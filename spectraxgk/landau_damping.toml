@@ -1,0 +1,28 @@
+[sim]
+mode = "fourier"            # "fourier" or "dg"
+backend = "eig"        # "diffrax" or "eig"
+tmax = 40.0
+nt = 800
+
+[grid]
+L = "2*pi"             # python-like; if not using python eval, put 6.28318530718
+Nx = 2
+# For Fourier mode bank (if mode="fourier"): kmin, kmax, Nk
+kmin = 0.4
+kmax = 0.6
+Nk = 3
+
+[hermite]
+N = 64
+nu0 = 0.0
+hyper_p = 0
+collide_cutoff = 3
+
+[bc]
+kind = "periodic"      # "periodic" | "dirichlet" | "neumann"
+
+[init]
+type = "landau"
+amplitude = 1e-3
+k = 0.5
+seed_c1 = true

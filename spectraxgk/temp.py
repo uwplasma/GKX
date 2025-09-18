@@ -255,7 +255,8 @@ def run_and_plot(
     # Plot 3: Energy split
     E_t = 1j * C_np[0, :] / k
     W_field = 0.5 * np.abs(E_t)**2
-    W_kin   = 0.5 * (np.abs(C_np[1:, :])**2).sum(axis=0)
+    W_kin   = 0.5 * (C_np[0, :] + C_np[2, :])#.sum(axis=0)
+    print(W_kin.shape, W_kin[0])
     W_total = W_field + W_kin
     plt.figure()
     plt.plot(ts_np, W_field, 'b-',  label="Field")

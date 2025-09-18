@@ -1,0 +1,25 @@
+[sim]
+mode = "dg"
+backend = "eig"
+tmax = 40.0
+nt = 800
+
+[grid]
+L = 2.0*pi
+Nx = 256
+
+[hermite]
+N = 64
+nu0 = 0.0
+hyper_p = 0
+collide_cutoff = 3
+
+[bc]
+kind = "periodic"
+
+[init]
+type = "two_stream"
+amplitude = 1e-3
+k = 0.5
+shift = 1.0
+seed_c1 = true
