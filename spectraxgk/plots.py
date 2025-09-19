@@ -18,14 +18,12 @@ jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 import numpy as np
 
-from diagnostics import (
+from spectraxgk.diagnostics import (
     pick_k0_index,
-    reconstruct_E_xt_from_fourier,
     energies_fourier_exact,
     energies_dg_exact,
 )
-
-from constants import speed_of_light as c_light
+from spectraxgk.constants import speed_of_light as c_light
 
 
 # -------------------- Hermite basis --------------------

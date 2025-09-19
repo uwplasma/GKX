@@ -1,0 +1,97 @@
+[build-system]
+requires = ["setuptools>=68", "wheel", "setuptools_scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spectraxgk"
+description = "Fourier–Hermite and Discontinuous-Galerkin solvers for multispecies Gyrokinetic Equation (linear & nonlinear), with JAX."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "UWPlasma Group", email = "rogerio.jorge@wisc.edu" }]
+keywords = ["plasma", "vlasov", "poisson", "fourier", "hermite", "discontinuous-galerkin", "jax"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Topic :: Scientific/Engineering :: Physics",
+]
+dynamic = ["version"]
+
+dependencies = [
+  "numpy",
+  "matplotlib",
+  "jax",
+  "diffrax",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.4",
+  "pytest-cov>=4.1",
+  "ruff>=0.6",
+  "mypy>=1.11",
+  "pre-commit>=3.7",
+  "build>=1.2",
+]
+
+[project.scripts]
+spectraxgk = "spectraxgk.cli:main"
+
+[tool.setuptools]
+# Top-level package (no src/ layout):
+packages = ["spectraxgk"]
+include-package-data = true
+
+[tool.setuptools_scm]
+version_scheme = "no-guess-dev"
+local_scheme = "node-and-date"
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+# ---------------- Ruff ----------------
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+# Core rules plus common quality checks
+select = ["E", "F", "I", "UP", "B", "W"]
+ignore = [
+  "E203",  # whitespace before ':' (Black/Ruff-format compat)
+]
+# Allow __init__ files to be lighter on imports
+per-file-ignores = {
+  "spectraxgk/__init__.py" = ["F401"],
+  "tests/**" = ["B011"],  # assert usage etc.
+}
+
+[tool.ruff.lint.isort]
+known-first-party = ["spectraxgk"]
+
+[tool.ruff.format]
+# Use Ruff's formatter (no Black needed).
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
+
+# ---------------- MyPy ----------------
+[tool.mypy]
+python_version = "3.11"
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_return_any = false
+no_implicit_optional = true
+strict_equality = true
+check_untyped_defs = true
+disallow_untyped_defs = false        # you can set true gradually
+disallow_incomplete_defs = false
+disallow_any_generics = false
+disallow_subclassing_any = false
+follow_imports = "silent"
+plugins = []
+
+# JAX types can be noisy; keep tests looser.
+[mypy-tests.*]
+ignore_errors = true

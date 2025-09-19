@@ -21,8 +21,8 @@ import jax
 jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 
-from hermite_ops import ladder_sqrt, build_collision_matrix
-from poisson import build_P
+from spectraxgk.hermite_ops import ladder_sqrt, build_collision_matrix
+from spectraxgk.poisson import build_P
 
 
 # -------------------- DG derivative --------------------

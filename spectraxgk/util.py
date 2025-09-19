@@ -1,7 +1,10 @@
 import jax.numpy as jnp
 from typing import Tuple
-from constants import epsilon_0, elementary_charge as e_charge, boltzmann_constant as kB
-from io_config import Config, SpeciesCfg
+
+from spectraxgk.constants import (
+    epsilon_0, elementary_charge as e_charge
+)
+from spectraxgk.io_config import Config, SpeciesCfg
 
 def _pick_debye_species(cfg: Config) -> Tuple[SpeciesCfg, int]:
     """
