@@ -32,7 +32,7 @@ from hermite_ops import (
 
 # Optional Diffrax for time integration
 try:
-    from diffrax import diffeqsolve, ODETerm, Tsit5, SaveAt, PIDController
+    from diffrax import diffeqsolve, ODETerm, Tsit5, SaveAt, PIDController, TqdmProgressMeter
     HAS_DIFFRAX = True
 except Exception:
     HAS_DIFFRAX = False
@@ -164,6 +164,7 @@ def _diffrax_evolve_block(Ar: jnp.ndarray, Ai: jnp.ndarray, base: jnp.ndarray,
         t0=0.0, t1=float(tmax), dt0=1e-3,
         y0=y0, args=(Ar, Ai),
         stepsize_controller=ctrl, saveat=SaveAt(ts=ts),
+        progress_meter=TqdmProgressMeter(),
         max_steps=2_000_000
     )
     M = Ar.shape[0]
@@ -419,6 +420,7 @@ def run_bank_multispecies_nonlinear(
             t0=0.0, t1=float(tmax), dt0=1e-3,
             y0=y0, args=None,
             stepsize_controller=controller, saveat=SaveAt(ts=ts),
+            progress_meter=TqdmProgressMeter(),
             max_steps=4_000_000
         )
         ys = sol.ys  # (nt, 2M)

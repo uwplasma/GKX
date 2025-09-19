@@ -18,6 +18,15 @@ jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 import numpy as np
 
+from diagnostics import (
+    pick_k0_index,
+    reconstruct_E_xt_from_fourier,
+    energies_fourier_exact,
+    energies_dg_exact,
+)
+
+from constants import speed_of_light as c_light
+
 
 # -------------------- Hermite basis --------------------
 def hermite_basis(u: jnp.ndarray, N: int) -> jnp.ndarray:
@@ -45,45 +54,13 @@ def hermite_basis(u: jnp.ndarray, N: int) -> jnp.ndarray:
 
 
 # -------------------- Helpers --------------------
-def _E2_space_average(
-    E_xt: Optional[jnp.ndarray],
-    Ek_kt: Optional[jnp.ndarray],
-) -> jnp.ndarray:
-    """Return ⟨E^2⟩_x(t) either from E(x,t) or from Σ_k |E_k|^2."""
-    if E_xt is not None:
-        return jnp.mean(E_xt**2, axis=0)  # (nt,)
-    if Ek_kt is not None:
-        return jnp.sum(jnp.abs(Ek_kt)**2, axis=0)  # (nt,)
-    raise ValueError("Provide E_xt or Ek_kt to compute field energy.")
-
 def _maxwellian_shifted(v: jnp.ndarray, n0: float, u0: float, vth: float) -> jnp.ndarray:
     v = jnp.asarray(v, dtype=jnp.float64)
     vth = jnp.asarray(vth, dtype=jnp.float64)
     return n0 * (1.0 / (jnp.sqrt(2.0 * jnp.pi) * vth)) * jnp.exp(-0.5 * ((v - u0) / vth) ** 2)
 
-def _pick_minabs_k_index(k: jnp.ndarray) -> int:
-    k_np = np.asarray(k)
-    return int(np.argmin(np.abs(k_np)))
-
-def _reconstruct_E_xt_from_fourier(Ek_kt: jnp.ndarray, k: jnp.ndarray, x: jnp.ndarray) -> jnp.ndarray:
-    """
-    E(x,t) = Re[ sum_k E_k(t) e^{ikx} ], returns (Nx, nt)
-    """
-    k = jnp.asarray(k, dtype=jnp.float64)
-    x = jnp.asarray(x, dtype=jnp.float64)
-    expikx = jnp.exp(1j * (k[:, None] * x[None, :]))         # (Nk, Nx)
-    E_xt = jnp.real(jnp.transpose(expikx, (1, 0)) @ Ek_kt)   # (Nx, nt)
-    return E_xt
-
 def _sp_name(species_list, idx: int) -> str:
     return getattr(species_list[idx], "name", f"s{idx}")
-
-def _kinetic_proxy_from_Cnt(C_nt: jnp.ndarray) -> jnp.ndarray:
-    """0.5*(C0 + C2) assuming orthonormal Hermite basis (N>=3)."""
-    if C_nt.shape[0] < 3:
-        raise ValueError("Need N>=3 for energy proxy.")
-    return 0.5 * jnp.real(C_nt[0, :] + C_nt[2, :])
-
 
 # -------------------- Panels --------------------
 def plot_phase_mixing(
@@ -267,9 +244,22 @@ def render_suite_onefigure(cfg, ts: jnp.ndarray, out: dict) -> None:
 
     S = len(species_list)
 
-    nv   = getattr(plot_cfg, "nv", 257)
-    vmax = getattr(plot_cfg, "vmax", 6.0)
-    v    = jnp.linspace(-float(vmax), float(vmax), int(nv), dtype=jnp.float64)
+
+    nv = int(getattr(plot_cfg, "nv", 257))
+    vmin_c = getattr(plot_cfg, "vmin_c", None)
+    vmax_c = getattr(plot_cfg, "vmax_c", None)
+
+    if (vmin_c is not None) and (vmax_c is not None):
+        vmin = float(vmin_c) * c_light
+        vmax = float(vmax_c) * c_light
+    else:
+        # fallback auto-range based on species
+        vmins = [float(sp.u0) - 5*float(sp.vth) for sp in species_list]
+        vmaxs = [float(sp.u0) + 5*float(sp.vth) for sp in species_list]
+        vmin = min(vmins)
+        vmax = max(vmaxs)
+
+    v = jnp.linspace(vmin, vmax, nv, dtype=jnp.float64)
     save_anim = getattr(plot_cfg, "save_anim", None)
     fps       = getattr(plot_cfg, "fps", 30)
     dpi       = getattr(plot_cfg, "dpi", 150)
@@ -298,47 +288,21 @@ def render_suite_onefigure(cfg, ts: jnp.ndarray, out: dict) -> None:
     ax_energy = axes[0, 0]
     ax_Ex_t   = axes[0, 1]
 
+    L, Nx = float(cfg.grid.L), int(cfg.grid.Nx)
+    xgrid = jnp.linspace(0.0, L, Nx, endpoint=False, dtype=jnp.float64)
     if cfg.sim.mode == "fourier":
-        # required keys
-        if ("C_kSnt" not in out) or ("Ek_kt" not in out) or ("k" not in out):
-            raise KeyError("Fourier mode requires keys: 'C_kSnt', 'Ek_kt', 'k'.")
-        C_kSnt = out["C_kSnt"]       # (Nk,S,N,nt)
-        Ek_kt  = out["Ek_kt"]        # (Nk,nt)
-        k      = out["k"]            # (Nk,)
-
-        # E(x,t)
-        E_xt = _reconstruct_E_xt_from_fourier(Ek_kt, k, xgrid)  # (Nx, nt)
-
-        # per-species kinetic proxies at k≈0
-        j0 = _pick_minabs_k_index(k)
-        species_energy: List[TTuple[str, jnp.ndarray]] = []
-        for s in range(S):
-            C_s_n_t = C_kSnt[j0, s, :, :]   # (N,nt)
-            Wk = _kinetic_proxy_from_Cnt(C_s_n_t)
-            species_energy.append((_sp_name(species_list, s), Wk))
-        W_field = 0.5 * _E2_space_average(E_xt, Ek_kt)
+        species_energy, W_field, E_xt = energies_fourier_exact(out=out, species_list=species_list, L=L, Nx=Nx, x=xgrid)
         plot_energy_row(ts, species_energy=species_energy, W_field=W_field, ax_energy=ax_energy)
-        plot_E_xt_imshow(ts, xgrid, E_xt.T, ax=ax_Ex_t)
+
+        if E_xt is not None:
+            plot_E_xt_imshow(ts, xgrid, E_xt.T, ax=ax_Ex_t)
+        else:
+            ax_Ex_t.set_title("E(x,t) unavailable"); ax_Ex_t.axis("off")
 
     else:
-        # DG required keys
-        for key in ("C_St", "E_xt", "x"):
-            if key not in out:
-                raise KeyError(f"DG mode requires key '{key}' in backend output.")
-        C_St = out["C_St"]   # (S,N,Nx,nt)
-        E_xt = out["E_xt"]   # (Nx,nt)
-        x    = out["x"]      # (Nx,)
-
-        # per-species kinetic proxies
-        species_energy = []
-        for s in range(S):
-            C_s_nxt = C_St[s]               # (N,Nx,nt)
-            C_s_nt  = jnp.mean(C_s_nxt, axis=1)
-            Wk = _kinetic_proxy_from_Cnt(C_s_nt)
-            species_energy.append((_sp_name(species_list, s), Wk))
-        W_field = 0.5 * _E2_space_average(E_xt, None)
+        species_energy, W_field, E_xt = energies_dg_exact(out=out, species_list=species_list, L=L, Nx=Nx)
         plot_energy_row(ts, species_energy=species_energy, W_field=W_field, ax_energy=ax_energy)
-        plot_E_xt_imshow(ts, x, E_xt.T, ax=ax_Ex_t)
+        plot_E_xt_imshow(ts, out["x"], E_xt.T, ax=ax_Ex_t)
 
     # ---------- Rows 2..S+1: per-species phase mixing + f(x,u,t) ----------
     first_ani = None
@@ -347,19 +311,20 @@ def render_suite_onefigure(cfg, ts: jnp.ndarray, out: dict) -> None:
         ax_fx = axes[s + 1, 1]
         sp = species_list[s]
         sp_name = _sp_name(species_list, s)
+        vth_s = float(getattr(sp, "vth", 1.0))
 
         if cfg.sim.mode == "fourier":
             C_kSnt = out["C_kSnt"]       # (Nk,S,N,nt)
             k      = out["k"]            # (Nk,)
             # Phase mixing at k≈0
-            j0 = _pick_minabs_k_index(k)
+            j0 = pick_k0_index(k)
             C_s_n_t = C_kSnt[j0, s, :, :]            # (N,nt)
             plot_phase_mixing(ts, C_s_n_t, ax=ax_pm, title=f"Phase mix ({sp_name})")
 
             # Distribution animation (use full bank for that species)
             C_knt_s = C_kSnt[:, s, :, :]             # (Nk,N,nt)
             ani = animate_distribution(
-                ts=ts, v=v, v_th=1.0, x=xgrid,
+                ts=ts, v=v, v_th=vth_s, x=xgrid,
                 mode="fourier", ax=ax_fx,
                 C_knt=C_knt_s, k=k,
                 species_params={"n0": getattr(sp, "n0", 1.0),
@@ -374,7 +339,7 @@ def render_suite_onefigure(cfg, ts: jnp.ndarray, out: dict) -> None:
             C_s_nxt = C_St[s, :, :, :]                  # (N,Nx,nt)
             plot_phase_mixing(ts, C_s_nxt, ax=ax_pm, title=f"Phase mix ({sp_name})")
             ani = animate_distribution(
-                ts=ts, v=v, v_th=1.0, x=xgrid,
+                ts=ts, v=v, v_th=vth_s, x=xgrid,
                 mode="dg", ax=ax_fx,
                 C=C_s_nxt,
                 species_params={"n0": getattr(sp, "n0", 1.0),

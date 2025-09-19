@@ -222,7 +222,7 @@ def solve_dg_multispecies(
         Yc = V @ (phases * alpha[:, None])    # complex
         Y = jnp.real(Yc)                      # A_real is real
     else:
-        from diffrax import diffeqsolve, ODETerm, Tsit5, SaveAt, PIDController
+        from diffrax import diffeqsolve, ODETerm, Tsit5, SaveAt, PIDController, TqdmProgressMeter
         term = ODETerm(lambda t, y, A: A @ y)
         controller = PIDController(rtol=1e-7, atol=1e-10, jump_ts=ts)
         sol = diffeqsolve(
@@ -231,6 +231,7 @@ def solve_dg_multispecies(
             y0=y0, args=A_real,
             stepsize_controller=controller,
             saveat=SaveAt(ts=ts),
+            progress_meter=TqdmProgressMeter(),
             max_steps=2_000_000
         )
         Y = sol.ys.T  # (S*N*Nx, nt)

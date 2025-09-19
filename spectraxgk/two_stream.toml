@@ -1,17 +1,18 @@
 [sim]
 mode    = "dg"      # "fourier" or "dg"
 backend = "diffrax"          # "eig" or "diffrax"
-tmax    = 10.0
+tmax    = 10.0   # <-- now interpreted as 10 / ω_p (dimensionless)
 nt      = 200
-nonlinear = true        # << set true for NL, false for linear
+nonlinear = false        # << set true for NL, false for linear
 dealias_frac = 0.6667   # optional; only used in Fourier-NL
 
 [grid]
-L  = "2*pi"
-Nx = 25
+L_lambdaD  = 64         # box is 64 Debye lengths long
+debye_species = "e_plus"   # optional; otherwise first q<0 is used
+Nx = 32
 
 [hermite]
-N  = 32
+N  = 24
 
 [bc]
 kind = "periodic"
@@ -21,10 +22,11 @@ kind = "periodic"
 [[species]]
 name           = "e_plus"
 q              = -1.0
-m              = 1.0
-n0             = 0.5
-vth            = 1.0
-u0             = 5.0
+n0             = 0.5*10000
+mass_base      = "electron"
+mass_multiple  = 1.0
+temperature_eV = 1.0       # 1 eV electrons
+drift_c        = +0.1
 nu0            = 0.0
 hyper_p        = 0
 collide_cutoff = 3
@@ -36,10 +38,11 @@ seed_c1        = false
 [[species]]
 name           = "e_minus"
 q              = -1.0
-m              = 1.0
-n0             = 0.5
-vth            = 1.0
-u0             = -5.0
+n0             = 0.5*10000
+mass_base      = "electron"
+mass_multiple  = 1.0
+temperature_eV = 1.0       # 1 eV electrons
+drift_c        = -0.1
 nu0            = 0.0
 hyper_p        = 0
 collide_cutoff = 3
@@ -47,24 +50,25 @@ amplitude      = 1e-3
 k              = 1
 seed_c1        = false
 
-# Ions: heavy, unperturbed background (can be warm if you like)
 [[species]]
 name           = "ions"
 q              = +1.0
-m              = 1836.0
-n0             = 1.0
-vth            = 0.1
-u0             = 0.0
+n0             = 1.0*10000
+mass_base      = "proton"
+mass_multiple  = 1.0
+temperature_eV = 1.0
+drift_c        = 0.00
 nu0            = 0.0
 hyper_p        = 0
 collide_cutoff = 3
 amplitude      = 0.0
-k              = 0
+k              = 0.0
 seed_c1        = false
 
 [plot]
 nv         = 257
-vmax       = 6.0
+vmin_c     = -0.3
+vmax_c     = 0.3
 fps        = 30
 dpi        = 150
 no_show    = false
