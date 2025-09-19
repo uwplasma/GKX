@@ -101,60 +101,67 @@ def assemble_A_real_multispecies(
     Nx: int,
     L: float,
     N: int,
-    species: Sequence,   # expects q, m, n0, vth, u0, nu0, hyper_p, collide_cutoff
+    species: Sequence,   # expects objects with attributes: q, m, n0, vth, u0, nu0, hyper_p, collide_cutoff
     bc_kind: str,
-) -> Tuple[jnp.ndarray, jnp.ndarray, dict]:
+):
     """
-    Build A_real for S species, size (S*N*Nx, S*N*Nx). P maps a scalar c0(x) to E(x) for the grid/bc:
-        E = P @ c0
-    Field coupling across species is embedded in A_real via (q_s/m_s) P q_r between (n=1 <- n=0) blocks.
-    Returns (A_real, P, meta).
+    Build A_real for S species, size (S*N*Nx, S*N*Nx). Also return P (Poisson map),
+    D (DG derivative), and x (grid).  Layout is block-diagonal per species for
+    streaming/drift/collisions, plus cross-species field coupling on (n=1 <- n=0).
     """
-    S_count = len(species)
-    Nx_i = int(Nx); L_f = float(L)
-    D = upwind_D(Nx_i, L_f, bc_kind)              # (Nx,Nx)
-    P = build_P(Nx_i, L_f, bc_kind)                   # (Nx,Nx)
-    I_x = jnp.eye(Nx, dtype=jnp.float64)
-    S_h = _hermite_streaming_blocks(N)            # (N,N)
-    I_h = jnp.eye(N, dtype=jnp.float64)
+    # --- grids & operators in x ---
+    Nx_i = int(Nx)
+    L_f  = float(L)
+    x = jnp.linspace(0.0, L_f, Nx_i, endpoint=False, dtype=jnp.float64)
+    D = upwind_D(Nx_i, L_f, bc_kind)        # (Nx,Nx)
+    P = build_P(Nx_i, L_f, bc_kind)         # (Nx,Nx)
+    I_x = jnp.eye(Nx_i, dtype=jnp.float64)
 
-    # Per-species diagonal parts
+    # --- Hermite operators ---
+    S_h = _hermite_streaming_blocks(N)      # (N,N)
+    I_h = jnp.eye(N, dtype=jnp.float64)
+    E10 = _field_selector(N)                # (N,N)
+
+    # --- per-species diagonal blocks (streaming + drift - collisions) ---
     diag_blocks = []
     for sp in species:
         vth = float(getattr(sp, "vth", 1.0))
         u0  = float(getattr(sp, "u0",  0.0))
         # streaming + drift
-        A_stream = _kron(vth * S_h, D)            # vth_s * S ⊗ D
-        A_drift  = _kron(I_h, u0 * D)             # u0_s  * I ⊗ D
+        A_stream = _kron(vth * S_h, D)          # vth_s * S ⊗ D
+        A_drift  = _kron(I_h, u0 * D)           # u0_s  * I ⊗ D
         # collisions
-        Cn = build_collision_matrix(N,
-                                    float(getattr(sp, "nu0", 0.0)),
-                                    int(getattr(sp, "hyper_p", 0)),
-                                    int(getattr(sp, "collide_cutoff", 3)))
+        Cn = build_collision_matrix(
+            N,
+            float(getattr(sp, "nu0", 0.0)),
+            int(getattr(sp, "hyper_p", 0)),
+            int(getattr(sp, "collide_cutoff", 3)),
+        )
         A_coll = _kron(Cn, I_x)
         diag_blocks.append((A_stream + A_drift) - A_coll)   # (N*Nx, N*Nx)
 
-    A_diag = _block_diag(diag_blocks)             # (S*N*Nx, S*N*Nx)
+    A_diag = _block_diag(diag_blocks)       # (S*N*Nx, S*N*Nx)
 
-    # Cross-species field coupling (n=1 <- n=0) via P, weighted by q_s/m_s and q_r
-    SNNx = S_count * N * Nx
+    # --- cross-species field coupling: (n=1 of s) gets (q_s/m_s) * E; E = P * sum_r q_r c0^{(r)} ---
+    S_count = len(species)
+    SNNx = S_count * N * Nx_i
     A_field = jnp.zeros((SNNx, SNNx), dtype=jnp.float64)
 
     def blk_slice(spec_idx: int, n: int) -> slice:
-        base = spec_idx * (N * Nx)
-        return slice(base + n * Nx, base + (n + 1) * Nx)
+        base = spec_idx * (N * Nx_i)
+        return slice(base + n * Nx_i, base + (n + 1) * Nx_i)
 
     for si, sp_s in enumerate(species):
         q_s = float(sp_s.q); m_s = float(sp_s.m)
-        r_slice = blk_slice(si, 1)   # receiver: n=1 of species s
+        r_slice = blk_slice(si, 1)   # receiver: species s, n=1
         for rj, sp_r in enumerate(species):
             q_r = float(sp_r.q)
-            c_slice = blk_slice(rj, 0)   # source: n=0 of species r
+            c_slice = blk_slice(rj, 0)  # source: species r, n=0
+            # place (q_s/m_s) * (P * q_r) into that cross-block
             A_field = A_field.at[r_slice, c_slice].set((q_s / m_s) * (P * q_r))
 
-    A_real = (A_diag + A_field).astype(jnp.float64)
-    # meta = {}  # reserved for future diagnostics if needed
-    return A_real, P.astype(jnp.float64)#, meta
+    A_real = A_diag + A_field
+    return A_real.astype(jnp.float64), P.astype(jnp.float64), D.astype(jnp.float64), x.astype(jnp.float64)
 
 
 def initial_condition_multispecies(

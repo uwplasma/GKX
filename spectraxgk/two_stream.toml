@@ -1,5 +1,5 @@
 [sim]
-mode    = "fourier"      # "fourier" or "dg"
+mode    = "dg"      # "fourier" or "dg"
 backend = "diffrax"          # "eig" or "diffrax"
 tmax    = 10.0
 nt      = 200
