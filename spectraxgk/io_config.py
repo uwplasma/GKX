@@ -124,14 +124,12 @@ def _finalize_species_units(sp: SpeciesCfg) -> SpeciesCfg:
     m0 = mass_electron if base == "electron" else mass_proton
     sp.m = float(sp.mass_multiple) * m0
 
-    # vth: sqrt(2 k_B T / m), where T = temperature_eV * e_charge
+    # vth: sqrt(2 T / m), where T (J) = temperature_eV * e_charge
     if sp.temperature_eV is None:
-        # if user didn’t give a temperature, keep vth as-is (default 1.0 -> dimensionless legacy)
-        # but better to set a tiny physical value to avoid NaNs; we pick 0
         sp.vth = 0.0
     else:
         T_J = float(sp.temperature_eV) * e_charge
-        sp.vth = float(jnp.sqrt(2.0 * kB * T_J / sp.m))
+        sp.vth = float(jnp.sqrt(2.0 * T_J / sp.m))
 
     # drift: u0 = drift_c * c
     if sp.drift_c is not None:

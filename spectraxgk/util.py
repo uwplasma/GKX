@@ -1,45 +1,41 @@
 import jax.numpy as jnp
-from constants import (
-    epsilon_0, elementary_charge as e_charge
-)
+from typing import Tuple
+from constants import epsilon_0, elementary_charge as e_charge, boltzmann_constant as kB
+from io_config import Config, SpeciesCfg
 
-def _pick_debye_species(cfg):
+def _pick_debye_species(cfg: Config) -> Tuple[SpeciesCfg, int]:
     """
-    Choose the species used to define λ_D.
-    Priority:
-      1) cfg.grid.debye_species as name (str) or index (int)
-      2) First species with q < 0 (electron-like)
-      3) Fallback: species[0]
-    Returns (species_obj, index).
+    Choose species for Debye/ωp normalization:
+    - If cfg.grid.debye_species is set (name or index), use it.
+    - Else prefer first negative charge (electron-like), else species[0].
     """
-    sp_list = getattr(cfg, "species", [])
-    if not sp_list:
-        raise ValueError("At least one [[species]] is required to define Debye length.")
-    sel = getattr(cfg.grid, "debye_species", None)
-    if isinstance(sel, int):
-        return sp_list[sel], sel
-    if isinstance(sel, str):
+    tag = getattr(cfg.grid, "debye_species", None)
+    sp_list = cfg.species
+    if isinstance(tag, int) and 0 <= tag < len(sp_list):
+        return sp_list[tag], tag
+    if isinstance(tag, str):
         for i, sp in enumerate(sp_list):
-            if getattr(sp, "name", f"s{i}") == sel:
+            if sp.name == tag:
                 return sp, i
-        raise ValueError(f"grid.debye_species='{sel}' not found among [[species]].")
-    # default: first with q<0
+    # default: first q<0 if any
     for i, sp in enumerate(sp_list):
-        if float(getattr(sp, "q", -1.0)) < 0.0:
+        if float(sp.q) < 0:
             return sp, i
+    # fallback
     return sp_list[0], 0
 
-def _compute_wp(sp) -> float:
+
+def _compute_wp(sp: SpeciesCfg) -> float:
     """
-    Plasma frequency ω_p = sqrt(n0 * q^2 / (ε0 * m)) [rad/s]
-    Uses species.n0 (m^-3), q (C), m (kg).
+    ω_p = sqrt( n0 * (q e)^2 / (ε0 m) ), SI units.
+    - sp.q is dimensionless charge number (e.g. -1 for electrons, +1 for protons)
+    - sp.n0 is in m^-3
+    - returns rad/s
     """
-    n0 = float(getattr(sp, "n0", 0.0))
-    q  = float(getattr(sp, "q", -e_charge))
-    m  = float(getattr(sp, "m", 9.10938371e-31))
-    if n0 <= 0.0:
-        raise ValueError("Plasma frequency requires species.n0 > 0 (in m^-3).")
-    return float(jnp.sqrt(n0 * (q*q) / (epsilon_0 * m)))
+    n = float(sp.n0)
+    q_si = float(sp.q) * e_charge
+    m = float(sp.m)
+    return float(jnp.sqrt(n * q_si*q_si / (epsilon_0 * m)))
 
 def _infer_Te_J_from_species(sp) -> float:
     """
@@ -60,13 +56,13 @@ def _infer_Te_J_from_species(sp) -> float:
     return 1.0 * e_charge  # 1 eV in Joules
 
 
-def _compute_lambda_D(sp) -> float:
+def _compute_lambda_D(sp: SpeciesCfg) -> float:
     """
-    Electron Debye length: λ_D = sqrt( ε0 * kB * T / (n0 * q_e^2) ).
-    Uses n0 (m^-3) from species and T from _infer_Te_J_from_species(sp).
+    λ_D = sqrt( ε0 * T_J / ( n0 (q e)^2 ) ), where T_J = (1/2) m v_th^2 (Joules).
     """
-    n0 = float(getattr(sp, "n0", 0.0))
-    if n0 <= 0.0:
-        raise ValueError("Debye length requires species.n0 > 0 (in m^-3).")
-    Tj = _infer_Te_J_from_species(sp) / 1.0  # Joules
-    return float(jnp.sqrt(epsilon_0 * (Tj) / (n0 * e_charge * e_charge)))
+    n = float(sp.n0)
+    q_si = float(sp.q) * e_charge
+    m = float(sp.m)
+    vth = float(sp.vth)
+    T_J = 0.5 * m * vth * vth
+    return float(jnp.sqrt(epsilon_0 * T_J / (n * q_si * q_si)))

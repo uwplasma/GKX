@@ -75,7 +75,8 @@ def main():
     print(f"Total time = {tmax:.3e} s, time step dt = {dt:.3e} s")
 
     # Wavenumbers
-    kvals = (2.0 * jnp.pi / L) * jnp.arange(-Nx//2, Nx//2)  # symmetric grid
+    dx = L / Nx
+    kvals = 2.0 * jnp.pi * jnp.fft.fftfreq(Nx, d=dx)
     kmin = float(jnp.min(jnp.abs(kvals[kvals != 0])))
     kmax = float(jnp.max(jnp.abs(kvals)))
     print(f"Wavenumber range: k_min = {kmin:.3e} 1/m, k_max = {kmax:.3e} 1/m")
@@ -90,8 +91,8 @@ def main():
         u0  = float(sp.u0)
 
         # Debye length λ_D = sqrt(ε₀ k_B T / (n e²)), using T = m vth² / (2 kB)
-        T_J = m_s * (vth**2) / (2.0 * kB)
-        lambda_D = (epsilon_0 * kB * T_J / (n0_m3 * e_charge**2))**0.5
+        T_J = m_s * (vth**2) / (2.0)
+        lambda_D = (epsilon_0 * T_J / (n0_m3 * e_charge**2))**0.5
 
         # Plasma frequency ω_p = sqrt(n e² / (ε₀ m))
         omega_p = (n0_m3 * e_charge**2 / (epsilon_0 * m_s))**0.5
