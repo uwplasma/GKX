@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "spectraxgk"
-description = "Fourier–Hermite and Discontinuous-Galerkin solvers for multispecies Gyrokinetic Equation (linear & nonlinear), with JAX."
+description = "Fourier–Hermite and DG solvers for multispecies Gyrokinetic equation with JAX."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-authors = [{ name = "UWPlasma Group", email = "rogerio.jorge@wisc.edu" }]
+authors = [{ name = "UWPlasma", email = "rogerio.jorge@wisc.edu" }]
 keywords = ["plasma", "vlasov", "poisson", "fourier", "hermite", "discontinuous-galerkin", "jax"]
 classifiers = [
   "Programming Language :: Python :: 3",
@@ -31,7 +31,6 @@ dev = [
   "pytest-cov>=4.1",
   "ruff>=0.6",
   "mypy>=1.11",
-  "pre-commit>=3.7",
   "build>=1.2",
 ]
 
@@ -39,7 +38,7 @@ dev = [
 spectraxgk = "spectraxgk.cli:main"
 
 [tool.setuptools]
-# Top-level package (no src/ layout):
+# Top-level package:
 packages = ["spectraxgk"]
 include-package-data = true
 
@@ -85,7 +84,7 @@ warn_return_any = false
 no_implicit_optional = true
 strict_equality = true
 check_untyped_defs = true
-disallow_untyped_defs = false        # you can set true gradually
+disallow_untyped_defs = false
 disallow_incomplete_defs = false
 disallow_any_generics = false
 disallow_subclassing_any = false
