@@ -5,12 +5,10 @@ Layout (always 2 columns):
   Row 1:  [ Energy (per-species + field + total) | E(x,t) imshow ]
   Row s+1 for each species s (s=1..S):
           [ Phase mixing | Animated f_s(x,u,t) ]
-
-We reconstruct E(x,t) from DG outputs directly, or from Fourier Ek_kt via inverse transform.
 """
 
 from __future__ import annotations
-from typing import Optional, Tuple, Literal, Sequence
+from typing import Optional, Tuple, Literal, Sequence, List, Tuple as TTuple
 
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
@@ -47,14 +45,6 @@ def hermite_basis(u: jnp.ndarray, N: int) -> jnp.ndarray:
 
 
 # -------------------- Helpers --------------------
-def _k0_spatial_average(C: jnp.ndarray) -> jnp.ndarray:
-    """Average over x (axis=1) if C is (N, Nx, nt); otherwise return C (N, nt)."""
-    if C.ndim == 2:
-        return C
-    if C.ndim == 3:
-        return jnp.mean(C, axis=1)
-    raise ValueError("C must be (N, nt) or (N, Nx, nt).")
-
 def _E2_space_average(
     E_xt: Optional[jnp.ndarray],
     Ek_kt: Optional[jnp.ndarray],
@@ -71,29 +61,34 @@ def _maxwellian_shifted(v: jnp.ndarray, n0: float, u0: float, vth: float) -> jnp
     vth = jnp.asarray(vth, dtype=jnp.float64)
     return n0 * (1.0 / (jnp.sqrt(2.0 * jnp.pi) * vth)) * jnp.exp(-0.5 * ((v - u0) / vth) ** 2)
 
-def _pick_minabs_k_index(k: Optional[jnp.ndarray]) -> int:
-    if k is None or k.size == 0:
-        return 0
+def _pick_minabs_k_index(k: jnp.ndarray) -> int:
     k_np = np.asarray(k)
     return int(np.argmin(np.abs(k_np)))
 
 def _reconstruct_E_xt_from_fourier(Ek_kt: jnp.ndarray, k: jnp.ndarray, x: jnp.ndarray) -> jnp.ndarray:
     """
-    E(x,t) = Re[ sum_k E_k(t) e^{ikx} ].
-    Ek_kt: (Nk, nt), k: (Nk,), x: (Nx,) -> E_xt: (Nx, nt)
+    E(x,t) = Re[ sum_k E_k(t) e^{ikx} ], returns (Nx, nt)
     """
     k = jnp.asarray(k, dtype=jnp.float64)
     x = jnp.asarray(x, dtype=jnp.float64)
     expikx = jnp.exp(1j * (k[:, None] * x[None, :]))         # (Nk, Nx)
-    # (Nx, nt) = Re[ (expikx^T) @ Ek_kt ]
     E_xt = jnp.real(jnp.transpose(expikx, (1, 0)) @ Ek_kt)   # (Nx, nt)
     return E_xt
+
+def _sp_name(species_list, idx: int) -> str:
+    return getattr(species_list[idx], "name", f"s{idx}")
+
+def _kinetic_proxy_from_Cnt(C_nt: jnp.ndarray) -> jnp.ndarray:
+    """0.5*(C0 + C2) assuming orthonormal Hermite basis (N>=3)."""
+    if C_nt.shape[0] < 3:
+        raise ValueError("Need N>=3 for energy proxy.")
+    return 0.5 * jnp.real(C_nt[0, :] + C_nt[2, :])
 
 
 # -------------------- Panels --------------------
 def plot_phase_mixing(
     ts: jnp.ndarray,
-    C: jnp.ndarray,                 # (N, nt) or (N, Nx, nt)
+    C_nt_or_nxt: jnp.ndarray,       # (N, nt) or (N, Nx, nt)
     *,
     ax: plt.Axes,
     vmin_log: float = -14.0,
@@ -101,7 +96,11 @@ def plot_phase_mixing(
     title: str = r"Phase mixing",
     cmap: str = "viridis",
 ) -> None:
-    C_nt = _k0_spatial_average(jnp.asarray(C))
+    # spatial average if needed
+    if C_nt_or_nxt.ndim == 3:
+        C_nt = jnp.mean(C_nt_or_nxt, axis=1)  # (N, nt)
+    else:
+        C_nt = C_nt_or_nxt
     Z = jnp.log(jnp.abs(C_nt) + 1e-300)
     im = ax.imshow(
         np.asarray(Z),
@@ -122,15 +121,12 @@ def plot_phase_mixing(
 def plot_energy_row(
     ts: jnp.ndarray,
     *,
-    # per-species kinetic proxies (list of (label, W_kin_s(t)))
-    species_energy: Sequence[Tuple[str, jnp.ndarray]],
-    W_field: jnp.ndarray,        # (nt,)
+    species_energy: Sequence[TTuple[str, jnp.ndarray]],  # list of (label, W_kin_s(t))
+    W_field: jnp.ndarray,                                # (nt,)
     ax_energy: plt.Axes,
 ) -> None:
-    # Plot per-species kinetic
     for label, Wk in species_energy:
         ax_energy.plot(np.asarray(ts), np.asarray(Wk), label=f"Kin({label})")
-    # Field and total
     W_field_np = np.asarray(W_field)
     ax_energy.plot(np.asarray(ts), W_field_np, "k--", label="Field")
     W_total = W_field_np + np.sum([np.asarray(Wk) for _, Wk in species_energy], axis=0)
@@ -251,40 +247,25 @@ def animate_distribution(
     return ani
 
 
-# -------------------- Extraction helpers --------------------
-def _extract_fourier_pieces(out: dict):
-    """
-    Returns (C_kSnt or None, C_knt or None, Ek_kt or None, k or None)
-    """
-    C_kSnt = out.get("C_kSnt", None)   # (Nk, S, N, nt)
-    C_knt  = out.get("C_knt",  None)   # (Nk, N, nt) (single-species)
-    Ek_kt  = out.get("Ek_kt",  None)   # (Nk, nt)
-    k      = out.get("k",      None)   # (Nk,)
-    return C_kSnt, C_knt, Ek_kt, k
-
-def _extract_dg_pieces(out: dict):
-    """
-    Returns (C_St or None, C_t (species-summed), E_xt, x)
-    """
-    C_St = out.get("C_St", None)       # (S, N, Nx, nt)
-    C_t  = out["C_t"]                  # (N, Nx, nt) summed
-    E_xt = out["E_xt"]                 # (Nx, nt)
-    x    = out["x"]                    # (Nx,)
-    return C_St, C_t, E_xt, x
-
-
-# -------------------- One-figure renderer --------------------
+# -------------------- One-figure renderer (multi-species only) --------------------
 def render_suite_onefigure(cfg, ts: jnp.ndarray, out: dict) -> None:
     """
     Single figure with 2 columns and (1 + S) rows:
       Row 1: [Energy panel | E(x,t) imshow]
       Rows 2..S+1: one row per species: [Phase mixing | Animated distribution]
+
+    Assumes multi-species outputs:
+      Fourier: out must contain C_kSnt (Nk,S,N,nt), Ek_kt (Nk,nt), k (Nk,)
+      DG:      out must contain C_St (S,N,Nx,nt), E_xt (Nx,nt), x (Nx,)
     """
     plot_cfg = getattr(cfg, "plot", None)
     if plot_cfg is None:
         raise ValueError("cfg.plot is required.")
     species_list = getattr(cfg, "species", [])
-    S = max(1, len(species_list))  # treat S>=1
+    if len(species_list) == 0:
+        raise ValueError("Expect at least one [[species]] in the TOML.")
+
+    S = len(species_list)
 
     nv   = getattr(plot_cfg, "nv", 257)
     vmax = getattr(plot_cfg, "vmax", 6.0)
@@ -294,166 +275,122 @@ def render_suite_onefigure(cfg, ts: jnp.ndarray, out: dict) -> None:
     dpi       = getattr(plot_cfg, "dpi", 150)
     no_show   = getattr(plot_cfg, "no_show", False)
     fig_width = getattr(plot_cfg, "fig_width", 12.0)
-    fig_row_h = getattr(plot_cfg, "fig_row_height", 3.5)
+    fig_row_h = getattr(plot_cfg, "fig_row_height", 3.0)
 
-    # Prepare spatial grid (for E(x,t) and animations)
-    if cfg.grid.L is not None and cfg.grid.Nx is not None:
-        L, Nx = float(cfg.grid.L), int(cfg.grid.Nx)
-        xgrid = jnp.linspace(0.0, L, Nx, endpoint=False, dtype=jnp.float64)
-    else:
-        xgrid = jnp.arange(1)  # fallback dummy grid
+    # x-grid (for E and animations)
+    if cfg.grid.L is None or cfg.grid.Nx is None:
+        raise ValueError("grid.L and grid.Nx are required for plotting.")
+    L, Nx = float(cfg.grid.L), int(cfg.grid.Nx)
+    xgrid = jnp.linspace(0.0, L, Nx, endpoint=False, dtype=jnp.float64)
 
     # Build figure
     nrows = 1 + S
     fig, axes = plt.subplots(
         nrows, 2,
-        figsize=(float(fig_width), float(fig_row_h) * nrows),  # <-- use per-row height
+        figsize=(float(fig_width), float(fig_row_h) * nrows),
         constrained_layout=True
     )
     axes = np.atleast_2d(axes)
+
+    anims = []
 
     # ---------- Row 1: Energy + E(x,t) ----------
     ax_energy = axes[0, 0]
     ax_Ex_t   = axes[0, 1]
 
-    # Compute energy components and E(x,t)
     if cfg.sim.mode == "fourier":
-        C_kSnt, C_knt, Ek_kt, k = _extract_fourier_pieces(out)
-        # reconstruct E_xt if possible
-        if (Ek_kt is not None) and (k is not None) and (xgrid.size > 1):
-            E_xt = _reconstruct_E_xt_from_fourier(Ek_kt, k, xgrid)  # (Nx, nt)
-        else:
-            E_xt = None
+        # required keys
+        if ("C_kSnt" not in out) or ("Ek_kt" not in out) or ("k" not in out):
+            raise KeyError("Fourier mode requires keys: 'C_kSnt', 'Ek_kt', 'k'.")
+        C_kSnt = out["C_kSnt"]       # (Nk,S,N,nt)
+        Ek_kt  = out["Ek_kt"]        # (Nk,nt)
+        k      = out["k"]            # (Nk,)
 
-        # per-species kinetic proxies
-        species_energy = []
-        if C_kSnt is not None:
-            # choose the mode with min |k| per usual
-            j0 = _pick_minabs_k_index(k)
-            for s, sp in enumerate(species_list):
-                C_s_n_t = C_kSnt[j0, s, :, :]  # (N, nt)
-                if C_s_n_t.shape[0] < 3:
-                    raise ValueError("Need N>=3 for energy proxy.")
-                Wk = 0.5 * jnp.real(C_s_n_t[0, :] + C_s_n_t[2, :])
-                label = getattr(sp, "name", f"s{s}")
-                species_energy.append((label, Wk))
-        else:
-            # single-species fallback
-            j0 = _pick_minabs_k_index(k)
-            C_n_t = C_knt[j0, :, :]
-            Wk = 0.5 * jnp.real(C_n_t[0, :] + C_n_t[2, :])
-            label = species_list[0].name if species_list else "species"
-            species_energy = [(label, Wk)]
+        # E(x,t)
+        E_xt = _reconstruct_E_xt_from_fourier(Ek_kt, k, xgrid)  # (Nx, nt)
 
-        W_field = 0.5 * _E2_space_average(E_xt, Ek_kt)  # uses Ek_kt if E_xt is None
+        # per-species kinetic proxies at k≈0
+        j0 = _pick_minabs_k_index(k)
+        species_energy: List[TTuple[str, jnp.ndarray]] = []
+        for s in range(S):
+            C_s_n_t = C_kSnt[j0, s, :, :]   # (N,nt)
+            Wk = _kinetic_proxy_from_Cnt(C_s_n_t)
+            species_energy.append((_sp_name(species_list, s), Wk))
+        W_field = 0.5 * _E2_space_average(E_xt, Ek_kt)
         plot_energy_row(ts, species_energy=species_energy, W_field=W_field, ax_energy=ax_energy)
-
-        # E(x,t) imshow
-        if E_xt is not None:
-            plot_E_xt_imshow(ts, xgrid, E_xt.T, ax=ax_Ex_t)  # (time on y) -> transpose
-        else:
-            ax_Ex_t.set_title("E(x,t) unavailable (need k, Ek_kt, and grid)")
-            ax_Ex_t.axis("off")
+        plot_E_xt_imshow(ts, xgrid, E_xt.T, ax=ax_Ex_t)
 
     else:
-        # DG
-        C_St, C_sum, E_xt, x = _extract_dg_pieces(out)
+        # DG required keys
+        for key in ("C_St", "E_xt", "x"):
+            if key not in out:
+                raise KeyError(f"DG mode requires key '{key}' in backend output.")
+        C_St = out["C_St"]   # (S,N,Nx,nt)
+        E_xt = out["E_xt"]   # (Nx,nt)
+        x    = out["x"]      # (Nx,)
+
         # per-species kinetic proxies
         species_energy = []
-        if C_St is not None:
-            for s, sp in enumerate(species_list):
-                C_s_nxt = C_St[s]              # (N, Nx, nt)
-                C_s_nt  = jnp.mean(C_s_nxt, axis=1)
-                Wk = 0.5 * jnp.real(C_s_nt[0, :] + C_s_nt[2, :])
-                label = getattr(sp, "name", f"s{s}")
-                species_energy.append((label, Wk))
-        else:
-            # species-summed only
-            C_nt = jnp.mean(C_sum, axis=1)
-            Wk = 0.5 * jnp.real(C_nt[0, :] + C_nt[2, :])
-            label = species_list[0].name if species_list else "species"
-            species_energy = [(label, Wk)]
-
+        for s in range(S):
+            C_s_nxt = C_St[s]               # (N,Nx,nt)
+            C_s_nt  = jnp.mean(C_s_nxt, axis=1)
+            Wk = _kinetic_proxy_from_Cnt(C_s_nt)
+            species_energy.append((_sp_name(species_list, s), Wk))
         W_field = 0.5 * _E2_space_average(E_xt, None)
         plot_energy_row(ts, species_energy=species_energy, W_field=W_field, ax_energy=ax_energy)
         plot_E_xt_imshow(ts, x, E_xt.T, ax=ax_Ex_t)
 
     # ---------- Rows 2..S+1: per-species phase mixing + f(x,u,t) ----------
     first_ani = None
-    for row in range(S):
-        ax_pm = axes[row + 1, 0]
-        ax_fx = axes[row + 1, 1]
-        sp = species_list[row] if row < len(species_list) else None
-        sp_name = getattr(sp, "name", f"s{row}") if sp is not None else f"s{row}"
+    for s in range(S):
+        ax_pm = axes[s + 1, 0]
+        ax_fx = axes[s + 1, 1]
+        sp = species_list[s]
+        sp_name = _sp_name(species_list, s)
 
         if cfg.sim.mode == "fourier":
-            C_kSnt, C_knt, Ek_kt, k = _extract_fourier_pieces(out)
-            if C_kSnt is not None and row < C_kSnt.shape[1]:
-                # Phase mixing with k≈0 slice
-                j0 = _pick_minabs_k_index(k)
-                C_s_n_t = C_kSnt[j0, row, :, :]                 # (N, nt)
-                plot_phase_mixing(ts, C_s_n_t, ax=ax_pm, title=f"Phase mix ({sp_name})")
+            C_kSnt = out["C_kSnt"]       # (Nk,S,N,nt)
+            k      = out["k"]            # (Nk,)
+            # Phase mixing at k≈0
+            j0 = _pick_minabs_k_index(k)
+            C_s_n_t = C_kSnt[j0, s, :, :]            # (N,nt)
+            plot_phase_mixing(ts, C_s_n_t, ax=ax_pm, title=f"Phase mix ({sp_name})")
 
-                # Distribution animation for species s (use whole bank (Nk,N,nt))
-                C_knt_s = C_kSnt[:, row, :, :]                   # (Nk, N, nt)
-                ani = animate_distribution(
-                    ts=ts, v=v, v_th=1.0, x=xgrid,
-                    mode="fourier", ax=ax_fx,
-                    C_knt=C_knt_s, k=k,
-                    species_params={"n0": getattr(sp, "n0", 1.0),
-                                    "u0": getattr(sp, "u0", 0.0),
-                                    "vth": getattr(sp, "vth", 1.0)},
-                    title=f"f(x,u,t) ({sp_name})",
-                )
-            else:
-                # single-species fallback
-                j0 = _pick_minabs_k_index(k)
-                C_s_n_t = C_knt[j0, :, :]
-                plot_phase_mixing(ts, C_s_n_t, ax=ax_pm, title=f"Phase mix ({sp_name})")
-                ani = animate_distribution(
-                    ts=ts, v=v, v_th=1.0, x=xgrid,
-                    mode="fourier", ax=ax_fx,
-                    C_knt=C_knt, k=k,
-                    species_params={"n0": getattr(sp, "n0", 1.0),
-                                    "u0": getattr(sp, "u0", 0.0),
-                                    "vth": getattr(sp, "vth", 1.0)},
-                    title=f"f(x,u,t) ({sp_name})",
-                )
+            # Distribution animation (use full bank for that species)
+            C_knt_s = C_kSnt[:, s, :, :]             # (Nk,N,nt)
+            ani = animate_distribution(
+                ts=ts, v=v, v_th=1.0, x=xgrid,
+                mode="fourier", ax=ax_fx,
+                C_knt=C_knt_s, k=k,
+                species_params={"n0": getattr(sp, "n0", 1.0),
+                                "u0": getattr(sp, "u0", 0.0),
+                                "vth": getattr(sp, "vth", 1.0)},
+                title=f"f(x,u,t) ({sp_name})",
+            )
+            anims.append(ani)
+
         else:
-            # DG
-            C_St = out.get("C_St", None)
-            if C_St is not None and row < C_St.shape[0]:
-                C_s_nxt = C_St[row, :, :, :]                     # (N, Nx, nt)
-                plot_phase_mixing(ts, C_s_nxt, ax=ax_pm, title=f"Phase mix ({sp_name})")
-                ani = animate_distribution(
-                    ts=ts, v=v, v_th=1.0, x=x,
-                    mode="dg", ax=ax_fx,
-                    C=C_s_nxt,
-                    species_params={"n0": getattr(sp, "n0", 1.0),
-                                    "u0": getattr(sp, "u0", 0.0),
-                                    "vth": getattr(sp, "vth", 1.0)},
-                    title=f"f(x,u,t) ({sp_name})",
-                )
-            else:
-                # fallback to summed
-                C_sum = out["C_t"]
-                plot_phase_mixing(ts, C_sum, ax=ax_pm, title=f"Phase mix ({sp_name})")
-                ani = animate_distribution(
-                    ts=ts, v=v, v_th=1.0, x=x,
-                    mode="dg", ax=ax_fx,
-                    C=C_sum,
-                    species_params={"n0": getattr(sp, "n0", 1.0),
-                                    "u0": getattr(sp, "u0", 0.0),
-                                    "vth": getattr(sp, "vth", 1.0)},
-                    title=f"f(x,u,t) ({sp_name})",
-                )
+            C_St = out["C_St"]                          # (S,N,Nx,nt)
+            C_s_nxt = C_St[s, :, :, :]                  # (N,Nx,nt)
+            plot_phase_mixing(ts, C_s_nxt, ax=ax_pm, title=f"Phase mix ({sp_name})")
+            ani = animate_distribution(
+                ts=ts, v=v, v_th=1.0, x=xgrid,
+                mode="dg", ax=ax_fx,
+                C=C_s_nxt,
+                species_params={"n0": getattr(sp, "n0", 1.0),
+                                "u0": getattr(sp, "u0", 0.0),
+                                "vth": getattr(sp, "vth", 1.0)},
+                title=f"f(x,u,t) ({sp_name})",
+            )
+            anims.append(ani)
 
         if first_ani is None:
             first_ani = ani
+    
+    fig._anims = anims
 
-    # optional save (first animation only)
-    if save_anim and first_ani is not None:
-        first_ani.save(save_anim, dpi=dpi, fps=fps)
+    if save_anim and anims:
+        anims[0].save(save_anim, dpi=dpi, fps=fps)
 
     if not no_show:
         plt.show()

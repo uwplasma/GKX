@@ -8,7 +8,7 @@ import re
 try:
     import tomllib  # Python 3.11+
 except ModuleNotFoundError:
-    import tomli as tomllib
+    import pip._vendor.tomli as tomllib
 
 @dataclass
 class SpeciesCfg:

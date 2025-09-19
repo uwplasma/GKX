@@ -48,7 +48,6 @@ except Exception:
 def resolve_kgrid(grid: GridCfg, *, only_positive: bool = False) -> jnp.ndarray:
     """
     Build k-grid from the periodic box: L, Nx (FFT frequencies).
-    This replaces any old kmin/kmax/Nk usage.
     """
     if grid.L is None or grid.Nx is None:
         raise ValueError("Provide grid.L and grid.Nx in [grid].")

@@ -8,7 +8,7 @@ dealias_frac = 0.6667   # optional; only used in Fourier-NL
 
 [grid]
 L  = "2*pi"
-Nx = 24
+Nx = 25
 
 [hermite]
 N  = 32
