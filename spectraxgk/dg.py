@@ -15,6 +15,7 @@ Poisson:  -∂_x^2 φ = Σ_s q_s δc^{(s)}_0,   E = -∂_x φ  => E = P @ (Σ_s 
 We build a big real operator A_real (S*N*Nx by S*N*Nx) so that dC/dt = A_real @ C.
 """
 
+from functools import partial
 from typing import Tuple, Sequence, Optional
 import jax
 jax.config.update("jax_enable_x64", True)
@@ -25,7 +26,7 @@ from poisson import build_P
 
 
 # -------------------- DG derivative --------------------
-@jax.jit
+@partial(jax.jit, static_argnames=("Nx",))
 def _D_periodic(Nx: int, L: float) -> jnp.ndarray:
     dx = jnp.asarray(L, jnp.float64) / jnp.asarray(Nx, jnp.float64)
     eye = jnp.eye(Nx, dtype=jnp.float64)
@@ -33,7 +34,7 @@ def _D_periodic(Nx: int, L: float) -> jnp.ndarray:
     S_minus = jnp.roll(eye,  1, axis=1)
     return (S_plus - S_minus) * (0.5 / dx)
 
-@jax.jit
+@partial(jax.jit, static_argnames=("Nx",))
 def _D_dirichlet(Nx: int, L: float) -> jnp.ndarray:
     dx = jnp.asarray(L, jnp.float64) / jnp.asarray(Nx, jnp.float64)
     D = jnp.zeros((Nx, Nx), dtype=jnp.float64)
@@ -44,7 +45,7 @@ def _D_dirichlet(Nx: int, L: float) -> jnp.ndarray:
     D = D.at[-1, -2].set(-1.0 / dx).at[-1, -1].set(+1.0 / dx)
     return D
 
-@jax.jit
+@partial(jax.jit, static_argnames=("Nx",))
 def _D_neumann(Nx: int, L: float) -> jnp.ndarray:
     dx = jnp.asarray(L, jnp.float64) / jnp.asarray(Nx, jnp.float64)
     D = jnp.zeros((Nx, Nx), dtype=jnp.float64)
@@ -110,8 +111,9 @@ def assemble_A_real_multispecies(
     Returns (A_real, P, meta).
     """
     S_count = len(species)
-    D = upwind_D(Nx, L, bc_kind)                  # (Nx,Nx)
-    P = build_P(Nx, L, bc_kind)                   # (Nx,Nx)
+    Nx_i = int(Nx); L_f = float(L)
+    D = upwind_D(Nx_i, L_f, bc_kind)              # (Nx,Nx)
+    P = build_P(Nx_i, L_f, bc_kind)                   # (Nx,Nx)
     I_x = jnp.eye(Nx, dtype=jnp.float64)
     S_h = _hermite_streaming_blocks(N)            # (N,N)
     I_h = jnp.eye(N, dtype=jnp.float64)
@@ -151,8 +153,8 @@ def assemble_A_real_multispecies(
             A_field = A_field.at[r_slice, c_slice].set((q_s / m_s) * (P * q_r))
 
     A_real = (A_diag + A_field).astype(jnp.float64)
-    meta = {}  # reserved for future diagnostics if needed
-    return A_real, P.astype(jnp.float64), meta
+    # meta = {}  # reserved for future diagnostics if needed
+    return A_real, P.astype(jnp.float64)#, meta
 
 
 def initial_condition_multispecies(
@@ -228,3 +230,123 @@ def solve_dg_multispecies(
 
     C_St = jnp.reshape(Y, (S, N, Nx, nt))
     return jnp.asarray(ts), jnp.asarray(C_St)
+
+def hermite_du_matrix(N: int) -> jnp.ndarray:
+    D = jnp.zeros((N, N), dtype=jnp.float64)
+    n = jnp.arange(N)
+    if N > 1:
+        D = D.at[jnp.arange(N-1), jnp.arange(1, N)].set(-jnp.sqrt((n[:N-1] + 1) / 2.0))
+        D = D.at[jnp.arange(1, N), jnp.arange(N-1)].set(jnp.sqrt(n[1:] / 2.0))
+    return D
+
+def solve_dg_multispecies_linear(
+    A_real: jnp.ndarray,
+    C0_Snx: jnp.ndarray,   # (S,N,Nx)
+    tmax: float,
+    nt: int,
+    backend: str,
+):
+    """
+    Linear multispecies DG: evolve each species with the same *linear* operator A_real
+    (which already includes inter-species linear field coupling via P and charges).
+    """
+    from diffrax import diffeqsolve, ODETerm, Tsit5, SaveAt, PIDController
+
+    S, N, Nx = C0_Snx.shape
+    ts = jnp.linspace(0.0, float(tmax), int(nt), dtype=jnp.float64)
+
+    def lin_solve(C0):
+        y0 = jnp.reshape(C0, (N*Nx,))
+        term = ODETerm(lambda t, y, A: A @ y)
+        controller = PIDController(rtol=1e-7, atol=1e-10, jump_ts=ts)
+        sol = diffeqsolve(
+            term, Tsit5(),
+            t0=0.0, t1=float(tmax), dt0=1e-3,
+            y0=y0, args=A_real,
+            stepsize_controller=controller,
+            saveat=SaveAt(ts=ts),
+            max_steps=4_000_000
+        )
+        Y = sol.ys.T  # (N*Nx,nt)
+        return jnp.reshape(Y, (N, Nx, nt))
+
+    C_list = [lin_solve(C0_Snx[s]) for s in range(S)]
+    C_St = jnp.stack(C_list, axis=0)  # (S,N,Nx,nt)
+    return ts, C_St
+
+def solve_dg_multispecies_nonlinear(
+    A_real: jnp.ndarray,          # linear part (streaming + drift + collisions + linear field)
+    P: jnp.ndarray,               # (Nx,Nx) E = P @ rho
+    species,
+    C0_Snx: jnp.ndarray,          # (S,N,Nx)
+    tmax: float,
+    nt: int,
+    backend: str,
+):
+    """
+    Nonlinear DG: y' = A_real y + NL(y) with NL_s = (q_s/m_s) * (E(x)/vth_s) * (∂_u δf_s)_proj
+    where δf_s is represented by Hermite coefficients C_s[:, x], and ∂_u is a fixed (N×N) matrix.
+    """
+    if backend != "diffrax":
+        # Nonlinear system needs a time-dependent RHS; keep Tsit5
+        backend = "diffrax"
+
+    from diffrax import diffeqsolve, ODETerm, Tsit5, SaveAt, PIDController
+
+    S, N, Nx = C0_Snx.shape
+    ts = jnp.linspace(0.0, float(tmax), int(nt), dtype=jnp.float64)
+    Du = hermite_du_matrix(N)  # (N,N)
+
+    # Pack S species into one long vector
+    def pack(C_St):
+        return jnp.reshape(C_St, (S*N*Nx,))
+    def unpack(y):
+        return jnp.reshape(y, (S, N, Nx))
+
+    # Apply A_real on each species (block-diagonal in species)
+    def apply_linear(C_St):
+        # (S,N,Nx) -> (S,N,Nx)   via matvec per species
+        def one(C):
+            Y = A_real @ jnp.reshape(C, (N*Nx,))
+            return jnp.reshape(Y, (N, Nx))
+        return jax.vmap(one, in_axes=0)(C_St)
+
+    # Nonlinear term: build E(x) from rho = Σ_s q_s c0_s, then Hermite-du per species
+    q = jnp.asarray([sp.q for sp in species], jnp.float64)[:, None]  # (S,1)
+    vth = jnp.asarray([max(float(getattr(sp, "vth", 1.0)), 1e-30) for sp in species], jnp.float64)[:, None]
+
+    def apply_nonlinear(C_St):
+        # rho(x) = Σ_s q_s * c0_s(x)
+        c0_Sx = C_St[:, 0, :]                         # (S,Nx)
+        rho_x = jnp.sum(q * c0_Sx, axis=0)           # (Nx,)
+        E_x   = P @ rho_x                             # (Nx,)
+        # per-species: (q_s/m_s)/vth_s * (Du @ C_s) * E(x)
+        ms  = jnp.asarray([sp.m for sp in species], jnp.float64)[:, None]
+        fac = (jnp.asarray([sp.q for sp in species], jnp.float64)[:, None] / ms) / vth  # (S,1)
+
+        def one_species(C_s, f):
+            G = Du @ C_s                              # (N,Nx)
+            return f * (G * E_x[None, :])             # (N,Nx)
+
+        return jax.vmap(one_species, in_axes=(0, 0))(C_St, fac)  # (S,N,Nx)
+
+    def rhs(t, y, _):
+        C = unpack(y)
+        L = apply_linear(C)
+        Nl = apply_nonlinear(C)
+        return pack(L + Nl)
+
+    y0 = pack(C0_Snx)
+    term = ODETerm(rhs)
+    controller = PIDController(rtol=1e-7, atol=1e-10, jump_ts=ts)
+    sol = diffeqsolve(
+        term, Tsit5(),
+        t0=0.0, t1=float(tmax), dt0=1e-3,
+        y0=y0, args=None,
+        stepsize_controller=controller,
+        saveat=SaveAt(ts=ts),
+        max_steps=6_000_000
+    )
+    Y = sol.ys.T  # (S*N*Nx, nt)
+    C_St = jnp.reshape(Y, (S, N, Nx, int(nt)))
+    return ts, C_St

@@ -1,15 +1,17 @@
 [sim]
-mode    = "fourier"      # "fourier" or "dg"
-backend = "eig"          # "eig" or "diffrax"
-tmax    = 40.0
-nt      = 800
+mode    = "dg"      # "fourier" or "dg"
+backend = "diffrax"          # "eig" or "diffrax"
+tmax    = 10.0
+nt      = 200
+nonlinear = true        # << set true for NL, false for linear
+dealias_frac = 0.6667   # optional; only used in Fourier-NL
 
 [grid]
 L  = "2*pi"              # domain length; you can write expressions like "2*pi"
 Nx = 23                 # number of x points (DG) or Fourier modes in the box
 
 [hermite]
-N               = 128
+N  = 32
 
 [bc]
 kind = "periodic"        # for DG; ignored by Fourier

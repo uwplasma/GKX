@@ -6,12 +6,13 @@ Poisson solvers mapping c0(x) -> E(x) = -∂x φ with -∂x^2 φ = c0 on a DG0 g
 - Neumann / Dirichlet: FD Laplacian + inverse, then E = -φ_x; return dense P.
 """
 
+from functools import partial
 from typing import Literal
 import jax
 import jax.numpy as jnp
 
 
-@jax.jit
+@partial(jax.jit, static_argnames=("Nx",))
 def _periodic_P(Nx: int, L: float) -> jnp.ndarray:
     """Dense operator P so that E = P @ c0 (periodic box)."""
     k = 2.0 * jnp.pi * jnp.fft.fftfreq(Nx, d=(L / Nx))
@@ -28,7 +29,7 @@ def _periodic_P(Nx: int, L: float) -> jnp.ndarray:
     return cols.T.astype(jnp.float64)
 
 
-@jax.jit
+@partial(jax.jit, static_argnames=("Nx",))
 def _fd_P(Nx: int, L: float, bc: Literal["neumann", "dirichlet"]) -> jnp.ndarray:
     """
     Dense P via FD Laplacian solve and gradient.

@@ -1,15 +1,17 @@
 [sim]
 mode    = "fourier"      # "fourier" or "dg"
-backend = "eig"          # "eig" or "diffrax"
-tmax    = 80.0
-nt      = 1200
+backend = "diffrax"          # "eig" or "diffrax"
+tmax    = 10.0
+nt      = 200
+nonlinear = true        # << set true for NL, false for linear
+dealias_frac = 0.6667   # optional; only used in Fourier-NL
 
 [grid]
 L  = "2*pi"
 Nx = 24
 
 [hermite]
-N               = 128
+N  = 32
 
 [bc]
 kind = "periodic"

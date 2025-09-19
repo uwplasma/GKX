@@ -31,6 +31,8 @@ class SimCfg:
     backend: str         # "eig" | "diffrax"
     tmax: float
     nt: int
+    nonlinear: bool = False          # <-- NEW: linear (False) vs nonlinear (True)
+    dealias_frac: float = 2.0/3.0    # <-- NEW: 2/3-rule cutoff for Fourier pseudo-spectral NL
 
 @dataclass
 class GridCfg:
