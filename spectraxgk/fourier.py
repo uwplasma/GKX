@@ -1,6 +1,6 @@
 # fourier.py
 """
-Fourier–Hermite mode bank (multi-species only, electrostatic).
+Fourier–Hermite mode bank
 Supports:
   - Linear evolution (block-coupled across species in k-space)
   - Nonlinear evolution via pseudo-spectral x-product:
@@ -13,10 +13,6 @@ IC per species s:
   seed n=0 on spatial mode matching k_s (cycles in box):
     cos(2π k_s x / L) injects equal power at ±k0_phys = 2π k_s / L
   ⇒ each matching k gets amplitude_s / 2 on c_{n=0}.
-
-Everything is written to be JAX JIT/vmap friendly:
-  - no Python float() on traced values
-  - k=0 handled by jnp.where
 """
 
 from typing import Tuple, Sequence
@@ -24,19 +20,16 @@ import jax
 jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 
-from hermite_ops import (
+from diffrax import (
+    diffeqsolve, ODETerm, Tsit5,
+    SaveAt, PIDController, TqdmProgressMeter,
+)
+
+from spectraxgk.hermite_ops import (
     streaming_block_fourier,   # H_stream(k,N) real
     field_one_sided_fourier,   # H_field(k,N)  real
     build_collision_matrix     # C(N; nu0, hyper_p, cutoff) real
 )
-
-# Optional Diffrax for time integration
-try:
-    from diffrax import diffeqsolve, ODETerm, Tsit5, SaveAt, PIDController, TqdmProgressMeter
-    HAS_DIFFRAX = True
-except Exception:
-    HAS_DIFFRAX = False
-
 
 # ---------------- Utilities ----------------
 def _match_mode_array(k_val, k0, tol):
@@ -146,8 +139,6 @@ def _dealias_mask(kvals: jnp.ndarray, frac: float) -> jnp.ndarray:
 # ---------------- Diffrax block evolve (2M real system) ----------------
 def _diffrax_evolve_block(Ar: jnp.ndarray, Ai: jnp.ndarray, base: jnp.ndarray,
                           ts: jnp.ndarray, tmax: float) -> jnp.ndarray:
-    if not HAS_DIFFRAX:
-        raise RuntimeError("Diffrax not installed.")
 
     def rhs(t, y, args):
         Ar, Ai = args
@@ -407,8 +398,6 @@ def run_bank_multispecies_nonlinear(
     y0 = pack(C_kSnt0)
 
     if backend == "diffrax":
-        if not HAS_DIFFRAX:
-            raise RuntimeError("Diffrax not installed.")
         def rhs_real(t, y, _):
             C = unpack(y)
             dC = rhs_complex(t, C)

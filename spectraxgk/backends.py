@@ -2,47 +2,22 @@
 """
 Thin wrappers to run either 'fourier' or 'dg' pipelines (multi-species only).
 Always return (ts, diag_dict) with keys used by the unified plots.
-
-Expected cfg fields:
-- cfg.sim.mode   : "fourier" | "dg"
-- cfg.sim.backend: "eig" | "diffrax"
-- cfg.sim.tmax   : float
-- cfg.sim.nt     : int
-- (optional) cfg.sim.model: "linear" | "nonlinear"   (defaults to "linear")
-- cfg.grid.L, cfg.grid.Nx
-- cfg.hermite.N
-- cfg.bc.kind
-- cfg.species: list of species, each with q, m, n0, vth, u0, nu0, hyper_p, collide_cutoff,
-               and IC fields amplitude, k, seed_c1 (per-species)
 """
 
 from typing import Dict, Tuple
 import jax.numpy as jnp
-from io_config import GridCfg
 
-# Fourier backends (linear & nonlinear)
-from fourier import (
-    run_bank_multispecies_linear,             # linear multispecies Fourier–Hermite
+from spectraxgk.io_config import GridCfg
+from spectraxgk.fourier import (
+    run_bank_multispecies_linear,
+    run_bank_multispecies_nonlinear,
 )
-# nonlinear Fourier evolve function (name from your current fourier.py)
-try:
-    from fourier import evolve_multispecies_nonlinear  # nonlinear multispecies
-    HAS_FOURIER_NL = True
-except Exception:
-    HAS_FOURIER_NL = False
-
-# DG backends (linear & nonlinear)
-from dg import (
+from spectraxgk.dg import (
     assemble_A_real_multispecies,
     initial_condition_multispecies,
-    solve_dg_multispecies,             # linear multispecies
+    solve_dg_multispecies,
+    solve_dg_multispecies_nonlinear,
 )
-# nonlinear DG evolve (if you added it as suggested)
-try:
-    from dg import solve_dg_nonlinear_multispecies
-    HAS_DG_NL = True
-except Exception:
-    HAS_DG_NL = False
 
 
 def resolve_kgrid(grid: GridCfg, *, only_positive: bool = False) -> jnp.ndarray:
@@ -75,9 +50,7 @@ def run_fourier(cfg):
     model = getattr(cfg.sim, "model", "linear").lower()
 
     if model == "nonlinear":
-        if not HAS_FOURIER_NL:
-            raise RuntimeError("Nonlinear Fourier path not available in this build.")
-        ts, C_kSnt, Ek_kt = evolve_multispecies_nonlinear(
+        ts, C_kSnt, Ek_kt = run_bank_multispecies_nonlinear(
             kvals=kvals,
             N=cfg.hermite.N,
             species=cfg.species,
@@ -135,9 +108,7 @@ def run_dg(cfg) -> Tuple[jnp.ndarray, Dict[str, jnp.ndarray]]:
 
     # Evolve
     if model == "nonlinear":
-        if not HAS_DG_NL:
-            raise RuntimeError("Nonlinear DG path not available in this build.")
-        ts, C_St = solve_dg_nonlinear_multispecies(
+        ts, C_St = solve_dg_multispecies_nonlinear(
             A_real=A_real,
             P=P,
             D=D,

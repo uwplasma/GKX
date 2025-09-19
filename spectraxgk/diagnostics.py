@@ -13,14 +13,13 @@ All functions are lightweight and NumPy/JAX-friendly.
 """
 
 from __future__ import annotations
-from typing import Optional, Sequence, Tuple, List
 
 import jax
 jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 import numpy as np
 
-from constants import epsilon_0
+from spectraxgk.constants import epsilon_0
 
 
 # -------------------- robust k≈0 selection --------------------

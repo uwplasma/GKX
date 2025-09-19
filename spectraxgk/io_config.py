@@ -12,8 +12,9 @@ except ModuleNotFoundError:
     import pip._vendor.tomli as tomllib
 from tomllib import TOMLDecodeError
 
-from constants import (
-    mass_electron, mass_proton, boltzmann_constant as kB, elementary_charge as e_charge,
+from spectraxgk.constants import (
+    mass_electron, mass_proton,
+    elementary_charge as e_charge,
     speed_of_light as c_light,
 )
 
