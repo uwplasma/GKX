@@ -1,36 +1,56 @@
 [sim]
-mode = "fourier"            # "fourier" or "dg"
-backend = "eig"        # "diffrax" or "eig"
-tmax = 40.0
-nt = 800
+mode    = "fourier"      # "fourier" or "dg"
+backend = "eig"          # "eig" or "diffrax"
+tmax    = 40.0
+nt      = 800
 
 [grid]
-L = "2*pi"             # python-like; if not using python eval, put 6.28318530718
-Nx = 2
-# For Fourier mode bank (if mode="fourier"): kmin, kmax, Nk
-kmin = -0.5
-kmax =  0.5
-Nk = 5
+L  = "2*pi"              # domain length; you can write expressions like "2*pi"
+Nx = 23                 # number of x points (DG) or Fourier modes in the box
 
 [hermite]
-N = 512
-nu0 = 0.0
-hyper_p = 0
-collide_cutoff = 3
+N               = 128
 
 [bc]
-kind = "periodic"      # "periodic" | "dirichlet" | "neumann"
+kind = "periodic"        # for DG; ignored by Fourier
 
-[init]
-type = "landau"
-amplitude = 1e-2
-k = 0.5
-seed_c1 = true
+# ---- Species ----
+# Electrons: light, warm, small density perturbation at k=1 (i.e. cos(2π x / L))
+[[species]]
+name           = "e"
+q              = -1.0
+m              = 1.0
+n0             = 1.0
+vth            = 1.0
+u0             = 0.0
+nu0            = 0.0
+hyper_p        = 0
+collide_cutoff = 3
+amplitude      = 1e-3         # δn amplitude for c0(x,0) = A cos(2π k x / L)
+k              = 1            # cycles in box
+seed_c1        = true         # small matching c1 seed
+
+# Ions: heavy, weakly warm, no initial perturbation (neutralizing background)
+[[species]]
+name           = "ions"
+q              = +1.0
+m              = 1836.0
+n0             = 1.0
+vth            = 0.1
+u0             = 0.0
+nu0            = 0.0
+hyper_p        = 0
+collide_cutoff = 3
+amplitude      = 0.0          # no IC perturbation
+k              = 0
+seed_c1        = false
 
 [plot]
-nv = 257
-vmax = 6.0
+nv         = 257
+vmax       = 6.0
+fps        = 30
+dpi        = 150
+no_show    = false
+fig_width = 10.0        # total width in inches
+fig_row_height = 2.2    # height per row in inches (row 1 is energy/Ex,t; each species adds a row)
 # save_anim = "out.mp4"   # or "" to disable
-fps = 30
-dpi = 150
-no_show = false

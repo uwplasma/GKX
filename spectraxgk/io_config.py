@@ -1,6 +1,6 @@
 # io_config.py
-from dataclasses import dataclass
-from typing import Optional, Any, Dict
+from dataclasses import dataclass, field
+from typing import Optional, Any, List, Union
 import math
 import re
 
@@ -9,6 +9,21 @@ try:
     import tomllib  # Python 3.11+
 except ModuleNotFoundError:
     import tomli as tomllib
+
+@dataclass
+class SpeciesCfg:
+    name: str = "species"
+    q: float = -1.0
+    m: float = 1.0
+    n0: float = 1.0
+    vth: float = 1.0      # reserved (basis is still centered at 0)
+    u0: float = 0.0       # drift (in v_th units)
+    nu0: float = 0.0
+    hyper_p: int = 0
+    collide_cutoff: int = 3
+    amplitude: float = 0.0
+    k: float = 0.0
+    seed_c1: bool = False
 
 @dataclass
 class SimCfg:
@@ -28,21 +43,10 @@ class GridCfg:
 @dataclass
 class HermiteCfg:
     N: int
-    nu0: float = 0.0
-    hyper_p: int = 0
-    collide_cutoff: int = 3
 
 @dataclass
 class BCCfg:
     kind: str            # "periodic" | "dirichlet" | "neumann"
-
-@dataclass
-class InitCfg:
-    type: str            # "landau" | "two_stream"
-    amplitude: float
-    k: Optional[float] = None
-    shift: Optional[float] = None
-    seed_c1: bool = False
 
 @dataclass
 class PlotCfg:
@@ -52,6 +56,8 @@ class PlotCfg:
     fps: int = 30
     dpi: int = 150
     no_show: bool = False
+    fig_width: float = 12.0
+    fig_row_height: float = 3.5
 
 @dataclass
 class Config:
@@ -59,8 +65,8 @@ class Config:
     grid: GridCfg
     hermite: HermiteCfg
     bc: BCCfg
-    init: InitCfg
     plot: PlotCfg
+    species: List[SpeciesCfg] = field(default_factory=list) 
 
 # ---------- safe expression support: "2*pi" ----------
 _ALLOWED_EXPR = re.compile(r"^[0-9\.\s\+\-\*\/\(\)piPI]+$")
@@ -89,7 +95,10 @@ def read_toml(path: str) -> Config:
     grid    = GridCfg(**d["grid"])
     hermite = HermiteCfg(**d["hermite"])
     bc      = BCCfg(**d["bc"])
-    init    = InitCfg(**d["init"])
     plot    = PlotCfg(**d.get("plot", {}))  # defaults if missing
+    
+    species = []
+    for sp in d.get("species", []):
+        species.append(SpeciesCfg(**sp))
 
-    return Config(sim=sim, grid=grid, hermite=hermite, bc=bc, init=init, plot=plot)
+    return Config(sim=sim, grid=grid, hermite=hermite, bc=bc, plot=plot, species=species)

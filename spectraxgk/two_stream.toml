@@ -1,25 +1,71 @@
 [sim]
-mode = "dg"
-backend = "eig"
-tmax = 40.0
-nt = 800
+mode    = "fourier"      # "fourier" or "dg"
+backend = "eig"          # "eig" or "diffrax"
+tmax    = 80.0
+nt      = 1200
 
 [grid]
-L = 2.0*pi
-Nx = 256
+L  = "2*pi"
+Nx = 24
 
 [hermite]
-N = 64
-nu0 = 0.0
-hyper_p = 0
-collide_cutoff = 3
+N               = 128
 
 [bc]
 kind = "periodic"
 
-[init]
-type = "two_stream"
-amplitude = 1e-3
-k = 0.5
-shift = 1.0
-seed_c1 = true
+# ---- Species ----
+# Electron beam drifting +u0
+[[species]]
+name           = "e_plus"
+q              = -1.0
+m              = 1.0
+n0             = 0.5
+vth            = 1.0
+u0             = 5.0
+nu0            = 0.0
+hyper_p        = 0
+collide_cutoff = 3
+amplitude      = 1e-3      # small density perturbation
+k              = 1         # excite mode k=1 (cos(2π x / L))
+seed_c1        = false
+
+# Electron beam drifting -u0
+[[species]]
+name           = "e_minus"
+q              = -1.0
+m              = 1.0
+n0             = 0.5
+vth            = 1.0
+u0             = -5.0
+nu0            = 0.0
+hyper_p        = 0
+collide_cutoff = 3
+amplitude      = 1e-3
+k              = 1
+seed_c1        = false
+
+# Ions: heavy, unperturbed background (can be warm if you like)
+[[species]]
+name           = "ions"
+q              = +1.0
+m              = 1836.0
+n0             = 1.0
+vth            = 0.1
+u0             = 0.0
+nu0            = 0.0
+hyper_p        = 0
+collide_cutoff = 3
+amplitude      = 0.0
+k              = 0
+seed_c1        = false
+
+[plot]
+nv         = 257
+vmax       = 6.0
+fps        = 30
+dpi        = 150
+no_show    = false
+fig_width = 10.0        # total width in inches
+fig_row_height = 2.2    # height per row in inches (row 1 is energy/Ex,t; each species adds a row)
+# save_anim = "out.mp4"   # or "" to disable

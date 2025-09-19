@@ -1,20 +1,23 @@
-# fourier.py
 """
-Fourier–Hermite mode bank.
-Build H_k and C once, form A_k = (-i H_k - C), then evolve either by Diffrax
-(ODE per k, real 2N system) or by batched eigendecomposition.
-Returns consistent keys: {"k", "C_knt", "Ek_kt"}.
+Fourier–Hermite mode bank (multi-species only).
+We build, per k, a coupled block system across species:
+  A(k) = (-i) * (H_tot + H_field) - C_tot
+and evolve either by eig or Diffrax (real 2M system under the hood).
+
+ICs are species-driven: each species s seeds its Hermite n=0 (and optionally n=1)
+on the spatial Fourier mode matching its requested cycles k_s,
+i.e. cos(2π k_s x / L) → equal power at ±k0_phys, so each matching k gets amp/2.
 """
 
-from typing import Tuple
-from functools import partial
+from typing import Tuple, Sequence
 import jax
 jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
+
 from hermite_ops import (
-    streaming_block_fourier,  # H_stream(k,N)
-    field_one_sided_fourier,  # H_field(k,N)
-    build_collision_matrix    # C(N; nu0, hyper_p, cutoff)
+    streaming_block_fourier,   # H_stream(k,N) real
+    field_one_sided_fourier,   # H_field(k,N)  real
+    build_collision_matrix     # C(N; nu0, hyper_p, cutoff) real
 )
 
 # Optional Diffrax
@@ -24,115 +27,199 @@ try:
 except Exception:
     HAS_DIFFRAX = False
 
-@jax.jit
-def eig_cache(A: jnp.ndarray):
-    w, V = jnp.linalg.eig(A)
-    Vinv = jnp.linalg.inv(V)
-    return w, V, Vinv
+
+# ---------------- Utilities ----------------
+def _match_mode(k_val: float, k0: float, tol: float) -> bool:
+    # Match by |k| since cos injects power at ±k0
+    return float(jnp.abs(jnp.abs(k_val) - jnp.abs(k0))) <= tol
 
 @jax.jit
-def evolve_cached(w, V, Vinv, c0, ts):
-    alpha = Vinv @ c0
-    phases = jnp.exp(w[:, None] * ts[None, :])
-    return V @ (phases * alpha[:, None])
+def _drift_shift(H: jnp.ndarray, k: float, u0: float) -> jnp.ndarray:
+    """Add species drift: H <- H + (k*u0) * I_N (Doppler shift)."""
+    N = H.shape[0]
+    return H + (k * u0) * jnp.eye(N, dtype=H.dtype)
 
-@partial(jax.jit, static_argnames=["N", "hyper_p", "cutoff"])
-def _A_from_k(k: float, N: int, nu0: float, hyper_p: int, cutoff: int) -> jnp.ndarray:
-    """Helper used by vmap: build H(k) = H_stream(k) + H_field(k)."""
-    H = streaming_block_fourier(k, N) + field_one_sided_fourier(k, N)           # (N,N) float64
-    C = build_collision_matrix(N, nu0, hyper_p, cutoff)                         # (N,N) float64
-    A = (-1j) * H.astype(jnp.complex128) - C.astype(jnp.complex128)             # (N,N) complex128
+@jax.jit
+def _block_diag(blocks: jnp.ndarray) -> jnp.ndarray:
+    """
+    Block-diagonal using a batched trick:
+      blocks: (S, N, N) -> (S*N, S*N)
+    """
+    S, N, _ = blocks.shape
+    eyeS = jnp.eye(S, dtype=blocks.dtype)
+    # Kronecker eyeS ⊗ block[i] and sum with mask
+    def one_row(i):
+        row = []
+        for j in range(S):
+            row.append(jnp.where(i == j, blocks[i], jnp.zeros_like(blocks[i])))
+        return jnp.block(row)
+    return jnp.block([[jnp.where(i == j, blocks[i], jnp.zeros_like(blocks[i]))
+                       for j in range(S)] for i in range(S)])
+
+
+# ---------------- Per-k coupled operator across species ----------------
+def _assemble_A_multi_for_k(
+    k: float,
+    species: Sequence,   # expects .q, .m, .u0, .nu0, .hyper_p, .collide_cutoff
+    N: int,
+) -> jnp.ndarray:
+    """
+    Build big complex A(k) for S species, size (S*N, S*N):
+
+      A = (-i) * ( H_tot + H_field ) - C_tot
+
+    - Per-species blocks: H_s = streaming + field-one-sided + drift (k*u0_s I)
+                          C_s = collisions
+    - Field coupling:
+        E_k = i/k * sum_r q_r * c0^{(r)}
+        dc1^{(s)}/dt += (q_s/m_s) * E_k
+        =>
+        H_field[(s,1),(r,0)] = (q_s/m_s) * (q_r) * (1/k)    (real), k=0 -> 0
+    """
+    S = len(species)
+
+    # per-species H_s and C_s (real float64)
+    H_blocks = []
+    C_blocks = []
+    for sp in species:
+        Hs = streaming_block_fourier(k, N) + field_one_sided_fourier(k, N)
+        Hs = _drift_shift(Hs, k, float(getattr(sp, "u0", 0.0)))
+        Cs = build_collision_matrix(
+            N,
+            float(getattr(sp, "nu0", 0.0)),
+            int(getattr(sp, "hyper_p", 0)),
+            int(getattr(sp, "collide_cutoff", 3)),
+        )
+        H_blocks.append(Hs)
+        C_blocks.append(Cs)
+
+    H_tot = _block_diag(jnp.stack(H_blocks, axis=0))   # (S*N, S*N)
+    C_tot = _block_diag(jnp.stack(C_blocks, axis=0))   # (S*N, S*N)
+
+    # field coupling H_field: only (n=1 <- n=0) across species
+    SNN = S * N
+    H_field = jnp.zeros((SNN, SNN), dtype=jnp.float64)
+    inv_k = 0.0 if (k == 0.0) else (1.0 / k)
+    for si, sp_s in enumerate(species):
+        for rj, sp_r in enumerate(species):
+            row = si * N + 1  # n=1
+            col = rj * N + 0  # n=0
+            H_field = H_field.at[row, col].set(
+                (float(sp_s.q) / float(sp_s.m)) * (float(sp_r.q)) * inv_k
+            )
+
+    # complex generator
+    A = (-1j) * (H_tot + H_field).astype(jnp.complex128) - C_tot.astype(jnp.complex128)
     return A
 
 
-def _batch_build_A(kvals: jnp.ndarray, N: int, nu0: float, hyper_p: int, cutoff: int) -> jnp.ndarray:
-    # vmap ONLY over k; N/hyper_p/cutoff stay python-statics for the jitted _A_from_k
-    build_one = lambda kk: _A_from_k(kk, N, nu0, hyper_p, cutoff)
-    return jax.vmap(build_one, in_axes=(0,))(kvals)  # (Nk, N, N)
+# ---------------- Diffrax block evolve (2M real system) ----------------
+def _diffrax_evolve_block(Ar: jnp.ndarray, Ai: jnp.ndarray, base: jnp.ndarray,
+                          ts: jnp.ndarray, tmax: float) -> jnp.ndarray:
+    if not HAS_DIFFRAX:
+        raise RuntimeError("Diffrax not installed.")
+
+    def rhs(t, y, args):
+        Ar, Ai = args
+        M = Ar.shape[0]
+        x = y[:M]; z = y[M:]
+        dx = Ar @ x - Ai @ z
+        dz = Ai @ x + Ar @ z
+        return jnp.concatenate([dx, dz])
+
+    y0 = jnp.concatenate([jnp.real(base), jnp.imag(base)])
+    ctrl = PIDController(rtol=1e-7, atol=1e-10, jump_ts=ts)
+    sol = diffeqsolve(
+        ODETerm(rhs), Tsit5(),
+        t0=0.0, t1=float(tmax), dt0=1e-3,
+        y0=y0, args=(Ar, Ai),
+        stepsize_controller=ctrl, saveat=SaveAt(ts=ts),
+        max_steps=2_000_000
+    )
+    M = Ar.shape[0]
+    Xr, Xi = sol.ys[:, :M], sol.ys[:, M:]
+    return (Xr + 1j * Xi).T
 
 
-# ---------------- Eig backend (batched) ----------------
-@jax.jit
-def _eig_evolve_batch(A_k: jnp.ndarray, c0: jnp.ndarray, ts: jnp.ndarray) -> jnp.ndarray:
+# ---------------- Public API (multi-species only) ----------------
+def run_bank_multispecies(
+    kvals: jnp.ndarray,
+    N: int,
+    species: Sequence,   # expects: q,m,n0,vth,u0,nu0,hyper_p,collide_cutoff, amplitude, k, seed_c1?
+    backend: str,
+    tmax: float,
+    nt: int,
+) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     """
-    Batched eigendecomposition and evolution across k.
-      A_k: (Nk, N, N) complex
-      c0:  (N,)       complex  (same initial condition for all k)
-      ts:  (nt,)      real
+    Multi-species Fourier–Hermite evolution.
+
     Returns:
-      C_knt: (Nk, N, nt) complex
-    """
-    def one_k(A):
-        w, V = jnp.linalg.eig(A)
-        Vinv = jnp.linalg.inv(V)
-        alpha = Vinv @ c0
-        phases = jnp.exp(w[:, None] * ts[None, :])       # (N, nt)
-        C = V @ (phases * alpha[:, None])                # (N, nt)
-        return C
-
-    return jax.vmap(one_k, in_axes=0)(A_k)               # (Nk, N, nt)
-
-
-# ---------------- Diffrax backend (per-k ODE) ----------------
-def rhs_real(t, y, A):
-    """
-    Real 2N state for dot c = (-i H - C) c.
-    Since Re(A)=-C, Im(A)=-H:
-      dx/dt = -C x + H y
-      dy/dt = -H x - C y
-    """
-    N = A.shape[0]
-    x = y[:N]; z = y[N:]
-    Ar, Ai = jnp.real(A), jnp.imag(A)
-    dx = Ar @ x - Ai @ z
-    dz = Ai @ x + Ar @ z
-    return jnp.concatenate([dx, dz])
-
-
-def run_bank(kvals: jnp.ndarray, N: int, nu0: float, hyper_p: int, cutoff: int,
-             backend: str, tmax: float, nt: int,
-             amplitude: float, seed_c1: bool) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    """
-    Return (ts, C_knt, Ek_kt), where:
-      ts: (nt,)
-      C_knt: (Nk, N, nt) Hermite coefficients per k
-      Ek_kt: (Nk, nt) electric field per k, with E_k = i c_{0k} / k
+      ts:      (nt,)
+      C_kSnt:  (Nk, S, N, nt) complex
+      Ek_kt:   (Nk, nt)       complex    with E_k = i/k * sum_s q_s c0^{(s)}
     """
     kvals = kvals.astype(jnp.float64)
     ts = jnp.linspace(0.0, tmax, nt, dtype=jnp.float64)
+    S = len(species)
 
-    # Build all A(k) at once (fast & JIT friendly)
-    A_k = _batch_build_A(kvals, N, nu0, hyper_p, cutoff)  # (Nk, N, N) complex128
+    # Infer L from Δk (kvals = 2π n / L). Handle degenerate Nk=1.
+    if kvals.size < 2:
+        dk = 2.0 * jnp.pi
+    else:
+        dk = float(kvals[1] - kvals[0])
+    L_inferred = 2.0 * jnp.pi / max(dk, 1e-30)
 
-    # Initial state (complex128)
-    amp = jnp.asarray(amplitude, jnp.float64)
-    base = jnp.zeros((N,), dtype=jnp.complex128).at[0].set(amp)
-    if seed_c1:
-        base = base.at[1].set(0.1 * amp)
+    # Precompute target physical wavenumbers & amplitudes per species
+    k0_phys_by_s = []
+    amp_by_s = []
+    seedc1_by_s = []
+    for sp in species:
+        ks = getattr(sp, "k", None)  # cycles in box
+        k0_phys = 0.0 if ks is None else (2.0 * jnp.pi * float(ks) / L_inferred)
+        k0_phys_by_s.append(float(k0_phys))
+        amp_by_s.append(float(getattr(sp, "amplitude", 0.0)))
+        seedc1_by_s.append(bool(getattr(sp, "seed_c1", False)))
 
-    def solve_one(A, k):
+    C_list = []
+    E_list = []
+
+    tol = 0.5 * abs(float(dk))  # tolerant mode match
+
+    for k in kvals:
+        # IC for this specific k: amp/2 on matching species (n=0), optional small n=1
+        base_blocks = []
+        for sidx, sp in enumerate(species):
+            amp_s = amp_by_s[sidx]
+            c0 = jnp.zeros((N,), jnp.complex128)
+            if _match_mode(float(k), k0_phys_by_s[sidx], tol=tol):
+                c0 = c0.at[0].set(0.5 * amp_s)           # cos → split into ±k
+                if seedc1_by_s[sidx]:
+                    c0 = c0.at[1].set(0.05 * amp_s)
+            base_blocks.append(c0)
+        base_k = jnp.concatenate(base_blocks, axis=0)  # (S*N,)
+
+        # Coupled operator and evolution
+        A = _assemble_A_multi_for_k(float(k), species, N)  # (S*N, S*N)
         if backend == "eig":
-            w, V, Vinv = eig_cache(A)
-            C = evolve_cached(w, V, Vinv, base, ts)                       # (N, nt)
+            w, V = jnp.linalg.eig(A)
+            Vinv = jnp.linalg.inv(V)
+            alpha = Vinv @ base_k
+            phases = jnp.exp(w[:, None] * ts[None, :])
+            Y = V @ (phases * alpha[:, None])               # (S*N, nt)
         else:
-            if not HAS_DIFFRAX:
-                raise RuntimeError("Diffrax not installed.")
-            # from diffrax import diffeqsolve, ODETerm, Tsit5, SaveAt, PIDController
-            y0 = jnp.concatenate([jnp.real(base), jnp.imag(base)])
-            controller = PIDController(rtol=1e-7, atol=1e-10, jump_ts=ts)
-            sol = diffeqsolve(
-                ODETerm(rhs_real), Tsit5(),
-                t0=0.0, t1=float(tmax), dt0=1e-3,
-                y0=y0, args=A,
-                stepsize_controller=controller, saveat=SaveAt(ts=ts),
-                max_steps=2_000_000
-            )
-            Y = sol.ys  # (nt, 2N)
-            Xr, Xi = Y[:, :N], Y[:, N:]
-            C = (Xr + 1j * Xi).T
-        Ek = 1j * C[0, :] / k
-        return C, Ek
+            Ar = jnp.real(A); Ai = jnp.imag(A)
+            Y  = _diffrax_evolve_block(Ar, Ai, base_k, ts, tmax)
 
-    # vmap over k-dimension
-    C_knt, Ek_kt = jax.vmap(solve_one, in_axes=(0, 0))(A_k, kvals)   # ((Nk,N,nt),(Nk,nt))
-    return jnp.asarray(ts), jnp.asarray(C_knt), jnp.asarray(Ek_kt)
+        C_Snt = Y.reshape((S, N, nt))               # (S, N, nt)
+        C_list.append(C_Snt)
+
+        # Field: E_k = i/k * sum_s q_s c0^{(s)} (safe k=0 → 0)
+        c0_by_s = C_Snt[:, 0, :]                            # (S, nt)
+        q = jnp.asarray([sp.q for sp in species], jnp.float64)[:, None]
+        rho_k = jnp.sum(q * c0_by_s, axis=0)                # (nt,)
+        inv_k = 0.0 if (k == 0.0) else (1.0 / k)
+        E_list.append(1j * inv_k * rho_k)                   # (nt,)
+
+    C_kSnt = jnp.stack(C_list, axis=0)   # (Nk, S, N, nt)
+    Ek_kt  = jnp.stack(E_list,  axis=0)  # (Nk, nt)
+    return jnp.asarray(ts), jnp.asarray(C_kSnt), jnp.asarray(Ek_kt)
