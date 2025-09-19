@@ -20,10 +20,13 @@ from spectraxgk.constants import (
 )
 
 def main():
-    parser = argparse.ArgumentParser(description="Run 1D Vlasov–Poisson experiment")
+    parser = argparse.ArgumentParser(description="Run simulation from TOML")
     parser.add_argument("--input", type=str, default="examples/two_stream.toml",
                         help="Path to TOML config (default: examples/two_stream.toml)")
     args = parser.parse_args()
+    
+    if args.input is None:
+        raise SystemExit("Please provide --input path to a TOML config (see repo examples/).")
 
     cfg = read_toml(args.input)
 
