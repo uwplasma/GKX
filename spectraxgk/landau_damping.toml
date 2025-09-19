@@ -8,12 +8,12 @@ nt = 800
 L = "2*pi"             # python-like; if not using python eval, put 6.28318530718
 Nx = 2
 # For Fourier mode bank (if mode="fourier"): kmin, kmax, Nk
-kmin = 0.4
-kmax = 0.6
-Nk = 3
+kmin = -0.5
+kmax =  0.5
+Nk = 5
 
 [hermite]
-N = 64
+N = 512
 nu0 = 0.0
 hyper_p = 0
 collide_cutoff = 3
@@ -23,6 +23,14 @@ kind = "periodic"      # "periodic" | "dirichlet" | "neumann"
 
 [init]
 type = "landau"
-amplitude = 1e-3
+amplitude = 1e-2
 k = 0.5
 seed_c1 = true
+
+[plot]
+nv = 257
+vmax = 6.0
+# save_anim = "out.mp4"   # or "" to disable
+fps = 30
+dpi = 150
+no_show = false

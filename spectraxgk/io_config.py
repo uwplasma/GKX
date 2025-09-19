@@ -1,23 +1,19 @@
 # io_config.py
 from dataclasses import dataclass
-from typing import Optional, Any
+from typing import Optional, Any, Dict
 import math
 import re
 
-# --- tomllib / tomli import with your requested fallback order ---
+# Prefer stdlib tomllib; fallback to tomli for <=3.10
 try:
     import tomllib  # Python 3.11+
 except ModuleNotFoundError:
-    try:
-        import pip._vendor.tomli as tomllib  # your preferred fallback
-    except Exception:
-        import tomli as tomllib  # final fallback if available
-
+    import tomli as tomllib
 
 @dataclass
 class SimCfg:
-    mode: str
-    backend: str
+    mode: str            # "fourier" | "dg"
+    backend: str         # "eig" | "diffrax"
     tmax: float
     nt: int
 
@@ -38,15 +34,24 @@ class HermiteCfg:
 
 @dataclass
 class BCCfg:
-    kind: str
+    kind: str            # "periodic" | "dirichlet" | "neumann"
 
 @dataclass
 class InitCfg:
-    type: str
+    type: str            # "landau" | "two_stream"
     amplitude: float
     k: Optional[float] = None
     shift: Optional[float] = None
     seed_c1: bool = False
+
+@dataclass
+class PlotCfg:
+    nv: int = 257
+    vmax: float = 6.0
+    save_anim: Optional[str] = None
+    fps: int = 30
+    dpi: int = 150
+    no_show: bool = False
 
 @dataclass
 class Config:
@@ -55,13 +60,13 @@ class Config:
     hermite: HermiteCfg
     bc: BCCfg
     init: InitCfg
+    plot: PlotCfg
 
-
-# Allow strings like "2*pi" (but not arbitrary code)
+# ---------- safe expression support: "2*pi" ----------
 _ALLOWED_EXPR = re.compile(r"^[0-9\.\s\+\-\*\/\(\)piPI]+$")
 
 def _coerce_constants(obj: Any) -> Any:
-    """Recursively convert strings like '2*pi' into floats (safe: only pi allowed)."""
+    """Recursively convert strings like '2*pi' (or 'PI/2') into floats, safely."""
     if isinstance(obj, dict):
         return {k: _coerce_constants(v) for k, v in obj.items()}
     if isinstance(obj, list):
@@ -75,21 +80,16 @@ def _coerce_constants(obj: Any) -> Any:
                 return obj
     return obj
 
-
 def read_toml(path: str) -> Config:
-    """Read a TOML config. Supports quoted expressions like "2*pi" -> float."""
     with open(path, "rb") as f:
-        text = f.read().decode("utf-8", errors="replace")
+        raw = tomllib.load(f)
+    d = _coerce_constants(raw)
 
-    # Parse TOML first (no pre-checks that can false-positive)
-    d = tomllib.loads(text)
-
-    # Optionally coerce any quoted expressions like "2*pi" -> float
-    d = _coerce_constants(d)
-
-    sim = SimCfg(**d["sim"])
-    grid = GridCfg(**d["grid"])
+    sim     = SimCfg(**d["sim"])
+    grid    = GridCfg(**d["grid"])
     hermite = HermiteCfg(**d["hermite"])
-    bc = BCCfg(**d["bc"])
-    init = InitCfg(**d["init"])
-    return Config(sim=sim, grid=grid, hermite=hermite, bc=bc, init=init)
+    bc      = BCCfg(**d["bc"])
+    init    = InitCfg(**d["init"])
+    plot    = PlotCfg(**d.get("plot", {}))  # defaults if missing
+
+    return Config(sim=sim, grid=grid, hermite=hermite, bc=bc, init=init, plot=plot)
