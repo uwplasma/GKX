@@ -8,22 +8,24 @@ Layout (always 2 columns):
 """
 
 from __future__ import annotations
-from typing import Optional, Tuple, Literal, Sequence, List, Tuple as TTuple
 
-import matplotlib.pyplot as plt
-import matplotlib.animation as animation
+from collections.abc import Sequence
+from typing import Literal
 
 import jax
+import matplotlib.pyplot as plt
+from matplotlib import animation
+
 jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.diagnostics import (
-    pick_k0_index,
-    energies_fourier_exact,
-    energies_dg_exact,
-)
 from spectraxgk.constants import speed_of_light as c_light
+from spectraxgk.diagnostics import (
+    energies_dg_exact,
+    energies_fourier_exact,
+    pick_k0_index,
+)
 
 
 # -------------------- Hermite basis --------------------
@@ -46,7 +48,9 @@ def hermite_basis(u: jnp.ndarray, N: int) -> jnp.ndarray:
         return (phi_n, phi_np1), phi_np1
 
     (_, _), rest = jax.lax.scan(body, (Phi[0], Phi[1]), jnp.arange(1, N - 1))
-    if N > 2:
+    if N > 2:  # noqa: PLR2004
+        # We already filled φ0 and φ1. `rest` contains exactly N-2 functions (φ2..φ_{N-1}),
+        # so place them starting at index 2 up to (but not including) N.
         Phi = Phi.at[2:N].set(rest)
     return Phi
 
@@ -57,25 +61,24 @@ def _maxwellian_shifted(v: jnp.ndarray, n0: float, u0: float, vth: float) -> jnp
     vth = jnp.asarray(vth, dtype=jnp.float64)
     return n0 * (1.0 / (jnp.sqrt(2.0 * jnp.pi) * vth)) * jnp.exp(-0.5 * ((v - u0) / vth) ** 2)
 
+
 def _sp_name(species_list, idx: int) -> str:
     return getattr(species_list[idx], "name", f"s{idx}")
+
 
 # -------------------- Panels --------------------
 def plot_phase_mixing(
     ts: jnp.ndarray,
-    C_nt_or_nxt: jnp.ndarray,       # (N, nt) or (N, Nx, nt)
+    C_nt_or_nxt: jnp.ndarray,  # (N, nt) or (N, Nx, nt)
     *,
     ax: plt.Axes,
     vmin_log: float = -14.0,
-    vmax_log: Optional[float] = None,
+    vmax_log: float | None = None,
     title: str = r"Phase mixing",
     cmap: str = "viridis",
 ) -> None:
-    # spatial average if needed
-    if C_nt_or_nxt.ndim == 3:
-        C_nt = jnp.mean(C_nt_or_nxt, axis=1)  # (N, nt)
-    else:
-        C_nt = C_nt_or_nxt
+    # If C has shape (N, Nx, nt) (3-D: Hermite × space × time), average over space (axis=1).
+    C_nt = jnp.mean(C_nt_or_nxt, axis=1) if C_nt_or_nxt.ndim == 3 else C_nt_or_nxt  # noqa: PLR2004
     Z = jnp.log(jnp.abs(C_nt) + 1e-300)
     im = ax.imshow(
         np.asarray(Z),
@@ -96,8 +99,8 @@ def plot_phase_mixing(
 def plot_energy_row(
     ts: jnp.ndarray,
     *,
-    species_energy: Sequence[TTuple[str, jnp.ndarray]],  # list of (label, W_kin_s(t))
-    W_field: jnp.ndarray,                                # (nt,)
+    species_energy: Sequence[tuple[str, jnp.ndarray]],  # list of (label, W_kin_s(t))
+    W_field: jnp.ndarray,  # (nt,)
     ax_energy: plt.Axes,
 ) -> None:
     for label, Wk in species_energy:
@@ -107,7 +110,8 @@ def plot_energy_row(
     W_total = W_field_np + np.sum([np.asarray(Wk) for _, Wk in species_energy], axis=0)
     ax_energy.plot(np.asarray(ts), W_total, "r-", label="Total")
     ax_energy.set_yscale("log")
-    ax_energy.set_xlabel("t"); ax_energy.set_ylabel("Energy")
+    ax_energy.set_xlabel("t")
+    ax_energy.set_ylabel("Energy")
     ax_energy.set_title("Energy conservation")
     ax_energy.legend(loc="best", fontsize=9)
 
@@ -130,7 +134,8 @@ def plot_E_xt_imshow(
         cmap=cmap,
     )
     ax.figure.colorbar(im, ax=ax, label="E")
-    ax.set_xlabel("x"); ax.set_ylabel("t")
+    ax.set_xlabel("x")
+    ax.set_ylabel("t")
     ax.set_title(title)
 
 
@@ -139,38 +144,42 @@ def plot_E_xt_imshow(
 def _reconstruct_F_dg_once(C_nx: jnp.ndarray, Phi: jnp.ndarray, f0: jnp.ndarray) -> jnp.ndarray:
     return f0[None, :] + (jnp.transpose(C_nx, (1, 0)) @ Phi)
 
+
 @jax.jit
-def _reconstruct_F_fourier_once(C_kn: jnp.ndarray, Phi: jnp.ndarray, expikx: jnp.ndarray, f0: jnp.ndarray) -> jnp.ndarray:
+def _reconstruct_F_fourier_once(
+    C_kn: jnp.ndarray, Phi: jnp.ndarray, expikx: jnp.ndarray, f0: jnp.ndarray
+) -> jnp.ndarray:
     A_kv = C_kn @ Phi
     Xv = jnp.real(jnp.transpose(expikx, (1, 0)) @ A_kv)
     return f0[None, :] + Xv
 
+
 def animate_distribution(
     *,
-    ts: jnp.ndarray,                         # (nt,)
-    v: jnp.ndarray,                          # (Nv,)
+    ts: jnp.ndarray,  # (nt,)
+    v: jnp.ndarray,  # (Nv,)
     v_th: float,
-    x: jnp.ndarray,                          # (Nx,)
+    x: jnp.ndarray,  # (Nx,)
     mode: Literal["dg", "fourier"],
     ax: plt.Axes,
-    C: Optional[jnp.ndarray] = None,         # DG: (N, Nx, nt)
-    C_knt: Optional[jnp.ndarray] = None,     # Fourier: (Nk, N, nt)
-    k: Optional[jnp.ndarray] = None,         # Fourier k: (Nk,)
-    species_params: Optional[dict] = None,   # one species dict (n0,u0,vth)
+    C: jnp.ndarray | None = None,  # DG: (N, Nx, nt)
+    C_knt: jnp.ndarray | None = None,  # Fourier: (Nk, N, nt)
+    k: jnp.ndarray | None = None,  # Fourier k: (Nk,)
+    species_params: dict | None = None,  # one species dict (n0,u0,vth)
     interval: int = 60,
-    clim: Optional[Tuple[float,float]] = None,
-    title: Optional[str] = None,
+    clim: tuple[float, float] | None = None,
+    title: str | None = None,
 ) -> animation.FuncAnimation:
     if title is None:
         title = "f(x,u,t)"
     ts = jnp.asarray(ts, dtype=jnp.float64)
-    v  = jnp.asarray(v,  dtype=jnp.float64)
-    x  = jnp.asarray(x,  dtype=jnp.float64)
+    v = jnp.asarray(v, dtype=jnp.float64)
+    x = jnp.asarray(x, dtype=jnp.float64)
 
     # single-species f0 for that row
     if species_params is not None:
-        n0  = float(species_params.get("n0", 1.0))
-        u0  = float(species_params.get("u0", 0.0))
+        n0 = float(species_params.get("n0", 1.0))
+        u0 = float(species_params.get("u0", 0.0))
         vth_s = float(species_params.get("vth", v_th))
         f0 = _maxwellian_shifted(v, n0, u0, vth_s)
     else:
@@ -180,12 +189,12 @@ def animate_distribution(
     if mode == "dg":
         if C is None:
             raise ValueError("DG mode needs C (N, Nx, nt).")
-        N  = int(C.shape[0])
+        N = int(C.shape[0])
         Phi = hermite_basis(v / v_th, N)
     else:
         if C_knt is None or k is None:
             raise ValueError("Fourier mode needs C_knt (Nk,N,nt) and k (Nk,).")
-        N  = int(C_knt.shape[1])
+        N = int(C_knt.shape[1])
         Phi = hermite_basis(v / v_th, N)
         k = jnp.asarray(k, dtype=jnp.float64)
         expikx = jnp.exp(1j * (k[:, None] * x[None, :]))  # (Nk, Nx)
@@ -197,7 +206,7 @@ def animate_distribution(
         F0 = _reconstruct_F_fourier_once(C_knt[:, :, 0], Phi, expikx, f0)
 
     im = ax.imshow(
-        np.asarray(F0).T,   # velocity on y-axis
+        np.asarray(F0).T,  # velocity on y-axis
         aspect="auto",
         origin="lower",
         extent=[float(x[0]), float(x[-1]), float(v[0]), float(v[-1])],
@@ -206,7 +215,8 @@ def animate_distribution(
     )
     if clim is not None:
         im.set_clim(*clim)
-    ax.set_xlabel("x"); ax.set_ylabel("u")
+    ax.set_xlabel("x")
+    ax.set_ylabel("u")
     ttl = ax.set_title(f"{title} @ t={float(ts[0]):.3f}")
 
     def update(i):
@@ -218,7 +228,9 @@ def animate_distribution(
         ttl.set_text(f"{title} @ t={float(ts[i]):.3f}")
         return (im, ttl)
 
-    ani = animation.FuncAnimation(ax.figure, update, frames=int(ts.shape[0]), interval=interval, blit=False)
+    ani = animation.FuncAnimation(
+        ax.figure, update, frames=int(ts.shape[0]), interval=interval, blit=False
+    )
     return ani
 
 
@@ -242,7 +254,6 @@ def render_suite_onefigure(cfg, ts: jnp.ndarray, out: dict) -> None:
 
     S = len(species_list)
 
-
     nv = int(getattr(plot_cfg, "nv", 257))
     vmin_c = getattr(plot_cfg, "vmin_c", None)
     vmax_c = getattr(plot_cfg, "vmax_c", None)
@@ -252,16 +263,16 @@ def render_suite_onefigure(cfg, ts: jnp.ndarray, out: dict) -> None:
         vmax = float(vmax_c) * c_light
     else:
         # fallback auto-range based on species
-        vmins = [float(sp.u0) - 5*float(sp.vth) for sp in species_list]
-        vmaxs = [float(sp.u0) + 5*float(sp.vth) for sp in species_list]
+        vmins = [float(sp.u0) - 5 * float(sp.vth) for sp in species_list]
+        vmaxs = [float(sp.u0) + 5 * float(sp.vth) for sp in species_list]
         vmin = min(vmins)
         vmax = max(vmaxs)
 
     v = jnp.linspace(vmin, vmax, nv, dtype=jnp.float64)
     save_anim = getattr(plot_cfg, "save_anim", None)
-    fps       = getattr(plot_cfg, "fps", 30)
-    dpi       = getattr(plot_cfg, "dpi", 150)
-    no_show   = getattr(plot_cfg, "no_show", False)
+    fps = getattr(plot_cfg, "fps", 30)
+    dpi = getattr(plot_cfg, "dpi", 150)
+    no_show = getattr(plot_cfg, "no_show", False)
     fig_width = getattr(plot_cfg, "fig_width", 12.0)
     fig_row_h = getattr(plot_cfg, "fig_row_height", 3.0)
 
@@ -274,9 +285,7 @@ def render_suite_onefigure(cfg, ts: jnp.ndarray, out: dict) -> None:
     # Build figure
     nrows = 1 + S
     fig, axes = plt.subplots(
-        nrows, 2,
-        figsize=(float(fig_width), float(fig_row_h) * nrows),
-        constrained_layout=True
+        nrows, 2, figsize=(float(fig_width), float(fig_row_h) * nrows), constrained_layout=True
     )
     axes = np.atleast_2d(axes)
 
@@ -284,21 +293,26 @@ def render_suite_onefigure(cfg, ts: jnp.ndarray, out: dict) -> None:
 
     # ---------- Row 1: Energy + E(x,t) ----------
     ax_energy = axes[0, 0]
-    ax_Ex_t   = axes[0, 1]
+    ax_Ex_t = axes[0, 1]
 
     L, Nx = float(cfg.grid.L), int(cfg.grid.Nx)
     xgrid = jnp.linspace(0.0, L, Nx, endpoint=False, dtype=jnp.float64)
     if cfg.sim.mode == "fourier":
-        species_energy, W_field, E_xt = energies_fourier_exact(out=out, species_list=species_list, L=L, Nx=Nx, x=xgrid)
+        species_energy, W_field, E_xt = energies_fourier_exact(
+            out=out, species_list=species_list, L=L, Nx=Nx, x=xgrid
+        )
         plot_energy_row(ts, species_energy=species_energy, W_field=W_field, ax_energy=ax_energy)
 
         if E_xt is not None:
             plot_E_xt_imshow(ts, xgrid, E_xt.T, ax=ax_Ex_t)
         else:
-            ax_Ex_t.set_title("E(x,t) unavailable"); ax_Ex_t.axis("off")
+            ax_Ex_t.set_title("E(x,t) unavailable")
+            ax_Ex_t.axis("off")
 
     else:
-        species_energy, W_field, E_xt = energies_dg_exact(out=out, species_list=species_list, L=L, Nx=Nx)
+        species_energy, W_field, E_xt = energies_dg_exact(
+            out=out, species_list=species_list, L=L, Nx=Nx
+        )
         plot_energy_row(ts, species_energy=species_energy, W_field=W_field, ax_energy=ax_energy)
         plot_E_xt_imshow(ts, out["x"], E_xt.T, ax=ax_Ex_t)
 
@@ -312,44 +326,57 @@ def render_suite_onefigure(cfg, ts: jnp.ndarray, out: dict) -> None:
         vth_s = float(getattr(sp, "vth", 1.0))
 
         if cfg.sim.mode == "fourier":
-            C_kSnt = out["C_kSnt"]       # (Nk,S,N,nt)
-            k      = out["k"]            # (Nk,)
+            C_kSnt = out["C_kSnt"]  # (Nk,S,N,nt)
+            k = out["k"]  # (Nk,)
             # Phase mixing at k≈0
             j0 = pick_k0_index(k)
-            C_s_n_t = C_kSnt[j0, s, :, :]            # (N,nt)
+            C_s_n_t = C_kSnt[j0, s, :, :]  # (N,nt)
             plot_phase_mixing(ts, C_s_n_t, ax=ax_pm, title=f"Phase mix ({sp_name})")
 
             # Distribution animation (use full bank for that species)
-            C_knt_s = C_kSnt[:, s, :, :]             # (Nk,N,nt)
+            C_knt_s = C_kSnt[:, s, :, :]  # (Nk,N,nt)
             ani = animate_distribution(
-                ts=ts, v=v, v_th=vth_s, x=xgrid,
-                mode="fourier", ax=ax_fx,
-                C_knt=C_knt_s, k=k,
-                species_params={"n0": getattr(sp, "n0", 1.0),
-                                "u0": getattr(sp, "u0", 0.0),
-                                "vth": getattr(sp, "vth", 1.0)},
+                ts=ts,
+                v=v,
+                v_th=vth_s,
+                x=xgrid,
+                mode="fourier",
+                ax=ax_fx,
+                C_knt=C_knt_s,
+                k=k,
+                species_params={
+                    "n0": getattr(sp, "n0", 1.0),
+                    "u0": getattr(sp, "u0", 0.0),
+                    "vth": getattr(sp, "vth", 1.0),
+                },
                 title=f"f(x,u,t) ({sp_name})",
             )
             anims.append(ani)
 
         else:
-            C_St = out["C_St"]                          # (S,N,Nx,nt)
-            C_s_nxt = C_St[s, :, :, :]                  # (N,Nx,nt)
+            C_St = out["C_St"]  # (S,N,Nx,nt)
+            C_s_nxt = C_St[s, :, :, :]  # (N,Nx,nt)
             plot_phase_mixing(ts, C_s_nxt, ax=ax_pm, title=f"Phase mix ({sp_name})")
             ani = animate_distribution(
-                ts=ts, v=v, v_th=vth_s, x=xgrid,
-                mode="dg", ax=ax_fx,
+                ts=ts,
+                v=v,
+                v_th=vth_s,
+                x=xgrid,
+                mode="dg",
+                ax=ax_fx,
                 C=C_s_nxt,
-                species_params={"n0": getattr(sp, "n0", 1.0),
-                                "u0": getattr(sp, "u0", 0.0),
-                                "vth": getattr(sp, "vth", 1.0)},
+                species_params={
+                    "n0": getattr(sp, "n0", 1.0),
+                    "u0": getattr(sp, "u0", 0.0),
+                    "vth": getattr(sp, "vth", 1.0),
+                },
                 title=f"f(x,u,t) ({sp_name})",
             )
             anims.append(ani)
 
         if first_ani is None:
             first_ani = ani
-    
+
     fig._anims = anims
 
     if save_anim and anims:

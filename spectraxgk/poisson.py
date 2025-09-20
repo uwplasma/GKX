@@ -8,6 +8,7 @@ Poisson solvers mapping c0(x) -> E(x) = -∂x φ with -∂x^2 φ = c0 on a DG0 g
 
 from functools import partial
 from typing import Literal
+
 import jax
 import jax.numpy as jnp
 
@@ -24,8 +25,8 @@ def _periodic_P(Nx: int, L: float) -> jnp.ndarray:
         Eh = -1j * k * ph
         return jnp.real(jnp.fft.ifft(Eh))
 
-    I = jnp.eye(Nx, dtype=jnp.float64)
-    cols = jax.vmap(apply, in_axes=0)(I)  # (Nx, Nx)
+    identity_matrix = jnp.eye(Nx, dtype=jnp.float64)
+    cols = jax.vmap(apply, in_axes=0)(identity_matrix)  # (Nx, Nx)
     return cols.T.astype(jnp.float64)
 
 
@@ -39,7 +40,7 @@ def _fd_P(Nx: int, L: float, bc: Literal["neumann", "dirichlet"]) -> jnp.ndarray
 
     # Laplacian
     main = -2.0 * jnp.ones((Nx,), jnp.float64)
-    off  =  1.0 * jnp.ones((Nx - 1,), jnp.float64)
+    off = 1.0 * jnp.ones((Nx - 1,), jnp.float64)
     A = jnp.diag(main) + jnp.diag(off, 1) + jnp.diag(off, -1)
     if bc == "neumann":
         A = A.at[0, 0].set(-1.0).at[-1, -1].set(-1.0)

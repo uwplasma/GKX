@@ -27,11 +27,11 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-  "pytest>=7.4",
-  "pytest-cov>=4.1",
-  "ruff>=0.6",
-  "mypy>=1.11",
-  "build>=1.2",
+  "pytest",
+  "pytest-cov",
+  "ruff",
+  "mypy",
+  "build",
 ]
 
 [project.scripts]
@@ -52,45 +52,53 @@ testpaths = ["tests"]
 
 # ---------------- Ruff ----------------
 [tool.ruff]
-line-length = 100
 target-version = "py311"
-# Core rules plus common quality checks
-select = ["E", "F", "I", "UP", "B", "W"]
-ignore = [
-  "E203",  # whitespace before ':' (Black/Ruff-format compat)
-]
-# Allow __init__ files to be lighter on imports
-per-file-ignores = {
-  "spectraxgk/__init__.py" = ["F401"],
-  "tests/**" = ["B011"],  # assert usage etc.
-}
+line-length = 100
+# Tell Ruff where your code lives (you are NOT using a "src/" layout):
+src = ["spectraxgk", "tests", "examples"]
+extend-exclude = ["build", "dist", ".eggs", "old_src", "old", "notebooks"]  # ⬅ add legacy dirs
 
-[tool.ruff.lint.isort]
-known-first-party = ["spectraxgk"]
 
 [tool.ruff.format]
-# Use Ruff's formatter (no Black needed).
+# Ruff-as-formatter (drop Black to avoid conflicts)
 quote-style = "double"
 indent-style = "space"
-docstring-code-format = true
+line-ending = "lf"
 
-# ---------------- MyPy ----------------
+[tool.ruff.lint]
+# Broad but sane rule set: pycodestyle/pyflakes/imports/pyupgrade/bugbear/etc.
+select = ["E", "F", "I", "UP", "B", "SIM", "W", "C90", "N", "PL"]
+ignore = [
+  "E203",  # compatible with many formatters; Ruff-format handles spacing
+  "E501",  # line-length handled by formatter; don't warn
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]              # allow re-export convenience imports
+"tests/**/*.py" = ["S101", "PLR2004", "N806"] # allow assert, magic-numbers in tests
+"examples/**/*.py" = ["S101"]         # allow assert in examples
+"*.py" = ["N802", "N803", "N806", "N812", "E402", "PLR0915", "PLR0913", "PLR0912", "C901"]
+
+# -------- MyPy ----------
 [tool.mypy]
 python_version = "3.11"
-warn_unused_configs = true
-warn_redundant_casts = true
+packages = ["spectraxgk"]
+pretty = true
 warn_unused_ignores = true
-warn_return_any = false
-no_implicit_optional = true
-strict_equality = true
-check_untyped_defs = true
-disallow_untyped_defs = false
-disallow_incomplete_defs = false
-disallow_any_generics = false
-disallow_subclassing_any = false
+warn_redundant_casts = true
+warn_unreachable = true
+show_error_codes = true
+# JAX-heavy code benefits from these two:
 follow_imports = "silent"
-plugins = []
+no_implicit_optional = true
 
-# JAX types can be noisy; keep tests looser.
-[mypy-tests.*]
+# Per-path or per-module adjustments:
+# (This REPLACES the invalid [mypy-tests.*] INI-style section.)
+[[tool.mypy.overrides]]
+module = "tests.*"
 ignore_errors = true
+
+# Example: silence types in vendorized utilities (optional)
+# [[tool.mypy.overrides]]
+# module = "spectraxgk.vendor.*"
+# ignore_errors = true

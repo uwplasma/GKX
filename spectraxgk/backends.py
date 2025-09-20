@@ -4,20 +4,19 @@ Thin wrappers to run either 'fourier' or 'dg' pipelines (multi-species only).
 Always return (ts, diag_dict) with keys used by the unified plots.
 """
 
-from typing import Dict, Tuple
 import jax.numpy as jnp
 
-from spectraxgk.io_config import GridCfg
-from spectraxgk.fourier import (
-    run_bank_multispecies_linear,
-    run_bank_multispecies_nonlinear,
-)
 from spectraxgk.dg import (
     assemble_A_real_multispecies,
     initial_condition_multispecies,
     solve_dg_multispecies,
     solve_dg_multispecies_nonlinear,
 )
+from spectraxgk.fourier import (
+    run_bank_multispecies_linear,
+    run_bank_multispecies_nonlinear,
+)
+from spectraxgk.io_config import GridCfg
 
 
 def resolve_kgrid(grid: GridCfg, *, only_positive: bool = False) -> jnp.ndarray:
@@ -72,7 +71,7 @@ def run_fourier(cfg):
     return ts, {"k": kvals, "C_kSnt": C_kSnt, "Ek_kt": Ek_kt}
 
 
-def run_dg(cfg) -> Tuple[jnp.ndarray, Dict[str, jnp.ndarray]]:
+def run_dg(cfg) -> tuple[jnp.ndarray, dict[str, jnp.ndarray]]:
     """
     Multi-species DG entry point.
     Returns:
@@ -84,8 +83,8 @@ def run_dg(cfg) -> Tuple[jnp.ndarray, Dict[str, jnp.ndarray]]:
       }
     """
     Nx = int(cfg.grid.Nx)
-    L  = float(cfg.grid.L)
-    N  = int(cfg.hermite.N)
+    L = float(cfg.grid.L)
+    N = int(cfg.hermite.N)
     model = getattr(cfg.sim, "model", "linear").lower()
 
     # Assemble global linear operator & Poisson map
@@ -134,9 +133,11 @@ def run_dg(cfg) -> Tuple[jnp.ndarray, Dict[str, jnp.ndarray]]:
     # Field: E = P @ (Σ_s q_s c0^{(s)})
     # c0 per species: (S, Nx, nt)
     c0_Sxt = C_St[:, 0, :, :]  # (S, Nx, nt)
-    q_vec = jnp.asarray([float(getattr(sp, "q", -1.0)) for sp in cfg.species], dtype=jnp.float64)  # (S,)
+    q_vec = jnp.asarray(
+        [float(getattr(sp, "q", -1.0)) for sp in cfg.species], dtype=jnp.float64
+    )  # (S,)
     # ρ(x,t) = Σ_s q_s c0^{(s)}(x,t)
     rho_xt = jnp.tensordot(q_vec, c0_Sxt, axes=(0, 0))  # (Nx, nt)
-    E_xt = jnp.einsum("ij,jt->it", P, rho_xt)          # (Nx, nt)
+    E_xt = jnp.einsum("ij,jt->it", P, rho_xt)  # (Nx, nt)
 
     return ts, {"C_t": C_sum, "C_St": C_St, "E_xt": E_xt, "x": x}
