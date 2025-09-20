@@ -1,0 +1,74 @@
+site_name: SPECTRAX-GK
+site_description: "Fourier–Hermite & DG JAX solvers for the multispecies Vlasov–Poisson system"
+site_url: https://uwplasma.github.io/SPECTRAX-GK/
+repo_url: https://github.com/uwplasma/SPECTRAX-GK
+repo_name: uwplasma/SPECTRAX-GK
+
+theme:
+  name: material
+  features:
+    - navigation.instant
+    - navigation.sections
+    - navigation.expand
+    - toc.integrate
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.tabs.link
+  palette:
+    - scheme: default
+      primary: blue
+      accent: indigo
+    - scheme: slate
+      primary: blue
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+
+nav:
+  - Home: index.md
+  - Install: install.md
+  - Quickstart: quickstart.md
+  - Physics: physics.md
+  - Inputs: inputs.md
+  - Outputs & Diagnostics: outputs.md
+  - API Reference:
+      - spectraxgk: api/index.md
+  - Developer Guide: dev_guide.md
+
+plugins:
+  - search
+  - autorefs
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            show_source: true
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.arithmatex:
+      generic: true   # MathJax
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.snippets
+  - pymdownx.tasklist
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+
+extra_javascript:
+  # MathJax for LaTeX equations
+  - https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/uwplasma/SPECTRAX-GK
