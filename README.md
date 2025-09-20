@@ -5,7 +5,7 @@
 [![CI](https://github.com/uwplasma/SPECTRAX-GK/actions/workflows/ci.yml/badge.svg)](https://github.com/uwplasma/SPECTRAX-GK/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-**SPECTRAX-GK** is a modern, differentiable solver for the multispecies **Vlasov–Poisson** system in 1D–1V, implemented with [JAX](https://github.com/google/jax).  
+**SPECTRAX-GK** is a modern, differentiable solver for the multispecies **Vlasov–Poisson** system in 1D–1V, implemented with [JAX](https://github.com/google/jax).
 It supports both **Fourier–Hermite** and **Discontinuous Galerkin (DG)** discretizations, runs on CPUs/GPUs/TPUs, and is designed for **plasma physics research, reproducibility, and education**.
 
 ---

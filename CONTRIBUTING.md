@@ -1,6 +1,6 @@
 # Contributing to SPECTRAX-GK
 
-We welcome contributions from the community!  
+We welcome contributions from the community!
 This document explains how to set up your development environment, run tests, and submit changes.
 
 ---
