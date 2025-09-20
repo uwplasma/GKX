@@ -33,9 +33,9 @@ nav:
   - Physics: physics.md
   - Inputs: inputs.md
   - Outputs & Diagnostics: outputs.md
+  - Developer Guide: dev_guide.md
   - API Reference:
       - spectraxgk: api/index.md
-  - Developer Guide: dev_guide.md
 
 plugins:
   - search
