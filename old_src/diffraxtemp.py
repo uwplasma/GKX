@@ -4,13 +4,15 @@
 
 # Enable 64-bit BEFORE importing jax.numpy
 import jax
+
 jax.config.update("jax_enable_x64", True)
 
 import jax.numpy as jnp
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
+from diffrax import ODETerm, PIDController, SaveAt, Tsit5, diffeqsolve
 from scipy.optimize import curve_fit
-from diffrax import diffeqsolve, ODETerm, Tsit5, SaveAt, PIDController
+
 
 def fit_decaying_cosine_abs(ts, Ek, tfit):
     """
@@ -100,7 +102,7 @@ def run_and_plot_diffrax(
     seed_c1=True,                      # small c1 to seed phase mixing
     rtol=1e-7, atol=1e-10, dt0=1e-2    # solver controls
 ):
-    
+
     # Build operators
     H = build_Hk(k, N)                           # real symmetric
     C = build_collision_matrix(N, nu0, hyper_p)  # real diagonal

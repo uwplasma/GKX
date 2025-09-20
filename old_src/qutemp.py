@@ -1,7 +1,9 @@
 # requirements: pip install "jax[cpu]" qujax optax
-import jax, jax.numpy as jnp
+import jax
+import jax.numpy as jnp
 import optax
 import qujax
+
 
 # --- Same FH pieces as above (copied here for self-containment) ---
 def hermite_streaming_tridiag(k: float, N: int, vth: float) -> jnp.ndarray:

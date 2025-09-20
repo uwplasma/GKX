@@ -10,6 +10,7 @@ Field closure:
 """
 
 from functools import partial
+
 import jax
 import jax.numpy as jnp
 

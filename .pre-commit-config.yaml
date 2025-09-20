@@ -1,0 +1,39 @@
+repos:
+  # --- Core hygiene ---
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+
+  # --- Ruff: lint + import sort + pyupgrade etc. ---
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.8
+    hooks:
+      - id: ruff
+        args: [--fix]        # autofix lint issues where safe
+      - id: ruff-format      # use Ruff as the code formatter
+
+  # --- MyPy (type checking) ---
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.11.2
+    hooks:
+      - id: mypy
+        additional_dependencies:
+          - types-setuptools
+          - types-PyYAML
+        # Keep mypy fast: only check project src + CLI, not venvs or notebooks
+        files: ^(spectraxgk/|tests/|examples/|scripts/|cli.py)
+        # You can pass custom mypy config file here if non-standard:
+        args: ["--config-file=pyproject.toml"]
+
+  # --- Spelling (optional but nice) ---
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.3.0
+    hooks:
+      - id: codespell
+        additional_dependencies: [tomli]
+        args: ["-L", "nd,fo"]   # allowlist false positives

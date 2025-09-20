@@ -2,16 +2,12 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main, master]
   pull_request:
 
 jobs:
-  test:
+  lint-type-test:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.10", "3.11", "3.12"]
 
     steps:
       - uses: actions/checkout@v4
@@ -19,21 +15,31 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.11"
 
-      - name: Install build backend and deps
+      - name: Install build + runtime deps
         run: |
           python -m pip install --upgrade pip
-          pip install .[dev] "jax[cpu]>=0.4.28"
+          pip install -e ".[dev,test]"  # assumes you defined extras in pyproject
 
-      - name: Lint (ruff)
-        run: ruff check .
+      - name: Ruff lint (CI)
+        run: |
+          ruff --version
+          # Fail CI if lint errors remain (no --fix in CI):
+          ruff check .
 
-      - name: Type check (mypy)  # optional; comment out if not ready
-        run: mypy src/spectraxgk || true
+      - name: Ruff format check (CI)
+        run: |
+          ruff format --check .
 
-      - name: Run tests
+      - name: MyPy (types)
+        run: |
+          mypy --version
+          mypy
+
+      - name: Pytest
         env:
+          MPLBACKEND: Agg         # headless tests for matplotlib
           JAX_ENABLE_X64: "true"
         run: |
           pytest -q --maxfail=1 --disable-warnings

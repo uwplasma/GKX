@@ -5,26 +5,28 @@
 #   python fh_slim.py --backend diffrax
 #   python fh_slim.py --backend eig
 
-import time
 import argparse
-import numpy as np
-import matplotlib.pyplot as plt
+import time
 from functools import partial
 
 # ---- JAX setup ----
 import jax
+import matplotlib.pyplot as plt
+import numpy as np
+
 jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 
 # Optional Diffrax (for --backend diffrax)
 try:
-    from diffrax import diffeqsolve, ODETerm, Tsit5, SaveAt, PIDController
+    from diffrax import ODETerm, PIDController, SaveAt, Tsit5, diffeqsolve
     HAS_DIFFRAX = True
 except Exception:
     HAS_DIFFRAX = False
 
 # SciPy only for the nonlinear |cos| fit
 from scipy.optimize import curve_fit
+
 
 # ============================ Operators (JAX, jittable) ============================
 @partial(jax.jit, static_argnames=['N'])

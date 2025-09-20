@@ -15,28 +15,34 @@ IC per species s:
   ⇒ each matching k gets amplitude_s / 2 on c_{n=0}.
 """
 
-from typing import Tuple, Sequence
+from collections.abc import Sequence
+
 import jax
+
 jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
-
 from diffrax import (
-    diffeqsolve, ODETerm, Tsit5,
-    SaveAt, PIDController, TqdmProgressMeter,
+    ODETerm,
+    PIDController,
+    SaveAt,
+    TqdmProgressMeter,
+    Tsit5,
+    diffeqsolve,
 )
 
 from spectraxgk.hermite_ops import (
-    streaming_block_fourier,   # H_stream(k,N) real
-    field_one_sided_fourier,   # H_field(k,N)  real
-    build_collision_matrix     # C(N; nu0, hyper_p, cutoff) real
+    build_collision_matrix,  # C(N; nu0, hyper_p, cutoff) real
+    field_one_sided_fourier,  # H_field(k,N)  real
+    streaming_block_fourier,  # H_stream(k,N) real
 )
+
 
 # ---------------- Utilities ----------------
 def _match_mode_array(k_val, k0, tol):
     """Return a JAX bool: | |k_val| - |k0| | <= tol."""
     k_val = jnp.asarray(k_val, jnp.float64)
-    k0    = jnp.asarray(k0,    jnp.float64)
-    tol   = jnp.asarray(tol,   jnp.float64)
+    k0 = jnp.asarray(k0, jnp.float64)
+    tol = jnp.asarray(tol, jnp.float64)
     return jnp.abs(jnp.abs(k_val) - jnp.abs(k0)) <= tol
 
 
@@ -62,8 +68,8 @@ def _block_diag_list(blocks: Sequence[jnp.ndarray]) -> jnp.ndarray:
 
 
 def _assemble_A_multi_for_k(
-    k,                       # JAX scalar
-    species: Sequence,       # expects .q, .m, .u0, .nu0, .hyper_p, .collide_cutoff
+    k,  # JAX scalar
+    species: Sequence,  # expects .q, .m, .u0, .nu0, .hyper_p, .collide_cutoff
     N: int,
 ) -> jnp.ndarray:
     """
@@ -120,8 +126,10 @@ def _build_linear_Ak_blocks(kvals: jnp.ndarray, N: int, species: Sequence) -> jn
     Build big A(k) (S*N x S*N) for each k and stack: (Nk, S*N, S*N) complex.
     """
     kvals = jnp.asarray(kvals, jnp.float64)
+
     def one_k(kk):
         return _assemble_A_multi_for_k(kk, species, N)
+
     return jax.vmap(one_k, in_axes=0)(kvals)
 
 
@@ -137,13 +145,14 @@ def _dealias_mask(kvals: jnp.ndarray, frac: float) -> jnp.ndarray:
 
 
 # ---------------- Diffrax block evolve (2M real system) ----------------
-def _diffrax_evolve_block(Ar: jnp.ndarray, Ai: jnp.ndarray, base: jnp.ndarray,
-                          ts: jnp.ndarray, tmax: float) -> jnp.ndarray:
-
+def _diffrax_evolve_block(
+    Ar: jnp.ndarray, Ai: jnp.ndarray, base: jnp.ndarray, ts: jnp.ndarray, tmax: float
+) -> jnp.ndarray:
     def rhs(t, y, args):
         Ar, Ai = args
         M = Ar.shape[0]
-        x = y[:M]; z = y[M:]
+        x = y[:M]
+        z = y[M:]
         dx = Ar @ x - Ai @ z
         dz = Ai @ x + Ar @ z
         return jnp.concatenate([dx, dz])
@@ -151,12 +160,17 @@ def _diffrax_evolve_block(Ar: jnp.ndarray, Ai: jnp.ndarray, base: jnp.ndarray,
     y0 = jnp.concatenate([jnp.real(base), jnp.imag(base)])
     ctrl = PIDController(rtol=1e-7, atol=1e-10, jump_ts=ts)
     sol = diffeqsolve(
-        ODETerm(rhs), Tsit5(),
-        t0=0.0, t1=float(tmax), dt0=1e-3,
-        y0=y0, args=(Ar, Ai),
-        stepsize_controller=ctrl, saveat=SaveAt(ts=ts),
+        ODETerm(rhs),
+        Tsit5(),
+        t0=0.0,
+        t1=float(tmax),
+        dt0=1e-3,
+        y0=y0,
+        args=(Ar, Ai),
+        stepsize_controller=ctrl,
+        saveat=SaveAt(ts=ts),
         progress_meter=TqdmProgressMeter(),
-        max_steps=2_000_000
+        max_steps=2_000_000,
     )
     M = Ar.shape[0]
     Xr, Xi = sol.ys[:, :M], sol.ys[:, M:]
@@ -167,11 +181,11 @@ def _diffrax_evolve_block(Ar: jnp.ndarray, Ai: jnp.ndarray, base: jnp.ndarray,
 def run_bank_multispecies_linear(
     kvals: jnp.ndarray,
     N: int,
-    species: Sequence,   # q,m,n0,vth,u0,nu0,hyper_p,collide_cutoff, amplitude, k, seed_c1?
+    species: Sequence,  # q,m,n0,vth,u0,nu0,hyper_p,collide_cutoff, amplitude, k, seed_c1?
     backend: str,
     tmax: float,
     nt: int,
-) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     """
     Linear multi-species Fourier–Hermite evolution.
 
@@ -181,22 +195,20 @@ def run_bank_multispecies_linear(
       Ek_kt:   (Nk, nt)       complex  (E_k = i/k * Σ_s q_s c0^{(s)}, safe k=0→0)
     """
     kvals = jnp.asarray(kvals, jnp.float64)
-    ts    = jnp.linspace(0.0, float(tmax), int(nt), dtype=jnp.float64)
-    S     = len(species)
-    Nk    = int(kvals.shape[0])
+    ts = jnp.linspace(0.0, float(tmax), int(nt), dtype=jnp.float64)
+    S = len(species)
+    Nk = int(kvals.shape[0])
 
     # infer L from Δk (k = 2π n / L)
-    if Nk < 2:
-        dk = 2.0 * jnp.pi
-    else:
-        dk = kvals[1] - kvals[0]
+
+    dk = 2.0 * jnp.pi if Nk < 2 else kvals[1] - kvals[0]  # noqa: PLR2004
     dk = jnp.asarray(dk, jnp.float64)
     L_inferred = 2.0 * jnp.pi / jnp.maximum(jnp.abs(dk), 1e-30)
 
     # per-species target |k0|
     k0_phys = []
-    amp     = []
-    seedc1  = []
+    amp = []
+    seedc1 = []
     for sp in species:
         cyc = getattr(sp, "k", None)
         amp.append(float(getattr(sp, "amplitude", 0.0)))
@@ -206,10 +218,10 @@ def run_bank_multispecies_linear(
         else:
             k0_phys.append(2.0 * jnp.pi * float(cyc) / L_inferred)
     k0_phys = jnp.asarray(k0_phys, jnp.float64)
-    amp     = jnp.asarray(amp,     jnp.float64)
+    amp = jnp.asarray(amp, jnp.float64)
 
     # build linear operators for each k
-    A_kk = _build_linear_Ak_blocks(kvals, N, species)   # (Nk, S*N, S*N) complex
+    A_kk = _build_linear_Ak_blocks(kvals, N, species)  # (Nk, S*N, S*N) complex
 
     C_list = []
     E_list = []
@@ -221,14 +233,14 @@ def run_bank_multispecies_linear(
         kk = kvals[ki]
         # IC on this k: half amplitude for matching species (cos → ±k)
         base_blocks = []
-        for si, sp in enumerate(species):
+        for si, _sp in enumerate(species):
             c0 = jnp.zeros((N,), jnp.complex128)
             is_match = _match_mode_array(kk, k0_phys[si], tol)
             c0 = c0.at[0].set(jnp.where(is_match, 0.5 * amp[si], 0.0))
             if seedc1[si]:
                 c0 = c0.at[1].set(jnp.where(is_match, 0.05 * amp[si], 0.0))
             base_blocks.append(c0)
-        base_k = jnp.concatenate(base_blocks, axis=0)   # (S*N,)
+        base_k = jnp.concatenate(base_blocks, axis=0)  # (S*N,)
 
         # evolve linearly with A(k)
         Ak = A_kk[ki, :, :]
@@ -237,23 +249,24 @@ def run_bank_multispecies_linear(
             Vinv = jnp.linalg.inv(V)
             alpha = Vinv @ base_k
             phases = jnp.exp(w[:, None] * ts[None, :])  # (S*N, nt)
-            Y = V @ (phases * alpha[:, None])           # (S*N, nt)
+            Y = V @ (phases * alpha[:, None])  # (S*N, nt)
         else:
-            Ar = jnp.real(Ak); Ai = jnp.imag(Ak)
-            Y  = _diffrax_evolve_block(Ar, Ai, base_k, ts, tmax)  # (S*N, nt)
+            Ar = jnp.real(Ak)
+            Ai = jnp.imag(Ak)
+            Y = _diffrax_evolve_block(Ar, Ai, base_k, ts, tmax)  # (S*N, nt)
 
-        C_Snt = Y.reshape((S, N, ts.shape[0]))         # (S, N, nt)
+        C_Snt = Y.reshape((S, N, ts.shape[0]))  # (S, N, nt)
         C_list.append(C_Snt)
 
         # field diagnostic: E_k = i/k * Σ_s q_s c0^{(s)}  (safe k=0→0)
-        c0_by_s = C_Snt[:, 0, :]                       # (S, nt)
+        c0_by_s = C_Snt[:, 0, :]  # (S, nt)
         q = jnp.asarray([float(sp.q) for sp in species], jnp.float64)[:, None]
-        rho_k_t = jnp.sum(q * c0_by_s, axis=0)         # (nt,)
-        inv_k   = jnp.where(kk != 0.0, 1.0 / kk, 0.0)
-        E_list.append(1j * inv_k * rho_k_t)            # (nt,)
+        rho_k_t = jnp.sum(q * c0_by_s, axis=0)  # (nt,)
+        inv_k = jnp.where(kk != 0.0, 1.0 / kk, 0.0)
+        E_list.append(1j * inv_k * rho_k_t)  # (nt,)
 
-    C_kSnt = jnp.stack(C_list, axis=0)   # (Nk, S, N, nt)
-    Ek_kt  = jnp.stack(E_list,  axis=0)  # (Nk, nt)
+    C_kSnt = jnp.stack(C_list, axis=0)  # (Nk, S, N, nt)
+    Ek_kt = jnp.stack(E_list, axis=0)  # (Nk, nt)
     return ts, C_kSnt, Ek_kt
 
 
@@ -267,9 +280,9 @@ def hermite_du_matrix(N: int) -> jnp.ndarray:
     if N > 1:
         n = jnp.arange(N, dtype=jnp.float64)
         # lower diag: n <- n+1   ( -√((n+1)/2) )
-        D = D.at[jnp.arange(N-1), jnp.arange(1, N)].set(-jnp.sqrt((n[:N-1] + 1.0) / 2.0))
+        D = D.at[jnp.arange(N - 1), jnp.arange(1, N)].set(-jnp.sqrt((n[: N - 1] + 1.0) / 2.0))
         # upper diag: n <- n-1   (  √(n/2) )
-        D = D.at[jnp.arange(1, N), jnp.arange(N-1)].set(jnp.sqrt(n[1:] / 2.0))
+        D = D.at[jnp.arange(1, N), jnp.arange(N - 1)].set(jnp.sqrt(n[1:] / 2.0))
     return D
 
 
@@ -281,8 +294,8 @@ def run_bank_multispecies_nonlinear(
     backend: str,
     tmax: float,
     nt: int,
-    dealias_frac: float = 2.0/3.0,
-) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    dealias_frac: float = 2.0 / 3.0,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     """
     Nonlinear electrostatic Vlasov–Poisson, multispecies (Fourier–Hermite).
     Pseudo-spectral NL in x, Hermite matrix in v.
@@ -293,32 +306,29 @@ def run_bank_multispecies_nonlinear(
       Ek_kt:   (Nk, nt) complex
     """
     kvals = jnp.asarray(kvals, jnp.float64)
-    Nk    = int(kvals.shape[0])
-    S     = len(species)
-    ts    = jnp.linspace(0.0, float(tmax), int(nt), dtype=jnp.float64)
+    Nk = int(kvals.shape[0])
+    S = len(species)
+    ts = jnp.linspace(0.0, float(tmax), int(nt), dtype=jnp.float64)
 
     # Linear part per-k (streaming + collisions + linear E⋅∂_v f0)
-    A_kk = _build_linear_Ak_blocks(kvals, N, species)          # (Nk, S*N, S*N)
+    A_kk = _build_linear_Ak_blocks(kvals, N, species)  # (Nk, S*N, S*N)
 
     # Hermite ∂_u and k-helpers for Poisson
-    Du   = hermite_du_matrix(N)                                 # (N,N) real
-    Du   = jnp.asarray(Du, jnp.float64)
-    inv_k   = jnp.where(kvals != 0.0, 1.0 / kvals, 0.0)         # (Nk,)
-    i_over_k = 1j * inv_k                                       # (Nk,)
-    dealias  = _dealias_mask(kvals, dealias_frac)               # (Nk,)
+    Du = hermite_du_matrix(N)  # (N,N) real
+    Du = jnp.asarray(Du, jnp.float64)
+    inv_k = jnp.where(kvals != 0.0, 1.0 / kvals, 0.0)  # (Nk,)
+    i_over_k = 1j * inv_k  # (Nk,)
+    dealias = _dealias_mask(kvals, dealias_frac)  # (Nk,)
     dealias_c = dealias.astype(jnp.complex128)
 
     # Infer L from Δk for mapping cycles→physical k0
-    if Nk < 2:
-        dk = 2.0 * jnp.pi
-    else:
-        dk = kvals[1] - kvals[0]
+    dk = 2.0 * jnp.pi if Nk < 2 else kvals[1] - kvals[0]  # noqa: PLR2004
     dk = jnp.asarray(dk, jnp.float64)
     L_inferred = 2.0 * jnp.pi / jnp.maximum(jnp.abs(dk), 1e-30)
 
     # IC: C_kSnt0 (Nk, S, N) at t=0
     k0_phys = []
-    amp     = []
+    amp = []
     for sp in species:
         cyc = getattr(sp, "k", None)
         amp.append(float(getattr(sp, "amplitude", 0.0)))
@@ -327,22 +337,24 @@ def run_bank_multispecies_nonlinear(
         else:
             k0_phys.append(2.0 * jnp.pi * float(cyc) / L_inferred)
     k0_phys = jnp.asarray(k0_phys, jnp.float64)
-    amp     = jnp.asarray(amp,     jnp.float64)
+    amp = jnp.asarray(amp, jnp.float64)
 
     # build mask per species for matching |k| ≈ |k0|
     tol = 0.5 * jnp.abs(dk)
     # C_kSnt0 init
     C_kSnt0 = jnp.zeros((Nk, S, N), dtype=jnp.complex128)
     for si in range(S):
-        match_si = _match_mode_array(kvals, k0_phys[si], tol)          # (Nk,)
-        seed = (0.5 * amp[si]) * match_si.astype(jnp.float64)          # (Nk,)
-        C_kSnt0 = C_kSnt0.at[:, si, 0].set(C_kSnt0[:, si, 0] + seed)   # put in n=0
+        match_si = _match_mode_array(kvals, k0_phys[si], tol)  # (Nk,)
+        seed = (0.5 * amp[si]) * match_si.astype(jnp.float64)  # (Nk,)
+        C_kSnt0 = C_kSnt0.at[:, si, 0].set(C_kSnt0[:, si, 0] + seed)  # put in n=0
 
     # pack/unpack for real 2M integration
     M = Nk * S * N
+
     def pack(C_kSnt):
         z = jnp.reshape(C_kSnt, (M,))
         return jnp.concatenate([jnp.real(z), jnp.imag(z)], axis=0)
+
     def unpack(y):
         yr, yi = jnp.split(y, 2, axis=0)
         z = yr + 1j * yi
@@ -350,25 +362,27 @@ def run_bank_multispecies_nonlinear(
 
     # linear term: vmap over k to apply A(k) @ y_k
     def lin_term(C_kSnt):
-        Y = C_kSnt.reshape((Nk, S * N))     # (Nk,S*N)
+        Y = C_kSnt.reshape((Nk, S * N))  # (Nk,S*N)
+
         def one_k(Ak, yk):
-            return Ak @ yk                  # (S*N,)
+            return Ak @ yk  # (S*N,)
+
         Z = jax.vmap(one_k, in_axes=(0, 0))(A_kk, Y)  # (Nk,S*N)
         return Z.reshape((Nk, S, N))
 
     # nonlinear term via physical x product: (q_s/m_s)/vth_s * E(x) * (∂_u δf_s)
-    q  = jnp.asarray([float(getattr(sp, "q",  -1.0)) for sp in species], jnp.float64)  # (S,)
-    m  = jnp.asarray([float(getattr(sp, "m",   1.0)) for sp in species], jnp.float64)  # (S,)
+    q = jnp.asarray([float(getattr(sp, "q", -1.0)) for sp in species], jnp.float64)  # (S,)
+    m = jnp.asarray([float(getattr(sp, "m", 1.0)) for sp in species], jnp.float64)  # (S,)
     vT = jnp.asarray([float(getattr(sp, "vth", 1.0)) for sp in species], jnp.float64)  # (S,)
-    scale_s = (q / m) / jnp.maximum(vT, 1e-30)                                         # (S,)
+    scale_s = (q / m) / jnp.maximum(vT, 1e-30)  # (S,)
 
     def nl_term(C_kSnt):
         # E from Poisson: E_k = (i/k) * Σ_s q_s c0_{k,s}   (k=0→0)
-        c0_kS = C_kSnt[:, :, 0]                      # (Nk,S)
-        rho_k = (c0_kS * q[None, :]).sum(axis=1)     # (Nk,)
-        E_k   = i_over_k * rho_k                     # (Nk,)
-        E_k   = dealias_c * E_k
-        E_x   = jnp.real(jnp.fft.ifft(E_k, axis=0))  # (Nx,) with Nx=Nk
+        c0_kS = C_kSnt[:, :, 0]  # (Nk,S)
+        rho_k = (c0_kS * q[None, :]).sum(axis=1)  # (Nk,)
+        E_k = i_over_k * rho_k  # (Nk,)
+        E_k = dealias_c * E_k
+        E_x = jnp.real(jnp.fft.ifft(E_k, axis=0))  # (Nx,) with Nx=Nk
 
         # to x-space: (S,N,Nx)
         C_SNx = jnp.transpose(jnp.fft.ifft(jnp.transpose(C_kSnt, (1, 2, 0)), axis=2), (0, 1, 2))
@@ -377,12 +391,14 @@ def run_bank_multispecies_nonlinear(
         # ∂_u in Hermite: (N,N) @ (N,Nx) per species
         out_SNx = []
         for si in range(S):
-            Gn = Du @ C_SNx[si, :, :]                # (N,Nx)
+            Gn = Du @ C_SNx[si, :, :]  # (N,Nx)
             out_SNx.append(scale_s[si] * (Gn * E_x[None, :]))
-        NL_SNx = jnp.stack(out_SNx, axis=0)          # (S,N,Nx)
+        NL_SNx = jnp.stack(out_SNx, axis=0)  # (S,N,Nx)
 
         # back to k and dealiased
-        NL_kSN = jnp.transpose(jnp.fft.fft(jnp.transpose(NL_SNx, (0, 1, 2)), axis=2), (2, 0, 1))  # (Nk,S,N)
+        NL_kSN = jnp.transpose(
+            jnp.fft.fft(jnp.transpose(NL_SNx, (0, 1, 2)), axis=2), (2, 0, 1)
+        )  # (Nk,S,N)
         NL_kSN = dealias_c[:, None, None] * NL_kSN
         return NL_kSN
 
@@ -398,31 +414,38 @@ def run_bank_multispecies_nonlinear(
     y0 = pack(C_kSnt0)
 
     if backend == "diffrax":
+
         def rhs_real(t, y, _):
             C = unpack(y)
             dC = rhs_complex(t, C)
             return pack(dC)
+
         term = ODETerm(rhs_real)
         controller = PIDController(rtol=1e-7, atol=1e-10, jump_ts=ts)
         sol = diffeqsolve(
-            term, Tsit5(),
-            t0=0.0, t1=float(tmax), dt0=1e-3,
-            y0=y0, args=None,
-            stepsize_controller=controller, saveat=SaveAt(ts=ts),
+            term,
+            Tsit5(),
+            t0=0.0,
+            t1=float(tmax),
+            dt0=1e-3,
+            y0=y0,
+            args=None,
+            stepsize_controller=controller,
+            saveat=SaveAt(ts=ts),
             progress_meter=TqdmProgressMeter(),
-            max_steps=4_000_000
+            max_steps=4_000_000,
         )
         ys = sol.ys  # (nt, 2M)
         C_seq = [unpack(ys[i]) for i in range(int(nt))]
-        C_kSnt = jnp.stack(C_seq, axis=-1)   # (Nk,S,N,nt)
+        C_kSnt = jnp.stack(C_seq, axis=-1)  # (Nk,S,N,nt)
     else:
         raise RuntimeError("Nonlinear Fourier mode requires backend='diffrax' currently.")
 
     # diagnostics: E_k(t) from c0
-    c0_k_t = C_kSnt[:, :, 0, :]                           # (Nk,S,nt)
-    q_vec  = jnp.asarray([float(getattr(sp, "q", -1.0)) for sp in species], jnp.float64)
+    c0_k_t = C_kSnt[:, :, 0, :]  # (Nk,S,nt)
+    q_vec = jnp.asarray([float(getattr(sp, "q", -1.0)) for sp in species], jnp.float64)
     rho_kt = jnp.sum(c0_k_t * q_vec[None, :, None], axis=1)  # (Nk,nt)
     inv_k_col = jnp.where(kvals[:, None] != 0.0, 1.0 / kvals[:, None], 0.0)
-    Ek_kt  = 1j * inv_k_col * rho_kt
+    Ek_kt = 1j * inv_k_col * rho_kt
 
     return ts, C_kSnt, Ek_kt
