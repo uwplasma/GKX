@@ -5,7 +5,7 @@
 [![CI](https://github.com/uwplasma/SPECTRAX-GK/actions/workflows/ci.yml/badge.svg)](https://github.com/uwplasma/SPECTRAX-GK/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-**SPECTRAX-GK** is a modern, differentiable solver for the multispecies **Vlasov–Poisson** system in 1D–1V, implemented with [JAX](https://github.com/google/jax).
+**SPECTRAX-GK** is a modern, differentiable solver for the multispecies **Vlasov–Poisson** system in 1D–1V, implemented with [JAX](https://github.com/google/jax).  
 It supports both **Fourier–Hermite** and **Discontinuous Galerkin (DG)** discretizations, runs on CPUs/GPUs/TPUs, and is designed for **plasma physics research, reproducibility, and education**.
 
 ---
@@ -18,10 +18,10 @@ It supports both **Fourier–Hermite** and **Discontinuous Galerkin (DG)** discr
 - **Linear and nonlinear physics**
 - **Multi-species support** (electrons, ions, arbitrary charge & mass)
 - **Units-aware input**
-  - time in plasma periods \(1/\omega_p\)
-  - length in Debye lengths \(\lambda_D\)
+  - time in plasma periods ![wp](https://latex.codecogs.com/svg.image?1/\omega_p&bg=transparent)
+  - length in Debye lengths ![ld](https://latex.codecogs.com/svg.image?\lambda_D&bg=transparent)
   - temperature in eV
-  - drift velocity in fractions of \(c\)
+  - drift velocity in fractions of ![c](https://latex.codecogs.com/svg.image?c&bg=transparent)
 - **Differentiable & JIT-able**: compatible with JAX AD for optimization and ML workflows
 - **Built-in diagnostics**: field & kinetic energy, electric field evolution, distribution functions
 - **Publication-quality plots and animations**
@@ -33,23 +33,26 @@ It supports both **Fourier–Hermite** and **Discontinuous Galerkin (DG)** discr
 
 We solve the **Vlasov–Poisson equations** in one spatial and one velocity dimension (1D1V):
 
-\[
-\frac{\partial f_s}{\partial t}
-+ v \frac{\partial f_s}{\partial x}
-+ \frac{q_s}{m_s} E(x,t) \frac{\partial f_s}{\partial v} = 0,
-\]
+![Vlasov](https://latex.codecogs.com/svg.image?\frac{\partial%20f_s}{\partial%20t}%20+%20v\,\frac{\partial%20f_s}{\partial%20x}%20+%20\frac{q_s}{m_s}E(x,t)\,\frac{\partial%20f_s}{\partial%20v}%20=%200&bg=transparent)
 
 with self-consistent electrostatics:
 
-\[
-\frac{\partial E}{\partial x} = \frac{1}{\epsilon_0}
-\sum_s q_s \int f_s \, dv.
-\]
+![Poisson](https://latex.codecogs.com/svg.image?\frac{\partial%20E}{\partial%20x}%20=%20\frac{1}{\epsilon_0}\sum_s%20q_s%20\int_{-\infty}^{\infty}%20f_s\,dv&bg=transparent)
 
 where
-- \(f_s(x,v,t)\): distribution function of species \(s\)
-- \(q_s, m_s\): species charge and mass
-- \(E(x,t)\): electric field
+- ![fs](https://latex.codecogs.com/svg.image?f_s(x,v,t)&bg=transparent): distribution function of species *s*
+- ![qs](https://latex.codecogs.com/svg.image?q_s&bg=transparent), ![ms](https://latex.codecogs.com/svg.image?m_s&bg=transparent): species charge and mass
+- ![E](https://latex.codecogs.com/svg.image?E(x,t)&bg=transparent): electric field
+
+### Key plasma scales
+
+Plasma frequency:
+
+![wp](https://latex.codecogs.com/svg.image?\omega_p%20=%20\sqrt{\frac{n_0%20q^2}{\epsilon_0%20m}}&bg=transparent)
+
+Debye length:
+
+![ld](https://latex.codecogs.com/svg.image?\lambda_D%20=%20\sqrt{\frac{\epsilon_0%20k_B%20T}{n_0%20q^2}}&bg=transparent)
 
 ### Discretizations
 
@@ -145,10 +148,10 @@ drift_c = 0.0
 
 * **Units**:
 
-  * `tmax`: multiples of $1/\omega_p$
-  * `L_lambdaD`: multiples of $\lambda_D$
+  * `tmax`: multiples of ![wp](https://latex.codecogs.com/svg.image?1/\omega_p\&bg=transparent)
+  * `L_lambdaD`: multiples of ![ld](https://latex.codecogs.com/svg.image?\lambda_D\&bg=transparent)
   * `temperature_eV`: in eV
-  * `drift_c`: fraction of speed of light
+  * `drift_c`: fraction of ![c](https://latex.codecogs.com/svg.image?c\&bg=transparent)
 * **Species**:
 
   * `mass_base = "electron"` or `"proton"` (scaled by `mass_multiple`)
@@ -161,7 +164,13 @@ drift_c = 0.0
 Diagnostics automatically produced:
 
 * **Energies**: kinetic + field energy
+
+  ![Wkin](https://latex.codecogs.com/svg.image?W_{\mathrm{kin},s}\(t\)%20=%20\frac{n_{0,s},m_s,v_{\mathrm{th},s}^2}{4\sqrt{2}}\int_0^{L}!\big\(C_{0,s}\(x,t\)%20+%20\sqrt{2},C_{2,s}\(x,t\)\big\),dx\&bg=transparent)
+
+  ![Wfield](https://latex.codecogs.com/svg.image?W_{\mathrm{field}}\(t\)%20=%20\int_0^L\frac{E\(x,t\)^2}{2,\epsilon_0},dx\&bg=transparent)
+
 * **Electric field** evolution in space & time
+
 * **Distribution functions** per species
 
 Plots are configurable under `[plot]` in the `.toml` file:
