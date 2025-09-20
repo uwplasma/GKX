@@ -33,6 +33,11 @@ dev = [
   "mypy",
   "build",
 ]
+docs = [
+  "mkdocs-material",
+  "mkdocstrings[python]",
+  "pymdown-extensions",
+]
 
 [project.scripts]
 spectraxgk = "spectraxgk.cli:main"
