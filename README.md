@@ -31,28 +31,8 @@ It supports both **Fourier–Hermite** and **Discontinuous Galerkin (DG)** discr
 
 ## 📖 Background
 
-We solve the **Vlasov–Poisson equations** in one spatial and one velocity dimension (1D1V):
+We solve the **Vlasov–Poisson equations** in one spatial and one velocity dimension (1D1V) with self-consistent electric field.
 
-![Vlasov](https://latex.codecogs.com/svg.image?\frac{\partial%20f_s}{\partial%20t}%20+%20v\,\frac{\partial%20f_s}{\partial%20x}%20+%20\frac{q_s}{m_s}E(x,t)\,\frac{\partial%20f_s}{\partial%20v}%20=%200&bg=transparent)
-
-with self-consistent electrostatics:
-
-![Poisson](https://latex.codecogs.com/svg.image?\frac{\partial%20E}{\partial%20x}%20=%20\frac{1}{\epsilon_0}\sum_s%20q_s%20\int_{-\infty}^{\infty}%20f_s\,dv&bg=transparent)
-
-where
-- ![fs](https://latex.codecogs.com/svg.image?f_s(x,v,t)&bg=transparent): distribution function of species *s*
-- ![qs](https://latex.codecogs.com/svg.image?q_s&bg=transparent), ![ms](https://latex.codecogs.com/svg.image?m_s&bg=transparent): species charge and mass
-- ![E](https://latex.codecogs.com/svg.image?E(x,t)&bg=transparent): electric field
-
-### Key plasma scales
-
-Plasma frequency:
-
-![wp](https://latex.codecogs.com/svg.image?\omega_p%20=%20\sqrt{\frac{n_0%20q^2}{\epsilon_0%20m}}&bg=transparent)
-
-Debye length:
-
-![ld](https://latex.codecogs.com/svg.image?\lambda_D%20=%20\sqrt{\frac{\epsilon_0%20k_B%20T}{n_0%20q^2}}&bg=transparent)
 
 ### Discretizations
 
@@ -164,10 +144,6 @@ drift_c = 0.0
 Diagnostics automatically produced:
 
 * **Energies**: kinetic + field energy
-
-  ![Wkin](https://latex.codecogs.com/svg.image?W_{\mathrm{kin},s}\(t\)%20=%20\frac{n_{0,s},m_s,v_{\mathrm{th},s}^2}{4\sqrt{2}}\int_0^{L}!\big\(C_{0,s}\(x,t\)%20+%20\sqrt{2},C_{2,s}\(x,t\)\big\),dx\&bg=transparent)
-
-  ![Wfield](https://latex.codecogs.com/svg.image?W_{\mathrm{field}}\(t\)%20=%20\int_0^L\frac{E\(x,t\)^2}{2,\epsilon_0},dx\&bg=transparent)
 
 * **Electric field** evolution in space & time
 
