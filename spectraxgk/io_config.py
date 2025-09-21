@@ -141,6 +141,7 @@ def _finalize_species_units(sp: SpeciesCfg) -> SpeciesCfg:
     sp.m = float(sp.mass_multiple) * m0
 
     # vth: sqrt(2 T / m), where T (J) = temperature_eV * e_charge
+    # T_J is k_B T in Joules (since 1 eV * e = k_B T for T in eV)
     if sp.temperature_eV is None:
         sp.vth = 0.0
     else:

@@ -1,9 +1,6 @@
 import jax.numpy as jnp
 
 from spectraxgk.constants import (
-    boltzmann_constant as kB,
-)
-from spectraxgk.constants import (
     elementary_charge as e_charge,
 )
 from spectraxgk.constants import (
@@ -74,11 +71,11 @@ def print_sim_summary(cfg: Config) -> None:
         u0 = float(sp.u0)
 
         # T from vth: T_J = 1/2 m vth^2   (no kB here; that appears in Debye via ε0*kB*T)
-        t_j = 0.5 * m_s * (vth**2)
-        t_ev = t_j / e_charge
+        kBT = 0.5 * m_s * (vth**2)  # Joules; equals k_B T
+        t_ev = kBT / e_charge  # eV
 
-        # Debye length: λ_D = sqrt( ε0 * kB * T / ( n0 e^2 ) ), with T inferred from vth
-        lambda_d = float(jnp.sqrt(epsilon_0 * kB * t_j / (n0_m3 * (e_charge**2))))
+        # Debye length: λ_D = sqrt( ε0 * (k_B T) / ( n0 e^2 ) ), and t_j = k_B T already.
+        lambda_d = float(jnp.sqrt(epsilon_0 * kBT / (n0_m3 * (e_charge**2))))
         # Plasma frequency: ω_p = sqrt( n0 e^2 / (ε0 m) )
         omega_p = float(jnp.sqrt(n0_m3 * (e_charge**2) / (epsilon_0 * m_s)))
 
