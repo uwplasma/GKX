@@ -24,12 +24,9 @@ from spectraxgk.util import (
 
 def main():
     parser = argparse.ArgumentParser(description="Run simulation from TOML")
-    parser.add_argument(
-        "--input",
-        type=str,
-        default="examples/two_stream.toml",
-        help="Path to TOML config (default: examples/two_stream.toml)",
-    )
+
+    parser.add_argument("input", type=str, nargs="?", help="Path to TOML config")
+
     args = parser.parse_args()
 
     if args.input is None:
