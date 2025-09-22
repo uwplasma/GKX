@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/images/spectraxgk_logo.svg" alt="SPECTRAX-GK" width="680">
+</p>
+
 # SPECTRAX-GK
 
 [![PyPI](https://img.shields.io/pypi/v/spectraxgk.svg)](https://pypi.org/project/spectraxgk/)
@@ -18,10 +22,10 @@ It supports both **Fourier–Hermite** and **Discontinuous Galerkin (DG)** discr
 - **Linear and nonlinear physics**
 - **Multi-species support** (electrons, ions, arbitrary charge & mass)
 - **Units-aware input**
-  - time in plasma periods ![wp](https://latex.codecogs.com/svg.image?1/\omega_p&bg=transparent)
-  - length in Debye lengths ![ld](https://latex.codecogs.com/svg.image?\lambda_D&bg=transparent)
+  - time in plasma periods w_p
+  - length in Debye lengths lambda_D
   - temperature in eV
-  - drift velocity in fractions of ![c](https://latex.codecogs.com/svg.image?c&bg=transparent)
+  - drift velocity in fractions of c
 - **Differentiable & JIT-able**: compatible with JAX AD for optimization and ML workflows
 - **Built-in diagnostics**: field & kinetic energy, electric field evolution, distribution functions
 - **Publication-quality plots and animations**

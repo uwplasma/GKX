@@ -6,6 +6,8 @@ repo_name: uwplasma/SPECTRAX-GK
 
 theme:
   name: material
+  logo: images/spectraxgk_logo.png
+  favicon: images/spectraxgk_logo.png
   features:
     - navigation.instant
     - navigation.sections
