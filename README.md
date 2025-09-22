@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/spectraxgk_logo.svg" alt="SPECTRAX-GK" width="680">
+  <img src="docs/images/spectraxgk_logo.svg" alt="SPECTRAX-GK" width="100">
 </p>
 
 # SPECTRAX-GK
