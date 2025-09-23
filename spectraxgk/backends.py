@@ -25,13 +25,17 @@ def resolve_kgrid(grid: GridCfg, *, only_positive: bool = False) -> jnp.ndarray:
     """
     if grid.L is None or grid.Nx is None:
         raise ValueError("Provide grid.L and grid.Nx in [grid].")
+        
     L = jnp.asarray(grid.L, dtype=jnp.float64)
     Nx = int(grid.Nx)
     dx = L / Nx
-    k = 2.0 * jnp.pi * jnp.fft.fftfreq(Nx, d=dx)  # float64 with x64 enabled
-    k = jnp.sort(k)
-    if only_positive:
-        k = k[k >= 0]
+    if Nx == 1:
+        k = jnp.array([2.0 * jnp.pi * jnp.fft.fftfreq(Nx+1, d=dx)[1]])
+    else:
+        k = 2.0 * jnp.pi * jnp.fft.fftfreq(Nx, d=dx)  # float64 with x64 enabled
+        k = jnp.sort(k)
+        if only_positive:
+            k = k[k >= 0]
     return k
 
 
