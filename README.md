@@ -132,10 +132,10 @@ drift_c = 0.0
 
 * **Units**:
 
-  * `tmax`: multiples of ![wp](https://latex.codecogs.com/svg.image?1/\omega_p\&bg=transparent)
-  * `L_lambdaD`: multiples of ![ld](https://latex.codecogs.com/svg.image?\lambda_D\&bg=transparent)
+  * `tmax`: multiples of w_p
+  * `L_lambdaD`: multiples of lambda_D
   * `temperature_eV`: in eV
-  * `drift_c`: fraction of ![c](https://latex.codecogs.com/svg.image?c\&bg=transparent)
+  * `drift_c`: fraction of c
 * **Species**:
 
   * `mass_base = "electron"` or `"proton"` (scaled by `mass_multiple`)
