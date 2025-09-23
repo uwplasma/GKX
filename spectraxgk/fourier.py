@@ -223,6 +223,19 @@ def run_bank_multispecies_linear(
     # build linear operators for each k
     A_kk = _build_linear_Ak_blocks(kvals, N, species)  # (Nk, S*N, S*N) complex
 
+    print(f"Running linear Fourier bank: {S} species, {N} Hermite modes, {Nk} k-modes upto t={tmax} with {nt} steps.")
+    print(f" Inferred box L = {L_inferred:.3e} m from Δk = {dk:.3e}  (k0_phys = 2π k / L)")
+    print("k0_phys (target physical k per species):", k0_phys)
+    print("kvals (all k-modes):", kvals)
+    print("amp (amplitude per species):", amp)
+    print(f" Backend: {backend}")
+    print("A_kk shape:", A_kk.shape)
+    for ki in range(A_kk.shape[0]):
+        print(f"\nA_kk[{ki}] (k = {kvals[ki]:.3e}):")
+        print(jnp.array(A_kk[ki]))
+    print("")
+    exit()
+
     C_list = []
     E_list = []
 
