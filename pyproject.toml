@@ -19,10 +19,15 @@ classifiers = [
 dynamic = ["version"]
 
 dependencies = [
-  "numpy",
-  "matplotlib",
-  "jax",
-  "diffrax",
+  "jax>=0.4.31",
+  "jaxlib>=0.4.31",
+  "equinox>=0.11.5",
+  "diffrax>=0.6.1",
+  "optax>=0.2.2",
+  "jaxopt>=0.8",
+  "numpy>=1.26",
+  "matplotlib>=3.8",
+  "tomli>=2; python_version<'3.11'",
 ]
 
 [project.optional-dependencies]
