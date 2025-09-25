@@ -31,12 +31,11 @@ spectraxgk --input examples/linear_slab.toml
 
 
 # 3) load & plot in Python
-python - <<'PY'
+python - <<
 from spectraxgk.post import load_result, plot_energy
 res = load_result("outputs/linear_slab_run.npz")
 print(res)
 plot_energy(res)
-PY
 ```
 
 ## Why this stack?
