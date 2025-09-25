@@ -1,0 +1,23 @@
+Be able to parallelize over multiple CPUs and/or GPUs
+
+Electrostatic closure: add quasi-neutrality using Laguerre algebra for and species sums; this becomes an algebraic solve each k/timestep. (Hooks are already in model.py.) See the moment-based flux-tube papers for formulae.
+
+Add plotting after every simulation in a figure with multiple subplots
+
+Batch k: promote kpar to an array and vmap the RHS over modes (PyTree state already plays nice).
+
+DG in x/y: fill the DG1D placeholder with modal mass/stiffness and flux terms; keep the RHS in PyTree form and Diffrax does the rest.
+
+Optimization: wrap parameters, closure coefficients into an eqx.Module, define a loss on diagnostics, and use Optax/JAXopt to calibrate.
+
+Richer I/O: optional Zarr/xarray writers; .npz stays as the simple default.
+
+Equinox gives the cleanest module-as-PyTree pattern (vs Flax for NN-heavy stacks); that keeps physics operators jit-friendly and composable.
+
+Diffrax is the de-facto JAX ODE/SDE library with adjoints, dense output, and a big solver zoo (Tsit5, Dopri8, symplectic, implicit).
+
+The approach aligns with modern HL moment GK work (Mandell, Frei et al.) and with the GX HL velocity discretization strategy.
+
+If you later want stencil/DG inspiration in JAX, jax-cfd (and similar) are good patterns for performance/parallelism.
+
+If you want, I can extend the canvas with (i) quasi-neutrality for electrostatic linear GK, (ii) batched multi-k support, and (iii) a tiny Optax example that fits a parameter to a synthetic dispersion curve.

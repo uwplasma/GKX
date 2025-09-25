@@ -1,8 +1,5 @@
-from importlib.metadata import PackageNotFoundError, version
+from spectraxgk.solver import run_simulation
+from spectraxgk.post import load_result
 
-try:
-    __version__ = version("spectraxgk")
-except PackageNotFoundError:
-    __version__ = "0.0.0"
 
-__all__ = ["__version__"]
+__all__ = ["run_simulation", "load_result"]
