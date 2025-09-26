@@ -2,12 +2,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-# Prefer stdlib tomllib; fallback to tomli for <=3.10
-try:
-    import tomllib  # Python 3.11+
-except ModuleNotFoundError:  # pragma: no cover
-    import pip._vendor.tomli as tomllib
-from tomllib import TOMLDecodeError
+# Prefer stdlib tomllib; fallback to pip vendored tomli for <=3.10
+import sys
+
+if sys.version_info >= (3, 11):
+    import tomllib
+    from tomllib import TOMLDecodeError
+else:  # Python ≤ 3.10
+    import pip._vendor.tomli as tomllib  # type: ignore[import-not-found]
+    class TOMLDecodeError(Exception):
+        """Compatibility shim for Python ≤3.10."""
+        pass
 
 
 @dataclass

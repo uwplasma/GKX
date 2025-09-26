@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Optional, Tuple
 
 import os
 
@@ -68,7 +69,7 @@ def _density_x_t(
     nt = C00_t.shape[0]
     L = (2 * np.pi / abs(k)) if k != 0 else (2 * np.pi)
     x = np.linspace(0.0, L, Nx)
-    t = None  # time vector provided externally when plotting
+    t: Optional[np.ndarray] = None  # time vector provided externally when plotting
     # Precompute cos/sin(kx)
     coskx = np.cos(k * x)
     sinkx = np.sin(k * x)

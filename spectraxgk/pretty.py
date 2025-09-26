@@ -1,9 +1,8 @@
-# spectraxgk/pretty.py
 from __future__ import annotations
 import os
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
-# Detect Rich availability (optional dependency)
+# Optional Rich availability
 _RICH_AVAIL = False
 try:
     from rich.console import Console
@@ -12,15 +11,15 @@ try:
     from rich.box import ROUNDED
     _RICH_AVAIL = True
 except Exception:  # pragma: no cover
-    pass
+    Console = object  # type: ignore[assignment]  # just to satisfy type names when Rich missing
+    Table = Panel = ROUNDED = object  # type: ignore[assignment]
 
-# Runtime switches (set by init_pretty)
-_USE_RICH = False
-_console = None  # type: ignore[misc]
+_USE_RICH: bool = False
+_console: Optional["Console"] = None
 
 def info_line(msg: str) -> None:
     """Print a single status line (respects Rich/NO_COLOR settings)."""
-    if _USE_RICH:
+    if _USE_RICH and _console is not None:
         _console.print(msg)  # style can be added later if desired
     else:
         print(msg)
@@ -40,7 +39,6 @@ def init_pretty(prefer_rich: bool = True) -> None:
         _USE_RICH = False
         _console = None
         return
-
     if prefer_rich and _RICH_AVAIL:
         _USE_RICH = True
         _console = Console()
@@ -81,7 +79,7 @@ def print_preflight(path: str, cfg) -> None:
     out_npz = os.path.join(cfg.paths.outdir, cfg.paths.outfile)
     out_png = os.path.splitext(out_npz)[0] + "_summary.png"
 
-    if _USE_RICH:
+    if _USE_RICH and _console is not None:
         header = Panel.fit(
             "[bold cyan]SPECTRAX-GK preflight[/bold cyan]\n"
             f"[dim]input:[/dim] {path}",
@@ -140,7 +138,7 @@ def print_summary(cfg, info: Dict[str, Any], elapsed_s: float) -> None:
     meta = info.get("meta", {})
     git = meta.get("git", None)
 
-    if _USE_RICH:
+    if _USE_RICH and _console is not None:
         header = Panel.fit(
             "[bold green]SPECTRAX-GK run summary[/bold green]",
             border_style="green", box=ROUNDED
