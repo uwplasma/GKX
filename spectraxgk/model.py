@@ -1,24 +1,28 @@
 from __future__ import annotations
 import equinox as eqx
+from typing import Optional
 import jax
 import jax.numpy as jnp
-from .operators import StreamingOperator, LenardBernstein
+from .operators import StreamingOperator, LenardBernstein, ElectrostaticDrive
 
 
 class LinearGK(eqx.Module):
     """Linear slab GK (streaming + LB collisions) in Hermite–Laguerre space.
+
     Future: add electrostatic closure via quasi-neutrality with Laguerre algebra.
     """
     stream: StreamingOperator
     collide: LenardBernstein
+    drive: Optional[ElectrostaticDrive] = None
 
-
-    def rhs(self, t: float, y: jnp.ndarray) -> jnp.ndarray:
+    def rhs(self, t: float, y: jnp.ndarray, args) -> jnp.ndarray:
+        """Diffrax vector field signature (t, y, args). `args` is unused."""
         Nn, Nm = self.stream.Nn, self.stream.Nm
         C = y.reshape(Nn, Nm)
         rhs = self.stream(C) + self.collide(C)
+        if self.drive is not None:
+            rhs = rhs + self.drive(C)
         return rhs.reshape(-1)
-
 
     def init_state(self, ic_kind: str, amp: float, phase: float) -> jnp.ndarray:
         Nn, Nm = self.stream.Nn, self.stream.Nm

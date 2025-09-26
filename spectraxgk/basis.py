@@ -13,10 +13,7 @@ def hermite_coupling_factors(Nn: int) -> tuple[jnp.ndarray, jnp.ndarray]:
 
 
 def lb_eigenvalues(Nn: int, Nm: int, alpha: float = 1.0, beta: float = 2.0) -> jnp.ndarray:
-    """Diagonal Lenard-Bernstein rates in Hermite-Laguerre space.
-    A common model is \lambda_{n,m} = alpha * n + beta * m. In 3D (two \perp dims),
-    a frequently used choice is alpha=1, beta=2 (reflecting two perpendicular degrees).
-    Overall collision frequency `nu` scales these rates.
+    """Diagonal Lenard–Bernstein rates in Hermite–Laguerre space.
     """
     n = jnp.arange(Nn)
     m = jnp.arange(Nm)

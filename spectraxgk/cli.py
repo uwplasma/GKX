@@ -9,11 +9,10 @@ def main():
     # Support either positional TOML or --input TOML
     p.add_argument("input_path", nargs="?", default=None, help="Path to TOML config (positional)")
     p.add_argument("--input", dest="input_path_flag", type=str, default=None,
-    help="Path to TOML config (optional flag)")
+                   help="Path to TOML config (optional flag)")
     args = p.parse_args()
-
 
     path = args.input_path_flag or args.input_path or "examples/linear_slab.toml"
     cfg = read_toml(path)
     info = run_simulation(cfg)
-    print(f"[OK] wrote {info['outfile']}")
+    print(f"\n[OK] wrote {info['outfile']}")

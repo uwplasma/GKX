@@ -3,11 +3,9 @@ from dataclasses import dataclass
 import jax
 import jax.numpy as jnp
 
-
 @dataclass
 class FourierZ:
     kpar: float
-
 
 @dataclass
 class DG1D:
