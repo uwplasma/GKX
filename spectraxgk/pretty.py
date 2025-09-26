@@ -1,21 +1,28 @@
 from __future__ import annotations
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Protocol, Callable
+
+# Anything with a `.print(...)` method (avoids depending on Rich types in annotations)
+class _ConsoleLike(Protocol):
+    def print(self, *args: Any, **kwargs: Any) -> Any: ...
 
 # Optional Rich availability
 _RICH_AVAIL = False
+_MAKE_CONSOLE: Optional[Callable[[], _ConsoleLike]] = None
 try:
-    from rich.console import Console
-    from rich.table import Table
-    from rich.panel import Panel
-    from rich.box import ROUNDED
+    from rich.console import Console  # type: ignore[import-not-found]
+    from rich.table import Table      # noqa: F401
+    from rich.panel import Panel      # noqa: F401
+    from rich.box import ROUNDED      # noqa: F401
     _RICH_AVAIL = True
+    _MAKE_CONSOLE = lambda: Console()
 except Exception:  # pragma: no cover
-    Console = object  # type: ignore[assignment]  # just to satisfy type names when Rich missing
-    Table = Panel = ROUNDED = object  # type: ignore[assignment]
+    _RICH_AVAIL = False
+    _MAKE_CONSOLE = None
 
 _USE_RICH: bool = False
-_console: Optional["Console"] = None
+_console: Optional[_ConsoleLike] = None
+
 
 def info_line(msg: str) -> None:
     """Print a single status line (respects Rich/NO_COLOR settings)."""
@@ -39,9 +46,9 @@ def init_pretty(prefer_rich: bool = True) -> None:
         _USE_RICH = False
         _console = None
         return
-    if prefer_rich and _RICH_AVAIL:
+    if prefer_rich and _RICH_AVAIL and _MAKE_CONSOLE is not None:
         _USE_RICH = True
-        _console = Console()
+        _console = _MAKE_CONSOLE()
     else:
         _USE_RICH = False
         _console = None
