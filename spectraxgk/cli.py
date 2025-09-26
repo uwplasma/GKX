@@ -1,25 +1,25 @@
 from __future__ import annotations
-
-import argparse
-
+import time
+from .args import parse_args
 from .io_config import read_toml
 from .solver import run_simulation
+from .pretty import init_pretty, print_preflight, print_summary, info_line
 
 
 def main():
-    p = argparse.ArgumentParser(description="Run SPECTRAX-GK from a TOML config")
-    # Support either positional TOML or --input TOML
-    p.add_argument("input_path", nargs="?", default=None, help="Path to TOML config (positional)")
-    p.add_argument(
-        "--input",
-        dest="input_path_flag",
-        type=str,
-        default=None,
-        help="Path to TOML config (optional flag)",
-    )
-    args = p.parse_args()
+    args = parse_args()
+    init_pretty(prefer_rich=not args.no_rich)
 
-    path = args.input_path_flag or args.input_path or "examples/linear_slab.toml"
-    cfg = read_toml(path)
+    cfg = read_toml(args.path)
+
+    # Preflight BEFORE solving
+    print_preflight(args.path, cfg)
+    if args.dry_run:
+        return
+
+    info_line("Starting solve…")
+    t0 = time.time()
     info = run_simulation(cfg)
-    print(f"\n[OK] wrote {info['outfile']}")
+    t1 = time.time()
+
+    print_summary(cfg, info, t1 - t0)

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import equinox as eqx
 import jax.numpy as jnp
+import equinox as eqx
+import jax.numpy as jnp
 
 from .basis import hermite_coupling_factors, lb_eigenvalues
 
@@ -32,16 +34,18 @@ class StreamingOperator(eqx.Module):
         object.__setattr__(self, "sqrt_n", sn)
         object.__setattr__(self, "sqrt_np1", snp1)
 
-    def __call__(self, C: jnp.ndarray) -> jnp.ndarray:
-        # C has shape (Nn, Nm). Build the two nearest-neighbor couplings in n.
-        # For the C_{n+1} term: shift C down by one (pad last row with zeros) and
-        # multiply by sqrt(n+1) evaluated at each n.
-        upper = jnp.pad(C[1:, :], ((0, 1), (0, 0))) * self.sqrt_np1[:, None]
-        # For the C_{n-1} term: shift C up by one (pad first row with zeros) and
-        # multiply by sqrt(n) evaluated at each n.
-        lower = jnp.pad(C[:-1, :], ((1, 0), (0, 0))) * self.sqrt_n[:, None]
-        rhs = -1j * self.kpar * self.vth / jnp.sqrt(2.0) * (upper + lower)
-        return rhs
+    @property
+    def a(self) -> jnp.ndarray:
+        # scalar factor kpar * vth / sqrt(2)
+        return self.kpar * self.vth / jnp.sqrt(2.0)
+
+    def couple_real(self, X: jnp.ndarray) -> jnp.ndarray:
+        """Apply the Hermite nearest-neighbour coupling to a REAL (Nn,Nm) array.
+        Returns (upper + lower). No -i factor here.
+        """
+        upper = jnp.pad(X[1:, :], ((0, 1), (0, 0))) * self.sqrt_np1[:, None]
+        lower = jnp.pad(X[:-1, :], ((1, 0), (0, 0))) * self.sqrt_n[:, None]
+        return upper + lower
 
 
 class LenardBernstein(eqx.Module):
@@ -79,3 +83,43 @@ class ElectrostaticDrive(eqx.Module):
         # Only (n=1,m=0) gets the drive
         dC = dC.at[1, 0].add(-1j * self.coef * E)
         return dC
+
+class StreamingRHS(eqx.Module):
+    """dCr = -a*S(Ci), dCi = +a*S(Cr) using StreamingOperator.couple_real and factor a."""
+    stream: "StreamingOperator"
+
+    def __call__(self, Cr: jnp.ndarray, Ci: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
+        S_Cr = self.stream.couple_real(Cr)
+        S_Ci = self.stream.couple_real(Ci)
+        a = self.stream.a
+        dCr = -a * S_Ci
+        dCi =  a * S_Cr
+        return dCr, dCi
+
+
+class CollisionsRHS(eqx.Module):
+    """dCr -= nu*λ*Cr, dCi -= nu*λ*Ci in HL space (diagonal)."""
+    collide: "LenardBernstein"
+
+    def __call__(self, Cr: jnp.ndarray, Ci: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
+        Nn, Nm = self.collide.Nn, self.collide.Nm
+        lam = lb_eigenvalues(Nn, Nm, self.collide.alpha, self.collide.beta)
+        dCr = -self.collide.nu * lam * Cr
+        dCi = -self.collide.nu * lam * Ci
+        return dCr, dCi
+
+
+class ElectrostaticDriveRHS(eqx.Module):
+    """E_∥ ~ C_{0,0}/kpar; inject only into (n=1, m=0)."""
+    drive: "ElectrostaticDrive"
+
+    def __call__(self, Cr: jnp.ndarray, Ci: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
+        Nn, Nm = self.drive.Nn, self.drive.Nm
+        dCr = jnp.zeros((Nn, Nm), dtype=Cr.dtype)
+        dCi = jnp.zeros((Nn, Nm), dtype=Ci.dtype)
+        k = self.drive.kpar
+        Er = jnp.where(k != 0.0, Cr[0, 0] / k, 0.0)
+        Ei = jnp.where(k != 0.0, Ci[0, 0] / k, 0.0)
+        dCr = dCr.at[1, 0].add(self.drive.coef * Er)
+        dCi = dCi.at[1, 0].add(self.drive.coef * Ei)
+        return dCr, dCi

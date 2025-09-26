@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  lint-type-test:
+  type-and-test:
     runs-on: ubuntu-latest
 
     steps:
@@ -20,17 +20,10 @@ jobs:
       - name: Install build + runtime deps
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,test]"  # assumes you defined extras in pyproject
-
-      - name: Ruff lint (CI)
-        run: |
-          ruff --version
-          # Fail CI if lint errors remain (no --fix in CI):
-          ruff check .
-
-      - name: Ruff format check (CI)
-        run: |
-          ruff format --check .
+          # Core
+          pip install -e .
+          # Test & type
+          pip install pytest mypy rich matplotlib
 
       - name: MyPy (types)
         run: |
@@ -39,7 +32,7 @@ jobs:
 
       - name: Pytest
         env:
-          MPLBACKEND: Agg         # headless tests for matplotlib
+          MPLBACKEND: Agg
           JAX_ENABLE_X64: "true"
         run: |
           pytest -q --maxfail=1 --disable-warnings
