@@ -1,9 +1,10 @@
 from __future__ import annotations
+
 import equinox as eqx
-from typing import Optional
 import jax
 import jax.numpy as jnp
-from .operators import StreamingOperator, LenardBernstein, ElectrostaticDrive
+
+from .operators import ElectrostaticDrive, LenardBernstein, StreamingOperator
 
 
 class LinearGK(eqx.Module):
@@ -11,9 +12,10 @@ class LinearGK(eqx.Module):
 
     Future: add electrostatic closure via quasi-neutrality with Laguerre algebra.
     """
+
     stream: StreamingOperator
     collide: LenardBernstein
-    drive: Optional[ElectrostaticDrive] = None
+    drive: ElectrostaticDrive | None = None
 
     def rhs(self, t: float, y: jnp.ndarray, args) -> jnp.ndarray:
         """Diffrax vector field signature (t, y, args). `args` is unused."""

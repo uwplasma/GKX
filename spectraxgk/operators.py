@@ -1,6 +1,8 @@
 from __future__ import annotations
+
 import equinox as eqx
 import jax.numpy as jnp
+
 from .basis import hermite_coupling_factors, lb_eigenvalues
 
 
@@ -12,6 +14,7 @@ class StreamingOperator(eqx.Module):
     We **precompute** sqrt(n) and sqrt(n+1) once and store them as fields to avoid
     rebuilding small arrays in the hot path.
     """
+
     Nn: int = eqx.static_field()
     Nm: int = eqx.static_field()
     kpar: float
@@ -46,6 +49,7 @@ class LenardBernstein(eqx.Module):
 
     C_dot += -nu * (alpha*n + beta*m) * C_{n,m}
     """
+
     Nn: int = eqx.static_field()
     Nm: int = eqx.static_field()
     nu: float
@@ -55,13 +59,14 @@ class LenardBernstein(eqx.Module):
     def __call__(self, C: jnp.ndarray) -> jnp.ndarray:
         lam = lb_eigenvalues(self.Nn, self.Nm, self.alpha, self.beta)
         return -self.nu * lam * C
-    
+
 
 class ElectrostaticDrive(eqx.Module):
     """Very simple electrostatic drive:
-       E_parallel ~ C_{0,0} / kpar
-       dC_{1,0}/dt += coef * E_parallel
+    E_parallel ~ C_{0,0} / kpar
+    dC_{1,0}/dt += coef * E_parallel
     """
+
     Nn: int = eqx.static_field()
     Nm: int = eqx.static_field()
     kpar: float

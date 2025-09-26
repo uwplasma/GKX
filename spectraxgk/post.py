@@ -1,8 +1,10 @@
 from __future__ import annotations
+
 import os
-from typing import Any, Dict
-import numpy as np
+
 import matplotlib.pyplot as plt
+import numpy as np
+
 from .types import Result
 
 
@@ -14,7 +16,7 @@ def load_result(path: str) -> Result:
 
 def plot_energy(res: Result):
     """Interactive plot (does not save)."""
-    E = np.sum(np.abs(res.C)**2, axis=(1, 2))
+    E = np.sum(np.abs(res.C) ** 2, axis=(1, 2))
     plt.figure()
     plt.plot(res.t, E)
     plt.xlabel("t")
@@ -29,7 +31,9 @@ from numpy.polynomial.hermite import hermval  # physicists' Hermite H_n
 from numpy.polynomial.laguerre import lagval  # standard Laguerre L_m
 
 
-def _reconstruct_f_vpar_vperp(C_nm: np.ndarray, vpar: np.ndarray, vperp: np.ndarray, vth: float) -> np.ndarray:
+def _reconstruct_f_vpar_vperp(
+    C_nm: np.ndarray, vpar: np.ndarray, vperp: np.ndarray, vth: float
+) -> np.ndarray:
     """Qualitative f(v_parallel, v_perp) from Hermite–Laguerre coefficients.
     Uses H_n(x) and L_m(ρ) with Maxwell weight exp(-x^2-ρ). For quick-look plots.
     """
@@ -38,11 +42,13 @@ def _reconstruct_f_vpar_vperp(C_nm: np.ndarray, vpar: np.ndarray, vperp: np.ndar
     rho = (vperp / float(vth)) ** 2
     H = np.empty((Nn, x.size))
     for n in range(Nn):
-        coef = np.zeros(n + 1); coef[-1] = 1.0
+        coef = np.zeros(n + 1)
+        coef[-1] = 1.0
         H[n] = hermval(x, coef)
     L = np.empty((Nm, rho.size))
     for m in range(Nm):
-        coef = np.zeros(m + 1); coef[-1] = 1.0
+        coef = np.zeros(m + 1)
+        coef[-1] = 1.0
         L[m] = lagval(rho, coef)
     weight = np.exp(-(x[:, None] ** 2) - rho[None, :])
     f = np.zeros((x.size, rho.size), dtype=np.complex128)
@@ -52,7 +58,9 @@ def _reconstruct_f_vpar_vperp(C_nm: np.ndarray, vpar: np.ndarray, vperp: np.ndar
     return (f * weight).real
 
 
-def _density_x_t(C00_t: np.ndarray, k: float, Nx: int = 256) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def _density_x_t(
+    C00_t: np.ndarray, k: float, Nx: int = 256
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Build density(x,t) assuming a single Fourier mode with amplitude C_{0,0}(t).
     density(x,t) = Re{ C00(t) * exp(i * k * x) }.
     Returns (x, t, dens) with dens shape (nt, Nx).
@@ -85,7 +93,7 @@ def save_summary(res: Result, out_png: str) -> str:
       (2,1) Stacked heatmap of |C_{n,m}(t)| for all m (blocks m=0,1,...) over time
     """
     # Scalars & slices
-    E = np.sum(np.abs(res.C)**2, axis=(1, 2))
+    E = np.sum(np.abs(res.C) ** 2, axis=(1, 2))
     C00 = res.C[:, 0, 0]
 
     # Velocity grids for quick-look f(v) plots
@@ -98,10 +106,12 @@ def save_summary(res: Result, out_png: str) -> str:
 
     # (0,0): overlay energy and |C00|
     ax00 = axs[0, 0]
-    l1, = ax00.plot(res.t, E, label="Energy proxy (sum |C|^2)")
-    ax00.set_xlabel("t"); ax00.set_ylabel("E"); ax00.grid(True)
+    (l1,) = ax00.plot(res.t, E, label="Energy proxy (sum |C|^2)")
+    ax00.set_xlabel("t")
+    ax00.set_ylabel("E")
+    ax00.grid(True)
     ax00t = ax00.twinx()
-    l2, = ax00t.plot(res.t, np.abs(C00), linestyle="--", label=r"$|C_{0,0}|$")
+    (l2,) = ax00t.plot(res.t, np.abs(C00), linestyle="--", label=r"$|C_{0,0}|$")
     ax00t.set_ylabel(r"$|C_{0,0}|$")
     ax00.legend([l1, l2], [l1.get_label(), l2.get_label()], loc="best")
     ax00.set_title("Energy & $|C_{0,0}|$ vs t")
@@ -110,30 +120,30 @@ def save_summary(res: Result, out_png: str) -> str:
     k = float(res.meta.get("grid", {}).get("kpar", 1.0))
     x, _, dens = _density_x_t(C00, k, Nx=256)
     im_d = axs[0, 1].imshow(
-        dens.T, origin="lower", aspect="auto",
-        extent=[res.t[0], res.t[-1], x[0], x[-1]]
+        dens.T, origin="lower", aspect="auto", extent=[res.t[0], res.t[-1], x[0], x[-1]]
     )
-    axs[0, 1].set_xlabel("t"); axs[0, 1].set_ylabel("x")
+    axs[0, 1].set_xlabel("t")
+    axs[0, 1].set_ylabel("x")
     axs[0, 1].set_title(r"density $(x,t)$ from $C_{0,0}(t)$")
     fig.colorbar(im_d, ax=axs[0, 1], fraction=0.046, pad=0.04)
 
     # (1,0): f(v_parallel, v_perp) at t=0 (moved from [0,1])
     f0 = _reconstruct_f_vpar_vperp(res.C[0], vpar, vperp, vth)
     im0 = axs[1, 0].imshow(
-        f0.T, origin="lower", aspect="auto",
-        extent=[vpar[0], vpar[-1], vperp[0], vperp[-1]]
+        f0.T, origin="lower", aspect="auto", extent=[vpar[0], vpar[-1], vperp[0], vperp[-1]]
     )
-    axs[1, 0].set_xlabel(r"$v_\parallel$"); axs[1, 0].set_ylabel(r"$v_\perp$")
+    axs[1, 0].set_xlabel(r"$v_\parallel$")
+    axs[1, 0].set_ylabel(r"$v_\perp$")
     axs[1, 0].set_title(r"$f(v_\parallel, v_\perp)$ at $t=0$ (Re)")
     fig.colorbar(im0, ax=axs[1, 0], fraction=0.046, pad=0.04)
 
     # (1,1): f(v_parallel, v_perp) at final time
     fT = _reconstruct_f_vpar_vperp(res.C[-1], vpar, vperp, vth)
     imT = axs[1, 1].imshow(
-        fT.T, origin="lower", aspect="auto",
-        extent=[vpar[0], vpar[-1], vperp[0], vperp[-1]]
+        fT.T, origin="lower", aspect="auto", extent=[vpar[0], vpar[-1], vperp[0], vperp[-1]]
     )
-    axs[1, 1].set_xlabel(r"$v_\parallel$"); axs[1, 1].set_ylabel(r"$v_\perp$")
+    axs[1, 1].set_xlabel(r"$v_\parallel$")
+    axs[1, 1].set_ylabel(r"$v_\perp$")
     axs[1, 1].set_title(r"$f(v_\parallel, v_\perp)$ at final t (Re)")
     fig.colorbar(imT, ax=axs[1, 1], fraction=0.046, pad=0.04)
 
@@ -145,7 +155,7 @@ def save_summary(res: Result, out_png: str) -> str:
         C_n_m0_t,
         origin="lower",
         aspect="auto",
-        extent=[0, C_n_m0_t.shape[1]-1, res.t[0], res.t[-1]]
+        extent=[0, C_n_m0_t.shape[1] - 1, res.t[0], res.t[-1]],
     )
     axs[2, 0].set_xlabel("n")
     axs[2, 0].set_ylabel("t")
@@ -161,14 +171,13 @@ def save_summary(res: Result, out_png: str) -> str:
     big = np.concatenate(blocks, axis=1)  # (nt, Nm*Nn), time horizontal by default
     # We want time on horizontal axis; display with origin lower.
     im_all = axs[2, 1].imshow(
-        big.T, origin="lower", aspect="auto",
-        extent=[res.t[0], res.t[-1], 0, Nm * Nn]
+        big.T, origin="lower", aspect="auto", extent=[res.t[0], res.t[-1], 0, Nm * Nn]
     )
     axs[2, 1].set_xlabel("t")
     axs[2, 1].set_ylabel("n blocks per m")
     axs[2, 1].set_title(r"Stacked $|C_{n,m}(t)|$ (m=0,1,...) blocks")
     # Add y tick labels at block boundaries for readability
-    yticks = [m * Nn for m in range(Nm+1)]
+    yticks = [m * Nn for m in range(Nm + 1)]
     axs[2, 1].set_yticks(yticks)
     axs[2, 1].set_yticklabels([f"m={m}" for m in range(Nm)] + [f"m={Nm}"])
     fig.colorbar(im_all, ax=axs[2, 1], fraction=0.046, pad=0.04)

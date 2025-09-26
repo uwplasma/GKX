@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import jax.numpy as jnp
 
 
@@ -13,8 +14,7 @@ def hermite_coupling_factors(Nn: int) -> tuple[jnp.ndarray, jnp.ndarray]:
 
 
 def lb_eigenvalues(Nn: int, Nm: int, alpha: float = 1.0, beta: float = 2.0) -> jnp.ndarray:
-    """Diagonal Lenard–Bernstein rates in Hermite–Laguerre space.
-    """
+    """Diagonal Lenard–Bernstein rates in Hermite–Laguerre space."""
     n = jnp.arange(Nn)
     m = jnp.arange(Nm)
     lam = alpha * n[:, None] + beta * m[None, :]
