@@ -19,7 +19,11 @@ class SimConfig:
     save_every: int = 1
     nonlinear: bool = False
     precision: str = "x64"  # "x32" | "x64"
-
+    solver: str = "tsit5"               # "tsit5","dopri5","dopri8","kvaerno3","kvaerno5","bosh3"
+    adaptive: bool = True               # True -> PID rtol/atol; False -> constant step
+    rtol: float = 1e-6
+    atol: float = 1e-9
+    dt: float | None = None             # used if adaptive=False; if None, fallback to uniform (tmax/(nt-1))
 
 @dataclass
 class GridConfig:
