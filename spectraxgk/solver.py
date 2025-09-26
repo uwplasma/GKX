@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import time
+from typing import Optional, List
 
 import diffrax as dfx
 import equinox as eqx
@@ -10,10 +11,10 @@ import jax.numpy as jnp
 import numpy as np
 
 from .io_config import FullConfig
-from .model import LinearGK
+from .model import RealRHSTerm, LinearGK
 from .operators import (
     StreamingOperator, LenardBernstein, ElectrostaticDrive,
-    StreamingRHS, CollisionsRHS, ElectrostaticDriveRHS, 
+    StreamingRHS, CollisionsRHS, ElectrostaticDriveRHS,
 )
 from .post import save_summary
 from .types import Result
@@ -26,15 +27,13 @@ def _maybe_enable_x64(flag: str):
 
 
 def build_model(cfg: FullConfig) -> LinearGK:
-    stream = StreamingOperator(Nn=cfg.grid.Nn, Nm=cfg.grid.Nm,
-                               kpar=cfg.grid.kpar, vth=cfg.grid.vth)
+    stream = StreamingOperator(Nn=cfg.grid.Nn, Nm=cfg.grid.Nm, kpar=cfg.grid.kpar, vth=cfg.grid.vth)
     collide = LenardBernstein(Nn=cfg.grid.Nn, Nm=cfg.grid.Nm, nu=cfg.grid.nu)
 
-    drive = None
-    terms = [StreamingRHS(stream), CollisionsRHS(collide)]
+    drive: Optional[ElectrostaticDrive] = None
+    terms: List[RealRHSTerm] = [StreamingRHS(stream), CollisionsRHS(collide)]
     if getattr(cfg.grid, "es_drive", False):
-        drive = ElectrostaticDrive(Nn=cfg.grid.Nn, Nm=cfg.grid.Nm,
-                                   kpar=cfg.grid.kpar, coef=getattr(cfg.grid, "e_coef", 1.0))
+        drive = ElectrostaticDrive(Nn=cfg.grid.Nn, Nm=cfg.grid.Nm, kpar=cfg.grid.kpar, coef=getattr(cfg.grid, "e_coef", 1.0))
         terms.append(ElectrostaticDriveRHS(drive))
 
     return LinearGK(stream=stream, collide=collide, drive=drive, terms=tuple(terms))

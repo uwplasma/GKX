@@ -69,7 +69,7 @@ def _density_x_t(
     nt = C00_t.shape[0]
     L = (2 * np.pi / abs(k)) if k != 0 else (2 * np.pi)
     x = np.linspace(0.0, L, Nx)
-    t: Optional[np.ndarray] = None  # time vector provided externally when plotting
+    t = np.linspace(0.0, 1.0, nt)
     # Precompute cos/sin(kx)
     coskx = np.cos(k * x)
     sinkx = np.sin(k * x)
