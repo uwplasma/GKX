@@ -15,8 +15,8 @@ class StreamingOperator(eqx.Module):
     rebuilding small arrays in the hot path.
     """
 
-    Nn: int = eqx.static_field()
-    Nm: int = eqx.static_field()
+    Nn: int = eqx.field(static=True)
+    Nm: int = eqx.field(static=True)
     kpar: float
     vth: float
     # precomputed Hermite coupling factors (dynamic PyTree fields)
@@ -50,11 +50,11 @@ class LenardBernstein(eqx.Module):
     C_dot += -nu * (alpha*n + beta*m) * C_{n,m}
     """
 
-    Nn: int = eqx.static_field()
-    Nm: int = eqx.static_field()
+    Nn: int = eqx.field(static=True)
+    Nm: int = eqx.field(static=True)
     nu: float
-    alpha: float = eqx.static_field(default=1.0)
-    beta: float = eqx.static_field(default=2.0)
+    alpha: float = eqx.field(static=True, default=1.0)
+    beta:  float = eqx.field(static=True, default=2.0)
 
     def __call__(self, C: jnp.ndarray) -> jnp.ndarray:
         lam = lb_eigenvalues(self.Nn, self.Nm, self.alpha, self.beta)
@@ -67,8 +67,8 @@ class ElectrostaticDrive(eqx.Module):
     dC_{1,0}/dt += coef * E_parallel
     """
 
-    Nn: int = eqx.static_field()
-    Nm: int = eqx.static_field()
+    Nn: int = eqx.field(static=True)
+    Nm: int = eqx.field(static=True)
     kpar: float
     coef: float
 
