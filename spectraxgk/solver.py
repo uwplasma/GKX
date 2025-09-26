@@ -115,7 +115,7 @@ def run_simulation(cfg: FullConfig) -> dict:
         kpar=cfg.grid.kpar,
         nu=cfg.grid.nu,
         vth=cfg.grid.vth,
-        meta=meta,
+        meta=np.array(meta, dtype=object),
     )
 
     # Save a summary figure alongside the NPZ
