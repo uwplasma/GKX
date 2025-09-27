@@ -15,18 +15,6 @@ def load_result(path: str) -> Result:
     return Result(t=data["t"], C=data["C"], meta=meta)
 
 
-def plot_energy(res: Result):
-    """Interactive plot (does not save)."""
-    E = np.sum(np.abs(res.C) ** 2, axis=(1, 2))
-    plt.figure()
-    plt.plot(res.t, E)
-    plt.xlabel("t")
-    plt.ylabel(r"$\sum_{n,m} |C_{n,m}|^2$")
-    plt.title("Hermite–Laguerre energy proxy")
-    plt.grid(True)
-    plt.show()
-
-
 # ---- Helpers for visualization ----
 from numpy.polynomial.hermite import hermval  # physicists' Hermite H_n
 from numpy.polynomial.laguerre import lagval  # standard Laguerre L_m
@@ -82,106 +70,143 @@ def _density_x_t(
     return x, t, dens
 
 
+# ---- small utilities ----
+def _cumtrapz(y: np.ndarray, x: np.ndarray) -> np.ndarray:
+    """Cumulative trapezoidal integral of y(x), same length as x, S[0]=0."""
+    out = np.zeros_like(y, dtype=float)
+    if len(x) > 1:
+        dx = x[1:] - x[:-1]
+        out[1:] = np.cumsum(0.5 * (y[1:] + y[:-1]) * dx)
+    return out
+
+
+def _energy_channels(res: Result) -> dict[str, np.ndarray]:
+    """Compute W_f, W_E, sink integral S, and conserved sum W_f+W_E+S."""
+    k = float(res.meta.get("grid", {}).get("kpar", 0.0))
+    nu = float(res.meta.get("grid", {}).get("nu", res.meta.get("nu", 0.0)))
+
+    # free energy on m=0: (1/4) * sum_n |C_{n,0}|^2
+    Cm0 = res.C[:, :, 0]                               # (nt, Nn)
+    Wf = 0.25 * np.sum(np.abs(Cm0) ** 2, axis=1)
+
+    # electric field E = i * C00 / k, WE = |E|^2/2
+    C00 = res.C[:, 0, 0]
+    Efield = (1j * C00 / k) if k != 0.0 else np.zeros_like(C00)
+    WE = 0.5 * np.abs(Efield) ** 2
+
+    # collisional power C(t) = (1/2) * nu * sum_n n * |C_{n,0}|^2
+    Nn = Cm0.shape[1]
+    weights = np.arange(Nn, dtype=float)
+    coll_power = 0.5 * nu * np.sum(weights[None, :] * np.abs(Cm0) ** 2, axis=1)
+
+    S = _cumtrapz(coll_power, res.t)                   # integrated sink
+    Wsum = Wf + WE + S                                 # should be flat (conserved)
+
+    return dict(Wf=Wf, WE=WE, S=S, Wsum=Wsum)
+
+
+# ---- panel functions ----
+def panel_energy(ax: plt.Axes, res: Result) -> None:
+    """[0,0] Energies vs t: W_f, W_E, ∫C dt, and W_f+W_E+∫C dt."""
+    ch = _energy_channels(res)
+    ax.plot(res.t, ch["Wf"],   label=r"$W_f$", linewidth=1.8)
+    ax.plot(res.t, ch["WE"],   label=r"$W_E$", linewidth=1.8)
+    ax.plot(res.t, ch["S"],    label=r"$\int_0^t C\,dt$", linestyle="--", linewidth=1.6)
+    ax.plot(res.t, ch["Wsum"], label=r"$W_f+W_E+\int_0^t C\,dt$", linestyle=":", linewidth=1.8)
+    ax.set_xlabel("t"); ax.set_ylabel("Energy"); ax.grid(True)
+    ax.legend(loc="best", ncols=2)
+    ax.set_title(r"Energies and collisional sink vs $t$")
+
+
+def panel_density_xt(ax: plt.Axes, res: Result, Nx: int = 256) -> None:
+    """[0,1] density(x,t) from C_{0,0}(t) as imshow (x vertical, t horizontal)."""
+    k = float(res.meta.get("grid", {}).get("kpar", 1.0))
+    C00 = res.C[:, 0, 0]
+    x, _, dens = _density_x_t(C00, k, Nx=Nx)
+    im = ax.imshow(dens.T, origin="lower", aspect="auto",
+                   extent=[res.t[0], res.t[-1], x[0], x[-1]])
+    ax.set_xlabel("t"); ax.set_ylabel("x"); ax.set_title(r"density $(x,t)$ from $C_{0,0}(t)$")
+    plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+
+
+def panel_fvparvperp(ax: plt.Axes, res: Result, t_index: int, vth_fallback: float = 1.0) -> None:
+    """[1,0] or [1,1] f(v_||, v_⊥) at a given time index (real part)."""
+    vth = float(res.meta.get("grid", {}).get("vth", vth_fallback))
+    vpar = np.linspace(-4 * vth, 4 * vth, 201)
+    vperp = np.linspace(0, 4 * vth, 201)
+    f = _reconstruct_f_vpar_vperp(res.C[t_index], vpar, vperp, vth)
+    im = ax.imshow(f.T, origin="lower", aspect="auto",
+                   extent=[vpar[0], vpar[-1], vperp[0], vperp[-1]])
+    ax.set_xlabel(r"$v_\parallel$"); ax.set_ylabel(r"$v_\perp$")
+    title_t = "0" if t_index == 0 else "final"
+    ax.set_title(rf"$f(v_\parallel, v_\perp)$ at $t={title_t}$ (Re)")
+    plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+
+
+def panel_hermite_heatmap_m0(ax: plt.Axes, res: Result) -> None:
+    """[2,0] |C_{n,m=0}(t)| as time–Hermite heatmap."""
+    C_n_m0_t = np.abs(res.C[:, :, 0])                      # (nt, Nn)
+    im = ax.imshow(C_n_m0_t, origin="lower", aspect="auto",
+                   extent=[0, C_n_m0_t.shape[1] - 1, res.t[0], res.t[-1]])
+    ax.set_xlabel("n"); ax.set_ylabel("t"); ax.set_title(r"$|C_{n,\,m=0}(t)|$")
+    plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+
+
+def panel_stacked_coeffs(ax: plt.Axes, res: Result) -> None:
+    """[2,1] Stacked heatmap with time on the vertical axis.
+
+    X-axis: concatenated Hermite blocks for m = 0,1,...
+    Y-axis: time.
+    """
+    nt, Nn, Nm = res.C.shape
+    blocks = [np.abs(res.C[:, :, m]) for m in range(Nm)]   # each (nt, Nn)
+    big = np.concatenate(blocks, axis=1)                   # (nt, Nm*Nn); time is axis=0
+
+    # Show time on vertical axis
+    im = ax.imshow(
+        big, origin="lower", aspect="auto",
+        extent=[0, Nm * Nn, res.t[0], res.t[-1]]
+    )
+
+    ax.set_xlabel("n blocks per m")
+    ax.set_ylabel("t")
+    ax.set_title(r"Stacked $|C_{n,m}(t)|$ (m=0,1,...) blocks")
+
+    # Tick marks at m-block boundaries along X
+    xticks = [m * Nn for m in range(Nm + 1)]
+    ax.set_xticks(xticks)
+    ax.set_xticklabels([f"m={m}" for m in range(Nm)] + [f"m={Nm}"])
+
+    plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    
+
+def plot_energy(res: Result):
+    """Interactive energy panel (same as summary [0,0])."""
+    fig, ax = plt.subplots(figsize=(6, 4))
+    panel_energy(ax, res)
+    fig.tight_layout()
+    plt.show()
+
+
 def save_summary(res: Result, out_png: str) -> str:
-    """Save a 3x2 summary figure.
+    """Save a 3x2 summary figure composed from reusable panel functions.
 
     Layout:
-      (0,0) Overlay: Energy proxy (sum |C|^2) & |C_{0,0}| vs t (twin y-axis)
+      (0,0) Energies vs t: W_f, W_E, ∫C dt, and W_f+W_E+∫C dt
       (0,1) density(x,t) imshow (vertical = x, horizontal = t)
       (1,0) f(v_parallel, v_perp) imshow at t=0
       (1,1) f(v_parallel, v_perp) imshow at final time
-      (2,0) Hermite spectrum at final time: sum_m |C_{n,m}(t_final)|^2 vs n
-      (2,1) Stacked heatmap of |C_{n,m}(t)| for all m (blocks m=0,1,...) over time
+      (2,0) Hermite heatmap |C_{n,m=0}(t)|
+      (2,1) Stacked heatmap of |C_{n,m}(t)| blocks over time
     """
-    # Scalars & slices
-    E = np.sum(np.abs(res.C) ** 2, axis=(1, 2))
-    C00 = res.C[:, 0, 0]
-
-    # Velocity grids for quick-look f(v) plots
-    vth = float(res.meta.get("grid", {}).get("vth", 1.0))
-    vpar = np.linspace(-4 * vth, 4 * vth, 201)
-    vperp = np.linspace(0, 4 * vth, 201)
-
-    # Figure
     fig, axs = plt.subplots(3, 2, figsize=(13, 11), constrained_layout=True)
 
-    # (0,0): overlay energy and |C00|
-    ax00 = axs[0, 0]
-    (l1,) = ax00.plot(res.t, E, label="Energy proxy (sum |C|^2)")
-    ax00.set_xlabel("t")
-    ax00.set_ylabel("E")
-    ax00.grid(True)
-    ax00t = ax00.twinx()
-    (l2,) = ax00t.plot(res.t, np.abs(C00), linestyle="--", label=r"$|C_{0,0}|$")
-    ax00t.set_ylabel(r"$|C_{0,0}|$")
-    ax00.legend([l1, l2], [l1.get_label(), l2.get_label()], loc="best")
-    ax00.set_title("Energy & $|C_{0,0}|$ vs t")
-
-    # (0,1): density(x,t) imshow (x vertical, t horizontal)
-    k = float(res.meta.get("grid", {}).get("kpar", 1.0))
-    x, _, dens = _density_x_t(C00, k, Nx=256)
-    im_d = axs[0, 1].imshow(
-        dens.T, origin="lower", aspect="auto", extent=[res.t[0], res.t[-1], x[0], x[-1]]
-    )
-    axs[0, 1].set_xlabel("t")
-    axs[0, 1].set_ylabel("x")
-    axs[0, 1].set_title(r"density $(x,t)$ from $C_{0,0}(t)$")
-    fig.colorbar(im_d, ax=axs[0, 1], fraction=0.046, pad=0.04)
-
-    # (1,0): f(v_parallel, v_perp) at t=0 (moved from [0,1])
-    f0 = _reconstruct_f_vpar_vperp(res.C[0], vpar, vperp, vth)
-    im0 = axs[1, 0].imshow(
-        f0.T, origin="lower", aspect="auto", extent=[vpar[0], vpar[-1], vperp[0], vperp[-1]]
-    )
-    axs[1, 0].set_xlabel(r"$v_\parallel$")
-    axs[1, 0].set_ylabel(r"$v_\perp$")
-    axs[1, 0].set_title(r"$f(v_\parallel, v_\perp)$ at $t=0$ (Re)")
-    fig.colorbar(im0, ax=axs[1, 0], fraction=0.046, pad=0.04)
-
-    # (1,1): f(v_parallel, v_perp) at final time
-    fT = _reconstruct_f_vpar_vperp(res.C[-1], vpar, vperp, vth)
-    imT = axs[1, 1].imshow(
-        fT.T, origin="lower", aspect="auto", extent=[vpar[0], vpar[-1], vperp[0], vperp[-1]]
-    )
-    axs[1, 1].set_xlabel(r"$v_\parallel$")
-    axs[1, 1].set_ylabel(r"$v_\perp$")
-    axs[1, 1].set_title(r"$f(v_\parallel, v_\perp)$ at final t (Re)")
-    fig.colorbar(imT, ax=axs[1, 1], fraction=0.046, pad=0.04)
-
-    # (2,0): |C_{n, m=0}(t)| as time–Hermite heatmap
-    # Bottom-row heatmaps precompute
-    C_n_m0_t = np.abs(res.C[:, :, 0])  # (nt, Nn)
-    # C_n0_m_t = np.abs(res.C[:, 0, :])  # (nt, Nm)
-    im1 = axs[2, 0].imshow(
-        C_n_m0_t,
-        origin="lower",
-        aspect="auto",
-        extent=[0, C_n_m0_t.shape[1] - 1, res.t[0], res.t[-1]],
-    )
-    axs[2, 0].set_xlabel("n")
-    axs[2, 0].set_ylabel("t")
-    axs[2, 0].set_title(r"$|C_{n,\,m=0}(t)|$")
-    fig.colorbar(im1, ax=axs[2, 0], fraction=0.046, pad=0.04)
-
-    # (2,1): Stacked heatmap over all m of |C_{n,m}(t)|.
-    # Build a tall array by stacking each m-block (shape (nt, Nn)) vertically.
-    nt, Nn, Nm = res.C.shape[0], res.C.shape[1], res.C.shape[2]
-    blocks = []
-    for m in range(Nm):
-        blocks.append(np.abs(res.C[:, :, m]))  # (nt, Nn)
-    big = np.concatenate(blocks, axis=1)  # (nt, Nm*Nn), time horizontal by default
-    # We want time on horizontal axis; display with origin lower.
-    im_all = axs[2, 1].imshow(
-        big.T, origin="lower", aspect="auto", extent=[res.t[0], res.t[-1], 0, Nm * Nn]
-    )
-    axs[2, 1].set_xlabel("t")
-    axs[2, 1].set_ylabel("n blocks per m")
-    axs[2, 1].set_title(r"Stacked $|C_{n,m}(t)|$ (m=0,1,...) blocks")
-    # Add y tick labels at block boundaries for readability
-    yticks = [m * Nn for m in range(Nm + 1)]
-    axs[2, 1].set_yticks(yticks)
-    axs[2, 1].set_yticklabels([f"m={m}" for m in range(Nm)] + [f"m={Nm}"])
-    fig.colorbar(im_all, ax=axs[2, 1], fraction=0.046, pad=0.04)
+    panel_energy(axs[0, 0], res)
+    panel_density_xt(axs[0, 1], res)
+    panel_fvparvperp(axs[1, 0], res, t_index=0)
+    panel_fvparvperp(axs[1, 1], res, t_index=-1)
+    panel_hermite_heatmap_m0(axs[2, 0], res)
+    panel_stacked_coeffs(axs[2, 1], res)
 
     os.makedirs(os.path.dirname(out_png) or ".", exist_ok=True)
     fig.savefig(out_png, dpi=200)
