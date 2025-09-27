@@ -11,13 +11,10 @@ import jax.numpy as jnp
 import numpy as np
 
 from .io_config import FullConfig
-from .model import RealRHSTerm, LinearGK
-from .operators import (
-    StreamingOperator, LenardBernstein, ElectrostaticDrive,
-    StreamingRHS, CollisionsRHS, ElectrostaticDriveRHS,
-)
+from .model import LinearGK
+from .operators import StreamingOperator, LenardBernstein, ElectrostaticDrive
 from .post import save_summary
-from .types import Result
+from .types import Result, ComplexTerm
 
 
 def _maybe_enable_x64(flag: str):
@@ -27,14 +24,16 @@ def _maybe_enable_x64(flag: str):
 
 
 def build_model(cfg: FullConfig) -> LinearGK:
-    stream = StreamingOperator(Nn=cfg.grid.Nn, Nm=cfg.grid.Nm, kpar=cfg.grid.kpar, vth=cfg.grid.vth)
+    stream = StreamingOperator(Nn=cfg.grid.Nn, Nm=cfg.grid.Nm,
+                               kpar=cfg.grid.kpar, vth=cfg.grid.vth)
     collide = LenardBernstein(Nn=cfg.grid.Nn, Nm=cfg.grid.Nm, nu=cfg.grid.nu)
 
     drive: Optional[ElectrostaticDrive] = None
-    terms: List[RealRHSTerm] = [StreamingRHS(stream), CollisionsRHS(collide)]
+    terms: List[ComplexTerm] = [stream, collide]
     if getattr(cfg.grid, "es_drive", False):
-        drive = ElectrostaticDrive(Nn=cfg.grid.Nn, Nm=cfg.grid.Nm, kpar=cfg.grid.kpar, coef=getattr(cfg.grid, "e_coef", 1.0))
-        terms.append(ElectrostaticDriveRHS(drive))
+        drive = ElectrostaticDrive(Nn=cfg.grid.Nn, Nm=cfg.grid.Nm,
+                                   kpar=cfg.grid.kpar, coef=getattr(cfg.grid, "e_coef", 1.0))
+        terms.append(drive)
 
     return LinearGK(stream=stream, collide=collide, drive=drive, terms=tuple(terms))
 
