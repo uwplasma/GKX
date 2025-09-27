@@ -29,6 +29,8 @@ class SimConfig:
     rtol: float = 1e-6
     atol: float = 1e-9
     dt: float | None = None             # used if adaptive=False; if None, fallback to uniform (tmax/(nt-1))
+    nl_filter: str = "two_thirds"      # "two_thirds" | "houli" | "none"
+
 
 @dataclass
 class GridConfig:
@@ -39,6 +41,7 @@ class GridConfig:
     nu: float = 0.01  # LB collision frequency
     es_drive: bool = False
     e_coef: float = 1.0
+    klist: list[float] | None = None   # list of k-values for nonlinear runs; if None -> linear single-k (old behavior)
 
 
 @dataclass
