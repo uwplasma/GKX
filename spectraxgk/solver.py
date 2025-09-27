@@ -12,7 +12,7 @@ import numpy as np
 
 from .io_config import FullConfig
 from .model import LinearGK
-from .operators import StreamingOperator, LenardBernstein, ElectrostaticDrive
+from .operators import StreamingOperator, LenardBernstein, ElectrostaticDrive, NonlinearConvolution, StreamingOperatorKS
 from .post import save_summary
 from .types import Result, ComplexTerm
 
@@ -24,18 +24,38 @@ def _maybe_enable_x64(flag: str):
 
 
 def build_model(cfg: FullConfig) -> LinearGK:
-    stream = StreamingOperator(Nn=cfg.grid.Nn, Nm=cfg.grid.Nm,
-                               kpar=cfg.grid.kpar, vth=cfg.grid.vth)
-    collide = LenardBernstein(Nn=cfg.grid.Nn, Nm=cfg.grid.Nm, nu=cfg.grid.nu)
+    Nn, Nm = cfg.grid.Nn, cfg.grid.Nm
+    terms: list[ComplexTerm] = []
+    drive = None
 
-    drive: Optional[ElectrostaticDrive] = None
-    terms: List[ComplexTerm] = [stream, collide]
-    if getattr(cfg.grid, "es_drive", False):
-        drive = ElectrostaticDrive(Nn=cfg.grid.Nn, Nm=cfg.grid.Nm,
-                                   kpar=cfg.grid.kpar, coef=getattr(cfg.grid, "e_coef", 1.0))
-        terms.append(drive)
+    if cfg.sim.nonlinear:
+        # require klist
+        assert cfg.grid.klist is not None and len(cfg.grid.klist) > 0, "Nonlinear run requires [grid].klist."
+        ks = jnp.asarray(cfg.grid.klist, dtype=jnp.float64)
+        Nk = int(ks.shape[0])
+        stream = StreamingOperatorKS(ks=ks, Nn=Nn, Nm=Nm, vth=cfg.grid.vth)
+        collide = LenardBernstein(Nn=Nn, Nm=Nm, nu=cfg.grid.nu)
+        terms.extend([stream, collide])
 
-    return LinearGK(stream=stream, collide=collide, drive=drive, terms=tuple(terms))
+        # optional drive: uses single kpar in your current definition; either skip or generalize similarly
+        if getattr(cfg.grid, "es_drive", False):
+            # (optional) generalize ElectrostaticDrive to KS later; skip for now in nonlinear
+            pass
+
+        nl = NonlinearConvolution(ks=ks, Nn=Nn, Nm=Nm, nl_filter=cfg.sim.nl_filter)
+        terms.append(nl)
+        model = LinearGK(stream=stream, collide=collide, drive=None, terms=tuple(terms), Nk=Nk)
+    else:
+        # linear single-k path (old behavior)
+        stream = StreamingOperator(Nn=Nn, Nm=Nm, kpar=cfg.grid.kpar, vth=cfg.grid.vth)
+        collide = LenardBernstein(Nn=Nn, Nm=Nm, nu=cfg.grid.nu)
+        terms.extend([stream, collide])
+        if getattr(cfg.grid, "es_drive", False):
+            drive = ElectrostaticDrive(Nn=Nn, Nm=Nm, kpar=cfg.grid.kpar, coef=getattr(cfg.grid, "e_coef", 1.0))
+            terms.append(drive)
+        model = LinearGK(stream=stream, collide=collide, drive=drive, terms=tuple(terms), Nk=1)
+
+    return model
 
 
 def _make_solver_and_controller(cfg):
@@ -90,13 +110,14 @@ def run_simulation(cfg: FullConfig) -> dict:
     Y = np.asarray(sol.ys)            # (nt, 2*M) REAL
     nt = Y.shape[0]
     Nn, Nm = cfg.grid.Nn, cfg.grid.Nm
-    M = Nn * Nm
-    Cr = Y[:, :M].reshape(nt, Nn, Nm)
-    Ci = Y[:, M:].reshape(nt, Nn, Nm)
-    C  = Cr + 1j * Ci                 # complex (nt, Nn, Nm)
+    Nk = model.Nk  # model carries Nk as a static field
+    M  = Nk * Nn * Nm
+    Cr = Y[:, :M].reshape(nt, Nk, Nn, Nm)
+    Ci = Y[:, M:].reshape(nt, Nk, Nn, Nm)
+    C  = Cr + 1j * Ci
 
     meta = {
-        "sim": cfg.sim.__dict__,
+        "sim": {**cfg.sim.__dict__, "Nk": model.Nk},
         "grid": cfg.grid.__dict__,
         "ic": cfg.ic.__dict__,
         "git": _git_hash_or_none(),
@@ -106,15 +127,27 @@ def run_simulation(cfg: FullConfig) -> dict:
 
     os.makedirs(cfg.paths.outdir, exist_ok=True)
     outfile = os.path.join(cfg.paths.outdir, cfg.paths.outfile)
-    np.savez_compressed(
-        outfile,
-        C=C,
-        t=np.asarray(ts),
-        kpar=cfg.grid.kpar,
-        nu=cfg.grid.nu,
-        vth=cfg.grid.vth,
-        meta=np.array(meta, dtype=object),
-    )
+
+    if cfg.sim.nonlinear and cfg.grid.klist:
+        np.savez_compressed(
+            outfile,
+            C=C,
+            t=np.asarray(ts),
+            ks=np.asarray(cfg.grid.klist, dtype=float),  # <— per-mode k list
+            nu=cfg.grid.nu,
+            vth=cfg.grid.vth,
+            meta=np.array(meta, dtype=object),
+        )
+    else:
+        np.savez_compressed(
+            outfile,
+            C=C,
+            t=np.asarray(ts),
+            kpar=cfg.grid.kpar,  # <— single-k linear path
+            nu=cfg.grid.nu,
+            vth=cfg.grid.vth,
+            meta=np.array(meta, dtype=object),
+        )
 
     # Save a summary figure alongside the NPZ
     base, _ = os.path.splitext(outfile)

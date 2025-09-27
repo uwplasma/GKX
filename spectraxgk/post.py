@@ -12,8 +12,57 @@ from .types import Result
 def load_result(path: str) -> Result:
     data = np.load(path, allow_pickle=True)
     meta = data["meta"].item() if isinstance(data["meta"].item, object) else dict(data["meta"])  # type: ignore
+    # OPTIONAL: if ks exists at top level, mirror it into meta["grid"]["klist"]
+    if "ks" in data.files:
+        meta.setdefault("grid", {}).setdefault("klist", data["ks"].tolist())
     return Result(t=data["t"], C=data["C"], meta=meta)
 
+
+def _get_ks_from_meta(meta: dict) -> Optional[np.ndarray]:
+    ks = meta.get("grid", {}).get("klist", None)
+    if ks is None:
+        # solver saved single-k as "kpar" on linear runs
+        kpar = meta.get("grid", {}).get("kpar", meta.get("kpar", None))
+        if kpar is None:
+            return None
+        return np.array([float(kpar)], dtype=float)
+    return np.asarray(ks, dtype=float)
+
+
+def _as_4d(C: np.ndarray) -> tuple[np.ndarray, int, int, int, int]:
+    """Return C as shape (nt, Nk, Nn, Nm), plus dims."""
+    if C.ndim == 3:
+        nt, Nn, Nm = C.shape
+        C4 = C[:, None, :, :]
+        return C4, nt, 1, Nn, Nm
+    elif C.ndim == 4:
+        nt, Nk, Nn, Nm = C.shape
+        return C, nt, Nk, Nn, Nm
+    else:
+        raise ValueError(f"Unexpected C.ndim={C.ndim}")
+
+def _ks_for(res: Result) -> np.ndarray:
+    """Return ks of length Nk that matches C’s second axis."""
+    C4, _, Nk, _, _ = _as_4d(res.C)
+    ks = _get_ks_from_meta(res.meta)
+    if ks is None:
+        return np.zeros((Nk,), dtype=float)
+    ks = np.asarray(ks, dtype=float).reshape(-1)
+    if ks.size != Nk:
+        if ks.size > Nk:
+            ks = ks[:Nk]
+        else:
+            ks = np.pad(ks, (0, Nk - ks.size), mode="constant")
+    return ks
+
+def _pick_k_index(res: Result) -> int:
+    if res.C.ndim != 4:
+        return 0
+    Nk = res.C.shape[1]
+    if Nk == 1:
+        return 0
+    ks = _ks_for(res)
+    return int(np.argmin(np.abs(ks)))
 
 # ---- Helpers for visualization ----
 from numpy.polynomial.hermite import hermval  # physicists' Hermite H_n
@@ -81,47 +130,110 @@ def _cumtrapz(y: np.ndarray, x: np.ndarray) -> np.ndarray:
 
 
 def _energy_channels(res: Result) -> dict[str, np.ndarray]:
-    """Compute W_f, W_E, sink integral S, and conserved sum W_f+W_E+S."""
-    k = float(res.meta.get("grid", {}).get("kpar", 0.0))
+    """Compute energies for linear and nonlinear runs.
+
+    Conventions (Laguerre m=0 only, as in the model):
+      Wf(t) = (1/4) * sum_{k,n} |C_{k,n,0}(t)|^2
+      WE(t) = (1/2) * sum_{k} |E_k(t)|^2,  E_k = i * C_{k,0,0} / k  (guard k=0)
+      S(t)  = ∫_0^t  (1/2) * nu * sum_{k,n} n * |C_{k,n,0}|^2  dt'
+      WN(t) = ∫_0^t  (1/4) * Re[ sum_{k,n} conj(C_{k,n,0}) * N_{k,n,0} ] dt'
+              where N is the nonlinear convolution (only m=0; n>=1)
+    """
+    C4, nt, Nk, Nn, Nm = _as_4d(res.C)
+    # --- ks normalization: ensure length Nk ---
+    ks = _ks_for(res)  # <- ensures ks has length Nk
+    if ks is None:
+        ks = np.zeros((Nk,), dtype=float)
+    else:
+        ks = np.asarray(ks, dtype=float).reshape(-1)
+        if ks.size != Nk:
+            if ks.size > Nk:
+                ks = ks[:Nk]
+            else:
+                ks = np.pad(ks, (0, Nk - ks.size), mode="constant")
+
     nu = float(res.meta.get("grid", {}).get("nu", res.meta.get("nu", 0.0)))
+    nonlinear = bool(res.meta.get("sim", {}).get("nonlinear", False))
 
-    # free energy on m=0: (1/4) * sum_n |C_{n,0}|^2
-    Cm0 = res.C[:, :, 0]                               # (nt, Nn)
-    Wf = 0.25 * np.sum(np.abs(Cm0) ** 2, axis=1)
+    # -------------------------
+    # Free energy Wf (m=0 only)
+    # -------------------------
+    a_k_n = C4[:, :, :, 0]                             # (nt, Nk, Nn)
+    Wf = 0.25 * np.sum(np.abs(a_k_n) ** 2, axis=(1, 2))  # (nt,)
 
-    # electric field E = i * C00 / k, WE = |E|^2/2
-    C00 = res.C[:, 0, 0]
-    Efield = (1j * C00 / k) if k != 0.0 else np.zeros_like(C00)
-    WE = 0.5 * np.abs(Efield) ** 2
+    # -------------------------
+    # Field energy WE (sum over k)
+    # -------------------------
+    a00_k = a_k_n[:, :, 0]                             # (nt, Nk)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        Ek = 1j * a00_k / ks[None, :]                 # (nt, Nk); ks=0 -> inf, we set to 0
+        Ek = np.where(np.isfinite(Ek), Ek, 0.0)
+    WE = 0.5 * np.sum(np.abs(Ek) ** 2, axis=1)         # (nt,)
 
-    # collisional power C(t) = (1/2) * nu * sum_n n * |C_{n,0}|^2
-    Nn = Cm0.shape[1]
-    weights = np.arange(Nn, dtype=float)
-    coll_power = 0.5 * nu * np.sum(weights[None, :] * np.abs(Cm0) ** 2, axis=1)
+    # ------------------------------------
+    # Collisional sink integral S(t)
+    # ------------------------------------
+    weights = np.arange(Nn, dtype=float)[None, None, :]  # (1,1,Nn)
+    coll_power = 0.5 * nu * np.sum(weights * np.abs(a_k_n) ** 2, axis=(1, 2))  # (nt,)
+    S = _cumtrapz(coll_power, res.t)
 
-    S = _cumtrapz(coll_power, res.t)                   # integrated sink
-    Wsum = Wf + WE + S                                 # should be flat (conserved)
+    # ------------------------------------
+    # Nonlinear power integral WN(t)
+    # Only if Nk>1 or user saved ks; for Nk=1, N=0 by our model.
+    # ------------------------------------
+    WN = np.zeros(nt, dtype=float)
+    if nonlinear and Nk > 1:
+        def _N_from_a(a_t: np.ndarray, ks_vec: np.ndarray) -> np.ndarray:
+            """a_t[k,n] -> N_t[k,n] (m=0 only)."""
+            a0 = a_t[:, 0]  # (Nk,)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                E = 1j * a0 / ks_vec
+                E = np.where(np.isfinite(E), E, 0.0)
+            Eh = np.fft.fft(E, axis=0)  # (Nk,)
 
-    return dict(Wf=Wf, WE=WE, S=S, Wsum=Wsum)
+            N_t = np.zeros_like(a_t, dtype=np.complex128)
+            for n in range(1, a_t.shape[1]):
+                Ah = np.fft.fft(a_t[:, n - 1], axis=0)   # (Nk,)
+                conv = np.fft.ifft(Eh * Ah, axis=0)      # (Nk,)
+                N_t[:, n] = np.sqrt(2.0 * n) * conv
+            return N_t
+
+        Pn = np.zeros(nt, dtype=float)
+        for it in range(nt):
+            N_t = _N_from_a(a_k_n[it], ks)  # (Nk, Nn)
+            Pn[it] = 0.25 * np.real(np.sum(np.conj(a_k_n[it]) * N_t))
+        WN = _cumtrapz(Pn, res.t)
+
+    # Diagnostics
+    Wsum = Wf + WE + S + WN
+
+    return dict(Wf=Wf, WE=WE, S=S, WN=WN, Wsum=Wsum)
 
 
 # ---- panel functions ----
 def panel_energy(ax: plt.Axes, res: Result) -> None:
-    """[0,0] Energies vs t: W_f, W_E, ∫C dt, and W_f+W_E+∫C dt."""
+    """[0,0] Energies vs t: W_f, W_E, ∫C dt, ∫P_N dt, and their sum."""
     ch = _energy_channels(res)
     ax.plot(res.t, ch["Wf"],   label=r"$W_f$", linewidth=1.8)
     ax.plot(res.t, ch["WE"],   label=r"$W_E$", linewidth=1.8)
     ax.plot(res.t, ch["S"],    label=r"$\int_0^t C\,dt$", linestyle="--", linewidth=1.6)
-    ax.plot(res.t, ch["Wsum"], label=r"$W_f+W_E+\int_0^t C\,dt$", linestyle=":", linewidth=1.8)
+    ax.plot(res.t, ch["WN"],   label=r"$\int_0^t P_N\,dt$", linestyle="--", linewidth=1.6)
+    ax.plot(res.t, ch["Wsum"], label=r"$W_f + W_E + \int_0^t(C+P_N)\,dt$", linestyle=":", linewidth=1.8)
     ax.set_xlabel("t"); ax.set_ylabel("Energy"); ax.grid(True)
     ax.legend(loc="best", ncols=2)
-    ax.set_title(r"Energies and collisional sink vs $t$")
+    ax.set_title(r"Energy channels vs $t$")
 
 
 def panel_density_xt(ax: plt.Axes, res: Result, Nx: int = 256) -> None:
-    """[0,1] density(x,t) from C_{0,0}(t) as imshow (x vertical, t horizontal)."""
-    k = float(res.meta.get("grid", {}).get("kpar", 1.0))
-    C00 = res.C[:, 0, 0]
+    if res.C.ndim == 4:
+        kidx = _pick_k_index(res)
+        ks = _ks_for(res)
+        C00 = res.C[:, kidx, 0, 0]
+        k = float(ks[kidx])
+    else:
+        C00 = res.C[:, 0, 0]
+        k = float(res.meta.get("grid", {}).get("kpar", 1.0))
+
     x, _, dens = _density_x_t(C00, k, Nx=Nx)
     im = ax.imshow(dens.T, origin="lower", aspect="auto",
                    extent=[res.t[0], res.t[-1], x[0], x[-1]])
@@ -129,12 +241,19 @@ def panel_density_xt(ax: plt.Axes, res: Result, Nx: int = 256) -> None:
     plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
 
 
+
 def panel_fvparvperp(ax: plt.Axes, res: Result, t_index: int, vth_fallback: float = 1.0) -> None:
-    """[1,0] or [1,1] f(v_||, v_⊥) at a given time index (real part)."""
     vth = float(res.meta.get("grid", {}).get("vth", vth_fallback))
     vpar = np.linspace(-4 * vth, 4 * vth, 201)
     vperp = np.linspace(0, 4 * vth, 201)
-    f = _reconstruct_f_vpar_vperp(res.C[t_index], vpar, vperp, vth)
+
+    if res.C.ndim == 4:
+        kidx = _pick_k_index(res)
+        Cnm = res.C[t_index, kidx, :, :]
+    else:
+        Cnm = res.C[t_index, :, :]
+
+    f = _reconstruct_f_vpar_vperp(Cnm, vpar, vperp, vth)
     im = ax.imshow(f.T, origin="lower", aspect="auto",
                    extent=[vpar[0], vpar[-1], vperp[0], vperp[-1]])
     ax.set_xlabel(r"$v_\parallel$"); ax.set_ylabel(r"$v_\perp$")
@@ -144,8 +263,12 @@ def panel_fvparvperp(ax: plt.Axes, res: Result, t_index: int, vth_fallback: floa
 
 
 def panel_hermite_heatmap_m0(ax: plt.Axes, res: Result) -> None:
-    """[2,0] |C_{n,m=0}(t)| as time–Hermite heatmap."""
-    C_n_m0_t = np.abs(res.C[:, :, 0])                      # (nt, Nn)
+    if res.C.ndim == 4:
+        kidx = _pick_k_index(res)
+        C_n_m0_t = np.abs(res.C[:, kidx, :, 0])   # (nt, Nn)
+    else:
+        C_n_m0_t = np.abs(res.C[:, :, 0])         # (nt, Nn)
+
     im = ax.imshow(C_n_m0_t, origin="lower", aspect="auto",
                    extent=[0, C_n_m0_t.shape[1] - 1, res.t[0], res.t[-1]])
     ax.set_xlabel("n"); ax.set_ylabel("t"); ax.set_title(r"$|C_{n,\,m=0}(t)|$")
@@ -153,30 +276,24 @@ def panel_hermite_heatmap_m0(ax: plt.Axes, res: Result) -> None:
 
 
 def panel_stacked_coeffs(ax: plt.Axes, res: Result) -> None:
-    """[2,1] Stacked heatmap with time on the vertical axis.
+    if res.C.ndim == 4:
+        kidx = _pick_k_index(res)
+        Ck = res.C[:, kidx, :, :]                  # (nt, Nn, Nm)
+    else:
+        Ck = res.C                                   # (nt, Nn, Nm)
 
-    X-axis: concatenated Hermite blocks for m = 0,1,...
-    Y-axis: time.
-    """
-    nt, Nn, Nm = res.C.shape
-    blocks = [np.abs(res.C[:, :, m]) for m in range(Nm)]   # each (nt, Nn)
-    big = np.concatenate(blocks, axis=1)                   # (nt, Nm*Nn); time is axis=0
+    nt, Nn, Nm = Ck.shape
+    blocks = [np.abs(Ck[:, :, m]) for m in range(Nm)]  # each (nt, Nn)
+    big = np.concatenate(blocks, axis=1)               # (nt, Nm*Nn)
 
-    # Show time on vertical axis
-    im = ax.imshow(
-        big, origin="lower", aspect="auto",
-        extent=[0, Nm * Nn, res.t[0], res.t[-1]]
-    )
-
-    ax.set_xlabel("n blocks per m")
-    ax.set_ylabel("t")
+    im = ax.imshow(big, origin="lower", aspect="auto",
+                   extent=[0, Nm * Nn, res.t[0], res.t[-1]])
+    ax.set_xlabel("n blocks per m"); ax.set_ylabel("t")
     ax.set_title(r"Stacked $|C_{n,m}(t)|$ (m=0,1,...) blocks")
 
-    # Tick marks at m-block boundaries along X
     xticks = [m * Nn for m in range(Nm + 1)]
     ax.set_xticks(xticks)
     ax.set_xticklabels([f"m={m}" for m in range(Nm)] + [f"m={Nm}"])
-
     plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
     
 
