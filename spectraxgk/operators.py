@@ -63,7 +63,7 @@ class ElectrostaticDrive(eqx.Module):
 
     def __call__(self, C: jnp.ndarray) -> jnp.ndarray:
         k = self.kpar
-        E = jnp.where(k != 0.0, C[0, 0] / k, 0.0 + 0.0j)
+        E = jnp.where(k != 0.0, 1j * C[0, 0] / k, 0.0 + 0.0j)
         dC = jnp.zeros_like(C)
-        dC = dC.at[1, 0].add(-1j * self.coef * jnp.sqrt(2.0) * E)
+        dC = dC.at[1, 0].add(-1 * self.coef * jnp.sqrt(2.0) * E)
         return dC
