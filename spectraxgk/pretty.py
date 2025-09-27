@@ -10,7 +10,7 @@ class _ConsoleLike(Protocol):
 _RICH_AVAIL = False
 _MAKE_CONSOLE: Optional[Callable[[], _ConsoleLike]] = None
 try:
-    from rich.console import Console  # type: ignore[import-not-found]
+    from rich.console import Console
     from rich.table import Table      # noqa: F401
     from rich.panel import Panel      # noqa: F401
     from rich.box import ROUNDED      # noqa: F401
