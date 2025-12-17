@@ -337,45 +337,10 @@ def rhs_gk_multispecies(Gk: jnp.ndarray, params: dict, Nh: int, Nl: int):
 
     stream = jax.lax.cond(enable_streaming, _stream, lambda _: jnp.zeros_like(Hk), operand=None)
 
-    # Streaming (esp. gradB) can create aliased kz content; enforce dealias mask.
-    stream = jnp.where(mask23[None, None, None, ...], stream, 0.0 + 0.0j)
-
-    # --- IMPORTANT: streaming is naturally written for H, but the state is G.
-    # To make W(G)=0.5||H(G,phi(G))||^2 conserved in the linear collisionless case,
-    # we must convert the m=0 slice: dH0 -> dG0 using quasineutrality linearity.
-    #
-    # For m>0, H=G so dG=dH.
+    # NOTE:
+    # The GK moment equation evolves G, but the parallel streaming operator depends on
+    # H(G,phi(G)). The expression above already computes dG (using H inside the flux).
     dG_stream = stream
-    dH0 = stream[:, :, 0, ...]  # (Ns,Nl,Ny,Nx,Nz)
-
-    rdt = dH0.real.dtype
-    q_s  = jnp.asarray(params["q_s"],  dtype=rdt)
-    n0_s = jnp.asarray(params["n0_s"], dtype=rdt)
-    T_s  = jnp.asarray(params["T_s"],  dtype=rdt)
-    Jl_s = jnp.asarray(params["Jl_s"], dtype=rdt)         # (Ns,Nl,Ny,Nx,Nz)
-    k2   = jnp.asarray(params["k2_grid"], dtype=rdt)       # (Ny,Nx,Nz)
-    lam  = jnp.asarray(params.get("lambda_D", 0.0), dtype=rdt)
-    den_qn = jnp.asarray(params["den_qn"], dtype=rdt)      # (Ny,Nx,Nz)
-    sum_q2n0_over_T = jnp.asarray(params["sum_q2n0_over_T"], dtype=rdt)  # scalar
-
-    # S = Σ_s q n0 Σ_l J_l dH0_{s,l}
-    num_s = jnp.sum(Jl_s * dH0, axis=1)  # (Ns,Ny,Nx,Nz)
-    S = jnp.sum((q_s * n0_s)[:, None, None, None] * num_s, axis=0)  # (Ny,Nx,Nz) complex
-
-    # Match *exactly* the branch logic in solve_phi_quasineutrality_multispecies:
-    # if den_qn is clamped (e.g. k⊥=0, λD=0), then φ is treated as 0 => dφ must be 0.
-    active = mask23 & (jnp.abs(den_qn) > DEN_EPS)
-
-    # Closed-form inversion denominator for the H->G mapping when φ is active.
-    denom = sum_q2n0_over_T + (lam * lam) * k2  # (Ny,Nx,Nz)
-    dphi = jnp.where(active, S / denom, 0.0 + 0.0j)
-    Ny, Nx, Nz = dphi.shape
-    # keep the same gauge as solve_phi_* : phi(k=0)=0 => dphi(k=0)=0
-    dphi = dphi.at[Ny//2, Nx//2, Nz//2].set(0.0 + 0.0j)
-
-    A = (q_s / T_s)[:, None, None, None, None] * (Jl_s * dphi[None, None, ...])  # (Ns,Nl,Ny,Nx,Nz)
-    dG0 = dH0 - A.astype(dH0.dtype)
-    dG_stream = dG_stream.at[:, :, 0, ...].set(dG0)
 
     # ---- Nonlinear E×B (pseudo-spectral) ----
     def _nonlinear(_):
