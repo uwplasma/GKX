@@ -1,5 +1,5 @@
 site_name: SPECTRAX-GK
-site_description: "Fourier–Hermite & DG JAX solvers for the multispecies Vlasov–Poisson system"
+site_description: "Fourier–Laguerre–Hermite JAX solvers for multispecies electrostatic gyrokinetics"
 site_url: https://uwplasma.github.io/SPECTRAX-GK/
 repo_url: https://github.com/uwplasma/SPECTRAX-GK
 repo_name: uwplasma/SPECTRAX-GK
@@ -48,6 +48,8 @@ plugins:
           options:
             docstring_style: google
             show_source: true
+            show_signature_annotations: true
+            merge_init_into_class: true
 
 markdown_extensions:
   - admonition
@@ -58,7 +60,7 @@ markdown_extensions:
   - toc:
       permalink: true
   - pymdownx.arithmatex:
-      generic: true   # MathJax
+      generic: true
   - pymdownx.details
   - pymdownx.superfences
   - pymdownx.snippets
@@ -67,8 +69,7 @@ markdown_extensions:
   - pymdownx.inlinehilite
 
 extra_javascript:
-  # MathJax for LaTeX equations
-  - javascripts/mathjax-config.js   # load config first
+  - javascripts/mathjax-config.js
   - https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js
 
 extra:
