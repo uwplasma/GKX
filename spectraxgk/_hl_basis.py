@@ -119,4 +119,5 @@ def alpha_tensor(Nl: int):
     Precompute alpha_{k l n} Laguerre triple-product coefficients.
     Cached so you don’t redo Python loops every simulation.
     """
-    return jnp.array(_alpha_tensor_cached(Nl), dtype=jnp.float64)
+    dtype = jnp.float64 if jax.config.read("jax_enable_x64") else jnp.float32
+    return jnp.array(_alpha_tensor_cached(Nl), dtype=dtype)

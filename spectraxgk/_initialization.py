@@ -1,6 +1,7 @@
 # spectraxgk/_initialization.py
-import jax
-jax.config.update("jax_enable_x64", True)  # keep for now; consider disabling for speed once stable
+import os, jax
+jax.config.update("jax_enable_x64", os.environ.get("SPECTRAX_X64", "0") == "1")
+
 import jax.numpy as jnp
 
 from ._hl_basis import (
@@ -62,6 +63,10 @@ def initialize_simulation_parameters(
     )
     p.update(user_parameters)
 
+    use_x64 = bool(jax.config.read("jax_enable_x64"))
+    rdt = jnp.float64 if use_x64 else jnp.float32
+    cdt = jnp.complex128 if use_x64 else jnp.complex64
+
     # Wavenumber grids in fftshifted ordering (rad/length)
     kx, ky, kz = kgrid_fftshifted(p["Lx"], p["Ly"], p["Lz"], Nx, Ny, Nz)
     k2 = kx**2 + ky**2 + kz**2
@@ -85,7 +90,7 @@ def initialize_simulation_parameters(
     alpha_kln = alpha_tensor(Nl)  # (Nl,Nl,Nl)
 
     # Hermite ladder coefficients for streaming
-    m = jnp.arange(Nh, dtype=jnp.float64)
+    m = jnp.arange(Nh, dtype=rdt)
     sqrt_m_plus = jnp.sqrt(m + 1.0)
     sqrt_m_minus = jnp.sqrt(m)
 
@@ -100,7 +105,7 @@ def initialize_simulation_parameters(
     kx0 = Nx // 2 + int(p["nx0"])
     kz0 = Nz // 2 + int(p["nz0"])
 
-    amp = jnp.array(p["pert_amp"], dtype=jnp.float64)
+    amp = jnp.array(p["pert_amp"], dtype=rdt)
     G0 = G0.at[0, 0, ky0, kx0, kz0].set(amp + 0.0j)
 
     ky1 = conjugate_index_fftshifted(ky0, Ny)
