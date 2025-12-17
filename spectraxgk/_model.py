@@ -4,20 +4,15 @@ Core slab electrostatic GK model in Laguerre–Hermite moments.
 
 This file provides:
   - fft/ifft helpers for arrays stored in fftshift ordering
+  - conjugate-symmetry enforcement in fftshift ordering
   - quasineutrality with adiabatic (Boltzmann) electrons
   - a conserving Lenard–Bernstein collision operator in LH space
   - the RHS: streaming + nonlinear E×B + collisions
+  - cheap diagnostics for SaveAt(fn=...)
 
-Key stability/conservation fix vs your previous version:
-  - DO NOT take `.real` after inverse FFTs in the nonlinear term.
-    Dropping imaginary parts breaks the antisymmetry that gives energy conservation
-    in pseudo-spectral Poisson brackets (even if the true physical fields are real).
-    If you want to enforce reality, do it by enforcing conjugate symmetry in k-space,
-    not by truncating `.real` in the middle of the calculation.
-
-Performance notes:
-  - Nonlinear term is O(Nl^2 * Nh * Ngrid). Keep Nl modest.
-  - 2/3 de-aliasing is applied in k-space via params["mask23"].
+IMPORTANT:
+  - Do NOT take `.real` mid-calculation in the nonlinear term.
+    Reality should be enforced by conjugate symmetry in k-space.
 """
 
 from __future__ import annotations
@@ -62,21 +57,29 @@ def fft_shifted(A: jnp.ndarray) -> jnp.ndarray:
 
 def enforce_conjugate_symmetry_fftshifted(Gk: jnp.ndarray, params: dict) -> jnp.ndarray:
     """
-    Enforce conjugate symmetry in fftshifted ordering:
-        G(k) = conj(G(-k))
-    This guarantees real fields after iFFT (up to roundoff), without dropping `.real`.
+    Enforce conjugate symmetry in fftshifted ordering on the LAST THREE axes:
+        G(k_y,k_x,k_z) = conj(G(-k_y,-k_x,-k_z))
 
     Requires precomputed index arrays in params:
       params["conj_y"], params["conj_x"], params["conj_z"].
+
+    This implementation is axis-correct and works for any leading dims,
+    e.g. (Nl,Nh,Ny,Nx,Nz) or (Ny,Nx,Nz).
     """
     iy = params["conj_y"]
     ix = params["conj_x"]
     iz = params["conj_z"]
-    G_conj = jnp.conj(Gk[..., iy][:, :, :, ix][:, :, :, :, iz])
-    return 0.5 * (Gk + G_conj)
+
+    Gneg = jnp.take(Gk, iy, axis=-3)
+    Gneg = jnp.take(Gneg, ix, axis=-2)
+    Gneg = jnp.take(Gneg, iz, axis=-1)
+
+    Gconj = jnp.conj(Gneg)
+    return 0.5 * (Gk + Gconj)
 
 
 def _pad_m_axis(H: jnp.ndarray) -> jnp.ndarray:
+    # Pad Hermite axis (axis=1) with zeros.
     return jnp.pad(H, ((0, 0), (1, 1), (0, 0), (0, 0), (0, 0)))
 
 
@@ -90,16 +93,22 @@ def shift_m(H: jnp.ndarray, dm: int) -> jnp.ndarray:
     """
     if dm == 0:
         return H
-    P = _pad_m_axis(H)
-    _, Nh, _, _, _ = H.shape
-    return P[:, 1 + dm : 1 + dm + Nh, :, :, :]
+    z = jnp.zeros_like(H[:, :1, ...])
+    if dm == +1:
+        # H_{m+1} -> drop m=0, append 0 at end
+        return jnp.concatenate([H[:, 1:, ...], z], axis=1)
+    if dm == -1:
+        # H_{m-1} -> prepend 0, drop last
+        return jnp.concatenate([z, H[:, :-1, ...]], axis=1)
+    raise ValueError("dm must be -1,0,+1")
+
 
 
 def solve_phi_from_quasineutrality_boltzmann_e(Gk: jnp.ndarray, params: dict) -> jnp.ndarray:
     """
     Adiabatic-electron quasineutrality in Fourier space (slab).
 
-    Using truncated Laguerre sums:
+    Truncated Laguerre sums:
       num = Σ_l J_l(b) * G_{l,m=0}
       den = 1/tau_e + 1 - Σ_l J_l(b)^2
       phi = num / den, with phi(k=0)=0 gauge.
@@ -123,12 +132,19 @@ def solve_phi_from_quasineutrality_boltzmann_e(Gk: jnp.ndarray, params: dict) ->
 
 def collision_lenard_bernstein_conserving(Hk: jnp.ndarray, params: dict) -> jnp.ndarray:
     """
-    Conserving Lenard–Bernstein collisions in Laguerre–Hermite space (electrostatic slab).
+    Conserving Lenard–Bernstein collisions in Laguerre–Hermite space.
 
     Returns Ck with the same shape as Hk.
-    """
-    nu = jnp.asarray(params["nu"], dtype=jnp.float64)
 
+    Note: Dissipation/energy tests are most consistent when you measure free energy
+    in terms of H (since collisions act on H).
+    """
+
+    use_x64 = bool(jax.config.read("jax_enable_x64"))
+    rdt = jnp.float64 if use_x64 else jnp.float32
+    cdt = jnp.complex128 if use_x64 else jnp.complex64
+
+    nu = jnp.asarray(params["nu"], dtype=rdt)
     def _do(_):
         b = params["b_grid"]     # (Ny,Nx,Nz)
         Jl = params["Jl_grid"]   # (Nl,Ny,Nx,Nz)
@@ -136,8 +152,8 @@ def collision_lenard_bernstein_conserving(Hk: jnp.ndarray, params: dict) -> jnp.
         Jp1 = params["Jl_p1"]
 
         Nl, Nh, Ny, Nx, Nz = Hk.shape
-        ell = jnp.arange(Nl, dtype=jnp.float64)[:, None, None, None]      # (Nl,1,1,1)
-        m = jnp.arange(Nh, dtype=jnp.float64)[None, :, None, None, None]  # (1,Nh,1,1,1)
+        ell = jnp.arange(Nl, dtype=rdt)[:, None, None, None]      # (Nl,1,1,1)
+        m = jnp.arange(Nh, dtype=rdt)[None, :, None, None, None]  # (1,Nh,1,1,1)
 
         # moments in k-space
         u_par = jnp.sum(Jl * Hk[:, 1, ...], axis=0)                        # (Ny,Nx,Nz)
@@ -148,11 +164,10 @@ def collision_lenard_bernstein_conserving(Hk: jnp.ndarray, params: dict) -> jnp.
             axis=0,
         )  # (Ny,Nx,Nz)
 
-        Ttot = (T_par + 2.0 * T_perp)
+        Ttot = (T_par + 2.0 * T_perp)  # (Ny,Nx,Nz)
 
         # base damping (diagonal in LH)
-        base = -nu * (b[None, None, ...] + 2.0 * ell[:, None, ...] + m) * Hk
-        C = base
+        C = -nu * (b[None, None, ...] + 2.0 * ell[:, None, ...] + m) * Hk
 
         # conserving corrections
         C = C.at[:, 1, ...].add(nu * (Jl * u_par))
@@ -168,30 +183,43 @@ def collision_lenard_bernstein_conserving(Hk: jnp.ndarray, params: dict) -> jnp.
 
 def cheap_diagnostics_from_state(Gk: jnp.ndarray, params: dict) -> dict:
     """
-    Cheap diagnostics computed from the *current* state only (no history needed).
-    Designed to be called inside SaveAt(fn=...).
+    Cheap diagnostics computed from current state only.
 
-    Returns a small pytree of scalars/arrays.
+    IMPORTANT: We define W_total as a "free-energy-like" quantity based on H,
+    since both the nonlinear bracket and the collisions are implemented on H.
+
+      H = G + J_l(b) * phi * δ_{m0}
+
+    We still report W_phi separately, but we do NOT force W_total = W_g + W_phi.
     """
     phi_k = solve_phi_from_quasineutrality_boltzmann_e(Gk, params)
     Jl = params["Jl_grid"]
-
     Hk = Gk.at[:, 0, ...].add(Jl * phi_k)
 
-    Wg = 0.5 * jnp.sum(jnp.abs(Gk) ** 2)
+    use_x64 = bool(jax.config.read("jax_enable_x64"))
+    rdt = jnp.float64 if use_x64 else jnp.float32
+    cdt = jnp.complex128 if use_x64 else jnp.complex64
+
+    # "moment/free energy" based on H (most consistent with RHS + collisions)
+    W_h = 0.5 * jnp.sum(jnp.abs(Hk) ** 2)
+
+    # keep a field-energy-like proxy separately for plotting
     Wphi = 0.5 * (1.0 + 1.0 / params["tau_e"]) * jnp.sum(jnp.abs(phi_k) ** 2)
-    Wtot = Wg + Wphi
 
-    # Collision dissipation proxy: D = -Re <H, C(H)>  (non-negative for a dissipative operator)
-    Ck = collision_lenard_bernstein_conserving(Hk, params)
-    Dcoll = -jnp.real(jnp.vdot(Hk, Ck))  # scalar
+    # define W_total as the conserved/dissipated quantity for tests/papers
+    Wtot = W_h
 
-    # A couple of “sanity” norms
+    enable_collisions = params.get("enable_collisions", True)
+    def _dcoll(_):
+        Ck = collision_lenard_bernstein_conserving(Hk, params)
+        return -jnp.real(jnp.vdot(Hk, Ck))  # should be >=0 for dissipative operator
+    Dcoll = jax.lax.cond(enable_collisions, _dcoll, lambda _: jnp.array(0.0, dtype=rdt), operand=None)
+
     max_abs_G = jnp.max(jnp.abs(Gk))
     max_abs_phi = jnp.max(jnp.abs(phi_k))
 
     return dict(
-        W_g=Wg,
+        W_g=W_h,          # keep key for backwards compat with plots/tests
         W_phi=Wphi,
         W_total=Wtot,
         D_coll=Dcoll,
@@ -205,14 +233,8 @@ def rhs_laguerre_hermite_gk(Gk: jnp.ndarray, params: dict, Nh: int, Nl: int):
     """
     RHS for electrostatic slab GK in Laguerre–Hermite moments.
 
-    Feature toggles in params (all default True in initialization below):
-      params["enable_streaming"]
-      params["enable_nonlinear"]
-      params["enable_collisions"]
-      params["enforce_reality"]   (enforce conjugate symmetry each RHS evaluation)
-
-    Returns:
-      dGk, phi_k
+    Feature toggles in params:
+      enable_streaming, enable_nonlinear, enable_collisions, enforce_reality
     """
     kx = params["kx_grid"]
     ky = params["ky_grid"]
@@ -231,7 +253,7 @@ def rhs_laguerre_hermite_gk(Gk: jnp.ndarray, params: dict, Nh: int, Nl: int):
     # de-alias state
     Gk = Gk * mask23[None, None, ...]
 
-    # enforce conjugate symmetry (helps long runs + prevents creeping complex physical fields)
+    # enforce conjugate symmetry (optional)
     Gk = jax.lax.cond(
         enforce_reality,
         lambda x: enforce_conjugate_symmetry_fftshifted(x, params),
@@ -242,51 +264,47 @@ def rhs_laguerre_hermite_gk(Gk: jnp.ndarray, params: dict, Nh: int, Nl: int):
     # fields
     phi_k = solve_phi_from_quasineutrality_boltzmann_e(Gk, params)
     Jl = params["Jl_grid"]
-
-    # H = G + J_l(b)*phi δ_{m0}
     Hk = Gk.at[:, 0, ...].add(Jl * phi_k)
 
-    # --- streaming (linear) ---
+    # streaming
     def _stream(_):
-        H_p1 = shift_m(Hk, +1)
-        H_m1 = shift_m(Hk, -1)
+        Hp1 = shift_m(Hk, +1)
+        Hm1 = shift_m(Hk, -1)
         return -1j * kz[None, None, ...] * vti * (
-            (sqrt_m_plus[None, :, None, None, None] * H_p1)
-            + (sqrt_m_minus[None, :, None, None, None] * H_m1)
+            (sqrt_m_plus[None, :, None, None, None] * Hp1)
+            + (sqrt_m_minus[None, :, None, None, None] * Hm1)
         )
 
     stream = jax.lax.cond(enable_streaming, _stream, lambda _: jnp.zeros_like(Hk), operand=None)
 
-    # --- nonlinear E×B term (pseudo-spectral Poisson bracket) ---
+    # nonlinear E×B
     def _nonlinear(_):
-        phi_nk = Jl * phi_k                                  # (Nl,Ny,Nx,Nz)
-        vEx_k = -1j * ky[None, ...] * phi_nk                 # (Nl,Ny,Nx,Nz)
-        vEy_k =  1j * kx[None, ...] * phi_nk                 # (Nl,Ny,Nx,Nz)
+        phi_nk = Jl * phi_k
+        vEx_k = -1j * ky[None, ...] * phi_nk
+        vEy_k =  1j * kx[None, ...] * phi_nk
 
-        # IMPORTANT: keep complex (do NOT drop `.real`)
-        vEx = ifft_shifted(vEx_k)                            # (Nl,Ny,Nx,Nz)
+        vEx = ifft_shifted(vEx_k)
         vEy = ifft_shifted(vEy_k)
 
-        dHdx = ifft_shifted((1j * kx)[None, None, ...] * Hk)  # (Nl,Nh,Ny,Nx,Nz)
+        dHdx = ifft_shifted((1j * kx)[None, None, ...] * Hk)
         dHdy = ifft_shifted((1j * ky)[None, None, ...] * Hk)
 
-        NL_realspace = (
+        NL_rs = (
             jnp.einsum("kln,nxyz,kmxyz->lmxyz", alpha_kln, vEx, dHdx, optimize=True)
             + jnp.einsum("kln,nxyz,kmxyz->lmxyz", alpha_kln, vEy, dHdy, optimize=True)
         )
-        return fft_shifted(NL_realspace) * mask23[None, None, ...]
+        return fft_shifted(NL_rs) * mask23[None, None, ...]
 
     NL_k = jax.lax.cond(enable_nonlinear, _nonlinear, lambda _: jnp.zeros_like(Hk), operand=None)
 
-    # --- collisions ---
+    # collisions
     def _coll(_):
         return collision_lenard_bernstein_conserving(Hk, params) * mask23[None, None, ...]
-
     Ck = jax.lax.cond(enable_collisions, _coll, lambda _: jnp.zeros_like(Hk), operand=None)
 
     dGk = -NL_k + stream + Ck
 
-    # re-apply symmetry to derivative too (prevents symmetry drift)
+    # keep symmetry of derivative too (prevents drift)
     dGk = jax.lax.cond(
         enforce_reality,
         lambda x: enforce_conjugate_symmetry_fftshifted(x, params),
