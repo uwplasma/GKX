@@ -24,8 +24,8 @@ from diffrax import ODETerm, PIDController, SaveAt, TqdmProgressMeter, Tsit5, di
 jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 
-from spectraxgk.hermite_ops import build_collision_matrix, ladder_sqrt
-from spectraxgk.poisson import build_P
+from spectraxgk_old.hermite_ops import build_collision_matrix, ladder_sqrt
+from spectraxgk_old.poisson import build_P
 
 
 # -------------------- DG derivative --------------------

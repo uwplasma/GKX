@@ -30,7 +30,7 @@ from diffrax import (
     diffeqsolve,
 )
 
-from spectraxgk.hermite_ops import (
+from spectraxgk_old.hermite_ops import (
     build_collision_matrix,  # C(N; nu0, hyper_p, cutoff) real
     field_one_sided_fourier,  # H_field(k,N)  real
     streaming_block_fourier,  # H_stream(k,N) real

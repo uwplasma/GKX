@@ -1,17 +1,17 @@
 import jax.numpy as jnp
 
-from spectraxgk.constants import (
+from spectraxgk_old.constants import (
     elementary_charge as e_charge,
 )
-from spectraxgk.constants import (
+from spectraxgk_old.constants import (
     epsilon_0,
     mass_electron,
     mass_proton,
 )
-from spectraxgk.constants import (
+from spectraxgk_old.constants import (
     speed_of_light as c_light,
 )
-from spectraxgk.io_config import Config, SpeciesCfg
+from spectraxgk_old.io_config import Config, SpeciesCfg
 
 
 def print_units_banner(

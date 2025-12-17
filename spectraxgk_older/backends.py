@@ -6,17 +6,17 @@ Always return (ts, diag_dict) with keys used by the unified plots.
 
 import jax.numpy as jnp
 
-from spectraxgk.dg import (
+from spectraxgk_old.dg import (
     assemble_A_real_multispecies,
     initial_condition_multispecies,
     solve_dg_multispecies,
     solve_dg_multispecies_nonlinear,
 )
-from spectraxgk.fourier import (
+from spectraxgk_old.fourier import (
     run_bank_multispecies_linear,
     run_bank_multispecies_nonlinear,
 )
-from spectraxgk.io_config import GridCfg
+from spectraxgk_old.io_config import GridCfg
 
 
 def resolve_kgrid(grid: GridCfg, *, only_positive: bool = False) -> jnp.ndarray:

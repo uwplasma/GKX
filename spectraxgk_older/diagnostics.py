@@ -20,7 +20,7 @@ jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.constants import epsilon_0
+from spectraxgk_old.constants import epsilon_0
 
 
 # -------------------- robust k≈0 selection --------------------
