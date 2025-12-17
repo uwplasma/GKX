@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "spectraxgk"
-description = "Fourier–Hermite and DG solvers for multispecies Gyrokinetic equation with JAX."
+description = "Solution of the gyrokinetic equation in JAX using a Hermite-Laguerre decomposition."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.9"
 license = { text = "MIT" }
 authors = [{ name = "UWPlasma", email = "rogerio.jorge@wisc.edu" }]
-keywords = ["plasma", "vlasov", "poisson", "fourier", "hermite", "discontinuous-galerkin", "jax"]
+keywords = ["plasma", "gyrokinetic", "fourier", "hermite", "laguerre", "jax"]
 classifiers = [
   "Programming Language :: Python :: 3",
   "License :: OSI Approved :: MIT License",
@@ -19,26 +19,12 @@ classifiers = [
 dynamic = ["version"]
 
 dependencies = [
-  "jax>=0.4.31",
-  "jaxlib>=0.4.31",
-  "equinox>=0.11.5",
-  "diffrax>=0.6.1",
-  "optax>=0.2.2",
-  "jaxopt>=0.8",
-  "numpy>=1.26",
-  "matplotlib>=3.8",
-  "tomli>=2; python_version<'3.11'",
+  "jax",
+  "jaxlib",
+  "diffrax"
 ]
 
 [project.optional-dependencies]
-pretty = ["rich>=13"]
-dev = [
-  "pytest",
-  "pytest-cov",
-  "ruff",
-  "mypy",
-  "build",
-]
 docs = [
   "mkdocs-material",
   "mkdocstrings[python]",
@@ -60,35 +46,6 @@ local_scheme = "node-and-date"
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["tests"]
-
-# ---------------- Ruff ----------------
-[tool.ruff]
-target-version = "py311"
-line-length = 100
-# Tell Ruff where your code lives (you are NOT using a "src/" layout):
-src = ["spectraxgk", "tests", "examples"]
-extend-exclude = ["build", "dist", ".eggs", "old_src", "old", "notebooks"]  # ⬅ add legacy dirs
-
-
-[tool.ruff.format]
-# Ruff-as-formatter (drop Black to avoid conflicts)
-quote-style = "double"
-indent-style = "space"
-line-ending = "lf"
-
-[tool.ruff.lint]
-# Broad but sane rule set: pycodestyle/pyflakes/imports/pyupgrade/bugbear/etc.
-select = ["E", "F", "I", "UP", "B", "SIM", "W", "C90", "N", "PL"]
-ignore = [
-  "E203",  # compatible with many formatters; Ruff-format handles spacing
-  "E501",  # line-length handled by formatter; don't warn
-]
-
-[tool.ruff.lint.per-file-ignores]
-"__init__.py" = ["F401"]              # allow re-export convenience imports
-"tests/**/*.py" = ["S101", "PLR2004", "N806"] # allow assert, magic-numbers in tests
-"examples/**/*.py" = ["S101"]         # allow assert in examples
-"*.py" = ["N802", "N803", "N806", "N812", "E402", "PLR0915", "PLR0913", "PLR0912", "C901"]
 
 # -------- MyPy ----------
 [tool.mypy]

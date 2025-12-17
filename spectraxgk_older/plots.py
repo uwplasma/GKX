@@ -20,8 +20,8 @@ jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.constants import speed_of_light as c_light
-from spectraxgk.diagnostics import (
+from spectraxgk_old.constants import speed_of_light as c_light
+from spectraxgk_old.diagnostics import (
     energies_dg_exact,
     energies_fourier_exact,
     pick_k0_index,
