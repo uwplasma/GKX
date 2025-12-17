@@ -211,3 +211,4 @@ __marimo__/
 .gitignore
 .DS_Store
 outputs/
+*.png
