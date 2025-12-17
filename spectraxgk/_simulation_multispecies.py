@@ -15,13 +15,20 @@ from diffrax import (
 )
 
 from ._initialization_multispecies import initialize_simulation_parameters_multispecies
-from ._model_multispecies import rhs_gk_multispecies, cheap_diagnostics_multispecies, solve_phi_quasineutrality_multispecies, build_Hk_from_Gk_phi
+from ._model_multispecies import (
+    rhs_gk_multispecies,
+    cheap_diagnostics_multispecies,
+    solve_phi_quasineutrality_multispecies,
+    build_Hk_from_Gk_phi,
+)
 
-__all__ = ["simulation_multispecies"]
+__all__ = ["simulation_multispecies", "_pack_complex_flat", "_unpack_complex_flat", "vector_field_real"]
+
 
 # ---- pretty console (Rich optional) ----
 class _ConsoleLike(Protocol):
     def print(self, *args: Any, **kwargs: Any) -> Any: ...
+
 
 _RICH_AVAIL = False
 _MAKE_CONSOLE: Optional[Callable[[], _ConsoleLike]] = None
@@ -39,6 +46,7 @@ except Exception:
 _USE_RICH: bool = False
 _console: Optional[_ConsoleLike] = None
 
+
 def init_pretty(prefer_rich: bool = True) -> None:
     global _USE_RICH, _console
     no_color_env = any(k.upper() == "NO_COLOR" for k in os.environ.keys())
@@ -55,11 +63,13 @@ def init_pretty(prefer_rich: bool = True) -> None:
         if prefer_rich and not _RICH_AVAIL:
             print("Note: nicer terminal output available via `pip install rich`.")
 
+
 def _p(msg: str) -> None:
     if _USE_RICH and _console is not None:
         _console.print(msg)
     else:
         print(msg)
+
 
 def _sizeof_fmt(num: float) -> str:
     for unit in ["B", "KB", "MB", "GB", "TB"]:
@@ -69,25 +79,55 @@ def _sizeof_fmt(num: float) -> str:
     return f"{num:.1f} PB"
 
 
-# ---- pack/unpack ----
+# ---- pack/unpack complex as REAL state ----
 def _pack_complex_flat(z: jnp.ndarray) -> jnp.ndarray:
+    """
+    Pack complex array into a real vector [Re(z), Im(z)].
+    """
     zf = z.reshape(-1)
     return jnp.concatenate([jnp.real(zf), jnp.imag(zf)], axis=0)
 
+
 def _unpack_complex_flat(y: jnp.ndarray, shape: tuple[int, ...], Ncomplex: int) -> jnp.ndarray:
+    """
+    Inverse of _pack_complex_flat.
+    """
     y = y.reshape(-1)
     re = y[:Ncomplex]
     im = y[Ncomplex:2*Ncomplex]
-    return (re + 1j*im).reshape(shape)
+    return (re + 1j * im).reshape(shape)
 
-@partial(jax.jit, static_argnames=("Ns","Nl","Nh","Ny","Nx","Nz","Ncomplex"))
+
+def _params_for_solver(params: dict) -> dict:
+    """
+    Diffrax args must be JAX-friendly and should avoid complex leaves to prevent
+    complex-dtype warnings. We keep all real arrays + small scalars, but remove
+    complex-valued cached items that are not required by the RHS.
+    """
+    # Shallow copy is fine (we don't mutate arrays).
+    p = dict(params)
+    # Complex-only leaves to remove from args:
+    p.pop("Gk_0", None)  # initial condition is passed separately as y0
+    return p
+
+
+@partial(jax.jit, static_argnames=("Ns", "Nl", "Nh", "Ny", "Nx", "Nz", "Ncomplex"))
 def vector_field_real(t, y, params, Ns, Nl, Nh, Ny, Nx, Nz, Ncomplex):
-    Gk = _unpack_complex_flat(y, (Ns,Nl,Nh,Ny,Nx,Nz), Ncomplex)
+    """
+    Diffrax-compatible vector field on a REAL state vector.
+    """
+    Gk = _unpack_complex_flat(y, (Ns, Nl, Nh, Ny, Nx, Nz), Ncomplex)
     dGk, _phi = rhs_gk_multispecies(Gk, params, Nh=Nh, Nl=Nl)
     return _pack_complex_flat(dGk)
 
+
 def _make_diag_fn(Ns, Nl, Nh, Ny, Nx, Nz, Ncomplex, diag_config: dict):
-    # static “probe indices” resolved outside JIT
+    """
+    Return a function fn(t,y,params)->dict of *REAL* diagnostics to be saved.
+
+    Key choice: everything returned is real-valued (no complex leaves),
+    which avoids Diffrax complex dtype warnings in saved output.
+    """
     ky = int(diag_config.get("ky", Ny // 2))
     kx = int(diag_config.get("kx", Nx // 2))
     kz = int(diag_config.get("kz", Nz // 2))
@@ -97,31 +137,40 @@ def _make_diag_fn(Ns, Nl, Nh, Ny, Nx, Nz, Ncomplex, diag_config: dict):
     save_Em = bool(diag_config.get("save_hermite_spectrum", True))
 
     def fn(t, y, params):
-        Gk = _unpack_complex_flat(y, (Ns,Nl,Nh,Ny,Nx,Nz), Ncomplex)
+        Gk = _unpack_complex_flat(y, (Ns, Nl, Nh, Ny, Nx, Nz), Ncomplex)
 
         d = cheap_diagnostics_multispecies(Gk, params)
 
-        # Optional “line” diagnostics (very useful in 1D)
+        # Split complex probes into real/imag for safe saving
         phi_k = solve_phi_quasineutrality_multispecies(Gk, params)
+        phi_probe = phi_k[ky, kx, kz]
+        d["phi_probe_re"] = jnp.real(phi_probe)
+        d["phi_probe_im"] = jnp.imag(phi_probe)
 
+        Gprobe = Gk[:, 0, 0, ky, kx, kz]  # (Ns,)
+        d["Gm0_probe_re_s"] = jnp.real(Gprobe)
+        d["Gm0_probe_im_s"] = jnp.imag(Gprobe)
+
+        # 1D line diagnostics
         if save_phi_line and (Ny == 1 and Nx == 1):
-            d["phi_k_line"] = phi_k[0, 0, :]  # (Nz,)
+            line = phi_k[0, 0, :]  # (Nz,) complex
+            d["phi_k_line_re"] = jnp.real(line)
+            d["phi_k_line_im"] = jnp.imag(line)
 
         if save_den_line and (Ny == 1 and Nx == 1):
             Hk = build_Hk_from_Gk_phi(Gk, phi_k, params)
-            # density-like moment: n_s(k) ~ n0_s * sum_l J_l * H_{m=0}
             n0 = params["n0_s"]
             Jl_s = params["Jl_s"]
-            Hm0 = Hk[:, :, 0, ...]                             # (Ns,Nl,Ny,Nx,Nz)
-            num_s = jnp.sum(Jl_s * Hm0, axis=1)                # (Ns,Ny,Nx,Nz)
-            d["n_s_k_line"] = (n0[:, None] * num_s[:, 0, 0, :]) # (Ns,Nz)
+            Hm0 = Hk[:, :, 0, ...]                        # (Ns,Nl,Ny,Nx,Nz)
+            num_s = jnp.sum(Jl_s * Hm0, axis=1)           # (Ns,Ny,Nx,Nz)
+            nline = (n0[:, None] * num_s[:, 0, 0, :])     # (Ns,Nz) complex
+            d["n_s_k_line_re"] = jnp.real(nline)
+            d["n_s_k_line_im"] = jnp.imag(nline)
 
         if save_Em:
-            d["E_m"] = d["E_m"]  # already included; keep explicit
+            # already in dict as (Ns,Nh) real; keep explicitly
+            d["E_m"] = d["E_m"]
 
-        # Single probe mode (always small)
-        d["phi_probe"] = phi_k[ky, kx, kz]
-        d["Gm0_probe_s"] = Gk[:, 0, 0, ky, kx, kz]  # (Ns,)
         return d
 
     return fn
@@ -166,7 +215,6 @@ def simulation_multispecies(
     # Preflight print
     bytes_per_real = 8 if bool(jax.config.read("jax_enable_x64")) else 4
     bytes_per_state = (2 * Ncomplex) * bytes_per_real
-    est_diag_bytes = (timesteps // max(1, int(save_every))) * 64  # scalars only rough
 
     if _USE_RICH and _console is not None:
         from rich.table import Table
@@ -191,6 +239,8 @@ def simulation_multispecies(
         t.add_row("packed state", f"{2*Ncomplex:,} reals")
         t.add_row("bytes/state", _sizeof_fmt(bytes_per_state))
         t.add_row("lambda_D", f"{float(params.get('lambda_D', 0.0))}")
+        t.add_row("enable_gradB_parallel", f"{bool(params.get('enable_gradB_parallel', False))}")
+        t.add_row("B_eps, B_mode", f"{float(params.get('B_eps', 0.0))}, {int(params.get('B_mode', 1))}")
         t.add_row("IC perturb weights", f"{jnp.asarray(params['perturb_weights_s'])}")
         _console.print(t)
 
@@ -212,14 +262,15 @@ def simulation_multispecies(
             )
         _console.print(st)
     else:
-        _p("-"*90)
+        _p("-" * 90)
         _p(f"backend={jax.default_backend()} x64={jax.config.read('jax_enable_x64')}")
         _p(f"grid (Ny,Nx,Nz)=({Ny},{Nx},{Nz})  moments (Nl,Nh)=({Nl},{Nh})  Ns={Ns}")
         _p(f"t_max={float(params['t_max'])} timesteps={timesteps} dt={dt} adaptive={adaptive_time_step}")
         _p(f"save={save} save_every={save_every} packed_len={2*Ncomplex} bytes/state={_sizeof_fmt(bytes_per_state)}")
-        _p(f"lambda_D={float(params.get('lambda_D', 0.0))}  perturb_weights={jnp.asarray(params['perturb_weights_s']) if 'np' in globals() else params['perturb_weights_s']}")
-        _p("-"*90)
+        _p(f"lambda_D={float(params.get('lambda_D', 0.0))}  gradB={bool(params.get('enable_gradB_parallel', False))}")
+        _p("-" * 90)
 
+    # Real ODE state (pack IC)
     y0 = _pack_complex_flat(params["Gk_0"])
 
     # Time grid
@@ -227,6 +278,9 @@ def simulation_multispecies(
     ts = ts_full[::max(1, int(save_every))]
 
     stepsize_controller = PIDController(rtol=1e-7, atol=1e-9) if adaptive_time_step else ConstantStepSize()
+
+    # IMPORTANT: pass only real-leaf params into Diffrax args
+    params_solver = _params_for_solver(params)
 
     term = ODETerm(lambda t, y, args: vector_field_real(t, y, args, Ns, Nl, Nh, Ny, Nx, Nz, Ncomplex))
 
@@ -238,9 +292,9 @@ def simulation_multispecies(
     else:
         raise ValueError("save must be 'diagnostics' or 'final'.")
 
-    # Warmup one RHS eval (compile) + print quick sanity
+    # Warmup RHS eval
     t_compile0 = _time.time()
-    _ = vector_field_real(0.0, y0, params, Ns, Nl, Nh, Ny, Nx, Nz, Ncomplex).block_until_ready()
+    _ = vector_field_real(0.0, y0, params_solver, Ns, Nl, Nh, Ny, Nx, Nz, Ncomplex).block_until_ready()
     _p(f"[dim]JIT compile warmup:[/dim] {_time.time()-t_compile0:.3f} s" if _USE_RICH else f"JIT compile warmup: {_time.time()-t_compile0:.3f} s")
 
     sol = diffeqsolve(
@@ -250,14 +304,14 @@ def simulation_multispecies(
         t1=float(params["t_max"]),
         dt0=float(dt),
         y0=y0,
-        args=params,
+        args=params_solver,
         saveat=saveat,
         stepsize_controller=stepsize_controller,
         max_steps=1_000_000,
         progress_meter=(TqdmProgressMeter() if progress else NoProgressMeter()),
     )
 
-    out = dict(**params)
+    out = dict(**params)  # include full params for user inspection
     out["wall_time"] = _time.time() - t_wall0
     out["time"] = sol.ts
     out["species"] = species_meta
@@ -266,24 +320,20 @@ def simulation_multispecies(
         for k, v in sol.ys.items():
             out[k] = v
 
-        # Add cumulative collision dissipation if present
-        if "D_coll" in out:
-            t = out["time"]
-            D = out["D_coll"]
-            cum = jnp.concatenate([jnp.zeros((1,), dtype=D.dtype),
-                                   jnp.cumsum(0.5 * (D[1:] + D[:-1]) * (t[1:] - t[:-1]))])
-            out["Cum_D_coll"] = cum
-
         _p("[bold green]SPECTRAX-GK multispecies: finished[/bold green]" if _USE_RICH else "SPECTRAX-GK multispecies: finished")
-        _p(f"wall_time={out['wall_time']:.3f} s  final W_total={float(out['W_total'][-1]):.6e}  final phi_rms={float(out['phi_rms'][-1]):.6e}")
-        _p(f"final max|phi|={float(out['max_abs_phi'][-1]):.6e}  final max|G|={float(out['max_abs_G'][-1]):.6e}")
 
-        if "Cum_D_coll" in out:
-            _p(f"Cum_D_coll(t_end)={float(out['Cum_D_coll'][-1]):.6e}")
+        # Helpful final summary lines (only scalars)
+        Wf = out.get("W_free", out.get("W_total", None))
+        if Wf is not None:
+            _p(f"wall_time={out['wall_time']:.3f} s  final W_free={float(Wf[-1]):.6e}")
+        if "phi_rms" in out:
+            _p(f"final phi_rms={float(out['phi_rms'][-1]):.6e}")
+        if "max_abs_phi" in out and "max_abs_G" in out:
+            _p(f"final max|phi|={float(out['max_abs_phi'][-1]):.6e}  final max|G|={float(out['max_abs_G'][-1]):.6e}")
 
     else:
         yT = sol.ys[-1]
-        out["Gk_final"] = _unpack_complex_flat(yT, (Ns,Nl,Nh,Ny,Nx,Nz), Ncomplex)
+        out["Gk_final"] = _unpack_complex_flat(yT, (Ns, Nl, Nh, Ny, Nx, Nz), Ncomplex)
         _p("[bold green]SPECTRAX-GK multispecies: finished (final state)[/bold green]" if _USE_RICH else "SPECTRAX-GK multispecies: finished (final state)")
 
     return out
