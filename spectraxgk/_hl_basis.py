@@ -28,10 +28,7 @@ def twothirds_mask(Ny: int, Nx: int, Nz: int):
     return (jnp.abs(ky) <= cy) & (jnp.abs(kx) <= cx) & (jnp.abs(kz) <= cz)
 
 def kgrid_fftshifted(Lx, Ly, Lz, Nx, Ny, Nz):
-    """
-    Return fftshifted physical wavenumber grids (rad / length) compatible with arrays
-    stored in fftshift order.
-    """
+    """Return fftshifted physical wavenumber grids (rad/length)."""
     kx_1d = jnp.fft.fftshift(jnp.fft.fftfreq(Nx, d=Lx / Nx)) * (2 * jnp.pi)
     ky_1d = jnp.fft.fftshift(jnp.fft.fftfreq(Ny, d=Ly / Ny)) * (2 * jnp.pi)
     kz_1d = jnp.fft.fftshift(jnp.fft.fftfreq(Nz, d=Lz / Nz)) * (2 * jnp.pi)
@@ -39,22 +36,13 @@ def kgrid_fftshifted(Lx, Ly, Lz, Nx, Ny, Nz):
     return kx, ky, kz
 
 def conjugate_index_fftshifted(i: int, N: int) -> int:
-    """
-    Index map for the conjugate (-k) mode in *fftshifted* ordering.
-    For odd N: i' = (N-1) - i ; for even N: i' = (N - i) mod N.
-    """
+    """Index map for the conjugate (-k) mode in fftshifted ordering."""
     if (N % 2) == 1:
         return (N - 1) - i
     return (N - i) % N
 
 def laguerre_L_all(b, Nl: int):
-    """
-    Compute Laguerre polynomials L_0..L_{Nl-1} at b (broadcastable array).
-    Recurrence:
-      L0=1
-      L1=1-b
-      L_{l+1}=((2l+1-b)L_l - l L_{l-1})/(l+1)
-    """
+    """Laguerre polynomials L_0..L_{Nl-1} via recurrence."""
     b = jnp.asarray(b)
     L0 = jnp.ones_like(b)
     if Nl == 1:
@@ -72,10 +60,7 @@ def laguerre_L_all(b, Nl: int):
     return jnp.concatenate([jnp.stack([L0, L1], axis=0), rest], axis=0)
 
 def J_l_all(b, Nl: int):
-    """
-    Gyroaveraging coefficients used in Laguerre–Hermite GK:
-      J_l(b) = exp(-b/2) * L_l(b)
-    """
+    """Gyroaveraging coefficients J_l(b) = exp(-b/2) * L_l(b)."""
     L = laguerre_L_all(b, Nl)
     return jnp.exp(-0.5 * b)[None, ...] * L
 
@@ -84,10 +69,6 @@ def _log_fact(n: int) -> float:
 
 @lru_cache(maxsize=None)
 def _alpha_tensor_cached(Nl: int):
-    """
-    CPU-side cached computation of alpha_{k l n}. Nl is small (typically <= 16).
-    Returned as a Python nested list of floats; converted to jnp in alpha_tensor().
-    """
     out = [[[0.0 for _ in range(Nl)] for _ in range(Nl)] for _ in range(Nl)]
     for k in range(Nl):
         for ell in range(Nl):
@@ -115,9 +96,7 @@ def _alpha_tensor_cached(Nl: int):
     return out
 
 def alpha_tensor(Nl: int):
-    """
-    Precompute alpha_{k l n} Laguerre triple-product coefficients.
-    Cached so you don’t redo Python loops every simulation.
-    """
-    dtype = jnp.float64 if jax.config.read("jax_enable_x64") else jnp.float32
+    """Cached alpha_{kln}, dtype matches x64 setting (avoids warnings)."""
+    use_x64 = bool(jax.config.read("jax_enable_x64"))
+    dtype = jnp.float64 if use_x64 else jnp.float32
     return jnp.array(_alpha_tensor_cached(Nl), dtype=dtype)
