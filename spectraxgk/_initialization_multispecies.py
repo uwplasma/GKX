@@ -5,6 +5,7 @@ import os
 import jax
 jax.config.update("jax_enable_x64", os.environ.get("SPECTRAX_X64", "0") == "1")
 import jax.numpy as jnp
+from jax.scipy.special import i0e
 
 from ._hl_basis import (
     kgrid_fftshifted,
@@ -167,7 +168,9 @@ def initialize_simulation_parameters_multispecies(
     Jl_s = jax.vmap(lambda b: J_l_all(b, Nl).astype(rdt))(b_s)               # (Ns,Nl,Ny,Nx,Nz)
     Jm1_s = jnp.concatenate([jnp.zeros_like(Jl_s[:, :1]), Jl_s[:, :-1]], axis=1)
     Jp1_s = jnp.concatenate([Jl_s[:, 1:], jnp.zeros_like(Jl_s[:, :1])], axis=1)
-    Gamma0_s = jnp.sum(Jl_s * Jl_s, axis=1)                                  # (Ns,Ny,Nx,Nz)
+    # Exact polarization function Γ0(b) = e^{-b} I0(b).  Using i0e(b)=e^{-b}I0(b) is stable.
+    # This is required for the free-energy cancellation in the collisionless linear system.
+    Gamma0_s = i0e(b_s).astype(rdt)                                          # (Ns,Ny,Nx,Nz)
 
     # Quasineutrality denominator (multi-species generalization of the usual form):
     den_qn = jnp.sum((q_s*q_s * n0_s / T_s)[:, None, None, None] * (1.0 - Gamma0_s), axis=0)
@@ -175,8 +178,9 @@ def initialize_simulation_parameters_multispecies(
     lambda_D = jnp.asarray(p.get("lambda_D", 0.0), dtype=rdt)
     den_qn = den_qn + (lambda_D * lambda_D) * k2
 
-    # Useful scalar for H->G m=0 correction (appears in the closed-form inversion)
+    # Useful scalar (appears in the closed-form inversion when solving phi from H)
     sum_q2n0_over_T = jnp.sum((q_s * q_s) * n0_s / T_s).astype(rdt)
+    den_h = sum_q2n0_over_T + (lambda_D * lambda_D) * k2   # (Ny,Nx,Nz)
 
     # Hermite ladder coefficients
     m = jnp.arange(Nh, dtype=rdt)
@@ -188,7 +192,7 @@ def initialize_simulation_parameters_multispecies(
     conj_x = jnp.array([conjugate_index_fftshifted(i, Nx) for i in range(Nx)], dtype=jnp.int32)
     conj_z = jnp.array([conjugate_index_fftshifted(i, Nz) for i in range(Nz)], dtype=jnp.int32)
 
-    # Initial condition (complex, but you can pass a real-only params copy to Diffrax later)
+    # Initial condition for G (user-facing), then convert to H for evolution.
     G0 = jnp.zeros((Ns, Nl, Nh, Ny, Nx, Nz), dtype=cdt)
 
     ky0 = Ny//2 + int(p["ny0"])
@@ -206,6 +210,19 @@ def initialize_simulation_parameters_multispecies(
     kx1 = conjugate_index_fftshifted(kx0, Nx)
     kz1 = conjugate_index_fftshifted(kz0, Nz)
     G0 = G0.at[:, 0, 0, ky1, kx1, kz1].set((w_s * amp).astype(cdt))
+
+    # --- Build phi0 from G0 (quasineutrality) and convert to H0 = G0 + (q/T) J_l phi δ_{m0} ---
+    g_m0 = G0[:, :, 0, ...]                               # (Ns,Nl,Ny,Nx,Nz)
+    num_s = jnp.sum(Jl_s * g_m0, axis=1)                  # (Ns,Ny,Nx,Nz)
+    num = jnp.sum((q_s * n0_s)[:, None, None, None] * num_s, axis=0)
+    phi0 = jnp.where(jnp.abs(den_qn) > 1e-30, num / den_qn, 0.0 + 0.0j).astype(cdt)
+    phi0 = phi0.at[Ny//2, Nx//2, Nz//2].set(0.0 + 0.0j)
+    phi0 = jnp.where(mask23_bool, phi0, 0.0 + 0.0j)
+
+    a_s = (q_s / T_s)[:, None, None, None, None]          # (Ns,1,1,1,1)
+    add_m0 = a_s * (Jl_s * phi0[None, None, ...])         # (Ns,Nl,Ny,Nx,Nz)
+    H0_m0 = (g_m0 + add_m0).astype(cdt)
+    H0 = G0.at[:, :, 0, ...].set(H0_m0)
 
     # Collisions cached pieces
     ell = jnp.arange(Nl, dtype=rdt)[:, None, None, None]   # (Nl,1,1,1)
@@ -247,6 +264,7 @@ def initialize_simulation_parameters_multispecies(
         Jl_s=Jl_s, Jl_m1_s=Jm1_s, Jl_p1_s=Jp1_s,
         Gamma0_s=Gamma0_s,
         den_qn=den_qn.astype(rdt),
+        den_h=den_h.astype(rdt),
         sum_q2n0_over_T=sum_q2n0_over_T,
 
         ell=ell,
@@ -261,6 +279,7 @@ def initialize_simulation_parameters_multispecies(
         B_mode=jnp.asarray(B_mode, dtype=jnp.int32),
         gradlnB_z=gradlnB_z,
 
-        Gk_0=G0,
+        Gk_0=G0,          # optional: keep for inspection
+        Hk_0=H0,          # <-- evolve this
     )
     return p

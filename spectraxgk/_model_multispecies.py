@@ -107,6 +107,47 @@ def solve_phi_quasineutrality_multispecies(Gk: jnp.ndarray, params: dict) -> jnp
     return jnp.where(mask23, phi, 0.0 + 0.0j)
 
 
+def solve_phi_from_H_multispecies(Hk: jnp.ndarray, params: dict) -> jnp.ndarray:
+    """
+    Quasineutrality solved using H as the state.
+
+    Using h = g + (q/T) J_l phi δ_{m0} and the standard GK quasineutrality,
+    one obtains a closed form:
+
+        den_h(k) * phi_k = Σ_s q_s n0_s Σ_l J_l(b_s) * H_{s,l,m=0}(k)
+
+    where:
+        den_h(k) = Σ_s (q_s^2 n0_s / T_s) + lambda_D^2 k^2
+               = params["den_h"].
+    """
+    q_s, n0_s = params["q_s"], params["n0_s"]
+    Jl_s = params["Jl_s"]          # (Ns,Nl,Ny,Nx,Nz)
+    den_h = params["den_h"]        # (Ny,Nx,Nz)
+    mask23 = params["mask23"]
+
+    h_m0 = Hk[:, :, 0, ...]                         # (Ns,Nl,Ny,Nx,Nz)
+    num_s = jnp.sum(Jl_s * h_m0, axis=1)            # (Ns,Ny,Nx,Nz)
+    num = jnp.sum((q_s * n0_s)[:, None, None, None] * num_s, axis=0)
+
+    phi = jnp.where(jnp.abs(den_h) > DEN_EPS, num / den_h, 0.0 + 0.0j)
+    Ny, Nx, Nz = phi.shape
+    phi = phi.at[Ny//2, Nx//2, Nz//2].set(0.0 + 0.0j)
+    return jnp.where(mask23, phi, 0.0 + 0.0j)
+
+def build_Gk_from_Hk_phi(Hk: jnp.ndarray, phi_k: jnp.ndarray, params: dict) -> jnp.ndarray:
+    """
+    Inverse map: G = H - (q/T) J_l phi δ_{m0}
+    """
+    rdt = Hk.real.dtype
+    q_s = jnp.asarray(params["q_s"], dtype=rdt)
+    T_s = jnp.asarray(params["T_s"], dtype=rdt)
+    a_s = (q_s / T_s)[:, None, None, None, None]     # (Ns,1,1,1,1)
+    Jl_s = jnp.asarray(params["Jl_s"], dtype=rdt)     # (Ns,Nl,Ny,Nx,Nz)
+    sub_m0 = a_s * (Jl_s * phi_k[None, None, ...])    # (Ns,Nl,Ny,Nx,Nz)
+    g_m0 = Hk[:, :, 0, ...] - sub_m0.astype(Hk.dtype)
+    rest = Hk[:, :, 1:, ...]
+    return jnp.concatenate([g_m0[:, :, None, ...], rest], axis=2)
+
 def collision_lenard_bernstein_conserving_multispecies(Hk: jnp.ndarray, params: dict) -> jnp.ndarray:
     """
     Conserving Lenard–Bernstein model operator in LH moments (sparse form).
@@ -153,73 +194,53 @@ def collision_lenard_bernstein_conserving_multispecies(Hk: jnp.ndarray, params: 
 
 def cheap_diagnostics_multispecies(Gk: jnp.ndarray, params: dict) -> dict:
     """
-    Paper/debug-quality diagnostics.
+    Diagnostics consistent with evolving G (Eq. 3.20).
 
-    We report the **free-energy** in a form consistent with the LH formulation
-    (streaming conserves W_free in the collisionless, nonlinear-off case).
-
-      W_free = 1/2 Σ_s n0_s T_s ||H_s||^2  - 1/2 Σ_s n0_s q_s^2/T_s ||φ||^2
-               + 1/2 (λ_D^2) Σ_k k^2 |φ_k|^2   (optional Debye term)
-
-    Also:
-      - W_h_s: per-species kinetic part 1/2 n0_s T_s ||H_s||^2
-      - W_phi: total field part (includes negative GK piece and +Debye if enabled)
-      - phi_rms, max|phi|, max|G|
-      - Hermite spectrum E_m(s,m) from H: 1/2 Σ_{ℓ,k} |H|^2
+    Conserved quadratic (collisionless, nonlinear-off) includes field/polarization:
+      W = 1/2 Σ_s n0_s T_s ||G_s||^2  +  1/2 Σ_k den_qn(k) |phi_k|^2
+    where den_qn is the quasineutrality/polarization denominator used to solve phi(G).
+    (Multi-species generalization of the single-species expressions around Eq. 3.20–3.24.)
     """
     rdt = Gk.real.dtype
+    # Ensure we're on the same manifold as RHS (dealias is enforced inside RHS too)
+    mask23 = params["mask23"]
+    Gk = jnp.where(mask23[None, None, None, ...], Gk, 0.0 + 0.0j)
+    if bool(params.get("enforce_reality", True)):
+        Gk = enforce_conjugate_symmetry_fftshifted(Gk, params)
+
     phi_k = solve_phi_quasineutrality_multispecies(Gk, params)
-    Hk = build_Hk_from_Gk_phi(Gk, phi_k, params)
+    den_qn = jnp.asarray(params["den_qn"], dtype=rdt)
 
     n0 = jnp.asarray(params["n0_s"], dtype=rdt)
-    T = jnp.asarray(params["T_s"], dtype=rdt)
-    q = jnp.asarray(params["q_s"], dtype=rdt)
+    T  = jnp.asarray(params["T_s"],  dtype=rdt)
 
-    absH2 = jnp.abs(Hk) ** 2
-    # per-species kinetic part
-    W_h_s = 0.5 * (n0 * T) * jnp.sum(absH2, axis=(1, 2, 3, 4, 5))
-    W_h = jnp.sum(W_h_s)
+    absG2 = jnp.abs(Gk) ** 2
+    W_g_s = 0.5 * (n0 * T) * jnp.sum(absG2, axis=(1,2,3,4,5))
+    W_g   = jnp.sum(W_g_s)
 
-    # field part (negative in this normalization; see LH free-energy form)
-    W_phi_gk = -0.5 * jnp.sum((n0 * (q*q) / T)) * jnp.sum(jnp.abs(phi_k) ** 2)
+    W_field = 0.5 * jnp.sum(den_qn * (jnp.abs(phi_k) ** 2))
+    W_free = W_g + W_field
 
-    # optional Debye energy: + 1/2 λ_D^2 ∫ |∇φ|^2  -> + 1/2 λ_D^2 Σ k^2 |φ_k|^2
-    lam = jnp.asarray(params.get("lambda_D", 0.0), dtype=rdt)
-    k2 = jnp.asarray(params["k2_grid"], dtype=rdt)
-    W_phi_debye = 0.5 * (lam * lam) * jnp.sum(k2 * (jnp.abs(phi_k) ** 2))
-
-    W_phi = W_phi_gk + W_phi_debye
-    # Invariant used by tests: W(G)=0.5 ||H(G,phi(G))||^2
-    W_free = W_h
-
-    phi_rms = jnp.sqrt(jnp.mean(jnp.abs(phi_k) ** 2))
+    # Helpful probes
+    Hk = build_Hk_from_Gk_phi(Gk, phi_k, params)
     max_abs_phi = jnp.max(jnp.abs(phi_k))
-    max_abs_G = jnp.max(jnp.abs(Gk))
+    max_abs_G   = jnp.max(jnp.abs(Gk))
 
-    # Hermite spectrum from H (shape (Ns,Nh))
-    E_m = 0.5 * jnp.sum(absH2, axis=(1, 3, 4, 5))  # sum over ℓ and k
+    # Hermite spectrum from G (shape (Ns,Nh))
+    E_m = 0.5 * jnp.sum(absG2, axis=(1,3,4,5))  # sum over ℓ,k
 
-    # return dict(
-        # W_total=W_free,          # for backward compatibility
-        # W_free=W_free,
-    #     W_h=W_h, W_h_s=W_h_s,
-    #     W_phi=W_phi,
-    #     phi_rms=phi_rms,
-    #     max_abs_phi=max_abs_phi,
-    #     max_abs_G=max_abs_G,
-    #     E_m=E_m,
-    # )
     return dict(
-        W_total=W_free,     # backward-compatible name used in prints/plots
-        W_free=W_free,      # what tests check
-        W_s=W_h_s,          # convenient alias for plotting
-        W_h=W_h, W_h_s=W_h_s,
-        W_phi=W_phi,
-        phi_rms=phi_rms,
+        W_total=W_free,
+        W_free=W_free,
+        W_s=W_g_s,
+        W_g=W_g, W_g_s=W_g_s,
+        W_field=W_field,
+        phi_rms=jnp.sqrt(jnp.mean(jnp.abs(phi_k) ** 2)),
         max_abs_phi=max_abs_phi,
         max_abs_G=max_abs_G,
         E_m=E_m,
     )
+
 
 
 def _ifftz_shifted(Ak: jnp.ndarray) -> jnp.ndarray:
@@ -280,10 +301,14 @@ def rhs_gk_multispecies(Gk: jnp.ndarray, params: dict, Nh: int, Nl: int):
         Gk,
     )
 
-    # Fields and h-variable
+    # Fields from G (closed form)
     phi_k = solve_phi_quasineutrality_multispecies(Gk, params)
+
     Hk = build_Hk_from_Gk_phi(Gk, phi_k, params)
 
+    # Fourier derivative convention used elsewhere in this file: ∂z -> (1j*kz).
+    # Eq. (3.20) has "+ v_ts ∇_||(...)" on the LHS, so the RHS contribution is "- v_ts ∇_||(...)".
+    # Hence we use (-1j*kz) for the RHS streaming pieces.
     kz_term = (-1j * kz)[None, None, None, ...]  # (1,1,1,Ny,Nx,Nz)
     vth = vth_s[:, None, None, None, None, None]
     U = U_s[:, None, None, None, None, None]
@@ -302,7 +327,9 @@ def rhs_gk_multispecies(Gk: jnp.ndarray, params: dict, Nh: int, Nl: int):
         # base: - vth * ∂z ladder  ->  (-i kz) vth ladder
         stream_base = kz_term * vth * ladder
 
-        # mean drift U: - U ∂z H -> (-i kz) U H
+        # Mean parallel flow advection is a parallel convective-derivative piece.
+        # For energy consistency it must act on the same object as streaming: H(G,phi(G)).
+        # RHS piece: - U ∂z H -> (-i kz) U H
         stream_U = kz_term * U * Hk
 
         def _no_gradB(_):
@@ -312,18 +339,24 @@ def rhs_gk_multispecies(Gk: jnp.ndarray, params: dict, Nh: int, Nl: int):
             # gradlnB(z) terms (z-only profile)
             gradlnB_z = jnp.asarray(params["gradlnB_z"], dtype=Hk.real.dtype)  # (Nz,)
 
-            ell = jnp.asarray(params["ell_vec"], dtype=Hk.real.dtype)
-            twoell1 = (2.0 * ell + 1.0)[None, :, None, None, None, None]  # (1,Nl,1,1,1,1)
+            # Implement Eq. (3.20) ∇_||lnB bracket exactly:
+            #   [ -(ℓ+1)√(m+1) H_{ℓ,m+1}  - ℓ√(m+1) H_{ℓ-1,m+1}
+            #     +  ℓ√m     H_{ℓ,m-1}   + (ℓ+1)√m   H_{ℓ+1,m-1} ] ∇_|| ln B
+            ell = jnp.asarray(params["ell_vec"], dtype=Hk.real.dtype)              # (Nl,)
+            ell_b   = ell[None, :, None, None, None, None]                         # (1,Nl,1,1,1,1)
+            ellp1_b = (ell + 1.0)[None, :, None, None, None, None]                 # (1,Nl,1,1,1,1)
+            s_mp = sqrt_mp[None, None, :, None, None, None]                        # (1,1,Nh,1,1,1)
+            s_mm = sqrt_mm[None, None, :, None, None, None]                        # (1,1,Nh,1,1,1)
 
-            # laguerre coupling: ℓ H_{ℓ-1,m-1} + (ℓ+1) H_{ℓ+1,m-1}
-            Hm1_lm1 = _shift_l(Hm1, -1)  # H_{ℓ-1,m-1}
+            Hp1_lm1 = _shift_l(Hp1, -1)  # H_{ℓ-1,m+1}
             Hm1_lp1 = _shift_l(Hm1, +1)  # H_{ℓ+1,m-1}
-            ell_b = ell[None, :, None, None, None, None]
-            lag_mix = (ell_b * Hm1_lm1) + ((ell_b + 1.0) * Hm1_lp1)
 
-            # inside the bracket multiplying gradlnB:
-            #   (2ℓ+1)*ladder  -  sqrt(m) * lag_mix
-            Bstuff = (twoell1 * ladder) - (sqrt_mm[None, None, :, None, None, None] * lag_mix)
+            Bstuff = (
+                (-ellp1_b * s_mp) * Hp1
+                + (-ell_b   * s_mp) * Hp1_lm1
+                + ( ell_b   * s_mm) * Hm1
+                + ( ellp1_b * s_mm) * Hm1_lp1
+            )
 
             # multiply by gradlnB(z) in real space (z-only FFTs)
             Bstuff_grad = _mul_gradlnB_z_in_fourier(Bstuff, gradlnB_z)
@@ -364,21 +397,21 @@ def rhs_gk_multispecies(Gk: jnp.ndarray, params: dict, Nh: int, Nl: int):
         vEx = ifftn_shifted(vEx_k)
         vEy = ifftn_shifted(vEy_k)
 
-        dHdx = ifftn_shifted((1j * kx)[None, None, None, ...] * Hk)
-        dHdy = ifftn_shifted((1j * ky)[None, None, None, ...] * Hk)
+        dGdx = ifftn_shifted((1j * kx)[None, None, None, ...] * Gk)
+        dGdy = ifftn_shifted((1j * ky)[None, None, None, ...] * Gk)
 
         # alpha_kln: (k, l, n)
         # vE:        (s, k, x,y,z)   i.e. Laguerre index k
         # dH:        (s, n, m, x,y,z) i.e. Laguerre index n
         NL = (
-            jnp.einsum("kln,skxyz,snmxyz->slmxyz", alpha_kln, vEx, dHdx, optimize=True)
-            + jnp.einsum("kln,skxyz,snmxyz->slmxyz", alpha_kln, vEy, dHdy, optimize=True)
+            jnp.einsum("kln,skxyz,snmxyz->slmxyz", alpha_kln, vEx, dGdx, optimize=True)
+            + jnp.einsum("kln,skxyz,snmxyz->slmxyz", alpha_kln, vEy, dGdy, optimize=True)
         )
         NL_k = fftn_shifted(NL)
 
         return jnp.where(mask23[None, None, None, ...], NL_k, 0.0 + 0.0j)
 
-    NL_k = jax.lax.cond(enable_nonlinear, _nonlinear, lambda _: jnp.zeros_like(Hk), operand=None)
+    NL_k = jax.lax.cond(enable_nonlinear, _nonlinear, lambda _: jnp.zeros_like(Gk), operand=None)
 
     # ---- Collisions ----
     def _coll(_):
@@ -387,14 +420,14 @@ def rhs_gk_multispecies(Gk: jnp.ndarray, params: dict, Nh: int, Nl: int):
 
     Ck = jax.lax.cond(enable_collisions, _coll, lambda _: jnp.zeros_like(Hk), operand=None)
 
-    # Convention: dG = -NL + streaming + collisions
+    # Convention: dH = -NL + streaming + collisions
     dGk = -NL_k + dG_stream + Ck
 
     dGk = jax.lax.cond(
-        enforce_reality,
-        lambda x: enforce_conjugate_symmetry_fftshifted(x, params),
-        lambda x: x,
+         enforce_reality,
+         lambda x: enforce_conjugate_symmetry_fftshifted(x, params),
+         lambda x: x,
         dGk,
-    )
+     )
 
     return dGk, phi_k

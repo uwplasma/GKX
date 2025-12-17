@@ -107,7 +107,8 @@ def _params_for_solver(params: dict) -> dict:
     # Shallow copy is fine (we don't mutate arrays).
     p = dict(params)
     # Complex-only leaves to remove from args:
-    p.pop("Gk_0", None)  # initial condition is passed separately as y0
+    p.pop("Gk_0", None)
+    p.pop("Hk_0", None)  # initial condition is passed separately as y0
     return p
 
 
@@ -138,7 +139,6 @@ def _make_diag_fn(Ns, Nl, Nh, Ny, Nx, Nz, Ncomplex, diag_config: dict):
 
     def fn(t, y, params):
         Gk = _unpack_complex_flat(y, (Ns, Nl, Nh, Ny, Nx, Nz), Ncomplex)
-
         d = cheap_diagnostics_multispecies(Gk, params)
 
         # Split complex probes into real/imag for safe saving
@@ -158,10 +158,10 @@ def _make_diag_fn(Ns, Nl, Nh, Ny, Nx, Nz, Ncomplex, diag_config: dict):
             d["phi_k_line_im"] = jnp.imag(line)
 
         if save_den_line and (Ny == 1 and Nx == 1):
-            Hk = build_Hk_from_Gk_phi(Gk, phi_k, params)
+            Hk_loc = build_Hk_from_Gk_phi(Gk, phi_k, params)
             n0 = params["n0_s"]
             Jl_s = params["Jl_s"]
-            Hm0 = Hk[:, :, 0, ...]                        # (Ns,Nl,Ny,Nx,Nz)
+            Hm0 = Hk_loc[:, :, 0, ...]                    # (Ns,Nl,Ny,Nx,Nz)
             num_s = jnp.sum(Jl_s * Hm0, axis=1)           # (Ns,Ny,Nx,Nz)
             nline = (n0[:, None] * num_s[:, 0, 0, :])     # (Ns,Nz) complex
             d["n_s_k_line_re"] = jnp.real(nline)
