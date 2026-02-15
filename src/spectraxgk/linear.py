@@ -28,9 +28,9 @@ class LinearParams:
     R_over_LTe: float = 0.0
     omega_d_scale: float = 1.0
     omega_star_scale: float = 1.0
-    energy_const: float = 1.0
-    energy_par_coef: float = 0.0
-    energy_perp_coef: float = 0.0
+    energy_const: float = 0.0
+    energy_par_coef: float = 0.5
+    energy_perp_coef: float = 1.0
 
     def tree_flatten(self):
         children = (
@@ -81,6 +81,42 @@ def compute_b(grid: SpectralGrid, geom: SAlphaGeometry, rho: float) -> jnp.ndarr
     theta = grid.z[None, None, :]
     kperp2 = geom.k_perp2(kx0, ky, theta)
     return (rho * rho) * kperp2
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
+class LinearCache:
+    """Precomputed arrays for the linear operator."""
+
+    Jl: jnp.ndarray
+    omega_d: jnp.ndarray
+    mask0: jnp.ndarray
+    dz: jnp.ndarray
+    ky: jnp.ndarray
+
+    def tree_flatten(self):
+        children = (self.Jl, self.omega_d, self.mask0, self.dz, self.ky)
+        return children, None
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        return cls(*children)
+
+
+def build_linear_cache(
+    grid: SpectralGrid,
+    geom: SAlphaGeometry,
+    params: LinearParams,
+    Nl: int,
+) -> LinearCache:
+    """Build reusable arrays for the linear RHS."""
+
+    dz = jnp.asarray(grid.z[1] - grid.z[0])
+    b = compute_b(grid, geom, params.rho)
+    Jl = J_l_all(b, l_max=Nl - 1)
+    omega_d = geom.omega_d(grid.kx, grid.ky, grid.z)
+    mask0 = (grid.ky == 0.0)[:, None, None] & (grid.kx == 0.0)[None, :, None]
+    return LinearCache(Jl=Jl, omega_d=omega_d, mask0=mask0, dz=dz, ky=grid.ky)
 
 
 def apply_hermite_v(G: jnp.ndarray) -> jnp.ndarray:
@@ -219,10 +255,11 @@ def linear_rhs(
     dG = -params.kpar_scale * stream
 
     omega_d = geom.omega_d(grid.kx, grid.ky, grid.z)
-    energy_H = energy_operator(
-        H, params.energy_const, params.energy_par_coef, params.energy_perp_coef
+    phi_component = jnp.zeros_like(G).at[:, 0, ...].set(Jl * phi)
+    energy_phi = energy_operator(
+        phi_component, params.energy_const, params.energy_par_coef, params.energy_perp_coef
     )
-    dG = dG + 1j * params.omega_d_scale * omega_d[None, None, ...] * energy_H
+    dG = dG + 1j * params.omega_d_scale * omega_d[None, None, ...] * (G + energy_phi)
 
     R_over_Ln = jnp.asarray(params.R_over_Ln)
     eta_i = jnp.where(R_over_Ln == 0.0, 0.0, params.R_over_LTi / R_over_Ln)
@@ -240,7 +277,79 @@ def linear_rhs(
     return dG, phi
 
 
+def linear_rhs_cached(
+    G: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Compute the linear RHS using precomputed geometry arrays."""
+
+    if G.ndim != 5:
+        raise ValueError("G must have shape (Nl, Nm, Ny, Nx, Nz)")
+    phi = quasineutrality_phi(G, cache.Jl, params.tau_e)
+    phi = jnp.where(cache.mask0, 0.0, phi)
+    H = build_H(G, cache.Jl, phi)
+    stream = streaming_term(H, cache.dz, params.vth)
+    dG = -params.kpar_scale * stream
+
+    phi_component = jnp.zeros_like(G).at[:, 0, ...].set(cache.Jl * phi)
+    energy_phi = energy_operator(
+        phi_component, params.energy_const, params.energy_par_coef, params.energy_perp_coef
+    )
+    dG = dG + 1j * params.omega_d_scale * cache.omega_d[None, None, ...] * (G + energy_phi)
+
+    R_over_Ln = jnp.asarray(params.R_over_Ln)
+    eta_i = jnp.where(R_over_Ln == 0.0, 0.0, params.R_over_LTi / R_over_Ln)
+    drive_coeffs = diamagnetic_drive_coeffs(
+        G.shape[0],
+        G.shape[1],
+        eta_i,
+        params.energy_const,
+        params.energy_par_coef,
+        params.energy_perp_coef,
+    )
+    omega_star = params.omega_star_scale * cache.ky[:, None, None] * R_over_Ln
+    phi_drive = omega_star * phi
+    dG = dG + 1j * drive_coeffs[:, :, None, None, None] * cache.Jl[:, None, ...] * phi_drive
+    return dG, phi
+
+
 @partial(jax.jit, static_argnames=("steps", "method"))
+def _integrate_linear_cached(
+    G0: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    dt: float,
+    steps: int,
+    method: str = "rk4",
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Time integrate the linear system using cached geometry arrays."""
+
+    if method not in {"euler", "rk2", "rk4"}:
+        raise ValueError("method must be one of {'euler', 'rk2', 'rk4'}")
+
+    G0 = jnp.asarray(G0, dtype=jnp.complex64)
+
+    def step(G, _):
+        dG, _phi = linear_rhs_cached(G, cache, params)
+        if method == "euler":
+            G_new = G + dt * dG
+        elif method == "rk2":
+            k1 = dG
+            k2, _ = linear_rhs_cached(G + 0.5 * dt * k1, cache, params)
+            G_new = G + dt * k2
+        else:
+            k1 = dG
+            k2, _ = linear_rhs_cached(G + 0.5 * dt * k1, cache, params)
+            k3, _ = linear_rhs_cached(G + 0.5 * dt * k2, cache, params)
+            k4, _ = linear_rhs_cached(G + dt * k3, cache, params)
+            G_new = G + (dt / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+        _dG_new, phi_new = linear_rhs_cached(G_new, cache, params)
+        return G_new, phi_new
+
+    return jax.lax.scan(step, G0, None, length=steps)
+
+
 def integrate_linear(
     G0: jnp.ndarray,
     grid: SpectralGrid,
@@ -249,29 +358,10 @@ def integrate_linear(
     dt: float,
     steps: int,
     method: str = "rk4",
+    cache: LinearCache | None = None,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Time integrate the linear system using a fixed-step explicit scheme."""
 
-    if method not in {"euler", "rk2", "rk4"}:
-        raise ValueError("method must be one of {'euler', 'rk2', 'rk4'}")
-
-    G0 = jnp.asarray(G0, dtype=jnp.complex64)
-
-    def step(G, _):
-        dG, _phi = linear_rhs(G, grid, geom, params)
-        if method == "euler":
-            G_new = G + dt * dG
-        elif method == "rk2":
-            k1 = dG
-            k2, _ = linear_rhs(G + 0.5 * dt * k1, grid, geom, params)
-            G_new = G + dt * k2
-        else:
-            k1 = dG
-            k2, _ = linear_rhs(G + 0.5 * dt * k1, grid, geom, params)
-            k3, _ = linear_rhs(G + 0.5 * dt * k2, grid, geom, params)
-            k4, _ = linear_rhs(G + dt * k3, grid, geom, params)
-            G_new = G + (dt / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
-        _dG_new, phi_new = linear_rhs(G_new, grid, geom, params)
-        return G_new, phi_new
-
-    return jax.lax.scan(step, G0, None, length=steps)
+    if cache is None:
+        cache = build_linear_cache(grid, geom, params, G0.shape[0])
+    return _integrate_linear_cached(G0, cache, params, dt, steps, method=method)
