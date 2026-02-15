@@ -53,9 +53,28 @@ def twothirds_mask(Ny: int, Nx: int) -> jnp.ndarray:
 
 
 def build_spectral_grid(cfg: GridConfig) -> SpectralGrid:
-    kx = _fftfreq_phys(cfg.Nx, cfg.Lx)
-    ky = _fftfreq_phys(cfg.Ny, cfg.Ly)
-    z = jnp.linspace(cfg.z_min, cfg.z_max, cfg.Nz, endpoint=False)
+    Lx = cfg.Lx
+    Ly = 2.0 * jnp.pi * cfg.y0 if cfg.y0 is not None else cfg.Ly
+
+    zp = cfg.zp
+    if zp is None:
+        if cfg.nperiod is not None:
+            zp = 2 * cfg.nperiod - 1
+        elif cfg.ntheta is not None:
+            zp = 1
+
+    Nz = cfg.Nz
+    if cfg.ntheta is not None:
+        Nz = int(cfg.ntheta) * int(zp if zp is not None else 1)
+        z_min = -jnp.pi * float(zp if zp is not None else 1)
+        z_max = jnp.pi * float(zp if zp is not None else 1)
+    else:
+        z_min = cfg.z_min
+        z_max = cfg.z_max
+
+    kx = _fftfreq_phys(cfg.Nx, Lx)
+    ky = _fftfreq_phys(cfg.Ny, Ly)
+    z = jnp.linspace(z_min, z_max, Nz, endpoint=False)
     ky_grid, kx_grid = jnp.meshgrid(ky, kx, indexing="ij")
     mask = twothirds_mask(cfg.Ny, cfg.Nx)
     return SpectralGrid(kx=kx, ky=ky, z=z, kx_grid=kx_grid, ky_grid=ky_grid, dealias_mask=mask)

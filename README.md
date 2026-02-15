@@ -16,6 +16,7 @@ is the **Cyclone base case** with adiabatic electrons.
 - **GX-style drift physics**: curvature/grad-B/mirror couplings + diamagnetic drive.
 - **Operator modes**: ``operator="gx"`` (full drift/mirror) or
   ``operator="energy"`` (reference-matching closure).
+- **GX grid matching**: ``y0``, ``ntheta``, and ``nperiod`` inputs for direct comparisons.
 - **Stable integrators**: explicit, IMEX, and implicit time stepping options.
 - **Cached operators**: precomputed geometry arrays for faster time stepping.
 - **Benchmark harness**: reference data + growth-rate extraction tools + comparisons.
