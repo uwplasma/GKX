@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 180 180" role="img" aria-label="SPECTRAX-GK mark">
+  <defs>
+    <linearGradient id="g2" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00C2FF"></stop>
+      <stop offset="50%" stop-color="#6C63FF"></stop>
+      <stop offset="100%" stop-color="#FF4D8D"></stop>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="180" height="180" rx="28" fill="#0B1020"></rect>
+
+  <!-- Hex -->
+  <path d="M90,18 L143,48 L143,132 L90,162 L37,132 L37,48 Z" fill="none" stroke="url(#g2)" stroke-width="5"></path>
+
+  <!-- Hermite-like blob -->
+  <path d="M48,90
+           C60,50 120,50 132,90
+           C120,130 60,130 48,90 Z" fill="url(#g2)" opacity="0.22"></path>
+
+  <!-- Sine wave -->
+  <path d="M48,108
+           C62,86 76,86 90,108
+           C104,130 118,130 132,108" fill="none" stroke="url(#g2)" stroke-width="7" stroke-linecap="round"></path>
+
+  <!-- E-field vector -->
+  <path d="M90,62 v-22" stroke="url(#g2)" stroke-width="5" stroke-linecap="round"></path>
+  <polygon points="90,36 84,48 96,48" fill="url(#g2)"></polygon>
+</svg>

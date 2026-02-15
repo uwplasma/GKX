@@ -1,0 +1,76 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, asdict
+from typing import Dict
+
+
+@dataclass(frozen=True)
+class GridConfig:
+    """Spectral grid configuration in a flux-tube."""
+
+    Nx: int = 48
+    Ny: int = 48
+    Nz: int = 64
+    Lx: float = 62.8
+    Ly: float = 62.8
+    z_min: float = -3.141592653589793
+    z_max: float = 3.141592653589793
+
+    def to_dict(self) -> Dict[str, float]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class TimeConfig:
+    """Time integration parameters."""
+
+    t_max: float = 100.0
+    dt: float = 0.1
+
+    def to_dict(self) -> Dict[str, float]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class GeometryConfig:
+    """Simple analytic s-alpha geometry parameters."""
+
+    q: float = 1.4
+    s_hat: float = 0.8
+    epsilon: float = 0.18
+    R0: float = 1.0
+    B0: float = 1.0
+    alpha: float = 0.0
+
+    def to_dict(self) -> Dict[str, float]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class ModelConfig:
+    """Dimensionless gradients for the Cyclone base case."""
+
+    R_over_LTi: float = 6.9
+    R_over_LTe: float = 0.0
+    R_over_Ln: float = 2.2
+
+    def to_dict(self) -> Dict[str, float]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class CycloneBaseCase:
+    """Standard parameters for the Cyclone base case ITG benchmark."""
+
+    grid: GridConfig = GridConfig()
+    time: TimeConfig = TimeConfig()
+    geometry: GeometryConfig = GeometryConfig()
+    model: ModelConfig = ModelConfig()
+
+    def to_dict(self) -> Dict[str, Dict[str, float]]:
+        return {
+            "grid": self.grid.to_dict(),
+            "time": self.time.to_dict(),
+            "geometry": self.geometry.to_dict(),
+            "model": self.model.to_dict(),
+        }
