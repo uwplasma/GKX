@@ -212,3 +212,6 @@ __marimo__/
 .DS_Store
 outputs/
 *.png
+# Allow documentation figures
+!docs/_static/*.png
+!docs/_static/*.pdf
