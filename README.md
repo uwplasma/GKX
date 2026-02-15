@@ -13,10 +13,13 @@ is the **Cyclone base case** with adiabatic electrons.
 - **JAX-first design**: fully differentiable kernels and JIT compilation.
 - **Hermite-Laguerre velocity space**: compact spectral representation.
 - **Field-aligned flux-tube geometry**: s-alpha analytic model (VMEC/DESC next).
-- **Linear drift physics**: curvature/grad-B + diamagnetic drive (Cyclone base case).
-- **Energy operator**: full Hermite-Laguerre velocity weighting.
+- **GX-style drift physics**: curvature/grad-B/mirror couplings + diamagnetic drive.
+- **Operator modes**: ``operator="gx"`` (full drift/mirror) or
+  ``operator="energy"`` (reference-matching closure).
+- **Stable integrators**: explicit, IMEX, and implicit time stepping options.
 - **Cached operators**: precomputed geometry arrays for faster time stepping.
 - **Benchmark harness**: reference data + growth-rate extraction tools + comparisons.
+- **Auto window fitting**: robust growth-rate extraction from transient signals.
 - **Publication-ready plots**: consistent styling and reusable plotting utilities.
 - **100% test coverage**: unit, regression, and physics-based checks.
 
@@ -39,7 +42,7 @@ spectrax-gk cyclone-kperp --kx0 0.0 --ky 0.3
 from spectraxgk import load_cyclone_reference, run_cyclone_linear
 
 ref = load_cyclone_reference()
-result = run_cyclone_linear(ky_target=0.3, steps=300, dt=0.02, tmin=3.0, method="rk4")
+result = run_cyclone_linear(ky_target=0.3, steps=300, dt=0.02, method="rk4")
 
 print(result.gamma, result.omega)
 ```
@@ -55,10 +58,10 @@ python examples/cyclone_linear_benchmark.py
 
 ## Validation status
 
-- **Cyclone base case (adiabatic electrons)**: curvature/grad-B and diamagnetic
-  drive terms are active with the full Hermite-Laguerre energy operator. The
-  default benchmark harness is tuned to reproduce the published GX growth rates
-  at ``k_y rho_i = 0.3`` while we extend accuracy across the full ky scan.
+- **Cyclone base case (adiabatic electrons)**: the benchmark harness defaults
+  to the energy-weighted drift closure to reproduce the published GX growth
+  rates at ``k_y rho_i = 0.3`` while we validate the full GX operator across the
+  ky scan.
 
 ## Figures
 

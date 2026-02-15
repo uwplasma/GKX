@@ -13,7 +13,15 @@ from spectraxgk.linear import (
     linear_rhs,
     linear_rhs_cached,
 )
-from spectraxgk.analysis import fit_growth_rate, ModeSelection, extract_mode, select_ky_index
+from spectraxgk.analysis import (
+    ModeSelection,
+    extract_mode,
+    extract_mode_time_series,
+    fit_growth_rate,
+    fit_growth_rate_auto,
+    select_fit_window,
+    select_ky_index,
+)
 from spectraxgk.benchmarks import (
     CycloneComparison,
     CycloneReference,
@@ -43,6 +51,8 @@ __all__ = [
     "integrate_linear",
     "load_cyclone_reference",
     "fit_growth_rate",
+    "fit_growth_rate_auto",
+    "select_fit_window",
     "CycloneReference",
     "CycloneScanResult",
     "CycloneComparison",
@@ -52,6 +62,7 @@ __all__ = [
     "CycloneRunResult",
     "ModeSelection",
     "extract_mode",
+    "extract_mode_time_series",
     "select_ky_index",
     "cyclone_reference_figure",
     "cyclone_comparison_figure",

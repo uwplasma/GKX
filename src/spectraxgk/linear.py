@@ -7,6 +7,7 @@ from functools import partial
 
 import jax
 import jax.numpy as jnp
+from jax.scipy.sparse.linalg import gmres
 
 from spectraxgk.basis import hermite_ladder_coeffs
 from spectraxgk.geometry import SAlphaGeometry
@@ -36,6 +37,7 @@ class LinearParams:
     nu_laguerre: float = 2.0
     nu_hyper: float = 0.0
     p_hyper: float = 4.0
+    tz: float = 1.0
 
     def tree_flatten(self):
         children = (
@@ -56,6 +58,7 @@ class LinearParams:
             self.nu_laguerre,
             self.nu_hyper,
             self.p_hyper,
+            self.tz,
         )
         return children, None
 
@@ -110,13 +113,28 @@ class LinearCache:
 
     Jl: jnp.ndarray
     omega_d: jnp.ndarray
+    cv_d: jnp.ndarray
+    gb_d: jnp.ndarray
+    bgrad: jnp.ndarray
     mask0: jnp.ndarray
     dz: jnp.ndarray
     ky: jnp.ndarray
     lb_lam: jnp.ndarray
+    hyper_ratio: jnp.ndarray
 
     def tree_flatten(self):
-        children = (self.Jl, self.omega_d, self.mask0, self.dz, self.ky, self.lb_lam)
+        children = (
+            self.Jl,
+            self.omega_d,
+            self.cv_d,
+            self.gb_d,
+            self.bgrad,
+            self.mask0,
+            self.dz,
+            self.ky,
+            self.lb_lam,
+            self.hyper_ratio,
+        )
         return children, None
 
     @classmethod
@@ -137,11 +155,29 @@ def build_linear_cache(
     b = compute_b(grid, geom, params.rho)
     Jl = J_l_all(b, l_max=Nl - 1)
     omega_d = geom.omega_d(grid.kx, grid.ky, grid.z)
+    cv_d, gb_d = geom.drift_components(grid.kx, grid.ky, grid.z)
+    bgrad = geom.bgrad(grid.z)
     mask0 = (grid.ky == 0.0)[:, None, None] & (grid.kx == 0.0)[None, :, None]
     lb_lam = lenard_bernstein_eigenvalues(Nl, Nm, params.nu_hermite, params.nu_laguerre)[
         :, :, None, None, None
     ]
-    return LinearCache(Jl=Jl, omega_d=omega_d, mask0=mask0, dz=dz, ky=grid.ky, lb_lam=lb_lam)
+    l = jnp.arange(Nl)[:, None, None, None, None]
+    m = jnp.arange(Nm)[None, :, None, None, None]
+    l_norm = jnp.maximum(Nl - 1, 1)
+    m_norm = jnp.maximum(Nm - 1, 1)
+    hyper_ratio = (l / l_norm) ** params.p_hyper + (m / m_norm) ** params.p_hyper
+    return LinearCache(
+        Jl=Jl,
+        omega_d=omega_d,
+        cv_d=cv_d,
+        gb_d=gb_d,
+        bgrad=bgrad,
+        mask0=mask0,
+        dz=dz,
+        ky=grid.ky,
+        lb_lam=lb_lam,
+        hyper_ratio=hyper_ratio,
+    )
 
 
 def apply_hermite_v(G: jnp.ndarray) -> jnp.ndarray:
@@ -180,6 +216,25 @@ def apply_laguerre_x(G: jnp.ndarray) -> jnp.ndarray:
         - (l_col + 1.0) * G_plus
         - l_col * G_minus
     )
+
+
+def shift_axis(arr: jnp.ndarray, offset: int, axis: int) -> jnp.ndarray:
+    """Shift an array along an axis with zero padding (non-periodic)."""
+
+    if offset == 0:
+        return arr
+    pad = [(0, 0)] * arr.ndim
+    if offset > 0:
+        pad[axis] = (0, offset)
+        arr_pad = jnp.pad(arr, pad)
+        slc = [slice(None)] * arr.ndim
+        slc[axis] = slice(offset, offset + arr.shape[axis])
+        return arr_pad[tuple(slc)]
+    pad[axis] = (-offset, 0)
+    arr_pad = jnp.pad(arr, pad)
+    slc = [slice(None)] * arr.ndim
+    slc[axis] = slice(0, arr.shape[axis])
+    return arr_pad[tuple(slc)]
 
 
 def energy_operator(
@@ -222,10 +277,10 @@ def quasineutrality_phi(G: jnp.ndarray, Jl: jnp.ndarray, tau_e: float) -> jnp.nd
     return num / den_safe
 
 
-def build_H(G: jnp.ndarray, Jl: jnp.ndarray, phi: jnp.ndarray) -> jnp.ndarray:
-    """Map G -> H = G + J_l(b) * phi * delta_{m0}."""
+def build_H(G: jnp.ndarray, Jl: jnp.ndarray, phi: jnp.ndarray, tz: float = 1.0) -> jnp.ndarray:
+    """Map G -> H = G + tz * J_l(b) * phi * delta_{m0}."""
 
-    return G.at[:, 0, ...].add(Jl * phi)
+    return G.at[:, 0, ...].add(tz * Jl * phi)
 
 
 def streaming_term(H: jnp.ndarray, dz: float, vth: float) -> jnp.ndarray:
@@ -252,6 +307,7 @@ def linear_rhs(
     grid: SpectralGrid,
     geom: SAlphaGeometry,
     params: LinearParams,
+    operator: str = "gx",
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Compute the linear RHS and electrostatic potential.
 
@@ -269,94 +325,106 @@ def linear_rhs(
 
     if G.ndim != 5:
         raise ValueError("G must have shape (Nl, Nm, Ny, Nx, Nz)")
-    dz = grid.z[1] - grid.z[0]
-    b = compute_b(grid, geom, params.rho)
-    Jl = J_l_all(b, l_max=G.shape[0] - 1)
-    phi = quasineutrality_phi(G, Jl, params.tau_e)
-    mask0 = (grid.ky == 0.0)[:, None, None] & (grid.kx == 0.0)[None, :, None]
-    phi = jnp.where(mask0, 0.0, phi)
-    H = build_H(G, Jl, phi)
-    stream = streaming_term(H, dz, params.vth)
-    dG = -params.kpar_scale * stream
-
-    omega_d = geom.omega_d(grid.kx, grid.ky, grid.z)
-    phi_component = jnp.zeros_like(G).at[:, 0, ...].set(Jl * phi)
-    energy_phi = energy_operator(
-        phi_component, params.energy_const, params.energy_par_coef, params.energy_perp_coef
-    )
-    dG = dG + 1j * params.omega_d_scale * omega_d[None, None, ...] * (G + energy_phi)
-
-    R_over_Ln = jnp.asarray(params.R_over_Ln)
-    eta_i = jnp.where(R_over_Ln == 0.0, 0.0, params.R_over_LTi / R_over_Ln)
-    drive_coeffs = diamagnetic_drive_coeffs(
-        G.shape[0],
-        G.shape[1],
-        eta_i,
-        params.energy_const,
-        params.energy_par_coef,
-        params.energy_perp_coef,
-    )
-    omega_star = params.omega_star_scale * grid.ky[:, None, None] * R_over_Ln
-    phi_drive = omega_star * phi
-    dG = dG + 1j * drive_coeffs[:, :, None, None, None] * Jl[:, None, ...] * phi_drive
-    lb_lam = lenard_bernstein_eigenvalues(G.shape[0], G.shape[1], params.nu_hermite, params.nu_laguerre)[
-        :, :, None, None, None
-    ]
-    dG = dG - params.nu * lb_lam * G
-    l = jnp.arange(G.shape[0])[:, None, None, None, None]
-    m = jnp.arange(G.shape[1])[None, :, None, None, None]
-    l_norm = jnp.maximum(G.shape[0] - 1, 1)
-    m_norm = jnp.maximum(G.shape[1] - 1, 1)
-    ratio = (l / l_norm) ** params.p_hyper + (m / m_norm) ** params.p_hyper
-    dG = dG - params.nu_hyper * ratio * G
-    return dG, phi
+    cache = build_linear_cache(grid, geom, params, G.shape[0], G.shape[1])
+    return linear_rhs_cached(G, cache, params, operator=operator)
 
 
 def linear_rhs_cached(
     G: jnp.ndarray,
     cache: LinearCache,
     params: LinearParams,
+    operator: str = "gx",
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Compute the linear RHS using precomputed geometry arrays."""
 
     if G.ndim != 5:
         raise ValueError("G must have shape (Nl, Nm, Ny, Nx, Nz)")
+    if operator not in {"gx", "energy"}:
+        raise ValueError("operator must be one of {'gx', 'energy'}")
     phi = quasineutrality_phi(G, cache.Jl, params.tau_e)
     phi = jnp.where(cache.mask0, 0.0, phi)
-    H = build_H(G, cache.Jl, phi)
+    H = build_H(G, cache.Jl, phi, params.tz)
     stream = streaming_term(H, cache.dz, params.vth)
     dG = -params.kpar_scale * stream
 
-    phi_component = jnp.zeros_like(G).at[:, 0, ...].set(cache.Jl * phi)
-    energy_phi = energy_operator(
-        phi_component, params.energy_const, params.energy_par_coef, params.energy_perp_coef
-    )
-    dG = dG + 1j * params.omega_d_scale * cache.omega_d[None, None, ...] * (G + energy_phi)
+    if operator == "gx":
+        Nl, Nm = G.shape[0], G.shape[1]
+        l = jnp.arange(Nl, dtype=jnp.float32)[:, None, None, None, None]
+        m = jnp.arange(Nm, dtype=jnp.float32)[None, :, None, None, None]
+        l_p1 = l + 1.0
+        m_p1 = m + 1.0
+        sqrt_m_p1 = jnp.sqrt(m_p1)
+        sqrt_m = jnp.sqrt(m)
 
-    R_over_Ln = jnp.asarray(params.R_over_Ln)
-    eta_i = jnp.where(R_over_Ln == 0.0, 0.0, params.R_over_LTi / R_over_Ln)
-    drive_coeffs = diamagnetic_drive_coeffs(
-        G.shape[0],
-        G.shape[1],
-        eta_i,
-        params.energy_const,
-        params.energy_par_coef,
-        params.energy_perp_coef,
-    )
-    omega_star = params.omega_star_scale * cache.ky[:, None, None] * R_over_Ln
-    phi_drive = omega_star * phi
-    dG = dG + 1j * drive_coeffs[:, :, None, None, None] * cache.Jl[:, None, ...] * phi_drive
+        H_m_p1 = shift_axis(H, 1, axis=1)
+        H_m_m1 = shift_axis(H, -1, axis=1)
+        mirror_term = (
+            -sqrt_m_p1 * l_p1 * H_m_p1
+            - sqrt_m_p1 * l * shift_axis(H_m_p1, -1, axis=0)
+            + sqrt_m * l * H_m_m1
+            + sqrt_m * l_p1 * shift_axis(H_m_m1, 1, axis=0)
+        )
+        bgrad = params.omega_d_scale * cache.bgrad[None, None, None, None, :]
+        dG = dG - params.vth * bgrad * mirror_term
+
+        icv = 1j * params.tz * params.omega_d_scale * cache.cv_d[None, None, ...]
+        igb = 1j * params.tz * params.omega_d_scale * cache.gb_d[None, None, ...]
+        H_m_p2 = shift_axis(H, 2, axis=1)
+        H_m_m2 = shift_axis(H, -2, axis=1)
+        curv_term = (
+            jnp.sqrt((m + 1.0) * (m + 2.0)) * H_m_p2
+            + (2.0 * m + 1.0) * H
+            + jnp.sqrt(m * (m - 1.0)) * H_m_m2
+        )
+        gradb_term = (
+            (l + 1.0) * shift_axis(H, 1, axis=0)
+            + (2.0 * l + 1.0) * H
+            + l * shift_axis(H, -1, axis=0)
+        )
+        dG = dG - icv * params.energy_par_coef * curv_term - igb * params.energy_perp_coef * gradb_term
+
+        iky = 1j * params.omega_star_scale * cache.ky[:, None, None]
+        l4 = jnp.arange(Nl, dtype=jnp.float32)[:, None, None, None]
+        Jl_m1 = shift_axis(cache.Jl, -1, axis=0)
+        Jl_p1 = shift_axis(cache.Jl, 1, axis=0)
+        tprim = jnp.asarray(params.R_over_LTi)
+        fprim = jnp.asarray(params.R_over_Ln)
+        drive_m0 = iky * phi * (
+            Jl_m1 * (l4 * tprim)
+            + cache.Jl * (fprim + 2.0 * l4 * tprim)
+            + Jl_p1 * ((l4 + 1.0) * tprim)
+        )
+        dG = dG.at[:, 0, ...].add(drive_m0)
+        if Nm > 2:
+            drive_m2 = iky * phi * cache.Jl * (tprim / jnp.sqrt(2.0))
+            dG = dG.at[:, 2, ...].add(drive_m2)
+    else:
+        phi_component = jnp.zeros_like(G).at[:, 0, ...].set(cache.Jl * phi)
+        energy_phi = energy_operator(
+            phi_component, params.energy_const, params.energy_par_coef, params.energy_perp_coef
+        )
+        dG = dG + 1j * params.omega_d_scale * cache.omega_d[None, None, ...] * (G + energy_phi)
+
+        R_over_Ln = jnp.asarray(params.R_over_Ln)
+        eta_i = jnp.where(R_over_Ln == 0.0, 0.0, params.R_over_LTi / R_over_Ln)
+        drive_coeffs = diamagnetic_drive_coeffs(
+            G.shape[0],
+            G.shape[1],
+            eta_i,
+            params.energy_const,
+            params.energy_par_coef,
+            params.energy_perp_coef,
+        )
+        omega_star = params.omega_star_scale * cache.ky[:, None, None] * R_over_Ln
+        phi_drive = omega_star * phi
+        dG = dG + 1j * drive_coeffs[:, :, None, None, None] * cache.Jl[:, None, ...] * phi_drive
+
     dG = dG - params.nu * cache.lb_lam * G
-    l = jnp.arange(G.shape[0])[:, None, None, None, None]
-    m = jnp.arange(G.shape[1])[None, :, None, None, None]
-    l_norm = jnp.maximum(G.shape[0] - 1, 1)
-    m_norm = jnp.maximum(G.shape[1] - 1, 1)
-    ratio = (l / l_norm) ** params.p_hyper + (m / m_norm) ** params.p_hyper
-    dG = dG - params.nu_hyper * ratio * G
+    dG = dG - params.nu_hyper * cache.hyper_ratio * G
     return dG, phi
 
 
-@partial(jax.jit, static_argnames=("steps", "method"))
+@partial(jax.jit, static_argnames=("steps", "method", "operator"))
 def _integrate_linear_cached(
     G0: jnp.ndarray,
     cache: LinearCache,
@@ -364,29 +432,34 @@ def _integrate_linear_cached(
     dt: float,
     steps: int,
     method: str = "rk4",
+    operator: str = "gx",
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Time integrate the linear system using cached geometry arrays."""
 
-    if method not in {"euler", "rk2", "rk4"}:
-        raise ValueError("method must be one of {'euler', 'rk2', 'rk4'}")
+    if method not in {"euler", "rk2", "rk4", "imex"}:
+        raise ValueError("method must be one of {'euler', 'rk2', 'rk4', 'imex'}")
 
     G0 = jnp.asarray(G0, dtype=jnp.complex64)
+    damping = params.nu * cache.lb_lam + params.nu_hyper * cache.hyper_ratio
 
     def step(G, _):
-        dG, _phi = linear_rhs_cached(G, cache, params)
-        if method == "euler":
+        dG, _phi = linear_rhs_cached(G, cache, params, operator=operator)
+        if method == "imex":
+            dG_explicit = dG + damping * G
+            G_new = (G + dt * dG_explicit) / (1.0 + dt * damping)
+        elif method == "euler":
             G_new = G + dt * dG
         elif method == "rk2":
             k1 = dG
-            k2, _ = linear_rhs_cached(G + 0.5 * dt * k1, cache, params)
+            k2, _ = linear_rhs_cached(G + 0.5 * dt * k1, cache, params, operator=operator)
             G_new = G + dt * k2
         else:
             k1 = dG
-            k2, _ = linear_rhs_cached(G + 0.5 * dt * k1, cache, params)
-            k3, _ = linear_rhs_cached(G + 0.5 * dt * k2, cache, params)
-            k4, _ = linear_rhs_cached(G + dt * k3, cache, params)
+            k2, _ = linear_rhs_cached(G + 0.5 * dt * k1, cache, params, operator=operator)
+            k3, _ = linear_rhs_cached(G + 0.5 * dt * k2, cache, params, operator=operator)
+            k4, _ = linear_rhs_cached(G + dt * k3, cache, params, operator=operator)
             G_new = G + (dt / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
-        _dG_new, phi_new = linear_rhs_cached(G_new, cache, params)
+        _dG_new, phi_new = linear_rhs_cached(G_new, cache, params, operator=operator)
         return G_new, phi_new
 
     return jax.lax.scan(step, G0, None, length=steps)
@@ -401,9 +474,33 @@ def integrate_linear(
     steps: int,
     method: str = "rk4",
     cache: LinearCache | None = None,
+    implicit_tol: float = 1.0e-6,
+    implicit_maxiter: int = 200,
+    operator: str = "gx",
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
-    """Time integrate the linear system using a fixed-step explicit scheme."""
+    """Time integrate the linear system using a fixed-step scheme."""
 
     if cache is None:
         cache = build_linear_cache(grid, geom, params, G0.shape[0], G0.shape[1])
-    return _integrate_linear_cached(G0, cache, params, dt, steps, method=method)
+    if method == "semi-implicit":
+        method = "imex"
+    if method == "implicit":
+        shape = G0.shape
+        size = 1
+        for dim in shape:
+            size *= int(dim)
+        G = jnp.asarray(G0, dtype=jnp.complex64)
+        phi_out = []
+
+        def matvec(x_flat: jnp.ndarray) -> jnp.ndarray:
+            x = x_flat.reshape(shape)
+            dG, _phi = linear_rhs_cached(x, cache, params, operator=operator)
+            return (x - dt * dG).reshape(size)
+
+        for _ in range(steps):
+            sol, _ = gmres(matvec, G.reshape(size), tol=implicit_tol, maxiter=implicit_maxiter)
+            G = sol.reshape(shape)
+            _dG, phi = linear_rhs_cached(G, cache, params, operator=operator)
+            phi_out.append(phi)
+        return G, jnp.stack(phi_out, axis=0)
+    return _integrate_linear_cached(G0, cache, params, dt, steps, method=method, operator=operator)

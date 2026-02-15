@@ -8,7 +8,13 @@ from importlib import resources
 
 import jax.numpy as jnp
 
-from spectraxgk.analysis import ModeSelection, extract_mode, fit_growth_rate, select_ky_index
+from spectraxgk.analysis import (
+    ModeSelection,
+    extract_mode_time_series,
+    fit_growth_rate,
+    fit_growth_rate_auto,
+    select_ky_index,
+)
 from spectraxgk.config import CycloneBaseCase
 from spectraxgk.geometry import SAlphaGeometry
 from spectraxgk.grids import build_spectral_grid
@@ -72,6 +78,11 @@ def run_cyclone_linear(
     cfg: CycloneBaseCase | None = None,
     tmin: float | None = None,
     tmax: float | None = None,
+    auto_window: bool = True,
+    window_fraction: float = 0.3,
+    min_points: int = 20,
+    mode_method: str = "z_index",
+    operator: str = "energy",
 ) -> CycloneRunResult:
     """Run the linear Cyclone benchmark and extract growth rate."""
 
@@ -93,12 +104,19 @@ def run_cyclone_linear(
     G0[0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
 
     G0_jax = jnp.asarray(G0)
-    _, phi_t = integrate_linear(G0_jax, grid, geom, params, dt=dt, steps=steps, method=method)
+    _, phi_t = integrate_linear(
+        G0_jax, grid, geom, params, dt=dt, steps=steps, method=method, operator=operator
+    )
 
     phi_t_np = np.asarray(phi_t)
     t = np.arange(steps) * dt
-    signal = extract_mode(phi_t_np, sel)
-    gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
+    signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
+    if auto_window and tmin is None and tmax is None:
+        gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
+            t, signal, window_fraction=window_fraction, min_points=min_points
+        )
+    else:
+        gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
 
     return CycloneRunResult(
         t=t,
@@ -121,6 +139,11 @@ def run_cyclone_scan(
     cfg: CycloneBaseCase | None = None,
     tmin: float | None = None,
     tmax: float | None = None,
+    auto_window: bool = True,
+    window_fraction: float = 0.3,
+    min_points: int = 20,
+    mode_method: str = "z_index",
+    operator: str = "energy",
 ) -> CycloneScanResult:
     """Run the linear Cyclone benchmark for a list of ky values."""
 
@@ -148,11 +171,26 @@ def run_cyclone_scan(
         G0[0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
 
         G0_jax = jnp.asarray(G0)
-        _, phi_t = integrate_linear(G0_jax, grid, geom, params, dt=dt, steps=steps, method=method, cache=cache)
+        _, phi_t = integrate_linear(
+            G0_jax,
+            grid,
+            geom,
+            params,
+            dt=dt,
+            steps=steps,
+            method=method,
+            cache=cache,
+            operator=operator,
+        )
 
         phi_t_np = np.asarray(phi_t)
-        signal = extract_mode(phi_t_np, sel)
-        gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
+        signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
+        if auto_window and tmin is None and tmax is None:
+            gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
+                t, signal, window_fraction=window_fraction, min_points=min_points
+            )
+        else:
+            gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
 
         gammas.append(gamma)
         omegas.append(omega)
