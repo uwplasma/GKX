@@ -69,7 +69,7 @@ class SAlphaGeometry:
         shear = self.s_hat * theta - self.alpha * jnp.sin(theta)
         gds2 = 1.0 + shear * shear
         gds21 = -self.s_hat * shear
-        gds22 = self.s_hat * self.s_hat
+        gds22 = jnp.asarray(self.s_hat) * jnp.asarray(self.s_hat)
         return gds2, gds21, gds22
 
     def k_perp2(self, kx0: jnp.ndarray, ky: jnp.ndarray, theta: jnp.ndarray) -> jnp.ndarray:
