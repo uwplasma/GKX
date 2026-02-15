@@ -15,6 +15,10 @@ class GridConfig:
     Ly: float = 62.8
     z_min: float = -3.141592653589793
     z_max: float = 3.141592653589793
+    y0: float | None = None
+    ntheta: int | None = None
+    nperiod: int | None = None
+    zp: int | None = None
 
     def to_dict(self) -> Dict[str, float]:
         return asdict(self)

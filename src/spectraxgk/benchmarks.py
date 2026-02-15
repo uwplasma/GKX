@@ -100,7 +100,7 @@ def run_cyclone_linear(
     ky_index = select_ky_index(np.asarray(grid.ky), ky_target)
     sel = ModeSelection(ky_index=ky_index, kx_index=0, z_index=0)
 
-    G0 = np.zeros((Nl, Nm, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz), dtype=np.complex64)
+    G0 = np.zeros((Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
     G0[0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
 
     G0_jax = jnp.asarray(G0)
@@ -167,7 +167,7 @@ def run_cyclone_scan(
         ky_index = select_ky_index(np.asarray(grid.ky), float(ky))
         sel = ModeSelection(ky_index=ky_index, kx_index=0, z_index=0)
 
-        G0 = np.zeros((Nl, Nm, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz), dtype=np.complex64)
+        G0 = np.zeros((Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
         G0[0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
 
         G0_jax = jnp.asarray(G0)

@@ -38,6 +38,7 @@ class LinearParams:
     nu_hyper: float = 0.0
     p_hyper: float = 4.0
     tz: float = 1.0
+    rho_star: float = 1.0
 
     def tree_flatten(self):
         children = (
@@ -59,6 +60,7 @@ class LinearParams:
             self.nu_hyper,
             self.p_hyper,
             self.tz,
+            self.rho_star,
         )
         return children, None
 
@@ -152,10 +154,16 @@ def build_linear_cache(
     """Build reusable arrays for the linear RHS."""
 
     dz = jnp.asarray(grid.z[1] - grid.z[0])
-    b = compute_b(grid, geom, params.rho)
+    kx_eff = params.rho_star * grid.kx
+    ky_eff = params.rho_star * grid.ky
+    kx0 = kx_eff[None, :, None]
+    ky0 = ky_eff[:, None, None]
+    theta = grid.z[None, None, :]
+    kperp2 = geom.k_perp2(kx0, ky0, theta)
+    b = (params.rho * params.rho) * kperp2
     Jl = J_l_all(b, l_max=Nl - 1)
-    omega_d = geom.omega_d(grid.kx, grid.ky, grid.z)
-    cv_d, gb_d = geom.drift_components(grid.kx, grid.ky, grid.z)
+    omega_d = geom.omega_d(kx_eff, ky_eff, grid.z)
+    cv_d, gb_d = geom.drift_components(kx_eff, ky_eff, grid.z)
     bgrad = geom.bgrad(grid.z)
     mask0 = (grid.ky == 0.0)[:, None, None] & (grid.kx == 0.0)[None, :, None]
     lb_lam = lenard_bernstein_eigenvalues(Nl, Nm, params.nu_hermite, params.nu_laguerre)[
@@ -174,7 +182,7 @@ def build_linear_cache(
         bgrad=bgrad,
         mask0=mask0,
         dz=dz,
-        ky=grid.ky,
+        ky=ky_eff,
         lb_lam=lb_lam,
         hyper_ratio=hyper_ratio,
     )
@@ -476,6 +484,8 @@ def integrate_linear(
     cache: LinearCache | None = None,
     implicit_tol: float = 1.0e-6,
     implicit_maxiter: int = 200,
+    implicit_iters: int = 3,
+    implicit_relax: float = 0.7,
     operator: str = "gx",
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Time integrate the linear system using a fixed-step scheme."""
@@ -490,6 +500,8 @@ def integrate_linear(
         for dim in shape:
             size *= int(dim)
         G = jnp.asarray(G0, dtype=jnp.complex64)
+        damping = params.nu * cache.lb_lam + params.nu_hyper * cache.hyper_ratio
+        precond = 1.0 / (1.0 + dt * damping)
         phi_out = []
 
         def matvec(x_flat: jnp.ndarray) -> jnp.ndarray:
@@ -497,8 +509,25 @@ def integrate_linear(
             dG, _phi = linear_rhs_cached(x, cache, params, operator=operator)
             return (x - dt * dG).reshape(size)
 
+        def apply_precond(x_flat: jnp.ndarray) -> jnp.ndarray:
+            x = x_flat.reshape(shape)
+            return (x * precond).reshape(size)
+
         for _ in range(steps):
-            sol, _ = gmres(matvec, G.reshape(size), tol=implicit_tol, maxiter=implicit_maxiter)
+            G_guess = G
+            for _iter in range(max(implicit_iters, 0)):
+                dG, _phi = linear_rhs_cached(G_guess, cache, params, operator=operator)
+                G_next = G + dt * dG
+                G_guess = (1.0 - implicit_relax) * G_guess + implicit_relax * G_next
+
+            sol, _ = gmres(
+                matvec,
+                G.reshape(size),
+                x0=G_guess.reshape(size),
+                tol=implicit_tol,
+                maxiter=implicit_maxiter,
+                M=apply_precond,
+            )
             G = sol.reshape(shape)
             _dG, phi = linear_rhs_cached(G, cache, params, operator=operator)
             phi_out.append(phi)
