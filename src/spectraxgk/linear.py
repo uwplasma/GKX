@@ -80,7 +80,7 @@ def _check_positive(x, name: str) -> None:
         raise ValueError(f"{name} must be > 0")
 
 
-def grad_z_periodic(f: jnp.ndarray, dz: float) -> jnp.ndarray:
+def grad_z_periodic(f: jnp.ndarray, dz: float | jnp.ndarray) -> jnp.ndarray:
     """Centered periodic derivative along the last axis."""
 
     _check_positive(dz, "dz")
@@ -291,7 +291,7 @@ def build_H(G: jnp.ndarray, Jl: jnp.ndarray, phi: jnp.ndarray, tz: float = 1.0) 
     return G.at[:, 0, ...].add(tz * Jl * phi)
 
 
-def streaming_term(H: jnp.ndarray, dz: float, vth: float) -> jnp.ndarray:
+def streaming_term(H: jnp.ndarray, dz: float | jnp.ndarray, vth: float) -> jnp.ndarray:
     """Streaming term using Hermite ladder and real-space z derivative."""
 
     _check_positive(vth, "vth")
@@ -501,7 +501,24 @@ def integrate_linear(
             size *= int(dim)
         G = jnp.asarray(G0, dtype=jnp.complex64)
         damping = params.nu * cache.lb_lam + params.nu_hyper * cache.hyper_ratio
-        precond = 1.0 / (1.0 + dt * damping)
+        Nl, Nm = shape[0], shape[1]
+        l = jnp.arange(Nl, dtype=jnp.float32)[:, None, None, None, None]
+        m = jnp.arange(Nm, dtype=jnp.float32)[None, :, None, None, None]
+        diag = jnp.zeros_like(damping, dtype=jnp.complex64)
+        if operator == "gx":
+            diag = diag - 1j * params.tz * params.omega_d_scale * (
+                cache.cv_d[None, None, ...] * (2.0 * m + 1.0)
+                + cache.gb_d[None, None, ...] * (2.0 * l + 1.0)
+            )
+            bgrad = cache.bgrad[None, None, None, None, :]
+            mirror_diag = params.vth * params.omega_d_scale * (2.0 * l + 1.0) * (2.0 * m + 1.0)
+            mirror_weight = 0.2
+            diag = diag - mirror_weight * bgrad * mirror_diag
+        elif operator == "energy":
+            diag = diag + 1j * params.omega_d_scale * cache.omega_d[None, None, ...]
+        else:
+            raise ValueError("operator must be one of {'gx', 'energy'}")
+        precond = 1.0 / (1.0 + dt * damping - dt * diag)
         phi_out = []
 
         def matvec(x_flat: jnp.ndarray) -> jnp.ndarray:
