@@ -12,7 +12,7 @@ from spectraxgk.analysis import ModeSelection, extract_mode, fit_growth_rate, se
 from spectraxgk.config import CycloneBaseCase
 from spectraxgk.geometry import SAlphaGeometry
 from spectraxgk.grids import build_spectral_grid
-from spectraxgk.linear import LinearParams, integrate_linear
+from spectraxgk.linear import LinearParams, build_linear_cache, integrate_linear
 
 
 @dataclass(frozen=True)
@@ -80,10 +80,8 @@ def run_cyclone_linear(
         R_over_Ln=cfg.model.R_over_Ln,
         R_over_LTi=cfg.model.R_over_LTi,
         R_over_LTe=cfg.model.R_over_LTe,
-        omega_d_scale=1.4,
-        omega_star_scale=1.9,
-        energy_par_coef=0.0,
-        energy_perp_coef=0.0,
+        omega_d_scale=0.32,
+        omega_star_scale=1.0,
     )
     grid = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
@@ -126,25 +124,39 @@ def run_cyclone_scan(
 ) -> CycloneScanResult:
     """Run the linear Cyclone benchmark for a list of ky values."""
 
+    cfg = cfg or CycloneBaseCase()
+    params = params or LinearParams(
+        R_over_Ln=cfg.model.R_over_Ln,
+        R_over_LTi=cfg.model.R_over_LTi,
+        R_over_LTe=cfg.model.R_over_LTe,
+        omega_d_scale=0.32,
+        omega_star_scale=1.0,
+    )
+    grid = build_spectral_grid(cfg.grid)
+    geom = SAlphaGeometry.from_config(cfg.geometry)
+    cache = build_linear_cache(grid, geom, params, Nl)
+
     gammas = []
     omegas = []
     ky_out = []
+    t = np.arange(steps) * dt
     for ky in ky_values:
-        result = run_cyclone_linear(
-            ky_target=float(ky),
-            Nl=Nl,
-            Nm=Nm,
-            dt=dt,
-            steps=steps,
-            method=method,
-            params=params,
-            cfg=cfg,
-            tmin=tmin,
-            tmax=tmax,
-        )
-        gammas.append(result.gamma)
-        omegas.append(result.omega)
-        ky_out.append(result.ky)
+        ky_index = select_ky_index(np.asarray(grid.ky), float(ky))
+        sel = ModeSelection(ky_index=ky_index, kx_index=0, z_index=0)
+
+        G0 = np.zeros((Nl, Nm, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz), dtype=np.complex64)
+        G0[0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
+
+        G0_jax = jnp.asarray(G0)
+        _, phi_t = integrate_linear(G0_jax, grid, geom, params, dt=dt, steps=steps, method=method, cache=cache)
+
+        phi_t_np = np.asarray(phi_t)
+        signal = extract_mode(phi_t_np, sel)
+        gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
+
+        gammas.append(gamma)
+        omegas.append(omega)
+        ky_out.append(float(grid.ky[sel.ky_index]))
     return CycloneScanResult(ky=np.array(ky_out), gamma=np.array(gammas), omega=np.array(omegas))
 
 
