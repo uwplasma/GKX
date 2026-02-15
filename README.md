@@ -14,7 +14,7 @@ is the **Cyclone base case** with adiabatic electrons.
 - **Hermite-Laguerre velocity space**: compact spectral representation.
 - **Field-aligned flux-tube geometry**: s-alpha analytic model (VMEC/DESC next).
 - **Full drift/mirror physics**: curvature/grad-B/mirror couplings + diamagnetic drive.
-- **Operator modes**: ``operator="gx"`` (full drift/mirror) or
+- **Operator modes**: ``operator="full"`` (full drift/mirror) or
   ``operator="energy"`` (reference-matching closure).
 - **Field-aligned grid controls**: ``y0``, ``ntheta``, and ``nperiod`` inputs.
 - **Stable integrators**: explicit, IMEX, and implicit time stepping options.

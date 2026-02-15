@@ -32,10 +32,19 @@ def extract_mode_time_series(
     if method == "max":
         idx = np.argmax(np.abs(data), axis=1)
         return data[np.arange(data.shape[0]), idx]
+    if method == "project":
+        n = data.shape[0]
+        tail_start = int(0.6 * n)
+        tail = data[tail_start:] if tail_start < n else data
+        ref_idx = int(np.argmax(np.linalg.norm(tail, axis=1)))
+        ref = tail[ref_idx]
+        denom = np.vdot(ref, ref)
+        denom = denom if denom != 0.0 else 1.0
+        return (data @ ref.conj()) / denom
     if method == "svd":
         u, s, _vh = np.linalg.svd(data, full_matrices=False)
         return u[:, 0] * s[0]
-    raise ValueError("method must be one of {'z_index', 'max', 'svd'}")
+    raise ValueError("method must be one of {'z_index', 'max', 'project', 'svd'}")
 
 
 def extract_mode(phi_t: np.ndarray, sel: ModeSelection) -> np.ndarray:
@@ -85,6 +94,9 @@ def select_fit_window(
     signal: np.ndarray,
     window_fraction: float = 0.3,
     min_points: int = 20,
+    start_fraction: float = 0.0,
+    growth_weight: float = 0.0,
+    require_positive: bool = False,
 ) -> Tuple[float, float]:
     """Pick a time window with the most exponential-like behavior."""
 
@@ -102,6 +114,10 @@ def select_fit_window(
     window = min(window, n)
     if window < 2:
         raise ValueError("window too short")
+    if not (0.0 <= start_fraction < 1.0):
+        raise ValueError("start_fraction must be in [0, 1)")
+    if growth_weight < 0.0:
+        raise ValueError("growth_weight must be >= 0")
 
     amp = np.log(np.maximum(np.abs(signal), 1.0e-30))
     phase = np.unwrap(np.angle(signal))
@@ -115,7 +131,9 @@ def select_fit_window(
 
     best_score = -np.inf
     best_slice = (0, window)
-    for start in range(0, n - window + 1):
+    found_positive = False
+    start_index = int(start_fraction * n)
+    for start in range(start_index, n - window + 1):
         end = start + window
         tt = t[start:end]
         A = np.vstack([tt, np.ones_like(tt)]).T
@@ -123,11 +141,27 @@ def select_fit_window(
         phase_slope, phase_off = np.linalg.lstsq(A, phase[start:end], rcond=None)[0]
         amp_fit = gamma * tt + offset
         phase_fit = phase_slope * tt + phase_off
+        if require_positive and gamma <= 0.0:
+            continue
+        if require_positive:
+            found_positive = True
         score = r2_score(amp[start:end], amp_fit) + r2_score(phase[start:end], phase_fit)
+        if growth_weight > 0.0:
+            score += growth_weight * float(gamma)
         score += 0.01 * (start / max(1, n - window))
         if score > best_score:
             best_score = score
             best_slice = (start, end)
+    if require_positive and not found_positive:
+        return select_fit_window(
+            t,
+            signal,
+            window_fraction=window_fraction,
+            min_points=min_points,
+            start_fraction=start_fraction,
+            growth_weight=growth_weight,
+            require_positive=False,
+        )
 
     tmin = float(t[best_slice[0]])
     tmax = float(t[best_slice[1] - 1])
@@ -141,11 +175,22 @@ def fit_growth_rate_auto(
     tmax: float | None = None,
     window_fraction: float = 0.3,
     min_points: int = 20,
+    start_fraction: float = 0.0,
+    growth_weight: float = 0.0,
+    require_positive: bool = False,
 ) -> Tuple[float, float, float, float]:
     """Fit gamma/omega with optional auto-selected window."""
 
     if tmin is None and tmax is None:
-        tmin, tmax = select_fit_window(t, signal, window_fraction=window_fraction, min_points=min_points)
+        tmin, tmax = select_fit_window(
+            t,
+            signal,
+            window_fraction=window_fraction,
+            min_points=min_points,
+            start_fraction=start_fraction,
+            growth_weight=growth_weight,
+            require_positive=require_positive,
+        )
     gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
     tmin_out = float(tmin) if tmin is not None else float(t[0])
     tmax_out = float(tmax) if tmax is not None else float(t[-1])

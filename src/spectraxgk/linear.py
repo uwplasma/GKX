@@ -364,11 +364,15 @@ def linear_rhs_cached(
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Compute the linear RHS using precomputed geometry arrays."""
 
-    out_dtype = G.dtype
+    out_dtype = jnp.result_type(G, jnp.complex64)
+    G = jnp.asarray(G, dtype=out_dtype)
+    imag = jnp.asarray(1j, dtype=out_dtype)
     if G.ndim != 5:
         raise ValueError("G must have shape (Nl, Nm, Ny, Nx, Nz)")
+    if operator == "full":
+        operator = "gx"
     if operator not in {"gx", "energy"}:
-        raise ValueError("operator must be one of {'gx', 'energy'}")
+        raise ValueError("operator must be one of {'full', 'energy'}")
     phi = quasineutrality_phi(G, cache.Jl, params.tau_e)
     phi = jnp.where(cache.mask0, 0.0, phi)
     H = build_H(G, cache.Jl, phi, params.tz)
@@ -395,8 +399,8 @@ def linear_rhs_cached(
         bgrad = params.omega_d_scale * cache.bgrad[None, None, None, None, :]
         dG = dG - params.vth * bgrad * mirror_term
 
-        icv = 1j * params.tz * params.omega_d_scale * cache.cv_d[None, None, ...]
-        igb = 1j * params.tz * params.omega_d_scale * cache.gb_d[None, None, ...]
+        icv = imag * params.tz * params.omega_d_scale * cache.cv_d[None, None, ...]
+        igb = imag * params.tz * params.omega_d_scale * cache.gb_d[None, None, ...]
         H_m_p2 = shift_axis(H, 2, axis=1)
         H_m_m2 = shift_axis(H, -2, axis=1)
         curv_term = (
@@ -411,27 +415,25 @@ def linear_rhs_cached(
         )
         dG = dG - icv * params.energy_par_coef * curv_term - igb * params.energy_perp_coef * gradb_term
 
-        iky = 1j * params.omega_star_scale * cache.ky[:, None, None]
-        l4 = cache.l4
-        Jl_m1 = shift_axis(cache.Jl, -1, axis=0)
-        Jl_p1 = shift_axis(cache.Jl, 1, axis=0)
-        tprim = jnp.asarray(params.R_over_LTi)
-        fprim = jnp.asarray(params.R_over_Ln)
-        drive_m0 = iky * phi * (
-            Jl_m1 * (l4 * tprim)
-            + cache.Jl * (fprim + 2.0 * l4 * tprim)
-            + Jl_p1 * ((l4 + 1.0) * tprim)
+        R_over_Ln = jnp.asarray(params.R_over_Ln)
+        eta_i = jnp.where(R_over_Ln == 0.0, 0.0, params.R_over_LTi / R_over_Ln)
+        drive_coeffs = diamagnetic_drive_coeffs(
+            G.shape[0],
+            G.shape[1],
+            eta_i,
+            params.energy_const,
+            params.energy_par_coef,
+            params.energy_perp_coef,
         )
-        dG = dG.at[:, 0, ...].add(drive_m0)
-        if Nm > 2:
-            drive_m2 = iky * phi * cache.Jl * (tprim / jnp.sqrt(2.0))
-            dG = dG.at[:, 2, ...].add(drive_m2)
+        omega_star = params.omega_star_scale * cache.ky[:, None, None] * R_over_Ln
+        phi_drive = omega_star * phi
+        dG = dG + imag * drive_coeffs[:, :, None, None, None] * cache.Jl[:, None, ...] * phi_drive
     else:
         phi_component = jnp.zeros_like(G).at[:, 0, ...].set(cache.Jl * phi)
         energy_phi = energy_operator(
             phi_component, params.energy_const, params.energy_par_coef, params.energy_perp_coef
         )
-        dG = dG + 1j * params.omega_d_scale * cache.omega_d[None, None, ...] * (G + energy_phi)
+        dG = dG + imag * params.omega_d_scale * cache.omega_d[None, None, ...] * (G + energy_phi)
 
         R_over_Ln = jnp.asarray(params.R_over_Ln)
         eta_i = jnp.where(R_over_Ln == 0.0, 0.0, params.R_over_LTi / R_over_Ln)
@@ -445,7 +447,7 @@ def linear_rhs_cached(
         )
         omega_star = params.omega_star_scale * cache.ky[:, None, None] * R_over_Ln
         phi_drive = omega_star * phi
-        dG = dG + 1j * drive_coeffs[:, :, None, None, None] * cache.Jl[:, None, ...] * phi_drive
+        dG = dG + imag * drive_coeffs[:, :, None, None, None] * cache.Jl[:, None, ...] * phi_drive
 
     dG = dG - params.nu * cache.lb_lam * G
     dG = dG - params.nu_hyper * cache.hyper_ratio * G
@@ -464,6 +466,8 @@ def _integrate_linear_cached(
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Time integrate the linear system using cached geometry arrays."""
 
+    if operator == "full":
+        operator = "gx"
     if method not in {"euler", "rk2", "rk4", "imex"}:
         raise ValueError("method must be one of {'euler', 'rk2', 'rk4', 'imex'}")
 
@@ -510,6 +514,8 @@ def integrate_linear(
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Time integrate the linear system using a fixed-step scheme."""
 
+    if operator == "full":
+        operator = "gx"
     if cache is None:
         cache = build_linear_cache(grid, geom, params, G0.shape[0], G0.shape[1])
     if method == "semi-implicit":
@@ -519,14 +525,16 @@ def integrate_linear(
         size = 1
         for dim in shape:
             size *= int(dim)
-        G = jnp.asarray(G0, dtype=jnp.complex64)
-        dt_val = jnp.asarray(dt, dtype=G.real.dtype)
+        state_dtype = jnp.result_type(G0, jnp.complex64)
+        G = jnp.asarray(G0, dtype=state_dtype)
+        dt_val = jnp.asarray(dt, dtype=jnp.real(G).dtype)
         damping = params.nu * cache.lb_lam + params.nu_hyper * cache.hyper_ratio
         l = cache.l
         m = cache.m
-        diag = jnp.zeros_like(damping, dtype=jnp.complex64)
+        diag = jnp.zeros_like(damping, dtype=state_dtype)
+        imag = jnp.asarray(1j, dtype=state_dtype)
         if operator == "gx":
-            diag = diag - 1j * params.tz * params.omega_d_scale * (
+            diag = diag - imag * params.tz * params.omega_d_scale * (
                 cache.cv_d[None, None, ...] * (2.0 * m + 1.0)
                 + cache.gb_d[None, None, ...] * (2.0 * l + 1.0)
             )
@@ -535,7 +543,7 @@ def integrate_linear(
             mirror_weight = 0.2
             diag = diag - mirror_weight * bgrad * mirror_diag
         elif operator == "energy":
-            diag = diag + 1j * params.omega_d_scale * cache.omega_d[None, None, ...]
+            diag = diag + imag * params.omega_d_scale * cache.omega_d[None, None, ...]
         else:
             raise ValueError("operator must be one of {'gx', 'energy'}")
         precond = 1.0 / (1.0 + dt_val * damping - dt_val * diag)

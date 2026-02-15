@@ -79,8 +79,11 @@ def run_cyclone_linear(
     tmin: float | None = None,
     tmax: float | None = None,
     auto_window: bool = True,
-    window_fraction: float = 0.3,
-    min_points: int = 20,
+    window_fraction: float = 0.4,
+    min_points: int = 40,
+    start_fraction: float = 0.2,
+    growth_weight: float = 1.0,
+    require_positive: bool = True,
     mode_method: str = "z_index",
     operator: str = "energy",
 ) -> CycloneRunResult:
@@ -113,7 +116,13 @@ def run_cyclone_linear(
     signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
     if auto_window and tmin is None and tmax is None:
         gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
-            t, signal, window_fraction=window_fraction, min_points=min_points
+            t,
+            signal,
+            window_fraction=window_fraction,
+            min_points=min_points,
+            start_fraction=start_fraction,
+            growth_weight=growth_weight,
+            require_positive=require_positive,
         )
     else:
         gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
@@ -140,8 +149,11 @@ def run_cyclone_scan(
     tmin: float | None = None,
     tmax: float | None = None,
     auto_window: bool = True,
-    window_fraction: float = 0.3,
-    min_points: int = 20,
+    window_fraction: float = 0.4,
+    min_points: int = 40,
+    start_fraction: float = 0.2,
+    growth_weight: float = 1.0,
+    require_positive: bool = True,
     mode_method: str = "z_index",
     operator: str = "energy",
 ) -> CycloneScanResult:
@@ -187,7 +199,13 @@ def run_cyclone_scan(
         signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
         if auto_window and tmin is None and tmax is None:
             gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
-                t, signal, window_fraction=window_fraction, min_points=min_points
+                t,
+                signal,
+                window_fraction=window_fraction,
+                min_points=min_points,
+                start_fraction=start_fraction,
+                growth_weight=growth_weight,
+                require_positive=require_positive,
             )
         else:
             gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)

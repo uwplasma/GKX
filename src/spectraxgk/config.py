@@ -66,7 +66,16 @@ class ModelConfig:
 class CycloneBaseCase:
     """Standard parameters for the Cyclone base case ITG benchmark."""
 
-    grid: GridConfig = GridConfig()
+    grid: GridConfig = GridConfig(
+        Nx=1,
+        Ny=32,
+        Nz=96,
+        Lx=62.8,
+        Ly=62.8,
+        y0=20.0,
+        ntheta=32,
+        nperiod=2,
+    )
     time: TimeConfig = TimeConfig()
     geometry: GeometryConfig = GeometryConfig()
     model: ModelConfig = ModelConfig()
