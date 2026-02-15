@@ -14,6 +14,8 @@ is the **Cyclone base case** with adiabatic electrons.
 - **Hermite-Laguerre velocity space**: compact spectral representation.
 - **Field-aligned flux-tube geometry**: s-alpha analytic model (VMEC/DESC next).
 - **Linear drift physics**: curvature/grad-B + diamagnetic drive (Cyclone base case).
+- **Energy operator**: full Hermite-Laguerre velocity weighting.
+- **Cached operators**: precomputed geometry arrays for faster time stepping.
 - **Benchmark harness**: reference data + growth-rate extraction tools + comparisons.
 - **Publication-ready plots**: consistent styling and reusable plotting utilities.
 - **100% test coverage**: unit, regression, and physics-based checks.
@@ -54,9 +56,9 @@ python examples/cyclone_linear_benchmark.py
 ## Validation status
 
 - **Cyclone base case (adiabatic electrons)**: curvature/grad-B and diamagnetic
-  drive terms are active in the linear operator. The default benchmark harness
-  is tuned to reproduce the published GX growth rates at
-  ``k_y rho_i = 0.3`` while we extend the full velocity-space weighting.
+  drive terms are active with the full Hermite-Laguerre energy operator. The
+  default benchmark harness is tuned to reproduce the published GX growth rates
+  at ``k_y rho_i = 0.3`` while we extend accuracy across the full ky scan.
 
 ## Figures
 
