@@ -42,12 +42,59 @@ class SAlphaGeometry:
         )
 
     def kx_effective(self, kx0: jnp.ndarray, ky: jnp.ndarray, theta: jnp.ndarray) -> jnp.ndarray:
-        """Field-aligned kx(theta) = kx0 + s_hat * theta * ky."""
+        """Field-aligned kx(theta) with s-alpha shear shift."""
 
-        return kx0 + self.s_hat * theta * ky
+        shear = self.s_hat * theta - self.alpha * jnp.sin(theta)
+        return kx0 - shear * ky
+
+    def bmag(self, theta: jnp.ndarray) -> jnp.ndarray:
+        """Magnetic field strength for circular s-alpha geometry."""
+
+        return 1.0 / (1.0 + self.epsilon * jnp.cos(theta))
+
+    def metric_coeffs(self, theta: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+        """Metric coefficients (gds2, gds21, gds22) for s-alpha geometry."""
+
+        shear = self.s_hat * theta - self.alpha * jnp.sin(theta)
+        gds2 = 1.0 + shear * shear
+        gds21 = -self.s_hat * shear
+        gds22 = self.s_hat * self.s_hat
+        return gds2, gds21, gds22
 
     def k_perp2(self, kx0: jnp.ndarray, ky: jnp.ndarray, theta: jnp.ndarray) -> jnp.ndarray:
         """Perpendicular wave-number squared for s-alpha geometry."""
 
-        kx_t = self.kx_effective(kx0, ky, theta)
-        return kx_t * kx_t + ky * ky
+        gds2, gds21, gds22 = self.metric_coeffs(theta)
+        s_hat = jnp.asarray(self.s_hat)
+        s_hat_safe = jnp.where(s_hat == 0.0, 1.0, s_hat)
+        kx_hat = kx0 / s_hat_safe
+        kx_hat = jnp.where(s_hat == 0.0, kx0, kx_hat)
+        kperp2 = ky * (ky * gds2 + 2.0 * kx_hat * gds21) + (kx_hat * kx_hat) * gds22
+        bmag_inv = 1.0 / self.bmag(theta)
+        return kperp2 * (bmag_inv * bmag_inv)
+
+    def drift_coeffs(
+        self, theta: jnp.ndarray
+    ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+        """Curvature and grad-B drift coefficients for s-alpha geometry."""
+
+        shear = self.s_hat * theta - self.alpha * jnp.sin(theta)
+        base = jnp.cos(theta) + shear * jnp.sin(theta)
+        cv = base / self.R0
+        gb = cv
+        cv0 = -self.s_hat * jnp.sin(theta) / self.R0
+        gb0 = cv0
+        return cv, gb, cv0, gb0
+
+    def omega_d(self, kx: jnp.ndarray, ky: jnp.ndarray, theta: jnp.ndarray) -> jnp.ndarray:
+        """Magnetic drift frequency for s-alpha geometry."""
+
+        kx0 = kx[None, :, None]
+        ky0 = ky[:, None, None]
+        theta0 = theta[None, None, :]
+        cv, gb, cv0, gb0 = self.drift_coeffs(theta0)
+        s_hat = jnp.asarray(self.s_hat)
+        s_hat_safe = jnp.where(s_hat == 0.0, 1.0, s_hat)
+        kx_hat = kx0 / s_hat_safe
+        kx_hat = jnp.where(s_hat == 0.0, kx0, kx_hat)
+        return ky0 * (cv + gb) + kx_hat * (cv0 + gb0)
