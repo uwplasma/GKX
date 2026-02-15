@@ -123,6 +123,11 @@ class LinearCache:
     ky: jnp.ndarray
     lb_lam: jnp.ndarray
     hyper_ratio: jnp.ndarray
+    l: jnp.ndarray
+    m: jnp.ndarray
+    l4: jnp.ndarray
+    sqrt_m: jnp.ndarray
+    sqrt_m_p1: jnp.ndarray
 
     def tree_flatten(self):
         children = (
@@ -136,6 +141,11 @@ class LinearCache:
             self.ky,
             self.lb_lam,
             self.hyper_ratio,
+            self.l,
+            self.m,
+            self.l4,
+            self.sqrt_m,
+            self.sqrt_m_p1,
         )
         return children, None
 
@@ -169,8 +179,12 @@ def build_linear_cache(
     lb_lam = lenard_bernstein_eigenvalues(Nl, Nm, params.nu_hermite, params.nu_laguerre)[
         :, :, None, None, None
     ]
-    l = jnp.arange(Nl)[:, None, None, None, None]
-    m = jnp.arange(Nm)[None, :, None, None, None]
+    l = jnp.arange(Nl, dtype=jnp.float32)[:, None, None, None, None]
+    m = jnp.arange(Nm, dtype=jnp.float32)[None, :, None, None, None]
+    l4 = jnp.arange(Nl, dtype=jnp.float32)[:, None, None, None]
+    m_p1 = m + 1.0
+    sqrt_m = jnp.sqrt(m)
+    sqrt_m_p1 = jnp.sqrt(m_p1)
     l_norm = jnp.maximum(Nl - 1, 1)
     m_norm = jnp.maximum(Nm - 1, 1)
     hyper_ratio = (l / l_norm) ** params.p_hyper + (m / m_norm) ** params.p_hyper
@@ -185,6 +199,11 @@ def build_linear_cache(
         ky=ky_eff,
         lb_lam=lb_lam,
         hyper_ratio=hyper_ratio,
+        l=l,
+        m=m,
+        l4=l4,
+        sqrt_m=sqrt_m,
+        sqrt_m_p1=sqrt_m_p1,
     )
 
 
@@ -356,13 +375,13 @@ def linear_rhs_cached(
     dG = -params.kpar_scale * stream
 
     if operator == "gx":
-        Nl, Nm = G.shape[0], G.shape[1]
-        l = jnp.arange(Nl, dtype=jnp.float32)[:, None, None, None, None]
-        m = jnp.arange(Nm, dtype=jnp.float32)[None, :, None, None, None]
+        l = cache.l
+        m = cache.m
+        Nm = G.shape[1]
         l_p1 = l + 1.0
         m_p1 = m + 1.0
-        sqrt_m_p1 = jnp.sqrt(m_p1)
-        sqrt_m = jnp.sqrt(m)
+        sqrt_m_p1 = cache.sqrt_m_p1
+        sqrt_m = cache.sqrt_m
 
         H_m_p1 = shift_axis(H, 1, axis=1)
         H_m_m1 = shift_axis(H, -1, axis=1)
@@ -392,7 +411,7 @@ def linear_rhs_cached(
         dG = dG - icv * params.energy_par_coef * curv_term - igb * params.energy_perp_coef * gradb_term
 
         iky = 1j * params.omega_star_scale * cache.ky[:, None, None]
-        l4 = jnp.arange(Nl, dtype=jnp.float32)[:, None, None, None]
+        l4 = cache.l4
         Jl_m1 = shift_axis(cache.Jl, -1, axis=0)
         Jl_p1 = shift_axis(cache.Jl, 1, axis=0)
         tprim = jnp.asarray(params.R_over_LTi)
@@ -501,9 +520,8 @@ def integrate_linear(
             size *= int(dim)
         G = jnp.asarray(G0, dtype=jnp.complex64)
         damping = params.nu * cache.lb_lam + params.nu_hyper * cache.hyper_ratio
-        Nl, Nm = shape[0], shape[1]
-        l = jnp.arange(Nl, dtype=jnp.float32)[:, None, None, None, None]
-        m = jnp.arange(Nm, dtype=jnp.float32)[None, :, None, None, None]
+        l = cache.l
+        m = cache.m
         diag = jnp.zeros_like(damping, dtype=jnp.complex64)
         if operator == "gx":
             diag = diag - 1j * params.tz * params.omega_d_scale * (
