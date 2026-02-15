@@ -21,10 +21,27 @@ def select_ky_index(ky: np.ndarray, ky_target: float) -> int:
     return int(np.argmin(np.abs(ky - ky_target)))
 
 
+def extract_mode_time_series(
+    phi_t: np.ndarray, sel: ModeSelection, method: str = "z_index"
+) -> np.ndarray:
+    """Extract a complex mode time series from phi_t(t, ky, kx, z)."""
+
+    data = phi_t[:, sel.ky_index, sel.kx_index, :]
+    if method == "z_index":
+        return data[:, sel.z_index]
+    if method == "max":
+        idx = np.argmax(np.abs(data), axis=1)
+        return data[np.arange(data.shape[0]), idx]
+    if method == "svd":
+        u, s, _vh = np.linalg.svd(data, full_matrices=False)
+        return u[:, 0] * s[0]
+    raise ValueError("method must be one of {'z_index', 'max', 'svd'}")
+
+
 def extract_mode(phi_t: np.ndarray, sel: ModeSelection) -> np.ndarray:
     """Extract a complex mode time series from phi_t(t, ky, kx, z)."""
 
-    return phi_t[:, sel.ky_index, sel.kx_index, sel.z_index]
+    return extract_mode_time_series(phi_t, sel, method="z_index")
 
 
 def fit_growth_rate(
@@ -61,3 +78,75 @@ def fit_growth_rate(
     gamma, _ = np.linalg.lstsq(A, np.log(amp), rcond=None)[0]
     omega, _ = np.linalg.lstsq(A, phase, rcond=None)[0]
     return float(gamma), float(omega)
+
+
+def select_fit_window(
+    t: np.ndarray,
+    signal: np.ndarray,
+    window_fraction: float = 0.3,
+    min_points: int = 20,
+) -> Tuple[float, float]:
+    """Pick a time window with the most exponential-like behavior."""
+
+    if t.ndim != 1:
+        raise ValueError("t must be 1D")
+    if signal.ndim != 1:
+        raise ValueError("signal must be 1D")
+    if t.shape[0] != signal.shape[0]:
+        raise ValueError("t and signal must have same length")
+
+    n = t.shape[0]
+    if n < 2:
+        raise ValueError("not enough points to fit")
+    window = max(min_points, int(window_fraction * n))
+    window = min(window, n)
+    if window < 2:
+        raise ValueError("window too short")
+
+    amp = np.log(np.maximum(np.abs(signal), 1.0e-30))
+    phase = np.unwrap(np.angle(signal))
+
+    def r2_score(y: np.ndarray, yfit: np.ndarray) -> float:
+        ss_res = float(np.sum((y - yfit) ** 2))
+        ss_tot = float(np.sum((y - np.mean(y)) ** 2))
+        if ss_tot <= 0.0:
+            return -np.inf
+        return 1.0 - ss_res / ss_tot
+
+    best_score = -np.inf
+    best_slice = (0, window)
+    for start in range(0, n - window + 1):
+        end = start + window
+        tt = t[start:end]
+        A = np.vstack([tt, np.ones_like(tt)]).T
+        gamma, offset = np.linalg.lstsq(A, amp[start:end], rcond=None)[0]
+        phase_slope, phase_off = np.linalg.lstsq(A, phase[start:end], rcond=None)[0]
+        amp_fit = gamma * tt + offset
+        phase_fit = phase_slope * tt + phase_off
+        score = r2_score(amp[start:end], amp_fit) + r2_score(phase[start:end], phase_fit)
+        score += 0.01 * (start / max(1, n - window))
+        if score > best_score:
+            best_score = score
+            best_slice = (start, end)
+
+    tmin = float(t[best_slice[0]])
+    tmax = float(t[best_slice[1] - 1])
+    return tmin, tmax
+
+
+def fit_growth_rate_auto(
+    t: np.ndarray,
+    signal: np.ndarray,
+    tmin: float | None = None,
+    tmax: float | None = None,
+    window_fraction: float = 0.3,
+    min_points: int = 20,
+) -> Tuple[float, float, float, float]:
+    """Fit gamma/omega with optional auto-selected window."""
+
+    if tmin is None and tmax is None:
+        tmin, tmax = select_fit_window(t, signal, window_fraction=window_fraction, min_points=min_points)
+    gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
+    tmin_out = float(tmin) if tmin is not None else float(t[0])
+    tmax_out = float(tmax) if tmax is not None else float(t[-1])
+    return gamma, omega, tmin_out, tmax_out
