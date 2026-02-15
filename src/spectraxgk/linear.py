@@ -520,6 +520,7 @@ def integrate_linear(
         for dim in shape:
             size *= int(dim)
         G = jnp.asarray(G0, dtype=jnp.complex64)
+        dt_val = jnp.asarray(dt, dtype=G.real.dtype)
         damping = params.nu * cache.lb_lam + params.nu_hyper * cache.hyper_ratio
         l = cache.l
         m = cache.m
@@ -537,13 +538,14 @@ def integrate_linear(
             diag = diag + 1j * params.omega_d_scale * cache.omega_d[None, None, ...]
         else:
             raise ValueError("operator must be one of {'gx', 'energy'}")
-        precond = 1.0 / (1.0 + dt * damping - dt * diag)
+        precond = 1.0 / (1.0 + dt_val * damping - dt_val * diag)
+        precond = precond.astype(G.dtype)
         phi_out = []
 
         def matvec(x_flat: jnp.ndarray) -> jnp.ndarray:
             x = x_flat.reshape(shape)
             dG, _phi = linear_rhs_cached(x, cache, params, operator=operator)
-            return (x - dt * dG).reshape(size)
+            return (x - dt_val * dG).reshape(size)
 
         def apply_precond(x_flat: jnp.ndarray) -> jnp.ndarray:
             x = x_flat.reshape(shape)
@@ -553,7 +555,7 @@ def integrate_linear(
             G_guess = G
             for _iter in range(max(implicit_iters, 0)):
                 dG, _phi = linear_rhs_cached(G_guess, cache, params, operator=operator)
-                G_next = G + dt * dG
+                G_next = G + dt_val * dG
                 G_guess = (1.0 - implicit_relax) * G_guess + implicit_relax * G_next
 
             sol, _ = gmres(
