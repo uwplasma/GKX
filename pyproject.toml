@@ -40,3 +40,7 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.mypy]
+files = ["src/spectraxgk"]
+exclude = ["legacy_archive", "examples", "docs"]

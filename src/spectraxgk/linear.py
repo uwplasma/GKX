@@ -31,6 +31,11 @@ class LinearParams:
     energy_const: float = 0.0
     energy_par_coef: float = 0.5
     energy_perp_coef: float = 1.0
+    nu: float = 0.0
+    nu_hermite: float = 1.0
+    nu_laguerre: float = 2.0
+    nu_hyper: float = 0.0
+    p_hyper: float = 4.0
 
     def tree_flatten(self):
         children = (
@@ -46,6 +51,11 @@ class LinearParams:
             self.energy_const,
             self.energy_par_coef,
             self.energy_perp_coef,
+            self.nu,
+            self.nu_hermite,
+            self.nu_laguerre,
+            self.nu_hyper,
+            self.p_hyper,
         )
         return children, None
 
@@ -83,6 +93,16 @@ def compute_b(grid: SpectralGrid, geom: SAlphaGeometry, rho: float) -> jnp.ndarr
     return (rho * rho) * kperp2
 
 
+def lenard_bernstein_eigenvalues(
+    Nl: int, Nm: int, nu_hermite: float, nu_laguerre: float
+) -> jnp.ndarray:
+    """Diagonal Lenard-Bernstein rates in Hermite-Laguerre space."""
+
+    l = jnp.arange(Nl)
+    m = jnp.arange(Nm)
+    return nu_laguerre * l[:, None] + nu_hermite * m[None, :]
+
+
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
 class LinearCache:
@@ -93,9 +113,10 @@ class LinearCache:
     mask0: jnp.ndarray
     dz: jnp.ndarray
     ky: jnp.ndarray
+    lb_lam: jnp.ndarray
 
     def tree_flatten(self):
-        children = (self.Jl, self.omega_d, self.mask0, self.dz, self.ky)
+        children = (self.Jl, self.omega_d, self.mask0, self.dz, self.ky, self.lb_lam)
         return children, None
 
     @classmethod
@@ -108,6 +129,7 @@ def build_linear_cache(
     geom: SAlphaGeometry,
     params: LinearParams,
     Nl: int,
+    Nm: int,
 ) -> LinearCache:
     """Build reusable arrays for the linear RHS."""
 
@@ -116,7 +138,10 @@ def build_linear_cache(
     Jl = J_l_all(b, l_max=Nl - 1)
     omega_d = geom.omega_d(grid.kx, grid.ky, grid.z)
     mask0 = (grid.ky == 0.0)[:, None, None] & (grid.kx == 0.0)[None, :, None]
-    return LinearCache(Jl=Jl, omega_d=omega_d, mask0=mask0, dz=dz, ky=grid.ky)
+    lb_lam = lenard_bernstein_eigenvalues(Nl, Nm, params.nu_hermite, params.nu_laguerre)[
+        :, :, None, None, None
+    ]
+    return LinearCache(Jl=Jl, omega_d=omega_d, mask0=mask0, dz=dz, ky=grid.ky, lb_lam=lb_lam)
 
 
 def apply_hermite_v(G: jnp.ndarray) -> jnp.ndarray:
@@ -274,6 +299,16 @@ def linear_rhs(
     omega_star = params.omega_star_scale * grid.ky[:, None, None] * R_over_Ln
     phi_drive = omega_star * phi
     dG = dG + 1j * drive_coeffs[:, :, None, None, None] * Jl[:, None, ...] * phi_drive
+    lb_lam = lenard_bernstein_eigenvalues(G.shape[0], G.shape[1], params.nu_hermite, params.nu_laguerre)[
+        :, :, None, None, None
+    ]
+    dG = dG - params.nu * lb_lam * G
+    l = jnp.arange(G.shape[0])[:, None, None, None, None]
+    m = jnp.arange(G.shape[1])[None, :, None, None, None]
+    l_norm = jnp.maximum(G.shape[0] - 1, 1)
+    m_norm = jnp.maximum(G.shape[1] - 1, 1)
+    ratio = (l / l_norm) ** params.p_hyper + (m / m_norm) ** params.p_hyper
+    dG = dG - params.nu_hyper * ratio * G
     return dG, phi
 
 
@@ -311,6 +346,13 @@ def linear_rhs_cached(
     omega_star = params.omega_star_scale * cache.ky[:, None, None] * R_over_Ln
     phi_drive = omega_star * phi
     dG = dG + 1j * drive_coeffs[:, :, None, None, None] * cache.Jl[:, None, ...] * phi_drive
+    dG = dG - params.nu * cache.lb_lam * G
+    l = jnp.arange(G.shape[0])[:, None, None, None, None]
+    m = jnp.arange(G.shape[1])[None, :, None, None, None]
+    l_norm = jnp.maximum(G.shape[0] - 1, 1)
+    m_norm = jnp.maximum(G.shape[1] - 1, 1)
+    ratio = (l / l_norm) ** params.p_hyper + (m / m_norm) ** params.p_hyper
+    dG = dG - params.nu_hyper * ratio * G
     return dG, phi
 
 
@@ -363,5 +405,5 @@ def integrate_linear(
     """Time integrate the linear system using a fixed-step explicit scheme."""
 
     if cache is None:
-        cache = build_linear_cache(grid, geom, params, G0.shape[0])
+        cache = build_linear_cache(grid, geom, params, G0.shape[0], G0.shape[1])
     return _integrate_linear_cached(G0, cache, params, dt, steps, method=method)
