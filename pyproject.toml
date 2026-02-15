@@ -1,72 +1,40 @@
 [build-system]
-requires = ["setuptools>=68", "wheel", "setuptools_scm>=8"]
+requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "spectraxgk"
-description = "Solution of the gyrokinetic equation in JAX using a Hermite-Laguerre decomposition."
+name = "spectrax-gk"
+version = "0.0.0"
+description = "JAX gyrokinetic solver with Hermite-Laguerre velocity space"
 readme = "README.md"
-requires-python = ">=3.9"
-license = { text = "MIT" }
-authors = [{ name = "UWPlasma", email = "rogerio.jorge@wisc.edu" }]
-keywords = ["plasma", "gyrokinetic", "fourier", "hermite", "laguerre", "jax"]
-classifiers = [
-  "Programming Language :: Python :: 3",
-  "License :: OSI Approved :: MIT License",
-  "Operating System :: OS Independent",
-  "Topic :: Scientific/Engineering :: Physics",
-]
-dynamic = ["version"]
+requires-python = ">=3.10"
+license = {file = "LICENSE"}
+authors = [{name = "SPECTRAX-GK team"}]
 
 dependencies = [
-  "jax",
-  "jaxlib",
-  "diffrax"
+  "jax>=0.4.20",
+  "jaxlib>=0.4.20",
+  "numpy>=1.24",
 ]
 
 [project.optional-dependencies]
-docs = [
-  "mkdocs-material",
-  "mkdocstrings[python]",
-  "pymdown-extensions",
+dev = [
+  "pytest>=7.0",
+  "pytest-cov>=4.0",
+  "ruff>=0.1.6",
+  "mypy>=1.6",
+  "sphinx>=7.0",
 ]
 
 [project.scripts]
-spectraxgk = "spectraxgk.cli:main"
+spectrax-gk = "spectraxgk.cli:main"
 
 [tool.setuptools]
-# Top-level package:
-packages = ["spectraxgk"]
+package-dir = {"" = "src"}
 include-package-data = true
 
-[tool.setuptools_scm]
-version_scheme = "no-guess-dev"
-local_scheme = "node-and-date"
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.pytest.ini_options]
-addopts = "-q"
 testpaths = ["tests"]
-
-# -------- MyPy ----------
-[tool.mypy]
-python_version = "3.11"
-packages = ["spectraxgk"]
-pretty = true
-warn_unused_ignores = true
-warn_redundant_casts = true
-warn_unreachable = true
-show_error_codes = true
-# JAX-heavy code benefits from these two:
-follow_imports = "silent"
-no_implicit_optional = true
-
-# Per-path or per-module adjustments:
-# (This REPLACES the invalid [mypy-tests.*] INI-style section.)
-[[tool.mypy.overrides]]
-module = "tests.*"
-ignore_errors = true
-
-# Example: silence types in vendorized utilities (optional)
-# [[tool.mypy.overrides]]
-# module = "spectraxgk.vendor.*"
-# ignore_errors = true
