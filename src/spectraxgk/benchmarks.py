@@ -57,9 +57,9 @@ class CycloneComparison:
 
 
 def load_cyclone_reference() -> CycloneReference:
-    """Load GX Cyclone base case reference data (adiabatic electrons)."""
+    """Load Cyclone base case reference data (adiabatic electrons)."""
 
-    data_path = resources.files("spectraxgk").joinpath("data", "cyclone_gx_adiabatic_ref.csv")
+    data_path = resources.files("spectraxgk").joinpath("data", "cyclone_reference_adiabatic.csv")
     arr = np.loadtxt(str(data_path), delimiter=",", skiprows=1)
     ky = arr[:, 0]
     omega = arr[:, 1]

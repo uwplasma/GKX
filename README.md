@@ -13,10 +13,10 @@ is the **Cyclone base case** with adiabatic electrons.
 - **JAX-first design**: fully differentiable kernels and JIT compilation.
 - **Hermite-Laguerre velocity space**: compact spectral representation.
 - **Field-aligned flux-tube geometry**: s-alpha analytic model (VMEC/DESC next).
-- **GX-style drift physics**: curvature/grad-B/mirror couplings + diamagnetic drive.
+- **Full drift/mirror physics**: curvature/grad-B/mirror couplings + diamagnetic drive.
 - **Operator modes**: ``operator="gx"`` (full drift/mirror) or
   ``operator="energy"`` (reference-matching closure).
-- **GX grid matching**: ``y0``, ``ntheta``, and ``nperiod`` inputs for direct comparisons.
+- **Field-aligned grid controls**: ``y0``, ``ntheta``, and ``nperiod`` inputs.
 - **Stable integrators**: explicit, IMEX, and implicit time stepping options.
 - **Cached operators**: precomputed geometry arrays for faster time stepping.
 - **Benchmark harness**: reference data + growth-rate extraction tools + comparisons.
@@ -60,9 +60,9 @@ python examples/cyclone_linear_benchmark.py
 ## Validation status
 
 - **Cyclone base case (adiabatic electrons)**: the benchmark harness defaults
-  to the energy-weighted drift closure to reproduce the published GX growth
-  rates at ``k_y rho_i = 0.3`` while we validate the full GX operator across the
-  ky scan.
+  to the energy-weighted drift closure to reproduce published growth rates at
+  ``k_y rho_i = 0.3`` while we validate the full drift/mirror operator across
+  the ky scan.
 
 ## Figures
 
