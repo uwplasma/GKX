@@ -6,14 +6,15 @@ Hermite-Laguerre velocity-space representation with Fourier perpendicular
 coordinates in a field-aligned flux-tube geometry. The initial validation target
 is the **Cyclone base case** with adiabatic electrons.
 
-![Cyclone base case reference](docs/_static/cyclone_reference.png)
+![Cyclone base case comparison](docs/_static/cyclone_comparison.png)
 
 ## Highlights
 
 - **JAX-first design**: fully differentiable kernels and JIT compilation.
 - **Hermite-Laguerre velocity space**: compact spectral representation.
 - **Field-aligned flux-tube geometry**: s-alpha analytic model (VMEC/DESC next).
-- **Benchmark harness**: reference data + growth-rate extraction tools.
+- **Linear drift physics**: curvature/grad-B + diamagnetic drive (Cyclone base case).
+- **Benchmark harness**: reference data + growth-rate extraction tools + comparisons.
 - **Publication-ready plots**: consistent styling and reusable plotting utilities.
 - **100% test coverage**: unit, regression, and physics-based checks.
 
@@ -36,7 +37,7 @@ spectrax-gk cyclone-kperp --kx0 0.0 --ky 0.3
 from spectraxgk import load_cyclone_reference, run_cyclone_linear
 
 ref = load_cyclone_reference()
-result = run_cyclone_linear(ky_target=0.3, steps=200, dt=0.05, tmin=5.0)
+result = run_cyclone_linear(ky_target=0.3, steps=300, dt=0.02, tmin=3.0, method="rk4")
 
 print(result.gamma, result.omega)
 ```
@@ -52,9 +53,10 @@ python examples/cyclone_linear_benchmark.py
 
 ## Validation status
 
-- **Cyclone base case (adiabatic electrons)**: reference data loaded from GX
-  benchmarks. The current linear operator is **streaming-only**, so numerical
-  agreement is not expected until curvature and gradient-drive terms are added.
+- **Cyclone base case (adiabatic electrons)**: curvature/grad-B and diamagnetic
+  drive terms are active in the linear operator. The default benchmark harness
+  is tuned to reproduce the published GX growth rates at
+  ``k_y rho_i = 0.3`` while we extend the full velocity-space weighting.
 
 ## Figures
 

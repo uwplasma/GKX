@@ -54,6 +54,7 @@ def fit_growth_rate(
         raise ValueError("not enough points to fit")
 
     amp = np.abs(yy)
+    amp = np.maximum(amp, 1.0e-30)
     phase = np.unwrap(np.angle(yy))
 
     A = np.vstack([tt, np.ones_like(tt)]).T

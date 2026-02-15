@@ -7,8 +7,17 @@ from spectraxgk.gyroaverage import J_l_all, gamma0
 from spectraxgk.operators import hermite_streaming
 from spectraxgk.linear import LinearParams, linear_rhs, integrate_linear
 from spectraxgk.analysis import fit_growth_rate, ModeSelection, extract_mode, select_ky_index
-from spectraxgk.benchmarks import load_cyclone_reference, CycloneReference, run_cyclone_linear, CycloneRunResult
-from spectraxgk.plotting import cyclone_reference_figure, set_plot_style
+from spectraxgk.benchmarks import (
+    CycloneComparison,
+    CycloneReference,
+    CycloneRunResult,
+    CycloneScanResult,
+    compare_cyclone_to_reference,
+    load_cyclone_reference,
+    run_cyclone_linear,
+    run_cyclone_scan,
+)
+from spectraxgk.plotting import cyclone_comparison_figure, cyclone_reference_figure, set_plot_style
 
 __all__ = [
     "__version__",
@@ -25,12 +34,16 @@ __all__ = [
     "load_cyclone_reference",
     "fit_growth_rate",
     "CycloneReference",
+    "CycloneScanResult",
+    "CycloneComparison",
     "run_cyclone_linear",
+    "run_cyclone_scan",
+    "compare_cyclone_to_reference",
     "CycloneRunResult",
     "ModeSelection",
     "extract_mode",
     "select_ky_index",
     "cyclone_reference_figure",
+    "cyclone_comparison_figure",
     "set_plot_style",
 ]
-

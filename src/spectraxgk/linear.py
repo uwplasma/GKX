@@ -23,9 +23,30 @@ class LinearParams:
     vth: float = 1.0
     rho: float = 1.0
     kpar_scale: float = 1.0
+    R_over_Ln: float = 2.2
+    R_over_LTi: float = 6.9
+    R_over_LTe: float = 0.0
+    omega_d_scale: float = 1.0
+    omega_star_scale: float = 1.0
+    energy_const: float = 1.0
+    energy_par_coef: float = 0.0
+    energy_perp_coef: float = 0.0
 
     def tree_flatten(self):
-        children = (self.tau_e, self.vth, self.rho, self.kpar_scale)
+        children = (
+            self.tau_e,
+            self.vth,
+            self.rho,
+            self.kpar_scale,
+            self.R_over_Ln,
+            self.R_over_LTi,
+            self.R_over_LTe,
+            self.omega_d_scale,
+            self.omega_star_scale,
+            self.energy_const,
+            self.energy_par_coef,
+            self.energy_perp_coef,
+        )
         return children, None
 
     @classmethod
@@ -58,9 +79,71 @@ def compute_b(grid: SpectralGrid, geom: SAlphaGeometry, rho: float) -> jnp.ndarr
     kx0 = grid.kx[None, :, None]
     ky = grid.ky[:, None, None]
     theta = grid.z[None, None, :]
-    kx_eff = geom.kx_effective(kx0, ky, theta)
-    kperp2 = kx_eff * kx_eff + ky * ky
+    kperp2 = geom.k_perp2(kx0, ky, theta)
     return (rho * rho) * kperp2
+
+
+def apply_hermite_v(G: jnp.ndarray) -> jnp.ndarray:
+    """Multiply Hermite coefficients by v_parallel (ladder form)."""
+
+    Nm = G.shape[1]
+    sqrt_p, sqrt_m = hermite_ladder_coeffs(Nm - 1)
+    sqrt_p = sqrt_p[:Nm]
+    sqrt_m = sqrt_m[:Nm]
+
+    pad = ((0, 0), (1, 1), (0, 0), (0, 0), (0, 0))
+    G_pad = jnp.pad(G, pad)
+    G_plus = G_pad[:, 2:, ...]
+    G_minus = G_pad[:, :-2, ...]
+    return sqrt_p[None, :, None, None, None] * G_plus + sqrt_m[None, :, None, None, None] * G_minus
+
+
+def apply_hermite_v2(G: jnp.ndarray) -> jnp.ndarray:
+    """Multiply Hermite coefficients by v_parallel^2."""
+
+    return apply_hermite_v(apply_hermite_v(G))
+
+
+def apply_laguerre_x(G: jnp.ndarray) -> jnp.ndarray:
+    """Multiply Laguerre coefficients by the perpendicular energy variable."""
+
+    Nl = G.shape[0]
+    l = jnp.arange(Nl)
+    pad = ((1, 1), (0, 0), (0, 0), (0, 0), (0, 0))
+    G_pad = jnp.pad(G, pad)
+    G_plus = G_pad[2:, ...]
+    G_minus = G_pad[:-2, ...]
+    l_col = l[:, None, None, None, None]
+    return (
+        (2.0 * l_col + 1.0) * G
+        - (l_col + 1.0) * G_plus
+        - l_col * G_minus
+    )
+
+
+def energy_operator(
+    G: jnp.ndarray, coeff_const: float, coeff_par: float, coeff_perp: float
+) -> jnp.ndarray:
+    """Apply the energy operator (1 + v_par^2 + mu) in Hermite-Laguerre space."""
+
+    return coeff_const * G + coeff_par * apply_hermite_v2(G) + coeff_perp * apply_laguerre_x(G)
+
+
+def diamagnetic_drive_coeffs(
+    Nl: int,
+    Nm: int,
+    eta_i: jnp.ndarray,
+    coeff_const: float,
+    coeff_par: float,
+    coeff_perp: float,
+) -> jnp.ndarray:
+    """Return velocity-space coefficients for (1 + eta_i(E - 3/2))."""
+
+    e00 = jnp.zeros((Nl, Nm, 1, 1, 1))
+    e00 = e00.at[0, 0, 0, 0, 0].set(1.0)
+    energy_e00 = energy_operator(e00, coeff_const, coeff_par, coeff_perp)
+    coeffs = e00 + eta_i * (energy_e00 - 1.5 * e00)
+    return coeffs[:, :, 0, 0, 0]
 
 
 def quasineutrality_phi(G: jnp.ndarray, Jl: jnp.ndarray, tau_e: float) -> jnp.ndarray:
@@ -134,10 +217,30 @@ def linear_rhs(
     H = build_H(G, Jl, phi)
     stream = streaming_term(H, dz, params.vth)
     dG = -params.kpar_scale * stream
+
+    omega_d = geom.omega_d(grid.kx, grid.ky, grid.z)
+    energy_H = energy_operator(
+        H, params.energy_const, params.energy_par_coef, params.energy_perp_coef
+    )
+    dG = dG + 1j * params.omega_d_scale * omega_d[None, None, ...] * energy_H
+
+    R_over_Ln = jnp.asarray(params.R_over_Ln)
+    eta_i = jnp.where(R_over_Ln == 0.0, 0.0, params.R_over_LTi / R_over_Ln)
+    drive_coeffs = diamagnetic_drive_coeffs(
+        G.shape[0],
+        G.shape[1],
+        eta_i,
+        params.energy_const,
+        params.energy_par_coef,
+        params.energy_perp_coef,
+    )
+    omega_star = params.omega_star_scale * grid.ky[:, None, None] * R_over_Ln
+    phi_drive = omega_star * phi
+    dG = dG + 1j * drive_coeffs[:, :, None, None, None] * Jl[:, None, ...] * phi_drive
     return dG, phi
 
 
-@partial(jax.jit, static_argnames=("steps",))
+@partial(jax.jit, static_argnames=("steps", "method"))
 def integrate_linear(
     G0: jnp.ndarray,
     grid: SpectralGrid,
@@ -145,11 +248,30 @@ def integrate_linear(
     params: LinearParams,
     dt: float,
     steps: int,
+    method: str = "rk4",
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
-    """Time integrate the linear system using forward Euler and JAX scan."""
+    """Time integrate the linear system using a fixed-step explicit scheme."""
+
+    if method not in {"euler", "rk2", "rk4"}:
+        raise ValueError("method must be one of {'euler', 'rk2', 'rk4'}")
+
+    G0 = jnp.asarray(G0, dtype=jnp.complex64)
 
     def step(G, _):
-        dG, phi = linear_rhs(G, grid, geom, params)
-        return G + dt * dG, phi
+        dG, _phi = linear_rhs(G, grid, geom, params)
+        if method == "euler":
+            G_new = G + dt * dG
+        elif method == "rk2":
+            k1 = dG
+            k2, _ = linear_rhs(G + 0.5 * dt * k1, grid, geom, params)
+            G_new = G + dt * k2
+        else:
+            k1 = dG
+            k2, _ = linear_rhs(G + 0.5 * dt * k1, grid, geom, params)
+            k3, _ = linear_rhs(G + 0.5 * dt * k2, grid, geom, params)
+            k4, _ = linear_rhs(G + dt * k3, grid, geom, params)
+            G_new = G + (dt / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+        _dG_new, phi_new = linear_rhs(G_new, grid, geom, params)
+        return G_new, phi_new
 
     return jax.lax.scan(step, G0, None, length=steps)
