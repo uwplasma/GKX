@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+
+import jax
 import jax.numpy as jnp
 
 from spectraxgk.config import GeometryConfig
 
 
+@jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
 class SAlphaGeometry:
     """Simple s-alpha geometry with circular concentric flux surfaces."""
@@ -18,6 +21,14 @@ class SAlphaGeometry:
     R0: float = 1.0
     B0: float = 1.0
     alpha: float = 0.0
+
+    def tree_flatten(self):
+        children = (self.q, self.s_hat, self.epsilon, self.R0, self.B0, self.alpha)
+        return children, None
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        return cls(*children)
 
     @staticmethod
     def from_config(cfg: GeometryConfig) -> "SAlphaGeometry":

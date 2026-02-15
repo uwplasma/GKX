@@ -1,4 +1,5 @@
 recursive-include examples *.py *.toml
 recursive-include docs *.rst *.py
+recursive-include docs/_static *
 recursive-include src/spectraxgk/data *.csv
 include README.md LICENSE

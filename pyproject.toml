@@ -15,6 +15,7 @@ dependencies = [
   "jax>=0.4.20",
   "jaxlib>=0.4.20",
   "numpy>=1.24",
+  "matplotlib>=3.7",
 ]
 
 [project.optional-dependencies]
@@ -24,6 +25,7 @@ dev = [
   "ruff>=0.1.6",
   "mypy>=1.6",
   "sphinx>=7.0",
+  "matplotlib>=3.7",
 ]
 
 [project.scripts]

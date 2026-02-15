@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+
+import jax
 import jax.numpy as jnp
 
 from spectraxgk.config import GridConfig
 
 
+@jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
 class SpectralGrid:
     kx: jnp.ndarray
@@ -16,6 +19,21 @@ class SpectralGrid:
     kx_grid: jnp.ndarray
     ky_grid: jnp.ndarray
     dealias_mask: jnp.ndarray
+
+    def tree_flatten(self):
+        children = (
+            self.kx,
+            self.ky,
+            self.z,
+            self.kx_grid,
+            self.ky_grid,
+            self.dealias_mask,
+        )
+        return children, None
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        return cls(*children)
 
 
 def _fftfreq_phys(n: int, L: float) -> jnp.ndarray:

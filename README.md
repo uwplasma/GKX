@@ -1,33 +1,47 @@
 # SPECTRAX-GK
 
-SPECTRAX-GK is a clean-room rebuild of a gyrokinetic solver in JAX with a
-Hermite-Laguerre velocity-space representation and Fourier real-space
-representation. The initial target is the Cyclone base case in a simple analytic
-s-alpha flux-tube geometry, followed by nonlinear turbulence, electromagnetic
-extensions, and VMEC/DESC geometry.
+SPECTRAX-GK is a clean-room, JAX-native gyrokinetic solver designed for
+performance, differentiability, and rapid experimentation. The code uses a
+Hermite-Laguerre velocity-space representation with Fourier perpendicular
+coordinates in a field-aligned flux-tube geometry. The initial validation target
+is the **Cyclone base case** with adiabatic electrons.
 
-## Status
+![Cyclone base case reference](docs/_static/cyclone_reference.png)
 
-Stage 0 is in progress. This repo currently provides:
-- Hermite and Laguerre basis utilities
-- Analytic s-alpha geometry helpers
-- Flux-tube spectral grids
-- Examples and tests to validate the basis and geometry
+## Highlights
 
-## Install
+- **JAX-first design**: fully differentiable kernels and JIT compilation.
+- **Hermite-Laguerre velocity space**: compact spectral representation.
+- **Field-aligned flux-tube geometry**: s-alpha analytic model (VMEC/DESC next).
+- **Benchmark harness**: reference data + growth-rate extraction tools.
+- **Publication-ready plots**: consistent styling and reusable plotting utilities.
+- **100% test coverage**: unit, regression, and physics-based checks.
+
+## Installation
 
 ```bash
 pip install -e .
 ```
 
-## Quickstart
+## Quickstart (CLI)
 
 ```bash
 spectrax-gk cyclone-info
 spectrax-gk cyclone-kperp --kx0 0.0 --ky 0.3
 ```
 
-Examples:
+## Quickstart (Python)
+
+```python
+from spectraxgk import load_cyclone_reference, run_cyclone_linear
+
+ref = load_cyclone_reference()
+result = run_cyclone_linear(ky_target=0.3, steps=200, dt=0.05, tmin=5.0)
+
+print(result.gamma, result.omega)
+```
+
+## Examples
 
 ```bash
 python examples/basis_orthonormality.py
@@ -36,25 +50,51 @@ python examples/linear_rhs_demo.py
 python examples/cyclone_linear_benchmark.py
 ```
 
-Example input:
+## Validation status
+
+- **Cyclone base case (adiabatic electrons)**: reference data loaded from GX
+  benchmarks. The current linear operator is **streaming-only**, so numerical
+  agreement is not expected until curvature and gradient-drive terms are added.
+
+## Figures
 
 ```bash
-cat examples/cyclone_base_case.toml
+python tools/make_figures.py
 ```
+
+## Documentation
+
+The ReadTheDocs site provides:
+
+- theory and equations
+- numerical discretization and algorithms
+- geometry and flux-tube model
+- benchmark methodology and reference data
+- API reference and examples
 
 ## Roadmap (high level)
 
-1. Linear electrostatic GK operator in Hermite-Laguerre basis
+1. Linear electrostatic GK operator (Hermite-Laguerre)
 2. Cyclone base case linear benchmarks
 3. Nonlinear E x B term and turbulence tests
 4. Electromagnetic extensions, multispecies, advanced collisions
 5. VMEC/DESC geometry adapters and stellarator benchmarks
 6. Performance tuning and profiling
 
+## References
+
+- GX: a GPU-native gyrokinetic turbulence code: [Journal of Plasma Physics](https://www.cambridge.org/core/journals/journal-of-plasma-physics/article/gx-a-gpunative-gyrokinetic-turbulence-code-for-tokamak-and-stellarator-design/2C4BB81955E7E749B95B8B8141E997FA)
+- Laguerre-Hermite pseudo-spectral GK: [arXiv:1708.04029](https://arxiv.org/abs/1708.04029)
+- Gyrokinetic equations (Frieman & Chen, 1982): [OSTI record](https://www.osti.gov/biblio/5235502)
+- Low-frequency kinetic equations (Antonsen & Lane, 1980): [OSTI record](https://www.osti.gov/biblio/5115944)
+- GENE code: [J. Comput. Phys. 230, 6979 (2011)](https://www.sciencedirect.com/science/article/pii/S0021999111002609)
+- stella code: [arXiv:1806.02162](https://arxiv.org/abs/1806.02162)
+
 ## Development notes
 
-- The previous codebase is preserved on the `legacy` branch.
-- This branch is a clean rebuild with a `src/` layout.
+- The previous codebase is preserved on the `legacy` branch and archived in
+  `legacy_archive/`.
+- This branch uses a `src/` layout and enforces 100% test coverage.
 
 ## License
 
