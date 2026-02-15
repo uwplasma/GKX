@@ -364,6 +364,7 @@ def linear_rhs_cached(
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Compute the linear RHS using precomputed geometry arrays."""
 
+    out_dtype = G.dtype
     if G.ndim != 5:
         raise ValueError("G must have shape (Nl, Nm, Ny, Nx, Nz)")
     if operator not in {"gx", "energy"}:
@@ -448,7 +449,7 @@ def linear_rhs_cached(
 
     dG = dG - params.nu * cache.lb_lam * G
     dG = dG - params.nu_hyper * cache.hyper_ratio * G
-    return dG, phi
+    return dG.astype(out_dtype), phi.astype(out_dtype)
 
 
 @partial(jax.jit, static_argnames=("steps", "method", "operator"))
