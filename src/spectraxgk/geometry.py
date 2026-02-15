@@ -52,6 +52,17 @@ class SAlphaGeometry:
 
         return 1.0 / (1.0 + self.epsilon * jnp.cos(theta))
 
+    def gradpar(self) -> jnp.ndarray:
+        """Parallel gradient factor for s-alpha geometry (constant for equal-arc)."""
+
+        return jnp.abs(1.0 / (self.q * self.R0))
+
+    def bgrad(self, theta: jnp.ndarray) -> jnp.ndarray:
+        """Magnetic field gradient term used in mirror force."""
+
+        bmag = self.bmag(theta)
+        return self.gradpar() * self.epsilon * jnp.sin(theta) * bmag
+
     def metric_coeffs(self, theta: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
         """Metric coefficients (gds2, gds21, gds22) for s-alpha geometry."""
 
@@ -86,8 +97,10 @@ class SAlphaGeometry:
         gb0 = cv0
         return cv, gb, cv0, gb0
 
-    def omega_d(self, kx: jnp.ndarray, ky: jnp.ndarray, theta: jnp.ndarray) -> jnp.ndarray:
-        """Magnetic drift frequency for s-alpha geometry."""
+    def drift_components(
+        self, kx: jnp.ndarray, ky: jnp.ndarray, theta: jnp.ndarray
+    ) -> tuple[jnp.ndarray, jnp.ndarray]:
+        """Return cv_d and gb_d drift components in (ky, kx, theta)."""
 
         kx0 = kx[None, :, None]
         ky0 = ky[:, None, None]
@@ -97,4 +110,12 @@ class SAlphaGeometry:
         s_hat_safe = jnp.where(s_hat == 0.0, 1.0, s_hat)
         kx_hat = kx0 / s_hat_safe
         kx_hat = jnp.where(s_hat == 0.0, kx0, kx_hat)
-        return ky0 * (cv + gb) + kx_hat * (cv0 + gb0)
+        cv_d = ky0 * cv + kx_hat * cv0
+        gb_d = ky0 * gb + kx_hat * gb0
+        return cv_d, gb_d
+
+    def omega_d(self, kx: jnp.ndarray, ky: jnp.ndarray, theta: jnp.ndarray) -> jnp.ndarray:
+        """Magnetic drift frequency for s-alpha geometry."""
+
+        cv_d, gb_d = self.drift_components(kx, ky, theta)
+        return cv_d + gb_d

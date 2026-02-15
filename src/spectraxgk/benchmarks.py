@@ -134,7 +134,7 @@ def run_cyclone_scan(
     )
     grid = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
-    cache = build_linear_cache(grid, geom, params, Nl)
+    cache = build_linear_cache(grid, geom, params, Nl, Nm)
 
     gammas = []
     omegas = []
