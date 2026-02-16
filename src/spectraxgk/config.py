@@ -54,9 +54,9 @@ class GeometryConfig:
 class ModelConfig:
     """Dimensionless gradients for the Cyclone base case."""
 
-    R_over_LTi: float = 6.9
+    R_over_LTi: float = 2.49
     R_over_LTe: float = 0.0
-    R_over_Ln: float = 2.2
+    R_over_Ln: float = 0.8
 
     def to_dict(self) -> Dict[str, float]:
         return asdict(self)
@@ -68,7 +68,7 @@ class CycloneBaseCase:
 
     grid: GridConfig = GridConfig(
         Nx=1,
-        Ny=32,
+        Ny=24,
         Nz=96,
         Lx=62.8,
         Ly=62.8,
@@ -77,7 +77,7 @@ class CycloneBaseCase:
         nperiod=2,
     )
     time: TimeConfig = TimeConfig()
-    geometry: GeometryConfig = GeometryConfig()
+    geometry: GeometryConfig = GeometryConfig(R0=2.77778)
     model: ModelConfig = ModelConfig()
 
     def to_dict(self) -> Dict[str, Dict[str, float]]:
