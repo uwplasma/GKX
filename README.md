@@ -4,10 +4,10 @@ SPECTRAX-GK is a clean-room, JAX-native gyrokinetic solver designed for
 performance, differentiability, and rapid experimentation. The code uses a
 Hermite-Laguerre velocity-space representation with Fourier perpendicular
 coordinates in a field-aligned flux-tube geometry. The initial validation target
-is the **Cyclone base case** with adiabatic electrons, alongside reduced ETG
+is the **Cyclone base case** with adiabatic electrons, alongside reduced ITG/ETG
 and MTM linear trend checks.
 
-![Cyclone base case comparison](docs/_static/cyclone_comparison.png)
+![Linear validation summary](docs/_static/linear_summary.png)
 
 ## Highlights
 
@@ -76,10 +76,6 @@ python examples/mtm_linear_benchmark.py
 ```bash
 python tools/make_figures.py
 ```
-
-![ETG linear trend](docs/_static/etg_trend.png)
-
-![MTM linear trend](docs/_static/mtm_trend.png)
 
 ## Documentation
 

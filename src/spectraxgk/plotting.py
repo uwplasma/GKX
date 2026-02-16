@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Tuple
+from dataclasses import dataclass
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -120,6 +121,55 @@ def mtm_trend_figure(
     ax1.plot(nu_values, omega, marker="o", color="#d62728")
     ax1.set_xlabel(r"$\nu$")
     ax1.set_ylabel(r"$\omega a / v_{ti}$")
+
+    fig.tight_layout()
+    return fig, axes
+
+
+@dataclass(frozen=True)
+class LinearValidationPanel:
+    name: str
+    z: np.ndarray
+    eigenfunction: np.ndarray
+    x: np.ndarray
+    gamma: np.ndarray
+    omega: np.ndarray
+    x_label: str
+
+
+def linear_validation_figure(
+    panels: list[LinearValidationPanel],
+) -> Tuple[plt.Figure, np.ndarray]:
+    """Create a multi-panel summary plot of eigenfunctions, growth rates, and frequencies."""
+
+    if len(panels) == 0:
+        raise ValueError("panels must be non-empty")
+    set_plot_style()
+    nrows = len(panels)
+    fig, axes = plt.subplots(nrows, 3, figsize=(12.0, 3.0 * nrows), sharex="col")
+    if nrows == 1:
+        axes = np.asarray([axes])
+
+    for i, panel in enumerate(panels):
+        ax0, ax1, ax2 = axes[i]
+        ax0.plot(panel.z, panel.eigenfunction.real, color="#1f77b4", label="Re")
+        ax0.plot(panel.z, panel.eigenfunction.imag, color="#ff7f0e", linestyle="--", label="Im")
+        ax0.set_ylabel(panel.name)
+        ax0.set_xlabel(r"$\theta$")
+        if i == 0:
+            ax0.set_title("Eigenfunction")
+            ax1.set_title("Growth rate")
+            ax2.set_title("Frequency")
+        if i == 0:
+            ax0.legend(loc="best", fontsize=9)
+
+        ax1.plot(panel.x, panel.gamma, marker="o", color="#2ca02c")
+        ax1.set_xlabel(panel.x_label)
+        ax1.set_ylabel(r"$\gamma a / v_{ti}$")
+
+        ax2.plot(panel.x, panel.omega, marker="o", color="#d62728")
+        ax2.set_xlabel(panel.x_label)
+        ax2.set_ylabel(r"$\omega a / v_{ti}$")
 
     fig.tight_layout()
     return fig, axes
