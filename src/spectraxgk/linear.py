@@ -81,10 +81,15 @@ def _check_positive(x, name: str) -> None:
 
 
 def grad_z_periodic(f: jnp.ndarray, dz: float | jnp.ndarray) -> jnp.ndarray:
-    """Centered periodic derivative along the last axis."""
+    """Spectral periodic derivative along the last axis."""
 
     _check_positive(dz, "dz")
-    return (jnp.roll(f, -1, axis=-1) - jnp.roll(f, 1, axis=-1)) / (2.0 * dz)
+    n = f.shape[-1]
+    dz_val = jnp.asarray(dz, dtype=jnp.real(f).dtype)
+    kz = 2.0 * jnp.pi * jnp.fft.fftfreq(n, d=dz_val)
+    f_hat = jnp.fft.fft(f, axis=-1)
+    df_hat = (1j * kz) * f_hat
+    return jnp.fft.ifft(df_hat, axis=-1)
 
 
 def compute_b(grid: SpectralGrid, geom: SAlphaGeometry, rho: float) -> jnp.ndarray:
@@ -416,7 +421,9 @@ def linear_rhs_cached(
             + (2.0 * l + 1.0) * H
             + l * shift_axis(H, -1, axis=0)
         )
-        dG = dG - icv * params.energy_par_coef * curv_term - igb * params.energy_perp_coef * gradb_term
+        par_coef = jnp.asarray(1.0, dtype=out_dtype)
+        perp_coef = jnp.asarray(1.0, dtype=out_dtype)
+        dG = dG - icv * par_coef * curv_term - igb * perp_coef * gradb_term
 
         iky = imag * params.omega_star_scale * cache.ky[:, None, None]
         l4 = cache.l4
