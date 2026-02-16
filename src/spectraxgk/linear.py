@@ -20,6 +20,7 @@ from spectraxgk.grids import SpectralGrid
 class LinearParams:
     """Parameters for the linear electrostatic operator."""
 
+    charge_sign: float = 1.0
     tau_e: float = 1.0
     vth: float = 1.0
     rho: float = 1.0
@@ -50,6 +51,7 @@ class LinearParams:
 
     def tree_flatten(self):
         children = (
+            self.charge_sign,
             self.tau_e,
             self.vth,
             self.rho,
@@ -327,7 +329,9 @@ def diamagnetic_drive_coeffs(
     return coeffs[:, :, 0, 0, 0]
 
 
-def quasineutrality_phi(G: jnp.ndarray, Jl: jnp.ndarray, tau_e: float) -> jnp.ndarray:
+def quasineutrality_phi(
+    G: jnp.ndarray, Jl: jnp.ndarray, tau_e: float, charge_sign: float = 1.0
+) -> jnp.ndarray:
     """Solve electrostatic quasineutrality for phi.
 
     Uses an adiabatic electron closure:
@@ -336,7 +340,7 @@ def quasineutrality_phi(G: jnp.ndarray, Jl: jnp.ndarray, tau_e: float) -> jnp.nd
 
     _check_positive(tau_e, "tau_e")
     Gm0 = G[:, 0, ...]
-    num = jnp.sum(Jl * Gm0, axis=0)
+    num = jnp.asarray(charge_sign) * jnp.sum(Jl * Gm0, axis=0)
     den = tau_e + 1.0 - jnp.sum(Jl * Jl, axis=0)
     den_safe = jnp.where(den == 0.0, jnp.inf, den)
     return num / den_safe
@@ -411,7 +415,7 @@ def linear_rhs_cached(
         operator = "gx"
     if operator not in {"gx", "energy"}:
         raise ValueError("operator must be one of {'full', 'energy'}")
-    phi = quasineutrality_phi(G, cache.Jl, params.tau_e)
+    phi = quasineutrality_phi(G, cache.Jl, params.tau_e, params.charge_sign)
     phi = jnp.where(cache.mask0, 0.0, phi)
     H = build_H(G, cache.Jl, phi, params.tz)
     stream = streaming_term(H, cache.dz, params.vth)
@@ -455,7 +459,7 @@ def linear_rhs_cached(
         perp_coef = jnp.asarray(1.0, dtype=out_dtype)
         dG = dG - icv * par_coef * curv_term - igb * perp_coef * gradb_term
 
-        iky = imag * params.omega_star_scale * cache.ky[:, None, None]
+        iky = imag * params.charge_sign * params.omega_star_scale * cache.ky[:, None, None]
         l4 = cache.l4
         Jl_m1 = shift_axis(cache.Jl, -1, axis=0)
         Jl_p1 = shift_axis(cache.Jl, 1, axis=0)
@@ -475,7 +479,9 @@ def linear_rhs_cached(
         energy_phi = energy_operator(
             phi_component, params.energy_const, params.energy_par_coef, params.energy_perp_coef
         )
-        dG = dG + imag * params.omega_d_scale * cache.omega_d[None, None, ...] * (G + energy_phi)
+        dG = dG + imag * params.charge_sign * params.omega_d_scale * cache.omega_d[None, None, ...] * (
+            G + energy_phi
+        )
 
         R_over_Ln = jnp.asarray(params.R_over_Ln)
         eta_i = jnp.where(R_over_Ln == 0.0, 0.0, params.R_over_LTi / R_over_Ln)
@@ -487,7 +493,7 @@ def linear_rhs_cached(
             params.energy_par_coef,
             params.energy_perp_coef,
         )
-        omega_star = params.omega_star_scale * cache.ky[:, None, None] * R_over_Ln
+        omega_star = params.charge_sign * params.omega_star_scale * cache.ky[:, None, None] * R_over_Ln
         phi_drive = omega_star * phi
         dG = dG + imag * drive_coeffs[:, :, None, None, None] * cache.Jl[:, None, ...] * phi_drive
 
@@ -607,7 +613,7 @@ def integrate_linear(
             mirror_weight = 0.2
             diag = diag - mirror_weight * bgrad * mirror_diag
         elif operator == "energy":
-            diag = diag + imag * params.omega_d_scale * cache.omega_d[None, None, ...]
+            diag = diag + imag * params.charge_sign * params.omega_d_scale * cache.omega_d[None, None, ...]
         else:
             raise ValueError("operator must be one of {'gx', 'energy'}")
         precond = 1.0 / (1.0 + dt_val * damping - dt_val * diag)

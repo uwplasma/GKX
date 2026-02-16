@@ -87,3 +87,84 @@ class CycloneBaseCase:
             "geometry": self.geometry.to_dict(),
             "model": self.model.to_dict(),
         }
+
+
+@dataclass(frozen=True)
+class ETGModelConfig:
+    """Dimensionless gradients and ratios for a canonical ETG setup."""
+
+    R_over_LTe: float = 6.0
+    R_over_Ln: float = 0.0
+    Te_over_Ti: float = 1.0
+    mass_ratio: float = 100.0
+
+    def to_dict(self) -> Dict[str, float]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class ETGBaseCase:
+    """Parameters for a reduced ETG linear benchmark."""
+
+    grid: GridConfig = GridConfig(
+        Nx=1,
+        Ny=24,
+        Nz=96,
+        Lx=6.28,
+        Ly=6.28,
+        y0=20.0,
+        ntheta=32,
+        nperiod=2,
+    )
+    time: TimeConfig = TimeConfig()
+    geometry: GeometryConfig = GeometryConfig(R0=2.77778)
+    model: ETGModelConfig = ETGModelConfig()
+
+    def to_dict(self) -> Dict[str, Dict[str, float]]:
+        return {
+            "grid": self.grid.to_dict(),
+            "time": self.time.to_dict(),
+            "geometry": self.geometry.to_dict(),
+            "model": self.model.to_dict(),
+        }
+
+
+@dataclass(frozen=True)
+class MTMModelConfig:
+    """Dimensionless gradients and ratios for a reduced MTM setup."""
+
+    R_over_LTe: float = 5.0
+    R_over_Ln: float = 0.0
+    Te_over_Ti: float = 1.0
+    mass_ratio: float = 100.0
+    nu: float = 0.2
+
+    def to_dict(self) -> Dict[str, float]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class MTMBaseCase:
+    """Parameters for a reduced MTM linear benchmark."""
+
+    grid: GridConfig = GridConfig(
+        Nx=1,
+        Ny=24,
+        Nz=96,
+        Lx=6.28,
+        Ly=6.28,
+        y0=20.0,
+        ntheta=32,
+        nperiod=2,
+    )
+    time: TimeConfig = TimeConfig()
+    geometry: GeometryConfig = GeometryConfig(R0=2.77778)
+    model: MTMModelConfig = MTMModelConfig()
+
+    def to_dict(self) -> Dict[str, Dict[str, float]]:
+        return {
+            "grid": self.grid.to_dict(),
+            "time": self.time.to_dict(),
+            "geometry": self.geometry.to_dict(),
+            "model": self.model.to_dict(),
+        }
