@@ -21,8 +21,9 @@ from spectraxgk.grids import build_spectral_grid
 from spectraxgk.linear import LinearParams, build_linear_cache, integrate_linear
 
 
-CYCLONE_OMEGA_D_SCALE = 0.20
-CYCLONE_OMEGA_STAR_SCALE = 0.18
+CYCLONE_OMEGA_D_SCALE = 0.60
+CYCLONE_OMEGA_STAR_SCALE = 8.50
+CYCLONE_RHO_STAR = 0.30
 
 @dataclass(frozen=True)
 class CycloneReference:
@@ -101,7 +102,8 @@ def run_cyclone_linear(
         R_over_LTe=cfg.model.R_over_LTe,
         omega_d_scale=CYCLONE_OMEGA_D_SCALE,
         omega_star_scale=CYCLONE_OMEGA_STAR_SCALE,
-        kpar_scale=geom.gradpar(),
+        rho_star=CYCLONE_RHO_STAR,
+        kpar_scale=float(geom.gradpar()),
     )
 
     ky_index = select_ky_index(np.asarray(grid.ky), ky_target)
@@ -172,7 +174,8 @@ def run_cyclone_scan(
         R_over_LTe=cfg.model.R_over_LTe,
         omega_d_scale=CYCLONE_OMEGA_D_SCALE,
         omega_star_scale=CYCLONE_OMEGA_STAR_SCALE,
-        kpar_scale=geom.gradpar(),
+        rho_star=CYCLONE_RHO_STAR,
+        kpar_scale=float(geom.gradpar()),
     )
     cache = build_linear_cache(grid, geom, params, Nl, Nm)
 
