@@ -75,3 +75,51 @@ def cyclone_comparison_figure(
 
     fig.tight_layout()
     return fig, axes
+
+
+def etg_trend_figure(
+    R_over_LTe: np.ndarray,
+    gamma: np.ndarray,
+    omega: np.ndarray,
+    ky_target: float,
+) -> Tuple[plt.Figure, np.ndarray]:
+    """Create a two-panel ETG trend plot versus R/LTe."""
+
+    set_plot_style()
+    fig, axes = plt.subplots(2, 1, sharex=True, figsize=(5.0, 5.0))
+    ax0, ax1 = axes
+
+    ax0.plot(R_over_LTe, gamma, marker="o", color="#1f77b4")
+    ax0.set_ylabel(r"$\gamma a / v_{ti}$")
+    ax0.set_title(fr"ETG trend at $k_y={ky_target:.2f}$")
+
+    ax1.plot(R_over_LTe, omega, marker="o", color="#ff7f0e")
+    ax1.set_xlabel(r"$R/L_{Te}$")
+    ax1.set_ylabel(r"$\omega a / v_{ti}$")
+
+    fig.tight_layout()
+    return fig, axes
+
+
+def mtm_trend_figure(
+    nu_values: np.ndarray,
+    gamma: np.ndarray,
+    omega: np.ndarray,
+    ky_target: float,
+) -> Tuple[plt.Figure, np.ndarray]:
+    """Create a two-panel MTM trend plot versus collisionality."""
+
+    set_plot_style()
+    fig, axes = plt.subplots(2, 1, sharex=True, figsize=(5.0, 5.0))
+    ax0, ax1 = axes
+
+    ax0.plot(nu_values, gamma, marker="o", color="#2ca02c")
+    ax0.set_ylabel(r"$\gamma a / v_{ti}$")
+    ax0.set_title(fr"MTM trend at $k_y={ky_target:.2f}$")
+
+    ax1.plot(nu_values, omega, marker="o", color="#d62728")
+    ax1.set_xlabel(r"$\nu$")
+    ax1.set_ylabel(r"$\omega a / v_{ti}$")
+
+    fig.tight_layout()
+    return fig, axes

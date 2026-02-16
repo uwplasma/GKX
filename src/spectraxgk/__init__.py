@@ -1,7 +1,7 @@
 """SPECTRAX-GK: a JAX gyrokinetic solver with Hermite-Laguerre velocity space."""
 
 from spectraxgk._version import __version__
-from spectraxgk.config import CycloneBaseCase, GridConfig, TimeConfig
+from spectraxgk.config import CycloneBaseCase, ETGBaseCase, GridConfig, MTMBaseCase, TimeConfig
 from spectraxgk.geometry import SAlphaGeometry
 from spectraxgk.gyroaverage import J_l_all, gamma0
 from spectraxgk.operators import hermite_streaming
@@ -27,17 +27,33 @@ from spectraxgk.benchmarks import (
     CycloneReference,
     CycloneRunResult,
     CycloneScanResult,
+    ETGRunResult,
+    ETGScanResult,
+    MTMRunResult,
+    MTMScanResult,
     compare_cyclone_to_reference,
     load_cyclone_reference,
+    run_etg_linear,
+    run_etg_scan,
+    run_mtm_linear,
+    run_mtm_scan,
     run_cyclone_linear,
     run_cyclone_scan,
 )
-from spectraxgk.plotting import cyclone_comparison_figure, cyclone_reference_figure, set_plot_style
+from spectraxgk.plotting import (
+    cyclone_comparison_figure,
+    cyclone_reference_figure,
+    etg_trend_figure,
+    mtm_trend_figure,
+    set_plot_style,
+)
 
 __all__ = [
     "__version__",
     "CycloneBaseCase",
+    "ETGBaseCase",
     "GridConfig",
+    "MTMBaseCase",
     "TimeConfig",
     "SAlphaGeometry",
     "J_l_all",
@@ -56,6 +72,14 @@ __all__ = [
     "CycloneReference",
     "CycloneScanResult",
     "CycloneComparison",
+    "ETGRunResult",
+    "ETGScanResult",
+    "MTMRunResult",
+    "MTMScanResult",
+    "run_etg_linear",
+    "run_etg_scan",
+    "run_mtm_linear",
+    "run_mtm_scan",
     "run_cyclone_linear",
     "run_cyclone_scan",
     "compare_cyclone_to_reference",
@@ -66,5 +90,7 @@ __all__ = [
     "select_ky_index",
     "cyclone_reference_figure",
     "cyclone_comparison_figure",
+    "etg_trend_figure",
+    "mtm_trend_figure",
     "set_plot_style",
 ]

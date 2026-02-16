@@ -4,7 +4,8 @@ SPECTRAX-GK is a clean-room, JAX-native gyrokinetic solver designed for
 performance, differentiability, and rapid experimentation. The code uses a
 Hermite-Laguerre velocity-space representation with Fourier perpendicular
 coordinates in a field-aligned flux-tube geometry. The initial validation target
-is the **Cyclone base case** with adiabatic electrons.
+is the **Cyclone base case** with adiabatic electrons, alongside reduced ETG
+and MTM linear trend checks.
 
 ![Cyclone base case comparison](docs/_static/cyclone_comparison.png)
 
@@ -20,6 +21,7 @@ is the **Cyclone base case** with adiabatic electrons.
 - **Stable integrators**: explicit, IMEX, and implicit time stepping options.
 - **Cached operators**: precomputed geometry arrays for faster time stepping.
 - **Benchmark harness**: reference data + growth-rate extraction tools + comparisons.
+- **ETG/MTM trend checks**: reduced electron-scale grids for linear trend validation.
 - **Auto window fitting**: robust growth-rate extraction from transient signals.
 - **Publication-ready plots**: consistent styling and reusable plotting utilities.
 - **100% test coverage**: unit, regression, and physics-based checks.
@@ -55,6 +57,8 @@ python examples/basis_orthonormality.py
 python examples/cyclone_geometry.py
 python examples/linear_rhs_demo.py
 python examples/cyclone_linear_benchmark.py
+python examples/etg_linear_benchmark.py
+python examples/mtm_linear_benchmark.py
 ```
 
 ## Validation status
@@ -62,12 +66,20 @@ python examples/cyclone_linear_benchmark.py
 - **Cyclone base case (adiabatic electrons)**: the benchmark harness reproduces
   published growth rates and real frequencies across the reduced ky scan using
   the full drift/mirror operator.
+- **ETG linear trend**: growth rates increase with :math:`R/L_{Te}` on a reduced
+  electron-scale grid; real frequencies follow the electron diamagnetic direction.
+- **MTM linear trend**: collisional electron branch is tracked versus weak
+  collisionality on the reduced electron-scale grid.
 
 ## Figures
 
 ```bash
 python tools/make_figures.py
 ```
+
+![ETG linear trend](docs/_static/etg_trend.png)
+
+![MTM linear trend](docs/_static/mtm_trend.png)
 
 ## Documentation
 
