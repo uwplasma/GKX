@@ -58,6 +58,61 @@ def extract_mode(phi_t: np.ndarray, sel: ModeSelection) -> np.ndarray:
     return extract_mode_time_series(phi_t, sel, method="z_index")
 
 
+def extract_eigenfunction(
+    phi_t: np.ndarray,
+    t: np.ndarray,
+    sel: ModeSelection,
+    method: str = "svd",
+    tmin: float | None = None,
+    tmax: float | None = None,
+) -> np.ndarray:
+    """Extract a normalized eigenfunction in z from phi_t(t, ky, kx, z)."""
+
+    if phi_t.ndim != 4:
+        raise ValueError("phi_t must have shape (t, ky, kx, z)")
+    if t.ndim != 1:
+        raise ValueError("t must be 1D")
+    if t.shape[0] != phi_t.shape[0]:
+        raise ValueError("t and phi_t must have consistent time dimension")
+
+    mask = np.ones_like(t, dtype=bool)
+    if tmin is not None:
+        mask &= t >= tmin
+    if tmax is not None:
+        mask &= t <= tmax
+    data = phi_t[mask, sel.ky_index, sel.kx_index, :]
+    if data.shape[0] == 0:
+        raise ValueError("empty time window for eigenfunction extraction")
+
+    def _snapshot_mode(arr: np.ndarray) -> np.ndarray:
+        norms = np.linalg.norm(arr, axis=1)
+        idx = int(np.argmax(norms))
+        return arr[idx]
+
+    if method == "snapshot":
+        mode = _snapshot_mode(data)
+    elif method == "svd":
+        if np.isnan(data).any():
+            mode = _snapshot_mode(data)
+        else:
+            try:
+                _u, _s, vh = np.linalg.svd(data, full_matrices=False)
+                mode = vh[0]
+                ref = _snapshot_mode(data)
+                phase = np.vdot(mode, ref)
+                if phase != 0.0:
+                    mode = mode * np.exp(-1j * np.angle(phase))
+            except np.linalg.LinAlgError:
+                mode = _snapshot_mode(data)
+    else:
+        raise ValueError("method must be one of {'svd', 'snapshot'}")
+
+    scale = np.max(np.abs(mode))
+    if scale > 0.0:
+        mode = mode / scale
+    return mode
+
+
 def fit_growth_rate(
     t: np.ndarray,
     signal: np.ndarray,
