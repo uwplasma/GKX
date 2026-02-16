@@ -37,6 +37,14 @@ class LinearParams:
     nu_laguerre: float = 2.0
     nu_hyper: float = 0.0
     p_hyper: float = 4.0
+    nu_hyper_l: float = 0.0
+    nu_hyper_m: float = 1.0
+    nu_hyper_lm: float = 0.0
+    p_hyper_l: float = 6.0
+    p_hyper_m: float = 20.0
+    p_hyper_lm: float = 6.0
+    damp_ends_widthfrac: float = 0.125
+    damp_ends_amp: float = 0.1
     tz: float = 1.0
     rho_star: float = 1.0
 
@@ -59,6 +67,14 @@ class LinearParams:
             self.nu_laguerre,
             self.nu_hyper,
             self.p_hyper,
+            self.nu_hyper_l,
+            self.nu_hyper_m,
+            self.nu_hyper_lm,
+            self.p_hyper_l,
+            self.p_hyper_m,
+            self.p_hyper_lm,
+            self.damp_ends_widthfrac,
+            self.damp_ends_amp,
             self.tz,
             self.rho_star,
         )
@@ -129,6 +145,7 @@ class LinearCache:
     ky: jnp.ndarray
     lb_lam: jnp.ndarray
     hyper_ratio: jnp.ndarray
+    damp_profile: jnp.ndarray
     l: jnp.ndarray
     m: jnp.ndarray
     l4: jnp.ndarray
@@ -148,6 +165,7 @@ class LinearCache:
             self.ky,
             self.lb_lam,
             self.hyper_ratio,
+            self.damp_profile,
             self.l,
             self.m,
             self.l4,
@@ -195,6 +213,17 @@ def build_linear_cache(
     l_norm = jnp.maximum(Nl - 1, 1)
     m_norm = jnp.maximum(Nm - 1, 1)
     hyper_ratio = (l / l_norm) ** params.p_hyper + (m / m_norm) ** params.p_hyper
+    Nz = grid.z.size
+    width = jnp.maximum(1, jnp.asarray(jnp.floor(params.damp_ends_widthfrac * Nz), dtype=jnp.int32))
+    idx = jnp.arange(Nz, dtype=jnp.float32)
+    width_f = jnp.asarray(width, dtype=jnp.float32)
+    left_mask = idx <= width_f
+    right_mask = idx >= (Nz - width_f)
+    x_left = jnp.where(left_mask, idx / width_f, 0.0)
+    x_right = jnp.where(right_mask, (Nz - idx) / width_f, 0.0)
+    nu_left = jnp.where(left_mask, 1.0 - 2.0 * x_left * x_left / (1.0 + x_left**4), 0.0)
+    nu_right = jnp.where(right_mask, 1.0 - 2.0 * x_right * x_right / (1.0 + x_right**4), 0.0)
+    damp_profile = jnp.maximum(nu_left, nu_right)
     return LinearCache(
         Jl=Jl,
         b=b,
@@ -207,6 +236,7 @@ def build_linear_cache(
         ky=ky_eff,
         lb_lam=lb_lam,
         hyper_ratio=hyper_ratio,
+        damp_profile=damp_profile,
         l=l,
         m=m,
         l4=l4,
@@ -342,7 +372,7 @@ def linear_rhs(
     grid: SpectralGrid,
     geom: SAlphaGeometry,
     params: LinearParams,
-    operator: str = "gx",
+    operator: str = "full",
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Compute the linear RHS and electrostatic potential.
 
@@ -368,7 +398,7 @@ def linear_rhs_cached(
     G: jnp.ndarray,
     cache: LinearCache,
     params: LinearParams,
-    operator: str = "gx",
+    operator: str = "full",
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Compute the linear RHS using precomputed geometry arrays."""
 
@@ -462,7 +492,26 @@ def linear_rhs_cached(
         dG = dG + imag * drive_coeffs[:, :, None, None, None] * cache.Jl[:, None, ...] * phi_drive
 
     dG = dG - params.nu * cache.lb_lam * H
+
+    Nl = G.shape[0]
+    Nm = G.shape[1]
+    l = cache.l
+    m = cache.m
+    l_norm = jnp.asarray(max(Nl, 1), dtype=l.dtype)
+    m_norm = jnp.asarray(max(Nm, 1), dtype=m.dtype)
+    p_hyper_m_eff = jnp.minimum(jnp.asarray(params.p_hyper_m, dtype=m.dtype), 0.5 * m_norm)
+    ratio_l = (l / l_norm) ** params.p_hyper_l
+    ratio_m = (m / m_norm) ** p_hyper_m_eff
+    ratio_lm = ((2.0 * l + m) / (2.0 * l_norm + m_norm)) ** params.p_hyper_lm
+    scaled_nu_l = l_norm * params.nu_hyper_l
+    scaled_nu_m = m_norm * params.nu_hyper_m
+    hyper_term = -params.vth * (scaled_nu_l * ratio_l + scaled_nu_m * ratio_m) - params.nu_hyper_lm * ratio_lm
+    mask = (m > 2.0) | (l > 1.0)
+    dG = dG + jnp.where(mask, hyper_term, 0.0) * G
     dG = dG - params.nu_hyper * cache.hyper_ratio * G
+    damp = params.damp_ends_amp * cache.damp_profile[None, None, None, None, :]
+    ky_mask = (cache.ky > 0.0)[None, None, :, None, None]
+    dG = dG - ky_mask * damp * H
     return dG.astype(out_dtype), phi.astype(out_dtype)
 
 
@@ -474,7 +523,7 @@ def _integrate_linear_cached(
     dt: float,
     steps: int,
     method: str = "rk4",
-    operator: str = "gx",
+    operator: str = "full",
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Time integrate the linear system using cached geometry arrays."""
 
@@ -524,7 +573,7 @@ def integrate_linear(
     implicit_maxiter: int = 200,
     implicit_iters: int = 3,
     implicit_relax: float = 0.7,
-    operator: str = "gx",
+    operator: str = "full",
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Time integrate the linear system using a fixed-step scheme."""
 

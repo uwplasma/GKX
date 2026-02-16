@@ -42,7 +42,12 @@ def extract_mode_time_series(
         denom = denom if denom != 0.0 else 1.0
         return (data @ ref.conj()) / denom
     if method == "svd":
-        u, s, _vh = np.linalg.svd(data, full_matrices=False)
+        if np.isnan(data).any():
+            return extract_mode_time_series(phi_t, sel, method="project")
+        try:
+            u, s, _vh = np.linalg.svd(data, full_matrices=False)
+        except np.linalg.LinAlgError:
+            return extract_mode_time_series(phi_t, sel, method="project")
         return u[:, 0] * s[0]
     raise ValueError("method must be one of {'z_index', 'max', 'project', 'svd'}")
 
@@ -59,7 +64,7 @@ def fit_growth_rate(
     tmin: float | None = None,
     tmax: float | None = None,
 ) -> Tuple[float, float]:
-    """Fit gamma and omega from a complex signal ~ exp((gamma + i*omega) t)."""
+    """Fit gamma and omega from a complex signal ~ exp((gamma - i*omega) t)."""
 
     if t.ndim != 1:
         raise ValueError("t must be 1D")
@@ -86,7 +91,7 @@ def fit_growth_rate(
     A = np.vstack([tt, np.ones_like(tt)]).T
     gamma, _ = np.linalg.lstsq(A, np.log(amp), rcond=None)[0]
     omega, _ = np.linalg.lstsq(A, phase, rcond=None)[0]
-    return float(gamma), float(omega)
+    return float(gamma), float(-omega)
 
 
 def select_fit_window(
