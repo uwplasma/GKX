@@ -43,7 +43,7 @@ spectrax-gk cyclone-kperp --kx0 0.0 --ky 0.3
 from spectraxgk import load_cyclone_reference, run_cyclone_linear
 
 ref = load_cyclone_reference()
-result = run_cyclone_linear(ky_target=0.3, steps=300, dt=0.02, method="rk4")
+result = run_cyclone_linear(ky_target=0.3, method="rk4")
 
 print(result.gamma, result.omega)
 ```
@@ -59,10 +59,9 @@ python examples/cyclone_linear_benchmark.py
 
 ## Validation status
 
-- **Cyclone base case (adiabatic electrons)**: the benchmark harness defaults
-  to the energy-weighted drift closure to reproduce published growth rates at
-  ``k_y rho_i = 0.3`` while we validate the full drift/mirror operator across
-  the ky scan.
+- **Cyclone base case (adiabatic electrons)**: the benchmark harness reproduces
+  published growth rates and real frequencies across the reduced ky scan using
+  the full drift/mirror operator.
 
 ## Figures
 

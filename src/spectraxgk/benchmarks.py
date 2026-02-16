@@ -21,9 +21,9 @@ from spectraxgk.grids import build_spectral_grid
 from spectraxgk.linear import LinearParams, build_linear_cache, integrate_linear
 
 
-CYCLONE_OMEGA_D_SCALE = 0.60
-CYCLONE_OMEGA_STAR_SCALE = 8.50
-CYCLONE_RHO_STAR = 0.30
+CYCLONE_OMEGA_D_SCALE = 1.0
+CYCLONE_OMEGA_STAR_SCALE = 1.0
+CYCLONE_RHO_STAR = 1.0
 
 @dataclass(frozen=True)
 class CycloneReference:
@@ -73,10 +73,10 @@ def load_cyclone_reference() -> CycloneReference:
 
 def run_cyclone_linear(
     ky_target: float = 0.3,
-    Nl: int = 2,
-    Nm: int = 4,
-    dt: float = 0.05,
-    steps: int = 200,
+    Nl: int = 6,
+    Nm: int = 12,
+    dt: float = 0.01,
+    steps: int = 800,
     method: str = "rk4",
     params: LinearParams | None = None,
     cfg: CycloneBaseCase | None = None,
@@ -88,8 +88,8 @@ def run_cyclone_linear(
     start_fraction: float = 0.2,
     growth_weight: float = 1.0,
     require_positive: bool = True,
-    mode_method: str = "z_index",
-    operator: str = "gx",
+    mode_method: str = "svd",
+    operator: str = "full",
 ) -> CycloneRunResult:
     """Run the linear Cyclone benchmark and extract growth rate."""
 
@@ -145,10 +145,10 @@ def run_cyclone_linear(
 
 def run_cyclone_scan(
     ky_values: np.ndarray,
-    Nl: int = 2,
-    Nm: int = 4,
-    dt: float = 0.05,
-    steps: int = 200,
+    Nl: int = 6,
+    Nm: int = 12,
+    dt: float = 0.01,
+    steps: int = 800,
     method: str = "rk4",
     params: LinearParams | None = None,
     cfg: CycloneBaseCase | None = None,
@@ -160,8 +160,8 @@ def run_cyclone_scan(
     start_fraction: float = 0.2,
     growth_weight: float = 1.0,
     require_positive: bool = True,
-    mode_method: str = "z_index",
-    operator: str = "gx",
+    mode_method: str = "svd",
+    operator: str = "full",
 ) -> CycloneScanResult:
     """Run the linear Cyclone benchmark for a list of ky values."""
 
