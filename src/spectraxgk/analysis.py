@@ -36,14 +36,18 @@ def extract_mode_time_series(
         n = data.shape[0]
         tail_start = int(0.6 * n)
         tail = data[tail_start:] if tail_start < n else data
+        finite_rows = np.isfinite(tail).all(axis=1)
+        if not finite_rows.any():
+            return data[:, sel.z_index]
+        tail = tail[finite_rows]
         ref_idx = int(np.argmax(np.linalg.norm(tail, axis=1)))
         ref = tail[ref_idx]
         denom = np.vdot(ref, ref)
         denom = denom if denom != 0.0 else 1.0
         return (data @ ref.conj()) / denom
     if method == "svd":
-        if np.isnan(data).any():
-            return extract_mode_time_series(phi_t, sel, method="project")
+        if not np.isfinite(data).all():
+            return extract_mode_time_series(phi_t, sel, method="z_index")
         try:
             u, s, _vh = np.linalg.svd(data, full_matrices=False)
         except np.linalg.LinAlgError:
@@ -62,6 +66,7 @@ def extract_eigenfunction(
     phi_t: np.ndarray,
     t: np.ndarray,
     sel: ModeSelection,
+    z: np.ndarray | None = None,
     method: str = "svd",
     tmin: float | None = None,
     tmax: float | None = None,
@@ -90,10 +95,14 @@ def extract_eigenfunction(
         return arr[idx]
 
     if method == "snapshot":
-        mode = _snapshot_mode(data)
+        finite_rows = np.isfinite(data).all(axis=1)
+        data_finite = data[finite_rows] if finite_rows.any() else data
+        mode = _snapshot_mode(data_finite)
     elif method == "svd":
-        if np.isnan(data).any():
-            mode = _snapshot_mode(data)
+        if not np.isfinite(data).all():
+            finite_rows = np.isfinite(data).all(axis=1)
+            data_finite = data[finite_rows] if finite_rows.any() else data
+            mode = _snapshot_mode(data_finite)
         else:
             try:
                 _u, _s, vh = np.linalg.svd(data, full_matrices=False)
@@ -107,9 +116,23 @@ def extract_eigenfunction(
     else:
         raise ValueError("method must be one of {'svd', 'snapshot'}")
 
-    scale = np.max(np.abs(mode))
-    if scale > 0.0:
-        mode = mode / scale
+    if z is not None:
+        if z.ndim != 1:
+            raise ValueError("z must be 1D when provided")
+        if z.shape[0] != mode.shape[0]:
+            raise ValueError("z must have the same length as the eigenfunction")
+        idx0 = int(np.argmin(np.abs(z)))
+        ref = mode[idx0]
+        if ref != 0.0:
+            mode = mode / ref
+        else:
+            scale = np.max(np.abs(mode))
+            if scale > 0.0:
+                mode = mode / scale
+    else:
+        scale = np.max(np.abs(mode))
+        if scale > 0.0:
+            mode = mode / scale
     return mode
 
 
@@ -127,6 +150,13 @@ def fit_growth_rate(
         raise ValueError("signal must be 1D")
     if t.shape[0] != signal.shape[0]:
         raise ValueError("t and signal must have same length")
+
+    finite = np.isfinite(signal)
+    if not np.all(finite):
+        t = t[finite]
+        signal = signal[finite]
+        if t.size < 2:
+            raise ValueError("not enough finite points to fit")
 
     mask = np.ones_like(t, dtype=bool)
     if tmin is not None:
@@ -166,6 +196,13 @@ def select_fit_window(
         raise ValueError("signal must be 1D")
     if t.shape[0] != signal.shape[0]:
         raise ValueError("t and signal must have same length")
+
+    finite = np.isfinite(signal)
+    if not np.all(finite):
+        t = t[finite]
+        signal = signal[finite]
+        if t.size < 2:
+            raise ValueError("not enough finite points to fit")
 
     n = t.shape[0]
     if n < 2:

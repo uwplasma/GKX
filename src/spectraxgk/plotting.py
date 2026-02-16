@@ -78,6 +78,42 @@ def cyclone_comparison_figure(
     return fig, axes
 
 
+def scan_comparison_figure(
+    x: np.ndarray,
+    gamma: np.ndarray,
+    omega: np.ndarray,
+    x_label: str,
+    title: str,
+    x_ref: np.ndarray | None = None,
+    gamma_ref: np.ndarray | None = None,
+    omega_ref: np.ndarray | None = None,
+    label: str = "SPECTRAX-GK",
+    ref_label: str = "Reference",
+) -> Tuple[plt.Figure, np.ndarray]:
+    """Create a two-panel comparison plot for a generic scan."""
+
+    set_plot_style()
+    fig, axes = plt.subplots(2, 1, sharex=True, figsize=(5.0, 5.0))
+    ax0, ax1 = axes
+
+    ax0.plot(x, gamma, marker="o", color="#2ca02c", label=label)
+    if x_ref is not None and gamma_ref is not None:
+        ax0.plot(x_ref, gamma_ref, marker="o", linestyle="None", color="#1f77b4", label=ref_label)
+    ax0.set_ylabel(r"$\gamma a / v_{ti}$")
+    ax0.set_title(title)
+    ax0.legend(loc="best")
+
+    ax1.plot(x, omega, marker="o", color="#d62728", label=label)
+    if x_ref is not None and omega_ref is not None:
+        ax1.plot(x_ref, omega_ref, marker="o", linestyle="None", color="#1f77b4", label=ref_label)
+    ax1.set_xlabel(x_label)
+    ax1.set_ylabel(r"$\omega a / v_{ti}$")
+    ax1.legend(loc="best")
+
+    fig.tight_layout()
+    return fig, axes
+
+
 def etg_trend_figure(
     R_over_LTe: np.ndarray,
     gamma: np.ndarray,
@@ -102,30 +138,6 @@ def etg_trend_figure(
     return fig, axes
 
 
-def mtm_trend_figure(
-    nu_values: np.ndarray,
-    gamma: np.ndarray,
-    omega: np.ndarray,
-    ky_target: float,
-) -> Tuple[plt.Figure, np.ndarray]:
-    """Create a two-panel MTM trend plot versus collisionality."""
-
-    set_plot_style()
-    fig, axes = plt.subplots(2, 1, sharex=True, figsize=(5.0, 5.0))
-    ax0, ax1 = axes
-
-    ax0.plot(nu_values, gamma, marker="o", color="#2ca02c")
-    ax0.set_ylabel(r"$\gamma a / v_{ti}$")
-    ax0.set_title(fr"MTM trend at $k_y={ky_target:.2f}$")
-
-    ax1.plot(nu_values, omega, marker="o", color="#d62728")
-    ax1.set_xlabel(r"$\nu$")
-    ax1.set_ylabel(r"$\omega a / v_{ti}$")
-
-    fig.tight_layout()
-    return fig, axes
-
-
 @dataclass(frozen=True)
 class LinearValidationPanel:
     name: str
@@ -135,6 +147,10 @@ class LinearValidationPanel:
     gamma: np.ndarray
     omega: np.ndarray
     x_label: str
+    x_ref: np.ndarray | None = None
+    gamma_ref: np.ndarray | None = None
+    omega_ref: np.ndarray | None = None
+    ref_label: str = "Reference"
 
 
 def linear_validation_figure(
@@ -163,13 +179,43 @@ def linear_validation_figure(
         if i == 0:
             ax0.legend(loc="best", fontsize=9)
 
-        ax1.plot(panel.x, panel.gamma, marker="o", color="#2ca02c")
+        ax1.plot(panel.x, panel.gamma, marker="o", color="#2ca02c", label="SPECTRAX-GK")
+        if panel.x_ref is not None and panel.gamma_ref is not None:
+            ax1.plot(panel.x_ref, panel.gamma_ref, marker="o", linestyle="None", color="#1f77b4", label=panel.ref_label)
         ax1.set_xlabel(panel.x_label)
         ax1.set_ylabel(r"$\gamma a / v_{ti}$")
 
-        ax2.plot(panel.x, panel.omega, marker="o", color="#d62728")
+        ax2.plot(panel.x, panel.omega, marker="o", color="#d62728", label="SPECTRAX-GK")
+        if panel.x_ref is not None and panel.omega_ref is not None:
+            ax2.plot(panel.x_ref, panel.omega_ref, marker="o", linestyle="None", color="#1f77b4", label=panel.ref_label)
         ax2.set_xlabel(panel.x_label)
         ax2.set_ylabel(r"$\omega a / v_{ti}$")
+        if i == 0:
+            ax1.legend(loc="best", fontsize=9)
+            ax2.legend(loc="best", fontsize=9)
 
     fig.tight_layout()
     return fig, axes
+
+
+def growth_rate_heatmap(
+    x: np.ndarray,
+    y: np.ndarray,
+    gamma: np.ndarray,
+    title: str,
+    x_label: str,
+    y_label: str,
+    cmap: str = "jet",
+) -> Tuple[plt.Figure, plt.Axes]:
+    """Render a growth-rate heatmap versus two gradient axes."""
+
+    set_plot_style()
+    fig, ax = plt.subplots(1, 1, figsize=(5.5, 4.5))
+    extent = (float(x[0]), float(x[-1]), float(y[0]), float(y[-1]))
+    im = ax.imshow(gamma, origin="lower", aspect="auto", extent=extent, cmap=cmap)
+    ax.set_title(title)
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
+    fig.colorbar(im, ax=ax, label=r"$\gamma a / v_{ti}$")
+    fig.tight_layout()
+    return fig, ax
