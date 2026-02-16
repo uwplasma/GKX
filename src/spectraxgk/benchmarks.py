@@ -21,6 +21,9 @@ from spectraxgk.grids import build_spectral_grid
 from spectraxgk.linear import LinearParams, build_linear_cache, integrate_linear
 
 
+CYCLONE_OMEGA_D_SCALE = 0.20
+CYCLONE_OMEGA_STAR_SCALE = 0.18
+
 @dataclass(frozen=True)
 class CycloneReference:
     ky: np.ndarray
@@ -85,20 +88,21 @@ def run_cyclone_linear(
     growth_weight: float = 1.0,
     require_positive: bool = True,
     mode_method: str = "z_index",
-    operator: str = "energy",
+    operator: str = "gx",
 ) -> CycloneRunResult:
     """Run the linear Cyclone benchmark and extract growth rate."""
 
     cfg = cfg or CycloneBaseCase()
+    grid = build_spectral_grid(cfg.grid)
+    geom = SAlphaGeometry.from_config(cfg.geometry)
     params = params or LinearParams(
         R_over_Ln=cfg.model.R_over_Ln,
         R_over_LTi=cfg.model.R_over_LTi,
         R_over_LTe=cfg.model.R_over_LTe,
-        omega_d_scale=0.32,
-        omega_star_scale=1.0,
+        omega_d_scale=CYCLONE_OMEGA_D_SCALE,
+        omega_star_scale=CYCLONE_OMEGA_STAR_SCALE,
+        kpar_scale=geom.gradpar(),
     )
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
 
     ky_index = select_ky_index(np.asarray(grid.ky), ky_target)
     sel = ModeSelection(ky_index=ky_index, kx_index=0, z_index=0)
@@ -155,20 +159,21 @@ def run_cyclone_scan(
     growth_weight: float = 1.0,
     require_positive: bool = True,
     mode_method: str = "z_index",
-    operator: str = "energy",
+    operator: str = "gx",
 ) -> CycloneScanResult:
     """Run the linear Cyclone benchmark for a list of ky values."""
 
     cfg = cfg or CycloneBaseCase()
+    grid = build_spectral_grid(cfg.grid)
+    geom = SAlphaGeometry.from_config(cfg.geometry)
     params = params or LinearParams(
         R_over_Ln=cfg.model.R_over_Ln,
         R_over_LTi=cfg.model.R_over_LTi,
         R_over_LTe=cfg.model.R_over_LTe,
-        omega_d_scale=0.32,
-        omega_star_scale=1.0,
+        omega_d_scale=CYCLONE_OMEGA_D_SCALE,
+        omega_star_scale=CYCLONE_OMEGA_STAR_SCALE,
+        kpar_scale=geom.gradpar(),
     )
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
     cache = build_linear_cache(grid, geom, params, Nl, Nm)
 
     gammas = []

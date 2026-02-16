@@ -114,6 +114,7 @@ class LinearCache:
     """Precomputed arrays for the linear operator."""
 
     Jl: jnp.ndarray
+    b: jnp.ndarray
     omega_d: jnp.ndarray
     cv_d: jnp.ndarray
     gb_d: jnp.ndarray
@@ -132,6 +133,7 @@ class LinearCache:
     def tree_flatten(self):
         children = (
             self.Jl,
+            self.b,
             self.omega_d,
             self.cv_d,
             self.gb_d,
@@ -178,7 +180,7 @@ def build_linear_cache(
     mask0 = (grid.ky == 0.0)[:, None, None] & (grid.kx == 0.0)[None, :, None]
     lb_lam = lenard_bernstein_eigenvalues(Nl, Nm, params.nu_hermite, params.nu_laguerre)[
         :, :, None, None, None
-    ]
+    ] + b[None, None, ...]
     l = jnp.arange(Nl, dtype=jnp.float32)[:, None, None, None, None]
     m = jnp.arange(Nm, dtype=jnp.float32)[None, :, None, None, None]
     l4 = jnp.arange(Nl, dtype=jnp.float32)[:, None, None, None]
@@ -190,6 +192,7 @@ def build_linear_cache(
     hyper_ratio = (l / l_norm) ** params.p_hyper + (m / m_norm) ** params.p_hyper
     return LinearCache(
         Jl=Jl,
+        b=b,
         omega_d=omega_d,
         cv_d=cv_d,
         gb_d=gb_d,
@@ -415,19 +418,21 @@ def linear_rhs_cached(
         )
         dG = dG - icv * params.energy_par_coef * curv_term - igb * params.energy_perp_coef * gradb_term
 
-        R_over_Ln = jnp.asarray(params.R_over_Ln)
-        eta_i = jnp.where(R_over_Ln == 0.0, 0.0, params.R_over_LTi / R_over_Ln)
-        drive_coeffs = diamagnetic_drive_coeffs(
-            G.shape[0],
-            G.shape[1],
-            eta_i,
-            params.energy_const,
-            params.energy_par_coef,
-            params.energy_perp_coef,
+        iky = imag * params.omega_star_scale * cache.ky[:, None, None]
+        l4 = cache.l4
+        Jl_m1 = shift_axis(cache.Jl, -1, axis=0)
+        Jl_p1 = shift_axis(cache.Jl, 1, axis=0)
+        tprim = jnp.asarray(params.R_over_LTi)
+        fprim = jnp.asarray(params.R_over_Ln)
+        drive_m0 = iky * phi * (
+            Jl_m1 * (l4 * tprim)
+            + cache.Jl * (fprim + 2.0 * l4 * tprim)
+            + Jl_p1 * ((l4 + 1.0) * tprim)
         )
-        omega_star = params.omega_star_scale * cache.ky[:, None, None] * R_over_Ln
-        phi_drive = omega_star * phi
-        dG = dG + imag * drive_coeffs[:, :, None, None, None] * cache.Jl[:, None, ...] * phi_drive
+        dG = dG.at[:, 0, ...].add(drive_m0)
+        if Nm > 2:
+            drive_m2 = iky * phi * cache.Jl * (tprim / jnp.sqrt(2.0))
+            dG = dG.at[:, 2, ...].add(drive_m2)
     else:
         phi_component = jnp.zeros_like(G).at[:, 0, ...].set(cache.Jl * phi)
         energy_phi = energy_operator(
@@ -449,7 +454,7 @@ def linear_rhs_cached(
         phi_drive = omega_star * phi
         dG = dG + imag * drive_coeffs[:, :, None, None, None] * cache.Jl[:, None, ...] * phi_drive
 
-    dG = dG - params.nu * cache.lb_lam * G
+    dG = dG - params.nu * cache.lb_lam * H
     dG = dG - params.nu_hyper * cache.hyper_ratio * G
     return dG.astype(out_dtype), phi.astype(out_dtype)
 
@@ -471,8 +476,10 @@ def _integrate_linear_cached(
     if method not in {"euler", "rk2", "rk4", "imex"}:
         raise ValueError("method must be one of {'euler', 'rk2', 'rk4', 'imex'}")
 
-    G0 = jnp.asarray(G0, dtype=jnp.complex64)
+    state_dtype = jnp.result_type(G0, cache.lb_lam, cache.ky, jnp.complex64)
+    G0 = jnp.asarray(G0, dtype=state_dtype)
     damping = params.nu * cache.lb_lam + params.nu_hyper * cache.hyper_ratio
+    damping = damping.astype(jnp.real(G0).dtype)
 
     def step(G, _):
         dG, _phi = linear_rhs_cached(G, cache, params, operator=operator)
@@ -525,10 +532,11 @@ def integrate_linear(
         size = 1
         for dim in shape:
             size *= int(dim)
-        state_dtype = jnp.result_type(G0, jnp.complex64)
+        state_dtype = jnp.result_type(G0, cache.lb_lam, cache.ky, jnp.complex64)
         G = jnp.asarray(G0, dtype=state_dtype)
         dt_val = jnp.asarray(dt, dtype=jnp.real(G).dtype)
         damping = params.nu * cache.lb_lam + params.nu_hyper * cache.hyper_ratio
+        damping = damping.astype(jnp.real(G).dtype)
         l = cache.l
         m = cache.m
         diag = jnp.zeros_like(damping, dtype=state_dtype)

@@ -91,10 +91,9 @@ class SAlphaGeometry:
 
         shear = self.s_hat * theta - self.alpha * jnp.sin(theta)
         base = jnp.cos(theta) + shear * jnp.sin(theta)
-        bmag = self.bmag(theta)
-        cv = (base * bmag) / self.R0
+        cv = base / self.R0
         gb = cv
-        cv0 = (-self.s_hat * jnp.sin(theta) * bmag) / self.R0
+        cv0 = (-self.s_hat * jnp.sin(theta)) / self.R0
         gb0 = cv0
         return cv, gb, cv0, gb0
 
