@@ -52,10 +52,10 @@ class SAlphaGeometry:
 
         return 1.0 / (1.0 + self.epsilon * jnp.cos(theta))
 
-    def gradpar(self) -> jnp.ndarray:
+    def gradpar(self) -> float:
         """Parallel gradient factor for s-alpha geometry (constant for equal-arc)."""
 
-        return jnp.abs(1.0 / (self.q * self.R0))
+        return float(abs(1.0 / (self.q * self.R0)))
 
     def bgrad(self, theta: jnp.ndarray) -> jnp.ndarray:
         """Magnetic field gradient term used in mirror force."""

@@ -4,8 +4,8 @@ SPECTRAX-GK is a clean-room, JAX-native gyrokinetic solver designed for
 performance, differentiability, and rapid experimentation. The code uses a
 Hermite-Laguerre velocity-space representation with Fourier perpendicular
 coordinates in a field-aligned flux-tube geometry. The initial validation target
-is the **Cyclone base case** with adiabatic electrons, alongside reduced ITG/ETG
-and MTM linear trend checks.
+is the **Cyclone base case** with adiabatic electrons, alongside kinetic-electron
+ITG/ETG, KBM beta scans, and TEM linear checks.
 
 ![Linear validation summary](docs/_static/linear_summary.png)
 
@@ -15,13 +15,13 @@ and MTM linear trend checks.
 - **Hermite-Laguerre velocity space**: compact spectral representation.
 - **Field-aligned flux-tube geometry**: s-alpha analytic model (VMEC/DESC next).
 - **Full drift/mirror physics**: curvature/grad-B/mirror couplings + diamagnetic drive.
-- **Operator modes**: ``operator="full"`` (full drift/mirror) or
-  ``operator="energy"`` (reference-matching closure).
+- **Electromagnetic fields**: coupled :math:`(\\phi, A_\\parallel, B_\\parallel)` solve.
+- **Term toggles**: switch linear-operator components via ``LinearTerms``.
 - **Field-aligned grid controls**: ``y0``, ``ntheta``, and ``nperiod`` inputs.
 - **Stable integrators**: explicit, IMEX, and implicit time stepping options.
 - **Cached operators**: precomputed geometry arrays for faster time stepping.
 - **Benchmark harness**: reference data + growth-rate extraction tools + comparisons.
-- **ETG/MTM trend checks**: reduced electron-scale grids for linear trend validation.
+- **ETG trend checks**: reduced electron-scale grids for linear trend validation.
 - **Auto window fitting**: robust growth-rate extraction from transient signals.
 - **Publication-ready plots**: consistent styling and reusable plotting utilities.
 - **100% test coverage**: unit, regression, and physics-based checks.
@@ -58,7 +58,9 @@ python examples/cyclone_geometry.py
 python examples/linear_rhs_demo.py
 python examples/cyclone_linear_benchmark.py
 python examples/etg_linear_benchmark.py
-python examples/mtm_linear_benchmark.py
+python examples/kinetic_linear_benchmark.py
+python examples/kbm_beta_scan.py
+python examples/tem_linear_benchmark.py
 ```
 
 ## Validation status
@@ -66,10 +68,11 @@ python examples/mtm_linear_benchmark.py
 - **Cyclone base case (adiabatic electrons)**: the benchmark harness reproduces
   published growth rates and real frequencies across the reduced ky scan using
   the full drift/mirror operator.
-- **ETG linear trend**: growth rates increase with :math:`R/L_{Te}` on a reduced
-  electron-scale grid; real frequencies follow the electron diamagnetic direction.
-- **MTM linear trend**: collisional electron branch is tracked versus weak
-  collisionality on the reduced electron-scale grid.
+- **ETG linear trend**: growth rates remain positive across reduced electron-scale
+  gradients; real frequencies follow the electron diamagnetic direction.
+- **KBM beta scan**: electromagnetic transition between ITG and KBM branches.
+- **TEM benchmark**: low-:math:`k_y` trapped-electron branch on the published
+  s-alpha parameter set.
 
 ## Figures
 
@@ -98,7 +101,6 @@ The ReadTheDocs site provides:
 
 ## References
 
-- GX: a GPU-native gyrokinetic turbulence code: [Journal of Plasma Physics](https://www.cambridge.org/core/journals/journal-of-plasma-physics/article/gx-a-gpunative-gyrokinetic-turbulence-code-for-tokamak-and-stellarator-design/2C4BB81955E7E749B95B8B8141E997FA)
 - Laguerre-Hermite pseudo-spectral GK: [arXiv:1708.04029](https://arxiv.org/abs/1708.04029)
 - Gyrokinetic equations (Frieman & Chen, 1982): [OSTI record](https://www.osti.gov/biblio/5235502)
 - Low-frequency kinetic equations (Antonsen & Lane, 1980): [OSTI record](https://www.osti.gov/biblio/5115944)

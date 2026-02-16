@@ -24,6 +24,7 @@ dev = [
   "pytest-cov>=4.0",
   "ruff>=0.1.6",
   "mypy>=1.6",
+  "mkdocs>=1.5",
   "sphinx>=7.0",
   "matplotlib>=3.7",
 ]
