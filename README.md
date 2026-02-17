@@ -50,17 +50,40 @@ result = run_cyclone_linear(ky_target=0.3, method="rk4")
 print(result.gamma, result.omega)
 ```
 
+## Config-driven integration
+
+```python
+import jax.numpy as jnp
+from spectraxgk import CycloneBaseCase, LinearParams, integrate_linear_from_config
+from spectraxgk.geometry import SAlphaGeometry
+from spectraxgk.grids import build_spectral_grid
+
+cfg = CycloneBaseCase()
+grid = build_spectral_grid(cfg.grid)
+geom = SAlphaGeometry.from_config(cfg.geometry)
+params = LinearParams()
+
+G0 = jnp.zeros((2, 2, grid.ky.size, grid.kx.size, grid.z.size), dtype=jnp.complex64)
+G0 = G0.at[0, 0, 0, 0, :].set(1.0e-3 + 0.0j)
+
+G_t, phi_t = integrate_linear_from_config(G0, grid, geom, params, cfg.time)
+```
+
 ## Examples
 
 ```bash
 python examples/basis_orthonormality.py
 python examples/cyclone_geometry.py
+python examples/diffrax_linear_demo.py
 python examples/linear_rhs_demo.py
+python examples/example.py
 python examples/cyclone_linear_benchmark.py
 python examples/etg_linear_benchmark.py
 python examples/kinetic_linear_benchmark.py
+python examples/gradB_coupling_hl_1d.py
 python examples/kbm_beta_scan.py
 python examples/tem_linear_benchmark.py
+python examples/two_stream_hermite_1d.py
 ```
 
 ## Validation status
@@ -79,6 +102,64 @@ python examples/tem_linear_benchmark.py
 ```bash
 python tools/make_figures.py
 ```
+
+## Figure parameters
+
+### Cyclone base case (adiabatic electrons, GX Fig. 1)
+
+| Parameter | Value |
+| --- | --- |
+| Geometry | q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778 |
+| Gradients | R/LTi=2.49, R/LTe=0.0, R/Ln=0.8 |
+| Species | ions (Z=1, m=1), adiabatic electrons (tau_e=1) |
+| Electromagnetic | beta=0, A_parallel=off, B_parallel=off |
+| Collisions | nu_i=1.0e-2, hypercollisions=off |
+| Operator toggles | streaming/mirror/curvature/grad-B/diamagnetic on; nonlinear off |
+| Grid | Nx=1, Ny=24, Nz=96, y0=20, ntheta=32, nperiod=2 |
+| Velocity resolution | Nl=6, Nm=16 |
+| Reference | GX paper Fig. 1 |
+
+### ETG (electron scale, GX Fig. 2b)
+
+| Parameter | Value |
+| --- | --- |
+| Geometry | q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778 |
+| Gradients | R/LTi=2.49, R/LTe=2.49, R/Ln=0.8 |
+| Species | ions + electrons, Te/Ti=1, mi/me=3670 |
+| Electromagnetic | beta=1.0e-5, A_parallel=on, B_parallel=on |
+| Collisions | nu_i=1.0e-2, nu_e=1.65e-4, hypercollisions=off |
+| Operator toggles | streaming/mirror/curvature/grad-B/diamagnetic on; nonlinear off |
+| Grid | Nx=1, Ny=24, Nz=96, y0=0.2, ntheta=32, nperiod=2 |
+| Velocity resolution | Nl=6, Nm=16 |
+| Reference | GX paper Fig. 2b |
+
+### KBM beta scan (GX Fig. 3)
+
+| Parameter | Value |
+| --- | --- |
+| Geometry | q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778 |
+| Gradients | R/LTi=2.49, R/LTe=2.49, R/Ln=0.8 |
+| Species | ions + electrons, Te/Ti=1, mi/me=3670 |
+| Electromagnetic | beta_ref scan (values from `kbm_reference.csv`), A_parallel=on, B_parallel=off |
+| Collisions | nu_i=0, nu_e=0, hypercollisions=off |
+| Operator toggles | streaming/mirror/curvature/grad-B/diamagnetic on; nonlinear off |
+| Grid | Nx=1, Ny=12, Nz=96, y0=10, ntheta=32, nperiod=2 |
+| Velocity resolution | Nl=6, Nm=16 |
+| Reference | GX paper Fig. 3 |
+
+### TEM (steep gradients, Frei et al. 2022 Fig. 4)
+
+| Parameter | Value |
+| --- | --- |
+| Geometry | q=2.7, s_hat=0.5, epsilon=0.18, R0=2.77778, alpha=0 |
+| Gradients | R/LTi=20, R/LTe=20, R/Ln=20 |
+| Species | ions + electrons, Te/Ti=1, mi/me=370 |
+| Electromagnetic | beta=1.0e-4, A_parallel=on, B_parallel=off |
+| Collisions | nu_i=0, nu_e=0, hypercollisions=off |
+| Operator toggles | streaming/mirror/curvature/grad-B/diamagnetic on; nonlinear off |
+| Grid | Nx=1, Ny=24, Nz=160, y0=20, ntheta=32, nperiod=3 |
+| Velocity resolution | Nl=6, Nm=16 |
+| Reference | Frei et al. 2022 Fig. 4 |
 
 ## Documentation
 
