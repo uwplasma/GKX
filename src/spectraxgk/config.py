@@ -89,7 +89,7 @@ class CycloneBaseCase:
         ntheta=32,
         nperiod=2,
     )
-    time: TimeConfig = TimeConfig(t_max=40.0, dt=0.1, method="rk4")
+    time: TimeConfig = TimeConfig(t_max=8.0, dt=0.01, method="rk2")
     geometry: GeometryConfig = GeometryConfig(R0=2.77778)
     model: ModelConfig = ModelConfig()
 

@@ -86,6 +86,14 @@ python examples/tem_linear_benchmark.py
 python examples/two_stream_hermite_1d.py
 ```
 
+Diffrax can be enabled for the ETG/TEM/KBM examples with:
+
+```bash
+python examples/etg_linear_benchmark.py --diffrax --solver Tsit5 --adaptive
+python examples/tem_linear_benchmark.py --diffrax --solver Tsit5 --adaptive
+python examples/kbm_beta_scan.py --diffrax --solver Tsit5 --adaptive
+```
+
 ## Validation status
 
 - **Cyclone base case (adiabatic electrons)**: the benchmark harness reproduces
@@ -101,6 +109,12 @@ python examples/two_stream_hermite_1d.py
 
 ```bash
 python tools/make_figures.py
+```
+
+## Integrator benchmark
+
+```bash
+python tools/benchmark_integrators.py
 ```
 
 ## Figure parameters
