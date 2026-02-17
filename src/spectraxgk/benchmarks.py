@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import numpy as np
 from importlib import resources
 
@@ -21,10 +21,12 @@ from spectraxgk.config import (
     KineticElectronBaseCase,
     KBMBaseCase,
     TEMBaseCase,
+    TimeConfig,
 )
 from spectraxgk.geometry import SAlphaGeometry
 from spectraxgk.grids import build_spectral_grid
 from spectraxgk.linear import LinearParams, LinearTerms, build_linear_cache, integrate_linear
+from spectraxgk.runners import integrate_linear_from_config
 from spectraxgk.species import Species, build_linear_params
 
 
@@ -163,6 +165,9 @@ def _two_species_params(
     omega_star_scale: float,
     rho_star: float,
     beta_override: float | None = None,
+    fapar_override: float | None = None,
+    damp_ends_amp: float | None = None,
+    damp_ends_widthfrac: float | None = None,
 ) -> LinearParams:
     """Build LinearParams for a two-species kinetic model (ions + electrons)."""
 
@@ -197,7 +202,7 @@ def _two_species_params(
         fprim=float(model.R_over_Ln),
         nu=nu_e,
     )
-    return build_linear_params(
+    params = build_linear_params(
         [ion, electron],
         tau_e=0.0,
         kpar_scale=kpar_scale,
@@ -207,6 +212,13 @@ def _two_species_params(
         beta=beta,
         fapar=1.0 if beta > 0.0 else 0.0,
     )
+    if fapar_override is not None:
+        params = replace(params, fapar=float(fapar_override))
+    if damp_ends_amp is not None:
+        params = replace(params, damp_ends_amp=float(damp_ends_amp))
+    if damp_ends_widthfrac is not None:
+        params = replace(params, damp_ends_widthfrac=float(damp_ends_widthfrac))
+    return params
 
 
 def run_cyclone_linear(
@@ -226,6 +238,7 @@ def run_cyclone_linear(
     start_fraction: float = 0.2,
     growth_weight: float = 1.0,
     require_positive: bool = True,
+    min_amp_fraction: float = 0.0,
     mode_method: str = "svd",
     terms: LinearTerms | None = None,
 ) -> CycloneRunResult:
@@ -242,7 +255,12 @@ def run_cyclone_linear(
         omega_star_scale=CYCLONE_OMEGA_STAR_SCALE,
         rho_star=CYCLONE_RHO_STAR,
         kpar_scale=float(geom.gradpar()),
+        nu=cfg.model.nu_i,
+        damp_ends_amp=0.0,
+        damp_ends_widthfrac=0.0,
     )
+    if terms is None:
+        terms = LinearTerms(hypercollisions=0.0)
 
     ky_index = select_ky_index(np.asarray(grid.ky), ky_target)
     sel = ModeSelection(ky_index=ky_index, kx_index=0, z_index=0)
@@ -267,6 +285,7 @@ def run_cyclone_linear(
             start_fraction=start_fraction,
             growth_weight=growth_weight,
             require_positive=require_positive,
+            min_amp_fraction=min_amp_fraction,
         )
     else:
         gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
@@ -285,8 +304,8 @@ def run_cyclone_scan(
     ky_values: np.ndarray,
     Nl: int = 6,
     Nm: int = 12,
-    dt: float = 0.01,
-    steps: int = 800,
+    dt: float | np.ndarray = 0.01,
+    steps: int | np.ndarray = 800,
     method: str = "rk4",
     params: LinearParams | None = None,
     cfg: CycloneBaseCase | None = None,
@@ -298,6 +317,7 @@ def run_cyclone_scan(
     start_fraction: float = 0.2,
     growth_weight: float = 1.0,
     require_positive: bool = True,
+    min_amp_fraction: float = 0.0,
     mode_method: str = "svd",
     terms: LinearTerms | None = None,
 ) -> CycloneScanResult:
@@ -314,14 +334,20 @@ def run_cyclone_scan(
         omega_star_scale=CYCLONE_OMEGA_STAR_SCALE,
         rho_star=CYCLONE_RHO_STAR,
         kpar_scale=float(geom.gradpar()),
+        nu=cfg.model.nu_i,
+        damp_ends_amp=0.0,
+        damp_ends_widthfrac=0.0,
     )
+    if terms is None:
+        terms = LinearTerms(hypercollisions=0.0)
     cache = build_linear_cache(grid, geom, params, Nl, Nm)
 
     gammas = []
     omegas = []
     ky_out = []
-    t = np.arange(steps) * dt
-    for ky in ky_values:
+    for i, ky in enumerate(ky_values):
+        dt_i = float(dt[i]) if isinstance(dt, np.ndarray) else float(dt)
+        steps_i = int(steps[i]) if isinstance(steps, np.ndarray) else int(steps)
         ky_index = select_ky_index(np.asarray(grid.ky), float(ky))
         sel = ModeSelection(ky_index=ky_index, kx_index=0, z_index=0)
 
@@ -334,14 +360,15 @@ def run_cyclone_scan(
             grid,
             geom,
             params,
-            dt=dt,
-            steps=steps,
+            dt=dt_i,
+            steps=steps_i,
             method=method,
             cache=cache,
             terms=terms,
         )
 
         phi_t_np = np.asarray(phi_t)
+        t = np.arange(steps_i) * dt_i
         signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
         if auto_window and tmin is None and tmax is None:
             gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
@@ -352,6 +379,7 @@ def run_cyclone_scan(
                 start_fraction=start_fraction,
                 growth_weight=growth_weight,
                 require_positive=require_positive,
+                min_amp_fraction=min_amp_fraction,
             )
         else:
             gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
@@ -392,6 +420,7 @@ def run_etg_linear(
     method: str = "rk4",
     params: LinearParams | None = None,
     cfg: ETGBaseCase | None = None,
+    time_cfg: TimeConfig | None = None,
     tmin: float | None = None,
     tmax: float | None = None,
     auto_window: bool = True,
@@ -400,7 +429,8 @@ def run_etg_linear(
     start_fraction: float = 0.2,
     growth_weight: float = 1.0,
     require_positive: bool = True,
-    mode_method: str = "svd",
+    min_amp_fraction: float = 0.0,
+    mode_method: str = "project",
     terms: LinearTerms | None = None,
 ) -> LinearRunResult:
     """Run an ETG linear benchmark and extract growth rate."""
@@ -415,19 +445,37 @@ def run_etg_linear(
             omega_d_scale=ETG_OMEGA_D_SCALE,
             omega_star_scale=ETG_OMEGA_STAR_SCALE,
             rho_star=ETG_RHO_STAR,
+            damp_ends_amp=0.0,
+            damp_ends_widthfrac=0.0,
         )
+    if terms is None:
+        terms = LinearTerms(hypercollisions=0.0)
 
     ky_index = select_ky_index(np.asarray(grid.ky), ky_target)
     sel = ModeSelection(ky_index=ky_index, kx_index=0, z_index=0)
 
     ns = 2
     G0 = np.zeros((ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
-    G0[0, 0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
+    G0[1, 0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
 
     G0_jax = jnp.asarray(G0)
-    _, phi_t = integrate_linear(
-        G0_jax, grid, geom, params, dt=dt, steps=steps, method=method, terms=terms
-    )
+    if time_cfg is not None:
+        dt = float(time_cfg.dt)
+        steps = int(round(time_cfg.t_max / time_cfg.dt))
+        cache = build_linear_cache(grid, geom, params, Nl, Nm)
+        _, phi_t = integrate_linear_from_config(
+            G0_jax,
+            grid,
+            geom,
+            params,
+            time_cfg,
+            cache=cache,
+            terms=terms,
+        )
+    else:
+        _, phi_t = integrate_linear(
+            G0_jax, grid, geom, params, dt=dt, steps=steps, method=method, terms=terms
+        )
 
     phi_t_np = np.asarray(phi_t)
     t = np.arange(steps) * dt
@@ -441,6 +489,7 @@ def run_etg_linear(
             start_fraction=start_fraction,
             growth_weight=growth_weight,
             require_positive=require_positive,
+            min_amp_fraction=min_amp_fraction,
         )
     else:
         gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
@@ -459,8 +508,8 @@ def run_etg_scan(
     ky_values: np.ndarray,
     Nl: int = 6,
     Nm: int = 12,
-    dt: float = 0.01,
-    steps: int = 800,
+    dt: float | np.ndarray = 0.01,
+    steps: int | np.ndarray = 800,
     method: str = "rk4",
     params: LinearParams | None = None,
     cfg: ETGBaseCase | None = None,
@@ -472,7 +521,8 @@ def run_etg_scan(
     start_fraction: float = 0.2,
     growth_weight: float = 1.0,
     require_positive: bool = True,
-    mode_method: str = "svd",
+    min_amp_fraction: float = 0.0,
+    mode_method: str = "project",
     terms: LinearTerms | None = None,
 ) -> LinearScanResult:
     """Run an ETG linear benchmark for a list of ky values."""
@@ -487,20 +537,25 @@ def run_etg_scan(
             omega_d_scale=ETG_OMEGA_D_SCALE,
             omega_star_scale=ETG_OMEGA_STAR_SCALE,
             rho_star=ETG_RHO_STAR,
+            damp_ends_amp=0.0,
+            damp_ends_widthfrac=0.0,
         )
+    if terms is None:
+        terms = LinearTerms(hypercollisions=0.0)
     cache = build_linear_cache(grid, geom, params, Nl, Nm)
 
     gammas = []
     omegas = []
     ky_out = []
-    t = np.arange(steps) * dt
-    for ky in ky_values:
+    for i, ky in enumerate(ky_values):
+        dt_i = float(dt[i]) if isinstance(dt, np.ndarray) else float(dt)
+        steps_i = int(steps[i]) if isinstance(steps, np.ndarray) else int(steps)
         ky_index = select_ky_index(np.asarray(grid.ky), float(ky))
         sel = ModeSelection(ky_index=ky_index, kx_index=0, z_index=0)
 
         ns = 2
         G0 = np.zeros((ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
-        G0[0, 0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
+        G0[1, 0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
 
         G0_jax = jnp.asarray(G0)
         _, phi_t = integrate_linear(
@@ -508,14 +563,15 @@ def run_etg_scan(
             grid,
             geom,
             params,
-            dt=dt,
-            steps=steps,
+            dt=dt_i,
+            steps=steps_i,
             method=method,
             cache=cache,
             terms=terms,
         )
 
         phi_t_np = np.asarray(phi_t)
+        t = np.arange(steps_i) * dt_i
         signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
         if auto_window and tmin is None and tmax is None:
             gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
@@ -526,6 +582,7 @@ def run_etg_scan(
                 start_fraction=start_fraction,
                 growth_weight=growth_weight,
                 require_positive=require_positive,
+                min_amp_fraction=min_amp_fraction,
             )
         else:
             gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
@@ -553,7 +610,8 @@ def run_kinetic_linear(
     start_fraction: float = 0.2,
     growth_weight: float = 1.0,
     require_positive: bool = True,
-    mode_method: str = "svd",
+    min_amp_fraction: float = 0.0,
+    mode_method: str = "project",
     terms: LinearTerms | None = None,
 ) -> LinearRunResult:
     """Run a kinetic-electron ITG/TEM benchmark and extract growth rate."""
@@ -568,14 +626,18 @@ def run_kinetic_linear(
             omega_d_scale=Kinetic_OMEGA_D_SCALE,
             omega_star_scale=Kinetic_OMEGA_STAR_SCALE,
             rho_star=Kinetic_RHO_STAR,
+            damp_ends_amp=0.0,
+            damp_ends_widthfrac=0.0,
         )
+    if terms is None:
+        terms = LinearTerms(hypercollisions=0.0)
 
     ky_index = select_ky_index(np.asarray(grid.ky), ky_target)
     sel = ModeSelection(ky_index=ky_index, kx_index=0, z_index=0)
 
     ns = 2
     G0 = np.zeros((ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
-    G0[0, 0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
+    G0[1, 0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
 
     G0_jax = jnp.asarray(G0)
     _, phi_t = integrate_linear(
@@ -594,6 +656,7 @@ def run_kinetic_linear(
             start_fraction=start_fraction,
             growth_weight=growth_weight,
             require_positive=require_positive,
+            min_amp_fraction=min_amp_fraction,
         )
     else:
         gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
@@ -612,8 +675,8 @@ def run_kinetic_scan(
     ky_values: np.ndarray,
     Nl: int = 6,
     Nm: int = 12,
-    dt: float = 0.01,
-    steps: int = 800,
+    dt: float | np.ndarray = 0.01,
+    steps: int | np.ndarray = 800,
     method: str = "rk4",
     params: LinearParams | None = None,
     cfg: KineticElectronBaseCase | None = None,
@@ -625,7 +688,8 @@ def run_kinetic_scan(
     start_fraction: float = 0.2,
     growth_weight: float = 1.0,
     require_positive: bool = True,
-    mode_method: str = "svd",
+    min_amp_fraction: float = 0.0,
+    mode_method: str = "project",
     terms: LinearTerms | None = None,
 ) -> LinearScanResult:
     """Run a kinetic-electron ITG/TEM benchmark for a list of ky values."""
@@ -640,20 +704,25 @@ def run_kinetic_scan(
             omega_d_scale=Kinetic_OMEGA_D_SCALE,
             omega_star_scale=Kinetic_OMEGA_STAR_SCALE,
             rho_star=Kinetic_RHO_STAR,
+            damp_ends_amp=0.0,
+            damp_ends_widthfrac=0.0,
         )
+    if terms is None:
+        terms = LinearTerms(hypercollisions=0.0)
     cache = build_linear_cache(grid, geom, params, Nl, Nm)
 
     gammas = []
     omegas = []
     ky_out = []
-    t = np.arange(steps) * dt
-    for ky in ky_values:
+    for i, ky in enumerate(ky_values):
+        dt_i = float(dt[i]) if isinstance(dt, np.ndarray) else float(dt)
+        steps_i = int(steps[i]) if isinstance(steps, np.ndarray) else int(steps)
         ky_index = select_ky_index(np.asarray(grid.ky), float(ky))
         sel = ModeSelection(ky_index=ky_index, kx_index=0, z_index=0)
 
         ns = 2
         G0 = np.zeros((ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
-        G0[0, 0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
+        G0[1, 0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
 
         G0_jax = jnp.asarray(G0)
         _, phi_t = integrate_linear(
@@ -661,14 +730,15 @@ def run_kinetic_scan(
             grid,
             geom,
             params,
-            dt=dt,
-            steps=steps,
+            dt=dt_i,
+            steps=steps_i,
             method=method,
             cache=cache,
             terms=terms,
         )
 
         phi_t_np = np.asarray(phi_t)
+        t = np.arange(steps_i) * dt_i
         signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
         if auto_window and tmin is None and tmax is None:
             gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
@@ -679,6 +749,7 @@ def run_kinetic_scan(
                 start_fraction=start_fraction,
                 growth_weight=growth_weight,
                 require_positive=require_positive,
+                min_amp_fraction=min_amp_fraction,
             )
         else:
             gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
@@ -706,7 +777,8 @@ def run_tem_linear(
     start_fraction: float = 0.2,
     growth_weight: float = 1.0,
     require_positive: bool = True,
-    mode_method: str = "svd",
+    min_amp_fraction: float = 0.0,
+    mode_method: str = "project",
     terms: LinearTerms | None = None,
 ) -> LinearRunResult:
     """Run the TEM benchmark and extract growth rate."""
@@ -719,16 +791,20 @@ def run_tem_linear(
             cfg.model,
             kpar_scale=float(geom.gradpar()),
             omega_d_scale=TEM_OMEGA_D_SCALE,
-            omega_star_scale=TEM_OMEGA_STAR_SCALE,
+            omega_star_scale=TEM_OMEGA_STAR_SCALE / float(cfg.geometry.R0),
             rho_star=TEM_RHO_STAR,
+            damp_ends_amp=0.0,
+            damp_ends_widthfrac=0.0,
         )
+    if terms is None:
+        terms = LinearTerms(bpar=0.0, hypercollisions=0.0)
 
     ky_index = select_ky_index(np.asarray(grid.ky), ky_target)
     sel = ModeSelection(ky_index=ky_index, kx_index=0, z_index=0)
 
     ns = 2
     G0 = np.zeros((ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
-    G0[0, 0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
+    G0[1, 0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
 
     G0_jax = jnp.asarray(G0)
     _, phi_t = integrate_linear(
@@ -747,6 +823,7 @@ def run_tem_linear(
             start_fraction=start_fraction,
             growth_weight=growth_weight,
             require_positive=require_positive,
+            min_amp_fraction=min_amp_fraction,
         )
     else:
         gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
@@ -765,11 +842,12 @@ def run_tem_scan(
     ky_values: np.ndarray,
     Nl: int = 6,
     Nm: int = 12,
-    dt: float = 0.01,
-    steps: int = 800,
+    dt: float | np.ndarray = 0.01,
+    steps: int | np.ndarray = 800,
     method: str = "rk4",
     params: LinearParams | None = None,
     cfg: TEMBaseCase | None = None,
+    time_cfg: TimeConfig | None = None,
     tmin: float | None = None,
     tmax: float | None = None,
     auto_window: bool = True,
@@ -778,10 +856,14 @@ def run_tem_scan(
     start_fraction: float = 0.2,
     growth_weight: float = 1.0,
     require_positive: bool = True,
-    mode_method: str = "svd",
+    min_amp_fraction: float = 0.0,
+    mode_method: str = "project",
     terms: LinearTerms | None = None,
 ) -> LinearScanResult:
-    """Run the TEM benchmark for a list of ky values."""
+    """Run the TEM benchmark for a list of ky values.
+
+    If ``time_cfg`` is provided, its ``dt`` and ``t_max`` override ``dt``/``steps``.
+    """
 
     cfg = cfg or TEMBaseCase()
     grid = build_spectral_grid(cfg.grid)
@@ -791,37 +873,58 @@ def run_tem_scan(
             cfg.model,
             kpar_scale=float(geom.gradpar()),
             omega_d_scale=TEM_OMEGA_D_SCALE,
-            omega_star_scale=TEM_OMEGA_STAR_SCALE,
+            omega_star_scale=TEM_OMEGA_STAR_SCALE / float(cfg.geometry.R0),
             rho_star=TEM_RHO_STAR,
+            damp_ends_amp=0.0,
+            damp_ends_widthfrac=0.0,
         )
+    if terms is None:
+        terms = LinearTerms(bpar=0.0, hypercollisions=0.0)
     cache = build_linear_cache(grid, geom, params, Nl, Nm)
 
     gammas = []
     omegas = []
     ky_out = []
-    t = np.arange(steps) * dt
-    for ky in ky_values:
+    for i, ky in enumerate(ky_values):
+        if time_cfg is not None:
+            dt_i = float(time_cfg.dt)
+            steps_i = int(round(time_cfg.t_max / time_cfg.dt))
+        else:
+            dt_i = float(dt[i]) if isinstance(dt, np.ndarray) else float(dt)
+            steps_i = int(steps[i]) if isinstance(steps, np.ndarray) else int(steps)
         ky_index = select_ky_index(np.asarray(grid.ky), float(ky))
         sel = ModeSelection(ky_index=ky_index, kx_index=0, z_index=0)
 
         ns = 2
         G0 = np.zeros((ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
-        G0[0, 0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
+        G0[1, 0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
 
         G0_jax = jnp.asarray(G0)
-        _, phi_t = integrate_linear(
-            G0_jax,
-            grid,
-            geom,
-            params,
-            dt=dt,
-            steps=steps,
-            method=method,
-            cache=cache,
-            terms=terms,
-        )
+        if time_cfg is not None:
+            _, phi_t = integrate_linear_from_config(
+                G0_jax,
+                grid,
+                geom,
+                params,
+                time_cfg,
+                cache=cache,
+                terms=terms,
+            )
+        else:
+            _, phi_t = integrate_linear(
+                G0_jax,
+                grid,
+                geom,
+                params,
+                dt=dt_i,
+                steps=steps_i,
+                method=method,
+                cache=cache,
+                terms=terms,
+            )
 
         phi_t_np = np.asarray(phi_t)
+        t = np.arange(steps_i) * dt_i
         signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
         if auto_window and tmin is None and tmax is None:
             gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
@@ -832,6 +935,7 @@ def run_tem_scan(
                 start_fraction=start_fraction,
                 growth_weight=growth_weight,
                 require_positive=require_positive,
+                min_amp_fraction=min_amp_fraction,
             )
         else:
             gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
@@ -847,10 +951,11 @@ def run_kbm_beta_scan(
     ky_target: float = 0.3,
     Nl: int = 6,
     Nm: int = 12,
-    dt: float = 0.01,
-    steps: int = 800,
+    dt: float | np.ndarray = 0.01,
+    steps: int | np.ndarray = 800,
     method: str = "rk4",
     cfg: KBMBaseCase | None = None,
+    time_cfg: TimeConfig | None = None,
     tmin: float | None = None,
     tmax: float | None = None,
     auto_window: bool = True,
@@ -859,23 +964,34 @@ def run_kbm_beta_scan(
     start_fraction: float = 0.2,
     growth_weight: float = 1.0,
     require_positive: bool = True,
-    mode_method: str = "svd",
+    min_amp_fraction: float = 0.0,
+    mode_method: str = "project",
     terms: LinearTerms | None = None,
 ) -> LinearScanResult:
-    """Run a KBM beta scan at fixed ky."""
+    """Run a KBM beta scan at fixed ky.
+
+    If ``time_cfg`` is provided, its ``dt`` and ``t_max`` override ``dt``/``steps``.
+    """
 
     cfg = cfg or KBMBaseCase()
     grid = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
+    if terms is None:
+        terms = LinearTerms(bpar=0.0, hypercollisions=0.0)
 
     gammas = []
     omegas = []
     beta_out = []
-    t = np.arange(steps) * dt
     ky_index = select_ky_index(np.asarray(grid.ky), ky_target)
     sel = ModeSelection(ky_index=ky_index, kx_index=0, z_index=0)
 
-    for beta in betas:
+    for i, beta in enumerate(betas):
+        if time_cfg is not None:
+            dt_i = float(time_cfg.dt)
+            steps_i = int(round(time_cfg.t_max / time_cfg.dt))
+        else:
+            dt_i = float(dt[i]) if isinstance(dt, np.ndarray) else float(dt)
+            steps_i = int(steps[i]) if isinstance(steps, np.ndarray) else int(steps)
         params = _two_species_params(
             cfg.model,
             kpar_scale=float(geom.gradpar()),
@@ -883,27 +999,41 @@ def run_kbm_beta_scan(
             omega_star_scale=KBM_OMEGA_STAR_SCALE,
             rho_star=KBM_RHO_STAR,
             beta_override=float(beta),
+            damp_ends_amp=0.0,
+            damp_ends_widthfrac=0.0,
         )
         cache = build_linear_cache(grid, geom, params, Nl, Nm)
 
         ns = 2
         G0 = np.zeros((ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
-        G0[0, 0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
+        G0[1, 0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
 
         G0_jax = jnp.asarray(G0)
-        _, phi_t = integrate_linear(
-            G0_jax,
-            grid,
-            geom,
-            params,
-            dt=dt,
-            steps=steps,
-            method=method,
-            cache=cache,
-            terms=terms,
-        )
+        if time_cfg is not None:
+            _, phi_t = integrate_linear_from_config(
+                G0_jax,
+                grid,
+                geom,
+                params,
+                time_cfg,
+                cache=cache,
+                terms=terms,
+            )
+        else:
+            _, phi_t = integrate_linear(
+                G0_jax,
+                grid,
+                geom,
+                params,
+                dt=dt_i,
+                steps=steps_i,
+                method=method,
+                cache=cache,
+                terms=terms,
+            )
 
         phi_t_np = np.asarray(phi_t)
+        t = np.arange(steps_i) * dt_i
         signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
         if auto_window and tmin is None and tmax is None:
             gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
@@ -914,6 +1044,7 @@ def run_kbm_beta_scan(
                 start_fraction=start_fraction,
                 growth_weight=growth_weight,
                 require_positive=require_positive,
+                min_amp_fraction=min_amp_fraction,
             )
         else:
             gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
