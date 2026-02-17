@@ -132,7 +132,15 @@ class ETGBaseCase:
         ntheta=32,
         nperiod=2,
     )
-    time: TimeConfig = TimeConfig(t_max=2.0, dt=0.01)
+    time: TimeConfig = TimeConfig(
+        t_max=2.0,
+        dt=0.01,
+        diffrax_solver="Tsit5",
+        diffrax_adaptive=True,
+        diffrax_rtol=1.0e-4,
+        diffrax_atol=1.0e-7,
+        diffrax_max_steps=20000,
+    )
     geometry: GeometryConfig = GeometryConfig(R0=2.77778)
     model: ETGModelConfig = ETGModelConfig()
 
@@ -176,7 +184,15 @@ class KineticElectronBaseCase:
         ntheta=32,
         nperiod=2,
     )
-    time: TimeConfig = TimeConfig(t_max=8.0, dt=0.01)
+    time: TimeConfig = TimeConfig(
+        t_max=8.0,
+        dt=0.01,
+        diffrax_solver="Tsit5",
+        diffrax_adaptive=True,
+        diffrax_rtol=1.0e-4,
+        diffrax_atol=1.0e-7,
+        diffrax_max_steps=20000,
+    )
     geometry: GeometryConfig = GeometryConfig(R0=2.77778)
     model: KineticElectronModelConfig = KineticElectronModelConfig()
 
@@ -203,7 +219,15 @@ class KBMBaseCase:
         ntheta=32,
         nperiod=2,
     )
-    time: TimeConfig = TimeConfig(t_max=6.0, dt=0.01)
+    time: TimeConfig = TimeConfig(
+        t_max=6.0,
+        dt=0.01,
+        diffrax_solver="Tsit5",
+        diffrax_adaptive=True,
+        diffrax_rtol=1.0e-4,
+        diffrax_atol=1.0e-7,
+        diffrax_max_steps=20000,
+    )
     geometry: GeometryConfig = GeometryConfig(R0=2.77778)
     model: KineticElectronModelConfig = KineticElectronModelConfig(beta=0.015)
 
@@ -247,7 +271,15 @@ class TEMBaseCase:
         ntheta=32,
         nperiod=2,
     )
-    time: TimeConfig = TimeConfig(t_max=8.0, dt=0.01)
+    time: TimeConfig = TimeConfig(
+        t_max=8.0,
+        dt=0.01,
+        diffrax_solver="Tsit5",
+        diffrax_adaptive=True,
+        diffrax_rtol=1.0e-4,
+        diffrax_atol=1.0e-7,
+        diffrax_max_steps=20000,
+    )
     geometry: GeometryConfig = GeometryConfig(q=2.7, s_hat=0.5, epsilon=0.18, R0=2.77778)
     model: TEMModelConfig = TEMModelConfig()
 
