@@ -30,6 +30,18 @@ class TimeConfig:
 
     t_max: float = 100.0
     dt: float = 0.1
+    method: str = "rk4"
+    checkpoint: bool = False
+    implicit_restart: int = 20
+    implicit_preconditioner: str | None = None
+    implicit_solve_method: str = "batched"
+    use_diffrax: bool = False
+    diffrax_solver: str = "Tsit5"
+    diffrax_adaptive: bool = False
+    diffrax_rtol: float = 1.0e-5
+    diffrax_atol: float = 1.0e-7
+    diffrax_max_steps: int = 4096
+    progress_bar: bool = True
 
     def to_dict(self) -> Dict[str, float]:
         return asdict(self)
@@ -57,6 +69,7 @@ class ModelConfig:
     R_over_LTi: float = 2.49
     R_over_LTe: float = 0.0
     R_over_Ln: float = 0.8
+    nu_i: float = 1.0e-2
 
     def to_dict(self) -> Dict[str, float]:
         return asdict(self)
@@ -93,11 +106,13 @@ class CycloneBaseCase:
 class ETGModelConfig:
     """Dimensionless gradients and ratios for a canonical ETG setup."""
 
-    R_over_LTi: float = 0.0
+    R_over_LTi: float = 2.49
     R_over_LTe: float = 2.49
     R_over_Ln: float = 0.8
     Te_over_Ti: float = 1.0
     mass_ratio: float = 3670.0
+    nu_i: float = 1.0e-2
+    nu_e: float = 1.65e-4
 
     def to_dict(self) -> Dict[str, float]:
         return asdict(self)
@@ -113,7 +128,7 @@ class ETGBaseCase:
         Nz=96,
         Lx=6.28,
         Ly=6.28,
-        y0=20.0,
+        y0=0.2,
         ntheta=32,
         nperiod=2,
     )

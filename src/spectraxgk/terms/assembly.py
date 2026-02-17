@@ -1,0 +1,215 @@
+"""RHS assembly for term-wise gyrokinetic evolution."""
+
+from __future__ import annotations
+
+from typing import Tuple
+
+import jax
+
+import jax.numpy as jnp
+
+from spectraxgk.geometry import SAlphaGeometry
+from spectraxgk.grids import SpectralGrid
+from spectraxgk.linear import LinearCache, LinearParams, _as_species_array, build_H, build_linear_cache
+from spectraxgk.terms.config import FieldState, TermConfig
+from spectraxgk.terms.fields import _solve_fields_impl, solve_fields
+from spectraxgk.terms.linear_terms import (
+    collisions_contribution,
+    curvature_gradb_contribution,
+    diamagnetic_contribution,
+    end_damping_contribution,
+    hypercollisions_contribution,
+    mirror_contribution,
+    streaming_contribution,
+)
+from spectraxgk.terms.operators import shift_axis
+
+
+def assemble_rhs_cached(
+    G: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    *,
+    terms: TermConfig | None = None,
+    use_custom_vjp: bool = True,
+) -> Tuple[jnp.ndarray, FieldState]:
+    """Assemble the RHS from term-wise modules using a precomputed cache."""
+
+    term_cfg = terms or TermConfig()
+
+    out_dtype = jnp.result_type(G, jnp.complex64)
+    G = jnp.asarray(G, dtype=out_dtype)
+    real_dtype = jnp.real(jnp.empty((), dtype=out_dtype)).dtype
+    imag = jnp.asarray(1j, dtype=out_dtype)
+    squeeze_species = False
+    if G.ndim == 5:
+        G = G[None, ...]
+        squeeze_species = True
+    if G.ndim != 6:
+        raise ValueError("G must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)")
+    if cache.Jl.shape[0] != G.shape[0]:
+        raise ValueError("Cache species dimension does not match G")
+
+    ns = G.shape[0]
+    charge = _as_species_array(params.charge_sign, ns, "charge_sign").astype(real_dtype)
+    density = _as_species_array(params.density, ns, "density").astype(real_dtype)
+    mass = _as_species_array(params.mass, ns, "mass").astype(real_dtype)
+    temp = _as_species_array(params.temp, ns, "temp").astype(real_dtype)
+    tz = _as_species_array(params.tz, ns, "tz").astype(real_dtype)
+    vth = _as_species_array(params.vth, ns, "vth").astype(real_dtype)
+    tprim = _as_species_array(params.R_over_LTi, ns, "R_over_LTi").astype(real_dtype)
+    fprim = _as_species_array(params.R_over_Ln, ns, "R_over_Ln").astype(real_dtype)
+    nu = _as_species_array(params.nu, ns, "nu").astype(real_dtype)
+
+    omega_d_scale = jnp.asarray(params.omega_d_scale, dtype=real_dtype)
+    omega_star_scale = jnp.asarray(params.omega_star_scale, dtype=real_dtype)
+    kpar_scale = jnp.asarray(params.kpar_scale, dtype=real_dtype)
+    nu_hyper = jnp.asarray(params.nu_hyper, dtype=real_dtype)
+    nu_hyper_l = jnp.asarray(params.nu_hyper_l, dtype=real_dtype)
+    nu_hyper_m = jnp.asarray(params.nu_hyper_m, dtype=real_dtype)
+    nu_hyper_lm = jnp.asarray(params.nu_hyper_lm, dtype=real_dtype)
+    p_hyper_l = jnp.asarray(params.p_hyper_l, dtype=real_dtype)
+    p_hyper_m = jnp.asarray(params.p_hyper_m, dtype=real_dtype)
+    p_hyper_lm = jnp.asarray(params.p_hyper_lm, dtype=real_dtype)
+    damp_amp = jnp.asarray(params.damp_ends_amp, dtype=real_dtype)
+
+    w_stream = jnp.asarray(term_cfg.streaming, dtype=real_dtype)
+    w_mirror = jnp.asarray(term_cfg.mirror, dtype=real_dtype)
+    w_curv = jnp.asarray(term_cfg.curvature, dtype=real_dtype)
+    w_gradb = jnp.asarray(term_cfg.gradb, dtype=real_dtype)
+    w_dia = jnp.asarray(term_cfg.diamagnetic, dtype=real_dtype)
+    w_coll = jnp.asarray(term_cfg.collisions, dtype=real_dtype)
+    w_hyper = jnp.asarray(term_cfg.hypercollisions, dtype=real_dtype)
+    w_damp = jnp.asarray(term_cfg.end_damping, dtype=real_dtype)
+    w_apar = jnp.asarray(term_cfg.apar, dtype=real_dtype)
+    w_bpar = jnp.asarray(term_cfg.bpar, dtype=real_dtype)
+    fapar = jnp.asarray(params.fapar, dtype=real_dtype) * w_apar
+
+    fields_fn = solve_fields if use_custom_vjp else _solve_fields_impl
+    fields = fields_fn(
+        G,
+        cache,
+        params,
+        charge=charge,
+        density=density,
+        temp=temp,
+        mass=mass,
+        tz=tz,
+        vth=vth,
+        fapar=fapar,
+        w_bpar=w_bpar,
+    )
+
+    Jl = cache.Jl.astype(real_dtype)
+    JlB = Jl + shift_axis(Jl, -1, axis=1)
+    apar = fields.apar if fields.apar is not None else jnp.zeros_like(fields.phi)
+    bpar = fields.bpar if fields.bpar is not None else jnp.zeros_like(fields.phi)
+    H = build_H(G, Jl, fields.phi, tz, apar=apar, vth=vth, bpar=bpar, JlB=JlB)
+
+    dG = streaming_contribution(
+        H,
+        dz=cache.dz.astype(real_dtype),
+        vth=vth,
+        kpar_scale=kpar_scale,
+        weight=w_stream,
+    )
+    dG = dG + mirror_contribution(
+        H,
+        vth=vth,
+        bgrad=cache.bgrad.astype(real_dtype),
+        omega_d_scale=omega_d_scale,
+        l=cache.l.astype(real_dtype),
+        sqrt_m=cache.sqrt_m.astype(real_dtype),
+        sqrt_m_p1=cache.sqrt_m_p1.astype(real_dtype),
+        weight=w_mirror,
+    )
+    dG = dG + curvature_gradb_contribution(
+        H,
+        tz=tz,
+        omega_d_scale=omega_d_scale,
+        cv_d=cache.cv_d.astype(real_dtype),
+        gb_d=cache.gb_d.astype(real_dtype),
+        l=cache.l.astype(real_dtype),
+        m=cache.m.astype(real_dtype),
+        imag=imag,
+        weight_curv=w_curv,
+        weight_gradb=w_gradb,
+    )
+    dG = diamagnetic_contribution(
+        dG,
+        phi=fields.phi,
+        apar=apar,
+        bpar=bpar,
+        Jl=Jl,
+        JlB=JlB,
+        l4=cache.l4.astype(real_dtype),
+        tprim=tprim,
+        fprim=fprim,
+        tz=tz,
+        vth=vth,
+        omega_star_scale=omega_star_scale,
+        ky=cache.ky.astype(real_dtype),
+        imag=imag,
+        weight=w_dia,
+    )
+    dG = dG + collisions_contribution(
+        H,
+        nu=nu,
+        lb_lam=cache.lb_lam.astype(real_dtype),
+        weight=w_coll,
+    )
+    dG = dG + hypercollisions_contribution(
+        G,
+        vth=vth,
+        l=cache.l.astype(real_dtype),
+        m=cache.m.astype(real_dtype),
+        nu_hyper=nu_hyper,
+        nu_hyper_l=nu_hyper_l,
+        nu_hyper_m=nu_hyper_m,
+        nu_hyper_lm=nu_hyper_lm,
+        p_hyper_l=p_hyper_l,
+        p_hyper_m=p_hyper_m,
+        p_hyper_lm=p_hyper_lm,
+        hyper_ratio=cache.hyper_ratio.astype(real_dtype),
+        weight=w_hyper,
+    )
+    dG = dG + end_damping_contribution(
+        H,
+        ky=cache.ky.astype(real_dtype),
+        damp_profile=cache.damp_profile.astype(real_dtype),
+        damp_amp=damp_amp,
+        weight=w_damp,
+    )
+
+    if squeeze_species:
+        dG = dG[0]
+    return dG.astype(out_dtype), fields
+
+
+@jax.jit
+def assemble_rhs_cached_jit(
+    G: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    terms: TermConfig,
+) -> Tuple[jnp.ndarray, FieldState]:
+    """Jitted wrapper for cached RHS assembly."""
+
+    return assemble_rhs_cached(G, cache, params, terms=terms)
+
+
+def assemble_rhs(
+    G: jnp.ndarray,
+    grid: SpectralGrid,
+    geom: SAlphaGeometry,
+    params: LinearParams,
+    *,
+    Nl: int,
+    Nm: int,
+    terms: TermConfig | None = None,
+    cache: LinearCache | None = None,
+) -> Tuple[jnp.ndarray, FieldState]:
+    """Assemble the RHS from term-wise modules."""
+
+    cache = cache or build_linear_cache(grid, geom, params, Nl, Nm)
+    return assemble_rhs_cached(G, cache, params, terms=terms)
