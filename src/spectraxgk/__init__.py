@@ -23,6 +23,7 @@ from spectraxgk.linear import (
     linear_rhs_cached,
 )
 from spectraxgk.nonlinear import integrate_nonlinear, integrate_nonlinear_cached, nonlinear_rhs_cached
+from spectraxgk.runners import integrate_linear_from_config, integrate_nonlinear_from_config
 from spectraxgk.species import Species, build_linear_params
 from spectraxgk.analysis import (
     ModeSelection,
@@ -94,6 +95,8 @@ __all__ = [
     "integrate_nonlinear_cached",
     "integrate_nonlinear_diffrax",
     "nonlinear_rhs_cached",
+    "integrate_linear_from_config",
+    "integrate_nonlinear_from_config",
     "Species",
     "build_linear_params",
     "load_cyclone_reference",
