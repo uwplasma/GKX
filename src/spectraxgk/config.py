@@ -30,13 +30,13 @@ class TimeConfig:
 
     t_max: float = 100.0
     dt: float = 0.1
-    method: str = "rk4"
+    method: str = "rk2"
     checkpoint: bool = False
     implicit_restart: int = 20
     implicit_preconditioner: str | None = None
     implicit_solve_method: str = "batched"
-    use_diffrax: bool = False
-    diffrax_solver: str = "Tsit5"
+    use_diffrax: bool = True
+    diffrax_solver: str = "Heun"
     diffrax_adaptive: bool = False
     diffrax_rtol: float = 1.0e-5
     diffrax_atol: float = 1.0e-7
@@ -132,7 +132,7 @@ class ETGBaseCase:
         ntheta=32,
         nperiod=2,
     )
-    time: TimeConfig = TimeConfig()
+    time: TimeConfig = TimeConfig(t_max=2.0, dt=0.01)
     geometry: GeometryConfig = GeometryConfig(R0=2.77778)
     model: ETGModelConfig = ETGModelConfig()
 
@@ -176,7 +176,7 @@ class KineticElectronBaseCase:
         ntheta=32,
         nperiod=2,
     )
-    time: TimeConfig = TimeConfig()
+    time: TimeConfig = TimeConfig(t_max=8.0, dt=0.01)
     geometry: GeometryConfig = GeometryConfig(R0=2.77778)
     model: KineticElectronModelConfig = KineticElectronModelConfig()
 
@@ -203,7 +203,7 @@ class KBMBaseCase:
         ntheta=32,
         nperiod=2,
     )
-    time: TimeConfig = TimeConfig(t_max=40.0, dt=0.05)
+    time: TimeConfig = TimeConfig(t_max=6.0, dt=0.01)
     geometry: GeometryConfig = GeometryConfig(R0=2.77778)
     model: KineticElectronModelConfig = KineticElectronModelConfig(beta=0.015)
 
@@ -247,7 +247,7 @@ class TEMBaseCase:
         ntheta=32,
         nperiod=2,
     )
-    time: TimeConfig = TimeConfig(t_max=80.0, dt=0.05)
+    time: TimeConfig = TimeConfig(t_max=8.0, dt=0.01)
     geometry: GeometryConfig = GeometryConfig(q=2.7, s_hat=0.5, epsilon=0.18, R0=2.77778)
     model: TEMModelConfig = TEMModelConfig()
 

@@ -69,6 +69,9 @@ G0 = G0.at[0, 0, 0, 0, :].set(1.0e-3 + 0.0j)
 G_t, phi_t = integrate_linear_from_config(G0, grid, geom, params, cfg.time)
 ```
 
+By default, ``TimeConfig`` enables the diffrax Heun solver. Set
+``use_diffrax=False`` to run the built-in fixed-step integrators.
+
 ## Examples
 
 ```bash
@@ -86,12 +89,13 @@ python examples/tem_linear_benchmark.py
 python examples/two_stream_hermite_1d.py
 ```
 
-Diffrax can be enabled for the ETG/TEM/KBM examples with:
+Diffrax is enabled by default for the ETG/TEM/KBM examples. To force the
+fixed-step integrators, pass ``--no-diffrax``:
 
 ```bash
-python examples/etg_linear_benchmark.py --diffrax --solver Tsit5 --adaptive
-python examples/tem_linear_benchmark.py --diffrax --solver Tsit5 --adaptive
-python examples/kbm_beta_scan.py --diffrax --solver Tsit5 --adaptive
+python examples/etg_linear_benchmark.py --no-diffrax
+python examples/tem_linear_benchmark.py --no-diffrax
+python examples/kbm_beta_scan.py --no-diffrax
 ```
 
 ## Validation status

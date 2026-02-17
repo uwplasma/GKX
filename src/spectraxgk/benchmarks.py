@@ -230,6 +230,7 @@ def run_cyclone_linear(
     method: str = "rk4",
     params: LinearParams | None = None,
     cfg: CycloneBaseCase | None = None,
+    time_cfg: TimeConfig | None = None,
     tmin: float | None = None,
     tmax: float | None = None,
     auto_window: bool = True,
@@ -269,9 +270,21 @@ def run_cyclone_linear(
     G0[0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
 
     G0_jax = jnp.asarray(G0)
-    _, phi_t = integrate_linear(
-        G0_jax, grid, geom, params, dt=dt, steps=steps, method=method, terms=terms
-    )
+    if time_cfg is not None:
+        dt = float(time_cfg.dt)
+        steps = int(round(time_cfg.t_max / time_cfg.dt))
+        _, phi_t = integrate_linear_from_config(
+            G0_jax,
+            grid,
+            geom,
+            params,
+            time_cfg,
+            terms=terms,
+        )
+    else:
+        _, phi_t = integrate_linear(
+            G0_jax, grid, geom, params, dt=dt, steps=steps, method=method, terms=terms
+        )
 
     phi_t_np = np.asarray(phi_t)
     t = np.arange(steps) * dt
@@ -309,6 +322,7 @@ def run_cyclone_scan(
     method: str = "rk4",
     params: LinearParams | None = None,
     cfg: CycloneBaseCase | None = None,
+    time_cfg: TimeConfig | None = None,
     tmin: float | None = None,
     tmax: float | None = None,
     auto_window: bool = True,
@@ -321,7 +335,10 @@ def run_cyclone_scan(
     mode_method: str = "svd",
     terms: LinearTerms | None = None,
 ) -> CycloneScanResult:
-    """Run the linear Cyclone benchmark for a list of ky values."""
+    """Run the linear Cyclone benchmark for a list of ky values.
+
+    If ``time_cfg`` is provided, its ``dt`` and ``t_max`` override ``dt``/``steps``.
+    """
 
     cfg = cfg or CycloneBaseCase()
     grid = build_spectral_grid(cfg.grid)
@@ -346,8 +363,12 @@ def run_cyclone_scan(
     omegas = []
     ky_out = []
     for i, ky in enumerate(ky_values):
-        dt_i = float(dt[i]) if isinstance(dt, np.ndarray) else float(dt)
-        steps_i = int(steps[i]) if isinstance(steps, np.ndarray) else int(steps)
+        if time_cfg is not None:
+            dt_i = float(time_cfg.dt)
+            steps_i = int(round(time_cfg.t_max / time_cfg.dt))
+        else:
+            dt_i = float(dt[i]) if isinstance(dt, np.ndarray) else float(dt)
+            steps_i = int(steps[i]) if isinstance(steps, np.ndarray) else int(steps)
         ky_index = select_ky_index(np.asarray(grid.ky), float(ky))
         sel = ModeSelection(ky_index=ky_index, kx_index=0, z_index=0)
 
@@ -355,17 +376,28 @@ def run_cyclone_scan(
         G0[0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
 
         G0_jax = jnp.asarray(G0)
-        _, phi_t = integrate_linear(
-            G0_jax,
-            grid,
-            geom,
-            params,
-            dt=dt_i,
-            steps=steps_i,
-            method=method,
-            cache=cache,
-            terms=terms,
-        )
+        if time_cfg is not None:
+            _, phi_t = integrate_linear_from_config(
+                G0_jax,
+                grid,
+                geom,
+                params,
+                time_cfg,
+                cache=cache,
+                terms=terms,
+            )
+        else:
+            _, phi_t = integrate_linear(
+                G0_jax,
+                grid,
+                geom,
+                params,
+                dt=dt_i,
+                steps=steps_i,
+                method=method,
+                cache=cache,
+                terms=terms,
+            )
 
         phi_t_np = np.asarray(phi_t)
         t = np.arange(steps_i) * dt_i
@@ -602,6 +634,7 @@ def run_kinetic_linear(
     method: str = "rk4",
     params: LinearParams | None = None,
     cfg: KineticElectronBaseCase | None = None,
+    time_cfg: TimeConfig | None = None,
     tmin: float | None = None,
     tmax: float | None = None,
     auto_window: bool = True,
@@ -640,9 +673,23 @@ def run_kinetic_linear(
     G0[1, 0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
 
     G0_jax = jnp.asarray(G0)
-    _, phi_t = integrate_linear(
-        G0_jax, grid, geom, params, dt=dt, steps=steps, method=method, terms=terms
-    )
+    if time_cfg is not None:
+        dt = float(time_cfg.dt)
+        steps = int(round(time_cfg.t_max / time_cfg.dt))
+        cache = build_linear_cache(grid, geom, params, Nl, Nm)
+        _, phi_t = integrate_linear_from_config(
+            G0_jax,
+            grid,
+            geom,
+            params,
+            time_cfg,
+            cache=cache,
+            terms=terms,
+        )
+    else:
+        _, phi_t = integrate_linear(
+            G0_jax, grid, geom, params, dt=dt, steps=steps, method=method, terms=terms
+        )
 
     phi_t_np = np.asarray(phi_t)
     t = np.arange(steps) * dt
@@ -680,6 +727,7 @@ def run_kinetic_scan(
     method: str = "rk4",
     params: LinearParams | None = None,
     cfg: KineticElectronBaseCase | None = None,
+    time_cfg: TimeConfig | None = None,
     tmin: float | None = None,
     tmax: float | None = None,
     auto_window: bool = True,
@@ -692,7 +740,10 @@ def run_kinetic_scan(
     mode_method: str = "project",
     terms: LinearTerms | None = None,
 ) -> LinearScanResult:
-    """Run a kinetic-electron ITG/TEM benchmark for a list of ky values."""
+    """Run a kinetic-electron ITG/TEM benchmark for a list of ky values.
+
+    If ``time_cfg`` is provided, its ``dt`` and ``t_max`` override ``dt``/``steps``.
+    """
 
     cfg = cfg or KineticElectronBaseCase()
     grid = build_spectral_grid(cfg.grid)
@@ -715,8 +766,12 @@ def run_kinetic_scan(
     omegas = []
     ky_out = []
     for i, ky in enumerate(ky_values):
-        dt_i = float(dt[i]) if isinstance(dt, np.ndarray) else float(dt)
-        steps_i = int(steps[i]) if isinstance(steps, np.ndarray) else int(steps)
+        if time_cfg is not None:
+            dt_i = float(time_cfg.dt)
+            steps_i = int(round(time_cfg.t_max / time_cfg.dt))
+        else:
+            dt_i = float(dt[i]) if isinstance(dt, np.ndarray) else float(dt)
+            steps_i = int(steps[i]) if isinstance(steps, np.ndarray) else int(steps)
         ky_index = select_ky_index(np.asarray(grid.ky), float(ky))
         sel = ModeSelection(ky_index=ky_index, kx_index=0, z_index=0)
 
@@ -725,17 +780,28 @@ def run_kinetic_scan(
         G0[1, 0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
 
         G0_jax = jnp.asarray(G0)
-        _, phi_t = integrate_linear(
-            G0_jax,
-            grid,
-            geom,
-            params,
-            dt=dt_i,
-            steps=steps_i,
-            method=method,
-            cache=cache,
-            terms=terms,
-        )
+        if time_cfg is not None:
+            _, phi_t = integrate_linear_from_config(
+                G0_jax,
+                grid,
+                geom,
+                params,
+                time_cfg,
+                cache=cache,
+                terms=terms,
+            )
+        else:
+            _, phi_t = integrate_linear(
+                G0_jax,
+                grid,
+                geom,
+                params,
+                dt=dt_i,
+                steps=steps_i,
+                method=method,
+                cache=cache,
+                terms=terms,
+            )
 
         phi_t_np = np.asarray(phi_t)
         t = np.arange(steps_i) * dt_i
@@ -769,6 +835,7 @@ def run_tem_linear(
     method: str = "rk4",
     params: LinearParams | None = None,
     cfg: TEMBaseCase | None = None,
+    time_cfg: TimeConfig | None = None,
     tmin: float | None = None,
     tmax: float | None = None,
     auto_window: bool = True,
@@ -807,9 +874,23 @@ def run_tem_linear(
     G0[1, 0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
 
     G0_jax = jnp.asarray(G0)
-    _, phi_t = integrate_linear(
-        G0_jax, grid, geom, params, dt=dt, steps=steps, method=method, terms=terms
-    )
+    if time_cfg is not None:
+        dt = float(time_cfg.dt)
+        steps = int(round(time_cfg.t_max / time_cfg.dt))
+        cache = build_linear_cache(grid, geom, params, Nl, Nm)
+        _, phi_t = integrate_linear_from_config(
+            G0_jax,
+            grid,
+            geom,
+            params,
+            time_cfg,
+            cache=cache,
+            terms=terms,
+        )
+    else:
+        _, phi_t = integrate_linear(
+            G0_jax, grid, geom, params, dt=dt, steps=steps, method=method, terms=terms
+        )
 
     phi_t_np = np.asarray(phi_t)
     t = np.arange(steps) * dt

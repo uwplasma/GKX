@@ -128,7 +128,7 @@ def integrate_linear_diffrax(
     dt: float,
     steps: int,
     *,
-    method: str = "Tsit5",
+    method: str = "Heun",
     cache: LinearCache | None = None,
     terms: LinearTerms | None = None,
     adaptive: bool = False,
