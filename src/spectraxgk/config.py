@@ -114,6 +114,7 @@ class ETGModelConfig:
     mass_ratio: float = 3670.0
     nu_i: float = 1.0e-2
     nu_e: float = 1.65e-4
+    adiabatic_ions: bool = True
 
     def to_dict(self) -> Dict[str, float]:
         return asdict(self)

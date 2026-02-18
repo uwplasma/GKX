@@ -799,6 +799,7 @@ def _build_implicit_operator(
         x = x_flat.reshape(shape)
         return (x * precond).reshape(size)
 
+    precond_op: Callable[[jnp.ndarray], jnp.ndarray]
     if resolved_precond is None:
         precond_op = apply_precond
     else:

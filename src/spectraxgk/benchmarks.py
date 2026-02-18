@@ -33,8 +33,8 @@ from spectraxgk.terms.assembly import compute_fields_cached
 from spectraxgk.terms.config import TermConfig
 
 
-CYCLONE_OMEGA_D_SCALE = 0.6
-CYCLONE_OMEGA_STAR_SCALE = 0.7
+CYCLONE_OMEGA_D_SCALE = 0.75
+CYCLONE_OMEGA_STAR_SCALE = 0.35
 CYCLONE_RHO_STAR = 1.0
 
 ETG_OMEGA_D_SCALE = 1.0
@@ -224,6 +224,61 @@ def _two_species_params(
     params = build_linear_params(
         [ion, electron],
         tau_e=0.0,
+        kpar_scale=kpar_scale,
+        omega_d_scale=omega_d_scale,
+        omega_star_scale=omega_star_scale,
+        rho_star=rho_star,
+        beta=beta,
+        fapar=1.0 if beta > 0.0 else 0.0,
+    )
+    params = _apply_gx_hypercollisions(params)
+    if fapar_override is not None:
+        params = replace(params, fapar=float(fapar_override))
+    if damp_ends_amp is not None:
+        params = replace(params, damp_ends_amp=float(damp_ends_amp))
+    if damp_ends_widthfrac is not None:
+        params = replace(params, damp_ends_widthfrac=float(damp_ends_widthfrac))
+    return params
+
+
+def _electron_only_params(
+    model,
+    *,
+    kpar_scale: float,
+    omega_d_scale: float,
+    omega_star_scale: float,
+    rho_star: float,
+    beta_override: float | None = None,
+    fapar_override: float | None = None,
+    damp_ends_amp: float | None = None,
+    damp_ends_widthfrac: float | None = None,
+) -> LinearParams:
+    """Build LinearParams for a single kinetic electron species + Boltzmann ions."""
+
+    mass_ratio = float(model.mass_ratio)
+    if mass_ratio <= 0.0:
+        raise ValueError("mass_ratio must be > 0")
+    Te_over_Ti = float(model.Te_over_Ti)
+    if Te_over_Ti <= 0.0:
+        raise ValueError("Te_over_Ti must be > 0")
+
+    nu_e = float(getattr(model, "nu_e", 0.0))
+    beta = float(getattr(model, "beta", 1.0e-5))
+    if beta_override is not None:
+        beta = float(beta_override)
+
+    electron = Species(
+        charge=-1.0,
+        mass=1.0 / mass_ratio,
+        density=1.0,
+        temperature=Te_over_Ti,
+        tprim=float(model.R_over_LTe),
+        fprim=float(model.R_over_Ln),
+        nu=nu_e,
+    )
+    params = build_linear_params(
+        [electron],
+        tau_e=Te_over_Ti,
         kpar_scale=kpar_scale,
         omega_d_scale=omega_d_scale,
         omega_star_scale=omega_star_scale,
@@ -577,15 +632,26 @@ def run_etg_linear(
     grid_full = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
     if params is None:
-        params = _two_species_params(
-            cfg.model,
-            kpar_scale=float(geom.gradpar()),
-            omega_d_scale=ETG_OMEGA_D_SCALE,
-            omega_star_scale=ETG_OMEGA_STAR_SCALE,
-            rho_star=ETG_RHO_STAR,
-            damp_ends_amp=0.0,
-            damp_ends_widthfrac=0.0,
-        )
+        if getattr(cfg.model, "adiabatic_ions", False):
+            params = _electron_only_params(
+                cfg.model,
+                kpar_scale=float(geom.gradpar()),
+                omega_d_scale=ETG_OMEGA_D_SCALE,
+                omega_star_scale=ETG_OMEGA_STAR_SCALE,
+                rho_star=ETG_RHO_STAR,
+                damp_ends_amp=0.0,
+                damp_ends_widthfrac=0.0,
+            )
+        else:
+            params = _two_species_params(
+                cfg.model,
+                kpar_scale=float(geom.gradpar()),
+                omega_d_scale=ETG_OMEGA_D_SCALE,
+                omega_star_scale=ETG_OMEGA_STAR_SCALE,
+                rho_star=ETG_RHO_STAR,
+                damp_ends_amp=0.0,
+                damp_ends_widthfrac=0.0,
+            )
     if terms is None:
         terms = LinearTerms()
 
@@ -593,9 +659,11 @@ def run_etg_linear(
     grid = select_ky_grid(grid_full, ky_index)
     sel = ModeSelection(ky_index=0, kx_index=0, z_index=0)
 
-    ns = 2
+    charge = np.atleast_1d(np.asarray(params.charge_sign))
+    ns = int(charge.size)
+    electron_index = int(np.argmin(charge))
     G0 = np.zeros((ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
-    G0[1, 0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
+    G0[electron_index, 0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
 
     G0_jax = jnp.asarray(G0)
     if solver.lower() == "krylov":
@@ -721,15 +789,26 @@ def run_etg_scan(
     grid_full = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
     if params is None:
-        params = _two_species_params(
-            cfg.model,
-            kpar_scale=float(geom.gradpar()),
-            omega_d_scale=ETG_OMEGA_D_SCALE,
-            omega_star_scale=ETG_OMEGA_STAR_SCALE,
-            rho_star=ETG_RHO_STAR,
-            damp_ends_amp=0.0,
-            damp_ends_widthfrac=0.0,
-        )
+        if getattr(cfg.model, "adiabatic_ions", False):
+            params = _electron_only_params(
+                cfg.model,
+                kpar_scale=float(geom.gradpar()),
+                omega_d_scale=ETG_OMEGA_D_SCALE,
+                omega_star_scale=ETG_OMEGA_STAR_SCALE,
+                rho_star=ETG_RHO_STAR,
+                damp_ends_amp=0.0,
+                damp_ends_widthfrac=0.0,
+            )
+        else:
+            params = _two_species_params(
+                cfg.model,
+                kpar_scale=float(geom.gradpar()),
+                omega_d_scale=ETG_OMEGA_D_SCALE,
+                omega_star_scale=ETG_OMEGA_STAR_SCALE,
+                rho_star=ETG_RHO_STAR,
+                damp_ends_amp=0.0,
+                damp_ends_widthfrac=0.0,
+            )
     if terms is None:
         terms = LinearTerms()
     gammas = []
@@ -742,9 +821,11 @@ def run_etg_scan(
         steps_i = int(steps[i]) if isinstance(steps, np.ndarray) else int(steps)
         sel = ModeSelection(ky_index=0, kx_index=0, z_index=0)
 
-        ns = 2
+        charge = np.atleast_1d(np.asarray(params.charge_sign))
+        ns = int(charge.size)
+        electron_index = int(np.argmin(charge))
         G0 = np.zeros((ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
-        G0[1, 0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
+        G0[electron_index, 0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
 
         cache = build_linear_cache(grid, geom, params, Nl, Nm)
         G0_jax = jnp.asarray(G0)
