@@ -360,6 +360,9 @@ def run_cyclone_linear(
             krylov_dim=krylov_cfg.krylov_dim,
             restarts=krylov_cfg.restarts,
             omega_cap_factor=krylov_cfg.omega_cap_factor,
+            method=krylov_cfg.method,
+            power_iters=krylov_cfg.power_iters,
+            power_dt=krylov_cfg.power_dt,
         )
         term_cfg = TermConfig(
             streaming=terms.streaming,
@@ -524,6 +527,9 @@ def run_cyclone_scan(
                 krylov_dim=krylov_cfg.krylov_dim,
                 restarts=krylov_cfg.restarts,
                 omega_cap_factor=krylov_cfg.omega_cap_factor,
+                method=krylov_cfg.method,
+                power_iters=krylov_cfg.power_iters,
+                power_dt=krylov_cfg.power_dt,
             )
             gamma = float(np.real(eig))
             omega = float(-np.imag(eig))
@@ -677,6 +683,9 @@ def run_etg_linear(
             krylov_dim=krylov_cfg.krylov_dim,
             restarts=krylov_cfg.restarts,
             omega_cap_factor=krylov_cfg.omega_cap_factor,
+            method=krylov_cfg.method,
+            power_iters=krylov_cfg.power_iters,
+            power_dt=krylov_cfg.power_dt,
         )
         term_cfg = TermConfig(
             streaming=terms.streaming,
@@ -839,6 +848,9 @@ def run_etg_scan(
                 krylov_dim=krylov_cfg.krylov_dim,
                 restarts=krylov_cfg.restarts,
                 omega_cap_factor=krylov_cfg.omega_cap_factor,
+                method=krylov_cfg.method,
+                power_iters=krylov_cfg.power_iters,
+                power_dt=krylov_cfg.power_dt,
             )
             gamma = float(np.real(eig))
             omega = float(-np.imag(eig))
@@ -958,6 +970,9 @@ def run_kinetic_linear(
             krylov_dim=krylov_cfg.krylov_dim,
             restarts=krylov_cfg.restarts,
             omega_cap_factor=krylov_cfg.omega_cap_factor,
+            method=krylov_cfg.method,
+            power_iters=krylov_cfg.power_iters,
+            power_dt=krylov_cfg.power_dt,
         )
         term_cfg = TermConfig(
             streaming=terms.streaming,
@@ -1107,6 +1122,9 @@ def run_kinetic_scan(
                 krylov_dim=krylov_cfg.krylov_dim,
                 restarts=krylov_cfg.restarts,
                 omega_cap_factor=krylov_cfg.omega_cap_factor,
+                method=krylov_cfg.method,
+                power_iters=krylov_cfg.power_iters,
+                power_dt=krylov_cfg.power_dt,
             )
             gamma = float(np.real(eig))
             omega = float(-np.imag(eig))
@@ -1226,6 +1244,9 @@ def run_tem_linear(
             krylov_dim=krylov_cfg.krylov_dim,
             restarts=krylov_cfg.restarts,
             omega_cap_factor=krylov_cfg.omega_cap_factor,
+            method=krylov_cfg.method,
+            power_iters=krylov_cfg.power_iters,
+            power_dt=krylov_cfg.power_dt,
         )
         term_cfg = TermConfig(
             streaming=terms.streaming,
@@ -1375,6 +1396,9 @@ def run_tem_scan(
                 krylov_dim=krylov_cfg.krylov_dim,
                 restarts=krylov_cfg.restarts,
                 omega_cap_factor=krylov_cfg.omega_cap_factor,
+                method=krylov_cfg.method,
+                power_iters=krylov_cfg.power_iters,
+                power_dt=krylov_cfg.power_dt,
             )
             gamma = float(np.real(eig))
             omega = float(-np.imag(eig))
@@ -1504,6 +1528,9 @@ def run_kbm_beta_scan(
                 krylov_dim=krylov_cfg.krylov_dim,
                 restarts=krylov_cfg.restarts,
                 omega_cap_factor=krylov_cfg.omega_cap_factor,
+                method=krylov_cfg.method,
+                power_iters=krylov_cfg.power_iters,
+                power_dt=krylov_cfg.power_dt,
             )
             gamma = float(np.real(eig))
             omega = float(-np.imag(eig))
