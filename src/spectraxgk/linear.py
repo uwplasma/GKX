@@ -736,32 +736,16 @@ def _integrate_linear_cached(
     return jax.lax.scan(sample_step, G0, None, length=num_samples)
 
 
-def _integrate_linear_implicit_cached(
+def _build_implicit_operator(
     G0: jnp.ndarray,
     cache: LinearCache,
     params: LinearParams,
     dt: float,
-    steps: int,
-    *,
-    terms: LinearTerms | None = None,
-    implicit_tol: float = 1.0e-6,
-    implicit_maxiter: int = 200,
-    implicit_iters: int = 3,
-    implicit_relax: float = 0.7,
-    implicit_restart: int = 20,
-    implicit_solve_method: str = "batched",
-    implicit_preconditioner: Callable[[jnp.ndarray], jnp.ndarray] | str | None = None,
-    checkpoint: bool = False,
-    sample_stride: int = 1,
-) -> tuple[jnp.ndarray, jnp.ndarray]:
-    """Implicit linear integrator using GMRES with a diagonal preconditioner."""
+    terms: LinearTerms | None,
+    implicit_preconditioner: Callable[[jnp.ndarray], jnp.ndarray] | str | None,
+) -> tuple[jnp.ndarray, tuple[int, ...], int, jnp.ndarray, Callable[[jnp.ndarray], jnp.ndarray], Callable[[jnp.ndarray], jnp.ndarray], bool]:
     if terms is None:
         terms = LinearTerms()
-    if sample_stride < 1:
-        raise ValueError("sample_stride must be >= 1")
-    if steps % sample_stride != 0:
-        raise ValueError("steps must be divisible by sample_stride")
-
     base_dtype = jnp.complex128 if _x64_enabled() else jnp.complex64
     state_dtype = jnp.result_type(G0, base_dtype)
     G = jnp.asarray(G0, dtype=state_dtype)
@@ -810,7 +794,6 @@ def _integrate_linear_implicit_cached(
     precond = 1.0 / (1.0 + dt_val * damping - dt_val * diag)
     precond = precond.astype(G.dtype)
     resolved_precond = _resolve_implicit_preconditioner(implicit_preconditioner)
-    precond_op = (lambda x: x) if resolved_precond is None else resolved_precond
 
     def apply_precond(x_flat: jnp.ndarray) -> jnp.ndarray:
         x = x_flat.reshape(shape)
@@ -818,6 +801,8 @@ def _integrate_linear_implicit_cached(
 
     if resolved_precond is None:
         precond_op = apply_precond
+    else:
+        precond_op = resolved_precond
 
     def matvec(x_flat: jnp.ndarray) -> jnp.ndarray:
         x = x_flat.reshape(shape)
@@ -831,7 +816,40 @@ def _integrate_linear_implicit_cached(
         )
         return (x - dt_val * dG).reshape(size)
 
-    def fixed_point(G_in: jnp.ndarray) -> jnp.ndarray:
+    return G, shape, size, dt_val, precond_op, matvec, squeeze_species
+
+
+def _integrate_linear_implicit_cached(
+    G0: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    dt: float,
+    steps: int,
+    *,
+    terms: LinearTerms | None = None,
+    implicit_tol: float = 1.0e-6,
+    implicit_maxiter: int = 200,
+    implicit_iters: int = 3,
+    implicit_relax: float = 0.7,
+    implicit_restart: int = 20,
+    implicit_solve_method: str = "batched",
+    implicit_preconditioner: Callable[[jnp.ndarray], jnp.ndarray] | str | None = None,
+    checkpoint: bool = False,
+    sample_stride: int = 1,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Implicit linear integrator using GMRES with a diagonal preconditioner."""
+    if terms is None:
+        terms = LinearTerms()
+    if sample_stride < 1:
+        raise ValueError("sample_stride must be >= 1")
+    if steps % sample_stride != 0:
+        raise ValueError("steps must be divisible by sample_stride")
+
+    G, shape, size, dt_val, precond_op, matvec, squeeze_species = _build_implicit_operator(
+        G0, cache, params, dt, terms, implicit_preconditioner
+    )
+
+    def fixed_point(G_in: jnp.ndarray, G_rhs: jnp.ndarray) -> jnp.ndarray:
         def body(_i, g):
             dG, _phi = linear_rhs_cached(
                 g,
@@ -841,13 +859,13 @@ def _integrate_linear_implicit_cached(
                 use_jit=False,
                 use_custom_vjp=False,
             )
-            g_next = G_in + dt_val * dG
+            g_next = G_rhs + dt_val * dG
             return (1.0 - implicit_relax) * g + implicit_relax * g_next
 
         return jax.lax.fori_loop(0, max(int(implicit_iters), 0), body, G_in)
 
     def solve_step(G_in: jnp.ndarray) -> jnp.ndarray:
-        G_guess = fixed_point(G_in)
+        G_guess = fixed_point(G_in, G_in)
         sol, _info = gmres(
             matvec,
             G_in.reshape(size),
