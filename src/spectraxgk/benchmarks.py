@@ -363,6 +363,13 @@ def run_cyclone_linear(
             method=krylov_cfg.method,
             power_iters=krylov_cfg.power_iters,
             power_dt=krylov_cfg.power_dt,
+            shift=krylov_cfg.shift,
+            shift_source=krylov_cfg.shift_source,
+            shift_tol=krylov_cfg.shift_tol,
+            shift_maxiter=krylov_cfg.shift_maxiter,
+            shift_restart=krylov_cfg.shift_restart,
+            shift_solve_method=krylov_cfg.shift_solve_method,
+            shift_preconditioner=krylov_cfg.shift_preconditioner,
         )
         term_cfg = TermConfig(
             streaming=terms.streaming,
@@ -530,6 +537,13 @@ def run_cyclone_scan(
                 method=krylov_cfg.method,
                 power_iters=krylov_cfg.power_iters,
                 power_dt=krylov_cfg.power_dt,
+                shift=krylov_cfg.shift,
+                shift_source=krylov_cfg.shift_source,
+                shift_tol=krylov_cfg.shift_tol,
+                shift_maxiter=krylov_cfg.shift_maxiter,
+                shift_restart=krylov_cfg.shift_restart,
+                shift_solve_method=krylov_cfg.shift_solve_method,
+                shift_preconditioner=krylov_cfg.shift_preconditioner,
             )
             gamma = float(np.real(eig))
             omega = float(-np.imag(eig))
@@ -686,6 +700,13 @@ def run_etg_linear(
             method=krylov_cfg.method,
             power_iters=krylov_cfg.power_iters,
             power_dt=krylov_cfg.power_dt,
+            shift=krylov_cfg.shift,
+            shift_source=krylov_cfg.shift_source,
+            shift_tol=krylov_cfg.shift_tol,
+            shift_maxiter=krylov_cfg.shift_maxiter,
+            shift_restart=krylov_cfg.shift_restart,
+            shift_solve_method=krylov_cfg.shift_solve_method,
+            shift_preconditioner=krylov_cfg.shift_preconditioner,
         )
         term_cfg = TermConfig(
             streaming=terms.streaming,
@@ -851,6 +872,13 @@ def run_etg_scan(
                 method=krylov_cfg.method,
                 power_iters=krylov_cfg.power_iters,
                 power_dt=krylov_cfg.power_dt,
+                shift=krylov_cfg.shift,
+                shift_source=krylov_cfg.shift_source,
+                shift_tol=krylov_cfg.shift_tol,
+                shift_maxiter=krylov_cfg.shift_maxiter,
+                shift_restart=krylov_cfg.shift_restart,
+                shift_solve_method=krylov_cfg.shift_solve_method,
+                shift_preconditioner=krylov_cfg.shift_preconditioner,
             )
             gamma = float(np.real(eig))
             omega = float(-np.imag(eig))
@@ -973,6 +1001,13 @@ def run_kinetic_linear(
             method=krylov_cfg.method,
             power_iters=krylov_cfg.power_iters,
             power_dt=krylov_cfg.power_dt,
+            shift=krylov_cfg.shift,
+            shift_source=krylov_cfg.shift_source,
+            shift_tol=krylov_cfg.shift_tol,
+            shift_maxiter=krylov_cfg.shift_maxiter,
+            shift_restart=krylov_cfg.shift_restart,
+            shift_solve_method=krylov_cfg.shift_solve_method,
+            shift_preconditioner=krylov_cfg.shift_preconditioner,
         )
         term_cfg = TermConfig(
             streaming=terms.streaming,
@@ -1125,6 +1160,13 @@ def run_kinetic_scan(
                 method=krylov_cfg.method,
                 power_iters=krylov_cfg.power_iters,
                 power_dt=krylov_cfg.power_dt,
+                shift=krylov_cfg.shift,
+                shift_source=krylov_cfg.shift_source,
+                shift_tol=krylov_cfg.shift_tol,
+                shift_maxiter=krylov_cfg.shift_maxiter,
+                shift_restart=krylov_cfg.shift_restart,
+                shift_solve_method=krylov_cfg.shift_solve_method,
+                shift_preconditioner=krylov_cfg.shift_preconditioner,
             )
             gamma = float(np.real(eig))
             omega = float(-np.imag(eig))
@@ -1247,6 +1289,13 @@ def run_tem_linear(
             method=krylov_cfg.method,
             power_iters=krylov_cfg.power_iters,
             power_dt=krylov_cfg.power_dt,
+            shift=krylov_cfg.shift,
+            shift_source=krylov_cfg.shift_source,
+            shift_tol=krylov_cfg.shift_tol,
+            shift_maxiter=krylov_cfg.shift_maxiter,
+            shift_restart=krylov_cfg.shift_restart,
+            shift_solve_method=krylov_cfg.shift_solve_method,
+            shift_preconditioner=krylov_cfg.shift_preconditioner,
         )
         term_cfg = TermConfig(
             streaming=terms.streaming,
@@ -1399,6 +1448,13 @@ def run_tem_scan(
                 method=krylov_cfg.method,
                 power_iters=krylov_cfg.power_iters,
                 power_dt=krylov_cfg.power_dt,
+                shift=krylov_cfg.shift,
+                shift_source=krylov_cfg.shift_source,
+                shift_tol=krylov_cfg.shift_tol,
+                shift_maxiter=krylov_cfg.shift_maxiter,
+                shift_restart=krylov_cfg.shift_restart,
+                shift_solve_method=krylov_cfg.shift_solve_method,
+                shift_preconditioner=krylov_cfg.shift_preconditioner,
             )
             gamma = float(np.real(eig))
             omega = float(-np.imag(eig))
@@ -1531,6 +1587,13 @@ def run_kbm_beta_scan(
                 method=krylov_cfg.method,
                 power_iters=krylov_cfg.power_iters,
                 power_dt=krylov_cfg.power_dt,
+                shift=krylov_cfg.shift,
+                shift_source=krylov_cfg.shift_source,
+                shift_tol=krylov_cfg.shift_tol,
+                shift_maxiter=krylov_cfg.shift_maxiter,
+                shift_restart=krylov_cfg.shift_restart,
+                shift_solve_method=krylov_cfg.shift_solve_method,
+                shift_preconditioner=krylov_cfg.shift_preconditioner,
             )
             gamma = float(np.real(eig))
             omega = float(-np.imag(eig))
