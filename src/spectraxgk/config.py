@@ -69,7 +69,7 @@ class ModelConfig:
     R_over_LTi: float = 2.49
     R_over_LTe: float = 0.0
     R_over_Ln: float = 0.8
-    nu_i: float = 1.0e-2
+    nu_i: float = 0.0
 
     def to_dict(self) -> Dict[str, float]:
         return asdict(self)

@@ -50,6 +50,22 @@ KBM_OMEGA_D_SCALE = 1.0
 KBM_OMEGA_STAR_SCALE = 1.0
 KBM_RHO_STAR = 1.0
 
+GX_NU_HYPER_L = 0.0
+GX_NU_HYPER_M = 1.0
+GX_P_HYPER_L = 6.0
+GX_P_HYPER_M = 20.0
+
+
+def _apply_gx_hypercollisions(params: LinearParams) -> LinearParams:
+    return replace(
+        params,
+        nu_hyper=0.0,
+        nu_hyper_l=GX_NU_HYPER_L,
+        nu_hyper_m=GX_NU_HYPER_M,
+        p_hyper_l=GX_P_HYPER_L,
+        p_hyper_m=GX_P_HYPER_M,
+    )
+
 @dataclass(frozen=True)
 class CycloneReference:
     ky: np.ndarray
@@ -212,6 +228,7 @@ def _two_species_params(
         beta=beta,
         fapar=1.0 if beta > 0.0 else 0.0,
     )
+    params = _apply_gx_hypercollisions(params)
     if fapar_override is not None:
         params = replace(params, fapar=float(fapar_override))
     if damp_ends_amp is not None:
@@ -248,20 +265,22 @@ def run_cyclone_linear(
     cfg = cfg or CycloneBaseCase()
     grid = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
-    params = params or LinearParams(
-        R_over_Ln=cfg.model.R_over_Ln,
-        R_over_LTi=cfg.model.R_over_LTi,
-        R_over_LTe=cfg.model.R_over_LTe,
-        omega_d_scale=CYCLONE_OMEGA_D_SCALE,
-        omega_star_scale=CYCLONE_OMEGA_STAR_SCALE,
-        rho_star=CYCLONE_RHO_STAR,
-        kpar_scale=float(geom.gradpar()),
-        nu=cfg.model.nu_i,
-        damp_ends_amp=0.0,
-        damp_ends_widthfrac=0.0,
-    )
+    if params is None:
+        params = LinearParams(
+            R_over_Ln=cfg.model.R_over_Ln,
+            R_over_LTi=cfg.model.R_over_LTi,
+            R_over_LTe=cfg.model.R_over_LTe,
+            omega_d_scale=CYCLONE_OMEGA_D_SCALE,
+            omega_star_scale=CYCLONE_OMEGA_STAR_SCALE,
+            rho_star=CYCLONE_RHO_STAR,
+            kpar_scale=float(geom.gradpar()),
+            nu=cfg.model.nu_i,
+            damp_ends_amp=0.0,
+            damp_ends_widthfrac=0.0,
+        )
+        params = _apply_gx_hypercollisions(params)
     if terms is None:
-        terms = LinearTerms(hypercollisions=0.0)
+        terms = LinearTerms()
 
     ky_index = select_ky_index(np.asarray(grid.ky), ky_target)
     sel = ModeSelection(ky_index=ky_index, kx_index=0, z_index=0)
@@ -343,32 +362,30 @@ def run_cyclone_scan(
     cfg = cfg or CycloneBaseCase()
     grid = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
-    params = params or LinearParams(
-        R_over_Ln=cfg.model.R_over_Ln,
-        R_over_LTi=cfg.model.R_over_LTi,
-        R_over_LTe=cfg.model.R_over_LTe,
-        omega_d_scale=CYCLONE_OMEGA_D_SCALE,
-        omega_star_scale=CYCLONE_OMEGA_STAR_SCALE,
-        rho_star=CYCLONE_RHO_STAR,
-        kpar_scale=float(geom.gradpar()),
-        nu=cfg.model.nu_i,
-        damp_ends_amp=0.0,
-        damp_ends_widthfrac=0.0,
-    )
+    if params is None:
+        params = LinearParams(
+            R_over_Ln=cfg.model.R_over_Ln,
+            R_over_LTi=cfg.model.R_over_LTi,
+            R_over_LTe=cfg.model.R_over_LTe,
+            omega_d_scale=CYCLONE_OMEGA_D_SCALE,
+            omega_star_scale=CYCLONE_OMEGA_STAR_SCALE,
+            rho_star=CYCLONE_RHO_STAR,
+            kpar_scale=float(geom.gradpar()),
+            nu=cfg.model.nu_i,
+            damp_ends_amp=0.0,
+            damp_ends_widthfrac=0.0,
+        )
+        params = _apply_gx_hypercollisions(params)
     if terms is None:
-        terms = LinearTerms(hypercollisions=0.0)
+        terms = LinearTerms()
     cache = build_linear_cache(grid, geom, params, Nl, Nm)
 
     gammas = []
     omegas = []
     ky_out = []
     for i, ky in enumerate(ky_values):
-        if time_cfg is not None:
-            dt_i = float(time_cfg.dt)
-            steps_i = int(round(time_cfg.t_max / time_cfg.dt))
-        else:
-            dt_i = float(dt[i]) if isinstance(dt, np.ndarray) else float(dt)
-            steps_i = int(steps[i]) if isinstance(steps, np.ndarray) else int(steps)
+        dt_i = float(dt[i]) if isinstance(dt, np.ndarray) else float(dt)
+        steps_i = int(steps[i]) if isinstance(steps, np.ndarray) else int(steps)
         ky_index = select_ky_index(np.asarray(grid.ky), float(ky))
         sel = ModeSelection(ky_index=ky_index, kx_index=0, z_index=0)
 
@@ -377,12 +394,13 @@ def run_cyclone_scan(
 
         G0_jax = jnp.asarray(G0)
         if time_cfg is not None:
+            time_cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
             _, phi_t = integrate_linear_from_config(
                 G0_jax,
                 grid,
                 geom,
                 params,
-                time_cfg,
+                time_cfg_i,
                 cache=cache,
                 terms=terms,
             )
@@ -481,7 +499,7 @@ def run_etg_linear(
             damp_ends_widthfrac=0.0,
         )
     if terms is None:
-        terms = LinearTerms(hypercollisions=0.0)
+        terms = LinearTerms()
 
     ky_index = select_ky_index(np.asarray(grid.ky), ky_target)
     sel = ModeSelection(ky_index=ky_index, kx_index=0, z_index=0)
@@ -545,6 +563,7 @@ def run_etg_scan(
     method: str = "rk4",
     params: LinearParams | None = None,
     cfg: ETGBaseCase | None = None,
+    time_cfg: TimeConfig | None = None,
     tmin: float | None = None,
     tmax: float | None = None,
     auto_window: bool = True,
@@ -557,7 +576,10 @@ def run_etg_scan(
     mode_method: str = "project",
     terms: LinearTerms | None = None,
 ) -> LinearScanResult:
-    """Run an ETG linear benchmark for a list of ky values."""
+    """Run an ETG linear benchmark for a list of ky values.
+
+    If ``time_cfg`` is provided, its ``dt`` and ``t_max`` override ``dt``/``steps``.
+    """
 
     cfg = cfg or ETGBaseCase()
     grid = build_spectral_grid(cfg.grid)
@@ -573,7 +595,7 @@ def run_etg_scan(
             damp_ends_widthfrac=0.0,
         )
     if terms is None:
-        terms = LinearTerms(hypercollisions=0.0)
+        terms = LinearTerms()
     cache = build_linear_cache(grid, geom, params, Nl, Nm)
 
     gammas = []
@@ -590,17 +612,29 @@ def run_etg_scan(
         G0[1, 0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
 
         G0_jax = jnp.asarray(G0)
-        _, phi_t = integrate_linear(
-            G0_jax,
-            grid,
-            geom,
-            params,
-            dt=dt_i,
-            steps=steps_i,
-            method=method,
-            cache=cache,
-            terms=terms,
-        )
+        if time_cfg is not None:
+            time_cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
+            _, phi_t = integrate_linear_from_config(
+                G0_jax,
+                grid,
+                geom,
+                params,
+                time_cfg_i,
+                cache=cache,
+                terms=terms,
+            )
+        else:
+            _, phi_t = integrate_linear(
+                G0_jax,
+                grid,
+                geom,
+                params,
+                dt=dt_i,
+                steps=steps_i,
+                method=method,
+                cache=cache,
+                terms=terms,
+            )
 
         phi_t_np = np.asarray(phi_t)
         t = np.arange(steps_i) * dt_i
@@ -663,7 +697,7 @@ def run_kinetic_linear(
             damp_ends_widthfrac=0.0,
         )
     if terms is None:
-        terms = LinearTerms(hypercollisions=0.0)
+        terms = LinearTerms()
 
     ky_index = select_ky_index(np.asarray(grid.ky), ky_target)
     sel = ModeSelection(ky_index=ky_index, kx_index=0, z_index=0)
@@ -759,19 +793,15 @@ def run_kinetic_scan(
             damp_ends_widthfrac=0.0,
         )
     if terms is None:
-        terms = LinearTerms(hypercollisions=0.0)
+        terms = LinearTerms()
     cache = build_linear_cache(grid, geom, params, Nl, Nm)
 
     gammas = []
     omegas = []
     ky_out = []
     for i, ky in enumerate(ky_values):
-        if time_cfg is not None:
-            dt_i = float(time_cfg.dt)
-            steps_i = int(round(time_cfg.t_max / time_cfg.dt))
-        else:
-            dt_i = float(dt[i]) if isinstance(dt, np.ndarray) else float(dt)
-            steps_i = int(steps[i]) if isinstance(steps, np.ndarray) else int(steps)
+        dt_i = float(dt[i]) if isinstance(dt, np.ndarray) else float(dt)
+        steps_i = int(steps[i]) if isinstance(steps, np.ndarray) else int(steps)
         ky_index = select_ky_index(np.asarray(grid.ky), float(ky))
         sel = ModeSelection(ky_index=ky_index, kx_index=0, z_index=0)
 
@@ -781,12 +811,13 @@ def run_kinetic_scan(
 
         G0_jax = jnp.asarray(G0)
         if time_cfg is not None:
+            time_cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
             _, phi_t = integrate_linear_from_config(
                 G0_jax,
                 grid,
                 geom,
                 params,
-                time_cfg,
+                time_cfg_i,
                 cache=cache,
                 terms=terms,
             )
@@ -864,7 +895,7 @@ def run_tem_linear(
             damp_ends_widthfrac=0.0,
         )
     if terms is None:
-        terms = LinearTerms(bpar=0.0, hypercollisions=0.0)
+        terms = LinearTerms(bpar=0.0)
 
     ky_index = select_ky_index(np.asarray(grid.ky), ky_target)
     sel = ModeSelection(ky_index=ky_index, kx_index=0, z_index=0)
@@ -960,19 +991,15 @@ def run_tem_scan(
             damp_ends_widthfrac=0.0,
         )
     if terms is None:
-        terms = LinearTerms(bpar=0.0, hypercollisions=0.0)
+        terms = LinearTerms(bpar=0.0)
     cache = build_linear_cache(grid, geom, params, Nl, Nm)
 
     gammas = []
     omegas = []
     ky_out = []
     for i, ky in enumerate(ky_values):
-        if time_cfg is not None:
-            dt_i = float(time_cfg.dt)
-            steps_i = int(round(time_cfg.t_max / time_cfg.dt))
-        else:
-            dt_i = float(dt[i]) if isinstance(dt, np.ndarray) else float(dt)
-            steps_i = int(steps[i]) if isinstance(steps, np.ndarray) else int(steps)
+        dt_i = float(dt[i]) if isinstance(dt, np.ndarray) else float(dt)
+        steps_i = int(steps[i]) if isinstance(steps, np.ndarray) else int(steps)
         ky_index = select_ky_index(np.asarray(grid.ky), float(ky))
         sel = ModeSelection(ky_index=ky_index, kx_index=0, z_index=0)
 
@@ -982,12 +1009,13 @@ def run_tem_scan(
 
         G0_jax = jnp.asarray(G0)
         if time_cfg is not None:
+            time_cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
             _, phi_t = integrate_linear_from_config(
                 G0_jax,
                 grid,
                 geom,
                 params,
-                time_cfg,
+                time_cfg_i,
                 cache=cache,
                 terms=terms,
             )
@@ -1058,7 +1086,7 @@ def run_kbm_beta_scan(
     grid = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
     if terms is None:
-        terms = LinearTerms(bpar=0.0, hypercollisions=0.0)
+        terms = LinearTerms(bpar=0.0)
 
     gammas = []
     omegas = []
@@ -1067,12 +1095,8 @@ def run_kbm_beta_scan(
     sel = ModeSelection(ky_index=ky_index, kx_index=0, z_index=0)
 
     for i, beta in enumerate(betas):
-        if time_cfg is not None:
-            dt_i = float(time_cfg.dt)
-            steps_i = int(round(time_cfg.t_max / time_cfg.dt))
-        else:
-            dt_i = float(dt[i]) if isinstance(dt, np.ndarray) else float(dt)
-            steps_i = int(steps[i]) if isinstance(steps, np.ndarray) else int(steps)
+        dt_i = float(dt[i]) if isinstance(dt, np.ndarray) else float(dt)
+        steps_i = int(steps[i]) if isinstance(steps, np.ndarray) else int(steps)
         params = _two_species_params(
             cfg.model,
             kpar_scale=float(geom.gradpar()),
@@ -1091,12 +1115,13 @@ def run_kbm_beta_scan(
 
         G0_jax = jnp.asarray(G0)
         if time_cfg is not None:
+            time_cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
             _, phi_t = integrate_linear_from_config(
                 G0_jax,
                 grid,
                 geom,
                 params,
-                time_cfg,
+                time_cfg_i,
                 cache=cache,
                 terms=terms,
             )
