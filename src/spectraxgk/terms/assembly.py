@@ -118,7 +118,6 @@ def assemble_rhs_cached(
         H,
         vth=vth,
         bgrad=cache.bgrad,
-        omega_d_scale=omega_d_scale,
         l=cache.l,
         sqrt_m=cache.sqrt_m,
         sqrt_m_p1=cache.sqrt_m_p1,

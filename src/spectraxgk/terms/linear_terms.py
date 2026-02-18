@@ -26,7 +26,6 @@ def mirror_contribution(
     *,
     vth: jnp.ndarray,
     bgrad: jnp.ndarray,
-    omega_d_scale: jnp.ndarray,
     l: jnp.ndarray,
     sqrt_m: jnp.ndarray,
     sqrt_m_p1: jnp.ndarray,
@@ -43,7 +42,7 @@ def mirror_contribution(
         + sqrt_m * l * H_m_m1
         + sqrt_m * l_p1 * shift_axis(H_m_m1, 1, axis=axis_l)
     )
-    bgrad_s = omega_d_scale * bgrad[None, None, None, None, None, :]
+    bgrad_s = bgrad[None, None, None, None, None, :]
     vth_s = vth[:, None, None, None, None, None]
     return -weight * vth_s * bgrad_s * mirror_term
 
