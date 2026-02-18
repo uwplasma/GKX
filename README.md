@@ -143,7 +143,7 @@ python tools/benchmark_integrators.py
 | --- | --- |
 | Geometry | q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778 |
 | Gradients | R/LTi=2.49, R/LTe=2.49, R/Ln=0.8 |
-| Species | ions + electrons, Te/Ti=1, mi/me=3670 |
+| Species | kinetic electrons + Boltzmann ions, Te/Ti=1, mi/me=3670 |
 | Electromagnetic | beta=1.0e-5, A_parallel=on, B_parallel=on |
 | Collisions | nu_i=1.0e-2, nu_e=1.65e-4, hypercollisions=off |
 | Operator toggles | streaming/mirror/curvature/grad-B/diamagnetic on; nonlinear off |
