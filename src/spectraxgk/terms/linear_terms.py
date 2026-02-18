@@ -74,8 +74,10 @@ def curvature_gradb_contribution(
         + (2.0 * l + 1.0) * H
         + l * shift_axis(H, -1, axis=axis_l)
     )
-    icv = imag * tz[:, None, None, None, None, None] * omega_d_scale * cv_d[None, None, None, ...]
-    igb = imag * tz[:, None, None, None, None, None] * omega_d_scale * gb_d[None, None, None, ...]
+    t_over_z = jnp.where(tz == 0.0, 0.0, 1.0 / tz)
+    t_over_z = t_over_z[:, None, None, None, None, None]
+    icv = imag * t_over_z * omega_d_scale * cv_d[None, None, None, ...]
+    igb = imag * t_over_z * omega_d_scale * gb_d[None, None, None, ...]
     return -weight_curv * icv * curv_term - weight_gradb * igb * gradb_term
 
 

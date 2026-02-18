@@ -33,8 +33,8 @@ from spectraxgk.terms.assembly import compute_fields_cached
 from spectraxgk.terms.config import TermConfig
 
 
-CYCLONE_OMEGA_D_SCALE = 0.75
-CYCLONE_OMEGA_STAR_SCALE = 0.35
+CYCLONE_OMEGA_D_SCALE = 0.60
+CYCLONE_OMEGA_STAR_SCALE = 0.70
 CYCLONE_RHO_STAR = 1.0
 
 ETG_OMEGA_D_SCALE = 1.0
