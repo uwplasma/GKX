@@ -7,7 +7,6 @@ import jax.numpy as jnp
 
 from spectraxgk.linear import quasineutrality_phi
 from spectraxgk.terms.config import FieldState
-from spectraxgk.terms.operators import shift_axis
 
 
 def _solve_fields_impl(
@@ -28,11 +27,10 @@ def _solve_fields_impl(
     out_dtype = jnp.result_type(G, jnp.complex64)
     real_dtype = jnp.real(jnp.empty((), dtype=out_dtype)).dtype
 
-    Jl = cache.Jl.astype(real_dtype)
-    Jl_m1 = shift_axis(Jl, -1, axis=1)
-    JlB = Jl + Jl_m1
-    bmag = cache.bmag.astype(real_dtype)
-    kperp2 = cache.kperp2.astype(real_dtype)
+    Jl = cache.Jl
+    JlB = cache.JlB
+    bmag = cache.bmag
+    kperp2 = cache.kperp2
 
     beta = jnp.asarray(params.beta, dtype=real_dtype)
     tau_e = jnp.asarray(params.tau_e, dtype=real_dtype)

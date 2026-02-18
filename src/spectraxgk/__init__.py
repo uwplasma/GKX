@@ -22,6 +22,7 @@ from spectraxgk.linear import (
     linear_rhs,
     linear_rhs_cached,
 )
+from spectraxgk.linear_krylov import KrylovConfig, dominant_eigenpair, dominant_eigenvalue
 from spectraxgk.nonlinear import integrate_nonlinear, integrate_nonlinear_cached, nonlinear_rhs_cached
 from spectraxgk.runners import integrate_linear_from_config, integrate_nonlinear_from_config
 from spectraxgk.species import Species, build_linear_params
@@ -90,6 +91,9 @@ __all__ = [
     "linear_rhs",
     "linear_rhs_cached",
     "integrate_linear",
+    "KrylovConfig",
+    "dominant_eigenpair",
+    "dominant_eigenvalue",
     "integrate_linear_diffrax",
     "integrate_nonlinear",
     "integrate_nonlinear_cached",

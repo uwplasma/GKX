@@ -242,6 +242,7 @@ class LinearCache:
     bgrad: jnp.ndarray
     mask0: jnp.ndarray
     dz: jnp.ndarray
+    kz: jnp.ndarray
     ky: jnp.ndarray
     lb_lam: jnp.ndarray
     hyper_ratio: jnp.ndarray
@@ -251,6 +252,9 @@ class LinearCache:
     l4: jnp.ndarray
     sqrt_m: jnp.ndarray
     sqrt_m_p1: jnp.ndarray
+    sqrt_p: jnp.ndarray
+    sqrt_m_ladder: jnp.ndarray
+    JlB: jnp.ndarray
 
     def tree_flatten(self):
         children = (
@@ -264,6 +268,7 @@ class LinearCache:
             self.bgrad,
             self.mask0,
             self.dz,
+            self.kz,
             self.ky,
             self.lb_lam,
             self.hyper_ratio,
@@ -273,6 +278,9 @@ class LinearCache:
             self.l4,
             self.sqrt_m,
             self.sqrt_m_p1,
+            self.sqrt_p,
+            self.sqrt_m_ladder,
+            self.JlB,
         )
         return children, None
 
@@ -290,33 +298,45 @@ def build_linear_cache(
 ) -> LinearCache:
     """Build reusable arrays for the linear RHS."""
 
-    dz = jnp.asarray(grid.z[1] - grid.z[0])
+    real_dtype = jnp.float64 if _x64_enabled() else jnp.float32
+    dz = jnp.asarray(grid.z[1] - grid.z[0], dtype=real_dtype)
+    kz = jnp.asarray(2.0 * jnp.pi * jnp.fft.fftfreq(grid.z.size, d=dz), dtype=real_dtype)
     kx_eff = params.rho_star * grid.kx
     ky_eff = params.rho_star * grid.ky
     kx0 = kx_eff[None, :, None]
     ky0 = ky_eff[:, None, None]
     theta = grid.z[None, None, :]
-    kperp2 = geom.k_perp2(kx0, ky0, theta)
-    rho = jnp.asarray(params.rho)
+    kperp2 = geom.k_perp2(kx0, ky0, theta).astype(real_dtype)
+    rho = jnp.asarray(params.rho, dtype=real_dtype)
     if rho.ndim == 0:
         rho = rho[None]
     b = (rho[:, None, None, None] * rho[:, None, None, None]) * kperp2[None, ...]
-    Jl = jax.vmap(lambda bs: J_l_all(bs, l_max=Nl - 1))(b)
-    omega_d = geom.omega_d(kx_eff, ky_eff, grid.z)
+    Jl = jax.vmap(lambda bs: J_l_all(bs, l_max=Nl - 1))(b).astype(real_dtype)
+    JlB = Jl + shift_axis(Jl, -1, axis=1)
+    omega_d = geom.omega_d(kx_eff, ky_eff, grid.z).astype(real_dtype)
     cv_d, gb_d = geom.drift_components(kx_eff, ky_eff, grid.z)
-    bgrad = geom.bgrad(grid.z)
-    bmag = geom.bmag(grid.z)
+    cv_d = cv_d.astype(real_dtype)
+    gb_d = gb_d.astype(real_dtype)
+    bgrad = geom.bgrad(grid.z).astype(real_dtype)
+    bmag = geom.bmag(grid.z).astype(real_dtype)
     mask0 = (grid.ky == 0.0)[:, None, None] & (grid.kx == 0.0)[None, :, None]
     lb_base = lenard_bernstein_eigenvalues(Nl, Nm, params.nu_hermite, params.nu_laguerre)[
         None, :, :, None, None, None
     ]
     lb_lam = lb_base + b[:, None, None, ...]
-    l = jnp.arange(Nl, dtype=jnp.float32)[:, None, None, None, None]
-    m = jnp.arange(Nm, dtype=jnp.float32)[None, :, None, None, None]
-    l4 = jnp.arange(Nl, dtype=jnp.float32)[:, None, None, None]
+    l = jnp.arange(Nl, dtype=real_dtype)[:, None, None, None, None]
+    m = jnp.arange(Nm, dtype=real_dtype)[None, :, None, None, None]
+    l4 = jnp.arange(Nl, dtype=real_dtype)[:, None, None, None]
     m_p1 = m + 1.0
     sqrt_m = jnp.sqrt(m)
     sqrt_m_p1 = jnp.sqrt(m_p1)
+    sqrt_p, sqrt_m_ladder = hermite_ladder_coeffs(Nm - 1)
+    sqrt_p = sqrt_p[:Nm]
+    sqrt_m_ladder = sqrt_m_ladder[:Nm]
+    sqrt_shape = [1] * 6
+    sqrt_shape[2] = Nm
+    sqrt_p = sqrt_p.reshape(sqrt_shape).astype(real_dtype)
+    sqrt_m_ladder = sqrt_m_ladder.reshape(sqrt_shape).astype(real_dtype)
     l_norm = jnp.maximum(Nl - 1, 1)
     m_norm = jnp.maximum(Nm - 1, 1)
     hyper_ratio = (l / l_norm) ** params.p_hyper + (m / m_norm) ** params.p_hyper
@@ -330,10 +350,10 @@ def build_linear_cache(
     x_right = jnp.where(right_mask, (Nz - idx) / width_f, 0.0)
     nu_left = jnp.where(left_mask, 1.0 - 2.0 * x_left * x_left / (1.0 + x_left**4), 0.0)
     nu_right = jnp.where(right_mask, 1.0 - 2.0 * x_right * x_right / (1.0 + x_right**4), 0.0)
-    damp_profile = jnp.maximum(nu_left, nu_right)
+    damp_profile = jnp.maximum(nu_left, nu_right).astype(real_dtype)
     return LinearCache(
         Jl=Jl,
-        b=b,
+        b=b.astype(real_dtype),
         kperp2=kperp2,
         bmag=bmag,
         omega_d=omega_d,
@@ -342,15 +362,19 @@ def build_linear_cache(
         bgrad=bgrad,
         mask0=mask0,
         dz=dz,
-        ky=ky_eff,
-        lb_lam=lb_lam,
-        hyper_ratio=hyper_ratio,
+        kz=kz,
+        ky=ky_eff.astype(real_dtype),
+        lb_lam=lb_lam.astype(real_dtype),
+        hyper_ratio=hyper_ratio.astype(real_dtype),
         damp_profile=damp_profile,
         l=l,
         m=m,
         l4=l4,
-        sqrt_m=sqrt_m,
-        sqrt_m_p1=sqrt_m_p1,
+        sqrt_m=sqrt_m.astype(real_dtype),
+        sqrt_m_p1=sqrt_m_p1.astype(real_dtype),
+        sqrt_p=sqrt_p,
+        sqrt_m_ladder=sqrt_m_ladder,
+        JlB=JlB.astype(real_dtype),
     )
 
 
@@ -618,6 +642,7 @@ def linear_rhs_cached(
         bpar=terms.bpar,
         nonlinear=0.0,
     )
+
     if use_jit:
         dG, fields = assemble_rhs_cached_jit(G, cache, params, term_cfg)
     else:
@@ -631,7 +656,7 @@ def linear_rhs_cached(
     return dG, fields.phi
 
 
-@partial(jax.jit, static_argnames=("steps", "method", "checkpoint"))
+@partial(jax.jit, static_argnames=("steps", "method", "checkpoint", "sample_stride"))
 def _integrate_linear_cached(
     G0: jnp.ndarray,
     cache: LinearCache,
@@ -641,10 +666,11 @@ def _integrate_linear_cached(
     method: str = "rk4",
     checkpoint: bool = False,
     terms: LinearTerms | None = None,
+    sample_stride: int = 1,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Time integrate the linear system using cached geometry arrays."""
-    if method not in {"euler", "rk2", "rk4", "imex"}:
-        raise ValueError("method must be one of {'euler', 'rk2', 'rk4', 'imex'}")
+    if method not in {"euler", "rk2", "rk4", "imex", "imex2"}:
+        raise ValueError("method must be one of {'euler', 'rk2', 'rk4', 'imex', 'imex2'}")
     if terms is None:
         terms = LinearTerms()
 
@@ -666,28 +692,48 @@ def _integrate_linear_cached(
         damping = jnp.asarray(params.nu, dtype=real_dtype) * lb_lam + nu_hyper * hyper_ratio
     damping = damping.astype(real_dtype)
 
-    def step(G, _):
+    def advance(G):
         dG, _phi = linear_rhs_cached(G, cache, params, terms=terms)
         if method == "imex":
             dG_explicit = dG + damping * G
-            G_new = (G + dt_val * dG_explicit) / (1.0 + dt_val * damping)
-        elif method == "euler":
-            G_new = G + dt_val * dG
-        elif method == "rk2":
+            return (G + dt_val * dG_explicit) / (1.0 + dt_val * damping)
+        if method == "imex2":
+            dG_explicit = dG + damping * G
+            G_half = (G + 0.5 * dt_val * dG_explicit) / (1.0 + 0.5 * dt_val * damping)
+            dG_half, _phi = linear_rhs_cached(G_half, cache, params, terms=terms)
+            dG_half_exp = dG_half + damping * G_half
+            return (G + dt_val * dG_half_exp) / (1.0 + dt_val * damping)
+        if method == "euler":
+            return G + dt_val * dG
+        if method == "rk2":
             k1 = dG
             k2, _ = linear_rhs_cached(G + 0.5 * dt_val * k1, cache, params, terms=terms)
-            G_new = G + dt_val * k2
-        else:
-            k1 = dG
-            k2, _ = linear_rhs_cached(G + 0.5 * dt_val * k1, cache, params, terms=terms)
-            k3, _ = linear_rhs_cached(G + 0.5 * dt_val * k2, cache, params, terms=terms)
-            k4, _ = linear_rhs_cached(G + dt_val * k3, cache, params, terms=terms)
-            G_new = G + (dt_val / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+            return G + dt_val * k2
+        k1 = dG
+        k2, _ = linear_rhs_cached(G + 0.5 * dt_val * k1, cache, params, terms=terms)
+        k3, _ = linear_rhs_cached(G + 0.5 * dt_val * k2, cache, params, terms=terms)
+        k4, _ = linear_rhs_cached(G + dt_val * k3, cache, params, terms=terms)
+        return G + (dt_val / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+
+    def step(G, _):
+        G_new = advance(G)
         _dG_new, phi_new = linear_rhs_cached(G_new, cache, params, terms=terms)
         return G_new, phi_new
 
     step_fn = jax.checkpoint(step) if checkpoint else step
-    return jax.lax.scan(step_fn, G0, None, length=steps)
+    if sample_stride <= 1:
+        return jax.lax.scan(step_fn, G0, None, length=steps)
+
+    def sample_step(G, _):
+        def inner_step(i, state):
+            return advance(state)
+
+        G_out = jax.lax.fori_loop(0, sample_stride, inner_step, G)
+        _dG_out, phi_out = linear_rhs_cached(G_out, cache, params, terms=terms)
+        return G_out, phi_out
+
+    num_samples = steps // sample_stride
+    return jax.lax.scan(sample_step, G0, None, length=num_samples)
 
 
 def integrate_linear(
@@ -708,10 +754,15 @@ def integrate_linear(
     implicit_preconditioner: Callable[[jnp.ndarray], jnp.ndarray] | str | None = None,
     terms: LinearTerms | None = None,
     checkpoint: bool = False,
+    sample_stride: int = 1,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Time integrate the linear system using a fixed-step scheme."""
     if terms is None:
         terms = LinearTerms()
+    if sample_stride < 1:
+        raise ValueError("sample_stride must be >= 1")
+    if steps % sample_stride != 0:
+        raise ValueError("steps must be divisible by sample_stride")
     if cache is None:
         if G0.ndim == 5:
             Nl, Nm = G0.shape[0], G0.shape[1]
@@ -833,4 +884,5 @@ def integrate_linear(
         method=method,
         checkpoint=checkpoint,
         terms=terms,
+        sample_stride=sample_stride,
     )

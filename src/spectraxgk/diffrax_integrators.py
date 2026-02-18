@@ -10,7 +10,7 @@ import jax.numpy as jnp
 from spectraxgk.geometry import SAlphaGeometry
 from spectraxgk.grids import SpectralGrid
 from spectraxgk.linear import LinearCache, LinearParams, LinearTerms, build_linear_cache
-from spectraxgk.terms.assembly import assemble_rhs_cached, assemble_rhs_cached_jit
+from spectraxgk.terms.assembly import assemble_rhs_cached, assemble_rhs_cached_jit, compute_fields_cached
 from spectraxgk.terms.config import FieldState, TermConfig
 from spectraxgk.terms.nonlinear import placeholder_nonlinear_contribution
 
@@ -115,8 +115,7 @@ def _save_with_phi(
     *,
     use_custom_vjp: bool,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
-    dG, fields = _assemble_rhs(G, cache, params, term_cfg, use_custom_vjp=use_custom_vjp)
-    _ = dG
+    fields = compute_fields_cached(G, cache, params, terms=term_cfg, use_custom_vjp=use_custom_vjp)
     return G, fields.phi
 
 
@@ -138,6 +137,7 @@ def integrate_linear_diffrax(
     progress_bar: bool = True,
     checkpoint: bool = False,
     jit: bool | None = None,
+    sample_stride: int = 1,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Integrate the linear system with diffrax."""
 
@@ -190,7 +190,12 @@ def integrate_linear_diffrax(
 
     real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
     dt_val = jnp.asarray(dt, dtype=real_dtype)
-    ts = dt_val * (jnp.arange(steps, dtype=real_dtype) + 1)
+    if sample_stride < 1:
+        raise ValueError("sample_stride must be >= 1")
+    if steps % sample_stride != 0:
+        raise ValueError("steps must be divisible by sample_stride")
+    num_samples = steps // sample_stride
+    ts = dt_val * sample_stride * (jnp.arange(num_samples, dtype=real_dtype) + 1)
 
     adaptive_eff = adaptive or _is_imex_solver(method) or _is_implicit_solver(method)
 

@@ -41,11 +41,13 @@ def cyclone_reference_figure(ref: CycloneReference) -> Tuple[plt.Figure, np.ndar
     ax0.set_ylabel(r"$\gamma a / v_{ti}$")
     ax0.set_title("Cyclone base case (adiabatic electrons)")
     ax0.legend(loc="best")
+    ax0.set_xscale("log")
 
     ax1.plot(ref.ky, ref.omega, marker="o", color="#ff7f0e", label="Reference")
     ax1.set_xlabel(r"$k_y \rho_i$")
     ax1.set_ylabel(r"$\omega a / v_{ti}$")
     ax1.legend(loc="best")
+    ax1.set_xscale("log")
 
     fig.tight_layout()
     return fig, axes
@@ -67,12 +69,14 @@ def cyclone_comparison_figure(
     ax0.set_ylabel(r"$\gamma a / v_{ti}$")
     ax0.set_title("Cyclone base case (adiabatic electrons)")
     ax0.legend(loc="best")
+    ax0.set_xscale("log")
 
     ax1.plot(ref.ky, ref.omega, marker="o", color="#ff7f0e", label="Reference")
     ax1.plot(scan.ky, scan.omega, marker="s", color="#d62728", label=label)
     ax1.set_xlabel(r"$k_y \rho_i$")
     ax1.set_ylabel(r"$\omega a / v_{ti}$")
     ax1.legend(loc="best")
+    ax1.set_xscale("log")
 
     fig.tight_layout()
     return fig, axes
@@ -89,6 +93,7 @@ def scan_comparison_figure(
     omega_ref: np.ndarray | None = None,
     label: str = "SPECTRAX-GK",
     ref_label: str = "Reference",
+    log_x: bool = False,
 ) -> Tuple[plt.Figure, np.ndarray]:
     """Create a two-panel comparison plot for a generic scan."""
 
@@ -102,6 +107,8 @@ def scan_comparison_figure(
     ax0.set_ylabel(r"$\gamma a / v_{ti}$")
     ax0.set_title(title)
     ax0.legend(loc="best")
+    if log_x:
+        ax0.set_xscale("log")
 
     ax1.plot(x, omega, marker="o", color="#d62728", label=label)
     if x_ref is not None and omega_ref is not None:
@@ -109,6 +116,8 @@ def scan_comparison_figure(
     ax1.set_xlabel(x_label)
     ax1.set_ylabel(r"$\omega a / v_{ti}$")
     ax1.legend(loc="best")
+    if log_x:
+        ax1.set_xscale("log")
 
     fig.tight_layout()
     return fig, axes
@@ -151,6 +160,7 @@ class LinearValidationPanel:
     gamma_ref: np.ndarray | None = None
     omega_ref: np.ndarray | None = None
     ref_label: str = "Reference"
+    log_x: bool = False
 
 
 def linear_validation_figure(
@@ -184,12 +194,16 @@ def linear_validation_figure(
             ax1.plot(panel.x_ref, panel.gamma_ref, marker="o", linestyle="None", color="#1f77b4", label=panel.ref_label)
         ax1.set_xlabel(panel.x_label)
         ax1.set_ylabel(r"$\gamma a / v_{ti}$")
+        if panel.log_x:
+            ax1.set_xscale("log")
 
         ax2.plot(panel.x, panel.omega, marker="o", color="#d62728", label="SPECTRAX-GK")
         if panel.x_ref is not None and panel.omega_ref is not None:
             ax2.plot(panel.x_ref, panel.omega_ref, marker="o", linestyle="None", color="#1f77b4", label=panel.ref_label)
         ax2.set_xlabel(panel.x_label)
         ax2.set_ylabel(r"$\omega a / v_{ti}$")
+        if panel.log_x:
+            ax2.set_xscale("log")
         if i == 0:
             ax1.legend(loc="best", fontsize=9)
             ax2.legend(loc="best", fontsize=9)

@@ -24,14 +24,17 @@ from spectraxgk.config import (
     TimeConfig,
 )
 from spectraxgk.geometry import SAlphaGeometry
-from spectraxgk.grids import build_spectral_grid
+from spectraxgk.grids import build_spectral_grid, select_ky_grid
 from spectraxgk.linear import LinearParams, LinearTerms, build_linear_cache, integrate_linear
+from spectraxgk.linear_krylov import KrylovConfig, dominant_eigenpair
 from spectraxgk.runners import integrate_linear_from_config
 from spectraxgk.species import Species, build_linear_params
+from spectraxgk.terms.assembly import compute_fields_cached
+from spectraxgk.terms.config import TermConfig
 
 
-CYCLONE_OMEGA_D_SCALE = 1.0
-CYCLONE_OMEGA_STAR_SCALE = 1.0
+CYCLONE_OMEGA_D_SCALE = 0.7
+CYCLONE_OMEGA_STAR_SCALE = 0.35
 CYCLONE_RHO_STAR = 1.0
 
 ETG_OMEGA_D_SCALE = 1.0
@@ -248,6 +251,8 @@ def run_cyclone_linear(
     params: LinearParams | None = None,
     cfg: CycloneBaseCase | None = None,
     time_cfg: TimeConfig | None = None,
+    solver: str = "krylov",
+    krylov_cfg: KrylovConfig | None = None,
     tmin: float | None = None,
     tmax: float | None = None,
     auto_window: bool = True,
@@ -259,11 +264,12 @@ def run_cyclone_linear(
     min_amp_fraction: float = 0.0,
     mode_method: str = "svd",
     terms: LinearTerms | None = None,
+    sample_stride: int | None = None,
 ) -> CycloneRunResult:
     """Run the linear Cyclone benchmark and extract growth rate."""
 
     cfg = cfg or CycloneBaseCase()
-    grid = build_spectral_grid(cfg.grid)
+    grid_full = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
     if params is None:
         params = LinearParams(
@@ -282,45 +288,94 @@ def run_cyclone_linear(
     if terms is None:
         terms = LinearTerms()
 
-    ky_index = select_ky_index(np.asarray(grid.ky), ky_target)
-    sel = ModeSelection(ky_index=ky_index, kx_index=0, z_index=0)
-
-    G0 = np.zeros((Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
-    G0[0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
-
-    G0_jax = jnp.asarray(G0)
-    if time_cfg is not None:
-        dt = float(time_cfg.dt)
-        steps = int(round(time_cfg.t_max / time_cfg.dt))
-        _, phi_t = integrate_linear_from_config(
+    if solver.lower() == "krylov":
+        ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
+        grid = select_ky_grid(grid_full, ky_index)
+        sel = ModeSelection(ky_index=0, kx_index=0, z_index=0)
+        G0 = np.zeros((Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
+        G0[0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
+        G0_jax = jnp.asarray(G0)
+        krylov_cfg = krylov_cfg or KrylovConfig()
+        cache = build_linear_cache(grid, geom, params, Nl, Nm)
+        eig, vec = dominant_eigenpair(
             G0_jax,
-            grid,
-            geom,
+            cache,
             params,
-            time_cfg,
             terms=terms,
+            krylov_dim=krylov_cfg.krylov_dim,
+            restarts=krylov_cfg.restarts,
+            omega_cap_factor=krylov_cfg.omega_cap_factor,
         )
+        term_cfg = TermConfig(
+            streaming=terms.streaming,
+            mirror=terms.mirror,
+            curvature=terms.curvature,
+            gradb=terms.gradb,
+            diamagnetic=terms.diamagnetic,
+            collisions=terms.collisions,
+            hypercollisions=terms.hypercollisions,
+            end_damping=terms.end_damping,
+            apar=terms.apar,
+            bpar=terms.bpar,
+            nonlinear=0.0,
+        )
+        phi = compute_fields_cached(vec, cache, params, terms=term_cfg).phi
+        phi_t_np = np.asarray(phi)[None, ...]
+        t = np.array([0.0])
+        gamma = float(np.real(eig))
+        omega = float(-np.imag(eig))
     else:
-        _, phi_t = integrate_linear(
-            G0_jax, grid, geom, params, dt=dt, steps=steps, method=method, terms=terms
-        )
+        ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
+        grid = grid_full
+        sel = ModeSelection(ky_index=ky_index, kx_index=0, z_index=0)
+        G0 = np.zeros((Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
+        G0[0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
+        G0_jax = jnp.asarray(G0)
+        if time_cfg is not None:
+            time_cfg_use = time_cfg
+            if sample_stride is not None:
+                time_cfg_use = replace(time_cfg, sample_stride=sample_stride)
+            dt = float(time_cfg_use.dt)
+            steps = int(round(time_cfg_use.t_max / time_cfg_use.dt))
+            _, phi_t = integrate_linear_from_config(
+                G0_jax,
+                grid,
+                geom,
+                params,
+                time_cfg_use,
+                terms=terms,
+            )
+            stride = time_cfg_use.sample_stride
+        else:
+            stride = 1 if sample_stride is None else int(sample_stride)
+            _, phi_t = integrate_linear(
+                G0_jax,
+                grid,
+                geom,
+                params,
+                dt=dt,
+                steps=steps,
+                method=method,
+                terms=terms,
+                sample_stride=stride,
+            )
 
-    phi_t_np = np.asarray(phi_t)
-    t = np.arange(steps) * dt
-    signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
-    if auto_window and tmin is None and tmax is None:
-        gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
-            t,
-            signal,
-            window_fraction=window_fraction,
-            min_points=min_points,
-            start_fraction=start_fraction,
-            growth_weight=growth_weight,
-            require_positive=require_positive,
-            min_amp_fraction=min_amp_fraction,
-        )
-    else:
-        gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
+        phi_t_np = np.asarray(phi_t)
+        t = np.arange(phi_t_np.shape[0]) * dt * stride
+        signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
+        if auto_window and tmin is None and tmax is None:
+            gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
+                t,
+                signal,
+                window_fraction=window_fraction,
+                min_points=min_points,
+                start_fraction=start_fraction,
+                growth_weight=growth_weight,
+                require_positive=require_positive,
+                min_amp_fraction=min_amp_fraction,
+            )
+        else:
+            gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
 
     return CycloneRunResult(
         t=t,
@@ -342,6 +397,8 @@ def run_cyclone_scan(
     params: LinearParams | None = None,
     cfg: CycloneBaseCase | None = None,
     time_cfg: TimeConfig | None = None,
+    solver: str = "krylov",
+    krylov_cfg: KrylovConfig | None = None,
     tmin: float | None = None,
     tmax: float | None = None,
     auto_window: bool = True,
@@ -353,6 +410,7 @@ def run_cyclone_scan(
     min_amp_fraction: float = 0.0,
     mode_method: str = "svd",
     terms: LinearTerms | None = None,
+    sample_stride: int | None = None,
 ) -> CycloneScanResult:
     """Run the linear Cyclone benchmark for a list of ky values.
 
@@ -360,7 +418,7 @@ def run_cyclone_scan(
     """
 
     cfg = cfg or CycloneBaseCase()
-    grid = build_spectral_grid(cfg.grid)
+    grid_full = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
     if params is None:
         params = LinearParams(
@@ -378,61 +436,88 @@ def run_cyclone_scan(
         params = _apply_gx_hypercollisions(params)
     if terms is None:
         terms = LinearTerms()
-    cache = build_linear_cache(grid, geom, params, Nl, Nm)
+    cache_full = None
+    if solver.lower() != "krylov":
+        cache_full = build_linear_cache(grid_full, geom, params, Nl, Nm)
 
     gammas = []
     omegas = []
     ky_out = []
     for i, ky in enumerate(ky_values):
+        ky_index = select_ky_index(np.asarray(grid_full.ky), float(ky))
+        if solver.lower() == "krylov":
+            grid = select_ky_grid(grid_full, ky_index)
+            sel = ModeSelection(ky_index=0, kx_index=0, z_index=0)
+        else:
+            grid = grid_full
+            sel = ModeSelection(ky_index=ky_index, kx_index=0, z_index=0)
         dt_i = float(dt[i]) if isinstance(dt, np.ndarray) else float(dt)
         steps_i = int(steps[i]) if isinstance(steps, np.ndarray) else int(steps)
-        ky_index = select_ky_index(np.asarray(grid.ky), float(ky))
-        sel = ModeSelection(ky_index=ky_index, kx_index=0, z_index=0)
 
         G0 = np.zeros((Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
         G0[0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
 
         G0_jax = jnp.asarray(G0)
-        if time_cfg is not None:
-            time_cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
-            _, phi_t = integrate_linear_from_config(
+        cache = build_linear_cache(grid, geom, params, Nl, Nm) if cache_full is None else cache_full
+        if solver.lower() == "krylov":
+            krylov_cfg = krylov_cfg or KrylovConfig()
+            eig, _vec = dominant_eigenpair(
                 G0_jax,
-                grid,
-                geom,
+                cache,
                 params,
-                time_cfg_i,
-                cache=cache,
                 terms=terms,
+                krylov_dim=krylov_cfg.krylov_dim,
+                restarts=krylov_cfg.restarts,
+                omega_cap_factor=krylov_cfg.omega_cap_factor,
             )
+            gamma = float(np.real(eig))
+            omega = float(-np.imag(eig))
         else:
-            _, phi_t = integrate_linear(
-                G0_jax,
-                grid,
-                geom,
-                params,
-                dt=dt_i,
-                steps=steps_i,
-                method=method,
-                cache=cache,
-                terms=terms,
-            )
+            if time_cfg is not None:
+                time_cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
+                if sample_stride is not None:
+                    time_cfg_i = replace(time_cfg_i, sample_stride=sample_stride)
+                _, phi_t = integrate_linear_from_config(
+                    G0_jax,
+                    grid,
+                    geom,
+                    params,
+                    time_cfg_i,
+                    cache=cache,
+                    terms=terms,
+                )
+                stride = time_cfg_i.sample_stride
+            else:
+                stride = 1 if sample_stride is None else int(sample_stride)
+                _, phi_t = integrate_linear(
+                    G0_jax,
+                    grid,
+                    geom,
+                    params,
+                    dt=dt_i,
+                    steps=steps_i,
+                    method=method,
+                    cache=cache,
+                    terms=terms,
+                    sample_stride=stride,
+                )
 
-        phi_t_np = np.asarray(phi_t)
-        t = np.arange(steps_i) * dt_i
-        signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
-        if auto_window and tmin is None and tmax is None:
-            gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
-                t,
-                signal,
-                window_fraction=window_fraction,
-                min_points=min_points,
-                start_fraction=start_fraction,
-                growth_weight=growth_weight,
-                require_positive=require_positive,
-                min_amp_fraction=min_amp_fraction,
-            )
-        else:
-            gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
+            phi_t_np = np.asarray(phi_t)
+            t = np.arange(phi_t_np.shape[0]) * dt_i * stride
+            signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
+            if auto_window and tmin is None and tmax is None:
+                gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
+                    t,
+                    signal,
+                    window_fraction=window_fraction,
+                    min_points=min_points,
+                    start_fraction=start_fraction,
+                    growth_weight=growth_weight,
+                    require_positive=require_positive,
+                    min_amp_fraction=min_amp_fraction,
+                )
+            else:
+                gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
 
         gammas.append(gamma)
         omegas.append(omega)
@@ -471,6 +556,8 @@ def run_etg_linear(
     params: LinearParams | None = None,
     cfg: ETGBaseCase | None = None,
     time_cfg: TimeConfig | None = None,
+    solver: str = "krylov",
+    krylov_cfg: KrylovConfig | None = None,
     tmin: float | None = None,
     tmax: float | None = None,
     auto_window: bool = True,
@@ -482,11 +569,12 @@ def run_etg_linear(
     min_amp_fraction: float = 0.0,
     mode_method: str = "project",
     terms: LinearTerms | None = None,
+    sample_stride: int | None = None,
 ) -> LinearRunResult:
     """Run an ETG linear benchmark and extract growth rate."""
 
     cfg = cfg or ETGBaseCase()
-    grid = build_spectral_grid(cfg.grid)
+    grid_full = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
     if params is None:
         params = _two_species_params(
@@ -501,48 +589,93 @@ def run_etg_linear(
     if terms is None:
         terms = LinearTerms()
 
-    ky_index = select_ky_index(np.asarray(grid.ky), ky_target)
-    sel = ModeSelection(ky_index=ky_index, kx_index=0, z_index=0)
+    ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
+    grid = select_ky_grid(grid_full, ky_index)
+    sel = ModeSelection(ky_index=0, kx_index=0, z_index=0)
 
     ns = 2
     G0 = np.zeros((ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
     G0[1, 0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
 
     G0_jax = jnp.asarray(G0)
-    if time_cfg is not None:
-        dt = float(time_cfg.dt)
-        steps = int(round(time_cfg.t_max / time_cfg.dt))
+    if solver.lower() == "krylov":
+        krylov_cfg = krylov_cfg or KrylovConfig()
         cache = build_linear_cache(grid, geom, params, Nl, Nm)
-        _, phi_t = integrate_linear_from_config(
+        eig, vec = dominant_eigenpair(
             G0_jax,
-            grid,
-            geom,
+            cache,
             params,
-            time_cfg,
-            cache=cache,
             terms=terms,
+            krylov_dim=krylov_cfg.krylov_dim,
+            restarts=krylov_cfg.restarts,
+            omega_cap_factor=krylov_cfg.omega_cap_factor,
         )
+        term_cfg = TermConfig(
+            streaming=terms.streaming,
+            mirror=terms.mirror,
+            curvature=terms.curvature,
+            gradb=terms.gradb,
+            diamagnetic=terms.diamagnetic,
+            collisions=terms.collisions,
+            hypercollisions=terms.hypercollisions,
+            end_damping=terms.end_damping,
+            apar=terms.apar,
+            bpar=terms.bpar,
+            nonlinear=0.0,
+        )
+        phi = compute_fields_cached(vec, cache, params, terms=term_cfg).phi
+        phi_t_np = np.asarray(phi)[None, ...]
+        t = np.array([0.0])
+        gamma = float(np.real(eig))
+        omega = float(-np.imag(eig))
     else:
-        _, phi_t = integrate_linear(
-            G0_jax, grid, geom, params, dt=dt, steps=steps, method=method, terms=terms
-        )
+        if time_cfg is not None:
+            time_cfg_use = time_cfg
+            if sample_stride is not None:
+                time_cfg_use = replace(time_cfg, sample_stride=sample_stride)
+            dt = float(time_cfg_use.dt)
+            steps = int(round(time_cfg_use.t_max / time_cfg_use.dt))
+            cache = build_linear_cache(grid, geom, params, Nl, Nm)
+            _, phi_t = integrate_linear_from_config(
+                G0_jax,
+                grid,
+                geom,
+                params,
+                time_cfg_use,
+                cache=cache,
+                terms=terms,
+            )
+            stride = time_cfg_use.sample_stride
+        else:
+            stride = 1 if sample_stride is None else int(sample_stride)
+            _, phi_t = integrate_linear(
+                G0_jax,
+                grid,
+                geom,
+                params,
+                dt=dt,
+                steps=steps,
+                method=method,
+                terms=terms,
+                sample_stride=stride,
+            )
 
-    phi_t_np = np.asarray(phi_t)
-    t = np.arange(steps) * dt
-    signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
-    if auto_window and tmin is None and tmax is None:
-        gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
-            t,
-            signal,
-            window_fraction=window_fraction,
-            min_points=min_points,
-            start_fraction=start_fraction,
-            growth_weight=growth_weight,
-            require_positive=require_positive,
-            min_amp_fraction=min_amp_fraction,
-        )
-    else:
-        gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
+        phi_t_np = np.asarray(phi_t)
+        t = np.arange(phi_t_np.shape[0]) * dt * stride
+        signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
+        if auto_window and tmin is None and tmax is None:
+            gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
+                t,
+                signal,
+                window_fraction=window_fraction,
+                min_points=min_points,
+                start_fraction=start_fraction,
+                growth_weight=growth_weight,
+                require_positive=require_positive,
+                min_amp_fraction=min_amp_fraction,
+            )
+        else:
+            gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
 
     return LinearRunResult(
         t=t,
@@ -564,6 +697,8 @@ def run_etg_scan(
     params: LinearParams | None = None,
     cfg: ETGBaseCase | None = None,
     time_cfg: TimeConfig | None = None,
+    solver: str = "krylov",
+    krylov_cfg: KrylovConfig | None = None,
     tmin: float | None = None,
     tmax: float | None = None,
     auto_window: bool = True,
@@ -575,6 +710,7 @@ def run_etg_scan(
     min_amp_fraction: float = 0.0,
     mode_method: str = "project",
     terms: LinearTerms | None = None,
+    sample_stride: int | None = None,
 ) -> LinearScanResult:
     """Run an ETG linear benchmark for a list of ky values.
 
@@ -582,7 +718,7 @@ def run_etg_scan(
     """
 
     cfg = cfg or ETGBaseCase()
-    grid = build_spectral_grid(cfg.grid)
+    grid_full = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
     if params is None:
         params = _two_species_params(
@@ -596,62 +732,81 @@ def run_etg_scan(
         )
     if terms is None:
         terms = LinearTerms()
-    cache = build_linear_cache(grid, geom, params, Nl, Nm)
-
     gammas = []
     omegas = []
     ky_out = []
     for i, ky in enumerate(ky_values):
+        ky_index = select_ky_index(np.asarray(grid_full.ky), float(ky))
+        grid = select_ky_grid(grid_full, ky_index)
         dt_i = float(dt[i]) if isinstance(dt, np.ndarray) else float(dt)
         steps_i = int(steps[i]) if isinstance(steps, np.ndarray) else int(steps)
-        ky_index = select_ky_index(np.asarray(grid.ky), float(ky))
-        sel = ModeSelection(ky_index=ky_index, kx_index=0, z_index=0)
+        sel = ModeSelection(ky_index=0, kx_index=0, z_index=0)
 
         ns = 2
         G0 = np.zeros((ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
         G0[1, 0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
 
+        cache = build_linear_cache(grid, geom, params, Nl, Nm)
         G0_jax = jnp.asarray(G0)
-        if time_cfg is not None:
-            time_cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
-            _, phi_t = integrate_linear_from_config(
+        if solver.lower() == "krylov":
+            krylov_cfg = krylov_cfg or KrylovConfig()
+            eig, _vec = dominant_eigenpair(
                 G0_jax,
-                grid,
-                geom,
+                cache,
                 params,
-                time_cfg_i,
-                cache=cache,
                 terms=terms,
+                krylov_dim=krylov_cfg.krylov_dim,
+                restarts=krylov_cfg.restarts,
+                omega_cap_factor=krylov_cfg.omega_cap_factor,
             )
+            gamma = float(np.real(eig))
+            omega = float(-np.imag(eig))
         else:
-            _, phi_t = integrate_linear(
-                G0_jax,
-                grid,
-                geom,
-                params,
-                dt=dt_i,
-                steps=steps_i,
-                method=method,
-                cache=cache,
-                terms=terms,
-            )
+            if time_cfg is not None:
+                time_cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
+                if sample_stride is not None:
+                    time_cfg_i = replace(time_cfg_i, sample_stride=sample_stride)
+                _, phi_t = integrate_linear_from_config(
+                    G0_jax,
+                    grid,
+                    geom,
+                    params,
+                    time_cfg_i,
+                    cache=cache,
+                    terms=terms,
+                )
+                stride = time_cfg_i.sample_stride
+            else:
+                stride = 1 if sample_stride is None else int(sample_stride)
+                _, phi_t = integrate_linear(
+                    G0_jax,
+                    grid,
+                    geom,
+                    params,
+                    dt=dt_i,
+                    steps=steps_i,
+                    method=method,
+                    cache=cache,
+                    terms=terms,
+                    sample_stride=stride,
+                )
 
-        phi_t_np = np.asarray(phi_t)
-        t = np.arange(steps_i) * dt_i
-        signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
-        if auto_window and tmin is None and tmax is None:
-            gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
-                t,
-                signal,
-                window_fraction=window_fraction,
-                min_points=min_points,
-                start_fraction=start_fraction,
-                growth_weight=growth_weight,
-                require_positive=require_positive,
-                min_amp_fraction=min_amp_fraction,
-            )
-        else:
-            gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
+            phi_t_np = np.asarray(phi_t)
+            t = np.arange(phi_t_np.shape[0]) * dt_i * stride
+            signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
+            if auto_window and tmin is None and tmax is None:
+                gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
+                    t,
+                    signal,
+                    window_fraction=window_fraction,
+                    min_points=min_points,
+                    start_fraction=start_fraction,
+                    growth_weight=growth_weight,
+                    require_positive=require_positive,
+                    min_amp_fraction=min_amp_fraction,
+                )
+            else:
+                gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
 
         gammas.append(gamma)
         omegas.append(omega)
@@ -669,6 +824,8 @@ def run_kinetic_linear(
     params: LinearParams | None = None,
     cfg: KineticElectronBaseCase | None = None,
     time_cfg: TimeConfig | None = None,
+    solver: str = "krylov",
+    krylov_cfg: KrylovConfig | None = None,
     tmin: float | None = None,
     tmax: float | None = None,
     auto_window: bool = True,
@@ -680,11 +837,12 @@ def run_kinetic_linear(
     min_amp_fraction: float = 0.0,
     mode_method: str = "project",
     terms: LinearTerms | None = None,
+    sample_stride: int | None = None,
 ) -> LinearRunResult:
     """Run a kinetic-electron ITG/TEM benchmark and extract growth rate."""
 
     cfg = cfg or KineticElectronBaseCase()
-    grid = build_spectral_grid(cfg.grid)
+    grid_full = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
     if params is None:
         params = _two_species_params(
@@ -699,48 +857,93 @@ def run_kinetic_linear(
     if terms is None:
         terms = LinearTerms()
 
-    ky_index = select_ky_index(np.asarray(grid.ky), ky_target)
-    sel = ModeSelection(ky_index=ky_index, kx_index=0, z_index=0)
+    ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
+    grid = select_ky_grid(grid_full, ky_index)
+    sel = ModeSelection(ky_index=0, kx_index=0, z_index=0)
 
     ns = 2
     G0 = np.zeros((ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
     G0[1, 0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
 
     G0_jax = jnp.asarray(G0)
-    if time_cfg is not None:
-        dt = float(time_cfg.dt)
-        steps = int(round(time_cfg.t_max / time_cfg.dt))
+    if solver.lower() == "krylov":
+        krylov_cfg = krylov_cfg or KrylovConfig()
         cache = build_linear_cache(grid, geom, params, Nl, Nm)
-        _, phi_t = integrate_linear_from_config(
+        eig, vec = dominant_eigenpair(
             G0_jax,
-            grid,
-            geom,
+            cache,
             params,
-            time_cfg,
-            cache=cache,
             terms=terms,
+            krylov_dim=krylov_cfg.krylov_dim,
+            restarts=krylov_cfg.restarts,
+            omega_cap_factor=krylov_cfg.omega_cap_factor,
         )
+        term_cfg = TermConfig(
+            streaming=terms.streaming,
+            mirror=terms.mirror,
+            curvature=terms.curvature,
+            gradb=terms.gradb,
+            diamagnetic=terms.diamagnetic,
+            collisions=terms.collisions,
+            hypercollisions=terms.hypercollisions,
+            end_damping=terms.end_damping,
+            apar=terms.apar,
+            bpar=terms.bpar,
+            nonlinear=0.0,
+        )
+        phi = compute_fields_cached(vec, cache, params, terms=term_cfg).phi
+        phi_t_np = np.asarray(phi)[None, ...]
+        t = np.array([0.0])
+        gamma = float(np.real(eig))
+        omega = float(-np.imag(eig))
     else:
-        _, phi_t = integrate_linear(
-            G0_jax, grid, geom, params, dt=dt, steps=steps, method=method, terms=terms
-        )
+        if time_cfg is not None:
+            time_cfg_use = time_cfg
+            if sample_stride is not None:
+                time_cfg_use = replace(time_cfg, sample_stride=sample_stride)
+            dt = float(time_cfg_use.dt)
+            steps = int(round(time_cfg_use.t_max / time_cfg_use.dt))
+            cache = build_linear_cache(grid, geom, params, Nl, Nm)
+            _, phi_t = integrate_linear_from_config(
+                G0_jax,
+                grid,
+                geom,
+                params,
+                time_cfg_use,
+                cache=cache,
+                terms=terms,
+            )
+            stride = time_cfg_use.sample_stride
+        else:
+            stride = 1 if sample_stride is None else int(sample_stride)
+            _, phi_t = integrate_linear(
+                G0_jax,
+                grid,
+                geom,
+                params,
+                dt=dt,
+                steps=steps,
+                method=method,
+                terms=terms,
+                sample_stride=stride,
+            )
 
-    phi_t_np = np.asarray(phi_t)
-    t = np.arange(steps) * dt
-    signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
-    if auto_window and tmin is None and tmax is None:
-        gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
-            t,
-            signal,
-            window_fraction=window_fraction,
-            min_points=min_points,
-            start_fraction=start_fraction,
-            growth_weight=growth_weight,
-            require_positive=require_positive,
-            min_amp_fraction=min_amp_fraction,
-        )
-    else:
-        gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
+        phi_t_np = np.asarray(phi_t)
+        t = np.arange(phi_t_np.shape[0]) * dt * stride
+        signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
+        if auto_window and tmin is None and tmax is None:
+            gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
+                t,
+                signal,
+                window_fraction=window_fraction,
+                min_points=min_points,
+                start_fraction=start_fraction,
+                growth_weight=growth_weight,
+                require_positive=require_positive,
+                min_amp_fraction=min_amp_fraction,
+            )
+        else:
+            gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
 
     return LinearRunResult(
         t=t,
@@ -762,6 +965,8 @@ def run_kinetic_scan(
     params: LinearParams | None = None,
     cfg: KineticElectronBaseCase | None = None,
     time_cfg: TimeConfig | None = None,
+    solver: str = "krylov",
+    krylov_cfg: KrylovConfig | None = None,
     tmin: float | None = None,
     tmax: float | None = None,
     auto_window: bool = True,
@@ -773,6 +978,7 @@ def run_kinetic_scan(
     min_amp_fraction: float = 0.0,
     mode_method: str = "project",
     terms: LinearTerms | None = None,
+    sample_stride: int | None = None,
 ) -> LinearScanResult:
     """Run a kinetic-electron ITG/TEM benchmark for a list of ky values.
 
@@ -780,7 +986,7 @@ def run_kinetic_scan(
     """
 
     cfg = cfg or KineticElectronBaseCase()
-    grid = build_spectral_grid(cfg.grid)
+    grid_full = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
     if params is None:
         params = _two_species_params(
@@ -794,62 +1000,81 @@ def run_kinetic_scan(
         )
     if terms is None:
         terms = LinearTerms()
-    cache = build_linear_cache(grid, geom, params, Nl, Nm)
-
     gammas = []
     omegas = []
     ky_out = []
     for i, ky in enumerate(ky_values):
+        ky_index = select_ky_index(np.asarray(grid_full.ky), float(ky))
+        grid = select_ky_grid(grid_full, ky_index)
         dt_i = float(dt[i]) if isinstance(dt, np.ndarray) else float(dt)
         steps_i = int(steps[i]) if isinstance(steps, np.ndarray) else int(steps)
-        ky_index = select_ky_index(np.asarray(grid.ky), float(ky))
-        sel = ModeSelection(ky_index=ky_index, kx_index=0, z_index=0)
+        sel = ModeSelection(ky_index=0, kx_index=0, z_index=0)
 
         ns = 2
         G0 = np.zeros((ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
         G0[1, 0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
 
+        cache = build_linear_cache(grid, geom, params, Nl, Nm)
         G0_jax = jnp.asarray(G0)
-        if time_cfg is not None:
-            time_cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
-            _, phi_t = integrate_linear_from_config(
+        if solver.lower() == "krylov":
+            krylov_cfg = krylov_cfg or KrylovConfig()
+            eig, _vec = dominant_eigenpair(
                 G0_jax,
-                grid,
-                geom,
+                cache,
                 params,
-                time_cfg_i,
-                cache=cache,
                 terms=terms,
+                krylov_dim=krylov_cfg.krylov_dim,
+                restarts=krylov_cfg.restarts,
+                omega_cap_factor=krylov_cfg.omega_cap_factor,
             )
+            gamma = float(np.real(eig))
+            omega = float(-np.imag(eig))
         else:
-            _, phi_t = integrate_linear(
-                G0_jax,
-                grid,
-                geom,
-                params,
-                dt=dt_i,
-                steps=steps_i,
-                method=method,
-                cache=cache,
-                terms=terms,
-            )
+            if time_cfg is not None:
+                time_cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
+                if sample_stride is not None:
+                    time_cfg_i = replace(time_cfg_i, sample_stride=sample_stride)
+                _, phi_t = integrate_linear_from_config(
+                    G0_jax,
+                    grid,
+                    geom,
+                    params,
+                    time_cfg_i,
+                    cache=cache,
+                    terms=terms,
+                )
+                stride = time_cfg_i.sample_stride
+            else:
+                stride = 1 if sample_stride is None else int(sample_stride)
+                _, phi_t = integrate_linear(
+                    G0_jax,
+                    grid,
+                    geom,
+                    params,
+                    dt=dt_i,
+                    steps=steps_i,
+                    method=method,
+                    cache=cache,
+                    terms=terms,
+                    sample_stride=stride,
+                )
 
-        phi_t_np = np.asarray(phi_t)
-        t = np.arange(steps_i) * dt_i
-        signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
-        if auto_window and tmin is None and tmax is None:
-            gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
-                t,
-                signal,
-                window_fraction=window_fraction,
-                min_points=min_points,
-                start_fraction=start_fraction,
-                growth_weight=growth_weight,
-                require_positive=require_positive,
-                min_amp_fraction=min_amp_fraction,
-            )
-        else:
-            gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
+            phi_t_np = np.asarray(phi_t)
+            t = np.arange(phi_t_np.shape[0]) * dt_i * stride
+            signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
+            if auto_window and tmin is None and tmax is None:
+                gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
+                    t,
+                    signal,
+                    window_fraction=window_fraction,
+                    min_points=min_points,
+                    start_fraction=start_fraction,
+                    growth_weight=growth_weight,
+                    require_positive=require_positive,
+                    min_amp_fraction=min_amp_fraction,
+                )
+            else:
+                gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
 
         gammas.append(gamma)
         omegas.append(omega)
@@ -867,6 +1092,8 @@ def run_tem_linear(
     params: LinearParams | None = None,
     cfg: TEMBaseCase | None = None,
     time_cfg: TimeConfig | None = None,
+    solver: str = "krylov",
+    krylov_cfg: KrylovConfig | None = None,
     tmin: float | None = None,
     tmax: float | None = None,
     auto_window: bool = True,
@@ -878,11 +1105,12 @@ def run_tem_linear(
     min_amp_fraction: float = 0.0,
     mode_method: str = "project",
     terms: LinearTerms | None = None,
+    sample_stride: int | None = None,
 ) -> LinearRunResult:
     """Run the TEM benchmark and extract growth rate."""
 
     cfg = cfg or TEMBaseCase()
-    grid = build_spectral_grid(cfg.grid)
+    grid_full = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
     if params is None:
         params = _two_species_params(
@@ -897,48 +1125,93 @@ def run_tem_linear(
     if terms is None:
         terms = LinearTerms(bpar=0.0)
 
-    ky_index = select_ky_index(np.asarray(grid.ky), ky_target)
-    sel = ModeSelection(ky_index=ky_index, kx_index=0, z_index=0)
+    ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
+    grid = select_ky_grid(grid_full, ky_index)
+    sel = ModeSelection(ky_index=0, kx_index=0, z_index=0)
 
     ns = 2
     G0 = np.zeros((ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
     G0[1, 0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
 
     G0_jax = jnp.asarray(G0)
-    if time_cfg is not None:
-        dt = float(time_cfg.dt)
-        steps = int(round(time_cfg.t_max / time_cfg.dt))
+    if solver.lower() == "krylov":
+        krylov_cfg = krylov_cfg or KrylovConfig()
         cache = build_linear_cache(grid, geom, params, Nl, Nm)
-        _, phi_t = integrate_linear_from_config(
+        eig, vec = dominant_eigenpair(
             G0_jax,
-            grid,
-            geom,
+            cache,
             params,
-            time_cfg,
-            cache=cache,
             terms=terms,
+            krylov_dim=krylov_cfg.krylov_dim,
+            restarts=krylov_cfg.restarts,
+            omega_cap_factor=krylov_cfg.omega_cap_factor,
         )
+        term_cfg = TermConfig(
+            streaming=terms.streaming,
+            mirror=terms.mirror,
+            curvature=terms.curvature,
+            gradb=terms.gradb,
+            diamagnetic=terms.diamagnetic,
+            collisions=terms.collisions,
+            hypercollisions=terms.hypercollisions,
+            end_damping=terms.end_damping,
+            apar=terms.apar,
+            bpar=terms.bpar,
+            nonlinear=0.0,
+        )
+        phi = compute_fields_cached(vec, cache, params, terms=term_cfg).phi
+        phi_t_np = np.asarray(phi)[None, ...]
+        t = np.array([0.0])
+        gamma = float(np.real(eig))
+        omega = float(-np.imag(eig))
     else:
-        _, phi_t = integrate_linear(
-            G0_jax, grid, geom, params, dt=dt, steps=steps, method=method, terms=terms
-        )
+        if time_cfg is not None:
+            time_cfg_use = time_cfg
+            if sample_stride is not None:
+                time_cfg_use = replace(time_cfg, sample_stride=sample_stride)
+            dt = float(time_cfg_use.dt)
+            steps = int(round(time_cfg_use.t_max / time_cfg_use.dt))
+            cache = build_linear_cache(grid, geom, params, Nl, Nm)
+            _, phi_t = integrate_linear_from_config(
+                G0_jax,
+                grid,
+                geom,
+                params,
+                time_cfg_use,
+                cache=cache,
+                terms=terms,
+            )
+            stride = time_cfg_use.sample_stride
+        else:
+            stride = 1 if sample_stride is None else int(sample_stride)
+            _, phi_t = integrate_linear(
+                G0_jax,
+                grid,
+                geom,
+                params,
+                dt=dt,
+                steps=steps,
+                method=method,
+                terms=terms,
+                sample_stride=stride,
+            )
 
-    phi_t_np = np.asarray(phi_t)
-    t = np.arange(steps) * dt
-    signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
-    if auto_window and tmin is None and tmax is None:
-        gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
-            t,
-            signal,
-            window_fraction=window_fraction,
-            min_points=min_points,
-            start_fraction=start_fraction,
-            growth_weight=growth_weight,
-            require_positive=require_positive,
-            min_amp_fraction=min_amp_fraction,
-        )
-    else:
-        gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
+        phi_t_np = np.asarray(phi_t)
+        t = np.arange(phi_t_np.shape[0]) * dt * stride
+        signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
+        if auto_window and tmin is None and tmax is None:
+            gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
+                t,
+                signal,
+                window_fraction=window_fraction,
+                min_points=min_points,
+                start_fraction=start_fraction,
+                growth_weight=growth_weight,
+                require_positive=require_positive,
+                min_amp_fraction=min_amp_fraction,
+            )
+        else:
+            gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
 
     return LinearRunResult(
         t=t,
@@ -960,6 +1233,8 @@ def run_tem_scan(
     params: LinearParams | None = None,
     cfg: TEMBaseCase | None = None,
     time_cfg: TimeConfig | None = None,
+    solver: str = "krylov",
+    krylov_cfg: KrylovConfig | None = None,
     tmin: float | None = None,
     tmax: float | None = None,
     auto_window: bool = True,
@@ -971,6 +1246,7 @@ def run_tem_scan(
     min_amp_fraction: float = 0.0,
     mode_method: str = "project",
     terms: LinearTerms | None = None,
+    sample_stride: int | None = None,
 ) -> LinearScanResult:
     """Run the TEM benchmark for a list of ky values.
 
@@ -978,7 +1254,7 @@ def run_tem_scan(
     """
 
     cfg = cfg or TEMBaseCase()
-    grid = build_spectral_grid(cfg.grid)
+    grid_full = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
     if params is None:
         params = _two_species_params(
@@ -992,62 +1268,81 @@ def run_tem_scan(
         )
     if terms is None:
         terms = LinearTerms(bpar=0.0)
-    cache = build_linear_cache(grid, geom, params, Nl, Nm)
-
     gammas = []
     omegas = []
     ky_out = []
     for i, ky in enumerate(ky_values):
+        ky_index = select_ky_index(np.asarray(grid_full.ky), float(ky))
+        grid = select_ky_grid(grid_full, ky_index)
         dt_i = float(dt[i]) if isinstance(dt, np.ndarray) else float(dt)
         steps_i = int(steps[i]) if isinstance(steps, np.ndarray) else int(steps)
-        ky_index = select_ky_index(np.asarray(grid.ky), float(ky))
-        sel = ModeSelection(ky_index=ky_index, kx_index=0, z_index=0)
+        sel = ModeSelection(ky_index=0, kx_index=0, z_index=0)
 
         ns = 2
         G0 = np.zeros((ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
         G0[1, 0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
 
+        cache = build_linear_cache(grid, geom, params, Nl, Nm)
         G0_jax = jnp.asarray(G0)
-        if time_cfg is not None:
-            time_cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
-            _, phi_t = integrate_linear_from_config(
+        if solver.lower() == "krylov":
+            krylov_cfg = krylov_cfg or KrylovConfig()
+            eig, _vec = dominant_eigenpair(
                 G0_jax,
-                grid,
-                geom,
+                cache,
                 params,
-                time_cfg_i,
-                cache=cache,
                 terms=terms,
+                krylov_dim=krylov_cfg.krylov_dim,
+                restarts=krylov_cfg.restarts,
+                omega_cap_factor=krylov_cfg.omega_cap_factor,
             )
+            gamma = float(np.real(eig))
+            omega = float(-np.imag(eig))
         else:
-            _, phi_t = integrate_linear(
-                G0_jax,
-                grid,
-                geom,
-                params,
-                dt=dt_i,
-                steps=steps_i,
-                method=method,
-                cache=cache,
-                terms=terms,
-            )
+            if time_cfg is not None:
+                time_cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
+                if sample_stride is not None:
+                    time_cfg_i = replace(time_cfg_i, sample_stride=sample_stride)
+                _, phi_t = integrate_linear_from_config(
+                    G0_jax,
+                    grid,
+                    geom,
+                    params,
+                    time_cfg_i,
+                    cache=cache,
+                    terms=terms,
+                )
+                stride = time_cfg_i.sample_stride
+            else:
+                stride = 1 if sample_stride is None else int(sample_stride)
+                _, phi_t = integrate_linear(
+                    G0_jax,
+                    grid,
+                    geom,
+                    params,
+                    dt=dt_i,
+                    steps=steps_i,
+                    method=method,
+                    cache=cache,
+                    terms=terms,
+                    sample_stride=stride,
+                )
 
-        phi_t_np = np.asarray(phi_t)
-        t = np.arange(steps_i) * dt_i
-        signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
-        if auto_window and tmin is None and tmax is None:
-            gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
-                t,
-                signal,
-                window_fraction=window_fraction,
-                min_points=min_points,
-                start_fraction=start_fraction,
-                growth_weight=growth_weight,
-                require_positive=require_positive,
-                min_amp_fraction=min_amp_fraction,
-            )
-        else:
-            gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
+            phi_t_np = np.asarray(phi_t)
+            t = np.arange(phi_t_np.shape[0]) * dt_i * stride
+            signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
+            if auto_window and tmin is None and tmax is None:
+                gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
+                    t,
+                    signal,
+                    window_fraction=window_fraction,
+                    min_points=min_points,
+                    start_fraction=start_fraction,
+                    growth_weight=growth_weight,
+                    require_positive=require_positive,
+                    min_amp_fraction=min_amp_fraction,
+                )
+            else:
+                gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
 
         gammas.append(gamma)
         omegas.append(omega)
@@ -1065,6 +1360,8 @@ def run_kbm_beta_scan(
     method: str = "rk4",
     cfg: KBMBaseCase | None = None,
     time_cfg: TimeConfig | None = None,
+    solver: str = "krylov",
+    krylov_cfg: KrylovConfig | None = None,
     tmin: float | None = None,
     tmax: float | None = None,
     auto_window: bool = True,
@@ -1076,6 +1373,7 @@ def run_kbm_beta_scan(
     min_amp_fraction: float = 0.0,
     mode_method: str = "project",
     terms: LinearTerms | None = None,
+    sample_stride: int | None = None,
 ) -> LinearScanResult:
     """Run a KBM beta scan at fixed ky.
 
@@ -1083,7 +1381,7 @@ def run_kbm_beta_scan(
     """
 
     cfg = cfg or KBMBaseCase()
-    grid = build_spectral_grid(cfg.grid)
+    grid_full = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
     if terms is None:
         terms = LinearTerms(bpar=0.0)
@@ -1091,8 +1389,9 @@ def run_kbm_beta_scan(
     gammas = []
     omegas = []
     beta_out = []
-    ky_index = select_ky_index(np.asarray(grid.ky), ky_target)
-    sel = ModeSelection(ky_index=ky_index, kx_index=0, z_index=0)
+    ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
+    grid = select_ky_grid(grid_full, ky_index)
+    sel = ModeSelection(ky_index=0, kx_index=0, z_index=0)
 
     for i, beta in enumerate(betas):
         dt_i = float(dt[i]) if isinstance(dt, np.ndarray) else float(dt)
@@ -1114,46 +1413,65 @@ def run_kbm_beta_scan(
         G0[1, 0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
 
         G0_jax = jnp.asarray(G0)
-        if time_cfg is not None:
-            time_cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
-            _, phi_t = integrate_linear_from_config(
+        if solver.lower() == "krylov":
+            krylov_cfg = krylov_cfg or KrylovConfig()
+            eig, _vec = dominant_eigenpair(
                 G0_jax,
-                grid,
-                geom,
+                cache,
                 params,
-                time_cfg_i,
-                cache=cache,
                 terms=terms,
+                krylov_dim=krylov_cfg.krylov_dim,
+                restarts=krylov_cfg.restarts,
+                omega_cap_factor=krylov_cfg.omega_cap_factor,
             )
+            gamma = float(np.real(eig))
+            omega = float(-np.imag(eig))
         else:
-            _, phi_t = integrate_linear(
-                G0_jax,
-                grid,
-                geom,
-                params,
-                dt=dt_i,
-                steps=steps_i,
-                method=method,
-                cache=cache,
-                terms=terms,
-            )
+            if time_cfg is not None:
+                time_cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
+                if sample_stride is not None:
+                    time_cfg_i = replace(time_cfg_i, sample_stride=sample_stride)
+                _, phi_t = integrate_linear_from_config(
+                    G0_jax,
+                    grid,
+                    geom,
+                    params,
+                    time_cfg_i,
+                    cache=cache,
+                    terms=terms,
+                )
+                stride = time_cfg_i.sample_stride
+            else:
+                stride = 1 if sample_stride is None else int(sample_stride)
+                _, phi_t = integrate_linear(
+                    G0_jax,
+                    grid,
+                    geom,
+                    params,
+                    dt=dt_i,
+                    steps=steps_i,
+                    method=method,
+                    cache=cache,
+                    terms=terms,
+                    sample_stride=stride,
+                )
 
-        phi_t_np = np.asarray(phi_t)
-        t = np.arange(steps_i) * dt_i
-        signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
-        if auto_window and tmin is None and tmax is None:
-            gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
-                t,
-                signal,
-                window_fraction=window_fraction,
-                min_points=min_points,
-                start_fraction=start_fraction,
-                growth_weight=growth_weight,
-                require_positive=require_positive,
-                min_amp_fraction=min_amp_fraction,
-            )
-        else:
-            gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
+            phi_t_np = np.asarray(phi_t)
+            t = np.arange(phi_t_np.shape[0]) * dt_i * stride
+            signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
+            if auto_window and tmin is None and tmax is None:
+                gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
+                    t,
+                    signal,
+                    window_fraction=window_fraction,
+                    min_points=min_points,
+                    start_fraction=start_fraction,
+                    growth_weight=growth_weight,
+                    require_positive=require_positive,
+                    min_amp_fraction=min_amp_fraction,
+                )
+            else:
+                gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
 
         gammas.append(gamma)
         omegas.append(omega)

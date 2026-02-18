@@ -2,19 +2,26 @@
 
 from __future__ import annotations
 
+import jax
 import jax.numpy as jnp
 
 from spectraxgk.basis import hermite_ladder_coeffs
 from spectraxgk.terms.validation import _check_positive
 
 
-def grad_z_periodic(f: jnp.ndarray, dz: float | jnp.ndarray) -> jnp.ndarray:
+def grad_z_periodic(
+    f: jnp.ndarray, dz: float | jnp.ndarray | None = None, kz: jnp.ndarray | None = None
+) -> jnp.ndarray:
     """Spectral periodic derivative along the last axis."""
 
-    _check_positive(dz, "dz")
+    if kz is None:
+        if dz is None:
+            raise ValueError("Either dz or kz must be provided")
+        _check_positive(dz, "dz")
     n = f.shape[-1]
-    dz_val = jnp.asarray(dz, dtype=jnp.real(f).dtype)
-    kz = 2.0 * jnp.pi * jnp.fft.fftfreq(n, d=dz_val)
+    if kz is None:
+        dz_val = jnp.asarray(dz, dtype=jnp.real(f).dtype)
+        kz = 2.0 * jnp.pi * jnp.fft.fftfreq(n, d=dz_val)
     f_hat = jnp.fft.fft(f, axis=-1)
     df_hat = (1j * kz) * f_hat
     return jnp.fft.ifft(df_hat, axis=-1)
@@ -25,18 +32,18 @@ def shift_axis(arr: jnp.ndarray, offset: int, axis: int) -> jnp.ndarray:
 
     if offset == 0:
         return arr
-    pad = [(0, 0)] * arr.ndim
+    axis_len = arr.shape[axis]
+    if abs(offset) >= axis_len:
+        return jnp.zeros_like(arr)
     if offset > 0:
-        pad[axis] = (0, offset)
-        arr_pad = jnp.pad(arr, pad)
-        slc = [slice(None)] * arr.ndim
-        slc[axis] = slice(offset, offset + arr.shape[axis])
-        return arr_pad[tuple(slc)]
-    pad[axis] = (-offset, 0)
-    arr_pad = jnp.pad(arr, pad)
-    slc = [slice(None)] * arr.ndim
-    slc[axis] = slice(0, arr.shape[axis])
-    return arr_pad[tuple(slc)]
+        pad_shape = [arr.shape[i] if i != axis else offset for i in range(arr.ndim)]
+        zeros = jnp.zeros(pad_shape, dtype=arr.dtype)
+        arr_pad = jnp.concatenate([arr, zeros], axis=axis)
+        return jax.lax.slice_in_dim(arr_pad, offset, offset + arr.shape[axis], axis=axis)
+    pad_shape = [arr.shape[i] if i != axis else -offset for i in range(arr.ndim)]
+    zeros = jnp.zeros(pad_shape, dtype=arr.dtype)
+    arr_pad = jnp.concatenate([zeros, arr], axis=axis)
+    return jax.lax.slice_in_dim(arr_pad, 0, arr.shape[axis], axis=axis)
 
 
 def apply_hermite_v(G: jnp.ndarray) -> jnp.ndarray:
@@ -96,18 +103,17 @@ def apply_laguerre_x(G: jnp.ndarray) -> jnp.ndarray:
 
 
 def streaming_term(
-    H: jnp.ndarray, dz: float | jnp.ndarray, vth: float | jnp.ndarray
+    H: jnp.ndarray,
+    kz: jnp.ndarray,
+    vth: float | jnp.ndarray,
+    sqrt_p: jnp.ndarray,
+    sqrt_m: jnp.ndarray,
 ) -> jnp.ndarray:
     """Streaming term using Hermite ladder and real-space z derivative."""
 
     _check_positive(vth, "vth")
-    dH_dz = grad_z_periodic(H, dz)
+    dH_dz = grad_z_periodic(H, kz=kz)
     axis_m = -4
-    Nm = H.shape[axis_m]
-    sqrt_p, sqrt_m = hermite_ladder_coeffs(Nm - 1)
-    sqrt_p = sqrt_p[:Nm]
-    sqrt_m = sqrt_m[:Nm]
-
     pad = [(0, 0)] * H.ndim
     pad[axis_m] = (1, 1)
     H_pad = jnp.pad(dH_dz, pad)
@@ -117,8 +123,4 @@ def streaming_term(
     slc_minus[axis_m] = slice(0, -2)
     H_plus = H_pad[tuple(slc_plus)]
     H_minus = H_pad[tuple(slc_minus)]
-    shape = [1] * H.ndim
-    shape[axis_m] = Nm
-    sqrt_p = sqrt_p.reshape(shape)
-    sqrt_m = sqrt_m.reshape(shape)
     return vth * (sqrt_p * H_plus + sqrt_m * H_minus)
