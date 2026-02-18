@@ -778,8 +778,9 @@ def _build_implicit_operator(
     diag = jnp.zeros_like(damping, dtype=state_dtype)
     imag = jnp.asarray(1j, dtype=state_dtype)
     tz = _as_species_array(params.tz, ns, "tz").astype(real_dtype)
+    t_over_z = jnp.where(tz == 0.0, 0.0, 1.0 / tz)
     vth = _as_species_array(params.vth, ns, "vth").astype(real_dtype)
-    tz_b = tz[:, None, None, None, None, None]
+    tz_b = t_over_z[:, None, None, None, None, None]
     vth_b = vth[:, None, None, None, None, None]
     omega_d_scale = jnp.asarray(params.omega_d_scale, dtype=real_dtype)
     diag = diag - imag * tz_b * omega_d_scale * (

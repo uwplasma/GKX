@@ -282,7 +282,7 @@ class TEMBaseCase:
         diffrax_atol=1.0e-7,
         diffrax_max_steps=20000,
     )
-    geometry: GeometryConfig = GeometryConfig(q=2.7, s_hat=0.5, epsilon=0.18, R0=2.77778)
+    geometry: GeometryConfig = GeometryConfig(q=2.7, s_hat=0.5, epsilon=0.18, R0=1.0)
     model: TEMModelConfig = TEMModelConfig()
 
     def to_dict(self) -> Dict[str, Dict[str, float]]:
