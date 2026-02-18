@@ -52,6 +52,7 @@ def integrate_linear_from_config(
             max_steps=time_cfg.diffrax_max_steps,
             progress_bar=time_cfg.progress_bar,
             checkpoint=time_cfg.checkpoint,
+            sample_stride=time_cfg.sample_stride,
         )
     return integrate_linear(
         G0,
@@ -66,6 +67,7 @@ def integrate_linear_from_config(
         implicit_preconditioner=time_cfg.implicit_preconditioner,
         implicit_solve_method=time_cfg.implicit_solve_method,
         checkpoint=time_cfg.checkpoint,
+        sample_stride=time_cfg.sample_stride,
         terms=terms,
     )
 

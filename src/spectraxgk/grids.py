@@ -78,3 +78,20 @@ def build_spectral_grid(cfg: GridConfig) -> SpectralGrid:
     ky_grid, kx_grid = jnp.meshgrid(ky, kx, indexing="ij")
     mask = twothirds_mask(cfg.Ny, cfg.Nx)
     return SpectralGrid(kx=kx, ky=ky, z=z, kx_grid=kx_grid, ky_grid=ky_grid, dealias_mask=mask)
+
+
+def select_ky_grid(grid: SpectralGrid, ky_index: int) -> SpectralGrid:
+    """Return a grid sliced down to a single ky index."""
+
+    ky = grid.ky[ky_index : ky_index + 1]
+    ky_grid = grid.ky_grid[ky_index : ky_index + 1, :]
+    kx_grid = grid.kx_grid[ky_index : ky_index + 1, :]
+    mask = grid.dealias_mask[ky_index : ky_index + 1, :]
+    return SpectralGrid(
+        kx=grid.kx,
+        ky=ky,
+        z=grid.z,
+        kx_grid=kx_grid,
+        ky_grid=ky_grid,
+        dealias_mask=mask,
+    )

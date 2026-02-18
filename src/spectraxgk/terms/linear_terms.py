@@ -10,13 +10,15 @@ from spectraxgk.terms.operators import shift_axis, streaming_term
 def streaming_contribution(
     H: jnp.ndarray,
     *,
-    dz: jnp.ndarray,
+    kz: jnp.ndarray,
     vth: jnp.ndarray,
+    sqrt_p: jnp.ndarray,
+    sqrt_m: jnp.ndarray,
     kpar_scale: jnp.ndarray,
     weight: jnp.ndarray,
 ) -> jnp.ndarray:
     vth_s = vth if vth.ndim == 0 else vth[:, None, None, None, None, None]
-    return -weight * kpar_scale * streaming_term(H, dz, vth_s)
+    return -weight * kpar_scale * streaming_term(H, kz, vth_s, sqrt_p, sqrt_m)
 
 
 def mirror_contribution(

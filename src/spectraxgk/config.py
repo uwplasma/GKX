@@ -31,6 +31,7 @@ class TimeConfig:
     t_max: float = 100.0
     dt: float = 0.1
     method: str = "rk2"
+    sample_stride: int = 1
     checkpoint: bool = False
     implicit_restart: int = 20
     implicit_preconditioner: str | None = None

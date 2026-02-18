@@ -187,6 +187,7 @@ def select_fit_window(
     start_fraction: float = 0.0,
     growth_weight: float = 0.0,
     require_positive: bool = False,
+    min_amp_fraction: float = 0.0,
 ) -> Tuple[float, float]:
     """Pick a time window with the most exponential-like behavior."""
 
@@ -215,8 +216,11 @@ def select_fit_window(
         raise ValueError("start_fraction must be in [0, 1)")
     if growth_weight < 0.0:
         raise ValueError("growth_weight must be >= 0")
+    if not (0.0 <= min_amp_fraction < 1.0):
+        raise ValueError("min_amp_fraction must be in [0, 1)")
 
-    amp = np.log(np.maximum(np.abs(signal), 1.0e-30))
+    amp_lin = np.abs(signal)
+    amp = np.log(np.maximum(amp_lin, 1.0e-30))
     phase = np.unwrap(np.angle(signal))
 
     def r2_score(y: np.ndarray, yfit: np.ndarray) -> float:
@@ -230,6 +234,11 @@ def select_fit_window(
     best_slice = (0, window)
     found_positive = False
     start_index = int(start_fraction * n)
+    if min_amp_fraction > 0.0:
+        amp_thresh = min_amp_fraction * float(np.max(amp_lin))
+        above = np.where(amp_lin >= amp_thresh)[0]
+        if above.size:
+            start_index = max(start_index, int(above[0]))
     for start in range(start_index, n - window + 1):
         end = start + window
         tt = t[start:end]
@@ -258,6 +267,7 @@ def select_fit_window(
             start_fraction=start_fraction,
             growth_weight=growth_weight,
             require_positive=False,
+            min_amp_fraction=min_amp_fraction,
         )
 
     tmin = float(t[best_slice[0]])
@@ -275,6 +285,7 @@ def fit_growth_rate_auto(
     start_fraction: float = 0.0,
     growth_weight: float = 0.0,
     require_positive: bool = False,
+    min_amp_fraction: float = 0.0,
 ) -> Tuple[float, float, float, float]:
     """Fit gamma/omega with optional auto-selected window."""
 
@@ -287,6 +298,7 @@ def fit_growth_rate_auto(
             start_fraction=start_fraction,
             growth_weight=growth_weight,
             require_positive=require_positive,
+            min_amp_fraction=min_amp_fraction,
         )
     gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
     tmin_out = float(tmin) if tmin is not None else float(t[0])
