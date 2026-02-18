@@ -736,6 +736,168 @@ def _integrate_linear_cached(
     return jax.lax.scan(sample_step, G0, None, length=num_samples)
 
 
+def _integrate_linear_implicit_cached(
+    G0: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    dt: float,
+    steps: int,
+    *,
+    terms: LinearTerms | None = None,
+    implicit_tol: float = 1.0e-6,
+    implicit_maxiter: int = 200,
+    implicit_iters: int = 3,
+    implicit_relax: float = 0.7,
+    implicit_restart: int = 20,
+    implicit_solve_method: str = "batched",
+    implicit_preconditioner: Callable[[jnp.ndarray], jnp.ndarray] | str | None = None,
+    checkpoint: bool = False,
+    sample_stride: int = 1,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Implicit linear integrator using GMRES with a diagonal preconditioner."""
+    if terms is None:
+        terms = LinearTerms()
+    if sample_stride < 1:
+        raise ValueError("sample_stride must be >= 1")
+    if steps % sample_stride != 0:
+        raise ValueError("steps must be divisible by sample_stride")
+
+    base_dtype = jnp.complex128 if _x64_enabled() else jnp.complex64
+    state_dtype = jnp.result_type(G0, base_dtype)
+    G = jnp.asarray(G0, dtype=state_dtype)
+    real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
+    dt_val = jnp.asarray(dt, dtype=real_dtype)
+
+    squeeze_species = False
+    if G.ndim == 5:
+        G = G[None, ...]
+        squeeze_species = True
+    shape = G.shape
+    size = int(np.prod(np.asarray(shape)))
+
+    ns = shape[0]
+    nu = _as_species_array(params.nu, ns, "nu").astype(real_dtype)
+    lb_lam = cache.lb_lam.astype(real_dtype)
+    hyper_ratio = cache.hyper_ratio.astype(real_dtype)
+    nu_hyper = jnp.asarray(params.nu_hyper, dtype=real_dtype)
+    damping = nu[:, None, None, None, None, None] * lb_lam + nu_hyper * hyper_ratio
+    damping = damping.astype(real_dtype)
+
+    l = cache.l.astype(real_dtype)
+    m = cache.m.astype(real_dtype)
+    cv_d = cache.cv_d.astype(real_dtype)
+    gb_d = cache.gb_d.astype(real_dtype)
+    bgrad = cache.bgrad.astype(real_dtype)
+    w_mirror = jnp.asarray(terms.mirror, dtype=real_dtype)
+    w_curv = jnp.asarray(terms.curvature, dtype=real_dtype)
+    w_gradb = jnp.asarray(terms.gradb, dtype=real_dtype)
+    diag = jnp.zeros_like(damping, dtype=state_dtype)
+    imag = jnp.asarray(1j, dtype=state_dtype)
+    tz = _as_species_array(params.tz, ns, "tz").astype(real_dtype)
+    vth = _as_species_array(params.vth, ns, "vth").astype(real_dtype)
+    tz_b = tz[:, None, None, None, None, None]
+    vth_b = vth[:, None, None, None, None, None]
+    omega_d_scale = jnp.asarray(params.omega_d_scale, dtype=real_dtype)
+    diag = diag - imag * tz_b * omega_d_scale * (
+        w_curv * cv_d[None, None, None, ...] * (2.0 * m + 1.0)
+        + w_gradb * gb_d[None, None, None, ...] * (2.0 * l + 1.0)
+    )
+    bgrad = bgrad[None, None, None, None, None, :]
+    mirror_diag = vth_b * (2.0 * l + 1.0) * (2.0 * m + 1.0)
+    mirror_weight = 0.2
+    diag = diag - w_mirror * mirror_weight * bgrad * mirror_diag
+
+    precond = 1.0 / (1.0 + dt_val * damping - dt_val * diag)
+    precond = precond.astype(G.dtype)
+    resolved_precond = _resolve_implicit_preconditioner(implicit_preconditioner)
+    precond_op = (lambda x: x) if resolved_precond is None else resolved_precond
+
+    def apply_precond(x_flat: jnp.ndarray) -> jnp.ndarray:
+        x = x_flat.reshape(shape)
+        return (x * precond).reshape(size)
+
+    if resolved_precond is None:
+        precond_op = apply_precond
+
+    def matvec(x_flat: jnp.ndarray) -> jnp.ndarray:
+        x = x_flat.reshape(shape)
+        dG, _phi = linear_rhs_cached(
+            x,
+            cache,
+            params,
+            terms=terms,
+            use_jit=False,
+            use_custom_vjp=False,
+        )
+        return (x - dt_val * dG).reshape(size)
+
+    def fixed_point(G_in: jnp.ndarray) -> jnp.ndarray:
+        def body(_i, g):
+            dG, _phi = linear_rhs_cached(
+                g,
+                cache,
+                params,
+                terms=terms,
+                use_jit=False,
+                use_custom_vjp=False,
+            )
+            g_next = G_in + dt_val * dG
+            return (1.0 - implicit_relax) * g + implicit_relax * g_next
+
+        return jax.lax.fori_loop(0, max(int(implicit_iters), 0), body, G_in)
+
+    def solve_step(G_in: jnp.ndarray) -> jnp.ndarray:
+        G_guess = fixed_point(G_in)
+        sol, _info = gmres(
+            matvec,
+            G_in.reshape(size),
+            x0=G_guess.reshape(size),
+            tol=implicit_tol,
+            maxiter=implicit_maxiter,
+            restart=implicit_restart,
+            M=precond_op,
+            solve_method=implicit_solve_method,
+        )
+        return sol.reshape(shape)
+
+    def step(G_in, _):
+        G_new = solve_step(G_in)
+        _dG_new, phi_new = linear_rhs_cached(
+            G_new,
+            cache,
+            params,
+            terms=terms,
+            use_jit=False,
+            use_custom_vjp=False,
+        )
+        return G_new, phi_new
+
+    step_fn = jax.checkpoint(step) if checkpoint else step
+    if sample_stride <= 1:
+        G_out, phi_t = jax.lax.scan(step_fn, G, None, length=steps)
+    else:
+        def sample_step(G_in, _):
+            def inner_step(_i, g):
+                return solve_step(g)
+
+            G_out_local = jax.lax.fori_loop(0, sample_stride, inner_step, G_in)
+            _dG_out, phi_out = linear_rhs_cached(
+                G_out_local,
+                cache,
+                params,
+                terms=terms,
+                use_jit=False,
+                use_custom_vjp=False,
+            )
+            return G_out_local, phi_out
+
+        num_samples = steps // sample_stride
+        G_out, phi_t = jax.lax.scan(sample_step, G, None, length=num_samples)
+
+    G_out = G_out[0] if squeeze_species else G_out
+    return G_out, phi_t
+
+
 def integrate_linear(
     G0: jnp.ndarray,
     grid: SpectralGrid,
@@ -774,107 +936,23 @@ def integrate_linear(
     if method == "semi-implicit":
         method = "imex"
     if method == "implicit":
-        base_dtype = jnp.complex128 if _x64_enabled() else jnp.complex64
-        state_dtype = jnp.result_type(G0, base_dtype)
-        G = jnp.asarray(G0, dtype=state_dtype)
-        real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
-        squeeze_species = False
-        if G.ndim == 5:
-            G = G[None, ...]
-            squeeze_species = True
-        shape = G.shape
-        size = 1
-        for dim in shape:
-            size *= int(dim)
-        dt_val = jnp.asarray(dt, dtype=real_dtype)
-        ns = shape[0]
-        nu = _as_species_array(params.nu, ns, "nu").astype(real_dtype)
-        lb_lam = cache.lb_lam.astype(real_dtype)
-        hyper_ratio = cache.hyper_ratio.astype(real_dtype)
-        nu_hyper = jnp.asarray(params.nu_hyper, dtype=real_dtype)
-        damping = nu[:, None, None, None, None, None] * lb_lam + nu_hyper * hyper_ratio
-        damping = damping.astype(real_dtype)
-        l = cache.l.astype(real_dtype)
-        m = cache.m.astype(real_dtype)
-        cv_d = cache.cv_d.astype(real_dtype)
-        gb_d = cache.gb_d.astype(real_dtype)
-        bgrad = cache.bgrad.astype(real_dtype)
-        w_mirror = jnp.asarray(terms.mirror, dtype=real_dtype)
-        w_curv = jnp.asarray(terms.curvature, dtype=real_dtype)
-        w_gradb = jnp.asarray(terms.gradb, dtype=real_dtype)
-        diag = jnp.zeros_like(damping, dtype=state_dtype)
-        imag = jnp.asarray(1j, dtype=state_dtype)
-        tz = _as_species_array(params.tz, ns, "tz").astype(real_dtype)
-        vth = _as_species_array(params.vth, ns, "vth").astype(real_dtype)
-        tz_b = tz[:, None, None, None, None, None]
-        vth_b = vth[:, None, None, None, None, None]
-        omega_d_scale = jnp.asarray(params.omega_d_scale, dtype=real_dtype)
-        diag = diag - imag * tz_b * omega_d_scale * (
-            w_curv * cv_d[None, None, None, ...] * (2.0 * m + 1.0)
-            + w_gradb * gb_d[None, None, None, ...] * (2.0 * l + 1.0)
+        return _integrate_linear_implicit_cached(
+            G0,
+            cache,
+            params,
+            dt=dt,
+            steps=steps,
+            terms=terms,
+            implicit_tol=implicit_tol,
+            implicit_maxiter=implicit_maxiter,
+            implicit_iters=implicit_iters,
+            implicit_relax=implicit_relax,
+            implicit_restart=implicit_restart,
+            implicit_solve_method=implicit_solve_method,
+            implicit_preconditioner=implicit_preconditioner,
+            checkpoint=checkpoint,
+            sample_stride=sample_stride,
         )
-        bgrad = bgrad[None, None, None, None, None, :]
-        mirror_diag = vth_b * omega_d_scale * (2.0 * l + 1.0) * (2.0 * m + 1.0)
-        mirror_weight = 0.2
-        diag = diag - w_mirror * mirror_weight * bgrad * mirror_diag
-        precond = 1.0 / (1.0 + dt_val * damping - dt_val * diag)
-        precond = precond.astype(G.dtype)
-        phi_out = []
-
-        def matvec(x_flat: jnp.ndarray) -> jnp.ndarray:
-            x = x_flat.reshape(shape)
-            dG, _phi = linear_rhs_cached(
-                x,
-                cache,
-                params,
-                terms=terms,
-                use_jit=False,
-                use_custom_vjp=False,
-            )
-            return (x - dt_val * dG).reshape(size)
-
-        def apply_precond(x_flat: jnp.ndarray) -> jnp.ndarray:
-            x = x_flat.reshape(shape)
-            return (x * precond).reshape(size)
-
-        for _ in range(steps):
-            G_guess = G
-            for _iter in range(max(implicit_iters, 0)):
-                dG, _phi = linear_rhs_cached(
-                    G_guess,
-                    cache,
-                    params,
-                    terms=terms,
-                    use_jit=False,
-                    use_custom_vjp=False,
-                )
-                G_next = G + dt_val * dG
-                G_guess = (1.0 - implicit_relax) * G_guess + implicit_relax * G_next
-
-            resolved_precond = _resolve_implicit_preconditioner(implicit_preconditioner)
-            precond_op = apply_precond if resolved_precond is None else resolved_precond
-            sol, _ = gmres(
-                matvec,
-                G.reshape(size),
-                x0=G_guess.reshape(size),
-                tol=implicit_tol,
-                maxiter=implicit_maxiter,
-                restart=implicit_restart,
-                M=precond_op,
-                solve_method=implicit_solve_method,
-            )
-            G = sol.reshape(shape)
-            _dG, phi = linear_rhs_cached(
-                G,
-                cache,
-                params,
-                terms=terms,
-                use_jit=False,
-                use_custom_vjp=False,
-            )
-            phi_out.append(phi)
-        G_out = G[0] if squeeze_species else G
-        return G_out, jnp.stack(phi_out, axis=0)
     return _integrate_linear_cached(
         G0,
         cache,

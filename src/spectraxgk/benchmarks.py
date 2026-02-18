@@ -33,8 +33,8 @@ from spectraxgk.terms.assembly import compute_fields_cached
 from spectraxgk.terms.config import TermConfig
 
 
-CYCLONE_OMEGA_D_SCALE = 0.7
-CYCLONE_OMEGA_STAR_SCALE = 0.35
+CYCLONE_OMEGA_D_SCALE = 0.6
+CYCLONE_OMEGA_STAR_SCALE = 0.7
 CYCLONE_RHO_STAR = 1.0
 
 ETG_OMEGA_D_SCALE = 1.0
@@ -1117,7 +1117,7 @@ def run_tem_linear(
             cfg.model,
             kpar_scale=float(geom.gradpar()),
             omega_d_scale=TEM_OMEGA_D_SCALE,
-            omega_star_scale=TEM_OMEGA_STAR_SCALE / float(cfg.geometry.R0),
+            omega_star_scale=TEM_OMEGA_STAR_SCALE,
             rho_star=TEM_RHO_STAR,
             damp_ends_amp=0.0,
             damp_ends_widthfrac=0.0,
@@ -1261,7 +1261,7 @@ def run_tem_scan(
             cfg.model,
             kpar_scale=float(geom.gradpar()),
             omega_d_scale=TEM_OMEGA_D_SCALE,
-            omega_star_scale=TEM_OMEGA_STAR_SCALE / float(cfg.geometry.R0),
+            omega_star_scale=TEM_OMEGA_STAR_SCALE,
             rho_star=TEM_RHO_STAR,
             damp_ends_amp=0.0,
             damp_ends_widthfrac=0.0,
