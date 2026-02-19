@@ -508,6 +508,68 @@ def run_cyclone_scan(
     gammas = []
     omegas = []
     ky_out = []
+    def _window_value(val, idx):
+        if val is None:
+            return None
+        if isinstance(val, (list, tuple, np.ndarray)):
+            return float(val[idx])
+        return float(val)
+
+    def _window_valid(t_arr, tmin_val, tmax_val):
+        if tmin_val is None or tmax_val is None:
+            return False
+        mask = (t_arr >= tmin_val) & (t_arr <= tmax_val)
+        return int(np.count_nonzero(mask)) >= 2
+
+    def _window_valid(t_arr, tmin_val, tmax_val):
+        if tmin_val is None or tmax_val is None:
+            return False
+        mask = (t_arr >= tmin_val) & (t_arr <= tmax_val)
+        return int(np.count_nonzero(mask)) >= 2
+
+    def _window_valid(t_arr, tmin_val, tmax_val):
+        if tmin_val is None or tmax_val is None:
+            return False
+        mask = (t_arr >= tmin_val) & (t_arr <= tmax_val)
+        return int(np.count_nonzero(mask)) >= 2
+
+    def _window_valid(t_arr, tmin_val, tmax_val):
+        if tmin_val is None or tmax_val is None:
+            return False
+        mask = (t_arr >= tmin_val) & (t_arr <= tmax_val)
+        return int(np.count_nonzero(mask)) >= 2
+
+    def _window_valid(t_arr, tmin_val, tmax_val):
+        if tmin_val is None or tmax_val is None:
+            return False
+        mask = (t_arr >= tmin_val) & (t_arr <= tmax_val)
+        return int(np.count_nonzero(mask)) >= 2
+
+    def _window_valid(t_arr, tmin_val, tmax_val):
+        if tmin_val is None or tmax_val is None:
+            return False
+        mask = (t_arr >= tmin_val) & (t_arr <= tmax_val)
+        return int(np.count_nonzero(mask)) >= 2
+
+    def _window_valid(t_arr, tmin_val, tmax_val):
+        if tmin_val is None or tmax_val is None:
+            return False
+        mask = (t_arr >= tmin_val) & (t_arr <= tmax_val)
+        return int(np.count_nonzero(mask)) >= 2
+
+    def _window_valid(t_arr, tmin_val, tmax_val):
+        if tmin_val is None or tmax_val is None:
+            return False
+        mask = (t_arr >= tmin_val) & (t_arr <= tmax_val)
+        return int(np.count_nonzero(mask)) >= 2
+
+
+    def _window_valid(t_arr, tmin_val, tmax_val):
+        if tmin_val is None or tmax_val is None:
+            return False
+        mask = (t_arr >= tmin_val) & (t_arr <= tmax_val)
+        return int(np.count_nonzero(mask)) >= 2
+
     for i, ky in enumerate(ky_values):
         ky_index = select_ky_index(np.asarray(grid_full.ky), float(ky))
         if solver.lower() == "krylov":
@@ -580,7 +642,12 @@ def run_cyclone_scan(
             phi_t_np = np.asarray(phi_t)
             t = np.arange(phi_t_np.shape[0]) * dt_i * stride
             signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
-            if auto_window and tmin is None and tmax is None:
+            tmin_i = _window_value(tmin, i)
+            tmax_i = _window_value(tmax, i)
+            use_auto = auto_window and tmin_i is None and tmax_i is None
+            if not use_auto and not _window_valid(t, tmin_i, tmax_i):
+                use_auto = True
+            if use_auto:
                 gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
                     t,
                     signal,
@@ -592,7 +659,19 @@ def run_cyclone_scan(
                     min_amp_fraction=min_amp_fraction,
                 )
             else:
-                gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
+                try:
+                    gamma, omega = fit_growth_rate(t, signal, tmin=tmin_i, tmax=tmax_i)
+                except ValueError:
+                    gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
+                        t,
+                        signal,
+                        window_fraction=window_fraction,
+                        min_points=min_points,
+                        start_fraction=start_fraction,
+                        growth_weight=growth_weight,
+                        require_positive=require_positive,
+                        min_amp_fraction=min_amp_fraction,
+                    )
 
         gammas.append(gamma)
         omegas.append(omega)
@@ -844,6 +923,19 @@ def run_etg_scan(
     gammas = []
     omegas = []
     ky_out = []
+    def _window_value(val, idx):
+        if val is None:
+            return None
+        if isinstance(val, (list, tuple, np.ndarray)):
+            return float(val[idx])
+        return float(val)
+
+    def _window_valid(t_arr, tmin_val, tmax_val):
+        if tmin_val is None or tmax_val is None:
+            return False
+        mask = (t_arr >= tmin_val) & (t_arr <= tmax_val)
+        return int(np.count_nonzero(mask)) >= 2
+
     for i, ky in enumerate(ky_values):
         ky_index = select_ky_index(np.asarray(grid_full.ky), float(ky))
         grid = select_ky_grid(grid_full, ky_index)
@@ -915,7 +1007,12 @@ def run_etg_scan(
             phi_t_np = np.asarray(phi_t)
             t = np.arange(phi_t_np.shape[0]) * dt_i * stride
             signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
-            if auto_window and tmin is None and tmax is None:
+            tmin_i = _window_value(tmin, i)
+            tmax_i = _window_value(tmax, i)
+            use_auto = auto_window and tmin_i is None and tmax_i is None
+            if not use_auto and not _window_valid(t, tmin_i, tmax_i):
+                use_auto = True
+            if use_auto:
                 gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
                     t,
                     signal,
@@ -927,7 +1024,19 @@ def run_etg_scan(
                     min_amp_fraction=min_amp_fraction,
                 )
             else:
-                gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
+                try:
+                    gamma, omega = fit_growth_rate(t, signal, tmin=tmin_i, tmax=tmax_i)
+                except ValueError:
+                    gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
+                        t,
+                        signal,
+                        window_fraction=window_fraction,
+                        min_points=min_points,
+                        start_fraction=start_fraction,
+                        growth_weight=growth_weight,
+                        require_positive=require_positive,
+                        min_amp_fraction=min_amp_fraction,
+                    )
 
         gammas.append(gamma)
         omegas.append(omega)
@@ -1134,6 +1243,19 @@ def run_kinetic_scan(
     gammas = []
     omegas = []
     ky_out = []
+    def _window_value(val, idx):
+        if val is None:
+            return None
+        if isinstance(val, (list, tuple, np.ndarray)):
+            return float(val[idx])
+        return float(val)
+
+    def _window_valid(t_arr, tmin_val, tmax_val):
+        if tmin_val is None or tmax_val is None:
+            return False
+        mask = (t_arr >= tmin_val) & (t_arr <= tmax_val)
+        return int(np.count_nonzero(mask)) >= 2
+
     for i, ky in enumerate(ky_values):
         ky_index = select_ky_index(np.asarray(grid_full.ky), float(ky))
         grid = select_ky_grid(grid_full, ky_index)
@@ -1203,7 +1325,12 @@ def run_kinetic_scan(
             phi_t_np = np.asarray(phi_t)
             t = np.arange(phi_t_np.shape[0]) * dt_i * stride
             signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
-            if auto_window and tmin is None and tmax is None:
+            tmin_i = _window_value(tmin, i)
+            tmax_i = _window_value(tmax, i)
+            use_auto = auto_window and tmin_i is None and tmax_i is None
+            if not use_auto and not _window_valid(t, tmin_i, tmax_i):
+                use_auto = True
+            if use_auto:
                 gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
                     t,
                     signal,
@@ -1215,7 +1342,19 @@ def run_kinetic_scan(
                     min_amp_fraction=min_amp_fraction,
                 )
             else:
-                gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
+                try:
+                    gamma, omega = fit_growth_rate(t, signal, tmin=tmin_i, tmax=tmax_i)
+                except ValueError:
+                    gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
+                        t,
+                        signal,
+                        window_fraction=window_fraction,
+                        min_points=min_points,
+                        start_fraction=start_fraction,
+                        growth_weight=growth_weight,
+                        require_positive=require_positive,
+                        min_amp_fraction=min_amp_fraction,
+                    )
 
         gammas.append(gamma)
         omegas.append(omega)
@@ -1422,6 +1561,19 @@ def run_tem_scan(
     gammas = []
     omegas = []
     ky_out = []
+    def _window_value(val, idx):
+        if val is None:
+            return None
+        if isinstance(val, (list, tuple, np.ndarray)):
+            return float(val[idx])
+        return float(val)
+
+    def _window_valid(t_arr, tmin_val, tmax_val):
+        if tmin_val is None or tmax_val is None:
+            return False
+        mask = (t_arr >= tmin_val) & (t_arr <= tmax_val)
+        return int(np.count_nonzero(mask)) >= 2
+
     for i, ky in enumerate(ky_values):
         ky_index = select_ky_index(np.asarray(grid_full.ky), float(ky))
         grid = select_ky_grid(grid_full, ky_index)
@@ -1491,7 +1643,12 @@ def run_tem_scan(
             phi_t_np = np.asarray(phi_t)
             t = np.arange(phi_t_np.shape[0]) * dt_i * stride
             signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
-            if auto_window and tmin is None and tmax is None:
+            tmin_i = _window_value(tmin, i)
+            tmax_i = _window_value(tmax, i)
+            use_auto = auto_window and tmin_i is None and tmax_i is None
+            if not use_auto and not _window_valid(t, tmin_i, tmax_i):
+                use_auto = True
+            if use_auto:
                 gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
                     t,
                     signal,
@@ -1503,7 +1660,19 @@ def run_tem_scan(
                     min_amp_fraction=min_amp_fraction,
                 )
             else:
-                gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
+                try:
+                    gamma, omega = fit_growth_rate(t, signal, tmin=tmin_i, tmax=tmax_i)
+                except ValueError:
+                    gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
+                        t,
+                        signal,
+                        window_fraction=window_fraction,
+                        min_points=min_points,
+                        start_fraction=start_fraction,
+                        growth_weight=growth_weight,
+                        require_positive=require_positive,
+                        min_amp_fraction=min_amp_fraction,
+                    )
 
         gammas.append(gamma)
         omegas.append(omega)
@@ -1553,6 +1722,19 @@ def run_kbm_beta_scan(
     ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
     grid = select_ky_grid(grid_full, ky_index)
     sel = ModeSelection(ky_index=0, kx_index=0, z_index=0)
+
+    def _window_value(val, idx):
+        if val is None:
+            return None
+        if isinstance(val, (list, tuple, np.ndarray)):
+            return float(val[idx])
+        return float(val)
+
+    def _window_valid(t_arr, tmin_val, tmax_val):
+        if tmin_val is None or tmax_val is None:
+            return False
+        mask = (t_arr >= tmin_val) & (t_arr <= tmax_val)
+        return int(np.count_nonzero(mask)) >= 2
 
     for i, beta in enumerate(betas):
         dt_i = float(dt[i]) if isinstance(dt, np.ndarray) else float(dt)
@@ -1630,7 +1812,12 @@ def run_kbm_beta_scan(
             phi_t_np = np.asarray(phi_t)
             t = np.arange(phi_t_np.shape[0]) * dt_i * stride
             signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
-            if auto_window and tmin is None and tmax is None:
+            tmin_i = _window_value(tmin, i)
+            tmax_i = _window_value(tmax, i)
+            use_auto = auto_window and tmin_i is None and tmax_i is None
+            if not use_auto and not _window_valid(t, tmin_i, tmax_i):
+                use_auto = True
+            if use_auto:
                 gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
                     t,
                     signal,
@@ -1642,7 +1829,19 @@ def run_kbm_beta_scan(
                     min_amp_fraction=min_amp_fraction,
                 )
             else:
-                gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
+                try:
+                    gamma, omega = fit_growth_rate(t, signal, tmin=tmin_i, tmax=tmax_i)
+                except ValueError:
+                    gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
+                        t,
+                        signal,
+                        window_fraction=window_fraction,
+                        min_points=min_points,
+                        start_fraction=start_fraction,
+                        growth_weight=growth_weight,
+                        require_positive=require_positive,
+                        min_amp_fraction=min_amp_fraction,
+                    )
 
         gammas.append(gamma)
         omegas.append(omega)

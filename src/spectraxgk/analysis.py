@@ -62,6 +62,26 @@ def extract_mode(phi_t: np.ndarray, sel: ModeSelection) -> np.ndarray:
     return extract_mode_time_series(phi_t, sel, method="z_index")
 
 
+def density_moment(
+    G: np.ndarray,
+    Jl: np.ndarray,
+    *,
+    species_index: int | None = None,
+) -> np.ndarray:
+    """Compute the m=0 density moment for a selected species (or summed if None)."""
+
+    if G.ndim == 5:
+        Gm0 = G[:, 0, ...]
+        return np.sum(Jl * Gm0, axis=0)
+    if G.ndim == 6:
+        if species_index is None:
+            Gm0 = G[:, :, 0, ...]
+            return np.sum(Jl[None, ...] * Gm0, axis=1).sum(axis=0)
+        Gm0 = G[species_index, :, 0, ...]
+        return np.sum(Jl * Gm0, axis=0)
+    raise ValueError("G must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)")
+
+
 def extract_eigenfunction(
     phi_t: np.ndarray,
     t: np.ndarray,
