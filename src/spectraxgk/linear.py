@@ -984,3 +984,118 @@ def integrate_linear(
         terms=terms,
         sample_stride=sample_stride,
     )
+
+
+def integrate_linear_diagnostics(
+    G0: jnp.ndarray,
+    grid: SpectralGrid,
+    geom: SAlphaGeometry,
+    params: LinearParams,
+    dt: float,
+    steps: int,
+    *,
+    method: str = "rk4",
+    cache: LinearCache | None = None,
+    terms: LinearTerms | None = None,
+    sample_stride: int = 1,
+    species_index: int | None = 0,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """Integrate and return (G_out, phi_t, density_t) for diagnostics."""
+
+    if terms is None:
+        terms = LinearTerms()
+    if sample_stride < 1:
+        raise ValueError("sample_stride must be >= 1")
+    if steps % sample_stride != 0:
+        raise ValueError("steps must be divisible by sample_stride")
+    if cache is None:
+        if G0.ndim == 5:
+            Nl, Nm = G0.shape[0], G0.shape[1]
+        elif G0.ndim == 6:
+            Nl, Nm = G0.shape[1], G0.shape[2]
+        else:
+            raise ValueError("G0 must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)")
+        cache = build_linear_cache(grid, geom, params, Nl, Nm)
+
+    base_dtype = jnp.complex128 if _x64_enabled() else jnp.complex64
+    state_dtype = jnp.result_type(G0, base_dtype)
+    G0 = jnp.asarray(G0, dtype=state_dtype)
+    real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
+    dt_val = jnp.asarray(dt, dtype=real_dtype)
+    lb_lam = cache.lb_lam.astype(real_dtype)
+    hyper_ratio = cache.hyper_ratio.astype(real_dtype)
+    nu_hyper = jnp.asarray(params.nu_hyper, dtype=real_dtype)
+    if lb_lam.ndim == 6:
+        ns = lb_lam.shape[0]
+        nu = _as_species_array(params.nu, ns, "nu").astype(real_dtype)
+        damping = nu[:, None, None, None, None, None] * lb_lam + nu_hyper * hyper_ratio
+        if G0.ndim == 5:
+            damping = damping[0]
+    else:
+        damping = jnp.asarray(params.nu, dtype=real_dtype) * lb_lam + nu_hyper * hyper_ratio
+    damping = damping.astype(real_dtype)
+
+    def advance(G_in: jnp.ndarray) -> jnp.ndarray:
+        dG, _phi = linear_rhs_cached(G_in, cache, params, terms=terms, use_jit=False)
+        if method == "imex":
+            dG_explicit = dG + damping * G_in
+            return (G_in + dt_val * dG_explicit) / (1.0 + dt_val * damping)
+        if method == "imex2":
+            dG_explicit = dG + damping * G_in
+            G_half = (G_in + 0.5 * dt_val * dG_explicit) / (1.0 + 0.5 * dt_val * damping)
+            dG_half, _phi = linear_rhs_cached(G_half, cache, params, terms=terms, use_jit=False)
+            dG_half_exp = dG_half + damping * G_half
+            return (G_in + dt_val * dG_half_exp) / (1.0 + dt_val * damping)
+        if method == "euler":
+            return G_in + dt_val * dG
+        if method == "rk2":
+            k1 = dG
+            k2, _ = linear_rhs_cached(G_in + 0.5 * dt_val * k1, cache, params, terms=terms, use_jit=False)
+            return G_in + dt_val * k2
+        if method == "rk4":
+            k1 = dG
+            k2, _ = linear_rhs_cached(G_in + 0.5 * dt_val * k1, cache, params, terms=terms, use_jit=False)
+            k3, _ = linear_rhs_cached(G_in + 0.5 * dt_val * k2, cache, params, terms=terms, use_jit=False)
+            k4, _ = linear_rhs_cached(G_in + dt_val * k3, cache, params, terms=terms, use_jit=False)
+            return G_in + (dt_val / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
+        raise ValueError(f"Unsupported method '{method}'")
+
+    def density_from_G(G_in: jnp.ndarray) -> jnp.ndarray:
+        Jl = cache.Jl
+        if G_in.ndim == 5:
+            if Jl.ndim == 5:
+                Jl_s = Jl[0]
+            else:
+                Jl_s = Jl
+            return jnp.sum(Jl_s * G_in[:, 0, ...], axis=0)
+        if Jl.ndim == 5:
+            if species_index is None:
+                return jnp.sum(jnp.sum(Jl * G_in[:, :, 0, ...], axis=1), axis=0)
+            Jl_s = Jl[int(species_index)]
+            return jnp.sum(Jl_s * G_in[int(species_index), :, 0, ...], axis=0)
+        if species_index is None:
+            return jnp.sum(jnp.sum(Jl[None, ...] * G_in[:, :, 0, ...], axis=1), axis=0)
+        return jnp.sum(Jl * G_in[int(species_index), :, 0, ...], axis=0)
+
+    def step(G_in, _):
+        G_out = advance(G_in)
+        _dG, phi = linear_rhs_cached(G_out, cache, params, terms=terms, use_jit=False)
+        density = density_from_G(G_out)
+        return G_out, (phi, density)
+
+    if sample_stride <= 1:
+        G_out, (phi_t, density_t) = jax.lax.scan(step, G0, None, length=steps)
+    else:
+        def sample_step(G_in, _):
+            def inner_step(_i, g):
+                return step(g, None)[0]
+
+            G_out_local = jax.lax.fori_loop(0, sample_stride, inner_step, G_in)
+            _dG, phi_out = linear_rhs_cached(G_out_local, cache, params, terms=terms, use_jit=False)
+            density_out = density_from_G(G_out_local)
+            return G_out_local, (phi_out, density_out)
+
+        num_samples = steps // sample_stride
+        G_out, (phi_t, density_t) = jax.lax.scan(sample_step, G0, None, length=num_samples)
+
+    return G_out, phi_t, density_t
