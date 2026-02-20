@@ -75,6 +75,7 @@ from spectraxgk.diffrax_integrators import (
     integrate_linear_diffrax_streaming,
     integrate_nonlinear_diffrax,
 )
+from spectraxgk.gx_integrators import GXTimeConfig, integrate_linear_gx
 
 __all__ = [
     "__version__",
@@ -104,6 +105,8 @@ __all__ = [
     "integrate_nonlinear",
     "integrate_nonlinear_cached",
     "integrate_nonlinear_diffrax",
+    "GXTimeConfig",
+    "integrate_linear_gx",
     "nonlinear_rhs_cached",
     "integrate_linear_from_config",
     "integrate_nonlinear_from_config",

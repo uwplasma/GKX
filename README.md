@@ -19,6 +19,7 @@ ITG/ETG, KBM beta scans, and TEM linear checks.
 - **Term toggles**: switch linear-operator components via ``LinearTerms``.
 - **Field-aligned grid controls**: ``y0``, ``ntheta``, and ``nperiod`` inputs.
 - **Stable integrators**: explicit, IMEX, and implicit time stepping options.
+- **GX-style RK4**: CFL-based timestep selection + GX growth-rate diagnostics.
 - **Cached operators**: precomputed geometry arrays for faster time stepping.
 - **Benchmark harness**: reference data + growth-rate extraction tools + comparisons.
 - **ETG trend checks**: reduced electron-scale grids for linear trend validation.
@@ -48,6 +49,26 @@ ref = load_cyclone_reference()
 result = run_cyclone_linear(ky_target=0.3, method="rk4")
 
 print(result.gamma, result.omega)
+```
+
+GX-style RK4 integration (GX timestep selection + growth-rate diagnostics):
+
+```python
+from spectraxgk import CycloneBaseCase, GXTimeConfig, integrate_linear_gx
+from spectraxgk.geometry import SAlphaGeometry
+from spectraxgk.grids import build_spectral_grid
+from spectraxgk.linear import LinearParams, build_linear_cache
+
+cfg = CycloneBaseCase()
+grid = build_spectral_grid(cfg.grid)
+geom = SAlphaGeometry.from_config(cfg.geometry)
+params = LinearParams()
+cache = build_linear_cache(grid, geom, params, Nl=16, Nm=8)
+
+G0 = jnp.zeros((16, 8, grid.ky.size, grid.kx.size, grid.z.size), dtype=jnp.complex64)
+time_cfg = GXTimeConfig(t_max=10.0, dt=0.01, fixed_dt=False)
+
+t, phi_t, gamma_t, omega_t = integrate_linear_gx(G0, grid, cache, params, geom, time_cfg)
 ```
 
 ## Config-driven integration
@@ -102,7 +123,8 @@ python examples/kbm_beta_scan.py --no-diffrax
 
 - **Cyclone base case (adiabatic electrons)**: the benchmark harness reproduces
   published growth rates and real frequencies across the reduced ky scan using
-  the full drift/mirror operator.
+  the full drift/mirror operator and GX-style RK4 diagnostics. Low-ky points
+  require longer ``t_max`` windows to converge to reference values.
 - **ETG linear trend**: growth rates remain positive across reduced electron-scale
   gradients; real frequencies follow the electron diamagnetic direction.
 - **KBM beta scan**: electromagnetic transition between ITG and KBM branches.
@@ -131,13 +153,22 @@ python tools/benchmark_integrators.py
 | Gradients | R/LTi=2.49, R/LTe=0.0, R/Ln=0.8 |
 | Species | ions (Z=1, m=1), adiabatic electrons (tau_e=1) |
 | Electromagnetic | beta=0, A_parallel=off, B_parallel=off |
-| Collisions | nu_i=1.0e-2, hypercollisions=off |
+| Collisions | nu_i=1.0e-2, GX-style hypercollisions (kz-proportional) on |
 | Operator toggles | streaming/mirror/curvature/grad-B/diamagnetic on; nonlinear off |
 | Grid | Nx=1, Ny=24, Nz=96, y0=20, ntheta=32, nperiod=2 |
-| Velocity resolution | Nl=6, Nm=16 |
+| Velocity resolution | Nl=6, Nm=16 (legacy figure); GX-style runs use per-ky balanced resolution |
 | Reference | GX paper Fig. 1 |
 
 ![Cyclone base case comparison](docs/_static/cyclone_comparison.png)
+
+GX-style balanced runs (moderate cost):
+
+| ky rho_i | Nl | Nm | t_max | gamma | omega | rel gamma | rel omega |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 0.05 | 16 | 8 | 30 | 0.0170 | 0.0461 | +73% | +26% |
+| 0.10 | 16 | 8 | 10 | 0.0298 | 0.0801 | -2.0% | +0.3% |
+| 0.20 | 24 | 12 | 20 | 0.0765 | 0.1864 | +1.9% | +4.8% |
+| 0.30 | 24 | 12 | 10 | 0.0911 | 0.2971 | -2.1% | +5.4% |
 
 ### ETG (electron scale, GX Fig. 2b)
 
