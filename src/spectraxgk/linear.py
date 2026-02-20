@@ -375,24 +375,100 @@ def build_linear_cache(
     real_dtype = jnp.float64 if _x64_enabled() else jnp.float32
     dz = jnp.asarray(grid.z[1] - grid.z[0], dtype=real_dtype)
     kz = jnp.asarray(2.0 * jnp.pi * jnp.fft.fftfreq(grid.z.size, d=dz), dtype=real_dtype)
-    kx_eff = params.rho_star * grid.kx
-    ky_eff = params.rho_star * grid.ky
-    kx0 = kx_eff[None, :, None]
-    ky0 = ky_eff[:, None, None]
-    theta = grid.z[None, None, :]
-    kperp2 = geom.k_perp2(kx0, ky0, theta).astype(real_dtype)
+    rho_star = jnp.asarray(params.rho_star, dtype=real_dtype)
+    kx_raw = jnp.asarray(grid.kx, dtype=real_dtype)
+    ky_raw = jnp.asarray(grid.ky, dtype=real_dtype)
+    kx_eff = rho_star * kx_raw
+    ky_eff = rho_star * ky_raw
+    theta = jnp.asarray(grid.z, dtype=real_dtype)
+    gds2, gds21, gds22 = geom.metric_coeffs(theta)
+    gds22_arr = gds22 if gds22.ndim else jnp.full_like(theta, gds22)
+    bmag = geom.bmag(theta).astype(real_dtype)
+    bgrad = geom.bgrad(theta).astype(real_dtype)
+    cv, gb, cv0, gb0 = geom.drift_coeffs(theta)
+    boundary = str(getattr(grid, "boundary", "periodic")).lower()
+    use_twist_shift = boundary == "linked"
+    y0 = getattr(grid, "y0", None)
+    if y0 is None:
+        if grid.ky.size > 1:
+            y0 = float(1.0 / float(grid.ky[1] - grid.ky[0]))
+        else:
+            y0 = 1.0
+    shat = float(geom.s_hat)
+    if use_twist_shift and abs(shat) < 1.0e-12:
+        use_twist_shift = False
+    x0_eff = float(getattr(grid, "x0", 1.0))
+    jtwist = 0
+    if use_twist_shift:
+        gds21_min = float(gds21[0]) if gds21.ndim else float(gds21)
+        gds22_min = float(gds22[0]) if gds22.ndim else float(gds22)
+        twist_shift_geo_fac = 0.0
+        if gds22_min != 0.0:
+            twist_shift_geo_fac = float(2.0 * shat * gds21_min / gds22_min)
+        if twist_shift_geo_fac != 0.0:
+            jtwist = grid.jtwist if getattr(grid, "jtwist", None) is not None else int(
+                np.round(twist_shift_geo_fac)
+            )
+            if jtwist == 0:
+                jtwist = 1
+            x0_eff = float(y0) * abs(jtwist) / abs(twist_shift_geo_fac)
+        else:
+            jtwist = grid.jtwist if getattr(grid, "jtwist", None) is not None else 1
+        if float(getattr(grid, "x0", x0_eff)) != 0.0:
+            kx_eff = kx_eff * (float(getattr(grid, "x0", x0_eff)) / float(x0_eff))
+    if use_twist_shift:
+        ftwist = (geom.s_hat * gds21 / gds22_arr).astype(real_dtype)
+        delta = jnp.asarray(0.01313, dtype=real_dtype)
+        ftwist_next = jnp.roll(ftwist, -1)
+        mid_idx = int(grid.z.size // 2)
+        mid_next = (mid_idx + 1) % grid.z.size
+        ftwist_mid = ftwist[mid_idx]
+        ftwist_mid_next = ftwist[mid_next]
+        m0 = -jnp.rint(
+            float(x0_eff)
+            * ky_raw[:, None]
+            * ((1.0 - delta) * ftwist[None, :] + delta * ftwist_next[None, :])
+        ) + jnp.rint(
+            float(x0_eff)
+            * ky_raw[:, None]
+            * ((1.0 - delta) * ftwist_mid + delta * ftwist_mid_next)
+        )
+        m0 = m0.astype(real_dtype)
+        shat_inv = 1.0 / shat
+        delta_kx = ky_eff[:, None] * ftwist[None, :] + (rho_star * m0 / float(x0_eff))
+        term_ky = ky_eff[:, None, None] ** 2 * (
+            gds2[None, None, :]
+            - 2.0 * ftwist[None, None, :] * gds21[None, None, :] * shat_inv
+            + (ftwist[None, None, :] ** 2) * gds22_arr[None, None, :] * shat_inv * shat_inv
+        )
+        term_kx = (kx_eff[None, :, None] + delta_kx[:, None, :]) ** 2 * gds22_arr[
+            None, None, :
+        ] * shat_inv * shat_inv
+        bmag_inv = 1.0 / bmag
+        kperp2 = (term_ky + term_kx) * (bmag_inv[None, None, :] ** 2)
+        kx_shift = kx_eff[None, :, None] + (rho_star * m0 / float(x0_eff))[:, None, :]
+        cv_d = ky_eff[:, None, None] * cv[None, None, :] + shat_inv * kx_shift * cv0[
+            None, None, :
+        ]
+        gb_d = ky_eff[:, None, None] * gb[None, None, :] + shat_inv * kx_shift * gb0[
+            None, None, :
+        ]
+        omega_d = cv_d + gb_d
+    else:
+        kx0 = kx_eff[None, :, None]
+        ky0 = ky_eff[:, None, None]
+        theta_b = theta[None, None, :]
+        kperp2 = geom.k_perp2(kx0, ky0, theta_b).astype(real_dtype)
+        cv_d, gb_d = geom.drift_components(kx_eff, ky_eff, theta)
+        cv_d = cv_d.astype(real_dtype)
+        gb_d = gb_d.astype(real_dtype)
+        omega_d = (cv_d + gb_d).astype(real_dtype)
     rho = jnp.asarray(params.rho, dtype=real_dtype)
     if rho.ndim == 0:
         rho = rho[None]
     b = (rho[:, None, None, None] * rho[:, None, None, None]) * kperp2[None, ...]
     Jl = jax.vmap(lambda bs: J_l_all(bs, l_max=Nl - 1))(b).astype(real_dtype)
     JlB = Jl + shift_axis(Jl, -1, axis=1)
-    omega_d = geom.omega_d(kx_eff, ky_eff, grid.z).astype(real_dtype)
-    cv_d, gb_d = geom.drift_components(kx_eff, ky_eff, grid.z)
-    cv_d = cv_d.astype(real_dtype)
-    gb_d = gb_d.astype(real_dtype)
-    bgrad = geom.bgrad(grid.z).astype(real_dtype)
-    bmag = geom.bmag(grid.z).astype(real_dtype)
     mask0 = (grid.ky == 0.0)[:, None, None] & (grid.kx == 0.0)[None, :, None]
     lb_base = lenard_bernstein_eigenvalues(Nl, Nm, params.nu_hermite, params.nu_laguerre)[
         None, :, :, None, None, None
@@ -438,23 +514,7 @@ def build_linear_cache(
     nu_left = jnp.where(left_mask, 1.0 - 2.0 * x_left * x_left / (1.0 + x_left**4), 0.0)
     nu_right = jnp.where(right_mask, 1.0 - 2.0 * x_right * x_right / (1.0 + x_right**4), 0.0)
     damp_profile = jnp.maximum(nu_left, nu_right).astype(real_dtype)
-    boundary = str(getattr(grid, "boundary", "periodic")).lower()
-    use_twist_shift = boundary == "linked"
     if use_twist_shift:
-        y0 = getattr(grid, "y0", None)
-        if y0 is None:
-            if grid.ky.size > 1:
-                y0 = float(1.0 / float(grid.ky[1] - grid.ky[0]))
-            else:
-                y0 = 1.0
-        theta_min = jnp.asarray(grid.z[0], dtype=real_dtype)
-        _, gds21_min, gds22_min = geom.metric_coeffs(theta_min)
-        twist_shift_geo_fac = float(2.0 * geom.s_hat * gds21_min / gds22_min)
-        jtwist = grid.jtwist if getattr(grid, "jtwist", None) is not None else int(
-            np.round(twist_shift_geo_fac)
-        )
-        if jtwist == 0:
-            jtwist = 1
         iky = jnp.rint(grid.ky * float(y0)).astype(jnp.int32)
         shift = jnp.asarray(jtwist, dtype=jnp.int32) * iky
         kx_idx = jnp.arange(grid.kx.size, dtype=jnp.int32)[None, :]
@@ -630,10 +690,11 @@ def quasineutrality_phi(
         axis=0,
     )
     g0 = jnp.sum(Jl * Jl, axis=1)
+    zt = jnp.where(tz == 0.0, 0.0, 1.0 / tz)
     den = tau_e + jnp.sum(
         density[:, None, None, None]
         * charge[:, None, None, None]
-        * tz[:, None, None, None]
+        * zt[:, None, None, None]
         * (1.0 - g0),
         axis=0,
     )
@@ -662,7 +723,8 @@ def build_H(
     tz_arr = jnp.asarray(tz)
     if tz_arr.ndim == 0:
         tz_arr = tz_arr[None]
-    H = G.at[:, :, 0, ...].add(tz_arr[:, None, None, None, None] * Jl * phi)
+    zt_arr = jnp.where(tz_arr == 0.0, 0.0, 1.0 / tz_arr)
+    H = G.at[:, :, 0, ...].add(zt_arr[:, None, None, None, None] * Jl * phi)
     if bpar is not None:
         if JlB is None:
             raise ValueError("JlB must be provided when bpar is supplied")
@@ -672,7 +734,7 @@ def build_H(
         if vth_arr.ndim == 0:
             vth_arr = vth_arr[None]
         H = H.at[:, :, 1, ...].add(
-            -tz_arr[:, None, None, None, None] * vth_arr[:, None, None, None, None] * Jl * apar
+            -zt_arr[:, None, None, None, None] * vth_arr[:, None, None, None, None] * Jl * apar
         )
     return H[0] if squeeze_species else H
 
@@ -965,9 +1027,8 @@ def _build_implicit_operator(
     diag = jnp.zeros_like(damping, dtype=state_dtype)
     imag = jnp.asarray(1j, dtype=state_dtype)
     tz = _as_species_array(params.tz, ns, "tz").astype(real_dtype)
-    t_over_z = jnp.where(tz == 0.0, 0.0, 1.0 / tz)
     vth = _as_species_array(params.vth, ns, "vth").astype(real_dtype)
-    tz_b = t_over_z[:, None, None, None, None, None]
+    tz_b = tz[:, None, None, None, None, None]
     vth_b = vth[:, None, None, None, None, None]
     omega_d_scale = jnp.asarray(params.omega_d_scale, dtype=real_dtype)
     diag = diag - imag * tz_b * omega_d_scale * (

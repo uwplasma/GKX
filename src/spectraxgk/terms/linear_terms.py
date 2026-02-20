@@ -92,10 +92,9 @@ def curvature_gradb_contribution(
         + (2.0 * l + 1.0) * H
         + l * shift_axis(H, -1, axis=axis_l)
     )
-    t_over_z = jnp.where(tz == 0.0, 0.0, 1.0 / tz)
-    t_over_z = t_over_z[:, None, None, None, None, None]
-    icv = imag * t_over_z * omega_d_scale * cv_d[None, None, None, ...]
-    igb = imag * t_over_z * omega_d_scale * gb_d[None, None, None, ...]
+    tz_s = tz[:, None, None, None, None, None]
+    icv = imag * tz_s * omega_d_scale * cv_d[None, None, None, ...]
+    igb = imag * tz_s * omega_d_scale * gb_d[None, None, None, ...]
     return -weight_curv * icv * curv_term - weight_gradb * igb * gradb_term
 
 
@@ -127,7 +126,7 @@ def diamagnetic_contribution(
     fprim_s = fprim[:, None, None, None, None]
     tz_s = tz[:, None, None, None, None]
     omega_star_s = omega_star[None, None, :, None, None]
-    omega_star_bpar = omega_star_s / tz_s
+    omega_star_bpar = omega_star_s * tz_s
     drive_m0 = omega_star_s * phi * (
         Jl_m1 * (l4 * tprim_s)
         + Jl * (fprim_s + 2.0 * l4 * tprim_s)

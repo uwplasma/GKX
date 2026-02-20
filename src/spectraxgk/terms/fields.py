@@ -41,6 +41,7 @@ def _solve_fields_impl(
     temp = jnp.asarray(temp, dtype=real_dtype)
     mass = jnp.asarray(mass, dtype=real_dtype)
     tz = jnp.asarray(tz, dtype=real_dtype)
+    zt = jnp.where(tz == 0.0, 0.0, 1.0 / tz)
     vth = jnp.asarray(vth, dtype=real_dtype)
 
     Gm1 = G[:, :, 1, ...]
@@ -70,7 +71,7 @@ def _solve_fields_impl(
     qphi = tau_e + jnp.sum(
         density[:, None, None, None]
         * charge[:, None, None, None]
-        * tz[:, None, None, None]
+        * zt[:, None, None, None]
         * (1.0 - g0),
         axis=0,
     )
