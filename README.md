@@ -137,6 +137,8 @@ python tools/benchmark_integrators.py
 | Velocity resolution | Nl=6, Nm=16 |
 | Reference | GX paper Fig. 1 |
 
+![Cyclone base case comparison](docs/_static/cyclone_comparison.png)
+
 ### ETG (electron scale, GX Fig. 2b)
 
 | Parameter | Value |

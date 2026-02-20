@@ -49,6 +49,8 @@ class LinearParams:
     p_hyper_l: float = 6.0
     p_hyper_m: float = 20.0
     p_hyper_lm: float = 6.0
+    hypercollisions_const: float = 1.0
+    hypercollisions_kz: float = 0.0
     damp_ends_widthfrac: float = 0.125
     damp_ends_amp: float = 0.1
     tz: float | jnp.ndarray = 1.0
@@ -85,6 +87,8 @@ class LinearParams:
             self.p_hyper_l,
             self.p_hyper_m,
             self.p_hyper_lm,
+            self.hypercollisions_const,
+            self.hypercollisions_kz,
             self.damp_ends_widthfrac,
             self.damp_ends_amp,
             self.tz,
@@ -179,18 +183,15 @@ def _as_species_array(value: float | jnp.ndarray, ns: int, name: str) -> jnp.nda
     return arr
 
 
-def _resolve_implicit_preconditioner(
-    preconditioner: Callable[[jnp.ndarray], jnp.ndarray] | str | None,
-) -> Callable[[jnp.ndarray], jnp.ndarray] | None:
+Preconditioner = Callable[[jnp.ndarray], jnp.ndarray]
+PreconditionerSpec = Preconditioner | str | None
+
+
+def _resolve_implicit_preconditioner(preconditioner: PreconditionerSpec) -> PreconditionerSpec:
     if preconditioner is None:
-        return None
+        return "auto"
     if isinstance(preconditioner, str):
-        key = preconditioner.strip().lower()
-        if key in {"auto", "diag", "diagonal"}:
-            return None
-        if key in {"identity", "none", "off"}:
-            return lambda x: x
-        raise ValueError(f"Unknown implicit_preconditioner '{preconditioner}'")
+        return preconditioner.strip().lower()
     return preconditioner
 
 
@@ -227,6 +228,53 @@ def lenard_bernstein_eigenvalues(
     return nu_laguerre * l[:, None] + nu_hermite * m[None, :]
 
 
+def hypercollision_damping(
+    cache: "LinearCache",
+    params: "LinearParams",
+    real_dtype: jnp.dtype,
+) -> jnp.ndarray:
+    """Assemble GX-style hypercollision damping factors."""
+
+    Nl = jnp.asarray(max(int(cache.l.shape[0]), 1), dtype=real_dtype)
+    Nm = jnp.asarray(max(int(cache.m.shape[1]), 1), dtype=real_dtype)
+
+    nu_hyper = jnp.asarray(params.nu_hyper, dtype=real_dtype)
+    nu_hyper_l = jnp.asarray(params.nu_hyper_l, dtype=real_dtype)
+    nu_hyper_m = jnp.asarray(params.nu_hyper_m, dtype=real_dtype)
+    nu_hyper_lm = jnp.asarray(params.nu_hyper_lm, dtype=real_dtype)
+    w_const = jnp.asarray(params.hypercollisions_const, dtype=real_dtype)
+    w_kz = jnp.asarray(params.hypercollisions_kz, dtype=real_dtype)
+
+    vth = jnp.asarray(params.vth, dtype=real_dtype)
+    vth_s = vth if vth.ndim == 0 else vth[:, None, None, None, None, None]
+
+    ratio_l = cache.ratio_l.astype(real_dtype)
+    ratio_m = cache.ratio_m.astype(real_dtype)
+    ratio_lm = cache.ratio_lm.astype(real_dtype)
+    scaled_nu_l = Nl * nu_hyper_l
+    scaled_nu_m = Nm * nu_hyper_m
+    mask_const = cache.mask_const
+    const_coeff = (
+        vth_s * (scaled_nu_l * ratio_l + scaled_nu_m * ratio_m)
+        + nu_hyper_lm * ratio_lm
+    )
+
+    hyper = nu_hyper * cache.hyper_ratio.astype(real_dtype)
+    hyper = hyper + w_const * jnp.where(mask_const, const_coeff, 0.0)
+
+    abs_kz = jnp.abs(cache.kz).astype(real_dtype)[None, None, None, None, None, :]
+    nu_hyp_m = (
+        nu_hyper_m
+        * cache.m_norm_kz_factor.astype(real_dtype)
+        * 2.3
+        * vth_s
+        * jnp.abs(jnp.asarray(params.kpar_scale, dtype=real_dtype))
+    )
+    kz_term = nu_hyp_m * cache.m_pow.astype(real_dtype) * abs_kz
+    hyper = hyper + w_kz * jnp.where(cache.mask_kz, kz_term, 0.0)
+    return hyper
+
+
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
 class LinearCache:
@@ -246,6 +294,13 @@ class LinearCache:
     ky: jnp.ndarray
     lb_lam: jnp.ndarray
     hyper_ratio: jnp.ndarray
+    ratio_l: jnp.ndarray
+    ratio_m: jnp.ndarray
+    ratio_lm: jnp.ndarray
+    mask_const: jnp.ndarray
+    mask_kz: jnp.ndarray
+    m_pow: jnp.ndarray
+    m_norm_kz_factor: jnp.ndarray
     damp_profile: jnp.ndarray
     l: jnp.ndarray
     m: jnp.ndarray
@@ -272,6 +327,13 @@ class LinearCache:
             self.ky,
             self.lb_lam,
             self.hyper_ratio,
+            self.ratio_l,
+            self.ratio_m,
+            self.ratio_lm,
+            self.mask_const,
+            self.mask_kz,
+            self.m_pow,
+            self.m_norm_kz_factor,
             self.damp_profile,
             self.l,
             self.m,
@@ -340,6 +402,19 @@ def build_linear_cache(
     l_norm = jnp.maximum(Nl - 1, 1)
     m_norm = jnp.maximum(Nm - 1, 1)
     hyper_ratio = (l / l_norm) ** params.p_hyper + (m / m_norm) ** params.p_hyper
+    l_norm_full = jnp.asarray(max(Nl, 1), dtype=real_dtype)
+    m_norm_full = jnp.asarray(max(Nm, 1), dtype=real_dtype)
+    m_norm_kz = jnp.asarray(max(Nm - 1, 1), dtype=real_dtype)
+    p_hyper_l = jnp.asarray(params.p_hyper_l, dtype=real_dtype)
+    p_hyper_m = jnp.asarray(params.p_hyper_m, dtype=real_dtype)
+    p_hyper_lm = jnp.asarray(params.p_hyper_lm, dtype=real_dtype)
+    ratio_l = (l / l_norm_full) ** p_hyper_l
+    ratio_m = (m / m_norm_full) ** p_hyper_m
+    ratio_lm = ((2.0 * l + m) / (2.0 * l_norm_full + m_norm_full)) ** p_hyper_lm
+    mask_const = (m > 2.0) | (l > 1.0)
+    mask_kz = m > 2.0
+    m_pow = m ** p_hyper_m
+    m_norm_kz_factor = (p_hyper_m + 0.5) / (m_norm_kz ** (p_hyper_m + 0.5))
     Nz = grid.z.size
     width = jnp.maximum(1, jnp.asarray(jnp.floor(params.damp_ends_widthfrac * Nz), dtype=jnp.int32))
     idx = jnp.arange(Nz, dtype=jnp.float32)
@@ -366,6 +441,13 @@ def build_linear_cache(
         ky=ky_eff.astype(real_dtype),
         lb_lam=lb_lam.astype(real_dtype),
         hyper_ratio=hyper_ratio.astype(real_dtype),
+        ratio_l=ratio_l.astype(real_dtype),
+        ratio_m=ratio_m.astype(real_dtype),
+        ratio_lm=ratio_lm.astype(real_dtype),
+        mask_const=mask_const,
+        mask_kz=mask_kz,
+        m_pow=m_pow.astype(real_dtype),
+        m_norm_kz_factor=m_norm_kz_factor.astype(real_dtype),
         damp_profile=damp_profile,
         l=l,
         m=m,
@@ -656,8 +738,7 @@ def linear_rhs_cached(
     return dG, fields.phi
 
 
-@partial(jax.jit, static_argnames=("steps", "method", "checkpoint", "sample_stride"))
-def _integrate_linear_cached(
+def _integrate_linear_cached_impl(
     G0: jnp.ndarray,
     cache: LinearCache,
     params: LinearParams,
@@ -680,16 +761,15 @@ def _integrate_linear_cached(
     real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
     dt_val = jnp.asarray(dt, dtype=real_dtype)
     lb_lam = cache.lb_lam.astype(real_dtype)
-    hyper_ratio = cache.hyper_ratio.astype(real_dtype)
-    nu_hyper = jnp.asarray(params.nu_hyper, dtype=real_dtype)
+    hyper_damp = hypercollision_damping(cache, params, real_dtype)
     if lb_lam.ndim == 6:
         ns = lb_lam.shape[0]
         nu = _as_species_array(params.nu, ns, "nu").astype(real_dtype)
-        damping = nu[:, None, None, None, None, None] * lb_lam + nu_hyper * hyper_ratio
+        damping = nu[:, None, None, None, None, None] * lb_lam + hyper_damp
         if G0.ndim == 5:
             damping = damping[0]
     else:
-        damping = jnp.asarray(params.nu, dtype=real_dtype) * lb_lam + nu_hyper * hyper_ratio
+        damping = jnp.asarray(params.nu, dtype=real_dtype) * lb_lam + hyper_damp
     damping = damping.astype(real_dtype)
 
     def advance(G):
@@ -736,13 +816,70 @@ def _integrate_linear_cached(
     return jax.lax.scan(sample_step, G0, None, length=num_samples)
 
 
+@partial(
+    jax.jit,
+    static_argnames=("steps", "method", "checkpoint", "sample_stride"),
+)
+def _integrate_linear_cached(
+    G0: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    dt: float,
+    steps: int,
+    method: str = "rk4",
+    checkpoint: bool = False,
+    terms: LinearTerms | None = None,
+    sample_stride: int = 1,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    return _integrate_linear_cached_impl(
+        G0,
+        cache,
+        params,
+        dt,
+        steps,
+        method=method,
+        checkpoint=checkpoint,
+        terms=terms,
+        sample_stride=sample_stride,
+    )
+
+
+@partial(
+    jax.jit,
+    static_argnames=("steps", "method", "checkpoint", "sample_stride"),
+    donate_argnums=(0,),
+)
+def _integrate_linear_cached_donate(
+    G0: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    dt: float,
+    steps: int,
+    method: str = "rk4",
+    checkpoint: bool = False,
+    terms: LinearTerms | None = None,
+    sample_stride: int = 1,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    return _integrate_linear_cached_impl(
+        G0,
+        cache,
+        params,
+        dt,
+        steps,
+        method=method,
+        checkpoint=checkpoint,
+        terms=terms,
+        sample_stride=sample_stride,
+    )
+
+
 def _build_implicit_operator(
     G0: jnp.ndarray,
     cache: LinearCache,
     params: LinearParams,
     dt: float,
     terms: LinearTerms | None,
-    implicit_preconditioner: Callable[[jnp.ndarray], jnp.ndarray] | str | None,
+    implicit_preconditioner: PreconditionerSpec,
 ) -> tuple[jnp.ndarray, tuple[int, ...], int, jnp.ndarray, Callable[[jnp.ndarray], jnp.ndarray], Callable[[jnp.ndarray], jnp.ndarray], bool]:
     if terms is None:
         terms = LinearTerms()
@@ -762,9 +899,8 @@ def _build_implicit_operator(
     ns = shape[0]
     nu = _as_species_array(params.nu, ns, "nu").astype(real_dtype)
     lb_lam = cache.lb_lam.astype(real_dtype)
-    hyper_ratio = cache.hyper_ratio.astype(real_dtype)
-    nu_hyper = jnp.asarray(params.nu_hyper, dtype=real_dtype)
-    damping = nu[:, None, None, None, None, None] * lb_lam + nu_hyper * hyper_ratio
+    hyper_damp = hypercollision_damping(cache, params, real_dtype)
+    damping = nu[:, None, None, None, None, None] * lb_lam + hyper_damp
     damping = damping.astype(real_dtype)
 
     l = cache.l.astype(real_dtype)
@@ -792,19 +928,35 @@ def _build_implicit_operator(
     mirror_weight = 0.2
     diag = diag - w_mirror * mirror_weight * bgrad * mirror_diag
 
-    precond = 1.0 / (1.0 + dt_val * damping - dt_val * diag)
-    precond = precond.astype(G.dtype)
+    precond_full = 1.0 / (1.0 + dt_val * damping - dt_val * diag)
+    precond_full = precond_full.astype(G.dtype)
+    precond_damp = (1.0 / (1.0 + dt_val * damping)).astype(G.dtype)
     resolved_precond = _resolve_implicit_preconditioner(implicit_preconditioner)
 
-    def apply_precond(x_flat: jnp.ndarray) -> jnp.ndarray:
+    def apply_precond_full(x_flat: jnp.ndarray) -> jnp.ndarray:
         x = x_flat.reshape(shape)
-        return (x * precond).reshape(size)
+        return (x * precond_full).reshape(size)
+
+    def apply_precond_damp(x_flat: jnp.ndarray) -> jnp.ndarray:
+        x = x_flat.reshape(shape)
+        return (x * precond_damp).reshape(size)
+
+    def apply_identity(x_flat: jnp.ndarray) -> jnp.ndarray:
+        return x_flat
 
     precond_op: Callable[[jnp.ndarray], jnp.ndarray]
-    if resolved_precond is None:
-        precond_op = apply_precond
-    else:
+    if callable(resolved_precond):
         precond_op = resolved_precond
+    else:
+        key = resolved_precond or "auto"
+        if key in {"auto", "diag", "diagonal", "physics", "block"}:
+            precond_op = apply_precond_full
+        elif key in {"damping", "collisional", "hyper"}:
+            precond_op = apply_precond_damp
+        elif key in {"identity", "none", "off"}:
+            precond_op = apply_identity
+        else:
+            raise ValueError(f"Unknown implicit_preconditioner '{resolved_precond}'")
 
     def matvec(x_flat: jnp.ndarray) -> jnp.ndarray:
         x = x_flat.reshape(shape)
@@ -835,7 +987,7 @@ def _integrate_linear_implicit_cached(
     implicit_relax: float = 0.7,
     implicit_restart: int = 20,
     implicit_solve_method: str = "batched",
-    implicit_preconditioner: Callable[[jnp.ndarray], jnp.ndarray] | str | None = None,
+    implicit_preconditioner: PreconditionerSpec = None,
     checkpoint: bool = False,
     sample_stride: int = 1,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
@@ -933,10 +1085,11 @@ def integrate_linear(
     implicit_relax: float = 0.7,
     implicit_restart: int = 20,
     implicit_solve_method: str = "batched",
-    implicit_preconditioner: Callable[[jnp.ndarray], jnp.ndarray] | str | None = None,
+    implicit_preconditioner: PreconditionerSpec = None,
     terms: LinearTerms | None = None,
     checkpoint: bool = False,
     sample_stride: int = 1,
+    donate: bool = False,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Time integrate the linear system using a fixed-step scheme."""
     if terms is None:
@@ -973,7 +1126,8 @@ def integrate_linear(
             checkpoint=checkpoint,
             sample_stride=sample_stride,
         )
-    return _integrate_linear_cached(
+    integrator = _integrate_linear_cached_donate if donate else _integrate_linear_cached
+    return integrator(
         G0,
         cache,
         params,
@@ -999,7 +1153,11 @@ def integrate_linear_diagnostics(
     terms: LinearTerms | None = None,
     sample_stride: int = 1,
     species_index: int | None = 0,
-) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    record_hl_energy: bool = False,
+) -> (
+    tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]
+    | tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]
+):
     """Integrate and return (G_out, phi_t, density_t) for diagnostics."""
 
     if terms is None:
@@ -1023,16 +1181,15 @@ def integrate_linear_diagnostics(
     real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
     dt_val = jnp.asarray(dt, dtype=real_dtype)
     lb_lam = cache.lb_lam.astype(real_dtype)
-    hyper_ratio = cache.hyper_ratio.astype(real_dtype)
-    nu_hyper = jnp.asarray(params.nu_hyper, dtype=real_dtype)
+    hyper_damp = hypercollision_damping(cache, params, real_dtype)
     if lb_lam.ndim == 6:
         ns = lb_lam.shape[0]
         nu = _as_species_array(params.nu, ns, "nu").astype(real_dtype)
-        damping = nu[:, None, None, None, None, None] * lb_lam + nu_hyper * hyper_ratio
+        damping = nu[:, None, None, None, None, None] * lb_lam + hyper_damp
         if G0.ndim == 5:
             damping = damping[0]
     else:
-        damping = jnp.asarray(params.nu, dtype=real_dtype) * lb_lam + nu_hyper * hyper_ratio
+        damping = jnp.asarray(params.nu, dtype=real_dtype) * lb_lam + hyper_damp
     damping = damping.astype(real_dtype)
 
     def advance(G_in: jnp.ndarray) -> jnp.ndarray:
@@ -1077,14 +1234,22 @@ def integrate_linear_diagnostics(
             return jnp.sum(jnp.sum(Jl[None, ...] * G_in[:, :, 0, ...], axis=1), axis=0)
         return jnp.sum(Jl * G_in[int(species_index), :, 0, ...], axis=0)
 
+    def hl_energy_from_G(G_in: jnp.ndarray) -> jnp.ndarray:
+        if G_in.ndim == 5:
+            return jnp.sum(jnp.abs(G_in) ** 2, axis=(2, 3, 4))
+        return jnp.sum(jnp.abs(G_in) ** 2, axis=(0, 3, 4, 5))
+
     def step(G_in, _):
         G_out = advance(G_in)
         _dG, phi = linear_rhs_cached(G_out, cache, params, terms=terms, use_jit=False)
         density = density_from_G(G_out)
+        if record_hl_energy:
+            hl_energy = hl_energy_from_G(G_out)
+            return G_out, (phi, density, hl_energy)
         return G_out, (phi, density)
 
     if sample_stride <= 1:
-        G_out, (phi_t, density_t) = jax.lax.scan(step, G0, None, length=steps)
+        G_out, outputs = jax.lax.scan(step, G0, None, length=steps)
     else:
         def sample_step(G_in, _):
             def inner_step(_i, g):
@@ -1093,9 +1258,16 @@ def integrate_linear_diagnostics(
             G_out_local = jax.lax.fori_loop(0, sample_stride, inner_step, G_in)
             _dG, phi_out = linear_rhs_cached(G_out_local, cache, params, terms=terms, use_jit=False)
             density_out = density_from_G(G_out_local)
+            if record_hl_energy:
+                hl_out = hl_energy_from_G(G_out_local)
+                return G_out_local, (phi_out, density_out, hl_out)
             return G_out_local, (phi_out, density_out)
 
         num_samples = steps // sample_stride
-        G_out, (phi_t, density_t) = jax.lax.scan(sample_step, G0, None, length=num_samples)
+        G_out, outputs = jax.lax.scan(sample_step, G0, None, length=num_samples)
 
+    if record_hl_energy:
+        phi_t, density_t, hl_t = outputs
+        return G_out, phi_t, density_t, hl_t
+    phi_t, density_t = outputs
     return G_out, phi_t, density_t

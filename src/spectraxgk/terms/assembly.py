@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Tuple
 
+import functools
 import jax
 
 import jax.numpy as jnp
@@ -67,9 +68,8 @@ def assemble_rhs_cached(
     nu_hyper_l = jnp.asarray(params.nu_hyper_l, dtype=real_dtype)
     nu_hyper_m = jnp.asarray(params.nu_hyper_m, dtype=real_dtype)
     nu_hyper_lm = jnp.asarray(params.nu_hyper_lm, dtype=real_dtype)
-    p_hyper_l = jnp.asarray(params.p_hyper_l, dtype=real_dtype)
-    p_hyper_m = jnp.asarray(params.p_hyper_m, dtype=real_dtype)
-    p_hyper_lm = jnp.asarray(params.p_hyper_lm, dtype=real_dtype)
+    hypercollisions_const = jnp.asarray(params.hypercollisions_const, dtype=real_dtype)
+    hypercollisions_kz = jnp.asarray(params.hypercollisions_kz, dtype=real_dtype)
     damp_amp = jnp.asarray(params.damp_ends_amp, dtype=real_dtype)
 
     w_stream = jnp.asarray(term_cfg.streaming, dtype=real_dtype)
@@ -161,16 +161,22 @@ def assemble_rhs_cached(
     dG = dG + hypercollisions_contribution(
         G,
         vth=vth,
-        l=cache.l,
-        m=cache.m,
         nu_hyper=nu_hyper,
         nu_hyper_l=nu_hyper_l,
         nu_hyper_m=nu_hyper_m,
         nu_hyper_lm=nu_hyper_lm,
-        p_hyper_l=p_hyper_l,
-        p_hyper_m=p_hyper_m,
-        p_hyper_lm=p_hyper_lm,
         hyper_ratio=cache.hyper_ratio,
+        ratio_l=cache.ratio_l,
+        ratio_m=cache.ratio_m,
+        ratio_lm=cache.ratio_lm,
+        mask_const=cache.mask_const,
+        mask_kz=cache.mask_kz,
+        m_pow=cache.m_pow,
+        m_norm_kz_factor=cache.m_norm_kz_factor,
+        kz=cache.kz,
+        kpar_scale=kpar_scale,
+        hypercollisions_const=hypercollisions_const,
+        hypercollisions_kz=hypercollisions_kz,
         weight=w_hyper,
     )
     dG = dG + end_damping_contribution(
@@ -186,7 +192,7 @@ def assemble_rhs_cached(
     return dG.astype(out_dtype), fields
 
 
-@jax.jit
+@functools.partial(jax.jit)
 def assemble_rhs_cached_jit(
     G: jnp.ndarray,
     cache: LinearCache,

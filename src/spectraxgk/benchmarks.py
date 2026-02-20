@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from typing import Sequence
 import numpy as np
 from importlib import resources
 
@@ -10,6 +11,7 @@ import jax.numpy as jnp
 
 from spectraxgk.analysis import (
     ModeSelection,
+    ModeSelectionBatch,
     extract_mode_time_series,
     fit_growth_rate,
     fit_growth_rate_auto,
@@ -18,14 +20,22 @@ from spectraxgk.analysis import (
 from spectraxgk.config import (
     CycloneBaseCase,
     ETGBaseCase,
+    InitializationConfig,
     KineticElectronBaseCase,
     KBMBaseCase,
     TEMBaseCase,
     TimeConfig,
 )
 from spectraxgk.geometry import SAlphaGeometry
-from spectraxgk.grids import build_spectral_grid, select_ky_grid
-from spectraxgk.linear import LinearParams, LinearTerms, build_linear_cache, integrate_linear
+from spectraxgk.grids import SpectralGrid, build_spectral_grid, select_ky_grid
+from spectraxgk.diffrax_integrators import integrate_linear_diffrax_streaming
+from spectraxgk.linear import (
+    LinearParams,
+    LinearTerms,
+    build_linear_cache,
+    integrate_linear,
+    integrate_linear_diagnostics,
+)
 from spectraxgk.linear_krylov import KrylovConfig, dominant_eigenpair
 from spectraxgk.runners import integrate_linear_from_config
 from spectraxgk.species import Species, build_linear_params
@@ -33,8 +43,8 @@ from spectraxgk.terms.assembly import compute_fields_cached
 from spectraxgk.terms.config import TermConfig
 
 
-CYCLONE_OMEGA_D_SCALE = 0.60
-CYCLONE_OMEGA_STAR_SCALE = 0.70
+CYCLONE_OMEGA_D_SCALE = 0.8
+CYCLONE_OMEGA_STAR_SCALE = 0.4
 CYCLONE_RHO_STAR = 1.0
 
 ETG_OMEGA_D_SCALE = 1.0
@@ -57,17 +67,138 @@ GX_NU_HYPER_L = 0.0
 GX_NU_HYPER_M = 1.0
 GX_P_HYPER_L = 6.0
 GX_P_HYPER_M = 20.0
+GX_DAMP_ENDS_AMP = 0.1
+GX_DAMP_ENDS_WIDTHFRAC = 1.0 / 8.0
 
 
-def _apply_gx_hypercollisions(params: LinearParams) -> LinearParams:
+def _gx_p_hyper_m(nhermite: int | None) -> float:
+    if nhermite is None:
+        return GX_P_HYPER_M
+    return float(min(GX_P_HYPER_M, max(int(nhermite) // 2, 1)))
+
+
+def _apply_gx_hypercollisions(params: LinearParams, *, nhermite: int | None = None) -> LinearParams:
     return replace(
         params,
         nu_hyper=0.0,
         nu_hyper_l=GX_NU_HYPER_L,
         nu_hyper_m=GX_NU_HYPER_M,
         p_hyper_l=GX_P_HYPER_L,
-        p_hyper_m=GX_P_HYPER_M,
+        p_hyper_m=_gx_p_hyper_m(nhermite),
+        hypercollisions_const=0.0,
+        hypercollisions_kz=1.0,
     )
+
+
+def _midplane_index(grid: SpectralGrid) -> int:
+    """Return GX-style midplane index for growth-rate diagnostics."""
+
+    if grid.z.size <= 1:
+        return 0
+    idx = int(grid.z.size // 2 + 1)
+    return min(idx, int(grid.z.size) - 1)
+
+
+def _select_fit_signal(
+    phi_t: np.ndarray,
+    density_t: np.ndarray | None,
+    sel: ModeSelection,
+    *,
+    fit_signal: str,
+    mode_method: str,
+) -> np.ndarray:
+    if fit_signal == "phi":
+        return extract_mode_time_series(phi_t, sel, method=mode_method)
+    if fit_signal == "density":
+        if density_t is None:
+            raise ValueError("density_t must be provided when fit_signal='density'")
+        return extract_mode_time_series(density_t, sel, method=mode_method)
+    raise ValueError("fit_signal must be 'phi' or 'density'")
+
+
+def _is_array_like(value) -> bool:
+    return isinstance(value, (list, tuple, np.ndarray))
+
+
+def _resolve_streaming_window(
+    t_total: float,
+    tmin: float | None,
+    tmax: float | None,
+    start_fraction: float,
+    window_fraction: float,
+    end_fraction: float,
+) -> tuple[float, float]:
+    if tmin is not None and tmax is not None:
+        return float(tmin), float(tmax)
+    t_start = float(start_fraction) * t_total
+    t_end = float(end_fraction) * t_total
+    t_end = min(t_end, t_start + float(window_fraction) * t_total)
+    if t_end <= t_start:
+        t_end = t_total
+    return t_start, t_end
+
+
+def _build_gaussian_profile(
+    z: np.ndarray,
+    *,
+    kx: float,
+    ky: float,
+    s_hat: float,
+    init_cfg: InitializationConfig,
+) -> np.ndarray:
+    if ky == 0.0:
+        return np.zeros_like(z)
+    theta0 = kx / (s_hat * ky)
+    envelope = init_cfg.gaussian_envelope_constant + init_cfg.gaussian_envelope_sine * np.sin(z - theta0)
+    width = init_cfg.gaussian_width
+    if width <= 0.0:
+        raise ValueError("gaussian_width must be > 0")
+    return envelope * np.exp(-((z - theta0) / width) ** 2)
+
+
+def _build_initial_condition(
+    grid: SpectralGrid,
+    geom: SAlphaGeometry,
+    *,
+    ky_index: int | Sequence[int] | np.ndarray,
+    kx_index: int,
+    Nl: int,
+    Nm: int,
+    init_cfg: InitializationConfig,
+) -> jnp.ndarray:
+    init_field = init_cfg.init_field.lower()
+    field_map = {
+        "density": (0, 0),
+        "upar": (0, 1),
+        "tpar": (0, 2),
+        "tperp": (1, 0),
+        "qpar": (0, 3),
+        "qperp": (1, 1),
+    }
+    if init_field not in field_map:
+        raise ValueError("init_field must be one of {'density','upar','tpar','tperp','qpar','qperp'}")
+    l_idx, m_idx = field_map[init_field]
+    if l_idx >= Nl or m_idx >= Nm:
+        raise ValueError("init_field moment exceeds (Nl, Nm) resolution")
+
+    G0 = np.zeros((Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
+    amp = float(init_cfg.init_amp)
+    ky_idx = np.atleast_1d(np.asarray(ky_index, dtype=int))
+    for ky_i in ky_idx:
+        if init_cfg.gaussian_init:
+            profile = _build_gaussian_profile(
+                np.asarray(grid.z),
+                kx=float(grid.kx[kx_index]),
+                ky=float(grid.ky[ky_i]),
+                s_hat=geom.s_hat,
+                init_cfg=init_cfg,
+            )
+            init_vals = amp * profile * (1.0 + 1.0j)
+        else:
+            init_vals = amp * (1.0 + 1.0j) * np.ones_like(grid.z)
+        if grid.ky[ky_i] != 0.0:
+            G0[l_idx, m_idx, ky_i, kx_index, :] = init_vals
+    return jnp.asarray(G0)
 
 @dataclass(frozen=True)
 class CycloneReference:
@@ -187,6 +318,7 @@ def _two_species_params(
     fapar_override: float | None = None,
     damp_ends_amp: float | None = None,
     damp_ends_widthfrac: float | None = None,
+    nhermite: int | None = None,
 ) -> LinearParams:
     """Build LinearParams for a two-species kinetic model (ions + electrons)."""
 
@@ -231,7 +363,7 @@ def _two_species_params(
         beta=beta,
         fapar=1.0 if beta > 0.0 else 0.0,
     )
-    params = _apply_gx_hypercollisions(params)
+    params = _apply_gx_hypercollisions(params, nhermite=nhermite)
     if fapar_override is not None:
         params = replace(params, fapar=float(fapar_override))
     if damp_ends_amp is not None:
@@ -252,6 +384,7 @@ def _electron_only_params(
     fapar_override: float | None = None,
     damp_ends_amp: float | None = None,
     damp_ends_widthfrac: float | None = None,
+    nhermite: int | None = None,
 ) -> LinearParams:
     """Build LinearParams for a single kinetic electron species + Boltzmann ions."""
 
@@ -286,7 +419,7 @@ def _electron_only_params(
         beta=beta,
         fapar=1.0 if beta > 0.0 else 0.0,
     )
-    params = _apply_gx_hypercollisions(params)
+    params = _apply_gx_hypercollisions(params, nhermite=nhermite)
     if fapar_override is not None:
         params = replace(params, fapar=float(fapar_override))
     if damp_ends_amp is not None:
@@ -317,13 +450,27 @@ def run_cyclone_linear(
     growth_weight: float = 1.0,
     require_positive: bool = True,
     min_amp_fraction: float = 0.0,
-    mode_method: str = "svd",
+    max_fraction: float = 0.8,
+    end_fraction: float = 1.0,
+    max_amp_fraction: float = 1.0,
+    phase_weight: float = 0.2,
+    length_weight: float = 0.05,
+    min_r2: float = 0.0,
+    late_penalty: float = 0.0,
+    min_slope: float | None = None,
+    min_slope_frac: float = 0.0,
+    slope_var_weight: float = 0.0,
+    window_method: str = "loglinear",
+    mode_method: str = "project",
     terms: LinearTerms | None = None,
     sample_stride: int | None = None,
+    init_cfg: InitializationConfig | None = None,
+    use_jit: bool = True,
 ) -> CycloneRunResult:
     """Run the linear Cyclone benchmark and extract growth rate."""
 
     cfg = cfg or CycloneBaseCase()
+    init_cfg = init_cfg or getattr(cfg, "init", None) or InitializationConfig()
     grid_full = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
     if params is None:
@@ -336,20 +483,26 @@ def run_cyclone_linear(
             rho_star=CYCLONE_RHO_STAR,
             kpar_scale=float(geom.gradpar()),
             nu=cfg.model.nu_i,
-            damp_ends_amp=0.0,
-            damp_ends_widthfrac=0.0,
+            damp_ends_amp=GX_DAMP_ENDS_AMP,
+            damp_ends_widthfrac=GX_DAMP_ENDS_WIDTHFRAC,
         )
-        params = _apply_gx_hypercollisions(params)
+        params = _apply_gx_hypercollisions(params, nhermite=Nm)
     if terms is None:
         terms = LinearTerms()
 
     if solver.lower() == "krylov":
         ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
         grid = select_ky_grid(grid_full, ky_index)
-        sel = ModeSelection(ky_index=0, kx_index=0, z_index=0)
-        G0 = np.zeros((Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
-        G0[0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
-        G0_jax = jnp.asarray(G0)
+        sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
+        G0_jax = _build_initial_condition(
+            grid,
+            geom,
+            ky_index=sel.ky_index,
+            kx_index=sel.kx_index,
+            Nl=Nl,
+            Nm=Nm,
+            init_cfg=init_cfg,
+        )
         krylov_cfg = krylov_cfg or KrylovConfig()
         cache = build_linear_cache(grid, geom, params, Nl, Nm)
         eig, vec = dominant_eigenpair(
@@ -391,39 +544,72 @@ def run_cyclone_linear(
         omega = float(-np.imag(eig))
     else:
         ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
-        grid = grid_full
-        sel = ModeSelection(ky_index=ky_index, kx_index=0, z_index=0)
-        G0 = np.zeros((Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
-        G0[0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
-        G0_jax = jnp.asarray(G0)
+        grid = select_ky_grid(grid_full, ky_index)
+        sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
+        G0_jax = _build_initial_condition(
+            grid,
+            geom,
+            ky_index=sel.ky_index,
+            kx_index=sel.kx_index,
+            Nl=Nl,
+            Nm=Nm,
+            init_cfg=init_cfg,
+        )
+        method_key = method.lower()
+        time_cfg_use = None
         if time_cfg is not None:
-            time_cfg_use = time_cfg
+            time_cfg_use = replace(time_cfg, dt=float(dt), t_max=float(dt) * int(steps))
             if sample_stride is not None:
-                time_cfg_use = replace(time_cfg, sample_stride=sample_stride)
-            dt = float(time_cfg_use.dt)
-            steps = int(round(time_cfg_use.t_max / time_cfg_use.dt))
+                time_cfg_use = replace(time_cfg_use, sample_stride=sample_stride)
+        elif cfg.time.use_diffrax and not (
+            method_key.startswith("imex") or method_key.startswith("implicit")
+        ):
+            time_cfg_use = replace(cfg.time, dt=float(dt), t_max=float(dt) * int(steps))
+            if sample_stride is not None:
+                time_cfg_use = replace(time_cfg_use, sample_stride=sample_stride)
+
+        params_use = params
+        if params_use.damp_ends_amp != 0.0 and terms.end_damping != 0.0:
+            params_use = replace(params_use, damp_ends_amp=params_use.damp_ends_amp / float(dt))
+
+        if time_cfg_use is not None:
             _, phi_t = integrate_linear_from_config(
                 G0_jax,
                 grid,
                 geom,
-                params,
+                params_use,
                 time_cfg_use,
                 terms=terms,
             )
             stride = time_cfg_use.sample_stride
         else:
             stride = 1 if sample_stride is None else int(sample_stride)
-            _, phi_t = integrate_linear(
-                G0_jax,
-                grid,
-                geom,
-                params,
-                dt=dt,
-                steps=steps,
-                method=method,
-                terms=terms,
-                sample_stride=stride,
-            )
+            if use_jit:
+                _, phi_t = integrate_linear(
+                    G0_jax,
+                    grid,
+                    geom,
+                    params_use,
+                    dt=dt,
+                    steps=steps,
+                    method=method,
+                    terms=terms,
+                    sample_stride=stride,
+                )
+            else:
+                _diag = integrate_linear_diagnostics(
+                    G0_jax,
+                    grid,
+                    geom,
+                    params_use,
+                    dt=dt,
+                    steps=steps,
+                    method=method,
+                    terms=terms,
+                    sample_stride=stride,
+                    record_hl_energy=False,
+                )
+                phi_t = _diag[1]
 
         phi_t_np = np.asarray(phi_t)
         t = np.arange(phi_t_np.shape[0]) * dt * stride
@@ -438,6 +624,17 @@ def run_cyclone_linear(
                 growth_weight=growth_weight,
                 require_positive=require_positive,
                 min_amp_fraction=min_amp_fraction,
+                max_fraction=max_fraction,
+                end_fraction=end_fraction,
+                max_amp_fraction=max_amp_fraction,
+                phase_weight=phase_weight,
+                length_weight=length_weight,
+                min_r2=min_r2,
+                late_penalty=late_penalty,
+                min_slope=min_slope,
+                min_slope_frac=min_slope_frac,
+                slope_var_weight=slope_var_weight,
+                window_method=window_method,
             )
         else:
             gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
@@ -473,9 +670,25 @@ def run_cyclone_scan(
     growth_weight: float = 1.0,
     require_positive: bool = True,
     min_amp_fraction: float = 0.0,
-    mode_method: str = "svd",
+    max_fraction: float = 0.8,
+    end_fraction: float = 1.0,
+    max_amp_fraction: float = 1.0,
+    phase_weight: float = 0.2,
+    length_weight: float = 0.05,
+    min_r2: float = 0.0,
+    late_penalty: float = 0.0,
+    min_slope: float | None = None,
+    min_slope_frac: float = 0.0,
+    slope_var_weight: float = 0.0,
+    window_method: str = "loglinear",
+    mode_method: str = "project",
+    mode_only: bool = True,
     terms: LinearTerms | None = None,
     sample_stride: int | None = None,
+    use_jit: bool = True,
+    ky_batch: int = 1,
+    streaming_fit: bool = True,
+    streaming_amp_floor: float = 1.0e-30,
 ) -> CycloneScanResult:
     """Run the linear Cyclone benchmark for a list of ky values.
 
@@ -483,6 +696,7 @@ def run_cyclone_scan(
     """
 
     cfg = cfg or CycloneBaseCase()
+    init_cfg = getattr(cfg, "init", None) or InitializationConfig()
     grid_full = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
     if params is None:
@@ -495,16 +709,12 @@ def run_cyclone_scan(
             rho_star=CYCLONE_RHO_STAR,
             kpar_scale=float(geom.gradpar()),
             nu=cfg.model.nu_i,
-            damp_ends_amp=0.0,
-            damp_ends_widthfrac=0.0,
+            damp_ends_amp=GX_DAMP_ENDS_AMP,
+            damp_ends_widthfrac=GX_DAMP_ENDS_WIDTHFRAC,
         )
-        params = _apply_gx_hypercollisions(params)
+        params = _apply_gx_hypercollisions(params, nhermite=Nm)
     if terms is None:
         terms = LinearTerms()
-    cache_full = None
-    if solver.lower() != "krylov":
-        cache_full = build_linear_cache(grid_full, geom, params, Nl, Nm)
-
     gammas = []
     omegas = []
     ky_out = []
@@ -521,133 +731,53 @@ def run_cyclone_scan(
         mask = (t_arr >= tmin_val) & (t_arr <= tmax_val)
         return int(np.count_nonzero(mask)) >= 2
 
-    def _window_valid(t_arr, tmin_val, tmax_val):
-        if tmin_val is None or tmax_val is None:
-            return False
-        mask = (t_arr >= tmin_val) & (t_arr <= tmax_val)
-        return int(np.count_nonzero(mask)) >= 2
+    if mode_only and mode_method not in {"z_index", "max"}:
+        mode_method = "z_index"
 
-    def _window_valid(t_arr, tmin_val, tmax_val):
-        if tmin_val is None or tmax_val is None:
-            return False
-        mask = (t_arr >= tmin_val) & (t_arr <= tmax_val)
-        return int(np.count_nonzero(mask)) >= 2
+    if ky_batch < 1:
+        raise ValueError("ky_batch must be >= 1")
+    use_batch = (
+        ky_batch > 1
+        and solver.lower() != "krylov"
+        and not _is_array_like(dt)
+        and not _is_array_like(steps)
+        and not _is_array_like(tmin)
+        and not _is_array_like(tmax)
+    )
 
-    def _window_valid(t_arr, tmin_val, tmax_val):
-        if tmin_val is None or tmax_val is None:
-            return False
-        mask = (t_arr >= tmin_val) & (t_arr <= tmax_val)
-        return int(np.count_nonzero(mask)) >= 2
-
-    def _window_valid(t_arr, tmin_val, tmax_val):
-        if tmin_val is None or tmax_val is None:
-            return False
-        mask = (t_arr >= tmin_val) & (t_arr <= tmax_val)
-        return int(np.count_nonzero(mask)) >= 2
-
-    def _window_valid(t_arr, tmin_val, tmax_val):
-        if tmin_val is None or tmax_val is None:
-            return False
-        mask = (t_arr >= tmin_val) & (t_arr <= tmax_val)
-        return int(np.count_nonzero(mask)) >= 2
-
-    def _window_valid(t_arr, tmin_val, tmax_val):
-        if tmin_val is None or tmax_val is None:
-            return False
-        mask = (t_arr >= tmin_val) & (t_arr <= tmax_val)
-        return int(np.count_nonzero(mask)) >= 2
-
-    def _window_valid(t_arr, tmin_val, tmax_val):
-        if tmin_val is None or tmax_val is None:
-            return False
-        mask = (t_arr >= tmin_val) & (t_arr <= tmax_val)
-        return int(np.count_nonzero(mask)) >= 2
-
-
-    def _window_valid(t_arr, tmin_val, tmax_val):
-        if tmin_val is None or tmax_val is None:
-            return False
-        mask = (t_arr >= tmin_val) & (t_arr <= tmax_val)
-        return int(np.count_nonzero(mask)) >= 2
-
-    for i, ky in enumerate(ky_values):
-        ky_index = select_ky_index(np.asarray(grid_full.ky), float(ky))
-        if solver.lower() == "krylov":
-            grid = select_ky_grid(grid_full, ky_index)
-            sel = ModeSelection(ky_index=0, kx_index=0, z_index=0)
-        else:
-            grid = grid_full
-            sel = ModeSelection(ky_index=ky_index, kx_index=0, z_index=0)
-        dt_i = float(dt[i]) if isinstance(dt, np.ndarray) else float(dt)
-        steps_i = int(steps[i]) if isinstance(steps, np.ndarray) else int(steps)
-
-        G0 = np.zeros((Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
-        G0[0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
-
-        G0_jax = jnp.asarray(G0)
-        cache = build_linear_cache(grid, geom, params, Nl, Nm) if cache_full is None else cache_full
-        if solver.lower() == "krylov":
-            krylov_cfg = krylov_cfg or KrylovConfig()
-            eig, _vec = dominant_eigenpair(
-                G0_jax,
-                cache,
-                params,
-                terms=terms,
-                krylov_dim=krylov_cfg.krylov_dim,
-                restarts=krylov_cfg.restarts,
-                omega_cap_factor=krylov_cfg.omega_cap_factor,
-                method=krylov_cfg.method,
-                power_iters=krylov_cfg.power_iters,
-                power_dt=krylov_cfg.power_dt,
-                shift=krylov_cfg.shift,
-                shift_source=krylov_cfg.shift_source,
-                shift_tol=krylov_cfg.shift_tol,
-                shift_maxiter=krylov_cfg.shift_maxiter,
-                shift_restart=krylov_cfg.shift_restart,
-                shift_solve_method=krylov_cfg.shift_solve_method,
-                shift_preconditioner=krylov_cfg.shift_preconditioner,
+    def _fit_signal(signal: np.ndarray, idx: int, dt_i: float, stride: int) -> tuple[float, float]:
+        t = np.arange(signal.shape[0]) * dt_i * stride
+        tmin_i = _window_value(tmin, idx)
+        tmax_i = _window_value(tmax, idx)
+        use_auto = auto_window and tmin_i is None and tmax_i is None
+        if not use_auto and not _window_valid(t, tmin_i, tmax_i):
+            use_auto = True
+        if use_auto:
+            gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
+                t,
+                signal,
+                window_fraction=window_fraction,
+                min_points=min_points,
+                start_fraction=start_fraction,
+                growth_weight=growth_weight,
+                require_positive=require_positive,
+                min_amp_fraction=min_amp_fraction,
+                max_fraction=max_fraction,
+                end_fraction=end_fraction,
+                max_amp_fraction=max_amp_fraction,
+                phase_weight=phase_weight,
+                length_weight=length_weight,
+                min_r2=min_r2,
+                late_penalty=late_penalty,
+                min_slope=min_slope,
+                min_slope_frac=min_slope_frac,
+                slope_var_weight=slope_var_weight,
+                window_method=window_method,
             )
-            gamma = float(np.real(eig))
-            omega = float(-np.imag(eig))
         else:
-            if time_cfg is not None:
-                time_cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
-                if sample_stride is not None:
-                    time_cfg_i = replace(time_cfg_i, sample_stride=sample_stride)
-                _, phi_t = integrate_linear_from_config(
-                    G0_jax,
-                    grid,
-                    geom,
-                    params,
-                    time_cfg_i,
-                    cache=cache,
-                    terms=terms,
-                )
-                stride = time_cfg_i.sample_stride
-            else:
-                stride = 1 if sample_stride is None else int(sample_stride)
-                _, phi_t = integrate_linear(
-                    G0_jax,
-                    grid,
-                    geom,
-                    params,
-                    dt=dt_i,
-                    steps=steps_i,
-                    method=method,
-                    cache=cache,
-                    terms=terms,
-                    sample_stride=stride,
-                )
-
-            phi_t_np = np.asarray(phi_t)
-            t = np.arange(phi_t_np.shape[0]) * dt_i * stride
-            signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
-            tmin_i = _window_value(tmin, i)
-            tmax_i = _window_value(tmax, i)
-            use_auto = auto_window and tmin_i is None and tmax_i is None
-            if not use_auto and not _window_valid(t, tmin_i, tmax_i):
-                use_auto = True
-            if use_auto:
+            try:
+                gamma, omega = fit_growth_rate(t, signal, tmin=tmin_i, tmax=tmax_i)
+            except ValueError:
                 gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
                     t,
                     signal,
@@ -657,25 +787,200 @@ def run_cyclone_scan(
                     growth_weight=growth_weight,
                     require_positive=require_positive,
                     min_amp_fraction=min_amp_fraction,
+                    max_fraction=max_fraction,
+                    end_fraction=end_fraction,
+                    max_amp_fraction=max_amp_fraction,
+                    phase_weight=phase_weight,
+                    length_weight=length_weight,
+                    min_r2=min_r2,
+                    late_penalty=late_penalty,
+                    min_slope=min_slope,
+                    min_slope_frac=min_slope_frac,
+                    slope_var_weight=slope_var_weight,
+                    window_method=window_method,
+                )
+        return gamma, omega
+
+    ky_iter = range(0, len(ky_values), ky_batch) if use_batch else range(len(ky_values))
+    ky_slice: np.ndarray
+    ky_indices: list[int]
+    sel: ModeSelection | ModeSelectionBatch
+
+    for batch_start in ky_iter:
+        if use_batch:
+            ky_slice = np.asarray(ky_values[batch_start : batch_start + ky_batch], dtype=float)
+            ky_indices = [select_ky_index(np.asarray(grid_full.ky), float(ky)) for ky in ky_slice]
+            grid = select_ky_grid(grid_full, ky_indices)
+            sel_indices = np.arange(len(ky_indices), dtype=int)
+            sel = ModeSelectionBatch(sel_indices, 0, _midplane_index(grid))
+            dt_i = float(dt)
+            steps_i = int(steps)
+        else:
+            ky_slice = np.asarray([ky_values[batch_start]], dtype=float)
+            ky_indices = [select_ky_index(np.asarray(grid_full.ky), float(ky_slice[0]))]
+            grid = select_ky_grid(grid_full, ky_indices[0])
+            sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
+            dt_i = float(dt[batch_start]) if isinstance(dt, np.ndarray) else float(dt)
+            steps_i = int(steps[batch_start]) if isinstance(steps, np.ndarray) else int(steps)
+
+        ky_local = np.arange(len(ky_indices))
+        G0_jax = _build_initial_condition(
+            grid,
+            geom,
+            ky_index=ky_local,
+            kx_index=0,
+            Nl=Nl,
+            Nm=Nm,
+            init_cfg=init_cfg,
+        )
+        cache = build_linear_cache(grid, geom, params, Nl, Nm)
+        if solver.lower() == "krylov":
+            for local_idx, ky_val in enumerate(ky_slice):
+                cfg_use = krylov_cfg or KrylovConfig()
+                eig, _vec = dominant_eigenpair(
+                    G0_jax,
+                    cache,
+                    params,
+                    terms=terms,
+                    krylov_dim=cfg_use.krylov_dim,
+                    restarts=cfg_use.restarts,
+                    omega_cap_factor=cfg_use.omega_cap_factor,
+                    method=cfg_use.method,
+                    power_iters=cfg_use.power_iters,
+                    power_dt=cfg_use.power_dt,
+                    shift=cfg_use.shift,
+                    shift_source=cfg_use.shift_source,
+                    shift_tol=cfg_use.shift_tol,
+                    shift_maxiter=cfg_use.shift_maxiter,
+                    shift_restart=cfg_use.shift_restart,
+                    shift_solve_method=cfg_use.shift_solve_method,
+                    shift_preconditioner=cfg_use.shift_preconditioner,
+                )
+                gamma = float(np.real(eig))
+                omega = float(-np.imag(eig))
+                gammas.append(gamma)
+                omegas.append(omega)
+                ky_out.append(float(ky_val))
+            continue
+
+        method_key = method.lower()
+        time_cfg_i = None
+        if time_cfg is not None:
+            time_cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
+            if sample_stride is not None:
+                time_cfg_i = replace(time_cfg_i, sample_stride=sample_stride)
+        elif cfg.time.use_diffrax and not (
+            method_key.startswith("imex") or method_key.startswith("implicit")
+        ):
+            time_cfg_i = replace(cfg.time, dt=dt_i, t_max=dt_i * steps_i)
+            if sample_stride is not None:
+                time_cfg_i = replace(time_cfg_i, sample_stride=sample_stride)
+
+        params_use = params
+        if params_use.damp_ends_amp != 0.0 and terms.end_damping != 0.0:
+            params_use = replace(params_use, damp_ends_amp=params_use.damp_ends_amp / dt_i)
+
+        if time_cfg_i is not None and streaming_fit:
+            t_total = float(time_cfg_i.t_max)
+            tmin_i, tmax_i = _resolve_streaming_window(
+                t_total, _window_value(tmin, batch_start), _window_value(tmax, batch_start), start_fraction, window_fraction, 1.0
+            )
+            _, gamma_vals, omega_vals = integrate_linear_diffrax_streaming(
+                G0_jax,
+                grid,
+                geom,
+                params_use,
+                dt=dt_i,
+                steps=steps_i,
+                method=time_cfg_i.diffrax_solver,
+                cache=cache,
+                terms=terms,
+                adaptive=time_cfg_i.diffrax_adaptive,
+                rtol=time_cfg_i.diffrax_rtol,
+                atol=time_cfg_i.diffrax_atol,
+                max_steps=time_cfg_i.diffrax_max_steps,
+                progress_bar=time_cfg_i.progress_bar,
+                checkpoint=time_cfg_i.checkpoint,
+                tmin=tmin_i,
+                tmax=tmax_i,
+                fit_signal="phi",
+                mode_ky_indices=ky_local,
+                mode_kx_index=0,
+                mode_z_index=_midplane_index(grid),
+                mode_method=mode_method,
+                amp_floor=streaming_amp_floor,
+                return_state=False,
+            )
+            gamma_arr = np.asarray(gamma_vals)
+            omega_arr = np.asarray(omega_vals)
+            for local_idx, ky_val in enumerate(ky_slice):
+                gammas.append(float(gamma_arr[local_idx]))
+                omegas.append(float(omega_arr[local_idx]))
+                ky_out.append(float(ky_val))
+            continue
+
+        if time_cfg_i is not None:
+            _, phi_t = integrate_linear_from_config(
+                G0_jax,
+                grid,
+                geom,
+                params_use,
+                time_cfg_i,
+                cache=cache,
+                terms=terms,
+                save_mode=sel if mode_only else None,
+                mode_method=mode_method,
+                save_field="phi",
+                density_species_index=None,
+            )
+            stride = time_cfg_i.sample_stride
+        else:
+            stride = 1 if sample_stride is None else int(sample_stride)
+            if use_jit:
+                _, phi_t = integrate_linear(
+                    G0_jax,
+                    grid,
+                    geom,
+                    params_use,
+                    dt=dt_i,
+                    steps=steps_i,
+                    method=method,
+                    cache=cache,
+                    terms=terms,
+                    sample_stride=stride,
                 )
             else:
-                try:
-                    gamma, omega = fit_growth_rate(t, signal, tmin=tmin_i, tmax=tmax_i)
-                except ValueError:
-                    gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
-                        t,
-                        signal,
-                        window_fraction=window_fraction,
-                        min_points=min_points,
-                        start_fraction=start_fraction,
-                        growth_weight=growth_weight,
-                        require_positive=require_positive,
-                        min_amp_fraction=min_amp_fraction,
-                    )
+                _diag = integrate_linear_diagnostics(
+                    G0_jax,
+                    grid,
+                    geom,
+                    params_use,
+                    dt=dt_i,
+                    steps=steps_i,
+                    method=method,
+                    cache=cache,
+                    terms=terms,
+                    sample_stride=stride,
+                    species_index=None,
+                    record_hl_energy=False,
+                )
+                phi_t = _diag[1]
 
-        gammas.append(gamma)
-        omegas.append(omega)
-        ky_out.append(float(grid.ky[sel.ky_index]))
+        phi_t_np = np.asarray(phi_t)
+        signal_t = None
+        if mode_only and phi_t_np.ndim == 2:
+            signal_t = phi_t_np
+
+        for local_idx, ky_val in enumerate(ky_slice):
+            if signal_t is None:
+                sel_local = ModeSelection(ky_index=local_idx, kx_index=0, z_index=_midplane_index(grid))
+                signal = extract_mode_time_series(phi_t_np, sel_local, method=mode_method)
+            else:
+                signal = signal_t[:, local_idx] if signal_t.ndim > 1 else signal_t
+            gamma, omega = _fit_signal(signal, batch_start + local_idx, dt_i, stride)
+            gammas.append(gamma)
+            omegas.append(omega)
+            ky_out.append(float(ky_val))
     return CycloneScanResult(ky=np.array(ky_out), gamma=np.array(gammas), omega=np.array(omegas))
 
 
@@ -724,6 +1029,7 @@ def run_etg_linear(
     mode_method: str = "project",
     terms: LinearTerms | None = None,
     sample_stride: int | None = None,
+    fit_signal: str = "phi",
 ) -> LinearRunResult:
     """Run an ETG linear benchmark and extract growth rate."""
 
@@ -740,6 +1046,7 @@ def run_etg_linear(
                 rho_star=ETG_RHO_STAR,
                 damp_ends_amp=0.0,
                 damp_ends_widthfrac=0.0,
+                nhermite=Nm,
             )
         else:
             params = _two_species_params(
@@ -750,13 +1057,14 @@ def run_etg_linear(
                 rho_star=ETG_RHO_STAR,
                 damp_ends_amp=0.0,
                 damp_ends_widthfrac=0.0,
+                nhermite=Nm,
             )
     if terms is None:
         terms = LinearTerms()
 
     ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
     grid = select_ky_grid(grid_full, ky_index)
-    sel = ModeSelection(ky_index=0, kx_index=0, z_index=0)
+    sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
 
     charge = np.atleast_1d(np.asarray(params.charge_sign))
     ns = int(charge.size)
@@ -813,33 +1121,75 @@ def run_etg_linear(
             dt = float(time_cfg_use.dt)
             steps = int(round(time_cfg_use.t_max / time_cfg_use.dt))
             cache = build_linear_cache(grid, geom, params, Nl, Nm)
-            _, phi_t = integrate_linear_from_config(
-                G0_jax,
-                grid,
-                geom,
-                params,
-                time_cfg_use,
-                cache=cache,
-                terms=terms,
-            )
+            if fit_signal == "density":
+                _diag = integrate_linear_diagnostics(
+                    G0_jax,
+                    grid,
+                    geom,
+                    params,
+                    dt=dt,
+                    steps=steps,
+                    method=time_cfg_use.method,
+                    cache=cache,
+                    terms=terms,
+                    sample_stride=time_cfg_use.sample_stride,
+                    species_index=electron_index,
+                )
+                phi_t = _diag[1]
+                density_t = _diag[2] if len(_diag) > 2 else None
+            else:
+                _, phi_t = integrate_linear_from_config(
+                    G0_jax,
+                    grid,
+                    geom,
+                    params,
+                    time_cfg_use,
+                    cache=cache,
+                    terms=terms,
+                )
+                density_t = None
             stride = time_cfg_use.sample_stride
         else:
             stride = 1 if sample_stride is None else int(sample_stride)
-            _, phi_t = integrate_linear(
-                G0_jax,
-                grid,
-                geom,
-                params,
-                dt=dt,
-                steps=steps,
-                method=method,
-                terms=terms,
-                sample_stride=stride,
-            )
+            if fit_signal == "density":
+                _diag = integrate_linear_diagnostics(
+                    G0_jax,
+                    grid,
+                    geom,
+                    params,
+                    dt=dt,
+                    steps=steps,
+                    method=method,
+                    terms=terms,
+                    sample_stride=stride,
+                    species_index=electron_index,
+                )
+                phi_t = _diag[1]
+                density_t = _diag[2] if len(_diag) > 2 else None
+            else:
+                _, phi_t = integrate_linear(
+                    G0_jax,
+                    grid,
+                    geom,
+                    params,
+                    dt=dt,
+                    steps=steps,
+                    method=method,
+                    terms=terms,
+                    sample_stride=stride,
+                )
+                density_t = None
 
         phi_t_np = np.asarray(phi_t)
         t = np.arange(phi_t_np.shape[0]) * dt * stride
-        signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
+        density_np = None if density_t is None else np.asarray(density_t)
+        signal = _select_fit_signal(
+            phi_t_np,
+            density_np,
+            sel,
+            fit_signal=fit_signal,
+            mode_method=mode_method,
+        )
         if auto_window and tmin is None and tmax is None:
             gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
                 t,
@@ -885,9 +1235,25 @@ def run_etg_scan(
     growth_weight: float = 1.0,
     require_positive: bool = True,
     min_amp_fraction: float = 0.0,
+    max_fraction: float = 0.8,
+    end_fraction: float = 1.0,
+    max_amp_fraction: float = 1.0,
+    phase_weight: float = 0.2,
+    length_weight: float = 0.05,
+    min_r2: float = 0.0,
+    late_penalty: float = 0.0,
+    min_slope: float | None = None,
+    min_slope_frac: float = 0.0,
+    slope_var_weight: float = 0.0,
+    window_method: str = "loglinear",
     mode_method: str = "project",
+    mode_only: bool = True,
     terms: LinearTerms | None = None,
     sample_stride: int | None = None,
+    fit_signal: str = "density",
+    ky_batch: int = 1,
+    streaming_fit: bool = True,
+    streaming_amp_floor: float = 1.0e-30,
 ) -> LinearScanResult:
     """Run an ETG linear benchmark for a list of ky values.
 
@@ -907,6 +1273,7 @@ def run_etg_scan(
                 rho_star=ETG_RHO_STAR,
                 damp_ends_amp=0.0,
                 damp_ends_widthfrac=0.0,
+                nhermite=Nm,
             )
         else:
             params = _two_species_params(
@@ -917,6 +1284,7 @@ def run_etg_scan(
                 rho_star=ETG_RHO_STAR,
                 damp_ends_amp=0.0,
                 damp_ends_widthfrac=0.0,
+                nhermite=Nm,
             )
     if terms is None:
         terms = LinearTerms()
@@ -936,83 +1304,53 @@ def run_etg_scan(
         mask = (t_arr >= tmin_val) & (t_arr <= tmax_val)
         return int(np.count_nonzero(mask)) >= 2
 
-    for i, ky in enumerate(ky_values):
-        ky_index = select_ky_index(np.asarray(grid_full.ky), float(ky))
-        grid = select_ky_grid(grid_full, ky_index)
-        dt_i = float(dt[i]) if isinstance(dt, np.ndarray) else float(dt)
-        steps_i = int(steps[i]) if isinstance(steps, np.ndarray) else int(steps)
-        sel = ModeSelection(ky_index=0, kx_index=0, z_index=0)
+    if mode_only and mode_method not in {"z_index", "max"}:
+        mode_method = "z_index"
 
-        charge = np.atleast_1d(np.asarray(params.charge_sign))
-        ns = int(charge.size)
-        electron_index = int(np.argmin(charge))
-        G0 = np.zeros((ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
-        G0[electron_index, 0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
+    if ky_batch < 1:
+        raise ValueError("ky_batch must be >= 1")
+    use_batch = (
+        ky_batch > 1
+        and solver.lower() != "krylov"
+        and not _is_array_like(dt)
+        and not _is_array_like(steps)
+        and not _is_array_like(tmin)
+        and not _is_array_like(tmax)
+    )
 
-        cache = build_linear_cache(grid, geom, params, Nl, Nm)
-        G0_jax = jnp.asarray(G0)
-        if solver.lower() == "krylov":
-            krylov_cfg = krylov_cfg or KrylovConfig()
-            eig, _vec = dominant_eigenpair(
-                G0_jax,
-                cache,
-                params,
-                terms=terms,
-                krylov_dim=krylov_cfg.krylov_dim,
-                restarts=krylov_cfg.restarts,
-                omega_cap_factor=krylov_cfg.omega_cap_factor,
-                method=krylov_cfg.method,
-                power_iters=krylov_cfg.power_iters,
-                power_dt=krylov_cfg.power_dt,
-                shift=krylov_cfg.shift,
-                shift_source=krylov_cfg.shift_source,
-                shift_tol=krylov_cfg.shift_tol,
-                shift_maxiter=krylov_cfg.shift_maxiter,
-                shift_restart=krylov_cfg.shift_restart,
-                shift_solve_method=krylov_cfg.shift_solve_method,
-                shift_preconditioner=krylov_cfg.shift_preconditioner,
+    def _fit_signal(signal: np.ndarray, idx: int, dt_i: float, stride: int) -> tuple[float, float]:
+        t = np.arange(signal.shape[0]) * dt_i * stride
+        tmin_i = _window_value(tmin, idx)
+        tmax_i = _window_value(tmax, idx)
+        use_auto = auto_window and tmin_i is None and tmax_i is None
+        if not use_auto and not _window_valid(t, tmin_i, tmax_i):
+            use_auto = True
+        if use_auto:
+            gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
+                t,
+                signal,
+                window_fraction=window_fraction,
+                min_points=min_points,
+                start_fraction=start_fraction,
+                growth_weight=growth_weight,
+                require_positive=require_positive,
+                min_amp_fraction=min_amp_fraction,
+                max_fraction=max_fraction,
+                end_fraction=end_fraction,
+                max_amp_fraction=max_amp_fraction,
+                phase_weight=phase_weight,
+                length_weight=length_weight,
+                min_r2=min_r2,
+                late_penalty=late_penalty,
+                min_slope=min_slope,
+                min_slope_frac=min_slope_frac,
+                slope_var_weight=slope_var_weight,
+                window_method=window_method,
             )
-            gamma = float(np.real(eig))
-            omega = float(-np.imag(eig))
         else:
-            if time_cfg is not None:
-                time_cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
-                if sample_stride is not None:
-                    time_cfg_i = replace(time_cfg_i, sample_stride=sample_stride)
-                _, phi_t = integrate_linear_from_config(
-                    G0_jax,
-                    grid,
-                    geom,
-                    params,
-                    time_cfg_i,
-                    cache=cache,
-                    terms=terms,
-                )
-                stride = time_cfg_i.sample_stride
-            else:
-                stride = 1 if sample_stride is None else int(sample_stride)
-                _, phi_t = integrate_linear(
-                    G0_jax,
-                    grid,
-                    geom,
-                    params,
-                    dt=dt_i,
-                    steps=steps_i,
-                    method=method,
-                    cache=cache,
-                    terms=terms,
-                    sample_stride=stride,
-                )
-
-            phi_t_np = np.asarray(phi_t)
-            t = np.arange(phi_t_np.shape[0]) * dt_i * stride
-            signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
-            tmin_i = _window_value(tmin, i)
-            tmax_i = _window_value(tmax, i)
-            use_auto = auto_window and tmin_i is None and tmax_i is None
-            if not use_auto and not _window_valid(t, tmin_i, tmax_i):
-                use_auto = True
-            if use_auto:
+            try:
+                gamma, omega = fit_growth_rate(t, signal, tmin=tmin_i, tmax=tmax_i)
+            except ValueError:
                 gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
                     t,
                     signal,
@@ -1022,25 +1360,206 @@ def run_etg_scan(
                     growth_weight=growth_weight,
                     require_positive=require_positive,
                     min_amp_fraction=min_amp_fraction,
+                    max_fraction=max_fraction,
+                    end_fraction=end_fraction,
+                    max_amp_fraction=max_amp_fraction,
+                    phase_weight=phase_weight,
+                    length_weight=length_weight,
+                    min_r2=min_r2,
+                    late_penalty=late_penalty,
+                    min_slope=min_slope,
+                    min_slope_frac=min_slope_frac,
+                    slope_var_weight=slope_var_weight,
+                    window_method=window_method,
                 )
-            else:
-                try:
-                    gamma, omega = fit_growth_rate(t, signal, tmin=tmin_i, tmax=tmax_i)
-                except ValueError:
-                    gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
-                        t,
-                        signal,
-                        window_fraction=window_fraction,
-                        min_points=min_points,
-                        start_fraction=start_fraction,
-                        growth_weight=growth_weight,
-                        require_positive=require_positive,
-                        min_amp_fraction=min_amp_fraction,
-                    )
+        return gamma, omega
 
-        gammas.append(gamma)
-        omegas.append(omega)
-        ky_out.append(float(grid.ky[sel.ky_index]))
+    ky_iter = range(0, len(ky_values), ky_batch) if use_batch else range(len(ky_values))
+    ky_slice: np.ndarray
+    ky_indices: list[int]
+    sel: ModeSelection | ModeSelectionBatch
+
+    for batch_start in ky_iter:
+        if use_batch:
+            ky_slice = np.asarray(ky_values[batch_start : batch_start + ky_batch], dtype=float)
+            ky_indices = [select_ky_index(np.asarray(grid_full.ky), float(ky)) for ky in ky_slice]
+            grid = select_ky_grid(grid_full, ky_indices)
+            sel_indices = np.arange(len(ky_indices), dtype=int)
+            sel = ModeSelectionBatch(sel_indices, 0, _midplane_index(grid))
+            dt_i = float(dt)
+            steps_i = int(steps)
+        else:
+            ky_slice = np.asarray([ky_values[batch_start]], dtype=float)
+            ky_indices = [select_ky_index(np.asarray(grid_full.ky), float(ky_slice[0]))]
+            grid = select_ky_grid(grid_full, ky_indices[0])
+            sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
+            dt_i = float(dt[batch_start]) if isinstance(dt, np.ndarray) else float(dt)
+            steps_i = int(steps[batch_start]) if isinstance(steps, np.ndarray) else int(steps)
+
+        charge = np.atleast_1d(np.asarray(params.charge_sign))
+        ns = int(charge.size)
+        electron_index = int(np.argmin(charge))
+        G0 = np.zeros((ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
+        for ky_i in range(len(ky_indices)):
+            G0[electron_index, 0, 0, ky_i, 0, :] = 1e-3 + 0.0j
+
+        cache = build_linear_cache(grid, geom, params, Nl, Nm)
+        G0_jax = jnp.asarray(G0)
+        if solver.lower() == "krylov":
+            cfg_use = krylov_cfg or KrylovConfig()
+            eig, _vec = dominant_eigenpair(
+                G0_jax,
+                cache,
+                params,
+                terms=terms,
+                krylov_dim=cfg_use.krylov_dim,
+                restarts=cfg_use.restarts,
+                omega_cap_factor=cfg_use.omega_cap_factor,
+                method=cfg_use.method,
+                power_iters=cfg_use.power_iters,
+                power_dt=cfg_use.power_dt,
+                shift=cfg_use.shift,
+                shift_source=cfg_use.shift_source,
+                shift_tol=cfg_use.shift_tol,
+                shift_maxiter=cfg_use.shift_maxiter,
+                shift_restart=cfg_use.shift_restart,
+                shift_solve_method=cfg_use.shift_solve_method,
+                shift_preconditioner=cfg_use.shift_preconditioner,
+            )
+            gamma = float(np.real(eig))
+            omega = float(-np.imag(eig))
+            gammas.append(gamma)
+            omegas.append(omega)
+            ky_out.append(float(ky_slice[0]))
+            continue
+
+        method_key = method.lower()
+        time_cfg_i = None
+        if time_cfg is not None:
+            time_cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
+            if sample_stride is not None:
+                time_cfg_i = replace(time_cfg_i, sample_stride=sample_stride)
+        elif cfg.time.use_diffrax and not (
+            method_key.startswith("imex") or method_key.startswith("implicit")
+        ):
+            time_cfg_i = replace(cfg.time, dt=dt_i, t_max=dt_i * steps_i)
+            if sample_stride is not None:
+                time_cfg_i = replace(time_cfg_i, sample_stride=sample_stride)
+
+        params_use = params
+        if params_use.damp_ends_amp != 0.0 and terms.end_damping != 0.0:
+            params_use = replace(params_use, damp_ends_amp=params_use.damp_ends_amp / dt_i)
+
+        if time_cfg_i is not None and streaming_fit:
+            t_total = float(time_cfg_i.t_max)
+            tmin_i, tmax_i = _resolve_streaming_window(
+                t_total, _window_value(tmin, batch_start), _window_value(tmax, batch_start), start_fraction, window_fraction, 1.0
+            )
+            _, gamma_vals, omega_vals = integrate_linear_diffrax_streaming(
+                G0_jax,
+                grid,
+                geom,
+                params_use,
+                dt=dt_i,
+                steps=steps_i,
+                method=time_cfg_i.diffrax_solver,
+                cache=cache,
+                terms=terms,
+                adaptive=time_cfg_i.diffrax_adaptive,
+                rtol=time_cfg_i.diffrax_rtol,
+                atol=time_cfg_i.diffrax_atol,
+                max_steps=time_cfg_i.diffrax_max_steps,
+                progress_bar=time_cfg_i.progress_bar,
+                checkpoint=time_cfg_i.checkpoint,
+                tmin=tmin_i,
+                tmax=tmax_i,
+                fit_signal=fit_signal,
+                mode_ky_indices=np.arange(len(ky_indices)),
+                mode_kx_index=0,
+                mode_z_index=_midplane_index(grid),
+                mode_method=mode_method,
+                amp_floor=streaming_amp_floor,
+                density_species_index=electron_index if fit_signal == "density" else None,
+                return_state=False,
+            )
+            gamma_arr = np.asarray(gamma_vals)
+            omega_arr = np.asarray(omega_vals)
+            for local_idx, ky_val in enumerate(ky_slice):
+                gammas.append(float(gamma_arr[local_idx]))
+                omegas.append(float(omega_arr[local_idx]))
+                ky_out.append(float(ky_val))
+            continue
+
+        if time_cfg_i is not None:
+            _, phi_t = integrate_linear_from_config(
+                G0_jax,
+                grid,
+                geom,
+                params_use,
+                time_cfg_i,
+                cache=cache,
+                terms=terms,
+                save_mode=sel if mode_only else None,
+                mode_method=mode_method,
+                save_field="density" if fit_signal == "density" else "phi",
+                density_species_index=electron_index if fit_signal == "density" else None,
+            )
+            stride = time_cfg_i.sample_stride
+            density_t = None
+        else:
+            stride = 1 if sample_stride is None else int(sample_stride)
+            if fit_signal == "density":
+                _diag = integrate_linear_diagnostics(
+                    G0_jax,
+                    grid,
+                    geom,
+                    params_use,
+                    dt=dt_i,
+                    steps=steps_i,
+                    method=method,
+                    cache=cache,
+                    terms=terms,
+                    sample_stride=stride,
+                    species_index=1,
+                )
+                phi_t = _diag[1]
+                density_t = _diag[2] if len(_diag) > 2 else None
+            else:
+                _, phi_t = integrate_linear(
+                    G0_jax,
+                    grid,
+                    geom,
+                    params_use,
+                    dt=dt_i,
+                    steps=steps_i,
+                    method=method,
+                    cache=cache,
+                    terms=terms,
+                    sample_stride=stride,
+                )
+                density_t = None
+
+        phi_t_np = np.asarray(phi_t)
+        density_np = None if density_t is None else np.asarray(density_t)
+        if fit_signal == "density" and density_np is None:
+            density_np = phi_t_np
+        for local_idx, ky_val in enumerate(ky_slice):
+            if mode_only:
+                source = density_np if (fit_signal == "density" and density_np is not None) else phi_t_np
+                signal = source[:, local_idx] if source.ndim > 1 else source
+            else:
+                sel_local = ModeSelection(ky_index=local_idx, kx_index=0, z_index=_midplane_index(grid))
+                signal = _select_fit_signal(
+                    phi_t_np,
+                    density_np,
+                    sel_local,
+                    fit_signal=fit_signal,
+                    mode_method=mode_method,
+                )
+            gamma, omega = _fit_signal(signal, batch_start + local_idx, dt_i, stride)
+            gammas.append(gamma)
+            omegas.append(omega)
+            ky_out.append(float(ky_val))
     return LinearScanResult(ky=np.array(ky_out), gamma=np.array(gammas), omega=np.array(omegas))
 
 
@@ -1068,6 +1587,7 @@ def run_kinetic_linear(
     mode_method: str = "project",
     terms: LinearTerms | None = None,
     sample_stride: int | None = None,
+    fit_signal: str = "density",
 ) -> LinearRunResult:
     """Run a kinetic-electron ITG/TEM benchmark and extract growth rate."""
 
@@ -1083,13 +1603,14 @@ def run_kinetic_linear(
             rho_star=Kinetic_RHO_STAR,
             damp_ends_amp=0.0,
             damp_ends_widthfrac=0.0,
+            nhermite=Nm,
         )
     if terms is None:
         terms = LinearTerms()
 
     ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
     grid = select_ky_grid(grid_full, ky_index)
-    sel = ModeSelection(ky_index=0, kx_index=0, z_index=0)
+    sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
 
     ns = 2
     G0 = np.zeros((ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
@@ -1144,33 +1665,75 @@ def run_kinetic_linear(
             dt = float(time_cfg_use.dt)
             steps = int(round(time_cfg_use.t_max / time_cfg_use.dt))
             cache = build_linear_cache(grid, geom, params, Nl, Nm)
-            _, phi_t = integrate_linear_from_config(
-                G0_jax,
-                grid,
-                geom,
-                params,
-                time_cfg_use,
-                cache=cache,
-                terms=terms,
-            )
+            if fit_signal == "density":
+                _diag = integrate_linear_diagnostics(
+                    G0_jax,
+                    grid,
+                    geom,
+                    params,
+                    dt=dt,
+                    steps=steps,
+                    method=time_cfg_use.method,
+                    cache=cache,
+                    terms=terms,
+                    sample_stride=time_cfg_use.sample_stride,
+                    species_index=1,
+                )
+                phi_t = _diag[1]
+                density_t = _diag[2] if len(_diag) > 2 else None
+            else:
+                _, phi_t = integrate_linear_from_config(
+                    G0_jax,
+                    grid,
+                    geom,
+                    params,
+                    time_cfg_use,
+                    cache=cache,
+                    terms=terms,
+                )
+                density_t = None
             stride = time_cfg_use.sample_stride
         else:
             stride = 1 if sample_stride is None else int(sample_stride)
-            _, phi_t = integrate_linear(
-                G0_jax,
-                grid,
-                geom,
-                params,
-                dt=dt,
-                steps=steps,
-                method=method,
-                terms=terms,
-                sample_stride=stride,
-            )
+            if fit_signal == "density":
+                _diag = integrate_linear_diagnostics(
+                    G0_jax,
+                    grid,
+                    geom,
+                    params,
+                    dt=dt,
+                    steps=steps,
+                    method=method,
+                    terms=terms,
+                    sample_stride=stride,
+                    species_index=1,
+                )
+                phi_t = _diag[1]
+                density_t = _diag[2] if len(_diag) > 2 else None
+            else:
+                _, phi_t = integrate_linear(
+                    G0_jax,
+                    grid,
+                    geom,
+                    params,
+                    dt=dt,
+                    steps=steps,
+                    method=method,
+                    terms=terms,
+                    sample_stride=stride,
+                )
+                density_t = None
 
         phi_t_np = np.asarray(phi_t)
         t = np.arange(phi_t_np.shape[0]) * dt * stride
-        signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
+        density_np = None if density_t is None else np.asarray(density_t)
+        signal = _select_fit_signal(
+            phi_t_np,
+            density_np,
+            sel,
+            fit_signal=fit_signal,
+            mode_method=mode_method,
+        )
         if auto_window and tmin is None and tmax is None:
             gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
                 t,
@@ -1217,8 +1780,13 @@ def run_kinetic_scan(
     require_positive: bool = True,
     min_amp_fraction: float = 0.0,
     mode_method: str = "project",
+    mode_only: bool = True,
     terms: LinearTerms | None = None,
     sample_stride: int | None = None,
+    fit_signal: str = "density",
+    ky_batch: int = 1,
+    streaming_fit: bool = True,
+    streaming_amp_floor: float = 1.0e-30,
 ) -> LinearScanResult:
     """Run a kinetic-electron ITG/TEM benchmark for a list of ky values.
 
@@ -1237,6 +1805,7 @@ def run_kinetic_scan(
             rho_star=Kinetic_RHO_STAR,
             damp_ends_amp=0.0,
             damp_ends_widthfrac=0.0,
+            nhermite=Nm,
         )
     if terms is None:
         terms = LinearTerms()
@@ -1256,81 +1825,42 @@ def run_kinetic_scan(
         mask = (t_arr >= tmin_val) & (t_arr <= tmax_val)
         return int(np.count_nonzero(mask)) >= 2
 
-    for i, ky in enumerate(ky_values):
-        ky_index = select_ky_index(np.asarray(grid_full.ky), float(ky))
-        grid = select_ky_grid(grid_full, ky_index)
-        dt_i = float(dt[i]) if isinstance(dt, np.ndarray) else float(dt)
-        steps_i = int(steps[i]) if isinstance(steps, np.ndarray) else int(steps)
-        sel = ModeSelection(ky_index=0, kx_index=0, z_index=0)
+    if mode_only and mode_method not in {"z_index", "max"}:
+        mode_method = "z_index"
 
-        ns = 2
-        G0 = np.zeros((ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
-        G0[1, 0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
+    if ky_batch < 1:
+        raise ValueError("ky_batch must be >= 1")
+    use_batch = (
+        ky_batch > 1
+        and solver.lower() != "krylov"
+        and not _is_array_like(dt)
+        and not _is_array_like(steps)
+        and not _is_array_like(tmin)
+        and not _is_array_like(tmax)
+    )
 
-        cache = build_linear_cache(grid, geom, params, Nl, Nm)
-        G0_jax = jnp.asarray(G0)
-        if solver.lower() == "krylov":
-            krylov_cfg = krylov_cfg or KrylovConfig()
-            eig, _vec = dominant_eigenpair(
-                G0_jax,
-                cache,
-                params,
-                terms=terms,
-                krylov_dim=krylov_cfg.krylov_dim,
-                restarts=krylov_cfg.restarts,
-                omega_cap_factor=krylov_cfg.omega_cap_factor,
-                method=krylov_cfg.method,
-                power_iters=krylov_cfg.power_iters,
-                power_dt=krylov_cfg.power_dt,
-                shift=krylov_cfg.shift,
-                shift_source=krylov_cfg.shift_source,
-                shift_tol=krylov_cfg.shift_tol,
-                shift_maxiter=krylov_cfg.shift_maxiter,
-                shift_restart=krylov_cfg.shift_restart,
-                shift_solve_method=krylov_cfg.shift_solve_method,
-                shift_preconditioner=krylov_cfg.shift_preconditioner,
+    def _fit_signal(signal: np.ndarray, idx: int, dt_i: float, stride: int) -> tuple[float, float]:
+        t = np.arange(signal.shape[0]) * dt_i * stride
+        tmin_i = _window_value(tmin, idx)
+        tmax_i = _window_value(tmax, idx)
+        use_auto = auto_window and tmin_i is None and tmax_i is None
+        if not use_auto and not _window_valid(t, tmin_i, tmax_i):
+            use_auto = True
+        if use_auto:
+            gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
+                t,
+                signal,
+                window_fraction=window_fraction,
+                min_points=min_points,
+                start_fraction=start_fraction,
+                growth_weight=growth_weight,
+                require_positive=require_positive,
+                min_amp_fraction=min_amp_fraction,
             )
-            gamma = float(np.real(eig))
-            omega = float(-np.imag(eig))
         else:
-            if time_cfg is not None:
-                time_cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
-                if sample_stride is not None:
-                    time_cfg_i = replace(time_cfg_i, sample_stride=sample_stride)
-                _, phi_t = integrate_linear_from_config(
-                    G0_jax,
-                    grid,
-                    geom,
-                    params,
-                    time_cfg_i,
-                    cache=cache,
-                    terms=terms,
-                )
-                stride = time_cfg_i.sample_stride
-            else:
-                stride = 1 if sample_stride is None else int(sample_stride)
-                _, phi_t = integrate_linear(
-                    G0_jax,
-                    grid,
-                    geom,
-                    params,
-                    dt=dt_i,
-                    steps=steps_i,
-                    method=method,
-                    cache=cache,
-                    terms=terms,
-                    sample_stride=stride,
-                )
-
-            phi_t_np = np.asarray(phi_t)
-            t = np.arange(phi_t_np.shape[0]) * dt_i * stride
-            signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
-            tmin_i = _window_value(tmin, i)
-            tmax_i = _window_value(tmax, i)
-            use_auto = auto_window and tmin_i is None and tmax_i is None
-            if not use_auto and not _window_valid(t, tmin_i, tmax_i):
-                use_auto = True
-            if use_auto:
+            try:
+                gamma, omega = fit_growth_rate(t, signal, tmin=tmin_i, tmax=tmax_i)
+            except ValueError:
                 gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
                     t,
                     signal,
@@ -1341,24 +1871,192 @@ def run_kinetic_scan(
                     require_positive=require_positive,
                     min_amp_fraction=min_amp_fraction,
                 )
-            else:
-                try:
-                    gamma, omega = fit_growth_rate(t, signal, tmin=tmin_i, tmax=tmax_i)
-                except ValueError:
-                    gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
-                        t,
-                        signal,
-                        window_fraction=window_fraction,
-                        min_points=min_points,
-                        start_fraction=start_fraction,
-                        growth_weight=growth_weight,
-                        require_positive=require_positive,
-                        min_amp_fraction=min_amp_fraction,
-                    )
+        return gamma, omega
 
-        gammas.append(gamma)
-        omegas.append(omega)
-        ky_out.append(float(grid.ky[sel.ky_index]))
+    ky_iter = range(0, len(ky_values), ky_batch) if use_batch else range(len(ky_values))
+    ky_slice: np.ndarray
+    ky_indices: list[int]
+    sel: ModeSelection | ModeSelectionBatch
+
+    for batch_start in ky_iter:
+        if use_batch:
+            ky_slice = np.asarray(ky_values[batch_start : batch_start + ky_batch], dtype=float)
+            ky_indices = [select_ky_index(np.asarray(grid_full.ky), float(ky)) for ky in ky_slice]
+            grid = select_ky_grid(grid_full, ky_indices)
+            sel_indices = np.arange(len(ky_indices), dtype=int)
+            sel = ModeSelectionBatch(sel_indices, 0, _midplane_index(grid))
+            dt_i = float(dt)
+            steps_i = int(steps)
+        else:
+            ky_slice = np.asarray([ky_values[batch_start]], dtype=float)
+            ky_indices = [select_ky_index(np.asarray(grid_full.ky), float(ky_slice[0]))]
+            grid = select_ky_grid(grid_full, ky_indices[0])
+            sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
+            dt_i = float(dt[batch_start]) if isinstance(dt, np.ndarray) else float(dt)
+            steps_i = int(steps[batch_start]) if isinstance(steps, np.ndarray) else int(steps)
+
+        ns = 2
+        G0 = np.zeros((ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
+        for ky_i in range(len(ky_indices)):
+            G0[1, 0, 0, ky_i, 0, :] = 1e-3 + 0.0j
+
+        cache = build_linear_cache(grid, geom, params, Nl, Nm)
+        G0_jax = jnp.asarray(G0)
+        if solver.lower() == "krylov":
+            cfg_use = krylov_cfg or KrylovConfig()
+            eig, _vec = dominant_eigenpair(
+                G0_jax,
+                cache,
+                params,
+                terms=terms,
+                krylov_dim=cfg_use.krylov_dim,
+                restarts=cfg_use.restarts,
+                omega_cap_factor=cfg_use.omega_cap_factor,
+                method=cfg_use.method,
+                power_iters=cfg_use.power_iters,
+                power_dt=cfg_use.power_dt,
+                shift=cfg_use.shift,
+                shift_source=cfg_use.shift_source,
+                shift_tol=cfg_use.shift_tol,
+                shift_maxiter=cfg_use.shift_maxiter,
+                shift_restart=cfg_use.shift_restart,
+                shift_solve_method=cfg_use.shift_solve_method,
+                shift_preconditioner=cfg_use.shift_preconditioner,
+            )
+            gamma = float(np.real(eig))
+            omega = float(-np.imag(eig))
+            gammas.append(gamma)
+            omegas.append(omega)
+            ky_out.append(float(ky_slice[0]))
+            continue
+
+        method_key = method.lower()
+        time_cfg_i = None
+        if time_cfg is not None:
+            time_cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
+            if sample_stride is not None:
+                time_cfg_i = replace(time_cfg_i, sample_stride=sample_stride)
+        elif cfg.time.use_diffrax and not (
+            method_key.startswith("imex") or method_key.startswith("implicit")
+        ):
+            time_cfg_i = replace(cfg.time, dt=dt_i, t_max=dt_i * steps_i)
+            if sample_stride is not None:
+                time_cfg_i = replace(time_cfg_i, sample_stride=sample_stride)
+
+        params_use = params
+        if params_use.damp_ends_amp != 0.0 and terms.end_damping != 0.0:
+            params_use = replace(params_use, damp_ends_amp=params_use.damp_ends_amp / dt_i)
+
+        if time_cfg_i is not None and streaming_fit:
+            t_total = float(time_cfg_i.t_max)
+            tmin_i, tmax_i = _resolve_streaming_window(
+                t_total, _window_value(tmin, batch_start), _window_value(tmax, batch_start), start_fraction, window_fraction, 1.0
+            )
+            _, gamma_vals, omega_vals = integrate_linear_diffrax_streaming(
+                G0_jax,
+                grid,
+                geom,
+                params_use,
+                dt=dt_i,
+                steps=steps_i,
+                method=time_cfg_i.diffrax_solver,
+                cache=cache,
+                terms=terms,
+                adaptive=time_cfg_i.diffrax_adaptive,
+                rtol=time_cfg_i.diffrax_rtol,
+                atol=time_cfg_i.diffrax_atol,
+                max_steps=time_cfg_i.diffrax_max_steps,
+                progress_bar=time_cfg_i.progress_bar,
+                checkpoint=time_cfg_i.checkpoint,
+                tmin=tmin_i,
+                tmax=tmax_i,
+                fit_signal=fit_signal,
+                mode_ky_indices=np.arange(len(ky_indices)),
+                mode_kx_index=0,
+                mode_z_index=_midplane_index(grid),
+                mode_method=mode_method,
+                amp_floor=streaming_amp_floor,
+                density_species_index=1 if fit_signal == "density" else None,
+                return_state=False,
+            )
+            gamma_arr = np.asarray(gamma_vals)
+            omega_arr = np.asarray(omega_vals)
+            for local_idx, ky_val in enumerate(ky_slice):
+                gammas.append(float(gamma_arr[local_idx]))
+                omegas.append(float(omega_arr[local_idx]))
+                ky_out.append(float(ky_val))
+            continue
+
+        if time_cfg_i is not None:
+            _, phi_t = integrate_linear_from_config(
+                G0_jax,
+                grid,
+                geom,
+                params_use,
+                time_cfg_i,
+                cache=cache,
+                terms=terms,
+                save_mode=sel if mode_only else None,
+                mode_method=mode_method,
+                save_field="density" if fit_signal == "density" else "phi",
+                density_species_index=1 if fit_signal == "density" else None,
+            )
+            stride = time_cfg_i.sample_stride
+            density_t = None
+        else:
+            stride = 1 if sample_stride is None else int(sample_stride)
+            if fit_signal == "density":
+                _diag = integrate_linear_diagnostics(
+                    G0_jax,
+                    grid,
+                    geom,
+                    params_use,
+                    dt=dt_i,
+                    steps=steps_i,
+                    method=method,
+                    cache=cache,
+                    terms=terms,
+                    sample_stride=stride,
+                    species_index=1,
+                )
+                phi_t = _diag[1]
+                density_t = _diag[2] if len(_diag) > 2 else None
+            else:
+                _, phi_t = integrate_linear(
+                    G0_jax,
+                    grid,
+                    geom,
+                    params_use,
+                    dt=dt_i,
+                    steps=steps_i,
+                    method=method,
+                    cache=cache,
+                    terms=terms,
+                    sample_stride=stride,
+                )
+                density_t = None
+
+        phi_t_np = np.asarray(phi_t)
+        density_np = None if density_t is None else np.asarray(density_t)
+        if fit_signal == "density" and density_np is None:
+            density_np = phi_t_np
+        for local_idx, ky_val in enumerate(ky_slice):
+            if mode_only:
+                source = density_np if (fit_signal == "density" and density_np is not None) else phi_t_np
+                signal = source[:, local_idx] if source.ndim > 1 else source
+            else:
+                sel_local = ModeSelection(ky_index=local_idx, kx_index=0, z_index=_midplane_index(grid))
+                signal = _select_fit_signal(
+                    phi_t_np,
+                    density_np,
+                    sel_local,
+                    fit_signal=fit_signal,
+                    mode_method=mode_method,
+                )
+            gamma, omega = _fit_signal(signal, batch_start + local_idx, dt_i, stride)
+            gammas.append(gamma)
+            omegas.append(omega)
+            ky_out.append(float(ky_val))
     return LinearScanResult(ky=np.array(ky_out), gamma=np.array(gammas), omega=np.array(omegas))
 
 
@@ -1401,13 +2099,14 @@ def run_tem_linear(
             rho_star=TEM_RHO_STAR,
             damp_ends_amp=0.0,
             damp_ends_widthfrac=0.0,
+            nhermite=Nm,
         )
     if terms is None:
         terms = LinearTerms(bpar=0.0)
 
     ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
     grid = select_ky_grid(grid_full, ky_index)
-    sel = ModeSelection(ky_index=0, kx_index=0, z_index=0)
+    sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
 
     ns = 2
     G0 = np.zeros((ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
@@ -1535,8 +2234,12 @@ def run_tem_scan(
     require_positive: bool = True,
     min_amp_fraction: float = 0.0,
     mode_method: str = "project",
+    mode_only: bool = True,
     terms: LinearTerms | None = None,
     sample_stride: int | None = None,
+    ky_batch: int = 1,
+    streaming_fit: bool = True,
+    streaming_amp_floor: float = 1.0e-30,
 ) -> LinearScanResult:
     """Run the TEM benchmark for a list of ky values.
 
@@ -1555,6 +2258,7 @@ def run_tem_scan(
             rho_star=TEM_RHO_STAR,
             damp_ends_amp=0.0,
             damp_ends_widthfrac=0.0,
+            nhermite=Nm,
         )
     if terms is None:
         terms = LinearTerms(bpar=0.0)
@@ -1574,81 +2278,42 @@ def run_tem_scan(
         mask = (t_arr >= tmin_val) & (t_arr <= tmax_val)
         return int(np.count_nonzero(mask)) >= 2
 
-    for i, ky in enumerate(ky_values):
-        ky_index = select_ky_index(np.asarray(grid_full.ky), float(ky))
-        grid = select_ky_grid(grid_full, ky_index)
-        dt_i = float(dt[i]) if isinstance(dt, np.ndarray) else float(dt)
-        steps_i = int(steps[i]) if isinstance(steps, np.ndarray) else int(steps)
-        sel = ModeSelection(ky_index=0, kx_index=0, z_index=0)
+    if mode_only and mode_method not in {"z_index", "max"}:
+        mode_method = "z_index"
 
-        ns = 2
-        G0 = np.zeros((ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
-        G0[1, 0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
+    if ky_batch < 1:
+        raise ValueError("ky_batch must be >= 1")
+    use_batch = (
+        ky_batch > 1
+        and solver.lower() != "krylov"
+        and not _is_array_like(dt)
+        and not _is_array_like(steps)
+        and not _is_array_like(tmin)
+        and not _is_array_like(tmax)
+    )
 
-        cache = build_linear_cache(grid, geom, params, Nl, Nm)
-        G0_jax = jnp.asarray(G0)
-        if solver.lower() == "krylov":
-            krylov_cfg = krylov_cfg or KrylovConfig()
-            eig, _vec = dominant_eigenpair(
-                G0_jax,
-                cache,
-                params,
-                terms=terms,
-                krylov_dim=krylov_cfg.krylov_dim,
-                restarts=krylov_cfg.restarts,
-                omega_cap_factor=krylov_cfg.omega_cap_factor,
-                method=krylov_cfg.method,
-                power_iters=krylov_cfg.power_iters,
-                power_dt=krylov_cfg.power_dt,
-                shift=krylov_cfg.shift,
-                shift_source=krylov_cfg.shift_source,
-                shift_tol=krylov_cfg.shift_tol,
-                shift_maxiter=krylov_cfg.shift_maxiter,
-                shift_restart=krylov_cfg.shift_restart,
-                shift_solve_method=krylov_cfg.shift_solve_method,
-                shift_preconditioner=krylov_cfg.shift_preconditioner,
+    def _fit_signal(signal: np.ndarray, idx: int, dt_i: float, stride: int) -> tuple[float, float]:
+        t = np.arange(signal.shape[0]) * dt_i * stride
+        tmin_i = _window_value(tmin, idx)
+        tmax_i = _window_value(tmax, idx)
+        use_auto = auto_window and tmin_i is None and tmax_i is None
+        if not use_auto and not _window_valid(t, tmin_i, tmax_i):
+            use_auto = True
+        if use_auto:
+            gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
+                t,
+                signal,
+                window_fraction=window_fraction,
+                min_points=min_points,
+                start_fraction=start_fraction,
+                growth_weight=growth_weight,
+                require_positive=require_positive,
+                min_amp_fraction=min_amp_fraction,
             )
-            gamma = float(np.real(eig))
-            omega = float(-np.imag(eig))
         else:
-            if time_cfg is not None:
-                time_cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
-                if sample_stride is not None:
-                    time_cfg_i = replace(time_cfg_i, sample_stride=sample_stride)
-                _, phi_t = integrate_linear_from_config(
-                    G0_jax,
-                    grid,
-                    geom,
-                    params,
-                    time_cfg_i,
-                    cache=cache,
-                    terms=terms,
-                )
-                stride = time_cfg_i.sample_stride
-            else:
-                stride = 1 if sample_stride is None else int(sample_stride)
-                _, phi_t = integrate_linear(
-                    G0_jax,
-                    grid,
-                    geom,
-                    params,
-                    dt=dt_i,
-                    steps=steps_i,
-                    method=method,
-                    cache=cache,
-                    terms=terms,
-                    sample_stride=stride,
-                )
-
-            phi_t_np = np.asarray(phi_t)
-            t = np.arange(phi_t_np.shape[0]) * dt_i * stride
-            signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
-            tmin_i = _window_value(tmin, i)
-            tmax_i = _window_value(tmax, i)
-            use_auto = auto_window and tmin_i is None and tmax_i is None
-            if not use_auto and not _window_valid(t, tmin_i, tmax_i):
-                use_auto = True
-            if use_auto:
+            try:
+                gamma, omega = fit_growth_rate(t, signal, tmin=tmin_i, tmax=tmax_i)
+            except ValueError:
                 gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
                     t,
                     signal,
@@ -1659,24 +2324,160 @@ def run_tem_scan(
                     require_positive=require_positive,
                     min_amp_fraction=min_amp_fraction,
                 )
-            else:
-                try:
-                    gamma, omega = fit_growth_rate(t, signal, tmin=tmin_i, tmax=tmax_i)
-                except ValueError:
-                    gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
-                        t,
-                        signal,
-                        window_fraction=window_fraction,
-                        min_points=min_points,
-                        start_fraction=start_fraction,
-                        growth_weight=growth_weight,
-                        require_positive=require_positive,
-                        min_amp_fraction=min_amp_fraction,
-                    )
+        return gamma, omega
 
-        gammas.append(gamma)
-        omegas.append(omega)
-        ky_out.append(float(grid.ky[sel.ky_index]))
+    ky_iter = range(0, len(ky_values), ky_batch) if use_batch else range(len(ky_values))
+    ky_slice: np.ndarray
+    ky_indices: list[int]
+    sel: ModeSelection | ModeSelectionBatch
+
+    for batch_start in ky_iter:
+        if use_batch:
+            ky_slice = np.asarray(ky_values[batch_start : batch_start + ky_batch], dtype=float)
+            ky_indices = [select_ky_index(np.asarray(grid_full.ky), float(ky)) for ky in ky_slice]
+            grid = select_ky_grid(grid_full, ky_indices)
+            sel_indices = np.arange(len(ky_indices), dtype=int)
+            sel = ModeSelectionBatch(sel_indices, 0, _midplane_index(grid))
+            dt_i = float(dt)
+            steps_i = int(steps)
+        else:
+            ky_slice = np.asarray([ky_values[batch_start]], dtype=float)
+            ky_indices = [select_ky_index(np.asarray(grid_full.ky), float(ky_slice[0]))]
+            grid = select_ky_grid(grid_full, ky_indices[0])
+            sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
+            dt_i = float(dt[batch_start]) if isinstance(dt, np.ndarray) else float(dt)
+            steps_i = int(steps[batch_start]) if isinstance(steps, np.ndarray) else int(steps)
+
+        ns = 2
+        G0 = np.zeros((ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
+        for ky_i in range(len(ky_indices)):
+            G0[1, 0, 0, ky_i, 0, :] = 1e-3 + 0.0j
+
+        cache = build_linear_cache(grid, geom, params, Nl, Nm)
+        G0_jax = jnp.asarray(G0)
+        if solver.lower() == "krylov":
+            cfg_use = krylov_cfg or KrylovConfig()
+            eig, _vec = dominant_eigenpair(
+                G0_jax,
+                cache,
+                params,
+                terms=terms,
+                krylov_dim=cfg_use.krylov_dim,
+                restarts=cfg_use.restarts,
+                omega_cap_factor=cfg_use.omega_cap_factor,
+                method=cfg_use.method,
+                power_iters=cfg_use.power_iters,
+                power_dt=cfg_use.power_dt,
+                shift=cfg_use.shift,
+                shift_source=cfg_use.shift_source,
+                shift_tol=cfg_use.shift_tol,
+                shift_maxiter=cfg_use.shift_maxiter,
+                shift_restart=cfg_use.shift_restart,
+                shift_solve_method=cfg_use.shift_solve_method,
+                shift_preconditioner=cfg_use.shift_preconditioner,
+            )
+            gamma = float(np.real(eig))
+            omega = float(-np.imag(eig))
+            gammas.append(gamma)
+            omegas.append(omega)
+            ky_out.append(float(ky_slice[0]))
+            continue
+
+        method_key = method.lower()
+        time_cfg_i = None
+        if time_cfg is not None:
+            time_cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
+            if sample_stride is not None:
+                time_cfg_i = replace(time_cfg_i, sample_stride=sample_stride)
+        elif cfg.time.use_diffrax and not (
+            method_key.startswith("imex") or method_key.startswith("implicit")
+        ):
+            time_cfg_i = replace(cfg.time, dt=dt_i, t_max=dt_i * steps_i)
+            if sample_stride is not None:
+                time_cfg_i = replace(time_cfg_i, sample_stride=sample_stride)
+
+        params_use = params
+        if params_use.damp_ends_amp != 0.0 and terms.end_damping != 0.0:
+            params_use = replace(params_use, damp_ends_amp=params_use.damp_ends_amp / dt_i)
+
+        if time_cfg_i is not None and streaming_fit:
+            t_total = float(time_cfg_i.t_max)
+            tmin_i, tmax_i = _resolve_streaming_window(
+                t_total, _window_value(tmin, batch_start), _window_value(tmax, batch_start), start_fraction, window_fraction, 1.0
+            )
+            _, gamma_vals, omega_vals = integrate_linear_diffrax_streaming(
+                G0_jax,
+                grid,
+                geom,
+                params_use,
+                dt=dt_i,
+                steps=steps_i,
+                method=time_cfg_i.diffrax_solver,
+                cache=cache,
+                terms=terms,
+                adaptive=time_cfg_i.diffrax_adaptive,
+                rtol=time_cfg_i.diffrax_rtol,
+                atol=time_cfg_i.diffrax_atol,
+                max_steps=time_cfg_i.diffrax_max_steps,
+                progress_bar=time_cfg_i.progress_bar,
+                checkpoint=time_cfg_i.checkpoint,
+                tmin=tmin_i,
+                tmax=tmax_i,
+                fit_signal="phi",
+                mode_ky_indices=np.arange(len(ky_indices)),
+                mode_kx_index=0,
+                mode_z_index=_midplane_index(grid),
+                mode_method=mode_method,
+                amp_floor=streaming_amp_floor,
+                return_state=False,
+            )
+            gamma_arr = np.asarray(gamma_vals)
+            omega_arr = np.asarray(omega_vals)
+            for local_idx, ky_val in enumerate(ky_slice):
+                gammas.append(float(gamma_arr[local_idx]))
+                omegas.append(float(omega_arr[local_idx]))
+                ky_out.append(float(ky_val))
+            continue
+
+        if time_cfg_i is not None:
+            _, phi_t = integrate_linear_from_config(
+                G0_jax,
+                grid,
+                geom,
+                params_use,
+                time_cfg_i,
+                cache=cache,
+                terms=terms,
+                save_mode=sel if mode_only else None,
+                mode_method=mode_method,
+            )
+            stride = time_cfg_i.sample_stride
+        else:
+            stride = 1 if sample_stride is None else int(sample_stride)
+            _, phi_t = integrate_linear(
+                G0_jax,
+                grid,
+                geom,
+                params_use,
+                dt=dt_i,
+                steps=steps_i,
+                method=method,
+                cache=cache,
+                terms=terms,
+                sample_stride=stride,
+            )
+
+        phi_t_np = np.asarray(phi_t)
+        for local_idx, ky_val in enumerate(ky_slice):
+            if mode_only:
+                signal = phi_t_np[:, local_idx] if phi_t_np.ndim > 1 else phi_t_np
+            else:
+                sel_local = ModeSelection(ky_index=local_idx, kx_index=0, z_index=_midplane_index(grid))
+                signal = extract_mode_time_series(phi_t_np, sel_local, method=mode_method)
+            gamma, omega = _fit_signal(signal, batch_start + local_idx, dt_i, stride)
+            gammas.append(gamma)
+            omegas.append(omega)
+            ky_out.append(float(ky_val))
     return LinearScanResult(ky=np.array(ky_out), gamma=np.array(gammas), omega=np.array(omegas))
 
 
@@ -1702,8 +2503,13 @@ def run_kbm_beta_scan(
     require_positive: bool = True,
     min_amp_fraction: float = 0.0,
     mode_method: str = "project",
+    mode_only: bool = True,
     terms: LinearTerms | None = None,
     sample_stride: int | None = None,
+    fit_signal: str = "density",
+    ky_batch: int = 1,
+    streaming_fit: bool = True,
+    streaming_amp_floor: float = 1.0e-30,
 ) -> LinearScanResult:
     """Run a KBM beta scan at fixed ky.
 
@@ -1721,7 +2527,7 @@ def run_kbm_beta_scan(
     beta_out = []
     ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
     grid = select_ky_grid(grid_full, ky_index)
-    sel = ModeSelection(ky_index=0, kx_index=0, z_index=0)
+    sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
 
     def _window_value(val, idx):
         if val is None:
@@ -1736,6 +2542,9 @@ def run_kbm_beta_scan(
         mask = (t_arr >= tmin_val) & (t_arr <= tmax_val)
         return int(np.count_nonzero(mask)) >= 2
 
+    if mode_only and mode_method not in {"z_index", "max"}:
+        mode_method = "z_index"
+
     for i, beta in enumerate(betas):
         dt_i = float(dt[i]) if isinstance(dt, np.ndarray) else float(dt)
         steps_i = int(steps[i]) if isinstance(steps, np.ndarray) else int(steps)
@@ -1748,6 +2557,7 @@ def run_kbm_beta_scan(
             beta_override=float(beta),
             damp_ends_amp=0.0,
             damp_ends_widthfrac=0.0,
+            nhermite=Nm,
         )
         cache = build_linear_cache(grid, geom, params, Nl, Nm)
 
@@ -1780,58 +2590,129 @@ def run_kbm_beta_scan(
             gamma = float(np.real(eig))
             omega = float(-np.imag(eig))
         else:
+            method_key = method.lower()
+            time_cfg_i = None
             if time_cfg is not None:
                 time_cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
                 if sample_stride is not None:
                     time_cfg_i = replace(time_cfg_i, sample_stride=sample_stride)
-                _, phi_t = integrate_linear_from_config(
-                    G0_jax,
-                    grid,
-                    geom,
-                    params,
-                    time_cfg_i,
-                    cache=cache,
-                    terms=terms,
+            elif cfg.time.use_diffrax and not (
+                method_key.startswith("imex") or method_key.startswith("implicit")
+            ):
+                time_cfg_i = replace(cfg.time, dt=dt_i, t_max=dt_i * steps_i)
+                if sample_stride is not None:
+                    time_cfg_i = replace(time_cfg_i, sample_stride=sample_stride)
+
+            params_use = params
+            if params_use.damp_ends_amp != 0.0 and terms.end_damping != 0.0:
+                params_use = replace(params_use, damp_ends_amp=params_use.damp_ends_amp / dt_i)
+
+            if time_cfg_i is not None and streaming_fit:
+                t_total = float(time_cfg_i.t_max)
+                tmin_i, tmax_i = _resolve_streaming_window(
+                    t_total, _window_value(tmin, i), _window_value(tmax, i), start_fraction, window_fraction, 1.0
                 )
-                stride = time_cfg_i.sample_stride
-            else:
-                stride = 1 if sample_stride is None else int(sample_stride)
-                _, phi_t = integrate_linear(
+                _, gamma_vals, omega_vals = integrate_linear_diffrax_streaming(
                     G0_jax,
                     grid,
                     geom,
-                    params,
+                    params_use,
                     dt=dt_i,
                     steps=steps_i,
-                    method=method,
+                    method=time_cfg_i.diffrax_solver,
                     cache=cache,
                     terms=terms,
-                    sample_stride=stride,
+                    adaptive=time_cfg_i.diffrax_adaptive,
+                    rtol=time_cfg_i.diffrax_rtol,
+                    atol=time_cfg_i.diffrax_atol,
+                    max_steps=time_cfg_i.diffrax_max_steps,
+                    progress_bar=time_cfg_i.progress_bar,
+                    checkpoint=time_cfg_i.checkpoint,
+                    tmin=tmin_i,
+                    tmax=tmax_i,
+                    fit_signal=fit_signal,
+                    mode_ky_indices=[0],
+                    mode_kx_index=0,
+                    mode_z_index=_midplane_index(grid),
+                    mode_method=mode_method,
+                    amp_floor=streaming_amp_floor,
+                    density_species_index=1 if fit_signal == "density" else None,
+                    return_state=False,
                 )
-
-            phi_t_np = np.asarray(phi_t)
-            t = np.arange(phi_t_np.shape[0]) * dt_i * stride
-            signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
-            tmin_i = _window_value(tmin, i)
-            tmax_i = _window_value(tmax, i)
-            use_auto = auto_window and tmin_i is None and tmax_i is None
-            if not use_auto and not _window_valid(t, tmin_i, tmax_i):
-                use_auto = True
-            if use_auto:
-                gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
-                    t,
-                    signal,
-                    window_fraction=window_fraction,
-                    min_points=min_points,
-                    start_fraction=start_fraction,
-                    growth_weight=growth_weight,
-                    require_positive=require_positive,
-                    min_amp_fraction=min_amp_fraction,
-                )
+                gamma = float(np.asarray(gamma_vals)[0])
+                omega = float(np.asarray(omega_vals)[0])
             else:
-                try:
-                    gamma, omega = fit_growth_rate(t, signal, tmin=tmin_i, tmax=tmax_i)
-                except ValueError:
+                if time_cfg_i is not None:
+                    _, phi_t = integrate_linear_from_config(
+                        G0_jax,
+                        grid,
+                        geom,
+                        params_use,
+                        time_cfg_i,
+                        cache=cache,
+                        terms=terms,
+                        save_mode=sel if mode_only else None,
+                        mode_method=mode_method,
+                        save_field="density" if fit_signal == "density" else "phi",
+                        density_species_index=1 if fit_signal == "density" else None,
+                    )
+                    stride = time_cfg_i.sample_stride
+                    density_t = None
+                else:
+                    stride = 1 if sample_stride is None else int(sample_stride)
+                    if fit_signal == "density":
+                        _diag = integrate_linear_diagnostics(
+                            G0_jax,
+                            grid,
+                            geom,
+                            params_use,
+                            dt=dt_i,
+                            steps=steps_i,
+                            method=method,
+                            cache=cache,
+                            terms=terms,
+                            sample_stride=stride,
+                            species_index=1,
+                        )
+                        phi_t = _diag[1]
+                        density_t = _diag[2] if len(_diag) > 2 else None
+                    else:
+                        _, phi_t = integrate_linear(
+                            G0_jax,
+                            grid,
+                            geom,
+                            params_use,
+                            dt=dt_i,
+                            steps=steps_i,
+                            method=method,
+                            cache=cache,
+                            terms=terms,
+                            sample_stride=stride,
+                        )
+                        density_t = None
+
+                phi_t_np = np.asarray(phi_t)
+                density_np = None if density_t is None else np.asarray(density_t)
+                if fit_signal == "density" and density_np is None:
+                    density_np = phi_t_np
+                if mode_only:
+                    source = density_np if (fit_signal == "density" and density_np is not None) else phi_t_np
+                    signal = source
+                else:
+                    signal = _select_fit_signal(
+                        phi_t_np,
+                        density_np,
+                        sel,
+                        fit_signal=fit_signal,
+                        mode_method=mode_method,
+                    )
+                t = np.arange(signal.shape[0]) * dt_i * stride
+                tmin_i = _window_value(tmin, i)
+                tmax_i = _window_value(tmax, i)
+                use_auto = auto_window and tmin_i is None and tmax_i is None
+                if not use_auto and not _window_valid(t, tmin_i, tmax_i):
+                    use_auto = True
+                if use_auto:
                     gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
                         t,
                         signal,
@@ -1842,6 +2723,20 @@ def run_kbm_beta_scan(
                         require_positive=require_positive,
                         min_amp_fraction=min_amp_fraction,
                     )
+                else:
+                    try:
+                        gamma, omega = fit_growth_rate(t, signal, tmin=tmin_i, tmax=tmax_i)
+                    except ValueError:
+                        gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
+                            t,
+                            signal,
+                            window_fraction=window_fraction,
+                            min_points=min_points,
+                            start_fraction=start_fraction,
+                            growth_weight=growth_weight,
+                            require_positive=require_positive,
+                            min_amp_fraction=min_amp_fraction,
+                        )
 
         gammas.append(gamma)
         omegas.append(omega)

@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, Tuple, TYPE_CHECKING
+from typing import Any, Callable, Sequence, Tuple, TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
 
+import numpy as np
+
+from spectraxgk.analysis import ModeSelection, ModeSelectionBatch
 from spectraxgk.geometry import SAlphaGeometry
 from spectraxgk.grids import SpectralGrid
 from spectraxgk.linear import LinearCache, LinearParams, LinearTerms, build_linear_cache
@@ -42,6 +45,7 @@ def _solver_from_name(name: str):
         "heun": "heun",
         "tsit5": "tsit5",
         "dopri5": "dopri5",
+        "dopri8": "dopri8",
         "implicit": "kvaerno5",
         "imex": "kencarp4",
         "semi-implicit": "kencarp4",
@@ -52,6 +56,7 @@ def _solver_from_name(name: str):
         "heun": dfx.Heun,
         "tsit5": dfx.Tsit5,
         "dopri5": dfx.Dopri5,
+        "dopri8": dfx.Dopri8,
         "impliciteuler": dfx.ImplicitEuler,
         "kvaerno3": dfx.Kvaerno3,
         "kvaerno4": dfx.Kvaerno4,
@@ -94,6 +99,14 @@ def _adjoint(checkpoint: bool):
     return dfx.DirectAdjoint()
 
 
+def _pack_complex_state(G: jnp.ndarray) -> jnp.ndarray:
+    return jnp.stack([jnp.real(G), jnp.imag(G)], axis=-1)
+
+
+def _unpack_complex_state(G_packed: jnp.ndarray) -> jnp.ndarray:
+    return G_packed[..., 0] + 1j * G_packed[..., 1]
+
+
 def _assemble_rhs(
     G: jnp.ndarray,
     cache: LinearCache,
@@ -119,6 +132,28 @@ def _save_with_phi(
     return G, fields.phi
 
 
+def _density_from_G_cached(
+    G_in: jnp.ndarray,
+    cache: LinearCache,
+    density_species_index: int | None,
+) -> jnp.ndarray:
+    Jl = cache.Jl
+    if G_in.ndim == 5:
+        if Jl.ndim == 5:
+            Jl_s = Jl[0]
+        else:
+            Jl_s = Jl
+        return jnp.sum(Jl_s * G_in[:, 0, ...], axis=0)
+    if Jl.ndim == 5:
+        if density_species_index is None:
+            return jnp.sum(jnp.sum(Jl * G_in[:, :, 0, ...], axis=1), axis=0)
+        Jl_s = Jl[int(density_species_index)]
+        return jnp.sum(Jl_s * G_in[int(density_species_index), :, 0, ...], axis=0)
+    if density_species_index is None:
+        return jnp.sum(jnp.sum(Jl[None, ...] * G_in[:, :, 0, ...], axis=1), axis=0)
+    return jnp.sum(Jl * G_in[int(density_species_index), :, 0, ...], axis=0)
+
+
 def integrate_linear_diffrax(
     G0: jnp.ndarray,
     grid: SpectralGrid,
@@ -127,23 +162,30 @@ def integrate_linear_diffrax(
     dt: float,
     steps: int,
     *,
-    method: str = "Heun",
+    method: str = "Dopri8",
     cache: LinearCache | None = None,
     terms: LinearTerms | None = None,
     adaptive: bool = False,
     rtol: float = 1.0e-5,
     atol: float = 1.0e-7,
     max_steps: int = 4096,
-    progress_bar: bool = True,
+    progress_bar: bool = False,
     checkpoint: bool = False,
     jit: bool | None = None,
     sample_stride: int = 1,
-) -> tuple[jnp.ndarray, jnp.ndarray]:
+    return_state: bool = True,
+    save_mode: ModeSelection | ModeSelectionBatch | None = None,
+    mode_method: str = "z_index",
+    save_field: str = "phi",
+    density_species_index: int | None = None,
+    state_sharding: Any | None = None,
+) -> tuple[jnp.ndarray | None, jnp.ndarray]:
     """Integrate the linear system with diffrax."""
 
     dfx, eqx = _require_diffrax()
     state_dtype = jnp.result_type(G0, jnp.complex64)
     G0 = jnp.asarray(G0, dtype=state_dtype)
+    real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
     if terms is None:
         terms = LinearTerms()
     if cache is None:
@@ -171,14 +213,60 @@ def integrate_linear_diffrax(
 
     use_custom_vjp = not (_is_imex_solver(method) or _is_implicit_solver(method))
 
-    def rhs(t, G, args):
-        cache_, params_, term_cfg_ = args
-        dG, _fields = _assemble_rhs(G, cache_, params_, term_cfg_, use_custom_vjp=use_custom_vjp)
-        return dG
+    G0_packed = _pack_complex_state(G0)
+    if state_sharding is not None:
+        G0_packed = jax.device_put(G0_packed, state_sharding)
 
-    def save_fn(t, G, args):
+    def rhs(t, G_packed, args):
         cache_, params_, term_cfg_ = args
-        return _save_with_phi(G, cache_, params_, term_cfg_, use_custom_vjp=use_custom_vjp)
+        G = _unpack_complex_state(G_packed)
+        dG, _fields = _assemble_rhs(G, cache_, params_, term_cfg_, use_custom_vjp=use_custom_vjp)
+        return _pack_complex_state(dG)
+
+    def _extract_mode(field: jnp.ndarray) -> jnp.ndarray:
+        if save_mode is None:
+            raise ValueError("save_mode must be provided when extracting modes")
+        if isinstance(save_mode, ModeSelectionBatch):
+            ky_idx = jnp.asarray(save_mode.ky_indices, dtype=jnp.int32)
+            data = field[ky_idx, save_mode.kx_index, :]
+            if mode_method == "z_index":
+                return data[:, save_mode.z_index]
+            if mode_method == "max":
+                idx = jnp.argmax(jnp.abs(data), axis=-1)
+                return jnp.take_along_axis(data, idx[:, None], axis=-1)[:, 0]
+            raise ValueError(
+                "mode_method must be one of {'z_index', 'max'} when save_mode is set"
+            )
+        data = field[save_mode.ky_index, save_mode.kx_index, :]
+        if mode_method == "z_index":
+            return data[save_mode.z_index]
+        if mode_method == "max":
+            idx = jnp.argmax(jnp.abs(data))
+            return data[idx]
+        raise ValueError("mode_method must be one of {'z_index', 'max'} when save_mode is set")
+
+    def _density_from_G_local(G_in: jnp.ndarray, cache_: LinearCache) -> jnp.ndarray:
+        return _density_from_G_cached(G_in, cache_, density_species_index)
+
+    def save_fn(t, G_packed, args):
+        cache_, params_, term_cfg_ = args
+        G = _unpack_complex_state(G_packed)
+        if save_field == "phi":
+            fields = compute_fields_cached(G, cache_, params_, terms=term_cfg_, use_custom_vjp=use_custom_vjp)
+            field = fields.phi
+        elif save_field == "density":
+            field = _density_from_G_local(G, cache_)
+        else:
+            raise ValueError("save_field must be 'phi' or 'density'")
+
+        if save_mode is not None:
+            mode_val = _extract_mode(field)
+            if return_state:
+                return _pack_complex_state(G), mode_val
+            return mode_val
+        if return_state:
+            return _pack_complex_state(G), field
+        return field
 
     solver = _solver_from_name(method)
     explicit_term = dfx.ODETerm(rhs)
@@ -188,7 +276,6 @@ def integrate_linear_diffrax(
     else:
         terms_obj = explicit_term
 
-    real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
     dt_val = jnp.asarray(dt, dtype=real_dtype)
     if sample_stride < 1:
         raise ValueError("sample_stride must be >= 1")
@@ -199,7 +286,7 @@ def integrate_linear_diffrax(
 
     adaptive_eff = adaptive or _is_imex_solver(method) or _is_implicit_solver(method)
 
-    def solve():
+    def solve(G0_packed_in):
         max_steps_eff = max(int(max_steps), int(steps))
         return dfx.diffeqsolve(
             terms_obj,
@@ -207,7 +294,7 @@ def integrate_linear_diffrax(
             t0=jnp.asarray(0.0, dtype=real_dtype),
             t1=dt_val * steps,
             dt0=dt_val,
-            y0=G0,
+            y0=G0_packed_in,
             args=(cache, params, term_cfg),
             saveat=dfx.SaveAt(ts=ts, fn=save_fn),
             stepsize_controller=_stepsize_controller(adaptive_eff, rtol, atol),
@@ -218,9 +305,226 @@ def integrate_linear_diffrax(
 
     if jit is None:
         jit = not progress_bar
-    sol = eqx.filter_jit(solve)() if jit else solve()
-    G_t, phi_t = sol.ys
-    return G_t[-1], phi_t
+    if jit:
+        solve_jit = eqx.filter_jit(solve, donate="all")
+        sol = solve_jit(G0_packed)
+    else:
+        sol = solve(G0_packed)
+    if return_state:
+        G_t_packed, phi_t = sol.ys
+        G_last = _unpack_complex_state(G_t_packed[-1])
+    else:
+        phi_t = sol.ys
+        G_last = None
+    return G_last, phi_t
+
+
+def integrate_linear_diffrax_streaming(
+    G0: jnp.ndarray,
+    grid: SpectralGrid,
+    geom: SAlphaGeometry,
+    params: LinearParams,
+    dt: float,
+    steps: int,
+    *,
+    method: str = "Dopri8",
+    cache: LinearCache | None = None,
+    terms: LinearTerms | None = None,
+    adaptive: bool = False,
+    rtol: float = 1.0e-5,
+    atol: float = 1.0e-7,
+    max_steps: int = 4096,
+    progress_bar: bool = False,
+    checkpoint: bool = False,
+    jit: bool | None = None,
+    tmin: float | None = None,
+    tmax: float | None = None,
+    fit_signal: str = "density",
+    mode_ky_indices: Sequence[int] | np.ndarray | jnp.ndarray | None = None,
+    mode_kx_index: int = 0,
+    mode_z_index: int = 0,
+    mode_method: str = "z_index",
+    amp_floor: float = 1.0e-30,
+    density_species_index: int | None = None,
+    return_state: bool = True,
+    state_sharding: Any | None = None,
+) -> tuple[jnp.ndarray | None, jnp.ndarray, jnp.ndarray]:
+    """Integrate the linear system and stream a growth-rate fit without storing time series."""
+
+    dfx, eqx = _require_diffrax()
+    state_dtype = jnp.result_type(G0, jnp.complex64)
+    G0 = jnp.asarray(G0, dtype=state_dtype)
+    real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
+    if terms is None:
+        terms = LinearTerms()
+    if cache is None:
+        if G0.ndim == 5:
+            Nl, Nm = G0.shape[0], G0.shape[1]
+        elif G0.ndim == 6:
+            Nl, Nm = G0.shape[1], G0.shape[2]
+        else:
+            raise ValueError("G0 must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)")
+        cache = build_linear_cache(grid, geom, params, Nl, Nm)
+
+    term_cfg = TermConfig(
+        streaming=terms.streaming,
+        mirror=terms.mirror,
+        curvature=terms.curvature,
+        gradb=terms.gradb,
+        diamagnetic=terms.diamagnetic,
+        collisions=terms.collisions,
+        hypercollisions=terms.hypercollisions,
+        end_damping=terms.end_damping,
+        apar=terms.apar,
+        bpar=terms.bpar,
+        nonlinear=0.0,
+    )
+
+    use_custom_vjp = not (_is_imex_solver(method) or _is_implicit_solver(method))
+
+    G0_packed = _pack_complex_state(G0)
+    if state_sharding is not None:
+        G0_packed = jax.device_put(G0_packed, state_sharding)
+
+    ky_idx = jnp.arange(grid.ky.size, dtype=jnp.int32)
+    if mode_ky_indices is not None:
+        ky_idx = jnp.asarray(mode_ky_indices, dtype=jnp.int32)
+        if ky_idx.ndim == 0:
+            ky_idx = ky_idx[None]
+
+    if mode_method not in {"z_index", "max"}:
+        raise ValueError("mode_method must be one of {'z_index', 'max'} for streaming fits")
+
+    def _extract_mode(field: jnp.ndarray) -> jnp.ndarray:
+        data = field[ky_idx, mode_kx_index, :]
+        if mode_method == "z_index":
+            return data[:, mode_z_index]
+        idx = jnp.argmax(jnp.abs(data), axis=-1)
+        return jnp.take_along_axis(data, idx[:, None], axis=-1)[:, 0]
+
+    def _density_mode_from_G(G_in: jnp.ndarray) -> jnp.ndarray:
+        if mode_method != "z_index":
+            field = _density_from_G_cached(G_in, cache, density_species_index)
+            return _extract_mode(field)
+        Jl = cache.Jl
+        if G_in.ndim == 5:
+            Jl_s = Jl[0] if Jl.ndim == 5 else Jl
+            Gm0 = G_in[:, 0, ...]
+            Gm0 = jnp.take(Gm0, ky_idx, axis=1)
+            Gm0 = Gm0[..., mode_kx_index, mode_z_index]
+            Jl_sel = jnp.take(Jl_s, ky_idx, axis=1)
+            Jl_sel = Jl_sel[..., mode_kx_index, mode_z_index]
+            return jnp.sum(Jl_sel * Gm0, axis=0)
+        if Jl.ndim == 5:
+            if density_species_index is None:
+                Gm0 = G_in[:, :, 0, ...]
+                Gm0 = jnp.take(Gm0, ky_idx, axis=2)
+                Gm0 = Gm0[..., mode_kx_index, mode_z_index]
+                Jl_sel = jnp.take(Jl, ky_idx, axis=2)
+                Jl_sel = Jl_sel[..., mode_kx_index, mode_z_index]
+                return jnp.sum(Jl_sel * Gm0, axis=1).sum(axis=0)
+            species_idx = int(density_species_index)
+            Gm0 = G_in[species_idx, :, 0, ...]
+            Gm0 = jnp.take(Gm0, ky_idx, axis=1)
+            Gm0 = Gm0[..., mode_kx_index, mode_z_index]
+            Jl_sel = jnp.take(Jl[species_idx], ky_idx, axis=1)
+            Jl_sel = Jl_sel[..., mode_kx_index, mode_z_index]
+            return jnp.sum(Jl_sel * Gm0, axis=0)
+        if density_species_index is None:
+            Gm0 = G_in[:, :, 0, ...]
+            Gm0 = jnp.take(Gm0, ky_idx, axis=2)
+            Gm0 = Gm0[..., mode_kx_index, mode_z_index]
+            Jl_sel = jnp.take(Jl, ky_idx, axis=1)
+            Jl_sel = Jl_sel[..., mode_kx_index, mode_z_index]
+            return jnp.sum(Jl_sel * Gm0, axis=1).sum(axis=0)
+        species_idx = int(density_species_index)
+        Gm0 = G_in[species_idx, :, 0, ...]
+        Gm0 = jnp.take(Gm0, ky_idx, axis=1)
+        Gm0 = Gm0[..., mode_kx_index, mode_z_index]
+        Jl_sel = jnp.take(Jl, ky_idx, axis=1)
+        Jl_sel = Jl_sel[..., mode_kx_index, mode_z_index]
+        return jnp.sum(Jl_sel * Gm0, axis=0)
+
+    amp_floor_val = jnp.asarray(amp_floor, dtype=real_dtype)
+    tmin_val = jnp.asarray(0.0 if tmin is None else tmin, dtype=real_dtype)
+    tmax_val = jnp.asarray(dt * steps if tmax is None else tmax, dtype=real_dtype)
+
+    def rhs(t, state, args):
+        cache_, params_, term_cfg_ = args
+        G_packed, acc_re, acc_im, wsum = state
+        G = _unpack_complex_state(G_packed)
+        dG, fields = _assemble_rhs(G, cache_, params_, term_cfg_, use_custom_vjp=use_custom_vjp)
+
+        if fit_signal == "phi":
+            s = _extract_mode(fields.phi)
+            dphi = compute_fields_cached(
+                dG, cache_, params_, terms=term_cfg_, use_custom_vjp=use_custom_vjp
+            ).phi
+            s_dot = _extract_mode(dphi)
+        elif fit_signal == "density":
+            s = _density_mode_from_G(G)
+            s_dot = _density_mode_from_G(dG)
+        else:
+            raise ValueError("fit_signal must be 'phi' or 'density'")
+
+        abs_s = jnp.abs(s)
+        safe_s = jnp.where(abs_s > amp_floor_val, s, 1.0 + 0.0j)
+        log_deriv = jnp.where(abs_s > amp_floor_val, s_dot / safe_s, 0.0 + 0.0j)
+        window = (t >= tmin_val) & (t <= tmax_val)
+        window = jnp.asarray(window, dtype=abs_s.dtype)
+        weight = window * (abs_s > amp_floor_val)
+        acc_re_dot = weight * jnp.real(log_deriv)
+        acc_im_dot = weight * jnp.imag(log_deriv)
+        wsum_dot = weight
+        return (_pack_complex_state(dG), acc_re_dot, acc_im_dot, wsum_dot)
+
+    solver = _solver_from_name(method)
+    explicit_term = dfx.ODETerm(rhs)
+    if _is_imex_solver(method):
+        zero_term = dfx.ODETerm(lambda t, y, args: (jnp.zeros_like(y[0]),) + tuple(jnp.zeros_like(x) for x in y[1:]))
+        terms_obj = dfx.MultiTerm(zero_term, explicit_term)
+    else:
+        terms_obj = explicit_term
+
+    dt_val = jnp.asarray(dt, dtype=real_dtype)
+    adaptive_eff = adaptive or _is_imex_solver(method) or _is_implicit_solver(method)
+
+    acc0 = jnp.zeros((ky_idx.shape[0],), dtype=real_dtype)
+
+    def solve(G0_packed_in):
+        max_steps_eff = max(int(max_steps), int(steps))
+        return dfx.diffeqsolve(
+            terms_obj,
+            solver,
+            t0=jnp.asarray(0.0, dtype=real_dtype),
+            t1=dt_val * steps,
+            dt0=dt_val,
+            y0=(G0_packed_in, acc0, acc0, acc0),
+            args=(cache, params, term_cfg),
+            saveat=dfx.SaveAt(t1=True),
+            stepsize_controller=_stepsize_controller(adaptive_eff, rtol, atol),
+            adjoint=_adjoint(checkpoint),
+            max_steps=max_steps_eff,
+            progress_meter=_progress_meter(progress_bar),
+        )
+
+    if jit is None:
+        jit = not progress_bar
+    if jit:
+        solve_jit = eqx.filter_jit(solve, donate="all")
+        sol = solve_jit(G0_packed)
+    else:
+        sol = solve(G0_packed)
+
+    (G_last_packed, acc_re, acc_im, wsum) = sol.ys
+    wsum_safe = jnp.where(wsum > 0.0, wsum, jnp.nan)
+    gamma = acc_re / wsum_safe
+    omega = -acc_im / wsum_safe
+    if return_state:
+        G_last = _unpack_complex_state(G_last_packed)
+    else:
+        G_last = None
+    return G_last, gamma, omega
 
 
 def integrate_nonlinear_diffrax(
@@ -241,6 +545,7 @@ def integrate_nonlinear_diffrax(
     progress_bar: bool = True,
     checkpoint: bool = False,
     jit: bool | None = None,
+    state_sharding: Any | None = None,
 ) -> tuple[jnp.ndarray, FieldState]:
     """Integrate the nonlinear system with diffrax (placeholder nonlinear term)."""
 
@@ -259,25 +564,34 @@ def integrate_nonlinear_diffrax(
 
     use_custom_vjp = not (_is_imex_solver(method) or _is_implicit_solver(method))
 
-    def rhs_linear(t, G, args):
-        cache_, params_, term_cfg_ = args
-        dG, _fields = _assemble_rhs(G, cache_, params_, term_cfg_, use_custom_vjp=use_custom_vjp)
-        return dG
+    G0_packed = _pack_complex_state(G0)
+    if state_sharding is not None:
+        G0_packed = jax.device_put(G0_packed, state_sharding)
 
-    def rhs_nonlinear(t, G, args):
+    def rhs_linear(t, G_packed, args):
+        cache_, params_, term_cfg_ = args
+        G = _unpack_complex_state(G_packed)
+        dG, _fields = _assemble_rhs(G, cache_, params_, term_cfg_, use_custom_vjp=use_custom_vjp)
+        return _pack_complex_state(dG)
+
+    def rhs_nonlinear(t, G_packed, args):
         _cache, _params, term_cfg_ = args
         if term_cfg_.nonlinear == 0.0:
-            return jnp.zeros_like(G)
+            return jnp.zeros_like(G_packed)
+        G = _unpack_complex_state(G_packed)
         real_dtype = jnp.real(jnp.empty((), dtype=G.dtype)).dtype
         weight = jnp.asarray(term_cfg_.nonlinear, dtype=real_dtype)
-        return placeholder_nonlinear_contribution(G, weight=weight)
+        dG = placeholder_nonlinear_contribution(G, weight=weight)
+        return _pack_complex_state(dG)
 
-    def rhs_full(t, G, args):
-        return rhs_linear(t, G, args) + rhs_nonlinear(t, G, args)
+    def rhs_full(t, G_packed, args):
+        return rhs_linear(t, G_packed, args) + rhs_nonlinear(t, G_packed, args)
 
-    def save_fn(t, G, args):
+    def save_fn(t, G_packed, args):
         cache_, params_, term_cfg_ = args
-        return _save_with_phi(G, cache_, params_, term_cfg_, use_custom_vjp=use_custom_vjp)
+        G = _unpack_complex_state(G_packed)
+        G_out, phi = _save_with_phi(G, cache_, params_, term_cfg_, use_custom_vjp=use_custom_vjp)
+        return _pack_complex_state(G_out), phi
 
     solver = _solver_from_name(method)
     explicit_term = dfx.ODETerm(rhs_nonlinear if _is_imex_solver(method) else rhs_full)
@@ -293,7 +607,7 @@ def integrate_nonlinear_diffrax(
 
     adaptive_eff = adaptive or _is_imex_solver(method) or _is_implicit_solver(method)
 
-    def solve():
+    def solve(G0_packed_in):
         max_steps_eff = max(int(max_steps), int(steps))
         return dfx.diffeqsolve(
             terms_obj,
@@ -301,7 +615,7 @@ def integrate_nonlinear_diffrax(
             t0=jnp.asarray(0.0, dtype=real_dtype),
             t1=dt_val * steps,
             dt0=dt_val,
-            y0=G0,
+            y0=G0_packed_in,
             args=(cache, params, term_cfg),
             saveat=dfx.SaveAt(ts=ts, fn=save_fn),
             stepsize_controller=_stepsize_controller(adaptive_eff, rtol, atol),
@@ -312,6 +626,11 @@ def integrate_nonlinear_diffrax(
 
     if jit is None:
         jit = not progress_bar
-    sol = eqx.filter_jit(solve)() if jit else solve()
-    G_t, phi_t = sol.ys
-    return G_t[-1], FieldState(phi=phi_t)
+    if jit:
+        solve_jit = eqx.filter_jit(solve, donate="all")
+        sol = solve_jit(G0_packed)
+    else:
+        sol = solve(G0_packed)
+    G_t_packed, phi_t = sol.ys
+    G_last = _unpack_complex_state(G_t_packed[-1])
+    return G_last, FieldState(phi=phi_t)
