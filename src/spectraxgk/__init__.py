@@ -33,6 +33,7 @@ from spectraxgk.analysis import (
     extract_eigenfunction,
     fit_growth_rate,
     fit_growth_rate_auto,
+    gx_growth_rate_from_phi,
     select_fit_window,
     select_ky_index,
 )
@@ -69,7 +70,11 @@ from spectraxgk.plotting import (
     scan_comparison_figure,
     set_plot_style,
 )
-from spectraxgk.diffrax_integrators import integrate_linear_diffrax, integrate_nonlinear_diffrax
+from spectraxgk.diffrax_integrators import (
+    integrate_linear_diffrax,
+    integrate_linear_diffrax_streaming,
+    integrate_nonlinear_diffrax,
+)
 
 __all__ = [
     "__version__",
@@ -95,6 +100,7 @@ __all__ = [
     "dominant_eigenpair",
     "dominant_eigenvalue",
     "integrate_linear_diffrax",
+    "integrate_linear_diffrax_streaming",
     "integrate_nonlinear",
     "integrate_nonlinear_cached",
     "integrate_nonlinear_diffrax",
@@ -110,6 +116,7 @@ __all__ = [
     "load_tem_reference",
     "fit_growth_rate",
     "fit_growth_rate_auto",
+    "gx_growth_rate_from_phi",
     "select_fit_window",
     "CycloneReference",
     "CycloneScanResult",
