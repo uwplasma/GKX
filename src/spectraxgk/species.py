@@ -40,6 +40,8 @@ def build_linear_params(
     fapar: float = 0.0,
     nu_hyper: float = 0.0,
     p_hyper: float = 4.0,
+    hypercollisions_const: float = 1.0,
+    hypercollisions_kz: float = 0.0,
 ) -> LinearParams:
     """Build LinearParams arrays from a list of species."""
 
@@ -54,7 +56,7 @@ def build_linear_params(
 
     vth = jnp.sqrt(temp / mass)
     rho = jnp.sqrt(temp * mass) / jnp.abs(charge)
-    tz = charge / temp
+    tz = temp / charge
 
     return LinearParams(
         charge_sign=charge,
@@ -76,4 +78,6 @@ def build_linear_params(
         nu=nu,
         nu_hyper=nu_hyper,
         p_hyper=p_hyper,
+        hypercollisions_const=hypercollisions_const,
+        hypercollisions_kz=hypercollisions_kz,
     )
