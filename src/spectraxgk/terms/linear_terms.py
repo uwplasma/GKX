@@ -21,6 +21,8 @@ def streaming_contribution(
     kx_link_minus: jnp.ndarray | None = None,
     kx_mask_plus: jnp.ndarray | None = None,
     kx_mask_minus: jnp.ndarray | None = None,
+    linked_indices: tuple[jnp.ndarray, ...] | None = None,
+    linked_kz: tuple[jnp.ndarray, ...] | None = None,
     use_twist_shift: bool = False,
 ) -> jnp.ndarray:
     vth_s = vth if vth.ndim == 0 else vth[:, None, None, None, None, None]
@@ -35,6 +37,8 @@ def streaming_contribution(
         kx_link_minus=kx_link_minus,
         kx_mask_plus=kx_mask_plus,
         kx_mask_minus=kx_mask_minus,
+        linked_indices=linked_indices,
+        linked_kz=linked_kz,
         use_twist_shift=use_twist_shift,
     )
 

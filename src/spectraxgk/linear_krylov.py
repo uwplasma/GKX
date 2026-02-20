@@ -10,7 +10,13 @@ import jax
 import jax.numpy as jnp
 from jax.scipy.sparse.linalg import gmres
 
-from spectraxgk.linear import LinearCache, LinearParams, LinearTerms, _as_species_array
+from spectraxgk.linear import (
+    LinearCache,
+    LinearParams,
+    LinearTerms,
+    _as_species_array,
+    hypercollision_damping,
+)
 from spectraxgk.terms.assembly import assemble_rhs_cached
 from spectraxgk.terms.config import TermConfig
 
@@ -67,16 +73,15 @@ def _compute_damping(
 ) -> jnp.ndarray:
     real_dtype = jnp.real(v).dtype
     lb_lam = cache.lb_lam.astype(real_dtype)
-    hyper_ratio = cache.hyper_ratio.astype(real_dtype)
-    nu_hyper = jnp.asarray(params.nu_hyper, dtype=real_dtype)
+    hyper_damp = hypercollision_damping(cache, params, real_dtype)
     if lb_lam.ndim == 6:
         ns = lb_lam.shape[0]
         nu = _as_species_array(params.nu, ns, "nu").astype(real_dtype)
-        damping = nu[:, None, None, None, None, None] * lb_lam + nu_hyper * hyper_ratio
+        damping = nu[:, None, None, None, None, None] * lb_lam + hyper_damp
         if v.ndim == 5:
             damping = damping[0]
     else:
-        damping = jnp.asarray(params.nu, dtype=real_dtype) * lb_lam + nu_hyper * hyper_ratio
+        damping = jnp.asarray(params.nu, dtype=real_dtype) * lb_lam + hyper_damp
     return damping.astype(real_dtype)
 
 

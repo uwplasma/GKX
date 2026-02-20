@@ -118,6 +118,8 @@ def assemble_rhs_cached(
         kx_link_minus=cache.kx_link_minus,
         kx_mask_plus=cache.kx_link_mask_plus,
         kx_mask_minus=cache.kx_link_mask_minus,
+        linked_indices=cache.linked_indices,
+        linked_kz=cache.linked_kz,
         use_twist_shift=cache.use_twist_shift,
     )
     dG = dG + mirror_contribution(

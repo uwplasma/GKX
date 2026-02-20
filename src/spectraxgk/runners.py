@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Tuple
 
+from spectraxgk.analysis import ModeSelection, ModeSelectionBatch
 from spectraxgk.config import TimeConfig
 from spectraxgk.diffrax_integrators import integrate_linear_diffrax, integrate_nonlinear_diffrax
 from spectraxgk.geometry import SAlphaGeometry
@@ -31,6 +32,10 @@ def integrate_linear_from_config(
     *,
     cache: LinearCache | None = None,
     terms: LinearTerms | None = None,
+    save_mode: ModeSelection | ModeSelectionBatch | None = None,
+    mode_method: str = "z_index",
+    save_field: str = "phi",
+    density_species_index: int | None = None,
 ) -> tuple:
     """Integrate the linear system using TimeConfig settings."""
 
@@ -53,6 +58,11 @@ def integrate_linear_from_config(
             progress_bar=time_cfg.progress_bar,
             checkpoint=time_cfg.checkpoint,
             sample_stride=time_cfg.sample_stride,
+            return_state=time_cfg.save_state,
+            save_mode=save_mode,
+            mode_method=mode_method,
+            save_field=save_field,
+            density_species_index=density_species_index,
         )
     return integrate_linear(
         G0,
