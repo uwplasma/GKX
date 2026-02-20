@@ -304,10 +304,11 @@ def _rk4_step(
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Single GX-style RK4 step for linear dynamics."""
 
-    dt_val = float(dt)
-    params_step = params
-    if params.damp_ends_amp != 0.0 and term_cfg.end_damping != 0.0:
-        params_step = replace(params, damp_ends_amp=float(params.damp_ends_amp) / dt_val)
+    dt_val = jnp.asarray(dt)
+    damp_amp = jnp.asarray(params.damp_ends_amp)
+    damp_weight = jnp.asarray(term_cfg.end_damping)
+    damp_scale = jnp.where(damp_weight != 0.0, 1.0 / dt_val, 1.0)
+    params_step = replace(params, damp_ends_amp=damp_amp * damp_scale)
 
     def rhs(state: jnp.ndarray) -> jnp.ndarray:
         dG, _fields = assemble_rhs_cached(state, cache, params_step, terms=term_cfg)
@@ -335,6 +336,7 @@ def integrate_linear_gx(
     *,
     mode_method: str = "z_index",
     z_index: int | None = None,
+    jit: bool = True,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """GX-style RK4 integrator with GX growth-rate diagnostics."""
 
@@ -370,12 +372,16 @@ def integrate_linear_gx(
     gamma_list: list[np.ndarray] = []
     omega_list: list[np.ndarray] = []
 
+    stepper = _rk4_step
+    if jit:
+        stepper = jax.jit(_rk4_step, donate_argnums=(0,))
+
     while t < t_max - 1.0e-12:
         if not time_cfg.fixed_dt and wmax > 0.0:
             dt_guess = float(time_cfg.cfl_fac) * float(time_cfg.cfl) / wmax
             dt = min(max(dt_guess, dt_min), dt_max)
 
-        G, phi = _rk4_step(G, cache, params, term_cfg, dt)
+        G, phi = stepper(G, cache, params, term_cfg, dt)
         step += 1
         t += dt
 
