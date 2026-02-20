@@ -1755,7 +1755,16 @@ def run_kinetic_linear(
             fit_signal=fit_signal,
             mode_method=mode_method,
         )
-        if auto_window and tmin is None and tmax is None:
+        def _window_valid(t_arr: np.ndarray, tmin_val: float | None, tmax_val: float | None) -> bool:
+            if tmin_val is None or tmax_val is None:
+                return False
+            mask = (t_arr >= tmin_val) & (t_arr <= tmax_val)
+            return int(np.count_nonzero(mask)) >= 2
+
+        use_auto = auto_window and tmin is None and tmax is None
+        if not use_auto and not _window_valid(t, tmin, tmax):
+            use_auto = True
+        if use_auto:
             gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
                 t,
                 signal,
@@ -1767,7 +1776,19 @@ def run_kinetic_linear(
                 min_amp_fraction=min_amp_fraction,
             )
         else:
-            gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
+            try:
+                gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
+            except ValueError:
+                gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
+                    t,
+                    signal,
+                    window_fraction=window_fraction,
+                    min_points=min_points,
+                    start_fraction=start_fraction,
+                    growth_weight=growth_weight,
+                    require_positive=require_positive,
+                    min_amp_fraction=min_amp_fraction,
+                )
 
     return LinearRunResult(
         t=t,
