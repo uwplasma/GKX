@@ -25,6 +25,8 @@ class SpectralGrid:
     x0: float
     boundary: str
     jtwist: int | None
+    non_twist: bool
+    kxfac: float
 
     def tree_flatten(self):
         children = (
@@ -35,13 +37,21 @@ class SpectralGrid:
             self.ky_grid,
             self.dealias_mask,
         )
-        aux_data = (self.y0, self.x0, self.boundary, self.jtwist)
+        aux_data = (self.y0, self.x0, self.boundary, self.jtwist, self.non_twist, self.kxfac)
         return children, aux_data
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
-        y0, x0, boundary, jtwist = aux_data
-        return cls(*children, y0=y0, x0=x0, boundary=boundary, jtwist=jtwist)
+        y0, x0, boundary, jtwist, non_twist, kxfac = aux_data
+        return cls(
+            *children,
+            y0=y0,
+            x0=x0,
+            boundary=boundary,
+            jtwist=jtwist,
+            non_twist=non_twist,
+            kxfac=kxfac,
+        )
 
 
 def _fftfreq_phys(n: int, L: float) -> jnp.ndarray:
@@ -98,6 +108,8 @@ def build_spectral_grid(cfg: GridConfig) -> SpectralGrid:
         x0=x0,
         boundary=str(cfg.boundary),
         jtwist=cfg.jtwist,
+        non_twist=bool(cfg.non_twist),
+        kxfac=float(cfg.kxfac),
     )
 
 
@@ -125,4 +137,6 @@ def select_ky_grid(
         x0=grid.x0,
         boundary=grid.boundary,
         jtwist=grid.jtwist,
+        non_twist=grid.non_twist,
+        kxfac=grid.kxfac,
     )

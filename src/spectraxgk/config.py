@@ -31,6 +31,8 @@ class GridConfig:
     Ly: float = 62.8
     boundary: str = "periodic"
     jtwist: int | None = None
+    non_twist: bool = False
+    kxfac: float = 1.0
     z_min: float = -3.141592653589793
     z_max: float = 3.141592653589793
     y0: float | None = None
