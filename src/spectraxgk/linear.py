@@ -388,6 +388,9 @@ def build_linear_cache(
     cv, gb, cv0, gb0 = geom.drift_coeffs(theta)
     boundary = str(getattr(grid, "boundary", "periodic")).lower()
     use_twist_shift = boundary == "linked"
+    use_ntft = bool(getattr(grid, "non_twist", False))
+    if use_twist_shift and grid.kx.size <= 1:
+        use_twist_shift = False
     y0 = getattr(grid, "y0", None)
     if y0 is None:
         if grid.ky.size > 1:
@@ -397,6 +400,7 @@ def build_linear_cache(
     shat = float(geom.s_hat)
     if use_twist_shift and abs(shat) < 1.0e-12:
         use_twist_shift = False
+        use_ntft = False
     x0_eff = float(getattr(grid, "x0", 1.0))
     jtwist = 0
     if use_twist_shift:
@@ -411,13 +415,15 @@ def build_linear_cache(
             )
             if jtwist == 0:
                 jtwist = 1
-            x0_eff = float(y0) * abs(jtwist) / abs(twist_shift_geo_fac)
+            if use_ntft:
+                x0_eff = float(y0) * abs(jtwist) / abs(twist_shift_geo_fac)
         else:
             jtwist = grid.jtwist if getattr(grid, "jtwist", None) is not None else 1
-        if float(getattr(grid, "x0", x0_eff)) != 0.0:
+        if use_ntft and float(getattr(grid, "x0", x0_eff)) != 0.0:
             kx_eff = kx_eff * (float(getattr(grid, "x0", x0_eff)) / float(x0_eff))
-    if use_twist_shift:
+    if use_ntft:
         ftwist = (geom.s_hat * gds21 / gds22_arr).astype(real_dtype)
+        kxfac = float(getattr(grid, "kxfac", 1.0))
         delta = jnp.asarray(0.01313, dtype=real_dtype)
         ftwist_next = jnp.roll(ftwist, -1)
         mid_idx = int(grid.z.size // 2)
@@ -630,6 +636,7 @@ def apply_laguerre_x(G: jnp.ndarray) -> jnp.ndarray:
 def shift_axis(arr: jnp.ndarray, offset: int, axis: int) -> jnp.ndarray:
     """Shift an array along an axis with zero padding (non-periodic)."""
 
+    axis = axis % arr.ndim
     if offset == 0:
         return arr
     pad = [(0, 0)] * arr.ndim

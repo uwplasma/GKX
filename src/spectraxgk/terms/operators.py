@@ -69,6 +69,7 @@ def grad_z_linked(
 def shift_axis(arr: jnp.ndarray, offset: int, axis: int) -> jnp.ndarray:
     """Shift an array along an axis with zero padding (non-periodic)."""
 
+    axis = axis % arr.ndim
     if offset == 0:
         return arr
     axis_len = arr.shape[axis]
