@@ -21,6 +21,10 @@ class SpectralGrid:
     kx_grid: jnp.ndarray
     ky_grid: jnp.ndarray
     dealias_mask: jnp.ndarray
+    y0: float
+    x0: float
+    boundary: str
+    jtwist: int | None
 
     def tree_flatten(self):
         children = (
@@ -31,11 +35,13 @@ class SpectralGrid:
             self.ky_grid,
             self.dealias_mask,
         )
-        return children, None
+        aux_data = (self.y0, self.x0, self.boundary, self.jtwist)
+        return children, aux_data
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
-        return cls(*children)
+        y0, x0, boundary, jtwist = aux_data
+        return cls(*children, y0=y0, x0=x0, boundary=boundary, jtwist=jtwist)
 
 
 def _fftfreq_phys(n: int, L: float) -> jnp.ndarray:
@@ -57,6 +63,8 @@ def twothirds_mask(Ny: int, Nx: int) -> jnp.ndarray:
 def build_spectral_grid(cfg: GridConfig) -> SpectralGrid:
     Lx = cfg.Lx
     Ly = 2.0 * jnp.pi * cfg.y0 if cfg.y0 is not None else cfg.Ly
+    y0 = float(cfg.y0) if cfg.y0 is not None else float(Ly) / (2.0 * jnp.pi)
+    x0 = float(Lx) / (2.0 * jnp.pi)
 
     zp = cfg.zp
     if zp is None:
@@ -79,7 +87,18 @@ def build_spectral_grid(cfg: GridConfig) -> SpectralGrid:
     z = jnp.linspace(z_min, z_max, Nz, endpoint=False)
     ky_grid, kx_grid = jnp.meshgrid(ky, kx, indexing="ij")
     mask = twothirds_mask(cfg.Ny, cfg.Nx)
-    return SpectralGrid(kx=kx, ky=ky, z=z, kx_grid=kx_grid, ky_grid=ky_grid, dealias_mask=mask)
+    return SpectralGrid(
+        kx=kx,
+        ky=ky,
+        z=z,
+        kx_grid=kx_grid,
+        ky_grid=ky_grid,
+        dealias_mask=mask,
+        y0=y0,
+        x0=x0,
+        boundary=str(cfg.boundary),
+        jtwist=cfg.jtwist,
+    )
 
 
 def select_ky_grid(
@@ -102,4 +121,8 @@ def select_ky_grid(
         kx_grid=kx_grid,
         ky_grid=ky_grid,
         dealias_mask=mask,
+        y0=grid.y0,
+        x0=grid.x0,
+        boundary=grid.boundary,
+        jtwist=grid.jtwist,
     )

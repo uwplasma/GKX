@@ -27,6 +27,45 @@ def grad_z_periodic(
     return jnp.fft.ifft(df_hat, axis=-1)
 
 
+def _shift_kx_linked(
+    f: jnp.ndarray,
+    kx_link: jnp.ndarray,
+    kx_mask: jnp.ndarray,
+) -> jnp.ndarray:
+    """Shift along kx for each ky using precomputed link indices."""
+
+    f_ky = jnp.moveaxis(f, -2, 0)
+    kx_mask = kx_mask.astype(f.dtype)
+
+    def _gather_ky(f_slice: jnp.ndarray, idx: jnp.ndarray, mask: jnp.ndarray) -> jnp.ndarray:
+        gathered = jnp.take(f_slice, idx, axis=-1)
+        return gathered * mask
+
+    shifted = jax.vmap(_gather_ky, in_axes=(0, 0, 0))(f_ky, kx_link, kx_mask)
+    return jnp.moveaxis(shifted, 0, -2)
+
+
+def grad_z_linked(
+    f: jnp.ndarray,
+    dz: float | jnp.ndarray,
+    kx_link_plus: jnp.ndarray,
+    kx_link_minus: jnp.ndarray,
+    kx_mask_plus: jnp.ndarray,
+    kx_mask_minus: jnp.ndarray,
+) -> jnp.ndarray:
+    """Finite-difference z-derivative with twist-shift kx linking at the ends."""
+
+    _check_positive(dz, "dz")
+    dz_val = jnp.asarray(dz, dtype=jnp.real(f).dtype)
+    f_roll_p1 = jnp.roll(f, -1, axis=-1)
+    f_roll_m1 = jnp.roll(f, 1, axis=-1)
+    f_z0 = f[..., 0]
+    f_zm1 = f[..., -1]
+    f_roll_p1 = f_roll_p1.at[..., -1].set(_shift_kx_linked(f_z0, kx_link_plus, kx_mask_plus))
+    f_roll_m1 = f_roll_m1.at[..., 0].set(_shift_kx_linked(f_zm1, kx_link_minus, kx_mask_minus))
+    return (f_roll_p1 - f_roll_m1) / (2.0 * dz_val)
+
+
 def shift_axis(arr: jnp.ndarray, offset: int, axis: int) -> jnp.ndarray:
     """Shift an array along an axis with zero padding (non-periodic)."""
 
@@ -108,11 +147,32 @@ def streaming_term(
     vth: float | jnp.ndarray,
     sqrt_p: jnp.ndarray,
     sqrt_m: jnp.ndarray,
+    *,
+    dz: float | jnp.ndarray | None = None,
+    kx_link_plus: jnp.ndarray | None = None,
+    kx_link_minus: jnp.ndarray | None = None,
+    kx_mask_plus: jnp.ndarray | None = None,
+    kx_mask_minus: jnp.ndarray | None = None,
+    use_twist_shift: bool = False,
 ) -> jnp.ndarray:
     """Streaming term using Hermite ladder and real-space z derivative."""
 
     _check_positive(vth, "vth")
-    dH_dz = grad_z_periodic(H, kz=kz)
+    if use_twist_shift:
+        if dz is None or kx_link_plus is None or kx_link_minus is None:
+            raise ValueError("dz and kx_link arrays must be provided for twist-shift boundaries")
+        if kx_mask_plus is None or kx_mask_minus is None:
+            raise ValueError("kx_link masks must be provided for twist-shift boundaries")
+        dH_dz = grad_z_linked(
+            H,
+            dz=dz,
+            kx_link_plus=kx_link_plus,
+            kx_link_minus=kx_link_minus,
+            kx_mask_plus=kx_mask_plus,
+            kx_mask_minus=kx_mask_minus,
+        )
+    else:
+        dH_dz = grad_z_periodic(H, kz=kz)
     axis_m = -4
     pad = [(0, 0)] * H.ndim
     pad[axis_m] = (1, 1)
