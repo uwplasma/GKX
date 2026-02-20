@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Sequence
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 from spectraxgk.config import GridConfig
 
@@ -80,13 +82,19 @@ def build_spectral_grid(cfg: GridConfig) -> SpectralGrid:
     return SpectralGrid(kx=kx, ky=ky, z=z, kx_grid=kx_grid, ky_grid=ky_grid, dealias_mask=mask)
 
 
-def select_ky_grid(grid: SpectralGrid, ky_index: int) -> SpectralGrid:
-    """Return a grid sliced down to a single ky index."""
+def select_ky_grid(
+    grid: SpectralGrid,
+    ky_index: int | jnp.ndarray | np.ndarray | Sequence[int],
+) -> SpectralGrid:
+    """Return a grid sliced down to one or more ky indices."""
 
-    ky = grid.ky[ky_index : ky_index + 1]
-    ky_grid = grid.ky_grid[ky_index : ky_index + 1, :]
-    kx_grid = grid.kx_grid[ky_index : ky_index + 1, :]
-    mask = grid.dealias_mask[ky_index : ky_index + 1, :]
+    ky_idx = jnp.asarray(ky_index, dtype=jnp.int32)
+    if ky_idx.ndim == 0:
+        ky_idx = ky_idx[None]
+    ky = jnp.take(grid.ky, ky_idx, axis=0)
+    ky_grid = jnp.take(grid.ky_grid, ky_idx, axis=0)
+    kx_grid = jnp.take(grid.kx_grid, ky_idx, axis=0)
+    mask = jnp.take(grid.dealias_mask, ky_idx, axis=0)
     return SpectralGrid(
         kx=grid.kx,
         ky=ky,
