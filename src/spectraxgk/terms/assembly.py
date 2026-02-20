@@ -108,11 +108,17 @@ def assemble_rhs_cached(
     dG = streaming_contribution(
         H,
         kz=cache.kz,
+        dz=cache.dz,
         vth=vth,
         sqrt_p=cache.sqrt_p,
         sqrt_m=cache.sqrt_m_ladder,
         kpar_scale=kpar_scale,
         weight=w_stream,
+        kx_link_plus=cache.kx_link_plus,
+        kx_link_minus=cache.kx_link_minus,
+        kx_mask_plus=cache.kx_link_mask_plus,
+        kx_mask_minus=cache.kx_link_mask_minus,
+        use_twist_shift=cache.use_twist_shift,
     )
     dG = dG + mirror_contribution(
         H,

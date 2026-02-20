@@ -11,14 +11,32 @@ def streaming_contribution(
     H: jnp.ndarray,
     *,
     kz: jnp.ndarray,
+    dz: jnp.ndarray,
     vth: jnp.ndarray,
     sqrt_p: jnp.ndarray,
     sqrt_m: jnp.ndarray,
     kpar_scale: jnp.ndarray,
     weight: jnp.ndarray,
+    kx_link_plus: jnp.ndarray | None = None,
+    kx_link_minus: jnp.ndarray | None = None,
+    kx_mask_plus: jnp.ndarray | None = None,
+    kx_mask_minus: jnp.ndarray | None = None,
+    use_twist_shift: bool = False,
 ) -> jnp.ndarray:
     vth_s = vth if vth.ndim == 0 else vth[:, None, None, None, None, None]
-    return -weight * kpar_scale * streaming_term(H, kz, vth_s, sqrt_p, sqrt_m)
+    return -weight * kpar_scale * streaming_term(
+        H,
+        kz,
+        vth_s,
+        sqrt_p,
+        sqrt_m,
+        dz=dz,
+        kx_link_plus=kx_link_plus,
+        kx_link_minus=kx_link_minus,
+        kx_mask_plus=kx_mask_plus,
+        kx_mask_minus=kx_mask_minus,
+        use_twist_shift=use_twist_shift,
+    )
 
 
 def mirror_contribution(
@@ -154,33 +172,45 @@ def hypercollisions_contribution(
     G: jnp.ndarray,
     *,
     vth: jnp.ndarray,
-    l: jnp.ndarray,
-    m: jnp.ndarray,
     nu_hyper: jnp.ndarray,
     nu_hyper_l: jnp.ndarray,
     nu_hyper_m: jnp.ndarray,
     nu_hyper_lm: jnp.ndarray,
-    p_hyper_l: jnp.ndarray,
-    p_hyper_m: jnp.ndarray,
-    p_hyper_lm: jnp.ndarray,
     hyper_ratio: jnp.ndarray,
+    ratio_l: jnp.ndarray,
+    ratio_m: jnp.ndarray,
+    ratio_lm: jnp.ndarray,
+    mask_const: jnp.ndarray,
+    mask_kz: jnp.ndarray,
+    m_pow: jnp.ndarray,
+    m_norm_kz_factor: jnp.ndarray,
+    kz: jnp.ndarray,
+    kpar_scale: jnp.ndarray,
+    hypercollisions_const: jnp.ndarray,
+    hypercollisions_kz: jnp.ndarray,
     weight: jnp.ndarray,
 ) -> jnp.ndarray:
-    Nl = G.shape[1]
-    Nm = G.shape[2]
-    l_norm = jnp.asarray(max(Nl, 1), dtype=l.dtype)
-    m_norm = jnp.asarray(max(Nm, 1), dtype=m.dtype)
-    p_hyper_m_eff = jnp.minimum(p_hyper_m.astype(m.dtype), 0.5 * m_norm)
-    ratio_l = (l / l_norm) ** p_hyper_l
-    ratio_m = (m / m_norm) ** p_hyper_m_eff
-    ratio_lm = ((2.0 * l + m) / (2.0 * l_norm + m_norm)) ** p_hyper_lm
+    l_norm = jnp.asarray(max(G.shape[1], 1), dtype=ratio_l.dtype)
+    m_norm = jnp.asarray(max(G.shape[2], 1), dtype=ratio_m.dtype)
     scaled_nu_l = l_norm * nu_hyper_l
     scaled_nu_m = m_norm * nu_hyper_m
     vth_s = vth[:, None, None, None, None, None]
-    hyper_term = -vth_s * (scaled_nu_l * ratio_l + scaled_nu_m * ratio_m) - nu_hyper_lm * ratio_lm
-    mask = (m > 2.0) | (l > 1.0)
-    dG = weight * jnp.where(mask, hyper_term, 0.0) * G
+    const_term = -(
+        vth_s * (scaled_nu_l * ratio_l + scaled_nu_m * ratio_m) + nu_hyper_lm * ratio_lm
+    )
+    dG = weight * hypercollisions_const * jnp.where(mask_const, const_term, 0.0) * G
     dG = dG - weight * nu_hyper * hyper_ratio * G
+
+    abs_kz = jnp.abs(kz)[None, None, None, None, None, :]
+    nu_hyp_m = (
+        nu_hyper_m
+        * m_norm_kz_factor
+        * 2.3
+        * vth_s
+        * jnp.abs(kpar_scale)
+    )
+    kz_term = -nu_hyp_m * m_pow * abs_kz
+    dG = dG + weight * hypercollisions_kz * jnp.where(mask_kz, kz_term, 0.0) * G
     return dG
 
 

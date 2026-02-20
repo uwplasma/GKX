@@ -310,6 +310,12 @@ class LinearCache:
     sqrt_p: jnp.ndarray
     sqrt_m_ladder: jnp.ndarray
     JlB: jnp.ndarray
+    kx_link_plus: jnp.ndarray
+    kx_link_minus: jnp.ndarray
+    kx_link_mask_plus: jnp.ndarray
+    kx_link_mask_minus: jnp.ndarray
+    use_twist_shift: bool = False
+    jtwist: int = 0
 
     def tree_flatten(self):
         children = (
@@ -343,12 +349,18 @@ class LinearCache:
             self.sqrt_p,
             self.sqrt_m_ladder,
             self.JlB,
+            self.kx_link_plus,
+            self.kx_link_minus,
+            self.kx_link_mask_plus,
+            self.kx_link_mask_minus,
         )
-        return children, None
+        aux_data = (self.use_twist_shift, self.jtwist)
+        return children, aux_data
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
-        return cls(*children)
+        use_twist_shift, jtwist = aux_data
+        return cls(*children, use_twist_shift=use_twist_shift, jtwist=jtwist)
 
 
 def build_linear_cache(
@@ -426,6 +438,39 @@ def build_linear_cache(
     nu_left = jnp.where(left_mask, 1.0 - 2.0 * x_left * x_left / (1.0 + x_left**4), 0.0)
     nu_right = jnp.where(right_mask, 1.0 - 2.0 * x_right * x_right / (1.0 + x_right**4), 0.0)
     damp_profile = jnp.maximum(nu_left, nu_right).astype(real_dtype)
+    boundary = str(getattr(grid, "boundary", "periodic")).lower()
+    use_twist_shift = boundary == "linked"
+    if use_twist_shift:
+        y0 = getattr(grid, "y0", None)
+        if y0 is None:
+            if grid.ky.size > 1:
+                y0 = float(1.0 / float(grid.ky[1] - grid.ky[0]))
+            else:
+                y0 = 1.0
+        theta_min = jnp.asarray(grid.z[0], dtype=real_dtype)
+        _, gds21_min, gds22_min = geom.metric_coeffs(theta_min)
+        twist_shift_geo_fac = float(2.0 * geom.s_hat * gds21_min / gds22_min)
+        jtwist = grid.jtwist if getattr(grid, "jtwist", None) is not None else int(
+            np.round(twist_shift_geo_fac)
+        )
+        if jtwist == 0:
+            jtwist = 1
+        iky = jnp.rint(grid.ky * float(y0)).astype(jnp.int32)
+        shift = jnp.asarray(jtwist, dtype=jnp.int32) * iky
+        kx_idx = jnp.arange(grid.kx.size, dtype=jnp.int32)[None, :]
+        kx_link_plus = kx_idx + shift[:, None]
+        kx_link_minus = kx_idx - shift[:, None]
+        kx_link_mask_plus = (kx_link_plus >= 0) & (kx_link_plus < grid.kx.size)
+        kx_link_mask_minus = (kx_link_minus >= 0) & (kx_link_minus < grid.kx.size)
+        kx_link_plus = jnp.clip(kx_link_plus, 0, grid.kx.size - 1)
+        kx_link_minus = jnp.clip(kx_link_minus, 0, grid.kx.size - 1)
+    else:
+        jtwist = 0
+        kx_idx = jnp.arange(grid.kx.size, dtype=jnp.int32)[None, :]
+        kx_link_plus = jnp.broadcast_to(kx_idx, (grid.ky.size, grid.kx.size))
+        kx_link_minus = kx_link_plus
+        kx_link_mask_plus = jnp.ones((grid.ky.size, grid.kx.size), dtype=bool)
+        kx_link_mask_minus = kx_link_mask_plus
     return LinearCache(
         Jl=Jl,
         b=b.astype(real_dtype),
@@ -457,6 +502,12 @@ def build_linear_cache(
         sqrt_p=sqrt_p,
         sqrt_m_ladder=sqrt_m_ladder,
         JlB=JlB.astype(real_dtype),
+        kx_link_plus=kx_link_plus,
+        kx_link_minus=kx_link_minus,
+        kx_link_mask_plus=kx_link_mask_plus,
+        kx_link_mask_minus=kx_link_mask_minus,
+        use_twist_shift=use_twist_shift,
+        jtwist=int(jtwist),
     )
 
 

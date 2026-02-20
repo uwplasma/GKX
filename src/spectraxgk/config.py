@@ -5,6 +5,22 @@ from typing import Dict
 
 
 @dataclass(frozen=True)
+class InitializationConfig:
+    """Initialization options for linear runs."""
+
+    init_field: str = "density"
+    init_amp: float = 1.0e-5
+    gaussian_init: bool = False
+    gaussian_width: float = 0.5
+    gaussian_envelope_constant: float = 1.0
+    gaussian_envelope_sine: float = 0.0
+    kpar_init: float = 0.0
+
+    def to_dict(self) -> Dict[str, float]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class GridConfig:
     """Spectral grid configuration in a flux-tube."""
 
@@ -13,6 +29,8 @@ class GridConfig:
     Nz: int = 64
     Lx: float = 62.8
     Ly: float = 62.8
+    boundary: str = "periodic"
+    jtwist: int | None = None
     z_min: float = -3.141592653589793
     z_max: float = 3.141592653589793
     y0: float | None = None
@@ -20,7 +38,7 @@ class GridConfig:
     nperiod: int | None = None
     zp: int | None = None
 
-    def to_dict(self) -> Dict[str, float]:
+    def to_dict(self) -> Dict[str, float | int | str | None]:
         return asdict(self)
 
 
@@ -32,17 +50,18 @@ class TimeConfig:
     dt: float = 0.1
     method: str = "rk2"
     sample_stride: int = 1
+    save_state: bool = False
     checkpoint: bool = False
     implicit_restart: int = 20
     implicit_preconditioner: str | None = None
     implicit_solve_method: str = "batched"
     use_diffrax: bool = True
-    diffrax_solver: str = "Heun"
+    diffrax_solver: str = "Dopri8"
     diffrax_adaptive: bool = False
     diffrax_rtol: float = 1.0e-5
     diffrax_atol: float = 1.0e-7
     diffrax_max_steps: int = 4096
-    progress_bar: bool = True
+    progress_bar: bool = False
 
     def to_dict(self) -> Dict[str, float]:
         return asdict(self)
@@ -86,13 +105,32 @@ class CycloneBaseCase:
         Nz=96,
         Lx=62.8,
         Ly=62.8,
+        boundary="linked",
         y0=20.0,
         ntheta=32,
         nperiod=2,
     )
-    time: TimeConfig = TimeConfig(t_max=8.0, dt=0.01, method="rk2")
+    time: TimeConfig = TimeConfig(
+        t_max=150.0,
+        dt=0.01,
+        method="rk4",
+        use_diffrax=True,
+        diffrax_solver="Dopri8",
+        diffrax_adaptive=True,
+        diffrax_rtol=1.0e-6,
+        diffrax_atol=1.0e-8,
+        diffrax_max_steps=200000,
+    )
     geometry: GeometryConfig = GeometryConfig(R0=2.77778)
     model: ModelConfig = ModelConfig()
+    init: InitializationConfig = InitializationConfig(
+        init_field="density",
+        init_amp=1.0e-10,
+        gaussian_init=True,
+        gaussian_width=0.5,
+        gaussian_envelope_constant=1.0,
+        gaussian_envelope_sine=0.0,
+    )
 
     def to_dict(self) -> Dict[str, Dict[str, float]]:
         return {
@@ -100,6 +138,7 @@ class CycloneBaseCase:
             "time": self.time.to_dict(),
             "geometry": self.geometry.to_dict(),
             "model": self.model.to_dict(),
+            "init": self.init.to_dict(),
         }
 
 
@@ -145,6 +184,7 @@ class ETGBaseCase:
     )
     geometry: GeometryConfig = GeometryConfig(R0=2.77778)
     model: ETGModelConfig = ETGModelConfig()
+    init: InitializationConfig = InitializationConfig()
 
     def to_dict(self) -> Dict[str, Dict[str, float]]:
         return {
@@ -152,6 +192,7 @@ class ETGBaseCase:
             "time": self.time.to_dict(),
             "geometry": self.geometry.to_dict(),
             "model": self.model.to_dict(),
+            "init": self.init.to_dict(),
         }
 
 
@@ -197,6 +238,7 @@ class KineticElectronBaseCase:
     )
     geometry: GeometryConfig = GeometryConfig(R0=2.77778)
     model: KineticElectronModelConfig = KineticElectronModelConfig()
+    init: InitializationConfig = InitializationConfig()
 
     def to_dict(self) -> Dict[str, Dict[str, float]]:
         return {
@@ -204,6 +246,7 @@ class KineticElectronBaseCase:
             "time": self.time.to_dict(),
             "geometry": self.geometry.to_dict(),
             "model": self.model.to_dict(),
+            "init": self.init.to_dict(),
         }
 
 
@@ -232,6 +275,7 @@ class KBMBaseCase:
     )
     geometry: GeometryConfig = GeometryConfig(R0=2.77778)
     model: KineticElectronModelConfig = KineticElectronModelConfig(beta=0.015)
+    init: InitializationConfig = InitializationConfig()
 
     def to_dict(self) -> Dict[str, Dict[str, float]]:
         return {
@@ -239,6 +283,7 @@ class KBMBaseCase:
             "time": self.time.to_dict(),
             "geometry": self.geometry.to_dict(),
             "model": self.model.to_dict(),
+            "init": self.init.to_dict(),
         }
 
 
@@ -284,6 +329,7 @@ class TEMBaseCase:
     )
     geometry: GeometryConfig = GeometryConfig(q=2.7, s_hat=0.5, epsilon=0.18, R0=1.0)
     model: TEMModelConfig = TEMModelConfig()
+    init: InitializationConfig = InitializationConfig()
 
     def to_dict(self) -> Dict[str, Dict[str, float]]:
         return {
@@ -291,4 +337,5 @@ class TEMBaseCase:
             "time": self.time.to_dict(),
             "geometry": self.geometry.to_dict(),
             "model": self.model.to_dict(),
+            "init": self.init.to_dict(),
         }
