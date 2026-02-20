@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import jax.numpy as jnp
 
-from spectraxgk.terms.operators import shift_axis, streaming_term
+from spectraxgk.terms.operators import grad_z_linked_fft, grad_z_periodic, shift_axis, streaming_term
 
 
 def streaming_contribution(
@@ -41,6 +41,65 @@ def streaming_contribution(
         linked_kz=linked_kz,
         use_twist_shift=use_twist_shift,
     )
+
+
+def streaming_contribution_gx(
+    G: jnp.ndarray,
+    *,
+    phi: jnp.ndarray,
+    apar: jnp.ndarray,
+    bpar: jnp.ndarray,
+    Jl: jnp.ndarray,
+    JlB: jnp.ndarray,
+    tz: jnp.ndarray,
+    vth: jnp.ndarray,
+    sqrt_p: jnp.ndarray,
+    sqrt_m: jnp.ndarray,
+    kpar_scale: jnp.ndarray,
+    weight: jnp.ndarray,
+    kz: jnp.ndarray,
+    dz: jnp.ndarray,
+    use_twist_shift: bool = False,
+    linked_indices: tuple[jnp.ndarray, ...] | None = None,
+    linked_kz: tuple[jnp.ndarray, ...] | None = None,
+) -> jnp.ndarray:
+    """GX-style streaming: ladder on g, add field terms, then apply parallel derivative."""
+
+    axis_m = -4
+    G_p1 = shift_axis(G, 1, axis=axis_m)
+    G_m1 = shift_axis(G, -1, axis=axis_m)
+    vth_s = vth[:, None, None, None, None, None]
+    rhs = -vth_s * (sqrt_p * G_p1 + sqrt_m * G_m1)
+
+    tz_arr = tz[:, None, None, None, None, None]
+    zt = jnp.where(tz_arr == 0.0, 0.0, 1.0 / tz_arr)
+    zt5 = zt[:, 0, 0, 0, 0, 0][:, None, None, None, None]
+    vth5 = vth[:, None, None, None, None]
+    phi_s = phi[None, None, ...]
+    apar_s = apar[None, None, ...]
+    bpar_s = bpar[None, None, ...]
+
+    # field terms (pre-derivative)
+    Nm = rhs.shape[2]
+    if Nm > 1:
+        rhs = rhs.at[:, :, 1, ...].add(-zt5 * vth5 * Jl * phi_s)
+        rhs = rhs.at[:, :, 1, ...].add(-vth5 * JlB * bpar_s)
+    rhs = rhs.at[:, :, 0, ...].add(zt5 * (vth5 * vth5) * Jl * apar_s)
+    if Nm > 2:
+        rhs = rhs.at[:, :, 2, ...].add(
+            jnp.sqrt(2.0) * zt5 * (vth5 * vth5) * Jl * apar_s
+        )
+
+    rhs = kpar_scale * rhs
+
+    if use_twist_shift:
+        if linked_indices is None or linked_kz is None:
+            raise ValueError("linked_indices and linked_kz must be provided for linked streaming")
+        dG = grad_z_linked_fft(rhs, dz=dz, linked_indices=linked_indices, linked_kz=linked_kz)
+    else:
+        dG = grad_z_periodic(rhs, kz=kz)
+
+    return weight * dG
 
 
 def mirror_contribution(

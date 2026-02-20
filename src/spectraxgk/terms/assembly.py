@@ -21,7 +21,7 @@ from spectraxgk.terms.linear_terms import (
     end_damping_contribution,
     hypercollisions_contribution,
     mirror_contribution,
-    streaming_contribution,
+    streaming_contribution_gx,
 )
 
 
@@ -105,8 +105,14 @@ def assemble_rhs_cached(
     bpar = fields.bpar if fields.bpar is not None else jnp.zeros_like(fields.phi)
     H = build_H(G, Jl, fields.phi, tz, apar=apar, vth=vth, bpar=bpar, JlB=JlB)
 
-    dG = streaming_contribution(
-        H,
+    dG = streaming_contribution_gx(
+        G,
+        phi=fields.phi,
+        apar=apar,
+        bpar=bpar,
+        Jl=Jl,
+        JlB=JlB,
+        tz=tz,
         kz=cache.kz,
         dz=cache.dz,
         vth=vth,
@@ -114,10 +120,6 @@ def assemble_rhs_cached(
         sqrt_m=cache.sqrt_m_ladder,
         kpar_scale=kpar_scale,
         weight=w_stream,
-        kx_link_plus=cache.kx_link_plus,
-        kx_link_minus=cache.kx_link_minus,
-        kx_mask_plus=cache.kx_link_mask_plus,
-        kx_mask_minus=cache.kx_link_mask_minus,
         linked_indices=cache.linked_indices,
         linked_kz=cache.linked_kz,
         use_twist_shift=cache.use_twist_shift,
