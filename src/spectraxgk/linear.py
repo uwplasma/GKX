@@ -195,6 +195,119 @@ def _resolve_implicit_preconditioner(preconditioner: PreconditionerSpec) -> Prec
     return preconditioner
 
 
+def _signed_to_index(idx: int, n: int) -> int:
+    half = (n + 1) // 2
+    if 0 <= idx < half:
+        return idx
+    if half <= idx + n < n:
+        return idx + n
+    return -1
+
+
+def _build_linked_fft_maps(
+    kx: np.ndarray,
+    ky: np.ndarray,
+    y0: float,
+    jtwist: int,
+    dz: float,
+    nz: int,
+    real_dtype: jnp.dtype,
+) -> tuple[tuple[jnp.ndarray, ...], tuple[jnp.ndarray, ...]]:
+    """Construct GX-style linked FFT index maps for the parallel derivative."""
+
+    ny = ky.size
+    nx = kx.size
+    naky = ny
+    if nx < 4:
+        nakx = nx
+    else:
+        nakx = 1 + 2 * ((nx - 1) // 3)
+    iky = np.rint(ky * y0).astype(int)
+    if nakx <= 0 or naky <= 0:
+        return (), ()
+
+    if nx < 4:
+        kx_outh = np.asarray(kx[:nakx], dtype=float)
+    else:
+        kx_outh = np.zeros(nakx, dtype=float)
+        mid = nakx // 2
+        kx_outh[mid] = 0.0
+        for i in range(1, mid + 1):
+            kx_outh[mid + i] = kx[i]
+            kx_outh[mid - i] = kx[nx - i]
+
+    kx_map = np.zeros(nakx, dtype=int)
+    for i in range(nakx):
+        kx_map[i] = int(np.argmin(np.abs(kx - kx_outh[i])))
+    idx_left = -np.ones((naky, nakx), dtype=int)
+    idx_right = -np.ones((naky, nakx), dtype=int)
+
+    for idy in range(naky):
+        shift = int(iky[idy]) * int(jtwist)
+        for idx in range(nakx):
+            idx0 = idx if idx < (nakx + 1) // 2 else idx - nakx
+            if iky[idy] == 0:
+                idx_l = idx0
+                idx_r = idx0
+            else:
+                idx_l = idx0 + shift
+                idx_r = idx0 - shift
+            idx_left[idy, idx] = _signed_to_index(idx_l, nakx)
+            idx_right[idy, idx] = _signed_to_index(idx_r, nakx)
+
+    links_l = np.zeros((naky, nakx), dtype=int)
+    links_r = np.zeros((naky, nakx), dtype=int)
+    for idy in range(naky):
+        for idx in range(nakx):
+            idx_star = idx
+            while idx_star != idx_left[idy, idx_star] and idx_left[idy, idx_star] >= 0:
+                links_l[idy, idx] += 1
+                idx_star = idx_left[idy, idx_star]
+            idx_star = idx
+            while idx_star != idx_right[idy, idx_star] and idx_right[idy, idx_star] >= 0:
+                links_r[idy, idx] += 1
+                idx_star = idx_right[idy, idx_star]
+
+    nlinks_map = 1 + links_l + links_r
+    chains_by_links: dict[int, list[tuple[int, list[int]]]] = {}
+    for idy in range(naky):
+        for idx in range(nakx):
+            if links_l[idy, idx] != 0:
+                continue
+            nlinks = int(nlinks_map[idy, idx])
+            if nlinks <= 0:
+                continue
+            chain: list[int] = []
+            idx_star = idx
+            valid = True
+            for p in range(nlinks):
+                chain.append(idx_star)
+                if p < nlinks - 1:
+                    idx_star = idx_right[idy, idx_star]
+                    if idx_star < 0:
+                        valid = False
+                        break
+            if valid:
+                chains_by_links.setdefault(nlinks, []).append((idy, chain))
+
+    linked_indices: list[jnp.ndarray] = []
+    linked_kz: list[jnp.ndarray] = []
+    for nlinks in sorted(chains_by_links):
+        chains = chains_by_links[nlinks]
+        nchains = len(chains)
+        link_kx = np.zeros((nchains, nlinks), dtype=np.int32)
+        link_ky = np.zeros((nchains, nlinks), dtype=np.int32)
+        for n, (idy, chain) in enumerate(chains):
+            link_kx[n, :] = np.asarray(chain, dtype=np.int32)
+            link_ky[n, :] = int(idy)
+        idx_flat = link_ky * nx + kx_map[link_kx]
+        linked_indices.append(jnp.asarray(idx_flat, dtype=jnp.int32))
+        kz_linked = 2.0 * np.pi * np.fft.fftfreq(nlinks * nz, d=dz)
+        linked_kz.append(jnp.asarray(kz_linked, dtype=real_dtype))
+
+    return tuple(linked_indices), tuple(linked_kz)
+
+
 def grad_z_periodic(f: jnp.ndarray, dz: float | jnp.ndarray) -> jnp.ndarray:
     """Spectral periodic derivative along the last axis."""
 
@@ -314,6 +427,8 @@ class LinearCache:
     kx_link_minus: jnp.ndarray
     kx_link_mask_plus: jnp.ndarray
     kx_link_mask_minus: jnp.ndarray
+    linked_indices: tuple[jnp.ndarray, ...] = ()
+    linked_kz: tuple[jnp.ndarray, ...] = ()
     use_twist_shift: bool = False
     jtwist: int = 0
 
@@ -354,13 +469,28 @@ class LinearCache:
             self.kx_link_mask_plus,
             self.kx_link_mask_minus,
         )
-        aux_data = (self.use_twist_shift, self.jtwist)
+        linked_idx = self.linked_indices or ()
+        linked_kz = self.linked_kz or ()
+        children = children + tuple(linked_idx) + tuple(linked_kz)
+        aux_data = (self.use_twist_shift, self.jtwist, len(linked_idx), len(linked_kz))
         return children, aux_data
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
-        use_twist_shift, jtwist = aux_data
-        return cls(*children, use_twist_shift=use_twist_shift, jtwist=jtwist)
+        use_twist_shift, jtwist, n_linked_idx, n_linked_kz = aux_data
+        base_count = 34
+        base_children = children[:base_count]
+        linked_idx = tuple(children[base_count : base_count + n_linked_idx])
+        linked_kz = tuple(
+            children[base_count + n_linked_idx : base_count + n_linked_idx + n_linked_kz]
+        )
+        return cls(
+            *base_children,
+            linked_indices=linked_idx,
+            linked_kz=linked_kz,
+            use_twist_shift=use_twist_shift,
+            jtwist=jtwist,
+        )
 
 
 def build_linear_cache(
@@ -389,8 +519,6 @@ def build_linear_cache(
     boundary = str(getattr(grid, "boundary", "periodic")).lower()
     use_twist_shift = boundary == "linked"
     use_ntft = bool(getattr(grid, "non_twist", False))
-    if use_twist_shift and grid.kx.size <= 1:
-        use_twist_shift = False
     y0 = getattr(grid, "y0", None)
     if y0 is None:
         if grid.ky.size > 1:
@@ -537,6 +665,18 @@ def build_linear_cache(
         kx_link_minus = kx_link_plus
         kx_link_mask_plus = jnp.ones((grid.ky.size, grid.kx.size), dtype=bool)
         kx_link_mask_minus = kx_link_mask_plus
+    linked_indices: tuple[jnp.ndarray, ...] = ()
+    linked_kz: tuple[jnp.ndarray, ...] = ()
+    if use_twist_shift:
+        linked_indices, linked_kz = _build_linked_fft_maps(
+            np.asarray(grid.kx),
+            np.asarray(grid.ky),
+            float(y0),
+            int(jtwist),
+            float(dz),
+            int(grid.z.size),
+            real_dtype,
+        )
     return LinearCache(
         Jl=Jl,
         b=b.astype(real_dtype),
@@ -572,6 +712,8 @@ def build_linear_cache(
         kx_link_minus=kx_link_minus,
         kx_link_mask_plus=kx_link_mask_plus,
         kx_link_mask_minus=kx_link_mask_minus,
+        linked_indices=linked_indices,
+        linked_kz=linked_kz,
         use_twist_shift=use_twist_shift,
         jtwist=int(jtwist),
     )

@@ -45,7 +45,7 @@ def _shift_kx_linked(
     return jnp.moveaxis(shifted, 0, -2)
 
 
-def grad_z_linked(
+def _grad_z_linked_fd(
     f: jnp.ndarray,
     dz: float | jnp.ndarray,
     kx_link_plus: jnp.ndarray,
@@ -64,6 +64,43 @@ def grad_z_linked(
     f_roll_p1 = f_roll_p1.at[..., -1].set(_shift_kx_linked(f_z0, kx_link_plus, kx_mask_plus))
     f_roll_m1 = f_roll_m1.at[..., 0].set(_shift_kx_linked(f_zm1, kx_link_minus, kx_mask_minus))
     return (f_roll_p1 - f_roll_m1) / (2.0 * dz_val)
+
+
+def grad_z_linked_fft(
+    f: jnp.ndarray,
+    dz: float | jnp.ndarray,
+    linked_indices: tuple[jnp.ndarray, ...],
+    linked_kz: tuple[jnp.ndarray, ...],
+) -> jnp.ndarray:
+    """Spectral z-derivative using GX-style linked FFT chains."""
+
+    _check_positive(dz, "dz")
+    if len(linked_indices) != len(linked_kz):
+        raise ValueError("linked_indices and linked_kz must have the same length")
+    if not linked_indices:
+        raise ValueError("linked_indices cannot be empty for linked FFT derivative")
+
+    Ny = f.shape[-3]
+    Nx = f.shape[-2]
+    Nz = f.shape[-1]
+    lead_shape = f.shape[:-3]
+    f_flat = f.reshape(*lead_shape, Ny * Nx, Nz)
+    df_flat = jnp.zeros_like(f_flat)
+
+    for idx_map, kz_link in zip(linked_indices, linked_kz):
+        if idx_map.ndim != 2:
+            raise ValueError("linked index maps must have shape (nChains, nLinks)")
+        nChains, nLinks = idx_map.shape
+        idx_flat = idx_map.reshape(-1)
+        f_link = jnp.take(f_flat, idx_flat, axis=-2)
+        f_link = f_link.reshape(*lead_shape, nChains, nLinks * Nz)
+        f_hat = jnp.fft.fft(f_link, axis=-1)
+        df_hat = (1j * kz_link) * f_hat
+        df_link = jnp.fft.ifft(df_hat, axis=-1)
+        df_link = df_link.reshape(*lead_shape, nChains * nLinks, Nz)
+        df_flat = df_flat.at[..., idx_flat, :].set(df_link)
+
+    return df_flat.reshape(*lead_shape, Ny, Nx, Nz)
 
 
 def shift_axis(arr: jnp.ndarray, offset: int, axis: int) -> jnp.ndarray:
@@ -154,24 +191,33 @@ def streaming_term(
     kx_link_minus: jnp.ndarray | None = None,
     kx_mask_plus: jnp.ndarray | None = None,
     kx_mask_minus: jnp.ndarray | None = None,
+    linked_indices: tuple[jnp.ndarray, ...] | None = None,
+    linked_kz: tuple[jnp.ndarray, ...] | None = None,
     use_twist_shift: bool = False,
 ) -> jnp.ndarray:
     """Streaming term using Hermite ladder and real-space z derivative."""
 
     _check_positive(vth, "vth")
     if use_twist_shift:
-        if dz is None or kx_link_plus is None or kx_link_minus is None:
-            raise ValueError("dz and kx_link arrays must be provided for twist-shift boundaries")
-        if kx_mask_plus is None or kx_mask_minus is None:
-            raise ValueError("kx_link masks must be provided for twist-shift boundaries")
-        dH_dz = grad_z_linked(
-            H,
-            dz=dz,
-            kx_link_plus=kx_link_plus,
-            kx_link_minus=kx_link_minus,
-            kx_mask_plus=kx_mask_plus,
-            kx_mask_minus=kx_mask_minus,
-        )
+        if dz is None:
+            raise ValueError("dz must be provided for twist-shift boundaries")
+        if linked_indices is not None and linked_kz is not None:
+            dH_dz = grad_z_linked_fft(
+                H, dz=dz, linked_indices=linked_indices, linked_kz=linked_kz
+            )
+        else:
+            if kx_link_plus is None or kx_link_minus is None:
+                raise ValueError("kx_link arrays must be provided for twist-shift boundaries")
+            if kx_mask_plus is None or kx_mask_minus is None:
+                raise ValueError("kx_link masks must be provided for twist-shift boundaries")
+            dH_dz = _grad_z_linked_fd(
+                H,
+                dz=dz,
+                kx_link_plus=kx_link_plus,
+                kx_link_minus=kx_link_minus,
+                kx_mask_plus=kx_mask_plus,
+                kx_mask_minus=kx_mask_minus,
+            )
     else:
         dH_dz = grad_z_periodic(H, kz=kz)
     axis_m = -4
