@@ -495,7 +495,10 @@ def run_cyclone_linear(
         )
         params = _apply_gx_hypercollisions(params, nhermite=Nm)
     if terms is None:
-        terms = LinearTerms()
+        if getattr(cfg.model, "adiabatic_ions", False):
+            terms = LinearTerms(bpar=0.0)
+        else:
+            terms = LinearTerms()
 
     if solver.lower() == "krylov":
         ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
@@ -721,7 +724,10 @@ def run_cyclone_scan(
         )
         params = _apply_gx_hypercollisions(params, nhermite=Nm)
     if terms is None:
-        terms = LinearTerms()
+        if getattr(cfg.model, "adiabatic_ions", False):
+            terms = LinearTerms(bpar=0.0)
+        else:
+            terms = LinearTerms()
     gammas = []
     omegas = []
     ky_out = []
@@ -1036,7 +1042,7 @@ def run_etg_linear(
     mode_method: str = "project",
     terms: LinearTerms | None = None,
     sample_stride: int | None = None,
-    fit_signal: str = "phi",
+    fit_signal: str = "density",
 ) -> LinearRunResult:
     """Run an ETG linear benchmark and extract growth rate."""
 
@@ -1067,7 +1073,10 @@ def run_etg_linear(
                 nhermite=Nm,
             )
     if terms is None:
-        terms = LinearTerms()
+        if getattr(cfg.model, "adiabatic_ions", False):
+            terms = LinearTerms(bpar=0.0, hypercollisions=0.0)
+        else:
+            terms = LinearTerms(hypercollisions=0.0)
 
     ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
     grid = select_ky_grid(grid_full, ky_index)
@@ -1324,7 +1333,10 @@ def run_etg_scan(
                 nhermite=Nm,
             )
     if terms is None:
-        terms = LinearTerms()
+        if getattr(cfg.model, "adiabatic_ions", False):
+            terms = LinearTerms(bpar=0.0, hypercollisions=0.0)
+        else:
+            terms = LinearTerms(hypercollisions=0.0)
     gammas = []
     omegas = []
     ky_out = []
