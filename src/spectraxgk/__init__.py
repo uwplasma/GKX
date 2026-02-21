@@ -60,11 +60,18 @@ from spectraxgk.benchmarks import (
     run_cyclone_linear,
     run_cyclone_scan,
 )
+from spectraxgk.benchmarking import (
+    ScanAndModeResult,
+    normalize_eigenfunction,
+    run_linear_scan,
+    run_scan_and_mode,
+)
 from spectraxgk.plotting import (
     cyclone_comparison_figure,
     cyclone_reference_figure,
     etg_trend_figure,
     growth_rate_heatmap,
+    growth_fit_figure,
     linear_validation_figure,
     LinearValidationPanel,
     scan_comparison_figure,
@@ -135,6 +142,10 @@ __all__ = [
     "run_kbm_beta_scan",
     "run_cyclone_linear",
     "run_cyclone_scan",
+    "ScanAndModeResult",
+    "normalize_eigenfunction",
+    "run_linear_scan",
+    "run_scan_and_mode",
     "compare_cyclone_to_reference",
     "CycloneRunResult",
     "ModeSelection",
@@ -146,6 +157,7 @@ __all__ = [
     "cyclone_comparison_figure",
     "etg_trend_figure",
     "growth_rate_heatmap",
+    "growth_fit_figure",
     "linear_validation_figure",
     "LinearValidationPanel",
     "scan_comparison_figure",

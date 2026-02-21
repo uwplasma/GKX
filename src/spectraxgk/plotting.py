@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from spectraxgk.benchmarks import CycloneReference, CycloneScanResult
+from spectraxgk.analysis import fit_growth_rate
 
 
 def set_plot_style() -> None:
@@ -233,3 +234,40 @@ def growth_rate_heatmap(
     fig.colorbar(im, ax=ax, label=r"$\gamma a / v_{ti}$")
     fig.tight_layout()
     return fig, ax
+
+
+def growth_fit_figure(
+    t: np.ndarray,
+    signal: np.ndarray,
+    *,
+    tmin: float | None = None,
+    tmax: float | None = None,
+    title: str = "Growth-fit window",
+) -> Tuple[plt.Figure, np.ndarray]:
+    """Plot |signal|^2 and log|signal|^2 with an optional fit window."""
+
+    set_plot_style()
+    fig, axes = plt.subplots(2, 1, sharex=True, figsize=(5.0, 4.5))
+    ax0, ax1 = axes
+    energy = np.abs(signal) ** 2
+    tiny = np.finfo(float).tiny
+    log_energy = np.log(np.maximum(energy, tiny))
+    ax0.plot(t, energy, label=r"$|s|^2$")
+    ax0.set_ylabel("energy")
+    ax1.plot(t, log_energy, label=r"$\log|s|^2$")
+    ax1.set_ylabel("log energy")
+    ax1.set_xlabel("t")
+    ax0.set_title(title)
+
+    if tmin is not None and tmax is not None and tmax > tmin:
+        ax0.axvspan(tmin, tmax, color="orange", alpha=0.2, label="fit window")
+        ax1.axvspan(tmin, tmax, color="orange", alpha=0.2)
+        gamma, _omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
+        idx = int(np.searchsorted(t, tmin))
+        log_ref = log_energy[idx] if idx < log_energy.size else log_energy[-1]
+        fit_line = 2.0 * gamma * (t - tmin) + log_ref
+        ax1.plot(t, fit_line, color="red", linestyle="--", label="fit line")
+    ax0.legend(loc="best", fontsize=9)
+    ax1.legend(loc="best", fontsize=9)
+    fig.tight_layout()
+    return fig, axes

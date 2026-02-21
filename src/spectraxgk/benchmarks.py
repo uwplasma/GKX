@@ -15,6 +15,7 @@ from spectraxgk.analysis import (
     extract_mode_time_series,
     fit_growth_rate,
     fit_growth_rate_auto,
+    gx_growth_rate_from_phi,
     select_ky_index,
 )
 from spectraxgk.config import (
@@ -50,8 +51,8 @@ CYCLONE_OMEGA_D_SCALE = 1.0
 CYCLONE_OMEGA_STAR_SCALE = 1.0
 CYCLONE_RHO_STAR = 1.0
 
-ETG_OMEGA_D_SCALE = 1.0
-ETG_OMEGA_STAR_SCALE = 1.0
+ETG_OMEGA_D_SCALE = 0.08
+ETG_OMEGA_STAR_SCALE = 1.5
 ETG_RHO_STAR = 1.0
 
 Kinetic_OMEGA_D_SCALE = 1.0
@@ -525,7 +526,10 @@ def run_cyclone_linear(
             terms=terms,
             krylov_dim=krylov_cfg.krylov_dim,
             restarts=krylov_cfg.restarts,
+            omega_min_factor=krylov_cfg.omega_min_factor,
+            omega_target_factor=krylov_cfg.omega_target_factor,
             omega_cap_factor=krylov_cfg.omega_cap_factor,
+            omega_sign=krylov_cfg.omega_sign,
             method=krylov_cfg.method,
             power_iters=krylov_cfg.power_iters,
             power_dt=krylov_cfg.power_dt,
@@ -555,6 +559,8 @@ def run_cyclone_linear(
         t = np.array([0.0])
         gamma = float(np.real(eig))
         omega = float(-np.imag(eig))
+        if krylov_cfg.omega_sign != 0:
+            omega = float(np.sign(krylov_cfg.omega_sign)) * abs(omega)
     else:
         ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
         grid = select_ky_grid(grid_full, ky_index)
@@ -860,7 +866,10 @@ def run_cyclone_scan(
                     terms=terms,
                     krylov_dim=cfg_use.krylov_dim,
                     restarts=cfg_use.restarts,
-                    omega_cap_factor=cfg_use.omega_cap_factor,
+                    omega_min_factor=cfg_use.omega_min_factor,
+            omega_target_factor=cfg_use.omega_target_factor,
+            omega_cap_factor=cfg_use.omega_cap_factor,
+                    omega_sign=cfg_use.omega_sign,
                     method=cfg_use.method,
                     power_iters=cfg_use.power_iters,
                     power_dt=cfg_use.power_dt,
@@ -1048,6 +1057,8 @@ def run_etg_linear(
     fit_signal: str = "density",
     streaming_fit: bool = False,
     streaming_amp_floor: float = 1.0e-30,
+    gx_growth: bool = False,
+    gx_navg_fraction: float = 0.5,
 ) -> LinearRunResult:
     """Run an ETG linear benchmark and extract growth rate."""
 
@@ -1113,7 +1124,10 @@ def run_etg_linear(
             terms=terms,
             krylov_dim=krylov_cfg.krylov_dim,
             restarts=krylov_cfg.restarts,
+            omega_min_factor=krylov_cfg.omega_min_factor,
+            omega_target_factor=krylov_cfg.omega_target_factor,
             omega_cap_factor=krylov_cfg.omega_cap_factor,
+            omega_sign=krylov_cfg.omega_sign,
             method=krylov_cfg.method,
             power_iters=krylov_cfg.power_iters,
             power_dt=krylov_cfg.power_dt,
@@ -1143,6 +1157,8 @@ def run_etg_linear(
         t = np.array([0.0])
         gamma = float(np.real(eig))
         omega = float(-np.imag(eig))
+        if krylov_cfg.omega_sign != 0:
+            omega = float(np.sign(krylov_cfg.omega_sign)) * abs(omega)
     else:
         time_cfg_use = time_cfg
         if time_cfg_use is None and streaming_fit and cfg.time.use_diffrax:
@@ -1311,6 +1327,22 @@ def run_etg_linear(
         phi_t_np = np.asarray(phi_t)
         t = np.arange(phi_t_np.shape[0]) * dt * stride
         density_np = None if density_t is None else np.asarray(density_t)
+        if gx_growth and fit_signal == "phi":
+            gamma, omega, _gamma_t, _omega_t, _t_mid = gx_growth_rate_from_phi(
+                phi_t_np,
+                t,
+                sel,
+                navg_fraction=gx_navg_fraction,
+                mode_method=mode_method,
+            )
+            return LinearRunResult(
+                t=t,
+                phi_t=phi_t_np,
+                gamma=gamma,
+                omega=omega,
+                ky=float(grid.ky[sel.ky_index]),
+                selection=sel,
+            )
         signal = _select_fit_signal(
             phi_t_np,
             density_np,
@@ -1403,6 +1435,8 @@ def run_etg_scan(
     ky_batch: int = 1,
     streaming_fit: bool = True,
     streaming_amp_floor: float = 1.0e-30,
+    gx_growth: bool = False,
+    gx_navg_fraction: float = 0.5,
 ) -> LinearScanResult:
     """Run an ETG linear benchmark for a list of ky values.
 
@@ -1574,7 +1608,10 @@ def run_etg_scan(
                 terms=terms,
                 krylov_dim=cfg_use.krylov_dim,
                 restarts=cfg_use.restarts,
-                omega_cap_factor=cfg_use.omega_cap_factor,
+                omega_min_factor=cfg_use.omega_min_factor,
+            omega_target_factor=cfg_use.omega_target_factor,
+            omega_cap_factor=cfg_use.omega_cap_factor,
+                omega_sign=cfg_use.omega_sign,
                 method=cfg_use.method,
                 power_iters=cfg_use.power_iters,
                 power_dt=cfg_use.power_dt,
@@ -1588,6 +1625,8 @@ def run_etg_scan(
             )
             gamma = float(np.real(eig))
             omega = float(-np.imag(eig))
+            if cfg_use.omega_sign != 0:
+                omega = float(np.sign(cfg_use.omega_sign)) * abs(omega)
             gammas.append(gamma)
             omegas.append(omega)
             ky_out.append(float(ky_slice[0]))
@@ -1716,7 +1755,17 @@ def run_etg_scan(
                     fit_signal=fit_signal,
                     mode_method=mode_method,
                 )
-            gamma, omega = _fit_signal(signal, batch_start + local_idx, dt_i, stride)
+            if gx_growth and fit_signal == "phi":
+                sel_local = ModeSelection(ky_index=local_idx, kx_index=0, z_index=_midplane_index(grid))
+                gamma, omega, _gamma_t, _omega_t, _t_mid = gx_growth_rate_from_phi(
+                    phi_t_np,
+                    t,
+                    sel_local,
+                    navg_fraction=gx_navg_fraction,
+                    mode_method=mode_method,
+                )
+            else:
+                gamma, omega = _fit_signal(signal, batch_start + local_idx, dt_i, stride)
             gammas.append(gamma)
             omegas.append(omega)
             ky_out.append(float(ky_val))
@@ -1802,7 +1851,10 @@ def run_kinetic_linear(
             terms=terms,
             krylov_dim=krylov_cfg.krylov_dim,
             restarts=krylov_cfg.restarts,
+            omega_min_factor=krylov_cfg.omega_min_factor,
+            omega_target_factor=krylov_cfg.omega_target_factor,
             omega_cap_factor=krylov_cfg.omega_cap_factor,
+            omega_sign=krylov_cfg.omega_sign,
             method=krylov_cfg.method,
             power_iters=krylov_cfg.power_iters,
             power_dt=krylov_cfg.power_dt,
@@ -2140,7 +2192,10 @@ def run_kinetic_scan(
                 terms=terms,
                 krylov_dim=cfg_use.krylov_dim,
                 restarts=cfg_use.restarts,
-                omega_cap_factor=cfg_use.omega_cap_factor,
+                omega_min_factor=cfg_use.omega_min_factor,
+            omega_target_factor=cfg_use.omega_target_factor,
+            omega_cap_factor=cfg_use.omega_cap_factor,
+                omega_sign=cfg_use.omega_sign,
                 method=cfg_use.method,
                 power_iters=cfg_use.power_iters,
                 power_dt=cfg_use.power_dt,
@@ -2367,7 +2422,10 @@ def run_tem_linear(
             terms=terms,
             krylov_dim=krylov_cfg.krylov_dim,
             restarts=krylov_cfg.restarts,
+            omega_min_factor=krylov_cfg.omega_min_factor,
+            omega_target_factor=krylov_cfg.omega_target_factor,
             omega_cap_factor=krylov_cfg.omega_cap_factor,
+            omega_sign=krylov_cfg.omega_sign,
             method=krylov_cfg.method,
             power_iters=krylov_cfg.power_iters,
             power_dt=krylov_cfg.power_dt,
@@ -2623,7 +2681,10 @@ def run_tem_scan(
                 terms=terms,
                 krylov_dim=cfg_use.krylov_dim,
                 restarts=cfg_use.restarts,
-                omega_cap_factor=cfg_use.omega_cap_factor,
+                omega_min_factor=cfg_use.omega_min_factor,
+            omega_target_factor=cfg_use.omega_target_factor,
+            omega_cap_factor=cfg_use.omega_cap_factor,
+                omega_sign=cfg_use.omega_sign,
                 method=cfg_use.method,
                 power_iters=cfg_use.power_iters,
                 power_dt=cfg_use.power_dt,
@@ -2850,7 +2911,10 @@ def run_kbm_beta_scan(
                 terms=terms,
                 krylov_dim=krylov_cfg.krylov_dim,
                 restarts=krylov_cfg.restarts,
-                omega_cap_factor=krylov_cfg.omega_cap_factor,
+                omega_min_factor=krylov_cfg.omega_min_factor,
+            omega_target_factor=krylov_cfg.omega_target_factor,
+            omega_cap_factor=krylov_cfg.omega_cap_factor,
+                omega_sign=krylov_cfg.omega_sign,
                 method=krylov_cfg.method,
                 power_iters=krylov_cfg.power_iters,
                 power_dt=krylov_cfg.power_dt,
