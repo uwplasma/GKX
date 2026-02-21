@@ -28,7 +28,10 @@ from spectraxgk.config import (
 )
 from spectraxgk.geometry import SAlphaGeometry
 from spectraxgk.grids import SpectralGrid, build_spectral_grid, select_ky_grid
-from spectraxgk.diffrax_integrators import integrate_linear_diffrax_streaming
+from spectraxgk.diffrax_integrators import (
+    integrate_linear_diffrax,
+    integrate_linear_diffrax_streaming,
+)
 from spectraxgk.linear import (
     LinearParams,
     LinearTerms,
@@ -908,7 +911,7 @@ def run_cyclone_scan(
                 method=time_cfg_i.diffrax_solver,
                 cache=cache,
                 terms=terms,
-                adaptive=time_cfg_i.diffrax_adaptive,
+                adaptive=False,
                 rtol=time_cfg_i.diffrax_rtol,
                 atol=time_cfg_i.diffrax_atol,
                 max_steps=time_cfg_i.diffrax_max_steps,
@@ -1043,6 +1046,8 @@ def run_etg_linear(
     terms: LinearTerms | None = None,
     sample_stride: int | None = None,
     fit_signal: str = "density",
+    streaming_fit: bool = False,
+    streaming_amp_floor: float = 1.0e-30,
 ) -> LinearRunResult:
     """Run an ETG linear benchmark and extract growth rate."""
 
@@ -1139,29 +1144,127 @@ def run_etg_linear(
         gamma = float(np.real(eig))
         omega = float(-np.imag(eig))
     else:
-        if time_cfg is not None:
-            time_cfg_use = time_cfg
+        time_cfg_use = time_cfg
+        if time_cfg_use is None and streaming_fit and cfg.time.use_diffrax:
+            max_steps = max(int(cfg.time.diffrax_max_steps), int(steps))
+            time_cfg_use = replace(
+                cfg.time,
+                dt=dt,
+                t_max=dt * steps,
+                diffrax_max_steps=max_steps,
+            )
             if sample_stride is not None:
-                time_cfg_use = replace(time_cfg, sample_stride=sample_stride)
-            dt = float(time_cfg_use.dt)
-            steps = int(round(time_cfg_use.t_max / time_cfg_use.dt))
+                time_cfg_use = replace(time_cfg_use, sample_stride=sample_stride)
+        if time_cfg_use is not None:
+            if sample_stride is not None:
+                time_cfg_use = replace(time_cfg_use, sample_stride=sample_stride)
+            if time_cfg is not None:
+                dt = float(time_cfg_use.dt)
+                steps = int(round(time_cfg_use.t_max / time_cfg_use.dt))
             cache = build_linear_cache(grid, geom, params, Nl, Nm)
             if fit_signal == "density":
-                _diag = integrate_linear_diagnostics(
-                    G0_jax,
-                    grid,
-                    geom,
-                    params,
-                    dt=dt,
-                    steps=steps,
-                    method=time_cfg_use.method,
-                    cache=cache,
-                    terms=terms,
-                    sample_stride=time_cfg_use.sample_stride,
-                    species_index=electron_index,
-                )
-                phi_t = _diag[1]
-                density_t = _diag[2] if len(_diag) > 2 else None
+                if streaming_fit and time_cfg_use.use_diffrax:
+                    t_total = float(dt * steps)
+                    tmin_i, tmax_i = _resolve_streaming_window(
+                        t_total, tmin, tmax, start_fraction, window_fraction, 1.0
+                    )
+                    G_last, gamma_vals, omega_vals = integrate_linear_diffrax_streaming(
+                        G0_jax,
+                        grid,
+                        geom,
+                        params,
+                        dt=dt,
+                        steps=steps,
+                        method=time_cfg_use.diffrax_solver,
+                        cache=cache,
+                        terms=terms,
+                        adaptive=False,
+                        rtol=time_cfg_use.diffrax_rtol,
+                        atol=time_cfg_use.diffrax_atol,
+                        max_steps=time_cfg_use.diffrax_max_steps,
+                        progress_bar=time_cfg_use.progress_bar,
+                        checkpoint=time_cfg_use.checkpoint,
+                        tmin=tmin_i,
+                        tmax=tmax_i,
+                        fit_signal=fit_signal,
+                        mode_ky_indices=np.array([0], dtype=int),
+                        mode_kx_index=0,
+                        mode_z_index=_midplane_index(grid),
+                        mode_method=mode_method,
+                        amp_floor=streaming_amp_floor,
+                        density_species_index=electron_index,
+                        return_state=True,
+                    )
+                    gamma = float(np.asarray(gamma_vals)[0])
+                    omega = float(np.asarray(omega_vals)[0])
+                    if G_last is not None and G_last.ndim == 7:
+                        G_last = G_last[0]
+                    term_cfg = TermConfig(
+                        streaming=terms.streaming,
+                        mirror=terms.mirror,
+                        curvature=terms.curvature,
+                        gradb=terms.gradb,
+                        diamagnetic=terms.diamagnetic,
+                        collisions=terms.collisions,
+                        hypercollisions=terms.hypercollisions,
+                        end_damping=terms.end_damping,
+                        apar=terms.apar,
+                        bpar=terms.bpar,
+                        nonlinear=0.0,
+                    )
+                    phi_last = compute_fields_cached(G_last, cache, params, terms=term_cfg).phi
+                    phi_t = jnp.asarray(phi_last)[None, ...]
+                    density_t = None
+                    stride = time_cfg_use.sample_stride
+                    phi_t_np = np.asarray(phi_t)
+                    t = np.array([tmax_i])
+                    return LinearRunResult(
+                        t=t,
+                        phi_t=phi_t_np,
+                        gamma=gamma,
+                        omega=omega,
+                        ky=float(grid.ky[sel.ky_index]),
+                        selection=sel,
+                    )
+                if time_cfg_use.use_diffrax:
+                    _, saved = integrate_linear_diffrax(
+                        G0_jax,
+                        grid,
+                        geom,
+                        params,
+                        dt=dt,
+                        steps=steps,
+                        method=time_cfg_use.diffrax_solver,
+                        cache=cache,
+                        terms=terms,
+                        adaptive=time_cfg_use.diffrax_adaptive,
+                        rtol=time_cfg_use.diffrax_rtol,
+                        atol=time_cfg_use.diffrax_atol,
+                        max_steps=time_cfg_use.diffrax_max_steps,
+                        progress_bar=time_cfg_use.progress_bar,
+                        checkpoint=time_cfg_use.checkpoint,
+                        sample_stride=time_cfg_use.sample_stride,
+                        return_state=time_cfg_use.save_state,
+                        save_field="phi+density",
+                        density_species_index=electron_index,
+                    )
+                    phi_t, density_t = saved
+                else:
+                    _diag = integrate_linear_diagnostics(
+                        G0_jax,
+                        grid,
+                        geom,
+                        params,
+                        dt=dt,
+                        steps=steps,
+                        method=time_cfg_use.method,
+                        cache=cache,
+                        terms=terms,
+                        sample_stride=time_cfg_use.sample_stride,
+                        species_index=electron_index,
+                    )
+                    phi_t = _diag[1]
+                    density_t = _diag[2] if len(_diag) > 2 else None
             else:
                 _, phi_t = integrate_linear_from_config(
                     G0_jax,
