@@ -177,12 +177,15 @@ GX-style balanced runs (moderate cost):
 | Geometry | q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778 |
 | Gradients | R/LTi=2.49, R/LTe=2.49, R/Ln=0.8 |
 | Species | kinetic electrons + Boltzmann ions, Te/Ti=1, mi/me=3670 |
-| Electromagnetic | beta=1.0e-5, A_parallel=on, B_parallel=on |
-| Collisions | nu_i=1.0e-2, nu_e=1.65e-4, hypercollisions=off |
+| Electromagnetic | beta=1.0e-5, A_parallel=on, B_parallel=off |
+| Collisions | nu_i=0, nu_e=0, hypercollisions=off |
 | Operator toggles | streaming/mirror/curvature/grad-B/diamagnetic on; nonlinear off |
 | Grid | Nx=1, Ny=24, Nz=96, y0=0.2, ntheta=32, nperiod=2 |
+| Time integration | diffrax Dopri8 (adaptive), t_max=10, dt=0.05, max_steps=200000 |
 | Velocity resolution | Nl=6, Nm=16 |
 | Reference | GX paper Fig. 2b |
+
+![ETG comparison](docs/_static/etg_comparison.png)
 
 ### KBM beta scan (GX Fig. 3)
 

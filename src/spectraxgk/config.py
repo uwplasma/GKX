@@ -184,7 +184,7 @@ class ETGBaseCase:
         diffrax_adaptive=True,
         diffrax_rtol=1.0e-5,
         diffrax_atol=1.0e-7,
-        diffrax_max_steps=20000,
+        diffrax_max_steps=200000,
     )
     geometry: GeometryConfig = GeometryConfig(R0=2.77778)
     model: ETGModelConfig = ETGModelConfig()

@@ -252,12 +252,25 @@ def integrate_linear_diffrax(
         cache_, params_, term_cfg_ = args
         G = _unpack_complex_state(G_packed)
         if save_field == "phi":
-            fields = compute_fields_cached(G, cache_, params_, terms=term_cfg_, use_custom_vjp=use_custom_vjp)
+            fields = compute_fields_cached(
+                G, cache_, params_, terms=term_cfg_, use_custom_vjp=use_custom_vjp
+            )
             field = fields.phi
         elif save_field == "density":
             field = _density_from_G_local(G, cache_)
+        elif save_field == "phi+density":
+            if save_mode is not None:
+                raise ValueError("save_mode cannot be used when save_field='phi+density'")
+            fields = compute_fields_cached(
+                G, cache_, params_, terms=term_cfg_, use_custom_vjp=use_custom_vjp
+            )
+            phi_field = fields.phi
+            density_field = _density_from_G_local(G, cache_)
+            if return_state:
+                return _pack_complex_state(G), (phi_field, density_field)
+            return (phi_field, density_field)
         else:
-            raise ValueError("save_field must be 'phi' or 'density'")
+            raise ValueError("save_field must be 'phi', 'density', or 'phi+density'")
 
         if save_mode is not None:
             mode_val = _extract_mode(field)
@@ -311,12 +324,12 @@ def integrate_linear_diffrax(
     else:
         sol = solve(G0_packed)
     if return_state:
-        G_t_packed, phi_t = sol.ys
+        G_t_packed, saved = sol.ys
         G_last = _unpack_complex_state(G_t_packed[-1])
     else:
-        phi_t = sol.ys
+        saved = sol.ys
         G_last = None
-    return G_last, phi_t
+    return G_last, saved
 
 
 def integrate_linear_diffrax_streaming(
