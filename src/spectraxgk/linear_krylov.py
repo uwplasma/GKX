@@ -27,7 +27,10 @@ class KrylovConfig:
 
     krylov_dim: int = 24
     restarts: int = 2
+    omega_min_factor: float = 0.0
+    omega_target_factor: float = 0.0
     omega_cap_factor: float = 2.0
+    omega_sign: int = 0
     method: str = "propagator"
     power_iters: int = 200
     power_dt: float = 0.01
@@ -83,6 +86,45 @@ def _compute_damping(
     else:
         damping = jnp.asarray(params.nu, dtype=real_dtype) * lb_lam + hyper_damp
     return damping.astype(real_dtype)
+
+
+def _omega_scale(cache: LinearCache, params: LinearParams) -> jnp.ndarray:
+    ky_scale = jnp.max(jnp.abs(cache.ky))
+    rlt = jnp.abs(params.R_over_LTi) + jnp.abs(params.R_over_Ln)
+    if rlt.ndim == 0:
+        drive = rlt
+    else:
+        drive = jnp.max(rlt)
+    return ky_scale * jnp.maximum(drive, 1.0e-8)
+
+
+def _select_by_target(
+    real_part: jnp.ndarray,
+    imag_part: jnp.ndarray,
+    mask: jnp.ndarray,
+    omega_scale: jnp.ndarray,
+    omega_target_factor: float,
+    omega_sign: int,
+    fallback_idx: jnp.ndarray,
+) -> jnp.ndarray:
+    omega_target_factor_val = jnp.asarray(omega_target_factor, dtype=imag_part.dtype)
+    use_target = omega_target_factor_val > 0.0
+    omega_target = omega_target_factor_val * omega_scale
+    omega_sign_val = jnp.asarray(omega_sign, dtype=imag_part.dtype)
+    use_sign = omega_sign_val != 0.0
+    omega_target = jnp.where(use_sign, jnp.sign(omega_sign_val) * jnp.abs(omega_target), omega_target)
+    use_mask = jnp.any(mask)
+    mask_use = jnp.where(use_mask, mask, jnp.ones_like(mask, dtype=bool))
+    real_masked = jnp.where(mask_use, real_part, -jnp.inf)
+    real_max = jnp.max(real_masked)
+    real_cut = real_max - 0.5 * jnp.abs(real_max)
+    mask_target = mask_use & (real_part >= real_cut)
+    has_target = jnp.any(mask_target)
+    dist = jnp.abs(imag_part - omega_target)
+    dist_masked = jnp.where(mask_target, dist, jnp.inf)
+    idx_target = jnp.argmin(dist_masked)
+    use_choice = use_target & has_target
+    return jnp.where(use_choice, idx_target, fallback_idx)
 
 
 def _advance_imex2(
@@ -218,7 +260,9 @@ def dominant_eigenpair_shift_invert_cached(
     krylov_dim: int,
     restarts: int,
     sigma: jnp.ndarray,
+    omega_min_factor: float,
     omega_cap_factor: float,
+    omega_sign: int,
     gmres_tol: float,
     gmres_maxiter: int,
     gmres_restart: int,
@@ -261,11 +305,19 @@ def dominant_eigenpair_shift_invert_cached(
         safe = jnp.where(jnp.abs(eigvals) > 1.0e-14, eigvals, 1.0e-14 + 0.0j)
         lam = sigma_val + 1.0 / safe
         imag_part = jnp.imag(lam)
-        rlt = jnp.max(jnp.abs(params.R_over_LTi)) + jnp.max(jnp.abs(params.R_over_Ln))
-        omega_scale = jnp.max(jnp.abs(cache.ky)) * jnp.maximum(rlt, 1.0e-8)
+        omega_scale = _omega_scale(cache, params)
         omega_cap = omega_cap_factor * omega_scale
+        omega_min = omega_min_factor * omega_scale
         use_cap = omega_cap_factor > 0.0
-        mask = jnp.abs(imag_part) <= omega_cap
+        use_min = omega_min_factor > 0.0
+        mask0 = jnp.abs(imag_part) <= omega_cap
+        mask0 = jnp.where(use_min, mask0 & (jnp.abs(imag_part) >= omega_min), mask0)
+        omega_sign_val = jnp.asarray(omega_sign, dtype=imag_part.dtype)
+        use_sign = omega_sign_val != 0.0
+        mask_sign = (omega_sign_val * imag_part) >= 0.0
+        mask = jnp.where(use_sign, mask0 & mask_sign, mask0)
+        use_sign_mask = jnp.any(mask)
+        mask = jnp.where(use_sign_mask, mask, mask0)
         dist = jnp.abs(lam - sigma_val)
         dist_masked = jnp.where(mask, dist, jnp.inf)
         idx_masked = jnp.argmin(dist_masked)
@@ -292,7 +344,10 @@ def dominant_eigenpair_cached(
     *,
     krylov_dim: int,
     restarts: int,
+    omega_min_factor: float,
+    omega_target_factor: float,
     omega_cap_factor: float,
+    omega_sign: int,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Approximate the dominant eigenvalue (max real part) with restarted Arnoldi."""
 
@@ -306,16 +361,33 @@ def dominant_eigenpair_cached(
         eigvals, eigvecs = jnp.linalg.eig(Hk)
         real_part = jnp.real(eigvals)
         imag_part = jnp.imag(eigvals)
-        rlt = jnp.max(jnp.abs(params.R_over_LTi)) + jnp.max(jnp.abs(params.R_over_Ln))
-        omega_scale = jnp.max(jnp.abs(cache.ky)) * jnp.maximum(rlt, 1.0e-8)
+        omega_scale = _omega_scale(cache, params)
         omega_cap = omega_cap_factor * omega_scale
+        omega_min = omega_min_factor * omega_scale
         use_cap = omega_cap_factor > 0.0
-        mask = jnp.abs(imag_part) <= omega_cap
+        use_min = omega_min_factor > 0.0
+        mask0 = jnp.abs(imag_part) <= omega_cap
+        mask0 = jnp.where(use_min, mask0 & (jnp.abs(imag_part) >= omega_min), mask0)
+        omega_sign_val = jnp.asarray(omega_sign, dtype=imag_part.dtype)
+        use_sign = omega_sign_val != 0.0
+        mask_sign = (omega_sign_val * imag_part) >= 0.0
+        mask = jnp.where(use_sign, mask0 & mask_sign, mask0)
+        use_sign_mask = jnp.any(mask)
+        mask = jnp.where(use_sign_mask, mask, mask0)
         real_masked = jnp.where(mask, real_part, -jnp.inf)
         idx_masked = jnp.argmax(real_masked)
         idx_all = jnp.argmax(real_part)
         use_mask = use_cap & jnp.any(mask)
         idx = jnp.where(use_mask, idx_masked, idx_all)
+        idx = _select_by_target(
+            real_part,
+            imag_part,
+            mask,
+            omega_scale,
+            omega_target_factor,
+            omega_sign,
+            idx,
+        )
         eig = eigvals[idx]
         y = eigvecs[:, idx]
         v_next = jnp.tensordot(jnp.conj(y), V[:krylov_dim], axes=1)
@@ -336,7 +408,10 @@ def dominant_eigenpair_propagator_cached(
     krylov_dim: int,
     restarts: int,
     dt: float,
+    omega_min_factor: float,
+    omega_target_factor: float,
     omega_cap_factor: float,
+    omega_sign: int,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Arnoldi on a stable IMEX2 propagator; eigenvalue from Rayleigh quotient."""
 
@@ -354,16 +429,33 @@ def dominant_eigenpair_propagator_cached(
         lam = jnp.log(eigvals) / dt_val
         real_part = jnp.real(lam)
         imag_part = jnp.imag(lam)
-        rlt = jnp.max(jnp.abs(params.R_over_LTi)) + jnp.max(jnp.abs(params.R_over_Ln))
-        omega_scale = jnp.max(jnp.abs(cache.ky)) * jnp.maximum(rlt, 1.0e-8)
+        omega_scale = _omega_scale(cache, params)
         omega_cap = omega_cap_factor * omega_scale
+        omega_min = omega_min_factor * omega_scale
         use_cap = omega_cap_factor > 0.0
-        mask = jnp.abs(imag_part) <= omega_cap
+        use_min = omega_min_factor > 0.0
+        mask0 = jnp.abs(imag_part) <= omega_cap
+        mask0 = jnp.where(use_min, mask0 & (jnp.abs(imag_part) >= omega_min), mask0)
+        omega_sign_val = jnp.asarray(omega_sign, dtype=imag_part.dtype)
+        use_sign = omega_sign_val != 0.0
+        mask_sign = (omega_sign_val * imag_part) >= 0.0
+        mask = jnp.where(use_sign, mask0 & mask_sign, mask0)
+        use_sign_mask = jnp.any(mask)
+        mask = jnp.where(use_sign_mask, mask, mask0)
         real_masked = jnp.where(mask, real_part, -jnp.inf)
         idx_masked = jnp.argmax(real_masked)
         idx_all = jnp.argmax(real_part)
         use_mask = use_cap & jnp.any(mask)
         idx = jnp.where(use_mask, idx_masked, idx_all)
+        idx = _select_by_target(
+            real_part,
+            imag_part,
+            mask,
+            omega_scale,
+            omega_target_factor,
+            omega_sign,
+            idx,
+        )
         y = eigvecs[:, idx]
         v_next = jnp.tensordot(jnp.conj(y), V[:krylov_dim], axes=1)
         v_next = _normalize(v_next)
@@ -387,7 +479,10 @@ def dominant_eigenpair(
     *,
     krylov_dim: int = 24,
     restarts: int = 2,
+    omega_min_factor: float = 0.0,
+    omega_target_factor: float = 0.0,
     omega_cap_factor: float = 2.0,
+    omega_sign: int = 0,
     method: str = "power",
     power_iters: int = 40,
     power_dt: float = 0.01,
@@ -435,7 +530,10 @@ def dominant_eigenpair(
             krylov_dim=krylov_dim,
             restarts=max(int(restarts), 1),
             dt=float(power_dt),
-            omega_cap_factor=omega_cap_factor,
+            omega_min_factor=float(omega_min_factor),
+            omega_target_factor=float(omega_target_factor),
+            omega_cap_factor=float(omega_cap_factor),
+            omega_sign=int(omega_sign),
         )
     if method_key == "shift_invert":
         restarts = max(int(restarts), 1)
@@ -450,7 +548,10 @@ def dominant_eigenpair(
                     krylov_dim=max(int(krylov_dim), 1),
                     restarts=1,
                     dt=float(power_dt),
-                    omega_cap_factor=omega_cap_factor,
+                    omega_min_factor=float(omega_min_factor),
+                    omega_target_factor=float(omega_target_factor),
+                    omega_cap_factor=float(omega_cap_factor),
+                    omega_sign=int(omega_sign),
                 )
                 sigma = shift_est
                 v_init = v_seed
@@ -476,7 +577,9 @@ def dominant_eigenpair(
             krylov_dim=krylov_dim,
             restarts=restarts,
             sigma=sigma,
-            omega_cap_factor=omega_cap_factor,
+            omega_min_factor=float(omega_min_factor),
+            omega_cap_factor=float(omega_cap_factor),
+            omega_sign=int(omega_sign),
             gmres_tol=shift_tol,
             gmres_maxiter=max(int(shift_maxiter), 1),
             gmres_restart=max(int(shift_restart), 1),
@@ -496,7 +599,10 @@ def dominant_eigenpair(
         term_cfg,
         krylov_dim=krylov_dim,
         restarts=restarts,
-        omega_cap_factor=omega_cap_factor,
+        omega_min_factor=float(omega_min_factor),
+        omega_target_factor=float(omega_target_factor),
+        omega_cap_factor=float(omega_cap_factor),
+        omega_sign=int(omega_sign),
     )
 
 

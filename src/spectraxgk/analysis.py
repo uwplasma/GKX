@@ -674,7 +674,14 @@ def _log_amp_phase(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
 
     if signal.size == 0:
         raise ValueError("signal must be non-empty")
-    scale = float(np.nanmax(np.abs(signal)))
+    signal = np.asarray(signal)
+    finite = np.isfinite(signal)
+    if np.any(finite):
+        scale = float(np.max(np.abs(signal[finite])))
+    else:
+        scale = 1.0
+    if not np.all(finite):
+        signal = np.where(finite, signal, 0.0)
     if not np.isfinite(scale) or scale <= 0.0:
         scale = 1.0
     scaled = signal / scale
