@@ -12,6 +12,7 @@ from spectraxgk.config import (
 )
 from spectraxgk.geometry import SAlphaGeometry
 from spectraxgk.gyroaverage import J_l_all, gamma0
+from spectraxgk.io import load_case_from_toml, load_krylov_from_toml, load_linear_terms_from_toml
 from spectraxgk.operators import hermite_streaming
 from spectraxgk.linear import (
     LinearCache,
@@ -96,6 +97,9 @@ __all__ = [
     "SAlphaGeometry",
     "J_l_all",
     "gamma0",
+    "load_case_from_toml",
+    "load_krylov_from_toml",
+    "load_linear_terms_from_toml",
     "hermite_streaming",
     "LinearParams",
     "LinearTerms",

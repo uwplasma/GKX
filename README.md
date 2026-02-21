@@ -38,6 +38,8 @@ pip install -e .
 ```bash
 spectrax-gk cyclone-info
 spectrax-gk cyclone-kperp --kx0 0.0 --ky 0.3
+spectrax-gk run-linear --config examples/configs/cyclone.toml --plot --outdir docs/_static
+spectrax-gk scan-linear --config examples/configs/etg.toml --plot --outdir docs/_static
 ```
 
 ## Quickstart (Python)
