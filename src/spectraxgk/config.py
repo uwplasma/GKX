@@ -153,8 +153,9 @@ class ETGModelConfig:
     R_over_Ln: float = 0.8
     Te_over_Ti: float = 1.0
     mass_ratio: float = 3670.0
-    nu_i: float = 1.0e-2
-    nu_e: float = 1.65e-4
+    nu_i: float = 0.0
+    nu_e: float = 0.0
+    beta: float = 1.0e-5
     adiabatic_ions: bool = True
 
     def to_dict(self) -> Dict[str, float]:
@@ -171,16 +172,17 @@ class ETGBaseCase:
         Nz=96,
         Lx=6.28,
         Ly=6.28,
+        boundary="linked",
         y0=0.2,
         ntheta=32,
         nperiod=2,
     )
     time: TimeConfig = TimeConfig(
-        t_max=2.0,
-        dt=0.01,
-        diffrax_solver="Tsit5",
+        t_max=10.0,
+        dt=0.05,
+        diffrax_solver="Dopri8",
         diffrax_adaptive=True,
-        diffrax_rtol=1.0e-4,
+        diffrax_rtol=1.0e-5,
         diffrax_atol=1.0e-7,
         diffrax_max_steps=20000,
     )
