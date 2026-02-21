@@ -165,8 +165,9 @@ def run_scan_and_mode(
     else:
         signal = extract_mode_time_series(run.phi_t, run.selection, method="project")
         _g, _w, tmin_fit, tmax_fit = fit_growth_rate_auto(run.t, signal, **window_kw)
+    z_np = np.asarray(grid.z)
     eig = extract_eigenfunction(
-        run.phi_t, run.t, run.selection, z=grid.z, method="snapshot", tmin=tmin_fit, tmax=tmax_fit
+        run.phi_t, run.t, run.selection, z=z_np, method="snapshot", tmin=tmin_fit, tmax=tmax_fit
     )
     return ScanAndModeResult(
         scan=scan,

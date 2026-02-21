@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import is_dataclass, replace
+from typing import Any, cast
 from pathlib import Path
 import tomllib
 
@@ -26,12 +27,12 @@ def load_toml(path: str | Path) -> dict:
         return tomllib.load(f)
 
 
-def _merge_dataclass(base, overrides: dict | None):
+def _merge_dataclass(base: Any, overrides: dict | None) -> Any:
     """Recursively merge a dict into a dataclass, returning a new instance."""
 
     if overrides is None:
         return base
-    if not is_dataclass(base):
+    if not is_dataclass(base) or isinstance(base, type):
         raise TypeError("base must be a dataclass instance")
     updates = {}
     for field in base.__dataclass_fields__.values():  # type: ignore[attr-defined]
@@ -46,7 +47,7 @@ def _merge_dataclass(base, overrides: dict | None):
             updates[name] = _merge_dataclass(current, value)
         else:
             updates[name] = value
-    return replace(base, **updates)
+    return cast(Any, replace(base, **updates))
 
 
 def _case_registry():

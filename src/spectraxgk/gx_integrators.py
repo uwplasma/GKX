@@ -85,13 +85,17 @@ def _gx_eta_max(tprim: np.ndarray, fprim: np.ndarray) -> float:
     return float(np.max(eta))
 
 
-def _gx_geometry_maxima(geom: SAlphaGeometry, theta: np.ndarray) -> tuple[float, float, float, float, float, float]:
-    cv, gb, cv0, gb0 = geom.drift_coeffs(theta)
-    cv = np.asarray(cv, dtype=float)
-    gb = np.asarray(gb, dtype=float)
-    cv0 = np.asarray(cv0, dtype=float)
-    gb0 = np.asarray(gb0, dtype=float)
-    bmag = np.asarray(geom.bmag(theta), dtype=float)
+def _gx_geometry_maxima(
+    geom: SAlphaGeometry, theta: np.ndarray
+) -> tuple[float, float, float, float, float, float]:
+    theta_j = jnp.asarray(theta)
+    cv_j, gb_j, cv0_j, gb0_j = geom.drift_coeffs(theta_j)
+    bmag_j = geom.bmag(theta_j)
+    cv = np.asarray(cv_j, dtype=float)
+    gb = np.asarray(gb_j, dtype=float)
+    cv0 = np.asarray(cv0_j, dtype=float)
+    gb0 = np.asarray(gb0_j, dtype=float)
+    bmag = np.asarray(bmag_j, dtype=float)
     bmag_max = float(np.max(np.abs(bmag)))
     cvdrift_max = float(np.max(np.abs(cv)))
     gbdrift_max = float(np.max(np.abs(gb)))
@@ -108,15 +112,17 @@ def _gx_m0_max_ntft(
     muB_max: float,
 ) -> tuple[float, float, float]:
     theta = np.asarray(grid.z, dtype=float)
-    gds2, gds21, gds22 = geom.metric_coeffs(theta)
-    gds21 = np.asarray(gds21, dtype=float)
-    gds22 = np.asarray(gds22, dtype=float)
+    theta_j = jnp.asarray(theta)
+    _gds2, gds21_j, gds22_j = geom.metric_coeffs(theta_j)
+    gds21 = np.asarray(gds21_j, dtype=float)
+    gds22 = np.asarray(gds22_j, dtype=float)
     shat = float(geom.s_hat)
     ftwist = shat * gds21 / gds22
     nz = theta.size
     if nz <= 1:
-        return 0.0, float(np.max(np.abs(geom.drift_coeffs(theta)[2]))), float(
-            np.max(np.abs(geom.drift_coeffs(theta)[3]))
+        _cv_j, _gb_j, cv0_j, gb0_j = geom.drift_coeffs(theta_j)
+        return 0.0, float(np.max(np.abs(np.asarray(cv0_j)))), float(
+            np.max(np.abs(np.asarray(gb0_j)))
         )
     delta = 0.01313
     x0 = float(grid.x0)
@@ -126,9 +132,9 @@ def _gx_m0_max_ntft(
     mid_next = min(mid + 1, nz - 1)
     ref_term = (1.0 - delta) * ftwist[mid] + delta * ftwist[mid_next]
 
-    cv, gb, cv0, gb0 = geom.drift_coeffs(theta)
-    cv0 = np.asarray(cv0, dtype=float)
-    gb0 = np.asarray(gb0, dtype=float)
+    cv_j, gb_j, cv0_j, gb0_j = geom.drift_coeffs(theta_j)
+    cv0 = np.asarray(cv0_j, dtype=float)
+    gb0 = np.asarray(gb0_j, dtype=float)
 
     m0_max = 0.0
     cv0_max = float(np.max(np.abs(cv0)))

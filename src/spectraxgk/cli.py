@@ -148,10 +148,11 @@ def _cmd_run_linear(args: argparse.Namespace) -> int:
         grid = build_spectral_grid(cfg.grid)
         if result.t.size > 1:
             signal = extract_mode_time_series(result.phi_t, result.selection, method="project")
-            fig, _ax = growth_fit_figure(result.t, signal, result.gamma, result.omega)
+            fig, _ax = growth_fit_figure(result.t, signal)
             fig.savefig(outdir / f"{case_name}_ky{result.ky:.3f}_fit.png")
-        eigen = extract_eigenfunction(result.phi_t, result.t, result.selection, z=grid.z)
-        eigen = normalize_eigenfunction(eigen, grid.z)
+        z_np = np.asarray(grid.z)
+        eigen = extract_eigenfunction(result.phi_t, result.t, result.selection, z=z_np)
+        eigen = normalize_eigenfunction(eigen, z_np)
         set_plot_style()
         import matplotlib.pyplot as plt
 
