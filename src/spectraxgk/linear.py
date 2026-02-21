@@ -51,8 +51,8 @@ class LinearParams:
     p_hyper_lm: float = 6.0
     hypercollisions_const: float = 1.0
     hypercollisions_kz: float = 0.0
-    damp_ends_widthfrac: float = 0.125
-    damp_ends_amp: float = 0.1
+    damp_ends_widthfrac: float | jnp.ndarray = 0.125
+    damp_ends_amp: float | jnp.ndarray = 0.1
     tz: float | jnp.ndarray = 1.0
     rho_star: float = 1.0
     beta: float = 0.0
@@ -538,15 +538,21 @@ def build_linear_cache(
         if gds22_min != 0.0:
             twist_shift_geo_fac = float(2.0 * shat * gds21_min / gds22_min)
         if twist_shift_geo_fac != 0.0:
-            jtwist = grid.jtwist if getattr(grid, "jtwist", None) is not None else int(
-                np.round(twist_shift_geo_fac)
-            )
+            jtwist_val = getattr(grid, "jtwist", None)
+            if jtwist_val is not None:
+                jtwist = int(jtwist_val)
+            else:
+                jtwist = int(np.round(twist_shift_geo_fac))
             if jtwist == 0:
                 jtwist = 1
             if use_ntft:
                 x0_eff = float(y0) * abs(jtwist) / abs(twist_shift_geo_fac)
         else:
-            jtwist = grid.jtwist if getattr(grid, "jtwist", None) is not None else 1
+            jtwist_val = getattr(grid, "jtwist", None)
+            if jtwist_val is not None:
+                jtwist = int(jtwist_val)
+            else:
+                jtwist = 1
         if use_ntft and float(getattr(grid, "x0", x0_eff)) != 0.0:
             kx_eff = kx_eff * (float(getattr(grid, "x0", x0_eff)) / float(x0_eff))
     if use_ntft:

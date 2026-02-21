@@ -1228,6 +1228,8 @@ def run_etg_linear(
                         bpar=terms.bpar,
                         nonlinear=0.0,
                     )
+                    if G_last is None:
+                        raise ValueError("Expected final state from streaming fit; got None.")
                     phi_last = compute_fields_cached(G_last, cache, params, terms=term_cfg).phi
                     phi_t = jnp.asarray(phi_last)[None, ...]
                     density_t = None
@@ -1742,6 +1744,7 @@ def run_etg_scan(
         density_np = None if density_t is None else np.asarray(density_t)
         if fit_signal == "density" and density_np is None:
             density_np = phi_t_np
+        t = np.arange(phi_t_np.shape[0]) * dt_i * stride
         for local_idx, ky_val in enumerate(ky_slice):
             if mode_only:
                 source = density_np if (fit_signal == "density" and density_np is not None) else phi_t_np

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, asdict
-from typing import Dict
+from typing import Dict, Any
 
 
 @dataclass(frozen=True)
@@ -16,7 +16,7 @@ class InitializationConfig:
     gaussian_envelope_sine: float = 0.0
     kpar_init: float = 0.0
 
-    def to_dict(self) -> Dict[str, float]:
+    def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
 
@@ -40,7 +40,7 @@ class GridConfig:
     nperiod: int | None = None
     zp: int | None = None
 
-    def to_dict(self) -> Dict[str, float | int | str | None]:
+    def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
 
@@ -65,7 +65,7 @@ class TimeConfig:
     diffrax_max_steps: int = 4096
     progress_bar: bool = False
 
-    def to_dict(self) -> Dict[str, float]:
+    def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
 
@@ -80,7 +80,7 @@ class GeometryConfig:
     B0: float = 1.0
     alpha: float = 0.0
 
-    def to_dict(self) -> Dict[str, float]:
+    def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
 
@@ -93,7 +93,7 @@ class ModelConfig:
     R_over_Ln: float = 0.8
     nu_i: float = 0.0
 
-    def to_dict(self) -> Dict[str, float]:
+    def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
 
@@ -134,7 +134,7 @@ class CycloneBaseCase:
         gaussian_envelope_sine=0.0,
     )
 
-    def to_dict(self) -> Dict[str, Dict[str, float]]:
+    def to_dict(self) -> Dict[str, Dict[str, Any]]:
         return {
             "grid": self.grid.to_dict(),
             "time": self.time.to_dict(),
@@ -158,7 +158,7 @@ class ETGModelConfig:
     beta: float = 1.0e-5
     adiabatic_ions: bool = True
 
-    def to_dict(self) -> Dict[str, float]:
+    def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
 
@@ -194,7 +194,7 @@ class ETGBaseCase:
         gaussian_init=True,
     )
 
-    def to_dict(self) -> Dict[str, Dict[str, float]]:
+    def to_dict(self) -> Dict[str, Dict[str, Any]]:
         return {
             "grid": self.grid.to_dict(),
             "time": self.time.to_dict(),
@@ -217,7 +217,7 @@ class KineticElectronModelConfig:
     nu_e: float = 0.0
     beta: float = 1.0e-5
 
-    def to_dict(self) -> Dict[str, float]:
+    def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
 
@@ -254,7 +254,7 @@ class KineticElectronBaseCase:
         gaussian_init=True,
     )
 
-    def to_dict(self) -> Dict[str, Dict[str, float]]:
+    def to_dict(self) -> Dict[str, Dict[str, Any]]:
         return {
             "grid": self.grid.to_dict(),
             "time": self.time.to_dict(),
@@ -296,7 +296,7 @@ class KBMBaseCase:
         gaussian_init=True,
     )
 
-    def to_dict(self) -> Dict[str, Dict[str, float]]:
+    def to_dict(self) -> Dict[str, Dict[str, Any]]:
         return {
             "grid": self.grid.to_dict(),
             "time": self.time.to_dict(),
@@ -319,7 +319,7 @@ class TEMModelConfig:
     nu_e: float = 0.0
     beta: float = 1.0e-4
 
-    def to_dict(self) -> Dict[str, float]:
+    def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
 
@@ -355,7 +355,7 @@ class TEMBaseCase:
         gaussian_init=True,
     )
 
-    def to_dict(self) -> Dict[str, Dict[str, float]]:
+    def to_dict(self) -> Dict[str, Dict[str, Any]]:
         return {
             "grid": self.grid.to_dict(),
             "time": self.time.to_dict(),
