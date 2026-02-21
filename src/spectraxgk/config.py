@@ -186,7 +186,11 @@ class ETGBaseCase:
     )
     geometry: GeometryConfig = GeometryConfig(R0=2.77778)
     model: ETGModelConfig = ETGModelConfig()
-    init: InitializationConfig = InitializationConfig()
+    init: InitializationConfig = InitializationConfig(
+        init_field="density",
+        init_amp=1.0e-10,
+        gaussian_init=True,
+    )
 
     def to_dict(self) -> Dict[str, Dict[str, float]]:
         return {
@@ -207,8 +211,8 @@ class KineticElectronModelConfig:
     R_over_Ln: float = 0.8
     Te_over_Ti: float = 1.0
     mass_ratio: float = 3670.0
-    nu_i: float = 1.0e-2
-    nu_e: float = 1.65e-4
+    nu_i: float = 0.0
+    nu_e: float = 0.0
     beta: float = 1.0e-5
 
     def to_dict(self) -> Dict[str, float]:
@@ -221,17 +225,19 @@ class KineticElectronBaseCase:
 
     grid: GridConfig = GridConfig(
         Nx=1,
-        Ny=24,
+        Ny=16,
         Nz=96,
         Lx=62.8,
         Ly=62.8,
-        y0=20.0,
+        boundary="linked",
+        y0=10.0,
         ntheta=32,
         nperiod=2,
     )
     time: TimeConfig = TimeConfig(
-        t_max=8.0,
+        t_max=40.0,
         dt=0.01,
+        method="rk4",
         diffrax_solver="Tsit5",
         diffrax_adaptive=True,
         diffrax_rtol=1.0e-4,
@@ -240,7 +246,11 @@ class KineticElectronBaseCase:
     )
     geometry: GeometryConfig = GeometryConfig(R0=2.77778)
     model: KineticElectronModelConfig = KineticElectronModelConfig()
-    init: InitializationConfig = InitializationConfig()
+    init: InitializationConfig = InitializationConfig(
+        init_field="density",
+        init_amp=1.0e-10,
+        gaussian_init=True,
+    )
 
     def to_dict(self) -> Dict[str, Dict[str, float]]:
         return {
@@ -262,6 +272,7 @@ class KBMBaseCase:
         Nz=96,
         Lx=62.8,
         Ly=62.8,
+        boundary="linked",
         y0=10.0,
         ntheta=32,
         nperiod=2,
@@ -277,7 +288,11 @@ class KBMBaseCase:
     )
     geometry: GeometryConfig = GeometryConfig(R0=2.77778)
     model: KineticElectronModelConfig = KineticElectronModelConfig(beta=0.015)
-    init: InitializationConfig = InitializationConfig()
+    init: InitializationConfig = InitializationConfig(
+        init_field="all",
+        init_amp=1.0e-10,
+        gaussian_init=True,
+    )
 
     def to_dict(self) -> Dict[str, Dict[str, float]]:
         return {
@@ -316,6 +331,7 @@ class TEMBaseCase:
         Nz=96,
         Lx=62.8,
         Ly=62.8,
+        boundary="linked",
         y0=20.0,
         ntheta=32,
         nperiod=2,
@@ -331,7 +347,11 @@ class TEMBaseCase:
     )
     geometry: GeometryConfig = GeometryConfig(q=2.7, s_hat=0.5, epsilon=0.18, R0=1.0)
     model: TEMModelConfig = TEMModelConfig()
-    init: InitializationConfig = InitializationConfig()
+    init: InitializationConfig = InitializationConfig(
+        init_field="density",
+        init_amp=1.0e-10,
+        gaussian_init=True,
+    )
 
     def to_dict(self) -> Dict[str, Dict[str, float]]:
         return {

@@ -175,11 +175,10 @@ def _build_initial_condition(
         "qpar": (0, 3),
         "qperp": (1, 1),
     }
-    if init_field not in field_map:
-        raise ValueError("init_field must be one of {'density','upar','tpar','tperp','qpar','qperp'}")
-    l_idx, m_idx = field_map[init_field]
-    if l_idx >= Nl or m_idx >= Nm:
-        raise ValueError("init_field moment exceeds (Nl, Nm) resolution")
+    if init_field != "all" and init_field not in field_map:
+        raise ValueError(
+            "init_field must be one of {'density','upar','tpar','tperp','qpar','qperp','all'}"
+        )
 
     G0 = np.zeros((Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
     amp = float(init_cfg.init_amp)
@@ -197,7 +196,15 @@ def _build_initial_condition(
         else:
             init_vals = amp * (1.0 + 1.0j) * np.ones_like(grid.z)
         if grid.ky[ky_i] != 0.0:
-            G0[l_idx, m_idx, ky_i, kx_index, :] = init_vals
+            if init_field == "all":
+                for l_idx, m_idx in field_map.values():
+                    if l_idx < Nl and m_idx < Nm:
+                        G0[l_idx, m_idx, ky_i, kx_index, :] = init_vals
+            else:
+                l_idx, m_idx = field_map[init_field]
+                if l_idx >= Nl or m_idx >= Nm:
+                    raise ValueError("init_field moment exceeds (Nl, Nm) resolution")
+                G0[l_idx, m_idx, ky_i, kx_index, :] = init_vals
     return jnp.asarray(G0)
 
 @dataclass(frozen=True)
@@ -1070,7 +1077,16 @@ def run_etg_linear(
     ns = int(charge.size)
     electron_index = int(np.argmin(charge))
     G0 = np.zeros((ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
-    G0[electron_index, 0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
+    G0_single = _build_initial_condition(
+        grid,
+        geom,
+        ky_index=sel.ky_index,
+        kx_index=sel.kx_index,
+        Nl=Nl,
+        Nm=Nm,
+        init_cfg=cfg.init,
+    )
+    G0[electron_index] = np.asarray(G0_single, dtype=np.complex64)
 
     G0_jax = jnp.asarray(G0)
     if solver.lower() == "krylov":
@@ -1421,8 +1437,16 @@ def run_etg_scan(
         ns = int(charge.size)
         electron_index = int(np.argmin(charge))
         G0 = np.zeros((ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
-        for ky_i in range(len(ky_indices)):
-            G0[electron_index, 0, 0, ky_i, 0, :] = 1e-3 + 0.0j
+        G0_single = _build_initial_condition(
+            grid,
+            geom,
+            ky_index=np.arange(len(ky_indices), dtype=int),
+            kx_index=0,
+            Nl=Nl,
+            Nm=Nm,
+            init_cfg=cfg.init,
+        )
+        G0[electron_index] = np.asarray(G0_single, dtype=np.complex64)
 
         cache = build_linear_cache(grid, geom, params, Nl, Nm)
         G0_jax = jnp.asarray(G0)
@@ -1609,6 +1633,8 @@ def run_kinetic_linear(
     terms: LinearTerms | None = None,
     sample_stride: int | None = None,
     fit_signal: str = "density",
+    init_species_index: int = 1,
+    density_species_index: int = 1,
 ) -> LinearRunResult:
     """Run a kinetic-electron ITG/TEM benchmark and extract growth rate."""
 
@@ -1634,8 +1660,21 @@ def run_kinetic_linear(
     sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
 
     ns = 2
+    if init_species_index < 0 or init_species_index >= ns:
+        raise ValueError("init_species_index out of range for kinetic species")
+    if density_species_index < 0 or density_species_index >= ns:
+        raise ValueError("density_species_index out of range for kinetic species")
     G0 = np.zeros((ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
-    G0[1, 0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
+    G0_single = _build_initial_condition(
+        grid,
+        geom,
+        ky_index=sel.ky_index,
+        kx_index=sel.kx_index,
+        Nl=Nl,
+        Nm=Nm,
+        init_cfg=cfg.init,
+    )
+    G0[int(init_species_index)] = np.asarray(G0_single, dtype=np.complex64)
 
     G0_jax = jnp.asarray(G0)
     if solver.lower() == "krylov":
@@ -1679,6 +1718,7 @@ def run_kinetic_linear(
         gamma = float(np.real(eig))
         omega = float(-np.imag(eig))
     else:
+        method_key = method.lower()
         if time_cfg is not None:
             time_cfg_use = time_cfg
             if sample_stride is not None:
@@ -1686,23 +1726,10 @@ def run_kinetic_linear(
             dt = float(time_cfg_use.dt)
             steps = int(round(time_cfg_use.t_max / time_cfg_use.dt))
             cache = build_linear_cache(grid, geom, params, Nl, Nm)
-            if fit_signal == "density":
-                _diag = integrate_linear_diagnostics(
-                    G0_jax,
-                    grid,
-                    geom,
-                    params,
-                    dt=dt,
-                    steps=steps,
-                    method=time_cfg_use.method,
-                    cache=cache,
-                    terms=terms,
-                    sample_stride=time_cfg_use.sample_stride,
-                    species_index=1,
-                )
-                phi_t = _diag[1]
-                density_t = _diag[2] if len(_diag) > 2 else None
-            else:
+            if time_cfg_use.use_diffrax and not (
+                method_key.startswith("imex") or method_key.startswith("implicit")
+            ):
+                save_field = "density" if fit_signal == "density" else "phi"
                 _, phi_t = integrate_linear_from_config(
                     G0_jax,
                     grid,
@@ -1711,8 +1738,39 @@ def run_kinetic_linear(
                     time_cfg_use,
                     cache=cache,
                     terms=terms,
+                    save_field=save_field,
+                    density_species_index=density_species_index if fit_signal == "density" else None,
                 )
-                density_t = None
+                density_t = phi_t if fit_signal == "density" else None
+            else:
+                if fit_signal == "density":
+                    _diag = integrate_linear_diagnostics(
+                        G0_jax,
+                        grid,
+                        geom,
+                        params,
+                        dt=dt,
+                        steps=steps,
+                        method=time_cfg_use.method,
+                        cache=cache,
+                        terms=terms,
+                        sample_stride=time_cfg_use.sample_stride,
+                        species_index=density_species_index,
+                    )
+                    phi_t = _diag[1]
+                    density_t = _diag[2] if len(_diag) > 2 else None
+                else:
+                    _, phi_t = integrate_linear_from_config(
+                        G0_jax,
+                        grid,
+                        geom,
+                        params,
+                        time_cfg_use,
+                        cache=cache,
+                        terms=terms,
+                        density_species_index=density_species_index if fit_signal == "density" else None,
+                    )
+                    density_t = None
             stride = time_cfg_use.sample_stride
         else:
             stride = 1 if sample_stride is None else int(sample_stride)
@@ -1727,7 +1785,7 @@ def run_kinetic_linear(
                     method=method,
                     terms=terms,
                     sample_stride=stride,
-                    species_index=1,
+                    species_index=density_species_index,
                 )
                 phi_t = _diag[1]
                 density_t = _diag[2] if len(_diag) > 2 else None
@@ -1829,6 +1887,8 @@ def run_kinetic_scan(
     ky_batch: int = 1,
     streaming_fit: bool = True,
     streaming_amp_floor: float = 1.0e-30,
+    init_species_index: int = 1,
+    density_species_index: int = 1,
 ) -> LinearScanResult:
     """Run a kinetic-electron ITG/TEM benchmark for a list of ky values.
 
@@ -1919,6 +1979,10 @@ def run_kinetic_scan(
     ky_slice: np.ndarray
     ky_indices: list[int]
     sel: ModeSelection | ModeSelectionBatch
+    if init_species_index < 0 or init_species_index >= 2:
+        raise ValueError("init_species_index out of range for kinetic species")
+    if density_species_index < 0 or density_species_index >= 2:
+        raise ValueError("density_species_index out of range for kinetic species")
 
     for batch_start in ky_iter:
         if use_batch:
@@ -1939,8 +2003,16 @@ def run_kinetic_scan(
 
         ns = 2
         G0 = np.zeros((ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
-        for ky_i in range(len(ky_indices)):
-            G0[1, 0, 0, ky_i, 0, :] = 1e-3 + 0.0j
+        G0_single = _build_initial_condition(
+            grid,
+            geom,
+            ky_index=np.arange(len(ky_indices), dtype=int),
+            kx_index=0,
+            Nl=Nl,
+            Nm=Nm,
+            init_cfg=cfg.init,
+        )
+        G0[int(init_species_index)] = np.asarray(G0_single, dtype=np.complex64)
 
         cache = build_linear_cache(grid, geom, params, Nl, Nm)
         G0_jax = jnp.asarray(G0)
@@ -2018,7 +2090,7 @@ def run_kinetic_scan(
                 mode_z_index=_midplane_index(grid),
                 mode_method=mode_method,
                 amp_floor=streaming_amp_floor,
-                density_species_index=1 if fit_signal == "density" else None,
+                density_species_index=density_species_index if fit_signal == "density" else None,
                 return_state=False,
             )
             gamma_arr = np.asarray(gamma_vals)
@@ -2041,7 +2113,7 @@ def run_kinetic_scan(
                 save_mode=sel if mode_only else None,
                 mode_method=mode_method,
                 save_field="density" if fit_signal == "density" else "phi",
-                density_species_index=1 if fit_signal == "density" else None,
+                density_species_index=density_species_index if fit_signal == "density" else None,
             )
             stride = time_cfg_i.sample_stride
             density_t = None
@@ -2059,7 +2131,7 @@ def run_kinetic_scan(
                     cache=cache,
                     terms=terms,
                     sample_stride=stride,
-                    species_index=1,
+                    species_index=density_species_index,
                 )
                 phi_t = _diag[1]
                 density_t = _diag[2] if len(_diag) > 2 else None
@@ -2126,6 +2198,8 @@ def run_tem_linear(
     mode_method: str = "project",
     terms: LinearTerms | None = None,
     sample_stride: int | None = None,
+    init_species_index: int = 1,
+    density_species_index: int = 1,
 ) -> LinearRunResult:
     """Run the TEM benchmark and extract growth rate."""
 
@@ -2151,8 +2225,21 @@ def run_tem_linear(
     sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
 
     ns = 2
+    if init_species_index < 0 or init_species_index >= ns:
+        raise ValueError("init_species_index out of range for kinetic species")
+    if density_species_index < 0 or density_species_index >= ns:
+        raise ValueError("density_species_index out of range for kinetic species")
     G0 = np.zeros((ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
-    G0[1, 0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
+    G0_single = _build_initial_condition(
+        grid,
+        geom,
+        ky_index=sel.ky_index,
+        kx_index=sel.kx_index,
+        Nl=Nl,
+        Nm=Nm,
+        init_cfg=cfg.init,
+    )
+    G0[int(init_species_index)] = np.asarray(G0_single, dtype=np.complex64)
 
     G0_jax = jnp.asarray(G0)
     if solver.lower() == "krylov":
@@ -2282,6 +2369,8 @@ def run_tem_scan(
     ky_batch: int = 1,
     streaming_fit: bool = True,
     streaming_amp_floor: float = 1.0e-30,
+    init_species_index: int = 1,
+    density_species_index: int = 1,
 ) -> LinearScanResult:
     """Run the TEM benchmark for a list of ky values.
 
@@ -2373,6 +2462,11 @@ def run_tem_scan(
     ky_indices: list[int]
     sel: ModeSelection | ModeSelectionBatch
 
+    if init_species_index < 0 or init_species_index >= 2:
+        raise ValueError("init_species_index out of range for kinetic species")
+    if density_species_index < 0 or density_species_index >= 2:
+        raise ValueError("density_species_index out of range for kinetic species")
+
     for batch_start in ky_iter:
         if use_batch:
             ky_slice = np.asarray(ky_values[batch_start : batch_start + ky_batch], dtype=float)
@@ -2392,8 +2486,16 @@ def run_tem_scan(
 
         ns = 2
         G0 = np.zeros((ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
-        for ky_i in range(len(ky_indices)):
-            G0[1, 0, 0, ky_i, 0, :] = 1e-3 + 0.0j
+        G0_single = _build_initial_condition(
+            grid,
+            geom,
+            ky_index=np.arange(len(ky_indices), dtype=int),
+            kx_index=0,
+            Nl=Nl,
+            Nm=Nm,
+            init_cfg=cfg.init,
+        )
+        G0[int(init_species_index)] = np.asarray(G0_single, dtype=np.complex64)
 
         cache = build_linear_cache(grid, geom, params, Nl, Nm)
         G0_jax = jnp.asarray(G0)
@@ -2552,6 +2654,8 @@ def run_kbm_beta_scan(
     ky_batch: int = 1,
     streaming_fit: bool = True,
     streaming_amp_floor: float = 1.0e-30,
+    init_species_index: int = 1,
+    density_species_index: int = 1,
 ) -> LinearScanResult:
     """Run a KBM beta scan at fixed ky.
 
@@ -2587,6 +2691,11 @@ def run_kbm_beta_scan(
     if mode_only and mode_method not in {"z_index", "max"}:
         mode_method = "z_index"
 
+    if init_species_index < 0 or init_species_index >= 2:
+        raise ValueError("init_species_index out of range for kinetic species")
+    if density_species_index < 0 or density_species_index >= 2:
+        raise ValueError("density_species_index out of range for kinetic species")
+
     for i, beta in enumerate(betas):
         dt_i = float(dt[i]) if isinstance(dt, np.ndarray) else float(dt)
         steps_i = int(steps[i]) if isinstance(steps, np.ndarray) else int(steps)
@@ -2605,7 +2714,16 @@ def run_kbm_beta_scan(
 
         ns = 2
         G0 = np.zeros((ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
-        G0[1, 0, 0, sel.ky_index, sel.kx_index, :] = 1e-3 + 0.0j
+        G0_single = _build_initial_condition(
+            grid,
+            geom,
+            ky_index=sel.ky_index,
+            kx_index=sel.kx_index,
+            Nl=Nl,
+            Nm=Nm,
+            init_cfg=cfg.init,
+        )
+        G0[int(init_species_index)] = np.asarray(G0_single, dtype=np.complex64)
 
         G0_jax = jnp.asarray(G0)
         if solver.lower() == "krylov":
@@ -2678,7 +2796,7 @@ def run_kbm_beta_scan(
                     mode_z_index=_midplane_index(grid),
                     mode_method=mode_method,
                     amp_floor=streaming_amp_floor,
-                    density_species_index=1 if fit_signal == "density" else None,
+                    density_species_index=density_species_index if fit_signal == "density" else None,
                     return_state=False,
                 )
                 gamma = float(np.asarray(gamma_vals)[0])
@@ -2696,7 +2814,7 @@ def run_kbm_beta_scan(
                         save_mode=sel if mode_only else None,
                         mode_method=mode_method,
                         save_field="density" if fit_signal == "density" else "phi",
-                        density_species_index=1 if fit_signal == "density" else None,
+                        density_species_index=density_species_index if fit_signal == "density" else None,
                     )
                     stride = time_cfg_i.sample_stride
                     density_t = None
@@ -2714,7 +2832,7 @@ def run_kbm_beta_scan(
                             cache=cache,
                             terms=terms,
                             sample_stride=stride,
-                            species_index=1,
+                            species_index=density_species_index,
                         )
                         phi_t = _diag[1]
                         density_t = _diag[2] if len(_diag) > 2 else None
