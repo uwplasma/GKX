@@ -84,6 +84,8 @@ CYCLONE_KRYLOV_DEFAULT = KrylovConfig(
     shift_maxiter=30,
     shift_restart=10,
     shift_tol=1.0e-3,
+    mode_family="cyclone",
+    fallback_method="propagator",
 )
 
 KINETIC_KRYLOV_DEFAULT = KrylovConfig(
@@ -101,6 +103,8 @@ KINETIC_KRYLOV_DEFAULT = KrylovConfig(
     shift_restart=12,
     shift_tol=5.0e-4,
     shift_preconditioner="hermite-line",
+    mode_family="tem",
+    fallback_method="propagator",
 )
 
 ETG_KRYLOV_DEFAULT = KrylovConfig(
@@ -116,6 +120,8 @@ ETG_KRYLOV_DEFAULT = KrylovConfig(
     shift_maxiter=40,
     shift_restart=12,
     shift_tol=2.0e-3,
+    mode_family="etg",
+    fallback_method="arnoldi",
 )
 
 KBM_KRYLOV_DEFAULT = KrylovConfig(
@@ -133,6 +139,8 @@ KBM_KRYLOV_DEFAULT = KrylovConfig(
     shift_restart=12,
     shift_tol=5.0e-4,
     shift_preconditioner="hermite-line",
+    mode_family="kbm",
+    fallback_method="propagator",
 )
 
 TEM_KRYLOV_DEFAULT = KrylovConfig(
@@ -150,6 +158,8 @@ TEM_KRYLOV_DEFAULT = KrylovConfig(
     shift_restart=12,
     shift_tol=5.0e-4,
     shift_preconditioner="hermite-line",
+    mode_family="tem",
+    fallback_method="propagator",
 )
 
 
@@ -259,6 +269,33 @@ def _extract_mode_only_signal(
 
 def _is_array_like(value) -> bool:
     return isinstance(value, (list, tuple, np.ndarray))
+
+
+def _iter_ky_batches(
+    ky_values: np.ndarray,
+    *,
+    ky_batch: int,
+    fixed_batch_shape: bool,
+):
+    """Yield ky batches with optional edge padding for fixed-shape compilation."""
+
+    n = int(len(ky_values))
+    if ky_batch <= 1:
+        for idx in range(n):
+            ky = float(ky_values[idx])
+            yield idx, np.asarray([ky], dtype=float), 1
+        return
+    for start in range(0, n, ky_batch):
+        raw = np.asarray(ky_values[start : start + ky_batch], dtype=float)
+        valid = int(raw.size)
+        if valid == 0:
+            continue
+        if fixed_batch_shape and valid < ky_batch:
+            pad = np.full((ky_batch - valid,), raw[-1], dtype=float)
+            batch = np.concatenate([raw, pad], axis=0)
+        else:
+            batch = raw
+        yield start, batch, valid
 
 
 def _resolve_streaming_window(
@@ -693,6 +730,10 @@ def run_cyclone_linear(
             shift_restart=krylov_cfg.shift_restart,
             shift_solve_method=krylov_cfg.shift_solve_method,
             shift_preconditioner=krylov_cfg.shift_preconditioner,
+            shift_selection=krylov_cfg.shift_selection,
+            mode_family=krylov_cfg.mode_family,
+            fallback_method=krylov_cfg.fallback_method,
+            fallback_real_floor=krylov_cfg.fallback_real_floor,
         )
         term_cfg = TermConfig(
             streaming=terms.streaming,
@@ -862,6 +903,7 @@ def run_cyclone_scan(
     diagnostic_norm: str = "none",
     use_jit: bool = True,
     ky_batch: int = 1,
+    fixed_batch_shape: bool = True,
     streaming_fit: bool = True,
     streaming_amp_floor: float = 1.0e-30,
 ) -> CycloneScanResult:
@@ -979,14 +1021,21 @@ def run_cyclone_scan(
                 )
         return _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
 
-    ky_iter = range(0, len(ky_values), ky_batch) if use_batch else range(len(ky_values))
+    ky_values_arr = np.asarray(ky_values, dtype=float)
+    if use_batch:
+        ky_iter = _iter_ky_batches(
+            ky_values_arr,
+            ky_batch=ky_batch,
+            fixed_batch_shape=fixed_batch_shape,
+        )
+    else:
+        ky_iter = _iter_ky_batches(ky_values_arr, ky_batch=1, fixed_batch_shape=False)
     ky_slice: np.ndarray
     ky_indices: list[int]
     sel: ModeSelection | ModeSelectionBatch
 
-    for batch_start in ky_iter:
+    for batch_start, ky_slice, valid_count in ky_iter:
         if use_batch:
-            ky_slice = np.asarray(ky_values[batch_start : batch_start + ky_batch], dtype=float)
             ky_indices = [select_ky_index(np.asarray(grid_full.ky), float(ky)) for ky in ky_slice]
             grid = select_ky_grid(grid_full, ky_indices)
             sel_indices = np.arange(len(ky_indices), dtype=int)
@@ -994,7 +1043,6 @@ def run_cyclone_scan(
             dt_i = float(dt)
             steps_i = int(steps)
         else:
-            ky_slice = np.asarray([ky_values[batch_start]], dtype=float)
             ky_indices = [select_ky_index(np.asarray(grid_full.ky), float(ky_slice[0]))]
             grid = select_ky_grid(grid_full, ky_indices[0])
             sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
@@ -1013,7 +1061,8 @@ def run_cyclone_scan(
         )
         cache = build_linear_cache(grid, geom, params, Nl, Nm)
         if solver.lower() == "krylov":
-            for local_idx, ky_val in enumerate(ky_slice):
+            for local_idx in range(valid_count):
+                ky_val = ky_slice[local_idx]
                 cfg_use = krylov_cfg or CYCLONE_KRYLOV_DEFAULT
                 eig, _vec = dominant_eigenpair(
                     G0_jax,
@@ -1036,6 +1085,10 @@ def run_cyclone_scan(
                     shift_restart=cfg_use.shift_restart,
                     shift_solve_method=cfg_use.shift_solve_method,
                     shift_preconditioner=cfg_use.shift_preconditioner,
+                    shift_selection=cfg_use.shift_selection,
+                    mode_family=cfg_use.mode_family,
+                    fallback_method=cfg_use.fallback_method,
+                    fallback_real_floor=cfg_use.fallback_real_floor,
                 )
                 gamma = float(np.real(eig))
                 omega = float(-np.imag(eig))
@@ -1086,7 +1139,7 @@ def run_cyclone_scan(
                 tmin=tmin_i,
                 tmax=tmax_i,
                 fit_signal="phi",
-                mode_ky_indices=ky_local,
+                mode_ky_indices=ky_local[:valid_count],
                 mode_kx_index=0,
                 mode_z_index=_midplane_index(grid),
                 mode_method=mode_method,
@@ -1095,7 +1148,8 @@ def run_cyclone_scan(
             )
             gamma_arr = np.asarray(gamma_vals)
             omega_arr = np.asarray(omega_vals)
-            for local_idx, ky_val in enumerate(ky_slice):
+            for local_idx in range(valid_count):
+                ky_val = ky_slice[local_idx]
                 gamma_i, omega_i = _normalize_growth_rate(
                     float(gamma_arr[local_idx]),
                     float(omega_arr[local_idx]),
@@ -1159,7 +1213,8 @@ def run_cyclone_scan(
         if mode_only and phi_t_np.ndim == 2:
             signal_t = phi_t_np
 
-        for local_idx, ky_val in enumerate(ky_slice):
+        for local_idx in range(valid_count):
+            ky_val = ky_slice[local_idx]
             if signal_t is None:
                 sel_local = ModeSelection(ky_index=local_idx, kx_index=0, z_index=_midplane_index(grid))
                 signal = extract_mode_time_series(phi_t_np, sel_local, method=mode_method)
@@ -1302,6 +1357,10 @@ def run_etg_linear(
             shift_restart=krylov_cfg.shift_restart,
             shift_solve_method=krylov_cfg.shift_solve_method,
             shift_preconditioner=krylov_cfg.shift_preconditioner,
+            shift_selection=krylov_cfg.shift_selection,
+            mode_family=krylov_cfg.mode_family,
+            fallback_method=krylov_cfg.fallback_method,
+            fallback_real_floor=krylov_cfg.fallback_real_floor,
         )
         term_cfg = TermConfig(
             streaming=terms.streaming,
@@ -1603,6 +1662,7 @@ def run_etg_scan(
     sample_stride: int | None = None,
     fit_signal: str = "density",
     ky_batch: int = 1,
+    fixed_batch_shape: bool = True,
     streaming_fit: bool = True,
     streaming_amp_floor: float = 1.0e-30,
     gx_growth: bool = False,
@@ -1731,14 +1791,21 @@ def run_etg_scan(
                 )
         return _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
 
-    ky_iter = range(0, len(ky_values), ky_batch) if use_batch else range(len(ky_values))
+    ky_values_arr = np.asarray(ky_values, dtype=float)
+    if use_batch:
+        ky_iter = _iter_ky_batches(
+            ky_values_arr,
+            ky_batch=ky_batch,
+            fixed_batch_shape=fixed_batch_shape,
+        )
+    else:
+        ky_iter = _iter_ky_batches(ky_values_arr, ky_batch=1, fixed_batch_shape=False)
     ky_slice: np.ndarray
     ky_indices: list[int]
     sel: ModeSelection | ModeSelectionBatch
 
-    for batch_start in ky_iter:
+    for batch_start, ky_slice, valid_count in ky_iter:
         if use_batch:
-            ky_slice = np.asarray(ky_values[batch_start : batch_start + ky_batch], dtype=float)
             ky_indices = [select_ky_index(np.asarray(grid_full.ky), float(ky)) for ky in ky_slice]
             grid = select_ky_grid(grid_full, ky_indices)
             sel_indices = np.arange(len(ky_indices), dtype=int)
@@ -1746,7 +1813,6 @@ def run_etg_scan(
             dt_i = float(dt)
             steps_i = int(steps)
         else:
-            ky_slice = np.asarray([ky_values[batch_start]], dtype=float)
             ky_indices = [select_ky_index(np.asarray(grid_full.ky), float(ky_slice[0]))]
             grid = select_ky_grid(grid_full, ky_indices[0])
             sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
@@ -1793,6 +1859,10 @@ def run_etg_scan(
                 shift_restart=cfg_use.shift_restart,
                 shift_solve_method=cfg_use.shift_solve_method,
                 shift_preconditioner=cfg_use.shift_preconditioner,
+                shift_selection=cfg_use.shift_selection,
+                mode_family=cfg_use.mode_family,
+                fallback_method=cfg_use.fallback_method,
+                fallback_real_floor=cfg_use.fallback_real_floor,
             )
             gamma = float(np.real(eig))
             omega = float(-np.imag(eig))
@@ -1845,7 +1915,7 @@ def run_etg_scan(
                 tmin=tmin_i,
                 tmax=tmax_i,
                 fit_signal=fit_signal,
-                mode_ky_indices=np.arange(len(ky_indices)),
+                mode_ky_indices=np.arange(valid_count, dtype=int),
                 mode_kx_index=0,
                 mode_z_index=_midplane_index(grid),
                 mode_method=mode_method,
@@ -1855,7 +1925,8 @@ def run_etg_scan(
             )
             gamma_arr = np.asarray(gamma_vals)
             omega_arr = np.asarray(omega_vals)
-            for local_idx, ky_val in enumerate(ky_slice):
+            for local_idx in range(valid_count):
+                ky_val = ky_slice[local_idx]
                 gamma_i, omega_i = _normalize_growth_rate(
                     float(gamma_arr[local_idx]),
                     float(omega_arr[local_idx]),
@@ -1921,7 +1992,8 @@ def run_etg_scan(
         if fit_signal == "density" and density_np is None:
             density_np = phi_t_np
         t = np.arange(phi_t_np.shape[0]) * dt_i * stride
-        for local_idx, ky_val in enumerate(ky_slice):
+        for local_idx in range(valid_count):
+            ky_val = ky_slice[local_idx]
             if mode_only and fit_signal == "phi":
                 signal = _extract_mode_only_signal(phi_t_np, local_idx=local_idx)
             else:
@@ -2045,6 +2117,10 @@ def run_kinetic_linear(
             shift_restart=krylov_cfg.shift_restart,
             shift_solve_method=krylov_cfg.shift_solve_method,
             shift_preconditioner=krylov_cfg.shift_preconditioner,
+            shift_selection=krylov_cfg.shift_selection,
+            mode_family=krylov_cfg.mode_family,
+            fallback_method=krylov_cfg.fallback_method,
+            fallback_real_floor=krylov_cfg.fallback_real_floor,
         )
         term_cfg = TermConfig(
             streaming=terms.streaming,
@@ -2234,6 +2310,7 @@ def run_kinetic_scan(
     sample_stride: int | None = None,
     fit_signal: str = "phi",
     ky_batch: int = 1,
+    fixed_batch_shape: bool = True,
     streaming_fit: bool = True,
     streaming_amp_floor: float = 1.0e-30,
     init_species_index: int = 1,
@@ -2325,7 +2402,15 @@ def run_kinetic_scan(
                 )
         return _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
 
-    ky_iter = range(0, len(ky_values), ky_batch) if use_batch else range(len(ky_values))
+    ky_values_arr = np.asarray(ky_values, dtype=float)
+    if use_batch:
+        ky_iter = _iter_ky_batches(
+            ky_values_arr,
+            ky_batch=ky_batch,
+            fixed_batch_shape=fixed_batch_shape,
+        )
+    else:
+        ky_iter = _iter_ky_batches(ky_values_arr, ky_batch=1, fixed_batch_shape=False)
     ky_slice: np.ndarray
     ky_indices: list[int]
     sel: ModeSelection | ModeSelectionBatch
@@ -2334,9 +2419,8 @@ def run_kinetic_scan(
     if density_species_index < 0 or density_species_index >= 2:
         raise ValueError("density_species_index out of range for kinetic species")
 
-    for batch_start in ky_iter:
+    for batch_start, ky_slice, valid_count in ky_iter:
         if use_batch:
-            ky_slice = np.asarray(ky_values[batch_start : batch_start + ky_batch], dtype=float)
             ky_indices = [select_ky_index(np.asarray(grid_full.ky), float(ky)) for ky in ky_slice]
             grid = select_ky_grid(grid_full, ky_indices)
             sel_indices = np.arange(len(ky_indices), dtype=int)
@@ -2344,7 +2428,6 @@ def run_kinetic_scan(
             dt_i = float(dt)
             steps_i = int(steps)
         else:
-            ky_slice = np.asarray([ky_values[batch_start]], dtype=float)
             ky_indices = [select_ky_index(np.asarray(grid_full.ky), float(ky_slice[0]))]
             grid = select_ky_grid(grid_full, ky_indices[0])
             sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
@@ -2389,6 +2472,10 @@ def run_kinetic_scan(
                 shift_restart=cfg_use.shift_restart,
                 shift_solve_method=cfg_use.shift_solve_method,
                 shift_preconditioner=cfg_use.shift_preconditioner,
+                shift_selection=cfg_use.shift_selection,
+                mode_family=cfg_use.mode_family,
+                fallback_method=cfg_use.fallback_method,
+                fallback_real_floor=cfg_use.fallback_real_floor,
             )
             gamma = float(np.real(eig))
             omega = float(-np.imag(eig))
@@ -2439,7 +2526,7 @@ def run_kinetic_scan(
                 tmin=tmin_i,
                 tmax=tmax_i,
                 fit_signal=fit_signal,
-                mode_ky_indices=np.arange(len(ky_indices)),
+                mode_ky_indices=np.arange(valid_count, dtype=int),
                 mode_kx_index=0,
                 mode_z_index=_midplane_index(grid),
                 mode_method=mode_method,
@@ -2449,7 +2536,8 @@ def run_kinetic_scan(
             )
             gamma_arr = np.asarray(gamma_vals)
             omega_arr = np.asarray(omega_vals)
-            for local_idx, ky_val in enumerate(ky_slice):
+            for local_idx in range(valid_count):
+                ky_val = ky_slice[local_idx]
                 gamma_i, omega_i = _normalize_growth_rate(
                     float(gamma_arr[local_idx]),
                     float(omega_arr[local_idx]),
@@ -2514,7 +2602,8 @@ def run_kinetic_scan(
         density_np = None if density_t is None else np.asarray(density_t)
         if fit_signal == "density" and density_np is None:
             density_np = phi_t_np
-        for local_idx, ky_val in enumerate(ky_slice):
+        for local_idx in range(valid_count):
+            ky_val = ky_slice[local_idx]
             if mode_only and fit_signal == "phi":
                 signal = _extract_mode_only_signal(phi_t_np, local_idx=local_idx)
             elif mode_only and fit_signal == "density" and density_np is not None:
@@ -2633,6 +2722,10 @@ def run_tem_linear(
             shift_restart=krylov_cfg.shift_restart,
             shift_solve_method=krylov_cfg.shift_solve_method,
             shift_preconditioner=krylov_cfg.shift_preconditioner,
+            shift_selection=krylov_cfg.shift_selection,
+            mode_family=krylov_cfg.mode_family,
+            fallback_method=krylov_cfg.fallback_method,
+            fallback_real_floor=krylov_cfg.fallback_real_floor,
         )
         term_cfg = TermConfig(
             streaming=terms.streaming,
@@ -2799,6 +2892,7 @@ def run_tem_scan(
     terms: LinearTerms | None = None,
     sample_stride: int | None = None,
     ky_batch: int = 1,
+    fixed_batch_shape: bool = True,
     streaming_fit: bool = True,
     streaming_amp_floor: float = 1.0e-30,
     init_species_index: int = 1,
@@ -2890,7 +2984,15 @@ def run_tem_scan(
                 )
         return _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
 
-    ky_iter = range(0, len(ky_values), ky_batch) if use_batch else range(len(ky_values))
+    ky_values_arr = np.asarray(ky_values, dtype=float)
+    if use_batch:
+        ky_iter = _iter_ky_batches(
+            ky_values_arr,
+            ky_batch=ky_batch,
+            fixed_batch_shape=fixed_batch_shape,
+        )
+    else:
+        ky_iter = _iter_ky_batches(ky_values_arr, ky_batch=1, fixed_batch_shape=False)
     ky_slice: np.ndarray
     ky_indices: list[int]
     sel: ModeSelection | ModeSelectionBatch
@@ -2900,9 +3002,8 @@ def run_tem_scan(
     if density_species_index < 0 or density_species_index >= 2:
         raise ValueError("density_species_index out of range for kinetic species")
 
-    for batch_start in ky_iter:
+    for batch_start, ky_slice, valid_count in ky_iter:
         if use_batch:
-            ky_slice = np.asarray(ky_values[batch_start : batch_start + ky_batch], dtype=float)
             ky_indices = [select_ky_index(np.asarray(grid_full.ky), float(ky)) for ky in ky_slice]
             grid = select_ky_grid(grid_full, ky_indices)
             sel_indices = np.arange(len(ky_indices), dtype=int)
@@ -2910,7 +3011,6 @@ def run_tem_scan(
             dt_i = float(dt)
             steps_i = int(steps)
         else:
-            ky_slice = np.asarray([ky_values[batch_start]], dtype=float)
             ky_indices = [select_ky_index(np.asarray(grid_full.ky), float(ky_slice[0]))]
             grid = select_ky_grid(grid_full, ky_indices[0])
             sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
@@ -2955,6 +3055,10 @@ def run_tem_scan(
                 shift_restart=cfg_use.shift_restart,
                 shift_solve_method=cfg_use.shift_solve_method,
                 shift_preconditioner=cfg_use.shift_preconditioner,
+                shift_selection=cfg_use.shift_selection,
+                mode_family=cfg_use.mode_family,
+                fallback_method=cfg_use.fallback_method,
+                fallback_real_floor=cfg_use.fallback_real_floor,
             )
             gamma = float(np.real(eig))
             omega = float(-np.imag(eig))
@@ -3005,7 +3109,7 @@ def run_tem_scan(
                 tmin=tmin_i,
                 tmax=tmax_i,
                 fit_signal="phi",
-                mode_ky_indices=np.arange(len(ky_indices)),
+                mode_ky_indices=np.arange(valid_count, dtype=int),
                 mode_kx_index=0,
                 mode_z_index=_midplane_index(grid),
                 mode_method=mode_method,
@@ -3014,7 +3118,8 @@ def run_tem_scan(
             )
             gamma_arr = np.asarray(gamma_vals)
             omega_arr = np.asarray(omega_vals)
-            for local_idx, ky_val in enumerate(ky_slice):
+            for local_idx in range(valid_count):
+                ky_val = ky_slice[local_idx]
                 gammas.append(float(gamma_arr[local_idx]))
                 omegas.append(float(omega_arr[local_idx]))
                 ky_out.append(float(ky_val))
@@ -3049,7 +3154,8 @@ def run_tem_scan(
             )
 
         phi_t_np = np.asarray(phi_t)
-        for local_idx, ky_val in enumerate(ky_slice):
+        for local_idx in range(valid_count):
+            ky_val = ky_slice[local_idx]
             if mode_only:
                 signal = _extract_mode_only_signal(phi_t_np, local_idx=local_idx)
             else:
@@ -3089,6 +3195,7 @@ def run_kbm_beta_scan(
     sample_stride: int | None = None,
     fit_signal: str = "phi",
     ky_batch: int = 1,
+    fixed_batch_shape: bool = True,
     streaming_fit: bool = True,
     streaming_amp_floor: float = 1.0e-30,
     init_species_index: int = 1,
@@ -3187,6 +3294,10 @@ def run_kbm_beta_scan(
                 shift_restart=krylov_cfg.shift_restart,
                 shift_solve_method=krylov_cfg.shift_solve_method,
                 shift_preconditioner=krylov_cfg.shift_preconditioner,
+                shift_selection=krylov_cfg.shift_selection,
+                mode_family=krylov_cfg.mode_family,
+                fallback_method=krylov_cfg.fallback_method,
+                fallback_real_floor=krylov_cfg.fallback_real_floor,
             )
             gamma = float(np.real(eig))
             omega = float(-np.imag(eig))

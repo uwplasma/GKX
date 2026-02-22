@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Tuple
+from dataclasses import dataclass
+from typing import Callable, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -20,6 +21,18 @@ from spectraxgk.terms.assembly import assemble_rhs_cached_jit
 from spectraxgk.terms.config import FieldState, TermConfig
 from spectraxgk.terms.integrators import integrate_nonlinear as integrate_nonlinear_scan
 from spectraxgk.terms.nonlinear import placeholder_nonlinear_contribution
+
+
+@dataclass(frozen=True)
+class IMEXLinearOperator:
+    """Reusable matrix-free linear operator for nonlinear IMEX solves."""
+
+    state_dtype: jnp.dtype
+    shape: tuple[int, ...]
+    dt_val: jnp.ndarray
+    precond_op: Callable[[jnp.ndarray], jnp.ndarray] | None
+    matvec: Callable[[jnp.ndarray], jnp.ndarray]
+    squeeze_species: bool
 
 
 def nonlinear_rhs_cached(
@@ -110,6 +123,48 @@ def integrate_nonlinear(
     )
 
 
+def build_nonlinear_imex_operator(
+    G0: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    dt: float,
+    *,
+    terms: TermConfig | None = None,
+    implicit_preconditioner: str | None = None,
+) -> IMEXLinearOperator:
+    """Build and cache the matrix-free linear operator used by nonlinear IMEX."""
+
+    term_cfg = terms or TermConfig()
+    linear_terms = LinearTerms(
+        streaming=term_cfg.streaming,
+        mirror=term_cfg.mirror,
+        curvature=term_cfg.curvature,
+        gradb=term_cfg.gradb,
+        diamagnetic=term_cfg.diamagnetic,
+        collisions=term_cfg.collisions,
+        hypercollisions=term_cfg.hypercollisions,
+        end_damping=term_cfg.end_damping,
+        apar=term_cfg.apar,
+        bpar=term_cfg.bpar,
+    )
+    G, shape, _size, dt_val, precond_op, matvec, squeeze_species = _build_implicit_operator(
+        G0,
+        cache,
+        params,
+        dt,
+        linear_terms,
+        implicit_preconditioner,
+    )
+    return IMEXLinearOperator(
+        state_dtype=G.dtype,
+        shape=shape,
+        dt_val=dt_val,
+        precond_op=precond_op,
+        matvec=matvec,
+        squeeze_species=squeeze_species,
+    )
+
+
 def integrate_nonlinear_imex_cached(
     G0: jnp.ndarray,
     cache: LinearCache,
@@ -126,6 +181,7 @@ def integrate_nonlinear_imex_cached(
     implicit_restart: int = 20,
     implicit_solve_method: str = "batched",
     implicit_preconditioner: str | None = None,
+    implicit_operator: IMEXLinearOperator | None = None,
 ) -> tuple[jnp.ndarray, FieldState]:
     """IMEX integrator: implicit linear operator, explicit nonlinear term."""
 
@@ -157,14 +213,31 @@ def integrate_nonlinear_imex_cached(
         bpar=linear_cfg.bpar,
     )
 
-    G, shape, _size, dt_val, precond_op, matvec, squeeze_species = _build_implicit_operator(
-        G0,
-        cache,
-        params,
-        dt,
-        linear_terms,
-        implicit_preconditioner,
-    )
+    precond_op: Callable[[jnp.ndarray], jnp.ndarray] | None
+    matvec: Callable[[jnp.ndarray], jnp.ndarray]
+    if implicit_operator is None:
+        G, shape, _size, dt_val, precond_op, matvec, squeeze_species = _build_implicit_operator(
+            G0,
+            cache,
+            params,
+            dt,
+            linear_terms,
+            implicit_preconditioner,
+        )
+    else:
+        shape = implicit_operator.shape
+        dt_val = implicit_operator.dt_val
+        precond_op = implicit_operator.precond_op
+        matvec = implicit_operator.matvec
+        squeeze_species = implicit_operator.squeeze_species
+        G = jnp.asarray(G0, dtype=implicit_operator.state_dtype)
+        if squeeze_species and G.ndim == len(shape) - 1:
+            G = G[None, ...]
+        if G.shape != shape:
+            raise ValueError(
+                "implicit_operator shape mismatch: "
+                f"expected {shape}, got {tuple(G.shape)}"
+            )
 
     def nonlinear_term(G_in: jnp.ndarray) -> jnp.ndarray:
         if term_cfg.nonlinear == 0.0:
