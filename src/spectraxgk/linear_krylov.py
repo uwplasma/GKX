@@ -8,6 +8,7 @@ from typing import Callable
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jax.scipy.sparse.linalg import gmres
 
 from spectraxgk.linear import (
@@ -41,6 +42,10 @@ class KrylovConfig:
     shift_restart: int = 20
     shift_solve_method: str = "batched"
     shift_preconditioner: str | None = "damping"
+    shift_selection: str = "targeted"
+    mode_family: str = "auto"
+    fallback_method: str = "propagator"
+    fallback_real_floor: float = -1.0e-6
 
 
 def _normalize(v: jnp.ndarray) -> jnp.ndarray:
@@ -102,6 +107,15 @@ def _omega_scale(cache: LinearCache, params: LinearParams) -> jnp.ndarray:
     drive_n = _max_scalar(rln)
     drive = jnp.maximum(drive_i, jnp.maximum(drive_e, drive_n))
     return ky_scale * jnp.maximum(drive, 1.0e-8)
+
+
+def _mode_family_sign(mode_family: str) -> int:
+    key = mode_family.strip().lower()
+    if key in {"ion", "itg", "cyclone", "positive"}:
+        return 1
+    if key in {"electron", "etg", "tem", "kbm", "negative"}:
+        return -1
+    return 0
 
 
 def _select_by_target(
@@ -229,7 +243,16 @@ def _build_shift_invert_precond(
         dl = jnp.broadcast_to(dl, batch_shape)
         d = jnp.broadcast_to(d, batch_shape)
         du = jnp.broadcast_to(du, batch_shape)
-        y_hat_mlast = jax.lax.linalg.tridiagonal_solve(dl, d, du, x_hat_mlast[..., None])[..., 0]
+        # `tridiagonal_solve` requires all operands to share the same dtype.
+        # Under x64 this pathway can mix complex64 state with complex128 coeffs.
+        solve_dtype = jnp.result_type(x_hat_mlast, dl, d, du)
+        y_hat_mlast = jax.lax.linalg.tridiagonal_solve(
+            dl.astype(solve_dtype),
+            d.astype(solve_dtype),
+            du.astype(solve_dtype),
+            x_hat_mlast.astype(solve_dtype)[..., None],
+        )[..., 0]
+        y_hat_mlast = y_hat_mlast.astype(x_hat_mlast.dtype)
         y_hat = jnp.moveaxis(y_hat_mlast, -1, 2)
         return jnp.fft.ifft(y_hat, axis=-1)
 
@@ -292,7 +315,14 @@ def _build_shift_invert_precond(
             dl = jnp.broadcast_to(dl, batch_shape)
             d = jnp.broadcast_to(d, batch_shape)
             du = jnp.broadcast_to(du, batch_shape)
-            y_hat_mlast = jax.lax.linalg.tridiagonal_solve(dl, d, du, x_hat_mlast[..., None])[..., 0]
+            solve_dtype = jnp.result_type(x_hat_mlast, dl, d, du)
+            y_hat_mlast = jax.lax.linalg.tridiagonal_solve(
+                dl.astype(solve_dtype),
+                d.astype(solve_dtype),
+                du.astype(solve_dtype),
+                x_hat_mlast.astype(solve_dtype)[..., None],
+            )[..., 0]
+            y_hat_mlast = y_hat_mlast.astype(x_hat_mlast.dtype)
             y_hat = jnp.moveaxis(y_hat_mlast, -1, 2)
             y_link = jnp.fft.ifft(y_hat, axis=-1)
             y_link = y_link.reshape(*lead_shape, nChains * nLinks, Nz)
@@ -475,6 +505,7 @@ def _arnoldi(
         "gmres_restart",
         "gmres_maxiter",
         "gmres_solve_method",
+        "select_targeted",
     ),
 )
 def dominant_eigenpair_shift_invert_cached(
@@ -487,6 +518,7 @@ def dominant_eigenpair_shift_invert_cached(
     restarts: int,
     sigma: jnp.ndarray,
     omega_min_factor: float,
+    omega_target_factor: float,
     omega_cap_factor: float,
     omega_sign: int,
     gmres_tol: float,
@@ -494,6 +526,7 @@ def dominant_eigenpair_shift_invert_cached(
     gmres_restart: int,
     gmres_solve_method: str,
     shift_preconditioner: str | None,
+    select_targeted: bool,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Restarted shift-invert Arnoldi with GMRES solves."""
 
@@ -530,7 +563,9 @@ def dominant_eigenpair_shift_invert_cached(
         eigvals, eigvecs = jnp.linalg.eig(Hk)
         safe = jnp.where(jnp.abs(eigvals) > 1.0e-14, eigvals, 1.0e-14 + 0.0j)
         lam = sigma_val + 1.0 / safe
+        real_part = jnp.real(lam)
         imag_part = jnp.imag(lam)
+        finite = jnp.isfinite(real_part) & jnp.isfinite(imag_part)
         omega_scale = _omega_scale(cache, params)
         omega_cap = omega_cap_factor * omega_scale
         omega_min = omega_min_factor * omega_scale
@@ -538,6 +573,7 @@ def dominant_eigenpair_shift_invert_cached(
         use_min = omega_min_factor > 0.0
         mask0 = jnp.abs(imag_part) <= omega_cap
         mask0 = jnp.where(use_min, mask0 & (jnp.abs(imag_part) >= omega_min), mask0)
+        mask0 = mask0 & finite
         omega_sign_val = jnp.asarray(omega_sign, dtype=imag_part.dtype)
         use_sign = omega_sign_val != 0.0
         mask_sign = (omega_sign_val * imag_part) >= 0.0
@@ -545,11 +581,26 @@ def dominant_eigenpair_shift_invert_cached(
         use_sign_mask = jnp.any(mask)
         mask = jnp.where(use_sign_mask, mask, mask0)
         dist = jnp.abs(lam - sigma_val)
+        dist = jnp.where(finite, dist, jnp.inf)
         dist_masked = jnp.where(mask, dist, jnp.inf)
         idx_masked = jnp.argmin(dist_masked)
         idx_all = jnp.argmin(dist)
-        use_mask = use_cap & jnp.any(mask)
-        idx = jnp.where(use_mask, idx_masked, idx_all)
+        has_mask = jnp.any(mask)
+        idx = jnp.where(has_mask, idx_masked, idx_all)
+        real_masked = jnp.where(mask, real_part, -jnp.inf)
+        idx_growth = jnp.argmax(real_masked)
+        has_growth = jnp.any(mask & (real_part >= 0.0))
+        idx = jnp.where(has_growth, idx_growth, idx)
+        if select_targeted:
+            idx = _select_by_target(
+                real_part,
+                imag_part,
+                mask,
+                omega_scale,
+                omega_target_factor,
+                omega_sign,
+                idx,
+            )
         y = eigvecs[:, idx]
         v_next = jnp.tensordot(jnp.conj(y), V[:krylov_dim], axes=1)
         v_next = _normalize(v_next)
@@ -719,6 +770,10 @@ def dominant_eigenpair(
     shift_restart: int = 20,
     shift_solve_method: str = "batched",
     shift_preconditioner: str | None = "damping",
+    shift_selection: str = "targeted",
+    mode_family: str = "auto",
+    fallback_method: str = "propagator",
+    fallback_real_floor: float = -1.0e-6,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Python wrapper for the cached Krylov solver."""
 
@@ -738,6 +793,8 @@ def dominant_eigenpair(
         nonlinear=0.0,
     )
     method_key = method.strip().lower()
+    mode_family_sign = _mode_family_sign(mode_family)
+    omega_sign_eff = int(omega_sign) if int(omega_sign) != 0 else mode_family_sign
     if method_key == "power":
         return dominant_eigenpair_power(
             v0,
@@ -759,7 +816,7 @@ def dominant_eigenpair(
             omega_min_factor=float(omega_min_factor),
             omega_target_factor=float(omega_target_factor),
             omega_cap_factor=float(omega_cap_factor),
-            omega_sign=int(omega_sign),
+            omega_sign=omega_sign_eff,
         )
     if method_key == "shift_invert":
         restarts = max(int(restarts), 1)
@@ -777,15 +834,15 @@ def dominant_eigenpair(
                     omega_min_factor=float(omega_min_factor),
                     omega_target_factor=float(omega_target_factor),
                     omega_cap_factor=float(omega_cap_factor),
-                    omega_sign=int(omega_sign),
+                    omega_sign=omega_sign_eff,
                 )
                 sigma = shift_est
                 v_init = v_seed
             elif shift_source_key == "target":
                 omega_scale = _omega_scale(cache, params)
                 omega_target = float(omega_target_factor) * omega_scale
-                if omega_sign != 0:
-                    omega_target = float(jnp.sign(omega_sign)) * jnp.abs(omega_target)
+                if omega_sign_eff != 0:
+                    omega_target = float(jnp.sign(omega_sign_eff)) * jnp.abs(omega_target)
                 sigma = 1j * omega_target
                 v_init = v0
             else:
@@ -802,7 +859,7 @@ def dominant_eigenpair(
         else:
             sigma = jnp.asarray(shift, dtype=v0.dtype)
             v_init = v0
-        return dominant_eigenpair_shift_invert_cached(
+        eig_si, vec_si = dominant_eigenpair_shift_invert_cached(
             v_init,
             cache,
             params,
@@ -811,14 +868,61 @@ def dominant_eigenpair(
             restarts=restarts,
             sigma=sigma,
             omega_min_factor=float(omega_min_factor),
+            omega_target_factor=float(omega_target_factor),
             omega_cap_factor=float(omega_cap_factor),
-            omega_sign=int(omega_sign),
+            omega_sign=omega_sign_eff,
             gmres_tol=shift_tol,
             gmres_maxiter=max(int(shift_maxiter), 1),
             gmres_restart=max(int(shift_restart), 1),
             gmres_solve_method=shift_solve_method,
             shift_preconditioner=shift_preconditioner,
+            select_targeted=shift_selection.strip().lower() != "nearest",
         )
+        fallback_key = fallback_method.strip().lower()
+        eig_host = complex(np.asarray(eig_si))
+        need_fallback = (
+            not np.isfinite(eig_host.real)
+            or not np.isfinite(eig_host.imag)
+            or eig_host.real < float(fallback_real_floor)
+        )
+        if need_fallback and fallback_key != "none":
+            if fallback_key == "propagator":
+                return dominant_eigenpair_propagator_cached(
+                    v0,
+                    cache,
+                    params,
+                    term_cfg,
+                    krylov_dim=krylov_dim,
+                    restarts=max(int(restarts), 1),
+                    dt=float(power_dt),
+                    omega_min_factor=float(omega_min_factor),
+                    omega_target_factor=float(omega_target_factor),
+                    omega_cap_factor=float(omega_cap_factor),
+                    omega_sign=omega_sign_eff,
+                )
+            if fallback_key == "arnoldi":
+                return dominant_eigenpair_cached(
+                    v0,
+                    cache,
+                    params,
+                    term_cfg,
+                    krylov_dim=krylov_dim,
+                    restarts=max(int(restarts), 1),
+                    omega_min_factor=float(omega_min_factor),
+                    omega_target_factor=float(omega_target_factor),
+                    omega_cap_factor=float(omega_cap_factor),
+                    omega_sign=omega_sign_eff,
+                )
+            if fallback_key == "power":
+                return dominant_eigenpair_power(
+                    v0,
+                    cache,
+                    params,
+                    term_cfg,
+                    iterations=max(int(power_iters), 1),
+                    dt=float(power_dt),
+                )
+        return eig_si, vec_si
     if method_key != "arnoldi":
         raise ValueError(
             "Krylov method must be 'power', 'propagator', 'shift_invert', or 'arnoldi'"
@@ -835,7 +939,7 @@ def dominant_eigenpair(
         omega_min_factor=float(omega_min_factor),
         omega_target_factor=float(omega_target_factor),
         omega_cap_factor=float(omega_cap_factor),
-        omega_sign=int(omega_sign),
+        omega_sign=omega_sign_eff,
     )
 
 
