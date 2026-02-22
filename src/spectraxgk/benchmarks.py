@@ -2369,6 +2369,7 @@ def run_tem_linear(
     require_positive: bool = True,
     min_amp_fraction: float = 0.0,
     mode_method: str = "project",
+    fit_signal: str = "phi",
     terms: LinearTerms | None = None,
     sample_stride: int | None = None,
     init_species_index: int = 1,
@@ -2459,6 +2460,8 @@ def run_tem_linear(
         gamma = float(np.real(eig))
         omega = float(-np.imag(eig))
     else:
+        if fit_signal not in {"phi", "density"}:
+            raise ValueError("fit_signal must be 'phi' or 'density'")
         if time_cfg is not None:
             time_cfg_use = time_cfg
             if sample_stride is not None:
@@ -2466,33 +2469,79 @@ def run_tem_linear(
             dt = float(time_cfg_use.dt)
             steps = int(round(time_cfg_use.t_max / time_cfg_use.dt))
             cache = build_linear_cache(grid, geom, params, Nl, Nm)
-            _, phi_t = integrate_linear_from_config(
-                G0_jax,
-                grid,
-                geom,
-                params,
-                time_cfg_use,
-                cache=cache,
-                terms=terms,
-            )
+            if fit_signal == "density":
+                _diag = integrate_linear_diagnostics(
+                    G0_jax,
+                    grid,
+                    geom,
+                    params,
+                    dt=dt,
+                    steps=steps,
+                    method=method,
+                    cache=cache,
+                    terms=terms,
+                    sample_stride=time_cfg_use.sample_stride,
+                    species_index=density_species_index,
+                )
+                if len(_diag) == 4:
+                    _, phi_t, density_t, _ = _diag
+                else:
+                    _, phi_t, density_t = _diag
+            else:
+                _, phi_t = integrate_linear_from_config(
+                    G0_jax,
+                    grid,
+                    geom,
+                    params,
+                    time_cfg_use,
+                    cache=cache,
+                    terms=terms,
+                )
+                density_t = None
             stride = time_cfg_use.sample_stride
         else:
             stride = 1 if sample_stride is None else int(sample_stride)
-            _, phi_t = integrate_linear(
-                G0_jax,
-                grid,
-                geom,
-                params,
-                dt=dt,
-                steps=steps,
-                method=method,
-                terms=terms,
-                sample_stride=stride,
-            )
+            cache = build_linear_cache(grid, geom, params, Nl, Nm)
+            if fit_signal == "density":
+                _diag = integrate_linear_diagnostics(
+                    G0_jax,
+                    grid,
+                    geom,
+                    params,
+                    dt=dt,
+                    steps=steps,
+                    method=method,
+                    cache=cache,
+                    terms=terms,
+                    sample_stride=stride,
+                    species_index=density_species_index,
+                )
+                if len(_diag) == 4:
+                    _, phi_t, density_t, _ = _diag
+                else:
+                    _, phi_t, density_t = _diag
+            else:
+                _, phi_t = integrate_linear(
+                    G0_jax,
+                    grid,
+                    geom,
+                    params,
+                    dt=dt,
+                    steps=steps,
+                    method=method,
+                    cache=cache,
+                    terms=terms,
+                    sample_stride=stride,
+                )
+                density_t = None
 
         phi_t_np = np.asarray(phi_t)
         t = np.arange(phi_t_np.shape[0]) * dt * stride
-        signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
+        if fit_signal == "density" and density_t is not None:
+            density_t_np = np.asarray(density_t)
+            signal = extract_mode_time_series(density_t_np, sel, method=mode_method)
+        else:
+            signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
         if auto_window and tmin is None and tmax is None:
             gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
                 t,

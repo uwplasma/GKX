@@ -467,6 +467,7 @@ def integrate_linear_diffrax_streaming(
         G_packed, acc_re, acc_im, wsum = state
         G = _unpack_complex_state(G_packed)
         dG, fields = _assemble_rhs(G, cache_, params_, term_cfg_, use_custom_vjp=use_custom_vjp)
+        dG = jnp.asarray(dG, dtype=G.dtype)
 
         if fit_signal == "phi":
             s = _extract_mode(fields.phi)
@@ -481,15 +482,16 @@ def integrate_linear_diffrax_streaming(
             raise ValueError("fit_signal must be 'phi' or 'density'")
 
         abs_s = jnp.abs(s)
-        safe_s = jnp.where(abs_s > amp_floor_val, s, 1.0 + 0.0j)
-        log_deriv = jnp.where(abs_s > amp_floor_val, s_dot / safe_s, 0.0 + 0.0j)
+        safe_s = jnp.where(abs_s > amp_floor_val, s, jnp.ones_like(s))
+        log_deriv = jnp.where(abs_s > amp_floor_val, s_dot / safe_s, jnp.zeros_like(s))
         window = (t >= tmin_val) & (t <= tmax_val)
         window = jnp.asarray(window, dtype=abs_s.dtype)
-        weight = window * (abs_s > amp_floor_val)
-        acc_re_dot = weight * jnp.real(log_deriv)
-        acc_im_dot = weight * jnp.imag(log_deriv)
+        weight = jnp.asarray(window * (abs_s > amp_floor_val), dtype=real_dtype)
+        acc_re_dot = weight * jnp.asarray(jnp.real(log_deriv), dtype=real_dtype)
+        acc_im_dot = weight * jnp.asarray(jnp.imag(log_deriv), dtype=real_dtype)
         wsum_dot = weight
-        return (_pack_complex_state(dG), acc_re_dot, acc_im_dot, wsum_dot)
+        dG_packed = jnp.asarray(_pack_complex_state(dG), dtype=G_packed.dtype)
+        return (dG_packed, acc_re_dot, acc_im_dot, wsum_dot)
 
     solver = _solver_from_name(method)
     explicit_term = dfx.ODETerm(rhs)
@@ -530,6 +532,14 @@ def integrate_linear_diffrax_streaming(
         sol = solve(G0_packed)
 
     (G_last_packed, acc_re, acc_im, wsum) = sol.ys
+    if isinstance(G_last_packed, jnp.ndarray) and G_last_packed.ndim > G0_packed.ndim:
+        G_last_packed = G_last_packed[0]
+    if isinstance(acc_re, jnp.ndarray) and acc_re.ndim > 1:
+        acc_re = acc_re[0]
+    if isinstance(acc_im, jnp.ndarray) and acc_im.ndim > 1:
+        acc_im = acc_im[0]
+    if isinstance(wsum, jnp.ndarray) and wsum.ndim > 1:
+        wsum = wsum[0]
     wsum_safe = jnp.where(wsum > 0.0, wsum, jnp.nan)
     gamma = acc_re / wsum_safe
     omega = -acc_im / wsum_safe
