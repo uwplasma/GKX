@@ -153,25 +153,199 @@ def _build_shift_invert_precond(
     v: jnp.ndarray,
     cache: LinearCache,
     params: LinearParams,
+    term_cfg: TermConfig,
     sigma: jnp.ndarray,
     mode: str | None,
 ) -> tuple[jnp.ndarray | None, Callable[[jnp.ndarray], jnp.ndarray] | None]:
     if mode is None or mode.lower() == "none":
         return None, None
-    if mode.lower() != "damping":
+    mode_key = mode.lower()
+    if mode_key == "damping":
+        damping = _compute_damping(v, cache, params)
+        diag = -damping.astype(v.dtype) - sigma
+        safe = jnp.where(jnp.abs(diag) > 0.0, diag, 1.0 + 0.0j)
+        precond = 1.0 / safe
+        shape = v.shape
+        size = v.size
+
+        def apply_precond(x_flat: jnp.ndarray) -> jnp.ndarray:
+            x = x_flat.reshape(shape)
+            return (x * precond).reshape(size)
+
+        return precond, apply_precond
+
+    if mode_key not in {
+        "hermite-line",
+        "hermite_line",
+        "hermite",
+        "streaming-line",
+        "streaming_line",
+        "hermite-line-coarse",
+        "hermite_line_coarse",
+        "hermite_coarse",
+        "streaming-line-coarse",
+    }:
         return None, None
-    damping = _compute_damping(v, cache, params)
-    diag = -damping.astype(v.dtype) - sigma
-    safe = jnp.where(jnp.abs(diag) > 0.0, diag, 1.0 + 0.0j)
-    precond = 1.0 / safe
+
     shape = v.shape
     size = v.size
+    state_dtype = v.dtype
+    real_dtype = jnp.real(v).dtype
+    imag = jnp.asarray(1j, dtype=state_dtype)
+    sigma_val = jnp.asarray(sigma, dtype=state_dtype)
+    sigma_safe = jnp.where(jnp.abs(sigma_val) > 1.0e-12, sigma_val, 1.0e-12 + 0.0j)
 
-    def apply_precond(x_flat: jnp.ndarray) -> jnp.ndarray:
+    w_stream = jnp.asarray(term_cfg.streaming, dtype=real_dtype)
+    kpar_scale = jnp.asarray(params.kpar_scale, dtype=real_dtype)
+    sqrt_m_line = cache.sqrt_m_ladder.reshape(-1).astype(real_dtype)
+    sqrt_p_line = cache.sqrt_p.reshape(-1).astype(real_dtype)
+
+    def _solve_hermite_lines_fft(
+        x: jnp.ndarray,
+        *,
+        kz: jnp.ndarray,
+        vth: jnp.ndarray,
+    ) -> jnp.ndarray:
+        """Invert (-sigma I + L_stream) via FFT(z) + tridiagonal(m).
+
+        This is a matrix-free streaming preconditioner for shift-invert GMRES
+        solves. It ignores curvature/mirror/etc. but captures the stiff Hermite
+        coupling from streaming exactly (for periodic z).
+        """
+
+        x_hat = jnp.fft.fft(x, axis=-1)
+        x_hat_mlast = jnp.moveaxis(x_hat, 2, -1)  # (Ns, Nl, Ny, Nx, Nz, Nm)
+        coeff = (
+            (-w_stream * kpar_scale)
+            * vth[:, None, None, None, None]
+            * (imag * kz)[None, None, None, None, :]
+        )
+        coeff = coeff[..., None]  # (Ns, 1, 1, 1, Nz, 1)
+        dl = coeff * sqrt_m_line
+        du = coeff * sqrt_p_line
+        du = du.at[..., -1].set(jnp.asarray(0.0, dtype=du.dtype))
+        d = jnp.ones_like(du) * (-sigma_safe)
+        batch_shape = x_hat_mlast.shape
+        dl = jnp.broadcast_to(dl, batch_shape)
+        d = jnp.broadcast_to(d, batch_shape)
+        du = jnp.broadcast_to(du, batch_shape)
+        y_hat_mlast = jax.lax.linalg.tridiagonal_solve(dl, d, du, x_hat_mlast[..., None])[..., 0]
+        y_hat = jnp.moveaxis(y_hat_mlast, -1, 2)
+        return jnp.fft.ifft(y_hat, axis=-1)
+
+    def _solve_hermite_lines_linked(
+        x: jnp.ndarray,
+        *,
+        vth: jnp.ndarray,
+    ) -> jnp.ndarray:
+        """Linked-FFT variant of the Hermite-line streaming preconditioner."""
+
+        if not cache.linked_indices:
+            return _solve_hermite_lines_fft(x, kz=cache.kz, vth=vth)
+
+        Ny = x.shape[-3]
+        Nx = x.shape[-2]
+        Nz = x.shape[-1]
+        lead_shape = x.shape[:-3]
+        x_flat = x.reshape(*lead_shape, Ny * Nx, Nz)
+        y_flat = jnp.zeros_like(x_flat)
+
+        def _scatter_unique(
+            target: jnp.ndarray, idx_flat: jnp.ndarray, updates: jnp.ndarray
+        ) -> jnp.ndarray:
+            idx = jnp.asarray(idx_flat, dtype=jnp.int32)
+            target_t = jnp.moveaxis(target, -2, 0)
+            updates_t = jnp.moveaxis(updates, -2, 0)
+            idx = idx[:, None]
+            dnums = jax.lax.ScatterDimensionNumbers(
+                update_window_dims=tuple(range(1, updates_t.ndim)),
+                inserted_window_dims=(0,),
+                scatter_dims_to_operand_dims=(0,),
+            )
+            out_t = jax.lax.scatter(
+                target_t,
+                idx,
+                updates_t,
+                dnums,
+                unique_indices=True,
+            )
+            return jnp.moveaxis(out_t, 0, -2)
+
+        for idx_map, kz_link in zip(cache.linked_indices, cache.linked_kz):
+            nChains, nLinks = idx_map.shape
+            idx_flat = idx_map.reshape(-1)
+            x_link = jnp.take(x_flat, idx_flat, axis=-2)
+            x_link = x_link.reshape(*lead_shape, nChains, nLinks * Nz)
+            x_hat = jnp.fft.fft(x_link, axis=-1)
+            x_hat_mlast = jnp.moveaxis(x_hat, 2, -1)  # (Ns, Nl, nChains, nfreq, Nm)
+            coeff = (
+                (-w_stream * kpar_scale)
+                * vth[:, None, None, None]
+                * (imag * kz_link)[None, None, None, :]
+            )
+            coeff = coeff[..., None]  # (Ns, 1, 1, nfreq, 1)
+            dl = coeff * sqrt_m_line
+            du = coeff * sqrt_p_line
+            du = du.at[..., -1].set(jnp.asarray(0.0, dtype=du.dtype))
+            d = jnp.ones_like(du) * (-sigma_safe)
+            batch_shape = x_hat_mlast.shape
+            dl = jnp.broadcast_to(dl, batch_shape)
+            d = jnp.broadcast_to(d, batch_shape)
+            du = jnp.broadcast_to(du, batch_shape)
+            y_hat_mlast = jax.lax.linalg.tridiagonal_solve(dl, d, du, x_hat_mlast[..., None])[..., 0]
+            y_hat = jnp.moveaxis(y_hat_mlast, -1, 2)
+            y_link = jnp.fft.ifft(y_hat, axis=-1)
+            y_link = y_link.reshape(*lead_shape, nChains * nLinks, Nz)
+            y_flat = _scatter_unique(y_flat, idx_flat, y_link)
+
+        return y_flat.reshape(*lead_shape, Ny, Nx, Nz)
+
+    def apply_precond_hermite_line(x_flat: jnp.ndarray) -> jnp.ndarray:
         x = x_flat.reshape(shape)
-        return (x * precond).reshape(size)
+        squeeze_species = False
+        if x.ndim == 5:
+            x = x[None, ...]
+            squeeze_species = True
+        ns = x.shape[0]
+        vth = _as_species_array(params.vth, ns, "vth").astype(real_dtype)
+        y = (
+            _solve_hermite_lines_linked(x, vth=vth)
+            if cache.use_twist_shift
+            else _solve_hermite_lines_fft(x, kz=cache.kz, vth=vth)
+        )
+        if squeeze_species:
+            y = y[0]
+        return y.reshape(size)
 
-    return precond, apply_precond
+    def apply_precond_hermite_line_coarse(x_flat: jnp.ndarray) -> jnp.ndarray:
+        x = x_flat.reshape(shape)
+        squeeze_species = False
+        if x.ndim == 5:
+            x = x[None, ...]
+            squeeze_species = True
+        ns = x.shape[0]
+        vth = _as_species_array(params.vth, ns, "vth").astype(real_dtype)
+
+        def solve(x_in: jnp.ndarray) -> jnp.ndarray:
+            return (
+                _solve_hermite_lines_linked(x_in, vth=vth)
+                if cache.use_twist_shift
+                else _solve_hermite_lines_fft(x_in, kz=cache.kz, vth=vth)
+            )
+
+        x_line = solve(x)
+        x_mean = jnp.mean(x, axis=-2, keepdims=True)
+        x_mean_full = jnp.broadcast_to(x_mean, x.shape)
+        x_coarse_full = solve(x_mean_full)
+        x_line_mean_full = jnp.broadcast_to(jnp.mean(x_line, axis=-2, keepdims=True), x.shape)
+        y = x_line + (x_coarse_full - x_line_mean_full)
+        if squeeze_species:
+            y = y[0]
+        return y.reshape(size)
+
+    if mode_key in {"hermite-line-coarse", "hermite_line_coarse", "hermite_coarse", "streaming-line-coarse"}:
+        return None, apply_precond_hermite_line_coarse
+    return None, apply_precond_hermite_line
 
 
 @partial(jax.jit, static_argnames=("iterations",))
@@ -281,7 +455,7 @@ def dominant_eigenpair_shift_invert_cached(
     shape = v0.shape
     size = v0.size
     _precond, precond_op = _build_shift_invert_precond(
-        v0, cache, params, sigma_val, shift_preconditioner
+        v0, cache, params, term_cfg, sigma_val, shift_preconditioner
     )
 
     def matvec(x_flat: jnp.ndarray) -> jnp.ndarray:
