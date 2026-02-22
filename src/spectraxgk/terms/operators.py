@@ -87,6 +87,25 @@ def grad_z_linked_fft(
     f_flat = f.reshape(*lead_shape, Ny * Nx, Nz)
     df_flat = jnp.zeros_like(f_flat)
 
+    def _scatter_unique(target: jnp.ndarray, idx_flat: jnp.ndarray, updates: jnp.ndarray) -> jnp.ndarray:
+        idx = jnp.asarray(idx_flat, dtype=jnp.int32)
+        target_t = jnp.moveaxis(target, -2, 0)
+        updates_t = jnp.moveaxis(updates, -2, 0)
+        idx = idx[:, None]
+        dnums = jax.lax.ScatterDimensionNumbers(
+            update_window_dims=tuple(range(1, updates_t.ndim)),
+            inserted_window_dims=(0,),
+            scatter_dims_to_operand_dims=(0,),
+        )
+        out_t = jax.lax.scatter(
+            target_t,
+            idx,
+            updates_t,
+            dnums,
+            unique_indices=True,
+        )
+        return jnp.moveaxis(out_t, 0, -2)
+
     for idx_map, kz_link in zip(linked_indices, linked_kz):
         if idx_map.ndim != 2:
             raise ValueError("linked index maps must have shape (nChains, nLinks)")
@@ -98,7 +117,7 @@ def grad_z_linked_fft(
         df_hat = (1j * kz_link) * f_hat
         df_link = jnp.fft.ifft(df_hat, axis=-1)
         df_link = df_link.reshape(*lead_shape, nChains * nLinks, Nz)
-        df_flat = df_flat.at[..., idx_flat, :].set(df_link)
+        df_flat = _scatter_unique(df_flat, idx_flat, df_link)
 
     return df_flat.reshape(*lead_shape, Ny, Nx, Nz)
 
