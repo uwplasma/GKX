@@ -110,13 +110,31 @@ def _select_fit_signal(
     *,
     fit_signal: str,
     mode_method: str,
+    fallback: bool = True,
 ) -> np.ndarray:
+    def _extract(arr: np.ndarray) -> np.ndarray:
+        return extract_mode_time_series(arr, sel, method=mode_method)
+
+    def _is_valid(arr: np.ndarray) -> bool:
+        finite = np.isfinite(arr)
+        return int(np.count_nonzero(finite)) >= 2
+
     if fit_signal == "phi":
-        return extract_mode_time_series(phi_t, sel, method=mode_method)
+        signal = _extract(phi_t)
+        if fallback and not _is_valid(signal) and density_t is not None:
+            alt = _extract(density_t)
+            if _is_valid(alt):
+                return alt
+        return signal
     if fit_signal == "density":
         if density_t is None:
             raise ValueError("density_t must be provided when fit_signal='density'")
-        return extract_mode_time_series(density_t, sel, method=mode_method)
+        signal = _extract(density_t)
+        if fallback and not _is_valid(signal):
+            alt = _extract(phi_t)
+            if _is_valid(alt):
+                return alt
+        return signal
     raise ValueError("fit_signal must be 'phi' or 'density'")
 
 
