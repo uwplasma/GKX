@@ -1207,6 +1207,99 @@ def _build_implicit_operator(
     precond_pas = precond_pas.astype(G.dtype)
     resolved_precond = _resolve_implicit_preconditioner(implicit_preconditioner)
 
+    sqrt_m_line = cache.sqrt_m_ladder.reshape(-1).astype(real_dtype)
+    sqrt_p_line = cache.sqrt_p.reshape(-1).astype(real_dtype)
+
+    def _solve_hermite_lines_fft(
+        x: jnp.ndarray,
+        *,
+        kz: jnp.ndarray,
+    ) -> jnp.ndarray:
+        """Invert (I - dt*L_stream) approximately via FFT(z) + tridiagonal(m)."""
+
+        x_hat = jnp.fft.fft(x, axis=-1)
+        x_hat_mlast = jnp.moveaxis(x_hat, 2, -1)  # (..., Nz, Nm)
+        coeff = (
+            (dt_val * w_stream * jnp.asarray(params.kpar_scale, dtype=real_dtype))
+            * vth[:, None, None, None, None]
+            * (imag * kz)[None, None, None, None, :]
+        )
+        coeff = coeff[..., None]  # (Ns, 1, 1, 1, Nz, 1)
+        dl = coeff * sqrt_m_line
+        du = coeff * sqrt_p_line
+        du = du.at[..., -1].set(jnp.asarray(0.0, dtype=du.dtype))
+        d = jnp.ones_like(du)
+        batch_shape = x_hat_mlast.shape
+        dl = jnp.broadcast_to(dl, batch_shape)
+        d = jnp.broadcast_to(d, batch_shape)
+        du = jnp.broadcast_to(du, batch_shape)
+        y_hat_mlast = jax.lax.linalg.tridiagonal_solve(dl, d, du, x_hat_mlast[..., None])[..., 0]
+        y_hat = jnp.moveaxis(y_hat_mlast, -1, 2)
+        return jnp.fft.ifft(y_hat, axis=-1)
+
+    def _solve_hermite_lines_linked(x: jnp.ndarray) -> jnp.ndarray:
+        """Linked-FFT variant of the Hermite-line streaming preconditioner."""
+
+        if not cache.linked_indices:
+            return _solve_hermite_lines_fft(x, kz=cache.kz)
+
+        Ny = x.shape[-3]
+        Nx = x.shape[-2]
+        Nz = x.shape[-1]
+        lead_shape = x.shape[:-3]
+        x_flat = x.reshape(*lead_shape, Ny * Nx, Nz)
+        y_flat = jnp.zeros_like(x_flat)
+
+        def _scatter_unique(
+            target: jnp.ndarray, idx_flat: jnp.ndarray, updates: jnp.ndarray
+        ) -> jnp.ndarray:
+            idx = jnp.asarray(idx_flat, dtype=jnp.int32)
+            target_t = jnp.moveaxis(target, -2, 0)
+            updates_t = jnp.moveaxis(updates, -2, 0)
+            idx = idx[:, None]
+            dnums = jax.lax.ScatterDimensionNumbers(
+                update_window_dims=tuple(range(1, updates_t.ndim)),
+                inserted_window_dims=(0,),
+                scatter_dims_to_operand_dims=(0,),
+            )
+            out_t = jax.lax.scatter(
+                target_t,
+                idx,
+                updates_t,
+                dnums,
+                unique_indices=True,
+            )
+            return jnp.moveaxis(out_t, 0, -2)
+
+        for idx_map, kz_link in zip(cache.linked_indices, cache.linked_kz):
+            nChains, nLinks = idx_map.shape
+            idx_flat = idx_map.reshape(-1)
+            x_link = jnp.take(x_flat, idx_flat, axis=-2)
+            x_link = x_link.reshape(*lead_shape, nChains, nLinks * Nz)
+            x_hat = jnp.fft.fft(x_link, axis=-1)
+            x_hat_mlast = jnp.moveaxis(x_hat, 2, -1)  # (Ns, Nl, nChains, nfreq, Nm)
+            coeff = (
+                (dt_val * w_stream * jnp.asarray(params.kpar_scale, dtype=real_dtype))
+                * vth[:, None, None, None]
+                * (imag * kz_link)[None, None, None, :]
+            )
+            coeff = coeff[..., None]  # (Ns, 1, 1, nfreq, 1)
+            dl = coeff * sqrt_m_line
+            du = coeff * sqrt_p_line
+            du = du.at[..., -1].set(jnp.asarray(0.0, dtype=du.dtype))
+            d = jnp.ones_like(du)
+            batch_shape = x_hat_mlast.shape
+            dl = jnp.broadcast_to(dl, batch_shape)
+            d = jnp.broadcast_to(d, batch_shape)
+            du = jnp.broadcast_to(du, batch_shape)
+            y_hat_mlast = jax.lax.linalg.tridiagonal_solve(dl, d, du, x_hat_mlast[..., None])[..., 0]
+            y_hat = jnp.moveaxis(y_hat_mlast, -1, 2)
+            y_link = jnp.fft.ifft(y_hat, axis=-1)
+            y_link = y_link.reshape(*lead_shape, nChains * nLinks, Nz)
+            y_flat = _scatter_unique(y_flat, idx_flat, y_link)
+
+        return y_flat.reshape(*lead_shape, Ny, Nx, Nz)
+
     def apply_precond_full(x_flat: jnp.ndarray) -> jnp.ndarray:
         x = x_flat.reshape(shape)
         return (x * precond_full).reshape(size)
@@ -1228,6 +1321,21 @@ def _build_implicit_operator(
         x_out = x_line + (x_coarse - x_line_coarse)
         return x_out.reshape(size)
 
+    def apply_precond_hermite_line(x_flat: jnp.ndarray) -> jnp.ndarray:
+        x = x_flat.reshape(shape)
+        x = x * precond_full
+        x = _solve_hermite_lines_linked(x) if cache.use_twist_shift else _solve_hermite_lines_fft(x, kz=cache.kz)
+        return x.reshape(size)
+
+    def apply_precond_hermite_line_coarse(x_flat: jnp.ndarray) -> jnp.ndarray:
+        x = x_flat.reshape(shape)
+        x_line = apply_precond_hermite_line(x.reshape(size)).reshape(shape)
+        x_mean = jnp.mean(x, axis=4, keepdims=True)
+        x_mean_full = jnp.broadcast_to(x_mean, shape)
+        x_coarse_full = apply_precond_hermite_line(x_mean_full.reshape(size)).reshape(shape)
+        x_line_mean_full = jnp.broadcast_to(jnp.mean(x_line, axis=4, keepdims=True), shape)
+        return (x_line + (x_coarse_full - x_line_mean_full)).reshape(size)
+
     def apply_identity(x_flat: jnp.ndarray) -> jnp.ndarray:
         return x_flat
 
@@ -1244,6 +1352,10 @@ def _build_implicit_operator(
             precond_op = apply_precond_pas
         elif key in {"pas-coarse", "pas_schur", "block-schur", "schur", "pas-hybrid"}:
             precond_op = apply_precond_pas_coarse
+        elif key in {"hermite-line", "hermite_line", "hermite", "streaming-line", "streaming_line"}:
+            precond_op = apply_precond_hermite_line
+        elif key in {"hermite-line-coarse", "hermite_line_coarse", "hermite_coarse", "streaming-line-coarse"}:
+            precond_op = apply_precond_hermite_line_coarse
         elif key in {"identity", "none", "off"}:
             precond_op = apply_identity
         else:
