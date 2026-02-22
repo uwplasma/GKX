@@ -90,11 +90,17 @@ def _compute_damping(
 
 def _omega_scale(cache: LinearCache, params: LinearParams) -> jnp.ndarray:
     ky_scale = jnp.max(jnp.abs(cache.ky))
-    rlt = jnp.abs(params.R_over_LTi) + jnp.abs(params.R_over_Ln)
-    if rlt.ndim == 0:
-        drive = rlt
-    else:
-        drive = jnp.max(rlt)
+    rlt_i = jnp.abs(params.R_over_LTi)
+    rlt_e = jnp.abs(params.R_over_LTe)
+    rln = jnp.abs(params.R_over_Ln)
+
+    def _max_scalar(arr: jnp.ndarray) -> jnp.ndarray:
+        return arr if arr.ndim == 0 else jnp.max(arr)
+
+    drive_i = _max_scalar(rlt_i)
+    drive_e = _max_scalar(rlt_e)
+    drive_n = _max_scalar(rln)
+    drive = jnp.maximum(drive_i, jnp.maximum(drive_e, drive_n))
     return ky_scale * jnp.maximum(drive, 1.0e-8)
 
 
@@ -115,14 +121,14 @@ def _select_by_target(
     omega_target = jnp.where(use_sign, jnp.sign(omega_sign_val) * jnp.abs(omega_target), omega_target)
     use_mask = jnp.any(mask)
     mask_use = jnp.where(use_mask, mask, jnp.ones_like(mask, dtype=bool))
-    real_masked = jnp.where(mask_use, real_part, -jnp.inf)
-    real_max = jnp.max(real_masked)
-    real_cut = real_max - 0.5 * jnp.abs(real_max)
-    mask_target = mask_use & (real_part >= real_cut)
-    has_target = jnp.any(mask_target)
+    mask_pos = real_part >= 0.0
+    mask_target = mask_use
+    has_pos = jnp.any(mask_target & mask_pos)
+    mask_target = jnp.where(has_pos, mask_target & mask_pos, mask_target)
     dist = jnp.abs(imag_part - omega_target)
     dist_masked = jnp.where(mask_target, dist, jnp.inf)
     idx_target = jnp.argmin(dist_masked)
+    has_target = jnp.any(mask_target)
     use_choice = use_target & has_target
     return jnp.where(use_choice, idx_target, fallback_idx)
 
@@ -376,9 +382,9 @@ def dominant_eigenpair_cached(
         mask = jnp.where(use_sign_mask, mask, mask0)
         real_masked = jnp.where(mask, real_part, -jnp.inf)
         idx_masked = jnp.argmax(real_masked)
-        idx_all = jnp.argmax(real_part)
+        idx_small = jnp.argmin(jnp.abs(imag_part))
         use_mask = use_cap & jnp.any(mask)
-        idx = jnp.where(use_mask, idx_masked, idx_all)
+        idx = jnp.where(use_mask, idx_masked, idx_small)
         idx = _select_by_target(
             real_part,
             imag_part,
@@ -444,9 +450,9 @@ def dominant_eigenpair_propagator_cached(
         mask = jnp.where(use_sign_mask, mask, mask0)
         real_masked = jnp.where(mask, real_part, -jnp.inf)
         idx_masked = jnp.argmax(real_masked)
-        idx_all = jnp.argmax(real_part)
+        idx_small = jnp.argmin(jnp.abs(imag_part))
         use_mask = use_cap & jnp.any(mask)
-        idx = jnp.where(use_mask, idx_masked, idx_all)
+        idx = jnp.where(use_mask, idx_masked, idx_small)
         idx = _select_by_target(
             real_part,
             imag_part,
@@ -555,6 +561,13 @@ def dominant_eigenpair(
                 )
                 sigma = shift_est
                 v_init = v_seed
+            elif shift_source_key == "target":
+                omega_scale = _omega_scale(cache, params)
+                omega_target = float(omega_target_factor) * omega_scale
+                if omega_sign != 0:
+                    omega_target = float(jnp.sign(omega_sign)) * jnp.abs(omega_target)
+                sigma = 1j * omega_target
+                v_init = v0
             else:
                 shift_est, v_seed = dominant_eigenpair_power(
                     v0,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from typing import Sequence
+import warnings
 import numpy as np
 from importlib import resources
 
@@ -74,6 +75,74 @@ GX_P_HYPER_M = 20.0
 GX_DAMP_ENDS_AMP = 0.1
 GX_DAMP_ENDS_WIDTHFRAC = 1.0 / 8.0
 
+CYCLONE_KRYLOV_DEFAULT = KrylovConfig(
+    method="shift_invert",
+    krylov_dim=16,
+    restarts=1,
+    power_iters=60,
+    power_dt=0.01,
+    shift_maxiter=30,
+    shift_restart=10,
+    shift_tol=1.0e-3,
+)
+
+KINETIC_KRYLOV_DEFAULT = KrylovConfig(
+    method="propagator",
+    krylov_dim=16,
+    restarts=1,
+    omega_cap_factor=1.0,
+    omega_target_factor=0.3,
+    omega_sign=-1,
+    power_iters=60,
+    power_dt=0.0005,
+    shift_maxiter=30,
+    shift_restart=10,
+    shift_tol=1.0e-3,
+)
+
+ETG_KRYLOV_DEFAULT = KrylovConfig(
+    method="propagator",
+    krylov_dim=16,
+    restarts=1,
+    omega_min_factor=0.0,
+    omega_target_factor=0.3,
+    omega_cap_factor=0.6,
+    omega_sign=-1,
+    power_iters=80,
+    power_dt=0.002,
+    shift_maxiter=40,
+    shift_restart=12,
+    shift_tol=2.0e-3,
+)
+
+KBM_KRYLOV_DEFAULT = KrylovConfig(
+    method="propagator",
+    krylov_dim=16,
+    restarts=1,
+    omega_cap_factor=3.0,
+    omega_target_factor=2.0,
+    omega_sign=-1,
+    power_iters=60,
+    power_dt=0.005,
+    shift_maxiter=30,
+    shift_restart=10,
+    shift_tol=1.0e-3,
+)
+
+TEM_KRYLOV_DEFAULT = KrylovConfig(
+    method="propagator",
+    krylov_dim=16,
+    restarts=1,
+    omega_cap_factor=0.6,
+    omega_target_factor=0.25,
+    omega_sign=-1,
+    power_iters=60,
+    power_dt=0.005,
+    shift_maxiter=30,
+    shift_restart=10,
+    shift_tol=1.0e-3,
+)
+
 
 def _gx_p_hyper_m(nhermite: int | None) -> float:
     if nhermite is None:
@@ -125,6 +194,12 @@ def _select_fit_signal(
             alt = _extract(density_t)
             if _is_valid(alt):
                 return alt
+        if not _is_valid(signal):
+            warnings.warn(
+                "Fit signal has insufficient finite samples; falling back to zeros.",
+                RuntimeWarning,
+            )
+            return np.zeros(phi_t.shape[0], dtype=np.complex128)
         return signal
     if fit_signal == "density":
         if density_t is None:
@@ -134,6 +209,12 @@ def _select_fit_signal(
             alt = _extract(phi_t)
             if _is_valid(alt):
                 return alt
+        if not _is_valid(signal):
+            warnings.warn(
+                "Fit signal has insufficient finite samples; falling back to zeros.",
+                RuntimeWarning,
+            )
+            return np.zeros(phi_t.shape[0], dtype=np.complex128)
         return signal
     raise ValueError("fit_signal must be 'phi' or 'density'")
 
@@ -158,6 +239,21 @@ def _resolve_streaming_window(
     if t_end <= t_start:
         t_end = t_total
     return t_start, t_end
+
+
+def _normalize_growth_rate(
+    gamma: float,
+    omega: float,
+    params: LinearParams,
+    diagnostic_norm: str,
+) -> tuple[float, float]:
+    mode = diagnostic_norm.strip().lower()
+    if mode in {"gx", "rho_star"}:
+        rho_star = float(np.asarray(params.rho_star))
+        return float(gamma) * rho_star, float(omega) * rho_star
+    if mode in {"none", ""}:
+        return float(gamma), float(omega)
+    raise ValueError(f"Unknown diagnostic_norm '{diagnostic_norm}'")
 
 
 def _build_gaussian_profile(
@@ -494,6 +590,7 @@ def run_cyclone_linear(
     terms: LinearTerms | None = None,
     sample_stride: int | None = None,
     init_cfg: InitializationConfig | None = None,
+    diagnostic_norm: str = "none",
     use_jit: bool = True,
 ) -> CycloneRunResult:
     """Run the linear Cyclone benchmark and extract growth rate."""
@@ -535,7 +632,7 @@ def run_cyclone_linear(
             Nm=Nm,
             init_cfg=init_cfg,
         )
-        krylov_cfg = krylov_cfg or KrylovConfig()
+        krylov_cfg = krylov_cfg or CYCLONE_KRYLOV_DEFAULT
         cache = build_linear_cache(grid, geom, params, Nl, Nm)
         eig, vec = dominant_eigenpair(
             G0_jax,
@@ -579,6 +676,7 @@ def run_cyclone_linear(
         omega = float(-np.imag(eig))
         if krylov_cfg.omega_sign != 0:
             omega = float(np.sign(krylov_cfg.omega_sign)) * abs(omega)
+        gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
     else:
         ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
         grid = select_ky_grid(grid_full, ky_index)
@@ -675,6 +773,7 @@ def run_cyclone_linear(
             )
         else:
             gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
+        gamma, omega = _normalize_growth_rate(gamma, omega, params_use, diagnostic_norm)
 
     return CycloneRunResult(
         t=t,
@@ -722,6 +821,7 @@ def run_cyclone_scan(
     mode_only: bool = True,
     terms: LinearTerms | None = None,
     sample_stride: int | None = None,
+    diagnostic_norm: str = "none",
     use_jit: bool = True,
     ky_batch: int = 1,
     streaming_fit: bool = True,
@@ -839,7 +939,7 @@ def run_cyclone_scan(
                     slope_var_weight=slope_var_weight,
                     window_method=window_method,
                 )
-        return gamma, omega
+        return _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
 
     ky_iter = range(0, len(ky_values), ky_batch) if use_batch else range(len(ky_values))
     ky_slice: np.ndarray
@@ -876,7 +976,7 @@ def run_cyclone_scan(
         cache = build_linear_cache(grid, geom, params, Nl, Nm)
         if solver.lower() == "krylov":
             for local_idx, ky_val in enumerate(ky_slice):
-                cfg_use = krylov_cfg or KrylovConfig()
+                cfg_use = krylov_cfg or CYCLONE_KRYLOV_DEFAULT
                 eig, _vec = dominant_eigenpair(
                     G0_jax,
                     cache,
@@ -901,6 +1001,7 @@ def run_cyclone_scan(
                 )
                 gamma = float(np.real(eig))
                 omega = float(-np.imag(eig))
+                gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
                 gammas.append(gamma)
                 omegas.append(omega)
                 ky_out.append(float(ky_val))
@@ -957,8 +1058,14 @@ def run_cyclone_scan(
             gamma_arr = np.asarray(gamma_vals)
             omega_arr = np.asarray(omega_vals)
             for local_idx, ky_val in enumerate(ky_slice):
-                gammas.append(float(gamma_arr[local_idx]))
-                omegas.append(float(omega_arr[local_idx]))
+                gamma_i, omega_i = _normalize_growth_rate(
+                    float(gamma_arr[local_idx]),
+                    float(omega_arr[local_idx]),
+                    params_use,
+                    diagnostic_norm,
+                )
+                gammas.append(gamma_i)
+                omegas.append(omega_i)
                 ky_out.append(float(ky_val))
             continue
 
@@ -1077,6 +1184,7 @@ def run_etg_linear(
     streaming_amp_floor: float = 1.0e-30,
     gx_growth: bool = False,
     gx_navg_fraction: float = 0.5,
+    diagnostic_norm: str = "none",
 ) -> LinearRunResult:
     """Run an ETG linear benchmark and extract growth rate."""
 
@@ -1133,7 +1241,7 @@ def run_etg_linear(
 
     G0_jax = jnp.asarray(G0)
     if solver.lower() == "krylov":
-        krylov_cfg = krylov_cfg or KrylovConfig()
+        krylov_cfg = krylov_cfg or ETG_KRYLOV_DEFAULT
         cache = build_linear_cache(grid, geom, params, Nl, Nm)
         eig, vec = dominant_eigenpair(
             G0_jax,
@@ -1177,6 +1285,7 @@ def run_etg_linear(
         omega = float(-np.imag(eig))
         if krylov_cfg.omega_sign != 0:
             omega = float(np.sign(krylov_cfg.omega_sign)) * abs(omega)
+        gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
     else:
         time_cfg_use = time_cfg
         if time_cfg_use is None and streaming_fit and cfg.time.use_diffrax:
@@ -1231,6 +1340,7 @@ def run_etg_linear(
                     )
                     gamma = float(np.asarray(gamma_vals)[0])
                     omega = float(np.asarray(omega_vals)[0])
+                    gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
                     if G_last is not None and G_last.ndim == 7:
                         G_last = G_last[0]
                     term_cfg = TermConfig(
@@ -1355,6 +1465,7 @@ def run_etg_linear(
                 navg_fraction=gx_navg_fraction,
                 mode_method=mode_method,
             )
+            gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
             return LinearRunResult(
                 t=t,
                 phi_t=phi_t_np,
@@ -1404,6 +1515,7 @@ def run_etg_linear(
                     require_positive=require_positive,
                     min_amp_fraction=min_amp_fraction,
                 )
+        gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
 
     return LinearRunResult(
         t=t,
@@ -1457,6 +1569,7 @@ def run_etg_scan(
     streaming_amp_floor: float = 1.0e-30,
     gx_growth: bool = False,
     gx_navg_fraction: float = 0.5,
+    diagnostic_norm: str = "none",
 ) -> LinearScanResult:
     """Run an ETG linear benchmark for a list of ky values.
 
@@ -1578,7 +1691,7 @@ def run_etg_scan(
                     slope_var_weight=slope_var_weight,
                     window_method=window_method,
                 )
-        return gamma, omega
+        return _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
 
     ky_iter = range(0, len(ky_values), ky_batch) if use_batch else range(len(ky_values))
     ky_slice: np.ndarray
@@ -1620,7 +1733,7 @@ def run_etg_scan(
         cache = build_linear_cache(grid, geom, params, Nl, Nm)
         G0_jax = jnp.asarray(G0)
         if solver.lower() == "krylov":
-            cfg_use = krylov_cfg or KrylovConfig()
+            cfg_use = krylov_cfg or ETG_KRYLOV_DEFAULT
             eig, _vec = dominant_eigenpair(
                 G0_jax,
                 cache,
@@ -1629,8 +1742,8 @@ def run_etg_scan(
                 krylov_dim=cfg_use.krylov_dim,
                 restarts=cfg_use.restarts,
                 omega_min_factor=cfg_use.omega_min_factor,
-            omega_target_factor=cfg_use.omega_target_factor,
-            omega_cap_factor=cfg_use.omega_cap_factor,
+                omega_target_factor=cfg_use.omega_target_factor,
+                omega_cap_factor=cfg_use.omega_cap_factor,
                 omega_sign=cfg_use.omega_sign,
                 method=cfg_use.method,
                 power_iters=cfg_use.power_iters,
@@ -1647,6 +1760,7 @@ def run_etg_scan(
             omega = float(-np.imag(eig))
             if cfg_use.omega_sign != 0:
                 omega = float(np.sign(cfg_use.omega_sign)) * abs(omega)
+            gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
             gammas.append(gamma)
             omegas.append(omega)
             ky_out.append(float(ky_slice[0]))
@@ -1704,8 +1818,14 @@ def run_etg_scan(
             gamma_arr = np.asarray(gamma_vals)
             omega_arr = np.asarray(omega_vals)
             for local_idx, ky_val in enumerate(ky_slice):
-                gammas.append(float(gamma_arr[local_idx]))
-                omegas.append(float(omega_arr[local_idx]))
+                gamma_i, omega_i = _normalize_growth_rate(
+                    float(gamma_arr[local_idx]),
+                    float(omega_arr[local_idx]),
+                    params_use,
+                    diagnostic_norm,
+                )
+                gammas.append(gamma_i)
+                omegas.append(omega_i)
                 ky_out.append(float(ky_val))
             continue
 
@@ -1785,6 +1905,7 @@ def run_etg_scan(
                     navg_fraction=gx_navg_fraction,
                     mode_method=mode_method,
                 )
+                gamma, omega = _normalize_growth_rate(gamma, omega, params_use, diagnostic_norm)
             else:
                 gamma, omega = _fit_signal(signal, batch_start + local_idx, dt_i, stride)
             gammas.append(gamma)
@@ -1820,6 +1941,7 @@ def run_kinetic_linear(
     fit_signal: str = "density",
     init_species_index: int = 1,
     density_species_index: int = 1,
+    diagnostic_norm: str = "none",
 ) -> LinearRunResult:
     """Run a kinetic-electron ITG/TEM benchmark and extract growth rate."""
 
@@ -1863,7 +1985,7 @@ def run_kinetic_linear(
 
     G0_jax = jnp.asarray(G0)
     if solver.lower() == "krylov":
-        krylov_cfg = krylov_cfg or KrylovConfig()
+        krylov_cfg = krylov_cfg or KINETIC_KRYLOV_DEFAULT
         cache = build_linear_cache(grid, geom, params, Nl, Nm)
         eig, vec = dominant_eigenpair(
             G0_jax,
@@ -1905,6 +2027,7 @@ def run_kinetic_linear(
         t = np.array([0.0])
         gamma = float(np.real(eig))
         omega = float(-np.imag(eig))
+        gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
     else:
         method_key = method.lower()
         if time_cfg is not None:
@@ -2036,6 +2159,7 @@ def run_kinetic_linear(
                     min_amp_fraction=min_amp_fraction,
                 )
 
+        gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
     return LinearRunResult(
         t=t,
         phi_t=phi_t_np,
@@ -2077,6 +2201,7 @@ def run_kinetic_scan(
     streaming_amp_floor: float = 1.0e-30,
     init_species_index: int = 1,
     density_species_index: int = 1,
+    diagnostic_norm: str = "none",
 ) -> LinearScanResult:
     """Run a kinetic-electron ITG/TEM benchmark for a list of ky values.
 
@@ -2161,7 +2286,7 @@ def run_kinetic_scan(
                     require_positive=require_positive,
                     min_amp_fraction=min_amp_fraction,
                 )
-        return gamma, omega
+        return _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
 
     ky_iter = range(0, len(ky_values), ky_batch) if use_batch else range(len(ky_values))
     ky_slice: np.ndarray
@@ -2205,7 +2330,7 @@ def run_kinetic_scan(
         cache = build_linear_cache(grid, geom, params, Nl, Nm)
         G0_jax = jnp.asarray(G0)
         if solver.lower() == "krylov":
-            cfg_use = krylov_cfg or KrylovConfig()
+            cfg_use = krylov_cfg or KINETIC_KRYLOV_DEFAULT
             eig, _vec = dominant_eigenpair(
                 G0_jax,
                 cache,
@@ -2230,6 +2355,7 @@ def run_kinetic_scan(
             )
             gamma = float(np.real(eig))
             omega = float(-np.imag(eig))
+            gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
             gammas.append(gamma)
             omegas.append(omega)
             ky_out.append(float(ky_slice[0]))
@@ -2287,8 +2413,14 @@ def run_kinetic_scan(
             gamma_arr = np.asarray(gamma_vals)
             omega_arr = np.asarray(omega_vals)
             for local_idx, ky_val in enumerate(ky_slice):
-                gammas.append(float(gamma_arr[local_idx]))
-                omegas.append(float(omega_arr[local_idx]))
+                gamma_i, omega_i = _normalize_growth_rate(
+                    float(gamma_arr[local_idx]),
+                    float(omega_arr[local_idx]),
+                    params_use,
+                    diagnostic_norm,
+                )
+                gammas.append(gamma_i)
+                omegas.append(omega_i)
                 ky_out.append(float(ky_val))
             continue
 
@@ -2392,6 +2524,7 @@ def run_tem_linear(
     sample_stride: int | None = None,
     init_species_index: int = 1,
     density_species_index: int = 1,
+    diagnostic_norm: str = "none",
 ) -> LinearRunResult:
     """Run the TEM benchmark and extract growth rate."""
 
@@ -2435,7 +2568,7 @@ def run_tem_linear(
 
     G0_jax = jnp.asarray(G0)
     if solver.lower() == "krylov":
-        krylov_cfg = krylov_cfg or KrylovConfig()
+        krylov_cfg = krylov_cfg or TEM_KRYLOV_DEFAULT
         cache = build_linear_cache(grid, geom, params, Nl, Nm)
         eig, vec = dominant_eigenpair(
             G0_jax,
@@ -2477,6 +2610,7 @@ def run_tem_linear(
         t = np.array([0.0])
         gamma = float(np.real(eig))
         omega = float(-np.imag(eig))
+        gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
     else:
         if fit_signal not in {"phi", "density"}:
             raise ValueError("fit_signal must be 'phi' or 'density'")
@@ -2573,6 +2707,7 @@ def run_tem_linear(
             )
         else:
             gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
+        gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
 
     return LinearRunResult(
         t=t,
@@ -2614,6 +2749,7 @@ def run_tem_scan(
     streaming_amp_floor: float = 1.0e-30,
     init_species_index: int = 1,
     density_species_index: int = 1,
+    diagnostic_norm: str = "none",
 ) -> LinearScanResult:
     """Run the TEM benchmark for a list of ky values.
 
@@ -2698,7 +2834,7 @@ def run_tem_scan(
                     require_positive=require_positive,
                     min_amp_fraction=min_amp_fraction,
                 )
-        return gamma, omega
+        return _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
 
     ky_iter = range(0, len(ky_values), ky_batch) if use_batch else range(len(ky_values))
     ky_slice: np.ndarray
@@ -2743,7 +2879,7 @@ def run_tem_scan(
         cache = build_linear_cache(grid, geom, params, Nl, Nm)
         G0_jax = jnp.asarray(G0)
         if solver.lower() == "krylov":
-            cfg_use = krylov_cfg or KrylovConfig()
+            cfg_use = krylov_cfg or TEM_KRYLOV_DEFAULT
             eig, _vec = dominant_eigenpair(
                 G0_jax,
                 cache,
@@ -2768,6 +2904,7 @@ def run_tem_scan(
             )
             gamma = float(np.real(eig))
             omega = float(-np.imag(eig))
+            gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
             gammas.append(gamma)
             omegas.append(omega)
             ky_out.append(float(ky_slice[0]))
@@ -2902,6 +3039,7 @@ def run_kbm_beta_scan(
     streaming_amp_floor: float = 1.0e-30,
     init_species_index: int = 1,
     density_species_index: int = 1,
+    diagnostic_norm: str = "none",
 ) -> LinearScanResult:
     """Run a KBM beta scan at fixed ky.
 
@@ -2973,7 +3111,7 @@ def run_kbm_beta_scan(
 
         G0_jax = jnp.asarray(G0)
         if solver.lower() == "krylov":
-            krylov_cfg = krylov_cfg or KrylovConfig()
+            krylov_cfg = krylov_cfg or KBM_KRYLOV_DEFAULT
             eig, _vec = dominant_eigenpair(
                 G0_jax,
                 cache,
@@ -2998,6 +3136,7 @@ def run_kbm_beta_scan(
             )
             gamma = float(np.real(eig))
             omega = float(-np.imag(eig))
+            gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
         else:
             method_key = method.lower()
             time_cfg_i = None
@@ -3050,6 +3189,7 @@ def run_kbm_beta_scan(
                 )
                 gamma = float(np.asarray(gamma_vals)[0])
                 omega = float(np.asarray(omega_vals)[0])
+                gamma, omega = _normalize_growth_rate(gamma, omega, params_use, diagnostic_norm)
             else:
                 if time_cfg_i is not None:
                     _, phi_t = integrate_linear_from_config(
@@ -3146,6 +3286,7 @@ def run_kbm_beta_scan(
                             require_positive=require_positive,
                             min_amp_fraction=min_amp_fraction,
                         )
+                gamma, omega = _normalize_growth_rate(gamma, omega, params_use, diagnostic_norm)
 
         gammas.append(gamma)
         omegas.append(omega)
