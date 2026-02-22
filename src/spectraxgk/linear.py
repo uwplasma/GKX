@@ -1198,6 +1198,13 @@ def _build_implicit_operator(
     precond_full = 1.0 / (1.0 + dt_val * damping - dt_val * diag)
     precond_full = precond_full.astype(G.dtype)
     precond_damp = (1.0 / (1.0 + dt_val * damping)).astype(G.dtype)
+    kpar = params.kpar_scale * cache.kz.astype(real_dtype)
+    w_stream = jnp.asarray(terms.streaming, dtype=real_dtype)
+    kpar_b = kpar[None, None, None, None, None, :]
+    precond_pas = 1.0 / (
+        1.0 + dt_val * damping - dt_val * diag + imag * dt_val * w_stream * vth_b * kpar_b
+    )
+    precond_pas = precond_pas.astype(G.dtype)
     resolved_precond = _resolve_implicit_preconditioner(implicit_preconditioner)
 
     def apply_precond_full(x_flat: jnp.ndarray) -> jnp.ndarray:
@@ -1207,6 +1214,19 @@ def _build_implicit_operator(
     def apply_precond_damp(x_flat: jnp.ndarray) -> jnp.ndarray:
         x = x_flat.reshape(shape)
         return (x * precond_damp).reshape(size)
+
+    def apply_precond_pas(x_flat: jnp.ndarray) -> jnp.ndarray:
+        x = x_flat.reshape(shape)
+        return (x * precond_pas).reshape(size)
+
+    def apply_precond_pas_coarse(x_flat: jnp.ndarray) -> jnp.ndarray:
+        """PAS line + kx-coarse correction (additive Schur-style)."""
+        x = x_flat.reshape(shape)
+        x_line = x * precond_pas
+        x_coarse = jnp.mean(x, axis=4, keepdims=True) * precond_pas
+        x_line_coarse = jnp.mean(x_line, axis=4, keepdims=True)
+        x_out = x_line + (x_coarse - x_line_coarse)
+        return x_out.reshape(size)
 
     def apply_identity(x_flat: jnp.ndarray) -> jnp.ndarray:
         return x_flat
@@ -1220,6 +1240,10 @@ def _build_implicit_operator(
             precond_op = apply_precond_full
         elif key in {"damping", "collisional", "hyper"}:
             precond_op = apply_precond_damp
+        elif key in {"pas", "pas-line", "pas_line"}:
+            precond_op = apply_precond_pas
+        elif key in {"pas-coarse", "pas_schur", "block-schur", "schur", "pas-hybrid"}:
+            precond_op = apply_precond_pas_coarse
         elif key in {"identity", "none", "off"}:
             precond_op = apply_identity
         else:
