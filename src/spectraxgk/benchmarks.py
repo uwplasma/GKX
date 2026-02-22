@@ -87,17 +87,20 @@ CYCLONE_KRYLOV_DEFAULT = KrylovConfig(
 )
 
 KINETIC_KRYLOV_DEFAULT = KrylovConfig(
-    method="propagator",
+    method="shift_invert",
     krylov_dim=16,
     restarts=1,
-    omega_cap_factor=1.0,
+    omega_min_factor=0.05,
+    omega_cap_factor=0.8,
     omega_target_factor=0.3,
     omega_sign=-1,
     power_iters=60,
-    power_dt=0.0005,
-    shift_maxiter=30,
-    shift_restart=10,
-    shift_tol=1.0e-3,
+    power_dt=0.001,
+    shift_source="target",
+    shift_maxiter=40,
+    shift_restart=12,
+    shift_tol=5.0e-4,
+    shift_preconditioner="hermite-line",
 )
 
 ETG_KRYLOV_DEFAULT = KrylovConfig(
@@ -116,31 +119,37 @@ ETG_KRYLOV_DEFAULT = KrylovConfig(
 )
 
 KBM_KRYLOV_DEFAULT = KrylovConfig(
-    method="propagator",
+    method="shift_invert",
     krylov_dim=16,
     restarts=1,
-    omega_cap_factor=3.0,
-    omega_target_factor=2.0,
+    omega_min_factor=0.2,
+    omega_cap_factor=2.5,
+    omega_target_factor=1.4,
     omega_sign=-1,
     power_iters=60,
     power_dt=0.005,
-    shift_maxiter=30,
-    shift_restart=10,
-    shift_tol=1.0e-3,
+    shift_source="target",
+    shift_maxiter=40,
+    shift_restart=12,
+    shift_tol=5.0e-4,
+    shift_preconditioner="hermite-line",
 )
 
 TEM_KRYLOV_DEFAULT = KrylovConfig(
-    method="propagator",
+    method="shift_invert",
     krylov_dim=16,
     restarts=1,
+    omega_min_factor=0.05,
     omega_cap_factor=0.6,
     omega_target_factor=0.25,
     omega_sign=-1,
     power_iters=60,
     power_dt=0.005,
-    shift_maxiter=30,
-    shift_restart=10,
-    shift_tol=1.0e-3,
+    shift_source="target",
+    shift_maxiter=40,
+    shift_restart=12,
+    shift_tol=5.0e-4,
+    shift_preconditioner="hermite-line",
 )
 
 
@@ -217,6 +226,35 @@ def _select_fit_signal(
             return np.zeros(phi_t.shape[0], dtype=np.complex128)
         return signal
     raise ValueError("fit_signal must be 'phi' or 'density'")
+
+
+def _extract_mode_only_signal(
+    source: np.ndarray,
+    *,
+    local_idx: int,
+    species_index: int | None = None,
+) -> np.ndarray:
+    """Extract a 1D time trace from reduced mode-only outputs."""
+
+    arr = np.asarray(source)
+    if arr.ndim == 0:
+        return np.asarray([arr], dtype=np.complex128)
+    if arr.ndim == 1:
+        return arr
+
+    # Some save modes return (t, species, ky). Select requested species first.
+    if species_index is not None and arr.ndim >= 3 and arr.shape[1] > 0:
+        idx = min(max(int(species_index), 0), arr.shape[1] - 1)
+        arr = arr[:, idx, ...]
+
+    if arr.ndim == 2:
+        idx = min(max(int(local_idx), 0), arr.shape[1] - 1)
+        return arr[:, idx]
+
+    # Final fallback: flatten non-time axes and select one column.
+    arr2 = arr.reshape(arr.shape[0], -1)
+    idx = min(max(int(local_idx), 0), arr2.shape[1] - 1)
+    return arr2[:, idx]
 
 
 def _is_array_like(value) -> bool:
@@ -1024,7 +1062,7 @@ def run_cyclone_scan(
         if params_use.damp_ends_amp != 0.0 and terms.end_damping != 0.0:
             params_use = replace(params_use, damp_ends_amp=params_use.damp_ends_amp / dt_i)
 
-        if time_cfg_i is not None and streaming_fit:
+        if time_cfg_i is not None and time_cfg_i.use_diffrax and streaming_fit:
             t_total = float(time_cfg_i.t_max)
             tmin_i, tmax_i = _resolve_streaming_window(
                 t_total, _window_value(tmin, batch_start), _window_value(tmax, batch_start), start_fraction, window_fraction, 1.0
@@ -1783,7 +1821,7 @@ def run_etg_scan(
         if params_use.damp_ends_amp != 0.0 and terms.end_damping != 0.0:
             params_use = replace(params_use, damp_ends_amp=params_use.damp_ends_amp / dt_i)
 
-        if time_cfg_i is not None and streaming_fit:
+        if time_cfg_i is not None and time_cfg_i.use_diffrax and streaming_fit:
             t_total = float(time_cfg_i.t_max)
             tmin_i, tmax_i = _resolve_streaming_window(
                 t_total, _window_value(tmin, batch_start), _window_value(tmax, batch_start), start_fraction, window_fraction, 1.0
@@ -1838,7 +1876,7 @@ def run_etg_scan(
                 time_cfg_i,
                 cache=cache,
                 terms=terms,
-                save_mode=sel if mode_only else None,
+                save_mode=sel if (mode_only and fit_signal == "phi") else None,
                 mode_method=mode_method,
                 save_field="density" if fit_signal == "density" else "phi",
                 density_species_index=electron_index if fit_signal == "density" else None,
@@ -1884,9 +1922,8 @@ def run_etg_scan(
             density_np = phi_t_np
         t = np.arange(phi_t_np.shape[0]) * dt_i * stride
         for local_idx, ky_val in enumerate(ky_slice):
-            if mode_only:
-                source = density_np if (fit_signal == "density" and density_np is not None) else phi_t_np
-                signal = source[:, local_idx] if source.ndim > 1 else source
+            if mode_only and fit_signal == "phi":
+                signal = _extract_mode_only_signal(phi_t_np, local_idx=local_idx)
             else:
                 sel_local = ModeSelection(ky_index=local_idx, kx_index=0, z_index=_midplane_index(grid))
                 signal = _select_fit_signal(
@@ -1938,7 +1975,7 @@ def run_kinetic_linear(
     mode_method: str = "project",
     terms: LinearTerms | None = None,
     sample_stride: int | None = None,
-    fit_signal: str = "density",
+    fit_signal: str = "phi",
     init_species_index: int = 1,
     density_species_index: int = 1,
     diagnostic_norm: str = "none",
@@ -2195,7 +2232,7 @@ def run_kinetic_scan(
     mode_only: bool = True,
     terms: LinearTerms | None = None,
     sample_stride: int | None = None,
-    fit_signal: str = "density",
+    fit_signal: str = "phi",
     ky_batch: int = 1,
     streaming_fit: bool = True,
     streaming_amp_floor: float = 1.0e-30,
@@ -2378,7 +2415,7 @@ def run_kinetic_scan(
         if params_use.damp_ends_amp != 0.0 and terms.end_damping != 0.0:
             params_use = replace(params_use, damp_ends_amp=params_use.damp_ends_amp / dt_i)
 
-        if time_cfg_i is not None and streaming_fit:
+        if time_cfg_i is not None and time_cfg_i.use_diffrax and streaming_fit:
             t_total = float(time_cfg_i.t_max)
             tmin_i, tmax_i = _resolve_streaming_window(
                 t_total, _window_value(tmin, batch_start), _window_value(tmax, batch_start), start_fraction, window_fraction, 1.0
@@ -2433,7 +2470,7 @@ def run_kinetic_scan(
                 time_cfg_i,
                 cache=cache,
                 terms=terms,
-                save_mode=sel if mode_only else None,
+                save_mode=sel if (mode_only and fit_signal == "phi") else None,
                 mode_method=mode_method,
                 save_field="density" if fit_signal == "density" else "phi",
                 density_species_index=density_species_index if fit_signal == "density" else None,
@@ -2478,9 +2515,14 @@ def run_kinetic_scan(
         if fit_signal == "density" and density_np is None:
             density_np = phi_t_np
         for local_idx, ky_val in enumerate(ky_slice):
-            if mode_only:
-                source = density_np if (fit_signal == "density" and density_np is not None) else phi_t_np
-                signal = source[:, local_idx] if source.ndim > 1 else source
+            if mode_only and fit_signal == "phi":
+                signal = _extract_mode_only_signal(phi_t_np, local_idx=local_idx)
+            elif mode_only and fit_signal == "density" and density_np is not None:
+                signal = _extract_mode_only_signal(
+                    density_np,
+                    local_idx=local_idx,
+                    species_index=density_species_index,
+                )
             else:
                 sel_local = ModeSelection(ky_index=local_idx, kx_index=0, z_index=_midplane_index(grid))
                 signal = _select_fit_signal(
@@ -2706,7 +2748,19 @@ def run_tem_linear(
                 min_amp_fraction=min_amp_fraction,
             )
         else:
-            gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
+            try:
+                gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
+            except ValueError:
+                gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
+                    t,
+                    signal,
+                    window_fraction=window_fraction,
+                    min_points=min_points,
+                    start_fraction=start_fraction,
+                    growth_weight=growth_weight,
+                    require_positive=require_positive,
+                    min_amp_fraction=min_amp_fraction,
+                )
         gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
 
     return LinearRunResult(
@@ -2927,7 +2981,7 @@ def run_tem_scan(
         if params_use.damp_ends_amp != 0.0 and terms.end_damping != 0.0:
             params_use = replace(params_use, damp_ends_amp=params_use.damp_ends_amp / dt_i)
 
-        if time_cfg_i is not None and streaming_fit:
+        if time_cfg_i is not None and time_cfg_i.use_diffrax and streaming_fit:
             t_total = float(time_cfg_i.t_max)
             tmin_i, tmax_i = _resolve_streaming_window(
                 t_total, _window_value(tmin, batch_start), _window_value(tmax, batch_start), start_fraction, window_fraction, 1.0
@@ -2997,7 +3051,7 @@ def run_tem_scan(
         phi_t_np = np.asarray(phi_t)
         for local_idx, ky_val in enumerate(ky_slice):
             if mode_only:
-                signal = phi_t_np[:, local_idx] if phi_t_np.ndim > 1 else phi_t_np
+                signal = _extract_mode_only_signal(phi_t_np, local_idx=local_idx)
             else:
                 sel_local = ModeSelection(ky_index=local_idx, kx_index=0, z_index=_midplane_index(grid))
                 signal = extract_mode_time_series(phi_t_np, sel_local, method=mode_method)
@@ -3033,7 +3087,7 @@ def run_kbm_beta_scan(
     mode_only: bool = True,
     terms: LinearTerms | None = None,
     sample_stride: int | None = None,
-    fit_signal: str = "density",
+    fit_signal: str = "phi",
     ky_batch: int = 1,
     streaming_fit: bool = True,
     streaming_amp_floor: float = 1.0e-30,
@@ -3155,7 +3209,7 @@ def run_kbm_beta_scan(
             if params_use.damp_ends_amp != 0.0 and terms.end_damping != 0.0:
                 params_use = replace(params_use, damp_ends_amp=params_use.damp_ends_amp / dt_i)
 
-            if time_cfg_i is not None and streaming_fit:
+            if time_cfg_i is not None and time_cfg_i.use_diffrax and streaming_fit:
                 t_total = float(time_cfg_i.t_max)
                 tmin_i, tmax_i = _resolve_streaming_window(
                     t_total, _window_value(tmin, i), _window_value(tmax, i), start_fraction, window_fraction, 1.0
@@ -3244,9 +3298,14 @@ def run_kbm_beta_scan(
                 density_np = None if density_t is None else np.asarray(density_t)
                 if fit_signal == "density" and density_np is None:
                     density_np = phi_t_np
-                if mode_only:
-                    source = density_np if (fit_signal == "density" and density_np is not None) else phi_t_np
-                    signal = source
+                if mode_only and fit_signal == "density" and density_np is not None:
+                    signal = _extract_mode_only_signal(
+                        density_np,
+                        local_idx=0,
+                        species_index=density_species_index,
+                    )
+                elif mode_only:
+                    signal = _extract_mode_only_signal(phi_t_np, local_idx=0)
                 else:
                     signal = _select_fit_signal(
                         phi_t_np,
