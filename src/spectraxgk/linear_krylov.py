@@ -300,6 +300,53 @@ def _build_shift_invert_precond(
 
         return y_flat.reshape(*lead_shape, Ny, Nx, Nz)
 
+    def _project_kx_coarse(x: jnp.ndarray) -> jnp.ndarray:
+        """Coarse-space projection/prolongation for twist/shift coupling."""
+
+        if not cache.use_twist_shift or not cache.linked_indices:
+            x_mean = jnp.mean(x, axis=-2, keepdims=True)
+            return jnp.broadcast_to(x_mean, x.shape)
+
+        Ny = x.shape[-3]
+        Nx = x.shape[-2]
+        Nz = x.shape[-1]
+        lead_shape = x.shape[:-3]
+        x_flat = x.reshape(*lead_shape, Ny * Nx, Nz)
+        y_flat = jnp.zeros_like(x_flat)
+
+        def _scatter_unique(
+            target: jnp.ndarray, idx_flat: jnp.ndarray, updates: jnp.ndarray
+        ) -> jnp.ndarray:
+            idx = jnp.asarray(idx_flat, dtype=jnp.int32)
+            target_t = jnp.moveaxis(target, -2, 0)
+            updates_t = jnp.moveaxis(updates, -2, 0)
+            idx = idx[:, None]
+            dnums = jax.lax.ScatterDimensionNumbers(
+                update_window_dims=tuple(range(1, updates_t.ndim)),
+                inserted_window_dims=(0,),
+                scatter_dims_to_operand_dims=(0,),
+            )
+            out_t = jax.lax.scatter(
+                target_t,
+                idx,
+                updates_t,
+                dnums,
+                unique_indices=True,
+            )
+            return jnp.moveaxis(out_t, 0, -2)
+
+        for idx_map in cache.linked_indices:
+            nChains, nLinks = idx_map.shape
+            idx_flat = idx_map.reshape(-1)
+            x_link = jnp.take(x_flat, idx_flat, axis=-2)
+            x_link = x_link.reshape(*lead_shape, nChains, nLinks, Nz)
+            x_mean = jnp.mean(x_link, axis=-2, keepdims=True)
+            x_mean = jnp.broadcast_to(x_mean, x_link.shape)
+            x_updates = x_mean.reshape(*lead_shape, nChains * nLinks, Nz)
+            y_flat = _scatter_unique(y_flat, idx_flat, x_updates)
+
+        return y_flat.reshape(*lead_shape, Ny, Nx, Nz)
+
     def apply_precond_hermite_line(x_flat: jnp.ndarray) -> jnp.ndarray:
         x = x_flat.reshape(shape)
         squeeze_species = False
@@ -334,11 +381,10 @@ def _build_shift_invert_precond(
             )
 
         x_line = solve(x)
-        x_mean = jnp.mean(x, axis=-2, keepdims=True)
-        x_mean_full = jnp.broadcast_to(x_mean, x.shape)
-        x_coarse_full = solve(x_mean_full)
-        x_line_mean_full = jnp.broadcast_to(jnp.mean(x_line, axis=-2, keepdims=True), x.shape)
-        y = x_line + (x_coarse_full - x_line_mean_full)
+        x_coarse_in = _project_kx_coarse(x)
+        x_coarse_full = solve(x_coarse_in)
+        x_line_coarse_full = _project_kx_coarse(x_line)
+        y = x_line + (x_coarse_full - x_line_coarse_full)
         if squeeze_species:
             y = y[0]
         return y.reshape(size)
