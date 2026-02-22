@@ -244,7 +244,7 @@ def growth_fit_figure(
     tmax: float | None = None,
     title: str = "Growth-fit window",
 ) -> Tuple[plt.Figure, np.ndarray]:
-    """Plot |signal|^2 and log|signal|^2 with an optional fit window."""
+    """Plot :math:`|s|^2` and :math:`\\log |s|^2` with an optional fit window."""
 
     set_plot_style()
     fig, axes = plt.subplots(2, 1, sharex=True, figsize=(5.0, 4.5))
