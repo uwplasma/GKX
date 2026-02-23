@@ -5,7 +5,7 @@ performance, differentiability, and rapid experimentation. The code uses a
 Hermite-Laguerre velocity-space representation with Fourier perpendicular
 coordinates in a field-aligned flux-tube geometry. The initial validation target
 is the **Cyclone base case** with adiabatic electrons, alongside kinetic-electron
-ITG/ETG, KBM beta scans, and TEM linear checks.
+ITG/ETG and KBM beta scans.
 
 ![Linear validation summary](docs/_static/linear_summary.png)
 
@@ -108,16 +108,14 @@ python examples/etg_linear_benchmark.py
 python examples/kinetic_linear_benchmark.py
 python examples/gradB_coupling_hl_1d.py
 python examples/kbm_beta_scan.py
-python examples/tem_linear_benchmark.py
 python examples/two_stream_hermite_1d.py
 ```
 
-Diffrax is enabled by default for the ETG/TEM/KBM examples. To force the
+Diffrax is enabled by default for the ETG/KBM examples. To force the
 fixed-step integrators, pass ``--no-diffrax``:
 
 ```bash
 python examples/etg_linear_benchmark.py --no-diffrax
-python examples/tem_linear_benchmark.py --no-diffrax
 python examples/kbm_beta_scan.py --no-diffrax
 ```
 
@@ -130,8 +128,6 @@ python examples/kbm_beta_scan.py --no-diffrax
 - **ETG linear trend**: growth rates remain positive across reduced electron-scale
   gradients; real frequencies follow the electron diamagnetic direction.
 - **KBM beta scan**: electromagnetic transition between ITG and KBM branches.
-- **TEM benchmark**: low-:math:`k_y` trapped-electron branch on the published
-  s-alpha parameter set.
 
 ## Figures
 
@@ -159,11 +155,11 @@ python tools/benchmark_integrators.py
 | Operator toggles | streaming/mirror/curvature/grad-B/diamagnetic on; nonlinear off |
 | Grid | Nx=1, Ny=24, Nz=96, y0=20, ntheta=32, nperiod=2 |
 | Velocity resolution | Nl=6, Nm=16 (legacy figure); GX-style runs use per-ky balanced resolution |
-| Reference | GX paper Fig. 1 |
+| External references | GX paper Fig. 1 + GS2 + stella (matched cyclone setup) |
 
 ![Cyclone base case comparison](docs/_static/cyclone_comparison.png)
 
-GX-style balanced runs (moderate cost):
+GX-style balanced runs (moderate cost, against GX):
 
 | ky rho_i | Nl | Nm | t_max | gamma | omega | rel gamma | rel omega |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -208,20 +204,6 @@ Cross-code mismatch (same ETG setup above):
 | Grid | Nx=1, Ny=12, Nz=96, y0=10, ntheta=32, nperiod=2 |
 | Velocity resolution | Nl=6, Nm=16 |
 | Reference | GX paper Fig. 3 |
-
-### TEM (steep gradients, Frei et al. 2022 Fig. 4)
-
-| Parameter | Value |
-| --- | --- |
-| Geometry | q=2.7, s_hat=0.5, epsilon=0.18, R0=2.77778, alpha=0 |
-| Gradients | R/LTi=20, R/LTe=20, R/Ln=20 |
-| Species | ions + electrons, Te/Ti=1, mi/me=370 |
-| Electromagnetic | beta=1.0e-4, A_parallel=on, B_parallel=off |
-| Collisions | nu_i=0, nu_e=0, hypercollisions=off |
-| Operator toggles | streaming/mirror/curvature/grad-B/diamagnetic on; nonlinear off |
-| Grid | Nx=1, Ny=24, Nz=160, y0=20, ntheta=32, nperiod=3 |
-| Velocity resolution | Nl=6, Nm=16 |
-| Reference | Frei et al. 2022 Fig. 4 |
 
 ## Documentation
 

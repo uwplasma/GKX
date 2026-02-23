@@ -164,6 +164,30 @@ class LinearValidationPanel:
     log_x: bool = False
 
 
+@dataclass(frozen=True)
+class ReferenceSeries:
+    label: str
+    x: np.ndarray
+    gamma: np.ndarray
+    omega: np.ndarray
+    color: str
+    marker: str = "o"
+    linestyle: str = "--"
+
+
+@dataclass(frozen=True)
+class MultiReferenceValidationPanel:
+    name: str
+    z: np.ndarray
+    eigenfunction: np.ndarray
+    x: np.ndarray
+    gamma: np.ndarray
+    omega: np.ndarray
+    x_label: str
+    references: list[ReferenceSeries]
+    log_x: bool = False
+
+
 def linear_validation_figure(
     panels: list[LinearValidationPanel],
 ) -> Tuple[plt.Figure, np.ndarray]:
@@ -209,6 +233,112 @@ def linear_validation_figure(
             ax1.legend(loc="best", fontsize=9)
             ax2.legend(loc="best", fontsize=9)
 
+    fig.tight_layout()
+    return fig, axes
+
+
+def linear_validation_multi_reference_figure(
+    panels: list[MultiReferenceValidationPanel],
+) -> Tuple[plt.Figure, np.ndarray]:
+    """Create summary panels with multiple external reference curves."""
+
+    if len(panels) == 0:
+        raise ValueError("panels must be non-empty")
+    set_plot_style()
+    nrows = len(panels)
+    fig, axes = plt.subplots(nrows, 3, figsize=(12.0, 3.0 * nrows), sharex="col")
+    if nrows == 1:
+        axes = np.asarray([axes])
+
+    for i, panel in enumerate(panels):
+        ax0, ax1, ax2 = axes[i]
+        ax0.plot(panel.z, panel.eigenfunction.real, color="#1f77b4", label="Re")
+        ax0.plot(panel.z, panel.eigenfunction.imag, color="#ff7f0e", linestyle="--", label="Im")
+        ax0.set_ylabel(panel.name)
+        ax0.set_xlabel(r"$\theta$")
+        if i == 0:
+            ax0.set_title("Eigenfunction")
+            ax1.set_title("Growth rate")
+            ax2.set_title("Frequency")
+            ax0.legend(loc="best", fontsize=9)
+
+        ax1.plot(panel.x, panel.gamma, marker="o", color="#2ca02c", label="SPECTRAX-GK")
+        ax2.plot(panel.x, panel.omega, marker="o", color="#d62728", label="SPECTRAX-GK")
+        for ref in panel.references:
+            ax1.plot(
+                ref.x,
+                ref.gamma,
+                marker=ref.marker,
+                linestyle=ref.linestyle,
+                color=ref.color,
+                label=ref.label,
+            )
+            ax2.plot(
+                ref.x,
+                ref.omega,
+                marker=ref.marker,
+                linestyle=ref.linestyle,
+                color=ref.color,
+                label=ref.label,
+            )
+        ax1.set_xlabel(panel.x_label)
+        ax1.set_ylabel(r"$\gamma a / v_{ti}$")
+        ax2.set_xlabel(panel.x_label)
+        ax2.set_ylabel(r"$\omega a / v_{ti}$")
+        if panel.log_x:
+            ax1.set_xscale("log")
+            ax2.set_xscale("log")
+        if i == 0:
+            ax1.legend(loc="best", fontsize=9)
+            ax2.legend(loc="best", fontsize=9)
+
+    fig.tight_layout()
+    return fig, axes
+
+
+def scan_multi_reference_figure(
+    x: np.ndarray,
+    gamma: np.ndarray,
+    omega: np.ndarray,
+    x_label: str,
+    title: str,
+    references: list[ReferenceSeries],
+    *,
+    log_x: bool = False,
+) -> Tuple[plt.Figure, np.ndarray]:
+    """Create a two-panel comparison figure against multiple reference curves."""
+
+    set_plot_style()
+    fig, axes = plt.subplots(2, 1, sharex=True, figsize=(5.5, 5.0))
+    ax0, ax1 = axes
+    ax0.plot(x, gamma, marker="o", color="#2ca02c", label="SPECTRAX-GK")
+    ax1.plot(x, omega, marker="o", color="#d62728", label="SPECTRAX-GK")
+    for ref in references:
+        ax0.plot(
+            ref.x,
+            ref.gamma,
+            marker=ref.marker,
+            linestyle=ref.linestyle,
+            color=ref.color,
+            label=ref.label,
+        )
+        ax1.plot(
+            ref.x,
+            ref.omega,
+            marker=ref.marker,
+            linestyle=ref.linestyle,
+            color=ref.color,
+            label=ref.label,
+        )
+    ax0.set_title(title)
+    ax0.set_ylabel(r"$\gamma a / v_{ti}$")
+    ax1.set_ylabel(r"$\omega a / v_{ti}$")
+    ax1.set_xlabel(x_label)
+    if log_x:
+        ax0.set_xscale("log")
+        ax1.set_xscale("log")
+    ax0.legend(loc="best")
+    ax1.legend(loc="best")
     fig.tight_layout()
     return fig, axes
 

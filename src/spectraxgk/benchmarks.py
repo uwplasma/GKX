@@ -463,6 +463,17 @@ def load_cyclone_reference() -> CycloneReference:
     return CycloneReference(ky=ky, omega=omega, gamma=gamma)
 
 
+def _load_reference_with_header(filename: str) -> CycloneReference:
+    """Load reference CSVs with columns ky,gamma,omega."""
+
+    data_path = resources.files("spectraxgk").joinpath("data", filename)
+    arr = np.genfromtxt(str(data_path), delimiter=",", names=True, dtype=float)
+    ky = np.asarray(arr["ky"], dtype=float)
+    gamma = np.asarray(arr["gamma"], dtype=float)
+    omega = np.asarray(arr["omega"], dtype=float)
+    return CycloneReference(ky=ky, omega=omega, gamma=gamma)
+
+
 def load_cyclone_reference_kinetic() -> CycloneReference:
     """Load Cyclone base case reference data (kinetic electrons)."""
 
@@ -472,6 +483,18 @@ def load_cyclone_reference_kinetic() -> CycloneReference:
     omega = arr[:, 1]
     gamma = arr[:, 2]
     return CycloneReference(ky=ky, omega=omega, gamma=gamma)
+
+
+def load_cyclone_reference_gs2() -> CycloneReference:
+    """Load Cyclone reference values extracted from GS2 runs."""
+
+    return _load_reference_with_header("cyclone_reference_gs2.csv")
+
+
+def load_cyclone_reference_stella() -> CycloneReference:
+    """Load Cyclone reference values extracted from stella runs."""
+
+    return _load_reference_with_header("cyclone_reference_stella.csv")
 
 
 def load_kbm_reference() -> CycloneReference:
@@ -494,6 +517,18 @@ def load_etg_reference() -> CycloneReference:
     omega = arr[:, 1]
     gamma = arr[:, 2]
     return CycloneReference(ky=ky, omega=omega, gamma=gamma)
+
+
+def load_etg_reference_gs2() -> CycloneReference:
+    """Load ETG reference values extracted from GS2 runs."""
+
+    return _load_reference_with_header("etg_reference_gs2.csv")
+
+
+def load_etg_reference_stella() -> CycloneReference:
+    """Load ETG reference values extracted from stella runs."""
+
+    return _load_reference_with_header("etg_reference_stella.csv")
 
 
 def load_tem_reference() -> CycloneReference:
