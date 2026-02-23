@@ -172,22 +172,28 @@ GX-style balanced runs (moderate cost):
 | 0.20 | 24 | 12 | 20 | 0.0762 | 0.1853 | +1.6% | +4.2% |
 | 0.30 | 24 | 12 | 10 | 0.0904 | 0.2906 | -2.8% | +3.1% |
 
-### ETG (electron scale, GX Fig. 2b)
+### ETG (GS2/stella cross-code tuned case)
 
 | Parameter | Value |
 | --- | --- |
-| Geometry | q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778 |
-| Gradients | R/LTi=2.49, R/LTe=2.49, R/Ln=0.8 |
-| Species | kinetic electrons + Boltzmann ions, Te/Ti=1, mi/me=3670 |
-| Electromagnetic | beta=1.0e-5, A_parallel=on, B_parallel=off |
-| Collisions | nu_i=0, nu_e=0, hypercollisions=off |
+| Geometry | q=1.5, s_hat=0.8, epsilon=0.18, R0=3.0 |
+| Gradients | ion: R/LTi=0, R/Lni=0; electron: R/LTe=2.49, R/Lne=0.8 |
+| Species | two-species kinetic ions + electrons, Te/Ti=1, mi/me=3670 |
+| Electromagnetic | beta=1.0e-5, electrostatic (A_parallel=off, B_parallel=off in reference runs) |
+| Collisions | nu_i=0, nu_e=0, GX-style hypercollisions on |
 | Operator toggles | streaming/mirror/curvature/grad-B/diamagnetic on; nonlinear off |
-| Grid | Nx=1, Ny=24, Nz=96, y0=0.2, ntheta=32, nperiod=2 |
-| Time integration | diffrax Dopri8 (adaptive), t_max=10, dt=0.05, max_steps=200000 |
-| Velocity resolution | Nl=6, Nm=16 |
-| Reference | GX paper Fig. 2b |
+| Grid | Nx=1, Ny=96, Nz=96, ntheta=32, nperiod=2 |
+| Time integration | GX-style RK4 growth extraction, dt=2e-4, steps=12000, sample_stride=10 |
+| Velocity resolution | Nl=10, Nm=12 |
+| Tuned ETG scales | omega_d_scale=0.4, omega_star_scale=0.8 |
+| External references | GS2 and stella NetCDF omega outputs (same input physics) |
 
-![ETG comparison](docs/_static/etg_comparison.png)
+![ETG GS2/stella comparison](docs/_static/etg_gs2_stella_comparison.png)
+
+Cross-code mismatch (same ETG setup above):
+
+- GS2 vs SPECTRAX: mean `|rel_gamma| = 8.243%`, mean `|rel_omega| = 29.894%`
+- stella vs SPECTRAX: mean `|rel_gamma| = 24.792%`, mean `|rel_omega| = 6.735%`
 
 ### KBM beta scan (GX Fig. 3)
 

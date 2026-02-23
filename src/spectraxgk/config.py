@@ -151,6 +151,8 @@ class ETGModelConfig:
     R_over_LTi: float = 2.49
     R_over_LTe: float = 2.49
     R_over_Ln: float = 0.8
+    R_over_Lni: float | None = None
+    R_over_Lne: float | None = None
     Te_over_Ti: float = 1.0
     mass_ratio: float = 3670.0
     nu_i: float = 0.0
