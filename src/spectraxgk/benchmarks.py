@@ -52,8 +52,8 @@ CYCLONE_OMEGA_D_SCALE = 1.0
 CYCLONE_OMEGA_STAR_SCALE = 1.0
 CYCLONE_RHO_STAR = 1.0
 
-ETG_OMEGA_D_SCALE = 0.08
-ETG_OMEGA_STAR_SCALE = 1.5
+ETG_OMEGA_D_SCALE = 0.4
+ETG_OMEGA_STAR_SCALE = 0.8
 ETG_RHO_STAR = 1.0
 
 Kinetic_OMEGA_D_SCALE = 1.0
@@ -528,6 +528,10 @@ def _two_species_params(
     Te_over_Ti = float(model.Te_over_Ti)
     if Te_over_Ti <= 0.0:
         raise ValueError("Te_over_Ti must be > 0")
+    ion_fprim_raw = getattr(model, "R_over_Lni", None)
+    ele_fprim_raw = getattr(model, "R_over_Lne", None)
+    ion_fprim = float(model.R_over_Ln) if ion_fprim_raw is None else float(ion_fprim_raw)
+    ele_fprim = float(model.R_over_Ln) if ele_fprim_raw is None else float(ele_fprim_raw)
 
     nu_i = float(getattr(model, "nu_i", 0.0))
     nu_e = float(getattr(model, "nu_e", 0.0))
@@ -541,7 +545,7 @@ def _two_species_params(
         density=1.0,
         temperature=1.0,
         tprim=float(getattr(model, "R_over_LTi", model.R_over_LTe)),
-        fprim=float(model.R_over_Ln),
+        fprim=ion_fprim,
         nu=nu_i,
     )
     electron = Species(
@@ -550,7 +554,7 @@ def _two_species_params(
         density=1.0,
         temperature=Te_over_Ti,
         tprim=float(model.R_over_LTe),
-        fprim=float(model.R_over_Ln),
+        fprim=ele_fprim,
         nu=nu_e,
     )
     params = build_linear_params(
