@@ -205,6 +205,15 @@ Cross-code mismatch (same ETG setup above):
 | Velocity resolution | Nl=6, Nm=16 |
 | Reference | GX paper Fig. 3 |
 
+## Cross-code performance (staging)
+
+Representative point timings on the current development workstation
+(SPECTRAX includes first-run JAX compile overhead):
+
+| Benchmark point | SPECTRAX-GK | GX | GS2 | stella |
+| --- | --- | --- | --- | --- |
+| Cyclone ky=0.3 (time, peak RSS) | 31.5 s, 664 MB | pending (GPU run) | 4.82 s, 35 MB | pending |
+
 ## Documentation
 
 The ReadTheDocs site provides:
