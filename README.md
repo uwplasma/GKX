@@ -205,6 +205,15 @@ Cross-code mismatch (same ETG setup above):
 | Velocity resolution | Nl=6, Nm=16 |
 | Reference | GX paper Fig. 3 |
 
+First GS2/stella cross-code KBM run set (staging, matched-input run plumbing):
+
+![KBM GS2/stella comparison](docs/_static/kbm_gs2_stella_comparison.png)
+
+- GS2 vs SPECTRAX: mean `|rel_gamma| = 114.002%`, mean `|rel_omega| = 303.058%`
+- stella vs SPECTRAX: mean `|rel_gamma| = 93.904%`, mean `|rel_omega| = 440.818%`
+- Status: run/extraction path is now in place; electromagnetic normalization and
+  branch-selection closure is still required before freezing KBM defaults.
+
 ## Cross-code performance (staging)
 
 Representative point timings on the current development workstation

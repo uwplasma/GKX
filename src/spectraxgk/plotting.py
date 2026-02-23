@@ -246,7 +246,9 @@ def linear_validation_multi_reference_figure(
         raise ValueError("panels must be non-empty")
     set_plot_style()
     nrows = len(panels)
-    fig, axes = plt.subplots(nrows, 3, figsize=(12.0, 3.0 * nrows), sharex="col")
+    # Keep each row on its own x-range so Cyclone- and ETG-scale ky scans
+    # remain readable in the combined summary figure.
+    fig, axes = plt.subplots(nrows, 3, figsize=(12.0, 3.0 * nrows), sharex=False)
     if nrows == 1:
         axes = np.asarray([axes])
 
