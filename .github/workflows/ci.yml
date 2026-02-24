@@ -42,3 +42,19 @@ jobs:
           SPECTRAX_X64: "1"
         run: |
           pytest -q --maxfail=1 --disable-warnings
+
+      - name: Core Terms Coverage (>=90%)
+        env:
+          MPLBACKEND: Agg
+          JAX_ENABLE_X64: "true"
+          SPECTRAX_X64: "1"
+        run: |
+          pytest -q \
+            tests/test_terms_assembly.py \
+            tests/test_terms_operators.py \
+            tests/test_terms_fields.py \
+            tests/test_terms_integrators.py \
+            tests/test_terms_validation.py \
+            --maxfail=1 --disable-warnings \
+            --cov=src/spectraxgk/terms \
+            --cov-fail-under=90
