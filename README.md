@@ -203,20 +203,19 @@ Cross-code mismatch (same ETG setup above):
 | Operator toggles | streaming/mirror/curvature/grad-B/diamagnetic on; nonlinear off |
 | Grid | Nx=1, Ny=12, Nz=96, y0=10, ntheta=32, nperiod=2 |
 | Velocity resolution | Nl=8, Nm=24 |
-| Time integration (cross-code) | Diffrax Dopri8 (fixed), dt=2e-3, steps=2000 |
-| Fit policy (cross-code) | streaming fit, signal=phi, window_fraction=0.2, start_fraction=0.2 |
+| Time integration (cross-code) | Diffrax RK4 (fixed), dt=5e-4, steps=12000 |
+| Fit policy (cross-code) | streaming fit, signal=phi, window_fraction=0.4, start_fraction=0.2 |
 | Reference | GX paper Fig. 3 |
 
 KBM GS2/stella cross-code set (matched-input run plumbing):
 
 ![KBM GS2/stella comparison](docs/_static/kbm_gs2_stella_comparison.png)
 
-- GS2 vs SPECTRAX: mean `|rel_gamma| = 8.121%`, max `|rel_gamma| = 16.224%`
-- GS2 vs SPECTRAX: mean `|rel_omega| = 104.444%`
-- stella vs SPECTRAX: mean `|rel_gamma| = 24.915%`
-- stella vs SPECTRAX: mean `|rel_omega| = 104.494%`
-- Status: growth-rate agreement improved substantially on the matched KBM set;
-  real-frequency branch closure remains the main open item before freezing KBM defaults.
+- GS2 vs SPECTRAX: mean `|rel_gamma| = 6.666%`, max `|rel_gamma| = 12.625%`
+- GS2 vs SPECTRAX: mean `|rel_omega| = 16.067%`, max `|rel_omega| = 30.604%`
+- stella vs SPECTRAX: mean `|rel_gamma| = 27.249%`, max `|rel_gamma| = 38.272%`
+- stella vs SPECTRAX: mean `|rel_omega| = 21.670%`, max `|rel_omega| = 46.713%`
+- Status: GS2 closure for KBM is in tolerance; stella still shows a higher-growth branch on this matched-input set.
 
 ## Cross-code performance (staging)
 

@@ -65,7 +65,8 @@ TEM_OMEGA_STAR_SCALE = 1.0
 TEM_RHO_STAR = 1.0
 
 KBM_OMEGA_D_SCALE = 1.0
-KBM_OMEGA_STAR_SCALE = 1.0
+# Tuned against matched-input GS2 KBM beta scans (ky*rho_i=0.3).
+KBM_OMEGA_STAR_SCALE = 0.8
 KBM_RHO_STAR = 1.0
 
 GX_NU_HYPER_L = 0.0
