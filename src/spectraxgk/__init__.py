@@ -12,12 +12,34 @@ from spectraxgk.config import (
 )
 from spectraxgk.geometry import SAlphaGeometry
 from spectraxgk.gyroaverage import J_l_all, gamma0
-from spectraxgk.io import load_case_from_toml, load_krylov_from_toml, load_linear_terms_from_toml
+from spectraxgk.io import (
+    load_case_from_toml,
+    load_krylov_from_toml,
+    load_linear_terms_from_toml,
+    load_runtime_from_toml,
+)
 from spectraxgk.normalization import (
     DiagnosticNorm,
     NormalizationContract,
     apply_diagnostic_normalization,
     get_normalization_contract,
+)
+from spectraxgk.runtime import (
+    RuntimeLinearResult,
+    RuntimeLinearScanResult,
+    build_runtime_linear_params,
+    build_runtime_linear_terms,
+    build_runtime_term_config,
+    run_runtime_linear,
+    run_runtime_scan,
+)
+from spectraxgk.runtime_config import (
+    RuntimeCollisionConfig,
+    RuntimeConfig,
+    RuntimeNormalizationConfig,
+    RuntimePhysicsConfig,
+    RuntimeSpeciesConfig,
+    RuntimeTermsConfig,
 )
 from spectraxgk.operators import hermite_streaming
 from spectraxgk.linear import (
@@ -120,10 +142,24 @@ __all__ = [
     "load_case_from_toml",
     "load_krylov_from_toml",
     "load_linear_terms_from_toml",
+    "load_runtime_from_toml",
     "DiagnosticNorm",
     "NormalizationContract",
     "get_normalization_contract",
     "apply_diagnostic_normalization",
+    "RuntimeConfig",
+    "RuntimeSpeciesConfig",
+    "RuntimePhysicsConfig",
+    "RuntimeCollisionConfig",
+    "RuntimeNormalizationConfig",
+    "RuntimeTermsConfig",
+    "RuntimeLinearResult",
+    "RuntimeLinearScanResult",
+    "build_runtime_linear_params",
+    "build_runtime_linear_terms",
+    "build_runtime_term_config",
+    "run_runtime_linear",
+    "run_runtime_scan",
     "hermite_streaming",
     "LinearParams",
     "LinearTerms",
