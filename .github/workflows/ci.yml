@@ -58,3 +58,52 @@ jobs:
             --maxfail=1 --disable-warnings \
             --cov=src/spectraxgk/terms \
             --cov-fail-under=90
+
+      - name: Krylov + Diffrax Core Coverage (>=90% each)
+        env:
+          MPLBACKEND: Agg
+          JAX_ENABLE_X64: "true"
+          SPECTRAX_X64: "1"
+        run: |
+          pytest -q \
+            tests/test_linear_krylov_core.py \
+            tests/test_diffrax_integrators.py \
+            tests/test_diffrax_integrators_core.py \
+            --maxfail=1 --disable-warnings \
+            --cov=src/spectraxgk \
+            --cov-report=xml:coverage-core.xml \
+            --cov-report=term
+          python - <<'PY'
+          import sys
+          import xml.etree.ElementTree as ET
+
+          thresholds = {
+              "linear_krylov.py": 90.0,
+              "diffrax_integrators.py": 90.0,
+          }
+
+          root = ET.parse("coverage-core.xml").getroot()
+          found = {}
+          for cls in root.findall(".//class"):
+              filename = cls.attrib.get("filename", "")
+              for target in thresholds:
+                  if filename.endswith(target):
+                      found[target] = float(cls.attrib["line-rate"]) * 100.0
+
+          missing = [name for name in thresholds if name not in found]
+          if missing:
+              print(f"Missing coverage entries for: {missing}")
+              sys.exit(1)
+
+          failed = []
+          for target, threshold in thresholds.items():
+              cov = found[target]
+              print(f"{target}: {cov:.2f}% (required {threshold:.1f}%)")
+              if cov < threshold:
+                  failed.append((target, cov, threshold))
+
+          if failed:
+              for target, cov, threshold in failed:
+                  print(f"FAIL: {target}={cov:.2f}% < {threshold:.1f}%")
+              sys.exit(1)
+          PY
