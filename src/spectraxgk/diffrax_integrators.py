@@ -12,7 +12,13 @@ import numpy as np
 from spectraxgk.analysis import ModeSelection, ModeSelectionBatch
 from spectraxgk.geometry import SAlphaGeometry
 from spectraxgk.grids import SpectralGrid
-from spectraxgk.linear import LinearCache, LinearParams, LinearTerms, build_linear_cache
+from spectraxgk.linear import (
+    LinearCache,
+    LinearParams,
+    LinearTerms,
+    build_linear_cache,
+    linear_terms_to_term_config,
+)
 from spectraxgk.terms.assembly import assemble_rhs_cached, assemble_rhs_cached_jit, compute_fields_cached
 from spectraxgk.terms.config import FieldState, TermConfig
 from spectraxgk.terms.nonlinear import placeholder_nonlinear_contribution
@@ -197,19 +203,7 @@ def integrate_linear_diffrax(
             raise ValueError("G0 must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)")
         cache = build_linear_cache(grid, geom, params, Nl, Nm)
 
-    term_cfg = TermConfig(
-        streaming=terms.streaming,
-        mirror=terms.mirror,
-        curvature=terms.curvature,
-        gradb=terms.gradb,
-        diamagnetic=terms.diamagnetic,
-        collisions=terms.collisions,
-        hypercollisions=terms.hypercollisions,
-        end_damping=terms.end_damping,
-        apar=terms.apar,
-        bpar=terms.bpar,
-        nonlinear=0.0,
-    )
+    term_cfg = linear_terms_to_term_config(terms)
 
     use_custom_vjp = not (_is_imex_solver(method) or _is_implicit_solver(method))
 
@@ -379,19 +373,7 @@ def integrate_linear_diffrax_streaming(
             raise ValueError("G0 must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)")
         cache = build_linear_cache(grid, geom, params, Nl, Nm)
 
-    term_cfg = TermConfig(
-        streaming=terms.streaming,
-        mirror=terms.mirror,
-        curvature=terms.curvature,
-        gradb=terms.gradb,
-        diamagnetic=terms.diamagnetic,
-        collisions=terms.collisions,
-        hypercollisions=terms.hypercollisions,
-        end_damping=terms.end_damping,
-        apar=terms.apar,
-        bpar=terms.bpar,
-        nonlinear=0.0,
-    )
+    term_cfg = linear_terms_to_term_config(terms)
 
     use_custom_vjp = not (_is_imex_solver(method) or _is_implicit_solver(method))
 

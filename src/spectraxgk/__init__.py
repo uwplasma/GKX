@@ -48,8 +48,10 @@ from spectraxgk.linear import (
     LinearTerms,
     build_linear_cache,
     integrate_linear,
+    linear_terms_to_term_config,
     linear_rhs,
     linear_rhs_cached,
+    term_config_to_linear_terms,
 )
 from spectraxgk.linear_krylov import KrylovConfig, dominant_eigenpair, dominant_eigenvalue
 from spectraxgk.nonlinear import (
@@ -165,6 +167,8 @@ __all__ = [
     "LinearTerms",
     "LinearCache",
     "build_linear_cache",
+    "linear_terms_to_term_config",
+    "term_config_to_linear_terms",
     "linear_rhs",
     "linear_rhs_cached",
     "integrate_linear",

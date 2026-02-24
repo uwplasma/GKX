@@ -17,6 +17,7 @@ from spectraxgk.linear import (
     LinearTerms,
     _as_species_array,
     hypercollision_damping,
+    linear_terms_to_term_config,
 )
 from spectraxgk.terms.assembly import assemble_rhs_cached
 from spectraxgk.terms.config import TermConfig
@@ -777,21 +778,7 @@ def dominant_eigenpair(
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Python wrapper for the cached Krylov solver."""
 
-    if terms is None:
-        terms = LinearTerms()
-    term_cfg = TermConfig(
-        streaming=terms.streaming,
-        mirror=terms.mirror,
-        curvature=terms.curvature,
-        gradb=terms.gradb,
-        diamagnetic=terms.diamagnetic,
-        collisions=terms.collisions,
-        hypercollisions=terms.hypercollisions,
-        end_damping=terms.end_damping,
-        apar=terms.apar,
-        bpar=terms.bpar,
-        nonlinear=0.0,
-    )
+    term_cfg = linear_terms_to_term_config(terms)
     method_key = method.strip().lower()
     mode_family_sign = _mode_family_sign(mode_family)
     omega_sign_eff = int(omega_sign) if int(omega_sign) != 0 else mode_family_sign
