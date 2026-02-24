@@ -4,8 +4,7 @@ SPECTRAX-GK is a clean-room, JAX-native gyrokinetic solver designed for
 performance, differentiability, and rapid experimentation. The code uses a
 Hermite-Laguerre velocity-space representation with Fourier perpendicular
 coordinates in a field-aligned flux-tube geometry. The initial validation target
-is the **Cyclone base case** with adiabatic electrons, alongside kinetic-electron
-ITG/ETG and KBM beta scans.
+is the **Cyclone base case** with adiabatic electrons, plus ETG and KBM scans.
 
 ![Linear validation summary](docs/_static/linear_summary.png)
 
@@ -105,7 +104,6 @@ python examples/linear_rhs_demo.py
 python examples/example.py
 python examples/cyclone_linear_benchmark.py
 python examples/etg_linear_benchmark.py
-python examples/kinetic_linear_benchmark.py
 python examples/gradB_coupling_hl_1d.py
 python examples/kbm_beta_scan.py
 python examples/two_stream_hermite_1d.py
@@ -128,6 +126,14 @@ python examples/kbm_beta_scan.py --no-diffrax
 - **ETG linear trend**: growth rates remain positive across reduced electron-scale
   gradients; real frequencies follow the electron diamagnetic direction.
 - **KBM beta scan**: electromagnetic transition between ITG and KBM branches.
+
+KBM cross-code note:
+
+- GS2 is used as the primary electromagnetic cross-code baseline.
+- The current stella documentation states that ``beta``, ``fapar``, and ``fbpar``
+  have no effect in the documented user namelists; this can invalidate KBM
+  cross-code parity checks that rely on finite-:math:`A_\parallel` physics
+  ([stella user manual](https://stellagk.github.io/stella/page/user_manual/index.html)).
 
 ## Figures
 
