@@ -13,6 +13,12 @@ from spectraxgk.config import (
 from spectraxgk.geometry import SAlphaGeometry
 from spectraxgk.gyroaverage import J_l_all, gamma0
 from spectraxgk.io import load_case_from_toml, load_krylov_from_toml, load_linear_terms_from_toml
+from spectraxgk.normalization import (
+    DiagnosticNorm,
+    NormalizationContract,
+    apply_diagnostic_normalization,
+    get_normalization_contract,
+)
 from spectraxgk.operators import hermite_streaming
 from spectraxgk.linear import (
     LinearCache,
@@ -114,6 +120,10 @@ __all__ = [
     "load_case_from_toml",
     "load_krylov_from_toml",
     "load_linear_terms_from_toml",
+    "DiagnosticNorm",
+    "NormalizationContract",
+    "get_normalization_contract",
+    "apply_diagnostic_normalization",
     "hermite_streaming",
     "LinearParams",
     "LinearTerms",

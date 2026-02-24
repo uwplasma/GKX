@@ -42,32 +42,40 @@ from spectraxgk.linear import (
     integrate_linear_diagnostics,
 )
 from spectraxgk.linear_krylov import KrylovConfig, dominant_eigenpair
+from spectraxgk.normalization import (
+    KBM_NORMALIZATION,
+    KINETIC_NORMALIZATION,
+    TEM_NORMALIZATION,
+    CYCLONE_NORMALIZATION,
+    ETG_NORMALIZATION,
+    apply_diagnostic_normalization,
+)
 from spectraxgk.runners import integrate_linear_from_config
 from spectraxgk.species import Species, build_linear_params
 from spectraxgk.terms.assembly import compute_fields_cached
 from spectraxgk.terms.config import TermConfig
 
 
-CYCLONE_OMEGA_D_SCALE = 1.0
-CYCLONE_OMEGA_STAR_SCALE = 1.0
-CYCLONE_RHO_STAR = 1.0
+CYCLONE_OMEGA_D_SCALE = CYCLONE_NORMALIZATION.omega_d_scale
+CYCLONE_OMEGA_STAR_SCALE = CYCLONE_NORMALIZATION.omega_star_scale
+CYCLONE_RHO_STAR = CYCLONE_NORMALIZATION.rho_star
 
-ETG_OMEGA_D_SCALE = 0.4
-ETG_OMEGA_STAR_SCALE = 0.8
-ETG_RHO_STAR = 1.0
+ETG_OMEGA_D_SCALE = ETG_NORMALIZATION.omega_d_scale
+ETG_OMEGA_STAR_SCALE = ETG_NORMALIZATION.omega_star_scale
+ETG_RHO_STAR = ETG_NORMALIZATION.rho_star
 
-Kinetic_OMEGA_D_SCALE = 1.0
-Kinetic_OMEGA_STAR_SCALE = 1.0
-Kinetic_RHO_STAR = 1.0
+Kinetic_OMEGA_D_SCALE = KINETIC_NORMALIZATION.omega_d_scale
+Kinetic_OMEGA_STAR_SCALE = KINETIC_NORMALIZATION.omega_star_scale
+Kinetic_RHO_STAR = KINETIC_NORMALIZATION.rho_star
 
-TEM_OMEGA_D_SCALE = 1.0
-TEM_OMEGA_STAR_SCALE = 1.0
-TEM_RHO_STAR = 1.0
+TEM_OMEGA_D_SCALE = TEM_NORMALIZATION.omega_d_scale
+TEM_OMEGA_STAR_SCALE = TEM_NORMALIZATION.omega_star_scale
+TEM_RHO_STAR = TEM_NORMALIZATION.rho_star
 
-KBM_OMEGA_D_SCALE = 1.0
+KBM_OMEGA_D_SCALE = KBM_NORMALIZATION.omega_d_scale
 # Tuned against matched-input GS2 KBM beta scans (ky*rho_i=0.3).
-KBM_OMEGA_STAR_SCALE = 0.8
-KBM_RHO_STAR = 1.0
+KBM_OMEGA_STAR_SCALE = KBM_NORMALIZATION.omega_star_scale
+KBM_RHO_STAR = KBM_NORMALIZATION.rho_star
 
 GX_NU_HYPER_L = 0.0
 GX_NU_HYPER_M = 1.0
@@ -323,13 +331,12 @@ def _normalize_growth_rate(
     params: LinearParams,
     diagnostic_norm: str,
 ) -> tuple[float, float]:
-    mode = diagnostic_norm.strip().lower()
-    if mode in {"gx", "rho_star"}:
-        rho_star = float(np.asarray(params.rho_star))
-        return float(gamma) * rho_star, float(omega) * rho_star
-    if mode in {"none", ""}:
-        return float(gamma), float(omega)
-    raise ValueError(f"Unknown diagnostic_norm '{diagnostic_norm}'")
+    return apply_diagnostic_normalization(
+        gamma,
+        omega,
+        rho_star=float(np.asarray(params.rho_star)),
+        diagnostic_norm=diagnostic_norm,
+    )
 
 
 def _build_gaussian_profile(
