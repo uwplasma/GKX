@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import partial
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 import jax
 import jax.numpy as jnp
@@ -15,6 +15,9 @@ from spectraxgk.basis import hermite_ladder_coeffs
 from spectraxgk.geometry import SAlphaGeometry
 from spectraxgk.gyroaverage import J_l_all
 from spectraxgk.grids import SpectralGrid
+
+if TYPE_CHECKING:
+    from spectraxgk.terms.config import TermConfig
 
 
 @jax.tree_util.register_pytree_node_class
@@ -137,6 +140,51 @@ class LinearTerms:
     @classmethod
     def tree_unflatten(cls, aux_data, children):
         return cls(*children)
+
+
+def linear_terms_to_term_config(
+    terms: LinearTerms | None,
+    *,
+    nonlinear: float = 0.0,
+) -> TermConfig:
+    """Convert :class:`LinearTerms` into the modular :class:`TermConfig`."""
+
+    from spectraxgk.terms.config import TermConfig
+
+    term_weights = terms if terms is not None else LinearTerms()
+    return TermConfig(
+        streaming=term_weights.streaming,
+        mirror=term_weights.mirror,
+        curvature=term_weights.curvature,
+        gradb=term_weights.gradb,
+        diamagnetic=term_weights.diamagnetic,
+        collisions=term_weights.collisions,
+        hypercollisions=term_weights.hypercollisions,
+        end_damping=term_weights.end_damping,
+        apar=term_weights.apar,
+        bpar=term_weights.bpar,
+        nonlinear=nonlinear,
+    )
+
+
+def term_config_to_linear_terms(term_cfg: TermConfig | None) -> LinearTerms:
+    """Convert modular :class:`TermConfig` into linear-only term weights."""
+
+    from spectraxgk.terms.config import TermConfig
+
+    cfg = term_cfg if term_cfg is not None else TermConfig()
+    return LinearTerms(
+        streaming=cfg.streaming,
+        mirror=cfg.mirror,
+        curvature=cfg.curvature,
+        gradb=cfg.gradb,
+        diamagnetic=cfg.diamagnetic,
+        collisions=cfg.collisions,
+        hypercollisions=cfg.hypercollisions,
+        end_damping=cfg.end_damping,
+        apar=cfg.apar,
+        bpar=cfg.bpar,
+    )
 
 
 def _is_tracer(x) -> bool:
@@ -973,25 +1021,9 @@ def linear_rhs_cached(
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Compute the linear RHS using precomputed geometry arrays."""
 
-    if terms is None:
-        terms = LinearTerms()
-
     from spectraxgk.terms.assembly import assemble_rhs_cached, assemble_rhs_cached_jit
-    from spectraxgk.terms.config import TermConfig
 
-    term_cfg = TermConfig(
-        streaming=terms.streaming,
-        mirror=terms.mirror,
-        curvature=terms.curvature,
-        gradb=terms.gradb,
-        diamagnetic=terms.diamagnetic,
-        collisions=terms.collisions,
-        hypercollisions=terms.hypercollisions,
-        end_damping=terms.end_damping,
-        apar=terms.apar,
-        bpar=terms.bpar,
-        nonlinear=0.0,
-    )
+    term_cfg = linear_terms_to_term_config(terms)
 
     if use_jit:
         dG, fields = assemble_rhs_cached_jit(G, cache, params, term_cfg)

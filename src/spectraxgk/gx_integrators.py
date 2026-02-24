@@ -11,7 +11,12 @@ from numpy.polynomial.laguerre import laggauss
 
 from spectraxgk.geometry import SAlphaGeometry
 from spectraxgk.grids import SpectralGrid
-from spectraxgk.linear import LinearCache, LinearParams, LinearTerms
+from spectraxgk.linear import (
+    LinearCache,
+    LinearParams,
+    LinearTerms,
+    linear_terms_to_term_config,
+)
 from spectraxgk.terms.assembly import assemble_rhs_cached
 from spectraxgk.terms.config import TermConfig
 
@@ -284,21 +289,7 @@ def _gx_growth_rate_step(
 
 
 def _gx_term_config(terms: LinearTerms | None) -> TermConfig:
-    if terms is None:
-        terms = LinearTerms()
-    return TermConfig(
-        streaming=terms.streaming,
-        mirror=terms.mirror,
-        curvature=terms.curvature,
-        gradb=terms.gradb,
-        diamagnetic=terms.diamagnetic,
-        collisions=terms.collisions,
-        hypercollisions=terms.hypercollisions,
-        end_damping=terms.end_damping,
-        apar=terms.apar,
-        bpar=terms.bpar,
-        nonlinear=0.0,
-    )
+    return linear_terms_to_term_config(terms)
 
 
 def _rk4_step(

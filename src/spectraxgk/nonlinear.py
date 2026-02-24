@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Callable, Tuple
 
 import jax
@@ -13,9 +13,9 @@ from spectraxgk.grids import SpectralGrid
 from spectraxgk.linear import (
     LinearCache,
     LinearParams,
-    LinearTerms,
     _build_implicit_operator,
     build_linear_cache,
+    term_config_to_linear_terms,
 )
 from spectraxgk.terms.assembly import assemble_rhs_cached_jit
 from spectraxgk.terms.config import FieldState, TermConfig
@@ -135,18 +135,7 @@ def build_nonlinear_imex_operator(
     """Build and cache the matrix-free linear operator used by nonlinear IMEX."""
 
     term_cfg = terms or TermConfig()
-    linear_terms = LinearTerms(
-        streaming=term_cfg.streaming,
-        mirror=term_cfg.mirror,
-        curvature=term_cfg.curvature,
-        gradb=term_cfg.gradb,
-        diamagnetic=term_cfg.diamagnetic,
-        collisions=term_cfg.collisions,
-        hypercollisions=term_cfg.hypercollisions,
-        end_damping=term_cfg.end_damping,
-        apar=term_cfg.apar,
-        bpar=term_cfg.bpar,
-    )
+    linear_terms = term_config_to_linear_terms(term_cfg)
     G, shape, _size, dt_val, precond_op, matvec, squeeze_species = _build_implicit_operator(
         G0,
         cache,
@@ -186,32 +175,9 @@ def integrate_nonlinear_imex_cached(
     """IMEX integrator: implicit linear operator, explicit nonlinear term."""
 
     term_cfg = terms or TermConfig()
-    linear_cfg = TermConfig(
-        streaming=term_cfg.streaming,
-        mirror=term_cfg.mirror,
-        curvature=term_cfg.curvature,
-        gradb=term_cfg.gradb,
-        diamagnetic=term_cfg.diamagnetic,
-        collisions=term_cfg.collisions,
-        hypercollisions=term_cfg.hypercollisions,
-        end_damping=term_cfg.end_damping,
-        apar=term_cfg.apar,
-        bpar=term_cfg.bpar,
-        nonlinear=0.0,
-    )
+    linear_cfg = replace(term_cfg, nonlinear=0.0)
 
-    linear_terms = LinearTerms(
-        streaming=linear_cfg.streaming,
-        mirror=linear_cfg.mirror,
-        curvature=linear_cfg.curvature,
-        gradb=linear_cfg.gradb,
-        diamagnetic=linear_cfg.diamagnetic,
-        collisions=linear_cfg.collisions,
-        hypercollisions=linear_cfg.hypercollisions,
-        end_damping=linear_cfg.end_damping,
-        apar=linear_cfg.apar,
-        bpar=linear_cfg.bpar,
-    )
+    linear_terms = term_config_to_linear_terms(linear_cfg)
 
     precond_op: Callable[[jnp.ndarray], jnp.ndarray] | None
     matvec: Callable[[jnp.ndarray], jnp.ndarray]

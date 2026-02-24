@@ -11,7 +11,12 @@ import numpy as np
 from spectraxgk.analysis import ModeSelection, extract_mode_time_series, fit_growth_rate, fit_growth_rate_auto, select_ky_index
 from spectraxgk.geometry import SAlphaGeometry
 from spectraxgk.grids import SpectralGrid, build_spectral_grid, select_ky_grid
-from spectraxgk.linear import LinearParams, LinearTerms, build_linear_cache
+from spectraxgk.linear import (
+    LinearParams,
+    LinearTerms,
+    build_linear_cache,
+    linear_terms_to_term_config,
+)
 from spectraxgk.linear_krylov import KrylovConfig, dominant_eigenpair
 from spectraxgk.normalization import apply_diagnostic_normalization, get_normalization_contract
 from spectraxgk.runtime_config import RuntimeConfig, RuntimeSpeciesConfig
@@ -139,19 +144,7 @@ def build_runtime_term_config(cfg: RuntimeConfig) -> TermConfig:
 
     lin_terms = build_runtime_linear_terms(cfg)
     nonlinear_on = float(cfg.terms.nonlinear if cfg.physics.nonlinear else 0.0)
-    return TermConfig(
-        streaming=lin_terms.streaming,
-        mirror=lin_terms.mirror,
-        curvature=lin_terms.curvature,
-        gradb=lin_terms.gradb,
-        diamagnetic=lin_terms.diamagnetic,
-        collisions=lin_terms.collisions,
-        hypercollisions=lin_terms.hypercollisions,
-        end_damping=lin_terms.end_damping,
-        apar=lin_terms.apar,
-        bpar=lin_terms.bpar,
-        nonlinear=nonlinear_on,
-    )
+    return linear_terms_to_term_config(lin_terms, nonlinear=nonlinear_on)
 
 
 def _build_gaussian_profile(

@@ -40,6 +40,7 @@ from spectraxgk.linear import (
     build_linear_cache,
     integrate_linear,
     integrate_linear_diagnostics,
+    linear_terms_to_term_config,
 )
 from spectraxgk.linear_krylov import KrylovConfig, dominant_eigenpair
 from spectraxgk.normalization import (
@@ -53,7 +54,6 @@ from spectraxgk.normalization import (
 from spectraxgk.runners import integrate_linear_from_config
 from spectraxgk.species import Species, build_linear_params
 from spectraxgk.terms.assembly import compute_fields_cached
-from spectraxgk.terms.config import TermConfig
 
 
 CYCLONE_OMEGA_D_SCALE = CYCLONE_NORMALIZATION.omega_d_scale
@@ -782,19 +782,7 @@ def run_cyclone_linear(
             fallback_method=krylov_cfg.fallback_method,
             fallback_real_floor=krylov_cfg.fallback_real_floor,
         )
-        term_cfg = TermConfig(
-            streaming=terms.streaming,
-            mirror=terms.mirror,
-            curvature=terms.curvature,
-            gradb=terms.gradb,
-            diamagnetic=terms.diamagnetic,
-            collisions=terms.collisions,
-            hypercollisions=terms.hypercollisions,
-            end_damping=terms.end_damping,
-            apar=terms.apar,
-            bpar=terms.bpar,
-            nonlinear=0.0,
-        )
+        term_cfg = linear_terms_to_term_config(terms)
         phi = compute_fields_cached(vec, cache, params, terms=term_cfg).phi
         phi_t_np = np.asarray(phi)[None, ...]
         t = np.array([0.0])
@@ -1409,19 +1397,7 @@ def run_etg_linear(
             fallback_method=krylov_cfg.fallback_method,
             fallback_real_floor=krylov_cfg.fallback_real_floor,
         )
-        term_cfg = TermConfig(
-            streaming=terms.streaming,
-            mirror=terms.mirror,
-            curvature=terms.curvature,
-            gradb=terms.gradb,
-            diamagnetic=terms.diamagnetic,
-            collisions=terms.collisions,
-            hypercollisions=terms.hypercollisions,
-            end_damping=terms.end_damping,
-            apar=terms.apar,
-            bpar=terms.bpar,
-            nonlinear=0.0,
-        )
+        term_cfg = linear_terms_to_term_config(terms)
         phi = compute_fields_cached(vec, cache, params, terms=term_cfg).phi
         phi_t_np = np.asarray(phi)[None, ...]
         t = np.array([0.0])
@@ -1487,19 +1463,7 @@ def run_etg_linear(
                     gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
                     if G_last is not None and G_last.ndim == 7:
                         G_last = G_last[0]
-                    term_cfg = TermConfig(
-                        streaming=terms.streaming,
-                        mirror=terms.mirror,
-                        curvature=terms.curvature,
-                        gradb=terms.gradb,
-                        diamagnetic=terms.diamagnetic,
-                        collisions=terms.collisions,
-                        hypercollisions=terms.hypercollisions,
-                        end_damping=terms.end_damping,
-                        apar=terms.apar,
-                        bpar=terms.bpar,
-                        nonlinear=0.0,
-                    )
+                    term_cfg = linear_terms_to_term_config(terms)
                     if G_last is None:
                         raise ValueError("Expected final state from streaming fit; got None.")
                     phi_last = compute_fields_cached(G_last, cache, params, terms=term_cfg).phi
@@ -2169,19 +2133,7 @@ def run_kinetic_linear(
             fallback_method=krylov_cfg.fallback_method,
             fallback_real_floor=krylov_cfg.fallback_real_floor,
         )
-        term_cfg = TermConfig(
-            streaming=terms.streaming,
-            mirror=terms.mirror,
-            curvature=terms.curvature,
-            gradb=terms.gradb,
-            diamagnetic=terms.diamagnetic,
-            collisions=terms.collisions,
-            hypercollisions=terms.hypercollisions,
-            end_damping=terms.end_damping,
-            apar=terms.apar,
-            bpar=terms.bpar,
-            nonlinear=0.0,
-        )
+        term_cfg = linear_terms_to_term_config(terms)
         phi = compute_fields_cached(vec, cache, params, terms=term_cfg).phi
         phi_t_np = np.asarray(phi)[None, ...]
         t = np.array([0.0])
@@ -2774,19 +2726,7 @@ def run_tem_linear(
             fallback_method=krylov_cfg.fallback_method,
             fallback_real_floor=krylov_cfg.fallback_real_floor,
         )
-        term_cfg = TermConfig(
-            streaming=terms.streaming,
-            mirror=terms.mirror,
-            curvature=terms.curvature,
-            gradb=terms.gradb,
-            diamagnetic=terms.diamagnetic,
-            collisions=terms.collisions,
-            hypercollisions=terms.hypercollisions,
-            end_damping=terms.end_damping,
-            apar=terms.apar,
-            bpar=terms.bpar,
-            nonlinear=0.0,
-        )
+        term_cfg = linear_terms_to_term_config(terms)
         phi = compute_fields_cached(vec, cache, params, terms=term_cfg).phi
         phi_t_np = np.asarray(phi)[None, ...]
         t = np.array([0.0])
