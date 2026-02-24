@@ -23,7 +23,7 @@ from spectraxgk.terms.assembly import assemble_rhs_cached, assemble_rhs_cached_j
 from spectraxgk.terms.config import FieldState, TermConfig
 from spectraxgk.terms.nonlinear import placeholder_nonlinear_contribution
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
     import diffrax as dfx
     import equinox as eqx
 else:  # pragma: no cover - optional dependency loading
