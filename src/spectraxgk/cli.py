@@ -20,8 +20,9 @@ from spectraxgk.benchmarks import (
 )
 from spectraxgk.geometry import SAlphaGeometry
 from spectraxgk.grids import build_spectral_grid
-from spectraxgk.io import load_case_from_toml, load_krylov_from_toml, load_linear_terms_from_toml
+from spectraxgk.io import load_case_from_toml, load_krylov_from_toml, load_linear_terms_from_toml, load_runtime_from_toml
 from spectraxgk.plotting import growth_fit_figure, scan_comparison_figure, set_plot_style
+from spectraxgk.runtime import run_runtime_linear, run_runtime_scan
 
 
 def _cmd_cyclone_info(_: argparse.Namespace) -> int:
@@ -82,6 +83,34 @@ def build_parser() -> argparse.ArgumentParser:
     scan_linear.add_argument("--plot", action="store_true", help="Save comparison plot if reference exists")
     scan_linear.add_argument("--outdir", default=".", help="Output directory for plots")
     scan_linear.set_defaults(func=_cmd_scan_linear)
+
+    run_runtime = sub.add_parser(
+        "run-runtime-linear",
+        help="Run one linear point from unified runtime TOML config",
+    )
+    run_runtime.add_argument("--config", required=True, help="Path to TOML config")
+    run_runtime.add_argument("--ky", type=float, default=None, help="Single ky value")
+    run_runtime.add_argument("--Nl", type=int, default=None)
+    run_runtime.add_argument("--Nm", type=int, default=None)
+    run_runtime.add_argument("--solver", type=str, default=None, help="time or krylov")
+    run_runtime.add_argument("--method", type=str, default=None, help="time integrator method")
+    run_runtime.add_argument("--dt", type=float, default=None)
+    run_runtime.add_argument("--steps", type=int, default=None)
+    run_runtime.set_defaults(func=_cmd_run_runtime_linear)
+
+    scan_runtime = sub.add_parser(
+        "scan-runtime-linear",
+        help="Run a ky scan from unified runtime TOML config",
+    )
+    scan_runtime.add_argument("--config", required=True, help="Path to TOML config")
+    scan_runtime.add_argument("--ky-values", type=str, default=None, help="Comma-separated ky list")
+    scan_runtime.add_argument("--Nl", type=int, default=None)
+    scan_runtime.add_argument("--Nm", type=int, default=None)
+    scan_runtime.add_argument("--solver", type=str, default=None, help="time or krylov")
+    scan_runtime.add_argument("--method", type=str, default=None, help="time integrator method")
+    scan_runtime.add_argument("--dt", type=float, default=None)
+    scan_runtime.add_argument("--steps", type=int, default=None)
+    scan_runtime.set_defaults(func=_cmd_scan_runtime_linear)
 
     return parser
 
@@ -233,6 +262,84 @@ def _cmd_scan_linear(args: argparse.Namespace) -> int:
             fig.savefig(outdir / f"{case_name}_scan_comparison.png")
         else:
             print("No reference available for this case; skipping comparison plot.")
+    return 0
+
+
+_RUNTIME_FIT_KEYS = {
+    "auto_window",
+    "tmin",
+    "tmax",
+    "window_fraction",
+    "min_points",
+    "start_fraction",
+    "growth_weight",
+    "require_positive",
+    "min_amp_fraction",
+    "mode_method",
+}
+
+
+def _cmd_run_runtime_linear(args: argparse.Namespace) -> int:
+    cfg, data = load_runtime_from_toml(args.config)
+    run_cfg = data.get("run", {})
+    fit_cfg = {k: v for k, v in data.get("fit", {}).items() if k in _RUNTIME_FIT_KEYS}
+
+    ky = float(args.ky if args.ky is not None else run_cfg.get("ky", 0.3))
+    Nl = int(args.Nl if args.Nl is not None else run_cfg.get("Nl", 24))
+    Nm = int(args.Nm if args.Nm is not None else run_cfg.get("Nm", 12))
+    solver = str(args.solver if args.solver is not None else run_cfg.get("solver", "krylov"))
+    method = args.method if args.method is not None else run_cfg.get("method", None)
+    dt = args.dt if args.dt is not None else run_cfg.get("dt", None)
+    steps = args.steps if args.steps is not None else run_cfg.get("steps", None)
+
+    res = run_runtime_linear(
+        cfg,
+        ky_target=ky,
+        Nl=Nl,
+        Nm=Nm,
+        solver=solver,
+        method=method,
+        dt=dt,
+        steps=steps,
+        **fit_cfg,
+    )
+    print(f"ky={res.ky:.4f} gamma={res.gamma:.6f} omega={res.omega:.6f}")
+    return 0
+
+
+def _cmd_scan_runtime_linear(args: argparse.Namespace) -> int:
+    cfg, data = load_runtime_from_toml(args.config)
+    scan_cfg = data.get("scan", {})
+    fit_cfg = {k: v for k, v in data.get("fit", {}).items() if k in _RUNTIME_FIT_KEYS}
+
+    if args.ky_values is not None:
+        ky_values = np.asarray([float(x) for x in args.ky_values.split(",") if x.strip()], dtype=float)
+    else:
+        ky_raw = scan_cfg.get("ky", [])
+        ky_values = np.asarray(ky_raw, dtype=float)
+    if ky_values.size == 0:
+        raise ValueError("No ky values provided. Use --ky-values or [scan].ky in TOML.")
+
+    Nl = int(args.Nl if args.Nl is not None else scan_cfg.get("Nl", 24))
+    Nm = int(args.Nm if args.Nm is not None else scan_cfg.get("Nm", 12))
+    solver = str(args.solver if args.solver is not None else scan_cfg.get("solver", "krylov"))
+    method = args.method if args.method is not None else scan_cfg.get("method", None)
+    dt = args.dt if args.dt is not None else scan_cfg.get("dt", None)
+    steps = args.steps if args.steps is not None else scan_cfg.get("steps", None)
+
+    scan = run_runtime_scan(
+        cfg,
+        ky_values.tolist(),
+        Nl=Nl,
+        Nm=Nm,
+        solver=solver,
+        method=method,
+        dt=dt,
+        steps=steps,
+        **fit_cfg,
+    )
+    for ky, g, w in zip(scan.ky, scan.gamma, scan.omega):
+        print(f"ky={ky:.4f} gamma={g:.6f} omega={w:.6f}")
     return 0
 
 
