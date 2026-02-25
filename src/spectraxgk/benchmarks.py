@@ -1815,6 +1815,8 @@ def run_etg_scan(
         )
     else:
         ky_iter = _iter_ky_batches(ky_values_arr, ky_batch=1, fixed_batch_shape=False)
+    prev_vec: jnp.ndarray | None = None
+    prev_eig: complex | None = None
     ky_slice: np.ndarray
     ky_indices: list[int]
     sel: ModeSelection | ModeSelectionBatch
