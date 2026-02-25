@@ -3697,7 +3697,7 @@ def run_kbm_beta_scan(
     grid_full = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
     if terms is None:
-        terms = LinearTerms(bpar=0.0)
+        terms = LinearTerms(bpar=-1.0)
 
     solver_key = solver.strip().lower()
     fit_key = fit_signal.strip().lower()

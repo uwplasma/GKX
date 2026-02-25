@@ -50,8 +50,15 @@ def _apply_flutter(
     sqrt_m_p1: jnp.ndarray,
 ) -> jnp.ndarray:
     axis_m = -4
-    b_m1 = jnp.roll(bracket_apar, 1, axis=axis_m)
-    b_p1 = jnp.roll(bracket_apar, -1, axis=axis_m)
+    pad = [(0, 0)] * bracket_apar.ndim
+    pad[axis_m] = (1, 1)
+    b_pad = jnp.pad(bracket_apar, pad)
+    slc_m1 = [slice(None)] * bracket_apar.ndim
+    slc_p1 = [slice(None)] * bracket_apar.ndim
+    slc_m1[axis_m] = slice(0, bracket_apar.shape[axis_m])
+    slc_p1[axis_m] = slice(2, bracket_apar.shape[axis_m] + 2)
+    b_m1 = b_pad[tuple(slc_m1)]
+    b_p1 = b_pad[tuple(slc_p1)]
     vth_arr = jnp.asarray(vth)
     if vth_arr.ndim == 0:
         vth_arr = vth_arr[None]
@@ -154,7 +161,11 @@ def nonlinear_em_contribution(
     apar_weight: float,
     bpar_weight: float,
 ) -> jnp.ndarray:
-    """Nonlinear E×B + flutter contribution using GX-style gyroaveraging."""
+    """Nonlinear E×B + flutter contribution using GX-style gyroaveraging.
+
+    ``apar_weight`` and ``bpar_weight`` are used as on/off toggles (nonzero
+    enables the term); the fields themselves already include any scaling.
+    """
 
     squeeze_species = False
     if G.ndim == 5:
@@ -165,16 +176,10 @@ def nonlinear_em_contribution(
     if JlB.ndim == 4:
         JlB = JlB[None, ...]
 
-    tz_arr = jnp.asarray(tz)
-    if tz_arr.ndim == 0:
-        tz_arr = tz_arr[None]
-    zt = jnp.where(tz_arr == 0.0, 0.0, 1.0 / tz_arr)
-    zt = zt[:, None, None, None, None]
-
     phi_hat = phi[None, None, ...]
-    chi = zt * Jl * phi_hat
-    if bpar is not None:
-        chi = chi + bpar_weight * JlB * bpar[None, None, ...]
+    chi = Jl * phi_hat
+    if bpar is not None and bpar_weight != 0.0:
+        chi = chi + JlB * bpar[None, None, ...]
 
     bracket_phi = _spectral_bracket(
         G,
@@ -188,7 +193,7 @@ def nonlinear_em_contribution(
     bracket_total = bracket_phi
     if apar is not None and apar_weight != 0.0:
         apar_hat = apar[None, None, ...]
-        chi_apar = apar_weight * Jl * apar_hat
+        chi_apar = Jl * apar_hat
         bracket_apar = _spectral_bracket(
             G,
             chi_apar,
