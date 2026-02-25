@@ -739,13 +739,15 @@ def dominant_eigenpair_propagator_cached(
         v_next = _normalize(v_next)
         return v_next, lam[idx]
 
-    v, _eig = jax.lax.fori_loop(
+    v, eig_sel = jax.lax.fori_loop(
         0, restarts, restart_body, (v, jnp.asarray(0.0, dtype=v0.dtype))
     )
     Lv = _apply_operator(v, cache, params, term_cfg)
     num = jnp.vdot(v, Lv)
     den = jnp.vdot(v, v)
-    eig = jnp.where(den == 0.0, 0.0, num / den)
+    eig_rayleigh = jnp.where(den == 0.0, 0.0, num / den)
+    sel_finite = jnp.isfinite(jnp.real(eig_sel)) & jnp.isfinite(jnp.imag(eig_sel))
+    eig = jnp.where(sel_finite, eig_sel, eig_rayleigh)
     return eig, v
 
 
