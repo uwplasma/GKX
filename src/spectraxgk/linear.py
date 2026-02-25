@@ -457,6 +457,7 @@ class LinearCache:
     kx_grid: jnp.ndarray
     ky_grid: jnp.ndarray
     dealias_mask: jnp.ndarray
+    kxfac: jnp.ndarray
     lb_lam: jnp.ndarray
     hyper_ratio: jnp.ndarray
     ratio_l: jnp.ndarray
@@ -505,6 +506,7 @@ class LinearCache:
             self.kx_grid,
             self.ky_grid,
             self.dealias_mask,
+            self.kxfac,
             self.lb_lam,
             self.hyper_ratio,
             self.ratio_l,
@@ -538,7 +540,7 @@ class LinearCache:
     @classmethod
     def tree_unflatten(cls, aux_data, children):
         use_twist_shift, jtwist, n_linked_idx, n_linked_kz = aux_data
-        base_count = 39
+        base_count = 40
         base_children = children[:base_count]
         linked_idx = tuple(children[base_count : base_count + n_linked_idx])
         linked_kz = tuple(
@@ -573,6 +575,7 @@ def build_linear_cache(
     kx_grid = jnp.asarray(grid.kx_grid, dtype=real_dtype) * rho_star
     ky_grid = jnp.asarray(grid.ky_grid, dtype=real_dtype) * rho_star
     dealias_mask = jnp.asarray(grid.dealias_mask, dtype=bool)
+    kxfac_val = float(getattr(grid, "kxfac", 1.0))
     theta = jnp.asarray(grid.z, dtype=real_dtype)
     gds2, gds21, gds22 = geom.metric_coeffs(theta)
     gds22_arr = gds22 if gds22.ndim else jnp.full_like(theta, gds22)
@@ -620,7 +623,7 @@ def build_linear_cache(
             kx_eff = kx_eff * (float(getattr(grid, "x0", x0_eff)) / float(x0_eff))
     if use_ntft:
         ftwist = (geom.s_hat * gds21 / gds22_arr).astype(real_dtype)
-        kxfac = float(getattr(grid, "kxfac", 1.0))
+        kxfac_val = float(getattr(grid, "kxfac", 1.0))
         delta = jnp.asarray(0.01313, dtype=real_dtype)
         ftwist_next = jnp.roll(ftwist, -1)
         mid_idx = int(grid.z.size // 2)
@@ -776,6 +779,7 @@ def build_linear_cache(
         kx_grid=kx_grid,
         ky_grid=ky_grid,
         dealias_mask=dealias_mask,
+        kxfac=jnp.asarray(kxfac_val, dtype=real_dtype),
         lb_lam=lb_lam.astype(real_dtype),
         hyper_ratio=hyper_ratio.astype(real_dtype),
         ratio_l=ratio_l.astype(real_dtype),
