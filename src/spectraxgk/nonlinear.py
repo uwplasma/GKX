@@ -17,10 +17,10 @@ from spectraxgk.linear import (
     build_linear_cache,
     term_config_to_linear_terms,
 )
-from spectraxgk.terms.assembly import assemble_rhs_cached_jit
+from spectraxgk.terms.assembly import assemble_rhs_cached_jit, compute_fields_cached
 from spectraxgk.terms.config import FieldState, TermConfig
 from spectraxgk.terms.integrators import integrate_nonlinear as integrate_nonlinear_scan
-from spectraxgk.terms.nonlinear import placeholder_nonlinear_contribution
+from spectraxgk.terms.nonlinear import exb_nonlinear_contribution
 
 
 @dataclass(frozen=True)
@@ -48,7 +48,14 @@ def nonlinear_rhs_cached(
     if term_cfg.nonlinear != 0.0:
         real_dtype = jnp.real(jnp.empty((), dtype=G.dtype)).dtype
         weight = jnp.asarray(term_cfg.nonlinear, dtype=real_dtype)
-        dG = dG + placeholder_nonlinear_contribution(G, weight=weight)
+        dG = dG + exb_nonlinear_contribution(
+            G,
+            phi=fields.phi,
+            dealias_mask=cache.dealias_mask,
+            kx_grid=cache.kx_grid,
+            ky_grid=cache.ky_grid,
+            weight=weight,
+        )
     return dG, fields
 
 
@@ -209,7 +216,15 @@ def integrate_nonlinear_imex_cached(
         if term_cfg.nonlinear == 0.0:
             return jnp.zeros_like(G_in)
         weight = jnp.asarray(term_cfg.nonlinear, dtype=jnp.real(jnp.empty((), G_in.dtype)).dtype)
-        return placeholder_nonlinear_contribution(G_in, weight=weight)
+        fields = compute_fields_cached(G_in, cache, params, terms=term_cfg)
+        return exb_nonlinear_contribution(
+            G_in,
+            phi=fields.phi,
+            dealias_mask=cache.dealias_mask,
+            kx_grid=cache.kx_grid,
+            ky_grid=cache.ky_grid,
+            weight=weight,
+        )
 
     def fixed_point(G_in: jnp.ndarray, G_rhs: jnp.ndarray) -> jnp.ndarray:
         def body(_i, g):
