@@ -204,13 +204,13 @@ Cross-code mismatch (same ETG setup above):
 | Geometry | q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778 |
 | Gradients | R/LTi=2.49, R/LTe=2.49, R/Ln=0.8 |
 | Species | ions + electrons, Te/Ti=1, mi/me=3670 |
-| Electromagnetic | beta_ref scan (values from `kbm_reference.csv`), A_parallel=on, B_parallel=off |
+| Electromagnetic | beta_ref scan (values from `kbm_reference_gs2.csv`), A_parallel=on, B_parallel=off |
 | Collisions | nu_i=0, nu_e=0, hypercollisions=off |
 | Operator toggles | streaming/mirror/curvature/grad-B/diamagnetic on; nonlinear off |
 | Grid | Nx=1, Ny=12, Nz=96, y0=10, ntheta=32, nperiod=2 |
 | Velocity resolution | Nl=8, Nm=24 |
-| Time integration (cross-code) | Diffrax RK4 (fixed), dt=5e-4, steps=12000 |
-| Fit policy (cross-code) | streaming fit, signal=phi, window_fraction=0.4, start_fraction=0.2 |
+| Time integration (cross-code) | fixed-step IMEX2 (scan default), Diffrax adaptive optional |
+| Fit policy (cross-code) | mode extracted at the selected ky/kx with midplane-aware signal extraction, log-linear auto-windowing |
 | Reference | GS2 matched-input electromagnetic beta scan |
 
 KBM GS2 cross-code set (matched-input run plumbing):

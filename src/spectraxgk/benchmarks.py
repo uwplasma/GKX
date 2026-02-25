@@ -1999,7 +1999,7 @@ def run_etg_scan(
         t = np.arange(phi_t_np.shape[0]) * dt_i * stride
         for local_idx in range(valid_count):
             ky_val = ky_slice[local_idx]
-            if mode_only and fit_signal == "phi":
+            if mode_only and fit_signal == "phi" and phi_t_np.ndim <= 2:
                 signal = _extract_mode_only_signal(phi_t_np, local_idx=local_idx)
             else:
                 sel_local = ModeSelection(ky_index=local_idx, kx_index=0, z_index=_midplane_index(grid))
@@ -2591,9 +2591,9 @@ def run_kinetic_scan(
             density_np = phi_t_np
         for local_idx in range(valid_count):
             ky_val = ky_slice[local_idx]
-            if mode_only and fit_signal == "phi":
+            if mode_only and fit_signal == "phi" and phi_t_np.ndim <= 2:
                 signal = _extract_mode_only_signal(phi_t_np, local_idx=local_idx)
-            elif mode_only and fit_signal == "density" and density_np is not None:
+            elif mode_only and fit_signal == "density" and density_np is not None and density_np.ndim <= 3:
                 signal = _extract_mode_only_signal(
                     density_np,
                     local_idx=local_idx,
@@ -3125,7 +3125,7 @@ def run_tem_scan(
         phi_t_np = np.asarray(phi_t)
         for local_idx in range(valid_count):
             ky_val = ky_slice[local_idx]
-            if mode_only:
+            if mode_only and phi_t_np.ndim <= 2:
                 signal = _extract_mode_only_signal(phi_t_np, local_idx=local_idx)
             else:
                 sel_local = ModeSelection(ky_index=local_idx, kx_index=0, z_index=_midplane_index(grid))
@@ -3372,13 +3372,13 @@ def run_kbm_beta_scan(
                 density_np = None if density_t is None else np.asarray(density_t)
                 if fit_signal == "density" and density_np is None:
                     density_np = phi_t_np
-                if mode_only and fit_signal == "density" and density_np is not None:
+                if mode_only and fit_signal == "density" and density_np is not None and density_np.ndim <= 3:
                     signal = _extract_mode_only_signal(
                         density_np,
                         local_idx=0,
                         species_index=density_species_index,
                     )
-                elif mode_only:
+                elif mode_only and phi_t_np.ndim <= 2:
                     signal = _extract_mode_only_signal(phi_t_np, local_idx=0)
                 else:
                     signal = _select_fit_signal(
