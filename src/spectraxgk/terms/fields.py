@@ -87,9 +87,10 @@ def _solve_fields_impl(
     phi_em = (ab * nbar - qb * jperpbar) / denom_safe
     bpar_em = (-aphi * nbar + qphi * jperpbar) / denom_safe
 
-    use_bpar = jnp.where((beta > 0.0) & (w_bpar > 0.0), 1.0, 0.0)
+    use_bpar = jnp.where((beta > 0.0) & (w_bpar != 0.0), 1.0, 0.0)
+    bpar_sign = jnp.sign(w_bpar)
     phi = phi_es * (1.0 - use_bpar) + phi_em * use_bpar
-    bpar = bpar_em * use_bpar
+    bpar = bpar_em * use_bpar * bpar_sign
     phi = jnp.where(cache.mask0, 0.0, phi)
     bpar = jnp.where(cache.mask0, 0.0, bpar)
 

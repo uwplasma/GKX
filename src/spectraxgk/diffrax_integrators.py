@@ -21,7 +21,7 @@ from spectraxgk.linear import (
 )
 from spectraxgk.terms.assembly import assemble_rhs_cached, assemble_rhs_cached_jit, compute_fields_cached
 from spectraxgk.terms.config import FieldState, TermConfig
-from spectraxgk.terms.nonlinear import exb_nonlinear_contribution
+from spectraxgk.terms.nonlinear import nonlinear_em_contribution
 
 if TYPE_CHECKING:  # pragma: no cover
     import diffrax as dfx
@@ -587,13 +587,24 @@ def integrate_nonlinear_diffrax(
         fields = compute_fields_cached(G, _cache, _params, terms=term_cfg_, use_custom_vjp=use_custom_vjp)
         real_dtype = jnp.real(jnp.empty((), dtype=G.dtype)).dtype
         weight = jnp.asarray(term_cfg_.nonlinear, dtype=real_dtype)
-        dG = exb_nonlinear_contribution(
+        dG = nonlinear_em_contribution(
             G,
             phi=fields.phi,
-            dealias_mask=_cache.dealias_mask,
+            apar=fields.apar,
+            bpar=fields.bpar,
+            Jl=_cache.Jl,
+            JlB=_cache.JlB,
+            tz=_params.tz,
+            vth=_params.vth,
+            sqrt_m=_cache.sqrt_m,
+            sqrt_m_p1=_cache.sqrt_m_p1,
             kx_grid=_cache.kx_grid,
             ky_grid=_cache.ky_grid,
+            dealias_mask=_cache.dealias_mask,
+            kxfac=_cache.kxfac,
             weight=weight,
+            apar_weight=float(term_cfg_.apar),
+            bpar_weight=float(term_cfg_.bpar),
         )
         return _pack_complex_state(dG)
 

@@ -140,10 +140,10 @@ KBM_KRYLOV_DEFAULT = KrylovConfig(
     method="shift_invert",
     krylov_dim=16,
     restarts=1,
-    omega_min_factor=0.2,
-    omega_cap_factor=2.5,
-    omega_target_factor=1.4,
-    omega_sign=-1,
+    omega_min_factor=0.0,
+    omega_cap_factor=1.0,
+    omega_target_factor=0.2,
+    omega_sign=1,
     power_iters=60,
     power_dt=0.005,
     shift_source="target",
@@ -2591,7 +2591,7 @@ def run_kinetic_linear(
             nhermite=Nm,
         )
     if terms is None:
-        terms = LinearTerms()
+        terms = LinearTerms(bpar=-1.0)
 
     ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
     grid = select_ky_grid(grid_full, ky_index)
@@ -3178,7 +3178,7 @@ def run_tem_linear(
             nhermite=Nm,
         )
     if terms is None:
-        terms = LinearTerms(bpar=0.0)
+        terms = LinearTerms()
 
     ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
     grid = select_ky_grid(grid_full, ky_index)
@@ -3806,6 +3806,8 @@ def run_kbm_beta_scan(
             )
             gamma = float(np.real(eig))
             omega = float(-np.imag(eig))
+            if krylov_cfg.omega_sign != 0:
+                omega = float(np.sign(krylov_cfg.omega_sign)) * abs(omega)
             gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
             if solver_key == "auto" and not _is_valid_growth(gamma, omega):
                 solver_use = "time"

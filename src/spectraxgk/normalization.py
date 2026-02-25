@@ -116,4 +116,3 @@ def apply_diagnostic_normalization(
         scale = float(rho_star)
         return float(gamma) * scale, float(omega) * scale
     raise ValueError(f"Unknown diagnostic_norm '{diagnostic_norm}'")
-
