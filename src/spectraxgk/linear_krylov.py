@@ -47,6 +47,8 @@ class KrylovConfig:
     mode_family: str = "auto"
     fallback_method: str = "propagator"
     fallback_real_floor: float = -1.0e-6
+    continuation: bool = False
+    continuation_selection: str = "overlap"
 
 
 def _normalize(v: jnp.ndarray) -> jnp.ndarray:
@@ -117,6 +119,22 @@ def _mode_family_sign(mode_family: str) -> int:
     if key in {"electron", "etg", "tem", "kbm", "negative"}:
         return -1
     return 0
+
+
+def _select_by_overlap(
+    eigvecs: jnp.ndarray,
+    V: jnp.ndarray,
+    v_ref: jnp.ndarray,
+    mask: jnp.ndarray,
+    fallback_idx: jnp.ndarray,
+) -> jnp.ndarray:
+    """Select eigenpair with maximal overlap to v_ref within mask."""
+    beta = jnp.tensordot(jnp.conj(V), v_ref, axes=v_ref.ndim)
+    overlap = jnp.abs(jnp.dot(jnp.conj(beta), eigvecs))
+    overlap_masked = jnp.where(mask, overlap, -jnp.inf)
+    has_mask = jnp.any(mask)
+    idx = jnp.argmax(overlap_masked)
+    return jnp.where(has_mask, idx, fallback_idx)
 
 
 def _select_by_target(
@@ -507,10 +525,12 @@ def _arnoldi(
         "gmres_maxiter",
         "gmres_solve_method",
         "select_targeted",
+        "select_overlap",
     ),
 )
 def dominant_eigenpair_shift_invert_cached(
     v0: jnp.ndarray,
+    v_ref: jnp.ndarray,
     cache: LinearCache,
     params: LinearParams,
     term_cfg: TermConfig,
@@ -528,6 +548,7 @@ def dominant_eigenpair_shift_invert_cached(
     gmres_solve_method: str,
     shift_preconditioner: str | None,
     select_targeted: bool,
+    select_overlap: bool,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Restarted shift-invert Arnoldi with GMRES solves."""
 
@@ -602,6 +623,8 @@ def dominant_eigenpair_shift_invert_cached(
                 omega_sign,
                 idx,
             )
+        if select_overlap:
+            idx = _select_by_overlap(eigvecs, V[:krylov_dim], v_ref, mask, idx)
         y = eigvecs[:, idx]
         v_next = jnp.tensordot(jnp.conj(y), V[:krylov_dim], axes=1)
         v_next = _normalize(v_next)
@@ -613,9 +636,10 @@ def dominant_eigenpair_shift_invert_cached(
     return eig, v
 
 
-@partial(jax.jit, static_argnames=("krylov_dim", "restarts"))
+@partial(jax.jit, static_argnames=("krylov_dim", "restarts", "select_overlap"))
 def dominant_eigenpair_cached(
     v0: jnp.ndarray,
+    v_ref: jnp.ndarray,
     cache: LinearCache,
     params: LinearParams,
     term_cfg: TermConfig,
@@ -626,6 +650,7 @@ def dominant_eigenpair_cached(
     omega_target_factor: float,
     omega_cap_factor: float,
     omega_sign: int,
+    select_overlap: bool,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Approximate the dominant eigenvalue (max real part) with restarted Arnoldi."""
 
@@ -666,6 +691,8 @@ def dominant_eigenpair_cached(
             omega_sign,
             idx,
         )
+        if select_overlap:
+            idx = _select_by_overlap(eigvecs, V[:krylov_dim], v_ref, mask, idx)
         eig = eigvals[idx]
         y = eigvecs[:, idx]
         v_next = jnp.tensordot(jnp.conj(y), V[:krylov_dim], axes=1)
@@ -676,9 +703,10 @@ def dominant_eigenpair_cached(
     return eig, v
 
 
-@partial(jax.jit, static_argnames=("krylov_dim", "restarts"))
+@partial(jax.jit, static_argnames=("krylov_dim", "restarts", "select_overlap"))
 def dominant_eigenpair_propagator_cached(
     v0: jnp.ndarray,
+    v_ref: jnp.ndarray,
     cache: LinearCache,
     params: LinearParams,
     term_cfg: TermConfig,
@@ -690,6 +718,7 @@ def dominant_eigenpair_propagator_cached(
     omega_target_factor: float,
     omega_cap_factor: float,
     omega_sign: int,
+    select_overlap: bool,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Arnoldi on a stable IMEX2 propagator; eigenvalue from Rayleigh quotient."""
 
@@ -734,6 +763,8 @@ def dominant_eigenpair_propagator_cached(
             omega_sign,
             idx,
         )
+        if select_overlap:
+            idx = _select_by_overlap(eigvecs, V[:krylov_dim], v_ref, mask, idx)
         y = eigvecs[:, idx]
         v_next = jnp.tensordot(jnp.conj(y), V[:krylov_dim], axes=1)
         v_next = _normalize(v_next)
@@ -760,6 +791,8 @@ def dominant_eigenpair(
     params: LinearParams,
     terms: LinearTerms | None = None,
     *,
+    v_ref: jnp.ndarray | None = None,
+    select_overlap: bool = False,
     krylov_dim: int = 24,
     restarts: int = 2,
     omega_min_factor: float = 0.0,
@@ -784,6 +817,7 @@ def dominant_eigenpair(
     """Python wrapper for the cached Krylov solver."""
 
     term_cfg = linear_terms_to_term_config(terms)
+    v_ref_use = v0 if v_ref is None else v_ref
     method_key = method.strip().lower()
     mode_family_sign = _mode_family_sign(mode_family)
     omega_sign_eff = int(omega_sign) if int(omega_sign) != 0 else mode_family_sign
@@ -799,6 +833,7 @@ def dominant_eigenpair(
     if method_key == "propagator":
         return dominant_eigenpair_propagator_cached(
             v0,
+            v_ref_use,
             cache,
             params,
             term_cfg,
@@ -809,6 +844,7 @@ def dominant_eigenpair(
             omega_target_factor=float(omega_target_factor),
             omega_cap_factor=float(omega_cap_factor),
             omega_sign=omega_sign_eff,
+            select_overlap=bool(select_overlap),
         )
     if method_key == "shift_invert":
         restarts = max(int(restarts), 1)
@@ -817,6 +853,7 @@ def dominant_eigenpair(
             if shift_source_key == "propagator":
                 shift_est, v_seed = dominant_eigenpair_propagator_cached(
                     v0,
+                    v_ref_use,
                     cache,
                     params,
                     term_cfg,
@@ -827,6 +864,7 @@ def dominant_eigenpair(
                     omega_target_factor=float(omega_target_factor),
                     omega_cap_factor=float(omega_cap_factor),
                     omega_sign=omega_sign_eff,
+                    select_overlap=False,
                 )
                 sigma = shift_est
                 v_init = v_seed
@@ -853,6 +891,7 @@ def dominant_eigenpair(
             v_init = v0
         eig_si, vec_si = dominant_eigenpair_shift_invert_cached(
             v_init,
+            v_ref_use,
             cache,
             params,
             term_cfg,
@@ -869,6 +908,7 @@ def dominant_eigenpair(
             gmres_solve_method=shift_solve_method,
             shift_preconditioner=shift_preconditioner,
             select_targeted=shift_selection.strip().lower() != "nearest",
+            select_overlap=bool(select_overlap),
         )
         fallback_key = fallback_method.strip().lower()
         eig_host = complex(np.asarray(eig_si))
@@ -881,6 +921,7 @@ def dominant_eigenpair(
             if fallback_key == "propagator":
                 return dominant_eigenpair_propagator_cached(
                     v0,
+                    v_ref_use,
                     cache,
                     params,
                     term_cfg,
@@ -891,10 +932,12 @@ def dominant_eigenpair(
                     omega_target_factor=float(omega_target_factor),
                     omega_cap_factor=float(omega_cap_factor),
                     omega_sign=omega_sign_eff,
+                    select_overlap=False,
                 )
             if fallback_key == "arnoldi":
                 return dominant_eigenpair_cached(
                     v0,
+                    v_ref_use,
                     cache,
                     params,
                     term_cfg,
@@ -904,6 +947,7 @@ def dominant_eigenpair(
                     omega_target_factor=float(omega_target_factor),
                     omega_cap_factor=float(omega_cap_factor),
                     omega_sign=omega_sign_eff,
+                    select_overlap=bool(select_overlap),
                 )
             if fallback_key == "power":
                 return dominant_eigenpair_power(
@@ -923,6 +967,7 @@ def dominant_eigenpair(
     restarts = max(int(restarts), 1)
     return dominant_eigenpair_cached(
         v0,
+        v_ref_use,
         cache,
         params,
         term_cfg,
@@ -932,6 +977,7 @@ def dominant_eigenpair(
         omega_target_factor=float(omega_target_factor),
         omega_cap_factor=float(omega_cap_factor),
         omega_sign=omega_sign_eff,
+        select_overlap=bool(select_overlap),
     )
 
 
