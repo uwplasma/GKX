@@ -23,6 +23,7 @@ def streaming_contribution(
     kx_mask_minus: jnp.ndarray | None = None,
     linked_indices: tuple[jnp.ndarray, ...] | None = None,
     linked_kz: tuple[jnp.ndarray, ...] | None = None,
+    linked_inverse_permutation: jnp.ndarray | None = None,
     use_twist_shift: bool = False,
 ) -> jnp.ndarray:
     vth_s = vth if vth.ndim == 0 else vth[:, None, None, None, None, None]
@@ -39,6 +40,7 @@ def streaming_contribution(
         kx_mask_minus=kx_mask_minus,
         linked_indices=linked_indices,
         linked_kz=linked_kz,
+        linked_inverse_permutation=linked_inverse_permutation,
         use_twist_shift=use_twist_shift,
     )
 
@@ -62,6 +64,7 @@ def streaming_contribution_gx(
     use_twist_shift: bool = False,
     linked_indices: tuple[jnp.ndarray, ...] | None = None,
     linked_kz: tuple[jnp.ndarray, ...] | None = None,
+    linked_inverse_permutation: jnp.ndarray | None = None,
 ) -> jnp.ndarray:
     """GX-style streaming: ladder on g, add field terms, then apply parallel derivative."""
 
@@ -98,7 +101,13 @@ def streaming_contribution_gx(
     if use_twist_shift:
         if linked_indices is None or linked_kz is None:
             raise ValueError("linked_indices and linked_kz must be provided for linked streaming")
-        dG = grad_z_linked_fft(rhs, dz=dz, linked_indices=linked_indices, linked_kz=linked_kz)
+        dG = grad_z_linked_fft(
+            rhs,
+            dz=dz,
+            linked_indices=linked_indices,
+            linked_kz=linked_kz,
+            linked_inverse_permutation=linked_inverse_permutation,
+        )
     else:
         dG = grad_z_periodic(rhs, kz=kz)
 

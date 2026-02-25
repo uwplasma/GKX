@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field as dataclass_field
 from functools import partial
 from typing import TYPE_CHECKING, Callable
 
@@ -475,6 +475,9 @@ class LinearCache:
     kx_link_minus: jnp.ndarray
     kx_link_mask_plus: jnp.ndarray
     kx_link_mask_minus: jnp.ndarray
+    linked_inverse_permutation: jnp.ndarray = dataclass_field(
+        default_factory=lambda: jnp.asarray([], dtype=jnp.int32)
+    )
     linked_indices: tuple[jnp.ndarray, ...] = ()
     linked_kz: tuple[jnp.ndarray, ...] = ()
     use_twist_shift: bool = False
@@ -516,6 +519,7 @@ class LinearCache:
             self.kx_link_minus,
             self.kx_link_mask_plus,
             self.kx_link_mask_minus,
+            self.linked_inverse_permutation,
         )
         linked_idx = self.linked_indices or ()
         linked_kz = self.linked_kz or ()
@@ -526,7 +530,7 @@ class LinearCache:
     @classmethod
     def tree_unflatten(cls, aux_data, children):
         use_twist_shift, jtwist, n_linked_idx, n_linked_kz = aux_data
-        base_count = 34
+        base_count = 35
         base_children = children[:base_count]
         linked_idx = tuple(children[base_count : base_count + n_linked_idx])
         linked_kz = tuple(
@@ -721,6 +725,7 @@ def build_linear_cache(
         kx_link_mask_minus = kx_link_mask_plus
     linked_indices: tuple[jnp.ndarray, ...] = ()
     linked_kz: tuple[jnp.ndarray, ...] = ()
+    linked_inverse_permutation = jnp.asarray([], dtype=jnp.int32)
     if use_twist_shift:
         linked_indices, linked_kz = _build_linked_fft_maps(
             np.asarray(grid.kx),
@@ -731,6 +736,18 @@ def build_linear_cache(
             int(grid.z.size),
             real_dtype,
         )
+        if linked_indices:
+            idx_flat = np.concatenate(
+                [np.asarray(idx, dtype=np.int32).reshape(-1) for idx in linked_indices],
+                axis=0,
+            )
+            n_modes = int(grid.ky.size * grid.kx.size)
+            if idx_flat.size == n_modes:
+                ref = np.arange(n_modes, dtype=np.int32)
+                if np.array_equal(np.sort(idx_flat), ref):
+                    linked_inverse_permutation = jnp.asarray(
+                        np.argsort(idx_flat).astype(np.int32)
+                    )
     return LinearCache(
         Jl=Jl,
         b=b.astype(real_dtype),
@@ -766,6 +783,7 @@ def build_linear_cache(
         kx_link_minus=kx_link_minus,
         kx_link_mask_plus=kx_link_mask_plus,
         kx_link_mask_minus=kx_link_mask_minus,
+        linked_inverse_permutation=linked_inverse_permutation,
         linked_indices=linked_indices,
         linked_kz=linked_kz,
         use_twist_shift=use_twist_shift,

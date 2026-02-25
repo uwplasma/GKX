@@ -516,6 +516,12 @@ def load_kbm_reference() -> CycloneReference:
     return CycloneReference(ky=ky, omega=omega, gamma=gamma)
 
 
+def load_kbm_reference_gs2() -> CycloneReference:
+    """Load KBM reference values extracted from GS2 runs."""
+
+    return _load_reference_with_header("kbm_reference_gs2.csv")
+
+
 def load_etg_reference() -> CycloneReference:
     """Load ETG reference data digitized from the GX paper."""
 
@@ -905,11 +911,11 @@ def run_cyclone_scan(
     Nm: int = 12,
     dt: float | np.ndarray = 0.01,
     steps: int | np.ndarray = 800,
-    method: str = "rk4",
+    method: str = "imex2",
     params: LinearParams | None = None,
     cfg: CycloneBaseCase | None = None,
     time_cfg: TimeConfig | None = None,
-    solver: str = "krylov",
+    solver: str = "time",
     krylov_cfg: KrylovConfig | None = None,
     tmin: float | None = None,
     tmax: float | None = None,
@@ -937,7 +943,7 @@ def run_cyclone_scan(
     sample_stride: int | None = None,
     diagnostic_norm: str = "none",
     use_jit: bool = True,
-    ky_batch: int = 1,
+    ky_batch: int = 4,
     fixed_batch_shape: bool = True,
     streaming_fit: bool = True,
     streaming_amp_floor: float = 1.0e-30,
@@ -1137,12 +1143,6 @@ def run_cyclone_scan(
         time_cfg_i = None
         if time_cfg is not None:
             time_cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
-            if sample_stride is not None:
-                time_cfg_i = replace(time_cfg_i, sample_stride=sample_stride)
-        elif cfg.time.use_diffrax and not (
-            method_key.startswith("imex") or method_key.startswith("implicit")
-        ):
-            time_cfg_i = replace(cfg.time, dt=dt_i, t_max=dt_i * steps_i)
             if sample_stride is not None:
                 time_cfg_i = replace(time_cfg_i, sample_stride=sample_stride)
 
@@ -1641,11 +1641,11 @@ def run_etg_scan(
     Nm: int = 12,
     dt: float | np.ndarray = 0.01,
     steps: int | np.ndarray = 800,
-    method: str = "rk4",
+    method: str = "imex2",
     params: LinearParams | None = None,
     cfg: ETGBaseCase | None = None,
     time_cfg: TimeConfig | None = None,
-    solver: str = "krylov",
+    solver: str = "time",
     krylov_cfg: KrylovConfig | None = None,
     tmin: float | None = None,
     tmax: float | None = None,
@@ -1672,7 +1672,7 @@ def run_etg_scan(
     terms: LinearTerms | None = None,
     sample_stride: int | None = None,
     fit_signal: str = "density",
-    ky_batch: int = 1,
+    ky_batch: int = 4,
     fixed_batch_shape: bool = True,
     streaming_fit: bool = True,
     streaming_amp_floor: float = 1.0e-30,
@@ -1889,12 +1889,6 @@ def run_etg_scan(
         time_cfg_i = None
         if time_cfg is not None:
             time_cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
-            if sample_stride is not None:
-                time_cfg_i = replace(time_cfg_i, sample_stride=sample_stride)
-        elif cfg.time.use_diffrax and not (
-            method_key.startswith("imex") or method_key.startswith("implicit")
-        ):
-            time_cfg_i = replace(cfg.time, dt=dt_i, t_max=dt_i * steps_i)
             if sample_stride is not None:
                 time_cfg_i = replace(time_cfg_i, sample_stride=sample_stride)
 
@@ -2288,11 +2282,11 @@ def run_kinetic_scan(
     Nm: int = 12,
     dt: float | np.ndarray = 0.01,
     steps: int | np.ndarray = 800,
-    method: str = "rk4",
+    method: str = "imex2",
     params: LinearParams | None = None,
     cfg: KineticElectronBaseCase | None = None,
     time_cfg: TimeConfig | None = None,
-    solver: str = "krylov",
+    solver: str = "time",
     krylov_cfg: KrylovConfig | None = None,
     tmin: float | None = None,
     tmax: float | None = None,
@@ -2308,7 +2302,7 @@ def run_kinetic_scan(
     terms: LinearTerms | None = None,
     sample_stride: int | None = None,
     fit_signal: str = "phi",
-    ky_batch: int = 1,
+    ky_batch: int = 4,
     fixed_batch_shape: bool = True,
     streaming_fit: bool = True,
     streaming_amp_floor: float = 1.0e-30,
@@ -2488,12 +2482,6 @@ def run_kinetic_scan(
         time_cfg_i = None
         if time_cfg is not None:
             time_cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
-            if sample_stride is not None:
-                time_cfg_i = replace(time_cfg_i, sample_stride=sample_stride)
-        elif cfg.time.use_diffrax and not (
-            method_key.startswith("imex") or method_key.startswith("implicit")
-        ):
-            time_cfg_i = replace(cfg.time, dt=dt_i, t_max=dt_i * steps_i)
             if sample_stride is not None:
                 time_cfg_i = replace(time_cfg_i, sample_stride=sample_stride)
 
@@ -2859,11 +2847,11 @@ def run_tem_scan(
     Nm: int = 12,
     dt: float | np.ndarray = 0.01,
     steps: int | np.ndarray = 800,
-    method: str = "rk4",
+    method: str = "imex2",
     params: LinearParams | None = None,
     cfg: TEMBaseCase | None = None,
     time_cfg: TimeConfig | None = None,
-    solver: str = "krylov",
+    solver: str = "time",
     krylov_cfg: KrylovConfig | None = None,
     tmin: float | None = None,
     tmax: float | None = None,
@@ -2878,7 +2866,7 @@ def run_tem_scan(
     mode_only: bool = True,
     terms: LinearTerms | None = None,
     sample_stride: int | None = None,
-    ky_batch: int = 1,
+    ky_batch: int = 4,
     fixed_batch_shape: bool = True,
     streaming_fit: bool = True,
     streaming_amp_floor: float = 1.0e-30,
@@ -3061,12 +3049,6 @@ def run_tem_scan(
             time_cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
             if sample_stride is not None:
                 time_cfg_i = replace(time_cfg_i, sample_stride=sample_stride)
-        elif cfg.time.use_diffrax and not (
-            method_key.startswith("imex") or method_key.startswith("implicit")
-        ):
-            time_cfg_i = replace(cfg.time, dt=dt_i, t_max=dt_i * steps_i)
-            if sample_stride is not None:
-                time_cfg_i = replace(time_cfg_i, sample_stride=sample_stride)
 
         params_use = params
         if params_use.damp_ends_amp != 0.0 and terms.end_damping != 0.0:
@@ -3162,10 +3144,10 @@ def run_kbm_beta_scan(
     Nm: int = 12,
     dt: float | np.ndarray = 0.01,
     steps: int | np.ndarray = 800,
-    method: str = "rk4",
+    method: str = "imex2",
     cfg: KBMBaseCase | None = None,
     time_cfg: TimeConfig | None = None,
-    solver: str = "krylov",
+    solver: str = "time",
     krylov_cfg: KrylovConfig | None = None,
     tmin: float | None = None,
     tmax: float | None = None,
@@ -3181,7 +3163,7 @@ def run_kbm_beta_scan(
     terms: LinearTerms | None = None,
     sample_stride: int | None = None,
     fit_signal: str = "phi",
-    ky_batch: int = 1,
+    ky_batch: int = 4,
     fixed_batch_shape: bool = True,
     streaming_fit: bool = True,
     streaming_amp_floor: float = 1.0e-30,
@@ -3294,12 +3276,6 @@ def run_kbm_beta_scan(
             time_cfg_i = None
             if time_cfg is not None:
                 time_cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
-                if sample_stride is not None:
-                    time_cfg_i = replace(time_cfg_i, sample_stride=sample_stride)
-            elif cfg.time.use_diffrax and not (
-                method_key.startswith("imex") or method_key.startswith("implicit")
-            ):
-                time_cfg_i = replace(cfg.time, dt=dt_i, t_max=dt_i * steps_i)
                 if sample_stride is not None:
                     time_cfg_i = replace(time_cfg_i, sample_stride=sample_stride)
 

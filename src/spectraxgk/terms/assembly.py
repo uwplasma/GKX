@@ -122,6 +122,7 @@ def assemble_rhs_cached(
         weight=w_stream,
         linked_indices=cache.linked_indices,
         linked_kz=cache.linked_kz,
+        linked_inverse_permutation=cache.linked_inverse_permutation,
         use_twist_shift=cache.use_twist_shift,
     )
     dG = dG + mirror_contribution(
