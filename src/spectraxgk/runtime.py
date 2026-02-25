@@ -8,13 +8,21 @@ from typing import Sequence
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.analysis import ModeSelection, extract_mode_time_series, fit_growth_rate, fit_growth_rate_auto, select_ky_index
+from spectraxgk.analysis import (
+    ModeSelection,
+    extract_mode_time_series,
+    fit_growth_rate,
+    fit_growth_rate_auto,
+    fit_growth_rate_auto_with_stats,
+    select_ky_index,
+)
 from spectraxgk.geometry import SAlphaGeometry
 from spectraxgk.grids import SpectralGrid, build_spectral_grid, select_ky_grid
 from spectraxgk.linear import (
     LinearParams,
     LinearTerms,
     build_linear_cache,
+    integrate_linear_diagnostics,
     linear_terms_to_term_config,
 )
 from spectraxgk.linear_krylov import KrylovConfig, dominant_eigenpair
@@ -230,7 +238,7 @@ def run_runtime_linear(
     ky_target: float = 0.3,
     Nl: int = 24,
     Nm: int = 12,
-    solver: str = "krylov",
+    solver: str = "auto",
     method: str | None = None,
     dt: float | None = None,
     steps: int | None = None,
@@ -245,6 +253,7 @@ def run_runtime_linear(
     min_amp_fraction: float = 0.0,
     krylov_cfg: KrylovConfig | None = None,
     mode_method: str = "project",
+    fit_signal: str = "auto",
 ) -> RuntimeLinearResult:
     """Run one linear point from a case-agnostic runtime config."""
 
@@ -268,7 +277,18 @@ def run_runtime_linear(
     )
 
     solver_key = solver.strip().lower()
-    if solver_key == "krylov":
+    fit_key = fit_signal.strip().lower()
+    if fit_key not in {"phi", "density", "auto"}:
+        raise ValueError("fit_signal must be 'phi', 'density', or 'auto'")
+
+    def _is_valid_growth(gamma_val: float, omega_val: float) -> bool:
+        if not np.isfinite(gamma_val) or not np.isfinite(omega_val):
+            return False
+        if require_positive and gamma_val <= 0.0:
+            return False
+        return True
+
+    def _run_krylov() -> tuple[float, float]:
         kcfg = krylov_cfg or KrylovConfig()
         cache = build_linear_cache(grid, geom, params, Nl, Nm)
         eig, _vec = dominant_eigenpair(
@@ -305,60 +325,153 @@ def run_runtime_linear(
             rho_star=float(np.asarray(params.rho_star)),
             diagnostic_norm=cfg.normalization.diagnostic_norm,
         )
-        return RuntimeLinearResult(ky=float(grid.ky[sel.ky_index]), gamma=gamma, omega=omega, selection=sel)
+        return gamma, omega
 
-    tcfg = cfg.time
-    if method is not None:
-        tcfg = replace(tcfg, method=str(method))
-    if dt is not None:
-        tcfg = replace(tcfg, dt=float(dt))
-    if steps is not None:
-        tcfg = replace(tcfg, t_max=float(steps) * float(tcfg.dt))
+    def _run_time() -> RuntimeLinearResult:
+        tcfg = cfg.time
+        if method is not None:
+            tcfg = replace(tcfg, method=str(method))
+        if dt is not None:
+            tcfg = replace(tcfg, dt=float(dt))
+        if steps is not None:
+            tcfg = replace(tcfg, t_max=float(steps) * float(tcfg.dt))
 
-    out = integrate_linear_from_config(
-        g0,
-        grid,
-        geom,
-        params,
-        tcfg,
-        terms=terms,
-        save_mode=sel,
-        mode_method=mode_method,
-        save_field="phi",
-    )
-    saved = np.asarray(out[1])
-    if saved.ndim == 1:
-        signal = saved
-    else:
-        signal = extract_mode_time_series(saved, sel, method=mode_method)
-    t = float(tcfg.dt) * float(tcfg.sample_stride) * (np.arange(signal.shape[0], dtype=float) + 1.0)
-    if auto_window:
-        gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
-            t,
-            signal,
-            window_fraction=window_fraction,
-            min_points=min_points,
-            start_fraction=start_fraction,
-            growth_weight=growth_weight,
-            require_positive=require_positive,
-            min_amp_fraction=min_amp_fraction,
+        need_density = fit_key in {"density", "auto"}
+        if tcfg.use_diffrax:
+            save_field = "phi+density" if need_density else "phi"
+            save_mode = None if need_density else sel
+            _g_last, saved = integrate_linear_from_config(
+                g0,
+                grid,
+                geom,
+                params,
+                tcfg,
+                terms=terms,
+                save_mode=save_mode,
+                mode_method=mode_method,
+                save_field=save_field,
+                density_species_index=0 if need_density else None,
+            )
+            if need_density:
+                phi_t, density_t = saved
+            else:
+                phi_t, density_t = saved, None
+        else:
+            if need_density:
+                _diag = integrate_linear_diagnostics(
+                    g0,
+                    grid,
+                    geom,
+                    params,
+                    dt=tcfg.dt,
+                    steps=int(round(tcfg.t_max / tcfg.dt)),
+                    method=tcfg.method,
+                    terms=terms,
+                    sample_stride=tcfg.sample_stride,
+                    species_index=0,
+                    record_hl_energy=False,
+                )
+                phi_t = _diag[1]
+                density_t = _diag[2] if len(_diag) > 2 else None
+            else:
+                _g_last, phi_t = integrate_linear_from_config(
+                    g0,
+                    grid,
+                    geom,
+                    params,
+                    tcfg,
+                    terms=terms,
+                    save_mode=sel,
+                    mode_method=mode_method,
+                    save_field="phi",
+                )
+                density_t = None
+
+        phi_t_np = np.asarray(phi_t)
+        t_arr = float(tcfg.dt) * float(tcfg.sample_stride) * (
+            np.arange(phi_t_np.shape[0], dtype=float) + 1.0
         )
-    else:
-        gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
-    gamma, omega = apply_diagnostic_normalization(
-        gamma,
-        omega,
-        rho_star=float(np.asarray(params.rho_star)),
-        diagnostic_norm=cfg.normalization.diagnostic_norm,
-    )
-    return RuntimeLinearResult(
-        ky=float(grid.ky[sel.ky_index]),
-        gamma=float(gamma),
-        omega=float(omega),
-        selection=sel,
-        t=t,
-        signal=np.asarray(signal),
-    )
+        density_np = None if density_t is None else np.asarray(density_t)
+
+        if fit_key == "auto":
+            phi_signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
+            gamma_phi, omega_phi, _, _, r2_phi, r2p_phi = fit_growth_rate_auto_with_stats(
+                t_arr,
+                phi_signal,
+                window_fraction=window_fraction,
+                min_points=min_points,
+                start_fraction=start_fraction,
+                growth_weight=growth_weight,
+                require_positive=require_positive,
+                min_amp_fraction=min_amp_fraction,
+            )
+            best_gamma, best_omega = gamma_phi, omega_phi
+            best_score = r2_phi + 0.2 * r2p_phi + growth_weight * gamma_phi
+            if density_np is not None:
+                dens_signal = extract_mode_time_series(density_np, sel, method=mode_method)
+                gamma_den, omega_den, _, _, r2_den, r2p_den = fit_growth_rate_auto_with_stats(
+                    t_arr,
+                    dens_signal,
+                    window_fraction=window_fraction,
+                    min_points=min_points,
+                    start_fraction=start_fraction,
+                    growth_weight=growth_weight,
+                    require_positive=require_positive,
+                    min_amp_fraction=min_amp_fraction,
+                )
+                score_den = r2_den + 0.2 * r2p_den + growth_weight * gamma_den
+                if score_den > best_score:
+                    best_gamma, best_omega = gamma_den, omega_den
+            gamma, omega = best_gamma, best_omega
+        else:
+            signal = extract_mode_time_series(
+                density_np if fit_key == "density" and density_np is not None else phi_t_np,
+                sel,
+                method=mode_method,
+            )
+            if auto_window:
+                gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
+                    t_arr,
+                    signal,
+                    window_fraction=window_fraction,
+                    min_points=min_points,
+                    start_fraction=start_fraction,
+                    growth_weight=growth_weight,
+                    require_positive=require_positive,
+                    min_amp_fraction=min_amp_fraction,
+                )
+            else:
+                gamma, omega = fit_growth_rate(t_arr, signal, tmin=tmin, tmax=tmax)
+        gamma, omega = apply_diagnostic_normalization(
+            gamma,
+            omega,
+            rho_star=float(np.asarray(params.rho_star)),
+            diagnostic_norm=cfg.normalization.diagnostic_norm,
+        )
+        return RuntimeLinearResult(
+            ky=float(grid.ky[sel.ky_index]),
+            gamma=float(gamma),
+            omega=float(omega),
+            selection=sel,
+            t=t_arr,
+            signal=None,
+        )
+
+    if solver_key == "krylov":
+        gamma, omega = _run_krylov()
+        return RuntimeLinearResult(
+            ky=float(grid.ky[sel.ky_index]), gamma=gamma, omega=omega, selection=sel
+        )
+    if solver_key == "auto":
+        result = _run_time()
+        if not _is_valid_growth(result.gamma, result.omega):
+            gamma, omega = _run_krylov()
+            return RuntimeLinearResult(
+                ky=float(grid.ky[sel.ky_index]), gamma=gamma, omega=omega, selection=sel
+            )
+        return result
+
+    return _run_time()
 
 
 def run_runtime_scan(
@@ -367,7 +480,7 @@ def run_runtime_scan(
     *,
     Nl: int = 24,
     Nm: int = 12,
-    solver: str = "krylov",
+    solver: str = "auto",
     method: str | None = None,
     dt: float | None = None,
     steps: int | None = None,
@@ -382,6 +495,7 @@ def run_runtime_scan(
     min_amp_fraction: float = 0.0,
     krylov_cfg: KrylovConfig | None = None,
     mode_method: str = "project",
+    fit_signal: str = "auto",
 ) -> RuntimeLinearScanResult:
     """Run a ky scan using the unified runtime config path."""
 
@@ -409,6 +523,7 @@ def run_runtime_scan(
             min_amp_fraction=min_amp_fraction,
             krylov_cfg=krylov_cfg,
             mode_method=mode_method,
+            fit_signal=fit_signal,
         )
         gamma[i] = float(res.gamma)
         omega[i] = float(res.omega)

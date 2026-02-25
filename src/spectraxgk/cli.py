@@ -62,10 +62,11 @@ def build_parser() -> argparse.ArgumentParser:
     run_linear.add_argument("--ky", type=float, default=None, help="Single ky value")
     run_linear.add_argument("--Nl", type=int, default=None)
     run_linear.add_argument("--Nm", type=int, default=None)
-    run_linear.add_argument("--solver", type=str, default=None, help="time or krylov")
+    run_linear.add_argument("--solver", type=str, default=None, help="auto, time, or krylov")
     run_linear.add_argument("--method", type=str, default=None, help="time integrator method")
     run_linear.add_argument("--dt", type=float, default=None)
     run_linear.add_argument("--steps", type=int, default=None)
+    run_linear.add_argument("--fit-signal", type=str, default=None, help="auto, phi, or density")
     run_linear.add_argument("--plot", action="store_true", help="Save fit/eigenfunction plots")
     run_linear.add_argument("--outdir", default=".", help="Output directory for plots")
     run_linear.set_defaults(func=_cmd_run_linear)
@@ -76,10 +77,11 @@ def build_parser() -> argparse.ArgumentParser:
     scan_linear.add_argument("--ky-values", type=str, default=None, help="Comma-separated ky list")
     scan_linear.add_argument("--Nl", type=int, default=None)
     scan_linear.add_argument("--Nm", type=int, default=None)
-    scan_linear.add_argument("--solver", type=str, default=None, help="time or krylov")
+    scan_linear.add_argument("--solver", type=str, default=None, help="auto, time, or krylov")
     scan_linear.add_argument("--method", type=str, default=None, help="time integrator method")
     scan_linear.add_argument("--dt", type=float, default=None)
     scan_linear.add_argument("--steps", type=int, default=None)
+    scan_linear.add_argument("--fit-signal", type=str, default=None, help="auto, phi, or density")
     scan_linear.add_argument("--plot", action="store_true", help="Save comparison plot if reference exists")
     scan_linear.add_argument("--outdir", default=".", help="Output directory for plots")
     scan_linear.set_defaults(func=_cmd_scan_linear)
@@ -92,10 +94,11 @@ def build_parser() -> argparse.ArgumentParser:
     run_runtime.add_argument("--ky", type=float, default=None, help="Single ky value")
     run_runtime.add_argument("--Nl", type=int, default=None)
     run_runtime.add_argument("--Nm", type=int, default=None)
-    run_runtime.add_argument("--solver", type=str, default=None, help="time or krylov")
+    run_runtime.add_argument("--solver", type=str, default=None, help="auto, time, or krylov")
     run_runtime.add_argument("--method", type=str, default=None, help="time integrator method")
     run_runtime.add_argument("--dt", type=float, default=None)
     run_runtime.add_argument("--steps", type=int, default=None)
+    run_runtime.add_argument("--fit-signal", type=str, default=None, help="auto, phi, or density")
     run_runtime.set_defaults(func=_cmd_run_runtime_linear)
 
     scan_runtime = sub.add_parser(
@@ -106,10 +109,11 @@ def build_parser() -> argparse.ArgumentParser:
     scan_runtime.add_argument("--ky-values", type=str, default=None, help="Comma-separated ky list")
     scan_runtime.add_argument("--Nl", type=int, default=None)
     scan_runtime.add_argument("--Nm", type=int, default=None)
-    scan_runtime.add_argument("--solver", type=str, default=None, help="time or krylov")
+    scan_runtime.add_argument("--solver", type=str, default=None, help="auto, time, or krylov")
     scan_runtime.add_argument("--method", type=str, default=None, help="time integrator method")
     scan_runtime.add_argument("--dt", type=float, default=None)
     scan_runtime.add_argument("--steps", type=int, default=None)
+    scan_runtime.add_argument("--fit-signal", type=str, default=None, help="auto, phi, or density")
     scan_runtime.set_defaults(func=_cmd_scan_runtime_linear)
 
     return parser
@@ -143,12 +147,13 @@ def _cmd_run_linear(args: argparse.Namespace) -> int:
     case_cls, run_fn = _resolve_case(case_name)
     _ = case_cls  # keep type checkers happy
     run_cfg = data.get("run", {})
-    fit_cfg = data.get("fit", {})
+    fit_cfg = dict(data.get("fit", {}))
 
     ky = args.ky if args.ky is not None else run_cfg.get("ky", 0.3)
     Nl = args.Nl if args.Nl is not None else run_cfg.get("Nl", 24)
     Nm = args.Nm if args.Nm is not None else run_cfg.get("Nm", 12)
-    solver = args.solver if args.solver is not None else run_cfg.get("solver", "krylov")
+    solver = args.solver if args.solver is not None else run_cfg.get("solver", "auto")
+    fit_signal = args.fit_signal if args.fit_signal is not None else fit_cfg.pop("fit_signal", "auto")
     method = args.method if args.method is not None else run_cfg.get("method", cfg.time.method)
     dt = args.dt if args.dt is not None else run_cfg.get("dt", cfg.time.dt)
     steps = args.steps if args.steps is not None else run_cfg.get("steps", int(round(cfg.time.t_max / cfg.time.dt)))
@@ -167,6 +172,7 @@ def _cmd_run_linear(args: argparse.Namespace) -> int:
         steps=int(steps),
         krylov_cfg=krylov_cfg,
         terms=terms,
+        fit_signal=str(fit_signal),
         **fit_cfg,
     )
     print(f"ky={result.ky:.4f} gamma={result.gamma:.6f} omega={result.omega:.6f}")
@@ -202,7 +208,7 @@ def _cmd_scan_linear(args: argparse.Namespace) -> int:
     case_name, cfg, data = load_case_from_toml(args.config, args.case)
     _case_cls, run_fn = _resolve_case(case_name)
     scan_cfg = data.get("scan", {})
-    fit_cfg = data.get("fit", {})
+    fit_cfg = dict(data.get("fit", {}))
 
     if args.ky_values is not None:
         ky_values = np.asarray([float(x) for x in args.ky_values.split(",") if x.strip() != ""])
@@ -213,7 +219,8 @@ def _cmd_scan_linear(args: argparse.Namespace) -> int:
 
     Nl = args.Nl if args.Nl is not None else scan_cfg.get("Nl", 24)
     Nm = args.Nm if args.Nm is not None else scan_cfg.get("Nm", 12)
-    solver = args.solver if args.solver is not None else scan_cfg.get("solver", "krylov")
+    solver = args.solver if args.solver is not None else scan_cfg.get("solver", "auto")
+    fit_signal = args.fit_signal if args.fit_signal is not None else fit_cfg.pop("fit_signal", "auto")
     method = args.method if args.method is not None else scan_cfg.get("method", cfg.time.method)
     dt = args.dt if args.dt is not None else scan_cfg.get("dt", cfg.time.dt)
     steps = args.steps if args.steps is not None else scan_cfg.get("steps", int(round(cfg.time.t_max / cfg.time.dt)))
@@ -287,7 +294,8 @@ def _cmd_run_runtime_linear(args: argparse.Namespace) -> int:
     ky = float(args.ky if args.ky is not None else run_cfg.get("ky", 0.3))
     Nl = int(args.Nl if args.Nl is not None else run_cfg.get("Nl", 24))
     Nm = int(args.Nm if args.Nm is not None else run_cfg.get("Nm", 12))
-    solver = str(args.solver if args.solver is not None else run_cfg.get("solver", "krylov"))
+    solver = str(args.solver if args.solver is not None else run_cfg.get("solver", "auto"))
+    fit_signal = str(args.fit_signal if args.fit_signal is not None else run_cfg.get("fit_signal", "auto"))
     method = args.method if args.method is not None else run_cfg.get("method", None)
     dt = args.dt if args.dt is not None else run_cfg.get("dt", None)
     steps = args.steps if args.steps is not None else run_cfg.get("steps", None)
@@ -301,6 +309,7 @@ def _cmd_run_runtime_linear(args: argparse.Namespace) -> int:
         method=method,
         dt=dt,
         steps=steps,
+        fit_signal=fit_signal,
         **fit_cfg,
     )
     print(f"ky={res.ky:.4f} gamma={res.gamma:.6f} omega={res.omega:.6f}")
@@ -322,7 +331,8 @@ def _cmd_scan_runtime_linear(args: argparse.Namespace) -> int:
 
     Nl = int(args.Nl if args.Nl is not None else scan_cfg.get("Nl", 24))
     Nm = int(args.Nm if args.Nm is not None else scan_cfg.get("Nm", 12))
-    solver = str(args.solver if args.solver is not None else scan_cfg.get("solver", "krylov"))
+    solver = str(args.solver if args.solver is not None else scan_cfg.get("solver", "auto"))
+    fit_signal = str(args.fit_signal if args.fit_signal is not None else scan_cfg.get("fit_signal", "auto"))
     method = args.method if args.method is not None else scan_cfg.get("method", None)
     dt = args.dt if args.dt is not None else scan_cfg.get("dt", None)
     steps = args.steps if args.steps is not None else scan_cfg.get("steps", None)
@@ -336,6 +346,7 @@ def _cmd_scan_runtime_linear(args: argparse.Namespace) -> int:
         method=method,
         dt=dt,
         steps=steps,
+        fit_signal=fit_signal,
         **fit_cfg,
     )
     for ky, g, w in zip(scan.ky, scan.gamma, scan.omega):
