@@ -131,6 +131,8 @@ ETG_KRYLOV_DEFAULT = KrylovConfig(
     shift_tol=2.0e-3,
     mode_family="etg",
     fallback_method="arnoldi",
+    continuation=True,
+    continuation_selection="overlap",
 )
 
 KBM_KRYLOV_DEFAULT = KrylovConfig(
@@ -1071,6 +1073,8 @@ def run_cyclone_scan(
         )
     else:
         ky_iter = _iter_ky_batches(ky_values_arr, ky_batch=1, fixed_batch_shape=False)
+    prev_vec: jnp.ndarray | None = None
+    prev_eig: complex | None = None
     ky_slice: np.ndarray
     ky_indices: list[int]
     sel: ModeSelection | ModeSelectionBatch
@@ -1849,11 +1853,26 @@ def run_etg_scan(
         G0_jax = jnp.asarray(G0)
         if solver.lower() == "krylov":
             cfg_use = krylov_cfg or ETG_KRYLOV_DEFAULT
-            eig, _vec = dominant_eigenpair(
-                G0_jax,
+            use_cont = bool(cfg_use.continuation)
+            v0_use = G0_jax
+            v_ref = None
+            shift_override = cfg_use.shift
+            if use_cont and prev_vec is not None and prev_vec.shape == G0_jax.shape:
+                v0_use = prev_vec
+                v_ref = prev_vec
+                if cfg_use.method.strip().lower() == "shift_invert" and prev_eig is not None:
+                    if shift_override is None:
+                        shift_override = prev_eig
+            select_overlap = use_cont and v_ref is not None and (
+                cfg_use.continuation_selection.strip().lower() == "overlap"
+            )
+            eig, vec = dominant_eigenpair(
+                v0_use,
                 cache,
                 params,
                 terms=terms,
+                v_ref=v_ref,
+                select_overlap=select_overlap,
                 krylov_dim=cfg_use.krylov_dim,
                 restarts=cfg_use.restarts,
                 omega_min_factor=cfg_use.omega_min_factor,
@@ -1863,7 +1882,7 @@ def run_etg_scan(
                 method=cfg_use.method,
                 power_iters=cfg_use.power_iters,
                 power_dt=cfg_use.power_dt,
-                shift=cfg_use.shift,
+                shift=shift_override,
                 shift_source=cfg_use.shift_source,
                 shift_tol=cfg_use.shift_tol,
                 shift_maxiter=cfg_use.shift_maxiter,
@@ -1875,6 +1894,14 @@ def run_etg_scan(
                 fallback_method=cfg_use.fallback_method,
                 fallback_real_floor=cfg_use.fallback_real_floor,
             )
+            if use_cont:
+                eig_host = complex(np.asarray(eig))
+                if np.isfinite(eig_host.real) and np.isfinite(eig_host.imag):
+                    prev_vec = vec
+                    prev_eig = eig_host
+                else:
+                    prev_vec = None
+                    prev_eig = None
             gamma = float(np.real(eig))
             omega = float(-np.imag(eig))
             if cfg_use.omega_sign != 0:
