@@ -21,7 +21,7 @@ from spectraxgk.linear import (
 )
 from spectraxgk.terms.assembly import assemble_rhs_cached, assemble_rhs_cached_jit, compute_fields_cached
 from spectraxgk.terms.config import FieldState, TermConfig
-from spectraxgk.terms.nonlinear import placeholder_nonlinear_contribution
+from spectraxgk.terms.nonlinear import exb_nonlinear_contribution
 
 if TYPE_CHECKING:  # pragma: no cover
     import diffrax as dfx
@@ -584,9 +584,17 @@ def integrate_nonlinear_diffrax(
         if term_cfg_.nonlinear == 0.0:
             return jnp.zeros_like(G_packed)
         G = _unpack_complex_state(G_packed)
+        fields = compute_fields_cached(G, _cache, _params, terms=term_cfg_, use_custom_vjp=use_custom_vjp)
         real_dtype = jnp.real(jnp.empty((), dtype=G.dtype)).dtype
         weight = jnp.asarray(term_cfg_.nonlinear, dtype=real_dtype)
-        dG = placeholder_nonlinear_contribution(G, weight=weight)
+        dG = exb_nonlinear_contribution(
+            G,
+            phi=fields.phi,
+            dealias_mask=_cache.dealias_mask,
+            kx_grid=_cache.kx_grid,
+            ky_grid=_cache.ky_grid,
+            weight=weight,
+        )
         return _pack_complex_state(dG)
 
     def rhs_full(t, G_packed, args):

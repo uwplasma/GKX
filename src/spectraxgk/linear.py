@@ -453,6 +453,10 @@ class LinearCache:
     dz: jnp.ndarray
     kz: jnp.ndarray
     ky: jnp.ndarray
+    kx: jnp.ndarray
+    kx_grid: jnp.ndarray
+    ky_grid: jnp.ndarray
+    dealias_mask: jnp.ndarray
     lb_lam: jnp.ndarray
     hyper_ratio: jnp.ndarray
     ratio_l: jnp.ndarray
@@ -497,6 +501,10 @@ class LinearCache:
             self.dz,
             self.kz,
             self.ky,
+            self.kx,
+            self.kx_grid,
+            self.ky_grid,
+            self.dealias_mask,
             self.lb_lam,
             self.hyper_ratio,
             self.ratio_l,
@@ -530,7 +538,7 @@ class LinearCache:
     @classmethod
     def tree_unflatten(cls, aux_data, children):
         use_twist_shift, jtwist, n_linked_idx, n_linked_kz = aux_data
-        base_count = 35
+        base_count = 39
         base_children = children[:base_count]
         linked_idx = tuple(children[base_count : base_count + n_linked_idx])
         linked_kz = tuple(
@@ -562,6 +570,9 @@ def build_linear_cache(
     ky_raw = jnp.asarray(grid.ky, dtype=real_dtype)
     kx_eff = rho_star * kx_raw
     ky_eff = rho_star * ky_raw
+    kx_grid = jnp.asarray(grid.kx_grid, dtype=real_dtype) * rho_star
+    ky_grid = jnp.asarray(grid.ky_grid, dtype=real_dtype) * rho_star
+    dealias_mask = jnp.asarray(grid.dealias_mask, dtype=bool)
     theta = jnp.asarray(grid.z, dtype=real_dtype)
     gds2, gds21, gds22 = geom.metric_coeffs(theta)
     gds22_arr = gds22 if gds22.ndim else jnp.full_like(theta, gds22)
@@ -761,6 +772,10 @@ def build_linear_cache(
         dz=dz,
         kz=kz,
         ky=ky_eff.astype(real_dtype),
+        kx=kx_eff.astype(real_dtype),
+        kx_grid=kx_grid,
+        ky_grid=ky_grid,
+        dealias_mask=dealias_mask,
         lb_lam=lb_lam.astype(real_dtype),
         hyper_ratio=hyper_ratio.astype(real_dtype),
         ratio_l=ratio_l.astype(real_dtype),
