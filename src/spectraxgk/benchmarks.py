@@ -293,7 +293,7 @@ def _score_fit_signal_auto(
             window_method=window_method,
             max_fraction=max_fraction,
             end_fraction=end_fraction,
-            num_windows=num_windows,
+                        num_windows=8,
             phase_weight=phase_weight,
             length_weight=length_weight,
             min_r2=min_r2,
@@ -361,7 +361,7 @@ def _select_fit_signal_auto(
         window_method=window_method,
         max_fraction=max_fraction,
         end_fraction=end_fraction,
-        num_windows=num_windows,
+                        num_windows=8,
         phase_weight=phase_weight,
         length_weight=length_weight,
         min_r2=min_r2,
@@ -1219,62 +1219,13 @@ def run_cyclone_scan(
     fit_key = fit_signal.strip().lower()
     if fit_key not in {"phi", "density", "auto"}:
         raise ValueError("fit_signal must be 'phi', 'density', or 'auto'")
-    if solver_key == "auto" or fit_key != "phi":
-        ky_arr = np.asarray(ky_values, dtype=float)
-        gammas = []
-        omegas = []
-        ky_out = []
-        for i, ky in enumerate(ky_arr):
-            dt_i = float(np.asarray(dt)[i]) if _is_array_like(dt) else float(dt)
-            steps_i = int(np.asarray(steps)[i]) if _is_array_like(steps) else int(steps)
-            tmin_i = float(np.asarray(tmin)[i]) if _is_array_like(tmin) else tmin
-            tmax_i = float(np.asarray(tmax)[i]) if _is_array_like(tmax) else tmax
-            res = run_cyclone_linear(
-                ky_target=float(ky),
-                Nl=Nl,
-                Nm=Nm,
-                dt=dt_i,
-                steps=steps_i,
-                method=method,
-                params=params,
-                cfg=cfg,
-                time_cfg=time_cfg,
-                solver="auto" if solver_key == "auto" else solver_key,
-                krylov_cfg=krylov_cfg,
-                tmin=tmin_i,
-                tmax=tmax_i,
-                auto_window=auto_window,
-                window_fraction=window_fraction,
-                min_points=min_points,
-                start_fraction=start_fraction,
-                growth_weight=growth_weight,
-                require_positive=require_positive,
-                min_amp_fraction=min_amp_fraction,
-                max_fraction=max_fraction,
-                end_fraction=end_fraction,
-                max_amp_fraction=max_amp_fraction,
-                phase_weight=phase_weight,
-                length_weight=length_weight,
-                min_r2=min_r2,
-                late_penalty=late_penalty,
-                min_slope=min_slope,
-                min_slope_frac=min_slope_frac,
-                slope_var_weight=slope_var_weight,
-                window_method=window_method,
-                mode_method=mode_method,
-                terms=terms,
-                sample_stride=sample_stride,
-                fit_signal=fit_signal,
-                init_cfg=init_cfg,
-                diagnostic_norm=diagnostic_norm,
-                use_jit=use_jit,
-            )
-            gammas.append(float(res.gamma))
-            omegas.append(float(res.omega))
-            ky_out.append(float(res.ky))
-        return CycloneScanResult(
-            ky=np.array(ky_out), gamma=np.array(gammas), omega=np.array(omegas)
-        )
+    auto_solver = solver_key == "auto"
+    if auto_solver:
+        solver_key = "time"
+    if fit_key == "auto":
+        streaming_fit = False
+        mode_only = False
+    need_density = fit_key in {"density", "auto"}
     gammas = []
     omegas = []
     ky_out = []
@@ -1298,7 +1249,7 @@ def run_cyclone_scan(
         raise ValueError("ky_batch must be >= 1")
     use_batch = (
         ky_batch > 1
-        and solver.lower() != "krylov"
+        and solver_key != "krylov"
         and not _is_array_like(dt)
         and not _is_array_like(steps)
         and not _is_array_like(tmin)
@@ -1402,7 +1353,7 @@ def run_cyclone_scan(
             init_cfg=init_cfg,
         )
         cache = build_linear_cache(grid, geom, params, Nl, Nm)
-        if solver.lower() == "krylov":
+        if solver_key == "krylov":
             for local_idx in range(valid_count):
                 ky_val = ky_slice[local_idx]
                 cfg_use = krylov_cfg or CYCLONE_KRYLOV_DEFAULT
@@ -1498,7 +1449,9 @@ def run_cyclone_scan(
             continue
 
         if time_cfg_i is not None:
-            _, phi_t = integrate_linear_from_config(
+            save_field = "phi+density" if fit_key == "auto" else ("density" if fit_key == "density" else "phi")
+            save_mode = None if fit_key == "auto" else (sel if mode_only else None)
+            _, saved = integrate_linear_from_config(
                 G0_jax,
                 grid,
                 geom,
@@ -1506,15 +1459,20 @@ def run_cyclone_scan(
                 time_cfg_i,
                 cache=cache,
                 terms=terms,
-                save_mode=sel if mode_only else None,
+                save_mode=save_mode,
                 mode_method=mode_method,
-                save_field="phi",
-                density_species_index=None,
+                save_field=save_field,
+                density_species_index=0 if need_density else None,
             )
+            if fit_key == "auto":
+                phi_t, density_t = saved
+            else:
+                phi_t = saved
+                density_t = None
             stride = time_cfg_i.sample_stride
         else:
             stride = 1 if sample_stride is None else int(sample_stride)
-            if use_jit:
+            if use_jit and not need_density:
                 _, phi_t = integrate_linear(
                     G0_jax,
                     grid,
@@ -1527,6 +1485,7 @@ def run_cyclone_scan(
                     terms=terms,
                     sample_stride=stride,
                 )
+                density_t = None
             else:
                 _diag = integrate_linear_diagnostics(
                     G0_jax,
@@ -1543,20 +1502,100 @@ def run_cyclone_scan(
                     record_hl_energy=False,
                 )
                 phi_t = _diag[1]
+                density_t = _diag[2] if len(_diag) > 2 else None
 
         phi_t_np = np.asarray(phi_t)
         signal_t = None
         if mode_only and phi_t_np.ndim == 2:
             signal_t = phi_t_np
 
+        density_np = None if density_t is None else np.asarray(density_t)
+        t = np.arange(phi_t_np.shape[0]) * dt_i * stride
+
+        def _is_valid_growth(gamma_val: float, omega_val: float) -> bool:
+            if not np.isfinite(gamma_val) or not np.isfinite(omega_val):
+                return False
+            if require_positive and gamma_val <= 0.0:
+                return False
+            return True
+
         for local_idx in range(valid_count):
             ky_val = ky_slice[local_idx]
             if signal_t is None:
                 sel_local = ModeSelection(ky_index=local_idx, kx_index=0, z_index=_midplane_index(grid))
+                if fit_key == "auto":
+                    signal, _name, gamma, omega = _select_fit_signal_auto(
+                        t,
+                        phi_t_np,
+                        density_np,
+                        sel_local,
+                        mode_method=mode_method,
+                        tmin=_window_value(tmin, batch_start + local_idx),
+                        tmax=_window_value(tmax, batch_start + local_idx),
+                        window_fraction=window_fraction,
+                        min_points=min_points,
+                        start_fraction=start_fraction,
+                        growth_weight=growth_weight,
+                        require_positive=require_positive,
+                        min_amp_fraction=min_amp_fraction,
+                        max_amp_fraction=max_amp_fraction,
+                        window_method=window_method,
+                        max_fraction=max_fraction,
+                        end_fraction=end_fraction,
+                        num_windows=8,
+                        phase_weight=phase_weight,
+                        length_weight=length_weight,
+                        min_r2=min_r2,
+                        late_penalty=late_penalty,
+                        min_slope=min_slope,
+                        min_slope_frac=min_slope_frac,
+                        slope_var_weight=slope_var_weight,
+                    )
+                    gamma, omega = _normalize_growth_rate(gamma, omega, params_use, diagnostic_norm)
+                    if auto_solver and not _is_valid_growth(gamma, omega):
+                        res = run_cyclone_linear(
+                            ky_target=float(ky_val),
+                            Nl=Nl,
+                            Nm=Nm,
+                            dt=dt_i,
+                            steps=steps_i,
+                            method=method,
+                            params=params,
+                            cfg=cfg,
+                            time_cfg=time_cfg,
+                            solver="krylov",
+                            krylov_cfg=krylov_cfg,
+                            diagnostic_norm=diagnostic_norm,
+                            fit_signal="phi",
+                        )
+                        gamma = float(res.gamma)
+                        omega = float(res.omega)
+                    gammas.append(gamma)
+                    omegas.append(omega)
+                    ky_out.append(float(ky_val))
+                    continue
                 signal = extract_mode_time_series(phi_t_np, sel_local, method=mode_method)
             else:
                 signal = signal_t[:, local_idx] if signal_t.ndim > 1 else signal_t
             gamma, omega = _fit_signal(signal, batch_start + local_idx, dt_i, stride)
+            if auto_solver and not _is_valid_growth(gamma, omega):
+                res = run_cyclone_linear(
+                    ky_target=float(ky_val),
+                    Nl=Nl,
+                    Nm=Nm,
+                    dt=dt_i,
+                    steps=steps_i,
+                    method=method,
+                    params=params,
+                    cfg=cfg,
+                    time_cfg=time_cfg,
+                    solver="krylov",
+                    krylov_cfg=krylov_cfg,
+                    diagnostic_norm=diagnostic_norm,
+                    fit_signal="phi",
+                )
+                gamma = float(res.gamma)
+                omega = float(res.omega)
             gammas.append(gamma)
             omegas.append(omega)
             ky_out.append(float(ky_val))
@@ -2079,52 +2118,13 @@ def run_etg_scan(
     fit_key = fit_signal.strip().lower()
     if fit_key not in {"phi", "density", "auto"}:
         raise ValueError("fit_signal must be 'phi', 'density', or 'auto'")
-    if solver_key == "auto" or fit_key == "auto":
-        ky_arr = np.asarray(ky_values, dtype=float)
-        gammas = []
-        omegas = []
-        ky_out = []
-        for i, ky in enumerate(ky_arr):
-            dt_i = float(np.asarray(dt)[i]) if _is_array_like(dt) else float(dt)
-            steps_i = int(np.asarray(steps)[i]) if _is_array_like(steps) else int(steps)
-            tmin_i = float(np.asarray(tmin)[i]) if _is_array_like(tmin) else tmin
-            tmax_i = float(np.asarray(tmax)[i]) if _is_array_like(tmax) else tmax
-            res = run_etg_linear(
-                ky_target=float(ky),
-                Nl=Nl,
-                Nm=Nm,
-                dt=dt_i,
-                steps=steps_i,
-                method=method,
-                params=params,
-                cfg=cfg,
-                time_cfg=time_cfg,
-                solver="auto" if solver_key == "auto" else solver_key,
-                krylov_cfg=krylov_cfg,
-                tmin=tmin_i,
-                tmax=tmax_i,
-                auto_window=auto_window,
-                window_fraction=window_fraction,
-                min_points=min_points,
-                start_fraction=start_fraction,
-                growth_weight=growth_weight,
-                require_positive=require_positive,
-                min_amp_fraction=min_amp_fraction,
-                mode_method=mode_method,
-                terms=terms,
-                sample_stride=sample_stride,
-                fit_signal=fit_signal,
-                streaming_fit=False,
-                gx_growth=gx_growth,
-                gx_navg_fraction=gx_navg_fraction,
-                diagnostic_norm=diagnostic_norm,
-            )
-            gammas.append(float(res.gamma))
-            omegas.append(float(res.omega))
-            ky_out.append(float(res.ky))
-        return LinearScanResult(
-            ky=np.array(ky_out), gamma=np.array(gammas), omega=np.array(omegas)
-        )
+    auto_solver = solver_key == "auto"
+    if auto_solver:
+        solver_key = "time"
+    if fit_key == "auto":
+        streaming_fit = False
+        mode_only = False
+    need_density = fit_key in {"density", "auto"}
     gammas = []
     omegas = []
     ky_out = []
@@ -2148,7 +2148,7 @@ def run_etg_scan(
         raise ValueError("ky_batch must be >= 1")
     use_batch = (
         ky_batch > 1
-        and solver.lower() != "krylov"
+        and solver_key != "krylov"
         and not _is_array_like(dt)
         and not _is_array_like(steps)
         and not _is_array_like(tmin)
@@ -2258,7 +2258,7 @@ def run_etg_scan(
 
         cache = build_linear_cache(grid, geom, params, Nl, Nm)
         G0_jax = jnp.asarray(G0)
-        if solver.lower() == "krylov":
+        if solver_key == "krylov":
             cfg_use = krylov_cfg or ETG_KRYLOV_DEFAULT
             use_cont = bool(cfg_use.continuation)
             v0_use = G0_jax
@@ -2353,13 +2353,13 @@ def run_etg_scan(
                 checkpoint=time_cfg_i.checkpoint,
                 tmin=tmin_i,
                 tmax=tmax_i,
-                fit_signal=fit_signal,
+                fit_signal=fit_key,
                 mode_ky_indices=np.arange(valid_count, dtype=int),
                 mode_kx_index=0,
                 mode_z_index=_midplane_index(grid),
                 mode_method=mode_method,
                 amp_floor=streaming_amp_floor,
-                density_species_index=electron_index if fit_signal == "density" else None,
+                density_species_index=electron_index if fit_key == "density" else None,
                 return_state=False,
             )
             gamma_arr = np.asarray(gamma_vals)
@@ -2378,7 +2378,9 @@ def run_etg_scan(
             continue
 
         if time_cfg_i is not None:
-            _, phi_t = integrate_linear_from_config(
+            save_field = "phi+density" if fit_key == "auto" else ("density" if fit_key == "density" else "phi")
+            save_mode = None if fit_key == "auto" else (sel if (mode_only and fit_key == "phi") else None)
+            _, saved = integrate_linear_from_config(
                 G0_jax,
                 grid,
                 geom,
@@ -2386,16 +2388,20 @@ def run_etg_scan(
                 time_cfg_i,
                 cache=cache,
                 terms=terms,
-                save_mode=sel if (mode_only and fit_signal == "phi") else None,
+                save_mode=save_mode,
                 mode_method=mode_method,
-                save_field="density" if fit_signal == "density" else "phi",
-                density_species_index=electron_index if fit_signal == "density" else None,
+                save_field=save_field,
+                density_species_index=electron_index if need_density else None,
             )
+            if fit_key == "auto":
+                phi_t, density_t = saved
+            else:
+                phi_t = saved
+                density_t = None
             stride = time_cfg_i.sample_stride
-            density_t = None
         else:
             stride = 1 if sample_stride is None else int(sample_stride)
-            if fit_signal == "density":
+            if need_density:
                 _diag = integrate_linear_diagnostics(
                     G0_jax,
                     grid,
@@ -2428,12 +2434,72 @@ def run_etg_scan(
 
         phi_t_np = np.asarray(phi_t)
         density_np = None if density_t is None else np.asarray(density_t)
-        if fit_signal == "density" and density_np is None:
+        if fit_key == "density" and density_np is None:
             density_np = phi_t_np
         t = np.arange(phi_t_np.shape[0]) * dt_i * stride
+
+        def _is_valid_growth(gamma_val: float, omega_val: float) -> bool:
+            if not np.isfinite(gamma_val) or not np.isfinite(omega_val):
+                return False
+            if require_positive and gamma_val <= 0.0:
+                return False
+            return True
+
         for local_idx in range(valid_count):
             ky_val = ky_slice[local_idx]
-            if mode_only and fit_signal == "phi" and phi_t_np.ndim <= 2:
+            if fit_key == "auto":
+                sel_local = ModeSelection(ky_index=local_idx, kx_index=0, z_index=_midplane_index(grid))
+                _signal, _name, gamma, omega = _select_fit_signal_auto(
+                    t,
+                    phi_t_np,
+                    density_np,
+                    sel_local,
+                    mode_method=mode_method,
+                    tmin=_window_value(tmin, batch_start + local_idx),
+                    tmax=_window_value(tmax, batch_start + local_idx),
+                    window_fraction=window_fraction,
+                    min_points=min_points,
+                    start_fraction=start_fraction,
+                    growth_weight=growth_weight,
+                    require_positive=require_positive,
+                    min_amp_fraction=min_amp_fraction,
+                    max_amp_fraction=max_amp_fraction,
+                    window_method=window_method,
+                    max_fraction=max_fraction,
+                    end_fraction=end_fraction,
+                    num_windows=8,
+                    phase_weight=phase_weight,
+                    length_weight=length_weight,
+                    min_r2=min_r2,
+                    late_penalty=late_penalty,
+                    min_slope=min_slope,
+                    min_slope_frac=min_slope_frac,
+                    slope_var_weight=slope_var_weight,
+                )
+                gamma, omega = _normalize_growth_rate(gamma, omega, params_use, diagnostic_norm)
+                if auto_solver and not _is_valid_growth(gamma, omega):
+                    res = run_etg_linear(
+                        ky_target=float(ky_val),
+                        cfg=cfg,
+                        Nl=Nl,
+                        Nm=Nm,
+                        dt=dt_i,
+                        steps=steps_i,
+                        method=method,
+                        params=params,
+                        solver="krylov",
+                        krylov_cfg=krylov_cfg,
+                        diagnostic_norm=diagnostic_norm,
+                        fit_signal="phi",
+                    )
+                    gamma = float(res.gamma)
+                    omega = float(res.omega)
+                gammas.append(gamma)
+                omegas.append(omega)
+                ky_out.append(float(ky_val))
+                continue
+
+            if mode_only and fit_key == "phi" and phi_t_np.ndim <= 2:
                 signal = _extract_mode_only_signal(phi_t_np, local_idx=local_idx)
             else:
                 sel_local = ModeSelection(ky_index=local_idx, kx_index=0, z_index=_midplane_index(grid))
@@ -2441,10 +2507,10 @@ def run_etg_scan(
                     phi_t_np,
                     density_np,
                     sel_local,
-                    fit_signal=fit_signal,
+                    fit_signal=fit_key,
                     mode_method=mode_method,
                 )
-            if gx_growth and fit_signal == "phi":
+            if gx_growth and fit_key == "phi":
                 sel_local = ModeSelection(ky_index=local_idx, kx_index=0, z_index=_midplane_index(grid))
                 gamma, omega, _gamma_t, _omega_t, _t_mid = gx_growth_rate_from_phi(
                     phi_t_np,
@@ -2456,6 +2522,23 @@ def run_etg_scan(
                 gamma, omega = _normalize_growth_rate(gamma, omega, params_use, diagnostic_norm)
             else:
                 gamma, omega = _fit_signal(signal, batch_start + local_idx, dt_i, stride)
+            if auto_solver and not _is_valid_growth(gamma, omega):
+                res = run_etg_linear(
+                    ky_target=float(ky_val),
+                    cfg=cfg,
+                    Nl=Nl,
+                    Nm=Nm,
+                    dt=dt_i,
+                    steps=steps_i,
+                    method=method,
+                    params=params,
+                    solver="krylov",
+                    krylov_cfg=krylov_cfg,
+                    diagnostic_norm=diagnostic_norm,
+                    fit_signal="phi",
+                )
+                gamma = float(res.gamma)
+                omega = float(res.omega)
             gammas.append(gamma)
             omegas.append(omega)
             ky_out.append(float(ky_val))
