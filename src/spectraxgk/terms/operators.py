@@ -71,6 +71,7 @@ def grad_z_linked_fft(
     dz: float | jnp.ndarray,
     linked_indices: tuple[jnp.ndarray, ...],
     linked_kz: tuple[jnp.ndarray, ...],
+    linked_inverse_permutation: jnp.ndarray | None = None,
 ) -> jnp.ndarray:
     """Spectral z-derivative using GX-style linked FFT chains."""
 
@@ -85,7 +86,8 @@ def grad_z_linked_fft(
     Nz = f.shape[-1]
     lead_shape = f.shape[:-3]
     f_flat = f.reshape(*lead_shape, Ny * Nx, Nz)
-    df_flat = jnp.zeros_like(f_flat)
+    chain_updates: list[jnp.ndarray] = []
+    chain_indices: list[jnp.ndarray] = []
 
     def _scatter_unique(target: jnp.ndarray, idx_flat: jnp.ndarray, updates: jnp.ndarray) -> jnp.ndarray:
         idx = jnp.asarray(idx_flat, dtype=jnp.int32)
@@ -117,6 +119,24 @@ def grad_z_linked_fft(
         df_hat = (1j * kz_link) * f_hat
         df_link = jnp.fft.ifft(df_hat, axis=-1)
         df_link = df_link.reshape(*lead_shape, nChains * nLinks, Nz)
+        chain_updates.append(df_link)
+        chain_indices.append(idx_flat)
+
+    if chain_updates and linked_inverse_permutation is not None:
+        idx_cat = jnp.concatenate(chain_indices, axis=0)
+        updates_cat = jnp.concatenate(chain_updates, axis=-2)
+        inv = jnp.asarray(linked_inverse_permutation, dtype=jnp.int32)
+        n_modes = Ny * Nx
+        if (
+            idx_cat.shape[0] == n_modes
+            and inv.ndim == 1
+            and inv.shape[0] == n_modes
+        ):
+            df_flat = jnp.take(updates_cat, inv, axis=-2)
+            return df_flat.reshape(*lead_shape, Ny, Nx, Nz)
+
+    df_flat = jnp.zeros_like(f_flat)
+    for idx_flat, df_link in zip(chain_indices, chain_updates):
         df_flat = _scatter_unique(df_flat, idx_flat, df_link)
 
     return df_flat.reshape(*lead_shape, Ny, Nx, Nz)
@@ -212,6 +232,7 @@ def streaming_term(
     kx_mask_minus: jnp.ndarray | None = None,
     linked_indices: tuple[jnp.ndarray, ...] | None = None,
     linked_kz: tuple[jnp.ndarray, ...] | None = None,
+    linked_inverse_permutation: jnp.ndarray | None = None,
     use_twist_shift: bool = False,
 ) -> jnp.ndarray:
     """Streaming term using Hermite ladder and real-space z derivative."""
@@ -222,7 +243,11 @@ def streaming_term(
             raise ValueError("dz must be provided for twist-shift boundaries")
         if linked_indices is not None and linked_kz is not None:
             dH_dz = grad_z_linked_fft(
-                H, dz=dz, linked_indices=linked_indices, linked_kz=linked_kz
+                H,
+                dz=dz,
+                linked_indices=linked_indices,
+                linked_kz=linked_kz,
+                linked_inverse_permutation=linked_inverse_permutation,
             )
         else:
             if kx_link_plus is None or kx_link_minus is None:
