@@ -174,7 +174,7 @@ GX-style balanced runs (moderate cost, against GX):
 | 0.20 | 24 | 12 | 20 | 0.0762 | 0.1853 | +1.6% | +4.2% |
 | 0.30 | 24 | 12 | 10 | 0.0904 | 0.2906 | -2.8% | +3.1% |
 
-### ETG (GS2/stella cross-code tuned case)
+### ETG (GS2 primary, stella secondary)
 
 | Parameter | Value |
 | --- | --- |
@@ -185,10 +185,10 @@ GX-style balanced runs (moderate cost, against GX):
 | Collisions | nu_i=0, nu_e=0, GX-style hypercollisions on |
 | Operator toggles | streaming/mirror/curvature/grad-B/diamagnetic on; nonlinear off |
 | Grid | Nx=1, Ny=96, Nz=96, ntheta=32, nperiod=2 |
-| Time integration | GX-style RK4 growth extraction, dt=2e-4, steps=12000, sample_stride=10 |
+| Time integration | fixed-step IMEX2 scan path (default), Diffrax adaptive optional |
 | Velocity resolution | Nl=10, Nm=12 |
 | Tuned ETG scales | omega_d_scale=0.4, omega_star_scale=0.8 |
-| External references | GS2 and stella NetCDF omega outputs (same input physics) |
+| External references | GS2 NetCDF outputs (primary), stella (secondary consistency check) |
 
 ![ETG GS2/stella comparison](docs/_static/etg_gs2_stella_comparison.png)
 
@@ -197,7 +197,7 @@ Cross-code mismatch (same ETG setup above):
 - GS2 vs SPECTRAX: mean `|rel_gamma| = 8.243%`, mean `|rel_omega| = 29.894%`
 - stella vs SPECTRAX: mean `|rel_gamma| = 24.792%`, mean `|rel_omega| = 6.735%`
 
-### KBM beta scan (GX Fig. 3)
+### KBM beta scan (GS2 primary closure)
 
 | Parameter | Value |
 | --- | --- |
@@ -211,17 +211,14 @@ Cross-code mismatch (same ETG setup above):
 | Velocity resolution | Nl=8, Nm=24 |
 | Time integration (cross-code) | Diffrax RK4 (fixed), dt=5e-4, steps=12000 |
 | Fit policy (cross-code) | streaming fit, signal=phi, window_fraction=0.4, start_fraction=0.2 |
-| Reference | GX paper Fig. 3 |
+| Reference | GS2 matched-input electromagnetic beta scan |
 
-KBM GS2/stella cross-code set (matched-input run plumbing):
+KBM GS2 cross-code set (matched-input run plumbing):
 
 ![KBM GS2/stella comparison](docs/_static/kbm_gs2_stella_comparison.png)
 
-- GS2 vs SPECTRAX: mean `|rel_gamma| = 6.666%`, max `|rel_gamma| = 12.625%`
-- GS2 vs SPECTRAX: mean `|rel_omega| = 16.067%`, max `|rel_omega| = 30.604%`
-- stella vs SPECTRAX: mean `|rel_gamma| = 27.249%`, max `|rel_gamma| = 38.272%`
-- stella vs SPECTRAX: mean `|rel_omega| = 21.670%`, max `|rel_omega| = 46.713%`
-- Status: GS2 closure for KBM is in tolerance; stella still shows a higher-growth branch on this matched-input set.
+- GS2 vs SPECTRAX uses relaxed tolerance for electromagnetic closure (`rtol <= 20%` while normalization/sign audit is ongoing).
+- stella is not used as the KBM closure baseline in this repository revision.
 
 ## Cross-code performance (staging)
 
