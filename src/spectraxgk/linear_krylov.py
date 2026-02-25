@@ -747,7 +747,10 @@ def dominant_eigenpair_propagator_cached(
     den = jnp.vdot(v, v)
     eig_rayleigh = jnp.where(den == 0.0, 0.0, num / den)
     sel_finite = jnp.isfinite(jnp.real(eig_sel)) & jnp.isfinite(jnp.imag(eig_sel))
-    eig = jnp.where(sel_finite, eig_sel, eig_rayleigh)
+    prefer_rayleigh = (~sel_finite) | (
+        (jnp.real(eig_sel) <= 0.0) & (jnp.real(eig_rayleigh) > jnp.real(eig_sel))
+    )
+    eig = jnp.where(prefer_rayleigh, eig_rayleigh, eig_sel)
     return eig, v
 
 
