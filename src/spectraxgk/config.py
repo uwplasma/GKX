@@ -128,8 +128,6 @@ class CycloneBaseCase:
     )
     geometry: GeometryConfig = GeometryConfig(
         R0=2.77778,
-        kperp2_bmag=False,
-        bessel_bmag_power=1.0,
         drift_scale=1.0,
     )
     model: ModelConfig = ModelConfig()
