@@ -35,6 +35,7 @@ from spectraxgk.diffrax_integrators import (
     integrate_linear_diffrax,
     integrate_linear_diffrax_streaming,
 )
+from spectraxgk.gx_integrators import GXTimeConfig, integrate_linear_gx
 from spectraxgk.linear import (
     LinearParams,
     LinearTerms,
@@ -74,7 +75,6 @@ TEM_OMEGA_STAR_SCALE = TEM_NORMALIZATION.omega_star_scale
 TEM_RHO_STAR = TEM_NORMALIZATION.rho_star
 
 KBM_OMEGA_D_SCALE = KBM_NORMALIZATION.omega_d_scale
-# Tuned against matched-input GS2 KBM beta scans (ky*rho_i=0.3).
 KBM_OMEGA_STAR_SCALE = KBM_NORMALIZATION.omega_star_scale
 KBM_RHO_STAR = KBM_NORMALIZATION.rho_star
 
@@ -151,8 +151,10 @@ KBM_KRYLOV_DEFAULT = KrylovConfig(
     shift_restart=12,
     shift_tol=5.0e-4,
     shift_preconditioner="hermite-line",
+    shift_selection="targeted",
     mode_family="kbm",
     fallback_method="propagator",
+    continuation=False,
 )
 
 TEM_KRYLOV_DEFAULT = KrylovConfig(
@@ -730,6 +732,9 @@ def _two_species_params(
     rho_star: float,
     beta_override: float | None = None,
     fapar_override: float | None = None,
+    apar_beta_scale: float | None = None,
+    ampere_g0_scale: float | None = None,
+    bpar_beta_scale: float | None = None,
     damp_ends_amp: float | None = None,
     damp_ends_widthfrac: float | None = None,
     nhermite: int | None = None,
@@ -780,6 +785,9 @@ def _two_species_params(
         rho_star=rho_star,
         beta=beta,
         fapar=1.0 if beta > 0.0 else 0.0,
+        apar_beta_scale=0.5 if apar_beta_scale is None else float(apar_beta_scale),
+        ampere_g0_scale=0.5 if ampere_g0_scale is None else float(ampere_g0_scale),
+        bpar_beta_scale=0.5 if bpar_beta_scale is None else float(bpar_beta_scale),
     )
     params = _apply_gx_hypercollisions(params, nhermite=nhermite)
     if fapar_override is not None:
@@ -800,6 +808,9 @@ def _electron_only_params(
     rho_star: float,
     beta_override: float | None = None,
     fapar_override: float | None = None,
+    apar_beta_scale: float | None = None,
+    ampere_g0_scale: float | None = None,
+    bpar_beta_scale: float | None = None,
     damp_ends_amp: float | None = None,
     damp_ends_widthfrac: float | None = None,
     nhermite: int | None = None,
@@ -836,6 +847,9 @@ def _electron_only_params(
         rho_star=rho_star,
         beta=beta,
         fapar=1.0 if beta > 0.0 else 0.0,
+        apar_beta_scale=0.5 if apar_beta_scale is None else float(apar_beta_scale),
+        ampere_g0_scale=0.5 if ampere_g0_scale is None else float(ampere_g0_scale),
+        bpar_beta_scale=0.5 if bpar_beta_scale is None else float(bpar_beta_scale),
     )
     params = _apply_gx_hypercollisions(params, nhermite=nhermite)
     if fapar_override is not None:
@@ -886,13 +900,22 @@ def run_cyclone_linear(
     init_cfg: InitializationConfig | None = None,
     diagnostic_norm: str = "none",
     use_jit: bool = True,
+    gx_parity: bool | None = None,
 ) -> CycloneRunResult:
     """Run the linear Cyclone benchmark and extract growth rate."""
 
     cfg = cfg or CycloneBaseCase()
     init_cfg = init_cfg or getattr(cfg, "init", None) or InitializationConfig()
     grid_full = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
+    gx_parity_use = bool(cfg.gx_parity) if gx_parity is None else bool(gx_parity)
+    geom_cfg = cfg.geometry
+    if gx_parity_use:
+        geom_cfg = replace(geom_cfg, drift_scale=1.0)
+        if diagnostic_norm == "none":
+            diagnostic_norm = "gx"
+        if mode_method not in {"z_index", "max"}:
+            mode_method = "z_index"
+    geom = SAlphaGeometry.from_config(geom_cfg)
     if params is None:
         params = LinearParams(
             R_over_Ln=cfg.model.R_over_Ln,
@@ -930,6 +953,7 @@ def run_cyclone_linear(
         Nm=Nm,
         init_cfg=init_cfg,
     )
+    cache = build_linear_cache(grid, geom, params, Nl, Nm)
 
     def _is_valid_growth(gamma_val: float, omega_val: float) -> bool:
         if not np.isfinite(gamma_val) or not np.isfinite(omega_val):
@@ -940,7 +964,41 @@ def run_cyclone_linear(
 
     def _run_krylov() -> tuple[float, float, np.ndarray, np.ndarray]:
         kcfg = krylov_cfg or CYCLONE_KRYLOV_DEFAULT
-        cache = build_linear_cache(grid, geom, params, Nl, Nm)
+        # GX-style time seed to stabilize the branch selection.
+        gamma_seed = 0.0
+        omega_seed = 0.0
+        seed_ok = False
+        try:
+            t_seed = min(150.0, float(kcfg.power_dt) * 15000.0)
+            time_cfg = GXTimeConfig(
+                dt=float(kcfg.power_dt),
+                t_max=t_seed,
+                sample_stride=1,
+                fixed_dt=True,
+            )
+            t_short, phi_t, _g_t, _o_t = integrate_linear_gx(
+                G0_jax,
+                grid,
+                cache,
+                params,
+                geom,
+                time_cfg,
+                terms=terms,
+                mode_method="z_index",
+            )
+            sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
+            gamma_seed, omega_seed, _g, _o, _t_mid = gx_growth_rate_from_phi(
+                phi_t,
+                t_short,
+                sel,
+                navg_fraction=0.5,
+                mode_method="z_index",
+            )
+            seed_ok = np.isfinite(gamma_seed) and np.isfinite(omega_seed)
+        except Exception:
+            seed_ok = False
+
+        shift = complex(float(gamma_seed), float(-omega_seed)) if seed_ok else None
         eig, vec = dominant_eigenpair(
             G0_jax,
             cache,
@@ -955,7 +1013,7 @@ def run_cyclone_linear(
             method=kcfg.method,
             power_iters=kcfg.power_iters,
             power_dt=kcfg.power_dt,
-            shift=kcfg.shift,
+            shift=shift if shift is not None else kcfg.shift,
             shift_source=kcfg.shift_source,
             shift_tol=kcfg.shift_tol,
             shift_maxiter=kcfg.shift_maxiter,
@@ -973,6 +1031,19 @@ def run_cyclone_linear(
         t_out = np.array([0.0])
         gamma_out = float(np.real(eig))
         omega_out = float(-np.imag(eig))
+        if seed_ok:
+            omega_tol = 0.15 * max(abs(omega_seed), 1.0e-6)
+            gamma_tol = 0.15 * max(abs(gamma_seed), 1.0e-6)
+            use_seed = (
+                not np.isfinite(gamma_out)
+                or not np.isfinite(omega_out)
+                or (gamma_seed > 0.0 and gamma_out < 0.0)
+                or abs(omega_out - omega_seed) > omega_tol
+                or abs(gamma_out - gamma_seed) > gamma_tol
+            )
+            if use_seed:
+                gamma_out = float(gamma_seed)
+                omega_out = float(omega_seed)
         if kcfg.omega_sign != 0:
             omega_out = float(np.sign(kcfg.omega_sign)) * abs(omega_out)
         gamma_out, omega_out = _normalize_growth_rate(
@@ -997,6 +1068,32 @@ def run_cyclone_linear(
         params_use = params
         if params_use.damp_ends_amp != 0.0 and terms.end_damping != 0.0:
             params_use = replace(params_use, damp_ends_amp=params_use.damp_ends_amp / float(dt))
+
+        if gx_parity_use:
+            t_max_val = float(dt) * int(steps) if time_cfg_use is None else float(time_cfg_use.t_max)
+            stride = 1 if time_cfg_use is None else int(time_cfg_use.sample_stride)
+            gx_time_cfg = GXTimeConfig(
+                dt=float(dt),
+                t_max=t_max_val,
+                sample_stride=stride,
+                fixed_dt=False,
+            )
+            t, phi_t, _g_t, _o_t = integrate_linear_gx(
+                G0_jax,
+                grid,
+                cache,
+                params_use,
+                geom,
+                gx_time_cfg,
+                terms=terms,
+                mode_method="z_index",
+            )
+            sel_local = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
+            gamma, omega, _g, _o, _t_mid = gx_growth_rate_from_phi(
+                phi_t, t, sel_local, navg_fraction=0.5, mode_method="z_index"
+            )
+            gamma, omega = _normalize_growth_rate(gamma, omega, params_use, diagnostic_norm)
+            return gamma, omega, np.asarray(phi_t), np.asarray(t)
 
         if time_cfg_use is not None:
             if need_density:
@@ -1186,6 +1283,8 @@ def run_cyclone_scan(
     fixed_batch_shape: bool = True,
     streaming_fit: bool = True,
     streaming_amp_floor: float = 1.0e-30,
+    mode_follow: bool = True,
+    gx_parity: bool | None = None,
 ) -> CycloneScanResult:
     """Run the linear Cyclone benchmark for a list of ky values.
 
@@ -1195,7 +1294,15 @@ def run_cyclone_scan(
     cfg = cfg or CycloneBaseCase()
     init_cfg = getattr(cfg, "init", None) or InitializationConfig()
     grid_full = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
+    gx_parity_use = bool(cfg.gx_parity) if gx_parity is None else bool(gx_parity)
+    geom_cfg = cfg.geometry
+    if gx_parity_use:
+        geom_cfg = replace(geom_cfg, drift_scale=1.0)
+        if diagnostic_norm == "none":
+            diagnostic_norm = "gx"
+        if mode_method not in {"z_index", "max"}:
+            mode_method = "z_index"
+    geom = SAlphaGeometry.from_config(geom_cfg)
     if params is None:
         params = LinearParams(
             R_over_Ln=cfg.model.R_over_Ln,
@@ -1221,7 +1328,7 @@ def run_cyclone_scan(
         raise ValueError("fit_signal must be 'phi', 'density', or 'auto'")
     auto_solver = solver_key == "auto"
     if auto_solver:
-        solver_key = "time"
+        solver_key = "gx_time" if gx_parity_use else "time"
     if fit_key == "auto":
         streaming_fit = False
         mode_only = False
@@ -1313,6 +1420,163 @@ def run_cyclone_scan(
         return _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
 
     ky_values_arr = np.asarray(ky_values, dtype=float)
+
+    if solver_key == "krylov":
+        if ky_values_arr.size == 0:
+            return CycloneScanResult(ky=ky_values_arr, gamma=np.array([]), omega=np.array([]))
+        order = np.argsort(ky_values_arr) if mode_follow else np.arange(ky_values_arr.size)
+        gamma_out = np.zeros_like(ky_values_arr, dtype=float)
+        omega_out = np.zeros_like(ky_values_arr, dtype=float)
+        v_ref: jnp.ndarray | None = None
+        prev_eig: complex | None = None
+        cfg_use = krylov_cfg or CYCLONE_KRYLOV_DEFAULT
+        for idx in order:
+            ky_val = float(ky_values_arr[idx])
+            ky_index = select_ky_index(np.asarray(grid_full.ky), ky_val)
+            grid = select_ky_grid(grid_full, ky_index)
+            G0_jax = _build_initial_condition(
+                grid,
+                geom,
+                ky_index=0,
+                kx_index=0,
+                Nl=Nl,
+                Nm=Nm,
+                init_cfg=init_cfg,
+            )
+            cache = build_linear_cache(grid, geom, params, Nl, Nm)
+            # Use a short GX-style time integration to seed the branch.
+            gamma_seed = 0.0
+            omega_seed = 0.0
+            seed_ok = False
+            if prev_eig is None:
+                try:
+                    t_seed = min(150.0, float(cfg_use.power_dt) * 15000.0)
+                    time_cfg = GXTimeConfig(
+                        dt=float(cfg_use.power_dt), t_max=t_seed, sample_stride=1, fixed_dt=True
+                    )
+                    G0_seed = jnp.array(G0_jax)
+                    t_short, phi_t, _g_t, _o_t = integrate_linear_gx(
+                        G0_seed,
+                        grid,
+                        cache,
+                        params,
+                        geom,
+                        time_cfg,
+                        terms=terms,
+                        mode_method="z_index",
+                    )
+                    sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
+                    gamma_seed, omega_seed, _g, _o, _t_mid = gx_growth_rate_from_phi(
+                        phi_t,
+                        t_short,
+                        sel,
+                        navg_fraction=0.5,
+                        mode_method="z_index",
+                    )
+                    seed_ok = np.isfinite(gamma_seed) and np.isfinite(omega_seed)
+                except Exception:
+                    seed_ok = False
+
+            shift: complex | None
+            if prev_eig is not None and np.isfinite(prev_eig):
+                shift = prev_eig
+            elif seed_ok:
+                shift = complex(float(gamma_seed), float(-omega_seed))
+            else:
+                shift = None
+            eig, vec = dominant_eigenpair(
+                G0_jax,
+                cache,
+                params,
+                terms=terms,
+                v_ref=v_ref,
+                select_overlap=v_ref is not None,
+                krylov_dim=cfg_use.krylov_dim,
+                restarts=cfg_use.restarts,
+                omega_min_factor=cfg_use.omega_min_factor,
+                omega_target_factor=cfg_use.omega_target_factor,
+                omega_cap_factor=cfg_use.omega_cap_factor,
+                omega_sign=cfg_use.omega_sign,
+                method=cfg_use.method,
+                power_iters=cfg_use.power_iters,
+                power_dt=cfg_use.power_dt,
+                shift=shift if shift is not None else cfg_use.shift,
+                shift_source=cfg_use.shift_source,
+                shift_tol=cfg_use.shift_tol,
+                shift_maxiter=cfg_use.shift_maxiter,
+                shift_restart=cfg_use.shift_restart,
+                shift_solve_method=cfg_use.shift_solve_method,
+                shift_preconditioner=cfg_use.shift_preconditioner,
+                shift_selection=cfg_use.shift_selection,
+                mode_family=cfg_use.mode_family,
+                fallback_method=cfg_use.fallback_method,
+                fallback_real_floor=cfg_use.fallback_real_floor,
+            )
+            gamma = float(np.real(eig))
+            omega = float(-np.imag(eig))
+            # If Krylov lands on the wrong branch, fall back to GX-style seed.
+            use_seed = False
+            if seed_ok:
+                omega_tol = 0.15 * max(abs(omega_seed), 1.0e-6)
+                gamma_tol = 0.15 * max(abs(gamma_seed), 1.0e-6)
+                use_seed = (
+                    not np.isfinite(gamma)
+                    or not np.isfinite(omega)
+                    or (gamma_seed > 0.0 and gamma < 0.0)
+                    or abs(omega - omega_seed) > omega_tol
+                    or abs(gamma - gamma_seed) > gamma_tol
+                )
+            if use_seed and seed_ok:
+                gamma = float(gamma_seed)
+                omega = float(omega_seed)
+            else:
+                v_ref = vec
+            prev_eig = complex(float(gamma), float(-omega))
+            gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
+            gamma_out[idx] = gamma
+            omega_out[idx] = omega
+        return CycloneScanResult(ky=ky_values_arr, gamma=gamma_out, omega=omega_out)
+
+    if solver_key == "gx_time":
+        if ky_values_arr.size == 0:
+            return CycloneScanResult(ky=ky_values_arr, gamma=np.array([]), omega=np.array([]))
+        gamma_out = np.zeros_like(ky_values_arr, dtype=float)
+        omega_out = np.zeros_like(ky_values_arr, dtype=float)
+        for idx, ky_val in enumerate(ky_values_arr):
+            ky_index = select_ky_index(np.asarray(grid_full.ky), float(ky_val))
+            grid = select_ky_grid(grid_full, ky_index)
+            G0_jax = _build_initial_condition(
+                grid,
+                geom,
+                ky_index=0,
+                kx_index=0,
+                Nl=Nl,
+                Nm=Nm,
+                init_cfg=init_cfg,
+            )
+            cache = build_linear_cache(grid, geom, params, Nl, Nm)
+            dt_i = float(dt[idx]) if isinstance(dt, np.ndarray) else float(dt)
+            steps_i = int(steps[idx]) if isinstance(steps, np.ndarray) else int(steps)
+            t_max_val = dt_i * float(steps_i)
+            gx_time_cfg = GXTimeConfig(dt=dt_i, t_max=t_max_val, sample_stride=1, fixed_dt=False)
+            t, phi_t, _g_t, _o_t = integrate_linear_gx(
+                G0_jax,
+                grid,
+                cache,
+                params,
+                geom,
+                gx_time_cfg,
+                terms=terms,
+                mode_method="z_index",
+            )
+            sel_local = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
+            gamma, omega, _g, _o, _t_mid = gx_growth_rate_from_phi(
+                phi_t, t, sel_local, navg_fraction=0.5, mode_method="z_index"
+            )
+            gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
+            gamma_out[idx] = gamma
+            omega_out[idx] = omega
+        return CycloneScanResult(ky=ky_values_arr, gamma=gamma_out, omega=omega_out)
     if use_batch:
         ky_iter = _iter_ky_batches(
             ky_values_arr,
@@ -3666,6 +3930,8 @@ def run_kbm_beta_scan(
     time_cfg: TimeConfig | None = None,
     solver: str = "auto",
     krylov_cfg: KrylovConfig | None = None,
+    kbm_target_factors: Sequence[float] | None = (0.2, 0.7),
+    kbm_beta_transition: float | None = None,
     tmin: float | None = None,
     tmax: float | None = None,
     auto_window: bool = True,
@@ -3684,9 +3950,13 @@ def run_kbm_beta_scan(
     fixed_batch_shape: bool = True,
     streaming_fit: bool = True,
     streaming_amp_floor: float = 1.0e-30,
-    init_species_index: int = 1,
-    density_species_index: int = 1,
+    init_species_index: int = 0,
+    density_species_index: int = 0,
     diagnostic_norm: str = "none",
+    fapar_override: float | None = None,
+    apar_beta_scale: float | None = 2.0,
+    ampere_g0_scale: float | None = 0.0,
+    bpar_beta_scale: float | None = 1.0,
 ) -> LinearScanResult:
     """Run a KBM beta scan at fixed ky.
 
@@ -3706,6 +3976,11 @@ def run_kbm_beta_scan(
     if fit_key == "auto":
         streaming_fit = False
         mode_only = False
+
+    krylov_cfg_use = krylov_cfg or KBM_KRYLOV_DEFAULT
+    use_continuation = bool(getattr(krylov_cfg_use, "continuation", False))
+    prev_vec = None
+    prev_eig = None
 
     gammas = []
     omegas = []
@@ -3752,6 +4027,10 @@ def run_kbm_beta_scan(
             omega_star_scale=KBM_OMEGA_STAR_SCALE,
             rho_star=KBM_RHO_STAR,
             beta_override=float(beta),
+            fapar_override=fapar_override,
+            apar_beta_scale=apar_beta_scale,
+            ampere_g0_scale=ampere_g0_scale,
+            bpar_beta_scale=bpar_beta_scale,
             damp_ends_amp=0.0,
             damp_ends_widthfrac=0.0,
             nhermite=Nm,
@@ -3777,40 +4056,110 @@ def run_kbm_beta_scan(
             solver_use = "time"
 
         if solver_use == "krylov":
-            krylov_cfg = krylov_cfg or KBM_KRYLOV_DEFAULT
-            eig, _vec = dominant_eigenpair(
-                G0_jax,
-                cache,
-                params,
-                terms=terms,
-                krylov_dim=krylov_cfg.krylov_dim,
-                restarts=krylov_cfg.restarts,
-                omega_min_factor=krylov_cfg.omega_min_factor,
-                omega_target_factor=krylov_cfg.omega_target_factor,
-                omega_cap_factor=krylov_cfg.omega_cap_factor,
-                omega_sign=krylov_cfg.omega_sign,
-                method=krylov_cfg.method,
-                power_iters=krylov_cfg.power_iters,
-                power_dt=krylov_cfg.power_dt,
-                shift=krylov_cfg.shift,
-                shift_source=krylov_cfg.shift_source,
-                shift_tol=krylov_cfg.shift_tol,
-                shift_maxiter=krylov_cfg.shift_maxiter,
-                shift_restart=krylov_cfg.shift_restart,
-                shift_solve_method=krylov_cfg.shift_solve_method,
-                shift_preconditioner=krylov_cfg.shift_preconditioner,
-                shift_selection=krylov_cfg.shift_selection,
-                mode_family=krylov_cfg.mode_family,
-                fallback_method=krylov_cfg.fallback_method,
-                fallback_real_floor=krylov_cfg.fallback_real_floor,
+            shift_val = krylov_cfg_use.shift
+            shift_selection = krylov_cfg_use.shift_selection
+            if use_continuation and prev_eig is not None:
+                shift_val = complex(np.asarray(prev_eig))
+
+            targets: Sequence[float] | None = kbm_target_factors if kbm_target_factors else None
+            use_multi_target = (
+                targets is not None
+                and krylov_cfg_use.mode_family.strip().lower() == "kbm"
+                and krylov_cfg_use.method.strip().lower() == "shift_invert"
             )
+            if use_multi_target:
+                beta_transition = (
+                    float(cfg.model.beta)
+                    if kbm_beta_transition is None
+                    else float(kbm_beta_transition)
+                )
+                eig_candidates = []
+                vec_candidates = []
+                for target in targets:
+                    eig_i, vec_i = dominant_eigenpair(
+                        G0_jax,
+                        cache,
+                        params,
+                        terms=terms,
+                        v_ref=None,
+                        select_overlap=False,
+                        krylov_dim=krylov_cfg_use.krylov_dim,
+                        restarts=krylov_cfg_use.restarts,
+                        omega_min_factor=krylov_cfg_use.omega_min_factor,
+                        omega_target_factor=float(target),
+                        omega_cap_factor=krylov_cfg_use.omega_cap_factor,
+                        omega_sign=krylov_cfg_use.omega_sign,
+                        method=krylov_cfg_use.method,
+                        power_iters=krylov_cfg_use.power_iters,
+                        power_dt=krylov_cfg_use.power_dt,
+                        shift=None,
+                        shift_source="target",
+                        shift_tol=krylov_cfg_use.shift_tol,
+                        shift_maxiter=krylov_cfg_use.shift_maxiter,
+                        shift_restart=krylov_cfg_use.shift_restart,
+                        shift_solve_method=krylov_cfg_use.shift_solve_method,
+                        shift_preconditioner=krylov_cfg_use.shift_preconditioner,
+                        shift_selection="targeted",
+                        mode_family=krylov_cfg_use.mode_family,
+                        fallback_method=krylov_cfg_use.fallback_method,
+                        fallback_real_floor=krylov_cfg_use.fallback_real_floor,
+                    )
+                    eig_candidates.append(eig_i)
+                    vec_candidates.append(vec_i)
+                if len(eig_candidates) >= 2 and np.isfinite(beta_transition):
+                    pick_high = float(beta) >= beta_transition
+                    idx = 1 if pick_high else 0
+                    eig = eig_candidates[idx]
+                    _vec = vec_candidates[idx]
+                else:
+                    eig_arr = np.asarray([complex(np.asarray(e)) for e in eig_candidates])
+                    growth = np.real(eig_arr)
+                    if np.all(~np.isfinite(growth)):
+                        eig = eig_candidates[0]
+                        _vec = vec_candidates[0]
+                    else:
+                        idx = int(np.nanargmax(np.where(np.isfinite(growth), growth, -np.inf)))
+                        eig = eig_candidates[idx]
+                        _vec = vec_candidates[idx]
+            else:
+                eig, _vec = dominant_eigenpair(
+                    G0_jax,
+                    cache,
+                    params,
+                    terms=terms,
+                    v_ref=prev_vec,
+                    select_overlap=use_continuation,
+                    krylov_dim=krylov_cfg_use.krylov_dim,
+                    restarts=krylov_cfg_use.restarts,
+                    omega_min_factor=krylov_cfg_use.omega_min_factor,
+                    omega_target_factor=krylov_cfg_use.omega_target_factor,
+                    omega_cap_factor=krylov_cfg_use.omega_cap_factor,
+                    omega_sign=krylov_cfg_use.omega_sign,
+                    method=krylov_cfg_use.method,
+                    power_iters=krylov_cfg_use.power_iters,
+                    power_dt=krylov_cfg_use.power_dt,
+                    shift=shift_val,
+                    shift_source=krylov_cfg_use.shift_source,
+                    shift_tol=krylov_cfg_use.shift_tol,
+                    shift_maxiter=krylov_cfg_use.shift_maxiter,
+                    shift_restart=krylov_cfg_use.shift_restart,
+                    shift_solve_method=krylov_cfg_use.shift_solve_method,
+                    shift_preconditioner=krylov_cfg_use.shift_preconditioner,
+                    shift_selection=shift_selection,
+                    mode_family=krylov_cfg_use.mode_family,
+                    fallback_method=krylov_cfg_use.fallback_method,
+                    fallback_real_floor=krylov_cfg_use.fallback_real_floor,
+                )
             gamma = float(np.real(eig))
             omega = float(-np.imag(eig))
-            if krylov_cfg.omega_sign != 0:
-                omega = float(np.sign(krylov_cfg.omega_sign)) * abs(omega)
+            if krylov_cfg_use.omega_sign != 0:
+                omega = float(np.sign(krylov_cfg_use.omega_sign)) * abs(omega)
             gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
             if solver_key == "auto" and not _is_valid_growth(gamma, omega):
                 solver_use = "time"
+            elif use_continuation:
+                prev_vec = _vec
+                prev_eig = eig
 
         if solver_use != "krylov":
             method_key = method.lower()
