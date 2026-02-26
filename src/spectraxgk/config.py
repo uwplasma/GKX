@@ -79,6 +79,9 @@ class GeometryConfig:
     R0: float = 1.0
     B0: float = 1.0
     alpha: float = 0.0
+    drift_scale: float = 2.0
+    kperp2_bmag: bool = True
+    bessel_bmag_power: float = 0.0
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -123,7 +126,12 @@ class CycloneBaseCase:
         diffrax_atol=1.0e-8,
         diffrax_max_steps=200000,
     )
-    geometry: GeometryConfig = GeometryConfig(R0=2.77778)
+    geometry: GeometryConfig = GeometryConfig(
+        R0=2.77778,
+        kperp2_bmag=False,
+        bessel_bmag_power=1.0,
+        drift_scale=1.0,
+    )
     model: ModelConfig = ModelConfig()
     init: InitializationConfig = InitializationConfig(
         init_field="density",
@@ -133,6 +141,7 @@ class CycloneBaseCase:
         gaussian_envelope_constant=1.0,
         gaussian_envelope_sine=0.0,
     )
+    gx_parity: bool = True
 
     def to_dict(self) -> Dict[str, Dict[str, Any]]:
         return {
@@ -141,6 +150,7 @@ class CycloneBaseCase:
             "geometry": self.geometry.to_dict(),
             "model": self.model.to_dict(),
             "init": self.init.to_dict(),
+            "gx_parity": {"enabled": self.gx_parity},
         }
 
 
