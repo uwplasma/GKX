@@ -5,7 +5,10 @@ from __future__ import annotations
 from dataclasses import is_dataclass, replace
 from typing import Any, cast
 from pathlib import Path
-import tomllib
+try:
+    import tomllib  # Python 3.11+
+except ModuleNotFoundError:  # pragma: no cover - only on Python <3.11
+    import tomli as tomllib
 
 from spectraxgk.config import (
     CycloneBaseCase,
