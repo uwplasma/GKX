@@ -278,6 +278,7 @@ def exb_nonlinear_contribution(
     kx_grid: jnp.ndarray,
     ky_grid: jnp.ndarray,
     weight: jnp.ndarray,
+    gx_real_fft: bool = True,
 ) -> jnp.ndarray:
     """Return the nonlinear E×B contribution using a pseudospectral bracket."""
     bracket_hat = _spectral_bracket(
@@ -287,6 +288,7 @@ def exb_nonlinear_contribution(
         ky_grid=ky_grid,
         dealias_mask=dealias_mask,
         kxfac=jnp.asarray(1.0),
+        gx_real_fft=gx_real_fft,
     )
     real_dtype = jnp.real(jnp.empty((), dtype=G.dtype)).dtype
     return jnp.asarray(weight, dtype=real_dtype) * bracket_hat
@@ -315,6 +317,7 @@ def nonlinear_em_contribution(
     laguerre_to_spectral: jnp.ndarray | None = None,
     laguerre_roots: jnp.ndarray | None = None,
     b: jnp.ndarray | None = None,
+    gx_real_fft: bool = True,
 ) -> jnp.ndarray:
     """Nonlinear E×B + flutter contribution using GX-style gyroaveraging.
 
@@ -348,6 +351,7 @@ def nonlinear_em_contribution(
             ky_grid=ky_grid,
             dealias_mask=dealias_mask,
             kxfac=kxfac,
+            gx_real_fft=gx_real_fft,
         )
         exb_bpar = jnp.zeros_like(exb_phi)
         if bpar is not None and bpar_weight != 0.0:
@@ -359,6 +363,7 @@ def nonlinear_em_contribution(
                 ky_grid=ky_grid,
                 dealias_mask=dealias_mask,
                 kxfac=kxfac,
+                gx_real_fft=gx_real_fft,
             )
 
         flutter = jnp.zeros_like(exb_phi)
@@ -371,6 +376,7 @@ def nonlinear_em_contribution(
                 ky_grid=ky_grid,
                 dealias_mask=dealias_mask,
                 kxfac=kxfac,
+                gx_real_fft=gx_real_fft,
             )
             flutter = _apply_flutter(bracket_apar, vth, sqrt_m, sqrt_m_p1)
 
@@ -392,6 +398,7 @@ def nonlinear_em_contribution(
         ky_grid=ky_grid,
         dealias_mask=dealias_mask,
         kxfac=kxfac,
+        gx_real_fft=gx_real_fft,
     )
 
     bracket_total = bracket_phi
@@ -405,6 +412,7 @@ def nonlinear_em_contribution(
             ky_grid=ky_grid,
             dealias_mask=dealias_mask,
             kxfac=kxfac,
+            gx_real_fft=gx_real_fft,
         )
         flutter = _apply_flutter(bracket_apar, vth, sqrt_m, sqrt_m_p1)
         bracket_total = bracket_total + flutter
@@ -437,6 +445,7 @@ def nonlinear_em_components(
     laguerre_to_spectral: jnp.ndarray | None = None,
     laguerre_roots: jnp.ndarray | None = None,
     b: jnp.ndarray | None = None,
+    gx_real_fft: bool = True,
 ) -> dict[str, jnp.ndarray]:
     """Return nonlinear E×B/flutter components for diagnostics/parity checks."""
 
@@ -466,6 +475,7 @@ def nonlinear_em_components(
             ky_grid=ky_grid,
             dealias_mask=dealias_mask,
             kxfac=kxfac,
+            gx_real_fft=gx_real_fft,
         )
         if bpar is not None and bpar_weight != 0.0:
             chi_bpar = _gx_bpar_term(bpar, b, laguerre_roots, tz, 1.0)
@@ -476,6 +486,7 @@ def nonlinear_em_components(
                 ky_grid=ky_grid,
                 dealias_mask=dealias_mask,
                 kxfac=kxfac,
+                gx_real_fft=gx_real_fft,
             )
         else:
             exb_bpar_mu = jnp.zeros_like(exb_phi_mu)
@@ -491,6 +502,7 @@ def nonlinear_em_components(
                 ky_grid=ky_grid,
                 dealias_mask=dealias_mask,
                 kxfac=kxfac,
+                gx_real_fft=gx_real_fft,
             )
             flutter_mu = _apply_flutter(bracket_apar_mu, vth, sqrt_m, sqrt_m_p1)
 
@@ -515,6 +527,7 @@ def nonlinear_em_components(
             ky_grid=ky_grid,
             dealias_mask=dealias_mask,
             kxfac=kxfac,
+            gx_real_fft=gx_real_fft,
         )
 
         if bpar is not None and bpar_weight != 0.0:
@@ -526,6 +539,7 @@ def nonlinear_em_components(
                 ky_grid=ky_grid,
                 dealias_mask=dealias_mask,
                 kxfac=kxfac,
+                gx_real_fft=gx_real_fft,
             )
         else:
             exb_bpar = jnp.zeros_like(exb_phi)
@@ -542,6 +556,7 @@ def nonlinear_em_components(
                 ky_grid=ky_grid,
                 dealias_mask=dealias_mask,
                 kxfac=kxfac,
+                gx_real_fft=gx_real_fft,
             )
             flutter = _apply_flutter(bracket_apar, vth, sqrt_m, sqrt_m_p1)
 
