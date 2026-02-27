@@ -210,6 +210,97 @@ def nonlinear_em_contribution(
     return out[0] if squeeze_species else out
 
 
+def nonlinear_em_components(
+    G: jnp.ndarray,
+    *,
+    phi: jnp.ndarray,
+    apar: jnp.ndarray | None,
+    bpar: jnp.ndarray | None,
+    Jl: jnp.ndarray,
+    JlB: jnp.ndarray,
+    tz: jnp.ndarray,
+    vth: jnp.ndarray,
+    sqrt_m: jnp.ndarray,
+    sqrt_m_p1: jnp.ndarray,
+    kx_grid: jnp.ndarray,
+    ky_grid: jnp.ndarray,
+    dealias_mask: jnp.ndarray,
+    kxfac: jnp.ndarray,
+    weight: jnp.ndarray,
+    apar_weight: float,
+    bpar_weight: float,
+) -> dict[str, jnp.ndarray]:
+    """Return nonlinear E×B/flutter components for diagnostics/parity checks."""
+
+    squeeze_species = False
+    if G.ndim == 5:
+        G = G[None, ...]
+        squeeze_species = True
+    if Jl.ndim == 4:
+        Jl = Jl[None, ...]
+    if JlB.ndim == 4:
+        JlB = JlB[None, ...]
+
+    phi_hat = phi[None, None, ...]
+    chi_phi = Jl * phi_hat
+    exb_phi = _spectral_bracket(
+        G,
+        chi_phi,
+        kx_grid=kx_grid,
+        ky_grid=ky_grid,
+        dealias_mask=dealias_mask,
+        kxfac=kxfac,
+    )
+
+    if bpar is not None and bpar_weight != 0.0:
+        chi_bpar = JlB * bpar[None, None, ...]
+        exb_bpar = _spectral_bracket(
+            G,
+            chi_bpar,
+            kx_grid=kx_grid,
+            ky_grid=ky_grid,
+            dealias_mask=dealias_mask,
+            kxfac=kxfac,
+        )
+    else:
+        exb_bpar = jnp.zeros_like(exb_phi)
+
+    bracket_apar = None
+    flutter = jnp.zeros_like(exb_phi)
+    if apar is not None and apar_weight != 0.0:
+        apar_hat = apar[None, None, ...]
+        chi_apar = Jl * apar_hat
+        bracket_apar = _spectral_bracket(
+            G,
+            chi_apar,
+            kx_grid=kx_grid,
+            ky_grid=ky_grid,
+            dealias_mask=dealias_mask,
+            kxfac=kxfac,
+        )
+        flutter = _apply_flutter(bracket_apar, vth, sqrt_m, sqrt_m_p1)
+
+    total_bracket = exb_phi + exb_bpar + flutter
+    real_dtype = jnp.real(jnp.empty((), dtype=G.dtype)).dtype
+    total = -jnp.asarray(weight, dtype=real_dtype) * total_bracket
+
+    if squeeze_species:
+        exb_phi = exb_phi[0]
+        exb_bpar = exb_bpar[0]
+        flutter = flutter[0]
+        total = total[0]
+        if bracket_apar is not None:
+            bracket_apar = bracket_apar[0]
+
+    return {
+        "exb_phi": exb_phi,
+        "exb_bpar": exb_bpar,
+        "bracket_apar": bracket_apar if bracket_apar is not None else jnp.zeros_like(exb_phi),
+        "flutter": flutter,
+        "total": total,
+    }
+
+
 def placeholder_nonlinear_contribution(
     G: jnp.ndarray,
     *,
