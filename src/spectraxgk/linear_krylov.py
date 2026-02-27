@@ -220,6 +220,24 @@ def _build_shift_invert_precond(
     }:
         return None, None
 
+    # Hermite-line preconditioners rely on real-valued tridiagonal solves.
+    # If the shift is complex (nonzero imaginary part), fall back to the
+    # diagonal damping preconditioner.
+    sigma_np = np.asarray(sigma)
+    if np.any(np.abs(np.imag(sigma_np)) > 0.0):
+        damping = _compute_damping(v, cache, params)
+        diag = -damping.astype(v.dtype) - sigma
+        safe = jnp.where(jnp.abs(diag) > 0.0, diag, 1.0 + 0.0j)
+        precond = 1.0 / safe
+        shape = v.shape
+        size = v.size
+
+        def apply_precond(x_flat: jnp.ndarray) -> jnp.ndarray:
+            x = x_flat.reshape(shape)
+            return (x * precond).reshape(size)
+
+        return precond, apply_precond
+
     shape = v.shape
     size = v.size
     state_dtype = v.dtype
@@ -525,6 +543,7 @@ def _arnoldi(
         "gmres_maxiter",
         "gmres_solve_method",
         "select_targeted",
+        "select_growth",
         "select_overlap",
     ),
 )
@@ -548,6 +567,7 @@ def dominant_eigenpair_shift_invert_cached(
     gmres_solve_method: str,
     shift_preconditioner: str | None,
     select_targeted: bool,
+    select_growth: bool,
     select_overlap: bool,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Restarted shift-invert Arnoldi with GMRES solves."""
@@ -596,6 +616,7 @@ def dominant_eigenpair_shift_invert_cached(
         mask0 = jnp.abs(imag_part) <= omega_cap
         mask0 = jnp.where(use_min, mask0 & (jnp.abs(imag_part) >= omega_min), mask0)
         mask0 = mask0 & finite
+        mask0_any = jnp.any(mask0)
         omega_sign_val = jnp.asarray(omega_sign, dtype=imag_part.dtype)
         use_sign = omega_sign_val != 0.0
         mask_sign = (omega_sign_val * imag_part) >= 0.0
@@ -610,9 +631,10 @@ def dominant_eigenpair_shift_invert_cached(
         has_mask = jnp.any(mask)
         idx = jnp.where(has_mask, idx_masked, idx_all)
         real_masked = jnp.where(mask, real_part, -jnp.inf)
-        idx_growth = jnp.argmax(real_masked)
-        has_growth = jnp.any(mask & (real_part >= 0.0))
-        idx = jnp.where(has_growth, idx_growth, idx)
+        if select_growth:
+            idx_growth = jnp.argmax(real_masked)
+            has_growth = jnp.any(mask & (real_part >= 0.0))
+            idx = jnp.where(has_growth, idx_growth, idx)
         if select_targeted:
             idx = _select_by_target(
                 real_part,
@@ -628,7 +650,8 @@ def dominant_eigenpair_shift_invert_cached(
         y = eigvecs[:, idx]
         v_next = jnp.tensordot(jnp.conj(y), V[:krylov_dim], axes=1)
         v_next = _normalize(v_next)
-        return v_next, lam[idx]
+        eig_out = jnp.where(mask0_any, lam[idx], jnp.nan + 1.0j * jnp.nan)
+        return v_next, eig_out
 
     v, eig = jax.lax.fori_loop(
         0, restarts, restart_body, (v0, jnp.asarray(0.0, dtype=v0.dtype))
@@ -671,6 +694,7 @@ def dominant_eigenpair_cached(
         use_min = omega_min_factor > 0.0
         mask0 = jnp.abs(imag_part) <= omega_cap
         mask0 = jnp.where(use_min, mask0 & (jnp.abs(imag_part) >= omega_min), mask0)
+        mask0_any = jnp.any(mask0)
         omega_sign_val = jnp.asarray(omega_sign, dtype=imag_part.dtype)
         use_sign = omega_sign_val != 0.0
         mask_sign = (omega_sign_val * imag_part) >= 0.0
@@ -682,6 +706,7 @@ def dominant_eigenpair_cached(
         idx_small = jnp.argmin(jnp.abs(imag_part))
         use_mask = use_cap & jnp.any(mask)
         idx = jnp.where(use_mask, idx_masked, idx_small)
+        idx = jnp.where(mask0_any, idx, jnp.argmax(real_part))
         idx = _select_by_target(
             real_part,
             imag_part,
@@ -889,6 +914,9 @@ def dominant_eigenpair(
         else:
             sigma = jnp.asarray(shift, dtype=v0.dtype)
             v_init = v0
+        selection_key = shift_selection.strip().lower()
+        select_targeted = selection_key in {"targeted", "target", "auto", "default"}
+        select_growth = selection_key in {"targeted", "growth", "auto", "default"}
         eig_si, vec_si = dominant_eigenpair_shift_invert_cached(
             v_init,
             v_ref_use,
@@ -907,7 +935,8 @@ def dominant_eigenpair(
             gmres_restart=max(int(shift_restart), 1),
             gmres_solve_method=shift_solve_method,
             shift_preconditioner=shift_preconditioner,
-            select_targeted=shift_selection.strip().lower() != "nearest",
+            select_targeted=select_targeted,
+            select_growth=select_growth,
             select_overlap=bool(select_overlap),
         )
         fallback_key = fallback_method.strip().lower()
