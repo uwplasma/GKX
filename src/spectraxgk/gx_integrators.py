@@ -29,6 +29,7 @@ class GXTimeConfig:
     dt: float
     sample_stride: int = 1
     fixed_dt: bool = False
+    use_dealias_mask: bool = False
     dt_min: float = 1.0e-7
     dt_max: float | None = None
     cfl: float = 0.9
@@ -462,6 +463,7 @@ def integrate_linear_gx_diagnostics(
     pflux_list: list[float] = []
 
     vol_fac, flux_fac = gx_volume_factors(geom, grid)
+    use_dealias = bool(time_cfg.use_dealias_mask)
 
     stepper = _rk4_step
     if jit:
@@ -486,11 +488,15 @@ def integrate_linear_gx_diagnostics(
             gamma_list.append(np.asarray(gamma))
             omega_list.append(np.asarray(omega))
 
-            Wg_val = gx_Wg(G, grid, params, vol_fac)
-            Wphi_val = gx_Wphi_krehm(phi, grid, params, vol_fac)
-            Wapar_val = gx_Wapar_krehm(apar, grid)
-            heat_val = gx_heat_flux(G, phi, apar, bpar, cache, grid, params, flux_fac)
-            pflux_val = gx_particle_flux(G, phi, apar, bpar, cache, grid, params, flux_fac)
+            Wg_val = gx_Wg(G, grid, params, vol_fac, use_dealias=use_dealias)
+            Wphi_val = gx_Wphi_krehm(phi, grid, params, vol_fac, use_dealias=use_dealias)
+            Wapar_val = gx_Wapar_krehm(apar, grid, use_dealias=use_dealias)
+            heat_val = gx_heat_flux(
+                G, phi, apar, bpar, cache, grid, params, flux_fac, use_dealias=use_dealias
+            )
+            pflux_val = gx_particle_flux(
+                G, phi, apar, bpar, cache, grid, params, flux_fac, use_dealias=use_dealias
+            )
 
             Wg_list.append(float(Wg_val))
             Wphi_list.append(float(Wphi_val))
