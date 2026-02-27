@@ -40,23 +40,29 @@ def gx_volume_factors(geom: SAlphaGeometry, grid: SpectralGrid) -> tuple[jnp.nda
     return vol_fac, flux_fac
 
 
-def _gx_fac_mask(grid: SpectralGrid) -> jnp.ndarray:
+def _gx_fac_mask(grid: SpectralGrid, *, use_dealias: bool) -> jnp.ndarray:
     """Return GX-style fac*mask for (ky, kx) weighting."""
 
     ky = grid.ky
     fac = jnp.where(ky == 0.0, 1.0, 2.0)
     fac = fac[:, None] * jnp.ones((1, grid.kx.size), dtype=fac.dtype)
-    mask = grid.dealias_mask.astype(fac.dtype)
+    if use_dealias:
+        mask = grid.dealias_mask.astype(fac.dtype)
+    else:
+        mask = jnp.ones_like(fac)
     return fac * mask
 
 
-def _gx_fac_mask_nonzero(grid: SpectralGrid) -> jnp.ndarray:
+def _gx_fac_mask_nonzero(grid: SpectralGrid, *, use_dealias: bool) -> jnp.ndarray:
     """Return fac*mask that excludes ky=0 contributions (for fluxes)."""
 
     ky = grid.ky
     fac = jnp.where(ky == 0.0, 0.0, 2.0)
     fac = fac[:, None] * jnp.ones((1, grid.kx.size), dtype=fac.dtype)
-    mask = grid.dealias_mask.astype(fac.dtype)
+    if use_dealias:
+        mask = grid.dealias_mask.astype(fac.dtype)
+    else:
+        mask = jnp.ones_like(fac)
     return fac * mask
 
 
@@ -67,10 +73,17 @@ def _species_array(val: float | jnp.ndarray, ns: int) -> jnp.ndarray:
     return arr
 
 
-def gx_Wg(G: jnp.ndarray, grid: SpectralGrid, params: LinearParams, vol_fac: jnp.ndarray) -> jnp.ndarray:
+def gx_Wg(
+    G: jnp.ndarray,
+    grid: SpectralGrid,
+    params: LinearParams,
+    vol_fac: jnp.ndarray,
+    *,
+    use_dealias: bool = True,
+) -> jnp.ndarray:
     """GX Wg diagnostic (free energy in g)."""
 
-    fac = _gx_fac_mask(grid)
+    fac = _gx_fac_mask(grid, use_dealias=use_dealias)
     fac = fac[None, None, None, :, :, None]
     vol = vol_fac[None, None, None, None, None, :]
 
@@ -92,6 +105,8 @@ def gx_Wphi_krehm(
     grid: SpectralGrid,
     params: LinearParams,
     vol_fac: jnp.ndarray,
+    *,
+    use_dealias: bool = True,
 ) -> jnp.ndarray:
     """GX Krehm electrostatic energy (Wphi) diagnostic."""
 
@@ -102,7 +117,7 @@ def gx_Wphi_krehm(
     if rho.ndim == 0:
         rho = rho[None]
     rho2 = rho * rho
-    fac = _gx_fac_mask(grid)
+    fac = _gx_fac_mask(grid, use_dealias=use_dealias)
     vol = vol_fac[None, None, :]
 
     wphi = 0.0
@@ -118,13 +133,15 @@ def gx_Wphi_krehm(
 def gx_Wapar_krehm(
     apar: jnp.ndarray,
     grid: SpectralGrid,
+    *,
+    use_dealias: bool = True,
 ) -> jnp.ndarray:
     """GX Krehm magnetic energy (Wapar) diagnostic."""
 
     kx = grid.kx[None, :]
     ky = grid.ky[:, None]
     kperp2 = kx * kx + ky * ky
-    fac = _gx_fac_mask(grid)
+    fac = _gx_fac_mask(grid, use_dealias=use_dealias)
     weight = fac[:, :, None]
     contrib = 0.5 * kperp2[:, :, None] * jnp.abs(apar) ** 2 * weight
     return jnp.sum(contrib)
@@ -163,6 +180,8 @@ def gx_heat_flux(
     grid: SpectralGrid,
     params: LinearParams,
     flux_fac: jnp.ndarray,
+    *,
+    use_dealias: bool = True,
 ) -> jnp.ndarray:
     """GX heat flux diagnostic (gyroBohm units)."""
 
@@ -171,7 +190,7 @@ def gx_heat_flux(
     else:
         Gs = G
     ns = Gs.shape[0]
-    fac = _gx_fac_mask_nonzero(grid)
+    fac = _gx_fac_mask_nonzero(grid, use_dealias=use_dealias)
     fac = fac[:, :, None]
     flx = flux_fac[None, None, :]
 
@@ -236,6 +255,8 @@ def gx_particle_flux(
     grid: SpectralGrid,
     params: LinearParams,
     flux_fac: jnp.ndarray,
+    *,
+    use_dealias: bool = True,
 ) -> jnp.ndarray:
     """GX particle flux diagnostic."""
 
@@ -244,7 +265,7 @@ def gx_particle_flux(
     else:
         Gs = G
     ns = Gs.shape[0]
-    fac = _gx_fac_mask_nonzero(grid)
+    fac = _gx_fac_mask_nonzero(grid, use_dealias=use_dealias)
     fac = fac[:, :, None]
     flx = flux_fac[None, None, :]
 
