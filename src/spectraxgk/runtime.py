@@ -113,6 +113,8 @@ def build_runtime_linear_params(cfg: RuntimeConfig) -> LinearParams:
         fapar=fapar,
         nu_hyper=float(cfg.collisions.nu_hyper),
         p_hyper=float(cfg.collisions.p_hyper),
+        D_hyper=float(cfg.collisions.D_hyper),
+        p_hyper_kperp=float(cfg.collisions.p_hyper_kperp),
         hypercollisions_const=float(cfg.collisions.hypercollisions_const),
         hypercollisions_kz=float(cfg.collisions.hypercollisions_kz),
     )
@@ -141,6 +143,7 @@ def build_runtime_linear_terms(cfg: RuntimeConfig) -> LinearTerms:
         diamagnetic=float(cfg.terms.diamagnetic),
         collisions=float(cfg.terms.collisions if collisions_on else 0.0),
         hypercollisions=float(cfg.terms.hypercollisions if hyper_on else 0.0),
+        hyperdiffusion=float(cfg.terms.hyperdiffusion),
         end_damping=float(cfg.terms.end_damping),
         apar=float(cfg.terms.apar if use_apar else 0.0),
         bpar=float(cfg.terms.bpar if use_bpar else 0.0),

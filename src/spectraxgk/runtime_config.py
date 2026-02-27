@@ -55,6 +55,8 @@ class RuntimeCollisionConfig:
     nu_laguerre: float = 2.0
     nu_hyper: float = 0.0
     p_hyper: float = 4.0
+    D_hyper: float = 0.0
+    p_hyper_kperp: float = 2.0
     hypercollisions_const: float = 1.0
     hypercollisions_kz: float = 0.0
     damp_ends_amp: float = 0.0
@@ -89,6 +91,7 @@ class RuntimeTermsConfig:
     diamagnetic: float = 1.0
     collisions: float = 1.0
     hypercollisions: float = 1.0
+    hyperdiffusion: float = 0.0
     end_damping: float = 1.0
     apar: float = 1.0
     bpar: float = 1.0
@@ -124,4 +127,3 @@ class RuntimeConfig:
             "normalization": self.normalization.to_dict(),
             "terms": self.terms.to_dict(),
         }
-
