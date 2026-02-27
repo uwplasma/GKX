@@ -89,11 +89,14 @@ CYCLONE_KRYLOV_DEFAULT = KrylovConfig(
     method="shift_invert",
     krylov_dim=16,
     restarts=1,
+    omega_target_factor=0.3,
     power_iters=60,
-    power_dt=0.01,
+    power_dt=0.001,
     shift_maxiter=30,
     shift_restart=10,
     shift_tol=1.0e-3,
+    shift_preconditioner="hermite-line",
+    omega_sign=1,
     mode_family="cyclone",
     fallback_method="propagator",
 )
@@ -968,6 +971,7 @@ def run_cyclone_linear(
         gamma_seed = 0.0
         omega_seed = 0.0
         seed_ok = False
+        omega_ok = False
         try:
             t_seed = min(150.0, float(kcfg.power_dt) * 15000.0)
             time_cfg = GXTimeConfig(
@@ -994,11 +998,64 @@ def run_cyclone_linear(
                 navg_fraction=0.5,
                 mode_method="z_index",
             )
-            seed_ok = np.isfinite(gamma_seed) and np.isfinite(omega_seed)
+            omega_ok = np.isfinite(omega_seed) and abs(omega_seed) > 1.0e-8
+            seed_ok = (
+                omega_ok and np.isfinite(gamma_seed) and gamma_seed > 0.0
+            )
         except Exception:
             seed_ok = False
+            omega_ok = False
 
-        shift = complex(float(gamma_seed), float(-omega_seed)) if seed_ok else None
+        if not seed_ok:
+            try:
+                Nl_seed = min(Nl, 16)
+                Nm_seed = min(Nm, 12)
+                cache_seed = build_linear_cache(grid, geom, params, Nl_seed, Nm_seed)
+                G0_seed = _build_initial_condition(
+                    grid,
+                    geom,
+                    ky_index=sel.ky_index,
+                    kx_index=sel.kx_index,
+                    Nl=Nl_seed,
+                    Nm=Nm_seed,
+                    init_cfg=init_cfg,
+                )
+                t_seed = min(150.0, float(kcfg.power_dt) * 15000.0)
+                time_cfg = GXTimeConfig(
+                    dt=float(kcfg.power_dt),
+                    t_max=t_seed,
+                    sample_stride=1,
+                    fixed_dt=True,
+                )
+                t_short, phi_t, _g_t, _o_t = integrate_linear_gx(
+                    G0_seed,
+                    grid,
+                    cache_seed,
+                    params,
+                    geom,
+                    time_cfg,
+                    terms=terms,
+                    mode_method="z_index",
+                )
+                sel_seed = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
+                gamma_seed, omega_seed, _g, _o, _t_mid = gx_growth_rate_from_phi(
+                    phi_t,
+                    t_short,
+                    sel_seed,
+                    navg_fraction=0.5,
+                    mode_method="z_index",
+                )
+                omega_ok = np.isfinite(omega_seed) and abs(omega_seed) > 1.0e-8
+                seed_ok = (
+                    omega_ok and np.isfinite(gamma_seed) and gamma_seed > 0.0
+                )
+            except Exception:
+                seed_ok = False
+                omega_ok = False
+
+        shift = None
+        if omega_ok:
+            shift = complex(float(gamma_seed) if seed_ok else 0.0, float(-omega_seed))
         eig, vec = dominant_eigenpair(
             G0_jax,
             cache,
@@ -1032,18 +1089,20 @@ def run_cyclone_linear(
         gamma_out = float(np.real(eig))
         omega_out = float(-np.imag(eig))
         if seed_ok:
-            omega_tol = 0.15 * max(abs(omega_seed), 1.0e-6)
-            gamma_tol = 0.15 * max(abs(gamma_seed), 1.0e-6)
-            use_seed = (
-                not np.isfinite(gamma_out)
-                or not np.isfinite(omega_out)
-                or (gamma_seed > 0.0 and gamma_out < 0.0)
-                or abs(omega_out - omega_seed) > omega_tol
-                or abs(gamma_out - gamma_seed) > gamma_tol
-            )
-            if use_seed:
-                gamma_out = float(gamma_seed)
-                omega_out = float(omega_seed)
+            seed_strong = (gamma_seed > 0.0) and (abs(omega_seed) > 1.0e-6)
+            if seed_strong:
+                omega_tol = 0.15 * max(abs(omega_seed), 1.0e-6)
+                gamma_tol = 0.15 * max(abs(gamma_seed), 1.0e-6)
+                use_seed = (
+                    not np.isfinite(gamma_out)
+                    or not np.isfinite(omega_out)
+                    or (gamma_seed > 0.0 and gamma_out < 0.0)
+                    or abs(omega_out - omega_seed) > omega_tol
+                    or abs(gamma_out - gamma_seed) > gamma_tol
+                )
+                if use_seed:
+                    gamma_out = float(gamma_seed)
+                    omega_out = float(omega_seed)
         if kcfg.omega_sign != 0:
             omega_out = float(np.sign(kcfg.omega_sign)) * abs(omega_out)
         gamma_out, omega_out = _normalize_growth_rate(
@@ -1448,6 +1507,7 @@ def run_cyclone_scan(
             gamma_seed = 0.0
             omega_seed = 0.0
             seed_ok = False
+            omega_ok = False
             if prev_eig is None:
                 try:
                     t_seed = min(150.0, float(cfg_use.power_dt) * 15000.0)
@@ -1473,15 +1533,62 @@ def run_cyclone_scan(
                         navg_fraction=0.5,
                         mode_method="z_index",
                     )
-                    seed_ok = np.isfinite(gamma_seed) and np.isfinite(omega_seed)
+                    omega_ok = np.isfinite(omega_seed) and abs(omega_seed) > 1.0e-8
+                    seed_ok = (
+                        omega_ok and np.isfinite(gamma_seed) and gamma_seed > 0.0
+                    )
                 except Exception:
                     seed_ok = False
+                    omega_ok = False
+            if not seed_ok:
+                try:
+                    Nl_seed = min(Nl, 16)
+                    Nm_seed = min(Nm, 12)
+                    cache_seed = build_linear_cache(grid, geom, params, Nl_seed, Nm_seed)
+                    G0_seed = _build_initial_condition(
+                        grid,
+                        geom,
+                        ky_index=0,
+                        kx_index=0,
+                        Nl=Nl_seed,
+                        Nm=Nm_seed,
+                        init_cfg=init_cfg,
+                    )
+                    t_seed = min(150.0, float(cfg_use.power_dt) * 15000.0)
+                    time_cfg = GXTimeConfig(
+                        dt=float(cfg_use.power_dt), t_max=t_seed, sample_stride=1, fixed_dt=True
+                    )
+                    t_short, phi_t, _g_t, _o_t = integrate_linear_gx(
+                        G0_seed,
+                        grid,
+                        cache_seed,
+                        params,
+                        geom,
+                        time_cfg,
+                        terms=terms,
+                        mode_method="z_index",
+                    )
+                    sel_seed = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
+                    gamma_seed, omega_seed, _g, _o, _t_mid = gx_growth_rate_from_phi(
+                        phi_t,
+                        t_short,
+                        sel_seed,
+                        navg_fraction=0.5,
+                        mode_method="z_index",
+                    )
+                    omega_ok = np.isfinite(omega_seed) and abs(omega_seed) > 1.0e-8
+                    seed_ok = (
+                        omega_ok and np.isfinite(gamma_seed) and gamma_seed > 0.0
+                    )
+                except Exception:
+                    seed_ok = False
+                    omega_ok = False
 
             shift: complex | None
             if prev_eig is not None and np.isfinite(prev_eig):
                 shift = prev_eig
-            elif seed_ok:
-                shift = complex(float(gamma_seed), float(-omega_seed))
+            elif omega_ok:
+                shift = complex(float(gamma_seed) if seed_ok else 0.0, float(-omega_seed))
             else:
                 shift = None
             eig, vec = dominant_eigenpair(
@@ -1517,15 +1624,17 @@ def run_cyclone_scan(
             # If Krylov lands on the wrong branch, fall back to GX-style seed.
             use_seed = False
             if seed_ok:
-                omega_tol = 0.15 * max(abs(omega_seed), 1.0e-6)
-                gamma_tol = 0.15 * max(abs(gamma_seed), 1.0e-6)
-                use_seed = (
-                    not np.isfinite(gamma)
-                    or not np.isfinite(omega)
-                    or (gamma_seed > 0.0 and gamma < 0.0)
-                    or abs(omega - omega_seed) > omega_tol
-                    or abs(gamma - gamma_seed) > gamma_tol
-                )
+                seed_strong = (gamma_seed > 0.0) and (abs(omega_seed) > 1.0e-6)
+                if seed_strong:
+                    omega_tol = 0.15 * max(abs(omega_seed), 1.0e-6)
+                    gamma_tol = 0.15 * max(abs(gamma_seed), 1.0e-6)
+                    use_seed = (
+                        not np.isfinite(gamma)
+                        or not np.isfinite(omega)
+                        or (gamma_seed > 0.0 and gamma < 0.0)
+                        or abs(omega - omega_seed) > omega_tol
+                        or abs(gamma - gamma_seed) > gamma_tol
+                    )
             if use_seed and seed_ok:
                 gamma = float(gamma_seed)
                 omega = float(omega_seed)
