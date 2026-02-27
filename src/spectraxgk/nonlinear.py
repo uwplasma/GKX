@@ -21,6 +21,17 @@ from spectraxgk.terms.assembly import assemble_rhs_cached_jit, compute_fields_ca
 from spectraxgk.terms.config import FieldState, TermConfig
 from spectraxgk.terms.integrators import integrate_nonlinear as integrate_nonlinear_scan
 from spectraxgk.terms.nonlinear import nonlinear_em_contribution
+from spectraxgk.gx_integrators import _gx_growth_rate_step, _gx_midplane_index
+from spectraxgk.diagnostics import (
+    GXDiagnostics,
+    gx_energy_total,
+    gx_heat_flux,
+    gx_particle_flux,
+    gx_volume_factors,
+    gx_Wapar_krehm,
+    gx_Wg,
+    gx_Wphi_krehm,
+)
 
 
 @dataclass(frozen=True)
@@ -139,6 +150,141 @@ def integrate_nonlinear(
         terms=terms,
         checkpoint=checkpoint,
     )
+
+
+def integrate_nonlinear_gx_diagnostics(
+    G0: jnp.ndarray,
+    grid: SpectralGrid,
+    geom: SAlphaGeometry,
+    params: LinearParams,
+    dt: float,
+    steps: int,
+    *,
+    method: str = "rk3",
+    cache: LinearCache | None = None,
+    terms: TermConfig | None = None,
+    checkpoint: bool = False,
+    sample_stride: int = 1,
+    use_dealias_mask: bool = False,
+    z_index: int | None = None,
+) -> tuple[jnp.ndarray, GXDiagnostics]:
+    """Integrate nonlinear system and return GX-style diagnostics."""
+
+    if cache is None:
+        if G0.ndim == 5:
+            Nl, Nm = G0.shape[0], G0.shape[1]
+        elif G0.ndim == 6:
+            Nl, Nm = G0.shape[1], G0.shape[2]
+        else:
+            raise ValueError("G0 must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)")
+        cache = build_linear_cache(grid, geom, params, Nl, Nm)
+
+    term_cfg = terms or TermConfig()
+    vol_fac, flux_fac = gx_volume_factors(geom, grid)
+    mask = jnp.asarray(grid.dealias_mask, dtype=bool)
+    z_idx = _gx_midplane_index(grid.z.size) if z_index is None else int(z_index)
+    use_dealias = bool(use_dealias_mask)
+
+    state_dtype = jnp.result_type(G0, jnp.complex64)
+    G0 = jnp.asarray(G0, dtype=state_dtype)
+    real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
+    dt_val = jnp.asarray(dt, dtype=real_dtype)
+
+    def rhs_fn(G):
+        return nonlinear_rhs_cached(G, cache, params, term_cfg)
+
+    _dG0, fields0 = rhs_fn(G0)
+    phi_prev = fields0.phi
+
+    def step(carry, _):
+        G, phi_last = carry
+        dG, _ = rhs_fn(G)
+        if method == "euler":
+            G_new = G + dt_val * dG
+        elif method == "rk2":
+            k1 = dG
+            k2, _ = rhs_fn(G + 0.5 * dt_val * k1)
+            G_new = G + dt_val * k2
+        elif method == "rk3":
+            k1 = dG
+            G1 = G + dt_val * k1
+            k2, _ = rhs_fn(G1)
+            G2 = 0.75 * G + 0.25 * (G1 + dt_val * k2)
+            k3, _ = rhs_fn(G2)
+            G_new = (1.0 / 3.0) * G + (2.0 / 3.0) * (G2 + dt_val * k3)
+        elif method == "rk4":
+            k1 = dG
+            k2, _ = rhs_fn(G + 0.5 * dt_val * k1)
+            k3, _ = rhs_fn(G + 0.5 * dt_val * k2)
+            k4, _ = rhs_fn(G + dt_val * k3)
+            G_new = G + (dt_val / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+        else:
+            raise ValueError("method must be one of {'euler', 'rk2', 'rk3', 'rk4'}")
+
+        _dG_new, fields_new = rhs_fn(G_new)
+        phi = fields_new.phi
+        apar = fields_new.apar if fields_new.apar is not None else jnp.zeros_like(phi)
+        bpar = fields_new.bpar if fields_new.bpar is not None else jnp.zeros_like(phi)
+
+        gamma, omega = _gx_growth_rate_step(phi, phi_last, dt_val, z_index=z_idx, mask=mask)
+        Wg_val = gx_Wg(G_new, grid, params, vol_fac, use_dealias=use_dealias)
+        Wphi_val = gx_Wphi_krehm(phi, grid, params, vol_fac, use_dealias=use_dealias)
+        Wapar_val = gx_Wapar_krehm(apar, grid, use_dealias=use_dealias)
+        heat_val = gx_heat_flux(
+            G_new,
+            phi,
+            apar,
+            bpar,
+            cache,
+            grid,
+            params,
+            flux_fac,
+            use_dealias=use_dealias,
+        )
+        pflux_val = gx_particle_flux(
+            G_new,
+            phi,
+            apar,
+            bpar,
+            cache,
+            grid,
+            params,
+            flux_fac,
+            use_dealias=use_dealias,
+        )
+        diag = (gamma, omega, Wg_val, Wphi_val, Wapar_val, heat_val, pflux_val)
+        return (G_new, phi), diag
+
+    step_fn = jax.checkpoint(step) if checkpoint else step
+    (G_final, _phi_last), diag = jax.lax.scan(step_fn, (G0, phi_prev), None, length=steps)
+
+    gamma_t, omega_t, Wg_t, Wphi_t, Wapar_t, heat_t, pflux_t = diag
+    t = dt_val * (jnp.arange(steps, dtype=real_dtype) + 1.0)
+
+    stride = int(max(sample_stride, 1))
+    if stride > 1:
+        gamma_t = gamma_t[::stride]
+        omega_t = omega_t[::stride]
+        Wg_t = Wg_t[::stride]
+        Wphi_t = Wphi_t[::stride]
+        Wapar_t = Wapar_t[::stride]
+        heat_t = heat_t[::stride]
+        pflux_t = pflux_t[::stride]
+        t = t[::stride]
+
+    energy_t = gx_energy_total(Wg_t, Wphi_t, Wapar_t)
+    diag_out = GXDiagnostics(
+        t=t,
+        gamma_t=gamma_t,
+        omega_t=omega_t,
+        Wg_t=Wg_t,
+        Wphi_t=Wphi_t,
+        Wapar_t=Wapar_t,
+        heat_flux_t=heat_t,
+        particle_flux_t=pflux_t,
+        energy_t=energy_t,
+    )
+    return t, diag_out
 
 
 def build_nonlinear_imex_operator(
