@@ -200,6 +200,7 @@ def _spectral_bracket(
     dealias_mask: jnp.ndarray,
     kxfac: jnp.ndarray,
     fft_norm: float | None = None,
+    gx_real_fft: bool = True,
 ) -> jnp.ndarray:
     complex_dtype = jnp.result_type(G_hat, chi_hat, jnp.complex64)
     real_dtype = jnp.real(jnp.empty((), dtype=complex_dtype)).dtype
@@ -209,8 +210,6 @@ def _spectral_bracket(
     chi_hat = jnp.asarray(chi_hat, dtype=complex_dtype)
 
     mask = jnp.asarray(dealias_mask, dtype=real_dtype)
-    G_hat = G_hat * _broadcast_mask(mask, G_hat.ndim)
-    chi_hat = chi_hat * _broadcast_mask(mask, chi_hat.ndim)
 
     kx = jnp.asarray(kx_grid, dtype=real_dtype)
     ky = jnp.asarray(ky_grid, dtype=real_dtype)
@@ -220,6 +219,38 @@ def _spectral_bracket(
         fft_norm_val = float(fft_norm)
     ifft_scale = jnp.asarray(fft_norm_val, dtype=real_dtype)
     fft_scale = jnp.asarray(1.0 / fft_norm_val, dtype=real_dtype)
+
+    if gx_real_fft:
+        ny_full = int(ky.shape[0])
+        nyc = ny_full // 2 + 1
+        ky_nyc = ky[:nyc, :]
+        kx_nyc = kx[:nyc, :]
+        G_nyc = G_hat[..., :nyc, :, :]
+        chi_nyc = chi_hat[..., :nyc, :, :]
+        kx_b = _broadcast_grid(kx_nyc, G_nyc.ndim)
+        ky_b = _broadcast_grid(ky_nyc, G_nyc.ndim)
+        kx_chi = _broadcast_grid(kx_nyc, chi_nyc.ndim)
+        ky_chi = _broadcast_grid(ky_nyc, chi_nyc.ndim)
+        axes = (-2, -3)
+        dchi_dx = jnp.fft.irfft2(imag * kx_chi * chi_nyc, s=(kx.shape[1], ny_full), axes=axes) * ifft_scale
+        dchi_dy = jnp.fft.irfft2(imag * ky_chi * chi_nyc, s=(kx.shape[1], ny_full), axes=axes) * ifft_scale
+        dG_dx = jnp.fft.irfft2(imag * kx_b * G_nyc, s=(kx.shape[1], ny_full), axes=axes) * ifft_scale
+        dG_dy = jnp.fft.irfft2(imag * ky_b * G_nyc, s=(kx.shape[1], ny_full), axes=axes) * ifft_scale
+
+        dchi_dx_b = _broadcast_to_G(dchi_dx, dG_dx)
+        dchi_dy_b = _broadcast_to_G(dchi_dy, dG_dx)
+        bracket = dG_dx * dchi_dy_b - dG_dy * dchi_dx_b
+        bracket_hat_nyc = jnp.fft.rfft2(bracket, axes=axes) * fft_scale
+        mask_nyc = mask[:nyc, :]
+        bracket_hat_nyc = bracket_hat_nyc * _broadcast_mask(mask_nyc, bracket_hat_nyc.ndim)
+        if ny_full > 1:
+            neg = jnp.conj(bracket_hat_nyc[..., 1 : nyc - 1, :, :])
+            neg = neg[..., ::-1, :, :]
+            bracket_hat = jnp.concatenate([bracket_hat_nyc, neg], axis=-3)
+        else:
+            bracket_hat = bracket_hat_nyc
+        return jnp.asarray(kxfac, dtype=real_dtype) * bracket_hat
+
     kx_b = _broadcast_grid(kx, G_hat.ndim)
     ky_b = _broadcast_grid(ky, G_hat.ndim)
     kx_chi = _broadcast_grid(kx, chi_hat.ndim)
@@ -232,7 +263,7 @@ def _spectral_bracket(
 
     dchi_dx_b = _broadcast_to_G(dchi_dx, G_hat)
     dchi_dy_b = _broadcast_to_G(dchi_dy, G_hat)
-    bracket = dchi_dx_b * dG_dy - dchi_dy_b * dG_dx
+    bracket = dG_dx * dchi_dy_b - dG_dy * dchi_dx_b
 
     bracket_hat = _fft2_xy(bracket) * fft_scale
     bracket_hat = bracket_hat * _broadcast_mask(mask, bracket_hat.ndim)
@@ -258,7 +289,7 @@ def exb_nonlinear_contribution(
         kxfac=jnp.asarray(1.0),
     )
     real_dtype = jnp.real(jnp.empty((), dtype=G.dtype)).dtype
-    return -jnp.asarray(weight, dtype=real_dtype) * bracket_hat
+    return jnp.asarray(weight, dtype=real_dtype) * bracket_hat
 
 
 def nonlinear_em_contribution(
@@ -473,7 +504,7 @@ def nonlinear_em_components(
         )
         total_bracket = exb_phi + exb_bpar + flutter
         real_dtype = jnp.real(jnp.empty((), dtype=G.dtype)).dtype
-        total = -jnp.asarray(weight, dtype=real_dtype) * total_bracket
+        total = jnp.asarray(weight, dtype=real_dtype) * total_bracket
     else:
         phi_hat = phi[None, None, ...]
         chi_phi = Jl * phi_hat
@@ -516,7 +547,7 @@ def nonlinear_em_components(
 
         total_bracket = exb_phi + exb_bpar + flutter
         real_dtype = jnp.real(jnp.empty((), dtype=G.dtype)).dtype
-        total = -jnp.asarray(weight, dtype=real_dtype) * total_bracket
+        total = jnp.asarray(weight, dtype=real_dtype) * total_bracket
 
     if squeeze_species:
         exb_phi = exb_phi[0]
