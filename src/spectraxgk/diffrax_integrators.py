@@ -605,6 +605,10 @@ def integrate_nonlinear_diffrax(
             weight=weight,
             apar_weight=float(term_cfg_.apar),
             bpar_weight=float(term_cfg_.bpar),
+            laguerre_to_grid=_cache.laguerre_to_grid,
+            laguerre_to_spectral=_cache.laguerre_to_spectral,
+            laguerre_roots=_cache.laguerre_roots,
+            b=_cache.b,
         )
         return _pack_complex_state(dG)
 

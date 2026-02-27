@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import jax.numpy as jnp
 from jax.scipy.special import gammaln, i0e
+import math
+import numpy as np
 
 
 def gamma0(b: jnp.ndarray) -> jnp.ndarray:
@@ -38,3 +40,51 @@ def sum_Jl2(b: jnp.ndarray, l_max: int) -> jnp.ndarray:
 
     Jl = J_l_all(b, l_max)
     return jnp.sum(Jl * Jl, axis=0)
+
+
+def gx_laguerre_nj(nl: int) -> int:
+    """GX default for number of Laguerre quadrature points."""
+
+    return max(1, 3 * nl // 2 - 1)
+
+
+def gx_laguerre_transform(nl: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Return GX-style Laguerre transform matrices and roots."""
+
+    if nl < 1:
+        raise ValueError("nl must be >= 1")
+    nj = gx_laguerre_nj(nl)
+    jac = np.zeros((nj, nj), dtype=float)
+    for i in range(nj - 1):
+        jac[i, i] = 2.0 * i + 1.0
+        jac[i, i + 1] = i + 1.0
+        jac[i + 1, i] = i + 1.0
+    jac[nj - 1, nj - 1] = 2.0 * nj - 1.0
+
+    evals, evecs = np.linalg.eigh(jac)
+    idx = np.argsort(np.abs(evals))
+    evals = evals[idx]
+    evecs = evecs[:, idx]
+
+    roots = evals.astype(float)
+    poly = np.zeros((nl, nj), dtype=float)
+    for i in range(nl):
+        for j in range(i + 1):
+            tmp = math.comb(i, j)
+            tmp *= (-1.0) ** j / math.factorial(j) * ((-1.0) ** i)
+            poly[i, j] = tmp
+
+    to_grid = np.zeros((nl, nj), dtype=float)
+    to_spectral = np.zeros((nj, nl), dtype=float)
+    for j in range(nj):
+        x_i = roots[j]
+        wgt = float(evecs[0, j] ** 2)
+        for ell in range(nl):
+            coeffs = poly[ell, : ell + 1]
+            Lmat = 0.0
+            for c in coeffs[::-1]:
+                Lmat = Lmat * x_i + c
+            to_grid[ell, j] = Lmat
+            to_spectral[j, ell] = Lmat * wgt
+
+    return to_grid, to_spectral, roots

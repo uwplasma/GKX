@@ -13,7 +13,7 @@ from jax.scipy.sparse.linalg import gmres
 
 from spectraxgk.basis import hermite_ladder_coeffs
 from spectraxgk.geometry import SAlphaGeometry
-from spectraxgk.gyroaverage import J_l_all
+from spectraxgk.gyroaverage import J_l_all, gx_laguerre_transform
 from spectraxgk.grids import SpectralGrid
 
 if TYPE_CHECKING:
@@ -491,6 +491,9 @@ class LinearCache:
     sqrt_p: jnp.ndarray
     sqrt_m_ladder: jnp.ndarray
     JlB: jnp.ndarray
+    laguerre_to_grid: jnp.ndarray
+    laguerre_to_spectral: jnp.ndarray
+    laguerre_roots: jnp.ndarray
     kx_link_plus: jnp.ndarray
     kx_link_minus: jnp.ndarray
     kx_link_mask_plus: jnp.ndarray
@@ -541,6 +544,9 @@ class LinearCache:
             self.sqrt_p,
             self.sqrt_m_ladder,
             self.JlB,
+            self.laguerre_to_grid,
+            self.laguerre_to_spectral,
+            self.laguerre_roots,
             self.kx_link_plus,
             self.kx_link_minus,
             self.kx_link_mask_plus,
@@ -556,7 +562,7 @@ class LinearCache:
     @classmethod
     def tree_unflatten(cls, aux_data, children):
         use_twist_shift, jtwist, n_linked_idx, n_linked_kz = aux_data
-        base_count = 41
+        base_count = 44
         base_children = children[:base_count]
         linked_idx = tuple(children[base_count : base_count + n_linked_idx])
         linked_kz = tuple(
@@ -697,6 +703,10 @@ def build_linear_cache(
         b = b * bmag_factor
     Jl = jax.vmap(lambda bs: J_l_all(bs, l_max=Nl - 1))(b).astype(real_dtype)
     JlB = Jl + shift_axis(Jl, -1, axis=1)
+    lag_to_grid_np, lag_to_spec_np, lag_roots_np = gx_laguerre_transform(Nl)
+    laguerre_to_grid = jnp.asarray(lag_to_grid_np, dtype=real_dtype)
+    laguerre_to_spectral = jnp.asarray(lag_to_spec_np, dtype=real_dtype)
+    laguerre_roots = jnp.asarray(lag_roots_np, dtype=real_dtype)
     mask0 = (grid.ky == 0.0)[:, None, None] & (grid.kx == 0.0)[None, :, None]
     lb_base = lenard_bernstein_eigenvalues(Nl, Nm, params.nu_hermite, params.nu_laguerre)[
         None, :, :, None, None, None
@@ -821,6 +831,9 @@ def build_linear_cache(
         sqrt_p=sqrt_p,
         sqrt_m_ladder=sqrt_m_ladder,
         JlB=JlB.astype(real_dtype),
+        laguerre_to_grid=laguerre_to_grid,
+        laguerre_to_spectral=laguerre_to_spectral,
+        laguerre_roots=laguerre_roots,
         kx_link_plus=kx_link_plus,
         kx_link_minus=kx_link_minus,
         kx_link_mask_plus=kx_link_mask_plus,
