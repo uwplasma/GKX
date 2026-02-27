@@ -220,23 +220,22 @@ def _build_shift_invert_precond(
     }:
         return None, None
 
-    # Hermite-line preconditioners rely on real-valued tridiagonal solves.
-    # If the shift is complex (nonzero imaginary part), fall back to the
-    # diagonal damping preconditioner.
-    sigma_np = np.asarray(sigma)
-    if np.any(np.abs(np.imag(sigma_np)) > 0.0):
-        damping = _compute_damping(v, cache, params)
-        diag = -damping.astype(v.dtype) - sigma
-        safe = jnp.where(jnp.abs(diag) > 0.0, diag, 1.0 + 0.0j)
-        precond = 1.0 / safe
-        shape = v.shape
-        size = v.size
+    # Hermite-line preconditioners rely on real-valued tridiagonal solves, but
+    # shift-invert uses complex coefficients (streaming i*kz). Until a complex
+    # tridiagonal solve is implemented, fall back to the diagonal damping
+    # preconditioner when hermite-line is requested.
+    damping = _compute_damping(v, cache, params)
+    diag = -damping.astype(v.dtype) - sigma
+    safe = jnp.where(jnp.abs(diag) > 0.0, diag, 1.0 + 0.0j)
+    precond = 1.0 / safe
+    shape = v.shape
+    size = v.size
 
-        def apply_precond(x_flat: jnp.ndarray) -> jnp.ndarray:
-            x = x_flat.reshape(shape)
-            return (x * precond).reshape(size)
+    def apply_precond(x_flat: jnp.ndarray) -> jnp.ndarray:
+        x = x_flat.reshape(shape)
+        return (x * precond).reshape(size)
 
-        return precond, apply_precond
+    return precond, apply_precond
 
     shape = v.shape
     size = v.size
