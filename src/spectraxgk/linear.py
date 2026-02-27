@@ -54,12 +54,17 @@ class LinearParams:
     p_hyper_lm: float = 6.0
     hypercollisions_const: float = 1.0
     hypercollisions_kz: float = 0.0
+    D_hyper: float = 0.0
+    p_hyper_kperp: float = 2.0
     damp_ends_widthfrac: float | jnp.ndarray = 0.125
     damp_ends_amp: float | jnp.ndarray = 0.1
     tz: float | jnp.ndarray = 1.0
     rho_star: float = 1.0
     beta: float = 0.0
     fapar: float = 0.0
+    apar_beta_scale: float = 0.5
+    ampere_g0_scale: float = 0.5
+    bpar_beta_scale: float = 0.5
 
     def tree_flatten(self):
         children = (
@@ -92,12 +97,17 @@ class LinearParams:
             self.p_hyper_lm,
             self.hypercollisions_const,
             self.hypercollisions_kz,
+            self.D_hyper,
+            self.p_hyper_kperp,
             self.damp_ends_widthfrac,
             self.damp_ends_amp,
             self.tz,
             self.rho_star,
             self.beta,
             self.fapar,
+            self.apar_beta_scale,
+            self.ampere_g0_scale,
+            self.bpar_beta_scale,
         )
         return children, None
 
@@ -118,6 +128,7 @@ class LinearTerms:
     diamagnetic: float = 1.0
     collisions: float = 1.0
     hypercollisions: float = 1.0
+    hyperdiffusion: float = 0.0
     end_damping: float = 1.0
     apar: float = 1.0
     bpar: float = 1.0
@@ -131,6 +142,7 @@ class LinearTerms:
             self.diamagnetic,
             self.collisions,
             self.hypercollisions,
+            self.hyperdiffusion,
             self.end_damping,
             self.apar,
             self.bpar,
@@ -160,6 +172,7 @@ def linear_terms_to_term_config(
         diamagnetic=term_weights.diamagnetic,
         collisions=term_weights.collisions,
         hypercollisions=term_weights.hypercollisions,
+        hyperdiffusion=term_weights.hyperdiffusion,
         end_damping=term_weights.end_damping,
         apar=term_weights.apar,
         bpar=term_weights.bpar,
@@ -181,6 +194,7 @@ def term_config_to_linear_terms(term_cfg: TermConfig | None) -> LinearTerms:
         diamagnetic=cfg.diamagnetic,
         collisions=cfg.collisions,
         hypercollisions=cfg.hypercollisions,
+        hyperdiffusion=cfg.hyperdiffusion,
         end_damping=cfg.end_damping,
         apar=cfg.apar,
         bpar=cfg.bpar,
@@ -444,6 +458,7 @@ class LinearCache:
     Jl: jnp.ndarray
     b: jnp.ndarray
     kperp2: jnp.ndarray
+    kperp2_bmag: bool
     bmag: jnp.ndarray
     omega_d: jnp.ndarray
     cv_d: jnp.ndarray
@@ -493,6 +508,7 @@ class LinearCache:
             self.Jl,
             self.b,
             self.kperp2,
+            self.kperp2_bmag,
             self.bmag,
             self.omega_d,
             self.cv_d,
@@ -540,7 +556,7 @@ class LinearCache:
     @classmethod
     def tree_unflatten(cls, aux_data, children):
         use_twist_shift, jtwist, n_linked_idx, n_linked_kz = aux_data
-        base_count = 40
+        base_count = 41
         base_children = children[:base_count]
         linked_idx = tuple(children[base_count : base_count + n_linked_idx])
         linked_kz = tuple(
@@ -553,7 +569,6 @@ class LinearCache:
             use_twist_shift=use_twist_shift,
             jtwist=jtwist,
         )
-
 
 def build_linear_cache(
     grid: SpectralGrid,
@@ -621,6 +636,7 @@ def build_linear_cache(
                 jtwist = 1
         if use_ntft and float(getattr(grid, "x0", x0_eff)) != 0.0:
             kx_eff = kx_eff * (float(getattr(grid, "x0", x0_eff)) / float(x0_eff))
+    kperp2_bmag = bool(getattr(geom, "kperp2_bmag", True))
     if use_ntft:
         ftwist = (geom.s_hat * gds21 / gds22_arr).astype(real_dtype)
         kxfac_val = float(getattr(grid, "kxfac", 1.0))
@@ -651,7 +667,9 @@ def build_linear_cache(
             None, None, :
         ] * shat_inv * shat_inv
         bmag_inv = 1.0 / bmag
-        kperp2 = (term_ky + term_kx) * (bmag_inv[None, None, :] ** 2)
+        kperp2 = term_ky + term_kx
+        if kperp2_bmag:
+            kperp2 = kperp2 * (bmag_inv[None, None, :] ** 2)
         kx_shift = kx_eff[None, :, None] + (rho_star * m0 / float(x0_eff))[:, None, :]
         cv_d = ky_eff[:, None, None] * cv[None, None, :] + shat_inv * kx_shift * cv0[
             None, None, :
@@ -673,6 +691,10 @@ def build_linear_cache(
     if rho.ndim == 0:
         rho = rho[None]
     b = (rho[:, None, None, None] * rho[:, None, None, None]) * kperp2[None, ...]
+    bessel_bmag_power = float(getattr(geom, "bessel_bmag_power", 0.0))
+    if bessel_bmag_power != 0.0:
+        bmag_factor = bmag[None, None, None, :] ** (-bessel_bmag_power)
+        b = b * bmag_factor
     Jl = jax.vmap(lambda bs: J_l_all(bs, l_max=Nl - 1))(b).astype(real_dtype)
     JlB = Jl + shift_axis(Jl, -1, axis=1)
     mask0 = (grid.ky == 0.0)[:, None, None] & (grid.kx == 0.0)[None, :, None]
@@ -766,6 +788,7 @@ def build_linear_cache(
         Jl=Jl,
         b=b.astype(real_dtype),
         kperp2=kperp2,
+        kperp2_bmag=kperp2_bmag,
         bmag=bmag,
         omega_d=omega_d,
         cv_d=cv_d,
@@ -952,7 +975,11 @@ def build_H(
     bpar: jnp.ndarray | None = None,
     JlB: jnp.ndarray | None = None,
 ) -> jnp.ndarray:
-    """Map G -> H = G + tz * J_l(b) * phi * delta_{m0} (+ Apar term in m=1)."""
+    """Map G -> H = G + tz * J_l(b) * phi * delta_{m0} (+ Bpar term).
+
+    In the GX/GS2 formulation the A_parallel field enters the streaming
+    operator explicitly and is not included in H for the remaining terms.
+    """
 
     squeeze_species = False
     if G.ndim == 5:
@@ -969,13 +996,6 @@ def build_H(
         if JlB is None:
             raise ValueError("JlB must be provided when bpar is supplied")
         H = H.at[:, :, 0, ...].add(JlB * bpar)
-    if apar is not None and vth is not None:
-        vth_arr = jnp.asarray(vth)
-        if vth_arr.ndim == 0:
-            vth_arr = vth_arr[None]
-        H = H.at[:, :, 1, ...].add(
-            -zt_arr[:, None, None, None, None] * vth_arr[:, None, None, None, None] * Jl * apar
-        )
     return H[0] if squeeze_species else H
 
 

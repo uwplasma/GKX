@@ -4,7 +4,13 @@ from __future__ import annotations
 
 import jax.numpy as jnp
 
-from spectraxgk.terms.operators import grad_z_linked_fft, grad_z_periodic, shift_axis, streaming_term
+from spectraxgk.terms.operators import (
+    abs_z_linked_fft,
+    grad_z_linked_fft,
+    grad_z_periodic,
+    shift_axis,
+    streaming_term,
+)
 
 
 def streaming_contribution(
@@ -264,6 +270,9 @@ def hypercollisions_contribution(
     hypercollisions_const: jnp.ndarray,
     hypercollisions_kz: jnp.ndarray,
     weight: jnp.ndarray,
+    linked_indices: tuple[jnp.ndarray, ...] | None = None,
+    linked_kz: tuple[jnp.ndarray, ...] | None = None,
+    linked_inverse_permutation: jnp.ndarray | None = None,
 ) -> jnp.ndarray:
     l_norm = jnp.asarray(max(G.shape[1], 1), dtype=ratio_l.dtype)
     m_norm = jnp.asarray(max(G.shape[2], 1), dtype=ratio_m.dtype)
@@ -276,7 +285,6 @@ def hypercollisions_contribution(
     dG = weight * hypercollisions_const * jnp.where(mask_const, const_term, 0.0) * G
     dG = dG - weight * nu_hyper * hyper_ratio * G
 
-    abs_kz = jnp.abs(kz)[None, None, None, None, None, :]
     nu_hyp_m = (
         nu_hyper_m
         * m_norm_kz_factor
@@ -284,9 +292,48 @@ def hypercollisions_contribution(
         * vth_s
         * jnp.abs(kpar_scale)
     )
-    kz_term = -nu_hyp_m * m_pow * abs_kz
-    dG = dG + weight * hypercollisions_kz * jnp.where(mask_kz, kz_term, 0.0) * G
+    kz_source = weight * hypercollisions_kz * jnp.where(mask_kz, -nu_hyp_m * m_pow, 0.0) * G
+    if linked_indices and linked_kz:
+        kz_term = abs_z_linked_fft(
+            kz_source,
+            linked_indices=linked_indices,
+            linked_kz=linked_kz,
+            linked_inverse_permutation=linked_inverse_permutation,
+        )
+    else:
+        abs_kz = jnp.abs(kz)[None, None, None, None, None, :]
+        kz_term = abs_kz * kz_source
+    dG = dG + kz_term
     return dG
+
+
+def hyperdiffusion_contribution(
+    G: jnp.ndarray,
+    *,
+    kx: jnp.ndarray,
+    ky: jnp.ndarray,
+    dealias_mask: jnp.ndarray,
+    D_hyper: jnp.ndarray,
+    p_hyper_kperp: jnp.ndarray,
+    weight: jnp.ndarray,
+) -> jnp.ndarray:
+    """Hyperdiffusion in k_perp following GX conventions."""
+
+    kx2 = kx * kx
+    ky2 = ky * ky
+    kperp2 = ky2[:, None] + kx2[None, :]
+
+    nx = kx.size
+    ny = ky.size
+    kx_idx = max((nx - 1) // 3, 0)
+    ky_idx = max((ny - 1) // 3, 0)
+    kperp2_max = kx2[kx_idx] + ky2[ky_idx]
+    kperp2_max = jnp.where(kperp2_max > 0.0, kperp2_max, 1.0)
+
+    Dfac = D_hyper * (kperp2 / kperp2_max) ** p_hyper_kperp
+    mask = dealias_mask.astype(Dfac.dtype)
+    Dfac = Dfac * mask
+    return -weight * Dfac[None, None, :, :, None] * G
 
 
 def end_damping_contribution(

@@ -20,6 +20,7 @@ from spectraxgk.terms.linear_terms import (
     diamagnetic_contribution,
     end_damping_contribution,
     hypercollisions_contribution,
+    hyperdiffusion_contribution,
     mirror_contribution,
     streaming_contribution_gx,
 )
@@ -70,6 +71,10 @@ def assemble_rhs_cached(
     nu_hyper_lm = jnp.asarray(params.nu_hyper_lm, dtype=real_dtype)
     hypercollisions_const = jnp.asarray(params.hypercollisions_const, dtype=real_dtype)
     hypercollisions_kz = jnp.asarray(params.hypercollisions_kz, dtype=real_dtype)
+    D_hyper = jnp.asarray(params.D_hyper, dtype=real_dtype)
+    p_hyper_kperp = jnp.asarray(params.p_hyper_kperp, dtype=real_dtype)
+    D_hyper = jnp.asarray(params.D_hyper, dtype=real_dtype)
+    p_hyper_kperp = jnp.asarray(params.p_hyper_kperp, dtype=real_dtype)
     damp_amp = jnp.asarray(params.damp_ends_amp, dtype=real_dtype)
 
     w_stream = jnp.asarray(term_cfg.streaming, dtype=real_dtype)
@@ -79,6 +84,8 @@ def assemble_rhs_cached(
     w_dia = jnp.asarray(term_cfg.diamagnetic, dtype=real_dtype)
     w_coll = jnp.asarray(term_cfg.collisions, dtype=real_dtype)
     w_hyper = jnp.asarray(term_cfg.hypercollisions, dtype=real_dtype)
+    w_hyperdiff = jnp.asarray(term_cfg.hyperdiffusion, dtype=real_dtype)
+    w_hyperdiff = jnp.asarray(term_cfg.hyperdiffusion, dtype=real_dtype)
     w_damp = jnp.asarray(term_cfg.end_damping, dtype=real_dtype)
     w_apar = jnp.asarray(term_cfg.apar, dtype=real_dtype)
     w_bpar = jnp.asarray(term_cfg.bpar, dtype=real_dtype)
@@ -189,6 +196,18 @@ def assemble_rhs_cached(
         hypercollisions_const=hypercollisions_const,
         hypercollisions_kz=hypercollisions_kz,
         weight=w_hyper,
+        linked_indices=cache.linked_indices,
+        linked_kz=cache.linked_kz,
+        linked_inverse_permutation=cache.linked_inverse_permutation,
+    )
+    dG = dG + hyperdiffusion_contribution(
+        G,
+        kx=cache.kx,
+        ky=cache.ky,
+        dealias_mask=cache.dealias_mask,
+        D_hyper=D_hyper,
+        p_hyper_kperp=p_hyper_kperp,
+        weight=w_hyperdiff,
     )
     dG = dG + end_damping_contribution(
         H,
@@ -384,6 +403,18 @@ def assemble_rhs_terms_cached(
         hypercollisions_const=hypercollisions_const,
         hypercollisions_kz=hypercollisions_kz,
         weight=w_hyper,
+        linked_indices=cache.linked_indices,
+        linked_kz=cache.linked_kz,
+        linked_inverse_permutation=cache.linked_inverse_permutation,
+    )
+    contrib["hyperdiffusion"] = hyperdiffusion_contribution(
+        G,
+        kx=cache.kx,
+        ky=cache.ky,
+        dealias_mask=cache.dealias_mask,
+        D_hyper=D_hyper,
+        p_hyper_kperp=p_hyper_kperp,
+        weight=w_hyperdiff,
     )
     contrib["end_damping"] = end_damping_contribution(
         H,

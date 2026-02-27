@@ -38,10 +38,15 @@ def build_linear_params(
     rho_star: float = 1.0,
     beta: float = 0.0,
     fapar: float = 0.0,
+    apar_beta_scale: float = 0.5,
+    ampere_g0_scale: float = 0.5,
+    bpar_beta_scale: float = 0.5,
     nu_hyper: float = 0.0,
     p_hyper: float = 4.0,
     hypercollisions_const: float = 1.0,
     hypercollisions_kz: float = 0.0,
+    D_hyper: float = 0.0,
+    p_hyper_kperp: float = 2.0,
 ) -> LinearParams:
     """Build LinearParams arrays from a list of species."""
 
@@ -75,9 +80,14 @@ def build_linear_params(
         rho_star=rho_star,
         beta=beta,
         fapar=fapar,
+        apar_beta_scale=apar_beta_scale,
+        ampere_g0_scale=ampere_g0_scale,
+        bpar_beta_scale=bpar_beta_scale,
         nu=nu,
         nu_hyper=nu_hyper,
         p_hyper=p_hyper,
         hypercollisions_const=hypercollisions_const,
         hypercollisions_kz=hypercollisions_kz,
+        D_hyper=D_hyper,
+        p_hyper_kperp=p_hyper_kperp,
     )

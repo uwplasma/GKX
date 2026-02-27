@@ -38,6 +38,7 @@ class TermConfig:
     diamagnetic: float = 1.0
     collisions: float = 1.0
     hypercollisions: float = 1.0
+    hyperdiffusion: float = 0.0
     end_damping: float = 1.0
     apar: float = 1.0
     bpar: float = 1.0
@@ -52,6 +53,7 @@ class TermConfig:
             self.diamagnetic,
             self.collisions,
             self.hypercollisions,
+            self.hyperdiffusion,
             self.end_damping,
             self.apar,
             self.bpar,
