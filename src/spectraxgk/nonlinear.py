@@ -77,6 +77,10 @@ def nonlinear_rhs_cached(
             weight=weight,
             apar_weight=float(term_cfg.apar),
             bpar_weight=float(term_cfg.bpar),
+            laguerre_to_grid=cache.laguerre_to_grid,
+            laguerre_to_spectral=cache.laguerre_to_spectral,
+            laguerre_roots=cache.laguerre_roots,
+            b=cache.b,
         )
     return dG, fields
 
@@ -392,6 +396,10 @@ def integrate_nonlinear_imex_cached(
             weight=weight,
             apar_weight=float(term_cfg.apar),
             bpar_weight=float(term_cfg.bpar),
+            laguerre_to_grid=cache.laguerre_to_grid,
+            laguerre_to_spectral=cache.laguerre_to_spectral,
+            laguerre_roots=cache.laguerre_roots,
+            b=cache.b,
         )
 
     def fixed_point(G_in: jnp.ndarray, G_rhs: jnp.ndarray) -> jnp.ndarray:
