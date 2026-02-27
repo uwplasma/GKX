@@ -59,6 +59,7 @@ from spectraxgk.nonlinear import (
     build_nonlinear_imex_operator,
     integrate_nonlinear,
     integrate_nonlinear_cached,
+    integrate_nonlinear_gx_diagnostics,
     nonlinear_rhs_cached,
 )
 from spectraxgk.runners import integrate_linear_from_config, integrate_nonlinear_from_config
@@ -181,6 +182,7 @@ __all__ = [
     "integrate_linear_diffrax_streaming",
     "integrate_nonlinear",
     "integrate_nonlinear_cached",
+    "integrate_nonlinear_gx_diagnostics",
     "integrate_nonlinear_diffrax",
     "build_nonlinear_imex_operator",
     "IMEXLinearOperator",

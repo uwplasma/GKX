@@ -25,8 +25,8 @@ def integrate_nonlinear(
 ) -> tuple[jnp.ndarray, FieldState]:
     """Integrate a nonlinear RHS using lax.scan for kernel fusion."""
 
-    if method not in {"euler", "rk2", "rk4"}:
-        raise ValueError("method must be one of {'euler', 'rk2', 'rk4'}")
+    if method not in {"euler", "rk2", "rk3", "rk4"}:
+        raise ValueError("method must be one of {'euler', 'rk2', 'rk3', 'rk4'}")
 
     state_dtype = jnp.result_type(G0, jnp.complex64)
     G0 = jnp.asarray(G0, dtype=state_dtype)
@@ -41,6 +41,13 @@ def integrate_nonlinear(
             k1 = dG
             k2, _ = rhs_fn(G + 0.5 * dt_val * k1)
             G_new = G + dt_val * k2
+        elif method == "rk3":
+            k1 = dG
+            G1 = G + dt_val * k1
+            k2, _ = rhs_fn(G1)
+            G2 = 0.75 * G + 0.25 * (G1 + dt_val * k2)
+            k3, _ = rhs_fn(G2)
+            G_new = (1.0 / 3.0) * G + (2.0 / 3.0) * (G2 + dt_val * k3)
         else:
             k1 = dG
             k2, _ = rhs_fn(G + 0.5 * dt_val * k1)
