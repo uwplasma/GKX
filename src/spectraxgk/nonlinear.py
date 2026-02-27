@@ -51,6 +51,8 @@ def nonlinear_rhs_cached(
     cache: LinearCache,
     params: LinearParams,
     terms: TermConfig | None = None,
+    *,
+    gx_real_fft: bool = True,
 ) -> Tuple[jnp.ndarray, FieldState]:
     """Compute a nonlinear RHS using linear terms plus a placeholder nonlinear term."""
 
@@ -81,6 +83,7 @@ def nonlinear_rhs_cached(
             laguerre_to_spectral=cache.laguerre_to_spectral,
             laguerre_roots=cache.laguerre_roots,
             b=cache.b,
+            gx_real_fft=gx_real_fft,
         )
     return dG, fields
 
@@ -94,6 +97,7 @@ def integrate_nonlinear_cached(
     method: str = "rk4",
     terms: TermConfig | None = None,
     checkpoint: bool = False,
+    gx_real_fft: bool = True,
 ) -> tuple[jnp.ndarray, FieldState]:
     """Integrate the nonlinear system using a cached geometry object."""
 
@@ -107,10 +111,11 @@ def integrate_nonlinear_cached(
             steps,
             terms=term_cfg,
             checkpoint=checkpoint,
+            gx_real_fft=gx_real_fft,
         )
 
     def rhs_fn(G):
-        return nonlinear_rhs_cached(G, cache, params, term_cfg)
+        return nonlinear_rhs_cached(G, cache, params, term_cfg, gx_real_fft=gx_real_fft)
 
     return integrate_nonlinear_scan(
         rhs_fn,
@@ -133,6 +138,7 @@ def integrate_nonlinear(
     cache: LinearCache | None = None,
     terms: TermConfig | None = None,
     checkpoint: bool = False,
+    gx_real_fft: bool = True,
 ) -> tuple[jnp.ndarray, FieldState]:
     """Integrate the nonlinear system using built-in cache construction."""
 
@@ -153,6 +159,7 @@ def integrate_nonlinear(
         method=method,
         terms=terms,
         checkpoint=checkpoint,
+        gx_real_fft=gx_real_fft,
     )
 
 
@@ -171,6 +178,7 @@ def integrate_nonlinear_gx_diagnostics(
     sample_stride: int = 1,
     use_dealias_mask: bool = False,
     z_index: int | None = None,
+    gx_real_fft: bool = True,
 ) -> tuple[jnp.ndarray, GXDiagnostics]:
     """Integrate nonlinear system and return GX-style diagnostics."""
 
@@ -195,7 +203,7 @@ def integrate_nonlinear_gx_diagnostics(
     dt_val = jnp.asarray(dt, dtype=real_dtype)
 
     def rhs_fn(G):
-        return nonlinear_rhs_cached(G, cache, params, term_cfg)
+        return nonlinear_rhs_cached(G, cache, params, term_cfg, gx_real_fft=gx_real_fft)
 
     _dG0, fields0 = rhs_fn(G0)
     phi_prev = fields0.phi
@@ -299,6 +307,7 @@ def build_nonlinear_imex_operator(
     *,
     terms: TermConfig | None = None,
     implicit_preconditioner: str | None = None,
+    gx_real_fft: bool = True,
 ) -> IMEXLinearOperator:
     """Build and cache the matrix-free linear operator used by nonlinear IMEX."""
 
@@ -339,6 +348,7 @@ def integrate_nonlinear_imex_cached(
     implicit_solve_method: str = "batched",
     implicit_preconditioner: str | None = None,
     implicit_operator: IMEXLinearOperator | None = None,
+    gx_real_fft: bool = True,
 ) -> tuple[jnp.ndarray, FieldState]:
     """IMEX integrator: implicit linear operator, explicit nonlinear term."""
 
@@ -400,6 +410,7 @@ def integrate_nonlinear_imex_cached(
             laguerre_to_spectral=cache.laguerre_to_spectral,
             laguerre_roots=cache.laguerre_roots,
             b=cache.b,
+            gx_real_fft=gx_real_fft,
         )
 
     def fixed_point(G_in: jnp.ndarray, G_rhs: jnp.ndarray) -> jnp.ndarray:
