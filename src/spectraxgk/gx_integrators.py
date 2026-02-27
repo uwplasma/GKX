@@ -18,7 +18,7 @@ from spectraxgk.linear import (
     linear_terms_to_term_config,
 )
 from spectraxgk.terms.assembly import assemble_rhs_cached
-from spectraxgk.terms.config import TermConfig
+from spectraxgk.terms.config import FieldState, TermConfig
 
 
 @dataclass(frozen=True)
@@ -298,7 +298,7 @@ def _rk4_step(
     params: LinearParams,
     term_cfg: TermConfig,
     dt: float,
-) -> tuple[jnp.ndarray, jnp.ndarray]:
+) -> tuple[jnp.ndarray, FieldState]:
     """Single GX-style RK4 step for linear dynamics."""
 
     dt_val = jnp.asarray(dt)
@@ -319,7 +319,7 @@ def _rk4_step(
 
     # fields at the end of step
     _, fields = assemble_rhs_cached(G_next, cache, params_step, terms=term_cfg)
-    return G_next, fields.phi
+    return G_next, fields
 
 
 def integrate_linear_gx(
@@ -378,14 +378,13 @@ def integrate_linear_gx(
             dt_guess = float(time_cfg.cfl_fac) * float(time_cfg.cfl) / wmax
             dt = min(max(dt_guess, dt_min), dt_max)
 
-        G, phi = stepper(G, cache, params, term_cfg, dt)
+        G, fields = stepper(G, cache, params, term_cfg, dt)
+        phi = fields.phi
         step += 1
         t += dt
 
         if step % sample_stride == 0 or t >= t_max:
-            gamma, omega = _gx_growth_rate_step(
-                phi, phi_prev, dt, z_index=z_idx, mask=mask
-            )
+            gamma, omega = _gx_growth_rate_step(phi, phi_prev, dt, z_index=z_idx, mask=mask)
             ts.append(t)
             phi_list.append(np.asarray(phi))
             gamma_list.append(np.asarray(gamma))
@@ -397,4 +396,127 @@ def integrate_linear_gx(
         np.asarray(phi_list),
         np.asarray(gamma_list),
         np.asarray(omega_list),
+    )
+
+
+def integrate_linear_gx_diagnostics(
+    G0: jnp.ndarray,
+    grid: SpectralGrid,
+    cache: LinearCache,
+    params: LinearParams,
+    geom: SAlphaGeometry,
+    time_cfg: GXTimeConfig,
+    terms: LinearTerms | None = None,
+    *,
+    mode_method: str = "z_index",
+    z_index: int | None = None,
+    jit: bool = True,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, GXDiagnostics]:
+    """GX-style RK4 integrator with GX growth-rate + energy/flux diagnostics."""
+
+    from spectraxgk.diagnostics import (
+        GXDiagnostics,
+        gx_energy_total,
+        gx_heat_flux,
+        gx_particle_flux,
+        gx_volume_factors,
+        gx_Wapar_krehm,
+        gx_Wg,
+        gx_Wphi_krehm,
+    )
+
+    if terms is None:
+        terms = LinearTerms()
+    term_cfg = _gx_term_config(terms)
+
+    t_max = float(time_cfg.t_max)
+    dt = float(time_cfg.dt)
+    dt_min = float(time_cfg.dt_min)
+    dt_max = float(time_cfg.dt_max) if time_cfg.dt_max is not None else dt
+    sample_stride = int(max(time_cfg.sample_stride, 1))
+
+    z_idx = _gx_midplane_index(grid.z.size) if z_index is None else int(z_index)
+    mask = jnp.asarray(grid.dealias_mask, dtype=bool)
+
+    G = jnp.asarray(G0)
+    t = 0.0
+    step = 0
+
+    _, fields0 = assemble_rhs_cached(G, cache, params, terms=term_cfg)
+    phi_prev = fields0.phi
+
+    omega_max = _gx_linear_omega_max(grid, geom, params, G.shape[-5], G.shape[-4])
+    wmax = float(np.sum(omega_max))
+    if not time_cfg.fixed_dt and wmax > 0.0:
+        dt_guess = float(time_cfg.cfl_fac) * float(time_cfg.cfl) / wmax
+        dt = min(max(dt_guess, dt_min), dt_max)
+
+    ts: list[float] = []
+    phi_list: list[np.ndarray] = []
+    gamma_list: list[np.ndarray] = []
+    omega_list: list[np.ndarray] = []
+    Wg_list: list[float] = []
+    Wphi_list: list[float] = []
+    Wapar_list: list[float] = []
+    heat_list: list[float] = []
+    pflux_list: list[float] = []
+
+    vol_fac, flux_fac = gx_volume_factors(geom, grid)
+
+    stepper = _rk4_step
+    if jit:
+        stepper = jax.jit(_rk4_step, donate_argnums=(0,))
+
+    while t < t_max - 1.0e-12:
+        if not time_cfg.fixed_dt and wmax > 0.0:
+            dt_guess = float(time_cfg.cfl_fac) * float(time_cfg.cfl) / wmax
+            dt = min(max(dt_guess, dt_min), dt_max)
+
+        G, fields = stepper(G, cache, params, term_cfg, dt)
+        step += 1
+        t += dt
+
+        if step % sample_stride == 0 or t >= t_max:
+            phi = fields.phi
+            apar = fields.apar if fields.apar is not None else jnp.zeros_like(phi)
+            bpar = fields.bpar if fields.bpar is not None else jnp.zeros_like(phi)
+            gamma, omega = _gx_growth_rate_step(phi, phi_prev, dt, z_index=z_idx, mask=mask)
+            ts.append(t)
+            phi_list.append(np.asarray(phi))
+            gamma_list.append(np.asarray(gamma))
+            omega_list.append(np.asarray(omega))
+
+            Wg_val = gx_Wg(G, grid, params, vol_fac)
+            Wphi_val = gx_Wphi_krehm(phi, grid, params, vol_fac)
+            Wapar_val = gx_Wapar_krehm(apar, grid)
+            heat_val = gx_heat_flux(G, phi, apar, bpar, cache, grid, params, flux_fac)
+            pflux_val = gx_particle_flux(G, phi, apar, bpar, cache, grid, params, flux_fac)
+
+            Wg_list.append(float(Wg_val))
+            Wphi_list.append(float(Wphi_val))
+            Wapar_list.append(float(Wapar_val))
+            heat_list.append(float(heat_val))
+            pflux_list.append(float(pflux_val))
+
+        phi_prev = fields.phi
+
+    diag = GXDiagnostics(
+        t=np.asarray(ts),
+        gamma_t=np.asarray(gamma_list),
+        omega_t=np.asarray(omega_list),
+        Wg_t=np.asarray(Wg_list),
+        Wphi_t=np.asarray(Wphi_list),
+        Wapar_t=np.asarray(Wapar_list),
+        heat_flux_t=np.asarray(heat_list),
+        particle_flux_t=np.asarray(pflux_list),
+        energy_t=np.asarray(
+            gx_energy_total(np.asarray(Wg_list), np.asarray(Wphi_list), np.asarray(Wapar_list))
+        ),
+    )
+    return (
+        np.asarray(ts),
+        np.asarray(phi_list),
+        np.asarray(gamma_list),
+        np.asarray(omega_list),
+        diag,
     )

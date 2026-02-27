@@ -1135,7 +1135,7 @@ def run_cyclone_linear(
                 dt=float(dt),
                 t_max=t_max_val,
                 sample_stride=stride,
-                fixed_dt=False,
+                fixed_dt=True,
             )
             t, phi_t, _g_t, _o_t = integrate_linear_gx(
                 G0_jax,
@@ -1667,7 +1667,7 @@ def run_cyclone_scan(
             dt_i = float(dt[idx]) if isinstance(dt, np.ndarray) else float(dt)
             steps_i = int(steps[idx]) if isinstance(steps, np.ndarray) else int(steps)
             t_max_val = dt_i * float(steps_i)
-            gx_time_cfg = GXTimeConfig(dt=dt_i, t_max=t_max_val, sample_stride=1, fixed_dt=False)
+            gx_time_cfg = GXTimeConfig(dt=dt_i, t_max=t_max_val, sample_stride=1, fixed_dt=True)
             t, phi_t, _g_t, _o_t = integrate_linear_gx(
                 G0_jax,
                 grid,
