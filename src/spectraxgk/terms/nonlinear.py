@@ -399,6 +399,7 @@ def nonlinear_em_contribution(
     laguerre_j1_over_alpha: jnp.ndarray | None = None,
     b: jnp.ndarray | None = None,
     gx_real_fft: bool = True,
+    laguerre_mode: str = "grid",
 ) -> jnp.ndarray:
     """Nonlinear E×B + flutter contribution using GX-style gyroaveraging.
 
@@ -421,6 +422,8 @@ def nonlinear_em_contribution(
         and laguerre_roots is not None
         and b is not None
     )
+    if str(laguerre_mode).lower() == "spectral":
+        use_laguerre = False
 
     if use_laguerre:
         laguerre_to_grid = cast(jnp.ndarray, laguerre_to_grid)
@@ -539,6 +542,7 @@ def nonlinear_em_components(
     laguerre_j1_over_alpha: jnp.ndarray | None = None,
     b: jnp.ndarray | None = None,
     gx_real_fft: bool = True,
+    laguerre_mode: str = "grid",
 ) -> dict[str, jnp.ndarray]:
     """Return nonlinear E×B/flutter components for diagnostics/parity checks."""
 
@@ -557,6 +561,8 @@ def nonlinear_em_components(
         and laguerre_roots is not None
         and b is not None
     )
+    if str(laguerre_mode).lower() == "spectral":
+        use_laguerre = False
 
     if use_laguerre:
         laguerre_to_grid = cast(jnp.ndarray, laguerre_to_grid)

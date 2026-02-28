@@ -552,6 +552,7 @@ def integrate_nonlinear_diffrax(
     jit: bool | None = None,
     state_sharding: Any | None = None,
     gx_real_fft: bool = True,
+    laguerre_mode: str = "grid",
 ) -> tuple[jnp.ndarray, FieldState]:
     """Integrate the nonlinear system with diffrax (placeholder nonlinear term)."""
 
@@ -613,6 +614,7 @@ def integrate_nonlinear_diffrax(
             laguerre_j1_over_alpha=_cache.laguerre_j1_over_alpha,
             b=_cache.b,
             gx_real_fft=gx_real_fft,
+            laguerre_mode=laguerre_mode,
         )
         return _pack_complex_state(dG)
 

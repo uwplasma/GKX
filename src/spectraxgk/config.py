@@ -52,6 +52,7 @@ class TimeConfig:
     dt: float = 0.1
     method: str = "rk2"
     sample_stride: int = 1
+    diagnostics_stride: int = 1
     save_state: bool = False
     checkpoint: bool = False
     implicit_restart: int = 20
@@ -65,6 +66,7 @@ class TimeConfig:
     diffrax_max_steps: int = 4096
     progress_bar: bool = False
     gx_real_fft: bool = True
+    laguerre_nonlinear_mode: str = "grid"
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

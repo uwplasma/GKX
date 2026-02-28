@@ -53,6 +53,7 @@ def nonlinear_rhs_cached(
     terms: TermConfig | None = None,
     *,
     gx_real_fft: bool = True,
+    laguerre_mode: str = "grid",
 ) -> Tuple[jnp.ndarray, FieldState]:
     """Compute a nonlinear RHS using linear terms plus a placeholder nonlinear term."""
 
@@ -86,6 +87,7 @@ def nonlinear_rhs_cached(
             laguerre_j1_over_alpha=cache.laguerre_j1_over_alpha,
             b=cache.b,
             gx_real_fft=gx_real_fft,
+            laguerre_mode=laguerre_mode,
         )
     return dG, fields
 
@@ -100,6 +102,7 @@ def integrate_nonlinear_cached(
     terms: TermConfig | None = None,
     checkpoint: bool = False,
     gx_real_fft: bool = True,
+    laguerre_mode: str = "grid",
 ) -> tuple[jnp.ndarray, FieldState]:
     """Integrate the nonlinear system using a cached geometry object."""
 
@@ -114,10 +117,18 @@ def integrate_nonlinear_cached(
             terms=term_cfg,
             checkpoint=checkpoint,
             gx_real_fft=gx_real_fft,
+            laguerre_mode=laguerre_mode,
         )
 
     def rhs_fn(G):
-        return nonlinear_rhs_cached(G, cache, params, term_cfg, gx_real_fft=gx_real_fft)
+        return nonlinear_rhs_cached(
+            G,
+            cache,
+            params,
+            term_cfg,
+            gx_real_fft=gx_real_fft,
+            laguerre_mode=laguerre_mode,
+        )
 
     return integrate_nonlinear_scan(
         rhs_fn,
@@ -141,6 +152,7 @@ def integrate_nonlinear(
     terms: TermConfig | None = None,
     checkpoint: bool = False,
     gx_real_fft: bool = True,
+    laguerre_mode: str = "grid",
 ) -> tuple[jnp.ndarray, FieldState]:
     """Integrate the nonlinear system using built-in cache construction."""
 
@@ -162,6 +174,7 @@ def integrate_nonlinear(
         terms=terms,
         checkpoint=checkpoint,
         gx_real_fft=gx_real_fft,
+        laguerre_mode=laguerre_mode,
     )
 
 
@@ -178,9 +191,11 @@ def integrate_nonlinear_gx_diagnostics(
     terms: TermConfig | None = None,
     checkpoint: bool = False,
     sample_stride: int = 1,
+    diagnostics_stride: int = 1,
     use_dealias_mask: bool = False,
     z_index: int | None = None,
     gx_real_fft: bool = True,
+    laguerre_mode: str = "grid",
 ) -> tuple[jnp.ndarray, GXDiagnostics]:
     """Integrate nonlinear system and return GX-style diagnostics."""
 
@@ -205,13 +220,54 @@ def integrate_nonlinear_gx_diagnostics(
     dt_val = jnp.asarray(dt, dtype=real_dtype)
 
     def rhs_fn(G):
-        return nonlinear_rhs_cached(G, cache, params, term_cfg, gx_real_fft=gx_real_fft)
+        return nonlinear_rhs_cached(
+            G,
+            cache,
+            params,
+            term_cfg,
+            gx_real_fft=gx_real_fft,
+            laguerre_mode=laguerre_mode,
+        )
 
     _dG0, fields0 = rhs_fn(G0)
     phi_prev = fields0.phi
 
-    def step(carry, _):
-        G, phi_last = carry
+    def _compute_diag_from_state(G_state, phi_last):
+        _dG_state, fields_state = rhs_fn(G_state)
+        phi = fields_state.phi
+        apar = fields_state.apar if fields_state.apar is not None else jnp.zeros_like(phi)
+        bpar = fields_state.bpar if fields_state.bpar is not None else jnp.zeros_like(phi)
+
+        gamma, omega = _gx_growth_rate_step(phi, phi_last, dt_val, z_index=z_idx, mask=mask)
+        Wg_val = gx_Wg(G_state, grid, params, vol_fac, use_dealias=use_dealias)
+        Wphi_val = gx_Wphi_krehm(phi, grid, params, vol_fac, use_dealias=use_dealias)
+        Wapar_val = gx_Wapar_krehm(apar, grid, use_dealias=use_dealias)
+        heat_val = gx_heat_flux(
+            G_state,
+            phi,
+            apar,
+            bpar,
+            cache,
+            grid,
+            params,
+            flux_fac,
+            use_dealias=use_dealias,
+        )
+        pflux_val = gx_particle_flux(
+            G_state,
+            phi,
+            apar,
+            bpar,
+            cache,
+            grid,
+            params,
+            flux_fac,
+            use_dealias=use_dealias,
+        )
+        return (gamma, omega, Wg_val, Wphi_val, Wapar_val, heat_val, pflux_val), phi
+
+    def step(carry, idx):
+        G, phi_last, diag_prev = carry
         dG, _ = rhs_fn(G)
         if method == "euler":
             G_new = G + dt_val * dG
@@ -235,47 +291,28 @@ def integrate_nonlinear_gx_diagnostics(
         else:
             raise ValueError("method must be one of {'euler', 'rk2', 'rk3', 'rk4'}")
 
-        _dG_new, fields_new = rhs_fn(G_new)
-        phi = fields_new.phi
-        apar = fields_new.apar if fields_new.apar is not None else jnp.zeros_like(phi)
-        bpar = fields_new.bpar if fields_new.bpar is not None else jnp.zeros_like(phi)
+        def _compute_diag(_):
+            return _compute_diag_from_state(G_new, phi_last)
 
-        gamma, omega = _gx_growth_rate_step(phi, phi_last, dt_val, z_index=z_idx, mask=mask)
-        Wg_val = gx_Wg(G_new, grid, params, vol_fac, use_dealias=use_dealias)
-        Wphi_val = gx_Wphi_krehm(phi, grid, params, vol_fac, use_dealias=use_dealias)
-        Wapar_val = gx_Wapar_krehm(apar, grid, use_dealias=use_dealias)
-        heat_val = gx_heat_flux(
-            G_new,
-            phi,
-            apar,
-            bpar,
-            cache,
-            grid,
-            params,
-            flux_fac,
-            use_dealias=use_dealias,
-        )
-        pflux_val = gx_particle_flux(
-            G_new,
-            phi,
-            apar,
-            bpar,
-            cache,
-            grid,
-            params,
-            flux_fac,
-            use_dealias=use_dealias,
-        )
-        diag = (gamma, omega, Wg_val, Wphi_val, Wapar_val, heat_val, pflux_val)
-        return (G_new, phi), diag
+        def _reuse_diag(_):
+            return diag_prev, phi_last
+
+        diag_stride = int(max(diagnostics_stride, 1))
+        do_diag = (idx % diag_stride) == 0
+        diag, phi = jax.lax.cond(do_diag, _compute_diag, _reuse_diag, operand=None)
+        return (G_new, phi, diag), diag
 
     step_fn = jax.checkpoint(step) if checkpoint else step
-    (G_final, _phi_last), diag = jax.lax.scan(step_fn, (G0, phi_prev), None, length=steps)
+    diag_zero, _phi0 = _compute_diag_from_state(G0, phi_prev)
+    idx = jnp.arange(steps, dtype=jnp.int32)
+    (G_final, _phi_last, _diag_last), diag = jax.lax.scan(
+        step_fn, (G0, phi_prev, diag_zero), idx, length=steps
+    )
 
     gamma_t, omega_t, Wg_t, Wphi_t, Wapar_t, heat_t, pflux_t = diag
     t = dt_val * (jnp.arange(steps, dtype=real_dtype) + 1.0)
 
-    stride = int(max(sample_stride, 1))
+    stride = int(max(sample_stride, diagnostics_stride, 1))
     if stride > 1:
         gamma_t = gamma_t[::stride]
         omega_t = omega_t[::stride]
@@ -351,6 +388,7 @@ def integrate_nonlinear_imex_cached(
     implicit_preconditioner: str | None = None,
     implicit_operator: IMEXLinearOperator | None = None,
     gx_real_fft: bool = True,
+    laguerre_mode: str = "grid",
 ) -> tuple[jnp.ndarray, FieldState]:
     """IMEX integrator: implicit linear operator, explicit nonlinear term."""
 
@@ -411,8 +449,11 @@ def integrate_nonlinear_imex_cached(
             laguerre_to_grid=cache.laguerre_to_grid,
             laguerre_to_spectral=cache.laguerre_to_spectral,
             laguerre_roots=cache.laguerre_roots,
+            laguerre_j0=cache.laguerre_j0,
+            laguerre_j1_over_alpha=cache.laguerre_j1_over_alpha,
             b=cache.b,
             gx_real_fft=gx_real_fft,
+            laguerre_mode=laguerre_mode,
         )
 
     def fixed_point(G_in: jnp.ndarray, G_rhs: jnp.ndarray) -> jnp.ndarray:

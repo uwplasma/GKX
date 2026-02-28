@@ -128,6 +128,13 @@ def build_parser() -> argparse.ArgumentParser:
     run_runtime_nl.add_argument("--steps", type=int, default=None)
     run_runtime_nl.add_argument("--method", type=str, default=None)
     run_runtime_nl.add_argument("--sample-stride", type=int, default=None)
+    run_runtime_nl.add_argument("--diagnostics-stride", type=int, default=None)
+    run_runtime_nl.add_argument(
+        "--laguerre-mode",
+        type=str,
+        default=None,
+        help="grid or spectral (nonlinear Laguerre handling)",
+    )
     run_runtime_nl.add_argument("--out", type=str, default=None, help="Optional CSV output path")
     run_runtime_nl.set_defaults(func=_cmd_run_runtime_nonlinear)
 
@@ -384,7 +391,17 @@ def _cmd_run_runtime_nonlinear(args: argparse.Namespace) -> int:
     )
     method = str(args.method if args.method is not None else run_cfg.get("method", cfg.time.method))
     sample_stride = int(
-        args.sample_stride if args.sample_stride is not None else run_cfg.get("sample_stride", 1)
+        args.sample_stride
+        if args.sample_stride is not None
+        else run_cfg.get("sample_stride", cfg.time.sample_stride)
+    )
+    diagnostics_stride = (
+        None
+        if args.diagnostics_stride is None
+        else int(args.diagnostics_stride)
+    )
+    laguerre_mode = args.laguerre_mode if args.laguerre_mode is not None else run_cfg.get(
+        "laguerre_mode"
     )
 
     result = run_runtime_nonlinear(
@@ -396,6 +413,8 @@ def _cmd_run_runtime_nonlinear(args: argparse.Namespace) -> int:
         steps=steps,
         method=method,
         sample_stride=sample_stride,
+        diagnostics_stride=diagnostics_stride,
+        laguerre_mode=laguerre_mode,
         diagnostics=True,
     )
     diag = result.diagnostics

@@ -554,7 +554,9 @@ def run_runtime_nonlinear(
     dt: float | None = None,
     steps: int | None = None,
     method: str | None = None,
-    sample_stride: int = 1,
+    sample_stride: int | None = None,
+    diagnostics_stride: int | None = None,
+    laguerre_mode: str | None = None,
     diagnostics: bool = True,
 ) -> RuntimeNonlinearResult:
     """Run a nonlinear point using the unified runtime config path."""
@@ -585,6 +587,9 @@ def run_runtime_nonlinear(
         raise ValueError("steps must be >= 1")
 
     if diagnostics:
+        sample_stride_use = cfg.time.sample_stride if sample_stride is None else int(sample_stride)
+        diag_stride = cfg.time.diagnostics_stride if diagnostics_stride is None else int(diagnostics_stride)
+        laguerre_mode_use = cfg.time.laguerre_nonlinear_mode if laguerre_mode is None else str(laguerre_mode)
         t, diag = integrate_nonlinear_gx_diagnostics(
             G0,
             grid,
@@ -594,7 +599,9 @@ def run_runtime_nonlinear(
             steps=steps_val,
             method=str(method or cfg.time.method),
             terms=term_cfg,
-            sample_stride=int(sample_stride),
+            sample_stride=int(sample_stride_use),
+            diagnostics_stride=int(diag_stride),
+            laguerre_mode=laguerre_mode_use,
         )
         return RuntimeNonlinearResult(
             t=np.asarray(t),
