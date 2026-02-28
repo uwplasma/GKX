@@ -7,6 +7,7 @@ from typing import Callable, Tuple
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 from spectraxgk.geometry import SAlphaGeometry
 from spectraxgk.grids import SpectralGrid
@@ -121,8 +122,9 @@ def integrate_nonlinear_cached(
         )
 
     def rhs_fn(G):
+        G_state = _enforce_hermitian(G)
         return nonlinear_rhs_cached(
-            G,
+            G_state,
             cache,
             params,
             term_cfg,
@@ -196,6 +198,7 @@ def integrate_nonlinear_gx_diagnostics(
     z_index: int | None = None,
     gx_real_fft: bool = True,
     laguerre_mode: str = "grid",
+    flux_scale: float = 2.0,
 ) -> tuple[jnp.ndarray, GXDiagnostics]:
     """Integrate nonlinear system and return GX-style diagnostics."""
 
@@ -213,9 +216,32 @@ def integrate_nonlinear_gx_diagnostics(
     mask = jnp.asarray(grid.dealias_mask, dtype=bool)
     z_idx = _gx_midplane_index(grid.z.size) if z_index is None else int(z_index)
     use_dealias = bool(use_dealias_mask)
+    rho_star = float(getattr(params, "rho_star", 1.0))
+    kx_phys = cache.kx / rho_star
+    ky_phys = cache.ky / rho_star
+    use_hermitian = bool(gx_real_fft) and bool(np.any(np.asarray(grid.ky) < 0.0))
+    ny_full = int(grid.ky.size)
+    nyc = ny_full // 2 + 1
+    nx = int(grid.kx.size)
+    if nx > 1:
+        kx_neg = jnp.concatenate(
+            [jnp.asarray([0], dtype=jnp.int32), jnp.arange(nx - 1, 0, -1, dtype=jnp.int32)]
+        )
+    else:
+        kx_neg = jnp.asarray([0], dtype=jnp.int32)
+
+    def _enforce_hermitian(G_state: jnp.ndarray) -> jnp.ndarray:
+        if not use_hermitian or nyc <= 2:
+            return G_state
+        pos = G_state[..., :nyc, :, :]
+        neg = jnp.conj(pos[..., 1 : nyc - 1, :, :])[..., ::-1, :, :]
+        if nx > 1:
+            neg = neg[..., kx_neg, :]
+        return jnp.concatenate([pos, neg], axis=-3)
 
     state_dtype = jnp.result_type(G0, jnp.complex64)
     G0 = jnp.asarray(G0, dtype=state_dtype)
+    G0 = _enforce_hermitian(G0)
     real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
     dt_val = jnp.asarray(dt, dtype=real_dtype)
 
@@ -240,8 +266,16 @@ def integrate_nonlinear_gx_diagnostics(
 
         gamma, omega = _gx_growth_rate_step(phi, phi_last, dt_val, z_index=z_idx, mask=mask)
         Wg_val = gx_Wg(G_state, grid, params, vol_fac, use_dealias=use_dealias)
-        Wphi_val = gx_Wphi_krehm(phi, grid, params, vol_fac, use_dealias=use_dealias)
-        Wapar_val = gx_Wapar_krehm(apar, grid, use_dealias=use_dealias)
+        Wphi_val = gx_Wphi_krehm(
+            phi,
+            grid,
+            params,
+            vol_fac,
+            kx=kx_phys,
+            ky=ky_phys,
+            use_dealias=use_dealias,
+        )
+        Wapar_val = gx_Wapar_krehm(apar, grid, kx=kx_phys, ky=ky_phys, use_dealias=use_dealias)
         heat_val = gx_heat_flux(
             G_state,
             phi,
@@ -252,6 +286,7 @@ def integrate_nonlinear_gx_diagnostics(
             params,
             flux_fac,
             use_dealias=use_dealias,
+            flux_scale=flux_scale,
         )
         pflux_val = gx_particle_flux(
             G_state,
@@ -263,6 +298,7 @@ def integrate_nonlinear_gx_diagnostics(
             params,
             flux_fac,
             use_dealias=use_dealias,
+            flux_scale=flux_scale,
         )
         return (gamma, omega, Wg_val, Wphi_val, Wapar_val, heat_val, pflux_val), phi
 
@@ -282,14 +318,43 @@ def integrate_nonlinear_gx_diagnostics(
             G2 = 0.75 * G + 0.25 * (G1 + dt_val * k2)
             k3, _ = rhs_fn(G2)
             G_new = (1.0 / 3.0) * G + (2.0 / 3.0) * (G2 + dt_val * k3)
+        elif method == "rk3_gx":
+            k1 = dG
+            G1 = G + (dt_val / 3.0) * k1
+            k2, _ = rhs_fn(G1)
+            G2 = G + (2.0 * dt_val / 3.0) * k2
+            k3, _ = rhs_fn(G2)
+            G3 = G + 0.75 * dt_val * k3
+            G_new = G3 + 0.25 * dt_val * k1
         elif method == "rk4":
             k1 = dG
             k2, _ = rhs_fn(G + 0.5 * dt_val * k1)
             k3, _ = rhs_fn(G + 0.5 * dt_val * k2)
             k4, _ = rhs_fn(G + dt_val * k3)
             G_new = G + (dt_val / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+        elif method == "k10":
+            def _euler_step(G_state):
+                dG_state, _ = rhs_fn(G_state)
+                return G_state + (dt_val / 6.0) * dG_state
+
+            G_q1 = G
+            G_q2 = G
+            for _ in range(5):
+                G_q1 = _euler_step(G_q1)
+
+            G_q2 = 0.04 * G_q2 + 0.36 * G_q1
+            G_q1 = 15.0 * G_q2 - 5.0 * G_q1
+
+            for _ in range(4):
+                G_q1 = _euler_step(G_q1)
+
+            dG_final, _ = rhs_fn(G_q1)
+            G_new = G_q2 + 0.6 * G_q1 + 0.1 * dt_val * dG_final
         else:
-            raise ValueError("method must be one of {'euler', 'rk2', 'rk3', 'rk4'}")
+            raise ValueError(
+                "method must be one of {'euler', 'rk2', 'rk3', 'rk3_gx', 'rk4', 'k10'}"
+            )
+        G_new = _enforce_hermitian(G_new)
 
         def _compute_diag(_):
             return _compute_diag_from_state(G_new, phi_last)

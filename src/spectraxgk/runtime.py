@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from typing import Sequence
+from pathlib import Path
 
 import jax.numpy as jnp
 import numpy as np
@@ -17,7 +18,7 @@ from spectraxgk.analysis import (
     select_ky_index,
 )
 from spectraxgk.diagnostics import GXDiagnostics
-from spectraxgk.geometry import SAlphaGeometry
+from spectraxgk.geometry import SAlphaGeometry, gx_twist_shift_params
 from spectraxgk.grids import SpectralGrid, build_spectral_grid, select_ky_grid
 from spectraxgk.linear import (
     LinearParams,
@@ -125,6 +126,12 @@ def build_runtime_linear_params(cfg: RuntimeConfig) -> LinearParams:
         fapar=fapar,
         nu_hyper=float(cfg.collisions.nu_hyper),
         p_hyper=float(cfg.collisions.p_hyper),
+        nu_hyper_l=float(cfg.collisions.nu_hyper_l),
+        nu_hyper_m=float(cfg.collisions.nu_hyper_m),
+        nu_hyper_lm=float(cfg.collisions.nu_hyper_lm),
+        p_hyper_l=float(cfg.collisions.p_hyper_l),
+        p_hyper_m=float(cfg.collisions.p_hyper_m),
+        p_hyper_lm=float(cfg.collisions.p_hyper_lm),
         D_hyper=float(cfg.collisions.D_hyper),
         p_hyper_kperp=float(cfg.collisions.p_hyper_kperp),
         hypercollisions_const=float(cfg.collisions.hypercollisions_const),
@@ -134,7 +141,11 @@ def build_runtime_linear_params(cfg: RuntimeConfig) -> LinearParams:
         params,
         nu_hermite=float(cfg.collisions.nu_hermite),
         nu_laguerre=float(cfg.collisions.nu_laguerre),
-        damp_ends_amp=float(cfg.collisions.damp_ends_amp),
+        damp_ends_amp=(
+            float(cfg.collisions.damp_ends_amp) / float(cfg.time.dt)
+            if cfg.collisions.damp_ends_scale_by_dt and float(cfg.time.dt) != 0.0
+            else float(cfg.collisions.damp_ends_amp)
+        ),
         damp_ends_widthfrac=float(cfg.collisions.damp_ends_widthfrac),
     )
 
@@ -187,6 +198,42 @@ def _build_gaussian_profile(
     return env * np.exp(-((z - theta0) / width) ** 2)
 
 
+def _reshape_gx_state(
+    raw: np.ndarray,
+    *,
+    nspec: int,
+    nl: int,
+    nm: int,
+    nyc: int,
+    nx: int,
+    nz: int,
+) -> np.ndarray:
+    nR = nyc * nx * nz
+    arr = raw.reshape((nspec, nm, nl, nR)).transpose(0, 2, 1, 3)
+    ky_idx = np.arange(nyc)[:, None, None]
+    kx_idx = np.arange(nx)[None, :, None]
+    z_idx = np.arange(nz)[None, None, :]
+    idxyz = ky_idx + nyc * (kx_idx + nx * z_idx)
+    arr = arr[..., idxyz.ravel()]
+    return arr.reshape((nspec, nl, nm, nyc, nx, nz))
+
+
+def _expand_ky(arr: np.ndarray, *, nyc: int) -> np.ndarray:
+    ny_full = 2 * (nyc - 1)
+    if ny_full <= 0 or arr.shape[-3] == ny_full:
+        return arr
+    if nyc <= 2:
+        return arr
+    pos = arr
+    neg = np.conj(pos[..., 1 : nyc - 1, :, :])
+    neg = neg[..., ::-1, :, :]
+    nx = pos.shape[-2]
+    if nx > 1:
+        kx_neg = np.concatenate(([0], np.arange(nx - 1, 0, -1)))
+        neg = neg[..., kx_neg, :]
+    return np.concatenate([pos, neg], axis=-3)
+
+
 def _build_initial_condition(
     grid: SpectralGrid,
     geom: SAlphaGeometry,
@@ -213,6 +260,26 @@ def _build_initial_condition(
         )
     if cfg.init.gaussian_width <= 0.0:
         raise ValueError("gaussian_width must be > 0")
+
+    if cfg.init.init_file is not None:
+        path = Path(cfg.init.init_file)
+        raw = np.fromfile(path, dtype=np.complex64)
+        ny = grid.ky.size
+        nx = grid.kx.size
+        nz = grid.z.size
+        nyc = ny // 2 + 1
+        expected_nyc = nspecies * Nl * Nm * nyc * nx * nz
+        expected_full = nspecies * Nl * Nm * ny * nx * nz
+        if raw.size == expected_nyc:
+            arr = _reshape_gx_state(raw, nspec=nspecies, nl=Nl, nm=Nm, nyc=nyc, nx=nx, nz=nz)
+            arr = _expand_ky(arr, nyc=nyc)
+            return jnp.asarray(arr)
+        if raw.size == expected_full:
+            arr = raw.reshape((nspecies, Nl, Nm, ny, nx, nz))
+            return jnp.asarray(arr)
+        raise ValueError(
+            f"init_file size {raw.size} does not match expected {expected_nyc} (nyc) or {expected_full} (full)"
+        )
 
     g0 = np.zeros((nspecies, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
     amp = float(cfg.init.init_amp)
@@ -272,8 +339,12 @@ def run_runtime_linear(
 ) -> RuntimeLinearResult:
     """Run one linear point from a case-agnostic runtime config."""
 
-    grid_full = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
+    grid_cfg = cfg.grid
+    if grid_cfg.boundary == "linked" and not grid_cfg.non_twist:
+        jtwist, x0 = gx_twist_shift_params(geom, grid_cfg)
+        grid_cfg = replace(grid_cfg, Lx=2.0 * np.pi * x0, jtwist=jtwist)
+    grid_full = build_spectral_grid(grid_cfg)
     params = build_runtime_linear_params(cfg)
     terms = build_runtime_linear_terms(cfg)
 
@@ -561,8 +632,12 @@ def run_runtime_nonlinear(
 ) -> RuntimeNonlinearResult:
     """Run a nonlinear point using the unified runtime config path."""
 
-    grid = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
+    grid_cfg = cfg.grid
+    if grid_cfg.boundary == "linked" and not grid_cfg.non_twist:
+        jtwist, x0 = gx_twist_shift_params(geom, grid_cfg)
+        grid_cfg = replace(grid_cfg, Lx=2.0 * np.pi * x0, jtwist=jtwist)
+    grid = build_spectral_grid(grid_cfg)
     params = build_runtime_linear_params(cfg)
     term_cfg = build_runtime_term_config(cfg)
 
@@ -601,7 +676,9 @@ def run_runtime_nonlinear(
             terms=term_cfg,
             sample_stride=int(sample_stride_use),
             diagnostics_stride=int(diag_stride),
+            use_dealias_mask=True,
             laguerre_mode=laguerre_mode_use,
+            flux_scale=float(cfg.normalization.flux_scale),
         )
         return RuntimeNonlinearResult(
             t=np.asarray(t),
