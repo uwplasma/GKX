@@ -618,6 +618,7 @@ def build_linear_cache(
         use_ntft = False
     x0_eff = float(getattr(grid, "x0", 1.0))
     jtwist = 0
+    x0_target = x0_eff
     if use_twist_shift:
         gds21_min = float(gds21[0]) if gds21.ndim else float(gds21)
         gds22_min = float(gds22[0]) if gds22.ndim else float(gds22)
@@ -632,8 +633,9 @@ def build_linear_cache(
                 jtwist = int(np.round(twist_shift_geo_fac))
             if jtwist == 0:
                 jtwist = 1
+            x0_target = float(y0) * abs(jtwist) / abs(twist_shift_geo_fac)
             if use_ntft:
-                x0_eff = float(y0) * abs(jtwist) / abs(twist_shift_geo_fac)
+                x0_eff = x0_target
         else:
             jtwist_val = getattr(grid, "jtwist", None)
             if jtwist_val is not None:
@@ -642,6 +644,11 @@ def build_linear_cache(
                 jtwist = 1
         if use_ntft and float(getattr(grid, "x0", x0_eff)) != 0.0:
             kx_eff = kx_eff * (float(getattr(grid, "x0", x0_eff)) / float(x0_eff))
+        if not use_ntft and x0_target != 0.0 and x0_target != x0_eff:
+            scale = float(x0_eff) / float(x0_target)
+            kx_eff = kx_eff * scale
+            kx_grid = kx_grid * scale
+            x0_eff = x0_target
     kperp2_bmag = bool(getattr(geom, "kperp2_bmag", True))
     if use_ntft:
         ftwist = (geom.s_hat * gds21 / gds22_arr).astype(real_dtype)

@@ -21,9 +21,22 @@ class SAlphaGeometry:
     R0: float = 1.0
     B0: float = 1.0
     alpha: float = 0.0
+    drift_scale: float = 1.0
+    kperp2_bmag: bool = True
+    bessel_bmag_power: float = 0.0
 
     def tree_flatten(self):
-        children = (self.q, self.s_hat, self.epsilon, self.R0, self.B0, self.alpha)
+        children = (
+            self.q,
+            self.s_hat,
+            self.epsilon,
+            self.R0,
+            self.B0,
+            self.alpha,
+            self.drift_scale,
+            self.kperp2_bmag,
+            self.bessel_bmag_power,
+        )
         return children, None
 
     @classmethod
@@ -39,6 +52,9 @@ class SAlphaGeometry:
             R0=cfg.R0,
             B0=cfg.B0,
             alpha=cfg.alpha,
+            drift_scale=cfg.drift_scale,
+            kperp2_bmag=cfg.kperp2_bmag,
+            bessel_bmag_power=cfg.bessel_bmag_power,
         )
 
     def kx_effective(self, kx0: jnp.ndarray, ky: jnp.ndarray, theta: jnp.ndarray) -> jnp.ndarray:
@@ -81,8 +97,10 @@ class SAlphaGeometry:
         kx_hat = kx0 / s_hat_safe
         kx_hat = jnp.where(s_hat == 0.0, kx0, kx_hat)
         kperp2 = ky * (ky * gds2 + 2.0 * kx_hat * gds21) + (kx_hat * kx_hat) * gds22
-        bmag_inv = 1.0 / self.bmag(theta)
-        return kperp2 * (bmag_inv * bmag_inv)
+        if self.kperp2_bmag:
+            bmag_inv = 1.0 / self.bmag(theta)
+            return kperp2 * (bmag_inv * bmag_inv)
+        return kperp2
 
     def drift_coeffs(
         self, theta: jnp.ndarray
@@ -91,9 +109,10 @@ class SAlphaGeometry:
 
         shear = self.s_hat * theta - self.alpha * jnp.sin(theta)
         base = jnp.cos(theta) + shear * jnp.sin(theta)
-        cv = base / self.R0
+        scale = jnp.asarray(self.drift_scale)
+        cv = scale * base / self.R0
         gb = cv
-        cv0 = (-self.s_hat * jnp.sin(theta)) / self.R0
+        cv0 = scale * (-self.s_hat * jnp.sin(theta)) / self.R0
         gb0 = cv0
         return cv, gb, cv0, gb0
 

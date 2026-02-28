@@ -64,6 +64,7 @@ class TimeConfig:
     diffrax_atol: float = 1.0e-7
     diffrax_max_steps: int = 4096
     progress_bar: bool = False
+    gx_real_fft: bool = True
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -79,7 +80,7 @@ class GeometryConfig:
     R0: float = 1.0
     B0: float = 1.0
     alpha: float = 0.0
-    drift_scale: float = 2.0
+    drift_scale: float = 1.0
     kperp2_bmag: bool = True
     bessel_bmag_power: float = 0.0
 

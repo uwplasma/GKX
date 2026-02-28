@@ -112,6 +112,7 @@ def integrate_nonlinear_from_config(
             max_steps=time_cfg.diffrax_max_steps,
             progress_bar=time_cfg.progress_bar,
             checkpoint=time_cfg.checkpoint,
+            gx_real_fft=time_cfg.gx_real_fft,
         )
     return integrate_nonlinear(
         G0,
@@ -124,4 +125,5 @@ def integrate_nonlinear_from_config(
         cache=cache,
         terms=terms,
         checkpoint=time_cfg.checkpoint,
+        gx_real_fft=time_cfg.gx_real_fft,
     )

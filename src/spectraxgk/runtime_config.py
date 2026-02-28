@@ -74,7 +74,7 @@ class RuntimeNormalizationConfig:
     rho_star: float | None = None
     omega_d_scale: float | None = None
     omega_star_scale: float | None = None
-    diagnostic_norm: str = "none"
+    diagnostic_norm: str = "gx"
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

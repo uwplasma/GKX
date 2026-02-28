@@ -692,6 +692,7 @@ def gx_growth_rate_from_phi(
     sel: ModeSelection,
     *,
     navg_fraction: float = 0.5,
+    use_last: bool = False,
     mode_method: str = "z_index",
 ) -> Tuple[float, float, np.ndarray, np.ndarray, np.ndarray]:
     """Compute GX-style instantaneous growth rates from phi ratios.
@@ -737,9 +738,13 @@ def gx_growth_rate_from_phi(
     if gamma.size == 0:
         raise ValueError("No finite GX growth-rate samples available")
 
-    istart = int(len(gamma) * navg_fraction)
-    gamma_avg = float(np.mean(gamma[istart:]))
-    omega_avg = float(np.mean(omega[istart:]))
+    if use_last:
+        gamma_avg = float(gamma[-1])
+        omega_avg = float(omega[-1])
+    else:
+        istart = int(len(gamma) * navg_fraction)
+        gamma_avg = float(np.mean(gamma[istart:]))
+        omega_avg = float(np.mean(omega[istart:]))
     return gamma_avg, omega_avg, gamma, omega, t_mid
 
 

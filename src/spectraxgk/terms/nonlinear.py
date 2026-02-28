@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import jax
 import jax.numpy as jnp
 from jax.scipy import special as jsp
@@ -342,6 +344,10 @@ def nonlinear_em_contribution(
     )
 
     if use_laguerre:
+        laguerre_to_grid = cast(jnp.ndarray, laguerre_to_grid)
+        laguerre_to_spectral = cast(jnp.ndarray, laguerre_to_spectral)
+        laguerre_roots = cast(jnp.ndarray, laguerre_roots)
+        b = cast(jnp.ndarray, b)
         g_mu = _laguerre_to_grid(G, laguerre_to_grid)
         chi_phi = _gx_j0_field(phi, b, laguerre_roots, 1.0)
         exb_phi = _spectral_bracket(
@@ -466,6 +472,10 @@ def nonlinear_em_components(
     )
 
     if use_laguerre:
+        laguerre_to_grid = cast(jnp.ndarray, laguerre_to_grid)
+        laguerre_to_spectral = cast(jnp.ndarray, laguerre_to_spectral)
+        laguerre_roots = cast(jnp.ndarray, laguerre_roots)
+        b = cast(jnp.ndarray, b)
         g_mu = _laguerre_to_grid(G, laguerre_to_grid)
         chi_phi = _gx_j0_field(phi, b, laguerre_roots, 1.0)
         exb_phi_mu = _spectral_bracket(

@@ -9,6 +9,7 @@ import jax.numpy as jnp
 import numpy as np
 from numpy.polynomial.laguerre import laggauss
 
+from spectraxgk.diagnostics import GXDiagnostics
 from spectraxgk.geometry import SAlphaGeometry
 from spectraxgk.grids import SpectralGrid
 from spectraxgk.linear import (

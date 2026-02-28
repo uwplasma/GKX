@@ -22,7 +22,7 @@ from spectraxgk.geometry import SAlphaGeometry
 from spectraxgk.grids import build_spectral_grid
 from spectraxgk.io import load_case_from_toml, load_krylov_from_toml, load_linear_terms_from_toml, load_runtime_from_toml
 from spectraxgk.plotting import growth_fit_figure, scan_comparison_figure, set_plot_style
-from spectraxgk.runtime import run_runtime_linear, run_runtime_scan
+from spectraxgk.runtime import run_runtime_linear, run_runtime_scan, run_runtime_nonlinear
 
 
 def _cmd_cyclone_info(_: argparse.Namespace) -> int:
@@ -115,6 +115,21 @@ def build_parser() -> argparse.ArgumentParser:
     scan_runtime.add_argument("--steps", type=int, default=None)
     scan_runtime.add_argument("--fit-signal", type=str, default=None, help="auto, phi, or density")
     scan_runtime.set_defaults(func=_cmd_scan_runtime_linear)
+
+    run_runtime_nl = sub.add_parser(
+        "run-runtime-nonlinear",
+        help="Run one nonlinear point from unified runtime TOML config",
+    )
+    run_runtime_nl.add_argument("--config", required=True, help="Path to TOML config")
+    run_runtime_nl.add_argument("--ky", type=float, default=None, help="Single ky value")
+    run_runtime_nl.add_argument("--Nl", type=int, default=None)
+    run_runtime_nl.add_argument("--Nm", type=int, default=None)
+    run_runtime_nl.add_argument("--dt", type=float, default=None)
+    run_runtime_nl.add_argument("--steps", type=int, default=None)
+    run_runtime_nl.add_argument("--method", type=str, default=None)
+    run_runtime_nl.add_argument("--sample-stride", type=int, default=None)
+    run_runtime_nl.add_argument("--out", type=str, default=None, help="Optional CSV output path")
+    run_runtime_nl.set_defaults(func=_cmd_run_runtime_nonlinear)
 
     return parser
 
@@ -351,6 +366,69 @@ def _cmd_scan_runtime_linear(args: argparse.Namespace) -> int:
     )
     for ky, g, w in zip(scan.ky, scan.gamma, scan.omega):
         print(f"ky={ky:.4f} gamma={g:.6f} omega={w:.6f}")
+    return 0
+
+
+def _cmd_run_runtime_nonlinear(args: argparse.Namespace) -> int:
+    cfg, data = load_runtime_from_toml(args.config)
+    run_cfg = data.get("run", {})
+
+    ky = float(args.ky if args.ky is not None else run_cfg.get("ky", 0.3))
+    Nl = int(args.Nl if args.Nl is not None else run_cfg.get("Nl", 24))
+    Nm = int(args.Nm if args.Nm is not None else run_cfg.get("Nm", 12))
+    dt = float(args.dt if args.dt is not None else run_cfg.get("dt", cfg.time.dt))
+    steps = int(
+        args.steps
+        if args.steps is not None
+        else run_cfg.get("steps", int(round(cfg.time.t_max / cfg.time.dt)))
+    )
+    method = str(args.method if args.method is not None else run_cfg.get("method", cfg.time.method))
+    sample_stride = int(
+        args.sample_stride if args.sample_stride is not None else run_cfg.get("sample_stride", 1)
+    )
+
+    result = run_runtime_nonlinear(
+        cfg,
+        ky_target=ky,
+        Nl=Nl,
+        Nm=Nm,
+        dt=dt,
+        steps=steps,
+        method=method,
+        sample_stride=sample_stride,
+        diagnostics=True,
+    )
+    diag = result.diagnostics
+    if diag is None:
+        print("nonlinear run completed")
+        return 0
+
+    print(
+        f"nonlinear: t={diag.t.size} Wg={float(diag.Wg_t[-1]):.6g} "
+        f"Wphi={float(diag.Wphi_t[-1]):.6g} Wapar={float(diag.Wapar_t[-1]):.6g}"
+    )
+    if args.out is not None:
+        data_out = np.column_stack(
+            [
+                np.asarray(diag.t),
+                np.asarray(diag.gamma_t),
+                np.asarray(diag.omega_t),
+                np.asarray(diag.Wg_t),
+                np.asarray(diag.Wphi_t),
+                np.asarray(diag.Wapar_t),
+                np.asarray(diag.energy_t),
+                np.asarray(diag.heat_flux_t),
+                np.asarray(diag.particle_flux_t),
+            ]
+        )
+        np.savetxt(
+            args.out,
+            data_out,
+            delimiter=",",
+            header="t,gamma,omega,Wg,Wphi,Wapar,energy,heat_flux,particle_flux",
+            comments="",
+        )
+        print(f"saved {args.out}")
     return 0
 
 

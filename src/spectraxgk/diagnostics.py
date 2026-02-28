@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import jax.numpy as jnp
+import numpy as np
 
 from spectraxgk.geometry import SAlphaGeometry
 from spectraxgk.gyroaverage import gamma0
@@ -13,19 +14,22 @@ from spectraxgk.linear import LinearCache, LinearParams
 from spectraxgk.terms.operators import shift_axis
 
 
+ArrayLike = jnp.ndarray | np.ndarray
+
+
 @dataclass(frozen=True)
 class GXDiagnostics:
     """Streaming GX-style diagnostics at each sample time."""
 
-    t: jnp.ndarray
-    gamma_t: jnp.ndarray
-    omega_t: jnp.ndarray
-    Wg_t: jnp.ndarray
-    Wphi_t: jnp.ndarray
-    Wapar_t: jnp.ndarray
-    heat_flux_t: jnp.ndarray
-    particle_flux_t: jnp.ndarray
-    energy_t: jnp.ndarray
+    t: ArrayLike
+    gamma_t: ArrayLike
+    omega_t: ArrayLike
+    Wg_t: ArrayLike
+    Wphi_t: ArrayLike
+    Wapar_t: ArrayLike
+    heat_flux_t: ArrayLike
+    particle_flux_t: ArrayLike
+    energy_t: ArrayLike
 
 
 def gx_volume_factors(geom: SAlphaGeometry, grid: SpectralGrid) -> tuple[jnp.ndarray, jnp.ndarray]:
@@ -120,7 +124,7 @@ def gx_Wphi_krehm(
     fac = _gx_fac_mask(grid, use_dealias=use_dealias)
     vol = vol_fac[None, None, :]
 
-    wphi = 0.0
+    wphi = jnp.asarray(0.0, dtype=jnp.real(phi).dtype)
     for rho2_s in rho2:
         b = 0.5 * kperp2 * rho2_s
         gam0 = gamma0(b)
@@ -203,7 +207,7 @@ def gx_heat_flux(
     sqrt2 = jnp.sqrt(2.0)
     sqrt32 = jnp.sqrt(1.5)
 
-    flux = 0.0
+    flux = jnp.asarray(0.0, dtype=jnp.real(phi).dtype)
     rho = _species_array(params.rho, ns)
     nt = _species_array(params.density, ns) * _species_array(params.temp, ns)
     vth = _species_array(params.vth, ns)
@@ -275,7 +279,7 @@ def gx_particle_flux(
     vbpar = 1.0j * ky * bpar
 
     Jl, JlB, _ = _jl_family(cache)
-    flux = 0.0
+    flux = jnp.asarray(0.0, dtype=jnp.real(phi).dtype)
     rho = _species_array(params.rho, ns)
     dens = _species_array(params.density, ns)
     vth = _species_array(params.vth, ns)
@@ -307,5 +311,5 @@ def gx_particle_flux(
     return flux
 
 
-def gx_energy_total(Wg: jnp.ndarray, Wphi: jnp.ndarray, Wapar: jnp.ndarray) -> jnp.ndarray:
+def gx_energy_total(Wg: ArrayLike, Wphi: ArrayLike, Wapar: ArrayLike) -> ArrayLike:
     return Wg + Wphi + Wapar
