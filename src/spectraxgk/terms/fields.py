@@ -33,6 +33,9 @@ def _solve_fields_impl(
     kperp2 = cache.kperp2
 
     beta = jnp.asarray(params.beta, dtype=real_dtype)
+    apar_beta_scale = jnp.asarray(params.apar_beta_scale, dtype=real_dtype)
+    ampere_g0_scale = jnp.asarray(params.ampere_g0_scale, dtype=real_dtype)
+    bpar_beta_scale = jnp.asarray(params.bpar_beta_scale, dtype=real_dtype)
     tau_e = jnp.asarray(params.tau_e, dtype=real_dtype)
     fapar = jnp.asarray(fapar, dtype=real_dtype)
     w_bpar = jnp.asarray(w_bpar, dtype=real_dtype)
@@ -57,8 +60,9 @@ def _solve_fields_impl(
         axis=0,
     )
     bmag_inv2 = 1.0 / (bmag * bmag)
+    bpar_beta = bpar_beta_scale * beta
     jperpbar = jnp.sum(
-        (-0.5 * beta)
+        (-bpar_beta)
         * density[:, None, None, None]
         * temp[:, None, None, None]
         * bmag_inv2[None, None, :]
@@ -76,10 +80,10 @@ def _solve_fields_impl(
         axis=0,
     )
     qb = -jnp.sum(density[:, None, None, None] * charge[:, None, None, None] * g01, axis=0)
-    aphi = 0.5 * beta * jnp.sum(
+    aphi = bpar_beta * jnp.sum(
         density[:, None, None, None] * charge[:, None, None, None] * g01, axis=0
     ) * bmag_inv2[None, None, :]
-    ab = 1.0 + 0.5 * beta * jnp.sum(
+    ab = 1.0 + bpar_beta * jnp.sum(
         density[:, None, None, None] * temp[:, None, None, None] * g11, axis=0
     ) * bmag_inv2[None, None, :]
     denom = qphi * ab - qb * aphi
@@ -101,9 +105,11 @@ def _solve_fields_impl(
         * jnp.sum(Jl * Gm1, axis=1),
         axis=0,
     )
-    jpar = 0.5 * beta * jpar
+    jpar = apar_beta_scale * beta * jpar
     bmag2 = bmag[None, None, :] * bmag[None, None, :]
-    ampere_denom = kperp2 * bmag2 + 0.5 * beta * jnp.sum(
+    use_bmag = jnp.asarray(getattr(cache, "kperp2_bmag", True), dtype=real_dtype)
+    ampere_kperp2 = kperp2 * (use_bmag * bmag2 + (1.0 - use_bmag))
+    ampere_denom = ampere_kperp2 + ampere_g0_scale * beta * jnp.sum(
         density[:, None, None, None]
         * (charge * charge / mass)[:, None, None, None]
         * g0,

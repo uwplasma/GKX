@@ -70,7 +70,7 @@ def gx_laguerre_transform(nl: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     poly = np.zeros((nl, nj), dtype=float)
     for i in range(nl):
         for j in range(i + 1):
-            tmp = math.comb(i, j)
+            tmp = float(math.comb(i, j))
             tmp *= (-1.0) ** j / math.factorial(j) * ((-1.0) ** i)
             poly[i, j] = tmp
 

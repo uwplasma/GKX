@@ -980,8 +980,9 @@ def run_cyclone_linear(
                 sample_stride=1,
                 fixed_dt=True,
             )
+            G0_seed = jnp.asarray(np.asarray(G0_jax))
             t_short, phi_t, _g_t, _o_t = integrate_linear_gx(
-                G0_jax,
+                G0_seed,
                 grid,
                 cache,
                 params,
@@ -1027,6 +1028,7 @@ def run_cyclone_linear(
                     sample_stride=1,
                     fixed_dt=True,
                 )
+                G0_seed = jnp.asarray(np.asarray(G0_seed))
                 t_short, phi_t, _g_t, _o_t = integrate_linear_gx(
                     G0_seed,
                     grid,
@@ -1056,8 +1058,9 @@ def run_cyclone_linear(
         shift = None
         if omega_ok:
             shift = complex(float(gamma_seed) if seed_ok else 0.0, float(-omega_seed))
+        G0_krylov = jnp.asarray(np.asarray(G0_jax))
         eig, vec = dominant_eigenpair(
-            G0_jax,
+            G0_krylov,
             cache,
             params,
             terms=terms,
@@ -1112,6 +1115,8 @@ def run_cyclone_linear(
 
     def _run_time() -> tuple[float, float, np.ndarray, np.ndarray]:
         method_key = method.lower()
+        phi_t: jnp.ndarray | np.ndarray
+        density_t: jnp.ndarray | np.ndarray | None
         time_cfg_use = None
         if time_cfg is not None:
             time_cfg_use = replace(time_cfg, dt=float(dt), t_max=float(dt) * int(steps))
@@ -1479,6 +1484,8 @@ def run_cyclone_scan(
         return _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
 
     ky_values_arr = np.asarray(ky_values, dtype=float)
+    phi_t: jnp.ndarray | np.ndarray
+    density_t: jnp.ndarray | np.ndarray | None
 
     if solver_key == "krylov":
         if ky_values_arr.size == 0:
@@ -1511,23 +1518,23 @@ def run_cyclone_scan(
             if prev_eig is None:
                 try:
                     t_seed = min(150.0, float(cfg_use.power_dt) * 15000.0)
-                    time_cfg = GXTimeConfig(
+                    gx_time_cfg = GXTimeConfig(
                         dt=float(cfg_use.power_dt), t_max=t_seed, sample_stride=1, fixed_dt=True
                     )
                     G0_seed = jnp.array(G0_jax)
-                    t_short, phi_t, _g_t, _o_t = integrate_linear_gx(
+                    t_short, phi_seed, _g_t, _o_t = integrate_linear_gx(
                         G0_seed,
                         grid,
                         cache,
                         params,
                         geom,
-                        time_cfg,
+                        gx_time_cfg,
                         terms=terms,
                         mode_method="z_index",
                     )
                     sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
                     gamma_seed, omega_seed, _g, _o, _t_mid = gx_growth_rate_from_phi(
-                        phi_t,
+                        phi_seed,
                         t_short,
                         sel,
                         navg_fraction=0.5,
@@ -1555,22 +1562,22 @@ def run_cyclone_scan(
                         init_cfg=init_cfg,
                     )
                     t_seed = min(150.0, float(cfg_use.power_dt) * 15000.0)
-                    time_cfg = GXTimeConfig(
+                    gx_time_cfg = GXTimeConfig(
                         dt=float(cfg_use.power_dt), t_max=t_seed, sample_stride=1, fixed_dt=True
                     )
-                    t_short, phi_t, _g_t, _o_t = integrate_linear_gx(
+                    t_short, phi_seed, _g_t, _o_t = integrate_linear_gx(
                         G0_seed,
                         grid,
                         cache_seed,
                         params,
                         geom,
-                        time_cfg,
+                        gx_time_cfg,
                         terms=terms,
                         mode_method="z_index",
                     )
                     sel_seed = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
                     gamma_seed, omega_seed, _g, _o, _t_mid = gx_growth_rate_from_phi(
-                        phi_t,
+                        phi_seed,
                         t_short,
                         sel_seed,
                         navg_fraction=0.5,
@@ -1668,7 +1675,7 @@ def run_cyclone_scan(
             steps_i = int(steps[idx]) if isinstance(steps, np.ndarray) else int(steps)
             t_max_val = dt_i * float(steps_i)
             gx_time_cfg = GXTimeConfig(dt=dt_i, t_max=t_max_val, sample_stride=1, fixed_dt=True)
-            t, phi_t, _g_t, _o_t = integrate_linear_gx(
+            t, phi_gx, _g_t, _o_t = integrate_linear_gx(
                 G0_jax,
                 grid,
                 cache,
@@ -1680,7 +1687,7 @@ def run_cyclone_scan(
             )
             sel_local = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
             gamma, omega, _g, _o, _t_mid = gx_growth_rate_from_phi(
-                phi_t, t, sel_local, navg_fraction=0.5, mode_method="z_index"
+                phi_gx, t, sel_local, navg_fraction=0.5, mode_method="z_index"
             )
             gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
             gamma_out[idx] = gamma
@@ -1695,23 +1702,23 @@ def run_cyclone_scan(
     else:
         ky_iter = _iter_ky_batches(ky_values_arr, ky_batch=1, fixed_batch_shape=False)
     prev_vec: jnp.ndarray | None = None
-    prev_eig: complex | None = None
+    prev_eig_scan: complex | None = None
     ky_slice: np.ndarray
     ky_indices: list[int]
-    sel: ModeSelection | ModeSelectionBatch
+    sel_scan: ModeSelection | ModeSelectionBatch
 
     for batch_start, ky_slice, valid_count in ky_iter:
         if use_batch:
             ky_indices = [select_ky_index(np.asarray(grid_full.ky), float(ky)) for ky in ky_slice]
             grid = select_ky_grid(grid_full, ky_indices)
             sel_indices = np.arange(len(ky_indices), dtype=int)
-            sel = ModeSelectionBatch(sel_indices, 0, _midplane_index(grid))
+            sel_scan = ModeSelectionBatch(sel_indices, 0, _midplane_index(grid))
             dt_i = float(dt)
             steps_i = int(steps)
         else:
             ky_indices = [select_ky_index(np.asarray(grid_full.ky), float(ky_slice[0]))]
             grid = select_ky_grid(grid_full, ky_indices[0])
-            sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
+            sel_scan = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
             dt_i = float(dt[batch_start]) if isinstance(dt, np.ndarray) else float(dt)
             steps_i = int(steps[batch_start]) if isinstance(steps, np.ndarray) else int(steps)
 
@@ -1823,7 +1830,7 @@ def run_cyclone_scan(
 
         if time_cfg_i is not None:
             save_field = "phi+density" if fit_key == "auto" else ("density" if fit_key == "density" else "phi")
-            save_mode = None if fit_key == "auto" else (sel if mode_only else None)
+            save_mode = None if fit_key == "auto" else (sel_scan if mode_only else None)
             _, saved = integrate_linear_from_config(
                 G0_jax,
                 grid,
@@ -1839,8 +1846,10 @@ def run_cyclone_scan(
             )
             if fit_key == "auto":
                 phi_t, density_t = saved
+                phi_t = np.asarray(phi_t)
+                density_t = np.asarray(density_t)
             else:
-                phi_t = saved
+                phi_t = np.asarray(saved)
                 density_t = None
             stride = time_cfg_i.sample_stride
         else:
@@ -1858,6 +1867,7 @@ def run_cyclone_scan(
                     terms=terms,
                     sample_stride=stride,
                 )
+                phi_t = np.asarray(phi_t)
                 density_t = None
             else:
                 _diag = integrate_linear_diagnostics(
@@ -1874,8 +1884,8 @@ def run_cyclone_scan(
                     species_index=None,
                     record_hl_energy=False,
                 )
-                phi_t = _diag[1]
-                density_t = _diag[2] if len(_diag) > 2 else None
+                phi_t = np.asarray(_diag[1])
+                density_t = np.asarray(_diag[2]) if len(_diag) > 2 else None
 
         phi_t_np = np.asarray(phi_t)
         signal_t = None
@@ -4177,6 +4187,7 @@ def run_kbm_beta_scan(
                 and krylov_cfg_use.method.strip().lower() == "shift_invert"
             )
             if use_multi_target:
+                assert targets is not None
                 beta_transition = (
                     float(cfg.model.beta)
                     if kbm_beta_transition is None

@@ -201,11 +201,11 @@ def _build_shift_invert_precond(
         shape = v.shape
         size = v.size
 
-        def apply_precond(x_flat: jnp.ndarray) -> jnp.ndarray:
+        def apply_precond_damping(x_flat: jnp.ndarray) -> jnp.ndarray:
             x = x_flat.reshape(shape)
             return (x * precond).reshape(size)
 
-        return precond, apply_precond
+        return precond, apply_precond_damping
 
     if mode_key not in {
         "hermite-line",
@@ -231,11 +231,11 @@ def _build_shift_invert_precond(
     shape = v.shape
     size = v.size
 
-    def apply_precond(x_flat: jnp.ndarray) -> jnp.ndarray:
+    def apply_precond_fallback(x_flat: jnp.ndarray) -> jnp.ndarray:
         x = x_flat.reshape(shape)
         return (x * precond).reshape(size)
 
-    return precond, apply_precond
+    return precond, apply_precond_fallback
 
     shape = v.shape
     size = v.size

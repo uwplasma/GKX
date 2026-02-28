@@ -16,6 +16,7 @@ from spectraxgk.analysis import (
     fit_growth_rate_auto_with_stats,
     select_ky_index,
 )
+from spectraxgk.diagnostics import GXDiagnostics
 from spectraxgk.geometry import SAlphaGeometry
 from spectraxgk.grids import SpectralGrid, build_spectral_grid, select_ky_grid
 from spectraxgk.linear import (
@@ -25,12 +26,13 @@ from spectraxgk.linear import (
     integrate_linear_diagnostics,
     linear_terms_to_term_config,
 )
+from spectraxgk.nonlinear import integrate_nonlinear_gx_diagnostics
 from spectraxgk.linear_krylov import KrylovConfig, dominant_eigenpair
 from spectraxgk.normalization import apply_diagnostic_normalization, get_normalization_contract
 from spectraxgk.runtime_config import RuntimeConfig, RuntimeSpeciesConfig
-from spectraxgk.runners import integrate_linear_from_config
+from spectraxgk.runners import integrate_linear_from_config, integrate_nonlinear_from_config
 from spectraxgk.species import Species, build_linear_params
-from spectraxgk.terms.config import TermConfig
+from spectraxgk.terms.config import FieldState, TermConfig
 
 
 @dataclass(frozen=True)
@@ -52,6 +54,16 @@ class RuntimeLinearScanResult:
     ky: np.ndarray
     gamma: np.ndarray
     omega: np.ndarray
+
+
+@dataclass(frozen=True)
+class RuntimeNonlinearResult:
+    """Result container for runtime nonlinear runs."""
+
+    t: np.ndarray
+    diagnostics: GXDiagnostics | None
+    phi2: np.ndarray | None = None
+    fields: FieldState | None = None
 
 
 def _midplane_index(grid: SpectralGrid) -> int:
@@ -531,3 +543,80 @@ def run_runtime_scan(
         gamma[i] = float(res.gamma)
         omega[i] = float(res.omega)
     return RuntimeLinearScanResult(ky=ky_arr, gamma=gamma, omega=omega)
+
+
+def run_runtime_nonlinear(
+    cfg: RuntimeConfig,
+    *,
+    ky_target: float = 0.3,
+    Nl: int = 24,
+    Nm: int = 12,
+    dt: float | None = None,
+    steps: int | None = None,
+    method: str | None = None,
+    sample_stride: int = 1,
+    diagnostics: bool = True,
+) -> RuntimeNonlinearResult:
+    """Run a nonlinear point using the unified runtime config path."""
+
+    grid = build_spectral_grid(cfg.grid)
+    geom = SAlphaGeometry.from_config(cfg.geometry)
+    params = build_runtime_linear_params(cfg)
+    term_cfg = build_runtime_term_config(cfg)
+
+    ky_index = select_ky_index(np.asarray(grid.ky), ky_target)
+    kx_index = 0
+    G0 = _build_initial_condition(
+        grid,
+        geom,
+        cfg,
+        ky_index=ky_index,
+        kx_index=kx_index,
+        Nl=Nl,
+        Nm=Nm,
+        nspecies=len(_species_to_linear(cfg.species)),
+    )
+
+    dt_val = float(cfg.time.dt if dt is None else dt)
+    if dt_val <= 0.0:
+        raise ValueError("dt must be > 0")
+    steps_val = int(round(cfg.time.t_max / cfg.time.dt)) if steps is None else int(steps)
+    if steps_val < 1:
+        raise ValueError("steps must be >= 1")
+
+    if diagnostics:
+        t, diag = integrate_nonlinear_gx_diagnostics(
+            G0,
+            grid,
+            geom,
+            params,
+            dt=dt_val,
+            steps=steps_val,
+            method=str(method or cfg.time.method),
+            terms=term_cfg,
+            sample_stride=int(sample_stride),
+        )
+        return RuntimeNonlinearResult(
+            t=np.asarray(t),
+            diagnostics=diag,
+            phi2=None,
+            fields=None,
+        )
+
+    # Diagnostics disabled: use the config-driven integrator for final state.
+    t_cfg = replace(cfg.time, dt=dt_val, t_max=dt_val * steps_val)
+    G_final, fields = integrate_nonlinear_from_config(
+        G0,
+        grid,
+        geom,
+        params,
+        t_cfg,
+        terms=term_cfg,
+    )
+    phi2 = np.asarray(jnp.mean(jnp.abs(fields.phi) ** 2))
+    return RuntimeNonlinearResult(
+        t=np.asarray([]),
+        diagnostics=None,
+        phi2=phi2,
+        fields=fields,
+    )

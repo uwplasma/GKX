@@ -31,6 +31,7 @@ from spectraxgk.runtime import (
     build_runtime_linear_terms,
     build_runtime_term_config,
     run_runtime_linear,
+    run_runtime_nonlinear,
     run_runtime_scan,
 )
 from spectraxgk.runtime_config import (
@@ -164,6 +165,7 @@ __all__ = [
     "build_runtime_linear_terms",
     "build_runtime_term_config",
     "run_runtime_linear",
+    "run_runtime_nonlinear",
     "run_runtime_scan",
     "hermite_streaming",
     "LinearParams",

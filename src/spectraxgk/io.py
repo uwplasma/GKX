@@ -8,7 +8,7 @@ from pathlib import Path
 try:
     import tomllib  # Python 3.11+
 except ModuleNotFoundError:  # pragma: no cover - only on Python <3.11
-    import tomli as tomllib
+    import tomli as tomllib  # type: ignore[no-redef]
 
 from spectraxgk.config import (
     CycloneBaseCase,
@@ -81,6 +81,15 @@ def load_case_from_toml(path: str | Path, case_name: str | None = None):
     if case_name not in registry:
         raise ValueError(f"Unknown case '{case_name}'. Available: {', '.join(registry)}")
     cfg = registry[case_name]()
+    gx_parity = None
+    gx_parity_raw = data.get("gx_parity")
+    if isinstance(gx_parity_raw, dict):
+        enabled = gx_parity_raw.get("enabled")
+        if enabled is not None:
+            gx_parity = bool(enabled)
+    elif gx_parity_raw is not None:
+        gx_parity = bool(gx_parity_raw)
+
     overrides = {
         "grid": data.get("grid"),
         "time": data.get("time"),
@@ -88,6 +97,8 @@ def load_case_from_toml(path: str | Path, case_name: str | None = None):
         "model": data.get("model"),
         "init": data.get("init"),
     }
+    if gx_parity is not None and hasattr(cfg, "gx_parity"):
+        overrides["gx_parity"] = gx_parity
     cfg = _merge_dataclass(cfg, overrides)
     return case_name, cfg, data
 
