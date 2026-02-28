@@ -82,6 +82,8 @@ def nonlinear_rhs_cached(
             laguerre_to_grid=cache.laguerre_to_grid,
             laguerre_to_spectral=cache.laguerre_to_spectral,
             laguerre_roots=cache.laguerre_roots,
+            laguerre_j0=cache.laguerre_j0,
+            laguerre_j1_over_alpha=cache.laguerre_j1_over_alpha,
             b=cache.b,
             gx_real_fft=gx_real_fft,
         )
