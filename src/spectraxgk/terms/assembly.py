@@ -130,6 +130,10 @@ def assemble_rhs_cached(
         linked_indices=cache.linked_indices,
         linked_kz=cache.linked_kz,
         linked_inverse_permutation=cache.linked_inverse_permutation,
+        linked_full_cover=cache.linked_full_cover,
+        linked_gather_map=cache.linked_gather_map,
+        linked_gather_mask=cache.linked_gather_mask,
+        linked_use_gather=cache.linked_use_gather,
         use_twist_shift=cache.use_twist_shift,
     )
     dG = dG + mirror_contribution(
@@ -199,6 +203,10 @@ def assemble_rhs_cached(
         linked_indices=cache.linked_indices,
         linked_kz=cache.linked_kz,
         linked_inverse_permutation=cache.linked_inverse_permutation,
+        linked_full_cover=cache.linked_full_cover,
+        linked_gather_map=cache.linked_gather_map,
+        linked_gather_mask=cache.linked_gather_mask,
+        linked_use_gather=cache.linked_use_gather,
     )
     dG = dG + hyperdiffusion_contribution(
         G,
@@ -327,6 +335,10 @@ def assemble_rhs_terms_cached(
         linked_indices=cache.linked_indices,
         linked_kz=cache.linked_kz,
         linked_inverse_permutation=cache.linked_inverse_permutation,
+        linked_full_cover=cache.linked_full_cover,
+        linked_gather_map=cache.linked_gather_map,
+        linked_gather_mask=cache.linked_gather_mask,
+        linked_use_gather=cache.linked_use_gather,
         use_twist_shift=cache.use_twist_shift,
     )
     contrib["mirror"] = mirror_contribution(
@@ -409,6 +421,10 @@ def assemble_rhs_terms_cached(
         linked_indices=cache.linked_indices,
         linked_kz=cache.linked_kz,
         linked_inverse_permutation=cache.linked_inverse_permutation,
+        linked_full_cover=cache.linked_full_cover,
+        linked_gather_map=cache.linked_gather_map,
+        linked_gather_mask=cache.linked_gather_mask,
+        linked_use_gather=cache.linked_use_gather,
     )
     contrib["hyperdiffusion"] = hyperdiffusion_contribution(
         G,

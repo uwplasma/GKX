@@ -503,6 +503,14 @@ class LinearCache:
     linked_inverse_permutation: jnp.ndarray = dataclass_field(
         default_factory=lambda: jnp.asarray([], dtype=jnp.int32)
     )
+    linked_gather_map: jnp.ndarray = dataclass_field(
+        default_factory=lambda: jnp.asarray([], dtype=jnp.int32)
+    )
+    linked_gather_mask: jnp.ndarray = dataclass_field(
+        default_factory=lambda: jnp.asarray([], dtype=bool)
+    )
+    linked_full_cover: bool = False
+    linked_use_gather: bool = False
     linked_indices: tuple[jnp.ndarray, ...] = ()
     linked_kz: tuple[jnp.ndarray, ...] = ()
     use_twist_shift: bool = False
@@ -556,17 +564,33 @@ class LinearCache:
             self.kx_link_mask_plus,
             self.kx_link_mask_minus,
             self.linked_inverse_permutation,
+            self.linked_gather_map,
+            self.linked_gather_mask,
         )
         linked_idx = self.linked_indices or ()
         linked_kz = self.linked_kz or ()
         children = children + tuple(linked_idx) + tuple(linked_kz)
-        aux_data = (self.use_twist_shift, self.jtwist, len(linked_idx), len(linked_kz))
+        aux_data = (
+            self.use_twist_shift,
+            self.jtwist,
+            len(linked_idx),
+            len(linked_kz),
+            self.linked_full_cover,
+            self.linked_use_gather,
+        )
         return children, aux_data
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
-        use_twist_shift, jtwist, n_linked_idx, n_linked_kz = aux_data
-        base_count = 46
+        (
+            use_twist_shift,
+            jtwist,
+            n_linked_idx,
+            n_linked_kz,
+            linked_full_cover,
+            linked_use_gather,
+        ) = aux_data
+        base_count = 48
         base_children = children[:base_count]
         linked_idx = tuple(children[base_count : base_count + n_linked_idx])
         linked_kz = tuple(
@@ -578,6 +602,8 @@ class LinearCache:
             linked_kz=linked_kz,
             use_twist_shift=use_twist_shift,
             jtwist=jtwist,
+            linked_full_cover=linked_full_cover,
+            linked_use_gather=linked_use_gather,
         )
 
 def build_linear_cache(
@@ -794,6 +820,10 @@ def build_linear_cache(
     linked_indices: tuple[jnp.ndarray, ...] = ()
     linked_kz: tuple[jnp.ndarray, ...] = ()
     linked_inverse_permutation = jnp.asarray([], dtype=jnp.int32)
+    linked_full_cover = False
+    linked_gather_map = jnp.asarray([], dtype=jnp.int32)
+    linked_gather_mask = jnp.asarray([], dtype=bool)
+    linked_use_gather = False
     if use_twist_shift:
         linked_indices, linked_kz = _build_linked_fft_maps(
             np.asarray(grid.kx),
@@ -816,6 +846,15 @@ def build_linear_cache(
                     linked_inverse_permutation = jnp.asarray(
                         np.argsort(idx_flat).astype(np.int32)
                     )
+                    linked_full_cover = True
+            if idx_flat.size > 0:
+                gather_map = np.zeros(n_modes, dtype=np.int32)
+                gather_mask = np.zeros(n_modes, dtype=bool)
+                gather_map[idx_flat] = np.arange(idx_flat.size, dtype=np.int32)
+                gather_mask[idx_flat] = True
+                linked_gather_map = jnp.asarray(gather_map, dtype=jnp.int32)
+                linked_gather_mask = jnp.asarray(gather_mask, dtype=bool)
+                linked_use_gather = True
     return LinearCache(
         Jl=Jl,
         b=b.astype(real_dtype),
@@ -862,7 +901,11 @@ def build_linear_cache(
         kx_link_minus=kx_link_minus,
         kx_link_mask_plus=kx_link_mask_plus,
         kx_link_mask_minus=kx_link_mask_minus,
+        linked_full_cover=linked_full_cover,
         linked_inverse_permutation=linked_inverse_permutation,
+        linked_gather_map=linked_gather_map,
+        linked_gather_mask=linked_gather_mask,
+        linked_use_gather=linked_use_gather,
         linked_indices=linked_indices,
         linked_kz=linked_kz,
         use_twist_shift=use_twist_shift,

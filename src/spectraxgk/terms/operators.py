@@ -72,6 +72,10 @@ def grad_z_linked_fft(
     linked_indices: tuple[jnp.ndarray, ...],
     linked_kz: tuple[jnp.ndarray, ...],
     linked_inverse_permutation: jnp.ndarray | None = None,
+    linked_full_cover: bool = False,
+    linked_gather_map: jnp.ndarray | None = None,
+    linked_gather_mask: jnp.ndarray | None = None,
+    linked_use_gather: bool = False,
 ) -> jnp.ndarray:
     """Spectral z-derivative using GX-style linked FFT chains."""
 
@@ -122,18 +126,24 @@ def grad_z_linked_fft(
         chain_updates.append(df_link)
         chain_indices.append(idx_flat)
 
-    if chain_updates and linked_inverse_permutation is not None:
-        idx_cat = jnp.concatenate(chain_indices, axis=0)
+    if linked_use_gather:
+        if linked_gather_map is None or linked_gather_mask is None:
+            raise ValueError("linked_gather_map/mask required when linked_use_gather is True")
+        updates_cat = jnp.concatenate(chain_updates, axis=-2)
+        gather_map = jnp.asarray(linked_gather_map, dtype=jnp.int32)
+        gather_mask = jnp.asarray(linked_gather_mask, dtype=updates_cat.dtype)
+        updates_full = jnp.take(updates_cat, gather_map, axis=-2)
+        mask_shape = (1,) * (updates_full.ndim - 2) + (gather_mask.shape[0], 1)
+        updates_full = updates_full * gather_mask.reshape(mask_shape)
+        return updates_full.reshape(*lead_shape, Ny, Nx, Nz)
+
+    if linked_full_cover:
+        if linked_inverse_permutation is None:
+            raise ValueError("linked_inverse_permutation required when linked_full_cover is True")
         updates_cat = jnp.concatenate(chain_updates, axis=-2)
         inv = jnp.asarray(linked_inverse_permutation, dtype=jnp.int32)
-        n_modes = Ny * Nx
-        if (
-            idx_cat.shape[0] == n_modes
-            and inv.ndim == 1
-            and inv.shape[0] == n_modes
-        ):
-            df_flat = jnp.take(updates_cat, inv, axis=-2)
-            return df_flat.reshape(*lead_shape, Ny, Nx, Nz)
+        df_flat = jnp.take(updates_cat, inv, axis=-2)
+        return df_flat.reshape(*lead_shape, Ny, Nx, Nz)
 
     df_flat = jnp.zeros_like(f_flat)
     for idx_flat, df_link in zip(chain_indices, chain_updates):
@@ -147,6 +157,10 @@ def abs_z_linked_fft(
     linked_indices: tuple[jnp.ndarray, ...],
     linked_kz: tuple[jnp.ndarray, ...],
     linked_inverse_permutation: jnp.ndarray | None = None,
+    linked_full_cover: bool = False,
+    linked_gather_map: jnp.ndarray | None = None,
+    linked_gather_mask: jnp.ndarray | None = None,
+    linked_use_gather: bool = False,
 ) -> jnp.ndarray:
     """Apply |kz| in linked-FFT space (GX abs_dz equivalent)."""
 
@@ -196,18 +210,24 @@ def abs_z_linked_fft(
         chain_updates.append(df_link)
         chain_indices.append(idx_flat)
 
-    if chain_updates and linked_inverse_permutation is not None:
-        idx_cat = jnp.concatenate(chain_indices, axis=0)
+    if linked_use_gather:
+        if linked_gather_map is None or linked_gather_mask is None:
+            raise ValueError("linked_gather_map/mask required when linked_use_gather is True")
+        updates_cat = jnp.concatenate(chain_updates, axis=-2)
+        gather_map = jnp.asarray(linked_gather_map, dtype=jnp.int32)
+        gather_mask = jnp.asarray(linked_gather_mask, dtype=updates_cat.dtype)
+        updates_full = jnp.take(updates_cat, gather_map, axis=-2)
+        mask_shape = (1,) * (updates_full.ndim - 2) + (gather_mask.shape[0], 1)
+        updates_full = updates_full * gather_mask.reshape(mask_shape)
+        return updates_full.reshape(*lead_shape, Ny, Nx, Nz)
+
+    if linked_full_cover:
+        if linked_inverse_permutation is None:
+            raise ValueError("linked_inverse_permutation required when linked_full_cover is True")
         updates_cat = jnp.concatenate(chain_updates, axis=-2)
         inv = jnp.asarray(linked_inverse_permutation, dtype=jnp.int32)
-        n_modes = Ny * Nx
-        if (
-            idx_cat.shape[0] == n_modes
-            and inv.ndim == 1
-            and inv.shape[0] == n_modes
-        ):
-            df_flat = jnp.take(updates_cat, inv, axis=-2)
-            return df_flat.reshape(*lead_shape, Ny, Nx, Nz)
+        df_flat = jnp.take(updates_cat, inv, axis=-2)
+        return df_flat.reshape(*lead_shape, Ny, Nx, Nz)
 
     df_flat = jnp.zeros_like(f_flat)
     for idx_flat, df_link in zip(chain_indices, chain_updates):
@@ -307,6 +327,10 @@ def streaming_term(
     linked_indices: tuple[jnp.ndarray, ...] | None = None,
     linked_kz: tuple[jnp.ndarray, ...] | None = None,
     linked_inverse_permutation: jnp.ndarray | None = None,
+    linked_full_cover: bool = False,
+    linked_gather_map: jnp.ndarray | None = None,
+    linked_gather_mask: jnp.ndarray | None = None,
+    linked_use_gather: bool = False,
     use_twist_shift: bool = False,
 ) -> jnp.ndarray:
     """Streaming term using Hermite ladder and real-space z derivative."""
@@ -322,6 +346,10 @@ def streaming_term(
                 linked_indices=linked_indices,
                 linked_kz=linked_kz,
                 linked_inverse_permutation=linked_inverse_permutation,
+                linked_full_cover=linked_full_cover,
+                linked_gather_map=linked_gather_map,
+                linked_gather_mask=linked_gather_mask,
+                linked_use_gather=linked_use_gather,
             )
         else:
             if kx_link_plus is None or kx_link_minus is None:

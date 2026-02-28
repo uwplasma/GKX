@@ -30,6 +30,10 @@ def streaming_contribution(
     linked_indices: tuple[jnp.ndarray, ...] | None = None,
     linked_kz: tuple[jnp.ndarray, ...] | None = None,
     linked_inverse_permutation: jnp.ndarray | None = None,
+    linked_full_cover: bool = False,
+    linked_gather_map: jnp.ndarray | None = None,
+    linked_gather_mask: jnp.ndarray | None = None,
+    linked_use_gather: bool = False,
     use_twist_shift: bool = False,
 ) -> jnp.ndarray:
     vth_s = vth if vth.ndim == 0 else vth[:, None, None, None, None, None]
@@ -47,6 +51,10 @@ def streaming_contribution(
         linked_indices=linked_indices,
         linked_kz=linked_kz,
         linked_inverse_permutation=linked_inverse_permutation,
+        linked_full_cover=linked_full_cover,
+        linked_gather_map=linked_gather_map,
+        linked_gather_mask=linked_gather_mask,
+        linked_use_gather=linked_use_gather,
         use_twist_shift=use_twist_shift,
     )
 
@@ -71,6 +79,10 @@ def streaming_contribution_gx(
     linked_indices: tuple[jnp.ndarray, ...] | None = None,
     linked_kz: tuple[jnp.ndarray, ...] | None = None,
     linked_inverse_permutation: jnp.ndarray | None = None,
+    linked_full_cover: bool = False,
+    linked_gather_map: jnp.ndarray | None = None,
+    linked_gather_mask: jnp.ndarray | None = None,
+    linked_use_gather: bool = False,
 ) -> jnp.ndarray:
     """GX-style streaming: ladder on g, add field terms, then apply parallel derivative."""
 
@@ -113,6 +125,10 @@ def streaming_contribution_gx(
             linked_indices=linked_indices,
             linked_kz=linked_kz,
             linked_inverse_permutation=linked_inverse_permutation,
+            linked_full_cover=linked_full_cover,
+            linked_gather_map=linked_gather_map,
+            linked_gather_mask=linked_gather_mask,
+            linked_use_gather=linked_use_gather,
         )
     else:
         dG = grad_z_periodic(rhs, kz=kz)
@@ -273,6 +289,10 @@ def hypercollisions_contribution(
     linked_indices: tuple[jnp.ndarray, ...] | None = None,
     linked_kz: tuple[jnp.ndarray, ...] | None = None,
     linked_inverse_permutation: jnp.ndarray | None = None,
+    linked_full_cover: bool = False,
+    linked_gather_map: jnp.ndarray | None = None,
+    linked_gather_mask: jnp.ndarray | None = None,
+    linked_use_gather: bool = False,
 ) -> jnp.ndarray:
     l_norm = jnp.asarray(max(G.shape[1], 1), dtype=ratio_l.dtype)
     m_norm = jnp.asarray(max(G.shape[2], 1), dtype=ratio_m.dtype)
@@ -299,6 +319,10 @@ def hypercollisions_contribution(
             linked_indices=linked_indices,
             linked_kz=linked_kz,
             linked_inverse_permutation=linked_inverse_permutation,
+            linked_full_cover=linked_full_cover,
+            linked_gather_map=linked_gather_map,
+            linked_gather_mask=linked_gather_mask,
+            linked_use_gather=linked_use_gather,
         )
     else:
         abs_kz = jnp.abs(kz)[None, None, None, None, None, :]
