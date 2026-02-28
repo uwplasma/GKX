@@ -48,7 +48,8 @@ def _gx_fac_mask(grid: SpectralGrid, *, use_dealias: bool) -> jnp.ndarray:
     """Return GX-style fac*mask for (ky, kx) weighting."""
 
     ky = grid.ky
-    fac = jnp.where(ky == 0.0, 1.0, 2.0)
+    has_negative = jnp.any(ky < 0.0)
+    fac = jnp.where(has_negative, 1.0, jnp.where(ky == 0.0, 1.0, 2.0))
     fac = fac[:, None] * jnp.ones((1, grid.kx.size), dtype=fac.dtype)
     if use_dealias:
         mask = grid.dealias_mask.astype(fac.dtype)
@@ -58,10 +59,10 @@ def _gx_fac_mask(grid: SpectralGrid, *, use_dealias: bool) -> jnp.ndarray:
 
 
 def _gx_fac_mask_nonzero(grid: SpectralGrid, *, use_dealias: bool) -> jnp.ndarray:
-    """Return fac*mask that excludes ky=0 contributions (for fluxes)."""
+    """Return fac*mask that excludes ky=0 and uses GX positive-ky weighting."""
 
     ky = grid.ky
-    fac = jnp.where(ky == 0.0, 0.0, 2.0)
+    fac = jnp.where(ky > 0.0, 2.0, 0.0)
     fac = fac[:, None] * jnp.ones((1, grid.kx.size), dtype=fac.dtype)
     if use_dealias:
         mask = grid.dealias_mask.astype(fac.dtype)
@@ -110,12 +111,16 @@ def gx_Wphi_krehm(
     params: LinearParams,
     vol_fac: jnp.ndarray,
     *,
+    kx: jnp.ndarray | None = None,
+    ky: jnp.ndarray | None = None,
     use_dealias: bool = True,
 ) -> jnp.ndarray:
     """GX Krehm electrostatic energy (Wphi) diagnostic."""
 
-    kx = grid.kx[None, :]
-    ky = grid.ky[:, None]
+    kx_arr = grid.kx if kx is None else kx
+    ky_arr = grid.ky if ky is None else ky
+    kx = jnp.asarray(kx_arr)[None, :]
+    ky = jnp.asarray(ky_arr)[:, None]
     kperp2 = kx * kx + ky * ky
     rho = jnp.asarray(params.rho)
     if rho.ndim == 0:
@@ -138,12 +143,16 @@ def gx_Wapar_krehm(
     apar: jnp.ndarray,
     grid: SpectralGrid,
     *,
+    kx: jnp.ndarray | None = None,
+    ky: jnp.ndarray | None = None,
     use_dealias: bool = True,
 ) -> jnp.ndarray:
     """GX Krehm magnetic energy (Wapar) diagnostic."""
 
-    kx = grid.kx[None, :]
-    ky = grid.ky[:, None]
+    kx_arr = grid.kx if kx is None else kx
+    ky_arr = grid.ky if ky is None else ky
+    kx = jnp.asarray(kx_arr)[None, :]
+    ky = jnp.asarray(ky_arr)[:, None]
     kperp2 = kx * kx + ky * ky
     fac = _gx_fac_mask(grid, use_dealias=use_dealias)
     weight = fac[:, :, None]
@@ -186,6 +195,7 @@ def gx_heat_flux(
     flux_fac: jnp.ndarray,
     *,
     use_dealias: bool = True,
+    flux_scale: float = 2.0,
 ) -> jnp.ndarray:
     """GX heat flux diagnostic (gyroBohm units)."""
 
@@ -245,7 +255,7 @@ def gx_heat_flux(
             - vth[s] * jnp.conj(vapar) * q_bar
             + tz[s] * jnp.conj(vbpar) * qB_bar
         )
-        flux_s = jnp.sum((fg * 2.0 * flx * fac).real) * nt[s]
+        flux_s = jnp.sum((fg * 2.0 * flx * fac).real) * nt[s] * flux_scale
         flux = flux + flux_s
     return flux
 
@@ -261,6 +271,7 @@ def gx_particle_flux(
     flux_fac: jnp.ndarray,
     *,
     use_dealias: bool = True,
+    flux_scale: float = 2.0,
 ) -> jnp.ndarray:
     """GX particle flux diagnostic."""
 
@@ -269,6 +280,8 @@ def gx_particle_flux(
     else:
         Gs = G
     ns = Gs.shape[0]
+    if ns == 1:
+        return jnp.asarray(0.0, dtype=jnp.real(phi).dtype)
     fac = _gx_fac_mask_nonzero(grid, use_dealias=use_dealias)
     fac = fac[:, :, None]
     flx = flux_fac[None, None, :]
@@ -306,7 +319,7 @@ def gx_particle_flux(
         uB_bar = jnp.sum(JlB_s * G0, axis=0)
 
         fg = jnp.conj(vphi) * n_bar - vth[s] * jnp.conj(vapar) * u_bar + tz[s] * jnp.conj(vbpar) * uB_bar
-        flux_s = jnp.sum((fg * 2.0 * flx * fac).real) * dens[s]
+        flux_s = jnp.sum((fg * 2.0 * flx * fac).real) * dens[s] * flux_scale
         flux = flux + flux_s
     return flux
 

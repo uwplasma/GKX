@@ -55,12 +55,19 @@ class RuntimeCollisionConfig:
     nu_laguerre: float = 2.0
     nu_hyper: float = 0.0
     p_hyper: float = 4.0
+    nu_hyper_l: float = 0.0
+    nu_hyper_m: float = 1.0
+    nu_hyper_lm: float = 0.0
+    p_hyper_l: float = 6.0
+    p_hyper_m: float = 20.0
+    p_hyper_lm: float = 6.0
     D_hyper: float = 0.0
     p_hyper_kperp: float = 2.0
     hypercollisions_const: float = 1.0
     hypercollisions_kz: float = 0.0
     damp_ends_amp: float = 0.0
     damp_ends_widthfrac: float = 0.0
+    damp_ends_scale_by_dt: bool = True
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -75,6 +82,7 @@ class RuntimeNormalizationConfig:
     omega_d_scale: float | None = None
     omega_star_scale: float | None = None
     diagnostic_norm: str = "gx"
+    flux_scale: float = 2.0
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
