@@ -13,7 +13,7 @@ from jax.scipy.sparse.linalg import gmres
 
 from spectraxgk.basis import hermite_ladder_coeffs
 from spectraxgk.geometry import SAlphaGeometry
-from spectraxgk.gyroaverage import J_l_all, gx_laguerre_transform
+from spectraxgk.gyroaverage import J_l_all, bessel_j0, bessel_j1, gx_laguerre_transform
 from spectraxgk.grids import SpectralGrid
 
 if TYPE_CHECKING:
@@ -494,6 +494,8 @@ class LinearCache:
     laguerre_to_grid: jnp.ndarray
     laguerre_to_spectral: jnp.ndarray
     laguerre_roots: jnp.ndarray
+    laguerre_j0: jnp.ndarray
+    laguerre_j1_over_alpha: jnp.ndarray
     kx_link_plus: jnp.ndarray
     kx_link_minus: jnp.ndarray
     kx_link_mask_plus: jnp.ndarray
@@ -547,6 +549,8 @@ class LinearCache:
             self.laguerre_to_grid,
             self.laguerre_to_spectral,
             self.laguerre_roots,
+            self.laguerre_j0,
+            self.laguerre_j1_over_alpha,
             self.kx_link_plus,
             self.kx_link_minus,
             self.kx_link_mask_plus,
@@ -562,7 +566,7 @@ class LinearCache:
     @classmethod
     def tree_unflatten(cls, aux_data, children):
         use_twist_shift, jtwist, n_linked_idx, n_linked_kz = aux_data
-        base_count = 44
+        base_count = 46
         base_children = children[:base_count]
         linked_idx = tuple(children[base_count : base_count + n_linked_idx])
         linked_kz = tuple(
@@ -714,6 +718,17 @@ def build_linear_cache(
     laguerre_to_grid = jnp.asarray(lag_to_grid_np, dtype=real_dtype)
     laguerre_to_spectral = jnp.asarray(lag_to_spec_np, dtype=real_dtype)
     laguerre_roots = jnp.asarray(lag_roots_np, dtype=real_dtype)
+    alpha = jnp.sqrt(
+        jnp.maximum(
+            0.0,
+            2.0 * laguerre_roots[None, :, None, None, None] * b[:, None, ...],
+        )
+    )
+    laguerre_j0 = bessel_j0(alpha).astype(real_dtype)
+    laguerre_j1 = bessel_j1(alpha)
+    laguerre_j1_over_alpha = jnp.where(alpha < 1.0e-8, 0.5, laguerre_j1 / alpha).astype(
+        real_dtype
+    )
     mask0 = (grid.ky == 0.0)[:, None, None] & (grid.kx == 0.0)[None, :, None]
     lb_base = lenard_bernstein_eigenvalues(Nl, Nm, params.nu_hermite, params.nu_laguerre)[
         None, :, :, None, None, None
@@ -841,6 +856,8 @@ def build_linear_cache(
         laguerre_to_grid=laguerre_to_grid,
         laguerre_to_spectral=laguerre_to_spectral,
         laguerre_roots=laguerre_roots,
+        laguerre_j0=laguerre_j0,
+        laguerre_j1_over_alpha=laguerre_j1_over_alpha,
         kx_link_plus=kx_link_plus,
         kx_link_minus=kx_link_minus,
         kx_link_mask_plus=kx_link_mask_plus,

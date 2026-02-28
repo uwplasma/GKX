@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import jax.numpy as jnp
-from jax.scipy.special import gammaln, i0e
+from jax.scipy.special import bessel_jn, gammaln, i0e
 import math
 import numpy as np
 
@@ -13,6 +13,28 @@ def gamma0(b: jnp.ndarray) -> jnp.ndarray:
 
     b = jnp.asarray(b)
     return i0e(b)
+
+
+def bessel_j0(x: jnp.ndarray) -> jnp.ndarray:
+    """Return J0(x) using jax.scipy.special.j0."""
+
+    x = jnp.asarray(x)
+    out = bessel_jn(x, v=0)[0]
+    x2 = x * x
+    approx = 1.0 - 0.25 * x2 + 0.015625 * x2 * x2
+    out = jnp.where(jnp.abs(x) < 1.0e-3, approx, out)
+    return jnp.where(jnp.isfinite(out), out, approx)
+
+
+def bessel_j1(x: jnp.ndarray) -> jnp.ndarray:
+    """Return J1(x) using jax.scipy.special.j1."""
+
+    x = jnp.asarray(x)
+    out = bessel_jn(x, v=1)[1]
+    x2 = x * x
+    approx = 0.5 * x - 0.0625 * x * x2 + (1.0 / 384.0) * x * x2 * x2
+    out = jnp.where(jnp.abs(x) < 1.0e-3, approx, out)
+    return jnp.where(jnp.isfinite(out), out, approx)
 
 
 def J_l_all(b: jnp.ndarray, l_max: int) -> jnp.ndarray:

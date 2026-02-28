@@ -609,6 +609,8 @@ def integrate_nonlinear_diffrax(
             laguerre_to_grid=_cache.laguerre_to_grid,
             laguerre_to_spectral=_cache.laguerre_to_spectral,
             laguerre_roots=_cache.laguerre_roots,
+            laguerre_j0=_cache.laguerre_j0,
+            laguerre_j1_over_alpha=_cache.laguerre_j1_over_alpha,
             b=_cache.b,
             gx_real_fft=gx_real_fft,
         )

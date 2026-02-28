@@ -13,7 +13,11 @@ from spectraxgk.terms.config import FieldState
 RHSFn = Callable[[jnp.ndarray], tuple[jnp.ndarray, FieldState]]
 
 
-@partial(jax.jit, static_argnames=("rhs_fn", "steps", "method", "checkpoint"))
+@partial(
+    jax.jit,
+    static_argnames=("rhs_fn", "steps", "method", "checkpoint"),
+    donate_argnums=(1,),
+)
 def integrate_nonlinear(
     rhs_fn: RHSFn,
     G0: jnp.ndarray,
