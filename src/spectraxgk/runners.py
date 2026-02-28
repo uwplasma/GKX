@@ -113,6 +113,7 @@ def integrate_nonlinear_from_config(
             progress_bar=time_cfg.progress_bar,
             checkpoint=time_cfg.checkpoint,
             gx_real_fft=time_cfg.gx_real_fft,
+            laguerre_mode=time_cfg.laguerre_nonlinear_mode,
         )
     return integrate_nonlinear(
         G0,
@@ -126,4 +127,5 @@ def integrate_nonlinear_from_config(
         terms=terms,
         checkpoint=time_cfg.checkpoint,
         gx_real_fft=time_cfg.gx_real_fft,
+        laguerre_mode=time_cfg.laguerre_nonlinear_mode,
     )
