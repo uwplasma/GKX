@@ -346,7 +346,10 @@ def integrate_linear_gx(
     t_max = float(time_cfg.t_max)
     dt = float(time_cfg.dt)
     dt_min = float(time_cfg.dt_min)
-    dt_max = float(time_cfg.dt_max) if time_cfg.dt_max is not None else dt
+    if time_cfg.dt_max is None and not time_cfg.fixed_dt:
+        dt_max = dt * 5.0
+    else:
+        dt_max = float(time_cfg.dt_max) if time_cfg.dt_max is not None else dt
     sample_stride = int(max(time_cfg.sample_stride, 1))
 
     z_idx = _gx_midplane_index(grid.z.size) if z_index is None else int(z_index)
@@ -370,6 +373,7 @@ def integrate_linear_gx(
     phi_list: list[np.ndarray] = []
     gamma_list: list[np.ndarray] = []
     omega_list: list[np.ndarray] = []
+    dt_list: list[float] = []
 
     stepper = _rk4_step
     if jit:
@@ -434,7 +438,10 @@ def integrate_linear_gx_diagnostics(
     t_max = float(time_cfg.t_max)
     dt = float(time_cfg.dt)
     dt_min = float(time_cfg.dt_min)
-    dt_max = float(time_cfg.dt_max) if time_cfg.dt_max is not None else dt
+    if time_cfg.dt_max is None and not time_cfg.fixed_dt:
+        dt_max = dt * 5.0
+    else:
+        dt_max = float(time_cfg.dt_max) if time_cfg.dt_max is not None else dt
     sample_stride = int(max(time_cfg.sample_stride, 1))
 
     z_idx = _gx_midplane_index(grid.z.size) if z_index is None else int(z_index)
@@ -457,6 +464,7 @@ def integrate_linear_gx_diagnostics(
     phi_list: list[np.ndarray] = []
     gamma_list: list[np.ndarray] = []
     omega_list: list[np.ndarray] = []
+    dt_list: list[float] = []
     Wg_list: list[float] = []
     Wphi_list: list[float] = []
     Wapar_list: list[float] = []
@@ -488,6 +496,7 @@ def integrate_linear_gx_diagnostics(
             bpar = fields.bpar if fields.bpar is not None else jnp.zeros_like(phi)
             gamma, omega = _gx_growth_rate_step(phi, phi_prev, dt, z_index=z_idx, mask=mask)
             ts.append(t)
+            dt_list.append(float(dt))
             phi_list.append(np.asarray(phi))
             gamma_list.append(np.asarray(gamma))
             omega_list.append(np.asarray(omega))
@@ -521,6 +530,8 @@ def integrate_linear_gx_diagnostics(
 
     diag = GXDiagnostics(
         t=np.asarray(ts),
+        dt_t=np.asarray(dt_list),
+        dt_mean=np.asarray(np.mean(dt_list)) if dt_list else np.asarray(0.0),
         gamma_t=np.asarray(gamma_list),
         omega_t=np.asarray(omega_list),
         Wg_t=np.asarray(Wg_list),

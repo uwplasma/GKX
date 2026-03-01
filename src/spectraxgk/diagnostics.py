@@ -22,6 +22,8 @@ class GXDiagnostics:
     """Streaming GX-style diagnostics at each sample time."""
 
     t: ArrayLike
+    dt_t: ArrayLike
+    dt_mean: ArrayLike
     gamma_t: ArrayLike
     omega_t: ArrayLike
     Wg_t: ArrayLike

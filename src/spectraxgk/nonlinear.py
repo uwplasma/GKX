@@ -16,6 +16,7 @@ from spectraxgk.linear import (
     LinearParams,
     _build_implicit_operator,
     build_linear_cache,
+    hypercollision_damping,
     term_config_to_linear_terms,
 )
 from spectraxgk.terms.assembly import assemble_rhs_cached_jit, compute_fields_cached
@@ -169,6 +170,55 @@ def _gx_nonlinear_omega_max(
     return jnp.asarray(omega_x + omega_y, dtype=real_dtype)
 
 
+def _collision_damping(
+    cache: LinearCache,
+    params: LinearParams,
+    term_cfg: TermConfig,
+    real_dtype: jnp.dtype,
+    *,
+    squeeze_species: bool,
+) -> jnp.ndarray:
+    """Assemble collision + hypercollision damping for operator splitting."""
+
+    lb_lam = cache.lb_lam.astype(real_dtype)
+    hyper_damp = hypercollision_damping(cache, params, real_dtype)
+    coll_w = jnp.asarray(term_cfg.collisions, dtype=real_dtype)
+    hyper_w = jnp.asarray(term_cfg.hypercollisions, dtype=real_dtype)
+
+    if lb_lam.ndim == 6:
+        ns = lb_lam.shape[0]
+        nu = jnp.asarray(params.nu, dtype=real_dtype)
+        if nu.ndim == 0:
+            nu = jnp.broadcast_to(nu, (ns,))
+        damping = nu[:, None, None, None, None, None] * lb_lam
+        if squeeze_species:
+            damping = damping[0]
+            hyper_damp = hyper_damp[0]
+    else:
+        damping = jnp.asarray(params.nu, dtype=real_dtype) * lb_lam
+
+    damping = coll_w * damping + hyper_w * hyper_damp
+    return damping.astype(real_dtype)
+
+
+def _apply_collision_split(
+    G: jnp.ndarray,
+    damping: jnp.ndarray,
+    dt_local: jnp.ndarray,
+    scheme: str,
+) -> jnp.ndarray:
+    """Apply a diagonal collision/hypercollision split update."""
+
+    scheme_key = scheme.strip().lower()
+    if scheme_key in {"implicit", "imex"}:
+        return G / (1.0 + dt_local * damping)
+    if scheme_key in {"exp", "sts", "rkc", "rkc2"}:
+        # For diagonal collision operators the exponential update is exact and
+        # behaves like a stabilized explicit (STS/RKC) limit.
+        return G * jnp.exp(-dt_local * damping)
+    raise ValueError("collision_scheme must be one of {'implicit', 'exp', 'sts', 'rkc'}")
+
+
 def integrate_nonlinear_cached(
     G0: jnp.ndarray,
     cache: LinearCache,
@@ -280,6 +330,15 @@ def integrate_nonlinear_gx_diagnostics(
     dt_max: float | None = None,
     cfl: float = 0.9,
     cfl_fac: float = 1.0,
+    collision_split: bool = False,
+    collision_scheme: str = "implicit",
+    implicit_tol: float = 1.0e-6,
+    implicit_maxiter: int = 200,
+    implicit_iters: int = 3,
+    implicit_relax: float = 0.7,
+    implicit_restart: int = 20,
+    implicit_solve_method: str = "batched",
+    implicit_preconditioner: str | None = None,
 ) -> tuple[jnp.ndarray, GXDiagnostics]:
     """Integrate nonlinear system and return GX-style diagnostics."""
 
@@ -293,6 +352,38 @@ def integrate_nonlinear_gx_diagnostics(
         cache = build_linear_cache(grid, geom, params, Nl, Nm)
 
     term_cfg = terms or TermConfig()
+    if method in {"imex", "semi-implicit"}:
+        if not fixed_dt:
+            raise ValueError("Adaptive dt is not supported for IMEX diagnostics")
+        return integrate_nonlinear_imex_gx_diagnostics(
+            G0,
+            grid,
+            geom,
+            params,
+            dt=dt,
+            steps=steps,
+            method=method,
+            cache=cache,
+            terms=term_cfg,
+            checkpoint=checkpoint,
+            sample_stride=sample_stride,
+            diagnostics_stride=diagnostics_stride,
+            use_dealias_mask=use_dealias_mask,
+            z_index=z_index,
+            gx_real_fft=gx_real_fft,
+            laguerre_mode=laguerre_mode,
+            flux_scale=flux_scale,
+            wphi_scale=wphi_scale,
+            collision_split=collision_split,
+            collision_scheme=collision_scheme,
+            implicit_tol=implicit_tol,
+            implicit_maxiter=implicit_maxiter,
+            implicit_iters=implicit_iters,
+            implicit_relax=implicit_relax,
+            implicit_restart=implicit_restart,
+            implicit_solve_method=implicit_solve_method,
+            implicit_preconditioner=implicit_preconditioner,
+        )
     vol_fac, flux_fac = gx_volume_factors(geom, grid)
     mask = jnp.asarray(grid.dealias_mask, dtype=bool)
     z_idx = _gx_midplane_index(grid.z.size) if z_index is None else int(z_index)
@@ -326,7 +417,10 @@ def integrate_nonlinear_gx_diagnostics(
     real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
     dt_init = jnp.asarray(dt, dtype=real_dtype)
     dt_min_val = jnp.asarray(dt_min, dtype=real_dtype)
-    dt_max_val = jnp.asarray(dt if dt_max is None else dt_max, dtype=real_dtype)
+    if dt_max is None and not fixed_dt:
+        dt_max_val = jnp.asarray(float(dt) * 5.0, dtype=real_dtype)
+    else:
+        dt_max_val = jnp.asarray(dt if dt_max is None else dt_max, dtype=real_dtype)
     cfl_val = jnp.asarray(cfl, dtype=real_dtype)
     cfl_fac_val = jnp.asarray(cfl_fac, dtype=real_dtype)
 
@@ -343,6 +437,13 @@ def integrate_nonlinear_gx_diagnostics(
     vpar_max = 2.0 * float(np.sqrt(max(nm, 1))) * vtmax
     muB_max = _gx_laguerre_vmax(nl) * tzmax
     kxfac_val = float(np.asarray(cache.kxfac))
+    squeeze_species = G0.ndim == 5 and cache.lb_lam.ndim == 6
+    use_collision_split = bool(collision_split) and (
+        float(term_cfg.collisions) != 0.0 or float(term_cfg.hypercollisions) != 0.0
+    )
+    damping = None
+    if use_collision_split:
+        damping = _collision_damping(cache, params, term_cfg, real_dtype, squeeze_species=squeeze_species)
 
     def _update_dt(fields_state: FieldState, dt_prev: jnp.ndarray) -> jnp.ndarray:
         if fixed_dt:
@@ -473,6 +574,8 @@ def integrate_nonlinear_gx_diagnostics(
             raise ValueError(
                 "method must be one of {'euler', 'rk2', 'rk3', 'rk3_gx', 'rk4', 'k10'}"
             )
+        if use_collision_split and damping is not None:
+            G_new = _apply_collision_split(G_new, damping, dt_local, collision_scheme)
         G_new = _enforce_hermitian(G_new)
         t_new = t_prev + dt_local
 
@@ -485,7 +588,7 @@ def integrate_nonlinear_gx_diagnostics(
         diag_stride = int(max(diagnostics_stride, 1))
         do_diag = (idx % diag_stride) == 0
         diag, phi = jax.lax.cond(do_diag, _compute_diag, _reuse_diag, operand=None)
-        return (G_new, phi, diag, t_new, dt_local), (diag, t_new)
+        return (G_new, phi, diag, t_new, dt_local), (diag, t_new, dt_local)
 
     step_fn = jax.checkpoint(step) if checkpoint else step
     dt0 = _update_dt(fields0, dt_init)
@@ -495,7 +598,7 @@ def integrate_nonlinear_gx_diagnostics(
         step_fn, (G0, phi_prev, diag_zero, jnp.asarray(0.0, dtype=real_dtype), dt0), idx, length=steps
     )
 
-    diag, t = diag_out
+    diag, t, dt_series = diag_out
     gamma_t, omega_t, Wg_t, Wphi_t, Wapar_t, heat_t, pflux_t = diag
 
     stride = int(max(sample_stride, diagnostics_stride, 1))
@@ -508,10 +611,277 @@ def integrate_nonlinear_gx_diagnostics(
         heat_t = heat_t[::stride]
         pflux_t = pflux_t[::stride]
         t = t[::stride]
+        dt_series = dt_series[::stride]
 
+    dt_mean = jnp.mean(dt_series)
     energy_t = gx_energy_total(Wg_t, Wphi_t, Wapar_t)
     diag_out = GXDiagnostics(
         t=t,
+        dt_t=dt_series,
+        dt_mean=dt_mean,
+        gamma_t=gamma_t,
+        omega_t=omega_t,
+        Wg_t=Wg_t,
+        Wphi_t=Wphi_t,
+        Wapar_t=Wapar_t,
+        heat_flux_t=heat_t,
+        particle_flux_t=pflux_t,
+        energy_t=energy_t,
+    )
+    return t, diag_out
+
+
+def integrate_nonlinear_imex_gx_diagnostics(
+    G0: jnp.ndarray,
+    grid: SpectralGrid,
+    geom: SAlphaGeometry,
+    params: LinearParams,
+    dt: float,
+    steps: int,
+    *,
+    method: str = "imex",
+    cache: LinearCache | None = None,
+    terms: TermConfig | None = None,
+    checkpoint: bool = False,
+    sample_stride: int = 1,
+    diagnostics_stride: int = 1,
+    use_dealias_mask: bool = False,
+    z_index: int | None = None,
+    gx_real_fft: bool = True,
+    laguerre_mode: str = "grid",
+    flux_scale: float = 2.0,
+    wphi_scale: float = 1.0,
+    collision_split: bool = False,
+    collision_scheme: str = "implicit",
+    implicit_tol: float = 1.0e-6,
+    implicit_maxiter: int = 200,
+    implicit_iters: int = 3,
+    implicit_relax: float = 0.7,
+    implicit_restart: int = 20,
+    implicit_solve_method: str = "batched",
+    implicit_preconditioner: str | None = None,
+) -> tuple[jnp.ndarray, GXDiagnostics]:
+    """IMEX nonlinear integrator with GX diagnostics."""
+
+    if cache is None:
+        if G0.ndim == 5:
+            Nl, Nm = G0.shape[0], G0.shape[1]
+        elif G0.ndim == 6:
+            Nl, Nm = G0.shape[1], G0.shape[2]
+        else:
+            raise ValueError("G0 must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)")
+        cache = build_linear_cache(grid, geom, params, Nl, Nm)
+
+    term_cfg = terms or TermConfig()
+    linear_cfg = replace(term_cfg, nonlinear=0.0)
+    if collision_split:
+        linear_cfg = replace(linear_cfg, collisions=0.0, hypercollisions=0.0)
+
+    vol_fac, flux_fac = gx_volume_factors(geom, grid)
+    mask = jnp.asarray(grid.dealias_mask, dtype=bool)
+    z_idx = _gx_midplane_index(grid.z.size) if z_index is None else int(z_index)
+    use_dealias = bool(use_dealias_mask)
+    rho_star = float(getattr(params, "rho_star", 1.0))
+    kx_phys = cache.kx / rho_star
+    ky_phys = cache.ky / rho_star
+    use_hermitian = bool(gx_real_fft) and bool(np.any(np.asarray(grid.ky) < 0.0))
+    ny_full = int(grid.ky.size)
+    nyc = ny_full // 2 + 1
+    nx = int(grid.kx.size)
+    if nx > 1:
+        kx_neg = jnp.concatenate(
+            [jnp.asarray([0], dtype=jnp.int32), jnp.arange(nx - 1, 0, -1, dtype=jnp.int32)]
+        )
+    else:
+        kx_neg = jnp.asarray([0], dtype=jnp.int32)
+
+    def _enforce_hermitian(G_state: jnp.ndarray) -> jnp.ndarray:
+        if not use_hermitian or nyc <= 2:
+            return G_state
+        pos = G_state[..., :nyc, :, :]
+        neg = jnp.conj(pos[..., 1 : nyc - 1, :, :])[..., ::-1, :, :]
+        if nx > 1:
+            neg = neg[..., kx_neg, :]
+        return jnp.concatenate([pos, neg], axis=-3)
+
+    state_dtype = jnp.result_type(G0, jnp.complex64)
+    G0 = jnp.asarray(G0, dtype=state_dtype)
+    G0 = _enforce_hermitian(G0)
+    real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
+    dt_val = jnp.asarray(dt, dtype=real_dtype)
+
+    implicit_operator = build_nonlinear_imex_operator(
+        G0,
+        cache,
+        params,
+        dt,
+        terms=linear_cfg,
+        implicit_preconditioner=implicit_preconditioner,
+        gx_real_fft=gx_real_fft,
+    )
+
+    squeeze_species = implicit_operator.squeeze_species
+    if squeeze_species and G0.ndim == len(implicit_operator.shape) - 1:
+        G0 = G0[None, ...]
+    use_collision_split = bool(collision_split) and (
+        float(term_cfg.collisions) != 0.0 or float(term_cfg.hypercollisions) != 0.0
+    )
+    damping = None
+    if use_collision_split:
+        damping = _collision_damping(cache, params, term_cfg, real_dtype, squeeze_species=squeeze_species)
+
+    def nonlinear_term(G_in: jnp.ndarray) -> jnp.ndarray:
+        if term_cfg.nonlinear == 0.0:
+            return jnp.zeros_like(G_in)
+        weight = jnp.asarray(term_cfg.nonlinear, dtype=real_dtype)
+        fields = compute_fields_cached(G_in, cache, params, terms=term_cfg)
+        return nonlinear_em_contribution(
+            G_in,
+            phi=fields.phi,
+            apar=fields.apar,
+            bpar=fields.bpar,
+            Jl=cache.Jl,
+            JlB=cache.JlB,
+            tz=jnp.asarray(params.tz),
+            vth=jnp.asarray(params.vth),
+            sqrt_m=cache.sqrt_m,
+            sqrt_m_p1=cache.sqrt_m_p1,
+            kx_grid=cache.kx_grid,
+            ky_grid=cache.ky_grid,
+            dealias_mask=cache.dealias_mask,
+            kxfac=cache.kxfac,
+            weight=weight,
+            apar_weight=float(term_cfg.apar),
+            bpar_weight=float(term_cfg.bpar),
+            laguerre_to_grid=cache.laguerre_to_grid,
+            laguerre_to_spectral=cache.laguerre_to_spectral,
+            laguerre_roots=cache.laguerre_roots,
+            laguerre_j0=cache.laguerre_j0,
+            laguerre_j1_over_alpha=cache.laguerre_j1_over_alpha,
+            b=cache.b,
+            gx_real_fft=gx_real_fft,
+            laguerre_mode=laguerre_mode,
+        )
+
+    def fixed_point(G_in: jnp.ndarray, G_rhs: jnp.ndarray) -> jnp.ndarray:
+        def body(_i, g):
+            dG, _fields = assemble_rhs_cached_jit(g, cache, params, linear_cfg)
+            g_next = G_rhs + dt_val * dG
+            return (1.0 - implicit_relax) * g + implicit_relax * g_next
+
+        return jax.lax.fori_loop(0, max(int(implicit_iters), 0), body, G_in)
+
+    def solve_step(G_in: jnp.ndarray, G_rhs: jnp.ndarray) -> jnp.ndarray:
+        G_guess = fixed_point(G_in, G_rhs)
+        sol, _info = jax.scipy.sparse.linalg.gmres(
+            implicit_operator.matvec,
+            G_rhs.reshape(-1),
+            x0=G_guess.reshape(-1),
+            tol=implicit_tol,
+            maxiter=implicit_maxiter,
+            restart=implicit_restart,
+            M=implicit_operator.precond_op,
+            solve_method=implicit_solve_method,
+        )
+        return sol.reshape(implicit_operator.shape)
+
+    def _compute_diag_from_state(G_state, phi_last):
+        fields_state = compute_fields_cached(G_state, cache, params, terms=term_cfg)
+        phi = fields_state.phi
+        apar = fields_state.apar if fields_state.apar is not None else jnp.zeros_like(phi)
+        bpar = fields_state.bpar if fields_state.bpar is not None else jnp.zeros_like(phi)
+
+        gamma, omega = _gx_growth_rate_step(phi, phi_last, dt_val, z_index=z_idx, mask=mask)
+        Wg_val = gx_Wg(G_state, grid, params, vol_fac, use_dealias=use_dealias)
+        Wphi_val = gx_Wphi_krehm(
+            phi,
+            grid,
+            params,
+            vol_fac,
+            kx=kx_phys,
+            ky=ky_phys,
+            use_dealias=use_dealias,
+            gx_real_fft=gx_real_fft,
+            wphi_scale=wphi_scale,
+        )
+        Wapar_val = gx_Wapar_krehm(apar, grid, kx=kx_phys, ky=ky_phys, use_dealias=use_dealias)
+        heat_val = gx_heat_flux(
+            G_state,
+            phi,
+            apar,
+            bpar,
+            cache,
+            grid,
+            params,
+            flux_fac,
+            use_dealias=use_dealias,
+            flux_scale=flux_scale,
+        )
+        pflux_val = gx_particle_flux(
+            G_state,
+            phi,
+            apar,
+            bpar,
+            cache,
+            grid,
+            params,
+            flux_fac,
+            use_dealias=use_dealias,
+            flux_scale=flux_scale,
+        )
+        return (gamma, omega, Wg_val, Wphi_val, Wapar_val, heat_val, pflux_val), phi
+
+    phi_prev = compute_fields_cached(G0, cache, params, terms=term_cfg).phi
+
+    def step(carry, idx):
+        G, phi_last, diag_prev, t_prev = carry
+        rhs = G + dt_val * nonlinear_term(G)
+        G_new = solve_step(G, rhs)
+        if use_collision_split and damping is not None:
+            G_new = _apply_collision_split(G_new, damping, dt_val, collision_scheme)
+        G_new = _enforce_hermitian(G_new)
+        t_new = t_prev + dt_val
+
+        def _compute_diag(_):
+            return _compute_diag_from_state(G_new, phi_last)
+
+        def _reuse_diag(_):
+            return diag_prev, phi_last
+
+        diag_stride = int(max(diagnostics_stride, 1))
+        do_diag = (idx % diag_stride) == 0
+        diag, phi = jax.lax.cond(do_diag, _compute_diag, _reuse_diag, operand=None)
+        return (G_new, phi, diag, t_new), (diag, t_new)
+
+    step_fn = jax.checkpoint(step) if checkpoint else step
+    diag_zero, _phi0 = _compute_diag_from_state(G0, phi_prev)
+    idx = jnp.arange(steps, dtype=jnp.int32)
+    (G_final, _phi_last, _diag_last, _t_last), diag_out = jax.lax.scan(
+        step_fn, (G0, phi_prev, diag_zero, jnp.asarray(0.0, dtype=real_dtype)), idx, length=steps
+    )
+
+    diag, t = diag_out
+    gamma_t, omega_t, Wg_t, Wphi_t, Wapar_t, heat_t, pflux_t = diag
+    dt_series = jnp.ones_like(t) * dt_val
+
+    stride = int(max(sample_stride, diagnostics_stride, 1))
+    if stride > 1:
+        gamma_t = gamma_t[::stride]
+        omega_t = omega_t[::stride]
+        Wg_t = Wg_t[::stride]
+        Wphi_t = Wphi_t[::stride]
+        Wapar_t = Wapar_t[::stride]
+        heat_t = heat_t[::stride]
+        pflux_t = pflux_t[::stride]
+        t = t[::stride]
+        dt_series = dt_series[::stride]
+
+    dt_mean = jnp.mean(dt_series)
+    energy_t = gx_energy_total(Wg_t, Wphi_t, Wapar_t)
+    diag_out = GXDiagnostics(
+        t=t,
+        dt_t=dt_series,
+        dt_mean=dt_mean,
         gamma_t=gamma_t,
         omega_t=omega_t,
         Wg_t=Wg_t,

@@ -455,8 +455,12 @@ def _cmd_run_runtime_nonlinear(args: argparse.Namespace) -> int:
         return 0
 
     print(
-        f"nonlinear: t={diag.t.size} Wg={float(diag.Wg_t[-1]):.6g} "
-        f"Wphi={float(diag.Wphi_t[-1]):.6g} Wapar={float(diag.Wapar_t[-1]):.6g}"
+        "nonlinear: "
+        f"t={diag.t.size} "
+        f"dt_mean={float(diag.dt_mean):.6g} "
+        f"Wg={float(diag.Wg_t[-1]):.6g} "
+        f"Wphi={float(diag.Wphi_t[-1]):.6g} "
+        f"Wapar={float(diag.Wapar_t[-1]):.6g}"
     )
     if args.out is not None:
         def _flatten(series: np.ndarray | Array) -> np.ndarray:
@@ -470,6 +474,7 @@ def _cmd_run_runtime_nonlinear(args: argparse.Namespace) -> int:
         data_out = np.column_stack(
             [
                 _flatten(diag.t),
+                _flatten(diag.dt_t),
                 _flatten(diag.gamma_t),
                 _flatten(diag.omega_t),
                 _flatten(diag.Wg_t),
@@ -484,7 +489,7 @@ def _cmd_run_runtime_nonlinear(args: argparse.Namespace) -> int:
             args.out,
             data_out,
             delimiter=",",
-            header="t,gamma,omega,Wg,Wphi,Wapar,energy,heat_flux,particle_flux",
+            header="t,dt,gamma,omega,Wg,Wphi,Wapar,energy,heat_flux,particle_flux",
             comments="",
         )
         print(f"saved {args.out}")

@@ -74,6 +74,8 @@ class TimeConfig:
     dt_max: float | None = None
     cfl: float = 0.9
     cfl_fac: float = 1.0
+    collision_split: bool = False
+    collision_scheme: str = "implicit"
     gx_real_fft: bool = True
     laguerre_nonlinear_mode: str = "grid"
 
@@ -137,6 +139,8 @@ class CycloneBaseCase:
         diffrax_rtol=1.0e-6,
         diffrax_atol=1.0e-8,
         diffrax_max_steps=200000,
+        fixed_dt=False,
+        dt_max=0.05,
     )
     geometry: GeometryConfig = GeometryConfig(
         R0=2.77778,

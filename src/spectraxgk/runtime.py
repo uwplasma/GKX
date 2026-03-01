@@ -871,7 +871,14 @@ def run_runtime_nonlinear(
     dt_val = float(cfg.time.dt if dt is None else dt)
     if dt_val <= 0.0:
         raise ValueError("dt must be > 0")
-    steps_val = int(round(cfg.time.t_max / cfg.time.dt)) if steps is None else int(steps)
+    if steps is None:
+        if not cfg.time.fixed_dt:
+            dt_cap = cfg.time.dt_max if cfg.time.dt_max is not None else dt_val * 5.0
+            steps_val = int(np.ceil(cfg.time.t_max / max(dt_cap, 1.0e-12)))
+        else:
+            steps_val = int(round(cfg.time.t_max / cfg.time.dt))
+    else:
+        steps_val = int(steps)
     if steps_val < 1:
         raise ValueError("steps must be >= 1")
 
@@ -900,6 +907,11 @@ def run_runtime_nonlinear(
             dt_max=cfg.time.dt_max,
             cfl=float(cfg.time.cfl),
             cfl_fac=float(cfg.time.cfl_fac),
+            collision_split=bool(cfg.time.collision_split),
+            collision_scheme=str(cfg.time.collision_scheme),
+            implicit_restart=int(cfg.time.implicit_restart),
+            implicit_solve_method=str(cfg.time.implicit_solve_method),
+            implicit_preconditioner=cfg.time.implicit_preconditioner,
         )
         return RuntimeNonlinearResult(
             t=np.asarray(t),
