@@ -8,7 +8,7 @@ from pathlib import Path
 try:
     import tomllib  # Python 3.11+
 except ModuleNotFoundError:  # pragma: no cover - only on Python <3.11
-    import tomli as tomllib  # type: ignore[no-redef]
+    import tomli as tomllib  # type: ignore[import-not-found,no-redef]
 
 from spectraxgk.config import (
     CycloneBaseCase,

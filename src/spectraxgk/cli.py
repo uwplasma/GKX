@@ -100,6 +100,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_runtime.add_argument("--method", type=str, default=None, help="time integrator method")
     run_runtime.add_argument("--dt", type=float, default=None)
     run_runtime.add_argument("--steps", type=int, default=None)
+    run_runtime.add_argument("--sample-stride", type=int, default=None)
     run_runtime.add_argument("--fit-signal", type=str, default=None, help="auto, phi, or density")
     run_runtime.set_defaults(func=_cmd_run_runtime_linear)
 
@@ -115,6 +116,8 @@ def build_parser() -> argparse.ArgumentParser:
     scan_runtime.add_argument("--method", type=str, default=None, help="time integrator method")
     scan_runtime.add_argument("--dt", type=float, default=None)
     scan_runtime.add_argument("--steps", type=int, default=None)
+    scan_runtime.add_argument("--sample-stride", type=int, default=None)
+    scan_runtime.add_argument("--batch-ky", action="store_true", help="Integrate all ky in one batch")
     scan_runtime.add_argument("--fit-signal", type=str, default=None, help="auto, phi, or density")
     scan_runtime.set_defaults(func=_cmd_scan_runtime_linear)
 
@@ -131,6 +134,9 @@ def build_parser() -> argparse.ArgumentParser:
     run_runtime_nl.add_argument("--method", type=str, default=None)
     run_runtime_nl.add_argument("--sample-stride", type=int, default=None)
     run_runtime_nl.add_argument("--diagnostics-stride", type=int, default=None)
+    diag_group = run_runtime_nl.add_mutually_exclusive_group()
+    diag_group.add_argument("--diagnostics", action="store_true", help="Enable diagnostics output")
+    diag_group.add_argument("--no-diagnostics", action="store_true", help="Disable diagnostics output")
     run_runtime_nl.add_argument(
         "--laguerre-mode",
         type=str,
@@ -324,6 +330,11 @@ def _cmd_run_runtime_linear(args: argparse.Namespace) -> int:
     method = args.method if args.method is not None else run_cfg.get("method", None)
     dt = args.dt if args.dt is not None else run_cfg.get("dt", None)
     steps = args.steps if args.steps is not None else run_cfg.get("steps", None)
+    sample_stride = (
+        int(args.sample_stride)
+        if args.sample_stride is not None
+        else run_cfg.get("sample_stride", cfg.time.sample_stride)
+    )
 
     res = run_runtime_linear(
         cfg,
@@ -334,6 +345,7 @@ def _cmd_run_runtime_linear(args: argparse.Namespace) -> int:
         method=method,
         dt=dt,
         steps=steps,
+        sample_stride=sample_stride,
         fit_signal=fit_signal,
         **fit_cfg,
     )
@@ -361,6 +373,12 @@ def _cmd_scan_runtime_linear(args: argparse.Namespace) -> int:
     method = args.method if args.method is not None else scan_cfg.get("method", None)
     dt = args.dt if args.dt is not None else scan_cfg.get("dt", None)
     steps = args.steps if args.steps is not None else scan_cfg.get("steps", None)
+    sample_stride = (
+        int(args.sample_stride)
+        if args.sample_stride is not None
+        else scan_cfg.get("sample_stride", cfg.time.sample_stride)
+    )
+    batch_ky = bool(args.batch_ky)
 
     scan = run_runtime_scan(
         cfg,
@@ -371,6 +389,8 @@ def _cmd_scan_runtime_linear(args: argparse.Namespace) -> int:
         method=method,
         dt=dt,
         steps=steps,
+        sample_stride=sample_stride,
+        batch_ky=batch_ky,
         fit_signal=fit_signal,
         **fit_cfg,
     )
@@ -406,6 +426,12 @@ def _cmd_run_runtime_nonlinear(args: argparse.Namespace) -> int:
         if args.diagnostics_stride is None
         else int(args.diagnostics_stride)
     )
+    if args.no_diagnostics:
+        diagnostics = False
+    elif args.diagnostics:
+        diagnostics = True
+    else:
+        diagnostics = run_cfg.get("diagnostics", cfg.time.diagnostics)
     laguerre_mode = args.laguerre_mode if args.laguerre_mode is not None else run_cfg.get(
         "laguerre_mode"
     )
@@ -421,7 +447,7 @@ def _cmd_run_runtime_nonlinear(args: argparse.Namespace) -> int:
         sample_stride=sample_stride,
         diagnostics_stride=diagnostics_stride,
         laguerre_mode=laguerre_mode,
-        diagnostics=True,
+        diagnostics=diagnostics,
     )
     diag = result.diagnostics
     if diag is None:

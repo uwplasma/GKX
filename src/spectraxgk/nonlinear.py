@@ -21,7 +21,7 @@ from spectraxgk.linear import (
 from spectraxgk.terms.assembly import assemble_rhs_cached_jit, compute_fields_cached
 from spectraxgk.terms.config import FieldState, TermConfig
 from spectraxgk.terms.integrators import integrate_nonlinear as integrate_nonlinear_scan
-from spectraxgk.terms.nonlinear import nonlinear_em_contribution
+from spectraxgk.terms.nonlinear import _broadcast_grid, _ifft2_xy, nonlinear_em_contribution
 from spectraxgk.gx_integrators import _gx_growth_rate_step, _gx_midplane_index
 from spectraxgk.diagnostics import (
     GXDiagnostics,
@@ -33,6 +33,7 @@ from spectraxgk.diagnostics import (
     gx_Wg,
     gx_Wphi_krehm,
 )
+from spectraxgk.gx_integrators import _gx_laguerre_vmax
 
 
 @dataclass(frozen=True)
@@ -91,6 +92,81 @@ def nonlinear_rhs_cached(
             laguerre_mode=laguerre_mode,
         )
     return dG, fields
+
+
+def _gx_nonlinear_omega_max(
+    fields: FieldState,
+    grid: SpectralGrid,
+    cache: LinearCache,
+    *,
+    gx_real_fft: bool,
+    kx_max: float,
+    ky_max: float,
+    kxfac: float,
+    vpar_max: float,
+    muB_max: float,
+) -> jnp.ndarray:
+    """GX-style nonlinear max frequency estimate from grad(phi,apar,bpar)."""
+
+    phi = fields.phi
+    apar = fields.apar
+    bpar = fields.bpar
+
+    ny = int(grid.ky.size)
+    nyc = 1 + ny // 2
+
+    real_dtype = jnp.real(jnp.empty((), dtype=phi.dtype)).dtype
+    kxfac_val = jnp.asarray(kxfac, dtype=real_dtype)
+    imag = jnp.asarray(1j, dtype=phi.dtype)
+
+    fft_norm = float(grid.ky.size * grid.kx.size)
+    ifft_scale = jnp.asarray(fft_norm, dtype=real_dtype)
+
+    if gx_real_fft:
+        phi_nyc = phi[:nyc, :, :]
+        kx_nyc = cache.kx_grid[:nyc, :]
+        ky_nyc = cache.ky_grid[:nyc, :]
+        kx_b = _broadcast_grid(kx_nyc, phi_nyc.ndim)
+        ky_b = _broadcast_grid(ky_nyc, phi_nyc.ndim)
+        dphi_dx = jnp.fft.irfft2(imag * kx_b * phi_nyc, s=(grid.kx.size, grid.ky.size), axes=(-2, -3))
+        dphi_dy = jnp.fft.irfft2(imag * ky_b * phi_nyc, s=(grid.kx.size, grid.ky.size), axes=(-2, -3))
+        dphi_dx = dphi_dx * ifft_scale
+        dphi_dy = dphi_dy * ifft_scale
+
+        def _grad_real(field: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
+            field_nyc = field[:nyc, :, :]
+            dfx = jnp.fft.irfft2(imag * kx_b * field_nyc, s=(grid.kx.size, grid.ky.size), axes=(-2, -3))
+            dfy = jnp.fft.irfft2(imag * ky_b * field_nyc, s=(grid.kx.size, grid.ky.size), axes=(-2, -3))
+            return dfx * ifft_scale, dfy * ifft_scale
+    else:
+        kx_b = _broadcast_grid(cache.kx_grid, phi.ndim)
+        ky_b = _broadcast_grid(cache.ky_grid, phi.ndim)
+        dphi_dx = _ifft2_xy(imag * kx_b * phi) * ifft_scale
+        dphi_dy = _ifft2_xy(imag * ky_b * phi) * ifft_scale
+
+        def _grad_real(field: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
+            dfx = _ifft2_xy(imag * kx_b * field) * ifft_scale
+            dfy = _ifft2_xy(imag * ky_b * field) * ifft_scale
+            return dfx, dfy
+
+    dphi_dx = jnp.abs(dphi_dx)
+    dphi_dy = jnp.abs(dphi_dy)
+
+    if apar is not None:
+        dap_dx, dap_dy = _grad_real(apar)
+        dphi_dx = dphi_dx + vpar_max * jnp.abs(dap_dx)
+        dphi_dy = dphi_dy + vpar_max * jnp.abs(dap_dy)
+    if bpar is not None:
+        dbp_dx, dbp_dy = _grad_real(bpar)
+        dphi_dx = dphi_dx + muB_max * jnp.abs(dbp_dx)
+        dphi_dy = dphi_dy + muB_max * jnp.abs(dbp_dy)
+
+    vmax_x = jnp.max(dphi_dy)
+    vmax_y = jnp.max(dphi_dx)
+    scale = jnp.asarray(0.5, dtype=real_dtype)
+    omega_x = jnp.abs(kxfac_val) * jnp.asarray(kx_max, dtype=real_dtype) * vmax_x * scale
+    omega_y = jnp.abs(kxfac_val) * jnp.asarray(ky_max, dtype=real_dtype) * vmax_y * scale
+    return jnp.asarray(omega_x + omega_y, dtype=real_dtype)
 
 
 def integrate_nonlinear_cached(
@@ -199,6 +275,11 @@ def integrate_nonlinear_gx_diagnostics(
     laguerre_mode: str = "grid",
     flux_scale: float = 2.0,
     wphi_scale: float = 1.0,
+    fixed_dt: bool = True,
+    dt_min: float = 1.0e-7,
+    dt_max: float | None = None,
+    cfl: float = 0.9,
+    cfl_fac: float = 1.0,
 ) -> tuple[jnp.ndarray, GXDiagnostics]:
     """Integrate nonlinear system and return GX-style diagnostics."""
 
@@ -243,7 +324,42 @@ def integrate_nonlinear_gx_diagnostics(
     G0 = jnp.asarray(G0, dtype=state_dtype)
     G0 = _enforce_hermitian(G0)
     real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
-    dt_val = jnp.asarray(dt, dtype=real_dtype)
+    dt_init = jnp.asarray(dt, dtype=real_dtype)
+    dt_min_val = jnp.asarray(dt_min, dtype=real_dtype)
+    dt_max_val = jnp.asarray(dt if dt_max is None else dt_max, dtype=real_dtype)
+    cfl_val = jnp.asarray(cfl, dtype=real_dtype)
+    cfl_fac_val = jnp.asarray(cfl_fac, dtype=real_dtype)
+
+    nx = int(grid.kx.size)
+    ny = int(grid.ky.size)
+    kx_np = np.asarray(cache.kx, dtype=float)
+    ky_np = np.asarray(cache.ky, dtype=float)
+    kx_max = float(abs(kx_np[(nx - 1) // 3])) if nx > 1 else 0.0
+    ky_max = float(abs(ky_np[(ny - 1) // 3])) if ny > 1 else 0.0
+    vtmax = float(np.max(np.abs(np.asarray(params.vth, dtype=float))))
+    tzmax = float(np.max(np.abs(np.asarray(params.tz, dtype=float))))
+    nm = int(cache.sqrt_m.shape[0])
+    nl = int(cache.l.shape[0])
+    vpar_max = 2.0 * float(np.sqrt(max(nm, 1))) * vtmax
+    muB_max = _gx_laguerre_vmax(nl) * tzmax
+    kxfac_val = float(np.asarray(cache.kxfac))
+
+    def _update_dt(fields_state: FieldState, dt_prev: jnp.ndarray) -> jnp.ndarray:
+        if fixed_dt:
+            return dt_prev
+        wmax = _gx_nonlinear_omega_max(
+            fields_state,
+            grid,
+            cache,
+            gx_real_fft=gx_real_fft,
+            kx_max=kx_max,
+            ky_max=ky_max,
+            kxfac=kxfac_val,
+            vpar_max=vpar_max,
+            muB_max=muB_max,
+        )
+        dt_guess = jnp.where(wmax > 0.0, cfl_fac_val * cfl_val / wmax, dt_prev)
+        return jnp.clip(dt_guess, dt_min_val, dt_max_val)
 
     def rhs_fn(G):
         return nonlinear_rhs_cached(
@@ -258,13 +374,13 @@ def integrate_nonlinear_gx_diagnostics(
     fields0 = compute_fields_cached(G0, cache, params, terms=term_cfg)
     phi_prev = fields0.phi
 
-    def _compute_diag_from_state(G_state, phi_last):
+    def _compute_diag_from_state(G_state, phi_last, dt_local):
         fields_state = compute_fields_cached(G_state, cache, params, terms=term_cfg)
         phi = fields_state.phi
         apar = fields_state.apar if fields_state.apar is not None else jnp.zeros_like(phi)
         bpar = fields_state.bpar if fields_state.bpar is not None else jnp.zeros_like(phi)
 
-        gamma, omega = _gx_growth_rate_step(phi, phi_last, dt_val, z_index=z_idx, mask=mask)
+        gamma, omega = _gx_growth_rate_step(phi, phi_last, dt_local, z_index=z_idx, mask=mask)
         Wg_val = gx_Wg(G_state, grid, params, vol_fac, use_dealias=use_dealias)
         Wphi_val = gx_Wphi_krehm(
             phi,
@@ -305,39 +421,40 @@ def integrate_nonlinear_gx_diagnostics(
         return (gamma, omega, Wg_val, Wphi_val, Wapar_val, heat_val, pflux_val), phi
 
     def step(carry, idx):
-        G, phi_last, diag_prev = carry
-        dG, _ = rhs_fn(G)
+        G, phi_last, diag_prev, t_prev, dt_prev = carry
+        dG, fields = rhs_fn(G)
+        dt_local = _update_dt(fields, dt_prev)
         if method == "euler":
-            G_new = G + dt_val * dG
+            G_new = G + dt_local * dG
         elif method == "rk2":
             k1 = dG
-            k2, _ = rhs_fn(G + 0.5 * dt_val * k1)
-            G_new = G + dt_val * k2
+            k2, _ = rhs_fn(G + 0.5 * dt_local * k1)
+            G_new = G + dt_local * k2
         elif method == "rk3":
             k1 = dG
-            G1 = G + dt_val * k1
+            G1 = G + dt_local * k1
             k2, _ = rhs_fn(G1)
-            G2 = 0.75 * G + 0.25 * (G1 + dt_val * k2)
+            G2 = 0.75 * G + 0.25 * (G1 + dt_local * k2)
             k3, _ = rhs_fn(G2)
-            G_new = (1.0 / 3.0) * G + (2.0 / 3.0) * (G2 + dt_val * k3)
+            G_new = (1.0 / 3.0) * G + (2.0 / 3.0) * (G2 + dt_local * k3)
         elif method == "rk3_gx":
             k1 = dG
-            G1 = G + (dt_val / 3.0) * k1
+            G1 = G + (dt_local / 3.0) * k1
             k2, _ = rhs_fn(G1)
-            G2 = G + (2.0 * dt_val / 3.0) * k2
+            G2 = G + (2.0 * dt_local / 3.0) * k2
             k3, _ = rhs_fn(G2)
-            G3 = G + 0.75 * dt_val * k3
-            G_new = G3 + 0.25 * dt_val * k1
+            G3 = G + 0.75 * dt_local * k3
+            G_new = G3 + 0.25 * dt_local * k1
         elif method == "rk4":
             k1 = dG
-            k2, _ = rhs_fn(G + 0.5 * dt_val * k1)
-            k3, _ = rhs_fn(G + 0.5 * dt_val * k2)
-            k4, _ = rhs_fn(G + dt_val * k3)
-            G_new = G + (dt_val / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+            k2, _ = rhs_fn(G + 0.5 * dt_local * k1)
+            k3, _ = rhs_fn(G + 0.5 * dt_local * k2)
+            k4, _ = rhs_fn(G + dt_local * k3)
+            G_new = G + (dt_local / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
         elif method == "k10":
             def _euler_step(G_state):
                 dG_state, _ = rhs_fn(G_state)
-                return G_state + (dt_val / 6.0) * dG_state
+                return G_state + (dt_local / 6.0) * dG_state
 
             G_q1 = G
             G_q2 = G
@@ -351,15 +468,16 @@ def integrate_nonlinear_gx_diagnostics(
                 G_q1 = _euler_step(G_q1)
 
             dG_final, _ = rhs_fn(G_q1)
-            G_new = G_q2 + 0.6 * G_q1 + 0.1 * dt_val * dG_final
+            G_new = G_q2 + 0.6 * G_q1 + 0.1 * dt_local * dG_final
         else:
             raise ValueError(
                 "method must be one of {'euler', 'rk2', 'rk3', 'rk3_gx', 'rk4', 'k10'}"
             )
         G_new = _enforce_hermitian(G_new)
+        t_new = t_prev + dt_local
 
         def _compute_diag(_):
-            return _compute_diag_from_state(G_new, phi_last)
+            return _compute_diag_from_state(G_new, phi_last, dt_local)
 
         def _reuse_diag(_):
             return diag_prev, phi_last
@@ -367,17 +485,18 @@ def integrate_nonlinear_gx_diagnostics(
         diag_stride = int(max(diagnostics_stride, 1))
         do_diag = (idx % diag_stride) == 0
         diag, phi = jax.lax.cond(do_diag, _compute_diag, _reuse_diag, operand=None)
-        return (G_new, phi, diag), diag
+        return (G_new, phi, diag, t_new, dt_local), (diag, t_new)
 
     step_fn = jax.checkpoint(step) if checkpoint else step
-    diag_zero, _phi0 = _compute_diag_from_state(G0, phi_prev)
+    dt0 = _update_dt(fields0, dt_init)
+    diag_zero, _phi0 = _compute_diag_from_state(G0, phi_prev, dt0)
     idx = jnp.arange(steps, dtype=jnp.int32)
-    (G_final, _phi_last, _diag_last), diag = jax.lax.scan(
-        step_fn, (G0, phi_prev, diag_zero), idx, length=steps
+    (G_final, _phi_last, _diag_last, _t_last, _dt_last), diag_out = jax.lax.scan(
+        step_fn, (G0, phi_prev, diag_zero, jnp.asarray(0.0, dtype=real_dtype), dt0), idx, length=steps
     )
 
+    diag, t = diag_out
     gamma_t, omega_t, Wg_t, Wphi_t, Wapar_t, heat_t, pflux_t = diag
-    t = dt_val * (jnp.arange(steps, dtype=real_dtype) + 1.0)
 
     stride = int(max(sample_stride, diagnostics_stride, 1))
     if stride > 1:

@@ -243,46 +243,19 @@ def _spectral_bracket_multi_gx(
     G_nyc = G_hat[..., :nyc, :, :]
     chi_nyc = chi_hat_stack[..., :nyc, :, :]
     axes = (-2, -3)
-    if chi_nyc.shape[1:] == G_nyc.shape:
-        # Pack G and chi into one batch to reduce FFT launches.
-        stack = jnp.concatenate([G_nyc[None, ...], chi_nyc], axis=0)
-        kx_stack = _broadcast_grid(kx_nyc, stack.ndim)
-        ky_stack = _broadcast_grid(ky_nyc, stack.ndim)
+    kx_b = _broadcast_grid(kx_nyc, G_nyc.ndim)
+    ky_b = _broadcast_grid(ky_nyc, G_nyc.ndim)
+    grad_G = jnp.stack([imag * kx_b * G_nyc, imag * ky_b * G_nyc], axis=0)
+    grad_G = jnp.fft.irfft2(grad_G, s=(kx.shape[1], ny_full), axes=axes) * ifft_scale
+    dG_dx = grad_G[0]
+    dG_dy = grad_G[1]
 
-        dstack_dx = (
-            jnp.fft.irfft2(imag * kx_stack * stack, s=(kx.shape[1], ny_full), axes=axes)
-            * ifft_scale
-        )
-        dstack_dy = (
-            jnp.fft.irfft2(imag * ky_stack * stack, s=(kx.shape[1], ny_full), axes=axes)
-            * ifft_scale
-        )
-        dG_dx = dstack_dx[0]
-        dG_dy = dstack_dy[0]
-        dchi_dx = dstack_dx[1:]
-        dchi_dy = dstack_dy[1:]
-    else:
-        kx_b = _broadcast_grid(kx_nyc, G_nyc.ndim)
-        ky_b = _broadcast_grid(ky_nyc, G_nyc.ndim)
-        kx_chi = _broadcast_grid(kx_nyc, chi_nyc.ndim)
-        ky_chi = _broadcast_grid(ky_nyc, chi_nyc.ndim)
-
-        dG_dx = (
-            jnp.fft.irfft2(imag * kx_b * G_nyc, s=(kx.shape[1], ny_full), axes=axes)
-            * ifft_scale
-        )
-        dG_dy = (
-            jnp.fft.irfft2(imag * ky_b * G_nyc, s=(kx.shape[1], ny_full), axes=axes)
-            * ifft_scale
-        )
-        dchi_dx = (
-            jnp.fft.irfft2(imag * kx_chi * chi_nyc, s=(kx.shape[1], ny_full), axes=axes)
-            * ifft_scale
-        )
-        dchi_dy = (
-            jnp.fft.irfft2(imag * ky_chi * chi_nyc, s=(kx.shape[1], ny_full), axes=axes)
-            * ifft_scale
-        )
+    kx_chi = _broadcast_grid(kx_nyc, chi_nyc.ndim)
+    ky_chi = _broadcast_grid(ky_nyc, chi_nyc.ndim)
+    grad_chi = jnp.stack([imag * kx_chi * chi_nyc, imag * ky_chi * chi_nyc], axis=0)
+    grad_chi = jnp.fft.irfft2(grad_chi, s=(kx.shape[1], ny_full), axes=axes) * ifft_scale
+    dchi_dx = grad_chi[0]
+    dchi_dy = grad_chi[1]
 
     bracket = dG_dx[None, ...] * dchi_dy - dG_dy[None, ...] * dchi_dx
 
@@ -325,28 +298,19 @@ def _spectral_bracket_multi_full(
     ifft_scale = jnp.asarray(fft_norm_val, dtype=real_dtype)
     fft_scale = jnp.asarray(1.0 / fft_norm_val, dtype=real_dtype)
 
-    if chi_hat_stack.shape[1:] == G_hat.shape:
-        # Pack G and chi into one batch to reduce FFT launches.
-        stack = jnp.concatenate([G_hat[None, ...], chi_hat_stack], axis=0)
-        kx_stack = _broadcast_grid(kx, stack.ndim)
-        ky_stack = _broadcast_grid(ky, stack.ndim)
+    kx_b = _broadcast_grid(kx, G_hat.ndim)
+    ky_b = _broadcast_grid(ky, G_hat.ndim)
+    grad_G = jnp.stack([imag * kx_b * G_hat, imag * ky_b * G_hat], axis=0)
+    grad_G = _ifft2_xy(grad_G) * ifft_scale
+    dG_dx = grad_G[0]
+    dG_dy = grad_G[1]
 
-        dstack_dx = _ifft2_xy(imag * kx_stack * stack) * ifft_scale
-        dstack_dy = _ifft2_xy(imag * ky_stack * stack) * ifft_scale
-        dG_dx = dstack_dx[0]
-        dG_dy = dstack_dy[0]
-        dchi_dx = dstack_dx[1:]
-        dchi_dy = dstack_dy[1:]
-    else:
-        kx_b = _broadcast_grid(kx, G_hat.ndim)
-        ky_b = _broadcast_grid(ky, G_hat.ndim)
-        kx_chi = _broadcast_grid(kx, chi_hat_stack.ndim)
-        ky_chi = _broadcast_grid(ky, chi_hat_stack.ndim)
-
-        dG_dx = _ifft2_xy(imag * kx_b * G_hat) * ifft_scale
-        dG_dy = _ifft2_xy(imag * ky_b * G_hat) * ifft_scale
-        dchi_dx = _ifft2_xy(imag * kx_chi * chi_hat_stack) * ifft_scale
-        dchi_dy = _ifft2_xy(imag * ky_chi * chi_hat_stack) * ifft_scale
+    kx_chi = _broadcast_grid(kx, chi_hat_stack.ndim)
+    ky_chi = _broadcast_grid(ky, chi_hat_stack.ndim)
+    grad_chi = jnp.stack([imag * kx_chi * chi_hat_stack, imag * ky_chi * chi_hat_stack], axis=0)
+    grad_chi = _ifft2_xy(grad_chi) * ifft_scale
+    dchi_dx = grad_chi[0]
+    dchi_dy = grad_chi[1]
 
     bracket = dG_dx[None, ...] * dchi_dy - dG_dy[None, ...] * dchi_dx
 

@@ -355,6 +355,7 @@ def run_runtime_linear(
     method: str | None = None,
     dt: float | None = None,
     steps: int | None = None,
+    sample_stride: int | None = None,
     auto_window: bool = True,
     tmin: float | None = None,
     tmax: float | None = None,
@@ -452,6 +453,8 @@ def run_runtime_linear(
             tcfg = replace(tcfg, dt=float(dt))
         if steps is not None:
             tcfg = replace(tcfg, t_max=float(steps) * float(tcfg.dt))
+        if sample_stride is not None:
+            tcfg = replace(tcfg, sample_stride=int(sample_stride))
 
         need_density = fit_key in {"density", "auto"}
         if tcfg.use_diffrax:
@@ -601,6 +604,8 @@ def run_runtime_scan(
     method: str | None = None,
     dt: float | None = None,
     steps: int | None = None,
+    sample_stride: int | None = None,
+    batch_ky: bool = False,
     auto_window: bool = True,
     tmin: float | None = None,
     tmax: float | None = None,
@@ -614,9 +619,38 @@ def run_runtime_scan(
     mode_method: str = "project",
     fit_signal: str = "auto",
 ) -> RuntimeLinearScanResult:
-    """Run a ky scan using the unified runtime config path."""
+    """Run a ky scan using the unified runtime config path.
+
+    When ``batch_ky`` is enabled, all ky points are integrated together using
+    the time integrator (Krylov is not supported in this mode).
+    """
 
     ky_arr = np.asarray(ky_values, dtype=float)
+    solver_key = solver.strip().lower()
+    if batch_ky and solver_key == "krylov":
+        raise ValueError("batch_ky is only supported for time integration")
+    if batch_ky:
+        return _run_runtime_scan_batch(
+            cfg,
+            ky_arr,
+            Nl=Nl,
+            Nm=Nm,
+            method=method,
+            dt=dt,
+            steps=steps,
+            sample_stride=sample_stride,
+            auto_window=auto_window,
+            tmin=tmin,
+            tmax=tmax,
+            window_fraction=window_fraction,
+            min_points=min_points,
+            start_fraction=start_fraction,
+            growth_weight=growth_weight,
+            require_positive=require_positive,
+            min_amp_fraction=min_amp_fraction,
+            mode_method=mode_method,
+            fit_signal=fit_signal,
+        )
     gamma = np.zeros_like(ky_arr)
     omega = np.zeros_like(ky_arr)
     for i, ky in enumerate(ky_arr):
@@ -629,6 +663,7 @@ def run_runtime_scan(
             method=method,
             dt=dt,
             steps=steps,
+            sample_stride=sample_stride,
             auto_window=auto_window,
             tmin=tmin,
             tmax=tmax,
@@ -647,6 +682,154 @@ def run_runtime_scan(
     return RuntimeLinearScanResult(ky=ky_arr, gamma=gamma, omega=omega)
 
 
+def _run_runtime_scan_batch(
+    cfg: RuntimeConfig,
+    ky_arr: np.ndarray,
+    *,
+    Nl: int,
+    Nm: int,
+    method: str | None,
+    dt: float | None,
+    steps: int | None,
+    sample_stride: int | None,
+    auto_window: bool,
+    tmin: float | None,
+    tmax: float | None,
+    window_fraction: float,
+    min_points: int,
+    start_fraction: float,
+    growth_weight: float,
+    require_positive: bool,
+    min_amp_fraction: float,
+    mode_method: str,
+    fit_signal: str,
+) -> RuntimeLinearScanResult:
+    """Batch a ky scan using one time integration over the full grid."""
+
+    geom = SAlphaGeometry.from_config(cfg.geometry)
+    grid_cfg = cfg.grid
+    if grid_cfg.boundary == "linked" and not grid_cfg.non_twist:
+        jtwist, x0 = gx_twist_shift_params(geom, grid_cfg)
+        grid_cfg = replace(grid_cfg, Lx=2.0 * np.pi * x0, jtwist=jtwist)
+    grid = build_spectral_grid(grid_cfg)
+    params = build_runtime_linear_params(cfg)
+    terms = build_runtime_linear_terms(cfg)
+
+    ky_indices = np.asarray([select_ky_index(np.asarray(grid.ky), ky) for ky in ky_arr], dtype=int)
+    nspecies = max(len([s for s in cfg.species if s.kinetic]), 1)
+
+    g0 = None
+    for ky_idx in ky_indices:
+        g0_local = _build_initial_condition(
+            grid,
+            geom,
+            cfg,
+            ky_index=int(ky_idx),
+            kx_index=0,
+            Nl=Nl,
+            Nm=Nm,
+            nspecies=nspecies,
+        )
+        g0 = g0_local if g0 is None else g0 + g0_local
+    if g0 is None:
+        raise ValueError("No ky values provided for batch scan")
+
+    tcfg = cfg.time
+    if method is not None:
+        tcfg = replace(tcfg, method=str(method))
+    if dt is not None:
+        tcfg = replace(tcfg, dt=float(dt))
+    if steps is not None:
+        tcfg = replace(tcfg, t_max=float(steps) * float(tcfg.dt))
+    if sample_stride is not None:
+        tcfg = replace(tcfg, sample_stride=int(sample_stride))
+
+    steps_val = int(round(tcfg.t_max / tcfg.dt))
+    diag = integrate_linear_diagnostics(
+        g0,
+        grid,
+        geom,
+        params,
+        dt=tcfg.dt,
+        steps=steps_val,
+        method=tcfg.method,
+        terms=terms,
+        sample_stride=tcfg.sample_stride,
+        species_index=0,
+        record_hl_energy=False,
+    )
+    phi_t = diag[1]
+    density_t = diag[2]
+    phi_t_np = np.asarray(phi_t)
+    dens_t_np = np.asarray(density_t)
+    t_arr = float(tcfg.dt) * float(tcfg.sample_stride) * (
+        np.arange(phi_t_np.shape[0], dtype=float) + 1.0
+    )
+
+    gamma = np.zeros_like(ky_arr, dtype=float)
+    omega = np.zeros_like(ky_arr, dtype=float)
+    fit_key = fit_signal.strip().lower()
+    if fit_key not in {"phi", "density", "auto"}:
+        raise ValueError("fit_signal must be 'phi', 'density', or 'auto'")
+
+    for i, ky_idx in enumerate(ky_indices):
+        sel = ModeSelection(ky_index=int(ky_idx), kx_index=0, z_index=_midplane_index(grid))
+        if fit_key == "auto":
+            phi_signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
+            gamma_phi, omega_phi, _, _, r2_phi, r2p_phi = fit_growth_rate_auto_with_stats(
+                t_arr,
+                phi_signal,
+                window_fraction=window_fraction,
+                min_points=min_points,
+                start_fraction=start_fraction,
+                growth_weight=growth_weight,
+                require_positive=require_positive,
+                min_amp_fraction=min_amp_fraction,
+            )
+            dens_signal = extract_mode_time_series(dens_t_np, sel, method=mode_method)
+            gamma_den, omega_den, _, _, r2_den, r2p_den = fit_growth_rate_auto_with_stats(
+                t_arr,
+                dens_signal,
+                window_fraction=window_fraction,
+                min_points=min_points,
+                start_fraction=start_fraction,
+                growth_weight=growth_weight,
+                require_positive=require_positive,
+                min_amp_fraction=min_amp_fraction,
+            )
+            score_phi = r2_phi + 0.2 * r2p_phi + growth_weight * gamma_phi
+            score_den = r2_den + 0.2 * r2p_den + growth_weight * gamma_den
+            g_val, o_val = (gamma_phi, omega_phi) if score_phi >= score_den else (gamma_den, omega_den)
+        else:
+            signal = extract_mode_time_series(
+                dens_t_np if fit_key == "density" else phi_t_np, sel, method=mode_method
+            )
+            if auto_window:
+                g_val, o_val, _tmin, _tmax = fit_growth_rate_auto(
+                    t_arr,
+                    signal,
+                    window_fraction=window_fraction,
+                    min_points=min_points,
+                    start_fraction=start_fraction,
+                    growth_weight=growth_weight,
+                    require_positive=require_positive,
+                    min_amp_fraction=min_amp_fraction,
+                )
+            else:
+                g_val, o_val = fit_growth_rate(t_arr, signal, tmin=tmin, tmax=tmax)
+
+        g_val, o_val = apply_diagnostic_normalization(
+            g_val,
+            o_val,
+            rho_star=float(np.asarray(params.rho_star)),
+            diagnostic_norm=cfg.normalization.diagnostic_norm,
+        )
+        gamma[i] = float(g_val)
+        omega[i] = float(o_val)
+
+    return RuntimeLinearScanResult(ky=ky_arr, gamma=gamma, omega=omega)
+
+
 def run_runtime_nonlinear(
     cfg: RuntimeConfig,
     *,
@@ -659,7 +842,7 @@ def run_runtime_nonlinear(
     sample_stride: int | None = None,
     diagnostics_stride: int | None = None,
     laguerre_mode: str | None = None,
-    diagnostics: bool = True,
+    diagnostics: bool | None = None,
 ) -> RuntimeNonlinearResult:
     """Run a nonlinear point using the unified runtime config path."""
 
@@ -692,7 +875,8 @@ def run_runtime_nonlinear(
     if steps_val < 1:
         raise ValueError("steps must be >= 1")
 
-    if diagnostics:
+    diagnostics_on = cfg.time.diagnostics if diagnostics is None else bool(diagnostics)
+    if diagnostics_on:
         sample_stride_use = cfg.time.sample_stride if sample_stride is None else int(sample_stride)
         diag_stride = cfg.time.diagnostics_stride if diagnostics_stride is None else int(diagnostics_stride)
         laguerre_mode_use = cfg.time.laguerre_nonlinear_mode if laguerre_mode is None else str(laguerre_mode)
@@ -711,6 +895,11 @@ def run_runtime_nonlinear(
             laguerre_mode=laguerre_mode_use,
             flux_scale=float(cfg.normalization.flux_scale),
             wphi_scale=float(cfg.normalization.wphi_scale),
+            fixed_dt=bool(cfg.time.fixed_dt),
+            dt_min=float(cfg.time.dt_min),
+            dt_max=cfg.time.dt_max,
+            cfl=float(cfg.time.cfl),
+            cfl_fac=float(cfg.time.cfl_fac),
         )
         return RuntimeNonlinearResult(
             t=np.asarray(t),
