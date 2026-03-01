@@ -10,6 +10,8 @@ class InitializationConfig:
 
     init_field: str = "density"
     init_amp: float = 1.0e-5
+    init_single: bool = True
+    random_seed: int = 22
     gaussian_init: bool = False
     gaussian_width: float = 0.5
     gaussian_envelope_constant: float = 1.0

@@ -302,15 +302,46 @@ def _build_initial_condition(
         vals = amp * (1.0 + 1.0j) * np.ones_like(np.asarray(grid.z))
 
     species_index = 0 if nspecies == 1 else nspecies - 1
-    if init_field == "all":
-        for l_idx, m_idx in field_map.values():
-            if l_idx < Nl and m_idx < Nm:
-                g0[species_index, l_idx, m_idx, ky_index, kx_index, :] = vals
-    else:
+    if not cfg.init.init_single and not cfg.init.gaussian_init:
+        rng = np.random.default_rng(int(cfg.init.random_seed))
+        z = np.asarray(grid.z)
+        z_min = float(z.min())
+        z_max = float(z.max())
+        Zp = (z_max - z_min) / (2.0 * np.pi) if z_max > z_min else 1.0
+        kpar = float(cfg.init.kpar_init)
+        z_phase = np.cos(kpar * z / Zp)
+        ny = grid.ky.size
+        nx = grid.kx.size
+        ky_mask = np.asarray(grid.ky) > 0.0
+        kx_mask = np.asarray(grid.kx) >= 0.0
+        dealias = np.asarray(grid.dealias_mask)
+        ky_indices = np.where(ky_mask)[0]
+        kx_indices = np.where(kx_mask)[0]
         l_idx, m_idx = field_map[init_field]
         if l_idx >= Nl or m_idx >= Nm:
             raise ValueError("init_field moment exceeds (Nl, Nm) resolution")
-        g0[species_index, l_idx, m_idx, ky_index, kx_index, :] = vals
+        for ky_i in ky_indices:
+            for kx_i in kx_indices:
+                if not dealias[ky_i, kx_i]:
+                    continue
+                ra = amp * (rng.random() - 0.5)
+                rb = amp * (rng.random() - 0.5)
+                vals_k = (ra + 1j * rb) * z_phase
+                g0[species_index, l_idx, m_idx, ky_i, kx_i, :] = vals_k
+                if kx_i != 0:
+                    kx_neg = nx - kx_i
+                    vals_neg = (rb + 1j * ra) * z_phase
+                    g0[species_index, l_idx, m_idx, ky_i, kx_neg, :] = vals_neg
+    else:
+        if init_field == "all":
+            for l_idx, m_idx in field_map.values():
+                if l_idx < Nl and m_idx < Nm:
+                    g0[species_index, l_idx, m_idx, ky_index, kx_index, :] = vals
+        else:
+            l_idx, m_idx = field_map[init_field]
+            if l_idx >= Nl or m_idx >= Nm:
+                raise ValueError("init_field moment exceeds (Nl, Nm) resolution")
+            g0[species_index, l_idx, m_idx, ky_index, kx_index, :] = vals
     return jnp.asarray(g0)
 
 
