@@ -89,7 +89,8 @@ def grad_z_linked_fft(
     Nx = f.shape[-2]
     Nz = f.shape[-1]
     lead_shape = f.shape[:-3]
-    f_flat = f.reshape(*lead_shape, Ny * Nx, Nz)
+    f_perm = jnp.swapaxes(f, -3, -2)
+    f_flat = f_perm.reshape(*lead_shape, Nx * Ny, Nz)
     chain_updates: list[jnp.ndarray] = []
     chain_indices: list[jnp.ndarray] = []
 
@@ -135,7 +136,8 @@ def grad_z_linked_fft(
         updates_full = jnp.take(updates_cat, gather_map, axis=-2)
         mask_shape = (1,) * (updates_full.ndim - 2) + (gather_mask.shape[0], 1)
         updates_full = updates_full * gather_mask.reshape(mask_shape)
-        return updates_full.reshape(*lead_shape, Ny, Nx, Nz)
+        updates_full = updates_full.reshape(*lead_shape, Nx, Ny, Nz)
+        return jnp.swapaxes(updates_full, -3, -2)
 
     if linked_full_cover:
         if linked_inverse_permutation is None:
@@ -143,13 +145,15 @@ def grad_z_linked_fft(
         updates_cat = jnp.concatenate(chain_updates, axis=-2)
         inv = jnp.asarray(linked_inverse_permutation, dtype=jnp.int32)
         df_flat = jnp.take(updates_cat, inv, axis=-2)
-        return df_flat.reshape(*lead_shape, Ny, Nx, Nz)
+        df_full = df_flat.reshape(*lead_shape, Nx, Ny, Nz)
+        return jnp.swapaxes(df_full, -3, -2)
 
     df_flat = jnp.zeros_like(f_flat)
     for idx_flat, df_link in zip(chain_indices, chain_updates):
         df_flat = _scatter_unique(df_flat, idx_flat, df_link)
 
-    return df_flat.reshape(*lead_shape, Ny, Nx, Nz)
+    df_full = df_flat.reshape(*lead_shape, Nx, Ny, Nz)
+    return jnp.swapaxes(df_full, -3, -2)
 
 
 def abs_z_linked_fft(
@@ -173,7 +177,8 @@ def abs_z_linked_fft(
     Nx = f.shape[-2]
     Nz = f.shape[-1]
     lead_shape = f.shape[:-3]
-    f_flat = f.reshape(*lead_shape, Ny * Nx, Nz)
+    f_perm = jnp.swapaxes(f, -3, -2)
+    f_flat = f_perm.reshape(*lead_shape, Nx * Ny, Nz)
     chain_updates: list[jnp.ndarray] = []
     chain_indices: list[jnp.ndarray] = []
 
@@ -219,7 +224,8 @@ def abs_z_linked_fft(
         updates_full = jnp.take(updates_cat, gather_map, axis=-2)
         mask_shape = (1,) * (updates_full.ndim - 2) + (gather_mask.shape[0], 1)
         updates_full = updates_full * gather_mask.reshape(mask_shape)
-        return updates_full.reshape(*lead_shape, Ny, Nx, Nz)
+        updates_full = updates_full.reshape(*lead_shape, Nx, Ny, Nz)
+        return jnp.swapaxes(updates_full, -3, -2)
 
     if linked_full_cover:
         if linked_inverse_permutation is None:
@@ -227,13 +233,15 @@ def abs_z_linked_fft(
         updates_cat = jnp.concatenate(chain_updates, axis=-2)
         inv = jnp.asarray(linked_inverse_permutation, dtype=jnp.int32)
         df_flat = jnp.take(updates_cat, inv, axis=-2)
-        return df_flat.reshape(*lead_shape, Ny, Nx, Nz)
+        df_full = df_flat.reshape(*lead_shape, Nx, Ny, Nz)
+        return jnp.swapaxes(df_full, -3, -2)
 
     df_flat = jnp.zeros_like(f_flat)
     for idx_flat, df_link in zip(chain_indices, chain_updates):
         df_flat = _scatter_unique(df_flat, idx_flat, df_link)
 
-    return df_flat.reshape(*lead_shape, Ny, Nx, Nz)
+    df_full = df_flat.reshape(*lead_shape, Nx, Ny, Nz)
+    return jnp.swapaxes(df_full, -3, -2)
 
 
 def shift_axis(arr: jnp.ndarray, offset: int, axis: int) -> jnp.ndarray:

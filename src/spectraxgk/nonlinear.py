@@ -122,9 +122,8 @@ def integrate_nonlinear_cached(
         )
 
     def rhs_fn(G):
-        G_state = _enforce_hermitian(G)
         return nonlinear_rhs_cached(
-            G_state,
+            G,
             cache,
             params,
             term_cfg,
@@ -199,6 +198,7 @@ def integrate_nonlinear_gx_diagnostics(
     gx_real_fft: bool = True,
     laguerre_mode: str = "grid",
     flux_scale: float = 2.0,
+    wphi_scale: float = 1.0,
 ) -> tuple[jnp.ndarray, GXDiagnostics]:
     """Integrate nonlinear system and return GX-style diagnostics."""
 
@@ -274,6 +274,8 @@ def integrate_nonlinear_gx_diagnostics(
             kx=kx_phys,
             ky=ky_phys,
             use_dealias=use_dealias,
+            gx_real_fft=gx_real_fft,
+            wphi_scale=wphi_scale,
         )
         Wapar_val = gx_Wapar_krehm(apar, grid, kx=kx_phys, ky=ky_phys, use_dealias=use_dealias)
         heat_val = gx_heat_flux(

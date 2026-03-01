@@ -27,6 +27,7 @@ class SpectralGrid:
     jtwist: int | None
     non_twist: bool
     kxfac: float
+    ky_mode: jnp.ndarray | None = None
 
     def tree_flatten(self):
         children = (
@@ -37,12 +38,20 @@ class SpectralGrid:
             self.ky_grid,
             self.dealias_mask,
         )
-        aux_data = (self.y0, self.x0, self.boundary, self.jtwist, self.non_twist, self.kxfac)
+        aux_data = (
+            self.y0,
+            self.x0,
+            self.boundary,
+            self.jtwist,
+            self.non_twist,
+            self.kxfac,
+            self.ky_mode,
+        )
         return children, aux_data
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
-        y0, x0, boundary, jtwist, non_twist, kxfac = aux_data
+        y0, x0, boundary, jtwist, non_twist, kxfac, ky_mode = aux_data
         return cls(
             *children,
             y0=y0,
@@ -51,6 +60,7 @@ class SpectralGrid:
             jtwist=jtwist,
             non_twist=non_twist,
             kxfac=kxfac,
+            ky_mode=ky_mode,
         )
 
 
@@ -110,6 +120,7 @@ def build_spectral_grid(cfg: GridConfig) -> SpectralGrid:
         jtwist=cfg.jtwist,
         non_twist=bool(cfg.non_twist),
         kxfac=float(cfg.kxfac),
+        ky_mode=None,
     )
 
 
@@ -126,6 +137,7 @@ def select_ky_grid(
     ky_grid = jnp.take(grid.ky_grid, ky_idx, axis=0)
     kx_grid = jnp.take(grid.kx_grid, ky_idx, axis=0)
     mask = jnp.take(grid.dealias_mask, ky_idx, axis=0)
+    ky_mode = jnp.rint(ky * grid.y0).astype(jnp.int32)
     return SpectralGrid(
         kx=grid.kx,
         ky=ky,
@@ -139,4 +151,5 @@ def select_ky_grid(
         jtwist=grid.jtwist,
         non_twist=grid.non_twist,
         kxfac=grid.kxfac,
+        ky_mode=ky_mode,
     )

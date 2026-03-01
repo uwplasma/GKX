@@ -28,6 +28,14 @@ def _broadcast_grid(grid: jnp.ndarray, ndim: int) -> jnp.ndarray:
     return jnp.reshape(grid, shape)
 
 
+def _apply_mask_xy(field: jnp.ndarray, mask: jnp.ndarray | None) -> jnp.ndarray:
+    if mask is None:
+        return field
+    real_dtype = jnp.real(jnp.empty((), dtype=field.dtype)).dtype
+    mask_b = _broadcast_mask(jnp.asarray(mask, dtype=real_dtype), field.ndim)
+    return field * mask_b
+
+
 def _broadcast_to_G(x: jnp.ndarray, G: jnp.ndarray) -> jnp.ndarray:
     if x.ndim == G.ndim:
         return x
@@ -360,6 +368,7 @@ def exb_nonlinear_contribution(
     gx_real_fft: bool = True,
 ) -> jnp.ndarray:
     """Return the nonlinear E×B contribution using a pseudospectral bracket."""
+    phi = _apply_mask_xy(phi, dealias_mask)
     bracket_fn = _spectral_bracket_multi_gx if gx_real_fft else _spectral_bracket_multi_full
     bracket_hat = bracket_fn(
         G,
@@ -432,6 +441,11 @@ def nonlinear_em_contribution(
         laguerre_j0 = cast(jnp.ndarray | None, laguerre_j0)
         laguerre_j1_over_alpha = cast(jnp.ndarray | None, laguerre_j1_over_alpha)
         b = cast(jnp.ndarray, b)
+        phi = _apply_mask_xy(phi, dealias_mask)
+        if apar is not None:
+            apar = _apply_mask_xy(apar, dealias_mask)
+        if bpar is not None:
+            bpar = _apply_mask_xy(bpar, dealias_mask)
         g_mu = _laguerre_to_grid(G, laguerre_to_grid)
         chi_fields: list[jnp.ndarray] = []
         idx_phi = 0
@@ -484,6 +498,11 @@ def nonlinear_em_contribution(
         out = -jnp.asarray(weight, dtype=real_dtype) * total
         return out[0] if squeeze_species else out
 
+    phi = _apply_mask_xy(phi, dealias_mask)
+    if apar is not None:
+        apar = _apply_mask_xy(apar, dealias_mask)
+    if bpar is not None:
+        bpar = _apply_mask_xy(bpar, dealias_mask)
     phi_hat = phi[None, None, ...]
     chi_fields = [Jl * phi_hat]
     idx_bpar = None

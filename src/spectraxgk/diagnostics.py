@@ -114,6 +114,8 @@ def gx_Wphi_krehm(
     kx: jnp.ndarray | None = None,
     ky: jnp.ndarray | None = None,
     use_dealias: bool = True,
+    gx_real_fft: bool = False,
+    wphi_scale: float = 1.0,
 ) -> jnp.ndarray:
     """GX Krehm electrostatic energy (Wphi) diagnostic."""
 
@@ -121,12 +123,25 @@ def gx_Wphi_krehm(
     ky_arr = grid.ky if ky is None else ky
     kx = jnp.asarray(kx_arr)[None, :]
     ky = jnp.asarray(ky_arr)[:, None]
+    mask = grid.dealias_mask
     kperp2 = kx * kx + ky * ky
     rho = jnp.asarray(params.rho)
     if rho.ndim == 0:
         rho = rho[None]
     rho2 = rho * rho
-    fac = _gx_fac_mask(grid, use_dealias=use_dealias)
+    if use_dealias:
+        mask = mask.astype(ky.dtype)
+    else:
+        mask = jnp.ones_like(mask, dtype=ky.dtype)
+    if gx_real_fft:
+        fac = jnp.where(ky[:, 0] > 0.0, 2.0, jnp.where(ky[:, 0] == 0.0, 1.0, 0.0))[:, None]
+    else:
+        has_negative = bool(np.any(np.asarray(ky_arr) < 0.0))
+        if has_negative:
+            fac = jnp.ones((ky.shape[0], kx.shape[1]), dtype=ky.dtype)
+        else:
+            fac = jnp.where(ky[:, 0] == 0.0, 1.0, 2.0)[:, None]
+    fac = fac * mask
     vol = vol_fac[None, None, :]
 
     wphi = jnp.asarray(0.0, dtype=jnp.real(phi).dtype)
@@ -136,7 +151,7 @@ def gx_Wphi_krehm(
         weight = (1.0 - gam0)[:, :, None] * fac[:, :, None]
         contrib = 0.5 * (2.0 / rho2_s) * jnp.abs(phi) ** 2 * weight * vol
         wphi = wphi + jnp.sum(contrib)
-    return wphi
+    return wphi * jnp.asarray(wphi_scale, dtype=jnp.real(phi).dtype)
 
 
 def gx_Wapar_krehm(

@@ -465,6 +465,9 @@ def integrate_linear_gx_diagnostics(
 
     vol_fac, flux_fac = gx_volume_factors(geom, grid)
     use_dealias = bool(time_cfg.use_dealias_mask)
+    rho_star = float(getattr(params, "rho_star", 1.0))
+    kx_phys = cache.kx / rho_star
+    ky_phys = cache.ky / rho_star
 
     stepper = _rk4_step
     if jit:
@@ -490,8 +493,17 @@ def integrate_linear_gx_diagnostics(
             omega_list.append(np.asarray(omega))
 
             Wg_val = gx_Wg(G, grid, params, vol_fac, use_dealias=use_dealias)
-            Wphi_val = gx_Wphi_krehm(phi, grid, params, vol_fac, use_dealias=use_dealias)
-            Wapar_val = gx_Wapar_krehm(apar, grid, use_dealias=use_dealias)
+            Wphi_val = gx_Wphi_krehm(
+                phi,
+                grid,
+                params,
+                vol_fac,
+                kx=kx_phys,
+                ky=ky_phys,
+                use_dealias=use_dealias,
+                gx_real_fft=bool(getattr(time_cfg, "gx_real_fft", True)),
+            )
+            Wapar_val = gx_Wapar_krehm(apar, grid, kx=kx_phys, ky=ky_phys, use_dealias=use_dealias)
             heat_val = gx_heat_flux(
                 G, phi, apar, bpar, cache, grid, params, flux_fac, use_dealias=use_dealias
             )

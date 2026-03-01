@@ -15,6 +15,7 @@ class InitializationConfig:
     gaussian_envelope_constant: float = 1.0
     gaussian_envelope_sine: float = 0.0
     kpar_init: float = 0.0
+    init_file: str | None = None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

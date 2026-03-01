@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
 from pathlib import Path
 
+from jax import Array
 import jax.numpy as jnp
 import numpy as np
 
@@ -135,6 +137,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="grid or spectral (nonlinear Laguerre handling)",
     )
+    run_runtime_nl.add_argument("--init-file", type=str, default=None, help="Optional init file (GX g_state)")
     run_runtime_nl.add_argument("--out", type=str, default=None, help="Optional CSV output path")
     run_runtime_nl.set_defaults(func=_cmd_run_runtime_nonlinear)
 
@@ -380,6 +383,9 @@ def _cmd_run_runtime_nonlinear(args: argparse.Namespace) -> int:
     cfg, data = load_runtime_from_toml(args.config)
     run_cfg = data.get("run", {})
 
+    if args.init_file is not None:
+        cfg = replace(cfg, init=replace(cfg.init, init_file=str(args.init_file)))
+
     ky = float(args.ky if args.ky is not None else run_cfg.get("ky", 0.3))
     Nl = int(args.Nl if args.Nl is not None else run_cfg.get("Nl", 24))
     Nm = int(args.Nm if args.Nm is not None else run_cfg.get("Nm", 12))
@@ -427,17 +433,25 @@ def _cmd_run_runtime_nonlinear(args: argparse.Namespace) -> int:
         f"Wphi={float(diag.Wphi_t[-1]):.6g} Wapar={float(diag.Wapar_t[-1]):.6g}"
     )
     if args.out is not None:
+        def _flatten(series: np.ndarray | Array) -> np.ndarray:
+            arr = np.asarray(series)
+            if arr.ndim == 1:
+                return arr
+            arr = arr.reshape(arr.shape[0], -1)
+            if arr.shape[1] == 1:
+                return arr[:, 0]
+            return np.mean(arr, axis=1)
         data_out = np.column_stack(
             [
-                np.asarray(diag.t),
-                np.asarray(diag.gamma_t),
-                np.asarray(diag.omega_t),
-                np.asarray(diag.Wg_t),
-                np.asarray(diag.Wphi_t),
-                np.asarray(diag.Wapar_t),
-                np.asarray(diag.energy_t),
-                np.asarray(diag.heat_flux_t),
-                np.asarray(diag.particle_flux_t),
+                _flatten(diag.t),
+                _flatten(diag.gamma_t),
+                _flatten(diag.omega_t),
+                _flatten(diag.Wg_t),
+                _flatten(diag.Wphi_t),
+                _flatten(diag.Wapar_t),
+                _flatten(diag.energy_t),
+                _flatten(diag.heat_flux_t),
+                _flatten(diag.particle_flux_t),
             ]
         )
         np.savetxt(
