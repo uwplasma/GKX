@@ -1092,11 +1092,16 @@ def build_H(
     if tz_arr.ndim == 0:
         tz_arr = tz_arr[None]
     zt_arr = jnp.where(tz_arr == 0.0, 0.0, 1.0 / tz_arr)
-    H = G.at[:, :, 0, ...].add(zt_arr[:, None, None, None, None] * Jl * phi)
+    Nm = G.shape[-4]
+    m0_mask = (jnp.arange(Nm, dtype=jnp.int32) == 0).astype(G.dtype)
+    m0_mask = m0_mask.reshape((1, 1, Nm, 1, 1, 1))
+    phi_term = (zt_arr[:, None, None, None, None] * Jl * phi)[:, :, None, ...]
+    H = G + m0_mask * phi_term
     if bpar is not None:
         if JlB is None:
             raise ValueError("JlB must be provided when bpar is supplied")
-        H = H.at[:, :, 0, ...].add(JlB * bpar)
+        bpar_term = (JlB * bpar)[:, :, None, ...]
+        H = H + m0_mask * bpar_term
     return H[0] if squeeze_species else H
 
 
