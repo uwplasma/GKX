@@ -550,6 +550,15 @@ def _build_initial_condition(
         "qpar": (0, 3),
         "qperp": (1, 1),
     }
+    # GX scales some moments when init_field="all" (see moments.cu).
+    all_scales = {
+        "density": 1.0,
+        "upar": 1.0,
+        "tpar": 1.0 / np.sqrt(2.0),
+        "tperp": 1.0,
+        "qpar": 1.0 / np.sqrt(6.0),
+        "qperp": 1.0,
+    }
     if init_field != "all" and init_field not in field_map:
         raise ValueError(
             "init_field must be one of {'density','upar','tpar','tperp','qpar','qperp','all'}"
@@ -572,9 +581,10 @@ def _build_initial_condition(
             init_vals = amp * (1.0 + 1.0j) * np.ones_like(grid.z)
         if grid.ky[ky_i] != 0.0:
             if init_field == "all":
-                for l_idx, m_idx in field_map.values():
+                for field_name, (l_idx, m_idx) in field_map.items():
                     if l_idx < Nl and m_idx < Nm:
-                        G0[l_idx, m_idx, ky_i, kx_index, :] = init_vals
+                        scale = all_scales.get(field_name, 1.0)
+                        G0[l_idx, m_idx, ky_i, kx_index, :] = init_vals * scale
             else:
                 l_idx, m_idx = field_map[init_field]
                 if l_idx >= Nl or m_idx >= Nm:
