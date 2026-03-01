@@ -83,6 +83,7 @@ class RuntimeNormalizationConfig:
     omega_star_scale: float | None = None
     diagnostic_norm: str = "gx"
     flux_scale: float = 2.0
+    wphi_scale: float = 1.0
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

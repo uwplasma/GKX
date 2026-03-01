@@ -50,9 +50,6 @@ def _solve_fields_impl(
     Gm1 = G[:, :, 1, ...]
     Gm0 = G[:, :, 0, ...]
 
-    phi_es = quasineutrality_phi(G, Jl, tau_e, charge, density, tz)
-    phi_es = jnp.where(cache.mask0, 0.0, phi_es)
-
     nbar = jnp.sum(
         density[:, None, None, None]
         * charge[:, None, None, None]
@@ -72,13 +69,40 @@ def _solve_fields_impl(
     g0 = jnp.sum(Jl * Jl, axis=1)
     g01 = jnp.sum(Jl * JlB, axis=1)
     g11 = jnp.sum(JlB * JlB, axis=1)
-    qphi = tau_e + jnp.sum(
+    qneut = jnp.sum(
         density[:, None, None, None]
         * charge[:, None, None, None]
         * zt[:, None, None, None]
         * (1.0 - g0),
         axis=0,
     )
+    qphi = tau_e + qneut
+
+    def _gx_quasineutrality_adiabatic() -> jnp.ndarray:
+        kpar = jnp.asarray(params.kpar_scale, dtype=real_dtype)
+        kpar_abs = jnp.abs(kpar)
+        jacobian = jnp.where(kpar_abs == 0.0, 0.0, 1.0 / (kpar_abs * bmag))
+        jac = jacobian[None, None, :]
+        denom = tau_e + qneut
+        denom_safe = jnp.where(denom == 0.0, jnp.inf, denom)
+        phi_avg_num = jnp.where(jac == 0.0, 0.0, nbar / denom_safe * jac)
+        phi_avg_num_sum = jnp.sum(phi_avg_num, axis=-1)
+        phi_avg_denom = jnp.sum(jacobian * qneut / denom_safe, axis=-1)
+        phi_avg_denom_safe = jnp.where(phi_avg_denom == 0.0, jnp.inf, phi_avg_denom)
+        ratio = phi_avg_num_sum / phi_avg_denom_safe
+        ky0_mask = (cache.ky == 0.0)[:, None]
+        kx_mask = (jnp.arange(phi_avg_num_sum.shape[1]) > 0)[None, :]
+        phi_avg = jnp.where(ky0_mask & kx_mask, ratio, 0.0)
+        phi_val = (nbar + tau_e * phi_avg[..., None]) / denom_safe
+        return phi_val
+
+    phi_es = jax.lax.cond(
+        jnp.any(tau_e > 0.0),
+        lambda _: _gx_quasineutrality_adiabatic(),
+        lambda _: quasineutrality_phi(G, Jl, tau_e, charge, density, tz),
+        operand=None,
+    )
+    phi_es = jnp.where(cache.mask0, 0.0, phi_es)
     qb = -jnp.sum(density[:, None, None, None] * charge[:, None, None, None] * g01, axis=0)
     aphi = bpar_beta * jnp.sum(
         density[:, None, None, None] * charge[:, None, None, None] * g01, axis=0

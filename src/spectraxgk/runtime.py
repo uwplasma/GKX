@@ -679,6 +679,7 @@ def run_runtime_nonlinear(
             use_dealias_mask=True,
             laguerre_mode=laguerre_mode_use,
             flux_scale=float(cfg.normalization.flux_scale),
+            wphi_scale=float(cfg.normalization.wphi_scale),
         )
         return RuntimeNonlinearResult(
             t=np.asarray(t),

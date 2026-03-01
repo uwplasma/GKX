@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import jax.numpy as jnp
-from jax.scipy.special import bessel_jn, gammaln, i0e
+from jax.scipy.special import gammaln, i0e
 import math
 import numpy as np
 
@@ -16,25 +16,86 @@ def gamma0(b: jnp.ndarray) -> jnp.ndarray:
 
 
 def bessel_j0(x: jnp.ndarray) -> jnp.ndarray:
-    """Return J0(x) using jax.scipy.special.j0."""
+    """Return J0(x) using a Cephes-style approximation (GX parity)."""
 
     x = jnp.asarray(x)
-    out = bessel_jn(x, v=0)[0]
-    x2 = x * x
-    approx = 1.0 - 0.25 * x2 + 0.015625 * x2 * x2
-    out = jnp.where(jnp.abs(x) < 1.0e-3, approx, out)
-    return jnp.where(jnp.isfinite(out), out, approx)
+    ax = jnp.abs(x)
+    y = x * x
+    r = (
+        57568490574.0
+        + y
+        * (
+            -13362590354.0
+            + y * (651619640.7 + y * (-11214424.18 + y * (77392.33017 + y * -184.9052456)))
+        )
+    )
+    s = (
+        57568490411.0
+        + y
+        * (
+            1029532985.0
+            + y * (9494680.718 + y * (59272.64853 + y * (267.8532712 + y)))
+        )
+    )
+    res_small = r / s
+    z = 8.0 / jnp.maximum(ax, 1.0e-30)
+    y2 = z * z
+    xx = ax - 0.785398164
+    p = 1.0 + y2 * (
+        -0.1098628627e-2
+        + y2 * (0.2734510407e-4 + y2 * (-0.2073370639e-5 + y2 * 0.2093887211e-6))
+    )
+    q = -0.1562499995e-1 + y2 * (
+        0.1430488765e-3
+        + y2 * (-0.6911147651e-5 + y2 * (0.7621095161e-6 + y2 * -0.934945152e-7))
+    )
+    res_large = jnp.sqrt(0.636619772 / jnp.maximum(ax, 1.0e-30)) * (
+        jnp.cos(xx) * p - z * jnp.sin(xx) * q
+    )
+    out = jnp.where(ax < 8.0, res_small, res_large)
+    return jnp.where(jnp.isfinite(out), out, res_small)
 
 
 def bessel_j1(x: jnp.ndarray) -> jnp.ndarray:
-    """Return J1(x) using jax.scipy.special.j1."""
+    """Return J1(x) using a Cephes-style approximation (GX parity)."""
 
     x = jnp.asarray(x)
-    out = bessel_jn(x, v=1)[1]
-    x2 = x * x
-    approx = 0.5 * x - 0.0625 * x * x2 + (1.0 / 384.0) * x * x2 * x2
-    out = jnp.where(jnp.abs(x) < 1.0e-3, approx, out)
-    return jnp.where(jnp.isfinite(out), out, approx)
+    ax = jnp.abs(x)
+    y = x * x
+    r = (
+        72362614232.0
+        + y
+        * (
+            -7895059235.0
+            + y * (242396853.1 + y * (-2972611.439 + y * (15704.48260 + y * -30.16036606)))
+        )
+    )
+    s = (
+        144725228442.0
+        + y
+        * (
+            2300535178.0
+            + y * (18583304.74 + y * (99447.43394 + y * (376.9991397 + y)))
+        )
+    )
+    res_small = x * (r / s)
+    z = 8.0 / jnp.maximum(ax, 1.0e-30)
+    y2 = z * z
+    xx = ax - 2.356194491
+    p = 1.0 + y2 * (
+        0.183105e-2
+        + y2 * (-0.3516396496e-4 + y2 * (0.2457520174e-5 + y2 * -0.240337019e-6))
+    )
+    q = 0.04687499995 + y2 * (
+        -0.2002690873e-3
+        + y2 * (0.8449199096e-5 + y2 * (-0.88228987e-6 + y2 * 0.105787412e-6))
+    )
+    res_large = jnp.sqrt(0.636619772 / jnp.maximum(ax, 1.0e-30)) * (
+        jnp.cos(xx) * p - z * jnp.sin(xx) * q
+    )
+    res_large = jnp.where(x < 0.0, -res_large, res_large)
+    out = jnp.where(ax < 8.0, res_small, res_large)
+    return jnp.where(jnp.isfinite(out), out, res_small)
 
 
 def J_l_all(b: jnp.ndarray, l_max: int) -> jnp.ndarray:

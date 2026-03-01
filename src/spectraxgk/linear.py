@@ -274,53 +274,46 @@ def _build_linked_fft_maps(
     dz: float,
     nz: int,
     real_dtype: jnp.dtype,
+    ky_mode: np.ndarray | None = None,
 ) -> tuple[tuple[jnp.ndarray, ...], tuple[jnp.ndarray, ...]]:
     """Construct GX-style linked FFT index maps for the parallel derivative."""
 
     ny = ky.size
     nx = kx.size
-    naky = ny
+    naky = 1 + (ny - 1) // 3
     if nx < 4:
         nakx = nx
     else:
         nakx = 1 + 2 * ((nx - 1) // 3)
-    iky = np.rint(ky * y0).astype(int)
     if nakx <= 0 or naky <= 0:
         return (), ()
 
-    if nx < 4:
-        kx_outh = np.asarray(kx[:nakx], dtype=float)
-    else:
-        kx_outh = np.zeros(nakx, dtype=float)
-        mid = nakx // 2
-        kx_outh[mid] = 0.0
-        for i in range(1, mid + 1):
-            kx_outh[mid + i] = kx[i]
-            kx_outh[mid - i] = kx[nx - i]
-
-    kx_map = np.zeros(nakx, dtype=int)
-    for i in range(nakx):
-        kx_map[i] = int(np.argmin(np.abs(kx - kx_outh[i])))
+    nshift = nx - nakx
     idx_left = -np.ones((naky, nakx), dtype=int)
     idx_right = -np.ones((naky, nakx), dtype=int)
 
-    for idy in range(naky):
-        shift = int(iky[idy]) * int(jtwist)
-        for idx in range(nakx):
-            idx0 = idx if idx < (nakx + 1) // 2 else idx - nakx
-            if iky[idy] == 0:
+    ky_mode_arr: np.ndarray | None = None
+    if ky_mode is not None:
+        ky_mode_arr = np.asarray(ky_mode, dtype=int).reshape(-1)
+        if ky_mode_arr.size < naky:
+            raise ValueError("ky_mode must have at least naky entries for linked FFT maps")
+    for idx in range(nakx):
+        idx0 = idx if idx < (nakx + 1) // 2 else idx - nakx
+        for idy in range(naky):
+            idy_mode = int(ky_mode_arr[idy]) if ky_mode_arr is not None else idy
+            if idy_mode == 0:
                 idx_l = idx0
                 idx_r = idx0
             else:
-                idx_l = idx0 + shift
-                idx_r = idx0 - shift
+                idx_l = idx0 + idy_mode * jtwist
+                idx_r = idx0 - idy_mode * jtwist
             idx_left[idy, idx] = _signed_to_index(idx_l, nakx)
             idx_right[idy, idx] = _signed_to_index(idx_r, nakx)
 
     links_l = np.zeros((naky, nakx), dtype=int)
     links_r = np.zeros((naky, nakx), dtype=int)
-    for idy in range(naky):
-        for idx in range(nakx):
+    for idx in range(nakx):
+        for idy in range(naky):
             idx_star = idx
             while idx_star != idx_left[idy, idx_star] and idx_left[idy, idx_star] >= 0:
                 links_l[idy, idx] += 1
@@ -330,41 +323,61 @@ def _build_linked_fft_maps(
                 links_r[idy, idx] += 1
                 idx_star = idx_right[idy, idx_star]
 
-    nlinks_map = 1 + links_l + links_r
-    chains_by_links: dict[int, list[tuple[int, list[int]]]] = {}
-    for idy in range(naky):
-        for idx in range(nakx):
-            if links_l[idy, idx] != 0:
-                continue
-            nlinks = int(nlinks_map[idy, idx])
-            if nlinks <= 0:
-                continue
-            chain: list[int] = []
-            idx_star = idx
-            valid = True
-            for p in range(nlinks):
-                chain.append(idx_star)
-                if p < nlinks - 1:
-                    idx_star = idx_right[idy, idx_star]
-                    if idx_star < 0:
-                        valid = False
-                        break
-            if valid:
-                chains_by_links.setdefault(nlinks, []).append((idy, chain))
+    n_k = np.zeros(naky * nakx, dtype=int)
+    k = 0
+    for idx in range(nakx):
+        for idy in range(naky):
+            n_k[k] = 1 + links_l[idy, idx] + links_r[idy, idx]
+            k += 1
+
+    n_k_sorted = np.sort(n_k)
+    unique_vals = np.unique(n_k_sorted)
+    n_links = unique_vals.astype(int)
+    n_chains = np.zeros_like(n_links)
+    start = 0
+    for i, val in enumerate(n_links):
+        count = int(np.sum(n_k_sorted == val))
+        n_chains[i] = count // val if val > 0 else 0
+        start += count
 
     linked_indices: list[jnp.ndarray] = []
     linked_kz: list[jnp.ndarray] = []
-    for nlinks in sorted(chains_by_links):
-        chains = chains_by_links[nlinks]
-        nchains = len(chains)
-        link_kx = np.zeros((nchains, nlinks), dtype=np.int32)
-        link_ky = np.zeros((nchains, nlinks), dtype=np.int32)
-        for n, (idy, chain) in enumerate(chains):
-            link_kx[n, :] = np.asarray(chain, dtype=np.int32)
-            link_ky[n, :] = int(idy)
-        idx_flat = link_ky * nx + kx_map[link_kx]
+    for nlinks_val, nchains_val in zip(n_links, n_chains):
+        if nlinks_val <= 0 or nchains_val <= 0:
+            continue
+        link_kx = np.zeros((nchains_val, nlinks_val), dtype=np.int32)
+        link_ky = np.zeros((nchains_val, nlinks_val), dtype=np.int32)
+        n = 0
+        for idy in range(naky):
+            for idx in range(nakx):
+                np_k = 1 + links_l[idy, idx] + links_r[idy, idx]
+                if np_k != nlinks_val:
+                    continue
+                p = links_l[idy, idx]
+                if p != 0:
+                    continue
+                idx0 = idx if idx < (nakx + 1) // 2 else idx + nshift
+                link_ky[n, 0] = idy
+                link_kx[n, 0] = idx0
+                idx_r = idx
+                for p in range(1, nlinks_val):
+                    idx_r = idx_right[idy, idx_r]
+                    link_ky[n, p] = idy
+                    if idx_r < (nakx + 1) // 2:
+                        link_kx[n, p] = idx_r
+                    else:
+                        link_kx[n, p] = idx_r + nshift
+                n += 1
+        idx_flat = link_ky + ny * link_kx
         linked_indices.append(jnp.asarray(idx_flat, dtype=jnp.int32))
-        kz_linked = 2.0 * np.pi * np.fft.fftfreq(nlinks * nz, d=dz)
+        nzL = int(nlinks_val) * int(nz)
+        zp = float(dz) * float(nz) / (2.0 * np.pi)
+        kz_linked = np.empty(nzL, dtype=float)
+        for i in range(nzL):
+            if i < nzL / 2 + 1:
+                kz_linked[i] = i / (zp * nlinks_val)
+            else:
+                kz_linked[i] = (i - nzL) / (zp * nlinks_val)
         linked_kz.append(jnp.asarray(kz_linked, dtype=real_dtype))
 
     return tuple(linked_indices), tuple(linked_kz)
@@ -730,6 +743,12 @@ def build_linear_cache(
         cv_d = cv_d.astype(real_dtype)
         gb_d = gb_d.astype(real_dtype)
         omega_d = (cv_d + gb_d).astype(real_dtype)
+    if dealias_mask is not None:
+        mask = dealias_mask[:, :, None]
+        kperp2 = kperp2 * mask
+        cv_d = cv_d * mask
+        gb_d = gb_d * mask
+        omega_d = omega_d * mask
     rho = jnp.asarray(params.rho, dtype=real_dtype)
     if rho.ndim == 0:
         rho = rho[None]
@@ -825,6 +844,7 @@ def build_linear_cache(
     linked_gather_mask = jnp.asarray([], dtype=bool)
     linked_use_gather = False
     if use_twist_shift:
+        ky_mode = getattr(grid, "ky_mode", None)
         linked_indices, linked_kz = _build_linked_fft_maps(
             np.asarray(grid.kx),
             np.asarray(grid.ky),
@@ -833,6 +853,7 @@ def build_linear_cache(
             float(dz),
             int(grid.z.size),
             real_dtype,
+            None if ky_mode is None else np.asarray(ky_mode),
         )
         if linked_indices:
             idx_flat = np.concatenate(

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import jax
 import jax.numpy as jnp
 
-from spectraxgk.config import GeometryConfig
+from spectraxgk.config import GeometryConfig, GridConfig
 
 
 @jax.tree_util.register_pytree_node_class
@@ -62,7 +62,6 @@ class SAlphaGeometry:
 
         shear = self.s_hat * theta - self.alpha * jnp.sin(theta)
         return kx0 - shear * ky
-
     def bmag(self, theta: jnp.ndarray) -> jnp.ndarray:
         """Magnetic field strength for circular s-alpha geometry."""
 
@@ -138,3 +137,40 @@ class SAlphaGeometry:
 
         cv_d, gb_d = self.drift_components(kx, ky, theta)
         return cv_d + gb_d
+
+
+def gx_twist_shift_params(
+    geom: SAlphaGeometry,
+    grid: GridConfig,
+) -> tuple[int, float]:
+    """Return (jtwist, x0) following GX twist-and-shift defaults."""
+
+    y0 = float(grid.y0) if grid.y0 is not None else float(grid.Ly) / (2.0 * jnp.pi)
+    if grid.ntheta is not None:
+        if grid.zp is not None:
+            zp = int(grid.zp)
+        elif grid.nperiod is not None:
+            zp = 2 * int(grid.nperiod) - 1
+        else:
+            zp = 1
+        theta_min = -jnp.pi * float(zp)
+    else:
+        theta_min = float(grid.z_min)
+    _gds2, gds21, gds22 = geom.metric_coeffs(jnp.asarray([theta_min]))
+    gds21_val = float(gds21[0])
+    gds22_val = float(gds22)
+    shat = float(geom.s_hat)
+    twist_shift_geo_fac = 2.0 * shat * gds21_val / gds22_val if gds22_val != 0.0 else 0.0
+    if grid.jtwist is None:
+        jtwist = int(round(twist_shift_geo_fac))
+        if jtwist == 0:
+            jtwist = 1
+    else:
+        jtwist = int(grid.jtwist)
+        if jtwist == 0:
+            jtwist = 1
+    if twist_shift_geo_fac == 0.0:
+        x0 = y0
+    else:
+        x0 = y0 * abs(jtwist) / abs(twist_shift_geo_fac)
+    return jtwist, x0
