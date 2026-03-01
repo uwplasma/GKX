@@ -255,11 +255,11 @@ def integrate_nonlinear_gx_diagnostics(
             laguerre_mode=laguerre_mode,
         )
 
-    _dG0, fields0 = rhs_fn(G0)
+    fields0 = compute_fields_cached(G0, cache, params, terms=term_cfg)
     phi_prev = fields0.phi
 
     def _compute_diag_from_state(G_state, phi_last):
-        _dG_state, fields_state = rhs_fn(G_state)
+        fields_state = compute_fields_cached(G_state, cache, params, terms=term_cfg)
         phi = fields_state.phi
         apar = fields_state.apar if fields_state.apar is not None else jnp.zeros_like(phi)
         bpar = fields_state.bpar if fields_state.bpar is not None else jnp.zeros_like(phi)

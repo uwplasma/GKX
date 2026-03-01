@@ -58,14 +58,28 @@ def _broadcast_to_G(x: jnp.ndarray, G: jnp.ndarray) -> jnp.ndarray:
 
 def _laguerre_to_grid(G: jnp.ndarray, laguerre_to_grid: jnp.ndarray) -> jnp.ndarray:
     """Transform Laguerre moments to GX muB grid."""
-    return jnp.einsum("slmxyz,lj->sjmxyz", G, laguerre_to_grid)
+    G = jnp.asarray(G)
+    laguerre_to_grid = jnp.asarray(laguerre_to_grid)
+    # (S, L, M, Y, X, Z) -> (S, M, Y, X, Z, L)
+    G_perm = jnp.moveaxis(G, 1, -1)
+    # (S, M, Y, X, Z, L) @ (L, J) -> (S, M, Y, X, Z, J)
+    out = jnp.tensordot(G_perm, laguerre_to_grid, axes=([-1], [0]))
+    # (S, J, M, Y, X, Z)
+    return jnp.moveaxis(out, -1, 1)
 
 
 def _laguerre_to_spectral(
     g_mu: jnp.ndarray, laguerre_to_spectral: jnp.ndarray
 ) -> jnp.ndarray:
     """Transform GX muB grid values back to Laguerre moments."""
-    return jnp.einsum("sjmxyz,jl->slmxyz", g_mu, laguerre_to_spectral)
+    g_mu = jnp.asarray(g_mu)
+    laguerre_to_spectral = jnp.asarray(laguerre_to_spectral)
+    # (S, J, M, Y, X, Z) -> (S, M, Y, X, Z, J)
+    g_perm = jnp.moveaxis(g_mu, 1, -1)
+    # (S, M, Y, X, Z, J) @ (J, L) -> (S, M, Y, X, Z, L)
+    out = jnp.tensordot(g_perm, laguerre_to_spectral, axes=([-1], [0]))
+    # (S, L, M, Y, X, Z)
+    return jnp.moveaxis(out, -1, 1)
 
 
 def _gx_j0_field(
@@ -228,21 +242,49 @@ def _spectral_bracket_multi_gx(
 
     G_nyc = G_hat[..., :nyc, :, :]
     chi_nyc = chi_hat_stack[..., :nyc, :, :]
-
-    kx_b = _broadcast_grid(kx_nyc, G_nyc.ndim)
-    ky_b = _broadcast_grid(ky_nyc, G_nyc.ndim)
-    kx_chi = _broadcast_grid(kx_nyc, chi_nyc.ndim)
-    ky_chi = _broadcast_grid(ky_nyc, chi_nyc.ndim)
     axes = (-2, -3)
+    if chi_nyc.shape[1:] == G_nyc.shape:
+        # Pack G and chi into one batch to reduce FFT launches.
+        stack = jnp.concatenate([G_nyc[None, ...], chi_nyc], axis=0)
+        kx_stack = _broadcast_grid(kx_nyc, stack.ndim)
+        ky_stack = _broadcast_grid(ky_nyc, stack.ndim)
 
-    dG_dx = jnp.fft.irfft2(imag * kx_b * G_nyc, s=(kx.shape[1], ny_full), axes=axes) * ifft_scale
-    dG_dy = jnp.fft.irfft2(imag * ky_b * G_nyc, s=(kx.shape[1], ny_full), axes=axes) * ifft_scale
-    dchi_dx = jnp.fft.irfft2(imag * kx_chi * chi_nyc, s=(kx.shape[1], ny_full), axes=axes) * ifft_scale
-    dchi_dy = jnp.fft.irfft2(imag * ky_chi * chi_nyc, s=(kx.shape[1], ny_full), axes=axes) * ifft_scale
+        dstack_dx = (
+            jnp.fft.irfft2(imag * kx_stack * stack, s=(kx.shape[1], ny_full), axes=axes)
+            * ifft_scale
+        )
+        dstack_dy = (
+            jnp.fft.irfft2(imag * ky_stack * stack, s=(kx.shape[1], ny_full), axes=axes)
+            * ifft_scale
+        )
+        dG_dx = dstack_dx[0]
+        dG_dy = dstack_dy[0]
+        dchi_dx = dstack_dx[1:]
+        dchi_dy = dstack_dy[1:]
+    else:
+        kx_b = _broadcast_grid(kx_nyc, G_nyc.ndim)
+        ky_b = _broadcast_grid(ky_nyc, G_nyc.ndim)
+        kx_chi = _broadcast_grid(kx_nyc, chi_nyc.ndim)
+        ky_chi = _broadcast_grid(ky_nyc, chi_nyc.ndim)
 
-    dG_dx = jnp.expand_dims(dG_dx, axis=0)
-    dG_dy = jnp.expand_dims(dG_dy, axis=0)
-    bracket = dG_dx * dchi_dy - dG_dy * dchi_dx
+        dG_dx = (
+            jnp.fft.irfft2(imag * kx_b * G_nyc, s=(kx.shape[1], ny_full), axes=axes)
+            * ifft_scale
+        )
+        dG_dy = (
+            jnp.fft.irfft2(imag * ky_b * G_nyc, s=(kx.shape[1], ny_full), axes=axes)
+            * ifft_scale
+        )
+        dchi_dx = (
+            jnp.fft.irfft2(imag * kx_chi * chi_nyc, s=(kx.shape[1], ny_full), axes=axes)
+            * ifft_scale
+        )
+        dchi_dy = (
+            jnp.fft.irfft2(imag * ky_chi * chi_nyc, s=(kx.shape[1], ny_full), axes=axes)
+            * ifft_scale
+        )
+
+    bracket = dG_dx[None, ...] * dchi_dy - dG_dy[None, ...] * dchi_dx
 
     bracket_hat_nyc = jnp.fft.rfft2(bracket, axes=axes) * fft_scale
     mask_nyc = mask[:nyc, :]
@@ -283,19 +325,30 @@ def _spectral_bracket_multi_full(
     ifft_scale = jnp.asarray(fft_norm_val, dtype=real_dtype)
     fft_scale = jnp.asarray(1.0 / fft_norm_val, dtype=real_dtype)
 
-    kx_b = _broadcast_grid(kx, G_hat.ndim)
-    ky_b = _broadcast_grid(ky, G_hat.ndim)
-    kx_chi = _broadcast_grid(kx, chi_hat_stack.ndim)
-    ky_chi = _broadcast_grid(ky, chi_hat_stack.ndim)
+    if chi_hat_stack.shape[1:] == G_hat.shape:
+        # Pack G and chi into one batch to reduce FFT launches.
+        stack = jnp.concatenate([G_hat[None, ...], chi_hat_stack], axis=0)
+        kx_stack = _broadcast_grid(kx, stack.ndim)
+        ky_stack = _broadcast_grid(ky, stack.ndim)
 
-    dG_dx = _ifft2_xy(imag * kx_b * G_hat) * ifft_scale
-    dG_dy = _ifft2_xy(imag * ky_b * G_hat) * ifft_scale
-    dchi_dx = _ifft2_xy(imag * kx_chi * chi_hat_stack) * ifft_scale
-    dchi_dy = _ifft2_xy(imag * ky_chi * chi_hat_stack) * ifft_scale
+        dstack_dx = _ifft2_xy(imag * kx_stack * stack) * ifft_scale
+        dstack_dy = _ifft2_xy(imag * ky_stack * stack) * ifft_scale
+        dG_dx = dstack_dx[0]
+        dG_dy = dstack_dy[0]
+        dchi_dx = dstack_dx[1:]
+        dchi_dy = dstack_dy[1:]
+    else:
+        kx_b = _broadcast_grid(kx, G_hat.ndim)
+        ky_b = _broadcast_grid(ky, G_hat.ndim)
+        kx_chi = _broadcast_grid(kx, chi_hat_stack.ndim)
+        ky_chi = _broadcast_grid(ky, chi_hat_stack.ndim)
 
-    dG_dx = jnp.expand_dims(dG_dx, axis=0)
-    dG_dy = jnp.expand_dims(dG_dy, axis=0)
-    bracket = dG_dx * dchi_dy - dG_dy * dchi_dx
+        dG_dx = _ifft2_xy(imag * kx_b * G_hat) * ifft_scale
+        dG_dy = _ifft2_xy(imag * ky_b * G_hat) * ifft_scale
+        dchi_dx = _ifft2_xy(imag * kx_chi * chi_hat_stack) * ifft_scale
+        dchi_dy = _ifft2_xy(imag * ky_chi * chi_hat_stack) * ifft_scale
+
+    bracket = dG_dx[None, ...] * dchi_dy - dG_dy[None, ...] * dchi_dx
 
     bracket_hat = _fft2_xy(bracket) * fft_scale
     bracket_hat = bracket_hat * _broadcast_mask(mask, bracket_hat.ndim)
