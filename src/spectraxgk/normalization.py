@@ -69,8 +69,8 @@ TEM_NORMALIZATION = NormalizationContract(
 KBM_NORMALIZATION = NormalizationContract(
     case="kbm",
     rho_star=1.0,
-    omega_d_scale=2.0,
-    omega_star_scale=0.5,
+    omega_d_scale=1.0,
+    omega_star_scale=1.0,
 )
 
 

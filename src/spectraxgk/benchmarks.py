@@ -35,7 +35,11 @@ from spectraxgk.diffrax_integrators import (
     integrate_linear_diffrax,
     integrate_linear_diffrax_streaming,
 )
-from spectraxgk.gx_integrators import GXTimeConfig, integrate_linear_gx
+from spectraxgk.gx_integrators import (
+    GXTimeConfig,
+    integrate_linear_gx,
+    integrate_linear_gx_diagnostics,
+)
 from spectraxgk.linear import (
     LinearParams,
     LinearTerms,
@@ -144,9 +148,9 @@ KBM_KRYLOV_DEFAULT = KrylovConfig(
     krylov_dim=16,
     restarts=1,
     omega_min_factor=0.0,
-    omega_cap_factor=1.0,
-    omega_target_factor=0.2,
-    omega_sign=1,
+    omega_cap_factor=2.0,
+    omega_target_factor=1.5,
+    omega_sign=-1,
     power_iters=60,
     power_dt=0.005,
     shift_source="target",
@@ -4049,7 +4053,7 @@ def run_kbm_beta_scan(
     time_cfg: TimeConfig | None = None,
     solver: str = "auto",
     krylov_cfg: KrylovConfig | None = None,
-    kbm_target_factors: Sequence[float] | None = (0.2, 0.7),
+    kbm_target_factors: Sequence[float] | None = (0.7, 1.5),
     kbm_beta_transition: float | None = None,
     tmin: float | None = None,
     tmax: float | None = None,
@@ -4069,13 +4073,14 @@ def run_kbm_beta_scan(
     fixed_batch_shape: bool = True,
     streaming_fit: bool = True,
     streaming_amp_floor: float = 1.0e-30,
-    init_species_index: int = 0,
-    density_species_index: int = 0,
+    init_species_index: int = 1,
+    density_species_index: int = 1,
     diagnostic_norm: str = "none",
     fapar_override: float | None = None,
-    apar_beta_scale: float | None = 2.0,
-    ampere_g0_scale: float | None = 0.0,
-    bpar_beta_scale: float | None = 1.0,
+    apar_beta_scale: float | None = None,
+    ampere_g0_scale: float | None = None,
+    bpar_beta_scale: float | None = None,
+    gx_parity: bool | None = True,
 ) -> LinearScanResult:
     """Run a KBM beta scan at fixed ky.
 
@@ -4086,7 +4091,9 @@ def run_kbm_beta_scan(
     grid_full = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
     if terms is None:
-        terms = LinearTerms(bpar=-1.0)
+        terms = LinearTerms(bpar=0.0)
+    if gx_parity and diagnostic_norm == "none":
+        diagnostic_norm = "gx"
 
     solver_key = solver.strip().lower()
     fit_key = fit_signal.strip().lower()
@@ -4171,10 +4178,48 @@ def run_kbm_beta_scan(
 
         G0_jax = jnp.asarray(G0)
         solver_use = solver_key
+        if solver_use == "auto" and gx_parity:
+            solver_use = "gx_time"
         if solver_use == "auto":
             solver_use = "time"
 
-        if solver_use == "krylov":
+        if solver_use == "gx_time":
+            gx_time_cfg = GXTimeConfig(
+                dt=dt_i,
+                t_max=dt_i * steps_i,
+                sample_stride=max(int(sample_stride or 1), 1),
+                fixed_dt=bool(time_cfg.fixed_dt) if time_cfg is not None else False,
+                use_dealias_mask=bool(getattr(time_cfg, "use_dealias_mask", False))
+                if time_cfg is not None
+                else False,
+                dt_min=float(time_cfg.dt_min) if time_cfg is not None else 1.0e-7,
+                dt_max=float(time_cfg.dt_max) if (time_cfg is not None and time_cfg.dt_max is not None) else None,
+                cfl=float(time_cfg.cfl) if time_cfg is not None else 0.9,
+                cfl_fac=float(time_cfg.cfl_fac) if time_cfg is not None else 1.0,
+            )
+            t_arr, _phi_t, gamma_t, omega_t, _gx_diag = integrate_linear_gx_diagnostics(
+                G0_jax,
+                grid,
+                cache,
+                params,
+                geom,
+                gx_time_cfg,
+                terms=terms,
+                mode_method="z_index",
+                z_index=sel.z_index,
+                jit=True,
+            )
+            if t_arr.size > 0:
+                mid = int(t_arr.size // 2)
+                gamma = float(np.mean(gamma_t[mid:]))
+                omega = float(np.mean(omega_t[mid:]))
+            else:
+                gamma = float("nan")
+                omega = float("nan")
+            gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
+            gamma_out = gamma
+            omega_out = omega
+        elif solver_use == "krylov":
             shift_val = krylov_cfg_use.shift
             shift_selection = krylov_cfg_use.shift_selection
             if use_continuation and prev_eig is not None:
@@ -4281,7 +4326,7 @@ def run_kbm_beta_scan(
                 prev_vec = _vec
                 prev_eig = eig
 
-        if solver_use != "krylov":
+        if solver_use not in {"krylov", "gx_time"}:
             method_key = method.lower()
             time_cfg_i = None
             if time_cfg is not None:
@@ -4351,7 +4396,7 @@ def run_kbm_beta_scan(
                 else:
                     stride = 1 if sample_stride is None else int(sample_stride)
                     if fit_key in {"density", "auto"}:
-                        _diag = integrate_linear_diagnostics(
+                        diag_out = integrate_linear_diagnostics(
                             G0_jax,
                             grid,
                             geom,
@@ -4364,8 +4409,8 @@ def run_kbm_beta_scan(
                             sample_stride=stride,
                             species_index=density_species_index,
                         )
-                        phi_t = _diag[1]
-                        density_t = _diag[2] if len(_diag) > 2 else None
+                        phi_t = diag_out[1]
+                        density_t = diag_out[2] if len(diag_out) > 2 else None
                     else:
                         _, phi_t = integrate_linear(
                             G0_jax,

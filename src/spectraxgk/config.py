@@ -296,7 +296,7 @@ class KBMBaseCase:
 
     grid: GridConfig = GridConfig(
         Nx=1,
-        Ny=12,
+        Ny=16,
         Nz=96,
         Lx=62.8,
         Ly=62.8,
@@ -306,8 +306,9 @@ class KBMBaseCase:
         nperiod=2,
     )
     time: TimeConfig = TimeConfig(
-        t_max=6.0,
+        t_max=40.0,
         dt=0.01,
+        method="rk4",
         diffrax_solver="Tsit5",
         diffrax_adaptive=True,
         diffrax_rtol=1.0e-4,
