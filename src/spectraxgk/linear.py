@@ -1076,10 +1076,11 @@ def build_H(
     bpar: jnp.ndarray | None = None,
     JlB: jnp.ndarray | None = None,
 ) -> jnp.ndarray:
-    """Map G -> H = G + tz * J_l(b) * phi * delta_{m0} (+ Bpar term).
+    """Map G -> H for mirror/curvature/grad-B/collision terms.
 
-    In the GX/GS2 formulation the A_parallel field enters the streaming
-    operator explicitly and is not included in H for the remaining terms.
+    GX builds H by adding the field terms for m=0 (phi, Bpar) and the
+    A_parallel term for m=1, while the streaming term applies its own
+    pre-derivative field contributions. We mirror that behavior here.
     """
 
     squeeze_species = False
@@ -1097,6 +1098,16 @@ def build_H(
     m0_mask = m0_mask.reshape((1, 1, Nm, 1, 1, 1))
     phi_term = (zt_arr[:, None, None, None, None] * Jl * phi)[:, :, None, ...]
     H = G + m0_mask * phi_term
+    if apar is not None:
+        if vth is None:
+            raise ValueError("vth must be provided when apar is supplied")
+        m1_mask = (jnp.arange(Nm, dtype=jnp.int32) == 1).astype(G.dtype)
+        m1_mask = m1_mask.reshape((1, 1, Nm, 1, 1, 1))
+        vth_arr = jnp.asarray(vth)
+        if vth_arr.ndim == 0:
+            vth_arr = vth_arr[None]
+        apar_term = (zt_arr[:, None, None, None, None] * vth_arr[:, None, None, None, None] * Jl * apar)[:, :, None, ...]
+        H = H - m1_mask * apar_term
     if bpar is not None:
         if JlB is None:
             raise ValueError("JlB must be provided when bpar is supplied")
