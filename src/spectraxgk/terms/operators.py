@@ -57,12 +57,12 @@ def _grad_z_linked_fd(
 
     _check_positive(dz, "dz")
     dz_val = jnp.asarray(dz, dtype=jnp.real(f).dtype)
-    f_roll_p1 = jnp.roll(f, -1, axis=-1)
-    f_roll_m1 = jnp.roll(f, 1, axis=-1)
     f_z0 = f[..., 0]
     f_zm1 = f[..., -1]
-    f_roll_p1 = f_roll_p1.at[..., -1].set(_shift_kx_linked(f_z0, kx_link_plus, kx_mask_plus))
-    f_roll_m1 = f_roll_m1.at[..., 0].set(_shift_kx_linked(f_zm1, kx_link_minus, kx_mask_minus))
+    f_z0_shift = _shift_kx_linked(f_z0, kx_link_plus, kx_mask_plus)
+    f_zm1_shift = _shift_kx_linked(f_zm1, kx_link_minus, kx_mask_minus)
+    f_roll_p1 = jnp.concatenate([f[..., 1:], f_z0_shift[..., None]], axis=-1)
+    f_roll_m1 = jnp.concatenate([f_zm1_shift[..., None], f[..., :-1]], axis=-1)
     return (f_roll_p1 - f_roll_m1) / (2.0 * dz_val)
 
 
