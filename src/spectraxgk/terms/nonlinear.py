@@ -484,7 +484,8 @@ def nonlinear_em_contribution(
         and laguerre_roots is not None
         and b is not None
     )
-    if str(laguerre_mode).lower() == "spectral":
+    mode = str(laguerre_mode).lower()
+    if mode in {"spectral", "fast", "spectral_fast", "spectral-fast"}:
         use_laguerre = False
 
     if use_laguerre:
@@ -633,7 +634,8 @@ def nonlinear_em_components(
         and laguerre_roots is not None
         and b is not None
     )
-    if str(laguerre_mode).lower() == "spectral":
+    mode = str(laguerre_mode).lower()
+    if mode in {"spectral", "fast", "spectral_fast", "spectral-fast"}:
         use_laguerre = False
 
     if use_laguerre:
