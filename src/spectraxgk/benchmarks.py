@@ -4314,8 +4314,16 @@ def run_kbm_beta_scan(
             )
             if t_arr.size > 0:
                 mid = int(t_arr.size // 2)
-                gamma = float(np.mean(gamma_t[mid:]))
-                omega = float(np.mean(omega_t[mid:]))
+                gamma_arr = np.asarray(gamma_t, dtype=float)
+                omega_arr = np.asarray(omega_t, dtype=float)
+                if gamma_arr.ndim >= 3:
+                    ky_nonneg = np.asarray(grid.ky, dtype=float)[:, None] >= 0.0
+                    mode_mask = np.asarray(grid.dealias_mask, dtype=bool) & ky_nonneg
+                    gamma = float(np.nanmean(np.where(mode_mask[None, ...], gamma_arr[mid:], np.nan)))
+                    omega = float(np.nanmean(np.where(mode_mask[None, ...], omega_arr[mid:], np.nan)))
+                else:
+                    gamma = float(np.nanmean(gamma_arr[mid:]))
+                    omega = float(np.nanmean(omega_arr[mid:]))
             else:
                 gamma = float("nan")
                 omega = float("nan")
