@@ -577,6 +577,8 @@ def integrate_nonlinear_gx_diagnostics(
         if use_collision_split and damping is not None:
             G_new = _apply_collision_split(G_new, damping, dt_local, collision_scheme)
         G_new = _enforce_hermitian(G_new)
+        # Keep scan carry dtype stable under mixed-precision scalar constants.
+        G_new = jnp.asarray(G_new, dtype=state_dtype)
         t_new = t_prev + dt_local
 
         def _compute_diag(_):
@@ -840,6 +842,8 @@ def integrate_nonlinear_imex_gx_diagnostics(
         if use_collision_split and damping is not None:
             G_new = _apply_collision_split(G_new, damping, dt_val, collision_scheme)
         G_new = _enforce_hermitian(G_new)
+        # Keep scan carry dtype stable under mixed-precision scalar constants.
+        G_new = jnp.asarray(G_new, dtype=state_dtype)
         t_new = t_prev + dt_val
 
         def _compute_diag(_):
