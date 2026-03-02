@@ -1143,11 +1143,9 @@ def run_cyclone_linear(
             if sample_stride is not None:
                 time_cfg_use = replace(time_cfg_use, sample_stride=sample_stride)
 
-        params_use = params
-        if params_use.damp_ends_amp != 0.0 and terms.end_damping != 0.0:
-            params_use = replace(params_use, damp_ends_amp=params_use.damp_ends_amp / float(dt))
-
         if gx_parity_use:
+            # GX integrator applies damping with per-time scaling internally.
+            params_use = params
             t_max_val = float(dt) * int(steps) if time_cfg_use is None else float(time_cfg_use.t_max)
             stride = 1 if time_cfg_use is None else int(time_cfg_use.sample_stride)
             gx_time_cfg = GXTimeConfig(
@@ -1172,6 +1170,10 @@ def run_cyclone_linear(
             )
             gamma, omega = _normalize_growth_rate(gamma, omega, params_use, diagnostic_norm)
             return gamma, omega, np.asarray(phi_t), np.asarray(t)
+
+        params_use = params
+        if params_use.damp_ends_amp != 0.0 and terms.end_damping != 0.0:
+            params_use = replace(params_use, damp_ends_amp=params_use.damp_ends_amp / float(dt))
 
         if time_cfg_use is not None:
             if need_density:
