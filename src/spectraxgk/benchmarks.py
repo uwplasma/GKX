@@ -1746,7 +1746,6 @@ def run_cyclone_scan(
                 target_omega: float = prev_omega
                 if prev_prev_omega is not None and prev_omega > prev_prev_omega:
                     target_omega = prev_omega + (prev_omega - prev_prev_omega)
-                shift_seed = complex(max(float(gamma), 1.0e-6), -target_omega)
                 G0_krylov = jnp.array(G0_jax)
                 eig, _vec = dominant_eigenpair(
                     G0_krylov,
@@ -1762,8 +1761,8 @@ def run_cyclone_scan(
                     method=kcfg.method,
                     power_iters=kcfg.power_iters,
                     power_dt=kcfg.power_dt,
-                    shift=shift_seed,
-                    shift_source="provided",
+                    shift=kcfg.shift,
+                    shift_source=kcfg.shift_source,
                     shift_tol=kcfg.shift_tol,
                     shift_maxiter=kcfg.shift_maxiter,
                     shift_restart=kcfg.shift_restart,
