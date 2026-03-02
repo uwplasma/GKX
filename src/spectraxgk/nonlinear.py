@@ -385,7 +385,8 @@ def integrate_nonlinear_gx_diagnostics(
             implicit_preconditioner=implicit_preconditioner,
         )
     vol_fac, flux_fac = gx_volume_factors(geom, grid)
-    mask = jnp.asarray(grid.dealias_mask, dtype=bool)
+    ky_nonneg = jnp.asarray(cache.ky)[:, None] >= 0.0
+    mask = jnp.asarray(grid.dealias_mask, dtype=bool) & ky_nonneg
     z_idx = _gx_midplane_index(grid.z.size) if z_index is None else int(z_index)
     use_dealias = bool(use_dealias_mask)
     rho_star = float(getattr(params, "rho_star", 1.0))
@@ -447,7 +448,7 @@ def integrate_nonlinear_gx_diagnostics(
 
     def _update_dt(fields_state: FieldState, dt_prev: jnp.ndarray) -> jnp.ndarray:
         if fixed_dt:
-            return dt_prev
+            return jnp.asarray(dt_prev, dtype=real_dtype)
         wmax = _gx_nonlinear_omega_max(
             fields_state,
             grid,
@@ -460,7 +461,7 @@ def integrate_nonlinear_gx_diagnostics(
             muB_max=muB_max,
         )
         dt_guess = jnp.where(wmax > 0.0, cfl_fac_val * cfl_val / wmax, dt_prev)
-        return jnp.clip(dt_guess, dt_min_val, dt_max_val)
+        return jnp.asarray(jnp.clip(dt_guess, dt_min_val, dt_max_val), dtype=real_dtype)
 
     def rhs_fn(G):
         return nonlinear_rhs_cached(
@@ -481,7 +482,17 @@ def integrate_nonlinear_gx_diagnostics(
         apar = fields_state.apar if fields_state.apar is not None else jnp.zeros_like(phi)
         bpar = fields_state.bpar if fields_state.bpar is not None else jnp.zeros_like(phi)
 
-        gamma, omega = _gx_growth_rate_step(phi, phi_last, dt_local, z_index=z_idx, mask=mask)
+        gamma_modes, omega_modes = _gx_growth_rate_step(
+            phi, phi_last, dt_local, z_index=z_idx, mask=mask
+        )
+        gamma = jnp.nan_to_num(
+            jnp.nanmean(jnp.where(mask, gamma_modes, jnp.nan)),
+            nan=jnp.asarray(0.0, dtype=real_dtype),
+        )
+        omega = jnp.nan_to_num(
+            jnp.nanmean(jnp.where(mask, omega_modes, jnp.nan)),
+            nan=jnp.asarray(0.0, dtype=real_dtype),
+        )
         Wg_val = gx_Wg(G_state, grid, params, vol_fac, use_dealias=use_dealias)
         Wphi_val = gx_Wphi_krehm(
             phi,
@@ -524,7 +535,7 @@ def integrate_nonlinear_gx_diagnostics(
     def step(carry, idx):
         G, phi_last, diag_prev, t_prev, dt_prev = carry
         dG, fields = rhs_fn(G)
-        dt_local = _update_dt(fields, dt_prev)
+        dt_local = jnp.asarray(_update_dt(fields, dt_prev), dtype=real_dtype)
         if method == "euler":
             G_new = G + dt_local * dG
         elif method == "rk2":
@@ -579,7 +590,7 @@ def integrate_nonlinear_gx_diagnostics(
         G_new = _enforce_hermitian(G_new)
         # Keep scan carry dtype stable under mixed-precision scalar constants.
         G_new = jnp.asarray(G_new, dtype=state_dtype)
-        t_new = t_prev + dt_local
+        t_new = jnp.asarray(t_prev + dt_local, dtype=real_dtype)
 
         def _compute_diag(_):
             return _compute_diag_from_state(G_new, phi_last, dt_local)
@@ -593,7 +604,7 @@ def integrate_nonlinear_gx_diagnostics(
         return (G_new, phi, diag, t_new, dt_local), (diag, t_new, dt_local)
 
     step_fn = jax.checkpoint(step) if checkpoint else step
-    dt0 = _update_dt(fields0, dt_init)
+    dt0 = jnp.asarray(_update_dt(fields0, dt_init), dtype=real_dtype)
     diag_zero, _phi0 = _compute_diag_from_state(G0, phi_prev, dt0)
     idx = jnp.arange(steps, dtype=jnp.int32)
     (G_final, _phi_last, _diag_last, _t_last, _dt_last), diag_out = jax.lax.scan(
@@ -680,7 +691,8 @@ def integrate_nonlinear_imex_gx_diagnostics(
         linear_cfg = replace(linear_cfg, collisions=0.0, hypercollisions=0.0)
 
     vol_fac, flux_fac = gx_volume_factors(geom, grid)
-    mask = jnp.asarray(grid.dealias_mask, dtype=bool)
+    ky_nonneg = jnp.asarray(cache.ky)[:, None] >= 0.0
+    mask = jnp.asarray(grid.dealias_mask, dtype=bool) & ky_nonneg
     z_idx = _gx_midplane_index(grid.z.size) if z_index is None else int(z_index)
     use_dealias = bool(use_dealias_mask)
     rho_star = float(getattr(params, "rho_star", 1.0))
@@ -793,7 +805,17 @@ def integrate_nonlinear_imex_gx_diagnostics(
         apar = fields_state.apar if fields_state.apar is not None else jnp.zeros_like(phi)
         bpar = fields_state.bpar if fields_state.bpar is not None else jnp.zeros_like(phi)
 
-        gamma, omega = _gx_growth_rate_step(phi, phi_last, dt_val, z_index=z_idx, mask=mask)
+        gamma_modes, omega_modes = _gx_growth_rate_step(
+            phi, phi_last, dt_val, z_index=z_idx, mask=mask
+        )
+        gamma = jnp.nan_to_num(
+            jnp.nanmean(jnp.where(mask, gamma_modes, jnp.nan)),
+            nan=jnp.asarray(0.0, dtype=real_dtype),
+        )
+        omega = jnp.nan_to_num(
+            jnp.nanmean(jnp.where(mask, omega_modes, jnp.nan)),
+            nan=jnp.asarray(0.0, dtype=real_dtype),
+        )
         Wg_val = gx_Wg(G_state, grid, params, vol_fac, use_dealias=use_dealias)
         Wphi_val = gx_Wphi_krehm(
             phi,

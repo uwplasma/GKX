@@ -124,6 +124,7 @@ def grad_z_linked_fft(
         df_hat = (1j * kz_link) * f_hat
         df_link = jnp.fft.ifft(df_hat, axis=-1)
         df_link = df_link.reshape(*lead_shape, nChains * nLinks, Nz)
+        df_link = jnp.asarray(df_link, dtype=f_flat.dtype)
         chain_updates.append(df_link)
         chain_indices.append(idx_flat)
 
@@ -210,6 +211,7 @@ def abs_z_linked_fft(
         df_hat = jnp.abs(kz_link) * f_hat
         df_link = jnp.fft.ifft(df_hat, axis=-1)
         df_link = df_link.reshape(*lead_shape, nChains * nLinks, Nz)
+        df_link = jnp.asarray(df_link, dtype=f_flat.dtype)
         chain_updates.append(df_link)
         chain_indices.append(idx_flat)
 

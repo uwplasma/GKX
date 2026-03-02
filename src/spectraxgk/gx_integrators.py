@@ -281,12 +281,12 @@ def _gx_growth_rate_step(
 
     phi_now_z = phi_now[..., z_index]
     phi_prev_z = phi_prev[..., z_index]
-    valid_now = (jnp.abs(jnp.real(phi_now_z)) != 0.0) & (jnp.abs(jnp.imag(phi_now_z)) != 0.0)
+    valid = (jnp.abs(phi_now_z) > 0.0) & (jnp.abs(phi_prev_z) > 0.0)
     ratio = jnp.where(phi_prev_z != 0.0, phi_now_z / phi_prev_z, 0.0 + 0.0j)
     log_amp = jnp.log(jnp.abs(ratio))
     phase = jnp.angle(ratio)
-    gamma = jnp.where(mask & valid_now, log_amp / dt, 0.0)
-    omega = jnp.where(mask & valid_now, -phase / dt, 0.0)
+    gamma = jnp.where(mask & valid, log_amp / dt, 0.0)
+    omega = jnp.where(mask & valid, -phase / dt, 0.0)
     return gamma, omega
 
 

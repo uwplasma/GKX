@@ -41,6 +41,7 @@ def integrate_nonlinear(
 
     def step(G, _):
         dG, _fields = rhs_fn(G)
+        dG = jnp.asarray(dG, dtype=state_dtype)
         if method == "euler":
             G_new = G + dt_val * dG
         elif method == "rk2":
@@ -72,7 +73,8 @@ def integrate_nonlinear(
             # Ketcheson 10-stage (K10,4) scheme as used in GX.
             def _euler_step(G_state):
                 dG_state, _ = rhs_fn(G_state)
-                return G_state + (dt_val / 6.0) * dG_state
+                dG_state = jnp.asarray(dG_state, dtype=state_dtype)
+                return jnp.asarray(G_state + (dt_val / 6.0) * dG_state, dtype=state_dtype)
 
             G_q1 = G
             G_q2 = G
@@ -86,7 +88,9 @@ def integrate_nonlinear(
                 G_q1 = _euler_step(G_q1)
 
             dG_final, _ = rhs_fn(G_q1)
+            dG_final = jnp.asarray(dG_final, dtype=state_dtype)
             G_new = G_q2 + 0.6 * G_q1 + 0.1 * dt_val * dG_final
+        G_new = jnp.asarray(G_new, dtype=state_dtype)
         _dG_new, fields_new = rhs_fn(G_new)
         return G_new, fields_new
 

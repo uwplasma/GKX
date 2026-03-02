@@ -105,6 +105,10 @@ def _adjoint(checkpoint: bool):
     return dfx.DirectAdjoint()
 
 
+def _base_complex_dtype() -> jnp.dtype:
+    return jnp.complex128 if bool(getattr(jax.config, "x64_enabled", False)) else jnp.complex64
+
+
 def _pack_complex_state(G: jnp.ndarray) -> jnp.ndarray:
     return jnp.stack([jnp.real(G), jnp.imag(G)], axis=-1)
 
@@ -189,7 +193,7 @@ def integrate_linear_diffrax(
     """Integrate the linear system with diffrax."""
 
     dfx, eqx = _require_diffrax()
-    state_dtype = jnp.result_type(G0, jnp.complex64)
+    state_dtype = jnp.result_type(G0, _base_complex_dtype())
     G0 = jnp.asarray(G0, dtype=state_dtype)
     real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
     if terms is None:
@@ -359,7 +363,7 @@ def integrate_linear_diffrax_streaming(
     """Integrate the linear system and stream a growth-rate fit without storing time series."""
 
     dfx, eqx = _require_diffrax()
-    state_dtype = jnp.result_type(G0, jnp.complex64)
+    state_dtype = jnp.result_type(G0, _base_complex_dtype())
     G0 = jnp.asarray(G0, dtype=state_dtype)
     real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
     if terms is None:
@@ -557,7 +561,7 @@ def integrate_nonlinear_diffrax(
     """Integrate the nonlinear system with diffrax (placeholder nonlinear term)."""
 
     dfx, eqx = _require_diffrax()
-    state_dtype = jnp.result_type(G0, jnp.complex64)
+    state_dtype = jnp.result_type(G0, _base_complex_dtype())
     G0 = jnp.asarray(G0, dtype=state_dtype)
     term_cfg = terms or TermConfig()
     if cache is None:
@@ -579,7 +583,8 @@ def integrate_nonlinear_diffrax(
         cache_, params_, term_cfg_ = args
         G = _unpack_complex_state(G_packed)
         dG, _fields = _assemble_rhs(G, cache_, params_, term_cfg_, use_custom_vjp=use_custom_vjp)
-        return _pack_complex_state(dG)
+        dG = jnp.asarray(dG, dtype=G.dtype)
+        return jnp.asarray(_pack_complex_state(dG), dtype=G_packed.dtype)
 
     def rhs_nonlinear(t, G_packed, args):
         _cache, _params, term_cfg_ = args
@@ -616,7 +621,8 @@ def integrate_nonlinear_diffrax(
             gx_real_fft=gx_real_fft,
             laguerre_mode=laguerre_mode,
         )
-        return _pack_complex_state(dG)
+        dG = jnp.asarray(dG, dtype=G.dtype)
+        return jnp.asarray(_pack_complex_state(dG), dtype=G_packed.dtype)
 
     def rhs_full(t, G_packed, args):
         return rhs_linear(t, G_packed, args) + rhs_nonlinear(t, G_packed, args)
@@ -625,7 +631,9 @@ def integrate_nonlinear_diffrax(
         cache_, params_, term_cfg_ = args
         G = _unpack_complex_state(G_packed)
         G_out, phi = _save_with_phi(G, cache_, params_, term_cfg_, use_custom_vjp=use_custom_vjp)
-        return _pack_complex_state(G_out), phi
+        G_out = jnp.asarray(G_out, dtype=state_dtype)
+        phi = jnp.asarray(phi, dtype=state_dtype)
+        return jnp.asarray(_pack_complex_state(G_out), dtype=G_packed.dtype), phi
 
     solver = _solver_from_name(method)
     explicit_term = dfx.ODETerm(rhs_nonlinear if _is_imex_solver(method) else rhs_full)
