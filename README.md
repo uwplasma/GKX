@@ -6,7 +6,11 @@ Hermite-Laguerre velocity-space representation with Fourier perpendicular
 coordinates in a field-aligned flux-tube geometry. The initial validation target
 is the **Cyclone base case** with adiabatic electrons, plus ETG and KBM scans.
 
-![Linear validation summary](docs/_static/linear_summary.png)
+![GX parity summary (Cyclone/KBM linear+nonlinear)](docs/_static/linear_summary.png)
+
+Top panel: Cyclone and KBM parity against GX, including linear eigenfunctions,
+linear growth/frequency scans, and nonlinear time traces for growth rate,
+frequency, and heat flux.
 
 ## Highlights
 
