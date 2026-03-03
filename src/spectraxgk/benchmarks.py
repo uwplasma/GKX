@@ -4704,3 +4704,131 @@ def run_kbm_beta_scan(
         beta_out.append(float(beta))
 
     return LinearScanResult(ky=np.array(beta_out), gamma=np.array(gammas), omega=np.array(omegas))
+
+
+def run_kbm_scan(
+    ky_values: np.ndarray,
+    *,
+    beta_value: float | None = None,
+    Nl: int = 6,
+    Nm: int = 12,
+    dt: float | np.ndarray = 0.01,
+    steps: int | np.ndarray = 800,
+    method: str = "imex2",
+    cfg: KBMBaseCase | None = None,
+    time_cfg: TimeConfig | None = None,
+    solver: str = "auto",
+    krylov_cfg: KrylovConfig | None = None,
+    kbm_target_factors: Sequence[float] | None = (0.7, 1.5),
+    kbm_beta_transition: float | None = None,
+    tmin: float | np.ndarray | None = None,
+    tmax: float | np.ndarray | None = None,
+    auto_window: bool = True,
+    window_fraction: float = 0.4,
+    min_points: int = 40,
+    start_fraction: float = 0.2,
+    growth_weight: float = 1.0,
+    require_positive: bool = True,
+    min_amp_fraction: float = 0.0,
+    mode_method: str = "project",
+    mode_only: bool = True,
+    terms: LinearTerms | None = None,
+    sample_stride: int | None = None,
+    fit_signal: str = "auto",
+    ky_batch: int = 4,
+    fixed_batch_shape: bool = True,
+    streaming_fit: bool = True,
+    streaming_amp_floor: float = 1.0e-30,
+    init_species_index: int = 1,
+    density_species_index: int = 1,
+    diagnostic_norm: str = "none",
+    fapar_override: float | None = None,
+    apar_beta_scale: float | None = None,
+    ampere_g0_scale: float | None = None,
+    bpar_beta_scale: float | None = None,
+    gx_parity: bool | None = True,
+) -> LinearScanResult:
+    """Run a KBM ky scan at fixed beta.
+
+    This is a thin wrapper over :func:`run_kbm_beta_scan` used for
+    GX parity workflows where the GX benchmark is a ky scan at fixed beta.
+    """
+
+    cfg_in = cfg or KBMBaseCase()
+    if beta_value is None:
+        beta_use = float(cfg_in.model.beta)
+    else:
+        beta_use = float(beta_value)
+    cfg_use = replace(cfg_in, model=replace(cfg_in.model, beta=beta_use))
+
+    ky_vals = np.asarray(ky_values, dtype=float)
+    gamma_out: list[float] = []
+    omega_out: list[float] = []
+    ky_out: list[float] = []
+
+    def _pick(value, idx):
+        if value is None:
+            return None
+        if isinstance(value, np.ndarray):
+            return value[idx].item()
+        if isinstance(value, (list, tuple)):
+            return value[idx]
+        return value
+
+    for i, ky_val in enumerate(ky_vals):
+        dt_i = _pick(dt, i)
+        steps_i = _pick(steps, i)
+        if dt_i is None:
+            dt_i = dt
+        if steps_i is None:
+            steps_i = steps
+        out = run_kbm_beta_scan(
+            betas=np.asarray([beta_use], dtype=float),
+            ky_target=float(ky_val),
+            Nl=Nl,
+            Nm=Nm,
+            dt=float(dt_i),
+            steps=int(steps_i),
+            method=method,
+            cfg=cfg_use,
+            time_cfg=time_cfg,
+            solver=solver,
+            krylov_cfg=krylov_cfg,
+            kbm_target_factors=kbm_target_factors,
+            kbm_beta_transition=kbm_beta_transition,
+            tmin=_pick(tmin, i),
+            tmax=_pick(tmax, i),
+            auto_window=auto_window,
+            window_fraction=window_fraction,
+            min_points=min_points,
+            start_fraction=start_fraction,
+            growth_weight=growth_weight,
+            require_positive=require_positive,
+            min_amp_fraction=min_amp_fraction,
+            mode_method=mode_method,
+            mode_only=mode_only,
+            terms=terms,
+            sample_stride=sample_stride,
+            fit_signal=fit_signal,
+            ky_batch=ky_batch,
+            fixed_batch_shape=fixed_batch_shape,
+            streaming_fit=streaming_fit,
+            streaming_amp_floor=streaming_amp_floor,
+            init_species_index=init_species_index,
+            density_species_index=density_species_index,
+            diagnostic_norm=diagnostic_norm,
+            fapar_override=fapar_override,
+            apar_beta_scale=apar_beta_scale,
+            ampere_g0_scale=ampere_g0_scale,
+            bpar_beta_scale=bpar_beta_scale,
+            gx_parity=gx_parity,
+        )
+        ky_out.append(float(ky_val))
+        gamma_out.append(float(out.gamma[0]))
+        omega_out.append(float(out.omega[0]))
+
+    return LinearScanResult(
+        ky=np.asarray(ky_out, dtype=float),
+        gamma=np.asarray(gamma_out, dtype=float),
+        omega=np.asarray(omega_out, dtype=float),
+    )

@@ -197,21 +197,21 @@ Cross-code mismatch (same ETG setup above):
 - GS2 vs SPECTRAX: mean `|rel_gamma| = 8.243%`, mean `|rel_omega| = 29.894%`
 - stella vs SPECTRAX: mean `|rel_gamma| = 24.792%`, mean `|rel_omega| = 6.735%`
 
-### KBM beta scan (GX parity closure)
+### KBM ky scan (GX parity closure)
 
 | Parameter | Value |
 | --- | --- |
 | Geometry | q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778 |
 | Gradients | R/LTi=2.49, R/LTe=2.49, R/Ln=0.8 |
 | Species | ions + electrons, Te/Ti=1, mi/me=3670 |
-| Electromagnetic | beta_ref scan (values from `kbm_reference_gs2.csv`), A_parallel=on, B_parallel=off |
+| Electromagnetic | fixed beta_ref=0.015 (GX `kbm_salpha.in`), A_parallel=on, B_parallel=off |
 | Collisions | nu_i=0, nu_e=0, hypercollisions=off |
 | Operator toggles | streaming/mirror/curvature/grad-B/diamagnetic on; nonlinear off |
 | Grid | Nx=1, Ny=12, Nz=96, y0=10, ntheta=32, nperiod=2 |
 | Velocity resolution | Nl=8, Nm=24 |
 | Time integration (cross-code) | fixed-step IMEX2 (scan default), Diffrax adaptive optional |
 | Fit policy (cross-code) | mode extracted at the selected ky/kx with midplane-aware signal extraction, log-linear auto-windowing |
-| Reference | GX matched-input electromagnetic beta scan |
+| Reference | GX matched-input electromagnetic ky scan |
 
 KBM GX parity set (matched-input run plumbing):
 
