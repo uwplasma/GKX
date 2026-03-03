@@ -17,6 +17,7 @@ from spectraxgk.analysis import (
     fit_growth_rate,
     fit_growth_rate_auto,
     fit_growth_rate_auto_with_stats,
+    gx_growth_rate_from_omega_series,
     gx_growth_rate_from_phi,
     select_ky_index,
 )
@@ -4331,18 +4332,17 @@ def run_kbm_beta_scan(
                 jit=True,
             )
             if t_arr.size > 1:
-                phi_np = np.asarray(_phi_t)
-                t_np = np.asarray(t_arr, dtype=float)
                 try:
-                    gamma, omega, _g_t, _o_t, _t_mid = gx_growth_rate_from_phi(
-                        phi_np,
-                        t_np,
+                    gamma, omega, _g_t, _o_t = gx_growth_rate_from_omega_series(
+                        np.asarray(gamma_t),
+                        np.asarray(omega_t),
                         sel,
                         navg_fraction=0.5,
-                        mode_method="z_index",
                     )
                 except ValueError:
                     try:
+                        phi_np = np.asarray(_phi_t)
+                        t_np = np.asarray(t_arr, dtype=float)
                         gamma, omega, _g_t, _o_t, _t_mid = gx_growth_rate_from_phi(
                             phi_np,
                             t_np,

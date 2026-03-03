@@ -748,6 +748,52 @@ def gx_growth_rate_from_phi(
     return gamma_avg, omega_avg, gamma, omega, t_mid
 
 
+def gx_growth_rate_from_omega_series(
+    gamma_t: np.ndarray,
+    omega_t: np.ndarray,
+    sel: ModeSelection,
+    *,
+    navg_fraction: float = 0.5,
+    use_last: bool = False,
+) -> Tuple[float, float, np.ndarray, np.ndarray]:
+    """Compute GX-style averaged growth rates from precomputed omega_kxky(t).
+
+    Parameters
+    ----------
+    gamma_t, omega_t:
+        Arrays with shape ``(t, ky, kx)``.
+    sel:
+        Mode selection used to choose the ``(ky, kx)`` series.
+    navg_fraction:
+        Fractional start index for late-time averaging (GX-style).
+    use_last:
+        If true, use the last finite sample instead of late-time average.
+    """
+
+    if gamma_t.ndim != 3 or omega_t.ndim != 3:
+        raise ValueError("gamma_t and omega_t must have shape (t, ky, kx)")
+    if gamma_t.shape != omega_t.shape:
+        raise ValueError("gamma_t and omega_t must have matching shape")
+
+    if sel.ky_index >= gamma_t.shape[1] or sel.kx_index >= gamma_t.shape[2]:
+        raise ValueError("ModeSelection indices out of range for omega series")
+
+    gamma = np.asarray(gamma_t[:, sel.ky_index, sel.kx_index], dtype=float)
+    omega = np.asarray(omega_t[:, sel.ky_index, sel.kx_index], dtype=float)
+    finite = np.isfinite(gamma) & np.isfinite(omega)
+    gamma = gamma[finite]
+    omega = omega[finite]
+    if gamma.size == 0:
+        raise ValueError("No finite GX omega-series samples available")
+
+    if use_last:
+        return float(gamma[-1]), float(omega[-1]), gamma, omega
+
+    istart = int(len(gamma) * navg_fraction)
+    istart = max(0, min(istart, len(gamma) - 1))
+    return float(np.mean(gamma[istart:])), float(np.mean(omega[istart:])), gamma, omega
+
+
 def _log_amp_phase(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """Return (log|signal|, unwrapped phase) with robust scaling."""
 
