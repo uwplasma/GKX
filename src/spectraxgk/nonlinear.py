@@ -418,10 +418,8 @@ def integrate_nonlinear_gx_diagnostics(
     real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
     dt_init = jnp.asarray(dt, dtype=real_dtype)
     dt_min_val = jnp.asarray(dt_min, dtype=real_dtype)
-    if dt_max is None and not fixed_dt:
-        dt_max_val = jnp.asarray(float(dt) * 5.0, dtype=real_dtype)
-    else:
-        dt_max_val = jnp.asarray(dt if dt_max is None else dt_max, dtype=real_dtype)
+    # GX default behavior: when dt_max is unset, dt_max == dt.
+    dt_max_val = jnp.asarray(dt if dt_max is None else dt_max, dtype=real_dtype)
     cfl_val = jnp.asarray(cfl, dtype=real_dtype)
     cfl_fac_val = jnp.asarray(cfl_fac, dtype=real_dtype)
 

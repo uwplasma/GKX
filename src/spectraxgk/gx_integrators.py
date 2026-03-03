@@ -281,7 +281,10 @@ def _gx_growth_rate_step(
 
     phi_now_z = phi_now[..., z_index]
     phi_prev_z = phi_prev[..., z_index]
-    valid = (jnp.abs(phi_now_z) > 0.0) & (jnp.abs(phi_prev_z) > 0.0)
+    # Match GX kernel logic exactly: require non-zero real and imaginary parts.
+    valid_now = (jnp.abs(jnp.real(phi_now_z)) > 0.0) & (jnp.abs(jnp.imag(phi_now_z)) > 0.0)
+    valid_prev = (jnp.abs(jnp.real(phi_prev_z)) > 0.0) & (jnp.abs(jnp.imag(phi_prev_z)) > 0.0)
+    valid = valid_now & valid_prev
     ratio = jnp.where(phi_prev_z != 0.0, phi_now_z / phi_prev_z, 0.0 + 0.0j)
     log_amp = jnp.log(jnp.abs(ratio))
     phase = jnp.angle(ratio)
@@ -346,10 +349,8 @@ def integrate_linear_gx(
     t_max = float(time_cfg.t_max)
     dt = float(time_cfg.dt)
     dt_min = float(time_cfg.dt_min)
-    if time_cfg.dt_max is None and not time_cfg.fixed_dt:
-        dt_max = dt * 5.0
-    else:
-        dt_max = float(time_cfg.dt_max) if time_cfg.dt_max is not None else dt
+    # GX default behavior: when dt_max is unset, dt_max == dt.
+    dt_max = float(time_cfg.dt_max) if time_cfg.dt_max is not None else dt
     sample_stride = int(max(time_cfg.sample_stride, 1))
 
     z_idx = _gx_midplane_index(grid.z.size) if z_index is None else int(z_index)
@@ -438,10 +439,8 @@ def integrate_linear_gx_diagnostics(
     t_max = float(time_cfg.t_max)
     dt = float(time_cfg.dt)
     dt_min = float(time_cfg.dt_min)
-    if time_cfg.dt_max is None and not time_cfg.fixed_dt:
-        dt_max = dt * 5.0
-    else:
-        dt_max = float(time_cfg.dt_max) if time_cfg.dt_max is not None else dt
+    # GX default behavior: when dt_max is unset, dt_max == dt.
+    dt_max = float(time_cfg.dt_max) if time_cfg.dt_max is not None else dt
     sample_stride = int(max(time_cfg.sample_stride, 1))
 
     z_idx = _gx_midplane_index(grid.z.size) if z_index is None else int(z_index)
