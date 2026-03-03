@@ -6,11 +6,14 @@ Hermite-Laguerre velocity-space representation with Fourier perpendicular
 coordinates in a field-aligned flux-tube geometry. The initial validation target
 is the **Cyclone base case** with adiabatic electrons, plus ETG and KBM scans.
 
-![GX parity summary (Cyclone/KBM linear+nonlinear)](docs/_static/linear_summary.png)
+![GX parity summary (Cyclone/KBM linear+nonlinear)](docs/_static/gx_cyclone_kbm_panel.png)
 
 Top panel: Cyclone and KBM parity against GX, including linear eigenfunctions,
 linear growth/frequency scans, and nonlinear time traces for growth rate,
 frequency, and heat flux.
+
+The current KBM GX mismatch table is stored in
+`docs/_static/kbm_gx_mismatch.csv`.
 
 ## Highlights
 
@@ -129,15 +132,8 @@ python examples/kbm_beta_scan.py --no-diffrax
   require longer ``t_max`` windows to converge to reference values.
 - **ETG linear trend**: growth rates remain positive across reduced electron-scale
   gradients; real frequencies follow the electron diamagnetic direction.
-- **KBM beta scan**: electromagnetic transition between ITG and KBM branches.
-
-KBM cross-code note:
-
-- GS2 is used as the primary electromagnetic cross-code baseline.
-- The current stella documentation states that ``beta``, ``fapar``, and ``fbpar``
-  have no effect in the documented user namelists; this can invalidate KBM
-  cross-code parity checks that rely on finite-:math:`A_\parallel` physics
-  ([stella user manual](https://stellagk.github.io/stella/page/user_manual/index.html)).
+- **KBM beta scan**: electromagnetic transition between ITG and KBM branches,
+  with GX as the parity baseline for linear and nonlinear diagnostics.
 
 ## Figures
 
@@ -201,7 +197,7 @@ Cross-code mismatch (same ETG setup above):
 - GS2 vs SPECTRAX: mean `|rel_gamma| = 8.243%`, mean `|rel_omega| = 29.894%`
 - stella vs SPECTRAX: mean `|rel_gamma| = 24.792%`, mean `|rel_omega| = 6.735%`
 
-### KBM beta scan (GS2 primary closure)
+### KBM beta scan (GX parity closure)
 
 | Parameter | Value |
 | --- | --- |
@@ -215,14 +211,11 @@ Cross-code mismatch (same ETG setup above):
 | Velocity resolution | Nl=8, Nm=24 |
 | Time integration (cross-code) | fixed-step IMEX2 (scan default), Diffrax adaptive optional |
 | Fit policy (cross-code) | mode extracted at the selected ky/kx with midplane-aware signal extraction, log-linear auto-windowing |
-| Reference | GS2 matched-input electromagnetic beta scan |
+| Reference | GX matched-input electromagnetic beta scan |
 
-KBM GS2 cross-code set (matched-input run plumbing):
+KBM GX parity set (matched-input run plumbing):
 
-![KBM GS2/stella comparison](docs/_static/kbm_gs2_stella_comparison.png)
-
-- GS2 vs SPECTRAX uses relaxed tolerance for electromagnetic closure (`rtol <= 20%` while normalization/sign audit is ongoing).
-- stella is not used as the KBM closure baseline in this repository revision.
+![Cyclone/KBM GX parity panel](docs/_static/gx_cyclone_kbm_panel.png)
 
 ## Cross-code performance (staging)
 

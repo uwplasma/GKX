@@ -164,6 +164,13 @@ KBM_KRYLOV_DEFAULT = KrylovConfig(
     continuation=False,
 )
 
+KBM_GX_SOLVER_LOCK: tuple[tuple[float, str], ...] = (
+    (0.10, "gx_time"),
+    (0.30, "gx_time"),
+    (0.40, "gx_time"),
+)
+KBM_GX_SOLVER_LOCK_TOL = 0.03
+
 TEM_KRYLOV_DEFAULT = KrylovConfig(
     method="shift_invert",
     krylov_dim=16,
@@ -210,6 +217,21 @@ def _midplane_index(grid: SpectralGrid) -> int:
         return 0
     idx = int(grid.z.size // 2 + 1)
     return min(idx, int(grid.z.size) - 1)
+
+
+def select_kbm_solver_auto(solver: str, *, ky_target: float, gx_parity: bool) -> str:
+    """Return deterministic KBM solver choice for auto mode."""
+
+    solver_key = solver.strip().lower()
+    if solver_key != "auto":
+        return solver_key
+    if not gx_parity:
+        return "time"
+    ky_abs = abs(float(ky_target))
+    for ky_ref, solver_ref in KBM_GX_SOLVER_LOCK:
+        if abs(ky_abs - ky_ref) <= KBM_GX_SOLVER_LOCK_TOL:
+            return solver_ref
+    return "gx_time"
 
 
 def _select_fit_signal(
@@ -4280,11 +4302,7 @@ def run_kbm_beta_scan(
         G0[int(init_species_index)] = np.asarray(G0_single, dtype=np.complex64)
 
         G0_jax = jnp.asarray(G0)
-        solver_use = solver_key
-        if solver_use == "auto" and gx_parity:
-            solver_use = "gx_time"
-        if solver_use == "auto":
-            solver_use = "time"
+        solver_use = select_kbm_solver_auto(solver_key, ky_target=ky_target, gx_parity=bool(gx_parity))
 
         if solver_use == "gx_time":
             gx_time_cfg = GXTimeConfig(
