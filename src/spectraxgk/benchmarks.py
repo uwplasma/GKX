@@ -4312,18 +4312,39 @@ def run_kbm_beta_scan(
                 z_index=sel.z_index,
                 jit=True,
             )
-            if t_arr.size > 0:
-                mid = int(t_arr.size // 2)
-                gamma_arr = np.asarray(gamma_t, dtype=float)
-                omega_arr = np.asarray(omega_t, dtype=float)
-                if gamma_arr.ndim >= 3:
-                    ky_nonneg = np.asarray(grid.ky, dtype=float)[:, None] >= 0.0
-                    mode_mask = np.asarray(grid.dealias_mask, dtype=bool) & ky_nonneg
-                    gamma = float(np.nanmean(np.where(mode_mask[None, ...], gamma_arr[mid:], np.nan)))
-                    omega = float(np.nanmean(np.where(mode_mask[None, ...], omega_arr[mid:], np.nan)))
-                else:
-                    gamma = float(np.nanmean(gamma_arr[mid:]))
-                    omega = float(np.nanmean(omega_arr[mid:]))
+            if t_arr.size > 1:
+                phi_np = np.asarray(_phi_t)
+                t_np = np.asarray(t_arr, dtype=float)
+                try:
+                    gamma, omega, _g_t, _o_t, _t_mid = gx_growth_rate_from_phi(
+                        phi_np,
+                        t_np,
+                        sel,
+                        navg_fraction=0.5,
+                        mode_method="z_index",
+                    )
+                except ValueError:
+                    try:
+                        gamma, omega, _g_t, _o_t, _t_mid = gx_growth_rate_from_phi(
+                            phi_np,
+                            t_np,
+                            sel,
+                            navg_fraction=0.5,
+                            mode_method="max",
+                        )
+                    except ValueError:
+                        signal = extract_mode_time_series(phi_np, sel, method="max")
+                        gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
+                            t_np,
+                            signal,
+                            window_method="loglinear",
+                            window_fraction=window_fraction,
+                            min_points=min_points,
+                            start_fraction=start_fraction,
+                            growth_weight=growth_weight,
+                            require_positive=require_positive,
+                            min_amp_fraction=min_amp_fraction,
+                        )
             else:
                 gamma = float("nan")
                 omega = float("nan")
@@ -4486,24 +4507,60 @@ def run_kbm_beta_scan(
                 gamma, omega = _normalize_growth_rate(gamma, omega, params_use, diagnostic_norm)
             else:
                 if time_cfg_i is not None:
-                    _, phi_t = integrate_linear_from_config(
-                        G0_jax,
-                        grid,
-                        geom,
-                        params_use,
-                        time_cfg_i,
-                        cache=cache,
-                        terms=terms,
-                        save_mode=sel if mode_only else None,
-                        mode_method=mode_method,
-                        save_field="phi+density" if fit_key == "auto" else ("density" if fit_key == "density" else "phi"),
-                        density_species_index=density_species_index if fit_key in {"density", "auto"} else None,
-                    )
                     stride = time_cfg_i.sample_stride
-                    if fit_key == "auto":
-                        phi_t, density_t = phi_t
+                    if time_cfg_i.use_diffrax:
+                        _, phi_t = integrate_linear_from_config(
+                            G0_jax,
+                            grid,
+                            geom,
+                            params_use,
+                            time_cfg_i,
+                            cache=cache,
+                            terms=terms,
+                            save_mode=sel if mode_only else None,
+                            mode_method=mode_method,
+                            save_field="phi+density"
+                            if fit_key == "auto"
+                            else ("density" if fit_key == "density" else "phi"),
+                            density_species_index=density_species_index
+                            if fit_key in {"density", "auto"}
+                            else None,
+                        )
+                        if fit_key == "auto":
+                            phi_t, density_t = phi_t
+                        else:
+                            density_t = None
                     else:
-                        density_t = None
+                        if fit_key in {"density", "auto"}:
+                            diag_out = integrate_linear_diagnostics(
+                                G0_jax,
+                                grid,
+                                geom,
+                                params_use,
+                                dt=dt_i,
+                                steps=steps_i,
+                                method=method,
+                                cache=cache,
+                                terms=terms,
+                                sample_stride=stride,
+                                species_index=density_species_index,
+                            )
+                            phi_t = diag_out[1]
+                            density_t = diag_out[2] if len(diag_out) > 2 else None
+                        else:
+                            _, phi_t = integrate_linear(
+                                G0_jax,
+                                grid,
+                                geom,
+                                params_use,
+                                dt=dt_i,
+                                steps=steps_i,
+                                method=method,
+                                cache=cache,
+                                terms=terms,
+                                sample_stride=stride,
+                            )
+                            density_t = None
                 else:
                     stride = 1 if sample_stride is None else int(sample_stride)
                     if fit_key in {"density", "auto"}:
