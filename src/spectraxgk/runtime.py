@@ -900,6 +900,8 @@ def run_runtime_nonlinear(
             diagnostics_stride=int(diag_stride),
             use_dealias_mask=True,
             laguerre_mode=laguerre_mode_use,
+            omega_ky_index=int(ky_index),
+            omega_kx_index=int(kx_index),
             flux_scale=float(cfg.normalization.flux_scale),
             wphi_scale=float(cfg.normalization.wphi_scale),
             fixed_dt=bool(cfg.time.fixed_dt),

@@ -170,6 +170,25 @@ def _gx_nonlinear_omega_max(
     return jnp.asarray(omega_x + omega_y, dtype=real_dtype)
 
 
+def _gx_omega_mode_mask(
+    grid: SpectralGrid,
+    cache: LinearCache,
+    *,
+    gx_real_fft: bool,
+) -> jnp.ndarray:
+    """Mask used to reduce mode-wise GX omega/gamma diagnostics."""
+
+    ny = int(grid.ky.size)
+    nx = int(grid.kx.size)
+    if gx_real_fft and bool(np.any(np.asarray(grid.ky) < 0.0)):
+        # Full-ky SPECTRAX layout stores the rFFT-unique modes in the first
+        # Ny//2+1 entries, including the Nyquist row when Ny is even.
+        ky_unique = jnp.arange(ny, dtype=jnp.int32)[:, None] < (ny // 2 + 1)
+    else:
+        ky_unique = jnp.asarray(cache.ky)[:, None] >= 0.0
+    return jnp.asarray(grid.dealias_mask, dtype=bool) & jnp.broadcast_to(ky_unique, (ny, nx))
+
+
 def _collision_damping(
     cache: LinearCache,
     params: LinearParams,
@@ -323,6 +342,8 @@ def integrate_nonlinear_gx_diagnostics(
     z_index: int | None = None,
     gx_real_fft: bool = True,
     laguerre_mode: str = "grid",
+    omega_ky_index: int | None = None,
+    omega_kx_index: int | None = None,
     flux_scale: float = 2.0,
     wphi_scale: float = 1.0,
     fixed_dt: bool = True,
@@ -372,6 +393,8 @@ def integrate_nonlinear_gx_diagnostics(
             z_index=z_index,
             gx_real_fft=gx_real_fft,
             laguerre_mode=laguerre_mode,
+            omega_ky_index=omega_ky_index,
+            omega_kx_index=omega_kx_index,
             flux_scale=flux_scale,
             wphi_scale=wphi_scale,
             collision_split=collision_split,
@@ -385,8 +408,7 @@ def integrate_nonlinear_gx_diagnostics(
             implicit_preconditioner=implicit_preconditioner,
         )
     vol_fac, flux_fac = gx_volume_factors(geom, grid)
-    ky_nonneg = jnp.asarray(cache.ky)[:, None] >= 0.0
-    mask = jnp.asarray(grid.dealias_mask, dtype=bool) & ky_nonneg
+    mask = _gx_omega_mode_mask(grid, cache, gx_real_fft=gx_real_fft)
     z_idx = _gx_midplane_index(grid.z.size) if z_index is None else int(z_index)
     use_dealias = bool(use_dealias_mask)
     rho_star = float(getattr(params, "rho_star", 1.0))
@@ -474,23 +496,29 @@ def integrate_nonlinear_gx_diagnostics(
     fields0 = compute_fields_cached(G0, cache, params, terms=term_cfg)
     phi_prev = fields0.phi
 
-    def _compute_diag_from_state(G_state, phi_last, dt_local):
+    def _compute_diag_from_state(G_state, phi_last, dt_span):
         fields_state = compute_fields_cached(G_state, cache, params, terms=term_cfg)
         phi = fields_state.phi
         apar = fields_state.apar if fields_state.apar is not None else jnp.zeros_like(phi)
         bpar = fields_state.bpar if fields_state.bpar is not None else jnp.zeros_like(phi)
 
         gamma_modes, omega_modes = _gx_growth_rate_step(
-            phi, phi_last, dt_local, z_index=z_idx, mask=mask
+            phi, phi_last, dt_span, z_index=z_idx, mask=mask
         )
-        gamma = jnp.nan_to_num(
-            jnp.nanmean(jnp.where(mask, gamma_modes, jnp.nan)),
-            nan=jnp.asarray(0.0, dtype=real_dtype),
-        )
-        omega = jnp.nan_to_num(
-            jnp.nanmean(jnp.where(mask, omega_modes, jnp.nan)),
-            nan=jnp.asarray(0.0, dtype=real_dtype),
-        )
+        if omega_ky_index is not None:
+            ky_i = int(np.clip(omega_ky_index, 0, int(gamma_modes.shape[0]) - 1))
+            kx_i = int(np.clip(omega_kx_index or 0, 0, int(gamma_modes.shape[1]) - 1))
+            gamma = jnp.nan_to_num(gamma_modes[ky_i, kx_i], nan=jnp.asarray(0.0, dtype=real_dtype))
+            omega = jnp.nan_to_num(omega_modes[ky_i, kx_i], nan=jnp.asarray(0.0, dtype=real_dtype))
+        else:
+            gamma = jnp.nan_to_num(
+                jnp.nanmean(jnp.where(mask, gamma_modes, jnp.nan)),
+                nan=jnp.asarray(0.0, dtype=real_dtype),
+            )
+            omega = jnp.nan_to_num(
+                jnp.nanmean(jnp.where(mask, omega_modes, jnp.nan)),
+                nan=jnp.asarray(0.0, dtype=real_dtype),
+            )
         Wg_val = gx_Wg(G_state, grid, params, vol_fac, use_dealias=use_dealias)
         Wphi_val = gx_Wphi_krehm(
             phi,
@@ -531,7 +559,7 @@ def integrate_nonlinear_gx_diagnostics(
         return (gamma, omega, Wg_val, Wphi_val, Wapar_val, heat_val, pflux_val), phi
 
     def step(carry, idx):
-        G, phi_last, diag_prev, t_prev, dt_prev = carry
+        G, phi_last, diag_prev, t_prev, dt_prev, dt_acc = carry
         dG, fields = rhs_fn(G)
         dt_local = jnp.asarray(_update_dt(fields, dt_prev), dtype=real_dtype)
         if method == "euler":
@@ -589,24 +617,36 @@ def integrate_nonlinear_gx_diagnostics(
         # Keep scan carry dtype stable under mixed-precision scalar constants.
         G_new = jnp.asarray(G_new, dtype=state_dtype)
         t_new = jnp.asarray(t_prev + dt_local, dtype=real_dtype)
+        dt_acc_new = jnp.asarray(dt_acc + dt_local, dtype=real_dtype)
 
         def _compute_diag(_):
-            return _compute_diag_from_state(G_new, phi_last, dt_local)
+            diag, phi = _compute_diag_from_state(G_new, phi_last, dt_acc_new)
+            return diag, phi, jnp.asarray(0.0, dtype=real_dtype)
 
         def _reuse_diag(_):
-            return diag_prev, phi_last
+            return diag_prev, phi_last, dt_acc_new
 
         diag_stride = int(max(diagnostics_stride, 1))
         do_diag = (idx % diag_stride) == 0
-        diag, phi = jax.lax.cond(do_diag, _compute_diag, _reuse_diag, operand=None)
-        return (G_new, phi, diag, t_new, dt_local), (diag, t_new, dt_local)
+        diag, phi, dt_acc_out = jax.lax.cond(do_diag, _compute_diag, _reuse_diag, operand=None)
+        return (G_new, phi, diag, t_new, dt_local, dt_acc_out), (diag, t_new, dt_local)
 
     step_fn = jax.checkpoint(step) if checkpoint else step
     dt0 = jnp.asarray(_update_dt(fields0, dt_init), dtype=real_dtype)
     diag_zero, _phi0 = _compute_diag_from_state(G0, phi_prev, dt0)
     idx = jnp.arange(steps, dtype=jnp.int32)
-    (G_final, _phi_last, _diag_last, _t_last, _dt_last), diag_out = jax.lax.scan(
-        step_fn, (G0, phi_prev, diag_zero, jnp.asarray(0.0, dtype=real_dtype), dt0), idx, length=steps
+    (G_final, _phi_last, _diag_last, _t_last, _dt_last, _dt_acc_last), diag_out = jax.lax.scan(
+        step_fn,
+        (
+            G0,
+            phi_prev,
+            diag_zero,
+            jnp.asarray(0.0, dtype=real_dtype),
+            dt0,
+            jnp.asarray(0.0, dtype=real_dtype),
+        ),
+        idx,
+        length=steps,
     )
 
     diag, t, dt_series = diag_out
@@ -660,6 +700,8 @@ def integrate_nonlinear_imex_gx_diagnostics(
     z_index: int | None = None,
     gx_real_fft: bool = True,
     laguerre_mode: str = "grid",
+    omega_ky_index: int | None = None,
+    omega_kx_index: int | None = None,
     flux_scale: float = 2.0,
     wphi_scale: float = 1.0,
     collision_split: bool = False,
@@ -689,8 +731,7 @@ def integrate_nonlinear_imex_gx_diagnostics(
         linear_cfg = replace(linear_cfg, collisions=0.0, hypercollisions=0.0)
 
     vol_fac, flux_fac = gx_volume_factors(geom, grid)
-    ky_nonneg = jnp.asarray(cache.ky)[:, None] >= 0.0
-    mask = jnp.asarray(grid.dealias_mask, dtype=bool) & ky_nonneg
+    mask = _gx_omega_mode_mask(grid, cache, gx_real_fft=gx_real_fft)
     z_idx = _gx_midplane_index(grid.z.size) if z_index is None else int(z_index)
     use_dealias = bool(use_dealias_mask)
     rho_star = float(getattr(params, "rho_star", 1.0))
@@ -797,23 +838,29 @@ def integrate_nonlinear_imex_gx_diagnostics(
         )
         return sol.reshape(implicit_operator.shape)
 
-    def _compute_diag_from_state(G_state, phi_last):
+    def _compute_diag_from_state(G_state, phi_last, dt_span):
         fields_state = compute_fields_cached(G_state, cache, params, terms=term_cfg)
         phi = fields_state.phi
         apar = fields_state.apar if fields_state.apar is not None else jnp.zeros_like(phi)
         bpar = fields_state.bpar if fields_state.bpar is not None else jnp.zeros_like(phi)
 
         gamma_modes, omega_modes = _gx_growth_rate_step(
-            phi, phi_last, dt_val, z_index=z_idx, mask=mask
+            phi, phi_last, dt_span, z_index=z_idx, mask=mask
         )
-        gamma = jnp.nan_to_num(
-            jnp.nanmean(jnp.where(mask, gamma_modes, jnp.nan)),
-            nan=jnp.asarray(0.0, dtype=real_dtype),
-        )
-        omega = jnp.nan_to_num(
-            jnp.nanmean(jnp.where(mask, omega_modes, jnp.nan)),
-            nan=jnp.asarray(0.0, dtype=real_dtype),
-        )
+        if omega_ky_index is not None:
+            ky_i = int(np.clip(omega_ky_index, 0, int(gamma_modes.shape[0]) - 1))
+            kx_i = int(np.clip(omega_kx_index or 0, 0, int(gamma_modes.shape[1]) - 1))
+            gamma = jnp.nan_to_num(gamma_modes[ky_i, kx_i], nan=jnp.asarray(0.0, dtype=real_dtype))
+            omega = jnp.nan_to_num(omega_modes[ky_i, kx_i], nan=jnp.asarray(0.0, dtype=real_dtype))
+        else:
+            gamma = jnp.nan_to_num(
+                jnp.nanmean(jnp.where(mask, gamma_modes, jnp.nan)),
+                nan=jnp.asarray(0.0, dtype=real_dtype),
+            )
+            omega = jnp.nan_to_num(
+                jnp.nanmean(jnp.where(mask, omega_modes, jnp.nan)),
+                nan=jnp.asarray(0.0, dtype=real_dtype),
+            )
         Wg_val = gx_Wg(G_state, grid, params, vol_fac, use_dealias=use_dealias)
         Wphi_val = gx_Wphi_krehm(
             phi,
@@ -856,7 +903,7 @@ def integrate_nonlinear_imex_gx_diagnostics(
     phi_prev = compute_fields_cached(G0, cache, params, terms=term_cfg).phi
 
     def step(carry, idx):
-        G, phi_last, diag_prev, t_prev = carry
+        G, phi_last, diag_prev, t_prev, dt_acc = carry
         rhs = G + dt_val * nonlinear_term(G)
         G_new = solve_step(G, rhs)
         if use_collision_split and damping is not None:
@@ -865,23 +912,34 @@ def integrate_nonlinear_imex_gx_diagnostics(
         # Keep scan carry dtype stable under mixed-precision scalar constants.
         G_new = jnp.asarray(G_new, dtype=state_dtype)
         t_new = t_prev + dt_val
+        dt_acc_new = dt_acc + dt_val
 
         def _compute_diag(_):
-            return _compute_diag_from_state(G_new, phi_last)
+            diag, phi = _compute_diag_from_state(G_new, phi_last, dt_acc_new)
+            return diag, phi, jnp.asarray(0.0, dtype=real_dtype)
 
         def _reuse_diag(_):
-            return diag_prev, phi_last
+            return diag_prev, phi_last, dt_acc_new
 
         diag_stride = int(max(diagnostics_stride, 1))
         do_diag = (idx % diag_stride) == 0
-        diag, phi = jax.lax.cond(do_diag, _compute_diag, _reuse_diag, operand=None)
-        return (G_new, phi, diag, t_new), (diag, t_new)
+        diag, phi, dt_acc_out = jax.lax.cond(do_diag, _compute_diag, _reuse_diag, operand=None)
+        return (G_new, phi, diag, t_new, dt_acc_out), (diag, t_new)
 
     step_fn = jax.checkpoint(step) if checkpoint else step
-    diag_zero, _phi0 = _compute_diag_from_state(G0, phi_prev)
+    diag_zero, _phi0 = _compute_diag_from_state(G0, phi_prev, dt_val)
     idx = jnp.arange(steps, dtype=jnp.int32)
-    (G_final, _phi_last, _diag_last, _t_last), diag_out = jax.lax.scan(
-        step_fn, (G0, phi_prev, diag_zero, jnp.asarray(0.0, dtype=real_dtype)), idx, length=steps
+    (G_final, _phi_last, _diag_last, _t_last, _dt_acc_last), diag_out = jax.lax.scan(
+        step_fn,
+        (
+            G0,
+            phi_prev,
+            diag_zero,
+            jnp.asarray(0.0, dtype=real_dtype),
+            jnp.asarray(0.0, dtype=real_dtype),
+        ),
+        idx,
+        length=steps,
     )
 
     diag, t = diag_out
