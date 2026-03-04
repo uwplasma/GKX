@@ -263,7 +263,8 @@ def _spectral_bracket_multi_gx(
     mask_nyc = mask[:nyc, :]
     bracket_hat_nyc = bracket_hat_nyc * _broadcast_mask(mask_nyc, bracket_hat_nyc.ndim)
     if ny_full > 1:
-        neg = jnp.conj(bracket_hat_nyc[..., 1 : nyc - 1, :, :])
+        neg_hi = nyc - 1 if (ny_full % 2 == 0) else nyc
+        neg = jnp.conj(bracket_hat_nyc[..., 1:neg_hi, :, :])
         neg = neg[..., ::-1, :, :]
         bracket_hat = jnp.concatenate([bracket_hat_nyc, neg], axis=-3)
     else:

@@ -429,7 +429,8 @@ def integrate_nonlinear_gx_diagnostics(
         if not use_hermitian or nyc <= 2:
             return G_state
         pos = G_state[..., :nyc, :, :]
-        neg = jnp.conj(pos[..., 1 : nyc - 1, :, :])[..., ::-1, :, :]
+        neg_hi = nyc - 1 if (ny_full % 2 == 0) else nyc
+        neg = jnp.conj(pos[..., 1:neg_hi, :, :])[..., ::-1, :, :]
         if nx > 1:
             neg = neg[..., kx_neg, :]
         return jnp.concatenate([pos, neg], axis=-3)
@@ -752,7 +753,8 @@ def integrate_nonlinear_imex_gx_diagnostics(
         if not use_hermitian or nyc <= 2:
             return G_state
         pos = G_state[..., :nyc, :, :]
-        neg = jnp.conj(pos[..., 1 : nyc - 1, :, :])[..., ::-1, :, :]
+        neg_hi = nyc - 1 if (ny_full % 2 == 0) else nyc
+        neg = jnp.conj(pos[..., 1:neg_hi, :, :])[..., ::-1, :, :]
         if nx > 1:
             neg = neg[..., kx_neg, :]
         return jnp.concatenate([pos, neg], axis=-3)
