@@ -16,7 +16,7 @@ def gamma0(b: jnp.ndarray) -> jnp.ndarray:
 
 
 def bessel_j0(x: jnp.ndarray) -> jnp.ndarray:
-    """Return J0(x) using a Cephes-style approximation (GX parity)."""
+    """Return J0(x) using a Cephes-style approximation (GX-compatible)."""
 
     x = jnp.asarray(x)
     ax = jnp.abs(x)
@@ -57,7 +57,7 @@ def bessel_j0(x: jnp.ndarray) -> jnp.ndarray:
 
 
 def bessel_j1(x: jnp.ndarray) -> jnp.ndarray:
-    """Return J1(x) using a Cephes-style approximation (GX parity)."""
+    """Return J1(x) using a Cephes-style approximation (GX-compatible)."""
 
     x = jnp.asarray(x)
     ax = jnp.abs(x)

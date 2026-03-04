@@ -155,7 +155,7 @@ class CycloneBaseCase:
         gaussian_envelope_constant=1.0,
         gaussian_envelope_sine=0.0,
     )
-    gx_parity: bool = True
+    gx_reference: bool = True
 
     def to_dict(self) -> Dict[str, Dict[str, Any]]:
         return {
@@ -164,7 +164,7 @@ class CycloneBaseCase:
             "geometry": self.geometry.to_dict(),
             "model": self.model.to_dict(),
             "init": self.init.to_dict(),
-            "gx_parity": {"enabled": self.gx_parity},
+            "gx_reference": {"enabled": self.gx_reference},
         }
 
 

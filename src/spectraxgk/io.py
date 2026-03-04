@@ -81,14 +81,14 @@ def load_case_from_toml(path: str | Path, case_name: str | None = None):
     if case_name not in registry:
         raise ValueError(f"Unknown case '{case_name}'. Available: {', '.join(registry)}")
     cfg = registry[case_name]()
-    gx_parity = None
-    gx_parity_raw = data.get("gx_parity")
-    if isinstance(gx_parity_raw, dict):
-        enabled = gx_parity_raw.get("enabled")
+    gx_reference = None
+    gx_reference_raw = data.get("gx_reference")
+    if isinstance(gx_reference_raw, dict):
+        enabled = gx_reference_raw.get("enabled")
         if enabled is not None:
-            gx_parity = bool(enabled)
-    elif gx_parity_raw is not None:
-        gx_parity = bool(gx_parity_raw)
+            gx_reference = bool(enabled)
+    elif gx_reference_raw is not None:
+        gx_reference = bool(gx_reference_raw)
 
     overrides = {
         "grid": data.get("grid"),
@@ -97,8 +97,8 @@ def load_case_from_toml(path: str | Path, case_name: str | None = None):
         "model": data.get("model"),
         "init": data.get("init"),
     }
-    if gx_parity is not None and hasattr(cfg, "gx_parity"):
-        overrides["gx_parity"] = gx_parity
+    if gx_reference is not None and hasattr(cfg, "gx_reference"):
+        overrides["gx_reference"] = gx_reference
     cfg = _merge_dataclass(cfg, overrides)
     return case_name, cfg, data
 

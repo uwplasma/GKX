@@ -581,7 +581,7 @@ def nonlinear_em_components(
     gx_real_fft: bool = True,
     laguerre_mode: str = "grid",
 ) -> dict[str, jnp.ndarray]:
-    """Return nonlinear E×B/flutter components for diagnostics/parity checks."""
+    """Return nonlinear E×B/flutter components for diagnostics/comparison checks."""
 
     squeeze_species = False
     if G.ndim == 5:

@@ -6,15 +6,14 @@ Hermite-Laguerre velocity-space representation with Fourier perpendicular
 coordinates in a field-aligned flux-tube geometry. The initial validation target
 is the **Cyclone base case** with adiabatic electrons, plus ETG and KBM scans.
 
-![GX parity summary (Cyclone/KBM linear+nonlinear)](docs/_static/gx_cyclone_kbm_panel.png)
+![GX comparison summary (Cyclone/KBM linear+nonlinear)](docs/_static/gx_cyclone_kbm_panel.png)
 
-Top panel: Cyclone and KBM parity against GX, including linear eigenfunctions,
+Top panel: Cyclone and KBM comparison against GX, including linear eigenfunctions,
 linear growth/frequency scans, and nonlinear time traces for growth rate,
 frequency, and heat flux. The panel now uses GX-matched runtime configs
 (same integrator family and normalization contract; no manual `flux_scale` or
-`wphi_scale` calibration in the Cyclone config). KBM nonlinear traces are drawn
-from the longer dense-cadence run (`t_max=0.50`) and clipped to the
-branch-consistent window (`t<=0.35`) for fair parity visualization.
+`wphi_scale` calibration in the Cyclone config), with long nonlinear windows
+(`t=100` Cyclone, `t=5` KBM).
 
 The current KBM GX mismatch table is stored in
 `docs/_static/kbm_gx_mismatch.csv`.
@@ -137,7 +136,7 @@ python examples/kbm_beta_scan.py --no-diffrax
 - **ETG linear trend**: growth rates remain positive across reduced electron-scale
   gradients; real frequencies follow the electron diamagnetic direction.
 - **KBM beta scan**: electromagnetic transition between ITG and KBM branches,
-  with GX as the parity baseline for linear and nonlinear diagnostics.
+  with GX as the baseline reference for linear and nonlinear diagnostics.
 
 ## Figures
 
@@ -201,7 +200,7 @@ Cross-code mismatch (same ETG setup above):
 - GS2 vs SPECTRAX: mean `|rel_gamma| = 8.243%`, mean `|rel_omega| = 29.894%`
 - stella vs SPECTRAX: mean `|rel_gamma| = 24.792%`, mean `|rel_omega| = 6.735%`
 
-### KBM ky scan (GX parity closure)
+### KBM ky scan (GX reference closure)
 
 | Parameter | Value |
 | --- | --- |
@@ -217,9 +216,9 @@ Cross-code mismatch (same ETG setup above):
 | Fit policy (cross-code) | mode extracted at the selected ky/kx with midplane-aware signal extraction, log-linear auto-windowing |
 | Reference | GX matched-input electromagnetic ky scan |
 
-KBM GX parity set (matched-input run plumbing):
+KBM GX matched-input set (reference plumbing):
 
-![Cyclone/KBM GX parity panel](docs/_static/gx_cyclone_kbm_panel.png)
+![Cyclone/KBM GX comparison panel](docs/_static/gx_cyclone_kbm_panel.png)
 
 ## Cross-code performance (staging)
 

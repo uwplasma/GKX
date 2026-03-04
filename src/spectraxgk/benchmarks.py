@@ -220,13 +220,13 @@ def _midplane_index(grid: SpectralGrid) -> int:
     return min(idx, int(grid.z.size) - 1)
 
 
-def select_kbm_solver_auto(solver: str, *, ky_target: float, gx_parity: bool) -> str:
+def select_kbm_solver_auto(solver: str, *, ky_target: float, gx_reference: bool) -> str:
     """Return deterministic KBM solver choice for auto mode."""
 
     solver_key = solver.strip().lower()
     if solver_key != "auto":
         return solver_key
-    if not gx_parity:
+    if not gx_reference:
         return "time"
     ky_abs = abs(float(ky_target))
     for ky_ref, solver_ref in KBM_GX_SOLVER_LOCK:
@@ -940,16 +940,16 @@ def run_cyclone_linear(
     init_cfg: InitializationConfig | None = None,
     diagnostic_norm: str = "none",
     use_jit: bool = True,
-    gx_parity: bool | None = None,
+    gx_reference: bool | None = None,
 ) -> CycloneRunResult:
     """Run the linear Cyclone benchmark and extract growth rate."""
 
     cfg = cfg or CycloneBaseCase()
     init_cfg = init_cfg or getattr(cfg, "init", None) or InitializationConfig()
     grid_full = build_spectral_grid(cfg.grid)
-    gx_parity_use = bool(cfg.gx_parity) if gx_parity is None else bool(gx_parity)
+    gx_reference_use = bool(cfg.gx_reference) if gx_reference is None else bool(gx_reference)
     geom_cfg = cfg.geometry
-    if gx_parity_use:
+    if gx_reference_use:
         geom_cfg = replace(geom_cfg, drift_scale=1.0)
         if diagnostic_norm == "none":
             diagnostic_norm = "gx"
@@ -1166,7 +1166,7 @@ def run_cyclone_linear(
             if sample_stride is not None:
                 time_cfg_use = replace(time_cfg_use, sample_stride=sample_stride)
 
-        if gx_parity_use:
+        if gx_reference_use:
             # GX integrator applies damping with per-time scaling internally.
             params_use = params
             t_max_val = float(dt) * int(steps) if time_cfg_use is None else float(time_cfg_use.t_max)
@@ -1387,7 +1387,7 @@ def run_cyclone_scan(
     streaming_fit: bool = True,
     streaming_amp_floor: float = 1.0e-30,
     mode_follow: bool = True,
-    gx_parity: bool | None = None,
+    gx_reference: bool | None = None,
 ) -> CycloneScanResult:
     """Run the linear Cyclone benchmark for a list of ky values.
 
@@ -1397,9 +1397,9 @@ def run_cyclone_scan(
     cfg = cfg or CycloneBaseCase()
     init_cfg = getattr(cfg, "init", None) or InitializationConfig()
     grid_full = build_spectral_grid(cfg.grid)
-    gx_parity_use = bool(cfg.gx_parity) if gx_parity is None else bool(gx_parity)
+    gx_reference_use = bool(cfg.gx_reference) if gx_reference is None else bool(gx_reference)
     geom_cfg = cfg.geometry
-    if gx_parity_use:
+    if gx_reference_use:
         geom_cfg = replace(geom_cfg, drift_scale=1.0)
         if diagnostic_norm == "none":
             diagnostic_norm = "gx"
@@ -1431,7 +1431,7 @@ def run_cyclone_scan(
         raise ValueError("fit_signal must be 'phi', 'density', or 'auto'")
     auto_solver = solver_key == "auto"
     if auto_solver:
-        solver_key = "gx_time" if gx_parity_use else "time"
+        solver_key = "gx_time" if gx_reference_use else "time"
     if fit_key == "auto":
         streaming_fit = False
         mode_only = False
@@ -1717,7 +1717,7 @@ def run_cyclone_scan(
             dt_i = float(dt[idx]) if isinstance(dt, np.ndarray) else float(dt)
             steps_i = int(steps[idx]) if isinstance(steps, np.ndarray) else int(steps)
             t_max_val = dt_i * float(steps_i)
-            if gx_parity_use and time_cfg is None:
+            if gx_reference_use and time_cfg is None:
                 fixed_dt_i = True
                 dt_min_i = dt_i
                 dt_max_i: float | None = dt_i
@@ -1755,10 +1755,10 @@ def run_cyclone_scan(
                 phi_gx, t, sel_local, navg_fraction=0.5, mode_method="z_index"
             )
             gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
-            if gx_parity_use and prev_omega is None and omega < 0.0:
+            if gx_reference_use and prev_omega is None and omega < 0.0:
                 omega = abs(omega)
             need_reselect = (
-                gx_parity_use
+                gx_reference_use
                 and prev_omega is not None
                 and prev_omega > 0.0
                 and (
@@ -4206,7 +4206,7 @@ def run_kbm_beta_scan(
     apar_beta_scale: float | None = None,
     ampere_g0_scale: float | None = None,
     bpar_beta_scale: float | None = None,
-    gx_parity: bool | None = True,
+    gx_reference: bool | None = True,
 ) -> LinearScanResult:
     """Run a KBM beta scan at fixed ky.
 
@@ -4218,7 +4218,7 @@ def run_kbm_beta_scan(
     geom = SAlphaGeometry.from_config(cfg.geometry)
     if terms is None:
         terms = LinearTerms(bpar=0.0)
-    if gx_parity and diagnostic_norm == "none":
+    if gx_reference and diagnostic_norm == "none":
         diagnostic_norm = "gx"
 
     solver_key = solver.strip().lower()
@@ -4303,7 +4303,7 @@ def run_kbm_beta_scan(
         G0[int(init_species_index)] = np.asarray(G0_single, dtype=np.complex64)
 
         G0_jax = jnp.asarray(G0)
-        solver_use = select_kbm_solver_auto(solver_key, ky_target=ky_target, gx_parity=bool(gx_parity))
+        solver_use = select_kbm_solver_auto(solver_key, ky_target=ky_target, gx_reference=bool(gx_reference))
 
         if solver_use == "gx_time":
             gx_time_cfg = GXTimeConfig(
@@ -4746,12 +4746,12 @@ def run_kbm_scan(
     apar_beta_scale: float | None = None,
     ampere_g0_scale: float | None = None,
     bpar_beta_scale: float | None = None,
-    gx_parity: bool | None = True,
+    gx_reference: bool | None = True,
 ) -> LinearScanResult:
     """Run a KBM ky scan at fixed beta.
 
     This is a thin wrapper over :func:`run_kbm_beta_scan` used for
-    GX parity workflows where the GX benchmark is a ky scan at fixed beta.
+    GX-reference workflows where the GX benchmark is a ky scan at fixed beta.
     """
 
     cfg_in = cfg or KBMBaseCase()
@@ -4821,7 +4821,7 @@ def run_kbm_scan(
             apar_beta_scale=apar_beta_scale,
             ampere_g0_scale=ampere_g0_scale,
             bpar_beta_scale=bpar_beta_scale,
-            gx_parity=gx_parity,
+            gx_reference=gx_reference,
         )
         ky_out.append(float(ky_val))
         gamma_out.append(float(out.gamma[0]))
