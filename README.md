@@ -10,9 +10,11 @@ is the **Cyclone base case** with adiabatic electrons, plus ETG and KBM scans.
 
 Top panel: Cyclone and KBM parity against GX, including linear eigenfunctions,
 linear growth/frequency scans, and nonlinear time traces for growth rate,
-frequency, and heat flux. The KBM nonlinear trace uses the dense-cadence short
-GX/SPECTRAX pair (`t_max=0.20`) that is currently the branch-stable parity
-window.
+frequency, and heat flux. The panel now uses GX-matched runtime configs
+(same integrator family and normalization contract; no manual `flux_scale` or
+`wphi_scale` calibration in the Cyclone config). KBM nonlinear traces are drawn
+from the longer dense-cadence run (`t_max=0.50`) and clipped to the
+branch-consistent window (`t<=0.35`) for fair parity visualization.
 
 The current KBM GX mismatch table is stored in
 `docs/_static/kbm_gx_mismatch.csv`.
