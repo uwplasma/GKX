@@ -287,9 +287,10 @@ def _build_initial_condition(
     if ky_val == 0.0:
         return jnp.asarray(g0)
 
+    z = np.asarray(grid.z)
     if cfg.init.gaussian_init:
         profile = _build_gaussian_profile(
-            np.asarray(grid.z),
+            z,
             kx=float(grid.kx[kx_index]),
             ky=ky_val,
             s_hat=float(geom.s_hat),
@@ -299,12 +300,59 @@ def _build_initial_condition(
         )
         vals = amp * profile * (1.0 + 1.0j)
     else:
-        vals = amp * (1.0 + 1.0j) * np.ones_like(np.asarray(grid.z))
+        vals = amp * (1.0 + 1.0j) * np.ones_like(z)
 
     species_index = 0 if nspecies == 1 else nspecies - 1
-    if not cfg.init.init_single and not cfg.init.gaussian_init:
+    if cfg.init.gaussian_init and not cfg.init.init_single:
+        ny = grid.ky.size
+        nx = grid.kx.size
+        dealias = np.asarray(grid.dealias_mask)
+        ky_indices = np.where(np.asarray(grid.ky) > 0.0)[0]
+        kx_pos = np.where(np.asarray(grid.kx) >= 0.0)[0]
+
+        def _set_mode(l_idx: int, m_idx: int, ky_i: int, kx_i: int, vals_k: np.ndarray) -> None:
+            if l_idx >= Nl or m_idx >= Nm:
+                return
+            g0[species_index, l_idx, m_idx, ky_i, kx_i, :] = vals_k
+
+        for ky_i in ky_indices:
+            ky_k = float(grid.ky[ky_i])
+            if ky_k == 0.0:
+                continue
+            for kx_i in kx_pos:
+                if not dealias[ky_i, kx_i]:
+                    continue
+                kx_k = float(grid.kx[kx_i])
+                profile_k = _build_gaussian_profile(
+                    z,
+                    kx=abs(kx_k),
+                    ky=ky_k,
+                    s_hat=float(geom.s_hat),
+                    width=float(cfg.init.gaussian_width),
+                    envelope_constant=float(cfg.init.gaussian_envelope_constant),
+                    envelope_sine=float(cfg.init.gaussian_envelope_sine),
+                )
+                vals_k = amp * profile_k * (1.0 + 1.0j)
+                if init_field == "all":
+                    for l_idx, m_idx in field_map.values():
+                        _set_mode(l_idx, m_idx, ky_i, kx_i, vals_k)
+                else:
+                    l_idx, m_idx = field_map[init_field]
+                    _set_mode(l_idx, m_idx, ky_i, kx_i, vals_k)
+
+                if kx_i == 0:
+                    continue
+                kx_neg = int(np.argmin(np.abs(np.asarray(grid.kx) + kx_k)))
+                if kx_neg == kx_i:
+                    continue
+                if init_field == "all":
+                    for l_idx, m_idx in field_map.values():
+                        _set_mode(l_idx, m_idx, ky_i, kx_neg, vals_k)
+                else:
+                    l_idx, m_idx = field_map[init_field]
+                    _set_mode(l_idx, m_idx, ky_i, kx_neg, vals_k)
+    elif not cfg.init.init_single and not cfg.init.gaussian_init:
         rng = np.random.default_rng(int(cfg.init.random_seed))
-        z = np.asarray(grid.z)
         z_min = float(z.min())
         z_max = float(z.max())
         Zp = (z_max - z_min) / (2.0 * np.pi) if z_max > z_min else 1.0
@@ -898,7 +946,7 @@ def run_runtime_nonlinear(
             terms=term_cfg,
             sample_stride=int(sample_stride_use),
             diagnostics_stride=int(diag_stride),
-            use_dealias_mask=True,
+            use_dealias_mask=bool(cfg.time.nonlinear_dealias),
             laguerre_mode=laguerre_mode_use,
             omega_ky_index=int(ky_index),
             omega_kx_index=int(kx_index),

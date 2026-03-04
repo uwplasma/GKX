@@ -77,6 +77,7 @@ class TimeConfig:
     collision_split: bool = False
     collision_scheme: str = "implicit"
     gx_real_fft: bool = True
+    nonlinear_dealias: bool = True
     laguerre_nonlinear_mode: str = "grid"
 
     def to_dict(self) -> Dict[str, Any]:
