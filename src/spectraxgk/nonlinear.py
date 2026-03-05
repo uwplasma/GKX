@@ -32,9 +32,9 @@ from spectraxgk.diagnostics import (
     gx_particle_flux,
     gx_particle_flux_species,
     gx_volume_factors,
-    gx_Wapar_krehm,
+    gx_Wapar,
     gx_Wg,
-    gx_Wphi_krehm,
+    gx_Wphi,
 )
 from spectraxgk.gx_integrators import _gx_laguerre_vmax
 
@@ -346,7 +346,7 @@ def integrate_nonlinear_gx_diagnostics(
     laguerre_mode: str = "grid",
     omega_ky_index: int | None = None,
     omega_kx_index: int | None = None,
-    flux_scale: float = 2.0,
+    flux_scale: float = 1.0,
     wphi_scale: float = 1.0,
     fixed_dt: bool = True,
     dt_min: float = 1.0e-7,
@@ -413,9 +413,6 @@ def integrate_nonlinear_gx_diagnostics(
     mask = _gx_omega_mode_mask(grid, cache, gx_real_fft=gx_real_fft)
     z_idx = _gx_midplane_index(grid.z.size) if z_index is None else int(z_index)
     use_dealias = bool(use_dealias_mask)
-    rho_star = float(getattr(params, "rho_star", 1.0))
-    kx_phys = cache.kx / rho_star
-    ky_phys = cache.ky / rho_star
     use_hermitian = bool(gx_real_fft) and bool(np.any(np.asarray(grid.ky) < 0.0))
     ny_full = int(grid.ky.size)
     nyc = ny_full // 2 + 1
@@ -523,18 +520,15 @@ def integrate_nonlinear_gx_diagnostics(
                 nan=jnp.asarray(0.0, dtype=real_dtype),
             )
         Wg_val = gx_Wg(G_state, grid, params, vol_fac, use_dealias=use_dealias)
-        Wphi_val = gx_Wphi_krehm(
+        Wphi_val = gx_Wphi(
             phi,
-            grid,
+            cache,
             params,
             vol_fac,
-            kx=kx_phys,
-            ky=ky_phys,
             use_dealias=use_dealias,
-            gx_real_fft=gx_real_fft,
             wphi_scale=wphi_scale,
         )
-        Wapar_val = gx_Wapar_krehm(apar, grid, kx=kx_phys, ky=ky_phys, use_dealias=use_dealias)
+        Wapar_val = gx_Wapar(apar, cache, vol_fac, use_dealias=use_dealias)
         heat_species = gx_heat_flux_species(
             G_state,
             phi,
@@ -721,7 +715,7 @@ def integrate_nonlinear_imex_gx_diagnostics(
     laguerre_mode: str = "grid",
     omega_ky_index: int | None = None,
     omega_kx_index: int | None = None,
-    flux_scale: float = 2.0,
+    flux_scale: float = 1.0,
     wphi_scale: float = 1.0,
     collision_split: bool = False,
     collision_scheme: str = "implicit",
@@ -753,9 +747,6 @@ def integrate_nonlinear_imex_gx_diagnostics(
     mask = _gx_omega_mode_mask(grid, cache, gx_real_fft=gx_real_fft)
     z_idx = _gx_midplane_index(grid.z.size) if z_index is None else int(z_index)
     use_dealias = bool(use_dealias_mask)
-    rho_star = float(getattr(params, "rho_star", 1.0))
-    kx_phys = cache.kx / rho_star
-    ky_phys = cache.ky / rho_star
     use_hermitian = bool(gx_real_fft) and bool(np.any(np.asarray(grid.ky) < 0.0))
     ny_full = int(grid.ky.size)
     nyc = ny_full // 2 + 1
@@ -882,18 +873,15 @@ def integrate_nonlinear_imex_gx_diagnostics(
                 nan=jnp.asarray(0.0, dtype=real_dtype),
             )
         Wg_val = gx_Wg(G_state, grid, params, vol_fac, use_dealias=use_dealias)
-        Wphi_val = gx_Wphi_krehm(
+        Wphi_val = gx_Wphi(
             phi,
-            grid,
+            cache,
             params,
             vol_fac,
-            kx=kx_phys,
-            ky=ky_phys,
             use_dealias=use_dealias,
-            gx_real_fft=gx_real_fft,
             wphi_scale=wphi_scale,
         )
-        Wapar_val = gx_Wapar_krehm(apar, grid, kx=kx_phys, ky=ky_phys, use_dealias=use_dealias)
+        Wapar_val = gx_Wapar(apar, cache, vol_fac, use_dealias=use_dealias)
         heat_species = gx_heat_flux_species(
             G_state,
             phi,

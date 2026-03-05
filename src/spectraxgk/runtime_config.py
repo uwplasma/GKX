@@ -59,7 +59,7 @@ class RuntimeCollisionConfig:
     nu_hyper_m: float = 1.0
     nu_hyper_lm: float = 0.0
     p_hyper_l: float = 6.0
-    p_hyper_m: float = 20.0
+    p_hyper_m: float | None = None
     p_hyper_lm: float = 6.0
     D_hyper: float = 0.0
     p_hyper_kperp: float = 2.0
@@ -83,7 +83,7 @@ class RuntimeNormalizationConfig:
     omega_d_scale: float | None = None
     omega_star_scale: float | None = None
     diagnostic_norm: str = "gx"
-    flux_scale: float = 2.0
+    flux_scale: float = 1.0
     wphi_scale: float = 1.0
 
     def to_dict(self) -> Dict[str, Any]:

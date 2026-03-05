@@ -78,6 +78,20 @@ def _gx_fac_mask_nonzero(grid: SpectralGrid, *, use_dealias: bool) -> jnp.ndarra
     return fac * mask
 
 
+def _gx_fac_mask_cached(cache: LinearCache, *, use_dealias: bool) -> jnp.ndarray:
+    """Return GX-style fac*mask from a linear cache."""
+
+    ky = cache.ky
+    has_negative = jnp.any(ky < 0.0)
+    fac = jnp.where(has_negative, 1.0, jnp.where(ky == 0.0, 1.0, 2.0))
+    fac = fac[:, None] * jnp.ones((1, cache.kx.size), dtype=fac.dtype)
+    if use_dealias:
+        mask = cache.dealias_mask.astype(fac.dtype)
+    else:
+        mask = jnp.ones_like(fac)
+    return fac * mask
+
+
 def _species_array(val: float | jnp.ndarray, ns: int) -> jnp.ndarray:
     arr = jnp.asarray(val)
     if arr.ndim == 0:
@@ -161,6 +175,33 @@ def gx_Wphi_krehm(
     return wphi * jnp.asarray(wphi_scale, dtype=jnp.real(phi).dtype)
 
 
+def gx_Wphi(
+    phi: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    vol_fac: jnp.ndarray,
+    *,
+    use_dealias: bool = True,
+    wphi_scale: float = 1.0,
+) -> jnp.ndarray:
+    """Standard GX electrostatic free energy diagnostic."""
+
+    fac = _gx_fac_mask_cached(cache, use_dealias=use_dealias)
+    weight = fac[:, :, None] * vol_fac[None, None, :]
+    rho = jnp.asarray(params.rho)
+    if rho.ndim == 0:
+        rho = rho[None]
+    rho2 = rho * rho
+
+    wphi = jnp.asarray(0.0, dtype=jnp.real(phi).dtype)
+    phi2 = jnp.abs(phi) ** 2
+    for rho2_s in rho2:
+        b = cache.kperp2 * rho2_s
+        contrib = 0.5 * phi2 * (1.0 - gamma0(b)) * weight
+        wphi = wphi + jnp.sum(contrib)
+    return wphi * jnp.asarray(wphi_scale, dtype=jnp.real(phi).dtype)
+
+
 def gx_Wapar_krehm(
     apar: jnp.ndarray,
     grid: SpectralGrid,
@@ -179,6 +220,22 @@ def gx_Wapar_krehm(
     fac = _gx_fac_mask(grid, use_dealias=use_dealias)
     weight = fac[:, :, None]
     contrib = 0.5 * kperp2[:, :, None] * jnp.abs(apar) ** 2 * weight
+    return jnp.sum(contrib)
+
+
+def gx_Wapar(
+    apar: jnp.ndarray,
+    cache: LinearCache,
+    vol_fac: jnp.ndarray,
+    *,
+    use_dealias: bool = True,
+) -> jnp.ndarray:
+    """Standard GX magnetic free energy diagnostic."""
+
+    fac = _gx_fac_mask_cached(cache, use_dealias=use_dealias)
+    weight = fac[:, :, None] * vol_fac[None, None, :]
+    bmag2 = cache.bmag[None, None, :] ** 2 if cache.kperp2_bmag else 1.0
+    contrib = 0.5 * jnp.abs(apar) ** 2 * cache.kperp2 * bmag2 * weight
     return jnp.sum(contrib)
 
 
@@ -217,7 +274,7 @@ def gx_heat_flux_species(
     flux_fac: jnp.ndarray,
     *,
     use_dealias: bool = True,
-    flux_scale: float = 2.0,
+    flux_scale: float = 1.0,
 ) -> jnp.ndarray:
     """GX heat flux diagnostic per species (gyroBohm units)."""
 
@@ -290,7 +347,7 @@ def gx_heat_flux(
     flux_fac: jnp.ndarray,
     *,
     use_dealias: bool = True,
-    flux_scale: float = 2.0,
+    flux_scale: float = 1.0,
 ) -> jnp.ndarray:
     """GX total heat flux diagnostic."""
 
@@ -321,7 +378,7 @@ def gx_particle_flux_species(
     flux_fac: jnp.ndarray,
     *,
     use_dealias: bool = True,
-    flux_scale: float = 2.0,
+    flux_scale: float = 1.0,
 ) -> jnp.ndarray:
     """GX particle flux diagnostic per species."""
 
@@ -382,7 +439,7 @@ def gx_particle_flux(
     flux_fac: jnp.ndarray,
     *,
     use_dealias: bool = True,
-    flux_scale: float = 2.0,
+    flux_scale: float = 1.0,
 ) -> jnp.ndarray:
     """GX total particle flux diagnostic."""
 

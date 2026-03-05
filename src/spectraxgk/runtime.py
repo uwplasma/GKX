@@ -121,7 +121,15 @@ def _species_to_linear(species_cfg: Sequence[RuntimeSpeciesConfig]) -> list[Spec
     ]
 
 
-def build_runtime_linear_params(cfg: RuntimeConfig) -> LinearParams:
+def _gx_default_p_hyper_m(nhermite: int | None) -> float:
+    """Return the GX default Hermite hypercollision exponent."""
+
+    if nhermite is None:
+        return 20.0
+    return float(min(20, max(int(nhermite) // 2, 1)))
+
+
+def build_runtime_linear_params(cfg: RuntimeConfig, *, Nm: int | None = None) -> LinearParams:
     """Build ``LinearParams`` from a unified runtime config."""
 
     geom = SAlphaGeometry.from_config(cfg.geometry)
@@ -144,6 +152,9 @@ def build_runtime_linear_params(cfg: RuntimeConfig) -> LinearParams:
     tau_e = float(cfg.physics.tau_e) if cfg.physics.adiabatic_electrons else 0.0
     beta = float(cfg.physics.beta) if cfg.physics.electromagnetic else 0.0
     fapar = 1.0 if (cfg.physics.electromagnetic and cfg.physics.use_apar and beta > 0.0) else 0.0
+    p_hyper_m = cfg.collisions.p_hyper_m
+    if p_hyper_m is None:
+        p_hyper_m = _gx_default_p_hyper_m(Nm)
 
     params = build_linear_params(
         species,
@@ -160,7 +171,7 @@ def build_runtime_linear_params(cfg: RuntimeConfig) -> LinearParams:
         nu_hyper_m=float(cfg.collisions.nu_hyper_m),
         nu_hyper_lm=float(cfg.collisions.nu_hyper_lm),
         p_hyper_l=float(cfg.collisions.p_hyper_l),
-        p_hyper_m=float(cfg.collisions.p_hyper_m),
+        p_hyper_m=float(p_hyper_m),
         p_hyper_lm=float(cfg.collisions.p_hyper_lm),
         D_hyper=float(cfg.collisions.D_hyper),
         p_hyper_kperp=float(cfg.collisions.p_hyper_kperp),
@@ -500,7 +511,7 @@ def run_runtime_linear(
         jtwist, x0 = gx_twist_shift_params(geom, grid_cfg)
         grid_cfg = replace(grid_cfg, Lx=2.0 * np.pi * x0, jtwist=jtwist)
     grid_full = build_spectral_grid(grid_cfg)
-    params = build_runtime_linear_params(cfg)
+    params = build_runtime_linear_params(cfg, Nm=Nm)
     terms = build_runtime_linear_terms(cfg)
 
     ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
@@ -835,7 +846,7 @@ def _run_runtime_scan_batch(
         jtwist, x0 = gx_twist_shift_params(geom, grid_cfg)
         grid_cfg = replace(grid_cfg, Lx=2.0 * np.pi * x0, jtwist=jtwist)
     grid = build_spectral_grid(grid_cfg)
-    params = build_runtime_linear_params(cfg)
+    params = build_runtime_linear_params(cfg, Nm=Nm)
     terms = build_runtime_linear_terms(cfg)
 
     ky_indices = np.asarray([select_ky_index(np.asarray(grid.ky), ky) for ky in ky_arr], dtype=int)
@@ -975,7 +986,7 @@ def run_runtime_nonlinear(
         jtwist, x0 = gx_twist_shift_params(geom, grid_cfg)
         grid_cfg = replace(grid_cfg, Lx=2.0 * np.pi * x0, jtwist=jtwist)
     grid = build_spectral_grid(grid_cfg)
-    params = build_runtime_linear_params(cfg)
+    params = build_runtime_linear_params(cfg, Nm=Nm)
     term_cfg = build_runtime_term_config(cfg)
 
     ky_index, kx_index = _select_nonlinear_mode_indices(
