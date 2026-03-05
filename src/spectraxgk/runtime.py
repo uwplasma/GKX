@@ -332,18 +332,35 @@ def _build_initial_condition(
     else:
         vals = amp * (1.0 + 1.0j) * np.ones_like(z)
 
-    species_index = 0 if nspecies == 1 else nspecies - 1
+    species_targets: tuple[int, ...]
+    if nspecies == 1:
+        species_targets = (0,)
+    elif cfg.init.init_electrons_only:
+        electron_indices = tuple(
+            i for i, sp in enumerate(cfg.species[:nspecies]) if float(sp.charge) < 0.0
+        )
+        species_targets = electron_indices or (nspecies - 1,)
+    else:
+        species_targets = tuple(range(nspecies))
+
+    def _set_mode(
+        l_idx: int,
+        m_idx: int,
+        ky_i: int,
+        kx_i: int,
+        vals_k: np.ndarray,
+    ) -> None:
+        if l_idx >= Nl or m_idx >= Nm:
+            return
+        for s_idx in species_targets:
+            g0[s_idx, l_idx, m_idx, ky_i, kx_i, :] = vals_k
+
     if cfg.init.gaussian_init and not cfg.init.init_single:
         ny = grid.ky.size
         nx = grid.kx.size
         dealias = np.asarray(grid.dealias_mask)
         ky_indices = np.where(np.asarray(grid.ky) > 0.0)[0]
         kx_pos = np.where(np.asarray(grid.kx) >= 0.0)[0]
-
-        def _set_mode(l_idx: int, m_idx: int, ky_i: int, kx_i: int, vals_k: np.ndarray) -> None:
-            if l_idx >= Nl or m_idx >= Nm:
-                return
-            g0[species_index, l_idx, m_idx, ky_i, kx_i, :] = vals_k
 
         for ky_i in ky_indices:
             ky_k = float(grid.ky[ky_i])
@@ -405,21 +422,25 @@ def _build_initial_condition(
                 ra = amp * (rng.random() - 0.5)
                 rb = amp * (rng.random() - 0.5)
                 vals_k = (ra + 1j * rb) * z_phase
-                g0[species_index, l_idx, m_idx, ky_i, kx_i, :] = vals_k
+                for s_idx in species_targets:
+                    g0[s_idx, l_idx, m_idx, ky_i, kx_i, :] = vals_k
                 if kx_i != 0:
                     kx_neg = nx - kx_i
                     vals_neg = (rb + 1j * ra) * z_phase
-                    g0[species_index, l_idx, m_idx, ky_i, kx_neg, :] = vals_neg
+                    for s_idx in species_targets:
+                        g0[s_idx, l_idx, m_idx, ky_i, kx_neg, :] = vals_neg
     else:
         if init_field == "all":
             for l_idx, m_idx in field_map.values():
                 if l_idx < Nl and m_idx < Nm:
-                    g0[species_index, l_idx, m_idx, ky_index, kx_index, :] = vals
+                    for s_idx in species_targets:
+                        g0[s_idx, l_idx, m_idx, ky_index, kx_index, :] = vals
         else:
             l_idx, m_idx = field_map[init_field]
             if l_idx >= Nl or m_idx >= Nm:
                 raise ValueError("init_field moment exceeds (Nl, Nm) resolution")
-            g0[species_index, l_idx, m_idx, ky_index, kx_index, :] = vals
+            for s_idx in species_targets:
+                g0[s_idx, l_idx, m_idx, ky_index, kx_index, :] = vals
     return jnp.asarray(g0)
 
 
