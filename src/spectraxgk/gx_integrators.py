@@ -281,10 +281,9 @@ def _gx_growth_rate_step(
 
     phi_now_z = phi_now[..., z_index]
     phi_prev_z = phi_prev[..., z_index]
-    # Match GX kernel logic exactly: require non-zero real and imaginary parts.
-    valid_now = (jnp.abs(jnp.real(phi_now_z)) > 0.0) & (jnp.abs(jnp.imag(phi_now_z)) > 0.0)
-    valid_prev = (jnp.abs(jnp.real(phi_prev_z)) > 0.0) & (jnp.abs(jnp.imag(phi_prev_z)) > 0.0)
-    valid = valid_now & valid_prev
+    # Match GX growthRates kernel logic: require non-zero real and imaginary
+    # parts of phi at the current step only.
+    valid = (jnp.abs(jnp.real(phi_now_z)) > 0.0) & (jnp.abs(jnp.imag(phi_now_z)) > 0.0)
     ratio = jnp.where(phi_prev_z != 0.0, phi_now_z / phi_prev_z, 0.0 + 0.0j)
     log_amp = jnp.log(jnp.abs(ratio))
     phase = jnp.angle(ratio)
