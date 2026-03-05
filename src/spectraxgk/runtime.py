@@ -283,6 +283,14 @@ def _build_initial_condition(
         "qpar": (0, 3),
         "qperp": (1, 1),
     }
+    all_scales = {
+        "density": 1.0,
+        "upar": 1.0,
+        "tpar": 1.0 / np.sqrt(2.0),
+        "tperp": 1.0,
+        "qpar": 1.0 / np.sqrt(6.0),
+        "qperp": 1.0,
+    }
     init_field = cfg.init.init_field.lower()
     if init_field != "all" and init_field not in field_map:
         raise ValueError(
@@ -355,6 +363,15 @@ def _build_initial_condition(
         for s_idx in species_targets:
             g0[s_idx, l_idx, m_idx, ky_i, kx_i, :] = vals_k
 
+    def _set_named_mode(
+        field_name: str,
+        ky_i: int,
+        kx_i: int,
+        vals_k: np.ndarray,
+    ) -> None:
+        l_idx, m_idx = field_map[field_name]
+        _set_mode(l_idx, m_idx, ky_i, kx_i, vals_k * all_scales[field_name])
+
     if cfg.init.gaussian_init and not cfg.init.init_single:
         ny = grid.ky.size
         nx = grid.kx.size
@@ -381,8 +398,8 @@ def _build_initial_condition(
                 )
                 vals_k = amp * profile_k * (1.0 + 1.0j)
                 if init_field == "all":
-                    for l_idx, m_idx in field_map.values():
-                        _set_mode(l_idx, m_idx, ky_i, kx_i, vals_k)
+                    for field_name in field_map:
+                        _set_named_mode(field_name, ky_i, kx_i, vals_k)
                 else:
                     l_idx, m_idx = field_map[init_field]
                     _set_mode(l_idx, m_idx, ky_i, kx_i, vals_k)
@@ -393,8 +410,8 @@ def _build_initial_condition(
                 if kx_neg == kx_i:
                     continue
                 if init_field == "all":
-                    for l_idx, m_idx in field_map.values():
-                        _set_mode(l_idx, m_idx, ky_i, kx_neg, vals_k)
+                    for field_name in field_map:
+                        _set_named_mode(field_name, ky_i, kx_neg, vals_k)
                 else:
                     l_idx, m_idx = field_map[init_field]
                     _set_mode(l_idx, m_idx, ky_i, kx_neg, vals_k)
@@ -412,9 +429,10 @@ def _build_initial_condition(
         dealias = np.asarray(grid.dealias_mask)
         ky_indices = np.where(ky_mask)[0]
         kx_indices = np.where(kx_mask)[0]
-        l_idx, m_idx = field_map[init_field]
-        if l_idx >= Nl or m_idx >= Nm:
-            raise ValueError("init_field moment exceeds (Nl, Nm) resolution")
+        if init_field != "all":
+            l_idx, m_idx = field_map[init_field]
+            if l_idx >= Nl or m_idx >= Nm:
+                raise ValueError("init_field moment exceeds (Nl, Nm) resolution")
         for ky_i in ky_indices:
             for kx_i in kx_indices:
                 if not dealias[ky_i, kx_i]:
@@ -422,19 +440,25 @@ def _build_initial_condition(
                 ra = amp * (rng.random() - 0.5)
                 rb = amp * (rng.random() - 0.5)
                 vals_k = (ra + 1j * rb) * z_phase
-                for s_idx in species_targets:
-                    g0[s_idx, l_idx, m_idx, ky_i, kx_i, :] = vals_k
+                if init_field == "all":
+                    for field_name in field_map:
+                        _set_named_mode(field_name, ky_i, kx_i, vals_k)
+                else:
+                    for s_idx in species_targets:
+                        g0[s_idx, l_idx, m_idx, ky_i, kx_i, :] = vals_k
                 if kx_i != 0:
                     kx_neg = nx - kx_i
                     vals_neg = (rb + 1j * ra) * z_phase
-                    for s_idx in species_targets:
-                        g0[s_idx, l_idx, m_idx, ky_i, kx_neg, :] = vals_neg
+                    if init_field == "all":
+                        for field_name in field_map:
+                            _set_named_mode(field_name, ky_i, kx_neg, vals_neg)
+                    else:
+                        for s_idx in species_targets:
+                            g0[s_idx, l_idx, m_idx, ky_i, kx_neg, :] = vals_neg
     else:
         if init_field == "all":
-            for l_idx, m_idx in field_map.values():
-                if l_idx < Nl and m_idx < Nm:
-                    for s_idx in species_targets:
-                        g0[s_idx, l_idx, m_idx, ky_index, kx_index, :] = vals
+            for field_name in field_map:
+                _set_named_mode(field_name, ky_index, kx_index, vals)
         else:
             l_idx, m_idx = field_map[init_field]
             if l_idx >= Nl or m_idx >= Nm:
