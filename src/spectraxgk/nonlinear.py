@@ -28,7 +28,9 @@ from spectraxgk.diagnostics import (
     GXDiagnostics,
     gx_energy_total,
     gx_heat_flux,
+    gx_heat_flux_species,
     gx_particle_flux,
+    gx_particle_flux_species,
     gx_volume_factors,
     gx_Wapar_krehm,
     gx_Wg,
@@ -533,7 +535,7 @@ def integrate_nonlinear_gx_diagnostics(
             wphi_scale=wphi_scale,
         )
         Wapar_val = gx_Wapar_krehm(apar, grid, kx=kx_phys, ky=ky_phys, use_dealias=use_dealias)
-        heat_val = gx_heat_flux(
+        heat_species = gx_heat_flux_species(
             G_state,
             phi,
             apar,
@@ -545,7 +547,7 @@ def integrate_nonlinear_gx_diagnostics(
             use_dealias=use_dealias,
             flux_scale=flux_scale,
         )
-        pflux_val = gx_particle_flux(
+        pflux_species = gx_particle_flux_species(
             G_state,
             phi,
             apar,
@@ -557,7 +559,19 @@ def integrate_nonlinear_gx_diagnostics(
             use_dealias=use_dealias,
             flux_scale=flux_scale,
         )
-        return (gamma, omega, Wg_val, Wphi_val, Wapar_val, heat_val, pflux_val), phi
+        heat_val = jnp.sum(heat_species)
+        pflux_val = jnp.sum(pflux_species)
+        return (
+            gamma,
+            omega,
+            Wg_val,
+            Wphi_val,
+            Wapar_val,
+            heat_val,
+            pflux_val,
+            heat_species,
+            pflux_species,
+        ), phi
 
     def step(carry, idx):
         G, phi_last, diag_prev, t_prev, dt_prev, dt_acc = carry
@@ -651,7 +665,7 @@ def integrate_nonlinear_gx_diagnostics(
     )
 
     diag, t, dt_series = diag_out
-    gamma_t, omega_t, Wg_t, Wphi_t, Wapar_t, heat_t, pflux_t = diag
+    gamma_t, omega_t, Wg_t, Wphi_t, Wapar_t, heat_t, pflux_t, heat_s_t, pflux_s_t = diag
 
     stride = int(max(sample_stride, diagnostics_stride, 1))
     if stride > 1:
@@ -662,6 +676,8 @@ def integrate_nonlinear_gx_diagnostics(
         Wapar_t = Wapar_t[::stride]
         heat_t = heat_t[::stride]
         pflux_t = pflux_t[::stride]
+        heat_s_t = heat_s_t[::stride, ...]
+        pflux_s_t = pflux_s_t[::stride, ...]
         t = t[::stride]
         dt_series = dt_series[::stride]
 
@@ -679,6 +695,8 @@ def integrate_nonlinear_gx_diagnostics(
         heat_flux_t=heat_t,
         particle_flux_t=pflux_t,
         energy_t=energy_t,
+        heat_flux_species_t=heat_s_t,
+        particle_flux_species_t=pflux_s_t,
     )
     return t, diag_out
 
@@ -876,7 +894,7 @@ def integrate_nonlinear_imex_gx_diagnostics(
             wphi_scale=wphi_scale,
         )
         Wapar_val = gx_Wapar_krehm(apar, grid, kx=kx_phys, ky=ky_phys, use_dealias=use_dealias)
-        heat_val = gx_heat_flux(
+        heat_species = gx_heat_flux_species(
             G_state,
             phi,
             apar,
@@ -888,7 +906,7 @@ def integrate_nonlinear_imex_gx_diagnostics(
             use_dealias=use_dealias,
             flux_scale=flux_scale,
         )
-        pflux_val = gx_particle_flux(
+        pflux_species = gx_particle_flux_species(
             G_state,
             phi,
             apar,
@@ -900,7 +918,19 @@ def integrate_nonlinear_imex_gx_diagnostics(
             use_dealias=use_dealias,
             flux_scale=flux_scale,
         )
-        return (gamma, omega, Wg_val, Wphi_val, Wapar_val, heat_val, pflux_val), phi
+        heat_val = jnp.sum(heat_species)
+        pflux_val = jnp.sum(pflux_species)
+        return (
+            gamma,
+            omega,
+            Wg_val,
+            Wphi_val,
+            Wapar_val,
+            heat_val,
+            pflux_val,
+            heat_species,
+            pflux_species,
+        ), phi
 
     phi_prev = compute_fields_cached(G0, cache, params, terms=term_cfg).phi
 
@@ -945,7 +975,7 @@ def integrate_nonlinear_imex_gx_diagnostics(
     )
 
     diag, t = diag_out
-    gamma_t, omega_t, Wg_t, Wphi_t, Wapar_t, heat_t, pflux_t = diag
+    gamma_t, omega_t, Wg_t, Wphi_t, Wapar_t, heat_t, pflux_t, heat_s_t, pflux_s_t = diag
     dt_series = jnp.ones_like(t) * dt_val
 
     stride = int(max(sample_stride, diagnostics_stride, 1))
@@ -957,6 +987,8 @@ def integrate_nonlinear_imex_gx_diagnostics(
         Wapar_t = Wapar_t[::stride]
         heat_t = heat_t[::stride]
         pflux_t = pflux_t[::stride]
+        heat_s_t = heat_s_t[::stride, ...]
+        pflux_s_t = pflux_s_t[::stride, ...]
         t = t[::stride]
         dt_series = dt_series[::stride]
 
@@ -974,6 +1006,8 @@ def integrate_nonlinear_imex_gx_diagnostics(
         heat_flux_t=heat_t,
         particle_flux_t=pflux_t,
         energy_t=energy_t,
+        heat_flux_species_t=heat_s_t,
+        particle_flux_species_t=pflux_s_t,
     )
     return t, diag_out
 

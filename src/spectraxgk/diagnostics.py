@@ -32,6 +32,8 @@ class GXDiagnostics:
     heat_flux_t: ArrayLike
     particle_flux_t: ArrayLike
     energy_t: ArrayLike
+    heat_flux_species_t: ArrayLike | None = None
+    particle_flux_species_t: ArrayLike | None = None
 
 
 def gx_volume_factors(geom: SAlphaGeometry, grid: SpectralGrid) -> tuple[jnp.ndarray, jnp.ndarray]:
@@ -201,7 +203,7 @@ def _jl_family(cache: LinearCache) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarra
     return Jl_s, JlB_s, Jfac
 
 
-def gx_heat_flux(
+def gx_heat_flux_species(
     G: jnp.ndarray,
     phi: jnp.ndarray,
     apar: jnp.ndarray,
@@ -214,7 +216,7 @@ def gx_heat_flux(
     use_dealias: bool = True,
     flux_scale: float = 2.0,
 ) -> jnp.ndarray:
-    """GX heat flux diagnostic (gyroBohm units)."""
+    """GX heat flux diagnostic per species (gyroBohm units)."""
 
     if G.ndim == 5:
         Gs = G[None, ...]
@@ -234,15 +236,12 @@ def gx_heat_flux(
     sqrt2 = jnp.sqrt(2.0)
     sqrt32 = jnp.sqrt(1.5)
 
-    flux = jnp.asarray(0.0, dtype=jnp.real(phi).dtype)
-    rho = _species_array(params.rho, ns)
+    flux_species: list[jnp.ndarray] = []
     nt = _species_array(params.density, ns) * _species_array(params.temp, ns)
     vth = _species_array(params.vth, ns)
     tz = _species_array(params.tz, ns)
 
-    kperp2 = cache.kperp2
     for s in range(ns):
-        b_s = kperp2 * rho[s] * rho[s]
         Jl_s = Jl[s]
         JlB_s = JlB[s]
         Jfac_s = Jfac[s]
@@ -273,11 +272,11 @@ def gx_heat_flux(
             + tz[s] * jnp.conj(vbpar) * qB_bar
         )
         flux_s = jnp.sum((fg * 2.0 * flx * fac).real) * nt[s] * flux_scale
-        flux = flux + flux_s
-    return flux
+        flux_species.append(flux_s)
+    return jnp.stack(flux_species, axis=0)
 
 
-def gx_particle_flux(
+def gx_heat_flux(
     G: jnp.ndarray,
     phi: jnp.ndarray,
     apar: jnp.ndarray,
@@ -290,7 +289,38 @@ def gx_particle_flux(
     use_dealias: bool = True,
     flux_scale: float = 2.0,
 ) -> jnp.ndarray:
-    """GX particle flux diagnostic."""
+    """GX total heat flux diagnostic."""
+
+    return jnp.sum(
+        gx_heat_flux_species(
+            G,
+            phi,
+            apar,
+            bpar,
+            cache,
+            grid,
+            params,
+            flux_fac,
+            use_dealias=use_dealias,
+            flux_scale=flux_scale,
+        )
+    )
+
+
+def gx_particle_flux_species(
+    G: jnp.ndarray,
+    phi: jnp.ndarray,
+    apar: jnp.ndarray,
+    bpar: jnp.ndarray,
+    cache: LinearCache,
+    grid: SpectralGrid,
+    params: LinearParams,
+    flux_fac: jnp.ndarray,
+    *,
+    use_dealias: bool = True,
+    flux_scale: float = 2.0,
+) -> jnp.ndarray:
+    """GX particle flux diagnostic per species."""
 
     if G.ndim == 5:
         Gs = G[None, ...]
@@ -298,7 +328,7 @@ def gx_particle_flux(
         Gs = G
     ns = Gs.shape[0]
     if ns == 1:
-        return jnp.asarray(0.0, dtype=jnp.real(phi).dtype)
+        return jnp.zeros((1,), dtype=jnp.real(phi).dtype)
     fac = _gx_fac_mask_nonzero(grid, use_dealias=use_dealias)
     fac = fac[:, :, None]
     flx = flux_fac[None, None, :]
@@ -309,15 +339,12 @@ def gx_particle_flux(
     vbpar = 1.0j * ky * bpar
 
     Jl, JlB, _ = _jl_family(cache)
-    flux = jnp.asarray(0.0, dtype=jnp.real(phi).dtype)
-    rho = _species_array(params.rho, ns)
+    flux_species: list[jnp.ndarray] = []
     dens = _species_array(params.density, ns)
     vth = _species_array(params.vth, ns)
     tz = _species_array(params.tz, ns)
 
-    kperp2 = cache.kperp2
     for s in range(ns):
-        b_s = kperp2 * rho[s] * rho[s]
         Jl_s = Jl[s]
         JlB_s = JlB[s]
         G_s = Gs[s]
@@ -337,8 +364,39 @@ def gx_particle_flux(
 
         fg = jnp.conj(vphi) * n_bar - vth[s] * jnp.conj(vapar) * u_bar + tz[s] * jnp.conj(vbpar) * uB_bar
         flux_s = jnp.sum((fg * 2.0 * flx * fac).real) * dens[s] * flux_scale
-        flux = flux + flux_s
-    return flux
+        flux_species.append(flux_s)
+    return jnp.stack(flux_species, axis=0)
+
+
+def gx_particle_flux(
+    G: jnp.ndarray,
+    phi: jnp.ndarray,
+    apar: jnp.ndarray,
+    bpar: jnp.ndarray,
+    cache: LinearCache,
+    grid: SpectralGrid,
+    params: LinearParams,
+    flux_fac: jnp.ndarray,
+    *,
+    use_dealias: bool = True,
+    flux_scale: float = 2.0,
+) -> jnp.ndarray:
+    """GX total particle flux diagnostic."""
+
+    return jnp.sum(
+        gx_particle_flux_species(
+            G,
+            phi,
+            apar,
+            bpar,
+            cache,
+            grid,
+            params,
+            flux_fac,
+            use_dealias=use_dealias,
+            flux_scale=flux_scale,
+        )
+    )
 
 
 def gx_energy_total(Wg: ArrayLike, Wphi: ArrayLike, Wapar: ArrayLike) -> ArrayLike:

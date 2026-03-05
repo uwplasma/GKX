@@ -463,6 +463,7 @@ def _cmd_run_runtime_nonlinear(args: argparse.Namespace) -> int:
         f"Wapar={float(diag.Wapar_t[-1]):.6g}"
     )
     if args.out is not None:
+
         def _flatten(series: np.ndarray | Array) -> np.ndarray:
             arr = np.asarray(series)
             if arr.ndim == 1:
@@ -471,25 +472,53 @@ def _cmd_run_runtime_nonlinear(args: argparse.Namespace) -> int:
             if arr.shape[1] == 1:
                 return arr[:, 0]
             return np.mean(arr, axis=1)
-        data_out = np.column_stack(
-            [
-                _flatten(diag.t),
-                _flatten(diag.dt_t),
-                _flatten(diag.gamma_t),
-                _flatten(diag.omega_t),
-                _flatten(diag.Wg_t),
-                _flatten(diag.Wphi_t),
-                _flatten(diag.Wapar_t),
-                _flatten(diag.energy_t),
-                _flatten(diag.heat_flux_t),
-                _flatten(diag.particle_flux_t),
-            ]
-        )
+
+        cols = [
+            _flatten(diag.t),
+            _flatten(diag.dt_t),
+            _flatten(diag.gamma_t),
+            _flatten(diag.omega_t),
+            _flatten(diag.Wg_t),
+            _flatten(diag.Wphi_t),
+            _flatten(diag.Wapar_t),
+            _flatten(diag.energy_t),
+            _flatten(diag.heat_flux_t),
+            _flatten(diag.particle_flux_t),
+        ]
+        headers = [
+            "t",
+            "dt",
+            "gamma",
+            "omega",
+            "Wg",
+            "Wphi",
+            "Wapar",
+            "energy",
+            "heat_flux",
+            "particle_flux",
+        ]
+
+        if diag.heat_flux_species_t is not None:
+            heat_s = np.asarray(diag.heat_flux_species_t)
+            if heat_s.ndim == 1:
+                heat_s = heat_s[:, None]
+            for i in range(heat_s.shape[1]):
+                cols.append(heat_s[:, i])
+                headers.append(f"heat_flux_s{i}")
+        if diag.particle_flux_species_t is not None:
+            pflux_s = np.asarray(diag.particle_flux_species_t)
+            if pflux_s.ndim == 1:
+                pflux_s = pflux_s[:, None]
+            for i in range(pflux_s.shape[1]):
+                cols.append(pflux_s[:, i])
+                headers.append(f"particle_flux_s{i}")
+
+        data_out = np.column_stack(cols)
         np.savetxt(
             args.out,
             data_out,
             delimiter=",",
-            header="t,dt,gamma,omega,Wg,Wphi,Wapar,energy,heat_flux,particle_flux",
+            header=",".join(headers),
             comments="",
         )
         print(f"saved {args.out}")
