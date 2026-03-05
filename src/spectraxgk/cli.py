@@ -457,6 +457,8 @@ def _cmd_run_runtime_nonlinear(args: argparse.Namespace) -> int:
     print(
         "nonlinear: "
         f"t={diag.t.size} "
+        f"ky_sel={result.ky_selected:.6g} "
+        f"kx_sel={result.kx_selected:.6g} "
         f"dt_mean={float(diag.dt_mean):.6g} "
         f"Wg={float(diag.Wg_t[-1]):.6g} "
         f"Wphi={float(diag.Wphi_t[-1]):.6g} "

@@ -65,12 +65,42 @@ class RuntimeNonlinearResult:
     diagnostics: GXDiagnostics | None
     phi2: np.ndarray | None = None
     fields: FieldState | None = None
+    ky_selected: float | None = None
+    kx_selected: float | None = None
 
 
 def _midplane_index(grid: SpectralGrid) -> int:
     if grid.z.size <= 1:
         return 0
     return min(int(grid.z.size // 2 + 1), int(grid.z.size) - 1)
+
+
+def _zero_kx_index(grid: SpectralGrid) -> int:
+    kx = np.asarray(grid.kx, dtype=float)
+    return int(np.argmin(np.abs(kx)))
+
+
+def _select_nonlinear_mode_indices(
+    grid: SpectralGrid,
+    *,
+    ky_target: float,
+    use_dealias_mask: bool,
+) -> tuple[int, int]:
+    ky = np.asarray(grid.ky, dtype=float)
+    kx = np.asarray(grid.kx, dtype=float)
+    if not use_dealias_mask:
+        return select_ky_index(ky, ky_target), _zero_kx_index(grid)
+
+    mask = np.asarray(grid.dealias_mask, dtype=bool)
+    ky_candidates = np.where(np.any(mask, axis=1))[0]
+    if ky_candidates.size == 0:
+        ky_candidates = np.arange(ky.size, dtype=int)
+    ky_pick = ky_candidates[int(np.argmin(np.abs(ky[ky_candidates] - float(ky_target))))]
+    kx_candidates = np.where(mask[ky_pick])[0]
+    if kx_candidates.size == 0:
+        kx_candidates = np.arange(kx.size, dtype=int)
+    kx_pick = kx_candidates[int(np.argmin(np.abs(kx[kx_candidates])))]
+    return int(ky_pick), int(kx_pick)
 
 
 def _species_to_linear(species_cfg: Sequence[RuntimeSpeciesConfig]) -> list[Species]:
@@ -903,8 +933,11 @@ def run_runtime_nonlinear(
     params = build_runtime_linear_params(cfg)
     term_cfg = build_runtime_term_config(cfg)
 
-    ky_index = select_ky_index(np.asarray(grid.ky), ky_target)
-    kx_index = 0
+    ky_index, kx_index = _select_nonlinear_mode_indices(
+        grid,
+        ky_target=ky_target,
+        use_dealias_mask=bool(cfg.time.nonlinear_dealias),
+    )
     G0 = _build_initial_condition(
         grid,
         geom,
@@ -968,6 +1001,8 @@ def run_runtime_nonlinear(
             diagnostics=diag,
             phi2=None,
             fields=None,
+            ky_selected=float(np.asarray(grid.ky[ky_index])),
+            kx_selected=float(np.asarray(grid.kx[kx_index])),
         )
 
     # Diagnostics disabled: use the config-driven integrator for final state.
@@ -986,4 +1021,6 @@ def run_runtime_nonlinear(
         diagnostics=None,
         phi2=phi2,
         fields=fields,
+        ky_selected=float(np.asarray(grid.ky[ky_index])),
+        kx_selected=float(np.asarray(grid.kx[kx_index])),
     )
