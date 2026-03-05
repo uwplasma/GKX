@@ -63,8 +63,9 @@ class RuntimeCollisionConfig:
     p_hyper_lm: float = 6.0
     D_hyper: float = 0.0
     p_hyper_kperp: float = 2.0
-    hypercollisions_const: float = 1.0
-    hypercollisions_kz: float = 0.0
+    # GX default nonlinear dissipation path: kz-proportional hypercollisions.
+    hypercollisions_const: float = 0.0
+    hypercollisions_kz: float = 1.0
     damp_ends_amp: float = 0.0
     damp_ends_widthfrac: float = 0.0
     damp_ends_scale_by_dt: bool = True
