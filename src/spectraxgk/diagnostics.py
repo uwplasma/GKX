@@ -66,7 +66,10 @@ def _gx_fac_mask_nonzero(grid: SpectralGrid, *, use_dealias: bool) -> jnp.ndarra
     """Return fac*mask that excludes ky=0 and uses GX positive-ky weighting."""
 
     ky = grid.ky
-    fac = jnp.where(ky > 0.0, 2.0, 0.0)
+    # GX flux kernels operate on the rFFT-positive ky set and already include
+    # the Hermitian pair factor of 2 in the kernel expression itself. For the
+    # full-ky SPECTRAX layout we therefore keep unit weight on ky>0 here.
+    fac = jnp.where(ky > 0.0, 1.0, 0.0)
     fac = fac[:, None] * jnp.ones((1, grid.kx.size), dtype=fac.dtype)
     if use_dealias:
         mask = grid.dealias_mask.astype(fac.dtype)
