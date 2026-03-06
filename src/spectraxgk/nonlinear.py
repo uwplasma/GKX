@@ -496,14 +496,18 @@ def integrate_nonlinear_gx_diagnostics(
     fields0 = compute_fields_cached(G0, cache, params, terms=term_cfg)
     phi_prev = fields0.phi
 
-    def _compute_diag_from_state(G_state, phi_last, dt_span):
-        fields_state = compute_fields_cached(G_state, cache, params, terms=term_cfg)
+    def _compute_diag_from_state(
+        G_state: jnp.ndarray,
+        fields_state: FieldState,
+        phi_prev_step: jnp.ndarray,
+        dt_step: jnp.ndarray,
+    ):
         phi = fields_state.phi
         apar = fields_state.apar if fields_state.apar is not None else jnp.zeros_like(phi)
         bpar = fields_state.bpar if fields_state.bpar is not None else jnp.zeros_like(phi)
 
         gamma_modes, omega_modes = _gx_growth_rate_step(
-            phi, phi_last, dt_span, z_index=z_idx, mask=mask
+            phi, phi_prev_step, dt_step, z_index=z_idx, mask=mask
         )
         if omega_ky_index is not None:
             ky_i = int(np.clip(omega_ky_index, 0, int(gamma_modes.shape[0]) - 1))
@@ -565,10 +569,10 @@ def integrate_nonlinear_gx_diagnostics(
             pflux_val,
             heat_species,
             pflux_species,
-        ), phi
+        )
 
     def step(carry, idx):
-        G, phi_last, diag_prev, t_prev, dt_prev, dt_acc = carry
+        G, phi_prev_step, diag_prev, t_prev, dt_prev = carry
         dG, fields = rhs_fn(G)
         dt_local = jnp.asarray(_update_dt(fields, dt_prev), dtype=real_dtype)
         if method == "euler":
@@ -626,25 +630,25 @@ def integrate_nonlinear_gx_diagnostics(
         # Keep scan carry dtype stable under mixed-precision scalar constants.
         G_new = jnp.asarray(G_new, dtype=state_dtype)
         t_new = jnp.asarray(t_prev + dt_local, dtype=real_dtype)
-        dt_acc_new = jnp.asarray(dt_acc + dt_local, dtype=real_dtype)
+        fields_new = compute_fields_cached(G_new, cache, params, terms=term_cfg)
+        phi_new = fields_new.phi
 
         def _compute_diag(_):
-            diag, phi = _compute_diag_from_state(G_new, phi_last, dt_acc_new)
-            return diag, phi, jnp.asarray(0.0, dtype=real_dtype)
+            return _compute_diag_from_state(G_new, fields_new, phi_prev_step, dt_local)
 
         def _reuse_diag(_):
-            return diag_prev, phi_last, dt_acc_new
+            return diag_prev
 
         diag_stride = int(max(diagnostics_stride, 1))
         do_diag = (idx % diag_stride) == 0
-        diag, phi, dt_acc_out = jax.lax.cond(do_diag, _compute_diag, _reuse_diag, operand=None)
-        return (G_new, phi, diag, t_new, dt_local, dt_acc_out), (diag, t_new, dt_local)
+        diag = jax.lax.cond(do_diag, _compute_diag, _reuse_diag, operand=None)
+        return (G_new, phi_new, diag, t_new, dt_local), (diag, t_new, dt_local)
 
     step_fn = jax.checkpoint(step) if checkpoint else step
     dt0 = jnp.asarray(_update_dt(fields0, dt_init), dtype=real_dtype)
-    diag_zero, _phi0 = _compute_diag_from_state(G0, phi_prev, dt0)
+    diag_zero = _compute_diag_from_state(G0, fields0, phi_prev, dt0)
     idx = jnp.arange(steps, dtype=jnp.int32)
-    (G_final, _phi_last, _diag_last, _t_last, _dt_last, _dt_acc_last), diag_out = jax.lax.scan(
+    (G_final, _phi_last, _diag_last, _t_last, _dt_last), diag_out = jax.lax.scan(
         step_fn,
         (
             G0,
@@ -652,7 +656,6 @@ def integrate_nonlinear_gx_diagnostics(
             diag_zero,
             jnp.asarray(0.0, dtype=real_dtype),
             dt0,
-            jnp.asarray(0.0, dtype=real_dtype),
         ),
         idx,
         length=steps,
@@ -849,14 +852,18 @@ def integrate_nonlinear_imex_gx_diagnostics(
         )
         return sol.reshape(implicit_operator.shape)
 
-    def _compute_diag_from_state(G_state, phi_last, dt_span):
-        fields_state = compute_fields_cached(G_state, cache, params, terms=term_cfg)
+    def _compute_diag_from_state(
+        G_state: jnp.ndarray,
+        fields_state: FieldState,
+        phi_prev_step: jnp.ndarray,
+        dt_step: jnp.ndarray,
+    ):
         phi = fields_state.phi
         apar = fields_state.apar if fields_state.apar is not None else jnp.zeros_like(phi)
         bpar = fields_state.bpar if fields_state.bpar is not None else jnp.zeros_like(phi)
 
         gamma_modes, omega_modes = _gx_growth_rate_step(
-            phi, phi_last, dt_span, z_index=z_idx, mask=mask
+            phi, phi_prev_step, dt_step, z_index=z_idx, mask=mask
         )
         if omega_ky_index is not None:
             ky_i = int(np.clip(omega_ky_index, 0, int(gamma_modes.shape[0]) - 1))
@@ -918,12 +925,13 @@ def integrate_nonlinear_imex_gx_diagnostics(
             pflux_val,
             heat_species,
             pflux_species,
-        ), phi
+        )
 
-    phi_prev = compute_fields_cached(G0, cache, params, terms=term_cfg).phi
+    fields0 = compute_fields_cached(G0, cache, params, terms=term_cfg)
+    phi_prev = fields0.phi
 
     def step(carry, idx):
-        G, phi_last, diag_prev, t_prev, dt_acc = carry
+        G, phi_prev_step, diag_prev, t_prev = carry
         rhs = G + dt_val * nonlinear_term(G)
         G_new = solve_step(G, rhs)
         if use_collision_split and damping is not None:
@@ -932,30 +940,29 @@ def integrate_nonlinear_imex_gx_diagnostics(
         # Keep scan carry dtype stable under mixed-precision scalar constants.
         G_new = jnp.asarray(G_new, dtype=state_dtype)
         t_new = t_prev + dt_val
-        dt_acc_new = dt_acc + dt_val
+        fields_new = compute_fields_cached(G_new, cache, params, terms=term_cfg)
+        phi_new = fields_new.phi
 
         def _compute_diag(_):
-            diag, phi = _compute_diag_from_state(G_new, phi_last, dt_acc_new)
-            return diag, phi, jnp.asarray(0.0, dtype=real_dtype)
+            return _compute_diag_from_state(G_new, fields_new, phi_prev_step, dt_val)
 
         def _reuse_diag(_):
-            return diag_prev, phi_last, dt_acc_new
+            return diag_prev
 
         diag_stride = int(max(diagnostics_stride, 1))
         do_diag = (idx % diag_stride) == 0
-        diag, phi, dt_acc_out = jax.lax.cond(do_diag, _compute_diag, _reuse_diag, operand=None)
-        return (G_new, phi, diag, t_new, dt_acc_out), (diag, t_new)
+        diag = jax.lax.cond(do_diag, _compute_diag, _reuse_diag, operand=None)
+        return (G_new, phi_new, diag, t_new), (diag, t_new)
 
     step_fn = jax.checkpoint(step) if checkpoint else step
-    diag_zero, _phi0 = _compute_diag_from_state(G0, phi_prev, dt_val)
+    diag_zero = _compute_diag_from_state(G0, fields0, phi_prev, dt_val)
     idx = jnp.arange(steps, dtype=jnp.int32)
-    (G_final, _phi_last, _diag_last, _t_last, _dt_acc_last), diag_out = jax.lax.scan(
+    (G_final, _phi_last, _diag_last, _t_last), diag_out = jax.lax.scan(
         step_fn,
         (
             G0,
             phi_prev,
             diag_zero,
-            jnp.asarray(0.0, dtype=real_dtype),
             jnp.asarray(0.0, dtype=real_dtype),
         ),
         idx,
