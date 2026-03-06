@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import jax.numpy as jnp
-from jax.scipy.special import gammaln, i0e
+from jax.scipy.special import i0e
 import math
 import numpy as np
 
@@ -98,6 +98,25 @@ def bessel_j1(x: jnp.ndarray) -> jnp.ndarray:
     return jnp.where(jnp.isfinite(out), out, res_small)
 
 
+def gx_factorial(m: jnp.ndarray) -> jnp.ndarray:
+    """Return GX's single-precision factorial approximation."""
+
+    m_arr = jnp.asarray(m)
+    dtype = m_arr.dtype
+    exact = jnp.asarray([1.0, 1.0, 2.0, 6.0, 24.0, 120.0, 720.0], dtype=dtype)
+    m_int = m_arr.astype(jnp.int32)
+    m_clamped = jnp.clip(m_int, 0, exact.shape[0] - 1)
+    m_safe = jnp.where(m_arr > 0, m_arr, jnp.asarray(1.0, dtype=dtype))
+    stirling = jnp.sqrt(2.0 * jnp.asarray(jnp.pi, dtype=dtype) * m_safe) * (m_safe**m_safe) * jnp.exp(
+        -m_safe
+    ) * (
+        1.0
+        + 1.0 / (12.0 * m_safe)
+        + 1.0 / (288.0 * m_safe * m_safe)
+    )
+    return jnp.where(m_int <= 6, exact[m_clamped], stirling)
+
+
 def J_l_all(b: jnp.ndarray, l_max: int) -> jnp.ndarray:
     """Gyroaveraging coefficients matching the GX Laguerre-Hermite convention."""
 
@@ -108,8 +127,7 @@ def J_l_all(b: jnp.ndarray, l_max: int) -> jnp.ndarray:
     l_shape = (l_max + 1,) + (1,) * b.ndim
     l = l.reshape(l_shape)
     b_safe = jnp.maximum(0.5 * b, 1.0e-30)
-    log_term = l * jnp.log(b_safe) - gammaln(l + 1.0)
-    coef = jnp.exp(log_term)
+    coef = jnp.power(b_safe[None, ...], l) / gx_factorial(l)
     sign = jnp.where((l % 2) == 0, 1.0, -1.0)
     Jl = jnp.exp(-0.5 * b)[None, ...] * sign * coef
     if b.ndim > 0:
