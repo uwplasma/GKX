@@ -13,7 +13,7 @@ linear growth/frequency scans, and nonlinear time traces for growth rate,
 frequency, and heat flux. The panel now uses GX-matched runtime configs
 (same integrator family and normalization contract; no manual `flux_scale` or
 `wphi_scale` calibration in the Cyclone config), with long nonlinear windows
-(`t=100` Cyclone, `t=5` KBM).
+(`t=400` Cyclone, `t=100` KBM).
 
 The current KBM GX mismatch table is stored in
 `docs/_static/kbm_gx_mismatch.csv`.
