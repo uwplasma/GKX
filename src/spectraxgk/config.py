@@ -3,6 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass, asdict
 from typing import Dict, Any
 
+GX_REFERENCE_ELECTRON_MASS = 2.7e-4
+GX_REFERENCE_MASS_RATIO = 1.0 / GX_REFERENCE_ELECTRON_MASS
+
 
 @dataclass(frozen=True)
 class InitializationConfig:
@@ -180,7 +183,7 @@ class ETGModelConfig:
     R_over_Lni: float | None = None
     R_over_Lne: float | None = None
     Te_over_Ti: float = 1.0
-    mass_ratio: float = 3670.0
+    mass_ratio: float = GX_REFERENCE_MASS_RATIO
     nu_i: float = 0.0
     nu_e: float = 0.0
     beta: float = 1.0e-5
@@ -240,7 +243,7 @@ class KineticElectronModelConfig:
     R_over_LTe: float = 2.49
     R_over_Ln: float = 0.8
     Te_over_Ti: float = 1.0
-    mass_ratio: float = 3670.0
+    mass_ratio: float = GX_REFERENCE_MASS_RATIO
     nu_i: float = 0.0
     nu_e: float = 0.0
     beta: float = 1.0e-5
