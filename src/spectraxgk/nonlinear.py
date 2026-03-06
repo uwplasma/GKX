@@ -97,6 +97,31 @@ def nonlinear_rhs_cached(
     return dG, fields
 
 
+def _make_hermitian_projector(ky_vals: np.ndarray, nx: int) -> Callable[[jnp.ndarray], jnp.ndarray]:
+    """Project full-ky states onto the GX real-FFT Hermitian manifold."""
+
+    ny_full = int(ky_vals.size)
+    nyc = ny_full // 2 + 1
+    use_hermitian = nyc > 2 and bool(np.any(np.asarray(ky_vals) < 0.0))
+    if not use_hermitian:
+        return lambda G_state: G_state
+
+    neg_hi = nyc - 1 if (ny_full % 2 == 0) else nyc
+    if nx > 1:
+        kx_neg = jnp.asarray(np.concatenate(([0], np.arange(nx - 1, 0, -1))), dtype=jnp.int32)
+    else:
+        kx_neg = None
+
+    def project(G_state: jnp.ndarray) -> jnp.ndarray:
+        pos = G_state[..., :nyc, :, :]
+        neg = jnp.conj(pos[..., 1:neg_hi, :, :])[..., ::-1, :, :]
+        if kx_neg is not None:
+            neg = neg[..., kx_neg, :]
+        return jnp.concatenate([pos, neg], axis=-3)
+
+    return project
+
+
 def _gx_nonlinear_omega_max(
     fields: FieldState,
     grid: SpectralGrid,
@@ -278,6 +303,10 @@ def integrate_nonlinear_cached(
             laguerre_mode=laguerre_mode,
         )
 
+    project_state = None
+    if gx_real_fft:
+        project_state = _make_hermitian_projector(np.asarray(cache.ky), int(np.asarray(cache.kx).size))
+
     return integrate_nonlinear_scan(
         rhs_fn,
         G0,
@@ -285,6 +314,7 @@ def integrate_nonlinear_cached(
         steps,
         method=method,
         checkpoint=checkpoint,
+        project_state=project_state,
     )
 
 
@@ -326,7 +356,7 @@ def integrate_nonlinear(
     )
 
 
-def integrate_nonlinear_gx_diagnostics(
+def _integrate_nonlinear_gx_diagnostics_impl(
     G0: jnp.ndarray,
     grid: SpectralGrid,
     geom: SAlphaGeometry,
@@ -362,8 +392,8 @@ def integrate_nonlinear_gx_diagnostics(
     implicit_restart: int = 20,
     implicit_solve_method: str = "batched",
     implicit_preconditioner: str | None = None,
-) -> tuple[jnp.ndarray, GXDiagnostics]:
-    """Integrate nonlinear system and return GX-style diagnostics."""
+) -> tuple[jnp.ndarray, GXDiagnostics, jnp.ndarray, FieldState]:
+    """Integrate nonlinear system and return GX-style diagnostics plus final state."""
 
     if cache is None:
         if G0.ndim == 5:
@@ -376,39 +406,7 @@ def integrate_nonlinear_gx_diagnostics(
 
     term_cfg = terms or TermConfig()
     if method in {"imex", "semi-implicit"}:
-        if not fixed_dt:
-            raise ValueError("Adaptive dt is not supported for IMEX diagnostics")
-        return integrate_nonlinear_imex_gx_diagnostics(
-            G0,
-            grid,
-            geom,
-            params,
-            dt=dt,
-            steps=steps,
-            method=method,
-            cache=cache,
-            terms=term_cfg,
-            checkpoint=checkpoint,
-            sample_stride=sample_stride,
-            diagnostics_stride=diagnostics_stride,
-            use_dealias_mask=use_dealias_mask,
-            z_index=z_index,
-            gx_real_fft=gx_real_fft,
-            laguerre_mode=laguerre_mode,
-            omega_ky_index=omega_ky_index,
-            omega_kx_index=omega_kx_index,
-            flux_scale=flux_scale,
-            wphi_scale=wphi_scale,
-            collision_split=collision_split,
-            collision_scheme=collision_scheme,
-            implicit_tol=implicit_tol,
-            implicit_maxiter=implicit_maxiter,
-            implicit_iters=implicit_iters,
-            implicit_relax=implicit_relax,
-            implicit_restart=implicit_restart,
-            implicit_solve_method=implicit_solve_method,
-            implicit_preconditioner=implicit_preconditioner,
-        )
+        raise ValueError("Final-state GX diagnostics helper only supports explicit methods")
     vol_fac, flux_fac = gx_volume_factors(geom, grid)
     mask = _gx_omega_mode_mask(grid, cache, gx_real_fft=gx_real_fft)
     z_idx = _gx_midplane_index(grid.z.size) if z_index is None else int(z_index)
@@ -579,33 +577,37 @@ def integrate_nonlinear_gx_diagnostics(
             G_new = G + dt_local * dG
         elif method == "rk2":
             k1 = dG
-            k2, _ = rhs_fn(G + 0.5 * dt_local * k1)
+            G_half = _enforce_hermitian(G + 0.5 * dt_local * k1)
+            k2, _ = rhs_fn(G_half)
             G_new = G + dt_local * k2
         elif method == "rk3":
             k1 = dG
-            G1 = G + dt_local * k1
+            G1 = _enforce_hermitian(G + dt_local * k1)
             k2, _ = rhs_fn(G1)
-            G2 = 0.75 * G + 0.25 * (G1 + dt_local * k2)
+            G2 = _enforce_hermitian(0.75 * G + 0.25 * (G1 + dt_local * k2))
             k3, _ = rhs_fn(G2)
             G_new = (1.0 / 3.0) * G + (2.0 / 3.0) * (G2 + dt_local * k3)
         elif method == "rk3_gx":
             k1 = dG
-            G1 = G + (dt_local / 3.0) * k1
+            G1 = _enforce_hermitian(G + (dt_local / 3.0) * k1)
             k2, _ = rhs_fn(G1)
-            G2 = G + (2.0 * dt_local / 3.0) * k2
+            G2 = _enforce_hermitian(G + (2.0 * dt_local / 3.0) * k2)
             k3, _ = rhs_fn(G2)
-            G3 = G + 0.75 * dt_local * k3
+            G3 = _enforce_hermitian(G + 0.75 * dt_local * k3)
             G_new = G3 + 0.25 * dt_local * k1
         elif method == "rk4":
             k1 = dG
-            k2, _ = rhs_fn(G + 0.5 * dt_local * k1)
-            k3, _ = rhs_fn(G + 0.5 * dt_local * k2)
-            k4, _ = rhs_fn(G + dt_local * k3)
+            G2 = _enforce_hermitian(G + 0.5 * dt_local * k1)
+            k2, _ = rhs_fn(G2)
+            G3 = _enforce_hermitian(G + 0.5 * dt_local * k2)
+            k3, _ = rhs_fn(G3)
+            G4 = _enforce_hermitian(G + dt_local * k3)
+            k4, _ = rhs_fn(G4)
             G_new = G + (dt_local / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
         elif method == "k10":
             def _euler_step(G_state):
                 dG_state, _ = rhs_fn(G_state)
-                return G_state + (dt_local / 6.0) * dG_state
+                return _enforce_hermitian(G_state + (dt_local / 6.0) * dG_state)
 
             G_q1 = G
             G_q2 = G
@@ -695,7 +697,199 @@ def integrate_nonlinear_gx_diagnostics(
         heat_flux_species_t=heat_s_t,
         particle_flux_species_t=pflux_s_t,
     )
+    fields_final = compute_fields_cached(G_final, cache, params, terms=term_cfg)
+    return t, diag_out, G_final, fields_final
+
+
+def integrate_nonlinear_gx_diagnostics(
+    G0: jnp.ndarray,
+    grid: SpectralGrid,
+    geom: SAlphaGeometry,
+    params: LinearParams,
+    dt: float,
+    steps: int,
+    *,
+    method: str = "rk3",
+    cache: LinearCache | None = None,
+    terms: TermConfig | None = None,
+    checkpoint: bool = False,
+    sample_stride: int = 1,
+    diagnostics_stride: int = 1,
+    use_dealias_mask: bool = False,
+    z_index: int | None = None,
+    gx_real_fft: bool = True,
+    laguerre_mode: str = "grid",
+    omega_ky_index: int | None = None,
+    omega_kx_index: int | None = None,
+    flux_scale: float = 1.0,
+    wphi_scale: float = 1.0,
+    fixed_dt: bool = True,
+    dt_min: float = 1.0e-7,
+    dt_max: float | None = None,
+    cfl: float = 0.9,
+    cfl_fac: float = 1.0,
+    collision_split: bool = False,
+    collision_scheme: str = "implicit",
+    implicit_tol: float = 1.0e-6,
+    implicit_maxiter: int = 200,
+    implicit_iters: int = 3,
+    implicit_relax: float = 0.7,
+    implicit_restart: int = 20,
+    implicit_solve_method: str = "batched",
+    implicit_preconditioner: str | None = None,
+) -> tuple[jnp.ndarray, GXDiagnostics]:
+    """Integrate nonlinear system and return GX-style diagnostics."""
+
+    if method in {"imex", "semi-implicit"}:
+        return integrate_nonlinear_imex_gx_diagnostics(
+            G0,
+            grid,
+            geom,
+            params,
+            dt=dt,
+            steps=steps,
+            method=method,
+            cache=cache,
+            terms=terms,
+            checkpoint=checkpoint,
+            sample_stride=sample_stride,
+            diagnostics_stride=diagnostics_stride,
+            use_dealias_mask=use_dealias_mask,
+            z_index=z_index,
+            gx_real_fft=gx_real_fft,
+            laguerre_mode=laguerre_mode,
+            omega_ky_index=omega_ky_index,
+            omega_kx_index=omega_kx_index,
+            flux_scale=flux_scale,
+            wphi_scale=wphi_scale,
+            collision_split=collision_split,
+            collision_scheme=collision_scheme,
+            implicit_tol=implicit_tol,
+            implicit_maxiter=implicit_maxiter,
+            implicit_iters=implicit_iters,
+            implicit_relax=implicit_relax,
+            implicit_restart=implicit_restart,
+            implicit_solve_method=implicit_solve_method,
+            implicit_preconditioner=implicit_preconditioner,
+        )
+
+    t, diag_out, _G_final, _fields_final = _integrate_nonlinear_gx_diagnostics_impl(
+        G0,
+        grid,
+        geom,
+        params,
+        dt,
+        steps,
+        method=method,
+        cache=cache,
+        terms=terms,
+        checkpoint=checkpoint,
+        sample_stride=sample_stride,
+        diagnostics_stride=diagnostics_stride,
+        use_dealias_mask=use_dealias_mask,
+        z_index=z_index,
+        gx_real_fft=gx_real_fft,
+        laguerre_mode=laguerre_mode,
+        omega_ky_index=omega_ky_index,
+        omega_kx_index=omega_kx_index,
+        flux_scale=flux_scale,
+        wphi_scale=wphi_scale,
+        fixed_dt=fixed_dt,
+        dt_min=dt_min,
+        dt_max=dt_max,
+        cfl=cfl,
+        cfl_fac=cfl_fac,
+        collision_split=collision_split,
+        collision_scheme=collision_scheme,
+        implicit_tol=implicit_tol,
+        implicit_maxiter=implicit_maxiter,
+        implicit_iters=implicit_iters,
+        implicit_relax=implicit_relax,
+        implicit_restart=implicit_restart,
+        implicit_solve_method=implicit_solve_method,
+        implicit_preconditioner=implicit_preconditioner,
+    )
     return t, diag_out
+
+
+def integrate_nonlinear_gx_diagnostics_state(
+    G0: jnp.ndarray,
+    grid: SpectralGrid,
+    geom: SAlphaGeometry,
+    params: LinearParams,
+    dt: float,
+    steps: int,
+    *,
+    method: str = "rk3",
+    cache: LinearCache | None = None,
+    terms: TermConfig | None = None,
+    checkpoint: bool = False,
+    sample_stride: int = 1,
+    diagnostics_stride: int = 1,
+    use_dealias_mask: bool = False,
+    z_index: int | None = None,
+    gx_real_fft: bool = True,
+    laguerre_mode: str = "grid",
+    omega_ky_index: int | None = None,
+    omega_kx_index: int | None = None,
+    flux_scale: float = 1.0,
+    wphi_scale: float = 1.0,
+    fixed_dt: bool = True,
+    dt_min: float = 1.0e-7,
+    dt_max: float | None = None,
+    cfl: float = 0.9,
+    cfl_fac: float = 1.0,
+    collision_split: bool = False,
+    collision_scheme: str = "implicit",
+    implicit_tol: float = 1.0e-6,
+    implicit_maxiter: int = 200,
+    implicit_iters: int = 3,
+    implicit_relax: float = 0.7,
+    implicit_restart: int = 20,
+    implicit_solve_method: str = "batched",
+    implicit_preconditioner: str | None = None,
+) -> tuple[jnp.ndarray, GXDiagnostics, jnp.ndarray, FieldState]:
+    """Integrate nonlinear system and return GX diagnostics plus the final state."""
+
+    if method in {"imex", "semi-implicit"}:
+        raise ValueError("integrate_nonlinear_gx_diagnostics_state only supports explicit methods")
+
+    return _integrate_nonlinear_gx_diagnostics_impl(
+        G0,
+        grid,
+        geom,
+        params,
+        dt,
+        steps,
+        method=method,
+        cache=cache,
+        terms=terms,
+        checkpoint=checkpoint,
+        sample_stride=sample_stride,
+        diagnostics_stride=diagnostics_stride,
+        use_dealias_mask=use_dealias_mask,
+        z_index=z_index,
+        gx_real_fft=gx_real_fft,
+        laguerre_mode=laguerre_mode,
+        omega_ky_index=omega_ky_index,
+        omega_kx_index=omega_kx_index,
+        flux_scale=flux_scale,
+        wphi_scale=wphi_scale,
+        fixed_dt=fixed_dt,
+        dt_min=dt_min,
+        dt_max=dt_max,
+        cfl=cfl,
+        cfl_fac=cfl_fac,
+        collision_split=collision_split,
+        collision_scheme=collision_scheme,
+        implicit_tol=implicit_tol,
+        implicit_maxiter=implicit_maxiter,
+        implicit_iters=implicit_iters,
+        implicit_relax=implicit_relax,
+        implicit_restart=implicit_restart,
+        implicit_solve_method=implicit_solve_method,
+        implicit_preconditioner=implicit_preconditioner,
+    )
 
 
 def integrate_nonlinear_imex_gx_diagnostics(
