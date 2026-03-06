@@ -272,7 +272,7 @@ def _gx_midplane_index(nz: int) -> int:
 def _gx_growth_rate_step(
     phi_now: jnp.ndarray,
     phi_prev: jnp.ndarray,
-    dt: float,
+    dt: float | jax.Array,
     *,
     z_index: int,
     mask: jnp.ndarray,
