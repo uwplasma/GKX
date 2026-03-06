@@ -243,19 +243,22 @@ def _jl_family(cache: LinearCache) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarra
     """Return (Jl, JlB, Jfac) arrays in GX conventions."""
 
     Jl = cache.Jl
-    if Jl.ndim == 6:
+    if Jl.ndim == 5:
         Jl_s = Jl
-    else:
+    elif Jl.ndim == 4:
         Jl_s = Jl[None, ...]
-    JlB = cache.JlB
-    if JlB.ndim == 6:
-        JlB_s = JlB
     else:
+        raise ValueError(f"unexpected Jl rank {Jl.ndim}; expected 4 or 5")
+    JlB = cache.JlB
+    if JlB.ndim == 5:
+        JlB_s = JlB
+    elif JlB.ndim == 4:
         JlB_s = JlB[None, ...]
+    else:
+        raise ValueError(f"unexpected JlB rank {JlB.ndim}; expected 4 or 5")
 
     Nl = Jl_s.shape[1]
-    l = jnp.arange(Nl, dtype=Jl_s.dtype)[:, None, None, None, None]
-    l = l[None, ...]
+    l = jnp.arange(Nl, dtype=Jl_s.dtype)[None, :, None, None, None]
     Jl_m1 = shift_axis(Jl_s, -1, axis=1)
     Jl_p1 = shift_axis(Jl_s, 1, axis=1)
     JflrA = l * Jl_m1 + 2.0 * l * Jl_s + (l + 1.0) * Jl_p1
