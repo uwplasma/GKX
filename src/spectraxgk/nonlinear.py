@@ -771,11 +771,9 @@ def integrate_nonlinear_imex_gx_diagnostics(
             neg = neg[..., kx_neg, :]
         return jnp.concatenate([pos, neg], axis=-3)
 
-    state_dtype = jnp.result_type(G0, jnp.complex64)
-    G0 = jnp.asarray(G0, dtype=state_dtype)
+    initial_state_dtype = jnp.result_type(G0, jnp.complex64)
+    G0 = jnp.asarray(G0, dtype=initial_state_dtype)
     G0 = _enforce_hermitian(G0)
-    real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
-    dt_val = jnp.asarray(dt, dtype=real_dtype)
 
     implicit_operator = build_nonlinear_imex_operator(
         G0,
@@ -786,6 +784,13 @@ def integrate_nonlinear_imex_gx_diagnostics(
         implicit_preconditioner=implicit_preconditioner,
         gx_real_fft=gx_real_fft,
     )
+
+    # Keep the scan carry in the same dtype as the implicit operator, especially
+    # under x64 where the operator promotes complex64 inputs to complex128.
+    state_dtype = implicit_operator.state_dtype
+    G0 = jnp.asarray(G0, dtype=state_dtype)
+    real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
+    dt_val = jnp.asarray(dt, dtype=real_dtype)
 
     squeeze_species = implicit_operator.squeeze_species
     if squeeze_species and G0.ndim == len(implicit_operator.shape) - 1:
