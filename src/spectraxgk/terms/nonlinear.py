@@ -453,6 +453,12 @@ def nonlinear_em_contribution(
     if mode in {"spectral", "fast", "spectral_fast", "spectral-fast"}:
         use_laguerre = False
 
+    phi = _apply_mask_xy(phi, dealias_mask)
+    if apar is not None:
+        apar = _apply_mask_xy(apar, dealias_mask)
+    if bpar is not None:
+        bpar = _apply_mask_xy(bpar, dealias_mask)
+
     if use_laguerre:
         laguerre_to_grid = cast(jnp.ndarray, laguerre_to_grid)
         laguerre_to_spectral = cast(jnp.ndarray, laguerre_to_spectral)
@@ -460,11 +466,6 @@ def nonlinear_em_contribution(
         laguerre_j0 = cast(jnp.ndarray | None, laguerre_j0)
         laguerre_j1_over_alpha = cast(jnp.ndarray | None, laguerre_j1_over_alpha)
         b = cast(jnp.ndarray, b)
-        phi = _apply_mask_xy(phi, dealias_mask)
-        if apar is not None:
-            apar = _apply_mask_xy(apar, dealias_mask)
-        if bpar is not None:
-            bpar = _apply_mask_xy(bpar, dealias_mask)
         g_mu = _laguerre_to_grid(G, laguerre_to_grid)
         chi_fields: list[jnp.ndarray] = []
         idx_phi = 0
@@ -514,7 +515,7 @@ def nonlinear_em_contribution(
         total_bracket = exb_phi + exb_bpar + flutter
         total = _laguerre_to_spectral(total_bracket, laguerre_to_spectral)
         real_dtype = jnp.real(jnp.empty((), dtype=G.dtype)).dtype
-        out = -jnp.asarray(weight, dtype=real_dtype) * total
+        out = jnp.asarray(weight, dtype=real_dtype) * total
         return out[0] if squeeze_species else out
 
     phi = _apply_mask_xy(phi, dealias_mask)
@@ -550,7 +551,7 @@ def nonlinear_em_contribution(
         bracket_total = bracket_total + flutter
 
     real_dtype = jnp.real(jnp.empty((), dtype=G.dtype)).dtype
-    out = -jnp.asarray(weight, dtype=real_dtype) * bracket_total
+    out = jnp.asarray(weight, dtype=real_dtype) * bracket_total
     return out[0] if squeeze_species else out
 
 
@@ -602,6 +603,12 @@ def nonlinear_em_components(
     mode = str(laguerre_mode).lower()
     if mode in {"spectral", "fast", "spectral_fast", "spectral-fast"}:
         use_laguerre = False
+
+    phi = _apply_mask_xy(phi, dealias_mask)
+    if apar is not None:
+        apar = _apply_mask_xy(apar, dealias_mask)
+    if bpar is not None:
+        bpar = _apply_mask_xy(bpar, dealias_mask)
 
     if use_laguerre:
         laguerre_to_grid = cast(jnp.ndarray, laguerre_to_grid)
