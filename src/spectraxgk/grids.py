@@ -80,6 +80,50 @@ def twothirds_mask(Ny: int, Nx: int) -> jnp.ndarray:
     return ky_ok[:, None] & kx_ok[None, :]
 
 
+def gx_real_fft_ky(ky: jnp.ndarray) -> jnp.ndarray:
+    """Return GX's compressed real-FFT ``ky`` convention.
+
+    GX stores the unique ``ky`` block with non-negative values, including the
+    positive Nyquist mode when ``Ny`` is even.
+    """
+
+    ky_arr = jnp.asarray(ky)
+    if ky_arr.ndim == 0:
+        raise ValueError("ky must be at least 1D")
+    ky_1d = ky_arr if ky_arr.ndim == 1 else ky_arr[:, 0]
+    nyc = 1 + int(ky_1d.shape[0]) // 2
+    return jnp.abs(ky_1d[:nyc])
+
+
+def gx_real_fft_kx(kx: jnp.ndarray) -> jnp.ndarray:
+    """Return GX's native ``kx`` ordering for real-FFT nonlinear kernels.
+
+    GX keeps the x-axis in full complex-FFT order but uses a positive Nyquist
+    multiplier when ``Nx`` is even.
+    """
+
+    kx_arr = jnp.asarray(kx)
+    if kx_arr.ndim == 0:
+        raise ValueError("kx must be at least 1D")
+    kx_1d = kx_arr if kx_arr.ndim == 1 else kx_arr[0, :]
+    nx = int(kx_1d.shape[0])
+    if nx == 0 or (nx % 2) != 0:
+        return kx_1d
+    return kx_1d.at[nx // 2].set(jnp.abs(kx_1d[nx // 2]))
+
+
+def gx_real_fft_mesh(
+    kx_grid: jnp.ndarray,
+    ky_grid: jnp.ndarray,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """Return GX-style compressed ``(kx, ky)`` multipliers and meshgrids."""
+
+    kx = gx_real_fft_kx(kx_grid)
+    ky = gx_real_fft_ky(ky_grid)
+    ky_mesh, kx_mesh = jnp.meshgrid(ky, kx, indexing="ij")
+    return kx, ky, kx_mesh, ky_mesh
+
+
 def build_spectral_grid(cfg: GridConfig) -> SpectralGrid:
     Lx = cfg.Lx
     Ly = 2.0 * jnp.pi * cfg.y0 if cfg.y0 is not None else cfg.Ly

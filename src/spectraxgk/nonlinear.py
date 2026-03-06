@@ -10,7 +10,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from spectraxgk.geometry import SAlphaGeometry
-from spectraxgk.grids import SpectralGrid
+from spectraxgk.grids import SpectralGrid, gx_real_fft_mesh
 from spectraxgk.linear import (
     LinearCache,
     LinearParams,
@@ -126,9 +126,9 @@ def _gx_nonlinear_omega_max(
     ifft_scale = jnp.asarray(fft_norm, dtype=real_dtype)
 
     if gx_real_fft:
+        _, ky_vals, kx_nyc, ky_nyc = gx_real_fft_mesh(cache.kx_grid, cache.ky_grid)
+        nyc = int(ky_vals.shape[0])
         phi_nyc = phi[:nyc, :, :]
-        kx_nyc = cache.kx_grid[:nyc, :]
-        ky_nyc = cache.ky_grid[:nyc, :]
         kx_b = _broadcast_grid(kx_nyc, phi_nyc.ndim)
         ky_b = _broadcast_grid(ky_nyc, phi_nyc.ndim)
         dphi_dx = jnp.fft.irfft2(imag * kx_b * phi_nyc, s=(grid.kx.size, grid.ky.size), axes=(-2, -3))
