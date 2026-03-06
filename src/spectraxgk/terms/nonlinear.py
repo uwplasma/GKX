@@ -266,6 +266,11 @@ def _spectral_bracket_multi_gx(
         neg_hi = nyc - 1 if (ny_full % 2 == 0) else nyc
         neg = jnp.conj(bracket_hat_nyc[..., 1:neg_hi, :, :])
         neg = neg[..., ::-1, :, :]
+        if kx.shape[1] > 1:
+            kx_neg = jnp.concatenate(
+                [jnp.asarray([0], dtype=jnp.int32), jnp.arange(kx.shape[1] - 1, 0, -1, dtype=jnp.int32)]
+            )
+            neg = neg[..., kx_neg, :]
         bracket_hat = jnp.concatenate([bracket_hat_nyc, neg], axis=-3)
     else:
         bracket_hat = bracket_hat_nyc
