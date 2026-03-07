@@ -19,12 +19,17 @@ heat flux, and particle flux.
 
 The current KBM GX mismatch table is stored in
 `docs/_static/kbm_gx_mismatch.csv`.
+The KBM linear harness now uses one explicit solver across the whole scan by
+default and records eigenfunction-overlap metrics alongside `gamma`/`omega`,
+so branch-following issues can be isolated from operator mismatches.
 
 ## Highlights
 
 - **JAX-first design**: fully differentiable kernels and JIT compilation.
 - **Hermite-Laguerre velocity space**: compact spectral representation.
 - **Field-aligned flux-tube geometry**: s-alpha analytic model (VMEC/DESC next).
+- **Geometry contract layer**: sampled flux-tube geometry profiles can now feed
+  the linear cache directly, which is the intended insertion point for VMEC.
 - **Full drift/mirror physics**: curvature/grad-B/mirror couplings + diamagnetic drive.
 - **Electromagnetic fields**: coupled :math:`(\\phi, A_\\parallel, B_\\parallel)` solve.
 - **Term toggles**: switch linear-operator components via ``LinearTerms``.

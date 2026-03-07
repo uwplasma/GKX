@@ -12,12 +12,15 @@ import numpy as np
 from jax.scipy.sparse.linalg import gmres
 
 from spectraxgk.basis import hermite_ladder_coeffs
-from spectraxgk.geometry import SAlphaGeometry
+from spectraxgk.geometry import FluxTubeGeometryData, SAlphaGeometry, sample_flux_tube_geometry
 from spectraxgk.gyroaverage import J_l_all, bessel_j0, bessel_j1, gx_laguerre_transform
 from spectraxgk.grids import SpectralGrid
 
 if TYPE_CHECKING:
     from spectraxgk.terms.config import TermConfig
+
+
+FluxTubeGeometryLike = SAlphaGeometry | FluxTubeGeometryData
 
 
 @jax.tree_util.register_pytree_node_class
@@ -395,7 +398,7 @@ def grad_z_periodic(f: jnp.ndarray, dz: float | jnp.ndarray) -> jnp.ndarray:
     return jnp.fft.ifft(df_hat, axis=-1)
 
 
-def compute_b(grid: SpectralGrid, geom: SAlphaGeometry, rho: float) -> jnp.ndarray:
+def compute_b(grid: SpectralGrid, geom: FluxTubeGeometryLike, rho: float) -> jnp.ndarray:
     """Compute b = rho^2 * k_perp^2(kx, ky, theta) for s-alpha geometry."""
 
     _check_positive(rho, "rho")
@@ -621,7 +624,7 @@ class LinearCache:
 
 def build_linear_cache(
     grid: SpectralGrid,
-    geom: SAlphaGeometry,
+    geom: FluxTubeGeometryLike,
     params: LinearParams,
     Nl: int,
     Nm: int,
@@ -641,11 +644,12 @@ def build_linear_cache(
     dealias_mask = jnp.asarray(grid.dealias_mask, dtype=bool)
     kxfac_val = float(getattr(grid, "kxfac", 1.0))
     theta = jnp.asarray(grid.z, dtype=real_dtype)
-    gds2, gds21, gds22 = geom.metric_coeffs(theta)
+    geom_data = geom if isinstance(geom, FluxTubeGeometryData) else sample_flux_tube_geometry(geom, theta)
+    gds2, gds21, gds22 = geom_data.metric_coeffs(theta)
     gds22_arr = gds22 if gds22.ndim else jnp.full_like(theta, gds22)
-    bmag = geom.bmag(theta).astype(real_dtype)
-    bgrad = geom.bgrad(theta).astype(real_dtype)
-    cv, gb, cv0, gb0 = geom.drift_coeffs(theta)
+    bmag = geom_data.bmag(theta).astype(real_dtype)
+    bgrad = geom_data.bgrad(theta).astype(real_dtype)
+    cv, gb, cv0, gb0 = geom_data.drift_coeffs(theta)
     boundary = str(getattr(grid, "boundary", "periodic")).lower()
     use_twist_shift = boundary == "linked"
     use_ntft = bool(getattr(grid, "non_twist", False))
@@ -655,7 +659,7 @@ def build_linear_cache(
             y0 = float(1.0 / float(grid.ky[1] - grid.ky[0]))
         else:
             y0 = 1.0
-    shat = float(geom.s_hat)
+    shat = float(geom_data.s_hat)
     if use_twist_shift and abs(shat) < 1.0e-12:
         use_twist_shift = False
         use_ntft = False
@@ -692,9 +696,9 @@ def build_linear_cache(
             kx_eff = kx_eff * scale
             kx_grid = kx_grid * scale
             x0_eff = x0_target
-    kperp2_bmag = bool(getattr(geom, "kperp2_bmag", True))
+    kperp2_bmag = bool(getattr(geom_data, "kperp2_bmag", True))
     if use_ntft:
-        ftwist = (geom.s_hat * gds21 / gds22_arr).astype(real_dtype)
+        ftwist = (geom_data.s_hat * gds21 / gds22_arr).astype(real_dtype)
         kxfac_val = float(getattr(grid, "kxfac", 1.0))
         delta = jnp.asarray(0.01313, dtype=real_dtype)
         ftwist_next = jnp.roll(ftwist, -1)
@@ -738,8 +742,8 @@ def build_linear_cache(
         kx0 = kx_eff[None, :, None]
         ky0 = ky_eff[:, None, None]
         theta_b = theta[None, None, :]
-        kperp2 = geom.k_perp2(kx0, ky0, theta_b).astype(real_dtype)
-        cv_d, gb_d = geom.drift_components(kx_eff, ky_eff, theta)
+        kperp2 = geom_data.k_perp2(kx0, ky0, theta_b).astype(real_dtype)
+        cv_d, gb_d = geom_data.drift_components(kx_eff, ky_eff, theta)
         cv_d = cv_d.astype(real_dtype)
         gb_d = gb_d.astype(real_dtype)
         omega_d = (cv_d + gb_d).astype(real_dtype)
@@ -753,7 +757,7 @@ def build_linear_cache(
     if rho.ndim == 0:
         rho = rho[None]
     b = (rho[:, None, None, None] * rho[:, None, None, None]) * kperp2[None, ...]
-    bessel_bmag_power = float(getattr(geom, "bessel_bmag_power", 0.0))
+    bessel_bmag_power = float(getattr(geom_data, "bessel_bmag_power", 0.0))
     if bessel_bmag_power != 0.0:
         bmag_factor = bmag[None, None, None, :] ** (-bessel_bmag_power)
         b = b * bmag_factor
@@ -1156,7 +1160,7 @@ def streaming_term(
 def linear_rhs(
     G: jnp.ndarray,
     grid: SpectralGrid,
-    geom: SAlphaGeometry,
+    geom: FluxTubeGeometryLike,
     params: LinearParams,
     terms: LinearTerms | None = None,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
@@ -1733,7 +1737,7 @@ def _integrate_linear_implicit_cached(
 def integrate_linear(
     G0: jnp.ndarray,
     grid: SpectralGrid,
-    geom: SAlphaGeometry,
+    geom: FluxTubeGeometryLike,
     params: LinearParams,
     dt: float,
     steps: int,
@@ -1803,7 +1807,7 @@ def integrate_linear(
 def integrate_linear_diagnostics(
     G0: jnp.ndarray,
     grid: SpectralGrid,
-    geom: SAlphaGeometry,
+    geom: FluxTubeGeometryLike,
     params: LinearParams,
     dt: float,
     steps: int,
