@@ -18,7 +18,12 @@ from spectraxgk.analysis import (
     select_ky_index,
 )
 from spectraxgk.diagnostics import GXDiagnostics
-from spectraxgk.geometry import FluxTubeGeometryLike, SAlphaGeometry, gx_twist_shift_params
+from spectraxgk.geometry import (
+    FluxTubeGeometryLike,
+    SAlphaGeometry,
+    build_flux_tube_geometry,
+    gx_twist_shift_params,
+)
 from spectraxgk.grids import SpectralGrid, build_spectral_grid, select_ky_grid
 from spectraxgk.linear import (
     LinearParams,
@@ -132,7 +137,7 @@ def _gx_default_p_hyper_m(nhermite: int | None) -> float:
 def build_runtime_linear_params(cfg: RuntimeConfig, *, Nm: int | None = None) -> LinearParams:
     """Build ``LinearParams`` from a unified runtime config."""
 
-    geom = SAlphaGeometry.from_config(cfg.geometry)
+    geom = build_flux_tube_geometry(cfg.geometry)
     contract = get_normalization_contract(cfg.normalization.contract)
     rho_star = contract.rho_star if cfg.normalization.rho_star is None else float(cfg.normalization.rho_star)
     omega_d_scale = (
@@ -505,9 +510,9 @@ def run_runtime_linear(
 ) -> RuntimeLinearResult:
     """Run one linear point from a case-agnostic runtime config."""
 
-    geom = SAlphaGeometry.from_config(cfg.geometry)
+    geom = build_flux_tube_geometry(cfg.geometry)
     grid_cfg = cfg.grid
-    if grid_cfg.boundary == "linked" and not grid_cfg.non_twist:
+    if isinstance(geom, SAlphaGeometry) and grid_cfg.boundary == "linked" and not grid_cfg.non_twist:
         jtwist, x0 = gx_twist_shift_params(geom, grid_cfg)
         grid_cfg = replace(grid_cfg, Lx=2.0 * np.pi * x0, jtwist=jtwist)
     grid_full = build_spectral_grid(grid_cfg)
@@ -840,9 +845,9 @@ def _run_runtime_scan_batch(
 ) -> RuntimeLinearScanResult:
     """Batch a ky scan using one time integration over the full grid."""
 
-    geom = SAlphaGeometry.from_config(cfg.geometry)
+    geom = build_flux_tube_geometry(cfg.geometry)
     grid_cfg = cfg.grid
-    if grid_cfg.boundary == "linked" and not grid_cfg.non_twist:
+    if isinstance(geom, SAlphaGeometry) and grid_cfg.boundary == "linked" and not grid_cfg.non_twist:
         jtwist, x0 = gx_twist_shift_params(geom, grid_cfg)
         grid_cfg = replace(grid_cfg, Lx=2.0 * np.pi * x0, jtwist=jtwist)
     grid = build_spectral_grid(grid_cfg)
@@ -980,9 +985,9 @@ def run_runtime_nonlinear(
 ) -> RuntimeNonlinearResult:
     """Run a nonlinear point using the unified runtime config path."""
 
-    geom = SAlphaGeometry.from_config(cfg.geometry)
+    geom = build_flux_tube_geometry(cfg.geometry)
     grid_cfg = cfg.grid
-    if grid_cfg.boundary == "linked" and not grid_cfg.non_twist:
+    if isinstance(geom, SAlphaGeometry) and grid_cfg.boundary == "linked" and not grid_cfg.non_twist:
         jtwist, x0 = gx_twist_shift_params(geom, grid_cfg)
         grid_cfg = replace(grid_cfg, Lx=2.0 * np.pi * x0, jtwist=jtwist)
     grid = build_spectral_grid(grid_cfg)

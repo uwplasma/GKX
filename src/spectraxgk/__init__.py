@@ -10,7 +10,7 @@ from spectraxgk.config import (
     TEMBaseCase,
     TimeConfig,
 )
-from spectraxgk.geometry import SAlphaGeometry
+from spectraxgk.geometry import SAlphaGeometry, build_flux_tube_geometry
 from spectraxgk.gyroaverage import J_l_all, gamma0
 from spectraxgk.io import (
     load_case_from_toml,
@@ -144,6 +144,7 @@ __all__ = [
     "TEMBaseCase",
     "TimeConfig",
     "SAlphaGeometry",
+    "build_flux_tube_geometry",
     "J_l_all",
     "gamma0",
     "load_case_from_toml",

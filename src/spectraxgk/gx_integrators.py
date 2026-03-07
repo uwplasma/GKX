@@ -46,25 +46,24 @@ def _gx_zp_from_grid(grid: SpectralGrid) -> float:
 
 
 def _gx_k_arrays(grid: SpectralGrid) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    nx = int(grid.kx.size)
-    ny = int(grid.ky.size)
+    kx = np.asarray(grid.kx, dtype=float).reshape(-1)
+    ky_full = np.asarray(grid.ky, dtype=float).reshape(-1)
+    nx = int(kx.size)
     nz = int(grid.z.size)
-    nyc = 1 + ny // 2
-    x0 = float(grid.x0)
-    y0 = float(grid.y0)
     zp = _gx_zp_from_grid(grid)
-
-    kx = np.zeros(nx, dtype=float)
-    ky = np.zeros(nyc, dtype=float)
     kz = np.zeros(nz, dtype=float)
 
-    for idx in range(nyc):
-        ky[idx] = float(idx) / y0
-    for idx in range(nx):
-        if idx < nx / 2 + 1:
-            kx[idx] = float(idx) / x0
-        else:
-            kx[idx] = float(idx - nx) / x0
+    # Preserve actual mode values on sliced ky grids. Reconstructing ky from
+    # (Ny, y0) maps a single selected positive ky back to ky=0 and breaks GX's
+    # CFL estimate for one-mode linear benchmark runs.
+    if ky_full.size == 0:
+        ky = np.zeros(0, dtype=float)
+    elif grid.ky_mode is not None:
+        ky = np.abs(ky_full)
+    else:
+        nyc = 1 + ky_full.size // 2
+        ky = np.abs(ky_full[:nyc])
+
     for idx in range(nz):
         if idx < nz / 2 + 1:
             kz[idx] = float(idx) / zp
@@ -174,13 +173,26 @@ def _gx_linear_omega_max(
     nm: int,
 ) -> np.ndarray:
     kx, ky, kz = _gx_k_arrays(grid)
-    nx = kx.size
-    ny = int(grid.ky.size)
     nz = kz.size
-    kx_max = float(kx[(nx - 1) // 3]) if nx > 1 else 0.0
-    ky_max = float(ky[(ny - 1) // 3]) if ky.size > 1 else 0.0
+    mask = np.asarray(grid.dealias_mask, dtype=bool)
+    kx_mesh = np.abs(np.asarray(grid.kx_grid, dtype=float))
+    ky_mesh = np.abs(np.asarray(grid.ky_grid, dtype=float))
+    if np.any(mask):
+        kx_active = kx_mesh[mask]
+        ky_active = ky_mesh[mask]
+    else:
+        kx_active = kx_mesh.reshape(-1)
+        ky_active = ky_mesh.reshape(-1)
+    kx_max = float(np.max(kx_active)) if kx_active.size else 0.0
+    ky_max = float(np.max(ky_active)) if ky_active.size else 0.0
     kz_max = float(kz[nz // 2]) if nz > 0 else 0.0
-    kperp_min = float(min(kx[1] if kx.size > 1 else 0.0, ky[1] if ky.size > 1 else 0.0))
+    positive_k = np.concatenate(
+        [
+            kx_active[np.abs(kx_active) > 0.0],
+            ky_active[np.abs(ky_active) > 0.0],
+        ]
+    )
+    kperp_min = float(np.min(positive_k)) if positive_k.size else 0.0
 
     tprim = np.atleast_1d(np.asarray(params.R_over_LTi, dtype=float))
     fprim = np.atleast_1d(np.asarray(params.R_over_Ln, dtype=float))

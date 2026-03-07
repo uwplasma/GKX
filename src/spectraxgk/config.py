@@ -90,8 +90,10 @@ class TimeConfig:
 
 @dataclass(frozen=True)
 class GeometryConfig:
-    """Simple analytic s-alpha geometry parameters."""
+    """Flux-tube geometry parameters or imported sampled geometry settings."""
 
+    model: str = "s-alpha"
+    geometry_file: str | None = None
     q: float = 1.4
     s_hat: float = 0.8
     epsilon: float = 0.18

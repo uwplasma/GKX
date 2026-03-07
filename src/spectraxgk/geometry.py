@@ -386,6 +386,19 @@ def load_gx_geometry_netcdf(path: str | Path) -> FluxTubeGeometryData:
 FluxTubeGeometryLike = SAlphaGeometry | FluxTubeGeometryData
 
 
+def build_flux_tube_geometry(cfg: GeometryConfig) -> FluxTubeGeometryLike:
+    """Build an analytic or imported flux-tube geometry from config."""
+
+    model = str(cfg.model).strip().lower().replace("_", "-")
+    if model in {"s-alpha", "salpha", "analytic"}:
+        return SAlphaGeometry.from_config(cfg)
+    if model in {"gx-netcdf", "gx-nc", "netcdf", "nc"}:
+        if cfg.geometry_file is None:
+            raise ValueError("geometry.geometry_file must be set for gx-netcdf geometry")
+        return load_gx_geometry_netcdf(cfg.geometry_file)
+    raise ValueError("geometry.model must be one of {'s-alpha', 'gx-netcdf'}")
+
+
 def ensure_flux_tube_geometry_data(
     geom: FluxTubeGeometryLike,
     theta: jnp.ndarray,
