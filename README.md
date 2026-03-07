@@ -33,6 +33,8 @@ so branch-following issues can be isolated from operator mismatches.
 - **Geometry contract layer**: sampled flux-tube geometry profiles can now feed
   the linear and nonlinear runner paths directly, which is the intended
   insertion point for VMEC/imported field-line geometry.
+- **GX NetCDF geometry bridge**: GX-style `Geometry` groups can now be loaded
+  directly into the sampled contract, preserving explicit Jacobian/flux weights.
 - **Full drift/mirror physics**: curvature/grad-B/mirror couplings + diamagnetic drive.
 - **Electromagnetic fields**: coupled :math:`(\\phi, A_\\parallel, B_\\parallel)` solve.
 - **Term toggles**: switch linear-operator components via ``LinearTerms``.

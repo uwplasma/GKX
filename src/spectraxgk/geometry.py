@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 import jax
 import jax.numpy as jnp
@@ -156,6 +157,8 @@ class FluxTubeGeometryData:
     gb_profile: jnp.ndarray
     cv0_profile: jnp.ndarray
     gb0_profile: jnp.ndarray
+    jacobian_profile: jnp.ndarray
+    grho_profile: jnp.ndarray
     q: float
     s_hat: float
     epsilon: float
@@ -163,6 +166,9 @@ class FluxTubeGeometryData:
     B0: float = 1.0
     alpha: float = 0.0
     drift_scale: float = 1.0
+    kxfac: float = 1.0
+    theta_scale: float = 1.0
+    nfp: int = 1
     kperp2_bmag: bool = True
     bessel_bmag_power: float = 0.0
     source_model: str = "sampled"
@@ -180,6 +186,8 @@ class FluxTubeGeometryData:
             self.gb_profile,
             self.cv0_profile,
             self.gb0_profile,
+            self.jacobian_profile,
+            self.grho_profile,
             self.q,
             self.s_hat,
             self.epsilon,
@@ -187,6 +195,9 @@ class FluxTubeGeometryData:
             self.B0,
             self.alpha,
             self.drift_scale,
+            self.kxfac,
+            self.theta_scale,
+            self.nfp,
             self.kperp2_bmag,
             self.bessel_bmag_power,
         )
@@ -243,6 +254,12 @@ class FluxTubeGeometryData:
             self._broadcast_profile(theta, self.gb0_profile),
         )
 
+    def jacobian(self, theta: jnp.ndarray) -> jnp.ndarray:
+        return self._broadcast_profile(theta, self.jacobian_profile)
+
+    def grho(self, theta: jnp.ndarray) -> jnp.ndarray:
+        return self._broadcast_profile(theta, self.grho_profile)
+
     def k_perp2(self, kx0: jnp.ndarray, ky: jnp.ndarray, theta: jnp.ndarray) -> jnp.ndarray:
         gds2, gds21, gds22 = self.metric_coeffs(theta)
         s_hat = jnp.asarray(self.s_hat)
@@ -285,10 +302,13 @@ def sample_flux_tube_geometry(geom: SAlphaGeometry, theta: jnp.ndarray) -> FluxT
     gds2, gds21, gds22 = geom.metric_coeffs(theta_arr)
     gds22_arr = gds22 if gds22.ndim else jnp.full_like(theta_arr, gds22)
     cv, gb, cv0, gb0 = geom.drift_coeffs(theta_arr)
+    bmag = geom.bmag(theta_arr)
+    gradpar = float(geom.gradpar())
+    jacobian = 1.0 / (jnp.abs(jnp.asarray(gradpar)) * bmag)
     return FluxTubeGeometryData(
         theta=theta_arr,
-        gradpar_value=float(geom.gradpar()),
-        bmag_profile=geom.bmag(theta_arr),
+        gradpar_value=gradpar,
+        bmag_profile=bmag,
         bgrad_profile=geom.bgrad(theta_arr),
         gds2_profile=gds2,
         gds21_profile=gds21,
@@ -297,6 +317,8 @@ def sample_flux_tube_geometry(geom: SAlphaGeometry, theta: jnp.ndarray) -> FluxT
         gb_profile=gb,
         cv0_profile=cv0,
         gb0_profile=gb0,
+        jacobian_profile=jacobian,
+        grho_profile=jnp.ones_like(theta_arr),
         q=float(geom.q),
         s_hat=float(geom.s_hat),
         epsilon=float(geom.epsilon),
@@ -304,10 +326,61 @@ def sample_flux_tube_geometry(geom: SAlphaGeometry, theta: jnp.ndarray) -> FluxT
         B0=float(geom.B0),
         alpha=float(geom.alpha),
         drift_scale=float(geom.drift_scale),
+        kxfac=1.0,
+        theta_scale=1.0,
+        nfp=1,
         kperp2_bmag=bool(geom.kperp2_bmag),
         bessel_bmag_power=float(geom.bessel_bmag_power),
         source_model="s-alpha",
     )
+
+
+def load_gx_geometry_netcdf(path: str | Path) -> FluxTubeGeometryData:
+    """Load sampled geometry from a GX-style NetCDF file."""
+
+    try:
+        from netCDF4 import Dataset
+    except ImportError as exc:  # pragma: no cover - optional import
+        raise ImportError("netCDF4 is required to load GX geometry NetCDF files") from exc
+
+    root = Dataset(Path(path), "r")
+    try:
+        geom = root.groups["Geometry"]
+        grids = root.groups["Grids"]
+        theta = jnp.asarray(np.asarray(grids.variables["theta"][:], dtype=float))
+        rmaj = float(np.asarray(geom.variables["rmaj"][:])) if "rmaj" in geom.variables else 1.0
+        aminor = float(np.asarray(geom.variables["aminor"][:])) if "aminor" in geom.variables else 0.0
+        epsilon = aminor / rmaj if abs(rmaj) > 0.0 else 0.0
+        return FluxTubeGeometryData(
+            theta=theta,
+            gradpar_value=float(np.asarray(geom.variables["gradpar"][:])),
+            bmag_profile=jnp.asarray(np.asarray(geom.variables["bmag"][:], dtype=float)),
+            bgrad_profile=jnp.asarray(np.asarray(geom.variables["bgrad"][:], dtype=float)),
+            gds2_profile=jnp.asarray(np.asarray(geom.variables["gds2"][:], dtype=float)),
+            gds21_profile=jnp.asarray(np.asarray(geom.variables["gds21"][:], dtype=float)),
+            gds22_profile=jnp.asarray(np.asarray(geom.variables["gds22"][:], dtype=float)),
+            cv_profile=jnp.asarray(np.asarray(geom.variables["cvdrift"][:], dtype=float)),
+            gb_profile=jnp.asarray(np.asarray(geom.variables["gbdrift"][:], dtype=float)),
+            cv0_profile=jnp.asarray(np.asarray(geom.variables["cvdrift0"][:], dtype=float)),
+            gb0_profile=jnp.asarray(np.asarray(geom.variables["gbdrift0"][:], dtype=float)),
+            jacobian_profile=jnp.asarray(np.asarray(geom.variables["jacobian"][:], dtype=float)),
+            grho_profile=jnp.asarray(np.asarray(geom.variables["grho"][:], dtype=float)),
+            q=float(np.asarray(geom.variables["q"][:])) if "q" in geom.variables else 0.0,
+            s_hat=float(np.asarray(geom.variables["shat"][:])) if "shat" in geom.variables else 0.0,
+            epsilon=float(epsilon),
+            R0=float(rmaj),
+            B0=1.0,
+            alpha=float(np.asarray(geom.variables["alpha"][:])) if "alpha" in geom.variables else 0.0,
+            drift_scale=1.0,
+            kxfac=float(np.asarray(geom.variables["kxfac"][:])) if "kxfac" in geom.variables else 1.0,
+            theta_scale=float(np.asarray(geom.variables["theta_scale"][:])) if "theta_scale" in geom.variables else 1.0,
+            nfp=int(round(float(np.asarray(geom.variables["nfp"][:]))) if "nfp" in geom.variables else 1.0),
+            kperp2_bmag=True,
+            bessel_bmag_power=0.0,
+            source_model="gx-netcdf",
+        )
+    finally:
+        root.close()
 
 
 FluxTubeGeometryLike = SAlphaGeometry | FluxTubeGeometryData

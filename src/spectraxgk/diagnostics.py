@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.geometry import FluxTubeGeometryLike
+from spectraxgk.geometry import FluxTubeGeometryData, FluxTubeGeometryLike
 from spectraxgk.gyroaverage import gamma0
 from spectraxgk.grids import SpectralGrid
 from spectraxgk.linear import LinearCache, LinearParams
@@ -40,11 +40,16 @@ def gx_volume_factors(geom: FluxTubeGeometryLike, grid: SpectralGrid) -> tuple[j
     """Return (vol_fac, flux_fac) matching GX's volume weights."""
 
     theta = grid.z
-    bmag = geom.bmag(theta)
-    gradpar = jnp.asarray(geom.gradpar())
-    jacobian = 1.0 / (jnp.abs(gradpar) * bmag)
+    if isinstance(geom, FluxTubeGeometryData):
+        jacobian = geom.jacobian(theta)
+        grho = geom.grho(theta)
+    else:
+        bmag = geom.bmag(theta)
+        gradpar = jnp.asarray(geom.gradpar())
+        jacobian = 1.0 / (jnp.abs(gradpar) * bmag)
+        grho = jnp.ones_like(jacobian)
     vol_fac = jacobian / jnp.sum(jacobian)
-    flux_fac = jacobian / jnp.sum(jacobian)
+    flux_fac = jacobian / jnp.sum(jacobian * grho)
     return vol_fac, flux_fac
 
 
