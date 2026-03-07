@@ -712,8 +712,8 @@ def gx_growth_rate_from_phi(
     if phi_t.shape[0] < 2:
         raise ValueError("phi_t must have at least two time samples")
 
-    if mode_method not in {"z_index", "max"}:
-        raise ValueError("mode_method must be 'z_index' or 'max'")
+    if mode_method not in {"z_index", "max", "project", "svd"}:
+        raise ValueError("mode_method must be one of {'z_index', 'max', 'project', 'svd'}")
 
     signal = extract_mode_time_series(phi_t, sel, method=mode_method)
     phi_now = signal[1:]

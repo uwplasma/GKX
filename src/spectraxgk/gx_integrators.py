@@ -276,11 +276,20 @@ def _gx_growth_rate_step(
     *,
     z_index: int,
     mask: jnp.ndarray,
+    mode_method: str = "z_index",
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """GX instantaneous growth rates from phi ratios at the midplane."""
 
-    phi_now_z = phi_now[..., z_index]
-    phi_prev_z = phi_prev[..., z_index]
+    if mode_method == "z_index":
+        phi_now_z = phi_now[..., z_index]
+        phi_prev_z = phi_prev[..., z_index]
+    elif mode_method == "max":
+        now_idx = jnp.argmax(jnp.abs(phi_now), axis=-1, keepdims=True)
+        prev_idx = jnp.argmax(jnp.abs(phi_prev), axis=-1, keepdims=True)
+        phi_now_z = jnp.take_along_axis(phi_now, now_idx, axis=-1)[..., 0]
+        phi_prev_z = jnp.take_along_axis(phi_prev, prev_idx, axis=-1)[..., 0]
+    else:
+        raise ValueError("mode_method must be 'z_index' or 'max'")
     # Match GX growthRates kernel logic: require non-zero real and imaginary
     # parts of phi at the current step only.
     valid = (jnp.abs(jnp.real(phi_now_z)) > 0.0) & (jnp.abs(jnp.imag(phi_now_z)) > 0.0)
@@ -390,7 +399,14 @@ def integrate_linear_gx(
         t += dt
 
         if step % sample_stride == 0 or t >= t_max:
-            gamma, omega = _gx_growth_rate_step(phi, phi_prev, dt, z_index=z_idx, mask=mask)
+            gamma, omega = _gx_growth_rate_step(
+                phi,
+                phi_prev,
+                dt,
+                z_index=z_idx,
+                mask=mask,
+                mode_method=mode_method,
+            )
             ts.append(t)
             phi_list.append(np.asarray(phi))
             gamma_list.append(np.asarray(gamma))
@@ -430,6 +446,9 @@ def integrate_linear_gx_diagnostics(
         gx_Wg,
         gx_Wphi,
     )
+
+    if mode_method not in {"z_index", "max"}:
+        raise ValueError("mode_method must be 'z_index' or 'max'")
 
     if terms is None:
         terms = LinearTerms()
@@ -489,7 +508,14 @@ def integrate_linear_gx_diagnostics(
             phi = fields.phi
             apar = fields.apar if fields.apar is not None else jnp.zeros_like(phi)
             bpar = fields.bpar if fields.bpar is not None else jnp.zeros_like(phi)
-            gamma, omega = _gx_growth_rate_step(phi, phi_prev, dt, z_index=z_idx, mask=mask)
+            gamma, omega = _gx_growth_rate_step(
+                phi,
+                phi_prev,
+                dt,
+                z_index=z_idx,
+                mask=mask,
+                mode_method=mode_method,
+            )
             ts.append(t)
             dt_list.append(float(dt))
             phi_list.append(np.asarray(phi))

@@ -3567,6 +3567,7 @@ def run_kinetic_scan(
             continue
 
         if time_cfg_i is not None:
+            save_mode_method = mode_method if mode_method in {"z_index", "max"} else "z_index"
             _, phi_t = integrate_linear_from_config(
                 G0_jax,
                 grid,
@@ -4254,9 +4255,6 @@ def run_kbm_beta_scan(
         mask = (t_arr >= tmin_val) & (t_arr <= tmax_val)
         return int(np.count_nonzero(mask)) >= 2
 
-    if mode_only and mode_method not in {"z_index", "max"}:
-        mode_method = "z_index"
-
     if init_species_index < 0 or init_species_index >= 2:
         raise ValueError("init_species_index out of range for kinetic species")
     if density_species_index < 0 or density_species_index >= 2:
@@ -4306,6 +4304,7 @@ def run_kbm_beta_scan(
         solver_use = select_kbm_solver_auto(solver_key, ky_target=ky_target, gx_reference=bool(gx_reference))
 
         if solver_use == "gx_time":
+            gx_mode_method = mode_method if mode_method in {"z_index", "max"} else "z_index"
             gx_time_cfg = GXTimeConfig(
                 dt=dt_i,
                 t_max=dt_i * steps_i,
@@ -4327,31 +4326,31 @@ def run_kbm_beta_scan(
                 geom,
                 gx_time_cfg,
                 terms=terms,
-                mode_method="z_index",
+                mode_method=gx_mode_method,
                 z_index=sel.z_index,
                 jit=True,
             )
             if t_arr.size > 1:
+                phi_np = np.asarray(_phi_t)
+                t_np = np.asarray(t_arr, dtype=float)
                 try:
-                    gamma, omega, _g_t, _o_t = gx_growth_rate_from_omega_series(
-                        np.asarray(gamma_t),
-                        np.asarray(omega_t),
+                    gamma, omega, _g_t, _o_t, _t_mid = gx_growth_rate_from_phi(
+                        phi_np,
+                        t_np,
                         sel,
                         navg_fraction=0.5,
+                        mode_method=mode_method,
                     )
                 except ValueError:
                     try:
-                        phi_np = np.asarray(_phi_t)
-                        t_np = np.asarray(t_arr, dtype=float)
-                        gamma, omega, _g_t, _o_t, _t_mid = gx_growth_rate_from_phi(
-                            phi_np,
-                            t_np,
+                        gamma, omega, _g_t, _o_t = gx_growth_rate_from_omega_series(
+                            np.asarray(gamma_t),
+                            np.asarray(omega_t),
                             sel,
                             navg_fraction=0.5,
-                            mode_method="max",
                         )
                     except ValueError:
-                        signal = extract_mode_time_series(phi_np, sel, method="max")
+                        signal = extract_mode_time_series(phi_np, sel, method=mode_method)
                         gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
                             t_np,
                             signal,
@@ -4527,6 +4526,7 @@ def run_kbm_beta_scan(
                 if time_cfg_i is not None:
                     stride = time_cfg_i.sample_stride
                     if time_cfg_i.use_diffrax:
+                        save_mode_method = mode_method if mode_method in {"z_index", "max"} else "z_index"
                         _, phi_t = integrate_linear_from_config(
                             G0_jax,
                             grid,
@@ -4536,7 +4536,7 @@ def run_kbm_beta_scan(
                             cache=cache,
                             terms=terms,
                             save_mode=sel if mode_only else None,
-                            mode_method=mode_method,
+                            mode_method=save_mode_method,
                             save_field="phi+density"
                             if fit_key == "auto"
                             else ("density" if fit_key == "density" else "phi"),
@@ -4848,6 +4848,7 @@ def run_kbm_linear(
         return gamma_val, omega_val
 
     if solver_key == "gx_time":
+        gx_mode_method = mode_method if mode_method in {"z_index", "max"} else "z_index"
         gx_time_cfg = GXTimeConfig(
             dt=dt,
             t_max=dt * steps,
@@ -4869,7 +4870,7 @@ def run_kbm_linear(
             geom,
             gx_time_cfg,
             terms=terms,
-            mode_method="z_index",
+            mode_method=gx_mode_method,
             z_index=sel.z_index,
             jit=True,
         )
@@ -4877,15 +4878,24 @@ def run_kbm_linear(
         phi_t_np = np.asarray(phi_t)
         if t_out.size > 1:
             try:
-                gamma, omega, _g_t, _o_t = gx_growth_rate_from_omega_series(
-                    np.asarray(gamma_t),
-                    np.asarray(omega_t),
+                gamma, omega, _g_t, _o_t, _t_mid = gx_growth_rate_from_phi(
+                    phi_t_np,
+                    t_out,
                     sel,
                     navg_fraction=0.5,
+                    mode_method=mode_method,
                 )
             except ValueError:
-                signal = extract_mode_time_series(phi_t_np, sel, method="max")
-                gamma, omega = _fit_with_window(signal, t_out)
+                try:
+                    gamma, omega, _g_t, _o_t = gx_growth_rate_from_omega_series(
+                        np.asarray(gamma_t),
+                        np.asarray(omega_t),
+                        sel,
+                        navg_fraction=0.5,
+                    )
+                except ValueError:
+                    signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
+                    gamma, omega = _fit_with_window(signal, t_out)
         else:
             gamma = float("nan")
             omega = float("nan")
