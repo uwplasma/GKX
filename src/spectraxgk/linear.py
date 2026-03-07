@@ -12,15 +12,12 @@ import numpy as np
 from jax.scipy.sparse.linalg import gmres
 
 from spectraxgk.basis import hermite_ladder_coeffs
-from spectraxgk.geometry import FluxTubeGeometryData, SAlphaGeometry, sample_flux_tube_geometry
+from spectraxgk.geometry import FluxTubeGeometryData, FluxTubeGeometryLike, ensure_flux_tube_geometry_data
 from spectraxgk.gyroaverage import J_l_all, bessel_j0, bessel_j1, gx_laguerre_transform
 from spectraxgk.grids import SpectralGrid
 
 if TYPE_CHECKING:
     from spectraxgk.terms.config import TermConfig
-
-
-FluxTubeGeometryLike = SAlphaGeometry | FluxTubeGeometryData
 
 
 @jax.tree_util.register_pytree_node_class
@@ -644,7 +641,7 @@ def build_linear_cache(
     dealias_mask = jnp.asarray(grid.dealias_mask, dtype=bool)
     kxfac_val = float(getattr(grid, "kxfac", 1.0))
     theta = jnp.asarray(grid.z, dtype=real_dtype)
-    geom_data = geom if isinstance(geom, FluxTubeGeometryData) else sample_flux_tube_geometry(geom, theta)
+    geom_data = ensure_flux_tube_geometry_data(geom, theta)
     gds2, gds21, gds22 = geom_data.metric_coeffs(theta)
     gds22_arr = gds22 if gds22.ndim else jnp.full_like(theta, gds22)
     bmag = geom_data.bmag(theta).astype(real_dtype)

@@ -13,9 +13,11 @@ linear growth/frequency scans, and nonlinear time traces for growth rate,
 frequency, and heat flux. The panel now uses GX-matched runtime configs
 (same integrator family and normalization contract; no manual `flux_scale` or
 `wphi_scale` calibration in the Cyclone config), with long nonlinear windows
-(`t=400` Cyclone, `t=100` KBM). The refreshed KBM `t=100` run now agrees with
-GX to within about `0.7%` mean relative error across `Wg`, `Wphi`, `Wapar`,
-heat flux, and particle flux.
+(`t=400` Cyclone and KBM). For the extended nonlinear KBM case, startup parity
+is checked against the dense `t<=0.2` GX run and the late saturated regime is
+checked by native-grid window statistics on the `t=400` run; the current
+late-window mean/std mismatch is about `5-6%` in `Wg`, heat flux, and
+particle flux.
 
 The current KBM GX mismatch table is stored in
 `docs/_static/kbm_gx_mismatch.csv`.
@@ -29,7 +31,8 @@ so branch-following issues can be isolated from operator mismatches.
 - **Hermite-Laguerre velocity space**: compact spectral representation.
 - **Field-aligned flux-tube geometry**: s-alpha analytic model (VMEC/DESC next).
 - **Geometry contract layer**: sampled flux-tube geometry profiles can now feed
-  the linear cache directly, which is the intended insertion point for VMEC.
+  the linear and nonlinear runner paths directly, which is the intended
+  insertion point for VMEC/imported field-line geometry.
 - **Full drift/mirror physics**: curvature/grad-B/mirror couplings + diamagnetic drive.
 - **Electromagnetic fields**: coupled :math:`(\\phi, A_\\parallel, B_\\parallel)` solve.
 - **Term toggles**: switch linear-operator components via ``LinearTerms``.

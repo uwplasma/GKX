@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.geometry import SAlphaGeometry
+from spectraxgk.geometry import FluxTubeGeometryLike
 from spectraxgk.gyroaverage import gamma0
 from spectraxgk.grids import SpectralGrid
 from spectraxgk.linear import LinearCache, LinearParams
@@ -36,7 +36,7 @@ class GXDiagnostics:
     particle_flux_species_t: ArrayLike | None = None
 
 
-def gx_volume_factors(geom: SAlphaGeometry, grid: SpectralGrid) -> tuple[jnp.ndarray, jnp.ndarray]:
+def gx_volume_factors(geom: FluxTubeGeometryLike, grid: SpectralGrid) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Return (vol_fac, flux_fac) matching GX's volume weights."""
 
     theta = grid.z

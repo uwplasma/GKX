@@ -10,7 +10,7 @@ import numpy as np
 from numpy.polynomial.laguerre import laggauss
 
 from spectraxgk.diagnostics import GXDiagnostics
-from spectraxgk.geometry import SAlphaGeometry
+from spectraxgk.geometry import FluxTubeGeometryLike
 from spectraxgk.grids import SpectralGrid
 from spectraxgk.linear import (
     LinearCache,
@@ -93,7 +93,7 @@ def _gx_eta_max(tprim: np.ndarray, fprim: np.ndarray) -> float:
 
 
 def _gx_geometry_maxima(
-    geom: SAlphaGeometry, theta: np.ndarray
+    geom: FluxTubeGeometryLike, theta: np.ndarray
 ) -> tuple[float, float, float, float, float, float]:
     theta_j = jnp.asarray(theta)
     cv_j, gb_j, cv0_j, gb0_j = geom.drift_coeffs(theta_j)
@@ -112,7 +112,7 @@ def _gx_geometry_maxima(
 
 
 def _gx_m0_max_ntft(
-    geom: SAlphaGeometry,
+    geom: FluxTubeGeometryLike,
     grid: SpectralGrid,
     ky_max: float,
     vpar_max: float,
@@ -168,7 +168,7 @@ def _gx_m0_max_ntft(
 
 def _gx_linear_omega_max(
     grid: SpectralGrid,
-    geom: SAlphaGeometry,
+    geom: FluxTubeGeometryLike,
     params: LinearParams,
     nl: int,
     nm: int,
@@ -331,7 +331,7 @@ def integrate_linear_gx(
     grid: SpectralGrid,
     cache: LinearCache,
     params: LinearParams,
-    geom: SAlphaGeometry,
+    geom: FluxTubeGeometryLike,
     time_cfg: GXTimeConfig,
     terms: LinearTerms | None = None,
     *,
@@ -410,7 +410,7 @@ def integrate_linear_gx_diagnostics(
     grid: SpectralGrid,
     cache: LinearCache,
     params: LinearParams,
-    geom: SAlphaGeometry,
+    geom: FluxTubeGeometryLike,
     time_cfg: GXTimeConfig,
     terms: LinearTerms | None = None,
     *,

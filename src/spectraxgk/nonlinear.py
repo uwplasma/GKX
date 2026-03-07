@@ -9,7 +9,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.geometry import SAlphaGeometry
+from spectraxgk.geometry import FluxTubeGeometryLike
 from spectraxgk.grids import SpectralGrid, gx_real_fft_mesh
 from spectraxgk.linear import (
     LinearCache,
@@ -321,7 +321,7 @@ def integrate_nonlinear_cached(
 def integrate_nonlinear(
     G0: jnp.ndarray,
     grid: SpectralGrid,
-    geom: SAlphaGeometry,
+    geom: FluxTubeGeometryLike,
     params: LinearParams,
     dt: float,
     steps: int,
@@ -359,7 +359,7 @@ def integrate_nonlinear(
 def _integrate_nonlinear_gx_diagnostics_impl(
     G0: jnp.ndarray,
     grid: SpectralGrid,
-    geom: SAlphaGeometry,
+    geom: FluxTubeGeometryLike,
     params: LinearParams,
     dt: float,
     steps: int,
@@ -704,7 +704,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
 def integrate_nonlinear_gx_diagnostics(
     G0: jnp.ndarray,
     grid: SpectralGrid,
-    geom: SAlphaGeometry,
+    geom: FluxTubeGeometryLike,
     params: LinearParams,
     dt: float,
     steps: int,
@@ -815,7 +815,7 @@ def integrate_nonlinear_gx_diagnostics(
 def integrate_nonlinear_gx_diagnostics_state(
     G0: jnp.ndarray,
     grid: SpectralGrid,
-    geom: SAlphaGeometry,
+    geom: FluxTubeGeometryLike,
     params: LinearParams,
     dt: float,
     steps: int,
@@ -895,7 +895,7 @@ def integrate_nonlinear_gx_diagnostics_state(
 def integrate_nonlinear_imex_gx_diagnostics(
     G0: jnp.ndarray,
     grid: SpectralGrid,
-    geom: SAlphaGeometry,
+    geom: FluxTubeGeometryLike,
     params: LinearParams,
     dt: float,
     steps: int,

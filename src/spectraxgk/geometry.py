@@ -140,6 +140,7 @@ class SAlphaGeometry:
         return cv_d + gb_d
 
 
+@jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
 class FluxTubeGeometryData:
     """Sampled flux-tube geometry contract for solver-ready metric profiles."""
@@ -165,6 +166,35 @@ class FluxTubeGeometryData:
     kperp2_bmag: bool = True
     bessel_bmag_power: float = 0.0
     source_model: str = "sampled"
+
+    def tree_flatten(self):
+        children = (
+            self.theta,
+            self.gradpar_value,
+            self.bmag_profile,
+            self.bgrad_profile,
+            self.gds2_profile,
+            self.gds21_profile,
+            self.gds22_profile,
+            self.cv_profile,
+            self.gb_profile,
+            self.cv0_profile,
+            self.gb0_profile,
+            self.q,
+            self.s_hat,
+            self.epsilon,
+            self.R0,
+            self.B0,
+            self.alpha,
+            self.drift_scale,
+            self.kperp2_bmag,
+            self.bessel_bmag_power,
+        )
+        return children, {"source_model": self.source_model}
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        return cls(*children, source_model=aux_data["source_model"])
 
     def _theta_matches(self, theta: jnp.ndarray) -> jnp.ndarray:
         theta_arr = jnp.asarray(theta)
@@ -278,6 +308,21 @@ def sample_flux_tube_geometry(geom: SAlphaGeometry, theta: jnp.ndarray) -> FluxT
         bessel_bmag_power=float(geom.bessel_bmag_power),
         source_model="s-alpha",
     )
+
+
+FluxTubeGeometryLike = SAlphaGeometry | FluxTubeGeometryData
+
+
+def ensure_flux_tube_geometry_data(
+    geom: FluxTubeGeometryLike,
+    theta: jnp.ndarray,
+) -> FluxTubeGeometryData:
+    """Return sampled geometry data for analytic or pre-sampled inputs."""
+
+    if isinstance(geom, FluxTubeGeometryData):
+        geom._theta_matches(theta)
+        return geom
+    return sample_flux_tube_geometry(geom, theta)
 
 
 def gx_twist_shift_params(

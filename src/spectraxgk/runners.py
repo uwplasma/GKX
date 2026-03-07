@@ -7,7 +7,7 @@ from typing import Tuple
 from spectraxgk.analysis import ModeSelection, ModeSelectionBatch
 from spectraxgk.config import TimeConfig
 from spectraxgk.diffrax_integrators import integrate_linear_diffrax, integrate_nonlinear_diffrax
-from spectraxgk.geometry import SAlphaGeometry
+from spectraxgk.geometry import FluxTubeGeometryLike
 from spectraxgk.grids import SpectralGrid
 from spectraxgk.linear import LinearCache, LinearParams, LinearTerms, integrate_linear
 from spectraxgk.nonlinear import integrate_nonlinear
@@ -26,7 +26,7 @@ def _steps_from_time(cfg: TimeConfig) -> int:
 def integrate_linear_from_config(
     G0,
     grid: SpectralGrid,
-    geom: SAlphaGeometry,
+    geom: FluxTubeGeometryLike,
     params: LinearParams,
     time_cfg: TimeConfig,
     *,
@@ -85,7 +85,7 @@ def integrate_linear_from_config(
 def integrate_nonlinear_from_config(
     G0,
     grid: SpectralGrid,
-    geom: SAlphaGeometry,
+    geom: FluxTubeGeometryLike,
     params: LinearParams,
     time_cfg: TimeConfig,
     *,

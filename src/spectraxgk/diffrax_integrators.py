@@ -10,7 +10,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from spectraxgk.analysis import ModeSelection, ModeSelectionBatch
-from spectraxgk.geometry import SAlphaGeometry
+from spectraxgk.geometry import FluxTubeGeometryLike
 from spectraxgk.grids import SpectralGrid
 from spectraxgk.linear import (
     LinearCache,
@@ -167,7 +167,7 @@ def _density_from_G_cached(
 def integrate_linear_diffrax(
     G0: jnp.ndarray,
     grid: SpectralGrid,
-    geom: SAlphaGeometry,
+    geom: FluxTubeGeometryLike,
     params: LinearParams,
     dt: float,
     steps: int,
@@ -333,7 +333,7 @@ def integrate_linear_diffrax(
 def integrate_linear_diffrax_streaming(
     G0: jnp.ndarray,
     grid: SpectralGrid,
-    geom: SAlphaGeometry,
+    geom: FluxTubeGeometryLike,
     params: LinearParams,
     dt: float,
     steps: int,
@@ -539,7 +539,7 @@ def integrate_linear_diffrax_streaming(
 def integrate_nonlinear_diffrax(
     G0: jnp.ndarray,
     grid: SpectralGrid,
-    geom: SAlphaGeometry,
+    geom: FluxTubeGeometryLike,
     params: LinearParams,
     dt: float,
     steps: int,
