@@ -18,7 +18,7 @@ from spectraxgk.analysis import (
     select_ky_index,
 )
 from spectraxgk.diagnostics import GXDiagnostics
-from spectraxgk.geometry import SAlphaGeometry, gx_twist_shift_params
+from spectraxgk.geometry import FluxTubeGeometryLike, SAlphaGeometry, gx_twist_shift_params
 from spectraxgk.grids import SpectralGrid, build_spectral_grid, select_ky_grid
 from spectraxgk.linear import (
     LinearParams,
@@ -277,7 +277,7 @@ def _expand_ky(arr: np.ndarray, *, nyc: int) -> np.ndarray:
 
 def _build_initial_condition(
     grid: SpectralGrid,
-    geom: SAlphaGeometry,
+    geom: FluxTubeGeometryLike,
     cfg: RuntimeConfig,
     *,
     ky_index: int,

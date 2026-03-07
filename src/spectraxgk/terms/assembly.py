@@ -9,7 +9,7 @@ import jax
 
 import jax.numpy as jnp
 
-from spectraxgk.geometry import SAlphaGeometry
+from spectraxgk.geometry import FluxTubeGeometryLike
 from spectraxgk.grids import SpectralGrid
 from spectraxgk.linear import LinearCache, LinearParams, _as_species_array, build_H, build_linear_cache
 from spectraxgk.terms.config import FieldState, TermConfig
@@ -533,7 +533,7 @@ def compute_fields_cached(
 def assemble_rhs(
     G: jnp.ndarray,
     grid: SpectralGrid,
-    geom: SAlphaGeometry,
+    geom: FluxTubeGeometryLike,
     params: LinearParams,
     *,
     Nl: int,
