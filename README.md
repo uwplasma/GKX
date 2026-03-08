@@ -34,7 +34,8 @@ so branch-following issues can be isolated from operator mismatches.
   the linear and nonlinear runner paths directly, which is the intended
   insertion point for VMEC/imported field-line geometry.
 - **GX NetCDF geometry bridge**: GX-style `Geometry` groups can now be loaded
-  directly into the sampled contract, preserving explicit Jacobian/flux weights.
+  directly into the sampled contract, preserving explicit Jacobian/flux weights
+  and root-level `*.eik.nc` VMEC field-line files from GX.
 - **Full drift/mirror physics**: curvature/grad-B/mirror couplings + diamagnetic drive.
 - **Electromagnetic fields**: coupled :math:`(\\phi, A_\\parallel, B_\\parallel)` solve.
 - **Term toggles**: switch linear-operator components via ``LinearTerms``.
@@ -149,6 +150,10 @@ python examples/kbm_beta_scan.py --no-diffrax
   gradients; real frequencies follow the electron diamagnetic direction.
 - **KBM beta scan**: electromagnetic transition between ITG and KBM branches,
   with GX as the baseline reference for linear and nonlinear diagnostics.
+- **Imported W7-X geometry**: the GX `*.eik.nc` W7-X linear ITG case now
+  matches the corrected GX `t=2` short-window reference with mean absolute
+  `omega` errors around `1e-5` and mean relative `gamma` errors of about
+  `0.4-4%` across `ky=0.1-0.4`.
 
 ## Figures
 
