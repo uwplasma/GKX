@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import jax
@@ -216,7 +216,7 @@ class FluxTubeGeometryData:
         theta_line = theta_arr if theta_arr.ndim == 1 else theta_arr.reshape(-1, theta_arr.shape[-1])[0]
         if isinstance(theta_line, jax.core.Tracer):
             return theta_arr
-        if not np.allclose(np.asarray(theta_line), np.asarray(self.theta)):
+        if not np.allclose(np.asarray(theta_line), np.asarray(self.theta), rtol=1.0e-6, atol=1.0e-6):
             raise ValueError("theta does not match the sampled geometry grid")
         return theta_arr
 
@@ -226,6 +226,33 @@ class FluxTubeGeometryData:
             return profile
         shape = (1,) * (theta_arr.ndim - 1) + (profile.shape[0],)
         return jnp.broadcast_to(profile.reshape(shape), theta_arr.shape)
+
+    def trim_terminal_theta_point(self) -> FluxTubeGeometryData:
+        """Return a copy without the terminal theta sample.
+
+        GX `*.eik.nc` files commonly store a closed theta interval, while the
+        spectral solver uses the matching open interval with the terminal point
+        excluded. Trimming keeps the imported coefficients aligned with the
+        runtime grid without changing the physical extent.
+        """
+
+        if self.theta.shape[0] < 2:
+            raise ValueError("Cannot trim the terminal point from a geometry grid with fewer than two samples")
+        return replace(
+            self,
+            theta=self.theta[:-1],
+            bmag_profile=self.bmag_profile[:-1],
+            bgrad_profile=self.bgrad_profile[:-1],
+            gds2_profile=self.gds2_profile[:-1],
+            gds21_profile=self.gds21_profile[:-1],
+            gds22_profile=self.gds22_profile[:-1],
+            cv_profile=self.cv_profile[:-1],
+            gb_profile=self.gb_profile[:-1],
+            cv0_profile=self.cv0_profile[:-1],
+            gb0_profile=self.gb0_profile[:-1],
+            jacobian_profile=self.jacobian_profile[:-1],
+            grho_profile=self.grho_profile[:-1],
+        )
 
     def gradpar(self) -> float:
         return float(self.gradpar_value)
@@ -445,32 +472,45 @@ def ensure_flux_tube_geometry_data(
     """Return sampled geometry data for analytic or pre-sampled inputs."""
 
     if isinstance(geom, FluxTubeGeometryData):
-        geom._theta_matches(theta)
-        return geom
+        try:
+            geom._theta_matches(theta)
+            return geom
+        except ValueError as exc:
+            theta_arr = jnp.asarray(theta)
+            if geom.theta.shape[0] == theta_arr.shape[-1] + 1:
+                trimmed = geom.trim_terminal_theta_point()
+                trimmed._theta_matches(theta)
+                return trimmed
+            raise exc
     return sample_flux_tube_geometry(geom, theta)
 
 
 def gx_twist_shift_params(
-    geom: SAlphaGeometry,
+    geom: FluxTubeGeometryLike,
     grid: GridConfig,
 ) -> tuple[int, float]:
     """Return (jtwist, x0) following GX twist-and-shift defaults."""
 
     y0 = float(grid.y0) if grid.y0 is not None else float(grid.Ly) / (2.0 * jnp.pi)
-    if grid.ntheta is not None:
-        if grid.zp is not None:
-            zp = int(grid.zp)
-        elif grid.nperiod is not None:
-            zp = 2 * int(grid.nperiod) - 1
-        else:
-            zp = 1
-        theta_min = -jnp.pi * float(zp)
+    if isinstance(geom, FluxTubeGeometryData):
+        gds21_val = float(np.asarray(geom.gds21_profile[0]))
+        gds22_val = float(np.asarray(geom.gds22_profile[0]))
+        shat = float(geom.s_hat)
     else:
-        theta_min = float(grid.z_min)
-    _gds2, gds21, gds22 = geom.metric_coeffs(jnp.asarray([theta_min]))
-    gds21_val = float(gds21[0])
-    gds22_val = float(gds22)
-    shat = float(geom.s_hat)
+        if grid.ntheta is not None:
+            if grid.zp is not None:
+                zp = int(grid.zp)
+            elif grid.nperiod is not None:
+                zp = 2 * int(grid.nperiod) - 1
+            else:
+                zp = 1
+            theta_min = -jnp.pi * float(zp)
+        else:
+            theta_min = float(grid.z_min)
+        _gds2, gds21, gds22 = geom.metric_coeffs(jnp.asarray([theta_min]))
+        gds21_val = float(gds21[0])
+        gds22_val = float(gds22)
+        shat = float(geom.s_hat)
     twist_shift_geo_fac = 2.0 * shat * gds21_val / gds22_val if gds22_val != 0.0 else 0.0
     if grid.jtwist is None:
         jtwist = int(round(twist_shift_geo_fac))
@@ -485,3 +525,31 @@ def gx_twist_shift_params(
     else:
         x0 = y0 * abs(jtwist) / abs(twist_shift_geo_fac)
     return jtwist, x0
+
+
+def apply_gx_geometry_grid_defaults(
+    geom: FluxTubeGeometryLike,
+    grid: GridConfig,
+) -> GridConfig:
+    """Apply GX-aligned grid defaults implied by the selected geometry."""
+
+    grid_out = grid
+    if isinstance(geom, FluxTubeGeometryData):
+        theta = np.asarray(geom.theta, dtype=float)
+        if theta.ndim != 1 or theta.size < 2:
+            raise ValueError("Imported GX geometry theta grid must be one-dimensional with at least two points")
+        grid_out = replace(
+            grid_out,
+            Nz=int(theta.size - 1),
+            z_min=float(theta[0]),
+            z_max=float(theta[-1]),
+            ntheta=None,
+            nperiod=None,
+            zp=None,
+        )
+        if float(grid_out.kxfac) == 1.0:
+            grid_out = replace(grid_out, kxfac=float(geom.kxfac))
+    if str(grid_out.boundary).lower() == "linked" and not bool(grid_out.non_twist):
+        jtwist, x0 = gx_twist_shift_params(geom, grid_out)
+        grid_out = replace(grid_out, Lx=2.0 * np.pi * x0, jtwist=jtwist)
+    return grid_out

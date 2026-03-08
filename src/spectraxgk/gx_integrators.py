@@ -10,7 +10,7 @@ import numpy as np
 from numpy.polynomial.laguerre import laggauss
 
 from spectraxgk.diagnostics import GXDiagnostics
-from spectraxgk.geometry import FluxTubeGeometryLike
+from spectraxgk.geometry import FluxTubeGeometryLike, ensure_flux_tube_geometry_data
 from spectraxgk.grids import SpectralGrid
 from spectraxgk.linear import (
     LinearCache,
@@ -465,6 +465,7 @@ def integrate_linear_gx_diagnostics(
     if terms is None:
         terms = LinearTerms()
     term_cfg = _gx_term_config(terms)
+    geom_eff = ensure_flux_tube_geometry_data(geom, grid.z)
 
     t_max = float(time_cfg.t_max)
     dt = float(time_cfg.dt)
@@ -483,7 +484,7 @@ def integrate_linear_gx_diagnostics(
     _, fields0 = assemble_rhs_cached(G, cache, params, terms=term_cfg)
     phi_prev = fields0.phi
 
-    omega_max = _gx_linear_omega_max(grid, geom, params, G.shape[-5], G.shape[-4])
+    omega_max = _gx_linear_omega_max(grid, geom_eff, params, G.shape[-5], G.shape[-4])
     wmax = float(np.sum(omega_max))
     if not time_cfg.fixed_dt and wmax > 0.0:
         dt_guess = float(time_cfg.cfl_fac) * float(time_cfg.cfl) / wmax
@@ -500,7 +501,7 @@ def integrate_linear_gx_diagnostics(
     heat_list: list[float] = []
     pflux_list: list[float] = []
 
-    vol_fac, flux_fac = gx_volume_factors(geom, grid)
+    vol_fac, flux_fac = gx_volume_factors(geom_eff, grid)
     use_dealias = bool(time_cfg.use_dealias_mask)
 
     stepper = _rk4_step

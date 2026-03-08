@@ -19,10 +19,9 @@ from spectraxgk.analysis import (
 )
 from spectraxgk.diagnostics import GXDiagnostics
 from spectraxgk.geometry import (
+    apply_gx_geometry_grid_defaults,
     FluxTubeGeometryLike,
-    SAlphaGeometry,
     build_flux_tube_geometry,
-    gx_twist_shift_params,
 )
 from spectraxgk.grids import SpectralGrid, build_spectral_grid, select_ky_grid
 from spectraxgk.linear import (
@@ -511,10 +510,7 @@ def run_runtime_linear(
     """Run one linear point from a case-agnostic runtime config."""
 
     geom = build_flux_tube_geometry(cfg.geometry)
-    grid_cfg = cfg.grid
-    if isinstance(geom, SAlphaGeometry) and grid_cfg.boundary == "linked" and not grid_cfg.non_twist:
-        jtwist, x0 = gx_twist_shift_params(geom, grid_cfg)
-        grid_cfg = replace(grid_cfg, Lx=2.0 * np.pi * x0, jtwist=jtwist)
+    grid_cfg = apply_gx_geometry_grid_defaults(geom, cfg.grid)
     grid_full = build_spectral_grid(grid_cfg)
     params = build_runtime_linear_params(cfg, Nm=Nm)
     terms = build_runtime_linear_terms(cfg)
@@ -846,10 +842,7 @@ def _run_runtime_scan_batch(
     """Batch a ky scan using one time integration over the full grid."""
 
     geom = build_flux_tube_geometry(cfg.geometry)
-    grid_cfg = cfg.grid
-    if isinstance(geom, SAlphaGeometry) and grid_cfg.boundary == "linked" and not grid_cfg.non_twist:
-        jtwist, x0 = gx_twist_shift_params(geom, grid_cfg)
-        grid_cfg = replace(grid_cfg, Lx=2.0 * np.pi * x0, jtwist=jtwist)
+    grid_cfg = apply_gx_geometry_grid_defaults(geom, cfg.grid)
     grid = build_spectral_grid(grid_cfg)
     params = build_runtime_linear_params(cfg, Nm=Nm)
     terms = build_runtime_linear_terms(cfg)
@@ -986,10 +979,7 @@ def run_runtime_nonlinear(
     """Run a nonlinear point using the unified runtime config path."""
 
     geom = build_flux_tube_geometry(cfg.geometry)
-    grid_cfg = cfg.grid
-    if isinstance(geom, SAlphaGeometry) and grid_cfg.boundary == "linked" and not grid_cfg.non_twist:
-        jtwist, x0 = gx_twist_shift_params(geom, grid_cfg)
-        grid_cfg = replace(grid_cfg, Lx=2.0 * np.pi * x0, jtwist=jtwist)
+    grid_cfg = apply_gx_geometry_grid_defaults(geom, cfg.grid)
     grid = build_spectral_grid(grid_cfg)
     params = build_runtime_linear_params(cfg, Nm=Nm)
     term_cfg = build_runtime_term_config(cfg)

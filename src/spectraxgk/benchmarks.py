@@ -30,7 +30,12 @@ from spectraxgk.config import (
     TEMBaseCase,
     TimeConfig,
 )
-from spectraxgk.geometry import FluxTubeGeometryLike, SAlphaGeometry, build_flux_tube_geometry
+from spectraxgk.geometry import (
+    FluxTubeGeometryLike,
+    SAlphaGeometry,
+    apply_gx_geometry_grid_defaults,
+    build_flux_tube_geometry,
+)
 from spectraxgk.grids import SpectralGrid, build_spectral_grid, select_ky_grid
 from spectraxgk.diffrax_integrators import (
     integrate_linear_diffrax,
@@ -4772,8 +4777,8 @@ def run_kbm_linear(
     cfg_in = cfg or KBMBaseCase()
     beta_use = float(cfg_in.model.beta) if beta_value is None else float(beta_value)
     cfg_use = replace(cfg_in, model=replace(cfg_in.model, beta=beta_use))
-    grid_full = build_spectral_grid(cfg_use.grid)
     geom = build_flux_tube_geometry(cfg_use.geometry)
+    grid_full = build_spectral_grid(apply_gx_geometry_grid_defaults(geom, cfg_use.grid))
     if terms is None:
         terms = LinearTerms(bpar=0.0)
     if gx_reference and diagnostic_norm == "none":
