@@ -343,38 +343,77 @@ def load_gx_geometry_netcdf(path: str | Path) -> FluxTubeGeometryData:
     except ImportError as exc:  # pragma: no cover - optional import
         raise ImportError("netCDF4 is required to load GX geometry NetCDF files") from exc
 
+    def _read_scalar(variables, *names: str, default: float | None = None) -> float:
+        for name in names:
+            if name in variables:
+                arr = np.asarray(variables[name][:], dtype=float)
+                if arr.ndim == 0:
+                    return float(arr)
+                if arr.ndim == 1 and np.allclose(arr, arr[0]):
+                    return float(arr[0])
+                raise ValueError(f"GX geometry variable '{name}' must be scalar or constant on theta")
+        if default is None:
+            raise KeyError(names[0])
+        return float(default)
+
+    def _read_profile(variables, *names: str) -> np.ndarray:
+        for name in names:
+            if name in variables:
+                arr = np.asarray(variables[name][:], dtype=float)
+                if arr.ndim != 1:
+                    raise ValueError(f"GX geometry variable '{name}' must be one-dimensional on theta")
+                return arr
+        raise KeyError(names[0])
+
     root = Dataset(Path(path), "r")
     try:
-        geom = root.groups["Geometry"]
-        grids = root.groups["Grids"]
-        theta = jnp.asarray(np.asarray(grids.variables["theta"][:], dtype=float))
-        rmaj = float(np.asarray(geom.variables["rmaj"][:])) if "rmaj" in geom.variables else 1.0
-        aminor = float(np.asarray(geom.variables["aminor"][:])) if "aminor" in geom.variables else 0.0
+        if "Geometry" in root.groups and "Grids" in root.groups:
+            geom_vars = root.groups["Geometry"].variables
+            grid_vars = root.groups["Grids"].variables
+            theta = _read_profile(grid_vars, "theta")
+        else:
+            geom_vars = root.variables
+            grid_vars = root.variables
+            theta = _read_profile(root.variables, "theta")
+
+        gradpar_val = _read_scalar(geom_vars, "gradpar")
+        bmag = _read_profile(geom_vars, "bmag")
+        if "bgrad" in geom_vars:
+            bgrad = _read_profile(geom_vars, "bgrad")
+        else:
+            log_bmag = np.log(np.clip(bmag, 1.0e-30, None))
+            if theta.size >= 3:
+                dlogb_dtheta = np.gradient(log_bmag, theta, edge_order=2)
+            else:
+                dlogb_dtheta = np.gradient(log_bmag, theta, edge_order=1)
+            bgrad = gradpar_val * dlogb_dtheta
+        rmaj = _read_scalar(geom_vars, "rmaj", "Rmaj", default=1.0)
+        aminor = _read_scalar(geom_vars, "aminor", default=0.0)
         epsilon = aminor / rmaj if abs(rmaj) > 0.0 else 0.0
         return FluxTubeGeometryData(
-            theta=theta,
-            gradpar_value=float(np.asarray(geom.variables["gradpar"][:])),
-            bmag_profile=jnp.asarray(np.asarray(geom.variables["bmag"][:], dtype=float)),
-            bgrad_profile=jnp.asarray(np.asarray(geom.variables["bgrad"][:], dtype=float)),
-            gds2_profile=jnp.asarray(np.asarray(geom.variables["gds2"][:], dtype=float)),
-            gds21_profile=jnp.asarray(np.asarray(geom.variables["gds21"][:], dtype=float)),
-            gds22_profile=jnp.asarray(np.asarray(geom.variables["gds22"][:], dtype=float)),
-            cv_profile=jnp.asarray(np.asarray(geom.variables["cvdrift"][:], dtype=float)),
-            gb_profile=jnp.asarray(np.asarray(geom.variables["gbdrift"][:], dtype=float)),
-            cv0_profile=jnp.asarray(np.asarray(geom.variables["cvdrift0"][:], dtype=float)),
-            gb0_profile=jnp.asarray(np.asarray(geom.variables["gbdrift0"][:], dtype=float)),
-            jacobian_profile=jnp.asarray(np.asarray(geom.variables["jacobian"][:], dtype=float)),
-            grho_profile=jnp.asarray(np.asarray(geom.variables["grho"][:], dtype=float)),
-            q=float(np.asarray(geom.variables["q"][:])) if "q" in geom.variables else 0.0,
-            s_hat=float(np.asarray(geom.variables["shat"][:])) if "shat" in geom.variables else 0.0,
+            theta=jnp.asarray(theta),
+            gradpar_value=gradpar_val,
+            bmag_profile=jnp.asarray(bmag),
+            bgrad_profile=jnp.asarray(bgrad),
+            gds2_profile=jnp.asarray(_read_profile(geom_vars, "gds2")),
+            gds21_profile=jnp.asarray(_read_profile(geom_vars, "gds21")),
+            gds22_profile=jnp.asarray(_read_profile(geom_vars, "gds22")),
+            cv_profile=jnp.asarray(_read_profile(geom_vars, "cvdrift")),
+            gb_profile=jnp.asarray(_read_profile(geom_vars, "gbdrift")),
+            cv0_profile=jnp.asarray(_read_profile(geom_vars, "cvdrift0")),
+            gb0_profile=jnp.asarray(_read_profile(geom_vars, "gbdrift0")),
+            jacobian_profile=jnp.asarray(_read_profile(geom_vars, "jacobian", "jacob")),
+            grho_profile=jnp.asarray(_read_profile(geom_vars, "grho")),
+            q=_read_scalar(geom_vars, "q", default=0.0),
+            s_hat=_read_scalar(geom_vars, "shat", default=0.0),
             epsilon=float(epsilon),
             R0=float(rmaj),
             B0=1.0,
-            alpha=float(np.asarray(geom.variables["alpha"][:])) if "alpha" in geom.variables else 0.0,
+            alpha=_read_scalar(geom_vars, "alpha", default=0.0),
             drift_scale=1.0,
-            kxfac=float(np.asarray(geom.variables["kxfac"][:])) if "kxfac" in geom.variables else 1.0,
-            theta_scale=float(np.asarray(geom.variables["theta_scale"][:])) if "theta_scale" in geom.variables else 1.0,
-            nfp=int(round(float(np.asarray(geom.variables["nfp"][:]))) if "nfp" in geom.variables else 1.0),
+            kxfac=_read_scalar(geom_vars, "kxfac", default=1.0),
+            theta_scale=_read_scalar(geom_vars, "theta_scale", "scale", default=1.0),
+            nfp=int(round(_read_scalar(geom_vars, "nfp", default=1.0))),
             kperp2_bmag=True,
             bessel_bmag_power=0.0,
             source_model="gx-netcdf",
