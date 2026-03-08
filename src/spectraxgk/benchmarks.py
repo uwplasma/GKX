@@ -30,7 +30,7 @@ from spectraxgk.config import (
     TEMBaseCase,
     TimeConfig,
 )
-from spectraxgk.geometry import SAlphaGeometry
+from spectraxgk.geometry import FluxTubeGeometryLike, SAlphaGeometry, build_flux_tube_geometry
 from spectraxgk.grids import SpectralGrid, build_spectral_grid, select_ky_grid
 from spectraxgk.diffrax_integrators import (
     integrate_linear_diffrax,
@@ -556,7 +556,7 @@ def _build_gaussian_profile(
 
 def _build_initial_condition(
     grid: SpectralGrid,
-    geom: SAlphaGeometry,
+    geom: FluxTubeGeometryLike,
     *,
     ky_index: int | Sequence[int] | np.ndarray,
     kx_index: int,
@@ -2422,7 +2422,7 @@ def run_etg_linear(
                 phi_t = _diag[1]
                 density_t = _diag[2] if len(_diag) > 2 else None
             else:
-                _, phi_out_time = integrate_linear(
+                _, phi_t = integrate_linear(
                     G0_jax,
                     grid,
                     geom,
@@ -4751,7 +4751,7 @@ def run_kbm_linear(
     beta_use = float(cfg_in.model.beta) if beta_value is None else float(beta_value)
     cfg_use = replace(cfg_in, model=replace(cfg_in.model, beta=beta_use))
     grid_full = build_spectral_grid(cfg_use.grid)
-    geom = SAlphaGeometry.from_config(cfg_use.geometry)
+    geom = build_flux_tube_geometry(cfg_use.geometry)
     if terms is None:
         terms = LinearTerms(bpar=0.0)
     if gx_reference and diagnostic_norm == "none":
