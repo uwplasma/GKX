@@ -615,6 +615,28 @@ def _build_initial_condition(
                 G0[l_idx, m_idx, ky_i, kx_index, :] = init_vals
     return jnp.asarray(G0)
 
+
+def _kbm_use_multi_target_krylov(
+    kcfg: KrylovConfig,
+    targets: Sequence[float] | None,
+    *,
+    shift: complex | None,
+) -> bool:
+    """Return whether KBM benchmark helpers should sweep target factors."""
+
+    if targets is None:
+        return False
+    if kcfg.mode_family.strip().lower() != "kbm":
+        return False
+    if kcfg.method.strip().lower() != "shift_invert":
+        return False
+    if shift is not None:
+        return False
+    if kcfg.shift_selection.strip().lower() == "shift":
+        return False
+    return True
+
+
 @dataclass(frozen=True)
 class CycloneReference:
     ky: np.ndarray
@@ -4375,10 +4397,10 @@ def run_kbm_beta_scan(
                 shift_val = complex(np.asarray(prev_eig))
 
             targets: Sequence[float] | None = kbm_target_factors if kbm_target_factors else None
-            use_multi_target = (
-                targets is not None
-                and krylov_cfg_use.mode_family.strip().lower() == "kbm"
-                and krylov_cfg_use.method.strip().lower() == "shift_invert"
+            use_multi_target = _kbm_use_multi_target_krylov(
+                krylov_cfg_use,
+                targets,
+                shift=shift_val,
             )
             if use_multi_target:
                 assert targets is not None
@@ -4912,10 +4934,10 @@ def run_kbm_linear(
     if solver_key == "krylov":
         shift_val = krylov_cfg_use.shift
         targets: Sequence[float] | None = kbm_target_factors if kbm_target_factors else None
-        use_multi_target = (
-            targets is not None
-            and krylov_cfg_use.mode_family.strip().lower() == "kbm"
-            and krylov_cfg_use.method.strip().lower() == "shift_invert"
+        use_multi_target = _kbm_use_multi_target_krylov(
+            krylov_cfg_use,
+            targets,
+            shift=shift_val,
         )
         if use_multi_target:
             assert targets is not None
