@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 import jax
 import jax.numpy as jnp
@@ -327,13 +327,9 @@ def _rk4_step(
     """Single GX-style RK4 step for linear dynamics."""
 
     dt_val = jnp.asarray(dt)
-    damp_amp = jnp.asarray(params.damp_ends_amp)
-    damp_weight = jnp.asarray(term_cfg.end_damping)
-    damp_scale = jnp.where(damp_weight != 0.0, 1.0 / dt_val, 1.0)
-    params_step = replace(params, damp_ends_amp=damp_amp * damp_scale)
 
     def rhs(state: jnp.ndarray) -> jnp.ndarray:
-        dG, _fields = assemble_rhs_cached(state, cache, params_step, terms=term_cfg)
+        dG, _fields = assemble_rhs_cached(state, cache, params, terms=term_cfg)
         return dG
 
     k1 = rhs(G)
@@ -343,7 +339,7 @@ def _rk4_step(
     G_next = G + (dt_val / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
 
     # fields at the end of step
-    _, fields = assemble_rhs_cached(G_next, cache, params_step, terms=term_cfg)
+    _, fields = assemble_rhs_cached(G_next, cache, params, terms=term_cfg)
     return G_next, fields
 
 

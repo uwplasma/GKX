@@ -172,6 +172,7 @@ class FluxTubeGeometryData:
     kperp2_bmag: bool = True
     bessel_bmag_power: float = 0.0
     source_model: str = "sampled"
+    theta_closed_interval: bool = False
 
     def tree_flatten(self):
         children = (
@@ -201,11 +202,18 @@ class FluxTubeGeometryData:
             self.kperp2_bmag,
             self.bessel_bmag_power,
         )
-        return children, {"source_model": self.source_model}
+        return children, {
+            "source_model": self.source_model,
+            "theta_closed_interval": self.theta_closed_interval,
+        }
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
-        return cls(*children, source_model=aux_data["source_model"])
+        return cls(
+            *children,
+            source_model=aux_data["source_model"],
+            theta_closed_interval=aux_data["theta_closed_interval"],
+        )
 
     def _theta_matches(self, theta: jnp.ndarray) -> jnp.ndarray:
         theta_arr = jnp.asarray(theta)
@@ -252,6 +260,7 @@ class FluxTubeGeometryData:
             gb0_profile=self.gb0_profile[:-1],
             jacobian_profile=self.jacobian_profile[:-1],
             grho_profile=self.grho_profile[:-1],
+            theta_closed_interval=False,
         )
 
     def gradpar(self) -> float:
@@ -359,7 +368,43 @@ def sample_flux_tube_geometry(geom: SAlphaGeometry, theta: jnp.ndarray) -> FluxT
         kperp2_bmag=bool(geom.kperp2_bmag),
         bessel_bmag_power=float(geom.bessel_bmag_power),
         source_model="s-alpha",
+        theta_closed_interval=False,
     )
+
+
+def _periodic_spectral_derivative(values: np.ndarray, spacing: float) -> np.ndarray:
+    """Return the periodic spectral derivative of a uniform 1D profile."""
+
+    if values.ndim != 1:
+        raise ValueError("Periodic spectral derivatives require a one-dimensional profile")
+    if values.size < 2:
+        return np.zeros_like(values)
+    k = 2.0 * np.pi * np.fft.fftfreq(values.size, d=spacing)
+    deriv_hat = 1j * k * np.fft.fft(values)
+    return np.fft.ifft(deriv_hat).real.astype(values.dtype, copy=False)
+
+
+def _gx_bgrad_from_bmag(theta: np.ndarray, bmag: np.ndarray, gradpar_val: float, *, closed: bool) -> np.ndarray:
+    """Reconstruct GX's mirror term from ``bmag`` on the solver theta grid."""
+
+    if theta.ndim != 1 or bmag.ndim != 1:
+        raise ValueError("GX bgrad reconstruction expects one-dimensional theta and bmag profiles")
+    if theta.shape != bmag.shape:
+        raise ValueError("theta and bmag must have the same shape for GX bgrad reconstruction")
+    if theta.size < 2:
+        return np.zeros_like(bmag)
+    if closed:
+        work_theta = theta[:-1]
+        work_bmag = bmag[:-1]
+    else:
+        work_theta = theta
+        work_bmag = bmag
+    spacing = float(work_theta[1] - work_theta[0])
+    d_bmag = _periodic_spectral_derivative(work_bmag, spacing)
+    bgrad = float(gradpar_val) * d_bmag / np.clip(work_bmag, 1.0e-30, None)
+    if closed:
+        return np.concatenate([bgrad, bgrad[:1]])
+    return bgrad
 
 
 def load_gx_geometry_netcdf(path: str | Path) -> FluxTubeGeometryData:
@@ -394,26 +439,44 @@ def load_gx_geometry_netcdf(path: str | Path) -> FluxTubeGeometryData:
 
     root = Dataset(Path(path), "r")
     try:
-        if "Geometry" in root.groups and "Grids" in root.groups:
+        is_grouped_gx_output = "Geometry" in root.groups and "Grids" in root.groups
+        if is_grouped_gx_output:
             geom_vars = root.groups["Geometry"].variables
             grid_vars = root.groups["Grids"].variables
             theta = _read_profile(grid_vars, "theta")
+            theta_closed_interval = False
         else:
             geom_vars = root.variables
             grid_vars = root.variables
             theta = _read_profile(root.variables, "theta")
+            theta_closed_interval = True
 
         gradpar_val = _read_scalar(geom_vars, "gradpar")
         bmag = _read_profile(geom_vars, "bmag")
-        if "bgrad" in geom_vars:
+        drhodpsi = _read_scalar(geom_vars, "drhodpsi", default=1.0)
+        if is_grouped_gx_output and "bgrad" in geom_vars:
             bgrad = _read_profile(geom_vars, "bgrad")
         else:
-            log_bmag = np.log(np.clip(bmag, 1.0e-30, None))
-            if theta.size >= 3:
-                dlogb_dtheta = np.gradient(log_bmag, theta, edge_order=2)
-            else:
-                dlogb_dtheta = np.gradient(log_bmag, theta, edge_order=1)
-            bgrad = gradpar_val * dlogb_dtheta
+            bgrad = _gx_bgrad_from_bmag(
+                np.asarray(theta, dtype=float),
+                np.asarray(bmag, dtype=float),
+                gradpar_val,
+                closed=theta_closed_interval,
+            )
+        if is_grouped_gx_output:
+            cvdrift = _read_profile(geom_vars, "cvdrift")
+            gbdrift = _read_profile(geom_vars, "gbdrift")
+            cvdrift0 = _read_profile(geom_vars, "cvdrift0")
+            gbdrift0 = _read_profile(geom_vars, "gbdrift0")
+            jacobian = _read_profile(geom_vars, "jacobian", "jacob")
+        else:
+            # Root-level VMEC ``*.eik.nc`` files carry the pre-GX drift
+            # normalization and a Jacobian that GX replaces at load time.
+            cvdrift = 0.5 * _read_profile(geom_vars, "cvdrift")
+            gbdrift = 0.5 * _read_profile(geom_vars, "gbdrift")
+            cvdrift0 = 0.5 * _read_profile(geom_vars, "cvdrift0")
+            gbdrift0 = 0.5 * _read_profile(geom_vars, "gbdrift0")
+            jacobian = 1.0 / np.abs(float(drhodpsi) * float(gradpar_val) * np.asarray(bmag, dtype=float))
         rmaj = _read_scalar(geom_vars, "rmaj", "Rmaj", default=1.0)
         aminor = _read_scalar(geom_vars, "aminor", default=0.0)
         epsilon = aminor / rmaj if abs(rmaj) > 0.0 else 0.0
@@ -425,11 +488,11 @@ def load_gx_geometry_netcdf(path: str | Path) -> FluxTubeGeometryData:
             gds2_profile=jnp.asarray(_read_profile(geom_vars, "gds2")),
             gds21_profile=jnp.asarray(_read_profile(geom_vars, "gds21")),
             gds22_profile=jnp.asarray(_read_profile(geom_vars, "gds22")),
-            cv_profile=jnp.asarray(_read_profile(geom_vars, "cvdrift")),
-            gb_profile=jnp.asarray(_read_profile(geom_vars, "gbdrift")),
-            cv0_profile=jnp.asarray(_read_profile(geom_vars, "cvdrift0")),
-            gb0_profile=jnp.asarray(_read_profile(geom_vars, "gbdrift0")),
-            jacobian_profile=jnp.asarray(_read_profile(geom_vars, "jacobian", "jacob")),
+            cv_profile=jnp.asarray(cvdrift),
+            gb_profile=jnp.asarray(gbdrift),
+            cv0_profile=jnp.asarray(cvdrift0),
+            gb0_profile=jnp.asarray(gbdrift0),
+            jacobian_profile=jnp.asarray(jacobian),
             grho_profile=jnp.asarray(_read_profile(geom_vars, "grho")),
             q=_read_scalar(geom_vars, "q", default=0.0),
             s_hat=_read_scalar(geom_vars, "shat", default=0.0),
@@ -444,6 +507,7 @@ def load_gx_geometry_netcdf(path: str | Path) -> FluxTubeGeometryData:
             kperp2_bmag=True,
             bessel_bmag_power=0.0,
             source_model="gx-netcdf",
+            theta_closed_interval=theta_closed_interval,
         )
     finally:
         root.close()
@@ -538,11 +602,20 @@ def apply_gx_geometry_grid_defaults(
         theta = np.asarray(geom.theta, dtype=float)
         if theta.ndim != 1 or theta.size < 2:
             raise ValueError("Imported GX geometry theta grid must be one-dimensional with at least two points")
+        if geom.theta_closed_interval:
+            nz = int(theta.size - 1)
+            z_min = float(theta[0])
+            z_max = float(theta[-1])
+        else:
+            spacing = float(theta[1] - theta[0])
+            nz = int(theta.size)
+            z_min = float(theta[0])
+            z_max = float(theta[-1] + spacing)
         grid_out = replace(
             grid_out,
-            Nz=int(theta.size - 1),
-            z_min=float(theta[0]),
-            z_max=float(theta[-1]),
+            Nz=nz,
+            z_min=z_min,
+            z_max=z_max,
             ntheta=None,
             nperiod=None,
             zp=None,

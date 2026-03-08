@@ -477,6 +477,7 @@ class LinearCache:
     cv_d: jnp.ndarray
     gb_d: jnp.ndarray
     bgrad: jnp.ndarray
+    jacobian: jnp.ndarray
     mask0: jnp.ndarray
     dz: jnp.ndarray
     kz: jnp.ndarray
@@ -540,6 +541,7 @@ class LinearCache:
             self.cv_d,
             self.gb_d,
             self.bgrad,
+            self.jacobian,
             self.mask0,
             self.dz,
             self.kz,
@@ -603,7 +605,7 @@ class LinearCache:
             linked_full_cover,
             linked_use_gather,
         ) = aux_data
-        base_count = 48
+        base_count = 49
         base_children = children[:base_count]
         linked_idx = tuple(children[base_count : base_count + n_linked_idx])
         linked_kz = tuple(
@@ -646,6 +648,7 @@ def build_linear_cache(
     gds22_arr = gds22 if gds22.ndim else jnp.full_like(theta, gds22)
     bmag = geom_data.bmag(theta).astype(real_dtype)
     bgrad = geom_data.bgrad(theta).astype(real_dtype)
+    jacobian = geom_data.jacobian(theta).astype(real_dtype)
     cv, gb, cv0, gb0 = geom_data.drift_coeffs(theta)
     boundary = str(getattr(grid, "boundary", "periodic")).lower()
     use_twist_shift = boundary == "linked"
@@ -887,6 +890,7 @@ def build_linear_cache(
         cv_d=cv_d,
         gb_d=gb_d,
         bgrad=bgrad,
+        jacobian=jacobian,
         mask0=mask0,
         dz=dz,
         kz=kz,

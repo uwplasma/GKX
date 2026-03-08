@@ -79,9 +79,7 @@ def _solve_fields_impl(
     qphi = tau_e + qneut
 
     def _gx_quasineutrality_adiabatic() -> jnp.ndarray:
-        kpar = jnp.asarray(params.kpar_scale, dtype=real_dtype)
-        kpar_abs = jnp.abs(kpar)
-        jacobian = jnp.where(kpar_abs == 0.0, 0.0, 1.0 / (kpar_abs * bmag))
+        jacobian = jnp.asarray(cache.jacobian, dtype=real_dtype)
         jac = jacobian[None, None, :]
         denom = tau_e + qneut
         denom_safe = jnp.where(denom == 0.0, jnp.inf, denom)
