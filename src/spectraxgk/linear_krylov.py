@@ -912,7 +912,36 @@ def dominant_eigenpair(
                 v_init = v_seed
         else:
             sigma = jnp.asarray(shift, dtype=v0.dtype)
-            v_init = v0
+            shift_source_key = shift_source.strip().lower()
+            if shift_source_key == "propagator":
+                _shift_seed, v_seed = dominant_eigenpair_propagator_cached(
+                    v0,
+                    v_ref_use,
+                    cache,
+                    params,
+                    term_cfg,
+                    krylov_dim=max(int(krylov_dim), 1),
+                    restarts=1,
+                    dt=float(power_dt),
+                    omega_min_factor=float(omega_min_factor),
+                    omega_target_factor=float(omega_target_factor),
+                    omega_cap_factor=float(omega_cap_factor),
+                    omega_sign=omega_sign_eff,
+                    select_overlap=bool(select_overlap),
+                )
+                v_init = v_seed
+            elif shift_source_key == "power":
+                _shift_seed, v_seed = dominant_eigenpair_power(
+                    v0,
+                    cache,
+                    params,
+                    term_cfg,
+                    iterations=max(int(power_iters), 1),
+                    dt=float(power_dt),
+                )
+                v_init = v_seed
+            else:
+                v_init = v_ref_use
         selection_key = shift_selection.strip().lower()
         select_targeted = selection_key in {"targeted", "target", "auto", "default"}
         select_growth = selection_key in {"targeted", "growth", "auto", "default"}
