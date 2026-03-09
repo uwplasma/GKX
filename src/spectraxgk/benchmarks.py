@@ -691,6 +691,8 @@ class LinearRunResult:
     omega: float
     ky: float
     selection: ModeSelection
+    gamma_t: np.ndarray | None = None
+    omega_t: np.ndarray | None = None
 
 
 @dataclass(frozen=True)
@@ -4944,6 +4946,8 @@ def run_kbm_linear(
             omega=omega,
             ky=float(ky_target),
             selection=sel,
+            gamma_t=np.asarray(gamma_t),
+            omega_t=np.asarray(omega_t),
         )
 
     if solver_key == "krylov":
