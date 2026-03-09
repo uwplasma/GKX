@@ -91,12 +91,16 @@ def _select_nonlinear_mode_indices(
     grid: SpectralGrid,
     *,
     ky_target: float,
+    kx_target: float | None,
     use_dealias_mask: bool,
 ) -> tuple[int, int]:
     ky = np.asarray(grid.ky, dtype=float)
     kx = np.asarray(grid.kx, dtype=float)
+    kx_pick_target = 0.0 if kx_target is None else float(kx_target)
     if not use_dealias_mask:
-        return select_ky_index(ky, ky_target), _zero_kx_index(grid)
+        ky_pick = select_ky_index(ky, ky_target)
+        kx_pick = int(np.argmin(np.abs(kx - kx_pick_target)))
+        return ky_pick, kx_pick
 
     mask = np.asarray(grid.dealias_mask, dtype=bool)
     ky_candidates = np.where(np.any(mask, axis=1))[0]
@@ -106,7 +110,7 @@ def _select_nonlinear_mode_indices(
     kx_candidates = np.where(mask[ky_pick])[0]
     if kx_candidates.size == 0:
         kx_candidates = np.arange(kx.size, dtype=int)
-    kx_pick = kx_candidates[int(np.argmin(np.abs(kx[kx_candidates])))]
+    kx_pick = kx_candidates[int(np.argmin(np.abs(kx[kx_candidates] - kx_pick_target)))]
     return int(ky_pick), int(kx_pick)
 
 
@@ -395,7 +399,8 @@ def _build_initial_condition(
         )
         vals = amp * profile * (1.0 + 1.0j)
     else:
-        vals = amp * (1.0 + 1.0j) * np.ones_like(z)
+        # GX seeds single non-Gaussian modes as purely real amplitudes.
+        vals = amp * np.ones_like(z, dtype=np.complex64)
 
     species_targets: tuple[int, ...]
     if nspecies == 1:
@@ -1020,6 +1025,7 @@ def run_runtime_nonlinear(
     cfg: RuntimeConfig,
     *,
     ky_target: float = 0.3,
+    kx_target: float | None = None,
     Nl: int = 24,
     Nm: int = 12,
     dt: float | None = None,
@@ -1042,6 +1048,7 @@ def run_runtime_nonlinear(
     ky_index, kx_index = _select_nonlinear_mode_indices(
         grid,
         ky_target=ky_target,
+        kx_target=kx_target,
         use_dealias_mask=bool(cfg.time.nonlinear_dealias),
     )
     G0 = _build_initial_condition(
