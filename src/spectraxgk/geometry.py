@@ -522,11 +522,14 @@ def build_flux_tube_geometry(cfg: GeometryConfig) -> FluxTubeGeometryLike:
     model = str(cfg.model).strip().lower().replace("_", "-")
     if model in {"s-alpha", "salpha", "analytic"}:
         return SAlphaGeometry.from_config(cfg)
-    if model in {"gx-netcdf", "gx-nc", "netcdf", "nc"}:
+    if model in {"gx-netcdf", "gx-nc", "netcdf", "nc", "gx-eik", "eik", "vmec-eik", "desc-eik"}:
         if cfg.geometry_file is None:
-            raise ValueError("geometry.geometry_file must be set for gx-netcdf geometry")
+            raise ValueError("geometry.geometry_file must be set for imported NetCDF/eik geometry")
         return load_gx_geometry_netcdf(cfg.geometry_file)
-    raise ValueError("geometry.model must be one of {'s-alpha', 'gx-netcdf'}")
+    raise ValueError(
+        "geometry.model must be one of "
+        "{'s-alpha', 'gx-netcdf', 'gx-eik', 'vmec-eik', 'desc-eik'}"
+    )
 
 
 def ensure_flux_tube_geometry_data(
