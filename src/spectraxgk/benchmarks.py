@@ -4351,7 +4351,7 @@ def run_kbm_beta_scan(
                 dt_min=float(time_cfg.dt_min) if time_cfg is not None else 1.0e-7,
                 dt_max=float(time_cfg.dt_max) if (time_cfg is not None and time_cfg.dt_max is not None) else None,
                 cfl=float(time_cfg.cfl) if time_cfg is not None else 0.9,
-                cfl_fac=float(time_cfg.cfl_fac) if time_cfg is not None else 1.0,
+                cfl_fac=float(time_cfg.cfl_fac) if time_cfg is not None else float(GXTimeConfig.cfl_fac),
             )
             t_arr, _phi_t, gamma_t, omega_t, _gx_diag = integrate_linear_gx_diagnostics(
                 G0_jax,
@@ -4897,7 +4897,7 @@ def run_kbm_linear(
             dt_min=float(time_cfg.dt_min) if time_cfg is not None else 1.0e-7,
             dt_max=float(time_cfg.dt_max) if (time_cfg is not None and time_cfg.dt_max is not None) else None,
             cfl=float(time_cfg.cfl) if time_cfg is not None else 0.9,
-            cfl_fac=float(time_cfg.cfl_fac) if time_cfg is not None else 1.0,
+            cfl_fac=float(time_cfg.cfl_fac) if time_cfg is not None else float(GXTimeConfig.cfl_fac),
         )
         t_arr, phi_t, gamma_t, omega_t, _gx_diag = integrate_linear_gx_diagnostics(
             G0_jax,

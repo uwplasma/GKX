@@ -34,7 +34,7 @@ class GXTimeConfig:
     dt_min: float = 1.0e-7
     dt_max: float | None = None
     cfl: float = 0.9
-    cfl_fac: float = 1.0
+    cfl_fac: float = 2.82
 
 
 def _gx_zp_from_grid(grid: SpectralGrid) -> float:
