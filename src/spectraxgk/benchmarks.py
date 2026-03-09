@@ -216,6 +216,12 @@ def _apply_gx_hypercollisions(params: LinearParams, *, nhermite: int | None = No
     )
 
 
+def _gx_linked_end_damping(gx_reference: bool) -> tuple[float, float]:
+    if gx_reference:
+        return GX_DAMP_ENDS_AMP, GX_DAMP_ENDS_WIDTHFRAC
+    return 0.0, 0.0
+
+
 def _midplane_index(grid: SpectralGrid) -> int:
     """Return GX-style midplane index for growth-rate diagnostics."""
 
@@ -4246,8 +4252,10 @@ def run_kbm_beta_scan(
     geom = SAlphaGeometry.from_config(cfg.geometry)
     if terms is None:
         terms = LinearTerms(bpar=0.0)
-    if gx_reference and diagnostic_norm == "none":
+    gx_reference_use = bool(gx_reference)
+    if gx_reference_use and diagnostic_norm == "none":
         diagnostic_norm = "gx"
+    damp_ends_amp, damp_ends_widthfrac = _gx_linked_end_damping(gx_reference_use)
 
     solver_key = solver.strip().lower()
     fit_key = fit_signal.strip().lower()
@@ -4308,8 +4316,8 @@ def run_kbm_beta_scan(
             apar_beta_scale=apar_beta_scale,
             ampere_g0_scale=ampere_g0_scale,
             bpar_beta_scale=bpar_beta_scale,
-            damp_ends_amp=0.0,
-            damp_ends_widthfrac=0.0,
+            damp_ends_amp=damp_ends_amp,
+            damp_ends_widthfrac=damp_ends_widthfrac,
             nhermite=Nm,
         )
         cache = build_linear_cache(grid, geom, params, Nl, Nm)
@@ -4328,7 +4336,7 @@ def run_kbm_beta_scan(
         G0[int(init_species_index)] = np.asarray(G0_single, dtype=np.complex64)
 
         G0_jax = jnp.asarray(G0)
-        solver_use = select_kbm_solver_auto(solver_key, ky_target=ky_target, gx_reference=bool(gx_reference))
+        solver_use = select_kbm_solver_auto(solver_key, ky_target=ky_target, gx_reference=gx_reference_use)
 
         if solver_use == "gx_time":
             gx_mode_method = mode_method if mode_method in {"z_index", "max"} else "z_index"
@@ -4781,8 +4789,10 @@ def run_kbm_linear(
     grid_full = build_spectral_grid(apply_gx_geometry_grid_defaults(geom, cfg_use.grid))
     if terms is None:
         terms = LinearTerms(bpar=0.0)
-    if gx_reference and diagnostic_norm == "none":
+    gx_reference_use = bool(gx_reference)
+    if gx_reference_use and diagnostic_norm == "none":
         diagnostic_norm = "gx"
+    damp_ends_amp, damp_ends_widthfrac = _gx_linked_end_damping(gx_reference_use)
 
     fit_key = fit_signal.strip().lower()
     if fit_key not in {"phi", "density", "auto"}:
@@ -4807,8 +4817,8 @@ def run_kbm_linear(
             apar_beta_scale=apar_beta_scale,
             ampere_g0_scale=ampere_g0_scale,
             bpar_beta_scale=bpar_beta_scale,
-            damp_ends_amp=0.0,
-            damp_ends_widthfrac=0.0,
+            damp_ends_amp=damp_ends_amp,
+            damp_ends_widthfrac=damp_ends_widthfrac,
             nhermite=Nm,
         )
 
@@ -4833,7 +4843,7 @@ def run_kbm_linear(
     solver_key = select_kbm_solver_auto(
         solver,
         ky_target=float(ky_target),
-        gx_reference=bool(gx_reference),
+        gx_reference=gx_reference_use,
     )
     krylov_cfg_use = krylov_cfg or KBM_KRYLOV_DEFAULT
 
