@@ -96,6 +96,8 @@ class GeometryConfig:
     geometry_file: str | None = None
     q: float = 1.4
     s_hat: float = 0.8
+    z0: float | None = None
+    zero_shat: bool = False
     epsilon: float = 0.18
     R0: float = 1.0
     B0: float = 1.0

@@ -143,6 +143,116 @@ class SAlphaGeometry:
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
+class SlabGeometry:
+    """GX slab geometry contract."""
+
+    s_hat: float = 0.0
+    z0: float | None = None
+    q: float = 1.0
+    epsilon: float = 0.0
+    R0: float = 1.0
+    B0: float = 1.0
+    alpha: float = 0.0
+    drift_scale: float = 0.0
+    kperp2_bmag: bool = True
+    bessel_bmag_power: float = 0.0
+    zero_shat: bool = False
+
+    def tree_flatten(self):
+        children = (
+            self.s_hat,
+            self.q,
+            self.epsilon,
+            self.R0,
+            self.B0,
+            self.alpha,
+            self.drift_scale,
+            self.kperp2_bmag,
+            self.bessel_bmag_power,
+        )
+        return children, {"z0": self.z0, "zero_shat": self.zero_shat}
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        return cls(*children, z0=aux_data["z0"], zero_shat=aux_data["zero_shat"])
+
+    @staticmethod
+    def from_config(cfg: GeometryConfig) -> "SlabGeometry":
+        shat = 0.0 if bool(cfg.zero_shat) else float(cfg.s_hat)
+        return SlabGeometry(
+            s_hat=shat,
+            z0=cfg.z0,
+            q=1.0,
+            epsilon=0.0,
+            R0=cfg.R0,
+            B0=cfg.B0,
+            alpha=0.0,
+            drift_scale=0.0,
+            kperp2_bmag=cfg.kperp2_bmag,
+            bessel_bmag_power=cfg.bessel_bmag_power,
+            zero_shat=bool(cfg.zero_shat),
+        )
+
+    def kx_effective(self, kx0: jnp.ndarray, ky: jnp.ndarray, theta: jnp.ndarray) -> jnp.ndarray:
+        shear = jnp.asarray(self.s_hat) * theta
+        return kx0 - shear * ky
+
+    def bmag(self, theta: jnp.ndarray) -> jnp.ndarray:
+        return jnp.ones_like(jnp.asarray(theta))
+
+    def gradpar(self) -> float:
+        if self.z0 is not None and float(self.z0) > 0.0:
+            return float(1.0 / float(self.z0))
+        return 1.0
+
+    def bgrad(self, theta: jnp.ndarray) -> jnp.ndarray:
+        return jnp.zeros_like(jnp.asarray(theta))
+
+    def metric_coeffs(self, theta: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+        theta_arr = jnp.asarray(theta)
+        shear = jnp.asarray(self.s_hat) * theta_arr
+        gds2 = 1.0 + shear * shear
+        gds21 = -jnp.asarray(self.s_hat) * shear
+        if float(self.s_hat) == 0.0:
+            gds22 = jnp.ones_like(theta_arr)
+        else:
+            gds22 = jnp.full_like(theta_arr, float(self.s_hat) * float(self.s_hat))
+        return gds2, gds21, gds22
+
+    def k_perp2(self, kx0: jnp.ndarray, ky: jnp.ndarray, theta: jnp.ndarray) -> jnp.ndarray:
+        gds2, gds21, gds22 = self.metric_coeffs(theta)
+        s_hat = jnp.asarray(self.s_hat)
+        s_hat_safe = jnp.where(s_hat == 0.0, 1.0, s_hat)
+        kx_hat = kx0 / s_hat_safe
+        kx_hat = jnp.where(s_hat == 0.0, kx0, kx_hat)
+        kperp2 = ky * (ky * gds2 + 2.0 * kx_hat * gds21) + (kx_hat * kx_hat) * gds22
+        return kperp2
+
+    def drift_coeffs(
+        self, theta: jnp.ndarray
+    ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+        theta_arr = jnp.asarray(theta)
+        zeros = jnp.zeros_like(theta_arr)
+        return zeros, zeros, zeros, zeros
+
+    def drift_components(
+        self, kx: jnp.ndarray, ky: jnp.ndarray, theta: jnp.ndarray
+    ) -> tuple[jnp.ndarray, jnp.ndarray]:
+        kx0 = jnp.asarray(kx)
+        ky0 = jnp.asarray(ky)
+        theta0 = jnp.asarray(theta)
+        zeros = jnp.zeros((ky0.shape[0], kx0.shape[0], theta0.shape[0]), dtype=theta0.dtype)
+        return zeros, zeros
+
+    def omega_d(self, kx: jnp.ndarray, ky: jnp.ndarray, theta: jnp.ndarray) -> jnp.ndarray:
+        kx0 = jnp.asarray(kx)
+        ky0 = jnp.asarray(ky)
+        theta0 = jnp.asarray(theta)
+        return jnp.zeros((ky0.shape[0], kx0.shape[0], theta0.shape[0]), dtype=theta0.dtype)
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
 class FluxTubeGeometryData:
     """Sampled flux-tube geometry contract for solver-ready metric profiles."""
 
@@ -331,7 +441,7 @@ class FluxTubeGeometryData:
         return cv_d + gb_d
 
 
-def sample_flux_tube_geometry(geom: SAlphaGeometry, theta: jnp.ndarray) -> FluxTubeGeometryData:
+def sample_flux_tube_geometry(geom: SAlphaGeometry | SlabGeometry, theta: jnp.ndarray) -> FluxTubeGeometryData:
     """Sample an analytic geometry model onto a flux-tube theta grid."""
 
     theta_arr = jnp.asarray(theta)
@@ -367,7 +477,7 @@ def sample_flux_tube_geometry(geom: SAlphaGeometry, theta: jnp.ndarray) -> FluxT
         nfp=1,
         kperp2_bmag=bool(geom.kperp2_bmag),
         bessel_bmag_power=float(geom.bessel_bmag_power),
-        source_model="s-alpha",
+        source_model="slab" if isinstance(geom, SlabGeometry) else "s-alpha",
         theta_closed_interval=False,
     )
 
@@ -513,7 +623,7 @@ def load_gx_geometry_netcdf(path: str | Path) -> FluxTubeGeometryData:
         root.close()
 
 
-FluxTubeGeometryLike = SAlphaGeometry | FluxTubeGeometryData
+FluxTubeGeometryLike = SAlphaGeometry | SlabGeometry | FluxTubeGeometryData
 
 
 def build_flux_tube_geometry(cfg: GeometryConfig) -> FluxTubeGeometryLike:
@@ -522,13 +632,15 @@ def build_flux_tube_geometry(cfg: GeometryConfig) -> FluxTubeGeometryLike:
     model = str(cfg.model).strip().lower().replace("_", "-")
     if model in {"s-alpha", "salpha", "analytic"}:
         return SAlphaGeometry.from_config(cfg)
+    if model in {"slab"}:
+        return SlabGeometry.from_config(cfg)
     if model in {"gx-netcdf", "gx-nc", "netcdf", "nc", "gx-eik", "eik", "vmec-eik", "desc-eik"}:
         if cfg.geometry_file is None:
             raise ValueError("geometry.geometry_file must be set for imported NetCDF/eik geometry")
         return load_gx_geometry_netcdf(cfg.geometry_file)
     raise ValueError(
         "geometry.model must be one of "
-        "{'s-alpha', 'gx-netcdf', 'gx-eik', 'vmec-eik', 'desc-eik'}"
+        "{'s-alpha', 'slab', 'gx-netcdf', 'gx-eik', 'vmec-eik', 'desc-eik'}"
     )
 
 
