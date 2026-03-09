@@ -94,6 +94,16 @@ class GeometryConfig:
 
     model: str = "s-alpha"
     geometry_file: str | None = None
+    vmec_file: str | None = None
+    torflux: float | None = None
+    npol: float | None = None
+    npol_min: float | None = None
+    isaxisym: bool = False
+    which_crossing: int | None = None
+    include_shear_variation: bool = False
+    include_pressure_variation: bool = False
+    betaprim: float | None = None
+    gx_repo: str | None = None
     q: float = 1.4
     s_hat: float = 0.8
     z0: float | None = None

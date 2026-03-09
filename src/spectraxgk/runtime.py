@@ -38,6 +38,7 @@ from spectraxgk.runtime_config import RuntimeConfig, RuntimeSpeciesConfig
 from spectraxgk.runners import integrate_linear_from_config, integrate_nonlinear_from_config
 from spectraxgk.species import Species, build_linear_params
 from spectraxgk.terms.config import FieldState, TermConfig
+from spectraxgk.vmec_eik import generate_runtime_vmec_eik
 
 
 @dataclass(frozen=True)
@@ -133,10 +134,26 @@ def _gx_default_p_hyper_m(nhermite: int | None) -> float:
     return float(min(20, max(int(nhermite) // 2, 1)))
 
 
-def build_runtime_linear_params(cfg: RuntimeConfig, *, Nm: int | None = None) -> LinearParams:
+def build_runtime_geometry(cfg: RuntimeConfig) -> FluxTubeGeometryLike:
+    """Resolve runtime geometry, generating VMEC ``*.eik.nc`` files when requested."""
+
+    if cfg.geometry.model.strip().lower() != "vmec":
+        return build_flux_tube_geometry(cfg.geometry)
+    eik_path = generate_runtime_vmec_eik(cfg)
+    geom_cfg = replace(cfg.geometry, model="vmec-eik", geometry_file=str(eik_path))
+    return build_flux_tube_geometry(geom_cfg)
+
+
+def build_runtime_linear_params(
+    cfg: RuntimeConfig,
+    *,
+    Nm: int | None = None,
+    geom: FluxTubeGeometryLike | None = None,
+) -> LinearParams:
     """Build ``LinearParams`` from a unified runtime config."""
 
-    geom = build_flux_tube_geometry(cfg.geometry)
+    if geom is None:
+        geom = build_runtime_geometry(cfg)
     contract = get_normalization_contract(cfg.normalization.contract)
     rho_star = contract.rho_star if cfg.normalization.rho_star is None else float(cfg.normalization.rho_star)
     omega_d_scale = (
@@ -509,10 +526,10 @@ def run_runtime_linear(
 ) -> RuntimeLinearResult:
     """Run one linear point from a case-agnostic runtime config."""
 
-    geom = build_flux_tube_geometry(cfg.geometry)
+    geom = build_runtime_geometry(cfg)
     grid_cfg = apply_gx_geometry_grid_defaults(geom, cfg.grid)
     grid_full = build_spectral_grid(grid_cfg)
-    params = build_runtime_linear_params(cfg, Nm=Nm)
+    params = build_runtime_linear_params(cfg, Nm=Nm, geom=geom)
     terms = build_runtime_linear_terms(cfg)
 
     ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
@@ -841,10 +858,10 @@ def _run_runtime_scan_batch(
 ) -> RuntimeLinearScanResult:
     """Batch a ky scan using one time integration over the full grid."""
 
-    geom = build_flux_tube_geometry(cfg.geometry)
+    geom = build_runtime_geometry(cfg)
     grid_cfg = apply_gx_geometry_grid_defaults(geom, cfg.grid)
     grid = build_spectral_grid(grid_cfg)
-    params = build_runtime_linear_params(cfg, Nm=Nm)
+    params = build_runtime_linear_params(cfg, Nm=Nm, geom=geom)
     terms = build_runtime_linear_terms(cfg)
 
     ky_indices = np.asarray([select_ky_index(np.asarray(grid.ky), ky) for ky in ky_arr], dtype=int)
@@ -978,10 +995,10 @@ def run_runtime_nonlinear(
 ) -> RuntimeNonlinearResult:
     """Run a nonlinear point using the unified runtime config path."""
 
-    geom = build_flux_tube_geometry(cfg.geometry)
+    geom = build_runtime_geometry(cfg)
     grid_cfg = apply_gx_geometry_grid_defaults(geom, cfg.grid)
     grid = build_spectral_grid(grid_cfg)
-    params = build_runtime_linear_params(cfg, Nm=Nm)
+    params = build_runtime_linear_params(cfg, Nm=Nm, geom=geom)
     term_cfg = build_runtime_term_config(cfg)
 
     ky_index, kx_index = _select_nonlinear_mode_indices(
