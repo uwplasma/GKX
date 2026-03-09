@@ -9,7 +9,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.geometry import FluxTubeGeometryLike
+from spectraxgk.geometry import FluxTubeGeometryLike, ensure_flux_tube_geometry_data
 from spectraxgk.grids import SpectralGrid, gx_real_fft_mesh
 from spectraxgk.linear import (
     LinearCache,
@@ -334,6 +334,7 @@ def integrate_nonlinear(
 ) -> tuple[jnp.ndarray, FieldState]:
     """Integrate the nonlinear system using built-in cache construction."""
 
+    geom_eff = ensure_flux_tube_geometry_data(geom, grid.z)
     if cache is None:
         if G0.ndim == 5:
             Nl, Nm = G0.shape[0], G0.shape[1]
@@ -341,7 +342,7 @@ def integrate_nonlinear(
             Nl, Nm = G0.shape[1], G0.shape[2]
         else:
             raise ValueError("G0 must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)")
-        cache = build_linear_cache(grid, geom, params, Nl, Nm)
+        cache = build_linear_cache(grid, geom_eff, params, Nl, Nm)
     return integrate_nonlinear_cached(
         G0,
         cache,
@@ -395,6 +396,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
 ) -> tuple[jnp.ndarray, GXDiagnostics, jnp.ndarray, FieldState]:
     """Integrate nonlinear system and return GX-style diagnostics plus final state."""
 
+    geom_eff = ensure_flux_tube_geometry_data(geom, grid.z)
     if cache is None:
         if G0.ndim == 5:
             Nl, Nm = G0.shape[0], G0.shape[1]
@@ -402,12 +404,12 @@ def _integrate_nonlinear_gx_diagnostics_impl(
             Nl, Nm = G0.shape[1], G0.shape[2]
         else:
             raise ValueError("G0 must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)")
-        cache = build_linear_cache(grid, geom, params, Nl, Nm)
+        cache = build_linear_cache(grid, geom_eff, params, Nl, Nm)
 
     term_cfg = terms or TermConfig()
     if method in {"imex", "semi-implicit"}:
         raise ValueError("Final-state GX diagnostics helper only supports explicit methods")
-    vol_fac, flux_fac = gx_volume_factors(geom, grid)
+    vol_fac, flux_fac = gx_volume_factors(geom_eff, grid)
     mask = _gx_omega_mode_mask(grid, cache, gx_real_fft=gx_real_fft)
     z_idx = _gx_midplane_index(grid.z.size) if z_index is None else int(z_index)
     use_dealias = bool(use_dealias_mask)
@@ -926,6 +928,7 @@ def integrate_nonlinear_imex_gx_diagnostics(
 ) -> tuple[jnp.ndarray, GXDiagnostics]:
     """IMEX nonlinear integrator with GX diagnostics."""
 
+    geom_eff = ensure_flux_tube_geometry_data(geom, grid.z)
     if cache is None:
         if G0.ndim == 5:
             Nl, Nm = G0.shape[0], G0.shape[1]
@@ -933,14 +936,14 @@ def integrate_nonlinear_imex_gx_diagnostics(
             Nl, Nm = G0.shape[1], G0.shape[2]
         else:
             raise ValueError("G0 must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)")
-        cache = build_linear_cache(grid, geom, params, Nl, Nm)
+        cache = build_linear_cache(grid, geom_eff, params, Nl, Nm)
 
     term_cfg = terms or TermConfig()
     linear_cfg = replace(term_cfg, nonlinear=0.0)
     if collision_split:
         linear_cfg = replace(linear_cfg, collisions=0.0, hypercollisions=0.0)
 
-    vol_fac, flux_fac = gx_volume_factors(geom, grid)
+    vol_fac, flux_fac = gx_volume_factors(geom_eff, grid)
     mask = _gx_omega_mode_mask(grid, cache, gx_real_fft=gx_real_fft)
     z_idx = _gx_midplane_index(grid.z.size) if z_index is None else int(z_index)
     use_dealias = bool(use_dealias_mask)
