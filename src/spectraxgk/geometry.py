@@ -737,7 +737,8 @@ def apply_gx_geometry_grid_defaults(
         )
         if float(grid_out.kxfac) == 1.0:
             grid_out = replace(grid_out, kxfac=float(geom.kxfac))
-    if str(grid_out.boundary).lower() == "linked" and not bool(grid_out.non_twist):
+    boundary = str(grid_out.boundary).lower()
+    if boundary in {"linked", "fix aspect"} and not bool(grid_out.non_twist):
         jtwist, x0 = gx_twist_shift_params(geom, grid_out)
         grid_out = replace(grid_out, Lx=2.0 * np.pi * x0, jtwist=jtwist)
     return grid_out
