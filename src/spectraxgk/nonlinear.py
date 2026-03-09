@@ -38,6 +38,12 @@ from spectraxgk.diagnostics import (
 )
 from spectraxgk.gx_integrators import _gx_laguerre_vmax
 
+_SSPX3_ADT = float((1.0 / 6.0) ** (1.0 / 3.0))
+_SSPX3_WGTFAC = float((9.0 - 2.0 * (6.0 ** (2.0 / 3.0))) ** 0.5)
+_SSPX3_W1 = 0.5 * (_SSPX3_WGTFAC - 1.0)
+_SSPX3_W2 = 0.5 * ((6.0 ** (2.0 / 3.0)) - 1.0 - _SSPX3_WGTFAC)
+_SSPX3_W3 = (1.0 / _SSPX3_ADT) - 1.0 - _SSPX3_W2 * (_SSPX3_W1 + 1.0)
+
 
 @dataclass(frozen=True)
 class IMEXLinearOperator:
@@ -636,27 +642,42 @@ def _integrate_nonlinear_gx_diagnostics_impl(
             G4 = _project_state(G + dt_local * k3)
             k4, _ = rhs_fn(G4)
             G_new = G + (dt_local / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+        elif method == "sspx3":
+            def _sspx3_euler_step(G_state: jnp.ndarray) -> jnp.ndarray:
+                dG_state, _fields_state = rhs_fn(G_state)
+                return _project_state(G_state + (_SSPX3_ADT * dt_local) * dG_state)
+
+            G1 = _sspx3_euler_step(G)
+            G2_euler = _sspx3_euler_step(G1)
+            G2 = _project_state((1.0 - _SSPX3_W1) * G + (_SSPX3_W1 - 1.0) * G1 + G2_euler)
+            G3 = _sspx3_euler_step(G2)
+            G_new = (
+                (1.0 - _SSPX3_W2 - _SSPX3_W3) * G
+                + _SSPX3_W3 * G1
+                + (_SSPX3_W2 - 1.0) * G2
+                + G3
+            )
         elif method == "k10":
-            def _euler_step(G_state):
+            def _k10_euler_step(G_state):
                 dG_state, _ = rhs_fn(G_state)
                 return _project_state(G_state + (dt_local / 6.0) * dG_state)
 
             G_q1 = G
             G_q2 = G
             for _ in range(5):
-                G_q1 = _euler_step(G_q1)
+                G_q1 = _k10_euler_step(G_q1)
 
             G_q2 = 0.04 * G_q2 + 0.36 * G_q1
             G_q1 = 15.0 * G_q2 - 5.0 * G_q1
 
             for _ in range(4):
-                G_q1 = _euler_step(G_q1)
+                G_q1 = _k10_euler_step(G_q1)
 
             dG_final, _ = rhs_fn(G_q1)
             G_new = G_q2 + 0.6 * G_q1 + 0.1 * dt_local * dG_final
         else:
             raise ValueError(
-                "method must be one of {'euler', 'rk2', 'rk3', 'rk3_gx', 'rk4', 'k10'}"
+                "method must be one of {'euler', 'rk2', 'rk3', 'rk3_gx', 'rk4', 'k10', 'sspx3'}"
             )
         if use_collision_split and damping is not None:
             G_new = _apply_collision_split(G_new, damping, dt_local, collision_scheme)
@@ -1185,7 +1206,23 @@ def integrate_nonlinear_imex_gx_diagnostics(
     def step(carry, idx):
         G, phi_prev_step, diag_prev, t_prev = carry
         rhs = G + dt_val * nonlinear_term(G)
-        G_new = solve_step(G, rhs)
+        if method == "sspx3":
+            def _euler_step(G_state: jnp.ndarray, dt_stage: jnp.ndarray) -> jnp.ndarray:
+                rhs_stage = G_state + dt_stage * nonlinear_term(G_state)
+                return solve_step(G_state, rhs_stage)
+
+            G1 = _euler_step(G, _SSPX3_ADT * dt_val)
+            G2_euler = _euler_step(G1, _SSPX3_ADT * dt_val)
+            G2 = _project_state((1.0 - _SSPX3_W1) * G + (_SSPX3_W1 - 1.0) * G1 + G2_euler)
+            G3 = _euler_step(G2, _SSPX3_ADT * dt_val)
+            G_new = (
+                (1.0 - _SSPX3_W2 - _SSPX3_W3) * G
+                + _SSPX3_W3 * G1
+                + (_SSPX3_W2 - 1.0) * G2
+                + G3
+            )
+        else:
+            G_new = solve_step(G, rhs)
         if use_collision_split and damping is not None:
             G_new = _apply_collision_split(G_new, damping, dt_val, collision_scheme)
         G_new = _project_state(G_new)

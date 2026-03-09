@@ -20,6 +20,13 @@ if TYPE_CHECKING:
     from spectraxgk.terms.config import TermConfig
 
 
+_SSPX3_ADT = float((1.0 / 6.0) ** (1.0 / 3.0))
+_SSPX3_WGTFAC = float((9.0 - 2.0 * (6.0 ** (2.0 / 3.0))) ** 0.5)
+_SSPX3_W1 = 0.5 * (_SSPX3_WGTFAC - 1.0)
+_SSPX3_W2 = 0.5 * ((6.0 ** (2.0 / 3.0)) - 1.0 - _SSPX3_WGTFAC)
+_SSPX3_W3 = (1.0 / _SSPX3_ADT) - 1.0 - _SSPX3_W2 * (_SSPX3_W1 + 1.0)
+
+
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
 class LinearParams:
@@ -1229,8 +1236,8 @@ def _integrate_linear_cached_impl(
     sample_stride: int = 1,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Time integrate the linear system using cached geometry arrays."""
-    if method not in {"euler", "rk2", "rk4", "imex", "imex2"}:
-        raise ValueError("method must be one of {'euler', 'rk2', 'rk4', 'imex', 'imex2'}")
+    if method not in {"euler", "rk2", "rk4", "imex", "imex2", "sspx3"}:
+        raise ValueError("method must be one of {'euler', 'rk2', 'rk4', 'imex', 'imex2', 'sspx3'}")
     if terms is None:
         terms = LinearTerms()
 
@@ -1268,6 +1275,21 @@ def _integrate_linear_cached_impl(
             k1 = dG
             k2, _ = linear_rhs_cached(G + 0.5 * dt_val * k1, cache, params, terms=terms)
             return G + dt_val * k2
+        if method == "sspx3":
+            def _euler_step(G_state: jnp.ndarray) -> jnp.ndarray:
+                dG_state, _ = linear_rhs_cached(G_state, cache, params, terms=terms)
+                return G_state + (_SSPX3_ADT * dt_val) * dG_state
+
+            G1 = _euler_step(G)
+            G2_euler = _euler_step(G1)
+            G2 = (1.0 - _SSPX3_W1) * G + (_SSPX3_W1 - 1.0) * G1 + G2_euler
+            G3 = _euler_step(G2)
+            return (
+                (1.0 - _SSPX3_W2 - _SSPX3_W3) * G
+                + _SSPX3_W3 * G1
+                + (_SSPX3_W2 - 1.0) * G2
+                + G3
+            )
         k1 = dG
         k2, _ = linear_rhs_cached(G + 0.5 * dt_val * k1, cache, params, terms=terms)
         k3, _ = linear_rhs_cached(G + 0.5 * dt_val * k2, cache, params, terms=terms)
@@ -1874,6 +1896,27 @@ def integrate_linear_diagnostics(
             k1 = dG
             k2, _ = linear_rhs_cached(G_in + 0.5 * dt_val * k1, cache, params, terms=terms, use_jit=False)
             return G_in + dt_val * k2
+        if method == "sspx3":
+            def _euler_step(G_state: jnp.ndarray) -> jnp.ndarray:
+                dG_state, _phi_state = linear_rhs_cached(
+                    G_state,
+                    cache,
+                    params,
+                    terms=terms,
+                    use_jit=False,
+                )
+                return G_state + (_SSPX3_ADT * dt_val) * dG_state
+
+            G1 = _euler_step(G_in)
+            G2_euler = _euler_step(G1)
+            G2 = (1.0 - _SSPX3_W1) * G_in + (_SSPX3_W1 - 1.0) * G1 + G2_euler
+            G3 = _euler_step(G2)
+            return (
+                (1.0 - _SSPX3_W2 - _SSPX3_W3) * G_in
+                + _SSPX3_W3 * G1
+                + (_SSPX3_W2 - 1.0) * G2
+                + G3
+            )
         if method == "rk4":
             k1 = dG
             k2, _ = linear_rhs_cached(G_in + 0.5 * dt_val * k1, cache, params, terms=terms, use_jit=False)

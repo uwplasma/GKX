@@ -12,6 +12,12 @@ from spectraxgk.terms.config import FieldState
 
 RHSFn = Callable[[jnp.ndarray], tuple[jnp.ndarray, FieldState]]
 
+_SSPX3_ADT = float((1.0 / 6.0) ** (1.0 / 3.0))
+_SSPX3_WGTFAC = float((9.0 - 2.0 * (6.0 ** (2.0 / 3.0))) ** 0.5)
+_SSPX3_W1 = 0.5 * (_SSPX3_WGTFAC - 1.0)
+_SSPX3_W2 = 0.5 * ((6.0 ** (2.0 / 3.0)) - 1.0 - _SSPX3_WGTFAC)
+_SSPX3_W3 = (1.0 / _SSPX3_ADT) - 1.0 - _SSPX3_W2 * (_SSPX3_W1 + 1.0)
+
 
 @partial(
     jax.jit,
@@ -30,9 +36,9 @@ def integrate_nonlinear(
 ) -> tuple[jnp.ndarray, FieldState]:
     """Integrate a nonlinear RHS using lax.scan for kernel fusion."""
 
-    if method not in {"euler", "rk2", "rk3", "rk3_gx", "rk4", "k10"}:
+    if method not in {"euler", "rk2", "rk3", "rk3_gx", "rk4", "k10", "sspx3"}:
         raise ValueError(
-            "method must be one of {'euler', 'rk2', 'rk3', 'rk3_gx', 'rk4', 'k10'}"
+            "method must be one of {'euler', 'rk2', 'rk3', 'rk3_gx', 'rk4', 'k10', 'sspx3'}"
         )
 
     state_dtype = jnp.result_type(G0, jnp.complex64)
@@ -76,9 +82,31 @@ def integrate_nonlinear(
             G4 = jnp.asarray(projector(G + dt_val * k3), dtype=state_dtype)
             k4, _ = rhs_fn(G4)
             G_new = G + (dt_val / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+        elif method == "sspx3":
+            def _sspx3_euler_step(G_state: jnp.ndarray) -> jnp.ndarray:
+                dG_state, _ = rhs_fn(G_state)
+                dG_state = jnp.asarray(dG_state, dtype=state_dtype)
+                trial = G_state + (_SSPX3_ADT * dt_val) * dG_state
+                return jnp.asarray(projector(trial), dtype=state_dtype)
+
+            G1 = _sspx3_euler_step(G)
+            G2_euler = _sspx3_euler_step(G1)
+            G2 = (
+                (1.0 - _SSPX3_W1) * G
+                + (_SSPX3_W1 - 1.0) * G1
+                + G2_euler
+            )
+            G2 = jnp.asarray(projector(G2), dtype=state_dtype)
+            G3 = _sspx3_euler_step(G2)
+            G_new = (
+                (1.0 - _SSPX3_W2 - _SSPX3_W3) * G
+                + _SSPX3_W3 * G1
+                + (_SSPX3_W2 - 1.0) * G2
+                + G3
+            )
         else:
             # Ketcheson 10-stage (K10,4) scheme as used in GX.
-            def _euler_step(G_state):
+            def _k10_euler_step(G_state):
                 dG_state, _ = rhs_fn(G_state)
                 dG_state = jnp.asarray(dG_state, dtype=state_dtype)
                 trial = G_state + (dt_val / 6.0) * dG_state
@@ -87,13 +115,13 @@ def integrate_nonlinear(
             G_q1 = G
             G_q2 = G
             for _ in range(5):
-                G_q1 = _euler_step(G_q1)
+                G_q1 = _k10_euler_step(G_q1)
 
             G_q2 = 0.04 * G_q2 + 0.36 * G_q1
             G_q1 = 15.0 * G_q2 - 5.0 * G_q1
 
             for _ in range(4):
-                G_q1 = _euler_step(G_q1)
+                G_q1 = _k10_euler_step(G_q1)
 
             dG_final, _ = rhs_fn(G_q1)
             dG_final = jnp.asarray(dG_final, dtype=state_dtype)

@@ -51,6 +51,7 @@ class RuntimeLinearResult:
     selection: ModeSelection
     t: np.ndarray | None = None
     signal: np.ndarray | None = None
+    state: np.ndarray | None = None
 
 
 @dataclass(frozen=True)
@@ -551,6 +552,7 @@ def run_runtime_linear(
     krylov_cfg: KrylovConfig | None = None,
     mode_method: str = "project",
     fit_signal: str = "auto",
+    return_state: bool = False,
 ) -> RuntimeLinearResult:
     """Run one linear point from a case-agnostic runtime config."""
 
@@ -635,12 +637,17 @@ def run_runtime_linear(
             tcfg = replace(tcfg, t_max=float(steps) * float(tcfg.dt))
         if sample_stride is not None:
             tcfg = replace(tcfg, sample_stride=int(sample_stride))
+        if return_state and solver_key == "gx_time":
+            raise ValueError("return_state is not supported with solver='gx_time'")
+        if return_state:
+            tcfg = replace(tcfg, save_state=True)
 
         need_density = fit_key in {"density", "auto"}
+        g_last = None
         if tcfg.use_diffrax:
             save_field = "phi+density" if need_density else "phi"
             save_mode = None if need_density else sel
-            _g_last, saved = integrate_linear_from_config(
+            g_last, saved = integrate_linear_from_config(
                 g0,
                 grid,
                 geom,
@@ -671,10 +678,11 @@ def run_runtime_linear(
                     species_index=0,
                     record_hl_energy=False,
                 )
+                g_last = _diag[0]
                 phi_t = _diag[1]
                 density_t = _diag[2] if len(_diag) > 2 else None
             else:
-                _g_last, phi_t = integrate_linear_from_config(
+                g_last, phi_t = integrate_linear_from_config(
                     g0,
                     grid,
                     geom,
@@ -755,6 +763,7 @@ def run_runtime_linear(
             selection=sel,
             t=t_arr,
             signal=None,
+            state=None if g_last is None or not return_state else np.asarray(g_last),
         )
 
     if solver_key == "krylov":
