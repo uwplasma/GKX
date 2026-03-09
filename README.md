@@ -130,6 +130,7 @@ python examples/etg_linear_benchmark.py
 python examples/gradB_coupling_hl_1d.py
 python examples/kbm_beta_scan.py
 python examples/w7x_linear_imported_geometry.py --geometry-file /path/to/itg_w7x_adiabatic_electrons.eik.nc
+python -m spectraxgk.cli run-runtime-linear --config examples/configs/runtime_w7x_linear_imported_geometry.toml
 python examples/two_stream_hermite_1d.py
 ```
 
