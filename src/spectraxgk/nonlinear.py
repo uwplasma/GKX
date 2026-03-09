@@ -265,6 +265,26 @@ def _apply_collision_split(
     raise ValueError("collision_scheme must be one of {'implicit', 'exp', 'sts', 'rkc'}")
 
 
+def _make_fixed_mode_projector(
+    fixed_state: jnp.ndarray | None,
+    *,
+    ky_index: int | None,
+    kx_index: int | None,
+) -> Callable[[jnp.ndarray], jnp.ndarray] | None:
+    """Return a projector that keeps one Fourier mode equal to ``fixed_state``."""
+
+    if fixed_state is None or ky_index is None or kx_index is None:
+        return None
+    ky_i = int(ky_index)
+    kx_i = int(kx_index)
+    fixed_block = jnp.asarray(fixed_state)[..., ky_i : ky_i + 1, kx_i : kx_i + 1, :]
+
+    def project(G_state: jnp.ndarray) -> jnp.ndarray:
+        return G_state.at[..., ky_i : ky_i + 1, kx_i : kx_i + 1, :].set(fixed_block)
+
+    return project
+
+
 def integrate_nonlinear_cached(
     G0: jnp.ndarray,
     cache: LinearCache,
@@ -393,6 +413,8 @@ def _integrate_nonlinear_gx_diagnostics_impl(
     implicit_restart: int = 20,
     implicit_solve_method: str = "batched",
     implicit_preconditioner: str | None = None,
+    fixed_mode_ky_index: int | None = None,
+    fixed_mode_kx_index: int | None = None,
 ) -> tuple[jnp.ndarray, GXDiagnostics, jnp.ndarray, FieldState]:
     """Integrate nonlinear system and return GX-style diagnostics plus final state."""
 
@@ -424,7 +446,15 @@ def _integrate_nonlinear_gx_diagnostics_impl(
     else:
         kx_neg = jnp.asarray([0], dtype=jnp.int32)
 
-    def _enforce_hermitian(G_state: jnp.ndarray) -> jnp.ndarray:
+    fixed_projector = _make_fixed_mode_projector(
+        G0,
+        ky_index=fixed_mode_ky_index,
+        kx_index=fixed_mode_kx_index,
+    )
+
+    def _project_state(G_state: jnp.ndarray) -> jnp.ndarray:
+        if fixed_projector is not None:
+            G_state = fixed_projector(G_state)
         if not use_hermitian or nyc <= 2:
             return G_state
         pos = G_state[..., :nyc, :, :]
@@ -436,7 +466,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
 
     state_dtype = jnp.result_type(G0, jnp.complex64)
     G0 = jnp.asarray(G0, dtype=state_dtype)
-    G0 = _enforce_hermitian(G0)
+    G0 = _project_state(G0)
     real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
     dt_init = jnp.asarray(dt, dtype=real_dtype)
     dt_min_val = jnp.asarray(dt_min, dtype=real_dtype)
@@ -579,37 +609,37 @@ def _integrate_nonlinear_gx_diagnostics_impl(
             G_new = G + dt_local * dG
         elif method == "rk2":
             k1 = dG
-            G_half = _enforce_hermitian(G + 0.5 * dt_local * k1)
+            G_half = _project_state(G + 0.5 * dt_local * k1)
             k2, _ = rhs_fn(G_half)
             G_new = G + dt_local * k2
         elif method == "rk3":
             k1 = dG
-            G1 = _enforce_hermitian(G + dt_local * k1)
+            G1 = _project_state(G + dt_local * k1)
             k2, _ = rhs_fn(G1)
-            G2 = _enforce_hermitian(0.75 * G + 0.25 * (G1 + dt_local * k2))
+            G2 = _project_state(0.75 * G + 0.25 * (G1 + dt_local * k2))
             k3, _ = rhs_fn(G2)
             G_new = (1.0 / 3.0) * G + (2.0 / 3.0) * (G2 + dt_local * k3)
         elif method == "rk3_gx":
             k1 = dG
-            G1 = _enforce_hermitian(G + (dt_local / 3.0) * k1)
+            G1 = _project_state(G + (dt_local / 3.0) * k1)
             k2, _ = rhs_fn(G1)
-            G2 = _enforce_hermitian(G + (2.0 * dt_local / 3.0) * k2)
+            G2 = _project_state(G + (2.0 * dt_local / 3.0) * k2)
             k3, _ = rhs_fn(G2)
-            G3 = _enforce_hermitian(G + 0.75 * dt_local * k3)
+            G3 = _project_state(G + 0.75 * dt_local * k3)
             G_new = G3 + 0.25 * dt_local * k1
         elif method == "rk4":
             k1 = dG
-            G2 = _enforce_hermitian(G + 0.5 * dt_local * k1)
+            G2 = _project_state(G + 0.5 * dt_local * k1)
             k2, _ = rhs_fn(G2)
-            G3 = _enforce_hermitian(G + 0.5 * dt_local * k2)
+            G3 = _project_state(G + 0.5 * dt_local * k2)
             k3, _ = rhs_fn(G3)
-            G4 = _enforce_hermitian(G + dt_local * k3)
+            G4 = _project_state(G + dt_local * k3)
             k4, _ = rhs_fn(G4)
             G_new = G + (dt_local / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
         elif method == "k10":
             def _euler_step(G_state):
                 dG_state, _ = rhs_fn(G_state)
-                return _enforce_hermitian(G_state + (dt_local / 6.0) * dG_state)
+                return _project_state(G_state + (dt_local / 6.0) * dG_state)
 
             G_q1 = G
             G_q2 = G
@@ -630,7 +660,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
             )
         if use_collision_split and damping is not None:
             G_new = _apply_collision_split(G_new, damping, dt_local, collision_scheme)
-        G_new = _enforce_hermitian(G_new)
+        G_new = _project_state(G_new)
         # Keep scan carry dtype stable under mixed-precision scalar constants.
         G_new = jnp.asarray(G_new, dtype=state_dtype)
         t_new = jnp.asarray(t_prev + dt_local, dtype=real_dtype)
@@ -739,6 +769,8 @@ def integrate_nonlinear_gx_diagnostics(
     implicit_restart: int = 20,
     implicit_solve_method: str = "batched",
     implicit_preconditioner: str | None = None,
+    fixed_mode_ky_index: int | None = None,
+    fixed_mode_kx_index: int | None = None,
 ) -> tuple[jnp.ndarray, GXDiagnostics]:
     """Integrate nonlinear system and return GX-style diagnostics."""
 
@@ -773,6 +805,8 @@ def integrate_nonlinear_gx_diagnostics(
             implicit_restart=implicit_restart,
             implicit_solve_method=implicit_solve_method,
             implicit_preconditioner=implicit_preconditioner,
+            fixed_mode_ky_index=fixed_mode_ky_index,
+            fixed_mode_kx_index=fixed_mode_kx_index,
         )
 
     t, diag_out, _G_final, _fields_final = _integrate_nonlinear_gx_diagnostics_impl(
@@ -810,6 +844,8 @@ def integrate_nonlinear_gx_diagnostics(
         implicit_restart=implicit_restart,
         implicit_solve_method=implicit_solve_method,
         implicit_preconditioner=implicit_preconditioner,
+        fixed_mode_ky_index=fixed_mode_ky_index,
+        fixed_mode_kx_index=fixed_mode_kx_index,
     )
     return t, diag_out
 
@@ -850,6 +886,8 @@ def integrate_nonlinear_gx_diagnostics_state(
     implicit_restart: int = 20,
     implicit_solve_method: str = "batched",
     implicit_preconditioner: str | None = None,
+    fixed_mode_ky_index: int | None = None,
+    fixed_mode_kx_index: int | None = None,
 ) -> tuple[jnp.ndarray, GXDiagnostics, jnp.ndarray, FieldState]:
     """Integrate nonlinear system and return GX diagnostics plus the final state."""
 
@@ -891,6 +929,8 @@ def integrate_nonlinear_gx_diagnostics_state(
         implicit_restart=implicit_restart,
         implicit_solve_method=implicit_solve_method,
         implicit_preconditioner=implicit_preconditioner,
+        fixed_mode_ky_index=fixed_mode_ky_index,
+        fixed_mode_kx_index=fixed_mode_kx_index,
     )
 
 
@@ -925,6 +965,8 @@ def integrate_nonlinear_imex_gx_diagnostics(
     implicit_restart: int = 20,
     implicit_solve_method: str = "batched",
     implicit_preconditioner: str | None = None,
+    fixed_mode_ky_index: int | None = None,
+    fixed_mode_kx_index: int | None = None,
 ) -> tuple[jnp.ndarray, GXDiagnostics]:
     """IMEX nonlinear integrator with GX diagnostics."""
 
@@ -958,7 +1000,15 @@ def integrate_nonlinear_imex_gx_diagnostics(
     else:
         kx_neg = jnp.asarray([0], dtype=jnp.int32)
 
-    def _enforce_hermitian(G_state: jnp.ndarray) -> jnp.ndarray:
+    fixed_projector = _make_fixed_mode_projector(
+        G0,
+        ky_index=fixed_mode_ky_index,
+        kx_index=fixed_mode_kx_index,
+    )
+
+    def _project_state(G_state: jnp.ndarray) -> jnp.ndarray:
+        if fixed_projector is not None:
+            G_state = fixed_projector(G_state)
         if not use_hermitian or nyc <= 2:
             return G_state
         pos = G_state[..., :nyc, :, :]
@@ -970,7 +1020,7 @@ def integrate_nonlinear_imex_gx_diagnostics(
 
     initial_state_dtype = jnp.result_type(G0, jnp.complex64)
     G0 = jnp.asarray(G0, dtype=initial_state_dtype)
-    G0 = _enforce_hermitian(G0)
+    G0 = _project_state(G0)
 
     implicit_operator = build_nonlinear_imex_operator(
         G0,
@@ -1138,7 +1188,7 @@ def integrate_nonlinear_imex_gx_diagnostics(
         G_new = solve_step(G, rhs)
         if use_collision_split and damping is not None:
             G_new = _apply_collision_split(G_new, damping, dt_val, collision_scheme)
-        G_new = _enforce_hermitian(G_new)
+        G_new = _project_state(G_new)
         # Keep scan carry dtype stable under mixed-precision scalar constants.
         G_new = jnp.asarray(G_new, dtype=state_dtype)
         t_new = t_prev + dt_val

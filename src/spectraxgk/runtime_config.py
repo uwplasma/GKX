@@ -112,6 +112,18 @@ class RuntimeTermsConfig:
 
 
 @dataclass(frozen=True)
+class RuntimeExpertConfig:
+    """Advanced runtime controls that should rarely be needed."""
+
+    fixed_mode: bool = False
+    iky_fixed: int | None = None
+    ikx_fixed: int | None = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class RuntimeConfig:
     """Unified simulation config for runtime-driven GK runs."""
 
@@ -124,6 +136,7 @@ class RuntimeConfig:
     collisions: RuntimeCollisionConfig = RuntimeCollisionConfig()
     normalization: RuntimeNormalizationConfig = RuntimeNormalizationConfig()
     terms: RuntimeTermsConfig = RuntimeTermsConfig()
+    expert: RuntimeExpertConfig = RuntimeExpertConfig()
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -136,4 +149,5 @@ class RuntimeConfig:
             "collisions": self.collisions.to_dict(),
             "normalization": self.normalization.to_dict(),
             "terms": self.terms.to_dict(),
+            "expert": self.expert.to_dict(),
         }

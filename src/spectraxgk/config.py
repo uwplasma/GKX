@@ -21,6 +21,8 @@ class InitializationConfig:
     gaussian_envelope_sine: float = 0.0
     kpar_init: float = 0.0
     init_file: str | None = None
+    init_file_scale: float = 1.0
+    init_file_mode: str = "replace"
     init_electrons_only: bool = False
 
     def to_dict(self) -> Dict[str, Any]:

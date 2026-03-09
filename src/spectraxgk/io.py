@@ -22,6 +22,7 @@ from spectraxgk.linear_krylov import KrylovConfig
 from spectraxgk.runtime_config import (
     RuntimeCollisionConfig,
     RuntimeConfig,
+    RuntimeExpertConfig,
     RuntimeNormalizationConfig,
     RuntimePhysicsConfig,
     RuntimeSpeciesConfig,
@@ -129,6 +130,9 @@ def load_runtime_from_toml(path: str | Path) -> tuple[RuntimeConfig, dict]:
     terms = data.get("terms")
     if isinstance(terms, dict):
         cfg = replace(cfg, terms=RuntimeTermsConfig(**terms))
+    expert = data.get("expert")
+    if isinstance(expert, dict):
+        cfg = replace(cfg, expert=RuntimeExpertConfig(**expert))
     species_raw = data.get("species")
     if species_raw is not None:
         if not isinstance(species_raw, list):

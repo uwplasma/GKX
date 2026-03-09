@@ -31,7 +31,7 @@ from spectraxgk.linear import (
     integrate_linear_diagnostics,
     linear_terms_to_term_config,
 )
-from spectraxgk.nonlinear import integrate_nonlinear_gx_diagnostics
+from spectraxgk.nonlinear import integrate_nonlinear_gx_diagnostics_state
 from spectraxgk.linear_krylov import KrylovConfig, dominant_eigenpair
 from spectraxgk.normalization import apply_diagnostic_normalization, get_normalization_contract
 from spectraxgk.runtime_config import RuntimeConfig, RuntimeSpeciesConfig
@@ -70,6 +70,7 @@ class RuntimeNonlinearResult:
     diagnostics: GXDiagnostics | None
     phi2: np.ndarray | None = None
     fields: FieldState | None = None
+    state: np.ndarray | None = None
     ky_selected: float | None = None
     kx_selected: float | None = None
 
@@ -296,6 +297,30 @@ def _expand_ky(arr: np.ndarray, *, nyc: int) -> np.ndarray:
     return np.concatenate([pos, neg], axis=-3)
 
 
+def _load_initial_state_from_file(
+    path: Path,
+    *,
+    nspecies: int,
+    Nl: int,
+    Nm: int,
+    ny: int,
+    nx: int,
+    nz: int,
+) -> np.ndarray:
+    raw = np.fromfile(path, dtype=np.complex64)
+    nyc = ny // 2 + 1
+    expected_nyc = nspecies * Nl * Nm * nyc * nx * nz
+    expected_full = nspecies * Nl * Nm * ny * nx * nz
+    if raw.size == expected_nyc:
+        arr = _reshape_gx_state(raw, nspec=nspecies, nl=Nl, nm=Nm, nyc=nyc, nx=nx, nz=nz)
+        return _expand_ky(arr, nyc=nyc)
+    if raw.size == expected_full:
+        return raw.reshape((nspecies, Nl, Nm, ny, nx, nz))
+    raise ValueError(
+        f"init_file size {raw.size} does not match expected {expected_nyc} (nyc) or {expected_full} (full)"
+    )
+
+
 def _build_initial_condition(
     grid: SpectralGrid,
     geom: FluxTubeGeometryLike,
@@ -330,32 +355,31 @@ def _build_initial_condition(
         )
     if cfg.init.gaussian_width <= 0.0:
         raise ValueError("gaussian_width must be > 0")
-
-    if cfg.init.init_file is not None:
-        path = Path(cfg.init.init_file)
-        raw = np.fromfile(path, dtype=np.complex64)
-        ny = grid.ky.size
-        nx = grid.kx.size
-        nz = grid.z.size
-        nyc = ny // 2 + 1
-        expected_nyc = nspecies * Nl * Nm * nyc * nx * nz
-        expected_full = nspecies * Nl * Nm * ny * nx * nz
-        if raw.size == expected_nyc:
-            arr = _reshape_gx_state(raw, nspec=nspecies, nl=Nl, nm=Nm, nyc=nyc, nx=nx, nz=nz)
-            arr = _expand_ky(arr, nyc=nyc)
-            return jnp.asarray(arr)
-        if raw.size == expected_full:
-            arr = raw.reshape((nspecies, Nl, Nm, ny, nx, nz))
-            return jnp.asarray(arr)
-        raise ValueError(
-            f"init_file size {raw.size} does not match expected {expected_nyc} (nyc) or {expected_full} (full)"
-        )
+    init_file_mode = cfg.init.init_file_mode.strip().lower()
+    if init_file_mode not in {"replace", "add"}:
+        raise ValueError("init_file_mode must be one of {'replace', 'add'}")
 
     g0 = np.zeros((nspecies, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
+    loaded_state: np.ndarray | None = None
+    if cfg.init.init_file is not None:
+        loaded_state = _load_initial_state_from_file(
+            Path(cfg.init.init_file),
+            nspecies=nspecies,
+            Nl=Nl,
+            Nm=Nm,
+            ny=grid.ky.size,
+            nx=grid.kx.size,
+            nz=grid.z.size,
+        )
+        loaded_state = np.asarray(loaded_state, dtype=np.complex64) * np.complex64(float(cfg.init.init_file_scale))
     amp = float(cfg.init.init_amp)
     ky_val = float(grid.ky[ky_index])
     if ky_val == 0.0:
-        return jnp.asarray(g0)
+        if loaded_state is None:
+            return jnp.asarray(g0)
+        if init_file_mode == "replace":
+            return jnp.asarray(loaded_state)
+        return jnp.asarray(loaded_state + g0)
 
     z = np.asarray(grid.z)
     if cfg.init.gaussian_init:
@@ -497,6 +521,10 @@ def _build_initial_condition(
                 raise ValueError("init_field moment exceeds (Nl, Nm) resolution")
             for s_idx in species_targets:
                 g0[s_idx, l_idx, m_idx, ky_index, kx_index, :] = vals
+    if loaded_state is not None:
+        if init_file_mode == "replace":
+            return jnp.asarray(loaded_state)
+        g0 = loaded_state + g0
     return jnp.asarray(g0)
 
 
@@ -992,6 +1020,7 @@ def run_runtime_nonlinear(
     diagnostics_stride: int | None = None,
     laguerre_mode: str | None = None,
     diagnostics: bool | None = None,
+    return_state: bool = False,
 ) -> RuntimeNonlinearResult:
     """Run a nonlinear point using the unified runtime config path."""
 
@@ -1031,12 +1060,23 @@ def run_runtime_nonlinear(
     if steps_val < 1:
         raise ValueError("steps must be >= 1")
 
+    fixed_mode_on = bool(cfg.expert.fixed_mode)
+    fixed_ky_index = cfg.expert.iky_fixed
+    fixed_kx_index = cfg.expert.ikx_fixed
+    fixed_ky_index_use: int | None = None
+    fixed_kx_index_use: int | None = None
+    if fixed_mode_on:
+        if fixed_ky_index is None or fixed_kx_index is None:
+            raise ValueError("expert.iky_fixed and expert.ikx_fixed must be set when expert.fixed_mode=true")
+        fixed_ky_index_use = int(fixed_ky_index)
+        fixed_kx_index_use = int(fixed_kx_index)
+
     diagnostics_on = cfg.time.diagnostics if diagnostics is None else bool(diagnostics)
-    if diagnostics_on:
+    if diagnostics_on or fixed_mode_on or return_state:
         sample_stride_use = cfg.time.sample_stride if sample_stride is None else int(sample_stride)
         diag_stride = cfg.time.diagnostics_stride if diagnostics_stride is None else int(diagnostics_stride)
         laguerre_mode_use = cfg.time.laguerre_nonlinear_mode if laguerre_mode is None else str(laguerre_mode)
-        t, diag = integrate_nonlinear_gx_diagnostics(
+        t, diag, G_final, fields_final = integrate_nonlinear_gx_diagnostics_state(
             G0,
             grid,
             geom,
@@ -1063,12 +1103,27 @@ def run_runtime_nonlinear(
             implicit_restart=int(cfg.time.implicit_restart),
             implicit_solve_method=str(cfg.time.implicit_solve_method),
             implicit_preconditioner=cfg.time.implicit_preconditioner,
+            fixed_mode_ky_index=fixed_ky_index_use,
+            fixed_mode_kx_index=fixed_kx_index_use,
         )
+        if diagnostics_on:
+            state_out = np.asarray(G_final) if return_state else None
+            return RuntimeNonlinearResult(
+                t=np.asarray(t),
+                diagnostics=diag,
+                phi2=None,
+                fields=None,
+                state=state_out,
+                ky_selected=float(np.asarray(grid.ky[ky_index])),
+                kx_selected=float(np.asarray(grid.kx[kx_index])),
+            )
+        phi2 = np.asarray(jnp.mean(jnp.abs(fields_final.phi) ** 2))
         return RuntimeNonlinearResult(
-            t=np.asarray(t),
-            diagnostics=diag,
-            phi2=None,
-            fields=None,
+            t=np.asarray([]),
+            diagnostics=None,
+            phi2=phi2,
+            fields=fields_final,
+            state=np.asarray(G_final) if return_state else None,
             ky_selected=float(np.asarray(grid.ky[ky_index])),
             kx_selected=float(np.asarray(grid.kx[kx_index])),
         )
