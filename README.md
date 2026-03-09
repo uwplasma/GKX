@@ -22,8 +22,12 @@ particle flux.
 The current KBM GX mismatch table is stored in
 `docs/_static/kbm_gx_mismatch.csv`.
 The KBM linear harness now uses one explicit solver across the whole scan by
-default and records eigenfunction-overlap metrics alongside `gamma`/`omega`,
-so branch-following issues can be isolated from operator mismatches.
+default, records eigenfunction-overlap metrics alongside `gamma`/`omega`, and
+reuses a single GX-time trajectory when auditing `project`/`svd`/`max`/`z_index`
+extractors. The GX-aligned linear KBM benchmark path also now restores the
+standard GX linked-end damping defaults instead of silently zeroing them, so
+branch-following audits are not contaminated by a benchmark-only damping
+contract mismatch.
 
 ## Highlights
 
