@@ -53,6 +53,7 @@ class GXVmecGeometryRequest:
     vnewk: tuple[float, ...]
     species_type: tuple[str, ...]
     gx_repo: str | None = None
+    gx_python: str | None = None
 
 
 def _format_toml_scalar(value: object) -> str:
@@ -106,6 +107,21 @@ def resolve_gx_vmec_script(gx_repo: str | Path | None = None) -> Path:
     if not script.exists():
         raise FileNotFoundError(f"GX VMEC geometry script not found: {script}")
     return script
+
+
+def resolve_gx_python(explicit_python: str | Path | None = None) -> str:
+    """Return the Python interpreter used to run GX's VMEC geometry helper."""
+
+    value = explicit_python if explicit_python is not None else os.environ.get("GX_VMEC_PYTHON")
+    if value is None:
+        return sys.executable
+    text = str(value).strip()
+    if not text:
+        return sys.executable
+    candidate = Path(text).expanduser()
+    if candidate.exists():
+        return str(candidate.resolve())
+    return text
 
 
 def _infer_vmec_npol(cfg: RuntimeConfig) -> float:
@@ -187,6 +203,7 @@ def build_gx_vmec_geometry_request(cfg: RuntimeConfig) -> GXVmecGeometryRequest:
         vnewk=tuple(vnewk),
         species_type=tuple(species_type),
         gx_repo=cfg.geometry.gx_repo,
+        gx_python=cfg.geometry.gx_python,
     )
 
 
@@ -295,13 +312,14 @@ def generate_gx_vmec_eik(
         return out
 
     script = resolve_gx_vmec_script(gx_repo or request.gx_repo)
+    gx_python = resolve_gx_python(request.gx_python)
     out.parent.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory(prefix="spectrax_vmec_") as tmpdir:
         input_path = Path(tmpdir) / "gx_vmec_geometry.toml"
         write_gx_vmec_geometry_input(request, input_path)
         proc = subprocess.run(
-            [sys.executable, str(script), str(input_path), str(out)],
+            [gx_python, str(script), str(input_path), str(out)],
             check=False,
             capture_output=True,
             text=True,
@@ -310,7 +328,7 @@ def generate_gx_vmec_eik(
     if proc.returncode != 0:
         raise RuntimeError(
             "GX VMEC geometry generation failed:\n"
-            f"command: {sys.executable} {script} ...\n"
+            f"command: {gx_python} {script} ...\n"
             f"stdout:\n{proc.stdout}\n"
             f"stderr:\n{proc.stderr}"
         )

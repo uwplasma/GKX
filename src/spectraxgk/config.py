@@ -97,6 +97,7 @@ class GeometryConfig:
     model: str = "s-alpha"
     geometry_file: str | None = None
     vmec_file: str | None = None
+    gx_python: str | None = None
     torflux: float | None = None
     npol: float | None = None
     npol_min: float | None = None
