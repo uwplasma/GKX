@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ctypes
 from dataclasses import dataclass, replace
 from typing import Sequence
 from pathlib import Path
@@ -76,6 +77,9 @@ class RuntimeNonlinearResult:
     kx_selected: float | None = None
 
 
+_GX_RAND_MAX = float((1 << 31) - 1)
+
+
 def _midplane_index(grid: SpectralGrid) -> int:
     if grid.z.size <= 1:
         return 0
@@ -85,6 +89,28 @@ def _midplane_index(grid: SpectralGrid) -> int:
 def _zero_kx_index(grid: SpectralGrid) -> int:
     kx = np.asarray(grid.kx, dtype=float)
     return int(np.argmin(np.abs(kx)))
+
+
+def _gx_centered_random_pairs(seed: int, count: int) -> np.ndarray:
+    """Return GX-style centered random pairs using the platform C ``rand()``."""
+
+    if count <= 0:
+        return np.empty((0, 2), dtype=np.float64)
+
+    libc = ctypes.CDLL(None)
+    srand = libc.srand
+    rand = libc.rand
+    srand.argtypes = [ctypes.c_uint]
+    rand.restype = ctypes.c_int
+    srand(ctypes.c_uint(int(seed)))
+
+    half = 0.5 * _GX_RAND_MAX
+    inv = 1.0 / _GX_RAND_MAX
+    pairs = np.empty((count, 2), dtype=np.float64)
+    for i in range(count):
+        pairs[i, 0] = (float(rand()) - half) * inv
+        pairs[i, 1] = (float(rand()) - half) * inv
+    return pairs
 
 
 def _select_nonlinear_mode_indices(
@@ -621,7 +647,6 @@ def _build_initial_condition(
                     l_idx, m_idx = field_map[init_field]
                     _set_mode(l_idx, m_idx, ky_i, kx_neg, vals_k)
     elif not cfg.init.init_single and not cfg.init.gaussian_init:
-        rng = np.random.default_rng(int(cfg.init.random_seed))
         z_min = float(z.min())
         z_max = float(z.max())
         Zp = (z_max - z_min) / (2.0 * np.pi) if z_max > z_min else 1.0
@@ -634,16 +659,18 @@ def _build_initial_condition(
         dealias = np.asarray(grid.dealias_mask)
         ky_indices = np.where(ky_mask)[0]
         kx_indices = np.where(kx_mask)[0]
+        active_modes = [
+            (int(kx_i), int(ky_i))
+            for kx_i in kx_indices
+            for ky_i in ky_indices
+            if dealias[ky_i, kx_i]
+        ]
+        rand_pairs = amp * _gx_centered_random_pairs(int(cfg.init.random_seed), len(active_modes))
         if init_field != "all":
             l_idx, m_idx = field_map[init_field]
             if l_idx >= Nl or m_idx >= Nm:
                 raise ValueError("init_field moment exceeds (Nl, Nm) resolution")
-        for ky_i in ky_indices:
-            for kx_i in kx_indices:
-                if not dealias[ky_i, kx_i]:
-                    continue
-                ra = amp * (rng.random() - 0.5)
-                rb = amp * (rng.random() - 0.5)
+        for (kx_i, ky_i), (ra, rb) in zip(active_modes, rand_pairs, strict=True):
                 vals_k = (ra + 1j * rb) * z_phase
                 if init_field == "all":
                     for field_name in field_map:
