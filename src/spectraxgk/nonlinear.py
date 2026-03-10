@@ -24,7 +24,12 @@ from spectraxgk.terms.assembly import assemble_rhs_cached_jit, compute_fields_ca
 from spectraxgk.terms.config import FieldState, TermConfig
 from spectraxgk.terms.integrators import integrate_nonlinear as integrate_nonlinear_scan
 from spectraxgk.terms.nonlinear import _broadcast_grid, _ifft2_xy, nonlinear_em_contribution
-from spectraxgk.gx_integrators import _gx_growth_rate_step, _gx_midplane_index
+from spectraxgk.gx_integrators import (
+    _gx_growth_rate_step,
+    _gx_laguerre_vmax,
+    _gx_linear_omega_max,
+    _gx_midplane_index,
+)
 from spectraxgk.diagnostics import (
     GXDiagnostics,
     gx_energy_total,
@@ -37,8 +42,6 @@ from spectraxgk.diagnostics import (
     gx_Wg,
     gx_Wphi,
 )
-from spectraxgk.gx_integrators import _gx_laguerre_vmax
-
 _SSPX3_ADT = float((1.0 / 6.0) ** (1.0 / 3.0))
 _SSPX3_WGTFAC = float((9.0 - 2.0 * (6.0 ** (2.0 / 3.0))) ** 0.5)
 _SSPX3_W1 = 0.5 * (_SSPX3_WGTFAC - 1.0)
@@ -129,7 +132,7 @@ def _make_hermitian_projector(ky_vals: np.ndarray, nx: int) -> Callable[[jnp.nda
     return project
 
 
-def _gx_nonlinear_omega_max(
+def _gx_nonlinear_omega_components(
     fields: FieldState,
     grid: SpectralGrid,
     cache: LinearCache,
@@ -140,8 +143,8 @@ def _gx_nonlinear_omega_max(
     kxfac: float,
     vpar_max: float,
     muB_max: float,
-) -> jnp.ndarray:
-    """GX-style nonlinear max frequency estimate from grad(phi,apar,bpar)."""
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """GX-style nonlinear x/y CFL frequency components from grad(phi,apar,bpar)."""
 
     phi = fields.phi
     apar = fields.apar
@@ -201,7 +204,7 @@ def _gx_nonlinear_omega_max(
     scale = jnp.asarray(0.5, dtype=real_dtype)
     omega_x = jnp.abs(kxfac_val) * jnp.asarray(kx_max, dtype=real_dtype) * vmax_x * scale
     omega_y = jnp.abs(kxfac_val) * jnp.asarray(ky_max, dtype=real_dtype) * vmax_y * scale
-    return jnp.asarray(omega_x + omega_y, dtype=real_dtype)
+    return jnp.asarray(omega_x, dtype=real_dtype), jnp.asarray(omega_y, dtype=real_dtype)
 
 
 def _gx_omega_mode_mask(
@@ -490,11 +493,22 @@ def _integrate_nonlinear_gx_diagnostics_impl(
     ky_max = float(abs(ky_np[(ny - 1) // 3])) if ny > 1 else 0.0
     vtmax = float(np.max(np.abs(np.asarray(params.vth, dtype=float))))
     tzmax = float(np.max(np.abs(np.asarray(params.tz, dtype=float))))
-    nm = int(cache.sqrt_m.shape[0])
     nl = int(cache.l.shape[0])
+    nm = int(cache.m.shape[1])
     vpar_max = 2.0 * float(np.sqrt(max(nm, 1))) * vtmax
     muB_max = _gx_laguerre_vmax(nl) * tzmax
     kxfac_val = float(np.asarray(cache.kxfac))
+    linear_omega = jnp.asarray(
+        _gx_linear_omega_max(
+            grid,
+            geom_eff,
+            params,
+            nl,
+            nm,
+            include_diamagnetic_drive=False,
+        ),
+        dtype=real_dtype,
+    )
     squeeze_species = G0.ndim == 5 and cache.lb_lam.ndim == 6
     use_collision_split = bool(collision_split) and (
         float(term_cfg.collisions) != 0.0 or float(term_cfg.hypercollisions) != 0.0
@@ -506,7 +520,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
     def _update_dt(fields_state: FieldState, dt_prev: jnp.ndarray) -> jnp.ndarray:
         if fixed_dt:
             return jnp.asarray(dt_prev, dtype=real_dtype)
-        wmax = _gx_nonlinear_omega_max(
+        omega_nl_x, omega_nl_y = _gx_nonlinear_omega_components(
             fields_state,
             grid,
             cache,
@@ -516,6 +530,11 @@ def _integrate_nonlinear_gx_diagnostics_impl(
             kxfac=kxfac_val,
             vpar_max=vpar_max,
             muB_max=muB_max,
+        )
+        wmax = (
+            jnp.maximum(linear_omega[0], omega_nl_x)
+            + jnp.maximum(linear_omega[1], omega_nl_y)
+            + linear_omega[2]
         )
         dt_guess = jnp.where(wmax > 0.0, cfl_fac_val * cfl_val / wmax, dt_prev)
         return jnp.asarray(jnp.clip(dt_guess, dt_min_val, dt_max_val), dtype=real_dtype)

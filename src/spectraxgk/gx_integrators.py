@@ -171,28 +171,19 @@ def _gx_linear_omega_max(
     params: LinearParams,
     nl: int,
     nm: int,
+    *,
+    include_diamagnetic_drive: bool = True,
 ) -> np.ndarray:
     kx, ky, kz = _gx_k_arrays(grid)
     nz = kz.size
-    mask = np.asarray(grid.dealias_mask, dtype=bool)
-    kx_mesh = np.abs(np.asarray(grid.kx_grid, dtype=float))
-    ky_mesh = np.abs(np.asarray(grid.ky_grid, dtype=float))
-    if np.any(mask):
-        kx_active = kx_mesh[mask]
-        ky_active = ky_mesh[mask]
-    else:
-        kx_active = kx_mesh.reshape(-1)
-        ky_active = ky_mesh.reshape(-1)
-    kx_max = float(np.max(kx_active)) if kx_active.size else 0.0
-    ky_max = float(np.max(ky_active)) if ky_active.size else 0.0
-    kz_max = float(kz[nz // 2]) if nz > 0 else 0.0
-    positive_k = np.concatenate(
-        [
-            kx_active[np.abs(kx_active) > 0.0],
-            ky_active[np.abs(ky_active) > 0.0],
-        ]
-    )
-    kperp_min = float(np.min(positive_k)) if positive_k.size else 0.0
+    nx = kx.size
+    ny = int(grid.ky.shape[0])
+    kx_max = float(abs(kx[(nx - 1) // 3])) if nx > 1 else 0.0
+    ky_max = float(abs(ky[(ny - 1) // 3])) if ky.size > 0 else 0.0
+    kz_max = float(abs(kz[nz // 2])) if nz > 0 else 0.0
+    kx_min = float(abs(kx[1])) if nx > 1 else np.inf
+    ky_min = float(abs(ky[1])) if ky.size > 1 else np.inf
+    kperp_min = float(min(kx_min, ky_min)) if np.isfinite(min(kx_min, ky_min)) else 0.0
 
     tprim = np.atleast_1d(np.asarray(params.R_over_LTi, dtype=float))
     fprim = np.atleast_1d(np.asarray(params.R_over_Ln, dtype=float))
@@ -243,7 +234,7 @@ def _gx_linear_omega_max(
     omega_max[1] = tzmax * ky_max * (
         vpar_max * vpar_max * cvdrift_max + muB_max * gbdrift_max
     )
-    if etamax < 1.0e5:
+    if include_diamagnetic_drive and etamax < 1.0e5:
         omega_max[1] = omega_max[1] + ky_max * (
             1.0 + etamax * (vpar_max * vpar_max / 2.0 + muB_max - 1.5)
         )
