@@ -410,11 +410,14 @@ def _cmd_run_runtime_nonlinear(args: argparse.Namespace) -> int:
     Nl = int(args.Nl if args.Nl is not None else run_cfg.get("Nl", 24))
     Nm = int(args.Nm if args.Nm is not None else run_cfg.get("Nm", 12))
     dt = float(args.dt if args.dt is not None else run_cfg.get("dt", cfg.time.dt))
-    steps = int(
-        args.steps
-        if args.steps is not None
-        else run_cfg.get("steps", int(round(cfg.time.t_max / cfg.time.dt)))
-    )
+    if args.steps is not None:
+        steps: int | None = int(args.steps)
+    elif run_cfg.get("steps", None) is not None:
+        steps = int(run_cfg["steps"])
+    elif bool(cfg.time.fixed_dt):
+        steps = int(round(cfg.time.t_max / cfg.time.dt))
+    else:
+        steps = None
     method = str(args.method if args.method is not None else run_cfg.get("method", cfg.time.method))
     sample_stride = int(
         args.sample_stride
