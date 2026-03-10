@@ -456,10 +456,11 @@ def _cmd_run_runtime_nonlinear(args: argparse.Namespace) -> int:
     if diag is None:
         print("nonlinear run completed")
         return 0
+    t_last = float(np.asarray(diag.t)[-1]) if np.asarray(diag.t).size else 0.0
 
     print(
         "nonlinear: "
-        f"t={diag.t.size} "
+        f"t={t_last:.6g} "
         f"ky_sel={result.ky_selected:.6g} "
         f"kx_sel={result.kx_selected:.6g} "
         f"dt_mean={float(diag.dt_mean):.6g} "
