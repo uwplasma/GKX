@@ -619,14 +619,14 @@ def _integrate_nonlinear_gx_diagnostics_impl(
             G_half = _project_state(G + 0.5 * dt_local * k1)
             k2, _ = rhs_fn(G_half)
             G_new = G + dt_local * k2
-        elif method == "rk3":
+        elif method == "rk3_classic":
             k1 = dG
             G1 = _project_state(G + dt_local * k1)
             k2, _ = rhs_fn(G1)
             G2 = _project_state(0.75 * G + 0.25 * (G1 + dt_local * k2))
             k3, _ = rhs_fn(G2)
             G_new = (1.0 / 3.0) * G + (2.0 / 3.0) * (G2 + dt_local * k3)
-        elif method == "rk3_gx":
+        elif method in {"rk3", "rk3_gx"}:
             k1 = dG
             G1 = _project_state(G + (dt_local / 3.0) * k1)
             k2, _ = rhs_fn(G1)
@@ -678,7 +678,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
             G_new = G_q2 + 0.6 * G_q1 + 0.1 * dt_local * dG_final
         else:
             raise ValueError(
-                "method must be one of {'euler', 'rk2', 'rk3', 'rk3_gx', 'rk4', 'k10', 'sspx3'}"
+                "method must be one of {'euler', 'rk2', 'rk3', 'rk3_classic', 'rk3_gx', 'rk4', 'k10', 'sspx3'}"
             )
         if use_collision_split and damping is not None:
             G_new = _apply_collision_split(G_new, damping, dt_local, collision_scheme)
