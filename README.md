@@ -160,6 +160,12 @@ python examples/kbm_beta_scan.py --no-diffrax
   matches the corrected GX `t=2` short-window reference with mean absolute
   `omega` errors around `1e-5` and mean relative `gamma` errors of about
   `0.4-4%` across `ky=0.1-0.4`.
+- **Nonlinear W7-X exact-state audit**: starting from the exact dumped GX
+  nonlinear state at `t≈32.44665203`, the next GX output window
+  (`time_index=10 -> 11`) matches to about `1e-4` relative in `Wg`, `Wphi`,
+  and heat flux through the runtime TOML path. The remaining free-run W7-X gap
+  is therefore a long-window decorrelation/statistics issue, not a same-state
+  operator or timestepper mismatch.
 
 ## Figures
 
