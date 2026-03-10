@@ -24,10 +24,14 @@ The current KBM GX mismatch table is stored in
 The KBM linear harness now uses one explicit solver across the whole scan by
 default, records eigenfunction-overlap metrics alongside `gamma`/`omega`, and
 reuses a single GX-time trajectory when auditing `project`/`svd`/`max`/`z_index`
-extractors. The GX-aligned linear KBM benchmark path also now restores the
-standard GX linked-end damping defaults instead of silently zeroing them, so
-branch-following audits are not contaminated by a benchmark-only damping
-contract mismatch.
+extractors. It now also carries explicit late projected-fit candidates for the
+slow low-`ky` KBM branch and records the actual selected fit window in the
+tracked CSV. The current tracked four-point table averages about `11.8%`
+relative error in `gamma` and about `6.1%` in `omega`, with the remaining
+linear residual concentrated at `ky rho_i = 0.2`. The GX-aligned linear KBM
+benchmark path also now restores the standard GX linked-end damping defaults
+instead of silently zeroing them, so branch-following audits are not
+contaminated by a benchmark-only damping contract mismatch.
 
 ## Highlights
 
