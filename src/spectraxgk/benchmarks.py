@@ -4370,35 +4370,49 @@ def run_kbm_beta_scan(
             if t_arr.size > 1:
                 phi_np = np.asarray(_phi_t)
                 t_np = np.asarray(t_arr, dtype=float)
-                try:
-                    gamma, omega, _g_t, _o_t, _t_mid = gx_growth_rate_from_phi(
-                        phi_np,
-                        t_np,
-                        sel,
-                        navg_fraction=0.5,
-                        mode_method=mode_method,
-                    )
-                except ValueError:
+                if mode_method in {"z_index", "max"}:
                     try:
-                        gamma, omega, _g_t, _o_t = gx_growth_rate_from_omega_series(
-                            np.asarray(gamma_t),
-                            np.asarray(omega_t),
+                        gamma, omega, _g_t, _o_t, _t_mid = gx_growth_rate_from_phi(
+                            phi_np,
+                            t_np,
                             sel,
                             navg_fraction=0.5,
+                            mode_method=mode_method,
                         )
                     except ValueError:
-                        signal = extract_mode_time_series(phi_np, sel, method=mode_method)
-                        gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
-                            t_np,
-                            signal,
-                            window_method="loglinear",
-                            window_fraction=window_fraction,
-                            min_points=min_points,
-                            start_fraction=start_fraction,
-                            growth_weight=growth_weight,
-                            require_positive=require_positive,
-                            min_amp_fraction=min_amp_fraction,
-                        )
+                        try:
+                            gamma, omega, _g_t, _o_t = gx_growth_rate_from_omega_series(
+                                np.asarray(gamma_t),
+                                np.asarray(omega_t),
+                                sel,
+                                navg_fraction=0.5,
+                            )
+                        except ValueError:
+                            signal = extract_mode_time_series(phi_np, sel, method=mode_method)
+                            gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
+                                t_np,
+                                signal,
+                                window_method="fixed",
+                                window_fraction=window_fraction,
+                                min_points=min_points,
+                                start_fraction=start_fraction,
+                                growth_weight=growth_weight,
+                                require_positive=require_positive,
+                                min_amp_fraction=min_amp_fraction,
+                            )
+                else:
+                    signal = extract_mode_time_series(phi_np, sel, method=mode_method)
+                    gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
+                        t_np,
+                        signal,
+                        window_method="fixed",
+                        window_fraction=window_fraction,
+                        min_points=min_points,
+                        start_fraction=start_fraction,
+                        growth_weight=growth_weight,
+                        require_positive=require_positive,
+                        min_amp_fraction=min_amp_fraction,
+                    )
             else:
                 gamma = float("nan")
                 omega = float("nan")
@@ -4916,24 +4930,41 @@ def run_kbm_linear(
         t_out = np.asarray(t_arr, dtype=float)
         phi_t_np = np.asarray(phi_t)
         if t_out.size > 1:
-            try:
-                gamma, omega, _g_t, _o_t, _t_mid = gx_growth_rate_from_phi(
-                    phi_t_np,
-                    t_out,
-                    sel,
-                    navg_fraction=0.5,
-                    mode_method=mode_method,
-                )
-            except ValueError:
+            if mode_method in {"z_index", "max"}:
                 try:
-                    gamma, omega, _g_t, _o_t = gx_growth_rate_from_omega_series(
-                        np.asarray(gamma_t),
-                        np.asarray(omega_t),
+                    gamma, omega, _g_t, _o_t, _t_mid = gx_growth_rate_from_phi(
+                        phi_t_np,
+                        t_out,
                         sel,
                         navg_fraction=0.5,
+                        mode_method=mode_method,
                     )
                 except ValueError:
-                    signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
+                    try:
+                        gamma, omega, _g_t, _o_t = gx_growth_rate_from_omega_series(
+                            np.asarray(gamma_t),
+                            np.asarray(omega_t),
+                            sel,
+                            navg_fraction=0.5,
+                        )
+                    except ValueError:
+                        signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
+                        gamma, omega = _fit_with_window(signal, t_out)
+            else:
+                signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
+                if auto_window and tmin is None and tmax is None:
+                    gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
+                        t_out,
+                        signal,
+                        window_method="fixed",
+                        window_fraction=window_fraction,
+                        min_points=min_points,
+                        start_fraction=start_fraction,
+                        growth_weight=growth_weight,
+                        require_positive=require_positive,
+                        min_amp_fraction=min_amp_fraction,
+                    )
+                else:
                     gamma, omega = _fit_with_window(signal, t_out)
         else:
             gamma = float("nan")

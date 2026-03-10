@@ -34,32 +34,60 @@ def extract_mode_time_series(
     """Extract a complex mode time series from phi_t(t, ky, kx, z)."""
 
     data = phi_t[:, sel.ky_index, sel.kx_index, :]
+    z_index = min(max(int(sel.z_index), 0), max(data.shape[1] - 1, 0))
+
+    def _late_time_mode(arr: np.ndarray, *, mode_method: str) -> np.ndarray:
+        n = arr.shape[0]
+        tail_start = int(0.6 * n)
+        tail = arr[tail_start:] if tail_start < n else arr
+        finite_rows = np.isfinite(tail).all(axis=1)
+        if finite_rows.any():
+            tail = tail[finite_rows]
+        else:
+            finite_all = np.isfinite(arr).all(axis=1)
+            if finite_all.any():
+                tail = arr[finite_all]
+        if tail.shape[0] == 0:
+            raise ValueError("not enough finite samples for late-time mode extraction")
+        if mode_method == "snapshot":
+            ref_idx = int(np.argmax(np.linalg.norm(tail, axis=1)))
+            return tail[ref_idx]
+        if mode_method == "svd":
+            _u, _s, vh = np.linalg.svd(tail, full_matrices=False)
+            mode = vh[0]
+            ref_idx = int(np.argmax(np.linalg.norm(tail, axis=1)))
+            ref = tail[ref_idx]
+            phase = np.vdot(mode, ref)
+            if phase != 0.0:
+                mode = mode * np.exp(-1j * np.angle(phase))
+            return mode
+        raise ValueError("mode_method must be 'snapshot' or 'svd'")
+
+    def _project_onto_mode(arr: np.ndarray, mode: np.ndarray) -> np.ndarray:
+        denom = np.vdot(mode, mode)
+        if not np.isfinite(denom) or abs(denom) <= 0.0:
+            return arr[:, z_index]
+        return (arr @ mode.conj()) / denom
+
     if method == "z_index":
-        return data[:, sel.z_index]
+        return data[:, z_index]
     if method == "max":
         idx = np.argmax(np.abs(data), axis=1)
         return data[np.arange(data.shape[0]), idx]
     if method == "project":
-        n = data.shape[0]
-        tail_start = int(0.6 * n)
-        tail = data[tail_start:] if tail_start < n else data
-        finite_rows = np.isfinite(tail).all(axis=1)
-        if not finite_rows.any():
-            return data[:, sel.z_index]
-        tail = tail[finite_rows]
-        ref_idx = int(np.argmax(np.linalg.norm(tail, axis=1)))
-        ref = tail[ref_idx]
-        denom = np.vdot(ref, ref)
-        denom = denom if denom != 0.0 else 1.0
-        return (data @ ref.conj()) / denom
+        try:
+            mode = _late_time_mode(data, mode_method="snapshot")
+        except ValueError:
+            return data[:, z_index]
+        return _project_onto_mode(data, mode)
     if method == "svd":
         if not np.isfinite(data).all():
             return extract_mode_time_series(phi_t, sel, method="z_index")
         try:
-            u, s, _vh = np.linalg.svd(data, full_matrices=False)
+            mode = _late_time_mode(data, mode_method="svd")
         except np.linalg.LinAlgError:
             return extract_mode_time_series(phi_t, sel, method="project")
-        return u[:, 0] * s[0]
+        return _project_onto_mode(data, mode)
     raise ValueError("method must be one of {'z_index', 'max', 'project', 'svd'}")
 
 
