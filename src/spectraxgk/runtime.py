@@ -114,6 +114,28 @@ def _select_nonlinear_mode_indices(
     return int(ky_pick), int(kx_pick)
 
 
+def _infer_runtime_nonlinear_steps(
+    cfg: RuntimeConfig,
+    *,
+    dt: float,
+    steps: int | None,
+) -> int:
+    """Infer nonlinear explicit step counts with the same dt ceiling as the integrator."""
+
+    if steps is not None:
+        steps_val = int(steps)
+    elif bool(cfg.time.fixed_dt):
+        steps_val = int(np.round(float(cfg.time.t_max) / max(float(cfg.time.dt), 1.0e-12)))
+    else:
+        # Keep runtime inference aligned with GX-style adaptive stepping: when
+        # dt_max is unset, the nonlinear integrator clamps at dt itself.
+        dt_cap = float(cfg.time.dt_max) if cfg.time.dt_max is not None else float(dt)
+        steps_val = int(np.ceil(float(cfg.time.t_max) / max(dt_cap, 1.0e-12)))
+    if steps_val < 1:
+        raise ValueError("steps must be >= 1")
+    return steps_val
+
+
 def _species_to_linear(species_cfg: Sequence[RuntimeSpeciesConfig]) -> list[Species]:
     kinetic = [s for s in species_cfg if bool(s.kinetic)]
     if not kinetic:
@@ -1065,16 +1087,7 @@ def run_runtime_nonlinear(
     dt_val = float(cfg.time.dt if dt is None else dt)
     if dt_val <= 0.0:
         raise ValueError("dt must be > 0")
-    if steps is None:
-        if not cfg.time.fixed_dt:
-            dt_cap = cfg.time.dt_max if cfg.time.dt_max is not None else dt_val * 5.0
-            steps_val = int(np.ceil(cfg.time.t_max / max(dt_cap, 1.0e-12)))
-        else:
-            steps_val = int(round(cfg.time.t_max / cfg.time.dt))
-    else:
-        steps_val = int(steps)
-    if steps_val < 1:
-        raise ValueError("steps must be >= 1")
+    steps_val = _infer_runtime_nonlinear_steps(cfg, dt=dt_val, steps=steps)
 
     fixed_mode_on = bool(cfg.expert.fixed_mode)
     fixed_ky_index = cfg.expert.iky_fixed
