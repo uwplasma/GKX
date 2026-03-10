@@ -9,6 +9,7 @@ from pathlib import Path
 import jax.numpy as jnp
 import numpy as np
 
+from spectraxgk.config import resolve_cfl_fac
 from spectraxgk.analysis import (
     ModeSelection,
     extract_mode_time_series,
@@ -1274,7 +1275,7 @@ def run_runtime_nonlinear(
                     dt_min=float(cfg.time.dt_min),
                     dt_max=cfg.time.dt_max,
                     cfl=float(cfg.time.cfl),
-                    cfl_fac=float(cfg.time.cfl_fac),
+                    cfl_fac=resolve_cfl_fac(str(method or cfg.time.method), cfg.time.cfl_fac),
                     collision_split=bool(cfg.time.collision_split),
                     collision_scheme=str(cfg.time.collision_scheme),
                     implicit_restart=int(cfg.time.implicit_restart),
@@ -1321,7 +1322,7 @@ def run_runtime_nonlinear(
                 dt_min=float(cfg.time.dt_min),
                 dt_max=cfg.time.dt_max,
                 cfl=float(cfg.time.cfl),
-                cfl_fac=float(cfg.time.cfl_fac),
+                cfl_fac=resolve_cfl_fac(str(method or cfg.time.method), cfg.time.cfl_fac),
                 collision_split=bool(cfg.time.collision_split),
                 collision_scheme=str(cfg.time.collision_scheme),
                 implicit_restart=int(cfg.time.implicit_restart),

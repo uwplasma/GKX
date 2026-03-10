@@ -9,6 +9,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from spectraxgk.config import resolve_cfl_fac
 from spectraxgk.geometry import FluxTubeGeometryLike, ensure_flux_tube_geometry_data
 from spectraxgk.grids import SpectralGrid, gx_real_fft_mesh
 from spectraxgk.linear import (
@@ -409,7 +410,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
     dt_min: float = 1.0e-7,
     dt_max: float | None = None,
     cfl: float = 0.9,
-    cfl_fac: float = 1.0,
+    cfl_fac: float | None = None,
     collision_split: bool = False,
     collision_scheme: str = "implicit",
     implicit_tol: float = 1.0e-6,
@@ -479,7 +480,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
     # GX default behavior: when dt_max is unset, dt_max == dt.
     dt_max_val = jnp.asarray(dt if dt_max is None else dt_max, dtype=real_dtype)
     cfl_val = jnp.asarray(cfl, dtype=real_dtype)
-    cfl_fac_val = jnp.asarray(cfl_fac, dtype=real_dtype)
+    cfl_fac_val = jnp.asarray(resolve_cfl_fac(method, cfl_fac), dtype=real_dtype)
 
     nx = int(grid.kx.size)
     ny = int(grid.ky.size)
@@ -780,7 +781,7 @@ def integrate_nonlinear_gx_diagnostics(
     dt_min: float = 1.0e-7,
     dt_max: float | None = None,
     cfl: float = 0.9,
-    cfl_fac: float = 1.0,
+    cfl_fac: float | None = None,
     collision_split: bool = False,
     collision_scheme: str = "implicit",
     implicit_tol: float = 1.0e-6,
@@ -897,7 +898,7 @@ def integrate_nonlinear_gx_diagnostics_state(
     dt_min: float = 1.0e-7,
     dt_max: float | None = None,
     cfl: float = 0.9,
-    cfl_fac: float = 1.0,
+    cfl_fac: float | None = None,
     collision_split: bool = False,
     collision_scheme: str = "implicit",
     implicit_tol: float = 1.0e-6,

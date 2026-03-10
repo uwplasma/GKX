@@ -29,6 +29,7 @@ from spectraxgk.config import (
     KBMBaseCase,
     TEMBaseCase,
     TimeConfig,
+    resolve_cfl_fac,
 )
 from spectraxgk.geometry import (
     FluxTubeGeometryLike,
@@ -1763,7 +1764,7 @@ def run_cyclone_scan(
                 dt_min_i = float(time_base.dt_min)
                 dt_max_i = None if time_base.dt_max is None else float(time_base.dt_max)
                 cfl_i = float(time_base.cfl)
-                cfl_fac_i = float(time_base.cfl_fac)
+                cfl_fac_i = resolve_cfl_fac(str(time_base.method), time_base.cfl_fac)
             gx_time_cfg = GXTimeConfig(
                 dt=dt_i,
                 t_max=t_max_val,
@@ -4353,7 +4354,11 @@ def run_kbm_beta_scan(
                 dt_min=float(time_cfg.dt_min) if time_cfg is not None else 1.0e-7,
                 dt_max=float(time_cfg.dt_max) if (time_cfg is not None and time_cfg.dt_max is not None) else None,
                 cfl=float(time_cfg.cfl) if time_cfg is not None else 0.9,
-                cfl_fac=float(time_cfg.cfl_fac) if time_cfg is not None else float(GXTimeConfig.cfl_fac),
+                cfl_fac=(
+                    resolve_cfl_fac(str(time_cfg.method), time_cfg.cfl_fac)
+                    if time_cfg is not None
+                    else float(GXTimeConfig.cfl_fac)
+                ),
             )
             t_arr, _phi_t, gamma_t, omega_t, _gx_diag = integrate_linear_gx_diagnostics(
                 G0_jax,
@@ -4913,7 +4918,11 @@ def run_kbm_linear(
             dt_min=float(time_cfg.dt_min) if time_cfg is not None else 1.0e-7,
             dt_max=float(time_cfg.dt_max) if (time_cfg is not None and time_cfg.dt_max is not None) else None,
             cfl=float(time_cfg.cfl) if time_cfg is not None else 0.9,
-            cfl_fac=float(time_cfg.cfl_fac) if time_cfg is not None else float(GXTimeConfig.cfl_fac),
+            cfl_fac=(
+                resolve_cfl_fac(str(time_cfg.method), time_cfg.cfl_fac)
+                if time_cfg is not None
+                else float(GXTimeConfig.cfl_fac)
+            ),
         )
         t_arr, phi_t, gamma_t, omega_t, _gx_diag = integrate_linear_gx_diagnostics(
             G0_jax,

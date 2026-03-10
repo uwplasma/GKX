@@ -7,6 +7,25 @@ GX_REFERENCE_ELECTRON_MASS = 2.7e-4
 GX_REFERENCE_MASS_RATIO = 1.0 / GX_REFERENCE_ELECTRON_MASS
 
 
+def gx_default_cfl_fac(method: str) -> float:
+    """Return the GX timestep CFL prefactor for a given explicit method."""
+
+    method_key = method.strip().lower()
+    if method_key in {"rk3", "sspx3"}:
+        return 1.73
+    if method_key == "rk4":
+        return 2.82
+    return 1.0
+
+
+def resolve_cfl_fac(method: str, cfl_fac: float | None) -> float:
+    """Resolve an explicit CFL prefactor, falling back to the GX method default."""
+
+    if cfl_fac is None:
+        return gx_default_cfl_fac(method)
+    return float(cfl_fac)
+
+
 @dataclass(frozen=True)
 class InitializationConfig:
     """Initialization options for linear runs."""
@@ -79,7 +98,7 @@ class TimeConfig:
     dt_min: float = 1.0e-7
     dt_max: float | None = None
     cfl: float = 0.9
-    cfl_fac: float = 1.0
+    cfl_fac: float | None = None
     collision_split: bool = False
     collision_scheme: str = "implicit"
     gx_real_fft: bool = True
