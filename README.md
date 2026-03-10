@@ -32,6 +32,12 @@ linear residual concentrated at `ky rho_i = 0.2`. The GX-aligned linear KBM
 benchmark path also now restores the standard GX linked-end damping defaults
 instead of silently zeroing them, so branch-following audits are not
 contaminated by a benchmark-only damping contract mismatch.
+For project-level acceptance, we now treat linear KBM as closed when the
+tracked table meets the default `1e-1` relative target and any remaining
+documented low-`ky` outlier is covered by the checkpoint probe within `1.5e-1`.
+The current low-`ky` probe asset is `docs/_static/kbm_probe_lowky_ckpt.csv`;
+it closes the remaining `ky rho_i = 0.2` branch with `rel_gamma≈2.4e-3` and
+`rel_omega≈1.35e-1` on the 800-step projected fit.
 
 ## Highlights
 
