@@ -352,4 +352,7 @@ def generate_runtime_vmec_eik(
     resolved_output = output_path
     if resolved_output is None and cfg.geometry.geometry_file is not None:
         resolved_output = cfg.geometry.geometry_file
-    return generate_gx_vmec_eik(request, output_path=resolved_output, gx_repo=gx_repo, force=force)
+    # For runtime VMEC workflows, an explicit geometry_file is an output target,
+    # not a signal to reuse whatever happened to be on disk from a previous run.
+    force_runtime = force or resolved_output is not None
+    return generate_gx_vmec_eik(request, output_path=resolved_output, gx_repo=gx_repo, force=force_runtime)

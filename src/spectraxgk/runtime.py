@@ -663,7 +663,7 @@ def _build_initial_condition(
             if l_idx >= Nl or m_idx >= Nm:
                 raise ValueError("init_field moment exceeds (Nl, Nm) resolution")
         for (kx_i, ky_i), (ra, rb) in zip(active_modes, rand_pairs, strict=True):
-            vals_k = (ra + 1j * rb) * z_phase
+            vals_k = ((rb + 1j * ra) if kx_i == 0 else (ra + 1j * rb)) * z_phase
             if init_field == "all":
                 for field_name in field_map:
                     _set_named_mode(field_name, ky_i, kx_i, vals_k)
