@@ -17,7 +17,7 @@ from spectraxgk.analysis import (
     fit_growth_rate_auto_with_stats,
     select_ky_index,
 )
-from spectraxgk.diagnostics import GXDiagnostics
+from spectraxgk.diagnostics import GXDiagnostics, gx_energy_total
 from spectraxgk.geometry import (
     apply_gx_geometry_grid_defaults,
     FluxTubeGeometryLike,
@@ -134,6 +134,127 @@ def _infer_runtime_nonlinear_steps(
     if steps_val < 1:
         raise ValueError("steps must be >= 1")
     return steps_val
+
+
+def _slice_gx_diagnostics(diag: GXDiagnostics, stop: int) -> GXDiagnostics:
+    """Return the first ``stop`` diagnostic samples."""
+
+    if stop < 0:
+        raise ValueError("stop must be >= 0")
+
+    def _slice_optional(arr: np.ndarray | jnp.ndarray | None) -> np.ndarray | None:
+        if arr is None:
+            return None
+        return np.asarray(arr)[:stop, ...]
+
+    dt_t = np.asarray(diag.dt_t)[:stop]
+    Wg_t = np.asarray(diag.Wg_t)[:stop]
+    Wphi_t = np.asarray(diag.Wphi_t)[:stop]
+    Wapar_t = np.asarray(diag.Wapar_t)[:stop]
+    if dt_t.size == 0:
+        dt_mean = np.asarray(0.0, dtype=float)
+    else:
+        dt_mean = np.asarray(np.mean(dt_t), dtype=float)
+    return GXDiagnostics(
+        t=np.asarray(diag.t)[:stop],
+        dt_t=dt_t,
+        dt_mean=dt_mean,
+        gamma_t=np.asarray(diag.gamma_t)[:stop],
+        omega_t=np.asarray(diag.omega_t)[:stop],
+        Wg_t=Wg_t,
+        Wphi_t=Wphi_t,
+        Wapar_t=Wapar_t,
+        heat_flux_t=np.asarray(diag.heat_flux_t)[:stop],
+        particle_flux_t=np.asarray(diag.particle_flux_t)[:stop],
+        energy_t=np.asarray(gx_energy_total(jnp.asarray(Wg_t), jnp.asarray(Wphi_t), jnp.asarray(Wapar_t))),
+        heat_flux_species_t=_slice_optional(diag.heat_flux_species_t),
+        particle_flux_species_t=_slice_optional(diag.particle_flux_species_t),
+    )
+
+
+def _truncate_gx_diagnostics(diag: GXDiagnostics, *, t_max: float) -> GXDiagnostics:
+    """Keep samples through the first entry that reaches ``t_max``."""
+
+    t_arr = np.asarray(diag.t, dtype=float)
+    if t_arr.size == 0:
+        return diag
+    stop = int(np.searchsorted(t_arr, float(t_max), side="left")) + 1
+    stop = min(max(stop, 1), int(t_arr.size))
+    return _slice_gx_diagnostics(diag, stop)
+
+
+def _stride_gx_diagnostics(diag: GXDiagnostics, *, stride: int) -> GXDiagnostics:
+    """Apply the GX runtime output stride after concatenating chunk diagnostics."""
+
+    stride_use = int(max(stride, 1))
+    if stride_use == 1:
+        return diag
+
+    def _stride_optional(arr: np.ndarray | jnp.ndarray | None) -> np.ndarray | None:
+        if arr is None:
+            return None
+        return np.asarray(arr)[::stride_use, ...]
+
+    dt_t = np.asarray(diag.dt_t)[::stride_use]
+    Wg_t = np.asarray(diag.Wg_t)[::stride_use]
+    Wphi_t = np.asarray(diag.Wphi_t)[::stride_use]
+    Wapar_t = np.asarray(diag.Wapar_t)[::stride_use]
+    if dt_t.size == 0:
+        dt_mean = np.asarray(0.0, dtype=float)
+    else:
+        dt_mean = np.asarray(np.mean(dt_t), dtype=float)
+    return GXDiagnostics(
+        t=np.asarray(diag.t)[::stride_use],
+        dt_t=dt_t,
+        dt_mean=dt_mean,
+        gamma_t=np.asarray(diag.gamma_t)[::stride_use],
+        omega_t=np.asarray(diag.omega_t)[::stride_use],
+        Wg_t=Wg_t,
+        Wphi_t=Wphi_t,
+        Wapar_t=Wapar_t,
+        heat_flux_t=np.asarray(diag.heat_flux_t)[::stride_use],
+        particle_flux_t=np.asarray(diag.particle_flux_t)[::stride_use],
+        energy_t=np.asarray(gx_energy_total(jnp.asarray(Wg_t), jnp.asarray(Wphi_t), jnp.asarray(Wapar_t))),
+        heat_flux_species_t=_stride_optional(diag.heat_flux_species_t),
+        particle_flux_species_t=_stride_optional(diag.particle_flux_species_t),
+    )
+
+
+def _concat_gx_diagnostics(diags: Sequence[GXDiagnostics]) -> GXDiagnostics:
+    """Concatenate one or more diagnostic chunks."""
+
+    if not diags:
+        raise ValueError("at least one diagnostic chunk is required")
+
+    def _concat(name: str) -> np.ndarray:
+        return np.concatenate([np.asarray(getattr(diag, name)) for diag in diags], axis=0)
+
+    def _concat_optional(name: str) -> np.ndarray | None:
+        values = [getattr(diag, name) for diag in diags]
+        if all(value is None for value in values):
+            return None
+        return np.concatenate([np.asarray(value) for value in values if value is not None], axis=0)
+
+    dt_t = _concat("dt_t")
+    Wg_t = _concat("Wg_t")
+    Wphi_t = _concat("Wphi_t")
+    Wapar_t = _concat("Wapar_t")
+    dt_mean = np.asarray(np.mean(dt_t), dtype=float)
+    return GXDiagnostics(
+        t=_concat("t"),
+        dt_t=dt_t,
+        dt_mean=dt_mean,
+        gamma_t=_concat("gamma_t"),
+        omega_t=_concat("omega_t"),
+        Wg_t=Wg_t,
+        Wphi_t=Wphi_t,
+        Wapar_t=Wapar_t,
+        heat_flux_t=_concat("heat_flux_t"),
+        particle_flux_t=_concat("particle_flux_t"),
+        energy_t=np.asarray(gx_energy_total(jnp.asarray(Wg_t), jnp.asarray(Wphi_t), jnp.asarray(Wapar_t))),
+        heat_flux_species_t=_concat_optional("heat_flux_species_t"),
+        particle_flux_species_t=_concat_optional("particle_flux_species_t"),
+    )
 
 
 def _species_to_linear(species_cfg: Sequence[RuntimeSpeciesConfig]) -> list[Species]:
@@ -1087,6 +1208,7 @@ def run_runtime_nonlinear(
     dt_val = float(cfg.time.dt if dt is None else dt)
     if dt_val <= 0.0:
         raise ValueError("dt must be > 0")
+    adaptive_chunked = steps is None and not bool(cfg.time.fixed_dt)
     steps_val = _infer_runtime_nonlinear_steps(cfg, dt=dt_val, steps=steps)
 
     fixed_mode_on = bool(cfg.expert.fixed_mode)
@@ -1101,40 +1223,94 @@ def run_runtime_nonlinear(
         fixed_kx_index_use = int(fixed_kx_index)
 
     diagnostics_on = cfg.time.diagnostics if diagnostics is None else bool(diagnostics)
-    if diagnostics_on or fixed_mode_on or return_state:
+    if diagnostics_on or fixed_mode_on or return_state or adaptive_chunked:
         sample_stride_use = cfg.time.sample_stride if sample_stride is None else int(sample_stride)
         diag_stride = cfg.time.diagnostics_stride if diagnostics_stride is None else int(diagnostics_stride)
         laguerre_mode_use = cfg.time.laguerre_nonlinear_mode if laguerre_mode is None else str(laguerre_mode)
-        t, diag, G_final, fields_final = integrate_nonlinear_gx_diagnostics_state(
-            G0,
-            grid,
-            geom,
-            params,
-            dt=dt_val,
-            steps=steps_val,
-            method=str(method or cfg.time.method),
-            terms=term_cfg,
-            sample_stride=int(sample_stride_use),
-            diagnostics_stride=int(diag_stride),
-            use_dealias_mask=bool(cfg.time.nonlinear_dealias),
-            laguerre_mode=laguerre_mode_use,
-            omega_ky_index=int(ky_index),
-            omega_kx_index=int(kx_index),
-            flux_scale=float(cfg.normalization.flux_scale),
-            wphi_scale=float(cfg.normalization.wphi_scale),
-            fixed_dt=bool(cfg.time.fixed_dt),
-            dt_min=float(cfg.time.dt_min),
-            dt_max=cfg.time.dt_max,
-            cfl=float(cfg.time.cfl),
-            cfl_fac=float(cfg.time.cfl_fac),
-            collision_split=bool(cfg.time.collision_split),
-            collision_scheme=str(cfg.time.collision_scheme),
-            implicit_restart=int(cfg.time.implicit_restart),
-            implicit_solve_method=str(cfg.time.implicit_solve_method),
-            implicit_preconditioner=cfg.time.implicit_preconditioner,
-            fixed_mode_ky_index=fixed_ky_index_use,
-            fixed_mode_kx_index=fixed_kx_index_use,
-        )
+        if adaptive_chunked:
+            chunk_steps = min(steps_val, 1024)
+            G_chunk = G0
+            t_elapsed = 0.0
+            diag_chunks: list[GXDiagnostics] = []
+            fields_final: FieldState | None = None
+            for _chunk in range(100000):
+                _t_chunk, diag_chunk, G_chunk, fields_final = integrate_nonlinear_gx_diagnostics_state(
+                    G_chunk,
+                    grid,
+                    geom,
+                    params,
+                    dt=dt_val,
+                    steps=chunk_steps,
+                    method=str(method or cfg.time.method),
+                    terms=term_cfg,
+                    sample_stride=1,
+                    diagnostics_stride=1,
+                    use_dealias_mask=bool(cfg.time.nonlinear_dealias),
+                    laguerre_mode=laguerre_mode_use,
+                    omega_ky_index=int(ky_index),
+                    omega_kx_index=int(kx_index),
+                    flux_scale=float(cfg.normalization.flux_scale),
+                    wphi_scale=float(cfg.normalization.wphi_scale),
+                    fixed_dt=False,
+                    dt_min=float(cfg.time.dt_min),
+                    dt_max=cfg.time.dt_max,
+                    cfl=float(cfg.time.cfl),
+                    cfl_fac=float(cfg.time.cfl_fac),
+                    collision_split=bool(cfg.time.collision_split),
+                    collision_scheme=str(cfg.time.collision_scheme),
+                    implicit_restart=int(cfg.time.implicit_restart),
+                    implicit_solve_method=str(cfg.time.implicit_solve_method),
+                    implicit_preconditioner=cfg.time.implicit_preconditioner,
+                    fixed_mode_ky_index=fixed_ky_index_use,
+                    fixed_mode_kx_index=fixed_kx_index_use,
+                )
+                diag_chunk = replace(diag_chunk, t=np.asarray(diag_chunk.t) + t_elapsed)
+                diag_chunks.append(diag_chunk)
+                t_next = float(np.asarray(diag_chunk.t)[-1])
+                if t_next <= t_elapsed + 1.0e-12:
+                    raise RuntimeError("adaptive nonlinear runtime made no time-step progress")
+                t_elapsed = t_next
+                if t_elapsed >= float(cfg.time.t_max):
+                    break
+            else:
+                raise RuntimeError("adaptive nonlinear runtime exceeded chunk limit before reaching t_max")
+
+            diag = _concat_gx_diagnostics(diag_chunks)
+            diag = _truncate_gx_diagnostics(diag, t_max=float(cfg.time.t_max))
+            diag = _stride_gx_diagnostics(diag, stride=max(int(sample_stride_use), int(diag_stride), 1))
+            t = jnp.asarray(diag.t)
+            G_final = G_chunk
+        else:
+            t, diag, G_final, fields_final = integrate_nonlinear_gx_diagnostics_state(
+                G0,
+                grid,
+                geom,
+                params,
+                dt=dt_val,
+                steps=steps_val,
+                method=str(method or cfg.time.method),
+                terms=term_cfg,
+                sample_stride=int(sample_stride_use),
+                diagnostics_stride=int(diag_stride),
+                use_dealias_mask=bool(cfg.time.nonlinear_dealias),
+                laguerre_mode=laguerre_mode_use,
+                omega_ky_index=int(ky_index),
+                omega_kx_index=int(kx_index),
+                flux_scale=float(cfg.normalization.flux_scale),
+                wphi_scale=float(cfg.normalization.wphi_scale),
+                fixed_dt=bool(cfg.time.fixed_dt),
+                dt_min=float(cfg.time.dt_min),
+                dt_max=cfg.time.dt_max,
+                cfl=float(cfg.time.cfl),
+                cfl_fac=float(cfg.time.cfl_fac),
+                collision_split=bool(cfg.time.collision_split),
+                collision_scheme=str(cfg.time.collision_scheme),
+                implicit_restart=int(cfg.time.implicit_restart),
+                implicit_solve_method=str(cfg.time.implicit_solve_method),
+                implicit_preconditioner=cfg.time.implicit_preconditioner,
+                fixed_mode_ky_index=fixed_ky_index_use,
+                fixed_mode_kx_index=fixed_kx_index_use,
+            )
         if diagnostics_on:
             state_out = np.asarray(G_final) if return_state else None
             return RuntimeNonlinearResult(
@@ -1146,6 +1322,8 @@ def run_runtime_nonlinear(
                 ky_selected=float(np.asarray(grid.ky[ky_index])),
                 kx_selected=float(np.asarray(grid.kx[kx_index])),
             )
+        if fields_final is None:
+            raise RuntimeError("adaptive nonlinear runtime did not produce final fields")
         phi2 = np.asarray(jnp.mean(jnp.abs(fields_final.phi) ** 2))
         return RuntimeNonlinearResult(
             t=np.asarray([]),
