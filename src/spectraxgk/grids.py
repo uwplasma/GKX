@@ -197,3 +197,43 @@ def select_ky_grid(
         kxfac=grid.kxfac,
         ky_mode=ky_mode,
     )
+
+
+def select_gx_real_fft_ky_grid(
+    grid: SpectralGrid,
+    ky_values: jnp.ndarray | np.ndarray | Sequence[float],
+) -> SpectralGrid:
+    """Return a GX real-FFT positive-``ky`` view of ``grid``.
+
+    GX nonlinear dumps store the compressed non-negative ``ky`` block, including
+    the unique Nyquist row when ``Ny`` is even. This helper keeps the matching
+    leading dealias rows from the full FFT grid while replacing the ``ky``
+    coordinates with the explicit positive-frequency values from the dump.
+    """
+
+    ky_vals = jnp.asarray(ky_values, dtype=grid.ky.dtype)
+    if ky_vals.ndim != 1 or ky_vals.size == 0:
+        raise ValueError("ky_values must be a non-empty 1D array")
+    nky = int(ky_vals.shape[0])
+    if nky > int(grid.ky.shape[0]):
+        raise ValueError("ky_values length cannot exceed the full grid ky length")
+    kx_vals = gx_real_fft_kx(grid.kx)
+    mask = jnp.take(grid.dealias_mask, jnp.arange(nky, dtype=jnp.int32), axis=0)
+    kx_grid = jnp.broadcast_to(kx_vals[None, :], (nky, kx_vals.shape[0]))
+    ky_grid = jnp.broadcast_to(ky_vals[:, None], (nky, kx_vals.shape[0]))
+    ky_mode = jnp.rint(ky_vals * grid.y0).astype(jnp.int32)
+    return SpectralGrid(
+        kx=kx_vals,
+        ky=ky_vals,
+        z=grid.z,
+        kx_grid=kx_grid,
+        ky_grid=ky_grid,
+        dealias_mask=mask,
+        y0=grid.y0,
+        x0=grid.x0,
+        boundary=grid.boundary,
+        jtwist=grid.jtwist,
+        non_twist=grid.non_twist,
+        kxfac=grid.kxfac,
+        ky_mode=ky_mode,
+    )
