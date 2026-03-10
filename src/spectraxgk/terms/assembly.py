@@ -176,6 +176,10 @@ def assemble_rhs_cached(
     )
     dG = dG + collisions_contribution(
         H,
+        G=G,
+        Jl=Jl,
+        JlB=JlB,
+        b=cache.b,
         nu=nu,
         lb_lam=cache.lb_lam,
         weight=w_coll,
@@ -394,6 +398,10 @@ def assemble_rhs_terms_cached(
     )
     contrib["collisions"] = collisions_contribution(
         H,
+        G=G,
+        Jl=Jl,
+        JlB=JlB,
+        b=cache.b,
         nu=nu,
         lb_lam=cache.lb_lam,
         weight=w_coll,

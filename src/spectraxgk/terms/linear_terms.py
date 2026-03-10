@@ -258,11 +258,65 @@ def diamagnetic_contribution(
 def collisions_contribution(
     H: jnp.ndarray,
     *,
+    G: jnp.ndarray | None = None,
+    Jl: jnp.ndarray | None = None,
+    JlB: jnp.ndarray | None = None,
+    b: jnp.ndarray | None = None,
     nu: jnp.ndarray,
     lb_lam: jnp.ndarray,
     weight: jnp.ndarray,
 ) -> jnp.ndarray:
-    return -weight * nu[:, None, None, None, None, None] * lb_lam * H
+    base = -weight * nu[:, None, None, None, None, None] * lb_lam * H
+    if G is None or Jl is None or JlB is None or b is None:
+        return base
+
+    nu_s = nu[:, None, None, None, None]
+    b_s = jnp.asarray(b, dtype=jnp.real(H).dtype)
+    sqrt_b = jnp.sqrt(jnp.maximum(b_s, 0.0))
+    H_m0 = H[:, :, 0, ...]
+    Nm = H.shape[2]
+    if Nm > 1:
+        H_m1 = H[:, :, 1, ...]
+    else:
+        H_m1 = jnp.zeros_like(H_m0)
+    if Nm > 2:
+        G_m2 = G[:, :, 2, ...]
+    else:
+        G_m2 = jnp.zeros_like(H_m0)
+
+    Jl_m1 = shift_axis(Jl, -1, axis=1)
+    Jl_p1 = shift_axis(Jl, 1, axis=1)
+    coeff_t = jnp.arange(Jl.shape[1], dtype=jnp.real(H).dtype)[None, :, None, None, None]
+    coeff_t = (
+        coeff_t * Jl_m1
+        + 2.0 * coeff_t * Jl
+        + (coeff_t + 1.0) * Jl_p1
+    )
+
+    uperp_bar = sqrt_b * jnp.sum(JlB * H_m0, axis=1)
+    upar_bar = jnp.sum(Jl * H_m1, axis=1)
+    if int(Jl.shape[1]) == 1:
+        t_bar = jnp.sqrt(2.0) * jnp.sum(Jl * G_m2, axis=1)
+    else:
+        t_bar = (
+            (jnp.sqrt(2.0) / 3.0) * jnp.sum(Jl * G_m2, axis=1)
+            + (2.0 / 3.0) * jnp.sum(coeff_t * H_m0, axis=1)
+        )
+
+    corr = jnp.zeros_like(H)
+    m_idx = jnp.arange(Nm, dtype=jnp.int32)[None, None, :, None, None, None]
+    corr_m0 = (
+        nu_s * sqrt_b[:, None, ...] * JlB * uperp_bar[:, None, ...]
+        + nu_s * 2.0 * coeff_t * t_bar[:, None, ...]
+    )
+    corr = corr + (m_idx == 0).astype(corr.dtype) * corr_m0[:, :, None, ...]
+    if Nm > 1:
+        corr_m1 = nu_s * Jl * upar_bar[:, None, ...]
+        corr = corr + (m_idx == 1).astype(corr.dtype) * corr_m1[:, :, None, ...]
+    if Nm > 2:
+        corr_m2 = nu_s * jnp.sqrt(2.0) * Jl * t_bar[:, None, ...]
+        corr = corr + (m_idx == 2).astype(corr.dtype) * corr_m2[:, :, None, ...]
+    return base + weight * corr
 
 
 def hypercollisions_contribution(
