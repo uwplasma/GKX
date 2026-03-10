@@ -170,6 +170,14 @@ python examples/kbm_beta_scan.py --no-diffrax
   and heat flux through the runtime TOML path. The remaining free-run W7-X gap
   is therefore a long-window decorrelation/statistics issue, not a same-state
   operator or timestepper mismatch.
+- **Secondary slab staged workflow**: the GX `kh01 -> kh01a` slab case runs
+  through the unified runtime API and now matches the published GX README
+  sideband growth target (`gamma≈4.901835`) on all four nonzero tracked
+  sidebands to about `4.3e-5` relative error. The remaining secondary residual
+  is in `omega`, not in missing sideband growth. When stock GX cannot emit
+  `kh01a.out.nc` on the current hardware/runtime stack, the benchmark tool can
+  compare directly against the published GX target table instead of pretending
+  to use an out.nc surrogate.
 
 ## Figures
 

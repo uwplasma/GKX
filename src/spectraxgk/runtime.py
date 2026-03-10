@@ -562,12 +562,6 @@ def _build_initial_condition(
         loaded_state = np.asarray(loaded_state, dtype=np.complex64) * np.complex64(float(cfg.init.init_file_scale))
     amp = float(cfg.init.init_amp)
     ky_val = float(grid.ky[ky_index])
-    if ky_val == 0.0:
-        if loaded_state is None:
-            return jnp.asarray(g0)
-        if init_file_mode == "replace":
-            return jnp.asarray(loaded_state)
-        return jnp.asarray(loaded_state + g0)
 
     z = np.asarray(grid.z)
     if cfg.init.gaussian_init:
@@ -681,6 +675,12 @@ def _build_initial_condition(
                     for s_idx in species_targets:
                         g0[s_idx, l_idx, m_idx, ky_i, kx_neg, :] = vals_neg
     else:
+        if ky_val == 0.0:
+            if loaded_state is None:
+                return jnp.asarray(g0)
+            if init_file_mode == "replace":
+                return jnp.asarray(loaded_state)
+            return jnp.asarray(loaded_state + g0)
         if init_field == "all":
             for field_name in field_map:
                 _set_named_mode(field_name, ky_index, kx_index, vals)
