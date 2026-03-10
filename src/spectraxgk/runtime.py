@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import ctypes
 from dataclasses import dataclass, replace
 from typing import Sequence
 from pathlib import Path
@@ -92,25 +91,39 @@ def _zero_kx_index(grid: SpectralGrid) -> int:
 
 
 def _gx_centered_random_pairs(seed: int, count: int) -> np.ndarray:
-    """Return GX-style centered random pairs using the platform C ``rand()``."""
+    """Return GX-style centered random pairs using glibc ``rand()`` semantics."""
 
     if count <= 0:
         return np.empty((0, 2), dtype=np.float64)
 
-    libc = ctypes.CDLL(None)
-    srand = libc.srand
-    rand = libc.rand
-    srand.argtypes = [ctypes.c_uint]
-    rand.restype = ctypes.c_int
-    srand(ctypes.c_uint(int(seed)))
+    seed_use = 1 if int(seed) == 0 else int(seed)
+    state = np.zeros(344 + 2 * count, dtype=np.uint64)
+    state[0] = np.uint64(seed_use)
+    for i in range(1, 31):
+        state[i] = np.uint64((16807 * int(state[i - 1])) % int(_GX_RAND_MAX))
+    for i in range(31, 34):
+        state[i] = state[i - 31]
+    for i in range(34, state.size):
+        state[i] = (state[i - 31] + state[i - 3]) & np.uint64(0xFFFFFFFF)
 
+    rand_vals = (state[344:] >> np.uint64(1)).astype(np.float64, copy=False)
     half = 0.5 * _GX_RAND_MAX
     inv = 1.0 / _GX_RAND_MAX
     pairs = np.empty((count, 2), dtype=np.float64)
     for i in range(count):
-        pairs[i, 0] = (float(rand()) - half) * inv
-        pairs[i, 1] = (float(rand()) - half) * inv
+        pairs[i, 0] = (rand_vals[2 * i] - half) * inv
+        pairs[i, 1] = (rand_vals[2 * i + 1] - half) * inv
     return pairs
+
+
+def _gx_init_mode_pairs(grid: SpectralGrid) -> list[tuple[int, int]]:
+    """Return the GX startup-loop ``(kx, ky)`` pairs for multimode initial conditions."""
+
+    nx = int(np.asarray(grid.kx).size)
+    ny = int(np.asarray(grid.ky).size)
+    kx_max = 1 + (nx - 1) // 3
+    ky_max = 1 + (ny - 1) // 3
+    return [(int(kx_i), int(ky_i)) for kx_i in range(kx_max) for ky_i in range(1, ky_max)]
 
 
 def _select_nonlinear_mode_indices(
@@ -604,89 +617,68 @@ def _build_initial_condition(
         _set_mode(l_idx, m_idx, ky_i, kx_i, vals_k * all_scales[field_name])
 
     if cfg.init.gaussian_init and not cfg.init.init_single:
-        ny = grid.ky.size
         nx = grid.kx.size
-        dealias = np.asarray(grid.dealias_mask)
-        ky_indices = np.where(np.asarray(grid.ky) > 0.0)[0]
-        kx_pos = np.where(np.asarray(grid.kx) >= 0.0)[0]
-
-        for ky_i in ky_indices:
+        for kx_i, ky_i in _gx_init_mode_pairs(grid):
             ky_k = float(grid.ky[ky_i])
             if ky_k == 0.0:
                 continue
-            for kx_i in kx_pos:
-                if not dealias[ky_i, kx_i]:
-                    continue
-                kx_k = float(grid.kx[kx_i])
-                profile_k = _build_gaussian_profile(
-                    z,
-                    kx=abs(kx_k),
-                    ky=ky_k,
-                    s_hat=float(geom.s_hat),
-                    width=float(cfg.init.gaussian_width),
-                    envelope_constant=float(cfg.init.gaussian_envelope_constant),
-                    envelope_sine=float(cfg.init.gaussian_envelope_sine),
-                )
-                vals_k = amp * profile_k * (1.0 + 1.0j)
-                if init_field == "all":
-                    for field_name in field_map:
-                        _set_named_mode(field_name, ky_i, kx_i, vals_k)
-                else:
-                    l_idx, m_idx = field_map[init_field]
-                    _set_mode(l_idx, m_idx, ky_i, kx_i, vals_k)
+            kx_k = float(grid.kx[kx_i])
+            profile_k = _build_gaussian_profile(
+                z,
+                kx=abs(kx_k),
+                ky=ky_k,
+                s_hat=float(geom.s_hat),
+                width=float(cfg.init.gaussian_width),
+                envelope_constant=float(cfg.init.gaussian_envelope_constant),
+                envelope_sine=float(cfg.init.gaussian_envelope_sine),
+            )
+            vals_k = amp * profile_k * (1.0 + 1.0j)
+            if init_field == "all":
+                for field_name in field_map:
+                    _set_named_mode(field_name, ky_i, kx_i, vals_k)
+            else:
+                l_idx, m_idx = field_map[init_field]
+                _set_mode(l_idx, m_idx, ky_i, kx_i, vals_k)
 
-                if kx_i == 0:
-                    continue
-                kx_neg = int(np.argmin(np.abs(np.asarray(grid.kx) + kx_k)))
-                if kx_neg == kx_i:
-                    continue
-                if init_field == "all":
-                    for field_name in field_map:
-                        _set_named_mode(field_name, ky_i, kx_neg, vals_k)
-                else:
-                    l_idx, m_idx = field_map[init_field]
-                    _set_mode(l_idx, m_idx, ky_i, kx_neg, vals_k)
+            if kx_i == 0:
+                continue
+            kx_neg = int(nx - kx_i)
+            if init_field == "all":
+                for field_name in field_map:
+                    _set_named_mode(field_name, ky_i, kx_neg, vals_k)
+            else:
+                l_idx, m_idx = field_map[init_field]
+                _set_mode(l_idx, m_idx, ky_i, kx_neg, vals_k)
     elif not cfg.init.init_single and not cfg.init.gaussian_init:
         z_min = float(z.min())
         z_max = float(z.max())
         Zp = (z_max - z_min) / (2.0 * np.pi) if z_max > z_min else 1.0
         kpar = float(cfg.init.kpar_init)
         z_phase = np.cos(kpar * z / Zp)
-        ny = grid.ky.size
         nx = grid.kx.size
-        ky_mask = np.asarray(grid.ky) > 0.0
-        kx_mask = np.asarray(grid.kx) >= 0.0
-        dealias = np.asarray(grid.dealias_mask)
-        ky_indices = np.where(ky_mask)[0]
-        kx_indices = np.where(kx_mask)[0]
-        active_modes = [
-            (int(kx_i), int(ky_i))
-            for kx_i in kx_indices
-            for ky_i in ky_indices
-            if dealias[ky_i, kx_i]
-        ]
+        active_modes = _gx_init_mode_pairs(grid)
         rand_pairs = amp * _gx_centered_random_pairs(int(cfg.init.random_seed), len(active_modes))
         if init_field != "all":
             l_idx, m_idx = field_map[init_field]
             if l_idx >= Nl or m_idx >= Nm:
                 raise ValueError("init_field moment exceeds (Nl, Nm) resolution")
         for (kx_i, ky_i), (ra, rb) in zip(active_modes, rand_pairs, strict=True):
-                vals_k = (ra + 1j * rb) * z_phase
+            vals_k = (ra + 1j * rb) * z_phase
+            if init_field == "all":
+                for field_name in field_map:
+                    _set_named_mode(field_name, ky_i, kx_i, vals_k)
+            else:
+                for s_idx in species_targets:
+                    g0[s_idx, l_idx, m_idx, ky_i, kx_i, :] = vals_k
+            if kx_i != 0:
+                kx_neg = nx - kx_i
+                vals_neg = (rb + 1j * ra) * z_phase
                 if init_field == "all":
                     for field_name in field_map:
-                        _set_named_mode(field_name, ky_i, kx_i, vals_k)
+                        _set_named_mode(field_name, ky_i, kx_neg, vals_neg)
                 else:
                     for s_idx in species_targets:
-                        g0[s_idx, l_idx, m_idx, ky_i, kx_i, :] = vals_k
-                if kx_i != 0:
-                    kx_neg = nx - kx_i
-                    vals_neg = (rb + 1j * ra) * z_phase
-                    if init_field == "all":
-                        for field_name in field_map:
-                            _set_named_mode(field_name, ky_i, kx_neg, vals_neg)
-                    else:
-                        for s_idx in species_targets:
-                            g0[s_idx, l_idx, m_idx, ky_i, kx_neg, :] = vals_neg
+                        g0[s_idx, l_idx, m_idx, ky_i, kx_neg, :] = vals_neg
     else:
         if init_field == "all":
             for field_name in field_map:
