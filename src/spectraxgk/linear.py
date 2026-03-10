@@ -658,7 +658,7 @@ def build_linear_cache(
     jacobian = geom_data.jacobian(theta).astype(real_dtype)
     cv, gb, cv0, gb0 = geom_data.drift_coeffs(theta)
     boundary = str(getattr(grid, "boundary", "periodic")).lower()
-    use_twist_shift = boundary == "linked"
+    use_twist_shift = boundary in {"linked", "fix aspect", "continuous drifts"}
     use_ntft = bool(getattr(grid, "non_twist", False))
     y0 = getattr(grid, "y0", None)
     if y0 is None:
