@@ -132,6 +132,24 @@ def _infer_vmec_npol(cfg: RuntimeConfig) -> float:
     return 1.0
 
 
+def _resolve_runtime_vmec_file(vmec_file: str, *, gx_repo: str | Path | None = None) -> Path:
+    """Resolve a runtime VMEC path with env/user expansion and GX-relative fallback."""
+
+    expanded = Path(os.path.expandvars(vmec_file)).expanduser()
+    if expanded.is_absolute():
+        return expanded.resolve()
+
+    cwd_candidate = expanded.resolve()
+    if cwd_candidate.exists():
+        return cwd_candidate
+
+    repo_candidate = resolve_gx_repo(gx_repo) / expanded
+    if repo_candidate.exists():
+        return repo_candidate.resolve()
+
+    return cwd_candidate
+
+
 def build_gx_vmec_geometry_request(cfg: RuntimeConfig) -> GXVmecGeometryRequest:
     """Build a GX VMEC generation request from a runtime config."""
 
@@ -180,7 +198,7 @@ def build_gx_vmec_geometry_request(cfg: RuntimeConfig) -> GXVmecGeometryRequest:
         species_type.append("electron")
 
     return GXVmecGeometryRequest(
-        vmec_file=str(Path(cfg.geometry.vmec_file).expanduser().resolve()),
+        vmec_file=str(_resolve_runtime_vmec_file(cfg.geometry.vmec_file, gx_repo=cfg.geometry.gx_repo)),
         ntheta=ntheta,
         boundary=str(cfg.grid.boundary),
         y0=y0,
