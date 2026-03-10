@@ -153,7 +153,9 @@ def build_gx_vmec_geometry_request(cfg: RuntimeConfig) -> GXVmecGeometryRequest:
         raise ValueError("RuntimeConfig.species must contain at least one species")
 
     y0 = float(cfg.grid.y0) if cfg.grid.y0 is not None else float(cfg.grid.Ly) / (2.0 * math.pi)
-    x0 = float(cfg.grid.Lx) / (2.0 * math.pi) if float(cfg.grid.Lx) > 0.0 else None
+    # Match GX VMEC defaults: unless the user exposes an explicit VMEC x0 control,
+    # leave x0 unset so the geometry helper chooses the flux-tube cut.
+    x0 = None
     ntheta = int(cfg.grid.ntheta) if cfg.grid.ntheta is not None else int(cfg.grid.Nz)
     if ntheta < 2:
         raise ValueError("VMEC geometry generation requires ntheta >= 2")
