@@ -10,8 +10,7 @@ is the **Cyclone base case** with adiabatic electrons, plus ETG and KBM scans.
 
 Summary panel: the tracked README asset now combines the detailed Cyclone/KBM
 subpanel, the closed nonlinear W7-X VMEC parity slice, the matched-horizon HSX
-VMEC parity slice, and the staged secondary slab comparison against the
-published GX target table. The Cyclone/KBM subpanel still uses GX-matched
+VMEC parity slice, and the staged secondary slab comparison against a real GX ``kh01a.out.nc`` reference. The Cyclone/KBM subpanel still uses GX-matched
 runtime configs (same integrator family and normalization contract; no manual
 `flux_scale` or `wphi_scale` calibration in the Cyclone config), with long
 nonlinear windows (`t=400` Cyclone and KBM). For the extended nonlinear KBM
