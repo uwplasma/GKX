@@ -195,6 +195,11 @@ python examples/kbm_beta_scan.py --no-diffrax
   growth. When stock GX cannot emit `kh01a.out.nc` on the current
   hardware/runtime stack, the benchmark tool compares directly against the
   published GX target table instead of pretending to use an out.nc surrogate.
+- **cETG/KREHM reduced-model boundary**: runtime configs can now declare
+  `physics.reduced_model = "cetg"` or `"krehm"`, and the runtime rejects them
+  explicitly with `NotImplementedError` instead of silently routing those GX
+  reduced-model benchmarks through the wrong full-GK slab equations. The GX
+  contract is parsed and test-covered, ready for the dedicated solver path.
 
 ## Figures
 

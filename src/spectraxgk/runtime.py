@@ -326,6 +326,25 @@ def _gx_default_p_hyper_m(nhermite: int | None) -> float:
     return float(min(20, max(int(nhermite) // 2, 1)))
 
 
+def _require_full_gk_runtime_model(cfg: RuntimeConfig) -> None:
+    """Reject reduced-model configs until their dedicated solvers exist."""
+
+    model = cfg.physics.reduced_model.strip().lower()
+    if model in {"", "gyrokinetic", "full", "full-gk", "gx"}:
+        return
+    if model == "cetg":
+        raise NotImplementedError(
+            "physics.reduced_model='cetg' requires the dedicated collisional-slab ETG solver; "
+            "the full-GK runtime path does not emulate the GX cETG model."
+        )
+    if model == "krehm":
+        raise NotImplementedError(
+            "physics.reduced_model='krehm' requires the dedicated KREHM solver; "
+            "the full-GK runtime path does not emulate the GX KREHM model."
+        )
+    raise ValueError(f"Unknown physics.reduced_model={cfg.physics.reduced_model!r}")
+
+
 def build_runtime_geometry(cfg: RuntimeConfig) -> FluxTubeGeometryLike:
     """Resolve runtime geometry, generating VMEC ``*.eik.nc`` files when requested."""
 
@@ -344,6 +363,7 @@ def build_runtime_linear_params(
 ) -> LinearParams:
     """Build ``LinearParams`` from a unified runtime config."""
 
+    _require_full_gk_runtime_model(cfg)
     if geom is None:
         geom = build_runtime_geometry(cfg)
     contract = get_normalization_contract(cfg.normalization.contract)

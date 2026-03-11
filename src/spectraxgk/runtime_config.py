@@ -30,6 +30,7 @@ class RuntimeSpeciesConfig:
 class RuntimePhysicsConfig:
     """Physics-family toggles independent from benchmark case names."""
 
+    reduced_model: str = "gyrokinetic"
     linear: bool = True
     nonlinear: bool = False
     electrostatic: bool = True
