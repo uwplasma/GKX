@@ -173,8 +173,11 @@ python examples/kbm_beta_scan.py --no-diffrax
 - **Nonlinear W7-X exact-state audit**: starting from the exact dumped GX
   nonlinear state at `t≈32.44665203`, the next GX output window
   (`time_index=10 -> 11`) matches to about `1e-4` relative in `Wg`, `Wphi`,
-  and heat flux through the runtime TOML path. The remaining free-run W7-X gap
-  is therefore a long-window decorrelation/statistics issue, not a same-state
+  and heat flux through the runtime TOML path. The tracked long-horizon W7-X
+  free run also now passes the native-grid late-window statistical check once
+  the comparator uses the same window semantics as GX-style diagnostic output;
+  the earlier apparent failure came from a contaminated office collisions-off
+  config plus strict pointwise trace comparison, not from a same-state
   operator or timestepper mismatch.
 - **Secondary slab staged workflow**: the GX `kh01 -> kh01a` slab case runs
   through the unified runtime API and now matches the published GX README
