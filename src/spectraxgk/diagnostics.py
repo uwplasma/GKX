@@ -34,6 +34,7 @@ class GXDiagnostics:
     energy_t: ArrayLike
     heat_flux_species_t: ArrayLike | None = None
     particle_flux_species_t: ArrayLike | None = None
+    phi_mode_t: ArrayLike | None = None
 
 
 def gx_volume_factors(geom: FluxTubeGeometryLike, grid: SpectralGrid) -> tuple[jnp.ndarray, jnp.ndarray]:

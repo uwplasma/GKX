@@ -209,6 +209,7 @@ def _slice_gx_diagnostics(diag: GXDiagnostics, stop: int) -> GXDiagnostics:
         energy_t=np.asarray(gx_energy_total(jnp.asarray(Wg_t), jnp.asarray(Wphi_t), jnp.asarray(Wapar_t))),
         heat_flux_species_t=_slice_optional(diag.heat_flux_species_t),
         particle_flux_species_t=_slice_optional(diag.particle_flux_species_t),
+        phi_mode_t=_slice_optional(diag.phi_mode_t),
     )
 
 
@@ -257,6 +258,7 @@ def _stride_gx_diagnostics(diag: GXDiagnostics, *, stride: int) -> GXDiagnostics
         energy_t=np.asarray(gx_energy_total(jnp.asarray(Wg_t), jnp.asarray(Wphi_t), jnp.asarray(Wapar_t))),
         heat_flux_species_t=_stride_optional(diag.heat_flux_species_t),
         particle_flux_species_t=_stride_optional(diag.particle_flux_species_t),
+        phi_mode_t=_stride_optional(diag.phi_mode_t),
     )
 
 
@@ -294,6 +296,7 @@ def _concat_gx_diagnostics(diags: Sequence[GXDiagnostics]) -> GXDiagnostics:
         energy_t=np.asarray(gx_energy_total(jnp.asarray(Wg_t), jnp.asarray(Wphi_t), jnp.asarray(Wapar_t))),
         heat_flux_species_t=_concat_optional("heat_flux_species_t"),
         particle_flux_species_t=_concat_optional("particle_flux_species_t"),
+        phi_mode_t=_concat_optional("phi_mode_t"),
     )
 
 

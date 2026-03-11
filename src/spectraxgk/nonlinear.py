@@ -573,6 +573,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
             kx_i = int(np.clip(omega_kx_index or 0, 0, int(gamma_modes.shape[1]) - 1))
             gamma = jnp.nan_to_num(gamma_modes[ky_i, kx_i], nan=jnp.asarray(0.0, dtype=real_dtype))
             omega = jnp.nan_to_num(omega_modes[ky_i, kx_i], nan=jnp.asarray(0.0, dtype=real_dtype))
+            phi_mode = phi[ky_i, kx_i, z_idx]
         else:
             gamma = jnp.nan_to_num(
                 jnp.nanmean(jnp.where(mask, gamma_modes, jnp.nan)),
@@ -582,6 +583,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
                 jnp.nanmean(jnp.where(mask, omega_modes, jnp.nan)),
                 nan=jnp.asarray(0.0, dtype=real_dtype),
             )
+            phi_mode = jnp.asarray(0.0 + 0.0j, dtype=phi.dtype)
         Wg_val = gx_Wg(G_state, grid, params, vol_fac, use_dealias=use_dealias)
         Wphi_val = gx_Wphi(
             phi,
@@ -628,6 +630,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
             pflux_val,
             heat_species,
             pflux_species,
+            phi_mode,
         )
 
     def step(carry, idx):
@@ -740,7 +743,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
     )
 
     diag, t, dt_series = diag_out
-    gamma_t, omega_t, Wg_t, Wphi_t, Wapar_t, heat_t, pflux_t, heat_s_t, pflux_s_t = diag
+    gamma_t, omega_t, Wg_t, Wphi_t, Wapar_t, heat_t, pflux_t, heat_s_t, pflux_s_t, phi_mode_t = diag
 
     stride = int(max(sample_stride, diagnostics_stride, 1))
     if stride > 1:
@@ -753,6 +756,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
         pflux_t = pflux_t[::stride]
         heat_s_t = heat_s_t[::stride, ...]
         pflux_s_t = pflux_s_t[::stride, ...]
+        phi_mode_t = phi_mode_t[::stride]
         t = t[::stride]
         dt_series = dt_series[::stride]
 
@@ -772,6 +776,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
         energy_t=energy_t,
         heat_flux_species_t=heat_s_t,
         particle_flux_species_t=pflux_s_t,
+        phi_mode_t=phi_mode_t,
     )
     fields_final = compute_fields_cached(G_final, cache, params, terms=term_cfg)
     return t, diag_out, G_final, fields_final
@@ -1166,6 +1171,7 @@ def integrate_nonlinear_imex_gx_diagnostics(
             kx_i = int(np.clip(omega_kx_index or 0, 0, int(gamma_modes.shape[1]) - 1))
             gamma = jnp.nan_to_num(gamma_modes[ky_i, kx_i], nan=jnp.asarray(0.0, dtype=real_dtype))
             omega = jnp.nan_to_num(omega_modes[ky_i, kx_i], nan=jnp.asarray(0.0, dtype=real_dtype))
+            phi_mode = phi[ky_i, kx_i, z_idx]
         else:
             gamma = jnp.nan_to_num(
                 jnp.nanmean(jnp.where(mask, gamma_modes, jnp.nan)),
@@ -1175,6 +1181,7 @@ def integrate_nonlinear_imex_gx_diagnostics(
                 jnp.nanmean(jnp.where(mask, omega_modes, jnp.nan)),
                 nan=jnp.asarray(0.0, dtype=real_dtype),
             )
+            phi_mode = jnp.asarray(0.0 + 0.0j, dtype=phi.dtype)
         Wg_val = gx_Wg(G_state, grid, params, vol_fac, use_dealias=use_dealias)
         Wphi_val = gx_Wphi(
             phi,
@@ -1221,6 +1228,7 @@ def integrate_nonlinear_imex_gx_diagnostics(
             pflux_val,
             heat_species,
             pflux_species,
+            phi_mode,
         )
 
     fields0 = compute_fields_cached(G0, cache, params, terms=term_cfg)
@@ -1282,7 +1290,7 @@ def integrate_nonlinear_imex_gx_diagnostics(
     )
 
     diag, t = diag_out
-    gamma_t, omega_t, Wg_t, Wphi_t, Wapar_t, heat_t, pflux_t, heat_s_t, pflux_s_t = diag
+    gamma_t, omega_t, Wg_t, Wphi_t, Wapar_t, heat_t, pflux_t, heat_s_t, pflux_s_t, phi_mode_t = diag
     dt_series = jnp.ones_like(t) * dt_val
 
     stride = int(max(sample_stride, diagnostics_stride, 1))
@@ -1296,6 +1304,7 @@ def integrate_nonlinear_imex_gx_diagnostics(
         pflux_t = pflux_t[::stride]
         heat_s_t = heat_s_t[::stride, ...]
         pflux_s_t = pflux_s_t[::stride, ...]
+        phi_mode_t = phi_mode_t[::stride]
         t = t[::stride]
         dt_series = dt_series[::stride]
 
@@ -1315,6 +1324,7 @@ def integrate_nonlinear_imex_gx_diagnostics(
         energy_t=energy_t,
         heat_flux_species_t=heat_s_t,
         particle_flux_species_t=pflux_s_t,
+        phi_mode_t=phi_mode_t,
     )
     return t, diag_out
 

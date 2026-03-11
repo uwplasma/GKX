@@ -6,18 +6,19 @@ Hermite-Laguerre velocity-space representation with Fourier perpendicular
 coordinates in a field-aligned flux-tube geometry. The initial validation target
 is the **Cyclone base case** with adiabatic electrons, plus ETG and KBM scans.
 
-![GX comparison summary (Cyclone/KBM linear+nonlinear)](docs/_static/gx_cyclone_kbm_panel.png)
+![GX comparison summary](docs/_static/gx_summary_panel.png)
 
-Top panel: Cyclone and KBM comparison against GX, including linear eigenfunctions,
-linear growth/frequency scans, and nonlinear time traces for growth rate,
-frequency, and heat flux. The panel now uses GX-matched runtime configs
-(same integrator family and normalization contract; no manual `flux_scale` or
-`wphi_scale` calibration in the Cyclone config), with long nonlinear windows
-(`t=400` Cyclone and KBM). For the extended nonlinear KBM case, startup parity
-is checked against the dense `t<=0.2` GX run and the late saturated regime is
-checked by native-grid window statistics on the `t=400` run; the current
-late-window mean/std mismatch is about `5-6%` in `Wg`, heat flux, and
-particle flux.
+Summary panel: the tracked README asset now combines the detailed Cyclone/KBM
+subpanel, the closed nonlinear W7-X VMEC parity slice, the matched-horizon HSX
+VMEC parity slice, and the staged secondary slab comparison against the
+published GX target table. The Cyclone/KBM subpanel still uses GX-matched
+runtime configs (same integrator family and normalization contract; no manual
+`flux_scale` or `wphi_scale` calibration in the Cyclone config), with long
+nonlinear windows (`t=400` Cyclone and KBM). For the extended nonlinear KBM
+case, startup parity is checked against the dense `t<=0.2` GX run and the late
+saturated regime is checked by native-grid window statistics on the `t=400`
+run; the current late-window mean/std mismatch is about `5-6%` in `Wg`, heat
+flux, and particle flux.
 
 The current KBM GX mismatch table is stored in
 `docs/_static/kbm_gx_mismatch.csv`.
@@ -179,14 +180,21 @@ python examples/kbm_beta_scan.py --no-diffrax
   `|k| = 1/3` shell in the nonlinear de-alias mask, so SPECTRAX now uses the
   same strict cutoff. Late-window (`t>=20`) mean errors are about `9.7%` in
   `Wg`, `12.7%` in `Wphi`, and `5.7%` in heat flux.
+- **Nonlinear HSX exact-file parity**: the HSX VMEC workflow now uses the same
+  GX-backed `vmec -> eik.nc` bridge and the same `wout_HSX_QHS_vac.nc` input
+  file for both codes. With the horizon matched at `t=50`, the tracked HSX
+  run passes both the early and late statistical windows; late-window
+  (`t>=20`) relative errors are about `7.1%` in `Wg`, `6.1%` in `Wphi`, and
+  `2.8%` in heat flux.
 - **Secondary slab staged workflow**: the GX `kh01 -> kh01a` slab case runs
   through the unified runtime API and now matches the published GX README
   sideband growth target (`gamma≈4.901835`) on all four nonzero tracked
-  sidebands to about `4.3e-5` relative error. The remaining secondary residual
-  is in `omega`, not in missing sideband growth. When stock GX cannot emit
-  `kh01a.out.nc` on the current hardware/runtime stack, the benchmark tool can
-  compare directly against the published GX target table instead of pretending
-  to use an out.nc surrogate.
+  sidebands to about `2.1e-5` relative error using the longest leading finite
+  selected-mode window from the honest `t=100` staged run. The remaining
+  secondary residual is in the tiny `omega` signal, not in missing sideband
+  growth. When stock GX cannot emit `kh01a.out.nc` on the current
+  hardware/runtime stack, the benchmark tool compares directly against the
+  published GX target table instead of pretending to use an out.nc surrogate.
 
 ## Figures
 
@@ -265,6 +273,10 @@ Cross-code mismatch (same ETG setup above):
 | Time integration (cross-code) | fixed-step IMEX2 (scan default), Diffrax adaptive optional |
 | Fit policy (cross-code) | mode extracted at the selected ky/kx with midplane-aware signal extraction, log-linear auto-windowing |
 | Reference | GX matched-input electromagnetic ky scan |
+
+GX validation summary:
+
+![GX validation summary panel](docs/_static/gx_summary_panel.png)
 
 KBM GX matched-input set (reference plumbing):
 
