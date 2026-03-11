@@ -173,12 +173,12 @@ python examples/kbm_beta_scan.py --no-diffrax
 - **Nonlinear W7-X exact-state audit**: starting from the exact dumped GX
   nonlinear state at `t≈32.44665203`, the next GX output window
   (`time_index=10 -> 11`) matches to about `1e-4` relative in `Wg`, `Wphi`,
-  and heat flux through the runtime TOML path. The tracked long-horizon W7-X
-  free run also now passes the native-grid late-window statistical check once
-  the comparator uses the same window semantics as GX-style diagnostic output;
-  the earlier apparent failure came from a contaminated office collisions-off
-  config plus strict pointwise trace comparison, not from a same-state
-  operator or timestepper mismatch.
+  and heat flux through the runtime TOML path. The tracked stock-GX `t=200`
+  free run now also passes the native-grid late-window statistical check after
+  closing the last evolution-side mismatch: GX excludes the exact
+  `|k| = 1/3` shell in the nonlinear de-alias mask, so SPECTRAX now uses the
+  same strict cutoff. Late-window (`t>=20`) mean errors are about `9.7%` in
+  `Wg`, `12.7%` in `Wphi`, and `5.7%` in heat flux.
 - **Secondary slab staged workflow**: the GX `kh01 -> kh01a` slab case runs
   through the unified runtime API and now matches the published GX README
   sideband growth target (`gamma≈4.901835`) on all four nonzero tracked
