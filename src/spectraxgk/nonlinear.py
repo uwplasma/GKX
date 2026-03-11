@@ -513,6 +513,9 @@ def _integrate_nonlinear_gx_diagnostics_impl(
     use_collision_split = bool(collision_split) and (
         float(term_cfg.collisions) != 0.0 or float(term_cfg.hypercollisions) != 0.0
     )
+    rhs_term_cfg = (
+        replace(term_cfg, collisions=0.0, hypercollisions=0.0) if use_collision_split else term_cfg
+    )
     damping = None
     if use_collision_split:
         damping = _collision_damping(cache, params, term_cfg, real_dtype, squeeze_species=squeeze_species)
@@ -544,7 +547,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
             G,
             cache,
             params,
-            term_cfg,
+            rhs_term_cfg,
             gx_real_fft=gx_real_fft,
             laguerre_mode=laguerre_mode,
         )
