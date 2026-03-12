@@ -40,6 +40,8 @@ class RuntimePhysicsConfig:
     adiabatic_electrons: bool = True
     adiabatic_ions: bool = False
     tau_e: float = 1.0
+    tau_fac: float | None = None
+    z_ion: float = 1.0
     beta: float = 0.0
     collisions: bool = True
     hypercollisions: bool = True
@@ -119,6 +121,7 @@ class RuntimeExpertConfig:
     fixed_mode: bool = False
     iky_fixed: int | None = None
     ikx_fixed: int | None = None
+    dealias_kz: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

@@ -9,6 +9,11 @@ from pathlib import Path
 import jax.numpy as jnp
 import numpy as np
 
+from spectraxgk.cetg import (
+    build_cetg_model_params,
+    integrate_cetg_gx_diagnostics_state,
+    validate_cetg_runtime_config,
+)
 from spectraxgk.config import resolve_cfl_fac
 from spectraxgk.analysis import (
     ModeSelection,
@@ -326,6 +331,35 @@ def _gx_default_p_hyper_m(nhermite: int | None) -> float:
     return float(min(20, max(int(nhermite) // 2, 1)))
 
 
+def _runtime_model_key(cfg: RuntimeConfig) -> str:
+    return cfg.physics.reduced_model.strip().lower()
+
+
+def _resolve_runtime_hl_dims(
+    cfg: RuntimeConfig,
+    *,
+    Nl: int | None,
+    Nm: int | None,
+) -> tuple[int, int]:
+    """Resolve model-native Hermite/Laguerre dimensions."""
+
+    model = _runtime_model_key(cfg)
+    if model in {"", "gyrokinetic", "full", "full-gk", "gx"}:
+        return int(24 if Nl is None else Nl), int(12 if Nm is None else Nm)
+    if model == "cetg":
+        Nl_use = 2 if Nl is None else int(Nl)
+        Nm_use = 1 if Nm is None else int(Nm)
+        if Nl_use != 2 or Nm_use != 1:
+            raise ValueError("GX cETG requires exactly Nl=2 and Nm=1")
+        return Nl_use, Nm_use
+    if model == "krehm":
+        raise NotImplementedError(
+            "physics.reduced_model='krehm' requires the dedicated KREHM solver; "
+            "the full-GK runtime path does not emulate the GX KREHM model."
+        )
+    raise ValueError(f"Unknown physics.reduced_model={cfg.physics.reduced_model!r}")
+
+
 def _require_full_gk_runtime_model(cfg: RuntimeConfig) -> None:
     """Reject reduced-model configs until their dedicated solvers exist."""
 
@@ -587,6 +621,10 @@ def _build_initial_condition(
     ky_val = float(grid.ky[ky_index])
 
     z = np.asarray(grid.z)
+    z_min = float(z.min())
+    z_max = float(z.max())
+    z_period = (z_max - z_min) / (2.0 * np.pi) if z_max > z_min else 1.0
+    z_phase = np.cos(float(cfg.init.kpar_init) * z / z_period)
     if cfg.init.gaussian_init:
         profile = _build_gaussian_profile(
             z,
@@ -600,7 +638,7 @@ def _build_initial_condition(
         vals = amp * profile * (1.0 + 1.0j)
     else:
         # GX seeds single non-Gaussian modes as purely real amplitudes.
-        vals = amp * np.ones_like(z, dtype=np.complex64)
+        vals = amp * z_phase.astype(np.complex64, copy=False)
 
     species_targets: tuple[int, ...]
     if nspecies == 1:
@@ -724,8 +762,8 @@ def run_runtime_linear(
     cfg: RuntimeConfig,
     *,
     ky_target: float = 0.3,
-    Nl: int = 24,
-    Nm: int = 12,
+    Nl: int | None = None,
+    Nm: int | None = None,
     solver: str = "auto",
     method: str | None = None,
     dt: float | None = None,
@@ -747,10 +785,90 @@ def run_runtime_linear(
 ) -> RuntimeLinearResult:
     """Run one linear point from a case-agnostic runtime config."""
 
+    Nl_use, Nm_use = _resolve_runtime_hl_dims(cfg, Nl=Nl, Nm=Nm)
+    if _runtime_model_key(cfg) == "cetg":
+        geom = build_runtime_geometry(cfg)
+        validate_cetg_runtime_config(cfg, geom, Nl=Nl_use, Nm=Nm_use)
+        grid_cfg = apply_gx_geometry_grid_defaults(geom, cfg.grid)
+        grid_full = build_spectral_grid(grid_cfg)
+        ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
+        grid = select_ky_grid(grid_full, ky_index)
+        sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
+        g0 = _build_initial_condition(
+            grid,
+            geom,
+            cfg,
+            ky_index=sel.ky_index,
+            kx_index=sel.kx_index,
+            Nl=Nl_use,
+            Nm=Nm_use,
+            nspecies=1,
+        )
+        cetg_terms = build_runtime_term_config(cfg)
+        cetg_params = build_cetg_model_params(cfg, geom, Nl=Nl_use, Nm=Nm_use)
+        solver_key = solver.strip().lower()
+        if solver_key == "krylov":
+            raise NotImplementedError("solver='krylov' is not implemented for physics.reduced_model='cetg'")
+        if solver_key not in {"auto", "time", "gx_time"}:
+            raise ValueError("solver must be one of {'auto', 'time', 'gx_time', 'krylov'}")
+        dt_val = float(cfg.time.dt if dt is None else dt)
+        if dt_val <= 0.0:
+            raise ValueError("dt must be > 0")
+        steps_val = int(steps) if steps is not None else int(round(float(cfg.time.t_max) / dt_val))
+        if steps_val < 1:
+            raise ValueError("steps must be >= 1")
+        sample_stride_use = int(cfg.time.sample_stride if sample_stride is None else sample_stride)
+        _t, diag, G_final, _fields = integrate_cetg_gx_diagnostics_state(
+            g0,
+            grid,
+            cetg_params,
+            cetg_terms,
+            dt=dt_val,
+            steps=steps_val,
+            method=str(method or cfg.time.method),
+            sample_stride=sample_stride_use,
+            diagnostics_stride=1,
+            gx_real_fft=bool(cfg.time.gx_real_fft),
+            omega_ky_index=0,
+            omega_kx_index=0,
+            fixed_dt=bool(cfg.time.fixed_dt),
+            dt_min=float(cfg.time.dt_min),
+            dt_max=cfg.time.dt_max,
+            cfl=float(cfg.time.cfl),
+            cfl_fac=cfg.time.cfl_fac,
+        )
+        signal = np.asarray(diag.phi_mode_t if diag.phi_mode_t is not None else np.zeros_like(np.asarray(diag.t)))
+        t_arr = np.asarray(diag.t, dtype=float)
+        if t_arr.size < 2:
+            gamma = float(np.asarray(diag.gamma_t)[-1]) if np.asarray(diag.gamma_t).size else 0.0
+            omega = float(np.asarray(diag.omega_t)[-1]) if np.asarray(diag.omega_t).size else 0.0
+        elif auto_window:
+            gamma, omega, _fit_tmin, _fit_tmax = fit_growth_rate_auto(
+                t_arr,
+                signal,
+                window_fraction=window_fraction,
+                min_points=min_points,
+                start_fraction=start_fraction,
+                growth_weight=growth_weight,
+                require_positive=require_positive,
+                min_amp_fraction=min_amp_fraction,
+            )
+        else:
+            gamma, omega = fit_growth_rate(t_arr, signal, tmin=tmin, tmax=tmax)
+        return RuntimeLinearResult(
+            ky=float(grid.ky[0]),
+            gamma=float(gamma),
+            omega=float(omega),
+            selection=sel,
+            t=t_arr,
+            signal=np.asarray(signal),
+            state=np.asarray(G_final) if return_state else None,
+        )
+
     geom = build_runtime_geometry(cfg)
     grid_cfg = apply_gx_geometry_grid_defaults(geom, cfg.grid)
     grid_full = build_spectral_grid(grid_cfg)
-    params = build_runtime_linear_params(cfg, Nm=Nm, geom=geom)
+    params = build_runtime_linear_params(cfg, Nm=Nm_use, geom=geom)
     terms = build_runtime_linear_terms(cfg)
 
     ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
@@ -762,8 +880,8 @@ def run_runtime_linear(
         cfg,
         ky_index=sel.ky_index,
         kx_index=sel.kx_index,
-        Nl=Nl,
-        Nm=Nm,
+        Nl=Nl_use,
+        Nm=Nm_use,
         nspecies=max(len([s for s in cfg.species if s.kinetic]), 1),
     )
 
@@ -781,7 +899,7 @@ def run_runtime_linear(
 
     def _run_krylov() -> tuple[float, float]:
         kcfg = krylov_cfg or KrylovConfig()
-        cache = build_linear_cache(grid, geom, params, Nl, Nm)
+        cache = build_linear_cache(grid, geom, params, Nl_use, Nm_use)
         eig, _vec = dominant_eigenpair(
             g0,
             cache,
@@ -978,8 +1096,8 @@ def run_runtime_scan(
     cfg: RuntimeConfig,
     ky_values: Sequence[float],
     *,
-    Nl: int = 24,
-    Nm: int = 12,
+    Nl: int | None = None,
+    Nm: int | None = None,
     solver: str = "auto",
     method: str | None = None,
     dt: float | None = None,
@@ -1006,6 +1124,7 @@ def run_runtime_scan(
     """
 
     ky_arr = np.asarray(ky_values, dtype=float)
+    Nl_use, Nm_use = _resolve_runtime_hl_dims(cfg, Nl=Nl, Nm=Nm)
     solver_key = solver.strip().lower()
     if batch_ky and solver_key == "krylov":
         raise ValueError("batch_ky is only supported for time integration")
@@ -1013,8 +1132,8 @@ def run_runtime_scan(
         return _run_runtime_scan_batch(
             cfg,
             ky_arr,
-            Nl=Nl,
-            Nm=Nm,
+            Nl=Nl_use,
+            Nm=Nm_use,
             method=method,
             dt=dt,
             steps=steps,
@@ -1037,8 +1156,8 @@ def run_runtime_scan(
         res = run_runtime_linear(
             cfg,
             ky_target=float(ky),
-            Nl=Nl,
-            Nm=Nm,
+            Nl=Nl_use,
+            Nm=Nm_use,
             solver=solver,
             method=method,
             dt=dt,
@@ -1212,8 +1331,8 @@ def run_runtime_nonlinear(
     *,
     ky_target: float = 0.3,
     kx_target: float | None = None,
-    Nl: int = 24,
-    Nm: int = 12,
+    Nl: int | None = None,
+    Nm: int | None = None,
     dt: float | None = None,
     steps: int | None = None,
     method: str | None = None,
@@ -1225,10 +1344,85 @@ def run_runtime_nonlinear(
 ) -> RuntimeNonlinearResult:
     """Run a nonlinear point using the unified runtime config path."""
 
+    Nl_use, Nm_use = _resolve_runtime_hl_dims(cfg, Nl=Nl, Nm=Nm)
+    if _runtime_model_key(cfg) == "cetg":
+        geom = build_runtime_geometry(cfg)
+        validate_cetg_runtime_config(cfg, geom, Nl=Nl_use, Nm=Nm_use)
+        grid_cfg = apply_gx_geometry_grid_defaults(geom, cfg.grid)
+        grid = build_spectral_grid(grid_cfg)
+        ky_index, kx_index = _select_nonlinear_mode_indices(
+            grid,
+            ky_target=ky_target,
+            kx_target=kx_target,
+            use_dealias_mask=bool(cfg.time.nonlinear_dealias),
+        )
+        G0 = _build_initial_condition(
+            grid,
+            geom,
+            cfg,
+            ky_index=ky_index,
+            kx_index=kx_index,
+            Nl=Nl_use,
+            Nm=Nm_use,
+            nspecies=1,
+        )
+        dt_val = float(cfg.time.dt if dt is None else dt)
+        if dt_val <= 0.0:
+            raise ValueError("dt must be > 0")
+        if steps is None:
+            steps_val = int(round(float(cfg.time.t_max) / dt_val))
+        else:
+            steps_val = int(steps)
+        if steps_val < 1:
+            raise ValueError("steps must be >= 1")
+        cetg_params = build_cetg_model_params(cfg, geom, Nl=Nl_use, Nm=Nm_use)
+        cetg_term_cfg = build_runtime_term_config(cfg)
+        sample_stride_use = cfg.time.sample_stride if sample_stride is None else int(sample_stride)
+        diag_stride = cfg.time.diagnostics_stride if diagnostics_stride is None else int(diagnostics_stride)
+        _t, diag, G_final, cetg_fields_final = integrate_cetg_gx_diagnostics_state(
+            G0,
+            grid,
+            cetg_params,
+            cetg_term_cfg,
+            dt=dt_val,
+            steps=steps_val,
+            method=str(method or cfg.time.method),
+            sample_stride=int(sample_stride_use),
+            diagnostics_stride=int(diag_stride),
+            gx_real_fft=bool(cfg.time.gx_real_fft),
+            omega_ky_index=int(ky_index),
+            omega_kx_index=int(kx_index),
+            fixed_dt=bool(cfg.time.fixed_dt),
+            dt_min=float(cfg.time.dt_min),
+            dt_max=cfg.time.dt_max,
+            cfl=float(cfg.time.cfl),
+            cfl_fac=cfg.time.cfl_fac,
+        )
+        if diagnostics is False:
+            phi2 = np.asarray(jnp.mean(jnp.abs(cetg_fields_final.phi) ** 2))
+            return RuntimeNonlinearResult(
+                t=np.asarray([]),
+                diagnostics=None,
+                phi2=phi2,
+                fields=cetg_fields_final,
+                state=np.asarray(G_final) if return_state else None,
+                ky_selected=float(np.asarray(grid.ky[ky_index])),
+                kx_selected=float(np.asarray(grid.kx[kx_index])),
+            )
+        return RuntimeNonlinearResult(
+            t=np.asarray(diag.t),
+            diagnostics=diag,
+            phi2=None,
+            fields=None,
+            state=np.asarray(G_final) if return_state else None,
+            ky_selected=float(np.asarray(grid.ky[ky_index])),
+            kx_selected=float(np.asarray(grid.kx[kx_index])),
+        )
+
     geom = build_runtime_geometry(cfg)
     grid_cfg = apply_gx_geometry_grid_defaults(geom, cfg.grid)
     grid = build_spectral_grid(grid_cfg)
-    params = build_runtime_linear_params(cfg, Nm=Nm, geom=geom)
+    params = build_runtime_linear_params(cfg, Nm=Nm_use, geom=geom)
     term_cfg = build_runtime_term_config(cfg)
 
     ky_index, kx_index = _select_nonlinear_mode_indices(
@@ -1243,8 +1437,8 @@ def run_runtime_nonlinear(
         cfg,
         ky_index=ky_index,
         kx_index=kx_index,
-        Nl=Nl,
-        Nm=Nm,
+        Nl=Nl_use,
+        Nm=Nm_use,
         nspecies=len(_species_to_linear(cfg.species)),
     )
 
