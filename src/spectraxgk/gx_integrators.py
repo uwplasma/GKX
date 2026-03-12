@@ -24,10 +24,11 @@ from spectraxgk.terms.config import FieldState, TermConfig
 
 @dataclass(frozen=True)
 class GXTimeConfig:
-    """GX-style RK4 time configuration."""
+    """GX-style explicit time configuration."""
 
     t_max: float
     dt: float
+    method: str = "rk4"
     sample_stride: int = 1
     fixed_dt: bool = False
     use_dealias_mask: bool = False
@@ -35,6 +36,13 @@ class GXTimeConfig:
     dt_max: float | None = None
     cfl: float = 0.9
     cfl_fac: float = 2.82
+
+
+_SSPX3_ADT = float((1.0 / 6.0) ** (1.0 / 3.0))
+_SSPX3_WGTFAC = float((9.0 - 2.0 * (6.0 ** (2.0 / 3.0))) ** 0.5)
+_SSPX3_W1 = 0.5 * (_SSPX3_WGTFAC - 1.0)
+_SSPX3_W2 = 0.5 * ((6.0 ** (2.0 / 3.0)) - 1.0 - _SSPX3_WGTFAC)
+_SSPX3_W3 = (1.0 / _SSPX3_ADT) - 1.0 - _SSPX3_W2 * (_SSPX3_W1 + 1.0)
 
 
 def _gx_zp_from_grid(grid: SpectralGrid) -> float:
@@ -317,17 +325,93 @@ def _rk4_step(
 ) -> tuple[jnp.ndarray, FieldState]:
     """Single GX-style RK4 step for linear dynamics."""
 
+    return _linear_explicit_step(G, cache, params, term_cfg, dt, method="rk4")
+
+
+def _rk3_gx_step(
+    G: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    term_cfg: TermConfig,
+    dt: float,
+) -> tuple[jnp.ndarray, FieldState]:
+    """Single GX-style RK3/Heun step for linear dynamics."""
+
+    return _linear_explicit_step(G, cache, params, term_cfg, dt, method="rk3")
+
+
+def _linear_explicit_step(
+    G: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    term_cfg: TermConfig,
+    dt: float,
+    *,
+    method: str,
+) -> tuple[jnp.ndarray, FieldState]:
+    """Single explicit linear step matching GX-style staged schemes."""
+
     dt_val = jnp.asarray(dt)
+    method_key = method.strip().lower()
 
     def rhs(state: jnp.ndarray) -> jnp.ndarray:
         dG, _fields = assemble_rhs_cached(state, cache, params, terms=term_cfg)
         return dG
 
     k1 = rhs(G)
-    k2 = rhs(G + 0.5 * dt_val * k1)
-    k3 = rhs(G + 0.5 * dt_val * k2)
-    k4 = rhs(G + dt_val * k3)
-    G_next = G + (dt_val / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+    if method_key == "euler":
+        G_next = G + dt_val * k1
+    elif method_key == "rk2":
+        G_half = G + 0.5 * dt_val * k1
+        k2 = rhs(G_half)
+        G_next = G + dt_val * k2
+    elif method_key == "rk3_classic":
+        G1 = G + dt_val * k1
+        k2 = rhs(G1)
+        G2 = 0.75 * G + 0.25 * (G1 + dt_val * k2)
+        k3 = rhs(G2)
+        G_next = (1.0 / 3.0) * G + (2.0 / 3.0) * (G2 + dt_val * k3)
+    elif method_key in {"rk3", "rk3_gx"}:
+        G1 = G + (dt_val / 3.0) * k1
+        k2 = rhs(G1)
+        G2 = G + (2.0 * dt_val / 3.0) * k2
+        k3 = rhs(G2)
+        G3 = G + 0.75 * dt_val * k3
+        G_next = G3 + 0.25 * dt_val * k1
+    elif method_key == "rk4":
+        k2 = rhs(G + 0.5 * dt_val * k1)
+        k3 = rhs(G + 0.5 * dt_val * k2)
+        k4 = rhs(G + dt_val * k3)
+        G_next = G + (dt_val / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+    elif method_key == "sspx3":
+        def _sspx3_euler_step(G_state: jnp.ndarray) -> jnp.ndarray:
+            dG_state = rhs(G_state)
+            return G_state + (_SSPX3_ADT * dt_val) * dG_state
+
+        G1 = _sspx3_euler_step(G)
+        G2_euler = _sspx3_euler_step(G1)
+        G2 = (1.0 - _SSPX3_W1) * G + (_SSPX3_W1 - 1.0) * G1 + G2_euler
+        G3 = _sspx3_euler_step(G2)
+        G_next = (1.0 - _SSPX3_W2 - _SSPX3_W3) * G + _SSPX3_W3 * G1 + (_SSPX3_W2 - 1.0) * G2 + G3
+    elif method_key == "k10":
+        def _k10_euler_step(G_state: jnp.ndarray) -> jnp.ndarray:
+            dG_state = rhs(G_state)
+            return G_state + (dt_val / 6.0) * dG_state
+
+        G_q1 = G
+        G_q2 = G
+        for _ in range(5):
+            G_q1 = _k10_euler_step(G_q1)
+        G_q2 = 0.04 * G_q2 + 0.36 * G_q1
+        G_q1 = 15.0 * G_q2 - 5.0 * G_q1
+        for _ in range(4):
+            G_q1 = _k10_euler_step(G_q1)
+        dG_final = rhs(G_q1)
+        G_next = G_q2 + 0.6 * G_q1 + 0.1 * dt_val * dG_final
+    else:
+        raise ValueError(
+            "GX linear method must be one of {'euler', 'rk2', 'rk3', 'rk3_classic', 'rk3_gx', 'rk4', 'k10', 'sspx3'}"
+        )
 
     # fields at the end of step
     _, fields = assemble_rhs_cached(G_next, cache, params, terms=term_cfg)
@@ -352,6 +436,11 @@ def integrate_linear_gx(
     if mode_method not in {"z_index", "max"}:
         raise ValueError("mode_method must be 'z_index' or 'max'")
 
+    method = time_cfg.method.strip().lower()
+    if method not in {"euler", "rk2", "rk3", "rk3_classic", "rk3_gx", "rk4", "k10", "sspx3"}:
+        raise ValueError(
+            "method must be one of {'euler', 'rk2', 'rk3', 'rk3_classic', 'rk3_gx', 'rk4', 'k10', 'sspx3'}"
+        )
     term_cfg = _gx_term_config(terms)
     t_max = float(time_cfg.t_max)
     dt = float(time_cfg.dt)
@@ -383,9 +472,14 @@ def integrate_linear_gx(
     omega_list: list[np.ndarray] = []
     dt_list: list[float] = []
 
-    stepper = _rk4_step
+    def _step(G_state, cache_state, params_state, term_cfg_state, dt_state):
+        return _linear_explicit_step(
+            G_state, cache_state, params_state, term_cfg_state, dt_state, method=method
+        )
+
+    stepper = _step
     if jit:
-        stepper = jax.jit(_rk4_step, donate_argnums=(0,))
+        stepper = jax.jit(_step, donate_argnums=(0,))
 
     while t < t_max - 1.0e-12:
         if not time_cfg.fixed_dt and wmax > 0.0:
@@ -451,6 +545,11 @@ def integrate_linear_gx_diagnostics(
 
     if terms is None:
         terms = LinearTerms()
+    method = time_cfg.method.strip().lower()
+    if method not in {"euler", "rk2", "rk3", "rk3_classic", "rk3_gx", "rk4", "k10", "sspx3"}:
+        raise ValueError(
+            "method must be one of {'euler', 'rk2', 'rk3', 'rk3_classic', 'rk3_gx', 'rk4', 'k10', 'sspx3'}"
+        )
     term_cfg = _gx_term_config(terms)
     geom_eff = ensure_flux_tube_geometry_data(geom, grid.z)
 
@@ -491,9 +590,14 @@ def integrate_linear_gx_diagnostics(
     vol_fac, flux_fac = gx_volume_factors(geom_eff, grid)
     use_dealias = bool(time_cfg.use_dealias_mask)
 
-    stepper = _rk4_step
+    def _step(G_state, cache_state, params_state, term_cfg_state, dt_state):
+        return _linear_explicit_step(
+            G_state, cache_state, params_state, term_cfg_state, dt_state, method=method
+        )
+
+    stepper = _step
     if jit:
-        stepper = jax.jit(_rk4_step, donate_argnums=(0,))
+        stepper = jax.jit(_step, donate_argnums=(0,))
 
     while t < t_max - 1.0e-12:
         if not time_cfg.fixed_dt and wmax > 0.0:
