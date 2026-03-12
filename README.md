@@ -15,8 +15,10 @@ GX-matched s-alpha Cyclone/KBM benchmark stack, while the stellarator rows show
 the clean-mainline W7-X and HSX linear/nonlinear closures. Reduced-model and
 staged slab cases are intentionally excluded from this primary figure so the
 headline validation claim stays tied to the production full-GK path. The
-remaining clean-mainline tokamak gap is the nonlinear Cyclone Miller geometry
-lane, which is not yet claimed as closed in SPECTRAX-GK.
+clean-mainline nonlinear Cyclone Miller lane now passes on the matched
+`t≈122` horizon, but the publication tokamak subpanel has not been switched
+over yet because the linear tokamak row still needs the same clean Miller
+refresh.
 
 The current KBM GX mismatch table is stored in
 `docs/_static/kbm_gx_mismatch.csv`.
