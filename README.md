@@ -19,10 +19,10 @@ Cyclone and KBM). For the extended nonlinear KBM case, startup parity is
 checked against the dense `t<=0.2` GX run and the late saturated regime is
 checked by native-grid window statistics on the `t=400` run; the current
 late-window mean/std mismatch is about `5-6%` in `Wg`, heat flux, and particle
-flux. The linear HSX imported-geometry row is intentionally shown as a live
-audit item: the fresh clean-mainline compare now closes the `kx=0` branch in
-absolute `omega` and `gamma`, but the `Wg_kyst` / `Wphi_kyst` energy
-projection is still under audit.
+flux. The linear HSX imported-geometry row now reflects the refreshed
+clean-mainline closure: the tracked `kx=0` branch matches in absolute `omega`
+and `gamma`, and the `Wg_kyst` / `Wphi_kyst` projections are down to
+single-digit-percent relative error on the `t=2` audit.
 
 The current KBM GX mismatch table is stored in
 `docs/_static/kbm_gx_mismatch.csv`.
@@ -193,15 +193,15 @@ python examples/kbm_beta_scan.py --no-diffrax
   (`t>=20`) relative errors are about `7.1%` in `Wg`, `6.1%` in `Wphi`, and
   `2.8%` in heat flux.
 - **Imported HSX geometry (linear audit)**: the clean-mainline linear HSX VMEC
-  compare is not closed yet, but the remaining gap is now narrow. The
-  imported-linear harness now preserves the full GX multimode startup on the
-  imported VMEC grid instead of slicing to one `ky`, uses the explicit GX
-  linear method, and follows the `kx≈0` branch by default unless the GX input
-  explicitly requested a different single-mode seed. On the refreshed `t=2`
-  audit, mean absolute `omega` errors are about `8e-4` to `4e-3` and mean
-  absolute `gamma` errors are about `3e-4` to `5e-3`; the remaining mismatch
-  is in the `Wg_kyst` / `Wphi_kyst` energy projection rather than startup,
-  VMEC geometry, or the linear RHS/update contract.
+  slice is now closed on the tracked `t=2` audit. The imported-linear harness
+  preserves the full GX multimode startup on the VMEC grid, follows the
+  `kx≈0` branch by default unless the GX input explicitly requested a
+  different single-mode seed, and now uses the authoritative grouped geometry
+  stored in the clean GX `out.nc` file for `vmec`/`desc` cases. On the
+  refreshed audit, mean absolute `omega` errors are about `8e-4` to `4e-3`,
+  mean absolute `gamma` errors are about `3e-4` to `5e-3`, and the
+  `Wg_kyst` / `Wphi_kyst` projections are down to about `2.6%` to `7.3%`
+  relative error.
 - **Secondary slab staged workflow**: the GX `kh01 -> kh01a` slab case runs
   through the unified runtime API and now matches the published GX README
   sideband growth target (`gamma≈4.901835`) on all four nonzero tracked
