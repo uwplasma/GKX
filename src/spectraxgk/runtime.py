@@ -44,6 +44,7 @@ from spectraxgk.runtime_config import RuntimeConfig, RuntimeSpeciesConfig
 from spectraxgk.runners import integrate_linear_from_config, integrate_nonlinear_from_config
 from spectraxgk.species import Species, build_linear_params
 from spectraxgk.terms.config import FieldState, TermConfig
+from spectraxgk.miller_eik import generate_runtime_miller_eik
 from spectraxgk.vmec_eik import generate_runtime_vmec_eik
 
 
@@ -395,11 +396,16 @@ def _require_full_gk_runtime_model(cfg: RuntimeConfig) -> None:
 def build_runtime_geometry(cfg: RuntimeConfig) -> FluxTubeGeometryLike:
     """Resolve runtime geometry, generating VMEC ``*.eik.nc`` files when requested."""
 
-    if cfg.geometry.model.strip().lower() != "vmec":
-        return build_flux_tube_geometry(cfg.geometry)
-    eik_path = generate_runtime_vmec_eik(cfg)
-    geom_cfg = replace(cfg.geometry, model="vmec-eik", geometry_file=str(eik_path))
-    return build_flux_tube_geometry(geom_cfg)
+    model = cfg.geometry.model.strip().lower()
+    if model == "vmec":
+        eik_path = generate_runtime_vmec_eik(cfg)
+        geom_cfg = replace(cfg.geometry, model="vmec-eik", geometry_file=str(eik_path))
+        return build_flux_tube_geometry(geom_cfg)
+    if model == "miller":
+        eik_path = generate_runtime_miller_eik(cfg)
+        geom_cfg = replace(cfg.geometry, model="gx-eik", geometry_file=str(eik_path))
+        return build_flux_tube_geometry(geom_cfg)
+    return build_flux_tube_geometry(cfg.geometry)
 
 
 def build_runtime_linear_params(

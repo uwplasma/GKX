@@ -117,6 +117,13 @@ class GeometryConfig:
     geometry_file: str | None = None
     vmec_file: str | None = None
     gx_python: str | None = None
+    rhoc: float = 0.5
+    R_geo: float | None = None
+    shift: float = 0.0
+    akappa: float = 1.0
+    akappri: float = 0.0
+    tri: float = 0.0
+    tripri: float = 0.0
     torflux: float | None = None
     npol: float | None = None
     npol_min: float | None = None
