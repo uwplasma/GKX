@@ -10,11 +10,13 @@ is the **Cyclone base case** with adiabatic electrons, plus ETG and KBM scans.
 
 Publication validation panel: the tracked primary asset now focuses only on
 the main GX-parity benchmark families used for the core validation claim:
-Cyclone, KBM, W7-X, and HSX. The tokamak subpanel keeps the current
-GX-matched Cyclone/KBM benchmark stack, while the stellarator rows show the
-clean-mainline W7-X and HSX linear/nonlinear closures. Reduced-model and staged
-slab cases are intentionally excluded from this primary figure so the headline
-validation claim stays tied to the production full-GK path.
+Cyclone, KBM, W7-X, and HSX. The tokamak subpanel currently keeps the
+GX-matched s-alpha Cyclone/KBM benchmark stack, while the stellarator rows show
+the clean-mainline W7-X and HSX linear/nonlinear closures. Reduced-model and
+staged slab cases are intentionally excluded from this primary figure so the
+headline validation claim stays tied to the production full-GK path. The
+remaining clean-mainline tokamak gap is the nonlinear Cyclone Miller geometry
+lane, which is not yet claimed as closed in SPECTRAX-GK.
 
 The current KBM GX mismatch table is stored in
 `docs/_static/kbm_gx_mismatch.csv`.
