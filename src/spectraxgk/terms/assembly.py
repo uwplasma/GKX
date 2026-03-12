@@ -225,6 +225,7 @@ def assemble_rhs_cached(
         H,
         ky=cache.ky,
         damp_profile=cache.damp_profile,
+        linked_damp_profile=cache.linked_damp_profile,
         damp_amp=damp_amp,
         weight=w_damp,
     )
@@ -447,6 +448,7 @@ def assemble_rhs_terms_cached(
         H,
         ky=cache.ky,
         damp_profile=cache.damp_profile,
+        linked_damp_profile=cache.linked_damp_profile,
         damp_amp=damp_amp,
         weight=w_damp,
     )

@@ -66,6 +66,42 @@ def _grad_z_linked_fd(
     return (f_roll_p1 - f_roll_m1) / (2.0 * dz_val)
 
 
+def _restore_linked_real_fft_conjugates(
+    out: jnp.ndarray,
+    *,
+    covered_rows: jnp.ndarray,
+) -> jnp.ndarray:
+    """Restore the conjugate ``-ky`` rows on a full GX FFT grid.
+
+    The linked-FFT chains are built on the unique dealiased positive-``ky``
+    block. When the runtime carries the full GX-expanded ``ky`` layout, the
+    untouched negative rows must be reconstructed by real-FFT conjugate
+    symmetry so the linked derivative acts on the same state as GX.
+    """
+
+    Ny = out.shape[-3]
+    if Ny <= 1:
+        return out
+    row_idx = jnp.arange(Ny, dtype=jnp.int32)
+    src_rows = jnp.mod(-row_idx, Ny)
+    covered = jnp.asarray(covered_rows, dtype=bool)
+    source_covered = jnp.take(covered, src_rows, axis=0)
+    fill_mask = (~covered) & source_covered & (row_idx != 0)
+    mirrored = jnp.take(out, src_rows, axis=-3)
+    Nx = out.shape[-2]
+    if Nx > 1:
+        kx_neg = jnp.concatenate(
+            (
+                jnp.asarray([0], dtype=jnp.int32),
+                jnp.arange(Nx - 1, 0, -1, dtype=jnp.int32),
+            )
+        )
+        mirrored = jnp.take(mirrored, kx_neg, axis=-2)
+    mirrored = jnp.conj(mirrored)
+    mask_shape = (1,) * (out.ndim - 3) + (Ny, 1, 1)
+    return jnp.where(fill_mask.reshape(mask_shape), mirrored, out)
+
+
 def grad_z_linked_fft(
     f: jnp.ndarray,
     dz: float | jnp.ndarray,
@@ -128,6 +164,9 @@ def grad_z_linked_fft(
         chain_updates.append(df_link)
         chain_indices.append(idx_flat)
 
+    idx_cat = chain_indices[0] if len(chain_indices) == 1 else jnp.concatenate(chain_indices, axis=0)
+    covered_rows = jnp.zeros((Ny,), dtype=bool).at[jnp.mod(idx_cat, Ny)].set(True)
+
     if linked_use_gather:
         updates_cat = jnp.concatenate(chain_updates, axis=-2)
         gather_map = jnp.asarray(linked_gather_map, dtype=jnp.int32)
@@ -136,7 +175,8 @@ def grad_z_linked_fft(
         mask_shape = (1,) * (updates_full.ndim - 2) + (gather_mask.shape[0], 1)
         updates_full = updates_full * gather_mask.reshape(mask_shape)
         updates_full = updates_full.reshape(*lead_shape, Nx, Ny, Nz)
-        return jnp.swapaxes(updates_full, -3, -2)
+        out = jnp.swapaxes(updates_full, -3, -2)
+        return _restore_linked_real_fft_conjugates(out, covered_rows=covered_rows)
 
     if linked_full_cover:
         if linked_inverse_permutation is None:
@@ -145,14 +185,16 @@ def grad_z_linked_fft(
         inv = jnp.asarray(linked_inverse_permutation, dtype=jnp.int32)
         df_flat = jnp.take(updates_cat, inv, axis=-2)
         df_full = df_flat.reshape(*lead_shape, Nx, Ny, Nz)
-        return jnp.swapaxes(df_full, -3, -2)
+        out = jnp.swapaxes(df_full, -3, -2)
+        return _restore_linked_real_fft_conjugates(out, covered_rows=covered_rows)
 
     df_flat = jnp.zeros_like(f_flat)
     for idx_flat, df_link in zip(chain_indices, chain_updates):
         df_flat = _scatter_unique(df_flat, idx_flat, df_link)
 
     df_full = df_flat.reshape(*lead_shape, Nx, Ny, Nz)
-    return jnp.swapaxes(df_full, -3, -2)
+    out = jnp.swapaxes(df_full, -3, -2)
+    return _restore_linked_real_fft_conjugates(out, covered_rows=covered_rows)
 
 
 def abs_z_linked_fft(
@@ -215,6 +257,9 @@ def abs_z_linked_fft(
         chain_updates.append(df_link)
         chain_indices.append(idx_flat)
 
+    idx_cat = chain_indices[0] if len(chain_indices) == 1 else jnp.concatenate(chain_indices, axis=0)
+    covered_rows = jnp.zeros((Ny,), dtype=bool).at[jnp.mod(idx_cat, Ny)].set(True)
+
     if linked_use_gather:
         updates_cat = jnp.concatenate(chain_updates, axis=-2)
         gather_map = jnp.asarray(linked_gather_map, dtype=jnp.int32)
@@ -223,7 +268,8 @@ def abs_z_linked_fft(
         mask_shape = (1,) * (updates_full.ndim - 2) + (gather_mask.shape[0], 1)
         updates_full = updates_full * gather_mask.reshape(mask_shape)
         updates_full = updates_full.reshape(*lead_shape, Nx, Ny, Nz)
-        return jnp.swapaxes(updates_full, -3, -2)
+        out = jnp.swapaxes(updates_full, -3, -2)
+        return _restore_linked_real_fft_conjugates(out, covered_rows=covered_rows)
 
     if linked_full_cover:
         if linked_inverse_permutation is None:
@@ -232,14 +278,16 @@ def abs_z_linked_fft(
         inv = jnp.asarray(linked_inverse_permutation, dtype=jnp.int32)
         df_flat = jnp.take(updates_cat, inv, axis=-2)
         df_full = df_flat.reshape(*lead_shape, Nx, Ny, Nz)
-        return jnp.swapaxes(df_full, -3, -2)
+        out = jnp.swapaxes(df_full, -3, -2)
+        return _restore_linked_real_fft_conjugates(out, covered_rows=covered_rows)
 
     df_flat = jnp.zeros_like(f_flat)
     for idx_flat, df_link in zip(chain_indices, chain_updates):
         df_flat = _scatter_unique(df_flat, idx_flat, df_link)
 
     df_full = df_flat.reshape(*lead_shape, Nx, Ny, Nz)
-    return jnp.swapaxes(df_full, -3, -2)
+    out = jnp.swapaxes(df_full, -3, -2)
+    return _restore_linked_real_fft_conjugates(out, covered_rows=covered_rows)
 
 
 def shift_axis(arr: jnp.ndarray, offset: int, axis: int) -> jnp.ndarray:

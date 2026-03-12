@@ -390,6 +390,56 @@ def _build_linked_fft_maps(
     return tuple(linked_indices), tuple(linked_kz)
 
 
+def _build_linked_end_damping_profile(
+    *,
+    linked_indices: tuple[jnp.ndarray, ...],
+    ny: int,
+    nx: int,
+    nz: int,
+    widthfrac: float,
+) -> np.ndarray:
+    """Construct the GX linked-boundary damping profile on the full FFT grid."""
+
+    profile = np.zeros((ny, nx, nz), dtype=float)
+    if not linked_indices or widthfrac <= 0.0 or ny <= 0 or nx <= 0 or nz <= 0:
+        return profile
+    if nx > 1:
+        kx_neg = np.concatenate(([0], np.arange(nx - 1, 0, -1, dtype=np.int32)))
+    else:
+        kx_neg = np.asarray([0], dtype=np.int32)
+
+    for idx_map_j in linked_indices:
+        idx_map = np.asarray(idx_map_j, dtype=np.int32)
+        if idx_map.ndim != 2 or idx_map.size == 0:
+            continue
+        nlinks = int(idx_map.shape[1])
+        width = int(nz * nlinks * float(widthfrac))
+        if width <= 0:
+            continue
+        chain_extent = nz * nlinks
+        for chain in idx_map:
+            for p, idx_flat in enumerate(chain):
+                ky_idx = int(idx_flat % ny)
+                kx_idx = int(idx_flat // ny)
+                if ky_idx == 0:
+                    continue
+                mirror_ky = (-ky_idx) % ny
+                mirror_kx = int(kx_neg[kx_idx])
+                for idz in range(nz):
+                    idzp = idz + nz * p
+                    nu = 0.0
+                    if idzp <= width:
+                        x = float(idzp) / float(width)
+                        nu = 1.0 - 2.0 * x * x / (1.0 + x**4)
+                    elif idzp >= chain_extent - width:
+                        x = float(chain_extent - idzp) / float(width)
+                        nu = 1.0 - 2.0 * x * x / (1.0 + x**4)
+                    profile[ky_idx, kx_idx, idz] = nu
+                    if mirror_ky != ky_idx:
+                        profile[mirror_ky, mirror_kx, idz] = nu
+    return profile
+
+
 def grad_z_periodic(f: jnp.ndarray, dz: float | jnp.ndarray) -> jnp.ndarray:
     """Spectral periodic derivative along the last axis."""
 
@@ -504,6 +554,7 @@ class LinearCache:
     m_pow: jnp.ndarray
     m_norm_kz_factor: jnp.ndarray
     damp_profile: jnp.ndarray
+    linked_damp_profile: jnp.ndarray
     l: jnp.ndarray
     m: jnp.ndarray
     l4: jnp.ndarray
@@ -568,6 +619,7 @@ class LinearCache:
             self.m_pow,
             self.m_norm_kz_factor,
             self.damp_profile,
+            self.linked_damp_profile,
             self.l,
             self.m,
             self.l4,
@@ -612,7 +664,7 @@ class LinearCache:
             linked_full_cover,
             linked_use_gather,
         ) = aux_data
-        base_count = 49
+        base_count = 50
         base_children = children[:base_count]
         linked_idx = tuple(children[base_count : base_count + n_linked_idx])
         linked_kz = tuple(
@@ -830,6 +882,7 @@ def build_linear_cache(
     nu_left = jnp.where(left_mask, 1.0 - 2.0 * x_left * x_left / (1.0 + x_left**4), 0.0)
     nu_right = jnp.where(right_mask, 1.0 - 2.0 * x_right * x_right / (1.0 + x_right**4), 0.0)
     damp_profile = jnp.maximum(nu_left, nu_right).astype(real_dtype)
+    linked_damp_profile = jnp.asarray([], dtype=real_dtype)
     if use_twist_shift:
         iky = jnp.rint(grid.ky * float(y0)).astype(jnp.int32)
         shift = jnp.asarray(jtwist, dtype=jnp.int32) * iky
@@ -887,6 +940,16 @@ def build_linear_cache(
                 linked_gather_map = jnp.asarray(gather_map, dtype=jnp.int32)
                 linked_gather_mask = jnp.asarray(gather_mask, dtype=bool)
                 linked_use_gather = True
+        linked_damp_profile = jnp.asarray(
+            _build_linked_end_damping_profile(
+                linked_indices=linked_indices,
+                ny=int(grid.ky.size),
+                nx=int(grid.kx.size),
+                nz=int(grid.z.size),
+                widthfrac=float(params.damp_ends_widthfrac),
+            ),
+            dtype=real_dtype,
+        )
     return LinearCache(
         Jl=Jl,
         b=b.astype(real_dtype),
@@ -917,6 +980,7 @@ def build_linear_cache(
         m_pow=m_pow.astype(real_dtype),
         m_norm_kz_factor=m_norm_kz_factor.astype(real_dtype),
         damp_profile=damp_profile,
+        linked_damp_profile=linked_damp_profile,
         l=l,
         m=m,
         l4=l4,

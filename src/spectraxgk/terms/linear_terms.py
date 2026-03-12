@@ -419,9 +419,13 @@ def end_damping_contribution(
     *,
     ky: jnp.ndarray,
     damp_profile: jnp.ndarray,
+    linked_damp_profile: jnp.ndarray | None,
     damp_amp: jnp.ndarray,
     weight: jnp.ndarray,
 ) -> jnp.ndarray:
+    if linked_damp_profile is not None and getattr(linked_damp_profile, "size", 0) != 0:
+        damp = weight * damp_amp * linked_damp_profile[None, None, None, ...]
+        return -(damp * H)
     damp = weight * damp_amp * damp_profile[None, None, None, None, None, :]
     ky_mask = (ky > 0.0).astype(damp.dtype)[None, None, None, :, None, None]
     return -(ky_mask * damp * H)

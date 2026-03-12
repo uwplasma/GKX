@@ -20,8 +20,9 @@ checked against the dense `t<=0.2` GX run and the late saturated regime is
 checked by native-grid window statistics on the `t=400` run; the current
 late-window mean/std mismatch is about `5-6%` in `Wg`, heat flux, and particle
 flux. The linear HSX imported-geometry row is intentionally shown as a live
-audit item: the fresh clean-mainline compare is still open and currently points
-to extraction/integrator-contract work rather than a VMEC geometry mismatch.
+audit item: the fresh clean-mainline compare now closes the `kx=0` branch in
+absolute `omega` and `gamma`, but the `Wg_kyst` / `Wphi_kyst` energy
+projection is still under audit.
 
 The current KBM GX mismatch table is stored in
 `docs/_static/kbm_gx_mismatch.csv`.
@@ -192,10 +193,15 @@ python examples/kbm_beta_scan.py --no-diffrax
   (`t>=20`) relative errors are about `7.1%` in `Wg`, `6.1%` in `Wphi`, and
   `2.8%` in heat flux.
 - **Imported HSX geometry (linear audit)**: the clean-mainline linear HSX VMEC
-  compare is not closed yet. The refreshed `t=2` audit currently shows
-  order-unity `gamma/omega` mismatch, which is consistent with the imported
-  linear harness still assuming the wrong time-history extraction/integrator
-  contract for this case rather than a startup or geometry mismatch.
+  compare is not closed yet, but the remaining gap is now narrow. The
+  imported-linear harness now preserves the full GX multimode startup on the
+  imported VMEC grid instead of slicing to one `ky`, uses the explicit GX
+  linear method, and follows the `kx≈0` branch by default unless the GX input
+  explicitly requested a different single-mode seed. On the refreshed `t=2`
+  audit, mean absolute `omega` errors are about `8e-4` to `4e-3` and mean
+  absolute `gamma` errors are about `3e-4` to `5e-3`; the remaining mismatch
+  is in the `Wg_kyst` / `Wphi_kyst` energy projection rather than startup,
+  VMEC geometry, or the linear RHS/update contract.
 - **Secondary slab staged workflow**: the GX `kh01 -> kh01a` slab case runs
   through the unified runtime API and now matches the published GX README
   sideband growth target (`gamma≈4.901835`) on all four nonzero tracked
