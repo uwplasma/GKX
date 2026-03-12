@@ -9,15 +9,19 @@ is the **Cyclone base case** with adiabatic electrons, plus ETG and KBM scans.
 ![GX comparison summary](docs/_static/gx_summary_panel.png)
 
 Summary panel: the tracked README asset now combines the detailed Cyclone/KBM
-subpanel, the closed nonlinear W7-X VMEC parity slice, the matched-horizon HSX
-VMEC parity slice, and the staged secondary slab comparison against a real GX ``kh01a.out.nc`` reference. The Cyclone/KBM subpanel still uses GX-matched
-runtime configs (same integrator family and normalization contract; no manual
-`flux_scale` or `wphi_scale` calibration in the Cyclone config), with long
-nonlinear windows (`t=400` Cyclone and KBM). For the extended nonlinear KBM
-case, startup parity is checked against the dense `t<=0.2` GX run and the late
-saturated regime is checked by native-grid window statistics on the `t=400`
-run; the current late-window mean/std mismatch is about `5-6%` in `Wg`, heat
-flux, and particle flux.
+subpanel, the clean-mainline nonlinear W7-X VMEC refresh, the matched-horizon
+HSX VMEC slice, the staged secondary slab comparison against a real GX
+``kh01a.out.nc`` reference, and the legacy-GX short-horizon cETG comparison.
+The Cyclone/KBM subpanel still uses GX-matched runtime configs (same integrator
+family and normalization contract; no manual `flux_scale` or `wphi_scale`
+calibration in the Cyclone config), with long nonlinear windows (`t=400`
+Cyclone and KBM). For the extended nonlinear KBM case, startup parity is
+checked against the dense `t<=0.2` GX run and the late saturated regime is
+checked by native-grid window statistics on the `t=400` run; the current
+late-window mean/std mismatch is about `5-6%` in `Wg`, heat flux, and particle
+flux. The linear HSX imported-geometry row is intentionally shown as a live
+audit item: the fresh clean-mainline compare is still open and currently points
+to extraction/integrator-contract work rather than a VMEC geometry mismatch.
 
 The current KBM GX mismatch table is stored in
 `docs/_static/kbm_gx_mismatch.csv`.
@@ -167,9 +171,10 @@ python examples/kbm_beta_scan.py --no-diffrax
 - **KBM beta scan**: electromagnetic transition between ITG and KBM branches,
   with GX as the baseline reference for linear and nonlinear diagnostics.
 - **Imported W7-X geometry**: the GX `*.eik.nc` W7-X linear ITG case now
-  matches the corrected GX `t=2` short-window reference with mean absolute
-  `omega` errors around `1e-5` and mean relative `gamma` errors of about
-  `0.4-4%` across `ky=0.1-0.4`.
+  matches the clean-mainline GX `t=2` short-window reference with mean absolute
+  `omega` errors around `1e-5`. The branch closest to marginal (`ky=0.1`)
+  still carries about `1.18e-1` relative `gamma` error, while `ky=0.2-0.4`
+  are within about `1.1-2.7%`.
 - **Nonlinear W7-X exact-state audit**: starting from the exact dumped GX
   nonlinear state at `t≈32.44665203`, the next GX output window
   (`time_index=10 -> 11`) matches to about `1e-4` relative in `Wg`, `Wphi`,
@@ -177,14 +182,20 @@ python examples/kbm_beta_scan.py --no-diffrax
   free run now also passes the native-grid late-window statistical check after
   closing the last evolution-side mismatch: GX excludes the exact
   `|k| = 1/3` shell in the nonlinear de-alias mask, so SPECTRAX now uses the
-  same strict cutoff. Late-window (`t>=20`) mean errors are about `9.7%` in
-  `Wg`, `12.7%` in `Wphi`, and `5.7%` in heat flux.
+  same strict cutoff. On the refreshed clean-mainline GX rerun, late-window
+  (`t>=20`) mean errors are about `9.3%` in `Wg`, `11.6%` in `Wphi`, and
+  `7.6%` in heat flux.
 - **Nonlinear HSX exact-file parity**: the HSX VMEC workflow now uses the same
   GX-backed `vmec -> eik.nc` bridge and the same `wout_HSX_QHS_vac.nc` input
   file for both codes. With the horizon matched at `t=50`, the tracked HSX
   run passes both the early and late statistical windows; late-window
   (`t>=20`) relative errors are about `7.1%` in `Wg`, `6.1%` in `Wphi`, and
   `2.8%` in heat flux.
+- **Imported HSX geometry (linear audit)**: the clean-mainline linear HSX VMEC
+  compare is not closed yet. The refreshed `t=2` audit currently shows
+  order-unity `gamma/omega` mismatch, which is consistent with the imported
+  linear harness still assuming the wrong time-history extraction/integrator
+  contract for this case rather than a startup or geometry mismatch.
 - **Secondary slab staged workflow**: the GX `kh01 -> kh01a` slab case runs
   through the unified runtime API and now matches the published GX README
   sideband growth target (`gamma≈4.901835`) on all four nonzero tracked
@@ -198,7 +209,10 @@ python examples/kbm_beta_scan.py --no-diffrax
   `physics.reduced_model = "cetg"` or `"krehm"`, and the runtime rejects them
   explicitly with `NotImplementedError` instead of silently routing those GX
   reduced-model benchmarks through the wrong full-GK slab equations. The GX
-  contract is parsed and test-covered, ready for the dedicated solver path.
+  contract is parsed and test-covered, ready for the dedicated solver path. The
+  first honest legacy-GX `cetg_smoke.nc` compare is now tracked in the summary
+  panel; over the leading finite overlap (`t≈0.052`), mean relative errors are
+  about `0.61` in `W/Phi2` and `0.21` in heat flux.
 
 ## Figures
 
