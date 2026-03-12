@@ -26,6 +26,7 @@ class CETGModelParams:
     tau_fac: float
     z_ion: float
     gradpar: float
+    z0: float
     c1: float
     C12: float
     C23: float
@@ -75,6 +76,8 @@ def build_cetg_model_params(
     """Build the GX cETG coefficient set from the runtime config."""
 
     validate_cetg_runtime_config(cfg, geom, Nl=Nl, Nm=Nm)
+    if not isinstance(geom, SlabGeometry):
+        raise ValueError("GX cETG currently requires geometry.model='slab'")
     kinetic = tuple(s for s in cfg.species if bool(s.kinetic))
     electron = kinetic[0]
     z_ion = float(cfg.physics.z_ion)
@@ -91,6 +94,7 @@ def build_cetg_model_params(
         tau_fac=tau_fac,
         z_ion=z_ion,
         gradpar=float(geom.gradpar()),
+        z0=float(geom.z0) if geom.z0 is not None else float(1.0 / float(geom.gradpar())),
         c1=float(c1),
         C12=float(C12),
         C23=float(C23),
@@ -204,14 +208,14 @@ def cetg_fields(
 
 def _cetg_linear_rhs(
     G: jnp.ndarray,
+    fields: FieldState,
+    terms: TermConfig,
     grid: SpectralGrid,
     params: CETGModelParams,
-    terms: TermConfig,
 ) -> jnp.ndarray:
     G_int = _to_internal_state(G)
     density = G_int[0]
     temperature = G_int[1]
-    fields = cetg_fields(G_int, grid, params)
     phi = fields.phi
     gpar2 = jnp.asarray(params.gradpar * params.gradpar, dtype=jnp.real(G_int).dtype)
     c1 = jnp.asarray(params.c1, dtype=jnp.real(G_int).dtype)
@@ -237,13 +241,13 @@ def _cetg_linear_rhs(
 
 def _cetg_nonlinear_rhs(
     G: jnp.ndarray,
+    fields: FieldState,
     grid: SpectralGrid,
-    params: CETGModelParams,
     *,
     gx_real_fft: bool,
 ) -> jnp.ndarray:
     G_int = _to_internal_state(G)
-    phi = cetg_fields(G_int, grid, params).phi
+    phi = fields.phi
     bracket = _spectral_bracket_multi(
         G_int,
         phi[None, ...],
@@ -265,17 +269,18 @@ def cetg_rhs(
     terms: TermConfig,
     *,
     gx_real_fft: bool,
+    fields_override: FieldState | None = None,
 ) -> tuple[jnp.ndarray, FieldState]:
     """Return the full cETG RHS and the electrostatic fields."""
 
     G_int = _to_internal_state(G)
-    fields = cetg_fields(G_int, grid, params)
-    rhs = _cetg_linear_rhs(G_int, grid, params, terms)
+    fields = cetg_fields(G_int, grid, params) if fields_override is None else fields_override
+    rhs = _cetg_linear_rhs(G_int, fields, terms, grid, params)
     if float(terms.nonlinear) != 0.0:
         rhs = rhs + jnp.asarray(float(terms.nonlinear), dtype=jnp.real(rhs).dtype) * _cetg_nonlinear_rhs(
             G_int,
+            fields,
             grid,
-            params,
             gx_real_fft=gx_real_fft,
         )
     rhs = _project_state(rhs, grid, gx_real_fft=gx_real_fft)
@@ -286,8 +291,8 @@ def _cetg_linear_omega_max(grid: SpectralGrid, params: CETGModelParams) -> float
     ny = int(grid.ky.size)
     nz = int(grid.z.size)
     ky_max = float(abs(np.asarray(grid.ky, dtype=float)[(ny - 1) // 3])) if ny > 1 else 0.0
-    z0 = abs(float(params.gradpar))
-    kz_max = (float(nz) / 3.0) * z0
+    z0 = abs(float(params.z0))
+    kz_max = (float(nz) / 3.0) * float(params.gradpar) / z0
     cfac = 0.5 * float(params.c1) * float(np.sqrt(1.0 + (params.C12 - 1.0)))
     return float(cfac * np.sqrt(max(ky_max, 0.0)) * kz_max)
 
@@ -456,9 +461,16 @@ def integrate_cetg_gx_diagnostics_state(
     )
 
     def step(carry, idx):
-        G_state, phi_prev, diag_prev, t_prev, dt_prev = carry
-        dG, fields = rhs_fn(G_state)
-        dt_local = _update_dt(fields, dt_prev)
+        G_state, fields_state, phi_prev, diag_prev, t_prev, dt_prev = carry
+        dt_local = _update_dt(fields_state, dt_prev)
+        dG, _fields_used = cetg_rhs(
+            G_state,
+            grid,
+            params,
+            terms,
+            gx_real_fft=gx_real_fft,
+            fields_override=fields_state,
+        )
         if method == "euler":
             G_new = G_state + dt_local * dG
         elif method == "rk2":
@@ -565,12 +577,12 @@ def integrate_cetg_gx_diagnostics_state(
 
         do_diag = (idx % int(max(diagnostics_stride, 1))) == 0
         diag = jax.lax.cond(do_diag, _compute_diag, _reuse_diag, operand=None)
-        return (G_new, fields_new.phi, diag, t_new, dt_local), (diag, t_new, dt_local)
+        return (G_new, fields_new, fields_new.phi, diag, t_new, dt_local), (diag, t_new, dt_local)
 
     idx = jnp.arange(steps, dtype=jnp.int32)
-    (G_final, phi_last, _diag_last, _t_last, _dt_last), diag_out = jax.lax.scan(
+    (G_final, fields_last, phi_last, _diag_last, _t_last, _dt_last), diag_out = jax.lax.scan(
         step,
-        (G0_int, fields0.phi, diag_zero, jnp.asarray(0.0, dtype=real_dtype), dt0),
+        (G0_int, fields0, fields0.phi, diag_zero, jnp.asarray(0.0, dtype=real_dtype), dt0),
         idx,
         length=steps,
     )
@@ -608,4 +620,4 @@ def integrate_cetg_gx_diagnostics_state(
         particle_flux_species_t=pflux_s_t,
         phi_mode_t=phi_mode_t,
     )
-    return t, diag_out_final, _from_internal_state(G_final), FieldState(phi=phi_last, apar=None, bpar=None)
+    return t, diag_out_final, _from_internal_state(G_final), FieldState(phi=fields_last.phi, apar=None, bpar=None)
