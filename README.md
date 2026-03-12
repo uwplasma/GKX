@@ -6,23 +6,15 @@ Hermite-Laguerre velocity-space representation with Fourier perpendicular
 coordinates in a field-aligned flux-tube geometry. The initial validation target
 is the **Cyclone base case** with adiabatic electrons, plus ETG and KBM scans.
 
-![GX comparison summary](docs/_static/gx_summary_panel.png)
+![GX publication validation panel](docs/_static/gx_publication_panel.png)
 
-Summary panel: the tracked README asset now combines the detailed Cyclone/KBM
-subpanel, the clean-mainline nonlinear W7-X VMEC refresh, the matched-horizon
-HSX VMEC slice, the staged secondary slab comparison against a real GX
-``kh01a.out.nc`` reference, and the legacy-GX short-horizon cETG comparison.
-The Cyclone/KBM subpanel still uses GX-matched runtime configs (same integrator
-family and normalization contract; no manual `flux_scale` or `wphi_scale`
-calibration in the Cyclone config), with long nonlinear windows (`t=400`
-Cyclone and KBM). For the extended nonlinear KBM case, startup parity is
-checked against the dense `t<=0.2` GX run and the late saturated regime is
-checked by native-grid window statistics on the `t=400` run; the current
-late-window mean/std mismatch is about `5-6%` in `Wg`, heat flux, and particle
-flux. The linear HSX imported-geometry row now reflects the refreshed
-clean-mainline closure: the tracked `kx=0` branch matches in absolute `omega`
-and `gamma`, and the `Wg_kyst` / `Wphi_kyst` projections are down to
-single-digit-percent relative error on the `t=2` audit.
+Publication validation panel: the tracked primary asset now focuses only on
+the main GX-parity benchmark families used for the core validation claim:
+Cyclone, KBM, W7-X, and HSX. The tokamak subpanel keeps the current
+GX-matched Cyclone/KBM benchmark stack, while the stellarator rows show the
+clean-mainline W7-X and HSX linear/nonlinear closures. Reduced-model and staged
+slab cases are intentionally excluded from this primary figure so the headline
+validation claim stays tied to the production full-GK path.
 
 The current KBM GX mismatch table is stored in
 `docs/_static/kbm_gx_mismatch.csv`.
@@ -298,9 +290,9 @@ Cross-code mismatch (same ETG setup above):
 | Fit policy (cross-code) | mode extracted at the selected ky/kx with midplane-aware signal extraction, log-linear auto-windowing |
 | Reference | GX matched-input electromagnetic ky scan |
 
-GX validation summary:
+GX publication validation panel:
 
-![GX validation summary panel](docs/_static/gx_summary_panel.png)
+![GX publication validation panel](docs/_static/gx_publication_panel.png)
 
 KBM GX matched-input set (reference plumbing):
 
