@@ -1378,16 +1378,78 @@ def run_runtime_nonlinear(
         dt_val = float(cfg.time.dt if dt is None else dt)
         if dt_val <= 0.0:
             raise ValueError("dt must be > 0")
-        if steps is None:
-            steps_val = int(round(float(cfg.time.t_max) / dt_val))
-        else:
-            steps_val = int(steps)
-        if steps_val < 1:
-            raise ValueError("steps must be >= 1")
         cetg_params = build_cetg_model_params(cfg, geom, Nl=Nl_use, Nm=Nm_use)
         cetg_term_cfg = build_runtime_term_config(cfg)
         sample_stride_use = cfg.time.sample_stride if sample_stride is None else int(sample_stride)
         diag_stride = cfg.time.diagnostics_stride if diagnostics_stride is None else int(diagnostics_stride)
+        diagnostics_on = cfg.time.diagnostics if diagnostics is None else bool(diagnostics)
+        adaptive_chunked = steps is None and not bool(cfg.time.fixed_dt)
+        if adaptive_chunked:
+            chunk_steps = 1024
+            G_chunk = G0
+            t_elapsed = 0.0
+            cetg_diag_chunks: list[GXDiagnostics] = []
+            cetg_fields_final: FieldState | None = None
+            for _chunk in range(100000):
+                _t_chunk, diag_chunk, G_chunk, cetg_fields_final = integrate_cetg_gx_diagnostics_state(
+                    G_chunk,
+                    grid,
+                    cetg_params,
+                    cetg_term_cfg,
+                    dt=dt_val,
+                    steps=chunk_steps,
+                    method=str(method or cfg.time.method),
+                    sample_stride=1,
+                    diagnostics_stride=1,
+                    gx_real_fft=bool(cfg.time.gx_real_fft),
+                    omega_ky_index=int(ky_index),
+                    omega_kx_index=int(kx_index),
+                    fixed_dt=False,
+                    dt_min=float(cfg.time.dt_min),
+                    dt_max=cfg.time.dt_max,
+                    cfl=float(cfg.time.cfl),
+                    cfl_fac=cfg.time.cfl_fac,
+                )
+                diag_chunk = replace(diag_chunk, t=np.asarray(diag_chunk.t) + t_elapsed)
+                cetg_diag_chunks.append(diag_chunk)
+                t_next = float(np.asarray(diag_chunk.t)[-1])
+                if t_next <= t_elapsed + 1.0e-12:
+                    raise RuntimeError("adaptive cETG runtime made no time-step progress")
+                t_elapsed = t_next
+                if t_elapsed >= float(cfg.time.t_max):
+                    break
+            else:
+                raise RuntimeError("adaptive cETG runtime exceeded chunk limit before reaching t_max")
+
+            diag = _concat_gx_diagnostics(cetg_diag_chunks)
+            diag = _truncate_gx_diagnostics(diag, t_max=float(cfg.time.t_max))
+            G_final = G_chunk
+            if cetg_fields_final is None:
+                raise RuntimeError("adaptive cETG runtime did not produce final fields")
+            if diagnostics_on is False:
+                phi2 = np.asarray(jnp.mean(jnp.abs(cetg_fields_final.phi) ** 2))
+                return RuntimeNonlinearResult(
+                    t=np.asarray([]),
+                    diagnostics=None,
+                    phi2=phi2,
+                    fields=cetg_fields_final,
+                    state=np.asarray(G_final) if return_state else None,
+                    ky_selected=float(np.asarray(grid.ky[ky_index])),
+                    kx_selected=float(np.asarray(grid.kx[kx_index])),
+                )
+            return RuntimeNonlinearResult(
+                t=np.asarray(diag.t),
+                diagnostics=diag,
+                phi2=None,
+                fields=None,
+                state=np.asarray(G_final) if return_state else None,
+                ky_selected=float(np.asarray(grid.ky[ky_index])),
+                kx_selected=float(np.asarray(grid.kx[kx_index])),
+            )
+
+        steps_val = int(round(float(cfg.time.t_max) / dt_val)) if steps is None else int(steps)
+        if steps_val < 1:
+            raise ValueError("steps must be >= 1")
         _t, diag, G_final, cetg_fields_final = integrate_cetg_gx_diagnostics_state(
             G0,
             grid,
@@ -1407,7 +1469,7 @@ def run_runtime_nonlinear(
             cfl=float(cfg.time.cfl),
             cfl_fac=cfg.time.cfl_fac,
         )
-        if diagnostics is False:
+        if diagnostics_on is False:
             phi2 = np.asarray(jnp.mean(jnp.abs(cetg_fields_final.phi) ** 2))
             return RuntimeNonlinearResult(
                 t=np.asarray([]),

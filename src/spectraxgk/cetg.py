@@ -511,15 +511,22 @@ def integrate_cetg_gx_diagnostics_state(
             k4, _ = rhs_fn(G4)
             G_new = G_state + (dt_local / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
         elif method == "sspx3":
-            def _sspx3_euler_step(G_stage: jnp.ndarray) -> jnp.ndarray:
-                dG_stage, _ = rhs_fn(G_stage)
+            def _sspx3_euler_step(
+                G_stage: jnp.ndarray,
+                dG_stage: jnp.ndarray | None = None,
+            ) -> jnp.ndarray:
+                if dG_stage is None:
+                    dG_stage, _ = rhs_fn(G_stage)
                 return _project_state(
                     G_stage + (_SSPX3_ADT * dt_local) * dG_stage,
                     grid,
                     gx_real_fft=gx_real_fft,
                 )
 
-            G1 = _sspx3_euler_step(G_state)
+            # The first SSPx3 Euler substep must use the carried field state that
+            # was already used to pick the adaptive timestep, matching GX's
+            # Timestepper::advance contract.
+            G1 = _sspx3_euler_step(G_state, dG)
             G2_euler = _sspx3_euler_step(G1)
             G2 = _project_state(
                 (1.0 - _SSPX3_W1) * G_state + (_SSPX3_W1 - 1.0) * G1 + G2_euler,
