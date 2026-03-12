@@ -71,7 +71,7 @@ class RuntimeCollisionConfig:
     hypercollisions_kz: float = 1.0
     damp_ends_amp: float = 0.1
     damp_ends_widthfrac: float = 0.125
-    damp_ends_scale_by_dt: bool = True
+    damp_ends_scale_by_dt: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

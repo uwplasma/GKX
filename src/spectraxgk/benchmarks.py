@@ -1231,9 +1231,6 @@ def run_cyclone_linear(
             return gamma, omega, np.asarray(phi_t), np.asarray(t)
 
         params_use = params
-        if params_use.damp_ends_amp != 0.0 and terms.end_damping != 0.0:
-            params_use = replace(params_use, damp_ends_amp=params_use.damp_ends_amp / float(dt))
-
         if time_cfg_use is not None:
             if need_density:
                 _, saved = integrate_linear_from_config(
@@ -1945,9 +1942,6 @@ def run_cyclone_scan(
                 time_cfg_i = replace(time_cfg_i, sample_stride=sample_stride)
 
         params_use = params
-        if params_use.damp_ends_amp != 0.0 and terms.end_damping != 0.0:
-            params_use = replace(params_use, damp_ends_amp=params_use.damp_ends_amp / dt_i)
-
         if time_cfg_i is not None and time_cfg_i.use_diffrax and streaming_fit:
             t_total = float(time_cfg_i.t_max)
             tmin_i, tmax_i = _resolve_streaming_window(
@@ -2876,9 +2870,6 @@ def run_etg_scan(
                 time_cfg_i = replace(time_cfg_i, sample_stride=sample_stride)
 
         params_use = params
-        if params_use.damp_ends_amp != 0.0 and terms.end_damping != 0.0:
-            params_use = replace(params_use, damp_ends_amp=params_use.damp_ends_amp / dt_i)
-
         if time_cfg_i is not None and time_cfg_i.use_diffrax and streaming_fit:
             t_total = float(time_cfg_i.t_max)
             tmin_i, tmax_i = _resolve_streaming_window(
@@ -3552,9 +3543,6 @@ def run_kinetic_scan(
                 time_cfg_i = replace(time_cfg_i, sample_stride=sample_stride)
 
         params_use = params
-        if params_use.damp_ends_amp != 0.0 and terms.end_damping != 0.0:
-            params_use = replace(params_use, damp_ends_amp=params_use.damp_ends_amp / dt_i)
-
         if time_cfg_i is not None and time_cfg_i.use_diffrax and streaming_fit:
             t_total = float(time_cfg_i.t_max)
             tmin_i, tmax_i = _resolve_streaming_window(
@@ -4118,9 +4106,6 @@ def run_tem_scan(
                 time_cfg_i = replace(time_cfg_i, sample_stride=sample_stride)
 
         params_use = params
-        if params_use.damp_ends_amp != 0.0 and terms.end_damping != 0.0:
-            params_use = replace(params_use, damp_ends_amp=params_use.damp_ends_amp / dt_i)
-
         if time_cfg_i is not None and time_cfg_i.use_diffrax and streaming_fit:
             t_total = float(time_cfg_i.t_max)
             tmin_i, tmax_i = _resolve_streaming_window(
@@ -4540,9 +4525,6 @@ def run_kbm_beta_scan(
                     time_cfg_i = replace(time_cfg_i, sample_stride=sample_stride)
 
             params_use = params
-            if params_use.damp_ends_amp != 0.0 and terms.end_damping != 0.0:
-                params_use = replace(params_use, damp_ends_amp=params_use.damp_ends_amp / dt_i)
-
             if time_cfg_i is not None and time_cfg_i.use_diffrax and streaming_fit:
                 t_total = float(time_cfg_i.t_max)
                 tmin_i, tmax_i = _resolve_streaming_window(
@@ -5100,9 +5082,6 @@ def run_kbm_linear(
         if sample_stride is not None:
             time_cfg_use = replace(time_cfg_use, sample_stride=stride)
     params_use = params
-    if params_use.damp_ends_amp != 0.0 and terms.end_damping != 0.0:
-        params_use = replace(params_use, damp_ends_amp=params_use.damp_ends_amp / dt)
-
     if time_cfg_use is not None:
         stride = int(time_cfg_use.sample_stride)
         if time_cfg_use.use_diffrax:
