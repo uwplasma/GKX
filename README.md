@@ -16,9 +16,10 @@ the clean-mainline W7-X and HSX linear/nonlinear closures. Reduced-model and
 staged slab cases are intentionally excluded from this primary figure so the
 headline validation claim stays tied to the production full-GK path. The
 clean-mainline nonlinear Cyclone Miller lane now passes on the matched
-`t≈122` horizon, but the publication tokamak subpanel has not been switched
-over yet because the linear tokamak row still needs the same clean Miller
-refresh.
+`t≈122` horizon, and the clean-mainline linear Cyclone Miller scan now closes
+on the tracked late-sample `gamma/omega` branch. The remaining tokamak work is
+publication plumbing: switching the panel builder over from the older matched
+`s-alpha` assets to the tracked clean-mainline Miller assets.
 
 The current KBM GX mismatch table is stored in
 `docs/_static/kbm_gx_mismatch.csv`.
