@@ -24,6 +24,24 @@ class GXLegacyCetgOutput:
     pflux: np.ndarray
 
 
+_NETCDF_FILL_FLOAT = np.float64(9.969209968386869e36)
+
+
+def _read_var(group, name: str) -> np.ndarray:
+    return np.asarray(group.variables[name][:], dtype=float)
+
+
+def _looks_like_fill(arr: np.ndarray) -> bool:
+    arr_f = np.asarray(arr, dtype=float)
+    if arr_f.size == 0:
+        return True
+    finite = np.isfinite(arr_f)
+    if not np.any(finite):
+        return True
+    vals = arr_f[finite]
+    return bool(np.all(np.abs(vals) >= 0.99 * _NETCDF_FILL_FLOAT))
+
+
 def load_gx_legacy_cetg_output(path: str | Path) -> GXLegacyCetgOutput:
     """Load the grouped legacy GX cETG NetCDF format."""
 
@@ -36,6 +54,18 @@ def load_gx_legacy_cetg_output(path: str | Path) -> GXLegacyCetgOutput:
     try:
         spectra = root.groups["Spectra"]
         fluxes = root.groups["Fluxes"]
+        W = _read_var(spectra, "W")
+        if _looks_like_fill(W):
+            Wkx = _read_var(spectra, "Wkxst")
+            W = np.sum(Wkx, axis=tuple(range(1, Wkx.ndim)))
+        Phi2 = _read_var(spectra, "Phi2t")
+        if _looks_like_fill(Phi2):
+            Phi2kx = _read_var(spectra, "Phi2kxt")
+            Phi2 = np.sum(Phi2kx, axis=tuple(range(1, Phi2kx.ndim)))
+        qflux = _read_var(fluxes, "qflux")
+        pflux = _read_var(fluxes, "pflux")
+        if _looks_like_fill(pflux):
+            pflux = np.zeros_like(qflux)
         return GXLegacyCetgOutput(
             time=np.asarray(root.variables["time"][:], dtype=float),
             ky=np.asarray(root.variables["ky"][:], dtype=float),
@@ -43,10 +73,10 @@ def load_gx_legacy_cetg_output(path: str | Path) -> GXLegacyCetgOutput:
             kz=np.asarray(root.variables["kz"][:], dtype=float),
             x=np.asarray(root.variables["x"][:], dtype=float),
             y=np.asarray(root.variables["y"][:], dtype=float),
-            W=np.asarray(spectra.variables["W"][:], dtype=float),
-            Phi2=np.asarray(spectra.variables["Phi2t"][:], dtype=float),
-            qflux=np.asarray(fluxes.variables["qflux"][:], dtype=float),
-            pflux=np.asarray(fluxes.variables["pflux"][:], dtype=float),
+            W=W,
+            Phi2=Phi2,
+            qflux=qflux,
+            pflux=pflux,
         )
     finally:
         root.close()
