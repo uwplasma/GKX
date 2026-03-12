@@ -132,6 +132,19 @@ def _gx_init_mode_pairs(grid: SpectralGrid) -> list[tuple[int, int]]:
     return [(int(kx_i), int(ky_i)) for kx_i in range(kx_max) for ky_i in range(1, ky_max)]
 
 
+def _gx_periodic_zp(z: np.ndarray) -> float:
+    """Return GX's periodic ``Zp`` from the discrete theta grid."""
+
+    z_arr = np.asarray(z, dtype=float)
+    if z_arr.size <= 1:
+        return 1.0
+    dz = float(z_arr[1] - z_arr[0])
+    period = abs(dz) * float(z_arr.size)
+    if period <= 0.0:
+        return 1.0
+    return period / (2.0 * np.pi)
+
+
 def _select_nonlinear_mode_indices(
     grid: SpectralGrid,
     *,
@@ -621,9 +634,7 @@ def _build_initial_condition(
     ky_val = float(grid.ky[ky_index])
 
     z = np.asarray(grid.z)
-    z_min = float(z.min())
-    z_max = float(z.max())
-    z_period = (z_max - z_min) / (2.0 * np.pi) if z_max > z_min else 1.0
+    z_period = _gx_periodic_zp(z)
     z_phase = np.cos(float(cfg.init.kpar_init) * z / z_period)
     if cfg.init.gaussian_init:
         profile = _build_gaussian_profile(
@@ -706,9 +717,7 @@ def _build_initial_condition(
                 l_idx, m_idx = field_map[init_field]
                 _set_mode(l_idx, m_idx, ky_i, kx_neg, vals_k)
     elif not cfg.init.init_single and not cfg.init.gaussian_init:
-        z_min = float(z.min())
-        z_max = float(z.max())
-        Zp = (z_max - z_min) / (2.0 * np.pi) if z_max > z_min else 1.0
+        Zp = _gx_periodic_zp(z)
         kpar = float(cfg.init.kpar_init)
         z_phase = np.cos(kpar * z / Zp)
         nx = grid.kx.size
