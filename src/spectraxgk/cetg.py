@@ -141,7 +141,9 @@ def _apply_kz_filter(arr: jnp.ndarray, grid: SpectralGrid, *, dealias_kz: bool) 
         return arr
     arr_k = jnp.fft.fft(arr, axis=-1)
     mask = _kz_mask(grid, arr_k.real.dtype, dealias_kz=True)
-    return jnp.fft.ifft(arr_k * mask, axis=-1)
+    # Legacy GX periodic-z dealias uses CUFFT forward/inverse pairs without
+    # the 1/N rescale on the inverse, so the filtered field carries an Nz factor.
+    return jnp.fft.ifft(arr_k * mask, axis=-1) * jnp.asarray(float(grid.z.size), dtype=arr_k.real.dtype)
 
 
 def _dz2(arr: jnp.ndarray, grid: SpectralGrid) -> jnp.ndarray:
@@ -161,11 +163,9 @@ def _project_state(
     grid: SpectralGrid,
     *,
     gx_real_fft: bool,
-    dealias_kz: bool,
 ) -> jnp.ndarray:
     G_proj = jnp.asarray(G)
     G_proj = G_proj * _xy_mask(grid, jnp.real(G_proj).dtype)
-    G_proj = _apply_kz_filter(G_proj, grid, dealias_kz=dealias_kz)
 
     if not _use_hermitian_reconstruction(grid, gx_real_fft=gx_real_fft):
         return G_proj
@@ -189,13 +189,16 @@ def cetg_fields(
     G: jnp.ndarray,
     grid: SpectralGrid,
     params: CETGModelParams,
+    *,
+    apply_kz_dealias: bool = True,
 ) -> FieldState:
     """Solve the cETG electrostatic field equation."""
 
     G_int = _to_internal_state(G)
     phi = -jnp.asarray(params.tau_fac, dtype=jnp.real(G_int).dtype) * G_int[0]
     phi = phi * _xy_mask(grid, jnp.real(phi).dtype)[0]
-    phi = _apply_kz_filter(phi, grid, dealias_kz=params.dealias_kz)
+    if apply_kz_dealias:
+        phi = _apply_kz_filter(phi, grid, dealias_kz=params.dealias_kz)
     return FieldState(phi=phi, apar=None, bpar=None)
 
 
@@ -228,7 +231,8 @@ def _cetg_linear_rhs(
             k2 ** jnp.asarray(params.nu_hyper, dtype=jnp.real(G_int).dtype)
         )
         rhs = rhs - jnp.asarray(float(terms.hyperdiffusion), dtype=jnp.real(G_int).dtype) * Dfac[None, ...] * G_int
-    return rhs * _xy_mask(grid, jnp.real(rhs).dtype)
+    rhs = rhs * _xy_mask(grid, jnp.real(rhs).dtype)
+    return _apply_kz_filter(rhs, grid, dealias_kz=params.dealias_kz)
 
 
 def _cetg_nonlinear_rhs(
@@ -251,7 +255,7 @@ def _cetg_nonlinear_rhs(
     )[0]
     bracket = 0.5 * bracket
     bracket = bracket * _xy_mask(grid, jnp.real(bracket).dtype)
-    return _apply_kz_filter(bracket, grid, dealias_kz=params.dealias_kz)
+    return bracket
 
 
 def cetg_rhs(
@@ -274,7 +278,7 @@ def cetg_rhs(
             params,
             gx_real_fft=gx_real_fft,
         )
-    rhs = _project_state(rhs, grid, gx_real_fft=gx_real_fft, dealias_kz=params.dealias_kz)
+    rhs = _project_state(rhs, grid, gx_real_fft=gx_real_fft)
     return rhs, fields
 
 
@@ -413,7 +417,7 @@ def integrate_cetg_gx_diagnostics_state(
     if method not in {"euler", "rk2", "rk3", "rk3_classic", "rk3_gx", "rk4", "k10", "sspx3"}:
         raise ValueError("Unsupported explicit cETG method")
 
-    G0_int = _project_state(_to_internal_state(G0), grid, gx_real_fft=gx_real_fft, dealias_kz=params.dealias_kz)
+    G0_int = _project_state(_to_internal_state(G0), grid, gx_real_fft=gx_real_fft)
     state_dtype = jnp.result_type(G0_int, jnp.complex64)
     real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
     dt_init = jnp.asarray(dt, dtype=real_dtype)
@@ -436,7 +440,7 @@ def integrate_cetg_gx_diagnostics_state(
     def rhs_fn(G_state: jnp.ndarray) -> tuple[jnp.ndarray, FieldState]:
         return cetg_rhs(G_state, grid, params, terms, gx_real_fft=gx_real_fft)
 
-    fields0 = cetg_fields(G0_int, grid, params)
+    fields0 = cetg_fields(G0_int, grid, params, apply_kz_dealias=False)
     dt0 = _update_dt(fields0, dt_init)
     diag_zero = _compute_cetg_diag(
         G0_int,
@@ -459,41 +463,39 @@ def integrate_cetg_gx_diagnostics_state(
             G_new = G_state + dt_local * dG
         elif method == "rk2":
             k1 = dG
-            G_half = _project_state(G_state + 0.5 * dt_local * k1, grid, gx_real_fft=gx_real_fft, dealias_kz=params.dealias_kz)
+            G_half = _project_state(G_state + 0.5 * dt_local * k1, grid, gx_real_fft=gx_real_fft)
             k2, _ = rhs_fn(G_half)
             G_new = G_state + dt_local * k2
         elif method == "rk3_classic":
             k1 = dG
-            G1 = _project_state(G_state + dt_local * k1, grid, gx_real_fft=gx_real_fft, dealias_kz=params.dealias_kz)
+            G1 = _project_state(G_state + dt_local * k1, grid, gx_real_fft=gx_real_fft)
             k2, _ = rhs_fn(G1)
             G2 = _project_state(
                 0.75 * G_state + 0.25 * (G1 + dt_local * k2),
                 grid,
                 gx_real_fft=gx_real_fft,
-                dealias_kz=params.dealias_kz,
             )
             k3, _ = rhs_fn(G2)
             G_new = (1.0 / 3.0) * G_state + (2.0 / 3.0) * (G2 + dt_local * k3)
         elif method in {"rk3", "rk3_gx"}:
             k1 = dG
-            G1 = _project_state(G_state + (dt_local / 3.0) * k1, grid, gx_real_fft=gx_real_fft, dealias_kz=params.dealias_kz)
+            G1 = _project_state(G_state + (dt_local / 3.0) * k1, grid, gx_real_fft=gx_real_fft)
             k2, _ = rhs_fn(G1)
             G2 = _project_state(
                 G_state + (2.0 * dt_local / 3.0) * k2,
                 grid,
                 gx_real_fft=gx_real_fft,
-                dealias_kz=params.dealias_kz,
             )
             k3, _ = rhs_fn(G2)
-            G3 = _project_state(G_state + 0.75 * dt_local * k3, grid, gx_real_fft=gx_real_fft, dealias_kz=params.dealias_kz)
+            G3 = _project_state(G_state + 0.75 * dt_local * k3, grid, gx_real_fft=gx_real_fft)
             G_new = G3 + 0.25 * dt_local * k1
         elif method == "rk4":
             k1 = dG
-            G2 = _project_state(G_state + 0.5 * dt_local * k1, grid, gx_real_fft=gx_real_fft, dealias_kz=params.dealias_kz)
+            G2 = _project_state(G_state + 0.5 * dt_local * k1, grid, gx_real_fft=gx_real_fft)
             k2, _ = rhs_fn(G2)
-            G3 = _project_state(G_state + 0.5 * dt_local * k2, grid, gx_real_fft=gx_real_fft, dealias_kz=params.dealias_kz)
+            G3 = _project_state(G_state + 0.5 * dt_local * k2, grid, gx_real_fft=gx_real_fft)
             k3, _ = rhs_fn(G3)
-            G4 = _project_state(G_state + dt_local * k3, grid, gx_real_fft=gx_real_fft, dealias_kz=params.dealias_kz)
+            G4 = _project_state(G_state + dt_local * k3, grid, gx_real_fft=gx_real_fft)
             k4, _ = rhs_fn(G4)
             G_new = G_state + (dt_local / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
         elif method == "sspx3":
@@ -503,7 +505,6 @@ def integrate_cetg_gx_diagnostics_state(
                     G_stage + (_SSPX3_ADT * dt_local) * dG_stage,
                     grid,
                     gx_real_fft=gx_real_fft,
-                    dealias_kz=params.dealias_kz,
                 )
 
             G1 = _sspx3_euler_step(G_state)
@@ -512,7 +513,6 @@ def integrate_cetg_gx_diagnostics_state(
                 (1.0 - _SSPX3_W1) * G_state + (_SSPX3_W1 - 1.0) * G1 + G2_euler,
                 grid,
                 gx_real_fft=gx_real_fft,
-                dealias_kz=params.dealias_kz,
             )
             G3 = _sspx3_euler_step(G2)
             G_new = (
@@ -528,7 +528,6 @@ def integrate_cetg_gx_diagnostics_state(
                     G_stage + (dt_local / 6.0) * dG_stage,
                     grid,
                     gx_real_fft=gx_real_fft,
-                    dealias_kz=params.dealias_kz,
                 )
 
             G_q1 = G_state
@@ -542,7 +541,7 @@ def integrate_cetg_gx_diagnostics_state(
             dG_final, _ = rhs_fn(G_q1)
             G_new = G_q2 + 0.6 * G_q1 + 0.1 * dt_local * dG_final
 
-        G_new = _project_state(G_new, grid, gx_real_fft=gx_real_fft, dealias_kz=params.dealias_kz)
+        G_new = _project_state(G_new, grid, gx_real_fft=gx_real_fft)
         G_new = jnp.asarray(G_new, dtype=state_dtype)
         t_new = jnp.asarray(t_prev + dt_local, dtype=real_dtype)
         fields_new = cetg_fields(G_new, grid, params)

@@ -29,6 +29,7 @@ class GXLegacyCetgRestart:
     """Legacy GX cETG restart state in GX's positive-ky in-memory layout."""
 
     time: float
+    state_active: np.ndarray
     state_positive_ky: np.ndarray
     nakx_active: int
     naky_active: int
@@ -111,9 +112,10 @@ def load_gx_legacy_cetg_restart(
                 f"got {raw.shape}"
             )
         nyc_full = int(ny_full) // 2 + 1
-        state = np.zeros((1, nl, 1, nyc_full, int(nx_full), int(nz)), dtype=np.complex64)
         G_complex = raw[..., 0] + 1j * raw[..., 1]
         G_complex = G_complex[0, 0]  # (Nl, Nz, Nkx, Nky)
+        state_active = np.transpose(G_complex, (0, 3, 2, 1))[None, :, None, :, :, :]
+        state = np.zeros((1, nl, 1, nyc_full, int(nx_full), int(nz)), dtype=np.complex64)
 
         expected_nakx = _legacy_active_kx_count(nx_full)
         expected_naky = _legacy_active_ky_count(ny_full)
@@ -136,6 +138,7 @@ def load_gx_legacy_cetg_restart(
         time = float(time_var.reshape(-1)[0]) if time_var.size else 0.0
         return GXLegacyCetgRestart(
             time=time,
+            state_active=state_active,
             state_positive_ky=state,
             nakx_active=int(nakx),
             naky_active=int(naky),
