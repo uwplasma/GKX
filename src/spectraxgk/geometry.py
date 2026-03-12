@@ -547,6 +547,41 @@ def load_gx_geometry_netcdf(path: str | Path) -> FluxTubeGeometryData:
                 return arr
         raise KeyError(names[0])
 
+    def _infer_root_theta_closed_interval(theta: np.ndarray, variables) -> bool:
+        """Infer whether a root-level GX ``*.eik.nc`` file includes a terminal theta endpoint.
+
+        VMEC-style ``*.eik.nc`` files often include the periodic terminal point, while
+        GX's Miller helper writes an already-open theta grid. Root-level files therefore
+        cannot be treated as closed intervals unconditionally.
+        """
+
+        if theta.ndim != 1 or theta.size < 2:
+            return False
+        profile_names = (
+            "bmag",
+            "gds2",
+            "gds21",
+            "gds22",
+            "cvdrift",
+            "gbdrift",
+            "grho",
+        )
+        matches = 0
+        checked = 0
+        for name in profile_names:
+            if name not in variables:
+                continue
+            arr = np.asarray(variables[name][:], dtype=float)
+            if arr.ndim != 1 or arr.size != theta.size:
+                continue
+            checked += 1
+            scale = max(float(np.nanmax(np.abs(arr))), 1.0)
+            if abs(float(arr[-1] - arr[0])) <= max(1.0e-10, 1.0e-6 * scale):
+                matches += 1
+        if checked == 0:
+            return False
+        return matches >= max(1, checked // 2 + checked % 2)
+
     root = Dataset(Path(path), "r")
     try:
         is_grouped_gx_output = "Geometry" in root.groups and "Grids" in root.groups
@@ -559,7 +594,7 @@ def load_gx_geometry_netcdf(path: str | Path) -> FluxTubeGeometryData:
             geom_vars = root.variables
             grid_vars = root.variables
             theta = _read_profile(root.variables, "theta")
-            theta_closed_interval = True
+            theta_closed_interval = _infer_root_theta_closed_interval(np.asarray(theta, dtype=float), root.variables)
 
         gradpar_val = _read_scalar(geom_vars, "gradpar")
         bmag = _read_profile(geom_vars, "bmag")
