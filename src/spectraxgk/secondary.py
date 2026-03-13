@@ -19,6 +19,7 @@ from spectraxgk.runtime_config import (
     RuntimePhysicsConfig,
     RuntimeTermsConfig,
 )
+from spectraxgk.restart import write_gx_restart_state
 
 
 @dataclass(frozen=True)
@@ -50,10 +51,7 @@ def _leading_finite_prefix(
 def write_restart_state(path: str | Path, state: np.ndarray) -> Path:
     """Write a complex restart state in the runtime binary layout."""
 
-    out = Path(path)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    np.asarray(state, dtype=np.complex64).tofile(out)
-    return out
+    return write_gx_restart_state(path, state)
 
 
 def _embed_linear_seed_on_full_grid(
