@@ -211,6 +211,7 @@ __marimo__/
 .gitignore
 .DS_Store
 outputs/
+tools_out/
 *.png
 # Allow documentation figures
 !docs/_static/*.png
