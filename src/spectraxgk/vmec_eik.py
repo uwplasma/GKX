@@ -22,6 +22,10 @@ _DEFAULT_GX_REPOS = (
     Path("/path/to/reference-code"),
     Path("/home/user/GX"),
 )
+_DEFAULT_BOOZ_XFORM_JAX_REPOS = (
+    Path("/home/user/local/booz_xform_jax"),
+    Path("/home/user/booz_xform_jax"),
+)
 
 
 @dataclass(frozen=True)
@@ -122,6 +126,61 @@ def resolve_gx_python(explicit_python: str | Path | None = None) -> str:
     if candidate.exists():
         return str(candidate.resolve())
     return text
+
+
+def resolve_booz_xform_jax_repo(explicit_repo: str | Path | None = None) -> Path | None:
+    """Resolve an optional ``booz_xform_jax`` repository for GX VMEC helpers."""
+
+    candidates: list[str | Path] = []
+    if explicit_repo is not None:
+        candidates.append(explicit_repo)
+    for env_name in ("GX_BOOZ_XFORM_JAX_PATH", "BOOZ_XFORM_JAX_PATH"):
+        value = os.environ.get(env_name)
+        if value:
+            candidates.append(value)
+    candidates.extend(_DEFAULT_BOOZ_XFORM_JAX_REPOS)
+
+    for candidate in candidates:
+        root = Path(candidate).expanduser().resolve()
+        if not root.exists():
+            continue
+        package_dir = root / "src" / "booz_xform_jax"
+        if package_dir.exists():
+            return root
+    return None
+
+
+def _prepend_pythonpath(env: dict[str, str], *paths: Path) -> None:
+    entries = [str(path) for path in paths]
+    existing = env.get("PYTHONPATH", "").strip()
+    if existing:
+        entries.append(existing)
+    env["PYTHONPATH"] = os.pathsep.join(entries)
+
+
+def _write_booz_xform_compat_module(path: Path) -> None:
+    path.write_text(
+        '"""Compatibility shim for GX VMEC helpers."""\n'
+        "from booz_xform_jax import Booz_xform\n"
+        "__all__ = ['Booz_xform']\n",
+        encoding="utf-8",
+    )
+
+
+def _build_gx_vmec_environment(
+    *,
+    shim_dir: Path,
+    booz_xform_jax_repo: Path | None = None,
+) -> dict[str, str]:
+    env = os.environ.copy()
+    resolved_repo = resolve_booz_xform_jax_repo(booz_xform_jax_repo)
+    if resolved_repo is None:
+        return env
+
+    shim_dir.mkdir(parents=True, exist_ok=True)
+    _write_booz_xform_compat_module(shim_dir / "booz_xform.py")
+    _prepend_pythonpath(env, shim_dir, resolved_repo / "src")
+    return env
 
 
 def _infer_vmec_npol(cfg: RuntimeConfig) -> float:
@@ -336,14 +395,17 @@ def generate_gx_vmec_eik(
     out.parent.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory(prefix="spectrax_vmec_") as tmpdir:
-        input_path = Path(tmpdir) / "gx_vmec_geometry.toml"
+        tmp_path = Path(tmpdir)
+        input_path = tmp_path / "gx_vmec_geometry.toml"
         write_gx_vmec_geometry_input(request, input_path)
+        env = _build_gx_vmec_environment(shim_dir=tmp_path / "pyshim")
         proc = subprocess.run(
             [gx_python, str(script), str(input_path), str(out)],
             check=False,
             capture_output=True,
             text=True,
             cwd=str(script.parent),
+            env=env,
         )
     if proc.returncode != 0:
         raise RuntimeError(
