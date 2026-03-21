@@ -45,6 +45,24 @@ _SSPX3_W2 = 0.5 * ((6.0 ** (2.0 / 3.0)) - 1.0 - _SSPX3_WGTFAC)
 _SSPX3_W3 = (1.0 / _SSPX3_ADT) - 1.0 - _SSPX3_W2 * (_SSPX3_W1 + 1.0)
 
 
+def _gx_state_mask(cache: LinearCache) -> jnp.ndarray:
+    """Return the GX state-space mask applied after each completed step."""
+
+    mask = jnp.asarray(cache.dealias_mask, dtype=bool)
+    ky_zero = jnp.isclose(jnp.asarray(cache.ky), 0.0)
+    kx_zero = jnp.isclose(jnp.asarray(cache.kx), 0.0)
+    zonal00 = ky_zero[:, None] & kx_zero[None, :]
+    return mask & ~zonal00
+
+
+def _apply_gx_state_mask(state: jnp.ndarray, cache: LinearCache) -> jnp.ndarray:
+    """Apply GX's end-of-step mask to a spectral state array."""
+
+    mask = _gx_state_mask(cache).astype(state.real.dtype)[..., None]
+    shape = (1,) * (state.ndim - mask.ndim) + mask.shape
+    return state * jnp.reshape(mask, shape)
+
+
 def _gx_zp_from_grid(grid: SpectralGrid) -> float:
     if grid.z.size <= 1:
         return 1.0
@@ -412,6 +430,9 @@ def _linear_explicit_step(
         raise ValueError(
             "GX linear method must be one of {'euler', 'rk2', 'rk3', 'rk3_classic', 'rk3_gx', 'rk4', 'k10', 'sspx3'}"
         )
+
+    # GX masks G only after the full explicit step, before the next field solve.
+    G_next = _apply_gx_state_mask(jnp.asarray(G_next), cache)
 
     # fields at the end of step
     _, fields = assemble_rhs_cached(G_next, cache, params, terms=term_cfg)
