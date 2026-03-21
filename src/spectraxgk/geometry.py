@@ -723,7 +723,7 @@ def gx_twist_shift_params(
             theta_min = float(grid.z_min)
         _gds2, gds21, gds22 = geom.metric_coeffs(jnp.asarray([theta_min]))
         gds21_val = float(gds21[0])
-        gds22_val = float(gds22)
+        gds22_val = float(gds22[0]) if jnp.asarray(gds22).ndim > 0 else float(gds22)
         shat = float(geom.s_hat)
     twist_shift_geo_fac = 2.0 * shat * gds21_val / gds22_val if gds22_val != 0.0 else 0.0
     if grid.jtwist is None:
