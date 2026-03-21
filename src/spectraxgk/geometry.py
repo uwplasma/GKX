@@ -11,6 +11,33 @@ import numpy as np
 
 from spectraxgk.config import GeometryConfig, GridConfig
 
+GX_ZERO_SHAT_THRESHOLD = 1.0e-5
+
+
+def gx_zero_shat_enabled(
+    s_hat: float,
+    *,
+    zero_shat: bool = False,
+    threshold: float = GX_ZERO_SHAT_THRESHOLD,
+) -> bool:
+    """Return the effective GX zero-shear state."""
+
+    return bool(zero_shat) or abs(float(s_hat)) < float(threshold)
+
+
+def gx_effective_boundary(
+    boundary: str,
+    *,
+    s_hat: float,
+    zero_shat: bool = False,
+    threshold: float = GX_ZERO_SHAT_THRESHOLD,
+) -> str:
+    """Return the effective GX boundary after zero-shear promotion."""
+
+    if gx_zero_shat_enabled(s_hat, zero_shat=zero_shat, threshold=threshold):
+        return "periodic"
+    return str(boundary)
+
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
@@ -47,9 +74,10 @@ class SAlphaGeometry:
 
     @staticmethod
     def from_config(cfg: GeometryConfig) -> "SAlphaGeometry":
+        zero_shat = gx_zero_shat_enabled(cfg.s_hat, zero_shat=cfg.zero_shat)
         return SAlphaGeometry(
             q=cfg.q,
-            s_hat=cfg.s_hat,
+            s_hat=0.0 if zero_shat else cfg.s_hat,
             epsilon=cfg.epsilon,
             R0=cfg.R0,
             B0=cfg.B0,
@@ -178,7 +206,8 @@ class SlabGeometry:
 
     @staticmethod
     def from_config(cfg: GeometryConfig) -> "SlabGeometry":
-        shat = 0.0 if bool(cfg.zero_shat) else float(cfg.s_hat)
+        zero_shat = gx_zero_shat_enabled(cfg.s_hat, zero_shat=cfg.zero_shat)
+        shat = 0.0 if zero_shat else float(cfg.s_hat)
         return SlabGeometry(
             s_hat=shat,
             z0=cfg.z0,
@@ -190,7 +219,7 @@ class SlabGeometry:
             drift_scale=0.0,
             kperp2_bmag=cfg.kperp2_bmag,
             bessel_bmag_power=cfg.bessel_bmag_power,
-            zero_shat=bool(cfg.zero_shat),
+            zero_shat=zero_shat,
         )
 
     def kx_effective(self, kx0: jnp.ndarray, ky: jnp.ndarray, theta: jnp.ndarray) -> jnp.ndarray:
@@ -772,7 +801,13 @@ def apply_gx_geometry_grid_defaults(
         )
         if float(grid_out.kxfac) == 1.0:
             grid_out = replace(grid_out, kxfac=float(geom.kxfac))
-    boundary = str(grid_out.boundary).lower()
+    boundary = gx_effective_boundary(
+        str(grid_out.boundary).lower(),
+        s_hat=float(getattr(geom, "s_hat", 0.0)),
+        zero_shat=bool(getattr(geom, "zero_shat", False)),
+    )
+    if boundary != str(grid_out.boundary).lower():
+        grid_out = replace(grid_out, boundary=boundary, jtwist=None)
     if boundary in {"linked", "fix aspect"} and not bool(grid_out.non_twist):
         jtwist, x0 = gx_twist_shift_params(geom, grid_out)
         grid_out = replace(grid_out, Lx=2.0 * np.pi * x0, jtwist=jtwist)

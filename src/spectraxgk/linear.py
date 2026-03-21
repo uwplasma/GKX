@@ -12,7 +12,12 @@ import numpy as np
 from jax.scipy.sparse.linalg import gmres
 
 from spectraxgk.basis import hermite_ladder_coeffs
-from spectraxgk.geometry import FluxTubeGeometryData, FluxTubeGeometryLike, ensure_flux_tube_geometry_data
+from spectraxgk.geometry import (
+    FluxTubeGeometryData,
+    FluxTubeGeometryLike,
+    ensure_flux_tube_geometry_data,
+    gx_zero_shat_enabled,
+)
 from spectraxgk.gyroaverage import J_l_all, bessel_j0, bessel_j1, gx_laguerre_transform
 from spectraxgk.grids import SpectralGrid
 
@@ -719,7 +724,7 @@ def build_linear_cache(
         else:
             y0 = 1.0
     shat = float(geom_data.s_hat)
-    if use_twist_shift and abs(shat) < 1.0e-12:
+    if use_twist_shift and gx_zero_shat_enabled(shat):
         use_twist_shift = False
         use_ntft = False
     x0_eff = float(getattr(grid, "x0", 1.0))
