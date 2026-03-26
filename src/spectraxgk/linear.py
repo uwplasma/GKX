@@ -386,13 +386,7 @@ def _build_linked_fft_maps(
         idx_flat = link_ky + ny * link_kx
         linked_indices.append(jnp.asarray(idx_flat, dtype=jnp.int32))
         nzL = int(nlinks_val) * int(nz)
-        zp = float(dz) * float(nz) / (2.0 * np.pi)
-        kz_linked = np.empty(nzL, dtype=float)
-        for i in range(nzL):
-            if i < nzL / 2 + 1:
-                kz_linked[i] = i / (zp * nlinks_val)
-            else:
-                kz_linked[i] = (i - nzL) / (zp * nlinks_val)
+        kz_linked = 2.0 * np.pi * np.fft.fftfreq(nzL, d=float(dz))
         linked_kz.append(jnp.asarray(kz_linked, dtype=real_dtype))
 
     return tuple(linked_indices), tuple(linked_kz)
