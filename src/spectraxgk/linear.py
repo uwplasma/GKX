@@ -712,9 +712,7 @@ def build_linear_cache(
     jacobian = geom_data.jacobian(theta).astype(real_dtype)
     cv, gb, cv0, gb0 = geom_data.drift_coeffs(theta)
     boundary = str(getattr(grid, "boundary", "periodic")).lower()
-    use_twist_shift = boundary in {"linked", "fix aspect", "continuous drifts"} or (
-        boundary == "periodic" and getattr(grid, "jtwist", None) is not None
-    )
+    use_twist_shift = boundary in {"linked", "fix aspect", "continuous drifts"}
     use_ntft = bool(getattr(grid, "non_twist", False))
     y0 = getattr(grid, "y0", None)
     if y0 is None:
@@ -883,6 +881,10 @@ def build_linear_cache(
     nu_left = jnp.where(left_mask, 1.0 - 2.0 * x_left * x_left / (1.0 + x_left**4), 0.0)
     nu_right = jnp.where(right_mask, 1.0 - 2.0 * x_right * x_right / (1.0 + x_right**4), 0.0)
     damp_profile = jnp.maximum(nu_left, nu_right).astype(real_dtype)
+    if boundary == "periodic":
+        # GX skips end damping entirely on periodic lanes, including
+        # near-zero-shear cases promoted from linked to periodic.
+        damp_profile = jnp.zeros_like(damp_profile)
     linked_damp_profile = jnp.asarray([], dtype=real_dtype)
     if use_twist_shift:
         iky = jnp.rint(grid.ky * float(y0)).astype(jnp.int32)

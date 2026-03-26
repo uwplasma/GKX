@@ -815,8 +815,7 @@ def apply_gx_geometry_grid_defaults(
         float(getattr(geom, "s_hat", 0.0)),
         zero_shat=bool(getattr(geom, "zero_shat", False)),
     ):
-        # GX zero-shear uses the linked grad-parallel operator with nLinks = 1
-        # per ky by forcing jtwist = 2 * Nx, while still skipping linked
-        # end-damping because the effective boundary is periodic.
-        grid_out = replace(grid_out, jtwist=2 * int(grid_out.Nx))
+        # GX zero-shear promotion switches the lane onto the periodic
+        # grad-parallel operator, so any linked-FFT metadata must be cleared.
+        grid_out = replace(grid_out, jtwist=None)
     return grid_out
