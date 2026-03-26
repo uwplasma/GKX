@@ -811,4 +811,12 @@ def apply_gx_geometry_grid_defaults(
     if boundary in {"linked", "fix aspect"} and not bool(grid_out.non_twist):
         jtwist, x0 = gx_twist_shift_params(geom, grid_out)
         grid_out = replace(grid_out, Lx=2.0 * np.pi * x0, jtwist=jtwist)
+    elif boundary == "periodic" and gx_zero_shat_enabled(
+        float(getattr(geom, "s_hat", 0.0)),
+        zero_shat=bool(getattr(geom, "zero_shat", False)),
+    ):
+        # GX zero-shear uses the linked grad-parallel operator with nLinks = 1
+        # per ky by forcing jtwist = 2 * Nx, while still skipping linked
+        # end-damping because the effective boundary is periodic.
+        grid_out = replace(grid_out, jtwist=2 * int(grid_out.Nx))
     return grid_out

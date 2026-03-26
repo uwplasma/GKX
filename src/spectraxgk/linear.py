@@ -292,7 +292,10 @@ def _build_linked_fft_maps(
 
     ny = ky.size
     nx = kx.size
-    naky = 1 + (ny - 1) // 3
+    if ky_mode is not None:
+        naky = int(np.asarray(ky_mode, dtype=int).reshape(-1).size)
+    else:
+        naky = 1 + (ny - 1) // 3
     if nx < 4:
         nakx = nx
     else:
@@ -715,7 +718,9 @@ def build_linear_cache(
     jacobian = geom_data.jacobian(theta).astype(real_dtype)
     cv, gb, cv0, gb0 = geom_data.drift_coeffs(theta)
     boundary = str(getattr(grid, "boundary", "periodic")).lower()
-    use_twist_shift = boundary in {"linked", "fix aspect", "continuous drifts"}
+    use_twist_shift = boundary in {"linked", "fix aspect", "continuous drifts"} or (
+        boundary == "periodic" and getattr(grid, "jtwist", None) is not None
+    )
     use_ntft = bool(getattr(grid, "non_twist", False))
     y0 = getattr(grid, "y0", None)
     if y0 is None:
@@ -724,9 +729,6 @@ def build_linear_cache(
         else:
             y0 = 1.0
     shat = float(geom_data.s_hat)
-    if use_twist_shift and gx_zero_shat_enabled(shat):
-        use_twist_shift = False
-        use_ntft = False
     x0_eff = float(getattr(grid, "x0", 1.0))
     jtwist = 0
     x0_target = x0_eff
@@ -945,16 +947,17 @@ def build_linear_cache(
                 linked_gather_map = jnp.asarray(gather_map, dtype=jnp.int32)
                 linked_gather_mask = jnp.asarray(gather_mask, dtype=bool)
                 linked_use_gather = True
-        linked_damp_profile = jnp.asarray(
-            _build_linked_end_damping_profile(
-                linked_indices=linked_indices,
-                ny=int(grid.ky.size),
-                nx=int(grid.kx.size),
-                nz=int(grid.z.size),
-                widthfrac=float(params.damp_ends_widthfrac),
-            ),
-            dtype=real_dtype,
-        )
+        if boundary != "periodic":
+            linked_damp_profile = jnp.asarray(
+                _build_linked_end_damping_profile(
+                    linked_indices=linked_indices,
+                    ny=int(grid.ky.size),
+                    nx=int(grid.kx.size),
+                    nz=int(grid.z.size),
+                    widthfrac=float(params.damp_ends_widthfrac),
+                ),
+                dtype=real_dtype,
+            )
     return LinearCache(
         Jl=Jl,
         b=b.astype(real_dtype),
