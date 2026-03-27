@@ -1,65 +1,28 @@
 # SPECTRAX-GK
 
-SPECTRAX-GK is a clean-room, JAX-native gyrokinetic solver designed for
-performance, differentiability, and rapid experimentation. The code uses a
-Hermite-Laguerre velocity-space representation with Fourier perpendicular
-coordinates in a field-aligned flux-tube geometry. The initial validation target
-is the **Cyclone base case** with adiabatic electrons, plus ETG and KBM scans.
+SPECTRAX-GK is a JAX-native gyrokinetic solver built for differentiability,
+accelerator execution, and reproducible cross-code benchmarking. The code uses
+Hermite-Laguerre velocity space, Fourier perpendicular coordinates, and
+field-aligned flux-tube geometry for linear and nonlinear electrostatic and
+electromagnetic runs.
 
-![GX publication validation panel](docs/_static/gx_publication_panel.png)
+![SPECTRAX-GK benchmark atlas](docs/_static/benchmark_readme_panel.png)
 
-Publication validation panel: the tracked primary asset now focuses only on
-the main GX-parity benchmark families used for the core validation claim:
-Cyclone, KBM, W7-X, and HSX. The tokamak subpanel currently keeps the
-clean-mainline Cyclone Miller tokamak lane plus the tracked KBM tokamak lane,
-while the stellarator rows show the clean-mainline W7-X and HSX
-linear/nonlinear closures. Reduced-model and staged slab cases are
-intentionally excluded from this primary figure so the headline validation
-claim stays tied to the production full-GK path.
-
-The current KBM GX mismatch table is stored in
-`docs/_static/kbm_gx_mismatch.csv`.
-The KBM linear harness now uses one explicit solver across the whole scan by
-default, records eigenfunction-overlap metrics alongside `gamma`/`omega`, and
-reuses a single GX-time trajectory when auditing `project`/`svd`/`max`/`z_index`
-extractors. It now also carries explicit late projected-fit candidates for the
-slow low-`ky` KBM branch and records the actual selected fit window in the
-tracked CSV. The current tracked four-point table averages about `11.8%`
-relative error in `gamma` and about `6.1%` in `omega`, with the remaining
-linear residual concentrated at `ky rho_i = 0.2`. The GX-aligned linear KBM
-benchmark path also now restores the standard GX linked-end damping defaults
-instead of silently zeroing them, so branch-following audits are not
-contaminated by a benchmark-only damping contract mismatch.
-For project-level acceptance, we now treat linear KBM as closed when the
-tracked table meets the default `1e-1` relative target and any remaining
-documented low-`ky` outlier is covered by the checkpoint probe within `1.5e-1`.
-The current low-`ky` probe asset is `docs/_static/kbm_probe_lowky_ckpt.csv`;
-it closes the remaining `ky rho_i = 0.2` branch with `rel_gamma≈2.4e-3` and
-`rel_omega≈1.35e-1` on the 800-step projected fit.
+The benchmark atlas above is the compact README summary. It is backed by a
+small set of reproducible figure builders in `tools/` and a larger benchmark
+discussion in the docs.
 
 ## Highlights
 
-- **JAX-first design**: fully differentiable kernels and JIT compilation.
-- **Hermite-Laguerre velocity space**: compact spectral representation.
-- **Field-aligned flux-tube geometry**: s-alpha analytic model (VMEC/DESC next).
-- **Geometry contract layer**: sampled flux-tube geometry profiles can now feed
-  the linear and nonlinear runner paths directly, which is the intended
-  insertion point for VMEC/imported field-line geometry.
-- **GX NetCDF geometry bridge**: GX-style `Geometry` groups can now be loaded
-  directly into the sampled contract, preserving explicit Jacobian/flux weights
-  and root-level `*.eik.nc` VMEC field-line files from GX.
-- **Full drift/mirror physics**: curvature/grad-B/mirror couplings + diamagnetic drive.
-- **Electromagnetic fields**: coupled :math:`(\\phi, A_\\parallel, B_\\parallel)` solve.
-- **Term toggles**: switch linear-operator components via ``LinearTerms``.
-- **Field-aligned grid controls**: ``y0``, ``ntheta``, and ``nperiod`` inputs.
-- **Stable integrators**: explicit, IMEX, and implicit time stepping options.
-- **GX-style RK4**: CFL-based timestep selection + GX growth-rate diagnostics.
-- **Cached operators**: precomputed geometry arrays for faster time stepping.
-- **Benchmark harness**: reference data + growth-rate extraction tools + comparisons.
-- **ETG trend checks**: reduced electron-scale grids for linear trend validation.
-- **Auto window fitting**: robust growth-rate extraction from transient signals.
-- **Publication-ready plots**: consistent styling and reusable plotting utilities.
-- **100% test coverage**: unit, regression, and physics-based checks.
+- **JAX-first solver kernels** with differentiable primitives and JIT execution.
+- **Hermite-Laguerre velocity representation** for compact kinetic closures.
+- **Field-aligned flux-tube geometry** with analytic and imported VMEC workflows.
+- **Electromagnetic field solve** for `(\phi, A_\parallel, B_\parallel)`.
+- **Explicit, IMEX, and implicit time integrators** with CFL-controlled
+  explicit stepping and streaming diagnostics.
+- **Operator caching and batched scans** for repeated linear and nonlinear runs.
+- **Benchmark tooling** for growth-rate/frequency scans, nonlinear transport
+  traces, restart checks, exact-state audits, and cross-code figure generation.
 
 ## Installation
 
@@ -79,41 +42,10 @@ spectrax-gk scan-linear --config examples/configs/etg.toml --plot --outdir docs/
 ## Quickstart (Python)
 
 ```python
-from spectraxgk import load_cyclone_reference, run_cyclone_linear
-
-ref = load_cyclone_reference()
-result = run_cyclone_linear(ky_target=0.3, method="rk4")
-
-print(result.gamma, result.omega)
-```
-
-GX-style RK4 integration (GX timestep selection + growth-rate diagnostics):
-
-```python
-from spectraxgk import CycloneBaseCase, GXTimeConfig, integrate_linear_gx
-from spectraxgk.geometry import SAlphaGeometry
-from spectraxgk.grids import build_spectral_grid
-from spectraxgk.linear import LinearParams, build_linear_cache
-
-cfg = CycloneBaseCase()
-grid = build_spectral_grid(cfg.grid)
-geom = SAlphaGeometry.from_config(cfg.geometry)
-params = LinearParams()
-cache = build_linear_cache(grid, geom, params, Nl=16, Nm=8)
-
-G0 = jnp.zeros((16, 8, grid.ky.size, grid.kx.size, grid.z.size), dtype=jnp.complex64)
-time_cfg = GXTimeConfig(t_max=10.0, dt=0.01, fixed_dt=False)
-
-t, phi_t, gamma_t, omega_t = integrate_linear_gx(G0, grid, cache, params, geom, time_cfg)
-```
-
-## Config-driven integration
-
-```python
-import jax.numpy as jnp
 from spectraxgk import CycloneBaseCase, LinearParams, integrate_linear_from_config
 from spectraxgk.geometry import SAlphaGeometry
 from spectraxgk.grids import build_spectral_grid
+import jax.numpy as jnp
 
 cfg = CycloneBaseCase()
 grid = build_spectral_grid(cfg.grid)
@@ -126,8 +58,51 @@ G0 = G0.at[0, 0, 0, 0, :].set(1.0e-3 + 0.0j)
 G_t, phi_t = integrate_linear_from_config(G0, grid, geom, params, cfg.time)
 ```
 
-By default, ``TimeConfig`` enables the diffrax Heun solver. Set
-``use_diffrax=False`` to run the built-in fixed-step integrators.
+## Benchmarks
+
+The benchmark layout follows the usual gyrokinetic-paper pattern: linear
+overlays of growth rate and real frequency versus `k_y`, and nonlinear time
+traces of heat flux, free energy, electrostatic field energy, and magnetic
+field energy where relevant.
+
+Primary full-GK publication set:
+
+- Cyclone ITG linear and nonlinear
+- KBM linear and nonlinear
+- W7-X linear and nonlinear
+- HSX linear and nonlinear
+- Cyclone Miller geometry linear and nonlinear
+
+Cross-code linear set:
+
+- Cyclone ITG against external tokamak references
+- ETG against GS2 and stella
+- KBM against GX, GS2, and stella when matching reference inputs are available
+- Imported-geometry and exact-diagnostic linear checks for W7-X, HSX, Miller,
+  and KAW
+
+Extended linear stress matrix:
+
+- Cyclone kinetic electrons
+- TEM
+
+Core linear atlas:
+
+![Core linear benchmark atlas](docs/_static/benchmark_core_linear_atlas.png)
+
+Core nonlinear atlas:
+
+![Core nonlinear benchmark atlas](docs/_static/benchmark_core_nonlinear_atlas.png)
+
+Extended linear stress matrix:
+
+![Extended linear stress matrix](docs/_static/benchmark_extended_linear_panel.png)
+
+Regenerate the benchmark figures with:
+
+```bash
+python tools/make_benchmark_atlas.py
+```
 
 ## Examples
 
@@ -146,201 +121,26 @@ python -m spectraxgk.cli run-runtime-linear --config examples/configs/runtime_w7
 python examples/two_stream_hermite_1d.py
 ```
 
-Diffrax is enabled by default for the ETG/KBM examples. To force the
-fixed-step integrators, pass ``--no-diffrax``:
-
-```bash
-python examples/etg_linear_benchmark.py --no-diffrax
-python examples/kbm_beta_scan.py --no-diffrax
-```
-
-## Validation status
-
-- **Cyclone base case (adiabatic electrons)**: the benchmark harness reproduces
-  published growth rates and real frequencies across the reduced ky scan using
-  the full drift/mirror operator and GX-style RK4 diagnostics. Low-ky points
-  require longer ``t_max`` windows to converge to reference values.
-- **ETG linear trend**: growth rates remain positive across reduced electron-scale
-  gradients; real frequencies follow the electron diamagnetic direction.
-- **KBM beta scan**: electromagnetic transition between ITG and KBM branches,
-  with GX as the baseline reference for linear and nonlinear diagnostics.
-- **Imported W7-X geometry**: the GX `*.eik.nc` W7-X linear ITG case now
-  matches the clean-mainline GX `t=2` short-window reference with mean absolute
-  `omega` errors around `1e-5`. The branch closest to marginal (`ky=0.1`)
-  still carries about `1.18e-1` relative `gamma` error, while `ky=0.2-0.4`
-  are within about `1.1-2.7%`.
-- **Nonlinear W7-X exact-state audit**: starting from the exact dumped GX
-  nonlinear state at `t≈32.44665203`, the next GX output window
-  (`time_index=10 -> 11`) matches to about `1e-4` relative in `Wg`, `Wphi`,
-  and heat flux through the runtime TOML path. The tracked stock-GX `t=200`
-  free run now also passes the native-grid late-window statistical check after
-  closing the last evolution-side mismatch: GX excludes the exact
-  `|k| = 1/3` shell in the nonlinear de-alias mask, so SPECTRAX now uses the
-  same strict cutoff. On the refreshed clean-mainline GX rerun, late-window
-  (`t>=20`) mean errors are about `9.3%` in `Wg`, `11.6%` in `Wphi`, and
-  `7.6%` in heat flux.
-- **Nonlinear HSX exact-file parity**: the HSX VMEC workflow now uses the same
-  GX-backed `vmec -> eik.nc` bridge and the same `wout_HSX_QHS_vac.nc` input
-  file for both codes. With the horizon matched at `t=50`, the tracked HSX
-  run passes both the early and late statistical windows; late-window
-  (`t>=20`) relative errors are about `7.1%` in `Wg`, `6.1%` in `Wphi`, and
-  `2.8%` in heat flux.
-- **Imported HSX geometry (linear audit)**: the clean-mainline linear HSX VMEC
-  slice is now closed on the tracked `t=2` audit. The imported-linear harness
-  preserves the full GX multimode startup on the VMEC grid, follows the
-  `kx≈0` branch by default unless the GX input explicitly requested a
-  different single-mode seed, and now uses the authoritative grouped geometry
-  stored in the clean GX `out.nc` file for `vmec`/`desc` cases. On the
-  refreshed audit, mean absolute `omega` errors are about `8e-4` to `4e-3`,
-  mean absolute `gamma` errors are about `3e-4` to `5e-3`, and the
-  `Wg_kyst` / `Wphi_kyst` projections are down to about `2.6%` to `7.3%`
-  relative error.
-- **Secondary slab staged workflow**: the GX `kh01 -> kh01a` slab case runs
-  through the unified runtime API and now matches the published GX README
-  sideband growth target (`gamma≈4.901835`) on all four nonzero tracked
-  sidebands to about `2.1e-5` relative error using the longest leading finite
-  selected-mode window from the honest `t=100` staged run. The remaining
-  secondary residual is in the tiny `omega` signal, not in missing sideband
-  growth. When stock GX cannot emit `kh01a.out.nc` on the current
-  hardware/runtime stack, the benchmark tool compares directly against the
-  published GX target table instead of pretending to use an out.nc surrogate.
-- **cETG/KREHM reduced-model boundary**: runtime configs can now declare
-  `physics.reduced_model = "cetg"` or `"krehm"`, and the runtime rejects them
-  explicitly with `NotImplementedError` instead of silently routing those GX
-  reduced-model benchmarks through the wrong full-GK slab equations. The GX
-  contract is parsed and test-covered, ready for the dedicated solver path. The
-  first honest legacy-GX `cetg_smoke.nc` compare is now tracked in the summary
-  panel; over the leading finite overlap (`t≈0.052`), mean relative errors are
-  about `0.61` in `W/Phi2` and `0.21` in heat flux.
-
-## Figures
-
-```bash
-python tools/make_figures.py
-```
-
-## Integrator benchmark
-
-```bash
-python tools/benchmark_integrators.py
-```
-
-## Figure parameters
-
-### Cyclone base case (adiabatic electrons, GX Fig. 1)
-
-| Parameter | Value |
-| --- | --- |
-| Geometry | q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778 |
-| Gradients | R/LTi=2.49, R/LTe=0.0, R/Ln=0.8 |
-| Species | ions (Z=1, m=1), adiabatic electrons (tau_e=1) |
-| Electromagnetic | beta=0, A_parallel=off, B_parallel=off |
-| Collisions | nu_i=1.0e-2, GX-style hypercollisions (kz-proportional) on |
-| Operator toggles | streaming/mirror/curvature/grad-B/diamagnetic on; nonlinear off |
-| Grid | Nx=1, Ny=24, Nz=96, y0=20, ntheta=32, nperiod=2 |
-| Velocity resolution | Nl=6, Nm=16 (legacy figure); GX-style runs use per-ky balanced resolution |
-| External references | GX paper Fig. 1 + GS2 + stella (matched cyclone setup) |
-
-![Cyclone base case comparison](docs/_static/cyclone_comparison.png)
-
-GX-style balanced runs (moderate cost, against GX):
-
-| ky rho_i | Nl | Nm | t_max | gamma | omega | rel gamma | rel omega |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| 0.05 | 16 | 8 | 80 | 0.00994 | 0.0413 | +1.2% | +13% |
-| 0.10 | 16 | 8 | 20 | 0.0299 | 0.0790 | -1.8% | -1.1% |
-| 0.20 | 24 | 12 | 20 | 0.0762 | 0.1853 | +1.6% | +4.2% |
-| 0.30 | 24 | 12 | 10 | 0.0904 | 0.2906 | -2.8% | +3.1% |
-
-### ETG (GS2 primary, stella secondary)
-
-| Parameter | Value |
-| --- | --- |
-| Geometry | q=1.5, s_hat=0.8, epsilon=0.18, R0=3.0 |
-| Gradients | ion: R/LTi=0, R/Lni=0; electron: R/LTe=2.49, R/Lne=0.8 |
-| Species | two-species kinetic ions + electrons, Te/Ti=1, mi/me=3670 |
-| Electromagnetic | beta=1.0e-5, electrostatic (A_parallel=off, B_parallel=off in reference runs) |
-| Collisions | nu_i=0, nu_e=0, GX-style hypercollisions on |
-| Operator toggles | streaming/mirror/curvature/grad-B/diamagnetic on; nonlinear off |
-| Grid | Nx=1, Ny=96, Nz=96, ntheta=32, nperiod=2 |
-| Time integration | fixed-step IMEX2 scan path (default), Diffrax adaptive optional |
-| Velocity resolution | Nl=10, Nm=12 |
-| Tuned ETG scales | omega_d_scale=0.4, omega_star_scale=0.8 |
-| External references | GS2 NetCDF outputs (primary), stella (secondary consistency check) |
-
-![ETG GS2/stella comparison](docs/_static/etg_gs2_stella_comparison.png)
-
-Cross-code mismatch (same ETG setup above):
-
-- GS2 vs SPECTRAX: mean `|rel_gamma| = 8.243%`, mean `|rel_omega| = 29.894%`
-- stella vs SPECTRAX: mean `|rel_gamma| = 24.792%`, mean `|rel_omega| = 6.735%`
-
-### KBM ky scan (GX reference closure)
-
-| Parameter | Value |
-| --- | --- |
-| Geometry | q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778 |
-| Gradients | R/LTi=2.49, R/LTe=2.49, R/Ln=0.8 |
-| Species | ions + electrons, Te/Ti=1, mi/me=3670 |
-| Electromagnetic | fixed beta_ref=0.015 (GX `kbm_salpha.in`), A_parallel=on, B_parallel=off |
-| Collisions | nu_i=0, nu_e=0, hypercollisions=off |
-| Operator toggles | streaming/mirror/curvature/grad-B/diamagnetic on; nonlinear off |
-| Grid | Nx=1, Ny=12, Nz=96, y0=10, ntheta=32, nperiod=2 |
-| Velocity resolution | Nl=8, Nm=24 |
-| Time integration (cross-code) | fixed-step IMEX2 (scan default), Diffrax adaptive optional |
-| Fit policy (cross-code) | mode extracted at the selected ky/kx with midplane-aware signal extraction, log-linear auto-windowing |
-| Reference | GX matched-input electromagnetic ky scan |
-
-GX publication validation panel:
-
-![GX publication validation panel](docs/_static/gx_publication_panel.png)
-
-KBM GX matched-input set (reference plumbing):
-
-![Cyclone/KBM GX comparison panel](docs/_static/gx_cyclone_kbm_panel.png)
-
-## Cross-code performance (staging)
-
-Representative point timings on the current development workstation
-(SPECTRAX includes first-run JAX compile overhead):
-
-| Benchmark point | SPECTRAX-GK | GX | GS2 | stella |
-| --- | --- | --- | --- | --- |
-| Cyclone ky=0.3 (time, peak RSS) | 31.5 s, 664 MB | pending (GPU run) | 4.82 s, 35 MB | pending |
-
 ## Documentation
 
-The ReadTheDocs site provides:
+Build the docs locally with:
 
-- theory and equations
-- numerical discretization and algorithms
-- geometry and flux-tube model
-- benchmark methodology and reference data
-- API reference and examples
+```bash
+cd docs
+pip install -r requirements.txt
+make html
+```
 
-## Roadmap (high level)
+The benchmark discussion, algorithms, inputs, and reference list live in
+`docs/`.
 
-1. Linear electrostatic GK operator (Hermite-Laguerre)
-2. Cyclone base case linear benchmarks
-3. Nonlinear E x B term and turbulence tests
-4. Electromagnetic extensions, multispecies, advanced collisions
-5. VMEC/DESC geometry adapters and stellarator benchmarks
-6. Performance tuning and profiling
+## Development
 
-## References
-
-- Laguerre-Hermite pseudo-spectral GK: [arXiv:1708.04029](https://arxiv.org/abs/1708.04029)
-- Gyrokinetic equations (Frieman & Chen, 1982): [OSTI record](https://www.osti.gov/biblio/5235502)
-- Low-frequency kinetic equations (Antonsen & Lane, 1980): [OSTI record](https://www.osti.gov/biblio/5115944)
-- GENE code: [J. Comput. Phys. 230, 6979 (2011)](https://www.sciencedirect.com/science/article/pii/S0021999111002609)
-- stella code: [arXiv:1806.02162](https://arxiv.org/abs/1806.02162)
-
-## Development notes
-
-- The previous codebase is preserved on the `legacy` branch and archived in
-  `legacy_archive/`.
-- This branch uses a `src/` layout and enforces 100% test coverage.
+- Run tests with `pytest`.
+- Rebuild the benchmark figures with `python tools/make_benchmark_atlas.py`.
+- Keep large benchmark reruns and office-specific audits documented in
+  `plan.md`.
 
 ## License
 
-See `LICENSE`.
+BSD 3-Clause License.
