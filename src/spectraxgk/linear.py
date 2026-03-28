@@ -816,7 +816,8 @@ def build_linear_cache(
         cv_d = cv_d.astype(real_dtype)
         gb_d = gb_d.astype(real_dtype)
         omega_d = (cv_d + gb_d).astype(real_dtype)
-    if dealias_mask is not None:
+    apply_dealias_mask = dealias_mask is not None and int(grid.ky.size) > 1
+    if apply_dealias_mask:
         mask = dealias_mask[:, :, None]
         kperp2 = kperp2 * mask
         cv_d = cv_d * mask

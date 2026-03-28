@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import jax.numpy as jnp
-from jax.scipy.special import i0e
+from jax.scipy.special import gammaln, i0e
 import math
 import numpy as np
 
@@ -126,13 +126,14 @@ def J_l_all(b: jnp.ndarray, l_max: int) -> jnp.ndarray:
     l = jnp.arange(l_max + 1, dtype=b.dtype)
     l_shape = (l_max + 1,) + (1,) * b.ndim
     l = l.reshape(l_shape)
-    b_safe = jnp.maximum(0.5 * b, 1.0e-30)
-    coef = jnp.power(b_safe[None, ...], l) / gx_factorial(l)
     sign = jnp.where((l % 2) == 0, 1.0, -1.0)
-    Jl = jnp.exp(-0.5 * b)[None, ...] * sign * coef
-    if b.ndim > 0:
-        mask = (b == 0.0)[None, ...] & (l > 0)
-        Jl = jnp.where(mask, 0.0, Jl)
+    half_b = 0.5 * b
+    half_b_safe = jnp.where(half_b > 0.0, half_b, 1.0)
+    log_abs = l * jnp.log(half_b_safe[None, ...]) - gammaln(l + 1.0) - half_b[None, ...]
+    Jl = sign * jnp.exp(log_abs)
+    zero_mask = (b == 0.0)[None, ...]
+    Jl = jnp.where(zero_mask & (l == 0), 1.0, Jl)
+    Jl = jnp.where(zero_mask & (l > 0), 0.0, Jl)
     return Jl
 
 

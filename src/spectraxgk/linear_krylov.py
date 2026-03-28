@@ -121,6 +121,12 @@ def _mode_family_sign(mode_family: str) -> int:
     return 0
 
 
+def _physical_omega(imag_part: jnp.ndarray) -> jnp.ndarray:
+    """Map eigenvalue imaginary part to reported physical frequency."""
+
+    return -imag_part
+
+
 def _select_by_overlap(
     eigvecs: jnp.ndarray,
     V: jnp.ndarray,
@@ -149,6 +155,7 @@ def _select_by_target(
     omega_target_factor_val = jnp.asarray(omega_target_factor, dtype=imag_part.dtype)
     use_target = omega_target_factor_val > 0.0
     omega_target = omega_target_factor_val * omega_scale
+    omega_phys = _physical_omega(imag_part)
     omega_sign_val = jnp.asarray(omega_sign, dtype=imag_part.dtype)
     use_sign = omega_sign_val != 0.0
     omega_target = jnp.where(use_sign, jnp.sign(omega_sign_val) * jnp.abs(omega_target), omega_target)
@@ -158,7 +165,7 @@ def _select_by_target(
     mask_target = mask_use
     has_pos = jnp.any(mask_target & mask_pos)
     mask_target = jnp.where(has_pos, mask_target & mask_pos, mask_target)
-    dist = jnp.abs(imag_part - omega_target)
+    dist = jnp.abs(omega_phys - omega_target)
     dist_masked = jnp.where(mask_target, dist, jnp.inf)
     idx_target = jnp.argmin(dist_masked)
     has_target = jnp.any(mask_target)
@@ -616,9 +623,10 @@ def dominant_eigenpair_shift_invert_cached(
         mask0 = jnp.where(use_min, mask0 & (jnp.abs(imag_part) >= omega_min), mask0)
         mask0 = mask0 & finite
         mask0_any = jnp.any(mask0)
+        omega_phys = _physical_omega(imag_part)
         omega_sign_val = jnp.asarray(omega_sign, dtype=imag_part.dtype)
         use_sign = omega_sign_val != 0.0
-        mask_sign = (omega_sign_val * imag_part) >= 0.0
+        mask_sign = (omega_sign_val * omega_phys) >= 0.0
         mask = jnp.where(use_sign, mask0 & mask_sign, mask0)
         use_sign_mask = jnp.any(mask)
         mask = jnp.where(use_sign_mask, mask, mask0)
@@ -694,9 +702,10 @@ def dominant_eigenpair_cached(
         mask0 = jnp.abs(imag_part) <= omega_cap
         mask0 = jnp.where(use_min, mask0 & (jnp.abs(imag_part) >= omega_min), mask0)
         mask0_any = jnp.any(mask0)
+        omega_phys = _physical_omega(imag_part)
         omega_sign_val = jnp.asarray(omega_sign, dtype=imag_part.dtype)
         use_sign = omega_sign_val != 0.0
-        mask_sign = (omega_sign_val * imag_part) >= 0.0
+        mask_sign = (omega_sign_val * omega_phys) >= 0.0
         mask = jnp.where(use_sign, mask0 & mask_sign, mask0)
         use_sign_mask = jnp.any(mask)
         mask = jnp.where(use_sign_mask, mask, mask0)
@@ -767,9 +776,10 @@ def dominant_eigenpair_propagator_cached(
         use_min = omega_min_factor > 0.0
         mask0 = jnp.abs(imag_part) <= omega_cap
         mask0 = jnp.where(use_min, mask0 & (jnp.abs(imag_part) >= omega_min), mask0)
+        omega_phys = _physical_omega(imag_part)
         omega_sign_val = jnp.asarray(omega_sign, dtype=imag_part.dtype)
         use_sign = omega_sign_val != 0.0
-        mask_sign = (omega_sign_val * imag_part) >= 0.0
+        mask_sign = (omega_sign_val * omega_phys) >= 0.0
         mask = jnp.where(use_sign, mask0 & mask_sign, mask0)
         use_sign_mask = jnp.any(mask)
         mask = jnp.where(use_sign_mask, mask, mask0)
@@ -897,7 +907,7 @@ def dominant_eigenpair(
                 omega_target = float(omega_target_factor) * omega_scale
                 if omega_sign_eff != 0:
                     omega_target = float(jnp.sign(omega_sign_eff)) * jnp.abs(omega_target)
-                sigma = 1j * omega_target
+                sigma = -1j * omega_target
                 v_init = v0
             else:
                 shift_est, v_seed = dominant_eigenpair_power(
