@@ -2240,10 +2240,10 @@ def run_etg_linear(
                 nhermite=Nm,
             )
     if terms is None:
-        if getattr(cfg.model, "adiabatic_ions", False):
-            terms = LinearTerms(bpar=0.0, hypercollisions=0.0)
-        else:
-            terms = LinearTerms(hypercollisions=0.0)
+        # The cross-code ETG benchmark contract is electrostatic for both the
+        # adiabatic-ion and two-species variants. Keep the default ETG wrappers
+        # aligned with the same term set used by the GS2/stella comparison tools.
+        terms = LinearTerms(apar=0.0, bpar=0.0, hypercollisions=1.0)
 
     ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
     grid = select_ky_grid(grid_full, ky_index)
@@ -2667,10 +2667,9 @@ def run_etg_scan(
                 nhermite=Nm,
             )
     if terms is None:
-        if getattr(cfg.model, "adiabatic_ions", False):
-            terms = LinearTerms(bpar=0.0, hypercollisions=0.0)
-        else:
-            terms = LinearTerms(hypercollisions=0.0)
+        # Keep the ETG scan helper on the same electrostatic benchmark contract
+        # as the single-ky ETG wrapper and the cross-code ETG comparison tools.
+        terms = LinearTerms(apar=0.0, bpar=0.0, hypercollisions=1.0)
     solver_key = solver.strip().lower()
     fit_key = fit_signal.strip().lower()
     if fit_key not in {"phi", "density", "auto"}:
