@@ -310,6 +310,25 @@ def shift_axis(arr: jnp.ndarray, offset: int, axis: int) -> jnp.ndarray:
     return jax.lax.slice_in_dim(arr_pad, 0, arr.shape[axis], axis=axis)
 
 
+def _shift_with_zeros(arr: jnp.ndarray, axis: int, offset: int) -> jnp.ndarray:
+    """Shift along ``axis`` and fill the exposed entries with zeros."""
+
+    axis = axis % arr.ndim
+    axis_len = arr.shape[axis]
+    if offset == 0:
+        return arr
+    if abs(offset) >= axis_len:
+        return jnp.zeros_like(arr)
+    zero_slice = jnp.zeros_like(jax.lax.slice_in_dim(arr, 0, 1, axis=axis))
+    if offset > 0:
+        body = jax.lax.slice_in_dim(arr, offset, axis_len, axis=axis)
+        zeros = jnp.broadcast_to(zero_slice, body.shape[:axis] + (offset,) + body.shape[axis + 1 :])
+        return jnp.concatenate((body, zeros), axis=axis)
+    body = jax.lax.slice_in_dim(arr, 0, axis_len + offset, axis=axis)
+    zeros = jnp.broadcast_to(zero_slice, body.shape[:axis] + (-offset,) + body.shape[axis + 1 :])
+    return jnp.concatenate((zeros, body), axis=axis)
+
+
 def apply_hermite_v(G: jnp.ndarray) -> jnp.ndarray:
     """Multiply Hermite coefficients by v_parallel (ladder form)."""
 
@@ -318,16 +337,8 @@ def apply_hermite_v(G: jnp.ndarray) -> jnp.ndarray:
     sqrt_p, sqrt_m = hermite_ladder_coeffs(Nm - 1)
     sqrt_p = sqrt_p[:Nm]
     sqrt_m = sqrt_m[:Nm]
-
-    pad = [(0, 0)] * G.ndim
-    pad[axis_m] = (1, 1)
-    G_pad = jnp.pad(G, pad)
-    slc_plus = [slice(None)] * G.ndim
-    slc_minus = [slice(None)] * G.ndim
-    slc_plus[axis_m] = slice(2, None)
-    slc_minus[axis_m] = slice(0, -2)
-    G_plus = G_pad[tuple(slc_plus)]
-    G_minus = G_pad[tuple(slc_minus)]
+    G_plus = _shift_with_zeros(G, axis_m, 1)
+    G_minus = _shift_with_zeros(G, axis_m, -1)
     shape = [1] * G.ndim
     shape[axis_m] = Nm
     sqrt_p = sqrt_p.reshape(shape)
@@ -347,15 +358,8 @@ def apply_laguerre_x(G: jnp.ndarray) -> jnp.ndarray:
     axis_l = -5
     Nl = G.shape[axis_l]
     l = jnp.arange(Nl)
-    pad = [(0, 0)] * G.ndim
-    pad[axis_l] = (1, 1)
-    G_pad = jnp.pad(G, pad)
-    slc_plus = [slice(None)] * G.ndim
-    slc_minus = [slice(None)] * G.ndim
-    slc_plus[axis_l] = slice(2, None)
-    slc_minus[axis_l] = slice(0, -2)
-    G_plus = G_pad[tuple(slc_plus)]
-    G_minus = G_pad[tuple(slc_minus)]
+    G_plus = _shift_with_zeros(G, axis_l, 1)
+    G_minus = _shift_with_zeros(G, axis_l, -1)
     l_shape = [1] * G.ndim
     l_shape[axis_l] = Nl
     l_col = l.reshape(l_shape)

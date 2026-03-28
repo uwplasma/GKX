@@ -1038,16 +1038,8 @@ def apply_hermite_v(G: jnp.ndarray) -> jnp.ndarray:
     sqrt_p, sqrt_m = hermite_ladder_coeffs(Nm - 1)
     sqrt_p = sqrt_p[:Nm]
     sqrt_m = sqrt_m[:Nm]
-
-    pad = [(0, 0)] * G.ndim
-    pad[axis_m] = (1, 1)
-    G_pad = jnp.pad(G, pad)
-    slc_plus = [slice(None)] * G.ndim
-    slc_minus = [slice(None)] * G.ndim
-    slc_plus[axis_m] = slice(2, None)
-    slc_minus[axis_m] = slice(0, -2)
-    G_plus = G_pad[tuple(slc_plus)]
-    G_minus = G_pad[tuple(slc_minus)]
+    G_plus = shift_axis(G, 1, axis_m)
+    G_minus = shift_axis(G, -1, axis_m)
     shape = [1] * G.ndim
     shape[axis_m] = Nm
     sqrt_p = sqrt_p.reshape(shape)
@@ -1067,15 +1059,8 @@ def apply_laguerre_x(G: jnp.ndarray) -> jnp.ndarray:
     axis_l = -5
     Nl = G.shape[axis_l]
     l = jnp.arange(Nl)
-    pad = [(0, 0)] * G.ndim
-    pad[axis_l] = (1, 1)
-    G_pad = jnp.pad(G, pad)
-    slc_plus = [slice(None)] * G.ndim
-    slc_minus = [slice(None)] * G.ndim
-    slc_plus[axis_l] = slice(2, None)
-    slc_minus[axis_l] = slice(0, -2)
-    G_plus = G_pad[tuple(slc_plus)]
-    G_minus = G_pad[tuple(slc_minus)]
+    G_plus = shift_axis(G, 1, axis_l)
+    G_minus = shift_axis(G, -1, axis_l)
     l_shape = [1] * G.ndim
     l_shape[axis_l] = Nl
     l_col = l.reshape(l_shape)
