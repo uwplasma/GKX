@@ -105,6 +105,10 @@ Regenerate the benchmark figures with:
 python tools/make_benchmark_atlas.py
 ```
 
+The atlas inputs are declared in `tools/benchmark_atlas_manifest.toml`, and
+each regeneration writes a summary to
+`tools_out/benchmark_atlas_summary.json`.
+
 ## Examples
 
 ```bash
@@ -139,6 +143,7 @@ The benchmark discussion, algorithms, inputs, and reference list live in
 
 - Run tests with `pytest`.
 - Rebuild the benchmark figures with `python tools/make_benchmark_atlas.py`.
+- Keep the atlas inputs explicit in `tools/benchmark_atlas_manifest.toml`.
 - Keep large benchmark reruns and office-specific audits documented in
   `plan.md`.
 
