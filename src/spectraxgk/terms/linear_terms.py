@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import numpy as np
+
+import jax
 import jax.numpy as jnp
 
 from spectraxgk.terms.operators import (
@@ -367,6 +370,9 @@ def hypercollisions_contribution(
         * jnp.abs(kpar_scale)
     )
     kz_source = weight * hypercollisions_kz * jnp.where(mask_kz, -nu_hyp_m * m_pow, 0.0) * G
+    kz_weight = jnp.asarray(weight) * jnp.asarray(hypercollisions_kz)
+    if not isinstance(kz_weight, jax.core.Tracer) and np.all(np.asarray(kz_weight) == 0.0):
+        return dG
     if linked_indices and linked_kz:
         kz_term = abs_z_linked_fft(
             kz_source,
