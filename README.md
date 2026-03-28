@@ -73,11 +73,11 @@ Primary full-GK publication set:
 - HSX linear and nonlinear
 - Cyclone Miller geometry linear and nonlinear
 
-Cross-code linear set:
+Core linear benchmark set:
 
-- Cyclone ITG against external tokamak references
-- ETG against GS2 and stella
-- KBM against GX, GS2, and stella when matching reference inputs are available
+- Cyclone ITG against the tracked benchmark reference
+- ETG against the tracked internal benchmark reference
+- KBM against the tracked internal benchmark reference and exact-diagnostic audits
 - Imported-geometry and exact-diagnostic linear checks for W7-X, HSX, Miller,
   and KAW
 

@@ -736,18 +736,6 @@ def load_cyclone_reference_kinetic() -> CycloneReference:
     return CycloneReference(ky=ky, omega=omega, gamma=gamma)
 
 
-def load_cyclone_reference_gs2() -> CycloneReference:
-    """Load Cyclone reference values extracted from GS2 runs."""
-
-    return _load_reference_with_header("cyclone_reference_gs2.csv")
-
-
-def load_cyclone_reference_stella() -> CycloneReference:
-    """Load Cyclone reference values extracted from stella runs."""
-
-    return _load_reference_with_header("cyclone_reference_stella.csv")
-
-
 def load_kbm_reference() -> CycloneReference:
     """Load KBM reference data (finite beta, kinetic electrons)."""
 
@@ -759,12 +747,6 @@ def load_kbm_reference() -> CycloneReference:
     return CycloneReference(ky=ky, omega=omega, gamma=gamma)
 
 
-def load_kbm_reference_gs2() -> CycloneReference:
-    """Load KBM reference values extracted from GS2 runs."""
-
-    return _load_reference_with_header("kbm_reference_gs2.csv")
-
-
 def load_etg_reference() -> CycloneReference:
     """Load ETG reference data digitized from the GX paper."""
 
@@ -774,18 +756,6 @@ def load_etg_reference() -> CycloneReference:
     omega = arr[:, 1]
     gamma = arr[:, 2]
     return CycloneReference(ky=ky, omega=omega, gamma=gamma)
-
-
-def load_etg_reference_gs2() -> CycloneReference:
-    """Load ETG reference values extracted from GS2 runs."""
-
-    return _load_reference_with_header("etg_reference_gs2.csv")
-
-
-def load_etg_reference_stella() -> CycloneReference:
-    """Load ETG reference values extracted from stella runs."""
-
-    return _load_reference_with_header("etg_reference_stella.csv")
 
 
 def load_tem_reference() -> CycloneReference:
@@ -2240,9 +2210,9 @@ def run_etg_linear(
                 nhermite=Nm,
             )
     if terms is None:
-        # The cross-code ETG benchmark contract is electrostatic for both the
-        # adiabatic-ion and two-species variants. Keep the default ETG wrappers
-        # aligned with the same term set used by the GS2/stella comparison tools.
+        # The ETG benchmark contract is electrostatic for both the adiabatic-ion
+        # and two-species variants. Keep the default ETG wrappers aligned with
+        # the tracked ETG asset-generation tools.
         terms = LinearTerms(apar=0.0, bpar=0.0, hypercollisions=1.0)
 
     ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
@@ -2668,7 +2638,7 @@ def run_etg_scan(
             )
     if terms is None:
         # Keep the ETG scan helper on the same electrostatic benchmark contract
-        # as the single-ky ETG wrapper and the cross-code ETG comparison tools.
+        # as the single-ky ETG wrapper and the tracked ETG figure builders.
         terms = LinearTerms(apar=0.0, bpar=0.0, hypercollisions=1.0)
     solver_key = solver.strip().lower()
     fit_key = fit_signal.strip().lower()
