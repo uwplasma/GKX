@@ -1784,14 +1784,20 @@ def run_cyclone_scan(
                 mode_method="z_index",
             )
             sel_local = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
-            gamma, omega, _g, _o, _t_mid = gx_growth_rate_from_phi(
-                phi_gx, t, sel_local, navg_fraction=0.5, mode_method="z_index"
-            )
-            gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
+            gx_growth_ok = True
+            try:
+                gamma, omega, _g, _o, _t_mid = gx_growth_rate_from_phi(
+                    phi_gx, t, sel_local, navg_fraction=0.5, mode_method="z_index"
+                )
+                gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
+            except ValueError:
+                gx_growth_ok = False
+                gamma = float("nan")
+                omega = float("nan")
             if gx_reference_use and prev_omega is None and omega < 0.0:
                 omega = abs(omega)
             need_reselect = (
-                gx_reference_use
+                (gx_reference_use and gx_growth_ok)
                 and prev_omega is not None
                 and prev_omega > 0.0
                 and (
@@ -1799,10 +1805,14 @@ def run_cyclone_scan(
                     or ((idx >= 2) and (omega < 0.85 * prev_omega))
                 )
             )
-            if need_reselect:
-                assert prev_omega is not None
-                target_omega: float = prev_omega
-                if prev_prev_omega is not None and prev_omega > prev_prev_omega:
+            if need_reselect or not gx_growth_ok:
+                target_omega: float | None = prev_omega if (gx_growth_ok and prev_omega is not None) else None
+                if (
+                    target_omega is not None
+                    and prev_prev_omega is not None
+                    and prev_omega is not None
+                    and prev_omega > prev_prev_omega
+                ):
                     target_omega = prev_omega + (prev_omega - prev_prev_omega)
                 G0_krylov = jnp.array(G0_jax)
                 eig, _vec = dominant_eigenpair(
@@ -1834,23 +1844,27 @@ def run_cyclone_scan(
                 gamma_k = float(np.real(eig))
                 omega_k = float(abs(-np.imag(eig)))
                 gamma_k, omega_k = _normalize_growth_rate(gamma_k, omega_k, params, diagnostic_norm)
-                candidates: list[tuple[float, float]] = [(float(gamma), float(abs(omega)))]
-                gamma_base = abs(float(gamma))
-                gamma_delta_limit = max(3.0 * gamma_base, gamma_base + 0.05, 1.0e-3)
-                if (
-                    np.isfinite(gamma_k)
-                    and np.isfinite(omega_k)
-                    and gamma_k > 0.0
-                    and abs(gamma_k - float(gamma)) <= gamma_delta_limit
-                ):
-                    candidates.append((gamma_k, omega_k))
+                if not gx_growth_ok:
+                    gamma, omega = gamma_k, omega_k
+                else:
+                    assert target_omega is not None
+                    candidates: list[tuple[float, float]] = [(float(gamma), float(abs(omega)))]
+                    gamma_base = abs(float(gamma))
+                    gamma_delta_limit = max(3.0 * gamma_base, gamma_base + 0.05, 1.0e-3)
+                    if (
+                        np.isfinite(gamma_k)
+                        and np.isfinite(omega_k)
+                        and gamma_k > 0.0
+                        and abs(gamma_k - float(gamma)) <= gamma_delta_limit
+                    ):
+                        candidates.append((gamma_k, omega_k))
 
-                def _score(candidate: tuple[float, float]) -> float:
-                    g_val, o_val = candidate
-                    penalty = 0.0 if g_val > 0.0 else 1.0e3
-                    return penalty + abs(o_val - target_omega)
+                    def _score(candidate: tuple[float, float]) -> float:
+                        g_val, o_val = candidate
+                        penalty = 0.0 if g_val > 0.0 else 1.0e3
+                        return penalty + abs(o_val - target_omega)
 
-                gamma, omega = min(candidates, key=_score)
+                    gamma, omega = min(candidates, key=_score)
             gamma_out[idx] = gamma
             omega_out[idx] = omega
             prev_prev_omega = prev_omega
