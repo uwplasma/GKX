@@ -299,34 +299,22 @@ def shift_axis(arr: jnp.ndarray, offset: int, axis: int) -> jnp.ndarray:
     axis_len = arr.shape[axis]
     if abs(offset) >= axis_len:
         return jnp.zeros_like(arr)
+    out = jnp.zeros_like(arr)
     if offset > 0:
-        pad_shape = [arr.shape[i] if i != axis else offset for i in range(arr.ndim)]
-        zeros = jnp.zeros(pad_shape, dtype=arr.dtype)
-        arr_pad = jnp.concatenate([arr, zeros], axis=axis)
-        return jax.lax.slice_in_dim(arr_pad, offset, offset + arr.shape[axis], axis=axis)
-    pad_shape = [arr.shape[i] if i != axis else -offset for i in range(arr.ndim)]
-    zeros = jnp.zeros(pad_shape, dtype=arr.dtype)
-    arr_pad = jnp.concatenate([zeros, arr], axis=axis)
-    return jax.lax.slice_in_dim(arr_pad, 0, arr.shape[axis], axis=axis)
+        body = jax.lax.slice_in_dim(arr, offset, axis_len, axis=axis)
+        starts = [0] * arr.ndim
+        starts[axis] = 0
+        return jax.lax.dynamic_update_slice(out, body, starts)
+    body = jax.lax.slice_in_dim(arr, 0, axis_len + offset, axis=axis)
+    starts = [0] * arr.ndim
+    starts[axis] = -offset
+    return jax.lax.dynamic_update_slice(out, body, starts)
 
 
 def _shift_with_zeros(arr: jnp.ndarray, axis: int, offset: int) -> jnp.ndarray:
     """Shift along ``axis`` and fill the exposed entries with zeros."""
 
-    axis = axis % arr.ndim
-    axis_len = arr.shape[axis]
-    if offset == 0:
-        return arr
-    if abs(offset) >= axis_len:
-        return jnp.zeros_like(arr)
-    zero_slice = jnp.zeros_like(jax.lax.slice_in_dim(arr, 0, 1, axis=axis))
-    if offset > 0:
-        body = jax.lax.slice_in_dim(arr, offset, axis_len, axis=axis)
-        zeros = jnp.broadcast_to(zero_slice, body.shape[:axis] + (offset,) + body.shape[axis + 1 :])
-        return jnp.concatenate((body, zeros), axis=axis)
-    body = jax.lax.slice_in_dim(arr, 0, axis_len + offset, axis=axis)
-    zeros = jnp.broadcast_to(zero_slice, body.shape[:axis] + (-offset,) + body.shape[axis + 1 :])
-    return jnp.concatenate((zeros, body), axis=axis)
+    return shift_axis(arr, offset, axis)
 
 
 def apply_hermite_v(G: jnp.ndarray) -> jnp.ndarray:

@@ -1077,18 +1077,19 @@ def shift_axis(arr: jnp.ndarray, offset: int, axis: int) -> jnp.ndarray:
     axis = axis % arr.ndim
     if offset == 0:
         return arr
-    pad = [(0, 0)] * arr.ndim
+    axis_len = arr.shape[axis]
+    if abs(offset) >= axis_len:
+        return jnp.zeros_like(arr)
+    out = jnp.zeros_like(arr)
     if offset > 0:
-        pad[axis] = (0, offset)
-        arr_pad = jnp.pad(arr, pad)
-        slc = [slice(None)] * arr.ndim
-        slc[axis] = slice(offset, offset + arr.shape[axis])
-        return arr_pad[tuple(slc)]
-    pad[axis] = (-offset, 0)
-    arr_pad = jnp.pad(arr, pad)
-    slc = [slice(None)] * arr.ndim
-    slc[axis] = slice(0, arr.shape[axis])
-    return arr_pad[tuple(slc)]
+        body = jax.lax.slice_in_dim(arr, offset, axis_len, axis=axis)
+        starts = [0] * arr.ndim
+        starts[axis] = 0
+        return jax.lax.dynamic_update_slice(out, body, starts)
+    body = jax.lax.slice_in_dim(arr, 0, axis_len + offset, axis=axis)
+    starts = [0] * arr.ndim
+    starts[axis] = -offset
+    return jax.lax.dynamic_update_slice(out, body, starts)
 
 
 def energy_operator(
