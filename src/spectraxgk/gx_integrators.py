@@ -373,7 +373,7 @@ def _linear_explicit_step(
     method_key = method.strip().lower()
 
     def rhs(state: jnp.ndarray) -> jnp.ndarray:
-        dG, _fields = assemble_rhs_cached(state, cache, params, terms=term_cfg)
+        dG, _fields = assemble_rhs_cached(state, cache, params, terms=term_cfg, dt=dt_val)
         return dG
 
     k1 = rhs(G)
@@ -435,7 +435,7 @@ def _linear_explicit_step(
     G_next = _apply_gx_state_mask(jnp.asarray(G_next), cache)
 
     # fields at the end of step
-    _, fields = assemble_rhs_cached(G_next, cache, params, terms=term_cfg)
+    _, fields = assemble_rhs_cached(G_next, cache, params, terms=term_cfg, dt=dt_val)
     return G_next, fields
 
 
@@ -478,7 +478,7 @@ def integrate_linear_gx(
     step = 0
 
     # compute initial fields for growth-rate ratio
-    _, fields0 = assemble_rhs_cached(G, cache, params, terms=term_cfg)
+    _, fields0 = assemble_rhs_cached(G, cache, params, terms=term_cfg, dt=dt)
     phi_prev = fields0.phi
 
     omega_max = _gx_linear_omega_max(grid, geom, params, G.shape[-5], G.shape[-4])
@@ -588,7 +588,7 @@ def integrate_linear_gx_diagnostics(
     t = 0.0
     step = 0
 
-    _, fields0 = assemble_rhs_cached(G, cache, params, terms=term_cfg)
+    _, fields0 = assemble_rhs_cached(G, cache, params, terms=term_cfg, dt=dt)
     phi_prev = fields0.phi
 
     omega_max = _gx_linear_omega_max(grid, geom_eff, params, G.shape[-5], G.shape[-4])

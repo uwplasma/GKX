@@ -33,6 +33,7 @@ def assemble_rhs_cached(
     *,
     terms: TermConfig | None = None,
     use_custom_vjp: bool = True,
+    dt: jnp.ndarray | float | None = None,
 ) -> Tuple[jnp.ndarray, FieldState]:
     """Assemble the RHS from term-wise modules using a precomputed cache."""
 
@@ -76,6 +77,9 @@ def assemble_rhs_cached(
     D_hyper = jnp.asarray(params.D_hyper, dtype=real_dtype)
     p_hyper_kperp = jnp.asarray(params.p_hyper_kperp, dtype=real_dtype)
     damp_amp = jnp.asarray(params.damp_ends_amp, dtype=real_dtype)
+    if dt is not None:
+        dt_arr = jnp.asarray(dt, dtype=real_dtype)
+        damp_amp = jnp.where(dt_arr != 0.0, damp_amp / dt_arr, damp_amp)
 
     w_stream = jnp.asarray(term_cfg.streaming, dtype=real_dtype)
     w_mirror = jnp.asarray(term_cfg.mirror, dtype=real_dtype)
@@ -242,6 +246,7 @@ def assemble_rhs_terms_cached(
     *,
     terms: TermConfig | None = None,
     use_custom_vjp: bool = True,
+    dt: jnp.ndarray | float | None = None,
 ) -> tuple[jnp.ndarray, FieldState, dict[str, jnp.ndarray]]:
     """Assemble per-term RHS contributions (debug/diagnostic path).
 
@@ -284,6 +289,9 @@ def assemble_rhs_terms_cached(
     hypercollisions_const = jnp.asarray(params.hypercollisions_const, dtype=real_dtype)
     hypercollisions_kz = jnp.asarray(params.hypercollisions_kz, dtype=real_dtype)
     damp_amp = jnp.asarray(params.damp_ends_amp, dtype=real_dtype)
+    if dt is not None:
+        dt_arr = jnp.asarray(dt, dtype=real_dtype)
+        damp_amp = jnp.where(dt_arr != 0.0, damp_amp / dt_arr, damp_amp)
     D_hyper = jnp.asarray(params.D_hyper, dtype=real_dtype)
     p_hyper_kperp = jnp.asarray(params.p_hyper_kperp, dtype=real_dtype)
 
@@ -478,10 +486,11 @@ def assemble_rhs_cached_jit(
     cache: LinearCache,
     params: LinearParams,
     terms: TermConfig,
+    dt: jnp.ndarray | float | None = None,
 ) -> Tuple[jnp.ndarray, FieldState]:
     """Jitted wrapper for cached RHS assembly."""
 
-    return assemble_rhs_cached(G, cache, params, terms=terms)
+    return assemble_rhs_cached(G, cache, params, terms=terms, dt=dt)
 
 
 def compute_fields_cached(
@@ -550,8 +559,9 @@ def assemble_rhs(
     Nm: int,
     terms: TermConfig | None = None,
     cache: LinearCache | None = None,
+    dt: jnp.ndarray | float | None = None,
 ) -> Tuple[jnp.ndarray, FieldState]:
     """Assemble the RHS from term-wise modules."""
 
     cache = cache or build_linear_cache(grid, geom, params, Nl, Nm)
-    return assemble_rhs_cached(G, cache, params, terms=terms)
+    return assemble_rhs_cached(G, cache, params, terms=terms, dt=dt)

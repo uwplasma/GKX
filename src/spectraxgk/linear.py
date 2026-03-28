@@ -399,12 +399,18 @@ def _build_linked_end_damping_profile(
     nx: int,
     nz: int,
     widthfrac: float,
+    ky_mode: np.ndarray | None = None,
 ) -> np.ndarray:
     """Construct the GX linked-boundary damping profile on the full FFT grid."""
 
     profile = np.zeros((ny, nx, nz), dtype=float)
     if not linked_indices or widthfrac <= 0.0 or ny <= 0 or nx <= 0 or nz <= 0:
         return profile
+    ky_mode_arr: np.ndarray | None = None
+    if ky_mode is not None:
+        ky_mode_arr = np.asarray(ky_mode, dtype=np.int32).reshape(-1)
+        if ky_mode_arr.size < ny:
+            raise ValueError("ky_mode must have at least ny entries for linked end damping")
     if nx > 1:
         kx_neg = np.concatenate(([0], np.arange(nx - 1, 0, -1, dtype=np.int32)))
     else:
@@ -423,9 +429,14 @@ def _build_linked_end_damping_profile(
             for p, idx_flat in enumerate(chain):
                 ky_idx = int(idx_flat % ny)
                 kx_idx = int(idx_flat // ny)
-                if ky_idx == 0:
+                ky_phys = int(ky_mode_arr[ky_idx]) if ky_mode_arr is not None else ky_idx
+                if ky_phys == 0:
                     continue
-                mirror_ky = (-ky_idx) % ny
+                if ky_mode_arr is not None:
+                    mirror_matches = np.flatnonzero(ky_mode_arr == -ky_phys)
+                    mirror_ky = int(mirror_matches[0]) if mirror_matches.size else ky_idx
+                else:
+                    mirror_ky = (-ky_idx) % ny
                 mirror_kx = int(kx_neg[kx_idx])
                 for idz in range(nz):
                     idzp = idz + nz * p
@@ -951,6 +962,11 @@ def build_linear_cache(
                     nx=int(grid.kx.size),
                     nz=int(grid.z.size),
                     widthfrac=float(params.damp_ends_widthfrac),
+                    ky_mode=(
+                        None
+                        if getattr(grid, "ky_mode", None) is None
+                        else np.asarray(grid.ky_mode, dtype=np.int32)
+                    ),
                 ),
                 dtype=real_dtype,
             )
@@ -1239,6 +1255,8 @@ def linear_rhs(
     geom: FluxTubeGeometryLike,
     params: LinearParams,
     terms: LinearTerms | None = None,
+    *,
+    dt: jnp.ndarray | float | None = None,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Compute the linear RHS and electrostatic potential.
 
@@ -1261,7 +1279,7 @@ def linear_rhs(
     else:
         raise ValueError("G must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)")
     cache = build_linear_cache(grid, geom, params, Nl, Nm)
-    return linear_rhs_cached(G, cache, params, terms=terms)
+    return linear_rhs_cached(G, cache, params, terms=terms, dt=dt)
 
 
 def linear_rhs_cached(
@@ -1272,6 +1290,7 @@ def linear_rhs_cached(
     *,
     use_jit: bool = True,
     use_custom_vjp: bool = True,
+    dt: jnp.ndarray | float | None = None,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Compute the linear RHS using precomputed geometry arrays."""
 
@@ -1280,7 +1299,7 @@ def linear_rhs_cached(
     term_cfg = linear_terms_to_term_config(terms)
 
     if use_jit:
-        dG, fields = assemble_rhs_cached_jit(G, cache, params, term_cfg)
+        dG, fields = assemble_rhs_cached_jit(G, cache, params, term_cfg, dt)
     else:
         dG, fields = assemble_rhs_cached(
             G,
@@ -1288,6 +1307,7 @@ def linear_rhs_cached(
             params,
             terms=term_cfg,
             use_custom_vjp=use_custom_vjp,
+            dt=dt,
         )
     return dG, fields.phi
 
@@ -1327,25 +1347,25 @@ def _integrate_linear_cached_impl(
     damping = damping.astype(real_dtype)
 
     def advance(G):
-        dG, _phi = linear_rhs_cached(G, cache, params, terms=terms)
+        dG, _phi = linear_rhs_cached(G, cache, params, terms=terms, dt=dt_val)
         if method == "imex":
             dG_explicit = dG + damping * G
             return (G + dt_val * dG_explicit) / (1.0 + dt_val * damping)
         if method == "imex2":
             dG_explicit = dG + damping * G
             G_half = (G + 0.5 * dt_val * dG_explicit) / (1.0 + 0.5 * dt_val * damping)
-            dG_half, _phi = linear_rhs_cached(G_half, cache, params, terms=terms)
+            dG_half, _phi = linear_rhs_cached(G_half, cache, params, terms=terms, dt=dt_val)
             dG_half_exp = dG_half + damping * G_half
             return (G + dt_val * dG_half_exp) / (1.0 + dt_val * damping)
         if method == "euler":
             return G + dt_val * dG
         if method == "rk2":
             k1 = dG
-            k2, _ = linear_rhs_cached(G + 0.5 * dt_val * k1, cache, params, terms=terms)
+            k2, _ = linear_rhs_cached(G + 0.5 * dt_val * k1, cache, params, terms=terms, dt=dt_val)
             return G + dt_val * k2
         if method == "sspx3":
             def _euler_step(G_state: jnp.ndarray) -> jnp.ndarray:
-                dG_state, _ = linear_rhs_cached(G_state, cache, params, terms=terms)
+                dG_state, _ = linear_rhs_cached(G_state, cache, params, terms=terms, dt=dt_val)
                 return G_state + (_SSPX3_ADT * dt_val) * dG_state
 
             G1 = _euler_step(G)
@@ -1359,14 +1379,14 @@ def _integrate_linear_cached_impl(
                 + G3
             )
         k1 = dG
-        k2, _ = linear_rhs_cached(G + 0.5 * dt_val * k1, cache, params, terms=terms)
-        k3, _ = linear_rhs_cached(G + 0.5 * dt_val * k2, cache, params, terms=terms)
-        k4, _ = linear_rhs_cached(G + dt_val * k3, cache, params, terms=terms)
+        k2, _ = linear_rhs_cached(G + 0.5 * dt_val * k1, cache, params, terms=terms, dt=dt_val)
+        k3, _ = linear_rhs_cached(G + 0.5 * dt_val * k2, cache, params, terms=terms, dt=dt_val)
+        k4, _ = linear_rhs_cached(G + dt_val * k3, cache, params, terms=terms, dt=dt_val)
         return G + (dt_val / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
 
     def step(G, _):
         G_new = advance(G)
-        _dG_new, phi_new = linear_rhs_cached(G_new, cache, params, terms=terms)
+        _dG_new, phi_new = linear_rhs_cached(G_new, cache, params, terms=terms, dt=dt_val)
         return G_new, phi_new
 
     step_fn = jax.checkpoint(step) if checkpoint else step
@@ -1378,7 +1398,7 @@ def _integrate_linear_cached_impl(
             return advance(state)
 
         G_out = jax.lax.fori_loop(0, sample_stride, inner_step, G)
-        _dG_out, phi_out = linear_rhs_cached(G_out, cache, params, terms=terms)
+        _dG_out, phi_out = linear_rhs_cached(G_out, cache, params, terms=terms, dt=dt_val)
         return G_out, phi_out
 
     num_samples = steps // sample_stride
@@ -1722,6 +1742,7 @@ def _build_implicit_operator(
             terms=terms,
             use_jit=False,
             use_custom_vjp=False,
+            dt=dt_val,
         )
         return (x - dt_val * dG).reshape(size)
 
@@ -1767,6 +1788,7 @@ def _integrate_linear_implicit_cached(
                 terms=terms,
                 use_jit=False,
                 use_custom_vjp=False,
+                dt=dt_val,
             )
             g_next = G_rhs + dt_val * dG
             return (1.0 - implicit_relax) * g + implicit_relax * g_next
@@ -1796,6 +1818,7 @@ def _integrate_linear_implicit_cached(
             terms=terms,
             use_jit=False,
             use_custom_vjp=False,
+            dt=dt_val,
         )
         return G_new, phi_new
 
@@ -1815,6 +1838,7 @@ def _integrate_linear_implicit_cached(
                 terms=terms,
                 use_jit=False,
                 use_custom_vjp=False,
+                dt=dt_val,
             )
             return G_out_local, phi_out
 
@@ -1948,21 +1972,21 @@ def integrate_linear_diagnostics(
     damping = damping.astype(real_dtype)
 
     def advance(G_in: jnp.ndarray) -> jnp.ndarray:
-        dG, _phi = linear_rhs_cached(G_in, cache, params, terms=terms, use_jit=False)
+        dG, _phi = linear_rhs_cached(G_in, cache, params, terms=terms, use_jit=False, dt=dt_val)
         if method == "imex":
             dG_explicit = dG + damping * G_in
             return (G_in + dt_val * dG_explicit) / (1.0 + dt_val * damping)
         if method == "imex2":
             dG_explicit = dG + damping * G_in
             G_half = (G_in + 0.5 * dt_val * dG_explicit) / (1.0 + 0.5 * dt_val * damping)
-            dG_half, _phi = linear_rhs_cached(G_half, cache, params, terms=terms, use_jit=False)
+            dG_half, _phi = linear_rhs_cached(G_half, cache, params, terms=terms, use_jit=False, dt=dt_val)
             dG_half_exp = dG_half + damping * G_half
             return (G_in + dt_val * dG_half_exp) / (1.0 + dt_val * damping)
         if method == "euler":
             return G_in + dt_val * dG
         if method == "rk2":
             k1 = dG
-            k2, _ = linear_rhs_cached(G_in + 0.5 * dt_val * k1, cache, params, terms=terms, use_jit=False)
+            k2, _ = linear_rhs_cached(G_in + 0.5 * dt_val * k1, cache, params, terms=terms, use_jit=False, dt=dt_val)
             return G_in + dt_val * k2
         if method == "sspx3":
             def _euler_step(G_state: jnp.ndarray) -> jnp.ndarray:
@@ -1972,6 +1996,7 @@ def integrate_linear_diagnostics(
                     params,
                     terms=terms,
                     use_jit=False,
+                    dt=dt_val,
                 )
                 return G_state + (_SSPX3_ADT * dt_val) * dG_state
 
@@ -1987,9 +2012,9 @@ def integrate_linear_diagnostics(
             )
         if method == "rk4":
             k1 = dG
-            k2, _ = linear_rhs_cached(G_in + 0.5 * dt_val * k1, cache, params, terms=terms, use_jit=False)
-            k3, _ = linear_rhs_cached(G_in + 0.5 * dt_val * k2, cache, params, terms=terms, use_jit=False)
-            k4, _ = linear_rhs_cached(G_in + dt_val * k3, cache, params, terms=terms, use_jit=False)
+            k2, _ = linear_rhs_cached(G_in + 0.5 * dt_val * k1, cache, params, terms=terms, use_jit=False, dt=dt_val)
+            k3, _ = linear_rhs_cached(G_in + 0.5 * dt_val * k2, cache, params, terms=terms, use_jit=False, dt=dt_val)
+            k4, _ = linear_rhs_cached(G_in + dt_val * k3, cache, params, terms=terms, use_jit=False, dt=dt_val)
             return G_in + (dt_val / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
         raise ValueError(f"Unsupported method '{method}'")
 
@@ -2017,7 +2042,7 @@ def integrate_linear_diagnostics(
 
     def step(G_in, _):
         G_out = advance(G_in)
-        _dG, phi = linear_rhs_cached(G_out, cache, params, terms=terms, use_jit=False)
+        _dG, phi = linear_rhs_cached(G_out, cache, params, terms=terms, use_jit=False, dt=dt_val)
         density = density_from_G(G_out)
         if record_hl_energy:
             hl_energy = hl_energy_from_G(G_out)
@@ -2032,7 +2057,7 @@ def integrate_linear_diagnostics(
                 return step(g, None)[0]
 
             G_out_local = jax.lax.fori_loop(0, sample_stride, inner_step, G_in)
-            _dG, phi_out = linear_rhs_cached(G_out_local, cache, params, terms=terms, use_jit=False)
+            _dG, phi_out = linear_rhs_cached(G_out_local, cache, params, terms=terms, use_jit=False, dt=dt_val)
             density_out = density_from_G(G_out_local)
             if record_hl_energy:
                 hl_out = hl_energy_from_G(G_out_local)
