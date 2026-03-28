@@ -109,6 +109,13 @@ The atlas inputs are declared in `tools/benchmark_atlas_manifest.toml`, and
 each regeneration writes a summary to
 `tools_out/benchmark_atlas_summary.json`.
 
+The full refresh matrix lives in `tools/benchmark_refresh_manifest.toml` and
+can be inspected with:
+
+```bash
+python tools/run_benchmark_refresh.py --list
+```
+
 ## Examples
 
 ```bash
