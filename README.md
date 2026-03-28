@@ -85,6 +85,7 @@ Extended linear stress matrix:
 
 - Cyclone kinetic electrons
 - TEM
+- KBM Miller exact late growth window
 
 Core linear atlas:
 
