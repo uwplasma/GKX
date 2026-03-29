@@ -138,6 +138,7 @@ python examples/cyclone_runtime_linear.py
 python examples/cyclone_runtime_nonlinear.py --steps 200
 python examples/cetg_runtime_nonlinear.py --steps 1000
 python examples/etg_runtime_linear.py
+python examples/kaw_runtime_linear.py
 python examples/kbm_runtime_linear.py
 python examples/kbm_runtime_nonlinear.py --steps 200
 python examples/miller_nonlinear_runtime.py --steps 200
@@ -164,8 +165,8 @@ python examples/two_stream_hermite_1d.py
 ```
 
 The `examples/configs` directory contains the runtime TOMLs used by the
-config-backed examples, including Cyclone, cETG, ETG, KBM, Miller, W7-X, HSX,
-and secondary-slab workflows.
+config-backed examples, including Cyclone, cETG, ETG, KAW, KBM, Miller, W7-X,
+HSX, and secondary-slab workflows.
 
 ## Documentation
 
