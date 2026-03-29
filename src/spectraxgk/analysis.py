@@ -524,7 +524,7 @@ def select_fit_window_loglinear(
                 best_slice = (start, end)
 
     if best_score == -np.inf:
-        fallback_start = 0
+        fallback_start = min(start_index, max(0, n - 2))
         fallback_end_index_max = end_index_max if end_index_max >= min_points else n
         for window in lengths:
             if window > n:
