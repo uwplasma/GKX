@@ -8,11 +8,10 @@ electromagnetic runs.
 
 ![SPECTRAX-GK benchmark and convergence atlas](docs/_static/benchmark_readme_panel.png)
 
-The figure above is the publication-facing benchmark summary used by the README.
-It combines representative convergence checks, core linear and nonlinear
-parity panels, imported-geometry and exact-diagnostic audits, and the extended
-linear stress matrix. The underlying figure builders are reproducible and live
-in `tools/`.
+The figure above is the publication-facing benchmark summary used by the
+README. It combines the representative convergence gate, the linear benchmark
+master panel, and the nonlinear benchmark master panel. The underlying figure
+builders are reproducible and live in `tools/`.
 
 ## Highlights
 
@@ -68,49 +67,19 @@ overlays of growth rate and real frequency versus `k_y`, and nonlinear time
 traces of heat flux, free energy, electrostatic field energy, and magnetic
 field energy where relevant.
 
-Representative convergence gate:
+Tracked benchmark coverage:
 
-- Cyclone resolution and `rho_star` sensitivity are shown explicitly in the
-  README panel and used as the tracked grid-convergence check for the benchmark
-  suite.
+- Representative convergence: Cyclone resolution and `rho_star` sensitivity
+- Linear overlays: Cyclone ITG, ETG, KBM, W7-X, HSX, Cyclone Miller, KAW, and
+  the KBM Miller late-growth window
+- Nonlinear overlays: Cyclone ITG, KBM, W7-X, HSX, Cyclone Miller, and the
+  reduced cETG comparison
 
-Primary full-GK publication set:
-
-- Cyclone ITG linear and nonlinear
-- KBM linear and nonlinear
-- W7-X linear and nonlinear
-- HSX linear and nonlinear
-- Cyclone Miller geometry linear and nonlinear
-
-Core linear benchmark set:
-
-- Cyclone ITG against the tracked benchmark reference
-- ETG against the tracked internal benchmark reference
-- KBM against the tracked internal benchmark reference and exact-diagnostic audits
-- Imported-geometry and exact-diagnostic linear checks for W7-X, HSX, Miller,
-  and KAW
-
-Extended linear stress matrix:
-
-- Cyclone kinetic electrons
-- TEM
-- KBM Miller exact late growth window
-
-Core linear atlas:
-
-![Core linear benchmark atlas](docs/_static/benchmark_core_linear_atlas.png)
-
-Core nonlinear atlas:
-
-![Core nonlinear benchmark atlas](docs/_static/benchmark_core_nonlinear_atlas.png)
-
-Representative convergence panel:
-
-![Representative convergence panel](docs/_static/benchmark_convergence_panel.png)
-
-Extended linear stress matrix:
-
-![Extended linear stress matrix](docs/_static/benchmark_extended_linear_panel.png)
+Strict exact-window parity gates are kept separate from the broader scan
+coverage. The current exact-window closures are the KAW diagnostic window and
+the KBM Miller late-growth replay. The broader linear and nonlinear benchmark
+panels remain benchmark overlays rather than universal `rtol <= 3e-2` parity
+claims for every tile.
 
 Regenerate the benchmark figures with:
 
@@ -122,13 +91,6 @@ The atlas inputs are declared in `tools/benchmark_atlas_manifest.toml`, and
 each regeneration writes a summary to
 `tools_out/benchmark_atlas_summary.json`.
 
-The full refresh matrix lives in `tools/benchmark_refresh_manifest.toml` and
-can be inspected with:
-
-```bash
-python tools/run_benchmark_refresh.py --list
-```
-
 ## Runtime and Memory
 
 ![Runtime and memory comparison](docs/_static/runtime_memory_benchmark.png)
@@ -136,9 +98,9 @@ python tools/run_benchmark_refresh.py --list
 The runtime panel reports measured wall time on a log scale and peak RSS on a
 linear scale for the shipped benchmark cases on the tracked office benchmark
 host. It compares SPECTRAX-GK CPU, SPECTRAX-GK GPU, and GX where the matching
-GX benchmark is stable on the measured build. The current reduced-model cETG
-benchmark contributes SPECTRAX-GK CPU/GPU rows only because the available GX
-binary still fails on that case.
+GX benchmark is stable on the measured build. The reduced-model cETG runtime
+row uses a matched short GX input with the same `dt` and total integration
+window as the SPECTRAX-GK runtime case.
 
 Regenerate the runtime figure from collected per-case summaries with:
 
