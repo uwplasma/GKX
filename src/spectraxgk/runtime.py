@@ -349,6 +349,46 @@ def _runtime_model_key(cfg: RuntimeConfig) -> str:
     return cfg.physics.reduced_model.strip().lower()
 
 
+def _runtime_default_krylov_config(cfg: RuntimeConfig) -> KrylovConfig:
+    """Return a model-aware Krylov default for runtime-configured linear runs."""
+
+    contract = cfg.normalization.contract.strip().lower()
+    kinetic_species = tuple(spec for spec in cfg.species if spec.kinetic)
+    electron_only = len(kinetic_species) == 1 and float(kinetic_species[0].charge) < 0.0
+
+    # Electron-scale runtime configs need a frequency-targeted selector; the
+    # blank Krylov defaults drift to damped or wrong-sign branches.
+    if contract == "etg" or (
+        cfg.physics.adiabatic_ions
+        and cfg.physics.electrostatic
+        and not cfg.physics.electromagnetic
+        and electron_only
+    ):
+        return KrylovConfig(
+            method="shift_invert",
+            krylov_dim=16,
+            restarts=1,
+            omega_min_factor=0.0,
+            omega_target_factor=0.4,
+            omega_cap_factor=1.5,
+            omega_sign=-1,
+            power_iters=80,
+            power_dt=0.002,
+            shift_source="target",
+            shift_tol=1.0e-3,
+            shift_maxiter=40,
+            shift_restart=12,
+            shift_solve_method="batched",
+            shift_preconditioner="damping",
+            shift_selection="targeted",
+            mode_family="etg",
+            fallback_method="arnoldi",
+            fallback_real_floor=-1.0e-6,
+        )
+
+    return KrylovConfig()
+
+
 def _resolve_runtime_hl_dims(
     cfg: RuntimeConfig,
     *,
@@ -913,7 +953,7 @@ def run_runtime_linear(
         return True
 
     def _run_krylov() -> tuple[float, float]:
-        kcfg = krylov_cfg or KrylovConfig()
+        kcfg = krylov_cfg or _runtime_default_krylov_config(cfg)
         cache = build_linear_cache(grid, geom, params, Nl_use, Nm_use)
         eig, _vec = dominant_eigenpair(
             g0,
