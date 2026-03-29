@@ -136,6 +136,7 @@ Config-backed case drivers:
 ```bash
 python examples/cyclone_runtime_linear.py
 python examples/cyclone_runtime_nonlinear.py --steps 200
+python examples/cetg_runtime_nonlinear.py --steps 1000
 python examples/etg_runtime_linear.py
 python examples/kbm_runtime_linear.py
 python examples/kbm_runtime_nonlinear.py --steps 200
@@ -157,13 +158,14 @@ python examples/etg_linear_benchmark.py
 python examples/gradB_coupling_hl_1d.py
 python examples/kbm_beta_scan.py
 python examples/w7x_linear_imported_geometry.py --geometry-file /path/to/itg_w7x_adiabatic_electrons.eik.nc
+python examples/hsx_linear_imported_geometry.py --geometry-file /path/to/hsx_linear.eik.nc
 python -m spectraxgk.cli run-runtime-linear --config examples/configs/runtime_w7x_linear_imported_geometry.toml
 python examples/two_stream_hermite_1d.py
 ```
 
 The `examples/configs` directory contains the runtime TOMLs used by the
-config-backed examples, including Cyclone, ETG, KBM, Miller, W7-X, HSX, and
-secondary-slab workflows.
+config-backed examples, including Cyclone, cETG, ETG, KBM, Miller, W7-X, HSX,
+and secondary-slab workflows.
 
 ## Documentation
 
