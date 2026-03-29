@@ -48,7 +48,7 @@ CYCLONE_NORMALIZATION = NormalizationContract(
 ETG_NORMALIZATION = NormalizationContract(
     case="etg",
     rho_star=1.0,
-    omega_d_scale=1.0,
+    omega_d_scale=0.95,
     omega_star_scale=1.0,
 )
 

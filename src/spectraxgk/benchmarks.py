@@ -748,7 +748,7 @@ def load_kbm_reference() -> CycloneReference:
 
 
 def load_etg_reference() -> CycloneReference:
-    """Load ETG reference data digitized from the GX paper."""
+    """Load GX-backed ETG reference data for the tracked two-species ETG lane."""
 
     data_path = resources.files("spectraxgk").joinpath("data", "etg_reference.csv")
     arr = np.loadtxt(str(data_path), delimiter=",", skiprows=1)
