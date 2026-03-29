@@ -2790,12 +2790,17 @@ def run_etg_scan(
             v0_use = G0_jax
             v_ref = None
             shift_override = cfg_use.shift
+            shift_selection_use = cfg_use.shift_selection
             if use_cont and prev_vec is not None and prev_vec.shape == G0_jax.shape:
                 v0_use = prev_vec
                 v_ref = prev_vec
                 if cfg_use.method.strip().lower() == "shift_invert" and prev_eig is not None:
                     if shift_override is None:
                         shift_override = prev_eig
+                        # When continuation carries an explicit previous eigenvalue
+                        # as the shift, select the closest shifted branch first and
+                        # let overlap tracking keep the mode family coherent.
+                        shift_selection_use = "shift"
             select_overlap = use_cont and v_ref is not None and (
                 cfg_use.continuation_selection.strip().lower() == "overlap"
             )
@@ -2822,7 +2827,7 @@ def run_etg_scan(
                 shift_restart=cfg_use.shift_restart,
                 shift_solve_method=cfg_use.shift_solve_method,
                 shift_preconditioner=cfg_use.shift_preconditioner,
-                shift_selection=cfg_use.shift_selection,
+                shift_selection=shift_selection_use,
                 mode_family=cfg_use.mode_family,
                 fallback_method=cfg_use.fallback_method,
                 fallback_real_floor=cfg_use.fallback_real_floor,
