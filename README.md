@@ -129,6 +129,25 @@ can be inspected with:
 python tools/run_benchmark_refresh.py --list
 ```
 
+## Runtime and Memory
+
+![Runtime and memory comparison](docs/_static/runtime_memory_benchmark.png)
+
+The runtime panel reports measured wall time on a log scale and peak RSS on a
+linear scale for the shipped benchmark cases on the tracked office benchmark
+host. It compares SPECTRAX-GK CPU, SPECTRAX-GK GPU, and GX where the matching
+GX benchmark is stable on the measured build. The current reduced-model cETG
+benchmark contributes SPECTRAX-GK CPU/GPU rows only because the available GX
+binary still fails on that case.
+
+Regenerate the runtime figure from collected per-case summaries with:
+
+```bash
+python tools/benchmark_runtime_memory.py \
+  --summary-glob tools_out/runtime_memory_*linear.json \
+  --summary-glob tools_out/runtime_memory_*nonlinear.json
+```
+
 ## Examples
 
 Config-backed case drivers:
