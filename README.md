@@ -1,7 +1,7 @@
 # SPECTRAX-GK
 
 SPECTRAX-GK is a JAX-native gyrokinetic solver built for differentiability,
-accelerator execution, and reproducible cross-code benchmarking. The code uses
+accelerator execution, and reproducible benchmark workflows. The code uses
 Hermite-Laguerre velocity space, Fourier perpendicular coordinates, and
 field-aligned flux-tube geometry for linear and nonlinear electrostatic and
 electromagnetic runs.
@@ -21,10 +21,11 @@ in `tools/`.
 - **Field-aligned flux-tube geometry** with analytic and imported VMEC workflows.
 - **Electromagnetic field solve** for `(\phi, A_\parallel, B_\parallel)`.
 - **Explicit, IMEX, and implicit time integrators** with CFL-controlled
-  explicit stepping and streaming diagnostics.
+  stepping and streaming diagnostics.
 - **Operator caching and batched scans** for repeated linear and nonlinear runs.
 - **Benchmark tooling** for growth-rate/frequency scans, nonlinear transport
-  traces, restart checks, exact-state audits, and cross-code figure generation.
+  traces, restart checks, exact-state audits, atlas generation, and runtime
+  comparison plots.
 
 ## Installation
 
@@ -130,6 +131,21 @@ python tools/run_benchmark_refresh.py --list
 
 ## Examples
 
+Config-backed case drivers:
+
+```bash
+python examples/cyclone_runtime_linear.py
+python examples/cyclone_runtime_nonlinear.py --steps 200
+python examples/etg_runtime_linear.py
+python examples/kbm_runtime_linear.py
+python examples/kbm_runtime_nonlinear.py --steps 200
+python examples/miller_nonlinear_runtime.py --steps 200
+python examples/w7x_nonlinear_vmec_geometry.py --steps 200
+python examples/hsx_nonlinear_vmec_geometry.py --steps 200
+```
+
+Benchmark and theory demos:
+
 ```bash
 python examples/basis_orthonormality.py
 python examples/cyclone_geometry.py
@@ -144,6 +160,10 @@ python examples/w7x_linear_imported_geometry.py --geometry-file /path/to/itg_w7x
 python -m spectraxgk.cli run-runtime-linear --config examples/configs/runtime_w7x_linear_imported_geometry.toml
 python examples/two_stream_hermite_1d.py
 ```
+
+The `examples/configs` directory contains the runtime TOMLs used by the
+config-backed examples, including Cyclone, ETG, KBM, Miller, W7-X, HSX, and
+secondary-slab workflows.
 
 ## Documentation
 
