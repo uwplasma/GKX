@@ -6,11 +6,13 @@ Hermite-Laguerre velocity space, Fourier perpendicular coordinates, and
 field-aligned flux-tube geometry for linear and nonlinear electrostatic and
 electromagnetic runs.
 
-![SPECTRAX-GK benchmark atlas](docs/_static/benchmark_readme_panel.png)
+![SPECTRAX-GK benchmark and convergence atlas](docs/_static/benchmark_readme_panel.png)
 
-The benchmark atlas above is the compact README summary. It is backed by a
-small set of reproducible figure builders in `tools/` and a larger benchmark
-discussion in the docs.
+The figure above is the publication-facing benchmark summary used by the README.
+It combines representative convergence checks, core linear and nonlinear
+parity panels, imported-geometry and exact-diagnostic audits, and the extended
+linear stress matrix. The underlying figure builders are reproducible and live
+in `tools/`.
 
 ## Highlights
 
@@ -65,6 +67,12 @@ overlays of growth rate and real frequency versus `k_y`, and nonlinear time
 traces of heat flux, free energy, electrostatic field energy, and magnetic
 field energy where relevant.
 
+Representative convergence gate:
+
+- Cyclone resolution and `rho_star` sensitivity are shown explicitly in the
+  README panel and used as the tracked grid-convergence check for the benchmark
+  suite.
+
 Primary full-GK publication set:
 
 - Cyclone ITG linear and nonlinear
@@ -94,6 +102,10 @@ Core linear atlas:
 Core nonlinear atlas:
 
 ![Core nonlinear benchmark atlas](docs/_static/benchmark_core_nonlinear_atlas.png)
+
+Representative convergence panel:
+
+![Representative convergence panel](docs/_static/benchmark_convergence_panel.png)
 
 Extended linear stress matrix:
 
