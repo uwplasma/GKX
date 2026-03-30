@@ -77,6 +77,12 @@ overlays of growth rate and real frequency versus `k_y`, and nonlinear time
 traces of heat flux, free energy, electrostatic field energy, and magnetic
 field energy where relevant.
 
+Benchmark-specific replay settings used to regenerate publication figures are
+kept in the benchmark tooling under `tools/`. They are not wired in as global
+runtime defaults, so the production solver and the shipped examples remain
+driven by their case configs rather than by atlas-specific thresholds or fit
+windows.
+
 Tracked benchmark coverage:
 
 - Representative convergence: Cyclone resolution and `rho_star` sensitivity
