@@ -72,6 +72,25 @@ SPECTRAX-GK is rigorously validated against standard gyrokinetic benchmarks, inc
 
 The benchmark tooling in `tools/` ensures reproducibility and performance tracking.
 
+## Runtime and Memory
+
+![Runtime and memory comparison](docs/_static/runtime_memory_benchmark.png)
+
+SPECTRAX-GK is optimized for performance across CPU and GPU backends. The runtime panel above compares wall-time and peak memory usage for core linear and nonlinear benchmarks. Performance tracking covers:
+
+- **Cyclone ITG** (linear/nonlinear)
+- **KBM** and **ETG** configurations
+- **W7-X** and **HSX** stellarator geometries
+- **Miller** geometry models
+
+Regenerate the runtime figure from collected per-case summaries with:
+
+```bash
+python tools/benchmark_runtime_memory.py \
+  --summary-glob tools_out/runtime_memory_*linear.json \
+  --summary-glob tools_out/runtime_memory_*nonlinear.json
+```
+
 ## Examples
 
 The `examples/` directory is organized by physics and configuration:
