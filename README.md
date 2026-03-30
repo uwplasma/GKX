@@ -6,12 +6,16 @@ Hermite-Laguerre velocity space, Fourier perpendicular coordinates, and
 field-aligned flux-tube geometry for linear and nonlinear electrostatic and
 electromagnetic runs.
 
-![SPECTRAX-GK benchmark and convergence atlas](docs/_static/benchmark_readme_panel.png)
+![SPECTRAX-GK convergence panel](docs/_static/benchmark_convergence_panel.png)
 
-The figure above is the publication-facing benchmark summary used by the
-README. It combines the representative convergence gate, the linear benchmark
-master panel, and the nonlinear benchmark master panel. The underlying figure
-builders are reproducible and live in `tools/`.
+![SPECTRAX-GK linear benchmark panel](docs/_static/benchmark_core_linear_atlas.png)
+
+![SPECTRAX-GK nonlinear benchmark panel](docs/_static/benchmark_core_nonlinear_atlas.png)
+
+The figures above are the publication-facing benchmark panels used by the
+README. They keep convergence, linear validation, and nonlinear validation
+separate so the labels remain readable at normal page width. The underlying
+figure builders are reproducible and live in `tools/`.
 
 What is covered in that atlas:
 
