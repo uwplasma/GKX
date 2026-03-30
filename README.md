@@ -13,6 +13,16 @@ README. It combines the representative convergence gate, the linear benchmark
 master panel, and the nonlinear benchmark master panel. The underlying figure
 builders are reproducible and live in `tools/`.
 
+What is covered in that atlas:
+
+- Linear growth-rate and real-frequency overlays for Cyclone ITG, ETG, KBM,
+  W7-X, HSX, Cyclone Miller, KAW, and the KBM Miller late-growth window
+- Extended linear stress tiles for Cyclone kinetic electrons and TEM
+- Nonlinear heat-flux, free-energy, electrostatic-energy, and magnetic-energy
+  traces for Cyclone ITG, KBM, W7-X, HSX, Cyclone Miller, and reduced cETG
+- A compact convergence gate showing Cyclone resolution and `rho_star`
+  sensitivity
+
 ## Highlights
 
 - **JAX-first solver kernels** with differentiable primitives and JIT execution.
@@ -72,6 +82,7 @@ Tracked benchmark coverage:
 - Representative convergence: Cyclone resolution and `rho_star` sensitivity
 - Linear overlays: Cyclone ITG, ETG, KBM, W7-X, HSX, Cyclone Miller, KAW, and
   the KBM Miller late-growth window
+- Extended linear stress lanes: Cyclone kinetic electrons and TEM
 - Nonlinear overlays: Cyclone ITG, KBM, W7-X, HSX, Cyclone Miller, and the
   reduced cETG comparison
 
@@ -101,6 +112,22 @@ host. It compares SPECTRAX-GK CPU, SPECTRAX-GK GPU, and GX where the matching
 GX benchmark is stable on the measured build. The reduced-model cETG runtime
 row uses a matched short GX input with the same `dt` and total integration
 window as the SPECTRAX-GK runtime case.
+
+Current runtime/memory case set:
+
+- Cyclone ITG linear and nonlinear
+- ETG linear
+- ETG nonlinear reduced model (cETG)
+- KBM linear and nonlinear
+- KAW linear
+- W7-X linear and nonlinear
+- HSX linear and nonlinear
+- Cyclone Miller nonlinear
+
+The runtime panel is intentionally separate from the benchmark atlas: the
+atlas carries growth/frequency and transport/energy parity figures, while the
+runtime panel carries wall-time and peak-memory measurements for the same
+shipped case families where backend measurements are available.
 
 Regenerate the runtime figure from collected per-case summaries with:
 
