@@ -7,7 +7,10 @@ so that numerical parity can be verified variable by variable.
 
 from __future__ import annotations
 
+import importlib
+import os
 from pathlib import Path
+import sys
 from typing import Any
 
 import numpy as np
@@ -18,6 +21,57 @@ from scipy.interpolate import CubicSpline, InterpolatedUnivariateSpline, PPoly, 
 from spectraxgk.from_gx.kernels import finite_diff_nonuniform, nperiod_contract
 
 _MU_0 = 4.0 * np.pi * 1.0e-7
+
+
+def _booz_xform_jax_search_paths() -> list[Path]:
+    repo_root = Path(__file__).resolve().parents[3]
+    raw_paths: list[Path] = []
+    for env_name in ("GX_BOOZ_XFORM_JAX_PATH", "BOOZ_XFORM_JAX_PATH"):
+        raw = os.environ.get(env_name)
+        if raw:
+            raw_paths.append(Path(os.path.expandvars(raw)).expanduser())
+    raw_paths.append(repo_root.parent / "booz_xform_jax")
+
+    search_paths: list[Path] = []
+    seen: set[Path] = set()
+    for base in raw_paths:
+        for candidate in (base, base / "src"):
+            resolved = candidate.resolve(strict=False)
+            if resolved in seen or not resolved.exists():
+                continue
+            seen.add(resolved)
+            search_paths.append(resolved)
+    return search_paths
+
+
+def _import_module_with_search_paths(name: str, search_paths: list[Path]) -> Any:
+    try:
+        return importlib.import_module(name)
+    except Exception:
+        pass
+
+    for path in search_paths:
+        path_str = str(path)
+        if path_str not in sys.path:
+            sys.path.insert(0, path_str)
+        try:
+            return importlib.import_module(name)
+        except Exception:
+            continue
+    raise ImportError(name)
+
+
+def _import_booz_backend() -> Any:
+    search_paths = _booz_xform_jax_search_paths()
+    try:
+        return _import_module_with_search_paths("booz_xform_jax", search_paths)
+    except Exception:
+        pass
+
+    try:
+        return importlib.import_module("booz_xform")
+    except Exception as exc:
+        raise ImportError("booz_xform_jax/booz_xform backend unavailable") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -34,13 +88,7 @@ def internal_vmec_backend_available() -> bool:
         return False
 
     try:
-        import booz_xform_jax  # noqa: F401
-        return True
-    except Exception:
-        pass
-
-    try:
-        import booz_xform  # noqa: F401
+        _import_booz_backend()
         return True
     except Exception:
         return False
@@ -193,10 +241,7 @@ def _vmec_fieldlines(
         integrals D1 and D2.
     """
 
-    try:
-        import booz_xform as bxform
-    except ImportError:
-        import booz_xform_jax as bxform
+    bxform = _import_booz_backend()
     from netCDF4 import Dataset as _NC
 
     nc_obj = _NC(str(vmec_fname), "r")
