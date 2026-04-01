@@ -24,7 +24,7 @@ configurations.
 - **Flexible geometry interface** supporting analytic s-alpha, Miller, and direct VMEC equilibrium imports.
 - **Electromagnetic turbulence** including $(\phi, A_\parallel, B_\parallel)$ fluctuations.
 - **Multi-species support** with kinetic electrons and advanced collision operators.
-- **Automated benchmark workflows** for rigorous validation against established gyrokinetic codes.
+- **Automated benchmark workflows** for reproducible validation and regression tracking.
 
 ## Installation
 
@@ -40,6 +40,9 @@ spectrax-gk cyclone-info
 
 # Run a linear simulation with a specific k_y
 spectrax-gk run-linear --config examples/linear/axisymmetric/runtime_cyclone.toml --plot
+
+# Run directly from a runtime TOML
+spectrax-gk examples/nonlinear/axisymmetric/runtime_cetg_reference.toml --steps 200
 
 # Run a linear scan across k_y
 spectrax-gk scan-linear --config examples/linear/axisymmetric/cyclone.toml --plot
