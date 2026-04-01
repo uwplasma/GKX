@@ -114,6 +114,7 @@ class GeometryConfig:
     """Flux-tube geometry parameters or imported sampled geometry settings."""
 
     model: str = "s-alpha"
+    geometry_backend: str = "auto"
     geometry_file: str | None = None
     vmec_file: str | None = None
     gx_python: str | None = None
