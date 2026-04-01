@@ -8,24 +8,14 @@ import json
 import math
 import os
 from pathlib import Path
-import subprocess
-import sys
-import tempfile
 
 from spectraxgk.config import GX_REFERENCE_ELECTRON_MASS
+from spectraxgk.from_gx.vmec import generate_vmec_eik_internal, internal_vmec_backend_available
 from spectraxgk.runtime_config import RuntimeConfig
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_CACHE_DIR = _REPO_ROOT / ".cache" / "spectrax" / "vmec_eik"
-_DEFAULT_GX_REPOS = (
-    Path("/path/to/reference-code"),
-    Path("/home/user/GX"),
-)
-_DEFAULT_BOOZ_XFORM_JAX_REPOS = (
-    Path("/home/user/local/booz_xform_jax"),
-    Path("/home/user/booz_xform_jax"),
-)
 
 
 @dataclass(frozen=True)
@@ -56,131 +46,6 @@ class GXVmecGeometryRequest:
     fprim: tuple[float, ...]
     vnewk: tuple[float, ...]
     species_type: tuple[str, ...]
-    gx_repo: str | None = None
-    gx_python: str | None = None
-
-
-def _format_toml_scalar(value: object) -> str:
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    if isinstance(value, str):
-        escaped = value.replace("\\", "\\\\").replace('"', '\\"')
-        return f'"{escaped}"'
-    if isinstance(value, int):
-        return str(value)
-    if isinstance(value, float):
-        if math.isfinite(value):
-            return repr(float(value))
-        raise ValueError(f"Non-finite TOML float: {value!r}")
-    raise TypeError(f"Unsupported TOML scalar type: {type(value)!r}")
-
-
-def _format_toml_array(values: tuple[object, ...]) -> str:
-    return "[" + ", ".join(_format_toml_scalar(value) for value in values) + "]"
-
-
-def resolve_gx_repo(explicit_repo: str | Path | None = None) -> Path:
-    """Resolve the GX repository used for VMEC geometry generation."""
-
-    if explicit_repo is not None:
-        repo = Path(explicit_repo).expanduser().resolve()
-        if not repo.exists():
-            raise FileNotFoundError(f"GX repository does not exist: {repo}")
-        return repo
-
-    gx_repo_env = os.environ.get("GX_REPO")
-    if gx_repo_env:
-        env_repo = Path(gx_repo_env).expanduser().resolve()
-        if env_repo.exists():
-            return env_repo
-
-    for candidate in _DEFAULT_GX_REPOS:
-        if candidate.exists():
-            return candidate.resolve()
-
-    raise FileNotFoundError(
-        "Could not locate a GX repository. Set geometry.gx_repo or the GX_REPO environment variable."
-    )
-
-
-def resolve_gx_vmec_script(gx_repo: str | Path | None = None) -> Path:
-    """Return the GX ``gx_geo_vmec.py`` script path."""
-
-    repo = resolve_gx_repo(gx_repo)
-    script = repo / "geometry_modules" / "pyvmec" / "gx_geo_vmec.py"
-    if not script.exists():
-        raise FileNotFoundError(f"GX VMEC geometry script not found: {script}")
-    return script
-
-
-def resolve_gx_python(explicit_python: str | Path | None = None) -> str:
-    """Return the Python interpreter used to run GX's VMEC geometry helper."""
-
-    value = explicit_python if explicit_python is not None else os.environ.get("GX_VMEC_PYTHON")
-    if value is None:
-        return sys.executable
-    text = str(value).strip()
-    if not text:
-        return sys.executable
-    candidate = Path(text).expanduser()
-    if candidate.exists():
-        return str(candidate.resolve())
-    return text
-
-
-def resolve_booz_xform_jax_repo(explicit_repo: str | Path | None = None) -> Path | None:
-    """Resolve an optional ``booz_xform_jax`` repository for GX VMEC helpers."""
-
-    candidates: list[str | Path] = []
-    if explicit_repo is not None:
-        candidates.append(explicit_repo)
-    for env_name in ("GX_BOOZ_XFORM_JAX_PATH", "BOOZ_XFORM_JAX_PATH"):
-        value = os.environ.get(env_name)
-        if value:
-            candidates.append(value)
-    candidates.extend(_DEFAULT_BOOZ_XFORM_JAX_REPOS)
-
-    for candidate in candidates:
-        root = Path(candidate).expanduser().resolve()
-        if not root.exists():
-            continue
-        package_dir = root / "src" / "booz_xform_jax"
-        if package_dir.exists():
-            return root
-    return None
-
-
-def _prepend_pythonpath(env: dict[str, str], *paths: Path) -> None:
-    entries = [str(path) for path in paths]
-    existing = env.get("PYTHONPATH", "").strip()
-    if existing:
-        entries.append(existing)
-    env["PYTHONPATH"] = os.pathsep.join(entries)
-
-
-def _write_booz_xform_compat_module(path: Path) -> None:
-    path.write_text(
-        '"""Compatibility shim for GX VMEC helpers."""\n'
-        "from booz_xform_jax import Booz_xform\n"
-        "__all__ = ['Booz_xform']\n",
-        encoding="utf-8",
-    )
-
-
-def _build_gx_vmec_environment(
-    *,
-    shim_dir: Path,
-    booz_xform_jax_repo: Path | None = None,
-) -> dict[str, str]:
-    env = os.environ.copy()
-    resolved_repo = resolve_booz_xform_jax_repo(booz_xform_jax_repo)
-    if resolved_repo is None:
-        return env
-
-    shim_dir.mkdir(parents=True, exist_ok=True)
-    _write_booz_xform_compat_module(shim_dir / "booz_xform.py")
-    _prepend_pythonpath(env, shim_dir, resolved_repo / "src")
-    return env
 
 
 def _infer_vmec_npol(cfg: RuntimeConfig) -> float:
@@ -191,21 +56,14 @@ def _infer_vmec_npol(cfg: RuntimeConfig) -> float:
     return 1.0
 
 
-def _resolve_runtime_vmec_file(vmec_file: str, *, gx_repo: str | Path | None = None) -> Path:
-    """Resolve a runtime VMEC path with env/user expansion and GX-relative fallback."""
+def _resolve_runtime_vmec_file(vmec_file: str) -> Path:
+    """Resolve a runtime VMEC path with env/user expansion."""
 
     expanded = Path(os.path.expandvars(vmec_file)).expanduser()
     if expanded.is_absolute():
         return expanded.resolve()
 
     cwd_candidate = expanded.resolve()
-    if cwd_candidate.exists():
-        return cwd_candidate
-
-    repo_candidate = resolve_gx_repo(gx_repo) / expanded
-    if repo_candidate.exists():
-        return repo_candidate.resolve()
-
     return cwd_candidate
 
 
@@ -257,7 +115,7 @@ def build_gx_vmec_geometry_request(cfg: RuntimeConfig) -> GXVmecGeometryRequest:
         species_type.append("electron")
 
     return GXVmecGeometryRequest(
-        vmec_file=str(_resolve_runtime_vmec_file(cfg.geometry.vmec_file, gx_repo=cfg.geometry.gx_repo)),
+        vmec_file=str(_resolve_runtime_vmec_file(cfg.geometry.vmec_file)),
         ntheta=ntheta,
         boundary=str(cfg.grid.boundary),
         y0=y0,
@@ -281,15 +139,11 @@ def build_gx_vmec_geometry_request(cfg: RuntimeConfig) -> GXVmecGeometryRequest:
         fprim=tuple(fprim),
         vnewk=tuple(vnewk),
         species_type=tuple(species_type),
-        gx_repo=cfg.geometry.gx_repo,
-        gx_python=cfg.geometry.gx_python,
     )
 
 
 def default_vmec_eik_output_path(
     request: GXVmecGeometryRequest,
-    *,
-    gx_repo: str | Path | None = None,
 ) -> Path:
     """Return a stable cache path for a VMEC-generated ``*.eik.nc`` file."""
 
@@ -297,7 +151,6 @@ def default_vmec_eik_output_path(
     stat = vmec_path.stat()
     payload = {
         **asdict(request),
-        "gx_repo": str(resolve_gx_repo(gx_repo or request.gx_repo)),
         "vmec_file": str(vmec_path),
         "vmec_size": stat.st_size,
         "vmec_mtime_ns": stat.st_mtime_ns,
@@ -307,126 +160,13 @@ def default_vmec_eik_output_path(
     return _DEFAULT_CACHE_DIR / f"{stem}_{digest}.eik.nc"
 
 
-def write_gx_vmec_geometry_input(request: GXVmecGeometryRequest, path: str | Path) -> Path:
-    """Write the minimal TOML input that GX's ``gx_geo_vmec.py`` expects."""
-
-    out = Path(path)
-    lines = [
-        "debug = false",
-        "",
-        "[Dimensions]",
-        f"ntheta = {request.ntheta}",
-        "",
-        "[Domain]",
-        f"boundary = {_format_toml_scalar(request.boundary)}",
-        f"y0 = {_format_toml_scalar(float(request.y0))}",
-    ]
-    if request.x0 is not None:
-        lines.append(f"x0 = {_format_toml_scalar(float(request.x0))}")
-    if request.jtwist is not None:
-        lines.append(f"jtwist = {int(request.jtwist)}")
-
-    lines.extend(
-        [
-            "",
-            "[Physics]",
-            f"beta = {_format_toml_scalar(float(request.beta))}",
-            "",
-            "[Geometry]",
-            'geo_option = "vmec"',
-            f"vmec_file = {_format_toml_scalar(request.vmec_file)}",
-            f"alpha = {_format_toml_scalar(float(request.alpha))}",
-            f"npol = {_format_toml_scalar(float(request.npol))}",
-            f"torflux = {_format_toml_scalar(float(request.torflux))}",
-        ]
-    )
-    if request.npol_min is not None:
-        lines.append(f"npol_min = {_format_toml_scalar(float(request.npol_min))}")
-    if request.isaxisym:
-        lines.append("isaxisym = true")
-    if request.which_crossing is not None:
-        lines.append(f"which_crossing = {int(request.which_crossing)}")
-    if request.include_shear_variation:
-        lines.append("include_shear_variation = true")
-    if request.include_pressure_variation:
-        lines.append("include_pressure_variation = true")
-    if request.betaprim is not None:
-        lines.append(f"betaprim = {_format_toml_scalar(float(request.betaprim))}")
-
-    lines.extend(
-        [
-            "",
-            "[species]",
-            f"z = {_format_toml_array(request.z)}",
-            f"mass = {_format_toml_array(request.mass)}",
-            f"dens = {_format_toml_array(request.dens)}",
-            f"temp = {_format_toml_array(request.temp)}",
-            f"tprim = {_format_toml_array(request.tprim)}",
-            f"fprim = {_format_toml_array(request.fprim)}",
-            f"vnewk = {_format_toml_array(request.vnewk)}",
-            f"type = {_format_toml_array(request.species_type)}",
-            "",
-        ]
-    )
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text("\n".join(lines), encoding="utf-8")
-    return out
-
-
-def generate_gx_vmec_eik(
-    request: GXVmecGeometryRequest,
-    *,
-    output_path: str | Path | None = None,
-    gx_repo: str | Path | None = None,
-    force: bool = False,
-) -> Path:
-    """Generate a GX-compatible ``*.eik.nc`` file from a VMEC ``wout`` file."""
-
-    out = (
-        Path(output_path).expanduser().resolve()
-        if output_path is not None
-        else default_vmec_eik_output_path(request, gx_repo=gx_repo)
-    )
-    if out.exists() and not force:
-        return out
-
-    script = resolve_gx_vmec_script(gx_repo or request.gx_repo)
-    gx_python = resolve_gx_python(request.gx_python)
-    out.parent.mkdir(parents=True, exist_ok=True)
-
-    with tempfile.TemporaryDirectory(prefix="spectrax_vmec_") as tmpdir:
-        tmp_path = Path(tmpdir)
-        input_path = tmp_path / "gx_vmec_geometry.toml"
-        write_gx_vmec_geometry_input(request, input_path)
-        env = _build_gx_vmec_environment(shim_dir=tmp_path / "pyshim")
-        proc = subprocess.run(
-            [gx_python, str(script), str(input_path), str(out)],
-            check=False,
-            capture_output=True,
-            text=True,
-            cwd=str(script.parent),
-            env=env,
-        )
-    if proc.returncode != 0:
-        raise RuntimeError(
-            "GX VMEC geometry generation failed:\n"
-            f"command: {gx_python} {script} ...\n"
-            f"stdout:\n{proc.stdout}\n"
-            f"stderr:\n{proc.stderr}"
-        )
-    if not out.exists():
-        raise RuntimeError(f"GX VMEC geometry generation did not create the requested output: {out}")
-    return out
-
-
 def generate_runtime_vmec_eik(
     cfg: RuntimeConfig,
     *,
     output_path: str | Path | None = None,
-    gx_repo: str | Path | None = None,
     force: bool = False,
 ) -> Path:
-    """Generate or reuse a GX-compatible ``*.eik.nc`` file from a runtime config."""
+    """Generate or reuse an internal-backend ``*.eik.nc`` file from a runtime config."""
 
     request = build_gx_vmec_geometry_request(cfg)
     resolved_output = output_path
@@ -434,5 +174,28 @@ def generate_runtime_vmec_eik(
         resolved_output = cfg.geometry.geometry_file
     # For runtime VMEC workflows, an explicit geometry_file is an output target,
     # not a signal to reuse whatever happened to be on disk from a previous run.
-    force_runtime = force or resolved_output is not None
-    return generate_gx_vmec_eik(request, output_path=resolved_output, gx_repo=gx_repo, force=force_runtime)
+    backend = str(cfg.geometry.geometry_backend).strip().lower()
+    if not backend:
+        backend = "auto"
+
+    if backend == "gx":
+        raise ValueError(
+            "geometry_backend='gx' is no longer supported for runtime VMEC geometry generation. "
+            "Use geometry_backend='internal' (or 'auto')."
+        )
+
+    if backend not in {"auto", "internal"}:
+        raise ValueError(
+            f"Unknown geometry backend {cfg.geometry.geometry_backend!r}. "
+            "Expected one of: 'auto', 'internal'."
+        )
+
+    if not internal_vmec_backend_available():
+        raise RuntimeError(
+            "Internal VMEC geometry backend dependencies are missing. "
+            "Install JAX plus either booz_xform_jax or booz_xform."
+        )
+
+    if resolved_output is None:
+        resolved_output = default_vmec_eik_output_path(request)
+    return generate_vmec_eik_internal(output_path=resolved_output, request=request)
