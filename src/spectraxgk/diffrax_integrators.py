@@ -179,6 +179,7 @@ def integrate_linear_diffrax(
     rtol: float = 1.0e-5,
     atol: float = 1.0e-7,
     max_steps: int = 4096,
+    show_progress: bool = False,
     progress_bar: bool = False,
     checkpoint: bool = False,
     jit: bool | None = None,
@@ -311,11 +312,11 @@ def integrate_linear_diffrax(
             stepsize_controller=_stepsize_controller(adaptive_eff, rtol, atol),
             adjoint=_adjoint(checkpoint),
             max_steps=max_steps_eff,
-            progress_meter=_progress_meter(progress_bar),
+            progress_meter=_progress_meter(show_progress or progress_bar),
         )
 
     if jit is None:
-        jit = not progress_bar
+        jit = not (show_progress or progress_bar)
     if jit:
         solve_jit = eqx.filter_jit(solve, donate="all")
         sol = solve_jit(G0_packed)
@@ -345,6 +346,7 @@ def integrate_linear_diffrax_streaming(
     rtol: float = 1.0e-5,
     atol: float = 1.0e-7,
     max_steps: int = 4096,
+    show_progress: bool = False,
     progress_bar: bool = False,
     checkpoint: bool = False,
     jit: bool | None = None,
@@ -506,11 +508,11 @@ def integrate_linear_diffrax_streaming(
             stepsize_controller=_stepsize_controller(adaptive_eff, rtol, atol),
             adjoint=_adjoint(checkpoint),
             max_steps=max_steps_eff,
-            progress_meter=_progress_meter(progress_bar),
+            progress_meter=_progress_meter(show_progress or progress_bar),
         )
 
     if jit is None:
-        jit = not progress_bar
+        jit = not (show_progress or progress_bar)
     if jit:
         solve_jit = eqx.filter_jit(solve, donate="all")
         sol = solve_jit(G0_packed)
@@ -551,8 +553,10 @@ def integrate_nonlinear_diffrax(
     rtol: float = 1.0e-5,
     atol: float = 1.0e-7,
     max_steps: int = 4096,
-    progress_bar: bool = True,
+    show_progress: bool = False,
+    progress_bar: bool = False,
     checkpoint: bool = False,
+
     jit: bool | None = None,
     state_sharding: Any | None = None,
     gx_real_fft: bool = True,
@@ -663,11 +667,11 @@ def integrate_nonlinear_diffrax(
             stepsize_controller=_stepsize_controller(adaptive_eff, rtol, atol),
             adjoint=_adjoint(checkpoint),
             max_steps=max_steps_eff,
-            progress_meter=_progress_meter(progress_bar),
+            progress_meter=_progress_meter(show_progress or progress_bar),
         )
 
     if jit is None:
-        jit = not progress_bar
+        jit = not (show_progress or progress_bar)
     if jit:
         solve_jit = eqx.filter_jit(solve, donate="all")
         sol = solve_jit(G0_packed)

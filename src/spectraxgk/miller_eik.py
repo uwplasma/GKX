@@ -1,4 +1,4 @@
-"""GX-backed Miller to ``*.eiknc.nc`` generation helpers."""
+"""Miller to ``*.eiknc.nc`` generation helpers."""
 
 from __future__ import annotations
 
@@ -18,15 +18,15 @@ _DEFAULT_CACHE_DIR = _REPO_ROOT / ".cache" / "spectrax" / "miller_eik"
 
 @dataclass(frozen=True)
 class GXMillerGeometryRequest:
-    """Minimal GX Miller geometry-generation contract."""
+    """Miller geometry-generation contract."""
 
     ntheta: int
     nperiod: int
     boundary: str
     y0: float
     rhoc: float
-    qinp: float
-    shat: float
+    q: float
+    s_hat: float
     Rmaj: float
     R_geo: float
     shift: float
@@ -53,10 +53,10 @@ def _infer_miller_nperiod(cfg: RuntimeConfig) -> int:
 
 
 def build_gx_miller_geometry_request(cfg: RuntimeConfig) -> GXMillerGeometryRequest:
-    """Build a GX Miller generation request from a runtime config."""
+    """Build a Miller generation request from a runtime config."""
 
     if str(cfg.geometry.model).strip().lower() != "miller":
-        raise ValueError("geometry.model must be 'miller' for GX Miller geometry generation")
+        raise ValueError("geometry.model must be 'miller' for Miller geometry generation")
 
     y0 = float(cfg.grid.y0) if cfg.grid.y0 is not None else float(cfg.grid.Ly) / (2.0 * math.pi)
     ntheta = _infer_miller_ntheta(cfg)
@@ -69,8 +69,8 @@ def build_gx_miller_geometry_request(cfg: RuntimeConfig) -> GXMillerGeometryRequ
         boundary=str(cfg.grid.boundary),
         y0=y0,
         rhoc=float(cfg.geometry.rhoc),
-        qinp=float(cfg.geometry.q),
-        shat=float(cfg.geometry.s_hat),
+        q=float(cfg.geometry.q),
+        s_hat=float(cfg.geometry.s_hat),
         Rmaj=float(cfg.geometry.R0),
         R_geo=float(cfg.geometry.R0 if cfg.geometry.R_geo is None else cfg.geometry.R_geo),
         shift=float(cfg.geometry.shift),

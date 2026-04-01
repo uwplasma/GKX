@@ -1,12 +1,12 @@
-"""GX-backed VMEC to ``*.eik.nc`` generation helpers."""
+"""VMEC to ``*.eik.nc`` generation helpers."""
 
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 import hashlib
 import json
-import math
 import os
+import math
 from pathlib import Path
 
 from spectraxgk.config import GX_REFERENCE_ELECTRON_MASS
@@ -20,7 +20,7 @@ _DEFAULT_CACHE_DIR = _REPO_ROOT / ".cache" / "spectrax" / "vmec_eik"
 
 @dataclass(frozen=True)
 class GXVmecGeometryRequest:
-    """Minimal GX VMEC geometry-generation contract."""
+    """VMEC geometry-generation contract."""
 
     vmec_file: str
     ntheta: int
@@ -70,19 +70,13 @@ def _resolve_runtime_vmec_file(vmec_file: str) -> Path:
 def build_gx_vmec_geometry_request(cfg: RuntimeConfig) -> GXVmecGeometryRequest:
     """Build a GX VMEC generation request from a runtime config."""
 
+    if str(cfg.geometry.model).strip().lower() != "vmec":
+        raise ValueError("geometry.model must be 'vmec' for VMEC geometry generation")
+
     if cfg.geometry.vmec_file is None:
-        raise ValueError("geometry.vmec_file must be set when geometry.model='vmec'")
-    if cfg.geometry.torflux is None:
-        raise ValueError("geometry.torflux must be set when geometry.model='vmec'")
+        raise ValueError("geometry.vmec_file must be set for VMEC geometry generation")
 
     beta = float(cfg.physics.beta)
-    if beta != 0.0 and cfg.geometry.betaprim is None:
-        has_adiabatic_species = bool(cfg.physics.adiabatic_electrons or cfg.physics.adiabatic_ions)
-        if has_adiabatic_species:
-            raise ValueError(
-                "geometry.betaprim must be set for VMEC generation when beta!=0 and adiabatic species are present"
-            )
-
     species = tuple(cfg.species)
     if not species:
         raise ValueError("RuntimeConfig.species must contain at least one species")

@@ -947,6 +947,7 @@ def run_cyclone_linear(
     diagnostic_norm: str = "none",
     use_jit: bool = True,
     gx_reference: bool | None = None,
+    show_progress: bool = False,
 ) -> CycloneRunResult:
     """Run the linear Cyclone benchmark and extract growth rate."""
 
@@ -1033,6 +1034,7 @@ def run_cyclone_linear(
                 time_cfg,
                 terms=terms,
                 mode_method="z_index",
+                show_progress=show_progress,
             )
             sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
             gamma_seed, omega_seed, _g, _o, _t_mid = gx_growth_rate_from_phi(
@@ -1081,6 +1083,7 @@ def run_cyclone_linear(
                     time_cfg,
                     terms=terms,
                     mode_method="z_index",
+                    show_progress=show_progress,
                 )
                 sel_seed = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
                 gamma_seed, omega_seed, _g, _o, _t_mid = gx_growth_rate_from_phi(
@@ -1192,6 +1195,7 @@ def run_cyclone_linear(
                 gx_time_cfg,
                 terms=terms,
                 mode_method="z_index",
+                show_progress=show_progress,
             )
             sel_local = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
             gamma, omega, _g, _o, _t_mid = gx_growth_rate_from_phi(
@@ -1212,6 +1216,7 @@ def run_cyclone_linear(
                     terms=terms,
                     save_field="phi+density",
                     density_species_index=0,
+                    show_progress=show_progress,
                 )
                 phi_t, density_t = saved
             else:
@@ -1222,6 +1227,7 @@ def run_cyclone_linear(
                     params_use,
                     time_cfg_use,
                     terms=terms,
+                    show_progress=show_progress,
                 )
                 density_t = None
             stride = time_cfg_use.sample_stride
@@ -1254,6 +1260,7 @@ def run_cyclone_linear(
                     method=method,
                     terms=terms,
                     sample_stride=stride,
+                    show_progress=show_progress,
                 )
                 density_t = None
 
@@ -1391,6 +1398,7 @@ def run_cyclone_scan(
     streaming_amp_floor: float = 1.0e-30,
     mode_follow: bool = True,
     gx_reference: bool | None = None,
+    show_progress: bool = False,
 ) -> CycloneScanResult:
     """Run the linear Cyclone benchmark for a list of ky values.
 
@@ -1573,7 +1581,9 @@ def run_cyclone_scan(
                         gx_time_cfg,
                         terms=terms,
                         mode_method="z_index",
+                        show_progress=show_progress,
                     )
+
                     sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
                     gamma_seed, omega_seed, _g, _o, _t_mid = gx_growth_rate_from_phi(
                         phi_seed,
@@ -1616,7 +1626,9 @@ def run_cyclone_scan(
                         gx_time_cfg,
                         terms=terms,
                         mode_method="z_index",
+                        show_progress=show_progress,
                     )
+
                     sel_seed = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
                     gamma_seed, omega_seed, _g, _o, _t_mid = gx_growth_rate_from_phi(
                         phi_seed,
@@ -1752,6 +1764,7 @@ def run_cyclone_scan(
                 gx_time_cfg,
                 terms=terms,
                 mode_method="z_index",
+                show_progress=show_progress,
             )
             sel_local = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
             gx_growth_ok = True
@@ -1949,7 +1962,7 @@ def run_cyclone_scan(
                 checkpoint=time_cfg_i.checkpoint,
                 tmin=tmin_i,
                 tmax=tmax_i,
-                fit_signal="phi",
+                fit_signal="phi", show_progress=show_progress,
                 mode_ky_indices=ky_local[:valid_count],
                 mode_kx_index=0,
                 mode_z_index=_midplane_index(grid),
@@ -2010,6 +2023,7 @@ def run_cyclone_scan(
                     cache=cache,
                     terms=terms,
                     sample_stride=stride,
+                    show_progress=show_progress,
                 )
                 phi_t = np.asarray(phi_t)
                 density_t = None
@@ -2093,7 +2107,7 @@ def run_cyclone_scan(
                             solver="krylov",
                             krylov_cfg=krylov_cfg,
                             diagnostic_norm=diagnostic_norm,
-                            fit_signal="phi",
+                            fit_signal="phi", show_progress=show_progress,
                         )
                         gamma = float(res.gamma)
                         omega = float(res.omega)
@@ -2119,7 +2133,7 @@ def run_cyclone_scan(
                     solver="krylov",
                     krylov_cfg=krylov_cfg,
                     diagnostic_norm=diagnostic_norm,
-                    fit_signal="phi",
+                    fit_signal="phi", show_progress=show_progress,
                 )
                 gamma = float(res.gamma)
                 omega = float(res.omega)
@@ -2180,6 +2194,7 @@ def run_etg_linear(
     gx_growth: bool = False,
     gx_navg_fraction: float = 0.5,
     diagnostic_norm: str = "none",
+    show_progress: bool = False,
 ) -> LinearRunResult:
     """Run an ETG linear benchmark and extract growth rate."""
 
@@ -2332,6 +2347,7 @@ def run_etg_linear(
                         rtol=time_cfg_use.diffrax_rtol,
                         atol=time_cfg_use.diffrax_atol,
                         max_steps=time_cfg_use.diffrax_max_steps,
+                        show_progress=show_progress,
                         progress_bar=time_cfg_use.progress_bar,
                         checkpoint=time_cfg_use.checkpoint,
                         tmin=tmin_i,
@@ -2382,6 +2398,7 @@ def run_etg_linear(
                         rtol=time_cfg_use.diffrax_rtol,
                         atol=time_cfg_use.diffrax_atol,
                         max_steps=time_cfg_use.diffrax_max_steps,
+                        show_progress=show_progress,
                         progress_bar=time_cfg_use.progress_bar,
                         checkpoint=time_cfg_use.checkpoint,
                         sample_stride=time_cfg_use.sample_stride,
@@ -2415,6 +2432,7 @@ def run_etg_linear(
                     time_cfg_use,
                     cache=cache,
                     terms=terms,
+                    show_progress=show_progress,
                 )
                 density_t = None
             stride = time_cfg_use.sample_stride
@@ -2446,6 +2464,7 @@ def run_etg_linear(
                     method=method,
                     terms=terms,
                     sample_stride=stride,
+                    show_progress=show_progress,
                 )
                 density_t = None
 
@@ -2604,6 +2623,7 @@ def run_etg_scan(
     gx_growth: bool = False,
     gx_navg_fraction: float = 0.5,
     diagnostic_norm: str = "none",
+    show_progress: bool = False,
 ) -> LinearScanResult:
     """Run an ETG linear benchmark for a list of ky values.
 
@@ -2919,7 +2939,7 @@ def run_etg_scan(
                 save_mode=save_mode,
                 mode_method=mode_method,
                 save_field=save_field,
-                density_species_index=electron_index if need_density else None,
+                density_species_index=electron_index if need_density else None, show_progress=show_progress,
             )
             if fit_key == "auto":
                 phi_t, density_t = saved
@@ -2941,7 +2961,7 @@ def run_etg_scan(
                     cache=cache,
                     terms=terms,
                     sample_stride=stride,
-                    species_index=1,
+                    species_index=1, show_progress=show_progress,
                 )
                 phi_t = _diag[1]
                 density_t = _diag[2] if len(_diag) > 2 else None
@@ -2957,6 +2977,7 @@ def run_etg_scan(
                     cache=cache,
                     terms=terms,
                     sample_stride=stride,
+                    show_progress=show_progress,
                 )
                 density_t = None
 
@@ -3018,7 +3039,7 @@ def run_etg_scan(
                         solver="krylov",
                         krylov_cfg=krylov_cfg,
                         diagnostic_norm=diagnostic_norm,
-                        fit_signal="phi",
+                        fit_signal="phi", show_progress=show_progress,
                     )
                     gamma = float(res.gamma)
                     omega = float(res.omega)
@@ -3063,7 +3084,7 @@ def run_etg_scan(
                     solver="krylov",
                     krylov_cfg=krylov_cfg,
                     diagnostic_norm=diagnostic_norm,
-                    fit_signal="phi",
+                    fit_signal="phi", show_progress=show_progress,
                 )
                 gamma = float(res.gamma)
                 omega = float(res.omega)
@@ -3262,6 +3283,7 @@ def run_kinetic_linear(
                     method=method,
                     terms=terms,
                     sample_stride=stride,
+                    show_progress=show_progress,
                 )
                 density_t = None
 
@@ -3625,6 +3647,7 @@ def run_kinetic_scan(
                     cache=cache,
                     terms=terms,
                     sample_stride=stride,
+                    show_progress=show_progress,
                 )
                 density_t = None
 
@@ -3801,6 +3824,7 @@ def run_tem_linear(
                     time_cfg_use,
                     cache=cache,
                     terms=terms,
+                    show_progress=show_progress,
                 )
                 density_t = None
             stride = time_cfg_use.sample_stride
@@ -3837,6 +3861,7 @@ def run_tem_linear(
                     cache=cache,
                     terms=terms,
                     sample_stride=stride,
+                    show_progress=show_progress,
                 )
                 density_t = None
 
@@ -4117,7 +4142,7 @@ def run_tem_scan(
                 checkpoint=time_cfg_i.checkpoint,
                 tmin=tmin_i,
                 tmax=tmax_i,
-                fit_signal="phi",
+                fit_signal="phi", show_progress=show_progress,
                 mode_ky_indices=np.arange(valid_count, dtype=int),
                 mode_kx_index=0,
                 mode_z_index=_midplane_index(grid),
@@ -5121,6 +5146,7 @@ def run_kbm_linear(
                     cache=cache,
                     terms=terms,
                     sample_stride=stride,
+                    show_progress=show_progress,
                 )
                 phi_t_np = np.asarray(phi_out_time)
                 density_np = None

@@ -451,6 +451,7 @@ def integrate_linear_gx(
     mode_method: str = "z_index",
     z_index: int | None = None,
     jit: bool = True,
+    show_progress: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """GX-style RK4 integrator with GX growth-rate diagnostics."""
 
@@ -547,8 +548,15 @@ def integrate_linear_gx_diagnostics(
     mode_method: str = "z_index",
     z_index: int | None = None,
     jit: bool = True,
+    show_progress: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, GXDiagnostics]:
     """GX-style RK4 integrator with GX growth-rate + energy/flux diagnostics."""
+
+    if show_progress:
+        from rich.console import Console
+        from rich.panel import Panel
+        console = Console()
+        console.print(Panel.fit("[bold blue]SPECTRAX-GK[/bold blue] | [bold green]GX Linear Simulation Started[/bold green]", border_style="blue"))
 
     from spectraxgk.diagnostics import (
         GXDiagnostics,
@@ -669,7 +677,37 @@ def integrate_linear_gx_diagnostics(
             heat_list.append(float(heat_val))
             pflux_list.append(float(pflux_val))
 
+            if show_progress:
+                from spectraxgk.utils.callbacks import print_callback
+                # We can't easily use jax.debug.callback here because we are in a python loop
+                # but we can just use the internal logic of print_callback if it's pure python
+                # or just use rich directly.
+                from rich.table import Table
+                from rich import box
+                pct = (t / t_max) * 100
+                table = Table(box=box.HORIZONTALS, show_header=(step <= sample_stride), header_style="bold magenta")
+                if step <= sample_stride:
+                    table.add_column("Progress", justify="right", style="cyan")
+                    table.add_column("Step", justify="right", style="green")
+                    table.add_column("Time", justify="right", style="yellow")
+                    table.add_column("Wg", justify="right")
+                    table.add_column("Wphi", justify="right")
+                    table.add_column("Heat", justify="right")
+                table.add_row(
+                    f"{pct:>3.0f}%",
+                    str(step),
+                    f"{float(t):.2f}",
+                    f"{float(Wg_val):.4e}",
+                    f"{float(Wphi_val):.4e}",
+                    f"{float(heat_val):.4e}"
+                )
+                console.print(table)
+
         phi_prev = fields.phi
+
+    if show_progress:
+        from rich.panel import Panel
+        console.print(Panel.fit("[bold green]Simulation Complete![/bold green]", border_style="green"))
 
     diag = GXDiagnostics(
         t=np.asarray(ts),

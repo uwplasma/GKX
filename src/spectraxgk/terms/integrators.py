@@ -8,20 +8,12 @@ from typing import Callable
 import jax
 import jax.numpy as jnp
 
-from spectraxgk.terms.config import FieldState
-
-RHSFn = Callable[[jnp.ndarray], tuple[jnp.ndarray, FieldState]]
-
-_SSPX3_ADT = float((1.0 / 6.0) ** (1.0 / 3.0))
-_SSPX3_WGTFAC = float((9.0 - 2.0 * (6.0 ** (2.0 / 3.0))) ** 0.5)
-_SSPX3_W1 = 0.5 * (_SSPX3_WGTFAC - 1.0)
-_SSPX3_W2 = 0.5 * ((6.0 ** (2.0 / 3.0)) - 1.0 - _SSPX3_WGTFAC)
-_SSPX3_W3 = (1.0 / _SSPX3_ADT) - 1.0 - _SSPX3_W2 * (_SSPX3_W1 + 1.0)
+from spectraxgk.terms.config import FieldState, RHSFn
 
 
 @partial(
     jax.jit,
-    static_argnames=("rhs_fn", "steps", "method", "checkpoint", "project_state"),
+    static_argnames=("rhs_fn", "steps", "method", "checkpoint", "project_state", "show_progress"),
     donate_argnums=(1,),
 )
 def integrate_nonlinear(
@@ -33,6 +25,7 @@ def integrate_nonlinear(
     method: str = "rk4",
     checkpoint: bool = False,
     project_state: Callable[[jnp.ndarray], jnp.ndarray] | None = None,
+    show_progress: bool = False,
 ) -> tuple[jnp.ndarray, FieldState]:
     """Integrate a nonlinear RHS using lax.scan for kernel fusion."""
 
@@ -47,7 +40,10 @@ def integrate_nonlinear(
     dt_val = jnp.asarray(dt, dtype=real_dtype)
     projector = project_state if project_state is not None else (lambda G: G)
 
-    def step(G, _):
+    def step(G, idx):
+        if show_progress:
+            from spectraxgk.utils.callbacks import print_callback
+            G = print_callback(G, idx, steps, 0.0, 0.0, 0.0, 0.0)
         G = jnp.asarray(projector(G), dtype=state_dtype)
         dG, _fields = rhs_fn(G)
         dG = jnp.asarray(dG, dtype=state_dtype)
@@ -57,60 +53,42 @@ def integrate_nonlinear(
             k1 = dG
             G_half = jnp.asarray(projector(G + 0.5 * dt_val * k1), dtype=state_dtype)
             k2, _ = rhs_fn(G_half)
-            G_new = G + dt_val * k2
+            G_new = G + dt_val * jnp.asarray(k2, dtype=state_dtype)
         elif method == "rk3_classic":
             k1 = dG
             G1 = jnp.asarray(projector(G + dt_val * k1), dtype=state_dtype)
             k2, _ = rhs_fn(G1)
-            G2 = jnp.asarray(projector(0.75 * G + 0.25 * (G1 + dt_val * k2)), dtype=state_dtype)
+            G2 = jnp.asarray(projector(0.75 * G + 0.25 * (G1 + dt_val * jnp.asarray(k2, dtype=state_dtype))), dtype=state_dtype)
             k3, _ = rhs_fn(G2)
-            G_new = (1.0 / 3.0) * G + (2.0 / 3.0) * (G2 + dt_val * k3)
+            G_new = (1.0 / 3.0) * G + (2.0 / 3.0) * (G2 + dt_val * jnp.asarray(k3, dtype=state_dtype))
         elif method in {"rk3", "rk3_gx"}:
             k1 = dG
             G1 = jnp.asarray(projector(G + (dt_val / 3.0) * k1), dtype=state_dtype)
             k2, _ = rhs_fn(G1)
-            G2 = jnp.asarray(projector(G + (2.0 * dt_val / 3.0) * k2), dtype=state_dtype)
+            G2 = jnp.asarray(projector(G + (2.0 * dt_val / 3.0) * jnp.asarray(k2, dtype=state_dtype)), dtype=state_dtype)
             k3, _ = rhs_fn(G2)
-            G3 = jnp.asarray(projector(G + 0.75 * dt_val * k3), dtype=state_dtype)
+            G3 = jnp.asarray(projector(G + 0.75 * dt_val * jnp.asarray(k3, dtype=state_dtype)), dtype=state_dtype)
             G_new = G3 + 0.25 * dt_val * k1
         elif method == "rk4":
             k1 = dG
             G2 = jnp.asarray(projector(G + 0.5 * dt_val * k1), dtype=state_dtype)
             k2, _ = rhs_fn(G2)
-            G3 = jnp.asarray(projector(G + 0.5 * dt_val * k2), dtype=state_dtype)
+            G3 = jnp.asarray(projector(G + 0.5 * dt_val * jnp.asarray(k2, dtype=state_dtype)), dtype=state_dtype)
             k3, _ = rhs_fn(G3)
-            G4 = jnp.asarray(projector(G + dt_val * k3), dtype=state_dtype)
+            G4 = jnp.asarray(projector(G + dt_val * jnp.asarray(k3, dtype=state_dtype)), dtype=state_dtype)
             k4, _ = rhs_fn(G4)
-            G_new = G + (dt_val / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+            G_new = G + (dt_val / 6.0) * (k1 + 2.0 * jnp.asarray(k2, dtype=state_dtype) + 2.0 * jnp.asarray(k3, dtype=state_dtype) + jnp.asarray(k4, dtype=state_dtype))
         elif method == "sspx3":
-            def _sspx3_euler_step(G_state: jnp.ndarray) -> jnp.ndarray:
-                dG_state, _ = rhs_fn(G_state)
-                dG_state = jnp.asarray(dG_state, dtype=state_dtype)
-                trial = G_state + (_SSPX3_ADT * dt_val) * dG_state
-                return jnp.asarray(projector(trial), dtype=state_dtype)
-
-            G1 = _sspx3_euler_step(G)
-            G2_euler = _sspx3_euler_step(G1)
-            G2 = (
-                (1.0 - _SSPX3_W1) * G
-                + (_SSPX3_W1 - 1.0) * G1
-                + G2_euler
-            )
-            G2 = jnp.asarray(projector(G2), dtype=state_dtype)
-            G3 = _sspx3_euler_step(G2)
-            G_new = (
-                (1.0 - _SSPX3_W2 - _SSPX3_W3) * G
-                + _SSPX3_W3 * G1
-                + (_SSPX3_W2 - 1.0) * G2
-                + G3
-            )
-        else:
-            # Ketcheson 10-stage (K10,4) scheme as used in GX.
+            k1, _ = rhs_fn(G)
+            G1 = jnp.asarray(projector(G + dt_val * jnp.asarray(k1, dtype=state_dtype)), dtype=state_dtype)
+            k2, _ = rhs_fn(G1)
+            G2 = jnp.asarray(projector(0.75 * G + 0.25 * (G1 + dt_val * jnp.asarray(k2, dtype=state_dtype))), dtype=state_dtype)
+            k3, _ = rhs_fn(G2)
+            G_new = (1.0 / 3.0) * G + (2.0 / 3.0) * (G2 + dt_val * jnp.asarray(k3, dtype=state_dtype))
+        elif method == "k10":
             def _k10_euler_step(G_state):
                 dG_state, _ = rhs_fn(G_state)
-                dG_state = jnp.asarray(dG_state, dtype=state_dtype)
-                trial = G_state + (dt_val / 6.0) * dG_state
-                return jnp.asarray(projector(trial), dtype=state_dtype)
+                return jnp.asarray(projector(G_state + (dt_val / 6.0) * jnp.asarray(dG_state, dtype=state_dtype)), dtype=state_dtype)
 
             G_q1 = G
             G_q2 = G
@@ -124,11 +102,14 @@ def integrate_nonlinear(
                 G_q1 = _k10_euler_step(G_q1)
 
             dG_final, _ = rhs_fn(G_q1)
-            dG_final = jnp.asarray(dG_final, dtype=state_dtype)
-            G_new = G_q2 + 0.6 * G_q1 + 0.1 * dt_val * dG_final
+            G_new = G_q2 + 0.6 * G_q1 + 0.1 * dt_val * jnp.asarray(dG_final, dtype=state_dtype)
+        else:
+            raise ValueError(f"Unsupported method '{method}'")
+
         G_new = jnp.asarray(projector(G_new), dtype=state_dtype)
         _dG_new, fields_new = rhs_fn(G_new)
         return G_new, fields_new
 
     step_fn = jax.checkpoint(step) if checkpoint else step
-    return jax.lax.scan(step_fn, G0, None, length=steps)
+    indices = jnp.arange(steps)
+    return jax.lax.scan(step_fn, G0, indices)
