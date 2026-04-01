@@ -142,6 +142,8 @@ jobs:
             tests/test_terms_fields.py \
             tests/test_terms_integrators.py \
             tests/test_terms_validation.py \
+            tests/test_nonlinear_exb.py \
+            tests/test_nonlinear.py \
             --maxfail=1 --disable-warnings \
             --cov=src/spectraxgk/terms \
             --cov-fail-under=90

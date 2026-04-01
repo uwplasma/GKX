@@ -837,6 +837,7 @@ def run_runtime_linear(
     mode_method: str = "project",
     fit_signal: str = "auto",
     return_state: bool = False,
+    show_progress: bool = False,
 ) -> RuntimeLinearResult:
     """Run one linear point from a case-agnostic runtime config."""
 
@@ -1022,6 +1023,7 @@ def run_runtime_linear(
                 mode_method=mode_method,
                 save_field=save_field,
                 density_species_index=0 if need_density else None,
+                show_progress=show_progress,
             )
             if need_density:
                 phi_t, density_t = saved
@@ -1041,6 +1043,7 @@ def run_runtime_linear(
                     sample_stride=tcfg.sample_stride,
                     species_index=0,
                     record_hl_energy=False,
+                    show_progress=show_progress,
                 )
                 g_last = _diag[0]
                 phi_t = _diag[1]
@@ -1056,6 +1059,7 @@ def run_runtime_linear(
                     save_mode=sel,
                     mode_method=mode_method,
                     save_field="phi",
+                    show_progress=show_progress,
                 )
                 density_t = None
 
@@ -1171,6 +1175,7 @@ def run_runtime_scan(
     krylov_cfg: KrylovConfig | None = None,
     mode_method: str = "project",
     fit_signal: str = "auto",
+    show_progress: bool = False,
 ) -> RuntimeLinearScanResult:
     """Run a ky scan using the unified runtime config path.
 
@@ -1204,6 +1209,7 @@ def run_runtime_scan(
             min_amp_fraction=min_amp_fraction,
             mode_method=mode_method,
             fit_signal=fit_signal,
+            show_progress=show_progress,
         )
     gamma = np.zeros_like(ky_arr)
     omega = np.zeros_like(ky_arr)
@@ -1230,6 +1236,7 @@ def run_runtime_scan(
             krylov_cfg=krylov_cfg,
             mode_method=mode_method,
             fit_signal=fit_signal,
+            show_progress=show_progress,
         )
         gamma[i] = float(res.gamma)
         omega[i] = float(res.omega)
@@ -1257,6 +1264,7 @@ def _run_runtime_scan_batch(
     min_amp_fraction: float,
     mode_method: str,
     fit_signal: str,
+    show_progress: bool,
 ) -> RuntimeLinearScanResult:
     """Batch a ky scan using one time integration over the full grid."""
 
@@ -1308,6 +1316,7 @@ def _run_runtime_scan_batch(
         sample_stride=tcfg.sample_stride,
         species_index=0,
         record_hl_energy=False,
+        show_progress=show_progress,
     )
     phi_t = diag[1]
     density_t = diag[2]
@@ -1396,9 +1405,11 @@ def run_runtime_nonlinear(
     laguerre_mode: str | None = None,
     diagnostics: bool | None = None,
     return_state: bool = False,
+    show_progress: bool = False,
 ) -> RuntimeNonlinearResult:
     """Run a nonlinear point using the unified runtime config path."""
 
+    progress_kw = {"show_progress": True} if show_progress else {}
     Nl_use, Nm_use = _resolve_runtime_hl_dims(cfg, Nl=Nl, Nm=Nm)
     if _runtime_model_key(cfg) == "cetg":
         geom = build_runtime_geometry(cfg)
@@ -1455,6 +1466,7 @@ def run_runtime_nonlinear(
                     dt_max=cfg.time.dt_max,
                     cfl=float(cfg.time.cfl),
                     cfl_fac=cfg.time.cfl_fac,
+                    **progress_kw,
                 )
                 diag_chunk = replace(diag_chunk, t=np.asarray(diag_chunk.t) + t_elapsed)
                 cetg_diag_chunks.append(diag_chunk)
@@ -1514,6 +1526,7 @@ def run_runtime_nonlinear(
             dt_max=cfg.time.dt_max,
             cfl=float(cfg.time.cfl),
             cfl_fac=cfg.time.cfl_fac,
+            **progress_kw,
         )
         if diagnostics_on is False:
             phi2 = np.asarray(jnp.mean(jnp.abs(cetg_fields_final.phi) ** 2))
@@ -1588,36 +1601,69 @@ def run_runtime_nonlinear(
             diag_chunks: list[GXDiagnostics] = []
             fields_final: FieldState | None = None
             for _chunk in range(100000):
-                _t_chunk, diag_chunk, G_chunk, fields_final = integrate_nonlinear_gx_diagnostics_state(
-                    G_chunk,
-                    grid,
-                    geom,
-                    params,
-                    dt=dt_val,
-                    steps=chunk_steps,
-                    method=str(method or cfg.time.method),
-                    terms=term_cfg,
-                    sample_stride=1,
-                    diagnostics_stride=1,
-                    use_dealias_mask=bool(cfg.time.nonlinear_dealias),
-                    laguerre_mode=laguerre_mode_use,
-                    omega_ky_index=int(ky_index),
-                    omega_kx_index=int(kx_index),
-                    flux_scale=float(cfg.normalization.flux_scale),
-                    wphi_scale=float(cfg.normalization.wphi_scale),
-                    fixed_dt=False,
-                    dt_min=float(cfg.time.dt_min),
-                    dt_max=cfg.time.dt_max,
-                    cfl=float(cfg.time.cfl),
-                    cfl_fac=resolve_cfl_fac(str(method or cfg.time.method), cfg.time.cfl_fac),
-                    collision_split=bool(cfg.time.collision_split),
-                    collision_scheme=str(cfg.time.collision_scheme),
-                    implicit_restart=int(cfg.time.implicit_restart),
-                    implicit_solve_method=str(cfg.time.implicit_solve_method),
-                    implicit_preconditioner=cfg.time.implicit_preconditioner,
-                    fixed_mode_ky_index=fixed_ky_index_use,
-                    fixed_mode_kx_index=fixed_kx_index_use,
-                )
+                if show_progress:
+                    _t_chunk, diag_chunk, G_chunk, fields_final = integrate_nonlinear_gx_diagnostics_state(
+                        G_chunk,
+                        grid,
+                        geom,
+                        params,
+                        dt=dt_val,
+                        steps=chunk_steps,
+                        method=str(method or cfg.time.method),
+                        terms=term_cfg,
+                        sample_stride=1,
+                        diagnostics_stride=1,
+                        use_dealias_mask=bool(cfg.time.nonlinear_dealias),
+                        laguerre_mode=laguerre_mode_use,
+                        omega_ky_index=int(ky_index),
+                        omega_kx_index=int(kx_index),
+                        flux_scale=float(cfg.normalization.flux_scale),
+                        wphi_scale=float(cfg.normalization.wphi_scale),
+                        fixed_dt=False,
+                        dt_min=float(cfg.time.dt_min),
+                        dt_max=cfg.time.dt_max,
+                        cfl=float(cfg.time.cfl),
+                        cfl_fac=resolve_cfl_fac(str(method or cfg.time.method), cfg.time.cfl_fac),
+                        collision_split=bool(cfg.time.collision_split),
+                        collision_scheme=str(cfg.time.collision_scheme),
+                        implicit_restart=int(cfg.time.implicit_restart),
+                        implicit_solve_method=str(cfg.time.implicit_solve_method),
+                        implicit_preconditioner=cfg.time.implicit_preconditioner,
+                        fixed_mode_ky_index=fixed_ky_index_use,
+                        fixed_mode_kx_index=fixed_kx_index_use,
+                        show_progress=True,
+                    )
+                else:
+                    _t_chunk, diag_chunk, G_chunk, fields_final = integrate_nonlinear_gx_diagnostics_state(
+                        G_chunk,
+                        grid,
+                        geom,
+                        params,
+                        dt=dt_val,
+                        steps=chunk_steps,
+                        method=str(method or cfg.time.method),
+                        terms=term_cfg,
+                        sample_stride=1,
+                        diagnostics_stride=1,
+                        use_dealias_mask=bool(cfg.time.nonlinear_dealias),
+                        laguerre_mode=laguerre_mode_use,
+                        omega_ky_index=int(ky_index),
+                        omega_kx_index=int(kx_index),
+                        flux_scale=float(cfg.normalization.flux_scale),
+                        wphi_scale=float(cfg.normalization.wphi_scale),
+                        fixed_dt=False,
+                        dt_min=float(cfg.time.dt_min),
+                        dt_max=cfg.time.dt_max,
+                        cfl=float(cfg.time.cfl),
+                        cfl_fac=resolve_cfl_fac(str(method or cfg.time.method), cfg.time.cfl_fac),
+                        collision_split=bool(cfg.time.collision_split),
+                        collision_scheme=str(cfg.time.collision_scheme),
+                        implicit_restart=int(cfg.time.implicit_restart),
+                        implicit_solve_method=str(cfg.time.implicit_solve_method),
+                        implicit_preconditioner=cfg.time.implicit_preconditioner,
+                        fixed_mode_ky_index=fixed_ky_index_use,
+                        fixed_mode_kx_index=fixed_kx_index_use,
+                    )
                 diag_chunk = replace(diag_chunk, t=np.asarray(diag_chunk.t) + t_elapsed)
                 diag_chunks.append(diag_chunk)
                 t_next = float(np.asarray(diag_chunk.t)[-1])
@@ -1635,36 +1681,69 @@ def run_runtime_nonlinear(
             t = jnp.asarray(diag.t)
             G_final = G_chunk
         else:
-            t, diag, G_final, fields_final = integrate_nonlinear_gx_diagnostics_state(
-                G0,
-                grid,
-                geom,
-                params,
-                dt=dt_val,
-                steps=steps_val,
-                method=str(method or cfg.time.method),
-                terms=term_cfg,
-                sample_stride=int(sample_stride_use),
-                diagnostics_stride=int(diag_stride),
-                use_dealias_mask=bool(cfg.time.nonlinear_dealias),
-                laguerre_mode=laguerre_mode_use,
-                omega_ky_index=int(ky_index),
-                omega_kx_index=int(kx_index),
-                flux_scale=float(cfg.normalization.flux_scale),
-                wphi_scale=float(cfg.normalization.wphi_scale),
-                fixed_dt=bool(cfg.time.fixed_dt),
-                dt_min=float(cfg.time.dt_min),
-                dt_max=cfg.time.dt_max,
-                cfl=float(cfg.time.cfl),
-                cfl_fac=resolve_cfl_fac(str(method or cfg.time.method), cfg.time.cfl_fac),
-                collision_split=bool(cfg.time.collision_split),
-                collision_scheme=str(cfg.time.collision_scheme),
-                implicit_restart=int(cfg.time.implicit_restart),
-                implicit_solve_method=str(cfg.time.implicit_solve_method),
-                implicit_preconditioner=cfg.time.implicit_preconditioner,
-                fixed_mode_ky_index=fixed_ky_index_use,
-                fixed_mode_kx_index=fixed_kx_index_use,
-            )
+            if show_progress:
+                t, diag, G_final, fields_final = integrate_nonlinear_gx_diagnostics_state(
+                    G0,
+                    grid,
+                    geom,
+                    params,
+                    dt=dt_val,
+                    steps=steps_val,
+                    method=str(method or cfg.time.method),
+                    terms=term_cfg,
+                    sample_stride=int(sample_stride_use),
+                    diagnostics_stride=int(diag_stride),
+                    use_dealias_mask=bool(cfg.time.nonlinear_dealias),
+                    laguerre_mode=laguerre_mode_use,
+                    omega_ky_index=int(ky_index),
+                    omega_kx_index=int(kx_index),
+                    flux_scale=float(cfg.normalization.flux_scale),
+                    wphi_scale=float(cfg.normalization.wphi_scale),
+                    fixed_dt=bool(cfg.time.fixed_dt),
+                    dt_min=float(cfg.time.dt_min),
+                    dt_max=cfg.time.dt_max,
+                    cfl=float(cfg.time.cfl),
+                    cfl_fac=resolve_cfl_fac(str(method or cfg.time.method), cfg.time.cfl_fac),
+                    collision_split=bool(cfg.time.collision_split),
+                    collision_scheme=str(cfg.time.collision_scheme),
+                    implicit_restart=int(cfg.time.implicit_restart),
+                    implicit_solve_method=str(cfg.time.implicit_solve_method),
+                    implicit_preconditioner=cfg.time.implicit_preconditioner,
+                    fixed_mode_ky_index=fixed_ky_index_use,
+                    fixed_mode_kx_index=fixed_kx_index_use,
+                    show_progress=True,
+                )
+            else:
+                t, diag, G_final, fields_final = integrate_nonlinear_gx_diagnostics_state(
+                    G0,
+                    grid,
+                    geom,
+                    params,
+                    dt=dt_val,
+                    steps=steps_val,
+                    method=str(method or cfg.time.method),
+                    terms=term_cfg,
+                    sample_stride=int(sample_stride_use),
+                    diagnostics_stride=int(diag_stride),
+                    use_dealias_mask=bool(cfg.time.nonlinear_dealias),
+                    laguerre_mode=laguerre_mode_use,
+                    omega_ky_index=int(ky_index),
+                    omega_kx_index=int(kx_index),
+                    flux_scale=float(cfg.normalization.flux_scale),
+                    wphi_scale=float(cfg.normalization.wphi_scale),
+                    fixed_dt=bool(cfg.time.fixed_dt),
+                    dt_min=float(cfg.time.dt_min),
+                    dt_max=cfg.time.dt_max,
+                    cfl=float(cfg.time.cfl),
+                    cfl_fac=resolve_cfl_fac(str(method or cfg.time.method), cfg.time.cfl_fac),
+                    collision_split=bool(cfg.time.collision_split),
+                    collision_scheme=str(cfg.time.collision_scheme),
+                    implicit_restart=int(cfg.time.implicit_restart),
+                    implicit_solve_method=str(cfg.time.implicit_solve_method),
+                    implicit_preconditioner=cfg.time.implicit_preconditioner,
+                    fixed_mode_ky_index=fixed_ky_index_use,
+                    fixed_mode_kx_index=fixed_kx_index_use,
+                )
         if diagnostics_on:
             state_out = np.asarray(G_final) if return_state else None
             return RuntimeNonlinearResult(
@@ -1691,14 +1770,25 @@ def run_runtime_nonlinear(
 
     # Diagnostics disabled: use the config-driven integrator for final state.
     t_cfg = replace(cfg.time, dt=dt_val, t_max=dt_val * steps_val)
-    G_final, fields = integrate_nonlinear_from_config(
-        G0,
-        grid,
-        geom,
-        params,
-        t_cfg,
-        terms=term_cfg,
-    )
+    if show_progress:
+        G_final, fields = integrate_nonlinear_from_config(
+            G0,
+            grid,
+            geom,
+            params,
+            t_cfg,
+            terms=term_cfg,
+            show_progress=True,
+        )
+    else:
+        G_final, fields = integrate_nonlinear_from_config(
+            G0,
+            grid,
+            geom,
+            params,
+            t_cfg,
+            terms=term_cfg,
+        )
     phi2 = np.asarray(jnp.mean(jnp.abs(fields.phi) ** 2))
     return RuntimeNonlinearResult(
         t=np.asarray([]),
@@ -1756,6 +1846,7 @@ def run_linear_case(
         dt=dt if dt is not None else run_cfg.get("dt", None),
         steps=steps if steps is not None else run_cfg.get("steps", None),
         sample_stride=sample_stride if sample_stride is not None else raw.get("time", {}).get("sample_stride", None),
+        show_progress=show_progress,
         **fit_cfg,
     )
     print(f"ky={result.ky:.6f} gamma={result.gamma:.8f} omega={result.omega:.8f}")
@@ -1796,6 +1887,7 @@ def run_nonlinear_case(
             diagnostics_stride if diagnostics_stride is not None else time_cfg.get("diagnostics_stride", None)
         ),
         diagnostics=True,
+        show_progress=show_progress,
     )
     if result.diagnostics is None or result.ky_selected is None:
         print("completed without streamed diagnostics")

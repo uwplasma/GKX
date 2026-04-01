@@ -88,6 +88,9 @@ def build_parser() -> argparse.ArgumentParser:
     generic_run.add_argument("--laguerre-mode", type=str, default=None, help="grid or spectral (nonlinear only)")
     generic_run.add_argument("--init-file", type=str, default=None, help="Optional init file for nonlinear runs")
     generic_run.add_argument("--out", type=str, default=None, help="Optional output path for diagnostics")
+    generic_progress = generic_run.add_mutually_exclusive_group()
+    generic_progress.add_argument("--progress", action="store_true", help="Enable progress output")
+    generic_progress.add_argument("--no-progress", action="store_true", help="Disable progress output")
     generic_run.set_defaults(func=_cmd_run)
 
     info = sub.add_parser("cyclone-info", help="Print Cyclone base case defaults")
@@ -142,6 +145,9 @@ def build_parser() -> argparse.ArgumentParser:
     run_runtime.add_argument("--steps", type=int, default=None)
     run_runtime.add_argument("--sample-stride", type=int, default=None)
     run_runtime.add_argument("--fit-signal", type=str, default=None, help="auto, phi, or density")
+    run_runtime_progress = run_runtime.add_mutually_exclusive_group()
+    run_runtime_progress.add_argument("--progress", action="store_true", help="Enable progress output")
+    run_runtime_progress.add_argument("--no-progress", action="store_true", help="Disable progress output")
     run_runtime.set_defaults(func=_cmd_run_runtime_linear)
 
     scan_runtime = sub.add_parser(
@@ -159,6 +165,9 @@ def build_parser() -> argparse.ArgumentParser:
     scan_runtime.add_argument("--sample-stride", type=int, default=None)
     scan_runtime.add_argument("--batch-ky", action="store_true", help="Integrate all ky in one batch")
     scan_runtime.add_argument("--fit-signal", type=str, default=None, help="auto, phi, or density")
+    scan_runtime_progress = scan_runtime.add_mutually_exclusive_group()
+    scan_runtime_progress.add_argument("--progress", action="store_true", help="Enable progress output")
+    scan_runtime_progress.add_argument("--no-progress", action="store_true", help="Disable progress output")
     scan_runtime.set_defaults(func=_cmd_scan_runtime_linear)
 
     run_runtime_nl = sub.add_parser(
@@ -185,6 +194,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run_runtime_nl.add_argument("--init-file", type=str, default=None, help="Optional init file (GX g_state)")
     run_runtime_nl.add_argument("--out", type=str, default=None, help="Optional CSV output path")
+    run_runtime_nl_progress = run_runtime_nl.add_mutually_exclusive_group()
+    run_runtime_nl_progress.add_argument("--progress", action="store_true", help="Enable progress output")
+    run_runtime_nl_progress.add_argument("--no-progress", action="store_true", help="Disable progress output")
     run_runtime_nl.set_defaults(func=_cmd_run_runtime_nonlinear)
 
     return parser
@@ -396,6 +408,13 @@ def _cmd_run_runtime_linear(args: argparse.Namespace) -> int:
         if args.sample_stride is not None
         else run_cfg.get("sample_stride", cfg.time.sample_stride)
     )
+    show_progress = (
+        True
+        if getattr(args, "progress", False)
+        else False
+        if getattr(args, "no_progress", False)
+        else bool(cfg.time.progress_bar)
+    )
 
     res = run_runtime_linear(
         cfg,
@@ -408,6 +427,7 @@ def _cmd_run_runtime_linear(args: argparse.Namespace) -> int:
         steps=steps,
         sample_stride=sample_stride,
         fit_signal=fit_signal,
+        show_progress=show_progress,
         **fit_cfg,
     )
     print(f"ky={res.ky:.4f} gamma={res.gamma:.6f} omega={res.omega:.6f}")
@@ -440,6 +460,13 @@ def _cmd_scan_runtime_linear(args: argparse.Namespace) -> int:
         else scan_cfg.get("sample_stride", cfg.time.sample_stride)
     )
     batch_ky = bool(args.batch_ky)
+    show_progress = (
+        True
+        if getattr(args, "progress", False)
+        else False
+        if getattr(args, "no_progress", False)
+        else bool(cfg.time.progress_bar)
+    )
 
     scan = run_runtime_scan(
         cfg,
@@ -453,6 +480,7 @@ def _cmd_scan_runtime_linear(args: argparse.Namespace) -> int:
         sample_stride=sample_stride,
         batch_ky=batch_ky,
         fit_signal=fit_signal,
+        show_progress=show_progress,
         **fit_cfg,
     )
     for ky, g, w in zip(scan.ky, scan.gamma, scan.omega):
@@ -499,6 +527,13 @@ def _cmd_run_runtime_nonlinear(args: argparse.Namespace) -> int:
     laguerre_mode = args.laguerre_mode if args.laguerre_mode is not None else run_cfg.get(
         "laguerre_mode"
     )
+    show_progress = (
+        True
+        if getattr(args, "progress", False)
+        else False
+        if getattr(args, "no_progress", False)
+        else bool(cfg.time.progress_bar)
+    )
 
     result = run_runtime_nonlinear(
         cfg,
@@ -512,6 +547,7 @@ def _cmd_run_runtime_nonlinear(args: argparse.Namespace) -> int:
         diagnostics_stride=diagnostics_stride,
         laguerre_mode=laguerre_mode,
         diagnostics=diagnostics,
+        show_progress=show_progress,
     )
     diag = result.diagnostics
     if diag is None:

@@ -416,6 +416,7 @@ def integrate_cetg_gx_diagnostics_state(
     dt_max: float | None = None,
     cfl: float = 1.0,
     cfl_fac: float | None = None,
+    show_progress: bool = False,
 ) -> tuple[jnp.ndarray, GXDiagnostics, jnp.ndarray, FieldState]:
     """Integrate the GX cETG model and stream GX-style diagnostics."""
 
@@ -587,8 +588,19 @@ def integrate_cetg_gx_diagnostics_state(
         return (G_new, fields_new, fields_new.phi, diag, t_new, dt_local), (diag, t_new, dt_local)
 
     idx = jnp.arange(steps, dtype=jnp.int32)
+    scan_step = step
+    if show_progress:
+        from spectraxgk.utils.callbacks import print_callback
+
+        def scan_step(carry, idx):
+            carry_out, diag_out = step(carry, idx)
+            diag_vals, _t_out, _dt_out = diag_out
+            gamma_cb, omega_cb, Wg_cb, Wphi_cb = diag_vals[0], diag_vals[1], diag_vals[2], diag_vals[3]
+            print_callback(_dt_out, idx, steps, gamma_cb, omega_cb, Wphi_cb, Wg_cb)
+            return carry_out, diag_out
+
     (G_final, fields_last, phi_last, _diag_last, _t_last, _dt_last), diag_out = jax.lax.scan(
-        step,
+        scan_step,
         (G0_int, fields0, fields0.phi, diag_zero, jnp.asarray(0.0, dtype=real_dtype), dt0),
         idx,
         length=steps,
