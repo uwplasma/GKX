@@ -86,6 +86,13 @@ class RuntimeNonlinearResult:
 _GX_RAND_MAX = float((1 << 31) - 1)
 
 
+def _normalize_linear_solver_name(solver: str) -> str:
+    solver_key = solver.strip().lower()
+    if solver_key == "explicit_time":
+        return "gx_time"
+    return solver_key
+
+
 def _midplane_index(grid: SpectralGrid) -> int:
     if grid.z.size <= 1:
         return 0
@@ -862,11 +869,11 @@ def run_runtime_linear(
         )
         cetg_terms = build_runtime_term_config(cfg)
         cetg_params = build_cetg_model_params(cfg, geom, Nl=Nl_use, Nm=Nm_use)
-        solver_key = solver.strip().lower()
+        solver_key = _normalize_linear_solver_name(solver)
         if solver_key == "krylov":
             raise NotImplementedError("solver='krylov' is not implemented for physics.reduced_model='cetg'")
         if solver_key not in {"auto", "time", "gx_time"}:
-            raise ValueError("solver must be one of {'auto', 'time', 'gx_time', 'krylov'}")
+            raise ValueError("solver must be one of {'auto', 'time', 'explicit_time', 'gx_time', 'krylov'}")
         dt_val = float(cfg.time.dt if dt is None else dt)
         if dt_val <= 0.0:
             raise ValueError("dt must be > 0")
@@ -941,7 +948,7 @@ def run_runtime_linear(
         nspecies=max(len([s for s in cfg.species if s.kinetic]), 1),
     )
 
-    solver_key = solver.strip().lower()
+    solver_key = _normalize_linear_solver_name(solver)
     fit_key = fit_signal.strip().lower()
     if fit_key not in {"phi", "density", "auto"}:
         raise ValueError("fit_signal must be 'phi', 'density', or 'auto'")
@@ -1185,7 +1192,7 @@ def run_runtime_scan(
 
     ky_arr = np.asarray(ky_values, dtype=float)
     Nl_use, Nm_use = _resolve_runtime_hl_dims(cfg, Nl=Nl, Nm=Nm)
-    solver_key = solver.strip().lower()
+    solver_key = _normalize_linear_solver_name(solver)
     if batch_ky and solver_key == "krylov":
         raise ValueError("batch_ky is only supported for time integration")
     if batch_ky:
