@@ -53,3 +53,15 @@ markers = [
 [tool.mypy]
 files = ["src/spectraxgk"]
 exclude = ["legacy_archive", "examples", "docs"]
+
+[[tool.mypy.overrides]]
+module = ["booz_xform", "booz_xform_jax", "scipy", "scipy.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["spectraxgk.from_gx.vmec", "spectraxgk.geometry.vmec"]
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = ["spectraxgk.from_gx.miller"]
+disable_error_code = ["arg-type"]

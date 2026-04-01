@@ -131,6 +131,13 @@ from spectraxgk.diffrax_integrators import (
 from spectraxgk.gx_integrators import GXTimeConfig, integrate_linear_gx, integrate_linear_gx_diagnostics
 from spectraxgk.diagnostics import GXDiagnostics
 
+LinearExplicitTimeConfig = GXTimeConfig
+SimulationDiagnostics = GXDiagnostics
+integrate_linear_explicit = integrate_linear_gx
+integrate_linear_explicit_diagnostics = integrate_linear_gx_diagnostics
+integrate_nonlinear_diagnostics = integrate_nonlinear_gx_diagnostics
+growth_rate_from_phi = gx_growth_rate_from_phi
+
 __all__ = [
     "__version__",
     "CycloneBaseCase",
@@ -186,13 +193,18 @@ __all__ = [
     "integrate_nonlinear",
     "integrate_nonlinear_cached",
     "integrate_nonlinear_gx_diagnostics",
+    "integrate_nonlinear_diagnostics",
     "integrate_nonlinear_diffrax",
     "build_nonlinear_imex_operator",
     "IMEXLinearOperator",
     "GXTimeConfig",
+    "LinearExplicitTimeConfig",
     "integrate_linear_gx",
+    "integrate_linear_explicit",
     "integrate_linear_gx_diagnostics",
+    "integrate_linear_explicit_diagnostics",
     "GXDiagnostics",
+    "SimulationDiagnostics",
     "nonlinear_rhs_cached",
     "integrate_linear_from_config",
     "integrate_nonlinear_from_config",
@@ -206,6 +218,7 @@ __all__ = [
     "fit_growth_rate",
     "fit_growth_rate_auto",
     "gx_growth_rate_from_phi",
+    "growth_rate_from_phi",
     "select_fit_window",
     "CycloneReference",
     "CycloneScanResult",

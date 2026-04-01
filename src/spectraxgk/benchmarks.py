@@ -3122,6 +3122,7 @@ def run_kinetic_linear(
     init_species_index: int = 1,
     density_species_index: int = 1,
     diagnostic_norm: str = "none",
+    show_progress: bool = False,
 ) -> LinearRunResult:
     """Run a kinetic-electron ITG/TEM benchmark and extract growth rate."""
 
@@ -3376,6 +3377,7 @@ def run_kinetic_scan(
     init_species_index: int = 1,
     density_species_index: int = 1,
     diagnostic_norm: str = "none",
+    show_progress: bool = False,
 ) -> LinearScanResult:
     """Run a kinetic-electron ITG/TEM benchmark for a list of ky values.
 
@@ -3709,6 +3711,7 @@ def run_tem_linear(
     init_species_index: int = 1,
     density_species_index: int = 1,
     diagnostic_norm: str = "none",
+    show_progress: bool = False,
 ) -> LinearRunResult:
     """Run the TEM benchmark and extract growth rate."""
 
@@ -3941,6 +3944,7 @@ def run_tem_scan(
     init_species_index: int = 1,
     density_species_index: int = 1,
     diagnostic_norm: str = "none",
+    show_progress: bool = False,
 ) -> LinearScanResult:
     """Run the TEM benchmark for a list of ky values.
 
@@ -4795,6 +4799,7 @@ def run_kbm_linear(
     ampere_g0_scale: float | None = None,
     bpar_beta_scale: float | None = None,
     gx_reference: bool | None = True,
+    show_progress: bool = False,
 ) -> LinearRunResult:
     """Run a single linear KBM point and return the stored field history."""
 
