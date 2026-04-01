@@ -11,6 +11,15 @@ import jax.numpy as jnp
 from spectraxgk.terms.config import FieldState, RHSFn
 
 
+# Keep the SSPX3 coefficients in one importable location because the cETG and
+# runtime paths reuse the same low-storage update.
+_SSPX3_ADT = float((1.0 / 6.0) ** (1.0 / 3.0))
+_SSPX3_WGTFAC = float((9.0 - 2.0 * (6.0 ** (2.0 / 3.0))) ** 0.5)
+_SSPX3_W1 = 0.5 * (_SSPX3_WGTFAC - 1.0)
+_SSPX3_W2 = 0.5 * ((6.0 ** (2.0 / 3.0)) - 1.0 - _SSPX3_WGTFAC)
+_SSPX3_W3 = (1.0 / _SSPX3_ADT) - 1.0 - _SSPX3_W2 * (_SSPX3_W1 + 1.0)
+
+
 @partial(
     jax.jit,
     static_argnames=("rhs_fn", "steps", "method", "checkpoint", "project_state", "show_progress"),
@@ -42,7 +51,7 @@ def integrate_nonlinear(
 
     def step(G, idx):
         if show_progress:
-            from spectraxgk.utils.callbacks import print_callback
+            from spectraxgk.utils.callbacks import print_callback  # type: ignore[import-untyped]
             G = print_callback(G, idx, steps, 0.0, 0.0, 0.0, 0.0)
         G = jnp.asarray(projector(G), dtype=state_dtype)
         dG, _fields = rhs_fn(G)

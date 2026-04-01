@@ -75,6 +75,8 @@ def build_gx_vmec_geometry_request(cfg: RuntimeConfig) -> GXVmecGeometryRequest:
 
     if cfg.geometry.vmec_file is None:
         raise ValueError("geometry.vmec_file must be set for VMEC geometry generation")
+    if cfg.geometry.torflux is None:
+        raise ValueError("geometry.torflux must be set for VMEC geometry generation")
 
     beta = float(cfg.physics.beta)
     species = tuple(cfg.species)
@@ -187,7 +189,7 @@ def generate_runtime_vmec_eik(
     if not internal_vmec_backend_available():
         raise RuntimeError(
             "Internal VMEC geometry backend dependencies are missing. "
-            "Install JAX plus either booz_xform_jax or booz_xform."
+            "Install JAX plus booz_xform_jax, or provide a booz_xform-compatible shim."
         )
 
     if resolved_output is None:

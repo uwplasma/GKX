@@ -46,9 +46,49 @@ def _cmd_cyclone_kperp(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_run(args: argparse.Namespace) -> int:
+    try:
+        cfg, _raw = load_runtime_from_toml(args.config)
+    except Exception as exc:
+        print(f"Error loading {args.config}: {exc}")
+        return 1
+
+    if cfg.physics.nonlinear:
+        return _cmd_run_runtime_nonlinear(args)
+    return _cmd_run_runtime_linear(args)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="spectrax-gk")
-    sub = parser.add_subparsers(dest="cmd", required=True)
+    parser.add_argument(
+        "config_pos",
+        nargs="?",
+        help="Path to TOML config (shorthand for 'run --config ...')",
+    )
+    sub = parser.add_subparsers(dest="cmd")
+
+    generic_run = sub.add_parser(
+        "run",
+        help="Run a simulation from a TOML config (auto-detect linear/nonlinear)",
+    )
+    generic_run.add_argument("--config", required=True, help="Path to TOML config")
+    generic_run.add_argument("--ky", type=float, default=None)
+    generic_run.add_argument("--Nl", type=int, default=None)
+    generic_run.add_argument("--Nm", type=int, default=None)
+    generic_run.add_argument("--steps", type=int, default=None)
+    generic_run.add_argument("--dt", type=float, default=None)
+    generic_run.add_argument("--solver", type=str, default=None)
+    generic_run.add_argument("--method", type=str, default=None)
+    generic_run.add_argument("--fit-signal", type=str, default=None)
+    generic_run.add_argument("--sample-stride", type=int, default=None)
+    generic_run.add_argument("--diagnostics-stride", type=int, default=None)
+    diag_group = generic_run.add_mutually_exclusive_group()
+    diag_group.add_argument("--diagnostics", action="store_true", help="Enable diagnostics output")
+    diag_group.add_argument("--no-diagnostics", action="store_true", help="Disable diagnostics output")
+    generic_run.add_argument("--laguerre-mode", type=str, default=None, help="grid or spectral (nonlinear only)")
+    generic_run.add_argument("--init-file", type=str, default=None, help="Optional init file for nonlinear runs")
+    generic_run.add_argument("--out", type=str, default=None, help="Optional output path for diagnostics")
+    generic_run.set_defaults(func=_cmd_run)
 
     info = sub.add_parser("cyclone-info", help="Print Cyclone base case defaults")
     info.set_defaults(func=_cmd_cyclone_info)
@@ -151,8 +191,29 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
+    import sys
+
+    known_cmds = {
+        "run",
+        "cyclone-info",
+        "cyclone-kperp",
+        "run-linear",
+        "scan-linear",
+        "run-runtime-linear",
+        "scan-runtime-linear",
+        "run-runtime-nonlinear",
+    }
+    if len(sys.argv) > 1 and not sys.argv[1].startswith("-") and sys.argv[1] not in known_cmds:
+        if Path(sys.argv[1]).exists():
+            parser = build_parser()
+            args = parser.parse_args(["run", "--config", sys.argv[1], *sys.argv[2:]])
+            return args.func(args)
+
     parser = build_parser()
     args = parser.parse_args()
+    if args.cmd is None:
+        parser.print_help()
+        return 0
     return args.func(args)
 
 
