@@ -306,6 +306,7 @@ def integrate_nonlinear_cached(
     checkpoint: bool = False,
     gx_real_fft: bool = True,
     laguerre_mode: str = "grid",
+    show_progress: bool = False,
 ) -> tuple[jnp.ndarray, FieldState]:
     """Integrate the nonlinear system using a cached geometry object."""
 
@@ -321,6 +322,7 @@ def integrate_nonlinear_cached(
             checkpoint=checkpoint,
             gx_real_fft=gx_real_fft,
             laguerre_mode=laguerre_mode,
+            show_progress=show_progress,
         )
 
     def rhs_fn(G):
@@ -345,6 +347,7 @@ def integrate_nonlinear_cached(
         method=method,
         checkpoint=checkpoint,
         project_state=project_state,
+        show_progress=show_progress,
     )
 
 
@@ -361,6 +364,7 @@ def integrate_nonlinear(
     checkpoint: bool = False,
     gx_real_fft: bool = True,
     laguerre_mode: str = "grid",
+    show_progress: bool = False,
 ) -> tuple[jnp.ndarray, FieldState]:
     """Integrate the nonlinear system using built-in cache construction."""
 
@@ -384,6 +388,7 @@ def integrate_nonlinear(
         checkpoint=checkpoint,
         gx_real_fft=gx_real_fft,
         laguerre_mode=laguerre_mode,
+        show_progress=show_progress,
     )
 
 
@@ -425,6 +430,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
     implicit_preconditioner: str | None = None,
     fixed_mode_ky_index: int | None = None,
     fixed_mode_kx_index: int | None = None,
+    show_progress: bool = False,
 ) -> tuple[jnp.ndarray, GXDiagnostics, jnp.ndarray, FieldState]:
     """Integrate nonlinear system and return GX-style diagnostics plus final state."""
 
@@ -820,6 +826,7 @@ def integrate_nonlinear_gx_diagnostics(
     implicit_preconditioner: str | None = None,
     fixed_mode_ky_index: int | None = None,
     fixed_mode_kx_index: int | None = None,
+    show_progress: bool = False,
 ) -> tuple[jnp.ndarray, GXDiagnostics]:
     """Integrate nonlinear system and return GX-style diagnostics."""
 
@@ -856,6 +863,7 @@ def integrate_nonlinear_gx_diagnostics(
             implicit_preconditioner=implicit_preconditioner,
             fixed_mode_ky_index=fixed_mode_ky_index,
             fixed_mode_kx_index=fixed_mode_kx_index,
+            show_progress=show_progress,
         )
 
     t, diag_out, _G_final, _fields_final = _integrate_nonlinear_gx_diagnostics_impl(
@@ -895,6 +903,7 @@ def integrate_nonlinear_gx_diagnostics(
         implicit_preconditioner=implicit_preconditioner,
         fixed_mode_ky_index=fixed_mode_ky_index,
         fixed_mode_kx_index=fixed_mode_kx_index,
+        show_progress=show_progress,
     )
     return t, diag_out
 
@@ -937,6 +946,7 @@ def integrate_nonlinear_gx_diagnostics_state(
     implicit_preconditioner: str | None = None,
     fixed_mode_ky_index: int | None = None,
     fixed_mode_kx_index: int | None = None,
+    show_progress: bool = False,
 ) -> tuple[jnp.ndarray, GXDiagnostics, jnp.ndarray, FieldState]:
     """Integrate nonlinear system and return GX diagnostics plus the final state."""
 
@@ -980,6 +990,7 @@ def integrate_nonlinear_gx_diagnostics_state(
         implicit_preconditioner=implicit_preconditioner,
         fixed_mode_ky_index=fixed_mode_ky_index,
         fixed_mode_kx_index=fixed_mode_kx_index,
+        show_progress=show_progress,
     )
 
 
@@ -1016,6 +1027,7 @@ def integrate_nonlinear_imex_gx_diagnostics(
     implicit_preconditioner: str | None = None,
     fixed_mode_ky_index: int | None = None,
     fixed_mode_kx_index: int | None = None,
+    show_progress: bool = False,
 ) -> tuple[jnp.ndarray, GXDiagnostics]:
     """IMEX nonlinear integrator with GX diagnostics."""
 
@@ -1380,6 +1392,7 @@ def integrate_nonlinear_imex_cached(
     implicit_operator: IMEXLinearOperator | None = None,
     gx_real_fft: bool = True,
     laguerre_mode: str = "grid",
+    show_progress: bool = False,
 ) -> tuple[jnp.ndarray, FieldState]:
     """IMEX integrator: implicit linear operator, explicit nonlinear term."""
 

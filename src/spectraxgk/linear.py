@@ -1309,6 +1309,7 @@ def _integrate_linear_cached_impl(
     checkpoint: bool = False,
     terms: LinearTerms | None = None,
     sample_stride: int = 1,
+    show_progress: bool = False,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Time integrate the linear system using cached geometry arrays."""
     if method not in {"euler", "rk2", "rk4", "imex", "imex2", "sspx3"}:
@@ -1371,30 +1372,39 @@ def _integrate_linear_cached_impl(
         k4, _ = linear_rhs_cached(G + dt_val * k3, cache, params, terms=terms, dt=dt_val)
         return G + (dt_val / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
 
-    def step(G, _):
+    def step(G, idx):
+        if show_progress:
+            from spectraxgk.utils.callbacks import print_callback
+            G = print_callback(G, idx, steps, 0.0, 0.0, 0.0, 0.0)
         G_new = advance(G)
         _dG_new, phi_new = linear_rhs_cached(G_new, cache, params, terms=terms, dt=dt_val)
         return G_new, phi_new
 
     step_fn = jax.checkpoint(step) if checkpoint else step
+    indices = jnp.arange(steps)
     if sample_stride <= 1:
-        return jax.lax.scan(step_fn, G0, None, length=steps)
+        return jax.lax.scan(step_fn, G0, indices)
 
-    def sample_step(G, _):
+    def sample_step(G, idx):
         def inner_step(i, state):
             return advance(state)
+
+        if show_progress:
+            from spectraxgk.utils.callbacks import print_callback
+            G = print_callback(G, idx * sample_stride, steps, 0.0, 0.0, 0.0, 0.0)
 
         G_out = jax.lax.fori_loop(0, sample_stride, inner_step, G)
         _dG_out, phi_out = linear_rhs_cached(G_out, cache, params, terms=terms, dt=dt_val)
         return G_out, phi_out
 
     num_samples = steps // sample_stride
-    return jax.lax.scan(sample_step, G0, None, length=num_samples)
+    sample_indices = jnp.arange(num_samples)
+    return jax.lax.scan(sample_step, G0, sample_indices)
 
 
 @partial(
     jax.jit,
-    static_argnames=("steps", "method", "checkpoint", "sample_stride"),
+    static_argnames=("steps", "method", "checkpoint", "sample_stride", "show_progress"),
 )
 def _integrate_linear_cached(
     G0: jnp.ndarray,
@@ -1406,6 +1416,7 @@ def _integrate_linear_cached(
     checkpoint: bool = False,
     terms: LinearTerms | None = None,
     sample_stride: int = 1,
+    show_progress: bool = False,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     return _integrate_linear_cached_impl(
         G0,
@@ -1417,12 +1428,13 @@ def _integrate_linear_cached(
         checkpoint=checkpoint,
         terms=terms,
         sample_stride=sample_stride,
+        show_progress=show_progress,
     )
 
 
 @partial(
     jax.jit,
-    static_argnames=("steps", "method", "checkpoint", "sample_stride"),
+    static_argnames=("steps", "method", "checkpoint", "sample_stride", "show_progress"),
     donate_argnums=(0,),
 )
 def _integrate_linear_cached_donate(
@@ -1435,6 +1447,7 @@ def _integrate_linear_cached_donate(
     checkpoint: bool = False,
     terms: LinearTerms | None = None,
     sample_stride: int = 1,
+    show_progress: bool = False,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     return _integrate_linear_cached_impl(
         G0,
@@ -1446,6 +1459,7 @@ def _integrate_linear_cached_donate(
         checkpoint=checkpoint,
         terms=terms,
         sample_stride=sample_stride,
+        show_progress=show_progress,
     )
 
 
@@ -1856,6 +1870,7 @@ def integrate_linear(
     checkpoint: bool = False,
     sample_stride: int = 1,
     donate: bool = False,
+    show_progress: bool = False,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Time integrate the linear system using a fixed-step scheme."""
     if terms is None:
@@ -1903,6 +1918,7 @@ def integrate_linear(
         checkpoint=checkpoint,
         terms=terms,
         sample_stride=sample_stride,
+        show_progress=show_progress,
     )
 
 
@@ -1920,6 +1936,7 @@ def integrate_linear_diagnostics(
     sample_stride: int = 1,
     species_index: int | None = 0,
     record_hl_energy: bool = False,
+    show_progress: bool = False,
 ) -> (
     tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]
     | tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]
@@ -2027,7 +2044,10 @@ def integrate_linear_diagnostics(
             return jnp.sum(jnp.abs(G_in) ** 2, axis=(2, 3, 4))
         return jnp.sum(jnp.abs(G_in) ** 2, axis=(0, 3, 4, 5))
 
-    def step(G_in, _):
+    def step(G_in, idx):
+        if show_progress:
+            from spectraxgk.utils.callbacks import print_callback
+            G_in = print_callback(G_in, idx, steps, 0.0, 0.0, 0.0, 0.0)
         G_out = advance(G_in)
         _dG, phi = linear_rhs_cached(G_out, cache, params, terms=terms, use_jit=False, dt=dt_val)
         density = density_from_G(G_out)
@@ -2037,11 +2057,16 @@ def integrate_linear_diagnostics(
         return G_out, (phi, density)
 
     if sample_stride <= 1:
-        G_out, outputs = jax.lax.scan(step, G0, None, length=steps)
+        indices = jnp.arange(steps)
+        G_out, outputs = jax.lax.scan(step, G0, indices)
     else:
-        def sample_step(G_in, _):
+        def sample_step(G_in, idx):
+            if show_progress:
+                from spectraxgk.utils.callbacks import print_callback
+                G_in = print_callback(G_in, idx * sample_stride, steps, 0.0, 0.0, 0.0, 0.0)
+
             def inner_step(_i, g):
-                return step(g, None)[0]
+                return advance(g)
 
             G_out_local = jax.lax.fori_loop(0, sample_stride, inner_step, G_in)
             _dG, phi_out = linear_rhs_cached(G_out_local, cache, params, terms=terms, use_jit=False, dt=dt_val)
@@ -2052,7 +2077,8 @@ def integrate_linear_diagnostics(
             return G_out_local, (phi_out, density_out)
 
         num_samples = steps // sample_stride
-        G_out, outputs = jax.lax.scan(sample_step, G0, None, length=num_samples)
+        sample_indices = jnp.arange(num_samples)
+        G_out, outputs = jax.lax.scan(sample_step, G0, sample_indices)
 
     if record_hl_energy:
         phi_t, density_t, hl_t = outputs

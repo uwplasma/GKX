@@ -36,10 +36,12 @@ def integrate_linear_from_config(
     mode_method: str = "z_index",
     save_field: str = "phi",
     density_species_index: int | None = None,
+    show_progress: bool | None = None,
 ) -> tuple:
     """Integrate the linear system using TimeConfig settings."""
 
     steps = _steps_from_time(time_cfg)
+    show_progress_use = bool(time_cfg.progress_bar if show_progress is None else show_progress)
     if time_cfg.use_diffrax:
         return integrate_linear_diffrax(
             G0,
@@ -55,7 +57,8 @@ def integrate_linear_from_config(
             rtol=time_cfg.diffrax_rtol,
             atol=time_cfg.diffrax_atol,
             max_steps=time_cfg.diffrax_max_steps,
-            progress_bar=time_cfg.progress_bar,
+            show_progress=show_progress_use,
+            progress_bar=show_progress_use,
             checkpoint=time_cfg.checkpoint,
             sample_stride=time_cfg.sample_stride,
             return_state=time_cfg.save_state,
@@ -79,6 +82,7 @@ def integrate_linear_from_config(
         checkpoint=time_cfg.checkpoint,
         sample_stride=time_cfg.sample_stride,
         terms=terms,
+        show_progress=show_progress_use,
     )
 
 
@@ -91,10 +95,12 @@ def integrate_nonlinear_from_config(
     *,
     cache: LinearCache | None = None,
     terms: TermConfig | None = None,
+    show_progress: bool | None = None,
 ) -> tuple:
     """Integrate the nonlinear system using TimeConfig settings."""
 
     steps = _steps_from_time(time_cfg)
+    show_progress_use = bool(time_cfg.progress_bar if show_progress is None else show_progress)
     if time_cfg.use_diffrax:
         return integrate_nonlinear_diffrax(
             G0,
@@ -110,7 +116,8 @@ def integrate_nonlinear_from_config(
             rtol=time_cfg.diffrax_rtol,
             atol=time_cfg.diffrax_atol,
             max_steps=time_cfg.diffrax_max_steps,
-            progress_bar=time_cfg.progress_bar,
+            show_progress=show_progress_use,
+            progress_bar=show_progress_use,
             checkpoint=time_cfg.checkpoint,
             gx_real_fft=time_cfg.gx_real_fft,
             laguerre_mode=time_cfg.laguerre_nonlinear_mode,
@@ -128,4 +135,5 @@ def integrate_nonlinear_from_config(
         checkpoint=time_cfg.checkpoint,
         gx_real_fft=time_cfg.gx_real_fft,
         laguerre_mode=time_cfg.laguerre_nonlinear_mode,
+        show_progress=show_progress_use,
     )

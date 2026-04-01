@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Callable, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -24,6 +25,10 @@ class FieldState:
     @classmethod
     def tree_unflatten(cls, aux_data, children):
         return cls(*children)
+
+
+# Signature for nonlinear RHS functions: G -> (dG, fields)
+RHSFn = Callable[[jnp.ndarray], Tuple[jnp.ndarray, FieldState]]
 
 
 @jax.tree_util.register_pytree_node_class
