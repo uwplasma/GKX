@@ -45,6 +45,10 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+  "gpu: tests that require or exercise GPU/device-specific execution paths",
+  "integration: broader end-to-end or workflow tests",
+]
 
 [tool.mypy]
 files = ["src/spectraxgk"]
