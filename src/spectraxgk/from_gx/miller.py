@@ -32,6 +32,15 @@ def internal_miller_backend_available() -> bool:
     return True
 
 
+def _request_attr(request: Any, *names: str) -> Any:
+    """Return the first available attribute from a Miller request."""
+
+    for name in names:
+        if hasattr(request, name):
+            return getattr(request, name)
+    raise AttributeError(f"Miller request is missing all aliases: {', '.join(names)}")
+
+
 def generate_miller_eik_internal(*, output_path: str | Path, request: Any | None = None) -> Path:
     """Internal Miller->EIK pipeline entry point (in progress)."""
 
@@ -44,17 +53,17 @@ def generate_miller_eik_internal(*, output_path: str | Path, request: Any | None
     params = MillerCoreParams(
         ntgrid=int(int(request.ntheta) / 2 + 1),
         nperiod=int(request.nperiod),
-        rhoc=float(request.rhoc),
-        qinp=float(request.qinp),
-        shat=float(request.shat),
-        rmaj=float(request.Rmaj),
-        r_geo=float(request.R_geo),
-        shift=float(request.shift),
-        akappa=float(request.akappa),
-        tri=float(request.tri),
-        akappri=float(request.akappri),
-        tripri=float(request.tripri),
-        betaprim=float(request.betaprim),
+        rhoc=float(_request_attr(request, "rhoc")),
+        qinp=float(_request_attr(request, "qinp", "q")),
+        shat=float(_request_attr(request, "shat", "s_hat")),
+        rmaj=float(_request_attr(request, "Rmaj", "R0")),
+        r_geo=float(_request_attr(request, "R_geo")),
+        shift=float(_request_attr(request, "shift")),
+        akappa=float(_request_attr(request, "akappa")),
+        tri=float(_request_attr(request, "tri")),
+        akappri=float(_request_attr(request, "akappri")),
+        tripri=float(_request_attr(request, "tripri")),
+        betaprim=float(_request_attr(request, "betaprim")),
     )
     state = build_collocation_surfaces(params)
     gradients = compute_primary_gradients(state)
