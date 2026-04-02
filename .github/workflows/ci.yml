@@ -78,6 +78,17 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
+      - name: Print benchmark stack
+        run: |
+          python - <<'PY'
+          import diffrax, equinox, jax, jaxlib, numpy
+          print("jax", jax.__version__)
+          print("jaxlib", jaxlib.__version__)
+          print("numpy", numpy.__version__)
+          print("diffrax", diffrax.__version__)
+          print("equinox", equinox.__version__)
+          PY
+
       - name: MyPy (types)
         run: |
           mypy --version
@@ -116,6 +127,17 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
+
+      - name: Print benchmark stack
+        run: |
+          python - <<'PY'
+          import diffrax, equinox, jax, jaxlib, numpy
+          print("jax", jax.__version__)
+          print("jaxlib", jaxlib.__version__)
+          print("numpy", numpy.__version__)
+          print("diffrax", diffrax.__version__)
+          print("equinox", equinox.__version__)
+          PY
 
       - name: MyPy (types)
         run: |
