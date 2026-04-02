@@ -55,7 +55,15 @@ files = ["src/spectraxgk"]
 exclude = ["legacy_archive", "examples", "docs"]
 
 [[tool.mypy.overrides]]
-module = ["booz_xform", "booz_xform_jax", "scipy", "scipy.*"]
+module = [
+  "booz_xform",
+  "booz_xform_jax",
+  "netCDF4",
+  "rich",
+  "rich.*",
+  "scipy",
+  "scipy.*",
+]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
