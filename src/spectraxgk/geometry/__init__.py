@@ -11,14 +11,14 @@ import numpy as np
 
 from spectraxgk.config import GeometryConfig, GridConfig
 
-GX_ZERO_SHAT_THRESHOLD = 1.0e-5
+ZERO_SHAT_THRESHOLD = 1.0e-5
 
 
 def gx_zero_shat_enabled(
     s_hat: float,
     *,
     zero_shat: bool = False,
-    threshold: float = GX_ZERO_SHAT_THRESHOLD,
+    threshold: float = ZERO_SHAT_THRESHOLD,
 ) -> bool:
     """Return the effective GX zero-shear state."""
 
@@ -30,7 +30,7 @@ def gx_effective_boundary(
     *,
     s_hat: float,
     zero_shat: bool = False,
-    threshold: float = GX_ZERO_SHAT_THRESHOLD,
+    threshold: float = ZERO_SHAT_THRESHOLD,
 ) -> str:
     """Return the effective GX boundary after zero-shear promotion."""
 

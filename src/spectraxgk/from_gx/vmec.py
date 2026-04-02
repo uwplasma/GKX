@@ -26,7 +26,7 @@ _MU_0 = 4.0 * np.pi * 1.0e-7
 def _booz_xform_jax_search_paths() -> list[Path]:
     repo_root = Path(__file__).resolve().parents[3]
     raw_paths: list[Path] = []
-    for env_name in ("GX_BOOZ_XFORM_JAX_PATH", "BOOZ_XFORM_JAX_PATH"):
+    for env_name in ("SPECTRAX_BOOZ_XFORM_JAX_PATH", "BOOZ_XFORM_JAX_PATH"):
         raw = os.environ.get(env_name)
         if raw:
             raw_paths.append(Path(os.path.expandvars(raw)).expanduser())
