@@ -24,6 +24,7 @@ from spectraxgk.runtime_config import (
     RuntimeConfig,
     RuntimeExpertConfig,
     RuntimeNormalizationConfig,
+    RuntimeOutputConfig,
     RuntimePhysicsConfig,
     RuntimeSpeciesConfig,
     RuntimeTermsConfig,
@@ -133,6 +134,9 @@ def load_runtime_from_toml(path: str | Path) -> tuple[RuntimeConfig, dict]:
     expert = data.get("expert")
     if isinstance(expert, dict):
         cfg = replace(cfg, expert=RuntimeExpertConfig(**expert))
+    output = data.get("output")
+    if isinstance(output, dict):
+        cfg = replace(cfg, output=RuntimeOutputConfig(**output))
     species_raw = data.get("species")
     if species_raw is not None:
         if not isinstance(species_raw, list):
