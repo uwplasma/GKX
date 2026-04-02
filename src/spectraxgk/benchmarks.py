@@ -89,12 +89,12 @@ KBM_OMEGA_D_SCALE = KBM_NORMALIZATION.omega_d_scale
 KBM_OMEGA_STAR_SCALE = KBM_NORMALIZATION.omega_star_scale
 KBM_RHO_STAR = KBM_NORMALIZATION.rho_star
 
-GX_NU_HYPER_L = 0.0
-GX_NU_HYPER_M = 1.0
-GX_P_HYPER_L = 6.0
-GX_P_HYPER_M = 20.0
-GX_DAMP_ENDS_AMP = 0.1
-GX_DAMP_ENDS_WIDTHFRAC = 1.0 / 8.0
+REFERENCE_NU_HYPER_L = 0.0
+REFERENCE_NU_HYPER_M = 1.0
+REFERENCE_P_HYPER_L = 6.0
+REFERENCE_P_HYPER_M = 20.0
+REFERENCE_DAMP_ENDS_AMP = 0.1
+REFERENCE_DAMP_ENDS_WIDTHFRAC = 1.0 / 8.0
 
 CYCLONE_KRYLOV_DEFAULT = KrylovConfig(
     method="shift_invert",
@@ -200,17 +200,17 @@ TEM_KRYLOV_DEFAULT = KrylovConfig(
 
 def _gx_p_hyper_m(nhermite: int | None) -> float:
     if nhermite is None:
-        return GX_P_HYPER_M
-    return float(min(GX_P_HYPER_M, max(int(nhermite) // 2, 1)))
+        return REFERENCE_P_HYPER_M
+    return float(min(REFERENCE_P_HYPER_M, max(int(nhermite) // 2, 1)))
 
 
 def _apply_gx_hypercollisions(params: LinearParams, *, nhermite: int | None = None) -> LinearParams:
     return replace(
         params,
         nu_hyper=0.0,
-        nu_hyper_l=GX_NU_HYPER_L,
-        nu_hyper_m=GX_NU_HYPER_M,
-        p_hyper_l=GX_P_HYPER_L,
+        nu_hyper_l=REFERENCE_NU_HYPER_L,
+        nu_hyper_m=REFERENCE_NU_HYPER_M,
+        p_hyper_l=REFERENCE_P_HYPER_L,
         p_hyper_m=_gx_p_hyper_m(nhermite),
         hypercollisions_const=0.0,
         hypercollisions_kz=1.0,
@@ -219,7 +219,7 @@ def _apply_gx_hypercollisions(params: LinearParams, *, nhermite: int | None = No
 
 def _gx_linked_end_damping(gx_reference: bool) -> tuple[float, float]:
     if gx_reference:
-        return GX_DAMP_ENDS_AMP, GX_DAMP_ENDS_WIDTHFRAC
+        return REFERENCE_DAMP_ENDS_AMP, REFERENCE_DAMP_ENDS_WIDTHFRAC
     return 0.0, 0.0
 
 
@@ -973,8 +973,8 @@ def run_cyclone_linear(
             rho_star=CYCLONE_RHO_STAR,
             kpar_scale=float(geom.gradpar()),
             nu=cfg.model.nu_i,
-            damp_ends_amp=GX_DAMP_ENDS_AMP,
-            damp_ends_widthfrac=GX_DAMP_ENDS_WIDTHFRAC,
+            damp_ends_amp=REFERENCE_DAMP_ENDS_AMP,
+            damp_ends_widthfrac=REFERENCE_DAMP_ENDS_WIDTHFRAC,
         )
         params = _apply_gx_hypercollisions(params, nhermite=Nm)
     if terms is None:
@@ -1427,8 +1427,8 @@ def run_cyclone_scan(
             rho_star=CYCLONE_RHO_STAR,
             kpar_scale=float(geom.gradpar()),
             nu=cfg.model.nu_i,
-            damp_ends_amp=GX_DAMP_ENDS_AMP,
-            damp_ends_widthfrac=GX_DAMP_ENDS_WIDTHFRAC,
+            damp_ends_amp=REFERENCE_DAMP_ENDS_AMP,
+            damp_ends_widthfrac=REFERENCE_DAMP_ENDS_WIDTHFRAC,
         )
         params = _apply_gx_hypercollisions(params, nhermite=Nm)
     if terms is None:

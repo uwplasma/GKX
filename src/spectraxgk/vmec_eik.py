@@ -9,7 +9,7 @@ import os
 import math
 from pathlib import Path
 
-from spectraxgk.config import GX_REFERENCE_ELECTRON_MASS
+from spectraxgk.config import REFERENCE_ELECTRON_MASS
 from spectraxgk.from_gx.vmec import generate_vmec_eik_internal, internal_vmec_backend_available
 from spectraxgk.runtime_config import RuntimeConfig
 
@@ -102,7 +102,7 @@ def build_gx_vmec_geometry_request(cfg: RuntimeConfig) -> GXVmecGeometryRequest:
 
     if cfg.physics.adiabatic_electrons and not any(val < 0.0 for val in z):
         z.append(-1.0)
-        mass.append(GX_REFERENCE_ELECTRON_MASS)
+        mass.append(REFERENCE_ELECTRON_MASS)
         dens.append(1.0)
         temp.append(1.0 / max(float(cfg.physics.tau_e), 1.0e-30))
         tprim.append(0.0)
