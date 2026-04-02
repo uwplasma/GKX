@@ -48,7 +48,7 @@ _SSPX3_W3 = (1.0 / _SSPX3_ADT) - 1.0 - _SSPX3_W2 * (_SSPX3_W1 + 1.0)
 def _gx_state_mask(cache: LinearCache) -> jnp.ndarray:
     """Return the GX state-space mask applied after each completed step."""
 
-    mask = jnp.asarray(cache.dealias_mask, dtype=bool)
+    mask = _gx_growth_mask(cache.ky, cache.kx, cache.dealias_mask)
     ky_zero = jnp.isclose(jnp.asarray(cache.ky), 0.0)
     kx_zero = jnp.isclose(jnp.asarray(cache.kx), 0.0)
     zonal00 = ky_zero[:, None] & kx_zero[None, :]
@@ -61,6 +61,29 @@ def _apply_gx_state_mask(state: jnp.ndarray, cache: LinearCache) -> jnp.ndarray:
     mask = _gx_state_mask(cache).astype(state.real.dtype)[..., None]
     shape = (1,) * (state.ndim - mask.ndim) + mask.shape
     return state * jnp.reshape(mask, shape)
+
+
+def _gx_growth_mask(
+    ky: jnp.ndarray,
+    kx: jnp.ndarray,
+    dealias_mask: jnp.ndarray,
+) -> jnp.ndarray:
+    """Return the diagnostic mask used by GX-style growth-rate extraction.
+
+    Single selected nonzonal ``ky`` slices should remain diagnosable even when
+    the originating full nonlinear mesh would mark that representative row as
+    dealiased away.
+    """
+
+    mask = jnp.asarray(dealias_mask, dtype=bool)
+    ky_arr = jnp.asarray(ky, dtype=float).reshape(-1)
+    if mask.ndim == 2 and int(mask.shape[0]) == 1:
+        promote = (~jnp.any(mask)) & jnp.any(jnp.abs(ky_arr) > 0.0)
+        mask = jnp.where(promote, jnp.ones_like(mask, dtype=bool), mask)
+    ky_zero = jnp.isclose(ky_arr, 0.0)
+    kx_zero = jnp.isclose(jnp.asarray(kx, dtype=float).reshape(-1), 0.0)
+    zonal00 = ky_zero[:, None] & kx_zero[None, :]
+    return mask & ~zonal00
 
 
 def _gx_zp_from_grid(grid: SpectralGrid) -> float:
@@ -472,7 +495,7 @@ def integrate_linear_gx(
     sample_stride = int(max(time_cfg.sample_stride, 1))
 
     z_idx = _gx_midplane_index(grid.z.size) if z_index is None else int(z_index)
-    mask = jnp.asarray(grid.dealias_mask, dtype=bool)
+    mask = _gx_growth_mask(grid.ky, grid.kx, grid.dealias_mask)
 
     G = jnp.asarray(G0)
     t = 0.0
@@ -590,7 +613,7 @@ def integrate_linear_gx_diagnostics(
     sample_stride = int(max(time_cfg.sample_stride, 1))
 
     z_idx = _gx_midplane_index(grid.z.size) if z_index is None else int(z_index)
-    mask = jnp.asarray(grid.dealias_mask, dtype=bool)
+    mask = _gx_growth_mask(grid.ky, grid.kx, grid.dealias_mask)
 
     G = jnp.asarray(G0)
     t = 0.0
