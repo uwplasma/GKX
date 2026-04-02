@@ -32,6 +32,19 @@ configurations.
 pip install -e .
 ```
 
+For benchmark-sensitive reproduction, use the tested numerical stack that the
+public CI and tracked atlas are validated against:
+
+- `jax>=0.8,<0.9`
+- `jaxlib>=0.8,<0.9`
+- `numpy>=2.3,<2.4`
+- `diffrax>=0.7,<0.8`
+- `equinox>=0.13,<0.14`
+
+The code may still run on newer stacks, but parity-sensitive lanes such as TEM,
+ETG branch-following, and KAW runtime examples should be audited on the tested
+stack before treating a mismatch as a solver regression.
+
 ## Quickstart (CLI)
 
 ```bash

@@ -12,12 +12,12 @@ license = {file = "LICENSE"}
 authors = [{name = "SPECTRAX-GK team"}]
 
 dependencies = [
-  "jax>=0.4.20",
-  "jaxlib>=0.4.20",
-  "numpy>=1.24",
+  "jax>=0.8,<0.9",
+  "jaxlib>=0.8,<0.9",
+  "numpy>=2.3,<2.4",
   "matplotlib>=3.7",
-  "diffrax>=0.7.0",
-  "equinox>=0.13.0",
+  "diffrax>=0.7,<0.8",
+  "equinox>=0.13,<0.14",
   "tomli>=2.0; python_version < '3.11'",
   "tqdm>=4.64",
 ]
