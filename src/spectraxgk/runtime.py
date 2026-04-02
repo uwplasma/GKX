@@ -1076,6 +1076,7 @@ def run_runtime_linear(
         )
         density_np = None if density_t is None else np.asarray(density_t)
 
+        signal_out: np.ndarray | None = None
         if fit_key == "auto":
             phi_signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
             gamma_phi, omega_phi, _, _, r2_phi, r2p_phi = fit_growth_rate_auto_with_stats(
@@ -1089,6 +1090,7 @@ def run_runtime_linear(
                 min_amp_fraction=min_amp_fraction,
             )
             best_gamma, best_omega = gamma_phi, omega_phi
+            signal_out = np.asarray(phi_signal)
             best_score = r2_phi + 0.2 * r2p_phi + growth_weight * gamma_phi
             if density_np is not None:
                 dens_signal = extract_mode_time_series(density_np, sel, method=mode_method)
@@ -1105,6 +1107,7 @@ def run_runtime_linear(
                 score_den = r2_den + 0.2 * r2p_den + growth_weight * gamma_den
                 if score_den > best_score:
                     best_gamma, best_omega = gamma_den, omega_den
+                    signal_out = np.asarray(dens_signal)
             gamma, omega = best_gamma, best_omega
         else:
             signal = extract_mode_time_series(
@@ -1112,6 +1115,7 @@ def run_runtime_linear(
                 sel,
                 method=mode_method,
             )
+            signal_out = np.asarray(signal)
             if auto_window:
                 gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
                     t_arr,
@@ -1137,7 +1141,7 @@ def run_runtime_linear(
             omega=float(omega),
             selection=sel,
             t=t_arr,
-            signal=None,
+            signal=signal_out,
             state=None if g_last is None or not return_state else np.asarray(g_last),
         )
 
