@@ -6,7 +6,6 @@ import argparse
 from dataclasses import replace
 from pathlib import Path
 
-from jax import Array
 import jax.numpy as jnp
 import numpy as np
 
@@ -24,6 +23,7 @@ from spectraxgk.geometry import SAlphaGeometry
 from spectraxgk.grids import build_spectral_grid
 from spectraxgk.io import load_case_from_toml, load_krylov_from_toml, load_linear_terms_from_toml, load_runtime_from_toml
 from spectraxgk.plotting import growth_fit_figure, scan_comparison_figure, set_plot_style
+from spectraxgk.runtime_artifacts import write_runtime_linear_artifacts, write_runtime_nonlinear_artifacts
 from spectraxgk.runtime import run_runtime_linear, run_runtime_scan, run_runtime_nonlinear
 
 
@@ -145,6 +145,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_runtime.add_argument("--steps", type=int, default=None)
     run_runtime.add_argument("--sample-stride", type=int, default=None)
     run_runtime.add_argument("--fit-signal", type=str, default=None, help="auto, phi, or density")
+    run_runtime.add_argument("--out", type=str, default=None, help="Optional artifact path/prefix")
     run_runtime_progress = run_runtime.add_mutually_exclusive_group()
     run_runtime_progress.add_argument("--progress", action="store_true", help="Enable progress output")
     run_runtime_progress.add_argument("--no-progress", action="store_true", help="Disable progress output")
@@ -431,6 +432,13 @@ def _cmd_run_runtime_linear(args: argparse.Namespace) -> int:
         **fit_cfg,
     )
     print(f"ky={res.ky:.4f} gamma={res.gamma:.6f} omega={res.omega:.6f}")
+    if getattr(args, "out", None) is not None:
+        paths = write_runtime_linear_artifacts(args.out, res)
+        print(f"saved {paths['summary']}")
+        if "timeseries" in paths:
+            print(f"saved {paths['timeseries']}")
+        if "state" in paths:
+            print(f"saved {paths['state']}")
     return 0
 
 
@@ -566,65 +574,12 @@ def _cmd_run_runtime_nonlinear(args: argparse.Namespace) -> int:
         f"Wapar={float(diag.Wapar_t[-1]):.6g}"
     )
     if args.out is not None:
-
-        def _flatten(series: np.ndarray | Array) -> np.ndarray:
-            arr = np.asarray(series)
-            if arr.ndim == 1:
-                return arr
-            arr = arr.reshape(arr.shape[0], -1)
-            if arr.shape[1] == 1:
-                return arr[:, 0]
-            return np.mean(arr, axis=1)
-
-        cols = [
-            _flatten(diag.t),
-            _flatten(diag.dt_t),
-            _flatten(diag.gamma_t),
-            _flatten(diag.omega_t),
-            _flatten(diag.Wg_t),
-            _flatten(diag.Wphi_t),
-            _flatten(diag.Wapar_t),
-            _flatten(diag.energy_t),
-            _flatten(diag.heat_flux_t),
-            _flatten(diag.particle_flux_t),
-        ]
-        headers = [
-            "t",
-            "dt",
-            "gamma",
-            "omega",
-            "Wg",
-            "Wphi",
-            "Wapar",
-            "energy",
-            "heat_flux",
-            "particle_flux",
-        ]
-
-        if diag.heat_flux_species_t is not None:
-            heat_s = np.asarray(diag.heat_flux_species_t)
-            if heat_s.ndim == 1:
-                heat_s = heat_s[:, None]
-            for i in range(heat_s.shape[1]):
-                cols.append(heat_s[:, i])
-                headers.append(f"heat_flux_s{i}")
-        if diag.particle_flux_species_t is not None:
-            pflux_s = np.asarray(diag.particle_flux_species_t)
-            if pflux_s.ndim == 1:
-                pflux_s = pflux_s[:, None]
-            for i in range(pflux_s.shape[1]):
-                cols.append(pflux_s[:, i])
-                headers.append(f"particle_flux_s{i}")
-
-        data_out = np.column_stack(cols)
-        np.savetxt(
-            args.out,
-            data_out,
-            delimiter=",",
-            header=",".join(headers),
-            comments="",
-        )
-        print(f"saved {args.out}")
+        paths = write_runtime_nonlinear_artifacts(args.out, result)
+        print(f"saved {paths['summary']}")
+        if "diagnostics" in paths:
+            print(f"saved {paths['diagnostics']}")
+        if "state" in paths:
+            print(f"saved {paths['state']}")
     return 0
 
 
