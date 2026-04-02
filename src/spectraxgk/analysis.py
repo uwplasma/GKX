@@ -23,9 +23,29 @@ class ModeSelectionBatch:
 
 
 def select_ky_index(ky: np.ndarray, ky_target: float) -> int:
-    """Return the index of ky closest to ky_target."""
+    """Return the best ky index for a requested target.
 
-    return int(np.argmin(np.abs(ky - ky_target)))
+    For nonzero requests, prefer a nonzonal mode with the closest absolute
+    magnitude, then prefer a sign match when one exists. This avoids collapsing
+    sparse signed grids such as ``[0, -k]`` onto the zonal row when the user
+    requests ``+k``.
+    """
+
+    ky_arr = np.asarray(ky, dtype=float)
+    if ky_arr.ndim != 1 or ky_arr.size == 0:
+        raise ValueError("ky must be a non-empty one-dimensional array")
+
+    if np.isclose(ky_target, 0.0):
+        return int(np.argmin(np.abs(ky_arr)))
+
+    abs_target = abs(float(ky_target))
+    magnitude_error = np.abs(np.abs(ky_arr) - abs_target)
+    nonzero_penalty = np.isclose(ky_arr, 0.0).astype(int)
+    sign_penalty = np.where(np.signbit(ky_arr) == np.signbit(ky_target), 0, 1)
+    direct_error = np.abs(ky_arr - float(ky_target))
+
+    order = np.lexsort((direct_error, sign_penalty, nonzero_penalty, magnitude_error))
+    return int(order[0])
 
 
 def extract_mode_time_series(
