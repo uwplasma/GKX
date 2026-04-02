@@ -128,6 +128,16 @@ class RuntimeExpertConfig:
 
 
 @dataclass(frozen=True)
+class RuntimeOutputConfig:
+    """Artifact-output controls for runtime CLI entry points."""
+
+    path: str | None = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class RuntimeConfig:
     """Unified simulation config for runtime-driven GK runs."""
 
@@ -141,6 +151,7 @@ class RuntimeConfig:
     normalization: RuntimeNormalizationConfig = RuntimeNormalizationConfig()
     terms: RuntimeTermsConfig = RuntimeTermsConfig()
     expert: RuntimeExpertConfig = RuntimeExpertConfig()
+    output: RuntimeOutputConfig = RuntimeOutputConfig()
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -154,4 +165,5 @@ class RuntimeConfig:
             "normalization": self.normalization.to_dict(),
             "terms": self.terms.to_dict(),
             "expert": self.expert.to_dict(),
+            "output": self.output.to_dict(),
         }

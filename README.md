@@ -48,6 +48,15 @@ spectrax-gk examples/nonlinear/axisymmetric/runtime_cetg_reference.toml --steps 
 spectrax-gk scan-linear --config examples/linear/axisymmetric/cyclone.toml --plot
 ```
 
+Single-point runtime TOMLs can also carry their own artifact prefix:
+
+```toml
+[output]
+path = "tools_out/runtime_case"
+```
+
+CLI `--out` overrides the TOML value when both are present.
+
 ## Quickstart (Python)
 
 ```python

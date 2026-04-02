@@ -27,6 +27,12 @@ from spectraxgk.runtime_artifacts import write_runtime_linear_artifacts, write_r
 from spectraxgk.runtime import run_runtime_linear, run_runtime_scan, run_runtime_nonlinear
 
 
+def _runtime_output_path(args: argparse.Namespace, cfg) -> str | None:
+    if getattr(args, "out", None) is not None:
+        return str(args.out)
+    return cfg.output.path
+
+
 def _cmd_cyclone_info(_: argparse.Namespace) -> int:
     cfg = CycloneBaseCase()
     print("Cyclone base case")
@@ -87,7 +93,7 @@ def build_parser() -> argparse.ArgumentParser:
     diag_group.add_argument("--no-diagnostics", action="store_true", help="Disable diagnostics output")
     generic_run.add_argument("--laguerre-mode", type=str, default=None, help="grid or spectral (nonlinear only)")
     generic_run.add_argument("--init-file", type=str, default=None, help="Optional init file for nonlinear runs")
-    generic_run.add_argument("--out", type=str, default=None, help="Optional output path for diagnostics")
+    generic_run.add_argument("--out", type=str, default=None, help="Optional artifact path/prefix")
     generic_progress = generic_run.add_mutually_exclusive_group()
     generic_progress.add_argument("--progress", action="store_true", help="Enable progress output")
     generic_progress.add_argument("--no-progress", action="store_true", help="Disable progress output")
@@ -194,7 +200,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="grid or spectral (nonlinear Laguerre handling)",
     )
     run_runtime_nl.add_argument("--init-file", type=str, default=None, help="Optional init file (GX g_state)")
-    run_runtime_nl.add_argument("--out", type=str, default=None, help="Optional CSV output path")
+    run_runtime_nl.add_argument("--out", type=str, default=None, help="Optional artifact path/prefix")
     run_runtime_nl_progress = run_runtime_nl.add_mutually_exclusive_group()
     run_runtime_nl_progress.add_argument("--progress", action="store_true", help="Enable progress output")
     run_runtime_nl_progress.add_argument("--no-progress", action="store_true", help="Disable progress output")
@@ -432,8 +438,9 @@ def _cmd_run_runtime_linear(args: argparse.Namespace) -> int:
         **fit_cfg,
     )
     print(f"ky={res.ky:.4f} gamma={res.gamma:.6f} omega={res.omega:.6f}")
-    if getattr(args, "out", None) is not None:
-        paths = write_runtime_linear_artifacts(args.out, res)
+    out_path = _runtime_output_path(args, cfg)
+    if out_path is not None:
+        paths = write_runtime_linear_artifacts(out_path, res)
         print(f"saved {paths['summary']}")
         if "timeseries" in paths:
             print(f"saved {paths['timeseries']}")
@@ -573,8 +580,9 @@ def _cmd_run_runtime_nonlinear(args: argparse.Namespace) -> int:
         f"Wphi={float(diag.Wphi_t[-1]):.6g} "
         f"Wapar={float(diag.Wapar_t[-1]):.6g}"
     )
-    if args.out is not None:
-        paths = write_runtime_nonlinear_artifacts(args.out, result)
+    out_path = _runtime_output_path(args, cfg)
+    if out_path is not None:
+        paths = write_runtime_nonlinear_artifacts(out_path, result)
         print(f"saved {paths['summary']}")
         if "diagnostics" in paths:
             print(f"saved {paths['diagnostics']}")

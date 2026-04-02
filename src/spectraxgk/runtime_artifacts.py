@@ -114,10 +114,16 @@ def write_runtime_linear_artifacts(out: str | Path, result: Any) -> dict[str, st
 
     paths = {"summary": str(summary_path)}
     if result.t is not None and result.signal is not None:
+        signal = _flatten_series(np.asarray(result.signal))
         _write_csv(
             csv_path,
-            headers=["t", "signal"],
-            cols=[_flatten_series(np.asarray(result.t)), _flatten_series(np.asarray(result.signal))],
+            headers=["t", "signal_real", "signal_imag", "signal_abs"],
+            cols=[
+                _flatten_series(np.asarray(result.t)),
+                np.real(signal),
+                np.imag(signal),
+                np.abs(signal),
+            ],
         )
         paths["timeseries"] = str(csv_path)
 
