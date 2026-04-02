@@ -991,15 +991,22 @@ def run_cyclone_linear(
     ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
     grid = select_ky_grid(grid_full, ky_index)
     sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
-    G0_jax = _build_initial_condition(
-        grid,
-        geom,
-        ky_index=sel.ky_index,
-        kx_index=sel.kx_index,
-        Nl=Nl,
-        Nm=Nm,
-        init_cfg=init_cfg,
+    G0_base = np.asarray(
+        _build_initial_condition(
+            grid,
+            geom,
+            ky_index=sel.ky_index,
+            kx_index=sel.kx_index,
+            Nl=Nl,
+            Nm=Nm,
+            init_cfg=init_cfg,
+        )
     )
+
+    def _fresh_G0() -> jnp.ndarray:
+        return jnp.asarray(G0_base)
+
+    G0_jax = _fresh_G0()
     cache = build_linear_cache(grid, geom, params, Nl, Nm)
 
     def _is_valid_growth(gamma_val: float, omega_val: float) -> bool:
@@ -1024,7 +1031,7 @@ def run_cyclone_linear(
                 sample_stride=1,
                 fixed_dt=True,
             )
-            G0_seed = jnp.asarray(np.asarray(G0_jax))
+            G0_seed = _fresh_G0()
             t_short, phi_t, _g_t, _o_t = integrate_linear_gx(
                 G0_seed,
                 grid,
@@ -1104,7 +1111,7 @@ def run_cyclone_linear(
         shift = None
         if omega_ok:
             shift = complex(float(gamma_seed) if seed_ok else 0.0, float(-omega_seed))
-        G0_krylov = jnp.asarray(np.asarray(G0_jax))
+        G0_krylov = _fresh_G0()
         eig, vec = dominant_eigenpair(
             G0_krylov,
             cache,
@@ -1187,7 +1194,7 @@ def run_cyclone_linear(
                 fixed_dt=True,
             )
             t, phi_t, _g_t, _o_t = integrate_linear_gx(
-                G0_jax,
+                _fresh_G0(),
                 grid,
                 cache,
                 params_use,
@@ -1208,7 +1215,7 @@ def run_cyclone_linear(
         if time_cfg_use is not None:
             if need_density:
                 _, saved = integrate_linear_from_config(
-                    G0_jax,
+                    _fresh_G0(),
                     grid,
                     geom,
                     params_use,
@@ -1221,7 +1228,7 @@ def run_cyclone_linear(
                 phi_t, density_t = saved
             else:
                 _, phi_t = integrate_linear_from_config(
-                    G0_jax,
+                    _fresh_G0(),
                     grid,
                     geom,
                     params_use,
@@ -1235,7 +1242,7 @@ def run_cyclone_linear(
             stride = 1 if sample_stride is None else int(sample_stride)
             if need_density or not use_jit:
                 _diag = integrate_linear_diagnostics(
-                    G0_jax,
+                    _fresh_G0(),
                     grid,
                     geom,
                     params_use,
@@ -1251,7 +1258,7 @@ def run_cyclone_linear(
                 density_t = _diag[2] if len(_diag) > 2 else None
             else:
                 _, phi_out_time = integrate_linear(
-                    G0_jax,
+                    _fresh_G0(),
                     grid,
                     geom,
                     params_use,
