@@ -3141,7 +3141,7 @@ def run_kinetic_linear(
             nhermite=Nm,
         )
     if terms is None:
-        terms = LinearTerms(bpar=-1.0)
+        terms = LinearTerms()
 
     ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
     grid = select_ky_grid(grid_full, ky_index)
@@ -3399,7 +3399,7 @@ def run_kinetic_scan(
             nhermite=Nm,
         )
     if terms is None:
-        terms = LinearTerms()
+        terms = LinearTerms(bpar=0.0)
     gammas = []
     omegas = []
     ky_out = []
@@ -3730,7 +3730,7 @@ def run_tem_linear(
             nhermite=Nm,
         )
     if terms is None:
-        terms = LinearTerms()
+        terms = LinearTerms(bpar=0.0)
 
     ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
     grid = select_ky_grid(grid_full, ky_index)
