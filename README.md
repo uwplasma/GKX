@@ -57,6 +57,12 @@ cd examples/linear/axisymmetric && spectrax-gk cyclone.toml
 # Run directly from a runtime TOML
 spectrax-gk examples/nonlinear/axisymmetric/runtime_cetg_reference.toml --steps 200
 
+# Write a GX-style nonlinear bundle
+spectrax-gk run-runtime-nonlinear \
+  --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_gx.toml \
+  --steps 200 \
+  --out tools_out/cyclone_release.out.nc
+
 # Run a linear scan across k_y
 spectrax-gk scan-runtime-linear --config examples/linear/axisymmetric/cyclone.toml
 ```
@@ -69,6 +75,33 @@ path = "tools_out/runtime_case"
 ```
 
 CLI `--out` overrides the TOML value when both are present.
+
+When the nonlinear target ends in `.out.nc` or another `.nc` suffix,
+SPECTRAX-GK writes a GX-style bundle instead of the lightweight JSON/CSV
+sidecars:
+
+- `case.out.nc`: resolved nonlinear diagnostics and metadata
+- `case.big.nc`: final fields and moments in real and spectral layouts
+- `case.restart.nc`: restart state for continuation runs
+
+The same runtime input can then resume from the saved restart file by setting
+restart controls in the TOML:
+
+```toml
+[time]
+nstep_restart = 100
+
+[output]
+path = "tools_out/cyclone_release.out.nc"
+restart_if_exists = true
+save_for_restart = true
+append_on_restart = true
+restart_with_perturb = false
+```
+
+With that configuration, rerunning the same command resumes from
+`tools_out/cyclone_release.restart.nc` when it already exists and appends the
+new samples to `tools_out/cyclone_release.out.nc`.
 
 ## Quickstart (Python)
 

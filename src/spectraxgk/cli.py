@@ -24,7 +24,11 @@ from spectraxgk.geometry import SAlphaGeometry
 from spectraxgk.grids import build_spectral_grid
 from spectraxgk.io import load_case_from_toml, load_krylov_from_toml, load_linear_terms_from_toml, load_runtime_from_toml, load_toml
 from spectraxgk.plotting import growth_fit_figure, scan_comparison_figure, set_plot_style
-from spectraxgk.runtime_artifacts import write_runtime_linear_artifacts, write_runtime_nonlinear_artifacts
+from spectraxgk.runtime_artifacts import (
+    run_runtime_nonlinear_with_artifacts,
+    write_runtime_linear_artifacts,
+    write_runtime_nonlinear_artifacts,
+)
 from spectraxgk.runtime import run_runtime_linear, run_runtime_scan, run_runtime_nonlinear
 
 
@@ -654,8 +658,11 @@ def _cmd_run_runtime_nonlinear(args: argparse.Namespace) -> int:
         f"diagnostics={'on' if diagnostics else 'off'} progress={'on' if show_progress else 'off'}"
     )
 
-    result = run_runtime_nonlinear(
+    out_path = _runtime_output_path(args, cfg)
+
+    result, paths = run_runtime_nonlinear_with_artifacts(
         cfg,
+        out=out_path,
         ky_target=ky,
         Nl=Nl,
         Nm=Nm,
@@ -685,14 +692,10 @@ def _cmd_run_runtime_nonlinear(args: argparse.Namespace) -> int:
         f"Wphi={float(diag.Wphi_t[-1]):.6g} "
         f"Wapar={float(diag.Wapar_t[-1]):.6g}"
     )
-    out_path = _runtime_output_path(args, cfg)
     if out_path is not None:
-        paths = write_runtime_nonlinear_artifacts(out_path, result)
-        print(f"saved {paths['summary']}")
-        if "diagnostics" in paths:
-            print(f"saved {paths['diagnostics']}")
-        if "state" in paths:
-            print(f"saved {paths['state']}")
+        for key in ("summary", "diagnostics", "state", "out", "big", "restart"):
+            if key in paths:
+                print(f"saved {paths[key]}")
     return 0
 
 

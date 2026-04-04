@@ -32,21 +32,85 @@ from spectraxgk.gx_integrators import (
 )
 from spectraxgk.diagnostics import (
     GXDiagnostics,
+    GXResolvedDiagnostics,
     gx_energy_total,
-    gx_heat_flux,
-    gx_heat_flux_species,
-    gx_particle_flux,
-    gx_particle_flux_species,
+    gx_heat_flux_resolved_species,
+    gx_heat_flux_split_resolved_species,
+    gx_particle_flux_resolved_species,
+    gx_particle_flux_split_resolved_species,
+    gx_phi2_resolved,
+    gx_turbulent_heating_resolved_species,
     gx_volume_factors,
-    gx_Wapar,
-    gx_Wg,
-    gx_Wphi,
+    gx_Wapar_resolved,
+    gx_Wg_resolved,
+    gx_Wphi_resolved,
 )
 _SSPX3_ADT = float((1.0 / 6.0) ** (1.0 / 3.0))
 _SSPX3_WGTFAC = float((9.0 - 2.0 * (6.0 ** (2.0 / 3.0))) ** 0.5)
 _SSPX3_W1 = 0.5 * (_SSPX3_WGTFAC - 1.0)
 _SSPX3_W2 = 0.5 * ((6.0 ** (2.0 / 3.0)) - 1.0 - _SSPX3_WGTFAC)
 _SSPX3_W3 = (1.0 / _SSPX3_ADT) - 1.0 - _SSPX3_W2 * (_SSPX3_W1 + 1.0)
+
+
+def _pack_resolved_diagnostics(resolved_t: tuple[np.ndarray, ...]) -> GXResolvedDiagnostics:
+    return GXResolvedDiagnostics(
+        Phi2_kxt=resolved_t[0],
+        Phi2_kyt=resolved_t[1],
+        Phi2_kxkyt=resolved_t[2],
+        Phi2_zt=resolved_t[3],
+        Phi2_zonal_t=resolved_t[4],
+        Phi2_zonal_kxt=resolved_t[5],
+        Phi2_zonal_zt=resolved_t[6],
+        Wg_kxst=resolved_t[7],
+        Wg_kyst=resolved_t[8],
+        Wg_kxkyst=resolved_t[9],
+        Wg_zst=resolved_t[10],
+        Wg_lmst=resolved_t[11],
+        Wphi_kxst=resolved_t[12],
+        Wphi_kyst=resolved_t[13],
+        Wphi_kxkyst=resolved_t[14],
+        Wphi_zst=resolved_t[15],
+        Wapar_kxst=resolved_t[16],
+        Wapar_kyst=resolved_t[17],
+        Wapar_kxkyst=resolved_t[18],
+        Wapar_zst=resolved_t[19],
+        HeatFlux_kxst=resolved_t[20],
+        HeatFlux_kyst=resolved_t[21],
+        HeatFlux_kxkyst=resolved_t[22],
+        HeatFlux_zst=resolved_t[23],
+        HeatFluxES_kxst=resolved_t[24],
+        HeatFluxES_kyst=resolved_t[25],
+        HeatFluxES_kxkyst=resolved_t[26],
+        HeatFluxES_zst=resolved_t[27],
+        HeatFluxApar_kxst=resolved_t[28],
+        HeatFluxApar_kyst=resolved_t[29],
+        HeatFluxApar_kxkyst=resolved_t[30],
+        HeatFluxApar_zst=resolved_t[31],
+        HeatFluxBpar_kxst=resolved_t[32],
+        HeatFluxBpar_kyst=resolved_t[33],
+        HeatFluxBpar_kxkyst=resolved_t[34],
+        HeatFluxBpar_zst=resolved_t[35],
+        ParticleFlux_kxst=resolved_t[36],
+        ParticleFlux_kyst=resolved_t[37],
+        ParticleFlux_kxkyst=resolved_t[38],
+        ParticleFlux_zst=resolved_t[39],
+        ParticleFluxES_kxst=resolved_t[40],
+        ParticleFluxES_kyst=resolved_t[41],
+        ParticleFluxES_kxkyst=resolved_t[42],
+        ParticleFluxES_zst=resolved_t[43],
+        ParticleFluxApar_kxst=resolved_t[44],
+        ParticleFluxApar_kyst=resolved_t[45],
+        ParticleFluxApar_kxkyst=resolved_t[46],
+        ParticleFluxApar_zst=resolved_t[47],
+        ParticleFluxBpar_kxst=resolved_t[48],
+        ParticleFluxBpar_kyst=resolved_t[49],
+        ParticleFluxBpar_kxkyst=resolved_t[50],
+        ParticleFluxBpar_zst=resolved_t[51],
+        TurbulentHeating_kxst=resolved_t[52],
+        TurbulentHeating_kyst=resolved_t[53],
+        TurbulentHeating_kxkyst=resolved_t[54],
+        TurbulentHeating_zst=resolved_t[55],
+    )
 
 
 @dataclass(frozen=True)
@@ -569,12 +633,16 @@ def _integrate_nonlinear_gx_diagnostics_impl(
     def _compute_diag_from_state(
         G_state: jnp.ndarray,
         fields_state: FieldState,
-        phi_prev_step: jnp.ndarray,
+        G_prev_step: jnp.ndarray,
+        fields_prev_step: FieldState,
         dt_step: jnp.ndarray,
     ):
         phi = fields_state.phi
         apar = fields_state.apar if fields_state.apar is not None else jnp.zeros_like(phi)
         bpar = fields_state.bpar if fields_state.bpar is not None else jnp.zeros_like(phi)
+        phi_prev_step = fields_prev_step.phi
+        apar_prev_step = fields_prev_step.apar if fields_prev_step.apar is not None else jnp.zeros_like(phi_prev_step)
+        bpar_prev_step = fields_prev_step.bpar if fields_prev_step.bpar is not None else jnp.zeros_like(phi_prev_step)
 
         gamma_modes, omega_modes = _gx_growth_rate_step(
             phi, phi_prev_step, dt_step, z_index=z_idx, mask=mask
@@ -595,8 +663,25 @@ def _integrate_nonlinear_gx_diagnostics_impl(
                 nan=jnp.asarray(0.0, dtype=real_dtype),
             )
             phi_mode = jnp.asarray(0.0 + 0.0j, dtype=phi.dtype)
-        Wg_val = gx_Wg(G_state, grid, params, vol_fac, use_dealias=use_dealias)
-        Wphi_val = gx_Wphi(
+        nspecies = int(G_state.shape[0]) if G_state.ndim == 6 else 1
+        (
+            phi2_val,
+            phi2_kxt,
+            phi2_kyt,
+            phi2_kxkyt,
+            phi2_zt,
+            phi2_zonal_t,
+            phi2_zonal_kxt,
+            phi2_zonal_zt,
+        ) = gx_phi2_resolved(phi, grid, vol_fac, use_dealias=use_dealias)
+        Wg_st, Wg_kxst, Wg_kyst, Wg_kxkyst, Wg_zst, Wg_lmst = gx_Wg_resolved(
+            G_state,
+            grid,
+            params,
+            vol_fac,
+            use_dealias=use_dealias,
+        )
+        Wphi_st, Wphi_kxst, Wphi_kyst, Wphi_kxkyst, Wphi_zst = gx_Wphi_resolved(
             phi,
             cache,
             params,
@@ -604,8 +689,14 @@ def _integrate_nonlinear_gx_diagnostics_impl(
             use_dealias=use_dealias,
             wphi_scale=wphi_scale,
         )
-        Wapar_val = gx_Wapar(apar, cache, vol_fac, use_dealias=use_dealias)
-        heat_species = gx_heat_flux_species(
+        Wapar_st, Wapar_kxst, Wapar_kyst, Wapar_kxkyst, Wapar_zst = gx_Wapar_resolved(
+            apar,
+            cache,
+            vol_fac,
+            nspecies=nspecies,
+            use_dealias=use_dealias,
+        )
+        heat_species, HeatFlux_kxst, HeatFlux_kyst, HeatFlux_kxkyst, HeatFlux_zst = gx_heat_flux_resolved_species(
             G_state,
             phi,
             apar,
@@ -617,7 +708,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
             use_dealias=use_dealias,
             flux_scale=flux_scale,
         )
-        pflux_species = gx_particle_flux_species(
+        (heat_es, heat_apar, heat_bpar) = gx_heat_flux_split_resolved_species(
             G_state,
             phi,
             apar,
@@ -629,8 +720,64 @@ def _integrate_nonlinear_gx_diagnostics_impl(
             use_dealias=use_dealias,
             flux_scale=flux_scale,
         )
+        (
+            pflux_species,
+            ParticleFlux_kxst,
+            ParticleFlux_kyst,
+            ParticleFlux_kxkyst,
+            ParticleFlux_zst,
+        ) = gx_particle_flux_resolved_species(
+            G_state,
+            phi,
+            apar,
+            bpar,
+            cache,
+            grid,
+            params,
+            flux_fac,
+            use_dealias=use_dealias,
+            flux_scale=flux_scale,
+        )
+        (pflux_es, pflux_apar, pflux_bpar) = gx_particle_flux_split_resolved_species(
+            G_state,
+            phi,
+            apar,
+            bpar,
+            cache,
+            grid,
+            params,
+            flux_fac,
+            use_dealias=use_dealias,
+            flux_scale=flux_scale,
+        )
+        (
+            turbulent_heat_species,
+            TurbulentHeating_kxst,
+            TurbulentHeating_kyst,
+            TurbulentHeating_kxkyst,
+            TurbulentHeating_zst,
+        ) = gx_turbulent_heating_resolved_species(
+            G_state,
+            G_prev_step,
+            phi,
+            apar,
+            bpar,
+            phi_prev_step,
+            apar_prev_step,
+            bpar_prev_step,
+            cache,
+            grid,
+            params,
+            vol_fac,
+            dt_step,
+            use_dealias=use_dealias,
+        )
+        Wg_val = jnp.sum(Wg_st)
+        Wphi_val = jnp.sum(Wphi_st)
+        Wapar_val = jnp.sum(Wapar_st)
         heat_val = jnp.sum(heat_species)
         pflux_val = jnp.sum(pflux_species)
+        turbulent_heat_val = jnp.sum(turbulent_heat_species)
         return (
             gamma,
             omega,
@@ -639,13 +786,73 @@ def _integrate_nonlinear_gx_diagnostics_impl(
             Wapar_val,
             heat_val,
             pflux_val,
+            turbulent_heat_val,
             heat_species,
             pflux_species,
+            turbulent_heat_species,
             phi_mode,
+            (
+                phi2_kxt,
+                phi2_kyt,
+                phi2_kxkyt,
+                phi2_zt,
+                phi2_zonal_t,
+                phi2_zonal_kxt,
+                phi2_zonal_zt,
+                Wg_kxst,
+                Wg_kyst,
+                Wg_kxkyst,
+                Wg_zst,
+                Wg_lmst,
+                Wphi_kxst,
+                Wphi_kyst,
+                Wphi_kxkyst,
+                Wphi_zst,
+                Wapar_kxst,
+                Wapar_kyst,
+                Wapar_kxkyst,
+                Wapar_zst,
+                HeatFlux_kxst,
+                HeatFlux_kyst,
+                HeatFlux_kxkyst,
+                HeatFlux_zst,
+                heat_es[1],
+                heat_es[2],
+                heat_es[3],
+                heat_es[4],
+                heat_apar[1],
+                heat_apar[2],
+                heat_apar[3],
+                heat_apar[4],
+                heat_bpar[1],
+                heat_bpar[2],
+                heat_bpar[3],
+                heat_bpar[4],
+                ParticleFlux_kxst,
+                ParticleFlux_kyst,
+                ParticleFlux_kxkyst,
+                ParticleFlux_zst,
+                pflux_es[1],
+                pflux_es[2],
+                pflux_es[3],
+                pflux_es[4],
+                pflux_apar[1],
+                pflux_apar[2],
+                pflux_apar[3],
+                pflux_apar[4],
+                pflux_bpar[1],
+                pflux_bpar[2],
+                pflux_bpar[3],
+                pflux_bpar[4],
+                TurbulentHeating_kxst,
+                TurbulentHeating_kyst,
+                TurbulentHeating_kxkyst,
+                TurbulentHeating_zst,
+            ),
         )
 
     def step(carry, idx):
-        G, phi_prev_step, diag_prev, t_prev, dt_prev = carry
+        G, G_prev_step, fields_prev_step, diag_prev, t_prev, dt_prev = carry
         dG, fields = rhs_fn(G)
         dt_local = jnp.asarray(_update_dt(fields, dt_prev), dtype=real_dtype)
         if method == "euler":
@@ -723,10 +930,9 @@ def _integrate_nonlinear_gx_diagnostics_impl(
         G_new = jnp.asarray(G_new, dtype=state_dtype)
         t_new = jnp.asarray(t_prev + dt_local, dtype=real_dtype)
         fields_new = compute_fields_cached(G_new, cache, params, terms=term_cfg)
-        phi_new = fields_new.phi
 
         def _compute_diag(_):
-            return _compute_diag_from_state(G_new, fields_new, phi_prev_step, dt_local)
+            return _compute_diag_from_state(G_new, fields_new, G_prev_step, fields_prev_step, dt_local)
 
         def _reuse_diag(_):
             return diag_prev
@@ -755,17 +961,18 @@ def _integrate_nonlinear_gx_diagnostics_impl(
                 lambda state: state,
                 G_new,
             )
-        return (G_new, phi_new, diag, t_new, dt_local), (diag, t_new, dt_local)
+        return (G_new, G_new, fields_new, diag, t_new, dt_local), (diag, t_new, dt_local)
 
     step_fn = jax.checkpoint(step) if checkpoint else step
     dt0 = jnp.asarray(_update_dt(fields0, dt_init), dtype=real_dtype)
-    diag_zero = _compute_diag_from_state(G0, fields0, phi_prev, dt0)
+    diag_zero = _compute_diag_from_state(G0, fields0, G0, fields0, dt0)
     idx = jnp.arange(steps, dtype=jnp.int32)
-    (G_final, _phi_last, _diag_last, _t_last, _dt_last), diag_out = jax.lax.scan(
+    (G_final, _G_prev_last, _fields_prev_last, _diag_last, _t_last, _dt_last), diag_out = jax.lax.scan(
         step_fn,
         (
             G0,
-            phi_prev,
+            G0,
+            fields0,
             diag_zero,
             jnp.asarray(0.0, dtype=real_dtype),
             dt0,
@@ -775,7 +982,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
     )
 
     diag, t, dt_series = diag_out
-    gamma_t, omega_t, Wg_t, Wphi_t, Wapar_t, heat_t, pflux_t, heat_s_t, pflux_s_t, phi_mode_t = diag
+    gamma_t, omega_t, Wg_t, Wphi_t, Wapar_t, heat_t, pflux_t, turbulent_heat_t, heat_s_t, pflux_s_t, turbulent_heat_s_t, phi_mode_t, resolved_t = diag
 
     stride = int(max(sample_stride, diagnostics_stride, 1))
     if stride > 1:
@@ -786,11 +993,16 @@ def _integrate_nonlinear_gx_diagnostics_impl(
         Wapar_t = Wapar_t[::stride]
         heat_t = heat_t[::stride]
         pflux_t = pflux_t[::stride]
+        turbulent_heat_t = turbulent_heat_t[::stride]
         heat_s_t = heat_s_t[::stride, ...]
         pflux_s_t = pflux_s_t[::stride, ...]
+        turbulent_heat_s_t = turbulent_heat_s_t[::stride, ...]
         phi_mode_t = phi_mode_t[::stride]
+        resolved_t = tuple(np.asarray(arr)[::stride, ...] for arr in resolved_t)
         t = t[::stride]
         dt_series = dt_series[::stride]
+
+    resolved = _pack_resolved_diagnostics(resolved_t)
 
     dt_mean = jnp.mean(dt_series)
     energy_t = gx_energy_total(Wg_t, Wphi_t, Wapar_t)
@@ -808,7 +1020,10 @@ def _integrate_nonlinear_gx_diagnostics_impl(
         energy_t=energy_t,
         heat_flux_species_t=heat_s_t,
         particle_flux_species_t=pflux_s_t,
+        turbulent_heating_t=turbulent_heat_t,
+        turbulent_heating_species_t=turbulent_heat_s_t,
         phi_mode_t=phi_mode_t,
+        resolved=resolved,
     )
     fields_final = compute_fields_cached(G_final, cache, params, terms=term_cfg)
     return t, diag_out, G_final, fields_final
@@ -1195,12 +1410,16 @@ def integrate_nonlinear_imex_gx_diagnostics(
     def _compute_diag_from_state(
         G_state: jnp.ndarray,
         fields_state: FieldState,
-        phi_prev_step: jnp.ndarray,
+        G_prev_step: jnp.ndarray,
+        fields_prev_step: FieldState,
         dt_step: jnp.ndarray,
     ):
         phi = fields_state.phi
         apar = fields_state.apar if fields_state.apar is not None else jnp.zeros_like(phi)
         bpar = fields_state.bpar if fields_state.bpar is not None else jnp.zeros_like(phi)
+        phi_prev_step = fields_prev_step.phi
+        apar_prev_step = fields_prev_step.apar if fields_prev_step.apar is not None else jnp.zeros_like(phi_prev_step)
+        bpar_prev_step = fields_prev_step.bpar if fields_prev_step.bpar is not None else jnp.zeros_like(phi_prev_step)
 
         gamma_modes, omega_modes = _gx_growth_rate_step(
             phi, phi_prev_step, dt_step, z_index=z_idx, mask=mask
@@ -1221,8 +1440,25 @@ def integrate_nonlinear_imex_gx_diagnostics(
                 nan=jnp.asarray(0.0, dtype=real_dtype),
             )
             phi_mode = jnp.asarray(0.0 + 0.0j, dtype=phi.dtype)
-        Wg_val = gx_Wg(G_state, grid, params, vol_fac, use_dealias=use_dealias)
-        Wphi_val = gx_Wphi(
+        nspecies = int(G_state.shape[0]) if G_state.ndim == 6 else 1
+        (
+            phi2_val,
+            phi2_kxt,
+            phi2_kyt,
+            phi2_kxkyt,
+            phi2_zt,
+            phi2_zonal_t,
+            phi2_zonal_kxt,
+            phi2_zonal_zt,
+        ) = gx_phi2_resolved(phi, grid, vol_fac, use_dealias=use_dealias)
+        Wg_st, Wg_kxst, Wg_kyst, Wg_kxkyst, Wg_zst, Wg_lmst = gx_Wg_resolved(
+            G_state,
+            grid,
+            params,
+            vol_fac,
+            use_dealias=use_dealias,
+        )
+        Wphi_st, Wphi_kxst, Wphi_kyst, Wphi_kxkyst, Wphi_zst = gx_Wphi_resolved(
             phi,
             cache,
             params,
@@ -1230,8 +1466,14 @@ def integrate_nonlinear_imex_gx_diagnostics(
             use_dealias=use_dealias,
             wphi_scale=wphi_scale,
         )
-        Wapar_val = gx_Wapar(apar, cache, vol_fac, use_dealias=use_dealias)
-        heat_species = gx_heat_flux_species(
+        Wapar_st, Wapar_kxst, Wapar_kyst, Wapar_kxkyst, Wapar_zst = gx_Wapar_resolved(
+            apar,
+            cache,
+            vol_fac,
+            nspecies=nspecies,
+            use_dealias=use_dealias,
+        )
+        heat_species, HeatFlux_kxst, HeatFlux_kyst, HeatFlux_kxkyst, HeatFlux_zst = gx_heat_flux_resolved_species(
             G_state,
             phi,
             apar,
@@ -1243,7 +1485,7 @@ def integrate_nonlinear_imex_gx_diagnostics(
             use_dealias=use_dealias,
             flux_scale=flux_scale,
         )
-        pflux_species = gx_particle_flux_species(
+        (heat_es, heat_apar, heat_bpar) = gx_heat_flux_split_resolved_species(
             G_state,
             phi,
             apar,
@@ -1255,8 +1497,64 @@ def integrate_nonlinear_imex_gx_diagnostics(
             use_dealias=use_dealias,
             flux_scale=flux_scale,
         )
+        (
+            pflux_species,
+            ParticleFlux_kxst,
+            ParticleFlux_kyst,
+            ParticleFlux_kxkyst,
+            ParticleFlux_zst,
+        ) = gx_particle_flux_resolved_species(
+            G_state,
+            phi,
+            apar,
+            bpar,
+            cache,
+            grid,
+            params,
+            flux_fac,
+            use_dealias=use_dealias,
+            flux_scale=flux_scale,
+        )
+        (pflux_es, pflux_apar, pflux_bpar) = gx_particle_flux_split_resolved_species(
+            G_state,
+            phi,
+            apar,
+            bpar,
+            cache,
+            grid,
+            params,
+            flux_fac,
+            use_dealias=use_dealias,
+            flux_scale=flux_scale,
+        )
+        (
+            turbulent_heat_species,
+            TurbulentHeating_kxst,
+            TurbulentHeating_kyst,
+            TurbulentHeating_kxkyst,
+            TurbulentHeating_zst,
+        ) = gx_turbulent_heating_resolved_species(
+            G_state,
+            G_prev_step,
+            phi,
+            apar,
+            bpar,
+            phi_prev_step,
+            apar_prev_step,
+            bpar_prev_step,
+            cache,
+            grid,
+            params,
+            vol_fac,
+            dt_step,
+            use_dealias=use_dealias,
+        )
+        Wg_val = jnp.sum(Wg_st)
+        Wphi_val = jnp.sum(Wphi_st)
+        Wapar_val = jnp.sum(Wapar_st)
         heat_val = jnp.sum(heat_species)
         pflux_val = jnp.sum(pflux_species)
+        turbulent_heat_val = jnp.sum(turbulent_heat_species)
         return (
             gamma,
             omega,
@@ -1265,16 +1563,75 @@ def integrate_nonlinear_imex_gx_diagnostics(
             Wapar_val,
             heat_val,
             pflux_val,
+            turbulent_heat_val,
             heat_species,
             pflux_species,
+            turbulent_heat_species,
             phi_mode,
+            (
+                phi2_kxt,
+                phi2_kyt,
+                phi2_kxkyt,
+                phi2_zt,
+                phi2_zonal_t,
+                phi2_zonal_kxt,
+                phi2_zonal_zt,
+                Wg_kxst,
+                Wg_kyst,
+                Wg_kxkyst,
+                Wg_zst,
+                Wg_lmst,
+                Wphi_kxst,
+                Wphi_kyst,
+                Wphi_kxkyst,
+                Wphi_zst,
+                Wapar_kxst,
+                Wapar_kyst,
+                Wapar_kxkyst,
+                Wapar_zst,
+                HeatFlux_kxst,
+                HeatFlux_kyst,
+                HeatFlux_kxkyst,
+                HeatFlux_zst,
+                heat_es[1],
+                heat_es[2],
+                heat_es[3],
+                heat_es[4],
+                heat_apar[1],
+                heat_apar[2],
+                heat_apar[3],
+                heat_apar[4],
+                heat_bpar[1],
+                heat_bpar[2],
+                heat_bpar[3],
+                heat_bpar[4],
+                ParticleFlux_kxst,
+                ParticleFlux_kyst,
+                ParticleFlux_kxkyst,
+                ParticleFlux_zst,
+                pflux_es[1],
+                pflux_es[2],
+                pflux_es[3],
+                pflux_es[4],
+                pflux_apar[1],
+                pflux_apar[2],
+                pflux_apar[3],
+                pflux_apar[4],
+                pflux_bpar[1],
+                pflux_bpar[2],
+                pflux_bpar[3],
+                pflux_bpar[4],
+                TurbulentHeating_kxst,
+                TurbulentHeating_kyst,
+                TurbulentHeating_kxkyst,
+                TurbulentHeating_zst,
+            ),
         )
 
     fields0 = compute_fields_cached(G0, cache, params, terms=term_cfg)
-    phi_prev = fields0.phi
 
     def step(carry, idx):
-        G, phi_prev_step, diag_prev, t_prev = carry
+        G, G_prev_step, fields_prev_step, diag_prev, t_prev = carry
         rhs = G + dt_val * nonlinear_term(G)
         if method == "sspx3":
             def _euler_step(G_state: jnp.ndarray, dt_stage: jnp.ndarray) -> jnp.ndarray:
@@ -1300,10 +1657,9 @@ def integrate_nonlinear_imex_gx_diagnostics(
         G_new = jnp.asarray(G_new, dtype=state_dtype)
         t_new = t_prev + dt_val
         fields_new = compute_fields_cached(G_new, cache, params, terms=term_cfg)
-        phi_new = fields_new.phi
 
         def _compute_diag(_):
-            return _compute_diag_from_state(G_new, fields_new, phi_prev_step, dt_val)
+            return _compute_diag_from_state(G_new, fields_new, G_prev_step, fields_prev_step, dt_val)
 
         def _reuse_diag(_):
             return diag_prev
@@ -1332,16 +1688,17 @@ def integrate_nonlinear_imex_gx_diagnostics(
                 lambda state: state,
                 G_new,
             )
-        return (G_new, phi_new, diag, t_new), (diag, t_new)
+        return (G_new, G_new, fields_new, diag, t_new), (diag, t_new)
 
     step_fn = jax.checkpoint(step) if checkpoint else step
-    diag_zero = _compute_diag_from_state(G0, fields0, phi_prev, dt_val)
+    diag_zero = _compute_diag_from_state(G0, fields0, G0, fields0, dt_val)
     idx = jnp.arange(steps, dtype=jnp.int32)
-    (G_final, _phi_last, _diag_last, _t_last), diag_out = jax.lax.scan(
+    (G_final, _G_prev_last, _fields_prev_last, _diag_last, _t_last), diag_out = jax.lax.scan(
         step_fn,
         (
             G0,
-            phi_prev,
+            G0,
+            fields0,
             diag_zero,
             jnp.asarray(0.0, dtype=real_dtype),
         ),
@@ -1350,7 +1707,7 @@ def integrate_nonlinear_imex_gx_diagnostics(
     )
 
     diag, t = diag_out
-    gamma_t, omega_t, Wg_t, Wphi_t, Wapar_t, heat_t, pflux_t, heat_s_t, pflux_s_t, phi_mode_t = diag
+    gamma_t, omega_t, Wg_t, Wphi_t, Wapar_t, heat_t, pflux_t, turbulent_heat_t, heat_s_t, pflux_s_t, turbulent_heat_s_t, phi_mode_t, resolved_t = diag
     dt_series = jnp.ones_like(t) * dt_val
 
     stride = int(max(sample_stride, diagnostics_stride, 1))
@@ -1362,11 +1719,16 @@ def integrate_nonlinear_imex_gx_diagnostics(
         Wapar_t = Wapar_t[::stride]
         heat_t = heat_t[::stride]
         pflux_t = pflux_t[::stride]
+        turbulent_heat_t = turbulent_heat_t[::stride]
         heat_s_t = heat_s_t[::stride, ...]
         pflux_s_t = pflux_s_t[::stride, ...]
+        turbulent_heat_s_t = turbulent_heat_s_t[::stride, ...]
         phi_mode_t = phi_mode_t[::stride]
+        resolved_t = tuple(np.asarray(arr)[::stride, ...] for arr in resolved_t)
         t = t[::stride]
         dt_series = dt_series[::stride]
+
+    resolved = _pack_resolved_diagnostics(resolved_t)
 
     dt_mean = jnp.mean(dt_series)
     energy_t = gx_energy_total(Wg_t, Wphi_t, Wapar_t)
@@ -1384,7 +1746,10 @@ def integrate_nonlinear_imex_gx_diagnostics(
         energy_t=energy_t,
         heat_flux_species_t=heat_s_t,
         particle_flux_species_t=pflux_s_t,
+        turbulent_heating_t=turbulent_heat_t,
+        turbulent_heating_species_t=turbulent_heat_s_t,
         phi_mode_t=phi_mode_t,
+        resolved=resolved,
     )
     return t, diag_out
 
