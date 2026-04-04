@@ -99,6 +99,7 @@ class TimeConfig:
     dt_max: float | None = None
     cfl: float = 0.9
     cfl_fac: float | None = None
+    nstep_restart: int | None = None
     collision_split: bool = False
     collision_scheme: str = "implicit"
     gx_real_fft: bool = True

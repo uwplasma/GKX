@@ -18,6 +18,68 @@ ArrayLike = jnp.ndarray | np.ndarray
 
 
 @dataclass(frozen=True)
+class GXResolvedDiagnostics:
+    """Optional GX-style resolved nonlinear diagnostics stored per sample."""
+
+    Phi2_kxt: ArrayLike | None = None
+    Phi2_kyt: ArrayLike | None = None
+    Phi2_kxkyt: ArrayLike | None = None
+    Phi2_zt: ArrayLike | None = None
+    Phi2_zonal_t: ArrayLike | None = None
+    Phi2_zonal_kxt: ArrayLike | None = None
+    Phi2_zonal_zt: ArrayLike | None = None
+    Wg_kxst: ArrayLike | None = None
+    Wg_kyst: ArrayLike | None = None
+    Wg_kxkyst: ArrayLike | None = None
+    Wg_zst: ArrayLike | None = None
+    Wg_lmst: ArrayLike | None = None
+    Wphi_kxst: ArrayLike | None = None
+    Wphi_kyst: ArrayLike | None = None
+    Wphi_kxkyst: ArrayLike | None = None
+    Wphi_zst: ArrayLike | None = None
+    Wapar_kxst: ArrayLike | None = None
+    Wapar_kyst: ArrayLike | None = None
+    Wapar_kxkyst: ArrayLike | None = None
+    Wapar_zst: ArrayLike | None = None
+    HeatFlux_kxst: ArrayLike | None = None
+    HeatFlux_kyst: ArrayLike | None = None
+    HeatFlux_kxkyst: ArrayLike | None = None
+    HeatFlux_zst: ArrayLike | None = None
+    HeatFluxES_kxst: ArrayLike | None = None
+    HeatFluxES_kyst: ArrayLike | None = None
+    HeatFluxES_kxkyst: ArrayLike | None = None
+    HeatFluxES_zst: ArrayLike | None = None
+    HeatFluxApar_kxst: ArrayLike | None = None
+    HeatFluxApar_kyst: ArrayLike | None = None
+    HeatFluxApar_kxkyst: ArrayLike | None = None
+    HeatFluxApar_zst: ArrayLike | None = None
+    HeatFluxBpar_kxst: ArrayLike | None = None
+    HeatFluxBpar_kyst: ArrayLike | None = None
+    HeatFluxBpar_kxkyst: ArrayLike | None = None
+    HeatFluxBpar_zst: ArrayLike | None = None
+    ParticleFlux_kxst: ArrayLike | None = None
+    ParticleFlux_kyst: ArrayLike | None = None
+    ParticleFlux_kxkyst: ArrayLike | None = None
+    ParticleFlux_zst: ArrayLike | None = None
+    ParticleFluxES_kxst: ArrayLike | None = None
+    ParticleFluxES_kyst: ArrayLike | None = None
+    ParticleFluxES_kxkyst: ArrayLike | None = None
+    ParticleFluxES_zst: ArrayLike | None = None
+    ParticleFluxApar_kxst: ArrayLike | None = None
+    ParticleFluxApar_kyst: ArrayLike | None = None
+    ParticleFluxApar_kxkyst: ArrayLike | None = None
+    ParticleFluxApar_zst: ArrayLike | None = None
+    ParticleFluxBpar_kxst: ArrayLike | None = None
+    ParticleFluxBpar_kyst: ArrayLike | None = None
+    ParticleFluxBpar_kxkyst: ArrayLike | None = None
+    ParticleFluxBpar_zst: ArrayLike | None = None
+    TurbulentHeating_kxst: ArrayLike | None = None
+    TurbulentHeating_kyst: ArrayLike | None = None
+    TurbulentHeating_kxkyst: ArrayLike | None = None
+    TurbulentHeating_zst: ArrayLike | None = None
+
+
+@dataclass(frozen=True)
 class GXDiagnostics:
     """Streaming GX-style diagnostics at each sample time."""
 
@@ -34,7 +96,10 @@ class GXDiagnostics:
     energy_t: ArrayLike
     heat_flux_species_t: ArrayLike | None = None
     particle_flux_species_t: ArrayLike | None = None
+    turbulent_heating_t: ArrayLike | None = None
+    turbulent_heating_species_t: ArrayLike | None = None
     phi_mode_t: ArrayLike | None = None
+    resolved: GXResolvedDiagnostics | None = None
 
 
 def gx_volume_factors(geom: FluxTubeGeometryLike, grid: SpectralGrid) -> tuple[jnp.ndarray, jnp.ndarray]:
@@ -287,62 +352,53 @@ def gx_heat_flux_species(
 ) -> jnp.ndarray:
     """GX heat flux diagnostic per species (gyroBohm units)."""
 
-    if G.ndim == 5:
-        Gs = G[None, ...]
-    else:
-        Gs = G
-    ns = Gs.shape[0]
-    fac = _gx_fac_mask_nonzero(grid, use_dealias=use_dealias)
-    fac = fac[:, :, None]
-    flx = flux_fac[None, None, :]
+    es_contrib, apar_contrib, bpar_contrib = _gx_heat_flux_channel_contrib_species(
+        G,
+        phi,
+        apar,
+        bpar,
+        cache,
+        grid,
+        params,
+        flux_fac,
+        use_dealias=use_dealias,
+        flux_scale=flux_scale,
+    )
+    return jnp.sum(es_contrib + apar_contrib + bpar_contrib, axis=(1, 2, 3))
 
-    ky = grid.ky[:, None, None]
-    vphi = 1.0j * ky * phi
-    vapar = 1.0j * ky * apar
-    vbpar = 1.0j * ky * bpar
 
-    Jl, JlB, Jfac = _jl_family(cache)
-    sqrt2 = jnp.sqrt(2.0)
-    sqrt32 = jnp.sqrt(1.5)
+def gx_heat_flux_split_species(
+    G: jnp.ndarray,
+    phi: jnp.ndarray,
+    apar: jnp.ndarray,
+    bpar: jnp.ndarray,
+    cache: LinearCache,
+    grid: SpectralGrid,
+    params: LinearParams,
+    flux_fac: jnp.ndarray,
+    *,
+    use_dealias: bool = True,
+    flux_scale: float = 1.0,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """Return ES, Apar, and Bpar heat-flux channels per species."""
 
-    flux_species: list[jnp.ndarray] = []
-    nt = _species_array(params.density, ns) * _species_array(params.temp, ns)
-    vth = _species_array(params.vth, ns)
-    tz = _species_array(params.tz, ns)
-
-    for s in range(ns):
-        Jl_s = Jl[s]
-        JlB_s = JlB[s]
-        Jfac_s = Jfac[s]
-        G_s = Gs[s]
-        Nm = G_s.shape[1]
-
-        def _get_m(m_idx: int) -> jnp.ndarray:
-            if Nm <= m_idx:
-                return jnp.zeros_like(G_s[:, 0, ...])
-            return G_s[:, m_idx, ...]
-
-        G0 = _get_m(0)
-        G1 = _get_m(1)
-        G2 = _get_m(2)
-        G3 = _get_m(3)
-
-        p_bar = jnp.sum(Jfac_s * G0 + (1.0 / sqrt2) * Jl_s * G2, axis=0)
-        q_bar = jnp.sum(
-            Jfac_s * G1 + Jl_s * (sqrt32 * G3 + G1),
-            axis=0,
-        )
-        Jfac_m1 = shift_axis(Jfac_s, -1, axis=0)
-        qB_bar = jnp.sum(Jfac_s * G0 + Jfac_m1 * G0 + (1.0 / sqrt2) * JlB_s * G2, axis=0)
-
-        fg = (
-            jnp.conj(vphi) * p_bar
-            - vth[s] * jnp.conj(vapar) * q_bar
-            + tz[s] * jnp.conj(vbpar) * qB_bar
-        )
-        flux_s = jnp.sum((fg * 2.0 * flx * fac).real) * nt[s] * flux_scale
-        flux_species.append(flux_s)
-    return jnp.stack(flux_species, axis=0)
+    es_contrib, apar_contrib, bpar_contrib = _gx_heat_flux_channel_contrib_species(
+        G,
+        phi,
+        apar,
+        bpar,
+        cache,
+        grid,
+        params,
+        flux_fac,
+        use_dealias=use_dealias,
+        flux_scale=flux_scale,
+    )
+    return (
+        jnp.sum(es_contrib, axis=(1, 2, 3)),
+        jnp.sum(apar_contrib, axis=(1, 2, 3)),
+        jnp.sum(bpar_contrib, axis=(1, 2, 3)),
+    )
 
 
 def gx_heat_flux(
@@ -391,50 +447,53 @@ def gx_particle_flux_species(
 ) -> jnp.ndarray:
     """GX particle flux diagnostic per species."""
 
-    if G.ndim == 5:
-        Gs = G[None, ...]
-    else:
-        Gs = G
-    ns = Gs.shape[0]
-    if ns == 1:
-        return jnp.zeros((1,), dtype=jnp.real(phi).dtype)
-    fac = _gx_fac_mask_nonzero(grid, use_dealias=use_dealias)
-    fac = fac[:, :, None]
-    flx = flux_fac[None, None, :]
+    es_contrib, apar_contrib, bpar_contrib = _gx_particle_flux_channel_contrib_species(
+        G,
+        phi,
+        apar,
+        bpar,
+        cache,
+        grid,
+        params,
+        flux_fac,
+        use_dealias=use_dealias,
+        flux_scale=flux_scale,
+    )
+    return jnp.sum(es_contrib + apar_contrib + bpar_contrib, axis=(1, 2, 3))
 
-    ky = grid.ky[:, None, None]
-    vphi = 1.0j * ky * phi
-    vapar = 1.0j * ky * apar
-    vbpar = 1.0j * ky * bpar
 
-    Jl, JlB, _ = _jl_family(cache)
-    flux_species: list[jnp.ndarray] = []
-    dens = _species_array(params.density, ns)
-    vth = _species_array(params.vth, ns)
-    tz = _species_array(params.tz, ns)
+def gx_particle_flux_split_species(
+    G: jnp.ndarray,
+    phi: jnp.ndarray,
+    apar: jnp.ndarray,
+    bpar: jnp.ndarray,
+    cache: LinearCache,
+    grid: SpectralGrid,
+    params: LinearParams,
+    flux_fac: jnp.ndarray,
+    *,
+    use_dealias: bool = True,
+    flux_scale: float = 1.0,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """Return ES, Apar, and Bpar particle-flux channels per species."""
 
-    for s in range(ns):
-        Jl_s = Jl[s]
-        JlB_s = JlB[s]
-        G_s = Gs[s]
-        Nm = G_s.shape[1]
-
-        def _get_m(m_idx: int) -> jnp.ndarray:
-            if Nm <= m_idx:
-                return jnp.zeros_like(G_s[:, 0, ...])
-            return G_s[:, m_idx, ...]
-
-        G0 = _get_m(0)
-        G1 = _get_m(1)
-
-        n_bar = jnp.sum(Jl_s * G0, axis=0)
-        u_bar = jnp.sum(Jl_s * G1, axis=0)
-        uB_bar = jnp.sum(JlB_s * G0, axis=0)
-
-        fg = jnp.conj(vphi) * n_bar - vth[s] * jnp.conj(vapar) * u_bar + tz[s] * jnp.conj(vbpar) * uB_bar
-        flux_s = jnp.sum((fg * 2.0 * flx * fac).real) * dens[s] * flux_scale
-        flux_species.append(flux_s)
-    return jnp.stack(flux_species, axis=0)
+    es_contrib, apar_contrib, bpar_contrib = _gx_particle_flux_channel_contrib_species(
+        G,
+        phi,
+        apar,
+        bpar,
+        cache,
+        grid,
+        params,
+        flux_fac,
+        use_dealias=use_dealias,
+        flux_scale=flux_scale,
+    )
+    return (
+        jnp.sum(es_contrib, axis=(1, 2, 3)),
+        jnp.sum(apar_contrib, axis=(1, 2, 3)),
+        jnp.sum(bpar_contrib, axis=(1, 2, 3)),
+    )
 
 
 def gx_particle_flux(
@@ -468,5 +527,601 @@ def gx_particle_flux(
     )
 
 
+def gx_turbulent_heating_species(
+    G: jnp.ndarray,
+    G_old: jnp.ndarray,
+    phi: jnp.ndarray,
+    apar: jnp.ndarray,
+    bpar: jnp.ndarray,
+    phi_old: jnp.ndarray,
+    apar_old: jnp.ndarray,
+    bpar_old: jnp.ndarray,
+    cache: LinearCache,
+    grid: SpectralGrid,
+    params: LinearParams,
+    vol_fac: jnp.ndarray,
+    dt: jnp.ndarray | float,
+    *,
+    use_dealias: bool = True,
+) -> jnp.ndarray:
+    """GX turbulent heating diagnostic per species."""
+
+    contrib = _gx_turbulent_heating_contrib_species(
+        G,
+        G_old,
+        phi,
+        apar,
+        bpar,
+        phi_old,
+        apar_old,
+        bpar_old,
+        cache,
+        grid,
+        params,
+        vol_fac,
+        dt,
+        use_dealias=use_dealias,
+    )
+    return jnp.sum(contrib, axis=(1, 2, 3))
+
+
+def gx_turbulent_heating(
+    G: jnp.ndarray,
+    G_old: jnp.ndarray,
+    phi: jnp.ndarray,
+    apar: jnp.ndarray,
+    bpar: jnp.ndarray,
+    phi_old: jnp.ndarray,
+    apar_old: jnp.ndarray,
+    bpar_old: jnp.ndarray,
+    cache: LinearCache,
+    grid: SpectralGrid,
+    params: LinearParams,
+    vol_fac: jnp.ndarray,
+    dt: jnp.ndarray | float,
+    *,
+    use_dealias: bool = True,
+) -> jnp.ndarray:
+    """GX total turbulent heating diagnostic."""
+
+    return jnp.sum(
+        gx_turbulent_heating_species(
+            G,
+            G_old,
+            phi,
+            apar,
+            bpar,
+            phi_old,
+            apar_old,
+            bpar_old,
+            cache,
+            grid,
+            params,
+            vol_fac,
+            dt,
+            use_dealias=use_dealias,
+        )
+    )
+
+
 def gx_energy_total(Wg: ArrayLike, Wphi: ArrayLike, Wapar: ArrayLike) -> ArrayLike:
     return Wg + Wphi + Wapar
+
+
+def _gx_heat_flux_channel_contrib_species(
+    G: jnp.ndarray,
+    phi: jnp.ndarray,
+    apar: jnp.ndarray,
+    bpar: jnp.ndarray,
+    cache: LinearCache,
+    grid: SpectralGrid,
+    params: LinearParams,
+    flux_fac: jnp.ndarray,
+    *,
+    use_dealias: bool,
+    flux_scale: float,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    if G.ndim == 5:
+        Gs = G[None, ...]
+    else:
+        Gs = G
+    ns = Gs.shape[0]
+    fac = _gx_fac_mask_nonzero(grid, use_dealias=use_dealias)[:, :, None]
+    flx = flux_fac[None, None, :]
+    ky = grid.ky[:, None, None]
+    vphi = 1.0j * ky * phi
+    vapar = 1.0j * ky * apar
+    vbpar = 1.0j * ky * bpar
+    Jl, JlB, Jfac = _jl_family(cache)
+    sqrt2 = jnp.sqrt(2.0)
+    sqrt32 = jnp.sqrt(1.5)
+    nt = _species_array(params.density, ns) * _species_array(params.temp, ns)
+    vth = _species_array(params.vth, ns)
+    tz = _species_array(params.tz, ns)
+    es_species = []
+    apar_species = []
+    bpar_species = []
+    for s in range(ns):
+        Jl_s = Jl[s]
+        JlB_s = JlB[s]
+        Jfac_s = Jfac[s]
+        G_s = Gs[s]
+        Nm = G_s.shape[1]
+
+        def _get_m(m_idx: int) -> jnp.ndarray:
+            if Nm <= m_idx:
+                return jnp.zeros_like(G_s[:, 0, ...])
+            return G_s[:, m_idx, ...]
+
+        G0 = _get_m(0)
+        G1 = _get_m(1)
+        G2 = _get_m(2)
+        G3 = _get_m(3)
+        p_bar = jnp.sum(Jfac_s * G0 + (1.0 / sqrt2) * Jl_s * G2, axis=0)
+        q_bar = jnp.sum(Jfac_s * G1 + Jl_s * (sqrt32 * G3 + G1), axis=0)
+        Jfac_m1 = shift_axis(Jfac_s, -1, axis=0)
+        qB_bar = jnp.sum(Jfac_s * G0 + Jfac_m1 * G0 + (1.0 / sqrt2) * JlB_s * G2, axis=0)
+        weight = 2.0 * flx * fac * nt[s] * flux_scale
+        es_species.append((jnp.conj(vphi) * p_bar * weight).real)
+        apar_species.append((-vth[s] * jnp.conj(vapar) * q_bar * weight).real)
+        bpar_species.append((tz[s] * jnp.conj(vbpar) * qB_bar * weight).real)
+    return (
+        jnp.stack(es_species, axis=0),
+        jnp.stack(apar_species, axis=0),
+        jnp.stack(bpar_species, axis=0),
+    )
+
+
+def _gx_particle_flux_channel_contrib_species(
+    G: jnp.ndarray,
+    phi: jnp.ndarray,
+    apar: jnp.ndarray,
+    bpar: jnp.ndarray,
+    cache: LinearCache,
+    grid: SpectralGrid,
+    params: LinearParams,
+    flux_fac: jnp.ndarray,
+    *,
+    use_dealias: bool,
+    flux_scale: float,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    if G.ndim == 5:
+        Gs = G[None, ...]
+    else:
+        Gs = G
+    ns = Gs.shape[0]
+    zero_shape = (ns, grid.ky.size, grid.kx.size, grid.z.size)
+    if ns == 1:
+        zero = jnp.zeros(zero_shape, dtype=jnp.real(phi).dtype)
+        return zero, zero, zero
+    fac = _gx_fac_mask_nonzero(grid, use_dealias=use_dealias)[:, :, None]
+    flx = flux_fac[None, None, :]
+    ky = grid.ky[:, None, None]
+    vphi = 1.0j * ky * phi
+    vapar = 1.0j * ky * apar
+    vbpar = 1.0j * ky * bpar
+    Jl, JlB, _ = _jl_family(cache)
+    dens = _species_array(params.density, ns)
+    vth = _species_array(params.vth, ns)
+    tz = _species_array(params.tz, ns)
+    es_species = []
+    apar_species = []
+    bpar_species = []
+    for s in range(ns):
+        Jl_s = Jl[s]
+        JlB_s = JlB[s]
+        G_s = Gs[s]
+        Nm = G_s.shape[1]
+
+        def _get_m(m_idx: int) -> jnp.ndarray:
+            if Nm <= m_idx:
+                return jnp.zeros_like(G_s[:, 0, ...])
+            return G_s[:, m_idx, ...]
+
+        G0 = _get_m(0)
+        G1 = _get_m(1)
+        n_bar = jnp.sum(Jl_s * G0, axis=0)
+        u_bar = jnp.sum(Jl_s * G1, axis=0)
+        uB_bar = jnp.sum(JlB_s * G0, axis=0)
+        weight = 2.0 * flx * fac * dens[s] * flux_scale
+        es_species.append((jnp.conj(vphi) * n_bar * weight).real)
+        apar_species.append((-vth[s] * jnp.conj(vapar) * u_bar * weight).real)
+        bpar_species.append((tz[s] * jnp.conj(vbpar) * uB_bar * weight).real)
+    return (
+        jnp.stack(es_species, axis=0),
+        jnp.stack(apar_species, axis=0),
+        jnp.stack(bpar_species, axis=0),
+    )
+
+
+def _gx_turbulent_heating_contrib_species(
+    G: jnp.ndarray,
+    G_old: jnp.ndarray,
+    phi: jnp.ndarray,
+    apar: jnp.ndarray,
+    bpar: jnp.ndarray,
+    phi_old: jnp.ndarray,
+    apar_old: jnp.ndarray,
+    bpar_old: jnp.ndarray,
+    cache: LinearCache,
+    grid: SpectralGrid,
+    params: LinearParams,
+    vol_fac: jnp.ndarray,
+    dt: jnp.ndarray | float,
+    *,
+    use_dealias: bool,
+) -> jnp.ndarray:
+    if G.ndim == 5:
+        Gs = G[None, ...]
+    else:
+        Gs = G
+    if G_old.ndim == 5:
+        G_old_s = G_old[None, ...]
+    else:
+        G_old_s = G_old
+
+    ns = Gs.shape[0]
+    fac = _gx_fac_mask(grid, use_dealias=use_dealias)[:, :, None]
+    vol = vol_fac[None, None, :]
+    Jl, JlB, _ = _jl_family(cache)
+    dens = _species_array(params.density, ns)
+    vth = _species_array(params.vth, ns)
+    tz = _species_array(params.tz, ns)
+    zt = jnp.where(tz == 0.0, 0.0, 1.0 / tz)
+    real_dtype = jnp.real(phi).dtype
+    dt_arr = jnp.asarray(dt, dtype=real_dtype)
+    dt_safe = jnp.where(dt_arr == 0.0, jnp.asarray(jnp.inf, dtype=real_dtype), dt_arr)
+
+    dphidt = (phi - phi_old) / dt_safe
+    dadt = (apar - apar_old) / dt_safe
+    dbdt = (bpar - bpar_old) / dt_safe
+
+    species_contrib = []
+    for s in range(ns):
+        Jl_s = Jl[s]
+        JlB_s = JlB[s]
+        G_s = Gs[s]
+        G_prev_s = G_old_s[s]
+        Nm = G_s.shape[1]
+
+        def _get_m(source: jnp.ndarray, m_idx: int) -> jnp.ndarray:
+            if source.shape[1] <= m_idx:
+                return jnp.zeros_like(source[:, 0, ...])
+            return source[:, m_idx, ...]
+
+        G0 = _get_m(G_s, 0)
+        G1 = _get_m(G_s, 1)
+        G0_old = _get_m(G_prev_s, 0)
+        G1_old = _get_m(G_prev_s, 1)
+
+        H0_old = G0_old + zt[s] * Jl_s * phi_old[None, ...] + JlB_s * bpar_old[None, ...]
+        H1_old = G1_old - zt[s] * vth[s] * Jl_s * apar_old[None, ...]
+        H0 = G0 + zt[s] * Jl_s * phi[None, ...] + JlB_s * bpar[None, ...]
+        H1 = G1 - zt[s] * vth[s] * Jl_s * apar[None, ...]
+
+        n_bar_old = jnp.sum(Jl_s * H0_old, axis=0)
+        u_bar_old = jnp.sum(Jl_s * H1_old, axis=0)
+        uB_bar_old = jnp.sum(JlB_s * H0_old, axis=0)
+        n_bar = jnp.sum(Jl_s * H0, axis=0)
+        u_bar = jnp.sum(Jl_s * H1, axis=0)
+        uB_bar = jnp.sum(JlB_s * H0, axis=0)
+
+        dn_bardt = (n_bar - n_bar_old) / dt_safe
+        du_bardt = (u_bar - u_bar_old) / dt_safe
+        duB_bardt = (uB_bar - uB_bar_old) / dt_safe
+
+        h_dchidt = (
+            jnp.conj(dphidt) * n_bar_old
+            - vth[s] * jnp.conj(dadt) * u_bar_old
+            + tz[s] * jnp.conj(dbdt) * uB_bar_old
+        )
+        chi_dhdt = (
+            jnp.conj(phi_old) * dn_bardt
+            - vth[s] * jnp.conj(apar_old) * du_bardt
+            + tz[s] * jnp.conj(bpar_old) * duB_bardt
+        )
+        species_contrib.append(0.5 * (h_dchidt.real - chi_dhdt.real) * dens[s] * fac * vol)
+
+    return jnp.stack(species_contrib, axis=0)
+
+
+def _reduce_scalar_kykxz(
+    contrib: jnp.ndarray,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """Reduce a ``(ky, kx, z)`` contribution to GX spectra views."""
+
+    return (
+        jnp.sum(contrib, axis=(0, 2)),
+        jnp.sum(contrib, axis=(1, 2)),
+        jnp.sum(contrib, axis=2),
+        jnp.sum(contrib, axis=(0, 1)),
+        jnp.sum(contrib),
+    )
+
+
+def _reduce_species_kykxz(
+    contrib: jnp.ndarray,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """Reduce a ``(species, ky, kx, z)`` contribution to GX spectra views."""
+
+    return (
+        jnp.sum(contrib, axis=(1, 2, 3)),
+        jnp.sum(contrib, axis=(1, 3)),
+        jnp.sum(contrib, axis=(2, 3)),
+        jnp.sum(contrib, axis=3),
+        jnp.sum(contrib, axis=(1, 2)),
+    )
+
+
+def gx_phi2_resolved(
+    phi: jnp.ndarray,
+    grid: SpectralGrid,
+    vol_fac: jnp.ndarray,
+    *,
+    use_dealias: bool = True,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """Return GX-style resolved ``Phi2`` reductions from a single field state."""
+
+    fac = _gx_fac_mask(grid, use_dealias=use_dealias)
+    contrib = jnp.abs(phi) ** 2 * fac[:, :, None] * vol_fac[None, None, :]
+    phi2_kxt, phi2_kyt, phi2_kxkyt, phi2_zt, phi2_t = _reduce_scalar_kykxz(contrib)
+    zonal_mask = (jnp.asarray(grid.ky) == 0.0).astype(contrib.dtype)[:, None, None]
+    zonal = contrib * zonal_mask
+    phi2_zonal_kxt, _phi2_zonal_kyt, _phi2_zonal_kxkyt, phi2_zonal_zt, phi2_zonal_t = _reduce_scalar_kykxz(zonal)
+    return (
+        phi2_t,
+        phi2_kxt,
+        phi2_kyt,
+        phi2_kxkyt,
+        phi2_zt,
+        phi2_zonal_t,
+        phi2_zonal_kxt,
+        phi2_zonal_zt,
+    )
+
+
+def gx_Wg_resolved(
+    G: jnp.ndarray,
+    grid: SpectralGrid,
+    params: LinearParams,
+    vol_fac: jnp.ndarray,
+    *,
+    use_dealias: bool = True,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """Return GX-style resolved free-energy reductions from a single state."""
+
+    fac = _gx_fac_mask(grid, use_dealias=use_dealias)[None, None, None, :, :, None]
+    vol = vol_fac[None, None, None, None, None, :]
+    if G.ndim == 5:
+        Gs = G[None, ...]
+    else:
+        Gs = G
+    ns = Gs.shape[0]
+    nt = _species_array(params.density, ns) * _species_array(params.temp, ns)
+    contrib = 0.5 * jnp.abs(Gs) ** 2 * fac * vol * nt[:, None, None, None, None, None]
+    Wg_kxst = jnp.sum(contrib, axis=(1, 2, 3, 5))
+    Wg_kyst = jnp.sum(contrib, axis=(1, 2, 4, 5))
+    Wg_kxkyst = jnp.sum(contrib, axis=(1, 2, 5))
+    Wg_zst = jnp.sum(contrib, axis=(1, 2, 3, 4))
+    Wg_st = jnp.sum(contrib, axis=(1, 2, 3, 4, 5))
+    Wg_lmst = jnp.transpose(jnp.sum(contrib, axis=(3, 4, 5)), (0, 2, 1))
+    return Wg_st, Wg_kxst, Wg_kyst, Wg_kxkyst, Wg_zst, Wg_lmst
+
+
+def gx_Wphi_resolved(
+    phi: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    vol_fac: jnp.ndarray,
+    *,
+    use_dealias: bool = True,
+    wphi_scale: float = 1.0,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """Return GX-style resolved electrostatic-energy reductions per species."""
+
+    fac = _gx_fac_mask_cached(cache, use_dealias=use_dealias)
+    weight = fac[:, :, None] * vol_fac[None, None, :]
+    rho = jnp.asarray(params.rho)
+    if rho.ndim == 0:
+        rho = rho[None]
+    phi2 = jnp.abs(phi) ** 2
+    contrib_species = []
+    scale = jnp.asarray(wphi_scale, dtype=jnp.real(phi).dtype)
+    for rho2_s in rho * rho:
+        b = cache.kperp2 * rho2_s
+        contrib_species.append(0.5 * phi2 * (1.0 - gamma0(b)) * weight * scale)
+    contrib = jnp.stack(contrib_species, axis=0)
+    return _reduce_species_kykxz(contrib)
+
+
+def gx_Wapar_resolved(
+    apar: jnp.ndarray,
+    cache: LinearCache,
+    vol_fac: jnp.ndarray,
+    *,
+    nspecies: int,
+    use_dealias: bool = True,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """Return GX-style resolved magnetic-energy reductions per species."""
+
+    fac = _gx_fac_mask_cached(cache, use_dealias=use_dealias)
+    weight = fac[:, :, None] * vol_fac[None, None, :]
+    bmag2 = cache.bmag[None, None, :] ** 2 if cache.kperp2_bmag else 1.0
+    total = 0.5 * jnp.abs(apar) ** 2 * cache.kperp2 * bmag2 * weight
+    ns = max(int(nspecies), 1)
+    contrib = jnp.broadcast_to(total[None, ...] / float(ns), (ns,) + total.shape)
+    return _reduce_species_kykxz(contrib)
+
+
+def gx_heat_flux_resolved_species(
+    G: jnp.ndarray,
+    phi: jnp.ndarray,
+    apar: jnp.ndarray,
+    bpar: jnp.ndarray,
+    cache: LinearCache,
+    grid: SpectralGrid,
+    params: LinearParams,
+    flux_fac: jnp.ndarray,
+    *,
+    use_dealias: bool = True,
+    flux_scale: float = 1.0,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """Return GX-style resolved heat-flux reductions per species."""
+
+    es_contrib, apar_contrib, bpar_contrib = _gx_heat_flux_channel_contrib_species(
+        G,
+        phi,
+        apar,
+        bpar,
+        cache,
+        grid,
+        params,
+        flux_fac,
+        use_dealias=use_dealias,
+        flux_scale=flux_scale,
+    )
+    return _reduce_species_kykxz(es_contrib + apar_contrib + bpar_contrib)
+
+
+def gx_heat_flux_split_resolved_species(
+    G: jnp.ndarray,
+    phi: jnp.ndarray,
+    apar: jnp.ndarray,
+    bpar: jnp.ndarray,
+    cache: LinearCache,
+    grid: SpectralGrid,
+    params: LinearParams,
+    flux_fac: jnp.ndarray,
+    *,
+    use_dealias: bool = True,
+    flux_scale: float = 1.0,
+) -> tuple[
+    tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray],
+    tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray],
+    tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray],
+]:
+    """Return resolved ES, Apar, and Bpar heat-flux channels per species."""
+
+    es_contrib, apar_contrib, bpar_contrib = _gx_heat_flux_channel_contrib_species(
+        G,
+        phi,
+        apar,
+        bpar,
+        cache,
+        grid,
+        params,
+        flux_fac,
+        use_dealias=use_dealias,
+        flux_scale=flux_scale,
+    )
+    return (
+        _reduce_species_kykxz(es_contrib),
+        _reduce_species_kykxz(apar_contrib),
+        _reduce_species_kykxz(bpar_contrib),
+    )
+
+
+def gx_particle_flux_resolved_species(
+    G: jnp.ndarray,
+    phi: jnp.ndarray,
+    apar: jnp.ndarray,
+    bpar: jnp.ndarray,
+    cache: LinearCache,
+    grid: SpectralGrid,
+    params: LinearParams,
+    flux_fac: jnp.ndarray,
+    *,
+    use_dealias: bool = True,
+    flux_scale: float = 1.0,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """Return GX-style resolved particle-flux reductions per species."""
+
+    es_contrib, apar_contrib, bpar_contrib = _gx_particle_flux_channel_contrib_species(
+        G,
+        phi,
+        apar,
+        bpar,
+        cache,
+        grid,
+        params,
+        flux_fac,
+        use_dealias=use_dealias,
+        flux_scale=flux_scale,
+    )
+    return _reduce_species_kykxz(es_contrib + apar_contrib + bpar_contrib)
+
+
+def gx_particle_flux_split_resolved_species(
+    G: jnp.ndarray,
+    phi: jnp.ndarray,
+    apar: jnp.ndarray,
+    bpar: jnp.ndarray,
+    cache: LinearCache,
+    grid: SpectralGrid,
+    params: LinearParams,
+    flux_fac: jnp.ndarray,
+    *,
+    use_dealias: bool = True,
+    flux_scale: float = 1.0,
+) -> tuple[
+    tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray],
+    tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray],
+    tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray],
+]:
+    """Return resolved ES, Apar, and Bpar particle-flux channels per species."""
+
+    es_contrib, apar_contrib, bpar_contrib = _gx_particle_flux_channel_contrib_species(
+        G,
+        phi,
+        apar,
+        bpar,
+        cache,
+        grid,
+        params,
+        flux_fac,
+        use_dealias=use_dealias,
+        flux_scale=flux_scale,
+    )
+    return (
+        _reduce_species_kykxz(es_contrib),
+        _reduce_species_kykxz(apar_contrib),
+        _reduce_species_kykxz(bpar_contrib),
+    )
+
+
+def gx_turbulent_heating_resolved_species(
+    G: jnp.ndarray,
+    G_old: jnp.ndarray,
+    phi: jnp.ndarray,
+    apar: jnp.ndarray,
+    bpar: jnp.ndarray,
+    phi_old: jnp.ndarray,
+    apar_old: jnp.ndarray,
+    bpar_old: jnp.ndarray,
+    cache: LinearCache,
+    grid: SpectralGrid,
+    params: LinearParams,
+    vol_fac: jnp.ndarray,
+    dt: jnp.ndarray | float,
+    *,
+    use_dealias: bool = True,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """Return GX-style resolved turbulent-heating reductions per species."""
+
+    contrib = _gx_turbulent_heating_contrib_species(
+        G,
+        G_old,
+        phi,
+        apar,
+        bpar,
+        phi_old,
+        apar_old,
+        bpar_old,
+        cache,
+        grid,
+        params,
+        vol_fac,
+        dt,
+        use_dealias=use_dealias,
+    )
+    return _reduce_species_kykxz(contrib)

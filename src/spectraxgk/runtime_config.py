@@ -132,6 +132,15 @@ class RuntimeOutputConfig:
     """Artifact-output controls for runtime CLI entry points."""
 
     path: str | None = None
+    restart: bool = False
+    restart_if_exists: bool = False
+    save_for_restart: bool = True
+    restart_to_file: str | None = None
+    restart_from_file: str | None = None
+    restart_with_perturb: bool = False
+    append_on_restart: bool = True
+    restart_scale: float = 1.0
+    nsave: int = 10000
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

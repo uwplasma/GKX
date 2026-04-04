@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields as dataclass_fields, replace
 from typing import Callable, Sequence
 from pathlib import Path
 
@@ -23,7 +23,7 @@ from spectraxgk.analysis import (
     fit_growth_rate_auto_with_stats,
     select_ky_index,
 )
-from spectraxgk.diagnostics import GXDiagnostics, gx_energy_total
+from spectraxgk.diagnostics import GXDiagnostics, GXResolvedDiagnostics, gx_energy_total
 from spectraxgk.geometry import (
     apply_gx_geometry_grid_defaults,
     FluxTubeGeometryLike,
@@ -38,6 +38,7 @@ from spectraxgk.linear import (
     linear_terms_to_term_config,
 )
 from spectraxgk.nonlinear import integrate_nonlinear_gx_diagnostics_state
+from spectraxgk.restart import load_gx_restart_state
 from spectraxgk.linear_krylov import KrylovConfig, dominant_eigenpair
 from spectraxgk.normalization import apply_diagnostic_normalization, get_normalization_contract
 from spectraxgk.runtime_config import RuntimeConfig, RuntimeSpeciesConfig
@@ -216,6 +217,15 @@ def _slice_gx_diagnostics(diag: GXDiagnostics, stop: int) -> GXDiagnostics:
             return None
         return np.asarray(arr)[:stop, ...]
 
+    def _slice_resolved(resolved: GXResolvedDiagnostics | None) -> GXResolvedDiagnostics | None:
+        if resolved is None:
+            return None
+        payload: dict[str, np.ndarray | None] = {}
+        for field in dataclass_fields(GXResolvedDiagnostics):
+            value = getattr(resolved, field.name)
+            payload[field.name] = None if value is None else np.asarray(value)[:stop, ...]
+        return GXResolvedDiagnostics(**payload)
+
     dt_t = np.asarray(diag.dt_t)[:stop]
     Wg_t = np.asarray(diag.Wg_t)[:stop]
     Wphi_t = np.asarray(diag.Wphi_t)[:stop]
@@ -238,7 +248,10 @@ def _slice_gx_diagnostics(diag: GXDiagnostics, stop: int) -> GXDiagnostics:
         energy_t=np.asarray(gx_energy_total(jnp.asarray(Wg_t), jnp.asarray(Wphi_t), jnp.asarray(Wapar_t))),
         heat_flux_species_t=_slice_optional(diag.heat_flux_species_t),
         particle_flux_species_t=_slice_optional(diag.particle_flux_species_t),
+        turbulent_heating_t=_slice_optional(diag.turbulent_heating_t),
+        turbulent_heating_species_t=_slice_optional(diag.turbulent_heating_species_t),
         phi_mode_t=_slice_optional(diag.phi_mode_t),
+        resolved=_slice_resolved(diag.resolved),
     )
 
 
@@ -265,6 +278,15 @@ def _stride_gx_diagnostics(diag: GXDiagnostics, *, stride: int) -> GXDiagnostics
             return None
         return np.asarray(arr)[::stride_use, ...]
 
+    def _stride_resolved(resolved: GXResolvedDiagnostics | None) -> GXResolvedDiagnostics | None:
+        if resolved is None:
+            return None
+        payload: dict[str, np.ndarray | None] = {}
+        for field in dataclass_fields(GXResolvedDiagnostics):
+            value = getattr(resolved, field.name)
+            payload[field.name] = None if value is None else np.asarray(value)[::stride_use, ...]
+        return GXResolvedDiagnostics(**payload)
+
     dt_t = np.asarray(diag.dt_t)[::stride_use]
     Wg_t = np.asarray(diag.Wg_t)[::stride_use]
     Wphi_t = np.asarray(diag.Wphi_t)[::stride_use]
@@ -287,7 +309,10 @@ def _stride_gx_diagnostics(diag: GXDiagnostics, *, stride: int) -> GXDiagnostics
         energy_t=np.asarray(gx_energy_total(jnp.asarray(Wg_t), jnp.asarray(Wphi_t), jnp.asarray(Wapar_t))),
         heat_flux_species_t=_stride_optional(diag.heat_flux_species_t),
         particle_flux_species_t=_stride_optional(diag.particle_flux_species_t),
+        turbulent_heating_t=_stride_optional(diag.turbulent_heating_t),
+        turbulent_heating_species_t=_stride_optional(diag.turbulent_heating_species_t),
         phi_mode_t=_stride_optional(diag.phi_mode_t),
+        resolved=_stride_resolved(diag.resolved),
     )
 
 
@@ -305,6 +330,22 @@ def _concat_gx_diagnostics(diags: Sequence[GXDiagnostics]) -> GXDiagnostics:
         if all(value is None for value in values):
             return None
         return np.concatenate([np.asarray(value) for value in values if value is not None], axis=0)
+
+    def _concat_resolved() -> GXResolvedDiagnostics | None:
+        values = [diag.resolved for diag in diags]
+        if all(value is None for value in values):
+            return None
+        payload: dict[str, np.ndarray | None] = {}
+        for field in dataclass_fields(GXResolvedDiagnostics):
+            series = [None if value is None else getattr(value, field.name) for value in values]
+            if all(item is None for item in series):
+                payload[field.name] = None
+            else:
+                payload[field.name] = np.concatenate(
+                    [np.asarray(item) for item in series if item is not None],
+                    axis=0,
+                )
+        return GXResolvedDiagnostics(**payload)
 
     dt_t = _concat("dt_t")
     Wg_t = _concat("Wg_t")
@@ -325,7 +366,10 @@ def _concat_gx_diagnostics(diags: Sequence[GXDiagnostics]) -> GXDiagnostics:
         energy_t=np.asarray(gx_energy_total(jnp.asarray(Wg_t), jnp.asarray(Wphi_t), jnp.asarray(Wapar_t))),
         heat_flux_species_t=_concat_optional("heat_flux_species_t"),
         particle_flux_species_t=_concat_optional("particle_flux_species_t"),
+        turbulent_heating_t=_concat_optional("turbulent_heating_t"),
+        turbulent_heating_species_t=_concat_optional("turbulent_heating_species_t"),
         phi_mode_t=_concat_optional("phi_mode_t"),
+        resolved=_concat_resolved(),
     )
 
 
@@ -621,6 +665,16 @@ def _load_initial_state_from_file(
     nx: int,
     nz: int,
 ) -> np.ndarray:
+    if path.suffix.lower() == ".nc":
+        return load_gx_restart_state(
+            path,
+            nspecies=nspecies,
+            Nl=Nl,
+            Nm=Nm,
+            ny=ny,
+            nx=nx,
+            nz=nz,
+        )
     raw = np.fromfile(path, dtype=np.complex64)
     nyc = ny // 2 + 1
     expected_nyc = nspecies * Nl * Nm * nyc * nx * nz
@@ -1592,7 +1646,7 @@ def run_runtime_nonlinear(
                 t=np.asarray(diag.t),
                 diagnostics=diag,
                 phi2=None,
-                fields=None,
+                fields=cetg_fields_final,
                 state=np.asarray(G_final) if return_state else None,
                 ky_selected=float(np.asarray(grid.ky[ky_index])),
                 kx_selected=float(np.asarray(grid.kx[kx_index])),
@@ -1638,7 +1692,7 @@ def run_runtime_nonlinear(
             t=np.asarray(diag.t),
             diagnostics=diag,
             phi2=None,
-            fields=None,
+            fields=cetg_fields_final,
             state=np.asarray(G_final) if return_state else None,
             ky_selected=float(np.asarray(grid.ky[ky_index])),
             kx_selected=float(np.asarray(grid.kx[kx_index])),
@@ -1861,7 +1915,7 @@ def run_runtime_nonlinear(
                 t=np.asarray(t),
                 diagnostics=diag,
                 phi2=None,
-                fields=None,
+                fields=fields_final,
                 state=state_out,
                 ky_selected=float(np.asarray(grid.ky[ky_index])),
                 kx_selected=float(np.asarray(grid.kx[kx_index])),
