@@ -104,8 +104,30 @@ def print_callback(
 ) -> Any:
     """Emit a host-side progress update and return ``state`` unchanged."""
 
+    def _callback(
+        cb_idx: Any,
+        cb_steps: Any,
+        cb_gamma: Any,
+        cb_omega: Any,
+        cb_wphi: Any,
+        cb_wg: Any,
+        cb_sim_time: Any,
+        cb_sim_total: Any,
+    ) -> None:
+        _emit_progress(
+            cb_idx,
+            cb_steps,
+            cb_gamma,
+            cb_omega,
+            cb_wphi,
+            cb_wg,
+            cb_sim_time,
+            cb_sim_total,
+            metric_labels=metric_labels,
+        )
+
     jax.debug.callback(
-        lambda *args: _emit_progress(*args, metric_labels=metric_labels),
+        _callback,
         idx,
         steps,
         gamma,
