@@ -625,15 +625,24 @@ def dominant_eigenpair(
     mode_family: str = "auto",
     fallback_method: str = "propagator",
     fallback_real_floor: float = -1.0e-6,
+    status_callback: Callable[[str], None] | None = None,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Python wrapper for the cached Krylov solver."""
+
+    def _status(message: str) -> None:
+        if status_callback is not None:
+            status_callback(message)
 
     term_cfg = linear_terms_to_term_config(terms)
     v_ref_use = v0 if v_ref is None else v_ref
     method_key = method.strip().lower()
     mode_family_sign = _mode_family_sign(mode_family)
     omega_sign_eff = int(omega_sign) if int(omega_sign) != 0 else mode_family_sign
+    _status(
+        f"krylov method={method_key} dim={max(int(krylov_dim), 1)} restarts={max(int(restarts), 1)}"
+    )
     if method_key == "power":
+        _status(f"running power iteration seed with iterations={max(int(power_iters), 1)} dt={float(power_dt):.6g}")
         return dominant_eigenpair_power(
             v0,
             cache,
@@ -643,6 +652,9 @@ def dominant_eigenpair(
             dt=float(power_dt),
         )
     if method_key == "propagator":
+        _status(
+            f"running propagator Arnoldi with dt={float(power_dt):.6g} dim={max(int(krylov_dim), 1)} restarts={max(int(restarts), 1)}"
+        )
         return dominant_eigenpair_propagator_cached(
             v0,
             v_ref_use,
@@ -660,9 +672,13 @@ def dominant_eigenpair(
         )
     if method_key == "shift_invert":
         restarts = max(int(restarts), 1)
+        _status(
+            f"preparing shift-invert solve with dim={max(int(krylov_dim), 1)} restarts={restarts} gmres_maxiter={max(int(shift_maxiter), 1)} restart={max(int(shift_restart), 1)} tol={float(shift_tol):.3g}"
+        )
         if shift is None:
             shift_source_key = shift_source.strip().lower()
             if shift_source_key == "propagator":
+                _status("estimating shift from propagator seed")
                 shift_est, v_seed = dominant_eigenpair_propagator_cached(
                     v0,
                     v_ref_use,
@@ -681,6 +697,7 @@ def dominant_eigenpair(
                 sigma = shift_est
                 v_init = v_seed
             elif shift_source_key == "target":
+                _status("building target-frequency shift")
                 omega_scale = _omega_scale(cache, params)
                 omega_target = float(omega_target_factor) * omega_scale
                 if omega_sign_eff != 0:
@@ -688,6 +705,7 @@ def dominant_eigenpair(
                 sigma = -1j * omega_target
                 v_init = v0
             else:
+                _status("estimating shift from power iteration seed")
                 shift_est, v_seed = dominant_eigenpair_power(
                     v0,
                     cache,
@@ -702,6 +720,7 @@ def dominant_eigenpair(
             sigma = jnp.asarray(shift, dtype=v0.dtype)
             shift_source_key = shift_source.strip().lower()
             if shift_source_key == "propagator":
+                _status("using explicit shift with propagator seed vector")
                 _shift_seed, v_seed = dominant_eigenpair_propagator_cached(
                     v0,
                     v_ref_use,
@@ -719,6 +738,7 @@ def dominant_eigenpair(
                 )
                 v_init = v_seed
             elif shift_source_key == "power":
+                _status("using explicit shift with power-iteration seed vector")
                 _shift_seed, v_seed = dominant_eigenpair_power(
                     v0,
                     cache,
@@ -729,10 +749,14 @@ def dominant_eigenpair(
                 )
                 v_init = v_seed
             else:
+                _status("using explicit shift with reference seed vector")
                 v_init = v_ref_use
+        sigma_host = complex(np.asarray(sigma))
+        _status(f"shift-invert sigma={sigma_host.real:.6g}{sigma_host.imag:+.6g}j")
         selection_key = shift_selection.strip().lower()
         select_targeted = selection_key in {"targeted", "target", "auto", "default"}
         select_growth = selection_key in {"targeted", "growth", "auto", "default"}
+        _status("running shift-invert Arnoldi")
         eig_si, vec_si = dominant_eigenpair_shift_invert_cached(
             v_init,
             v_ref_use,
@@ -755,14 +779,16 @@ def dominant_eigenpair(
             select_growth=select_growth,
             select_overlap=bool(select_overlap),
         )
-        fallback_key = fallback_method.strip().lower()
         eig_host = complex(np.asarray(eig_si))
+        _status(f"shift-invert solve finished with eig={eig_host.real:.6g}{eig_host.imag:+.6g}j")
+        fallback_key = fallback_method.strip().lower()
         need_fallback = (
             not np.isfinite(eig_host.real)
             or not np.isfinite(eig_host.imag)
             or eig_host.real < float(fallback_real_floor)
         )
         if need_fallback and fallback_key != "none":
+            _status(f"shift-invert result rejected; falling back to {fallback_key}")
             if fallback_key == "propagator":
                 return dominant_eigenpair_propagator_cached(
                     v0,
@@ -810,6 +836,7 @@ def dominant_eigenpair(
         )
 
     restarts = max(int(restarts), 1)
+    _status(f"running plain Arnoldi with dim={max(int(krylov_dim), 1)} restarts={restarts}")
     return dominant_eigenpair_cached(
         v0,
         v_ref_use,

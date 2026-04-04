@@ -1373,11 +1373,31 @@ def _integrate_linear_cached_impl(
         return G + (dt_val / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
 
     def step(G, idx):
-        if show_progress:
-            from spectraxgk.utils.callbacks import print_callback
-            G = print_callback(G, idx, steps, 0.0, 0.0, 0.0, 0.0)
         G_new = advance(G)
         _dG_new, phi_new = linear_rhs_cached(G_new, cache, params, terms=terms, dt=dt_val)
+        if show_progress:
+            from spectraxgk.utils.callbacks import print_callback, should_emit_progress
+
+            sim_time = (idx + 1) * dt_val
+            sim_total = jnp.asarray(steps, dtype=dt_val.dtype) * dt_val
+            phi_max = jnp.max(jnp.abs(phi_new))
+            G_new = jax.lax.cond(
+                should_emit_progress(idx, steps),
+                lambda state: print_callback(
+                    state,
+                    idx,
+                    steps,
+                    0.0,
+                    0.0,
+                    phi_max,
+                    0.0,
+                    sim_time,
+                    sim_total,
+                    metric_labels=("|phi|_max", "|n|_max"),
+                ),
+                lambda state: state,
+                G_new,
+            )
         return G_new, phi_new
 
     step_fn = jax.checkpoint(step) if checkpoint else step
@@ -1388,12 +1408,31 @@ def _integrate_linear_cached_impl(
     def sample_step(G, idx):
         def inner_step(i, state):
             return advance(state)
-
-        if show_progress:
-            from spectraxgk.utils.callbacks import print_callback
-            G = print_callback(G, idx * sample_stride, steps, 0.0, 0.0, 0.0, 0.0)
-
         G_out = jax.lax.fori_loop(0, sample_stride, inner_step, G)
+        if show_progress:
+            from spectraxgk.utils.callbacks import print_callback, should_emit_progress
+
+            completed_idx = jnp.minimum((idx + 1) * sample_stride, steps) - 1
+            sim_time = jnp.minimum((idx + 1) * sample_stride, steps) * dt_val
+            sim_total = jnp.asarray(steps, dtype=dt_val.dtype) * dt_val
+            phi_max = jnp.max(jnp.abs(phi_out))
+            G_out = jax.lax.cond(
+                should_emit_progress(completed_idx, steps),
+                lambda state: print_callback(
+                    state,
+                    completed_idx,
+                    steps,
+                    0.0,
+                    0.0,
+                    phi_max,
+                    0.0,
+                    sim_time,
+                    sim_total,
+                    metric_labels=("|phi|_max", "|n|_max"),
+                ),
+                lambda state: state,
+                G_out,
+            )
         _dG_out, phi_out = linear_rhs_cached(G_out, cache, params, terms=terms, dt=dt_val)
         return G_out, phi_out
 
@@ -2045,12 +2084,33 @@ def integrate_linear_diagnostics(
         return jnp.sum(jnp.abs(G_in) ** 2, axis=(0, 3, 4, 5))
 
     def step(G_in, idx):
-        if show_progress:
-            from spectraxgk.utils.callbacks import print_callback
-            G_in = print_callback(G_in, idx, steps, 0.0, 0.0, 0.0, 0.0)
         G_out = advance(G_in)
         _dG, phi = linear_rhs_cached(G_out, cache, params, terms=terms, use_jit=False, dt=dt_val)
         density = density_from_G(G_out)
+        if show_progress:
+            from spectraxgk.utils.callbacks import print_callback, should_emit_progress
+
+            sim_time = (idx + 1) * dt_val
+            sim_total = jnp.asarray(steps, dtype=dt_val.dtype) * dt_val
+            phi_max = jnp.max(jnp.abs(phi))
+            density_max = jnp.max(jnp.abs(density))
+            G_out = jax.lax.cond(
+                should_emit_progress(idx, steps),
+                lambda state: print_callback(
+                    state,
+                    idx,
+                    steps,
+                    0.0,
+                    0.0,
+                    phi_max,
+                    density_max,
+                    sim_time,
+                    sim_total,
+                    metric_labels=("|phi|_max", "|n|_max"),
+                ),
+                lambda state: state,
+                G_out,
+            )
         if record_hl_energy:
             hl_energy = hl_energy_from_G(G_out)
             return G_out, (phi, density, hl_energy)
@@ -2061,14 +2121,35 @@ def integrate_linear_diagnostics(
         G_out, outputs = jax.lax.scan(step, G0, indices)
     else:
         def sample_step(G_in, idx):
-            if show_progress:
-                from spectraxgk.utils.callbacks import print_callback
-                G_in = print_callback(G_in, idx * sample_stride, steps, 0.0, 0.0, 0.0, 0.0)
-
             def inner_step(_i, g):
                 return advance(g)
 
             G_out_local = jax.lax.fori_loop(0, sample_stride, inner_step, G_in)
+            if show_progress:
+                from spectraxgk.utils.callbacks import print_callback, should_emit_progress
+
+                completed_idx = jnp.minimum((idx + 1) * sample_stride, steps) - 1
+                sim_time = jnp.minimum((idx + 1) * sample_stride, steps) * dt_val
+                sim_total = jnp.asarray(steps, dtype=dt_val.dtype) * dt_val
+                phi_max = jnp.max(jnp.abs(phi_out))
+                density_max = jnp.max(jnp.abs(density_out))
+                G_out_local = jax.lax.cond(
+                    should_emit_progress(completed_idx, steps),
+                    lambda state: print_callback(
+                        state,
+                        completed_idx,
+                        steps,
+                        0.0,
+                        0.0,
+                        phi_max,
+                        density_max,
+                        sim_time,
+                        sim_total,
+                        metric_labels=("|phi|_max", "|n|_max"),
+                    ),
+                    lambda state: state,
+                    G_out_local,
+                )
             _dG, phi_out = linear_rhs_cached(G_out_local, cache, params, terms=terms, use_jit=False, dt=dt_val)
             density_out = density_from_G(G_out_local)
             if record_hl_energy:

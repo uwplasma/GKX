@@ -590,13 +590,18 @@ def integrate_cetg_gx_diagnostics_state(
     idx = jnp.arange(steps, dtype=jnp.int32)
     scan_step = step
     if show_progress:
-        from spectraxgk.utils.callbacks import print_callback
+        from spectraxgk.utils.callbacks import print_callback, should_emit_progress
 
         def scan_step(carry, idx):
             carry_out, diag_out = step(carry, idx)
             diag_vals, _t_out, _dt_out = diag_out
             gamma_cb, omega_cb, Wg_cb, Wphi_cb = diag_vals[0], diag_vals[1], diag_vals[2], diag_vals[3]
-            print_callback(_dt_out, idx, steps, gamma_cb, omega_cb, Wphi_cb, Wg_cb)
+            _dt_out = jax.lax.cond(
+                should_emit_progress(idx, steps),
+                lambda state: print_callback(state, idx, steps, gamma_cb, omega_cb, Wphi_cb, Wg_cb, _t_out, None),
+                lambda state: state,
+                _dt_out,
+            )
             return carry_out, diag_out
 
     (G_final, fields_last, phi_last, _diag_last, _t_last, _dt_last), diag_out = jax.lax.scan(

@@ -51,8 +51,15 @@ def integrate_nonlinear(
 
     def step(G, idx):
         if show_progress:
-            from spectraxgk.utils.callbacks import print_callback  # type: ignore[import-untyped]
-            G = print_callback(G, idx, steps, 0.0, 0.0, 0.0, 0.0)
+            from spectraxgk.utils.callbacks import print_callback, should_emit_progress  # type: ignore[import-untyped]
+            sim_time = (idx + 1) * dt_val
+            sim_total = jnp.asarray(steps, dtype=real_dtype) * dt_val
+            G = jax.lax.cond(
+                should_emit_progress(idx, steps),
+                lambda state: print_callback(state, idx, steps, 0.0, 0.0, 0.0, 0.0, sim_time, sim_total),
+                lambda state: state,
+                G,
+            )
         G = jnp.asarray(projector(G), dtype=state_dtype)
         dG, _fields = rhs_fn(G)
         dG = jnp.asarray(dG, dtype=state_dtype)
