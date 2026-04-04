@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Sequence
+from typing import Callable, Sequence
 import warnings
 import numpy as np
 from importlib import resources
@@ -948,11 +948,17 @@ def run_cyclone_linear(
     use_jit: bool = True,
     gx_reference: bool | None = None,
     show_progress: bool = False,
+    status_callback: Callable[[str], None] | None = None,
 ) -> CycloneRunResult:
     """Run the linear Cyclone benchmark and extract growth rate."""
 
+    def _status(message: str) -> None:
+        if status_callback is not None:
+            status_callback(message)
+
     cfg = cfg or CycloneBaseCase()
     init_cfg = init_cfg or getattr(cfg, "init", None) or InitializationConfig()
+    _status("building spectral grid")
     grid_full = build_spectral_grid(cfg.grid)
     gx_reference_use = bool(cfg.gx_reference) if gx_reference is None else bool(gx_reference)
     geom_cfg = cfg.geometry
@@ -962,8 +968,10 @@ def run_cyclone_linear(
             diagnostic_norm = "gx"
         if mode_method not in {"z_index", "max"}:
             mode_method = "z_index"
+    _status("building s-alpha geometry")
     geom = SAlphaGeometry.from_config(geom_cfg)
     if params is None:
+        _status("building Cyclone linear parameters")
         params = LinearParams(
             R_over_Ln=cfg.model.R_over_Ln,
             R_over_LTi=cfg.model.R_over_LTi,
@@ -991,6 +999,8 @@ def run_cyclone_linear(
     ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
     grid = select_ky_grid(grid_full, ky_index)
     sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
+    _status(f"selected ky index {ky_index} at ky={float(grid.ky[sel.ky_index]):.4f}")
+    _status("building initial condition")
     G0_base = np.asarray(
         _build_initial_condition(
             grid,
@@ -1007,6 +1017,7 @@ def run_cyclone_linear(
         return jnp.asarray(G0_base)
 
     G0_jax = _fresh_G0()
+    _status("building linear cache")
     cache = build_linear_cache(grid, geom, params, Nl, Nm)
 
     def _is_valid_growth(gamma_val: float, omega_val: float) -> bool:
@@ -1017,6 +1028,7 @@ def run_cyclone_linear(
         return True
 
     def _run_krylov() -> tuple[float, float, np.ndarray, np.ndarray]:
+        _status("starting Krylov solve")
         kcfg = krylov_cfg or CYCLONE_KRYLOV_DEFAULT
         # GX-style time seed to stabilize the branch selection.
         gamma_seed = 0.0
@@ -1024,6 +1036,7 @@ def run_cyclone_linear(
         seed_ok = False
         omega_ok = False
         try:
+            _status("estimating frequency seed with short GX time march")
             t_seed = min(150.0, float(kcfg.power_dt) * 15000.0)
             time_cfg = GXTimeConfig(
                 dt=float(kcfg.power_dt),
@@ -1061,6 +1074,7 @@ def run_cyclone_linear(
 
         if not seed_ok:
             try:
+                _status("primary seed failed; retrying reduced Hermite-Laguerre seed")
                 Nl_seed = min(Nl, 16)
                 Nm_seed = min(Nm, 12)
                 cache_seed = build_linear_cache(grid, geom, params, Nl_seed, Nm_seed)
@@ -1112,6 +1126,7 @@ def run_cyclone_linear(
         if omega_ok:
             shift = complex(float(gamma_seed) if seed_ok else 0.0, float(-omega_seed))
         G0_krylov = _fresh_G0()
+        _status("running dominant eigenpair solve")
         eig, vec = dominant_eigenpair(
             G0_krylov,
             cache,
@@ -1137,6 +1152,7 @@ def run_cyclone_linear(
             mode_family=kcfg.mode_family,
             fallback_method=kcfg.fallback_method,
             fallback_real_floor=kcfg.fallback_real_floor,
+            status_callback=_status,
         )
         term_cfg = linear_terms_to_term_config(terms)
         phi = compute_fields_cached(vec, cache, params, terms=term_cfg).phi
@@ -1164,9 +1180,11 @@ def run_cyclone_linear(
         gamma_out, omega_out = _normalize_growth_rate(
             gamma_out, omega_out, params, diagnostic_norm
         )
+        _status(f"Krylov solve complete: gamma={gamma_out:.6f} omega={omega_out:.6f}")
         return gamma_out, omega_out, phi_t_out, t_out
 
     def _run_time() -> tuple[float, float, np.ndarray, np.ndarray]:
+        _status(f"starting time integration path with fit_signal={fit_key}")
         method_key = method.lower()
         phi_t: jnp.ndarray | np.ndarray
         density_t: jnp.ndarray | np.ndarray | None
@@ -1185,6 +1203,7 @@ def run_cyclone_linear(
         if gx_reference_use:
             # GX integrator applies damping with per-time scaling internally.
             params_use = params
+            _status("running GX-reference time integrator")
             t_max_val = float(dt) * int(steps) if time_cfg_use is None else float(time_cfg_use.t_max)
             stride = 1 if time_cfg_use is None else int(time_cfg_use.sample_stride)
             gx_time_cfg = GXTimeConfig(
@@ -1213,7 +1232,11 @@ def run_cyclone_linear(
 
         params_use = params
         if time_cfg_use is not None:
+            _status(
+                f"running runtime-configured integrator over {int(steps)} steps with sample_stride={int(time_cfg_use.sample_stride)}"
+            )
             if need_density:
+                _status("saving phi and density diagnostics for automatic fit selection")
                 _, saved = integrate_linear_from_config(
                     _fresh_G0(),
                     grid,
@@ -1241,6 +1264,9 @@ def run_cyclone_linear(
         else:
             stride = 1 if sample_stride is None else int(sample_stride)
             if need_density or not use_jit:
+                _status(
+                    f"running explicit diagnostics integrator over {int(steps)} steps with sample_stride={stride}"
+                )
                 _diag = integrate_linear_diagnostics(
                     _fresh_G0(),
                     grid,
@@ -1253,10 +1279,14 @@ def run_cyclone_linear(
                     sample_stride=stride,
                     species_index=0,
                     record_hl_energy=False,
+                    show_progress=show_progress,
                 )
                 phi_t = _diag[1]
                 density_t = _diag[2] if len(_diag) > 2 else None
             else:
+                _status(
+                    f"running cached linear integrator over {int(steps)} steps with sample_stride={stride}"
+                )
                 _, phi_out_time = integrate_linear(
                     _fresh_G0(),
                     grid,
@@ -1274,6 +1304,7 @@ def run_cyclone_linear(
         phi_t_np = np.asarray(phi_t)
         t_arr = np.arange(phi_t_np.shape[0]) * dt * stride
         density_np = None if density_t is None else np.asarray(density_t)
+        _status(f"integration complete; fitting growth rate from {phi_t_np.shape[0]} saved samples")
         if fit_key == "auto":
             signal, _name, gamma_out, omega_out = _select_fit_signal_auto(
                 t_arr,
@@ -1302,6 +1333,7 @@ def run_cyclone_linear(
                 min_slope_frac=min_slope_frac,
                 slope_var_weight=slope_var_weight,
             )
+            _status(f"automatic fit selected signal '{_name}'")
             if not np.isfinite(gamma_out) or not np.isfinite(omega_out):
                 gamma_out, omega_out = 0.0, 0.0
         else:
@@ -1339,6 +1371,7 @@ def run_cyclone_linear(
         gamma_out, omega_out = _normalize_growth_rate(
             gamma_out, omega_out, params_use, diagnostic_norm
         )
+        _status(f"time integration fit complete: gamma={gamma_out:.6f} omega={omega_out:.6f}")
         return float(gamma_out), float(omega_out), phi_t_np, t_arr
 
     if solver_key == "krylov":
@@ -1346,9 +1379,12 @@ def run_cyclone_linear(
     elif solver_key == "auto":
         gamma, omega, phi_t_np, t = _run_time()
         if not _is_valid_growth(gamma, omega):
+            _status("time-path result rejected; falling back to Krylov solve")
             gamma, omega, phi_t_np, t = _run_krylov()
     else:
         gamma, omega, phi_t_np, t = _run_time()
+
+    _status(f"completed Cyclone linear run at ky={float(grid.ky[sel.ky_index]):.4f}")
 
     return CycloneRunResult(
         t=t,

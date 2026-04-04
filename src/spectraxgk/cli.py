@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from dataclasses import replace
 from pathlib import Path
 
@@ -21,7 +22,7 @@ from spectraxgk.benchmarks import (
 )
 from spectraxgk.geometry import SAlphaGeometry
 from spectraxgk.grids import build_spectral_grid
-from spectraxgk.io import load_case_from_toml, load_krylov_from_toml, load_linear_terms_from_toml, load_runtime_from_toml
+from spectraxgk.io import load_case_from_toml, load_krylov_from_toml, load_linear_terms_from_toml, load_runtime_from_toml, load_toml
 from spectraxgk.plotting import growth_fit_figure, scan_comparison_figure, set_plot_style
 from spectraxgk.runtime_artifacts import write_runtime_linear_artifacts, write_runtime_nonlinear_artifacts
 from spectraxgk.runtime import run_runtime_linear, run_runtime_scan, run_runtime_nonlinear
@@ -31,6 +32,68 @@ def _runtime_output_path(args: argparse.Namespace, cfg) -> str | None:
     if getattr(args, "out", None) is not None:
         return str(args.out)
     return cfg.output.path
+
+
+_RUNTIME_TOP_LEVEL_KEYS = {
+    "species",
+    "physics",
+    "collisions",
+    "normalization",
+    "expert",
+    "output",
+}
+_LEGACY_CASE_TOP_LEVEL_KEYS = {"case", "model", "gx_reference"}
+
+
+def _is_runtime_toml(data: dict) -> bool:
+    if any(key in data for key in _LEGACY_CASE_TOP_LEVEL_KEYS):
+        return False
+    if any(key in data for key in _RUNTIME_TOP_LEVEL_KEYS):
+        return True
+    return True
+
+
+def _should_show_progress(args: argparse.Namespace, configured: bool) -> bool:
+    if getattr(args, "progress", False):
+        return True
+    if getattr(args, "no_progress", False):
+        return False
+    return bool(configured or sys.stdout.isatty())
+
+
+def _print_linear_run_header(
+    *,
+    label: str,
+    config_path: str,
+    ky: float,
+    Nl: int,
+    Nm: int,
+    solver: str,
+    method: str,
+    dt: float,
+    steps: int,
+    grid_shape: tuple[int, int, int],
+    show_progress: bool,
+    extra: str | None = None,
+) -> None:
+    print(f"starting {label}")
+    print(
+        f"config={config_path} ky={ky:.4f} Nl={Nl} Nm={Nm} "
+        f"solver={solver} method={method} dt={dt:.6g} steps={steps}"
+    )
+    print(
+        f"grid=Nx{grid_shape[0]} Ny{grid_shape[1]} Nz{grid_shape[2]} "
+        f"progress={'on' if show_progress else 'off'}"
+    )
+    if extra is not None:
+        print(extra)
+
+
+def _status_printer(prefix: str):
+    def _emit(message: str) -> None:
+        print(f"{prefix}: {message}")
+
+    return _emit
 
 
 def _cmd_cyclone_info(_: argparse.Namespace) -> int:
@@ -120,6 +183,9 @@ def build_parser() -> argparse.ArgumentParser:
     run_linear.add_argument("--fit-signal", type=str, default=None, help="auto, phi, or density")
     run_linear.add_argument("--plot", action="store_true", help="Save fit/eigenfunction plots")
     run_linear.add_argument("--outdir", default=".", help="Output directory for plots")
+    run_linear_progress = run_linear.add_mutually_exclusive_group()
+    run_linear_progress.add_argument("--progress", action="store_true", help="Enable progress output")
+    run_linear_progress.add_argument("--no-progress", action="store_true", help="Disable progress output")
     run_linear.set_defaults(func=_cmd_run_linear)
 
     scan_linear = sub.add_parser("scan-linear", help="Run a ky scan from a TOML config")
@@ -210,8 +276,6 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
-    import sys
-
     known_cmds = {
         "run",
         "cyclone-info",
@@ -224,8 +288,10 @@ def main() -> int:
     }
     if len(sys.argv) > 1 and not sys.argv[1].startswith("-") and sys.argv[1] not in known_cmds:
         if Path(sys.argv[1]).exists():
+            data = load_toml(sys.argv[1])
+            command = "run" if _is_runtime_toml(data) else "run-linear"
             parser = build_parser()
-            args = parser.parse_args(["run", "--config", sys.argv[1], *sys.argv[2:]])
+            args = parser.parse_args([command, "--config", sys.argv[1], *sys.argv[2:]])
             return args.func(args)
 
     parser = build_parser()
@@ -268,9 +334,25 @@ def _cmd_run_linear(args: argparse.Namespace) -> int:
     method = args.method if args.method is not None else run_cfg.get("method", cfg.time.method)
     dt = args.dt if args.dt is not None else run_cfg.get("dt", cfg.time.dt)
     steps = args.steps if args.steps is not None else run_cfg.get("steps", int(round(cfg.time.t_max / cfg.time.dt)))
+    show_progress = _should_show_progress(args, bool(cfg.time.progress_bar))
 
     terms = load_linear_terms_from_toml(data)
     krylov_cfg = load_krylov_from_toml(data)
+
+    _print_linear_run_header(
+        label=f"legacy linear {case_name} run",
+        config_path=str(args.config),
+        ky=float(ky),
+        Nl=int(Nl),
+        Nm=int(Nm),
+        solver=str(solver),
+        method=str(method),
+        dt=float(dt),
+        steps=int(steps),
+        grid_shape=(int(cfg.grid.Nx), int(cfg.grid.Ny), int(cfg.grid.Nz)),
+        show_progress=show_progress,
+        extra="detected legacy case TOML; using run-linear path",
+    )
 
     result = run_fn(
         ky_target=float(ky),
@@ -284,6 +366,8 @@ def _cmd_run_linear(args: argparse.Namespace) -> int:
         krylov_cfg=krylov_cfg,
         terms=terms,
         fit_signal=str(fit_signal),
+        show_progress=show_progress,
+        status_callback=_status_printer(case_name),
         **fit_cfg,
     )
     print(f"ky={result.ky:.4f} gamma={result.gamma:.6f} omega={result.omega:.6f}")
@@ -415,12 +499,27 @@ def _cmd_run_runtime_linear(args: argparse.Namespace) -> int:
         if args.sample_stride is not None
         else run_cfg.get("sample_stride", cfg.time.sample_stride)
     )
-    show_progress = (
-        True
-        if getattr(args, "progress", False)
-        else False
-        if getattr(args, "no_progress", False)
-        else bool(cfg.time.progress_bar)
+    dt_use = float(dt if dt is not None else cfg.time.dt)
+    steps_use = int(steps) if steps is not None else int(round(float(cfg.time.t_max) / dt_use))
+    method_use = str(method if method is not None else cfg.time.method)
+    show_progress = _should_show_progress(args, bool(cfg.time.progress_bar))
+
+    _print_linear_run_header(
+        label="runtime linear run",
+        config_path=str(args.config),
+        ky=ky,
+        Nl=Nl,
+        Nm=Nm,
+        solver=solver,
+        method=method_use,
+        dt=dt_use,
+        steps=steps_use,
+        grid_shape=(int(cfg.grid.Nx), int(cfg.grid.Ny), int(cfg.grid.Nz)),
+        show_progress=show_progress,
+        extra=(
+            f"model={cfg.physics.reduced_model} electrostatic={cfg.physics.electrostatic} "
+            f"electromagnetic={cfg.physics.electromagnetic} fit_signal={fit_signal}"
+        ),
     )
 
     res = run_runtime_linear(
@@ -435,6 +534,7 @@ def _cmd_run_runtime_linear(args: argparse.Namespace) -> int:
         sample_stride=sample_stride,
         fit_signal=fit_signal,
         show_progress=show_progress,
+        status_callback=_status_printer("runtime"),
         **fit_cfg,
     )
     print(f"ky={res.ky:.4f} gamma={res.gamma:.6f} omega={res.omega:.6f}")
@@ -542,12 +642,16 @@ def _cmd_run_runtime_nonlinear(args: argparse.Namespace) -> int:
     laguerre_mode = args.laguerre_mode if args.laguerre_mode is not None else run_cfg.get(
         "laguerre_mode"
     )
-    show_progress = (
-        True
-        if getattr(args, "progress", False)
-        else False
-        if getattr(args, "no_progress", False)
-        else bool(cfg.time.progress_bar)
+    show_progress = _should_show_progress(args, bool(cfg.time.progress_bar))
+
+    print("starting runtime nonlinear run")
+    print(
+        f"config={args.config} ky={ky:.4f} Nl={Nl} Nm={Nm} method={method} dt={dt:.6g} "
+        f"steps={'auto' if steps is None else steps}"
+    )
+    print(
+        f"grid=Nx{int(cfg.grid.Nx)} Ny{int(cfg.grid.Ny)} Nz{int(cfg.grid.Nz)} "
+        f"diagnostics={'on' if diagnostics else 'off'} progress={'on' if show_progress else 'off'}"
     )
 
     result = run_runtime_nonlinear(
@@ -563,6 +667,7 @@ def _cmd_run_runtime_nonlinear(args: argparse.Namespace) -> int:
         laguerre_mode=laguerre_mode,
         diagnostics=diagnostics,
         show_progress=show_progress,
+        status_callback=_status_printer("runtime"),
     )
     diag = result.diagnostics
     if diag is None:

@@ -102,6 +102,9 @@ def write_runtime_linear_artifacts(out: str | Path, result: Any) -> dict[str, st
         "ky": float(result.ky),
         "gamma": float(result.gamma),
         "omega": float(result.omega),
+        "fit_window_tmin": None if result.fit_window_tmin is None else float(result.fit_window_tmin),
+        "fit_window_tmax": None if result.fit_window_tmax is None else float(result.fit_window_tmax),
+        "fit_signal_used": result.fit_signal_used,
         "selection": {
             "ky_index": int(result.selection.ky_index),
             "kx_index": int(result.selection.kx_index),

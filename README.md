@@ -51,14 +51,14 @@ stack before treating a mismatch as a solver regression.
 # Get information about the Cyclone base case
 spectrax-gk cyclone-info
 
-# Run a linear simulation with a specific k_y
-spectrax-gk run-linear --config examples/linear/axisymmetric/runtime_cyclone.toml --plot
+# Run the current Cyclone example from its TOML
+cd examples/linear/axisymmetric && spectrax-gk cyclone.toml
 
 # Run directly from a runtime TOML
 spectrax-gk examples/nonlinear/axisymmetric/runtime_cetg_reference.toml --steps 200
 
 # Run a linear scan across k_y
-spectrax-gk scan-linear --config examples/linear/axisymmetric/cyclone.toml --plot
+spectrax-gk scan-runtime-linear --config examples/linear/axisymmetric/cyclone.toml
 ```
 
 Single-point runtime TOMLs can also carry their own artifact prefix:

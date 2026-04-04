@@ -485,6 +485,11 @@ def _integrate_nonlinear_gx_diagnostics_impl(
     G0 = _project_state(G0)
     real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
     dt_init = jnp.asarray(dt, dtype=real_dtype)
+    progress_total = (
+        jnp.asarray(float(steps) * float(dt), dtype=real_dtype)
+        if fixed_dt
+        else jnp.asarray(jnp.nan, dtype=real_dtype)
+    )
     dt_min_val = jnp.asarray(dt_min, dtype=real_dtype)
     # GX default behavior: when dt_max is unset, dt_max == dt.
     dt_max_val = jnp.asarray(dt if dt_max is None else dt_max, dtype=real_dtype)
@@ -729,6 +734,27 @@ def _integrate_nonlinear_gx_diagnostics_impl(
         diag_stride = int(max(diagnostics_stride, 1))
         do_diag = (idx % diag_stride) == 0
         diag = jax.lax.cond(do_diag, _compute_diag, _reuse_diag, operand=None)
+        if show_progress:
+            from spectraxgk.utils.callbacks import print_callback, should_emit_progress
+
+            gamma_cb, omega_cb = diag[0], diag[1]
+            Wg_cb, Wphi_cb = diag[2], diag[3]
+            G_new = jax.lax.cond(
+                should_emit_progress(idx, steps),
+                lambda state: print_callback(
+                    state,
+                    idx,
+                    steps,
+                    gamma_cb,
+                    omega_cb,
+                    Wphi_cb,
+                    Wg_cb,
+                    t_new,
+                    progress_total,
+                ),
+                lambda state: state,
+                G_new,
+            )
         return (G_new, phi_new, diag, t_new, dt_local), (diag, t_new, dt_local)
 
     step_fn = jax.checkpoint(step) if checkpoint else step
@@ -1099,6 +1125,7 @@ def integrate_nonlinear_imex_gx_diagnostics(
     G0 = jnp.asarray(G0, dtype=state_dtype)
     real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
     dt_val = jnp.asarray(dt, dtype=real_dtype)
+    progress_total = jnp.asarray(float(steps) * float(dt), dtype=real_dtype)
 
     squeeze_species = implicit_operator.squeeze_species
     if squeeze_species and G0.ndim == len(implicit_operator.shape) - 1:
@@ -1284,6 +1311,27 @@ def integrate_nonlinear_imex_gx_diagnostics(
         diag_stride = int(max(diagnostics_stride, 1))
         do_diag = (idx % diag_stride) == 0
         diag = jax.lax.cond(do_diag, _compute_diag, _reuse_diag, operand=None)
+        if show_progress:
+            from spectraxgk.utils.callbacks import print_callback, should_emit_progress
+
+            gamma_cb, omega_cb = diag[0], diag[1]
+            Wg_cb, Wphi_cb = diag[2], diag[3]
+            G_new = jax.lax.cond(
+                should_emit_progress(idx, steps),
+                lambda state: print_callback(
+                    state,
+                    idx,
+                    steps,
+                    gamma_cb,
+                    omega_cb,
+                    Wphi_cb,
+                    Wg_cb,
+                    t_new,
+                    progress_total,
+                ),
+                lambda state: state,
+                G_new,
+            )
         return (G_new, phi_new, diag, t_new), (diag, t_new)
 
     step_fn = jax.checkpoint(step) if checkpoint else step
