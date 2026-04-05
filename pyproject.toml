@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,29 +8,60 @@ version = "0.0.0"
 description = "JAX gyrokinetic solver with Hermite-Laguerre velocity space"
 readme = "README.md"
 requires-python = ">=3.10"
-license = {file = "LICENSE"}
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
 authors = [{name = "SPECTRAX-GK team"}]
-
-dependencies = [
-  "jax>=0.8,<0.9",
-  "jaxlib>=0.8,<0.9",
-  "numpy>=2.3,<2.4",
-  "matplotlib>=3.7",
-  "diffrax>=0.7,<0.8",
-  "equinox>=0.13,<0.14",
-  "tomli>=2.0; python_version < '3.11'",
-  "tqdm>=4.64",
+keywords = ["gyrokinetics", "jax", "plasma-physics", "tokamak", "stellarator", "turbulence"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Topic :: Scientific/Engineering :: Physics",
 ]
 
+dependencies = [
+  "jax",
+  "jaxlib",
+  "numpy",
+  "matplotlib",
+  "scipy",
+  "netCDF4",
+  "diffrax",
+  "equinox",
+  "tomli; python_version < '3.11'",
+  "tqdm",
+]
+
+[project.urls]
+Homepage = "https://github.com/uwplasma/SPECTRAX-GK"
+Documentation = "https://github.com/uwplasma/SPECTRAX-GK/tree/main/docs"
+Repository = "https://github.com/uwplasma/SPECTRAX-GK"
+Issues = "https://github.com/uwplasma/SPECTRAX-GK/issues"
+
 [project.optional-dependencies]
+docs = [
+  "sphinx",
+  "sphinx-rtd-theme",
+  "matplotlib",
+]
+release = [
+  "build",
+  "twine",
+]
 dev = [
-  "pytest>=7.0",
-  "pytest-cov>=4.0",
-  "ruff>=0.1.6",
-  "mypy>=1.6",
-  "mkdocs>=1.5",
-  "sphinx>=7.0",
-  "matplotlib>=3.7",
+  "pytest",
+  "pytest-cov",
+  "ruff",
+  "mypy",
+  "mkdocs",
+  "sphinx",
+  "sphinx-rtd-theme",
+  "matplotlib",
+  "build",
+  "twine",
 ]
 
 [project.scripts]

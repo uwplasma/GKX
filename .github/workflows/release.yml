@@ -22,8 +22,12 @@ jobs:
 
       - name: Build artifacts (sdist + wheel)
         run: |
-          python -m pip install --upgrade pip build
+          python -m pip install --upgrade pip build twine
           python -m build
+
+      - name: Check distribution metadata
+        run: |
+          twine check dist/*
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
