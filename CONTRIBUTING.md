@@ -15,6 +15,19 @@ pip install -e .[dev]
 pytest
 ```
 
+## Building docs
+
+```bash
+python -m sphinx -W -b html docs docs/_build/html
+```
+
+## Packaging checks
+
+```bash
+python -m build
+twine check dist/*
+```
+
 ## Code layout
 
 - `src/spectraxgk`: library code
