@@ -402,7 +402,7 @@ class TEMModelConfig:
 
 @dataclass(frozen=True)
 class TEMBaseCase:
-    """Parameters for the TEM case in GX validation (s-alpha)."""
+    """Parameters for the provisional literature-backed TEM stress case."""
 
     grid: GridConfig = GridConfig(
         Nx=1,

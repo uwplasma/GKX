@@ -759,7 +759,11 @@ def load_etg_reference() -> CycloneReference:
 
 
 def load_tem_reference() -> CycloneReference:
-    """Load TEM reference data digitized from the literature."""
+    """Load the provisional TEM reference digitized from the literature.
+
+    This lane is not backed by a GX reference dump. It remains an extended
+    stress case while the literature case definition is being reconstructed.
+    """
 
     data_path = resources.files("spectraxgk").joinpath("data", "tem_reference.csv")
     arr = np.loadtxt(str(data_path), delimiter=",", skiprows=1)
