@@ -44,6 +44,9 @@ public CI and tracked atlas are validated against:
 The code may still run on newer stacks, but parity-sensitive lanes such as TEM,
 ETG branch-following, and KAW runtime examples should be audited on the tested
 stack before treating a mismatch as a solver regression.
+For direct reproduction of older runtime-example outputs, also run with
+`JAX_ENABLE_X64=1`; the default precision policy can be faster, but it may move
+parity-sensitive linear example results.
 
 ## Quickstart (CLI)
 

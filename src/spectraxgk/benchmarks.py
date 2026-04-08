@@ -1377,7 +1377,11 @@ def run_cyclone_linear(
     if solver_key == "krylov":
         gamma, omega, phi_t_np, t = _run_krylov()
     elif solver_key == "auto":
-        gamma, omega, phi_t_np, t = _run_time()
+        try:
+            gamma, omega, phi_t_np, t = _run_time()
+        except ValueError as exc:
+            _status(f"time-path failed ({exc}); falling back to Krylov solve")
+            gamma, omega, phi_t_np, t = _run_krylov()
         if not _is_valid_growth(gamma, omega):
             _status("time-path result rejected; falling back to Krylov solve")
             gamma, omega, phi_t_np, t = _run_krylov()
