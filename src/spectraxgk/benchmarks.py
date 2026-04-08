@@ -119,7 +119,7 @@ KINETIC_KRYLOV_DEFAULT = KrylovConfig(
     omega_min_factor=0.05,
     omega_cap_factor=0.8,
     omega_target_factor=0.3,
-    omega_sign=-1,
+    omega_sign=1,
     power_iters=60,
     power_dt=0.001,
     shift_source="target",
@@ -127,7 +127,7 @@ KINETIC_KRYLOV_DEFAULT = KrylovConfig(
     shift_restart=12,
     shift_tol=5.0e-4,
     shift_preconditioner="hermite-line",
-    mode_family="tem",
+    mode_family="cyclone",
     fallback_method="propagator",
 )
 
@@ -3173,6 +3173,7 @@ def run_kinetic_linear(
     init_species_index: int = 1,
     density_species_index: int = 1,
     diagnostic_norm: str = "none",
+    gx_reference: bool | None = True,
     show_progress: bool = False,
 ) -> LinearRunResult:
     """Run a kinetic-electron ITG/TEM benchmark and extract growth rate."""
@@ -3180,6 +3181,10 @@ def run_kinetic_linear(
     cfg = cfg or KineticElectronBaseCase()
     grid_full = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
+    gx_reference_use = bool(gx_reference)
+    if gx_reference_use and diagnostic_norm == "none":
+        diagnostic_norm = "gx"
+    damp_ends_amp, damp_ends_widthfrac = _gx_linked_end_damping(gx_reference_use)
     if params is None:
         params = _two_species_params(
             cfg.model,
@@ -3187,12 +3192,14 @@ def run_kinetic_linear(
             omega_d_scale=Kinetic_OMEGA_D_SCALE,
             omega_star_scale=Kinetic_OMEGA_STAR_SCALE,
             rho_star=Kinetic_RHO_STAR,
-            damp_ends_amp=0.0,
-            damp_ends_widthfrac=0.0,
+            damp_ends_amp=damp_ends_amp,
+            damp_ends_widthfrac=damp_ends_widthfrac,
             nhermite=Nm,
         )
+        if gx_reference_use:
+            params = _apply_gx_hypercollisions(params, nhermite=Nm)
     if terms is None:
-        terms = LinearTerms()
+        terms = LinearTerms(bpar=0.0)
 
     ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
     grid = select_ky_grid(grid_full, ky_index)
@@ -3428,6 +3435,7 @@ def run_kinetic_scan(
     init_species_index: int = 1,
     density_species_index: int = 1,
     diagnostic_norm: str = "none",
+    gx_reference: bool | None = True,
     show_progress: bool = False,
 ) -> LinearScanResult:
     """Run a kinetic-electron ITG/TEM benchmark for a list of ky values.
@@ -3438,6 +3446,10 @@ def run_kinetic_scan(
     cfg = cfg or KineticElectronBaseCase()
     grid_full = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
+    gx_reference_use = bool(gx_reference)
+    if gx_reference_use and diagnostic_norm == "none":
+        diagnostic_norm = "gx"
+    damp_ends_amp, damp_ends_widthfrac = _gx_linked_end_damping(gx_reference_use)
     if params is None:
         params = _two_species_params(
             cfg.model,
@@ -3445,10 +3457,12 @@ def run_kinetic_scan(
             omega_d_scale=Kinetic_OMEGA_D_SCALE,
             omega_star_scale=Kinetic_OMEGA_STAR_SCALE,
             rho_star=Kinetic_RHO_STAR,
-            damp_ends_amp=0.0,
-            damp_ends_widthfrac=0.0,
+            damp_ends_amp=damp_ends_amp,
+            damp_ends_widthfrac=damp_ends_widthfrac,
             nhermite=Nm,
         )
+        if gx_reference_use:
+            params = _apply_gx_hypercollisions(params, nhermite=Nm)
     if terms is None:
         terms = LinearTerms(bpar=0.0)
     gammas = []
