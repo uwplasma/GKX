@@ -1409,6 +1409,7 @@ def _integrate_linear_cached_impl(
         def inner_step(i, state):
             return advance(state)
         G_out = jax.lax.fori_loop(0, sample_stride, inner_step, G)
+        _dG_out, phi_out = linear_rhs_cached(G_out, cache, params, terms=terms, dt=dt_val)
         if show_progress:
             from spectraxgk.utils.callbacks import print_callback, should_emit_progress
 
@@ -1433,7 +1434,6 @@ def _integrate_linear_cached_impl(
                 lambda state: state,
                 G_out,
             )
-        _dG_out, phi_out = linear_rhs_cached(G_out, cache, params, terms=terms, dt=dt_val)
         return G_out, phi_out
 
     num_samples = steps // sample_stride
@@ -2125,6 +2125,8 @@ def integrate_linear_diagnostics(
                 return advance(g)
 
             G_out_local = jax.lax.fori_loop(0, sample_stride, inner_step, G_in)
+            _dG, phi_out = linear_rhs_cached(G_out_local, cache, params, terms=terms, use_jit=False, dt=dt_val)
+            density_out = density_from_G(G_out_local)
             if show_progress:
                 from spectraxgk.utils.callbacks import print_callback, should_emit_progress
 
@@ -2150,8 +2152,6 @@ def integrate_linear_diagnostics(
                     lambda state: state,
                     G_out_local,
                 )
-            _dG, phi_out = linear_rhs_cached(G_out_local, cache, params, terms=terms, use_jit=False, dt=dt_val)
-            density_out = density_from_G(G_out_local)
             if record_hl_energy:
                 hl_out = hl_energy_from_G(G_out_local)
                 return G_out_local, (phi_out, density_out, hl_out)
