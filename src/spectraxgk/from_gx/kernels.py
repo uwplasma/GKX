@@ -10,7 +10,6 @@ import math
 
 try:
     import jax
-    jax.config.update("jax_enable_x64", True)
     import jax.numpy as jnp
 except Exception as exc:  # pragma: no cover - optional runtime dependency
     raise ImportError("spectraxgk.from_gx.kernels requires JAX") from exc
