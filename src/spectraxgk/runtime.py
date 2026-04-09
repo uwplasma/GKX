@@ -1999,6 +1999,7 @@ def run_linear_case(
     """Run a linear case from a runtime TOML with optional overrides."""
 
     from spectraxgk.io import load_runtime_from_toml
+    from spectraxgk.runtime_artifacts import write_runtime_linear_artifacts
 
     cfg, raw = load_runtime_from_toml(config_path)
     run_cfg = dict(raw.get("run", {}))
@@ -2017,6 +2018,10 @@ def run_linear_case(
         show_progress=show_progress,
         **fit_cfg,
     )
+    if cfg.output.path:
+        paths = write_runtime_linear_artifacts(cfg.output.path, result)
+        if "summary" in paths:
+            print(f"saved {paths['summary']}")
     print(f"ky={result.ky:.6f} gamma={result.gamma:.8f} omega={result.omega:.8f}")
     return 0
 
@@ -2037,6 +2042,7 @@ def run_nonlinear_case(
     """Run a nonlinear case from a runtime TOML with optional overrides."""
 
     from spectraxgk.io import load_runtime_from_toml
+    from spectraxgk.runtime_artifacts import write_runtime_nonlinear_artifacts
 
     cfg, raw = load_runtime_from_toml(config_path)
     run_cfg = dict(raw.get("run", {}))
@@ -2061,6 +2067,10 @@ def run_nonlinear_case(
         show_progress=show_progress,
         status_callback=_status,
     )
+    if cfg.output.path:
+        paths = write_runtime_nonlinear_artifacts(cfg.output.path, result, cfg)
+        if "summary" in paths:
+            print(f"saved {paths['summary']}")
     if result.diagnostics is None or result.ky_selected is None:
         print("completed without streamed diagnostics")
         return 0
