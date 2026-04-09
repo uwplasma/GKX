@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import is_dataclass, replace
 from typing import Any, cast
+import os
 from pathlib import Path
 try:
     import tomllib  # Python 3.11+
@@ -38,6 +39,20 @@ def load_toml(path: str | Path) -> dict:
     path = Path(path)
     with path.open("rb") as f:
         return tomllib.load(f)
+
+
+def _resolve_runtime_path(value: str | None, *, base_dir: Path) -> str | None:
+    if value is None:
+        return None
+    expanded = os.path.expanduser(os.path.expandvars(value))
+    if "$" in expanded:
+        return value
+    path = Path(expanded)
+    if not path.is_absolute():
+        path = (base_dir / path).resolve()
+    else:
+        path = path.resolve()
+    return str(path)
 
 
 def _merge_dataclass(base: Any, overrides: dict | None) -> Any:
@@ -108,7 +123,9 @@ def load_case_from_toml(path: str | Path, case_name: str | None = None):
 def load_runtime_from_toml(path: str | Path) -> tuple[RuntimeConfig, dict]:
     """Load unified runtime config from TOML, returning ``(cfg, data)``."""
 
+    path = Path(path)
     data = load_toml(path)
+    base_dir = path.resolve().parent
     cfg: RuntimeConfig = RuntimeConfig()
     cfg = _merge_dataclass(
         cfg,
@@ -148,6 +165,21 @@ def load_runtime_from_toml(path: str | Path) -> tuple[RuntimeConfig, dict]:
             species.append(RuntimeSpeciesConfig(**item))
         if species:
             cfg = replace(cfg, species=tuple(species))
+    cfg = replace(
+        cfg,
+        geometry=replace(
+            cfg.geometry,
+            vmec_file=_resolve_runtime_path(cfg.geometry.vmec_file, base_dir=base_dir),
+            geometry_file=_resolve_runtime_path(cfg.geometry.geometry_file, base_dir=base_dir),
+        ),
+        init=replace(cfg.init, init_file=_resolve_runtime_path(cfg.init.init_file, base_dir=base_dir)),
+        output=replace(
+            cfg.output,
+            path=_resolve_runtime_path(cfg.output.path, base_dir=base_dir),
+            restart_to_file=_resolve_runtime_path(cfg.output.restart_to_file, base_dir=base_dir),
+            restart_from_file=_resolve_runtime_path(cfg.output.restart_from_file, base_dir=base_dir),
+        ),
+    )
     return cfg, data
 
 
