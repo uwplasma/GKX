@@ -79,6 +79,10 @@ path = "tools_out/runtime_case"
 
 CLI `--out` overrides the TOML value when both are present.
 
+The shipped nonlinear W7-X and HSX runtime TOMLs already set this lightweight
+artifact prefix, so long stellarator parity runs leave ``tools_out/...``
+diagnostics and summaries behind without extra CLI flags.
+
 When the nonlinear target ends in `.out.nc` or another `.nc` suffix,
 SPECTRAX-GK writes a GX-style bundle instead of the lightweight JSON/CSV
 sidecars:
