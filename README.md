@@ -81,7 +81,9 @@ CLI `--out` overrides the TOML value when both are present.
 
 The shipped nonlinear W7-X and HSX runtime TOMLs already set this lightweight
 artifact prefix, so long stellarator parity runs leave ``tools_out/...``
-diagnostics and summaries behind without extra CLI flags.
+diagnostics and summaries behind without extra CLI flags. The direct Python
+case wrappers now honor that TOML output contract as well, so chunked
+nonlinear runs persist their evolving diagnostics through the same path.
 
 When the nonlinear target ends in `.out.nc` or another `.nc` suffix,
 SPECTRAX-GK writes a GX-style bundle instead of the lightweight JSON/CSV

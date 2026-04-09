@@ -2042,7 +2042,7 @@ def run_nonlinear_case(
     """Run a nonlinear case from a runtime TOML with optional overrides."""
 
     from spectraxgk.io import load_runtime_from_toml
-    from spectraxgk.runtime_artifacts import write_runtime_nonlinear_artifacts
+    from spectraxgk.runtime_artifacts import run_runtime_nonlinear_with_artifacts, write_runtime_nonlinear_artifacts
 
     cfg, raw = load_runtime_from_toml(config_path)
     run_cfg = dict(raw.get("run", {}))
@@ -2051,26 +2051,48 @@ def run_nonlinear_case(
     def _status(message: str) -> None:
         print(f"runtime: {message}")
 
-    result = run_runtime_nonlinear(
-        cfg,
-        ky_target=float(ky if ky is not None else run_cfg.get("ky", 0.3)),
-        Nl=int(Nl if Nl is not None else run_cfg.get("Nl", 4)),
-        Nm=int(Nm if Nm is not None else run_cfg.get("Nm", 8)),
-        method=method if method is not None else run_cfg.get("method", None),
-        dt=dt if dt is not None else time_cfg.get("dt", None),
-        steps=steps if steps is not None else run_cfg.get("steps", None),
-        sample_stride=sample_stride if sample_stride is not None else time_cfg.get("sample_stride", None),
-        diagnostics_stride=(
-            diagnostics_stride if diagnostics_stride is not None else time_cfg.get("diagnostics_stride", None)
-        ),
-        diagnostics=True,
-        show_progress=show_progress,
-        status_callback=_status,
-    )
+    ky_target = float(ky if ky is not None else run_cfg.get("ky", 0.3))
+    Nl_use = int(Nl if Nl is not None else run_cfg.get("Nl", 4))
+    Nm_use = int(Nm if Nm is not None else run_cfg.get("Nm", 8))
+    method_use = method if method is not None else run_cfg.get("method", None)
+    dt_use = dt if dt is not None else time_cfg.get("dt", None)
+    steps_use = steps if steps is not None else run_cfg.get("steps", None)
+    sample_stride_use = sample_stride if sample_stride is not None else time_cfg.get("sample_stride", None)
+    diagnostics_stride_use = diagnostics_stride if diagnostics_stride is not None else time_cfg.get("diagnostics_stride", None)
+
     if cfg.output.path:
-        paths = write_runtime_nonlinear_artifacts(cfg.output.path, result, cfg)
+        result, paths = run_runtime_nonlinear_with_artifacts(
+            cfg,
+            cfg.output.path,
+            ky_target=ky_target,
+            Nl=Nl_use,
+            Nm=Nm_use,
+            dt=dt_use,
+            steps=steps_use,
+            method=method_use,
+            sample_stride=sample_stride_use,
+            diagnostics_stride=diagnostics_stride_use,
+            diagnostics=True,
+            show_progress=show_progress,
+            status_callback=_status,
+        )
         if "summary" in paths:
             print(f"saved {paths['summary']}")
+    else:
+        result = run_runtime_nonlinear(
+            cfg,
+            ky_target=ky_target,
+            Nl=Nl_use,
+            Nm=Nm_use,
+            method=method_use,
+            dt=dt_use,
+            steps=steps_use,
+            sample_stride=sample_stride_use,
+            diagnostics_stride=diagnostics_stride_use,
+            diagnostics=True,
+            show_progress=show_progress,
+            status_callback=_status,
+        )
     if result.diagnostics is None or result.ky_selected is None:
         print("completed without streamed diagnostics")
         return 0
