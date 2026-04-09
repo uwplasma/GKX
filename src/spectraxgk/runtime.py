@@ -2063,7 +2063,7 @@ def run_nonlinear_case(
     if cfg.output.path:
         result, paths = run_runtime_nonlinear_with_artifacts(
             cfg,
-            cfg.output.path,
+            out=cfg.output.path,
             ky_target=ky_target,
             Nl=Nl_use,
             Nm=Nm_use,
