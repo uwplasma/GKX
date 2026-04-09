@@ -628,6 +628,36 @@ def _build_initial_condition(
     return jnp.asarray(G0)
 
 
+def _kinetic_reference_init_cfg(init_cfg: InitializationConfig, *, gx_reference: bool) -> InitializationConfig:
+    """Restore the historical kinetic benchmark seed on the GX-reference path.
+
+    Older kinetic parity runs seeded a constant electron-density moment rather than
+    the newer tiny Gaussian default. Preserve explicit user overrides by only
+    replacing the exact current kinetic default init.
+    """
+
+    if not gx_reference:
+        return init_cfg
+    kinetic_default_init = KineticElectronBaseCase().init
+    if init_cfg != kinetic_default_init:
+        return init_cfg
+    return InitializationConfig(
+        init_field="density",
+        init_amp=1.0e-3,
+        init_single=True,
+        random_seed=kinetic_default_init.random_seed,
+        gaussian_init=False,
+        gaussian_width=kinetic_default_init.gaussian_width,
+        gaussian_envelope_constant=kinetic_default_init.gaussian_envelope_constant,
+        gaussian_envelope_sine=kinetic_default_init.gaussian_envelope_sine,
+        kpar_init=kinetic_default_init.kpar_init,
+        init_file=kinetic_default_init.init_file,
+        init_file_scale=kinetic_default_init.init_file_scale,
+        init_file_mode=kinetic_default_init.init_file_mode,
+        init_electrons_only=kinetic_default_init.init_electrons_only,
+    )
+
+
 def _kbm_use_multi_target_krylov(
     kcfg: KrylovConfig,
     targets: Sequence[float] | None,
@@ -3184,6 +3214,7 @@ def run_kinetic_linear(
     gx_reference_use = bool(gx_reference)
     if gx_reference_use and diagnostic_norm == "none":
         diagnostic_norm = "gx"
+    init_cfg_use = _kinetic_reference_init_cfg(cfg.init, gx_reference=gx_reference_use)
     damp_ends_amp, damp_ends_widthfrac = _gx_linked_end_damping(gx_reference_use)
     if params is None:
         params = _two_species_params(
@@ -3218,7 +3249,7 @@ def run_kinetic_linear(
         kx_index=sel.kx_index,
         Nl=Nl,
         Nm=Nm,
-        init_cfg=cfg.init,
+        init_cfg=init_cfg_use,
     )
     G0[int(init_species_index)] = np.asarray(G0_single, dtype=np.complex64)
 
@@ -3449,6 +3480,7 @@ def run_kinetic_scan(
     gx_reference_use = bool(gx_reference)
     if gx_reference_use and diagnostic_norm == "none":
         diagnostic_norm = "gx"
+    init_cfg_use = _kinetic_reference_init_cfg(cfg.init, gx_reference=gx_reference_use)
     damp_ends_amp, damp_ends_widthfrac = _gx_linked_end_damping(gx_reference_use)
     if params is None:
         params = _two_species_params(
@@ -3570,7 +3602,7 @@ def run_kinetic_scan(
             kx_index=0,
             Nl=Nl,
             Nm=Nm,
-            init_cfg=cfg.init,
+            init_cfg=init_cfg_use,
         )
         G0[int(init_species_index)] = np.asarray(G0_single, dtype=np.complex64)
 
