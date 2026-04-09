@@ -6,6 +6,7 @@ import argparse
 import sys
 from dataclasses import replace
 from pathlib import Path
+from typing import cast
 
 import jax.numpy as jnp
 import numpy as np
@@ -587,9 +588,10 @@ def _cmd_scan_runtime_linear(args: argparse.Namespace) -> int:
         else bool(cfg.time.progress_bar)
     )
 
+    ky_sequence = cast(list[float], ky_values.tolist())
     scan = run_runtime_scan(
         cfg,
-        ky_values.tolist(),
+        ky_sequence,
         Nl=Nl,
         Nm=Nm,
         solver=solver,

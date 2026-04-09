@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, fields as dataclass_fields, replace
-from typing import Callable, Sequence
+from typing import Callable, Sequence, cast
 from pathlib import Path
 
 import jax.numpy as jnp
@@ -635,8 +635,8 @@ def _reshape_gx_state(
     kx_idx = np.arange(nx)[None, :, None]
     z_idx = np.arange(nz)[None, None, :]
     idxyz = ky_idx + nyc * (kx_idx + nx * z_idx)
-    arr = arr[..., idxyz.ravel()]
-    return arr.reshape((nspec, nl, nm, nyc, nx, nz))
+    arr_reordered = arr[..., idxyz.ravel()]
+    return arr_reordered.reshape((nspec, nl, nm, nyc, nx, nz))
 
 
 def _expand_ky(arr: np.ndarray, *, nyc: int) -> np.ndarray:
@@ -727,7 +727,7 @@ def _build_initial_condition(
     if init_file_mode not in {"replace", "add"}:
         raise ValueError("init_file_mode must be one of {'replace', 'add'}")
 
-    g0 = np.zeros((nspecies, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
+    g0: np.ndarray = np.zeros((nspecies, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
     loaded_state: np.ndarray | None = None
     if cfg.init.init_file is not None:
         loaded_state = _load_initial_state_from_file(
@@ -873,7 +873,7 @@ def _build_initial_condition(
     if loaded_state is not None:
         if init_file_mode == "replace":
             return jnp.asarray(loaded_state)
-        g0 = loaded_state + g0
+        g0 = cast(np.ndarray, loaded_state + g0)
     return jnp.asarray(g0)
 
 
