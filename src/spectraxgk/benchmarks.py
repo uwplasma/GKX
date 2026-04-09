@@ -131,6 +131,8 @@ KINETIC_KRYLOV_DEFAULT = KrylovConfig(
     fallback_method="propagator",
 )
 
+KINETIC_KRYLOV_GX_REFERENCE = replace(KINETIC_KRYLOV_DEFAULT, shift_source="history")
+
 ETG_KRYLOV_DEFAULT = KrylovConfig(
     method="propagator",
     krylov_dim=16,
@@ -3255,7 +3257,9 @@ def run_kinetic_linear(
 
     G0_jax = jnp.asarray(G0)
     if solver.lower() == "krylov":
-        krylov_cfg = krylov_cfg or KINETIC_KRYLOV_DEFAULT
+        krylov_cfg = krylov_cfg or (
+            KINETIC_KRYLOV_GX_REFERENCE if gx_reference_use else KINETIC_KRYLOV_DEFAULT
+        )
         cache = build_linear_cache(grid, geom, params, Nl, Nm)
         eig, vec = dominant_eigenpair(
             G0_jax,
@@ -3609,7 +3613,9 @@ def run_kinetic_scan(
         cache = build_linear_cache(grid, geom, params, Nl, Nm)
         G0_jax = jnp.asarray(G0)
         if solver.lower() == "krylov":
-            cfg_use = krylov_cfg or KINETIC_KRYLOV_DEFAULT
+            cfg_use = krylov_cfg or (
+                KINETIC_KRYLOV_GX_REFERENCE if gx_reference_use else KINETIC_KRYLOV_DEFAULT
+            )
             eig, _vec = dominant_eigenpair(
                 G0_jax,
                 cache,
