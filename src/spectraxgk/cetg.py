@@ -9,7 +9,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from spectraxgk.config import resolve_cfl_fac
-from spectraxgk.diagnostics import GXDiagnostics, gx_energy_total
+from spectraxgk.diagnostics import SimulationDiagnostics, gx_energy_total
 from spectraxgk.geometry import FluxTubeGeometryLike, SlabGeometry
 from spectraxgk.gx_integrators import _gx_growth_rate_step, _gx_midplane_index
 from spectraxgk.grids import SpectralGrid
@@ -417,7 +417,7 @@ def integrate_cetg_gx_diagnostics_state(
     cfl: float = 1.0,
     cfl_fac: float | None = None,
     show_progress: bool = False,
-) -> tuple[jnp.ndarray, GXDiagnostics, jnp.ndarray, FieldState]:
+) -> tuple[jnp.ndarray, SimulationDiagnostics, jnp.ndarray, FieldState]:
     """Integrate the GX cETG model and stream GX-style diagnostics."""
 
     if method not in {"euler", "rk2", "rk3", "rk3_classic", "rk3_gx", "rk4", "k10", "sspx3"}:
@@ -628,7 +628,7 @@ def integrate_cetg_gx_diagnostics_state(
         t = t[::stride]
         dt_series = dt_series[::stride]
 
-    diag_out_final = GXDiagnostics(
+    diag_out_final = SimulationDiagnostics(
         t=t,
         dt_t=dt_series,
         dt_mean=jnp.mean(dt_series) if int(np.asarray(dt_series).size) else jnp.asarray(0.0, dtype=real_dtype),

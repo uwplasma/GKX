@@ -31,8 +31,8 @@ from spectraxgk.gx_integrators import (
     _gx_midplane_index,
 )
 from spectraxgk.diagnostics import (
-    GXDiagnostics,
-    GXResolvedDiagnostics,
+    SimulationDiagnostics,
+    ResolvedDiagnostics,
     gx_energy_total,
     gx_heat_flux_resolved_species,
     gx_heat_flux_split_resolved_species,
@@ -52,8 +52,8 @@ _SSPX3_W2 = 0.5 * ((6.0 ** (2.0 / 3.0)) - 1.0 - _SSPX3_WGTFAC)
 _SSPX3_W3 = (1.0 / _SSPX3_ADT) - 1.0 - _SSPX3_W2 * (_SSPX3_W1 + 1.0)
 
 
-def _pack_resolved_diagnostics(resolved_t: tuple[np.ndarray, ...]) -> GXResolvedDiagnostics:
-    return GXResolvedDiagnostics(
+def _pack_resolved_diagnostics(resolved_t: tuple[np.ndarray, ...]) -> ResolvedDiagnostics:
+    return ResolvedDiagnostics(
         Phi2_kxt=resolved_t[0],
         Phi2_kyt=resolved_t[1],
         Phi2_kxkyt=resolved_t[2],
@@ -495,7 +495,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
     fixed_mode_ky_index: int | None = None,
     fixed_mode_kx_index: int | None = None,
     show_progress: bool = False,
-) -> tuple[jnp.ndarray, GXDiagnostics, jnp.ndarray, FieldState]:
+) -> tuple[jnp.ndarray, SimulationDiagnostics, jnp.ndarray, FieldState]:
     """Integrate nonlinear system and return GX-style diagnostics plus final state."""
 
     geom_eff = ensure_flux_tube_geometry_data(geom, grid.z)
@@ -1006,7 +1006,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
 
     dt_mean = jnp.mean(dt_series)
     energy_t = gx_energy_total(Wg_t, Wphi_t, Wapar_t)
-    diag_out = GXDiagnostics(
+    diag_out = SimulationDiagnostics(
         t=t,
         dt_t=dt_series,
         dt_mean=dt_mean,
@@ -1068,7 +1068,7 @@ def integrate_nonlinear_gx_diagnostics(
     fixed_mode_ky_index: int | None = None,
     fixed_mode_kx_index: int | None = None,
     show_progress: bool = False,
-) -> tuple[jnp.ndarray, GXDiagnostics]:
+) -> tuple[jnp.ndarray, SimulationDiagnostics]:
     """Integrate nonlinear system and return GX-style diagnostics."""
 
     if method in {"imex", "semi-implicit"}:
@@ -1188,7 +1188,7 @@ def integrate_nonlinear_gx_diagnostics_state(
     fixed_mode_ky_index: int | None = None,
     fixed_mode_kx_index: int | None = None,
     show_progress: bool = False,
-) -> tuple[jnp.ndarray, GXDiagnostics, jnp.ndarray, FieldState]:
+) -> tuple[jnp.ndarray, SimulationDiagnostics, jnp.ndarray, FieldState]:
     """Integrate nonlinear system and return GX diagnostics plus the final state."""
 
     if method in {"imex", "semi-implicit"}:
@@ -1269,7 +1269,7 @@ def integrate_nonlinear_imex_gx_diagnostics(
     fixed_mode_ky_index: int | None = None,
     fixed_mode_kx_index: int | None = None,
     show_progress: bool = False,
-) -> tuple[jnp.ndarray, GXDiagnostics]:
+) -> tuple[jnp.ndarray, SimulationDiagnostics]:
     """IMEX nonlinear integrator with GX diagnostics."""
 
     geom_eff = ensure_flux_tube_geometry_data(geom, grid.z)
@@ -1732,7 +1732,7 @@ def integrate_nonlinear_imex_gx_diagnostics(
 
     dt_mean = jnp.mean(dt_series)
     energy_t = gx_energy_total(Wg_t, Wphi_t, Wapar_t)
-    diag_out = GXDiagnostics(
+    diag_out = SimulationDiagnostics(
         t=t,
         dt_t=dt_series,
         dt_mean=dt_mean,

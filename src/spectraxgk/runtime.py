@@ -23,7 +23,7 @@ from spectraxgk.analysis import (
     fit_growth_rate_auto_with_stats,
     select_ky_index,
 )
-from spectraxgk.diagnostics import GXDiagnostics, GXResolvedDiagnostics, gx_energy_total
+from spectraxgk.diagnostics import SimulationDiagnostics, ResolvedDiagnostics, gx_energy_total
 from spectraxgk.geometry import (
     apply_gx_geometry_grid_defaults,
     FluxTubeGeometryLike,
@@ -79,7 +79,7 @@ class RuntimeNonlinearResult:
     """Result container for runtime nonlinear runs."""
 
     t: np.ndarray
-    diagnostics: GXDiagnostics | None
+    diagnostics: SimulationDiagnostics | None
     phi2: np.ndarray | None = None
     fields: FieldState | None = None
     state: np.ndarray | None = None
@@ -206,7 +206,7 @@ def _infer_runtime_nonlinear_steps(
     return steps_val
 
 
-def _slice_gx_diagnostics(diag: GXDiagnostics, stop: int) -> GXDiagnostics:
+def _slice_gx_diagnostics(diag: SimulationDiagnostics, stop: int) -> SimulationDiagnostics:
     """Return the first ``stop`` diagnostic samples."""
 
     if stop < 0:
@@ -217,14 +217,14 @@ def _slice_gx_diagnostics(diag: GXDiagnostics, stop: int) -> GXDiagnostics:
             return None
         return np.asarray(arr)[:stop, ...]
 
-    def _slice_resolved(resolved: GXResolvedDiagnostics | None) -> GXResolvedDiagnostics | None:
+    def _slice_resolved(resolved: ResolvedDiagnostics | None) -> ResolvedDiagnostics | None:
         if resolved is None:
             return None
         payload: dict[str, np.ndarray | None] = {}
-        for field in dataclass_fields(GXResolvedDiagnostics):
+        for field in dataclass_fields(ResolvedDiagnostics):
             value = getattr(resolved, field.name)
             payload[field.name] = None if value is None else np.asarray(value)[:stop, ...]
-        return GXResolvedDiagnostics(**payload)
+        return ResolvedDiagnostics(**payload)
 
     dt_t = np.asarray(diag.dt_t)[:stop]
     Wg_t = np.asarray(diag.Wg_t)[:stop]
@@ -234,7 +234,7 @@ def _slice_gx_diagnostics(diag: GXDiagnostics, stop: int) -> GXDiagnostics:
         dt_mean = np.asarray(0.0, dtype=float)
     else:
         dt_mean = np.asarray(np.mean(dt_t), dtype=float)
-    return GXDiagnostics(
+    return SimulationDiagnostics(
         t=np.asarray(diag.t)[:stop],
         dt_t=dt_t,
         dt_mean=dt_mean,
@@ -255,7 +255,7 @@ def _slice_gx_diagnostics(diag: GXDiagnostics, stop: int) -> GXDiagnostics:
     )
 
 
-def _truncate_gx_diagnostics(diag: GXDiagnostics, *, t_max: float) -> GXDiagnostics:
+def _truncate_gx_diagnostics(diag: SimulationDiagnostics, *, t_max: float) -> SimulationDiagnostics:
     """Keep samples through the first entry that reaches ``t_max``."""
 
     t_arr = np.asarray(diag.t, dtype=float)
@@ -266,7 +266,7 @@ def _truncate_gx_diagnostics(diag: GXDiagnostics, *, t_max: float) -> GXDiagnost
     return _slice_gx_diagnostics(diag, stop)
 
 
-def _stride_gx_diagnostics(diag: GXDiagnostics, *, stride: int) -> GXDiagnostics:
+def _stride_gx_diagnostics(diag: SimulationDiagnostics, *, stride: int) -> SimulationDiagnostics:
     """Apply the GX runtime output stride after concatenating chunk diagnostics."""
 
     stride_use = int(max(stride, 1))
@@ -278,14 +278,14 @@ def _stride_gx_diagnostics(diag: GXDiagnostics, *, stride: int) -> GXDiagnostics
             return None
         return np.asarray(arr)[::stride_use, ...]
 
-    def _stride_resolved(resolved: GXResolvedDiagnostics | None) -> GXResolvedDiagnostics | None:
+    def _stride_resolved(resolved: ResolvedDiagnostics | None) -> ResolvedDiagnostics | None:
         if resolved is None:
             return None
         payload: dict[str, np.ndarray | None] = {}
-        for field in dataclass_fields(GXResolvedDiagnostics):
+        for field in dataclass_fields(ResolvedDiagnostics):
             value = getattr(resolved, field.name)
             payload[field.name] = None if value is None else np.asarray(value)[::stride_use, ...]
-        return GXResolvedDiagnostics(**payload)
+        return ResolvedDiagnostics(**payload)
 
     dt_t = np.asarray(diag.dt_t)[::stride_use]
     Wg_t = np.asarray(diag.Wg_t)[::stride_use]
@@ -295,7 +295,7 @@ def _stride_gx_diagnostics(diag: GXDiagnostics, *, stride: int) -> GXDiagnostics
         dt_mean = np.asarray(0.0, dtype=float)
     else:
         dt_mean = np.asarray(np.mean(dt_t), dtype=float)
-    return GXDiagnostics(
+    return SimulationDiagnostics(
         t=np.asarray(diag.t)[::stride_use],
         dt_t=dt_t,
         dt_mean=dt_mean,
@@ -316,7 +316,7 @@ def _stride_gx_diagnostics(diag: GXDiagnostics, *, stride: int) -> GXDiagnostics
     )
 
 
-def _concat_gx_diagnostics(diags: Sequence[GXDiagnostics]) -> GXDiagnostics:
+def _concat_gx_diagnostics(diags: Sequence[SimulationDiagnostics]) -> SimulationDiagnostics:
     """Concatenate one or more diagnostic chunks."""
 
     if not diags:
@@ -331,12 +331,12 @@ def _concat_gx_diagnostics(diags: Sequence[GXDiagnostics]) -> GXDiagnostics:
             return None
         return np.concatenate([np.asarray(value) for value in values if value is not None], axis=0)
 
-    def _concat_resolved() -> GXResolvedDiagnostics | None:
+    def _concat_resolved() -> ResolvedDiagnostics | None:
         values = [diag.resolved for diag in diags]
         if all(value is None for value in values):
             return None
         payload: dict[str, np.ndarray | None] = {}
-        for field in dataclass_fields(GXResolvedDiagnostics):
+        for field in dataclass_fields(ResolvedDiagnostics):
             series = [None if value is None else getattr(value, field.name) for value in values]
             if all(item is None for item in series):
                 payload[field.name] = None
@@ -345,14 +345,14 @@ def _concat_gx_diagnostics(diags: Sequence[GXDiagnostics]) -> GXDiagnostics:
                     [np.asarray(item) for item in series if item is not None],
                     axis=0,
                 )
-        return GXResolvedDiagnostics(**payload)
+        return ResolvedDiagnostics(**payload)
 
     dt_t = _concat("dt_t")
     Wg_t = _concat("Wg_t")
     Wphi_t = _concat("Wphi_t")
     Wapar_t = _concat("Wapar_t")
     dt_mean = np.asarray(np.mean(dt_t), dtype=float)
-    return GXDiagnostics(
+    return SimulationDiagnostics(
         t=_concat("t"),
         dt_t=dt_t,
         dt_mean=dt_mean,
@@ -1590,7 +1590,7 @@ def run_runtime_nonlinear(
             chunk_steps = 1024
             G_chunk = G0
             t_elapsed = 0.0
-            cetg_diag_chunks: list[GXDiagnostics] = []
+            cetg_diag_chunks: list[SimulationDiagnostics] = []
             cetg_fields_final: FieldState | None = None
             _status(f"starting adaptive cETG integration in chunks of {chunk_steps} steps up to t_max={float(cfg.time.t_max):.6g}")
             for _chunk in range(100000):
@@ -1759,7 +1759,7 @@ def run_runtime_nonlinear(
             chunk_steps = min(steps_val, 1024)
             G_chunk = G0
             t_elapsed = 0.0
-            diag_chunks: list[GXDiagnostics] = []
+            diag_chunks: list[SimulationDiagnostics] = []
             fields_final: FieldState | None = None
             _status(f"starting adaptive nonlinear integration in chunks of {chunk_steps} steps up to t_max={float(cfg.time.t_max):.6g}")
             for _chunk in range(100000):

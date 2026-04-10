@@ -129,11 +129,10 @@ from spectraxgk.diffrax_integrators import (
     integrate_linear_diffrax_streaming,
     integrate_nonlinear_diffrax,
 )
-from spectraxgk.gx_integrators import GXTimeConfig, integrate_linear_gx, integrate_linear_gx_diagnostics
-from spectraxgk.diagnostics import GXDiagnostics
+from spectraxgk.gx_integrators import ExplicitTimeConfig, GXTimeConfig, integrate_linear_gx, integrate_linear_gx_diagnostics
+from spectraxgk.diagnostics import GXDiagnostics, SimulationDiagnostics
 
-LinearExplicitTimeConfig = GXTimeConfig
-SimulationDiagnostics = GXDiagnostics
+LinearExplicitTimeConfig = ExplicitTimeConfig
 integrate_linear_explicit = integrate_linear_gx
 integrate_linear_explicit_diagnostics = integrate_linear_gx_diagnostics
 integrate_nonlinear_diagnostics = integrate_nonlinear_gx_diagnostics
@@ -200,6 +199,7 @@ __all__ = [
     "build_nonlinear_imex_operator",
     "IMEXLinearOperator",
     "GXTimeConfig",
+    "ExplicitTimeConfig",
     "LinearExplicitTimeConfig",
     "integrate_linear_gx",
     "integrate_linear_explicit",

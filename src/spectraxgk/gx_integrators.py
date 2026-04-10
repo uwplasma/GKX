@@ -1,4 +1,4 @@
-"""GX-style linear time integrator implemented in JAX."""
+"""Reference-aligned linear time integrator implemented in JAX."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import jax.numpy as jnp
 import numpy as np
 from numpy.polynomial.laguerre import laggauss
 
-from spectraxgk.diagnostics import GXDiagnostics
+from spectraxgk.diagnostics import SimulationDiagnostics
 from spectraxgk.geometry import FluxTubeGeometryLike, ensure_flux_tube_geometry_data
 from spectraxgk.grids import SpectralGrid
 from spectraxgk.linear import (
@@ -23,8 +23,8 @@ from spectraxgk.terms.config import FieldState, TermConfig
 
 
 @dataclass(frozen=True)
-class GXTimeConfig:
-    """GX-style explicit time configuration."""
+class ExplicitTimeConfig:
+    """Explicit time integration configuration."""
 
     t_max: float
     dt: float
@@ -468,7 +468,7 @@ def integrate_linear_gx(
     cache: LinearCache,
     params: LinearParams,
     geom: FluxTubeGeometryLike,
-    time_cfg: GXTimeConfig,
+    time_cfg: ExplicitTimeConfig,
     terms: LinearTerms | None = None,
     *,
     mode_method: str = "z_index",
@@ -565,14 +565,14 @@ def integrate_linear_gx_diagnostics(
     cache: LinearCache,
     params: LinearParams,
     geom: FluxTubeGeometryLike,
-    time_cfg: GXTimeConfig,
+    time_cfg: ExplicitTimeConfig,
     terms: LinearTerms | None = None,
     *,
     mode_method: str = "z_index",
     z_index: int | None = None,
     jit: bool = True,
     show_progress: bool = False,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, GXDiagnostics]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, SimulationDiagnostics]:
     """GX-style RK4 integrator with GX growth-rate + energy/flux diagnostics."""
 
     if show_progress:
@@ -582,7 +582,7 @@ def integrate_linear_gx_diagnostics(
         console.print(Panel.fit("[bold blue]SPECTRAX-GK[/bold blue] | [bold green]GX Linear Simulation Started[/bold green]", border_style="blue"))
 
     from spectraxgk.diagnostics import (
-        GXDiagnostics,
+        SimulationDiagnostics,
         gx_energy_total,
         gx_heat_flux,
         gx_particle_flux,
@@ -732,7 +732,7 @@ def integrate_linear_gx_diagnostics(
         from rich.panel import Panel
         console.print(Panel.fit("[bold green]Simulation Complete![/bold green]", border_style="green"))
 
-    diag = GXDiagnostics(
+    diag = SimulationDiagnostics(
         t=np.asarray(ts),
         dt_t=np.asarray(dt_list),
         dt_mean=np.asarray(np.mean(dt_list)) if dt_list else np.asarray(0.0),
@@ -754,3 +754,7 @@ def integrate_linear_gx_diagnostics(
         np.asarray(omega_list),
         diag,
     )
+
+
+# Compatibility alias retained while callers migrate off the older name.
+GXTimeConfig = ExplicitTimeConfig

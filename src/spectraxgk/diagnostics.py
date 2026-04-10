@@ -1,4 +1,4 @@
-"""GX-style diagnostics for gyrokinetic simulations."""
+"""Simulation diagnostics for gyrokinetic runs."""
 
 from __future__ import annotations
 
@@ -18,8 +18,8 @@ ArrayLike = jnp.ndarray | np.ndarray
 
 
 @dataclass(frozen=True)
-class GXResolvedDiagnostics:
-    """Optional GX-style resolved nonlinear diagnostics stored per sample."""
+class ResolvedDiagnostics:
+    """Optional resolved nonlinear diagnostics stored per sample."""
 
     Phi2_kxt: ArrayLike | None = None
     Phi2_kyt: ArrayLike | None = None
@@ -80,8 +80,8 @@ class GXResolvedDiagnostics:
 
 
 @dataclass(frozen=True)
-class GXDiagnostics:
-    """Streaming GX-style diagnostics at each sample time."""
+class SimulationDiagnostics:
+    """Streaming diagnostics at each sample time."""
 
     t: ArrayLike
     dt_t: ArrayLike
@@ -99,7 +99,13 @@ class GXDiagnostics:
     turbulent_heating_t: ArrayLike | None = None
     turbulent_heating_species_t: ArrayLike | None = None
     phi_mode_t: ArrayLike | None = None
-    resolved: GXResolvedDiagnostics | None = None
+    resolved: ResolvedDiagnostics | None = None
+
+
+# Compatibility aliases preserved while the broader rename propagates through
+# the comparison and audit tooling.
+GXResolvedDiagnostics = ResolvedDiagnostics
+GXDiagnostics = SimulationDiagnostics
 
 
 def gx_volume_factors(geom: FluxTubeGeometryLike, grid: SpectralGrid) -> tuple[jnp.ndarray, jnp.ndarray]:

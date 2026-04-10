@@ -11,7 +11,7 @@ import numpy as np
 
 from spectraxgk.geometry import ensure_flux_tube_geometry_data
 from spectraxgk.grids import build_spectral_grid, gx_real_fft_kx, gx_real_fft_ky
-from spectraxgk.diagnostics import GXDiagnostics, GXResolvedDiagnostics, gx_energy_total
+from spectraxgk.diagnostics import SimulationDiagnostics, ResolvedDiagnostics, gx_energy_total
 from spectraxgk.linear import build_linear_cache
 from spectraxgk.runtime import (
     RuntimeNonlinearResult,
@@ -97,11 +97,11 @@ def _resolve_restart_path(out: str | Path, cfg: Any, *, for_write: bool) -> Path
     return Path(f"{base}.restart.nc")
 
 
-def _condense_resolved_for_output(resolved: GXResolvedDiagnostics | None) -> GXResolvedDiagnostics | None:
+def _condense_resolved_for_output(resolved: ResolvedDiagnostics | None) -> ResolvedDiagnostics | None:
     if resolved is None:
         return None
     payload: dict[str, np.ndarray | None] = {}
-    for field in GXResolvedDiagnostics.__dataclass_fields__.values():
+    for field in ResolvedDiagnostics.__dataclass_fields__.values():
         value = getattr(resolved, field.name)
         if value is None:
             payload[field.name] = None
@@ -113,14 +113,14 @@ def _condense_resolved_for_output(resolved: GXResolvedDiagnostics | None) -> GXR
             payload[field.name] = _condense_kykx(np.asarray(value))
         else:
             payload[field.name] = np.asarray(value)
-    return GXResolvedDiagnostics(**payload)
+    return ResolvedDiagnostics(**payload)
 
 
-def _condense_gx_diagnostics_for_output(diag: GXDiagnostics) -> GXDiagnostics:
+def _condense_gx_diagnostics_for_output(diag: SimulationDiagnostics) -> SimulationDiagnostics:
     return replace(diag, resolved=_condense_resolved_for_output(diag.resolved))
 
 
-def load_runtime_nonlinear_gx_diagnostics(path: str | Path) -> GXDiagnostics:
+def load_runtime_nonlinear_gx_diagnostics(path: str | Path) -> SimulationDiagnostics:
     Dataset = _require_netcdf4()
     with Dataset(Path(path), "r") as root:
         grids = root.groups["Grids"]
@@ -134,7 +134,7 @@ def load_runtime_nonlinear_gx_diagnostics(path: str | Path) -> GXDiagnostics:
         turb_heat_st = _read_optional_var(diag_group, "TurbulentHeating_st")
         resolved_payload = {
             field.name: _read_optional_var(diag_group, field.name)
-            for field in GXResolvedDiagnostics.__dataclass_fields__.values()
+            for field in ResolvedDiagnostics.__dataclass_fields__.values()
         }
     if turb_heat_st is None:
         turb_heat_st = np.zeros_like(heat_st)
@@ -146,7 +146,7 @@ def load_runtime_nonlinear_gx_diagnostics(path: str | Path) -> GXDiagnostics:
     heat_t = np.sum(heat_st, axis=1)
     pflux_t = np.sum(pflux_st, axis=1)
     turb_heat_t = np.sum(np.asarray(turb_heat_st, dtype=np.float32), axis=1)
-    return GXDiagnostics(
+    return SimulationDiagnostics(
         t=time_vals,
         dt_t=dt_t,
         dt_mean=dt_mean,
@@ -163,7 +163,7 @@ def load_runtime_nonlinear_gx_diagnostics(path: str | Path) -> GXDiagnostics:
         turbulent_heating_t=turb_heat_t,
         turbulent_heating_species_t=np.asarray(turb_heat_st, dtype=np.float32),
         phi_mode_t=None,
-        resolved=GXResolvedDiagnostics(**resolved_payload),
+        resolved=ResolvedDiagnostics(**resolved_payload),
     )
 
 
@@ -233,7 +233,7 @@ def run_runtime_nonlinear_with_artifacts(
             ),
         )
 
-    cumulative_diag: GXDiagnostics | None = None
+    cumulative_diag: SimulationDiagnostics | None = None
     history_from_file = False
     if gx_target and resume_requested and bool(getattr(cfg.output, "append_on_restart", True)):
         assert out_path is not None
@@ -566,7 +566,7 @@ def _write_runtime_nonlinear_gx_artifacts(out: str | Path, result: Any, cfg: Any
     restart_path = _resolve_restart_path(out_path, cfg, for_write=True)
     big_path = Path(f"{base}.big.nc")
 
-    diag: GXDiagnostics | None = result.diagnostics
+    diag: SimulationDiagnostics | None = result.diagnostics
     if diag is None:
         raise ValueError("GX-style nonlinear NetCDF artifacts require nonlinear diagnostics output")
 
@@ -970,7 +970,7 @@ def write_runtime_nonlinear_artifacts(out: str | Path, result: Any, cfg: Any | N
 
     _write_json(summary_path, _nonlinear_summary(result))
     paths = {"summary": str(summary_path)}
-    diag: GXDiagnostics | None = result.diagnostics
+    diag: SimulationDiagnostics | None = result.diagnostics
     if diag is not None:
         cols = [
             _flatten_series(np.asarray(diag.t)),

@@ -43,7 +43,7 @@ from spectraxgk.diffrax_integrators import (
     integrate_linear_diffrax_streaming,
 )
 from spectraxgk.gx_integrators import (
-    GXTimeConfig,
+    ExplicitTimeConfig,
     integrate_linear_gx,
     integrate_linear_gx_diagnostics,
 )
@@ -1074,7 +1074,7 @@ def run_cyclone_linear(
         try:
             _status("estimating frequency seed with short GX time march")
             t_seed = min(150.0, float(kcfg.power_dt) * 15000.0)
-            time_cfg = GXTimeConfig(
+            time_cfg = ExplicitTimeConfig(
                 dt=float(kcfg.power_dt),
                 t_max=t_seed,
                 sample_stride=1,
@@ -1124,7 +1124,7 @@ def run_cyclone_linear(
                     init_cfg=init_cfg,
                 )
                 t_seed = min(150.0, float(kcfg.power_dt) * 15000.0)
-                time_cfg = GXTimeConfig(
+                time_cfg = ExplicitTimeConfig(
                     dt=float(kcfg.power_dt),
                     t_max=t_seed,
                     sample_stride=1,
@@ -1242,7 +1242,7 @@ def run_cyclone_linear(
             _status("running GX-reference time integrator")
             t_max_val = float(dt) * int(steps) if time_cfg_use is None else float(time_cfg_use.t_max)
             stride = 1 if time_cfg_use is None else int(time_cfg_use.sample_stride)
-            gx_time_cfg = GXTimeConfig(
+            gx_time_cfg = ExplicitTimeConfig(
                 dt=float(dt),
                 t_max=t_max_val,
                 sample_stride=stride,
@@ -1651,7 +1651,7 @@ def run_cyclone_scan(
             if prev_eig is None:
                 try:
                     t_seed = min(150.0, float(cfg_use.power_dt) * 15000.0)
-                    gx_time_cfg = GXTimeConfig(
+                    gx_time_cfg = ExplicitTimeConfig(
                         dt=float(cfg_use.power_dt), t_max=t_seed, sample_stride=1, fixed_dt=True
                     )
                     G0_seed = jnp.array(G0_jax)
@@ -1697,7 +1697,7 @@ def run_cyclone_scan(
                         init_cfg=init_cfg,
                     )
                     t_seed = min(150.0, float(cfg_use.power_dt) * 15000.0)
-                    gx_time_cfg = GXTimeConfig(
+                    gx_time_cfg = ExplicitTimeConfig(
                         dt=float(cfg_use.power_dt), t_max=t_seed, sample_stride=1, fixed_dt=True
                     )
                     t_short, phi_seed, _g_t, _o_t = integrate_linear_gx(
@@ -1827,7 +1827,7 @@ def run_cyclone_scan(
                 dt_max_i = None if time_base.dt_max is None else float(time_base.dt_max)
                 cfl_i = float(time_base.cfl)
                 cfl_fac_i = resolve_cfl_fac(str(time_base.method), time_base.cfl_fac)
-            gx_time_cfg = GXTimeConfig(
+            gx_time_cfg = ExplicitTimeConfig(
                 dt=dt_i,
                 t_max=t_max_val,
                 sample_stride=1,
@@ -4448,7 +4448,7 @@ def run_kbm_beta_scan(
 
         if solver_use == "gx_time":
             gx_mode_method = mode_method if mode_method in {"z_index", "max"} else "z_index"
-            gx_time_cfg = GXTimeConfig(
+            gx_time_cfg = ExplicitTimeConfig(
                 dt=dt_i,
                 t_max=dt_i * steps_i,
                 sample_stride=max(int(sample_stride or 1), 1),
@@ -4462,7 +4462,7 @@ def run_kbm_beta_scan(
                 cfl_fac=(
                     resolve_cfl_fac(str(time_cfg.method), time_cfg.cfl_fac)
                     if time_cfg is not None
-                    else float(GXTimeConfig.cfl_fac)
+                    else float(ExplicitTimeConfig.cfl_fac)
                 ),
             )
             t_arr, _phi_t, gamma_t, omega_t, _gx_diag = integrate_linear_gx_diagnostics(
@@ -5010,7 +5010,7 @@ def run_kbm_linear(
 
     if solver_key == "gx_time":
         gx_mode_method = mode_method if mode_method in {"z_index", "max"} else "z_index"
-        gx_time_cfg = GXTimeConfig(
+        gx_time_cfg = ExplicitTimeConfig(
             dt=dt,
             t_max=dt * steps,
             sample_stride=max(int(sample_stride or 1), 1),
@@ -5024,7 +5024,7 @@ def run_kbm_linear(
             cfl_fac=(
                 resolve_cfl_fac(str(time_cfg.method), time_cfg.cfl_fac)
                 if time_cfg is not None
-                else float(GXTimeConfig.cfl_fac)
+                else float(ExplicitTimeConfig.cfl_fac)
             ),
         )
         t_arr, phi_t, gamma_t, omega_t, _gx_diag = integrate_linear_gx_diagnostics(
