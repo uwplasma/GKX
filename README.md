@@ -58,9 +58,9 @@ spectrax-gk cyclone-info
 cd examples/linear/axisymmetric && spectrax-gk cyclone.toml
 
 # Run directly from a runtime TOML
-spectrax-gk examples/nonlinear/axisymmetric/runtime_cetg_reference.toml --steps 200
+spectrax-gk examples/linear/axisymmetric/runtime_cyclone.toml
 
-# Write a GX-style nonlinear bundle
+# Write a restartable nonlinear NetCDF bundle
 spectrax-gk run-runtime-nonlinear \
   --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_gx.toml \
   --steps 200 \
@@ -86,8 +86,8 @@ case wrappers now honor that TOML output contract as well, so chunked
 nonlinear runs persist their evolving diagnostics through the same path.
 
 When the nonlinear target ends in `.out.nc` or another `.nc` suffix,
-SPECTRAX-GK writes a GX-style bundle instead of the lightweight JSON/CSV
-sidecars:
+SPECTRAX-GK writes a restartable NetCDF bundle, compatible with the comparison
+tooling, instead of the lightweight JSON/CSV sidecars:
 
 - `case.out.nc`: resolved nonlinear diagnostics and metadata
 - `case.big.nc`: final fields and moments in real and spectral layouts
@@ -138,7 +138,7 @@ SPECTRAX-GK is rigorously validated against standard gyrokinetic benchmarks, inc
 - **Nonlinear transport:** Heat flux and energy traces for ITG, KBM, and stellarator configurations.
 
 The benchmark tooling in `tools/` ensures reproducibility and performance tracking.
-For the current release pass, the accepted nonlinear GX-facing set is Cyclone,
+For the current release pass, the accepted nonlinear validation set is Cyclone,
 KBM, W7-X, HSX, and Cyclone Miller. Full-GK ETG nonlinear remains a tracked
 pilot lane, while TEM and KAW stay outside the active parity claim.
 
@@ -146,12 +146,17 @@ pilot lane, while TEM and KAW stay outside the active parity claim.
 
 ![Runtime and memory comparison](docs/_static/runtime_memory_benchmark.png)
 
-SPECTRAX-GK is optimized for performance across CPU and GPU backends. The runtime panel above compares wall-time and peak memory usage for core linear and nonlinear benchmarks. Performance tracking covers:
+SPECTRAX-GK is optimized for performance across CPU and GPU backends. The
+runtime panel above compares wall-time and peak memory usage for the shipped
+1.0 benchmark cases. Performance tracking covers:
 
 - **Cyclone ITG** (linear/nonlinear)
-- **KBM** and **ETG** configurations
+- **KBM** and **ETG linear** configurations
 - **W7-X** and **HSX** stellarator geometries
 - **Miller** geometry models
+
+Experimental or not-yet-closed lanes such as full-GK ETG nonlinear, KAW, and
+TEM are tracked separately and do not appear in the shipped runtime panel.
 
 Regenerate the runtime figure from collected per-case summaries with:
 
