@@ -976,13 +976,13 @@ def generate_vmec_eik_internal(
 ) -> Path:
     """Internal VMEC->EIK pipeline.
 
-    Port of GX's ``gx_geo_vmec.py`` main script.  Accepts a
-    ``GXVmecGeometryRequest`` and writes a GX-compatible ``*.eik.nc`` file.
+    Port of GX's ``gx_geo_vmec.py`` main script. Accepts a
+    runtime VMEC geometry request and writes a GX-compatible ``*.eik.nc`` file.
     """
 
     if request is None:
         raise NotImplementedError(
-            "Internal VMEC geometry backend requires a GXVmecGeometryRequest. "
+            "Internal VMEC geometry backend requires a VMEC geometry request. "
             "Pass request= to invoke the port."
         )
 

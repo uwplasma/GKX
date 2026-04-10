@@ -19,7 +19,7 @@ _DEFAULT_CACHE_DIR = _REPO_ROOT / ".cache" / "spectrax" / "vmec_eik"
 
 
 @dataclass(frozen=True)
-class GXVmecGeometryRequest:
+class VmecGeometryRequest:
     """VMEC geometry-generation contract."""
 
     vmec_file: str
@@ -67,8 +67,8 @@ def _resolve_runtime_vmec_file(vmec_file: str) -> Path:
     return cwd_candidate
 
 
-def build_gx_vmec_geometry_request(cfg: RuntimeConfig) -> GXVmecGeometryRequest:
-    """Build a GX VMEC generation request from a runtime config."""
+def build_vmec_geometry_request(cfg: RuntimeConfig) -> VmecGeometryRequest:
+    """Build a VMEC generation request from a runtime config."""
 
     if str(cfg.geometry.model).strip().lower() != "vmec":
         raise ValueError("geometry.model must be 'vmec' for VMEC geometry generation")
@@ -110,7 +110,7 @@ def build_gx_vmec_geometry_request(cfg: RuntimeConfig) -> GXVmecGeometryRequest:
         vnewk.append(0.0)
         species_type.append("electron")
 
-    return GXVmecGeometryRequest(
+    return VmecGeometryRequest(
         vmec_file=str(_resolve_runtime_vmec_file(cfg.geometry.vmec_file)),
         ntheta=ntheta,
         boundary=str(cfg.grid.boundary),
@@ -139,7 +139,7 @@ def build_gx_vmec_geometry_request(cfg: RuntimeConfig) -> GXVmecGeometryRequest:
 
 
 def default_vmec_eik_output_path(
-    request: GXVmecGeometryRequest,
+    request: VmecGeometryRequest,
 ) -> Path:
     """Return a stable cache path for a VMEC-generated ``*.eik.nc`` file."""
 
@@ -164,7 +164,7 @@ def generate_runtime_vmec_eik(
 ) -> Path:
     """Generate or reuse an internal-backend ``*.eik.nc`` file from a runtime config."""
 
-    request = build_gx_vmec_geometry_request(cfg)
+    request = build_vmec_geometry_request(cfg)
     resolved_output = output_path
     if resolved_output is None and cfg.geometry.geometry_file is not None:
         resolved_output = cfg.geometry.geometry_file
@@ -195,3 +195,9 @@ def generate_runtime_vmec_eik(
     if resolved_output is None:
         resolved_output = default_vmec_eik_output_path(request)
     return generate_vmec_eik_internal(output_path=resolved_output, request=request)
+
+
+# Compatibility aliases kept for callers still using the older GX-prefixed
+# request and builder names.
+GXVmecGeometryRequest = VmecGeometryRequest
+build_gx_vmec_geometry_request = build_vmec_geometry_request
