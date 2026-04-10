@@ -167,6 +167,17 @@ The `examples/` directory is organized by physics and configuration:
 - **`benchmarks/`**: Scripts for replicating published benchmark results and parameter scans.
 - **`theory_and_demos/`**: Pedagogical examples and demonstrations of the underlying numerical methods.
 
+Parity-facing nonlinear examples now include:
+
+- Cyclone ITG
+- KBM
+- W7-X
+- HSX
+- a full-GK ETG nonlinear pilot lane in `examples/nonlinear/axisymmetric/runtime_etg_nonlinear.toml`
+
+The reduced `cETG` example remains available as a separate reduced-model
+workflow; it is not the same thing as the full-GK ETG nonlinear lane.
+
 ## Documentation
 
 Comprehensive documentation, including theory, algorithms, and API references, is available in `docs/`.
