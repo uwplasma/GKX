@@ -164,6 +164,9 @@ Regenerate the runtime figure from collected per-case summaries with:
 python tools/benchmark_runtime_memory.py \
   --summary-glob tools_out/runtime_memory_*linear.json \
   --summary-glob tools_out/runtime_memory_*nonlinear.json
+
+# For a long office sweep, keep going after a failed row and save per-row logs.
+python tools/benchmark_runtime_memory.py --continue-on-error --log-dir tools_out/runtime_memory_logs
 ```
 
 ## Examples
