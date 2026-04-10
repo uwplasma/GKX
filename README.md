@@ -138,6 +138,9 @@ SPECTRAX-GK is rigorously validated against standard gyrokinetic benchmarks, inc
 - **Nonlinear transport:** Heat flux and energy traces for ITG, KBM, and stellarator configurations.
 
 The benchmark tooling in `tools/` ensures reproducibility and performance tracking.
+For the current release pass, the accepted nonlinear GX-facing set is Cyclone,
+KBM, W7-X, HSX, and Cyclone Miller. Full-GK ETG nonlinear remains a tracked
+pilot lane, while TEM and KAW stay outside the active parity claim.
 
 ## Runtime and Memory
 
