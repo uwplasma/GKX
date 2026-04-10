@@ -7,8 +7,8 @@ REFERENCE_ELECTRON_MASS = 2.7e-4
 REFERENCE_MASS_RATIO = 1.0 / REFERENCE_ELECTRON_MASS
 
 
-def gx_default_cfl_fac(method: str) -> float:
-    """Return the GX timestep CFL prefactor for a given explicit method."""
+def explicit_method_default_cfl_fac(method: str) -> float:
+    """Return the reference explicit-method CFL prefactor for a given method."""
 
     method_key = method.strip().lower()
     if method_key in {"rk3", "sspx3"}:
@@ -19,11 +19,16 @@ def gx_default_cfl_fac(method: str) -> float:
 
 
 def resolve_cfl_fac(method: str, cfl_fac: float | None) -> float:
-    """Resolve an explicit CFL prefactor, falling back to the GX method default."""
+    """Resolve an explicit CFL prefactor, falling back to the method default."""
 
     if cfl_fac is None:
-        return gx_default_cfl_fac(method)
+        return explicit_method_default_cfl_fac(method)
     return float(cfl_fac)
+
+
+# Compatibility alias for older callers that still expect the GX-prefixed
+# helper name.
+gx_default_cfl_fac = explicit_method_default_cfl_fac
 
 
 @dataclass(frozen=True)

@@ -10,7 +10,7 @@ from spectraxgk.io import load_toml
 
 
 @dataclass(frozen=True)
-class GXReducedModelContract:
+class ReducedModelContract:
     """Minimal parsed contract for a GX reduced-model input file."""
 
     model: str
@@ -41,7 +41,7 @@ class GXReducedModelContract:
         return asdict(self)
 
 
-def load_gx_reduced_model_contract(path: str | Path) -> GXReducedModelContract:
+def load_reduced_model_contract(path: str | Path) -> ReducedModelContract:
     """Parse a GX reduced-model input file into a stable contract summary."""
 
     data = load_toml(path)
@@ -68,7 +68,7 @@ def load_gx_reduced_model_contract(path: str | Path) -> GXReducedModelContract:
         raise ValueError(f"{path} is not a GX reduced-model input (expected cETG or KREHM marker)")
 
     t_max = time.get("t_max")
-    return GXReducedModelContract(
+    return ReducedModelContract(
         model=model,
         nx=int(dims["nx"]),
         ny=int(dims["ny"]),
@@ -93,3 +93,9 @@ def load_gx_reduced_model_contract(path: str | Path) -> GXReducedModelContract:
         D_hyper=float(diss.get("D_hyper", 0.0)),
         dealias_kz=bool(expert.get("dealias_kz", False)),
     )
+
+
+# Compatibility aliases kept for callers that still use the historical
+# GX-prefixed names.
+GXReducedModelContract = ReducedModelContract
+load_gx_reduced_model_contract = load_reduced_model_contract

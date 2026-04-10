@@ -17,7 +17,7 @@ _DEFAULT_CACHE_DIR = _REPO_ROOT / ".cache" / "spectrax" / "miller_eik"
 
 
 @dataclass(frozen=True)
-class GXMillerGeometryRequest:
+class MillerGeometryRequest:
     """Miller geometry-generation contract."""
 
     ntheta: int
@@ -52,7 +52,7 @@ def _infer_miller_nperiod(cfg: RuntimeConfig) -> int:
     return 1
 
 
-def build_gx_miller_geometry_request(cfg: RuntimeConfig) -> GXMillerGeometryRequest:
+def build_miller_geometry_request(cfg: RuntimeConfig) -> MillerGeometryRequest:
     """Build a Miller generation request from a runtime config."""
 
     if str(cfg.geometry.model).strip().lower() != "miller":
@@ -63,7 +63,7 @@ def build_gx_miller_geometry_request(cfg: RuntimeConfig) -> GXMillerGeometryRequ
     if ntheta < 2:
         raise ValueError("Miller geometry generation requires ntheta >= 2")
 
-    return GXMillerGeometryRequest(
+    return MillerGeometryRequest(
         ntheta=ntheta,
         nperiod=_infer_miller_nperiod(cfg),
         boundary=str(cfg.grid.boundary),
@@ -83,7 +83,7 @@ def build_gx_miller_geometry_request(cfg: RuntimeConfig) -> GXMillerGeometryRequ
 
 
 def default_miller_eik_output_path(
-    request: GXMillerGeometryRequest,
+    request: MillerGeometryRequest,
 ) -> Path:
     """Return a stable cache path for a Miller-generated ``*.eiknc.nc`` file."""
 
@@ -100,7 +100,7 @@ def generate_runtime_miller_eik(
 ) -> Path:
     """Generate or reuse an internal-backend Miller ``*.eiknc.nc`` file from a runtime config."""
 
-    request = build_gx_miller_geometry_request(cfg)
+    request = build_miller_geometry_request(cfg)
     resolved_output = output_path
     if resolved_output is None and cfg.geometry.geometry_file is not None:
         resolved_output = cfg.geometry.geometry_file
@@ -129,3 +129,9 @@ def generate_runtime_miller_eik(
     if resolved_output is None:
         resolved_output = default_miller_eik_output_path(request)
     return generate_miller_eik_internal(output_path=resolved_output, request=request)
+
+
+# Compatibility aliases kept for existing callers and tests that still import
+# the older GX-prefixed API names.
+GXMillerGeometryRequest = MillerGeometryRequest
+build_gx_miller_geometry_request = build_miller_geometry_request
