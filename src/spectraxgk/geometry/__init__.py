@@ -14,29 +14,33 @@ from spectraxgk.config import GeometryConfig, GridConfig
 ZERO_SHAT_THRESHOLD = 1.0e-5
 
 
-def gx_zero_shat_enabled(
+def zero_shear_enabled(
     s_hat: float,
     *,
     zero_shat: bool = False,
     threshold: float = ZERO_SHAT_THRESHOLD,
 ) -> bool:
-    """Return the effective GX zero-shear state."""
+    """Return the effective zero-shear state."""
 
     return bool(zero_shat) or abs(float(s_hat)) < float(threshold)
 
 
-def gx_effective_boundary(
+def effective_boundary(
     boundary: str,
     *,
     s_hat: float,
     zero_shat: bool = False,
     threshold: float = ZERO_SHAT_THRESHOLD,
 ) -> str:
-    """Return the effective GX boundary after zero-shear promotion."""
+    """Return the effective boundary after zero-shear promotion."""
 
-    if gx_zero_shat_enabled(s_hat, zero_shat=zero_shat, threshold=threshold):
+    if zero_shear_enabled(s_hat, zero_shat=zero_shat, threshold=threshold):
         return "periodic"
     return str(boundary)
+
+
+gx_zero_shat_enabled = zero_shear_enabled
+gx_effective_boundary = effective_boundary
 
 
 @jax.tree_util.register_pytree_node_class
@@ -74,7 +78,7 @@ class SAlphaGeometry:
 
     @staticmethod
     def from_config(cfg: GeometryConfig) -> "SAlphaGeometry":
-        zero_shat = gx_zero_shat_enabled(cfg.s_hat, zero_shat=cfg.zero_shat)
+        zero_shat = zero_shear_enabled(cfg.s_hat, zero_shat=cfg.zero_shat)
         return SAlphaGeometry(
             q=cfg.q,
             s_hat=0.0 if zero_shat else cfg.s_hat,
@@ -206,7 +210,7 @@ class SlabGeometry:
 
     @staticmethod
     def from_config(cfg: GeometryConfig) -> "SlabGeometry":
-        zero_shat = gx_zero_shat_enabled(cfg.s_hat, zero_shat=cfg.zero_shat)
+        zero_shat = zero_shear_enabled(cfg.s_hat, zero_shat=cfg.zero_shat)
         shat = 0.0 if zero_shat else float(cfg.s_hat)
         return SlabGeometry(
             s_hat=shat,
@@ -728,11 +732,11 @@ def ensure_flux_tube_geometry_data(
     return sample_flux_tube_geometry(geom, theta)
 
 
-def gx_twist_shift_params(
+def twist_shift_params(
     geom: FluxTubeGeometryLike,
     grid: GridConfig,
 ) -> tuple[int, float]:
-    """Return (jtwist, x0) following GX twist-and-shift defaults."""
+    """Return `(jtwist, x0)` for twist-and-shift grid defaults."""
 
     y0 = float(grid.y0) if grid.y0 is not None else float(grid.Ly) / (2.0 * jnp.pi)
     if isinstance(geom, FluxTubeGeometryData):
@@ -770,7 +774,10 @@ def gx_twist_shift_params(
     return jtwist, x0
 
 
-def apply_gx_geometry_grid_defaults(
+gx_twist_shift_params = twist_shift_params
+
+
+def apply_geometry_grid_defaults(
     geom: FluxTubeGeometryLike,
     grid: GridConfig,
 ) -> GridConfig:
@@ -801,7 +808,7 @@ def apply_gx_geometry_grid_defaults(
         )
         if float(grid_out.kxfac) == 1.0:
             grid_out = replace(grid_out, kxfac=float(geom.kxfac))
-    boundary = gx_effective_boundary(
+    boundary = effective_boundary(
         str(grid_out.boundary).lower(),
         s_hat=float(getattr(geom, "s_hat", 0.0)),
         zero_shat=bool(getattr(geom, "zero_shat", False)),
@@ -809,9 +816,9 @@ def apply_gx_geometry_grid_defaults(
     if boundary != str(grid_out.boundary).lower():
         grid_out = replace(grid_out, boundary=boundary, jtwist=None)
     if boundary in {"linked", "fix aspect"} and not bool(grid_out.non_twist):
-        jtwist, x0 = gx_twist_shift_params(geom, grid_out)
+        jtwist, x0 = twist_shift_params(geom, grid_out)
         grid_out = replace(grid_out, Lx=2.0 * np.pi * x0, jtwist=jtwist)
-    elif boundary == "periodic" and gx_zero_shat_enabled(
+    elif boundary == "periodic" and zero_shear_enabled(
         float(getattr(geom, "s_hat", 0.0)),
         zero_shat=bool(getattr(geom, "zero_shat", False)),
     ):
@@ -819,3 +826,6 @@ def apply_gx_geometry_grid_defaults(
         # grad-parallel operator, so any linked-FFT metadata must be cleared.
         grid_out = replace(grid_out, jtwist=None)
     return grid_out
+
+
+apply_gx_geometry_grid_defaults = apply_geometry_grid_defaults

@@ -25,7 +25,7 @@ from spectraxgk.analysis import (
 )
 from spectraxgk.diagnostics import SimulationDiagnostics, ResolvedDiagnostics, gx_energy_total
 from spectraxgk.geometry import (
-    apply_gx_geometry_grid_defaults,
+    apply_geometry_grid_defaults,
     FluxTubeGeometryLike,
     build_flux_tube_geometry,
 )
@@ -927,7 +927,7 @@ def run_runtime_linear(
         geom = build_runtime_geometry(cfg)
         validate_cetg_runtime_config(cfg, geom, Nl=Nl_use, Nm=Nm_use)
         _status("building spectral grid")
-        grid_cfg = apply_gx_geometry_grid_defaults(geom, cfg.grid)
+        grid_cfg = apply_geometry_grid_defaults(geom, cfg.grid)
         grid_full = build_spectral_grid(grid_cfg)
         ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
         grid = select_ky_grid(grid_full, ky_index)
@@ -1016,7 +1016,7 @@ def run_runtime_linear(
 
     geom = build_runtime_geometry(cfg)
     _status("building spectral grid")
-    grid_cfg = apply_gx_geometry_grid_defaults(geom, cfg.grid)
+    grid_cfg = apply_geometry_grid_defaults(geom, cfg.grid)
     grid_full = build_spectral_grid(grid_cfg)
     _status("building runtime linear parameters")
     params = build_runtime_linear_params(cfg, Nm=Nm_use, geom=geom)
@@ -1400,7 +1400,7 @@ def _run_runtime_scan_batch(
     """Batch a ky scan using one time integration over the full grid."""
 
     geom = build_runtime_geometry(cfg)
-    grid_cfg = apply_gx_geometry_grid_defaults(geom, cfg.grid)
+    grid_cfg = apply_geometry_grid_defaults(geom, cfg.grid)
     grid = build_spectral_grid(grid_cfg)
     params = build_runtime_linear_params(cfg, Nm=Nm, geom=geom)
     terms = build_runtime_linear_terms(cfg)
@@ -1552,7 +1552,7 @@ def run_runtime_nonlinear(
         geom = build_runtime_geometry(cfg)
         validate_cetg_runtime_config(cfg, geom, Nl=Nl_use, Nm=Nm_use)
         _status("building spectral grid")
-        grid_cfg = apply_gx_geometry_grid_defaults(geom, cfg.grid)
+        grid_cfg = apply_geometry_grid_defaults(geom, cfg.grid)
         grid = build_spectral_grid(grid_cfg)
         ky_index, kx_index = _select_nonlinear_mode_indices(
             grid,
@@ -1700,7 +1700,7 @@ def run_runtime_nonlinear(
 
     geom = build_runtime_geometry(cfg)
     _status("building spectral grid")
-    grid_cfg = apply_gx_geometry_grid_defaults(geom, cfg.grid)
+    grid_cfg = apply_geometry_grid_defaults(geom, cfg.grid)
     grid = build_spectral_grid(grid_cfg)
     _status("building runtime nonlinear parameters")
     params = build_runtime_linear_params(cfg, Nm=Nm_use, geom=geom)

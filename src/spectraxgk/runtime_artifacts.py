@@ -10,7 +10,7 @@ from typing import Any
 import numpy as np
 
 from spectraxgk.geometry import ensure_flux_tube_geometry_data
-from spectraxgk.grids import build_spectral_grid, gx_real_fft_kx, gx_real_fft_ky
+from spectraxgk.grids import build_spectral_grid, real_fft_ordered_kx, real_fft_unique_ky
 from spectraxgk.diagnostics import SimulationDiagnostics, ResolvedDiagnostics, gx_energy_total
 from spectraxgk.linear import build_linear_cache
 from spectraxgk.runtime import (
@@ -531,7 +531,7 @@ def _write_gx_geometry_group(group: Any, cfg: Any) -> tuple[np.ndarray, np.ndarr
     group.createVariable("nfp", "i4", ())[:] = np.int32(geom.nfp)
     group.createVariable("alpha", "f4", ())[:] = np.float32(geom.alpha)
     group.createVariable("zeta_center", "f4", ())[:] = np.float32(0.0)
-    return theta, np.asarray(gx_real_fft_kx(grid.kx), dtype=np.float32), np.asarray(gx_real_fft_ky(grid.ky), dtype=np.float32), geom
+    return theta, np.asarray(real_fft_ordered_kx(grid.kx), dtype=np.float32), np.asarray(real_fft_unique_ky(grid.ky), dtype=np.float32), geom
 
 
 def _write_gx_inputs_group(group: Any, cfg: Any, geom: Any) -> None:

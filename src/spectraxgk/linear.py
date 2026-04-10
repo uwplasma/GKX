@@ -16,7 +16,7 @@ from spectraxgk.geometry import (
     FluxTubeGeometryData,
     FluxTubeGeometryLike,
     ensure_flux_tube_geometry_data,
-    gx_zero_shat_enabled,
+    zero_shear_enabled,
 )
 from spectraxgk.gyroaverage import J_l_all, bessel_j0, bessel_j1, gx_laguerre_transform
 from spectraxgk.grids import SpectralGrid

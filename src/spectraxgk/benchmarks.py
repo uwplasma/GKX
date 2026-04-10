@@ -34,7 +34,7 @@ from spectraxgk.config import (
 from spectraxgk.geometry import (
     FluxTubeGeometryLike,
     SAlphaGeometry,
-    apply_gx_geometry_grid_defaults,
+    apply_geometry_grid_defaults,
     build_flux_tube_geometry,
 )
 from spectraxgk.grids import SpectralGrid, build_spectral_grid, select_ky_grid
@@ -4910,7 +4910,7 @@ def run_kbm_linear(
     beta_use = float(cfg_in.model.beta) if beta_value is None else float(beta_value)
     cfg_use = replace(cfg_in, model=replace(cfg_in.model, beta=beta_use))
     geom = build_flux_tube_geometry(cfg_use.geometry)
-    grid_full = build_spectral_grid(apply_gx_geometry_grid_defaults(geom, cfg_use.grid))
+    grid_full = build_spectral_grid(apply_geometry_grid_defaults(geom, cfg_use.grid))
     if terms is None:
         terms = LinearTerms(bpar=0.0)
     gx_reference_use = bool(gx_reference)

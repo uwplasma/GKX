@@ -11,7 +11,7 @@ import numpy as np
 
 from spectraxgk.config import resolve_cfl_fac
 from spectraxgk.geometry import FluxTubeGeometryLike, ensure_flux_tube_geometry_data
-from spectraxgk.grids import SpectralGrid, gx_real_fft_mesh
+from spectraxgk.grids import SpectralGrid, real_fft_mesh
 from spectraxgk.linear import (
     LinearCache,
     LinearParams,
@@ -225,7 +225,7 @@ def _gx_nonlinear_omega_components(
     ifft_scale = jnp.asarray(fft_norm, dtype=real_dtype)
 
     if gx_real_fft:
-        _, ky_vals, kx_nyc, ky_nyc = gx_real_fft_mesh(cache.kx_grid, cache.ky_grid)
+        _, ky_vals, kx_nyc, ky_nyc = real_fft_mesh(cache.kx_grid, cache.ky_grid)
         nyc = int(ky_vals.shape[0])
         phi_nyc = phi[:nyc, :, :]
         kx_b = _broadcast_grid(kx_nyc, phi_nyc.ndim)

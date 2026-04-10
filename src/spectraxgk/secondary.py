@@ -10,7 +10,7 @@ import numpy as np
 from jax.typing import ArrayLike
 
 from spectraxgk.analysis import fit_growth_rate
-from spectraxgk.geometry import apply_gx_geometry_grid_defaults, build_flux_tube_geometry
+from spectraxgk.geometry import apply_geometry_grid_defaults, build_flux_tube_geometry
 from spectraxgk.grids import build_spectral_grid
 from spectraxgk.runtime import run_runtime_linear, run_runtime_nonlinear
 from spectraxgk.runtime_config import (
@@ -63,7 +63,7 @@ def _embed_linear_seed_on_full_grid(
     """Embed a single-ky linear state back onto the full runtime grid."""
 
     geom = build_flux_tube_geometry(cfg.geometry)
-    grid_cfg = apply_gx_geometry_grid_defaults(geom, cfg.grid)
+    grid_cfg = apply_geometry_grid_defaults(geom, cfg.grid)
     grid = build_spectral_grid(grid_cfg)
     full_shape = (
         state.shape[0],

@@ -81,12 +81,8 @@ def twothirds_mask(Ny: int, Nx: int) -> jnp.ndarray:
     return ky_ok[:, None] & kx_ok[None, :]
 
 
-def gx_real_fft_ky(ky: jnp.ndarray) -> jnp.ndarray:
-    """Return GX's compressed real-FFT ``ky`` convention.
-
-    GX stores the unique ``ky`` block with non-negative values, including the
-    positive Nyquist mode when ``Ny`` is even.
-    """
+def real_fft_unique_ky(ky: jnp.ndarray) -> jnp.ndarray:
+    """Return the compressed non-negative `ky` block for a real FFT."""
 
     ky_arr = jnp.asarray(ky)
     if ky_arr.ndim == 0:
@@ -96,12 +92,8 @@ def gx_real_fft_ky(ky: jnp.ndarray) -> jnp.ndarray:
     return jnp.abs(ky_1d[:nyc])
 
 
-def gx_real_fft_kx(kx: jnp.ndarray) -> jnp.ndarray:
-    """Return GX's native ``kx`` ordering for real-FFT nonlinear kernels.
-
-    GX keeps the x-axis in full complex-FFT order but uses a positive Nyquist
-    multiplier when ``Nx`` is even.
-    """
+def real_fft_ordered_kx(kx: jnp.ndarray) -> jnp.ndarray:
+    """Return the `kx` ordering used with real-FFT nonlinear kernels."""
 
     kx_arr = jnp.asarray(kx)
     if kx_arr.ndim == 0:
@@ -113,16 +105,21 @@ def gx_real_fft_kx(kx: jnp.ndarray) -> jnp.ndarray:
     return kx_1d.at[nx // 2].set(jnp.abs(kx_1d[nx // 2]))
 
 
-def gx_real_fft_mesh(
+def real_fft_mesh(
     kx_grid: jnp.ndarray,
     ky_grid: jnp.ndarray,
 ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    """Return GX-style compressed ``(kx, ky)`` multipliers and meshgrids."""
+    """Return compressed real-FFT `(kx, ky)` multipliers and meshgrids."""
 
-    kx = gx_real_fft_kx(kx_grid)
-    ky = gx_real_fft_ky(ky_grid)
+    kx = real_fft_ordered_kx(kx_grid)
+    ky = real_fft_unique_ky(ky_grid)
     ky_mesh, kx_mesh = jnp.meshgrid(ky, kx, indexing="ij")
     return kx, ky, kx_mesh, ky_mesh
+
+
+gx_real_fft_ky = real_fft_unique_ky
+gx_real_fft_kx = real_fft_ordered_kx
+gx_real_fft_mesh = real_fft_mesh
 
 
 def build_spectral_grid(cfg: GridConfig) -> SpectralGrid:
@@ -200,17 +197,11 @@ def select_ky_grid(
     )
 
 
-def select_gx_real_fft_ky_grid(
+def select_real_fft_ky_grid(
     grid: SpectralGrid,
     ky_values: jnp.ndarray | np.ndarray | Sequence[float],
 ) -> SpectralGrid:
-    """Return a GX real-FFT positive-``ky`` view of ``grid``.
-
-    GX nonlinear dumps store the compressed non-negative ``ky`` block, including
-    the unique Nyquist row when ``Ny`` is even. This helper keeps the matching
-    leading dealias rows from the full FFT grid while replacing the ``ky``
-    coordinates with the explicit positive-frequency values from the dump.
-    """
+    """Return a positive-`ky` real-FFT view of `grid`."""
 
     ky_vals = jnp.asarray(ky_values, dtype=grid.ky.dtype)
     if ky_vals.ndim != 1 or ky_vals.size == 0:
@@ -218,7 +209,7 @@ def select_gx_real_fft_ky_grid(
     nky = int(ky_vals.shape[0])
     if nky > int(grid.ky.shape[0]):
         raise ValueError("ky_values length cannot exceed the full grid ky length")
-    kx_vals = gx_real_fft_kx(grid.kx)
+    kx_vals = real_fft_ordered_kx(grid.kx)
     mask = jnp.take(grid.dealias_mask, jnp.arange(nky, dtype=jnp.int32), axis=0)
     kx_grid = jnp.broadcast_to(kx_vals[None, :], (nky, kx_vals.shape[0]))
     ky_grid = jnp.broadcast_to(ky_vals[:, None], (nky, kx_vals.shape[0]))
@@ -238,3 +229,6 @@ def select_gx_real_fft_ky_grid(
         kxfac=grid.kxfac,
         ky_mode=ky_mode,
     )
+
+
+select_gx_real_fft_ky_grid = select_real_fft_ky_grid

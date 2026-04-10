@@ -9,7 +9,7 @@ import jax.numpy as jnp
 from jax.scipy import special as jsp
 
 from spectraxgk.gyroaverage import bessel_j0, bessel_j1
-from spectraxgk.grids import gx_real_fft_mesh
+from spectraxgk.grids import real_fft_mesh
 
 def _fft2_xy(x: jnp.ndarray) -> jnp.ndarray:
     return jnp.fft.fft2(x, axes=(-3, -2))
@@ -237,7 +237,7 @@ def _spectral_bracket_multi_gx(
     fft_scale = jnp.asarray(1.0 / fft_norm_val, dtype=real_dtype)
 
     ny_full = int(ky.shape[0])
-    _, ky_vals, kx_nyc, ky_nyc = gx_real_fft_mesh(kx, ky)
+    _, ky_vals, kx_nyc, ky_nyc = real_fft_mesh(kx, ky)
     nyc = int(ky_vals.shape[0])
 
     G_nyc = G_hat[..., :nyc, :, :]
