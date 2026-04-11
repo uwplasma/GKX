@@ -202,9 +202,20 @@ python tools/benchmark_runtime_memory.py --continue-on-error --log-dir tools_out
 ```
 
 The scaling panel includes two views: the top row tracks CPU/GPU 2x speedup
-on the diffrax integrator path, and the bottom row shows strong scaling on
-CPU using the sharded linear RK2 loop (1/2/4/8 devices) to validate multi-core
-parallel efficiency.
+on the diffrax integrator path, and the bottom row shows strong scaling on a
+larger grid (Ny=128, Nz=256, Nl=8, Nm=8) using the sharded linear RK2 loop for
+CPU (1/2/4/8 devices) and GPU (1/2 devices). The GPU curve highlights the
+current multi-device overhead at this size.
+
+To regenerate strong-scaling sweeps, use:
+
+```bash
+python examples/utilities/strong_scaling_sweep.py \
+  --ny 128 --nz 256 --nl 8 --nm 8 --steps 120 \
+  --devices 1,2,4,8 \
+  --backend cpu_sharded_large \
+  --out tools_out/strong_scaling_cpu.csv
+```
 
 ## Examples
 
