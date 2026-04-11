@@ -20,6 +20,10 @@ Autodiff validation (inverse/sensitivity demo):
 
 ![SPECTRAX-GK autodiff inverse demo](docs/_static/autodiff_inverse_growth.png)
 
+Autodiff validation (two-mode inverse demo):
+
+![SPECTRAX-GK autodiff two-mode demo](docs/_static/autodiff_inverse_twomode.png)
+
 ## Highlights
 
 - **Differentiable JAX-native kernels** for gradient-based optimization and sensitivity analysis.
@@ -142,6 +146,9 @@ The autodiff inverse/sensitivity example lives at
 figure shown above. It uses JAX autodiff on a short linear ITG window, reports
 gradients against a finite-difference check, and writes a summary JSON plus
 parameter sweeps for both `R/L_Ti` and `R/L_n` alongside the plot.
+The two-mode inverse example in
+`examples/theory_and_demos/autodiff_inverse_twomode.py` uses two ky modes to
+stabilize the inverse problem and produces its own publication-ready panel.
 
 For multi-device runs, set `TimeConfig.state_sharding = "auto"` (or `"ky"`) in
 runtime TOMLs to shard the packed state array across available JAX devices.
@@ -162,6 +169,8 @@ pilot lane, while TEM and KAW stay outside the active parity claim.
 ## Runtime and Memory
 
 ![Runtime and memory comparison](docs/_static/runtime_memory_benchmark.png)
+
+![Scaling speedup](docs/_static/scaling_speedup.png)
 
 SPECTRAX-GK is optimized for performance across CPU and GPU backends. The
 runtime panel above compares wall-time and peak memory usage for the shipped
