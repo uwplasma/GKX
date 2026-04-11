@@ -251,6 +251,15 @@ pytest -m integration
 python tools/run_tests_fast.py
 ```
 
+## Plotting outputs
+
+To visualize nonlinear diagnostics from a ``*.out.nc`` file:
+
+```bash
+python examples/utilities/plot_runtime_outputs.py tools_out/cyclone_nonlinear.out.nc \
+  --out tools_out/cyclone_nonlinear_diagnostics.png
+```
+
 ## Contributing
 
 SPECTRAX-GK is an open-source project welcoming contributions. Whether it's improving runtimes, reducing memory usage, or expanding the physics models, your help is appreciated.
