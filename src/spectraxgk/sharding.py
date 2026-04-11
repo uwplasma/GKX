@@ -72,9 +72,9 @@ def resolve_state_sharding(
         return None
 
     if G0.ndim == 5:
-        dims = ["l", "m", "ky", "kx", "z", "ri"]
+        dims = ["l", "m", "ky", "kx", "z"]
     elif G0.ndim == 6:
-        dims = ["s", "l", "m", "ky", "kx", "z", "ri"]
+        dims = ["s", "l", "m", "ky", "kx", "z"]
     else:
         raise ValueError("G0 must have 5 or 6 dimensions for sharding")
 

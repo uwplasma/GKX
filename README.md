@@ -201,6 +201,11 @@ python tools/benchmark_runtime_memory.py \
 python tools/benchmark_runtime_memory.py --continue-on-error --log-dir tools_out/runtime_memory_logs
 ```
 
+The scaling panel includes two views: the top row tracks CPU/GPU 2x speedup
+on the diffrax integrator path, and the bottom row shows strong scaling on
+CPU using the sharded linear RK2 loop (1/2/4/8 devices) to validate multi-core
+parallel efficiency.
+
 ## Examples
 
 The `examples/` directory is organized by physics and configuration:
