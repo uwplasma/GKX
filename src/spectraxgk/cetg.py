@@ -9,7 +9,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from spectraxgk.config import resolve_cfl_fac
-from spectraxgk.diagnostics import SimulationDiagnostics, gx_energy_total
+from spectraxgk.diagnostics import SimulationDiagnostics, total_energy
 from spectraxgk.geometry import FluxTubeGeometryLike, SlabGeometry
 from spectraxgk.gx_integrators import _gx_growth_rate_step, _gx_midplane_index
 from spectraxgk.grids import SpectralGrid
@@ -639,7 +639,7 @@ def integrate_cetg_gx_diagnostics_state(
         Wapar_t=Wapar_t,
         heat_flux_t=heat_t,
         particle_flux_t=pflux_t,
-        energy_t=gx_energy_total(Wg_t, Wphi_t, Wapar_t),
+        energy_t=total_energy(Wg_t, Wphi_t, Wapar_t),
         heat_flux_species_t=heat_s_t,
         particle_flux_species_t=pflux_s_t,
         phi_mode_t=phi_mode_t,

@@ -157,6 +157,10 @@ runtime panel above compares wall-time and peak memory usage for the shipped
 
 Experimental or not-yet-closed lanes such as full-GK ETG nonlinear, KAW, and
 TEM are tracked separately and do not appear in the shipped runtime panel.
+For the stellarator nonlinear runtime rows, the shipped panel uses imported
+`*.eik.nc` geometry files on `office` rather than on-the-fly VMEC generation,
+because the office performance environment does not carry the VMEC geometry
+backend stack.
 
 Regenerate the runtime figure from collected per-case summaries with:
 

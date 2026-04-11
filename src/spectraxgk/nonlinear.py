@@ -33,7 +33,7 @@ from spectraxgk.gx_integrators import (
 from spectraxgk.diagnostics import (
     SimulationDiagnostics,
     ResolvedDiagnostics,
-    gx_energy_total,
+    total_energy,
     gx_heat_flux_resolved_species,
     gx_heat_flux_split_resolved_species,
     gx_particle_flux_resolved_species,
@@ -1005,7 +1005,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
     resolved = _pack_resolved_diagnostics(resolved_t)
 
     dt_mean = jnp.mean(dt_series)
-    energy_t = gx_energy_total(Wg_t, Wphi_t, Wapar_t)
+    energy_t = total_energy(Wg_t, Wphi_t, Wapar_t)
     diag_out = SimulationDiagnostics(
         t=t,
         dt_t=dt_series,
@@ -1731,7 +1731,7 @@ def integrate_nonlinear_imex_gx_diagnostics(
     resolved = _pack_resolved_diagnostics(resolved_t)
 
     dt_mean = jnp.mean(dt_series)
-    energy_t = gx_energy_total(Wg_t, Wphi_t, Wapar_t)
+    energy_t = total_energy(Wg_t, Wphi_t, Wapar_t)
     diag_out = SimulationDiagnostics(
         t=t,
         dt_t=dt_series,

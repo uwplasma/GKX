@@ -11,7 +11,7 @@ import numpy as np
 
 from spectraxgk.geometry import ensure_flux_tube_geometry_data
 from spectraxgk.grids import build_spectral_grid, real_fft_ordered_kx, real_fft_unique_ky
-from spectraxgk.diagnostics import SimulationDiagnostics, ResolvedDiagnostics, gx_energy_total
+from spectraxgk.diagnostics import SimulationDiagnostics, ResolvedDiagnostics, total_energy
 from spectraxgk.linear import build_linear_cache
 from spectraxgk.runtime import (
     RuntimeNonlinearResult,
@@ -157,7 +157,7 @@ def load_runtime_nonlinear_gx_diagnostics(path: str | Path) -> SimulationDiagnos
         Wapar_t=Wapar_t,
         heat_flux_t=heat_t,
         particle_flux_t=pflux_t,
-        energy_t=np.asarray(gx_energy_total(Wg_t, Wphi_t, Wapar_t), dtype=np.float32),
+        energy_t=np.asarray(total_energy(Wg_t, Wphi_t, Wapar_t), dtype=np.float32),
         heat_flux_species_t=heat_st,
         particle_flux_species_t=pflux_st,
         turbulent_heating_t=turb_heat_t,

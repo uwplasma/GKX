@@ -23,7 +23,7 @@ from spectraxgk.analysis import (
     fit_growth_rate_auto_with_stats,
     select_ky_index,
 )
-from spectraxgk.diagnostics import SimulationDiagnostics, ResolvedDiagnostics, gx_energy_total
+from spectraxgk.diagnostics import SimulationDiagnostics, ResolvedDiagnostics, total_energy
 from spectraxgk.geometry import (
     apply_geometry_grid_defaults,
     FluxTubeGeometryLike,
@@ -245,7 +245,7 @@ def _slice_gx_diagnostics(diag: SimulationDiagnostics, stop: int) -> SimulationD
         Wapar_t=Wapar_t,
         heat_flux_t=np.asarray(diag.heat_flux_t)[:stop],
         particle_flux_t=np.asarray(diag.particle_flux_t)[:stop],
-        energy_t=np.asarray(gx_energy_total(jnp.asarray(Wg_t), jnp.asarray(Wphi_t), jnp.asarray(Wapar_t))),
+        energy_t=np.asarray(total_energy(jnp.asarray(Wg_t), jnp.asarray(Wphi_t), jnp.asarray(Wapar_t))),
         heat_flux_species_t=_slice_optional(diag.heat_flux_species_t),
         particle_flux_species_t=_slice_optional(diag.particle_flux_species_t),
         turbulent_heating_t=_slice_optional(diag.turbulent_heating_t),
@@ -306,7 +306,7 @@ def _stride_gx_diagnostics(diag: SimulationDiagnostics, *, stride: int) -> Simul
         Wapar_t=Wapar_t,
         heat_flux_t=np.asarray(diag.heat_flux_t)[::stride_use],
         particle_flux_t=np.asarray(diag.particle_flux_t)[::stride_use],
-        energy_t=np.asarray(gx_energy_total(jnp.asarray(Wg_t), jnp.asarray(Wphi_t), jnp.asarray(Wapar_t))),
+        energy_t=np.asarray(total_energy(jnp.asarray(Wg_t), jnp.asarray(Wphi_t), jnp.asarray(Wapar_t))),
         heat_flux_species_t=_stride_optional(diag.heat_flux_species_t),
         particle_flux_species_t=_stride_optional(diag.particle_flux_species_t),
         turbulent_heating_t=_stride_optional(diag.turbulent_heating_t),
@@ -363,7 +363,7 @@ def _concat_gx_diagnostics(diags: Sequence[SimulationDiagnostics]) -> Simulation
         Wapar_t=Wapar_t,
         heat_flux_t=_concat("heat_flux_t"),
         particle_flux_t=_concat("particle_flux_t"),
-        energy_t=np.asarray(gx_energy_total(jnp.asarray(Wg_t), jnp.asarray(Wphi_t), jnp.asarray(Wapar_t))),
+        energy_t=np.asarray(total_energy(jnp.asarray(Wg_t), jnp.asarray(Wphi_t), jnp.asarray(Wapar_t))),
         heat_flux_species_t=_concat_optional("heat_flux_species_t"),
         particle_flux_species_t=_concat_optional("particle_flux_species_t"),
         turbulent_heating_t=_concat_optional("turbulent_heating_t"),

@@ -583,7 +583,7 @@ def integrate_linear_gx_diagnostics(
 
     from spectraxgk.diagnostics import (
         SimulationDiagnostics,
-        gx_energy_total,
+        total_energy,
         gx_heat_flux,
         gx_particle_flux,
         gx_volume_factors,
@@ -744,7 +744,7 @@ def integrate_linear_gx_diagnostics(
         heat_flux_t=np.asarray(heat_list),
         particle_flux_t=np.asarray(pflux_list),
         energy_t=np.asarray(
-            gx_energy_total(np.asarray(Wg_list), np.asarray(Wphi_list), np.asarray(Wapar_list))
+            total_energy(np.asarray(Wg_list), np.asarray(Wphi_list), np.asarray(Wapar_list))
         ),
     )
     return (

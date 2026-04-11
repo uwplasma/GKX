@@ -610,8 +610,11 @@ def gx_turbulent_heating(
     )
 
 
-def gx_energy_total(Wg: ArrayLike, Wphi: ArrayLike, Wapar: ArrayLike) -> ArrayLike:
+def total_energy(Wg: ArrayLike, Wphi: ArrayLike, Wapar: ArrayLike) -> ArrayLike:
     return Wg + Wphi + Wapar
+
+
+gx_energy_total = total_energy
 
 
 def _gx_heat_flux_channel_contrib_species(
