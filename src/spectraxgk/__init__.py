@@ -129,6 +129,7 @@ from spectraxgk.diffrax_integrators import (
     integrate_linear_diffrax_streaming,
     integrate_nonlinear_diffrax,
 )
+from spectraxgk.sharded_integrators import integrate_linear_sharded
 from spectraxgk.gx_integrators import ExplicitTimeConfig, GXTimeConfig, integrate_linear_gx, integrate_linear_gx_diagnostics
 from spectraxgk.diagnostics import GXDiagnostics, SimulationDiagnostics
 
@@ -191,6 +192,7 @@ __all__ = [
     "dominant_eigenvalue",
     "integrate_linear_diffrax",
     "integrate_linear_diffrax_streaming",
+    "integrate_linear_sharded",
     "integrate_nonlinear",
     "integrate_nonlinear_cached",
     "integrate_nonlinear_gx_diagnostics",
