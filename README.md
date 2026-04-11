@@ -157,10 +157,12 @@ runtime panel above compares wall-time and peak memory usage for the shipped
 
 Experimental or not-yet-closed lanes such as full-GK ETG nonlinear, KAW, and
 TEM are tracked separately and do not appear in the shipped runtime panel.
-For the stellarator nonlinear runtime rows, the shipped panel uses imported
-`*.eik.nc` geometry files on `office` rather than on-the-fly VMEC generation,
-because the office performance environment does not carry the VMEC geometry
-backend stack.
+For the stellarator rows on `office`, the shipped panel uses pre-generated
+`*.eik.nc` geometry files rather than on-the-fly VMEC regeneration. The GX
+reference rows also run against a consistent local `netcdf-c` / `hdf5`
+runtime stack there, because the default `office` stellarator environment
+mixed incompatible HDF5 / NetCDF libraries and lacked the VMEC Python helper
+dependencies needed for live geometry generation.
 
 Regenerate the runtime figure from collected per-case summaries with:
 
