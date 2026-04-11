@@ -16,6 +16,10 @@ The figures above represent the validated benchmark suite, covering convergence,
 linear microinstabilities, and nonlinear transport across diverse magnetic 
 configurations.
 
+Autodiff validation (inverse/sensitivity demo):
+
+![SPECTRAX-GK autodiff inverse demo](docs/_static/autodiff_inverse_growth.png)
+
 ## Highlights
 
 - **Differentiable JAX-native kernels** for gradient-based optimization and sensitivity analysis.
@@ -130,6 +134,19 @@ G0 = G0.at[0, 0, 0, 0, :].set(1.0e-3 + 0.0j)
 
 G_t, phi_t = integrate_linear_from_config(G0, grid, geom, params, cfg.time)
 ```
+
+## Autodiff demo and multi-device notes
+
+The autodiff inverse/sensitivity example lives at
+`examples/theory_and_demos/autodiff_inverse_growth.py` and generates the
+figure shown above. It uses JAX autodiff on a short linear ITG window, reports
+gradients against a finite-difference check, and writes a summary JSON and CSV
+alongside the plot.
+
+For multi-device runs, set `TimeConfig.state_sharding = "auto"` (or `"ky"`) in
+runtime TOMLs to shard the packed state array across available JAX devices.
+This path is supported by the diffrax integrators; when only one device is
+available the run falls back to single-device execution.
 
 ## Benchmarks
 

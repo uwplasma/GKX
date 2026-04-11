@@ -212,15 +212,34 @@ def integrate_linear_diffrax(
 
     use_custom_vjp = not (_is_imex_solver(method) or _is_implicit_solver(method))
 
+    def _maybe_shard(state: jnp.ndarray) -> jnp.ndarray:
+        if state_sharding is None:
+            return state
+        return jax.lax.with_sharding_constraint(state, state_sharding)
+
+    def _maybe_shard(state: jnp.ndarray) -> jnp.ndarray:
+        if state_sharding is None:
+            return state
+        return jax.lax.with_sharding_constraint(state, state_sharding)
+
+    def _maybe_shard(state: jnp.ndarray) -> jnp.ndarray:
+        if state_sharding is None:
+            return state
+        return jax.lax.with_sharding_constraint(state, state_sharding)
+
     G0_packed = _pack_complex_state(G0)
     if state_sharding is not None:
         G0_packed = jax.device_put(G0_packed, state_sharding)
+        G0_packed = _maybe_shard(G0_packed)
+        G0_packed = _maybe_shard(G0_packed)
+        G0_packed = _maybe_shard(G0_packed)
 
     def rhs(t, G_packed, args):
         cache_, params_, term_cfg_ = args
+        G_packed = _maybe_shard(G_packed)
         G = _unpack_complex_state(G_packed)
         dG, _fields = _assemble_rhs(G, cache_, params_, term_cfg_, use_custom_vjp=use_custom_vjp)
-        return _pack_complex_state(dG)
+        return _maybe_shard(_pack_complex_state(dG))
 
     def _extract_mode(field: jnp.ndarray) -> jnp.ndarray:
         if save_mode is None:
@@ -249,6 +268,7 @@ def integrate_linear_diffrax(
 
     def save_fn(t, G_packed, args):
         cache_, params_, term_cfg_ = args
+        G_packed = _maybe_shard(G_packed)
         G = _unpack_complex_state(G_packed)
         if save_field == "phi":
             fields = compute_fields_cached(
@@ -266,7 +286,7 @@ def integrate_linear_diffrax(
             phi_field = fields.phi
             density_field = _density_from_G_local(G, cache_)
             if return_state:
-                return _pack_complex_state(G), (phi_field, density_field)
+                return _maybe_shard(_pack_complex_state(G)), (phi_field, density_field)
             return (phi_field, density_field)
         else:
             raise ValueError("save_field must be 'phi', 'density', or 'phi+density'")
@@ -274,10 +294,10 @@ def integrate_linear_diffrax(
         if save_mode is not None:
             mode_val = _extract_mode(field)
             if return_state:
-                return _pack_complex_state(G), mode_val
+                return _maybe_shard(_pack_complex_state(G)), mode_val
             return mode_val
         if return_state:
-            return _pack_complex_state(G), field
+            return _maybe_shard(_pack_complex_state(G)), field
         return field
 
     solver = _solver_from_name(method)
@@ -299,6 +319,7 @@ def integrate_linear_diffrax(
     adaptive_eff = adaptive or _is_imex_solver(method) or _is_implicit_solver(method)
 
     def solve(G0_packed_in):
+        G0_packed_in = _maybe_shard(G0_packed_in)
         max_steps_eff = max(int(max_steps), int(steps))
         return dfx.diffeqsolve(
             terms_obj,
@@ -312,6 +333,7 @@ def integrate_linear_diffrax(
             stepsize_controller=_stepsize_controller(adaptive_eff, rtol, atol),
             adjoint=_adjoint(checkpoint),
             max_steps=max_steps_eff,
+            throw=state_sharding is None,
             progress_meter=_progress_meter(show_progress or progress_bar),
         )
 
@@ -453,6 +475,7 @@ def integrate_linear_diffrax_streaming(
     def rhs(t, state, args):
         cache_, params_, term_cfg_ = args
         G_packed, acc_re, acc_im, wsum = state
+        G_packed = _maybe_shard(G_packed)
         G = _unpack_complex_state(G_packed)
         dG, fields = _assemble_rhs(G, cache_, params_, term_cfg_, use_custom_vjp=use_custom_vjp)
         dG = jnp.asarray(dG, dtype=G.dtype)
@@ -479,6 +502,7 @@ def integrate_linear_diffrax_streaming(
         acc_im_dot = weight * jnp.asarray(jnp.imag(log_deriv), dtype=real_dtype)
         wsum_dot = weight
         dG_packed = jnp.asarray(_pack_complex_state(dG), dtype=G_packed.dtype)
+        dG_packed = _maybe_shard(dG_packed)
         return (dG_packed, acc_re_dot, acc_im_dot, wsum_dot)
 
     solver = _solver_from_name(method)
@@ -495,6 +519,7 @@ def integrate_linear_diffrax_streaming(
     acc0 = jnp.zeros((ky_idx.shape[0],), dtype=real_dtype)
 
     def solve(G0_packed_in):
+        G0_packed_in = _maybe_shard(G0_packed_in)
         max_steps_eff = max(int(max_steps), int(steps))
         return dfx.diffeqsolve(
             terms_obj,
@@ -508,6 +533,7 @@ def integrate_linear_diffrax_streaming(
             stepsize_controller=_stepsize_controller(adaptive_eff, rtol, atol),
             adjoint=_adjoint(checkpoint),
             max_steps=max_steps_eff,
+            throw=state_sharding is None,
             progress_meter=_progress_meter(show_progress or progress_bar),
         )
 
@@ -585,15 +611,17 @@ def integrate_nonlinear_diffrax(
 
     def rhs_linear(t, G_packed, args):
         cache_, params_, term_cfg_ = args
+        G_packed = _maybe_shard(G_packed)
         G = _unpack_complex_state(G_packed)
         dG, _fields = _assemble_rhs(G, cache_, params_, term_cfg_, use_custom_vjp=use_custom_vjp)
         dG = jnp.asarray(dG, dtype=G.dtype)
-        return jnp.asarray(_pack_complex_state(dG), dtype=G_packed.dtype)
+        return _maybe_shard(jnp.asarray(_pack_complex_state(dG), dtype=G_packed.dtype))
 
     def rhs_nonlinear(t, G_packed, args):
         _cache, _params, term_cfg_ = args
         if term_cfg_.nonlinear == 0.0:
             return jnp.zeros_like(G_packed)
+        G_packed = _maybe_shard(G_packed)
         G = _unpack_complex_state(G_packed)
         fields = compute_fields_cached(G, _cache, _params, terms=term_cfg_, use_custom_vjp=use_custom_vjp)
         real_dtype = jnp.real(jnp.empty((), dtype=G.dtype)).dtype
@@ -626,18 +654,19 @@ def integrate_nonlinear_diffrax(
             laguerre_mode=laguerre_mode,
         )
         dG = jnp.asarray(dG, dtype=G.dtype)
-        return jnp.asarray(_pack_complex_state(dG), dtype=G_packed.dtype)
+        return _maybe_shard(jnp.asarray(_pack_complex_state(dG), dtype=G_packed.dtype))
 
     def rhs_full(t, G_packed, args):
         return rhs_linear(t, G_packed, args) + rhs_nonlinear(t, G_packed, args)
 
     def save_fn(t, G_packed, args):
         cache_, params_, term_cfg_ = args
+        G_packed = _maybe_shard(G_packed)
         G = _unpack_complex_state(G_packed)
         G_out, phi = _save_with_phi(G, cache_, params_, term_cfg_, use_custom_vjp=use_custom_vjp)
         G_out = jnp.asarray(G_out, dtype=state_dtype)
         phi = jnp.asarray(phi, dtype=state_dtype)
-        return jnp.asarray(_pack_complex_state(G_out), dtype=G_packed.dtype), phi
+        return _maybe_shard(jnp.asarray(_pack_complex_state(G_out), dtype=G_packed.dtype)), phi
 
     solver = _solver_from_name(method)
     explicit_term = dfx.ODETerm(rhs_nonlinear if _is_imex_solver(method) else rhs_full)
@@ -654,6 +683,7 @@ def integrate_nonlinear_diffrax(
     adaptive_eff = adaptive or _is_imex_solver(method) or _is_implicit_solver(method)
 
     def solve(G0_packed_in):
+        G0_packed_in = _maybe_shard(G0_packed_in)
         max_steps_eff = max(int(max_steps), int(steps))
         return dfx.diffeqsolve(
             terms_obj,
@@ -667,6 +697,7 @@ def integrate_nonlinear_diffrax(
             stepsize_controller=_stepsize_controller(adaptive_eff, rtol, atol),
             adjoint=_adjoint(checkpoint),
             max_steps=max_steps_eff,
+            throw=state_sharding is None,
             progress_meter=_progress_meter(show_progress or progress_bar),
         )
 

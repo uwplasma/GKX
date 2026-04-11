@@ -98,6 +98,7 @@ class TimeConfig:
     diffrax_rtol: float = 1.0e-5
     diffrax_atol: float = 1.0e-7
     diffrax_max_steps: int = 4096
+    state_sharding: str | None = None
     progress_bar: bool = False
     fixed_dt: bool = True
     dt_min: float = 1.0e-7

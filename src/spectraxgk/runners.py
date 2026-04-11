@@ -11,6 +11,7 @@ from spectraxgk.geometry import FluxTubeGeometryLike
 from spectraxgk.grids import SpectralGrid
 from spectraxgk.linear import LinearCache, LinearParams, LinearTerms, integrate_linear
 from spectraxgk.nonlinear import integrate_nonlinear
+from spectraxgk.sharding import resolve_state_sharding
 from spectraxgk.terms.config import FieldState, TermConfig
 
 
@@ -43,6 +44,7 @@ def integrate_linear_from_config(
     steps = _steps_from_time(time_cfg)
     show_progress_use = bool(time_cfg.progress_bar if show_progress is None else show_progress)
     if time_cfg.use_diffrax:
+        state_sharding = resolve_state_sharding(G0, time_cfg.state_sharding)
         return integrate_linear_diffrax(
             G0,
             grid,
@@ -66,6 +68,7 @@ def integrate_linear_from_config(
             mode_method=mode_method,
             save_field=save_field,
             density_species_index=density_species_index,
+            state_sharding=state_sharding,
         )
     return integrate_linear(
         G0,
@@ -102,6 +105,7 @@ def integrate_nonlinear_from_config(
     steps = _steps_from_time(time_cfg)
     show_progress_use = bool(time_cfg.progress_bar if show_progress is None else show_progress)
     if time_cfg.use_diffrax:
+        state_sharding = resolve_state_sharding(G0, time_cfg.state_sharding)
         return integrate_nonlinear_diffrax(
             G0,
             grid,
@@ -121,6 +125,7 @@ def integrate_nonlinear_from_config(
             checkpoint=time_cfg.checkpoint,
             gx_real_fft=time_cfg.gx_real_fft,
             laguerre_mode=time_cfg.laguerre_nonlinear_mode,
+            state_sharding=state_sharding,
         )
     return integrate_nonlinear(
         G0,
