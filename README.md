@@ -241,6 +241,16 @@ workflow; it is not the same thing as the full-GK ETG nonlinear lane.
 
 Comprehensive documentation, including theory, algorithms, and API references, is available in `docs/`.
 
+## Testing
+
+Default `pytest` runs skip integration tests for faster feedback. Use:
+
+```bash
+pytest
+pytest -m integration
+python tools/run_tests_fast.py
+```
+
 ## Contributing
 
 SPECTRAX-GK is an open-source project welcoming contributions. Whether it's improving runtimes, reducing memory usage, or expanding the physics models, your help is appreciated.

@@ -15,6 +15,19 @@ pip install -e .[dev]
 pytest
 ```
 
+By default, integration tests are excluded to keep local runs fast. To run the
+full integration suite:
+
+```bash
+pytest -m integration
+```
+
+For quick local feedback with a 5-minute per-file cap:
+
+```bash
+python tools/run_tests_fast.py
+```
+
 ## Building docs
 
 ```bash
