@@ -140,8 +140,8 @@ G_t, phi_t = integrate_linear_from_config(G0, grid, geom, params, cfg.time)
 The autodiff inverse/sensitivity example lives at
 `examples/theory_and_demos/autodiff_inverse_growth.py` and generates the
 figure shown above. It uses JAX autodiff on a short linear ITG window, reports
-gradients against a finite-difference check, and writes a summary JSON and CSV
-alongside the plot.
+gradients against a finite-difference check, and writes a summary JSON plus
+parameter sweeps for both `R/L_Ti` and `R/L_n` alongside the plot.
 
 For multi-device runs, set `TimeConfig.state_sharding = "auto"` (or `"ky"`) in
 runtime TOMLs to shard the packed state array across available JAX devices.
