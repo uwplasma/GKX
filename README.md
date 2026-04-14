@@ -202,20 +202,10 @@ python tools/benchmark_runtime_memory.py \
 python tools/benchmark_runtime_memory.py --continue-on-error --log-dir tools_out/runtime_memory_logs
 ```
 
-The scaling figure is kept in the performance docs rather than the top-level
-README. The shipped public plot focuses on the release-grade 2-device diffrax
-speedup curve; the exploratory sharded-RK2 strong-scaling sweep remains
-available as raw data but is intentionally not treated as a headline result.
-
-To regenerate strong-scaling sweeps, use:
-
-```bash
-python examples/utilities/strong_scaling_sweep.py \
-  --ny 128 --nz 256 --nl 8 --nm 8 --steps 120 \
-  --devices 1,2,4,8 \
-  --backend cpu_sharded_large \
-  --out tools_out/strong_scaling_cpu.csv
-```
+The parallelization scaling figure is kept in the performance docs rather than
+the top-level README. The shipped public plot focuses on the release-grade
+2-device diffrax speedup curve rather than the exploratory CPU strong-scaling
+study.
 
 ## Examples
 
