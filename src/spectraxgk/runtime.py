@@ -655,6 +655,26 @@ def _expand_ky(arr: np.ndarray, *, nyc: int) -> np.ndarray:
     return np.concatenate([pos, neg], axis=-3)
 
 
+def _enforce_full_ky_hermitian(arr: np.ndarray) -> np.ndarray:
+    """Mirror positive-``ky`` content into the negative branch for full FFT grids."""
+
+    state = np.asarray(arr, dtype=np.complex64)
+    ny = int(state.shape[-3])
+    if ny <= 1:
+        return state
+    nyc = ny // 2 + 1
+    neg_hi = nyc - 1 if (ny % 2) == 0 else nyc
+    if neg_hi <= 1:
+        return state
+    neg = np.conj(state[..., 1:neg_hi, :, :])[..., ::-1, :, :]
+    nx = int(state.shape[-2])
+    if nx > 1:
+        kx_neg = np.concatenate(([0], np.arange(nx - 1, 0, -1)))
+        neg = neg[..., kx_neg, :]
+    state[..., nyc:, :, :] = neg
+    return state
+
+
 def _load_initial_state_from_file(
     path: Path,
     *,
@@ -746,7 +766,12 @@ def _build_initial_condition(
     z = np.asarray(grid.z)
     z_period = _gx_periodic_zp(z)
     z_phase = np.cos(float(cfg.init.kpar_init) * z / z_period)
-    if cfg.init.gaussian_init:
+    # GX gives init_single precedence over gaussian_init: single-mode seeds use
+    # the real cosine profile even when gaussian_init=true is present in the
+    # input file.
+    if cfg.init.init_single:
+        vals = amp * z_phase.astype(np.complex64, copy=False)
+    elif cfg.init.gaussian_init:
         profile = _build_gaussian_profile(
             z,
             kx=float(grid.kx[kx_index]),
@@ -758,7 +783,6 @@ def _build_initial_condition(
         )
         vals = amp * profile * (1.0 + 1.0j)
     else:
-        # GX seeds single non-Gaussian modes as purely real amplitudes.
         vals = amp * z_phase.astype(np.complex64, copy=False)
 
     species_targets: tuple[int, ...]
@@ -870,6 +894,8 @@ def _build_initial_condition(
                 raise ValueError("init_field moment exceeds (Nl, Nm) resolution")
             for s_idx in species_targets:
                 g0[s_idx, l_idx, m_idx, ky_index, kx_index, :] = vals
+    if grid.ky.size > 1 and np.any(np.asarray(grid.ky) < 0.0):
+        g0 = _enforce_full_ky_hermitian(g0)
     if loaded_state is not None:
         if init_file_mode == "replace":
             return jnp.asarray(loaded_state)

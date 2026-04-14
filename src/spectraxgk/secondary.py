@@ -48,6 +48,28 @@ def _leading_finite_prefix(
     return t_arr[:stop], sig_arr[:stop]
 
 
+def _tail_mean_pair(
+    gamma_t: ArrayLike,
+    omega_t: ArrayLike,
+    *,
+    tail_fraction: float | None,
+) -> tuple[float, float] | None:
+    """Return a late-time average from finite diagnostic gamma/omega series."""
+
+    gamma_arr = np.asarray(gamma_t, dtype=float)
+    omega_arr = np.asarray(omega_t, dtype=float)
+    finite = np.isfinite(gamma_arr) & np.isfinite(omega_arr)
+    if not np.any(finite):
+        return None
+    gamma_finite = gamma_arr[finite]
+    omega_finite = omega_arr[finite]
+    if tail_fraction is None:
+        return float(gamma_finite[-1]), float(omega_finite[-1])
+    istart = int(len(gamma_finite) * (1.0 - float(tail_fraction)))
+    istart = max(0, min(istart, len(gamma_finite) - 1))
+    return float(np.mean(gamma_finite[istart:])), float(np.mean(omega_finite[istart:]))
+
+
 def write_restart_state(path: str | Path, state: np.ndarray) -> Path:
     """Write a complex restart state in the runtime binary layout."""
 
@@ -168,7 +190,15 @@ def run_secondary_modes(
     sample_stride: int = 100,
     fit_fraction: float | None = 0.5,
 ) -> list[SecondaryModeResult]:
-    """Run the nonlinear stage once per requested diagnostic mode."""
+    """Run the nonlinear stage once per requested diagnostic mode.
+
+    ``fit_fraction`` controls the late-time fitting window on the complex
+    ``phi_mode_t`` trace when it is available. ``gamma`` is reported from that
+    fit, while ``omega`` remains tied to the late-time diagnostic tail so the
+    returned frequency matches the GX ``omega_kxkyt`` contract. The diagnostic
+    gamma/omega series remain as a fallback when the tracked mode trace is not
+    usable.
+    """
 
     rows: list[SecondaryModeResult] = []
     for ky_target, kx_target in modes:
@@ -183,10 +213,13 @@ def run_secondary_modes(
         )
         if result.diagnostics is None:
             raise RuntimeError("Secondary nonlinear run did not produce diagnostics.")
-        gamma_t = np.asarray(result.diagnostics.gamma_t, dtype=float)
-        omega_t = np.asarray(result.diagnostics.omega_t, dtype=float)
-        gamma = float(gamma_t[-1])
-        omega = float(omega_t[-1])
+        tail_mean = _tail_mean_pair(
+            result.diagnostics.gamma_t,
+            result.diagnostics.omega_t,
+            tail_fraction=fit_fraction,
+        )
+        gamma = float(tail_mean[0]) if tail_mean is not None else 0.0
+        omega = float(tail_mean[1]) if tail_mean is not None else 0.0
         phi_mode_t = result.diagnostics.phi_mode_t
         if fit_fraction is not None and phi_mode_t is not None:
             t, signal = _leading_finite_prefix(result.diagnostics.t, phi_mode_t)
@@ -194,10 +227,13 @@ def run_secondary_modes(
                 t_span = float(t[-1] - t[0]) if t.size > 1 else 0.0
                 tmin = float(t[0] + (1.0 - float(fit_fraction)) * t_span) if t_span > 0.0 else None
                 try:
-                    gamma, omega = fit_growth_rate(t, signal, tmin=tmin)
+                    gamma_fit, omega_fit = fit_growth_rate(t, signal, tmin=tmin)
+                    gamma = float(gamma_fit)
+                    if tail_mean is None:
+                        omega = float(omega_fit)
                 except ValueError:
-                    gamma = float(gamma_t[-1])
-                    omega = float(omega_t[-1])
+                    gamma = float(tail_mean[0]) if tail_mean is not None else 0.0
+                    omega = float(tail_mean[1]) if tail_mean is not None else 0.0
         rows.append(
             SecondaryModeResult(
                 ky=float(ky_target),

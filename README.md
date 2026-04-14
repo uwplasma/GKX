@@ -163,8 +163,8 @@ SPECTRAX-GK is rigorously validated against standard gyrokinetic benchmarks, inc
 
 The benchmark tooling in `tools/` ensures reproducibility and performance tracking.
 For the current release pass, the accepted nonlinear validation set is Cyclone,
-KBM, W7-X, HSX, and Cyclone Miller. Full-GK ETG nonlinear remains a tracked
-pilot lane, while TEM and KAW stay outside the active parity claim.
+KBM, W7-X, HSX, Cyclone Miller, and the closed short-window full-GK ETG
+nonlinear pilot. TEM and KAW stay outside the active parity claim.
 
 ## Runtime and Memory
 
@@ -177,12 +177,12 @@ runtime panel above compares wall-time and peak memory usage for the shipped
 1.0 benchmark cases. Performance tracking covers:
 
 - **Cyclone ITG** (linear/nonlinear)
-- **KBM** and **ETG linear** configurations
+- **KBM** and **ETG** configurations
 - **W7-X** and **HSX** stellarator geometries
 - **Miller** geometry models
 
-Experimental or not-yet-closed lanes such as full-GK ETG nonlinear, KAW, and
-TEM are tracked separately and do not appear in the shipped runtime panel.
+Experimental or not-yet-closed lanes such as KAW, TEM, and kinetic-electron
+Cyclone are tracked separately and do not appear in the shipped runtime panel.
 For the stellarator rows on `office`, the shipped panel uses pre-generated
 `*.eik.nc` geometry files rather than on-the-fly VMEC regeneration. The GX
 reference rows also run against a consistent local `netcdf-c` / `hdf5`

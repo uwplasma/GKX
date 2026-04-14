@@ -68,6 +68,30 @@ def _expand_gx_restart_state_to_full_positive_ky(
     return out
 
 
+def _expand_gx_restart_state_full_ky(
+    state_active: np.ndarray,
+    *,
+    nx_full: int,
+) -> np.ndarray:
+    """Expand a GX restart that already stores the full ``ky`` axis."""
+
+    state = np.asarray(state_active)
+    if state.ndim != 6:
+        raise ValueError("state_active must have shape (Ns, Nl, Nm, Ny, Nakx, Nz)")
+    nspec, nl, nm, ny_full, nakx, nz = state.shape
+    expected_nakx = _gx_active_kx_count(int(nx_full))
+    if nakx != expected_nakx:
+        raise ValueError(f"restart Nkx={nakx} does not match nx_full={nx_full} (expected {expected_nakx})")
+    out = np.zeros((nspec, nl, nm, int(ny_full), int(nx_full), nz), dtype=np.complex64)
+    split = 1 + ((int(nx_full) - 1) // 3)
+    out[..., :split, :] = state[..., :split, :]
+    if int(nx_full) > 1:
+        for i in range(2 * int(nx_full) // 3 + 1, int(nx_full)):
+            it = i - 2 * int(nx_full) // 3 + ((int(nx_full) - 1) // 3)
+            out[..., i, :] = state[..., it, :]
+    return out
+
+
 def write_gx_restart_state(path: str | Path, state: ArrayLike) -> Path:
     """Write a restart state in GX-compatible flat complex64 layout."""
 
@@ -108,6 +132,7 @@ def load_gx_restart_state(
         )
     if state_active.shape[-1] != int(nz):
         raise ValueError(f"restart Nz={state_active.shape[-1]} does not match requested {int(nz)}")
+    if state_active.shape[3] == int(ny):
+        return _expand_gx_restart_state_full_ky(state_active, nx_full=nx)
     positive_ky = _expand_gx_restart_state_to_full_positive_ky(state_active, ny_full=ny, nx_full=nx)
     return _expand_positive_ky_to_full(positive_ky, ny_full=ny)
-
