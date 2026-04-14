@@ -8,13 +8,14 @@ version = "1.0"
 description = "JAX gyrokinetic solver with Hermite-Laguerre velocity space"
 readme = "README.md"
 requires-python = ">=3.10"
-license = "BSD-3-Clause"
+license = "MIT"
 license-files = ["LICENSE"]
 authors = [{name = "SPECTRAX-GK team"}]
 keywords = ["gyrokinetics", "jax", "plasma-physics", "tokamak", "stellarator", "turbulence"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.10",

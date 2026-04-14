@@ -145,10 +145,13 @@ The autodiff inverse/sensitivity example lives at
 `examples/theory_and_demos/autodiff_inverse_growth.py` and generates the
 figure shown above. It uses JAX autodiff on a short linear ITG window, reports
 gradients against a finite-difference check, and writes a summary JSON plus
-parameter sweeps for both `R/L_Ti` and `R/L_n` alongside the plot.
+parameter sweeps for both `R/L_Ti` and `R/L_n` alongside the plot. The
+single-mode panel should be read as a local inverse demo, not as a global
+identifiability claim.
 The two-mode inverse example in
 `examples/theory_and_demos/autodiff_inverse_twomode.py` uses two ky modes to
-stabilize the inverse problem and produces its own publication-ready panel.
+stabilize the inverse problem and provides the release-grade parameter
+recovery panel.
 
 For multi-device runs, set `TimeConfig.state_sharding = "auto"` (or `"ky"`) in
 runtime TOMLs to shard the packed state array across available JAX devices.
@@ -169,8 +172,6 @@ nonlinear pilot. TEM and KAW stay outside the active parity claim.
 ## Runtime and Memory
 
 ![Runtime and memory comparison](docs/_static/runtime_memory_benchmark.png)
-
-![Scaling speedup](docs/_static/scaling_speedup.png)
 
 SPECTRAX-GK is optimized for performance across CPU and GPU backends. The
 runtime panel above compares wall-time and peak memory usage for the shipped
@@ -201,11 +202,10 @@ python tools/benchmark_runtime_memory.py \
 python tools/benchmark_runtime_memory.py --continue-on-error --log-dir tools_out/runtime_memory_logs
 ```
 
-The scaling panel includes two views: the top row tracks CPU/GPU 2x speedup
-on the diffrax integrator path, and the bottom row shows strong scaling on a
-larger grid (Ny=128, Nz=256, Nl=8, Nm=8) using the sharded linear RK2 loop for
-CPU (1/2/4/8 devices) and GPU (1/2 devices). The GPU curve highlights the
-current multi-device overhead at this size.
+The scaling figure is kept in the performance docs rather than the top-level
+README. The shipped public plot focuses on the release-grade 2-device diffrax
+speedup curve; the exploratory sharded-RK2 strong-scaling sweep remains
+available as raw data but is intentionally not treated as a headline result.
 
 To regenerate strong-scaling sweeps, use:
 
@@ -266,4 +266,4 @@ SPECTRAX-GK is an open-source project welcoming contributions. Whether it's impr
 
 ## License
 
-BSD 3-Clause License.
+MIT License.
