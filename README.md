@@ -1,20 +1,28 @@
 # SPECTRAX-GK
 
+[![Release](https://img.shields.io/github/v/release/uwplasma/SPECTRAX-GK?display_name=tag)](https://github.com/uwplasma/SPECTRAX-GK/releases)
+[![CI](https://github.com/uwplasma/SPECTRAX-GK/actions/workflows/ci.yml/badge.svg)](https://github.com/uwplasma/SPECTRAX-GK/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/uwplasma/SPECTRAX-GK/blob/main/LICENSE)
+[![Python](https://img.shields.io/badge/python-%3E%3D3.10-blue.svg)](https://github.com/uwplasma/SPECTRAX-GK/blob/main/pyproject.toml)
+[![Coverage](https://img.shields.io/badge/coverage-62%25-orange.svg)](https://github.com/uwplasma/SPECTRAX-GK)
+
 SPECTRAX-GK is a JAX-native gyrokinetic solver designed for differentiability, 
 high-performance accelerator execution, and advanced stellarator optimization. 
 The code employs a Hermite-Laguerre velocity space, Fourier perpendicular 
 coordinates, and field-aligned flux-tube geometry to simulate linear and 
 nonlinear electrostatic and electromagnetic turbulence in magnetized plasmas.
 
-![SPECTRAX-GK convergence panel](docs/_static/benchmark_convergence_panel.png)
-
 ![SPECTRAX-GK linear benchmark panel](docs/_static/benchmark_core_linear_atlas.png)
 
 ![SPECTRAX-GK nonlinear benchmark panel](docs/_static/benchmark_core_nonlinear_atlas.png)
 
-The figures above represent the validated benchmark suite, covering convergence, 
-linear microinstabilities, and nonlinear transport across diverse magnetic 
-configurations.
+The figures above represent the validated benchmark suite, covering linear
+microinstabilities and nonlinear transport across diverse magnetic
+configurations. The shipped nonlinear atlas emphasizes the longest archived
+windows currently tracked in the repo: KBM to about `t=400`, W7-X to about
+`t=200`, and Cyclone Miller to about `t=122`. HSX is currently archived on the
+closed `t=50` window; I did not find a longer HSX nonlinear audit artifact to
+promote above that.
 
 Autodiff validation (inverse/sensitivity demo):
 
@@ -41,26 +49,12 @@ This two-mode figure is the actual parameter-recovery validation, where the goal
 ## Installation
 
 ```bash
+git clone https://github.com/uwplasma/SPECTRAX-GK
+cd SPECTRAX-GK
 pip install -e .
 ```
 
-For benchmark-sensitive reproduction, use the tested numerical stack that the
-public CI and tracked atlas are validated against:
-
-- `jax>=0.8,<0.9`
-- `jaxlib>=0.8,<0.9`
-- `numpy>=2.3,<2.4`
-- `diffrax>=0.7,<0.8`
-- `equinox>=0.13,<0.14`
-
-The code may still run on newer stacks, but parity-sensitive lanes such as TEM,
-ETG branch-following, and KAW runtime examples should be audited on the tested
-stack before treating a mismatch as a solver regression.
-For direct reproduction of older runtime-example outputs, also run with
-`JAX_ENABLE_X64=1`; the default precision policy can be faster, but it may move
-parity-sensitive linear example results.
-
-## Quickstart (CLI)
+## Quickstart (Executable)
 
 ```bash
 # Get information about the Cyclone base case
@@ -74,7 +68,7 @@ spectrax-gk examples/linear/axisymmetric/runtime_cyclone.toml
 
 # Write a restartable nonlinear NetCDF bundle
 spectrax-gk run-runtime-nonlinear \
-  --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_gx.toml \
+  --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml \
   --steps 200 \
   --out tools_out/cyclone_release.out.nc
 
@@ -89,11 +83,11 @@ Single-point runtime TOMLs can also carry their own artifact prefix:
 path = "tools_out/runtime_case"
 ```
 
-CLI `--out` overrides the TOML value when both are present.
+The executable `--out` flag overrides the TOML value when both are present.
 
 The shipped nonlinear W7-X and HSX runtime TOMLs already set this lightweight
 artifact prefix, so long stellarator parity runs leave ``tools_out/...``
-diagnostics and summaries behind without extra CLI flags. The direct Python
+diagnostics and summaries behind without extra command-line flags. The direct Python
 case wrappers now honor that TOML output contract as well, so chunked
 nonlinear runs persist their evolving diagnostics through the same path.
 
@@ -143,7 +137,7 @@ G0 = G0.at[0, 0, 0, 0, :].set(1.0e-3 + 0.0j)
 G_t, phi_t = integrate_linear_from_config(G0, grid, geom, params, cfg.time)
 ```
 
-## Autodiff demo and multi-device notes
+## Autodiff demo and parallelization notes
 
 The autodiff inverse/sensitivity example lives at
 `examples/theory_and_demos/autodiff_inverse_growth.py` and generates the
@@ -159,10 +153,10 @@ stabilize the inverse problem and provides the release-grade parameter
 recovery panel, closing the identifiability gap present in the single-mode
 demo.
 
-For multi-device runs, set `TimeConfig.state_sharding = "auto"` (or `"ky"`) in
-runtime TOMLs to shard the packed state array across available JAX devices.
-This path is supported by the diffrax integrators; when only one device is
-available the run falls back to single-device execution.
+For distributed parallelization, set `TimeConfig.state_sharding = "auto"` (or
+`"ky"`) in runtime TOMLs to partition the packed state array across available
+JAX devices. This path is supported by the diffrax integrators; when only one
+device is available the run falls back to single-device execution.
 
 ## Benchmarks
 
