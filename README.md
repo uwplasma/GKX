@@ -20,9 +20,13 @@ Autodiff validation (inverse/sensitivity demo):
 
 ![SPECTRAX-GK autodiff inverse demo](docs/_static/autodiff_inverse_growth.png)
 
+This single-mode figure checks that the JAX derivatives are correct and shows how one measured mode constrains the gradients locally. The expected outcome is small observable and Jacobian errors, not exact parameter recovery; the shipped result is a near-perfect match in `(γ, ω)` but a visibly non-unique recovered `(R/L_Ti, R/L_n)` pair.
+
 Autodiff validation (two-mode inverse demo):
 
 ![SPECTRAX-GK autodiff two-mode demo](docs/_static/autodiff_inverse_twomode.png)
+
+This two-mode figure is the actual parameter-recovery validation, where the goal is to recover the planted gradients from two independent mode observables. The shipped result reaches the target to numerical precision and the autodiff Jacobian matches finite differences, which is the behavior expected from an identifiable inverse problem.
 
 ## Highlights
 
@@ -147,11 +151,13 @@ figure shown above. It uses JAX autodiff on a short linear ITG window, reports
 gradients against a finite-difference check, and writes a summary JSON plus
 parameter sweeps for both `R/L_Ti` and `R/L_n` alongside the plot. The
 single-mode panel should be read as a local inverse demo, not as a global
-identifiability claim.
+identifiability claim; in the shipped figure the observable errors are small
+while the parameter errors remain finite for exactly that reason.
 The two-mode inverse example in
 `examples/theory_and_demos/autodiff_inverse_twomode.py` uses two ky modes to
 stabilize the inverse problem and provides the release-grade parameter
-recovery panel.
+recovery panel, closing the identifiability gap present in the single-mode
+demo.
 
 For multi-device runs, set `TimeConfig.state_sharding = "auto"` (or `"ky"`) in
 runtime TOMLs to shard the packed state array across available JAX devices.
