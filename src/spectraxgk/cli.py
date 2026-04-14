@@ -313,7 +313,7 @@ def _resolve_case(case_name: str):
         return CycloneBaseCase, run_cyclone_linear
     if name == "etg":
         return ETGBaseCase, run_etg_linear
-    raise ValueError(f"Unsupported case '{case_name}' in CLI (supported: cyclone, etg)")
+    raise ValueError(f"Unsupported case '{case_name}' in executable dispatcher (supported: cyclone, etg)")
 
 
 def _load_scan_ky(data: dict) -> np.ndarray:

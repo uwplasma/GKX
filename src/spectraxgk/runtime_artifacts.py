@@ -1,4 +1,4 @@
-"""Structured runtime artifact writers for CLI and benchmark tooling."""
+"""Structured runtime artifact writers for the executable and benchmark tooling."""
 
 from __future__ import annotations
 

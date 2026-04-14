@@ -175,7 +175,7 @@ nonlinear pilot. TEM and KAW stay outside the active parity claim.
 
 SPECTRAX-GK is optimized for performance across CPU and GPU backends. The
 runtime panel above compares wall-time and peak memory usage for the shipped
-1.0 benchmark cases. Performance tracking covers:
+1.1 benchmark cases. Performance tracking covers:
 
 - **Cyclone ITG** (linear/nonlinear)
 - **KBM** and **ETG** configurations

@@ -1,4 +1,4 @@
-"""TOML-based input helpers for CLI and driver scripts."""
+"""TOML-based input helpers for the executable and driver scripts."""
 
 from __future__ import annotations
 

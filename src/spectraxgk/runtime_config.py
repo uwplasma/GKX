@@ -129,7 +129,7 @@ class RuntimeExpertConfig:
 
 @dataclass(frozen=True)
 class RuntimeOutputConfig:
-    """Artifact-output controls for runtime CLI entry points."""
+    """Artifact-output controls for runtime executable entry points."""
 
     path: str | None = None
     restart: bool = False
