@@ -6,6 +6,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+  id-token: write
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
@@ -220,6 +224,59 @@ jobs:
                   print(f"FAIL: {target}={cov:.2f}% < {threshold:.1f}%")
               sys.exit(1)
           PY
+
+      - name: Upload fast coverage report
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage-fast.xml
+          flags: fast-surface
+          fail_ci_if_error: true
+          use_oidc: true
+
+  wide-coverage:
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install build + runtime deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Wide package coverage
+        env:
+          MPLBACKEND: Agg
+          JAX_ENABLE_X64: "true"
+          SPECTRAX_X64: "1"
+        run: |
+          pytest -q --maxfail=1 --disable-warnings \
+            --cov=spectraxgk \
+            --cov-report=xml:coverage-wide.xml \
+            --cov-report=term
+
+      - name: Upload wide coverage report
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage-wide.xml
+          flags: wide-package
+          fail_ci_if_error: true
+          use_oidc: true
 
   docs-and-packaging:
     if: github.event_name == 'pull_request' || github.event_name == 'push'

@@ -5,7 +5,7 @@
 [![CI](https://github.com/uwplasma/SPECTRAX-GK/actions/workflows/ci.yml/badge.svg)](https://github.com/uwplasma/SPECTRAX-GK/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/uwplasma/SPECTRAX-GK/blob/main/LICENSE)
 [![Python](https://img.shields.io/badge/python-%3E%3D3.10-blue.svg)](https://github.com/uwplasma/SPECTRAX-GK/blob/main/pyproject.toml)
-[![Coverage Gates](https://img.shields.io/badge/coverage-gated-blue.svg)](https://github.com/uwplasma/SPECTRAX-GK/actions/workflows/ci.yml)
+[![Coverage](https://codecov.io/gh/uwplasma/SPECTRAX-GK/graph/badge.svg)](https://codecov.io/gh/uwplasma/SPECTRAX-GK)
 
 SPECTRAX-GK is a JAX-native gyrokinetic solver designed for differentiability, 
 high-performance accelerator execution, and advanced stellarator optimization. 
