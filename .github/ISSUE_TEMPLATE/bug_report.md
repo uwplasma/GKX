@@ -11,7 +11,7 @@ A clear and concise description of the bug.
 1. Command(s) you ran (paste exact input):
 ```
 
-spectraxgk --input examples/<file>.toml
+spectraxgk examples/<file>.toml
 
 ```
 2. What happened vs what you expected?

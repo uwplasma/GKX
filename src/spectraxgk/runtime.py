@@ -17,6 +17,7 @@ from spectraxgk.cetg import (
 from spectraxgk.config import resolve_cfl_fac
 from spectraxgk.analysis import (
     ModeSelection,
+    extract_eigenfunction,
     extract_mode_time_series,
     fit_growth_rate,
     fit_growth_rate_auto,
@@ -60,6 +61,8 @@ class RuntimeLinearResult:
     t: np.ndarray | None = None
     signal: np.ndarray | None = None
     state: np.ndarray | None = None
+    z: np.ndarray | None = None
+    eigenfunction: np.ndarray | None = None
     fit_window_tmin: float | None = None
     fit_window_tmax: float | None = None
     fit_signal_used: str | None = None
@@ -1208,6 +1211,8 @@ def run_runtime_linear(
         _status(f"integration complete; fitting growth rate from {t_arr.size} saved samples")
 
         signal_out: np.ndarray | None = None
+        z_out: np.ndarray | None = np.asarray(grid.z, dtype=float)
+        eigenfunction_out: np.ndarray | None = None
         fit_window_tmin: float | None = None
         fit_window_tmax: float | None = None
         fit_signal_used: str | None = None
@@ -1270,6 +1275,20 @@ def run_runtime_linear(
             else:
                 gamma, omega = fit_growth_rate(t_arr, signal, tmin=tmin, tmax=tmax)
                 fit_window_tmin, fit_window_tmax = _resolved_fit_bounds(t_arr, tmin, tmax)
+        try:
+            eigenfunction_out = np.asarray(
+                extract_eigenfunction(
+                    phi_t_np,
+                    t_arr,
+                    sel,
+                    z=z_out,
+                    method="svd",
+                    tmin=fit_window_tmin,
+                    tmax=fit_window_tmax,
+                )
+            )
+        except Exception:
+            eigenfunction_out = None
         gamma, omega = apply_diagnostic_normalization(
             gamma,
             omega,
@@ -1285,6 +1304,8 @@ def run_runtime_linear(
             t=t_arr,
             signal=signal_out,
             state=None if g_last is None or not return_state else np.asarray(g_last),
+            z=z_out if eigenfunction_out is not None else None,
+            eigenfunction=eigenfunction_out,
             fit_window_tmin=fit_window_tmin,
             fit_window_tmax=fit_window_tmax,
             fit_signal_used=fit_signal_used,

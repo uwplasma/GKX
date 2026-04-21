@@ -3,8 +3,8 @@ requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "spectrax-gk"
-version = "1.1"
+name = "spectraxgk"
+version = "1.2.0"
 description = "JAX gyrokinetic solver with Hermite-Laguerre velocity space"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -66,6 +66,7 @@ dev = [
 
 [project.scripts]
 spectrax-gk = "spectraxgk.cli:main"
+spectraxgk = "spectraxgk.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

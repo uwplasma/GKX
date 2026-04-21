@@ -24,13 +24,20 @@ from spectraxgk.benchmarks import (
 from spectraxgk.geometry import SAlphaGeometry
 from spectraxgk.grids import build_spectral_grid
 from spectraxgk.io import load_case_from_toml, load_krylov_from_toml, load_linear_terms_from_toml, load_runtime_from_toml, load_toml
-from spectraxgk.plotting import growth_fit_figure, scan_comparison_figure, set_plot_style
+from spectraxgk._version import __version__
+from spectraxgk.plotting import (
+    growth_fit_figure,
+    linear_runtime_panel_figure,
+    plot_saved_output,
+    scan_comparison_figure,
+    set_plot_style,
+)
 from spectraxgk.runtime_artifacts import (
     run_runtime_nonlinear_with_artifacts,
     write_runtime_linear_artifacts,
     write_runtime_nonlinear_artifacts,
 )
-from spectraxgk.runtime import run_runtime_linear, run_runtime_scan, run_runtime_nonlinear
+from spectraxgk.runtime import RuntimeLinearResult, run_runtime_linear, run_runtime_scan, run_runtime_nonlinear
 
 
 def _runtime_output_path(args: argparse.Namespace, cfg) -> str | None:
@@ -132,8 +139,132 @@ def _cmd_run(args: argparse.Namespace) -> int:
     return _cmd_run_runtime_linear(args)
 
 
+def _default_example_config_path() -> Path | None:
+    root = Path(__file__).resolve().parents[2]
+    path = root / "examples" / "linear" / "axisymmetric" / "cyclone.toml"
+    return path if path.exists() else None
+
+
+def _default_demo_plot_path() -> Path:
+    return Path("tools_out") / "spectraxgk_default_linear.png"
+
+
+def _cmd_default_demo() -> int:
+    example_path = _default_example_config_path()
+    if example_path is not None:
+        _case_name, cfg, data = load_case_from_toml(str(example_path), None)
+        run_cfg = data.get("run", {})
+        fit_cfg = dict(data.get("fit", {}))
+        ky = float(run_cfg.get("ky", 0.3))
+        Nl = int(run_cfg.get("Nl", 24))
+        Nm = int(run_cfg.get("Nm", 12))
+        solver = str(run_cfg.get("solver", "auto"))
+        method = str(run_cfg.get("method", cfg.time.method))
+        dt = float(run_cfg.get("dt", cfg.time.dt))
+        steps = int(run_cfg.get("steps", int(round(float(cfg.time.t_max) / float(cfg.time.dt)))))
+        mode_method = str(fit_cfg.get("mode_method", "project"))
+        source = str(example_path)
+    else:
+        cfg = CycloneBaseCase()
+        ky = 0.3
+        Nl = 24
+        Nm = 12
+        solver = "auto"
+        method = str(cfg.time.method)
+        dt = float(cfg.time.dt)
+        steps = int(round(float(cfg.time.t_max) / float(cfg.time.dt)))
+        fit_cfg = {"mode_method": "project"}
+        mode_method = "project"
+        source = "built-in Cyclone defaults (equivalent to examples/linear/axisymmetric/cyclone.toml)"
+
+    print("No input file specified; running the default Cyclone linear example.")
+    print(f"source={source}")
+    result = run_cyclone_linear(
+        ky_target=ky,
+        cfg=cfg,
+        Nl=Nl,
+        Nm=Nm,
+        solver=solver,
+        method=method,
+        dt=dt,
+        steps=steps,
+        status_callback=_status_printer("demo"),
+        **fit_cfg,
+    )
+    grid = build_spectral_grid(cfg.grid)
+    signal = extract_mode_time_series(result.phi_t, result.selection, method=mode_method)
+    eigen = normalize_eigenfunction(
+        extract_eigenfunction(
+            result.phi_t,
+            result.t,
+            result.selection,
+            z=np.asarray(grid.z, dtype=float),
+            method="svd",
+        ),
+        np.asarray(grid.z, dtype=float),
+    )
+    out_path = _default_demo_plot_path()
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    fig, _axes = linear_runtime_panel_figure(
+        t=np.asarray(result.t, dtype=float),
+        signal=np.asarray(signal),
+        z=np.asarray(grid.z, dtype=float),
+        eigenfunction=np.asarray(eigen),
+        gamma=float(result.gamma),
+        omega=float(result.omega),
+        title="SPECTRAX-GK default Cyclone linear example",
+    )
+    fig.savefig(out_path, dpi=220, bbox_inches="tight")
+    import matplotlib.pyplot as plt
+
+    plt.close(fig)
+    bundle_paths = write_runtime_linear_artifacts(
+        out_path.with_suffix(""),
+        RuntimeLinearResult(
+            ky=float(result.ky),
+            gamma=float(result.gamma),
+            omega=float(result.omega),
+            selection=result.selection,
+            t=np.asarray(result.t, dtype=float),
+            signal=np.asarray(signal),
+            z=np.asarray(grid.z, dtype=float),
+            eigenfunction=np.asarray(eigen),
+        ),
+    )
+    print(f"gamma={float(result.gamma):.6f} omega={float(result.omega):.6f}")
+    print(f"saved {bundle_paths['summary']}")
+    if "timeseries" in bundle_paths:
+        print(f"saved {bundle_paths['timeseries']}")
+    if "eigenfunction" in bundle_paths:
+        print(f"saved {bundle_paths['eigenfunction']}")
+    print(f"saved {out_path}")
+    return 0
+
+
+def _cmd_plot_saved_output(argv: list[str]) -> int:
+    if len(argv) < 2:
+        print("usage: spectraxgk --plot OUTPUT_FILE [--out FIGURE.png]")
+        return 1
+    input_path = argv[1]
+    out_path = None
+    if len(argv) > 2:
+        if len(argv) == 4 and argv[2] == "--out":
+            out_path = argv[3]
+        else:
+            print("usage: spectraxgk --plot OUTPUT_FILE [--out FIGURE.png]")
+            return 1
+    rendered = plot_saved_output(input_path, out=out_path)
+    print(f"saved {rendered}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="spectrax-gk")
+    parser = argparse.ArgumentParser(prog=Path(sys.argv[0]).name if sys.argv else "spectraxgk")
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
+    )
     parser.add_argument(
         "config_pos",
         nargs="?",
@@ -281,6 +412,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
+    if len(sys.argv) == 1:
+        return _cmd_default_demo()
+    if len(sys.argv) > 1 and sys.argv[1] == "--plot":
+        return _cmd_plot_saved_output(sys.argv[1:])
+
     known_cmds = {
         "run",
         "cyclone-info",
@@ -302,8 +438,7 @@ def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
     if args.cmd is None:
-        parser.print_help()
-        return 0
+        return _cmd_default_demo()
     return args.func(args)
 
 
@@ -549,6 +684,8 @@ def _cmd_run_runtime_linear(args: argparse.Namespace) -> int:
         print(f"saved {paths['summary']}")
         if "timeseries" in paths:
             print(f"saved {paths['timeseries']}")
+        if "eigenfunction" in paths:
+            print(f"saved {paths['eigenfunction']}")
         if "state" in paths:
             print(f"saved {paths['state']}")
     return 0

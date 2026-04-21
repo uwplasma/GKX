@@ -1,16 +1,81 @@
 # SPECTRAX-GK
 
 [![Release](https://img.shields.io/github/v/release/uwplasma/SPECTRAX-GK?display_name=tag)](https://github.com/uwplasma/SPECTRAX-GK/releases)
+[![PyPI](https://img.shields.io/pypi/v/spectraxgk.svg)](https://pypi.org/project/spectraxgk/)
 [![CI](https://github.com/uwplasma/SPECTRAX-GK/actions/workflows/ci.yml/badge.svg)](https://github.com/uwplasma/SPECTRAX-GK/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/uwplasma/SPECTRAX-GK/blob/main/LICENSE)
 [![Python](https://img.shields.io/badge/python-%3E%3D3.10-blue.svg)](https://github.com/uwplasma/SPECTRAX-GK/blob/main/pyproject.toml)
-[![Coverage](https://img.shields.io/badge/coverage-62%25-orange.svg)](https://github.com/uwplasma/SPECTRAX-GK)
+[![Coverage Gates](https://img.shields.io/badge/coverage-gated-blue.svg)](https://github.com/uwplasma/SPECTRAX-GK/actions/workflows/ci.yml)
 
 SPECTRAX-GK is a JAX-native gyrokinetic solver designed for differentiability, 
 high-performance accelerator execution, and advanced stellarator optimization. 
 The code employs a Hermite-Laguerre velocity space, Fourier perpendicular 
 coordinates, and field-aligned flux-tube geometry to simulate linear and 
 nonlinear electrostatic and electromagnetic turbulence in magnetized plasmas.
+
+## Installation
+
+```bash
+pip install spectraxgk
+```
+
+or install the development checkout directly:
+
+```bash
+git clone https://github.com/uwplasma/SPECTRAX-GK
+cd SPECTRAX-GK
+pip install -e .
+```
+
+## Quickstart (Executable)
+
+```bash
+# Run the built-in default example.
+spectraxgk
+
+# The hyphenated entry point works too.
+spectrax-gk
+
+# Run directly from a checked-in TOML.
+spectraxgk examples/linear/axisymmetric/cyclone.toml
+
+# Write a restartable nonlinear NetCDF bundle.
+spectraxgk run-runtime-nonlinear \
+  --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml \
+  --steps 200 \
+  --out tools_out/cyclone_release.out.nc
+
+# Turn any saved runtime bundle into a polished figure.
+spectraxgk --plot tools_out/cyclone_release.out.nc
+spectraxgk --plot tools_out/spectraxgk_default_linear.summary.json
+```
+
+Running `spectraxgk` with no TOML starts the default Cyclone linear example
+(equivalent to the standard `examples/linear/axisymmetric/cyclone.toml`
+surface), prints the fitted growth rate and frequency to the terminal, and
+writes a two-panel figure to `tools_out/spectraxgk_default_linear.png`. The
+left panel shows the linear `|\phi|^2` history on a log scale with the fitted
+`(\gamma, \omega)` annotation. The right panel shows the normalized real and
+imaginary eigenfunction.
+
+The `--plot` mode reads saved runtime artifacts directly:
+
+- linear bundles: `*.summary.json` + `*.timeseries.csv` + `*.eigenfunction.csv`
+- nonlinear bundles: `*.summary.json` + `*.diagnostics.csv` or `*.out.nc`
+
+Linear plots reproduce the two-panel growth/eigenfunction layout. Nonlinear
+plots produce a three-panel diagnostic view with field amplitude/energy,
+resolved diagnostics, and heat flux.
+
+## Highlights
+
+- **Differentiable JAX-native kernels** for gradient-based optimization and sensitivity analysis.
+- **Hermite-Laguerre spectral velocity basis** providing efficient kinetic closures and multi-fidelity modeling.
+- **Accelerator-ready execution** on CPUs and GPUs with JIT compilation.
+- **Flexible geometry interface** supporting analytic s-alpha, Miller, and direct VMEC equilibrium imports.
+- **Electromagnetic turbulence** including $(\phi, A_\parallel, B_\parallel)$ fluctuations.
+- **Multi-species support** with kinetic electrons and advanced collision operators.
+- **Automated benchmark workflows** for reproducible validation and regression tracking.
 
 ![SPECTRAX-GK linear benchmark panel](docs/_static/benchmark_core_linear_atlas.png)
 
@@ -35,46 +100,6 @@ Autodiff validation (two-mode inverse demo):
 ![SPECTRAX-GK autodiff two-mode demo](docs/_static/autodiff_inverse_twomode.png)
 
 This two-mode figure is the actual parameter-recovery validation, where the goal is to recover the planted gradients from two independent mode observables. The shipped result reaches the target to numerical precision and the autodiff Jacobian matches finite differences, which is the behavior expected from an identifiable inverse problem.
-
-## Highlights
-
-- **Differentiable JAX-native kernels** for gradient-based optimization and sensitivity analysis.
-- **Hermite-Laguerre spectral velocity basis** providing efficient kinetic closures and multi-fidelity modeling.
-- **Accelerator-ready execution** on CPUs and GPUs with JIT compilation.
-- **Flexible geometry interface** supporting analytic s-alpha, Miller, and direct VMEC equilibrium imports.
-- **Electromagnetic turbulence** including $(\phi, A_\parallel, B_\parallel)$ fluctuations.
-- **Multi-species support** with kinetic electrons and advanced collision operators.
-- **Automated benchmark workflows** for reproducible validation and regression tracking.
-
-## Installation
-
-```bash
-git clone https://github.com/uwplasma/SPECTRAX-GK
-cd SPECTRAX-GK
-pip install -e .
-```
-
-## Quickstart (Executable)
-
-```bash
-# Get information about the Cyclone base case
-spectrax-gk cyclone-info
-
-# Run the current Cyclone example from its TOML
-cd examples/linear/axisymmetric && spectrax-gk cyclone.toml
-
-# Run directly from a runtime TOML
-spectrax-gk examples/linear/axisymmetric/runtime_cyclone.toml
-
-# Write a restartable nonlinear NetCDF bundle
-spectrax-gk run-runtime-nonlinear \
-  --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml \
-  --steps 200 \
-  --out tools_out/cyclone_release.out.nc
-
-# Run a linear scan across k_y
-spectrax-gk scan-runtime-linear --config examples/linear/axisymmetric/cyclone.toml
-```
 
 Single-point runtime TOMLs can also carry their own artifact prefix:
 
@@ -175,7 +200,7 @@ nonlinear pilot. TEM and KAW stay outside the active parity claim.
 
 SPECTRAX-GK is optimized for performance across CPU and GPU backends. The
 runtime panel above compares wall-time and peak memory usage for the shipped
-1.1 benchmark cases. Performance tracking covers:
+benchmark cases. Performance tracking covers:
 
 - **Cyclone ITG** (linear/nonlinear)
 - **KBM** and **ETG** configurations

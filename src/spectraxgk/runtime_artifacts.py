@@ -931,6 +931,7 @@ def write_runtime_linear_artifacts(out: str | Path, result: Any) -> dict[str, st
         },
         "n_samples": 0 if result.t is None else int(np.asarray(result.t).size),
         "n_state_shape": None if result.state is None else list(np.asarray(result.state).shape),
+        "has_eigenfunction": bool(result.z is not None and result.eigenfunction is not None),
     }
     _write_json(summary_path, summary)
 
@@ -948,6 +949,21 @@ def write_runtime_linear_artifacts(out: str | Path, result: Any) -> dict[str, st
             ],
         )
         paths["timeseries"] = str(csv_path)
+
+    if result.z is not None and result.eigenfunction is not None:
+        eig_path = Path(f"{base}.eigenfunction.csv")
+        eig = np.asarray(result.eigenfunction)
+        _write_csv(
+            eig_path,
+            headers=["z", "eigen_real", "eigen_imag", "eigen_abs"],
+            cols=[
+                np.asarray(result.z, dtype=float),
+                np.real(eig),
+                np.imag(eig),
+                np.abs(eig),
+            ],
+        )
+        paths["eigenfunction"] = str(eig_path)
 
     state_path = _write_state(base, None if result.state is None else np.asarray(result.state))
     if state_path is not None:
