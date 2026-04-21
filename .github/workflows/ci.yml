@@ -86,14 +86,15 @@ jobs:
               tests/test_terms_operators.py
               tests/test_terms_validation.py
               tests/test_linear_krylov_core.py
-              tests/test_diffrax_integrators_core.py
           - name: runtime-nonlinear
             files: >-
               tests/test_diffrax_integrators.py
+              tests/test_diffrax_integrators_core.py
               tests/test_nonlinear.py
               tests/test_nonlinear_exb.py
               tests/test_hyperdiffusion.py
               tests/test_runtime_config.py
+              tests/test_runtime_helpers.py
               tests/test_runtime_runner.py
               tests/test_runners.py
               tests/test_cli.py
