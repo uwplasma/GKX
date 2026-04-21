@@ -6,12 +6,56 @@ on:
   pull_request:
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  quick-type-and-tests:
+  mypy:
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install build + runtime deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Print benchmark stack
+        run: |
+          python - <<'PY'
+          import diffrax, equinox, jax, jaxlib, numpy
+          print("jax", jax.__version__)
+          print("jaxlib", jaxlib.__version__)
+          print("numpy", numpy.__version__)
+          print("diffrax", diffrax.__version__)
+          print("equinox", equinox.__version__)
+          PY
+
+      - name: MyPy (types)
+        run: |
+          mypy --version
+          mypy
+
+  quick-tests:
     if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
     strategy:
@@ -89,11 +133,6 @@ jobs:
           print("equinox", equinox.__version__)
           PY
 
-      - name: MyPy (types)
-        run: |
-          mypy --version
-          mypy
-
       - name: Pytest shard (${{ matrix.shard.name }})
         env:
           MPLBACKEND: Agg
@@ -101,6 +140,85 @@ jobs:
           SPECTRAX_X64: "1"
         run: |
           pytest -q --maxfail=1 --disable-warnings ${{ matrix.shard.files }}
+
+  fast-coverage:
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install build + runtime deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Release-surface coverage (>=95%)
+        env:
+          MPLBACKEND: Agg
+          JAX_ENABLE_X64: "true"
+          SPECTRAX_X64: "1"
+        run: |
+          pytest -q \
+            tests/test_cli.py \
+            tests/test_plotting.py \
+            tests/test_runtime_artifacts.py \
+            tests/test_secondary.py \
+            tests/test_analysis.py \
+            --maxfail=1 --disable-warnings \
+            --cov=spectraxgk \
+            --cov-report=xml:coverage-fast.xml \
+            --cov-report=term
+          python - <<'PY'
+          import sys
+          import xml.etree.ElementTree as ET
+
+          thresholds = {
+              "cli.py": 95.0,
+              "plotting.py": 95.0,
+              "runtime_artifacts.py": 95.0,
+              "secondary.py": 95.0,
+              "analysis.py": 95.0,
+          }
+
+          root = ET.parse("coverage-fast.xml").getroot()
+          found = {}
+          for cls in root.findall(".//class"):
+              filename = cls.attrib.get("filename", "")
+              for target in thresholds:
+                  if filename.endswith(target):
+                      found[target] = float(cls.attrib["line-rate"]) * 100.0
+
+          missing = [name for name in thresholds if name not in found]
+          if missing:
+              print(f"Missing coverage entries for: {missing}")
+              sys.exit(1)
+
+          failed = []
+          for target, threshold in thresholds.items():
+              cov = found[target]
+              print(f"{target}: {cov:.2f}% (required {threshold:.1f}%)")
+              if cov < threshold:
+                  failed.append((target, cov, threshold))
+
+          if failed:
+              for target, cov, threshold in failed:
+                  print(f"FAIL: {target}={cov:.2f}% < {threshold:.1f}%")
+              sys.exit(1)
+          PY
 
   docs-and-packaging:
     if: github.event_name == 'pull_request' || github.event_name == 'push'

@@ -217,31 +217,9 @@ def integrate_linear_diffrax(
             return state
         return jax.lax.with_sharding_constraint(state, state_sharding)
 
-    def _maybe_shard(state: jnp.ndarray) -> jnp.ndarray:
-        if state_sharding is None:
-            return state
-        return jax.lax.with_sharding_constraint(state, state_sharding)
-
-    def _maybe_shard(state: jnp.ndarray) -> jnp.ndarray:
-        if state_sharding is None:
-            return state
-        return jax.lax.with_sharding_constraint(state, state_sharding)
-
     G0_packed = _pack_complex_state(G0)
     if state_sharding is not None:
         G0_packed = jax.device_put(G0_packed, state_sharding)
-
-    def _maybe_shard(state: jnp.ndarray) -> jnp.ndarray:
-        if state_sharding is None:
-            return state
-        return jax.lax.with_sharding_constraint(state, state_sharding)
-
-    def _maybe_shard(state: jnp.ndarray) -> jnp.ndarray:
-        if state_sharding is None:
-            return state
-        return jax.lax.with_sharding_constraint(state, state_sharding)
-        G0_packed = _maybe_shard(G0_packed)
-        G0_packed = _maybe_shard(G0_packed)
         G0_packed = _maybe_shard(G0_packed)
 
     def rhs(t, G_packed, args):
