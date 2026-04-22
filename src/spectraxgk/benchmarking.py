@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
+from pathlib import Path
 from typing import Callable
 
 import numpy as np
@@ -81,6 +83,17 @@ class EigenfunctionComparisonMetrics:
     phase_shift: float
 
 
+@dataclass(frozen=True)
+class EigenfunctionReferenceBundle:
+    """Frozen reference eigenfunction bundle for manuscript-grade overlays."""
+
+    theta: np.ndarray
+    mode: np.ndarray
+    source: str
+    case: str
+    metadata: dict[str, object]
+
+
 def normalize_eigenfunction(eigenfunction: np.ndarray, z: np.ndarray) -> np.ndarray:
     """Normalize an eigenfunction by its value at theta=0 (nearest z=0)."""
 
@@ -127,6 +140,44 @@ def compare_eigenfunctions(eigenfunction: np.ndarray, reference: np.ndarray) -> 
         overlap=overlap,
         relative_l2=rel_l2,
         phase_shift=phase_shift,
+    )
+
+
+def save_eigenfunction_reference_bundle(
+    path: str | Path,
+    *,
+    theta: np.ndarray,
+    mode: np.ndarray,
+    source: str,
+    case: str,
+    metadata: dict[str, object] | None = None,
+) -> Path:
+    """Write a frozen reference eigenfunction bundle as ``.npz``."""
+
+    out = Path(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    np.savez(
+        out,
+        theta=np.asarray(theta, dtype=float),
+        mode=np.asarray(mode, dtype=np.complex128),
+        source=np.asarray(str(source)),
+        case=np.asarray(str(case)),
+        metadata_json=np.asarray(json.dumps(metadata or {}, sort_keys=True)),
+    )
+    return out
+
+
+def load_eigenfunction_reference_bundle(path: str | Path) -> EigenfunctionReferenceBundle:
+    """Load a frozen reference eigenfunction bundle."""
+
+    data = np.load(Path(path), allow_pickle=False)
+    metadata_json = str(np.asarray(data["metadata_json"]).item()) if "metadata_json" in data else "{}"
+    return EigenfunctionReferenceBundle(
+        theta=np.asarray(data["theta"], dtype=float),
+        mode=np.asarray(data["mode"], dtype=np.complex128),
+        source=str(np.asarray(data["source"]).item()),
+        case=str(np.asarray(data["case"]).item()),
+        metadata=json.loads(metadata_json),
     )
 
 

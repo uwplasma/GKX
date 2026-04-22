@@ -668,3 +668,67 @@ def eigenfunction_overlap_summary_figure(
 
     fig.tight_layout()
     return fig, axes
+
+
+def eigenfunction_reference_overlay_figure(
+    theta: np.ndarray,
+    eigenfunction: np.ndarray,
+    theta_ref: np.ndarray,
+    reference: np.ndarray,
+    *,
+    title: str = "Eigenfunction overlay",
+) -> Tuple[plt.Figure, np.ndarray]:
+    """Render a phase-aligned raw overlay against a frozen reference mode."""
+
+    from spectraxgk.benchmarking import compare_eigenfunctions, phase_align_eigenfunction
+
+    set_plot_style()
+    theta_arr = np.asarray(theta, dtype=float)
+    eig = np.asarray(eigenfunction, dtype=np.complex128)
+    theta_ref_arr = np.asarray(theta_ref, dtype=float)
+    ref = np.asarray(reference, dtype=np.complex128)
+    if eig.shape != ref.shape:
+        raise ValueError("eigenfunction and reference must have the same shape")
+
+    eig_aligned, _phase = phase_align_eigenfunction(eig, ref)
+    metrics = compare_eigenfunctions(eig, ref)
+
+    fig, axes = plt.subplots(1, 3, figsize=(12.0, 3.9))
+    ax0, ax1, ax2 = axes
+
+    ax0.plot(theta_ref_arr, np.real(ref), color="#0f4c81", linewidth=2.4, label="Reference Re")
+    ax0.plot(theta_arr, np.real(eig_aligned), color="#c44e52", linewidth=2.0, linestyle="--", label="SPECTRAX Re")
+    ax0.set_xlabel(r"$\theta$")
+    ax0.set_ylabel("real")
+    ax0.set_title("Real part")
+    ax0.legend(loc="best", frameon=False)
+
+    ax1.plot(theta_ref_arr, np.imag(ref), color="#0f4c81", linewidth=2.4, label="Reference Im")
+    ax1.plot(theta_arr, np.imag(eig_aligned), color="#c44e52", linewidth=2.0, linestyle="--", label="SPECTRAX Im")
+    ax1.set_xlabel(r"$\theta$")
+    ax1.set_ylabel("imag")
+    ax1.set_title("Imaginary part")
+    ax1.legend(loc="best", frameon=False)
+
+    ax2.plot(theta_ref_arr, np.abs(ref), color="#0f4c81", linewidth=2.4, label="Reference $|\\phi|$")
+    ax2.plot(theta_arr, np.abs(eig_aligned), color="#c44e52", linewidth=2.0, linestyle="--", label="SPECTRAX $|\\phi|$")
+    ax2.set_xlabel(r"$\theta$")
+    ax2.set_ylabel(r"$|\phi|$")
+    ax2.set_title("Amplitude")
+    ax2.legend(loc="best", frameon=False)
+    ax2.text(
+        0.03,
+        0.97,
+        f"overlap = {metrics.overlap:.4f}\nrel $L^2$ = {metrics.relative_l2:.4f}",
+        transform=ax2.transAxes,
+        va="top",
+        ha="left",
+        bbox={"boxstyle": "round,pad=0.3", "facecolor": "white", "alpha": 0.9, "edgecolor": "#cccccc"},
+    )
+
+    for axis in axes:
+        axis.grid(True, alpha=0.25)
+
+    fig.suptitle(title, y=1.02)
+    fig.tight_layout()
+    return fig, axes
