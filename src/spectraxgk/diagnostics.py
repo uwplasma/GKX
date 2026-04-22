@@ -28,6 +28,7 @@ class ResolvedDiagnostics:
     Phi2_zonal_t: ArrayLike | None = None
     Phi2_zonal_kxt: ArrayLike | None = None
     Phi2_zonal_zt: ArrayLike | None = None
+    Phi_zonal_mode_kxt: ArrayLike | None = None
     Wg_kxst: ArrayLike | None = None
     Wg_kyst: ArrayLike | None = None
     Wg_kxkyst: ArrayLike | None = None
@@ -887,6 +888,23 @@ def gx_phi2_resolved(
         phi2_zonal_kxt,
         phi2_zonal_zt,
     )
+
+
+def gx_phi_zonal_mode_kxt(
+    phi: jnp.ndarray,
+    grid: SpectralGrid,
+    vol_fac: jnp.ndarray,
+) -> jnp.ndarray:
+    """Return the signed, volume-averaged zonal potential history per ``k_x``.
+
+    This is the minimal complex zonal observable needed to construct
+    Rosenbluth-Hinton / GAM response traces from nonlinear diagnostics without
+    collapsing immediately to a positive-definite energy proxy.
+    """
+
+    zonal_mask = (jnp.asarray(grid.ky) == 0.0).astype(phi.dtype)[:, None, None]
+    zonal = phi * zonal_mask
+    return jnp.sum(zonal * vol_fac[None, None, :], axis=(0, 2))
 
 
 def gx_Wg_resolved(

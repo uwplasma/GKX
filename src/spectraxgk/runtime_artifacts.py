@@ -86,7 +86,12 @@ def _resolved_species_time(arr: Any | None, *, fallback: np.ndarray) -> np.ndarr
 def _read_optional_var(group: Any, name: str) -> np.ndarray | None:
     if name not in group.variables:
         return None
-    return np.asarray(group.variables[name][:])
+    var = group.variables[name]
+    arr = np.asarray(var[:])
+    dims = tuple(getattr(var, "dimensions", ()))
+    if dims and dims[-1] == "ri":
+        return np.asarray(arr[..., 0] + 1j * arr[..., 1])
+    return arr
 
 
 def _resolve_restart_path(out: str | Path, cfg: Any, *, for_write: bool) -> Path:
@@ -377,6 +382,11 @@ def _spectral_to_ri(field: np.ndarray) -> np.ndarray:
     field_arr = np.asarray(field)
     if field_arr.ndim != 3:
         raise ValueError("field must have shape (Ny, Nx, Nz)")
+    return np.stack([np.real(field_arr), np.imag(field_arr)], axis=-1).astype(np.float32, copy=False)
+
+
+def _complex_to_ri(field: np.ndarray) -> np.ndarray:
+    field_arr = np.asarray(field)
     return np.stack([np.real(field_arr), np.imag(field_arr)], axis=-1).astype(np.float32, copy=False)
 
 
@@ -682,6 +692,10 @@ def _write_runtime_nonlinear_gx_artifacts(out: str | Path, result: Any, cfg: Any
                 diag_group.createVariable("Phi2_zonal_kxt", "f4", ("time", "kx"))[:, :] = _condense_kx(np.asarray(resolved.Phi2_zonal_kxt, dtype=np.float32))
             if resolved.Phi2_zonal_zt is not None:
                 diag_group.createVariable("Phi2_zonal_zt", "f4", ("time", "theta"))[:, :] = np.asarray(resolved.Phi2_zonal_zt, dtype=np.float32)
+            if resolved.Phi_zonal_mode_kxt is not None:
+                diag_group.createVariable("Phi_zonal_mode_kxt", "f4", ("time", "kx", "ri"))[:, :, :] = _complex_to_ri(
+                    _condense_kx(np.asarray(resolved.Phi_zonal_mode_kxt))
+                )
             metric_specs = (
                 ("Wg", resolved.Wg_kxst, resolved.Wg_kyst, resolved.Wg_kxkyst, resolved.Wg_zst),
                 ("Wphi", resolved.Wphi_kxst, resolved.Wphi_kyst, resolved.Wphi_kxkyst, resolved.Wphi_zst),
