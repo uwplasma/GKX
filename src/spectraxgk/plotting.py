@@ -732,3 +732,81 @@ def eigenfunction_reference_overlay_figure(
     fig.suptitle(title, y=1.02)
     fig.tight_layout()
     return fig, axes
+
+
+def zonal_flow_response_figure(
+    t: np.ndarray,
+    response: np.ndarray,
+    *,
+    metrics=None,
+    title: str = "Zonal-flow response",
+    y_label: str = "normalized response",
+) -> Tuple[plt.Figure, np.ndarray]:
+    """Render a zonal-flow response trace and its envelope summary."""
+
+    from spectraxgk.benchmarking import zonal_flow_response_metrics
+
+    set_plot_style()
+    t_arr = np.asarray(t, dtype=float)
+    resp = np.asarray(response, dtype=float)
+    if t_arr.ndim != 1 or resp.ndim != 1 or t_arr.size != resp.size:
+        raise ValueError("t and response must be one-dimensional arrays of equal length")
+    if metrics is None:
+        metrics = zonal_flow_response_metrics(t_arr, resp)
+
+    response_norm = resp / float(metrics.initial_level)
+    residual = float(metrics.residual_level)
+    env_t = np.asarray(metrics.peak_times, dtype=float)
+    env_y = np.asarray(metrics.peak_envelope, dtype=float)
+
+    fig, axes = plt.subplots(1, 2, figsize=(11.0, 4.0))
+    ax0, ax1 = axes
+
+    ax0.plot(t_arr, response_norm, color="#0f4c81", linewidth=2.2, label="response")
+    ax0.axhline(residual, color="#c44e52", linestyle="--", linewidth=2.0, label="residual")
+    ax0.fill_between(
+        t_arr,
+        residual - float(metrics.residual_std),
+        residual + float(metrics.residual_std),
+        color="#c44e52",
+        alpha=0.15,
+        linewidth=0.0,
+    )
+    ax0.set_xlabel("t")
+    ax0.set_ylabel(y_label)
+    ax0.set_title("Normalized response")
+    ax0.legend(loc="best", frameon=False)
+
+    ax1.plot(t_arr, np.maximum(np.abs(response_norm - residual), 1.0e-14), color="#4c956c", linewidth=2.0, alpha=0.5)
+    if env_t.size:
+        ax1.plot(env_t, env_y, color="#c44e52", marker="o", linewidth=1.8, label="envelope peaks")
+    if env_t.size >= 2 and np.isfinite(float(metrics.gam_damping_rate)):
+        fit = env_y[0] * np.exp(-float(metrics.gam_damping_rate) * (env_t - env_t[0]))
+        ax1.plot(env_t, fit, color="#2a9d8f", linestyle="--", linewidth=2.0, label="envelope fit")
+    ax1.set_yscale("log")
+    ax1.set_xlabel("t")
+    ax1.set_ylabel("envelope")
+    ax1.set_title("GAM envelope")
+    if env_t.size:
+        ax1.legend(loc="best", frameon=False)
+    ax1.text(
+        0.03,
+        0.97,
+        (
+            f"residual = {metrics.residual_level:.4f}\n"
+            f"std = {metrics.residual_std:.4f}\n"
+            f"ω_GAM = {metrics.gam_frequency:.4f}\n"
+            f"γ_damp = {metrics.gam_damping_rate:.4f}"
+        ),
+        transform=ax1.transAxes,
+        va="top",
+        ha="left",
+        bbox={"boxstyle": "round,pad=0.3", "facecolor": "white", "alpha": 0.9, "edgecolor": "#cccccc"},
+    )
+
+    for axis in axes:
+        axis.grid(True, alpha=0.25)
+
+    fig.suptitle(title, y=1.02)
+    fig.tight_layout()
+    return fig, axes

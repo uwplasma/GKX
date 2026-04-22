@@ -65,6 +65,23 @@ class NonlinearWindowMetrics:
 
 
 @dataclass(frozen=True)
+class ZonalFlowResponseMetrics:
+    """Late-time residual and GAM-envelope metrics for zonal-flow responses."""
+
+    initial_level: float
+    residual_level: float
+    residual_std: float
+    response_rms: float
+    gam_frequency: float
+    gam_damping_rate: float
+    peak_count: int
+    tmin: float
+    tmax: float
+    peak_times: np.ndarray
+    peak_envelope: np.ndarray
+
+
+@dataclass(frozen=True)
 class ObservedOrderMetrics:
     """Observed-order convergence summary from step sizes and errors."""
 
@@ -231,6 +248,106 @@ def _tail_stats(arr: np.ndarray, mask: np.ndarray) -> tuple[float, float]:
     if vals.size == 0:
         return float("nan"), float("nan")
     return float(np.mean(vals)), float(np.std(vals))
+
+
+def _leading_window(
+    t: np.ndarray,
+    lead_fraction: float,
+) -> tuple[np.ndarray, float | None, float | None]:
+    if not 0.0 < float(lead_fraction) <= 1.0:
+        raise ValueError("lead_fraction must be in (0, 1]")
+    if t.ndim != 1:
+        raise ValueError("t must be one-dimensional")
+    if t.size == 0:
+        raise ValueError("t must be non-empty")
+    stop = max(1, int(np.ceil(float(lead_fraction) * t.size)))
+    mask = np.zeros_like(t, dtype=bool)
+    mask[:stop] = True
+    tt = np.asarray(t[mask], dtype=float)
+    return mask, float(tt[0]) if tt.size else None, float(tt[-1]) if tt.size else None
+
+
+def zonal_flow_response_metrics(
+    t: np.ndarray,
+    response: np.ndarray,
+    *,
+    tail_fraction: float = 0.3,
+    initial_fraction: float = 0.1,
+) -> ZonalFlowResponseMetrics:
+    """Estimate residual level and GAM envelope metrics from a zonal response.
+
+    The input ``response`` should be a scalar zonal observable such as zonal
+    potential or a normalized zonal-energy proxy on a uniform time trace.
+    """
+
+    t_arr = np.asarray(t, dtype=float)
+    resp = np.asarray(response, dtype=float)
+    if t_arr.ndim != 1 or resp.ndim != 1 or t_arr.size != resp.size:
+        raise ValueError("t and response must be one-dimensional arrays of equal length")
+    if t_arr.size < 4:
+        raise ValueError("zonal-flow response requires at least four samples")
+
+    finite = np.isfinite(t_arr) & np.isfinite(resp)
+    t_arr = t_arr[finite]
+    resp = resp[finite]
+    if t_arr.size < 4:
+        raise ValueError("zonal-flow response requires at least four finite samples")
+
+    lead_mask, _lead_tmin, _lead_tmax = _leading_window(t_arr, float(initial_fraction))
+    tail_mask, tail_tmin, tail_tmax = _tail_window(t_arr, float(tail_fraction))
+    initial_vals = resp[lead_mask]
+    tail_vals = resp[tail_mask]
+    if initial_vals.size == 0 or tail_vals.size == 0:
+        raise ValueError("response windows must be non-empty")
+
+    initial_level = float(np.mean(np.abs(initial_vals)))
+    if initial_level <= 0.0 or not np.isfinite(initial_level):
+        raise ValueError("initial response level must be finite and positive")
+
+    residual = float(np.mean(tail_vals))
+    residual_std = float(np.std(tail_vals))
+    response_norm = resp / initial_level
+    residual_norm = residual / initial_level
+    residual_std_norm = residual_std / initial_level
+    response_rms = float(np.sqrt(np.mean(np.square(response_norm[tail_mask]))))
+
+    detrended = resp - residual
+    envelope = np.abs(detrended) / initial_level
+    if envelope.size < 3:
+        peak_times = np.asarray([], dtype=float)
+        peak_values = np.asarray([], dtype=float)
+    else:
+        interior = (envelope[1:-1] >= envelope[:-2]) & (envelope[1:-1] > envelope[2:])
+        positive = envelope[1:-1] > 1.0e-12
+        peak_idx = np.flatnonzero(interior & positive) + 1
+        peak_times = t_arr[peak_idx]
+        peak_values = envelope[peak_idx]
+
+    gam_frequency = float("nan")
+    gam_damping = float("nan")
+    if peak_times.size >= 2:
+        dt_peaks = np.diff(peak_times)
+        dt_peaks = dt_peaks[np.isfinite(dt_peaks) & (dt_peaks > 0.0)]
+        if dt_peaks.size:
+            gam_frequency = float(np.pi / np.mean(dt_peaks))
+        valid = np.isfinite(peak_values) & (peak_values > 0.0)
+        if np.count_nonzero(valid) >= 2:
+            slope, _offset = np.polyfit(peak_times[valid], np.log(peak_values[valid]), 1)
+            gam_damping = float(-slope)
+
+    return ZonalFlowResponseMetrics(
+        initial_level=initial_level,
+        residual_level=residual_norm,
+        residual_std=residual_std_norm,
+        response_rms=response_rms,
+        gam_frequency=gam_frequency,
+        gam_damping_rate=gam_damping,
+        peak_count=int(peak_times.size),
+        tmin=float(tail_tmin if tail_tmin is not None else t_arr[0]),
+        tmax=float(tail_tmax if tail_tmax is not None else t_arr[-1]),
+        peak_times=np.asarray(peak_times, dtype=float),
+        peak_envelope=np.asarray(peak_values, dtype=float),
+    )
 
 
 def late_time_linear_metrics(
