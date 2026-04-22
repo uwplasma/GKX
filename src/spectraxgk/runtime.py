@@ -2015,6 +2015,7 @@ def run_runtime_nonlinear(
         diagnostics=None,
         phi2=phi2,
         fields=fields,
+        state=np.asarray(G_final) if return_state else None,
         ky_selected=float(np.asarray(grid.ky[ky_index])),
         kx_selected=float(np.asarray(grid.kx[kx_index])),
     )
