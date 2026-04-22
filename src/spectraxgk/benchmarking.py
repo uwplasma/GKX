@@ -197,6 +197,34 @@ def _tail_window(t: np.ndarray, tail_fraction: float) -> tuple[np.ndarray, float
     return mask, float(tt[0]) if tt.size else None, float(tt[-1]) if tt.size else None
 
 
+def late_time_window(t: np.ndarray, *, tail_fraction: float = 0.4) -> tuple[float, float]:
+    """Return the start/end of a late-time tail window.
+
+    This is the windowing convention used for manuscript-facing eigenfunction
+    extraction when the growth-rate fit window is not the same object as the
+    late-time mode-shape window.
+    """
+
+    _mask, tmin, tmax = _tail_window(np.asarray(t, dtype=float), float(tail_fraction))
+    if tmin is None or tmax is None:
+        raise ValueError("late-time window requires a non-empty time axis")
+    return float(tmin), float(tmax)
+
+
+def infer_triple_dealiased_ny(nky_positive: int) -> int:
+    """Infer the full ``Ny`` from the number of positive ``k_y`` points.
+
+    GX-style reference outputs typically store only the non-negative
+    ``k_y`` branch. For the linked-boundary spectral grid used here, the
+    corresponding real-space ``Ny`` follows ``Ny = 3 * (nky - 1) + 1``.
+    """
+
+    nky = int(nky_positive)
+    if nky < 2:
+        raise ValueError("nky_positive must be >= 2")
+    return 3 * (nky - 1) + 1
+
+
 def _tail_stats(arr: np.ndarray, mask: np.ndarray) -> tuple[float, float]:
     vals = np.asarray(arr, dtype=float)[mask]
     vals = vals[np.isfinite(vals)]
