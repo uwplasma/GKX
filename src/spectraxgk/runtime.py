@@ -45,6 +45,7 @@ from spectraxgk.runtime_diagnostics import (
     stride_gx_diagnostics,
     truncate_gx_diagnostics,
 )
+from spectraxgk.runtime_chunks import run_adaptive_gx_chunk_loop
 from spectraxgk.runtime_startup import (
     _build_gaussian_profile,
     _build_initial_condition,
@@ -1045,12 +1046,31 @@ def run_runtime_nonlinear(
         if adaptive_chunked:
             chunk_steps = 1024
             G_chunk = G0
-            t_elapsed = 0.0
-            cetg_diag_chunks: list[SimulationDiagnostics] = []
-            cetg_fields_final: FieldState | None = None
-            _status(f"starting adaptive cETG integration in chunks of {chunk_steps} steps up to t_max={float(cfg.time.t_max):.6g}")
-            for _chunk in range(100000):
-                _t_chunk, diag_chunk, G_chunk, cetg_fields_final = integrate_cetg_gx_diagnostics_state(
+
+            def _run_cetg_chunk(chunk_show_progress: bool):
+                nonlocal G_chunk
+                if chunk_show_progress:
+                    return integrate_cetg_gx_diagnostics_state(
+                        G_chunk,
+                        grid,
+                        cetg_params,
+                        cetg_term_cfg,
+                        dt=dt_val,
+                        steps=chunk_steps,
+                        method=str(method or cfg.time.method),
+                        sample_stride=1,
+                        diagnostics_stride=1,
+                        gx_real_fft=bool(cfg.time.gx_real_fft),
+                        omega_ky_index=int(ky_index),
+                        omega_kx_index=int(kx_index),
+                        fixed_dt=False,
+                        dt_min=float(cfg.time.dt_min),
+                        dt_max=cfg.time.dt_max,
+                        cfl=float(cfg.time.cfl),
+                        cfl_fac=cfg.time.cfl_fac,
+                        show_progress=True,
+                    )
+                return integrate_cetg_gx_diagnostics_state(
                     G_chunk,
                     grid,
                     cetg_params,
@@ -1068,25 +1088,19 @@ def run_runtime_nonlinear(
                     dt_max=cfg.time.dt_max,
                     cfl=float(cfg.time.cfl),
                     cfl_fac=cfg.time.cfl_fac,
-                    **progress_kw,
                 )
-                diag_chunk = replace(diag_chunk, t=np.asarray(diag_chunk.t) + t_elapsed)
-                cetg_diag_chunks.append(diag_chunk)
-                t_next = float(np.asarray(diag_chunk.t)[-1])
-                if t_next <= t_elapsed + 1.0e-12:
-                    raise RuntimeError("adaptive cETG runtime made no time-step progress")
-                t_elapsed = t_next
-                _status(f"completed cETG chunk {_chunk + 1}: t={t_elapsed:.6g}/{float(cfg.time.t_max):.6g}")
-                if t_elapsed >= float(cfg.time.t_max):
-                    break
-            else:
-                raise RuntimeError("adaptive cETG runtime exceeded chunk limit before reaching t_max")
 
-            diag = _concat_gx_diagnostics(cetg_diag_chunks)
-            diag = _truncate_gx_diagnostics(diag, t_max=float(cfg.time.t_max))
-            G_final = G_chunk
-            if cetg_fields_final is None:
-                raise RuntimeError("adaptive cETG runtime did not produce final fields")
+            chunk_result = run_adaptive_gx_chunk_loop(
+                integrate_chunk=_run_cetg_chunk,
+                t_max=float(cfg.time.t_max),
+                chunk_steps=chunk_steps,
+                label="cETG",
+                show_progress=show_progress,
+                status_callback=_status,
+            )
+            diag = chunk_result.diagnostics
+            G_final = chunk_result.state
+            cetg_fields_final = chunk_result.fields
             if diagnostics_on is False:
                 phi2 = np.asarray(jnp.mean(jnp.abs(cetg_fields_final.phi) ** 2))
                 return RuntimeNonlinearResult(
@@ -1214,91 +1228,58 @@ def run_runtime_nonlinear(
         if adaptive_chunked:
             chunk_steps = min(steps_val, 1024)
             G_chunk = G0
-            t_elapsed = 0.0
-            diag_chunks: list[SimulationDiagnostics] = []
-            fields_final: FieldState | None = None
-            _status(f"starting adaptive nonlinear integration in chunks of {chunk_steps} steps up to t_max={float(cfg.time.t_max):.6g}")
-            for _chunk in range(100000):
-                if show_progress:
-                    _t_chunk, diag_chunk, G_chunk, fields_final = integrate_nonlinear_gx_diagnostics_state(
-                        G_chunk,
-                        grid,
-                        geom,
-                        params,
-                        dt=dt_val,
-                        steps=chunk_steps,
-                        method=str(method or cfg.time.method),
-                        terms=term_cfg,
-                        sample_stride=1,
-                        diagnostics_stride=1,
-                        use_dealias_mask=bool(cfg.time.nonlinear_dealias),
-                        laguerre_mode=laguerre_mode_use,
-                        omega_ky_index=int(ky_index),
-                        omega_kx_index=int(kx_index),
-                        flux_scale=float(cfg.normalization.flux_scale),
-                        wphi_scale=float(cfg.normalization.wphi_scale),
-                        fixed_dt=False,
-                        dt_min=float(cfg.time.dt_min),
-                        dt_max=cfg.time.dt_max,
-                        cfl=float(cfg.time.cfl),
-                        cfl_fac=resolve_cfl_fac(str(method or cfg.time.method), cfg.time.cfl_fac),
-                        collision_split=bool(cfg.time.collision_split),
-                        collision_scheme=str(cfg.time.collision_scheme),
-                        implicit_restart=int(cfg.time.implicit_restart),
-                        implicit_solve_method=str(cfg.time.implicit_solve_method),
-                        implicit_preconditioner=cfg.time.implicit_preconditioner,
-                        fixed_mode_ky_index=fixed_ky_index_use,
-                        fixed_mode_kx_index=fixed_kx_index_use,
-                        show_progress=True,
-                    )
-                else:
-                    _t_chunk, diag_chunk, G_chunk, fields_final = integrate_nonlinear_gx_diagnostics_state(
-                        G_chunk,
-                        grid,
-                        geom,
-                        params,
-                        dt=dt_val,
-                        steps=chunk_steps,
-                        method=str(method or cfg.time.method),
-                        terms=term_cfg,
-                        sample_stride=1,
-                        diagnostics_stride=1,
-                        use_dealias_mask=bool(cfg.time.nonlinear_dealias),
-                        laguerre_mode=laguerre_mode_use,
-                        omega_ky_index=int(ky_index),
-                        omega_kx_index=int(kx_index),
-                        flux_scale=float(cfg.normalization.flux_scale),
-                        wphi_scale=float(cfg.normalization.wphi_scale),
-                        fixed_dt=False,
-                        dt_min=float(cfg.time.dt_min),
-                        dt_max=cfg.time.dt_max,
-                        cfl=float(cfg.time.cfl),
-                        cfl_fac=resolve_cfl_fac(str(method or cfg.time.method), cfg.time.cfl_fac),
-                        collision_split=bool(cfg.time.collision_split),
-                        collision_scheme=str(cfg.time.collision_scheme),
-                        implicit_restart=int(cfg.time.implicit_restart),
-                        implicit_solve_method=str(cfg.time.implicit_solve_method),
-                        implicit_preconditioner=cfg.time.implicit_preconditioner,
-                        fixed_mode_ky_index=fixed_ky_index_use,
-                        fixed_mode_kx_index=fixed_kx_index_use,
-                    )
-                diag_chunk = replace(diag_chunk, t=np.asarray(diag_chunk.t) + t_elapsed)
-                diag_chunks.append(diag_chunk)
-                t_next = float(np.asarray(diag_chunk.t)[-1])
-                if t_next <= t_elapsed + 1.0e-12:
-                    raise RuntimeError("adaptive nonlinear runtime made no time-step progress")
-                t_elapsed = t_next
-                _status(f"completed nonlinear chunk {_chunk + 1}: t={t_elapsed:.6g}/{float(cfg.time.t_max):.6g}")
-                if t_elapsed >= float(cfg.time.t_max):
-                    break
-            else:
-                raise RuntimeError("adaptive nonlinear runtime exceeded chunk limit before reaching t_max")
 
-            diag = _concat_gx_diagnostics(diag_chunks)
-            diag = _truncate_gx_diagnostics(diag, t_max=float(cfg.time.t_max))
-            diag = _stride_gx_diagnostics(diag, stride=max(int(sample_stride_use), int(diag_stride), 1))
+            def _run_nonlinear_chunk(chunk_show_progress: bool):
+                nonlocal G_chunk
+                kwargs = dict(
+                    dt=dt_val,
+                    steps=chunk_steps,
+                    method=str(method or cfg.time.method),
+                    terms=term_cfg,
+                    sample_stride=1,
+                    diagnostics_stride=1,
+                    use_dealias_mask=bool(cfg.time.nonlinear_dealias),
+                    laguerre_mode=laguerre_mode_use,
+                    omega_ky_index=int(ky_index),
+                    omega_kx_index=int(kx_index),
+                    flux_scale=float(cfg.normalization.flux_scale),
+                    wphi_scale=float(cfg.normalization.wphi_scale),
+                    fixed_dt=False,
+                    dt_min=float(cfg.time.dt_min),
+                    dt_max=cfg.time.dt_max,
+                    cfl=float(cfg.time.cfl),
+                    cfl_fac=resolve_cfl_fac(str(method or cfg.time.method), cfg.time.cfl_fac),
+                    collision_split=bool(cfg.time.collision_split),
+                    collision_scheme=str(cfg.time.collision_scheme),
+                    implicit_restart=int(cfg.time.implicit_restart),
+                    implicit_solve_method=str(cfg.time.implicit_solve_method),
+                    implicit_preconditioner=cfg.time.implicit_preconditioner,
+                    fixed_mode_ky_index=fixed_ky_index_use,
+                    fixed_mode_kx_index=fixed_kx_index_use,
+                )
+                if chunk_show_progress:
+                    kwargs["show_progress"] = True
+                return integrate_nonlinear_gx_diagnostics_state(
+                    G_chunk,
+                    grid,
+                    geom,
+                    params,
+                    **kwargs,
+                )
+
+            chunk_result = run_adaptive_gx_chunk_loop(
+                integrate_chunk=_run_nonlinear_chunk,
+                t_max=float(cfg.time.t_max),
+                chunk_steps=chunk_steps,
+                label="nonlinear",
+                show_progress=show_progress,
+                status_callback=_status,
+                diagnostics_stride=max(int(sample_stride_use), int(diag_stride), 1),
+            )
+            diag = chunk_result.diagnostics
             t = jnp.asarray(diag.t)
-            G_final = G_chunk
+            G_final = chunk_result.state
+            fields_final = chunk_result.fields
         else:
             _status(f"running nonlinear diagnostics integrator over {steps_val} steps with dt={dt_val:.6g}")
             if show_progress:
