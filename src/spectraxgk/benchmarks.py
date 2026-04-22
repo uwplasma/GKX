@@ -1335,6 +1335,7 @@ def run_cyclone_linear(
                     sample_stride=stride,
                     show_progress=show_progress,
                 )
+                phi_t = phi_out_time
                 density_t = None
 
         phi_t_np = np.asarray(phi_t)
@@ -2108,7 +2109,7 @@ def run_cyclone_scan(
                     sample_stride=stride,
                     show_progress=show_progress,
                 )
-                phi_t = np.asarray(phi_t)
+                phi_t = phi_out_time
                 density_t = None
             else:
                 _diag = integrate_linear_diagnostics(
@@ -3717,7 +3718,7 @@ def run_kinetic_scan(
                 cache=cache,
                 terms=terms,
                 save_mode=sel if (mode_only and fit_signal == "phi") else None,
-                mode_method=mode_method,
+                mode_method=save_mode_method,
                 save_field="density" if fit_signal == "density" else "phi",
                 density_species_index=density_species_index if fit_signal == "density" else None,
             )
