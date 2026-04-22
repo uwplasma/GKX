@@ -2551,7 +2551,7 @@ def run_etg_linear(
                 )
                 density_t = None
 
-        phi_t_np = np.asarray(phi_t)
+            phi_t_np = np.asarray(phi_t)
         t = np.arange(phi_t_np.shape[0]) * dt * stride
         density_np = None if density_t is None else np.asarray(density_t)
         if gx_growth and fit_key == "phi":
@@ -3062,6 +3062,7 @@ def run_etg_scan(
                     sample_stride=stride,
                     show_progress=show_progress,
                 )
+                phi_t = phi_out_time
                 density_t = None
 
         phi_t_np = np.asarray(phi_t)
