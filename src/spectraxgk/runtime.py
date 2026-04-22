@@ -1145,7 +1145,12 @@ def run_runtime_linear(
                 f"running diffrax integrator over {int(round(tcfg.t_max / tcfg.dt))} steps with sample_stride={int(tcfg.sample_stride)}"
             )
             save_field = "phi+density" if need_density else "phi"
-            save_mode = None if need_density else sel
+            # Keep the full field history on the diffrax path. The downstream
+            # runtime fitting and eigenfunction extraction logic expects
+            # ``phi_t`` / ``density_t`` with shape ``(t, ky, kx, z)``, while the
+            # diffrax mode-save path only supports scalar mode traces for
+            # ``z_index`` / ``max`` extraction.
+            save_mode = None
             g_last, saved = integrate_linear_from_config(
                 g0,
                 grid,
