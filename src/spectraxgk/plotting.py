@@ -626,3 +626,45 @@ def growth_fit_figure(
     ax1.legend(loc="best", fontsize=9)
     fig.tight_layout()
     return fig, axes
+
+
+def eigenfunction_overlap_summary_figure(
+    ky: np.ndarray,
+    overlap: np.ndarray,
+    relative_l2: np.ndarray,
+    *,
+    title: str = "Eigenfunction overlap summary",
+    x_label: str = r"$k_y \rho_i$",
+    overlap_label: str = "Normalized overlap",
+    rel_l2_label: str = "Relative $L^2$ error",
+    log_x: bool = True,
+) -> Tuple[plt.Figure, np.ndarray]:
+    """Render a compact two-panel eigenfunction-overlap summary."""
+
+    set_plot_style()
+    fig, axes = plt.subplots(2, 1, sharex=True, figsize=(5.6, 5.2))
+    ax0, ax1 = axes
+    ky_arr = np.asarray(ky, dtype=float)
+    overlap_arr = np.asarray(overlap, dtype=float)
+    rel_l2_arr = np.asarray(relative_l2, dtype=float)
+
+    ax0.plot(ky_arr, overlap_arr, color="#0f4c81", marker="o", linewidth=2.2, label=overlap_label)
+    ax0.set_ylabel("overlap")
+    ax0.set_ylim(0.0, min(1.02, max(1.0, float(np.nanmax(overlap_arr)) + 0.02)))
+    ax0.set_title(title)
+    ax0.legend(loc="best", frameon=False)
+
+    ax1.plot(ky_arr, rel_l2_arr, color="#c44e52", marker="s", linewidth=2.2, label=rel_l2_label)
+    ax1.set_xlabel(x_label)
+    ax1.set_ylabel(r"relative $L^2$")
+    ax1.legend(loc="best", frameon=False)
+
+    if log_x:
+        ax0.set_xscale("log")
+        ax1.set_xscale("log")
+
+    for axis in axes:
+        axis.grid(True, alpha=0.25)
+
+    fig.tight_layout()
+    return fig, axes
