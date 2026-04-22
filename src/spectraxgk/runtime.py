@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from typing import Callable, cast
 from pathlib import Path
 
@@ -46,6 +46,12 @@ from spectraxgk.runtime_diagnostics import (
     truncate_gx_diagnostics,
 )
 from spectraxgk.runtime_chunks import run_adaptive_gx_chunk_loop
+from spectraxgk.runtime_results import (
+    RuntimeLinearResult,
+    RuntimeLinearScanResult,
+    RuntimeNonlinearResult,
+    build_runtime_nonlinear_result,
+)
 from spectraxgk.runtime_startup import (
     _build_gaussian_profile,
     _build_initial_condition,
@@ -67,47 +73,6 @@ from spectraxgk.species import Species, build_linear_params
 from spectraxgk.terms.config import FieldState, TermConfig
 from spectraxgk.miller_eik import generate_runtime_miller_eik
 from spectraxgk.vmec_eik import generate_runtime_vmec_eik
-
-
-@dataclass(frozen=True)
-class RuntimeLinearResult:
-    """Result container for runtime linear runs."""
-
-    ky: float
-    gamma: float
-    omega: float
-    selection: ModeSelection
-    t: np.ndarray | None = None
-    signal: np.ndarray | None = None
-    state: np.ndarray | None = None
-    z: np.ndarray | None = None
-    eigenfunction: np.ndarray | None = None
-    fit_window_tmin: float | None = None
-    fit_window_tmax: float | None = None
-    fit_signal_used: str | None = None
-
-
-@dataclass(frozen=True)
-class RuntimeLinearScanResult:
-    """Result container for runtime linear ky scans."""
-
-    ky: np.ndarray
-    gamma: np.ndarray
-    omega: np.ndarray
-
-
-@dataclass(frozen=True)
-class RuntimeNonlinearResult:
-    """Result container for runtime nonlinear runs."""
-
-    t: np.ndarray
-    diagnostics: SimulationDiagnostics | None
-    phi2: np.ndarray | None = None
-    fields: FieldState | None = None
-    state: np.ndarray | None = None
-    ky_selected: float | None = None
-    kx_selected: float | None = None
-
 
 _GX_RAND_MAX = float((1 << 31) - 1)
 
@@ -1101,25 +1066,14 @@ def run_runtime_nonlinear(
             diag = chunk_result.diagnostics
             G_final = chunk_result.state
             cetg_fields_final = chunk_result.fields
-            if diagnostics_on is False:
-                phi2 = np.asarray(jnp.mean(jnp.abs(cetg_fields_final.phi) ** 2))
-                return RuntimeNonlinearResult(
-                    t=np.asarray([]),
-                    diagnostics=None,
-                    phi2=phi2,
-                    fields=cetg_fields_final,
-                    state=np.asarray(G_final) if return_state else None,
-                    ky_selected=float(np.asarray(grid.ky[ky_index])),
-                    kx_selected=float(np.asarray(grid.kx[kx_index])),
-                )
-            return RuntimeNonlinearResult(
+            return build_runtime_nonlinear_result(
                 t=np.asarray(diag.t),
                 diagnostics=diag,
-                phi2=None,
                 fields=cetg_fields_final,
                 state=np.asarray(G_final) if return_state else None,
                 ky_selected=float(np.asarray(grid.ky[ky_index])),
                 kx_selected=float(np.asarray(grid.kx[kx_index])),
+                summarize_fields=diagnostics_on is False,
             )
 
         steps_val = int(round(float(cfg.time.t_max) / dt_val)) if steps is None else int(steps)
@@ -1148,24 +1102,14 @@ def run_runtime_nonlinear(
         )
         if diagnostics_on is False:
             _status("diagnostics disabled; returning final cETG state summary")
-            phi2 = np.asarray(jnp.mean(jnp.abs(cetg_fields_final.phi) ** 2))
-            return RuntimeNonlinearResult(
-                t=np.asarray([]),
-                diagnostics=None,
-                phi2=phi2,
-                fields=cetg_fields_final,
-                state=np.asarray(G_final) if return_state else None,
-                ky_selected=float(np.asarray(grid.ky[ky_index])),
-                kx_selected=float(np.asarray(grid.kx[kx_index])),
-            )
-        return RuntimeNonlinearResult(
+        return build_runtime_nonlinear_result(
             t=np.asarray(diag.t),
             diagnostics=diag,
-            phi2=None,
             fields=cetg_fields_final,
             state=np.asarray(G_final) if return_state else None,
             ky_selected=float(np.asarray(grid.ky[ky_index])),
             kx_selected=float(np.asarray(grid.kx[kx_index])),
+            summarize_fields=diagnostics_on is False,
         )
 
     geom = build_runtime_geometry(cfg)
@@ -1348,27 +1292,26 @@ def run_runtime_nonlinear(
         if diagnostics_on:
             _status(f"completed nonlinear run with {int(np.asarray(t).size)} saved samples")
             state_out = np.asarray(G_final) if return_state else None
-            return RuntimeNonlinearResult(
+            return build_runtime_nonlinear_result(
                 t=np.asarray(t),
                 diagnostics=diag,
-                phi2=None,
                 fields=fields_final,
                 state=state_out,
                 ky_selected=float(np.asarray(grid.ky[ky_index])),
                 kx_selected=float(np.asarray(grid.kx[kx_index])),
+                summarize_fields=False,
             )
         if fields_final is None:
             raise RuntimeError("adaptive nonlinear runtime did not produce final fields")
         _status("diagnostics disabled; returning final nonlinear field summary")
-        phi2 = np.asarray(jnp.mean(jnp.abs(fields_final.phi) ** 2))
-        return RuntimeNonlinearResult(
+        return build_runtime_nonlinear_result(
             t=np.asarray([]),
             diagnostics=None,
-            phi2=phi2,
             fields=fields_final,
             state=np.asarray(G_final) if return_state else None,
             ky_selected=float(np.asarray(grid.ky[ky_index])),
             kx_selected=float(np.asarray(grid.kx[kx_index])),
+            summarize_fields=True,
         )
 
     # Diagnostics disabled: use the config-driven integrator for final state.
@@ -1393,16 +1336,15 @@ def run_runtime_nonlinear(
             t_cfg,
             terms=term_cfg,
         )
-    phi2 = np.asarray(jnp.mean(jnp.abs(fields.phi) ** 2))
     _status("completed nonlinear final-state integration")
-    return RuntimeNonlinearResult(
+    return build_runtime_nonlinear_result(
         t=np.asarray([]),
         diagnostics=None,
-        phi2=phi2,
         fields=fields,
         state=np.asarray(G_final) if return_state else None,
         ky_selected=float(np.asarray(grid.ky[ky_index])),
         kx_selected=float(np.asarray(grid.kx[kx_index])),
+        summarize_fields=True,
     )
 
 
