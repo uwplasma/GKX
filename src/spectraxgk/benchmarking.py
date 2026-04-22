@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from typing import Callable
 
+import netCDF4 as nc
 import numpy as np
 
 from spectraxgk.analysis import (
@@ -111,6 +112,16 @@ class EigenfunctionReferenceBundle:
     metadata: dict[str, object]
 
 
+@dataclass(frozen=True)
+class DiagnosticTimeSeries:
+    """Single benchmark-facing time series loaded from an ``out.nc`` artifact."""
+
+    t: np.ndarray
+    values: np.ndarray
+    variable: str
+    source_path: str
+
+
 def normalize_eigenfunction(eigenfunction: np.ndarray, z: np.ndarray) -> np.ndarray:
     """Normalize an eigenfunction by its value at theta=0 (nearest z=0)."""
 
@@ -195,6 +206,45 @@ def load_eigenfunction_reference_bundle(path: str | Path) -> EigenfunctionRefere
         source=str(np.asarray(data["source"]).item()),
         case=str(np.asarray(data["case"]).item()),
         metadata=json.loads(metadata_json),
+    )
+
+
+def load_diagnostic_time_series(
+    path: str | Path,
+    *,
+    variable: str,
+    diagnostics_group: str = "Diagnostics",
+    time_group: str = "Grids",
+    time_var: str = "time",
+) -> DiagnosticTimeSeries:
+    """Load a 1D diagnostics time series from a GX-style ``out.nc`` artifact."""
+
+    src = Path(path)
+    with nc.Dataset(src) as ds:
+        diag_group = ds.groups.get(diagnostics_group)
+        if diag_group is None:
+            raise ValueError(f"missing NetCDF group {diagnostics_group!r} in {src}")
+        if variable not in diag_group.variables:
+            raise ValueError(f"missing diagnostics variable {variable!r} in {src}")
+        values = np.asarray(diag_group.variables[variable][:], dtype=float)
+        if values.ndim != 1:
+            raise ValueError(f"diagnostics variable {variable!r} must be one-dimensional")
+
+        if time_group in ds.groups and time_var in ds.groups[time_group].variables:
+            t = np.asarray(ds.groups[time_group].variables[time_var][:], dtype=float)
+        elif time_var in ds.variables:
+            t = np.asarray(ds.variables[time_var][:], dtype=float)
+        else:
+            raise ValueError(f"missing time variable {time_group}/{time_var} in {src}")
+
+    if t.ndim != 1 or t.size != values.size:
+        raise ValueError(f"time axis for {variable!r} must be one-dimensional and match the diagnostics length")
+
+    return DiagnosticTimeSeries(
+        t=t,
+        values=values,
+        variable=str(variable),
+        source_path=str(src),
     )
 
 
