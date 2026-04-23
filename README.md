@@ -224,8 +224,8 @@ These shipped runtime rows are cold wall-time measurements, so the SPECTRAX-GK
 nonlinear GPU entries include JAX startup/compile cost. Targeted `office` GPU
 profiles on the same short nonlinear cases measured:
 
-- Cyclone nonlinear: `warmup_time_s = 33.251`, `run_time_s = 14.428`
-- KBM nonlinear: `warmup_time_s = 24.005`, `run_time_s = 9.271`
+- Cyclone nonlinear: `warmup_time_s = 33.957`, `run_time_s = 15.054`
+- KBM nonlinear: `warmup_time_s = 27.485`, `run_time_s = 9.725`
 
 This means the current short-run Cyclone and KBM gaps are dominated much more
 by cold-start overhead than by steady-state timestep throughput. In steady
