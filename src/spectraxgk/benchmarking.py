@@ -1068,14 +1068,16 @@ def observed_order_gate_report(
     case: str,
     source: str,
     min_asymptotic_order: float,
+    min_pairwise_order: float | None = None,
     max_final_error: float | None = None,
     order_atol: float = 1.0e-12,
 ) -> GateReport:
     """Gate an observed-order convergence study.
 
-    ``min_asymptotic_order`` encodes the expected method/order floor, while
-    ``max_final_error`` can be used for publication figures where both rate and
-    absolute accuracy matter.
+    ``min_asymptotic_order`` encodes the expected method/order floor for the
+    finest refinement pair. ``min_pairwise_order`` can additionally require the
+    whole table to be monotone enough for publication use. ``max_final_error``
+    can be used when both rate and absolute accuracy matter.
     """
 
     min_order = float(min_asymptotic_order)
@@ -1092,6 +1094,20 @@ def observed_order_gate_report(
             notes=f"Passes when asymptotic observed order >= {min_order:.6g}.",
         )
     ]
+    if min_pairwise_order is not None:
+        min_pair_order = float(min_pairwise_order)
+        if min_pair_order < 0.0:
+            raise ValueError("min_pairwise_order must be non-negative")
+        gates.append(
+            evaluate_scalar_gate(
+                "min_pairwise_order_deficit",
+                max(0.0, min_pair_order - float(np.min(metrics.orders))),
+                0.0,
+                atol=order_tol,
+                rtol=0.0,
+                notes=f"Passes when every pairwise observed order >= {min_pair_order:.6g}.",
+            )
+        )
     if max_final_error is not None:
         final_error_limit = float(max_final_error)
         if final_error_limit < 0.0:
@@ -1304,7 +1320,8 @@ def run_scan_and_mode(
     """Run a scan and extract a representative eigenfunction."""
 
     if select_ky is None:
-        select_ky = lambda scan: float(scan.ky[int(np.nanargmax(scan.gamma))])
+        def select_ky(scan: LinearScanResult) -> float:
+            return float(scan.ky[int(np.nanargmax(scan.gamma))])
 
     scan = run_linear_scan(
         ky_values=ky_values,
