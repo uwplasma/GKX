@@ -9,7 +9,7 @@ from typing import Any
 
 import numpy as np
 
-from spectraxgk.geometry import ensure_flux_tube_geometry_data
+from spectraxgk.geometry import apply_geometry_grid_defaults, ensure_flux_tube_geometry_data
 from spectraxgk.grids import build_spectral_grid, real_fft_ordered_kx, real_fft_unique_ky
 from spectraxgk.diagnostics import SimulationDiagnostics, ResolvedDiagnostics, total_energy
 from spectraxgk.linear import build_linear_cache
@@ -390,6 +390,16 @@ def _complex_to_ri(field: np.ndarray) -> np.ndarray:
     return np.stack([np.real(field_arr), np.imag(field_arr)], axis=-1).astype(np.float32, copy=False)
 
 
+def _build_artifact_grid_and_geometry(cfg: Any) -> tuple[Any, Any]:
+    """Resolve artifact output onto the same geometry-implied grid as the solver."""
+
+    geom_raw = build_runtime_geometry(cfg)
+    grid_cfg = apply_geometry_grid_defaults(geom_raw, cfg.grid)
+    grid = build_spectral_grid(grid_cfg)
+    geom = ensure_flux_tube_geometry_data(geom_raw, grid.z)
+    return grid, geom
+
+
 def _spectral_to_xy(field: np.ndarray) -> np.ndarray:
     xy = np.fft.ifft2(np.asarray(field), axes=(0, 1))
     return np.real(xy).astype(np.float32, copy=False)
@@ -474,8 +484,7 @@ def _state_basis_moments(state: np.ndarray) -> dict[str, np.ndarray]:
 def _particle_moments(state: np.ndarray, cfg: Any) -> dict[str, np.ndarray]:
     state_arr = np.asarray(state)
     ns, nl, nm, _ny, _nx, _nz = state_arr.shape
-    grid = build_spectral_grid(cfg.grid)
-    geom = build_runtime_geometry(cfg)
+    grid, geom = _build_artifact_grid_and_geometry(cfg)
     params = build_runtime_linear_params(cfg, Nm=nm, geom=geom)
     cache = build_linear_cache(grid, geom, params, nl, nm)
     Jl = np.asarray(cache.Jl)
@@ -513,9 +522,15 @@ def _condense_kykx(arr: np.ndarray) -> np.ndarray:
     return _take_axis(out, _gx_active_kx_indices(np.asarray(arr).shape[-1]), axis=-1)
 
 
-def _write_gx_geometry_group(group: Any, cfg: Any) -> tuple[np.ndarray, np.ndarray, np.ndarray, Any]:
-    grid = build_spectral_grid(cfg.grid)
-    geom = ensure_flux_tube_geometry_data(build_runtime_geometry(cfg), grid.z)
+def _write_gx_geometry_group(
+    group: Any,
+    cfg: Any,
+    *,
+    grid: Any | None = None,
+    geom: Any | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, Any]:
+    if grid is None or geom is None:
+        grid, geom = _build_artifact_grid_and_geometry(cfg)
     theta = np.asarray(grid.z, dtype=np.float32)
     group.createVariable("bmag", "f4", ("theta",))[:] = np.asarray(geom.bmag_profile, dtype=np.float32)
     group.createVariable("bgrad", "f4", ("theta",))[:] = np.asarray(geom.bgrad_profile, dtype=np.float32)
@@ -580,14 +595,13 @@ def _write_runtime_nonlinear_gx_artifacts(out: str | Path, result: Any, cfg: Any
     if diag is None:
         raise ValueError("GX-style nonlinear NetCDF artifacts require nonlinear diagnostics output")
 
-    grid = build_spectral_grid(cfg.grid)
-    geom_data = ensure_flux_tube_geometry_data(build_runtime_geometry(cfg), grid.z)
+    grid, geom_data = _build_artifact_grid_and_geometry(cfg)
     theta = np.asarray(grid.z, dtype=np.float32)
     kx_vals = _gx_active_kx_values(np.asarray(grid.kx))
     ky_vals = _gx_active_ky_values(np.asarray(grid.ky))
     nspecies = int(np.asarray(result.state).shape[0]) if result.state is not None and np.asarray(result.state).ndim == 6 else len(cfg.species)
     time_vals = np.asarray(diag.t, dtype=np.float64)
-    x_vals = _real_space_axis(int(grid.kx.size), float(cfg.grid.Lx))
+    x_vals = _real_space_axis(int(grid.kx.size), float(2.0 * np.pi * grid.x0))
     y_extent = float(2.0 * np.pi * grid.y0)
     y_vals = _real_space_axis(int(grid.ky.size), y_extent)
     nl = int(np.asarray(result.state).shape[1]) if result.state is not None and np.asarray(result.state).ndim == 6 else 1
@@ -618,7 +632,7 @@ def _write_runtime_nonlinear_gx_artifacts(out: str | Path, result: Any, cfg: Any
         grids.createVariable("theta", "f4", ("theta",))[:] = theta
 
         geom_group = root.createGroup("Geometry")
-        _write_gx_geometry_group(geom_group, cfg)
+        _write_gx_geometry_group(geom_group, cfg, grid=grid, geom=geom_data)
 
         diag_group = root.createGroup("Diagnostics")
         resolved = diag.resolved
