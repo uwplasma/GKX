@@ -29,6 +29,7 @@ class ResolvedDiagnostics:
     Phi2_zonal_kxt: ArrayLike | None = None
     Phi2_zonal_zt: ArrayLike | None = None
     Phi_zonal_mode_kxt: ArrayLike | None = None
+    Phi_zonal_line_kxt: ArrayLike | None = None
     Wg_kxst: ArrayLike | None = None
     Wg_kyst: ArrayLike | None = None
     Wg_kxkyst: ArrayLike | None = None
@@ -336,10 +337,10 @@ def _jl_family(cache: LinearCache) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarra
         raise ValueError(f"unexpected JlB rank {JlB.ndim}; expected 4 or 5")
 
     Nl = Jl_s.shape[1]
-    l = jnp.arange(Nl, dtype=Jl_s.dtype)[None, :, None, None, None]
+    ell = jnp.arange(Nl, dtype=Jl_s.dtype)[None, :, None, None, None]
     Jl_m1 = shift_axis(Jl_s, -1, axis=1)
     Jl_p1 = shift_axis(Jl_s, 1, axis=1)
-    JflrA = l * Jl_m1 + 2.0 * l * Jl_s + (l + 1.0) * Jl_p1
+    JflrA = ell * Jl_m1 + 2.0 * ell * Jl_s + (ell + 1.0) * Jl_p1
     Jfac = 1.5 * Jl_s + JflrA
     return Jl_s, JlB_s, Jfac
 
@@ -792,8 +793,6 @@ def _gx_turbulent_heating_contrib_species(
         JlB_s = JlB[s]
         G_s = Gs[s]
         G_prev_s = G_old_s[s]
-        Nm = G_s.shape[1]
-
         def _get_m(source: jnp.ndarray, m_idx: int) -> jnp.ndarray:
             if source.shape[1] <= m_idx:
                 return jnp.zeros_like(source[:, 0, ...])
@@ -905,6 +904,17 @@ def gx_phi_zonal_mode_kxt(
     zonal_mask = (jnp.asarray(grid.ky) == 0.0).astype(phi.dtype)[:, None, None]
     zonal = phi * zonal_mask
     return jnp.sum(zonal * vol_fac[None, None, :], axis=(0, 2))
+
+
+def gx_phi_zonal_line_kxt(
+    phi: jnp.ndarray,
+    grid: SpectralGrid,
+) -> jnp.ndarray:
+    """Return the signed, unweighted line-averaged zonal potential per ``k_x``."""
+
+    zonal_mask = (jnp.asarray(grid.ky) == 0.0).astype(phi.dtype)[:, None, None]
+    zonal = phi * zonal_mask
+    return jnp.sum(zonal, axis=(0, 2)) / jnp.asarray(phi.shape[-1], dtype=phi.real.dtype)
 
 
 def gx_Wg_resolved(

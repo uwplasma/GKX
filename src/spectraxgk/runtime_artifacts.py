@@ -726,6 +726,10 @@ def _write_runtime_nonlinear_gx_artifacts(out: str | Path, result: Any, cfg: Any
                 diag_group.createVariable("Phi_zonal_mode_kxt", "f4", ("time", "kx", "ri"))[:, :, :] = _complex_to_ri(
                     _condense_kx(np.asarray(resolved.Phi_zonal_mode_kxt))
                 )
+            if resolved.Phi_zonal_line_kxt is not None:
+                diag_group.createVariable("Phi_zonal_line_kxt", "f4", ("time", "kx", "ri"))[:, :, :] = _complex_to_ri(
+                    _condense_kx(np.asarray(resolved.Phi_zonal_line_kxt))
+                )
             metric_specs = (
                 ("Wg", resolved.Wg_kxst, resolved.Wg_kyst, resolved.Wg_kxkyst, resolved.Wg_zst),
                 ("Wphi", resolved.Wphi_kxst, resolved.Wphi_kyst, resolved.Wphi_kxkyst, resolved.Wphi_zst),
