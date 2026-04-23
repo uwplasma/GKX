@@ -58,6 +58,10 @@ left panel shows the linear `|\phi|^2` history on a log scale with the fitted
 `(\gamma, \omega)` annotation. The right panel shows the normalized real and
 imaginary eigenfunction.
 
+When progress output is enabled, the executable prints live status lines with
+step/time progress, wall elapsed time, and an estimated wall-clock time
+remaining. Adaptive nonlinear runs also emit chunk-level elapsed/ETA updates.
+
 The `--plot` mode reads saved runtime artifacts directly:
 
 - linear bundles: `*.summary.json` + `*.timeseries.csv` + `*.eigenfunction.csv`

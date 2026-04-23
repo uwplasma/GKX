@@ -8,6 +8,7 @@ smaller without changing the accepted diagnostics truncation/stride behavior.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+import time
 from typing import Any, Callable
 
 import numpy as np
@@ -24,6 +25,15 @@ class AdaptiveChunkResult:
     diagnostics: SimulationDiagnostics
     state: Any
     fields: FieldState
+
+
+def _format_duration(seconds: float) -> str:
+    seconds_i = max(int(round(seconds)), 0)
+    minutes, secs = divmod(seconds_i, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours > 0:
+        return f"{hours:d}:{minutes:02d}:{secs:02d}"
+    return f"{minutes:02d}:{secs:02d}"
 
 
 def run_adaptive_gx_chunk_loop(
@@ -51,9 +61,11 @@ def run_adaptive_gx_chunk_loop(
     t_elapsed = 0.0
     diag_chunks: list[SimulationDiagnostics] = []
     fields_final: FieldState | None = None
+    wall_start = time.perf_counter()
     _status(f"starting adaptive {label} integration in chunks of {chunk_steps} steps up to t_max={float(t_max):.6g}")
 
     for chunk in range(max_chunks):
+        chunk_start = time.perf_counter()
         _t_chunk, diag_chunk, state_chunk, fields_final = integrate_chunk(show_progress)
         diag_chunk = replace(diag_chunk, t=np.asarray(diag_chunk.t) + t_elapsed)
         diag_chunks.append(diag_chunk)
@@ -61,7 +73,19 @@ def run_adaptive_gx_chunk_loop(
         if t_next <= t_elapsed + 1.0e-12:
             raise RuntimeError(f"adaptive {label} runtime made no time-step progress")
         t_elapsed = t_next
-        _status(f"completed {label} chunk {chunk + 1}: t={t_elapsed:.6g}/{float(t_max):.6g}")
+        chunk_wall = max(time.perf_counter() - chunk_start, 0.0)
+        wall_elapsed = max(time.perf_counter() - wall_start, 0.0)
+        progress = min(max(t_elapsed / float(t_max), 0.0), 1.0) if float(t_max) > 0.0 else 1.0
+        eta = wall_elapsed * (1.0 / progress - 1.0) if progress > 1.0e-12 else float("inf")
+        eta_text = _format_duration(eta) if np.isfinite(eta) else "--:--"
+        _status(
+            f"completed {label} chunk {chunk + 1}: "
+            f"t={t_elapsed:.6g}/{float(t_max):.6g} "
+            f"progress={100.0 * progress:5.1f}% "
+            f"chunk_wall={_format_duration(chunk_wall)} "
+            f"elapsed={_format_duration(wall_elapsed)} "
+            f"eta={eta_text}"
+        )
         if t_elapsed >= float(t_max):
             break
     else:
