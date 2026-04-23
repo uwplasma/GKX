@@ -270,6 +270,17 @@ def _infer_runtime_nonlinear_steps(
     return steps_val
 
 
+def _runtime_external_phi(cfg: RuntimeConfig) -> float | None:
+    """Return a GX-style runtime external-phi source if requested."""
+
+    source = str(cfg.expert.source).strip().lower()
+    if source in {"", "default"}:
+        return None
+    if source != "phiext_full":
+        raise ValueError(f"unsupported expert.source={cfg.expert.source!r}; expected 'default' or 'phiext_full'")
+    return float(cfg.expert.phi_ext)
+
+
 _slice_gx_diagnostics = slice_gx_diagnostics
 _truncate_gx_diagnostics = truncate_gx_diagnostics
 _stride_gx_diagnostics = stride_gx_diagnostics
@@ -1150,6 +1161,8 @@ def run_runtime_nonlinear(
     fixed_mode_on = bool(cfg.expert.fixed_mode)
     fixed_ky_index = cfg.expert.iky_fixed
     fixed_kx_index = cfg.expert.ikx_fixed
+    external_phi = _runtime_external_phi(cfg)
+    source_on = external_phi is not None
     fixed_ky_index_use: int | None = None
     fixed_kx_index_use: int | None = None
     if fixed_mode_on:
@@ -1160,9 +1173,9 @@ def run_runtime_nonlinear(
 
     diagnostics_on = cfg.time.diagnostics if diagnostics is None else bool(diagnostics)
     _status(
-        f"nonlinear diagnostics={'on' if diagnostics_on else 'off'} fixed_mode={'on' if fixed_mode_on else 'off'}"
+        f"nonlinear diagnostics={'on' if diagnostics_on else 'off'} fixed_mode={'on' if fixed_mode_on else 'off'} source={cfg.expert.source}"
     )
-    if diagnostics_on or fixed_mode_on or return_state or adaptive_chunked:
+    if diagnostics_on or fixed_mode_on or return_state or adaptive_chunked or source_on:
         sample_stride_use = cfg.time.sample_stride if sample_stride is None else int(sample_stride)
         diag_stride = cfg.time.diagnostics_stride if diagnostics_stride is None else int(diagnostics_stride)
         laguerre_mode_use = cfg.time.laguerre_nonlinear_mode if laguerre_mode is None else str(laguerre_mode)
@@ -1200,6 +1213,7 @@ def run_runtime_nonlinear(
                     implicit_preconditioner=cfg.time.implicit_preconditioner,
                     fixed_mode_ky_index=fixed_ky_index_use,
                     fixed_mode_kx_index=fixed_kx_index_use,
+                    external_phi=external_phi,
                 )
                 if chunk_show_progress:
                     kwargs["show_progress"] = True
@@ -1256,6 +1270,7 @@ def run_runtime_nonlinear(
                     implicit_preconditioner=cfg.time.implicit_preconditioner,
                     fixed_mode_ky_index=fixed_ky_index_use,
                     fixed_mode_kx_index=fixed_kx_index_use,
+                    external_phi=external_phi,
                     show_progress=True,
                 )
             else:
@@ -1288,6 +1303,7 @@ def run_runtime_nonlinear(
                     implicit_preconditioner=cfg.time.implicit_preconditioner,
                     fixed_mode_ky_index=fixed_ky_index_use,
                     fixed_mode_kx_index=fixed_kx_index_use,
+                    external_phi=external_phi,
                 )
         if diagnostics_on:
             _status(f"completed nonlinear run with {int(np.asarray(t).size)} saved samples")

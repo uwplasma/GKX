@@ -135,11 +135,12 @@ def nonlinear_rhs_cached(
     *,
     gx_real_fft: bool = True,
     laguerre_mode: str = "grid",
+    external_phi: jnp.ndarray | float | None = None,
 ) -> Tuple[jnp.ndarray, FieldState]:
     """Compute a nonlinear RHS using linear terms plus a placeholder nonlinear term."""
 
     term_cfg = terms or TermConfig()
-    dG, fields = assemble_rhs_cached_jit(G, cache, params, term_cfg)
+    dG, fields = assemble_rhs_cached_jit(G, cache, params, term_cfg, external_phi=external_phi)
     if term_cfg.nonlinear != 0.0:
         real_dtype = jnp.real(jnp.empty((), dtype=G.dtype)).dtype
         weight = jnp.asarray(term_cfg.nonlinear, dtype=real_dtype)
@@ -496,6 +497,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
     implicit_preconditioner: str | None = None,
     fixed_mode_ky_index: int | None = None,
     fixed_mode_kx_index: int | None = None,
+    external_phi: jnp.ndarray | float | None = None,
     show_progress: bool = False,
 ) -> tuple[jnp.ndarray, SimulationDiagnostics, jnp.ndarray, FieldState]:
     """Integrate nonlinear system and return GX-style diagnostics plus final state."""
@@ -627,9 +629,10 @@ def _integrate_nonlinear_gx_diagnostics_impl(
             rhs_term_cfg,
             gx_real_fft=gx_real_fft,
             laguerre_mode=laguerre_mode,
+            external_phi=external_phi,
         )
 
-    fields0 = compute_fields_cached(G0, cache, params, terms=term_cfg)
+    fields0 = compute_fields_cached(G0, cache, params, terms=term_cfg, external_phi=external_phi)
     phi_prev = fields0.phi
 
     def _compute_diag_from_state(
@@ -933,7 +936,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
         # Keep scan carry dtype stable under mixed-precision scalar constants.
         G_new = jnp.asarray(G_new, dtype=state_dtype)
         t_new = jnp.asarray(t_prev + dt_local, dtype=real_dtype)
-        fields_new = compute_fields_cached(G_new, cache, params, terms=term_cfg)
+        fields_new = compute_fields_cached(G_new, cache, params, terms=term_cfg, external_phi=external_phi)
 
         def _compute_diag(_):
             return _compute_diag_from_state(G_new, fields_new, G_prev_step, fields_prev_step, dt_local)
@@ -1029,7 +1032,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
         phi_mode_t=phi_mode_t,
         resolved=resolved,
     )
-    fields_final = compute_fields_cached(G_final, cache, params, terms=term_cfg)
+    fields_final = compute_fields_cached(G_final, cache, params, terms=term_cfg, external_phi=external_phi)
     return t, diag_out, G_final, fields_final
 
 
@@ -1071,6 +1074,7 @@ def integrate_nonlinear_gx_diagnostics(
     implicit_preconditioner: str | None = None,
     fixed_mode_ky_index: int | None = None,
     fixed_mode_kx_index: int | None = None,
+    external_phi: jnp.ndarray | float | None = None,
     show_progress: bool = False,
 ) -> tuple[jnp.ndarray, SimulationDiagnostics]:
     """Integrate nonlinear system and return GX-style diagnostics."""
@@ -1108,6 +1112,7 @@ def integrate_nonlinear_gx_diagnostics(
             implicit_preconditioner=implicit_preconditioner,
             fixed_mode_ky_index=fixed_mode_ky_index,
             fixed_mode_kx_index=fixed_mode_kx_index,
+            external_phi=external_phi,
             show_progress=show_progress,
         )
 
@@ -1148,6 +1153,7 @@ def integrate_nonlinear_gx_diagnostics(
         implicit_preconditioner=implicit_preconditioner,
         fixed_mode_ky_index=fixed_mode_ky_index,
         fixed_mode_kx_index=fixed_mode_kx_index,
+        external_phi=external_phi,
         show_progress=show_progress,
     )
     return t, diag_out
@@ -1191,6 +1197,7 @@ def integrate_nonlinear_gx_diagnostics_state(
     implicit_preconditioner: str | None = None,
     fixed_mode_ky_index: int | None = None,
     fixed_mode_kx_index: int | None = None,
+    external_phi: jnp.ndarray | float | None = None,
     show_progress: bool = False,
 ) -> tuple[jnp.ndarray, SimulationDiagnostics, jnp.ndarray, FieldState]:
     """Integrate nonlinear system and return GX diagnostics plus the final state."""
@@ -1235,6 +1242,7 @@ def integrate_nonlinear_gx_diagnostics_state(
         implicit_preconditioner=implicit_preconditioner,
         fixed_mode_ky_index=fixed_mode_ky_index,
         fixed_mode_kx_index=fixed_mode_kx_index,
+        external_phi=external_phi,
         show_progress=show_progress,
     )
 
@@ -1272,6 +1280,7 @@ def integrate_nonlinear_imex_gx_diagnostics(
     implicit_preconditioner: str | None = None,
     fixed_mode_ky_index: int | None = None,
     fixed_mode_kx_index: int | None = None,
+    external_phi: jnp.ndarray | float | None = None,
     show_progress: bool = False,
 ) -> tuple[jnp.ndarray, SimulationDiagnostics]:
     """IMEX nonlinear integrator with GX diagnostics."""
@@ -1360,7 +1369,7 @@ def integrate_nonlinear_imex_gx_diagnostics(
         if term_cfg.nonlinear == 0.0:
             return jnp.zeros_like(G_in)
         weight = jnp.asarray(term_cfg.nonlinear, dtype=real_dtype)
-        fields = compute_fields_cached(G_in, cache, params, terms=term_cfg)
+        fields = compute_fields_cached(G_in, cache, params, terms=term_cfg, external_phi=external_phi)
         return nonlinear_em_contribution(
             G_in,
             phi=fields.phi,
@@ -1391,7 +1400,7 @@ def integrate_nonlinear_imex_gx_diagnostics(
 
     def fixed_point(G_in: jnp.ndarray, G_rhs: jnp.ndarray) -> jnp.ndarray:
         def body(_i, g):
-            dG, _fields = assemble_rhs_cached_jit(g, cache, params, linear_cfg)
+            dG, _fields = assemble_rhs_cached_jit(g, cache, params, linear_cfg, external_phi=external_phi)
             g_next = G_rhs + dt_val * dG
             return (1.0 - implicit_relax) * g + implicit_relax * g_next
 
@@ -1634,7 +1643,7 @@ def integrate_nonlinear_imex_gx_diagnostics(
             ),
         )
 
-    fields0 = compute_fields_cached(G0, cache, params, terms=term_cfg)
+    fields0 = compute_fields_cached(G0, cache, params, terms=term_cfg, external_phi=external_phi)
 
     def step(carry, idx):
         G, G_prev_step, fields_prev_step, diag_prev, t_prev = carry
@@ -1662,7 +1671,7 @@ def integrate_nonlinear_imex_gx_diagnostics(
         # Keep scan carry dtype stable under mixed-precision scalar constants.
         G_new = jnp.asarray(G_new, dtype=state_dtype)
         t_new = t_prev + dt_val
-        fields_new = compute_fields_cached(G_new, cache, params, terms=term_cfg)
+        fields_new = compute_fields_cached(G_new, cache, params, terms=term_cfg, external_phi=external_phi)
 
         def _compute_diag(_):
             return _compute_diag_from_state(G_new, fields_new, G_prev_step, fields_prev_step, dt_val)
@@ -1811,6 +1820,7 @@ def integrate_nonlinear_imex_cached(
     implicit_operator: IMEXLinearOperator | None = None,
     gx_real_fft: bool = True,
     laguerre_mode: str = "grid",
+    external_phi: jnp.ndarray | float | None = None,
     show_progress: bool = False,
 ) -> tuple[jnp.ndarray, FieldState]:
     """IMEX integrator: implicit linear operator, explicit nonlinear term."""
@@ -1850,7 +1860,7 @@ def integrate_nonlinear_imex_cached(
         if term_cfg.nonlinear == 0.0:
             return jnp.zeros_like(G_in)
         weight = jnp.asarray(term_cfg.nonlinear, dtype=jnp.real(jnp.empty((), G_in.dtype)).dtype)
-        fields = compute_fields_cached(G_in, cache, params, terms=term_cfg)
+        fields = compute_fields_cached(G_in, cache, params, terms=term_cfg, external_phi=external_phi)
         return nonlinear_em_contribution(
             G_in,
             phi=fields.phi,
@@ -1881,7 +1891,7 @@ def integrate_nonlinear_imex_cached(
 
     def fixed_point(G_in: jnp.ndarray, G_rhs: jnp.ndarray) -> jnp.ndarray:
         def body(_i, g):
-            dG, _fields = assemble_rhs_cached_jit(g, cache, params, linear_cfg)
+            dG, _fields = assemble_rhs_cached_jit(g, cache, params, linear_cfg, external_phi=external_phi)
             g_next = G_rhs + dt_val * dG
             return (1.0 - implicit_relax) * g + implicit_relax * g_next
 
@@ -1904,7 +1914,7 @@ def integrate_nonlinear_imex_cached(
     def step(G_in, _):
         rhs = G_in + dt_val * nonlinear_term(G_in)
         G_new = solve_step(G_in, rhs)
-        _dG_new, fields_new = assemble_rhs_cached_jit(G_new, cache, params, linear_cfg)
+        _dG_new, fields_new = assemble_rhs_cached_jit(G_new, cache, params, linear_cfg, external_phi=external_phi)
         return G_new, fields_new
 
     step_fn = jax.checkpoint(step) if checkpoint else step
