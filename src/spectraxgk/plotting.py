@@ -758,6 +758,7 @@ def zonal_flow_response_figure(
     residual = float(metrics.residual_level)
     env_t = np.asarray(metrics.peak_times, dtype=float)
     env_y = np.asarray(metrics.peak_envelope, dtype=float)
+    fit_count = int(min(getattr(metrics, "peak_fit_count", env_t.size), env_t.size))
 
     fig, axes = plt.subplots(1, 2, figsize=(11.0, 4.0))
     ax0, ax1 = axes
@@ -780,9 +781,11 @@ def zonal_flow_response_figure(
     ax1.plot(t_arr, np.maximum(np.abs(response_norm - residual), 1.0e-14), color="#4c956c", linewidth=2.0, alpha=0.5)
     if env_t.size:
         ax1.plot(env_t, env_y, color="#c44e52", marker="o", linewidth=1.8, label="envelope peaks")
-    if env_t.size >= 2 and np.isfinite(float(metrics.gam_damping_rate)):
-        fit = env_y[0] * np.exp(-float(metrics.gam_damping_rate) * (env_t - env_t[0]))
-        ax1.plot(env_t, fit, color="#2a9d8f", linestyle="--", linewidth=2.0, label="envelope fit")
+    if fit_count >= 2 and np.isfinite(float(metrics.gam_damping_rate)):
+        fit_t = env_t[:fit_count]
+        fit = env_y[0] * np.exp(-float(metrics.gam_damping_rate) * (fit_t - fit_t[0]))
+        label = "envelope fit" if fit_count == env_t.size else f"envelope fit (first {fit_count} peaks)"
+        ax1.plot(fit_t, fit, color="#2a9d8f", linestyle="--", linewidth=2.0, label=label)
     ax1.set_yscale("log")
     ax1.set_xlabel("t")
     ax1.set_ylabel("envelope")
@@ -797,6 +800,7 @@ def zonal_flow_response_figure(
             f"std = {metrics.residual_std:.4f}\n"
             f"ω_GAM = {metrics.gam_frequency:.4f}\n"
             f"γ_damp = {metrics.gam_damping_rate:.4f}\n"
+            f"fit_peaks = {fit_count}\n"
             f"norm = {getattr(metrics, 'initial_policy', 'window_abs_mean')}"
         ),
         transform=ax1.transAxes,

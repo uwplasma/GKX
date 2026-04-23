@@ -77,6 +77,7 @@ class ZonalFlowResponseMetrics:
     gam_frequency: float
     gam_damping_rate: float
     peak_count: int
+    peak_fit_count: int
     tmin: float
     tmax: float
     peak_times: np.ndarray
@@ -362,6 +363,7 @@ def zonal_flow_response_metrics(
     tail_fraction: float = 0.3,
     initial_fraction: float = 0.1,
     initial_policy: str = "window_abs_mean",
+    peak_fit_max_peaks: int | None = None,
 ) -> ZonalFlowResponseMetrics:
     """Estimate residual level and GAM envelope metrics from a zonal response.
 
@@ -388,6 +390,8 @@ def zonal_flow_response_metrics(
     policy = str(initial_policy).strip().lower().replace("-", "_")
     if policy not in {"window_abs_mean", "first_abs"}:
         raise ValueError("initial_policy must be one of {'window_abs_mean', 'first_abs'}")
+    if peak_fit_max_peaks is not None and int(peak_fit_max_peaks) <= 0:
+        raise ValueError("peak_fit_max_peaks must be > 0 when provided")
 
     tail_mask, tail_tmin, tail_tmax = _tail_window(t_arr, float(tail_fraction))
     tail_vals = resp[tail_mask]
@@ -426,14 +430,20 @@ def zonal_flow_response_metrics(
 
     gam_frequency = float("nan")
     gam_damping = float("nan")
+    peak_fit_times = peak_times
+    peak_fit_values = peak_values
+    if peak_fit_max_peaks is not None and peak_times.size:
+        nfit = min(int(peak_fit_max_peaks), int(peak_times.size))
+        peak_fit_times = peak_times[:nfit]
+        peak_fit_values = peak_values[:nfit]
     if peak_times.size >= 2:
         dt_peaks = np.diff(peak_times)
         dt_peaks = dt_peaks[np.isfinite(dt_peaks) & (dt_peaks > 0.0)]
         if dt_peaks.size:
             gam_frequency = float(np.pi / np.mean(dt_peaks))
-        valid = np.isfinite(peak_values) & (peak_values > 0.0)
+        valid = np.isfinite(peak_fit_values) & (peak_fit_values > 0.0)
         if np.count_nonzero(valid) >= 2:
-            slope, _offset = np.polyfit(peak_times[valid], np.log(peak_values[valid]), 1)
+            slope, _offset = np.polyfit(peak_fit_times[valid], np.log(peak_fit_values[valid]), 1)
             gam_damping = float(-slope)
 
     return ZonalFlowResponseMetrics(
@@ -445,6 +455,7 @@ def zonal_flow_response_metrics(
         gam_frequency=gam_frequency,
         gam_damping_rate=gam_damping,
         peak_count=int(peak_times.size),
+        peak_fit_count=int(peak_fit_times.size),
         tmin=float(tail_tmin if tail_tmin is not None else t_arr[0]),
         tmax=float(tail_tmax if tail_tmax is not None else t_arr[-1]),
         peak_times=np.asarray(peak_times, dtype=float),
