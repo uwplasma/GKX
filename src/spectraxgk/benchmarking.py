@@ -380,6 +380,51 @@ def zonal_response_gate_report(
     )
 
 
+def eigenfunction_gate_report(
+    comparison: EigenfunctionComparisonMetrics,
+    *,
+    case: str,
+    source: str,
+    min_overlap: float = 0.95,
+    max_relative_l2: float = 0.25,
+) -> GateReport:
+    """Gate a phase-aligned eigenfunction comparison.
+
+    The ideal reference is overlap equal to one and relative L2 mismatch equal
+    to zero. ``min_overlap`` and ``max_relative_l2`` make the acceptance policy
+    explicit for manuscript overlays and branch-identity checks.
+    """
+
+    min_overlap_f = float(min_overlap)
+    max_relative_l2_f = float(max_relative_l2)
+    if not 0.0 <= min_overlap_f <= 1.0:
+        raise ValueError("min_overlap must be in [0, 1]")
+    if max_relative_l2_f < 0.0:
+        raise ValueError("max_relative_l2 must be non-negative")
+    return gate_report(
+        case,
+        source,
+        (
+            evaluate_scalar_gate(
+                "eigenfunction_overlap",
+                comparison.overlap,
+                1.0,
+                atol=1.0 - min_overlap_f,
+                rtol=0.0,
+                notes=f"Passes when overlap >= {min_overlap_f:.6g}.",
+            ),
+            evaluate_scalar_gate(
+                "eigenfunction_relative_l2",
+                comparison.relative_l2,
+                0.0,
+                atol=max_relative_l2_f,
+                rtol=0.0,
+                notes=f"Passes when relative L2 <= {max_relative_l2_f:.6g}.",
+            ),
+        ),
+    )
+
+
 def normalize_eigenfunction(eigenfunction: np.ndarray, z: np.ndarray) -> np.ndarray:
     """Normalize an eigenfunction by its value at theta=0 (nearest z=0)."""
 
