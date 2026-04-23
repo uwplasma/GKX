@@ -220,6 +220,18 @@ runtime stack there, because the default `office` stellarator environment
 mixed incompatible HDF5 / NetCDF libraries and lacked the VMEC Python helper
 dependencies needed for live geometry generation.
 
+These shipped runtime rows are cold wall-time measurements, so the SPECTRAX-GK
+nonlinear GPU entries include JAX startup/compile cost. Targeted `office` GPU
+profiles on the same short nonlinear cases measured:
+
+- Cyclone nonlinear: `warmup_time_s = 30.776`, `run_time_s = 14.081`
+- KBM nonlinear: `warmup_time_s = 25.413`, `run_time_s = 9.449`
+
+This means the current short-run Cyclone and KBM gaps are dominated much more
+by cold-start overhead than by steady-state timestep throughput. In steady
+state, Cyclone GPU is faster than the shipped GX runtime row, and KBM GPU is
+close to parity.
+
 Regenerate the runtime figure from collected per-case summaries with:
 
 ```bash
