@@ -558,6 +558,7 @@ class LinearCache:
     dealias_mask: jnp.ndarray
     kxfac: jnp.ndarray
     lb_lam: jnp.ndarray
+    collision_lam: jnp.ndarray
     hyper_ratio: jnp.ndarray
     ratio_l: jnp.ndarray
     ratio_m: jnp.ndarray
@@ -623,6 +624,7 @@ class LinearCache:
             self.dealias_mask,
             self.kxfac,
             self.lb_lam,
+            self.collision_lam,
             self.hyper_ratio,
             self.ratio_l,
             self.ratio_m,
@@ -677,7 +679,7 @@ class LinearCache:
             linked_full_cover,
             linked_use_gather,
         ) = aux_data
-        base_count = 50
+        base_count = 51
         base_children = children[:base_count]
         linked_idx = tuple(children[base_count : base_count + n_linked_idx])
         linked_kz = tuple(
@@ -853,6 +855,10 @@ def build_linear_cache(
         None, :, :, None, None, None
     ]
     lb_lam = lb_base + b[:, None, None, ...]
+    nu_arr = jnp.asarray(params.nu, dtype=real_dtype)
+    if nu_arr.ndim == 0:
+        nu_arr = nu_arr[None]
+    collision_lam = nu_arr[:, None, None, None, None, None] * lb_lam
     l = jnp.arange(Nl, dtype=real_dtype)[:, None, None, None, None]
     m = jnp.arange(Nm, dtype=real_dtype)[None, :, None, None, None]
     l4 = jnp.arange(Nl, dtype=real_dtype)[:, None, None, None]
@@ -992,6 +998,7 @@ def build_linear_cache(
         dealias_mask=dealias_mask,
         kxfac=jnp.asarray(kxfac_val, dtype=real_dtype),
         lb_lam=lb_lam.astype(real_dtype),
+        collision_lam=collision_lam.astype(real_dtype),
         hyper_ratio=hyper_ratio.astype(real_dtype),
         ratio_l=ratio_l.astype(real_dtype),
         ratio_m=ratio_m.astype(real_dtype),

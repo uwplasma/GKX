@@ -202,7 +202,7 @@ def assemble_rhs_cached(
         JlB=JlB,
         b=cache.b,
         nu=nu,
-        lb_lam=cache.lb_lam,
+        collision_lam=cache.collision_lam,
         weight=w_coll,
     )
     dG = dG + hypercollisions_contribution(
@@ -429,7 +429,7 @@ def assemble_rhs_terms_cached(
         JlB=JlB,
         b=cache.b,
         nu=nu,
-        lb_lam=cache.lb_lam,
+        collision_lam=cache.collision_lam,
         weight=w_coll,
     )
     contrib["hypercollisions"] = hypercollisions_contribution(

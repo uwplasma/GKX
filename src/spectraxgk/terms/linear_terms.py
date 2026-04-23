@@ -266,10 +266,10 @@ def collisions_contribution(
     JlB: jnp.ndarray | None = None,
     b: jnp.ndarray | None = None,
     nu: jnp.ndarray,
-    lb_lam: jnp.ndarray,
+    collision_lam: jnp.ndarray,
     weight: jnp.ndarray,
 ) -> jnp.ndarray:
-    base = -weight * nu[:, None, None, None, None, None] * lb_lam * H
+    base = -(H * collision_lam) * weight
     if G is None or Jl is None or JlB is None or b is None:
         return base
 
