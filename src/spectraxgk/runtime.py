@@ -1025,32 +1025,7 @@ def run_runtime_nonlinear(
 
             def _run_cetg_chunk(chunk_show_progress: bool):
                 nonlocal G_chunk
-                if chunk_show_progress:
-                    return integrate_cetg_gx_diagnostics_state(
-                        G_chunk,
-                        grid,
-                        cetg_params,
-                        cetg_term_cfg,
-                        dt=dt_val,
-                        steps=chunk_steps,
-                        method=str(method or cfg.time.method),
-                        sample_stride=1,
-                        diagnostics_stride=1,
-                        gx_real_fft=bool(cfg.time.gx_real_fft),
-                        omega_ky_index=int(ky_index),
-                        omega_kx_index=int(kx_index),
-                        fixed_dt=False,
-                        dt_min=float(cfg.time.dt_min),
-                        dt_max=cfg.time.dt_max,
-                        cfl=float(cfg.time.cfl),
-                        cfl_fac=cfg.time.cfl_fac,
-                        show_progress=True,
-                    )
-                return integrate_cetg_gx_diagnostics_state(
-                    G_chunk,
-                    grid,
-                    cetg_params,
-                    cetg_term_cfg,
+                kwargs = dict(
                     dt=dt_val,
                     steps=chunk_steps,
                     method=str(method or cfg.time.method),
@@ -1065,6 +1040,17 @@ def run_runtime_nonlinear(
                     cfl=float(cfg.time.cfl),
                     cfl_fac=cfg.time.cfl_fac,
                 )
+                if chunk_show_progress:
+                    kwargs["show_progress"] = True
+                t_chunk, diag_chunk, G_next, fields_next = integrate_cetg_gx_diagnostics_state(
+                    G_chunk,
+                    grid,
+                    cetg_params,
+                    cetg_term_cfg,
+                    **kwargs,
+                )
+                G_chunk = G_next
+                return t_chunk, diag_chunk, G_next, fields_next
 
             chunk_result = run_adaptive_gx_chunk_loop(
                 integrate_chunk=_run_cetg_chunk,
@@ -1217,13 +1203,15 @@ def run_runtime_nonlinear(
                 )
                 if chunk_show_progress:
                     kwargs["show_progress"] = True
-                return integrate_nonlinear_gx_diagnostics_state(
+                t_chunk, diag_chunk, G_next, fields_next = integrate_nonlinear_gx_diagnostics_state(
                     G_chunk,
                     grid,
                     geom,
                     params,
                     **kwargs,
                 )
+                G_chunk = G_next
+                return t_chunk, diag_chunk, G_next, fields_next
 
             chunk_result = run_adaptive_gx_chunk_loop(
                 integrate_chunk=_run_nonlinear_chunk,

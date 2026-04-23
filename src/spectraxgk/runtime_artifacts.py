@@ -247,19 +247,19 @@ def run_runtime_nonlinear_with_artifacts(
             cumulative_diag = load_runtime_nonlinear_gx_diagnostics(history_path)
             history_from_file = True
 
-    checkpoint_steps: int | None = None
-    if gx_target and bool(getattr(cfg.output, "save_for_restart", True)):
-        if getattr(cfg.time, "nstep_restart", None) is not None and int(cfg.time.nstep_restart) > 0:
-            checkpoint_steps = int(cfg.time.nstep_restart)
-        elif int(getattr(cfg.output, "nsave", 0)) > 0:
-            checkpoint_steps = int(cfg.output.nsave)
-
     if steps is not None:
         remaining_steps: int | None = int(steps)
     elif bool(cfg.time.fixed_dt):
         remaining_steps = int(round(float(cfg.time.t_max) / float(cfg.time.dt if dt is None else dt)))
     else:
         remaining_steps = None
+
+    checkpoint_steps: int | None = None
+    if gx_target and remaining_steps is not None and bool(getattr(cfg.output, "save_for_restart", True)):
+        if getattr(cfg.time, "nstep_restart", None) is not None and int(cfg.time.nstep_restart) > 0:
+            checkpoint_steps = int(cfg.time.nstep_restart)
+        elif int(getattr(cfg.output, "nsave", 0)) > 0:
+            checkpoint_steps = int(cfg.output.nsave)
 
     time_offset = 0.0
     if cumulative_diag is not None and np.asarray(cumulative_diag.t).size:
@@ -622,8 +622,24 @@ def _write_runtime_nonlinear_gx_artifacts(out: str | Path, result: Any, cfg: Any
 
         diag_group = root.createGroup("Diagnostics")
         resolved = diag.resolved
-        if resolved is not None and resolved.Phi2_kxt is not None:
-            phi2_t = np.sum(np.asarray(resolved.Phi2_kxt, dtype=np.float32), axis=1)
+        phi2_kx_out = None
+        phi2_ky_out = None
+        phi2_kykx_out = None
+        if resolved is not None and resolved.Phi2_kxkyt is not None:
+            # GX stores Phi2 on the rFFT-positive ky view.  Deriving the one-
+            # dimensional spectra from the condensed two-dimensional spectrum
+            # keeps Phi2_t, Phi2_kxt, and Phi2_kyt mutually consistent when
+            # SPECTRAX-GK evolved a full Hermitian ky layout internally.
+            phi2_kykx_out = _condense_kykx(np.asarray(resolved.Phi2_kxkyt, dtype=np.float32))
+            phi2_kx_out = np.sum(phi2_kykx_out, axis=1)
+            phi2_ky_out = np.sum(phi2_kykx_out, axis=2)
+            phi2_t = np.sum(phi2_kykx_out, axis=(1, 2))
+        elif resolved is not None and resolved.Phi2_kyt is not None:
+            phi2_ky_out = _condense_ky(np.asarray(resolved.Phi2_kyt, dtype=np.float32))
+            phi2_t = np.sum(phi2_ky_out, axis=1)
+        elif resolved is not None and resolved.Phi2_kxt is not None:
+            phi2_kx_out = _condense_kx(np.asarray(resolved.Phi2_kxt, dtype=np.float32))
+            phi2_t = np.sum(phi2_kx_out, axis=1)
         else:
             phi2_t = np.asarray(diag.Wphi_t, dtype=np.float32)
         diag_group.createVariable("Phi2_t", "f4", ("time",))[:] = phi2_t
@@ -678,12 +694,12 @@ def _write_runtime_nonlinear_gx_artifacts(out: str | Path, result: Any, cfg: Any
         )
         diag_group.createVariable("TurbulentHeating_st", "f4", ("time", "s"))[:, :] = turb_heat_st
         if resolved is not None:
-            if resolved.Phi2_kxt is not None:
-                diag_group.createVariable("Phi2_kxt", "f4", ("time", "kx"))[:, :] = _condense_kx(np.asarray(resolved.Phi2_kxt, dtype=np.float32))
-            if resolved.Phi2_kyt is not None:
-                diag_group.createVariable("Phi2_kyt", "f4", ("time", "ky"))[:, :] = _condense_ky(np.asarray(resolved.Phi2_kyt, dtype=np.float32))
-            if resolved.Phi2_kxkyt is not None:
-                diag_group.createVariable("Phi2_kxkyt", "f4", ("time", "ky", "kx"))[:, :, :] = _condense_kykx(np.asarray(resolved.Phi2_kxkyt, dtype=np.float32))
+            if phi2_kx_out is not None:
+                diag_group.createVariable("Phi2_kxt", "f4", ("time", "kx"))[:, :] = phi2_kx_out
+            if phi2_ky_out is not None:
+                diag_group.createVariable("Phi2_kyt", "f4", ("time", "ky"))[:, :] = phi2_ky_out
+            if phi2_kykx_out is not None:
+                diag_group.createVariable("Phi2_kxkyt", "f4", ("time", "ky", "kx"))[:, :, :] = phi2_kykx_out
             if resolved.Phi2_zt is not None:
                 diag_group.createVariable("Phi2_zt", "f4", ("time", "theta"))[:, :] = np.asarray(resolved.Phi2_zt, dtype=np.float32)
             if resolved.Phi2_zonal_t is not None:
