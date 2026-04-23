@@ -706,7 +706,7 @@ def _vmec_fieldlines(
     r.iota_input = iota_input_val
     r.d_iota_d_s = d_iota_d_s
     r.d_pressure_d_s = d_pressure_d_s
-    r.s_hat_input = float(shat[0])
+    r.s_hat_input = s_hat_input_val
     r.alpha = alpha
     r.theta_b = theta_b
     r.phi_b = phi_b
