@@ -103,6 +103,40 @@ class ObservedOrderMetrics:
 
 
 @dataclass(frozen=True)
+class ScalarGateResult:
+    """Pass/fail result for one benchmark observable.
+
+    The tolerance convention follows ``numpy.isclose``: a metric passes when
+    ``abs_error <= atol + rtol * abs(reference)``. This keeps near-zero
+    frequency and marginal-growth gates explicit through ``atol`` rather than
+    hiding them behind unstable relative errors.
+    """
+
+    metric: str
+    observed: float
+    reference: float
+    abs_error: float
+    rel_error: float
+    atol: float
+    rtol: float
+    passed: bool
+    units: str
+    notes: str
+
+
+@dataclass(frozen=True)
+class GateReport:
+    """Collection of scalar gates for one validation artifact."""
+
+    case: str
+    source: str
+    gates: tuple[ScalarGateResult, ...]
+    passed: bool
+    max_abs_error: float
+    max_rel_error: float
+
+
+@dataclass(frozen=True)
 class EigenfunctionComparisonMetrics:
     """Phase-aligned eigenfunction comparison summary."""
 
@@ -130,6 +164,220 @@ class DiagnosticTimeSeries:
     values: np.ndarray
     variable: str
     source_path: str
+
+
+def evaluate_scalar_gate(
+    metric: str,
+    observed: float,
+    reference: float,
+    *,
+    atol: float,
+    rtol: float,
+    units: str = "",
+    notes: str = "",
+) -> ScalarGateResult:
+    """Evaluate one scalar benchmark gate.
+
+    Use this helper for publication-facing metrics such as growth rates,
+    frequencies, windowed heat fluxes, zonal residuals, and damping rates. The
+    explicit ``atol``/``rtol`` pair forces each artifact to document whether its
+    tolerance is absolute, relative, or both.
+    """
+
+    obs = float(observed)
+    ref = float(reference)
+    atol_f = float(atol)
+    rtol_f = float(rtol)
+    if atol_f < 0.0 or rtol_f < 0.0:
+        raise ValueError("atol and rtol must be non-negative")
+    abs_error = float(abs(obs - ref)) if np.isfinite(obs) and np.isfinite(ref) else float("inf")
+    if np.isfinite(ref) and abs(ref) > 0.0:
+        rel_error = float(abs_error / abs(ref))
+    else:
+        rel_error = 0.0 if abs_error == 0.0 else float("inf")
+    tolerance = atol_f + rtol_f * abs(ref)
+    passed = bool(np.isfinite(obs) and np.isfinite(ref) and abs_error <= tolerance)
+    return ScalarGateResult(
+        metric=str(metric),
+        observed=obs,
+        reference=ref,
+        abs_error=abs_error,
+        rel_error=rel_error,
+        atol=atol_f,
+        rtol=rtol_f,
+        passed=passed,
+        units=str(units),
+        notes=str(notes),
+    )
+
+
+def gate_report(case: str, source: str, gates: list[ScalarGateResult] | tuple[ScalarGateResult, ...]) -> GateReport:
+    """Summarize a set of scalar gates for one artifact."""
+
+    gate_tuple = tuple(gates)
+    if not gate_tuple:
+        raise ValueError("gate report requires at least one scalar gate")
+    finite_abs = [gate.abs_error for gate in gate_tuple if np.isfinite(gate.abs_error)]
+    finite_rel = [gate.rel_error for gate in gate_tuple if np.isfinite(gate.rel_error)]
+    return GateReport(
+        case=str(case),
+        source=str(source),
+        gates=gate_tuple,
+        passed=all(gate.passed for gate in gate_tuple),
+        max_abs_error=float(max(finite_abs)) if finite_abs else float("inf"),
+        max_rel_error=float(max(finite_rel)) if finite_rel else float("inf"),
+    )
+
+
+def gate_report_to_dict(report: GateReport) -> dict[str, object]:
+    """Return a JSON-serializable representation of a gate report."""
+
+    return {
+        "case": report.case,
+        "source": report.source,
+        "passed": bool(report.passed),
+        "max_abs_error": float(report.max_abs_error),
+        "max_rel_error": float(report.max_rel_error),
+        "gates": [
+            {
+                "metric": gate.metric,
+                "observed": float(gate.observed),
+                "reference": float(gate.reference),
+                "abs_error": float(gate.abs_error),
+                "rel_error": float(gate.rel_error),
+                "atol": float(gate.atol),
+                "rtol": float(gate.rtol),
+                "passed": bool(gate.passed),
+                "units": gate.units,
+                "notes": gate.notes,
+            }
+            for gate in report.gates
+        ],
+    }
+
+
+def linear_metrics_gate_report(
+    observed: LateTimeLinearMetrics,
+    reference: LateTimeLinearMetrics,
+    *,
+    case: str,
+    source: str,
+    gamma_atol: float = 0.0,
+    gamma_rtol: float = 0.05,
+    omega_atol: float = 0.0,
+    omega_rtol: float = 0.05,
+) -> GateReport:
+    """Gate late-time linear growth and frequency metrics."""
+
+    return gate_report(
+        case,
+        source,
+        (
+            evaluate_scalar_gate(
+                "gamma_fit",
+                observed.gamma_fit,
+                reference.gamma_fit,
+                atol=gamma_atol,
+                rtol=gamma_rtol,
+                units="v_t/R",
+            ),
+            evaluate_scalar_gate(
+                "omega_fit",
+                observed.omega_fit,
+                reference.omega_fit,
+                atol=omega_atol,
+                rtol=omega_rtol,
+                units="v_t/R",
+            ),
+        ),
+    )
+
+
+def nonlinear_window_gate_report(
+    observed: NonlinearWindowMetrics,
+    reference: NonlinearWindowMetrics,
+    *,
+    case: str,
+    source: str,
+    rtol: float = 0.1,
+    atol: float = 0.0,
+    include_envelope: bool = True,
+) -> GateReport:
+    """Gate windowed nonlinear transport and field-energy metrics."""
+
+    metrics = ("heat_flux_mean", "heat_flux_rms", "wphi_mean", "wg_mean")
+    gates: list[ScalarGateResult] = []
+    for metric in metrics:
+        gates.append(
+            evaluate_scalar_gate(
+                metric,
+                getattr(observed, metric),
+                getattr(reference, metric),
+                atol=atol,
+                rtol=rtol,
+            )
+        )
+    if (
+        include_envelope
+        and observed.phi_mode_envelope_mean is not None
+        and reference.phi_mode_envelope_mean is not None
+    ):
+        gates.append(
+            evaluate_scalar_gate(
+                "phi_mode_envelope_mean",
+                observed.phi_mode_envelope_mean,
+                reference.phi_mode_envelope_mean,
+                atol=atol,
+                rtol=rtol,
+            )
+        )
+    return gate_report(case, source, gates)
+
+
+def zonal_response_gate_report(
+    observed: ZonalFlowResponseMetrics,
+    reference: ZonalFlowResponseMetrics,
+    *,
+    case: str,
+    source: str,
+    residual_atol: float,
+    residual_rtol: float = 0.0,
+    frequency_atol: float,
+    frequency_rtol: float = 0.0,
+    damping_atol: float,
+    damping_rtol: float = 0.0,
+) -> GateReport:
+    """Gate Rosenbluth-Hinton/GAM-style response observables."""
+
+    return gate_report(
+        case,
+        source,
+        (
+            evaluate_scalar_gate(
+                "residual_level",
+                observed.residual_level,
+                reference.residual_level,
+                atol=residual_atol,
+                rtol=residual_rtol,
+            ),
+            evaluate_scalar_gate(
+                "gam_frequency",
+                observed.gam_frequency,
+                reference.gam_frequency,
+                atol=frequency_atol,
+                rtol=frequency_rtol,
+                units="v_t/R",
+            ),
+            evaluate_scalar_gate(
+                "gam_damping_rate",
+                observed.gam_damping_rate,
+                reference.gam_damping_rate,
+                atol=damping_atol,
+                rtol=damping_rtol,
+                units="v_t/R",
+            ),
+        ),
+    )
 
 
 def normalize_eigenfunction(eigenfunction: np.ndarray, z: np.ndarray) -> np.ndarray:
