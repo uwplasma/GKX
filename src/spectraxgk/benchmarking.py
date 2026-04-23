@@ -70,6 +70,7 @@ class ZonalFlowResponseMetrics:
     """Late-time residual and GAM-envelope metrics for zonal-flow responses."""
 
     initial_level: float
+    initial_policy: str
     residual_level: float
     residual_std: float
     response_rms: float
@@ -360,11 +361,15 @@ def zonal_flow_response_metrics(
     *,
     tail_fraction: float = 0.3,
     initial_fraction: float = 0.1,
+    initial_policy: str = "window_abs_mean",
 ) -> ZonalFlowResponseMetrics:
     """Estimate residual level and GAM envelope metrics from a zonal response.
 
     The input ``response`` should be a scalar zonal observable such as zonal
     potential or a normalized zonal-energy proxy on a uniform time trace.
+    ``initial_policy="first_abs"`` follows Rosenbluth-Hinton/GAM convention by
+    normalizing to the initial potential magnitude; ``"window_abs_mean"`` keeps
+    the older robust behavior for generic noisy traces.
     """
 
     t_arr = np.asarray(t, dtype=float)
@@ -380,14 +385,23 @@ def zonal_flow_response_metrics(
     if t_arr.size < 4:
         raise ValueError("zonal-flow response requires at least four finite samples")
 
-    lead_mask, _lead_tmin, _lead_tmax = _leading_window(t_arr, float(initial_fraction))
+    policy = str(initial_policy).strip().lower().replace("-", "_")
+    if policy not in {"window_abs_mean", "first_abs"}:
+        raise ValueError("initial_policy must be one of {'window_abs_mean', 'first_abs'}")
+
     tail_mask, tail_tmin, tail_tmax = _tail_window(t_arr, float(tail_fraction))
-    initial_vals = resp[lead_mask]
     tail_vals = resp[tail_mask]
-    if initial_vals.size == 0 or tail_vals.size == 0:
+    if tail_vals.size == 0:
         raise ValueError("response windows must be non-empty")
 
-    initial_level = float(np.mean(np.abs(initial_vals)))
+    if policy == "first_abs":
+        initial_level = float(abs(resp[0]))
+    else:
+        lead_mask, _lead_tmin, _lead_tmax = _leading_window(t_arr, float(initial_fraction))
+        initial_vals = resp[lead_mask]
+        if initial_vals.size == 0:
+            raise ValueError("response windows must be non-empty")
+        initial_level = float(np.mean(np.abs(initial_vals)))
     if initial_level <= 0.0 or not np.isfinite(initial_level):
         raise ValueError("initial response level must be finite and positive")
 
@@ -424,6 +438,7 @@ def zonal_flow_response_metrics(
 
     return ZonalFlowResponseMetrics(
         initial_level=initial_level,
+        initial_policy=policy,
         residual_level=residual_norm,
         residual_std=residual_std_norm,
         response_rms=response_rms,

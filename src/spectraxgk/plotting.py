@@ -796,11 +796,13 @@ def zonal_flow_response_figure(
             f"residual = {metrics.residual_level:.4f}\n"
             f"std = {metrics.residual_std:.4f}\n"
             f"ω_GAM = {metrics.gam_frequency:.4f}\n"
-            f"γ_damp = {metrics.gam_damping_rate:.4f}"
+            f"γ_damp = {metrics.gam_damping_rate:.4f}\n"
+            f"norm = {getattr(metrics, 'initial_policy', 'window_abs_mean')}"
         ),
         transform=ax1.transAxes,
         va="top",
         ha="left",
+        fontsize=9,
         bbox={"boxstyle": "round,pad=0.3", "facecolor": "white", "alpha": 0.9, "edgecolor": "#cccccc"},
     )
 
