@@ -225,23 +225,27 @@ def gate_report(
 
 
 def gate_report_to_dict(report: GateReport) -> dict[str, object]:
-    """Return a JSON-serializable representation of a gate report."""
+    """Return a strict JSON-serializable representation of a gate report."""
+
+    def _finite_json_float(value: float) -> float | None:
+        val = float(value)
+        return val if np.isfinite(val) else None
 
     return {
         "case": report.case,
         "source": report.source,
         "passed": bool(report.passed),
-        "max_abs_error": float(report.max_abs_error),
-        "max_rel_error": float(report.max_rel_error),
+        "max_abs_error": _finite_json_float(report.max_abs_error),
+        "max_rel_error": _finite_json_float(report.max_rel_error),
         "gates": [
             {
                 "metric": gate.metric,
-                "observed": float(gate.observed),
-                "reference": float(gate.reference),
-                "abs_error": float(gate.abs_error),
-                "rel_error": float(gate.rel_error),
-                "atol": float(gate.atol),
-                "rtol": float(gate.rtol),
+                "observed": _finite_json_float(gate.observed),
+                "reference": _finite_json_float(gate.reference),
+                "abs_error": _finite_json_float(gate.abs_error),
+                "rel_error": _finite_json_float(gate.rel_error),
+                "atol": _finite_json_float(gate.atol),
+                "rtol": _finite_json_float(gate.rtol),
                 "passed": bool(gate.passed),
                 "units": gate.units,
                 "notes": gate.notes,
