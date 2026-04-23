@@ -103,27 +103,29 @@ from spectraxgk.benchmarks import (
     run_cyclone_linear,
     run_cyclone_scan,
 )
-from spectraxgk.benchmarking import (
+from spectraxgk.validation_gates import (
     BranchContinuationMetrics,
     GateReport,
     LateTimeLinearMetrics,
     NonlinearWindowMetrics,
     ScalarGateResult,
-    ScanAndModeResult,
     ZonalFlowResponseMetrics,
     branch_continuity_gate_report,
-    branch_continuity_metrics,
     eigenfunction_gate_report,
     evaluate_scalar_gate,
     gate_report,
     gate_report_to_dict,
     linear_metrics_gate_report,
     nonlinear_window_gate_report,
-    normalize_eigenfunction,
     observed_order_gate_report,
+    zonal_response_gate_report,
+)
+from spectraxgk.benchmarking import (
+    ScanAndModeResult,
+    branch_continuity_metrics,
+    normalize_eigenfunction,
     run_linear_scan,
     run_scan_and_mode,
-    zonal_response_gate_report,
 )
 from spectraxgk.plotting import (
     cyclone_comparison_figure,
