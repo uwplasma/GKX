@@ -17,6 +17,7 @@ from spectraxgk.linear import (
     LinearParams,
     _build_implicit_operator,
     build_linear_cache,
+    collision_damping as _base_collision_damping,
     hypercollision_damping,
     term_config_to_linear_terms,
 )
@@ -303,22 +304,12 @@ def _collision_damping(
 ) -> jnp.ndarray:
     """Assemble collision + hypercollision damping for operator splitting."""
 
-    lb_lam = cache.lb_lam.astype(real_dtype)
+    damping = _base_collision_damping(cache, params, real_dtype, squeeze_species=squeeze_species)
     hyper_damp = hypercollision_damping(cache, params, real_dtype)
     coll_w = jnp.asarray(term_cfg.collisions, dtype=real_dtype)
     hyper_w = jnp.asarray(term_cfg.hypercollisions, dtype=real_dtype)
-
-    if lb_lam.ndim == 6:
-        ns = lb_lam.shape[0]
-        nu = jnp.asarray(params.nu, dtype=real_dtype)
-        if nu.ndim == 0:
-            nu = jnp.broadcast_to(nu, (ns,))
-        damping = nu[:, None, None, None, None, None] * lb_lam
-        if squeeze_species:
-            damping = damping[0]
-            hyper_damp = hyper_damp[0]
-    else:
-        damping = jnp.asarray(params.nu, dtype=real_dtype) * lb_lam
+    if squeeze_species and hyper_damp.ndim == 6:
+        hyper_damp = hyper_damp[0]
 
     damping = coll_w * damping + hyper_w * hyper_damp
     return damping.astype(real_dtype)
@@ -588,7 +579,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
         ),
         dtype=real_dtype,
     )
-    squeeze_species = G0.ndim == 5 and cache.lb_lam.ndim == 6
+    squeeze_species = G0.ndim == 5
     use_collision_split = bool(collision_split) and (
         float(term_cfg.collisions) != 0.0 or float(term_cfg.hypercollisions) != 0.0
     )

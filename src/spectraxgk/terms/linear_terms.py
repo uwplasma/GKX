@@ -266,10 +266,57 @@ def collisions_contribution(
     JlB: jnp.ndarray | None = None,
     b: jnp.ndarray | None = None,
     nu: jnp.ndarray,
-    collision_lam: jnp.ndarray,
+    collision_lam: jnp.ndarray | None = None,
+    lb_lam: jnp.ndarray | None = None,
     weight: jnp.ndarray,
 ) -> jnp.ndarray:
-    base = -(H * collision_lam) * weight
+    real_dtype = jnp.real(H).dtype
+
+    def _species_nu(ns: int) -> jnp.ndarray:
+        nu_arr = jnp.asarray(nu, dtype=real_dtype).reshape(-1)
+        if nu_arr.size == 1:
+            return jnp.broadcast_to(nu_arr, (ns,))
+        if int(nu_arr.size) != int(ns):
+            raise ValueError(f"nu must have length {ns} (got {nu_arr.size})")
+        return nu_arr
+
+    collision_base = None
+    if collision_lam is not None:
+        collision_arr = jnp.asarray(collision_lam, dtype=real_dtype)
+        if collision_arr.size != 0:
+            collision_base = collision_arr
+    if collision_base is None:
+        if lb_lam is None:
+            collision_base = jnp.zeros_like(H, dtype=real_dtype)
+        else:
+            lb_arr = jnp.asarray(lb_lam, dtype=real_dtype)
+            if lb_arr.ndim == 2:
+                if H.ndim == 6:
+                    ns = int(H.shape[0])
+                    nu_s = _species_nu(ns)[:, None, None, None, None, None]
+                    collision_base = nu_s * lb_arr[None, :, :, None, None, None]
+                    if b is not None:
+                        b_s = jnp.asarray(b, dtype=real_dtype)
+                        if b_s.ndim == 3:
+                            b_s = jnp.broadcast_to(b_s, (ns,) + b_s.shape)
+                        collision_base = collision_base + nu_s * b_s[:, None, None, ...]
+                else:
+                    nu0 = _species_nu(1)[0]
+                    collision_base = nu0 * lb_arr[:, :, None, None, None]
+                    if b is not None:
+                        b_s = jnp.asarray(b, dtype=real_dtype)
+                        if b_s.ndim == 4:
+                            b_s = b_s[0]
+                        collision_base = collision_base + nu0 * b_s[None, None, ...]
+            elif lb_arr.ndim == 6:
+                ns = int(lb_arr.shape[0])
+                collision_base = _species_nu(ns)[:, None, None, None, None, None] * lb_arr
+                if H.ndim == 5:
+                    collision_base = collision_base[0]
+            else:
+                collision_base = jnp.asarray(nu, dtype=real_dtype) * lb_arr
+
+    base = -(H * collision_base) * weight
     if G is None or Jl is None or JlB is None or b is None:
         return base
 

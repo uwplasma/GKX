@@ -533,6 +533,43 @@ def hypercollision_damping(
     return hyper
 
 
+def collision_damping(
+    cache: "LinearCache",
+    params: "LinearParams",
+    real_dtype: jnp.dtype,
+    *,
+    squeeze_species: bool = False,
+) -> jnp.ndarray:
+    """Assemble collision damping from cached low-rank factors.
+
+    Runtime caches store ``lb_lam`` as the Hermite-Laguerre Lenard-Bernstein
+    diagonal only, with shape ``(Nl, Nm)``. Older tests may still provide a
+    pre-expanded array; support that for compatibility.
+    """
+
+    lb_lam = cache.lb_lam.astype(real_dtype)
+    if lb_lam.ndim == 2:
+        b = jnp.asarray(cache.b, dtype=real_dtype)
+        ns = int(b.shape[0])
+        nu = _as_species_array(params.nu, ns, "nu").astype(real_dtype)
+        nu_s = nu[:, None, None, None, None, None]
+        damping = nu_s * lb_lam[None, :, :, None, None, None]
+        damping = damping + nu_s * b[:, None, None, ...]
+        if squeeze_species:
+            damping = damping[0]
+        return damping.astype(real_dtype)
+
+    if lb_lam.ndim == 6:
+        ns = int(lb_lam.shape[0])
+        nu = _as_species_array(params.nu, ns, "nu").astype(real_dtype)
+        damping = nu[:, None, None, None, None, None] * lb_lam
+        if squeeze_species:
+            damping = damping[0]
+        return damping.astype(real_dtype)
+
+    return (jnp.asarray(params.nu, dtype=real_dtype) * lb_lam).astype(real_dtype)
+
+
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
 class LinearCache:
@@ -851,14 +888,7 @@ def build_linear_cache(
         real_dtype
     )
     mask0 = (grid.ky == 0.0)[:, None, None] & (grid.kx == 0.0)[None, :, None]
-    lb_base = lenard_bernstein_eigenvalues(Nl, Nm, params.nu_hermite, params.nu_laguerre)[
-        None, :, :, None, None, None
-    ]
-    lb_lam = lb_base + b[:, None, None, ...]
-    nu_arr = jnp.asarray(params.nu, dtype=real_dtype)
-    if nu_arr.ndim == 0:
-        nu_arr = nu_arr[None]
-    collision_lam = nu_arr[:, None, None, None, None, None] * lb_lam
+    lb_lam = lenard_bernstein_eigenvalues(Nl, Nm, params.nu_hermite, params.nu_laguerre).astype(real_dtype)
     l = jnp.arange(Nl, dtype=real_dtype)[:, None, None, None, None]
     m = jnp.arange(Nm, dtype=real_dtype)[None, :, None, None, None]
     l4 = jnp.arange(Nl, dtype=real_dtype)[:, None, None, None]
@@ -997,8 +1027,8 @@ def build_linear_cache(
         ky_grid=ky_grid,
         dealias_mask=dealias_mask,
         kxfac=jnp.asarray(kxfac_val, dtype=real_dtype),
-        lb_lam=lb_lam.astype(real_dtype),
-        collision_lam=collision_lam.astype(real_dtype),
+        lb_lam=lb_lam,
+        collision_lam=jnp.asarray([], dtype=real_dtype),
         hyper_ratio=hyper_ratio.astype(real_dtype),
         ratio_l=ratio_l.astype(real_dtype),
         ratio_m=ratio_m.astype(real_dtype),
@@ -1329,16 +1359,10 @@ def _integrate_linear_cached_impl(
     G0 = jnp.asarray(G0, dtype=state_dtype)
     real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
     dt_val = jnp.asarray(dt, dtype=real_dtype)
-    lb_lam = cache.lb_lam.astype(real_dtype)
     hyper_damp = hypercollision_damping(cache, params, real_dtype)
-    if lb_lam.ndim == 6:
-        ns = lb_lam.shape[0]
-        nu = _as_species_array(params.nu, ns, "nu").astype(real_dtype)
-        damping = nu[:, None, None, None, None, None] * lb_lam + hyper_damp
-        if G0.ndim == 5:
-            damping = damping[0]
-    else:
-        damping = jnp.asarray(params.nu, dtype=real_dtype) * lb_lam + hyper_damp
+    if G0.ndim == 5 and hyper_damp.ndim == 6:
+        hyper_damp = hyper_damp[0]
+    damping = collision_damping(cache, params, real_dtype, squeeze_species=(G0.ndim == 5)) + hyper_damp
     damping = damping.astype(real_dtype)
 
     def advance(G):
@@ -1531,12 +1555,10 @@ def _build_implicit_operator(
         squeeze_species = True
     shape = G.shape
     size = int(np.prod(np.asarray(shape)))
-
     ns = shape[0]
-    nu = _as_species_array(params.nu, ns, "nu").astype(real_dtype)
-    lb_lam = cache.lb_lam.astype(real_dtype)
+
     hyper_damp = hypercollision_damping(cache, params, real_dtype)
-    damping = nu[:, None, None, None, None, None] * lb_lam + hyper_damp
+    damping = collision_damping(cache, params, real_dtype, squeeze_species=False) + hyper_damp
     damping = damping.astype(real_dtype)
 
     l = cache.l.astype(real_dtype)
@@ -2009,16 +2031,10 @@ def integrate_linear_diagnostics(
     G0 = jnp.asarray(G0, dtype=state_dtype)
     real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
     dt_val = jnp.asarray(dt, dtype=real_dtype)
-    lb_lam = cache.lb_lam.astype(real_dtype)
     hyper_damp = hypercollision_damping(cache, params, real_dtype)
-    if lb_lam.ndim == 6:
-        ns = lb_lam.shape[0]
-        nu = _as_species_array(params.nu, ns, "nu").astype(real_dtype)
-        damping = nu[:, None, None, None, None, None] * lb_lam + hyper_damp
-        if G0.ndim == 5:
-            damping = damping[0]
-    else:
-        damping = jnp.asarray(params.nu, dtype=real_dtype) * lb_lam + hyper_damp
+    if G0.ndim == 5 and hyper_damp.ndim == 6:
+        hyper_damp = hyper_damp[0]
+    damping = collision_damping(cache, params, real_dtype, squeeze_species=(G0.ndim == 5)) + hyper_damp
     damping = damping.astype(real_dtype)
 
     def advance(G_in: jnp.ndarray) -> jnp.ndarray:
