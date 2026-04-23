@@ -14,6 +14,7 @@ from spectraxgk.runtime_config import RuntimeConfig
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_CACHE_DIR = _REPO_ROOT / ".cache" / "spectrax" / "miller_eik"
+_MILLER_EIK_CACHE_VERSION = 2
 
 
 @dataclass(frozen=True)
@@ -87,7 +88,7 @@ def default_miller_eik_output_path(
 ) -> Path:
     """Return a stable cache path for a Miller-generated ``*.eiknc.nc`` file."""
 
-    payload = asdict(request)
+    payload = {"cache_version": _MILLER_EIK_CACHE_VERSION, **asdict(request)}
     digest = hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()[:16]
     return _DEFAULT_CACHE_DIR / f"miller_{digest}.eiknc.nc"
 
