@@ -103,6 +103,20 @@ class ObservedOrderMetrics:
 
 
 @dataclass(frozen=True)
+class BranchContinuationMetrics:
+    """Continuity summary for a scanned linear branch."""
+
+    ky: np.ndarray
+    gamma: np.ndarray
+    omega: np.ndarray
+    rel_gamma_jumps: np.ndarray
+    rel_omega_jumps: np.ndarray
+    max_rel_gamma_jump: float
+    max_rel_omega_jump: float
+    min_successive_overlap: float | None
+
+
+@dataclass(frozen=True)
 class ScalarGateResult:
     """Pass/fail result for one benchmark observable.
 
@@ -1046,6 +1060,163 @@ def estimate_observed_order(step_sizes: np.ndarray, errors: np.ndarray) -> Obser
         orders=orders_arr,
         asymptotic_order=float(orders_arr[-1]),
     )
+
+
+def observed_order_gate_report(
+    metrics: ObservedOrderMetrics,
+    *,
+    case: str,
+    source: str,
+    min_asymptotic_order: float,
+    max_final_error: float | None = None,
+    order_atol: float = 1.0e-12,
+) -> GateReport:
+    """Gate an observed-order convergence study.
+
+    ``min_asymptotic_order`` encodes the expected method/order floor, while
+    ``max_final_error`` can be used for publication figures where both rate and
+    absolute accuracy matter.
+    """
+
+    min_order = float(min_asymptotic_order)
+    order_tol = float(order_atol)
+    if min_order < 0.0 or order_tol < 0.0:
+        raise ValueError("min_asymptotic_order and order_atol must be non-negative")
+    gates = [
+        evaluate_scalar_gate(
+            "observed_order_deficit",
+            max(0.0, min_order - float(metrics.asymptotic_order)),
+            0.0,
+            atol=order_tol,
+            rtol=0.0,
+            notes=f"Passes when asymptotic observed order >= {min_order:.6g}.",
+        )
+    ]
+    if max_final_error is not None:
+        final_error_limit = float(max_final_error)
+        if final_error_limit < 0.0:
+            raise ValueError("max_final_error must be non-negative")
+        gates.append(
+            evaluate_scalar_gate(
+                "final_error",
+                float(metrics.errors[-1]),
+                0.0,
+                atol=final_error_limit,
+                rtol=0.0,
+                notes=f"Passes when final-grid error <= {final_error_limit:.6g}.",
+            )
+        )
+    return gate_report(case, source, gates)
+
+
+def branch_continuity_metrics(
+    ky: np.ndarray,
+    gamma: np.ndarray,
+    omega: np.ndarray,
+    *,
+    successive_overlap: np.ndarray | None = None,
+    floor_fraction: float = 1.0e-8,
+) -> BranchContinuationMetrics:
+    """Compute branch-continuity diagnostics for a linear scan.
+
+    The relative jump normalization uses a local scale from adjacent values,
+    with a floor tied to the largest value in the scan. This avoids false
+    blow-ups near marginal points while still flagging branch jumps.
+    """
+
+    ky_arr = np.asarray(ky, dtype=float)
+    gamma_arr = np.asarray(gamma, dtype=float)
+    omega_arr = np.asarray(omega, dtype=float)
+    if ky_arr.ndim != 1 or gamma_arr.ndim != 1 or omega_arr.ndim != 1:
+        raise ValueError("ky, gamma, and omega must be one-dimensional arrays")
+    if not (ky_arr.size == gamma_arr.size == omega_arr.size):
+        raise ValueError("ky, gamma, and omega must have equal length")
+    if ky_arr.size < 2:
+        raise ValueError("branch continuity requires at least two ky samples")
+    if np.any(~np.isfinite(ky_arr)) or np.any(~np.isfinite(gamma_arr)) or np.any(~np.isfinite(omega_arr)):
+        raise ValueError("ky, gamma, and omega must be finite")
+    floor = float(floor_fraction)
+    if floor < 0.0:
+        raise ValueError("floor_fraction must be non-negative")
+
+    def _relative_jumps(values: np.ndarray) -> np.ndarray:
+        jumps = np.abs(np.diff(values))
+        global_floor = max(float(np.nanmax(np.abs(values))) * floor, 1.0e-30)
+        local_scale = np.maximum(np.maximum(np.abs(values[:-1]), np.abs(values[1:])), global_floor)
+        return jumps / local_scale
+
+    overlap_min: float | None = None
+    if successive_overlap is not None:
+        overlap = np.asarray(successive_overlap, dtype=float)
+        if overlap.ndim != 1 or overlap.size != ky_arr.size - 1:
+            raise ValueError("successive_overlap must have length len(ky) - 1")
+        if np.any(~np.isfinite(overlap)):
+            raise ValueError("successive_overlap must be finite")
+        overlap_min = float(np.min(overlap))
+
+    gamma_jumps = _relative_jumps(gamma_arr)
+    omega_jumps = _relative_jumps(omega_arr)
+    return BranchContinuationMetrics(
+        ky=ky_arr,
+        gamma=gamma_arr,
+        omega=omega_arr,
+        rel_gamma_jumps=gamma_jumps,
+        rel_omega_jumps=omega_jumps,
+        max_rel_gamma_jump=float(np.max(gamma_jumps)),
+        max_rel_omega_jump=float(np.max(omega_jumps)),
+        min_successive_overlap=overlap_min,
+    )
+
+
+def branch_continuity_gate_report(
+    metrics: BranchContinuationMetrics,
+    *,
+    case: str,
+    source: str,
+    max_rel_gamma_jump: float,
+    max_rel_omega_jump: float,
+    min_successive_overlap: float | None = None,
+) -> GateReport:
+    """Gate branch-continuation diagnostics for branch-followed scans."""
+
+    gamma_limit = float(max_rel_gamma_jump)
+    omega_limit = float(max_rel_omega_jump)
+    if gamma_limit < 0.0 or omega_limit < 0.0:
+        raise ValueError("maximum relative jumps must be non-negative")
+    gates = [
+        evaluate_scalar_gate(
+            "max_rel_gamma_jump",
+            metrics.max_rel_gamma_jump,
+            0.0,
+            atol=gamma_limit,
+            rtol=0.0,
+            notes=f"Passes when adjacent gamma jumps <= {gamma_limit:.6g}.",
+        ),
+        evaluate_scalar_gate(
+            "max_rel_omega_jump",
+            metrics.max_rel_omega_jump,
+            0.0,
+            atol=omega_limit,
+            rtol=0.0,
+            notes=f"Passes when adjacent omega jumps <= {omega_limit:.6g}.",
+        ),
+    ]
+    if min_successive_overlap is not None:
+        min_overlap = float(min_successive_overlap)
+        if not 0.0 <= min_overlap <= 1.0:
+            raise ValueError("min_successive_overlap must be in [0, 1]")
+        observed = float("nan") if metrics.min_successive_overlap is None else float(metrics.min_successive_overlap)
+        gates.append(
+            evaluate_scalar_gate(
+                "successive_overlap_deficit",
+                max(0.0, min_overlap - observed) if np.isfinite(observed) else float("nan"),
+                0.0,
+                atol=0.0,
+                rtol=0.0,
+                notes=f"Passes when successive eigenfunction overlap >= {min_overlap:.6g}.",
+            )
+        )
+    return gate_report(case, source, gates)
 
 
 def run_linear_scan(
