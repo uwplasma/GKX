@@ -626,3 +626,215 @@ def growth_fit_figure(
     ax1.legend(loc="best", fontsize=9)
     fig.tight_layout()
     return fig, axes
+
+
+def eigenfunction_overlap_summary_figure(
+    ky: np.ndarray,
+    overlap: np.ndarray,
+    relative_l2: np.ndarray,
+    *,
+    title: str = "Eigenfunction overlap summary",
+    x_label: str = r"$k_y \rho_i$",
+    overlap_label: str = "Normalized overlap",
+    rel_l2_label: str = "Relative $L^2$ error",
+    log_x: bool = True,
+) -> Tuple[plt.Figure, np.ndarray]:
+    """Render a compact two-panel eigenfunction-overlap summary."""
+
+    set_plot_style()
+    fig, axes = plt.subplots(2, 1, sharex=True, figsize=(5.6, 5.2))
+    ax0, ax1 = axes
+    ky_arr = np.asarray(ky, dtype=float)
+    overlap_arr = np.asarray(overlap, dtype=float)
+    rel_l2_arr = np.asarray(relative_l2, dtype=float)
+
+    ax0.plot(ky_arr, overlap_arr, color="#0f4c81", marker="o", linewidth=2.2, label=overlap_label)
+    ax0.set_ylabel("overlap")
+    ax0.set_ylim(0.0, min(1.02, max(1.0, float(np.nanmax(overlap_arr)) + 0.02)))
+    ax0.set_title(title)
+    ax0.legend(loc="best", frameon=False)
+
+    ax1.plot(ky_arr, rel_l2_arr, color="#c44e52", marker="s", linewidth=2.2, label=rel_l2_label)
+    ax1.set_xlabel(x_label)
+    ax1.set_ylabel(r"relative $L^2$")
+    ax1.legend(loc="best", frameon=False)
+
+    if log_x:
+        ax0.set_xscale("log")
+        ax1.set_xscale("log")
+
+    for axis in axes:
+        axis.grid(True, alpha=0.25)
+
+    fig.tight_layout()
+    return fig, axes
+
+
+def eigenfunction_reference_overlay_figure(
+    theta: np.ndarray,
+    eigenfunction: np.ndarray,
+    theta_ref: np.ndarray,
+    reference: np.ndarray,
+    *,
+    title: str = "Eigenfunction overlay",
+) -> Tuple[plt.Figure, np.ndarray]:
+    """Render a phase-aligned raw overlay against a frozen reference mode."""
+
+    from spectraxgk.benchmarking import compare_eigenfunctions, phase_align_eigenfunction
+
+    set_plot_style()
+    theta_arr = np.asarray(theta, dtype=float)
+    eig = np.asarray(eigenfunction, dtype=np.complex128)
+    theta_ref_arr = np.asarray(theta_ref, dtype=float)
+    ref = np.asarray(reference, dtype=np.complex128)
+    if eig.shape != ref.shape:
+        raise ValueError("eigenfunction and reference must have the same shape")
+
+    eig_aligned, _phase = phase_align_eigenfunction(eig, ref)
+    metrics = compare_eigenfunctions(eig, ref)
+
+    fig, axes = plt.subplots(1, 3, figsize=(12.0, 3.9))
+    ax0, ax1, ax2 = axes
+
+    ax0.plot(theta_ref_arr, np.real(ref), color="#0f4c81", linewidth=2.4, label="Reference Re")
+    ax0.plot(theta_arr, np.real(eig_aligned), color="#c44e52", linewidth=2.0, linestyle="--", label="SPECTRAX Re")
+    ax0.set_xlabel(r"$\theta$")
+    ax0.set_ylabel("real")
+    ax0.set_title("Real part")
+    ax0.legend(loc="best", frameon=False)
+
+    ax1.plot(theta_ref_arr, np.imag(ref), color="#0f4c81", linewidth=2.4, label="Reference Im")
+    ax1.plot(theta_arr, np.imag(eig_aligned), color="#c44e52", linewidth=2.0, linestyle="--", label="SPECTRAX Im")
+    ax1.set_xlabel(r"$\theta$")
+    ax1.set_ylabel("imag")
+    ax1.set_title("Imaginary part")
+    ax1.legend(loc="best", frameon=False)
+
+    ax2.plot(theta_ref_arr, np.abs(ref), color="#0f4c81", linewidth=2.4, label="Reference $|\\phi|$")
+    ax2.plot(theta_arr, np.abs(eig_aligned), color="#c44e52", linewidth=2.0, linestyle="--", label="SPECTRAX $|\\phi|$")
+    ax2.set_xlabel(r"$\theta$")
+    ax2.set_ylabel(r"$|\phi|$")
+    ax2.set_title("Amplitude")
+    ax2.legend(loc="upper right", frameon=False)
+    ax2.text(
+        0.03,
+        0.04,
+        f"overlap = {metrics.overlap:.4f}\nrel $L^2$ = {metrics.relative_l2:.4f}",
+        transform=ax2.transAxes,
+        va="bottom",
+        ha="left",
+        bbox={"boxstyle": "round,pad=0.3", "facecolor": "white", "alpha": 0.9, "edgecolor": "#cccccc"},
+    )
+
+    for axis in axes:
+        axis.grid(True, alpha=0.25)
+
+    fig.suptitle(title, y=1.02)
+    fig.tight_layout()
+    return fig, axes
+
+
+def zonal_flow_response_figure(
+    t: np.ndarray,
+    response: np.ndarray,
+    *,
+    metrics=None,
+    title: str = "Zonal-flow response",
+    y_label: str = "normalized response",
+) -> Tuple[plt.Figure, np.ndarray]:
+    """Render a zonal-flow response trace and its envelope summary."""
+
+    from spectraxgk.benchmarking import zonal_flow_response_metrics
+
+    set_plot_style()
+    t_arr = np.asarray(t, dtype=float)
+    resp = np.asarray(response, dtype=float)
+    if t_arr.ndim != 1 or resp.ndim != 1 or t_arr.size != resp.size:
+        raise ValueError("t and response must be one-dimensional arrays of equal length")
+    if metrics is None:
+        metrics = zonal_flow_response_metrics(t_arr, resp)
+
+    response_norm = resp / float(metrics.initial_level)
+    residual = float(metrics.residual_level)
+    env_t = np.asarray(metrics.peak_times, dtype=float)
+    env_y = np.asarray(metrics.peak_envelope, dtype=float)
+    fit_count = int(getattr(metrics, "peak_fit_count", env_t.size))
+    fit_tmin = float(getattr(metrics, "fit_tmin", t_arr[0]))
+    fit_tmax = float(getattr(metrics, "fit_tmax", t_arr[-1]))
+    damping_method = str(getattr(metrics, "damping_method", "combined_envelope"))
+    frequency_method = str(getattr(metrics, "frequency_method", "peak_spacing"))
+    max_peak_t = np.asarray(getattr(metrics, "max_peak_times", np.asarray([], dtype=float)), dtype=float)
+    max_peak_y = np.asarray(getattr(metrics, "max_peak_values", np.asarray([], dtype=float)), dtype=float)
+    min_peak_t = np.asarray(getattr(metrics, "min_peak_times", np.asarray([], dtype=float)), dtype=float)
+    min_peak_y = np.asarray(getattr(metrics, "min_peak_values", np.asarray([], dtype=float)), dtype=float)
+
+    fig, axes = plt.subplots(1, 2, figsize=(11.0, 4.0))
+    ax0, ax1 = axes
+
+    ax0.plot(t_arr, response_norm, color="#0f4c81", linewidth=2.2, label="response")
+    ax0.axhline(residual, color="#c44e52", linestyle="--", linewidth=2.0, label="residual")
+    ax0.axvspan(fit_tmin, fit_tmax, color="#d9ead3", alpha=0.22, linewidth=0.0)
+    if damping_method == "branchwise_extrema":
+        if max_peak_t.size:
+            keep = (max_peak_t >= fit_tmin) & (max_peak_t <= fit_tmax)
+            ax0.plot(max_peak_t[keep], max_peak_y[keep], linestyle="none", marker="o", color="#2a9d8f", markersize=5.2, label="maxima fit points")
+        if min_peak_t.size:
+            keep = (min_peak_t >= fit_tmin) & (min_peak_t <= fit_tmax)
+            ax0.plot(min_peak_t[keep], min_peak_y[keep], linestyle="none", marker="o", color="#7b2cbf", markersize=5.2, label="minima fit points")
+    ax0.fill_between(
+        t_arr,
+        residual - float(metrics.residual_std),
+        residual + float(metrics.residual_std),
+        color="#c44e52",
+        alpha=0.15,
+        linewidth=0.0,
+    )
+    ax0.set_xlabel("t")
+    ax0.set_ylabel(y_label)
+    ax0.set_title("Normalized response")
+    ax0.legend(loc="best", frameon=False)
+
+    ax1.plot(t_arr, np.maximum(np.abs(response_norm - residual), 1.0e-14), color="#4c956c", linewidth=2.0, alpha=0.5)
+    if env_t.size:
+        ax1.plot(env_t, env_y, color="#c44e52", marker="o", linewidth=1.8, label="envelope peaks")
+    fit_env_t = env_t[(env_t >= fit_tmin) & (env_t <= fit_tmax)]
+    fit_env_y = env_y[(env_t >= fit_tmin) & (env_t <= fit_tmax)]
+    if damping_method == "combined_envelope" and fit_count >= 2 and np.isfinite(float(metrics.gam_damping_rate)) and fit_env_t.size:
+        fit_n = min(fit_count, fit_env_t.size)
+        fit_t = fit_env_t[:fit_n]
+        fit = fit_env_y[0] * np.exp(-float(metrics.gam_damping_rate) * (fit_t - fit_t[0]))
+        label = "envelope fit" if fit_n == fit_env_t.size else f"envelope fit (first {fit_n} peaks)"
+        ax1.plot(fit_t, fit, color="#2a9d8f", linestyle="--", linewidth=2.0, label=label)
+    ax1.set_yscale("log")
+    ax1.set_xlabel("t")
+    ax1.set_ylabel("envelope")
+    ax1.set_title("GAM envelope")
+    if env_t.size:
+        ax1.legend(loc="best", frameon=False)
+    ax1.text(
+        0.03,
+        0.97,
+        (
+            f"residual = {metrics.residual_level:.4f}\n"
+            f"std = {metrics.residual_std:.4f}\n"
+            f"ω_GAM = {metrics.gam_frequency:.4f}\n"
+            f"γ_damp = {metrics.gam_damping_rate:.4f}\n"
+            f"fit_peaks = {fit_count}\n"
+            f"norm = {getattr(metrics, 'initial_policy', 'window_abs_mean')}\n"
+            f"damp = {damping_method}\n"
+            f"freq = {frequency_method}\n"
+            f"fit_t = [{fit_tmin:.1f}, {fit_tmax:.1f}]"
+        ),
+        transform=ax1.transAxes,
+        va="top",
+        ha="left",
+        fontsize=9,
+        bbox={"boxstyle": "round,pad=0.3", "facecolor": "white", "alpha": 0.9, "edgecolor": "#cccccc"},
+    )
+
+    for axis in axes:
+        axis.grid(True, alpha=0.25)
+
+    fig.suptitle(title, y=1.02)
+    fig.tight_layout()
+    return fig, axes

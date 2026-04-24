@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, fields as dataclass_fields, replace
-from typing import Callable, Sequence, cast
+from dataclasses import replace
+from typing import Any, Callable, Sequence
 from pathlib import Path
 
 import jax.numpy as jnp
@@ -24,12 +24,8 @@ from spectraxgk.analysis import (
     fit_growth_rate_auto_with_stats,
     select_ky_index,
 )
-from spectraxgk.diagnostics import SimulationDiagnostics, ResolvedDiagnostics, total_energy
-from spectraxgk.geometry import (
-    apply_geometry_grid_defaults,
-    FluxTubeGeometryLike,
-    build_flux_tube_geometry,
-)
+from spectraxgk.diagnostics import SimulationDiagnostics
+from spectraxgk.geometry import apply_geometry_grid_defaults, FluxTubeGeometryLike
 from spectraxgk.grids import SpectralGrid, build_spectral_grid, select_ky_grid
 from spectraxgk.linear import (
     LinearParams,
@@ -39,56 +35,41 @@ from spectraxgk.linear import (
     linear_terms_to_term_config,
 )
 from spectraxgk.nonlinear import integrate_nonlinear_gx_diagnostics_state
-from spectraxgk.restart import load_gx_restart_state
 from spectraxgk.linear_krylov import KrylovConfig, dominant_eigenpair
 from spectraxgk.normalization import apply_diagnostic_normalization, get_normalization_contract
 from spectraxgk.runtime_config import RuntimeConfig, RuntimeSpeciesConfig
+from spectraxgk import runtime_startup
+from spectraxgk.runtime_diagnostics import (
+    concat_gx_diagnostics,
+    slice_gx_diagnostics,
+    stride_gx_diagnostics,
+    truncate_gx_diagnostics,
+)
+from spectraxgk.runtime_chunks import run_adaptive_gx_chunk_loop
+from spectraxgk.runtime_results import (
+    RuntimeLinearResult,
+    RuntimeLinearScanResult,
+    RuntimeNonlinearResult,
+    build_runtime_nonlinear_result,
+)
+from spectraxgk.runtime_startup import (
+    _build_gaussian_profile,
+    _build_initial_condition,
+    _enforce_full_ky_hermitian,
+    _expand_ky,
+    _gx_default_p_hyper_m,
+    _require_full_gk_runtime_model,
+    _resolve_runtime_hl_dims,
+    _reshape_gx_state,
+    _runtime_default_krylov_config,
+    _runtime_model_key,
+    _species_to_linear,
+)
 from spectraxgk.runners import integrate_linear_from_config, integrate_nonlinear_from_config
 from spectraxgk.species import Species, build_linear_params
 from spectraxgk.terms.config import FieldState, TermConfig
 from spectraxgk.miller_eik import generate_runtime_miller_eik
 from spectraxgk.vmec_eik import generate_runtime_vmec_eik
-
-
-@dataclass(frozen=True)
-class RuntimeLinearResult:
-    """Result container for runtime linear runs."""
-
-    ky: float
-    gamma: float
-    omega: float
-    selection: ModeSelection
-    t: np.ndarray | None = None
-    signal: np.ndarray | None = None
-    state: np.ndarray | None = None
-    z: np.ndarray | None = None
-    eigenfunction: np.ndarray | None = None
-    fit_window_tmin: float | None = None
-    fit_window_tmax: float | None = None
-    fit_signal_used: str | None = None
-
-
-@dataclass(frozen=True)
-class RuntimeLinearScanResult:
-    """Result container for runtime linear ky scans."""
-
-    ky: np.ndarray
-    gamma: np.ndarray
-    omega: np.ndarray
-
-
-@dataclass(frozen=True)
-class RuntimeNonlinearResult:
-    """Result container for runtime nonlinear runs."""
-
-    t: np.ndarray
-    diagnostics: SimulationDiagnostics | None
-    phi2: np.ndarray | None = None
-    fields: FieldState | None = None
-    state: np.ndarray | None = None
-    ky_selected: float | None = None
-    kx_selected: float | None = None
-
 
 _GX_RAND_MAX = float((1 << 31) - 1)
 
@@ -109,6 +90,83 @@ def _midplane_index(grid: SpectralGrid) -> int:
 def _zero_kx_index(grid: SpectralGrid) -> int:
     kx = np.asarray(grid.kx, dtype=float)
     return int(np.argmin(np.abs(kx)))
+
+
+build_flux_tube_geometry = runtime_startup.build_flux_tube_geometry
+load_gx_restart_state = runtime_startup.load_gx_restart_state
+
+
+def build_runtime_geometry(cfg: RuntimeConfig) -> FluxTubeGeometryLike:
+    """Resolve runtime geometry while preserving the runtime module patch surface."""
+
+    model = cfg.geometry.model.strip().lower()
+    if model == "vmec":
+        eik_path = generate_runtime_vmec_eik(cfg)
+        geom_cfg = replace(cfg.geometry, model="vmec-eik", geometry_file=str(eik_path))
+        return build_flux_tube_geometry(geom_cfg)
+    if model == "miller":
+        eik_path = generate_runtime_miller_eik(cfg)
+        geom_cfg = replace(cfg.geometry, model="gx-eik", geometry_file=str(eik_path))
+        return build_flux_tube_geometry(geom_cfg)
+    return build_flux_tube_geometry(cfg.geometry)
+
+
+def build_runtime_linear_params(
+    cfg: RuntimeConfig,
+    *,
+    Nm: int | None = None,
+    geom: FluxTubeGeometryLike | None = None,
+) -> LinearParams:
+    """Build runtime linear parameters using the runtime module geometry surface."""
+
+    if geom is None:
+        geom = build_runtime_geometry(cfg)
+    return runtime_startup.build_runtime_linear_params(cfg, Nm=Nm, geom=geom)
+
+
+def build_runtime_linear_terms(cfg: RuntimeConfig) -> LinearTerms:
+    """Build runtime linear term toggles."""
+
+    return runtime_startup.build_runtime_linear_terms(cfg)
+
+
+def build_runtime_term_config(cfg: RuntimeConfig) -> TermConfig:
+    """Build runtime nonlinear-ready term config."""
+
+    return runtime_startup.build_runtime_term_config(cfg)
+
+
+def _load_initial_state_from_file(
+    path: Path,
+    *,
+    nspecies: int,
+    Nl: int,
+    Nm: int,
+    ny: int,
+    nx: int,
+    nz: int,
+) -> np.ndarray:
+    """Load an initial state while preserving the runtime module patch surface."""
+
+    if path.suffix.lower() == ".nc":
+        return load_gx_restart_state(
+            path,
+            nspecies=nspecies,
+            Nl=Nl,
+            Nm=Nm,
+            ny=ny,
+            nx=nx,
+            nz=nz,
+        )
+    return runtime_startup._load_initial_state_from_file(
+        path,
+        nspecies=nspecies,
+        Nl=Nl,
+        Nm=Nm,
+        ny=ny,
+        nx=nx,
+        nz=nz,
+    )
 
 
 def _gx_centered_random_pairs(seed: int, count: int) -> np.ndarray:
@@ -209,701 +267,21 @@ def _infer_runtime_nonlinear_steps(
     return steps_val
 
 
-def _slice_gx_diagnostics(diag: SimulationDiagnostics, stop: int) -> SimulationDiagnostics:
-    """Return the first ``stop`` diagnostic samples."""
-
-    if stop < 0:
-        raise ValueError("stop must be >= 0")
-
-    def _slice_optional(arr: np.ndarray | jnp.ndarray | None) -> np.ndarray | None:
-        if arr is None:
-            return None
-        return np.asarray(arr)[:stop, ...]
-
-    def _slice_resolved(resolved: ResolvedDiagnostics | None) -> ResolvedDiagnostics | None:
-        if resolved is None:
-            return None
-        payload: dict[str, np.ndarray | None] = {}
-        for field in dataclass_fields(ResolvedDiagnostics):
-            value = getattr(resolved, field.name)
-            payload[field.name] = None if value is None else np.asarray(value)[:stop, ...]
-        return ResolvedDiagnostics(**payload)
-
-    dt_t = np.asarray(diag.dt_t)[:stop]
-    Wg_t = np.asarray(diag.Wg_t)[:stop]
-    Wphi_t = np.asarray(diag.Wphi_t)[:stop]
-    Wapar_t = np.asarray(diag.Wapar_t)[:stop]
-    if dt_t.size == 0:
-        dt_mean = np.asarray(0.0, dtype=float)
-    else:
-        dt_mean = np.asarray(np.mean(dt_t), dtype=float)
-    return SimulationDiagnostics(
-        t=np.asarray(diag.t)[:stop],
-        dt_t=dt_t,
-        dt_mean=dt_mean,
-        gamma_t=np.asarray(diag.gamma_t)[:stop],
-        omega_t=np.asarray(diag.omega_t)[:stop],
-        Wg_t=Wg_t,
-        Wphi_t=Wphi_t,
-        Wapar_t=Wapar_t,
-        heat_flux_t=np.asarray(diag.heat_flux_t)[:stop],
-        particle_flux_t=np.asarray(diag.particle_flux_t)[:stop],
-        energy_t=np.asarray(total_energy(jnp.asarray(Wg_t), jnp.asarray(Wphi_t), jnp.asarray(Wapar_t))),
-        heat_flux_species_t=_slice_optional(diag.heat_flux_species_t),
-        particle_flux_species_t=_slice_optional(diag.particle_flux_species_t),
-        turbulent_heating_t=_slice_optional(diag.turbulent_heating_t),
-        turbulent_heating_species_t=_slice_optional(diag.turbulent_heating_species_t),
-        phi_mode_t=_slice_optional(diag.phi_mode_t),
-        resolved=_slice_resolved(diag.resolved),
-    )
-
-
-def _truncate_gx_diagnostics(diag: SimulationDiagnostics, *, t_max: float) -> SimulationDiagnostics:
-    """Keep samples through the first entry that reaches ``t_max``."""
-
-    t_arr = np.asarray(diag.t, dtype=float)
-    if t_arr.size == 0:
-        return diag
-    stop = int(np.searchsorted(t_arr, float(t_max), side="left")) + 1
-    stop = min(max(stop, 1), int(t_arr.size))
-    return _slice_gx_diagnostics(diag, stop)
-
-
-def _stride_gx_diagnostics(diag: SimulationDiagnostics, *, stride: int) -> SimulationDiagnostics:
-    """Apply the GX runtime output stride after concatenating chunk diagnostics."""
-
-    stride_use = int(max(stride, 1))
-    if stride_use == 1:
-        return diag
-
-    def _stride_optional(arr: np.ndarray | jnp.ndarray | None) -> np.ndarray | None:
-        if arr is None:
-            return None
-        return np.asarray(arr)[::stride_use, ...]
-
-    def _stride_resolved(resolved: ResolvedDiagnostics | None) -> ResolvedDiagnostics | None:
-        if resolved is None:
-            return None
-        payload: dict[str, np.ndarray | None] = {}
-        for field in dataclass_fields(ResolvedDiagnostics):
-            value = getattr(resolved, field.name)
-            payload[field.name] = None if value is None else np.asarray(value)[::stride_use, ...]
-        return ResolvedDiagnostics(**payload)
-
-    dt_t = np.asarray(diag.dt_t)[::stride_use]
-    Wg_t = np.asarray(diag.Wg_t)[::stride_use]
-    Wphi_t = np.asarray(diag.Wphi_t)[::stride_use]
-    Wapar_t = np.asarray(diag.Wapar_t)[::stride_use]
-    if dt_t.size == 0:
-        dt_mean = np.asarray(0.0, dtype=float)
-    else:
-        dt_mean = np.asarray(np.mean(dt_t), dtype=float)
-    return SimulationDiagnostics(
-        t=np.asarray(diag.t)[::stride_use],
-        dt_t=dt_t,
-        dt_mean=dt_mean,
-        gamma_t=np.asarray(diag.gamma_t)[::stride_use],
-        omega_t=np.asarray(diag.omega_t)[::stride_use],
-        Wg_t=Wg_t,
-        Wphi_t=Wphi_t,
-        Wapar_t=Wapar_t,
-        heat_flux_t=np.asarray(diag.heat_flux_t)[::stride_use],
-        particle_flux_t=np.asarray(diag.particle_flux_t)[::stride_use],
-        energy_t=np.asarray(total_energy(jnp.asarray(Wg_t), jnp.asarray(Wphi_t), jnp.asarray(Wapar_t))),
-        heat_flux_species_t=_stride_optional(diag.heat_flux_species_t),
-        particle_flux_species_t=_stride_optional(diag.particle_flux_species_t),
-        turbulent_heating_t=_stride_optional(diag.turbulent_heating_t),
-        turbulent_heating_species_t=_stride_optional(diag.turbulent_heating_species_t),
-        phi_mode_t=_stride_optional(diag.phi_mode_t),
-        resolved=_stride_resolved(diag.resolved),
-    )
-
-
-def _concat_gx_diagnostics(diags: Sequence[SimulationDiagnostics]) -> SimulationDiagnostics:
-    """Concatenate one or more diagnostic chunks."""
-
-    if not diags:
-        raise ValueError("at least one diagnostic chunk is required")
-
-    def _concat(name: str) -> np.ndarray:
-        return np.concatenate([np.asarray(getattr(diag, name)) for diag in diags], axis=0)
-
-    def _concat_optional(name: str) -> np.ndarray | None:
-        values = [getattr(diag, name) for diag in diags]
-        if all(value is None for value in values):
-            return None
-        return np.concatenate([np.asarray(value) for value in values if value is not None], axis=0)
-
-    def _concat_resolved() -> ResolvedDiagnostics | None:
-        values = [diag.resolved for diag in diags]
-        if all(value is None for value in values):
-            return None
-        payload: dict[str, np.ndarray | None] = {}
-        for field in dataclass_fields(ResolvedDiagnostics):
-            series = [None if value is None else getattr(value, field.name) for value in values]
-            if all(item is None for item in series):
-                payload[field.name] = None
-            else:
-                payload[field.name] = np.concatenate(
-                    [np.asarray(item) for item in series if item is not None],
-                    axis=0,
-                )
-        return ResolvedDiagnostics(**payload)
-
-    dt_t = _concat("dt_t")
-    Wg_t = _concat("Wg_t")
-    Wphi_t = _concat("Wphi_t")
-    Wapar_t = _concat("Wapar_t")
-    dt_mean = np.asarray(np.mean(dt_t), dtype=float)
-    return SimulationDiagnostics(
-        t=_concat("t"),
-        dt_t=dt_t,
-        dt_mean=dt_mean,
-        gamma_t=_concat("gamma_t"),
-        omega_t=_concat("omega_t"),
-        Wg_t=Wg_t,
-        Wphi_t=Wphi_t,
-        Wapar_t=Wapar_t,
-        heat_flux_t=_concat("heat_flux_t"),
-        particle_flux_t=_concat("particle_flux_t"),
-        energy_t=np.asarray(total_energy(jnp.asarray(Wg_t), jnp.asarray(Wphi_t), jnp.asarray(Wapar_t))),
-        heat_flux_species_t=_concat_optional("heat_flux_species_t"),
-        particle_flux_species_t=_concat_optional("particle_flux_species_t"),
-        turbulent_heating_t=_concat_optional("turbulent_heating_t"),
-        turbulent_heating_species_t=_concat_optional("turbulent_heating_species_t"),
-        phi_mode_t=_concat_optional("phi_mode_t"),
-        resolved=_concat_resolved(),
-    )
-
-
-def _species_to_linear(species_cfg: Sequence[RuntimeSpeciesConfig]) -> list[Species]:
-    kinetic = [s for s in species_cfg if bool(s.kinetic)]
-    if not kinetic:
-        raise ValueError("RuntimeConfig.species must include at least one kinetic species")
-    return [
-        Species(
-            charge=float(s.charge),
-            mass=float(s.mass),
-            density=float(s.density),
-            temperature=float(s.temperature),
-            tprim=float(s.tprim),
-            fprim=float(s.fprim),
-            nu=float(s.nu),
-        )
-        for s in kinetic
-    ]
-
-
-def _gx_default_p_hyper_m(nhermite: int | None) -> float:
-    """Return the GX default Hermite hypercollision exponent."""
-
-    if nhermite is None:
-        return 20.0
-    return float(min(20, max(int(nhermite) // 2, 1)))
-
-
-def _runtime_model_key(cfg: RuntimeConfig) -> str:
-    return cfg.physics.reduced_model.strip().lower()
-
-
-def _runtime_default_krylov_config(cfg: RuntimeConfig) -> KrylovConfig:
-    """Return a model-aware Krylov default for runtime-configured linear runs."""
-
-    contract = cfg.normalization.contract.strip().lower()
-    kinetic_species = tuple(spec for spec in cfg.species if spec.kinetic)
-    electron_only = len(kinetic_species) == 1 and float(kinetic_species[0].charge) < 0.0
-
-    # Electron-scale runtime configs need a frequency-targeted selector; the
-    # blank Krylov defaults drift to damped or wrong-sign branches.
-    if contract == "etg" or (
-        cfg.physics.adiabatic_ions
-        and cfg.physics.electrostatic
-        and not cfg.physics.electromagnetic
-        and electron_only
-    ):
-        return KrylovConfig(
-            method="shift_invert",
-            krylov_dim=16,
-            restarts=1,
-            omega_min_factor=0.0,
-            omega_target_factor=0.4,
-            omega_cap_factor=1.5,
-            omega_sign=-1,
-            power_iters=80,
-            power_dt=0.002,
-            shift_source="target",
-            shift_tol=1.0e-3,
-            shift_maxiter=40,
-            shift_restart=12,
-            shift_solve_method="batched",
-            shift_preconditioner="damping",
-            shift_selection="targeted",
-            mode_family="etg",
-            fallback_method="arnoldi",
-            fallback_real_floor=-1.0e-6,
-        )
-
-    return KrylovConfig()
-
-
-def _resolve_runtime_hl_dims(
-    cfg: RuntimeConfig,
-    *,
-    Nl: int | None,
-    Nm: int | None,
-) -> tuple[int, int]:
-    """Resolve model-native Hermite/Laguerre dimensions."""
-
-    model = _runtime_model_key(cfg)
-    if model in {"", "gyrokinetic", "full", "full-gk", "gx"}:
-        return int(24 if Nl is None else Nl), int(12 if Nm is None else Nm)
-    if model == "cetg":
-        Nl_use = 2 if Nl is None else int(Nl)
-        Nm_use = 1 if Nm is None else int(Nm)
-        if Nl_use != 2 or Nm_use != 1:
-            raise ValueError("GX cETG requires exactly Nl=2 and Nm=1")
-        return Nl_use, Nm_use
-    if model == "krehm":
-        raise NotImplementedError(
-            "physics.reduced_model='krehm' requires the dedicated KREHM solver; "
-            "the full-GK runtime path does not emulate the GX KREHM model."
-        )
-    raise ValueError(f"Unknown physics.reduced_model={cfg.physics.reduced_model!r}")
-
-
-def _require_full_gk_runtime_model(cfg: RuntimeConfig) -> None:
-    """Reject reduced-model configs until their dedicated solvers exist."""
-
-    model = cfg.physics.reduced_model.strip().lower()
-    if model in {"", "gyrokinetic", "full", "full-gk", "gx"}:
-        return
-    if model == "cetg":
-        raise NotImplementedError(
-            "physics.reduced_model='cetg' requires the dedicated collisional-slab ETG solver; "
-            "the full-GK runtime path does not emulate the GX cETG model."
-        )
-    if model == "krehm":
-        raise NotImplementedError(
-            "physics.reduced_model='krehm' requires the dedicated KREHM solver; "
-            "the full-GK runtime path does not emulate the GX KREHM model."
-        )
-    raise ValueError(f"Unknown physics.reduced_model={cfg.physics.reduced_model!r}")
-
-
-def build_runtime_geometry(cfg: RuntimeConfig) -> FluxTubeGeometryLike:
-    """Resolve runtime geometry, generating VMEC ``*.eik.nc`` files when requested."""
-
-    model = cfg.geometry.model.strip().lower()
-    if model == "vmec":
-        eik_path = generate_runtime_vmec_eik(cfg)
-        geom_cfg = replace(cfg.geometry, model="vmec-eik", geometry_file=str(eik_path))
-        return build_flux_tube_geometry(geom_cfg)
-    if model == "miller":
-        eik_path = generate_runtime_miller_eik(cfg)
-        geom_cfg = replace(cfg.geometry, model="gx-eik", geometry_file=str(eik_path))
-        return build_flux_tube_geometry(geom_cfg)
-    return build_flux_tube_geometry(cfg.geometry)
-
-
-def build_runtime_linear_params(
-    cfg: RuntimeConfig,
-    *,
-    Nm: int | None = None,
-    geom: FluxTubeGeometryLike | None = None,
-) -> LinearParams:
-    """Build ``LinearParams`` from a unified runtime config."""
-
-    _require_full_gk_runtime_model(cfg)
-    if geom is None:
-        geom = build_runtime_geometry(cfg)
-    contract = get_normalization_contract(cfg.normalization.contract)
-    rho_star = contract.rho_star if cfg.normalization.rho_star is None else float(cfg.normalization.rho_star)
-    omega_d_scale = (
-        contract.omega_d_scale if cfg.normalization.omega_d_scale is None else float(cfg.normalization.omega_d_scale)
-    )
-    omega_star_scale = (
-        contract.omega_star_scale
-        if cfg.normalization.omega_star_scale is None
-        else float(cfg.normalization.omega_star_scale)
-    )
-
-    species = _species_to_linear(cfg.species)
-    has_kinetic_electron = any(float(s.charge) < 0.0 for s in species)
-    if cfg.physics.adiabatic_electrons and has_kinetic_electron:
-        raise ValueError("adiabatic_electrons=True conflicts with kinetic electron species")
-
-    tau_e = float(cfg.physics.tau_e) if cfg.physics.adiabatic_electrons else 0.0
-    beta = float(cfg.physics.beta) if cfg.physics.electromagnetic else 0.0
-    fapar = 1.0 if (cfg.physics.electromagnetic and cfg.physics.use_apar and beta > 0.0) else 0.0
-    p_hyper_m = cfg.collisions.p_hyper_m
-    if p_hyper_m is None:
-        p_hyper_m = _gx_default_p_hyper_m(Nm)
-
-    params = build_linear_params(
-        species,
-        tau_e=tau_e,
-        kpar_scale=float(geom.gradpar()),
-        omega_d_scale=float(omega_d_scale),
-        omega_star_scale=float(omega_star_scale),
-        rho_star=float(rho_star),
-        beta=beta,
-        fapar=fapar,
-        nu_hyper=float(cfg.collisions.nu_hyper),
-        p_hyper=float(cfg.collisions.p_hyper),
-        nu_hyper_l=float(cfg.collisions.nu_hyper_l),
-        nu_hyper_m=float(cfg.collisions.nu_hyper_m),
-        nu_hyper_lm=float(cfg.collisions.nu_hyper_lm),
-        p_hyper_l=float(cfg.collisions.p_hyper_l),
-        p_hyper_m=float(p_hyper_m),
-        p_hyper_lm=float(cfg.collisions.p_hyper_lm),
-        D_hyper=float(cfg.collisions.D_hyper),
-        p_hyper_kperp=float(cfg.collisions.p_hyper_kperp),
-        hypercollisions_const=float(cfg.collisions.hypercollisions_const),
-        hypercollisions_kz=float(cfg.collisions.hypercollisions_kz),
-    )
-    return replace(
-        params,
-        nu_hermite=float(cfg.collisions.nu_hermite),
-        nu_laguerre=float(cfg.collisions.nu_laguerre),
-        damp_ends_amp=(
-            float(cfg.collisions.damp_ends_amp) / float(cfg.time.dt)
-            if cfg.collisions.damp_ends_scale_by_dt and float(cfg.time.dt) != 0.0
-            else float(cfg.collisions.damp_ends_amp)
-        ),
-        damp_ends_widthfrac=float(cfg.collisions.damp_ends_widthfrac),
-    )
-
-
-def build_runtime_linear_terms(cfg: RuntimeConfig) -> LinearTerms:
-    """Build ``LinearTerms`` from unified toggles."""
-
-    em_on = bool(cfg.physics.electromagnetic)
-    use_apar = em_on and bool(cfg.physics.use_apar)
-    use_bpar = em_on and bool(cfg.physics.use_bpar)
-    collisions_on = bool(cfg.physics.collisions)
-    hyper_on = bool(cfg.physics.hypercollisions)
-    return LinearTerms(
-        streaming=float(cfg.terms.streaming),
-        mirror=float(cfg.terms.mirror),
-        curvature=float(cfg.terms.curvature),
-        gradb=float(cfg.terms.gradb),
-        diamagnetic=float(cfg.terms.diamagnetic),
-        collisions=float(cfg.terms.collisions if collisions_on else 0.0),
-        hypercollisions=float(cfg.terms.hypercollisions if hyper_on else 0.0),
-        hyperdiffusion=float(cfg.terms.hyperdiffusion),
-        end_damping=float(cfg.terms.end_damping),
-        apar=float(cfg.terms.apar if use_apar else 0.0),
-        bpar=float(cfg.terms.bpar if use_bpar else 0.0),
-    )
-
-
-def build_runtime_term_config(cfg: RuntimeConfig) -> TermConfig:
-    """Build nonlinear-ready ``TermConfig`` from unified toggles."""
-
-    lin_terms = build_runtime_linear_terms(cfg)
-    nonlinear_on = float(cfg.terms.nonlinear if cfg.physics.nonlinear else 0.0)
-    return linear_terms_to_term_config(lin_terms, nonlinear=nonlinear_on)
-
-
-def _build_gaussian_profile(
-    z: np.ndarray,
-    *,
-    kx: float,
-    ky: float,
-    s_hat: float,
-    width: float,
-    envelope_constant: float,
-    envelope_sine: float,
-) -> np.ndarray:
-    if ky == 0.0:
-        return np.zeros_like(z)
-    theta0 = kx / (s_hat * ky)
-    env = envelope_constant + envelope_sine * np.sin(z - theta0)
-    return env * np.exp(-((z - theta0) / width) ** 2)
-
-
-def _reshape_gx_state(
-    raw: np.ndarray,
-    *,
-    nspec: int,
-    nl: int,
-    nm: int,
-    nyc: int,
-    nx: int,
-    nz: int,
-) -> np.ndarray:
-    nR = nyc * nx * nz
-    arr = raw.reshape((nspec, nm, nl, nR)).transpose(0, 2, 1, 3)
-    ky_idx = np.arange(nyc)[:, None, None]
-    kx_idx = np.arange(nx)[None, :, None]
-    z_idx = np.arange(nz)[None, None, :]
-    idxyz = ky_idx + nyc * (kx_idx + nx * z_idx)
-    arr_reordered = arr[..., idxyz.ravel()]
-    return arr_reordered.reshape((nspec, nl, nm, nyc, nx, nz))
-
-
-def _expand_ky(arr: np.ndarray, *, nyc: int) -> np.ndarray:
-    ny_full = 2 * (nyc - 1)
-    if ny_full <= 0 or arr.shape[-3] == ny_full:
-        return arr
-    if nyc <= 2:
-        return arr
-    pos = arr
-    neg = np.conj(pos[..., 1 : nyc - 1, :, :])
-    neg = neg[..., ::-1, :, :]
-    nx = pos.shape[-2]
-    if nx > 1:
-        kx_neg = np.concatenate(([0], np.arange(nx - 1, 0, -1)))
-        neg = neg[..., kx_neg, :]
-    return np.concatenate([pos, neg], axis=-3)
-
-
-def _enforce_full_ky_hermitian(arr: np.ndarray) -> np.ndarray:
-    """Mirror positive-``ky`` content into the negative branch for full FFT grids."""
-
-    state = np.asarray(arr, dtype=np.complex64)
-    ny = int(state.shape[-3])
-    if ny <= 1:
-        return state
-    nyc = ny // 2 + 1
-    neg_hi = nyc - 1 if (ny % 2) == 0 else nyc
-    if neg_hi <= 1:
-        return state
-    neg = np.conj(state[..., 1:neg_hi, :, :])[..., ::-1, :, :]
-    nx = int(state.shape[-2])
-    if nx > 1:
-        kx_neg = np.concatenate(([0], np.arange(nx - 1, 0, -1)))
-        neg = neg[..., kx_neg, :]
-    state[..., nyc:, :, :] = neg
-    return state
-
-
-def _load_initial_state_from_file(
-    path: Path,
-    *,
-    nspecies: int,
-    Nl: int,
-    Nm: int,
-    ny: int,
-    nx: int,
-    nz: int,
-) -> np.ndarray:
-    if path.suffix.lower() == ".nc":
-        return load_gx_restart_state(
-            path,
-            nspecies=nspecies,
-            Nl=Nl,
-            Nm=Nm,
-            ny=ny,
-            nx=nx,
-            nz=nz,
-        )
-    raw = np.fromfile(path, dtype=np.complex64)
-    nyc = ny // 2 + 1
-    expected_nyc = nspecies * Nl * Nm * nyc * nx * nz
-    expected_full = nspecies * Nl * Nm * ny * nx * nz
-    if raw.size == expected_nyc:
-        arr = _reshape_gx_state(raw, nspec=nspecies, nl=Nl, nm=Nm, nyc=nyc, nx=nx, nz=nz)
-        return _expand_ky(arr, nyc=nyc)
-    if raw.size == expected_full:
-        return raw.reshape((nspecies, Nl, Nm, ny, nx, nz))
-    raise ValueError(
-        f"init_file size {raw.size} does not match expected {expected_nyc} (nyc) or {expected_full} (full)"
-    )
-
-
-def _build_initial_condition(
-    grid: SpectralGrid,
-    geom: FluxTubeGeometryLike,
-    cfg: RuntimeConfig,
-    *,
-    ky_index: int,
-    kx_index: int,
-    Nl: int,
-    Nm: int,
-    nspecies: int,
-) -> jnp.ndarray:
-    field_map = {
-        "density": (0, 0),
-        "upar": (0, 1),
-        "tpar": (0, 2),
-        "tperp": (1, 0),
-        "qpar": (0, 3),
-        "qperp": (1, 1),
-    }
-    all_scales = {
-        "density": 1.0,
-        "upar": 1.0,
-        "tpar": 1.0 / np.sqrt(2.0),
-        "tperp": 1.0,
-        "qpar": 1.0 / np.sqrt(6.0),
-        "qperp": 1.0,
-    }
-    init_field = cfg.init.init_field.lower()
-    if init_field != "all" and init_field not in field_map:
-        raise ValueError(
-            "init_field must be one of {'density','upar','tpar','tperp','qpar','qperp','all'}"
-        )
-    if cfg.init.gaussian_width <= 0.0:
-        raise ValueError("gaussian_width must be > 0")
-    init_file_mode = cfg.init.init_file_mode.strip().lower()
-    if init_file_mode not in {"replace", "add"}:
-        raise ValueError("init_file_mode must be one of {'replace', 'add'}")
-
-    g0: np.ndarray = np.zeros((nspecies, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
-    loaded_state: np.ndarray | None = None
-    if cfg.init.init_file is not None:
-        loaded_state = _load_initial_state_from_file(
-            Path(cfg.init.init_file),
-            nspecies=nspecies,
-            Nl=Nl,
-            Nm=Nm,
-            ny=grid.ky.size,
-            nx=grid.kx.size,
-            nz=grid.z.size,
-        )
-        loaded_state = np.asarray(loaded_state, dtype=np.complex64) * np.complex64(float(cfg.init.init_file_scale))
-    amp = float(cfg.init.init_amp)
-    ky_val = float(grid.ky[ky_index])
-
-    z = np.asarray(grid.z)
-    z_period = _gx_periodic_zp(z)
-    z_phase = np.cos(float(cfg.init.kpar_init) * z / z_period)
-    # GX gives init_single precedence over gaussian_init: single-mode seeds use
-    # the real cosine profile even when gaussian_init=true is present in the
-    # input file.
-    if cfg.init.init_single:
-        vals = amp * z_phase.astype(np.complex64, copy=False)
-    elif cfg.init.gaussian_init:
-        profile = _build_gaussian_profile(
-            z,
-            kx=float(grid.kx[kx_index]),
-            ky=ky_val,
-            s_hat=float(geom.s_hat),
-            width=float(cfg.init.gaussian_width),
-            envelope_constant=float(cfg.init.gaussian_envelope_constant),
-            envelope_sine=float(cfg.init.gaussian_envelope_sine),
-        )
-        vals = amp * profile * (1.0 + 1.0j)
-    else:
-        vals = amp * z_phase.astype(np.complex64, copy=False)
-
-    species_targets: tuple[int, ...]
-    if nspecies == 1:
-        species_targets = (0,)
-    elif cfg.init.init_electrons_only:
-        electron_indices = tuple(
-            i for i, sp in enumerate(cfg.species[:nspecies]) if float(sp.charge) < 0.0
-        )
-        species_targets = electron_indices or (nspecies - 1,)
-    else:
-        species_targets = tuple(range(nspecies))
-
-    def _set_mode(
-        l_idx: int,
-        m_idx: int,
-        ky_i: int,
-        kx_i: int,
-        vals_k: np.ndarray,
-    ) -> None:
-        if l_idx >= Nl or m_idx >= Nm:
-            return
-        for s_idx in species_targets:
-            g0[s_idx, l_idx, m_idx, ky_i, kx_i, :] = vals_k
-
-    def _set_named_mode(
-        field_name: str,
-        ky_i: int,
-        kx_i: int,
-        vals_k: np.ndarray,
-    ) -> None:
-        l_idx, m_idx = field_map[field_name]
-        _set_mode(l_idx, m_idx, ky_i, kx_i, vals_k * all_scales[field_name])
-
-    if cfg.init.gaussian_init and not cfg.init.init_single:
-        nx = grid.kx.size
-        for kx_i, ky_i in _gx_init_mode_pairs(grid):
-            ky_k = float(grid.ky[ky_i])
-            if ky_k == 0.0:
-                continue
-            kx_k = float(grid.kx[kx_i])
-            profile_k = _build_gaussian_profile(
-                z,
-                kx=abs(kx_k),
-                ky=ky_k,
-                s_hat=float(geom.s_hat),
-                width=float(cfg.init.gaussian_width),
-                envelope_constant=float(cfg.init.gaussian_envelope_constant),
-                envelope_sine=float(cfg.init.gaussian_envelope_sine),
-            )
-            vals_k = amp * profile_k * (1.0 + 1.0j)
-            if init_field == "all":
-                for field_name in field_map:
-                    _set_named_mode(field_name, ky_i, kx_i, vals_k)
-            else:
-                l_idx, m_idx = field_map[init_field]
-                _set_mode(l_idx, m_idx, ky_i, kx_i, vals_k)
-
-            if kx_i == 0:
-                continue
-            kx_neg = int(nx - kx_i)
-            if init_field == "all":
-                for field_name in field_map:
-                    _set_named_mode(field_name, ky_i, kx_neg, vals_k)
-            else:
-                l_idx, m_idx = field_map[init_field]
-                _set_mode(l_idx, m_idx, ky_i, kx_neg, vals_k)
-    elif not cfg.init.init_single and not cfg.init.gaussian_init:
-        Zp = _gx_periodic_zp(z)
-        kpar = float(cfg.init.kpar_init)
-        z_phase = np.cos(kpar * z / Zp)
-        nx = grid.kx.size
-        active_modes = _gx_init_mode_pairs(grid)
-        rand_pairs = amp * _gx_centered_random_pairs(int(cfg.init.random_seed), len(active_modes))
-        if init_field != "all":
-            l_idx, m_idx = field_map[init_field]
-            if l_idx >= Nl or m_idx >= Nm:
-                raise ValueError("init_field moment exceeds (Nl, Nm) resolution")
-        for (kx_i, ky_i), (ra, rb) in zip(active_modes, rand_pairs, strict=True):
-            vals_k = ((rb + 1j * ra) if kx_i == 0 else (ra + 1j * rb)) * z_phase
-            if init_field == "all":
-                for field_name in field_map:
-                    _set_named_mode(field_name, ky_i, kx_i, vals_k)
-            else:
-                for s_idx in species_targets:
-                    g0[s_idx, l_idx, m_idx, ky_i, kx_i, :] = vals_k
-            if kx_i != 0:
-                kx_neg = nx - kx_i
-                vals_neg = (rb + 1j * ra) * z_phase
-                if init_field == "all":
-                    for field_name in field_map:
-                        _set_named_mode(field_name, ky_i, kx_neg, vals_neg)
-                else:
-                    for s_idx in species_targets:
-                        g0[s_idx, l_idx, m_idx, ky_i, kx_neg, :] = vals_neg
-    else:
-        if ky_val == 0.0:
-            if loaded_state is None:
-                return jnp.asarray(g0)
-            if init_file_mode == "replace":
-                return jnp.asarray(loaded_state)
-            return jnp.asarray(loaded_state + g0)
-        if init_field == "all":
-            for field_name in field_map:
-                _set_named_mode(field_name, ky_index, kx_index, vals)
-        else:
-            l_idx, m_idx = field_map[init_field]
-            if l_idx >= Nl or m_idx >= Nm:
-                raise ValueError("init_field moment exceeds (Nl, Nm) resolution")
-            for s_idx in species_targets:
-                g0[s_idx, l_idx, m_idx, ky_index, kx_index, :] = vals
-    if grid.ky.size > 1 and np.any(np.asarray(grid.ky) < 0.0):
-        g0 = _enforce_full_ky_hermitian(g0)
-    if loaded_state is not None:
-        if init_file_mode == "replace":
-            return jnp.asarray(loaded_state)
-        g0 = cast(np.ndarray, loaded_state + g0)
-    return jnp.asarray(g0)
+def _runtime_external_phi(cfg: RuntimeConfig) -> float | None:
+    """Return a GX-style runtime external-phi source if requested."""
+
+    source = str(cfg.expert.source).strip().lower()
+    if source in {"", "default"}:
+        return None
+    if source != "phiext_full":
+        raise ValueError(f"unsupported expert.source={cfg.expert.source!r}; expected 'default' or 'phiext_full'")
+    return float(cfg.expert.phi_ext)
+
+
+_slice_gx_diagnostics = slice_gx_diagnostics
+_truncate_gx_diagnostics = truncate_gx_diagnostics
+_stride_gx_diagnostics = stride_gx_diagnostics
+_concat_gx_diagnostics = concat_gx_diagnostics
 
 
 def run_runtime_linear(
@@ -1641,16 +1019,10 @@ def run_runtime_nonlinear(
         if adaptive_chunked:
             chunk_steps = 1024
             G_chunk = G0
-            t_elapsed = 0.0
-            cetg_diag_chunks: list[SimulationDiagnostics] = []
-            cetg_fields_final: FieldState | None = None
-            _status(f"starting adaptive cETG integration in chunks of {chunk_steps} steps up to t_max={float(cfg.time.t_max):.6g}")
-            for _chunk in range(100000):
-                _t_chunk, diag_chunk, G_chunk, cetg_fields_final = integrate_cetg_gx_diagnostics_state(
-                    G_chunk,
-                    grid,
-                    cetg_params,
-                    cetg_term_cfg,
+
+            def _run_cetg_chunk(chunk_show_progress: bool):
+                nonlocal G_chunk
+                kwargs: dict[str, Any] = dict(
                     dt=dt_val,
                     steps=chunk_steps,
                     method=str(method or cfg.time.method),
@@ -1664,44 +1036,38 @@ def run_runtime_nonlinear(
                     dt_max=cfg.time.dt_max,
                     cfl=float(cfg.time.cfl),
                     cfl_fac=cfg.time.cfl_fac,
-                    **progress_kw,
                 )
-                diag_chunk = replace(diag_chunk, t=np.asarray(diag_chunk.t) + t_elapsed)
-                cetg_diag_chunks.append(diag_chunk)
-                t_next = float(np.asarray(diag_chunk.t)[-1])
-                if t_next <= t_elapsed + 1.0e-12:
-                    raise RuntimeError("adaptive cETG runtime made no time-step progress")
-                t_elapsed = t_next
-                _status(f"completed cETG chunk {_chunk + 1}: t={t_elapsed:.6g}/{float(cfg.time.t_max):.6g}")
-                if t_elapsed >= float(cfg.time.t_max):
-                    break
-            else:
-                raise RuntimeError("adaptive cETG runtime exceeded chunk limit before reaching t_max")
+                if chunk_show_progress:
+                    kwargs["show_progress"] = True
+                t_chunk, diag_chunk, G_next, fields_next = integrate_cetg_gx_diagnostics_state(
+                    G_chunk,
+                    grid,
+                    cetg_params,
+                    cetg_term_cfg,
+                    **kwargs,
+                )
+                G_chunk = G_next
+                return t_chunk, diag_chunk, G_next, fields_next
 
-            diag = _concat_gx_diagnostics(cetg_diag_chunks)
-            diag = _truncate_gx_diagnostics(diag, t_max=float(cfg.time.t_max))
-            G_final = G_chunk
-            if cetg_fields_final is None:
-                raise RuntimeError("adaptive cETG runtime did not produce final fields")
-            if diagnostics_on is False:
-                phi2 = np.asarray(jnp.mean(jnp.abs(cetg_fields_final.phi) ** 2))
-                return RuntimeNonlinearResult(
-                    t=np.asarray([]),
-                    diagnostics=None,
-                    phi2=phi2,
-                    fields=cetg_fields_final,
-                    state=np.asarray(G_final) if return_state else None,
-                    ky_selected=float(np.asarray(grid.ky[ky_index])),
-                    kx_selected=float(np.asarray(grid.kx[kx_index])),
-                )
-            return RuntimeNonlinearResult(
+            chunk_result = run_adaptive_gx_chunk_loop(
+                integrate_chunk=_run_cetg_chunk,
+                t_max=float(cfg.time.t_max),
+                chunk_steps=chunk_steps,
+                label="cETG",
+                show_progress=show_progress,
+                status_callback=_status,
+            )
+            diag = chunk_result.diagnostics
+            G_final = chunk_result.state
+            cetg_fields_final = chunk_result.fields
+            return build_runtime_nonlinear_result(
                 t=np.asarray(diag.t),
                 diagnostics=diag,
-                phi2=None,
                 fields=cetg_fields_final,
                 state=np.asarray(G_final) if return_state else None,
                 ky_selected=float(np.asarray(grid.ky[ky_index])),
                 kx_selected=float(np.asarray(grid.kx[kx_index])),
+                summarize_fields=diagnostics_on is False,
             )
 
         steps_val = int(round(float(cfg.time.t_max) / dt_val)) if steps is None else int(steps)
@@ -1730,24 +1096,14 @@ def run_runtime_nonlinear(
         )
         if diagnostics_on is False:
             _status("diagnostics disabled; returning final cETG state summary")
-            phi2 = np.asarray(jnp.mean(jnp.abs(cetg_fields_final.phi) ** 2))
-            return RuntimeNonlinearResult(
-                t=np.asarray([]),
-                diagnostics=None,
-                phi2=phi2,
-                fields=cetg_fields_final,
-                state=np.asarray(G_final) if return_state else None,
-                ky_selected=float(np.asarray(grid.ky[ky_index])),
-                kx_selected=float(np.asarray(grid.kx[kx_index])),
-            )
-        return RuntimeNonlinearResult(
+        return build_runtime_nonlinear_result(
             t=np.asarray(diag.t),
             diagnostics=diag,
-            phi2=None,
             fields=cetg_fields_final,
             state=np.asarray(G_final) if return_state else None,
             ky_selected=float(np.asarray(grid.ky[ky_index])),
             kx_selected=float(np.asarray(grid.kx[kx_index])),
+            summarize_fields=diagnostics_on is False,
         )
 
     geom = build_runtime_geometry(cfg)
@@ -1788,6 +1144,8 @@ def run_runtime_nonlinear(
     fixed_mode_on = bool(cfg.expert.fixed_mode)
     fixed_ky_index = cfg.expert.iky_fixed
     fixed_kx_index = cfg.expert.ikx_fixed
+    external_phi = _runtime_external_phi(cfg)
+    source_on = external_phi is not None
     fixed_ky_index_use: int | None = None
     fixed_kx_index_use: int | None = None
     if fixed_mode_on:
@@ -1798,9 +1156,9 @@ def run_runtime_nonlinear(
 
     diagnostics_on = cfg.time.diagnostics if diagnostics is None else bool(diagnostics)
     _status(
-        f"nonlinear diagnostics={'on' if diagnostics_on else 'off'} fixed_mode={'on' if fixed_mode_on else 'off'}"
+        f"nonlinear diagnostics={'on' if diagnostics_on else 'off'} fixed_mode={'on' if fixed_mode_on else 'off'} source={cfg.expert.source}"
     )
-    if diagnostics_on or fixed_mode_on or return_state or adaptive_chunked:
+    if diagnostics_on or fixed_mode_on or return_state or adaptive_chunked or source_on:
         sample_stride_use = cfg.time.sample_stride if sample_stride is None else int(sample_stride)
         diag_stride = cfg.time.diagnostics_stride if diagnostics_stride is None else int(diagnostics_stride)
         laguerre_mode_use = cfg.time.laguerre_nonlinear_mode if laguerre_mode is None else str(laguerre_mode)
@@ -1810,91 +1168,61 @@ def run_runtime_nonlinear(
         if adaptive_chunked:
             chunk_steps = min(steps_val, 1024)
             G_chunk = G0
-            t_elapsed = 0.0
-            diag_chunks: list[SimulationDiagnostics] = []
-            fields_final: FieldState | None = None
-            _status(f"starting adaptive nonlinear integration in chunks of {chunk_steps} steps up to t_max={float(cfg.time.t_max):.6g}")
-            for _chunk in range(100000):
-                if show_progress:
-                    _t_chunk, diag_chunk, G_chunk, fields_final = integrate_nonlinear_gx_diagnostics_state(
-                        G_chunk,
-                        grid,
-                        geom,
-                        params,
-                        dt=dt_val,
-                        steps=chunk_steps,
-                        method=str(method or cfg.time.method),
-                        terms=term_cfg,
-                        sample_stride=1,
-                        diagnostics_stride=1,
-                        use_dealias_mask=bool(cfg.time.nonlinear_dealias),
-                        laguerre_mode=laguerre_mode_use,
-                        omega_ky_index=int(ky_index),
-                        omega_kx_index=int(kx_index),
-                        flux_scale=float(cfg.normalization.flux_scale),
-                        wphi_scale=float(cfg.normalization.wphi_scale),
-                        fixed_dt=False,
-                        dt_min=float(cfg.time.dt_min),
-                        dt_max=cfg.time.dt_max,
-                        cfl=float(cfg.time.cfl),
-                        cfl_fac=resolve_cfl_fac(str(method or cfg.time.method), cfg.time.cfl_fac),
-                        collision_split=bool(cfg.time.collision_split),
-                        collision_scheme=str(cfg.time.collision_scheme),
-                        implicit_restart=int(cfg.time.implicit_restart),
-                        implicit_solve_method=str(cfg.time.implicit_solve_method),
-                        implicit_preconditioner=cfg.time.implicit_preconditioner,
-                        fixed_mode_ky_index=fixed_ky_index_use,
-                        fixed_mode_kx_index=fixed_kx_index_use,
-                        show_progress=True,
-                    )
-                else:
-                    _t_chunk, diag_chunk, G_chunk, fields_final = integrate_nonlinear_gx_diagnostics_state(
-                        G_chunk,
-                        grid,
-                        geom,
-                        params,
-                        dt=dt_val,
-                        steps=chunk_steps,
-                        method=str(method or cfg.time.method),
-                        terms=term_cfg,
-                        sample_stride=1,
-                        diagnostics_stride=1,
-                        use_dealias_mask=bool(cfg.time.nonlinear_dealias),
-                        laguerre_mode=laguerre_mode_use,
-                        omega_ky_index=int(ky_index),
-                        omega_kx_index=int(kx_index),
-                        flux_scale=float(cfg.normalization.flux_scale),
-                        wphi_scale=float(cfg.normalization.wphi_scale),
-                        fixed_dt=False,
-                        dt_min=float(cfg.time.dt_min),
-                        dt_max=cfg.time.dt_max,
-                        cfl=float(cfg.time.cfl),
-                        cfl_fac=resolve_cfl_fac(str(method or cfg.time.method), cfg.time.cfl_fac),
-                        collision_split=bool(cfg.time.collision_split),
-                        collision_scheme=str(cfg.time.collision_scheme),
-                        implicit_restart=int(cfg.time.implicit_restart),
-                        implicit_solve_method=str(cfg.time.implicit_solve_method),
-                        implicit_preconditioner=cfg.time.implicit_preconditioner,
-                        fixed_mode_ky_index=fixed_ky_index_use,
-                        fixed_mode_kx_index=fixed_kx_index_use,
-                    )
-                diag_chunk = replace(diag_chunk, t=np.asarray(diag_chunk.t) + t_elapsed)
-                diag_chunks.append(diag_chunk)
-                t_next = float(np.asarray(diag_chunk.t)[-1])
-                if t_next <= t_elapsed + 1.0e-12:
-                    raise RuntimeError("adaptive nonlinear runtime made no time-step progress")
-                t_elapsed = t_next
-                _status(f"completed nonlinear chunk {_chunk + 1}: t={t_elapsed:.6g}/{float(cfg.time.t_max):.6g}")
-                if t_elapsed >= float(cfg.time.t_max):
-                    break
-            else:
-                raise RuntimeError("adaptive nonlinear runtime exceeded chunk limit before reaching t_max")
 
-            diag = _concat_gx_diagnostics(diag_chunks)
-            diag = _truncate_gx_diagnostics(diag, t_max=float(cfg.time.t_max))
-            diag = _stride_gx_diagnostics(diag, stride=max(int(sample_stride_use), int(diag_stride), 1))
+            def _run_nonlinear_chunk(chunk_show_progress: bool):
+                nonlocal G_chunk
+                kwargs: dict[str, Any] = dict(
+                    dt=dt_val,
+                    steps=chunk_steps,
+                    method=str(method or cfg.time.method),
+                    terms=term_cfg,
+                    sample_stride=1,
+                    diagnostics_stride=1,
+                    use_dealias_mask=bool(cfg.time.nonlinear_dealias),
+                    laguerre_mode=laguerre_mode_use,
+                    omega_ky_index=int(ky_index),
+                    omega_kx_index=int(kx_index),
+                    flux_scale=float(cfg.normalization.flux_scale),
+                    wphi_scale=float(cfg.normalization.wphi_scale),
+                    fixed_dt=False,
+                    dt_min=float(cfg.time.dt_min),
+                    dt_max=cfg.time.dt_max,
+                    cfl=float(cfg.time.cfl),
+                    cfl_fac=resolve_cfl_fac(str(method or cfg.time.method), cfg.time.cfl_fac),
+                    collision_split=bool(cfg.time.collision_split),
+                    collision_scheme=str(cfg.time.collision_scheme),
+                    implicit_restart=int(cfg.time.implicit_restart),
+                    implicit_solve_method=str(cfg.time.implicit_solve_method),
+                    implicit_preconditioner=cfg.time.implicit_preconditioner,
+                    fixed_mode_ky_index=fixed_ky_index_use,
+                    fixed_mode_kx_index=fixed_kx_index_use,
+                    external_phi=external_phi,
+                )
+                if chunk_show_progress:
+                    kwargs["show_progress"] = True
+                t_chunk, diag_chunk, G_next, fields_next = integrate_nonlinear_gx_diagnostics_state(
+                    G_chunk,
+                    grid,
+                    geom,
+                    params,
+                    **kwargs,
+                )
+                G_chunk = G_next
+                return t_chunk, diag_chunk, G_next, fields_next
+
+            chunk_result = run_adaptive_gx_chunk_loop(
+                integrate_chunk=_run_nonlinear_chunk,
+                t_max=float(cfg.time.t_max),
+                chunk_steps=chunk_steps,
+                label="nonlinear",
+                show_progress=show_progress,
+                status_callback=_status,
+                diagnostics_stride=max(int(sample_stride_use), int(diag_stride), 1),
+            )
+            diag = chunk_result.diagnostics
             t = jnp.asarray(diag.t)
-            G_final = G_chunk
+            G_final = chunk_result.state
+            fields_final = chunk_result.fields
         else:
             _status(f"running nonlinear diagnostics integrator over {steps_val} steps with dt={dt_val:.6g}")
             if show_progress:
@@ -1927,6 +1255,7 @@ def run_runtime_nonlinear(
                     implicit_preconditioner=cfg.time.implicit_preconditioner,
                     fixed_mode_ky_index=fixed_ky_index_use,
                     fixed_mode_kx_index=fixed_kx_index_use,
+                    external_phi=external_phi,
                     show_progress=True,
                 )
             else:
@@ -1959,31 +1288,31 @@ def run_runtime_nonlinear(
                     implicit_preconditioner=cfg.time.implicit_preconditioner,
                     fixed_mode_ky_index=fixed_ky_index_use,
                     fixed_mode_kx_index=fixed_kx_index_use,
+                    external_phi=external_phi,
                 )
         if diagnostics_on:
             _status(f"completed nonlinear run with {int(np.asarray(t).size)} saved samples")
             state_out = np.asarray(G_final) if return_state else None
-            return RuntimeNonlinearResult(
+            return build_runtime_nonlinear_result(
                 t=np.asarray(t),
                 diagnostics=diag,
-                phi2=None,
                 fields=fields_final,
                 state=state_out,
                 ky_selected=float(np.asarray(grid.ky[ky_index])),
                 kx_selected=float(np.asarray(grid.kx[kx_index])),
+                summarize_fields=False,
             )
         if fields_final is None:
             raise RuntimeError("adaptive nonlinear runtime did not produce final fields")
         _status("diagnostics disabled; returning final nonlinear field summary")
-        phi2 = np.asarray(jnp.mean(jnp.abs(fields_final.phi) ** 2))
-        return RuntimeNonlinearResult(
+        return build_runtime_nonlinear_result(
             t=np.asarray([]),
             diagnostics=None,
-            phi2=phi2,
             fields=fields_final,
             state=np.asarray(G_final) if return_state else None,
             ky_selected=float(np.asarray(grid.ky[ky_index])),
             kx_selected=float(np.asarray(grid.kx[kx_index])),
+            summarize_fields=True,
         )
 
     # Diagnostics disabled: use the config-driven integrator for final state.
@@ -2008,16 +1337,15 @@ def run_runtime_nonlinear(
             t_cfg,
             terms=term_cfg,
         )
-    phi2 = np.asarray(jnp.mean(jnp.abs(fields.phi) ** 2))
     _status("completed nonlinear final-state integration")
-    return RuntimeNonlinearResult(
+    return build_runtime_nonlinear_result(
         t=np.asarray([]),
         diagnostics=None,
-        phi2=phi2,
         fields=fields,
         state=np.asarray(G_final) if return_state else None,
         ky_selected=float(np.asarray(grid.ky[ky_index])),
         kx_selected=float(np.asarray(grid.kx[kx_index])),
+        summarize_fields=True,
     )
 
 

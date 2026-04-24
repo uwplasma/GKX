@@ -16,6 +16,7 @@ from spectraxgk.runtime_config import RuntimeConfig
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_CACHE_DIR = _REPO_ROOT / ".cache" / "spectrax" / "vmec_eik"
+_REQUIRED_EIK_VARIABLES = ("theta", "bmag", "gradpar", "q", "shat")
 
 
 @dataclass(frozen=True)
@@ -156,6 +157,22 @@ def default_vmec_eik_output_path(
     return _DEFAULT_CACHE_DIR / f"{stem}_{digest}.eik.nc"
 
 
+def _resolve_output_path(path: str | Path) -> Path:
+    return Path(os.path.expandvars(str(path))).expanduser().resolve()
+
+
+def _is_reusable_vmec_eik_cache(path: Path) -> bool:
+    if not (path.exists() and path.is_file() and path.stat().st_size > 0):
+        return False
+    try:
+        import netCDF4 as nc
+
+        with nc.Dataset(path, "r") as ds:
+            return all(name in ds.variables for name in _REQUIRED_EIK_VARIABLES)
+    except Exception:
+        return False
+
+
 def generate_runtime_vmec_eik(
     cfg: RuntimeConfig,
     *,
@@ -166,6 +183,7 @@ def generate_runtime_vmec_eik(
 
     request = build_vmec_geometry_request(cfg)
     resolved_output = output_path
+    default_cache_output = False
     if resolved_output is None and cfg.geometry.geometry_file is not None:
         resolved_output = cfg.geometry.geometry_file
     # For runtime VMEC workflows, an explicit geometry_file is an output target,
@@ -186,15 +204,21 @@ def generate_runtime_vmec_eik(
             "Expected one of: 'auto', 'internal'."
         )
 
+    if resolved_output is None:
+        resolved_output = default_vmec_eik_output_path(request)
+        default_cache_output = True
+    resolved_path = _resolve_output_path(resolved_output)
+
+    if default_cache_output and not force and _is_reusable_vmec_eik_cache(resolved_path):
+        return resolved_path
+
     if not internal_vmec_backend_available():
         raise RuntimeError(
             "Internal VMEC geometry backend dependencies are missing. "
             "Install JAX plus booz_xform_jax, or provide a booz_xform-compatible shim."
         )
 
-    if resolved_output is None:
-        resolved_output = default_vmec_eik_output_path(request)
-    return generate_vmec_eik_internal(output_path=resolved_output, request=request)
+    return generate_vmec_eik_internal(output_path=resolved_path, request=request)
 
 
 # Compatibility aliases kept for callers still using the older GX-prefixed

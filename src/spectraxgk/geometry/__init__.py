@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+import math
 from pathlib import Path
 
 import jax
@@ -206,7 +207,30 @@ class SlabGeometry:
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
-        return cls(*children, z0=aux_data["z0"], zero_shat=aux_data["zero_shat"])
+        (
+            s_hat,
+            q,
+            epsilon,
+            R0,
+            B0,
+            alpha,
+            drift_scale,
+            kperp2_bmag,
+            bessel_bmag_power,
+        ) = children
+        return cls(
+            s_hat=s_hat,
+            z0=aux_data["z0"],
+            q=q,
+            epsilon=epsilon,
+            R0=R0,
+            B0=B0,
+            alpha=alpha,
+            drift_scale=drift_scale,
+            kperp2_bmag=kperp2_bmag,
+            bessel_bmag_power=bessel_bmag_power,
+            zero_shat=aux_data["zero_shat"],
+        )
 
     @staticmethod
     def from_config(cfg: GeometryConfig) -> "SlabGeometry":
@@ -754,10 +778,21 @@ def twist_shift_params(
             theta_min = -jnp.pi * float(zp)
         else:
             theta_min = float(grid.z_min)
-        _gds2, gds21, gds22 = geom.metric_coeffs(jnp.asarray([theta_min]))
-        gds21_val = float(gds21[0])
-        gds22_val = float(gds22[0]) if jnp.asarray(gds22).ndim > 0 else float(gds22)
+        theta_min_f = float(theta_min)
         shat = float(geom.s_hat)
+        if isinstance(geom, SAlphaGeometry):
+            shear = shat * theta_min_f - float(geom.alpha) * math.sin(theta_min_f)
+            gds21_val = -shat * shear
+            gds22_val = shat * shat
+        elif isinstance(geom, SlabGeometry):
+            shear = shat * theta_min_f
+            gds21_val = -shat * shear
+            gds22_val = 1.0 if shat == 0.0 else shat * shat
+        else:
+            _gds2, gds21, gds22 = geom.metric_coeffs(np.asarray([theta_min_f], dtype=float))
+            gds21_val = float(np.asarray(gds21, dtype=float).reshape(-1)[0])
+            gds22_arr = np.asarray(gds22, dtype=float)
+            gds22_val = float(gds22_arr.reshape(-1)[0]) if gds22_arr.ndim > 0 else float(gds22_arr)
     twist_shift_geo_fac = 2.0 * shat * gds21_val / gds22_val if gds22_val != 0.0 else 0.0
     if grid.jtwist is None:
         jtwist = int(round(twist_shift_geo_fac))

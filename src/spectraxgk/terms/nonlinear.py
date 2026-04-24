@@ -6,7 +6,6 @@ from typing import cast, Sequence
 
 import jax
 import jax.numpy as jnp
-from jax.scipy import special as jsp
 
 from spectraxgk.gyroaverage import bessel_j0, bessel_j1
 from spectraxgk.grids import real_fft_mesh
@@ -44,16 +43,10 @@ def _broadcast_to_G(x: jnp.ndarray, G: jnp.ndarray) -> jnp.ndarray:
         return jnp.expand_dims(x, axis=-4)
     if x.ndim == 3:
         shape = (1,) * (G.ndim - 3) + x.shape
-        x = jnp.reshape(x, shape)
-        if x.ndim == G.ndim - 1:
-            x = jnp.expand_dims(x, axis=-4)
-        return x
+        return jnp.reshape(x, shape)
     if x.ndim < G.ndim:
         shape = (1,) * (G.ndim - x.ndim) + x.shape
-        x = jnp.reshape(x, shape)
-        if x.ndim == G.ndim - 1:
-            x = jnp.expand_dims(x, axis=-4)
-        return x
+        return jnp.reshape(x, shape)
     return x
 
 

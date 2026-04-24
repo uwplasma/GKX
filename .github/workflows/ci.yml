@@ -5,6 +5,12 @@ on:
     branches: [main, master]
   pull_request:
   workflow_dispatch:
+    inputs:
+      run_nightly:
+        description: "Also run the long full-suite validation tier"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -19,7 +25,7 @@ concurrency:
 
 jobs:
   mypy:
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
 
     steps:
@@ -60,7 +66,7 @@ jobs:
           mypy
 
   quick-tests:
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -101,6 +107,10 @@ jobs:
               tests/test_runtime_helpers.py
               tests/test_runtime_runner.py
               tests/test_runners.py
+              tests/test_parallel.py
+              tests/test_generate_parallel_ky_scan_gate.py
+              tests/test_autodiff_validation.py
+              tests/test_differentiable_geometry_bridge.py
               tests/test_cli.py
               tests/test_gx_consistency.py
               tests/test_gx_diagnostics.py
@@ -147,7 +157,7 @@ jobs:
           pytest -q --maxfail=1 --disable-warnings ${{ matrix.shard.files }}
 
   fast-coverage:
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
 
     steps:
@@ -234,9 +244,9 @@ jobs:
           use_oidc: true
 
   wide-coverage:
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - uses: actions/checkout@v4
@@ -265,10 +275,13 @@ jobs:
           JAX_ENABLE_X64: "true"
           SPECTRAX_X64: "1"
         run: |
-          pytest -q --maxfail=1 --disable-warnings \
-            --cov=spectraxgk \
-            --cov-report=xml:coverage-wide.xml \
-            --cov-report=term
+          python tools/run_wide_coverage_gate.py \
+            --shards 12 \
+            --timeout 300 \
+            --fail-under 95 \
+            --xml coverage-wide.xml \
+            --pytest-arg=-o \
+            --pytest-arg=addopts=
 
       - name: Upload wide coverage report
         uses: codecov/codecov-action@v5
@@ -279,7 +292,7 @@ jobs:
           use_oidc: true
 
   docs-and-packaging:
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
 
     steps:
@@ -305,6 +318,7 @@ jobs:
 
       - name: Build docs
         run: |
+          python tools/check_validation_coverage_manifest.py --out-json docs/_static/validation_coverage_manifest_summary.json
           python -m sphinx -W -b html docs docs/_build/html
 
       - name: Build distribution artifacts
@@ -316,7 +330,7 @@ jobs:
           twine check dist/*
 
   nightly-full:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.run_nightly
     runs-on: ubuntu-latest
     timeout-minutes: 60
 

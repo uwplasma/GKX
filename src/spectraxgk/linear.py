@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field as dataclass_field
 from functools import partial
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 import jax
 import jax.numpy as jnp
@@ -13,10 +13,8 @@ from jax.scipy.sparse.linalg import gmres
 
 from spectraxgk.basis import hermite_ladder_coeffs
 from spectraxgk.geometry import (
-    FluxTubeGeometryData,
     FluxTubeGeometryLike,
     ensure_flux_tube_geometry_data,
-    zero_shear_enabled,
 )
 from spectraxgk.gyroaverage import J_l_all, bessel_j0, bessel_j1, gx_laguerre_transform
 from spectraxgk.grids import SpectralGrid
@@ -310,8 +308,6 @@ def _build_linked_fft_maps(
     ky_mode_arr: np.ndarray | None = None
     if ky_mode is not None:
         ky_mode_arr = np.asarray(ky_mode, dtype=int).reshape(-1)
-        if ky_mode_arr.size < naky:
-            raise ValueError("ky_mode must have at least naky entries for linked FFT maps")
     for idx in range(nakx):
         idx0 = idx if idx < (nakx + 1) // 2 else idx - nakx
         for idy in range(naky):
@@ -481,9 +477,96 @@ def lenard_bernstein_eigenvalues(
 ) -> jnp.ndarray:
     """Diagonal Lenard-Bernstein rates in Hermite-Laguerre space."""
 
-    l = jnp.arange(Nl)
+    ell = jnp.arange(Nl)
     m = jnp.arange(Nm)
-    return nu_laguerre * l[:, None] + nu_hermite * m[None, :]
+    return nu_laguerre * ell[:, None] + nu_hermite * m[None, :]
+
+
+def _numpy_dtype_for_jax(real_dtype: jnp.dtype) -> type[np.float32] | type[np.float64]:
+    return np.float64 if real_dtype == jnp.float64 else np.float32
+
+
+def _build_low_rank_moment_cache_arrays(
+    Nl: int,
+    Nm: int,
+    params: LinearParams,
+    real_dtype: jnp.dtype,
+) -> dict[str, jnp.ndarray]:
+    """Build small moment-space cache arrays without many eager JAX dispatches."""
+
+    np_dtype: Any = _numpy_dtype_for_jax(real_dtype)
+    ell: Any = np.arange(Nl, dtype=np_dtype).reshape(Nl, 1, 1, 1, 1)
+    m: Any = np.arange(Nm, dtype=np_dtype).reshape(1, Nm, 1, 1, 1)
+    lb_lam_np = (
+        float(params.nu_laguerre) * np.arange(Nl, dtype=np_dtype)[:, None]
+        + float(params.nu_hermite) * np.arange(Nm, dtype=np_dtype)[None, :]
+    )
+    sqrt_shape = (1, 1, Nm, 1, 1, 1)
+    hermite_index: Any = np.arange(Nm, dtype=np_dtype)
+    sqrt_p_np = np.sqrt(hermite_index + np_dtype(1.0)).reshape(sqrt_shape)
+    sqrt_m_ladder_np = np.sqrt(hermite_index).reshape(sqrt_shape)
+    l_norm = np_dtype(max(Nl - 1, 1))
+    m_norm = np_dtype(max(Nm - 1, 1))
+    l_norm_full = np_dtype(max(Nl, 1))
+    m_norm_full = np_dtype(max(Nm, 1))
+    m_norm_kz = np_dtype(max(Nm - 1, 1))
+    p_hyper_l = np_dtype(params.p_hyper_l)
+    p_hyper_m = np_dtype(params.p_hyper_m)
+    p_hyper_lm = np_dtype(params.p_hyper_lm)
+    return {
+        "lb_lam": jnp.asarray(lb_lam_np, dtype=real_dtype),
+        "l": jnp.asarray(ell, dtype=real_dtype),
+        "m": jnp.asarray(m, dtype=real_dtype),
+        "l4": jnp.asarray(np.arange(Nl, dtype=np_dtype).reshape(Nl, 1, 1, 1), dtype=real_dtype),
+        "sqrt_m": jnp.asarray(np.sqrt(m), dtype=real_dtype),
+        "sqrt_m_p1": jnp.asarray(np.sqrt(m + np_dtype(1.0)), dtype=real_dtype),
+        "sqrt_p": jnp.asarray(sqrt_p_np, dtype=real_dtype),
+        "sqrt_m_ladder": jnp.asarray(sqrt_m_ladder_np, dtype=real_dtype),
+        "hyper_ratio": jnp.asarray((ell / l_norm) ** params.p_hyper + (m / m_norm) ** params.p_hyper, dtype=real_dtype),
+        "ratio_l": jnp.asarray((ell / l_norm_full) ** p_hyper_l, dtype=real_dtype),
+        "ratio_m": jnp.asarray((m / m_norm_full) ** p_hyper_m, dtype=real_dtype),
+        "ratio_lm": jnp.asarray(((2.0 * ell + m) / (2.0 * l_norm_full + m_norm_full)) ** p_hyper_lm, dtype=real_dtype),
+        "mask_const": jnp.asarray((m > 2.0) | (ell > 1.0), dtype=bool),
+        "mask_kz": jnp.asarray(m > 2.0, dtype=bool),
+        "m_pow": jnp.asarray(m**p_hyper_m, dtype=real_dtype),
+        "m_norm_kz_factor": jnp.asarray((p_hyper_m + 0.5) / (m_norm_kz ** (p_hyper_m + 0.5)), dtype=real_dtype),
+    }
+
+
+def _build_end_damping_profile_array(
+    Nz: int,
+    widthfrac: float,
+    boundary: str,
+    real_dtype: jnp.dtype,
+) -> jnp.ndarray:
+    """Build the one-dimensional end-damping profile as one host array."""
+
+    np_dtype = np.float32
+    width = max(1, int(np.floor(float(widthfrac) * int(Nz))))
+    idx = np.arange(Nz, dtype=np_dtype)
+    width_f = np_dtype(width)
+    left_mask = idx <= width_f
+    right_mask = idx >= (Nz - width_f)
+    x_left = np.where(left_mask, idx / width_f, 0.0)
+    x_right = np.where(right_mask, (Nz - idx) / width_f, 0.0)
+    nu_left = np.where(left_mask, 1.0 - 2.0 * x_left * x_left / (1.0 + x_left**4), 0.0)
+    nu_right = np.where(right_mask, 1.0 - 2.0 * x_right * x_right / (1.0 + x_right**4), 0.0)
+    damp_profile_np = np.maximum(nu_left, nu_right).astype(np_dtype)
+    if boundary == "periodic":
+        damp_profile_np = np.zeros_like(damp_profile_np)
+    return jnp.asarray(damp_profile_np, dtype=real_dtype)
+
+
+def _build_gyroaverage_cache_arrays(
+    b: jnp.ndarray,
+    Nl: int,
+    real_dtype: jnp.dtype,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Build species-major gyroaverage factors without a Python-level vmap."""
+
+    Jl = jnp.moveaxis(J_l_all(b, l_max=Nl - 1), 0, 1).astype(real_dtype)
+    JlB = Jl + shift_axis(Jl, -1, axis=1)
+    return Jl, JlB.astype(real_dtype)
 
 
 def hypercollision_damping(
@@ -533,6 +616,43 @@ def hypercollision_damping(
     return hyper
 
 
+def collision_damping(
+    cache: "LinearCache",
+    params: "LinearParams",
+    real_dtype: jnp.dtype,
+    *,
+    squeeze_species: bool = False,
+) -> jnp.ndarray:
+    """Assemble collision damping from cached low-rank factors.
+
+    Runtime caches store ``lb_lam`` as the Hermite-Laguerre Lenard-Bernstein
+    diagonal only, with shape ``(Nl, Nm)``. Older tests may still provide a
+    pre-expanded array; support that for compatibility.
+    """
+
+    lb_lam = cache.lb_lam.astype(real_dtype)
+    if lb_lam.ndim == 2:
+        b = jnp.asarray(cache.b, dtype=real_dtype)
+        ns = int(b.shape[0])
+        nu = _as_species_array(params.nu, ns, "nu").astype(real_dtype)
+        nu_s = nu[:, None, None, None, None, None]
+        damping = nu_s * lb_lam[None, :, :, None, None, None]
+        damping = damping + nu_s * b[:, None, None, ...]
+        if squeeze_species:
+            damping = damping[0]
+        return damping.astype(real_dtype)
+
+    if lb_lam.ndim == 6:
+        ns = int(lb_lam.shape[0])
+        nu = _as_species_array(params.nu, ns, "nu").astype(real_dtype)
+        damping = nu[:, None, None, None, None, None] * lb_lam
+        if squeeze_species:
+            damping = damping[0]
+        return damping.astype(real_dtype)
+
+    return (jnp.asarray(params.nu, dtype=real_dtype) * lb_lam).astype(real_dtype)
+
+
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
 class LinearCache:
@@ -558,6 +678,7 @@ class LinearCache:
     dealias_mask: jnp.ndarray
     kxfac: jnp.ndarray
     lb_lam: jnp.ndarray
+    collision_lam: jnp.ndarray
     hyper_ratio: jnp.ndarray
     ratio_l: jnp.ndarray
     ratio_m: jnp.ndarray
@@ -568,7 +689,7 @@ class LinearCache:
     m_norm_kz_factor: jnp.ndarray
     damp_profile: jnp.ndarray
     linked_damp_profile: jnp.ndarray
-    l: jnp.ndarray
+    l: jnp.ndarray  # noqa: E741 - public cache field for the Laguerre index.
     m: jnp.ndarray
     l4: jnp.ndarray
     sqrt_m: jnp.ndarray
@@ -623,6 +744,7 @@ class LinearCache:
             self.dealias_mask,
             self.kxfac,
             self.lb_lam,
+            self.collision_lam,
             self.hyper_ratio,
             self.ratio_l,
             self.ratio_m,
@@ -677,7 +799,7 @@ class LinearCache:
             linked_full_cover,
             linked_use_gather,
         ) = aux_data
-        base_count = 50
+        base_count = 51
         base_children = children[:base_count]
         linked_idx = tuple(children[base_count : base_count + n_linked_idx])
         linked_kz = tuple(
@@ -831,8 +953,7 @@ def build_linear_cache(
     if bessel_bmag_power != 0.0:
         bmag_factor = bmag[None, None, None, :] ** (-bessel_bmag_power)
         b = b * bmag_factor
-    Jl = jax.vmap(lambda bs: J_l_all(bs, l_max=Nl - 1))(b).astype(real_dtype)
-    JlB = Jl + shift_axis(Jl, -1, axis=1)
+    Jl, JlB = _build_gyroaverage_cache_arrays(b, Nl, real_dtype)
     lag_to_grid_np, lag_to_spec_np, lag_roots_np = gx_laguerre_transform(Nl)
     laguerre_to_grid = jnp.asarray(lag_to_grid_np, dtype=real_dtype)
     laguerre_to_spectral = jnp.asarray(lag_to_spec_np, dtype=real_dtype)
@@ -849,54 +970,29 @@ def build_linear_cache(
         real_dtype
     )
     mask0 = (grid.ky == 0.0)[:, None, None] & (grid.kx == 0.0)[None, :, None]
-    lb_base = lenard_bernstein_eigenvalues(Nl, Nm, params.nu_hermite, params.nu_laguerre)[
-        None, :, :, None, None, None
-    ]
-    lb_lam = lb_base + b[:, None, None, ...]
-    l = jnp.arange(Nl, dtype=real_dtype)[:, None, None, None, None]
-    m = jnp.arange(Nm, dtype=real_dtype)[None, :, None, None, None]
-    l4 = jnp.arange(Nl, dtype=real_dtype)[:, None, None, None]
-    m_p1 = m + 1.0
-    sqrt_m = jnp.sqrt(m)
-    sqrt_m_p1 = jnp.sqrt(m_p1)
-    sqrt_p, sqrt_m_ladder = hermite_ladder_coeffs(Nm - 1)
-    sqrt_p = sqrt_p[:Nm]
-    sqrt_m_ladder = sqrt_m_ladder[:Nm]
-    sqrt_shape = [1] * 6
-    sqrt_shape[2] = Nm
-    sqrt_p = sqrt_p.reshape(sqrt_shape).astype(real_dtype)
-    sqrt_m_ladder = sqrt_m_ladder.reshape(sqrt_shape).astype(real_dtype)
-    l_norm = jnp.maximum(Nl - 1, 1)
-    m_norm = jnp.maximum(Nm - 1, 1)
-    hyper_ratio = (l / l_norm) ** params.p_hyper + (m / m_norm) ** params.p_hyper
-    l_norm_full = jnp.asarray(max(Nl, 1), dtype=real_dtype)
-    m_norm_full = jnp.asarray(max(Nm, 1), dtype=real_dtype)
-    m_norm_kz = jnp.asarray(max(Nm - 1, 1), dtype=real_dtype)
-    p_hyper_l = jnp.asarray(params.p_hyper_l, dtype=real_dtype)
-    p_hyper_m = jnp.asarray(params.p_hyper_m, dtype=real_dtype)
-    p_hyper_lm = jnp.asarray(params.p_hyper_lm, dtype=real_dtype)
-    ratio_l = (l / l_norm_full) ** p_hyper_l
-    ratio_m = (m / m_norm_full) ** p_hyper_m
-    ratio_lm = ((2.0 * l + m) / (2.0 * l_norm_full + m_norm_full)) ** p_hyper_lm
-    mask_const = (m > 2.0) | (l > 1.0)
-    mask_kz = m > 2.0
-    m_pow = m ** p_hyper_m
-    m_norm_kz_factor = (p_hyper_m + 0.5) / (m_norm_kz ** (p_hyper_m + 0.5))
-    Nz = grid.z.size
-    width = jnp.maximum(1, jnp.asarray(jnp.floor(params.damp_ends_widthfrac * Nz), dtype=jnp.int32))
-    idx = jnp.arange(Nz, dtype=jnp.float32)
-    width_f = jnp.asarray(width, dtype=jnp.float32)
-    left_mask = idx <= width_f
-    right_mask = idx >= (Nz - width_f)
-    x_left = jnp.where(left_mask, idx / width_f, 0.0)
-    x_right = jnp.where(right_mask, (Nz - idx) / width_f, 0.0)
-    nu_left = jnp.where(left_mask, 1.0 - 2.0 * x_left * x_left / (1.0 + x_left**4), 0.0)
-    nu_right = jnp.where(right_mask, 1.0 - 2.0 * x_right * x_right / (1.0 + x_right**4), 0.0)
-    damp_profile = jnp.maximum(nu_left, nu_right).astype(real_dtype)
-    if boundary == "periodic":
-        # GX skips end damping entirely on periodic lanes, including
-        # near-zero-shear cases promoted from linked to periodic.
-        damp_profile = jnp.zeros_like(damp_profile)
+    moment_cache = _build_low_rank_moment_cache_arrays(Nl, Nm, params, real_dtype)
+    lb_lam = moment_cache["lb_lam"]
+    ell_cache = moment_cache["l"]
+    m = moment_cache["m"]
+    l4 = moment_cache["l4"]
+    sqrt_m = moment_cache["sqrt_m"]
+    sqrt_m_p1 = moment_cache["sqrt_m_p1"]
+    sqrt_p = moment_cache["sqrt_p"]
+    sqrt_m_ladder = moment_cache["sqrt_m_ladder"]
+    hyper_ratio = moment_cache["hyper_ratio"]
+    ratio_l = moment_cache["ratio_l"]
+    ratio_m = moment_cache["ratio_m"]
+    ratio_lm = moment_cache["ratio_lm"]
+    mask_const = moment_cache["mask_const"]
+    mask_kz = moment_cache["mask_kz"]
+    m_pow = moment_cache["m_pow"]
+    m_norm_kz_factor = moment_cache["m_norm_kz_factor"]
+    damp_profile = _build_end_damping_profile_array(
+        int(grid.z.size),
+        float(params.damp_ends_widthfrac),
+        boundary,
+        real_dtype,
+    )
     linked_damp_profile = jnp.asarray([], dtype=real_dtype)
     if use_twist_shift:
         iky = jnp.rint(grid.ky * float(y0)).astype(jnp.int32)
@@ -991,7 +1087,8 @@ def build_linear_cache(
         ky_grid=ky_grid,
         dealias_mask=dealias_mask,
         kxfac=jnp.asarray(kxfac_val, dtype=real_dtype),
-        lb_lam=lb_lam.astype(real_dtype),
+        lb_lam=lb_lam,
+        collision_lam=jnp.asarray([], dtype=real_dtype),
         hyper_ratio=hyper_ratio.astype(real_dtype),
         ratio_l=ratio_l.astype(real_dtype),
         ratio_m=ratio_m.astype(real_dtype),
@@ -1002,7 +1099,7 @@ def build_linear_cache(
         m_norm_kz_factor=m_norm_kz_factor.astype(real_dtype),
         damp_profile=damp_profile,
         linked_damp_profile=linked_damp_profile,
-        l=l,
+        l=ell_cache,
         m=m,
         l4=l4,
         sqrt_m=sqrt_m.astype(real_dtype),
@@ -1059,16 +1156,16 @@ def apply_laguerre_x(G: jnp.ndarray) -> jnp.ndarray:
 
     axis_l = -5
     Nl = G.shape[axis_l]
-    l = jnp.arange(Nl)
+    ell = jnp.arange(Nl)
     G_plus = shift_axis(G, 1, axis_l)
     G_minus = shift_axis(G, -1, axis_l)
-    l_shape = [1] * G.ndim
-    l_shape[axis_l] = Nl
-    l_col = l.reshape(l_shape)
+    ell_shape = [1] * G.ndim
+    ell_shape[axis_l] = Nl
+    ell_col = ell.reshape(ell_shape)
     return (
-        (2.0 * l_col + 1.0) * G
-        - (l_col + 1.0) * G_plus
-        - l_col * G_minus
+        (2.0 * ell_col + 1.0) * G
+        - (ell_col + 1.0) * G_plus
+        - ell_col * G_minus
     )
 
 
@@ -1322,16 +1419,10 @@ def _integrate_linear_cached_impl(
     G0 = jnp.asarray(G0, dtype=state_dtype)
     real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
     dt_val = jnp.asarray(dt, dtype=real_dtype)
-    lb_lam = cache.lb_lam.astype(real_dtype)
     hyper_damp = hypercollision_damping(cache, params, real_dtype)
-    if lb_lam.ndim == 6:
-        ns = lb_lam.shape[0]
-        nu = _as_species_array(params.nu, ns, "nu").astype(real_dtype)
-        damping = nu[:, None, None, None, None, None] * lb_lam + hyper_damp
-        if G0.ndim == 5:
-            damping = damping[0]
-    else:
-        damping = jnp.asarray(params.nu, dtype=real_dtype) * lb_lam + hyper_damp
+    if G0.ndim == 5 and hyper_damp.ndim == 6:
+        hyper_damp = hyper_damp[0]
+    damping = collision_damping(cache, params, real_dtype, squeeze_species=(G0.ndim == 5)) + hyper_damp
     damping = damping.astype(real_dtype)
 
     def advance(G):
@@ -1524,15 +1615,13 @@ def _build_implicit_operator(
         squeeze_species = True
     shape = G.shape
     size = int(np.prod(np.asarray(shape)))
-
     ns = shape[0]
-    nu = _as_species_array(params.nu, ns, "nu").astype(real_dtype)
-    lb_lam = cache.lb_lam.astype(real_dtype)
+
     hyper_damp = hypercollision_damping(cache, params, real_dtype)
-    damping = nu[:, None, None, None, None, None] * lb_lam + hyper_damp
+    damping = collision_damping(cache, params, real_dtype, squeeze_species=False) + hyper_damp
     damping = damping.astype(real_dtype)
 
-    l = cache.l.astype(real_dtype)
+    ell = cache.l.astype(real_dtype)
     m = cache.m.astype(real_dtype)
     cv_d = cache.cv_d.astype(real_dtype)
     gb_d = cache.gb_d.astype(real_dtype)
@@ -1549,10 +1638,10 @@ def _build_implicit_operator(
     omega_d_scale = jnp.asarray(params.omega_d_scale, dtype=real_dtype)
     diag = diag - imag * tz_b * omega_d_scale * (
         w_curv * cv_d[None, None, None, ...] * (2.0 * m + 1.0)
-        + w_gradb * gb_d[None, None, None, ...] * (2.0 * l + 1.0)
+        + w_gradb * gb_d[None, None, None, ...] * (2.0 * ell + 1.0)
     )
     bgrad = bgrad[None, None, None, None, None, :]
-    mirror_diag = vth_b * (2.0 * l + 1.0) * (2.0 * m + 1.0)
+    mirror_diag = vth_b * (2.0 * ell + 1.0) * (2.0 * m + 1.0)
     mirror_weight = 0.2
     diag = diag - w_mirror * mirror_weight * bgrad * mirror_diag
 
@@ -2002,16 +2091,10 @@ def integrate_linear_diagnostics(
     G0 = jnp.asarray(G0, dtype=state_dtype)
     real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
     dt_val = jnp.asarray(dt, dtype=real_dtype)
-    lb_lam = cache.lb_lam.astype(real_dtype)
     hyper_damp = hypercollision_damping(cache, params, real_dtype)
-    if lb_lam.ndim == 6:
-        ns = lb_lam.shape[0]
-        nu = _as_species_array(params.nu, ns, "nu").astype(real_dtype)
-        damping = nu[:, None, None, None, None, None] * lb_lam + hyper_damp
-        if G0.ndim == 5:
-            damping = damping[0]
-    else:
-        damping = jnp.asarray(params.nu, dtype=real_dtype) * lb_lam + hyper_damp
+    if G0.ndim == 5 and hyper_damp.ndim == 6:
+        hyper_damp = hyper_damp[0]
+    damping = collision_damping(cache, params, real_dtype, squeeze_species=(G0.ndim == 5)) + hyper_damp
     damping = damping.astype(real_dtype)
 
     def advance(G_in: jnp.ndarray) -> jnp.ndarray:

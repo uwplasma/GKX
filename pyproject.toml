@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "spectraxgk"
-version = "1.2.0"
+version = "1.3.0"
 description = "JAX gyrokinetic solver with Hermite-Laguerre velocity space"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -92,6 +92,7 @@ module = [
   "booz_xform",
   "booz_xform_jax",
   "netCDF4",
+  "pandas",
   "rich",
   "rich.*",
   "scipy",

@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
+from pathlib import Path
 from typing import Callable
 
+import netCDF4 as nc
 import numpy as np
 
 from spectraxgk.analysis import (
@@ -15,6 +18,27 @@ from spectraxgk.analysis import (
 )
 from spectraxgk.benchmarks import LinearRunResult, LinearScanResult
 from spectraxgk.grids import SpectralGrid, build_spectral_grid
+from spectraxgk.validation_gates import (
+    BranchContinuationMetrics,
+    DiagnosticTimeSeries,
+    EigenfunctionComparisonMetrics,
+    EigenfunctionReferenceBundle,
+    GateReport as GateReport,
+    LateTimeLinearMetrics,
+    NonlinearWindowMetrics,
+    ObservedOrderMetrics,
+    ScalarGateResult as ScalarGateResult,
+    ZonalFlowResponseMetrics,
+    branch_continuity_gate_report as branch_continuity_gate_report,
+    eigenfunction_gate_report as eigenfunction_gate_report,
+    evaluate_scalar_gate as evaluate_scalar_gate,
+    gate_report as gate_report,
+    gate_report_to_dict as gate_report_to_dict,
+    linear_metrics_gate_report as linear_metrics_gate_report,
+    nonlinear_window_gate_report as nonlinear_window_gate_report,
+    observed_order_gate_report as observed_order_gate_report,
+    zonal_response_gate_report as zonal_response_gate_report,
+)
 
 
 @dataclass(frozen=True)
@@ -27,51 +51,6 @@ class ScanAndModeResult:
     tmax: float | None
 
 
-@dataclass(frozen=True)
-class LateTimeLinearMetrics:
-    """Late-time growth/frequency metrics for a linear run."""
-
-    gamma_fit: float
-    omega_fit: float
-    gamma_tail_mean: float
-    omega_tail_mean: float
-    gamma_tail_std: float
-    omega_tail_std: float
-    tmin: float | None
-    tmax: float | None
-    nsamples: int
-    signal_source: str
-
-
-@dataclass(frozen=True)
-class NonlinearWindowMetrics:
-    """Windowed transport/envelope metrics for a nonlinear run."""
-
-    tmin: float
-    tmax: float
-    nsamples: int
-    heat_flux_mean: float
-    heat_flux_std: float
-    heat_flux_rms: float
-    wphi_mean: float
-    wphi_std: float
-    wg_mean: float
-    wg_std: float
-    phi_mode_envelope_mean: float | None
-    phi_mode_envelope_std: float | None
-    phi_mode_envelope_max: float | None
-
-
-@dataclass(frozen=True)
-class ObservedOrderMetrics:
-    """Observed-order convergence summary from step sizes and errors."""
-
-    step_sizes: np.ndarray
-    errors: np.ndarray
-    orders: np.ndarray
-    asymptotic_order: float
-
-
 def normalize_eigenfunction(eigenfunction: np.ndarray, z: np.ndarray) -> np.ndarray:
     """Normalize an eigenfunction by its value at theta=0 (nearest z=0)."""
 
@@ -80,6 +59,159 @@ def normalize_eigenfunction(eigenfunction: np.ndarray, z: np.ndarray) -> np.ndar
     if scale == 0:
         return eigenfunction
     return eigenfunction / scale
+
+
+def phase_align_eigenfunction(eigenfunction: np.ndarray, reference: np.ndarray) -> tuple[np.ndarray, float]:
+    """Phase-align ``eigenfunction`` to ``reference`` using the global complex phase."""
+
+    lhs = np.asarray(eigenfunction, dtype=np.complex128)
+    rhs = np.asarray(reference, dtype=np.complex128)
+    if lhs.shape != rhs.shape:
+        raise ValueError("eigenfunction and reference must have the same shape")
+    phase = np.vdot(lhs, rhs)
+    if abs(phase) <= 1.0e-30:
+        return lhs, 0.0
+    phase_shift = float(np.angle(phase))
+    return lhs * np.exp(1j * phase_shift), phase_shift
+
+
+def compare_eigenfunctions(eigenfunction: np.ndarray, reference: np.ndarray) -> EigenfunctionComparisonMetrics:
+    """Return normalized overlap and relative L2 error after global phase alignment."""
+
+    lhs = np.asarray(eigenfunction, dtype=np.complex128)
+    rhs = np.asarray(reference, dtype=np.complex128)
+    if lhs.shape != rhs.shape:
+        raise ValueError("eigenfunction and reference must have the same shape")
+    lhs_norm = float(np.linalg.norm(lhs))
+    rhs_norm = float(np.linalg.norm(rhs))
+    if lhs_norm <= 0.0 or rhs_norm <= 0.0:
+        return EigenfunctionComparisonMetrics(
+            overlap=float("nan"),
+            relative_l2=float("nan"),
+            phase_shift=0.0,
+        )
+    lhs_aligned, phase_shift = phase_align_eigenfunction(lhs, rhs)
+    overlap = float(np.abs(np.vdot(lhs, rhs)) / (lhs_norm * rhs_norm))
+    rel_l2 = float(np.linalg.norm(lhs_aligned - rhs) / rhs_norm)
+    return EigenfunctionComparisonMetrics(
+        overlap=overlap,
+        relative_l2=rel_l2,
+        phase_shift=phase_shift,
+    )
+
+
+def save_eigenfunction_reference_bundle(
+    path: str | Path,
+    *,
+    theta: np.ndarray,
+    mode: np.ndarray,
+    source: str,
+    case: str,
+    metadata: dict[str, object] | None = None,
+) -> Path:
+    """Write a frozen reference eigenfunction bundle as ``.npz``."""
+
+    out = Path(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    np.savez(
+        out,
+        theta=np.asarray(theta, dtype=float),
+        mode=np.asarray(mode, dtype=np.complex128),
+        source=np.asarray(str(source)),
+        case=np.asarray(str(case)),
+        metadata_json=np.asarray(json.dumps(metadata or {}, sort_keys=True)),
+    )
+    return out
+
+
+def load_eigenfunction_reference_bundle(path: str | Path) -> EigenfunctionReferenceBundle:
+    """Load a frozen reference eigenfunction bundle."""
+
+    data = np.load(Path(path), allow_pickle=False)
+    metadata_json = str(np.asarray(data["metadata_json"]).item()) if "metadata_json" in data else "{}"
+    return EigenfunctionReferenceBundle(
+        theta=np.asarray(data["theta"], dtype=float),
+        mode=np.asarray(data["mode"], dtype=np.complex128),
+        source=str(np.asarray(data["source"]).item()),
+        case=str(np.asarray(data["case"]).item()),
+        metadata=json.loads(metadata_json),
+    )
+
+
+def load_diagnostic_time_series(
+    path: str | Path,
+    *,
+    variable: str,
+    diagnostics_group: str = "Diagnostics",
+    time_group: str = "Grids",
+    time_var: str = "time",
+    kx_index: int | None = None,
+    component: str = "real",
+    align_phase: bool = False,
+) -> DiagnosticTimeSeries:
+    """Load a 1D diagnostics time series from a GX-style ``out.nc`` artifact."""
+
+    src = Path(path)
+    with nc.Dataset(src) as ds:
+        diag_group = ds.groups.get(diagnostics_group)
+        if diag_group is None:
+            raise ValueError(f"missing NetCDF group {diagnostics_group!r} in {src}")
+        if variable not in diag_group.variables:
+            raise ValueError(f"missing diagnostics variable {variable!r} in {src}")
+        var = diag_group.variables[variable]
+        raw = np.asarray(var[:])
+        dims = tuple(getattr(var, "dimensions", ()))
+        if dims and dims[-1] == "ri":
+            raw = np.asarray(raw[..., 0] + 1j * raw[..., 1], dtype=np.complex128)
+        if raw.ndim == 1:
+            values = raw
+        elif raw.ndim == 2:
+            if kx_index is None:
+                raise ValueError(f"diagnostics variable {variable!r} requires kx_index for 2D extraction")
+            values = raw[:, int(kx_index)]
+        else:
+            raise ValueError(f"diagnostics variable {variable!r} must reduce to a 1D time series")
+
+        if time_group in ds.groups and time_var in ds.groups[time_group].variables:
+            t = np.asarray(ds.groups[time_group].variables[time_var][:], dtype=float)
+        elif time_var in ds.variables:
+            t = np.asarray(ds.variables[time_var][:], dtype=float)
+        else:
+            raise ValueError(f"missing time variable {time_group}/{time_var} in {src}")
+
+    if t.ndim != 1 or t.size != values.size:
+        raise ValueError(f"time axis for {variable!r} must be one-dimensional and match the diagnostics length")
+
+    values_arr = np.asarray(values)
+    if np.iscomplexobj(values_arr):
+        if align_phase:
+            finite = np.isfinite(values_arr)
+            nz = finite & (np.abs(values_arr) > 1.0e-30)
+            if np.any(nz):
+                first = values_arr[np.flatnonzero(nz)[0]]
+                values_arr = values_arr * np.exp(-1j * np.angle(first))
+        component_key = str(component).lower()
+        if component_key == "complex":
+            selected = values_arr
+        elif component_key == "real":
+            selected = np.real(values_arr)
+        elif component_key == "imag":
+            selected = np.imag(values_arr)
+        elif component_key == "abs":
+            selected = np.abs(values_arr)
+        else:
+            raise ValueError("component must be one of {'real', 'imag', 'abs', 'complex'}")
+    else:
+        if component not in {"real", "abs"}:
+            raise ValueError("real diagnostics only support component='real' or 'abs'")
+        selected = np.abs(values_arr) if component == "abs" else np.asarray(values_arr, dtype=float)
+
+    return DiagnosticTimeSeries(
+        t=t,
+        values=np.asarray(selected),
+        variable=str(variable),
+        source_path=str(src),
+    )
 
 
 def _tail_window(t: np.ndarray, tail_fraction: float) -> tuple[np.ndarray, float | None, float | None]:
@@ -98,12 +230,289 @@ def _tail_window(t: np.ndarray, tail_fraction: float) -> tuple[np.ndarray, float
     return mask, float(tt[0]) if tt.size else None, float(tt[-1]) if tt.size else None
 
 
+def late_time_window(t: np.ndarray, *, tail_fraction: float = 0.4) -> tuple[float, float]:
+    """Return the start/end of a late-time tail window.
+
+    This is the windowing convention used for manuscript-facing eigenfunction
+    extraction when the growth-rate fit window is not the same object as the
+    late-time mode-shape window.
+    """
+
+    _mask, tmin, tmax = _tail_window(np.asarray(t, dtype=float), float(tail_fraction))
+    if tmin is None or tmax is None:
+        raise ValueError("late-time window requires a non-empty time axis")
+    return float(tmin), float(tmax)
+
+
+def infer_triple_dealiased_ny(nky_positive: int) -> int:
+    """Infer the full ``Ny`` from the number of positive ``k_y`` points.
+
+    GX-style reference outputs typically store only the non-negative
+    ``k_y`` branch. For the linked-boundary spectral grid used here, the
+    corresponding real-space ``Ny`` follows ``Ny = 3 * (nky - 1) + 1``.
+    """
+
+    nky = int(nky_positive)
+    if nky < 2:
+        raise ValueError("nky_positive must be >= 2")
+    return 3 * (nky - 1) + 1
+
+
 def _tail_stats(arr: np.ndarray, mask: np.ndarray) -> tuple[float, float]:
     vals = np.asarray(arr, dtype=float)[mask]
     vals = vals[np.isfinite(vals)]
     if vals.size == 0:
         return float("nan"), float("nan")
     return float(np.mean(vals)), float(np.std(vals))
+
+
+def _leading_window(
+    t: np.ndarray,
+    lead_fraction: float,
+) -> tuple[np.ndarray, float | None, float | None]:
+    if not 0.0 < float(lead_fraction) <= 1.0:
+        raise ValueError("lead_fraction must be in (0, 1]")
+    if t.ndim != 1:
+        raise ValueError("t must be one-dimensional")
+    if t.size == 0:
+        raise ValueError("t must be non-empty")
+    stop = max(1, int(np.ceil(float(lead_fraction) * t.size)))
+    mask = np.zeros_like(t, dtype=bool)
+    mask[:stop] = True
+    tt = np.asarray(t[mask], dtype=float)
+    return mask, float(tt[0]) if tt.size else None, float(tt[-1]) if tt.size else None
+
+
+def _explicit_time_window(
+    t: np.ndarray,
+    *,
+    tmin: float | None = None,
+    tmax: float | None = None,
+) -> tuple[np.ndarray, float, float]:
+    mask = np.ones_like(t, dtype=bool)
+    if tmin is not None:
+        mask &= t >= float(tmin)
+    if tmax is not None:
+        mask &= t <= float(tmax)
+    if not np.any(mask):
+        raise ValueError("explicit fit window is empty")
+    tt = np.asarray(t[mask], dtype=float)
+    return mask, float(tt[0]), float(tt[-1])
+
+
+def _analytic_signal(signal: np.ndarray) -> np.ndarray:
+    x = np.asarray(signal, dtype=float)
+    if x.ndim != 1 or x.size == 0:
+        raise ValueError("signal must be a non-empty one-dimensional array")
+    spec = np.fft.fft(x)
+    filt = np.zeros(x.size, dtype=float)
+    if x.size % 2 == 0:
+        filt[0] = 1.0
+        filt[x.size // 2] = 1.0
+        filt[1 : x.size // 2] = 2.0
+    else:
+        filt[0] = 1.0
+        filt[1 : (x.size + 1) // 2] = 2.0
+    return np.fft.ifft(spec * filt)
+
+
+def zonal_flow_response_metrics(
+    t: np.ndarray,
+    response: np.ndarray,
+    *,
+    tail_fraction: float = 0.3,
+    initial_fraction: float = 0.1,
+    initial_policy: str = "window_abs_mean",
+    initial_level_override: float | None = None,
+    peak_fit_max_peaks: int | None = None,
+    damping_fit_mode: str = "combined_envelope",
+    frequency_fit_mode: str = "peak_spacing",
+    fit_window_tmin: float | None = None,
+    fit_window_tmax: float | None = None,
+    hilbert_trim_fraction: float = 0.2,
+) -> ZonalFlowResponseMetrics:
+    """Estimate residual level and GAM envelope metrics from a zonal response.
+
+    The input ``response`` should be a scalar zonal observable such as zonal
+    potential or a normalized zonal-energy proxy on a uniform time trace.
+    ``initial_policy="first_abs"`` follows Rosenbluth-Hinton/GAM convention by
+    normalizing to the initial potential magnitude; ``"window_abs_mean"`` keeps
+    the older robust behavior for generic noisy traces. ``initial_level_override``
+    supports benchmarks whose published normalization is an external initial
+    amplitude, for example a Gaussian potential maximum rather than the first
+    line-averaged sample.
+    """
+
+    t_arr = np.asarray(t, dtype=float)
+    resp = np.asarray(response, dtype=float)
+    if t_arr.ndim != 1 or resp.ndim != 1 or t_arr.size != resp.size:
+        raise ValueError("t and response must be one-dimensional arrays of equal length")
+    if t_arr.size < 4:
+        raise ValueError("zonal-flow response requires at least four samples")
+
+    finite = np.isfinite(t_arr) & np.isfinite(resp)
+    t_arr = t_arr[finite]
+    resp = resp[finite]
+    if t_arr.size < 4:
+        raise ValueError("zonal-flow response requires at least four finite samples")
+
+    policy = str(initial_policy).strip().lower().replace("-", "_")
+    if policy not in {"window_abs_mean", "first_abs"}:
+        raise ValueError("initial_policy must be one of {'window_abs_mean', 'first_abs'}")
+    if peak_fit_max_peaks is not None and int(peak_fit_max_peaks) <= 0:
+        raise ValueError("peak_fit_max_peaks must be > 0 when provided")
+    damping_mode = str(damping_fit_mode).strip().lower().replace("-", "_")
+    if damping_mode not in {"combined_envelope", "branchwise_extrema"}:
+        raise ValueError("damping_fit_mode must be one of {'combined_envelope', 'branchwise_extrema'}")
+    frequency_mode = str(frequency_fit_mode).strip().lower().replace("-", "_")
+    if frequency_mode not in {"peak_spacing", "hilbert_phase"}:
+        raise ValueError("frequency_fit_mode must be one of {'peak_spacing', 'hilbert_phase'}")
+    if not 0.0 <= float(hilbert_trim_fraction) < 0.5:
+        raise ValueError("hilbert_trim_fraction must be in [0, 0.5)")
+
+    tail_mask, tail_tmin, tail_tmax = _tail_window(t_arr, float(tail_fraction))
+    tail_vals = resp[tail_mask]
+    if tail_vals.size == 0:
+        raise ValueError("response windows must be non-empty")
+
+    if initial_level_override is not None:
+        initial_level = float(initial_level_override)
+    elif policy == "first_abs":
+        initial_level = float(abs(resp[0]))
+    else:
+        lead_mask, _lead_tmin, _lead_tmax = _leading_window(t_arr, float(initial_fraction))
+        initial_vals = resp[lead_mask]
+        if initial_vals.size == 0:
+            raise ValueError("response windows must be non-empty")
+        initial_level = float(np.mean(np.abs(initial_vals)))
+    if initial_level <= 0.0 or not np.isfinite(initial_level):
+        raise ValueError("initial response level must be finite and positive")
+
+    residual = float(np.mean(tail_vals))
+    residual_std = float(np.std(tail_vals))
+    response_norm = resp / initial_level
+    residual_norm = residual / initial_level
+    residual_std_norm = residual_std / initial_level
+    response_rms = float(np.sqrt(np.mean(np.square(response_norm[tail_mask]))))
+
+    detrended_norm = response_norm - residual_norm
+    fit_mask, fit_tmin, fit_tmax = _explicit_time_window(
+        t_arr,
+        tmin=fit_window_tmin,
+        tmax=fit_window_tmax,
+    )
+
+    max_peak_idx = np.asarray([], dtype=int)
+    min_peak_idx = np.asarray([], dtype=int)
+    peak_idx = np.asarray([], dtype=int)
+    if detrended_norm.size >= 3:
+        max_peak_idx = (
+            np.flatnonzero(
+                (detrended_norm[1:-1] > detrended_norm[:-2])
+                & (detrended_norm[1:-1] >= detrended_norm[2:])
+                & (detrended_norm[1:-1] > 1.0e-12)
+            )
+            + 1
+        )
+        min_peak_idx = (
+            np.flatnonzero(
+                (detrended_norm[1:-1] < detrended_norm[:-2])
+                & (detrended_norm[1:-1] <= detrended_norm[2:])
+                & (detrended_norm[1:-1] < -1.0e-12)
+            )
+            + 1
+        )
+        peak_idx = np.sort(np.concatenate([max_peak_idx, min_peak_idx]))
+    peak_times = t_arr[peak_idx]
+    peak_values = np.abs(detrended_norm[peak_idx])
+    max_peak_times = t_arr[max_peak_idx]
+    max_peak_values = response_norm[max_peak_idx]
+    min_peak_times = t_arr[min_peak_idx]
+    min_peak_values = response_norm[min_peak_idx]
+
+    gam_frequency = float("nan")
+    gam_damping = float("nan")
+    peak_fit_count = 0
+    if damping_mode == "combined_envelope":
+        peak_fit_times = peak_times[fit_mask[peak_idx]]
+        peak_fit_values = peak_values[fit_mask[peak_idx]]
+        if peak_fit_max_peaks is not None and peak_fit_times.size:
+            nfit = min(int(peak_fit_max_peaks), int(peak_fit_times.size))
+            peak_fit_times = peak_fit_times[:nfit]
+            peak_fit_values = peak_fit_values[:nfit]
+        peak_fit_count = int(peak_fit_times.size)
+        valid = np.isfinite(peak_fit_values) & (peak_fit_values > 0.0)
+        if np.count_nonzero(valid) >= 2:
+            slope, _offset = np.polyfit(peak_fit_times[valid], np.log(peak_fit_values[valid]), 1)
+            gam_damping = float(-slope)
+    else:
+        branch_gammas: list[float] = []
+        branch_counts: list[int] = []
+        for branch_idx in (max_peak_idx, min_peak_idx):
+            idx = branch_idx[fit_mask[branch_idx]]
+            if peak_fit_max_peaks is not None and idx.size:
+                idx = idx[: min(int(peak_fit_max_peaks), int(idx.size))]
+            amp = np.abs(detrended_norm[idx])
+            valid = np.isfinite(amp) & (amp > 0.0)
+            if np.count_nonzero(valid) >= 2:
+                slope, _offset = np.polyfit(t_arr[idx][valid], np.log(amp[valid]), 1)
+                branch_gammas.append(float(-slope))
+                branch_counts.append(int(np.count_nonzero(valid)))
+        if branch_gammas:
+            gam_damping = float(np.mean(branch_gammas))
+            peak_fit_count = int(np.sum(branch_counts))
+
+    fit_peak_times = peak_times[fit_mask[peak_idx]]
+    if peak_fit_max_peaks is not None and damping_mode == "combined_envelope" and fit_peak_times.size:
+        fit_peak_times = fit_peak_times[: min(int(peak_fit_max_peaks), int(fit_peak_times.size))]
+
+    if frequency_mode == "peak_spacing":
+        freq_peak_times = fit_peak_times if fit_peak_times.size >= 2 else peak_times[fit_mask[peak_idx]]
+        if freq_peak_times.size >= 2:
+            dt_peaks = np.diff(freq_peak_times)
+            dt_peaks = dt_peaks[np.isfinite(dt_peaks) & (dt_peaks > 0.0)]
+            if dt_peaks.size:
+                gam_frequency = float(np.pi / np.mean(dt_peaks))
+    else:
+        fit_t = t_arr[fit_mask]
+        fit_signal = detrended_norm[fit_mask]
+        if fit_t.size >= 8:
+            analytic = _analytic_signal(fit_signal)
+            phase = np.unwrap(np.angle(analytic))
+            omega = np.gradient(phase, fit_t)
+            trim = int(np.floor(float(hilbert_trim_fraction) * fit_t.size))
+            trim_mask = np.ones_like(fit_t, dtype=bool)
+            if trim > 0:
+                trim_mask[:trim] = False
+                trim_mask[-trim:] = False
+            amp = np.abs(analytic)
+            valid = np.isfinite(omega) & np.isfinite(amp) & (amp > 1.0e-6) & trim_mask
+            if np.count_nonzero(valid) >= 2:
+                gam_frequency = float(np.mean(omega[valid]))
+
+    return ZonalFlowResponseMetrics(
+        initial_level=initial_level,
+        initial_policy=policy,
+        residual_level=residual_norm,
+        residual_std=residual_std_norm,
+        response_rms=response_rms,
+        gam_frequency=gam_frequency,
+        gam_damping_rate=gam_damping,
+        damping_method=damping_mode,
+        frequency_method=frequency_mode,
+        peak_count=int(peak_times.size),
+        peak_fit_count=int(peak_fit_count),
+        tmin=float(tail_tmin if tail_tmin is not None else t_arr[0]),
+        tmax=float(tail_tmax if tail_tmax is not None else t_arr[-1]),
+        fit_tmin=float(fit_tmin),
+        fit_tmax=float(fit_tmax),
+        peak_times=np.asarray(peak_times, dtype=float),
+        peak_envelope=np.asarray(peak_values, dtype=float),
+        max_peak_times=np.asarray(max_peak_times, dtype=float),
+        max_peak_values=np.asarray(max_peak_values, dtype=float),
+        min_peak_times=np.asarray(min_peak_times, dtype=float),
+        min_peak_values=np.asarray(min_peak_values, dtype=float),
+    )
 
 
 def late_time_linear_metrics(
@@ -271,6 +680,65 @@ def estimate_observed_order(step_sizes: np.ndarray, errors: np.ndarray) -> Obser
     )
 
 
+def branch_continuity_metrics(
+    ky: np.ndarray,
+    gamma: np.ndarray,
+    omega: np.ndarray,
+    *,
+    successive_overlap: np.ndarray | None = None,
+    floor_fraction: float = 1.0e-8,
+) -> BranchContinuationMetrics:
+    """Compute branch-continuity diagnostics for a linear scan.
+
+    The relative jump normalization uses a local scale from adjacent values,
+    with a floor tied to the largest value in the scan. This avoids false
+    blow-ups near marginal points while still flagging branch jumps.
+    """
+
+    ky_arr = np.asarray(ky, dtype=float)
+    gamma_arr = np.asarray(gamma, dtype=float)
+    omega_arr = np.asarray(omega, dtype=float)
+    if ky_arr.ndim != 1 or gamma_arr.ndim != 1 or omega_arr.ndim != 1:
+        raise ValueError("ky, gamma, and omega must be one-dimensional arrays")
+    if not (ky_arr.size == gamma_arr.size == omega_arr.size):
+        raise ValueError("ky, gamma, and omega must have equal length")
+    if ky_arr.size < 2:
+        raise ValueError("branch continuity requires at least two ky samples")
+    if np.any(~np.isfinite(ky_arr)) or np.any(~np.isfinite(gamma_arr)) or np.any(~np.isfinite(omega_arr)):
+        raise ValueError("ky, gamma, and omega must be finite")
+    floor = float(floor_fraction)
+    if floor < 0.0:
+        raise ValueError("floor_fraction must be non-negative")
+
+    def _relative_jumps(values: np.ndarray) -> np.ndarray:
+        jumps = np.abs(np.diff(values))
+        global_floor = max(float(np.nanmax(np.abs(values))) * floor, 1.0e-30)
+        local_scale = np.maximum(np.maximum(np.abs(values[:-1]), np.abs(values[1:])), global_floor)
+        return jumps / local_scale
+
+    overlap_min: float | None = None
+    if successive_overlap is not None:
+        overlap = np.asarray(successive_overlap, dtype=float)
+        if overlap.ndim != 1 or overlap.size != ky_arr.size - 1:
+            raise ValueError("successive_overlap must have length len(ky) - 1")
+        if np.any(~np.isfinite(overlap)):
+            raise ValueError("successive_overlap must be finite")
+        overlap_min = float(np.min(overlap))
+
+    gamma_jumps = _relative_jumps(gamma_arr)
+    omega_jumps = _relative_jumps(omega_arr)
+    return BranchContinuationMetrics(
+        ky=ky_arr,
+        gamma=gamma_arr,
+        omega=omega_arr,
+        rel_gamma_jumps=gamma_jumps,
+        rel_omega_jumps=omega_jumps,
+        max_rel_gamma_jump=float(np.max(gamma_jumps)),
+        max_rel_omega_jump=float(np.max(omega_jumps)),
+        min_successive_overlap=overlap_min,
+    )
+
+
 def run_linear_scan(
     *,
     ky_values: np.ndarray,
@@ -356,7 +824,8 @@ def run_scan_and_mode(
     """Run a scan and extract a representative eigenfunction."""
 
     if select_ky is None:
-        select_ky = lambda scan: float(scan.ky[int(np.nanargmax(scan.gamma))])
+        def select_ky(scan: LinearScanResult) -> float:
+            return float(scan.ky[int(np.nanargmax(scan.gamma))])
 
     scan = run_linear_scan(
         ky_values=ky_values,

@@ -26,6 +26,21 @@ from spectraxgk.terms.linear_terms import (
 )
 
 
+def _apply_external_phi_source(
+    fields: FieldState,
+    *,
+    external_phi: jnp.ndarray | float | None,
+) -> FieldState:
+    """Apply a GX-style external electrostatic source after the field solve."""
+
+    if external_phi is None:
+        return fields
+    phi_shift = jnp.asarray(external_phi, dtype=fields.phi.dtype)
+    if phi_shift.ndim > fields.phi.ndim:
+        raise ValueError("external_phi must be broadcastable to the solved phi field")
+    return FieldState(phi=fields.phi + phi_shift, apar=fields.apar, bpar=fields.bpar)
+
+
 def assemble_rhs_cached(
     G: jnp.ndarray,
     cache: LinearCache,
@@ -34,6 +49,7 @@ def assemble_rhs_cached(
     terms: TermConfig | None = None,
     use_custom_vjp: bool = True,
     dt: jnp.ndarray | float | None = None,
+    external_phi: jnp.ndarray | float | None = None,
 ) -> Tuple[jnp.ndarray, FieldState]:
     """Assemble the RHS from term-wise modules using a precomputed cache."""
 
@@ -109,6 +125,7 @@ def assemble_rhs_cached(
         fapar=fapar,
         w_bpar=w_bpar,
     )
+    fields = _apply_external_phi_source(fields, external_phi=external_phi)
 
     Jl = cache.Jl
     JlB = cache.JlB
@@ -185,6 +202,7 @@ def assemble_rhs_cached(
         JlB=JlB,
         b=cache.b,
         nu=nu,
+        collision_lam=cache.collision_lam,
         lb_lam=cache.lb_lam,
         weight=w_coll,
     )
@@ -412,6 +430,7 @@ def assemble_rhs_terms_cached(
         JlB=JlB,
         b=cache.b,
         nu=nu,
+        collision_lam=cache.collision_lam,
         lb_lam=cache.lb_lam,
         weight=w_coll,
     )
@@ -487,10 +506,11 @@ def assemble_rhs_cached_jit(
     params: LinearParams,
     terms: TermConfig,
     dt: jnp.ndarray | float | None = None,
+    external_phi: jnp.ndarray | float | None = None,
 ) -> Tuple[jnp.ndarray, FieldState]:
     """Jitted wrapper for cached RHS assembly."""
 
-    return assemble_rhs_cached(G, cache, params, terms=terms, dt=dt)
+    return assemble_rhs_cached(G, cache, params, terms=terms, dt=dt, external_phi=external_phi)
 
 
 def compute_fields_cached(
@@ -500,6 +520,7 @@ def compute_fields_cached(
     *,
     terms: TermConfig | None = None,
     use_custom_vjp: bool = True,
+    external_phi: jnp.ndarray | float | None = None,
 ) -> FieldState:
     """Compute fields for a cached state without assembling the RHS."""
 
@@ -544,6 +565,7 @@ def compute_fields_cached(
         fapar=fapar,
         w_bpar=w_bpar,
     )
+    fields = _apply_external_phi_source(fields, external_phi=external_phi)
     if squeeze_species:
         return FieldState(phi=fields.phi, apar=fields.apar, bpar=fields.bpar)
     return fields
@@ -560,8 +582,9 @@ def assemble_rhs(
     terms: TermConfig | None = None,
     cache: LinearCache | None = None,
     dt: jnp.ndarray | float | None = None,
+    external_phi: jnp.ndarray | float | None = None,
 ) -> Tuple[jnp.ndarray, FieldState]:
     """Assemble the RHS from term-wise modules."""
 
     cache = cache or build_linear_cache(grid, geom, params, Nl, Nm)
-    return assemble_rhs_cached(G, cache, params, terms=terms, dt=dt)
+    return assemble_rhs_cached(G, cache, params, terms=terms, dt=dt, external_phi=external_phi)

@@ -122,6 +122,8 @@ class RuntimeExpertConfig:
     iky_fixed: int | None = None
     ikx_fixed: int | None = None
     dealias_kz: bool = False
+    source: str = "default"
+    phi_ext: float = 0.0
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

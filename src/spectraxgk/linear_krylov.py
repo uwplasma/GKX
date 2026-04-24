@@ -15,7 +15,7 @@ from spectraxgk.linear import (
     LinearCache,
     LinearParams,
     LinearTerms,
-    _as_species_array,
+    collision_damping,
     hypercollision_damping,
     linear_terms_to_term_config,
 )
@@ -83,16 +83,10 @@ def _compute_damping(
     params: LinearParams,
 ) -> jnp.ndarray:
     real_dtype = jnp.real(v).dtype
-    lb_lam = cache.lb_lam.astype(real_dtype)
     hyper_damp = hypercollision_damping(cache, params, real_dtype)
-    if lb_lam.ndim == 6:
-        ns = lb_lam.shape[0]
-        nu = _as_species_array(params.nu, ns, "nu").astype(real_dtype)
-        damping = nu[:, None, None, None, None, None] * lb_lam + hyper_damp
-        if v.ndim == 5:
-            damping = damping[0]
-    else:
-        damping = jnp.asarray(params.nu, dtype=real_dtype) * lb_lam + hyper_damp
+    if v.ndim == 5 and hyper_damp.ndim == 6:
+        hyper_damp = hyper_damp[0]
+    damping = collision_damping(cache, params, real_dtype, squeeze_species=(v.ndim == 5)) + hyper_damp
     return damping.astype(real_dtype)
 
 

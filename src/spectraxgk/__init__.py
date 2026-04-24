@@ -11,6 +11,14 @@ from spectraxgk.config import (
     TimeConfig,
 )
 from spectraxgk.geometry import SAlphaGeometry, build_flux_tube_geometry
+from spectraxgk.geometry.differentiable import (
+    discover_differentiable_geometry_backends,
+    finite_difference_jacobian,
+    flux_tube_geometry_from_mapping,
+    flux_tube_geometry_observables,
+    geometry_observable_names,
+    geometry_sensitivity_report,
+)
 from spectraxgk.gyroaverage import J_l_all, gamma0
 from spectraxgk.io import (
     load_case_from_toml,
@@ -103,12 +111,32 @@ from spectraxgk.benchmarks import (
     run_cyclone_linear,
     run_cyclone_scan,
 )
+from spectraxgk.validation_gates import (
+    BranchContinuationMetrics,
+    GateReport,
+    LateTimeLinearMetrics,
+    NonlinearWindowMetrics,
+    ScalarGateResult,
+    ZonalFlowResponseMetrics,
+    branch_continuity_gate_report,
+    eigenfunction_gate_report,
+    evaluate_scalar_gate,
+    gate_report,
+    gate_report_to_dict,
+    linear_metrics_gate_report,
+    nonlinear_window_gate_report,
+    observed_order_gate_report,
+    zonal_response_gate_report,
+)
 from spectraxgk.benchmarking import (
     ScanAndModeResult,
+    branch_continuity_metrics,
     normalize_eigenfunction,
     run_linear_scan,
     run_scan_and_mode,
 )
+from spectraxgk.autodiff_validation import covariance_diagnostics
+from spectraxgk.parallel import batch_map, ky_scan_batches
 from spectraxgk.plotting import (
     cyclone_comparison_figure,
     cyclone_reference_figure,
@@ -150,6 +178,12 @@ __all__ = [
     "TimeConfig",
     "SAlphaGeometry",
     "build_flux_tube_geometry",
+    "discover_differentiable_geometry_backends",
+    "finite_difference_jacobian",
+    "flux_tube_geometry_from_mapping",
+    "flux_tube_geometry_observables",
+    "geometry_observable_names",
+    "geometry_sensitivity_report",
     "J_l_all",
     "gamma0",
     "load_case_from_toml",
@@ -240,6 +274,25 @@ __all__ = [
     "run_cyclone_linear",
     "run_cyclone_scan",
     "ScanAndModeResult",
+    "BranchContinuationMetrics",
+    "ScalarGateResult",
+    "GateReport",
+    "LateTimeLinearMetrics",
+    "NonlinearWindowMetrics",
+    "ZonalFlowResponseMetrics",
+    "branch_continuity_gate_report",
+    "branch_continuity_metrics",
+    "covariance_diagnostics",
+    "batch_map",
+    "ky_scan_batches",
+    "eigenfunction_gate_report",
+    "evaluate_scalar_gate",
+    "gate_report",
+    "gate_report_to_dict",
+    "linear_metrics_gate_report",
+    "nonlinear_window_gate_report",
+    "observed_order_gate_report",
+    "zonal_response_gate_report",
     "normalize_eigenfunction",
     "run_linear_scan",
     "run_scan_and_mode",

@@ -67,7 +67,10 @@ def _emit_progress(
     elapsed = max(now - _PROGRESS_START[key], 0.0)
     rate = float(idx_i + 1) / elapsed if elapsed > 1.0e-12 else 0.0
     remaining_steps = max(steps_i - (idx_i + 1), 0)
-    eta = remaining_steps / rate if rate > 1.0e-12 else float("inf")
+    if remaining_steps == 0:
+        eta = 0.0
+    else:
+        eta = remaining_steps / rate if rate > 1.0e-12 else float("inf")
     sim_text = ""
     if sim_time is not None:
         sim_time_f = float(sim_time)

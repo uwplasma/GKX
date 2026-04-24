@@ -24,6 +24,16 @@ def _gx_active_ky_count(ny_full: int) -> int:
     return 1 + ((int(ny_full) - 1) // 3)
 
 
+def _gx_active_kx_indices(nx_full: int) -> np.ndarray:
+    nx = int(nx_full)
+    split = 1 + ((nx - 1) // 3)
+    if nx <= 1:
+        return np.array([0], dtype=np.int32)
+    neg = np.arange(2 * nx // 3 + 1, nx, dtype=np.int32)
+    pos = np.arange(0, split, dtype=np.int32)
+    return np.concatenate([neg, pos], axis=0)
+
+
 def _expand_positive_ky_to_full(state_positive_ky: np.ndarray, *, ny_full: int) -> np.ndarray:
     state = np.asarray(state_positive_ky)
     if state.ndim != 6:
@@ -59,12 +69,7 @@ def _expand_gx_restart_state_to_full_positive_ky(
     if nakx != expected_nakx:
         raise ValueError(f"restart Nkx={nakx} does not match nx_full={nx_full} (expected {expected_nakx})")
     out = np.zeros((nspec, nl, nm, nyc_full, int(nx_full), nz), dtype=np.complex64)
-    split = 1 + ((int(nx_full) - 1) // 3)
-    out[..., :naky, :split, :] = state[..., :split, :]
-    if int(nx_full) > 1:
-        for i in range(2 * int(nx_full) // 3 + 1, int(nx_full)):
-            it = i - 2 * int(nx_full) // 3 + ((int(nx_full) - 1) // 3)
-            out[..., :naky, i, :] = state[..., it, :]
+    out[..., :naky, _gx_active_kx_indices(int(nx_full)), :] = state
     return out
 
 
@@ -83,12 +88,7 @@ def _expand_gx_restart_state_full_ky(
     if nakx != expected_nakx:
         raise ValueError(f"restart Nkx={nakx} does not match nx_full={nx_full} (expected {expected_nakx})")
     out = np.zeros((nspec, nl, nm, int(ny_full), int(nx_full), nz), dtype=np.complex64)
-    split = 1 + ((int(nx_full) - 1) // 3)
-    out[..., :split, :] = state[..., :split, :]
-    if int(nx_full) > 1:
-        for i in range(2 * int(nx_full) // 3 + 1, int(nx_full)):
-            it = i - 2 * int(nx_full) // 3 + ((int(nx_full) - 1) // 3)
-            out[..., i, :] = state[..., it, :]
+    out[..., _gx_active_kx_indices(int(nx_full)), :] = state
     return out
 
 

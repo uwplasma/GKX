@@ -177,9 +177,9 @@ def build_collocation_surfaces(params: MillerCoreParams) -> dict[str, np.ndarray
     theta = np.linspace(0.0, np.pi, int(params.ntgrid), dtype=float)
     r0 = np.array(
         [
-            params.rmaj + np.abs(params.shift) * params.delrho,
+            params.rmaj - params.shift * params.delrho,
             params.rmaj,
-            params.rmaj - np.abs(params.shift) * params.delrho,
+            params.rmaj + params.shift * params.delrho,
         ],
         dtype=float,
     )
