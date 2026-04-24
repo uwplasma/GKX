@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import sys
 from typing import Any
+import uuid
 
 import numpy as np
 from scipy.integrate import cumulative_trapezoid as _ctrap
@@ -285,7 +286,7 @@ def _vmec_fieldlines(
         s_hat_input_val = 1.0e-8
 
     G = vs.Gfun(s)
-    I = vs.Ifun(s)
+    boozer_i = vs.Ifun(s)
 
     xm_b = vs.xm_b
     xn_b = vs.xn_b
@@ -398,8 +399,8 @@ def _vmec_fieldlines(
     )
     lambmnc_b[:, 1:] = (
         delmnc_b[:, 1:]
-        * (xm_b[1:] * G[:, None] + xn_b[1:] * I[:, None])
-        / (safe_denom_mn * (G[:, None] + iota[:, None] * I[:, None]))
+        * (xm_b[1:] * G[:, None] + xn_b[1:] * boozer_i[:, None])
+        / (safe_denom_mn * (G[:, None] + iota[:, None] * boozer_i[:, None]))
     )
 
     beta_b = np.einsum("ij,jikl->ikl", betamns_b, sinangle_b)
@@ -596,7 +597,7 @@ def _vmec_fieldlines(
             * (intinv_g / D1 - phi_b + zeta_center)
             - d_pressure_d_s_1[:, None, None]
             * Vprime[:, None, None]
-            * (G[:, None, None] + iota[:, None, None] * I[:, None, None])
+            * (G[:, None, None] + iota[:, None, None] * boozer_i[:, None, None])
             * (int_lam_div_g - D2 * intinv_g / D1)
         )
     )
@@ -624,15 +625,15 @@ def _vmec_fieldlines(
         * (modB_b * d_B_b_d_s + _MU_0 * d_pressure_d_s[:, None, None])
         / _etf
         - beta_b
-        / (2.0 * sqrt_g_booz * (G[:, None, None] + iota[:, None, None] * I[:, None, None]))
+        / (2.0 * sqrt_g_booz * (G[:, None, None] + iota[:, None, None] * boozer_i[:, None, None]))
         * d_sqrt_g_booz_d_phi_b
         + L0
-        * (G[:, None] * d_sqrt_g_booz_d_theta_b - I[:, None] * d_sqrt_g_booz_d_phi_b)
-        / (2.0 * sqrt_g_booz * (G[:, None] + iota[:, None] * I[:, None]))
+        * (G[:, None] * d_sqrt_g_booz_d_theta_b - boozer_i[:, None] * d_sqrt_g_booz_d_phi_b)
+        / (2.0 * sqrt_g_booz * (G[:, None] + iota[:, None] * boozer_i[:, None]))
     )
     kappa_g = (
-        G[:, None] * d_sqrt_g_booz_d_theta_b - I[:, None] * d_sqrt_g_booz_d_phi_b
-    ) / (2.0 * sqrt_g_booz * (G[:, None] + iota[:, None] * I[:, None]))
+        G[:, None] * d_sqrt_g_booz_d_theta_b - boozer_i[:, None] * d_sqrt_g_booz_d_phi_b
+    ) / (2.0 * sqrt_g_booz * (G[:, None] + iota[:, None] * boozer_i[:, None]))
 
     B_cross_kappa_dot_grad_alpha = (kappa_n + kappa_g * L1) * modB_b ** 2
     B_cross_kappa_dot_grad_psi = kappa_g * modB_b ** 2
@@ -969,6 +970,31 @@ def write_vmec_eik_netcdf(
         ds.createVariable("nfp", "i4").assignValue(int(profiles["nfp"]))
 
 
+def _write_vmec_eik_netcdf_atomically(
+    path: Path,
+    profiles: dict[str, Any],
+    *,
+    request: Any,
+) -> None:
+    """Write a VMEC eik file through a unique temp file, then atomically replace.
+
+    W7-X validation sweeps commonly launch multiple identical VMEC geometry
+    requests at once. Writing the shared cache file directly can expose a
+    partially written netCDF to another process. A per-process temp path keeps
+    the final cache path all-or-nothing.
+    """
+
+    final_path = Path(path).expanduser().resolve()
+    final_path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = final_path.with_name(f".{final_path.name}.{os.getpid()}.{uuid.uuid4().hex}.tmp")
+    try:
+        write_vmec_eik_netcdf(temp_path, profiles, request=request)
+        os.replace(temp_path, final_path)
+    finally:
+        if temp_path.exists():
+            temp_path.unlink()
+
+
 def generate_vmec_eik_internal(
     *,
     output_path: str | Path,
@@ -1085,6 +1111,5 @@ def generate_vmec_eik_internal(
     }
 
     out = Path(output_path).expanduser().resolve()
-    out.parent.mkdir(parents=True, exist_ok=True)
-    write_vmec_eik_netcdf(out, profiles, request=request)
+    _write_vmec_eik_netcdf_atomically(out, profiles, request=request)
     return out
