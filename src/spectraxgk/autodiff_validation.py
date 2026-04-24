@@ -23,6 +23,8 @@ def covariance_diagnostics(
     res = np.asarray(residual, dtype=float).reshape(-1)
     if jac.ndim != 2:
         raise ValueError("jacobian must be a two-dimensional array")
+    if jac.shape[1] == 0:
+        raise ValueError("jacobian must contain at least one parameter column")
     if jac.shape[0] != res.size:
         raise ValueError("residual length must match the number of Jacobian rows")
     reg = float(regularization)
