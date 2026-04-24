@@ -323,6 +323,7 @@ def zonal_flow_response_metrics(
     tail_fraction: float = 0.3,
     initial_fraction: float = 0.1,
     initial_policy: str = "window_abs_mean",
+    initial_level_override: float | None = None,
     peak_fit_max_peaks: int | None = None,
     damping_fit_mode: str = "combined_envelope",
     frequency_fit_mode: str = "peak_spacing",
@@ -336,7 +337,10 @@ def zonal_flow_response_metrics(
     potential or a normalized zonal-energy proxy on a uniform time trace.
     ``initial_policy="first_abs"`` follows Rosenbluth-Hinton/GAM convention by
     normalizing to the initial potential magnitude; ``"window_abs_mean"`` keeps
-    the older robust behavior for generic noisy traces.
+    the older robust behavior for generic noisy traces. ``initial_level_override``
+    supports benchmarks whose published normalization is an external initial
+    amplitude, for example a Gaussian potential maximum rather than the first
+    line-averaged sample.
     """
 
     t_arr = np.asarray(t, dtype=float)
@@ -371,7 +375,9 @@ def zonal_flow_response_metrics(
     if tail_vals.size == 0:
         raise ValueError("response windows must be non-empty")
 
-    if policy == "first_abs":
+    if initial_level_override is not None:
+        initial_level = float(initial_level_override)
+    elif policy == "first_abs":
         initial_level = float(abs(resp[0]))
     else:
         lead_mask, _lead_tmin, _lead_tmax = _leading_window(t_arr, float(initial_fraction))
