@@ -276,10 +276,12 @@ jobs:
           SPECTRAX_X64: "1"
         run: |
           python tools/run_wide_coverage_gate.py \
-            --shards 6 \
+            --shards 12 \
             --timeout 300 \
             --fail-under 95 \
-            --xml coverage-wide.xml
+            --xml coverage-wide.xml \
+            --pytest-arg=-o \
+            --pytest-arg=addopts=
 
       - name: Upload wide coverage report
         uses: codecov/codecov-action@v5

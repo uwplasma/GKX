@@ -1052,7 +1052,6 @@ def run_cyclone_linear(
     def _fresh_G0() -> jnp.ndarray:
         return jnp.asarray(G0_base)
 
-    G0_jax = _fresh_G0()
     _status("building linear cache")
     cache = build_linear_cache(grid, geom, params, Nl, Nm)
 
@@ -1945,8 +1944,6 @@ def run_cyclone_scan(
         )
     else:
         ky_iter = _iter_ky_batches(ky_values_arr, ky_batch=1, fixed_batch_shape=False)
-    prev_vec: jnp.ndarray | None = None
-    prev_eig_scan: complex | None = None
     ky_slice: np.ndarray
     ky_indices: list[int]
     sel_scan: ModeSelection | ModeSelectionBatch
@@ -2015,7 +2012,6 @@ def run_cyclone_scan(
                 ky_out.append(float(ky_val))
             continue
 
-        method_key = method.lower()
         time_cfg_i = None
         if time_cfg is not None:
             time_cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
@@ -2404,9 +2400,9 @@ def run_etg_linear(
             )
             if sample_stride is not None:
                 time_cfg_use = replace(time_cfg_use, sample_stride=sample_stride)
-            if time_cfg_use is not None:
-                if sample_stride is not None:
-                    time_cfg_use = replace(time_cfg_use, sample_stride=sample_stride)
+        if time_cfg_use is not None:
+            if sample_stride is not None:
+                time_cfg_use = replace(time_cfg_use, sample_stride=sample_stride)
             if time_cfg is not None:
                 dt = float(time_cfg_use.dt)
                 steps = int(round(time_cfg_use.t_max / time_cfg_use.dt))
@@ -2552,7 +2548,7 @@ def run_etg_linear(
                 )
                 density_t = None
 
-            phi_t_np = np.asarray(phi_t)
+        phi_t_np = np.asarray(phi_t)
         t = np.arange(phi_t_np.shape[0]) * dt * stride
         density_np = None if density_t is None else np.asarray(density_t)
         if gx_growth and fit_key == "phi":
@@ -2954,7 +2950,6 @@ def run_etg_scan(
             ky_out.append(float(ky_slice[0]))
             continue
 
-        method_key = method.lower()
         time_cfg_i = None
         if time_cfg is not None:
             time_cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
@@ -3652,7 +3647,6 @@ def run_kinetic_scan(
             ky_out.append(float(ky_slice[0]))
             continue
 
-        method_key = method.lower()
         time_cfg_i = None
         if time_cfg is not None:
             time_cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
@@ -4220,7 +4214,6 @@ def run_tem_scan(
             ky_out.append(float(ky_slice[0]))
             continue
 
-        method_key = method.lower()
         time_cfg_i = None
         if time_cfg is not None:
             time_cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
@@ -4529,8 +4522,6 @@ def run_kbm_beta_scan(
                 gamma = float("nan")
                 omega = float("nan")
             gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
-            gamma_out = gamma
-            omega_out = omega
         elif solver_use == "krylov":
             shift_val = krylov_cfg_use.shift
             shift_selection = krylov_cfg_use.shift_selection
@@ -4639,7 +4630,6 @@ def run_kbm_beta_scan(
                 prev_eig = eig
 
         if solver_use not in {"krylov", "gx_time"}:
-            method_key = method.lower()
             time_cfg_i = None
             if time_cfg is not None:
                 time_cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
@@ -4923,8 +4913,6 @@ def run_kbm_linear(
     fit_key = fit_signal.strip().lower()
     if fit_key not in {"phi", "density", "auto"}:
         raise ValueError("fit_signal must be 'phi', 'density', or 'auto'")
-    if fit_key == "auto":
-        streaming_fit = False
 
     if init_species_index < 0 or init_species_index >= 2:
         raise ValueError("init_species_index out of range for kinetic species")

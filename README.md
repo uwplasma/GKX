@@ -312,6 +312,7 @@ Default `pytest` runs skip integration tests for faster feedback. Use:
 pytest
 pytest -m integration
 python tools/run_tests_fast.py
+python tools/run_wide_coverage_gate.py --shards 12 --timeout 300 --fail-under 95 --pytest-arg=-o --pytest-arg=addopts=
 ```
 
 ## Plotting outputs

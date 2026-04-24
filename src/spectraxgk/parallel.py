@@ -58,7 +58,7 @@ def batch_map(
     arr = jnp.asarray(values)
     if arr.shape[0] == 0:
         raise ValueError("values must contain at least one item")
-    chunk_size = int(batch_size or arr.shape[0])
+    chunk_size = int(arr.shape[0] if batch_size is None else batch_size)
     if chunk_size < 1:
         raise ValueError("batch_size must be >= 1")
 

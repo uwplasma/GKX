@@ -207,7 +207,30 @@ class SlabGeometry:
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
-        return cls(*children, z0=aux_data["z0"], zero_shat=aux_data["zero_shat"])
+        (
+            s_hat,
+            q,
+            epsilon,
+            R0,
+            B0,
+            alpha,
+            drift_scale,
+            kperp2_bmag,
+            bessel_bmag_power,
+        ) = children
+        return cls(
+            s_hat=s_hat,
+            z0=aux_data["z0"],
+            q=q,
+            epsilon=epsilon,
+            R0=R0,
+            B0=B0,
+            alpha=alpha,
+            drift_scale=drift_scale,
+            kperp2_bmag=kperp2_bmag,
+            bessel_bmag_power=bessel_bmag_power,
+            zero_shat=aux_data["zero_shat"],
+        )
 
     @staticmethod
     def from_config(cfg: GeometryConfig) -> "SlabGeometry":
