@@ -561,6 +561,18 @@ def _build_end_damping_profile_array(
     return jnp.asarray(damp_profile_np, dtype=real_dtype)
 
 
+def _build_gyroaverage_cache_arrays(
+    b: jnp.ndarray,
+    Nl: int,
+    real_dtype: jnp.dtype,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Build species-major gyroaverage factors without a Python-level vmap."""
+
+    Jl = jnp.moveaxis(J_l_all(b, l_max=Nl - 1), 0, 1).astype(real_dtype)
+    JlB = Jl + shift_axis(Jl, -1, axis=1)
+    return Jl, JlB.astype(real_dtype)
+
+
 def hypercollision_damping(
     cache: "LinearCache",
     params: "LinearParams",
@@ -945,8 +957,7 @@ def build_linear_cache(
     if bessel_bmag_power != 0.0:
         bmag_factor = bmag[None, None, None, :] ** (-bessel_bmag_power)
         b = b * bmag_factor
-    Jl = jax.vmap(lambda bs: J_l_all(bs, l_max=Nl - 1))(b).astype(real_dtype)
-    JlB = Jl + shift_axis(Jl, -1, axis=1)
+    Jl, JlB = _build_gyroaverage_cache_arrays(b, Nl, real_dtype)
     lag_to_grid_np, lag_to_spec_np, lag_roots_np = gx_laguerre_transform(Nl)
     laguerre_to_grid = jnp.asarray(lag_to_grid_np, dtype=real_dtype)
     laguerre_to_spectral = jnp.asarray(lag_to_spec_np, dtype=real_dtype)
