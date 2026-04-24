@@ -1065,63 +1065,16 @@ def run_cyclone_linear(
     def _run_krylov() -> tuple[float, float, np.ndarray, np.ndarray]:
         _status("starting Krylov solve")
         kcfg = krylov_cfg or CYCLONE_KRYLOV_DEFAULT
-        # GX-style time seed to stabilize the branch selection.
+        # GX-style time seed to stabilize branch selection.  If the caller
+        # supplied an explicit shift, respect it directly and avoid the seed
+        # march; this keeps explicit-shift scans bounded and deterministic.
         gamma_seed = 0.0
         omega_seed = 0.0
         seed_ok = False
         omega_ok = False
-        try:
-            _status("estimating frequency seed with short GX time march")
-            t_seed = min(150.0, float(kcfg.power_dt) * 15000.0)
-            time_cfg = ExplicitTimeConfig(
-                dt=float(kcfg.power_dt),
-                t_max=t_seed,
-                sample_stride=1,
-                fixed_dt=True,
-            )
-            G0_seed = _fresh_G0()
-            t_short, phi_t, _g_t, _o_t = integrate_linear_gx(
-                G0_seed,
-                grid,
-                cache,
-                params,
-                geom,
-                time_cfg,
-                terms=terms,
-                mode_method="z_index",
-                show_progress=show_progress,
-            )
-            sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
-            gamma_seed, omega_seed, _g, _o, _t_mid = gx_growth_rate_from_phi(
-                phi_t,
-                t_short,
-                sel,
-                navg_fraction=0.5,
-                mode_method="z_index",
-            )
-            omega_ok = np.isfinite(omega_seed) and abs(omega_seed) > 1.0e-8
-            seed_ok = (
-                omega_ok and np.isfinite(gamma_seed) and gamma_seed > 0.0
-            )
-        except Exception:
-            seed_ok = False
-            omega_ok = False
-
-        if not seed_ok:
+        if kcfg.shift is None:
             try:
-                _status("primary seed failed; retrying reduced Hermite-Laguerre seed")
-                Nl_seed = min(Nl, 16)
-                Nm_seed = min(Nm, 12)
-                cache_seed = build_linear_cache(grid, geom, params, Nl_seed, Nm_seed)
-                G0_seed = _build_initial_condition(
-                    grid,
-                    geom,
-                    ky_index=sel.ky_index,
-                    kx_index=sel.kx_index,
-                    Nl=Nl_seed,
-                    Nm=Nm_seed,
-                    init_cfg=init_cfg,
-                )
+                _status("estimating frequency seed with short GX time march")
                 t_seed = min(150.0, float(kcfg.power_dt) * 15000.0)
                 time_cfg = ExplicitTimeConfig(
                     dt=float(kcfg.power_dt),
@@ -1129,11 +1082,11 @@ def run_cyclone_linear(
                     sample_stride=1,
                     fixed_dt=True,
                 )
-                G0_seed = jnp.asarray(np.asarray(G0_seed))
+                G0_seed = _fresh_G0()
                 t_short, phi_t, _g_t, _o_t = integrate_linear_gx(
                     G0_seed,
                     grid,
-                    cache_seed,
+                    cache,
                     params,
                     geom,
                     time_cfg,
@@ -1141,11 +1094,11 @@ def run_cyclone_linear(
                     mode_method="z_index",
                     show_progress=show_progress,
                 )
-                sel_seed = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
+                sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
                 gamma_seed, omega_seed, _g, _o, _t_mid = gx_growth_rate_from_phi(
                     phi_t,
                     t_short,
-                    sel_seed,
+                    sel,
                     navg_fraction=0.5,
                     mode_method="z_index",
                 )
@@ -1156,6 +1109,56 @@ def run_cyclone_linear(
             except Exception:
                 seed_ok = False
                 omega_ok = False
+
+            if not seed_ok:
+                try:
+                    _status("primary seed failed; retrying reduced Hermite-Laguerre seed")
+                    Nl_seed = min(Nl, 16)
+                    Nm_seed = min(Nm, 12)
+                    cache_seed = build_linear_cache(grid, geom, params, Nl_seed, Nm_seed)
+                    G0_seed = _build_initial_condition(
+                        grid,
+                        geom,
+                        ky_index=sel.ky_index,
+                        kx_index=sel.kx_index,
+                        Nl=Nl_seed,
+                        Nm=Nm_seed,
+                        init_cfg=init_cfg,
+                    )
+                    t_seed = min(150.0, float(kcfg.power_dt) * 15000.0)
+                    time_cfg = ExplicitTimeConfig(
+                        dt=float(kcfg.power_dt),
+                        t_max=t_seed,
+                        sample_stride=1,
+                        fixed_dt=True,
+                    )
+                    G0_seed = jnp.asarray(np.asarray(G0_seed))
+                    t_short, phi_t, _g_t, _o_t = integrate_linear_gx(
+                        G0_seed,
+                        grid,
+                        cache_seed,
+                        params,
+                        geom,
+                        time_cfg,
+                        terms=terms,
+                        mode_method="z_index",
+                        show_progress=show_progress,
+                    )
+                    sel_seed = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
+                    gamma_seed, omega_seed, _g, _o, _t_mid = gx_growth_rate_from_phi(
+                        phi_t,
+                        t_short,
+                        sel_seed,
+                        navg_fraction=0.5,
+                        mode_method="z_index",
+                    )
+                    omega_ok = np.isfinite(omega_seed) and abs(omega_seed) > 1.0e-8
+                    seed_ok = (
+                        omega_ok and np.isfinite(gamma_seed) and gamma_seed > 0.0
+                    )
+                except Exception:
+                    seed_ok = False
+                    omega_ok = False
 
         shift = None
         if omega_ok:
