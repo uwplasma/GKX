@@ -544,6 +544,62 @@ def _condense_kykx(arr: np.ndarray) -> np.ndarray:
     return _take_axis(out, _gx_active_kx_indices(np.asarray(arr).shape[-1]), axis=-1)
 
 
+def _condense_kx_for_output(arr: np.ndarray, *, full_nx: int, active_nx: int) -> np.ndarray:
+    """Return kx-resolved data on the GX-active output axis.
+
+    Fresh in-memory diagnostics carry the full spectral ``kx`` axis, while
+    history loaded from an existing GX-style ``out.nc`` bundle is already
+    condensed.  External restart continuation appends both forms, so the writer
+    must not apply the active-index selection a second time.
+    """
+
+    arr_np = np.asarray(arr)
+    nx = int(arr_np.shape[-1])
+    if nx == int(active_nx):
+        return arr_np
+    if nx == int(full_nx):
+        return _take_axis(arr_np, _gx_active_kx_indices(int(full_nx)), axis=-1)
+    raise ValueError(f"kx-resolved diagnostic has length {nx}; expected full Nx={full_nx} or active Nkx={active_nx}")
+
+
+def _condense_ky_for_output(arr: np.ndarray, *, full_ny: int, active_ny: int) -> np.ndarray:
+    """Return ky-resolved data on the GX-active positive-ky output axis."""
+
+    arr_np = np.asarray(arr)
+    ny = int(arr_np.shape[-1])
+    if ny == int(active_ny):
+        return arr_np
+    if ny == int(full_ny):
+        return _take_axis(arr_np, _gx_active_ky_indices(int(full_ny)), axis=-1)
+    raise ValueError(f"ky-resolved diagnostic has length {ny}; expected full Ny={full_ny} or active Nky={active_ny}")
+
+
+def _condense_kykx_for_output(
+    arr: np.ndarray,
+    *,
+    full_ny: int,
+    full_nx: int,
+    active_ny: int,
+    active_nx: int,
+) -> np.ndarray:
+    """Return ky-kx-resolved data on GX-active output axes."""
+
+    arr_np = np.asarray(arr)
+    ny = int(arr_np.shape[-2])
+    nx = int(arr_np.shape[-1])
+    if ny == int(active_ny) and nx == int(active_nx):
+        return arr_np
+    if ny == int(full_ny):
+        arr_np = _take_axis(arr_np, _gx_active_ky_indices(int(full_ny)), axis=-2)
+    elif ny != int(active_ny):
+        raise ValueError(f"ky-kx diagnostic ky length {ny}; expected full Ny={full_ny} or active Nky={active_ny}")
+    if nx == int(full_nx):
+        arr_np = _take_axis(arr_np, _gx_active_kx_indices(int(full_nx)), axis=-1)
+    elif nx != int(active_nx):
+        raise ValueError(f"ky-kx diagnostic kx length {nx}; expected full Nx={full_nx} or active Nkx={active_nx}")
+    return arr_np
+
+
 def _write_gx_geometry_group(
     group: Any,
     cfg: Any,
@@ -621,6 +677,10 @@ def _write_runtime_nonlinear_gx_artifacts(out: str | Path, result: Any, cfg: Any
     theta = np.asarray(grid.z, dtype=np.float32)
     kx_vals = _gx_active_kx_values(np.asarray(grid.kx))
     ky_vals = _gx_active_ky_values(np.asarray(grid.ky))
+    full_nx = int(np.asarray(grid.kx).size)
+    full_ny = int(np.asarray(grid.ky).size)
+    active_nx = int(kx_vals.size)
+    active_ny = int(ky_vals.size)
     nspecies = int(np.asarray(result.state).shape[0]) if result.state is not None and np.asarray(result.state).ndim == 6 else len(cfg.species)
     time_vals = np.asarray(diag.t, dtype=np.float64)
     x_vals = _real_space_axis(int(grid.kx.size), float(2.0 * np.pi * grid.x0))
@@ -666,15 +726,29 @@ def _write_runtime_nonlinear_gx_artifacts(out: str | Path, result: Any, cfg: Any
             # dimensional spectra from the condensed two-dimensional spectrum
             # keeps Phi2_t, Phi2_kxt, and Phi2_kyt mutually consistent when
             # SPECTRAX-GK evolved a full Hermitian ky layout internally.
-            phi2_kykx_out = _condense_kykx(np.asarray(resolved.Phi2_kxkyt, dtype=np.float32))
+            phi2_kykx_out = _condense_kykx_for_output(
+                np.asarray(resolved.Phi2_kxkyt, dtype=np.float32),
+                full_ny=full_ny,
+                full_nx=full_nx,
+                active_ny=active_ny,
+                active_nx=active_nx,
+            )
             phi2_kx_out = np.sum(phi2_kykx_out, axis=1)
             phi2_ky_out = np.sum(phi2_kykx_out, axis=2)
             phi2_t = np.sum(phi2_kykx_out, axis=(1, 2))
         elif resolved is not None and resolved.Phi2_kyt is not None:
-            phi2_ky_out = _condense_ky(np.asarray(resolved.Phi2_kyt, dtype=np.float32))
+            phi2_ky_out = _condense_ky_for_output(
+                np.asarray(resolved.Phi2_kyt, dtype=np.float32),
+                full_ny=full_ny,
+                active_ny=active_ny,
+            )
             phi2_t = np.sum(phi2_ky_out, axis=1)
         elif resolved is not None and resolved.Phi2_kxt is not None:
-            phi2_kx_out = _condense_kx(np.asarray(resolved.Phi2_kxt, dtype=np.float32))
+            phi2_kx_out = _condense_kx_for_output(
+                np.asarray(resolved.Phi2_kxt, dtype=np.float32),
+                full_nx=full_nx,
+                active_nx=active_nx,
+            )
             phi2_t = np.sum(phi2_kx_out, axis=1)
         else:
             phi2_t = np.asarray(diag.Wphi_t, dtype=np.float32)
@@ -741,16 +815,28 @@ def _write_runtime_nonlinear_gx_artifacts(out: str | Path, result: Any, cfg: Any
             if resolved.Phi2_zonal_t is not None:
                 diag_group.createVariable("Phi2_zonal_t", "f4", ("time",))[:] = np.asarray(resolved.Phi2_zonal_t, dtype=np.float32)
             if resolved.Phi2_zonal_kxt is not None:
-                diag_group.createVariable("Phi2_zonal_kxt", "f4", ("time", "kx"))[:, :] = _condense_kx(np.asarray(resolved.Phi2_zonal_kxt, dtype=np.float32))
+                diag_group.createVariable("Phi2_zonal_kxt", "f4", ("time", "kx"))[:, :] = _condense_kx_for_output(
+                    np.asarray(resolved.Phi2_zonal_kxt, dtype=np.float32),
+                    full_nx=full_nx,
+                    active_nx=active_nx,
+                )
             if resolved.Phi2_zonal_zt is not None:
                 diag_group.createVariable("Phi2_zonal_zt", "f4", ("time", "theta"))[:, :] = np.asarray(resolved.Phi2_zonal_zt, dtype=np.float32)
             if resolved.Phi_zonal_mode_kxt is not None:
                 diag_group.createVariable("Phi_zonal_mode_kxt", "f4", ("time", "kx", "ri"))[:, :, :] = _complex_to_ri(
-                    _condense_kx(np.asarray(resolved.Phi_zonal_mode_kxt))
+                    _condense_kx_for_output(
+                        np.asarray(resolved.Phi_zonal_mode_kxt),
+                        full_nx=full_nx,
+                        active_nx=active_nx,
+                    )
                 )
             if resolved.Phi_zonal_line_kxt is not None:
                 diag_group.createVariable("Phi_zonal_line_kxt", "f4", ("time", "kx", "ri"))[:, :, :] = _complex_to_ri(
-                    _condense_kx(np.asarray(resolved.Phi_zonal_line_kxt))
+                    _condense_kx_for_output(
+                        np.asarray(resolved.Phi_zonal_line_kxt),
+                        full_nx=full_nx,
+                        active_nx=active_nx,
+                    )
                 )
             metric_specs = (
                 ("Wg", resolved.Wg_kxst, resolved.Wg_kyst, resolved.Wg_kxkyst, resolved.Wg_zst),
@@ -761,11 +847,25 @@ def _write_runtime_nonlinear_gx_artifacts(out: str | Path, result: Any, cfg: Any
             )
             for prefix, kx_arr, ky_arr, kykx_arr, z_arr in metric_specs:
                 if kx_arr is not None:
-                    diag_group.createVariable(f"{prefix}_kxst", "f4", ("time", "s", "kx"))[:, :, :] = _condense_kx(np.asarray(kx_arr, dtype=np.float32))
+                    diag_group.createVariable(f"{prefix}_kxst", "f4", ("time", "s", "kx"))[:, :, :] = _condense_kx_for_output(
+                        np.asarray(kx_arr, dtype=np.float32),
+                        full_nx=full_nx,
+                        active_nx=active_nx,
+                    )
                 if ky_arr is not None:
-                    diag_group.createVariable(f"{prefix}_kyst", "f4", ("time", "s", "ky"))[:, :, :] = _condense_ky(np.asarray(ky_arr, dtype=np.float32))
+                    diag_group.createVariable(f"{prefix}_kyst", "f4", ("time", "s", "ky"))[:, :, :] = _condense_ky_for_output(
+                        np.asarray(ky_arr, dtype=np.float32),
+                        full_ny=full_ny,
+                        active_ny=active_ny,
+                    )
                 if kykx_arr is not None:
-                    diag_group.createVariable(f"{prefix}_kxkyst", "f4", ("time", "s", "ky", "kx"))[:, :, :, :] = _condense_kykx(np.asarray(kykx_arr, dtype=np.float32))
+                    diag_group.createVariable(f"{prefix}_kxkyst", "f4", ("time", "s", "ky", "kx"))[:, :, :, :] = _condense_kykx_for_output(
+                        np.asarray(kykx_arr, dtype=np.float32),
+                        full_ny=full_ny,
+                        full_nx=full_nx,
+                        active_ny=active_ny,
+                        active_nx=active_nx,
+                    )
                 if z_arr is not None:
                     diag_group.createVariable(f"{prefix}_zst", "f4", ("time", "s", "theta"))[:, :, :] = np.asarray(z_arr, dtype=np.float32)
             if resolved.Wg_lmst is not None:
@@ -850,19 +950,47 @@ def _write_runtime_nonlinear_gx_artifacts(out: str | Path, result: Any, cfg: Any
                 use_kykx = total_kykx if kykx_arr is None and fallback_total else kykx_arr
                 use_z = total_z if z_arr is None and fallback_total else z_arr
                 if use_kx is not None:
-                    diag_group.createVariable(f"{prefix}_kxst", "f4", ("time", "s", "kx"))[:, :, :] = _condense_kx(np.asarray(use_kx, dtype=np.float32))
+                    diag_group.createVariable(f"{prefix}_kxst", "f4", ("time", "s", "kx"))[:, :, :] = _condense_kx_for_output(
+                        np.asarray(use_kx, dtype=np.float32),
+                        full_nx=full_nx,
+                        active_nx=active_nx,
+                    )
                 if use_ky is not None:
-                    diag_group.createVariable(f"{prefix}_kyst", "f4", ("time", "s", "ky"))[:, :, :] = _condense_ky(np.asarray(use_ky, dtype=np.float32))
+                    diag_group.createVariable(f"{prefix}_kyst", "f4", ("time", "s", "ky"))[:, :, :] = _condense_ky_for_output(
+                        np.asarray(use_ky, dtype=np.float32),
+                        full_ny=full_ny,
+                        active_ny=active_ny,
+                    )
                 if use_kykx is not None:
-                    diag_group.createVariable(f"{prefix}_kxkyst", "f4", ("time", "s", "ky", "kx"))[:, :, :, :] = _condense_kykx(np.asarray(use_kykx, dtype=np.float32))
+                    diag_group.createVariable(f"{prefix}_kxkyst", "f4", ("time", "s", "ky", "kx"))[:, :, :, :] = _condense_kykx_for_output(
+                        np.asarray(use_kykx, dtype=np.float32),
+                        full_ny=full_ny,
+                        full_nx=full_nx,
+                        active_ny=active_ny,
+                        active_nx=active_nx,
+                    )
                 if use_z is not None:
                     diag_group.createVariable(f"{prefix}_zst", "f4", ("time", "s", "theta"))[:, :, :] = np.asarray(use_z, dtype=np.float32)
             if resolved.TurbulentHeating_kxst is not None:
-                diag_group.createVariable("TurbulentHeating_kxst", "f4", ("time", "s", "kx"))[:, :, :] = _condense_kx(np.asarray(resolved.TurbulentHeating_kxst, dtype=np.float32))
+                diag_group.createVariable("TurbulentHeating_kxst", "f4", ("time", "s", "kx"))[:, :, :] = _condense_kx_for_output(
+                    np.asarray(resolved.TurbulentHeating_kxst, dtype=np.float32),
+                    full_nx=full_nx,
+                    active_nx=active_nx,
+                )
             if resolved.TurbulentHeating_kyst is not None:
-                diag_group.createVariable("TurbulentHeating_kyst", "f4", ("time", "s", "ky"))[:, :, :] = _condense_ky(np.asarray(resolved.TurbulentHeating_kyst, dtype=np.float32))
+                diag_group.createVariable("TurbulentHeating_kyst", "f4", ("time", "s", "ky"))[:, :, :] = _condense_ky_for_output(
+                    np.asarray(resolved.TurbulentHeating_kyst, dtype=np.float32),
+                    full_ny=full_ny,
+                    active_ny=active_ny,
+                )
             if resolved.TurbulentHeating_kxkyst is not None:
-                diag_group.createVariable("TurbulentHeating_kxkyst", "f4", ("time", "s", "ky", "kx"))[:, :, :, :] = _condense_kykx(np.asarray(resolved.TurbulentHeating_kxkyst, dtype=np.float32))
+                diag_group.createVariable("TurbulentHeating_kxkyst", "f4", ("time", "s", "ky", "kx"))[:, :, :, :] = _condense_kykx_for_output(
+                    np.asarray(resolved.TurbulentHeating_kxkyst, dtype=np.float32),
+                    full_ny=full_ny,
+                    full_nx=full_nx,
+                    active_ny=active_ny,
+                    active_nx=active_nx,
+                )
             if resolved.TurbulentHeating_zst is not None:
                 diag_group.createVariable("TurbulentHeating_zst", "f4", ("time", "s", "theta"))[:, :, :] = np.asarray(resolved.TurbulentHeating_zst, dtype=np.float32)
 
