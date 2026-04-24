@@ -11,6 +11,10 @@ from spectraxgk.config import (
     TimeConfig,
 )
 from spectraxgk.geometry import SAlphaGeometry, build_flux_tube_geometry
+from spectraxgk.geometry.differentiable import (
+    discover_differentiable_geometry_backends,
+    flux_tube_geometry_from_mapping,
+)
 from spectraxgk.gyroaverage import J_l_all, gamma0
 from spectraxgk.io import (
     load_case_from_toml,
@@ -127,6 +131,8 @@ from spectraxgk.benchmarking import (
     run_linear_scan,
     run_scan_and_mode,
 )
+from spectraxgk.autodiff_validation import covariance_diagnostics
+from spectraxgk.parallel import batch_map, ky_scan_batches
 from spectraxgk.plotting import (
     cyclone_comparison_figure,
     cyclone_reference_figure,
@@ -168,6 +174,8 @@ __all__ = [
     "TimeConfig",
     "SAlphaGeometry",
     "build_flux_tube_geometry",
+    "discover_differentiable_geometry_backends",
+    "flux_tube_geometry_from_mapping",
     "J_l_all",
     "gamma0",
     "load_case_from_toml",
@@ -266,6 +274,9 @@ __all__ = [
     "ZonalFlowResponseMetrics",
     "branch_continuity_gate_report",
     "branch_continuity_metrics",
+    "covariance_diagnostics",
+    "batch_map",
+    "ky_scan_batches",
     "eigenfunction_gate_report",
     "evaluate_scalar_gate",
     "gate_report",

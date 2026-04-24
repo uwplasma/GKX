@@ -107,6 +107,9 @@ jobs:
               tests/test_runtime_helpers.py
               tests/test_runtime_runner.py
               tests/test_runners.py
+              tests/test_parallel.py
+              tests/test_autodiff_validation.py
+              tests/test_differentiable_geometry_bridge.py
               tests/test_cli.py
               tests/test_gx_consistency.py
               tests/test_gx_diagnostics.py

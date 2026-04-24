@@ -180,12 +180,19 @@ The two-mode inverse example in
 `examples/theory_and_demos/autodiff_inverse_twomode.py` uses two ky modes to
 stabilize the inverse problem and provides the release-grade parameter
 recovery panel, closing the identifiability gap present in the single-mode
-demo.
+demo. Both autodiff examples now report finite-difference Jacobian checks,
+Jacobian rank/conditioning, covariance, standard deviations, correlations, and
+one-sigma UQ ellipse area in their summary JSON files.
 
-For distributed parallelization, set `TimeConfig.state_sharding = "auto"` (or
-`"ky"`) in runtime TOMLs to partition the packed state array across available
-JAX devices. This path is supported by the diffrax integrators; when only one
-device is available the run falls back to single-device execution.
+For production parallelization of independent work, use
+`spectraxgk.batch_map` / `spectraxgk.ky_scan_batches` for ky scans,
+sensitivity sweeps, and UQ ensembles. These helpers preserve serial ordering,
+fall back to `vmap` on one device, and use JAX device batching when multiple
+devices are available. For full-state runtime parallelization, set
+`TimeConfig.state_sharding = "auto"` (or `"ky"`) in runtime TOMLs to partition
+the packed state array across available JAX devices. Nonlinear domain
+parallelization remains out of the release claim until its communication and
+numerical-identity gates are closed.
 
 ## Benchmarks
 
@@ -197,6 +204,10 @@ The benchmark tooling in `tools/` ensures reproducibility and performance tracki
 For the current release pass, the accepted nonlinear validation set is Cyclone,
 KBM, W7-X, HSX, Cyclone Miller, and the closed short-window full-GK ETG
 nonlinear pilot. TEM and KAW stay outside the active parity claim.
+The window-statistics artifact uses case-specific mean-relative gates: KBM
+`0.02`, HSX `0.05`, Cyclone Miller `0.095`, and the broader release envelope
+`0.10` for Cyclone and W7-X while their paper-level tightening lanes remain
+open.
 
 ## Runtime and Memory
 
@@ -210,6 +221,17 @@ benchmark cases. Performance tracking covers:
 - **KBM** and **ETG** configurations
 - **W7-X** and **HSX** stellarator geometries
 - **Miller** geometry models
+
+The refreshed shipped panel includes the W7-X and HSX linear and nonlinear
+rows. Regenerate this public panel from the shipped refresh summary with:
+
+```bash
+python tools/benchmark_runtime_memory.py \
+  --summary-glob tools_out/runtime_memory_summary_ship_refresh.json \
+  --csv-out tools_out/runtime_memory_results_ship_refresh_regenerated.csv \
+  --summary-out tools_out/runtime_memory_summary_ship_refresh_regenerated.json \
+  --plot-out docs/_static/runtime_memory_benchmark.png
+```
 
 Experimental or not-yet-closed lanes such as KAW, TEM, and kinetic-electron
 Cyclone are tracked separately and do not appear in the shipped runtime panel.
