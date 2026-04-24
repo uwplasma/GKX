@@ -715,13 +715,13 @@ def eigenfunction_reference_overlay_figure(
     ax2.set_xlabel(r"$\theta$")
     ax2.set_ylabel(r"$|\phi|$")
     ax2.set_title("Amplitude")
-    ax2.legend(loc="best", frameon=False)
+    ax2.legend(loc="upper right", frameon=False)
     ax2.text(
         0.03,
-        0.97,
+        0.04,
         f"overlap = {metrics.overlap:.4f}\nrel $L^2$ = {metrics.relative_l2:.4f}",
         transform=ax2.transAxes,
-        va="top",
+        va="bottom",
         ha="left",
         bbox={"boxstyle": "round,pad=0.3", "facecolor": "white", "alpha": 0.9, "edgecolor": "#cccccc"},
     )
