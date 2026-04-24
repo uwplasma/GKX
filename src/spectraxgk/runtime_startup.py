@@ -274,6 +274,40 @@ def _build_gaussian_profile(
     return env * np.exp(-((z - theta0) / width) ** 2)
 
 
+def _build_single_phi_gaussian_profile(
+    z: np.ndarray,
+    *,
+    kx: float,
+    ky: float,
+    s_hat: float,
+    width: float,
+    envelope_constant: float,
+    envelope_sine: float,
+) -> np.ndarray:
+    """Return a single-mode Gaussian potential profile along the flux tube.
+
+    The W7-X zonal-flow benchmark prescribes a Gaussian electrostatic-potential
+    perturbation centered in the middle of the flux tube. The multi-mode GX
+    Gaussian initializer is undefined for ``ky=0`` because its ballooning-angle
+    center uses ``kx / (s_hat * ky)``; for the zonal case the physically stated
+    center is therefore the tube midpoint, ``z=0``.
+    """
+
+    if ky != 0.0 and s_hat != 0.0:
+        return _build_gaussian_profile(
+            z,
+            kx=kx,
+            ky=ky,
+            s_hat=s_hat,
+            width=width,
+            envelope_constant=envelope_constant,
+            envelope_sine=envelope_sine,
+        )
+    center = 0.0
+    env = envelope_constant + envelope_sine * np.sin(z - center)
+    return env * np.exp(-((z - center) / width) ** 2)
+
+
 def _reshape_gx_state(
     raw: np.ndarray,
     *,
@@ -554,7 +588,17 @@ def _build_initial_condition(
     z = np.asarray(grid.z)
     z_period = _gx_periodic_zp(z)
     z_phase = np.cos(float(cfg.init.kpar_init) * z / z_period)
-    if cfg.init.init_single:
+    if cfg.init.init_single and cfg.init.gaussian_init and init_field == "phi":
+        vals = amp * _build_single_phi_gaussian_profile(
+            z,
+            kx=float(grid.kx[kx_index]),
+            ky=ky_val,
+            s_hat=float(geom.s_hat),
+            width=float(cfg.init.gaussian_width),
+            envelope_constant=float(cfg.init.gaussian_envelope_constant),
+            envelope_sine=float(cfg.init.gaussian_envelope_sine),
+        ).astype(np.complex64, copy=False)
+    elif cfg.init.init_single:
         vals = amp * z_phase.astype(np.complex64, copy=False)
     elif cfg.init.gaussian_init:
         profile = _build_gaussian_profile(
