@@ -13,10 +13,8 @@ from jax.scipy.sparse.linalg import gmres
 
 from spectraxgk.basis import hermite_ladder_coeffs
 from spectraxgk.geometry import (
-    FluxTubeGeometryData,
     FluxTubeGeometryLike,
     ensure_flux_tube_geometry_data,
-    zero_shear_enabled,
 )
 from spectraxgk.gyroaverage import J_l_all, bessel_j0, bessel_j1, gx_laguerre_transform
 from spectraxgk.grids import SpectralGrid
@@ -310,8 +308,6 @@ def _build_linked_fft_maps(
     ky_mode_arr: np.ndarray | None = None
     if ky_mode is not None:
         ky_mode_arr = np.asarray(ky_mode, dtype=int).reshape(-1)
-        if ky_mode_arr.size < naky:
-            raise ValueError("ky_mode must have at least naky entries for linked FFT maps")
     for idx in range(nakx):
         idx0 = idx if idx < (nakx + 1) // 2 else idx - nakx
         for idy in range(naky):
@@ -481,9 +477,9 @@ def lenard_bernstein_eigenvalues(
 ) -> jnp.ndarray:
     """Diagonal Lenard-Bernstein rates in Hermite-Laguerre space."""
 
-    l = jnp.arange(Nl)
+    ell = jnp.arange(Nl)
     m = jnp.arange(Nm)
-    return nu_laguerre * l[:, None] + nu_hermite * m[None, :]
+    return nu_laguerre * ell[:, None] + nu_hermite * m[None, :]
 
 
 def _numpy_dtype_for_jax(real_dtype: jnp.dtype) -> type[np.float32] | type[np.float64]:
@@ -693,7 +689,7 @@ class LinearCache:
     m_norm_kz_factor: jnp.ndarray
     damp_profile: jnp.ndarray
     linked_damp_profile: jnp.ndarray
-    l: jnp.ndarray
+    l: jnp.ndarray  # noqa: E741 - public cache field for the Laguerre index.
     m: jnp.ndarray
     l4: jnp.ndarray
     sqrt_m: jnp.ndarray
@@ -1160,16 +1156,16 @@ def apply_laguerre_x(G: jnp.ndarray) -> jnp.ndarray:
 
     axis_l = -5
     Nl = G.shape[axis_l]
-    l = jnp.arange(Nl)
+    ell = jnp.arange(Nl)
     G_plus = shift_axis(G, 1, axis_l)
     G_minus = shift_axis(G, -1, axis_l)
-    l_shape = [1] * G.ndim
-    l_shape[axis_l] = Nl
-    l_col = l.reshape(l_shape)
+    ell_shape = [1] * G.ndim
+    ell_shape[axis_l] = Nl
+    ell_col = ell.reshape(ell_shape)
     return (
-        (2.0 * l_col + 1.0) * G
-        - (l_col + 1.0) * G_plus
-        - l_col * G_minus
+        (2.0 * ell_col + 1.0) * G
+        - (ell_col + 1.0) * G_plus
+        - ell_col * G_minus
     )
 
 
@@ -1625,7 +1621,7 @@ def _build_implicit_operator(
     damping = collision_damping(cache, params, real_dtype, squeeze_species=False) + hyper_damp
     damping = damping.astype(real_dtype)
 
-    l = cache.l.astype(real_dtype)
+    ell = cache.l.astype(real_dtype)
     m = cache.m.astype(real_dtype)
     cv_d = cache.cv_d.astype(real_dtype)
     gb_d = cache.gb_d.astype(real_dtype)
@@ -1642,10 +1638,10 @@ def _build_implicit_operator(
     omega_d_scale = jnp.asarray(params.omega_d_scale, dtype=real_dtype)
     diag = diag - imag * tz_b * omega_d_scale * (
         w_curv * cv_d[None, None, None, ...] * (2.0 * m + 1.0)
-        + w_gradb * gb_d[None, None, None, ...] * (2.0 * l + 1.0)
+        + w_gradb * gb_d[None, None, None, ...] * (2.0 * ell + 1.0)
     )
     bgrad = bgrad[None, None, None, None, None, :]
-    mirror_diag = vth_b * (2.0 * l + 1.0) * (2.0 * m + 1.0)
+    mirror_diag = vth_b * (2.0 * ell + 1.0) * (2.0 * m + 1.0)
     mirror_weight = 0.2
     diag = diag - w_mirror * mirror_weight * bgrad * mirror_diag
 
