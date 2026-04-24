@@ -1974,43 +1974,6 @@ def run_cyclone_scan(
             init_cfg=init_cfg,
         )
         cache = build_linear_cache(grid, geom, params, Nl, Nm)
-        if solver_key == "krylov":
-            for local_idx in range(valid_count):
-                ky_val = ky_slice[local_idx]
-                cfg_use = krylov_cfg or CYCLONE_KRYLOV_DEFAULT
-                eig, _vec = dominant_eigenpair(
-                    G0_jax,
-                    cache,
-                    params,
-                    terms=terms,
-                    krylov_dim=cfg_use.krylov_dim,
-                    restarts=cfg_use.restarts,
-                    omega_min_factor=cfg_use.omega_min_factor,
-                    omega_target_factor=cfg_use.omega_target_factor,
-                    omega_cap_factor=cfg_use.omega_cap_factor,
-                    omega_sign=cfg_use.omega_sign,
-                    method=cfg_use.method,
-                    power_iters=cfg_use.power_iters,
-                    power_dt=cfg_use.power_dt,
-                    shift=cfg_use.shift,
-                    shift_source=cfg_use.shift_source,
-                    shift_tol=cfg_use.shift_tol,
-                    shift_maxiter=cfg_use.shift_maxiter,
-                    shift_restart=cfg_use.shift_restart,
-                    shift_solve_method=cfg_use.shift_solve_method,
-                    shift_preconditioner=cfg_use.shift_preconditioner,
-                    shift_selection=cfg_use.shift_selection,
-                    mode_family=cfg_use.mode_family,
-                    fallback_method=cfg_use.fallback_method,
-                    fallback_real_floor=cfg_use.fallback_real_floor,
-                )
-                gamma = float(np.real(eig))
-                omega = float(-np.imag(eig))
-                gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
-                gammas.append(gamma)
-                omegas.append(omega)
-                ky_out.append(float(ky_val))
-            continue
 
         time_cfg_i = None
         if time_cfg is not None:
