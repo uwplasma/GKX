@@ -170,7 +170,13 @@ def select_ky_grid(
     grid: SpectralGrid,
     ky_index: int | jnp.ndarray | np.ndarray | Sequence[int],
 ) -> SpectralGrid:
-    """Return a grid sliced down to one or more ky indices."""
+    """Return a linear-solver grid sliced down to one or more ky indices.
+
+    The parent grid's two-thirds mask belongs to nonlinear FFT products.  A
+    linear ky scan must not zero a selected high-ky mode just because that row
+    would be dealiased in a nonlinear convolution, so sliced linear grids carry
+    an all-true mask.
+    """
 
     ky_idx = jnp.asarray(ky_index, dtype=jnp.int32)
     if ky_idx.ndim == 0:
@@ -178,7 +184,7 @@ def select_ky_grid(
     ky = jnp.take(grid.ky, ky_idx, axis=0)
     ky_grid = jnp.take(grid.ky_grid, ky_idx, axis=0)
     kx_grid = jnp.take(grid.kx_grid, ky_idx, axis=0)
-    mask = jnp.take(grid.dealias_mask, ky_idx, axis=0)
+    mask = jnp.ones_like(jnp.take(grid.dealias_mask, ky_idx, axis=0), dtype=bool)
     ky_mode = jnp.rint(ky * grid.y0).astype(jnp.int32)
     return SpectralGrid(
         kx=grid.kx,
