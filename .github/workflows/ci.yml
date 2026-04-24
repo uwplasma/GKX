@@ -305,6 +305,7 @@ jobs:
 
       - name: Build docs
         run: |
+          python tools/check_validation_coverage_manifest.py --out-json docs/_static/validation_coverage_manifest_summary.json
           python -m sphinx -W -b html docs docs/_build/html
 
       - name: Build distribution artifacts
