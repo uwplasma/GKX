@@ -236,7 +236,7 @@ jobs:
   wide-coverage:
     if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - uses: actions/checkout@v4
@@ -265,10 +265,11 @@ jobs:
           JAX_ENABLE_X64: "true"
           SPECTRAX_X64: "1"
         run: |
-          pytest -q --maxfail=1 --disable-warnings \
-            --cov=spectraxgk \
-            --cov-report=xml:coverage-wide.xml \
-            --cov-report=term
+          python tools/run_wide_coverage_gate.py \
+            --shards 6 \
+            --timeout 300 \
+            --fail-under 95 \
+            --xml coverage-wide.xml
 
       - name: Upload wide coverage report
         uses: codecov/codecov-action@v5

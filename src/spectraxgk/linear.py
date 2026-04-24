@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field as dataclass_field
 from functools import partial
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 import jax
 import jax.numpy as jnp
@@ -498,15 +498,15 @@ def _build_low_rank_moment_cache_arrays(
 ) -> dict[str, jnp.ndarray]:
     """Build small moment-space cache arrays without many eager JAX dispatches."""
 
-    np_dtype = _numpy_dtype_for_jax(real_dtype)
-    ell = np.arange(Nl, dtype=np_dtype).reshape(Nl, 1, 1, 1, 1)
-    m = np.arange(Nm, dtype=np_dtype).reshape(1, Nm, 1, 1, 1)
+    np_dtype: Any = _numpy_dtype_for_jax(real_dtype)
+    ell: Any = np.arange(Nl, dtype=np_dtype).reshape(Nl, 1, 1, 1, 1)
+    m: Any = np.arange(Nm, dtype=np_dtype).reshape(1, Nm, 1, 1, 1)
     lb_lam_np = (
         float(params.nu_laguerre) * np.arange(Nl, dtype=np_dtype)[:, None]
         + float(params.nu_hermite) * np.arange(Nm, dtype=np_dtype)[None, :]
     )
     sqrt_shape = (1, 1, Nm, 1, 1, 1)
-    hermite_index = np.arange(Nm, dtype=np_dtype)
+    hermite_index: Any = np.arange(Nm, dtype=np_dtype)
     sqrt_p_np = np.sqrt(hermite_index + np_dtype(1.0)).reshape(sqrt_shape)
     sqrt_m_ladder_np = np.sqrt(hermite_index).reshape(sqrt_shape)
     l_norm = np_dtype(max(Nl - 1, 1))

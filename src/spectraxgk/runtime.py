@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Callable, cast
+from typing import Any, Callable, Sequence
 from pathlib import Path
 
 import jax.numpy as jnp
@@ -57,10 +57,7 @@ from spectraxgk.runtime_startup import (
     _build_initial_condition,
     _enforce_full_ky_hermitian,
     _expand_ky,
-    _gx_centered_random_pairs,
     _gx_default_p_hyper_m,
-    _gx_init_mode_pairs,
-    _gx_periodic_zp,
     _require_full_gk_runtime_model,
     _resolve_runtime_hl_dims,
     _reshape_gx_state,
@@ -1025,7 +1022,7 @@ def run_runtime_nonlinear(
 
             def _run_cetg_chunk(chunk_show_progress: bool):
                 nonlocal G_chunk
-                kwargs = dict(
+                kwargs: dict[str, Any] = dict(
                     dt=dt_val,
                     steps=chunk_steps,
                     method=str(method or cfg.time.method),
@@ -1174,7 +1171,7 @@ def run_runtime_nonlinear(
 
             def _run_nonlinear_chunk(chunk_show_progress: bool):
                 nonlocal G_chunk
-                kwargs = dict(
+                kwargs: dict[str, Any] = dict(
                     dt=dt_val,
                     steps=chunk_steps,
                     method=str(method or cfg.time.method),

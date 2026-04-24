@@ -8,6 +8,12 @@ import numpy as np
 import pandas as pd
 
 
+def _float_groupby_key(value: object) -> float:
+    """Convert a scalar pandas groupby key to a float for validation tables."""
+
+    return float(np.asarray(value, dtype=float).item())
+
+
 def kx_token(kx: float) -> str:
     """Return the canonical three-digit token for ``kx rho_i`` values."""
 
@@ -96,7 +102,7 @@ def reference_residual_table(path: Path) -> pd.DataFrame:
         spread = float(np.max(np.abs(medians - center))) if medians.size > 1 else 0.0
         rows.append(
             {
-                "kx": float(kx),
+                "kx": _float_groupby_key(kx),
                 "reference_residual": center,
                 "reference_code_spread": spread,
                 "reference_min": float(np.min(medians)),
@@ -116,7 +122,13 @@ def reference_time_limits(trace_table: pd.DataFrame) -> pd.DataFrame:
     rows = []
     for kx, group in trace_table.groupby("kx_rhoi"):
         t = np.asarray(group["t_vti_over_a"], dtype=float)
-        rows.append({"kx": float(kx), "reference_tmax": float(np.nanmax(t)), "reference_tmin": float(np.nanmin(t))})
+        rows.append(
+            {
+                "kx": _float_groupby_key(kx),
+                "reference_tmax": float(np.nanmax(t)),
+                "reference_tmin": float(np.nanmin(t)),
+            }
+        )
     return pd.DataFrame(rows)
 
 
