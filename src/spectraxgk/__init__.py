@@ -13,7 +13,11 @@ from spectraxgk.config import (
 from spectraxgk.geometry import SAlphaGeometry, build_flux_tube_geometry
 from spectraxgk.geometry.differentiable import (
     discover_differentiable_geometry_backends,
+    finite_difference_jacobian,
     flux_tube_geometry_from_mapping,
+    flux_tube_geometry_observables,
+    geometry_observable_names,
+    geometry_sensitivity_report,
 )
 from spectraxgk.gyroaverage import J_l_all, gamma0
 from spectraxgk.io import (
@@ -175,7 +179,11 @@ __all__ = [
     "SAlphaGeometry",
     "build_flux_tube_geometry",
     "discover_differentiable_geometry_backends",
+    "finite_difference_jacobian",
     "flux_tube_geometry_from_mapping",
+    "flux_tube_geometry_observables",
+    "geometry_observable_names",
+    "geometry_sensitivity_report",
     "J_l_all",
     "gamma0",
     "load_case_from_toml",

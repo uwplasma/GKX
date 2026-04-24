@@ -90,7 +90,7 @@ microinstabilities and nonlinear transport across diverse magnetic
 configurations. The shipped nonlinear atlas emphasizes the longest archived
 windows currently tracked in the repo: KBM to about `t=400`, W7-X to about
 `t=200`, and Cyclone Miller to about `t=122`. HSX is currently archived on the
-closed `t=50` window; no longer HSX nonlinear audit artifact is currently
+closed `t=50` window; no longer-window HSX nonlinear audit artifact is currently
 tracked for the release panel.
 
 Autodiff validation (inverse/sensitivity demo):
@@ -183,6 +183,20 @@ recovery panel, closing the identifiability gap present in the single-mode
 demo. Both autodiff examples now report finite-difference Jacobian checks,
 Jacobian rank/conditioning, covariance, standard deviations, correlations, and
 one-sigma UQ ellipse area in their summary JSON files.
+
+The differentiable geometry bridge example lives at
+`examples/theory_and_demos/differentiable_geometry_bridge.py` and writes the
+publication artifact below. It validates the in-memory
+`vmec_jax`/`booz_xform_jax` bridge contract used by stellarator optimization
+workflows: solver-ready field-line arrays remain JAX-traceable, geometry
+observable sensitivities match central finite differences, a two-parameter
+inverse design recovers the target observables, and the local UQ covariance is
+reported. When `vmec_jax` is available, the same artifact also checks a real
+VMEC boundary-aspect derivative through its boundary Fourier API; when
+`booz_xform_jax` is available, the JAX-native Boozer transform API is recorded
+in the JSON metadata.
+
+![SPECTRAX-GK differentiable geometry bridge](docs/_static/differentiable_geometry_bridge.png)
 
 For production parallelization of independent work, use
 `spectraxgk.batch_map` / `spectraxgk.ky_scan_batches` for ky scans,
@@ -314,6 +328,11 @@ pytest -m integration
 python tools/run_tests_fast.py
 python tools/run_wide_coverage_gate.py --shards 12 --timeout 300 --fail-under 95 --pytest-arg=-o --pytest-arg=addopts=
 ```
+
+For laptops or shared workstations, run the same wide gate one bounded shard at
+a time with `--only-shard N --keep-existing-coverage --skip-combine`, then
+finish with `--combine-only --fail-under 95`; this keeps every local pytest
+process under the release timeout instead of launching one long run.
 
 ## Plotting outputs
 
