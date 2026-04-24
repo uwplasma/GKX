@@ -276,7 +276,7 @@ jobs:
           SPECTRAX_X64: "1"
         run: |
           python tools/run_wide_coverage_gate.py \
-            --shards 12 \
+            --shards 24 \
             --timeout 300 \
             --fail-under 95 \
             --xml coverage-wide.xml \
