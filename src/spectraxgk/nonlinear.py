@@ -118,6 +118,23 @@ def _pack_resolved_diagnostics(resolved_t: tuple[np.ndarray, ...]) -> ResolvedDi
     )
 
 
+def _sample_indices_with_final(length: int, stride: int) -> slice | np.ndarray:
+    """Return strided sample indices while always retaining the final step."""
+
+    n = int(length)
+    stride_i = int(max(stride, 1))
+    if stride_i <= 1 or n <= 1:
+        return slice(None)
+    idx = np.arange(0, n, stride_i, dtype=int)
+    if idx.size == 0 or int(idx[-1]) != n - 1:
+        idx = np.concatenate([idx, np.asarray([n - 1], dtype=int)])
+    return idx
+
+
+def _sample_axis0(arr, indices: slice | np.ndarray):
+    return arr[indices, ...]
+
+
 @dataclass(frozen=True)
 class IMEXLinearOperator:
     """Reusable matrix-free linear operator for nonlinear IMEX solves."""
@@ -987,21 +1004,22 @@ def _integrate_nonlinear_gx_diagnostics_impl(
 
     stride = int(max(sample_stride, diagnostics_stride, 1))
     if stride > 1:
-        gamma_t = gamma_t[::stride]
-        omega_t = omega_t[::stride]
-        Wg_t = Wg_t[::stride]
-        Wphi_t = Wphi_t[::stride]
-        Wapar_t = Wapar_t[::stride]
-        heat_t = heat_t[::stride]
-        pflux_t = pflux_t[::stride]
-        turbulent_heat_t = turbulent_heat_t[::stride]
-        heat_s_t = heat_s_t[::stride, ...]
-        pflux_s_t = pflux_s_t[::stride, ...]
-        turbulent_heat_s_t = turbulent_heat_s_t[::stride, ...]
-        phi_mode_t = phi_mode_t[::stride]
-        resolved_t = tuple(np.asarray(arr)[::stride, ...] for arr in resolved_t)
-        t = t[::stride]
-        dt_series = dt_series[::stride]
+        sample_idx = _sample_indices_with_final(int(t.shape[0]), stride)
+        gamma_t = _sample_axis0(gamma_t, sample_idx)
+        omega_t = _sample_axis0(omega_t, sample_idx)
+        Wg_t = _sample_axis0(Wg_t, sample_idx)
+        Wphi_t = _sample_axis0(Wphi_t, sample_idx)
+        Wapar_t = _sample_axis0(Wapar_t, sample_idx)
+        heat_t = _sample_axis0(heat_t, sample_idx)
+        pflux_t = _sample_axis0(pflux_t, sample_idx)
+        turbulent_heat_t = _sample_axis0(turbulent_heat_t, sample_idx)
+        heat_s_t = _sample_axis0(heat_s_t, sample_idx)
+        pflux_s_t = _sample_axis0(pflux_s_t, sample_idx)
+        turbulent_heat_s_t = _sample_axis0(turbulent_heat_s_t, sample_idx)
+        phi_mode_t = _sample_axis0(phi_mode_t, sample_idx)
+        resolved_t = tuple(_sample_axis0(np.asarray(arr), sample_idx) for arr in resolved_t)
+        t = _sample_axis0(t, sample_idx)
+        dt_series = _sample_axis0(dt_series, sample_idx)
 
     resolved = _pack_resolved_diagnostics(resolved_t)
 
@@ -1723,21 +1741,22 @@ def integrate_nonlinear_imex_gx_diagnostics(
 
     stride = int(max(sample_stride, diagnostics_stride, 1))
     if stride > 1:
-        gamma_t = gamma_t[::stride]
-        omega_t = omega_t[::stride]
-        Wg_t = Wg_t[::stride]
-        Wphi_t = Wphi_t[::stride]
-        Wapar_t = Wapar_t[::stride]
-        heat_t = heat_t[::stride]
-        pflux_t = pflux_t[::stride]
-        turbulent_heat_t = turbulent_heat_t[::stride]
-        heat_s_t = heat_s_t[::stride, ...]
-        pflux_s_t = pflux_s_t[::stride, ...]
-        turbulent_heat_s_t = turbulent_heat_s_t[::stride, ...]
-        phi_mode_t = phi_mode_t[::stride]
-        resolved_t = tuple(np.asarray(arr)[::stride, ...] for arr in resolved_t)
-        t = t[::stride]
-        dt_series = dt_series[::stride]
+        sample_idx = _sample_indices_with_final(int(t.shape[0]), stride)
+        gamma_t = _sample_axis0(gamma_t, sample_idx)
+        omega_t = _sample_axis0(omega_t, sample_idx)
+        Wg_t = _sample_axis0(Wg_t, sample_idx)
+        Wphi_t = _sample_axis0(Wphi_t, sample_idx)
+        Wapar_t = _sample_axis0(Wapar_t, sample_idx)
+        heat_t = _sample_axis0(heat_t, sample_idx)
+        pflux_t = _sample_axis0(pflux_t, sample_idx)
+        turbulent_heat_t = _sample_axis0(turbulent_heat_t, sample_idx)
+        heat_s_t = _sample_axis0(heat_s_t, sample_idx)
+        pflux_s_t = _sample_axis0(pflux_s_t, sample_idx)
+        turbulent_heat_s_t = _sample_axis0(turbulent_heat_s_t, sample_idx)
+        phi_mode_t = _sample_axis0(phi_mode_t, sample_idx)
+        resolved_t = tuple(_sample_axis0(np.asarray(arr), sample_idx) for arr in resolved_t)
+        t = _sample_axis0(t, sample_idx)
+        dt_series = _sample_axis0(dt_series, sample_idx)
 
     resolved = _pack_resolved_diagnostics(resolved_t)
 

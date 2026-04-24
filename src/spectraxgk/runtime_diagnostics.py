@@ -17,6 +17,74 @@ import numpy as np
 from spectraxgk.diagnostics import ResolvedDiagnostics, SimulationDiagnostics, total_energy
 
 
+def _first_nonfinite_sample(value: np.ndarray | jnp.ndarray, *, nsamples: int) -> int | None:
+    arr = np.asarray(value)
+    if arr.size == 0 or np.isfinite(arr).all():
+        return None
+    if arr.ndim >= 1 and arr.shape[0] == nsamples:
+        finite_by_sample = np.isfinite(arr).reshape(arr.shape[0], -1).all(axis=1)
+        bad = np.flatnonzero(~finite_by_sample)
+        if bad.size:
+            return int(bad[0])
+    return 0
+
+
+def validate_finite_gx_diagnostics(diag: SimulationDiagnostics, *, label: str = "runtime") -> None:
+    """Raise if a runtime diagnostic chunk contains NaN or infinite values.
+
+    Long validation runs can otherwise continue for thousands of fixed steps
+    after the first unstable sample. This host-side guard keeps the expensive
+    artifact path fail-fast and reports the first offending diagnostic channel.
+    """
+
+    t_arr = np.asarray(diag.t, dtype=float)
+    nsamples = int(t_arr.size)
+    fields_to_check = [
+        "t",
+        "dt_t",
+        "gamma_t",
+        "omega_t",
+        "Wg_t",
+        "Wphi_t",
+        "Wapar_t",
+        "heat_flux_t",
+        "particle_flux_t",
+        "energy_t",
+        "heat_flux_species_t",
+        "particle_flux_species_t",
+        "turbulent_heating_t",
+        "turbulent_heating_species_t",
+        "phi_mode_t",
+    ]
+    for name in fields_to_check:
+        value = getattr(diag, name, None)
+        if value is None:
+            continue
+        sample = _first_nonfinite_sample(value, nsamples=nsamples)
+        if sample is None:
+            continue
+        t_text = ""
+        if t_arr.size and sample < t_arr.size and np.isfinite(t_arr[sample]):
+            t_text = f" at t={float(t_arr[sample]):.6g}"
+        raise RuntimeError(f"{label} produced non-finite diagnostics in {name} at sample {sample}{t_text}")
+
+    if diag.resolved is None:
+        return
+    for field in dataclass_fields(ResolvedDiagnostics):
+        value = getattr(diag.resolved, field.name)
+        if value is None:
+            continue
+        sample = _first_nonfinite_sample(value, nsamples=nsamples)
+        if sample is None:
+            continue
+        t_text = ""
+        if t_arr.size and sample < t_arr.size and np.isfinite(t_arr[sample]):
+            t_text = f" at t={float(t_arr[sample]):.6g}"
+        raise RuntimeError(
+            f"{label} produced non-finite diagnostics in resolved.{field.name} at sample {sample}{t_text}"
+        )
+
+
 def slice_gx_diagnostics(diag: SimulationDiagnostics, stop: int) -> SimulationDiagnostics:
     """Return the first ``stop`` diagnostic samples."""
 

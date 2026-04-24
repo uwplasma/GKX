@@ -14,7 +14,12 @@ from typing import Any, Callable
 import numpy as np
 
 from spectraxgk.diagnostics import SimulationDiagnostics
-from spectraxgk.runtime_diagnostics import concat_gx_diagnostics, stride_gx_diagnostics, truncate_gx_diagnostics
+from spectraxgk.runtime_diagnostics import (
+    concat_gx_diagnostics,
+    stride_gx_diagnostics,
+    truncate_gx_diagnostics,
+    validate_finite_gx_diagnostics,
+)
 from spectraxgk.terms.config import FieldState
 
 
@@ -68,6 +73,7 @@ def run_adaptive_gx_chunk_loop(
         chunk_start = time.perf_counter()
         _t_chunk, diag_chunk, state_chunk, fields_final = integrate_chunk(show_progress)
         diag_chunk = replace(diag_chunk, t=np.asarray(diag_chunk.t) + t_elapsed)
+        validate_finite_gx_diagnostics(diag_chunk, label=f"adaptive {label} chunk {chunk + 1}")
         diag_chunks.append(diag_chunk)
         t_next = float(np.asarray(diag_chunk.t)[-1])
         if t_next <= t_elapsed + 1.0e-12:

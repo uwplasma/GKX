@@ -20,6 +20,7 @@ from spectraxgk.runtime import (
     build_runtime_linear_params,
     run_runtime_nonlinear,
 )
+from spectraxgk.runtime_diagnostics import validate_finite_gx_diagnostics
 
 
 def _artifact_base(path: Path) -> Path:
@@ -75,6 +76,26 @@ def _write_state(base: Path, state: np.ndarray | None) -> Path | None:
     _ensure_parent(path)
     np.save(path, np.asarray(state))
     return path
+
+
+def _validate_finite_array(value: Any, *, label: str) -> None:
+    if value is None:
+        return
+    arr = np.asarray(value)
+    if arr.size == 0 or np.isfinite(arr).all():
+        return
+    raise RuntimeError(f"{label} contains non-finite values")
+
+
+def _validate_finite_runtime_result(result: RuntimeNonlinearResult, *, label: str) -> None:
+    if result.diagnostics is not None:
+        validate_finite_gx_diagnostics(result.diagnostics, label=label)
+    _validate_finite_array(result.state, label=f"{label} state")
+    fields = result.fields
+    if fields is not None:
+        _validate_finite_array(getattr(fields, "phi", None), label=f"{label} phi")
+        _validate_finite_array(getattr(fields, "apar", None), label=f"{label} apar")
+        _validate_finite_array(getattr(fields, "bpar", None), label=f"{label} bpar")
 
 
 def _resolved_species_time(arr: Any | None, *, fallback: np.ndarray) -> np.ndarray:
@@ -288,6 +309,7 @@ def run_runtime_nonlinear_with_artifacts(
             show_progress=show_progress,
             status_callback=status_callback,
         )
+        _validate_finite_runtime_result(result_chunk, label="nonlinear runtime chunk")
         result_effective = result_chunk
         if result_chunk.diagnostics is not None:
             diag_chunk = result_chunk.diagnostics
