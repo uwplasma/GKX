@@ -92,6 +92,7 @@ module = [
   "booz_xform",
   "booz_xform_jax",
   "netCDF4",
+  "pandas",
   "rich",
   "rich.*",
   "scipy",

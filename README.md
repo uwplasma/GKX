@@ -90,8 +90,8 @@ microinstabilities and nonlinear transport across diverse magnetic
 configurations. The shipped nonlinear atlas emphasizes the longest archived
 windows currently tracked in the repo: KBM to about `t=400`, W7-X to about
 `t=200`, and Cyclone Miller to about `t=122`. HSX is currently archived on the
-closed `t=50` window; I did not find a longer HSX nonlinear audit artifact to
-promote above that.
+closed `t=50` window; no longer HSX nonlinear audit artifact is currently
+tracked for the release panel.
 
 Autodiff validation (inverse/sensitivity demo):
 
