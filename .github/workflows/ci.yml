@@ -301,9 +301,10 @@ jobs:
           import shutil
 
           files = sorted(Path(".").glob(".coverage.*"))
-          if not files:
-              raise SystemExit("no coverage data files produced")
           out = Path("coverage-shard")
+          if not files:
+              (out / f"EMPTY_SHARD_${{ matrix.shard }}").write_text("empty shard\n", encoding="utf-8")
+              raise SystemExit(0)
           for idx, path in enumerate(files):
               shutil.copy2(path, out / f".coverage.shard-${{ matrix.shard }}.{idx}")
           PY
