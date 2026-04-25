@@ -1141,22 +1141,22 @@ def _integrate_nonlinear_gx_diagnostics_impl(
     gamma_t, omega_t, Wg_t, Wphi_t, Wapar_t, heat_t, pflux_t, turbulent_heat_t, heat_s_t, pflux_s_t, turbulent_heat_s_t, phi_mode_t, resolved_t = diag
 
     if stride > 1 and not sampled_scan:
-        sample_idx = _sample_indices_with_final(int(t.shape[0]), stride)
-        gamma_t = _sample_axis0(gamma_t, sample_idx)
-        omega_t = _sample_axis0(omega_t, sample_idx)
-        Wg_t = _sample_axis0(Wg_t, sample_idx)
-        Wphi_t = _sample_axis0(Wphi_t, sample_idx)
-        Wapar_t = _sample_axis0(Wapar_t, sample_idx)
-        heat_t = _sample_axis0(heat_t, sample_idx)
-        pflux_t = _sample_axis0(pflux_t, sample_idx)
-        turbulent_heat_t = _sample_axis0(turbulent_heat_t, sample_idx)
-        heat_s_t = _sample_axis0(heat_s_t, sample_idx)
-        pflux_s_t = _sample_axis0(pflux_s_t, sample_idx)
-        turbulent_heat_s_t = _sample_axis0(turbulent_heat_s_t, sample_idx)
-        phi_mode_t = _sample_axis0(phi_mode_t, sample_idx)
-        resolved_t = tuple(_sample_axis0(arr, sample_idx) for arr in resolved_t)
-        t = _sample_axis0(t, sample_idx)
-        dt_series = _sample_axis0(dt_series, sample_idx)
+        output_sample_idx = _sample_indices_with_final(int(t.shape[0]), stride)
+        gamma_t = _sample_axis0(gamma_t, output_sample_idx)
+        omega_t = _sample_axis0(omega_t, output_sample_idx)
+        Wg_t = _sample_axis0(Wg_t, output_sample_idx)
+        Wphi_t = _sample_axis0(Wphi_t, output_sample_idx)
+        Wapar_t = _sample_axis0(Wapar_t, output_sample_idx)
+        heat_t = _sample_axis0(heat_t, output_sample_idx)
+        pflux_t = _sample_axis0(pflux_t, output_sample_idx)
+        turbulent_heat_t = _sample_axis0(turbulent_heat_t, output_sample_idx)
+        heat_s_t = _sample_axis0(heat_s_t, output_sample_idx)
+        pflux_s_t = _sample_axis0(pflux_s_t, output_sample_idx)
+        turbulent_heat_s_t = _sample_axis0(turbulent_heat_s_t, output_sample_idx)
+        phi_mode_t = _sample_axis0(phi_mode_t, output_sample_idx)
+        resolved_t = tuple(_sample_axis0(arr, output_sample_idx) for arr in resolved_t)
+        t = _sample_axis0(t, output_sample_idx)
+        dt_series = _sample_axis0(dt_series, output_sample_idx)
 
     resolved = _pack_resolved_diagnostics(resolved_t) if resolved_diagnostics else None
 
