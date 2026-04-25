@@ -16,6 +16,7 @@ from spectraxgk.geometry.differentiable import (
     finite_difference_jacobian,
     flux_tube_geometry_from_mapping,
     flux_tube_geometry_observables,
+    geometry_inverse_design_report,
     geometry_observable_names,
     geometry_sensitivity_report,
 )
@@ -157,7 +158,7 @@ from spectraxgk.diffrax_integrators import (
     integrate_linear_diffrax_streaming,
     integrate_nonlinear_diffrax,
 )
-from spectraxgk.sharded_integrators import integrate_linear_sharded
+from spectraxgk.sharded_integrators import integrate_linear_sharded, integrate_nonlinear_sharded
 from spectraxgk.gx_integrators import ExplicitTimeConfig, GXTimeConfig, integrate_linear_gx, integrate_linear_gx_diagnostics
 from spectraxgk.diagnostics import GXDiagnostics, SimulationDiagnostics
 
@@ -182,6 +183,7 @@ __all__ = [
     "finite_difference_jacobian",
     "flux_tube_geometry_from_mapping",
     "flux_tube_geometry_observables",
+    "geometry_inverse_design_report",
     "geometry_observable_names",
     "geometry_sensitivity_report",
     "J_l_all",
@@ -227,6 +229,7 @@ __all__ = [
     "integrate_linear_diffrax",
     "integrate_linear_diffrax_streaming",
     "integrate_linear_sharded",
+    "integrate_nonlinear_sharded",
     "integrate_nonlinear",
     "integrate_nonlinear_cached",
     "integrate_nonlinear_gx_diagnostics",

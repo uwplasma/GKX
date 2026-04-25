@@ -2,17 +2,18 @@
 
 from __future__ import annotations
 
-from typing import Tuple
+from typing import cast
 
 from spectraxgk.analysis import ModeSelection, ModeSelectionBatch
 from spectraxgk.config import TimeConfig
 from spectraxgk.diffrax_integrators import integrate_linear_diffrax, integrate_nonlinear_diffrax
 from spectraxgk.geometry import FluxTubeGeometryLike
 from spectraxgk.grids import SpectralGrid
-from spectraxgk.linear import LinearCache, LinearParams, LinearTerms, integrate_linear
+from spectraxgk.linear import LinearCache, LinearParams, LinearTerms, build_linear_cache, integrate_linear
 from spectraxgk.nonlinear import integrate_nonlinear
 from spectraxgk.sharding import resolve_state_sharding
-from spectraxgk.terms.config import FieldState, TermConfig
+from spectraxgk.sharded_integrators import integrate_nonlinear_sharded
+from spectraxgk.terms.config import TermConfig
 
 
 def _steps_from_time(cfg: TimeConfig) -> int:
@@ -104,8 +105,8 @@ def integrate_nonlinear_from_config(
 
     steps = _steps_from_time(time_cfg)
     show_progress_use = bool(time_cfg.progress_bar if show_progress is None else show_progress)
+    state_sharding = resolve_state_sharding(G0, time_cfg.state_sharding)
     if time_cfg.use_diffrax:
-        state_sharding = resolve_state_sharding(G0, time_cfg.state_sharding)
         return integrate_nonlinear_diffrax(
             G0,
             grid,
@@ -126,6 +127,31 @@ def integrate_nonlinear_from_config(
             gx_real_fft=time_cfg.gx_real_fft,
             laguerre_mode=time_cfg.laguerre_nonlinear_mode,
             state_sharding=state_sharding,
+        )
+    if state_sharding is not None:
+        if cache is None:
+            if G0.ndim == 5:
+                nl, nm = G0.shape[0], G0.shape[1]
+            elif G0.ndim == 6:
+                nl, nm = G0.shape[1], G0.shape[2]
+            else:
+                raise ValueError("G0 must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)")
+            cache = build_linear_cache(grid, geom, params, int(nl), int(nm))
+        return cast(
+            tuple,
+            integrate_nonlinear_sharded(
+                G0,
+                cache,
+                params,
+                dt=time_cfg.dt,
+                steps=steps,
+                method=time_cfg.method,
+                terms=terms,
+                state_sharding=state_sharding,
+                gx_real_fft=time_cfg.gx_real_fft,
+                laguerre_mode=time_cfg.laguerre_nonlinear_mode,
+                return_fields=True,
+            ),
         )
     return integrate_nonlinear(
         G0,

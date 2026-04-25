@@ -108,7 +108,11 @@ jobs:
               tests/test_runtime_runner.py
               tests/test_runners.py
               tests/test_parallel.py
+              tests/test_sharding.py
+              tests/test_sharded_integrators.py
               tests/test_generate_parallel_ky_scan_gate.py
+              tests/test_performance_optimization_manifest.py
+              tests/test_profile_nonlinear_sharding.py
               tests/test_autodiff_validation.py
               tests/test_differentiable_geometry_bridge.py
               tests/test_cli.py

@@ -204,9 +204,12 @@ sensitivity sweeps, and UQ ensembles. These helpers preserve serial ordering,
 fall back to `vmap` on one device, and use JAX device batching when multiple
 devices are available. For full-state runtime parallelization, set
 `TimeConfig.state_sharding = "auto"` (or `"ky"`) in runtime TOMLs to partition
-the packed state array across available JAX devices. Nonlinear domain
-parallelization remains out of the release claim until its communication and
-numerical-identity gates are closed.
+the packed state array across available JAX devices. The fixed-step nonlinear
+runner now honors the same state-sharding contract and has a profiler-backed
+final-state identity artifact at
+`docs/_static/nonlinear_sharding_profile.json`. Treat that artifact as an
+engineering gate, not as a new runtime claim; publication speedups still need a
+matched CPU/GPU sweep on benchmark-size nonlinear cases.
 
 ![SPECTRAX-GK ky-batch parallelization identity gate](docs/_static/parallel_ky_scan_gate.png)
 
