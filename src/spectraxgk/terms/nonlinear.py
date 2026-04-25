@@ -329,16 +329,141 @@ def _spectral_bracket(
     fft_norm: float | None = None,
     gx_real_fft: bool = True,
 ) -> jnp.ndarray:
-    return _spectral_bracket_multi(
+    if gx_real_fft:
+        return _spectral_bracket_gx(
+            G_hat,
+            chi_hat,
+            kx_grid=kx_grid,
+            ky_grid=ky_grid,
+            dealias_mask=dealias_mask,
+            kxfac=kxfac,
+            fft_norm=fft_norm,
+        )
+    return _spectral_bracket_full(
         G_hat,
-        _stack_fields(G_hat, [chi_hat]),
+        chi_hat,
         kx_grid=kx_grid,
         ky_grid=ky_grid,
         dealias_mask=dealias_mask,
         kxfac=kxfac,
         fft_norm=fft_norm,
-        gx_real_fft=gx_real_fft,
-    )[0]
+    )
+
+
+def _spectral_bracket_gx(
+    G_hat: jnp.ndarray,
+    chi_hat: jnp.ndarray,
+    *,
+    kx_grid: jnp.ndarray,
+    ky_grid: jnp.ndarray,
+    dealias_mask: jnp.ndarray,
+    kxfac: jnp.ndarray,
+    fft_norm: float | None = None,
+) -> jnp.ndarray:
+    complex_dtype = jnp.result_type(G_hat, chi_hat, jnp.complex64)
+    real_dtype = jnp.real(jnp.empty((), dtype=complex_dtype)).dtype
+    imag = jnp.asarray(1j, dtype=complex_dtype)
+
+    G_hat = jnp.asarray(G_hat, dtype=complex_dtype)
+    chi_hat = _broadcast_to_G(jnp.asarray(chi_hat, dtype=complex_dtype), G_hat)
+
+    mask = jnp.asarray(dealias_mask, dtype=real_dtype)
+    kx = jnp.asarray(kx_grid, dtype=real_dtype)
+    ky = jnp.asarray(ky_grid, dtype=real_dtype)
+    if fft_norm is None:
+        fft_norm_val = float(ky_grid.shape[0] * ky_grid.shape[1])
+    else:
+        fft_norm_val = float(fft_norm)
+    ifft_scale = jnp.asarray(fft_norm_val, dtype=real_dtype)
+    fft_scale = jnp.asarray(1.0 / fft_norm_val, dtype=real_dtype)
+
+    ny_full = int(ky.shape[0])
+    _, ky_vals, kx_nyc, ky_nyc = real_fft_mesh(kx, ky)
+    nyc = int(ky_vals.shape[0])
+
+    G_nyc = G_hat[..., :nyc, :, :]
+    chi_nyc = chi_hat[..., :nyc, :, :]
+    axes = (-2, -3)
+    kx_b = _broadcast_grid(kx_nyc, G_nyc.ndim)
+    ky_b = _broadcast_grid(ky_nyc, G_nyc.ndim)
+    grad_G = jnp.stack([imag * kx_b * G_nyc, imag * ky_b * G_nyc], axis=0)
+    grad_G = jnp.fft.irfft2(grad_G, s=(kx.shape[1], ny_full), axes=axes) * ifft_scale
+    dG_dx = grad_G[0]
+    dG_dy = grad_G[1]
+
+    kx_chi = _broadcast_grid(kx_nyc, chi_nyc.ndim)
+    ky_chi = _broadcast_grid(ky_nyc, chi_nyc.ndim)
+    grad_chi = jnp.stack([imag * kx_chi * chi_nyc, imag * ky_chi * chi_nyc], axis=0)
+    grad_chi = jnp.fft.irfft2(grad_chi, s=(kx.shape[1], ny_full), axes=axes) * ifft_scale
+    dchi_dx = grad_chi[0]
+    dchi_dy = grad_chi[1]
+
+    bracket = dG_dx * dchi_dy - dG_dy * dchi_dx
+
+    bracket_hat_nyc = jnp.fft.rfft2(bracket, axes=axes) * fft_scale
+    mask_nyc = mask[:nyc, :]
+    bracket_hat_nyc = bracket_hat_nyc * _broadcast_mask(mask_nyc, bracket_hat_nyc.ndim)
+    if ny_full > 1:
+        neg_hi = nyc - 1 if (ny_full % 2 == 0) else nyc
+        neg = jnp.conj(bracket_hat_nyc[..., 1:neg_hi, :, :])
+        neg = neg[..., ::-1, :, :]
+        if kx.shape[1] > 1:
+            kx_neg = jnp.concatenate(
+                [jnp.asarray([0], dtype=jnp.int32), jnp.arange(kx.shape[1] - 1, 0, -1, dtype=jnp.int32)]
+            )
+            neg = neg[..., kx_neg, :]
+        bracket_hat = jnp.concatenate([bracket_hat_nyc, neg], axis=-3)
+    else:
+        bracket_hat = bracket_hat_nyc
+    return jnp.asarray(kxfac, dtype=real_dtype) * bracket_hat
+
+
+def _spectral_bracket_full(
+    G_hat: jnp.ndarray,
+    chi_hat: jnp.ndarray,
+    *,
+    kx_grid: jnp.ndarray,
+    ky_grid: jnp.ndarray,
+    dealias_mask: jnp.ndarray,
+    kxfac: jnp.ndarray,
+    fft_norm: float | None = None,
+) -> jnp.ndarray:
+    complex_dtype = jnp.result_type(G_hat, chi_hat, jnp.complex64)
+    real_dtype = jnp.real(jnp.empty((), dtype=complex_dtype)).dtype
+    imag = jnp.asarray(1j, dtype=complex_dtype)
+
+    G_hat = jnp.asarray(G_hat, dtype=complex_dtype)
+    chi_hat = _broadcast_to_G(jnp.asarray(chi_hat, dtype=complex_dtype), G_hat)
+
+    mask = jnp.asarray(dealias_mask, dtype=real_dtype)
+    kx = jnp.asarray(kx_grid, dtype=real_dtype)
+    ky = jnp.asarray(ky_grid, dtype=real_dtype)
+    if fft_norm is None:
+        fft_norm_val = float(ky_grid.shape[0] * ky_grid.shape[1])
+    else:
+        fft_norm_val = float(fft_norm)
+    ifft_scale = jnp.asarray(fft_norm_val, dtype=real_dtype)
+    fft_scale = jnp.asarray(1.0 / fft_norm_val, dtype=real_dtype)
+
+    kx_b = _broadcast_grid(kx, G_hat.ndim)
+    ky_b = _broadcast_grid(ky, G_hat.ndim)
+    grad_G = jnp.stack([imag * kx_b * G_hat, imag * ky_b * G_hat], axis=0)
+    grad_G = _ifft2_xy(grad_G) * ifft_scale
+    dG_dx = grad_G[0]
+    dG_dy = grad_G[1]
+
+    kx_chi = _broadcast_grid(kx, chi_hat.ndim)
+    ky_chi = _broadcast_grid(ky, chi_hat.ndim)
+    grad_chi = jnp.stack([imag * kx_chi * chi_hat, imag * ky_chi * chi_hat], axis=0)
+    grad_chi = _ifft2_xy(grad_chi) * ifft_scale
+    dchi_dx = grad_chi[0]
+    dchi_dy = grad_chi[1]
+
+    bracket = dG_dx * dchi_dy - dG_dy * dchi_dx
+
+    bracket_hat = _fft2_xy(bracket) * fft_scale
+    bracket_hat = bracket_hat * _broadcast_mask(mask, bracket_hat.ndim)
+    return jnp.asarray(kxfac, dtype=real_dtype) * bracket_hat
 
 
 def _spectral_bracket_multi(
@@ -385,15 +510,15 @@ def exb_nonlinear_contribution(
 ) -> jnp.ndarray:
     """Return the nonlinear E×B contribution using a pseudospectral bracket."""
     phi = _apply_mask_xy(phi, dealias_mask)
-    bracket_fn = _spectral_bracket_multi_gx if gx_real_fft else _spectral_bracket_multi_full
-    bracket_hat = bracket_fn(
+    bracket_hat = _spectral_bracket(
         G,
-        _stack_fields(G, [phi]),
+        phi,
         kx_grid=kx_grid,
         ky_grid=ky_grid,
         dealias_mask=dealias_mask,
         kxfac=jnp.asarray(1.0),
-    )[0]
+        gx_real_fft=gx_real_fft,
+    )
     real_dtype = jnp.real(jnp.empty((), dtype=G.dtype)).dtype
     return jnp.asarray(weight, dtype=real_dtype) * bracket_hat
 
@@ -457,6 +582,8 @@ def nonlinear_em_contribution(
     if bpar is not None:
         bpar = _apply_mask_xy(bpar, dealias_mask)
 
+    electrostatic_only = (bpar is None or bpar_weight == 0.0) and (apar is None or apar_weight == 0.0)
+
     if use_laguerre:
         laguerre_to_grid = cast(jnp.ndarray, laguerre_to_grid)
         laguerre_to_spectral = cast(jnp.ndarray, laguerre_to_spectral)
@@ -468,9 +595,24 @@ def nonlinear_em_contribution(
         chi_fields: list[jnp.ndarray] = []
         idx_phi = 0
         if laguerre_j0 is not None:
-            chi_fields.append(_gx_j0_field_precomputed(phi, laguerre_j0, 1.0))
+            chi_phi = _gx_j0_field_precomputed(phi, laguerre_j0, 1.0)
         else:
-            chi_fields.append(_gx_j0_field(phi, b, laguerre_roots, 1.0))
+            chi_phi = _gx_j0_field(phi, b, laguerre_roots, 1.0)
+        if electrostatic_only:
+            exb_phi = _spectral_bracket(
+                g_mu,
+                chi_phi,
+                kx_grid=kx_grid,
+                ky_grid=ky_grid,
+                dealias_mask=dealias_mask,
+                kxfac=kxfac,
+                gx_real_fft=gx_real_fft,
+            )
+            total = _laguerre_to_spectral(exb_phi, laguerre_to_spectral)
+            real_dtype = jnp.real(jnp.empty((), dtype=G.dtype)).dtype
+            out = jnp.asarray(weight, dtype=real_dtype) * total
+            return out[0] if squeeze_species else out
+        chi_fields.append(chi_phi)
         idx_bpar = None
         if bpar is not None and bpar_weight != 0.0:
             idx_bpar = len(chi_fields)
@@ -522,7 +664,21 @@ def nonlinear_em_contribution(
     if bpar is not None:
         bpar = _apply_mask_xy(bpar, dealias_mask)
     phi_hat = phi[None, None, ...]
-    chi_fields = [Jl * phi_hat]
+    chi_phi = Jl * phi_hat
+    if electrostatic_only:
+        bracket_total = _spectral_bracket(
+            G,
+            chi_phi,
+            kx_grid=kx_grid,
+            ky_grid=ky_grid,
+            dealias_mask=dealias_mask,
+            kxfac=kxfac,
+            gx_real_fft=gx_real_fft,
+        )
+        real_dtype = jnp.real(jnp.empty((), dtype=G.dtype)).dtype
+        out = jnp.asarray(weight, dtype=real_dtype) * bracket_total
+        return out[0] if squeeze_species else out
+    chi_fields = [chi_phi]
     idx_bpar = None
     if bpar is not None and bpar_weight != 0.0:
         idx_bpar = len(chi_fields)
