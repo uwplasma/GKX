@@ -965,6 +965,7 @@ def run_runtime_nonlinear(
     diagnostics_stride: int | None = None,
     laguerre_mode: str | None = None,
     diagnostics: bool | None = None,
+    resolved_diagnostics: bool = True,
     return_state: bool = False,
     show_progress: bool = False,
     status_callback: Callable[[str], None] | None = None,
@@ -1162,6 +1163,7 @@ def run_runtime_nonlinear(
         sample_stride_use = cfg.time.sample_stride if sample_stride is None else int(sample_stride)
         diag_stride = cfg.time.diagnostics_stride if diagnostics_stride is None else int(diagnostics_stride)
         laguerre_mode_use = cfg.time.laguerre_nonlinear_mode if laguerre_mode is None else str(laguerre_mode)
+        resolved_diag_kw = {} if resolved_diagnostics else {"resolved_diagnostics": False}
         _status(
             f"sample_stride={int(sample_stride_use)} diagnostics_stride={int(diag_stride)} laguerre_mode={laguerre_mode_use}"
         )
@@ -1198,6 +1200,7 @@ def run_runtime_nonlinear(
                     fixed_mode_kx_index=fixed_kx_index_use,
                     external_phi=external_phi,
                 )
+                kwargs.update(resolved_diag_kw)
                 if chunk_show_progress:
                     kwargs["show_progress"] = True
                 t_chunk, diag_chunk, G_next, fields_next = integrate_nonlinear_gx_diagnostics_state(
@@ -1257,6 +1260,7 @@ def run_runtime_nonlinear(
                     fixed_mode_kx_index=fixed_kx_index_use,
                     external_phi=external_phi,
                     show_progress=True,
+                    **resolved_diag_kw,
                 )
             else:
                 t, diag, G_final, fields_final = integrate_nonlinear_gx_diagnostics_state(
@@ -1289,6 +1293,7 @@ def run_runtime_nonlinear(
                     fixed_mode_ky_index=fixed_ky_index_use,
                     fixed_mode_kx_index=fixed_kx_index_use,
                     external_phi=external_phi,
+                    **resolved_diag_kw,
                 )
         if diagnostics_on:
             _status(f"completed nonlinear run with {int(np.asarray(t).size)} saved samples")
@@ -1471,6 +1476,7 @@ def run_nonlinear_case(
             sample_stride=sample_stride_use,
             diagnostics_stride=diagnostics_stride_use,
             diagnostics=True,
+            resolved_diagnostics=False,
             show_progress=show_progress,
             status_callback=_status,
         )

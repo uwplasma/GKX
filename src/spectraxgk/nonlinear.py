@@ -35,17 +35,23 @@ from spectraxgk.diagnostics import (
     SimulationDiagnostics,
     ResolvedDiagnostics,
     total_energy,
+    gx_heat_flux_species,
     gx_heat_flux_resolved_species,
     gx_heat_flux_split_resolved_species,
+    gx_particle_flux_species,
     gx_particle_flux_resolved_species,
     gx_particle_flux_split_resolved_species,
     gx_phi2_resolved,
     gx_phi_zonal_line_kxt,
     gx_phi_zonal_mode_kxt,
+    gx_turbulent_heating_species,
     gx_turbulent_heating_resolved_species,
     gx_volume_factors,
+    gx_Wapar,
     gx_Wapar_resolved,
+    gx_Wg,
     gx_Wg_resolved,
+    gx_Wphi,
     gx_Wphi_resolved,
 )
 _SSPX3_ADT = float((1.0 / 6.0) ** (1.0 / 3.0))
@@ -246,6 +252,7 @@ def _gx_nonlinear_omega_components(
 
     fft_norm = float(grid.ky.size * grid.kx.size)
     ifft_scale = jnp.asarray(fft_norm, dtype=real_dtype)
+    use_batched_fft = jax.default_backend() != "cpu"
 
     if gx_real_fft:
         _, ky_vals, kx_nyc, ky_nyc = real_fft_mesh(cache.kx_grid, cache.ky_grid)
@@ -253,23 +260,41 @@ def _gx_nonlinear_omega_components(
         phi_nyc = phi[:nyc, :, :]
         kx_b = _broadcast_grid(kx_nyc, phi_nyc.ndim)
         ky_b = _broadcast_grid(ky_nyc, phi_nyc.ndim)
-        dphi_dx = jnp.fft.irfft2(imag * kx_b * phi_nyc, s=(grid.kx.size, grid.ky.size), axes=(-2, -3))
-        dphi_dy = jnp.fft.irfft2(imag * ky_b * phi_nyc, s=(grid.kx.size, grid.ky.size), axes=(-2, -3))
-        dphi_dx = dphi_dx * ifft_scale
-        dphi_dy = dphi_dy * ifft_scale
+        if use_batched_fft:
+            grad_phi = jnp.stack([imag * kx_b * phi_nyc, imag * ky_b * phi_nyc], axis=0)
+            grad_phi = jnp.fft.irfft2(grad_phi, s=(grid.kx.size, grid.ky.size), axes=(-2, -3)) * ifft_scale
+            dphi_dx = grad_phi[0]
+            dphi_dy = grad_phi[1]
+        else:
+            dphi_dx = jnp.fft.irfft2(imag * kx_b * phi_nyc, s=(grid.kx.size, grid.ky.size), axes=(-2, -3))
+            dphi_dy = jnp.fft.irfft2(imag * ky_b * phi_nyc, s=(grid.kx.size, grid.ky.size), axes=(-2, -3))
+            dphi_dx = dphi_dx * ifft_scale
+            dphi_dy = dphi_dy * ifft_scale
 
         def _grad_real(field: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
             field_nyc = field[:nyc, :, :]
+            if use_batched_fft:
+                grad = jnp.stack([imag * kx_b * field_nyc, imag * ky_b * field_nyc], axis=0)
+                grad = jnp.fft.irfft2(grad, s=(grid.kx.size, grid.ky.size), axes=(-2, -3)) * ifft_scale
+                return grad[0], grad[1]
             dfx = jnp.fft.irfft2(imag * kx_b * field_nyc, s=(grid.kx.size, grid.ky.size), axes=(-2, -3))
             dfy = jnp.fft.irfft2(imag * ky_b * field_nyc, s=(grid.kx.size, grid.ky.size), axes=(-2, -3))
             return dfx * ifft_scale, dfy * ifft_scale
     else:
         kx_b = _broadcast_grid(cache.kx_grid, phi.ndim)
         ky_b = _broadcast_grid(cache.ky_grid, phi.ndim)
-        dphi_dx = _ifft2_xy(imag * kx_b * phi) * ifft_scale
-        dphi_dy = _ifft2_xy(imag * ky_b * phi) * ifft_scale
+        if use_batched_fft:
+            grad_phi = _ifft2_xy(jnp.stack([imag * kx_b * phi, imag * ky_b * phi], axis=0)) * ifft_scale
+            dphi_dx = grad_phi[0]
+            dphi_dy = grad_phi[1]
+        else:
+            dphi_dx = _ifft2_xy(imag * kx_b * phi) * ifft_scale
+            dphi_dy = _ifft2_xy(imag * ky_b * phi) * ifft_scale
 
         def _grad_real(field: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
+            if use_batched_fft:
+                grad = _ifft2_xy(jnp.stack([imag * kx_b * field, imag * ky_b * field], axis=0)) * ifft_scale
+                return grad[0], grad[1]
             dfx = _ifft2_xy(imag * kx_b * field) * ifft_scale
             dfy = _ifft2_xy(imag * ky_b * field) * ifft_scale
             return dfx, dfy
@@ -508,6 +533,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
     fixed_mode_ky_index: int | None = None,
     fixed_mode_kx_index: int | None = None,
     external_phi: jnp.ndarray | float | None = None,
+    resolved_diagnostics: bool = True,
     show_progress: bool = False,
 ) -> tuple[jnp.ndarray, SimulationDiagnostics, jnp.ndarray, FieldState]:
     """Integrate nonlinear system and return GX-style diagnostics plus final state."""
@@ -678,6 +704,75 @@ def _integrate_nonlinear_gx_diagnostics_impl(
             )
             phi_mode = jnp.asarray(0.0 + 0.0j, dtype=phi.dtype)
         nspecies = int(G_state.shape[0]) if G_state.ndim == 6 else 1
+        if not resolved_diagnostics:
+            Wg_val = gx_Wg(G_state, grid, params, vol_fac, use_dealias=use_dealias)
+            Wphi_val = gx_Wphi(
+                phi,
+                cache,
+                params,
+                vol_fac,
+                use_dealias=use_dealias,
+                wphi_scale=wphi_scale,
+            )
+            Wapar_val = gx_Wapar(apar, cache, vol_fac, use_dealias=use_dealias)
+            heat_species = gx_heat_flux_species(
+                G_state,
+                phi,
+                apar,
+                bpar,
+                cache,
+                grid,
+                params,
+                flux_fac,
+                use_dealias=use_dealias,
+                flux_scale=flux_scale,
+            )
+            pflux_species = gx_particle_flux_species(
+                G_state,
+                phi,
+                apar,
+                bpar,
+                cache,
+                grid,
+                params,
+                flux_fac,
+                use_dealias=use_dealias,
+                flux_scale=flux_scale,
+            )
+            turbulent_heat_species = gx_turbulent_heating_species(
+                G_state,
+                G_prev_step,
+                phi,
+                apar,
+                bpar,
+                phi_prev_step,
+                apar_prev_step,
+                bpar_prev_step,
+                cache,
+                grid,
+                params,
+                vol_fac,
+                dt_step,
+                use_dealias=use_dealias,
+            )
+            heat_val = jnp.sum(heat_species)
+            pflux_val = jnp.sum(pflux_species)
+            turbulent_heat_val = jnp.sum(turbulent_heat_species)
+            return (
+                gamma,
+                omega,
+                Wg_val,
+                Wphi_val,
+                Wapar_val,
+                heat_val,
+                pflux_val,
+                turbulent_heat_val,
+                heat_species,
+                pflux_species,
+                turbulent_heat_species,
+                phi_mode,
+                (),
+            )
         (
             phi2_val,
             phi2_kxt,
@@ -984,26 +1079,68 @@ def _integrate_nonlinear_gx_diagnostics_impl(
     step_fn = jax.checkpoint(step) if checkpoint else step
     dt0 = jnp.asarray(_update_dt(fields0, dt_init), dtype=real_dtype)
     diag_zero = _compute_diag_from_state(G0, fields0, G0, fields0, dt0)
-    idx = jnp.arange(steps, dtype=jnp.int32)
-    (G_final, _G_prev_last, _fields_prev_last, _diag_last, _t_last, _dt_last), diag_out = jax.lax.scan(
-        step_fn,
+
+    stride = int(max(sample_stride, diagnostics_stride, 1))
+    sampled_scan = stride > 1 and jax.default_backend() != "cpu"
+    if sampled_scan:
+        sample_idx_raw = _sample_indices_with_final(int(steps), stride)
+        sample_idx = np.asarray(sample_idx_raw if not isinstance(sample_idx_raw, slice) else np.arange(steps), dtype=np.int32)
+        sample_steps = sample_idx + np.int32(1)
+        intervals = np.diff(np.concatenate([np.asarray([0], dtype=np.int32), sample_steps])).astype(np.int32)
+
+        def sample_interval(carry, interval_steps):
+            def run_one_step(_i, inner_carry):
+                G_i, G_prev_i, fields_prev_i, diag_prev_i, t_i, dt_i, idx_i = inner_carry
+                next_carry, _diag_step = step_fn((G_i, G_prev_i, fields_prev_i, diag_prev_i, t_i, dt_i), idx_i)
+                G_next, G_prev_next, fields_prev_next, diag_next, t_next, dt_next = next_carry
+                return (G_next, G_prev_next, fields_prev_next, diag_next, t_next, dt_next, idx_i + 1)
+
+            carry_next = jax.lax.fori_loop(0, interval_steps, run_one_step, carry)
+            G_next, _G_prev_next, _fields_prev_next, diag_next, t_next, dt_next, _idx_next = carry_next
+            return carry_next, (diag_next, t_next, dt_next)
+
         (
-            G0,
-            G0,
-            fields0,
-            diag_zero,
-            jnp.asarray(0.0, dtype=real_dtype),
-            dt0,
-        ),
-        idx,
-        length=steps,
-    )
+            G_final,
+            _G_prev_last,
+            _fields_prev_last,
+            _diag_last,
+            _t_last,
+            _dt_last,
+            _idx_last,
+        ), diag_out = jax.lax.scan(
+            sample_interval,
+            (
+                G0,
+                G0,
+                fields0,
+                diag_zero,
+                jnp.asarray(0.0, dtype=real_dtype),
+                dt0,
+                jnp.asarray(0, dtype=jnp.int32),
+            ),
+            jnp.asarray(intervals, dtype=jnp.int32),
+            length=int(intervals.size),
+        )
+    else:
+        idx = jnp.arange(steps, dtype=jnp.int32)
+        (G_final, _G_prev_last, _fields_prev_last, _diag_last, _t_last, _dt_last), diag_out = jax.lax.scan(
+            step_fn,
+            (
+                G0,
+                G0,
+                fields0,
+                diag_zero,
+                jnp.asarray(0.0, dtype=real_dtype),
+                dt0,
+            ),
+            idx,
+            length=steps,
+        )
 
     diag, t, dt_series = diag_out
     gamma_t, omega_t, Wg_t, Wphi_t, Wapar_t, heat_t, pflux_t, turbulent_heat_t, heat_s_t, pflux_s_t, turbulent_heat_s_t, phi_mode_t, resolved_t = diag
 
-    stride = int(max(sample_stride, diagnostics_stride, 1))
-    if stride > 1:
+    if stride > 1 and not sampled_scan:
         sample_idx = _sample_indices_with_final(int(t.shape[0]), stride)
         gamma_t = _sample_axis0(gamma_t, sample_idx)
         omega_t = _sample_axis0(omega_t, sample_idx)
@@ -1017,11 +1154,11 @@ def _integrate_nonlinear_gx_diagnostics_impl(
         pflux_s_t = _sample_axis0(pflux_s_t, sample_idx)
         turbulent_heat_s_t = _sample_axis0(turbulent_heat_s_t, sample_idx)
         phi_mode_t = _sample_axis0(phi_mode_t, sample_idx)
-        resolved_t = tuple(_sample_axis0(np.asarray(arr), sample_idx) for arr in resolved_t)
+        resolved_t = tuple(_sample_axis0(arr, sample_idx) for arr in resolved_t)
         t = _sample_axis0(t, sample_idx)
         dt_series = _sample_axis0(dt_series, sample_idx)
 
-    resolved = _pack_resolved_diagnostics(resolved_t)
+    resolved = _pack_resolved_diagnostics(resolved_t) if resolved_diagnostics else None
 
     dt_mean = jnp.mean(dt_series)
     energy_t = total_energy(Wg_t, Wphi_t, Wapar_t)
@@ -1087,6 +1224,7 @@ def integrate_nonlinear_gx_diagnostics(
     fixed_mode_ky_index: int | None = None,
     fixed_mode_kx_index: int | None = None,
     external_phi: jnp.ndarray | float | None = None,
+    resolved_diagnostics: bool = True,
     show_progress: bool = False,
 ) -> tuple[jnp.ndarray, SimulationDiagnostics]:
     """Integrate nonlinear system and return GX-style diagnostics."""
@@ -1166,6 +1304,7 @@ def integrate_nonlinear_gx_diagnostics(
         fixed_mode_ky_index=fixed_mode_ky_index,
         fixed_mode_kx_index=fixed_mode_kx_index,
         external_phi=external_phi,
+        resolved_diagnostics=resolved_diagnostics,
         show_progress=show_progress,
     )
     return t, diag_out
@@ -1210,6 +1349,7 @@ def integrate_nonlinear_gx_diagnostics_state(
     fixed_mode_ky_index: int | None = None,
     fixed_mode_kx_index: int | None = None,
     external_phi: jnp.ndarray | float | None = None,
+    resolved_diagnostics: bool = True,
     show_progress: bool = False,
 ) -> tuple[jnp.ndarray, SimulationDiagnostics, jnp.ndarray, FieldState]:
     """Integrate nonlinear system and return GX diagnostics plus the final state."""
@@ -1255,6 +1395,7 @@ def integrate_nonlinear_gx_diagnostics_state(
         fixed_mode_ky_index=fixed_mode_ky_index,
         fixed_mode_kx_index=fixed_mode_kx_index,
         external_phi=external_phi,
+        resolved_diagnostics=resolved_diagnostics,
         show_progress=show_progress,
     )
 
