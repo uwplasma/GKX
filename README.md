@@ -326,7 +326,7 @@ Default `pytest` runs skip integration tests for faster feedback. Use:
 pytest
 pytest -m integration
 python tools/run_tests_fast.py
-python tools/run_wide_coverage_gate.py --shards 24 --timeout 300 --fail-under 95 --pytest-arg=-o --pytest-arg=addopts=
+python tools/run_wide_coverage_gate.py --shards 24 --timeout 300 --fail-under 95 --pytest-arg=-o --pytest-arg=addopts= --pytest-arg=-m --pytest-arg="not slow"
 ```
 
 For laptops or shared workstations, run the same wide gate one bounded shard at

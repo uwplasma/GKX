@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "spectraxgk"
-version = "1.3.3"
+version = "1.3.4"
 description = "JAX gyrokinetic solver with Hermite-Laguerre velocity space"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -81,6 +81,7 @@ testpaths = ["tests"]
 markers = [
   "gpu: tests that require or exercise GPU/device-specific execution paths",
   "integration: broader end-to-end or workflow tests",
+  "slow: long-running literature or artifact validation tests kept out of bounded release coverage shards",
 ]
 
 [tool.mypy]

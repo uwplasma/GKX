@@ -281,7 +281,9 @@ jobs:
             --fail-under 95 \
             --xml coverage-wide.xml \
             --pytest-arg=-o \
-            --pytest-arg=addopts=
+            --pytest-arg=addopts= \
+            --pytest-arg=-m \
+            --pytest-arg="not slow"
 
       - name: Upload wide coverage report
         uses: codecov/codecov-action@v5
