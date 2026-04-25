@@ -284,6 +284,25 @@ close to parity.
 The hollow diamond markers in the runtime subplot show those warm second-run
 timings on top of the cold wall-time bars.
 
+### Kernel profiling and gated fast modes
+
+![Nonlinear RHS kernel profile](docs/_static/nonlinear_rhs_profile.png)
+
+The current profiler splits the nonlinear RHS into field solve, linear RHS,
+nonlinear bracket, and full RHS kernels on CPU and GPU. The latest bounded
+Cyclone profile shows the nonlinear bracket and full RHS are the dominant warm
+throughput targets, while GPU execution reduces all measured RHS kernels.
+
+![Spectral Laguerre mode gate](docs/_static/laguerre_mode_gate_gpu.png)
+
+The optional spectral Laguerre nonlinear mode is gated, not a default. On the
+bounded `office` GPU gate it preserves scalar nonlinear diagnostics across
+Cyclone, KBM, W7-X, and HSX with max relative differences below `2.2e-5`.
+It speeds up Cyclone, KBM, and W7-X in that gate, but HSX is slower, so users
+should treat it as an opt-in engineering mode and rerun
+`python tools/gate_laguerre_nonlinear_modes.py` for their production case
+before relying on it for performance claims.
+
 Regenerate the runtime figure from collected per-case summaries with:
 
 ```bash
