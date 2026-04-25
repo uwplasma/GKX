@@ -9,6 +9,21 @@ from spectraxgk.basis import hermite_ladder_coeffs
 from spectraxgk.terms.validation import _check_positive
 
 
+def _fft_ik_multiplier(kz: jnp.ndarray, like: jnp.ndarray) -> jnp.ndarray:
+    """Return ``1j * kz`` with the same complex dtype as an FFT array."""
+
+    real_dtype = jnp.real(like).dtype
+    kz_cast = jnp.asarray(kz, dtype=real_dtype).astype(like.dtype)
+    return jnp.asarray(1j, dtype=like.dtype) * kz_cast
+
+
+def _fft_abs_multiplier(kz: jnp.ndarray, like: jnp.ndarray) -> jnp.ndarray:
+    """Return ``abs(kz)`` as a complex multiplier matching an FFT array."""
+
+    real_dtype = jnp.real(like).dtype
+    return jnp.asarray(jnp.abs(kz), dtype=real_dtype).astype(like.dtype)
+
+
 def grad_z_periodic(
     f: jnp.ndarray, dz: float | jnp.ndarray | None = None, kz: jnp.ndarray | None = None
 ) -> jnp.ndarray:
@@ -23,7 +38,7 @@ def grad_z_periodic(
         dz_val = jnp.asarray(dz, dtype=jnp.real(f).dtype)
         kz = 2.0 * jnp.pi * jnp.fft.fftfreq(n, d=dz_val)
     f_hat = jnp.fft.fft(f, axis=-1)
-    df_hat = (1j * kz) * f_hat
+    df_hat = _fft_ik_multiplier(kz, f_hat) * f_hat
     return jnp.fft.ifft(df_hat, axis=-1)
 
 
@@ -157,7 +172,7 @@ def grad_z_linked_fft(
         f_link = jnp.take(f_flat, idx_flat, axis=-2)
         f_link = f_link.reshape(*lead_shape, nChains, nLinks * Nz)
         f_hat = jnp.fft.fft(f_link, axis=-1)
-        df_hat = (1j * kz_link) * f_hat
+        df_hat = _fft_ik_multiplier(kz_link, f_hat) * f_hat
         df_link = jnp.fft.ifft(df_hat, axis=-1)
         df_link = df_link.reshape(*lead_shape, nChains * nLinks, Nz)
         df_link = jnp.asarray(df_link, dtype=f_flat.dtype)
@@ -250,7 +265,7 @@ def abs_z_linked_fft(
         f_link = jnp.take(f_flat, idx_flat, axis=-2)
         f_link = f_link.reshape(*lead_shape, nChains, nLinks * Nz)
         f_hat = jnp.fft.fft(f_link, axis=-1)
-        df_hat = jnp.abs(kz_link) * f_hat
+        df_hat = _fft_abs_multiplier(kz_link, f_hat) * f_hat
         df_link = jnp.fft.ifft(df_hat, axis=-1)
         df_link = df_link.reshape(*lead_shape, nChains * nLinks, Nz)
         df_link = jnp.asarray(df_link, dtype=f_flat.dtype)
@@ -345,12 +360,12 @@ def apply_laguerre_x(G: jnp.ndarray) -> jnp.ndarray:
 
     axis_l = -5
     Nl = G.shape[axis_l]
-    l = jnp.arange(Nl)
+    ell = jnp.arange(Nl)
     G_plus = _shift_with_zeros(G, axis_l, 1)
     G_minus = _shift_with_zeros(G, axis_l, -1)
     l_shape = [1] * G.ndim
     l_shape[axis_l] = Nl
-    l_col = l.reshape(l_shape)
+    l_col = ell.reshape(l_shape)
     return (
         (2.0 * l_col + 1.0) * G
         - (l_col + 1.0) * G_plus

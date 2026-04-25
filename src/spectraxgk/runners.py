@@ -25,6 +25,22 @@ def _steps_from_time(cfg: TimeConfig) -> int:
     return steps
 
 
+def _validate_nonlinear_config_state_sharding(spec: str | None) -> None:
+    """Keep config-level nonlinear sharding on release-gated state axes."""
+
+    if spec is None:
+        return
+    key = str(spec).strip().lower()
+    if key in {"", "none", "off", "false", "0"}:
+        return
+    if key not in {"auto", "ky", "kx"}:
+        raise ValueError(
+            "nonlinear TimeConfig.state_sharding currently supports only 'auto', 'ky', 'kx', or 'none'. "
+            "Sharding along the z FFT axis is an exploratory domain-decomposition lane and is not a "
+            "release-gated runtime path."
+        )
+
+
 def integrate_linear_from_config(
     G0,
     grid: SpectralGrid,
@@ -105,6 +121,7 @@ def integrate_nonlinear_from_config(
 
     steps = _steps_from_time(time_cfg)
     show_progress_use = bool(time_cfg.progress_bar if show_progress is None else show_progress)
+    _validate_nonlinear_config_state_sharding(time_cfg.state_sharding)
     state_sharding = resolve_state_sharding(G0, time_cfg.state_sharding)
     if time_cfg.use_diffrax:
         return integrate_nonlinear_diffrax(

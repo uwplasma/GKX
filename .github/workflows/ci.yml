@@ -247,10 +247,14 @@ jobs:
           fail_ci_if_error: true
           use_oidc: true
 
-  wide-coverage:
+  wide-coverage-shards:
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
 
     steps:
       - uses: actions/checkout@v4
@@ -273,7 +277,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
-      - name: Wide package coverage
+      - name: Wide package coverage shard ${{ matrix.shard }}/24
         env:
           MPLBACKEND: Agg
           JAX_ENABLE_X64: "true"
@@ -282,12 +286,82 @@ jobs:
           python tools/run_wide_coverage_gate.py \
             --shards 24 \
             --timeout 300 \
-            --fail-under 95 \
-            --xml coverage-wide.xml \
+            --only-shard "${{ matrix.shard }}" \
+            --skip-combine \
             --pytest-arg=-o \
             --pytest-arg=addopts= \
             --pytest-arg=-m \
             --pytest-arg="not slow"
+
+      - name: Package coverage shard data
+        run: |
+          mkdir -p coverage-shard
+          python - <<'PY'
+          from pathlib import Path
+          import shutil
+
+          files = sorted(Path(".").glob(".coverage.*"))
+          if not files:
+              raise SystemExit("no coverage data files produced")
+          out = Path("coverage-shard")
+          for idx, path in enumerate(files):
+              shutil.copy2(path, out / f".coverage.shard-${{ matrix.shard }}.{idx}")
+          PY
+          tar -czf "coverage-wide-shard-${{ matrix.shard }}.tgz" -C coverage-shard .
+
+      - name: Upload coverage shard data
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-wide-shard-${{ matrix.shard }}
+          path: coverage-wide-shard-${{ matrix.shard }}.tgz
+          if-no-files-found: error
+
+  wide-coverage:
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: wide-coverage-shards
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install coverage deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Download wide coverage shard data
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-wide-shard-*
+          path: coverage-wide-artifacts
+          merge-multiple: true
+
+      - name: Combine wide package coverage
+        env:
+          MPLBACKEND: Agg
+          JAX_ENABLE_X64: "true"
+          SPECTRAX_X64: "1"
+        run: |
+          find coverage-wide-artifacts -name '*.tgz' -print -exec tar -xzf {} \;
+          python tools/run_wide_coverage_gate.py \
+            --shards 24 \
+            --combine-only \
+            --fail-under 95 \
+            --xml coverage-wide.xml
 
       - name: Upload wide coverage report
         uses: codecov/codecov-action@v5
