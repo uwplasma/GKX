@@ -45,6 +45,20 @@ spectraxgk run-runtime-nonlinear \
   --steps 200 \
   --out tools_out/cyclone_release.out.nc
 
+# Replace the VMEC equilibrium used by a VMEC-backed TOML (model = "vmec").
+spectrax-gk run \
+  --config examples/nonlinear/non-axisymmetric/runtime_hsx_nonlinear_vmec_geometry.toml \
+  --vmec-file /path/to/wout_HSX_QHS_vacuum_ns201.nc \
+  --out tools_out/hsx_run
+
+# Replace the imported EIK/NetCDF geometry used by an imported-geometry TOML.
+# --geometry-file does not switch model="vmec" into imported-geometry mode;
+# the TOML should already use model="vmec-eik", "gx-eik", or "gx-netcdf".
+spectrax-gk run \
+  --config examples/nonlinear/non-axisymmetric/runtime_w7x_nonlinear_imported_geometry.toml \
+  --geometry-file /path/to/w7x_adiabatic_electrons.eik.nc \
+  --out tools_out/w7x_run
+
 # Turn any saved runtime bundle into a polished figure.
 spectraxgk --plot tools_out/cyclone_release.out.nc
 spectraxgk --plot tools_out/spectraxgk_default_linear.summary.json

@@ -23,7 +23,7 @@ from spectraxgk.benchmarks import (
 )
 from spectraxgk.geometry import SAlphaGeometry
 from spectraxgk.grids import build_spectral_grid
-from spectraxgk.io import load_case_from_toml, load_krylov_from_toml, load_linear_terms_from_toml, load_runtime_from_toml, load_toml
+from spectraxgk.io import load_case_from_toml, load_krylov_from_toml, load_linear_terms_from_toml, load_runtime_from_toml, load_toml, resolve_runtime_path
 from spectraxgk._version import __version__
 from spectraxgk.plotting import (
     growth_fit_figure,
@@ -258,6 +258,9 @@ def _cmd_plot_saved_output(argv: list[str]) -> int:
     return 0
 
 
+# Path-valued CLI flags (--vmec-file, --geometry-file, --init-file) follow
+# shell conventions: relative paths resolve against cwd, ~ expands to $HOME,
+# and $VAR is expanded from the environment. See _apply_runtime_path_overrides.
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog=Path(sys.argv[0]).name if sys.argv else "spectraxgk")
     parser.add_argument(
@@ -292,6 +295,8 @@ def build_parser() -> argparse.ArgumentParser:
     diag_group.add_argument("--no-diagnostics", action="store_true", help="Disable diagnostics output")
     generic_run.add_argument("--laguerre-mode", type=str, default=None, help="grid or spectral (nonlinear only)")
     generic_run.add_argument("--init-file", type=str, default=None, help="Optional init file for nonlinear runs")
+    generic_run.add_argument("--vmec-file", type=str, default=None, help="Override [geometry].vmec_file")
+    generic_run.add_argument("--geometry-file", type=str, default=None, help="Override [geometry].geometry_file")
     generic_run.add_argument("--out", type=str, default=None, help="Optional artifact path/prefix")
     generic_progress = generic_run.add_mutually_exclusive_group()
     generic_progress.add_argument("--progress", action="store_true", help="Enable progress output")
@@ -353,6 +358,8 @@ def build_parser() -> argparse.ArgumentParser:
     run_runtime.add_argument("--steps", type=int, default=None)
     run_runtime.add_argument("--sample-stride", type=int, default=None)
     run_runtime.add_argument("--fit-signal", type=str, default=None, help="auto, phi, or density")
+    run_runtime.add_argument("--vmec-file", type=str, default=None, help="Override [geometry].vmec_file")
+    run_runtime.add_argument("--geometry-file", type=str, default=None, help="Override [geometry].geometry_file")
     run_runtime.add_argument("--out", type=str, default=None, help="Optional artifact path/prefix")
     run_runtime_progress = run_runtime.add_mutually_exclusive_group()
     run_runtime_progress.add_argument("--progress", action="store_true", help="Enable progress output")
@@ -402,6 +409,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="grid or spectral (nonlinear Laguerre handling)",
     )
     run_runtime_nl.add_argument("--init-file", type=str, default=None, help="Optional init file (GX g_state)")
+    run_runtime_nl.add_argument("--vmec-file", type=str, default=None, help="Override [geometry].vmec_file")
+    run_runtime_nl.add_argument("--geometry-file", type=str, default=None, help="Override [geometry].geometry_file")
     run_runtime_nl.add_argument("--out", type=str, default=None, help="Optional artifact path/prefix")
     run_runtime_nl_progress = run_runtime_nl.add_mutually_exclusive_group()
     run_runtime_nl_progress.add_argument("--progress", action="store_true", help="Enable progress output")
@@ -621,8 +630,33 @@ _RUNTIME_FIT_KEYS = {
 }
 
 
+def _apply_runtime_path_overrides(cfg, args: argparse.Namespace):
+    """Apply CLI path overrides for geometry and init files.
+
+    CLI-supplied paths are resolved against the shell's current working
+    directory (not the config file's parent), matching conventional CLI
+    behavior. ``~`` and ``$VAR`` are expanded via ``resolve_runtime_path``.
+    """
+    cwd = Path.cwd()
+    geometry = cfg.geometry
+    vmec_cli = getattr(args, "vmec_file", None)
+    geom_cli = getattr(args, "geometry_file", None)
+    if vmec_cli is not None:
+        geometry = replace(geometry, vmec_file=resolve_runtime_path(str(vmec_cli), base_dir=cwd))
+    if geom_cli is not None:
+        geometry = replace(geometry, geometry_file=resolve_runtime_path(str(geom_cli), base_dir=cwd))
+
+    init = cfg.init
+    init_cli = getattr(args, "init_file", None)
+    if init_cli is not None:
+        init = replace(init, init_file=resolve_runtime_path(str(init_cli), base_dir=cwd))
+
+    return replace(cfg, geometry=geometry, init=init)
+
+
 def _cmd_run_runtime_linear(args: argparse.Namespace) -> int:
     cfg, data = load_runtime_from_toml(args.config)
+    cfg = _apply_runtime_path_overrides(cfg, args)
     run_cfg = data.get("run", {})
     fit_cfg = {k: v for k, v in data.get("fit", {}).items() if k in _RUNTIME_FIT_KEYS}
 
@@ -748,10 +782,8 @@ def _cmd_scan_runtime_linear(args: argparse.Namespace) -> int:
 
 def _cmd_run_runtime_nonlinear(args: argparse.Namespace) -> int:
     cfg, data = load_runtime_from_toml(args.config)
+    cfg = _apply_runtime_path_overrides(cfg, args)
     run_cfg = data.get("run", {})
-
-    if args.init_file is not None:
-        cfg = replace(cfg, init=replace(cfg.init, init_file=str(args.init_file)))
 
     ky = float(args.ky if args.ky is not None else run_cfg.get("ky", 0.3))
     Nl = int(args.Nl if args.Nl is not None else run_cfg.get("Nl", 24))

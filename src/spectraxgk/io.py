@@ -41,7 +41,28 @@ def load_toml(path: str | Path) -> dict:
         return tomllib.load(f)
 
 
-def _resolve_runtime_path(value: str | None, *, base_dir: Path) -> str | None:
+def resolve_runtime_path(value: str | None, *, base_dir: Path) -> str | None:
+    """Expand and resolve a runtime config path.
+
+    Applies ``$VAR`` and ``~`` expansion, then resolves relative paths against
+    ``base_dir``. If an unresolved ``$VAR`` remains after expansion (env var not
+    set), the original value is returned unchanged so downstream code can raise
+    a clearer error. ``None`` is passed through.
+
+    Parameters
+    ----------
+    value : str or None
+        Raw path string from a TOML config or CLI flag.
+    base_dir : Path
+        Directory used to resolve relative paths. Callers typically pass the
+        config file's parent directory (TOML values) or ``Path.cwd()``
+        (CLI-supplied values).
+
+    Returns
+    -------
+    str or None
+        Absolute resolved path as a string, or ``None`` when ``value`` is ``None``.
+    """
     if value is None:
         return None
     expanded = os.path.expanduser(os.path.expandvars(value))
@@ -169,15 +190,15 @@ def load_runtime_from_toml(path: str | Path) -> tuple[RuntimeConfig, dict]:
         cfg,
         geometry=replace(
             cfg.geometry,
-            vmec_file=_resolve_runtime_path(cfg.geometry.vmec_file, base_dir=base_dir),
-            geometry_file=_resolve_runtime_path(cfg.geometry.geometry_file, base_dir=base_dir),
+            vmec_file=resolve_runtime_path(cfg.geometry.vmec_file, base_dir=base_dir),
+            geometry_file=resolve_runtime_path(cfg.geometry.geometry_file, base_dir=base_dir),
         ),
-        init=replace(cfg.init, init_file=_resolve_runtime_path(cfg.init.init_file, base_dir=base_dir)),
+        init=replace(cfg.init, init_file=resolve_runtime_path(cfg.init.init_file, base_dir=base_dir)),
         output=replace(
             cfg.output,
-            path=_resolve_runtime_path(cfg.output.path, base_dir=base_dir),
-            restart_to_file=_resolve_runtime_path(cfg.output.restart_to_file, base_dir=base_dir),
-            restart_from_file=_resolve_runtime_path(cfg.output.restart_from_file, base_dir=base_dir),
+            path=resolve_runtime_path(cfg.output.path, base_dir=base_dir),
+            restart_to_file=resolve_runtime_path(cfg.output.restart_to_file, base_dir=base_dir),
+            restart_from_file=resolve_runtime_path(cfg.output.restart_from_file, base_dir=base_dir),
         ),
     )
     return cfg, data
