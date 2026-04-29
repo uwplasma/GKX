@@ -162,6 +162,7 @@ from spectraxgk.autodiff_validation import (
     central_finite_difference_jacobian,
     covariance_diagnostics,
     explicit_complex_operator_matrix,
+    implicit_eigenpair_observable_sensitivity_report,
     isolated_eigenpair_observable_sensitivity_report,
     isolated_eigenvalue_sensitivity_report,
 )
@@ -334,6 +335,7 @@ __all__ = [
     "autodiff_finite_difference_report",
     "central_finite_difference_jacobian",
     "explicit_complex_operator_matrix",
+    "implicit_eigenpair_observable_sensitivity_report",
     "isolated_eigenpair_observable_sensitivity_report",
     "isolated_eigenvalue_sensitivity_report",
     "batch_map",
