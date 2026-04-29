@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.geometry import FluxTubeGeometryData, FluxTubeGeometryLike
+from spectraxgk.geometry import FluxTubeGeometryData, FluxTubeGeometryLike, ensure_flux_tube_geometry_data
 from spectraxgk.gyroaverage import gamma0
 from spectraxgk.grids import SpectralGrid
 from spectraxgk.linear import LinearCache, LinearParams
@@ -115,8 +115,9 @@ def gx_volume_factors(geom: FluxTubeGeometryLike, grid: SpectralGrid) -> tuple[j
 
     theta = grid.z
     if isinstance(geom, FluxTubeGeometryData):
-        jacobian = geom.jacobian(theta)
-        grho = geom.grho(theta)
+        geom_data = ensure_flux_tube_geometry_data(geom, theta)
+        jacobian = geom_data.jacobian(theta)
+        grho = geom_data.grho(theta)
     else:
         bmag = geom.bmag(theta)
         gradpar = jnp.asarray(geom.gradpar())
