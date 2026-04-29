@@ -151,6 +151,37 @@ def autodiff_finite_difference_report(
     }
 
 
+def explicit_complex_operator_matrix(
+    operator: Callable[[jnp.ndarray], Any],
+    state_shape: tuple[int, ...],
+    *,
+    dtype: Any | None = None,
+) -> jnp.ndarray:
+    """Materialize a small complex linear operator as a dense matrix.
+
+    This helper is intended for validation fixtures, not production solves. It
+    applies ``operator`` to each basis vector of ``state_shape`` and returns a
+    matrix whose columns are the flattened outputs. Small dense matrices make
+    eigenvalue AD-vs-finite-difference gates easy to express while keeping the
+    production code matrix-free.
+    """
+
+    if not state_shape or any(int(size) <= 0 for size in state_shape):
+        raise ValueError("state_shape must contain positive dimensions")
+    matrix_dtype = dtype or (jnp.complex128 if jax.config.jax_enable_x64 else jnp.complex64)
+    size = int(np.prod(tuple(int(dim) for dim in state_shape)))
+    eye = jnp.eye(size, dtype=matrix_dtype)
+
+    def column(vec: jnp.ndarray) -> jnp.ndarray:
+        out = jnp.asarray(operator(jnp.reshape(vec, state_shape)))
+        if tuple(out.shape) != tuple(state_shape):
+            raise ValueError("operator output shape must match state_shape")
+        return jnp.ravel(out)
+
+    columns = jax.vmap(column)(eye)
+    return jnp.swapaxes(columns, 0, 1)
+
+
 def isolated_eigenvalue_sensitivity_report(
     matrix_fn: Callable[[jnp.ndarray], Any],
     params: jnp.ndarray | np.ndarray,
@@ -221,5 +252,6 @@ __all__ = [
     "autodiff_finite_difference_report",
     "central_finite_difference_jacobian",
     "covariance_diagnostics",
+    "explicit_complex_operator_matrix",
     "isolated_eigenvalue_sensitivity_report",
 ]
