@@ -159,6 +159,7 @@ from spectraxgk.autodiff_validation import (
     autodiff_finite_difference_report,
     central_finite_difference_jacobian,
     covariance_diagnostics,
+    isolated_eigenvalue_sensitivity_report,
 )
 from spectraxgk.parallel import batch_map, ky_scan_batches
 from spectraxgk.plotting import (
@@ -326,6 +327,7 @@ __all__ = [
     "covariance_diagnostics",
     "autodiff_finite_difference_report",
     "central_finite_difference_jacobian",
+    "isolated_eigenvalue_sensitivity_report",
     "batch_map",
     "ky_scan_batches",
     "eigenfunction_gate_report",

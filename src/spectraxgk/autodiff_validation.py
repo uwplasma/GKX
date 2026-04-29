@@ -151,8 +151,75 @@ def autodiff_finite_difference_report(
     }
 
 
+def isolated_eigenvalue_sensitivity_report(
+    matrix_fn: Callable[[jnp.ndarray], Any],
+    params: jnp.ndarray | np.ndarray,
+    *,
+    selector: str = "max_real",
+    step: float = 1.0e-4,
+    rtol: float = 1.0e-4,
+    atol: float = 1.0e-6,
+    gap_floor: float = 1.0e-8,
+) -> dict[str, object]:
+    """Validate AD sensitivities of one isolated eigenvalue branch.
+
+    The branch index is selected at the base point and then held fixed during
+    the finite-difference comparison. This mirrors the branch-continuity
+    assumption used for linear growth/frequency sensitivities.
+    """
+
+    p = jnp.asarray(params, dtype=jnp.float64 if jax.config.jax_enable_x64 else jnp.float32)
+    if p.ndim != 1:
+        raise ValueError("params must be one-dimensional")
+    eig_base = jnp.linalg.eigvals(jnp.asarray(matrix_fn(p)))
+    eig_np = np.asarray(eig_base)
+    if eig_np.ndim != 1 or eig_np.size == 0:
+        raise ValueError("matrix_fn must return a square matrix with at least one eigenvalue")
+    selector_key = selector.strip().lower()
+    if selector_key == "max_real":
+        index = int(np.argmax(np.real(eig_np)))
+    elif selector_key.startswith("index:"):
+        index = int(selector_key.split(":", 1)[1])
+        if index < 0 or index >= eig_np.size:
+            raise ValueError(f"selector index {index} is out of bounds for {eig_np.size} eigenvalues")
+    else:
+        raise ValueError("selector must be 'max_real' or 'index:N'")
+
+    selected = eig_np[index]
+    if eig_np.size == 1:
+        gap = float("inf")
+    else:
+        others = np.delete(eig_np, index)
+        gap = float(np.min(np.abs(selected - others)))
+
+    def branch_fn(x: jnp.ndarray) -> jnp.ndarray:
+        value = jnp.linalg.eigvals(jnp.asarray(matrix_fn(x)))[index]
+        return jnp.asarray([jnp.real(value), jnp.imag(value)])
+
+    report = autodiff_finite_difference_report(
+        branch_fn,
+        p,
+        step=step,
+        rtol=rtol,
+        atol=atol,
+    )
+    branch_isolated = bool(gap >= float(gap_floor))
+    return {
+        **report,
+        "passed": bool(report["passed"]) and branch_isolated,
+        "selector": selector_key,
+        "selected_index": index,
+        "eigenvalue_real": float(np.real(selected)),
+        "eigenvalue_imag": float(np.imag(selected)),
+        "eigenvalue_gap": gap,
+        "gap_floor": float(gap_floor),
+        "branch_isolated": branch_isolated,
+    }
+
+
 __all__ = [
     "autodiff_finite_difference_report",
     "central_finite_difference_jacobian",
     "covariance_diagnostics",
+    "isolated_eigenvalue_sensitivity_report",
 ]
