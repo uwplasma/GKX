@@ -28,7 +28,14 @@ from spectraxgk.terms.config import TermConfig
 
 
 _SUPPORTED_NORMALIZATIONS = {"phi_rms", "phi_midplane", "field_energy"}
-_SUPPORTED_RULES = {"none", "mixing_length", "lapillonne_2011"}
+_SUPPORTED_RULES = {
+    "none",
+    "mixing_length",
+    "lapillonne_2011",
+    "linear_weight",
+    "absolute_growth_mixing_length",
+    "abs_growth_mixing_length",
+}
 _SUPPORTED_MODES = {"weights", "saturated"}
 
 
@@ -184,6 +191,10 @@ def saturation_amplitude2(
     drive = float(gamma) - float(gamma_floor)
     if not include_stable_modes:
         drive = max(drive, 0.0)
+    if rule_key == "linear_weight":
+        return float(csat)
+    if rule_key in {"absolute_growth_mixing_length", "abs_growth_mixing_length"}:
+        return float(csat) * abs(float(gamma)) / float(kperp_eff2_value)
     if rule_key in {"mixing_length", "lapillonne_2011"}:
         return float(csat) * drive / float(kperp_eff2_value)
     return None
@@ -233,6 +244,7 @@ def saturated_flux_from_linear_weight(
 def quasilinear_feature_objective(
     features: jnp.ndarray | Sequence[float],
     *,
+    rule: str = "mixing_length",
     csat: float = 1.0,
     gamma_floor: float = 0.0,
     include_stable_modes: bool = False,
@@ -247,6 +259,14 @@ def quasilinear_feature_objective(
     x = jnp.asarray(features)
     if x.shape[-1] != 3:
         raise ValueError("features must end with [gamma, kperp_eff2, flux_weight]")
+    rule_key = rule.strip().lower()
+    if rule_key == "linear_weight":
+        return jnp.asarray(csat, dtype=x.dtype) * x[..., 2]
+    if rule_key in {"absolute_growth_mixing_length", "abs_growth_mixing_length"}:
+        denom = jnp.maximum(x[..., 1], jnp.asarray(1.0e-30, dtype=x.dtype))
+        return jnp.asarray(csat, dtype=x.dtype) * jnp.abs(x[..., 0]) * x[..., 2] / denom
+    if rule_key not in {"mixing_length", "lapillonne_2011"}:
+        raise NotImplementedError(f"Quasilinear feature rule '{rule}' is not implemented")
     return saturated_flux_from_linear_weight(
         x[..., 2],
         x[..., 0],
