@@ -122,6 +122,8 @@ This panel is generated from `examples/linear/axisymmetric/runtime_cyclone_quasi
 It shows linear growth/frequency, eigenfunction-weighted `k_perp`, amplitude-normalized
 heat/particle flux weights, and an explicitly uncalibrated mixing-length output. The
 absolute saturated-flux claim remains gated on nonlinear train/holdout calibration.
+The first Cyclone nonlinear audit is tracked in `docs/quasilinear.rst` and is
+kept at `training_or_audit_only` until a held-out calibration set passes.
 
 Autodiff validation (inverse/sensitivity demo):
 

@@ -68,6 +68,8 @@ from spectraxgk.quasilinear import (
 from spectraxgk.quasilinear_calibration import (
     QuasilinearCalibrationPoint,
     calibration_point_from_nonlinear_window_summary,
+    calibration_point_from_spectrum_and_nonlinear_window,
+    integrated_quasilinear_flux_from_spectrum,
     quasilinear_calibration_report,
     write_quasilinear_calibration_report,
 )
@@ -235,6 +237,8 @@ __all__ = [
     "saturated_flux_from_linear_weight",
     "QuasilinearCalibrationPoint",
     "calibration_point_from_nonlinear_window_summary",
+    "calibration_point_from_spectrum_and_nonlinear_window",
+    "integrated_quasilinear_flux_from_spectrum",
     "quasilinear_calibration_report",
     "write_quasilinear_calibration_report",
     "RuntimeLinearResult",

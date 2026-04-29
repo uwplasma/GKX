@@ -116,6 +116,68 @@ def quasilinear_calibration_report(
     }
 
 
+def integrated_quasilinear_flux_from_spectrum(
+    spectrum_csv: str | Path,
+    *,
+    column: str = "saturated_heat_flux_total",
+    ky_column: str = "ky",
+    method: str = "sum",
+    delta_ky: float | None = None,
+) -> dict[str, Any]:
+    """Integrate one quasilinear spectrum column into a scalar flux estimate.
+
+    ``method="sum"`` preserves the discrete spectral-sum convention used by
+    most runtime diagnostics. ``method="trapezoid"`` is available for smooth
+    scan studies where the CSV is treated as a sampled function of ``ky``.
+    """
+
+    path = Path(spectrum_csv)
+    data = np.genfromtxt(path, delimiter=",", names=True)
+    if data.shape == ():
+        data = np.asarray([data], dtype=data.dtype)
+    names = set(data.dtype.names or ())
+    if column not in names:
+        raise ValueError(f"{path} is missing quasilinear column '{column}'")
+    values = np.asarray(data[column], dtype=float)
+    finite = np.isfinite(values)
+    if ky_column in names:
+        ky = np.asarray(data[ky_column], dtype=float)
+        finite &= np.isfinite(ky)
+    else:
+        ky = np.arange(values.size, dtype=float)
+    if not np.any(finite):
+        raise ValueError(f"{path} contains no finite samples in column '{column}'")
+    values = values[finite]
+    ky = ky[finite]
+
+    method_key = method.strip().lower()
+    if method_key == "sum":
+        estimate = float(np.sum(values))
+        if delta_ky is not None:
+            estimate *= float(delta_ky)
+    elif method_key == "mean":
+        estimate = float(np.mean(values))
+    elif method_key == "trapezoid":
+        if values.size < 2:
+            raise ValueError("trapezoid integration requires at least two finite spectrum samples")
+        order = np.argsort(ky)
+        estimate = float(np.trapezoid(values[order], ky[order]))
+    else:
+        raise ValueError("method must be one of {'sum', 'mean', 'trapezoid'}")
+
+    return {
+        "estimate": estimate,
+        "method": method_key,
+        "column": str(column),
+        "ky_column": str(ky_column),
+        "delta_ky": None if delta_ky is None else float(delta_ky),
+        "n_samples": int(values.size),
+        "ky_min": float(np.min(ky)),
+        "ky_max": float(np.max(ky)),
+        "artifact": str(path),
+    }
+
+
 def calibration_point_from_nonlinear_window_summary(
     summary_json: str | Path,
     *,
@@ -183,6 +245,64 @@ def calibration_point_from_nonlinear_window_summary(
     )
 
 
+def calibration_point_from_spectrum_and_nonlinear_window(
+    spectrum_csv: str | Path,
+    summary_json: str | Path,
+    *,
+    split: str,
+    saturation_rule: str,
+    spectrum_column: str = "saturated_heat_flux_total",
+    spectrum_method: str = "sum",
+    delta_ky: float | None = None,
+    diagnostics_source: str = "spectrax",
+    heat_flux_column: str = "heat_flux",
+    case: str | None = None,
+    geometry: str = "unspecified",
+    electron_model: str = "unspecified",
+    notes: str | None = None,
+) -> QuasilinearCalibrationPoint:
+    """Create a calibration point from a quasilinear spectrum and nonlinear window."""
+
+    estimate = integrated_quasilinear_flux_from_spectrum(
+        spectrum_csv,
+        column=spectrum_column,
+        method=spectrum_method,
+        delta_ky=delta_ky,
+    )
+    point = calibration_point_from_nonlinear_window_summary(
+        summary_json,
+        predicted_heat_flux=float(estimate["estimate"]),
+        split=split,
+        saturation_rule=saturation_rule,
+        diagnostics_source=diagnostics_source,
+        heat_flux_column=heat_flux_column,
+        case=case,
+        geometry=geometry,
+        electron_model=electron_model,
+        quasilinear_artifact=str(spectrum_csv),
+        notes=notes,
+    )
+    ratio = None
+    if point.predicted_heat_flux != 0.0 and np.isfinite(point.predicted_heat_flux):
+        ratio = point.observed_heat_flux / point.predicted_heat_flux
+    merged_notes = [
+        item
+        for item in (
+            point.notes,
+            f"ql_spectrum_method={estimate['method']}",
+            f"ql_spectrum_column={estimate['column']}",
+            None if ratio is None else f"observed_to_predicted={ratio:.6g}",
+        )
+        if item
+    ]
+    return QuasilinearCalibrationPoint(
+        **{
+            **point.to_dict(),
+            "notes": "; ".join(merged_notes),
+        }
+    )
+
+
 def write_quasilinear_calibration_report(path: str | Path, report: dict[str, Any]) -> Path:
     """Write a quasilinear calibration report to JSON."""
 
@@ -195,6 +315,8 @@ def write_quasilinear_calibration_report(path: str | Path, report: dict[str, Any
 __all__ = [
     "QuasilinearCalibrationPoint",
     "calibration_point_from_nonlinear_window_summary",
+    "calibration_point_from_spectrum_and_nonlinear_window",
+    "integrated_quasilinear_flux_from_spectrum",
     "quasilinear_calibration_report",
     "write_quasilinear_calibration_report",
 ]
