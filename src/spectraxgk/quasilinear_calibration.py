@@ -19,6 +19,8 @@ class QuasilinearCalibrationPoint:
     predicted_heat_flux: float
     observed_heat_flux: float
     saturation_rule: str
+    raw_predicted_heat_flux: float | None = None
+    calibration_scale: float | None = None
     geometry: str = "unspecified"
     electron_model: str = "unspecified"
     ky: float | None = None
@@ -58,6 +60,80 @@ def _split_metrics(points: list[QuasilinearCalibrationPoint], *, observed_floor:
     }
 
 
+def fit_train_heat_flux_scale(
+    points: Iterable[QuasilinearCalibrationPoint | dict[str, Any]],
+    *,
+    train_split: str = "train",
+    prediction_floor: float = 1.0e-300,
+) -> dict[str, Any]:
+    """Fit one multiplicative heat-flux scale from training points.
+
+    The fit is a through-origin least-squares estimate,
+    ``scale = sum(q_i Q_i) / sum(q_i^2)``, where ``q_i`` is the raw
+    quasilinear heat-flux estimate and ``Q_i`` is the nonlinear window mean.
+    This is the minimal calibration constant used by simple mixing-length
+    models; any held-out failure after this fit is therefore a model failure,
+    not a missing constant factor.
+    """
+
+    pts = [_point_from_mapping(item) for item in points]
+    train = [
+        p
+        for p in pts
+        if p.split == train_split
+        and np.isfinite(p.predicted_heat_flux)
+        and np.isfinite(p.observed_heat_flux)
+        and abs(p.predicted_heat_flux) > prediction_floor
+    ]
+    if not train:
+        raise ValueError(f"no finite nonzero '{train_split}' points available for scale fit")
+    pred = np.asarray([p.predicted_heat_flux for p in train], dtype=float)
+    obs = np.asarray([p.observed_heat_flux for p in train], dtype=float)
+    denom = float(np.dot(pred, pred))
+    if not np.isfinite(denom) or denom <= prediction_floor:
+        raise ValueError("training predictions are too small to fit a stable scale")
+    scale = float(np.dot(pred, obs) / denom)
+    if scale < 0.0:
+        raise ValueError("fitted heat-flux scale is negative; do not treat this as a saturation constant")
+    scaled_residual = scale * pred - obs
+    return {
+        "scale": scale,
+        "train_split": str(train_split),
+        "n_train": int(pred.size),
+        "fit_kind": "through_origin_least_squares",
+        "prediction_floor": float(prediction_floor),
+        "train_rmse": float(np.sqrt(np.mean(scaled_residual**2))),
+    }
+
+
+def apply_heat_flux_scale(
+    points: Iterable[QuasilinearCalibrationPoint | dict[str, Any]],
+    *,
+    scale: float,
+    note_label: str = "heat_flux_scale",
+) -> list[QuasilinearCalibrationPoint]:
+    """Return calibration points with heat-flux predictions multiplied by ``scale``."""
+
+    if not np.isfinite(scale) or scale < 0.0:
+        raise ValueError("scale must be finite and non-negative")
+    scaled = []
+    for item in points:
+        point = _point_from_mapping(item)
+        notes = [point.notes, f"{note_label}={scale:.12g}"]
+        scaled.append(
+            QuasilinearCalibrationPoint(
+                **{
+                    **point.to_dict(),
+                    "predicted_heat_flux": float(scale * point.predicted_heat_flux),
+                    "raw_predicted_heat_flux": float(point.predicted_heat_flux),
+                    "calibration_scale": float(scale),
+                    "notes": "; ".join(str(note) for note in notes if note),
+                }
+            )
+        )
+    return scaled
+
+
 def quasilinear_calibration_report(
     points: Iterable[QuasilinearCalibrationPoint | dict[str, Any]],
     *,
@@ -65,6 +141,7 @@ def quasilinear_calibration_report(
     version: str = "0.1",
     holdout_mean_rel_gate: float = 0.35,
     observed_floor: float = 1.0e-12,
+    fit_train_scale: bool = False,
     metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a JSON-friendly calibration/holdout report.
@@ -85,6 +162,15 @@ def quasilinear_calibration_report(
     bad_splits = sorted({p.split for p in pts if p.split not in allowed_splits})
     if bad_splits:
         raise ValueError(f"unsupported calibration split(s): {bad_splits}")
+
+    scale_fit = None
+    if fit_train_scale:
+        scale_fit = fit_train_heat_flux_scale(pts)
+        pts = apply_heat_flux_scale(
+            pts,
+            scale=float(scale_fit["scale"]),
+            note_label="train_fitted_heat_flux_scale",
+        )
 
     by_split_points = {split: [p for p in pts if p.split == split] for split in allowed_splits}
     by_split = {
@@ -112,7 +198,10 @@ def quasilinear_calibration_report(
         "metrics": all_metrics,
         "by_split": by_split,
         "points": [p.to_dict() for p in pts],
-        "metadata": dict(metadata or {}),
+        "metadata": {
+            **dict(metadata or {}),
+            **({} if scale_fit is None else {"heat_flux_scale_fit": scale_fit}),
+        },
     }
 
 
@@ -314,8 +403,10 @@ def write_quasilinear_calibration_report(path: str | Path, report: dict[str, Any
 
 __all__ = [
     "QuasilinearCalibrationPoint",
+    "apply_heat_flux_scale",
     "calibration_point_from_nonlinear_window_summary",
     "calibration_point_from_spectrum_and_nonlinear_window",
+    "fit_train_heat_flux_scale",
     "integrated_quasilinear_flux_from_spectrum",
     "quasilinear_calibration_report",
     "write_quasilinear_calibration_report",

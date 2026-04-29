@@ -157,7 +157,16 @@ def write_runtime_linear_scan_artifacts(out: str | Path, result: Any) -> dict[st
 
     if ql_payloads:
         ql_path = Path(f"{base}.quasilinear_spectrum.csv")
-        ql_ky = np.asarray([float(p.get("ky", np.nan)) for p in ql_payloads], dtype=float)
+        # The scan coordinate is the user-requested target ky.  Individual
+        # linear payloads also carry the selected signed grid-mode ky, which
+        # can differ for linked-boundary layouts.  Keep both so publication
+        # spectra remain ordered by requested ky without losing mode metadata.
+        ql_ky = (
+            np.asarray(ky, dtype=float)
+            if len(ql_payloads) == int(ky.size)
+            else np.asarray([float(p.get("ky", np.nan)) for p in ql_payloads], dtype=float)
+        )
+        ql_mode_ky = np.asarray([float(p.get("ky", np.nan)) for p in ql_payloads], dtype=float)
         ql_gamma = np.asarray([float(p.get("gamma", np.nan)) for p in ql_payloads], dtype=float)
         ql_omega = np.asarray([float(p.get("omega", np.nan)) for p in ql_payloads], dtype=float)
         kperp_eff2 = np.asarray([float(p.get("kperp_eff2", np.nan)) for p in ql_payloads], dtype=float)
@@ -192,6 +201,7 @@ def write_runtime_linear_scan_artifacts(out: str | Path, result: Any) -> dict[st
             ql_path,
             [
                 "ky",
+                "mode_ky",
                 "gamma",
                 "omega",
                 "kperp_eff2",
@@ -201,7 +211,7 @@ def write_runtime_linear_scan_artifacts(out: str | Path, result: Any) -> dict[st
                 "saturated_heat_flux_total",
                 "saturated_particle_flux_total",
             ],
-            [ql_ky, ql_gamma, ql_omega, kperp_eff2, heat, particle, amp2, sat_heat, sat_particle],
+            [ql_ky, ql_mode_ky, ql_gamma, ql_omega, kperp_eff2, heat, particle, amp2, sat_heat, sat_particle],
         )
         paths["quasilinear_spectrum"] = str(ql_path)
     return paths

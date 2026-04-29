@@ -125,6 +125,17 @@ absolute saturated-flux claim remains gated on nonlinear train/holdout calibrati
 The first Cyclone nonlinear audit is tracked in `docs/quasilinear.rst` and is
 kept at `training_or_audit_only` until a held-out calibration set passes.
 
+The first train/holdout calibration diagnostic fits one heat-flux scale on the
+Cyclone nonlinear window and scores Cyclone Miller as a held-out geometry:
+
+![SPECTRAX-GK quasilinear train/holdout calibration](docs/_static/quasilinear_cyclone_miller_train_holdout.png)
+
+This held-out transfer test fails intentionally in the current release, so
+SPECTRAX-GK does not claim calibrated absolute quasilinear flux prediction yet.
+The result is kept because it is the correct research gate: linear weights and
+gradients are available now, while saturation-rule transfer must be improved
+and validated before being used for stellarator optimization claims.
+
 Autodiff validation (inverse/sensitivity demo):
 
 ![SPECTRAX-GK autodiff inverse demo](docs/_static/autodiff_inverse_growth.png)
