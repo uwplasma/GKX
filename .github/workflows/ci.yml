@@ -24,6 +24,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  repo-hygiene:
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Repository size manifest
+        run: |
+          python tools/check_repository_size_manifest.py
+
   mypy:
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
@@ -82,6 +98,8 @@ jobs:
               tests/test_grids.py
               tests/test_gyroaverage.py
               tests/test_normalization.py
+              tests/test_audit_repository_size.py
+              tests/test_check_repository_size_manifest.py
               tests/test_operators.py
               tests/test_plotting.py
               tests/test_species.py
