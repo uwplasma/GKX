@@ -374,7 +374,7 @@ def implicit_eigenpair_observable_sensitivity_report(
     not eigenvectors. This helper avoids differentiating through
     ``jnp.linalg.eig``. It differentiates the matrix entries with JAX, solves
     the left/right eigenvector perturbation equation for each parameter, and
-    compares the resulting observable Jacobian against branch-fixed central
+    compares the resulting observable Jacobian against nearest-branch central
     finite differences.
 
     The observable should be phase-invariant under ``v -> exp(i alpha) v``.
@@ -471,7 +471,8 @@ def implicit_eigenpair_observable_sensitivity_report(
 
     def branch_observable(x: jnp.ndarray) -> jnp.ndarray:
         eigvals_i, eigvecs_i = jnp.linalg.eig(jnp.asarray(matrix_fn(x)))
-        obs = jnp.ravel(jnp.asarray(observable_fn(eigvals_i[index], eigvecs_i[:, index], x)))
+        branch_index = int(np.argmin(np.abs(np.asarray(eigvals_i) - np.asarray(lam))))
+        obs = jnp.ravel(jnp.asarray(observable_fn(eigvals_i[branch_index], eigvecs_i[:, branch_index], x)))
         if jnp.iscomplexobj(obs):
             return jnp.concatenate([jnp.real(obs), jnp.imag(obs)])
         return jnp.real(obs)
