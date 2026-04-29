@@ -39,6 +39,7 @@ jobs:
       - name: Repository size manifest
         run: |
           python tools/check_repository_size_manifest.py
+          python tools/check_release_artifact_manifest.py
 
   mypy:
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
@@ -100,6 +101,8 @@ jobs:
               tests/test_normalization.py
               tests/test_audit_repository_size.py
               tests/test_check_repository_size_manifest.py
+              tests/test_check_release_artifact_manifest.py
+              tests/test_plot_quasilinear_candidate_uncertainty.py
               tests/test_operators.py
               tests/test_plotting.py
               tests/test_species.py
