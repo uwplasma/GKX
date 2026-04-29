@@ -10,6 +10,14 @@ import json
 import numpy as np
 
 
+_NETCDF_HEAT_FLUX_COLUMNS = {
+    "heat_flux": "Diagnostics/HeatFlux_st",
+    "heat_flux_es": "Diagnostics/HeatFluxES_st",
+    "heat_flux_apar": "Diagnostics/HeatFluxApar_st",
+    "heat_flux_bpar": "Diagnostics/HeatFluxBpar_st",
+}
+
+
 @dataclass(frozen=True)
 class QuasilinearCalibrationPoint:
     """One quasilinear-vs-nonlinear transport comparison point."""
@@ -267,6 +275,131 @@ def integrated_quasilinear_flux_from_spectrum(
     }
 
 
+def _resolve_summary_artifact(summary_path: Path, source: object) -> Path:
+    diag_path = Path(str(source))
+    if diag_path.is_absolute():
+        return diag_path
+    candidates = (
+        (summary_path.parent / diag_path).resolve(),
+        (summary_path.parent.parent / diag_path).resolve(),
+        (Path.cwd() / diag_path).resolve(),
+    )
+    return next((candidate for candidate in candidates if candidate.exists()), candidates[0])
+
+
+def _window_from_summary(summary: dict[str, Any], t: np.ndarray) -> tuple[float, float]:
+    raw_tmin = summary.get("tmin")
+    raw_tmax = summary.get("tmax")
+    tmin = float(np.nanmin(t) if raw_tmin is None else raw_tmin)
+    tmax = float(np.nanmax(t) if raw_tmax is None else raw_tmax)
+    return tmin, tmax
+
+
+def _read_csv_window_heat_flux(
+    path: Path,
+    summary: dict[str, Any],
+    *,
+    heat_flux_column: str,
+) -> dict[str, Any]:
+    data = np.genfromtxt(path, delimiter=",", names=True)
+    if data.shape == ():
+        data = np.asarray([data], dtype=data.dtype)
+    names = set(data.dtype.names or ())
+    if "t" not in names:
+        raise ValueError(f"{path} is missing a 't' column")
+    if heat_flux_column not in names:
+        raise ValueError(f"{path} is missing heat-flux column '{heat_flux_column}'")
+    t = np.asarray(data["t"], dtype=float)
+    heat = np.asarray(data[heat_flux_column], dtype=float)
+    tmin, tmax = _window_from_summary(summary, t)
+    mask = (t >= tmin) & (t <= tmax) & np.isfinite(heat)
+    if not np.any(mask):
+        raise ValueError(f"no finite heat-flux samples in [{tmin}, {tmax}] from {path}")
+    return {
+        "mean": float(np.mean(heat[mask])),
+        "std": float(np.std(heat[mask])),
+        "tmin": tmin,
+        "tmax": tmax,
+        "n_samples": int(np.count_nonzero(mask)),
+        "variable": heat_flux_column,
+    }
+
+
+def _netcdf_variable(root: Any, path: str) -> Any:
+    current = root
+    parts = [part for part in path.strip("/").split("/") if part]
+    if not parts:
+        raise ValueError("NetCDF variable path must not be empty")
+    for group in parts[:-1]:
+        if group not in current.groups:
+            raise KeyError(f"NetCDF group '{group}' not found in '{path}'")
+        current = current.groups[group]
+    name = parts[-1]
+    if name not in current.variables:
+        raise KeyError(f"NetCDF variable '{name}' not found in '{path}'")
+    return current.variables[name]
+
+
+def _netcdf_heat_flux_variable(heat_flux_column: str) -> str:
+    key = str(heat_flux_column).strip()
+    if "/" in key:
+        return key
+    if key.startswith("Diagnostics"):
+        return key
+    if key in _NETCDF_HEAT_FLUX_COLUMNS:
+        return _NETCDF_HEAT_FLUX_COLUMNS[key]
+    if key.endswith("_st"):
+        return f"Diagnostics/{key}"
+    raise ValueError(
+        f"unknown NetCDF heat-flux column '{heat_flux_column}'. "
+        "Use one of heat_flux, heat_flux_es, heat_flux_apar, heat_flux_bpar, "
+        "or an explicit NetCDF path such as Diagnostics/HeatFlux_st."
+    )
+
+
+def _read_netcdf_window_heat_flux(
+    path: Path,
+    summary: dict[str, Any],
+    *,
+    heat_flux_column: str,
+    species_index: int | None,
+) -> dict[str, Any]:
+    try:
+        import netCDF4
+    except ImportError as exc:  # pragma: no cover - exercised only without optional dependency.
+        raise RuntimeError("netCDF4 is required to read nonlinear NetCDF calibration windows") from exc
+
+    variable_path = _netcdf_heat_flux_variable(heat_flux_column)
+    with netCDF4.Dataset(path) as root:
+        t = np.asarray(_netcdf_variable(root, "Grids/time")[:], dtype=float)
+        values = np.asarray(_netcdf_variable(root, variable_path)[:], dtype=float)
+    if values.shape[0] != t.size:
+        raise ValueError(f"{variable_path} first dimension does not match Grids/time in {path}")
+    if values.ndim == 1:
+        heat = values
+    elif values.ndim == 2:
+        if species_index is None:
+            heat = np.sum(values, axis=1)
+        else:
+            if species_index < 0 or species_index >= values.shape[1]:
+                raise ValueError(f"species_index {species_index} is out of bounds for {values.shape[1]} species")
+            heat = values[:, int(species_index)]
+    else:
+        raise ValueError(f"{variable_path} must have shape (time,) or (time, species), got {values.shape}")
+    tmin, tmax = _window_from_summary(summary, t)
+    mask = (t >= tmin) & (t <= tmax) & np.isfinite(heat)
+    if not np.any(mask):
+        raise ValueError(f"no finite heat-flux samples in [{tmin}, {tmax}] from {path}")
+    return {
+        "mean": float(np.mean(heat[mask])),
+        "std": float(np.std(heat[mask])),
+        "tmin": tmin,
+        "tmax": tmax,
+        "n_samples": int(np.count_nonzero(mask)),
+        "variable": variable_path,
+    }
+
+
 def calibration_point_from_nonlinear_window_summary(
     summary_json: str | Path,
     *,
@@ -279,14 +412,15 @@ def calibration_point_from_nonlinear_window_summary(
     geometry: str = "unspecified",
     electron_model: str = "unspecified",
     quasilinear_artifact: str | None = None,
+    species_index: int | None = None,
     notes: str | None = None,
 ) -> QuasilinearCalibrationPoint:
     """Create a calibration point from a nonlinear window-summary JSON.
 
     The helper reads the window bounds from a tracked nonlinear gate summary and
-    computes the mean/std of a heat-flux column from the selected diagnostics CSV.
-    It is intentionally conservative: NetCDF-only summaries are rejected until
-    a dedicated reader supplies the same windowed observable contract.
+    computes the mean/std of a heat-flux column from the selected diagnostics
+    CSV or runtime NetCDF. For NetCDF inputs, ``heat_flux_column='heat_flux'``
+    maps to ``Diagnostics/HeatFlux_st`` and species are summed by default.
     """
 
     summary_path = Path(summary_json)
@@ -294,43 +428,37 @@ def calibration_point_from_nonlinear_window_summary(
     source = summary.get(diagnostics_source)
     if source is None:
         raise ValueError(f"summary does not contain diagnostics source '{diagnostics_source}'")
-    diag_path = Path(str(source))
-    if not diag_path.is_absolute():
-        candidates = (
-            (summary_path.parent / diag_path).resolve(),
-            (summary_path.parent.parent / diag_path).resolve(),
-            (Path.cwd() / diag_path).resolve(),
+    diag_path = _resolve_summary_artifact(summary_path, source)
+    suffixes = [suffix.lower() for suffix in diag_path.suffixes]
+    if diag_path.suffix.lower() == ".csv":
+        window = _read_csv_window_heat_flux(diag_path, summary, heat_flux_column=heat_flux_column)
+    elif suffixes[-2:] == [".out", ".nc"] or diag_path.suffix.lower() == ".nc":
+        window = _read_netcdf_window_heat_flux(
+            diag_path,
+            summary,
+            heat_flux_column=heat_flux_column,
+            species_index=species_index,
         )
-        diag_path = next((candidate for candidate in candidates if candidate.exists()), candidates[0])
-    if diag_path.suffix.lower() != ".csv":
-        raise NotImplementedError("nonlinear calibration ingestion currently supports diagnostics CSV files")
-    data = np.genfromtxt(diag_path, delimiter=",", names=True)
-    if data.shape == ():
-        data = np.asarray([data], dtype=data.dtype)
-    names = set(data.dtype.names or ())
-    if "t" not in names:
-        raise ValueError(f"{diag_path} is missing a 't' column")
-    if heat_flux_column not in names:
-        raise ValueError(f"{diag_path} is missing heat-flux column '{heat_flux_column}'")
-    t = np.asarray(data["t"], dtype=float)
-    heat = np.asarray(data[heat_flux_column], dtype=float)
-    tmin = float(summary.get("tmin", np.min(t)))
-    tmax = float(summary.get("tmax", np.max(t)))
-    mask = (t >= tmin) & (t <= tmax) & np.isfinite(heat)
-    if not np.any(mask):
-        raise ValueError(f"no finite heat-flux samples in [{tmin}, {tmax}] from {diag_path}")
+    else:
+        raise NotImplementedError("nonlinear calibration ingestion supports diagnostics CSV and NetCDF files")
+    note_items = [
+        notes,
+        None if diag_path.suffix.lower() == ".csv" else f"nonlinear_variable={window['variable']}",
+        f"nonlinear_window=[{window['tmin']:.12g},{window['tmax']:.12g}]",
+        f"nonlinear_window_samples={window['n_samples']}",
+    ]
     return QuasilinearCalibrationPoint(
         case=str(case or summary.get("case", summary_path.stem)),
         split=str(split),
         predicted_heat_flux=float(predicted_heat_flux),
-        observed_heat_flux=float(np.mean(heat[mask])),
-        observed_heat_flux_std=float(np.std(heat[mask])),
+        observed_heat_flux=float(window["mean"]),
+        observed_heat_flux_std=float(window["std"]),
         saturation_rule=str(saturation_rule),
         geometry=str(geometry),
         electron_model=str(electron_model),
         quasilinear_artifact=quasilinear_artifact,
         nonlinear_artifact=str(diag_path),
-        notes=notes,
+        notes="; ".join(str(item) for item in note_items if item),
     )
 
 
@@ -348,6 +476,7 @@ def calibration_point_from_spectrum_and_nonlinear_window(
     case: str | None = None,
     geometry: str = "unspecified",
     electron_model: str = "unspecified",
+    species_index: int | None = None,
     notes: str | None = None,
 ) -> QuasilinearCalibrationPoint:
     """Create a calibration point from a quasilinear spectrum and nonlinear window."""
@@ -369,6 +498,7 @@ def calibration_point_from_spectrum_and_nonlinear_window(
         geometry=geometry,
         electron_model=electron_model,
         quasilinear_artifact=str(spectrum_csv),
+        species_index=species_index,
         notes=notes,
     )
     ratio = None
