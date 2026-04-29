@@ -64,6 +64,7 @@ from spectraxgk.quasilinear import (
     quasilinear_feature_objective,
     saturation_amplitude2,
     saturated_flux_from_linear_weight,
+    shape_aware_power_law_objective,
 )
 from spectraxgk.quasilinear_calibration import (
     QuasilinearCalibrationPoint,
@@ -241,6 +242,7 @@ __all__ = [
     "quasilinear_feature_objective",
     "saturation_amplitude2",
     "saturated_flux_from_linear_weight",
+    "shape_aware_power_law_objective",
     "QuasilinearCalibrationPoint",
     "apply_heat_flux_scale",
     "calibration_point_from_nonlinear_window_summary",

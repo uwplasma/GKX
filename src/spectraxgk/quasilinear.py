@@ -277,6 +277,44 @@ def quasilinear_feature_objective(
     )
 
 
+def shape_aware_power_law_objective(
+    features: jnp.ndarray | Sequence[float],
+    ky: jnp.ndarray | Sequence[float] | float,
+    *,
+    exponent: jnp.ndarray | float,
+    csat: float = 1.0,
+    ky_ref: float | None = None,
+    eps: float = 1.0e-30,
+) -> jnp.ndarray:
+    """Differentiable shape-aware linear-weight objective.
+
+    ``features`` must end with ``[gamma, kperp_eff2, flux_weight]``. The
+    current low-dimensional shape model intentionally uses only the linear
+    heat-flux weight and a power-law envelope in ``ky``:
+
+    ``Q = C_sat * flux_weight * (ky / ky_ref)**exponent``.
+
+    Growth-rate dependence is left to separately validated rules. This helper
+    exists so the shape-aware saturation diagnostics and future optimization
+    examples use one differentiable objective rather than plotting-only
+    formulas.
+    """
+
+    dtype = jnp.result_type(features, ky, exponent, jnp.float32)
+    x = jnp.asarray(features, dtype=dtype)
+    if x.shape[-1] != 3:
+        raise ValueError("features must end with [gamma, kperp_eff2, flux_weight]")
+    ky_arr = jnp.asarray(ky, dtype=dtype)
+    eps_arr = jnp.asarray(eps, dtype=dtype)
+    positive_ky = jnp.maximum(ky_arr, eps_arr)
+    if ky_ref is None:
+        ref = jnp.exp(jnp.mean(jnp.log(positive_ky)))
+    else:
+        ref = jnp.maximum(jnp.asarray(ky_ref, dtype=dtype), eps_arr)
+    envelope = (positive_ky / ref) ** jnp.asarray(exponent, dtype=dtype)
+    return jnp.asarray(csat, dtype=dtype) * x[..., 2] * envelope
+
+
 def compute_quasilinear_from_linear_state(
     state: jnp.ndarray | np.ndarray,
     *,
