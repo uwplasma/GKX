@@ -275,6 +275,13 @@ def _vmec_fieldlines(
     edge_toroidal_flux_over_2pi = -vs.phiedge / (2.0 * np.pi)
     toroidal_flux_sign = np.sign(edge_toroidal_flux_over_2pi)
     L_reference = vs.Aminor_p
+    if not np.isfinite(float(L_reference)) or abs(float(L_reference)) <= 0.0:
+        nc_obj.close()
+        raise ValueError(
+            "VMEC geometry has an invalid reference length Aminor_p="
+            f"{float(L_reference)!r}. External VMEC equilibria used for runtime "
+            "EIK generation must provide a positive finite minor radius."
+        )
     B_reference = 2.0 * abs(edge_toroidal_flux_over_2pi) / (L_reference ** 2)
     R_mag_ax = float(vs.raxis_cc[0])
 
@@ -813,23 +820,36 @@ def _apply_flux_tube_cut(
     jtwist_arr = 2.0 * geo.s_hat_input * gds21 / gds22  # twist_shift_geo_fac
     jtwist_line = jtwist_arr / y0 * x0
 
+    def _select_crossing(crossings: np.ndarray, *, label: str) -> float:
+        crossings = np.asarray(crossings, dtype=float)
+        crossings = np.sort(crossings[np.isfinite(crossings) & (crossings > 0.0)])
+        if npol_min is not None:
+            crossings = crossings[crossings > npol_min * np.pi]
+        if crossings.size == 0:
+            raise ValueError(
+                f"No positive {label} flux-tube crossing was found for "
+                f"flux_tube_cut={flux_tube_cut!r}, npol_min={npol_min!r}. "
+                "Try a different flux_tube_cut, npol_min, jtwist_in, or a larger "
+                "theta/npol search range for this VMEC equilibrium."
+            )
+        try:
+            return float(crossings[which_crossing])
+        except IndexError as exc:
+            raise ValueError(
+                f"Requested which_crossing={which_crossing} for "
+                f"flux_tube_cut={flux_tube_cut!r}, but only {crossings.size} "
+                f"positive {label} crossings were found."
+            ) from exc
+
     if flux_tube_cut == "gds21":
         tck = splrep(theta, gds21, s=0)
         ppoly = PPoly.from_spline(tck)
-        roots = ppoly.roots(extrapolate=False)
-        roots = roots[roots > 0]
-        if npol_min is not None:
-            roots = roots[roots > npol_min * np.pi]
-        cut = float(roots[which_crossing])
+        cut = _select_crossing(ppoly.roots(extrapolate=False), label="gds21")
 
     elif flux_tube_cut == "gbdrift0":
         tck = splrep(theta, gbdrift0, s=0)
         ppoly = PPoly.from_spline(tck)
-        roots = ppoly.roots(extrapolate=False)
-        roots = roots[roots > 0]
-        if npol_min is not None:
-            roots = roots[roots > npol_min * np.pi]
-        cut = float(roots[which_crossing])
+        cut = _select_crossing(ppoly.roots(extrapolate=False), label="gbdrift0")
 
     elif flux_tube_cut == "aspect":
         jtwist_spl = CubicSpline(theta, jtwist_line)
@@ -841,10 +861,7 @@ def _apply_flux_tube_cut(
         crossings = np.concatenate([
             jtwist_spl.solve(float(v), extrapolate=False) for v in candidates
         ])
-        crossings = np.sort(crossings[crossings > 0])
-        if npol_min is not None:
-            crossings = crossings[crossings > npol_min * np.pi]
-        cut = float(crossings[which_crossing])
+        cut = _select_crossing(crossings, label="jtwist")
 
     else:
         raise ValueError(f"Unknown flux_tube_cut={flux_tube_cut!r}")
