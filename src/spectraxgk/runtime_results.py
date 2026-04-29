@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 import jax.numpy as jnp
 import numpy as np
@@ -28,6 +29,7 @@ class RuntimeLinearResult:
     fit_window_tmin: float | None = None
     fit_window_tmax: float | None = None
     fit_signal_used: str | None = None
+    quasilinear: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -37,6 +39,7 @@ class RuntimeLinearScanResult:
     ky: np.ndarray
     gamma: np.ndarray
     omega: np.ndarray
+    quasilinear: tuple[dict[str, Any], ...] | None = None
 
 
 @dataclass(frozen=True)

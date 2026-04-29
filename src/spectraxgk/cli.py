@@ -34,7 +34,9 @@ from spectraxgk.plotting import (
 )
 from spectraxgk.runtime_artifacts import (
     run_runtime_nonlinear_with_artifacts,
+    write_quasilinear_artifacts,
     write_runtime_linear_artifacts,
+    write_runtime_linear_scan_artifacts,
     write_runtime_nonlinear_artifacts,
 )
 from spectraxgk.runtime import RuntimeLinearResult, run_runtime_linear, run_runtime_scan, run_runtime_nonlinear
@@ -53,6 +55,7 @@ _RUNTIME_TOP_LEVEL_KEYS = {
     "normalization",
     "expert",
     "output",
+    "quasilinear",
 }
 _LEGACY_CASE_TOP_LEVEL_KEYS = {"case", "model", "gx_reference"}
 
@@ -258,6 +261,20 @@ def _cmd_plot_saved_output(argv: list[str]) -> int:
     return 0
 
 
+def _add_quasilinear_flags(cmd: argparse.ArgumentParser) -> None:
+    cmd.add_argument("--quasilinear", action="store_true", help="Compute quasilinear transport diagnostics")
+    cmd.add_argument("--ql-mode", type=str, default=None, help="weights or saturated")
+    cmd.add_argument("--ql-saturation-rule", type=str, default=None, help="none, mixing_length, or lapillonne_2011")
+    cmd.add_argument("--ql-csat", type=float, default=None, help="Saturation-rule calibration constant")
+    cmd.add_argument(
+        "--ql-normalization",
+        type=str,
+        default=None,
+        help="phi_rms, phi_midplane, or field_energy",
+    )
+    cmd.add_argument("--ql-output", type=str, default=None, help="Optional quasilinear artifact path")
+
+
 # Path-valued CLI flags (--vmec-file, --geometry-file, --init-file) follow
 # shell conventions: relative paths resolve against cwd, ~ expands to $HOME,
 # and $VAR is expanded from the environment. See _apply_runtime_path_overrides.
@@ -298,6 +315,7 @@ def build_parser() -> argparse.ArgumentParser:
     generic_run.add_argument("--vmec-file", type=str, default=None, help="Override [geometry].vmec_file")
     generic_run.add_argument("--geometry-file", type=str, default=None, help="Override [geometry].geometry_file")
     generic_run.add_argument("--out", type=str, default=None, help="Optional artifact path/prefix")
+    _add_quasilinear_flags(generic_run)
     generic_progress = generic_run.add_mutually_exclusive_group()
     generic_progress.add_argument("--progress", action="store_true", help="Enable progress output")
     generic_progress.add_argument("--no-progress", action="store_true", help="Disable progress output")
@@ -361,6 +379,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_runtime.add_argument("--vmec-file", type=str, default=None, help="Override [geometry].vmec_file")
     run_runtime.add_argument("--geometry-file", type=str, default=None, help="Override [geometry].geometry_file")
     run_runtime.add_argument("--out", type=str, default=None, help="Optional artifact path/prefix")
+    _add_quasilinear_flags(run_runtime)
     run_runtime_progress = run_runtime.add_mutually_exclusive_group()
     run_runtime_progress.add_argument("--progress", action="store_true", help="Enable progress output")
     run_runtime_progress.add_argument("--no-progress", action="store_true", help="Disable progress output")
@@ -381,6 +400,8 @@ def build_parser() -> argparse.ArgumentParser:
     scan_runtime.add_argument("--sample-stride", type=int, default=None)
     scan_runtime.add_argument("--batch-ky", action="store_true", help="Integrate all ky in one batch")
     scan_runtime.add_argument("--fit-signal", type=str, default=None, help="auto, phi, or density")
+    scan_runtime.add_argument("--out", type=str, default=None, help="Optional scan artifact path/prefix")
+    _add_quasilinear_flags(scan_runtime)
     scan_runtime_progress = scan_runtime.add_mutually_exclusive_group()
     scan_runtime_progress.add_argument("--progress", action="store_true", help="Enable progress output")
     scan_runtime_progress.add_argument("--no-progress", action="store_true", help="Disable progress output")
@@ -654,9 +675,33 @@ def _apply_runtime_path_overrides(cfg, args: argparse.Namespace):
     return replace(cfg, geometry=geometry, init=init)
 
 
+def _apply_quasilinear_overrides(cfg, args: argparse.Namespace):
+    """Apply CLI quasilinear diagnostic overrides."""
+
+    ql = cfg.quasilinear
+    updates = {}
+    if getattr(args, "quasilinear", False):
+        updates["enabled"] = True
+    mapping = {
+        "ql_mode": "mode",
+        "ql_saturation_rule": "saturation_rule",
+        "ql_csat": "csat",
+        "ql_normalization": "amplitude_normalization",
+        "ql_output": "output_path",
+    }
+    for arg_name, field_name in mapping.items():
+        value = getattr(args, arg_name, None)
+        if value is not None:
+            updates[field_name] = value
+    if not updates:
+        return cfg
+    return replace(cfg, quasilinear=replace(ql, **updates))
+
+
 def _cmd_run_runtime_linear(args: argparse.Namespace) -> int:
     cfg, data = load_runtime_from_toml(args.config)
     cfg = _apply_runtime_path_overrides(cfg, args)
+    cfg = _apply_quasilinear_overrides(cfg, args)
     run_cfg = data.get("run", {})
     fit_cfg = {k: v for k, v in data.get("fit", {}).items() if k in _RUNTIME_FIT_KEYS}
 
@@ -722,11 +767,22 @@ def _cmd_run_runtime_linear(args: argparse.Namespace) -> int:
             print(f"saved {paths['eigenfunction']}")
         if "state" in paths:
             print(f"saved {paths['state']}")
+        if "quasilinear_summary" in paths:
+            print(f"saved {paths['quasilinear_summary']}")
+        if "quasilinear_species" in paths:
+            print(f"saved {paths['quasilinear_species']}")
+    ql_output = getattr(args, "ql_output", None) or cfg.quasilinear.output_path
+    if ql_output is not None and res.quasilinear is not None:
+        paths = write_quasilinear_artifacts(str(ql_output), res.quasilinear)
+        print(f"saved {paths['quasilinear_summary']}")
+        if "quasilinear_species" in paths:
+            print(f"saved {paths['quasilinear_species']}")
     return 0
 
 
 def _cmd_scan_runtime_linear(args: argparse.Namespace) -> int:
     cfg, data = load_runtime_from_toml(args.config)
+    cfg = _apply_quasilinear_overrides(cfg, args)
     scan_cfg = data.get("scan", {})
     fit_cfg = {k: v for k, v in data.get("fit", {}).items() if k in _RUNTIME_FIT_KEYS}
 
@@ -777,6 +833,13 @@ def _cmd_scan_runtime_linear(args: argparse.Namespace) -> int:
     )
     for ky, g, w in zip(scan.ky, scan.gamma, scan.omega):
         print(f"ky={ky:.4f} gamma={g:.6f} omega={w:.6f}")
+    out_path = _runtime_output_path(args, cfg) or cfg.quasilinear.output_path
+    if out_path is not None:
+        paths = write_runtime_linear_scan_artifacts(out_path, scan)
+        print(f"saved {paths['summary']}")
+        print(f"saved {paths['scan']}")
+        if "quasilinear_spectrum" in paths:
+            print(f"saved {paths['quasilinear_spectrum']}")
     return 0
 
 

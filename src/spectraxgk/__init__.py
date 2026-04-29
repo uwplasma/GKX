@@ -51,8 +51,25 @@ from spectraxgk.runtime_config import (
     RuntimeNormalizationConfig,
     RuntimeOutputConfig,
     RuntimePhysicsConfig,
+    RuntimeQuasilinearConfig,
     RuntimeSpeciesConfig,
     RuntimeTermsConfig,
+)
+from spectraxgk.quasilinear import (
+    QuasilinearTransportResult,
+    compute_quasilinear_from_linear_state,
+    effective_kperp2,
+    mixing_length_amplitude2_jax,
+    phi_norm2,
+    quasilinear_feature_objective,
+    saturation_amplitude2,
+    saturated_flux_from_linear_weight,
+)
+from spectraxgk.quasilinear_calibration import (
+    QuasilinearCalibrationPoint,
+    calibration_point_from_nonlinear_window_summary,
+    quasilinear_calibration_report,
+    write_quasilinear_calibration_report,
 )
 from spectraxgk.operators import hermite_streaming
 from spectraxgk.linear import (
@@ -136,7 +153,11 @@ from spectraxgk.benchmarking import (
     run_linear_scan,
     run_scan_and_mode,
 )
-from spectraxgk.autodiff_validation import covariance_diagnostics
+from spectraxgk.autodiff_validation import (
+    autodiff_finite_difference_report,
+    central_finite_difference_jacobian,
+    covariance_diagnostics,
+)
 from spectraxgk.parallel import batch_map, ky_scan_batches
 from spectraxgk.plotting import (
     cyclone_comparison_figure,
@@ -202,7 +223,20 @@ __all__ = [
     "RuntimeCollisionConfig",
     "RuntimeNormalizationConfig",
     "RuntimeOutputConfig",
+    "RuntimeQuasilinearConfig",
     "RuntimeTermsConfig",
+    "QuasilinearTransportResult",
+    "compute_quasilinear_from_linear_state",
+    "effective_kperp2",
+    "mixing_length_amplitude2_jax",
+    "phi_norm2",
+    "quasilinear_feature_objective",
+    "saturation_amplitude2",
+    "saturated_flux_from_linear_weight",
+    "QuasilinearCalibrationPoint",
+    "calibration_point_from_nonlinear_window_summary",
+    "quasilinear_calibration_report",
+    "write_quasilinear_calibration_report",
     "RuntimeLinearResult",
     "RuntimeLinearScanResult",
     "build_runtime_linear_params",
@@ -286,6 +320,8 @@ __all__ = [
     "branch_continuity_gate_report",
     "branch_continuity_metrics",
     "covariance_diagnostics",
+    "autodiff_finite_difference_report",
+    "central_finite_difference_jacobian",
     "batch_map",
     "ky_scan_batches",
     "eigenfunction_gate_report",

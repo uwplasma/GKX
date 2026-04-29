@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Any, Callable
+
+import jax
+import jax.numpy as jnp
 import numpy as np
 
 
@@ -68,4 +72,87 @@ def covariance_diagnostics(
     }
 
 
-__all__ = ["covariance_diagnostics"]
+def central_finite_difference_jacobian(
+    fn: Callable[[jnp.ndarray], Any],
+    params: jnp.ndarray | np.ndarray,
+    *,
+    step: float = 1.0e-4,
+) -> jnp.ndarray:
+    """Central finite-difference Jacobian for small differentiability gates."""
+
+    p = jnp.asarray(params, dtype=jnp.float64 if jax.config.jax_enable_x64 else jnp.float32)
+    if p.ndim != 1:
+        raise ValueError("params must be one-dimensional")
+    h = float(step)
+    if h <= 0.0:
+        raise ValueError("step must be positive")
+    cols = []
+    eye = jnp.eye(p.size, dtype=p.dtype)
+    for i in range(p.size):
+        fp = jnp.ravel(jnp.asarray(fn(p + h * eye[i])))
+        fm = jnp.ravel(jnp.asarray(fn(p - h * eye[i])))
+        cols.append((fp - fm) / (2.0 * h))
+    if not cols:
+        return jnp.zeros((jnp.ravel(jnp.asarray(fn(p))).size, 0), dtype=p.dtype)
+    return jnp.stack(cols, axis=1)
+
+
+def autodiff_finite_difference_report(
+    fn: Callable[[jnp.ndarray], Any],
+    params: jnp.ndarray | np.ndarray,
+    *,
+    step: float = 1.0e-4,
+    rtol: float = 1.0e-4,
+    atol: float = 1.0e-6,
+    direction: jnp.ndarray | np.ndarray | None = None,
+) -> dict[str, object]:
+    """Compare JAX forward-mode derivatives against finite differences."""
+
+    p = jnp.asarray(params, dtype=jnp.float64 if jax.config.jax_enable_x64 else jnp.float32)
+    if p.ndim != 1:
+        raise ValueError("params must be one-dimensional")
+
+    def flat_fn(x: jnp.ndarray) -> jnp.ndarray:
+        return jnp.ravel(jnp.asarray(fn(x)))
+
+    jac_ad = jax.jacfwd(flat_fn)(p)
+    jac_fd = central_finite_difference_jacobian(flat_fn, p, step=step)
+    err = np.asarray(jac_ad - jac_fd, dtype=float)
+    denom = np.maximum(np.asarray(np.abs(jac_fd), dtype=float), float(atol))
+    rel = np.abs(err) / denom
+
+    if direction is None:
+        d = jnp.ones_like(p)
+        d = d / jnp.maximum(jnp.linalg.norm(d), jnp.asarray(1.0, dtype=d.dtype))
+    else:
+        d = jnp.asarray(direction, dtype=p.dtype)
+        if d.shape != p.shape:
+            raise ValueError("direction must have the same shape as params")
+    tangent_ad = jac_ad @ d
+    tangent_fd = (flat_fn(p + step * d) - flat_fn(p - step * d)) / (2.0 * step)
+    tangent_err = np.asarray(tangent_ad - tangent_fd, dtype=float)
+
+    max_abs = float(np.max(np.abs(err))) if err.size else 0.0
+    max_rel = float(np.max(rel)) if rel.size else 0.0
+    tangent_max_abs = float(np.max(np.abs(tangent_err))) if tangent_err.size else 0.0
+    passed = bool(max_abs <= float(atol) or max_rel <= float(rtol))
+    return {
+        "passed": passed,
+        "step": float(step),
+        "rtol": float(rtol),
+        "atol": float(atol),
+        "max_abs_error": max_abs,
+        "max_rel_error": max_rel,
+        "tangent_max_abs_error": tangent_max_abs,
+        "jacobian_ad": np.asarray(jac_ad, dtype=float).tolist(),
+        "jacobian_fd": np.asarray(jac_fd, dtype=float).tolist(),
+        "tangent_ad": np.asarray(tangent_ad, dtype=float).tolist(),
+        "tangent_fd": np.asarray(tangent_fd, dtype=float).tolist(),
+    }
+
+
+__all__ = [
+    "autodiff_finite_difference_report",
+    "central_finite_difference_jacobian",
+    "covariance_diagnostics",
+]

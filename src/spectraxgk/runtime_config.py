@@ -149,6 +149,35 @@ class RuntimeOutputConfig:
 
 
 @dataclass(frozen=True)
+class RuntimeQuasilinearConfig:
+    """Quasilinear transport diagnostics computed from linear states."""
+
+    enabled: bool = False
+    mode: str = "weights"
+    saturation_rule: str = "none"
+    amplitude_normalization: str = "phi_rms"
+    kperp_average: str = "phi_weighted"
+    csat: float = 1.0
+    gamma_floor: float = 0.0
+    include_stable_modes: bool = False
+    delta_ky: str | float = "auto"
+    species: str = "all"
+    channels: Tuple[str, ...] = ("es",)
+    write_spectrum: bool = True
+    output_path: str | None = None
+
+    def __post_init__(self) -> None:
+        if isinstance(self.channels, str):
+            channels = (self.channels,)
+        else:
+            channels = tuple(self.channels)
+        object.__setattr__(self, "channels", channels)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class RuntimeConfig:
     """Unified simulation config for runtime-driven GK runs."""
 
@@ -163,6 +192,7 @@ class RuntimeConfig:
     terms: RuntimeTermsConfig = RuntimeTermsConfig()
     expert: RuntimeExpertConfig = RuntimeExpertConfig()
     output: RuntimeOutputConfig = RuntimeOutputConfig()
+    quasilinear: RuntimeQuasilinearConfig = RuntimeQuasilinearConfig()
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -177,4 +207,5 @@ class RuntimeConfig:
             "terms": self.terms.to_dict(),
             "expert": self.expert.to_dict(),
             "output": self.output.to_dict(),
+            "quasilinear": self.quasilinear.to_dict(),
         }

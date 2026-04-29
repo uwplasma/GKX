@@ -27,6 +27,7 @@ from spectraxgk.runtime_config import (
     RuntimeNormalizationConfig,
     RuntimeOutputConfig,
     RuntimePhysicsConfig,
+    RuntimeQuasilinearConfig,
     RuntimeSpeciesConfig,
     RuntimeTermsConfig,
 )
@@ -175,6 +176,9 @@ def load_runtime_from_toml(path: str | Path) -> tuple[RuntimeConfig, dict]:
     output = data.get("output")
     if isinstance(output, dict):
         cfg = replace(cfg, output=RuntimeOutputConfig(**output))
+    quasilinear = data.get("quasilinear")
+    if isinstance(quasilinear, dict):
+        cfg = replace(cfg, quasilinear=RuntimeQuasilinearConfig(**quasilinear))
     species_raw = data.get("species")
     if species_raw is not None:
         if not isinstance(species_raw, list):
@@ -199,6 +203,10 @@ def load_runtime_from_toml(path: str | Path) -> tuple[RuntimeConfig, dict]:
             path=resolve_runtime_path(cfg.output.path, base_dir=base_dir),
             restart_to_file=resolve_runtime_path(cfg.output.restart_to_file, base_dir=base_dir),
             restart_from_file=resolve_runtime_path(cfg.output.restart_from_file, base_dir=base_dir),
+        ),
+        quasilinear=replace(
+            cfg.quasilinear,
+            output_path=resolve_runtime_path(cfg.quasilinear.output_path, base_dir=base_dir),
         ),
     )
     return cfg, data

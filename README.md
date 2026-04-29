@@ -39,6 +39,11 @@ spectrax-gk
 # Run directly from a checked-in TOML.
 spectraxgk examples/linear/axisymmetric/cyclone.toml
 
+# Compute linear quasilinear transport weights and write JSON/CSV artifacts.
+spectraxgk run-runtime-linear \
+  --config examples/linear/axisymmetric/runtime_cyclone_quasilinear.toml \
+  --out tools_out/cyclone_quasilinear
+
 # Write a restartable nonlinear NetCDF bundle.
 spectraxgk run-runtime-nonlinear \
   --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml \
@@ -93,6 +98,8 @@ resolved diagnostics, and heat flux.
 - **Flexible geometry interface** supporting analytic s-alpha, Miller, and direct VMEC equilibrium imports.
 - **Electromagnetic turbulence** including $(\phi, A_\parallel, B_\parallel)$ fluctuations.
 - **Multi-species support** with kinetic electrons and advanced collision operators.
+- **Quasilinear transport diagnostics** from linear states, with explicit
+  saturation-rule metadata and electrostatic channel validation gates.
 - **Automated benchmark workflows** for reproducible validation and regression tracking.
 
 ![SPECTRAX-GK linear benchmark panel](docs/_static/benchmark_core_linear_atlas.png)
@@ -106,6 +113,15 @@ windows currently tracked in the repo: KBM to about `t=400`, W7-X to about
 `t=200`, and Cyclone Miller to about `t=122`. HSX is currently archived on the
 closed `t=50` window; no longer-window HSX nonlinear audit artifact is currently
 tracked for the release panel.
+
+Quasilinear transport diagnostic example:
+
+![SPECTRAX-GK quasilinear Cyclone spectrum](docs/_static/quasilinear_cyclone_spectrum.png)
+
+This panel is generated from `examples/linear/axisymmetric/runtime_cyclone_quasilinear.toml`.
+It shows linear growth/frequency, eigenfunction-weighted `k_perp`, amplitude-normalized
+heat/particle flux weights, and an explicitly uncalibrated mixing-length output. The
+absolute saturated-flux claim remains gated on nonlinear train/holdout calibration.
 
 Autodiff validation (inverse/sensitivity demo):
 

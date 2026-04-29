@@ -37,6 +37,7 @@ from spectraxgk.linear import (
 from spectraxgk.nonlinear import integrate_nonlinear_gx_diagnostics_state
 from spectraxgk.linear_krylov import KrylovConfig, dominant_eigenpair
 from spectraxgk.normalization import apply_diagnostic_normalization, get_normalization_contract
+from spectraxgk.quasilinear import compute_quasilinear_from_linear_state
 from spectraxgk.runtime_config import RuntimeConfig, RuntimeSpeciesConfig
 from spectraxgk import runtime_startup
 from spectraxgk.runtime_diagnostics import (
@@ -328,9 +329,15 @@ def run_runtime_linear(
         tmax_use = float(tmax_fit) if tmax_fit is not None else float(t_arr[-1])
         return tmin_use, tmax_use
 
+    ql_enabled = bool(getattr(cfg.quasilinear, "enabled", False))
+    return_state_requested = bool(return_state)
+    return_state_eff = return_state_requested or ql_enabled
+
     Nl_use, Nm_use = _resolve_runtime_hl_dims(cfg, Nl=Nl, Nm=Nm)
     _status("building runtime geometry")
     if _runtime_model_key(cfg) == "cetg":
+        if ql_enabled:
+            raise NotImplementedError("quasilinear diagnostics are not yet validated for reduced_model='cetg'")
         geom = build_runtime_geometry(cfg)
         validate_cetg_runtime_config(cfg, geom, Nl=Nl_use, Nm=Nm_use)
         _status("building spectral grid")
@@ -457,12 +464,60 @@ def run_runtime_linear(
             return False
         return True
 
-    def _run_krylov() -> tuple[float, float]:
+    def _finalize_linear_result(
+        result: RuntimeLinearResult,
+        *,
+        state_for_quasilinear: np.ndarray | None = None,
+    ) -> RuntimeLinearResult:
+        ql_payload = None
+        state_for_ql = state_for_quasilinear if state_for_quasilinear is not None else result.state
+        if ql_enabled:
+            if state_for_ql is None:
+                raise RuntimeError("quasilinear diagnostics require a final linear state")
+            ql_cfg = cfg.quasilinear
+            _status("computing quasilinear transport weights")
+            cache = build_linear_cache(grid, geom, params, Nl_use, Nm_use)
+            ql_payload = compute_quasilinear_from_linear_state(
+                state_for_ql,
+                cache=cache,
+                grid=grid,
+                geom=geom,
+                params=params,
+                ky=float(result.ky),
+                gamma=float(result.gamma),
+                omega=float(result.omega),
+                terms=linear_terms_to_term_config(terms),
+                mode=str(ql_cfg.mode),
+                saturation_rule=str(ql_cfg.saturation_rule),
+                amplitude_normalization=str(ql_cfg.amplitude_normalization),
+                kperp_average=str(ql_cfg.kperp_average),
+                csat=float(ql_cfg.csat),
+                gamma_floor=float(ql_cfg.gamma_floor),
+                include_stable_modes=bool(ql_cfg.include_stable_modes),
+                channels=ql_cfg.channels,
+                species_names=tuple(s.name for s in cfg.species if s.kinetic),
+                flux_scale=float(cfg.normalization.flux_scale),
+                metadata={
+                    "runtime_config_enabled": True,
+                    "solver": _normalize_linear_solver_name(solver),
+                    "delta_ky": ql_cfg.delta_ky,
+                    "species_selection": ql_cfg.species,
+                    "write_spectrum": bool(ql_cfg.write_spectrum),
+                },
+            ).to_dict()
+            _status("quasilinear transport weights complete")
+        return replace(
+            result,
+            state=result.state if return_state_requested else None,
+            quasilinear=ql_payload,
+        )
+
+    def _run_krylov() -> tuple[float, float, np.ndarray]:
         _status("starting Krylov solve")
         kcfg = krylov_cfg or _runtime_default_krylov_config(cfg)
         _status("building linear cache")
         cache = build_linear_cache(grid, geom, params, Nl_use, Nm_use)
-        eig, _vec = dominant_eigenpair(
+        eig, vec = dominant_eigenpair(
             g0,
             cache,
             params,
@@ -498,7 +553,7 @@ def run_runtime_linear(
             diagnostic_norm=cfg.normalization.diagnostic_norm,
         )
         _status(f"Krylov solve complete: gamma={gamma:.6f} omega={omega:.6f}")
-        return gamma, omega
+        return gamma, omega, np.asarray(vec)
 
     def _run_time() -> RuntimeLinearResult:
         _status(f"starting time integration path with fit_signal={fit_key}")
@@ -511,9 +566,9 @@ def run_runtime_linear(
             tcfg = replace(tcfg, t_max=float(steps) * float(tcfg.dt))
         if sample_stride is not None:
             tcfg = replace(tcfg, sample_stride=int(sample_stride))
-        if return_state and solver_key == "gx_time":
-            raise ValueError("return_state is not supported with solver='gx_time'")
-        if return_state:
+        if return_state_eff and solver_key == "gx_time":
+            raise ValueError("return_state/quasilinear diagnostics are not supported with solver='gx_time'")
+        if return_state_eff:
             tcfg = replace(tcfg, save_state=True)
 
         need_density = fit_key in {"density", "auto"}
@@ -686,7 +741,7 @@ def run_runtime_linear(
             selection=sel,
             t=t_arr,
             signal=signal_out,
-            state=None if g_last is None or not return_state else np.asarray(g_last),
+            state=None if g_last is None or not return_state_eff else np.asarray(g_last),
             z=z_out if eigenfunction_out is not None else None,
             eigenfunction=eigenfunction_out,
             fit_window_tmin=fit_window_tmin,
@@ -695,21 +750,31 @@ def run_runtime_linear(
         )
 
     if solver_key == "krylov":
-        gamma, omega = _run_krylov()
-        return RuntimeLinearResult(
-            ky=float(grid.ky[sel.ky_index]), gamma=gamma, omega=omega, selection=sel
+        gamma, omega, vec = _run_krylov()
+        result = RuntimeLinearResult(
+            ky=float(grid.ky[sel.ky_index]),
+            gamma=gamma,
+            omega=omega,
+            selection=sel,
+            state=vec if return_state_eff else None,
         )
+        return _finalize_linear_result(result, state_for_quasilinear=vec)
     if solver_key == "auto":
         result = _run_time()
         if not _is_valid_growth(result.gamma, result.omega):
             _status("time-path result rejected; falling back to Krylov solve")
-            gamma, omega = _run_krylov()
-            return RuntimeLinearResult(
-                ky=float(grid.ky[sel.ky_index]), gamma=gamma, omega=omega, selection=sel
+            gamma, omega, vec = _run_krylov()
+            result = RuntimeLinearResult(
+                ky=float(grid.ky[sel.ky_index]),
+                gamma=gamma,
+                omega=omega,
+                selection=sel,
+                state=vec if return_state_eff else None,
             )
-        return result
+            return _finalize_linear_result(result, state_for_quasilinear=vec)
+        return _finalize_linear_result(result)
 
-    return _run_time()
+    return _finalize_linear_result(_run_time())
 
 
 def run_runtime_scan(
@@ -749,6 +814,8 @@ def run_runtime_scan(
     solver_key = _normalize_linear_solver_name(solver)
     if batch_ky and solver_key == "krylov":
         raise ValueError("batch_ky is only supported for time integration")
+    if batch_ky and bool(getattr(cfg.quasilinear, "enabled", False)):
+        raise NotImplementedError("quasilinear scan artifacts currently require serial ky evaluation")
     if batch_ky:
         return _run_runtime_scan_batch(
             cfg,
@@ -774,6 +841,7 @@ def run_runtime_scan(
         )
     gamma = np.zeros_like(ky_arr)
     omega = np.zeros_like(ky_arr)
+    ql_payloads: list[dict[str, Any]] = []
     for i, ky in enumerate(ky_arr):
         res = run_runtime_linear(
             cfg,
@@ -801,7 +869,14 @@ def run_runtime_scan(
         )
         gamma[i] = float(res.gamma)
         omega[i] = float(res.omega)
-    return RuntimeLinearScanResult(ky=ky_arr, gamma=gamma, omega=omega)
+        if res.quasilinear is not None:
+            ql_payloads.append(res.quasilinear)
+    return RuntimeLinearScanResult(
+        ky=ky_arr,
+        gamma=gamma,
+        omega=omega,
+        quasilinear=tuple(ql_payloads) if ql_payloads else None,
+    )
 
 
 def _run_runtime_scan_batch(
