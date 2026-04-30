@@ -127,7 +127,7 @@ def _validate_params(params: jnp.ndarray | Sequence[float]) -> jnp.ndarray:
 def _precision_gate_tolerances(fd_step: float) -> tuple[float, float, float]:
     """Return FD tolerances that are strict in x64 and stable in float32."""
 
-    if bool(jax.config.jax_enable_x64):
+    if bool(getattr(jax.config, "jax_enable_x64", False)):
         return float(fd_step), 5.0e-3, 6.0e-4
     return max(float(fd_step), 5.0e-3), 5.0e-2, 6.0e-3
 
