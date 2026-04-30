@@ -102,6 +102,7 @@ jobs:
               tests/test_audit_repository_size.py
               tests/test_check_repository_size_manifest.py
               tests/test_check_release_artifact_manifest.py
+              tests/test_check_quasilinear_calibration_inputs.py
               tests/test_compress_release_previews.py
               tests/test_plot_quasilinear_candidate_uncertainty.py
               tests/test_plot_nonlinear_feasibility_pilot.py
