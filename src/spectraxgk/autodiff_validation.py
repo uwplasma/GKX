@@ -447,32 +447,41 @@ def implicit_eigenpair_observable_sensitivity_report(
     dv = solution[:n, :]
     dlam = solution[n, :]
 
-    def observable_real_from_parts(packed: jnp.ndarray) -> jnp.ndarray:
-        lam_i = packed[0] + 1j * packed[1]
-        v_real_start = 2
-        v_imag_start = v_real_start + n
-        p_start = v_imag_start + n
-        v_i = packed[v_real_start:v_imag_start] + 1j * packed[v_imag_start:p_start]
-        p_i = packed[p_start:]
+    def observable_real(lam_i: jnp.ndarray, v_i: jnp.ndarray, p_i: jnp.ndarray) -> jnp.ndarray:
         obs = jnp.ravel(jnp.asarray(observable_fn(lam_i, v_i, p_i)))
         if jnp.iscomplexobj(obs):
             return jnp.concatenate([jnp.real(obs), jnp.imag(obs)])
         return jnp.real(obs)
 
-    packed_base = jnp.concatenate([jnp.asarray([jnp.real(lam), jnp.imag(lam)]), jnp.real(v), jnp.imag(v), p])
-    obs_jac_parts = jax.jacfwd(observable_real_from_parts)(packed_base)
+    def observable_real_from_eigenpair(packed: jnp.ndarray) -> jnp.ndarray:
+        lam_i = packed[0] + 1j * packed[1]
+        v_real_start = 2
+        v_imag_start = v_real_start + n
+        v_i = packed[v_real_start:v_imag_start] + 1j * packed[v_imag_start:]
+        return observable_real(lam_i, v_i, p)
+
+    def observable_real_from_params(p_i: jnp.ndarray) -> jnp.ndarray:
+        return observable_real(lam, v, p_i)
+
+    # Split the chain rule so expensive parameter-dependent context, e.g.
+    # VMEC/Boozer geometry reconstruction, is only differentiated along the
+    # actual parameter directions. Differentiating one packed vector
+    # [lambda, v, p] is mathematically equivalent but can replicate heavy
+    # geometry tangents for every eigenvector component.
+    eigenpair_base = jnp.concatenate([jnp.asarray([jnp.real(lam), jnp.imag(lam)]), jnp.real(v), jnp.imag(v)])
+    obs_jac_eigenpair = jax.jacfwd(observable_real_from_eigenpair)(eigenpair_base)
+    obs_jac_params = jax.jacfwd(observable_real_from_params)(p)
     implicit_cols = []
     eye = jnp.eye(p.size, dtype=p.dtype)
     for i in range(int(p.size)):
-        tangent = jnp.concatenate(
+        eigenpair_tangent = jnp.concatenate(
             [
                 jnp.asarray([jnp.real(dlam[i]), jnp.imag(dlam[i])]),
                 jnp.real(dv[:, i]),
                 jnp.imag(dv[:, i]),
-                eye[i],
             ]
         )
-        implicit_cols.append(obs_jac_parts @ tangent)
+        implicit_cols.append(obs_jac_eigenpair @ eigenpair_tangent + obs_jac_params @ eye[i])
     jac_implicit = jnp.stack(implicit_cols, axis=1)
 
     def branch_observable(x: jnp.ndarray) -> jnp.ndarray:
@@ -495,6 +504,7 @@ def implicit_eigenpair_observable_sensitivity_report(
         "passed": passed,
         "ad_supported": True,
         "sensitivity_method": "implicit_left_right_eigenpair",
+        "observable_chain_rule": "split_eigenpair_and_explicit_parameter",
         "step": float(step),
         "rtol": float(rtol),
         "atol": float(atol),

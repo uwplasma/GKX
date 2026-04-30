@@ -283,14 +283,19 @@ against central finite differences. This closes the production solver contract
 for `FluxTubeGeometryData` gradients. The companion full-chain gate starts
 from a real `vmec_jax` state coefficient, maps through `booz_xform_jax`
 with `mboz=nboz=21`, builds the SPECTRAX-GK linear RHS, and verifies the
-linear eigenfrequency gradient against central finite differences. Full
-quasilinear flux-weight and nonlinear-window state-gradient gates remain open
-because the current full-chain quasilinear diagnostic is still too heavy for
-release tests and needs profiling/conditioning before publication claims.
+linear eigenfrequency gradient against central finite differences. The
+full-chain quasilinear gate uses a richer `Nl=2, Nm=3` moment basis and
+checks `gamma`, `omega`, `<k_perp^2>`, the electrostatic heat-flux weight, and
+`gamma Q_i/k_perp^2` against central finite differences with maximum relative
+error `4.3e-3`. This closes the reduced linear/quasilinear stellarator
+objective-gradient path; nonlinear-window state-gradient gates remain future
+work before full nonlinear heat-flux optimization claims.
 
 ![SPECTRAX-GK solver-objective geometry-gradient gate](docs/_static/solver_objective_gradient_gate.png)
 
 ![SPECTRAX-GK VMEC/Boozer solver-frequency gradient gate](docs/_static/vmec_boozer_solver_frequency_gradient_gate.png)
+
+![SPECTRAX-GK VMEC/Boozer quasilinear-gradient gate](docs/_static/vmec_boozer_quasilinear_gradient_gate.png)
 
 Differentiable stellarator ITG optimization examples live in
 `examples/optimization/`. They optimize the same QA, max-mode-1 control vector
