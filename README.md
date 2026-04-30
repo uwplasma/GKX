@@ -236,7 +236,10 @@ observable sensitivities match central finite differences, a two-parameter
 inverse design recovers the target observables, and the local UQ covariance is
 reported. When `vmec_jax` is available, the same artifact also checks a real
 VMEC boundary-aspect derivative through its boundary Fourier API and real VMEC
-metric-tensor derivatives through `vmec_jax.geom.eval_geom`. When
+metric-tensor derivatives through `vmec_jax.geom.eval_geom`. It also samples a
+real stellarator VMEC field line from `vmec_jax` metric and magnetic-field
+tensors to check that state-level geometry sensitivities reach field-line
+observables before any SPECTRAX-GK closure approximation is introduced. When
 `booz_xform_jax` is available, it also runs a bounded JAX-native Boozer
 spectral transform, samples the resulting Boozer `|B|` spectrum onto a
 field-line flux-tube mapping, and checks both derivative paths against central

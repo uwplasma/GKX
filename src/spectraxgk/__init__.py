@@ -24,8 +24,10 @@ from spectraxgk.geometry.differentiable import (
     geometry_observable_names,
     geometry_sensitivity_report,
     vmec_jax_boozer_flux_tube_sensitivity_report,
+    vmec_jax_field_line_tensor_sensitivity_report,
     vmec_jax_metric_tensor_sensitivity_report,
     vmec_boundary_aspect_sensitivity_report,
+    vmec_field_line_tensor_observable_names,
     vmec_metric_tensor_observable_names,
 )
 from spectraxgk.gyroaverage import J_l_all, gamma0
@@ -244,8 +246,10 @@ __all__ = [
     "geometry_observable_names",
     "geometry_sensitivity_report",
     "vmec_jax_boozer_flux_tube_sensitivity_report",
+    "vmec_jax_field_line_tensor_sensitivity_report",
     "vmec_jax_metric_tensor_sensitivity_report",
     "vmec_boundary_aspect_sensitivity_report",
+    "vmec_field_line_tensor_observable_names",
     "vmec_metric_tensor_observable_names",
     "J_l_all",
     "gamma0",
