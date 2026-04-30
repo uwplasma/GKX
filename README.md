@@ -239,7 +239,11 @@ VMEC boundary-aspect derivative through its boundary Fourier API and real VMEC
 metric-tensor derivatives through `vmec_jax.geom.eval_geom`. It also samples a
 real stellarator VMEC field line from `vmec_jax` metric and magnetic-field
 tensors to check that state-level geometry sensitivities reach field-line
-observables before any SPECTRAX-GK closure approximation is introduced. When
+observables before any SPECTRAX-GK closure approximation is introduced. The
+same path now emits a direct VMEC tensor-derived SPECTRAX-GK flux-tube mapping
+and checks its geometry-observable sensitivities against finite differences,
+so the differentiability chain starts at `vmec_jax` state coefficients rather
+than only at a Boozer spectral adapter. When
 `booz_xform_jax` is available, it also runs a bounded JAX-native Boozer
 spectral transform, samples the resulting Boozer `|B|` spectrum onto a
 field-line flux-tube mapping, and checks both derivative paths against central
@@ -247,8 +251,9 @@ finite differences. When both optional backends are available, the artifact
 also starts from a real `vmec_jax` `VMECState`, perturbs VMEC Fourier
 coefficients, converts that state through `booz_xform_jax`, and differentiates
 the resulting SPECTRAX-GK field-line geometry observables against central
-finite differences. The remaining promotion gate is sampled VMEC/Boozer
-metric and drift parity with the imported VMEC/EIK runtime path.
+finite differences. The remaining promotion gate is exact production drift
+parity with the imported VMEC/EIK runtime path and then production
+growth-rate/quasilinear-gradient gates.
 
 ![SPECTRAX-GK differentiable geometry bridge](docs/_static/differentiable_geometry_bridge.png)
 
@@ -267,8 +272,8 @@ objectives keep the optimized QA configuration near aspect ratio `7` and
 read as validated optimization plumbing for stellarator-transport objectives,
 not as a final absolute-flux optimization claim. Full
 `vmec_jax -> booz_xform_jax -> SPECTRAX-GK` nonlinear optimization remains
-scoped to the next promotion gate: replacing the current smooth metric/drift
-closure with sampled VMEC/Boozer tensors, matching the imported geometry path,
+scoped to the next promotion gate: matching the direct VMEC tensor-derived
+flux-tube arrays and production drift convention to the imported geometry path,
 checking production linear/quasilinear gradients, and converged nonlinear
 audits of the optimized equilibria.
 
