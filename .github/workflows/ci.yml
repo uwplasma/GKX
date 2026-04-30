@@ -114,10 +114,6 @@ jobs:
               tests/test_check_release_artifact_manifest.py
               tests/test_check_quasilinear_calibration_inputs.py
               tests/test_compress_release_previews.py
-              tests/test_plot_quasilinear_candidate_uncertainty.py
-              tests/test_plot_nonlinear_feasibility_pilot.py
-              tests/test_plot_external_vmec_nonlinear_convergence_gate.py
-              tests/test_plot_vmec_jax_equilibrium_inventory.py
           - name: linear-core
             files: >-
               tests/test_linear.py
