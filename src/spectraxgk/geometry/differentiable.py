@@ -1619,12 +1619,13 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(
     """Return Boozer equal-arc core profiles from a real ``vmec_jax`` state.
 
     This bridge follows the same high-level convention as the imported VMEC/EIK
-    runtime path for the scalar/core field-line quantities and the zero-beta
-    Boozer metric terms that can be reconstructed directly from
-    ``booz_xform_jax`` output: Boozer ``|B|``, the equal-arc constant
-    ``gradpar``, ``q``, magnetic shear, solver Jacobian normalization, and
-    ``gds*``/``grho``.  It deliberately does not claim production drift parity;
-    that still requires the full Hegna-Nakajima curvature/drift convention.
+    runtime path for scalar/core field-line quantities and the zero-beta Boozer
+    metric/drift terms that can be reconstructed directly from
+    ``booz_xform_jax`` output: Boozer ``|B|``, equal-arc constant ``gradpar``,
+    ``q``, magnetic shear, solver Jacobian normalization, ``gds*``/``grho``,
+    and loaded-convention ``cvdrift``/``gbdrift`` coefficients.  General
+    finite-beta pressure corrections and broader-equilibrium drift gates remain
+    separate promotion steps.
     """
 
     ntheta_int = int(ntheta)
@@ -1691,6 +1692,11 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(
     rmnc_b = _interp_radial(jnp.asarray(out["rmnc_b"], dtype=base_Rcos.dtype), s_half, s_value)
     zmns_b = _interp_radial(jnp.asarray(out["zmns_b"], dtype=base_Rcos.dtype), s_half, s_value)
     numns_b = -_interp_radial(jnp.asarray(out["pmns_b"], dtype=base_Rcos.dtype), s_half, s_value)
+    d_bmnc_b_d_s = _interp_radial(
+        _radial_derivative_array(jnp.asarray(out["bmnc_b"], dtype=base_Rcos.dtype), radial_spacing),
+        s_half,
+        s_value,
+    )
     d_rmnc_b_d_s = _interp_radial(
         _radial_derivative_array(jnp.asarray(out["rmnc_b"], dtype=base_Rcos.dtype), radial_spacing),
         s_half,
@@ -1764,6 +1770,9 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(
     n_sin = n[:, None] * sin_phase
 
     r_b = jnp.sum(rmnc_b[:, None] * cos_phase, axis=0)
+    d_mod_b_d_s = jnp.sum(d_bmnc_b_d_s[:, None] * cos_phase, axis=0)
+    d_mod_b_d_theta = -jnp.sum(bmnc_b[:, None] * m_sin, axis=0)
+    d_mod_b_d_phi = jnp.sum(bmnc_b[:, None] * n_sin, axis=0)
     d_r_b_d_s = jnp.sum(d_rmnc_b_d_s[:, None] * cos_phase, axis=0)
     d_r_b_d_theta = -jnp.sum(rmnc_b[:, None] * m_sin, axis=0)
     d_r_b_d_phi = jnp.sum(rmnc_b[:, None] * n_sin, axis=0)
@@ -1814,10 +1823,54 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(
     gds21_raw = g_sup_psi_psi_safe * local_shear_l1 * shat_metric / Bref
     gds22_raw = g_sup_psi_psi_safe * shat_metric * shat_metric / (L * L * Bref * Bref * s_arr)
     grho_raw = jnp.sqrt(g_sup_psi_psi_safe / (L * L * Bref * Bref * s_arr))
+
+    boozer_current_sum = boozer_g + iota_safe * boozer_i
+    d_sqrt_g_booz_d_theta = -2.0 * boozer_current_sum * d_mod_b_d_theta / (mod_b_safe**3)
+    d_sqrt_g_booz_d_phi = -2.0 * boozer_current_sum * d_mod_b_d_phi / (mod_b_safe**3)
+    curvature_numerator = boozer_g * d_sqrt_g_booz_d_theta - boozer_i * d_sqrt_g_booz_d_phi
+    curvature_denom = 2.0 * sqrt_g_booz * boozer_current_sum
+    eps = jnp.asarray(1.0e-30, dtype=base_Rcos.dtype)
+    curvature_denom_safe = jnp.where(
+        jnp.abs(curvature_denom) < eps,
+        jnp.sign(curvature_denom + eps) * eps,
+        curvature_denom,
+    )
+    etf_safe = jnp.where(jnp.abs(etf) < eps, jnp.sign(etf + eps) * eps, etf)
+    kappa_g = curvature_numerator / curvature_denom_safe
+    local_shear_l0 = -(local_shear_l1 + d_iota_ds / etf_safe * shear_phase)
+    kappa_n = d_mod_b_d_s / (mod_b_safe * etf_safe) + local_shear_l0 * kappa_g
+    b_cross_kappa_dot_grad_alpha = (kappa_n + kappa_g * local_shear_l1) * metric_bmag_sq
+    b_cross_kappa_dot_grad_psi = kappa_g * metric_bmag_sq
+    toroidal_flux_sign = jnp.sign(etf)
+    sqrt_s = jnp.sqrt(s_arr)
+    drift_cvdrift0_raw = (
+        -b_cross_kappa_dot_grad_psi
+        * 2.0
+        * shat_metric
+        / jnp.maximum(metric_bmag_sq * sqrt_s, eps)
+        * toroidal_flux_sign
+    )
+    drift_cvdrift_raw = (
+        -2.0
+        * Bref
+        * L
+        * L
+        * sqrt_s
+        * b_cross_kappa_dot_grad_alpha
+        / metric_bmag_sq
+        * toroidal_flux_sign
+    )
+    # Root-level VMEC/EIK drift coefficients are stored at the pre-loader (2x)
+    # level; SPECTRAX-GK compares against the loaded solver convention.
+    drift_loader_factor = jnp.asarray(0.5, dtype=base_Rcos.dtype)
     gds2 = jnp.interp(theta_uniform_closed, theta_eqarc, gds2_raw)[:-1]
     gds21 = jnp.interp(theta_uniform_closed, theta_eqarc, gds21_raw)[:-1]
     gds22 = jnp.interp(theta_uniform_closed, theta_eqarc, gds22_raw)[:-1]
     grho = jnp.interp(theta_uniform_closed, theta_eqarc, grho_raw)[:-1]
+    cvdrift = drift_loader_factor * jnp.interp(theta_uniform_closed, theta_eqarc, drift_cvdrift_raw)[:-1]
+    gbdrift = cvdrift
+    cvdrift0 = drift_loader_factor * jnp.interp(theta_uniform_closed, theta_eqarc, drift_cvdrift0_raw)[:-1]
+    gbdrift0 = cvdrift0
 
     return {
         "theta": theta,
@@ -1830,6 +1883,10 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(
         "gds2": gds2,
         "gds21": gds21,
         "gds22": gds22,
+        "cvdrift": cvdrift,
+        "gbdrift": gbdrift,
+        "cvdrift0": cvdrift0,
+        "gbdrift0": gbdrift0,
         "grho": grho,
         "q": 1.0 / jnp.maximum(jnp.abs(iota_safe), jnp.asarray(1.0e-30, dtype=base_Rcos.dtype)),
         "s_hat": s_hat,
@@ -1842,8 +1899,8 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(
         "nboz": int(nboz),
         "field_line_convention": "Boozer theta, alpha=theta-iota*zeta, equal-arc remap",
         "scope": (
-            "Boozer equal-arc bmag/gradpar/Jacobian and zero-beta metric parity; "
-            "curvature/drift tensors remain open"
+            "Boozer equal-arc bmag/gradpar/Jacobian plus zero-beta metric/drift parity; "
+            "finite-beta pressure corrections and broad-equilibrium drift gates remain open"
         ),
     }
 
@@ -1986,6 +2043,7 @@ def vmec_jax_flux_tube_array_parity_report(
     equal_arc_core_tolerance: float = 1.0e-2,
     equal_arc_derivative_tolerance: float = 3.0e-2,
     equal_arc_metric_tolerance: float = 8.0e-2,
+    equal_arc_drift_tolerance: float = 8.0e-2,
 ) -> dict[str, object]:
     """Compare the direct ``vmec_jax`` flux-tube arrays to imported VMEC/EIK.
 
@@ -2128,14 +2186,17 @@ def vmec_jax_flux_tube_array_parity_report(
         equal_arc_core_error = None
         equal_arc_core_array_metrics: dict[str, dict[str, object]] = {}
         equal_arc_metric_array_metrics: dict[str, dict[str, object]] = {}
+        equal_arc_drift_array_metrics: dict[str, dict[str, object]] = {}
         equal_arc_core_scalar_metrics: dict[str, dict[str, float]] = {}
         equal_arc_core_worst = np.inf
         equal_arc_core_worst_scalar = np.inf
         equal_arc_derivative_worst = np.inf
         equal_arc_metric_worst = np.inf
+        equal_arc_drift_worst = np.inf
         equal_arc_core_passed = False
         equal_arc_derivative_passed = False
         equal_arc_metric_passed = False
+        equal_arc_drift_passed = False
         if bool(info.get("booz_xform_jax_api_available", False)):
             try:
                 equal_arc_core = vmec_jax_boozer_equal_arc_core_profiles_from_state(
@@ -2163,6 +2224,12 @@ def vmec_jax_flux_tube_array_parity_report(
                     "gds22": (equal_arc_core["gds22"], imported.gds22_profile),
                     "grho": (equal_arc_core["grho"], imported.grho_profile),
                 }
+                equal_arc_drift_pairs = {
+                    "cvdrift": (equal_arc_core["cvdrift"], imported.cv_profile),
+                    "gbdrift": (equal_arc_core["gbdrift"], imported.gb_profile),
+                    "cvdrift0": (equal_arc_core["cvdrift0"], imported.cv0_profile),
+                    "gbdrift0": (equal_arc_core["gbdrift0"], imported.gb0_profile),
+                }
                 equal_arc_core_array_metrics = {
                     name: _array_parity_metrics(candidate, reference)
                     for name, (candidate, reference) in equal_arc_core_pairs.items()
@@ -2170,6 +2237,10 @@ def vmec_jax_flux_tube_array_parity_report(
                 equal_arc_metric_array_metrics = {
                     name: _array_parity_metrics(candidate, reference)
                     for name, (candidate, reference) in equal_arc_metric_pairs.items()
+                }
+                equal_arc_drift_array_metrics = {
+                    name: _array_parity_metrics(candidate, reference)
+                    for name, (candidate, reference) in equal_arc_drift_pairs.items()
                 }
                 equal_arc_core_scalar_metrics = {
                     "gradpar": _scalar_parity_metrics(jnp.asarray(equal_arc_core["gradpar"])[0], imported.gradpar_value),
@@ -2204,6 +2275,14 @@ def vmec_jax_flux_tube_array_parity_report(
                     metric_values.append(float(raw_value) if isinstance(raw_value, int | float | np.floating) else np.inf)
                 equal_arc_metric_worst = max(metric_values) if metric_values else np.inf
                 equal_arc_metric_passed = bool(equal_arc_metric_worst <= float(equal_arc_metric_tolerance))
+                drift_values: list[float] = []
+                for metrics in equal_arc_drift_array_metrics.values():
+                    if not bool(metrics.get("shape_match", False)):
+                        continue
+                    raw_value = metrics.get("normalized_max_abs")
+                    drift_values.append(float(raw_value) if isinstance(raw_value, int | float | np.floating) else np.inf)
+                equal_arc_drift_worst = max(drift_values) if drift_values else np.inf
+                equal_arc_drift_passed = bool(equal_arc_drift_worst <= float(equal_arc_drift_tolerance))
             except Exception as exc:  # pragma: no cover - optional-backend diagnostic detail
                 equal_arc_core_error = f"{type(exc).__name__}: {exc}"
         else:
@@ -2236,17 +2315,21 @@ def vmec_jax_flux_tube_array_parity_report(
         "scalar_metrics": scalar_metrics,
         "equal_arc_core_array_metrics": equal_arc_core_array_metrics,
         "equal_arc_metric_array_metrics": equal_arc_metric_array_metrics,
+        "equal_arc_drift_array_metrics": equal_arc_drift_array_metrics,
         "equal_arc_core_scalar_metrics": equal_arc_core_scalar_metrics,
         "equal_arc_core_worst_normalized_max_abs": float(equal_arc_core_worst),
         "equal_arc_core_worst_scalar_rel": float(equal_arc_core_worst_scalar),
         "equal_arc_derivative_worst_normalized_max_abs": float(equal_arc_derivative_worst),
         "equal_arc_metric_worst_normalized_max_abs": float(equal_arc_metric_worst),
+        "equal_arc_drift_worst_normalized_max_abs": float(equal_arc_drift_worst),
         "equal_arc_core_tolerance": float(equal_arc_core_tolerance),
         "equal_arc_derivative_tolerance": float(equal_arc_derivative_tolerance),
         "equal_arc_metric_tolerance": float(equal_arc_metric_tolerance),
+        "equal_arc_drift_tolerance": float(equal_arc_drift_tolerance),
         "equal_arc_core_passed": bool(equal_arc_core_passed),
         "equal_arc_derivative_passed": bool(equal_arc_derivative_passed),
         "equal_arc_metric_passed": bool(equal_arc_metric_passed),
+        "equal_arc_drift_passed": bool(equal_arc_drift_passed),
         "equal_arc_core_error": equal_arc_core_error,
         "worst_core_normalized_max_abs": float(worst_core),
         "worst_scalar_rel": float(worst_scalar),

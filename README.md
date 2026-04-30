@@ -248,9 +248,11 @@ direct-VMEC-tensor vs imported-VMEC/EIK array-parity audit. A new
 `vmec_jax -> booz_xform_jax` Boozer equal-arc core audit now matches the
 imported convention for `bmag`, `bgrad`, `gradpar`, `q`, `s_hat`, and the
 solver Jacobian at the percent level on the tracked stellarator fixture; the
-same audit now also reconstructs the zero-beta Boozer metric profiles
-`gds*`/`grho` with worst normalized mismatch `3.44e-2`. The production gate
-still remains open for the Hegna-Nakajima curvature/drift convention. When
+same audit now reconstructs the zero-beta Boozer metric profiles `gds*`/`grho`
+with worst normalized mismatch `3.44e-2` and the loaded-convention zero-beta
+drift profiles `cvdrift`/`gbdrift`/`cvdrift0`/`gbdrift0` with worst normalized
+mismatch `3.45e-2`. The remaining promotion work is broad finite-beta and
+multi-equilibrium drift parity plus solver-objective gradients. When
 `booz_xform_jax` is available, it also runs a bounded JAX-native Boozer
 spectral transform, samples the resulting Boozer `|B|` spectrum onto a
 field-line flux-tube mapping, and checks both derivative paths against central
