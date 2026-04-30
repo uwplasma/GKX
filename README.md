@@ -251,9 +251,8 @@ solver Jacobian at the percent level on the tracked stellarator fixture; the
 same audit now reconstructs the zero-beta Boozer metric profiles `gds*`/`grho`
 with worst normalized mismatch `3.45e-2` and the loaded-convention zero-beta
 drift profiles `cvdrift`/`gbdrift`/`cvdrift0`/`gbdrift0` with worst normalized
-mismatch `3.50e-2`. The remaining promotion work is broad finite-beta and
-multi-equilibrium drift parity plus quasilinear/nonlinear solver-objective
-state gradients. When
+mismatch `3.50e-2`. The remaining geometry promotion work is broad finite-beta
+and multi-equilibrium drift parity. When
 `booz_xform_jax` is available, it also runs a bounded JAX-native Boozer
 spectral transform, samples the resulting Boozer `|B|` spectrum onto a
 field-line flux-tube mapping, and checks both derivative paths against central
@@ -262,8 +261,8 @@ also starts from a real `vmec_jax` `VMECState`, perturbs VMEC Fourier
 coefficients, converts that state through `booz_xform_jax`, and differentiates
 the resulting SPECTRAX-GK field-line geometry observables against central
 finite differences. The remaining promotion gate is exact production drift
-parity with the imported VMEC/EIK runtime path and then production
-quasilinear-gradient and nonlinear-window gates through the solver.
+parity with the imported VMEC/EIK runtime path and then multi-equilibrium
+transport-gradient and nonlinear-window gates through the solver.
 
 ![SPECTRAX-GK differentiable geometry bridge](docs/_static/differentiable_geometry_bridge.png)
 
@@ -288,8 +287,11 @@ full-chain quasilinear gate uses a richer `Nl=2, Nm=3` moment basis and
 checks `gamma`, `omega`, `<k_perp^2>`, the electrostatic heat-flux weight, and
 `gamma Q_i/k_perp^2` against central finite differences with maximum relative
 error `4.3e-3`. This closes the reduced linear/quasilinear stellarator
-objective-gradient path; nonlinear-window state-gradient gates remain future
-work before full nonlinear heat-flux optimization claims.
+objective-gradient path on the tracked all-surface QH fixture. A memory-bounded
+Boozer surface stencil exists for diagnostics and large-equilibrium probes, but
+it is not used for the published accuracy claim. Multi-equilibrium
+transport-gradient promotion and nonlinear-window state-gradient gates remain
+future work before full nonlinear heat-flux optimization claims.
 
 ![SPECTRAX-GK solver-objective geometry-gradient gate](docs/_static/solver_objective_gradient_gate.png)
 
@@ -313,9 +315,9 @@ read as validated optimization plumbing for stellarator-transport objectives,
 not as a final absolute-flux optimization claim. Full
 `vmec_jax -> booz_xform_jax -> SPECTRAX-GK` nonlinear optimization remains
 scoped to the next promotion gate: matching the production curvature/drift
-convention to the imported geometry path, checking full-chain quasilinear
-flux-weight gradients, and converged nonlinear audits of the optimized
-equilibria.
+convention to the imported geometry path across additional equilibria,
+broadening full-chain transport-gradient checks beyond the tracked QH fixture,
+and converged nonlinear audits of the optimized equilibria.
 
 For production parallelization of independent work, use
 `spectraxgk.batch_map` / `spectraxgk.ky_scan_batches` for ky scans,
