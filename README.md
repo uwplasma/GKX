@@ -237,8 +237,9 @@ inverse design recovers the target observables, and the local UQ covariance is
 reported. When `vmec_jax` is available, the same artifact also checks a real
 VMEC boundary-aspect derivative through its boundary Fourier API. When
 `booz_xform_jax` is available, it also runs a bounded JAX-native Boozer
-spectral transform and checks a spectral derivative against central finite
-differences.
+spectral transform, samples the resulting Boozer `|B|` spectrum onto a
+field-line flux-tube mapping, and checks both derivative paths against central
+finite differences.
 
 ![SPECTRAX-GK differentiable geometry bridge](docs/_static/differentiable_geometry_bridge.png)
 

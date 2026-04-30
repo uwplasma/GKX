@@ -499,6 +499,241 @@ def booz_xform_spectral_sensitivity_report(
     }
 
 
+def evaluate_boozer_bmag_on_field_line(
+    theta: jnp.ndarray,
+    *,
+    bmnc_b: jnp.ndarray,
+    ixm_b: jnp.ndarray,
+    ixn_b: jnp.ndarray,
+    iota: jnp.ndarray | float,
+    alpha: float = 0.0,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Evaluate a Boozer ``|B|`` spectrum and theta derivative on a field line.
+
+    The field-line label convention is :math:`\alpha = \theta - \iota\zeta`.
+    This helper is intentionally small and JAX-native so that the
+    ``booz_xform_jax`` spectral output can be differentiated all the way into
+    the sampled SPECTRAX-GK geometry contract.
+    """
+
+    theta_arr = jnp.asarray(theta)
+    modes_m = jnp.asarray(ixm_b, dtype=theta_arr.dtype)
+    modes_n = jnp.asarray(ixn_b, dtype=theta_arr.dtype)
+    coeffs = jnp.asarray(bmnc_b, dtype=theta_arr.dtype)
+    iota_arr = jnp.asarray(iota, dtype=theta_arr.dtype)
+    iota_safe = jnp.where(jnp.abs(iota_arr) < 1.0e-12, jnp.sign(iota_arr + 1.0e-30) * 1.0e-12, iota_arr)
+    zeta = (theta_arr - jnp.asarray(float(alpha), dtype=theta_arr.dtype)) / iota_safe
+    phase = theta_arr[:, None] * modes_m[None, :] - zeta[:, None] * modes_n[None, :]
+    dphase_dtheta = modes_m[None, :] - modes_n[None, :] / iota_safe
+    bmag = jnp.sum(coeffs[None, :] * jnp.cos(phase), axis=1)
+    dbmag_dtheta = jnp.sum(-coeffs[None, :] * dphase_dtheta * jnp.sin(phase), axis=1)
+    return bmag, dbmag_dtheta
+
+
+def booz_xform_flux_tube_mapping_from_inputs(
+    inputs: Any,
+    *,
+    mboz: int = 2,
+    nboz: int = 1,
+    ntheta: int = 96,
+    alpha: float = 0.0,
+    surface_index: int = 0,
+    magnetic_shear: float = 0.35,
+    R0: float = 1.0,
+    B0: float = 1.0,
+    drift_scale: float = 1.0,
+    jit: bool = False,
+) -> dict[str, Any]:
+    """Build a solver-ready flux-tube mapping from ``booz_xform_jax`` output.
+
+    This is the first bounded production bridge step between JAX-native Boozer
+    coordinates and SPECTRAX-GK. It uses the real Boozer magnetic-field
+    spectrum for ``bmag``/``bgrad`` and supplies smooth metric/drift profiles
+    with the same solver-ready names accepted by
+    :func:`flux_tube_geometry_from_mapping`.
+
+    Full VMEC/Boozer metric parity remains a separate promotion gate: a
+    high-fidelity backend must replace the smooth metric/drift closure here
+    with sampled VMEC/Boozer metric tensors before nonlinear optimization
+    claims are made.
+    """
+
+    info = discover_differentiable_geometry_backends()
+    if not info.get("booz_xform_jax_api_available", False):
+        raise RuntimeError("booz_xform_jax functional API is not available")
+
+    bx = importlib.import_module("booz_xform_jax.jax_api")
+    constants, grids = bx.prepare_booz_xform_constants_from_inputs(
+        inputs=inputs,
+        mboz=int(mboz),
+        nboz=int(nboz),
+        asym=bool(getattr(inputs, "bmns", None) is not None),
+    )
+    out = bx.booz_xform_from_inputs(inputs=inputs, constants=constants, grids=grids, jit=bool(jit))
+    idx = int(surface_index)
+    theta = jnp.linspace(-jnp.pi, jnp.pi, int(ntheta), endpoint=False)
+    bmnc_b = jnp.asarray(out["bmnc_b"])[idx]
+    iota = jnp.asarray(out["iota_b"])[idx]
+    bmag, dbmag_dtheta = evaluate_boozer_bmag_on_field_line(
+        theta,
+        bmnc_b=bmnc_b,
+        ixm_b=jnp.asarray(out["ixm_b"]),
+        ixn_b=jnp.asarray(out["ixn_b"]),
+        iota=iota,
+        alpha=float(alpha),
+    )
+    q = 1.0 / jnp.maximum(jnp.abs(iota), jnp.asarray(1.0e-12, dtype=theta.dtype))
+    gradpar_value = 1.0 / (q * float(R0))
+    gradpar = gradpar_value * jnp.ones_like(theta)
+    shear = jnp.asarray(float(magnetic_shear), dtype=theta.dtype)
+    field_line_shift = shear * theta
+    gds2 = 1.0 + field_line_shift * field_line_shift
+    gds21 = -shear * field_line_shift
+    gds22 = (1.0 + shear * shear) * jnp.ones_like(theta)
+    cv = float(drift_scale) * (jnp.cos(theta) + field_line_shift * jnp.sin(theta)) / float(R0)
+    cv0 = -float(drift_scale) * shear * jnp.sin(theta) / float(R0)
+    bmag_safe = jnp.maximum(jnp.abs(bmag), jnp.asarray(1.0e-12, dtype=theta.dtype))
+    return {
+        "theta": theta,
+        "gradpar": gradpar,
+        "bmag": bmag,
+        "bgrad": gradpar_value * dbmag_dtheta / bmag_safe,
+        "gds2": gds2,
+        "gds21": gds21,
+        "gds22": gds22,
+        "cvdrift": cv,
+        "gbdrift": cv,
+        "cvdrift0": cv0,
+        "gbdrift0": cv0,
+        "jacobian": 1.0 / (gradpar * bmag_safe),
+        "grho": jnp.ones_like(theta),
+        "q": q,
+        "s_hat": shear,
+        "epsilon": jnp.sqrt(jnp.mean((bmag / jnp.mean(bmag) - 1.0) ** 2)),
+        "R0": float(R0),
+        "B0": float(B0),
+        "alpha": float(alpha),
+        "drift_scale": float(drift_scale),
+        "nfp": int(jnp.asarray(getattr(inputs, "nfp", 1))),
+        "booz_xform": {
+            "bmnc_b": bmnc_b,
+            "ixm_b": jnp.asarray(out["ixm_b"]),
+            "ixn_b": jnp.asarray(out["ixn_b"]),
+            "iota_b": iota,
+        },
+    }
+
+
+def booz_xform_flux_tube_sensitivity_report(
+    *,
+    params: jnp.ndarray | None = None,
+    fd_step: float = 2.0e-5,
+    mboz: int = 2,
+    nboz: int = 1,
+    ntheta: int = 64,
+) -> dict[str, object]:
+    """AD/FD-check a Boozer-spectrum-to-flux-tube geometry bridge.
+
+    ``params = [axisymmetric_B_ripple, helical_B_ripple]`` perturbs a tiny
+    one-surface VMEC-to-Boozer input bundle. The real ``booz_xform_jax``
+    transform is run for each parameter vector; its Boozer ``|B|`` spectrum is
+    sampled on a field line and converted into ``FluxTubeGeometryData``.
+    """
+
+    info = discover_differentiable_geometry_backends()
+    if not info.get("booz_xform_jax_api_available", False):
+        return {
+            "available": False,
+            "backend_info": info,
+            "sensitivity": None,
+            "fd_step": float(fd_step),
+            "mboz": int(mboz),
+            "nboz": int(nboz),
+            "ntheta": int(ntheta),
+        }
+
+    p = jnp.asarray([0.05, 0.02] if params is None else params, dtype=jnp.float64)
+    if p.ndim != 1 or int(p.shape[0]) != 2:
+        raise ValueError("params must be a length-2 vector")
+
+    xm = jnp.asarray([0, 1, 1], dtype=jnp.int32)
+    xn = jnp.asarray([0, 0, 2], dtype=jnp.int32)
+
+    def _inputs(x: jnp.ndarray) -> SimpleNamespace:
+        axisym_ripple, helical_ripple = x
+        one = jnp.asarray(1.0, dtype=x.dtype)
+        zero = jnp.asarray(0.0, dtype=x.dtype)
+        minor = jnp.asarray(0.22, dtype=x.dtype)
+        helical_shape = jnp.asarray(0.02, dtype=x.dtype)
+        return SimpleNamespace(
+            rmnc=jnp.asarray([[one, minor, helical_shape]], dtype=x.dtype),
+            zmns=jnp.asarray([[zero, minor, helical_shape]], dtype=x.dtype),
+            lmns=jnp.asarray([[zero, zero, zero]], dtype=x.dtype),
+            bmnc=jnp.asarray([[one, axisym_ripple, helical_ripple]], dtype=x.dtype),
+            bsubumnc=jnp.asarray([[0.1, 0.0, 0.0]], dtype=x.dtype),
+            bsubvmnc=jnp.asarray([[one, zero, zero]], dtype=x.dtype),
+            iota=jnp.asarray([0.41], dtype=x.dtype),
+            xm=xm,
+            xn=xn,
+            xm_nyq=xm,
+            xn_nyq=xn,
+            nfp=2,
+            bmns=None,
+            bsubumns=None,
+            bsubvmns=None,
+        )
+
+    try:
+        sensitivity = geometry_sensitivity_report(
+            lambda x: booz_xform_flux_tube_mapping_from_inputs(
+                _inputs(x),
+                mboz=int(mboz),
+                nboz=int(nboz),
+                ntheta=int(ntheta),
+                magnetic_shear=0.35,
+                jit=False,
+            ),
+            p,
+            fd_step=float(fd_step),
+            source_model="booz_xform_jax:field-line-bmag",
+        )
+        mapping = booz_xform_flux_tube_mapping_from_inputs(
+            _inputs(p),
+            mboz=int(mboz),
+            nboz=int(nboz),
+            ntheta=int(ntheta),
+            magnetic_shear=0.35,
+            jit=False,
+        )
+        booz_meta = mapping["booz_xform"]
+    except Exception as exc:
+        return {
+            "available": False,
+            "backend_info": info,
+            "sensitivity": None,
+            "fd_step": float(fd_step),
+            "mboz": int(mboz),
+            "nboz": int(nboz),
+            "ntheta": int(ntheta),
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+
+    return {
+        "available": True,
+        "backend_info": info,
+        "params": np.asarray(p).tolist(),
+        "sensitivity": sensitivity,
+        "fd_step": float(fd_step),
+        "mboz": int(mboz),
+        "nboz": int(nboz),
+        "ntheta": int(ntheta),
+        "bmnc_b": np.asarray(booz_meta["bmnc_b"]).tolist(),
+        "ixm_b": np.asarray(booz_meta["ixm_b"]).tolist(),
+        "ixn_b": np.asarray(booz_meta["ixn_b"]).tolist(),
+        "iota_b": float(np.asarray(booz_meta["iota_b"])),
+    }
+
+
 def geometry_sensitivity_report(
     mapping_fn: Any,
     params: jnp.ndarray,
@@ -649,8 +884,11 @@ def geometry_inverse_design_report(
 
 
 __all__ = [
+    "booz_xform_flux_tube_mapping_from_inputs",
+    "booz_xform_flux_tube_sensitivity_report",
     "booz_xform_spectral_sensitivity_report",
     "discover_differentiable_geometry_backends",
+    "evaluate_boozer_bmag_on_field_line",
     "finite_difference_jacobian",
     "flux_tube_geometry_from_mapping",
     "flux_tube_geometry_observables",
