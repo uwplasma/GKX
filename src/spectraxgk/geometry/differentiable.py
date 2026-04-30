@@ -434,6 +434,21 @@ def _radial_derivative_profile(values: jnp.ndarray, spacing: float) -> jnp.ndarr
     return deriv
 
 
+def _radial_derivative_array(values: jnp.ndarray, spacing: float) -> jnp.ndarray:
+    arr = jnp.asarray(values)
+    if arr.ndim != 2:
+        raise ValueError("radial derivative expects a two-dimensional surface-mode array")
+    if int(arr.shape[0]) < 2:
+        return jnp.zeros_like(arr)
+    ds = jnp.asarray(float(spacing), dtype=arr.dtype)
+    deriv = jnp.empty_like(arr)
+    deriv = deriv.at[0].set((arr[1] - arr[0]) / ds)
+    deriv = deriv.at[-1].set((arr[-1] - arr[-2]) / ds)
+    if int(arr.shape[0]) > 2:
+        deriv = deriv.at[1:-1].set((arr[2:] - arr[:-2]) / (2.0 * ds))
+    return deriv
+
+
 def _evaluate_boozer_cosine_series_on_field_line(
     theta: jnp.ndarray,
     *,
@@ -1604,12 +1619,12 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(
     """Return Boozer equal-arc core profiles from a real ``vmec_jax`` state.
 
     This bridge follows the same high-level convention as the imported VMEC/EIK
-    runtime path for the scalar/core field-line quantities that can be
-    reconstructed directly from ``booz_xform_jax`` output: Boozer ``|B|``, the
-    equal-arc constant ``gradpar``, ``q``, magnetic shear, and the solver
-    Jacobian normalization.  It deliberately does not claim production metric
-    or drift parity; those require the full Hegna-Nakajima local-equilibrium
-    tensor path rather than just the Boozer magnetic spectrum.
+    runtime path for the scalar/core field-line quantities and the zero-beta
+    Boozer metric terms that can be reconstructed directly from
+    ``booz_xform_jax`` output: Boozer ``|B|``, the equal-arc constant
+    ``gradpar``, ``q``, magnetic shear, solver Jacobian normalization, and
+    ``gds*``/``grho``.  It deliberately does not claim production drift parity;
+    that still requires the full Hegna-Nakajima curvature/drift convention.
     """
 
     ntheta_int = int(ntheta)
@@ -1671,10 +1686,29 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(
         raise RuntimeError("booz_xform_jax output needs at least two radial surfaces")
     s_half = (jnp.arange(ns_b, dtype=base_Rcos.dtype) + 0.5) / float(ns_b)
 
+    radial_spacing = float(s_half[1] - s_half[0])
     bmnc_b = _interp_radial(bmnc_b_all, s_half, s_value)
+    rmnc_b = _interp_radial(jnp.asarray(out["rmnc_b"], dtype=base_Rcos.dtype), s_half, s_value)
+    zmns_b = _interp_radial(jnp.asarray(out["zmns_b"], dtype=base_Rcos.dtype), s_half, s_value)
+    numns_b = -_interp_radial(jnp.asarray(out["pmns_b"], dtype=base_Rcos.dtype), s_half, s_value)
+    d_rmnc_b_d_s = _interp_radial(
+        _radial_derivative_array(jnp.asarray(out["rmnc_b"], dtype=base_Rcos.dtype), radial_spacing),
+        s_half,
+        s_value,
+    )
+    d_zmns_b_d_s = _interp_radial(
+        _radial_derivative_array(jnp.asarray(out["zmns_b"], dtype=base_Rcos.dtype), radial_spacing),
+        s_half,
+        s_value,
+    )
+    d_numns_b_d_s = -_interp_radial(
+        _radial_derivative_array(jnp.asarray(out["pmns_b"], dtype=base_Rcos.dtype), radial_spacing),
+        s_half,
+        s_value,
+    )
     iota_profile = jnp.asarray(out["iota_b"], dtype=base_Rcos.dtype)
     iota = _interp_radial(iota_profile, s_half, s_value)
-    d_iota_ds = _interp_radial(_radial_derivative_profile(iota_profile, float(s_half[1] - s_half[0])), s_half, s_value)
+    d_iota_ds = _interp_radial(_radial_derivative_profile(iota_profile, radial_spacing), s_half, s_value)
     iota_safe = jnp.where(jnp.abs(iota) < 1.0e-12, jnp.sign(iota + 1.0e-30) * 1.0e-12, iota)
     s_hat = -2.0 * jnp.asarray(s_value, dtype=base_Rcos.dtype) * d_iota_ds / iota_safe
 
@@ -1718,6 +1752,73 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(
     drhodpsi = 1.0 / jnp.maximum(jnp.abs(dpsidrho), jnp.asarray(1.0e-30, dtype=base_Rcos.dtype))
     jacobian = 1.0 / jnp.maximum(jnp.abs(drhodpsi * gradpar_eqarc * bmag_safe), jnp.asarray(1.0e-30, dtype=base_Rcos.dtype))
 
+    m = jnp.asarray(out["ixm_b"], dtype=base_Rcos.dtype)
+    n = jnp.asarray(out["ixn_b"], dtype=base_Rcos.dtype)
+    phi_b = (theta_closed - jnp.asarray(float(alpha), dtype=base_Rcos.dtype)) / iota_safe
+    phase = m[:, None] * theta_closed[None, :] - n[:, None] * phi_b[None, :]
+    cos_phase = jnp.cos(phase)
+    sin_phase = jnp.sin(phase)
+    m_cos = m[:, None] * cos_phase
+    m_sin = m[:, None] * sin_phase
+    n_cos = n[:, None] * cos_phase
+    n_sin = n[:, None] * sin_phase
+
+    r_b = jnp.sum(rmnc_b[:, None] * cos_phase, axis=0)
+    d_r_b_d_s = jnp.sum(d_rmnc_b_d_s[:, None] * cos_phase, axis=0)
+    d_r_b_d_theta = -jnp.sum(rmnc_b[:, None] * m_sin, axis=0)
+    d_r_b_d_phi = jnp.sum(rmnc_b[:, None] * n_sin, axis=0)
+    d_z_b_d_s = jnp.sum(d_zmns_b_d_s[:, None] * sin_phase, axis=0)
+    d_z_b_d_theta = jnp.sum(zmns_b[:, None] * m_cos, axis=0)
+    d_z_b_d_phi = -jnp.sum(zmns_b[:, None] * n_cos, axis=0)
+    nu_b = jnp.sum(numns_b[:, None] * sin_phase, axis=0)
+    d_nu_b_d_s = jnp.sum(d_numns_b_d_s[:, None] * sin_phase, axis=0)
+    d_nu_b_d_theta = jnp.sum(numns_b[:, None] * m_cos, axis=0)
+    d_nu_b_d_phi = -jnp.sum(numns_b[:, None] * n_cos, axis=0)
+
+    phi_cyl = phi_b - nu_b
+    sin_phi = jnp.sin(phi_cyl)
+    cos_phi = jnp.cos(phi_cyl)
+    d_x_d_theta = d_r_b_d_theta * cos_phi - r_b * sin_phi * (-d_nu_b_d_theta)
+    d_x_d_phi = d_r_b_d_phi * cos_phi - r_b * sin_phi * (1.0 - d_nu_b_d_phi)
+    d_x_d_s = d_r_b_d_s * cos_phi - r_b * sin_phi * (-d_nu_b_d_s)
+    d_y_d_theta = d_r_b_d_theta * sin_phi + r_b * cos_phi * (-d_nu_b_d_theta)
+    d_y_d_phi = d_r_b_d_phi * sin_phi + r_b * cos_phi * (1.0 - d_nu_b_d_phi)
+    d_y_d_s = d_r_b_d_s * sin_phi + r_b * cos_phi * (-d_nu_b_d_s)
+
+    grad_psi_x = (d_y_d_theta * d_z_b_d_phi - d_z_b_d_theta * d_y_d_phi) / sqrt_g_booz
+    grad_psi_y = (d_z_b_d_theta * d_x_d_phi - d_x_d_theta * d_z_b_d_phi) / sqrt_g_booz
+    grad_psi_z = (d_x_d_theta * d_y_d_phi - d_y_d_theta * d_x_d_phi) / sqrt_g_booz
+    g_sup_psi_psi = grad_psi_x**2 + grad_psi_y**2 + grad_psi_z**2
+    g_sup_psi_psi_safe = jnp.maximum(g_sup_psi_psi, jnp.asarray(1.0e-30, dtype=base_Rcos.dtype))
+
+    etf = jnp.asarray(edge_toroidal_flux_over_2pi, dtype=base_Rcos.dtype)
+    grad_theta_x = (d_y_d_phi * d_z_b_d_s - d_z_b_d_phi * d_y_d_s) / (sqrt_g_booz * etf)
+    grad_theta_y = (d_z_b_d_phi * d_x_d_s - d_x_d_phi * d_z_b_d_s) / (sqrt_g_booz * etf)
+    grad_theta_z = (d_x_d_phi * d_y_d_s - d_y_d_phi * d_x_d_s) / (sqrt_g_booz * etf)
+    grad_phi_x = (d_y_d_s * d_z_b_d_theta - d_z_b_d_s * d_y_d_theta) / (sqrt_g_booz * etf)
+    grad_phi_y = (d_z_b_d_s * d_x_d_theta - d_x_d_s * d_z_b_d_theta) / (sqrt_g_booz * etf)
+    grad_phi_z = (d_x_d_s * d_y_d_theta - d_y_d_s * d_x_d_theta) / (sqrt_g_booz * etf)
+    zeta_center = -jnp.asarray(float(alpha), dtype=base_Rcos.dtype) / iota_safe
+    shear_phase = phi_b - zeta_center
+    grad_alpha_x = -shear_phase * d_iota_ds * grad_psi_x / etf + grad_theta_x - iota_safe * grad_phi_x
+    grad_alpha_y = -shear_phase * d_iota_ds * grad_psi_y / etf + grad_theta_y - iota_safe * grad_phi_y
+    grad_alpha_z = -shear_phase * d_iota_ds * grad_psi_z / etf + grad_theta_z - iota_safe * grad_phi_z
+    grad_alpha_dot_grad_psi = grad_alpha_x * grad_psi_x + grad_alpha_y * grad_psi_y + grad_alpha_z * grad_psi_z
+    local_shear_l1 = grad_alpha_dot_grad_psi / g_sup_psi_psi_safe
+    s_arr = jnp.asarray(s_value, dtype=base_Rcos.dtype)
+    L = jnp.asarray(float(L_reference), dtype=base_Rcos.dtype)
+    Bref = jnp.asarray(float(B_reference), dtype=base_Rcos.dtype)
+    shat_metric = s_hat
+    metric_bmag_sq = mod_b_safe * mod_b_safe
+    gds2_raw = (metric_bmag_sq / g_sup_psi_psi_safe + g_sup_psi_psi_safe * local_shear_l1**2) * L * L * s_arr
+    gds21_raw = g_sup_psi_psi_safe * local_shear_l1 * shat_metric / Bref
+    gds22_raw = g_sup_psi_psi_safe * shat_metric * shat_metric / (L * L * Bref * Bref * s_arr)
+    grho_raw = jnp.sqrt(g_sup_psi_psi_safe / (L * L * Bref * Bref * s_arr))
+    gds2 = jnp.interp(theta_uniform_closed, theta_eqarc, gds2_raw)[:-1]
+    gds21 = jnp.interp(theta_uniform_closed, theta_eqarc, gds21_raw)[:-1]
+    gds22 = jnp.interp(theta_uniform_closed, theta_eqarc, gds22_raw)[:-1]
+    grho = jnp.interp(theta_uniform_closed, theta_eqarc, grho_raw)[:-1]
+
     return {
         "theta": theta,
         "theta_equal_arc_closed": theta_eqarc,
@@ -1726,6 +1827,10 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(
         "bmag": bmag,
         "bgrad": bgrad,
         "jacobian": jacobian,
+        "gds2": gds2,
+        "gds21": gds21,
+        "gds22": gds22,
+        "grho": grho,
         "q": 1.0 / jnp.maximum(jnp.abs(iota_safe), jnp.asarray(1.0e-30, dtype=base_Rcos.dtype)),
         "s_hat": s_hat,
         "iota": iota,
@@ -1736,7 +1841,10 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(
         "mboz": int(mboz),
         "nboz": int(nboz),
         "field_line_convention": "Boozer theta, alpha=theta-iota*zeta, equal-arc remap",
-        "scope": "core bmag/gradpar/jacobian/q/s_hat parity only; metric and drift tensors remain open",
+        "scope": (
+            "Boozer equal-arc bmag/gradpar/Jacobian and zero-beta metric parity; "
+            "curvature/drift tensors remain open"
+        ),
     }
 
 
@@ -1877,6 +1985,7 @@ def vmec_jax_flux_tube_array_parity_report(
     scalar_tolerance: float = 5.0e-3,
     equal_arc_core_tolerance: float = 1.0e-2,
     equal_arc_derivative_tolerance: float = 3.0e-2,
+    equal_arc_metric_tolerance: float = 8.0e-2,
 ) -> dict[str, object]:
     """Compare the direct ``vmec_jax`` flux-tube arrays to imported VMEC/EIK.
 
@@ -2018,12 +2127,15 @@ def vmec_jax_flux_tube_array_parity_report(
 
         equal_arc_core_error = None
         equal_arc_core_array_metrics: dict[str, dict[str, object]] = {}
+        equal_arc_metric_array_metrics: dict[str, dict[str, object]] = {}
         equal_arc_core_scalar_metrics: dict[str, dict[str, float]] = {}
         equal_arc_core_worst = np.inf
         equal_arc_core_worst_scalar = np.inf
         equal_arc_derivative_worst = np.inf
+        equal_arc_metric_worst = np.inf
         equal_arc_core_passed = False
         equal_arc_derivative_passed = False
+        equal_arc_metric_passed = False
         if bool(info.get("booz_xform_jax_api_available", False)):
             try:
                 equal_arc_core = vmec_jax_boozer_equal_arc_core_profiles_from_state(
@@ -2045,9 +2157,19 @@ def vmec_jax_flux_tube_array_parity_report(
                     "bgrad": (equal_arc_core["bgrad"], imported.bgrad_profile),
                     "jacobian": (equal_arc_core["jacobian"], imported.jacobian_profile),
                 }
+                equal_arc_metric_pairs = {
+                    "gds2": (equal_arc_core["gds2"], imported.gds2_profile),
+                    "gds21": (equal_arc_core["gds21"], imported.gds21_profile),
+                    "gds22": (equal_arc_core["gds22"], imported.gds22_profile),
+                    "grho": (equal_arc_core["grho"], imported.grho_profile),
+                }
                 equal_arc_core_array_metrics = {
                     name: _array_parity_metrics(candidate, reference)
                     for name, (candidate, reference) in equal_arc_core_pairs.items()
+                }
+                equal_arc_metric_array_metrics = {
+                    name: _array_parity_metrics(candidate, reference)
+                    for name, (candidate, reference) in equal_arc_metric_pairs.items()
                 }
                 equal_arc_core_scalar_metrics = {
                     "gradpar": _scalar_parity_metrics(jnp.asarray(equal_arc_core["gradpar"])[0], imported.gradpar_value),
@@ -2074,6 +2196,14 @@ def vmec_jax_flux_tube_array_parity_report(
                     and equal_arc_core_worst_scalar <= float(equal_arc_core_tolerance)
                 )
                 equal_arc_derivative_passed = bool(equal_arc_derivative_worst <= float(equal_arc_derivative_tolerance))
+                metric_values: list[float] = []
+                for metrics in equal_arc_metric_array_metrics.values():
+                    if not bool(metrics.get("shape_match", False)):
+                        continue
+                    raw_value = metrics.get("normalized_max_abs")
+                    metric_values.append(float(raw_value) if isinstance(raw_value, int | float | np.floating) else np.inf)
+                equal_arc_metric_worst = max(metric_values) if metric_values else np.inf
+                equal_arc_metric_passed = bool(equal_arc_metric_worst <= float(equal_arc_metric_tolerance))
             except Exception as exc:  # pragma: no cover - optional-backend diagnostic detail
                 equal_arc_core_error = f"{type(exc).__name__}: {exc}"
         else:
@@ -2105,14 +2235,18 @@ def vmec_jax_flux_tube_array_parity_report(
         "array_metrics": array_metrics,
         "scalar_metrics": scalar_metrics,
         "equal_arc_core_array_metrics": equal_arc_core_array_metrics,
+        "equal_arc_metric_array_metrics": equal_arc_metric_array_metrics,
         "equal_arc_core_scalar_metrics": equal_arc_core_scalar_metrics,
         "equal_arc_core_worst_normalized_max_abs": float(equal_arc_core_worst),
         "equal_arc_core_worst_scalar_rel": float(equal_arc_core_worst_scalar),
         "equal_arc_derivative_worst_normalized_max_abs": float(equal_arc_derivative_worst),
+        "equal_arc_metric_worst_normalized_max_abs": float(equal_arc_metric_worst),
         "equal_arc_core_tolerance": float(equal_arc_core_tolerance),
         "equal_arc_derivative_tolerance": float(equal_arc_derivative_tolerance),
+        "equal_arc_metric_tolerance": float(equal_arc_metric_tolerance),
         "equal_arc_core_passed": bool(equal_arc_core_passed),
         "equal_arc_derivative_passed": bool(equal_arc_derivative_passed),
+        "equal_arc_metric_passed": bool(equal_arc_metric_passed),
         "equal_arc_core_error": equal_arc_core_error,
         "worst_core_normalized_max_abs": float(worst_core),
         "worst_scalar_rel": float(worst_scalar),
