@@ -23,6 +23,7 @@ from spectraxgk.geometry.differentiable import (
     geometry_inverse_design_report,
     geometry_observable_names,
     geometry_sensitivity_report,
+    vmec_jax_boozer_equal_arc_core_profiles_from_state,
     vmec_jax_boozer_flux_tube_sensitivity_report,
     vmec_jax_field_line_tensor_sensitivity_report,
     vmec_jax_flux_tube_array_parity_report,  # noqa: F401
@@ -248,6 +249,7 @@ __all__ = [
     "geometry_inverse_design_report",
     "geometry_observable_names",
     "geometry_sensitivity_report",
+    "vmec_jax_boozer_equal_arc_core_profiles_from_state",
     "vmec_jax_boozer_flux_tube_sensitivity_report",
     "vmec_jax_field_line_tensor_sensitivity_report",
     "vmec_jax_flux_tube_array_parity_report",

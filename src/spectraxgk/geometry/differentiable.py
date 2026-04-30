@@ -408,6 +408,65 @@ def _scalar_parity_metrics(candidate: Any, reference: Any, *, floor: float = 1.0
     }
 
 
+def _interp_radial(values: jnp.ndarray, s_grid: jnp.ndarray, s_value: float) -> jnp.ndarray:
+    arr = jnp.asarray(values)
+    s = jnp.asarray(s_grid, dtype=arr.dtype)
+    s_val = jnp.asarray(float(s_value), dtype=arr.dtype)
+    if arr.ndim == 1:
+        return jnp.interp(s_val, s, arr)
+    if arr.ndim == 2:
+        return jax.vmap(lambda col: jnp.interp(s_val, s, col), in_axes=1, out_axes=0)(arr)
+    raise ValueError("radial interpolation expects a one- or two-dimensional array")
+
+
+def _radial_derivative_profile(values: jnp.ndarray, spacing: float) -> jnp.ndarray:
+    arr = jnp.asarray(values)
+    if arr.ndim != 1:
+        raise ValueError("radial derivative expects a one-dimensional profile")
+    if int(arr.shape[0]) < 2:
+        return jnp.zeros_like(arr)
+    ds = jnp.asarray(float(spacing), dtype=arr.dtype)
+    deriv = jnp.empty_like(arr)
+    deriv = deriv.at[0].set((arr[1] - arr[0]) / ds)
+    deriv = deriv.at[-1].set((arr[-1] - arr[-2]) / ds)
+    if int(arr.shape[0]) > 2:
+        deriv = deriv.at[1:-1].set((arr[2:] - arr[:-2]) / (2.0 * ds))
+    return deriv
+
+
+def _evaluate_boozer_cosine_series_on_field_line(
+    theta: jnp.ndarray,
+    *,
+    coeffs: jnp.ndarray,
+    ixm_b: jnp.ndarray,
+    ixn_b: jnp.ndarray,
+    iota: jnp.ndarray,
+    alpha: float,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    theta_arr = jnp.asarray(theta)
+    coeff_arr = jnp.asarray(coeffs, dtype=theta_arr.dtype)
+    m = jnp.asarray(ixm_b, dtype=theta_arr.dtype)
+    n = jnp.asarray(ixn_b, dtype=theta_arr.dtype)
+    iota_safe = jnp.where(jnp.abs(iota) < 1.0e-12, jnp.sign(iota + 1.0e-30) * 1.0e-12, iota)
+    zeta = (theta_arr - jnp.asarray(float(alpha), dtype=theta_arr.dtype)) / iota_safe
+    phase = m[:, None] * theta_arr[None, :] - n[:, None] * zeta[None, :]
+    dphase_dtheta = m[:, None] - n[:, None] / iota_safe
+    values = jnp.sum(coeff_arr[:, None] * jnp.cos(phase), axis=0)
+    dvalues_dtheta = jnp.sum(-coeff_arr[:, None] * dphase_dtheta * jnp.sin(phase), axis=0)
+    return values, dvalues_dtheta
+
+
+def _cumulative_trapezoid(y: jnp.ndarray, x: jnp.ndarray) -> jnp.ndarray:
+    values = jnp.asarray(y)
+    grid = jnp.asarray(x, dtype=values.dtype)
+    if values.ndim != 1 or grid.ndim != 1 or int(values.shape[0]) != int(grid.shape[0]):
+        raise ValueError("cumulative trapezoid expects matching one-dimensional arrays")
+    if int(values.shape[0]) < 2:
+        return jnp.zeros_like(values)
+    areas = 0.5 * (values[1:] + values[:-1]) * (grid[1:] - grid[:-1])
+    return jnp.concatenate([jnp.zeros((1,), dtype=values.dtype), jnp.cumsum(areas)])
+
+
 def _periodic_bilinear_sample_2d(values: jnp.ndarray, theta: jnp.ndarray, zeta: jnp.ndarray) -> jnp.ndarray:
     """Sample a uniform periodic ``(theta,zeta)`` grid with fixed bilinear weights."""
 
@@ -1526,6 +1585,161 @@ def vmec_jax_flux_tube_mapping_from_state(
     }
 
 
+def vmec_jax_boozer_equal_arc_core_profiles_from_state(
+    state: Any,
+    static: Any,
+    indata: Any,
+    wout: Any,
+    *,
+    surface_index: int | None = None,
+    torflux: float | None = None,
+    alpha: float = 0.0,
+    ntheta: int = 32,
+    mboz: int = 8,
+    nboz: int = 8,
+    jit: bool = False,
+    reference_length: float | None = None,
+    reference_b: float | None = None,
+) -> dict[str, Any]:
+    """Return Boozer equal-arc core profiles from a real ``vmec_jax`` state.
+
+    This bridge follows the same high-level convention as the imported VMEC/EIK
+    runtime path for the scalar/core field-line quantities that can be
+    reconstructed directly from ``booz_xform_jax`` output: Boozer ``|B|``, the
+    equal-arc constant ``gradpar``, ``q``, magnetic shear, and the solver
+    Jacobian normalization.  It deliberately does not claim production metric
+    or drift parity; those require the full Hegna-Nakajima local-equilibrium
+    tensor path rather than just the Boozer magnetic spectrum.
+    """
+
+    ntheta_int = int(ntheta)
+    if ntheta_int < 4:
+        raise ValueError("ntheta must be >= 4")
+
+    info = discover_differentiable_geometry_backends()
+    if not (info.get("vmec_jax_available", False) and info.get("booz_xform_jax_api_available", False)):
+        raise RuntimeError("vmec_jax and booz_xform_jax functional APIs are required")
+
+    booz_input_mod = importlib.import_module("vmec_jax.booz_input")
+    bx = importlib.import_module("booz_xform_jax.jax_api")
+
+    base_Rcos = jnp.asarray(state.Rcos)
+    if base_Rcos.ndim != 2:
+        raise RuntimeError("vmec_jax state Rcos array must be two-dimensional")
+    ns_full = int(base_Rcos.shape[0])
+    if ns_full < 3:
+        raise RuntimeError("vmec_jax state needs at least three radial surfaces")
+
+    sidx = max(1, min(ns_full // 2, ns_full - 2)) if surface_index is None else int(surface_index)
+    if not (0 < sidx < ns_full - 1):
+        raise ValueError("surface_index must be an interior VMEC radial index")
+    s_value = float(sidx) / float(max(ns_full - 1, 1)) if torflux is None else float(torflux)
+    if not (0.0 < s_value < 1.0):
+        raise ValueError("torflux must lie inside (0, 1)")
+
+    raw_length = float(getattr(wout, "Aminor_p", 1.0)) if reference_length is None else float(reference_length)
+    L_reference = raw_length if np.isfinite(raw_length) and abs(raw_length) > 0.0 else 1.0
+    if reference_b is None:
+        phi_profile = np.asarray(getattr(wout, "phi", [0.0, np.pi]), dtype=float)
+        edge_toroidal_flux_over_2pi = -float(phi_profile[-1]) / (2.0 * np.pi)
+        raw_b = 2.0 * abs(edge_toroidal_flux_over_2pi) / (L_reference * L_reference)
+        B_reference = raw_b if np.isfinite(raw_b) and abs(raw_b) > 0.0 else 1.0
+    else:
+        edge_toroidal_flux_over_2pi = -float(np.asarray(getattr(wout, "phi", [0.0, np.pi]))[-1]) / (2.0 * np.pi)
+        B_reference = float(reference_b)
+    B_reference = B_reference if np.isfinite(B_reference) and abs(B_reference) > 0.0 else 1.0
+
+    inputs = booz_input_mod.booz_xform_inputs_from_state(
+        state=state,
+        static=static,
+        indata=indata,
+        signgs=getattr(wout, "signgs", 1),
+    )
+    constants, grids = bx.prepare_booz_xform_constants_from_inputs(
+        inputs=inputs,
+        mboz=int(mboz),
+        nboz=int(nboz),
+        asym=bool(getattr(inputs, "bmns", None) is not None),
+    )
+    out = bx.booz_xform_from_inputs(inputs=inputs, constants=constants, grids=grids, jit=bool(jit))
+
+    bmnc_b_all = jnp.asarray(out["bmnc_b"], dtype=base_Rcos.dtype)
+    if bmnc_b_all.ndim != 2:
+        raise RuntimeError("booz_xform_jax bmnc_b output must have shape (surface, mode)")
+    ns_b = int(bmnc_b_all.shape[0])
+    if ns_b < 2:
+        raise RuntimeError("booz_xform_jax output needs at least two radial surfaces")
+    s_half = (jnp.arange(ns_b, dtype=base_Rcos.dtype) + 0.5) / float(ns_b)
+
+    bmnc_b = _interp_radial(bmnc_b_all, s_half, s_value)
+    iota_profile = jnp.asarray(out["iota_b"], dtype=base_Rcos.dtype)
+    iota = _interp_radial(iota_profile, s_half, s_value)
+    d_iota_ds = _interp_radial(_radial_derivative_profile(iota_profile, float(s_half[1] - s_half[0])), s_half, s_value)
+    iota_safe = jnp.where(jnp.abs(iota) < 1.0e-12, jnp.sign(iota + 1.0e-30) * 1.0e-12, iota)
+    s_hat = -2.0 * jnp.asarray(s_value, dtype=base_Rcos.dtype) * d_iota_ds / iota_safe
+
+    boozer_i = _interp_radial(jnp.asarray(out["buco_b"], dtype=base_Rcos.dtype), s_half, s_value)
+    boozer_g = _interp_radial(jnp.asarray(out["bvco_b"], dtype=base_Rcos.dtype), s_half, s_value)
+
+    theta_closed = jnp.linspace(-jnp.pi, jnp.pi, ntheta_int + 1, dtype=base_Rcos.dtype)
+    mod_b, _dmod_b_dtheta = _evaluate_boozer_cosine_series_on_field_line(
+        theta_closed,
+        coeffs=bmnc_b,
+        ixm_b=jnp.asarray(out["ixm_b"]),
+        ixn_b=jnp.asarray(out["ixn_b"]),
+        iota=iota_safe,
+        alpha=float(alpha),
+    )
+    mod_b_safe = jnp.maximum(jnp.abs(mod_b), jnp.asarray(1.0e-30, dtype=base_Rcos.dtype))
+    sqrt_g_booz = (boozer_g + iota_safe * boozer_i) / (mod_b_safe * mod_b_safe)
+    gradpar_raw = jnp.abs(
+        jnp.asarray(float(L_reference), dtype=base_Rcos.dtype)
+        * iota_safe
+        / jnp.maximum(jnp.abs(mod_b_safe * sqrt_g_booz), jnp.asarray(1.0e-30, dtype=base_Rcos.dtype))
+    )
+    inv_gradpar_int = _cumulative_trapezoid(1.0 / gradpar_raw, theta_closed)
+    gradpar_eqarc = 2.0 * jnp.pi / jnp.maximum(inv_gradpar_int[-1], jnp.asarray(1.0e-30, dtype=base_Rcos.dtype))
+    theta_eqarc = gradpar_eqarc * inv_gradpar_int - jnp.pi
+    theta_uniform_closed = jnp.linspace(-jnp.pi, jnp.pi, ntheta_int + 1, dtype=base_Rcos.dtype)
+    bmag_closed = jnp.asarray(jnp.interp(theta_uniform_closed, theta_eqarc, mod_b_safe / float(B_reference)))
+    theta = theta_uniform_closed[:-1]
+    bmag = bmag_closed[:-1]
+    gradpar = gradpar_eqarc * jnp.ones_like(theta)
+    dtheta = 2.0 * jnp.pi / float(ntheta_int)
+    bmag_safe = jnp.maximum(jnp.abs(bmag), jnp.asarray(1.0e-30, dtype=base_Rcos.dtype))
+    wave_number = 2.0 * jnp.pi * jnp.fft.fftfreq(ntheta_int, d=float(dtheta))
+    dbmag_dtheta = jnp.real(jnp.fft.ifft(1j * wave_number * jnp.fft.fft(bmag)))
+    bgrad = gradpar_eqarc * dbmag_dtheta / bmag_safe
+
+    dpsidrho = 2.0 * jnp.sqrt(jnp.asarray(s_value, dtype=base_Rcos.dtype)) * jnp.asarray(
+        edge_toroidal_flux_over_2pi,
+        dtype=base_Rcos.dtype,
+    )
+    drhodpsi = 1.0 / jnp.maximum(jnp.abs(dpsidrho), jnp.asarray(1.0e-30, dtype=base_Rcos.dtype))
+    jacobian = 1.0 / jnp.maximum(jnp.abs(drhodpsi * gradpar_eqarc * bmag_safe), jnp.asarray(1.0e-30, dtype=base_Rcos.dtype))
+
+    return {
+        "theta": theta,
+        "theta_equal_arc_closed": theta_eqarc,
+        "theta_uniform_closed": theta_uniform_closed,
+        "gradpar": gradpar,
+        "bmag": bmag,
+        "bgrad": bgrad,
+        "jacobian": jacobian,
+        "q": 1.0 / jnp.maximum(jnp.abs(iota_safe), jnp.asarray(1.0e-30, dtype=base_Rcos.dtype)),
+        "s_hat": s_hat,
+        "iota": iota,
+        "torflux": float(s_value),
+        "surface_index": int(sidx),
+        "reference_length": float(L_reference),
+        "reference_b": float(B_reference),
+        "mboz": int(mboz),
+        "nboz": int(nboz),
+        "field_line_convention": "Boozer theta, alpha=theta-iota*zeta, equal-arc remap",
+        "scope": "core bmag/gradpar/jacobian/q/s_hat parity only; metric and drift tensors remain open",
+    }
+
+
 def vmec_jax_flux_tube_sensitivity_report(
     *,
     params: jnp.ndarray | None = None,
@@ -1654,11 +1868,15 @@ def vmec_jax_flux_tube_array_parity_report(
     surface_index: int | None = None,
     alpha: float = 0.0,
     ntheta: int = 16,
+    mboz: int = 8,
+    nboz: int = 8,
     boundary: str = "none",
     include_shear_variation: bool = True,
     include_pressure_variation: bool = True,
     core_tolerance: float = 5.0e-2,
     scalar_tolerance: float = 5.0e-3,
+    equal_arc_core_tolerance: float = 1.0e-2,
+    equal_arc_derivative_tolerance: float = 3.0e-2,
 ) -> dict[str, object]:
     """Compare the direct ``vmec_jax`` flux-tube arrays to imported VMEC/EIK.
 
@@ -1708,7 +1926,7 @@ def vmec_jax_flux_tube_array_parity_report(
         if wout_path is None:
             raise RuntimeError(f"vmec_jax example {case_name!r} has no bundled wout reference")
 
-        cfg, _indata = config_mod.load_config(str(input_path))
+        cfg, indata = config_mod.load_config(str(input_path))
         static = static_mod.build_static(cfg)
         wout = wout_mod.read_wout(wout_path)
         state = wout_mod.state_from_wout(wout)
@@ -1797,6 +2015,69 @@ def vmec_jax_flux_tube_array_parity_report(
         worst_core = max(core_values) if core_values else np.inf
         worst_scalar = max(float(values["rel"]) for values in scalar_metrics.values())
         production_parity_passed = bool(worst_core <= float(core_tolerance) and worst_scalar <= float(scalar_tolerance))
+
+        equal_arc_core_error = None
+        equal_arc_core_array_metrics: dict[str, dict[str, object]] = {}
+        equal_arc_core_scalar_metrics: dict[str, dict[str, float]] = {}
+        equal_arc_core_worst = np.inf
+        equal_arc_core_worst_scalar = np.inf
+        equal_arc_derivative_worst = np.inf
+        equal_arc_core_passed = False
+        equal_arc_derivative_passed = False
+        if bool(info.get("booz_xform_jax_api_available", False)):
+            try:
+                equal_arc_core = vmec_jax_boozer_equal_arc_core_profiles_from_state(
+                    state,
+                    static,
+                    indata,
+                    wout,
+                    surface_index=sidx,
+                    torflux=torflux,
+                    alpha=float(alpha),
+                    ntheta=ntheta_int,
+                    mboz=int(mboz),
+                    nboz=int(nboz),
+                    jit=False,
+                )
+                equal_arc_core_pairs = {
+                    "theta": (equal_arc_core["theta"], imported.theta),
+                    "bmag": (equal_arc_core["bmag"], imported.bmag_profile),
+                    "bgrad": (equal_arc_core["bgrad"], imported.bgrad_profile),
+                    "jacobian": (equal_arc_core["jacobian"], imported.jacobian_profile),
+                }
+                equal_arc_core_array_metrics = {
+                    name: _array_parity_metrics(candidate, reference)
+                    for name, (candidate, reference) in equal_arc_core_pairs.items()
+                }
+                equal_arc_core_scalar_metrics = {
+                    "gradpar": _scalar_parity_metrics(jnp.asarray(equal_arc_core["gradpar"])[0], imported.gradpar_value),
+                    "q": _scalar_parity_metrics(equal_arc_core["q"], imported.q),
+                    "s_hat": _scalar_parity_metrics(equal_arc_core["s_hat"], imported.s_hat),
+                }
+                equal_arc_core_names = ("theta", "bmag", "jacobian")
+                equal_arc_values: list[float] = []
+                for name in equal_arc_core_names:
+                    metrics = equal_arc_core_array_metrics[name]
+                    if not bool(metrics.get("shape_match", False)):
+                        continue
+                    raw_value = metrics.get("normalized_max_abs")
+                    equal_arc_values.append(float(raw_value) if isinstance(raw_value, int | float | np.floating) else np.inf)
+                equal_arc_core_worst = max(equal_arc_values) if equal_arc_values else np.inf
+                equal_arc_core_worst_scalar = max(float(values["rel"]) for values in equal_arc_core_scalar_metrics.values())
+                derivative_metrics = equal_arc_core_array_metrics["bgrad"]
+                raw_derivative = derivative_metrics.get("normalized_max_abs")
+                equal_arc_derivative_worst = (
+                    float(raw_derivative) if isinstance(raw_derivative, int | float | np.floating) else np.inf
+                )
+                equal_arc_core_passed = bool(
+                    equal_arc_core_worst <= float(equal_arc_core_tolerance)
+                    and equal_arc_core_worst_scalar <= float(equal_arc_core_tolerance)
+                )
+                equal_arc_derivative_passed = bool(equal_arc_derivative_worst <= float(equal_arc_derivative_tolerance))
+            except Exception as exc:  # pragma: no cover - optional-backend diagnostic detail
+                equal_arc_core_error = f"{type(exc).__name__}: {exc}"
+        else:
+            equal_arc_core_error = "booz_xform_jax functional API is not available"
     except Exception as exc:
         return {
             "available": False,
@@ -1816,11 +2097,23 @@ def vmec_jax_flux_tube_array_parity_report(
         "torflux": float(torflux),
         "alpha": float(alpha),
         "ntheta": int(ntheta_int),
+        "mboz": int(mboz),
+        "nboz": int(nboz),
         "boundary": str(boundary),
         "include_shear_variation": bool(include_shear_variation),
         "include_pressure_variation": bool(include_pressure_variation),
         "array_metrics": array_metrics,
         "scalar_metrics": scalar_metrics,
+        "equal_arc_core_array_metrics": equal_arc_core_array_metrics,
+        "equal_arc_core_scalar_metrics": equal_arc_core_scalar_metrics,
+        "equal_arc_core_worst_normalized_max_abs": float(equal_arc_core_worst),
+        "equal_arc_core_worst_scalar_rel": float(equal_arc_core_worst_scalar),
+        "equal_arc_derivative_worst_normalized_max_abs": float(equal_arc_derivative_worst),
+        "equal_arc_core_tolerance": float(equal_arc_core_tolerance),
+        "equal_arc_derivative_tolerance": float(equal_arc_derivative_tolerance),
+        "equal_arc_core_passed": bool(equal_arc_core_passed),
+        "equal_arc_derivative_passed": bool(equal_arc_derivative_passed),
+        "equal_arc_core_error": equal_arc_core_error,
         "worst_core_normalized_max_abs": float(worst_core),
         "worst_scalar_rel": float(worst_scalar),
         "core_tolerance": float(core_tolerance),
@@ -1829,8 +2122,8 @@ def vmec_jax_flux_tube_array_parity_report(
         "status": "passed" if production_parity_passed else "diagnostic_open",
         "interpretation": (
             "The direct VMEC tensor path proves state-level differentiability. "
-            "Production transport optimization still requires matching the "
-            "imported VMEC/EIK Boozer equal-arc metric and drift convention."
+            "The Boozer equal-arc core audit narrows the production gap to the "
+            "full imported VMEC/EIK metric and drift convention when it passes."
         ),
     }
 
@@ -1997,6 +2290,7 @@ __all__ = [
     "geometry_observable_names",
     "geometry_sensitivity_report",
     "vmec_jax_boozer_flux_tube_sensitivity_report",
+    "vmec_jax_boozer_equal_arc_core_profiles_from_state",
     "vmec_jax_field_line_tensor_sensitivity_report",
     "vmec_jax_flux_tube_array_parity_report",
     "vmec_jax_flux_tube_mapping_from_state",

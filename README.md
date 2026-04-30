@@ -244,9 +244,12 @@ same path now emits a direct VMEC tensor-derived SPECTRAX-GK flux-tube mapping
 and checks its geometry-observable sensitivities against finite differences,
 so the differentiability chain starts at `vmec_jax` state coefficients rather
 than only at a Boozer spectral adapter. The validation artifact also records a
-direct-VMEC-tensor vs imported-VMEC/EIK array-parity audit; that production
-gate remains open until the Boozer equal-arc metric and drift conventions
-match. When
+direct-VMEC-tensor vs imported-VMEC/EIK array-parity audit. A new
+`vmec_jax -> booz_xform_jax` Boozer equal-arc core audit now matches the
+imported convention for `bmag`, `bgrad`, `gradpar`, `q`, `s_hat`, and the
+solver Jacobian at the percent level on the tracked stellarator fixture. The
+production gate still remains open for the full `gds*`, `grho`, and
+Hegna-Nakajima drift convention. When
 `booz_xform_jax` is available, it also runs a bounded JAX-native Boozer
 spectral transform, samples the resulting Boozer `|B|` spectrum onto a
 field-line flux-tube mapping, and checks both derivative paths against central
@@ -254,9 +257,9 @@ finite differences. When both optional backends are available, the artifact
 also starts from a real `vmec_jax` `VMECState`, perturbs VMEC Fourier
 coefficients, converts that state through `booz_xform_jax`, and differentiates
 the resulting SPECTRAX-GK field-line geometry observables against central
-finite differences. The remaining promotion gate is exact production drift
-parity with the imported VMEC/EIK runtime path and then production
-growth-rate/quasilinear-gradient gates.
+finite differences. The remaining promotion gate is exact production metric
+and drift parity with the imported VMEC/EIK runtime path and then production
+growth-rate/quasilinear-gradient gates through the solver.
 
 ![SPECTRAX-GK differentiable geometry bridge](docs/_static/differentiable_geometry_bridge.png)
 
@@ -275,9 +278,9 @@ objectives keep the optimized QA configuration near aspect ratio `7` and
 read as validated optimization plumbing for stellarator-transport objectives,
 not as a final absolute-flux optimization claim. Full
 `vmec_jax -> booz_xform_jax -> SPECTRAX-GK` nonlinear optimization remains
-scoped to the next promotion gate: matching the direct VMEC tensor-derived
-flux-tube arrays and production drift convention to the imported geometry path,
-checking production linear/quasilinear gradients, and converged nonlinear
+scoped to the next promotion gate: matching the full VMEC/Boozer metric and
+production drift convention to the imported geometry path, checking production
+linear/quasilinear gradients, and converged nonlinear
 audits of the optimized equilibria.
 
 For production parallelization of independent work, use
