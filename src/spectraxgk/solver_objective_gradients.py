@@ -52,6 +52,12 @@ VMEC_BOOZER_QUASILINEAR_OBJECTIVE_NAMES = (
 )
 
 
+def _vmec_boozer_state_parameter_name(radial_index: int, mode_index: int, *, default_mid_surface: int) -> str:
+    if int(radial_index) == int(default_mid_surface) and int(mode_index) == 1:
+        return VMEC_BOOZER_STATE_PARAMETER_NAMES[0]
+    return f"Rcos_r{int(radial_index)}_m{int(mode_index)}"
+
+
 def default_solver_geometry_design_params() -> jnp.ndarray:
     """Return the small geometry-design vector used by the release gate."""
 
@@ -283,6 +289,9 @@ def linear_solver_geometry_gradient_report(
 def mode21_vmec_boozer_linear_frequency_gradient_report(
     *,
     case_name: str = "nfp4_QH_warm_start",
+    radial_index: int | None = None,
+    mode_index: int = 1,
+    surface_index: int | None = None,
     fd_step: float = 1.0e-6,
     rtol: float = 5.0e-2,
     atol: float = 2.0e-2,
@@ -318,8 +327,20 @@ def mode21_vmec_boozer_linear_frequency_gradient_report(
     base_Rcos = jnp.asarray(state.Rcos)
     if base_Rcos.ndim != 2 or int(base_Rcos.shape[1]) < 2:
         raise RuntimeError("vmec_jax state Rcos array must expose at least one non-axisymmetric mode")
-    radial_index = int(base_Rcos.shape[0] // 2)
-    mode_index = 1
+    default_radial_index = int(base_Rcos.shape[0] // 2)
+    radial_index_int = default_radial_index if radial_index is None else int(radial_index)
+    mode_index_int = int(mode_index)
+    if not (0 <= radial_index_int < int(base_Rcos.shape[0])):
+        raise ValueError("radial_index is outside the VMEC state radial grid")
+    if not (0 <= mode_index_int < int(base_Rcos.shape[1])):
+        raise ValueError("mode_index is outside the VMEC state mode table")
+    parameter_names = (
+        _vmec_boozer_state_parameter_name(
+            radial_index_int,
+            mode_index_int,
+            default_mid_surface=default_radial_index,
+        ),
+    )
 
     cfg = CycloneBaseCase(grid=GridConfig(Nx=1, Ny=4, Nz=int(ntheta), Lx=6.0, Ly=12.0))
     grid = select_ky_grid(build_spectral_grid(cfg.grid), 1)
@@ -346,12 +367,13 @@ def mode21_vmec_boozer_linear_frequency_gradient_report(
     )
 
     def geometry_for(x: jnp.ndarray):
-        traced_state = dc_replace(state, Rcos=base_Rcos.at[radial_index, mode_index].add(x[0]))
+        traced_state = dc_replace(state, Rcos=base_Rcos.at[radial_index_int, mode_index_int].add(x[0]))
         mapping = vmec_jax_boozer_equal_arc_core_profiles_from_state(
             traced_state,
             static,
             indata,
             wout,
+            surface_index=surface_index,
             ntheta=int(ntheta),
             mboz=int(mboz),
             nboz=int(nboz),
@@ -394,7 +416,7 @@ def mode21_vmec_boozer_linear_frequency_gradient_report(
     )
     rows = _objective_gate_rows(
         gate,
-        parameter_names=VMEC_BOOZER_STATE_PARAMETER_NAMES,
+        parameter_names=parameter_names,
         objective_names=VMEC_BOOZER_FREQUENCY_OBJECTIVE_NAMES,
         rtol=rtol,
         atol=atol,
@@ -412,9 +434,10 @@ def mode21_vmec_boozer_linear_frequency_gradient_report(
             "geometry -> SPECTRAX-GK linear-RHS eigenfrequency gradient"
         ),
         "case_name": str(case_name),
-        "parameter_names": list(VMEC_BOOZER_STATE_PARAMETER_NAMES),
+        "parameter_names": list(parameter_names),
         "objective_names": list(VMEC_BOOZER_FREQUENCY_OBJECTIVE_NAMES),
-        "parameter_indices": {"Rcos": [radial_index, mode_index]},
+        "parameter_indices": {"Rcos": [radial_index_int, mode_index_int]},
+        "surface_index": None if surface_index is None else int(surface_index),
         "grid": {"Nx": int(cfg.grid.Nx), "Ny": int(cfg.grid.Ny), "Nz": int(cfg.grid.Nz), "selected_ky_index": 1},
         "mboz": int(mboz),
         "nboz": int(nboz),
@@ -438,6 +461,9 @@ def mode21_vmec_boozer_linear_frequency_gradient_report(
 def mode21_vmec_boozer_quasilinear_gradient_report(
     *,
     case_name: str = "nfp4_QH_warm_start",
+    radial_index: int | None = None,
+    mode_index: int = 1,
+    surface_index: int | None = None,
     fd_step: float = 1.0e-6,
     rtol: float = 2.0e-2,
     atol: float = 5.0e-2,
@@ -472,8 +498,20 @@ def mode21_vmec_boozer_quasilinear_gradient_report(
     base_Rcos = jnp.asarray(state.Rcos)
     if base_Rcos.ndim != 2 or int(base_Rcos.shape[1]) < 2:
         raise RuntimeError("vmec_jax state Rcos array must expose at least one non-axisymmetric mode")
-    radial_index = int(base_Rcos.shape[0] // 2)
-    mode_index = 1
+    default_radial_index = int(base_Rcos.shape[0] // 2)
+    radial_index_int = default_radial_index if radial_index is None else int(radial_index)
+    mode_index_int = int(mode_index)
+    if not (0 <= radial_index_int < int(base_Rcos.shape[0])):
+        raise ValueError("radial_index is outside the VMEC state radial grid")
+    if not (0 <= mode_index_int < int(base_Rcos.shape[1])):
+        raise ValueError("mode_index is outside the VMEC state mode table")
+    parameter_names = (
+        _vmec_boozer_state_parameter_name(
+            radial_index_int,
+            mode_index_int,
+            default_mid_surface=default_radial_index,
+        ),
+    )
 
     cfg = CycloneBaseCase(grid=GridConfig(Nx=1, Ny=4, Nz=int(ntheta), Lx=6.0, Ly=12.0))
     grid = select_ky_grid(build_spectral_grid(cfg.grid), 1)
@@ -500,12 +538,13 @@ def mode21_vmec_boozer_quasilinear_gradient_report(
     )
 
     def geometry_for(x: jnp.ndarray):
-        traced_state = dc_replace(state, Rcos=base_Rcos.at[radial_index, mode_index].add(x[0]))
+        traced_state = dc_replace(state, Rcos=base_Rcos.at[radial_index_int, mode_index_int].add(x[0]))
         mapping = vmec_jax_boozer_equal_arc_core_profiles_from_state(
             traced_state,
             static,
             indata,
             wout,
+            surface_index=surface_index,
             ntheta=int(ntheta),
             mboz=int(mboz),
             nboz=int(nboz),
@@ -573,7 +612,7 @@ def mode21_vmec_boozer_quasilinear_gradient_report(
     )
     rows = _objective_gate_rows(
         gate,
-        parameter_names=VMEC_BOOZER_STATE_PARAMETER_NAMES,
+        parameter_names=parameter_names,
         objective_names=VMEC_BOOZER_QUASILINEAR_OBJECTIVE_NAMES,
         rtol=rtol,
         atol=atol,
@@ -591,9 +630,10 @@ def mode21_vmec_boozer_quasilinear_gradient_report(
             "geometry -> SPECTRAX-GK linear-RHS quasilinear heat-flux-weight gradient"
         ),
         "case_name": str(case_name),
-        "parameter_names": list(VMEC_BOOZER_STATE_PARAMETER_NAMES),
+        "parameter_names": list(parameter_names),
         "objective_names": list(VMEC_BOOZER_QUASILINEAR_OBJECTIVE_NAMES),
-        "parameter_indices": {"Rcos": [radial_index, mode_index]},
+        "parameter_indices": {"Rcos": [radial_index_int, mode_index_int]},
+        "surface_index": None if surface_index is None else int(surface_index),
         "grid": {"Nx": int(cfg.grid.Nx), "Ny": int(cfg.grid.Ny), "Nz": int(cfg.grid.Nz), "selected_ky_index": 1},
         "mboz": int(mboz),
         "nboz": int(nboz),
