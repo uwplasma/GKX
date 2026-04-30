@@ -275,6 +275,15 @@ stellarator-transport-gradient claim.
 
 ![SPECTRAX-GK VMEC/Boozer parity matrix](docs/_static/vmec_boozer_parity_matrix.png)
 
+The solver-objective geometry-gradient gate differentiates actual
+electrostatic linear-RHS eigenpair observables with respect to solver-ready
+geometry arrays and checks the implicit left/right eigenpair sensitivities
+against central finite differences. This closes the production solver contract
+for `FluxTubeGeometryData` gradients; the remaining promotion step is the full
+`vmec_jax -> booz_xform_jax -> SPECTRAX-GK` state-coefficient gradient gate.
+
+![SPECTRAX-GK solver-objective geometry-gradient gate](docs/_static/solver_objective_gradient_gate.png)
+
 Differentiable stellarator ITG optimization examples live in
 `examples/optimization/`. They optimize the same QA, max-mode-1 control vector
 with three turbulence objectives: small linear ITG growth rate, small

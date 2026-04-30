@@ -197,6 +197,13 @@ from spectraxgk.stellarator_optimization import (
     qa_observable_vector,
     stellarator_itg_objective,
 )
+from spectraxgk.solver_objective_gradients import (
+    SOLVER_GEOMETRY_PARAMETER_NAMES,
+    SOLVER_OBJECTIVE_NAMES,
+    default_solver_geometry_design_params,
+    linear_solver_geometry_gradient_report,
+    solver_ready_geometry_mapping,
+)
 from spectraxgk.plotting import (
     cyclone_comparison_figure,
     cyclone_reference_figure,
@@ -398,6 +405,11 @@ __all__ = [
     "qa_max_mode1_observables",
     "qa_observable_vector",
     "stellarator_itg_objective",
+    "SOLVER_GEOMETRY_PARAMETER_NAMES",
+    "SOLVER_OBJECTIVE_NAMES",
+    "default_solver_geometry_design_params",
+    "linear_solver_geometry_gradient_report",
+    "solver_ready_geometry_mapping",
     "eigenfunction_gate_report",
     "evaluate_scalar_gate",
     "gate_report",
