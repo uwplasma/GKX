@@ -239,7 +239,12 @@ VMEC boundary-aspect derivative through its boundary Fourier API. When
 `booz_xform_jax` is available, it also runs a bounded JAX-native Boozer
 spectral transform, samples the resulting Boozer `|B|` spectrum onto a
 field-line flux-tube mapping, and checks both derivative paths against central
-finite differences.
+finite differences. When both optional backends are available, the artifact
+also starts from a real `vmec_jax` `VMECState`, perturbs VMEC Fourier
+coefficients, converts that state through `booz_xform_jax`, and differentiates
+the resulting SPECTRAX-GK field-line geometry observables against central
+finite differences. The remaining promotion gate is sampled VMEC/Boozer
+metric and drift parity with the imported VMEC/EIK runtime path.
 
 ![SPECTRAX-GK differentiable geometry bridge](docs/_static/differentiable_geometry_bridge.png)
 
@@ -258,9 +263,10 @@ objectives keep the optimized QA configuration near aspect ratio `7` and
 read as validated optimization plumbing for stellarator-transport objectives,
 not as a final absolute-flux optimization claim. Full
 `vmec_jax -> booz_xform_jax -> SPECTRAX-GK` nonlinear optimization remains
-scoped to the next promotion gate: in-memory geometry parity, gradient checks
-through the production geometry cache, and converged nonlinear audits of the
-optimized equilibria.
+scoped to the next promotion gate: replacing the current smooth metric/drift
+closure with sampled VMEC/Boozer tensors, matching the imported geometry path,
+checking production linear/quasilinear gradients, and converged nonlinear
+audits of the optimized equilibria.
 
 For production parallelization of independent work, use
 `spectraxgk.batch_map` / `spectraxgk.ky_scan_batches` for ky scans,

@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib
 import os
 from collections.abc import Mapping, Sequence
+from dataclasses import replace as dc_replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -734,6 +735,145 @@ def booz_xform_flux_tube_sensitivity_report(
     }
 
 
+def vmec_jax_boozer_flux_tube_sensitivity_report(
+    *,
+    params: jnp.ndarray | None = None,
+    case_name: str = "circular_tokamak",
+    radial_index: int | None = None,
+    mode_index: int = 1,
+    surface_index: int | None = None,
+    fd_step: float = 1.0e-5,
+    mboz: int = 2,
+    nboz: int = 0,
+    ntheta: int = 32,
+) -> dict[str, object]:
+    """AD/FD-check ``vmec_jax`` state coefficients through the Boozer bridge.
+
+    This is the first end-to-end optional-backend gate that starts from a real
+    ``vmec_jax`` ``VMECState`` instead of a hand-built Boozer input bundle. It
+    loads a small bundled VMEC example, perturbs two VMEC Fourier coefficients
+    ``[Rcos(radial_index, mode_index), Zsin(radial_index, mode_index)]``,
+    converts the perturbed state to ``booz_xform_jax`` inputs, samples the
+    resulting Boozer ``|B|`` spectrum on a field line, and checks
+    SPECTRAX-GK geometry-observable derivatives against central finite
+    differences.
+
+    The current metric/drift closure is still intentionally smooth and local to
+    SPECTRAX-GK. Full production promotion requires replacing it with sampled
+    VMEC/Boozer metric tensors and parity-checking those arrays against the
+    imported VMEC/EIK path.
+    """
+
+    p = jnp.asarray([1.0e-3, 1.0e-3] if params is None else params, dtype=jnp.float64)
+    if p.ndim != 1 or int(p.shape[0]) != 2:
+        raise ValueError("params must be a length-2 vector")
+
+    info = discover_differentiable_geometry_backends()
+    if not (info.get("vmec_jax_available", False) and info.get("booz_xform_jax_api_available", False)):
+        return {
+            "available": False,
+            "backend_info": info,
+            "sensitivity": None,
+            "fd_step": float(fd_step),
+            "case_name": str(case_name),
+            "reason": "vmec_jax or booz_xform_jax functional API is not available",
+        }
+
+    try:
+        driver = importlib.import_module("vmec_jax.driver")
+        config_mod = importlib.import_module("vmec_jax.config")
+        static_mod = importlib.import_module("vmec_jax.static")
+        wout_mod = importlib.import_module("vmec_jax.wout")
+        booz_input_mod = importlib.import_module("vmec_jax.booz_input")
+
+        input_path, wout_path = driver.example_paths(str(case_name))
+        if wout_path is None:
+            raise RuntimeError(f"vmec_jax example {case_name!r} has no bundled wout reference")
+
+        cfg, indata = config_mod.load_config(str(input_path))
+        static = static_mod.build_static(cfg)
+        wout = wout_mod.read_wout(wout_path)
+        state = wout_mod.state_from_wout(wout)
+
+        base_Rcos = jnp.asarray(state.Rcos)
+        base_Zsin = jnp.asarray(state.Zsin)
+        if base_Rcos.ndim != 2 or base_Zsin.ndim != 2:
+            raise RuntimeError("vmec_jax state Rcos/Zsin arrays must be two-dimensional")
+
+        ridx = int(base_Rcos.shape[0] // 2) if radial_index is None else int(radial_index)
+        midx = int(mode_index)
+        if not (0 <= ridx < int(base_Rcos.shape[0])):
+            raise ValueError("radial_index is outside the VMEC state radial grid")
+        if not (0 <= midx < int(base_Rcos.shape[1])):
+            raise ValueError("mode_index is outside the VMEC state mode table")
+        sidx = max(0, min(ridx - 1, int(base_Rcos.shape[0]) - 2)) if surface_index is None else int(surface_index)
+        if not (0 <= sidx < int(base_Rcos.shape[0]) - 1):
+            raise ValueError("surface_index is outside the VMEC half-mesh Boozer surface grid")
+
+        def mapping_fn(x: jnp.ndarray) -> dict[str, Any]:
+            traced_state = dc_replace(
+                state,
+                Rcos=base_Rcos.at[ridx, midx].add(x[0]),
+                Zsin=base_Zsin.at[ridx, midx].add(x[1]),
+            )
+            inputs = booz_input_mod.booz_xform_inputs_from_state(
+                state=traced_state,
+                static=static,
+                indata=indata,
+                signgs=wout.signgs,
+            )
+            return booz_xform_flux_tube_mapping_from_inputs(
+                inputs,
+                mboz=int(mboz),
+                nboz=int(nboz),
+                ntheta=int(ntheta),
+                surface_index=int(sidx),
+                magnetic_shear=0.35,
+                jit=False,
+            )
+
+        sensitivity = geometry_sensitivity_report(
+            mapping_fn,
+            p,
+            fd_step=float(fd_step),
+            source_model="vmec_jax:state->booz_xform_jax:field-line-bmag",
+        )
+        mapping = mapping_fn(p)
+        booz_meta = mapping["booz_xform"]
+    except Exception as exc:
+        return {
+            "available": False,
+            "backend_info": info,
+            "sensitivity": None,
+            "fd_step": float(fd_step),
+            "case_name": str(case_name),
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+
+    return {
+        "available": True,
+        "backend_info": info,
+        "case_name": str(case_name),
+        "input_path": str(input_path),
+        "wout_path": str(wout_path),
+        "param_names": ["delta_Rcos", "delta_Zsin"],
+        "params": np.asarray(p).tolist(),
+        "radial_index": int(ridx),
+        "mode_index": int(midx),
+        "surface_index": int(sidx),
+        "state_shape": [int(base_Rcos.shape[0]), int(base_Rcos.shape[1])],
+        "sensitivity": sensitivity,
+        "fd_step": float(fd_step),
+        "mboz": int(mboz),
+        "nboz": int(nboz),
+        "ntheta": int(ntheta),
+        "bmnc_b": np.asarray(booz_meta["bmnc_b"]).tolist(),
+        "ixm_b": np.asarray(booz_meta["ixm_b"]).tolist(),
+        "ixn_b": np.asarray(booz_meta["ixn_b"]).tolist(),
+        "iota_b": float(np.asarray(booz_meta["iota_b"])),
+    }
+
+
 def geometry_sensitivity_report(
     mapping_fn: Any,
     params: jnp.ndarray,
@@ -895,5 +1035,6 @@ __all__ = [
     "geometry_inverse_design_report",
     "geometry_observable_names",
     "geometry_sensitivity_report",
+    "vmec_jax_boozer_flux_tube_sensitivity_report",
     "vmec_boundary_aspect_sensitivity_report",
 ]
