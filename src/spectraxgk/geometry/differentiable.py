@@ -89,13 +89,22 @@ def discover_differentiable_geometry_backends() -> dict[str, object]:
     """Discover optional ``vmec_jax`` and ``booz_xform_jax`` bridge APIs."""
 
     repo_parent = Path(__file__).resolve().parents[3].parent
+    home = Path.home()
     vmec_paths = _candidate_paths(
         ("SPECTRAX_VMEC_JAX_PATH", "VMEC_JAX_PATH"),
-        (repo_parent / "vmec_jax", Path("/Users/rogeriojorge/local/vmec_jax")),
+        (
+            repo_parent / "vmec_jax",
+            home / "vmec_jax",
+            home / "local" / "vmec_jax",
+        ),
     )
     booz_paths = _candidate_paths(
         ("SPECTRAX_BOOZ_XFORM_JAX_PATH", "BOOZ_XFORM_JAX_PATH"),
-        (repo_parent / "booz_xform_jax", Path("/Users/rogeriojorge/local/booz_xform_jax")),
+        (
+            repo_parent / "booz_xform_jax",
+            home / "booz_xform_jax",
+            home / "local" / "booz_xform_jax",
+        ),
     )
     vmec = _find_importable_module("vmec_jax", vmec_paths)
     booz = _find_importable_module("booz_xform_jax", booz_paths)
@@ -292,6 +301,75 @@ def finite_difference_jacobian(fn: Any, params: jnp.ndarray, *, step: float = 1.
     return jnp.stack(columns, axis=1)
 
 
+def vmec_boundary_aspect_sensitivity_report(
+    params: jnp.ndarray,
+    *,
+    fd_step: float = 2.0e-5,
+    mpol: int = 2,
+    ntor: int = 0,
+    ntheta: int = 96,
+    nphi: int = 1,
+    nfp: int = 1,
+) -> dict[str, object]:
+    """Validate a real ``vmec_jax`` boundary-aspect derivative when available.
+
+    The check intentionally stops at the boundary Fourier API. Full VMEC solves
+    are too expensive and environment-sensitive for the default package tests,
+    but the boundary-aspect path verifies that SPECTRAX-GK can discover a
+    ``vmec_jax`` checkout and differentiate through its JAX-native boundary
+    data structures before higher-cost optimization workflows are promoted.
+    """
+
+    p = jnp.asarray(params, dtype=jnp.float64)
+    if p.ndim != 1 or int(p.shape[0]) != 2:
+        raise ValueError("params must be a one-dimensional length-2 vector")
+    info = discover_differentiable_geometry_backends()
+    if not info.get("vmec_jax_boundary_api_available", False):
+        return {
+            "available": False,
+            "backend_info": info,
+            "aspect": None,
+            "grad_ad": None,
+            "grad_fd": None,
+            "max_abs_ad_fd_error": None,
+            "fd_step": float(fd_step),
+        }
+
+    import vmec_jax as vj  # type: ignore[import-not-found]
+
+    modes = vj.vmec_mode_table(int(mpol), int(ntor))
+    grid = vj.make_angle_grid(int(ntheta), int(nphi), int(nfp))
+    basis = vj.build_helical_basis(modes, grid)
+
+    def aspect_fn(x: jnp.ndarray) -> jnp.ndarray:
+        ripple, elongation = x
+        r0 = 1.0
+        minor = 0.22 * (1.0 + 0.5 * ripple)
+        r_cos = jnp.zeros(modes.K, dtype=p.dtype).at[0].set(r0).at[1].set(minor)
+        z_sin = jnp.zeros(modes.K, dtype=p.dtype).at[1].set(minor * (1.0 + elongation))
+        zeros = jnp.zeros_like(r_cos)
+        boundary = vj.BoundaryCoeffs(R_cos=r_cos, R_sin=zeros, Z_cos=zeros, Z_sin=z_sin)
+        return vj.boundary_aspect_ratio(boundary, basis)
+
+    grad_ad = jax.grad(aspect_fn)(p)
+    grad_fd = finite_difference_jacobian(lambda x: jnp.asarray([aspect_fn(x)]), p, step=fd_step)[0]
+    diff = grad_ad - grad_fd
+    return {
+        "available": True,
+        "backend_info": info,
+        "aspect": float(aspect_fn(p)),
+        "grad_ad": np.asarray(grad_ad).tolist(),
+        "grad_fd": np.asarray(grad_fd).tolist(),
+        "max_abs_ad_fd_error": float(np.max(np.abs(np.asarray(diff)))),
+        "fd_step": float(fd_step),
+        "mpol": int(mpol),
+        "ntor": int(ntor),
+        "ntheta": int(ntheta),
+        "nphi": int(nphi),
+        "nfp": int(nfp),
+    }
+
+
 def geometry_sensitivity_report(
     mapping_fn: Any,
     params: jnp.ndarray,
@@ -449,4 +527,5 @@ __all__ = [
     "geometry_inverse_design_report",
     "geometry_observable_names",
     "geometry_sensitivity_report",
+    "vmec_boundary_aspect_sensitivity_report",
 ]
