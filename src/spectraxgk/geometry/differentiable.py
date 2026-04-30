@@ -58,6 +58,7 @@ _VMEC_FIELD_LINE_OBSERVABLE_NAMES = (
     "g_tp_rms",
     "mean_g_ss",
 )
+_VMEC_BOOZER_PARITY_MIN_MODE_COUNT = 21
 
 
 def _candidate_paths(env_names: Sequence[str], defaults: Sequence[Path]) -> list[Path]:
@@ -1610,8 +1611,8 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(
     torflux: float | None = None,
     alpha: float = 0.0,
     ntheta: int = 32,
-    mboz: int = 12,
-    nboz: int = 12,
+    mboz: int = _VMEC_BOOZER_PARITY_MIN_MODE_COUNT,
+    nboz: int = _VMEC_BOOZER_PARITY_MIN_MODE_COUNT,
     jit: bool = False,
     reference_length: float | None = None,
     reference_b: float | None = None,
@@ -1631,6 +1632,13 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(
     ntheta_int = int(ntheta)
     if ntheta_int < 4:
         raise ValueError("ntheta must be >= 4")
+    mboz_int = int(mboz)
+    nboz_int = int(nboz)
+    if mboz_int < _VMEC_BOOZER_PARITY_MIN_MODE_COUNT or nboz_int < _VMEC_BOOZER_PARITY_MIN_MODE_COUNT:
+        raise ValueError(
+            "mboz and nboz must both be >= "
+            f"{_VMEC_BOOZER_PARITY_MIN_MODE_COUNT} for VMEC/Boozer parity gates"
+        )
 
     info = discover_differentiable_geometry_backends()
     if not (info.get("vmec_jax_available", False) and info.get("booz_xform_jax_api_available", False)):
@@ -1673,8 +1681,8 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(
     )
     constants, grids = bx.prepare_booz_xform_constants_from_inputs(
         inputs=inputs,
-        mboz=int(mboz),
-        nboz=int(nboz),
+        mboz=mboz_int,
+        nboz=nboz_int,
         asym=bool(getattr(inputs, "bmns", None) is not None),
     )
     out = bx.booz_xform_from_inputs(inputs=inputs, constants=constants, grids=grids, jit=bool(jit))
@@ -1895,8 +1903,8 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(
         "surface_index": int(sidx),
         "reference_length": float(L_reference),
         "reference_b": float(B_reference),
-        "mboz": int(mboz),
-        "nboz": int(nboz),
+        "mboz": mboz_int,
+        "nboz": nboz_int,
         "field_line_convention": "Boozer theta, alpha=theta-iota*zeta, equal-arc remap",
         "scope": (
             "Boozer equal-arc bmag/gradpar/Jacobian plus zero-beta metric/drift parity; "
@@ -2033,8 +2041,8 @@ def vmec_jax_flux_tube_array_parity_report(
     surface_index: int | None = None,
     alpha: float = 0.0,
     ntheta: int = 16,
-    mboz: int = 12,
-    nboz: int = 12,
+    mboz: int = _VMEC_BOOZER_PARITY_MIN_MODE_COUNT,
+    nboz: int = _VMEC_BOOZER_PARITY_MIN_MODE_COUNT,
     boundary: str = "none",
     include_shear_variation: bool = True,
     include_pressure_variation: bool = True,
@@ -2062,6 +2070,13 @@ def vmec_jax_flux_tube_array_parity_report(
     ntheta_int = int(ntheta)
     if ntheta_int < 4:
         raise ValueError("ntheta must be >= 4")
+    mboz_int = int(mboz)
+    nboz_int = int(nboz)
+    if mboz_int < _VMEC_BOOZER_PARITY_MIN_MODE_COUNT or nboz_int < _VMEC_BOOZER_PARITY_MIN_MODE_COUNT:
+        raise ValueError(
+            "mboz and nboz must both be >= "
+            f"{_VMEC_BOOZER_PARITY_MIN_MODE_COUNT} for VMEC/Boozer parity gates"
+        )
 
     info = discover_differentiable_geometry_backends()
     if not info.get("vmec_jax_available", False):
@@ -2208,8 +2223,8 @@ def vmec_jax_flux_tube_array_parity_report(
                     torflux=torflux,
                     alpha=float(alpha),
                     ntheta=ntheta_int,
-                    mboz=int(mboz),
-                    nboz=int(nboz),
+                    mboz=mboz_int,
+                    nboz=nboz_int,
                     jit=False,
                 )
                 equal_arc_core_pairs = {
@@ -2306,8 +2321,8 @@ def vmec_jax_flux_tube_array_parity_report(
         "torflux": float(torflux),
         "alpha": float(alpha),
         "ntheta": int(ntheta_int),
-        "mboz": int(mboz),
-        "nboz": int(nboz),
+        "mboz": mboz_int,
+        "nboz": nboz_int,
         "boundary": str(boundary),
         "include_shear_variation": bool(include_shear_variation),
         "include_pressure_variation": bool(include_pressure_variation),
