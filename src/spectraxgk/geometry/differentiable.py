@@ -1614,6 +1614,7 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(
     mboz: int = _VMEC_BOOZER_PARITY_MIN_MODE_COUNT,
     nboz: int = _VMEC_BOOZER_PARITY_MIN_MODE_COUNT,
     jit: bool = False,
+    surface_stencil_width: int | None = None,
     reference_length: float | None = None,
     reference_b: float | None = None,
 ) -> dict[str, Any]:
@@ -1660,6 +1661,8 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(
     s_value = float(sidx) / float(max(ns_full - 1, 1)) if torflux is None else float(torflux)
     if not (0.0 < s_value < 1.0):
         raise ValueError("torflux must lie inside (0, 1)")
+    if surface_stencil_width is not None and int(surface_stencil_width) < 3:
+        raise ValueError("surface_stencil_width must be >= 3 when provided")
 
     raw_length = float(getattr(wout, "Aminor_p", 1.0)) if reference_length is None else float(reference_length)
     L_reference = raw_length if np.isfinite(raw_length) and abs(raw_length) > 0.0 else 1.0
@@ -1685,7 +1688,21 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(
         nboz=nboz_int,
         asym=bool(getattr(inputs, "bmns", None) is not None),
     )
-    out = bx.booz_xform_from_inputs(inputs=inputs, constants=constants, grids=grids, jit=bool(jit))
+    surface_indices = None
+    if surface_stencil_width is not None:
+        ns_b_est = max(1, ns_full - 1)
+        width = min(int(surface_stencil_width), ns_b_est)
+        center = int(round(s_value * float(ns_b_est) - 0.5))
+        half_width = width // 2
+        start = max(0, min(center - half_width, ns_b_est - width))
+        surface_indices = jnp.arange(start, start + width, dtype=jnp.int32)
+    out = bx.booz_xform_from_inputs(
+        inputs=inputs,
+        constants=constants,
+        grids=grids,
+        surface_indices=surface_indices,
+        jit=bool(jit),
+    )
 
     bmnc_b_all = jnp.asarray(out["bmnc_b"], dtype=base_Rcos.dtype)
     if bmnc_b_all.ndim != 2:
@@ -1693,7 +1710,9 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(
     ns_b = int(bmnc_b_all.shape[0])
     if ns_b < 2:
         raise RuntimeError("booz_xform_jax output needs at least two radial surfaces")
-    s_half = (jnp.arange(ns_b, dtype=base_Rcos.dtype) + 0.5) / float(ns_b)
+    ns_b_full = int(np.asarray(out.get("ns_b", ns_b)))
+    jlist = jnp.asarray(out.get("jlist", jnp.arange(1, ns_b + 1)), dtype=base_Rcos.dtype)
+    s_half = (jlist - 0.5) / float(max(ns_b_full, 1))
 
     radial_spacing = float(s_half[1] - s_half[0])
     bmnc_b = _interp_radial(bmnc_b_all, s_half, s_value)
@@ -1905,6 +1924,8 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(
         "reference_b": float(B_reference),
         "mboz": mboz_int,
         "nboz": nboz_int,
+        "surface_stencil_width": None if surface_stencil_width is None else int(surface_stencil_width),
+        "boozer_surface_indices": None if surface_indices is None else [int(x) for x in np.asarray(surface_indices)],
         "field_line_convention": "Boozer theta, alpha=theta-iota*zeta, equal-arc remap",
         "scope": (
             "Boozer equal-arc bmag/gradpar/Jacobian plus zero-beta metric/drift parity; "

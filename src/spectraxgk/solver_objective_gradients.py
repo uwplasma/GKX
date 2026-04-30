@@ -290,6 +290,7 @@ def mode21_vmec_boozer_linear_frequency_gradient_report(
     ntheta: int = 4,
     mboz: int = 21,
     nboz: int = 21,
+    surface_stencil_width: int | None = None,
 ) -> dict[str, object]:
     """Validate a full VMEC/Boozer-state gradient of linear frequency.
 
@@ -354,6 +355,7 @@ def mode21_vmec_boozer_linear_frequency_gradient_report(
             ntheta=int(ntheta),
             mboz=int(mboz),
             nboz=int(nboz),
+            surface_stencil_width=surface_stencil_width,
         )
         return flux_tube_geometry_from_mapping(
             mapping,
@@ -416,6 +418,7 @@ def mode21_vmec_boozer_linear_frequency_gradient_report(
         "grid": {"Nx": int(cfg.grid.Nx), "Ny": int(cfg.grid.Ny), "Nz": int(cfg.grid.Nz), "selected_ky_index": 1},
         "mboz": int(mboz),
         "nboz": int(nboz),
+        "surface_stencil_width": None if surface_stencil_width is None else int(surface_stencil_width),
         "n_laguerre": n_laguerre,
         "n_hermite": n_hermite,
         "state_size": int(np.prod(state_shape)),
@@ -442,6 +445,7 @@ def mode21_vmec_boozer_quasilinear_gradient_report(
     ntheta: int = 4,
     mboz: int = 21,
     nboz: int = 21,
+    surface_stencil_width: int | None = None,
 ) -> dict[str, object]:
     """Validate full VMEC/Boozer-state gradients of quasilinear observables.
 
@@ -505,6 +509,7 @@ def mode21_vmec_boozer_quasilinear_gradient_report(
             ntheta=int(ntheta),
             mboz=int(mboz),
             nboz=int(nboz),
+            surface_stencil_width=surface_stencil_width,
         )
         return flux_tube_geometry_from_mapping(
             mapping,
@@ -592,6 +597,7 @@ def mode21_vmec_boozer_quasilinear_gradient_report(
         "grid": {"Nx": int(cfg.grid.Nx), "Ny": int(cfg.grid.Ny), "Nz": int(cfg.grid.Nz), "selected_ky_index": 1},
         "mboz": int(mboz),
         "nboz": int(nboz),
+        "surface_stencil_width": None if surface_stencil_width is None else int(surface_stencil_width),
         "n_laguerre": n_laguerre,
         "n_hermite": n_hermite,
         "state_size": int(np.prod(state_shape)),
