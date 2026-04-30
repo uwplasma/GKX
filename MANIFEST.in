@@ -3,3 +3,11 @@ recursive-include docs *.rst *.py
 recursive-include docs/_static *
 recursive-include src/spectraxgk/data *.csv
 include README.md LICENSE
+prune docs/_build
+prune build
+prune dist
+prune tools_out
+prune .cache
+prune .pytest_cache
+prune .ruff_cache
+global-exclude __pycache__ *.py[cod] .DS_Store

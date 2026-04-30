@@ -241,6 +241,25 @@ in the JSON metadata.
 
 ![SPECTRAX-GK differentiable geometry bridge](docs/_static/differentiable_geometry_bridge.png)
 
+Differentiable stellarator ITG optimization examples live in
+`examples/optimization/`. They optimize the same QA, max-mode-1 control vector
+with three turbulence objectives: small linear ITG growth rate, small
+quasilinear ITG heat-flux proxy, and a small late-window nonlinear heat-flux
+envelope. Each example reports AD-vs-finite-difference checks, UQ covariance
+diagnostics, objective histories, and polished figures.
+
+![SPECTRAX-GK differentiable stellarator ITG optimization](docs/_static/stellarator_itg_optimization_comparison.png)
+
+The panel above is the current release-grade differentiability gate: all three
+objectives keep the optimized QA configuration near aspect ratio `7` and
+`iota = 0.41` while reducing the tracked transport observables. It should be
+read as validated optimization plumbing for stellarator-transport objectives,
+not as a final absolute-flux optimization claim. Full
+`vmec_jax -> booz_xform_jax -> SPECTRAX-GK` nonlinear optimization remains
+scoped to the next promotion gate: in-memory geometry parity, gradient checks
+through the production geometry cache, and converged nonlinear audits of the
+optimized equilibria.
+
 For production parallelization of independent work, use
 `spectraxgk.batch_map` / `spectraxgk.ky_scan_batches` for ky scans,
 sensitivity sweeps, and UQ ensembles. These helpers preserve serial ordering,

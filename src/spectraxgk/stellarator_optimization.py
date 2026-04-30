@@ -1,0 +1,518 @@
+"""Differentiable stellarator ITG objective-reduction utilities.
+
+The functions here provide a small, fully JAX-differentiable optimization
+contract for QA, max-mode-1 stellarator studies. They are intentionally
+separate from the production runtime drivers: this module is the gradient,
+conditioning, and UQ gate used before promoting a full VMEC/Boozer/nonlinear
+gyrokinetic loop into a release claim.
+"""
+
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass, replace
+from typing import Any, Literal, Sequence
+
+import jax
+import jax.numpy as jnp
+import numpy as np
+
+from spectraxgk.autodiff_validation import autodiff_finite_difference_report, covariance_diagnostics
+from spectraxgk.geometry.differentiable import discover_differentiable_geometry_backends
+from spectraxgk.quasilinear import quasilinear_feature_objective
+
+
+StellaratorObjectiveKind = Literal["growth", "quasilinear_flux", "nonlinear_heat_flux"]
+
+PARAMETER_NAMES = (
+    "minor_radius_log_shift",
+    "vertical_elongation_shift",
+    "helical_ripple_amplitude",
+    "magnetic_shear_shift",
+)
+
+OBSERVABLE_NAMES = (
+    "aspect",
+    "mean_iota",
+    "qa_residual",
+    "kperp_eff2",
+    "growth_rate",
+    "frequency",
+    "linear_heat_flux_weight",
+    "quasilinear_heat_flux",
+    "nonlinear_heat_flux_mean",
+    "nonlinear_heat_flux_cv",
+    "nonlinear_heat_flux_trend",
+)
+
+
+@dataclass(frozen=True)
+class StellaratorITGOptimizationConfig:
+    """Configuration for the QA max-mode-1 ITG optimization examples."""
+
+    target_aspect: float = 7.0
+    target_iota: float = 0.41
+    max_mode: int = 1
+    aspect_weight: float = 0.25
+    iota_weight: float = 25.0
+    qa_weight: float = 5.0
+    turbulence_weight: float = 1.0
+    regularization: float = 2.0e-3
+    learning_rate: float = 0.035
+    steps: int = 90
+    nonlinear_dt: float = 0.18
+    nonlinear_steps: int = 520
+    nonlinear_tail_fraction: float = 0.25
+    quasilinear_csat: float = 0.75
+    fd_step: float = 1.0e-4
+
+    def with_kind_defaults(self, kind: StellaratorObjectiveKind) -> "StellaratorITGOptimizationConfig":
+        """Return conservative optimizer defaults for one objective family."""
+
+        if kind == "growth":
+            return replace(self, learning_rate=0.045, steps=max(self.steps, 80), turbulence_weight=1.0)
+        if kind == "quasilinear_flux":
+            return replace(self, learning_rate=0.030, steps=max(self.steps, 95), turbulence_weight=1.0)
+        if kind == "nonlinear_heat_flux":
+            return replace(self, learning_rate=0.025, steps=max(self.steps, 110), turbulence_weight=1.0)
+        raise ValueError(f"unknown stellarator objective kind {kind!r}")
+
+
+@dataclass(frozen=True)
+class StellaratorITGOptimizationResult:
+    """JSON-friendly result for one differentiable stellarator objective."""
+
+    objective_kind: StellaratorObjectiveKind
+    parameter_names: tuple[str, ...]
+    observable_names: tuple[str, ...]
+    initial_params: tuple[float, ...]
+    final_params: tuple[float, ...]
+    initial_objective: float
+    final_objective: float
+    initial_observables: tuple[float, ...]
+    final_observables: tuple[float, ...]
+    history: tuple[dict[str, Any], ...]
+    gradient_gate: dict[str, Any]
+    covariance: dict[str, Any]
+    nonlinear_trace: dict[str, Any] | None
+    config: dict[str, Any]
+    backend_info: dict[str, Any]
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a stable JSON-serializable representation."""
+
+        payload = asdict(self)
+        payload["parameter_names"] = list(self.parameter_names)
+        payload["observable_names"] = list(self.observable_names)
+        payload["initial_params"] = list(self.initial_params)
+        payload["final_params"] = list(self.final_params)
+        payload["initial_observables"] = list(self.initial_observables)
+        payload["final_observables"] = list(self.final_observables)
+        payload["history"] = list(self.history)
+        return payload
+
+
+def default_stellarator_initial_params() -> jnp.ndarray:
+    """Return the shared off-optimum QA max-mode-1 starting point."""
+
+    return jnp.asarray([0.28, 0.46, 0.42, -0.32])
+
+
+def _validate_params(params: jnp.ndarray | Sequence[float]) -> jnp.ndarray:
+    p = jnp.asarray(params)
+    if p.ndim != 1 or int(p.shape[0]) != len(PARAMETER_NAMES):
+        raise ValueError(f"params must be a length-{len(PARAMETER_NAMES)} vector")
+    return p
+
+
+def _precision_gate_tolerances(fd_step: float) -> tuple[float, float, float]:
+    """Return FD tolerances that are strict in x64 and stable in float32."""
+
+    if bool(jax.config.jax_enable_x64):
+        return float(fd_step), 5.0e-3, 6.0e-4
+    return max(float(fd_step), 5.0e-3), 5.0e-2, 6.0e-3
+
+
+def smooth_positive(x: jnp.ndarray | float, *, beta: float = 18.0) -> jnp.ndarray:
+    """Smooth positive part used to keep objectives differentiable near marginality."""
+
+    arr = jnp.asarray(x)
+    beta_arr = jnp.asarray(beta, dtype=arr.dtype)
+    return jax.nn.softplus(beta_arr * arr) / beta_arr
+
+
+def _qa_core_features(
+    params: jnp.ndarray | Sequence[float],
+    config: StellaratorITGOptimizationConfig,
+) -> dict[str, jnp.ndarray]:
+    """Return the linear/quasilinear QA-ITG features without nonlinear tracing."""
+
+    p = _validate_params(params)
+    minor_shift, elong_shift, ripple, shear_shift = p
+    dtype = p.dtype
+
+    aspect_target = jnp.asarray(config.target_aspect, dtype=dtype)
+    iota_target = jnp.asarray(config.target_iota, dtype=dtype)
+
+    aspect = aspect_target * jnp.exp(
+        -0.48 * minor_shift + 0.060 * elong_shift**2 + 0.045 * ripple**2
+    )
+    mean_iota = iota_target + 0.19 * shear_shift - 0.030 * ripple + 0.018 * elong_shift
+    qa_residual = jnp.sqrt((0.18 * ripple) ** 2 + (0.035 * elong_shift * ripple) ** 2 + (2.0e-4) ** 2)
+    shear_metric = jnp.sqrt(shear_shift**2 + 4.0e-4)
+    bad_curvature = (
+        0.055
+        + 0.18 * qa_residual
+        + 0.030 * (aspect / aspect_target - 1.0) ** 2
+        + 0.035 * elong_shift**2
+    )
+    kperp_eff2 = (
+        0.34
+        + 0.18 / aspect
+        + 0.42 * qa_residual
+        + 0.080 * shear_metric
+        + 0.055 * elong_shift**2
+    )
+    raw_drive = 1.8 * bad_curvature + 0.25 * shear_metric + 0.08 * (mean_iota - iota_target) ** 2 - 0.24
+    growth_rate = 0.025 + smooth_positive(raw_drive, beta=20.0)
+    frequency = -0.42 * mean_iota + 0.090 * shear_shift - 0.045 * ripple
+    linear_heat_flux_weight = (
+        0.38
+        + 2.4 * qa_residual
+        + 0.18 * elong_shift**2
+        + 0.10 * shear_metric
+        + 0.06 * jnp.sqrt((mean_iota - iota_target) ** 2 + 1.0e-10)
+    )
+    ql_features = jnp.asarray([growth_rate, kperp_eff2, linear_heat_flux_weight], dtype=dtype)
+    quasilinear_heat_flux = quasilinear_feature_objective(
+        ql_features,
+        rule="mixing_length",
+        csat=config.quasilinear_csat,
+        gamma_floor=0.0,
+    )
+    return {
+        "aspect": aspect,
+        "mean_iota": mean_iota,
+        "qa_residual": qa_residual,
+        "shear_metric": shear_metric,
+        "kperp_eff2": kperp_eff2,
+        "growth_rate": growth_rate,
+        "frequency": frequency,
+        "linear_heat_flux_weight": linear_heat_flux_weight,
+        "quasilinear_heat_flux": quasilinear_heat_flux,
+    }
+
+
+def qa_max_mode1_observables(
+    params: jnp.ndarray | Sequence[float],
+    config: StellaratorITGOptimizationConfig | None = None,
+) -> dict[str, jnp.ndarray]:
+    """Map a QA max-mode-1 boundary/control vector to differentiable ITG observables.
+
+    The four inputs represent the active low-order controls used by the example
+    scripts. The map is calibrated as a smooth objective-reduction gate around a
+    QA stellarator with aspect ratio 7 and mean rotational transform 0.41. It is
+    not a replacement for the full VMEC/Boozer flux-tube geometry contract; its
+    purpose is to validate gradient plumbing, UQ, optimizer behavior, and
+    figure-generation before expensive production objectives are promoted.
+    """
+
+    cfg = config or StellaratorITGOptimizationConfig()
+    p = _validate_params(params)
+    core = _qa_core_features(p, cfg)
+    times, heat_flux = nonlinear_heat_flux_trace(p, cfg)
+    nl_summary = nonlinear_heat_flux_window_metrics(times, heat_flux, tail_fraction=cfg.nonlinear_tail_fraction)
+
+    return {
+        "aspect": core["aspect"],
+        "mean_iota": core["mean_iota"],
+        "qa_residual": core["qa_residual"],
+        "kperp_eff2": core["kperp_eff2"],
+        "growth_rate": core["growth_rate"],
+        "frequency": core["frequency"],
+        "linear_heat_flux_weight": core["linear_heat_flux_weight"],
+        "quasilinear_heat_flux": core["quasilinear_heat_flux"],
+        "nonlinear_heat_flux_mean": nl_summary["mean"],
+        "nonlinear_heat_flux_cv": nl_summary["cv"],
+        "nonlinear_heat_flux_trend": nl_summary["trend"],
+    }
+
+
+def qa_observable_vector(
+    params: jnp.ndarray | Sequence[float],
+    config: StellaratorITGOptimizationConfig | None = None,
+) -> jnp.ndarray:
+    """Return observables in the stable order defined by ``OBSERVABLE_NAMES``."""
+
+    obs = qa_max_mode1_observables(params, config)
+    return jnp.asarray([obs[name] for name in OBSERVABLE_NAMES])
+
+
+def nonlinear_heat_flux_trace(
+    params: jnp.ndarray | Sequence[float],
+    config: StellaratorITGOptimizationConfig | None = None,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Return a differentiable short-window ITG heat-flux envelope trace.
+
+    The envelope evolves ``E`` with a fixed-step RK2 discretization,
+
+    ``dE/dt = 2 gamma E - alpha E^2``, ``Q_i(t) = W_i E``.
+
+    ``gamma`` and ``W_i`` come from the same differentiable QA/ITG feature map
+    as the linear and quasilinear objectives. The output is therefore useful for
+    nonlinear averaging, optimizer, and UQ gates while the full production
+    nonlinear-GK geometry path is still being made traceable end-to-end.
+    """
+
+    cfg = config or StellaratorITGOptimizationConfig()
+    p = _validate_params(params)
+    dtype = p.dtype
+    # Inline only the feature subset needed here to avoid recursion through
+    # qa_max_mode1_observables.
+    minor_shift, elong_shift, ripple, shear_shift = p
+    aspect_target = jnp.asarray(cfg.target_aspect, dtype=dtype)
+    iota_target = jnp.asarray(cfg.target_iota, dtype=dtype)
+    aspect = aspect_target * jnp.exp(-0.48 * minor_shift + 0.060 * elong_shift**2 + 0.045 * ripple**2)
+    mean_iota = iota_target + 0.19 * shear_shift - 0.030 * ripple + 0.018 * elong_shift
+    qa_residual = jnp.sqrt((0.18 * ripple) ** 2 + (0.035 * elong_shift * ripple) ** 2 + (2.0e-4) ** 2)
+    shear_metric = jnp.sqrt(shear_shift**2 + 4.0e-4)
+    bad_curvature = (
+        0.055
+        + 0.18 * qa_residual
+        + 0.030 * (aspect / aspect_target - 1.0) ** 2
+        + 0.035 * elong_shift**2
+    )
+    kperp_eff2 = 0.34 + 0.18 / aspect + 0.42 * qa_residual + 0.080 * shear_metric + 0.055 * elong_shift**2
+    growth_rate = 0.025 + smooth_positive(
+        1.8 * bad_curvature + 0.25 * shear_metric + 0.08 * (mean_iota - iota_target) ** 2 - 0.24,
+        beta=20.0,
+    )
+    flux_weight = 0.38 + 2.4 * qa_residual + 0.18 * elong_shift**2 + 0.10 * shear_metric
+    saturation = 1.2 + 2.8 * kperp_eff2 + 0.45 * shear_metric + 1.4 * qa_residual
+    drive_weight = flux_weight / (1.0 + 0.35 * kperp_eff2)
+    dt = jnp.asarray(cfg.nonlinear_dt, dtype=dtype)
+    steps = int(cfg.nonlinear_steps)
+    times = dt * jnp.arange(steps + 1, dtype=dtype)
+    equilibrium_energy = 2.0 * growth_rate / jnp.maximum(saturation, jnp.asarray(1.0e-12, dtype=dtype))
+    seed_floor = jnp.asarray(8.0e-4, dtype=dtype) * (1.0 + 0.5 * ripple**2 + 0.2 * elong_shift**2)
+    e0 = jnp.maximum(seed_floor, 0.40 * equilibrium_energy)
+
+    def rhs(energy: jnp.ndarray) -> jnp.ndarray:
+        return 2.0 * growth_rate * energy - saturation * energy**2
+
+    def step_fn(energy: jnp.ndarray, _idx: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
+        k1 = rhs(energy)
+        predictor = jnp.maximum(energy + dt * k1, jnp.asarray(0.0, dtype=dtype))
+        k2 = rhs(predictor)
+        next_energy = jnp.maximum(energy + 0.5 * dt * (k1 + k2), jnp.asarray(0.0, dtype=dtype))
+        return next_energy, next_energy
+
+    _, energy_tail = jax.lax.scan(step_fn, e0, jnp.arange(steps, dtype=jnp.int32))
+    energy = jnp.concatenate([jnp.asarray([e0], dtype=dtype), energy_tail])
+    heat_flux = drive_weight * energy
+    return times, heat_flux
+
+
+def nonlinear_heat_flux_window_metrics(
+    times: jnp.ndarray,
+    heat_flux: jnp.ndarray,
+    *,
+    tail_fraction: float = 0.45,
+    eps: float = 1.0e-14,
+) -> dict[str, jnp.ndarray]:
+    """Return mean, coefficient of variation, and trend on a late-time window."""
+
+    t = jnp.asarray(times)
+    q = jnp.asarray(heat_flux)
+    if int(t.ndim) != 1 or int(q.ndim) != 1 or int(t.shape[0]) != int(q.shape[0]):
+        raise ValueError("times and heat_flux must be one-dimensional arrays with matching length")
+    n = int(q.shape[0])
+    start = max(0, min(n - 2, int(round((1.0 - float(tail_fraction)) * n))))
+    tw = t[start:]
+    qw = q[start:]
+    mean = jnp.mean(qw)
+    centered_t = tw - jnp.mean(tw)
+    denom = jnp.maximum(jnp.sum(centered_t**2), jnp.asarray(eps, dtype=qw.dtype))
+    slope = jnp.sum(centered_t * (qw - mean)) / denom
+    span = jnp.maximum(tw[-1] - tw[0], jnp.asarray(eps, dtype=qw.dtype))
+    trend = jnp.abs(slope) * span / jnp.maximum(jnp.abs(mean), jnp.asarray(eps, dtype=qw.dtype))
+    cv = jnp.std(qw) / jnp.maximum(jnp.abs(mean), jnp.asarray(eps, dtype=qw.dtype))
+    return {
+        "mean": mean,
+        "std": jnp.std(qw),
+        "cv": cv,
+        "trend": trend,
+        "slope": slope,
+        "start_index": jnp.asarray(start),
+    }
+
+
+def stellarator_itg_objective(
+    params: jnp.ndarray | Sequence[float],
+    kind: StellaratorObjectiveKind,
+    config: StellaratorITGOptimizationConfig | None = None,
+) -> jnp.ndarray:
+    """Return the scalar constrained QA + ITG objective for one optimization."""
+
+    cfg = config or StellaratorITGOptimizationConfig()
+    p = _validate_params(params)
+    obs = _qa_core_features(p, cfg)
+    aspect_res = (obs["aspect"] - cfg.target_aspect) / cfg.target_aspect
+    iota_res = obs["mean_iota"] - cfg.target_iota
+    constraints = (
+        cfg.aspect_weight * aspect_res**2
+        + cfg.iota_weight * iota_res**2
+        + cfg.qa_weight * obs["qa_residual"] ** 2
+        + cfg.regularization * jnp.dot(p, p)
+    )
+    if kind == "growth":
+        turbulence = obs["growth_rate"]
+    elif kind == "quasilinear_flux":
+        turbulence = obs["quasilinear_heat_flux"]
+    elif kind == "nonlinear_heat_flux":
+        times, heat_flux = nonlinear_heat_flux_trace(p, cfg)
+        turbulence = nonlinear_heat_flux_window_metrics(
+            times,
+            heat_flux,
+            tail_fraction=cfg.nonlinear_tail_fraction,
+        )["mean"]
+    else:
+        raise ValueError(f"unknown stellarator objective kind {kind!r}")
+    return constraints + cfg.turbulence_weight * turbulence
+
+
+def optimize_stellarator_itg(
+    kind: StellaratorObjectiveKind,
+    initial_params: jnp.ndarray | Sequence[float] | None = None,
+    config: StellaratorITGOptimizationConfig | None = None,
+) -> StellaratorITGOptimizationResult:
+    """Optimize one differentiable stellarator ITG objective with Adam."""
+
+    backend_info = discover_differentiable_geometry_backends()
+    base_cfg = config or StellaratorITGOptimizationConfig()
+    cfg = base_cfg.with_kind_defaults(kind)
+    p0 = default_stellarator_initial_params() if initial_params is None else _validate_params(initial_params)
+    p = jnp.asarray(p0)
+    value_and_grad = jax.jit(jax.value_and_grad(lambda x: stellarator_itg_objective(x, kind, cfg)))
+    obs_fn = jax.jit(lambda x: qa_observable_vector(x, cfg))
+
+    beta1 = jnp.asarray(0.9, dtype=p.dtype)
+    beta2 = jnp.asarray(0.99, dtype=p.dtype)
+    eps = jnp.asarray(1.0e-8, dtype=p.dtype)
+    lr = jnp.asarray(cfg.learning_rate, dtype=p.dtype)
+    m = jnp.zeros_like(p)
+    v = jnp.zeros_like(p)
+    history: list[dict[str, Any]] = []
+    initial_value = float(stellarator_itg_objective(p, kind, cfg))
+
+    for step in range(int(cfg.steps) + 1):
+        value, grad = value_and_grad(p)
+        obs = obs_fn(p)
+        history.append(
+            {
+                "step": int(step),
+                "objective": float(value),
+                "params": np.asarray(p).tolist(),
+                "observables": np.asarray(obs).tolist(),
+                "gradient_norm": float(jnp.linalg.norm(grad)),
+            }
+        )
+        if step == int(cfg.steps):
+            break
+        m = beta1 * m + (1.0 - beta1) * grad
+        v = beta2 * v + (1.0 - beta2) * (grad * grad)
+        m_hat = m / (1.0 - beta1 ** (step + 1))
+        v_hat = v / (1.0 - beta2 ** (step + 1))
+        p = p - lr * m_hat / (jnp.sqrt(v_hat) + eps)
+        p = jnp.clip(p, -0.8, 0.8)
+
+    final_value = float(stellarator_itg_objective(p, kind, cfg))
+    initial_obs = qa_observable_vector(p0, cfg)
+    final_obs = qa_observable_vector(p, cfg)
+    fd_step, rtol, atol = _precision_gate_tolerances(cfg.fd_step)
+    gradient_gate = autodiff_finite_difference_report(
+        lambda x: stellarator_itg_objective(x, kind, cfg),
+        p,
+        step=fd_step,
+        rtol=rtol,
+        atol=atol,
+    )
+    jac = jax.jacfwd(lambda x: qa_observable_vector(x, cfg))(p)
+    residual = np.asarray(final_obs) - np.asarray(initial_obs)
+    covariance = covariance_diagnostics(np.asarray(jac), residual, regularization=1.0e-8)
+
+    nonlinear_trace = None
+    if kind == "nonlinear_heat_flux":
+        times0, heat0 = nonlinear_heat_flux_trace(p0, cfg)
+        times1, heat1 = nonlinear_heat_flux_trace(p, cfg)
+        summary0 = nonlinear_heat_flux_window_metrics(times0, heat0, tail_fraction=cfg.nonlinear_tail_fraction)
+        summary1 = nonlinear_heat_flux_window_metrics(times1, heat1, tail_fraction=cfg.nonlinear_tail_fraction)
+        nonlinear_trace = {
+            "times": np.asarray(times1).tolist(),
+            "initial_heat_flux": np.asarray(heat0).tolist(),
+            "final_heat_flux": np.asarray(heat1).tolist(),
+            "initial_window": {
+                "mean": float(summary0["mean"]),
+                "cv": float(summary0["cv"]),
+                "trend": float(summary0["trend"]),
+                "start_index": int(summary0["start_index"]),
+            },
+            "final_window": {
+                "mean": float(summary1["mean"]),
+                "cv": float(summary1["cv"]),
+                "trend": float(summary1["trend"]),
+                "start_index": int(summary1["start_index"]),
+            },
+        }
+
+    return StellaratorITGOptimizationResult(
+        objective_kind=kind,
+        parameter_names=PARAMETER_NAMES,
+        observable_names=OBSERVABLE_NAMES,
+        initial_params=tuple(float(x) for x in np.asarray(p0)),
+        final_params=tuple(float(x) for x in np.asarray(p)),
+        initial_objective=initial_value,
+        final_objective=final_value,
+        initial_observables=tuple(float(x) for x in np.asarray(initial_obs)),
+        final_observables=tuple(float(x) for x in np.asarray(final_obs)),
+        history=tuple(history),
+        gradient_gate=gradient_gate,
+        covariance=covariance,
+        nonlinear_trace=nonlinear_trace,
+        config=asdict(cfg),
+        backend_info=backend_info,
+    )
+
+
+def compare_stellarator_itg_objectives(
+    kinds: Sequence[StellaratorObjectiveKind] = ("growth", "quasilinear_flux", "nonlinear_heat_flux"),
+    *,
+    initial_params: jnp.ndarray | Sequence[float] | None = None,
+    config: StellaratorITGOptimizationConfig | None = None,
+) -> dict[str, Any]:
+    """Run the three objective reductions from a shared starting point."""
+
+    results = [optimize_stellarator_itg(kind, initial_params=initial_params, config=config) for kind in kinds]
+    return {
+        "parameter_names": list(PARAMETER_NAMES),
+        "observable_names": list(OBSERVABLE_NAMES),
+        "results": [result.to_dict() for result in results],
+        "backend_info": discover_differentiable_geometry_backends(),
+    }
+
+
+__all__ = [
+    "OBSERVABLE_NAMES",
+    "PARAMETER_NAMES",
+    "StellaratorITGOptimizationConfig",
+    "StellaratorITGOptimizationResult",
+    "StellaratorObjectiveKind",
+    "compare_stellarator_itg_objectives",
+    "default_stellarator_initial_params",
+    "nonlinear_heat_flux_trace",
+    "nonlinear_heat_flux_window_metrics",
+    "optimize_stellarator_itg",
+    "qa_max_mode1_observables",
+    "qa_observable_vector",
+    "smooth_positive",
+    "stellarator_itg_objective",
+]
