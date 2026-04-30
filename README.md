@@ -243,7 +243,10 @@ observables before any SPECTRAX-GK closure approximation is introduced. The
 same path now emits a direct VMEC tensor-derived SPECTRAX-GK flux-tube mapping
 and checks its geometry-observable sensitivities against finite differences,
 so the differentiability chain starts at `vmec_jax` state coefficients rather
-than only at a Boozer spectral adapter. When
+than only at a Boozer spectral adapter. The validation artifact also records a
+direct-VMEC-tensor vs imported-VMEC/EIK array-parity audit; that production
+gate remains open until the Boozer equal-arc metric and drift conventions
+match. When
 `booz_xform_jax` is available, it also runs a bounded JAX-native Boozer
 spectral transform, samples the resulting Boozer `|B|` spectrum onto a
 field-line flux-tube mapping, and checks both derivative paths against central

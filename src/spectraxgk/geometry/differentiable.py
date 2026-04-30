@@ -7,6 +7,7 @@ import os
 from collections.abc import Mapping, Sequence
 from dataclasses import replace as dc_replace
 from pathlib import Path
+import tempfile
 from types import SimpleNamespace
 from typing import Any
 
@@ -362,6 +363,49 @@ def finite_difference_jacobian(fn: Any, params: jnp.ndarray, *, step: float = 1.
         basis = jnp.zeros_like(p).at[idx].set(h)
         columns.append((jnp.asarray(fn(p + basis)) - jnp.asarray(fn(p - basis))) / (2.0 * h))
     return jnp.stack(columns, axis=1)
+
+
+def _array_parity_metrics(candidate: Any, reference: Any, *, floor: float = 1.0e-12) -> dict[str, object]:
+    cand = np.asarray(candidate, dtype=float)
+    ref = np.asarray(reference, dtype=float)
+    metrics: dict[str, object] = {
+        "candidate_shape": [int(v) for v in cand.shape],
+        "reference_shape": [int(v) for v in ref.shape],
+        "shape_match": bool(cand.shape == ref.shape),
+    }
+    if cand.shape != ref.shape:
+        return metrics
+    diff = cand - ref
+    ref_scale = max(float(np.nanmax(np.abs(ref))) if ref.size else 0.0, float(floor))
+    local_scale = np.maximum(np.abs(ref), float(floor))
+    metrics.update(
+        {
+            "max_abs": float(np.nanmax(np.abs(diff))) if diff.size else 0.0,
+            "rms_abs": float(np.sqrt(np.nanmean(diff * diff))) if diff.size else 0.0,
+            "max_rel_pointwise": float(np.nanmax(np.abs(diff) / local_scale)) if diff.size else 0.0,
+            "rms_rel_pointwise": float(np.sqrt(np.nanmean((diff / local_scale) ** 2))) if diff.size else 0.0,
+            "reference_scale": ref_scale,
+            "normalized_max_abs": float(np.nanmax(np.abs(diff)) / ref_scale) if diff.size else 0.0,
+            "candidate_min": float(np.nanmin(cand)) if cand.size else 0.0,
+            "candidate_max": float(np.nanmax(cand)) if cand.size else 0.0,
+            "reference_min": float(np.nanmin(ref)) if ref.size else 0.0,
+            "reference_max": float(np.nanmax(ref)) if ref.size else 0.0,
+        }
+    )
+    return metrics
+
+
+def _scalar_parity_metrics(candidate: Any, reference: Any, *, floor: float = 1.0e-12) -> dict[str, float]:
+    cand = float(np.asarray(candidate))
+    ref = float(np.asarray(reference))
+    diff = cand - ref
+    scale = max(abs(ref), float(floor))
+    return {
+        "candidate": cand,
+        "reference": ref,
+        "abs": abs(diff),
+        "rel": abs(diff) / scale,
+    }
 
 
 def _periodic_bilinear_sample_2d(values: jnp.ndarray, theta: jnp.ndarray, zeta: jnp.ndarray) -> jnp.ndarray:
@@ -1604,6 +1648,193 @@ def vmec_jax_flux_tube_sensitivity_report(
     }
 
 
+def vmec_jax_flux_tube_array_parity_report(
+    *,
+    case_name: str = "nfp4_QH_warm_start",
+    surface_index: int | None = None,
+    alpha: float = 0.0,
+    ntheta: int = 16,
+    boundary: str = "none",
+    include_shear_variation: bool = True,
+    include_pressure_variation: bool = True,
+    core_tolerance: float = 5.0e-2,
+    scalar_tolerance: float = 5.0e-3,
+) -> dict[str, object]:
+    """Compare the direct ``vmec_jax`` flux-tube arrays to imported VMEC/EIK.
+
+    This is a diagnostic promotion gate, not a differentiability check.  It
+    starts from the same real ``vmec_jax`` example state used by
+    :func:`vmec_jax_flux_tube_sensitivity_report`, builds the direct
+    VMEC-tensor-derived flux-tube mapping, then generates the existing imported
+    VMEC/EIK geometry on the same surface and compares solver-facing arrays.
+
+    The expected current result is that ``q`` and magnetic shear are close
+    while metric/drift arrays remain open because the direct path still uses a
+    VMEC-coordinate/equal-theta convention and a local grad-:math:`B` closure
+    instead of the production Boozer equal-arc/Hegna-Nakajima convention.
+    """
+
+    ntheta_int = int(ntheta)
+    if ntheta_int < 4:
+        raise ValueError("ntheta must be >= 4")
+
+    info = discover_differentiable_geometry_backends()
+    if not info.get("vmec_jax_available", False):
+        return {
+            "available": False,
+            "backend_info": info,
+            "case_name": str(case_name),
+            "reason": "vmec_jax is not available",
+        }
+
+    try:
+        from spectraxgk.from_gx.vmec import generate_vmec_eik_internal, internal_vmec_backend_available
+        from spectraxgk.geometry import load_gx_geometry_netcdf
+
+        if not internal_vmec_backend_available():
+            return {
+                "available": False,
+                "backend_info": info,
+                "case_name": str(case_name),
+                "reason": "internal VMEC/EIK backend is not available",
+            }
+
+        driver = importlib.import_module("vmec_jax.driver")
+        config_mod = importlib.import_module("vmec_jax.config")
+        static_mod = importlib.import_module("vmec_jax.static")
+        wout_mod = importlib.import_module("vmec_jax.wout")
+
+        input_path, wout_path = driver.example_paths(str(case_name))
+        if wout_path is None:
+            raise RuntimeError(f"vmec_jax example {case_name!r} has no bundled wout reference")
+
+        cfg, _indata = config_mod.load_config(str(input_path))
+        static = static_mod.build_static(cfg)
+        wout = wout_mod.read_wout(wout_path)
+        state = wout_mod.state_from_wout(wout)
+
+        ns = int(jnp.asarray(state.Rcos).shape[0])
+        sidx = max(1, min(ns // 2, ns - 2)) if surface_index is None else int(surface_index)
+        torflux = float(sidx) / float(max(ns - 1, 1))
+        direct_mapping = vmec_jax_flux_tube_mapping_from_state(
+            state,
+            static,
+            wout,
+            surface_index=sidx,
+            alpha=float(alpha),
+            ntheta=ntheta_int,
+        )
+        direct = flux_tube_geometry_from_mapping(
+            direct_mapping,
+            source_model="vmec_jax:state->tensor-flux-tube",
+            validate_finite=False,
+        )
+
+        request = SimpleNamespace(
+            vmec_file=str(wout_path),
+            ntheta=ntheta_int,
+            boundary=str(boundary),
+            y0=10.0,
+            x0=None,
+            jtwist=None,
+            beta=0.0,
+            alpha=float(alpha),
+            torflux=torflux,
+            npol=1.0,
+            npol_min=None,
+            isaxisym=False,
+            which_crossing=None,
+            include_shear_variation=bool(include_shear_variation),
+            include_pressure_variation=bool(include_pressure_variation),
+            betaprim=None,
+            z=(1.0, -1.0),
+            mass=(1.0, 2.7e-4),
+            dens=(1.0, 1.0),
+            temp=(1.0, 1.0),
+            tprim=(3.0, 0.0),
+            fprim=(1.0, 0.0),
+            vnewk=(0.0, 0.0),
+            species_type=("ion", "electron"),
+        )
+        with tempfile.TemporaryDirectory(prefix="spectrax_vmec_eik_parity_") as tmp:
+            eik_path = Path(tmp) / f"{case_name}.eik.nc"
+            generate_vmec_eik_internal(output_path=eik_path, request=request)
+            imported = load_gx_geometry_netcdf(eik_path)
+            if imported.theta.shape[0] == direct.theta.shape[0] + 1:
+                imported = imported.trim_terminal_theta_point()
+
+        array_pairs = {
+            "theta": (direct.theta, imported.theta),
+            "bmag": (direct.bmag_profile, imported.bmag_profile),
+            "bgrad": (direct.bgrad_profile, imported.bgrad_profile),
+            "gds2": (direct.gds2_profile, imported.gds2_profile),
+            "gds21": (direct.gds21_profile, imported.gds21_profile),
+            "gds22": (direct.gds22_profile, imported.gds22_profile),
+            "cvdrift": (direct.cv_profile, imported.cv_profile),
+            "gbdrift": (direct.gb_profile, imported.gb_profile),
+            "cvdrift0": (direct.cv0_profile, imported.cv0_profile),
+            "gbdrift0": (direct.gb0_profile, imported.gb0_profile),
+            "jacobian": (direct.jacobian_profile, imported.jacobian_profile),
+            "grho": (direct.grho_profile, imported.grho_profile),
+        }
+        array_metrics = {
+            name: _array_parity_metrics(candidate, reference)
+            for name, (candidate, reference) in array_pairs.items()
+        }
+        scalar_metrics = {
+            "gradpar": _scalar_parity_metrics(direct.gradpar_value, imported.gradpar_value),
+            "q": _scalar_parity_metrics(direct.q, imported.q),
+            "s_hat": _scalar_parity_metrics(direct.s_hat, imported.s_hat),
+        }
+        core_names = ("bmag", "gds2", "gds21", "gds22", "cvdrift", "gbdrift", "jacobian", "grho")
+        core_values: list[float] = []
+        for name in core_names:
+            metrics = array_metrics[name]
+            if not bool(metrics.get("shape_match", False)):
+                continue
+            raw_value = metrics.get("normalized_max_abs")
+            core_values.append(float(raw_value) if isinstance(raw_value, int | float | np.floating) else np.inf)
+        worst_core = max(core_values) if core_values else np.inf
+        worst_scalar = max(float(values["rel"]) for values in scalar_metrics.values())
+        production_parity_passed = bool(worst_core <= float(core_tolerance) and worst_scalar <= float(scalar_tolerance))
+    except Exception as exc:
+        return {
+            "available": False,
+            "backend_info": info,
+            "case_name": str(case_name),
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+
+    return {
+        "available": True,
+        "backend_info": info,
+        "case_name": str(case_name),
+        "input_path": str(input_path),
+        "wout_path": str(wout_path),
+        "source_model": "vmec_jax:state->tensor-flux-tube vs imported-vmec-eik",
+        "surface_index": int(sidx),
+        "torflux": float(torflux),
+        "alpha": float(alpha),
+        "ntheta": int(ntheta_int),
+        "boundary": str(boundary),
+        "include_shear_variation": bool(include_shear_variation),
+        "include_pressure_variation": bool(include_pressure_variation),
+        "array_metrics": array_metrics,
+        "scalar_metrics": scalar_metrics,
+        "worst_core_normalized_max_abs": float(worst_core),
+        "worst_scalar_rel": float(worst_scalar),
+        "core_tolerance": float(core_tolerance),
+        "scalar_tolerance": float(scalar_tolerance),
+        "production_parity_passed": production_parity_passed,
+        "status": "passed" if production_parity_passed else "diagnostic_open",
+        "interpretation": (
+            "The direct VMEC tensor path proves state-level differentiability. "
+            "Production transport optimization still requires matching the "
+            "imported VMEC/EIK Boozer equal-arc metric and drift convention."
+        ),
+    }
+
+
 def geometry_sensitivity_report(
     mapping_fn: Any,
     params: jnp.ndarray,
@@ -1767,6 +1998,7 @@ __all__ = [
     "geometry_sensitivity_report",
     "vmec_jax_boozer_flux_tube_sensitivity_report",
     "vmec_jax_field_line_tensor_sensitivity_report",
+    "vmec_jax_flux_tube_array_parity_report",
     "vmec_jax_flux_tube_mapping_from_state",
     "vmec_jax_flux_tube_sensitivity_report",
     "vmec_jax_metric_tensor_sensitivity_report",
