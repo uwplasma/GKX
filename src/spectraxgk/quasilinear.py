@@ -89,6 +89,7 @@ class QuasilinearTransportResult:
 def normalize_quasilinear_channels(channels: Iterable[str] | str) -> tuple[str, ...]:
     """Normalize and validate quasilinear field channels."""
 
+    values: tuple[str, ...]
     if isinstance(channels, str):
         values = (channels,)
     else:

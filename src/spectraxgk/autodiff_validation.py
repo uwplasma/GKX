@@ -9,6 +9,12 @@ import jax.numpy as jnp
 import numpy as np
 
 
+def _jax_enable_x64() -> bool:
+    """Return the active JAX 64-bit precision flag without relying on dynamic attrs."""
+
+    return bool(jax.config.read("jax_enable_x64"))
+
+
 def covariance_diagnostics(
     jacobian: np.ndarray,
     residual: np.ndarray,
@@ -80,7 +86,7 @@ def central_finite_difference_jacobian(
 ) -> jnp.ndarray:
     """Central finite-difference Jacobian for small differentiability gates."""
 
-    p = jnp.asarray(params, dtype=jnp.float64 if jax.config.jax_enable_x64 else jnp.float32)
+    p = jnp.asarray(params, dtype=jnp.float64 if _jax_enable_x64() else jnp.float32)
     if p.ndim != 1:
         raise ValueError("params must be one-dimensional")
     h = float(step)
@@ -108,7 +114,7 @@ def autodiff_finite_difference_report(
 ) -> dict[str, object]:
     """Compare JAX forward-mode derivatives against finite differences."""
 
-    p = jnp.asarray(params, dtype=jnp.float64 if jax.config.jax_enable_x64 else jnp.float32)
+    p = jnp.asarray(params, dtype=jnp.float64 if _jax_enable_x64() else jnp.float32)
     if p.ndim != 1:
         raise ValueError("params must be one-dimensional")
 
@@ -168,7 +174,7 @@ def explicit_complex_operator_matrix(
 
     if not state_shape or any(int(size) <= 0 for size in state_shape):
         raise ValueError("state_shape must contain positive dimensions")
-    matrix_dtype = dtype or (jnp.complex128 if jax.config.jax_enable_x64 else jnp.complex64)
+    matrix_dtype = dtype or (jnp.complex128 if _jax_enable_x64() else jnp.complex64)
     size = int(np.prod(tuple(int(dim) for dim in state_shape)))
     eye = jnp.eye(size, dtype=matrix_dtype)
 
@@ -199,7 +205,7 @@ def isolated_eigenvalue_sensitivity_report(
     assumption used for linear growth/frequency sensitivities.
     """
 
-    p = jnp.asarray(params, dtype=jnp.float64 if jax.config.jax_enable_x64 else jnp.float32)
+    p = jnp.asarray(params, dtype=jnp.float64 if _jax_enable_x64() else jnp.float32)
     if p.ndim != 1:
         raise ValueError("params must be one-dimensional")
     eig_base = jnp.linalg.eigvals(jnp.asarray(matrix_fn(p)))
@@ -285,7 +291,7 @@ def isolated_eigenpair_observable_sensitivity_report(
     phase-invariant quantities such as ``gamma / <k_perp^2>``.
     """
 
-    p = jnp.asarray(params, dtype=jnp.float64 if jax.config.jax_enable_x64 else jnp.float32)
+    p = jnp.asarray(params, dtype=jnp.float64 if _jax_enable_x64() else jnp.float32)
     if p.ndim != 1:
         raise ValueError("params must be one-dimensional")
     eig_base, vec_base = jnp.linalg.eig(jnp.asarray(matrix_fn(p)))
@@ -382,7 +388,7 @@ def implicit_eigenpair_observable_sensitivity_report(
     eigenvector ``w`` normalized by ``w^H v = 1``.
     """
 
-    p = jnp.asarray(params, dtype=jnp.float64 if jax.config.jax_enable_x64 else jnp.float32)
+    p = jnp.asarray(params, dtype=jnp.float64 if _jax_enable_x64() else jnp.float32)
     if p.ndim != 1:
         raise ValueError("params must be one-dimensional")
     A = jnp.asarray(matrix_fn(p))
