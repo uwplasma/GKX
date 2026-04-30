@@ -200,8 +200,11 @@ from spectraxgk.stellarator_optimization import (
 from spectraxgk.solver_objective_gradients import (
     SOLVER_GEOMETRY_PARAMETER_NAMES,
     SOLVER_OBJECTIVE_NAMES,
+    VMEC_BOOZER_FREQUENCY_OBJECTIVE_NAMES,
+    VMEC_BOOZER_STATE_PARAMETER_NAMES,
     default_solver_geometry_design_params,
     linear_solver_geometry_gradient_report,
+    mode21_vmec_boozer_linear_frequency_gradient_report,
     solver_ready_geometry_mapping,
 )
 from spectraxgk.plotting import (
@@ -407,8 +410,11 @@ __all__ = [
     "stellarator_itg_objective",
     "SOLVER_GEOMETRY_PARAMETER_NAMES",
     "SOLVER_OBJECTIVE_NAMES",
+    "VMEC_BOOZER_FREQUENCY_OBJECTIVE_NAMES",
+    "VMEC_BOOZER_STATE_PARAMETER_NAMES",
     "default_solver_geometry_design_params",
     "linear_solver_geometry_gradient_report",
+    "mode21_vmec_boozer_linear_frequency_gradient_report",
     "solver_ready_geometry_mapping",
     "eigenfunction_gate_report",
     "evaluate_scalar_gate",

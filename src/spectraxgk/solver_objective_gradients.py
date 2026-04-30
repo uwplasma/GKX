@@ -8,6 +8,8 @@ than reduced optimization proxies, but still narrower than a full
 
 from __future__ import annotations
 
+import importlib
+from dataclasses import replace as dc_replace
 from typing import Any
 
 import jax.numpy as jnp
@@ -19,13 +21,18 @@ from spectraxgk.autodiff_validation import (
 )
 from spectraxgk.config import CycloneBaseCase, GridConfig
 from spectraxgk.diagnostics import gx_heat_flux_species, gx_particle_flux_species, gx_volume_factors
-from spectraxgk.geometry.differentiable import flux_tube_geometry_from_mapping
+from spectraxgk.geometry.differentiable import (
+    discover_differentiable_geometry_backends,
+    flux_tube_geometry_from_mapping,
+    vmec_jax_boozer_equal_arc_core_profiles_from_state,
+)
 from spectraxgk.grids import build_spectral_grid, select_ky_grid
 from spectraxgk.linear import LinearParams, LinearTerms, build_linear_cache, linear_rhs_cached
 from spectraxgk.quasilinear import effective_kperp2, phi_norm2
 
 
 SOLVER_GEOMETRY_PARAMETER_NAMES = ("bmag_ripple", "curvature_drift_scale")
+VMEC_BOOZER_STATE_PARAMETER_NAMES = ("Rcos_mid_surface_m1",)
 SOLVER_OBJECTIVE_NAMES = (
     "gamma",
     "omega",
@@ -34,6 +41,7 @@ SOLVER_OBJECTIVE_NAMES = (
     "linear_particle_flux_weight",
     "mixing_length_heat_flux_proxy",
 )
+VMEC_BOOZER_FREQUENCY_OBJECTIVE_NAMES = ("gamma", "omega")
 
 
 def default_solver_geometry_design_params() -> jnp.ndarray:
@@ -75,12 +83,19 @@ def solver_ready_geometry_mapping(params: jnp.ndarray, theta: jnp.ndarray) -> di
     }
 
 
-def _objective_gate_rows(report: dict[str, object], *, rtol: float, atol: float) -> list[dict[str, object]]:
+def _objective_gate_rows(
+    report: dict[str, object],
+    *,
+    parameter_names: tuple[str, ...] = SOLVER_GEOMETRY_PARAMETER_NAMES,
+    objective_names: tuple[str, ...] = SOLVER_OBJECTIVE_NAMES,
+    rtol: float,
+    atol: float,
+) -> list[dict[str, object]]:
     implicit = np.asarray(report["jacobian_implicit"], dtype=float)
     finite_difference = np.asarray(report["jacobian_fd"], dtype=float)
     rows: list[dict[str, object]] = []
-    for i, objective in enumerate(SOLVER_OBJECTIVE_NAMES):
-        for j, parameter in enumerate(SOLVER_GEOMETRY_PARAMETER_NAMES):
+    for i, objective in enumerate(objective_names):
+        for j, parameter in enumerate(parameter_names):
             fd_value = float(finite_difference[i, j])
             implicit_value = float(implicit[i, j])
             abs_error = abs(implicit_value - fd_value)
@@ -257,10 +272,165 @@ def linear_solver_geometry_gradient_report(
     }
 
 
+def mode21_vmec_boozer_linear_frequency_gradient_report(
+    *,
+    case_name: str = "nfp4_QH_warm_start",
+    fd_step: float = 1.0e-6,
+    rtol: float = 5.0e-2,
+    atol: float = 2.0e-2,
+    gap_floor: float = 1.0e-8,
+    ntheta: int = 4,
+    mboz: int = 21,
+    nboz: int = 21,
+) -> dict[str, object]:
+    """Validate a full VMEC/Boozer-state gradient of linear frequency.
+
+    This is an offline manuscript artifact gate.  It perturbs one mid-surface
+    VMEC Fourier coefficient, maps it through ``vmec_jax`` and
+    ``booz_xform_jax`` into the mode-21 equal-arc flux-tube geometry contract,
+    builds the SPECTRAX-GK linear RHS, and compares implicit eigenpair
+    sensitivities against central finite differences.  Quasilinear flux-weight
+    state gradients are intentionally not promoted here because the current
+    full-chain diagnostic is substantially heavier and remains an optimization
+    campaign lane.
+    """
+
+    discover_differentiable_geometry_backends()
+    driver = importlib.import_module("vmec_jax.driver")
+    config_mod = importlib.import_module("vmec_jax.config")
+    static_mod = importlib.import_module("vmec_jax.static")
+    wout_mod = importlib.import_module("vmec_jax.wout")
+
+    input_path, wout_path = driver.example_paths(str(case_name))
+    cfg_vmec, indata = config_mod.load_config(str(input_path))
+    static = static_mod.build_static(cfg_vmec)
+    wout = wout_mod.read_wout(wout_path)
+    state = wout_mod.state_from_wout(wout)
+    base_Rcos = jnp.asarray(state.Rcos)
+    if base_Rcos.ndim != 2 or int(base_Rcos.shape[1]) < 2:
+        raise RuntimeError("vmec_jax state Rcos array must expose at least one non-axisymmetric mode")
+    radial_index = int(base_Rcos.shape[0] // 2)
+    mode_index = 1
+
+    cfg = CycloneBaseCase(grid=GridConfig(Nx=1, Ny=4, Nz=int(ntheta), Lx=6.0, Ly=12.0))
+    grid = select_ky_grid(build_spectral_grid(cfg.grid), 1)
+    n_laguerre = 1
+    n_hermite = 1
+    state_shape = (n_laguerre, n_hermite, grid.ky.size, grid.kx.size, grid.z.size)
+    params_linear = LinearParams(
+        R_over_Ln=2.2,
+        R_over_LTi=6.9,
+        nu=0.0,
+        nu_hyper=0.0,
+        hypercollisions_const=0.0,
+        hypercollisions_kz=0.0,
+        D_hyper=0.0,
+        beta=0.0,
+        fapar=0.0,
+    )
+    terms = LinearTerms(
+        collisions=0.0,
+        hypercollisions=0.0,
+        end_damping=0.0,
+        apar=0.0,
+        bpar=0.0,
+    )
+
+    def geometry_for(x: jnp.ndarray):
+        traced_state = dc_replace(state, Rcos=base_Rcos.at[radial_index, mode_index].add(x[0]))
+        mapping = vmec_jax_boozer_equal_arc_core_profiles_from_state(
+            traced_state,
+            static,
+            indata,
+            wout,
+            ntheta=int(ntheta),
+            mboz=int(mboz),
+            nboz=int(nboz),
+        )
+        return flux_tube_geometry_from_mapping(
+            mapping,
+            source_model="mode21_vmec_boozer_state",
+            validate_finite=False,
+        )
+
+    def cache_for(x: jnp.ndarray):
+        return build_linear_cache(grid, geometry_for(x), params_linear, n_laguerre, n_hermite)
+
+    def matrix_fn(x: jnp.ndarray) -> jnp.ndarray:
+        cache = cache_for(x)
+        return explicit_complex_operator_matrix(
+            lambda state_arr: linear_rhs_cached(
+                state_arr,
+                cache,
+                params_linear,
+                terms=terms,
+                use_jit=False,
+                use_custom_vjp=False,
+            )[0],
+            state_shape,
+        )
+
+    def objective_fn(eigenvalue: jnp.ndarray, _eigenvector: jnp.ndarray, _x: jnp.ndarray) -> jnp.ndarray:
+        return jnp.asarray([jnp.real(eigenvalue), jnp.imag(eigenvalue)])
+
+    gate = implicit_eigenpair_observable_sensitivity_report(
+        matrix_fn,
+        objective_fn,
+        jnp.asarray([0.0]),
+        step=fd_step,
+        rtol=rtol,
+        atol=atol,
+        gap_floor=gap_floor,
+    )
+    rows = _objective_gate_rows(
+        gate,
+        parameter_names=VMEC_BOOZER_STATE_PARAMETER_NAMES,
+        objective_names=VMEC_BOOZER_FREQUENCY_OBJECTIVE_NAMES,
+        rtol=rtol,
+        atol=atol,
+    )
+    by_objective = {
+        name: bool(all(row["passed"] for row in rows if row["objective"] == name))
+        for name in VMEC_BOOZER_FREQUENCY_OBJECTIVE_NAMES
+    }
+    return {
+        "kind": "mode21_vmec_boozer_linear_frequency_gradient_gate",
+        "passed": bool(gate["passed"] and all(row["passed"] for row in rows)),
+        "source_scope": "mode21_vmec_boozer_state",
+        "claim_scope": (
+            "full vmec_jax state coefficient -> booz_xform_jax mode-21 equal-arc "
+            "geometry -> SPECTRAX-GK linear-RHS eigenfrequency gradient"
+        ),
+        "case_name": str(case_name),
+        "parameter_names": list(VMEC_BOOZER_STATE_PARAMETER_NAMES),
+        "objective_names": list(VMEC_BOOZER_FREQUENCY_OBJECTIVE_NAMES),
+        "parameter_indices": {"Rcos": [radial_index, mode_index]},
+        "grid": {"Nx": int(cfg.grid.Nx), "Ny": int(cfg.grid.Ny), "Nz": int(cfg.grid.Nz), "selected_ky_index": 1},
+        "mboz": int(mboz),
+        "nboz": int(nboz),
+        "n_laguerre": n_laguerre,
+        "n_hermite": n_hermite,
+        "state_size": int(np.prod(state_shape)),
+        "linear_growth_gradient_gate": bool(by_objective["gamma"]),
+        "linear_frequency_gradient_gate": bool(by_objective["omega"]),
+        "quasilinear_weight_gradient_gate": False,
+        "nonlinear_window_gradient_gate": False,
+        "objective_gates": rows,
+        "eigenpair_gate": gate,
+        "next_action": (
+            "Promote the full-chain gate from eigenfrequency to quasilinear flux weights after "
+            "the heavy Nl>=2 diagnostic is profiled and conditioned below manuscript runtime caps."
+        ),
+    }
+
+
 __all__ = [
     "SOLVER_GEOMETRY_PARAMETER_NAMES",
     "SOLVER_OBJECTIVE_NAMES",
+    "VMEC_BOOZER_FREQUENCY_OBJECTIVE_NAMES",
+    "VMEC_BOOZER_STATE_PARAMETER_NAMES",
     "default_solver_geometry_design_params",
     "linear_solver_geometry_gradient_report",
+    "mode21_vmec_boozer_linear_frequency_gradient_report",
     "solver_ready_geometry_mapping",
 ]

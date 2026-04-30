@@ -252,7 +252,8 @@ same audit now reconstructs the zero-beta Boozer metric profiles `gds*`/`grho`
 with worst normalized mismatch `3.45e-2` and the loaded-convention zero-beta
 drift profiles `cvdrift`/`gbdrift`/`cvdrift0`/`gbdrift0` with worst normalized
 mismatch `3.50e-2`. The remaining promotion work is broad finite-beta and
-multi-equilibrium drift parity plus solver-objective gradients. When
+multi-equilibrium drift parity plus quasilinear/nonlinear solver-objective
+state gradients. When
 `booz_xform_jax` is available, it also runs a bounded JAX-native Boozer
 spectral transform, samples the resulting Boozer `|B|` spectrum onto a
 field-line flux-tube mapping, and checks both derivative paths against central
@@ -262,7 +263,7 @@ coefficients, converts that state through `booz_xform_jax`, and differentiates
 the resulting SPECTRAX-GK field-line geometry observables against central
 finite differences. The remaining promotion gate is exact production drift
 parity with the imported VMEC/EIK runtime path and then production
-growth-rate/quasilinear-gradient gates through the solver.
+quasilinear-gradient and nonlinear-window gates through the solver.
 
 ![SPECTRAX-GK differentiable geometry bridge](docs/_static/differentiable_geometry_bridge.png)
 
@@ -279,10 +280,17 @@ The solver-objective geometry-gradient gate differentiates actual
 electrostatic linear-RHS eigenpair observables with respect to solver-ready
 geometry arrays and checks the implicit left/right eigenpair sensitivities
 against central finite differences. This closes the production solver contract
-for `FluxTubeGeometryData` gradients; the remaining promotion step is the full
-`vmec_jax -> booz_xform_jax -> SPECTRAX-GK` state-coefficient gradient gate.
+for `FluxTubeGeometryData` gradients. The companion full-chain gate starts
+from a real `vmec_jax` state coefficient, maps through `booz_xform_jax`
+with `mboz=nboz=21`, builds the SPECTRAX-GK linear RHS, and verifies the
+linear eigenfrequency gradient against central finite differences. Full
+quasilinear flux-weight and nonlinear-window state-gradient gates remain open
+because the current full-chain quasilinear diagnostic is still too heavy for
+release tests and needs profiling/conditioning before publication claims.
 
 ![SPECTRAX-GK solver-objective geometry-gradient gate](docs/_static/solver_objective_gradient_gate.png)
+
+![SPECTRAX-GK VMEC/Boozer solver-frequency gradient gate](docs/_static/vmec_boozer_solver_frequency_gradient_gate.png)
 
 Differentiable stellarator ITG optimization examples live in
 `examples/optimization/`. They optimize the same QA, max-mode-1 control vector
@@ -300,9 +308,9 @@ read as validated optimization plumbing for stellarator-transport objectives,
 not as a final absolute-flux optimization claim. Full
 `vmec_jax -> booz_xform_jax -> SPECTRAX-GK` nonlinear optimization remains
 scoped to the next promotion gate: matching the production curvature/drift
-convention to the imported geometry path, checking production linear/quasilinear
-gradients, and converged nonlinear
-audits of the optimized equilibria.
+convention to the imported geometry path, checking full-chain quasilinear
+flux-weight gradients, and converged nonlinear audits of the optimized
+equilibria.
 
 For production parallelization of independent work, use
 `spectraxgk.batch_map` / `spectraxgk.ky_scan_batches` for ky scans,

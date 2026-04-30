@@ -853,11 +853,15 @@ def build_linear_cache(
             y0 = float(1.0 / float(grid.ky[1] - grid.ky[0]))
         else:
             y0 = 1.0
-    shat = float(geom_data.s_hat)
+    shat_arr = jnp.asarray(geom_data.s_hat, dtype=real_dtype)
+    shat_host = None if _is_tracer(shat_arr) else float(np.asarray(shat_arr))
     x0_eff = float(getattr(grid, "x0", 1.0))
     jtwist = 0
     x0_target = x0_eff
     if use_twist_shift:
+        if shat_host is None:
+            raise ValueError("traced magnetic shear is not supported with twist-shift boundaries")
+        shat = shat_host
         gds21_min = float(gds21[0]) if gds21.ndim else float(gds21)
         gds22_min = float(gds22[0]) if gds22.ndim else float(gds22)
         twist_shift_geo_fac = 0.0
