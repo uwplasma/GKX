@@ -105,6 +105,7 @@ jobs:
               tests/test_compress_release_previews.py
               tests/test_plot_quasilinear_candidate_uncertainty.py
               tests/test_plot_nonlinear_feasibility_pilot.py
+              tests/test_plot_external_vmec_nonlinear_convergence_gate.py
               tests/test_plot_vmec_jax_equilibrium_inventory.py
               tests/test_operators.py
               tests/test_plotting.py
