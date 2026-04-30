@@ -426,6 +426,13 @@ jobs:
       - name: Build docs
         run: |
           python tools/check_validation_coverage_manifest.py --out-json docs/_static/validation_coverage_manifest_summary.json
+          python tools/check_quasilinear_calibration_inputs.py \
+            --report docs/_static/quasilinear_cyclone_miller_train_holdout_report.json \
+            --report docs/_static/quasilinear_hsx_train_holdout_report.json \
+            --report docs/_static/quasilinear_w7x_train_holdout_report.json \
+            --report docs/_static/quasilinear_stellarator_train_holdout_report.json \
+            --out-json /tmp/quasilinear_validated_calibration_inputs.json \
+            --no-plot
           python -m sphinx -W -b html docs docs/_build/html
 
       - name: Build distribution artifacts
