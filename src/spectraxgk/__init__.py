@@ -12,6 +12,7 @@ from spectraxgk.config import (
 )
 from spectraxgk.geometry import SAlphaGeometry, build_flux_tube_geometry
 from spectraxgk.geometry.differentiable import (
+    booz_xform_spectral_sensitivity_report,
     discover_differentiable_geometry_backends,
     finite_difference_jacobian,
     flux_tube_geometry_from_mapping,
@@ -225,6 +226,7 @@ __all__ = [
     "TimeConfig",
     "SAlphaGeometry",
     "build_flux_tube_geometry",
+    "booz_xform_spectral_sensitivity_report",
     "discover_differentiable_geometry_backends",
     "finite_difference_jacobian",
     "flux_tube_geometry_from_mapping",

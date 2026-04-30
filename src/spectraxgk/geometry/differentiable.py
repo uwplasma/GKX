@@ -6,6 +6,7 @@ import importlib
 import os
 from collections.abc import Mapping, Sequence
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import jax
@@ -123,6 +124,7 @@ def discover_differentiable_geometry_backends() -> dict[str, object]:
     booz_api = (
         booz_jax_api is not None
         and hasattr(booz_jax_api, "prepare_booz_xform_constants_from_inputs")
+        and hasattr(booz_jax_api, "booz_xform_from_inputs")
         and hasattr(booz_jax_api, "booz_xform_jax_impl")
     )
 
@@ -335,7 +337,7 @@ def vmec_boundary_aspect_sensitivity_report(
             "fd_step": float(fd_step),
         }
 
-    import vmec_jax as vj  # type: ignore[import-not-found]
+    import vmec_jax as vj  # type: ignore[import-untyped, import-not-found]
 
     modes = vj.vmec_mode_table(int(mpol), int(ntor))
     grid = vj.make_angle_grid(int(ntheta), int(nphi), int(nfp))
@@ -367,6 +369,133 @@ def vmec_boundary_aspect_sensitivity_report(
         "ntheta": int(ntheta),
         "nphi": int(nphi),
         "nfp": int(nfp),
+    }
+
+
+def booz_xform_spectral_sensitivity_report(
+    *,
+    ripple: float = 0.05,
+    fd_step: float = 2.0e-5,
+    mboz: int = 2,
+    nboz: int = 0,
+) -> dict[str, object]:
+    """Validate a real ``booz_xform_jax`` spectral derivative when available.
+
+    This is a deliberately tiny Boozer-transform gate. It constructs an
+    axisymmetric one-surface VMEC-to-Boozer input bundle, runs the real
+    ``booz_xform_jax`` functional API, and checks the derivative of a Boozer
+    magnetic-spectrum norm with respect to a magnetic-ripple coefficient against
+    central finite differences.
+
+    The gate strengthens the bridge beyond import discovery while remaining
+    bounded enough for examples and optional local validation. It is not a full
+    VMEC-state-to-flux-tube parity claim; that requires an equilibrium solve,
+    field-line sampling, and comparison against the production imported-VMEC
+    geometry path.
+    """
+
+    info = discover_differentiable_geometry_backends()
+    if not info.get("booz_xform_jax_api_available", False):
+        return {
+            "available": False,
+            "backend_info": info,
+            "objective": None,
+            "grad_ad": None,
+            "grad_fd": None,
+            "max_abs_ad_fd_error": None,
+            "fd_step": float(fd_step),
+            "mboz": int(mboz),
+            "nboz": int(nboz),
+        }
+
+    bx = importlib.import_module("booz_xform_jax.jax_api")
+
+    xm = jnp.asarray([0, 1], dtype=jnp.int32)
+    xn = jnp.asarray([0, 0], dtype=jnp.int32)
+
+    def _inputs(ripple_value: Any) -> SimpleNamespace:
+        r = jnp.asarray(ripple_value)
+        one = jnp.asarray(1.0, dtype=r.dtype)
+        zero = jnp.asarray(0.0, dtype=r.dtype)
+        minor = jnp.asarray(0.22, dtype=r.dtype)
+        return SimpleNamespace(
+            rmnc=jnp.asarray([[one, minor]], dtype=r.dtype),
+            zmns=jnp.asarray([[zero, minor]], dtype=r.dtype),
+            lmns=jnp.asarray([[zero, zero]], dtype=r.dtype),
+            bmnc=jnp.asarray([[one, r]], dtype=r.dtype),
+            bsubumnc=jnp.asarray([[0.1, 0.0]], dtype=r.dtype),
+            bsubvmnc=jnp.asarray([[one, zero]], dtype=r.dtype),
+            iota=jnp.asarray([0.41], dtype=r.dtype),
+            xm=xm,
+            xn=xn,
+            xm_nyq=xm,
+            xn_nyq=xn,
+            nfp=1,
+            bmns=None,
+            bsubumns=None,
+            bsubvmns=None,
+        )
+
+    try:
+        base_inputs = _inputs(jnp.asarray(ripple, dtype=jnp.float64))
+        constants, grids = bx.prepare_booz_xform_constants_from_inputs(
+            inputs=base_inputs,
+            mboz=int(mboz),
+            nboz=int(nboz),
+            asym=False,
+        )
+
+        def objective_fn(ripple_value: jnp.ndarray) -> jnp.ndarray:
+            out = bx.booz_xform_from_inputs(
+                inputs=_inputs(ripple_value),
+                constants=constants,
+                grids=grids,
+                jit=False,
+            )
+            bmnc_b = jnp.asarray(out["bmnc_b"])
+            return jnp.sum(bmnc_b * bmnc_b)
+
+        r0 = jnp.asarray(float(ripple), dtype=jnp.float64)
+        grad_ad = jax.grad(objective_fn)(r0)
+        h = jnp.asarray(float(fd_step), dtype=r0.dtype)
+        grad_fd = (objective_fn(r0 + h) - objective_fn(r0 - h)) / (2.0 * h)
+        out = bx.booz_xform_from_inputs(
+            inputs=base_inputs,
+            constants=constants,
+            grids=grids,
+            jit=False,
+        )
+        diff = grad_ad - grad_fd
+    except Exception as exc:
+        return {
+            "available": False,
+            "backend_info": info,
+            "objective": None,
+            "grad_ad": None,
+            "grad_fd": None,
+            "max_abs_ad_fd_error": None,
+            "fd_step": float(fd_step),
+            "mboz": int(mboz),
+            "nboz": int(nboz),
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+
+    return {
+        "available": True,
+        "backend_info": info,
+        "objective": float(objective_fn(r0)),
+        "grad_ad": float(grad_ad),
+        "grad_fd": float(grad_fd),
+        "max_abs_ad_fd_error": float(jnp.abs(diff)),
+        "fd_step": float(fd_step),
+        "mboz": int(mboz),
+        "nboz": int(nboz),
+        "bmnc_b": np.asarray(out["bmnc_b"]).tolist(),
+        "rmnc_b": np.asarray(out["rmnc_b"]).tolist(),
+        "zmns_b": np.asarray(out["zmns_b"]).tolist(),
+        "iota_b": np.asarray(out["iota_b"]).tolist(),
+        "ixm_b": np.asarray(out["ixm_b"]).tolist(),
+        "ixn_b": np.asarray(out["ixn_b"]).tolist(),
     }
 
 
@@ -520,6 +649,7 @@ def geometry_inverse_design_report(
 
 
 __all__ = [
+    "booz_xform_spectral_sensitivity_report",
     "discover_differentiable_geometry_backends",
     "finite_difference_jacobian",
     "flux_tube_geometry_from_mapping",
