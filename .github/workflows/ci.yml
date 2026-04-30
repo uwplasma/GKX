@@ -91,7 +91,7 @@ jobs:
       max-parallel: 3
       matrix:
         shard:
-          - name: fundamentals
+          - name: fundamentals-core
             files: >-
               tests/test_analysis.py
               tests/test_auto_fit_signal.py
@@ -101,6 +101,12 @@ jobs:
               tests/test_grids.py
               tests/test_gyroaverage.py
               tests/test_normalization.py
+              tests/test_operators.py
+              tests/test_plotting.py
+              tests/test_species.py
+              tests/test_io.py
+          - name: release-artifacts
+            files: >-
               tests/test_audit_repository_size.py
               tests/test_check_repository_size_manifest.py
               tests/test_check_release_artifact_manifest.py
@@ -110,10 +116,6 @@ jobs:
               tests/test_plot_nonlinear_feasibility_pilot.py
               tests/test_plot_external_vmec_nonlinear_convergence_gate.py
               tests/test_plot_vmec_jax_equilibrium_inventory.py
-              tests/test_operators.py
-              tests/test_plotting.py
-              tests/test_species.py
-              tests/test_io.py
           - name: linear-core
             files: >-
               tests/test_linear.py
