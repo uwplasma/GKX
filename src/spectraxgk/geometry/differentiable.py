@@ -39,6 +39,15 @@ _GEOMETRY_OBSERVABLE_NAMES = (
     "mean_jacobian",
     "mean_gradpar",
 )
+_VMEC_METRIC_OBSERVABLE_NAMES = (
+    "sqrtg_rms",
+    "mean_g_ss",
+    "mean_g_tt",
+    "mean_g_pp",
+    "g_st_rms",
+    "g_sp_rms",
+    "g_tp_rms",
+)
 
 
 def _candidate_paths(env_names: Sequence[str], defaults: Sequence[Path]) -> list[Path]:
@@ -240,6 +249,12 @@ def geometry_observable_names() -> tuple[str, ...]:
     """Return the ordered geometry observables used by bridge AD checks."""
 
     return _GEOMETRY_OBSERVABLE_NAMES
+
+
+def vmec_metric_tensor_observable_names() -> tuple[str, ...]:
+    """Return the ordered observables used by the VMEC metric-tensor gate."""
+
+    return _VMEC_METRIC_OBSERVABLE_NAMES
 
 
 def flux_tube_geometry_observables(geom: FluxTubeGeometryData) -> jnp.ndarray:
@@ -874,6 +889,150 @@ def vmec_jax_boozer_flux_tube_sensitivity_report(
     }
 
 
+def vmec_jax_metric_tensor_sensitivity_report(
+    *,
+    params: jnp.ndarray | None = None,
+    case_name: str = "circular_tokamak",
+    radial_index: int | None = None,
+    mode_index: int = 1,
+    surface_index: int | None = None,
+    fd_step: float = 1.0e-5,
+    rms_epsilon: float = 1.0e-24,
+) -> dict[str, object]:
+    """AD/FD-check real ``vmec_jax`` metric tensors from a ``VMECState``.
+
+    The Boozer bridge validates the straight-field-line ``|B|`` spectrum, but
+    SPECTRAX-GK's production geometry contract also needs sampled metric and
+    drift tensors. This gate stays upstream of any reduced closure: it loads a
+    real ``vmec_jax`` example state, perturbs two VMEC Fourier coefficients,
+    evaluates ``vmec_jax.geom.eval_geom``, and checks metric-tensor observable
+    derivatives against central finite differences.
+
+    This is a prerequisite for replacing the smooth metric/drift closure in
+    :func:`booz_xform_flux_tube_mapping_from_inputs`; it is not by itself the
+    final Boozer-field-line metric parity gate.
+    """
+
+    p = jnp.asarray([1.0e-3, 1.0e-3] if params is None else params, dtype=jnp.float64)
+    if p.ndim != 1 or int(p.shape[0]) != 2:
+        raise ValueError("params must be a length-2 vector")
+
+    info = discover_differentiable_geometry_backends()
+    if not info.get("vmec_jax_available", False):
+        return {
+            "available": False,
+            "backend_info": info,
+            "sensitivity": None,
+            "fd_step": float(fd_step),
+            "case_name": str(case_name),
+            "reason": "vmec_jax is not available",
+        }
+
+    try:
+        driver = importlib.import_module("vmec_jax.driver")
+        config_mod = importlib.import_module("vmec_jax.config")
+        static_mod = importlib.import_module("vmec_jax.static")
+        wout_mod = importlib.import_module("vmec_jax.wout")
+        geom_mod = importlib.import_module("vmec_jax.geom")
+
+        input_path, wout_path = driver.example_paths(str(case_name))
+        if wout_path is None:
+            raise RuntimeError(f"vmec_jax example {case_name!r} has no bundled wout reference")
+
+        cfg, _indata = config_mod.load_config(str(input_path))
+        static = static_mod.build_static(cfg)
+        wout = wout_mod.read_wout(wout_path)
+        state = wout_mod.state_from_wout(wout)
+
+        base_Rcos = jnp.asarray(state.Rcos)
+        base_Zsin = jnp.asarray(state.Zsin)
+        if base_Rcos.ndim != 2 or base_Zsin.ndim != 2:
+            raise RuntimeError("vmec_jax state Rcos/Zsin arrays must be two-dimensional")
+
+        ridx = int(base_Rcos.shape[0] // 2) if radial_index is None else int(radial_index)
+        midx = int(mode_index)
+        if not (0 <= ridx < int(base_Rcos.shape[0])):
+            raise ValueError("radial_index is outside the VMEC state radial grid")
+        if not (0 <= midx < int(base_Rcos.shape[1])):
+            raise ValueError("mode_index is outside the VMEC state mode table")
+        sidx = max(0, min(ridx - 1, int(base_Rcos.shape[0]) - 1)) if surface_index is None else int(surface_index)
+        if not (0 <= sidx < int(base_Rcos.shape[0])):
+            raise ValueError("surface_index is outside the VMEC metric radial grid")
+
+        eps = jnp.asarray(float(rms_epsilon), dtype=p.dtype)
+
+        def _rms(arr: jnp.ndarray) -> jnp.ndarray:
+            arr = jnp.asarray(arr)
+            return jnp.sqrt(jnp.mean(arr * arr) + eps)
+
+        def metric_observables(x: jnp.ndarray) -> jnp.ndarray:
+            traced_state = dc_replace(
+                state,
+                Rcos=base_Rcos.at[ridx, midx].add(x[0]),
+                Zsin=base_Zsin.at[ridx, midx].add(x[1]),
+            )
+            geom = geom_mod.eval_geom(traced_state, static)
+            sqrtg = jnp.asarray(geom.sqrtg)[sidx]
+            g_ss = jnp.asarray(geom.g_ss)[sidx]
+            g_st = jnp.asarray(geom.g_st)[sidx]
+            g_sp = jnp.asarray(geom.g_sp)[sidx]
+            g_tt = jnp.asarray(geom.g_tt)[sidx]
+            g_tp = jnp.asarray(geom.g_tp)[sidx]
+            g_pp = jnp.asarray(geom.g_pp)[sidx]
+            return jnp.asarray(
+                [
+                    _rms(sqrtg),
+                    jnp.mean(g_ss),
+                    jnp.mean(g_tt),
+                    jnp.mean(g_pp),
+                    _rms(g_st),
+                    _rms(g_sp),
+                    _rms(g_tp),
+                ]
+            )
+
+        observables = metric_observables(p)
+        jac_ad = jax.jacfwd(metric_observables)(p)
+        jac_fd = finite_difference_jacobian(metric_observables, p, step=float(fd_step))
+        diff = jac_ad - jac_fd
+        max_abs = jnp.max(jnp.abs(diff))
+        max_rel = jnp.max(jnp.abs(diff) / (jnp.abs(jac_fd) + 1.0e-12))
+        geom0 = geom_mod.eval_geom(state, static)
+    except Exception as exc:
+        return {
+            "available": False,
+            "backend_info": info,
+            "sensitivity": None,
+            "fd_step": float(fd_step),
+            "case_name": str(case_name),
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+
+    return {
+        "available": True,
+        "backend_info": info,
+        "case_name": str(case_name),
+        "input_path": str(input_path),
+        "wout_path": str(wout_path),
+        "source_model": "vmec_jax:state->metric-tensors",
+        "param_names": ["delta_Rcos", "delta_Zsin"],
+        "observable_names": list(_VMEC_METRIC_OBSERVABLE_NAMES),
+        "params": np.asarray(p).tolist(),
+        "observables": np.asarray(observables).tolist(),
+        "jacobian_ad": np.asarray(jac_ad).tolist(),
+        "jacobian_fd": np.asarray(jac_fd).tolist(),
+        "max_abs_ad_fd_error": float(np.asarray(max_abs)),
+        "max_rel_ad_fd_error": float(np.asarray(max_rel)),
+        "radial_index": int(ridx),
+        "mode_index": int(midx),
+        "surface_index": int(sidx),
+        "state_shape": [int(base_Rcos.shape[0]), int(base_Rcos.shape[1])],
+        "metric_grid_shape": [int(v) for v in np.asarray(geom0.sqrtg).shape],
+        "fd_step": float(fd_step),
+        "rms_epsilon": float(rms_epsilon),
+    }
+
+
 def geometry_sensitivity_report(
     mapping_fn: Any,
     params: jnp.ndarray,
@@ -1036,5 +1195,7 @@ __all__ = [
     "geometry_observable_names",
     "geometry_sensitivity_report",
     "vmec_jax_boozer_flux_tube_sensitivity_report",
+    "vmec_jax_metric_tensor_sensitivity_report",
     "vmec_boundary_aspect_sensitivity_report",
+    "vmec_metric_tensor_observable_names",
 ]
