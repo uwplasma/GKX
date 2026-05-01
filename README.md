@@ -136,6 +136,15 @@ The result is kept because it is the correct research gate: linear weights and
 gradients are available now, while saturation-rule transfer must be improved
 and validated before being used for stellarator optimization claims.
 
+![SPECTRAX-GK quasilinear dataset sufficiency gate](docs/_static/quasilinear_dataset_sufficiency.png)
+
+The dataset-sufficiency gate keeps the same scope machine-readable. The current
+four electrostatic-compatible nonlinear windows reject the simple saturation
+rules, but they are not enough to promote richer absolute-flux candidates:
+there is only one explicit training geometry, downstream skill gates still
+fail, and electromagnetic KBM is deliberately excluded until electromagnetic
+quasilinear channels are validated.
+
 Autodiff validation (inverse/sensitivity demo):
 
 ![SPECTRAX-GK autodiff inverse demo](docs/_static/autodiff_inverse_growth.png)
