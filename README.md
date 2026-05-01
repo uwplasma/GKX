@@ -308,11 +308,16 @@ diagnostics, objective histories, and polished figures.
 
 ![SPECTRAX-GK differentiable stellarator ITG optimization](docs/_static/stellarator_itg_optimization_comparison.png)
 
+![SPECTRAX-GK stellarator ITG optimization UQ diagnostics](docs/_static/stellarator_itg_optimization_uq.png)
+
 The panel above is the current release-grade differentiability gate: all three
 objectives keep the optimized QA configuration near aspect ratio `7` and
 `iota = 0.41` while reducing the tracked transport observables. It should be
-read as validated optimization plumbing for stellarator-transport objectives,
-not as a final absolute-flux optimization claim. Full
+read together with the UQ panel, which verifies AD/FD derivative parity for
+each active control and estimates local Gauss-Newton covariance from the final
+weighted objective residual. These are validated optimization-plumbing
+diagnostics for stellarator-transport objectives, not a final absolute-flux
+optimization claim. Full
 `vmec_jax -> booz_xform_jax -> SPECTRAX-GK` nonlinear optimization remains
 scoped to the next promotion gate: matching the production curvature/drift
 convention to the imported geometry path across additional equilibria,

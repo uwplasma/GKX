@@ -353,17 +353,47 @@ def stellarator_itg_objective(
 ) -> jnp.ndarray:
     """Return the scalar constrained QA + ITG objective for one optimization."""
 
+    residual = stellarator_itg_objective_residual_vector(params, kind, config)
+    return jnp.dot(residual, residual)
+
+
+def stellarator_itg_objective_residual_names(kind: StellaratorObjectiveKind) -> tuple[str, ...]:
+    """Return stable residual names for the weighted QA + ITG objective."""
+
+    if kind not in ("growth", "quasilinear_flux", "nonlinear_heat_flux"):
+        raise ValueError(f"unknown stellarator objective kind {kind!r}")
+    return (
+        "aspect_constraint",
+        "iota_constraint",
+        "qa_constraint",
+        *(f"regularization_{name}" for name in PARAMETER_NAMES),
+        f"{kind}_transport_objective",
+    )
+
+
+def stellarator_itg_objective_residual_vector(
+    params: jnp.ndarray | Sequence[float],
+    kind: StellaratorObjectiveKind,
+    config: StellaratorITGOptimizationConfig | None = None,
+) -> jnp.ndarray:
+    """Return weighted residuals whose squared norm is the optimization objective.
+
+    This is the correct local residual map for Gauss-Newton covariance and
+    identifiability diagnostics. Using the initial-to-final observable
+    displacement would overstate uncertainty because it measures optimizer
+    travel rather than the residual left at the optimized point.
+    """
+
     cfg = config or StellaratorITGOptimizationConfig()
     p = _validate_params(params)
     obs = _qa_core_features(p, cfg)
-    aspect_res = (obs["aspect"] - cfg.target_aspect) / cfg.target_aspect
-    iota_res = obs["mean_iota"] - cfg.target_iota
-    constraints = (
-        cfg.aspect_weight * aspect_res**2
-        + cfg.iota_weight * iota_res**2
-        + cfg.qa_weight * obs["qa_residual"] ** 2
-        + cfg.regularization * jnp.dot(p, p)
+    dtype = p.dtype
+    aspect_res = jnp.sqrt(jnp.asarray(cfg.aspect_weight, dtype=dtype)) * (
+        (obs["aspect"] - cfg.target_aspect) / cfg.target_aspect
     )
+    iota_res = jnp.sqrt(jnp.asarray(cfg.iota_weight, dtype=dtype)) * (obs["mean_iota"] - cfg.target_iota)
+    qa_res = jnp.sqrt(jnp.asarray(cfg.qa_weight, dtype=dtype)) * obs["qa_residual"]
+    reg_res = jnp.sqrt(jnp.asarray(cfg.regularization, dtype=dtype)) * p
     if kind == "growth":
         turbulence = obs["growth_rate"]
     elif kind == "quasilinear_flux":
@@ -377,7 +407,19 @@ def stellarator_itg_objective(
         )["mean"]
     else:
         raise ValueError(f"unknown stellarator objective kind {kind!r}")
-    return constraints + cfg.turbulence_weight * turbulence
+    turbulence_res = jnp.sqrt(
+        jnp.maximum(
+            jnp.asarray(cfg.turbulence_weight, dtype=dtype) * turbulence,
+            jnp.asarray(0.0, dtype=dtype),
+        )
+    )
+    return jnp.concatenate(
+        [
+            jnp.asarray([aspect_res, iota_res, qa_res], dtype=dtype),
+            reg_res,
+            jnp.asarray([turbulence_res], dtype=dtype),
+        ]
+    )
 
 
 def optimize_stellarator_itg(
@@ -436,9 +478,14 @@ def optimize_stellarator_itg(
         rtol=rtol,
         atol=atol,
     )
-    jac = jax.jacfwd(lambda x: qa_observable_vector(x, cfg))(p)
-    residual = np.asarray(final_obs) - np.asarray(initial_obs)
+    def residual_fn(x: jnp.ndarray) -> jnp.ndarray:
+        return stellarator_itg_objective_residual_vector(x, kind, cfg)
+
+    jac = jax.jacfwd(residual_fn)(p)
+    residual = np.asarray(residual_fn(p))
     covariance = covariance_diagnostics(np.asarray(jac), residual, regularization=1.0e-8)
+    covariance["source"] = "weighted_objective_residual"
+    covariance["residual_names"] = list(stellarator_itg_objective_residual_names(kind))
 
     nonlinear_trace = None
     if kind == "nonlinear_heat_flux":
@@ -515,4 +562,6 @@ __all__ = [
     "qa_observable_vector",
     "smooth_positive",
     "stellarator_itg_objective",
+    "stellarator_itg_objective_residual_names",
+    "stellarator_itg_objective_residual_vector",
 ]

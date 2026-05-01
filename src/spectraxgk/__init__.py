@@ -196,6 +196,8 @@ from spectraxgk.stellarator_optimization import (
     qa_max_mode1_observables,
     qa_observable_vector,
     stellarator_itg_objective,
+    stellarator_itg_objective_residual_names,
+    stellarator_itg_objective_residual_vector,
 )
 from spectraxgk.solver_objective_gradients import (
     SOLVER_GEOMETRY_PARAMETER_NAMES,
@@ -410,6 +412,8 @@ __all__ = [
     "qa_max_mode1_observables",
     "qa_observable_vector",
     "stellarator_itg_objective",
+    "stellarator_itg_objective_residual_names",
+    "stellarator_itg_objective_residual_vector",
     "SOLVER_GEOMETRY_PARAMETER_NAMES",
     "SOLVER_OBJECTIVE_NAMES",
     "VMEC_BOOZER_FREQUENCY_OBJECTIVE_NAMES",
