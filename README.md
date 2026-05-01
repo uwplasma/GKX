@@ -432,7 +432,9 @@ timings on top of the cold wall-time bars.
 The current profiler splits the nonlinear RHS into field solve, linear RHS,
 nonlinear bracket, and full RHS kernels on CPU and GPU. The latest bounded
 Cyclone profile shows the nonlinear bracket and full RHS are the dominant warm
-throughput targets, while GPU execution reduces all measured RHS kernels.
+throughput targets, while GPU execution reduces all measured RHS kernels. The
+companion JSON artifact records dominant kernels and grid-to-spectral speedups
+so the optimization lane remains traceable and machine-checkable.
 
 ![Spectral Laguerre mode gate](docs/_static/laguerre_mode_gate_gpu.png)
 
