@@ -439,11 +439,12 @@ so the optimization lane remains traceable and machine-checkable.
 
 The next profiler layer resolves the linear RHS into individual term kernels.
 The tracked Cyclone CPU artifact (`docs/_static/linear_rhs_terms_profile.json`)
-shows a large compiled-assembly gap in the full linear RHS call and identifies
-the linked parallel-gradient path as the dominant nonzero standalone term. It
-also records zero-norm initial-state rows such as `linked_abs_kz`; those rows
-are retained in production until a state-window identity gate proves they remain
-inactive after nonlinear evolution.
+now includes the zero-collision fast path and reports `full_linear_rhs=4.94e-2 s`
+in the bounded CPU harness. It identifies the linked parallel-gradient path as
+the dominant nonzero standalone term and records zero-norm initial-state rows
+such as `linked_abs_kz`; those rows are retained in production until a
+state-window identity gate proves they remain inactive after nonlinear
+evolution.
 
 The tracked state-window gate
 (`docs/_static/linear_rhs_zero_norm_state_window_gate.json`) now makes that

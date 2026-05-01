@@ -232,7 +232,7 @@ def build_runtime_linear_terms(cfg: RuntimeConfig) -> LinearTerms:
     em_on = bool(cfg.physics.electromagnetic)
     use_apar = em_on and bool(cfg.physics.use_apar)
     use_bpar = em_on and bool(cfg.physics.use_bpar)
-    collisions_on = bool(cfg.physics.collisions)
+    collisions_on = bool(cfg.physics.collisions) and any(float(sp.nu) != 0.0 for sp in cfg.species)
     hyper_on = bool(cfg.physics.hypercollisions)
     return LinearTerms(
         streaming=float(cfg.terms.streaming),

@@ -272,6 +272,12 @@ def collisions_contribution(
 ) -> jnp.ndarray:
     real_dtype = jnp.real(H).dtype
 
+    def _is_static_zero(value: jnp.ndarray) -> bool:
+        arr = jnp.asarray(value, dtype=real_dtype)
+        if isinstance(arr, jax.core.Tracer):
+            return False
+        return bool(np.all(np.asarray(arr) == 0.0))
+
     def _species_nu(ns: int) -> jnp.ndarray:
         nu_arr = jnp.asarray(nu, dtype=real_dtype).reshape(-1)
         if nu_arr.size == 1:
@@ -281,10 +287,14 @@ def collisions_contribution(
         return nu_arr
 
     collision_base = None
+    if _is_static_zero(weight):
+        return jnp.zeros_like(H)
     if collision_lam is not None:
         collision_arr = jnp.asarray(collision_lam, dtype=real_dtype)
         if collision_arr.size != 0:
             collision_base = collision_arr
+    if collision_base is None and _is_static_zero(nu):
+        return jnp.zeros_like(H)
     if collision_base is None:
         if lb_lam is None:
             collision_base = jnp.zeros_like(H, dtype=real_dtype)
