@@ -447,7 +447,8 @@ zero-norm initial-state rows are retained in production until a state-window
 identity gate proves they remain inactive after nonlinear evolution. The
 matching `office` GPU artifact
 (`docs/_static/linear_rhs_terms_profile_gpu.json`) reports
-`full_linear_rhs=6.44e-3 s` on one RTX A4000.
+`full_linear_rhs=6.53e-3 s` on one RTX A4000, and the active-state GPU
+companion reproduces the linked-`|k_z|`/hypercollision norm match.
 
 The tracked state-window gate
 (`docs/_static/linear_rhs_zero_norm_state_window_gate.json`) now makes that
