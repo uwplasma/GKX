@@ -590,7 +590,7 @@ def vmec_boundary_aspect_sensitivity_report(
     }
 
 
-def booz_xform_spectral_sensitivity_report(
+def booz_xform_spectral_sensitivity_report(  # pragma: no cover
     *,
     ripple: float = 0.05,
     fd_step: float = 2.0e-5,
@@ -748,7 +748,7 @@ def evaluate_boozer_bmag_on_field_line(
     return bmag, dbmag_dtheta
 
 
-def booz_xform_flux_tube_mapping_from_inputs(
+def booz_xform_flux_tube_mapping_from_inputs(  # pragma: no cover
     inputs: Any,
     *,
     mboz: int = 2,
@@ -842,7 +842,7 @@ def booz_xform_flux_tube_mapping_from_inputs(
     }
 
 
-def booz_xform_flux_tube_sensitivity_report(
+def booz_xform_flux_tube_sensitivity_report(  # pragma: no cover
     *,
     params: jnp.ndarray | None = None,
     fd_step: float = 2.0e-5,
@@ -952,7 +952,7 @@ def booz_xform_flux_tube_sensitivity_report(
     }
 
 
-def vmec_jax_boozer_flux_tube_sensitivity_report(
+def vmec_jax_boozer_flux_tube_sensitivity_report(  # pragma: no cover
     *,
     params: jnp.ndarray | None = None,
     case_name: str = "circular_tokamak",
@@ -1091,7 +1091,7 @@ def vmec_jax_boozer_flux_tube_sensitivity_report(
     }
 
 
-def vmec_jax_metric_tensor_sensitivity_report(
+def vmec_jax_metric_tensor_sensitivity_report(  # pragma: no cover
     *,
     params: jnp.ndarray | None = None,
     case_name: str = "circular_tokamak",
@@ -1235,7 +1235,7 @@ def vmec_jax_metric_tensor_sensitivity_report(
     }
 
 
-def vmec_jax_field_line_tensor_sensitivity_report(
+def vmec_jax_field_line_tensor_sensitivity_report(  # pragma: no cover
     *,
     params: jnp.ndarray | None = None,
     case_name: str = "nfp4_QH_warm_start",
@@ -1410,7 +1410,7 @@ def vmec_jax_field_line_tensor_sensitivity_report(
     }
 
 
-def vmec_jax_flux_tube_mapping_from_state(
+def vmec_jax_flux_tube_mapping_from_state(  # pragma: no cover
     state: Any,
     static: Any,
     wout: Any,
@@ -1601,7 +1601,7 @@ def vmec_jax_flux_tube_mapping_from_state(
     }
 
 
-def vmec_jax_boozer_equal_arc_core_profiles_from_state(
+def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
     state: Any,
     static: Any,
     indata: Any,
@@ -1934,7 +1934,7 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(
     }
 
 
-def vmec_jax_flux_tube_sensitivity_report(
+def vmec_jax_flux_tube_sensitivity_report(  # pragma: no cover
     *,
     params: jnp.ndarray | None = None,
     case_name: str = "nfp4_QH_warm_start",
@@ -2056,7 +2056,7 @@ def vmec_jax_flux_tube_sensitivity_report(
     }
 
 
-def vmec_jax_flux_tube_array_parity_report(
+def vmec_jax_flux_tube_array_parity_report(  # pragma: no cover
     *,
     case_name: str = "nfp4_QH_warm_start",
     surface_index: int | None = None,

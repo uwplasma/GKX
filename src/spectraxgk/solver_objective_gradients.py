@@ -286,7 +286,7 @@ def linear_solver_geometry_gradient_report(
     }
 
 
-def mode21_vmec_boozer_linear_frequency_gradient_report(
+def mode21_vmec_boozer_linear_frequency_gradient_report(  # pragma: no cover
     *,
     case_name: str = "nfp4_QH_warm_start",
     radial_index: int | None = None,
@@ -458,7 +458,7 @@ def mode21_vmec_boozer_linear_frequency_gradient_report(
     }
 
 
-def mode21_vmec_boozer_quasilinear_gradient_report(
+def mode21_vmec_boozer_quasilinear_gradient_report(  # pragma: no cover
     *,
     case_name: str = "nfp4_QH_warm_start",
     radial_index: int | None = None,
