@@ -445,6 +445,12 @@ also records zero-norm initial-state rows such as `linked_abs_kz`; those rows
 are retained in production until a state-window identity gate proves they remain
 inactive after nonlinear evolution.
 
+The tracked state-window gate
+(`docs/_static/linear_rhs_zero_norm_state_window_gate.json`) now makes that
+policy executable: it accepts a zero-collision skip for the `nu=0` Cyclone
+window but rejects skipping linked-`|k_z|` hypercollisions once a resolved
+parallel perturbation is present.
+
 ![Spectral Laguerre mode gate](docs/_static/laguerre_mode_gate_gpu.png)
 
 The optional spectral Laguerre nonlinear mode is gated, not a default. On the
