@@ -90,8 +90,6 @@ def assemble_rhs_cached(
     hypercollisions_kz = jnp.asarray(params.hypercollisions_kz, dtype=real_dtype)
     D_hyper = jnp.asarray(params.D_hyper, dtype=real_dtype)
     p_hyper_kperp = jnp.asarray(params.p_hyper_kperp, dtype=real_dtype)
-    D_hyper = jnp.asarray(params.D_hyper, dtype=real_dtype)
-    p_hyper_kperp = jnp.asarray(params.p_hyper_kperp, dtype=real_dtype)
     damp_amp = jnp.asarray(params.damp_ends_amp, dtype=real_dtype)
     if dt is not None:
         dt_arr = jnp.asarray(dt, dtype=real_dtype)
@@ -104,7 +102,6 @@ def assemble_rhs_cached(
     w_dia = jnp.asarray(term_cfg.diamagnetic, dtype=real_dtype)
     w_coll = jnp.asarray(term_cfg.collisions, dtype=real_dtype)
     w_hyper = jnp.asarray(term_cfg.hypercollisions, dtype=real_dtype)
-    w_hyperdiff = jnp.asarray(term_cfg.hyperdiffusion, dtype=real_dtype)
     w_hyperdiff = jnp.asarray(term_cfg.hyperdiffusion, dtype=real_dtype)
     w_damp = jnp.asarray(term_cfg.end_damping, dtype=real_dtype)
     w_apar = jnp.asarray(term_cfg.apar, dtype=real_dtype)
@@ -488,6 +485,7 @@ def assemble_rhs_terms_cached(
         "diamagnetic",
         "collisions",
         "hypercollisions",
+        "hyperdiffusion",
         "end_damping",
     ):
         total = total + contrib[key]
