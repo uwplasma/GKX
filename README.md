@@ -431,10 +431,19 @@ timings on top of the cold wall-time bars.
 
 The current profiler splits the nonlinear RHS into field solve, linear RHS,
 nonlinear bracket, and full RHS kernels on CPU and GPU. The latest bounded
-Cyclone profile shows the nonlinear bracket and full RHS are the dominant warm
-throughput targets, while GPU execution reduces all measured RHS kernels. The
+Cyclone profile shows the compiled linear RHS, nonlinear bracket, and full RHS
+are the dominant warm-throughput targets, while GPU execution reduces all
+measured RHS kernels. The
 companion JSON artifact records dominant kernels and grid-to-spectral speedups
 so the optimization lane remains traceable and machine-checkable.
+
+The next profiler layer resolves the linear RHS into individual term kernels.
+The tracked Cyclone CPU artifact (`docs/_static/linear_rhs_terms_profile.json`)
+shows a large compiled-assembly gap in the full linear RHS call and identifies
+the linked parallel-gradient path as the dominant nonzero standalone term. It
+also records zero-norm initial-state rows such as `linked_abs_kz`; those rows
+are retained in production until a state-window identity gate proves they remain
+inactive after nonlinear evolution.
 
 ![Spectral Laguerre mode gate](docs/_static/laguerre_mode_gate_gpu.png)
 
