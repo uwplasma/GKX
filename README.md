@@ -459,10 +459,14 @@ parallel perturbation is present.
 ![Spectral Laguerre mode gate](docs/_static/laguerre_mode_gate_gpu.png)
 
 The optional spectral Laguerre nonlinear mode is gated, not a default. On the
-bounded `office` GPU gate it preserves scalar nonlinear diagnostics across
-Cyclone, KBM, W7-X, and HSX with max relative differences below `2.2e-5`.
-It speeds up Cyclone, KBM, and W7-X in that gate, but HSX is slower, so users
-should treat it as an opt-in engineering mode and rerun
+bounded local CPU and `office` GPU gates it preserves scalar nonlinear
+diagnostics across Cyclone, KBM, W7-X, and HSX. The refreshed CPU gate has
+maximum relative differences below `8.9e-4` and grid/spectral runtime ratios
+of `2.90`, `3.31`, `1.67`, and `0.66` for Cyclone, KBM, W7-X, and HSX,
+respectively. The tracked GPU gate has maximum relative differences below
+`2.2e-5` and ratios `1.66`, `2.69`, `1.63`, and `0.74`. HSX is slower on both
+backends in these bounded gates, so users should treat spectral Laguerre mode
+as an opt-in engineering mode and rerun
 `python tools/gate_laguerre_nonlinear_modes.py` for their production case
 before relying on it for performance claims.
 
