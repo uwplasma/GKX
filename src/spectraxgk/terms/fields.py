@@ -47,7 +47,6 @@ def _solve_fields_impl(
     zt = jnp.where(tz == 0.0, 0.0, 1.0 / tz)
     vth = jnp.asarray(vth, dtype=real_dtype)
 
-    Gm1 = G[:, :, 1, ...]
     Gm0 = G[:, :, 0, ...]
 
     nbar = jnp.sum(
@@ -56,19 +55,7 @@ def _solve_fields_impl(
         * jnp.sum(Jl * Gm0, axis=1),
         axis=0,
     )
-    bmag_inv2 = 1.0 / (bmag * bmag)
-    bpar_beta = bpar_beta_scale * beta
-    jperpbar = jnp.sum(
-        (-bpar_beta)
-        * density[:, None, None, None]
-        * temp[:, None, None, None]
-        * bmag_inv2[None, None, :]
-        * jnp.sum(JlB * Gm0, axis=1),
-        axis=0,
-    )
     g0 = jnp.sum(Jl * Jl, axis=1)
-    g01 = jnp.sum(Jl * JlB, axis=1)
-    g11 = jnp.sum(JlB * JlB, axis=1)
     qneut = jnp.sum(
         density[:, None, None, None]
         * charge[:, None, None, None]
@@ -101,45 +88,73 @@ def _solve_fields_impl(
         operand=None,
     )
     phi_es = jnp.where(cache.mask0, 0.0, phi_es)
-    qb = -jnp.sum(density[:, None, None, None] * charge[:, None, None, None] * g01, axis=0)
-    aphi = bpar_beta * jnp.sum(
-        density[:, None, None, None] * charge[:, None, None, None] * g01, axis=0
-    ) * bmag_inv2[None, None, :]
-    ab = 1.0 + bpar_beta * jnp.sum(
-        density[:, None, None, None] * temp[:, None, None, None] * g11, axis=0
-    ) * bmag_inv2[None, None, :]
-    denom = qphi * ab - qb * aphi
-    denom_safe = jnp.where(denom == 0.0, jnp.inf, denom)
-    phi_em = (ab * nbar - qb * jperpbar) / denom_safe
-    bpar_em = (-aphi * nbar + qphi * jperpbar) / denom_safe
 
-    use_bpar = jnp.where((beta > 0.0) & (w_bpar != 0.0), 1.0, 0.0)
-    bpar_sign = jnp.sign(w_bpar)
-    phi = phi_es * (1.0 - use_bpar) + phi_em * use_bpar
-    bpar = bpar_em * use_bpar * bpar_sign
-    phi = jnp.where(cache.mask0, 0.0, phi)
-    bpar = jnp.where(cache.mask0, 0.0, bpar)
+    def _solve_bpar_branch(_) -> tuple[jnp.ndarray, jnp.ndarray]:
+        bmag_inv2 = 1.0 / (bmag * bmag)
+        bpar_beta = bpar_beta_scale * beta
+        g01 = jnp.sum(Jl * JlB, axis=1)
+        g11 = jnp.sum(JlB * JlB, axis=1)
+        jperpbar = jnp.sum(
+            (-bpar_beta)
+            * density[:, None, None, None]
+            * temp[:, None, None, None]
+            * bmag_inv2[None, None, :]
+            * jnp.sum(JlB * Gm0, axis=1),
+            axis=0,
+        )
+        qb = -jnp.sum(density[:, None, None, None] * charge[:, None, None, None] * g01, axis=0)
+        aphi = bpar_beta * jnp.sum(
+            density[:, None, None, None] * charge[:, None, None, None] * g01,
+            axis=0,
+        ) * bmag_inv2[None, None, :]
+        ab = 1.0 + bpar_beta * jnp.sum(
+            density[:, None, None, None] * temp[:, None, None, None] * g11,
+            axis=0,
+        ) * bmag_inv2[None, None, :]
+        denom = qphi * ab - qb * aphi
+        denom_safe = jnp.where(denom == 0.0, jnp.inf, denom)
+        phi_em = (ab * nbar - qb * jperpbar) / denom_safe
+        bpar_em = (-aphi * nbar + qphi * jperpbar) / denom_safe
+        return jnp.where(cache.mask0, 0.0, phi_em), jnp.where(cache.mask0, 0.0, bpar_em * jnp.sign(w_bpar))
 
-    jpar = jnp.sum(
-        density[:, None, None, None]
-        * charge[:, None, None, None]
-        * vth[:, None, None, None]
-        * jnp.sum(Jl * Gm1, axis=1),
-        axis=0,
+    phi, bpar = jax.lax.cond(
+        (beta > 0.0) & (w_bpar != 0.0),
+        _solve_bpar_branch,
+        lambda _: (phi_es, jnp.zeros_like(phi_es)),
+        operand=None,
     )
-    jpar = apar_beta_scale * beta * jpar
-    bmag2 = bmag[None, None, :] * bmag[None, None, :]
-    use_bmag = jnp.asarray(getattr(cache, "kperp2_bmag", True), dtype=real_dtype)
-    ampere_kperp2 = kperp2 * (use_bmag * bmag2 + (1.0 - use_bmag))
-    ampere_denom = ampere_kperp2 + ampere_g0_scale * beta * jnp.sum(
-        density[:, None, None, None]
-        * (charge * charge / mass)[:, None, None, None]
-        * g0,
-        axis=0,
-    )
-    ampere_safe = jnp.where(ampere_denom == 0.0, jnp.inf, ampere_denom)
-    apar = fapar * jpar / ampere_safe
-    apar = jnp.where(cache.mask0, 0.0, apar)
+
+    def _solve_apar_branch(_) -> jnp.ndarray:
+        Gm1 = G[:, :, 1, ...]
+        jpar = jnp.sum(
+            density[:, None, None, None]
+            * charge[:, None, None, None]
+            * vth[:, None, None, None]
+            * jnp.sum(Jl * Gm1, axis=1),
+            axis=0,
+        )
+        jpar = apar_beta_scale * beta * jpar
+        bmag2 = bmag[None, None, :] * bmag[None, None, :]
+        use_bmag = jnp.asarray(getattr(cache, "kperp2_bmag", True), dtype=real_dtype)
+        ampere_kperp2 = kperp2 * (use_bmag * bmag2 + (1.0 - use_bmag))
+        ampere_denom = ampere_kperp2 + ampere_g0_scale * beta * jnp.sum(
+            density[:, None, None, None]
+            * (charge * charge / mass)[:, None, None, None]
+            * g0,
+            axis=0,
+        )
+        ampere_safe = jnp.where(ampere_denom == 0.0, jnp.inf, ampere_denom)
+        return jnp.where(cache.mask0, 0.0, fapar * jpar / ampere_safe)
+
+    if G.shape[2] > 1:
+        apar = jax.lax.cond(
+            (beta > 0.0) & jnp.any(fapar != 0.0),
+            _solve_apar_branch,
+            lambda _: jnp.zeros_like(phi),
+            operand=None,
+        )
+    else:
+        apar = jnp.zeros_like(phi)
 
     return FieldState(phi=phi, apar=apar, bpar=bpar)
 
