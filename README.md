@@ -334,10 +334,11 @@ weighted objective residual. These are validated optimization-plumbing
 diagnostics for stellarator-transport objectives, not a final absolute-flux
 optimization claim. Full
 `vmec_jax -> booz_xform_jax -> SPECTRAX-GK` nonlinear optimization remains
-scoped to the next promotion gate: matching the production curvature/drift
-convention to the imported geometry path across additional equilibria,
-broadening full-chain transport-gradient checks beyond the tracked QH fixture,
-and converged nonlinear audits of the optimized equilibria.
+scoped to the next promotion gate: nonlinear-window state-gradient validation,
+continued production curvature/drift parity on additional equilibria, and
+converged nonlinear audits of the optimized equilibria. The current full-chain
+linear/quasilinear gradient evidence covers QH and Li383 at `mboz=nboz=21`;
+it should not be read as a production nonlinear heat-flux optimization claim.
 
 For production parallelization of independent work, use
 `spectraxgk.batch_map` / `spectraxgk.ky_scan_batches` for ky scans,
