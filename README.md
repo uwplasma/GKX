@@ -300,17 +300,22 @@ objective-gradient path on the tracked all-surface QH fixture. A second Li383
 holdout now passes the same frequency and quasilinear VMEC/Boozer gradient
 contracts at `mboz=nboz=21`; the combined holdout matrix has maximum relative
 AD/finite-difference mismatch `4.9e-3`. This is a multi-equilibrium reduced
-linear/quasilinear differentiability gate, not a nonlinear-window heat-flux
-gradient claim. A memory-bounded Boozer surface stencil exists for diagnostics
-and large-equilibrium probes, but it is not used for the published accuracy
-claim. Nonlinear-window state-gradient gates remain future work before full
-nonlinear heat-flux optimization claims.
+linear/quasilinear differentiability gate. A companion reduced nonlinear-window
+estimator gate differentiates a smooth late-window heat-flux envelope through
+the same `vmec_jax -> booz_xform_jax -> SPECTRAX-GK` state path. That closes a
+bounded differentiability check for nonlinear-window-style objectives, but it
+is not a converged nonlinear turbulence-gradient or optimized-equilibrium
+transport claim. A memory-bounded Boozer surface stencil exists for diagnostics
+and large-equilibrium probes, but it is not used for the published
+linear/quasilinear accuracy claim.
 
 ![SPECTRAX-GK solver-objective geometry-gradient gate](docs/_static/solver_objective_gradient_gate.png)
 
 ![SPECTRAX-GK VMEC/Boozer solver-frequency gradient gate](docs/_static/vmec_boozer_solver_frequency_gradient_gate.png)
 
 ![SPECTRAX-GK VMEC/Boozer quasilinear-gradient gate](docs/_static/vmec_boozer_quasilinear_gradient_gate.png)
+
+![SPECTRAX-GK VMEC/Boozer reduced nonlinear-window-gradient gate](docs/_static/vmec_boozer_nonlinear_window_gradient_gate.png)
 
 ![SPECTRAX-GK VMEC/Boozer gradient holdout matrix](docs/_static/vmec_boozer_gradient_holdout_matrix.png)
 
