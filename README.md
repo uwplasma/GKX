@@ -314,10 +314,20 @@ repeated base run. It passes finite-output, repeatability, monotonic
 drive-response, window-CV/trend, and resolved finite-difference-response gates
 with response/base about `0.111`. This closes the production nonlinear-window
 observable extraction and conditioning path, but it is not a VMEC/Boozer
-nonlinear state-gradient or optimized-equilibrium transport claim. A
-memory-bounded Boozer surface stencil exists for diagnostics and
-large-equilibrium probes, but it is not used for the published
-linear/quasilinear accuracy claim.
+nonlinear state-gradient or optimized-equilibrium transport claim.
+
+A companion VMEC/Boozer-perturbed audit starts from the real mode-21
+`vmec_jax -> booz_xform_jax` QH state bridge, writes perturbed sampled
+geometries to temporary NetCDF files, and runs compact production nonlinear
+windows at `Rcos_mid_surface_m1 = base +/- 1e-5`. It passes finite-output,
+repeatability, window-conditioning, geometry-response, and resolved central
+finite-difference response gates with response/base about `0.040`. The
+forward/backward response is asymmetric and not monotone, so this is only a
+VMEC/Boozer geometry-perturbed observable-path audit. It is not promoted as a
+local nonlinear gradient, optimized-equilibrium audit, or production heat-flux
+stellarator optimization claim. A memory-bounded Boozer surface stencil exists
+for diagnostics and large-equilibrium probes, but it is not used for the
+published linear/quasilinear accuracy claim.
 
 ![SPECTRAX-GK solver-objective geometry-gradient gate](docs/_static/solver_objective_gradient_gate.png)
 
@@ -330,6 +340,8 @@ linear/quasilinear accuracy claim.
 ![SPECTRAX-GK VMEC/Boozer gradient holdout matrix](docs/_static/vmec_boozer_gradient_holdout_matrix.png)
 
 ![SPECTRAX-GK nonlinear-window finite-difference audit](docs/_static/nonlinear_window_fd_audit.png)
+
+![SPECTRAX-GK VMEC/Boozer nonlinear-window finite-difference audit](docs/_static/vmec_boozer_nonlinear_window_fd_audit.png)
 
 Differentiable stellarator ITG optimization examples live in
 `examples/optimization/`. They optimize the same QA, max-mode-1 control vector
