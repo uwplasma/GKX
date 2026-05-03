@@ -306,9 +306,18 @@ differentiate a smooth late-window heat-flux envelope through the same
 including those estimator rows has maximum relative mismatch `2.7e-2`. That
 closes a multi-equilibrium bounded differentiability check for
 nonlinear-window-style reduced objectives, but it is not a converged nonlinear
-turbulence-gradient or optimized-equilibrium transport claim. A memory-bounded
-Boozer surface stencil exists for diagnostics and large-equilibrium probes, but
-it is not used for the published linear/quasilinear accuracy claim.
+turbulence-gradient or optimized-equilibrium transport claim.
+
+A compact production nonlinear-window finite-difference audit now runs actual
+SPECTRAX-GK nonlinear Cyclone windows at `R/LTi = base +/- step` plus a
+repeated base run. It passes finite-output, repeatability, monotonic
+drive-response, window-CV/trend, and resolved finite-difference-response gates
+with response/base about `0.111`. This closes the production nonlinear-window
+observable extraction and conditioning path, but it is not a VMEC/Boozer
+nonlinear state-gradient or optimized-equilibrium transport claim. A
+memory-bounded Boozer surface stencil exists for diagnostics and
+large-equilibrium probes, but it is not used for the published
+linear/quasilinear accuracy claim.
 
 ![SPECTRAX-GK solver-objective geometry-gradient gate](docs/_static/solver_objective_gradient_gate.png)
 
@@ -319,6 +328,8 @@ it is not used for the published linear/quasilinear accuracy claim.
 ![SPECTRAX-GK VMEC/Boozer reduced nonlinear-window-gradient gate](docs/_static/vmec_boozer_nonlinear_window_gradient_gate.png)
 
 ![SPECTRAX-GK VMEC/Boozer gradient holdout matrix](docs/_static/vmec_boozer_gradient_holdout_matrix.png)
+
+![SPECTRAX-GK nonlinear-window finite-difference audit](docs/_static/nonlinear_window_fd_audit.png)
 
 Differentiable stellarator ITG optimization examples live in
 `examples/optimization/`. They optimize the same QA, max-mode-1 control vector
