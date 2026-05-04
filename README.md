@@ -356,8 +356,10 @@ The nonlinear time-horizon audit below separates long post-transient transport
 windows from startup plumbing checks and reduced nonlinear-envelope examples.
 The external nfp4 QH pilot has now been extended to `t=150`, where its late
 heat-flux window is meaningful rather than noise-floor-scale; it remains a
-feasibility result because the new `48x48x32` grid check changes the late
-heat-flux level by about `52%`, above the current convergence gate.
+feasibility result because the `48x48x32` grid check changes the late
+heat-flux level by about `52%`, and the follow-on `64x64x40` check changes it
+again by about `63%`. QH is therefore excluded from quasilinear calibration
+until a separate grid/window-converged transport gate passes.
 
 ![SPECTRAX-GK nonlinear transport time-horizon audit](docs/_static/nonlinear_transport_time_horizon_audit.png)
 
