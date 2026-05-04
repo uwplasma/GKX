@@ -135,6 +135,10 @@ SPECTRAX-GK does not claim calibrated absolute quasilinear flux prediction yet.
 The result is kept because it is the correct research gate: linear weights and
 gradients are available now, while saturation-rule transfer must be improved
 and validated before being used for stellarator optimization claims.
+The combined holdout report now also admits the D-shaped external-VMEC
+`t=250` nonlinear window after its high-grid convergence gate passed; that
+additional point reinforces the same conclusion rather than promoting the
+one-constant model.
 
 ![SPECTRAX-GK quasilinear dataset sufficiency gate](docs/_static/quasilinear_dataset_sufficiency.png)
 
