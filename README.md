@@ -352,6 +352,14 @@ as saturated transport.
 
 ![SPECTRAX-GK VMEC/Boozer nonlinear startup-window finite-difference audit](docs/_static/vmec_boozer_nonlinear_window_fd_audit.png)
 
+The nonlinear time-horizon audit below separates long post-transient transport
+windows from startup plumbing checks and reduced nonlinear-envelope examples.
+The external nfp4 QH pilot has now been extended to `t=150`, where its late
+heat-flux window is meaningful rather than noise-floor-scale; it remains a
+feasibility result until a grid/window convergence gate passes.
+
+![SPECTRAX-GK nonlinear transport time-horizon audit](docs/_static/nonlinear_transport_time_horizon_audit.png)
+
 Differentiable stellarator ITG optimization examples live in
 `examples/optimization/`. They optimize the same QA, max-mode-1 control vector
 with three turbulence objectives: small linear ITG growth rate, small
