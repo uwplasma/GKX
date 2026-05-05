@@ -125,29 +125,41 @@ absolute saturated-flux claim remains gated on nonlinear train/holdout calibrati
 The first Cyclone nonlinear audit is tracked in `docs/quasilinear.rst` and is
 kept at `training_or_audit_only` until a held-out calibration set passes.
 
-The first train/holdout calibration diagnostic fits one heat-flux scale on the
-Cyclone nonlinear window and scores Cyclone Miller as a held-out geometry:
+The manuscript-facing quasilinear calibration panel now uses the full admitted
+electrostatic portfolio: two training geometries and five held-out nonlinear
+windows spanning tokamak, stellarator, and external-VMEC cases.
 
-![SPECTRAX-GK quasilinear train/holdout calibration](docs/_static/quasilinear_cyclone_miller_train_holdout.png)
+![SPECTRAX-GK quasilinear stellarator train/holdout calibration](docs/_static/quasilinear_stellarator_train_holdout.png)
 
-This held-out transfer test fails intentionally in the current release, so
-SPECTRAX-GK does not claim calibrated absolute quasilinear flux prediction yet.
-The result is kept because it is the correct research gate: linear weights and
-gradients are available now, while saturation-rule transfer must be improved
-and validated before being used for stellarator optimization claims.
-The combined holdout report now also admits the D-shaped external-VMEC
-`t=250` nonlinear window after its high-grid convergence gate passed; that
-additional point reinforces the same conclusion rather than promoting the
-one-constant model.
+The current training set is Cyclone plus the external-VMEC ITERModel case; the
+holdouts are Cyclone Miller, HSX, W7-X, D-shaped VMEC, and the up-down
+asymmetric VMEC tokamak. This is a stronger negative-transfer result than the
+earlier Cyclone-only fit: nonlinear input validation now passes, but the fitted
+one-constant mixing-length model still fails the held-out absolute-flux gate
+with mean relative error about `2.57`. The best current one-scalar saturation
+rule remains worse than the training-mean null baseline (`2.51` versus `1.39`),
+so SPECTRAX-GK does not promote an absolute quasilinear flux predictor yet.
 
-![SPECTRAX-GK quasilinear dataset sufficiency gate](docs/_static/quasilinear_dataset_sufficiency.png)
+Two of the strongest admitted external-VMEC nonlinear holdouts are shown below.
+These figures are part of the publication-facing evidence that the nonlinear
+inputs are converged enough to be used as negative transfer constraints rather
+than as exploratory pilots.
 
-The dataset-sufficiency gate keeps the same scope machine-readable. The current
-four electrostatic-compatible nonlinear windows reject the simple saturation
-rules, but they are not enough to promote richer absolute-flux candidates:
-there is only one explicit training geometry, downstream skill gates still
-fail, and electromagnetic KBM is deliberately excluded until electromagnetic
-quasilinear channels are validated.
+![SPECTRAX-GK ITERModel external-VMEC nonlinear convergence gate](docs/_static/external_vmec_itermodel_t350_high_grid_convergence_gate.png)
+
+The ITERModel external-VMEC case closes at `t=350` on the `48x48x32` to
+`64x64x40` ladder. Its common-window grid difference is about `0.0165`, the
+least-window difference is about `0.1415`, and the trend/CV/sample-count gates
+all pass.
+
+![SPECTRAX-GK up-down asymmetric external-VMEC nonlinear convergence gate](docs/_static/external_vmec_updown_asym_t450_high_grid_convergence_gate.png)
+
+The up-down asymmetric external-VMEC tokamak closes at `t=450` on the same
+ladder. Its common-window and least-window relative differences are about
+`0.0435` and `0.0242`, respectively. These admitted windows strengthen the
+quasilinear calibration dataset without changing the core conclusion: the
+current absolute-flux model is still a rejected research candidate, not a
+shipped predictive transport law.
 
 Autodiff validation (inverse/sensitivity demo):
 
