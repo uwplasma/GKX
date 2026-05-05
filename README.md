@@ -138,7 +138,17 @@ earlier Cyclone-only fit: nonlinear input validation now passes, but the fitted
 one-constant mixing-length model still fails the held-out absolute-flux gate
 with mean relative error about `2.57`. The best current one-scalar saturation
 rule remains worse than the training-mean null baseline (`2.51` versus `1.39`),
-so SPECTRAX-GK does not promote an absolute quasilinear flux predictor yet.
+so SPECTRAX-GK does not promote any simple or user-facing absolute quasilinear
+flux predictor from that legacy family.
+
+The richer held-out candidate is now the reduced spectral-envelope model below.
+It uses only two linear-spectrum envelope features, reaches mean relative error
+about `0.244`, and clears the leave-one-geometry-out interval-coverage gate on
+the current seven-case electrostatic portfolio. That is the current manuscript
+result: the simple rules are rejected, but a small spectrum-aware candidate is
+now accepted as a scoped research model.
+
+![SPECTRAX-GK quasilinear candidate uncertainty gate](docs/_static/quasilinear_candidate_uncertainty.png)
 
 Two of the strongest admitted external-VMEC nonlinear holdouts are shown below.
 These figures are part of the publication-facing evidence that the nonlinear
