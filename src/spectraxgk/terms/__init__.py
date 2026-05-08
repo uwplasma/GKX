@@ -3,8 +3,8 @@
 This package provides a modular structure for assembling the nonlinear,
 electromagnetic multispecies gyrokinetic RHS from individual terms. The
 term modules expose a stable API for streaming, mirror, curvature/grad-B,
-diamagnetic drive, collisions, hyper-collisions, and end damping, with
-placeholders for nonlinear terms.
+diamagnetic drive, collisions, hyper-collisions, end damping, and the
+pseudo-spectral nonlinear bracket.
 """
 
 from typing import TYPE_CHECKING

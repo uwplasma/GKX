@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, Sequence, Tuple, TYPE_CHECKING
+from typing import Any, Sequence, TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
@@ -581,7 +581,7 @@ def integrate_nonlinear_diffrax(
     gx_real_fft: bool = True,
     laguerre_mode: str = "grid",
 ) -> tuple[jnp.ndarray, FieldState]:
-    """Integrate the nonlinear system with diffrax (placeholder nonlinear term)."""
+    """Integrate the nonlinear system with diffrax."""
 
     dfx, eqx = _require_diffrax()
     state_dtype = jnp.result_type(G0, _base_complex_dtype())

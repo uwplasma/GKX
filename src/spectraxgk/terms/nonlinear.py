@@ -1,4 +1,4 @@
-"""Nonlinear E×B term placeholders (to be implemented)."""
+"""Pseudo-spectral nonlinear E×B and electromagnetic bracket terms."""
 
 from __future__ import annotations
 
@@ -886,6 +886,6 @@ def placeholder_nonlinear_contribution(
     *,
     weight: jnp.ndarray,
 ) -> jnp.ndarray:
-    """Return a zero nonlinear contribution to validate IO shapes."""
+    """Return a zero contribution for shape-only tests and disabled-term paths."""
 
     return jnp.zeros_like(G) * weight

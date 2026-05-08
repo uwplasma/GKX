@@ -163,7 +163,7 @@ def nonlinear_rhs_cached(
     laguerre_mode: str = "grid",
     external_phi: jnp.ndarray | float | None = None,
 ) -> Tuple[jnp.ndarray, FieldState]:
-    """Compute a nonlinear RHS using linear terms plus a placeholder nonlinear term."""
+    """Compute the assembled nonlinear RHS and electromagnetic field state."""
 
     term_cfg = terms or TermConfig()
     dG, fields = assemble_rhs_cached_jit(G, cache, params, term_cfg, external_phi=external_phi)
