@@ -911,7 +911,7 @@ def build_linear_cache(
             * ((1.0 - delta) * ftwist_mid + delta * ftwist_mid_next)
         )
         m0 = m0.astype(real_dtype)
-        shat_inv = 1.0 / shat
+        shat_inv = 1.0 / shat_arr
         delta_kx = ky_eff[:, None] * ftwist[None, :] + (rho_star * m0 / float(x0_eff))
         term_ky = ky_eff[:, None, None] ** 2 * (
             gds2[None, None, :]
