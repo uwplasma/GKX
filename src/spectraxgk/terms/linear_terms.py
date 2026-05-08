@@ -419,6 +419,10 @@ def hypercollisions_contribution(
     dG = weight * hypercollisions_const * jnp.where(mask_const, const_term, 0.0) * G
     dG = dG - weight * nu_hyper * hyper_ratio * G
 
+    kz_weight = jnp.asarray(weight) * jnp.asarray(hypercollisions_kz)
+    if not isinstance(kz_weight, jax.core.Tracer) and np.all(np.asarray(kz_weight) == 0.0):
+        return dG
+
     nu_hyp_m = (
         nu_hyper_m
         * m_norm_kz_factor
@@ -426,10 +430,7 @@ def hypercollisions_contribution(
         * vth_s
         * jnp.abs(kpar_scale)
     )
-    kz_source = weight * hypercollisions_kz * jnp.where(mask_kz, -nu_hyp_m * m_pow, 0.0) * G
-    kz_weight = jnp.asarray(weight) * jnp.asarray(hypercollisions_kz)
-    if not isinstance(kz_weight, jax.core.Tracer) and np.all(np.asarray(kz_weight) == 0.0):
-        return dG
+    kz_source = kz_weight * jnp.where(mask_kz, -nu_hyp_m * m_pow, 0.0) * G
     if linked_indices and linked_kz:
         kz_term = abs_z_linked_fft(
             kz_source,

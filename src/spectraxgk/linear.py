@@ -513,6 +513,7 @@ def _build_low_rank_moment_cache_arrays(
     p_hyper_l = np_dtype(params.p_hyper_l)
     p_hyper_m = np_dtype(params.p_hyper_m)
     p_hyper_lm = np_dtype(params.p_hyper_lm)
+    normalized_m = m / m_norm_kz
     return {
         "lb_lam": jnp.asarray(lb_lam_np, dtype=real_dtype),
         "l": jnp.asarray(ell, dtype=real_dtype),
@@ -528,8 +529,8 @@ def _build_low_rank_moment_cache_arrays(
         "ratio_lm": jnp.asarray(((2.0 * ell + m) / (2.0 * l_norm_full + m_norm_full)) ** p_hyper_lm, dtype=real_dtype),
         "mask_const": jnp.asarray((m > 2.0) | (ell > 1.0), dtype=bool),
         "mask_kz": jnp.asarray(m > 2.0, dtype=bool),
-        "m_pow": jnp.asarray(m**p_hyper_m, dtype=real_dtype),
-        "m_norm_kz_factor": jnp.asarray((p_hyper_m + 0.5) / (m_norm_kz ** (p_hyper_m + 0.5)), dtype=real_dtype),
+        "m_pow": jnp.asarray(normalized_m**p_hyper_m, dtype=real_dtype),
+        "m_norm_kz_factor": jnp.asarray((p_hyper_m + 0.5) / np.sqrt(m_norm_kz), dtype=real_dtype),
     }
 
 
