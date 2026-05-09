@@ -65,11 +65,11 @@ def _collision_contribution_or_zero(
         return bool(np.all(np.asarray(arr) == 0.0))
 
     if _is_static_zero(weight):
-        return jnp.zeros_like(G)
+        return jnp.zeros_like(H)
 
     no_preexpanded_operator = collision_lam.size == 0
     if no_preexpanded_operator and _is_static_zero(nu):
-        return jnp.zeros_like(G)
+        return jnp.zeros_like(H)
 
     zero_nu_operator = jnp.logical_and(no_preexpanded_operator, jnp.all(nu == 0.0))
     zero_weight = jnp.all(weight == 0.0)
@@ -77,7 +77,7 @@ def _collision_contribution_or_zero(
 
     return jax.lax.cond(
         skip,
-        lambda _: jnp.zeros_like(G),
+        lambda _: jnp.zeros_like(H),
         lambda _: collisions_contribution(
             H,
             G=G,
