@@ -8,6 +8,7 @@ import functools
 import jax
 
 import jax.numpy as jnp
+import numpy as np
 
 from spectraxgk.geometry import FluxTubeGeometryLike
 from spectraxgk.grids import SpectralGrid
@@ -39,6 +40,57 @@ def _apply_external_phi_source(
     if phi_shift.ndim > fields.phi.ndim:
         raise ValueError("external_phi must be broadcastable to the solved phi field")
     return FieldState(phi=fields.phi + phi_shift, apar=fields.apar, bpar=fields.bpar)
+
+
+def _collision_contribution_or_zero(
+    H: jnp.ndarray,
+    *,
+    G: jnp.ndarray,
+    Jl: jnp.ndarray,
+    JlB: jnp.ndarray,
+    b: jnp.ndarray,
+    nu: jnp.ndarray,
+    collision_lam: jnp.ndarray,
+    lb_lam: jnp.ndarray,
+    weight: jnp.ndarray,
+) -> jnp.ndarray:
+    """Skip the collision operator when the configured operator is exactly zero."""
+
+    real_dtype = jnp.real(G).dtype
+
+    def _is_static_zero(value: jnp.ndarray) -> bool:
+        arr = jnp.asarray(value, dtype=real_dtype)
+        if isinstance(arr, jax.core.Tracer):
+            return False
+        return bool(np.all(np.asarray(arr) == 0.0))
+
+    if _is_static_zero(weight):
+        return jnp.zeros_like(G)
+
+    no_preexpanded_operator = collision_lam.size == 0
+    if no_preexpanded_operator and _is_static_zero(nu):
+        return jnp.zeros_like(G)
+
+    zero_nu_operator = jnp.logical_and(no_preexpanded_operator, jnp.all(nu == 0.0))
+    zero_weight = jnp.all(weight == 0.0)
+    skip = jnp.logical_or(zero_weight, zero_nu_operator)
+
+    return jax.lax.cond(
+        skip,
+        lambda _: jnp.zeros_like(G),
+        lambda _: collisions_contribution(
+            H,
+            G=G,
+            Jl=Jl,
+            JlB=JlB,
+            b=b,
+            nu=nu,
+            collision_lam=collision_lam,
+            lb_lam=lb_lam,
+            weight=weight,
+        ),
+        operand=None,
+    )
 
 
 def assemble_rhs_cached(
@@ -192,7 +244,7 @@ def assemble_rhs_cached(
         imag=imag,
         weight=w_dia,
     )
-    dG = dG + collisions_contribution(
+    dG = dG + _collision_contribution_or_zero(
         H,
         G=G,
         Jl=Jl,
@@ -420,7 +472,7 @@ def assemble_rhs_terms_cached(
         imag=imag,
         weight=w_dia,
     )
-    contrib["collisions"] = collisions_contribution(
+    contrib["collisions"] = _collision_contribution_or_zero(
         H,
         G=G,
         Jl=Jl,
