@@ -548,6 +548,11 @@ grid mode and `1.48e-2 s` in spectral mode. Spectral mode still reduces the
 GPU nonlinear bracket by about `1.63x`, but the full-RHS timing is limited by
 the combined linear-RHS/bracket graph, so the next optimization target is
 linear-RHS fusion/cache layout before any broader nonlinear speedup claim.
+The matched W7-X/HSX runtime-mode stellarator profiler artifact
+(`docs/_static/nonlinear_rhs_profile_stellarator_runtime.json`) records W7-X
+and HSX GPU full-RHS calls near `2.7e-2 s` versus CPU calls near `3.1e-1 s`;
+those rows close the release-level performance evidence while keeping broader
+production nonlinear speedup claims scoped to future profiler-gated work.
 
 The full fused linear-RHS trace artifact
 (`docs/_static/full_linear_rhs_trace_summary.json`) now records the Cyclone
