@@ -518,17 +518,20 @@ so the optimization lane remains traceable and machine-checkable.
 
 The next profiler layer resolves the linear RHS into individual term kernels.
 The tracked Cyclone CPU artifact (`docs/_static/linear_rhs_terms_profile.json`)
-now includes the zero-collision fast path and reports `full_linear_rhs=1.17e-1 s`
-in the bounded CPU harness. The active-state companion
+now includes the zero-collision fast path and linked-FFT refactor and reports
+`full_linear_rhs=1.08e-1 s` in the bounded CPU harness. The active-state
+companion
 (`docs/_static/linear_rhs_terms_profile_z_wave_cpu.json`) injects resolved
-parallel variation and shows linked-`|k_z|` hypercollisions becoming active;
-apart from the accepted zero-collision guard, zero-norm initial-state rows
+parallel variation and reports `full_linear_rhs=1.27e-1 s` while showing
+linked-`|k_z|` hypercollisions becoming active; apart from the accepted
+zero-collision guard, zero-norm initial-state rows
 remain enabled until a state-window identity gate proves they remain inactive
 after nonlinear evolution. The
 matching `office` GPU artifact
 (`docs/_static/linear_rhs_terms_profile_gpu.json`) reports
-`full_linear_rhs=6.18e-3 s` on one RTX A4000, and the active-state GPU
-companion reproduces the linked-`|k_z|`/hypercollision norm match.
+`full_linear_rhs=5.50e-3 s` on one RTX A4000, and the active-state GPU
+companion reports `5.48e-3 s` while reproducing the linked-`|k_z|`/
+hypercollision norm match.
 
 The tracked state-window gate
 (`docs/_static/linear_rhs_zero_norm_state_window_gate.json`) now makes that
