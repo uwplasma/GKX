@@ -658,11 +658,6 @@ def nonlinear_em_contribution(
         out = jnp.asarray(weight, dtype=real_dtype) * total
         return out[0] if squeeze_species else out
 
-    phi = _apply_mask_xy(phi, dealias_mask)
-    if apar is not None:
-        apar = _apply_mask_xy(apar, dealias_mask)
-    if bpar is not None:
-        bpar = _apply_mask_xy(bpar, dealias_mask)
     phi_hat = phi[None, None, ...]
     chi_phi = Jl * phi_hat
     if electrostatic_only:
