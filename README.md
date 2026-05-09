@@ -539,6 +539,14 @@ policy executable: it accepts a zero-collision skip for the `nu=0` Cyclone
 window but rejects skipping linked-`|k_z|` hypercollisions once a resolved
 parallel perturbation is present.
 
+A larger Cyclone Miller companion profile is documented in
+`docs/performance.rst` and tracked as
+`docs/_static/nonlinear_rhs_profile_miller.{png,json}`. It uses
+`Nx=192`, `Ny=64`, `Nz=24`, `Nl=4`, `Nm=8`; spectral mode reduces the GPU
+nonlinear bracket by about `2.09x`, but full-RHS timing is linear-RHS dominated,
+so the next optimization target is linear-RHS fusion/cache layout before any
+broader nonlinear speedup claim.
+
 ![Spectral Laguerre mode gate](docs/_static/laguerre_mode_gate_gpu.png)
 
 The optional spectral Laguerre nonlinear mode is gated, not a default. On the
