@@ -542,10 +542,12 @@ parallel perturbation is present.
 A larger Cyclone Miller companion profile is documented in
 `docs/performance.rst` and tracked as
 `docs/_static/nonlinear_rhs_profile_miller.{png,json}`. It uses
-`Nx=192`, `Ny=64`, `Nz=24`, `Nl=4`, `Nm=8`; spectral mode reduces the GPU
-nonlinear bracket by about `2.09x`, but full-RHS timing is linear-RHS dominated,
-so the next optimization target is linear-RHS fusion/cache layout before any
-broader nonlinear speedup claim.
+`Nx=192`, `Ny=64`, `Nz=24`, `Nl=4`, `Nm=8`. After the grid-Laguerre
+`einsum` refactor, the matched one-GPU profile gives `full_rhs=1.28e-2 s` in
+grid mode and `1.48e-2 s` in spectral mode. Spectral mode still reduces the
+GPU nonlinear bracket by about `1.63x`, but the full-RHS timing is limited by
+the combined linear-RHS/bracket graph, so the next optimization target is
+linear-RHS fusion/cache layout before any broader nonlinear speedup claim.
 
 The full fused linear-RHS trace artifact
 (`docs/_static/full_linear_rhs_trace_summary.json`) now records the Cyclone

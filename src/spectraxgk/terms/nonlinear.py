@@ -51,29 +51,29 @@ def _broadcast_to_G(x: jnp.ndarray, G: jnp.ndarray) -> jnp.ndarray:
 
 
 def _laguerre_to_grid(G: jnp.ndarray, laguerre_to_grid: jnp.ndarray) -> jnp.ndarray:
-    """Transform Laguerre moments to GX muB grid."""
+    """Transform Laguerre moments to the muB quadrature grid."""
     G = jnp.asarray(G)
     laguerre_to_grid = jnp.asarray(laguerre_to_grid)
-    # (S, L, M, Y, X, Z) -> (S, M, Y, X, Z, L)
-    G_perm = jnp.moveaxis(G, 1, -1)
-    # (S, M, Y, X, Z, L) @ (L, J) -> (S, M, Y, X, Z, J)
-    out = jnp.tensordot(G_perm, laguerre_to_grid, axes=([-1], [0]))
-    # (S, J, M, Y, X, Z)
-    return jnp.moveaxis(out, -1, 1)
+    return jnp.einsum(
+        "slmyxz,lj->sjmyxz",
+        G,
+        laguerre_to_grid,
+        precision=jax.lax.Precision.HIGHEST,
+    )
 
 
 def _laguerre_to_spectral(
     g_mu: jnp.ndarray, laguerre_to_spectral: jnp.ndarray
 ) -> jnp.ndarray:
-    """Transform GX muB grid values back to Laguerre moments."""
+    """Transform muB quadrature-grid values back to Laguerre moments."""
     g_mu = jnp.asarray(g_mu)
     laguerre_to_spectral = jnp.asarray(laguerre_to_spectral)
-    # (S, J, M, Y, X, Z) -> (S, M, Y, X, Z, J)
-    g_perm = jnp.moveaxis(g_mu, 1, -1)
-    # (S, M, Y, X, Z, J) @ (J, L) -> (S, M, Y, X, Z, L)
-    out = jnp.tensordot(g_perm, laguerre_to_spectral, axes=([-1], [0]))
-    # (S, L, M, Y, X, Z)
-    return jnp.moveaxis(out, -1, 1)
+    return jnp.einsum(
+        "sjmyxz,jl->slmyxz",
+        g_mu,
+        laguerre_to_spectral,
+        precision=jax.lax.Precision.HIGHEST,
+    )
 
 
 def _gx_j0_field(
