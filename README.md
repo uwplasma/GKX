@@ -547,6 +547,13 @@ nonlinear bracket by about `2.09x`, but full-RHS timing is linear-RHS dominated,
 so the next optimization target is linear-RHS fusion/cache layout before any
 broader nonlinear speedup claim.
 
+The full fused linear-RHS trace artifact
+(`docs/_static/full_linear_rhs_trace_summary.json`) now records the Cyclone
+Miller graph-level profile: `warm_seconds=1.19e-1`, first
+compile+execute `1.94 s`, and HLO triage counts dominated by broadcasts,
+reshapes, FFTs, reductions, and gathers. This is an optimization-localization
+artifact, not a headline runtime claim.
+
 ![Spectral Laguerre mode gate](docs/_static/laguerre_mode_gate_gpu.png)
 
 The optional spectral Laguerre nonlinear mode is gated, not a default. On the
