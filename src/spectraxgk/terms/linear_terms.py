@@ -16,6 +16,17 @@ from spectraxgk.terms.operators import (
 )
 
 
+def _is_static_zero(value: jnp.ndarray, dtype: jnp.dtype | None = None) -> bool:
+    arr = jnp.asarray(value, dtype=dtype)
+    if isinstance(arr, jax.core.Tracer):
+        return False
+    return bool(np.all(np.asarray(arr) == 0.0))
+
+
+def _zeros_like_result(x: jnp.ndarray, *values: jnp.ndarray) -> jnp.ndarray:
+    return jnp.zeros_like(x, dtype=jnp.result_type(x, *values))
+
+
 def streaming_contribution(
     H: jnp.ndarray,
     *,
@@ -39,6 +50,8 @@ def streaming_contribution(
     linked_use_gather: bool = False,
     use_twist_shift: bool = False,
 ) -> jnp.ndarray:
+    if _is_static_zero(weight, jnp.real(H).dtype):
+        return _zeros_like_result(H, weight)
     vth_s = vth if vth.ndim == 0 else vth[:, None, None, None, None, None]
     return -weight * kpar_scale * streaming_term(
         H,
@@ -88,6 +101,9 @@ def streaming_contribution_gx(
     linked_use_gather: bool = False,
 ) -> jnp.ndarray:
     """GX-style streaming: ladder on g, add field terms, then apply parallel derivative."""
+
+    if _is_static_zero(weight, jnp.real(G).dtype):
+        return _zeros_like_result(G, weight)
 
     axis_m = -4
     G_p1 = shift_axis(G, 1, axis=axis_m)
@@ -272,12 +288,6 @@ def collisions_contribution(
 ) -> jnp.ndarray:
     real_dtype = jnp.real(H).dtype
 
-    def _is_static_zero(value: jnp.ndarray) -> bool:
-        arr = jnp.asarray(value, dtype=real_dtype)
-        if isinstance(arr, jax.core.Tracer):
-            return False
-        return bool(np.all(np.asarray(arr) == 0.0))
-
     def _species_nu(ns: int) -> jnp.ndarray:
         nu_arr = jnp.asarray(nu, dtype=real_dtype).reshape(-1)
         if nu_arr.size == 1:
@@ -287,13 +297,13 @@ def collisions_contribution(
         return nu_arr
 
     collision_base = None
-    if _is_static_zero(weight):
+    if _is_static_zero(weight, real_dtype):
         return jnp.zeros_like(H)
     if collision_lam is not None:
         collision_arr = jnp.asarray(collision_lam, dtype=real_dtype)
         if collision_arr.size != 0:
             collision_base = collision_arr
-    if collision_base is None and _is_static_zero(nu):
+    if collision_base is None and _is_static_zero(nu, real_dtype):
         return jnp.zeros_like(H)
     if collision_base is None:
         if lb_lam is None:
@@ -408,6 +418,38 @@ def hypercollisions_contribution(
     linked_gather_mask: jnp.ndarray | None = None,
     linked_use_gather: bool = False,
 ) -> jnp.ndarray:
+    real_dtype = jnp.real(G).dtype
+    if _is_static_zero(weight, real_dtype):
+        return _zeros_like_result(
+            G,
+            weight,
+            nu_hyper,
+            nu_hyper_l,
+            nu_hyper_m,
+            nu_hyper_lm,
+            hypercollisions_const,
+            hypercollisions_kz,
+        )
+
+    const_branch_zero = (
+        _is_static_zero(weight * hypercollisions_const * nu_hyper_l, real_dtype)
+        and _is_static_zero(weight * hypercollisions_const * nu_hyper_m, real_dtype)
+        and _is_static_zero(weight * hypercollisions_const * nu_hyper_lm, real_dtype)
+    )
+    isotropic_branch_zero = _is_static_zero(weight * nu_hyper, real_dtype)
+    kz_branch_zero = _is_static_zero(weight * hypercollisions_kz * nu_hyper_m, real_dtype)
+    if const_branch_zero and isotropic_branch_zero and kz_branch_zero:
+        return _zeros_like_result(
+            G,
+            weight,
+            nu_hyper,
+            nu_hyper_l,
+            nu_hyper_m,
+            nu_hyper_lm,
+            hypercollisions_const,
+            hypercollisions_kz,
+        )
+
     l_norm = jnp.asarray(max(G.shape[1], 1), dtype=ratio_l.dtype)
     m_norm = jnp.asarray(max(G.shape[2], 1), dtype=ratio_m.dtype)
     scaled_nu_l = l_norm * nu_hyper_l
@@ -461,6 +503,10 @@ def hyperdiffusion_contribution(
 ) -> jnp.ndarray:
     """Hyperdiffusion in k_perp following GX conventions."""
 
+    real_dtype = jnp.real(G).dtype
+    if _is_static_zero(weight, real_dtype) or _is_static_zero(D_hyper, real_dtype):
+        return _zeros_like_result(G, weight, D_hyper)
+
     kx2 = kx * kx
     ky2 = ky * ky
     kperp2 = ky2[:, None] + kx2[None, :]
@@ -487,6 +533,10 @@ def end_damping_contribution(
     damp_amp: jnp.ndarray,
     weight: jnp.ndarray,
 ) -> jnp.ndarray:
+    real_dtype = jnp.real(H).dtype
+    if _is_static_zero(weight, real_dtype) or _is_static_zero(damp_amp, real_dtype):
+        return _zeros_like_result(H, weight, damp_amp)
+
     if linked_damp_profile is not None and getattr(linked_damp_profile, "size", 0) != 0:
         damp = weight * damp_amp * linked_damp_profile[None, None, None, ...]
         return -(damp * H)
