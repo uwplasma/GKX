@@ -21,7 +21,7 @@ from spectraxgk.linear import (
     hypercollision_damping,
     term_config_to_linear_terms,
 )
-from spectraxgk.terms.assembly import assemble_rhs_cached_jit, compute_fields_cached
+from spectraxgk.terms.assembly import _is_static_zero, assemble_rhs_cached_jit, compute_fields_cached
 from spectraxgk.terms.config import FieldState, TermConfig
 from spectraxgk.terms.integrators import integrate_nonlinear as integrate_nonlinear_scan
 from spectraxgk.terms.nonlinear import _broadcast_grid, _ifft2_xy, nonlinear_em_contribution
@@ -170,11 +170,13 @@ def nonlinear_rhs_cached(
     if term_cfg.nonlinear != 0.0:
         real_dtype = jnp.real(jnp.empty((), dtype=G.dtype)).dtype
         weight = jnp.asarray(term_cfg.nonlinear, dtype=real_dtype)
+        apar = None if fields.apar is None or _is_static_zero(term_cfg.apar) else fields.apar
+        bpar = None if fields.bpar is None or _is_static_zero(term_cfg.bpar) else fields.bpar
         dG = dG + nonlinear_em_contribution(
             G,
             phi=fields.phi,
-            apar=fields.apar,
-            bpar=fields.bpar,
+            apar=apar,
+            bpar=bpar,
             Jl=cache.Jl,
             JlB=cache.JlB,
             tz=jnp.asarray(params.tz),

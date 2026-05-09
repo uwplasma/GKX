@@ -42,6 +42,31 @@ def _apply_external_phi_source(
     return FieldState(phi=fields.phi + phi_shift, apar=fields.apar, bpar=fields.bpar)
 
 
+def _is_static_zero(value: object) -> bool:
+    """Return true when a Python/JAX value is known to be exactly zero at trace time."""
+
+    arr = jnp.asarray(value)
+    if isinstance(arr, jax.core.Tracer):
+        return False
+    return bool(np.all(np.asarray(arr) == 0.0))
+
+
+def _rhs_field_views(fields: FieldState, terms: TermConfig) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray | None, jnp.ndarray | None]:
+    """Return zero-filled RHS fields and optional Hamiltonian fields.
+
+    Streaming and diamagnetic terms expect array-valued electromagnetic fields.
+    ``build_H`` already has an electrostatic path when these fields are ``None``;
+    keeping disabled fields as ``None`` there avoids compiling zero-valued
+    electromagnetic Hamiltonian branches in electrostatic nonlinear runs.
+    """
+
+    apar = fields.apar if fields.apar is not None else jnp.zeros_like(fields.phi)
+    bpar = fields.bpar if fields.bpar is not None else jnp.zeros_like(fields.phi)
+    h_apar = None if fields.apar is None or _is_static_zero(terms.apar) else fields.apar
+    h_bpar = None if fields.bpar is None or _is_static_zero(terms.bpar) else fields.bpar
+    return apar, bpar, h_apar, h_bpar
+
+
 def _collision_contribution_or_zero(
     H: jnp.ndarray,
     *,
@@ -178,9 +203,8 @@ def assemble_rhs_cached(
 
     Jl = cache.Jl
     JlB = cache.JlB
-    apar = fields.apar if fields.apar is not None else jnp.zeros_like(fields.phi)
-    bpar = fields.bpar if fields.bpar is not None else jnp.zeros_like(fields.phi)
-    H = build_H(G, Jl, fields.phi, tz, apar=apar, vth=vth, bpar=bpar, JlB=JlB)
+    apar, bpar, h_apar, h_bpar = _rhs_field_views(fields, term_cfg)
+    H = build_H(G, Jl, fields.phi, tz, apar=h_apar, vth=vth, bpar=h_bpar, JlB=JlB)
 
     dG = streaming_contribution_gx(
         G,
@@ -392,9 +416,8 @@ def assemble_rhs_terms_cached(
 
     Jl = cache.Jl
     JlB = cache.JlB
-    apar = fields.apar if fields.apar is not None else jnp.zeros_like(fields.phi)
-    bpar = fields.bpar if fields.bpar is not None else jnp.zeros_like(fields.phi)
-    H = build_H(G, Jl, fields.phi, tz, apar=apar, vth=vth, bpar=bpar, JlB=JlB)
+    apar, bpar, h_apar, h_bpar = _rhs_field_views(fields, term_cfg)
+    H = build_H(G, Jl, fields.phi, tz, apar=h_apar, vth=vth, bpar=h_bpar, JlB=JlB)
 
     contrib: dict[str, jnp.ndarray] = {}
     contrib["streaming"] = streaming_contribution_gx(
