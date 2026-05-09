@@ -51,7 +51,12 @@ def _is_static_zero(value: object) -> bool:
     return bool(np.all(np.asarray(arr) == 0.0))
 
 
-def _rhs_field_views(fields: FieldState, terms: TermConfig) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray | None, jnp.ndarray | None]:
+def _rhs_field_views(
+    fields: FieldState,
+    terms: TermConfig,
+    *,
+    force_electrostatic_fields: bool = False,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray | None, jnp.ndarray | None]:
     """Return zero-filled RHS fields and optional Hamiltonian fields.
 
     Streaming and diamagnetic terms expect array-valued electromagnetic fields.
@@ -62,8 +67,8 @@ def _rhs_field_views(fields: FieldState, terms: TermConfig) -> tuple[jnp.ndarray
 
     apar = fields.apar if fields.apar is not None else jnp.zeros_like(fields.phi)
     bpar = fields.bpar if fields.bpar is not None else jnp.zeros_like(fields.phi)
-    h_apar = None if fields.apar is None or _is_static_zero(terms.apar) else fields.apar
-    h_bpar = None if fields.bpar is None or _is_static_zero(terms.bpar) else fields.bpar
+    h_apar = None if force_electrostatic_fields or fields.apar is None or _is_static_zero(terms.apar) else fields.apar
+    h_bpar = None if force_electrostatic_fields or fields.bpar is None or _is_static_zero(terms.bpar) else fields.bpar
     return apar, bpar, h_apar, h_bpar
 
 
@@ -127,6 +132,7 @@ def assemble_rhs_cached(
     use_custom_vjp: bool = True,
     dt: jnp.ndarray | float | None = None,
     external_phi: jnp.ndarray | float | None = None,
+    force_electrostatic_fields: bool = False,
 ) -> Tuple[jnp.ndarray, FieldState]:
     """Assemble the RHS from term-wise modules using a precomputed cache."""
 
@@ -203,14 +209,18 @@ def assemble_rhs_cached(
 
     Jl = cache.Jl
     JlB = cache.JlB
-    apar, bpar, h_apar, h_bpar = _rhs_field_views(fields, term_cfg)
+    _, _, h_apar, h_bpar = _rhs_field_views(
+        fields,
+        term_cfg,
+        force_electrostatic_fields=force_electrostatic_fields,
+    )
     H = build_H(G, Jl, fields.phi, tz, apar=h_apar, vth=vth, bpar=h_bpar, JlB=JlB)
 
     dG = streaming_contribution_gx(
         G,
         phi=fields.phi,
-        apar=apar,
-        bpar=bpar,
+        apar=h_apar,
+        bpar=h_bpar,
         Jl=Jl,
         JlB=JlB,
         tz=tz,
@@ -254,8 +264,8 @@ def assemble_rhs_cached(
     dG = diamagnetic_contribution(
         dG,
         phi=fields.phi,
-        apar=apar,
-        bpar=bpar,
+        apar=h_apar,
+        bpar=h_bpar,
         Jl=Jl,
         JlB=JlB,
         l4=cache.l4,
@@ -416,15 +426,15 @@ def assemble_rhs_terms_cached(
 
     Jl = cache.Jl
     JlB = cache.JlB
-    apar, bpar, h_apar, h_bpar = _rhs_field_views(fields, term_cfg)
+    _, _, h_apar, h_bpar = _rhs_field_views(fields, term_cfg)
     H = build_H(G, Jl, fields.phi, tz, apar=h_apar, vth=vth, bpar=h_bpar, JlB=JlB)
 
     contrib: dict[str, jnp.ndarray] = {}
     contrib["streaming"] = streaming_contribution_gx(
         G,
         phi=fields.phi,
-        apar=apar,
-        bpar=bpar,
+        apar=h_apar,
+        bpar=h_bpar,
         Jl=Jl,
         JlB=JlB,
         tz=tz,
@@ -481,8 +491,8 @@ def assemble_rhs_terms_cached(
     contrib["diamagnetic"] = diamagnetic_contribution(
         zero,
         phi=fields.phi,
-        apar=apar,
-        bpar=bpar,
+        apar=h_apar,
+        bpar=h_bpar,
         Jl=Jl,
         JlB=JlB,
         l4=cache.l4,
@@ -584,6 +594,28 @@ def assemble_rhs_cached_jit(
     """Jitted wrapper for cached RHS assembly."""
 
     return assemble_rhs_cached(G, cache, params, terms=terms, dt=dt, external_phi=external_phi)
+
+
+@functools.partial(jax.jit)
+def assemble_rhs_cached_electrostatic_jit(
+    G: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    terms: TermConfig,
+    dt: jnp.ndarray | float | None = None,
+    external_phi: jnp.ndarray | float | None = None,
+) -> Tuple[jnp.ndarray, FieldState]:
+    """Jitted cached RHS assembly for statically electrostatic field terms."""
+
+    return assemble_rhs_cached(
+        G,
+        cache,
+        params,
+        terms=terms,
+        dt=dt,
+        external_phi=external_phi,
+        force_electrostatic_fields=True,
+    )
 
 
 def compute_fields_cached(

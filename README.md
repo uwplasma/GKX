@@ -549,13 +549,15 @@ broader nonlinear speedup claim.
 
 The full fused linear-RHS trace artifact
 (`docs/_static/full_linear_rhs_trace_summary.json`) now records the Cyclone
-Miller graph-level profile: `warm_seconds=1.19e-1`, first
-compile+execute `1.94 s`, and HLO triage counts dominated by broadcasts,
-reshapes, FFTs, reductions, and gathers. This is an optimization-localization
-artifact, not a headline runtime claim. The active `z_wave` companion
-(`docs/_static/full_linear_rhs_trace_z_wave_summary.json`) reports
-`warm_seconds=1.22e-1` with the same HLO shape after resolved parallel
-variation is injected.
+Miller graph-level profile after electrostatic field specialization:
+`warm_seconds=8.09e-2`, first compile+execute `1.40 s`, and `2225` HLO
+lines. The matching pre-specialization local artifact had `warm_seconds=1.19e-1`
+and `2425` HLO lines, so this is a bounded CPU graph-localization improvement,
+not a broad runtime claim. The active `z_wave` companion
+(`docs/_static/full_linear_rhs_trace_z_wave_summary.json`) uses the same
+specialized graph and reports `warm_seconds=1.29e-1` after resolved parallel
+variation is injected; that timing is not promoted as a speedup until a matched
+GPU and nonlinear full-RHS profile is refreshed.
 
 ![Spectral Laguerre mode gate](docs/_static/laguerre_mode_gate_gpu.png)
 

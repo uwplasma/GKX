@@ -79,8 +79,8 @@ def streaming_contribution_gx(
     G: jnp.ndarray,
     *,
     phi: jnp.ndarray,
-    apar: jnp.ndarray,
-    bpar: jnp.ndarray,
+    apar: jnp.ndarray | None,
+    bpar: jnp.ndarray | None,
     Jl: jnp.ndarray,
     JlB: jnp.ndarray,
     tz: jnp.ndarray,
@@ -116,19 +116,21 @@ def streaming_contribution_gx(
     zt5 = zt[:, 0, 0, 0, 0, 0][:, None, None, None, None]
     vth5 = vth[:, None, None, None, None]
     phi_s = phi[None, None, ...]
-    apar_s = apar[None, None, ...]
-    bpar_s = bpar[None, None, ...]
 
     # field terms (pre-derivative); use contiguous m-axis masks instead of scatter updates.
     Nm = rhs.shape[2]
     m_idx = jnp.arange(Nm, dtype=jnp.int32)[None, None, :, None, None, None]
     field_rhs = jnp.zeros_like(rhs)
-    drive_m0 = zt5 * (vth5 * vth5) * Jl * apar_s
-    field_rhs = field_rhs + (m_idx == 0).astype(field_rhs.dtype) * drive_m0[:, :, None, ...]
+    if apar is not None:
+        apar_s = apar[None, None, ...]
+        drive_m0 = zt5 * (vth5 * vth5) * Jl * apar_s
+        field_rhs = field_rhs + (m_idx == 0).astype(field_rhs.dtype) * drive_m0[:, :, None, ...]
     if Nm > 1:
-        drive_m1 = -zt5 * vth5 * Jl * phi_s - vth5 * JlB * bpar_s
+        drive_m1 = -zt5 * vth5 * Jl * phi_s
+        if bpar is not None:
+            drive_m1 = drive_m1 - vth5 * JlB * bpar[None, None, ...]
         field_rhs = field_rhs + (m_idx == 1).astype(field_rhs.dtype) * drive_m1[:, :, None, ...]
-    if Nm > 2:
+    if Nm > 2 and apar is not None:
         drive_m2 = jnp.sqrt(2.0) * zt5 * (vth5 * vth5) * Jl * apar_s
         field_rhs = field_rhs + (m_idx == 2).astype(field_rhs.dtype) * drive_m2[:, :, None, ...]
     rhs = rhs + field_rhs
@@ -218,8 +220,8 @@ def diamagnetic_contribution(
     dG: jnp.ndarray,
     *,
     phi: jnp.ndarray,
-    apar: jnp.ndarray,
-    bpar: jnp.ndarray,
+    apar: jnp.ndarray | None,
+    bpar: jnp.ndarray | None,
     Jl: jnp.ndarray,
     JlB: jnp.ndarray,
     l4: jnp.ndarray,
@@ -249,17 +251,19 @@ def diamagnetic_contribution(
         + Jl * (fprim_s + 2.0 * l4 * tprim_s)
         + Jl_p1 * ((l4 + 1.0) * tprim_s)
     )
-    drive_m0 = drive_m0 + omega_star_bpar * bpar * (
-        JlB_m1 * (l4 * tprim_s)
-        + JlB * (fprim_s + 2.0 * l4 * tprim_s)
-        + JlB_p1 * ((l4 + 1.0) * tprim_s)
-    )
+    if bpar is not None:
+        drive_m0 = drive_m0 + omega_star_bpar * bpar * (
+            JlB_m1 * (l4 * tprim_s)
+            + JlB * (fprim_s + 2.0 * l4 * tprim_s)
+            + JlB_p1 * ((l4 + 1.0) * tprim_s)
+        )
     drive = (m_idx == 0).astype(dG.dtype) * drive_m0[:, :, None, ...]
     if Nm > 2:
         drive_m2 = omega_star_s * phi * Jl * (tprim_s / jnp.sqrt(2.0))
-        drive_m2 = drive_m2 + omega_star_bpar * bpar * JlB * (tprim_s / jnp.sqrt(2.0))
+        if bpar is not None:
+            drive_m2 = drive_m2 + omega_star_bpar * bpar * JlB * (tprim_s / jnp.sqrt(2.0))
         drive = drive + (m_idx == 2).astype(dG.dtype) * drive_m2[:, :, None, ...]
-    if Nm > 1:
+    if Nm > 1 and apar is not None:
         vth_s = vth[:, None, None, None, None]
         apar_drive = -vth_s * omega_star_s * apar * (
             Jl_m1 * (l4 * tprim_s)
@@ -267,7 +271,7 @@ def diamagnetic_contribution(
             + Jl_p1 * ((l4 + 1.0) * tprim_s)
         )
         drive = drive + (m_idx == 1).astype(dG.dtype) * apar_drive[:, :, None, ...]
-    if Nm > 3:
+    if Nm > 3 and apar is not None:
         vth_s = vth[:, None, None, None, None]
         drive_m3 = -vth_s * omega_star_s * apar * Jl * (tprim_s * jnp.sqrt(3.0 / 2.0))
         drive = drive + (m_idx == 3).astype(dG.dtype) * drive_m3[:, :, None, ...]
