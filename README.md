@@ -612,6 +612,11 @@ python tools/run_tests_fast.py
 python tools/run_wide_coverage_gate.py --shards 24 --timeout 300 --fail-under 95 --pytest-arg=-o --pytest-arg=addopts= --pytest-arg=-m --pytest-arg="not slow"
 ```
 
+`tools/run_tests_fast.py` runs per-file pytest shards with a 300 s per-file
+timeout and a 300 s total local budget by default. Use
+`--total-timeout 0` only when you explicitly want the full sequential local
+pass.
+
 For laptops or shared workstations, run the same wide gate one bounded shard at
 a time with `--only-shard N --keep-existing-coverage --skip-combine`, then
 finish with `--combine-only --fail-under 95`; this keeps every local pytest
