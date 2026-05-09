@@ -552,7 +552,10 @@ The full fused linear-RHS trace artifact
 Miller graph-level profile: `warm_seconds=1.19e-1`, first
 compile+execute `1.94 s`, and HLO triage counts dominated by broadcasts,
 reshapes, FFTs, reductions, and gathers. This is an optimization-localization
-artifact, not a headline runtime claim.
+artifact, not a headline runtime claim. The active `z_wave` companion
+(`docs/_static/full_linear_rhs_trace_z_wave_summary.json`) reports
+`warm_seconds=1.22e-1` with the same HLO shape after resolved parallel
+variation is injected.
 
 ![Spectral Laguerre mode gate](docs/_static/laguerre_mode_gate_gpu.png)
 
