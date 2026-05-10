@@ -82,6 +82,17 @@ def _normalize_linear_solver_name(solver: str) -> str:
     return solver_key
 
 
+def _parallel_requests_combined_ky_scan(cfg: RuntimeConfig) -> bool:
+    """Return whether runtime parallel config requests the combined-ky scan path."""
+
+    parallel = getattr(cfg, "parallel", None)
+    if parallel is None:
+        return False
+    return str(getattr(parallel, "strategy", "serial")).lower() == "combined_ky" and str(
+        getattr(parallel, "axis", "ky")
+    ).lower() == "ky"
+
+
 def _midplane_index(grid: SpectralGrid) -> int:
     if grid.z.size <= 1:
         return 0
@@ -812,6 +823,7 @@ def run_runtime_scan(
     ky_arr = np.asarray(ky_values, dtype=float)
     Nl_use, Nm_use = _resolve_runtime_hl_dims(cfg, Nl=Nl, Nm=Nm)
     solver_key = _normalize_linear_solver_name(solver)
+    batch_ky = bool(batch_ky or _parallel_requests_combined_ky_scan(cfg))
     if batch_ky and solver_key == "krylov":
         raise ValueError("batch_ky is only supported for time integration")
     if batch_ky and bool(getattr(cfg.quasilinear, "enabled", False)):

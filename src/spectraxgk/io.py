@@ -26,6 +26,7 @@ from spectraxgk.runtime_config import (
     RuntimeExpertConfig,
     RuntimeNormalizationConfig,
     RuntimeOutputConfig,
+    RuntimeParallelConfig,
     RuntimePhysicsConfig,
     RuntimeQuasilinearConfig,
     RuntimeSpeciesConfig,
@@ -179,6 +180,9 @@ def load_runtime_from_toml(path: str | Path) -> tuple[RuntimeConfig, dict]:
     quasilinear = data.get("quasilinear")
     if isinstance(quasilinear, dict):
         cfg = replace(cfg, quasilinear=RuntimeQuasilinearConfig(**quasilinear))
+    parallel = data.get("parallel")
+    if isinstance(parallel, dict):
+        cfg = replace(cfg, parallel=RuntimeParallelConfig(**parallel))
     species_raw = data.get("species")
     if species_raw is not None:
         if not isinstance(species_raw, list):

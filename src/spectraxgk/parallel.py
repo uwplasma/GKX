@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
+from typing import Any
 
 import jax
 import jax.numpy as jnp
@@ -39,13 +40,21 @@ def pad_to_multiple(values: jnp.ndarray, multiple: int) -> tuple[jnp.ndarray, in
     return jnp.concatenate([arr, tail], axis=0), n
 
 
+def _concat_batch_outputs(outputs: list[Any]) -> Any:
+    """Concatenate a sequence of batched array or pytree outputs."""
+
+    if not outputs:
+        raise ValueError("cannot concatenate an empty batch output list")
+    return jax.tree_util.tree_map(lambda *parts: jnp.concatenate(parts, axis=0), *outputs)
+
+
 def batch_map(
-    fn: Callable[[jnp.ndarray], jnp.ndarray],
+    fn: Callable[[jnp.ndarray], Any],
     values: jnp.ndarray | np.ndarray,
     *,
     batch_size: int | None = None,
     devices: Iterable[jax.Device] | None = None,
-) -> jnp.ndarray:
+) -> Any:
     """Map ``fn`` over independent inputs with optional multi-device batching.
 
     This helper is intended for embarrassingly parallel physics workloads such
@@ -65,7 +74,7 @@ def batch_map(
     device_list = list(devices) if devices is not None else list(jax.devices())
     if len(device_list) < 2:
         outputs = [jax.vmap(fn)(chunk) for chunk in jnp.array_split(arr, int(np.ceil(arr.shape[0] / chunk_size)), axis=0)]
-        return jnp.concatenate(outputs, axis=0)
+        return _concat_batch_outputs(outputs)
 
     ndev = len(device_list)
     per_device = max(1, int(np.ceil(chunk_size / ndev)))
@@ -74,9 +83,16 @@ def batch_map(
     for chunk in jnp.array_split(arr, int(np.ceil(arr.shape[0] / chunk_size)), axis=0):
         padded, original_n = pad_to_multiple(chunk, ndev * per_device)
         sharded = padded.reshape((ndev, per_device) + tuple(padded.shape[1:]))
-        mapped = pmapped(sharded).reshape((ndev * per_device,) + tuple(jax.eval_shape(fn, padded[0]).shape))
-        outputs.append(mapped[:original_n])
-    return jnp.concatenate(outputs, axis=0)
+        mapped = pmapped(sharded)
+        outputs.append(
+            jax.tree_util.tree_map(
+                lambda leaf: jnp.asarray(leaf).reshape((ndev * per_device,) + tuple(jnp.asarray(leaf).shape[2:]))[
+                    :original_n
+                ],
+                mapped,
+            )
+        )
+    return _concat_batch_outputs(outputs)
 
 
 def ky_scan_batches(ky_values: np.ndarray, *, n_batches: int) -> list[np.ndarray]:

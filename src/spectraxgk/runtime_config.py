@@ -178,6 +178,56 @@ class RuntimeQuasilinearConfig:
 
 
 @dataclass(frozen=True)
+class RuntimeParallelConfig:
+    """Parallel-execution policy for independent scans and future sharded paths."""
+
+    strategy: str = "serial"
+    axis: str = "ky"
+    batch_size: int | None = None
+    num_devices: int | None = None
+    strict_identity: bool = True
+    profile: bool = False
+    backend: str = "auto"
+
+    def __post_init__(self) -> None:
+        strategy = str(self.strategy).strip().lower().replace("-", "_")
+        strategy_aliases = {
+            "none": "serial",
+            "off": "serial",
+            "batch_ky": "combined_ky",
+            "combinedky": "combined_ky",
+        }
+        strategy = strategy_aliases.get(strategy, strategy)
+        allowed_strategies = {
+            "serial",
+            "batch",
+            "combined_ky",
+            "device_batch",
+            "pmap",
+            "pjit",
+            "shard_map",
+            "state",
+            "velocity",
+        }
+        if strategy not in allowed_strategies:
+            raise ValueError(f"Unknown parallel strategy '{self.strategy}'")
+
+        axis = str(self.axis).strip().lower().replace("-", "_")
+        if not axis:
+            raise ValueError("parallel axis must be nonempty")
+        if self.batch_size is not None and int(self.batch_size) < 1:
+            raise ValueError("parallel batch_size must be >= 1 when provided")
+        if self.num_devices is not None and int(self.num_devices) < 1:
+            raise ValueError("parallel num_devices must be >= 1 when provided")
+
+        object.__setattr__(self, "strategy", strategy)
+        object.__setattr__(self, "axis", axis)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class RuntimeConfig:
     """Unified simulation config for runtime-driven GK runs."""
 
@@ -193,6 +243,7 @@ class RuntimeConfig:
     expert: RuntimeExpertConfig = RuntimeExpertConfig()
     output: RuntimeOutputConfig = RuntimeOutputConfig()
     quasilinear: RuntimeQuasilinearConfig = RuntimeQuasilinearConfig()
+    parallel: RuntimeParallelConfig = RuntimeParallelConfig()
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -208,4 +259,5 @@ class RuntimeConfig:
             "expert": self.expert.to_dict(),
             "output": self.output.to_dict(),
             "quasilinear": self.quasilinear.to_dict(),
+            "parallel": self.parallel.to_dict(),
         }
