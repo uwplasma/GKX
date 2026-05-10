@@ -431,8 +431,13 @@ requires a separate communication/layout design. The current profiler-backed
 artifacts are `docs/_static/nonlinear_sharding_profile.json` for the local
 control-flow gate and `docs/_static/nonlinear_sharding_profile_office_gpu.json`
 for the two-GPU office identity gate. Treat both as engineering gates, not as
-new runtime claims; publication speedups still need a matched CPU/GPU sweep on
-benchmark-size nonlinear cases.
+new runtime claims. The matched large strong-scaling sweep in
+`docs/performance.rst` now confirms this conservative stance: whole-state
+nonlinear sharding is identity-correct, but only modestly useful on logical
+CPUs and slower on two RTX A4000 GPUs for the current decomposition. Production
+parallelization should therefore focus first on independent `k_y` scans,
+UQ/ensemble batching, and a communication-aware nonlinear decomposition before
+any nonlinear multi-GPU speedup claim is promoted.
 
 ![SPECTRAX-GK ky-batch parallelization identity gate](docs/_static/parallel_ky_scan_gate.png)
 
