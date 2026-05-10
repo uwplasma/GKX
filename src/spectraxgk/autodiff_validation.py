@@ -8,11 +8,24 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from spectraxgk.parallel import independent_map
+
 
 def _jax_enable_x64() -> bool:
     """Return the active JAX 64-bit precision flag without relying on dynamic attrs."""
 
     return bool(jax.config.read("jax_enable_x64"))
+
+
+def _normalize_fd_executor(executor: str) -> str:
+    """Normalize finite-difference worker executor names."""
+
+    key = str(executor).strip().lower()
+    if key in {"thread", "threads"}:
+        return "thread"
+    if key in {"process", "processes"}:
+        return "process"
+    raise ValueError("parallel_executor must be 'thread' or 'process'")
 
 
 def covariance_diagnostics(
@@ -83,6 +96,8 @@ def central_finite_difference_jacobian(
     params: jnp.ndarray | np.ndarray,
     *,
     step: float = 1.0e-4,
+    workers: int = 1,
+    parallel_executor: str = "thread",
 ) -> jnp.ndarray:
     """Central finite-difference Jacobian for small differentiability gates."""
 
@@ -92,12 +107,22 @@ def central_finite_difference_jacobian(
     h = float(step)
     if h <= 0.0:
         raise ValueError("step must be positive")
-    cols = []
+    n_workers = int(workers)
+    if n_workers < 1:
+        raise ValueError("workers must be >= 1")
+    executor_key = _normalize_fd_executor(parallel_executor)
+    if executor_key == "process" and n_workers > 1:
+        raise ValueError(
+            "parallel finite differences require the thread executor because objective closures are not pickled"
+        )
     eye = jnp.eye(p.size, dtype=p.dtype)
-    for i in range(p.size):
+
+    def column(i: int) -> jnp.ndarray:
         fp = jnp.ravel(jnp.asarray(fn(p + h * eye[i])))
         fm = jnp.ravel(jnp.asarray(fn(p - h * eye[i])))
-        cols.append((fp - fm) / (2.0 * h))
+        return (fp - fm) / (2.0 * h)
+
+    cols = independent_map(column, range(int(p.size)), workers=n_workers, executor=executor_key)
     if not cols:
         return jnp.zeros((jnp.ravel(jnp.asarray(fn(p))).size, 0), dtype=p.dtype)
     return jnp.stack(cols, axis=1)
@@ -111,18 +136,30 @@ def autodiff_finite_difference_report(
     rtol: float = 1.0e-4,
     atol: float = 1.0e-6,
     direction: jnp.ndarray | np.ndarray | None = None,
+    workers: int = 1,
+    parallel_executor: str = "thread",
 ) -> dict[str, object]:
     """Compare JAX forward-mode derivatives against finite differences."""
 
     p = jnp.asarray(params, dtype=jnp.float64 if _jax_enable_x64() else jnp.float32)
     if p.ndim != 1:
         raise ValueError("params must be one-dimensional")
+    n_workers = int(workers)
+    if n_workers < 1:
+        raise ValueError("workers must be >= 1")
+    executor_key = _normalize_fd_executor(parallel_executor)
 
     def flat_fn(x: jnp.ndarray) -> jnp.ndarray:
         return jnp.ravel(jnp.asarray(fn(x)))
 
     jac_ad = jax.jacfwd(flat_fn)(p)
-    jac_fd = central_finite_difference_jacobian(flat_fn, p, step=step)
+    jac_fd = central_finite_difference_jacobian(
+        flat_fn,
+        p,
+        step=step,
+        workers=n_workers,
+        parallel_executor=executor_key,
+    )
     err = np.asarray(jac_ad - jac_fd, dtype=float)
     denom = np.maximum(np.asarray(np.abs(jac_fd), dtype=float), float(atol))
     rel = np.abs(err) / denom
@@ -154,6 +191,12 @@ def autodiff_finite_difference_report(
         "jacobian_fd": np.asarray(jac_fd, dtype=float).tolist(),
         "tangent_ad": np.asarray(tangent_ad, dtype=float).tolist(),
         "tangent_fd": np.asarray(tangent_fd, dtype=float).tolist(),
+        "finite_difference_parallel": {
+            "requested_workers": n_workers,
+            "effective_workers": int(min(n_workers, max(int(p.size), 1))),
+            "executor": executor_key,
+            "identity_contract": "parallel finite-difference columns must match serial columns",
+        },
     }
 
 

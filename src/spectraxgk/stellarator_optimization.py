@@ -18,6 +18,7 @@ import numpy as np
 
 from spectraxgk.autodiff_validation import autodiff_finite_difference_report, covariance_diagnostics
 from spectraxgk.geometry.differentiable import discover_differentiable_geometry_backends
+from spectraxgk.parallel import independent_map
 from spectraxgk.quasilinear import quasilinear_feature_objective
 
 
@@ -426,6 +427,9 @@ def optimize_stellarator_itg(
     kind: StellaratorObjectiveKind,
     initial_params: jnp.ndarray | Sequence[float] | None = None,
     config: StellaratorITGOptimizationConfig | None = None,
+    *,
+    finite_difference_workers: int = 1,
+    finite_difference_executor: str = "thread",
 ) -> StellaratorITGOptimizationResult:
     """Optimize one differentiable stellarator ITG objective with Adam."""
 
@@ -477,6 +481,8 @@ def optimize_stellarator_itg(
         step=fd_step,
         rtol=rtol,
         atol=atol,
+        workers=finite_difference_workers,
+        parallel_executor=finite_difference_executor,
     )
     def residual_fn(x: jnp.ndarray) -> jnp.ndarray:
         return stellarator_itg_objective_residual_vector(x, kind, cfg)
@@ -530,20 +536,60 @@ def optimize_stellarator_itg(
     )
 
 
+def _optimize_stellarator_itg_task(
+    task: tuple[
+        StellaratorObjectiveKind,
+        tuple[float, ...] | None,
+        StellaratorITGOptimizationConfig | None,
+        int,
+        str,
+    ],
+) -> StellaratorITGOptimizationResult:
+    """Run one optimization task for ordered independent objective comparisons."""
+
+    kind, initial_params, config, fd_workers, fd_executor = task
+    initial = None if initial_params is None else jnp.asarray(initial_params)
+    return optimize_stellarator_itg(
+        kind,
+        initial_params=initial,
+        config=config,
+        finite_difference_workers=fd_workers,
+        finite_difference_executor=fd_executor,
+    )
+
+
 def compare_stellarator_itg_objectives(
     kinds: Sequence[StellaratorObjectiveKind] = ("growth", "quasilinear_flux", "nonlinear_heat_flux"),
     *,
     initial_params: jnp.ndarray | Sequence[float] | None = None,
     config: StellaratorITGOptimizationConfig | None = None,
+    workers: int = 1,
+    parallel_executor: str = "thread",
+    finite_difference_workers: int = 1,
+    finite_difference_executor: str = "thread",
 ) -> dict[str, Any]:
     """Run the three objective reductions from a shared starting point."""
 
-    results = [optimize_stellarator_itg(kind, initial_params=initial_params, config=config) for kind in kinds]
+    kind_list = list(kinds)
+    initial_tuple = None if initial_params is None else tuple(float(x) for x in np.asarray(_validate_params(initial_params)))
+    tasks = [
+        (kind, initial_tuple, config, int(finite_difference_workers), str(finite_difference_executor))
+        for kind in kind_list
+    ]
+    results = independent_map(_optimize_stellarator_itg_task, tasks, workers=workers, executor=parallel_executor)
     return {
         "parameter_names": list(PARAMETER_NAMES),
         "observable_names": list(OBSERVABLE_NAMES),
         "results": [result.to_dict() for result in results],
         "backend_info": discover_differentiable_geometry_backends(),
+        "parallel": {
+            "requested_workers": int(workers),
+            "effective_workers": int(min(max(int(workers), 1), max(len(kind_list), 1))),
+            "executor": str(parallel_executor).strip().lower(),
+            "finite_difference_workers": int(finite_difference_workers),
+            "finite_difference_executor": str(finite_difference_executor).strip().lower(),
+            "identity_contract": "parallel objective reports must preserve serial ordering and values",
+        },
     }
 
 
