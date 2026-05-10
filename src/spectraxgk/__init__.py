@@ -101,6 +101,8 @@ from spectraxgk.linear import (
     linear_terms_to_term_config,
     linear_rhs,
     linear_rhs_cached,
+    linear_rhs_parallel_cached,
+    linear_rhs_streaming_velocity_sharded,
     term_config_to_linear_terms,
 )
 from spectraxgk.linear_krylov import KrylovConfig, dominant_eigenpair, dominant_eigenvalue
@@ -343,6 +345,8 @@ __all__ = [
     "term_config_to_linear_terms",
     "linear_rhs",
     "linear_rhs_cached",
+    "linear_rhs_parallel_cached",
+    "linear_rhs_streaming_velocity_sharded",
     "integrate_linear",
     "KrylovConfig",
     "dominant_eigenpair",

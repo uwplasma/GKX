@@ -1401,6 +1401,119 @@ def linear_rhs_cached(
     return dG, fields.phi
 
 
+def _is_streaming_only_terms(terms: LinearTerms | None) -> bool:
+    term_weights = terms if terms is not None else LinearTerms()
+    return (
+        float(term_weights.streaming) == 1.0
+        and float(term_weights.mirror) == 0.0
+        and float(term_weights.curvature) == 0.0
+        and float(term_weights.gradb) == 0.0
+        and float(term_weights.diamagnetic) == 0.0
+        and float(term_weights.collisions) == 0.0
+        and float(term_weights.hypercollisions) == 0.0
+        and float(term_weights.hyperdiffusion) == 0.0
+        and float(term_weights.end_damping) == 0.0
+        and float(term_weights.apar) == 0.0
+        and float(term_weights.bpar) == 0.0
+    )
+
+
+def linear_rhs_streaming_velocity_sharded(
+    G: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    *,
+    num_devices: int | None = None,
+    devices: Any | None = None,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Compute the streaming-only linear RHS with the Hermite shard-map path.
+
+    This diagnostic route is intentionally narrower than
+    :func:`linear_rhs_cached`: it covers the velocity-space streaming operator
+    only and returns a zero electrostatic potential. It is used to gate the
+    future production velocity decomposition before field solves, drifts,
+    collisions, and nonlinear terms are exposed through the runtime path.
+    """
+
+    from spectraxgk.velocity_sharding import build_velocity_sharding_plan, periodic_streaming_shard_map
+
+    arr = jnp.asarray(G)
+    if arr.ndim not in (5, 6):
+        raise ValueError("G must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)")
+
+    if devices is None:
+        device_list = list(jax.devices())
+        if num_devices is not None:
+            device_count = int(num_devices)
+            if device_count < 1:
+                raise ValueError("num_devices must be >= 1")
+            if len(device_list) < device_count:
+                raise ValueError(f"requested {device_count} devices, but only {len(device_list)} are available")
+            device_list = device_list[:device_count]
+    else:
+        device_list = list(devices)
+        if num_devices is not None and int(num_devices) != len(device_list):
+            raise ValueError("num_devices must match the explicit devices list length")
+    if not device_list:
+        raise ValueError("at least one device is required")
+
+    plan = build_velocity_sharding_plan(arr.shape, num_devices=len(device_list), axes=("hermite",))
+    dG = -periodic_streaming_shard_map(arr, plan, kz=cache.kz, vth=params.vth, devices=device_list)
+    phi = jnp.zeros(arr.shape[-3:], dtype=arr.dtype)
+    return dG, phi
+
+
+def linear_rhs_parallel_cached(
+    G: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    terms: LinearTerms | None = None,
+    *,
+    parallel: Any | None = None,
+    use_jit: bool = True,
+    use_custom_vjp: bool = True,
+    dt: jnp.ndarray | float | None = None,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Compute linear RHS with an explicit, disabled-by-default parallel route.
+
+    ``parallel=None`` and ``parallel.strategy="serial"`` are exact aliases for
+    :func:`linear_rhs_cached`. The only non-serial route currently exposed is
+    ``strategy="velocity", backend="streaming_only"`` on the Hermite axis,
+    which is restricted to streaming-only term weights and identity-gated
+    separately from full linear or nonlinear production paths.
+    """
+
+    if parallel is None or str(getattr(parallel, "strategy", "serial")).lower() == "serial":
+        return linear_rhs_cached(
+            G,
+            cache,
+            params,
+            terms=terms,
+            use_jit=use_jit,
+            use_custom_vjp=use_custom_vjp,
+            dt=dt,
+        )
+
+    strategy = str(getattr(parallel, "strategy", "serial")).lower().replace("-", "_")
+    backend = str(getattr(parallel, "backend", "auto")).lower().replace("-", "_")
+    axis = str(getattr(parallel, "axis", "hermite")).lower().replace("-", "_")
+    if strategy == "velocity" and backend in {"streaming_only", "linear_streaming_only"}:
+        if axis not in {"m", "hermite"}:
+            raise NotImplementedError("streaming-only velocity sharding currently supports only the Hermite axis")
+        if not _is_streaming_only_terms(terms):
+            raise NotImplementedError("velocity streaming route requires streaming-only LinearTerms")
+        return linear_rhs_streaming_velocity_sharded(
+            G,
+            cache,
+            params,
+            num_devices=getattr(parallel, "num_devices", None),
+        )
+
+    raise NotImplementedError(
+        "parallel linear RHS currently supports only strategy='velocity', backend='streaming_only'"
+    )
+
+
 def _integrate_linear_cached_impl(
     G0: jnp.ndarray,
     cache: LinearCache,
