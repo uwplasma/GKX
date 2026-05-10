@@ -124,6 +124,9 @@ jobs:
               tests/test_plot_quasilinear_shape_aware_saturation.py
               tests/test_plot_quasilinear_candidate_uncertainty.py
               tests/test_plot_quasilinear_dataset_sufficiency.py
+              tests/test_profile_quasilinear_uq_ensemble_scaling.py
+              tests/test_plot_quasilinear_uq_ensemble_scaling.py
+              tests/test_quasilinear_uq_ensemble_scaling_artifacts.py
               tests/test_quasilinear_implicit_sensitivity_demo.py
           - name: linear-core
             files: >-
@@ -135,17 +138,25 @@ jobs:
               tests/test_terms_operators.py
               tests/test_terms_validation.py
               tests/test_linear_krylov_core.py
-          - name: runtime-nonlinear
+          - name: runtime-core
             files: >-
               tests/test_diffrax_integrators.py
               tests/test_diffrax_integrators_core.py
-              tests/test_nonlinear.py
-              tests/test_nonlinear_exb.py
-              tests/test_hyperdiffusion.py
               tests/test_runtime_config.py
               tests/test_runtime_helpers.py
               tests/test_runtime_runner.py
               tests/test_runners.py
+              tests/test_cli.py
+              tests/test_example_smoke.py
+          - name: nonlinear-core
+            files: >-
+              tests/test_nonlinear.py
+              tests/test_nonlinear_exb.py
+              tests/test_hyperdiffusion.py
+              tests/test_gx_consistency.py
+              tests/test_gx_diagnostics.py
+          - name: parallel-autodiff
+            files: >-
               tests/test_parallel.py
               tests/test_sharding.py
               tests/test_sharded_integrators.py
@@ -155,10 +166,6 @@ jobs:
               tests/test_profile_nonlinear_sharding.py
               tests/test_autodiff_validation.py
               tests/test_differentiable_geometry_bridge.py
-              tests/test_cli.py
-              tests/test_gx_consistency.py
-              tests/test_gx_diagnostics.py
-              tests/test_example_smoke.py
 
     steps:
       - uses: actions/checkout@v4
