@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import numpy as np
-from scipy.signal import find_peaks
 from pathlib import Path
+
+import numpy as np
 
 def derm(arr, ch, par='e'):
     # Finite difference subroutine
@@ -184,38 +184,38 @@ def generate_miller_eik(
 
     # This is a simplified version of gx_geo.py integrated into the package
     ntheta = int(cfg_data["Dimensions"]["ntheta"])
-    nperiod = int(cfg_data["Dimensions"].get("nperiod", 1))
+    _nperiod = int(cfg_data["Dimensions"].get("nperiod", 1))
     
     geom = cfg_data["Geometry"]
     rhoc = float(geom["rhoc"])
-    qfac = float(geom["q"])
-    s_hat_input = float(geom["s_hat"])
+    _qfac = float(geom["q"])
+    _s_hat_input = float(geom["s_hat"])
     R0 = float(geom["R0"])
     R_geo = float(geom.get("R_geo", R0))
-    shift = float(geom.get("shift", 0.0))
+    _shift = float(geom.get("shift", 0.0))
     akappa = float(geom.get("akappa", 1.0))
     akappri = float(geom.get("akappri", 0.0))
     tri = float(geom.get("tri", 0.0))
     tripri = float(geom.get("tripri", 0.0))
-    betaprim = float(geom.get("betaprim", 0.0))
+    _betaprim = float(geom.get("betaprim", 0.0))
     
     theta_arr = np.linspace(0, np.pi, ntheta//2 + 1)
     
     costh = np.cos(theta_arr)
     sinth = np.sin(theta_arr)
     sin_tri_sinth = np.sin(tri * sinth)
-    cos_tri_sinth = np.cos(tri * sinth)
+    _cos_tri_sinth = np.cos(tri * sinth)
     
     # R and Z and their derivatives w.r.t theta
-    Rplot = R_geo + rhoc * np.cos(theta_arr + sin_tri_sinth)
-    Zplot = rhoc * akappa * sinth
-    
-    dR_dtheta = -rhoc * (1.0 + tri * costh) * np.sin(theta_arr + sin_tri_sinth)
-    dZ_dtheta = rhoc * akappa * costh
-    
+    _Rplot = R_geo + rhoc * np.cos(theta_arr + sin_tri_sinth)
+    _Zplot = rhoc * akappa * sinth
+
+    _dR_dtheta = -rhoc * (1.0 + tri * costh) * np.sin(theta_arr + sin_tri_sinth)
+    _dZ_dtheta = rhoc * akappa * costh
+
     # Derivatives w.r.t rho
-    dR_drho = np.cos(theta_arr + sin_tri_sinth) - rhoc * sinth * sin_tri_sinth * tripri
-    dZ_drho = akappa * sinth + rhoc * sinth * akappri
+    _dR_drho = np.cos(theta_arr + sin_tri_sinth) - rhoc * sinth * sin_tri_sinth * tripri
+    _dZ_drho = akappa * sinth + rhoc * sinth * akappri
     
     # Jacobian and other metric elements (simplified implementation)
     # Following the formulas in the original Miller paper/script

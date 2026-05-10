@@ -75,7 +75,6 @@ def generate_miller_eik_internal(*, output_path: str | Path, request: Any | None
     jac = np.asarray(gradients["jac"], dtype=float)
     drhod_r = np.asarray(gradients["drhod_r"], dtype=float)
     drhod_z = np.asarray(gradients["drhod_z"], dtype=float)
-    dl = np.asarray(gradients["dl"], dtype=float)
 
     jac_r_theta_arr = np.abs(2.0 * cumulative_trapezoid(jac / _safe_denom(r), theta_common, axis=1)[:, -1])
     dpsidrho_arr = -(params.r_geo / np.abs(2.0 * np.pi * qfac)) * jac_r_theta_arr
@@ -398,7 +397,6 @@ def rebuild_straight_theta_state(
 ) -> dict[str, np.ndarray]:
     """Rebuild Miller geometric quantities with theta_st as the independent grid, mirroring GX."""
 
-    rho = np.asarray(state["rho"], dtype=float)
     r = np.asarray(state["r"], dtype=float).copy()
     z = np.asarray(state["z"], dtype=float).copy()
 
@@ -508,8 +506,6 @@ def assemble_miller_profiles(
     dpsi_dr = np.asarray(straight_state["dpsi_dr"], dtype=float)
     bpol = np.asarray(straight_state["bpol"], dtype=float)
     bmag = np.asarray(straight_state["bmag"], dtype=float)
-    l_st = np.asarray(straight_state["l_st"], dtype=float)
-    psi = np.asarray(straight_state["psi"], dtype=float)
     psi_diff = np.asarray(straight_state["psi_diff"], dtype=float)
 
     r_ex = nperiod_data_extend(r[c], params.nperiod, istheta=0, par="e")
@@ -551,7 +547,6 @@ def assemble_miller_profiles(
     dt_st_l_dl_center = np.asarray(straight_state["dt_st_l_dl_center"], dtype=float)
     dt_st_l_dl = nperiod_data_extend(dt_st_l_dl_center, params.nperiod, istheta=0, par="e")
 
-    l_st_ex = np.concatenate(([0.0], np.cumsum(np.sqrt(np.diff(r_ex) ** 2 + np.diff(z_ex) ** 2))))
     dtdr_st_ex = (aprime_bish * drhodpsi - dqdr * theta_st_ex) / qfac[c]
     gds2_ex = (
         (psi_diff[c] / diffrho[c]) ** 2

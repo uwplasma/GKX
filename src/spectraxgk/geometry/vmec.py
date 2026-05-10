@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import numpy as np
 from pathlib import Path
-import sys
 
 def generate_vmec_eik(
     cfg_data: dict,
@@ -17,14 +15,12 @@ def generate_vmec_eik(
     except ImportError:
         raise ImportError("netCDF4 is required for VMEC geometry generation")
 
-    # Try to import booz_xform_jax first, then fallback to booz_xform
+    # Try booz_xform_jax first, then fallback to booz_xform.
     try:
-        import booz_xform_jax as bxform
-        USE_JAX = True
+        __import__("booz_xform_jax")
     except ImportError:
         try:
-            import booz_xform as bxform
-            USE_JAX = False
+            __import__("booz_xform")
         except ImportError:
             raise ImportError("Either booz_xform or booz_xform_jax is required for VMEC geometry generation")
 

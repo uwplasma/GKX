@@ -389,7 +389,6 @@ def dominant_eigenpair_shift_invert_cached(
         omega_scale = _omega_scale(cache, params)
         omega_cap = omega_cap_factor * omega_scale
         omega_min = omega_min_factor * omega_scale
-        use_cap = omega_cap_factor > 0.0
         use_min = omega_min_factor > 0.0
         mask0 = jnp.abs(imag_part) <= omega_cap
         mask0 = jnp.where(use_min, mask0 & (jnp.abs(imag_part) >= omega_min), mask0)

@@ -16,8 +16,6 @@ from spectraxgk.runtime import run_runtime_linear, run_runtime_nonlinear
 from spectraxgk.runtime_config import (
     RuntimeConfig,
     RuntimeExpertConfig,
-    RuntimePhysicsConfig,
-    RuntimeTermsConfig,
 )
 from spectraxgk.restart import write_gx_restart_state
 

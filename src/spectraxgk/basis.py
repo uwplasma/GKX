@@ -63,9 +63,9 @@ def laguerre(x: jnp.ndarray, l_max: int) -> jnp.ndarray:
     l0 = jnp.ones_like(x)
     l1 = 1.0 - x
 
-    def step(carry, l):
+    def step(carry, ell_idx):
         l_prev, l_curr = carry
-        l_next = ((2.0 * l + 1.0 - x) * l_curr - l * l_prev) / (l + 1.0)
+        l_next = ((2.0 * ell_idx + 1.0 - x) * l_curr - ell_idx * l_prev) / (ell_idx + 1.0)
         return (l_curr, l_next), l_next
 
     _, tail = jax.lax.scan(step, (l0, l1), jnp.arange(1, l_max))

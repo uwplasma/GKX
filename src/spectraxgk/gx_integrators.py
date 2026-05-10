@@ -97,7 +97,6 @@ def _gx_zp_from_grid(grid: SpectralGrid) -> float:
 def _gx_k_arrays(grid: SpectralGrid) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     kx = np.asarray(grid.kx, dtype=float).reshape(-1)
     ky_full = np.asarray(grid.ky, dtype=float).reshape(-1)
-    nx = int(kx.size)
     nz = int(grid.z.size)
     zp = _gx_zp_from_grid(grid)
     kz = np.zeros(nz, dtype=float)
@@ -515,7 +514,6 @@ def integrate_linear_gx(
     phi_list: list[np.ndarray] = []
     gamma_list: list[np.ndarray] = []
     omega_list: list[np.ndarray] = []
-    dt_list: list[float] = []
 
     def _step(G_state, cache_state, params_state, term_cfg_state, dt_state):
         return _linear_explicit_step(
@@ -701,10 +699,7 @@ def integrate_linear_gx_diagnostics(
             pflux_list.append(float(pflux_val))
 
             if show_progress:
-                from spectraxgk.utils.callbacks import print_callback
-                # We can't easily use jax.debug.callback here because we are in a python loop
-                # but we can just use the internal logic of print_callback if it's pure python
-                # or just use rich directly.
+                # This path runs in a Python loop, so rich output is sufficient.
                 from rich.table import Table
                 from rich import box
                 pct = (t / t_max) * 100

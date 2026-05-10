@@ -124,15 +124,15 @@ def load_gx_legacy_cetg_restart(
         if int(naky) != expected_naky:
             raise ValueError(f"restart Nky={naky} does not match ny_full={ny_full} (expected {expected_naky})")
 
-        for l in range(nl):
+        for ell_idx in range(nl):
             for iz in range(nz):
                 for i in range(1 + ((int(nx_full) - 1) // 3)):
                     for j in range(naky):
-                        state[0, l, 0, j, i, iz] = G_complex[l, iz, i, j]
+                        state[0, ell_idx, 0, j, i, iz] = G_complex[ell_idx, iz, i, j]
                 for i in range(2 * int(nx_full) // 3 + 1, int(nx_full)):
                     it = i - 2 * int(nx_full) // 3 + ((int(nx_full) - 1) // 3)
                     for j in range(naky):
-                        state[0, l, 0, j, i, iz] = G_complex[l, iz, it, j]
+                        state[0, ell_idx, 0, j, i, iz] = G_complex[ell_idx, iz, it, j]
 
         time_var = np.asarray(root.variables["time"][:], dtype=float)
         time = float(time_var.reshape(-1)[0]) if time_var.size else 0.0
