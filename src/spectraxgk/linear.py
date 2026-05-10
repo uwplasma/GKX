@@ -28,6 +28,7 @@ _SSPX3_WGTFAC = float((9.0 - 2.0 * (6.0 ** (2.0 / 3.0))) ** 0.5)
 _SSPX3_W1 = 0.5 * (_SSPX3_WGTFAC - 1.0)
 _SSPX3_W2 = 0.5 * ((6.0 ** (2.0 / 3.0)) - 1.0 - _SSPX3_WGTFAC)
 _SSPX3_W3 = (1.0 / _SSPX3_ADT) - 1.0 - _SSPX3_W2 * (_SSPX3_W1 + 1.0)
+_FUSED_ELECTROSTATIC_SLICE_KERNEL_CACHE: dict[tuple[Any, ...], tuple[Any, Any]] = {}
 
 
 @jax.tree_util.register_pytree_node_class
@@ -1566,6 +1567,178 @@ def linear_rhs_streaming_electrostatic_velocity_sharded(
     return _streaming_electrostatic_from_phi_velocity_sharded(arr, cache, params, phi=phi, plan=plan, devices=device_list), phi
 
 
+def _linear_rhs_electrostatic_slices_velocity_sharded_fused(
+    arr: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    term_weights: LinearTerms,
+    *,
+    plan: Any,
+    devices: Any,
+    axis_name: str = "m",
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Fuse the current single-species periodic electrostatic shard-map route."""
+
+    from jax.sharding import Mesh, NamedSharding, PartitionSpec
+
+    from spectraxgk.terms.operators import grad_z_periodic, shift_axis
+
+    dims = ("l", "m", "ky", "kx", "z")
+    m_axis = dims.index("m")
+    m_chunks = int(plan.chunks.get("m", 1))
+    if m_chunks <= 1:
+        raise ValueError("fused Hermite route requires more than one Hermite chunk")
+    if int(arr.shape[m_axis]) % m_chunks != 0:
+        raise ValueError("Hermite dimension must divide evenly across Hermite chunks")
+    active_non_hermite = tuple(active_axis for active_axis in plan.active_axes if active_axis != "m")
+    if active_non_hermite:
+        raise NotImplementedError("fused electrostatic slice route currently supports only an active 'm' axis")
+
+    device_list = list(devices)
+    if len(device_list) < m_chunks:
+        raise ValueError("not enough devices for the requested Hermite decomposition")
+
+    mesh = Mesh(np.asarray(device_list[:m_chunks]), (axis_name,))
+    spec_list: list[str | None] = [None] * arr.ndim
+    spec_list[m_axis] = axis_name
+    state_spec = PartitionSpec(*spec_list)
+    phi_spec = PartitionSpec(None, None, None)
+    sharding = NamedSharding(mesh, state_spec)
+    local_m = int(arr.shape[m_axis]) // m_chunks
+    local_m_index = jnp.arange(local_m, dtype=jnp.int32).reshape((1, local_m, 1, 1, 1))
+    prev_pairs = tuple((idx, idx + 1) for idx in range(m_chunks - 1))
+    next_pairs = tuple((idx, idx - 1) for idx in range(1, m_chunks))
+
+    real_dtype = jnp.real(arr).dtype
+    jl = jnp.asarray(cache.Jl)
+    if jl.ndim == 5:
+        jl = jl[0]
+    charge_s = jnp.asarray(params.charge_sign, dtype=real_dtype).reshape(-1)[0]
+    density_s = jnp.asarray(params.density, dtype=real_dtype).reshape(-1)[0]
+    tau = jnp.asarray(params.tau_e, dtype=real_dtype)
+    tz_s = jnp.asarray(params.tz, dtype=real_dtype).reshape(-1)[0]
+    zt = jnp.where(tz_s == 0.0, 0.0, 1.0 / tz_s)
+    vth_s = jnp.asarray(params.vth, dtype=real_dtype).reshape(-1)[0]
+    g0 = jnp.sum(jl * jl, axis=0)
+    den_safe = jnp.where(tau + density_s * charge_s * zt * (1.0 - g0) == 0.0, jnp.inf, tau + density_s * charge_s * zt * (1.0 - g0))
+    mask0 = None if cache.mask0 is None else jnp.asarray(cache.mask0)
+    ell = jnp.arange(arr.shape[0], dtype=real_dtype).reshape((arr.shape[0], 1, 1, 1, 1))
+    ell_p1 = ell + 1.0
+    bgrad = jnp.asarray(cache.bgrad, dtype=real_dtype).reshape((1, 1, 1, 1, int(jnp.asarray(cache.bgrad).shape[-1])))
+    cv = jnp.asarray(cache.cv_d, dtype=real_dtype).reshape((1, 1) + tuple(jnp.asarray(cache.cv_d).shape))
+    gb = jnp.asarray(cache.gb_d, dtype=real_dtype).reshape((1, 1) + tuple(jnp.asarray(cache.gb_d).shape))
+    omega_d_scale = jnp.asarray(params.omega_d_scale, dtype=real_dtype)
+    kpar_scale = jnp.asarray(params.kpar_scale, dtype=real_dtype)
+    imag = jnp.asarray(1j, dtype=arr.dtype)
+    omega_star = imag * jnp.asarray(params.omega_star_scale, dtype=real_dtype) * jnp.asarray(cache.ky, dtype=real_dtype)
+    omega_star_s = omega_star.reshape((1, omega_star.shape[0], 1, 1))
+    tprim_s = jnp.asarray(params.R_over_LTi, dtype=real_dtype).reshape(-1)[0]
+    fprim_s = jnp.asarray(params.R_over_Ln, dtype=real_dtype).reshape(-1)[0]
+    jl_m1 = shift_axis(jl, -1, axis=0)
+    jl_p1 = shift_axis(jl, 1, axis=0)
+    l4 = jnp.asarray(cache.l4, dtype=real_dtype).reshape((arr.shape[0], 1, 1, 1))
+    w_streaming = jnp.asarray(term_weights.streaming, dtype=real_dtype)
+    w_mirror = jnp.asarray(term_weights.mirror, dtype=real_dtype)
+    w_curv = jnp.asarray(term_weights.curvature, dtype=real_dtype)
+    w_gradb = jnp.asarray(term_weights.gradb, dtype=real_dtype)
+    w_diamag = jnp.asarray(term_weights.diamagnetic, dtype=real_dtype)
+
+    def shift_m(local, *, offset: int):
+        depth = abs(int(offset))
+        if depth == 0:
+            return local
+        if offset < 0:
+            boundary = local[:, -depth:, ...]
+            received = jax.lax.ppermute(boundary, axis_name, prev_pairs)
+            return jnp.concatenate([received, local[:, :-depth, ...]], axis=1)
+        boundary = local[:, :depth, ...]
+        received = jax.lax.ppermute(boundary, axis_name, next_pairs)
+        return jnp.concatenate([local[:, depth:, ...], received], axis=1)
+
+    def fused(local):
+        global_m = jax.lax.axis_index(axis_name) * local_m + local_m_index
+        global_m_real = global_m.astype(real_dtype)
+        m0 = (global_m == 0).astype(local.dtype)
+        local_gm0 = jnp.sum(local * m0, axis=1)
+        local_nbar = density_s * charge_s * jnp.sum(jl * local_gm0, axis=0)
+        phi = jax.lax.psum(local_nbar, axis_name) / den_safe
+        if mask0 is not None:
+            phi = jnp.where(mask0, 0.0, phi)
+
+        dlocal_dz = grad_z_periodic(local, kz=cache.kz)
+        lower = shift_m(dlocal_dz, offset=-1)
+        upper = shift_m(dlocal_dz, offset=1)
+        streaming = -vth_s * (jnp.sqrt(global_m_real + 1.0) * upper + jnp.sqrt(global_m_real) * lower)
+        field_drive_m1 = (global_m == 1).astype(local.dtype) * (-zt * vth_s * jl * phi)[:, None, ...]
+        streaming = streaming + kpar_scale * grad_z_periodic(field_drive_m1, kz=cache.kz)
+
+        h = local + (global_m == 0).astype(local.dtype) * (zt * jl * phi)[:, None, ...]
+        h_m_p1 = shift_m(h, offset=1)
+        h_m_m1 = shift_m(h, offset=-1)
+        mirror_term = (
+            -jnp.sqrt(global_m_real + 1.0) * ell_p1 * h_m_p1
+            - jnp.sqrt(global_m_real + 1.0) * ell * shift_axis(h_m_p1, -1, axis=0)
+            + jnp.sqrt(global_m_real) * ell * h_m_m1
+            + jnp.sqrt(global_m_real) * ell_p1 * shift_axis(h_m_m1, 1, axis=0)
+        )
+        mirror = -vth_s * bgrad * mirror_term
+
+        h_m_p2 = shift_m(h, offset=2)
+        h_m_m2 = shift_m(h, offset=-2)
+        curv_term = (
+            jnp.sqrt((global_m_real + 1.0) * (global_m_real + 2.0)) * h_m_p2
+            + (2.0 * global_m_real + 1.0) * h
+            + jnp.sqrt(global_m_real * (global_m_real - 1.0)) * h_m_m2
+        )
+        gradb_term = (ell + 1.0) * shift_axis(h, 1, axis=0) + (2.0 * ell + 1.0) * h + ell * shift_axis(h, -1, axis=0)
+        curvature = -(imag * tz_s * omega_d_scale * cv) * curv_term
+        gradb = -(imag * tz_s * omega_d_scale * gb) * gradb_term
+
+        drive_m0 = omega_star_s * phi * (
+            jl_m1 * (l4 * tprim_s)
+            + jl * (fprim_s + 2.0 * l4 * tprim_s)
+            + jl_p1 * ((l4 + 1.0) * tprim_s)
+        )
+        drive_m2 = omega_star_s * phi * jl * (tprim_s / jnp.sqrt(jnp.asarray(2.0, dtype=real_dtype)))
+        diamagnetic = (global_m == 0).astype(local.dtype) * drive_m0[:, None, ...]
+        diamagnetic = diamagnetic + (global_m == 2).astype(local.dtype) * drive_m2[:, None, ...]
+
+        rhs = w_streaming * streaming + w_mirror * mirror + w_curv * curvature + w_gradb * gradb
+        rhs = rhs + w_diamag * diamagnetic
+        return rhs, phi
+
+    cache_key = (
+        "electrostatic_linear_slices_fused",
+        tuple(int(x) for x in arr.shape),
+        str(arr.dtype),
+        id(cache),
+        id(params),
+        float(term_weights.streaming),
+        float(term_weights.mirror),
+        float(term_weights.curvature),
+        float(term_weights.gradb),
+        float(term_weights.diamagnetic),
+        tuple(str(device) for device in device_list[:m_chunks]),
+        axis_name,
+    )
+    cached = _FUSED_ELECTROSTATIC_SLICE_KERNEL_CACHE.get(cache_key)
+    if cached is None:
+        mapped = jax.jit(
+            jax.shard_map(
+                fused,
+                mesh=mesh,
+                in_specs=state_spec,
+                out_specs=(state_spec, phi_spec),
+                axis_names={axis_name},
+            )
+        )
+        cached = (mapped, sharding)
+        _FUSED_ELECTROSTATIC_SLICE_KERNEL_CACHE[cache_key] = cached
+    else:
+        mapped, sharding = cached
+    return mapped(jax.device_put(arr, sharding))
+
+
 def linear_rhs_electrostatic_slices_velocity_sharded(
     G: jnp.ndarray,
     cache: LinearCache,
@@ -1596,6 +1769,15 @@ def linear_rhs_electrostatic_slices_velocity_sharded(
 
     device_list = _resolve_parallel_devices(num_devices=num_devices, devices=devices)
     plan = build_velocity_sharding_plan(arr.shape, num_devices=len(device_list), axes=("hermite",))
+    if len(device_list) > 1:
+        return _linear_rhs_electrostatic_slices_velocity_sharded_fused(
+            arr,
+            cache,
+            params,
+            term_weights,
+            plan=plan,
+            devices=device_list,
+        )
     real_dtype = jnp.real(arr).dtype
     phi = electrostatic_phi_shard_map(
         arr,
