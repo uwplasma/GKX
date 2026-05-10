@@ -1418,6 +1418,19 @@ def _is_streaming_only_terms(terms: LinearTerms | None) -> bool:
     )
 
 
+def _is_electrostatic_slice_terms(terms: LinearTerms | None) -> bool:
+    term_weights = terms if terms is not None else LinearTerms()
+    return (
+        float(term_weights.diamagnetic) == 0.0
+        and float(term_weights.collisions) == 0.0
+        and float(term_weights.hypercollisions) == 0.0
+        and float(term_weights.hyperdiffusion) == 0.0
+        and float(term_weights.end_damping) == 0.0
+        and float(term_weights.apar) == 0.0
+        and float(term_weights.bpar) == 0.0
+    )
+
+
 def _resolve_parallel_devices(*, num_devices: int | None = None, devices: Any | None = None) -> list[Any]:
     """Return an explicit device list for opt-in parallel diagnostics."""
 
@@ -1543,6 +1556,86 @@ def linear_rhs_streaming_electrostatic_velocity_sharded(
     return particle_streaming + field_streaming[0], phi
 
 
+def linear_rhs_electrostatic_slices_velocity_sharded(
+    G: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    terms: LinearTerms | None = None,
+    *,
+    num_devices: int | None = None,
+    devices: Any | None = None,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Compute gated electrostatic streaming, mirror, curvature, and grad-B slices."""
+
+    from spectraxgk.velocity_sharding import (
+        build_velocity_sharding_plan,
+        curvature_gradb_drift_shard_map,
+        electrostatic_phi_shard_map,
+        mirror_drift_shard_map,
+    )
+
+    term_weights = terms if terms is not None else LinearTerms()
+    if not _is_electrostatic_slice_terms(term_weights):
+        raise NotImplementedError("electrostatic slice route allows only streaming, mirror, curvature, and grad-B terms")
+    arr = jnp.asarray(G)
+    if arr.ndim != 5:
+        raise NotImplementedError("velocity-sharded electrostatic slice route currently supports single-species 5D states")
+    if bool(getattr(cache, "use_twist_shift", False)):
+        raise NotImplementedError("velocity-sharded electrostatic slice route currently requires a periodic z grid")
+
+    device_list = _resolve_parallel_devices(num_devices=num_devices, devices=devices)
+    plan = build_velocity_sharding_plan(arr.shape, num_devices=len(device_list), axes=("hermite",))
+    real_dtype = jnp.real(arr).dtype
+    phi = electrostatic_phi_shard_map(
+        arr,
+        plan,
+        Jl=cache.Jl,
+        tau_e=params.tau_e,
+        charge=params.charge_sign,
+        density=params.density,
+        tz=params.tz,
+        mask0=cache.mask0,
+        devices=device_list,
+    )
+    dG = jnp.zeros_like(arr)
+    if float(term_weights.streaming) != 0.0:
+        streaming, _phi_stream = linear_rhs_streaming_electrostatic_velocity_sharded(
+            arr,
+            cache,
+            params,
+            devices=device_list,
+        )
+        dG = dG + jnp.asarray(term_weights.streaming, dtype=real_dtype) * streaming
+    H = build_H(arr, cache.Jl, phi, jnp.asarray([params.tz], dtype=real_dtype))
+    if float(term_weights.mirror) != 0.0:
+        dG = dG + mirror_drift_shard_map(
+            H,
+            plan,
+            vth=jnp.asarray([params.vth], dtype=real_dtype),
+            bgrad=cache.bgrad,
+            ell=cache.l,
+            sqrt_m=cache.sqrt_m,
+            sqrt_m_p1=cache.sqrt_m_p1,
+            weight=jnp.asarray(term_weights.mirror, dtype=real_dtype),
+            devices=device_list,
+        )
+    if float(term_weights.curvature) != 0.0 or float(term_weights.gradb) != 0.0:
+        dG = dG + curvature_gradb_drift_shard_map(
+            H,
+            plan,
+            tz=jnp.asarray([params.tz], dtype=real_dtype),
+            omega_d_scale=params.omega_d_scale,
+            cv_d=cache.cv_d,
+            gb_d=cache.gb_d,
+            ell=cache.l,
+            m=cache.m,
+            weight_curv=jnp.asarray(term_weights.curvature, dtype=real_dtype),
+            weight_gradb=jnp.asarray(term_weights.gradb, dtype=real_dtype),
+            devices=device_list,
+        )
+    return dG, phi
+
+
 def linear_rhs_parallel_cached(
     G: jnp.ndarray,
     cache: LinearCache,
@@ -1600,9 +1693,21 @@ def linear_rhs_parallel_cached(
             num_devices=getattr(parallel, "num_devices", None),
             use_custom_vjp=use_custom_vjp,
         )
+    if strategy == "velocity" and backend in {"electrostatic_linear_slices", "linear_electrostatic_slices"}:
+        if axis not in {"m", "hermite"}:
+            raise NotImplementedError("electrostatic slice velocity sharding currently supports only the Hermite axis")
+        if not _is_electrostatic_slice_terms(terms):
+            raise NotImplementedError("electrostatic slice route requires diamagnetic/collision/EM terms to be disabled")
+        return linear_rhs_electrostatic_slices_velocity_sharded(
+            G,
+            cache,
+            params,
+            terms=terms,
+            num_devices=getattr(parallel, "num_devices", None),
+        )
 
     raise NotImplementedError(
-        "parallel linear RHS currently supports only strategy='velocity' with streaming-only backends"
+        "parallel linear RHS currently supports only strategy='velocity' with gated electrostatic backends"
     )
 
 
