@@ -447,6 +447,16 @@ linear solver serially and with fixed-shape ky batching, verifies numerical
 identity for `gamma` and `omega`, and reports the observed batch speedup for
 engineering tracking.
 
+![SPECTRAX-GK independent ky scan strong scaling](docs/_static/independent_ky_scan_scaling_large.png)
+
+The large independent-`k_y` strong-scaling panel uses the real Cyclone linear
+solver on twelve modes with `Ny=128`, `Nz=96`, `Nl=4`, `Nm=8`, and `240` RK2
+steps per mode. It passes exact `gamma`/`omega` identity against the one-worker
+reference. On `ssh office`, CPU process scaling reaches `5.34x` on eight
+workers, and the two-RTX-A4000 GPU run reaches `1.63x`. This is the preferred
+production parallelization path for linear scans, quasilinear studies,
+sensitivity sweeps, and UQ ensembles.
+
 ## Benchmarks
 
 SPECTRAX-GK is rigorously validated against standard gyrokinetic benchmarks, including:
