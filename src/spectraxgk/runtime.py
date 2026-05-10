@@ -54,8 +54,14 @@ from spectraxgk.runtime_results import (
     build_runtime_nonlinear_result,
 )
 from spectraxgk.runtime_startup import (
+    _build_gaussian_profile,
     _build_initial_condition,
+    _enforce_full_ky_hermitian,
+    _expand_ky,
+    _gx_default_p_hyper_m,
+    _require_full_gk_runtime_model,
     _resolve_runtime_hl_dims,
+    _reshape_gx_state,
     _runtime_default_krylov_config,
     _runtime_model_key,
     _species_to_linear,
@@ -66,6 +72,47 @@ from spectraxgk.miller_eik import generate_runtime_miller_eik
 from spectraxgk.vmec_eik import generate_runtime_vmec_eik
 
 _GX_RAND_MAX = float((1 << 31) - 1)
+
+__all__ = [
+    "RuntimeLinearResult",
+    "RuntimeLinearScanResult",
+    "RuntimeNonlinearResult",
+    "_build_gaussian_profile",
+    "_build_initial_condition",
+    "_concat_gx_diagnostics",
+    "_enforce_full_ky_hermitian",
+    "_expand_ky",
+    "_gx_centered_random_pairs",
+    "_gx_default_p_hyper_m",
+    "_gx_init_mode_pairs",
+    "_gx_periodic_zp",
+    "_infer_runtime_nonlinear_steps",
+    "_load_initial_state_from_file",
+    "_midplane_index",
+    "_normalize_linear_solver_name",
+    "_require_full_gk_runtime_model",
+    "_resolve_runtime_hl_dims",
+    "_reshape_gx_state",
+    "_run_runtime_scan_batch",
+    "_runtime_default_krylov_config",
+    "_runtime_external_phi",
+    "_runtime_model_key",
+    "_select_nonlinear_mode_indices",
+    "_slice_gx_diagnostics",
+    "_species_to_linear",
+    "_stride_gx_diagnostics",
+    "_truncate_gx_diagnostics",
+    "_zero_kx_index",
+    "build_runtime_geometry",
+    "build_runtime_linear_params",
+    "build_runtime_linear_terms",
+    "build_runtime_term_config",
+    "run_linear_case",
+    "run_nonlinear_case",
+    "run_runtime_linear",
+    "run_runtime_nonlinear",
+    "run_runtime_scan",
+]
 
 
 def _normalize_linear_solver_name(solver: str) -> str:
