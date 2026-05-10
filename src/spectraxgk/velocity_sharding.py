@@ -661,6 +661,168 @@ def curvature_gradb_drift_shard_map(
     return -jnp.asarray(weight_curv, dtype=real_dtype) * icv * curv_term - jnp.asarray(weight_gradb, dtype=real_dtype) * igb * gradb_term
 
 
+def _diamagnetic_drive_from_global_m(
+    *,
+    state: Any,
+    global_m: Any,
+    phi: Any,
+    Jl: Any,
+    l4: Any,
+    tprim: Any,
+    fprim: Any,
+    omega_star_scale: Any,
+    ky: Any,
+    weight: Any,
+) -> Any:
+    import jax.numpy as jnp
+
+    from spectraxgk.terms.operators import shift_axis
+
+    arr = jnp.asarray(state)
+    real_dtype = jnp.real(arr).dtype
+    jl = jnp.asarray(Jl)
+    if jl.ndim == 5:
+        jl = jl[0]
+    if jl.ndim != 4:
+        raise ValueError("Jl must have shape (Nl, Ny, Nx, Nz) or (1, Nl, Ny, Nx, Nz)")
+    jl_m1 = shift_axis(jl, -1, axis=0)
+    jl_p1 = shift_axis(jl, 1, axis=0)
+    ell = jnp.asarray(l4, dtype=real_dtype).reshape((jl.shape[0], 1, 1, 1))
+    tprim_s = jnp.asarray(tprim, dtype=real_dtype).reshape(-1)[0]
+    fprim_s = jnp.asarray(fprim, dtype=real_dtype).reshape(-1)[0]
+    omega_star = jnp.asarray(1j, dtype=arr.dtype) * jnp.asarray(omega_star_scale, dtype=real_dtype) * jnp.asarray(ky, dtype=real_dtype)
+    omega_star_s = omega_star.reshape((1, omega_star.shape[0], 1, 1))
+    phi_arr = jnp.asarray(phi, dtype=arr.dtype)
+    drive_m0 = omega_star_s * phi_arr * (
+        jl_m1 * (ell * tprim_s)
+        + jl * (fprim_s + 2.0 * ell * tprim_s)
+        + jl_p1 * ((ell + 1.0) * tprim_s)
+    )
+    drive = (global_m == 0).astype(arr.dtype) * drive_m0[:, None, ...]
+    if int(arr.shape[1]) > 0:
+        drive_m2 = omega_star_s * phi_arr * jl * (tprim_s / jnp.sqrt(jnp.asarray(2.0, dtype=real_dtype)))
+        drive = drive + (global_m == 2).astype(arr.dtype) * drive_m2[:, None, ...]
+    return jnp.asarray(weight, dtype=real_dtype) * drive
+
+
+def diamagnetic_drive_reference(
+    state: Any,
+    *,
+    phi: Any,
+    Jl: Any,
+    l4: Any,
+    tprim: Any,
+    fprim: Any,
+    omega_star_scale: Any,
+    ky: Any,
+    weight: Any = 1.0,
+) -> Any:
+    """Return the single-species electrostatic diamagnetic drive."""
+
+    import jax.numpy as jnp
+
+    arr = jnp.asarray(state)
+    if arr.ndim != 5:
+        raise NotImplementedError("diamagnetic_drive_reference currently supports single-species 5D states")
+    global_m = jnp.arange(arr.shape[1], dtype=jnp.int32).reshape((1, arr.shape[1], 1, 1, 1))
+    return _diamagnetic_drive_from_global_m(
+        state=arr,
+        global_m=global_m,
+        phi=phi,
+        Jl=Jl,
+        l4=l4,
+        tprim=tprim,
+        fprim=fprim,
+        omega_star_scale=omega_star_scale,
+        ky=ky,
+        weight=weight,
+    )
+
+
+def diamagnetic_drive_shard_map(
+    state: Any,
+    plan: VelocityShardingPlan,
+    *,
+    phi: Any,
+    Jl: Any,
+    l4: Any,
+    tprim: Any,
+    fprim: Any,
+    omega_star_scale: Any,
+    ky: Any,
+    weight: Any = 1.0,
+    devices: Sequence[Any] | None = None,
+    axis_name: str = "m",
+) -> Any:
+    """Return the diamagnetic drive through a Hermite-sharded local map."""
+
+    import jax
+    import jax.numpy as jnp
+    from jax.sharding import Mesh, NamedSharding, PartitionSpec
+
+    arr = jnp.asarray(state)
+    if arr.ndim != 5:
+        raise NotImplementedError("diamagnetic_drive_shard_map currently supports single-species 5D states")
+    if tuple(arr.shape) != tuple(plan.state_shape):
+        raise ValueError("state shape does not match the supplied velocity sharding plan")
+    dims = _state_dims(arr.ndim)
+    m_axis = dims.index("m")
+    m_chunks = int(plan.chunks.get("m", 1))
+    active_non_hermite = tuple(active_axis for active_axis in plan.active_axes if active_axis != "m")
+    if active_non_hermite:
+        raise NotImplementedError("diamagnetic drive gate currently supports only an active 'm' axis")
+    if m_chunks == 1:
+        return diamagnetic_drive_reference(
+            arr,
+            phi=phi,
+            Jl=Jl,
+            l4=l4,
+            tprim=tprim,
+            fprim=fprim,
+            omega_star_scale=omega_star_scale,
+            ky=ky,
+            weight=weight,
+        )
+    if int(arr.shape[m_axis]) % m_chunks != 0:
+        raise ValueError("Hermite dimension must divide evenly across Hermite chunks")
+
+    device_list = list(devices) if devices is not None else list(jax.devices())
+    if len(device_list) < m_chunks:
+        raise ValueError("not enough devices for the requested Hermite decomposition")
+
+    mesh = Mesh(np.asarray(device_list[:m_chunks]), (axis_name,))
+    spec_list: list[str | None] = [None] * arr.ndim
+    spec_list[m_axis] = axis_name
+    spec = PartitionSpec(*spec_list)
+    sharding = NamedSharding(mesh, spec)
+    local_m = int(arr.shape[m_axis]) // m_chunks
+    local_m_index = jnp.arange(local_m, dtype=jnp.int32).reshape((1, local_m, 1, 1, 1))
+
+    def drive(local):
+        global_m = jax.lax.axis_index(axis_name) * local_m + local_m_index
+        return _diamagnetic_drive_from_global_m(
+            state=local,
+            global_m=global_m,
+            phi=phi,
+            Jl=Jl,
+            l4=l4,
+            tprim=tprim,
+            fprim=fprim,
+            omega_star_scale=omega_star_scale,
+            ky=ky,
+            weight=weight,
+        )
+
+    mapped = jax.shard_map(
+        drive,
+        mesh=mesh,
+        in_specs=spec,
+        out_specs=spec,
+        axis_names={axis_name},
+    )
+    return mapped(jax.device_put(arr, sharding))
+
+
 def electrostatic_phi_reference(
     state: Any,
     *,
@@ -795,6 +957,8 @@ __all__ = [
     "build_velocity_sharding_plan",
     "curvature_gradb_drift_reference",
     "curvature_gradb_drift_shard_map",
+    "diamagnetic_drive_reference",
+    "diamagnetic_drive_shard_map",
     "electrostatic_phi_reference",
     "electrostatic_phi_shard_map",
     "hermite_neighbor_reference",

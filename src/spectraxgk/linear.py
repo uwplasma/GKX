@@ -1421,8 +1421,7 @@ def _is_streaming_only_terms(terms: LinearTerms | None) -> bool:
 def _is_electrostatic_slice_terms(terms: LinearTerms | None) -> bool:
     term_weights = terms if terms is not None else LinearTerms()
     return (
-        float(term_weights.diamagnetic) == 0.0
-        and float(term_weights.collisions) == 0.0
+        float(term_weights.collisions) == 0.0
         and float(term_weights.hypercollisions) == 0.0
         and float(term_weights.hyperdiffusion) == 0.0
         and float(term_weights.end_damping) == 0.0
@@ -1565,18 +1564,19 @@ def linear_rhs_electrostatic_slices_velocity_sharded(
     num_devices: int | None = None,
     devices: Any | None = None,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
-    """Compute gated electrostatic streaming, mirror, curvature, and grad-B slices."""
+    """Compute gated electrostatic streaming, drift, and diamagnetic slices."""
 
     from spectraxgk.velocity_sharding import (
         build_velocity_sharding_plan,
         curvature_gradb_drift_shard_map,
+        diamagnetic_drive_shard_map,
         electrostatic_phi_shard_map,
         mirror_drift_shard_map,
     )
 
     term_weights = terms if terms is not None else LinearTerms()
     if not _is_electrostatic_slice_terms(term_weights):
-        raise NotImplementedError("electrostatic slice route allows only streaming, mirror, curvature, and grad-B terms")
+        raise NotImplementedError("electrostatic slice route allows only electrostatic linear terms")
     arr = jnp.asarray(G)
     if arr.ndim != 5:
         raise NotImplementedError("velocity-sharded electrostatic slice route currently supports single-species 5D states")
@@ -1631,6 +1631,20 @@ def linear_rhs_electrostatic_slices_velocity_sharded(
             m=cache.m,
             weight_curv=jnp.asarray(term_weights.curvature, dtype=real_dtype),
             weight_gradb=jnp.asarray(term_weights.gradb, dtype=real_dtype),
+            devices=device_list,
+        )
+    if float(term_weights.diamagnetic) != 0.0:
+        dG = dG + diamagnetic_drive_shard_map(
+            arr,
+            plan,
+            phi=phi,
+            Jl=cache.Jl,
+            l4=cache.l4,
+            tprim=params.R_over_LTi,
+            fprim=params.R_over_Ln,
+            omega_star_scale=params.omega_star_scale,
+            ky=cache.ky,
+            weight=jnp.asarray(term_weights.diamagnetic, dtype=real_dtype),
             devices=device_list,
         )
     return dG, phi
@@ -1697,7 +1711,7 @@ def linear_rhs_parallel_cached(
         if axis not in {"m", "hermite"}:
             raise NotImplementedError("electrostatic slice velocity sharding currently supports only the Hermite axis")
         if not _is_electrostatic_slice_terms(terms):
-            raise NotImplementedError("electrostatic slice route requires diamagnetic/collision/EM terms to be disabled")
+            raise NotImplementedError("electrostatic slice route requires collision/EM terms to be disabled")
         return linear_rhs_electrostatic_slices_velocity_sharded(
             G,
             cache,
