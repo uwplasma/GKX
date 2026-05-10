@@ -457,6 +457,17 @@ workers, and the two-RTX-A4000 GPU run reaches `1.63x`. This is the preferred
 production parallelization path for linear scans, quasilinear studies,
 sensitivity sweeps, and UQ ensembles.
 
+![SPECTRAX-GK quasilinear UQ ensemble strong scaling](docs/_static/quasilinear_uq_ensemble_scaling_large.png)
+
+The quasilinear/UQ ensemble panel applies the same independent-worker policy
+to six late-time Cyclone ITG gradient samples and five `k_y` values per sample
+at `Ny=96`, `Nz=64`, `Nl=3`, `Nm=6`, and `2000` RK2 steps. It computes real
+linear growth/frequency fits and a reduced mixing-length feature observable,
+then checks exact serial identity. On `ssh office`, CPU process scaling reaches
+`5.41x` on eight requested workers using six actual ensemble chunks, and the
+two-RTX-A4000 GPU run reaches `1.71x`. This is a parallelization and UQ
+plumbing result, not a promoted absolute nonlinear heat-flux model.
+
 ## Benchmarks
 
 SPECTRAX-GK is rigorously validated against standard gyrokinetic benchmarks, including:
