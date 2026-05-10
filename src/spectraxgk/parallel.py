@@ -125,11 +125,7 @@ def independent_map(
     if n_workers < 1:
         raise ValueError("workers must be >= 1")
     executor_key = str(executor).strip().lower()
-    if executor_key in {"thread", "threads"}:
-        executor_cls = ThreadPoolExecutor
-    elif executor_key in {"process", "processes"}:
-        executor_cls = ProcessPoolExecutor
-    else:
+    if executor_key not in {"thread", "threads", "process", "processes"}:
         raise ValueError("executor must be 'thread' or 'process'")
     if not items:
         return []
@@ -137,7 +133,10 @@ def independent_map(
         return [fn(item) for item in items]
 
     max_workers = min(n_workers, len(items))
-    with executor_cls(max_workers=max_workers) as pool:
+    if executor_key in {"thread", "threads"}:
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            return list(pool.map(fn, items))
+    with ProcessPoolExecutor(max_workers=max_workers) as pool:
         return list(pool.map(fn, items))
 
 
