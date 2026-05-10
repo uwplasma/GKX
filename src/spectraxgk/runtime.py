@@ -24,7 +24,6 @@ from spectraxgk.analysis import (
     fit_growth_rate_auto_with_stats,
     select_ky_index,
 )
-from spectraxgk.diagnostics import SimulationDiagnostics
 from spectraxgk.geometry import apply_geometry_grid_defaults, FluxTubeGeometryLike
 from spectraxgk.grids import SpectralGrid, build_spectral_grid, select_ky_grid
 from spectraxgk.linear import (
@@ -36,10 +35,10 @@ from spectraxgk.linear import (
 )
 from spectraxgk.nonlinear import integrate_nonlinear_gx_diagnostics_state
 from spectraxgk.linear_krylov import KrylovConfig, dominant_eigenpair
-from spectraxgk.normalization import apply_diagnostic_normalization, get_normalization_contract
+from spectraxgk.normalization import apply_diagnostic_normalization
 from spectraxgk.parallel import independent_map
 from spectraxgk.quasilinear import compute_quasilinear_from_linear_state
-from spectraxgk.runtime_config import RuntimeConfig, RuntimeSpeciesConfig
+from spectraxgk.runtime_config import RuntimeConfig
 from spectraxgk import runtime_startup
 from spectraxgk.runtime_diagnostics import (
     concat_gx_diagnostics,
@@ -55,21 +54,14 @@ from spectraxgk.runtime_results import (
     build_runtime_nonlinear_result,
 )
 from spectraxgk.runtime_startup import (
-    _build_gaussian_profile,
     _build_initial_condition,
-    _enforce_full_ky_hermitian,
-    _expand_ky,
-    _gx_default_p_hyper_m,
-    _require_full_gk_runtime_model,
     _resolve_runtime_hl_dims,
-    _reshape_gx_state,
     _runtime_default_krylov_config,
     _runtime_model_key,
     _species_to_linear,
 )
 from spectraxgk.runners import integrate_linear_from_config, integrate_nonlinear_from_config
-from spectraxgk.species import Species, build_linear_params
-from spectraxgk.terms.config import FieldState, TermConfig
+from spectraxgk.terms.config import TermConfig
 from spectraxgk.miller_eik import generate_runtime_miller_eik
 from spectraxgk.vmec_eik import generate_runtime_vmec_eik
 
@@ -1528,7 +1520,7 @@ def run_nonlinear_case(
     """Run a nonlinear case from a runtime TOML with optional overrides."""
 
     from spectraxgk.io import load_runtime_from_toml
-    from spectraxgk.runtime_artifacts import run_runtime_nonlinear_with_artifacts, write_runtime_nonlinear_artifacts
+    from spectraxgk.runtime_artifacts import run_runtime_nonlinear_with_artifacts
 
     cfg, raw = load_runtime_from_toml(config_path)
     run_cfg = dict(raw.get("run", {}))

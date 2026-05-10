@@ -37,9 +37,8 @@ from spectraxgk.runtime_artifacts import (
     write_quasilinear_artifacts,
     write_runtime_linear_artifacts,
     write_runtime_linear_scan_artifacts,
-    write_runtime_nonlinear_artifacts,
 )
-from spectraxgk.runtime import RuntimeLinearResult, run_runtime_linear, run_runtime_scan, run_runtime_nonlinear
+from spectraxgk.runtime import RuntimeLinearResult, run_runtime_linear, run_runtime_scan
 
 
 def _runtime_output_path(args: argparse.Namespace, cfg) -> str | None:
@@ -617,7 +616,9 @@ def _cmd_scan_linear(args: argparse.Namespace) -> int:
         solver=str(solver),
         krylov_cfg=krylov_cfg,
         window_kw=fit_cfg,
-        run_kwargs={"terms": terms} if terms is not None else None,
+        run_kwargs={"terms": terms, "fit_signal": str(fit_signal)}
+        if terms is not None
+        else {"fit_signal": str(fit_signal)},
     )
 
     for ky, g, w in zip(scan.ky, scan.gamma, scan.omega):
