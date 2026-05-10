@@ -1463,6 +1463,109 @@ def linear_rhs_streaming_velocity_sharded(
     return dG, phi
 
 
+def _streaming_electrostatic_fields(
+    G: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    *,
+    use_custom_vjp: bool = True,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """Solve electrostatic fields and return arrays needed by streaming."""
+
+    from spectraxgk.terms.fields import _solve_fields_impl, solve_fields
+
+    arr = jnp.asarray(G)
+    if arr.ndim == 5:
+        arr = arr[None, ...]
+    if arr.ndim != 6:
+        raise ValueError("G must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)")
+    if cache.Jl.shape[0] != arr.shape[0]:
+        raise ValueError("Cache species dimension does not match G")
+
+    real_dtype = jnp.real(arr).dtype
+    ns = arr.shape[0]
+    charge = _as_species_array(params.charge_sign, ns, "charge_sign").astype(real_dtype)
+    density = _as_species_array(params.density, ns, "density").astype(real_dtype)
+    mass = _as_species_array(params.mass, ns, "mass").astype(real_dtype)
+    temp = _as_species_array(params.temp, ns, "temp").astype(real_dtype)
+    tz = _as_species_array(params.tz, ns, "tz").astype(real_dtype)
+    vth = _as_species_array(params.vth, ns, "vth").astype(real_dtype)
+    zero = jnp.asarray(0.0, dtype=real_dtype)
+    fields_fn = solve_fields if use_custom_vjp else _solve_fields_impl
+    fields = fields_fn(
+        arr,
+        cache,
+        params,
+        charge=charge,
+        density=density,
+        temp=temp,
+        mass=mass,
+        tz=tz,
+        vth=vth,
+        fapar=zero,
+        w_bpar=zero,
+    )
+    return arr, fields.phi, tz, vth
+
+
+def _electrostatic_streaming_field_rhs(
+    G6: jnp.ndarray,
+    *,
+    phi: jnp.ndarray,
+    Jl: jnp.ndarray,
+    tz: jnp.ndarray,
+    vth: jnp.ndarray,
+) -> jnp.ndarray:
+    """Build the pre-derivative electrostatic streaming field term."""
+
+    Nm = G6.shape[2]
+    m_idx = jnp.arange(Nm, dtype=jnp.int32)[None, None, :, None, None, None]
+    zt = jnp.where(tz == 0.0, 0.0, 1.0 / tz)
+    zt5 = zt[:, None, None, None, None]
+    vth5 = vth[:, None, None, None, None]
+    phi_s = phi[None, None, ...]
+    drive_m1 = -zt5 * vth5 * Jl * phi_s
+    return (m_idx == 1).astype(G6.dtype) * drive_m1[:, :, None, ...]
+
+
+def linear_rhs_streaming_electrostatic_velocity_sharded(
+    G: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    *,
+    num_devices: int | None = None,
+    devices: Any | None = None,
+    use_custom_vjp: bool = True,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Compute electrostatic streaming RHS with Hermite-sharded particle streaming.
+
+    This route solves ``phi`` with the production electrostatic field solve,
+    applies the Hermite velocity-sharded particle-streaming operator, and adds
+    the GX-style electrostatic streaming field term. It is limited to periodic
+    field-line grids and excludes electromagnetic fields by construction.
+    """
+
+    from spectraxgk.terms.operators import grad_z_periodic
+
+    arr = jnp.asarray(G)
+    if bool(getattr(cache, "use_twist_shift", False)):
+        raise NotImplementedError("velocity-sharded electrostatic streaming currently requires a periodic z grid")
+
+    particle_streaming, _zero_phi = linear_rhs_streaming_velocity_sharded(
+        arr,
+        cache,
+        params,
+        num_devices=num_devices,
+        devices=devices,
+    )
+    G6, phi, tz, vth = _streaming_electrostatic_fields(arr, cache, params, use_custom_vjp=use_custom_vjp)
+    field_rhs = _electrostatic_streaming_field_rhs(G6, phi=phi, Jl=cache.Jl, tz=tz, vth=vth)
+    field_streaming = jnp.asarray(params.kpar_scale, dtype=jnp.real(arr).dtype) * grad_z_periodic(field_rhs, kz=cache.kz)
+    if arr.ndim == 5:
+        field_streaming = field_streaming[0]
+    return particle_streaming + field_streaming, phi
+
+
 def linear_rhs_parallel_cached(
     G: jnp.ndarray,
     cache: LinearCache,
@@ -1508,9 +1611,21 @@ def linear_rhs_parallel_cached(
             params,
             num_devices=getattr(parallel, "num_devices", None),
         )
+    if strategy == "velocity" and backend in {"streaming_electrostatic", "linear_streaming_electrostatic"}:
+        if axis not in {"m", "hermite"}:
+            raise NotImplementedError("electrostatic streaming velocity sharding currently supports only the Hermite axis")
+        if not _is_streaming_only_terms(terms):
+            raise NotImplementedError("electrostatic velocity streaming route requires streaming-only LinearTerms")
+        return linear_rhs_streaming_electrostatic_velocity_sharded(
+            G,
+            cache,
+            params,
+            num_devices=getattr(parallel, "num_devices", None),
+            use_custom_vjp=use_custom_vjp,
+        )
 
     raise NotImplementedError(
-        "parallel linear RHS currently supports only strategy='velocity', backend='streaming_only'"
+        "parallel linear RHS currently supports only strategy='velocity' with streaming-only backends"
     )
 
 
