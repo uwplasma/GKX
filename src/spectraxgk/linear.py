@@ -1481,6 +1481,30 @@ def linear_rhs_streaming_velocity_sharded(
     return dG, phi
 
 
+def _streaming_electrostatic_from_phi_velocity_sharded(
+    arr: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    *,
+    phi: jnp.ndarray,
+    plan: Any,
+    devices: Any,
+) -> jnp.ndarray:
+    """Apply electrostatic streaming with a precomputed electrostatic field."""
+
+    from spectraxgk.terms.operators import grad_z_periodic
+    from spectraxgk.velocity_sharding import periodic_streaming_shard_map
+
+    particle_streaming = -periodic_streaming_shard_map(arr, plan, kz=cache.kz, vth=params.vth, devices=devices)
+    real_dtype = jnp.real(arr).dtype
+    G6 = arr[None, ...]
+    tz = _as_species_array(params.tz, 1, "tz").astype(real_dtype)
+    vth = _as_species_array(params.vth, 1, "vth").astype(real_dtype)
+    field_rhs = _electrostatic_streaming_field_rhs(G6, phi=phi, Jl=cache.Jl, tz=tz, vth=vth)
+    field_streaming = jnp.asarray(params.kpar_scale, dtype=real_dtype) * grad_z_periodic(field_rhs, kz=cache.kz)
+    return particle_streaming + field_streaming[0]
+
+
 def _electrostatic_streaming_field_rhs(
     G6: jnp.ndarray,
     *,
@@ -1518,7 +1542,6 @@ def linear_rhs_streaming_electrostatic_velocity_sharded(
     field-line grids and excludes electromagnetic fields by construction.
     """
 
-    from spectraxgk.terms.operators import grad_z_periodic
     from spectraxgk.velocity_sharding import build_velocity_sharding_plan, electrostatic_phi_shard_map
 
     arr = jnp.asarray(G)
@@ -1528,13 +1551,6 @@ def linear_rhs_streaming_electrostatic_velocity_sharded(
         raise NotImplementedError("velocity-sharded electrostatic streaming currently requires a periodic z grid")
 
     device_list = _resolve_parallel_devices(num_devices=num_devices, devices=devices)
-    particle_streaming, _zero_phi = linear_rhs_streaming_velocity_sharded(
-        arr,
-        cache,
-        params,
-        devices=device_list,
-    )
-    real_dtype = jnp.real(arr).dtype
     plan = build_velocity_sharding_plan(arr.shape, num_devices=len(device_list), axes=("hermite",))
     phi = electrostatic_phi_shard_map(
         arr,
@@ -1547,12 +1563,7 @@ def linear_rhs_streaming_electrostatic_velocity_sharded(
         mask0=cache.mask0,
         devices=device_list,
     )
-    G6 = arr[None, ...]
-    tz = _as_species_array(params.tz, 1, "tz").astype(real_dtype)
-    vth = _as_species_array(params.vth, 1, "vth").astype(real_dtype)
-    field_rhs = _electrostatic_streaming_field_rhs(G6, phi=phi, Jl=cache.Jl, tz=tz, vth=vth)
-    field_streaming = jnp.asarray(params.kpar_scale, dtype=jnp.real(arr).dtype) * grad_z_periodic(field_rhs, kz=cache.kz)
-    return particle_streaming + field_streaming[0], phi
+    return _streaming_electrostatic_from_phi_velocity_sharded(arr, cache, params, phi=phi, plan=plan, devices=device_list), phi
 
 
 def linear_rhs_electrostatic_slices_velocity_sharded(
@@ -1599,10 +1610,12 @@ def linear_rhs_electrostatic_slices_velocity_sharded(
     )
     dG = jnp.zeros_like(arr)
     if float(term_weights.streaming) != 0.0:
-        streaming, _phi_stream = linear_rhs_streaming_electrostatic_velocity_sharded(
+        streaming = _streaming_electrostatic_from_phi_velocity_sharded(
             arr,
             cache,
             params,
+            phi=phi,
+            plan=plan,
             devices=device_list,
         )
         dG = dG + jnp.asarray(term_weights.streaming, dtype=real_dtype) * streaming
