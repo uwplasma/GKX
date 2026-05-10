@@ -158,6 +158,16 @@ class IMEXLinearOperator:
     squeeze_species: bool
 
 
+def _linear_rhs_jit_for_terms(term_cfg: TermConfig):
+    """Return the narrowest compiled linear RHS path compatible with ``term_cfg``."""
+
+    return (
+        assemble_rhs_cached_electrostatic_jit
+        if _is_static_zero(term_cfg.apar) and _is_static_zero(term_cfg.bpar)
+        else assemble_rhs_cached_jit
+    )
+
+
 def nonlinear_rhs_cached(
     G: jnp.ndarray,
     cache: LinearCache,
@@ -171,11 +181,7 @@ def nonlinear_rhs_cached(
     """Compute the assembled nonlinear RHS and electromagnetic field state."""
 
     term_cfg = terms or TermConfig()
-    linear_rhs_fn = (
-        assemble_rhs_cached_electrostatic_jit
-        if _is_static_zero(term_cfg.apar) and _is_static_zero(term_cfg.bpar)
-        else assemble_rhs_cached_jit
-    )
+    linear_rhs_fn = _linear_rhs_jit_for_terms(term_cfg)
     dG, fields = linear_rhs_fn(G, cache, params, term_cfg, external_phi=external_phi)
     if term_cfg.nonlinear != 0.0:
         real_dtype = jnp.real(jnp.empty((), dtype=G.dtype)).dtype
@@ -1464,6 +1470,7 @@ def integrate_nonlinear_imex_gx_diagnostics(
     linear_cfg = replace(term_cfg, nonlinear=0.0)
     if collision_split:
         linear_cfg = replace(linear_cfg, collisions=0.0, hypercollisions=0.0)
+    linear_rhs_fn = _linear_rhs_jit_for_terms(linear_cfg)
 
     vol_fac, flux_fac = gx_volume_factors(geom_eff, grid)
     mask = _gx_omega_mode_mask(grid, cache, gx_real_fft=gx_real_fft)
@@ -1565,7 +1572,7 @@ def integrate_nonlinear_imex_gx_diagnostics(
 
     def fixed_point(G_in: jnp.ndarray, G_rhs: jnp.ndarray) -> jnp.ndarray:
         def body(_i, g):
-            dG, _fields = assemble_rhs_cached_jit(g, cache, params, linear_cfg, external_phi=external_phi)
+            dG, _fields = linear_rhs_fn(g, cache, params, linear_cfg, external_phi=external_phi)
             g_next = G_rhs + dt_val * dG
             return (1.0 - implicit_relax) * g + implicit_relax * g_next
 
@@ -1995,6 +2002,7 @@ def integrate_nonlinear_imex_cached(
 
     term_cfg = terms or TermConfig()
     linear_cfg = replace(term_cfg, nonlinear=0.0)
+    linear_rhs_fn = _linear_rhs_jit_for_terms(linear_cfg)
 
     linear_terms = term_config_to_linear_terms(linear_cfg)
 
@@ -2059,7 +2067,7 @@ def integrate_nonlinear_imex_cached(
 
     def fixed_point(G_in: jnp.ndarray, G_rhs: jnp.ndarray) -> jnp.ndarray:
         def body(_i, g):
-            dG, _fields = assemble_rhs_cached_jit(g, cache, params, linear_cfg, external_phi=external_phi)
+            dG, _fields = linear_rhs_fn(g, cache, params, linear_cfg, external_phi=external_phi)
             g_next = G_rhs + dt_val * dG
             return (1.0 - implicit_relax) * g + implicit_relax * g_next
 
@@ -2082,7 +2090,7 @@ def integrate_nonlinear_imex_cached(
     def step(G_in, _):
         rhs = G_in + dt_val * nonlinear_term(G_in)
         G_new = solve_step(G_in, rhs)
-        _dG_new, fields_new = assemble_rhs_cached_jit(G_new, cache, params, linear_cfg, external_phi=external_phi)
+        _dG_new, fields_new = linear_rhs_fn(G_new, cache, params, linear_cfg, external_phi=external_phi)
         return G_new, fields_new
 
     step_fn = jax.checkpoint(step) if checkpoint else step
