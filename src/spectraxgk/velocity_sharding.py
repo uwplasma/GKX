@@ -180,6 +180,18 @@ def hermite_neighbor_reference(state: Any) -> tuple[Any, Any]:
     return lower, upper
 
 
+def hermite_shift_reference(state: Any, *, offset: int) -> Any:
+    """Shift a state along the Hermite axis with zero physical boundaries."""
+
+    import jax.numpy as jnp
+
+    from spectraxgk.terms.operators import shift_axis
+
+    arr = jnp.asarray(state)
+    dims = _state_dims(arr.ndim)
+    return shift_axis(arr, int(offset), axis=dims.index("m"))
+
+
 def hermite_neighbor_shard_map(
     state: Any,
     plan: VelocityShardingPlan,
@@ -241,6 +253,74 @@ def hermite_neighbor_shard_map(
         mesh=mesh,
         in_specs=spec,
         out_specs=(spec, spec),
+        axis_names={axis_name},
+    )
+    return mapped(jax.device_put(arr, sharding))
+
+
+def hermite_shift_shard_map(
+    state: Any,
+    plan: VelocityShardingPlan,
+    *,
+    offset: int,
+    devices: Sequence[Any] | None = None,
+    axis_name: str = "m",
+) -> Any:
+    """Shift a Hermite-sharded state by ``offset`` moments with shard exchange."""
+
+    import jax
+    import jax.numpy as jnp
+    from jax.sharding import Mesh, NamedSharding, PartitionSpec
+
+    shift = int(offset)
+    arr = jnp.asarray(state)
+    if tuple(arr.shape) != tuple(plan.state_shape):
+        raise ValueError("state shape does not match the supplied velocity sharding plan")
+    if shift == 0:
+        return arr
+    dims = _state_dims(arr.ndim)
+    m_axis = dims.index("m")
+    m_chunks = int(plan.chunks.get("m", 1))
+    if abs(shift) >= int(arr.shape[m_axis]):
+        return jnp.zeros_like(arr)
+    active_non_hermite = tuple(axis for axis in plan.active_axes if axis != "m")
+    if active_non_hermite:
+        raise NotImplementedError("Hermite shard-map shift currently supports only an active 'm' axis")
+    if m_chunks == 1:
+        return hermite_shift_reference(arr, offset=shift)
+    if int(arr.shape[m_axis]) % m_chunks != 0:
+        raise ValueError("Hermite dimension must divide evenly across Hermite chunks")
+    local_m = int(arr.shape[m_axis]) // m_chunks
+    depth = abs(shift)
+    if depth > local_m:
+        raise NotImplementedError("Hermite shard-map shift currently requires abs(offset) <= local shard size")
+
+    device_list = list(devices) if devices is not None else list(jax.devices())
+    if len(device_list) < m_chunks:
+        raise ValueError("not enough devices for the requested Hermite decomposition")
+
+    mesh = Mesh(np.asarray(device_list[:m_chunks]), (axis_name,))
+    spec_list: list[str | None] = [None] * arr.ndim
+    spec_list[m_axis] = axis_name
+    spec = PartitionSpec(*spec_list)
+    sharding = NamedSharding(mesh, spec)
+    prev_pairs = tuple((idx, idx + 1) for idx in range(m_chunks - 1))
+    next_pairs = tuple((idx, idx - 1) for idx in range(1, m_chunks))
+
+    def exchange(local):
+        if shift < 0:
+            boundary = _slice_axis(local, m_axis, -depth, None)
+            received = jax.lax.ppermute(boundary, axis_name, prev_pairs)
+            return jnp.concatenate([received, _slice_axis(local, m_axis, 0, -depth)], axis=m_axis)
+        boundary = _slice_axis(local, m_axis, 0, depth)
+        received = jax.lax.ppermute(boundary, axis_name, next_pairs)
+        return jnp.concatenate([_slice_axis(local, m_axis, depth, None), received], axis=m_axis)
+
+    mapped = jax.shard_map(
+        exchange,
+        mesh=mesh,
+        in_specs=spec,
+        out_specs=spec,
         axis_names={axis_name},
     )
     return mapped(jax.device_put(arr, sharding))
@@ -411,6 +491,176 @@ def periodic_streaming_shard_map(
     return hermite_streaming_ladder_shard_map(dstate_dz, plan, vth=vth, devices=devices, axis_name=axis_name)
 
 
+def mirror_drift_reference(
+    H: Any,
+    *,
+    vth: Any,
+    bgrad: Any,
+    ell: Any,
+    sqrt_m: Any,
+    sqrt_m_p1: Any,
+    weight: Any = 1.0,
+) -> Any:
+    """Return the mirror-drift contribution with full-array Hermite shifts."""
+
+    import jax.numpy as jnp
+
+    from spectraxgk.terms.operators import shift_axis
+
+    arr = jnp.asarray(H)
+    dims = _state_dims(arr.ndim)
+    axis_l = dims.index("l")
+    ell_p1 = ell + 1.0
+    H_m_p1 = hermite_shift_reference(arr, offset=1)
+    H_m_m1 = hermite_shift_reference(arr, offset=-1)
+    mirror_term = (
+        -sqrt_m_p1 * ell_p1 * H_m_p1
+        - sqrt_m_p1 * ell * shift_axis(H_m_p1, -1, axis=axis_l)
+        + sqrt_m * ell * H_m_m1
+        + sqrt_m * ell_p1 * shift_axis(H_m_m1, 1, axis=axis_l)
+    )
+    bgrad_shape = [1] * arr.ndim
+    bgrad_shape[-1] = int(jnp.asarray(bgrad).shape[-1])
+    vth_arr = jnp.asarray(vth, dtype=jnp.real(arr).dtype)
+    if arr.ndim == 6:
+        vth_arr = vth_arr.reshape((vth_arr.reshape(-1).shape[0], 1, 1, 1, 1, 1))
+    else:
+        vth_arr = vth_arr.reshape(-1)[0]
+    return -jnp.asarray(weight, dtype=jnp.real(arr).dtype) * vth_arr * jnp.asarray(bgrad).reshape(bgrad_shape) * mirror_term
+
+
+def mirror_drift_shard_map(
+    H: Any,
+    plan: VelocityShardingPlan,
+    *,
+    vth: Any,
+    bgrad: Any,
+    ell: Any,
+    sqrt_m: Any,
+    sqrt_m_p1: Any,
+    weight: Any = 1.0,
+    devices: Sequence[Any] | None = None,
+    axis_name: str = "m",
+) -> Any:
+    """Return the mirror-drift contribution using Hermite shard exchange."""
+
+    import jax.numpy as jnp
+
+    from spectraxgk.terms.operators import shift_axis
+
+    arr = jnp.asarray(H)
+    dims = _state_dims(arr.ndim)
+    axis_l = dims.index("l")
+    ell_p1 = ell + 1.0
+    H_m_p1 = hermite_shift_shard_map(arr, plan, offset=1, devices=devices, axis_name=axis_name)
+    H_m_m1 = hermite_shift_shard_map(arr, plan, offset=-1, devices=devices, axis_name=axis_name)
+    mirror_term = (
+        -sqrt_m_p1 * ell_p1 * H_m_p1
+        - sqrt_m_p1 * ell * shift_axis(H_m_p1, -1, axis=axis_l)
+        + sqrt_m * ell * H_m_m1
+        + sqrt_m * ell_p1 * shift_axis(H_m_m1, 1, axis=axis_l)
+    )
+    bgrad_shape = [1] * arr.ndim
+    bgrad_shape[-1] = int(jnp.asarray(bgrad).shape[-1])
+    vth_arr = jnp.asarray(vth, dtype=jnp.real(arr).dtype)
+    if arr.ndim == 6:
+        vth_arr = vth_arr.reshape((vth_arr.reshape(-1).shape[0], 1, 1, 1, 1, 1))
+    else:
+        vth_arr = vth_arr.reshape(-1)[0]
+    return -jnp.asarray(weight, dtype=jnp.real(arr).dtype) * vth_arr * jnp.asarray(bgrad).reshape(bgrad_shape) * mirror_term
+
+
+def curvature_gradb_drift_reference(
+    H: Any,
+    *,
+    tz: Any,
+    omega_d_scale: Any,
+    cv_d: Any,
+    gb_d: Any,
+    ell: Any,
+    m: Any,
+    weight_curv: Any = 1.0,
+    weight_gradb: Any = 1.0,
+) -> Any:
+    """Return curvature and grad-B drift contributions with full-array shifts."""
+
+    import jax.numpy as jnp
+
+    from spectraxgk.terms.operators import shift_axis
+
+    arr = jnp.asarray(H)
+    dims = _state_dims(arr.ndim)
+    axis_l = dims.index("l")
+    H_m_p2 = hermite_shift_reference(arr, offset=2)
+    H_m_m2 = hermite_shift_reference(arr, offset=-2)
+    curv_term = (
+        jnp.sqrt((m + 1.0) * (m + 2.0)) * H_m_p2
+        + (2.0 * m + 1.0) * arr
+        + jnp.sqrt(m * (m - 1.0)) * H_m_m2
+    )
+    gradb_term = (ell + 1.0) * shift_axis(arr, 1, axis=axis_l) + (2.0 * ell + 1.0) * arr + ell * shift_axis(arr, -1, axis=axis_l)
+    imag = jnp.asarray(1j, dtype=arr.dtype)
+    real_dtype = jnp.real(arr).dtype
+    if arr.ndim == 6:
+        tz_s = jnp.asarray(tz, dtype=real_dtype).reshape((-1, 1, 1, 1, 1, 1))
+        cv = jnp.asarray(cv_d, dtype=real_dtype)[None, None, None, ...]
+        gb = jnp.asarray(gb_d, dtype=real_dtype)[None, None, None, ...]
+    else:
+        tz_s = jnp.asarray(tz, dtype=real_dtype).reshape(-1)[0]
+        cv = jnp.asarray(cv_d, dtype=real_dtype)[None, None, ...]
+        gb = jnp.asarray(gb_d, dtype=real_dtype)[None, None, ...]
+    icv = imag * tz_s * jnp.asarray(omega_d_scale, dtype=real_dtype) * cv
+    igb = imag * tz_s * jnp.asarray(omega_d_scale, dtype=real_dtype) * gb
+    return -jnp.asarray(weight_curv, dtype=real_dtype) * icv * curv_term - jnp.asarray(weight_gradb, dtype=real_dtype) * igb * gradb_term
+
+
+def curvature_gradb_drift_shard_map(
+    H: Any,
+    plan: VelocityShardingPlan,
+    *,
+    tz: Any,
+    omega_d_scale: Any,
+    cv_d: Any,
+    gb_d: Any,
+    ell: Any,
+    m: Any,
+    weight_curv: Any = 1.0,
+    weight_gradb: Any = 1.0,
+    devices: Sequence[Any] | None = None,
+    axis_name: str = "m",
+) -> Any:
+    """Return curvature and grad-B drift contributions using Hermite exchange."""
+
+    import jax.numpy as jnp
+
+    from spectraxgk.terms.operators import shift_axis
+
+    arr = jnp.asarray(H)
+    dims = _state_dims(arr.ndim)
+    axis_l = dims.index("l")
+    H_m_p2 = hermite_shift_shard_map(arr, plan, offset=2, devices=devices, axis_name=axis_name)
+    H_m_m2 = hermite_shift_shard_map(arr, plan, offset=-2, devices=devices, axis_name=axis_name)
+    curv_term = (
+        jnp.sqrt((m + 1.0) * (m + 2.0)) * H_m_p2
+        + (2.0 * m + 1.0) * arr
+        + jnp.sqrt(m * (m - 1.0)) * H_m_m2
+    )
+    gradb_term = (ell + 1.0) * shift_axis(arr, 1, axis=axis_l) + (2.0 * ell + 1.0) * arr + ell * shift_axis(arr, -1, axis=axis_l)
+    imag = jnp.asarray(1j, dtype=arr.dtype)
+    real_dtype = jnp.real(arr).dtype
+    if arr.ndim == 6:
+        tz_s = jnp.asarray(tz, dtype=real_dtype).reshape((-1, 1, 1, 1, 1, 1))
+        cv = jnp.asarray(cv_d, dtype=real_dtype)[None, None, None, ...]
+        gb = jnp.asarray(gb_d, dtype=real_dtype)[None, None, None, ...]
+    else:
+        tz_s = jnp.asarray(tz, dtype=real_dtype).reshape(-1)[0]
+        cv = jnp.asarray(cv_d, dtype=real_dtype)[None, None, ...]
+        gb = jnp.asarray(gb_d, dtype=real_dtype)[None, None, ...]
+    icv = imag * tz_s * jnp.asarray(omega_d_scale, dtype=real_dtype) * cv
+    igb = imag * tz_s * jnp.asarray(omega_d_scale, dtype=real_dtype) * gb
+    return -jnp.asarray(weight_curv, dtype=real_dtype) * icv * curv_term - jnp.asarray(weight_gradb, dtype=real_dtype) * igb * gradb_term
+
+
 def electrostatic_phi_reference(
     state: Any,
     *,
@@ -543,12 +793,18 @@ def electrostatic_phi_shard_map(
 __all__ = [
     "VelocityShardingPlan",
     "build_velocity_sharding_plan",
+    "curvature_gradb_drift_reference",
+    "curvature_gradb_drift_shard_map",
     "electrostatic_phi_reference",
     "electrostatic_phi_shard_map",
     "hermite_neighbor_reference",
     "hermite_neighbor_shard_map",
+    "hermite_shift_reference",
+    "hermite_shift_shard_map",
     "hermite_streaming_ladder_reference",
     "hermite_streaming_ladder_shard_map",
+    "mirror_drift_reference",
+    "mirror_drift_shard_map",
     "periodic_streaming_reference",
     "periodic_streaming_shard_map",
     "velocity_field_reduce_reference",
