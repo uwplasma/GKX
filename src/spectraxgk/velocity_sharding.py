@@ -411,9 +411,140 @@ def periodic_streaming_shard_map(
     return hermite_streaming_ladder_shard_map(dstate_dz, plan, vth=vth, devices=devices, axis_name=axis_name)
 
 
+def electrostatic_phi_reference(
+    state: Any,
+    *,
+    Jl: Any,
+    tau_e: Any,
+    charge: Any = 1.0,
+    density: Any = 1.0,
+    tz: Any = 1.0,
+    mask0: Any | None = None,
+) -> Any:
+    """Return single-species electrostatic phi from a full 5D state."""
+
+    import jax.numpy as jnp
+
+    arr = jnp.asarray(state)
+    if arr.ndim != 5:
+        raise NotImplementedError("electrostatic_phi_reference currently supports single-species 5D states")
+    jl = jnp.asarray(Jl)
+    if jl.ndim == 5:
+        jl = jl[0]
+    if jl.ndim != 4:
+        raise ValueError("Jl must have shape (Nl, Ny, Nx, Nz) or (1, Nl, Ny, Nx, Nz)")
+    real_dtype = jnp.real(arr).dtype
+    charge_s = jnp.asarray(charge, dtype=real_dtype).reshape(-1)[0]
+    density_s = jnp.asarray(density, dtype=real_dtype).reshape(-1)[0]
+    tz_s = jnp.asarray(tz, dtype=real_dtype).reshape(-1)[0]
+    zt = jnp.where(tz_s == 0.0, 0.0, 1.0 / tz_s)
+    nbar = density_s * charge_s * jnp.sum(jl * arr[:, 0, ...], axis=0)
+    g0 = jnp.sum(jl * jl, axis=0)
+    qneut = density_s * charge_s * zt * (1.0 - g0)
+    den_safe = jnp.where(jnp.asarray(tau_e, dtype=real_dtype) + qneut == 0.0, jnp.inf, jnp.asarray(tau_e, dtype=real_dtype) + qneut)
+    phi = nbar / den_safe
+    if mask0 is not None:
+        phi = jnp.where(jnp.asarray(mask0), 0.0, phi)
+    return phi
+
+
+def electrostatic_phi_shard_map(
+    state: Any,
+    plan: VelocityShardingPlan,
+    *,
+    Jl: Any,
+    tau_e: Any,
+    charge: Any = 1.0,
+    density: Any = 1.0,
+    tz: Any = 1.0,
+    mask0: Any | None = None,
+    devices: Sequence[Any] | None = None,
+    axis_name: str = "m",
+) -> Any:
+    """Solve electrostatic phi using a Hermite-sharded density reduction."""
+
+    import jax
+    import jax.numpy as jnp
+    from jax.sharding import Mesh, NamedSharding, PartitionSpec
+
+    arr = jnp.asarray(state)
+    if arr.ndim != 5:
+        raise NotImplementedError("electrostatic_phi_shard_map currently supports single-species 5D states")
+    if tuple(arr.shape) != tuple(plan.state_shape):
+        raise ValueError("state shape does not match the supplied velocity sharding plan")
+    dims = _state_dims(arr.ndim)
+    m_axis = dims.index("m")
+    m_chunks = int(plan.chunks.get("m", 1))
+    active_non_hermite = tuple(active_axis for active_axis in plan.active_axes if active_axis != "m")
+    if active_non_hermite:
+        raise NotImplementedError("electrostatic field-reduction gate currently supports only an active 'm' axis")
+    if m_chunks == 1:
+        return electrostatic_phi_reference(
+            arr,
+            Jl=Jl,
+            tau_e=tau_e,
+            charge=charge,
+            density=density,
+            tz=tz,
+            mask0=mask0,
+        )
+    if int(arr.shape[m_axis]) % m_chunks != 0:
+        raise ValueError("Hermite dimension must divide evenly across Hermite chunks")
+
+    jl = jnp.asarray(Jl)
+    if jl.ndim == 5:
+        jl = jl[0]
+    if jl.ndim != 4:
+        raise ValueError("Jl must have shape (Nl, Ny, Nx, Nz) or (1, Nl, Ny, Nx, Nz)")
+    real_dtype = jnp.real(arr).dtype
+    charge_s = jnp.asarray(charge, dtype=real_dtype).reshape(-1)[0]
+    density_s = jnp.asarray(density, dtype=real_dtype).reshape(-1)[0]
+    tz_s = jnp.asarray(tz, dtype=real_dtype).reshape(-1)[0]
+    zt = jnp.where(tz_s == 0.0, 0.0, 1.0 / tz_s)
+    tau = jnp.asarray(tau_e, dtype=real_dtype)
+    g0 = jnp.sum(jl * jl, axis=0)
+    qneut = density_s * charge_s * zt * (1.0 - g0)
+    den_safe = jnp.where(tau + qneut == 0.0, jnp.inf, tau + qneut)
+
+    device_list = list(devices) if devices is not None else list(jax.devices())
+    if len(device_list) < m_chunks:
+        raise ValueError("not enough devices for the requested Hermite decomposition")
+
+    mesh = Mesh(np.asarray(device_list[:m_chunks]), (axis_name,))
+    spec_list: list[str | None] = [None] * arr.ndim
+    spec_list[m_axis] = axis_name
+    input_spec = PartitionSpec(*spec_list)
+    output_spec = PartitionSpec(*[None for _ in range(arr.ndim - 2)])
+    sharding = NamedSharding(mesh, input_spec)
+    local_m = int(arr.shape[m_axis]) // m_chunks
+    local_m_index = jnp.arange(local_m, dtype=jnp.int32).reshape((1, local_m, 1, 1, 1))
+
+    def local_density(local):
+        global_m = jax.lax.axis_index(axis_name) * local_m + local_m_index
+        m0 = (global_m == 0).astype(local.dtype)
+        local_gm0 = jnp.sum(local * m0, axis=m_axis)
+        local_nbar = density_s * charge_s * jnp.sum(jl * local_gm0, axis=0)
+        return jax.lax.psum(local_nbar, axis_name)
+
+    mapped = jax.shard_map(
+        local_density,
+        mesh=mesh,
+        in_specs=input_spec,
+        out_specs=output_spec,
+        axis_names={axis_name},
+    )
+    nbar = mapped(jax.device_put(arr, sharding))
+    phi = nbar / den_safe
+    if mask0 is not None:
+        phi = jnp.where(jnp.asarray(mask0), 0.0, phi)
+    return phi
+
+
 __all__ = [
     "VelocityShardingPlan",
     "build_velocity_sharding_plan",
+    "electrostatic_phi_reference",
+    "electrostatic_phi_shard_map",
     "hermite_neighbor_reference",
     "hermite_neighbor_shard_map",
     "hermite_streaming_ladder_reference",

@@ -1418,6 +1418,27 @@ def _is_streaming_only_terms(terms: LinearTerms | None) -> bool:
     )
 
 
+def _resolve_parallel_devices(*, num_devices: int | None = None, devices: Any | None = None) -> list[Any]:
+    """Return an explicit device list for opt-in parallel diagnostics."""
+
+    if devices is None:
+        device_list = list(jax.devices())
+        if num_devices is not None:
+            device_count = int(num_devices)
+            if device_count < 1:
+                raise ValueError("num_devices must be >= 1")
+            if len(device_list) < device_count:
+                raise ValueError(f"requested {device_count} devices, but only {len(device_list)} are available")
+            device_list = device_list[:device_count]
+    else:
+        device_list = list(devices)
+        if num_devices is not None and int(num_devices) != len(device_list):
+            raise ValueError("num_devices must match the explicit devices list length")
+    if not device_list:
+        raise ValueError("at least one device is required")
+    return device_list
+
+
 def linear_rhs_streaming_velocity_sharded(
     G: jnp.ndarray,
     cache: LinearCache,
@@ -1441,71 +1462,11 @@ def linear_rhs_streaming_velocity_sharded(
     if arr.ndim not in (5, 6):
         raise ValueError("G must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)")
 
-    if devices is None:
-        device_list = list(jax.devices())
-        if num_devices is not None:
-            device_count = int(num_devices)
-            if device_count < 1:
-                raise ValueError("num_devices must be >= 1")
-            if len(device_list) < device_count:
-                raise ValueError(f"requested {device_count} devices, but only {len(device_list)} are available")
-            device_list = device_list[:device_count]
-    else:
-        device_list = list(devices)
-        if num_devices is not None and int(num_devices) != len(device_list):
-            raise ValueError("num_devices must match the explicit devices list length")
-    if not device_list:
-        raise ValueError("at least one device is required")
-
+    device_list = _resolve_parallel_devices(num_devices=num_devices, devices=devices)
     plan = build_velocity_sharding_plan(arr.shape, num_devices=len(device_list), axes=("hermite",))
     dG = -periodic_streaming_shard_map(arr, plan, kz=cache.kz, vth=params.vth, devices=device_list)
     phi = jnp.zeros(arr.shape[-3:], dtype=arr.dtype)
     return dG, phi
-
-
-def _streaming_electrostatic_fields(
-    G: jnp.ndarray,
-    cache: LinearCache,
-    params: LinearParams,
-    *,
-    use_custom_vjp: bool = True,
-) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    """Solve electrostatic fields and return arrays needed by streaming."""
-
-    from spectraxgk.terms.fields import _solve_fields_impl, solve_fields
-
-    arr = jnp.asarray(G)
-    if arr.ndim == 5:
-        arr = arr[None, ...]
-    if arr.ndim != 6:
-        raise ValueError("G must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)")
-    if cache.Jl.shape[0] != arr.shape[0]:
-        raise ValueError("Cache species dimension does not match G")
-
-    real_dtype = jnp.real(arr).dtype
-    ns = arr.shape[0]
-    charge = _as_species_array(params.charge_sign, ns, "charge_sign").astype(real_dtype)
-    density = _as_species_array(params.density, ns, "density").astype(real_dtype)
-    mass = _as_species_array(params.mass, ns, "mass").astype(real_dtype)
-    temp = _as_species_array(params.temp, ns, "temp").astype(real_dtype)
-    tz = _as_species_array(params.tz, ns, "tz").astype(real_dtype)
-    vth = _as_species_array(params.vth, ns, "vth").astype(real_dtype)
-    zero = jnp.asarray(0.0, dtype=real_dtype)
-    fields_fn = solve_fields if use_custom_vjp else _solve_fields_impl
-    fields = fields_fn(
-        arr,
-        cache,
-        params,
-        charge=charge,
-        density=density,
-        temp=temp,
-        mass=mass,
-        tz=tz,
-        vth=vth,
-        fapar=zero,
-        w_bpar=zero,
-    )
-    return arr, fields.phi, tz, vth
 
 
 def _electrostatic_streaming_field_rhs(
@@ -1546,24 +1507,40 @@ def linear_rhs_streaming_electrostatic_velocity_sharded(
     """
 
     from spectraxgk.terms.operators import grad_z_periodic
+    from spectraxgk.velocity_sharding import build_velocity_sharding_plan, electrostatic_phi_shard_map
 
     arr = jnp.asarray(G)
+    if arr.ndim != 5:
+        raise NotImplementedError("velocity-sharded electrostatic streaming currently supports single-species 5D states")
     if bool(getattr(cache, "use_twist_shift", False)):
         raise NotImplementedError("velocity-sharded electrostatic streaming currently requires a periodic z grid")
 
+    device_list = _resolve_parallel_devices(num_devices=num_devices, devices=devices)
     particle_streaming, _zero_phi = linear_rhs_streaming_velocity_sharded(
         arr,
         cache,
         params,
-        num_devices=num_devices,
-        devices=devices,
+        devices=device_list,
     )
-    G6, phi, tz, vth = _streaming_electrostatic_fields(arr, cache, params, use_custom_vjp=use_custom_vjp)
+    real_dtype = jnp.real(arr).dtype
+    plan = build_velocity_sharding_plan(arr.shape, num_devices=len(device_list), axes=("hermite",))
+    phi = electrostatic_phi_shard_map(
+        arr,
+        plan,
+        Jl=cache.Jl,
+        tau_e=params.tau_e,
+        charge=params.charge_sign,
+        density=params.density,
+        tz=params.tz,
+        mask0=cache.mask0,
+        devices=device_list,
+    )
+    G6 = arr[None, ...]
+    tz = _as_species_array(params.tz, 1, "tz").astype(real_dtype)
+    vth = _as_species_array(params.vth, 1, "vth").astype(real_dtype)
     field_rhs = _electrostatic_streaming_field_rhs(G6, phi=phi, Jl=cache.Jl, tz=tz, vth=vth)
     field_streaming = jnp.asarray(params.kpar_scale, dtype=jnp.real(arr).dtype) * grad_z_periodic(field_rhs, kz=cache.kz)
-    if arr.ndim == 5:
-        field_streaming = field_streaming[0]
-    return particle_streaming + field_streaming, phi
+    return particle_streaming + field_streaming[0], phi
 
 
 def linear_rhs_parallel_cached(

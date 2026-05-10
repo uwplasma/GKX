@@ -189,6 +189,8 @@ from spectraxgk.parallel import batch_map, ky_scan_batches
 from spectraxgk.velocity_sharding import (
     VelocityShardingPlan,
     build_velocity_sharding_plan,
+    electrostatic_phi_reference,
+    electrostatic_phi_shard_map,
     hermite_neighbor_reference,
     hermite_neighbor_shard_map,
     hermite_streaming_ladder_reference,
@@ -423,6 +425,8 @@ __all__ = [
     "ky_scan_batches",
     "VelocityShardingPlan",
     "build_velocity_sharding_plan",
+    "electrostatic_phi_reference",
+    "electrostatic_phi_shard_map",
     "hermite_neighbor_reference",
     "hermite_neighbor_shard_map",
     "hermite_streaming_ladder_reference",
