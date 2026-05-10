@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from typing import Any
 
 import jax
@@ -104,4 +105,40 @@ def ky_scan_batches(ky_values: np.ndarray, *, n_batches: int) -> list[np.ndarray
     return split_evenly(ky, n_batches)
 
 
-__all__ = ["batch_map", "ky_scan_batches", "pad_to_multiple", "split_evenly"]
+def independent_map(
+    fn: Callable[[Any], Any],
+    values: Iterable[Any],
+    *,
+    workers: int = 1,
+    executor: str = "thread",
+) -> list[Any]:
+    """Map independent Python tasks while preserving serial result ordering.
+
+    ``batch_map`` handles JAX-array workloads. This helper covers file-backed
+    calibration, finite-difference, and UQ tasks whose individual units are
+    independent Python calls. The acceptance contract is numerical identity
+    with ``[fn(value) for value in values]``; timing is secondary.
+    """
+
+    items = list(values)
+    n_workers = int(workers)
+    if n_workers < 1:
+        raise ValueError("workers must be >= 1")
+    executor_key = str(executor).strip().lower()
+    if executor_key in {"thread", "threads"}:
+        executor_cls = ThreadPoolExecutor
+    elif executor_key in {"process", "processes"}:
+        executor_cls = ProcessPoolExecutor
+    else:
+        raise ValueError("executor must be 'thread' or 'process'")
+    if not items:
+        return []
+    if n_workers == 1 or len(items) == 1:
+        return [fn(item) for item in items]
+
+    max_workers = min(n_workers, len(items))
+    with executor_cls(max_workers=max_workers) as pool:
+        return list(pool.map(fn, items))
+
+
+__all__ = ["batch_map", "independent_map", "ky_scan_batches", "pad_to_multiple", "split_evenly"]

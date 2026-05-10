@@ -186,7 +186,7 @@ from spectraxgk.autodiff_validation import (
     isolated_eigenpair_observable_sensitivity_report,
     isolated_eigenvalue_sensitivity_report,
 )
-from spectraxgk.parallel import batch_map, ky_scan_batches
+from spectraxgk.parallel import batch_map, independent_map as independent_map, ky_scan_batches
 from spectraxgk.velocity_sharding import (
     VelocityShardingPlan,
     build_velocity_sharding_plan,
