@@ -728,7 +728,7 @@ def evaluate_boozer_bmag_on_field_line(
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Evaluate a Boozer ``|B|`` spectrum and theta derivative on a field line.
 
-    The field-line label convention is :math:`\alpha = \theta - \iota\zeta`.
+    The field-line label convention is :math:`\\alpha = \\theta - \\iota\\zeta`.
     This helper is intentionally small and JAX-native so that the
     ``booz_xform_jax`` spectral output can be differentiated all the way into
     the sampled SPECTRAX-GK geometry contract.
