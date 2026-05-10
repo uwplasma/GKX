@@ -40,6 +40,7 @@ class RuntimeLinearScanResult:
     gamma: np.ndarray
     omega: np.ndarray
     quasilinear: tuple[dict[str, Any], ...] | None = None
+    parallel: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)

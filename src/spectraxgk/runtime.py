@@ -37,6 +37,7 @@ from spectraxgk.linear import (
 from spectraxgk.nonlinear import integrate_nonlinear_gx_diagnostics_state
 from spectraxgk.linear_krylov import KrylovConfig, dominant_eigenpair
 from spectraxgk.normalization import apply_diagnostic_normalization, get_normalization_contract
+from spectraxgk.parallel import independent_map
 from spectraxgk.quasilinear import compute_quasilinear_from_linear_state
 from spectraxgk.runtime_config import RuntimeConfig, RuntimeSpeciesConfig
 from spectraxgk import runtime_startup
@@ -97,6 +98,35 @@ def _midplane_index(grid: SpectralGrid) -> int:
     if grid.z.size <= 1:
         return 0
     return min(int(grid.z.size // 2 + 1), int(grid.z.size) - 1)
+
+
+def _run_runtime_scan_ky_task(task: dict[str, Any]) -> RuntimeLinearResult:
+    """Run one independent ky point for ordered scan-worker execution."""
+
+    return run_runtime_linear(
+        task["cfg"],
+        ky_target=float(task["ky"]),
+        Nl=int(task["Nl"]),
+        Nm=int(task["Nm"]),
+        solver=str(task["solver"]),
+        method=task["method"],
+        dt=task["dt"],
+        steps=task["steps"],
+        sample_stride=task["sample_stride"],
+        auto_window=bool(task["auto_window"]),
+        tmin=task["tmin"],
+        tmax=task["tmax"],
+        window_fraction=float(task["window_fraction"]),
+        min_points=int(task["min_points"]),
+        start_fraction=float(task["start_fraction"]),
+        growth_weight=float(task["growth_weight"]),
+        require_positive=bool(task["require_positive"]),
+        min_amp_fraction=float(task["min_amp_fraction"]),
+        krylov_cfg=task["krylov_cfg"],
+        mode_method=str(task["mode_method"]),
+        fit_signal=str(task["fit_signal"]),
+        show_progress=bool(task["show_progress"]),
+    )
 
 
 def _zero_kx_index(grid: SpectralGrid) -> int:
@@ -813,6 +843,8 @@ def run_runtime_scan(
     mode_method: str = "project",
     fit_signal: str = "auto",
     show_progress: bool = False,
+    workers: int = 1,
+    parallel_executor: str = "thread",
 ) -> RuntimeLinearScanResult:
     """Run a ky scan using the unified runtime config path.
 
@@ -854,31 +886,35 @@ def run_runtime_scan(
     gamma = np.zeros_like(ky_arr)
     omega = np.zeros_like(ky_arr)
     ql_payloads: list[dict[str, Any]] = []
-    for i, ky in enumerate(ky_arr):
-        res = run_runtime_linear(
-            cfg,
-            ky_target=float(ky),
-            Nl=Nl_use,
-            Nm=Nm_use,
-            solver=solver,
-            method=method,
-            dt=dt,
-            steps=steps,
-            sample_stride=sample_stride,
-            auto_window=auto_window,
-            tmin=tmin,
-            tmax=tmax,
-            window_fraction=window_fraction,
-            min_points=min_points,
-            start_fraction=start_fraction,
-            growth_weight=growth_weight,
-            require_positive=require_positive,
-            min_amp_fraction=min_amp_fraction,
-            krylov_cfg=krylov_cfg,
-            mode_method=mode_method,
-            fit_signal=fit_signal,
-            show_progress=show_progress,
-        )
+    tasks = [
+        {
+            "cfg": cfg,
+            "ky": float(ky),
+            "Nl": Nl_use,
+            "Nm": Nm_use,
+            "solver": solver,
+            "method": method,
+            "dt": dt,
+            "steps": steps,
+            "sample_stride": sample_stride,
+            "auto_window": auto_window,
+            "tmin": tmin,
+            "tmax": tmax,
+            "window_fraction": window_fraction,
+            "min_points": min_points,
+            "start_fraction": start_fraction,
+            "growth_weight": growth_weight,
+            "require_positive": require_positive,
+            "min_amp_fraction": min_amp_fraction,
+            "krylov_cfg": krylov_cfg,
+            "mode_method": mode_method,
+            "fit_signal": fit_signal,
+            "show_progress": show_progress,
+        }
+        for ky in ky_arr
+    ]
+    results = independent_map(_run_runtime_scan_ky_task, tasks, workers=workers, executor=parallel_executor)
+    for i, res in enumerate(results):
         gamma[i] = float(res.gamma)
         omega[i] = float(res.omega)
         if res.quasilinear is not None:
@@ -888,6 +924,13 @@ def run_runtime_scan(
         gamma=gamma,
         omega=omega,
         quasilinear=tuple(ql_payloads) if ql_payloads else None,
+        parallel={
+            "requested_workers": int(workers),
+            "effective_workers": int(min(max(int(workers), 1), max(int(ky_arr.size), 1))),
+            "executor": str(parallel_executor).strip().lower(),
+            "identity_contract": "independent ky workers must preserve serial ky ordering and values",
+            "quasilinear_state_extraction": bool(ql_payloads),
+        },
     )
 
 

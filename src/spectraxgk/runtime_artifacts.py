@@ -151,6 +151,9 @@ def write_runtime_linear_scan_artifacts(out: str | Path, result: Any) -> dict[st
         "ky_max": None if ky.size == 0 else float(np.max(ky)),
         "has_quasilinear": bool(ql_payloads),
     }
+    parallel = getattr(result, "parallel", None)
+    if isinstance(parallel, dict):
+        summary["parallel"] = parallel
     _write_json(summary_path, summary)
     _write_csv(csv_path, ["ky", "gamma", "omega"], [ky, gamma, omega])
     paths = {"summary": str(summary_path), "scan": str(csv_path)}
