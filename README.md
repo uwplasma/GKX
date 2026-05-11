@@ -287,8 +287,9 @@ solver Jacobian at the percent level on the tracked stellarator fixture; the
 same audit now reconstructs the zero-beta Boozer metric profiles `gds*`/`grho`
 with worst normalized mismatch `3.45e-2` and the loaded-convention zero-beta
 drift profiles `cvdrift`/`gbdrift`/`cvdrift0`/`gbdrift0` with worst normalized
-mismatch `3.50e-2`. The remaining geometry promotion work is broad finite-beta
-and multi-equilibrium drift parity. When
+mismatch `3.50e-2`. The remaining geometry promotion work is finite-beta and
+broader production-runtime drift parity beyond the tracked zero-beta equal-arc
+fixtures. When
 `booz_xform_jax` is available, it also runs a bounded JAX-native Boozer
 spectral transform, samples the resulting Boozer `|B|` spectrum onto a
 field-line flux-tube mapping, and checks both derivative paths against central
@@ -413,10 +414,12 @@ weighted objective residual. These are validated optimization-plumbing
 diagnostics for stellarator-transport objectives, not a final absolute-flux
 optimization claim. Full
 `vmec_jax -> booz_xform_jax -> SPECTRAX-GK` nonlinear optimization remains
-scoped to the next promotion gate: nonlinear-window state-gradient validation,
-continued production curvature/drift parity on additional equilibria, and
-converged nonlinear audits of the optimized equilibria. The current full-chain
-linear/quasilinear gradient evidence covers QH and Li383 at `mboz=nboz=21`;
+scoped to the next promotion gate: production nonlinear turbulence-gradient or
+robust finite-difference audits with converged post-transient heat-flux
+windows, continued production curvature/drift parity on additional equilibria,
+and nonlinear audits of the optimized equilibria. The current full-chain
+linear/quasilinear and reduced nonlinear-window estimator gradient evidence
+covers QH and Li383 at `mboz=nboz=21`;
 it should not be read as a production nonlinear heat-flux optimization claim.
 
 For production parallelization of independent work, use
