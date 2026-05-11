@@ -102,6 +102,31 @@ resolved diagnostics, and heat flux.
   saturation-rule metadata and electrostatic channel validation gates.
 - **Automated benchmark workflows** for reproducible validation and regression tracking.
 
+## Current claim scope
+
+The current release surface is deliberately scoped:
+
+- Linear and nonlinear benchmark claims are tied to tracked gates and figures
+  under `docs/_static`.
+- Electrostatic quasilinear weights and spectra are validated diagnostics. The
+  one-constant and simple saturation-rule absolute-flux models are rejected on
+  the current train/holdout portfolio; the `spectral_envelope_ridge` result is
+  a scoped model-development candidate, not a runtime/TOML absolute-flux
+  predictor.
+- The `vmec_jax -> booz_xform_jax -> SPECTRAX-GK` path is validated for
+  zero-beta equal-arc geometry parity and reduced linear/quasilinear/nonlinear-
+  window-estimator gradients on tracked fixtures. It is not yet a production
+  nonlinear heat-flux stellarator optimizer.
+- Production parallelization is currently the independent-work path for `k_y`
+  scans, sensitivity sweeps, quasilinear studies, and UQ ensembles. Whole-state
+  nonlinear sharding is identity-correct but remains a profiler/diagnostic
+  path, not a nonlinear multi-GPU speedup claim.
+- W7-X zonal long-window recurrence/damping and W7-X TEM / kinetic-electron
+  extensions are deferred from the current manuscript/release scope.
+
+The detailed claim ledger is in
+[`docs/release_scope.rst`](docs/release_scope.rst).
+
 ![SPECTRAX-GK linear benchmark panel](docs/_static/benchmark_core_linear_atlas.png)
 
 ![SPECTRAX-GK nonlinear benchmark panel](docs/_static/benchmark_core_nonlinear_atlas.png)
@@ -622,10 +647,11 @@ python tools/benchmark_runtime_memory.py \
 python tools/benchmark_runtime_memory.py --continue-on-error --log-dir tools_out/runtime_memory_logs
 ```
 
-The parallelization scaling figure is kept in the performance docs rather than
-the top-level README. The shipped public plot focuses on the release-grade
-2-device diffrax speedup curve rather than the exploratory CPU strong-scaling
-study.
+Parallelization scaling figures are kept in the performance docs rather than
+the top-level README. The shipped public claim is the independent-work path for
+`k_y` scans and UQ ensembles; whole-state nonlinear sharding remains an
+identity/profiler artifact until a communication-aware nonlinear decomposition
+has matched CPU/GPU identity and throughput evidence.
 
 ## Examples
 

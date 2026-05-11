@@ -206,7 +206,9 @@ def _gx_p_hyper_m(nhermite: int | None) -> float:
     return float(min(REFERENCE_P_HYPER_M, max(int(nhermite) // 2, 1)))
 
 
-def _apply_gx_hypercollisions(params: LinearParams, *, nhermite: int | None = None) -> LinearParams:
+def _apply_gx_hypercollisions(
+    params: LinearParams, *, nhermite: int | None = None
+) -> LinearParams:
     return replace(
         params,
         nu_hyper=0.0,
@@ -561,11 +563,14 @@ def _build_gaussian_profile(
     if ky == 0.0:
         return np.zeros_like(z)
     theta0 = kx / (s_hat * ky)
-    envelope = init_cfg.gaussian_envelope_constant + init_cfg.gaussian_envelope_sine * np.sin(z - theta0)
+    envelope = (
+        init_cfg.gaussian_envelope_constant
+        + init_cfg.gaussian_envelope_sine * np.sin(z - theta0)
+    )
     width = init_cfg.gaussian_width
     if width <= 0.0:
         raise ValueError("gaussian_width must be > 0")
-    return envelope * np.exp(-((z - theta0) / width) ** 2)
+    return envelope * np.exp(-(((z - theta0) / width) ** 2))
 
 
 def _build_initial_condition(
@@ -630,7 +635,9 @@ def _build_initial_condition(
     return jnp.asarray(G0)
 
 
-def _kinetic_reference_init_cfg(init_cfg: InitializationConfig, *, gx_reference: bool) -> InitializationConfig:
+def _kinetic_reference_init_cfg(
+    init_cfg: InitializationConfig, *, gx_reference: bool
+) -> InitializationConfig:
     """Restore the historical kinetic benchmark seed on the GX-reference path.
 
     Older kinetic parity runs seeded a constant electron-density moment rather than
@@ -738,7 +745,9 @@ class LinearScanResult:
 def load_cyclone_reference() -> CycloneReference:
     """Load Cyclone base case reference data (adiabatic electrons)."""
 
-    data_path = resources.files("spectraxgk").joinpath("data", "cyclone_reference_adiabatic.csv")
+    data_path = resources.files("spectraxgk").joinpath(
+        "data", "cyclone_reference_adiabatic.csv"
+    )
     arr = np.loadtxt(str(data_path), delimiter=",", skiprows=1)
     ky = arr[:, 0]
     omega = arr[:, 1]
@@ -751,16 +760,18 @@ def _load_reference_with_header(filename: str) -> CycloneReference:
 
     data_path = resources.files("spectraxgk").joinpath("data", filename)
     arr = np.genfromtxt(str(data_path), delimiter=",", names=True, dtype=float)
-    ky = np.asarray(arr["ky"], dtype=float)
-    gamma = np.asarray(arr["gamma"], dtype=float)
-    omega = np.asarray(arr["omega"], dtype=float)
+    ky = np.atleast_1d(np.asarray(arr["ky"], dtype=float))
+    gamma = np.atleast_1d(np.asarray(arr["gamma"], dtype=float))
+    omega = np.atleast_1d(np.asarray(arr["omega"], dtype=float))
     return CycloneReference(ky=ky, omega=omega, gamma=gamma)
 
 
 def load_cyclone_reference_kinetic() -> CycloneReference:
     """Load Cyclone base case reference data (kinetic electrons)."""
 
-    data_path = resources.files("spectraxgk").joinpath("data", "cyclone_reference_kinetic.csv")
+    data_path = resources.files("spectraxgk").joinpath(
+        "data", "cyclone_reference_kinetic.csv"
+    )
     arr = np.loadtxt(str(data_path), delimiter=",", skiprows=1)
     ky = arr[:, 0]
     omega = arr[:, 1]
@@ -831,8 +842,12 @@ def _two_species_params(
         raise ValueError("Te_over_Ti must be > 0")
     ion_fprim_raw = getattr(model, "R_over_Lni", None)
     ele_fprim_raw = getattr(model, "R_over_Lne", None)
-    ion_fprim = float(model.R_over_Ln) if ion_fprim_raw is None else float(ion_fprim_raw)
-    ele_fprim = float(model.R_over_Ln) if ele_fprim_raw is None else float(ele_fprim_raw)
+    ion_fprim = (
+        float(model.R_over_Ln) if ion_fprim_raw is None else float(ion_fprim_raw)
+    )
+    ele_fprim = (
+        float(model.R_over_Ln) if ele_fprim_raw is None else float(ele_fprim_raw)
+    )
 
     nu_i = float(getattr(model, "nu_i", 0.0))
     nu_e = float(getattr(model, "nu_e", 0.0))
@@ -996,7 +1011,9 @@ def run_cyclone_linear(
     init_cfg = init_cfg or getattr(cfg, "init", None) or InitializationConfig()
     _status("building spectral grid")
     grid_full = build_spectral_grid(cfg.grid)
-    gx_reference_use = bool(cfg.gx_reference) if gx_reference is None else bool(gx_reference)
+    gx_reference_use = (
+        bool(cfg.gx_reference) if gx_reference is None else bool(gx_reference)
+    )
     geom_cfg = cfg.geometry
     if gx_reference_use:
         geom_cfg = replace(geom_cfg, drift_scale=1.0)
@@ -1094,7 +1111,9 @@ def run_cyclone_linear(
                     mode_method="z_index",
                     show_progress=show_progress,
                 )
-                sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
+                sel = ModeSelection(
+                    ky_index=0, kx_index=0, z_index=_midplane_index(grid)
+                )
                 gamma_seed, omega_seed, _g, _o, _t_mid = gx_growth_rate_from_phi(
                     phi_t,
                     t_short,
@@ -1103,19 +1122,21 @@ def run_cyclone_linear(
                     mode_method="z_index",
                 )
                 omega_ok = np.isfinite(omega_seed) and abs(omega_seed) > 1.0e-8
-                seed_ok = (
-                    omega_ok and np.isfinite(gamma_seed) and gamma_seed > 0.0
-                )
+                seed_ok = omega_ok and np.isfinite(gamma_seed) and gamma_seed > 0.0
             except Exception:
                 seed_ok = False
                 omega_ok = False
 
             if not seed_ok:
                 try:
-                    _status("primary seed failed; retrying reduced Hermite-Laguerre seed")
+                    _status(
+                        "primary seed failed; retrying reduced Hermite-Laguerre seed"
+                    )
                     Nl_seed = min(Nl, 16)
                     Nm_seed = min(Nm, 12)
-                    cache_seed = build_linear_cache(grid, geom, params, Nl_seed, Nm_seed)
+                    cache_seed = build_linear_cache(
+                        grid, geom, params, Nl_seed, Nm_seed
+                    )
                     G0_seed = _build_initial_condition(
                         grid,
                         geom,
@@ -1144,7 +1165,9 @@ def run_cyclone_linear(
                         mode_method="z_index",
                         show_progress=show_progress,
                     )
-                    sel_seed = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
+                    sel_seed = ModeSelection(
+                        ky_index=0, kx_index=0, z_index=_midplane_index(grid)
+                    )
                     gamma_seed, omega_seed, _g, _o, _t_mid = gx_growth_rate_from_phi(
                         phi_t,
                         t_short,
@@ -1153,9 +1176,7 @@ def run_cyclone_linear(
                         mode_method="z_index",
                     )
                     omega_ok = np.isfinite(omega_seed) and abs(omega_seed) > 1.0e-8
-                    seed_ok = (
-                        omega_ok and np.isfinite(gamma_seed) and gamma_seed > 0.0
-                    )
+                    seed_ok = omega_ok and np.isfinite(gamma_seed) and gamma_seed > 0.0
                 except Exception:
                     seed_ok = False
                     omega_ok = False
@@ -1242,7 +1263,11 @@ def run_cyclone_linear(
             # GX integrator applies damping with per-time scaling internally.
             params_use = params
             _status("running GX-reference time integrator")
-            t_max_val = float(dt) * int(steps) if time_cfg_use is None else float(time_cfg_use.t_max)
+            t_max_val = (
+                float(dt) * int(steps)
+                if time_cfg_use is None
+                else float(time_cfg_use.t_max)
+            )
             stride = 1 if time_cfg_use is None else int(time_cfg_use.sample_stride)
             gx_time_cfg = ExplicitTimeConfig(
                 dt=float(dt),
@@ -1261,11 +1286,15 @@ def run_cyclone_linear(
                 mode_method="z_index",
                 show_progress=show_progress,
             )
-            sel_local = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
+            sel_local = ModeSelection(
+                ky_index=0, kx_index=0, z_index=_midplane_index(grid)
+            )
             gamma, omega, _g, _o, _t_mid = gx_growth_rate_from_phi(
                 phi_t, t, sel_local, navg_fraction=0.5, mode_method="z_index"
             )
-            gamma, omega = _normalize_growth_rate(gamma, omega, params_use, diagnostic_norm)
+            gamma, omega = _normalize_growth_rate(
+                gamma, omega, params_use, diagnostic_norm
+            )
             return gamma, omega, np.asarray(phi_t), np.asarray(t)
 
         params_use = params
@@ -1274,7 +1303,9 @@ def run_cyclone_linear(
                 f"running runtime-configured integrator over {int(steps)} steps with sample_stride={int(time_cfg_use.sample_stride)}"
             )
             if need_density:
-                _status("saving phi and density diagnostics for automatic fit selection")
+                _status(
+                    "saving phi and density diagnostics for automatic fit selection"
+                )
                 _, saved = integrate_linear_from_config(
                     _fresh_G0(),
                     grid,
@@ -1343,7 +1374,9 @@ def run_cyclone_linear(
         phi_t_np = np.asarray(phi_t)
         t_arr = np.arange(phi_t_np.shape[0]) * dt * stride
         density_np = None if density_t is None else np.asarray(density_t)
-        _status(f"integration complete; fitting growth rate from {phi_t_np.shape[0]} saved samples")
+        _status(
+            f"integration complete; fitting growth rate from {phi_t_np.shape[0]} saved samples"
+        )
         if fit_key == "auto":
             signal, _name, gamma_out, omega_out = _select_fit_signal_auto(
                 t_arr,
@@ -1406,11 +1439,15 @@ def run_cyclone_linear(
                     window_method=window_method,
                 )
             else:
-                gamma_out, omega_out = fit_growth_rate(t_arr, signal, tmin=tmin, tmax=tmax)
+                gamma_out, omega_out = fit_growth_rate(
+                    t_arr, signal, tmin=tmin, tmax=tmax
+                )
         gamma_out, omega_out = _normalize_growth_rate(
             gamma_out, omega_out, params_use, diagnostic_norm
         )
-        _status(f"time integration fit complete: gamma={gamma_out:.6f} omega={omega_out:.6f}")
+        _status(
+            f"time integration fit complete: gamma={gamma_out:.6f} omega={omega_out:.6f}"
+        )
         return float(gamma_out), float(omega_out), phi_t_np, t_arr
 
     if solver_key == "krylov":
@@ -1494,7 +1531,9 @@ def run_cyclone_scan(
     cfg = cfg or CycloneBaseCase()
     init_cfg = getattr(cfg, "init", None) or InitializationConfig()
     grid_full = build_spectral_grid(cfg.grid)
-    gx_reference_use = bool(cfg.gx_reference) if gx_reference is None else bool(gx_reference)
+    gx_reference_use = (
+        bool(cfg.gx_reference) if gx_reference is None else bool(gx_reference)
+    )
     geom_cfg = cfg.geometry
     if gx_reference_use:
         geom_cfg = replace(geom_cfg, drift_scale=1.0)
@@ -1536,6 +1575,7 @@ def run_cyclone_scan(
     gammas = []
     omegas = []
     ky_out = []
+
     def _window_value(val, idx):
         if val is None:
             return None
@@ -1563,7 +1603,9 @@ def run_cyclone_scan(
         and not _is_array_like(tmax)
     )
 
-    def _fit_signal(signal: np.ndarray, idx: int, dt_i: float, stride: int) -> tuple[float, float]:
+    def _fit_signal(
+        signal: np.ndarray, idx: int, dt_i: float, stride: int
+    ) -> tuple[float, float]:
         t = np.arange(signal.shape[0]) * dt_i * stride
         tmin_i = _window_value(tmin, idx)
         tmax_i = _window_value(tmax, idx)
@@ -1625,8 +1667,12 @@ def run_cyclone_scan(
 
     if solver_key == "krylov":
         if ky_values_arr.size == 0:
-            return CycloneScanResult(ky=ky_values_arr, gamma=np.array([]), omega=np.array([]))
-        order = np.argsort(ky_values_arr) if mode_follow else np.arange(ky_values_arr.size)
+            return CycloneScanResult(
+                ky=ky_values_arr, gamma=np.array([]), omega=np.array([])
+            )
+        order = (
+            np.argsort(ky_values_arr) if mode_follow else np.arange(ky_values_arr.size)
+        )
         gamma_out = np.zeros_like(ky_values_arr, dtype=float)
         omega_out = np.zeros_like(ky_values_arr, dtype=float)
         v_ref: jnp.ndarray | None = None
@@ -1655,7 +1701,10 @@ def run_cyclone_scan(
                 try:
                     t_seed = min(150.0, float(cfg_use.power_dt) * 15000.0)
                     gx_time_cfg = ExplicitTimeConfig(
-                        dt=float(cfg_use.power_dt), t_max=t_seed, sample_stride=1, fixed_dt=True
+                        dt=float(cfg_use.power_dt),
+                        t_max=t_seed,
+                        sample_stride=1,
+                        fixed_dt=True,
                     )
                     G0_seed = jnp.array(G0_jax)
                     t_short, phi_seed, _g_t, _o_t = integrate_linear_gx(
@@ -1670,7 +1719,9 @@ def run_cyclone_scan(
                         show_progress=show_progress,
                     )
 
-                    sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
+                    sel = ModeSelection(
+                        ky_index=0, kx_index=0, z_index=_midplane_index(grid)
+                    )
                     gamma_seed, omega_seed, _g, _o, _t_mid = gx_growth_rate_from_phi(
                         phi_seed,
                         t_short,
@@ -1679,9 +1730,7 @@ def run_cyclone_scan(
                         mode_method="z_index",
                     )
                     omega_ok = np.isfinite(omega_seed) and abs(omega_seed) > 1.0e-8
-                    seed_ok = (
-                        omega_ok and np.isfinite(gamma_seed) and gamma_seed > 0.0
-                    )
+                    seed_ok = omega_ok and np.isfinite(gamma_seed) and gamma_seed > 0.0
                 except Exception:
                     seed_ok = False
                     omega_ok = False
@@ -1689,7 +1738,9 @@ def run_cyclone_scan(
                 try:
                     Nl_seed = min(Nl, 16)
                     Nm_seed = min(Nm, 12)
-                    cache_seed = build_linear_cache(grid, geom, params, Nl_seed, Nm_seed)
+                    cache_seed = build_linear_cache(
+                        grid, geom, params, Nl_seed, Nm_seed
+                    )
                     G0_seed = _build_initial_condition(
                         grid,
                         geom,
@@ -1701,7 +1752,10 @@ def run_cyclone_scan(
                     )
                     t_seed = min(150.0, float(cfg_use.power_dt) * 15000.0)
                     gx_time_cfg = ExplicitTimeConfig(
-                        dt=float(cfg_use.power_dt), t_max=t_seed, sample_stride=1, fixed_dt=True
+                        dt=float(cfg_use.power_dt),
+                        t_max=t_seed,
+                        sample_stride=1,
+                        fixed_dt=True,
                     )
                     t_short, phi_seed, _g_t, _o_t = integrate_linear_gx(
                         G0_seed,
@@ -1715,7 +1769,9 @@ def run_cyclone_scan(
                         show_progress=show_progress,
                     )
 
-                    sel_seed = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
+                    sel_seed = ModeSelection(
+                        ky_index=0, kx_index=0, z_index=_midplane_index(grid)
+                    )
                     gamma_seed, omega_seed, _g, _o, _t_mid = gx_growth_rate_from_phi(
                         phi_seed,
                         t_short,
@@ -1724,9 +1780,7 @@ def run_cyclone_scan(
                         mode_method="z_index",
                     )
                     omega_ok = np.isfinite(omega_seed) and abs(omega_seed) > 1.0e-8
-                    seed_ok = (
-                        omega_ok and np.isfinite(gamma_seed) and gamma_seed > 0.0
-                    )
+                    seed_ok = omega_ok and np.isfinite(gamma_seed) and gamma_seed > 0.0
                 except Exception:
                     seed_ok = False
                     omega_ok = False
@@ -1735,7 +1789,9 @@ def run_cyclone_scan(
             if prev_eig is not None and np.isfinite(prev_eig):
                 shift = prev_eig
             elif omega_ok:
-                shift = complex(float(gamma_seed) if seed_ok else 0.0, float(-omega_seed))
+                shift = complex(
+                    float(gamma_seed) if seed_ok else 0.0, float(-omega_seed)
+                )
             else:
                 shift = None
             eig, vec = dominant_eigenpair(
@@ -1795,7 +1851,9 @@ def run_cyclone_scan(
 
     if solver_key == "gx_time":
         if ky_values_arr.size == 0:
-            return CycloneScanResult(ky=ky_values_arr, gamma=np.array([]), omega=np.array([]))
+            return CycloneScanResult(
+                ky=ky_values_arr, gamma=np.array([]), omega=np.array([])
+            )
         gamma_out = np.zeros_like(ky_values_arr, dtype=float)
         omega_out = np.zeros_like(ky_values_arr, dtype=float)
         prev_omega: float | None = None
@@ -1852,13 +1910,17 @@ def run_cyclone_scan(
                 mode_method="z_index",
                 show_progress=show_progress,
             )
-            sel_local = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
+            sel_local = ModeSelection(
+                ky_index=0, kx_index=0, z_index=_midplane_index(grid)
+            )
             gx_growth_ok = True
             try:
                 gamma, omega, _g, _o, _t_mid = gx_growth_rate_from_phi(
                     phi_gx, t, sel_local, navg_fraction=0.5, mode_method="z_index"
                 )
-                gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
+                gamma, omega = _normalize_growth_rate(
+                    gamma, omega, params, diagnostic_norm
+                )
             except ValueError:
                 gx_growth_ok = False
                 gamma = float("nan")
@@ -1869,13 +1931,12 @@ def run_cyclone_scan(
                 (gx_reference_use and gx_growth_ok)
                 and prev_omega is not None
                 and prev_omega > 0.0
-                and (
-                    omega <= 0.0
-                    or ((idx >= 2) and (omega < 0.85 * prev_omega))
-                )
+                and (omega <= 0.0 or ((idx >= 2) and (omega < 0.85 * prev_omega)))
             )
             if need_reselect or not gx_growth_ok:
-                target_omega: float | None = prev_omega if (gx_growth_ok and prev_omega is not None) else None
+                target_omega: float | None = (
+                    prev_omega if (gx_growth_ok and prev_omega is not None) else None
+                )
                 if (
                     target_omega is not None
                     and prev_prev_omega is not None
@@ -1912,12 +1973,16 @@ def run_cyclone_scan(
                 )
                 gamma_k = float(np.real(eig))
                 omega_k = float(abs(-np.imag(eig)))
-                gamma_k, omega_k = _normalize_growth_rate(gamma_k, omega_k, params, diagnostic_norm)
+                gamma_k, omega_k = _normalize_growth_rate(
+                    gamma_k, omega_k, params, diagnostic_norm
+                )
                 if not gx_growth_ok:
                     gamma, omega = gamma_k, omega_k
                 else:
                     assert target_omega is not None
-                    candidates: list[tuple[float, float]] = [(float(gamma), float(abs(omega)))]
+                    candidates: list[tuple[float, float]] = [
+                        (float(gamma), float(abs(omega)))
+                    ]
                     gamma_base = abs(float(gamma))
                     gamma_delta_limit = max(3.0 * gamma_base, gamma_base + 0.05, 1.0e-3)
                     if (
@@ -1953,7 +2018,9 @@ def run_cyclone_scan(
 
     for batch_start, ky_slice, valid_count in ky_iter:
         if use_batch:
-            ky_indices = [select_ky_index(np.asarray(grid_full.ky), float(ky)) for ky in ky_slice]
+            ky_indices = [
+                select_ky_index(np.asarray(grid_full.ky), float(ky)) for ky in ky_slice
+            ]
             grid = select_ky_grid(grid_full, ky_indices)
             sel_indices = np.arange(len(ky_indices), dtype=int)
             sel_scan = ModeSelectionBatch(sel_indices, 0, _midplane_index(grid))
@@ -1962,9 +2029,13 @@ def run_cyclone_scan(
         else:
             ky_indices = [select_ky_index(np.asarray(grid_full.ky), float(ky_slice[0]))]
             grid = select_ky_grid(grid_full, ky_indices[0])
-            sel_scan = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
+            sel_scan = ModeSelection(
+                ky_index=0, kx_index=0, z_index=_midplane_index(grid)
+            )
             dt_i = float(dt[batch_start]) if isinstance(dt, np.ndarray) else float(dt)
-            steps_i = int(steps[batch_start]) if isinstance(steps, np.ndarray) else int(steps)
+            steps_i = (
+                int(steps[batch_start]) if isinstance(steps, np.ndarray) else int(steps)
+            )
 
         ky_local = np.arange(len(ky_indices))
         G0_jax = _build_initial_condition(
@@ -1988,7 +2059,12 @@ def run_cyclone_scan(
         if time_cfg_i is not None and time_cfg_i.use_diffrax and streaming_fit:
             t_total = float(time_cfg_i.t_max)
             tmin_i, tmax_i = _resolve_streaming_window(
-                t_total, _window_value(tmin, batch_start), _window_value(tmax, batch_start), start_fraction, window_fraction, 1.0
+                t_total,
+                _window_value(tmin, batch_start),
+                _window_value(tmax, batch_start),
+                start_fraction,
+                window_fraction,
+                1.0,
             )
             _, gamma_vals, omega_vals = integrate_linear_diffrax_streaming(
                 G0_jax,
@@ -2008,7 +2084,8 @@ def run_cyclone_scan(
                 checkpoint=time_cfg_i.checkpoint,
                 tmin=tmin_i,
                 tmax=tmax_i,
-                fit_signal="phi", show_progress=show_progress,
+                fit_signal="phi",
+                show_progress=show_progress,
                 mode_ky_indices=ky_local[:valid_count],
                 mode_kx_index=0,
                 mode_z_index=_midplane_index(grid),
@@ -2032,7 +2109,11 @@ def run_cyclone_scan(
             continue
 
         if time_cfg_i is not None:
-            save_field = "phi+density" if fit_key == "auto" else ("density" if fit_key == "density" else "phi")
+            save_field = (
+                "phi+density"
+                if fit_key == "auto"
+                else ("density" if fit_key == "density" else "phi")
+            )
             save_mode = None if fit_key == "auto" else (sel_scan if mode_only else None)
             _, saved = integrate_linear_from_config(
                 G0_jax,
@@ -2109,7 +2190,9 @@ def run_cyclone_scan(
         for local_idx in range(valid_count):
             ky_val = ky_slice[local_idx]
             if signal_t is None:
-                sel_local = ModeSelection(ky_index=local_idx, kx_index=0, z_index=_midplane_index(grid))
+                sel_local = ModeSelection(
+                    ky_index=local_idx, kx_index=0, z_index=_midplane_index(grid)
+                )
                 if fit_key == "auto":
                     signal, _name, gamma, omega = _select_fit_signal_auto(
                         t,
@@ -2138,7 +2221,9 @@ def run_cyclone_scan(
                         min_slope_frac=min_slope_frac,
                         slope_var_weight=slope_var_weight,
                     )
-                    gamma, omega = _normalize_growth_rate(gamma, omega, params_use, diagnostic_norm)
+                    gamma, omega = _normalize_growth_rate(
+                        gamma, omega, params_use, diagnostic_norm
+                    )
                     if auto_solver and not _is_valid_growth(gamma, omega):
                         res = run_cyclone_linear(
                             ky_target=float(ky_val),
@@ -2153,7 +2238,8 @@ def run_cyclone_scan(
                             solver="krylov",
                             krylov_cfg=krylov_cfg,
                             diagnostic_norm=diagnostic_norm,
-                            fit_signal="phi", show_progress=show_progress,
+                            fit_signal="phi",
+                            show_progress=show_progress,
                         )
                         gamma = float(res.gamma)
                         omega = float(res.omega)
@@ -2161,7 +2247,9 @@ def run_cyclone_scan(
                     omegas.append(omega)
                     ky_out.append(float(ky_val))
                     continue
-                signal = extract_mode_time_series(phi_t_np, sel_local, method=mode_method)
+                signal = extract_mode_time_series(
+                    phi_t_np, sel_local, method=mode_method
+                )
             else:
                 signal = signal_t[:, local_idx] if signal_t.ndim > 1 else signal_t
             gamma, omega = _fit_signal(signal, batch_start + local_idx, dt_i, stride)
@@ -2179,14 +2267,17 @@ def run_cyclone_scan(
                     solver="krylov",
                     krylov_cfg=krylov_cfg,
                     diagnostic_norm=diagnostic_norm,
-                    fit_signal="phi", show_progress=show_progress,
+                    fit_signal="phi",
+                    show_progress=show_progress,
                 )
                 gamma = float(res.gamma)
                 omega = float(res.omega)
             gammas.append(gamma)
             omegas.append(omega)
             ky_out.append(float(ky_val))
-    return CycloneScanResult(ky=np.array(ky_out), gamma=np.array(gammas), omega=np.array(omegas))
+    return CycloneScanResult(
+        ky=np.array(ky_out), gamma=np.array(gammas), omega=np.array(omegas)
+    )
 
 
 def compare_cyclone_to_reference(
@@ -2283,7 +2374,9 @@ def run_etg_linear(
     charge = np.atleast_1d(np.asarray(params.charge_sign))
     ns = int(charge.size)
     electron_index = int(np.argmin(charge))
-    G0 = np.zeros((ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
+    G0 = np.zeros(
+        (ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64
+    )
     G0_single = _build_initial_condition(
         grid,
         geom,
@@ -2409,13 +2502,19 @@ def run_etg_linear(
                     )
                     gamma = float(np.asarray(gamma_vals)[0])
                     omega = float(np.asarray(omega_vals)[0])
-                    gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
+                    gamma, omega = _normalize_growth_rate(
+                        gamma, omega, params, diagnostic_norm
+                    )
                     if G_last is not None and G_last.ndim == 7:
                         G_last = G_last[0]
                     term_cfg = linear_terms_to_term_config(terms)
                     if G_last is None:
-                        raise ValueError("Expected final state from streaming fit; got None.")
-                    phi_last = compute_fields_cached(G_last, cache, params, terms=term_cfg).phi
+                        raise ValueError(
+                            "Expected final state from streaming fit; got None."
+                        )
+                    phi_last = compute_fields_cached(
+                        G_last, cache, params, terms=term_cfg
+                    ).phi
                     phi_t = jnp.asarray(phi_last)[None, ...]
                     density_t = None
                     stride = time_cfg_use.sample_stride
@@ -2579,7 +2678,10 @@ def run_etg_linear(
             fit_signal=fit_key,
             mode_method=mode_method,
         )
-        def _window_valid(t_arr: np.ndarray, tmin_val: float | None, tmax_val: float | None) -> bool:
+
+        def _window_valid(
+            t_arr: np.ndarray, tmin_val: float | None, tmax_val: float | None
+        ) -> bool:
             if tmin_val is None or tmax_val is None:
                 return False
             mask = (t_arr >= tmin_val) & (t_arr <= tmax_val)
@@ -2720,6 +2822,7 @@ def run_etg_scan(
     gammas = []
     omegas = []
     ky_out = []
+
     def _window_value(val, idx):
         if val is None:
             return None
@@ -2747,7 +2850,9 @@ def run_etg_scan(
         and not _is_array_like(tmax)
     )
 
-    def _fit_signal(signal: np.ndarray, idx: int, dt_i: float, stride: int) -> tuple[float, float]:
+    def _fit_signal(
+        signal: np.ndarray, idx: int, dt_i: float, stride: int
+    ) -> tuple[float, float]:
         t = np.arange(signal.shape[0]) * dt_i * stride
         tmin_i = _window_value(tmin, idx)
         tmax_i = _window_value(tmax, idx)
@@ -2820,7 +2925,9 @@ def run_etg_scan(
 
     for batch_start, ky_slice, valid_count in ky_iter:
         if use_batch:
-            ky_indices = [select_ky_index(np.asarray(grid_full.ky), float(ky)) for ky in ky_slice]
+            ky_indices = [
+                select_ky_index(np.asarray(grid_full.ky), float(ky)) for ky in ky_slice
+            ]
             grid = select_ky_grid(grid_full, ky_indices)
             sel_indices = np.arange(len(ky_indices), dtype=int)
             sel = ModeSelectionBatch(sel_indices, 0, _midplane_index(grid))
@@ -2831,12 +2938,16 @@ def run_etg_scan(
             grid = select_ky_grid(grid_full, ky_indices[0])
             sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
             dt_i = float(dt[batch_start]) if isinstance(dt, np.ndarray) else float(dt)
-            steps_i = int(steps[batch_start]) if isinstance(steps, np.ndarray) else int(steps)
+            steps_i = (
+                int(steps[batch_start]) if isinstance(steps, np.ndarray) else int(steps)
+            )
 
         charge = np.atleast_1d(np.asarray(params.charge_sign))
         ns = int(charge.size)
         electron_index = int(np.argmin(charge))
-        G0 = np.zeros((ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
+        G0 = np.zeros(
+            (ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64
+        )
         G0_single = _build_initial_condition(
             grid,
             geom,
@@ -2860,15 +2971,20 @@ def run_etg_scan(
             if use_cont and prev_vec is not None and prev_vec.shape == G0_jax.shape:
                 v0_use = prev_vec
                 v_ref = prev_vec
-                if cfg_use.method.strip().lower() == "shift_invert" and prev_eig is not None:
+                if (
+                    cfg_use.method.strip().lower() == "shift_invert"
+                    and prev_eig is not None
+                ):
                     if shift_override is None:
                         shift_override = prev_eig
                         # When continuation carries an explicit previous eigenvalue
                         # as the shift, select the closest shifted branch first and
                         # let overlap tracking keep the mode family coherent.
                         shift_selection_use = "shift"
-            select_overlap = use_cont and v_ref is not None and (
-                cfg_use.continuation_selection.strip().lower() == "overlap"
+            select_overlap = (
+                use_cont
+                and v_ref is not None
+                and (cfg_use.continuation_selection.strip().lower() == "overlap")
             )
             eig, vec = dominant_eigenpair(
                 v0_use,
@@ -2926,7 +3042,12 @@ def run_etg_scan(
         if time_cfg_i is not None and time_cfg_i.use_diffrax and streaming_fit:
             t_total = float(time_cfg_i.t_max)
             tmin_i, tmax_i = _resolve_streaming_window(
-                t_total, _window_value(tmin, batch_start), _window_value(tmax, batch_start), start_fraction, window_fraction, 1.0
+                t_total,
+                _window_value(tmin, batch_start),
+                _window_value(tmax, batch_start),
+                start_fraction,
+                window_fraction,
+                1.0,
             )
             _, gamma_vals, omega_vals = integrate_linear_diffrax_streaming(
                 G0_jax,
@@ -2971,8 +3092,16 @@ def run_etg_scan(
             continue
 
         if time_cfg_i is not None:
-            save_field = "phi+density" if fit_key == "auto" else ("density" if fit_key == "density" else "phi")
-            save_mode = None if fit_key == "auto" else (sel if (mode_only and fit_key == "phi") else None)
+            save_field = (
+                "phi+density"
+                if fit_key == "auto"
+                else ("density" if fit_key == "density" else "phi")
+            )
+            save_mode = (
+                None
+                if fit_key == "auto"
+                else (sel if (mode_only and fit_key == "phi") else None)
+            )
             _, saved = integrate_linear_from_config(
                 G0_jax,
                 grid,
@@ -2984,7 +3113,8 @@ def run_etg_scan(
                 save_mode=save_mode,
                 mode_method=mode_method,
                 save_field=save_field,
-                density_species_index=electron_index if need_density else None, show_progress=show_progress,
+                density_species_index=electron_index if need_density else None,
+                show_progress=show_progress,
             )
             if fit_key == "auto":
                 phi_t, density_t = saved
@@ -3006,7 +3136,8 @@ def run_etg_scan(
                     cache=cache,
                     terms=terms,
                     sample_stride=stride,
-                    species_index=1, show_progress=show_progress,
+                    species_index=1,
+                    show_progress=show_progress,
                 )
                 phi_t = _diag[1]
                 density_t = _diag[2] if len(_diag) > 2 else None
@@ -3043,7 +3174,9 @@ def run_etg_scan(
         for local_idx in range(valid_count):
             ky_val = ky_slice[local_idx]
             if fit_key == "auto":
-                sel_local = ModeSelection(ky_index=local_idx, kx_index=0, z_index=_midplane_index(grid))
+                sel_local = ModeSelection(
+                    ky_index=local_idx, kx_index=0, z_index=_midplane_index(grid)
+                )
                 _signal, _name, gamma, omega = _select_fit_signal_auto(
                     t,
                     phi_t_np,
@@ -3071,7 +3204,9 @@ def run_etg_scan(
                     min_slope_frac=min_slope_frac,
                     slope_var_weight=slope_var_weight,
                 )
-                gamma, omega = _normalize_growth_rate(gamma, omega, params_use, diagnostic_norm)
+                gamma, omega = _normalize_growth_rate(
+                    gamma, omega, params_use, diagnostic_norm
+                )
                 if auto_solver and not _is_valid_growth(gamma, omega):
                     res = run_etg_linear(
                         ky_target=float(ky_val),
@@ -3085,7 +3220,8 @@ def run_etg_scan(
                         solver="krylov",
                         krylov_cfg=krylov_cfg,
                         diagnostic_norm=diagnostic_norm,
-                        fit_signal="phi", show_progress=show_progress,
+                        fit_signal="phi",
+                        show_progress=show_progress,
                     )
                     gamma = float(res.gamma)
                     omega = float(res.omega)
@@ -3097,7 +3233,9 @@ def run_etg_scan(
             if mode_only and fit_key == "phi" and phi_t_np.ndim <= 2:
                 signal = _extract_mode_only_signal(phi_t_np, local_idx=local_idx)
             else:
-                sel_local = ModeSelection(ky_index=local_idx, kx_index=0, z_index=_midplane_index(grid))
+                sel_local = ModeSelection(
+                    ky_index=local_idx, kx_index=0, z_index=_midplane_index(grid)
+                )
                 signal = _select_fit_signal(
                     phi_t_np,
                     density_np,
@@ -3106,7 +3244,9 @@ def run_etg_scan(
                     mode_method=mode_method,
                 )
             if gx_growth and fit_key == "phi":
-                sel_local = ModeSelection(ky_index=local_idx, kx_index=0, z_index=_midplane_index(grid))
+                sel_local = ModeSelection(
+                    ky_index=local_idx, kx_index=0, z_index=_midplane_index(grid)
+                )
                 gamma, omega, _gamma_t, _omega_t, _t_mid = gx_growth_rate_from_phi(
                     phi_t_np,
                     t,
@@ -3114,9 +3254,13 @@ def run_etg_scan(
                     navg_fraction=gx_navg_fraction,
                     mode_method=mode_method,
                 )
-                gamma, omega = _normalize_growth_rate(gamma, omega, params_use, diagnostic_norm)
+                gamma, omega = _normalize_growth_rate(
+                    gamma, omega, params_use, diagnostic_norm
+                )
             else:
-                gamma, omega = _fit_signal(signal, batch_start + local_idx, dt_i, stride)
+                gamma, omega = _fit_signal(
+                    signal, batch_start + local_idx, dt_i, stride
+                )
             if auto_solver and not _is_valid_growth(gamma, omega):
                 res = run_etg_linear(
                     ky_target=float(ky_val),
@@ -3130,14 +3274,17 @@ def run_etg_scan(
                     solver="krylov",
                     krylov_cfg=krylov_cfg,
                     diagnostic_norm=diagnostic_norm,
-                    fit_signal="phi", show_progress=show_progress,
+                    fit_signal="phi",
+                    show_progress=show_progress,
                 )
                 gamma = float(res.gamma)
                 omega = float(res.omega)
             gammas.append(gamma)
             omegas.append(omega)
             ky_out.append(float(ky_val))
-    return LinearScanResult(ky=np.array(ky_out), gamma=np.array(gammas), omega=np.array(omegas))
+    return LinearScanResult(
+        ky=np.array(ky_out), gamma=np.array(gammas), omega=np.array(omegas)
+    )
 
 
 def run_kinetic_linear(
@@ -3206,7 +3353,9 @@ def run_kinetic_linear(
         raise ValueError("init_species_index out of range for kinetic species")
     if density_species_index < 0 or density_species_index >= ns:
         raise ValueError("density_species_index out of range for kinetic species")
-    G0 = np.zeros((ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
+    G0 = np.zeros(
+        (ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64
+    )
     G0_single = _build_initial_condition(
         grid,
         geom,
@@ -3279,7 +3428,9 @@ def run_kinetic_linear(
                     cache=cache,
                     terms=terms,
                     save_field=save_field,
-                    density_species_index=density_species_index if fit_signal == "density" else None,
+                    density_species_index=density_species_index
+                    if fit_signal == "density"
+                    else None,
                 )
                 density_t = phi_t if fit_signal == "density" else None
             else:
@@ -3308,7 +3459,9 @@ def run_kinetic_linear(
                         time_cfg_use,
                         cache=cache,
                         terms=terms,
-                        density_species_index=density_species_index if fit_signal == "density" else None,
+                        density_species_index=density_species_index
+                        if fit_signal == "density"
+                        else None,
                     )
                     density_t = None
             stride = time_cfg_use.sample_stride
@@ -3354,7 +3507,10 @@ def run_kinetic_linear(
             fit_signal=fit_signal,
             mode_method=mode_method,
         )
-        def _window_valid(t_arr: np.ndarray, tmin_val: float | None, tmax_val: float | None) -> bool:
+
+        def _window_valid(
+            t_arr: np.ndarray, tmin_val: float | None, tmax_val: float | None
+        ) -> bool:
             if tmin_val is None or tmax_val is None:
                 return False
             mask = (t_arr >= tmin_val) & (t_arr <= tmax_val)
@@ -3467,6 +3623,7 @@ def run_kinetic_scan(
     gammas = []
     omegas = []
     ky_out = []
+
     def _window_value(val, idx):
         if val is None:
             return None
@@ -3494,7 +3651,9 @@ def run_kinetic_scan(
         and not _is_array_like(tmax)
     )
 
-    def _fit_signal(signal: np.ndarray, idx: int, dt_i: float, stride: int) -> tuple[float, float]:
+    def _fit_signal(
+        signal: np.ndarray, idx: int, dt_i: float, stride: int
+    ) -> tuple[float, float]:
         t = np.arange(signal.shape[0]) * dt_i * stride
         tmin_i = _window_value(tmin, idx)
         tmax_i = _window_value(tmax, idx)
@@ -3547,7 +3706,9 @@ def run_kinetic_scan(
 
     for batch_start, ky_slice, valid_count in ky_iter:
         if use_batch:
-            ky_indices = [select_ky_index(np.asarray(grid_full.ky), float(ky)) for ky in ky_slice]
+            ky_indices = [
+                select_ky_index(np.asarray(grid_full.ky), float(ky)) for ky in ky_slice
+            ]
             grid = select_ky_grid(grid_full, ky_indices)
             sel_indices = np.arange(len(ky_indices), dtype=int)
             sel = ModeSelectionBatch(sel_indices, 0, _midplane_index(grid))
@@ -3558,10 +3719,14 @@ def run_kinetic_scan(
             grid = select_ky_grid(grid_full, ky_indices[0])
             sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
             dt_i = float(dt[batch_start]) if isinstance(dt, np.ndarray) else float(dt)
-            steps_i = int(steps[batch_start]) if isinstance(steps, np.ndarray) else int(steps)
+            steps_i = (
+                int(steps[batch_start]) if isinstance(steps, np.ndarray) else int(steps)
+            )
 
         ns = 2
-        G0 = np.zeros((ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
+        G0 = np.zeros(
+            (ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64
+        )
         G0_single = _build_initial_condition(
             grid,
             geom,
@@ -3577,7 +3742,9 @@ def run_kinetic_scan(
         G0_jax = jnp.asarray(G0)
         if solver.lower() == "krylov":
             cfg_use = krylov_cfg or (
-                KINETIC_KRYLOV_GX_REFERENCE if gx_reference_use else KINETIC_KRYLOV_DEFAULT
+                KINETIC_KRYLOV_GX_REFERENCE
+                if gx_reference_use
+                else KINETIC_KRYLOV_DEFAULT
             )
             eig, _vec = dominant_eigenpair(
                 G0_jax,
@@ -3623,7 +3790,12 @@ def run_kinetic_scan(
         if time_cfg_i is not None and time_cfg_i.use_diffrax and streaming_fit:
             t_total = float(time_cfg_i.t_max)
             tmin_i, tmax_i = _resolve_streaming_window(
-                t_total, _window_value(tmin, batch_start), _window_value(tmax, batch_start), start_fraction, window_fraction, 1.0
+                t_total,
+                _window_value(tmin, batch_start),
+                _window_value(tmax, batch_start),
+                start_fraction,
+                window_fraction,
+                1.0,
             )
             _, gamma_vals, omega_vals = integrate_linear_diffrax_streaming(
                 G0_jax,
@@ -3649,7 +3821,9 @@ def run_kinetic_scan(
                 mode_z_index=_midplane_index(grid),
                 mode_method=mode_method,
                 amp_floor=streaming_amp_floor,
-                density_species_index=density_species_index if fit_signal == "density" else None,
+                density_species_index=density_species_index
+                if fit_signal == "density"
+                else None,
                 return_state=False,
             )
             gamma_arr = np.asarray(gamma_vals)
@@ -3668,7 +3842,9 @@ def run_kinetic_scan(
             continue
 
         if time_cfg_i is not None:
-            save_mode_method = mode_method if mode_method in {"z_index", "max"} else "z_index"
+            save_mode_method = (
+                mode_method if mode_method in {"z_index", "max"} else "z_index"
+            )
             _, phi_t = integrate_linear_from_config(
                 G0_jax,
                 grid,
@@ -3680,7 +3856,9 @@ def run_kinetic_scan(
                 save_mode=sel if (mode_only and fit_signal == "phi") else None,
                 mode_method=save_mode_method,
                 save_field="density" if fit_signal == "density" else "phi",
-                density_species_index=density_species_index if fit_signal == "density" else None,
+                density_species_index=density_species_index
+                if fit_signal == "density"
+                else None,
             )
             stride = time_cfg_i.sample_stride
             density_t = None
@@ -3726,14 +3904,21 @@ def run_kinetic_scan(
             ky_val = ky_slice[local_idx]
             if mode_only and fit_signal == "phi" and phi_t_np.ndim <= 2:
                 signal = _extract_mode_only_signal(phi_t_np, local_idx=local_idx)
-            elif mode_only and fit_signal == "density" and density_np is not None and density_np.ndim <= 3:
+            elif (
+                mode_only
+                and fit_signal == "density"
+                and density_np is not None
+                and density_np.ndim <= 3
+            ):
                 signal = _extract_mode_only_signal(
                     density_np,
                     local_idx=local_idx,
                     species_index=density_species_index,
                 )
             else:
-                sel_local = ModeSelection(ky_index=local_idx, kx_index=0, z_index=_midplane_index(grid))
+                sel_local = ModeSelection(
+                    ky_index=local_idx, kx_index=0, z_index=_midplane_index(grid)
+                )
                 signal = _select_fit_signal(
                     phi_t_np,
                     density_np,
@@ -3745,7 +3930,9 @@ def run_kinetic_scan(
             gammas.append(gamma)
             omegas.append(omega)
             ky_out.append(float(ky_val))
-    return LinearScanResult(ky=np.array(ky_out), gamma=np.array(gammas), omega=np.array(omegas))
+    return LinearScanResult(
+        ky=np.array(ky_out), gamma=np.array(gammas), omega=np.array(omegas)
+    )
 
 
 def run_tem_linear(
@@ -3806,7 +3993,9 @@ def run_tem_linear(
         raise ValueError("init_species_index out of range for kinetic species")
     if density_species_index < 0 or density_species_index >= ns:
         raise ValueError("density_species_index out of range for kinetic species")
-    G0 = np.zeros((ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
+    G0 = np.zeros(
+        (ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64
+    )
     G0_single = _build_initial_condition(
         grid,
         geom,
@@ -4035,6 +4224,7 @@ def run_tem_scan(
     gammas = []
     omegas = []
     ky_out = []
+
     def _window_value(val, idx):
         if val is None:
             return None
@@ -4062,7 +4252,9 @@ def run_tem_scan(
         and not _is_array_like(tmax)
     )
 
-    def _fit_signal(signal: np.ndarray, idx: int, dt_i: float, stride: int) -> tuple[float, float]:
+    def _fit_signal(
+        signal: np.ndarray, idx: int, dt_i: float, stride: int
+    ) -> tuple[float, float]:
         t = np.arange(signal.shape[0]) * dt_i * stride
         tmin_i = _window_value(tmin, idx)
         tmax_i = _window_value(tmax, idx)
@@ -4116,7 +4308,9 @@ def run_tem_scan(
 
     for batch_start, ky_slice, valid_count in ky_iter:
         if use_batch:
-            ky_indices = [select_ky_index(np.asarray(grid_full.ky), float(ky)) for ky in ky_slice]
+            ky_indices = [
+                select_ky_index(np.asarray(grid_full.ky), float(ky)) for ky in ky_slice
+            ]
             grid = select_ky_grid(grid_full, ky_indices)
             sel_indices = np.arange(len(ky_indices), dtype=int)
             sel = ModeSelectionBatch(sel_indices, 0, _midplane_index(grid))
@@ -4127,10 +4321,14 @@ def run_tem_scan(
             grid = select_ky_grid(grid_full, ky_indices[0])
             sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
             dt_i = float(dt[batch_start]) if isinstance(dt, np.ndarray) else float(dt)
-            steps_i = int(steps[batch_start]) if isinstance(steps, np.ndarray) else int(steps)
+            steps_i = (
+                int(steps[batch_start]) if isinstance(steps, np.ndarray) else int(steps)
+            )
 
         ns = 2
-        G0 = np.zeros((ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
+        G0 = np.zeros(
+            (ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64
+        )
         G0_single = _build_initial_condition(
             grid,
             geom,
@@ -4190,7 +4388,12 @@ def run_tem_scan(
         if time_cfg_i is not None and time_cfg_i.use_diffrax and streaming_fit:
             t_total = float(time_cfg_i.t_max)
             tmin_i, tmax_i = _resolve_streaming_window(
-                t_total, _window_value(tmin, batch_start), _window_value(tmax, batch_start), start_fraction, window_fraction, 1.0
+                t_total,
+                _window_value(tmin, batch_start),
+                _window_value(tmax, batch_start),
+                start_fraction,
+                window_fraction,
+                1.0,
             )
             _, gamma_vals, omega_vals = integrate_linear_diffrax_streaming(
                 G0_jax,
@@ -4210,7 +4413,8 @@ def run_tem_scan(
                 checkpoint=time_cfg_i.checkpoint,
                 tmin=tmin_i,
                 tmax=tmax_i,
-                fit_signal="phi", show_progress=show_progress,
+                fit_signal="phi",
+                show_progress=show_progress,
                 mode_ky_indices=np.arange(valid_count, dtype=int),
                 mode_kx_index=0,
                 mode_z_index=_midplane_index(grid),
@@ -4261,13 +4465,19 @@ def run_tem_scan(
             if mode_only and phi_t_np.ndim <= 2:
                 signal = _extract_mode_only_signal(phi_t_np, local_idx=local_idx)
             else:
-                sel_local = ModeSelection(ky_index=local_idx, kx_index=0, z_index=_midplane_index(grid))
-                signal = extract_mode_time_series(phi_t_np, sel_local, method=mode_method)
+                sel_local = ModeSelection(
+                    ky_index=local_idx, kx_index=0, z_index=_midplane_index(grid)
+                )
+                signal = extract_mode_time_series(
+                    phi_t_np, sel_local, method=mode_method
+                )
             gamma, omega = _fit_signal(signal, batch_start + local_idx, dt_i, stride)
             gammas.append(gamma)
             omegas.append(omega)
             ky_out.append(float(ky_val))
-    return LinearScanResult(ky=np.array(ky_out), gamma=np.array(gammas), omega=np.array(omegas))
+    return LinearScanResult(
+        ky=np.array(ky_out), gamma=np.array(gammas), omega=np.array(omegas)
+    )
 
 
 def run_kbm_beta_scan(
@@ -4392,7 +4602,9 @@ def run_kbm_beta_scan(
         cache = build_linear_cache(grid, geom, params, Nl, Nm)
 
         ns = 2
-        G0 = np.zeros((ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
+        G0 = np.zeros(
+            (ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64
+        )
         G0_single = _build_initial_condition(
             grid,
             geom,
@@ -4405,10 +4617,14 @@ def run_kbm_beta_scan(
         G0[int(init_species_index)] = np.asarray(G0_single, dtype=np.complex64)
 
         G0_jax = jnp.asarray(G0)
-        solver_use = select_kbm_solver_auto(solver_key, ky_target=ky_target, gx_reference=gx_reference_use)
+        solver_use = select_kbm_solver_auto(
+            solver_key, ky_target=ky_target, gx_reference=gx_reference_use
+        )
 
         if solver_use == "gx_time":
-            gx_mode_method = mode_method if mode_method in {"z_index", "max"} else "z_index"
+            gx_mode_method = (
+                mode_method if mode_method in {"z_index", "max"} else "z_index"
+            )
             gx_time_cfg = ExplicitTimeConfig(
                 dt=dt_i,
                 t_max=dt_i * steps_i,
@@ -4418,7 +4634,9 @@ def run_kbm_beta_scan(
                 if time_cfg is not None
                 else False,
                 dt_min=float(time_cfg.dt_min) if time_cfg is not None else 1.0e-7,
-                dt_max=float(time_cfg.dt_max) if (time_cfg is not None and time_cfg.dt_max is not None) else None,
+                dt_max=float(time_cfg.dt_max)
+                if (time_cfg is not None and time_cfg.dt_max is not None)
+                else None,
                 cfl=float(time_cfg.cfl) if time_cfg is not None else 0.9,
                 cfl_fac=(
                     resolve_cfl_fac(str(time_cfg.method), time_cfg.cfl_fac)
@@ -4459,7 +4677,9 @@ def run_kbm_beta_scan(
                                 navg_fraction=0.5,
                             )
                         except ValueError:
-                            signal = extract_mode_time_series(phi_np, sel, method=mode_method)
+                            signal = extract_mode_time_series(
+                                phi_np, sel, method=mode_method
+                            )
                             gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
                                 t_np,
                                 signal,
@@ -4494,7 +4714,9 @@ def run_kbm_beta_scan(
             if use_continuation and prev_eig is not None:
                 shift_val = complex(np.asarray(prev_eig))
 
-            targets: Sequence[float] | None = kbm_target_factors if kbm_target_factors else None
+            targets: Sequence[float] | None = (
+                kbm_target_factors if kbm_target_factors else None
+            )
             use_multi_target = _kbm_use_multi_target_krylov(
                 krylov_cfg_use,
                 targets,
@@ -4546,13 +4768,17 @@ def run_kbm_beta_scan(
                     eig = eig_candidates[idx]
                     _vec = vec_candidates[idx]
                 else:
-                    eig_arr = np.asarray([complex(np.asarray(e)) for e in eig_candidates])
+                    eig_arr = np.asarray(
+                        [complex(np.asarray(e)) for e in eig_candidates]
+                    )
                     growth = np.real(eig_arr)
                     if np.all(~np.isfinite(growth)):
                         eig = eig_candidates[0]
                         _vec = vec_candidates[0]
                     else:
-                        idx = int(np.nanargmax(np.where(np.isfinite(growth), growth, -np.inf)))
+                        idx = int(
+                            np.nanargmax(np.where(np.isfinite(growth), growth, -np.inf))
+                        )
                         eig = eig_candidates[idx]
                         _vec = vec_candidates[idx]
             else:
@@ -4606,7 +4832,12 @@ def run_kbm_beta_scan(
             if time_cfg_i is not None and time_cfg_i.use_diffrax and streaming_fit:
                 t_total = float(time_cfg_i.t_max)
                 tmin_i, tmax_i = _resolve_streaming_window(
-                    t_total, _window_value(tmin, i), _window_value(tmax, i), start_fraction, window_fraction, 1.0
+                    t_total,
+                    _window_value(tmin, i),
+                    _window_value(tmax, i),
+                    start_fraction,
+                    window_fraction,
+                    1.0,
                 )
                 _, gamma_vals, omega_vals = integrate_linear_diffrax_streaming(
                     G0_jax,
@@ -4632,17 +4863,25 @@ def run_kbm_beta_scan(
                     mode_z_index=_midplane_index(grid),
                     mode_method=mode_method,
                     amp_floor=streaming_amp_floor,
-                    density_species_index=density_species_index if fit_key == "density" else None,
+                    density_species_index=density_species_index
+                    if fit_key == "density"
+                    else None,
                     return_state=False,
                 )
                 gamma = float(np.asarray(gamma_vals)[0])
                 omega = float(np.asarray(omega_vals)[0])
-                gamma, omega = _normalize_growth_rate(gamma, omega, params_use, diagnostic_norm)
+                gamma, omega = _normalize_growth_rate(
+                    gamma, omega, params_use, diagnostic_norm
+                )
             else:
                 if time_cfg_i is not None:
                     stride = time_cfg_i.sample_stride
                     if time_cfg_i.use_diffrax:
-                        save_mode_method = mode_method if mode_method in {"z_index", "max"} else "z_index"
+                        save_mode_method = (
+                            mode_method
+                            if mode_method in {"z_index", "max"}
+                            else "z_index"
+                        )
                         _, phi_t = integrate_linear_from_config(
                             G0_jax,
                             grid,
@@ -4760,13 +4999,20 @@ def run_kbm_beta_scan(
                         min_slope_frac=0.0,
                         slope_var_weight=0.0,
                     )
-                    gamma, omega = _normalize_growth_rate(gamma, omega, params_use, diagnostic_norm)
+                    gamma, omega = _normalize_growth_rate(
+                        gamma, omega, params_use, diagnostic_norm
+                    )
                     gammas.append(gamma)
                     omegas.append(omega)
                     beta_out.append(float(beta))
                     continue
 
-                if mode_only and fit_key == "density" and density_np is not None and density_np.ndim <= 3:
+                if (
+                    mode_only
+                    and fit_key == "density"
+                    and density_np is not None
+                    and density_np.ndim <= 3
+                ):
                     signal = _extract_mode_only_signal(
                         density_np,
                         local_idx=0,
@@ -4801,7 +5047,9 @@ def run_kbm_beta_scan(
                     )
                 else:
                     try:
-                        gamma, omega = fit_growth_rate(t, signal, tmin=tmin_i, tmax=tmax_i)
+                        gamma, omega = fit_growth_rate(
+                            t, signal, tmin=tmin_i, tmax=tmax_i
+                        )
                     except ValueError:
                         gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
                             t,
@@ -4813,13 +5061,17 @@ def run_kbm_beta_scan(
                             require_positive=require_positive,
                             min_amp_fraction=min_amp_fraction,
                         )
-                gamma, omega = _normalize_growth_rate(gamma, omega, params_use, diagnostic_norm)
+                gamma, omega = _normalize_growth_rate(
+                    gamma, omega, params_use, diagnostic_norm
+                )
 
         gammas.append(gamma)
         omegas.append(omega)
         beta_out.append(float(beta))
 
-    return LinearScanResult(ky=np.array(beta_out), gamma=np.array(gammas), omega=np.array(omegas))
+    return LinearScanResult(
+        ky=np.array(beta_out), gamma=np.array(gammas), omega=np.array(omegas)
+    )
 
 
 def run_kbm_linear(
@@ -4907,7 +5159,9 @@ def run_kbm_linear(
     sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
     cache = build_linear_cache(grid, geom, params, Nl, Nm)
 
-    G0 = np.zeros((2, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
+    G0 = np.zeros(
+        (2, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64
+    )
     G0_single = _build_initial_condition(
         grid,
         geom,
@@ -4927,7 +5181,9 @@ def run_kbm_linear(
     )
     krylov_cfg_use = krylov_cfg or KBM_KRYLOV_DEFAULT
 
-    def _window_valid(t_arr: np.ndarray, tmin_val: float | None, tmax_val: float | None) -> bool:
+    def _window_valid(
+        t_arr: np.ndarray, tmin_val: float | None, tmax_val: float | None
+    ) -> bool:
         if tmin_val is None or tmax_val is None:
             return False
         mask = (t_arr >= tmin_val) & (t_arr <= tmax_val)
@@ -4950,7 +5206,9 @@ def run_kbm_linear(
             )
         else:
             try:
-                gamma_val, omega_val = fit_growth_rate(t_arr, signal, tmin=tmin, tmax=tmax)
+                gamma_val, omega_val = fit_growth_rate(
+                    t_arr, signal, tmin=tmin, tmax=tmax
+                )
             except ValueError:
                 gamma_val, omega_val, _tmin, _tmax = fit_growth_rate_auto(
                     t_arr,
@@ -4975,7 +5233,9 @@ def run_kbm_linear(
             if time_cfg is not None
             else False,
             dt_min=float(time_cfg.dt_min) if time_cfg is not None else 1.0e-7,
-            dt_max=float(time_cfg.dt_max) if (time_cfg is not None and time_cfg.dt_max is not None) else None,
+            dt_max=float(time_cfg.dt_max)
+            if (time_cfg is not None and time_cfg.dt_max is not None)
+            else None,
             cfl=float(time_cfg.cfl) if time_cfg is not None else 0.9,
             cfl_fac=(
                 resolve_cfl_fac(str(time_cfg.method), time_cfg.cfl_fac)
@@ -5016,7 +5276,9 @@ def run_kbm_linear(
                             navg_fraction=0.5,
                         )
                     except ValueError:
-                        signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
+                        signal = extract_mode_time_series(
+                            phi_t_np, sel, method=mode_method
+                        )
                         gamma, omega = _fit_with_window(signal, t_out)
             else:
                 signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
@@ -5051,7 +5313,9 @@ def run_kbm_linear(
 
     if solver_key == "krylov":
         shift_val = krylov_cfg_use.shift
-        targets: Sequence[float] | None = kbm_target_factors if kbm_target_factors else None
+        targets: Sequence[float] | None = (
+            kbm_target_factors if kbm_target_factors else None
+        )
         use_multi_target = _kbm_use_multi_target_krylov(
             krylov_cfg_use,
             targets,
@@ -5102,8 +5366,12 @@ def run_kbm_linear(
             else:
                 eig_arr = np.asarray([complex(np.asarray(e)) for e in eig_candidates])
                 growth = np.real(eig_arr)
-                idx = 0 if np.all(~np.isfinite(growth)) else int(
-                    np.nanargmax(np.where(np.isfinite(growth), growth, -np.inf))
+                idx = (
+                    0
+                    if np.all(~np.isfinite(growth))
+                    else int(
+                        np.nanargmax(np.where(np.isfinite(growth), growth, -np.inf))
+                    )
                 )
             eig = eig_candidates[idx]
             vec = vec_candidates[idx]
@@ -5174,7 +5442,9 @@ def run_kbm_linear(
                 save_mode=sel if fit_key == "phi" else None,
                 mode_method=mode_method,
                 save_field=save_field,
-                density_species_index=density_species_index if fit_key in {"density", "auto"} else None,
+                density_species_index=density_species_index
+                if fit_key in {"density", "auto"}
+                else None,
             )
             if fit_key in {"density", "auto"}:
                 phi_t_np, density_np = (np.asarray(phi_out[0]), np.asarray(phi_out[1]))

@@ -14,10 +14,16 @@ from typing import Sequence
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.diagnostics import ResolvedDiagnostics, SimulationDiagnostics, total_energy
+from spectraxgk.diagnostics import (
+    ResolvedDiagnostics,
+    SimulationDiagnostics,
+    total_energy,
+)
 
 
-def _first_nonfinite_sample(value: np.ndarray | jnp.ndarray, *, nsamples: int) -> int | None:
+def _first_nonfinite_sample(
+    value: np.ndarray | jnp.ndarray, *, nsamples: int
+) -> int | None:
     arr = np.asarray(value)
     if arr.size == 0 or np.isfinite(arr).all():
         return None
@@ -29,7 +35,9 @@ def _first_nonfinite_sample(value: np.ndarray | jnp.ndarray, *, nsamples: int) -
     return 0
 
 
-def validate_finite_gx_diagnostics(diag: SimulationDiagnostics, *, label: str = "runtime") -> None:
+def validate_finite_gx_diagnostics(
+    diag: SimulationDiagnostics, *, label: str = "runtime"
+) -> None:
     """Raise if a runtime diagnostic chunk contains NaN or infinite values.
 
     Long validation runs can otherwise continue for thousands of fixed steps
@@ -66,7 +74,9 @@ def validate_finite_gx_diagnostics(diag: SimulationDiagnostics, *, label: str = 
         t_text = ""
         if t_arr.size and sample < t_arr.size and np.isfinite(t_arr[sample]):
             t_text = f" at t={float(t_arr[sample]):.6g}"
-        raise RuntimeError(f"{label} produced non-finite diagnostics in {name} at sample {sample}{t_text}")
+        raise RuntimeError(
+            f"{label} produced non-finite diagnostics in {name} at sample {sample}{t_text}"
+        )
 
     if diag.resolved is None:
         return
@@ -85,7 +95,9 @@ def validate_finite_gx_diagnostics(diag: SimulationDiagnostics, *, label: str = 
         )
 
 
-def slice_gx_diagnostics(diag: SimulationDiagnostics, stop: int) -> SimulationDiagnostics:
+def slice_gx_diagnostics(
+    diag: SimulationDiagnostics, stop: int
+) -> SimulationDiagnostics:
     """Return the first ``stop`` diagnostic samples."""
 
     if stop < 0:
@@ -96,13 +108,17 @@ def slice_gx_diagnostics(diag: SimulationDiagnostics, stop: int) -> SimulationDi
             return None
         return np.asarray(arr)[:stop, ...]
 
-    def _slice_resolved(resolved: ResolvedDiagnostics | None) -> ResolvedDiagnostics | None:
+    def _slice_resolved(
+        resolved: ResolvedDiagnostics | None,
+    ) -> ResolvedDiagnostics | None:
         if resolved is None:
             return None
         payload: dict[str, np.ndarray | None] = {}
         for field in dataclass_fields(ResolvedDiagnostics):
             value = getattr(resolved, field.name)
-            payload[field.name] = None if value is None else np.asarray(value)[:stop, ...]
+            payload[field.name] = (
+                None if value is None else np.asarray(value)[:stop, ...]
+            )
         return ResolvedDiagnostics(**payload)
 
     dt_t = np.asarray(diag.dt_t)[:stop]
@@ -124,7 +140,9 @@ def slice_gx_diagnostics(diag: SimulationDiagnostics, stop: int) -> SimulationDi
         Wapar_t=Wapar_t,
         heat_flux_t=np.asarray(diag.heat_flux_t)[:stop],
         particle_flux_t=np.asarray(diag.particle_flux_t)[:stop],
-        energy_t=np.asarray(total_energy(jnp.asarray(Wg_t), jnp.asarray(Wphi_t), jnp.asarray(Wapar_t))),
+        energy_t=np.asarray(
+            total_energy(jnp.asarray(Wg_t), jnp.asarray(Wphi_t), jnp.asarray(Wapar_t))
+        ),
         heat_flux_species_t=_slice_optional(diag.heat_flux_species_t),
         particle_flux_species_t=_slice_optional(diag.particle_flux_species_t),
         turbulent_heating_t=_slice_optional(diag.turbulent_heating_t),
@@ -134,7 +152,9 @@ def slice_gx_diagnostics(diag: SimulationDiagnostics, stop: int) -> SimulationDi
     )
 
 
-def truncate_gx_diagnostics(diag: SimulationDiagnostics, *, t_max: float) -> SimulationDiagnostics:
+def truncate_gx_diagnostics(
+    diag: SimulationDiagnostics, *, t_max: float
+) -> SimulationDiagnostics:
     """Keep samples through the first entry that reaches ``t_max``."""
 
     t_arr = np.asarray(diag.t, dtype=float)
@@ -145,7 +165,9 @@ def truncate_gx_diagnostics(diag: SimulationDiagnostics, *, t_max: float) -> Sim
     return slice_gx_diagnostics(diag, stop)
 
 
-def stride_gx_diagnostics(diag: SimulationDiagnostics, *, stride: int) -> SimulationDiagnostics:
+def stride_gx_diagnostics(
+    diag: SimulationDiagnostics, *, stride: int
+) -> SimulationDiagnostics:
     """Apply the GX runtime output stride after concatenating chunk diagnostics."""
 
     stride_use = int(max(stride, 1))
@@ -157,13 +179,17 @@ def stride_gx_diagnostics(diag: SimulationDiagnostics, *, stride: int) -> Simula
             return None
         return np.asarray(arr)[::stride_use, ...]
 
-    def _stride_resolved(resolved: ResolvedDiagnostics | None) -> ResolvedDiagnostics | None:
+    def _stride_resolved(
+        resolved: ResolvedDiagnostics | None,
+    ) -> ResolvedDiagnostics | None:
         if resolved is None:
             return None
         payload: dict[str, np.ndarray | None] = {}
         for field in dataclass_fields(ResolvedDiagnostics):
             value = getattr(resolved, field.name)
-            payload[field.name] = None if value is None else np.asarray(value)[::stride_use, ...]
+            payload[field.name] = (
+                None if value is None else np.asarray(value)[::stride_use, ...]
+            )
         return ResolvedDiagnostics(**payload)
 
     dt_t = np.asarray(diag.dt_t)[::stride_use]
@@ -185,7 +211,9 @@ def stride_gx_diagnostics(diag: SimulationDiagnostics, *, stride: int) -> Simula
         Wapar_t=Wapar_t,
         heat_flux_t=np.asarray(diag.heat_flux_t)[::stride_use],
         particle_flux_t=np.asarray(diag.particle_flux_t)[::stride_use],
-        energy_t=np.asarray(total_energy(jnp.asarray(Wg_t), jnp.asarray(Wphi_t), jnp.asarray(Wapar_t))),
+        energy_t=np.asarray(
+            total_energy(jnp.asarray(Wg_t), jnp.asarray(Wphi_t), jnp.asarray(Wapar_t))
+        ),
         heat_flux_species_t=_stride_optional(diag.heat_flux_species_t),
         particle_flux_species_t=_stride_optional(diag.particle_flux_species_t),
         turbulent_heating_t=_stride_optional(diag.turbulent_heating_t),
@@ -195,30 +223,51 @@ def stride_gx_diagnostics(diag: SimulationDiagnostics, *, stride: int) -> Simula
     )
 
 
-def concat_gx_diagnostics(diags: Sequence[SimulationDiagnostics]) -> SimulationDiagnostics:
+def concat_gx_diagnostics(
+    diags: Sequence[SimulationDiagnostics],
+) -> SimulationDiagnostics:
     """Concatenate one or more diagnostic chunks."""
 
     if not diags:
         raise ValueError("at least one diagnostic chunk is required")
 
     def _concat(name: str) -> np.ndarray:
-        return np.concatenate([np.asarray(getattr(diag, name)) for diag in diags], axis=0)
+        return np.concatenate(
+            [np.asarray(getattr(diag, name)) for diag in diags], axis=0
+        )
 
     def _concat_optional(name: str) -> np.ndarray | None:
         values = [getattr(diag, name) for diag in diags]
         if all(value is None for value in values):
             return None
-        return np.concatenate([np.asarray(value) for value in values if value is not None], axis=0)
+        if any(value is None for value in values):
+            raise ValueError(
+                f"inconsistent optional diagnostic {name}: every concatenated chunk must either provide it or omit it"
+            )
+        return np.concatenate(
+            [np.asarray(value) for value in values if value is not None], axis=0
+        )
 
     def _concat_resolved() -> ResolvedDiagnostics | None:
         values = [diag.resolved for diag in diags]
         if all(value is None for value in values):
             return None
+        if any(value is None for value in values):
+            raise ValueError(
+                "inconsistent resolved diagnostics: every concatenated chunk must either provide resolved data or omit it"
+            )
         payload: dict[str, np.ndarray | None] = {}
         for field in dataclass_fields(ResolvedDiagnostics):
-            series = [None if value is None else getattr(value, field.name) for value in values]
+            series = [
+                None if value is None else getattr(value, field.name)
+                for value in values
+            ]
             if all(item is None for item in series):
                 payload[field.name] = None
+            elif any(item is None for item in series):
+                raise ValueError(
+                    f"inconsistent resolved diagnostic {field.name}: every concatenated chunk must either provide it or omit it"
+                )
             else:
                 payload[field.name] = np.concatenate(
                     [np.asarray(item) for item in series if item is not None],
@@ -242,7 +291,9 @@ def concat_gx_diagnostics(diags: Sequence[SimulationDiagnostics]) -> SimulationD
         Wapar_t=Wapar_t,
         heat_flux_t=_concat("heat_flux_t"),
         particle_flux_t=_concat("particle_flux_t"),
-        energy_t=np.asarray(total_energy(jnp.asarray(Wg_t), jnp.asarray(Wphi_t), jnp.asarray(Wapar_t))),
+        energy_t=np.asarray(
+            total_energy(jnp.asarray(Wg_t), jnp.asarray(Wphi_t), jnp.asarray(Wapar_t))
+        ),
         heat_flux_species_t=_concat_optional("heat_flux_species_t"),
         particle_flux_species_t=_concat_optional("particle_flux_species_t"),
         turbulent_heating_t=_concat_optional("turbulent_heating_t"),

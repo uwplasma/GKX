@@ -41,13 +41,17 @@ class QuasilinearCalibrationPoint:
         return asdict(self)
 
 
-def _point_from_mapping(item: QuasilinearCalibrationPoint | dict[str, Any]) -> QuasilinearCalibrationPoint:
+def _point_from_mapping(
+    item: QuasilinearCalibrationPoint | dict[str, Any],
+) -> QuasilinearCalibrationPoint:
     if isinstance(item, QuasilinearCalibrationPoint):
         return item
     return QuasilinearCalibrationPoint(**dict(item))
 
 
-def _split_metrics(points: list[QuasilinearCalibrationPoint], *, observed_floor: float) -> dict[str, Any]:
+def _split_metrics(
+    points: list[QuasilinearCalibrationPoint], *, observed_floor: float
+) -> dict[str, Any]:
     if not points:
         return {
             "n": 0,
@@ -84,6 +88,9 @@ def fit_train_heat_flux_scale(
     not a missing constant factor.
     """
 
+    floor = float(prediction_floor)
+    if not np.isfinite(floor) or floor < 0.0:
+        raise ValueError("prediction_floor must be finite and non-negative")
     pts = [_point_from_mapping(item) for item in points]
     train = [
         p
@@ -91,25 +98,29 @@ def fit_train_heat_flux_scale(
         if p.split == train_split
         and np.isfinite(p.predicted_heat_flux)
         and np.isfinite(p.observed_heat_flux)
-        and abs(p.predicted_heat_flux) > prediction_floor
+        and abs(p.predicted_heat_flux) > floor
     ]
     if not train:
-        raise ValueError(f"no finite nonzero '{train_split}' points available for scale fit")
+        raise ValueError(
+            f"no finite nonzero '{train_split}' points available for scale fit"
+        )
     pred = np.asarray([p.predicted_heat_flux for p in train], dtype=float)
     obs = np.asarray([p.observed_heat_flux for p in train], dtype=float)
     denom = float(np.dot(pred, pred))
-    if not np.isfinite(denom) or denom <= prediction_floor:
+    if not np.isfinite(denom) or denom <= floor:
         raise ValueError("training predictions are too small to fit a stable scale")
     scale = float(np.dot(pred, obs) / denom)
     if scale < 0.0:
-        raise ValueError("fitted heat-flux scale is negative; do not treat this as a saturation constant")
+        raise ValueError(
+            "fitted heat-flux scale is negative; do not treat this as a saturation constant"
+        )
     scaled_residual = scale * pred - obs
     return {
         "scale": scale,
         "train_split": str(train_split),
         "n_train": int(pred.size),
         "fit_kind": "through_origin_least_squares",
-        "prediction_floor": float(prediction_floor),
+        "prediction_floor": floor,
         "train_rmse": float(np.sqrt(np.mean(scaled_residual**2))),
     }
 
@@ -170,6 +181,35 @@ def quasilinear_calibration_report(
     bad_splits = sorted({p.split for p in pts if p.split not in allowed_splits})
     if bad_splits:
         raise ValueError(f"unsupported calibration split(s): {bad_splits}")
+    nonfinite_cases = [
+        p.case
+        for p in pts
+        if not np.isfinite(p.predicted_heat_flux)
+        or not np.isfinite(p.observed_heat_flux)
+        or (
+            p.observed_heat_flux_std is not None
+            and not np.isfinite(p.observed_heat_flux_std)
+        )
+    ]
+    if nonfinite_cases:
+        raise ValueError(
+            f"calibration points contain non-finite values: {nonfinite_cases}"
+        )
+    negative_std_cases = [
+        p.case
+        for p in pts
+        if p.observed_heat_flux_std is not None and p.observed_heat_flux_std < 0.0
+    ]
+    if negative_std_cases:
+        raise ValueError(
+            f"calibration points contain negative observed_heat_flux_std: {negative_std_cases}"
+        )
+    point_rules = {p.saturation_rule for p in pts}
+    if point_rules != {str(saturation_rule)}:
+        raise ValueError(
+            "all calibration points must use the report saturation_rule "
+            f"{saturation_rule!r}; found {sorted(point_rules)}"
+        )
 
     scale_fit = None
     if fit_train_scale:
@@ -180,7 +220,9 @@ def quasilinear_calibration_report(
             note_label="train_fitted_heat_flux_scale",
         )
 
-    by_split_points = {split: [p for p in pts if p.split == split] for split in allowed_splits}
+    by_split_points = {
+        split: [p for p in pts if p.split == split] for split in allowed_splits
+    }
     by_split = {
         split: _split_metrics(split_points, observed_floor=observed_floor)
         for split, split_points in sorted(by_split_points.items())
@@ -190,7 +232,12 @@ def quasilinear_calibration_report(
     has_train = by_split["train"]["n"] > 0
     has_holdout = holdout["n"] > 0
     holdout_error = holdout["mean_abs_relative_error"]
-    passed = bool(has_train and has_holdout and holdout_error is not None and holdout_error <= holdout_mean_rel_gate)
+    passed = bool(
+        has_train
+        and has_holdout
+        and holdout_error is not None
+        and holdout_error <= holdout_mean_rel_gate
+    )
     claim_level = "calibrated_absolute_flux" if passed else "calibration_dataset"
     if not has_holdout:
         claim_level = "training_or_audit_only"
@@ -251,12 +298,17 @@ def integrated_quasilinear_flux_from_spectrum(
     if method_key == "sum":
         estimate = float(np.sum(values))
         if delta_ky is not None:
-            estimate *= float(delta_ky)
+            width = float(delta_ky)
+            if not np.isfinite(width) or width <= 0.0:
+                raise ValueError("delta_ky must be finite and positive")
+            estimate *= width
     elif method_key == "mean":
         estimate = float(np.mean(values))
     elif method_key == "trapezoid":
         if values.size < 2:
-            raise ValueError("trapezoid integration requires at least two finite spectrum samples")
+            raise ValueError(
+                "trapezoid integration requires at least two finite spectrum samples"
+            )
         order = np.argsort(ky)
         estimate = float(np.trapezoid(values[order], ky[order]))
     else:
@@ -284,7 +336,9 @@ def _resolve_summary_artifact(summary_path: Path, source: object) -> Path:
         (summary_path.parent.parent / diag_path).resolve(),
         (Path.cwd() / diag_path).resolve(),
     )
-    return next((candidate for candidate in candidates if candidate.exists()), candidates[0])
+    return next(
+        (candidate for candidate in candidates if candidate.exists()), candidates[0]
+    )
 
 
 def _window_from_summary(summary: dict[str, Any], t: np.ndarray) -> tuple[float, float]:
@@ -366,15 +420,21 @@ def _read_netcdf_window_heat_flux(
 ) -> dict[str, Any]:
     try:
         import netCDF4
-    except ImportError as exc:  # pragma: no cover - exercised only without optional dependency.
-        raise RuntimeError("netCDF4 is required to read nonlinear NetCDF calibration windows") from exc
+    except (
+        ImportError
+    ) as exc:  # pragma: no cover - exercised only without optional dependency.
+        raise RuntimeError(
+            "netCDF4 is required to read nonlinear NetCDF calibration windows"
+        ) from exc
 
     variable_path = _netcdf_heat_flux_variable(heat_flux_column)
     with netCDF4.Dataset(path) as root:
         t = np.asarray(_netcdf_variable(root, "Grids/time")[:], dtype=float)
         values = np.asarray(_netcdf_variable(root, variable_path)[:], dtype=float)
     if values.shape[0] != t.size:
-        raise ValueError(f"{variable_path} first dimension does not match Grids/time in {path}")
+        raise ValueError(
+            f"{variable_path} first dimension does not match Grids/time in {path}"
+        )
     if values.ndim == 1:
         heat = values
     elif values.ndim == 2:
@@ -382,10 +442,14 @@ def _read_netcdf_window_heat_flux(
             heat = np.sum(values, axis=1)
         else:
             if species_index < 0 or species_index >= values.shape[1]:
-                raise ValueError(f"species_index {species_index} is out of bounds for {values.shape[1]} species")
+                raise ValueError(
+                    f"species_index {species_index} is out of bounds for {values.shape[1]} species"
+                )
             heat = values[:, int(species_index)]
     else:
-        raise ValueError(f"{variable_path} must have shape (time,) or (time, species), got {values.shape}")
+        raise ValueError(
+            f"{variable_path} must have shape (time,) or (time, species), got {values.shape}"
+        )
     tmin, tmax = _window_from_summary(summary, t)
     mask = (t >= tmin) & (t <= tmax) & np.isfinite(heat)
     if not np.any(mask):
@@ -427,11 +491,15 @@ def calibration_point_from_nonlinear_window_summary(
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
     source = summary.get(diagnostics_source)
     if source is None:
-        raise ValueError(f"summary does not contain diagnostics source '{diagnostics_source}'")
+        raise ValueError(
+            f"summary does not contain diagnostics source '{diagnostics_source}'"
+        )
     diag_path = _resolve_summary_artifact(summary_path, source)
     suffixes = [suffix.lower() for suffix in diag_path.suffixes]
     if diag_path.suffix.lower() == ".csv":
-        window = _read_csv_window_heat_flux(diag_path, summary, heat_flux_column=heat_flux_column)
+        window = _read_csv_window_heat_flux(
+            diag_path, summary, heat_flux_column=heat_flux_column
+        )
     elif suffixes[-2:] == [".out", ".nc"] or diag_path.suffix.lower() == ".nc":
         window = _read_netcdf_window_heat_flux(
             diag_path,
@@ -440,10 +508,14 @@ def calibration_point_from_nonlinear_window_summary(
             species_index=species_index,
         )
     else:
-        raise NotImplementedError("nonlinear calibration ingestion supports diagnostics CSV and NetCDF files")
+        raise NotImplementedError(
+            "nonlinear calibration ingestion supports diagnostics CSV and NetCDF files"
+        )
     note_items = [
         notes,
-        None if diag_path.suffix.lower() == ".csv" else f"nonlinear_variable={window['variable']}",
+        None
+        if diag_path.suffix.lower() == ".csv"
+        else f"nonlinear_variable={window['variable']}",
         f"nonlinear_window=[{window['tmin']:.12g},{window['tmax']:.12g}]",
         f"nonlinear_window_samples={window['n_samples']}",
     ]
@@ -522,12 +594,16 @@ def calibration_point_from_spectrum_and_nonlinear_window(
     )
 
 
-def write_quasilinear_calibration_report(path: str | Path, report: dict[str, Any]) -> Path:
+def write_quasilinear_calibration_report(
+    path: str | Path, report: dict[str, Any]
+) -> Path:
     """Write a quasilinear calibration report to JSON."""
 
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    out.write_text(
+        json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     return out
 
 

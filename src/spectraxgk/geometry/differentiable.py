@@ -160,7 +160,11 @@ def discover_differentiable_geometry_backends() -> dict[str, object]:
     )
     vmec = _find_importable_module("vmec_jax", vmec_paths)
     booz = _find_importable_module("booz_xform_jax", booz_paths)
-    booz_jax_api = None if booz is None else _find_importable_module("booz_xform_jax.jax_api", booz_paths)
+    booz_jax_api = (
+        None
+        if booz is None
+        else _find_importable_module("booz_xform_jax.jax_api", booz_paths)
+    )
 
     vmec_boundary_api = vmec is not None and all(
         hasattr(vmec, name)
@@ -202,20 +206,35 @@ def _array(
     if arr.ndim != 1:
         raise ValueError(f"{key} must be one-dimensional")
     if ntheta is not None and int(arr.shape[0]) != int(ntheta):
-        raise ValueError(f"{key} length {arr.shape[0]} does not match theta length {ntheta}")
-    if validate_finite and not _is_traced(arr) and not bool(np.all(np.isfinite(np.asarray(arr)))):
+        raise ValueError(
+            f"{key} length {arr.shape[0]} does not match theta length {ntheta}"
+        )
+    if (
+        validate_finite
+        and not _is_traced(arr)
+        and not bool(np.all(np.isfinite(np.asarray(arr))))
+    ):
         raise ValueError(f"{key} contains non-finite values")
     return arr
 
 
-def _scalar(mapping: Mapping[str, Any], key: str, default: float) -> Any:
+def _scalar(
+    mapping: Mapping[str, Any],
+    key: str,
+    default: float,
+    *,
+    validate_finite: bool = True,
+) -> Any:
     value = mapping.get(key, default)
     arr = jnp.asarray(value)
     if arr.ndim != 0:
         raise ValueError(f"{key} must be scalar")
     if _is_traced(arr):
         return arr
-    return float(np.asarray(arr))
+    out = float(np.asarray(arr))
+    if validate_finite and not np.isfinite(out):
+        raise ValueError(f"{key} contains a non-finite value")
+    return out
 
 
 def flux_tube_geometry_from_mapping(
@@ -234,6 +253,8 @@ def flux_tube_geometry_from_mapping(
 
     theta = _array(data, "theta", validate_finite=validate_finite)
     ntheta = int(theta.shape[0])
+    if ntheta < 1:
+        raise ValueError("theta must contain at least one sample")
     arrays = {
         name: _array(data, name, ntheta, validate_finite=validate_finite)
         for name in _ARRAY_FIELDS
@@ -244,7 +265,11 @@ def flux_tube_geometry_from_mapping(
         if "jacobian" in data
         else 1.0 / arrays["gradpar"] / arrays["bmag"]
     )
-    grho = _array(data, "grho", ntheta, validate_finite=validate_finite) if "grho" in data else jnp.ones_like(theta)
+    grho = (
+        _array(data, "grho", ntheta, validate_finite=validate_finite)
+        if "grho" in data
+        else jnp.ones_like(theta)
+    )
 
     gradpar_value: Any
     if _is_traced(arrays["gradpar"]):
@@ -252,8 +277,14 @@ def flux_tube_geometry_from_mapping(
     else:
         gradpar_values = np.asarray(arrays["gradpar"])
         gradpar_value = float(np.mean(gradpar_values))
-        if validate_finite and not np.allclose(gradpar_values, gradpar_value, rtol=1.0e-5, atol=1.0e-7):
+        if validate_finite and not np.allclose(
+            gradpar_values, gradpar_value, rtol=1.0e-5, atol=1.0e-7
+        ):
             raise ValueError("gradpar must be constant along the sampled field line")
+
+    nfp = int(data.get("nfp", 1))
+    if nfp < 1:
+        raise ValueError("nfp must be a positive integer")
 
     return FluxTubeGeometryData(
         theta=theta,
@@ -269,16 +300,18 @@ def flux_tube_geometry_from_mapping(
         gb0_profile=arrays["gbdrift0"],
         jacobian_profile=jacobian,
         grho_profile=grho,
-        q=_scalar(data, "q", 1.0),
-        s_hat=_scalar(data, "s_hat", data.get("shat", 0.0)),
-        epsilon=_scalar(data, "epsilon", 0.0),
-        R0=_scalar(data, "R0", 1.0),
-        B0=_scalar(data, "B0", 1.0),
-        alpha=_scalar(data, "alpha", 0.0),
-        drift_scale=_scalar(data, "drift_scale", 1.0),
-        kxfac=_scalar(data, "kxfac", 1.0),
-        theta_scale=_scalar(data, "theta_scale", 1.0),
-        nfp=int(data.get("nfp", 1)),
+        q=_scalar(data, "q", 1.0, validate_finite=validate_finite),
+        s_hat=_scalar(
+            data, "s_hat", data.get("shat", 0.0), validate_finite=validate_finite
+        ),
+        epsilon=_scalar(data, "epsilon", 0.0, validate_finite=validate_finite),
+        R0=_scalar(data, "R0", 1.0, validate_finite=validate_finite),
+        B0=_scalar(data, "B0", 1.0, validate_finite=validate_finite),
+        alpha=_scalar(data, "alpha", 0.0, validate_finite=validate_finite),
+        drift_scale=_scalar(data, "drift_scale", 1.0, validate_finite=validate_finite),
+        kxfac=_scalar(data, "kxfac", 1.0, validate_finite=validate_finite),
+        theta_scale=_scalar(data, "theta_scale", 1.0, validate_finite=validate_finite),
+        nfp=nfp,
         kperp2_bmag=bool(data.get("kperp2_bmag", True)),
         bessel_bmag_power=_scalar(data, "bessel_bmag_power", 0.0),
         source_model=str(source_model),
@@ -318,7 +351,9 @@ def flux_tube_geometry_observables(geom: FluxTubeGeometryData) -> jnp.ndarray:
     jac = jnp.abs(jnp.asarray(geom.jacobian_profile))
     weights = jac / jnp.maximum(jnp.sum(jac), jnp.asarray(1.0e-300, dtype=jac.dtype))
     mean_b = jnp.sum(weights * bmag)
-    ripple = jnp.sqrt(jnp.sum(weights * (bmag / jnp.maximum(jnp.abs(mean_b), 1.0e-300) - 1.0) ** 2))
+    ripple = jnp.sqrt(
+        jnp.sum(weights * (bmag / jnp.maximum(jnp.abs(mean_b), 1.0e-300) - 1.0) ** 2)
+    )
     metric = jnp.sqrt(
         jnp.sum(
             weights
@@ -352,21 +387,29 @@ def flux_tube_geometry_observables(geom: FluxTubeGeometryData) -> jnp.ndarray:
     )
 
 
-def finite_difference_jacobian(fn: Any, params: jnp.ndarray, *, step: float = 1.0e-4) -> jnp.ndarray:
+def finite_difference_jacobian(
+    fn: Any, params: jnp.ndarray, *, step: float = 1.0e-4
+) -> jnp.ndarray:
     """Central finite-difference Jacobian for small validation problems."""
 
     p = jnp.asarray(params, dtype=jnp.float64)
     h = float(step)
     if p.ndim != 1:
         raise ValueError("params must be one-dimensional")
+    if h <= 0.0:
+        raise ValueError("step must be positive")
     columns = []
     for idx in range(int(p.shape[0])):
         basis = jnp.zeros_like(p).at[idx].set(h)
-        columns.append((jnp.asarray(fn(p + basis)) - jnp.asarray(fn(p - basis))) / (2.0 * h))
+        columns.append(
+            (jnp.asarray(fn(p + basis)) - jnp.asarray(fn(p - basis))) / (2.0 * h)
+        )
     return jnp.stack(columns, axis=1)
 
 
-def _array_parity_metrics(candidate: Any, reference: Any, *, floor: float = 1.0e-12) -> dict[str, object]:
+def _array_parity_metrics(
+    candidate: Any, reference: Any, *, floor: float = 1.0e-12
+) -> dict[str, object]:
     cand = np.asarray(candidate, dtype=float)
     ref = np.asarray(reference, dtype=float)
     metrics: dict[str, object] = {
@@ -383,10 +426,16 @@ def _array_parity_metrics(candidate: Any, reference: Any, *, floor: float = 1.0e
         {
             "max_abs": float(np.nanmax(np.abs(diff))) if diff.size else 0.0,
             "rms_abs": float(np.sqrt(np.nanmean(diff * diff))) if diff.size else 0.0,
-            "max_rel_pointwise": float(np.nanmax(np.abs(diff) / local_scale)) if diff.size else 0.0,
-            "rms_rel_pointwise": float(np.sqrt(np.nanmean((diff / local_scale) ** 2))) if diff.size else 0.0,
+            "max_rel_pointwise": float(np.nanmax(np.abs(diff) / local_scale))
+            if diff.size
+            else 0.0,
+            "rms_rel_pointwise": float(np.sqrt(np.nanmean((diff / local_scale) ** 2)))
+            if diff.size
+            else 0.0,
             "reference_scale": ref_scale,
-            "normalized_max_abs": float(np.nanmax(np.abs(diff)) / ref_scale) if diff.size else 0.0,
+            "normalized_max_abs": float(np.nanmax(np.abs(diff)) / ref_scale)
+            if diff.size
+            else 0.0,
             "candidate_min": float(np.nanmin(cand)) if cand.size else 0.0,
             "candidate_max": float(np.nanmax(cand)) if cand.size else 0.0,
             "reference_min": float(np.nanmin(ref)) if ref.size else 0.0,
@@ -396,7 +445,9 @@ def _array_parity_metrics(candidate: Any, reference: Any, *, floor: float = 1.0e
     return metrics
 
 
-def _scalar_parity_metrics(candidate: Any, reference: Any, *, floor: float = 1.0e-12) -> dict[str, float]:
+def _scalar_parity_metrics(
+    candidate: Any, reference: Any, *, floor: float = 1.0e-12
+) -> dict[str, float]:
     cand = float(np.asarray(candidate))
     ref = float(np.asarray(reference))
     diff = cand - ref
@@ -409,14 +460,18 @@ def _scalar_parity_metrics(candidate: Any, reference: Any, *, floor: float = 1.0
     }
 
 
-def _interp_radial(values: jnp.ndarray, s_grid: jnp.ndarray, s_value: float) -> jnp.ndarray:
+def _interp_radial(
+    values: jnp.ndarray, s_grid: jnp.ndarray, s_value: float
+) -> jnp.ndarray:
     arr = jnp.asarray(values)
     s = jnp.asarray(s_grid, dtype=arr.dtype)
     s_val = jnp.asarray(float(s_value), dtype=arr.dtype)
     if arr.ndim == 1:
         return jnp.interp(s_val, s, arr)
     if arr.ndim == 2:
-        return jax.vmap(lambda col: jnp.interp(s_val, s, col), in_axes=1, out_axes=0)(arr)
+        return jax.vmap(lambda col: jnp.interp(s_val, s, col), in_axes=1, out_axes=0)(
+            arr
+        )
     raise ValueError("radial interpolation expects a one- or two-dimensional array")
 
 
@@ -438,7 +493,9 @@ def _radial_derivative_profile(values: jnp.ndarray, spacing: float) -> jnp.ndarr
 def _radial_derivative_array(values: jnp.ndarray, spacing: float) -> jnp.ndarray:
     arr = jnp.asarray(values)
     if arr.ndim != 2:
-        raise ValueError("radial derivative expects a two-dimensional surface-mode array")
+        raise ValueError(
+            "radial derivative expects a two-dimensional surface-mode array"
+        )
     if int(arr.shape[0]) < 2:
         return jnp.zeros_like(arr)
     ds = jnp.asarray(float(spacing), dtype=arr.dtype)
@@ -463,12 +520,16 @@ def _evaluate_boozer_cosine_series_on_field_line(
     coeff_arr = jnp.asarray(coeffs, dtype=theta_arr.dtype)
     m = jnp.asarray(ixm_b, dtype=theta_arr.dtype)
     n = jnp.asarray(ixn_b, dtype=theta_arr.dtype)
-    iota_safe = jnp.where(jnp.abs(iota) < 1.0e-12, jnp.sign(iota + 1.0e-30) * 1.0e-12, iota)
+    iota_safe = jnp.where(
+        jnp.abs(iota) < 1.0e-12, jnp.sign(iota + 1.0e-30) * 1.0e-12, iota
+    )
     zeta = (theta_arr - jnp.asarray(float(alpha), dtype=theta_arr.dtype)) / iota_safe
     phase = m[:, None] * theta_arr[None, :] - n[:, None] * zeta[None, :]
     dphase_dtheta = m[:, None] - n[:, None] / iota_safe
     values = jnp.sum(coeff_arr[:, None] * jnp.cos(phase), axis=0)
-    dvalues_dtheta = jnp.sum(-coeff_arr[:, None] * dphase_dtheta * jnp.sin(phase), axis=0)
+    dvalues_dtheta = jnp.sum(
+        -coeff_arr[:, None] * dphase_dtheta * jnp.sin(phase), axis=0
+    )
     return values, dvalues_dtheta
 
 
@@ -483,7 +544,9 @@ def _cumulative_trapezoid(y: jnp.ndarray, x: jnp.ndarray) -> jnp.ndarray:
     return jnp.concatenate([jnp.zeros((1,), dtype=values.dtype), jnp.cumsum(areas)])
 
 
-def _periodic_bilinear_sample_2d(values: jnp.ndarray, theta: jnp.ndarray, zeta: jnp.ndarray) -> jnp.ndarray:
+def _periodic_bilinear_sample_2d(
+    values: jnp.ndarray, theta: jnp.ndarray, zeta: jnp.ndarray
+) -> jnp.ndarray:
     """Sample a uniform periodic ``(theta,zeta)`` grid with fixed bilinear weights."""
 
     arr = jnp.asarray(values)
@@ -572,7 +635,9 @@ def vmec_boundary_aspect_sensitivity_report(
         return vj.boundary_aspect_ratio(boundary, basis)
 
     grad_ad = jax.grad(aspect_fn)(p)
-    grad_fd = finite_difference_jacobian(lambda x: jnp.asarray([aspect_fn(x)]), p, step=fd_step)[0]
+    grad_fd = finite_difference_jacobian(
+        lambda x: jnp.asarray([aspect_fn(x)]), p, step=fd_step
+    )[0]
     diff = grad_ad - grad_fd
     return {
         "available": True,
@@ -739,7 +804,9 @@ def evaluate_boozer_bmag_on_field_line(
     modes_n = jnp.asarray(ixn_b, dtype=theta_arr.dtype)
     coeffs = jnp.asarray(bmnc_b, dtype=theta_arr.dtype)
     iota_arr = jnp.asarray(iota, dtype=theta_arr.dtype)
-    iota_safe = jnp.where(jnp.abs(iota_arr) < 1.0e-12, jnp.sign(iota_arr + 1.0e-30) * 1.0e-12, iota_arr)
+    iota_safe = jnp.where(
+        jnp.abs(iota_arr) < 1.0e-12, jnp.sign(iota_arr + 1.0e-30) * 1.0e-12, iota_arr
+    )
     zeta = (theta_arr - jnp.asarray(float(alpha), dtype=theta_arr.dtype)) / iota_safe
     phase = theta_arr[:, None] * modes_m[None, :] - zeta[:, None] * modes_n[None, :]
     dphase_dtheta = modes_m[None, :] - modes_n[None, :] / iota_safe
@@ -787,7 +854,9 @@ def booz_xform_flux_tube_mapping_from_inputs(  # pragma: no cover
         nboz=int(nboz),
         asym=bool(getattr(inputs, "bmns", None) is not None),
     )
-    out = bx.booz_xform_from_inputs(inputs=inputs, constants=constants, grids=grids, jit=bool(jit))
+    out = bx.booz_xform_from_inputs(
+        inputs=inputs, constants=constants, grids=grids, jit=bool(jit)
+    )
     idx = int(surface_index)
     theta = jnp.linspace(-jnp.pi, jnp.pi, int(ntheta), endpoint=False)
     bmnc_b = jnp.asarray(out["bmnc_b"])[idx]
@@ -808,7 +877,11 @@ def booz_xform_flux_tube_mapping_from_inputs(  # pragma: no cover
     gds2 = 1.0 + field_line_shift * field_line_shift
     gds21 = -shear * field_line_shift
     gds22 = (1.0 + shear * shear) * jnp.ones_like(theta)
-    cv = float(drift_scale) * (jnp.cos(theta) + field_line_shift * jnp.sin(theta)) / float(R0)
+    cv = (
+        float(drift_scale)
+        * (jnp.cos(theta) + field_line_shift * jnp.sin(theta))
+        / float(R0)
+    )
     cv0 = -float(drift_scale) * shear * jnp.sin(theta) / float(R0)
     bmag_safe = jnp.maximum(jnp.abs(bmag), jnp.asarray(1.0e-12, dtype=theta.dtype))
     return {
@@ -986,7 +1059,10 @@ def vmec_jax_boozer_flux_tube_sensitivity_report(  # pragma: no cover
         raise ValueError("params must be a length-2 vector")
 
     info = discover_differentiable_geometry_backends()
-    if not (info.get("vmec_jax_available", False) and info.get("booz_xform_jax_api_available", False)):
+    if not (
+        info.get("vmec_jax_available", False)
+        and info.get("booz_xform_jax_api_available", False)
+    ):
         return {
             "available": False,
             "backend_info": info,
@@ -1005,7 +1081,9 @@ def vmec_jax_boozer_flux_tube_sensitivity_report(  # pragma: no cover
 
         input_path, wout_path = driver.example_paths(str(case_name))
         if wout_path is None:
-            raise RuntimeError(f"vmec_jax example {case_name!r} has no bundled wout reference")
+            raise RuntimeError(
+                f"vmec_jax example {case_name!r} has no bundled wout reference"
+            )
 
         cfg, indata = config_mod.load_config(str(input_path))
         static = static_mod.build_static(cfg)
@@ -1015,17 +1093,27 @@ def vmec_jax_boozer_flux_tube_sensitivity_report(  # pragma: no cover
         base_Rcos = jnp.asarray(state.Rcos)
         base_Zsin = jnp.asarray(state.Zsin)
         if base_Rcos.ndim != 2 or base_Zsin.ndim != 2:
-            raise RuntimeError("vmec_jax state Rcos/Zsin arrays must be two-dimensional")
+            raise RuntimeError(
+                "vmec_jax state Rcos/Zsin arrays must be two-dimensional"
+            )
 
-        ridx = int(base_Rcos.shape[0] // 2) if radial_index is None else int(radial_index)
+        ridx = (
+            int(base_Rcos.shape[0] // 2) if radial_index is None else int(radial_index)
+        )
         midx = int(mode_index)
         if not (0 <= ridx < int(base_Rcos.shape[0])):
             raise ValueError("radial_index is outside the VMEC state radial grid")
         if not (0 <= midx < int(base_Rcos.shape[1])):
             raise ValueError("mode_index is outside the VMEC state mode table")
-        sidx = max(0, min(ridx - 1, int(base_Rcos.shape[0]) - 2)) if surface_index is None else int(surface_index)
+        sidx = (
+            max(0, min(ridx - 1, int(base_Rcos.shape[0]) - 2))
+            if surface_index is None
+            else int(surface_index)
+        )
         if not (0 <= sidx < int(base_Rcos.shape[0]) - 1):
-            raise ValueError("surface_index is outside the VMEC half-mesh Boozer surface grid")
+            raise ValueError(
+                "surface_index is outside the VMEC half-mesh Boozer surface grid"
+            )
 
         def mapping_fn(x: jnp.ndarray) -> dict[str, Any]:
             traced_state = dc_replace(
@@ -1139,7 +1227,9 @@ def vmec_jax_metric_tensor_sensitivity_report(  # pragma: no cover
 
         input_path, wout_path = driver.example_paths(str(case_name))
         if wout_path is None:
-            raise RuntimeError(f"vmec_jax example {case_name!r} has no bundled wout reference")
+            raise RuntimeError(
+                f"vmec_jax example {case_name!r} has no bundled wout reference"
+            )
 
         cfg, _indata = config_mod.load_config(str(input_path))
         static = static_mod.build_static(cfg)
@@ -1149,15 +1239,23 @@ def vmec_jax_metric_tensor_sensitivity_report(  # pragma: no cover
         base_Rcos = jnp.asarray(state.Rcos)
         base_Zsin = jnp.asarray(state.Zsin)
         if base_Rcos.ndim != 2 or base_Zsin.ndim != 2:
-            raise RuntimeError("vmec_jax state Rcos/Zsin arrays must be two-dimensional")
+            raise RuntimeError(
+                "vmec_jax state Rcos/Zsin arrays must be two-dimensional"
+            )
 
-        ridx = int(base_Rcos.shape[0] // 2) if radial_index is None else int(radial_index)
+        ridx = (
+            int(base_Rcos.shape[0] // 2) if radial_index is None else int(radial_index)
+        )
         midx = int(mode_index)
         if not (0 <= ridx < int(base_Rcos.shape[0])):
             raise ValueError("radial_index is outside the VMEC state radial grid")
         if not (0 <= midx < int(base_Rcos.shape[1])):
             raise ValueError("mode_index is outside the VMEC state mode table")
-        sidx = max(0, min(ridx - 1, int(base_Rcos.shape[0]) - 1)) if surface_index is None else int(surface_index)
+        sidx = (
+            max(0, min(ridx - 1, int(base_Rcos.shape[0]) - 1))
+            if surface_index is None
+            else int(surface_index)
+        )
         if not (0 <= sidx < int(base_Rcos.shape[0])):
             raise ValueError("surface_index is outside the VMEC metric radial grid")
 
@@ -1292,7 +1390,9 @@ def vmec_jax_field_line_tensor_sensitivity_report(  # pragma: no cover
 
         input_path, wout_path = driver.example_paths(str(case_name))
         if wout_path is None:
-            raise RuntimeError(f"vmec_jax example {case_name!r} has no bundled wout reference")
+            raise RuntimeError(
+                f"vmec_jax example {case_name!r} has no bundled wout reference"
+            )
 
         cfg, _indata = config_mod.load_config(str(input_path))
         static = static_mod.build_static(cfg)
@@ -1302,26 +1402,45 @@ def vmec_jax_field_line_tensor_sensitivity_report(  # pragma: no cover
         base_Rcos = jnp.asarray(state.Rcos)
         base_Zsin = jnp.asarray(state.Zsin)
         if base_Rcos.ndim != 2 or base_Zsin.ndim != 2:
-            raise RuntimeError("vmec_jax state Rcos/Zsin arrays must be two-dimensional")
+            raise RuntimeError(
+                "vmec_jax state Rcos/Zsin arrays must be two-dimensional"
+            )
 
-        ridx = int(base_Rcos.shape[0] // 2) if radial_index is None else int(radial_index)
+        ridx = (
+            int(base_Rcos.shape[0] // 2) if radial_index is None else int(radial_index)
+        )
         midx = int(mode_index)
         if not (0 <= ridx < int(base_Rcos.shape[0])):
             raise ValueError("radial_index is outside the VMEC state radial grid")
         if not (0 <= midx < int(base_Rcos.shape[1])):
             raise ValueError("mode_index is outside the VMEC state mode table")
-        sidx = max(1, min(ridx, int(base_Rcos.shape[0]) - 2)) if surface_index is None else int(surface_index)
+        sidx = (
+            max(1, min(ridx, int(base_Rcos.shape[0]) - 2))
+            if surface_index is None
+            else int(surface_index)
+        )
         if not (0 <= sidx < int(base_Rcos.shape[0])):
             raise ValueError("surface_index is outside the VMEC metric radial grid")
 
         iota_profile = jnp.asarray(getattr(wout, "iotas"))
         if iota_profile.ndim != 1 or int(iota_profile.shape[0]) <= sidx:
-            raise RuntimeError("vmec_jax wout iotas profile is missing or incompatible with the state grid")
+            raise RuntimeError(
+                "vmec_jax wout iotas profile is missing or incompatible with the state grid"
+            )
         iota_line = iota_profile[sidx]
-        iota_safe = jnp.where(jnp.abs(iota_line) < 1.0e-12, jnp.sign(iota_line + 1.0e-30) * 1.0e-12, iota_line)
-        theta_line = jnp.linspace(-jnp.pi, jnp.pi, ntheta_int, endpoint=False, dtype=p.dtype)
+        iota_safe = jnp.where(
+            jnp.abs(iota_line) < 1.0e-12,
+            jnp.sign(iota_line + 1.0e-30) * 1.0e-12,
+            iota_line,
+        )
+        theta_line = jnp.linspace(
+            -jnp.pi, jnp.pi, ntheta_int, endpoint=False, dtype=p.dtype
+        )
         theta_vmec = jnp.mod(theta_line + jnp.pi, 2.0 * jnp.pi)
-        zeta_line = jnp.mod((theta_vmec - jnp.asarray(float(alpha), dtype=p.dtype)) / iota_safe, 2.0 * jnp.pi)
+        zeta_line = jnp.mod(
+            (theta_vmec - jnp.asarray(float(alpha), dtype=p.dtype)) / iota_safe,
+            2.0 * jnp.pi,
+        )
         b2_floor_arr = jnp.asarray(float(b2_floor), dtype=p.dtype)
         eps = jnp.asarray(float(rms_epsilon), dtype=p.dtype)
 
@@ -1343,14 +1462,23 @@ def vmec_jax_field_line_tensor_sensitivity_report(  # pragma: no cover
                 pres=getattr(wout, "pres", None),
             )
             b2 = field_mod.b2_from_bsup(geom, bcovar.bsupu, bcovar.bsupv)
-            bmag = jnp.sqrt(jnp.maximum(_periodic_bilinear_sample_2d(b2[sidx], theta_vmec, zeta_line), b2_floor_arr))
-            sqrtg = _periodic_bilinear_sample_2d(geom.sqrtg[sidx], theta_vmec, zeta_line)
+            bmag = jnp.sqrt(
+                jnp.maximum(
+                    _periodic_bilinear_sample_2d(b2[sidx], theta_vmec, zeta_line),
+                    b2_floor_arr,
+                )
+            )
+            sqrtg = _periodic_bilinear_sample_2d(
+                geom.sqrtg[sidx], theta_vmec, zeta_line
+            )
             g_tt = _periodic_bilinear_sample_2d(geom.g_tt[sidx], theta_vmec, zeta_line)
             g_tp = _periodic_bilinear_sample_2d(geom.g_tp[sidx], theta_vmec, zeta_line)
             g_pp = _periodic_bilinear_sample_2d(geom.g_pp[sidx], theta_vmec, zeta_line)
             g_ss = _periodic_bilinear_sample_2d(geom.g_ss[sidx], theta_vmec, zeta_line)
             mean_b = jnp.mean(bmag)
-            ripple = jnp.std(bmag) / jnp.maximum(jnp.abs(mean_b), jnp.asarray(1.0e-30, dtype=bmag.dtype))
+            ripple = jnp.std(bmag) / jnp.maximum(
+                jnp.abs(mean_b), jnp.asarray(1.0e-30, dtype=bmag.dtype)
+            )
             return jnp.asarray(
                 [
                     mean_b,
@@ -1365,7 +1493,9 @@ def vmec_jax_field_line_tensor_sensitivity_report(  # pragma: no cover
 
         observables = field_line_observables(p)
         jac_ad = jax.jacfwd(field_line_observables)(p)
-        jac_fd = finite_difference_jacobian(field_line_observables, p, step=float(fd_step))
+        jac_fd = finite_difference_jacobian(
+            field_line_observables, p, step=float(fd_step)
+        )
         diff = jac_ad - jac_fd
         max_abs = jnp.max(jnp.abs(diff))
         max_rel = jnp.max(jnp.abs(diff) / (jnp.abs(jac_fd) + 1.0e-10))
@@ -1459,9 +1589,13 @@ def vmec_jax_flux_tube_mapping_from_state(  # pragma: no cover
 
     iota_profile = jnp.asarray(getattr(wout, "iotas"))
     if iota_profile.ndim != 1 or int(iota_profile.shape[0]) <= sidx + 1:
-        raise RuntimeError("vmec_jax wout iotas profile is missing or incompatible with the state grid")
+        raise RuntimeError(
+            "vmec_jax wout iotas profile is missing or incompatible with the state grid"
+        )
     iota_line = iota_profile[sidx]
-    iota_safe = jnp.where(jnp.abs(iota_line) < 1.0e-12, jnp.sign(iota_line + 1.0e-30) * 1.0e-12, iota_line)
+    iota_safe = jnp.where(
+        jnp.abs(iota_line) < 1.0e-12, jnp.sign(iota_line + 1.0e-30) * 1.0e-12, iota_line
+    )
 
     s_grid = jnp.linspace(0.0, 1.0, ns, dtype=base_Rcos.dtype)
     s_val = jnp.maximum(s_grid[sidx], jnp.asarray(1.0e-12, dtype=base_Rcos.dtype))
@@ -1469,8 +1603,14 @@ def vmec_jax_flux_tube_mapping_from_state(  # pragma: no cover
     d_iota_ds = (iota_profile[sidx + 1] - iota_profile[sidx - 1]) / (2.0 * ds)
     s_hat = -2.0 * s_val * d_iota_ds / iota_safe
 
-    raw_length = float(getattr(wout, "Aminor_p", 1.0)) if reference_length is None else float(reference_length)
-    L_reference = raw_length if np.isfinite(raw_length) and abs(raw_length) > 0.0 else 1.0
+    raw_length = (
+        float(getattr(wout, "Aminor_p", 1.0))
+        if reference_length is None
+        else float(reference_length)
+    )
+    L_reference = (
+        raw_length if np.isfinite(raw_length) and abs(raw_length) > 0.0 else 1.0
+    )
     if reference_b is None:
         phi_profile = np.asarray(getattr(wout, "phi", [0.0, np.pi]), dtype=float)
         edge_toroidal_flux_over_2pi = abs(float(phi_profile[-1]) / (2.0 * np.pi))
@@ -1478,11 +1618,18 @@ def vmec_jax_flux_tube_mapping_from_state(  # pragma: no cover
         B_reference = raw_b if np.isfinite(raw_b) and abs(raw_b) > 0.0 else 1.0
     else:
         B_reference = float(reference_b)
-    B_reference = B_reference if np.isfinite(B_reference) and abs(B_reference) > 0.0 else 1.0
+    B_reference = (
+        B_reference if np.isfinite(B_reference) and abs(B_reference) > 0.0 else 1.0
+    )
 
-    theta_line = jnp.linspace(-jnp.pi, jnp.pi, ntheta_int, endpoint=False, dtype=base_Rcos.dtype)
+    theta_line = jnp.linspace(
+        -jnp.pi, jnp.pi, ntheta_int, endpoint=False, dtype=base_Rcos.dtype
+    )
     theta_vmec = jnp.mod(theta_line + jnp.pi, 2.0 * jnp.pi)
-    zeta_line = jnp.mod((theta_vmec - jnp.asarray(float(alpha), dtype=base_Rcos.dtype)) / iota_safe, 2.0 * jnp.pi)
+    zeta_line = jnp.mod(
+        (theta_vmec - jnp.asarray(float(alpha), dtype=base_Rcos.dtype)) / iota_safe,
+        2.0 * jnp.pi,
+    )
 
     geom = geom_mod.eval_geom(state, static)
     bcovar = bcovar_mod.vmec_bcovar_half_mesh_from_wout(
@@ -1499,8 +1646,12 @@ def vmec_jax_flux_tube_mapping_from_state(  # pragma: no cover
     bmag_grid = bmag_all[sidx]
     dtheta_grid = 2.0 * jnp.pi / float(bmag_grid.shape[0])
     dzeta_grid = 2.0 * jnp.pi / float(bmag_grid.shape[1])
-    db_dtheta_grid = (jnp.roll(bmag_grid, -1, axis=0) - jnp.roll(bmag_grid, 1, axis=0)) / (2.0 * dtheta_grid)
-    db_dzeta_grid = (jnp.roll(bmag_grid, -1, axis=1) - jnp.roll(bmag_grid, 1, axis=1)) / (2.0 * dzeta_grid)
+    db_dtheta_grid = (
+        jnp.roll(bmag_grid, -1, axis=0) - jnp.roll(bmag_grid, 1, axis=0)
+    ) / (2.0 * dtheta_grid)
+    db_dzeta_grid = (
+        jnp.roll(bmag_grid, -1, axis=1) - jnp.roll(bmag_grid, 1, axis=1)
+    ) / (2.0 * dzeta_grid)
     db_ds_grid = (bmag_all[sidx + 1] - bmag_all[sidx - 1]) / (2.0 * ds)
 
     def _line(values: jnp.ndarray) -> jnp.ndarray:
@@ -1527,7 +1678,9 @@ def vmec_jax_flux_tube_mapping_from_state(  # pragma: no cover
         axis=-2,
     )
     contra = jnp.linalg.inv(cov_metric)
-    alpha_coeff = jnp.asarray([0.0, 1.0, -1.0], dtype=base_Rcos.dtype).at[2].set(-iota_safe)
+    alpha_coeff = (
+        jnp.asarray([0.0, 1.0, -1.0], dtype=base_Rcos.dtype).at[2].set(-iota_safe)
+    )
     grad_alpha_metric = jnp.einsum("i,zij,j->z", alpha_coeff, contra, alpha_coeff)
     grad_s_metric = contra[:, 0, 0]
     grad_s_dot_alpha = contra[:, 0, 1] - iota_safe * contra[:, 0, 2]
@@ -1537,23 +1690,40 @@ def vmec_jax_flux_tube_mapping_from_state(  # pragma: no cover
     sqrt_s = jnp.sqrt(s_val)
     L = jnp.asarray(float(L_reference), dtype=base_Rcos.dtype)
     Bref = jnp.asarray(float(B_reference), dtype=base_Rcos.dtype)
-    shat_safe = jnp.where(jnp.abs(s_hat) < 1.0e-12, jnp.asarray(0.0, dtype=base_Rcos.dtype), s_hat)
+    shat_safe = jnp.where(
+        jnp.abs(s_hat) < 1.0e-12, jnp.asarray(0.0, dtype=base_Rcos.dtype), s_hat
+    )
     gds2 = L * L * s_val * grad_alpha_metric
-    gds21 = shat_safe * grad_s_dot_alpha / jnp.maximum(Bref, jnp.asarray(1.0e-30, dtype=base_Rcos.dtype))
+    gds21 = (
+        shat_safe
+        * grad_s_dot_alpha
+        / jnp.maximum(Bref, jnp.asarray(1.0e-30, dtype=base_Rcos.dtype))
+    )
     gds22 = (
         shat_safe
         * shat_safe
         * grad_s_metric
-        / jnp.maximum(L * L * Bref * Bref * s_val, jnp.asarray(1.0e-30, dtype=base_Rcos.dtype))
+        / jnp.maximum(
+            L * L * Bref * Bref * s_val, jnp.asarray(1.0e-30, dtype=base_Rcos.dtype)
+        )
     )
-    grho = jnp.sqrt(grad_s_metric) / jnp.maximum(L * Bref * sqrt_s, jnp.asarray(1.0e-30, dtype=base_Rcos.dtype))
+    grho = jnp.sqrt(grad_s_metric) / jnp.maximum(
+        L * Bref * sqrt_s, jnp.asarray(1.0e-30, dtype=base_Rcos.dtype)
+    )
 
-    gradpar_profile = jnp.abs(L * iota_safe / jnp.maximum(jnp.abs(bmag * sqrtg), jnp.asarray(1.0e-30, dtype=base_Rcos.dtype)))
+    gradpar_profile = jnp.abs(
+        L
+        * iota_safe
+        / jnp.maximum(
+            jnp.abs(bmag * sqrtg), jnp.asarray(1.0e-30, dtype=base_Rcos.dtype)
+        )
+    )
     gradpar_value = jnp.mean(gradpar_profile)
     gradpar = gradpar_value * jnp.ones_like(theta_line)
-    dlogb_dtheta = (jnp.roll(jnp.log(jnp.maximum(bmag, 1.0e-30)), -1) - jnp.roll(jnp.log(jnp.maximum(bmag, 1.0e-30)), 1)) / (
-        2.0 * (2.0 * jnp.pi / float(ntheta_int))
-    )
+    dlogb_dtheta = (
+        jnp.roll(jnp.log(jnp.maximum(bmag, 1.0e-30)), -1)
+        - jnp.roll(jnp.log(jnp.maximum(bmag, 1.0e-30)), 1)
+    ) / (2.0 * (2.0 * jnp.pi / float(ntheta_int)))
     bgrad = gradpar_value * dlogb_dtheta
 
     grad_b_cov = jnp.stack((db_ds, db_dt, db_dp), axis=-1)
@@ -1566,7 +1736,9 @@ def vmec_jax_flux_tube_mapping_from_state(  # pragma: no cover
         * float(drift_scale)
         * shat_safe
         * grad_b_dot_s
-        / jnp.maximum(Bref * bmag_sq * sqrt_s, jnp.asarray(1.0e-30, dtype=base_Rcos.dtype))
+        / jnp.maximum(
+            Bref * bmag_sq * sqrt_s, jnp.asarray(1.0e-30, dtype=base_Rcos.dtype)
+        )
     )
 
     return {
@@ -1581,11 +1753,16 @@ def vmec_jax_flux_tube_mapping_from_state(  # pragma: no cover
         "gbdrift": gbdrift,
         "cvdrift0": gbdrift0,
         "gbdrift0": gbdrift0,
-        "jacobian": jnp.abs(sqrtg) / jnp.maximum(jnp.mean(jnp.abs(sqrtg)), jnp.asarray(1.0e-30, dtype=base_Rcos.dtype)),
+        "jacobian": jnp.abs(sqrtg)
+        / jnp.maximum(
+            jnp.mean(jnp.abs(sqrtg)), jnp.asarray(1.0e-30, dtype=base_Rcos.dtype)
+        ),
         "grho": grho,
-        "q": 1.0 / jnp.maximum(jnp.abs(iota_safe), jnp.asarray(1.0e-30, dtype=base_Rcos.dtype)),
+        "q": 1.0
+        / jnp.maximum(jnp.abs(iota_safe), jnp.asarray(1.0e-30, dtype=base_Rcos.dtype)),
         "s_hat": shat_safe,
-        "epsilon": jnp.std(bmag) / jnp.maximum(jnp.mean(bmag), jnp.asarray(1.0e-30, dtype=base_Rcos.dtype)),
+        "epsilon": jnp.std(bmag)
+        / jnp.maximum(jnp.mean(bmag), jnp.asarray(1.0e-30, dtype=base_Rcos.dtype)),
         "R0": float(L_reference),
         "B0": float(B_reference),
         "alpha": float(alpha),
@@ -1635,14 +1812,20 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
         raise ValueError("ntheta must be >= 4")
     mboz_int = int(mboz)
     nboz_int = int(nboz)
-    if mboz_int < _VMEC_BOOZER_PARITY_MIN_MODE_COUNT or nboz_int < _VMEC_BOOZER_PARITY_MIN_MODE_COUNT:
+    if (
+        mboz_int < _VMEC_BOOZER_PARITY_MIN_MODE_COUNT
+        or nboz_int < _VMEC_BOOZER_PARITY_MIN_MODE_COUNT
+    ):
         raise ValueError(
             "mboz and nboz must both be >= "
             f"{_VMEC_BOOZER_PARITY_MIN_MODE_COUNT} for VMEC/Boozer parity gates"
         )
 
     info = discover_differentiable_geometry_backends()
-    if not (info.get("vmec_jax_available", False) and info.get("booz_xform_jax_api_available", False)):
+    if not (
+        info.get("vmec_jax_available", False)
+        and info.get("booz_xform_jax_api_available", False)
+    ):
         raise RuntimeError("vmec_jax and booz_xform_jax functional APIs are required")
 
     booz_input_mod = importlib.import_module("vmec_jax.booz_input")
@@ -1655,26 +1838,42 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
     if ns_full < 3:
         raise RuntimeError("vmec_jax state needs at least three radial surfaces")
 
-    sidx = max(1, min(ns_full // 2, ns_full - 2)) if surface_index is None else int(surface_index)
+    sidx = (
+        max(1, min(ns_full // 2, ns_full - 2))
+        if surface_index is None
+        else int(surface_index)
+    )
     if not (0 < sidx < ns_full - 1):
         raise ValueError("surface_index must be an interior VMEC radial index")
-    s_value = float(sidx) / float(max(ns_full - 1, 1)) if torflux is None else float(torflux)
+    s_value = (
+        float(sidx) / float(max(ns_full - 1, 1)) if torflux is None else float(torflux)
+    )
     if not (0.0 < s_value < 1.0):
         raise ValueError("torflux must lie inside (0, 1)")
     if surface_stencil_width is not None and int(surface_stencil_width) < 3:
         raise ValueError("surface_stencil_width must be >= 3 when provided")
 
-    raw_length = float(getattr(wout, "Aminor_p", 1.0)) if reference_length is None else float(reference_length)
-    L_reference = raw_length if np.isfinite(raw_length) and abs(raw_length) > 0.0 else 1.0
+    raw_length = (
+        float(getattr(wout, "Aminor_p", 1.0))
+        if reference_length is None
+        else float(reference_length)
+    )
+    L_reference = (
+        raw_length if np.isfinite(raw_length) and abs(raw_length) > 0.0 else 1.0
+    )
     if reference_b is None:
         phi_profile = np.asarray(getattr(wout, "phi", [0.0, np.pi]), dtype=float)
         edge_toroidal_flux_over_2pi = -float(phi_profile[-1]) / (2.0 * np.pi)
         raw_b = 2.0 * abs(edge_toroidal_flux_over_2pi) / (L_reference * L_reference)
         B_reference = raw_b if np.isfinite(raw_b) and abs(raw_b) > 0.0 else 1.0
     else:
-        edge_toroidal_flux_over_2pi = -float(np.asarray(getattr(wout, "phi", [0.0, np.pi]))[-1]) / (2.0 * np.pi)
+        edge_toroidal_flux_over_2pi = -float(
+            np.asarray(getattr(wout, "phi", [0.0, np.pi]))[-1]
+        ) / (2.0 * np.pi)
         B_reference = float(reference_b)
-    B_reference = B_reference if np.isfinite(B_reference) and abs(B_reference) > 0.0 else 1.0
+    B_reference = (
+        B_reference if np.isfinite(B_reference) and abs(B_reference) > 0.0 else 1.0
+    )
 
     inputs = booz_input_mod.booz_xform_inputs_from_state(
         state=state,
@@ -1706,47 +1905,73 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
 
     bmnc_b_all = jnp.asarray(out["bmnc_b"], dtype=base_Rcos.dtype)
     if bmnc_b_all.ndim != 2:
-        raise RuntimeError("booz_xform_jax bmnc_b output must have shape (surface, mode)")
+        raise RuntimeError(
+            "booz_xform_jax bmnc_b output must have shape (surface, mode)"
+        )
     ns_b = int(bmnc_b_all.shape[0])
     if ns_b < 2:
         raise RuntimeError("booz_xform_jax output needs at least two radial surfaces")
     ns_b_full = int(np.asarray(out.get("ns_b", ns_b)))
-    jlist = jnp.asarray(out.get("jlist", jnp.arange(1, ns_b + 1)), dtype=base_Rcos.dtype)
+    jlist = jnp.asarray(
+        out.get("jlist", jnp.arange(1, ns_b + 1)), dtype=base_Rcos.dtype
+    )
     s_half = (jlist - 0.5) / float(max(ns_b_full, 1))
 
     radial_spacing = float(s_half[1] - s_half[0])
     bmnc_b = _interp_radial(bmnc_b_all, s_half, s_value)
-    rmnc_b = _interp_radial(jnp.asarray(out["rmnc_b"], dtype=base_Rcos.dtype), s_half, s_value)
-    zmns_b = _interp_radial(jnp.asarray(out["zmns_b"], dtype=base_Rcos.dtype), s_half, s_value)
-    numns_b = -_interp_radial(jnp.asarray(out["pmns_b"], dtype=base_Rcos.dtype), s_half, s_value)
+    rmnc_b = _interp_radial(
+        jnp.asarray(out["rmnc_b"], dtype=base_Rcos.dtype), s_half, s_value
+    )
+    zmns_b = _interp_radial(
+        jnp.asarray(out["zmns_b"], dtype=base_Rcos.dtype), s_half, s_value
+    )
+    numns_b = -_interp_radial(
+        jnp.asarray(out["pmns_b"], dtype=base_Rcos.dtype), s_half, s_value
+    )
     d_bmnc_b_d_s = _interp_radial(
-        _radial_derivative_array(jnp.asarray(out["bmnc_b"], dtype=base_Rcos.dtype), radial_spacing),
+        _radial_derivative_array(
+            jnp.asarray(out["bmnc_b"], dtype=base_Rcos.dtype), radial_spacing
+        ),
         s_half,
         s_value,
     )
     d_rmnc_b_d_s = _interp_radial(
-        _radial_derivative_array(jnp.asarray(out["rmnc_b"], dtype=base_Rcos.dtype), radial_spacing),
+        _radial_derivative_array(
+            jnp.asarray(out["rmnc_b"], dtype=base_Rcos.dtype), radial_spacing
+        ),
         s_half,
         s_value,
     )
     d_zmns_b_d_s = _interp_radial(
-        _radial_derivative_array(jnp.asarray(out["zmns_b"], dtype=base_Rcos.dtype), radial_spacing),
+        _radial_derivative_array(
+            jnp.asarray(out["zmns_b"], dtype=base_Rcos.dtype), radial_spacing
+        ),
         s_half,
         s_value,
     )
     d_numns_b_d_s = -_interp_radial(
-        _radial_derivative_array(jnp.asarray(out["pmns_b"], dtype=base_Rcos.dtype), radial_spacing),
+        _radial_derivative_array(
+            jnp.asarray(out["pmns_b"], dtype=base_Rcos.dtype), radial_spacing
+        ),
         s_half,
         s_value,
     )
     iota_profile = jnp.asarray(out["iota_b"], dtype=base_Rcos.dtype)
     iota = _interp_radial(iota_profile, s_half, s_value)
-    d_iota_ds = _interp_radial(_radial_derivative_profile(iota_profile, radial_spacing), s_half, s_value)
-    iota_safe = jnp.where(jnp.abs(iota) < 1.0e-12, jnp.sign(iota + 1.0e-30) * 1.0e-12, iota)
+    d_iota_ds = _interp_radial(
+        _radial_derivative_profile(iota_profile, radial_spacing), s_half, s_value
+    )
+    iota_safe = jnp.where(
+        jnp.abs(iota) < 1.0e-12, jnp.sign(iota + 1.0e-30) * 1.0e-12, iota
+    )
     s_hat = -2.0 * jnp.asarray(s_value, dtype=base_Rcos.dtype) * d_iota_ds / iota_safe
 
-    boozer_i = _interp_radial(jnp.asarray(out["buco_b"], dtype=base_Rcos.dtype), s_half, s_value)
-    boozer_g = _interp_radial(jnp.asarray(out["bvco_b"], dtype=base_Rcos.dtype), s_half, s_value)
+    boozer_i = _interp_radial(
+        jnp.asarray(out["buco_b"], dtype=base_Rcos.dtype), s_half, s_value
+    )
+    boozer_g = _interp_radial(
+        jnp.asarray(out["bvco_b"], dtype=base_Rcos.dtype), s_half, s_value
+    )
 
     theta_closed = jnp.linspace(-jnp.pi, jnp.pi, ntheta_int + 1, dtype=base_Rcos.dtype)
     mod_b, _dmod_b_dtheta = _evaluate_boozer_cosine_series_on_field_line(
@@ -1757,18 +1982,31 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
         iota=iota_safe,
         alpha=float(alpha),
     )
-    mod_b_safe = jnp.maximum(jnp.abs(mod_b), jnp.asarray(1.0e-30, dtype=base_Rcos.dtype))
+    mod_b_safe = jnp.maximum(
+        jnp.abs(mod_b), jnp.asarray(1.0e-30, dtype=base_Rcos.dtype)
+    )
     sqrt_g_booz = (boozer_g + iota_safe * boozer_i) / (mod_b_safe * mod_b_safe)
     gradpar_raw = jnp.abs(
         jnp.asarray(float(L_reference), dtype=base_Rcos.dtype)
         * iota_safe
-        / jnp.maximum(jnp.abs(mod_b_safe * sqrt_g_booz), jnp.asarray(1.0e-30, dtype=base_Rcos.dtype))
+        / jnp.maximum(
+            jnp.abs(mod_b_safe * sqrt_g_booz),
+            jnp.asarray(1.0e-30, dtype=base_Rcos.dtype),
+        )
     )
     inv_gradpar_int = _cumulative_trapezoid(1.0 / gradpar_raw, theta_closed)
-    gradpar_eqarc = 2.0 * jnp.pi / jnp.maximum(inv_gradpar_int[-1], jnp.asarray(1.0e-30, dtype=base_Rcos.dtype))
+    gradpar_eqarc = (
+        2.0
+        * jnp.pi
+        / jnp.maximum(inv_gradpar_int[-1], jnp.asarray(1.0e-30, dtype=base_Rcos.dtype))
+    )
     theta_eqarc = gradpar_eqarc * inv_gradpar_int - jnp.pi
-    theta_uniform_closed = jnp.linspace(-jnp.pi, jnp.pi, ntheta_int + 1, dtype=base_Rcos.dtype)
-    bmag_closed = jnp.asarray(jnp.interp(theta_uniform_closed, theta_eqarc, mod_b_safe / float(B_reference)))
+    theta_uniform_closed = jnp.linspace(
+        -jnp.pi, jnp.pi, ntheta_int + 1, dtype=base_Rcos.dtype
+    )
+    bmag_closed = jnp.asarray(
+        jnp.interp(theta_uniform_closed, theta_eqarc, mod_b_safe / float(B_reference))
+    )
     theta = theta_uniform_closed[:-1]
     bmag = bmag_closed[:-1]
     gradpar = gradpar_eqarc * jnp.ones_like(theta)
@@ -1778,16 +2016,27 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
     dbmag_dtheta = jnp.real(jnp.fft.ifft(1j * wave_number * jnp.fft.fft(bmag)))
     bgrad = gradpar_eqarc * dbmag_dtheta / bmag_safe
 
-    dpsidrho = 2.0 * jnp.sqrt(jnp.asarray(s_value, dtype=base_Rcos.dtype)) * jnp.asarray(
-        edge_toroidal_flux_over_2pi,
-        dtype=base_Rcos.dtype,
+    dpsidrho = (
+        2.0
+        * jnp.sqrt(jnp.asarray(s_value, dtype=base_Rcos.dtype))
+        * jnp.asarray(
+            edge_toroidal_flux_over_2pi,
+            dtype=base_Rcos.dtype,
+        )
     )
-    drhodpsi = 1.0 / jnp.maximum(jnp.abs(dpsidrho), jnp.asarray(1.0e-30, dtype=base_Rcos.dtype))
-    jacobian = 1.0 / jnp.maximum(jnp.abs(drhodpsi * gradpar_eqarc * bmag_safe), jnp.asarray(1.0e-30, dtype=base_Rcos.dtype))
+    drhodpsi = 1.0 / jnp.maximum(
+        jnp.abs(dpsidrho), jnp.asarray(1.0e-30, dtype=base_Rcos.dtype)
+    )
+    jacobian = 1.0 / jnp.maximum(
+        jnp.abs(drhodpsi * gradpar_eqarc * bmag_safe),
+        jnp.asarray(1.0e-30, dtype=base_Rcos.dtype),
+    )
 
     m = jnp.asarray(out["ixm_b"], dtype=base_Rcos.dtype)
     n = jnp.asarray(out["ixn_b"], dtype=base_Rcos.dtype)
-    phi_b = (theta_closed - jnp.asarray(float(alpha), dtype=base_Rcos.dtype)) / iota_safe
+    phi_b = (
+        theta_closed - jnp.asarray(float(alpha), dtype=base_Rcos.dtype)
+    ) / iota_safe
     phase = m[:, None] * theta_closed[None, :] - n[:, None] * phi_b[None, :]
     cos_phase = jnp.cos(phase)
     sin_phase = jnp.sin(phase)
@@ -1825,36 +2074,69 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
     grad_psi_y = (d_z_b_d_theta * d_x_d_phi - d_x_d_theta * d_z_b_d_phi) / sqrt_g_booz
     grad_psi_z = (d_x_d_theta * d_y_d_phi - d_y_d_theta * d_x_d_phi) / sqrt_g_booz
     g_sup_psi_psi = grad_psi_x**2 + grad_psi_y**2 + grad_psi_z**2
-    g_sup_psi_psi_safe = jnp.maximum(g_sup_psi_psi, jnp.asarray(1.0e-30, dtype=base_Rcos.dtype))
+    g_sup_psi_psi_safe = jnp.maximum(
+        g_sup_psi_psi, jnp.asarray(1.0e-30, dtype=base_Rcos.dtype)
+    )
 
     etf = jnp.asarray(edge_toroidal_flux_over_2pi, dtype=base_Rcos.dtype)
     grad_theta_x = (d_y_d_phi * d_z_b_d_s - d_z_b_d_phi * d_y_d_s) / (sqrt_g_booz * etf)
     grad_theta_y = (d_z_b_d_phi * d_x_d_s - d_x_d_phi * d_z_b_d_s) / (sqrt_g_booz * etf)
     grad_theta_z = (d_x_d_phi * d_y_d_s - d_y_d_phi * d_x_d_s) / (sqrt_g_booz * etf)
-    grad_phi_x = (d_y_d_s * d_z_b_d_theta - d_z_b_d_s * d_y_d_theta) / (sqrt_g_booz * etf)
-    grad_phi_y = (d_z_b_d_s * d_x_d_theta - d_x_d_s * d_z_b_d_theta) / (sqrt_g_booz * etf)
+    grad_phi_x = (d_y_d_s * d_z_b_d_theta - d_z_b_d_s * d_y_d_theta) / (
+        sqrt_g_booz * etf
+    )
+    grad_phi_y = (d_z_b_d_s * d_x_d_theta - d_x_d_s * d_z_b_d_theta) / (
+        sqrt_g_booz * etf
+    )
     grad_phi_z = (d_x_d_s * d_y_d_theta - d_y_d_s * d_x_d_theta) / (sqrt_g_booz * etf)
     zeta_center = -jnp.asarray(float(alpha), dtype=base_Rcos.dtype) / iota_safe
     shear_phase = phi_b - zeta_center
-    grad_alpha_x = -shear_phase * d_iota_ds * grad_psi_x / etf + grad_theta_x - iota_safe * grad_phi_x
-    grad_alpha_y = -shear_phase * d_iota_ds * grad_psi_y / etf + grad_theta_y - iota_safe * grad_phi_y
-    grad_alpha_z = -shear_phase * d_iota_ds * grad_psi_z / etf + grad_theta_z - iota_safe * grad_phi_z
-    grad_alpha_dot_grad_psi = grad_alpha_x * grad_psi_x + grad_alpha_y * grad_psi_y + grad_alpha_z * grad_psi_z
+    grad_alpha_x = (
+        -shear_phase * d_iota_ds * grad_psi_x / etf
+        + grad_theta_x
+        - iota_safe * grad_phi_x
+    )
+    grad_alpha_y = (
+        -shear_phase * d_iota_ds * grad_psi_y / etf
+        + grad_theta_y
+        - iota_safe * grad_phi_y
+    )
+    grad_alpha_z = (
+        -shear_phase * d_iota_ds * grad_psi_z / etf
+        + grad_theta_z
+        - iota_safe * grad_phi_z
+    )
+    grad_alpha_dot_grad_psi = (
+        grad_alpha_x * grad_psi_x
+        + grad_alpha_y * grad_psi_y
+        + grad_alpha_z * grad_psi_z
+    )
     local_shear_l1 = grad_alpha_dot_grad_psi / g_sup_psi_psi_safe
     s_arr = jnp.asarray(s_value, dtype=base_Rcos.dtype)
     L = jnp.asarray(float(L_reference), dtype=base_Rcos.dtype)
     Bref = jnp.asarray(float(B_reference), dtype=base_Rcos.dtype)
     shat_metric = s_hat
     metric_bmag_sq = mod_b_safe * mod_b_safe
-    gds2_raw = (metric_bmag_sq / g_sup_psi_psi_safe + g_sup_psi_psi_safe * local_shear_l1**2) * L * L * s_arr
+    gds2_raw = (
+        (metric_bmag_sq / g_sup_psi_psi_safe + g_sup_psi_psi_safe * local_shear_l1**2)
+        * L
+        * L
+        * s_arr
+    )
     gds21_raw = g_sup_psi_psi_safe * local_shear_l1 * shat_metric / Bref
-    gds22_raw = g_sup_psi_psi_safe * shat_metric * shat_metric / (L * L * Bref * Bref * s_arr)
+    gds22_raw = (
+        g_sup_psi_psi_safe * shat_metric * shat_metric / (L * L * Bref * Bref * s_arr)
+    )
     grho_raw = jnp.sqrt(g_sup_psi_psi_safe / (L * L * Bref * Bref * s_arr))
 
     boozer_current_sum = boozer_g + iota_safe * boozer_i
-    d_sqrt_g_booz_d_theta = -2.0 * boozer_current_sum * d_mod_b_d_theta / (mod_b_safe**3)
+    d_sqrt_g_booz_d_theta = (
+        -2.0 * boozer_current_sum * d_mod_b_d_theta / (mod_b_safe**3)
+    )
     d_sqrt_g_booz_d_phi = -2.0 * boozer_current_sum * d_mod_b_d_phi / (mod_b_safe**3)
-    curvature_numerator = boozer_g * d_sqrt_g_booz_d_theta - boozer_i * d_sqrt_g_booz_d_phi
+    curvature_numerator = (
+        boozer_g * d_sqrt_g_booz_d_theta - boozer_i * d_sqrt_g_booz_d_phi
+    )
     curvature_denom = 2.0 * sqrt_g_booz * boozer_current_sum
     eps = jnp.asarray(1.0e-30, dtype=base_Rcos.dtype)
     curvature_denom_safe = jnp.where(
@@ -1894,9 +2176,15 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
     gds21 = jnp.interp(theta_uniform_closed, theta_eqarc, gds21_raw)[:-1]
     gds22 = jnp.interp(theta_uniform_closed, theta_eqarc, gds22_raw)[:-1]
     grho = jnp.interp(theta_uniform_closed, theta_eqarc, grho_raw)[:-1]
-    cvdrift = drift_loader_factor * jnp.interp(theta_uniform_closed, theta_eqarc, drift_cvdrift_raw)[:-1]
+    cvdrift = (
+        drift_loader_factor
+        * jnp.interp(theta_uniform_closed, theta_eqarc, drift_cvdrift_raw)[:-1]
+    )
     gbdrift = cvdrift
-    cvdrift0 = drift_loader_factor * jnp.interp(theta_uniform_closed, theta_eqarc, drift_cvdrift0_raw)[:-1]
+    cvdrift0 = (
+        drift_loader_factor
+        * jnp.interp(theta_uniform_closed, theta_eqarc, drift_cvdrift0_raw)[:-1]
+    )
     gbdrift0 = cvdrift0
 
     return {
@@ -1915,7 +2203,8 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
         "cvdrift0": cvdrift0,
         "gbdrift0": gbdrift0,
         "grho": grho,
-        "q": 1.0 / jnp.maximum(jnp.abs(iota_safe), jnp.asarray(1.0e-30, dtype=base_Rcos.dtype)),
+        "q": 1.0
+        / jnp.maximum(jnp.abs(iota_safe), jnp.asarray(1.0e-30, dtype=base_Rcos.dtype)),
         "s_hat": s_hat,
         "iota": iota,
         "torflux": float(s_value),
@@ -1924,8 +2213,12 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
         "reference_b": float(B_reference),
         "mboz": mboz_int,
         "nboz": nboz_int,
-        "surface_stencil_width": None if surface_stencil_width is None else int(surface_stencil_width),
-        "boozer_surface_indices": None if surface_indices is None else [int(x) for x in np.asarray(surface_indices)],
+        "surface_stencil_width": None
+        if surface_stencil_width is None
+        else int(surface_stencil_width),
+        "boozer_surface_indices": None
+        if surface_indices is None
+        else [int(x) for x in np.asarray(surface_indices)],
         "field_line_convention": "Boozer theta, alpha=theta-iota*zeta, equal-arc remap",
         "scope": (
             "Boozer equal-arc bmag/gradpar/Jacobian plus zero-beta metric/drift parity; "
@@ -1976,7 +2269,9 @@ def vmec_jax_flux_tube_sensitivity_report(  # pragma: no cover
 
         input_path, wout_path = driver.example_paths(str(case_name))
         if wout_path is None:
-            raise RuntimeError(f"vmec_jax example {case_name!r} has no bundled wout reference")
+            raise RuntimeError(
+                f"vmec_jax example {case_name!r} has no bundled wout reference"
+            )
 
         cfg, _indata = config_mod.load_config(str(input_path))
         static = static_mod.build_static(cfg)
@@ -1986,9 +2281,13 @@ def vmec_jax_flux_tube_sensitivity_report(  # pragma: no cover
         base_Rcos = jnp.asarray(state.Rcos)
         base_Zsin = jnp.asarray(state.Zsin)
         if base_Rcos.ndim != 2 or base_Zsin.ndim != 2:
-            raise RuntimeError("vmec_jax state Rcos/Zsin arrays must be two-dimensional")
+            raise RuntimeError(
+                "vmec_jax state Rcos/Zsin arrays must be two-dimensional"
+            )
 
-        ridx = int(base_Rcos.shape[0] // 2) if radial_index is None else int(radial_index)
+        ridx = (
+            int(base_Rcos.shape[0] // 2) if radial_index is None else int(radial_index)
+        )
         midx = int(mode_index)
         if not (0 <= ridx < int(base_Rcos.shape[0])):
             raise ValueError("radial_index is outside the VMEC state radial grid")
@@ -2093,7 +2392,10 @@ def vmec_jax_flux_tube_array_parity_report(  # pragma: no cover
         raise ValueError("ntheta must be >= 4")
     mboz_int = int(mboz)
     nboz_int = int(nboz)
-    if mboz_int < _VMEC_BOOZER_PARITY_MIN_MODE_COUNT or nboz_int < _VMEC_BOOZER_PARITY_MIN_MODE_COUNT:
+    if (
+        mboz_int < _VMEC_BOOZER_PARITY_MIN_MODE_COUNT
+        or nboz_int < _VMEC_BOOZER_PARITY_MIN_MODE_COUNT
+    ):
         raise ValueError(
             "mboz and nboz must both be >= "
             f"{_VMEC_BOOZER_PARITY_MIN_MODE_COUNT} for VMEC/Boozer parity gates"
@@ -2109,7 +2411,10 @@ def vmec_jax_flux_tube_array_parity_report(  # pragma: no cover
         }
 
     try:
-        from spectraxgk.from_gx.vmec import generate_vmec_eik_internal, internal_vmec_backend_available
+        from spectraxgk.from_gx.vmec import (
+            generate_vmec_eik_internal,
+            internal_vmec_backend_available,
+        )
         from spectraxgk.geometry import load_gx_geometry_netcdf
 
         if not internal_vmec_backend_available():
@@ -2127,7 +2432,9 @@ def vmec_jax_flux_tube_array_parity_report(  # pragma: no cover
 
         input_path, wout_path = driver.example_paths(str(case_name))
         if wout_path is None:
-            raise RuntimeError(f"vmec_jax example {case_name!r} has no bundled wout reference")
+            raise RuntimeError(
+                f"vmec_jax example {case_name!r} has no bundled wout reference"
+            )
 
         cfg, indata = config_mod.load_config(str(input_path))
         static = static_mod.build_static(cfg)
@@ -2135,7 +2442,11 @@ def vmec_jax_flux_tube_array_parity_report(  # pragma: no cover
         state = wout_mod.state_from_wout(wout)
 
         ns = int(jnp.asarray(state.Rcos).shape[0])
-        sidx = max(1, min(ns // 2, ns - 2)) if surface_index is None else int(surface_index)
+        sidx = (
+            max(1, min(ns // 2, ns - 2))
+            if surface_index is None
+            else int(surface_index)
+        )
         torflux = float(sidx) / float(max(ns - 1, 1))
         direct_mapping = vmec_jax_flux_tube_mapping_from_state(
             state,
@@ -2203,21 +2514,39 @@ def vmec_jax_flux_tube_array_parity_report(  # pragma: no cover
             for name, (candidate, reference) in array_pairs.items()
         }
         scalar_metrics = {
-            "gradpar": _scalar_parity_metrics(direct.gradpar_value, imported.gradpar_value),
+            "gradpar": _scalar_parity_metrics(
+                direct.gradpar_value, imported.gradpar_value
+            ),
             "q": _scalar_parity_metrics(direct.q, imported.q),
             "s_hat": _scalar_parity_metrics(direct.s_hat, imported.s_hat),
         }
-        core_names = ("bmag", "gds2", "gds21", "gds22", "cvdrift", "gbdrift", "jacobian", "grho")
+        core_names = (
+            "bmag",
+            "gds2",
+            "gds21",
+            "gds22",
+            "cvdrift",
+            "gbdrift",
+            "jacobian",
+            "grho",
+        )
         core_values: list[float] = []
         for name in core_names:
             metrics = array_metrics[name]
             if not bool(metrics.get("shape_match", False)):
                 continue
             raw_value = metrics.get("normalized_max_abs")
-            core_values.append(float(raw_value) if isinstance(raw_value, int | float | np.floating) else np.inf)
+            core_values.append(
+                float(raw_value)
+                if isinstance(raw_value, int | float | np.floating)
+                else np.inf
+            )
         worst_core = max(core_values) if core_values else np.inf
         worst_scalar = max(float(values["rel"]) for values in scalar_metrics.values())
-        production_parity_passed = bool(worst_core <= float(core_tolerance) and worst_scalar <= float(scalar_tolerance))
+        production_parity_passed = bool(
+            worst_core <= float(core_tolerance)
+            and worst_scalar <= float(scalar_tolerance)
+        )
 
         equal_arc_core_error = None
         equal_arc_core_array_metrics: dict[str, dict[str, object]] = {}
@@ -2279,9 +2608,14 @@ def vmec_jax_flux_tube_array_parity_report(  # pragma: no cover
                     for name, (candidate, reference) in equal_arc_drift_pairs.items()
                 }
                 equal_arc_core_scalar_metrics = {
-                    "gradpar": _scalar_parity_metrics(jnp.asarray(equal_arc_core["gradpar"])[0], imported.gradpar_value),
+                    "gradpar": _scalar_parity_metrics(
+                        jnp.asarray(equal_arc_core["gradpar"])[0],
+                        imported.gradpar_value,
+                    ),
                     "q": _scalar_parity_metrics(equal_arc_core["q"], imported.q),
-                    "s_hat": _scalar_parity_metrics(equal_arc_core["s_hat"], imported.s_hat),
+                    "s_hat": _scalar_parity_metrics(
+                        equal_arc_core["s_hat"], imported.s_hat
+                    ),
                 }
                 equal_arc_core_names = ("theta", "bmag", "jacobian")
                 equal_arc_values: list[float] = []
@@ -2290,36 +2624,63 @@ def vmec_jax_flux_tube_array_parity_report(  # pragma: no cover
                     if not bool(metrics.get("shape_match", False)):
                         continue
                     raw_value = metrics.get("normalized_max_abs")
-                    equal_arc_values.append(float(raw_value) if isinstance(raw_value, int | float | np.floating) else np.inf)
-                equal_arc_core_worst = max(equal_arc_values) if equal_arc_values else np.inf
-                equal_arc_core_worst_scalar = max(float(values["rel"]) for values in equal_arc_core_scalar_metrics.values())
+                    equal_arc_values.append(
+                        float(raw_value)
+                        if isinstance(raw_value, int | float | np.floating)
+                        else np.inf
+                    )
+                equal_arc_core_worst = (
+                    max(equal_arc_values) if equal_arc_values else np.inf
+                )
+                equal_arc_core_worst_scalar = max(
+                    float(values["rel"])
+                    for values in equal_arc_core_scalar_metrics.values()
+                )
                 derivative_metrics = equal_arc_core_array_metrics["bgrad"]
                 raw_derivative = derivative_metrics.get("normalized_max_abs")
                 equal_arc_derivative_worst = (
-                    float(raw_derivative) if isinstance(raw_derivative, int | float | np.floating) else np.inf
+                    float(raw_derivative)
+                    if isinstance(raw_derivative, int | float | np.floating)
+                    else np.inf
                 )
                 equal_arc_core_passed = bool(
                     equal_arc_core_worst <= float(equal_arc_core_tolerance)
                     and equal_arc_core_worst_scalar <= float(equal_arc_core_tolerance)
                 )
-                equal_arc_derivative_passed = bool(equal_arc_derivative_worst <= float(equal_arc_derivative_tolerance))
+                equal_arc_derivative_passed = bool(
+                    equal_arc_derivative_worst <= float(equal_arc_derivative_tolerance)
+                )
                 metric_values: list[float] = []
                 for metrics in equal_arc_metric_array_metrics.values():
                     if not bool(metrics.get("shape_match", False)):
                         continue
                     raw_value = metrics.get("normalized_max_abs")
-                    metric_values.append(float(raw_value) if isinstance(raw_value, int | float | np.floating) else np.inf)
+                    metric_values.append(
+                        float(raw_value)
+                        if isinstance(raw_value, int | float | np.floating)
+                        else np.inf
+                    )
                 equal_arc_metric_worst = max(metric_values) if metric_values else np.inf
-                equal_arc_metric_passed = bool(equal_arc_metric_worst <= float(equal_arc_metric_tolerance))
+                equal_arc_metric_passed = bool(
+                    equal_arc_metric_worst <= float(equal_arc_metric_tolerance)
+                )
                 drift_values: list[float] = []
                 for metrics in equal_arc_drift_array_metrics.values():
                     if not bool(metrics.get("shape_match", False)):
                         continue
                     raw_value = metrics.get("normalized_max_abs")
-                    drift_values.append(float(raw_value) if isinstance(raw_value, int | float | np.floating) else np.inf)
+                    drift_values.append(
+                        float(raw_value)
+                        if isinstance(raw_value, int | float | np.floating)
+                        else np.inf
+                    )
                 equal_arc_drift_worst = max(drift_values) if drift_values else np.inf
-                equal_arc_drift_passed = bool(equal_arc_drift_worst <= float(equal_arc_drift_tolerance))
-            except Exception as exc:  # pragma: no cover - optional-backend diagnostic detail
+                equal_arc_drift_passed = bool(
+                    equal_arc_drift_worst <= float(equal_arc_drift_tolerance)
+                )
+            except (
+                Exception
+            ) as exc:  # pragma: no cover - optional-backend diagnostic detail
                 equal_arc_core_error = f"{type(exc).__name__}: {exc}"
         else:
             equal_arc_core_error = "booz_xform_jax functional API is not available"
@@ -2355,7 +2716,9 @@ def vmec_jax_flux_tube_array_parity_report(  # pragma: no cover
         "equal_arc_core_scalar_metrics": equal_arc_core_scalar_metrics,
         "equal_arc_core_worst_normalized_max_abs": float(equal_arc_core_worst),
         "equal_arc_core_worst_scalar_rel": float(equal_arc_core_worst_scalar),
-        "equal_arc_derivative_worst_normalized_max_abs": float(equal_arc_derivative_worst),
+        "equal_arc_derivative_worst_normalized_max_abs": float(
+            equal_arc_derivative_worst
+        ),
         "equal_arc_metric_worst_normalized_max_abs": float(equal_arc_metric_worst),
         "equal_arc_drift_worst_normalized_max_abs": float(equal_arc_drift_worst),
         "equal_arc_core_tolerance": float(equal_arc_core_tolerance),
@@ -2421,7 +2784,9 @@ def geometry_sensitivity_report(
         "jacobian_ad": np.asarray(jac_ad).tolist(),
         "jacobian_fd": np.asarray(jac_fd).tolist(),
         "max_abs_ad_fd_error": float(np.max(np.abs(np.asarray(diff)))),
-        "max_rel_ad_fd_error": float(np.max(np.abs(np.asarray(diff) / np.asarray(scale)))),
+        "max_rel_ad_fd_error": float(
+            np.max(np.abs(np.asarray(diff) / np.asarray(scale)))
+        ),
         "fd_step": float(fd_step),
         "source_model": str(source_model),
     }
@@ -2462,7 +2827,9 @@ def geometry_inverse_design_report(
     else:
         indices_np = np.asarray(list(observable_indices), dtype=int)
     if indices_np.ndim != 1 or indices_np.size == 0:
-        raise ValueError("observable_indices must be a non-empty one-dimensional sequence")
+        raise ValueError(
+            "observable_indices must be a non-empty one-dimensional sequence"
+        )
     if np.any(indices_np < 0) or np.any(indices_np >= len(_GEOMETRY_OBSERVABLE_NAMES)):
         raise ValueError("observable_indices contains an out-of-range observable index")
 
@@ -2506,10 +2873,14 @@ def geometry_inverse_design_report(
     jac_fd = finite_difference_jacobian(observable_fn, p, step=fd_step)
     diff = jac_ad - jac_fd
     scale = jnp.maximum(jnp.abs(jac_fd), 1.0e-12)
-    uq = covariance_diagnostics(np.asarray(jac_ad), np.asarray(residual), regularization=regularization)
+    uq = covariance_diagnostics(
+        np.asarray(jac_ad), np.asarray(residual), regularization=regularization
+    )
 
     return {
-        "observable_names": [str(_GEOMETRY_OBSERVABLE_NAMES[int(i)]) for i in indices_np],
+        "observable_names": [
+            str(_GEOMETRY_OBSERVABLE_NAMES[int(i)]) for i in indices_np
+        ],
         "initial_params": np.asarray(params).tolist(),
         "final_params": np.asarray(p).tolist(),
         "target_observables": np.asarray(target).tolist(),
@@ -2520,7 +2891,9 @@ def geometry_inverse_design_report(
         "jacobian_ad": np.asarray(jac_ad).tolist(),
         "jacobian_fd": np.asarray(jac_fd).tolist(),
         "max_abs_ad_fd_error": float(np.max(np.abs(np.asarray(diff)))),
-        "max_rel_ad_fd_error": float(np.max(np.abs(np.asarray(diff) / np.asarray(scale)))),
+        "max_rel_ad_fd_error": float(
+            np.max(np.abs(np.asarray(diff) / np.asarray(scale)))
+        ),
         "uq": uq,
         "fd_step": float(fd_step),
         "damping": float(damping),

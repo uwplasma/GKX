@@ -50,6 +50,10 @@ def covariance_diagnostics(
         raise ValueError("jacobian must contain at least one parameter column")
     if jac.shape[0] != res.size:
         raise ValueError("residual length must match the number of Jacobian rows")
+    if not np.all(np.isfinite(jac)):
+        raise ValueError("jacobian must contain only finite values")
+    if not np.all(np.isfinite(res)):
+        raise ValueError("residual must contain only finite values")
     reg = float(regularization)
     if reg < 0.0:
         raise ValueError("regularization must be non-negative")
@@ -67,7 +71,9 @@ def covariance_diagnostics(
     covariance = 0.5 * (covariance + covariance.T)
     std = np.sqrt(np.maximum(np.diag(covariance), 0.0))
     denom = np.outer(std, std)
-    correlation = np.divide(covariance, denom, out=np.zeros_like(covariance), where=denom > 0.0)
+    correlation = np.divide(
+        covariance, denom, out=np.zeros_like(covariance), where=denom > 0.0
+    )
 
     eigvals = np.linalg.eigvalsh(covariance)
     positive = eigvals[eigvals > 0.0]
@@ -122,7 +128,9 @@ def central_finite_difference_jacobian(
         fm = jnp.ravel(jnp.asarray(fn(p - h * eye[i])))
         return (fp - fm) / (2.0 * h)
 
-    cols = independent_map(column, range(int(p.size)), workers=n_workers, executor=executor_key)
+    cols = independent_map(
+        column, range(int(p.size)), workers=n_workers, executor=executor_key
+    )
     if not cols:
         return jnp.zeros((jnp.ravel(jnp.asarray(fn(p))).size, 0), dtype=p.dtype)
     return jnp.stack(cols, axis=1)
@@ -254,14 +262,18 @@ def isolated_eigenvalue_sensitivity_report(
     eig_base = jnp.linalg.eigvals(jnp.asarray(matrix_fn(p)))
     eig_np = np.asarray(eig_base)
     if eig_np.ndim != 1 or eig_np.size == 0:
-        raise ValueError("matrix_fn must return a square matrix with at least one eigenvalue")
+        raise ValueError(
+            "matrix_fn must return a square matrix with at least one eigenvalue"
+        )
     selector_key = selector.strip().lower()
     if selector_key == "max_real":
         index = int(np.argmax(np.real(eig_np)))
     elif selector_key.startswith("index:"):
         index = int(selector_key.split(":", 1)[1])
         if index < 0 or index >= eig_np.size:
-            raise ValueError(f"selector index {index} is out of bounds for {eig_np.size} eigenvalues")
+            raise ValueError(
+                f"selector index {index} is out of bounds for {eig_np.size} eigenvalues"
+            )
     else:
         raise ValueError("selector must be 'max_real' or 'index:N'")
 
@@ -340,7 +352,9 @@ def isolated_eigenpair_observable_sensitivity_report(
     eig_base, vec_base = jnp.linalg.eig(jnp.asarray(matrix_fn(p)))
     eig_np = np.asarray(eig_base)
     if eig_np.ndim != 1 or eig_np.size == 0:
-        raise ValueError("matrix_fn must return a square matrix with at least one eigenvalue")
+        raise ValueError(
+            "matrix_fn must return a square matrix with at least one eigenvalue"
+        )
     if np.asarray(vec_base).shape[1] != eig_np.size:
         raise ValueError("eigenvector matrix shape is inconsistent with eigenvalues")
     selector_key = selector.strip().lower()
@@ -349,7 +363,9 @@ def isolated_eigenpair_observable_sensitivity_report(
     elif selector_key.startswith("index:"):
         index = int(selector_key.split(":", 1)[1])
         if index < 0 or index >= eig_np.size:
-            raise ValueError(f"selector index {index} is out of bounds for {eig_np.size} eigenvalues")
+            raise ValueError(
+                f"selector index {index} is out of bounds for {eig_np.size} eigenvalues"
+            )
     else:
         raise ValueError("selector must be 'max_real' or 'index:N'")
 
@@ -362,7 +378,9 @@ def isolated_eigenpair_observable_sensitivity_report(
 
     def branch_fn(x: jnp.ndarray) -> jnp.ndarray:
         eigvals, eigvecs = jnp.linalg.eig(jnp.asarray(matrix_fn(x)))
-        obs = jnp.ravel(jnp.asarray(observable_fn(eigvals[index], eigvecs[:, index], x)))
+        obs = jnp.ravel(
+            jnp.asarray(observable_fn(eigvals[index], eigvecs[:, index], x))
+        )
         if jnp.iscomplexobj(obs):
             obs = jnp.concatenate([jnp.real(obs), jnp.imag(obs)])
         return obs
@@ -448,7 +466,9 @@ def implicit_eigenpair_observable_sensitivity_report(
     elif selector_key.startswith("index:"):
         index = int(selector_key.split(":", 1)[1])
         if index < 0 or index >= eig_np.size:
-            raise ValueError(f"selector index {index} is out of bounds for {eig_np.size} eigenvalues")
+            raise ValueError(
+                f"selector index {index} is out of bounds for {eig_np.size} eigenvalues"
+            )
     else:
         raise ValueError("selector must be 'max_real' or 'index:N'")
 
@@ -461,7 +481,9 @@ def implicit_eigenpair_observable_sensitivity_report(
     branch_isolated = bool(gap >= float(gap_floor))
 
     left_vals, left_vecs = jnp.linalg.eig(jnp.conj(jnp.swapaxes(A, 0, 1)))
-    left_index = int(np.argmin(np.abs(np.asarray(left_vals) - np.conj(np.asarray(lam)))))
+    left_index = int(
+        np.argmin(np.abs(np.asarray(left_vals) - np.conj(np.asarray(lam))))
+    )
     w = left_vecs[:, left_index]
     overlap = jnp.vdot(w, v)
     overlap_abs = float(np.abs(np.asarray(overlap)))
@@ -484,13 +506,17 @@ def implicit_eigenpair_observable_sensitivity_report(
     augmented = jnp.concatenate([top, bottom], axis=0)
     rhs_columns = []
     for i in range(int(p.size)):
-        rhs_columns.append(jnp.concatenate([-dA[:, :, i] @ v, jnp.zeros((1,), dtype=A.dtype)]))
+        rhs_columns.append(
+            jnp.concatenate([-dA[:, :, i] @ v, jnp.zeros((1,), dtype=A.dtype)])
+        )
     rhs = jnp.stack(rhs_columns, axis=1)
     solution = jnp.linalg.solve(augmented, rhs)
     dv = solution[:n, :]
     dlam = solution[n, :]
 
-    def observable_real(lam_i: jnp.ndarray, v_i: jnp.ndarray, p_i: jnp.ndarray) -> jnp.ndarray:
+    def observable_real(
+        lam_i: jnp.ndarray, v_i: jnp.ndarray, p_i: jnp.ndarray
+    ) -> jnp.ndarray:
         obs = jnp.ravel(jnp.asarray(observable_fn(lam_i, v_i, p_i)))
         if jnp.iscomplexobj(obs):
             return jnp.concatenate([jnp.real(obs), jnp.imag(obs)])
@@ -511,7 +537,9 @@ def implicit_eigenpair_observable_sensitivity_report(
     # actual parameter directions. Differentiating one packed vector
     # [lambda, v, p] is mathematically equivalent but can replicate heavy
     # geometry tangents for every eigenvector component.
-    eigenpair_base = jnp.concatenate([jnp.asarray([jnp.real(lam), jnp.imag(lam)]), jnp.real(v), jnp.imag(v)])
+    eigenpair_base = jnp.concatenate(
+        [jnp.asarray([jnp.real(lam), jnp.imag(lam)]), jnp.real(v), jnp.imag(v)]
+    )
     obs_jac_eigenpair = jax.jacfwd(observable_real_from_eigenpair)(eigenpair_base)
     obs_jac_params = jax.jacfwd(observable_real_from_params)(p)
     implicit_cols = []
@@ -524,13 +552,19 @@ def implicit_eigenpair_observable_sensitivity_report(
                 jnp.imag(dv[:, i]),
             ]
         )
-        implicit_cols.append(obs_jac_eigenpair @ eigenpair_tangent + obs_jac_params @ eye[i])
+        implicit_cols.append(
+            obs_jac_eigenpair @ eigenpair_tangent + obs_jac_params @ eye[i]
+        )
     jac_implicit = jnp.stack(implicit_cols, axis=1)
 
     def branch_observable(x: jnp.ndarray) -> jnp.ndarray:
         eigvals_i, eigvecs_i = jnp.linalg.eig(jnp.asarray(matrix_fn(x)))
         branch_index = int(np.argmin(np.abs(np.asarray(eigvals_i) - np.asarray(lam))))
-        obs = jnp.ravel(jnp.asarray(observable_fn(eigvals_i[branch_index], eigvecs_i[:, branch_index], x)))
+        obs = jnp.ravel(
+            jnp.asarray(
+                observable_fn(eigvals_i[branch_index], eigvecs_i[:, branch_index], x)
+            )
+        )
         if jnp.iscomplexobj(obs):
             return jnp.concatenate([jnp.real(obs), jnp.imag(obs)])
         return jnp.real(obs)
@@ -541,7 +575,9 @@ def implicit_eigenpair_observable_sensitivity_report(
     rel = np.abs(err) / denom
     max_abs = float(np.max(np.abs(err))) if err.size else 0.0
     max_rel = float(np.max(rel)) if rel.size else 0.0
-    passed = bool(branch_isolated and (max_abs <= float(atol) or max_rel <= float(rtol)))
+    passed = bool(
+        branch_isolated and (max_abs <= float(atol) or max_rel <= float(rtol))
+    )
     dlam_np = np.asarray(dlam, dtype=complex)
     return {
         "passed": passed,
