@@ -1859,10 +1859,10 @@ def linear_rhs_parallel_cached(
     """Compute linear RHS with an explicit, disabled-by-default parallel route.
 
     ``parallel=None`` and ``parallel.strategy="serial"`` are exact aliases for
-    :func:`linear_rhs_cached`. The only non-serial route currently exposed is
-    ``strategy="velocity", backend="streaming_only"`` on the Hermite axis,
-    which is restricted to streaming-only term weights and identity-gated
-    separately from full linear or nonlinear production paths.
+    :func:`linear_rhs_cached`. The non-serial velocity routes are opt-in,
+    Hermite-axis-only identity gates. ``backend="auto"`` selects the most
+    complete currently gated electrostatic route when the term set is eligible;
+    otherwise callers must request a narrower explicit backend.
     """
 
     if parallel is None or str(getattr(parallel, "strategy", "serial")).lower() == "serial":
@@ -1879,6 +1879,16 @@ def linear_rhs_parallel_cached(
     strategy = str(getattr(parallel, "strategy", "serial")).lower().replace("-", "_")
     backend = str(getattr(parallel, "backend", "auto")).lower().replace("-", "_")
     axis = str(getattr(parallel, "axis", "hermite")).lower().replace("-", "_")
+    if strategy == "velocity" and backend == "auto":
+        if axis not in {"m", "hermite"}:
+            raise NotImplementedError("velocity sharding currently supports only the Hermite axis")
+        if _is_electrostatic_slice_terms(terms):
+            backend = "electrostatic_linear_slices"
+        else:
+            raise NotImplementedError(
+                "backend='auto' can only select gated electrostatic velocity routes; "
+                "disable collision/EM/end-damping terms or request an explicit backend"
+            )
     if strategy == "velocity" and backend in {"streaming_only", "linear_streaming_only"}:
         if axis not in {"m", "hermite"}:
             raise NotImplementedError("streaming-only velocity sharding currently supports only the Hermite axis")
