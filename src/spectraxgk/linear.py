@@ -1381,15 +1381,21 @@ def linear_rhs_cached(
     use_jit: bool = True,
     use_custom_vjp: bool = True,
     dt: jnp.ndarray | float | None = None,
+    force_electrostatic_fields: bool = False,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Compute the linear RHS using precomputed geometry arrays."""
 
-    from spectraxgk.terms.assembly import assemble_rhs_cached, assemble_rhs_cached_jit
+    from spectraxgk.terms.assembly import (
+        assemble_rhs_cached,
+        assemble_rhs_cached_electrostatic_jit,
+        assemble_rhs_cached_jit,
+    )
 
     term_cfg = linear_terms_to_term_config(terms)
 
     if use_jit:
-        dG, fields = assemble_rhs_cached_jit(G, cache, params, term_cfg, dt)
+        rhs_fn = assemble_rhs_cached_electrostatic_jit if force_electrostatic_fields else assemble_rhs_cached_jit
+        dG, fields = rhs_fn(G, cache, params, term_cfg, dt)
     else:
         dG, fields = assemble_rhs_cached(
             G,
@@ -1398,6 +1404,7 @@ def linear_rhs_cached(
             terms=term_cfg,
             use_custom_vjp=use_custom_vjp,
             dt=dt,
+            force_electrostatic_fields=force_electrostatic_fields,
         )
     return dG, fields.phi
 
@@ -1429,6 +1436,11 @@ def _is_electrostatic_slice_terms(terms: LinearTerms | None) -> bool:
         and float(term_weights.apar) == 0.0
         and float(term_weights.bpar) == 0.0
     )
+
+
+def _is_electrostatic_field_terms(terms: LinearTerms | None) -> bool:
+    term_weights = terms if terms is not None else LinearTerms()
+    return float(term_weights.apar) == 0.0 and float(term_weights.bpar) == 0.0
 
 
 def _resolve_parallel_devices(*, num_devices: int | None = None, devices: Any | None = None) -> list[Any]:
@@ -1942,6 +1954,7 @@ def _integrate_linear_cached_impl(
     sample_stride: int = 1,
     show_progress: bool = False,
     parallel: Any | None = None,
+    force_electrostatic_fields: bool = False,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Time integrate the linear system using cached geometry arrays."""
     if method not in {"euler", "rk2", "rk4", "imex", "imex2", "sspx3"}:
@@ -1964,7 +1977,14 @@ def _integrate_linear_cached_impl(
 
     def rhs(G_in: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
         if parallel_strategy == "serial":
-            return linear_rhs_cached(G_in, cache, params, terms=terms, dt=dt_val)
+            return linear_rhs_cached(
+                G_in,
+                cache,
+                params,
+                terms=terms,
+                dt=dt_val,
+                force_electrostatic_fields=force_electrostatic_fields,
+            )
         return linear_rhs_parallel_cached(G_in, cache, params, terms=terms, parallel=parallel, dt=dt_val)
 
     def advance(G):
@@ -2076,7 +2096,14 @@ def _integrate_linear_cached_impl(
 
 @partial(
     jax.jit,
-    static_argnames=("steps", "method", "checkpoint", "sample_stride", "show_progress"),
+    static_argnames=(
+        "steps",
+        "method",
+        "checkpoint",
+        "sample_stride",
+        "show_progress",
+        "force_electrostatic_fields",
+    ),
 )
 def _integrate_linear_cached(
     G0: jnp.ndarray,
@@ -2089,6 +2116,7 @@ def _integrate_linear_cached(
     terms: LinearTerms | None = None,
     sample_stride: int = 1,
     show_progress: bool = False,
+    force_electrostatic_fields: bool = False,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     return _integrate_linear_cached_impl(
         G0,
@@ -2101,12 +2129,20 @@ def _integrate_linear_cached(
         terms=terms,
         sample_stride=sample_stride,
         show_progress=show_progress,
+        force_electrostatic_fields=force_electrostatic_fields,
     )
 
 
 @partial(
     jax.jit,
-    static_argnames=("steps", "method", "checkpoint", "sample_stride", "show_progress"),
+    static_argnames=(
+        "steps",
+        "method",
+        "checkpoint",
+        "sample_stride",
+        "show_progress",
+        "force_electrostatic_fields",
+    ),
     donate_argnums=(0,),
 )
 def _integrate_linear_cached_donate(
@@ -2120,6 +2156,7 @@ def _integrate_linear_cached_donate(
     terms: LinearTerms | None = None,
     sample_stride: int = 1,
     show_progress: bool = False,
+    force_electrostatic_fields: bool = False,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     return _integrate_linear_cached_impl(
         G0,
@@ -2132,6 +2169,7 @@ def _integrate_linear_cached_donate(
         terms=terms,
         sample_stride=sample_stride,
         show_progress=show_progress,
+        force_electrostatic_fields=force_electrostatic_fields,
     )
 
 
@@ -2561,6 +2599,7 @@ def integrate_linear(
     if method == "semi-implicit":
         method = "imex"
     parallel_strategy = "serial" if parallel is None else str(getattr(parallel, "strategy", "serial")).lower().replace("-", "_")
+    force_electrostatic_fields = _is_electrostatic_field_terms(terms)
     if method == "implicit":
         if parallel_strategy != "serial":
             raise NotImplementedError("parallel linear integration currently supports only explicit fixed-step methods")
@@ -2596,6 +2635,7 @@ def integrate_linear(
             sample_stride=sample_stride,
             show_progress=show_progress,
             parallel=parallel,
+            force_electrostatic_fields=force_electrostatic_fields,
         )
     integrator = _integrate_linear_cached_donate if donate else _integrate_linear_cached
     return integrator(
@@ -2609,6 +2649,7 @@ def integrate_linear(
         terms=terms,
         sample_stride=sample_stride,
         show_progress=show_progress,
+        force_electrostatic_fields=force_electrostatic_fields,
     )
 
 
