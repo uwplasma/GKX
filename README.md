@@ -7,8 +7,8 @@
 [![Python](https://img.shields.io/badge/python-%3E%3D3.10-blue.svg)](https://github.com/uwplasma/SPECTRAX-GK/blob/main/pyproject.toml)
 [![Coverage](https://codecov.io/gh/uwplasma/SPECTRAX-GK/graph/badge.svg)](https://codecov.io/gh/uwplasma/SPECTRAX-GK)
 
-SPECTRAX-GK is a JAX-native gyrokinetic solver designed for differentiability, 
-high-performance accelerator execution, and advanced stellarator optimization. 
+SPECTRAX-GK is a JAX-native gyrokinetic solver designed for differentiability,
+accelerator-ready execution, and stellarator-optimization research workflows.
 The code employs a Hermite-Laguerre velocity space, Fourier perpendicular 
 coordinates, and field-aligned flux-tube geometry to simulate linear and 
 nonlinear electrostatic and electromagnetic turbulence in magnetized plasmas.
@@ -141,12 +141,13 @@ rule remains worse than the training-mean null baseline (`2.51` versus `1.39`),
 so SPECTRAX-GK does not promote any simple or user-facing absolute quasilinear
 flux predictor from that legacy family.
 
-The richer held-out candidate is now the reduced spectral-envelope model below.
-It uses only two linear-spectrum envelope features, reaches mean relative error
-about `0.244`, and clears the leave-one-geometry-out interval-coverage gate on
-the current seven-case electrostatic portfolio. That is the current manuscript
-result: the simple rules are rejected, but a small spectrum-aware candidate is
-now accepted as a scoped research model.
+The richer held-out candidate is now the reduced `spectral_envelope_ridge`
+model below. It uses only two linear-spectrum envelope features, reaches mean
+relative error about `0.244`, and clears the leave-one-geometry-out
+interval-coverage gate on the current seven-case electrostatic portfolio. That
+is the current manuscript result: the simple rules are rejected, but a small
+spectrum-aware candidate is accepted as a scoped model-development result, not
+a runtime/TOML absolute-flux predictor or universal saturation law.
 
 ![SPECTRAX-GK quasilinear candidate uncertainty gate](docs/_static/quasilinear_candidate_uncertainty.png)
 
@@ -477,7 +478,8 @@ SPECTRAX-GK is rigorously validated against standard gyrokinetic benchmarks, inc
 The benchmark tooling in `tools/` ensures reproducibility and performance tracking.
 For the current release pass, the accepted nonlinear validation set is Cyclone,
 KBM, W7-X, HSX, Cyclone Miller, and the closed short-window full-GK ETG
-nonlinear pilot. TEM and KAW stay outside the active parity claim.
+nonlinear pilot. TEM and KAW stay outside the active parity claim, and W7-X
+zonal-flow recurrence/damping remains deferred from the current release scope.
 The window-statistics artifact uses case-specific mean-relative gates: KBM
 `0.02`, HSX `0.05`, Cyclone Miller `0.095`, and the broader release envelope
 `0.10` for Cyclone and W7-X while their paper-level tightening lanes remain
