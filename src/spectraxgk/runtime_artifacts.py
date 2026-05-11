@@ -285,7 +285,11 @@ def _condense_resolved_for_output(resolved: ResolvedDiagnostics | None) -> Resol
 
 
 def _condense_gx_diagnostics_for_output(diag: SimulationDiagnostics) -> SimulationDiagnostics:
-    return replace(diag, resolved=_condense_resolved_for_output(diag.resolved))
+    # GX-style NetCDF artifacts do not persist the monitored complex mode trace.
+    # Drop it when appending from an existing artifact so restart concatenation
+    # preserves the exact on-disk schema instead of mixing persisted and transient
+    # diagnostics.
+    return replace(diag, phi_mode_t=None, resolved=_condense_resolved_for_output(diag.resolved))
 
 
 def load_runtime_nonlinear_gx_diagnostics(path: str | Path) -> SimulationDiagnostics:
