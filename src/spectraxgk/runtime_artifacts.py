@@ -20,7 +20,9 @@ from spectraxgk.runtime import (
     build_runtime_linear_params,
     run_runtime_nonlinear,
 )
-from spectraxgk.runtime_diagnostics import validate_finite_gx_diagnostics
+from spectraxgk.runtime_artifact_diagnostics import (
+    validate_finite_runtime_result as _validate_finite_runtime_result,
+)
 
 
 def _artifact_base(path: Path) -> Path:
@@ -218,26 +220,6 @@ def write_runtime_linear_scan_artifacts(out: str | Path, result: Any) -> dict[st
         )
         paths["quasilinear_spectrum"] = str(ql_path)
     return paths
-
-
-def _validate_finite_array(value: Any, *, label: str) -> None:
-    if value is None:
-        return
-    arr = np.asarray(value)
-    if arr.size == 0 or np.isfinite(arr).all():
-        return
-    raise RuntimeError(f"{label} contains non-finite values")
-
-
-def _validate_finite_runtime_result(result: RuntimeNonlinearResult, *, label: str) -> None:
-    if result.diagnostics is not None:
-        validate_finite_gx_diagnostics(result.diagnostics, label=label)
-    _validate_finite_array(result.state, label=f"{label} state")
-    fields = result.fields
-    if fields is not None:
-        _validate_finite_array(getattr(fields, "phi", None), label=f"{label} phi")
-        _validate_finite_array(getattr(fields, "apar", None), label=f"{label} apar")
-        _validate_finite_array(getattr(fields, "bpar", None), label=f"{label} bpar")
 
 
 def _resolved_species_time(arr: Any | None, *, fallback: np.ndarray) -> np.ndarray:

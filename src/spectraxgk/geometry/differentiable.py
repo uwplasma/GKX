@@ -475,6 +475,29 @@ def _interp_radial(
     raise ValueError("radial interpolation expects a one- or two-dimensional array")
 
 
+def _boozer_half_mesh_s_grid(
+    raw_jlist: Any | None,
+    *,
+    ns_b: int,
+    ns_b_full: int,
+    dtype: Any,
+) -> jnp.ndarray:
+    """Return normalized Boozer half-mesh coordinates from API surface indices.
+
+    ``booz_xform_jax`` exposes ``jlist`` using VMEC/Fortran half-mesh indexing
+    where the first interior half mesh is ``j=2``.  The corresponding normalized
+    radial coordinate is therefore ``(j - 1.5) / ns_b_full``, matching the
+    imported VMEC/EIK half mesh ``0.5 * (s_full[:-1] + s_full[1:])``.
+    """
+
+    if raw_jlist is None:
+        return (jnp.arange(int(ns_b), dtype=dtype) + 0.5) / float(
+            max(int(ns_b_full), 1)
+        )
+    jlist = jnp.asarray(raw_jlist, dtype=dtype)
+    return (jlist - 1.5) / float(max(int(ns_b_full), 1))
+
+
 def _radial_derivative_profile(values: jnp.ndarray, spacing: float) -> jnp.ndarray:
     arr = jnp.asarray(values)
     if arr.ndim != 1:
@@ -1912,10 +1935,12 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
     if ns_b < 2:
         raise RuntimeError("booz_xform_jax output needs at least two radial surfaces")
     ns_b_full = int(np.asarray(out.get("ns_b", ns_b)))
-    jlist = jnp.asarray(
-        out.get("jlist", jnp.arange(1, ns_b + 1)), dtype=base_Rcos.dtype
+    s_half = _boozer_half_mesh_s_grid(
+        out.get("jlist"),
+        ns_b=ns_b,
+        ns_b_full=ns_b_full,
+        dtype=base_Rcos.dtype,
     )
-    s_half = (jlist - 0.5) / float(max(ns_b_full, 1))
 
     radial_spacing = float(s_half[1] - s_half[0])
     bmnc_b = _interp_radial(bmnc_b_all, s_half, s_value)
