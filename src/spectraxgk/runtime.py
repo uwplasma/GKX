@@ -652,6 +652,12 @@ def run_runtime_linear(
             tcfg = replace(tcfg, save_state=True)
 
         need_density = fit_key in {"density", "auto"}
+        parallel_strategy = str(getattr(cfg.parallel, "strategy", "serial")).lower().replace("-", "_")
+        if parallel_strategy != "serial":
+            if tcfg.use_diffrax:
+                raise NotImplementedError("parallel linear RHS is currently supported only by the fixed-step cached integrator")
+            if need_density:
+                raise NotImplementedError("parallel linear RHS runtime path currently requires fit_signal='phi'")
         g_last = None
         if tcfg.use_diffrax:
             _status(
@@ -676,6 +682,7 @@ def run_runtime_linear(
                 save_field=save_field,
                 density_species_index=0 if need_density else None,
                 show_progress=show_progress,
+                parallel=cfg.parallel,
             )
             if need_density:
                 phi_t, density_t = saved
@@ -718,6 +725,7 @@ def run_runtime_linear(
                     mode_method=mode_method,
                     save_field="phi",
                     show_progress=show_progress,
+                    parallel=cfg.parallel,
                 )
                 density_t = None
 

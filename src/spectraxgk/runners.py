@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import cast
+from typing import Any, cast
 
 from spectraxgk.analysis import ModeSelection, ModeSelectionBatch
 from spectraxgk.config import TimeConfig
@@ -55,12 +55,16 @@ def integrate_linear_from_config(
     save_field: str = "phi",
     density_species_index: int | None = None,
     show_progress: bool | None = None,
+    parallel: Any | None = None,
 ) -> tuple:
     """Integrate the linear system using TimeConfig settings."""
 
     steps = _steps_from_time(time_cfg)
     show_progress_use = bool(time_cfg.progress_bar if show_progress is None else show_progress)
+    parallel_strategy = "serial" if parallel is None else str(getattr(parallel, "strategy", "serial")).lower().replace("-", "_")
     if time_cfg.use_diffrax:
+        if parallel_strategy != "serial":
+            raise NotImplementedError("parallel linear RHS is currently supported only by the fixed-step cached integrator")
         state_sharding = resolve_state_sharding(G0, time_cfg.state_sharding)
         return integrate_linear_diffrax(
             G0,
@@ -103,6 +107,7 @@ def integrate_linear_from_config(
         sample_stride=time_cfg.sample_stride,
         terms=terms,
         show_progress=show_progress_use,
+        parallel=parallel,
     )
 
 

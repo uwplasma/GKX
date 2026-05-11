@@ -1941,6 +1941,7 @@ def _integrate_linear_cached_impl(
     terms: LinearTerms | None = None,
     sample_stride: int = 1,
     show_progress: bool = False,
+    parallel: Any | None = None,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Time integrate the linear system using cached geometry arrays."""
     if method not in {"euler", "rk2", "rk4", "imex", "imex2", "sspx3"}:
@@ -1959,26 +1960,33 @@ def _integrate_linear_cached_impl(
     damping = collision_damping(cache, params, real_dtype, squeeze_species=(G0.ndim == 5)) + hyper_damp
     damping = damping.astype(real_dtype)
 
+    parallel_strategy = "serial" if parallel is None else str(getattr(parallel, "strategy", "serial")).lower().replace("-", "_")
+
+    def rhs(G_in: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
+        if parallel_strategy == "serial":
+            return linear_rhs_cached(G_in, cache, params, terms=terms, dt=dt_val)
+        return linear_rhs_parallel_cached(G_in, cache, params, terms=terms, parallel=parallel, dt=dt_val)
+
     def advance(G):
-        dG, _phi = linear_rhs_cached(G, cache, params, terms=terms, dt=dt_val)
+        dG, _phi = rhs(G)
         if method == "imex":
             dG_explicit = dG + damping * G
             return (G + dt_val * dG_explicit) / (1.0 + dt_val * damping)
         if method == "imex2":
             dG_explicit = dG + damping * G
             G_half = (G + 0.5 * dt_val * dG_explicit) / (1.0 + 0.5 * dt_val * damping)
-            dG_half, _phi = linear_rhs_cached(G_half, cache, params, terms=terms, dt=dt_val)
+            dG_half, _phi = rhs(G_half)
             dG_half_exp = dG_half + damping * G_half
             return (G + dt_val * dG_half_exp) / (1.0 + dt_val * damping)
         if method == "euler":
             return G + dt_val * dG
         if method == "rk2":
             k1 = dG
-            k2, _ = linear_rhs_cached(G + 0.5 * dt_val * k1, cache, params, terms=terms, dt=dt_val)
+            k2, _ = rhs(G + 0.5 * dt_val * k1)
             return G + dt_val * k2
         if method == "sspx3":
             def _euler_step(G_state: jnp.ndarray) -> jnp.ndarray:
-                dG_state, _ = linear_rhs_cached(G_state, cache, params, terms=terms, dt=dt_val)
+                dG_state, _ = rhs(G_state)
                 return G_state + (_SSPX3_ADT * dt_val) * dG_state
 
             G1 = _euler_step(G)
@@ -1992,14 +2000,14 @@ def _integrate_linear_cached_impl(
                 + G3
             )
         k1 = dG
-        k2, _ = linear_rhs_cached(G + 0.5 * dt_val * k1, cache, params, terms=terms, dt=dt_val)
-        k3, _ = linear_rhs_cached(G + 0.5 * dt_val * k2, cache, params, terms=terms, dt=dt_val)
-        k4, _ = linear_rhs_cached(G + dt_val * k3, cache, params, terms=terms, dt=dt_val)
+        k2, _ = rhs(G + 0.5 * dt_val * k1)
+        k3, _ = rhs(G + 0.5 * dt_val * k2)
+        k4, _ = rhs(G + dt_val * k3)
         return G + (dt_val / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
 
     def step(G, idx):
         G_new = advance(G)
-        _dG_new, phi_new = linear_rhs_cached(G_new, cache, params, terms=terms, dt=dt_val)
+        _dG_new, phi_new = rhs(G_new)
         if show_progress:
             from spectraxgk.utils.callbacks import print_callback, should_emit_progress
 
@@ -2034,7 +2042,7 @@ def _integrate_linear_cached_impl(
         def inner_step(i, state):
             return advance(state)
         G_out = jax.lax.fori_loop(0, sample_stride, inner_step, G)
-        _dG_out, phi_out = linear_rhs_cached(G_out, cache, params, terms=terms, dt=dt_val)
+        _dG_out, phi_out = rhs(G_out)
         if show_progress:
             from spectraxgk.utils.callbacks import print_callback, should_emit_progress
 
@@ -2533,6 +2541,7 @@ def integrate_linear(
     sample_stride: int = 1,
     donate: bool = False,
     show_progress: bool = False,
+    parallel: Any | None = None,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Time integrate the linear system using a fixed-step scheme."""
     if terms is None:
@@ -2551,7 +2560,10 @@ def integrate_linear(
         cache = build_linear_cache(grid, geom, params, Nl, Nm)
     if method == "semi-implicit":
         method = "imex"
+    parallel_strategy = "serial" if parallel is None else str(getattr(parallel, "strategy", "serial")).lower().replace("-", "_")
     if method == "implicit":
+        if parallel_strategy != "serial":
+            raise NotImplementedError("parallel linear integration currently supports only explicit fixed-step methods")
         return _integrate_linear_implicit_cached(
             G0,
             cache,
@@ -2568,6 +2580,22 @@ def integrate_linear(
             implicit_preconditioner=implicit_preconditioner,
             checkpoint=checkpoint,
             sample_stride=sample_stride,
+        )
+    if parallel_strategy != "serial":
+        if donate:
+            raise NotImplementedError("parallel linear integration does not currently support donated input buffers")
+        return _integrate_linear_cached_impl(
+            G0,
+            cache,
+            params,
+            dt,
+            steps,
+            method=method,
+            checkpoint=checkpoint,
+            terms=terms,
+            sample_stride=sample_stride,
+            show_progress=show_progress,
+            parallel=parallel,
         )
     integrator = _integrate_linear_cached_donate if donate else _integrate_linear_cached
     return integrator(
