@@ -107,7 +107,11 @@ from spectraxgk.linear import (
     linear_rhs_streaming_velocity_sharded,
     term_config_to_linear_terms,
 )
-from spectraxgk.linear_krylov import KrylovConfig, dominant_eigenpair, dominant_eigenvalue
+from spectraxgk.linear_krylov import (
+    KrylovConfig,
+    dominant_eigenpair,
+    dominant_eigenvalue,
+)
 from spectraxgk.nonlinear import (
     IMEXLinearOperator,
     build_nonlinear_imex_operator,
@@ -116,7 +120,10 @@ from spectraxgk.nonlinear import (
     integrate_nonlinear_gx_diagnostics,
     nonlinear_rhs_cached,
 )
-from spectraxgk.runners import integrate_linear_from_config, integrate_nonlinear_from_config
+from spectraxgk.runners import (
+    integrate_linear_from_config,
+    integrate_nonlinear_from_config,
+)
 from spectraxgk.species import Species, build_linear_params
 from spectraxgk.analysis import (
     ModeSelection,
@@ -186,7 +193,18 @@ from spectraxgk.autodiff_validation import (
     isolated_eigenpair_observable_sensitivity_report,
     isolated_eigenvalue_sensitivity_report,
 )
-from spectraxgk.parallel import batch_map, independent_map as independent_map, ky_scan_batches
+from spectraxgk.parallel import (
+    batch_map,
+    independent_map as independent_map,
+    ky_scan_batches,
+)
+from spectraxgk.nonlinear_parallel import (
+    NonlinearParallelStrategy,
+    classify_nonlinear_parallel_strategy,
+    nonlinear_parallel_strategies,
+    nonlinear_parallel_strategy,
+    release_ready_nonlinear_parallel_strategies,
+)
 from spectraxgk.velocity_sharding import (
     VelocityShardingPlan,
     build_velocity_sharding_plan,
@@ -260,8 +278,16 @@ from spectraxgk.diffrax_integrators import (
     integrate_linear_diffrax_streaming,
     integrate_nonlinear_diffrax,
 )
-from spectraxgk.sharded_integrators import integrate_linear_sharded, integrate_nonlinear_sharded
-from spectraxgk.gx_integrators import ExplicitTimeConfig, GXTimeConfig, integrate_linear_gx, integrate_linear_gx_diagnostics
+from spectraxgk.sharded_integrators import (
+    integrate_linear_sharded,
+    integrate_nonlinear_sharded,
+)
+from spectraxgk.gx_integrators import (
+    ExplicitTimeConfig,
+    GXTimeConfig,
+    integrate_linear_gx,
+    integrate_linear_gx_diagnostics,
+)
 from spectraxgk.diagnostics import GXDiagnostics, SimulationDiagnostics
 
 LinearExplicitTimeConfig = ExplicitTimeConfig
@@ -432,7 +458,13 @@ __all__ = [
     "isolated_eigenpair_observable_sensitivity_report",
     "isolated_eigenvalue_sensitivity_report",
     "batch_map",
+    "independent_map",
     "ky_scan_batches",
+    "NonlinearParallelStrategy",
+    "classify_nonlinear_parallel_strategy",
+    "nonlinear_parallel_strategies",
+    "nonlinear_parallel_strategy",
+    "release_ready_nonlinear_parallel_strategies",
     "VelocityShardingPlan",
     "build_velocity_sharding_plan",
     "curvature_gradb_drift_reference",
