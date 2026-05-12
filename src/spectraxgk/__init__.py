@@ -272,7 +272,9 @@ from spectraxgk.solver_objective_gradients import (
     mode21_vmec_boozer_linear_frequency_gradient_report,
     mode21_vmec_boozer_nonlinear_window_gradient_report,
     mode21_vmec_boozer_quasilinear_gradient_report,
+    solver_objective_vector_from_geometry,
     solver_ready_geometry_mapping,
+    vmec_boozer_solver_objective_vector_from_state,
 )
 from spectraxgk.plotting import (
     cyclone_comparison_figure,
@@ -543,7 +545,9 @@ __all__ = [
     "mode21_vmec_boozer_linear_frequency_gradient_report",
     "mode21_vmec_boozer_nonlinear_window_gradient_report",
     "mode21_vmec_boozer_quasilinear_gradient_report",
+    "solver_objective_vector_from_geometry",
     "solver_ready_geometry_mapping",
+    "vmec_boozer_solver_objective_vector_from_state",
     "eigenfunction_gate_report",
     "evaluate_scalar_gate",
     "gate_report",
