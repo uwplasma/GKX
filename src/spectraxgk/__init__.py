@@ -194,9 +194,12 @@ from spectraxgk.autodiff_validation import (
     isolated_eigenvalue_sensitivity_report,
 )
 from spectraxgk.parallel import (
+    ParallelIdentityReport,
     batch_map,
+    batch_map_identity_report,
     independent_map as independent_map,
     ky_scan_batches,
+    parallel_identity_report,
 )
 from spectraxgk.nonlinear_parallel import (
     NonlinearParallelStrategy,
@@ -457,9 +460,12 @@ __all__ = [
     "implicit_eigenpair_observable_sensitivity_report",
     "isolated_eigenpair_observable_sensitivity_report",
     "isolated_eigenvalue_sensitivity_report",
+    "ParallelIdentityReport",
     "batch_map",
+    "batch_map_identity_report",
     "independent_map",
     "ky_scan_batches",
+    "parallel_identity_report",
     "NonlinearParallelStrategy",
     "classify_nonlinear_parallel_strategy",
     "nonlinear_parallel_strategies",

@@ -9,6 +9,12 @@ import json
 
 import numpy as np
 
+from spectraxgk.quasilinear_window import (
+    NonlinearWindowConvergenceConfig,
+    nonlinear_window_convergence_report,
+    nonlinear_window_stats_promotion_ready,
+)
+
 
 _NETCDF_HEAT_FLUX_COLUMNS = {
     "heat_flux": "Diagnostics/HeatFlux_st",
@@ -33,6 +39,7 @@ class QuasilinearCalibrationPoint:
     electron_model: str = "unspecified"
     ky: float | None = None
     observed_heat_flux_std: float | None = None
+    nonlinear_window_stats: dict[str, Any] | None = None
     quasilinear_artifact: str | None = None
     nonlinear_artifact: str | None = None
     notes: str | None = None
@@ -69,6 +76,29 @@ def _split_metrics(
         "rmse": float(np.sqrt(np.mean(residual**2))),
         "mean_abs_relative_error": float(np.mean(rel)),
         "max_abs_relative_error": float(np.max(rel)),
+    }
+
+
+def _holdout_window_convergence_summary(
+    points: list[QuasilinearCalibrationPoint],
+) -> dict[str, Any]:
+    holdouts = [point for point in points if point.split == "holdout"]
+    failures: list[str] = []
+    passed_cases: list[str] = []
+    for point in holdouts:
+        ready, point_failures = nonlinear_window_stats_promotion_ready(
+            point.nonlinear_window_stats
+        )
+        if ready:
+            passed_cases.append(point.case)
+        else:
+            failures.extend(f"{point.case}: {failure}" for failure in point_failures)
+    return {
+        "passed": bool(holdouts) and not failures,
+        "n_holdout": len(holdouts),
+        "n_passed": len(passed_cases),
+        "passed_cases": passed_cases,
+        "failures": failures,
     }
 
 
@@ -232,11 +262,13 @@ def quasilinear_calibration_report(
     has_train = by_split["train"]["n"] > 0
     has_holdout = holdout["n"] > 0
     holdout_error = holdout["mean_abs_relative_error"]
+    holdout_window_convergence = _holdout_window_convergence_summary(pts)
     passed = bool(
         has_train
         and has_holdout
         and holdout_error is not None
         and holdout_error <= holdout_mean_rel_gate
+        and holdout_window_convergence["passed"]
     )
     claim_level = "calibrated_absolute_flux" if passed else "calibration_dataset"
     if not has_holdout:
@@ -255,6 +287,7 @@ def quasilinear_calibration_report(
         "points": [p.to_dict() for p in pts],
         "metadata": {
             **dict(metadata or {}),
+            "holdout_window_convergence": holdout_window_convergence,
             **({} if scale_fit is None else {"heat_flux_scale_fit": scale_fit}),
         },
     }
@@ -379,6 +412,22 @@ def _read_csv_window_heat_flux(
     }
 
 
+def _csv_heat_flux_trace(
+    path: Path, *, heat_flux_column: str
+) -> tuple[np.ndarray, np.ndarray]:
+    data = np.genfromtxt(path, delimiter=",", names=True)
+    if data.shape == ():
+        data = np.asarray([data], dtype=data.dtype)
+    names = set(data.dtype.names or ())
+    if "t" not in names:
+        raise ValueError(f"{path} is missing a 't' column")
+    if heat_flux_column not in names:
+        raise ValueError(f"{path} is missing heat-flux column '{heat_flux_column}'")
+    return np.asarray(data["t"], dtype=float), np.asarray(
+        data[heat_flux_column], dtype=float
+    )
+
+
 def _netcdf_variable(root: Any, path: str) -> Any:
     current = root
     parts = [part for part in path.strip("/").split("/") if part]
@@ -464,6 +513,60 @@ def _read_netcdf_window_heat_flux(
     }
 
 
+def _netcdf_heat_flux_trace(
+    path: Path,
+    *,
+    heat_flux_column: str,
+    species_index: int | None,
+) -> tuple[np.ndarray, np.ndarray, str]:
+    try:
+        import netCDF4
+    except (
+        ImportError
+    ) as exc:  # pragma: no cover - exercised only without optional dependency.
+        raise RuntimeError(
+            "netCDF4 is required to read nonlinear NetCDF calibration windows"
+        ) from exc
+
+    variable_path = _netcdf_heat_flux_variable(heat_flux_column)
+    with netCDF4.Dataset(path) as root:
+        t = np.asarray(_netcdf_variable(root, "Grids/time")[:], dtype=float)
+        values = np.asarray(_netcdf_variable(root, variable_path)[:], dtype=float)
+    if values.shape[0] != t.size:
+        raise ValueError(
+            f"{variable_path} first dimension does not match Grids/time in {path}"
+        )
+    if values.ndim == 1:
+        heat = values
+    elif values.ndim == 2:
+        if species_index is None:
+            heat = np.sum(values, axis=1)
+        else:
+            if species_index < 0 or species_index >= values.shape[1]:
+                raise ValueError(
+                    f"species_index {species_index} is out of bounds for {values.shape[1]} species"
+                )
+            heat = values[:, int(species_index)]
+    else:
+        raise ValueError(
+            f"{variable_path} must have shape (time,) or (time, species), got {values.shape}"
+        )
+    return t, heat, variable_path
+
+
+def _window_convergence_config(
+    window: dict[str, Any],
+    config: NonlinearWindowConvergenceConfig | None,
+) -> NonlinearWindowConvergenceConfig:
+    if config is not None:
+        return config
+    return NonlinearWindowConvergenceConfig(
+        tmin=window.get("tmin"),
+        tmax=window.get("tmax"),
+        transient_fraction=0.0,
+    )
+
+
 def calibration_point_from_nonlinear_window_summary(
     summary_json: str | Path,
     *,
@@ -477,6 +580,7 @@ def calibration_point_from_nonlinear_window_summary(
     electron_model: str = "unspecified",
     quasilinear_artifact: str | None = None,
     species_index: int | None = None,
+    window_convergence_config: NonlinearWindowConvergenceConfig | None = None,
     notes: str | None = None,
 ) -> QuasilinearCalibrationPoint:
     """Create a calibration point from a nonlinear window-summary JSON.
@@ -500,6 +604,10 @@ def calibration_point_from_nonlinear_window_summary(
         window = _read_csv_window_heat_flux(
             diag_path, summary, heat_flux_column=heat_flux_column
         )
+        trace_t, trace_heat = _csv_heat_flux_trace(
+            diag_path, heat_flux_column=heat_flux_column
+        )
+        convergence_variable = heat_flux_column
     elif suffixes[-2:] == [".out", ".nc"] or diag_path.suffix.lower() == ".nc":
         window = _read_netcdf_window_heat_flux(
             diag_path,
@@ -507,10 +615,24 @@ def calibration_point_from_nonlinear_window_summary(
             heat_flux_column=heat_flux_column,
             species_index=species_index,
         )
+        trace_t, trace_heat, convergence_variable = _netcdf_heat_flux_trace(
+            diag_path,
+            heat_flux_column=heat_flux_column,
+            species_index=species_index,
+        )
     else:
         raise NotImplementedError(
             "nonlinear calibration ingestion supports diagnostics CSV and NetCDF files"
         )
+    convergence = nonlinear_window_convergence_report(
+        trace_t,
+        trace_heat,
+        case=str(case or summary.get("case", summary_path.stem)),
+        observable=str(convergence_variable),
+        source_artifact=str(diag_path),
+        summary_artifact=str(summary_path),
+        config=_window_convergence_config(window, window_convergence_config),
+    )
     note_items = [
         notes,
         None
@@ -525,6 +647,7 @@ def calibration_point_from_nonlinear_window_summary(
         predicted_heat_flux=float(predicted_heat_flux),
         observed_heat_flux=float(window["mean"]),
         observed_heat_flux_std=float(window["std"]),
+        nonlinear_window_stats=convergence,
         saturation_rule=str(saturation_rule),
         geometry=str(geometry),
         electron_model=str(electron_model),
@@ -549,6 +672,7 @@ def calibration_point_from_spectrum_and_nonlinear_window(
     geometry: str = "unspecified",
     electron_model: str = "unspecified",
     species_index: int | None = None,
+    window_convergence_config: NonlinearWindowConvergenceConfig | None = None,
     notes: str | None = None,
 ) -> QuasilinearCalibrationPoint:
     """Create a calibration point from a quasilinear spectrum and nonlinear window."""
@@ -571,6 +695,7 @@ def calibration_point_from_spectrum_and_nonlinear_window(
         electron_model=electron_model,
         quasilinear_artifact=str(spectrum_csv),
         species_index=species_index,
+        window_convergence_config=window_convergence_config,
         notes=notes,
     )
     ratio = None

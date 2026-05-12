@@ -41,6 +41,12 @@ jobs:
           python tools/check_repository_size_manifest.py
           python tools/check_release_artifact_manifest.py
           python tools/check_release_version.py
+          python tools/check_performance_optimization_manifest.py
+          python tools/check_parallel_scaling_artifacts.py
+          python tools/check_quasilinear_promotion_guardrails.py \
+            --out-json docs/_static/quasilinear_promotion_guardrails.json
+          python tools/check_release_readiness.py \
+            --out-json docs/_static/release_readiness.json
 
   mypy:
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
@@ -113,6 +119,7 @@ jobs:
               tests/test_audit_repository_size.py
               tests/test_check_repository_size_manifest.py
               tests/test_check_release_artifact_manifest.py
+              tests/test_check_release_readiness.py
               tests/test_check_release_version.py
               tests/test_check_quasilinear_calibration_inputs.py
               tests/test_compress_docs_previews.py

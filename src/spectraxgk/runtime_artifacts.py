@@ -5,13 +5,25 @@ from __future__ import annotations
 from dataclasses import replace
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
 
-from spectraxgk.geometry import apply_geometry_grid_defaults, ensure_flux_tube_geometry_data
-from spectraxgk.grids import build_spectral_grid, real_fft_ordered_kx, real_fft_unique_ky
-from spectraxgk.diagnostics import SimulationDiagnostics, ResolvedDiagnostics, total_energy
+from spectraxgk.geometry import (
+    apply_geometry_grid_defaults,
+    ensure_flux_tube_geometry_data,
+)
+from spectraxgk.grids import (
+    build_spectral_grid,
+    real_fft_ordered_kx,
+    real_fft_unique_ky,
+)
+from spectraxgk.diagnostics import (
+    SimulationDiagnostics,
+    ResolvedDiagnostics,
+    total_energy,
+)
 from spectraxgk.linear import build_linear_cache
 from spectraxgk.runtime import (
     RuntimeNonlinearResult,
@@ -23,6 +35,7 @@ from spectraxgk.runtime import (
 from spectraxgk.runtime_artifact_diagnostics import (
     validate_finite_runtime_result as _validate_finite_runtime_result,
 )
+from spectraxgk.runtime_orchestration import run_runtime_nonlinear_artifact_handoff
 
 
 def _artifact_base(path: Path) -> Path:
@@ -62,7 +75,9 @@ def _flatten_series(series: np.ndarray) -> np.ndarray:
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     _ensure_parent(path)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
 
 
 def _write_csv(path: Path, headers: list[str], cols: list[np.ndarray]) -> None:
@@ -80,19 +95,25 @@ def _write_state(base: Path, state: np.ndarray | None) -> Path | None:
     return path
 
 
-def write_quasilinear_artifacts(out: str | Path, quasilinear: dict[str, Any]) -> dict[str, str]:
+def write_quasilinear_artifacts(
+    out: str | Path, quasilinear: dict[str, Any]
+) -> dict[str, str]:
     """Write quasilinear summary and species tables."""
 
     out_path = Path(out)
     base = _artifact_base(out_path)
     summary_path = (
-        out_path if out_path.suffix.lower() == ".json" else Path(f"{base}.quasilinear.summary.json")
+        out_path
+        if out_path.suffix.lower() == ".json"
+        else Path(f"{base}.quasilinear.summary.json")
     )
     _write_json(summary_path, quasilinear)
     paths = {"quasilinear_summary": str(summary_path)}
 
     heat = np.asarray(quasilinear.get("heat_flux_weight_species", []), dtype=float)
-    particle = np.asarray(quasilinear.get("particle_flux_weight_species", []), dtype=float)
+    particle = np.asarray(
+        quasilinear.get("particle_flux_weight_species", []), dtype=float
+    )
     if heat.size or particle.size:
         n = max(int(heat.size), int(particle.size))
         heat_col = np.full(n, np.nan, dtype=float)
@@ -140,8 +161,12 @@ def write_runtime_linear_scan_artifacts(out: str | Path, result: Any) -> dict[st
 
     out_path = Path(out)
     base = _artifact_base(out_path)
-    summary_path = out_path if out_path.suffix.lower() == ".json" else Path(f"{base}.summary.json")
-    csv_path = out_path if out_path.suffix.lower() == ".csv" else Path(f"{base}.scan.csv")
+    summary_path = (
+        out_path if out_path.suffix.lower() == ".json" else Path(f"{base}.summary.json")
+    )
+    csv_path = (
+        out_path if out_path.suffix.lower() == ".csv" else Path(f"{base}.scan.csv")
+    )
     ky = np.asarray(result.ky, dtype=float)
     gamma = np.asarray(result.gamma, dtype=float)
     omega = np.asarray(result.omega, dtype=float)
@@ -169,19 +194,35 @@ def write_runtime_linear_scan_artifacts(out: str | Path, result: Any) -> dict[st
         ql_ky = (
             np.asarray(ky, dtype=float)
             if len(ql_payloads) == int(ky.size)
-            else np.asarray([float(p.get("ky", np.nan)) for p in ql_payloads], dtype=float)
+            else np.asarray(
+                [float(p.get("ky", np.nan)) for p in ql_payloads], dtype=float
+            )
         )
-        ql_mode_ky = np.asarray([float(p.get("ky", np.nan)) for p in ql_payloads], dtype=float)
-        ql_gamma = np.asarray([float(p.get("gamma", np.nan)) for p in ql_payloads], dtype=float)
-        ql_omega = np.asarray([float(p.get("omega", np.nan)) for p in ql_payloads], dtype=float)
-        kperp_eff2 = np.asarray([float(p.get("kperp_eff2", np.nan)) for p in ql_payloads], dtype=float)
-        heat = np.asarray([float(p.get("heat_flux_weight_total", np.nan)) for p in ql_payloads], dtype=float)
+        ql_mode_ky = np.asarray(
+            [float(p.get("ky", np.nan)) for p in ql_payloads], dtype=float
+        )
+        ql_gamma = np.asarray(
+            [float(p.get("gamma", np.nan)) for p in ql_payloads], dtype=float
+        )
+        ql_omega = np.asarray(
+            [float(p.get("omega", np.nan)) for p in ql_payloads], dtype=float
+        )
+        kperp_eff2 = np.asarray(
+            [float(p.get("kperp_eff2", np.nan)) for p in ql_payloads], dtype=float
+        )
+        heat = np.asarray(
+            [float(p.get("heat_flux_weight_total", np.nan)) for p in ql_payloads],
+            dtype=float,
+        )
         particle = np.asarray(
             [float(p.get("particle_flux_weight_total", np.nan)) for p in ql_payloads],
             dtype=float,
         )
         amp2 = np.asarray(
-            [np.nan if p.get("amplitude2") is None else float(p.get("amplitude2")) for p in ql_payloads],
+            [
+                np.nan if p.get("amplitude2") is None else float(p.get("amplitude2"))
+                for p in ql_payloads
+            ],
             dtype=float,
         )
         sat_heat = np.asarray(
@@ -216,7 +257,18 @@ def write_runtime_linear_scan_artifacts(out: str | Path, result: Any) -> dict[st
                 "saturated_heat_flux_total",
                 "saturated_particle_flux_total",
             ],
-            [ql_ky, ql_mode_ky, ql_gamma, ql_omega, kperp_eff2, heat, particle, amp2, sat_heat, sat_particle],
+            [
+                ql_ky,
+                ql_mode_ky,
+                ql_gamma,
+                ql_omega,
+                kperp_eff2,
+                heat,
+                particle,
+                amp2,
+                sat_heat,
+                sat_particle,
+            ],
         )
         paths["quasilinear_spectrum"] = str(ql_path)
     return paths
@@ -240,14 +292,18 @@ def _read_optional_var(group: Any, name: str) -> np.ndarray | None:
 
 
 def _resolve_restart_path(out: str | Path, cfg: Any, *, for_write: bool) -> Path:
-    configured = cfg.output.restart_to_file if for_write else cfg.output.restart_from_file
+    configured = (
+        cfg.output.restart_to_file if for_write else cfg.output.restart_from_file
+    )
     if configured is not None:
         return Path(configured)
     base = _gx_bundle_base(Path(out))
     return Path(f"{base}.restart.nc")
 
 
-def _condense_resolved_for_output(resolved: ResolvedDiagnostics | None) -> ResolvedDiagnostics | None:
+def _condense_resolved_for_output(
+    resolved: ResolvedDiagnostics | None,
+) -> ResolvedDiagnostics | None:
     if resolved is None:
         return None
     payload: dict[str, np.ndarray | None] = {}
@@ -266,12 +322,16 @@ def _condense_resolved_for_output(resolved: ResolvedDiagnostics | None) -> Resol
     return ResolvedDiagnostics(**payload)
 
 
-def _condense_gx_diagnostics_for_output(diag: SimulationDiagnostics) -> SimulationDiagnostics:
+def _condense_gx_diagnostics_for_output(
+    diag: SimulationDiagnostics,
+) -> SimulationDiagnostics:
     # GX-style NetCDF artifacts do not persist the monitored complex mode trace.
     # Drop it when appending from an existing artifact so restart concatenation
     # preserves the exact on-disk schema instead of mixing persisted and transient
     # diagnostics.
-    return replace(diag, phi_mode_t=None, resolved=_condense_resolved_for_output(diag.resolved))
+    return replace(
+        diag, phi_mode_t=None, resolved=_condense_resolved_for_output(diag.resolved)
+    )
 
 
 def load_runtime_nonlinear_gx_diagnostics(path: str | Path) -> SimulationDiagnostics:
@@ -284,7 +344,9 @@ def load_runtime_nonlinear_gx_diagnostics(path: str | Path) -> SimulationDiagnos
         wphi_st = np.asarray(diag_group.variables["Wphi_st"][:], dtype=np.float32)
         wapar_st = np.asarray(diag_group.variables["Wapar_st"][:], dtype=np.float32)
         heat_st = np.asarray(diag_group.variables["HeatFlux_st"][:], dtype=np.float32)
-        pflux_st = np.asarray(diag_group.variables["ParticleFlux_st"][:], dtype=np.float32)
+        pflux_st = np.asarray(
+            diag_group.variables["ParticleFlux_st"][:], dtype=np.float32
+        )
         turb_heat_st = _read_optional_var(diag_group, "TurbulentHeating_st")
         resolved_payload = {
             field.name: _read_optional_var(diag_group, field.name)
@@ -292,8 +354,14 @@ def load_runtime_nonlinear_gx_diagnostics(path: str | Path) -> SimulationDiagnos
         }
     if turb_heat_st is None:
         turb_heat_st = np.zeros_like(heat_st)
-    dt_t = np.diff(np.concatenate(([0.0], time_vals))) if time_vals.size else np.asarray([], dtype=np.float64)
-    dt_mean = np.asarray(np.mean(dt_t[dt_t > 0.0]) if np.any(dt_t > 0.0) else 0.0, dtype=np.float64)
+    dt_t = (
+        np.diff(np.concatenate(([0.0], time_vals)))
+        if time_vals.size
+        else np.asarray([], dtype=np.float64)
+    )
+    dt_mean = np.asarray(
+        np.mean(dt_t[dt_t > 0.0]) if np.any(dt_t > 0.0) else 0.0, dtype=np.float64
+    )
     Wg_t = np.sum(wg_st, axis=1)
     Wphi_t = np.sum(wphi_st, axis=1)
     Wapar_t = np.sum(wapar_st, axis=1)
@@ -339,156 +407,58 @@ def run_runtime_nonlinear_with_artifacts(
     show_progress: bool = False,
     status_callback: Any = None,
 ) -> tuple[RuntimeNonlinearResult, dict[str, str]]:
-    out_path = None if out is None else Path(out)
-    gx_target = out_path is not None and _is_gx_netcdf_target(out_path)
-    diagnostics_on = bool(cfg.time.diagnostics if diagnostics is None else diagnostics)
-    if gx_target and not diagnostics_on:
-        raise ValueError("GX-style nonlinear NetCDF artifacts require diagnostics output")
-
-    cfg_run = cfg
-    restart_from: Path | None = None
-    restart_to: Path | None = None
-    if gx_target:
-        assert out_path is not None
-        restart_from = _resolve_restart_path(out_path, cfg, for_write=False)
-        restart_to = _resolve_restart_path(out_path, cfg, for_write=True)
-    resume_requested = bool(getattr(cfg.output, "restart", False)) or cfg.init.init_file is not None
-    if gx_target and cfg.init.init_file is None:
-        if bool(getattr(cfg.output, "restart_if_exists", False)) and restart_from is not None and restart_from.exists():
-            resume_requested = True
-            cfg_run = replace(
-                cfg_run,
-                init=replace(
-                    cfg_run.init,
-                    init_file=str(restart_from),
-                    init_file_scale=float(getattr(cfg.output, "restart_scale", 1.0)),
-                    init_file_mode="add" if bool(getattr(cfg.output, "restart_with_perturb", False)) else "replace",
-                ),
-            )
-        elif bool(getattr(cfg.output, "restart", False)) and restart_from is not None:
-            if not restart_from.exists():
-                raise FileNotFoundError(f"restart file not found: {restart_from}")
-            cfg_run = replace(
-                cfg_run,
-                init=replace(
-                    cfg_run.init,
-                    init_file=str(restart_from),
-                    init_file_scale=float(getattr(cfg.output, "restart_scale", 1.0)),
-                    init_file_mode="add" if bool(getattr(cfg.output, "restart_with_perturb", False)) else "replace",
-                ),
-            )
-    elif cfg.init.init_file is not None and bool(getattr(cfg.output, "restart_with_perturb", False)):
-        cfg_run = replace(
-            cfg_run,
-            init=replace(
-                cfg_run.init,
-                init_file_scale=float(getattr(cfg.output, "restart_scale", 1.0)),
-                init_file_mode="add",
-            ),
-        )
-
-    cumulative_diag: SimulationDiagnostics | None = None
-    history_from_file = False
-    if gx_target and resume_requested and bool(getattr(cfg.output, "append_on_restart", True)):
-        assert out_path is not None
-        history_path = Path(f"{_gx_bundle_base(out_path)}.out.nc")
-        if history_path.exists():
-            cumulative_diag = load_runtime_nonlinear_gx_diagnostics(history_path)
-            history_from_file = True
-
-    if steps is not None:
-        remaining_steps: int | None = int(steps)
-    elif bool(cfg.time.fixed_dt):
-        remaining_steps = int(round(float(cfg.time.t_max) / float(cfg.time.dt if dt is None else dt)))
-    else:
-        remaining_steps = None
-
-    checkpoint_steps: int | None = None
-    if gx_target and remaining_steps is not None and bool(getattr(cfg.output, "save_for_restart", True)):
-        if getattr(cfg.time, "nstep_restart", None) is not None and int(cfg.time.nstep_restart) > 0:
-            checkpoint_steps = int(cfg.time.nstep_restart)
-        elif int(getattr(cfg.output, "nsave", 0)) > 0:
-            checkpoint_steps = int(cfg.output.nsave)
-
-    time_offset = 0.0
-    if cumulative_diag is not None and np.asarray(cumulative_diag.t).size:
-        time_offset = float(np.asarray(cumulative_diag.t)[-1])
-
-    result_final: RuntimeNonlinearResult | None = None
-    paths: dict[str, str] = {}
-    while True:
-        chunk_steps = remaining_steps
-        if checkpoint_steps is not None:
-            chunk_steps = checkpoint_steps if remaining_steps is None else min(int(remaining_steps), checkpoint_steps)
-        result_chunk = run_runtime_nonlinear(
-            cfg_run,
-            ky_target=ky_target,
-            kx_target=kx_target,
-            Nl=Nl,
-            Nm=Nm,
-            dt=dt,
-            steps=chunk_steps,
-            method=method,
-            sample_stride=sample_stride,
-            diagnostics_stride=diagnostics_stride,
-            laguerre_mode=laguerre_mode,
-            diagnostics=diagnostics,
-            return_state=gx_target,
-            show_progress=show_progress,
-            status_callback=status_callback,
-        )
-        _validate_finite_runtime_result(result_chunk, label="nonlinear runtime chunk")
-        result_effective = result_chunk
-        if result_chunk.diagnostics is not None:
-            diag_chunk = result_chunk.diagnostics
-            if history_from_file:
-                diag_chunk = _condense_gx_diagnostics_for_output(diag_chunk)
-            if time_offset != 0.0:
-                diag_chunk = replace(diag_chunk, t=np.asarray(diag_chunk.t) + time_offset)
-            cumulative_diag = diag_chunk if cumulative_diag is None else _concat_gx_diagnostics([cumulative_diag, diag_chunk])
-            time_offset = float(np.asarray(cumulative_diag.t)[-1]) if np.asarray(cumulative_diag.t).size else time_offset
-            result_effective = replace(result_chunk, diagnostics=cumulative_diag, t=np.asarray(cumulative_diag.t))
-        result_final = result_effective
-
-        if out_path is not None:
-            paths = write_runtime_nonlinear_artifacts(out_path, result_effective, cfg)
-
-        if checkpoint_steps is None:
-            break
-        if remaining_steps is not None:
-            assert chunk_steps is not None
-            remaining_steps -= int(chunk_steps)
-            if remaining_steps <= 0:
-                break
-        elif result_effective.diagnostics is None or time_offset >= float(cfg.time.t_max) - 1.0e-12:
-            break
-        if restart_to is None:
-            break
-        cfg_run = replace(
-            cfg,
-            init=replace(
-                cfg.init,
-                init_file=str(restart_to),
-                init_file_scale=1.0,
-                init_file_mode="replace",
-            ),
-        )
-
-    if result_final is None:
-        raise RuntimeError("nonlinear runtime produced no result")
-    return result_final, paths
+    deps = SimpleNamespace(
+        is_gx_netcdf_target=_is_gx_netcdf_target,
+        resolve_restart_path=lambda path, run_cfg: _resolve_restart_path(
+            path, run_cfg, for_write=False
+        ),
+        resolve_restart_write_path=lambda path, run_cfg: _resolve_restart_path(
+            path, run_cfg, for_write=True
+        ),
+        gx_bundle_base=_gx_bundle_base,
+        load_runtime_nonlinear_gx_diagnostics=load_runtime_nonlinear_gx_diagnostics,
+        condense_gx_diagnostics_for_output=_condense_gx_diagnostics_for_output,
+        concat_gx_diagnostics=_concat_gx_diagnostics,
+        validate_finite_runtime_result=lambda result: _validate_finite_runtime_result(
+            result, label="nonlinear runtime chunk"
+        ),
+        run_runtime_nonlinear=run_runtime_nonlinear,
+        write_runtime_nonlinear_artifacts=write_runtime_nonlinear_artifacts,
+    )
+    return run_runtime_nonlinear_artifact_handoff(
+        cfg,
+        out=out,
+        ky_target=ky_target,
+        kx_target=kx_target,
+        Nl=Nl,
+        Nm=Nm,
+        dt=dt,
+        steps=steps,
+        method=method,
+        sample_stride=sample_stride,
+        diagnostics_stride=diagnostics_stride,
+        laguerre_mode=laguerre_mode,
+        diagnostics=diagnostics,
+        show_progress=show_progress,
+        status_callback=status_callback,
+        deps=deps,
+    )
 
 
 def _require_netcdf4():
     try:
         from netCDF4 import Dataset
     except ImportError as exc:  # pragma: no cover
-        raise ImportError("netCDF4 is required to write GX-style NetCDF runtime artifacts") from exc
+        raise ImportError(
+            "netCDF4 is required to write GX-style NetCDF runtime artifacts"
+        ) from exc
     return Dataset
 
 
 def _real_space_axis(length: int, extent: float) -> np.ndarray:
-    return np.linspace(0.0, float(extent), int(length), endpoint=False, dtype=np.float32)
+    return np.linspace(
+        0.0, float(extent), int(length), endpoint=False, dtype=np.float32
+    )
 
 
 def _gx_active_kx_count(nx: int) -> int:
@@ -532,12 +502,16 @@ def _spectral_to_ri(field: np.ndarray) -> np.ndarray:
     field_arr = np.asarray(field)
     if field_arr.ndim != 3:
         raise ValueError("field must have shape (Ny, Nx, Nz)")
-    return np.stack([np.real(field_arr), np.imag(field_arr)], axis=-1).astype(np.float32, copy=False)
+    return np.stack([np.real(field_arr), np.imag(field_arr)], axis=-1).astype(
+        np.float32, copy=False
+    )
 
 
 def _complex_to_ri(field: np.ndarray) -> np.ndarray:
     field_arr = np.asarray(field)
-    return np.stack([np.real(field_arr), np.imag(field_arr)], axis=-1).astype(np.float32, copy=False)
+    return np.stack([np.real(field_arr), np.imag(field_arr)], axis=-1).astype(
+        np.float32, copy=False
+    )
 
 
 def _build_artifact_grid_and_geometry(cfg: Any) -> tuple[Any, Any]:
@@ -560,7 +534,9 @@ def _restart_to_gx_layout(state: np.ndarray) -> np.ndarray:
     if state_arr.ndim == 5:
         state_arr = state_arr[None, ...]
     if state_arr.ndim != 6:
-        raise ValueError("nonlinear state must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)")
+        raise ValueError(
+            "nonlinear state must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)"
+        )
     ky_idx = _gx_active_ky_indices(state_arr.shape[3])
     kx_idx = _gx_active_kx_indices(state_arr.shape[4])
     state_arr = _take_axis(state_arr, ky_idx, axis=3)
@@ -569,7 +545,9 @@ def _restart_to_gx_layout(state: np.ndarray) -> np.ndarray:
     return np.stack([np.real(gx), np.imag(gx)], axis=-1).astype(np.float32, copy=False)
 
 
-def _species_matrix(total: np.ndarray, nspecies: int, species_values: np.ndarray | None) -> np.ndarray:
+def _species_matrix(
+    total: np.ndarray, nspecies: int, species_values: np.ndarray | None
+) -> np.ndarray:
     total_arr = np.asarray(total, dtype=np.float32)
     ns = max(int(nspecies), 1)
     if species_values is not None:
@@ -577,29 +555,41 @@ def _species_matrix(total: np.ndarray, nspecies: int, species_values: np.ndarray
         if arr.ndim == 1:
             return arr[:, None]
         return arr
-    return np.broadcast_to((total_arr / float(ns))[:, None], (total_arr.shape[0], ns)).copy()
+    return np.broadcast_to(
+        (total_arr / float(ns))[:, None], (total_arr.shape[0], ns)
+    ).copy()
 
 
-def _maybe_var(group: Any, name: str, dtype: str, dims: tuple[str, ...], values: np.ndarray) -> None:
+def _maybe_var(
+    group: Any, name: str, dtype: str, dims: tuple[str, ...], values: np.ndarray
+) -> None:
     var = group.createVariable(name, dtype, dims)
     var[...] = values
 
 
-def _write_runtime_root_metadata(root: Any, cfg: Any, *, nspecies: int, nl: int, nm: int) -> None:
+def _write_runtime_root_metadata(
+    root: Any, cfg: Any, *, nspecies: int, nl: int, nm: int
+) -> None:
     root.createVariable("ny", "i4", ())[:] = np.int32(cfg.grid.Ny)
     root.createVariable("nx", "i4", ())[:] = np.int32(cfg.grid.Nx)
-    root.createVariable("ntheta", "i4", ())[:] = np.int32(cfg.grid.ntheta if cfg.grid.ntheta is not None else cfg.grid.Nz)
+    root.createVariable("ntheta", "i4", ())[:] = np.int32(
+        cfg.grid.ntheta if cfg.grid.ntheta is not None else cfg.grid.Nz
+    )
     root.createVariable("nhermite", "i4", ())[:] = np.int32(nm)
     root.createVariable("nlaguerre", "i4", ())[:] = np.int32(nl)
     root.createVariable("nspecies", "i4", ())[:] = np.int32(nspecies)
-    root.createVariable("nperiod", "i4", ())[:] = np.int32(cfg.grid.nperiod if cfg.grid.nperiod is not None else 1)
+    root.createVariable("nperiod", "i4", ())[:] = np.int32(
+        cfg.grid.nperiod if cfg.grid.nperiod is not None else 1
+    )
     root.createVariable("debug", "i4", ())[:] = np.int32(0)
     code_info = root.createVariable("code_info", "i4", ())
     code_info[:] = np.int32(1)
     code_info.setncattr("value", "spectrax-gk")
 
 
-def _gx_active_field(field: np.ndarray, *, ky_axis: int = 0, kx_axis: int = 1) -> np.ndarray:
+def _gx_active_field(
+    field: np.ndarray, *, ky_axis: int = 0, kx_axis: int = 1
+) -> np.ndarray:
     field_arr = np.asarray(field)
     ky_idx = _gx_active_ky_indices(field_arr.shape[ky_axis])
     kx_idx = _gx_active_kx_indices(field_arr.shape[kx_axis])
@@ -610,7 +600,9 @@ def _spectral_species_to_ri(field: np.ndarray) -> np.ndarray:
     field_arr = np.asarray(field)
     if field_arr.ndim != 4:
         raise ValueError("field must have shape (Ns, Ny, Nx, Nz)")
-    return np.stack([np.real(field_arr), np.imag(field_arr)], axis=-1).astype(np.float32, copy=False)
+    return np.stack([np.real(field_arr), np.imag(field_arr)], axis=-1).astype(
+        np.float32, copy=False
+    )
 
 
 def _state_basis_moments(state: np.ndarray) -> dict[str, np.ndarray]:
@@ -618,10 +610,16 @@ def _state_basis_moments(state: np.ndarray) -> dict[str, np.ndarray]:
     if state_arr.ndim != 6:
         raise ValueError("state must have shape (Ns, Nl, Nm, Ny, Nx, Nz)")
     ns, nl, nm, _ny, _nx, nz = state_arr.shape
-    zeros = np.zeros((ns, state_arr.shape[3], state_arr.shape[4], nz), dtype=state_arr.dtype)
+    zeros = np.zeros(
+        (ns, state_arr.shape[3], state_arr.shape[4], nz), dtype=state_arr.dtype
+    )
     density = state_arr[:, 0, 0, ...] if nl >= 1 and nm >= 1 else zeros
     upar = state_arr[:, 0, 1, ...] if nl >= 1 and nm >= 2 else zeros
-    tpar = np.sqrt(2.0, dtype=np.float32) * state_arr[:, 0, 2, ...] if nl >= 1 and nm >= 3 else zeros
+    tpar = (
+        np.sqrt(2.0, dtype=np.float32) * state_arr[:, 0, 2, ...]
+        if nl >= 1 and nm >= 3
+        else zeros
+    )
     tperp = state_arr[:, 1, 0, ...] if nl >= 2 and nm >= 1 else zeros
     return {
         "Density": density,
@@ -644,7 +642,11 @@ def _particle_moments(state: np.ndarray, cfg: Any) -> dict[str, np.ndarray]:
     if JlB.ndim == 4:
         JlB = JlB[None, ...]
     sqrt_b = np.sqrt(np.maximum(np.asarray(cache.kperp2, dtype=np.float32), 0.0))
-    g0 = state_arr[:, :, 0, ...] if nm >= 1 else np.zeros((ns, nl) + state_arr.shape[3:], dtype=state_arr.dtype)
+    g0 = (
+        state_arr[:, :, 0, ...]
+        if nm >= 1
+        else np.zeros((ns, nl) + state_arr.shape[3:], dtype=state_arr.dtype)
+    )
     g1 = state_arr[:, :, 1, ...] if nm >= 2 else np.zeros_like(g0)
     g2 = state_arr[:, :, 2, ...] if nm >= 3 else np.zeros_like(g0)
     particle_density = np.sum(Jl * g0, axis=1)
@@ -672,7 +674,9 @@ def _condense_kykx(arr: np.ndarray) -> np.ndarray:
     return _take_axis(out, _gx_active_kx_indices(np.asarray(arr).shape[-1]), axis=-1)
 
 
-def _condense_kx_for_output(arr: np.ndarray, *, full_nx: int, active_nx: int) -> np.ndarray:
+def _condense_kx_for_output(
+    arr: np.ndarray, *, full_nx: int, active_nx: int
+) -> np.ndarray:
     """Return kx-resolved data on the GX-active output axis.
 
     Fresh in-memory diagnostics carry the full spectral ``kx`` axis, while
@@ -687,10 +691,14 @@ def _condense_kx_for_output(arr: np.ndarray, *, full_nx: int, active_nx: int) ->
         return arr_np
     if nx == int(full_nx):
         return _take_axis(arr_np, _gx_active_kx_indices(int(full_nx)), axis=-1)
-    raise ValueError(f"kx-resolved diagnostic has length {nx}; expected full Nx={full_nx} or active Nkx={active_nx}")
+    raise ValueError(
+        f"kx-resolved diagnostic has length {nx}; expected full Nx={full_nx} or active Nkx={active_nx}"
+    )
 
 
-def _condense_ky_for_output(arr: np.ndarray, *, full_ny: int, active_ny: int) -> np.ndarray:
+def _condense_ky_for_output(
+    arr: np.ndarray, *, full_ny: int, active_ny: int
+) -> np.ndarray:
     """Return ky-resolved data on the GX-active positive-ky output axis."""
 
     arr_np = np.asarray(arr)
@@ -699,7 +707,9 @@ def _condense_ky_for_output(arr: np.ndarray, *, full_ny: int, active_ny: int) ->
         return arr_np
     if ny == int(full_ny):
         return _take_axis(arr_np, _gx_active_ky_indices(int(full_ny)), axis=-1)
-    raise ValueError(f"ky-resolved diagnostic has length {ny}; expected full Ny={full_ny} or active Nky={active_ny}")
+    raise ValueError(
+        f"ky-resolved diagnostic has length {ny}; expected full Ny={full_ny} or active Nky={active_ny}"
+    )
 
 
 def _condense_kykx_for_output(
@@ -720,11 +730,15 @@ def _condense_kykx_for_output(
     if ny == int(full_ny):
         arr_np = _take_axis(arr_np, _gx_active_ky_indices(int(full_ny)), axis=-2)
     elif ny != int(active_ny):
-        raise ValueError(f"ky-kx diagnostic ky length {ny}; expected full Ny={full_ny} or active Nky={active_ny}")
+        raise ValueError(
+            f"ky-kx diagnostic ky length {ny}; expected full Ny={full_ny} or active Nky={active_ny}"
+        )
     if nx == int(full_nx):
         arr_np = _take_axis(arr_np, _gx_active_kx_indices(int(full_nx)), axis=-1)
     elif nx != int(active_nx):
-        raise ValueError(f"ky-kx diagnostic kx length {nx}; expected full Nx={full_nx} or active Nkx={active_nx}")
+        raise ValueError(
+            f"ky-kx diagnostic kx length {nx}; expected full Nx={full_nx} or active Nkx={active_nx}"
+        )
     return arr_np
 
 
@@ -738,22 +752,48 @@ def _write_gx_geometry_group(
     if grid is None or geom is None:
         grid, geom = _build_artifact_grid_and_geometry(cfg)
     theta = np.asarray(grid.z, dtype=np.float32)
-    group.createVariable("bmag", "f4", ("theta",))[:] = np.asarray(geom.bmag_profile, dtype=np.float32)
-    group.createVariable("bgrad", "f4", ("theta",))[:] = np.asarray(geom.bgrad_profile, dtype=np.float32)
-    group.createVariable("gbdrift", "f4", ("theta",))[:] = np.asarray(geom.gb_profile, dtype=np.float32)
-    group.createVariable("gbdrift0", "f4", ("theta",))[:] = np.asarray(geom.gb0_profile, dtype=np.float32)
-    group.createVariable("cvdrift", "f4", ("theta",))[:] = np.asarray(geom.cv_profile, dtype=np.float32)
-    group.createVariable("cvdrift0", "f4", ("theta",))[:] = np.asarray(geom.cv0_profile, dtype=np.float32)
-    group.createVariable("gds2", "f4", ("theta",))[:] = np.asarray(geom.gds2_profile, dtype=np.float32)
-    group.createVariable("gds21", "f4", ("theta",))[:] = np.asarray(geom.gds21_profile, dtype=np.float32)
-    group.createVariable("gds22", "f4", ("theta",))[:] = np.asarray(geom.gds22_profile, dtype=np.float32)
-    group.createVariable("grho", "f4", ("theta",))[:] = np.asarray(geom.grho_profile, dtype=np.float32)
-    group.createVariable("jacobian", "f4", ("theta",))[:] = np.asarray(geom.jacobian_profile, dtype=np.float32)
+    group.createVariable("bmag", "f4", ("theta",))[:] = np.asarray(
+        geom.bmag_profile, dtype=np.float32
+    )
+    group.createVariable("bgrad", "f4", ("theta",))[:] = np.asarray(
+        geom.bgrad_profile, dtype=np.float32
+    )
+    group.createVariable("gbdrift", "f4", ("theta",))[:] = np.asarray(
+        geom.gb_profile, dtype=np.float32
+    )
+    group.createVariable("gbdrift0", "f4", ("theta",))[:] = np.asarray(
+        geom.gb0_profile, dtype=np.float32
+    )
+    group.createVariable("cvdrift", "f4", ("theta",))[:] = np.asarray(
+        geom.cv_profile, dtype=np.float32
+    )
+    group.createVariable("cvdrift0", "f4", ("theta",))[:] = np.asarray(
+        geom.cv0_profile, dtype=np.float32
+    )
+    group.createVariable("gds2", "f4", ("theta",))[:] = np.asarray(
+        geom.gds2_profile, dtype=np.float32
+    )
+    group.createVariable("gds21", "f4", ("theta",))[:] = np.asarray(
+        geom.gds21_profile, dtype=np.float32
+    )
+    group.createVariable("gds22", "f4", ("theta",))[:] = np.asarray(
+        geom.gds22_profile, dtype=np.float32
+    )
+    group.createVariable("grho", "f4", ("theta",))[:] = np.asarray(
+        geom.grho_profile, dtype=np.float32
+    )
+    group.createVariable("jacobian", "f4", ("theta",))[:] = np.asarray(
+        geom.jacobian_profile, dtype=np.float32
+    )
     group.createVariable("gradpar", "f4", ())[:] = np.float32(geom.gradpar_value)
-    group.createVariable("nperiod", "i4", ())[:] = np.int32(cfg.grid.nperiod if cfg.grid.nperiod is not None else 1)
+    group.createVariable("nperiod", "i4", ())[:] = np.int32(
+        cfg.grid.nperiod if cfg.grid.nperiod is not None else 1
+    )
     group.createVariable("q", "f4", ())[:] = np.float32(geom.q)
     group.createVariable("shat", "f4", ())[:] = np.float32(geom.s_hat)
-    group.createVariable("shift", "f4", ())[:] = np.float32(getattr(cfg.geometry, "shift", 0.0))
+    group.createVariable("shift", "f4", ())[:] = np.float32(
+        getattr(cfg.geometry, "shift", 0.0)
+    )
     group.createVariable("rmaj", "f4", ())[:] = np.float32(geom.R0)
     group.createVariable("aminor", "f4", ())[:] = np.float32(geom.epsilon * geom.R0)
     group.createVariable("kxfac", "f4", ())[:] = np.float32(geom.kxfac)
@@ -762,34 +802,63 @@ def _write_gx_geometry_group(
     group.createVariable("nfp", "i4", ())[:] = np.int32(geom.nfp)
     group.createVariable("alpha", "f4", ())[:] = np.float32(geom.alpha)
     group.createVariable("zeta_center", "f4", ())[:] = np.float32(0.0)
-    return theta, np.asarray(real_fft_ordered_kx(grid.kx), dtype=np.float32), np.asarray(real_fft_unique_ky(grid.ky), dtype=np.float32), geom
+    return (
+        theta,
+        np.asarray(real_fft_ordered_kx(grid.kx), dtype=np.float32),
+        np.asarray(real_fft_unique_ky(grid.ky), dtype=np.float32),
+        geom,
+    )
 
 
 def _write_gx_inputs_group(group: Any, cfg: Any, geom: Any) -> None:
-    group.createVariable("igeo", "i4", ())[:] = np.int32(0 if str(cfg.geometry.model).lower() == "miller" else 1)
-    group.createVariable("slab", "i4", ())[:] = np.int32(1 if str(cfg.geometry.model).lower() == "slab" else 0)
+    group.createVariable("igeo", "i4", ())[:] = np.int32(
+        0 if str(cfg.geometry.model).lower() == "miller" else 1
+    )
+    group.createVariable("slab", "i4", ())[:] = np.int32(
+        1 if str(cfg.geometry.model).lower() == "slab" else 0
+    )
     group.createVariable("const_curv", "i4", ())[:] = np.int32(0)
-    group.createVariable("geofile_dum", "i4", ())[:] = np.int32(1 if getattr(cfg.geometry, "geometry_file", None) else 0)
+    group.createVariable("geofile_dum", "i4", ())[:] = np.int32(
+        1 if getattr(cfg.geometry, "geometry_file", None) else 0
+    )
     group.createVariable("drhodpsi", "f4", ())[:] = np.float32(1.0)
     group.createVariable("kxfac", "f4", ())[:] = np.float32(geom.kxfac)
     group.createVariable("Rmaj", "f4", ())[:] = np.float32(geom.R0)
-    group.createVariable("shift", "f4", ())[:] = np.float32(getattr(cfg.geometry, "shift", 0.0))
+    group.createVariable("shift", "f4", ())[:] = np.float32(
+        getattr(cfg.geometry, "shift", 0.0)
+    )
     group.createVariable("eps", "f4", ())[:] = np.float32(geom.epsilon)
     group.createVariable("q", "f4", ())[:] = np.float32(geom.q)
     group.createVariable("shat", "f4", ())[:] = np.float32(geom.s_hat)
-    group.createVariable("kappa", "f4", ())[:] = np.float32(getattr(cfg.geometry, "kappa", 1.0))
-    group.createVariable("kappa_prime", "f4", ())[:] = np.float32(getattr(cfg.geometry, "akappri", 0.0))
-    group.createVariable("tri", "f4", ())[:] = np.float32(getattr(cfg.geometry, "tri", 0.0))
-    group.createVariable("tri_prime", "f4", ())[:] = np.float32(getattr(cfg.geometry, "tripri", 0.0))
+    group.createVariable("kappa", "f4", ())[:] = np.float32(
+        getattr(cfg.geometry, "kappa", 1.0)
+    )
+    group.createVariable("kappa_prime", "f4", ())[:] = np.float32(
+        getattr(cfg.geometry, "akappri", 0.0)
+    )
+    group.createVariable("tri", "f4", ())[:] = np.float32(
+        getattr(cfg.geometry, "tri", 0.0)
+    )
+    group.createVariable("tri_prime", "f4", ())[:] = np.float32(
+        getattr(cfg.geometry, "tripri", 0.0)
+    )
     group.createVariable("beta", "f4", ())[:] = np.float32(cfg.physics.beta)
-    group.createVariable("zero_shat", "i4", ())[:] = np.int32(abs(float(geom.s_hat)) < 1.0e-30)
+    group.createVariable("zero_shat", "i4", ())[:] = np.int32(
+        abs(float(geom.s_hat)) < 1.0e-30
+    )
     group.createVariable("B_ref", "f4", ())[:] = np.float32(geom.B0)
-    group.createVariable("a_ref", "f4", ())[:] = np.float32(max(float(geom.epsilon * geom.R0), 1.0))
-    group.createVariable("grhoavg", "f4", ())[:] = np.float32(np.mean(np.asarray(geom.grho_profile, dtype=np.float32)))
+    group.createVariable("a_ref", "f4", ())[:] = np.float32(
+        max(float(geom.epsilon * geom.R0), 1.0)
+    )
+    group.createVariable("grhoavg", "f4", ())[:] = np.float32(
+        np.mean(np.asarray(geom.grho_profile, dtype=np.float32))
+    )
     group.createVariable("surfarea", "f4", ())[:] = np.float32(np.nan)
 
 
-def _write_runtime_nonlinear_gx_artifacts(out: str | Path, result: Any, cfg: Any) -> dict[str, str]:
+def _write_runtime_nonlinear_gx_artifacts(
+    out: str | Path, result: Any, cfg: Any
+) -> dict[str, str]:
     Dataset = _require_netcdf4()
     out_path = Path(out)
     base = _gx_bundle_base(out_path)
@@ -799,7 +868,9 @@ def _write_runtime_nonlinear_gx_artifacts(out: str | Path, result: Any, cfg: Any
 
     diag: SimulationDiagnostics | None = result.diagnostics
     if diag is None:
-        raise ValueError("GX-style nonlinear NetCDF artifacts require nonlinear diagnostics output")
+        raise ValueError(
+            "GX-style nonlinear NetCDF artifacts require nonlinear diagnostics output"
+        )
 
     grid, geom_data = _build_artifact_grid_and_geometry(cfg)
     theta = np.asarray(grid.z, dtype=np.float32)
@@ -809,13 +880,25 @@ def _write_runtime_nonlinear_gx_artifacts(out: str | Path, result: Any, cfg: Any
     full_ny = int(np.asarray(grid.ky).size)
     active_nx = int(kx_vals.size)
     active_ny = int(ky_vals.size)
-    nspecies = int(np.asarray(result.state).shape[0]) if result.state is not None and np.asarray(result.state).ndim == 6 else len(cfg.species)
+    nspecies = (
+        int(np.asarray(result.state).shape[0])
+        if result.state is not None and np.asarray(result.state).ndim == 6
+        else len(cfg.species)
+    )
     time_vals = np.asarray(diag.t, dtype=np.float64)
     x_vals = _real_space_axis(int(grid.kx.size), float(2.0 * np.pi * grid.x0))
     y_extent = float(2.0 * np.pi * grid.y0)
     y_vals = _real_space_axis(int(grid.ky.size), y_extent)
-    nl = int(np.asarray(result.state).shape[1]) if result.state is not None and np.asarray(result.state).ndim == 6 else 1
-    nm = int(np.asarray(result.state).shape[2]) if result.state is not None and np.asarray(result.state).ndim == 6 else 1
+    nl = (
+        int(np.asarray(result.state).shape[1])
+        if result.state is not None and np.asarray(result.state).ndim == 6
+        else 1
+    )
+    nm = (
+        int(np.asarray(result.state).shape[2])
+        if result.state is not None and np.asarray(result.state).ndim == 6
+        else 1
+    )
 
     _ensure_parent(out_nc_path)
     with Dataset(out_nc_path, "w") as root:
@@ -882,20 +965,45 @@ def _write_runtime_nonlinear_gx_artifacts(out: str | Path, result: Any, cfg: Any
             phi2_t = np.asarray(diag.Wphi_t, dtype=np.float32)
         diag_group.createVariable("Phi2_t", "f4", ("time",))[:] = phi2_t
         wg_s = _species_matrix(np.asarray(diag.Wg_t, dtype=np.float32), nspecies, None)
-        wphi_s = _species_matrix(np.asarray(diag.Wphi_t, dtype=np.float32), nspecies, None)
-        wapar_s = _species_matrix(np.asarray(diag.Wapar_t, dtype=np.float32), nspecies, None)
-        heat_s = _species_matrix(np.asarray(diag.heat_flux_t, dtype=np.float32), nspecies, None if diag.heat_flux_species_t is None else np.asarray(diag.heat_flux_species_t, dtype=np.float32))
-        pflux_s = _species_matrix(np.asarray(diag.particle_flux_t, dtype=np.float32), nspecies, None if diag.particle_flux_species_t is None else np.asarray(diag.particle_flux_species_t, dtype=np.float32))
-        turb_heat_s = _species_matrix(
-            np.asarray(np.zeros_like(diag.heat_flux_t) if diag.turbulent_heating_t is None else diag.turbulent_heating_t, dtype=np.float32),
+        wphi_s = _species_matrix(
+            np.asarray(diag.Wphi_t, dtype=np.float32), nspecies, None
+        )
+        wapar_s = _species_matrix(
+            np.asarray(diag.Wapar_t, dtype=np.float32), nspecies, None
+        )
+        heat_s = _species_matrix(
+            np.asarray(diag.heat_flux_t, dtype=np.float32),
             nspecies,
-            None if diag.turbulent_heating_species_t is None else np.asarray(diag.turbulent_heating_species_t, dtype=np.float32),
+            None
+            if diag.heat_flux_species_t is None
+            else np.asarray(diag.heat_flux_species_t, dtype=np.float32),
+        )
+        pflux_s = _species_matrix(
+            np.asarray(diag.particle_flux_t, dtype=np.float32),
+            nspecies,
+            None
+            if diag.particle_flux_species_t is None
+            else np.asarray(diag.particle_flux_species_t, dtype=np.float32),
+        )
+        turb_heat_s = _species_matrix(
+            np.asarray(
+                np.zeros_like(diag.heat_flux_t)
+                if diag.turbulent_heating_t is None
+                else diag.turbulent_heating_t,
+                dtype=np.float32,
+            ),
+            nspecies,
+            None
+            if diag.turbulent_heating_species_t is None
+            else np.asarray(diag.turbulent_heating_species_t, dtype=np.float32),
         )
         diag_group.createVariable("Wg_st", "f4", ("time", "s"))[:, :] = wg_s
         diag_group.createVariable("Wphi_st", "f4", ("time", "s"))[:, :] = wphi_s
         diag_group.createVariable("Wapar_st", "f4", ("time", "s"))[:, :] = wapar_s
         diag_group.createVariable("HeatFlux_st", "f4", ("time", "s"))[:, :] = heat_s
-        diag_group.createVariable("ParticleFlux_st", "f4", ("time", "s"))[:, :] = pflux_s
+        diag_group.createVariable("ParticleFlux_st", "f4", ("time", "s"))[:, :] = (
+            pflux_s
+        )
         heat_es_st = _resolved_species_time(
             None if resolved is None else resolved.HeatFluxES_kxst,
             fallback=heat_s if cfg.physics.electrostatic else np.zeros_like(heat_s),
@@ -920,38 +1028,68 @@ def _write_runtime_nonlinear_gx_artifacts(out: str | Path, result: Any, cfg: Any
             None if resolved is None else resolved.ParticleFluxBpar_kxst,
             fallback=np.zeros_like(pflux_s),
         )
-        diag_group.createVariable("HeatFluxES_st", "f4", ("time", "s"))[:, :] = heat_es_st
-        diag_group.createVariable("HeatFluxApar_st", "f4", ("time", "s"))[:, :] = heat_apar_st
-        diag_group.createVariable("HeatFluxBpar_st", "f4", ("time", "s"))[:, :] = heat_bpar_st
-        diag_group.createVariable("ParticleFluxES_st", "f4", ("time", "s"))[:, :] = pflux_es_st
-        diag_group.createVariable("ParticleFluxApar_st", "f4", ("time", "s"))[:, :] = pflux_apar_st
-        diag_group.createVariable("ParticleFluxBpar_st", "f4", ("time", "s"))[:, :] = pflux_bpar_st
+        diag_group.createVariable("HeatFluxES_st", "f4", ("time", "s"))[:, :] = (
+            heat_es_st
+        )
+        diag_group.createVariable("HeatFluxApar_st", "f4", ("time", "s"))[:, :] = (
+            heat_apar_st
+        )
+        diag_group.createVariable("HeatFluxBpar_st", "f4", ("time", "s"))[:, :] = (
+            heat_bpar_st
+        )
+        diag_group.createVariable("ParticleFluxES_st", "f4", ("time", "s"))[:, :] = (
+            pflux_es_st
+        )
+        diag_group.createVariable("ParticleFluxApar_st", "f4", ("time", "s"))[:, :] = (
+            pflux_apar_st
+        )
+        diag_group.createVariable("ParticleFluxBpar_st", "f4", ("time", "s"))[:, :] = (
+            pflux_bpar_st
+        )
         turb_heat_st = _resolved_species_time(
             None if resolved is None else resolved.TurbulentHeating_kxst,
             fallback=turb_heat_s,
         )
-        diag_group.createVariable("TurbulentHeating_st", "f4", ("time", "s"))[:, :] = turb_heat_st
+        diag_group.createVariable("TurbulentHeating_st", "f4", ("time", "s"))[:, :] = (
+            turb_heat_st
+        )
         if resolved is not None:
             if phi2_kx_out is not None:
-                diag_group.createVariable("Phi2_kxt", "f4", ("time", "kx"))[:, :] = phi2_kx_out
+                diag_group.createVariable("Phi2_kxt", "f4", ("time", "kx"))[:, :] = (
+                    phi2_kx_out
+                )
             if phi2_ky_out is not None:
-                diag_group.createVariable("Phi2_kyt", "f4", ("time", "ky"))[:, :] = phi2_ky_out
+                diag_group.createVariable("Phi2_kyt", "f4", ("time", "ky"))[:, :] = (
+                    phi2_ky_out
+                )
             if phi2_kykx_out is not None:
-                diag_group.createVariable("Phi2_kxkyt", "f4", ("time", "ky", "kx"))[:, :, :] = phi2_kykx_out
+                diag_group.createVariable("Phi2_kxkyt", "f4", ("time", "ky", "kx"))[
+                    :, :, :
+                ] = phi2_kykx_out
             if resolved.Phi2_zt is not None:
-                diag_group.createVariable("Phi2_zt", "f4", ("time", "theta"))[:, :] = np.asarray(resolved.Phi2_zt, dtype=np.float32)
+                diag_group.createVariable("Phi2_zt", "f4", ("time", "theta"))[:, :] = (
+                    np.asarray(resolved.Phi2_zt, dtype=np.float32)
+                )
             if resolved.Phi2_zonal_t is not None:
-                diag_group.createVariable("Phi2_zonal_t", "f4", ("time",))[:] = np.asarray(resolved.Phi2_zonal_t, dtype=np.float32)
+                diag_group.createVariable("Phi2_zonal_t", "f4", ("time",))[:] = (
+                    np.asarray(resolved.Phi2_zonal_t, dtype=np.float32)
+                )
             if resolved.Phi2_zonal_kxt is not None:
-                diag_group.createVariable("Phi2_zonal_kxt", "f4", ("time", "kx"))[:, :] = _condense_kx_for_output(
+                diag_group.createVariable("Phi2_zonal_kxt", "f4", ("time", "kx"))[
+                    :, :
+                ] = _condense_kx_for_output(
                     np.asarray(resolved.Phi2_zonal_kxt, dtype=np.float32),
                     full_nx=full_nx,
                     active_nx=active_nx,
                 )
             if resolved.Phi2_zonal_zt is not None:
-                diag_group.createVariable("Phi2_zonal_zt", "f4", ("time", "theta"))[:, :] = np.asarray(resolved.Phi2_zonal_zt, dtype=np.float32)
+                diag_group.createVariable("Phi2_zonal_zt", "f4", ("time", "theta"))[
+                    :, :
+                ] = np.asarray(resolved.Phi2_zonal_zt, dtype=np.float32)
             if resolved.Phi_zonal_mode_kxt is not None:
-                diag_group.createVariable("Phi_zonal_mode_kxt", "f4", ("time", "kx", "ri"))[:, :, :] = _complex_to_ri(
+                diag_group.createVariable(
+                    "Phi_zonal_mode_kxt", "f4", ("time", "kx", "ri")
+                )[:, :, :] = _complex_to_ri(
                     _condense_kx_for_output(
                         np.asarray(resolved.Phi_zonal_mode_kxt),
                         full_nx=full_nx,
@@ -959,7 +1097,9 @@ def _write_runtime_nonlinear_gx_artifacts(out: str | Path, result: Any, cfg: Any
                     )
                 )
             if resolved.Phi_zonal_line_kxt is not None:
-                diag_group.createVariable("Phi_zonal_line_kxt", "f4", ("time", "kx", "ri"))[:, :, :] = _complex_to_ri(
+                diag_group.createVariable(
+                    "Phi_zonal_line_kxt", "f4", ("time", "kx", "ri")
+                )[:, :, :] = _complex_to_ri(
                     _condense_kx_for_output(
                         np.asarray(resolved.Phi_zonal_line_kxt),
                         full_nx=full_nx,
@@ -967,27 +1107,63 @@ def _write_runtime_nonlinear_gx_artifacts(out: str | Path, result: Any, cfg: Any
                     )
                 )
             metric_specs = (
-                ("Wg", resolved.Wg_kxst, resolved.Wg_kyst, resolved.Wg_kxkyst, resolved.Wg_zst),
-                ("Wphi", resolved.Wphi_kxst, resolved.Wphi_kyst, resolved.Wphi_kxkyst, resolved.Wphi_zst),
-                ("Wapar", resolved.Wapar_kxst, resolved.Wapar_kyst, resolved.Wapar_kxkyst, resolved.Wapar_zst),
-                ("HeatFlux", resolved.HeatFlux_kxst, resolved.HeatFlux_kyst, resolved.HeatFlux_kxkyst, resolved.HeatFlux_zst),
-                ("ParticleFlux", resolved.ParticleFlux_kxst, resolved.ParticleFlux_kyst, resolved.ParticleFlux_kxkyst, resolved.ParticleFlux_zst),
+                (
+                    "Wg",
+                    resolved.Wg_kxst,
+                    resolved.Wg_kyst,
+                    resolved.Wg_kxkyst,
+                    resolved.Wg_zst,
+                ),
+                (
+                    "Wphi",
+                    resolved.Wphi_kxst,
+                    resolved.Wphi_kyst,
+                    resolved.Wphi_kxkyst,
+                    resolved.Wphi_zst,
+                ),
+                (
+                    "Wapar",
+                    resolved.Wapar_kxst,
+                    resolved.Wapar_kyst,
+                    resolved.Wapar_kxkyst,
+                    resolved.Wapar_zst,
+                ),
+                (
+                    "HeatFlux",
+                    resolved.HeatFlux_kxst,
+                    resolved.HeatFlux_kyst,
+                    resolved.HeatFlux_kxkyst,
+                    resolved.HeatFlux_zst,
+                ),
+                (
+                    "ParticleFlux",
+                    resolved.ParticleFlux_kxst,
+                    resolved.ParticleFlux_kyst,
+                    resolved.ParticleFlux_kxkyst,
+                    resolved.ParticleFlux_zst,
+                ),
             )
             for prefix, kx_arr, ky_arr, kykx_arr, z_arr in metric_specs:
                 if kx_arr is not None:
-                    diag_group.createVariable(f"{prefix}_kxst", "f4", ("time", "s", "kx"))[:, :, :] = _condense_kx_for_output(
+                    diag_group.createVariable(
+                        f"{prefix}_kxst", "f4", ("time", "s", "kx")
+                    )[:, :, :] = _condense_kx_for_output(
                         np.asarray(kx_arr, dtype=np.float32),
                         full_nx=full_nx,
                         active_nx=active_nx,
                     )
                 if ky_arr is not None:
-                    diag_group.createVariable(f"{prefix}_kyst", "f4", ("time", "s", "ky"))[:, :, :] = _condense_ky_for_output(
+                    diag_group.createVariable(
+                        f"{prefix}_kyst", "f4", ("time", "s", "ky")
+                    )[:, :, :] = _condense_ky_for_output(
                         np.asarray(ky_arr, dtype=np.float32),
                         full_ny=full_ny,
                         active_ny=active_ny,
                     )
                 if kykx_arr is not None:
-                    diag_group.createVariable(f"{prefix}_kxkyst", "f4", ("time", "s", "ky", "kx"))[:, :, :, :] = _condense_kykx_for_output(
+                    diag_group.createVariable(
+                        f"{prefix}_kxkyst", "f4", ("time", "s", "ky", "kx")
+                    )[:, :, :, :] = _condense_kykx_for_output(
                         np.asarray(kykx_arr, dtype=np.float32),
                         full_ny=full_ny,
                         full_nx=full_nx,
@@ -995,9 +1171,13 @@ def _write_runtime_nonlinear_gx_artifacts(out: str | Path, result: Any, cfg: Any
                         active_nx=active_nx,
                     )
                 if z_arr is not None:
-                    diag_group.createVariable(f"{prefix}_zst", "f4", ("time", "s", "theta"))[:, :, :] = np.asarray(z_arr, dtype=np.float32)
+                    diag_group.createVariable(
+                        f"{prefix}_zst", "f4", ("time", "s", "theta")
+                    )[:, :, :] = np.asarray(z_arr, dtype=np.float32)
             if resolved.Wg_lmst is not None:
-                diag_group.createVariable("Wg_lmst", "f4", ("time", "s", "m", "l"))[:, :, :, :] = np.asarray(resolved.Wg_lmst, dtype=np.float32)
+                diag_group.createVariable("Wg_lmst", "f4", ("time", "s", "m", "l"))[
+                    :, :, :, :
+                ] = np.asarray(resolved.Wg_lmst, dtype=np.float32)
             split_metric_specs = (
                 (
                     "HeatFluxES",
@@ -1072,25 +1252,44 @@ def _write_runtime_nonlinear_gx_artifacts(out: str | Path, result: Any, cfg: Any
                     False,
                 ),
             )
-            for prefix, kx_arr, ky_arr, kykx_arr, z_arr, total_kx, total_ky, total_kykx, total_z, fallback_total in split_metric_specs:
+            for (
+                prefix,
+                kx_arr,
+                ky_arr,
+                kykx_arr,
+                z_arr,
+                total_kx,
+                total_ky,
+                total_kykx,
+                total_z,
+                fallback_total,
+            ) in split_metric_specs:
                 use_kx = total_kx if kx_arr is None and fallback_total else kx_arr
                 use_ky = total_ky if ky_arr is None and fallback_total else ky_arr
-                use_kykx = total_kykx if kykx_arr is None and fallback_total else kykx_arr
+                use_kykx = (
+                    total_kykx if kykx_arr is None and fallback_total else kykx_arr
+                )
                 use_z = total_z if z_arr is None and fallback_total else z_arr
                 if use_kx is not None:
-                    diag_group.createVariable(f"{prefix}_kxst", "f4", ("time", "s", "kx"))[:, :, :] = _condense_kx_for_output(
+                    diag_group.createVariable(
+                        f"{prefix}_kxst", "f4", ("time", "s", "kx")
+                    )[:, :, :] = _condense_kx_for_output(
                         np.asarray(use_kx, dtype=np.float32),
                         full_nx=full_nx,
                         active_nx=active_nx,
                     )
                 if use_ky is not None:
-                    diag_group.createVariable(f"{prefix}_kyst", "f4", ("time", "s", "ky"))[:, :, :] = _condense_ky_for_output(
+                    diag_group.createVariable(
+                        f"{prefix}_kyst", "f4", ("time", "s", "ky")
+                    )[:, :, :] = _condense_ky_for_output(
                         np.asarray(use_ky, dtype=np.float32),
                         full_ny=full_ny,
                         active_ny=active_ny,
                     )
                 if use_kykx is not None:
-                    diag_group.createVariable(f"{prefix}_kxkyst", "f4", ("time", "s", "ky", "kx"))[:, :, :, :] = _condense_kykx_for_output(
+                    diag_group.createVariable(
+                        f"{prefix}_kxkyst", "f4", ("time", "s", "ky", "kx")
+                    )[:, :, :, :] = _condense_kykx_for_output(
                         np.asarray(use_kykx, dtype=np.float32),
                         full_ny=full_ny,
                         full_nx=full_nx,
@@ -1098,21 +1297,29 @@ def _write_runtime_nonlinear_gx_artifacts(out: str | Path, result: Any, cfg: Any
                         active_nx=active_nx,
                     )
                 if use_z is not None:
-                    diag_group.createVariable(f"{prefix}_zst", "f4", ("time", "s", "theta"))[:, :, :] = np.asarray(use_z, dtype=np.float32)
+                    diag_group.createVariable(
+                        f"{prefix}_zst", "f4", ("time", "s", "theta")
+                    )[:, :, :] = np.asarray(use_z, dtype=np.float32)
             if resolved.TurbulentHeating_kxst is not None:
-                diag_group.createVariable("TurbulentHeating_kxst", "f4", ("time", "s", "kx"))[:, :, :] = _condense_kx_for_output(
+                diag_group.createVariable(
+                    "TurbulentHeating_kxst", "f4", ("time", "s", "kx")
+                )[:, :, :] = _condense_kx_for_output(
                     np.asarray(resolved.TurbulentHeating_kxst, dtype=np.float32),
                     full_nx=full_nx,
                     active_nx=active_nx,
                 )
             if resolved.TurbulentHeating_kyst is not None:
-                diag_group.createVariable("TurbulentHeating_kyst", "f4", ("time", "s", "ky"))[:, :, :] = _condense_ky_for_output(
+                diag_group.createVariable(
+                    "TurbulentHeating_kyst", "f4", ("time", "s", "ky")
+                )[:, :, :] = _condense_ky_for_output(
                     np.asarray(resolved.TurbulentHeating_kyst, dtype=np.float32),
                     full_ny=full_ny,
                     active_ny=active_ny,
                 )
             if resolved.TurbulentHeating_kxkyst is not None:
-                diag_group.createVariable("TurbulentHeating_kxkyst", "f4", ("time", "s", "ky", "kx"))[:, :, :, :] = _condense_kykx_for_output(
+                diag_group.createVariable(
+                    "TurbulentHeating_kxkyst", "f4", ("time", "s", "ky", "kx")
+                )[:, :, :, :] = _condense_kykx_for_output(
                     np.asarray(resolved.TurbulentHeating_kxkyst, dtype=np.float32),
                     full_ny=full_ny,
                     full_nx=full_nx,
@@ -1120,7 +1327,9 @@ def _write_runtime_nonlinear_gx_artifacts(out: str | Path, result: Any, cfg: Any
                     active_nx=active_nx,
                 )
             if resolved.TurbulentHeating_zst is not None:
-                diag_group.createVariable("TurbulentHeating_zst", "f4", ("time", "s", "theta"))[:, :, :] = np.asarray(resolved.TurbulentHeating_zst, dtype=np.float32)
+                diag_group.createVariable(
+                    "TurbulentHeating_zst", "f4", ("time", "s", "theta")
+                )[:, :, :] = np.asarray(resolved.TurbulentHeating_zst, dtype=np.float32)
 
         inputs = root.createGroup("Inputs")
         _write_gx_inputs_group(inputs, cfg, geom_data)
@@ -1138,7 +1347,9 @@ def _write_runtime_nonlinear_gx_artifacts(out: str | Path, result: Any, cfg: Any
             root.createDimension("Nkx", gx_state.shape[4])
             root.createDimension("Nky", gx_state.shape[5])
             root.createDimension("ri", 2)
-            root.createVariable("G", "f4", ("Nspecies", "Nm", "Nl", "Nz", "Nkx", "Nky", "ri"))[:, :, :, :, :, :, :] = gx_state
+            root.createVariable(
+                "G", "f4", ("Nspecies", "Nm", "Nl", "Nz", "Nkx", "Nky", "ri")
+            )[:, :, :, :, :, :, :] = gx_state
             time_last = float(time_vals[-1]) if time_vals.size else 0.0
             root.createVariable("time", "f8", ())[:] = time_last
         paths["restart"] = str(restart_path)
@@ -1146,13 +1357,29 @@ def _write_runtime_nonlinear_gx_artifacts(out: str | Path, result: Any, cfg: Any
     if result.fields is not None:
         _ensure_parent(big_path)
         phi_full = np.asarray(result.fields.phi)
-        apar_full = np.zeros_like(phi_full) if result.fields.apar is None else np.asarray(result.fields.apar)
-        bpar_full = np.zeros_like(phi_full) if result.fields.bpar is None else np.asarray(result.fields.bpar)
+        apar_full = (
+            np.zeros_like(phi_full)
+            if result.fields.apar is None
+            else np.asarray(result.fields.apar)
+        )
+        bpar_full = (
+            np.zeros_like(phi_full)
+            if result.fields.bpar is None
+            else np.asarray(result.fields.bpar)
+        )
         phi_active = _gx_active_field(phi_full)
         apar_active = _gx_active_field(apar_full)
         bpar_active = _gx_active_field(bpar_full)
-        basis_moments = _state_basis_moments(np.asarray(result.state)) if result.state is not None else {}
-        particle_moments = _particle_moments(np.asarray(result.state), cfg) if result.state is not None else {}
+        basis_moments = (
+            _state_basis_moments(np.asarray(result.state))
+            if result.state is not None
+            else {}
+        )
+        particle_moments = (
+            _particle_moments(np.asarray(result.state), cfg)
+            if result.state is not None
+            else {}
+        )
         with Dataset(big_path, "w") as root:
             root.createDimension("ri", 2)
             root.createDimension("x", x_vals.size)
@@ -1167,7 +1394,9 @@ def _write_runtime_nonlinear_gx_artifacts(out: str | Path, result: Any, cfg: Any
             root.createDimension("time", 1)
             _write_runtime_root_metadata(root, cfg, nspecies=nspecies, nl=nl, nm=nm)
             grids = root.createGroup("Grids")
-            grids.createVariable("time", "f8", ("time",))[:] = np.asarray([float(time_vals[-1]) if time_vals.size else 0.0], dtype=np.float64)
+            grids.createVariable("time", "f8", ("time",))[:] = np.asarray(
+                [float(time_vals[-1]) if time_vals.size else 0.0], dtype=np.float64
+            )
             grids.createVariable("kx", "f4", ("kx",))[:] = kx_vals
             grids.createVariable("ky", "f4", ("ky",))[:] = ky_vals
             grids.createVariable("kz", "f4", ("kz",))[:] = theta
@@ -1177,20 +1406,44 @@ def _write_runtime_nonlinear_gx_artifacts(out: str | Path, result: Any, cfg: Any
             geom_group = root.createGroup("Geometry")
             _write_gx_geometry_group(geom_group, cfg)
             diag_group = root.createGroup("Diagnostics")
-            diag_group.createVariable("Phi", "f4", ("time", "ky", "kx", "theta", "ri"))[0, ...] = _spectral_to_ri(phi_active)
-            diag_group.createVariable("Apar", "f4", ("time", "ky", "kx", "theta", "ri"))[0, ...] = _spectral_to_ri(apar_active)
-            diag_group.createVariable("Bpar", "f4", ("time", "ky", "kx", "theta", "ri"))[0, ...] = _spectral_to_ri(bpar_active)
-            diag_group.createVariable("PhiXY", "f4", ("time", "y", "x", "theta"))[0, ...] = _spectral_to_xy(phi_full)
-            diag_group.createVariable("AparXY", "f4", ("time", "y", "x", "theta"))[0, ...] = _spectral_to_xy(apar_full)
-            diag_group.createVariable("BparXY", "f4", ("time", "y", "x", "theta"))[0, ...] = _spectral_to_xy(bpar_full)
+            diag_group.createVariable("Phi", "f4", ("time", "ky", "kx", "theta", "ri"))[
+                0, ...
+            ] = _spectral_to_ri(phi_active)
+            diag_group.createVariable(
+                "Apar", "f4", ("time", "ky", "kx", "theta", "ri")
+            )[0, ...] = _spectral_to_ri(apar_active)
+            diag_group.createVariable(
+                "Bpar", "f4", ("time", "ky", "kx", "theta", "ri")
+            )[0, ...] = _spectral_to_ri(bpar_active)
+            diag_group.createVariable("PhiXY", "f4", ("time", "y", "x", "theta"))[
+                0, ...
+            ] = _spectral_to_xy(phi_full)
+            diag_group.createVariable("AparXY", "f4", ("time", "y", "x", "theta"))[
+                0, ...
+            ] = _spectral_to_xy(apar_full)
+            diag_group.createVariable("BparXY", "f4", ("time", "y", "x", "theta"))[
+                0, ...
+            ] = _spectral_to_xy(bpar_full)
             for name, values in basis_moments.items():
                 active = _gx_active_field(values, ky_axis=1, kx_axis=2)
-                diag_group.createVariable(name, "f4", ("time", "s", "ky", "kx", "theta", "ri"))[0, ...] = _spectral_species_to_ri(active)
-                diag_group.createVariable(f"{name}XY", "f4", ("time", "s", "y", "x", "theta"))[0, ...] = np.real(np.fft.ifft2(values, axes=(1, 2))).astype(np.float32, copy=False)
+                diag_group.createVariable(
+                    name, "f4", ("time", "s", "ky", "kx", "theta", "ri")
+                )[0, ...] = _spectral_species_to_ri(active)
+                diag_group.createVariable(
+                    f"{name}XY", "f4", ("time", "s", "y", "x", "theta")
+                )[0, ...] = np.real(np.fft.ifft2(values, axes=(1, 2))).astype(
+                    np.float32, copy=False
+                )
             for name, values in particle_moments.items():
                 active = _gx_active_field(values, ky_axis=1, kx_axis=2)
-                diag_group.createVariable(name, "f4", ("time", "s", "ky", "kx", "theta", "ri"))[0, ...] = _spectral_species_to_ri(active)
-                diag_group.createVariable(f"{name}XY", "f4", ("time", "s", "y", "x", "theta"))[0, ...] = np.real(np.fft.ifft2(values, axes=(1, 2))).astype(np.float32, copy=False)
+                diag_group.createVariable(
+                    name, "f4", ("time", "s", "ky", "kx", "theta", "ri")
+                )[0, ...] = _spectral_species_to_ri(active)
+                diag_group.createVariable(
+                    f"{name}XY", "f4", ("time", "s", "y", "x", "theta")
+                )[0, ...] = np.real(np.fft.ifft2(values, axes=(1, 2))).astype(
+                    np.float32, copy=False
+                )
         paths["big"] = str(big_path)
 
     return paths
@@ -1200,26 +1453,48 @@ def _nonlinear_summary(result: Any) -> dict[str, Any]:
     diag = result.diagnostics
     payload: dict[str, Any] = {
         "kind": "nonlinear",
-        "ky_selected": None if result.ky_selected is None else float(result.ky_selected),
-        "kx_selected": None if result.kx_selected is None else float(result.kx_selected),
-        "n_state_shape": None if result.state is None else list(np.asarray(result.state).shape),
+        "ky_selected": None
+        if result.ky_selected is None
+        else float(result.ky_selected),
+        "kx_selected": None
+        if result.kx_selected is None
+        else float(result.kx_selected),
+        "n_state_shape": None
+        if result.state is None
+        else list(np.asarray(result.state).shape),
     }
     if diag is not None:
         payload.update(
             {
                 "n_samples": int(np.asarray(diag.t).size),
-                "t_last": float(np.asarray(diag.t)[-1]) if np.asarray(diag.t).size else 0.0,
+                "t_last": float(np.asarray(diag.t)[-1])
+                if np.asarray(diag.t).size
+                else 0.0,
                 "dt_mean": float(np.asarray(diag.dt_mean)),
-                "gamma_last": float(np.asarray(diag.gamma_t)[-1]) if np.asarray(diag.gamma_t).size else 0.0,
-                "omega_last": float(np.asarray(diag.omega_t)[-1]) if np.asarray(diag.omega_t).size else 0.0,
-                "Wg_last": float(np.asarray(diag.Wg_t)[-1]) if np.asarray(diag.Wg_t).size else 0.0,
-                "Wphi_last": float(np.asarray(diag.Wphi_t)[-1]) if np.asarray(diag.Wphi_t).size else 0.0,
-                "Wapar_last": float(np.asarray(diag.Wapar_t)[-1]) if np.asarray(diag.Wapar_t).size else 0.0,
+                "gamma_last": float(np.asarray(diag.gamma_t)[-1])
+                if np.asarray(diag.gamma_t).size
+                else 0.0,
+                "omega_last": float(np.asarray(diag.omega_t)[-1])
+                if np.asarray(diag.omega_t).size
+                else 0.0,
+                "Wg_last": float(np.asarray(diag.Wg_t)[-1])
+                if np.asarray(diag.Wg_t).size
+                else 0.0,
+                "Wphi_last": float(np.asarray(diag.Wphi_t)[-1])
+                if np.asarray(diag.Wphi_t).size
+                else 0.0,
+                "Wapar_last": float(np.asarray(diag.Wapar_t)[-1])
+                if np.asarray(diag.Wapar_t).size
+                else 0.0,
                 "heat_flux_last": (
-                    float(np.asarray(diag.heat_flux_t)[-1]) if np.asarray(diag.heat_flux_t).size else 0.0
+                    float(np.asarray(diag.heat_flux_t)[-1])
+                    if np.asarray(diag.heat_flux_t).size
+                    else 0.0
                 ),
                 "particle_flux_last": (
-                    float(np.asarray(diag.particle_flux_t)[-1]) if np.asarray(diag.particle_flux_t).size else 0.0
+                    float(np.asarray(diag.particle_flux_t)[-1])
+                    if np.asarray(diag.particle_flux_t).size
+                    else 0.0
                 ),
             }
         )
@@ -1239,16 +1514,26 @@ def write_runtime_linear_artifacts(out: str | Path, result: Any) -> dict[str, st
 
     out_path = Path(out)
     base = _artifact_base(out_path)
-    summary_path = out_path if out_path.suffix.lower() == ".json" else Path(f"{base}.summary.json")
-    csv_path = out_path if out_path.suffix.lower() == ".csv" else Path(f"{base}.timeseries.csv")
+    summary_path = (
+        out_path if out_path.suffix.lower() == ".json" else Path(f"{base}.summary.json")
+    )
+    csv_path = (
+        out_path
+        if out_path.suffix.lower() == ".csv"
+        else Path(f"{base}.timeseries.csv")
+    )
 
     summary = {
         "kind": "linear",
         "ky": float(result.ky),
         "gamma": float(result.gamma),
         "omega": float(result.omega),
-        "fit_window_tmin": None if result.fit_window_tmin is None else float(result.fit_window_tmin),
-        "fit_window_tmax": None if result.fit_window_tmax is None else float(result.fit_window_tmax),
+        "fit_window_tmin": None
+        if result.fit_window_tmin is None
+        else float(result.fit_window_tmin),
+        "fit_window_tmax": None
+        if result.fit_window_tmax is None
+        else float(result.fit_window_tmax),
         "fit_signal_used": result.fit_signal_used,
         "selection": {
             "ky_index": int(result.selection.ky_index),
@@ -1256,8 +1541,12 @@ def write_runtime_linear_artifacts(out: str | Path, result: Any) -> dict[str, st
             "z_index": int(result.selection.z_index),
         },
         "n_samples": 0 if result.t is None else int(np.asarray(result.t).size),
-        "n_state_shape": None if result.state is None else list(np.asarray(result.state).shape),
-        "has_eigenfunction": bool(result.z is not None and result.eigenfunction is not None),
+        "n_state_shape": None
+        if result.state is None
+        else list(np.asarray(result.state).shape),
+        "has_eigenfunction": bool(
+            result.z is not None and result.eigenfunction is not None
+        ),
         "has_quasilinear": bool(getattr(result, "quasilinear", None) is not None),
     }
     if getattr(result, "quasilinear", None) is not None:
@@ -1294,7 +1583,9 @@ def write_runtime_linear_artifacts(out: str | Path, result: Any) -> dict[str, st
         )
         paths["eigenfunction"] = str(eig_path)
 
-    state_path = _write_state(base, None if result.state is None else np.asarray(result.state))
+    state_path = _write_state(
+        base, None if result.state is None else np.asarray(result.state)
+    )
     if state_path is not None:
         paths["state"] = str(state_path)
     if getattr(result, "quasilinear", None) is not None:
@@ -1302,18 +1593,28 @@ def write_runtime_linear_artifacts(out: str | Path, result: Any) -> dict[str, st
     return paths
 
 
-def write_runtime_nonlinear_artifacts(out: str | Path, result: Any, cfg: Any | None = None) -> dict[str, str]:
+def write_runtime_nonlinear_artifacts(
+    out: str | Path, result: Any, cfg: Any | None = None
+) -> dict[str, str]:
     """Write summary/diagnostics/state artifacts for a nonlinear runtime run."""
 
     out_path = Path(out)
     if _is_gx_netcdf_target(out_path):
         if cfg is None:
-            raise ValueError("cfg is required to write GX-style nonlinear NetCDF artifacts")
+            raise ValueError(
+                "cfg is required to write GX-style nonlinear NetCDF artifacts"
+            )
         return _write_runtime_nonlinear_gx_artifacts(out_path, result, cfg)
 
     base = _artifact_base(out_path)
-    summary_path = out_path if out_path.suffix.lower() == ".json" else Path(f"{base}.summary.json")
-    csv_path = out_path if out_path.suffix.lower() == ".csv" else Path(f"{base}.diagnostics.csv")
+    summary_path = (
+        out_path if out_path.suffix.lower() == ".json" else Path(f"{base}.summary.json")
+    )
+    csv_path = (
+        out_path
+        if out_path.suffix.lower() == ".csv"
+        else Path(f"{base}.diagnostics.csv")
+    )
 
     _write_json(summary_path, _nonlinear_summary(result))
     paths = {"summary": str(summary_path)}
@@ -1370,7 +1671,9 @@ def write_runtime_nonlinear_artifacts(out: str | Path, result: Any, cfg: Any | N
         _write_csv(csv_path, headers=headers, cols=cols)
         paths["diagnostics"] = str(csv_path)
 
-    state_path = _write_state(base, None if result.state is None else np.asarray(result.state))
+    state_path = _write_state(
+        base, None if result.state is None else np.asarray(result.state)
+    )
     if state_path is not None:
         paths["state"] = str(state_path)
     return paths

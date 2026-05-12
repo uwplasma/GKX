@@ -26,6 +26,7 @@ from spectraxgk.diagnostics import gx_heat_flux_species, gx_particle_flux_specie
 from spectraxgk.geometry.differentiable import (
     discover_differentiable_geometry_backends,
     flux_tube_geometry_from_mapping,
+    observable_gradient_validation_report,
     vmec_jax_boozer_equal_arc_core_profiles_from_state,
 )
 from spectraxgk.grids import build_spectral_grid, select_ky_grid
@@ -42,6 +43,11 @@ SOLVER_OBJECTIVE_NAMES = (
     "linear_heat_flux_weight",
     "linear_particle_flux_weight",
     "mixing_length_heat_flux_proxy",
+)
+TINY_OBJECTIVE_NAMES = (
+    "mean_bmag",
+    "drift_rms",
+    "metric_weighted_bmag_proxy",
 )
 VMEC_BOOZER_FREQUENCY_OBJECTIVE_NAMES = ("gamma", "omega")
 VMEC_BOOZER_QUASILINEAR_OBJECTIVE_NAMES = (
@@ -168,6 +174,62 @@ def solver_ready_geometry_mapping(params: jnp.ndarray, theta: jnp.ndarray) -> di
         "R0": 1.0,
         "nfp": 1,
     }
+
+
+def tiny_differentiable_objective_gradient_report(
+    params: jnp.ndarray | np.ndarray | None = None,
+    *,
+    fd_step: float = 1.0e-4,
+    rtol: float = 2.0e-4,
+    atol: float = 2.0e-6,
+) -> dict[str, object]:
+    """Validate a tiny differentiable objective on the solver-ready geometry map.
+
+    This is a lightweight objective-observable gate for CI and documentation. It
+    checks the reusable AD/finite-difference report path without running the
+    linear eigensolver or optional VMEC/Boozer backends.
+    """
+
+    p = default_solver_geometry_design_params() if params is None else jnp.asarray(params)
+    if p.ndim != 1 or int(p.size) != 2:
+        raise ValueError("params must be a length-2 vector")
+    theta = jnp.linspace(-jnp.pi, jnp.pi, 16, endpoint=False, dtype=p.dtype)
+
+    def objective_observables(x: jnp.ndarray) -> jnp.ndarray:
+        geom = flux_tube_geometry_from_mapping(
+            solver_ready_geometry_mapping(x, theta),
+            source_model="tiny_solver_ready_objective_gradient_gate",
+            validate_finite=False,
+        )
+        bmag = jnp.asarray(geom.bmag_profile)
+        gds2 = jnp.asarray(geom.gds2_profile)
+        drift = jnp.asarray(geom.cv_profile)
+        gb = jnp.asarray(geom.gb_profile)
+        drift_rms = jnp.sqrt(jnp.mean(drift * drift + gb * gb))
+        metric_weighted_bmag = jnp.mean(gds2 * bmag) + 0.25 * x[1] * x[1]
+        return jnp.asarray([jnp.mean(bmag), drift_rms, metric_weighted_bmag])
+
+    report = observable_gradient_validation_report(
+        objective_observables,
+        p,
+        fd_step=float(fd_step),
+        rtol=float(rtol),
+        atol=float(atol),
+        observable_names=TINY_OBJECTIVE_NAMES,
+        param_names=SOLVER_GEOMETRY_PARAMETER_NAMES,
+        relative_floor=1.0e-12,
+        report_kind="tiny_solver_ready_objective_gradient_ad_fd_gate",
+    )
+    report.update(
+        {
+            "source_scope": "solver_ready_geometry_contract",
+            "claim_scope": (
+                "tiny differentiable objective-observable gate only; not a "
+                "linear eigenpair, VMEC/Boozer, or nonlinear transport claim"
+            ),
+        }
+    )
+    return report
 
 
 def _objective_gate_rows(
@@ -894,6 +956,7 @@ def mode21_vmec_boozer_nonlinear_window_gradient_report(  # pragma: no cover
 __all__ = [
     "SOLVER_GEOMETRY_PARAMETER_NAMES",
     "SOLVER_OBJECTIVE_NAMES",
+    "TINY_OBJECTIVE_NAMES",
     "VMEC_BOOZER_FREQUENCY_OBJECTIVE_NAMES",
     "VMEC_BOOZER_NONLINEAR_WINDOW_OBJECTIVE_NAMES",
     "VMEC_BOOZER_QUASILINEAR_OBJECTIVE_NAMES",
@@ -904,4 +967,5 @@ __all__ = [
     "mode21_vmec_boozer_nonlinear_window_gradient_report",
     "mode21_vmec_boozer_quasilinear_gradient_report",
     "solver_ready_geometry_mapping",
+    "tiny_differentiable_objective_gradient_report",
 ]

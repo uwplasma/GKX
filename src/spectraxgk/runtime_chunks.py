@@ -20,6 +20,10 @@ from spectraxgk.runtime_diagnostics import (
     truncate_gx_diagnostics,
     validate_finite_gx_diagnostics,
 )
+from spectraxgk.runtime_orchestration import (
+    build_runtime_progress_message,
+    format_duration,
+)
 from spectraxgk.terms.config import FieldState
 
 
@@ -33,17 +37,16 @@ class AdaptiveChunkResult:
 
 
 def _format_duration(seconds: float) -> str:
-    seconds_i = max(int(round(seconds)), 0)
-    minutes, secs = divmod(seconds_i, 60)
-    hours, minutes = divmod(minutes, 60)
-    if hours > 0:
-        return f"{hours:d}:{minutes:02d}:{secs:02d}"
-    return f"{minutes:02d}:{secs:02d}"
+    """Compatibility wrapper for tests and private imports."""
+
+    return format_duration(seconds)
 
 
 def run_adaptive_gx_chunk_loop(
     *,
-    integrate_chunk: Callable[[bool], tuple[Any, SimulationDiagnostics, Any, FieldState | None]],
+    integrate_chunk: Callable[
+        [bool], tuple[Any, SimulationDiagnostics, Any, FieldState | None]
+    ],
     t_max: float,
     chunk_steps: int,
     label: str,
@@ -67,13 +70,17 @@ def run_adaptive_gx_chunk_loop(
     diag_chunks: list[SimulationDiagnostics] = []
     fields_final: FieldState | None = None
     wall_start = time.perf_counter()
-    _status(f"starting adaptive {label} integration in chunks of {chunk_steps} steps up to t_max={float(t_max):.6g}")
+    _status(
+        f"starting adaptive {label} integration in chunks of {chunk_steps} steps up to t_max={float(t_max):.6g}"
+    )
 
     for chunk in range(max_chunks):
         chunk_start = time.perf_counter()
         _t_chunk, diag_chunk, state_chunk, fields_final = integrate_chunk(show_progress)
         diag_chunk = replace(diag_chunk, t=np.asarray(diag_chunk.t) + t_elapsed)
-        validate_finite_gx_diagnostics(diag_chunk, label=f"adaptive {label} chunk {chunk + 1}")
+        validate_finite_gx_diagnostics(
+            diag_chunk, label=f"adaptive {label} chunk {chunk + 1}"
+        )
         diag_chunks.append(diag_chunk)
         t_next = float(np.asarray(diag_chunk.t)[-1])
         if t_next <= t_elapsed + 1.0e-12:
@@ -81,21 +88,21 @@ def run_adaptive_gx_chunk_loop(
         t_elapsed = t_next
         chunk_wall = max(time.perf_counter() - chunk_start, 0.0)
         wall_elapsed = max(time.perf_counter() - wall_start, 0.0)
-        progress = min(max(t_elapsed / float(t_max), 0.0), 1.0) if float(t_max) > 0.0 else 1.0
-        eta = wall_elapsed * (1.0 / progress - 1.0) if progress > 1.0e-12 else float("inf")
-        eta_text = _format_duration(eta) if np.isfinite(eta) else "--:--"
-        _status(
-            f"completed {label} chunk {chunk + 1}: "
-            f"t={t_elapsed:.6g}/{float(t_max):.6g} "
-            f"progress={100.0 * progress:5.1f}% "
-            f"chunk_wall={_format_duration(chunk_wall)} "
-            f"elapsed={_format_duration(wall_elapsed)} "
-            f"eta={eta_text}"
+        message, _snapshot = build_runtime_progress_message(
+            label=label,
+            chunk_index=chunk + 1,
+            t_elapsed=t_elapsed,
+            t_max=float(t_max),
+            chunk_wall_seconds=chunk_wall,
+            elapsed_seconds=wall_elapsed,
         )
+        _status(message)
         if t_elapsed >= float(t_max):
             break
     else:
-        raise RuntimeError(f"adaptive {label} runtime exceeded chunk limit before reaching t_max")
+        raise RuntimeError(
+            f"adaptive {label} runtime exceeded chunk limit before reaching t_max"
+        )
 
     diag = concat_gx_diagnostics(diag_chunks)
     diag = truncate_gx_diagnostics(diag, t_max=float(t_max))

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any, Callable, Sequence
 from pathlib import Path
+from types import SimpleNamespace
 
 import jax.numpy as jnp
 import numpy as np
@@ -53,6 +54,9 @@ from spectraxgk.runtime_results import (
     RuntimeNonlinearResult,
     build_runtime_nonlinear_result,
 )
+from spectraxgk.runtime_orchestration import (
+    run_runtime_scan_batch as _run_runtime_scan_batch_impl,
+)
 from spectraxgk.runtime_policies import (
     _infer_runtime_nonlinear_steps,
     _midplane_index,
@@ -75,7 +79,10 @@ from spectraxgk.runtime_startup import (
     _runtime_model_key,
     _species_to_linear,
 )
-from spectraxgk.runners import integrate_linear_from_config, integrate_nonlinear_from_config
+from spectraxgk.runners import (
+    integrate_linear_from_config,
+    integrate_nonlinear_from_config,
+)
 from spectraxgk.terms.config import TermConfig
 from spectraxgk.miller_eik import generate_runtime_miller_eik
 from spectraxgk.vmec_eik import generate_runtime_vmec_eik
@@ -151,6 +158,7 @@ def _run_runtime_scan_ky_task(task: dict[str, Any]) -> RuntimeLinearResult:
         fit_signal=str(task["fit_signal"]),
         show_progress=bool(task["show_progress"]),
     )
+
 
 build_flux_tube_geometry = runtime_startup.build_flux_tube_geometry
 load_gx_restart_state = runtime_startup.load_gx_restart_state
@@ -262,7 +270,9 @@ def _gx_init_mode_pairs(grid: SpectralGrid) -> list[tuple[int, int]]:
     ny = int(np.asarray(grid.ky).size)
     kx_max = 1 + (nx - 1) // 3
     ky_max = 1 + (ny - 1) // 3
-    return [(int(kx_i), int(ky_i)) for kx_i in range(kx_max) for ky_i in range(1, ky_max)]
+    return [
+        (int(kx_i), int(ky_i)) for kx_i in range(kx_max) for ky_i in range(1, ky_max)
+    ]
 
 
 def _gx_periodic_zp(z: np.ndarray) -> float:
@@ -336,7 +346,9 @@ def run_runtime_linear(
     _status("building runtime geometry")
     if _runtime_model_key(cfg) == "cetg":
         if ql_enabled:
-            raise NotImplementedError("quasilinear diagnostics are not yet validated for reduced_model='cetg'")
+            raise NotImplementedError(
+                "quasilinear diagnostics are not yet validated for reduced_model='cetg'"
+            )
         geom = build_runtime_geometry(cfg)
         validate_cetg_runtime_config(cfg, geom, Nl=Nl_use, Nm=Nm_use)
         _status("building spectral grid")
@@ -361,16 +373,26 @@ def run_runtime_linear(
         cetg_params = build_cetg_model_params(cfg, geom, Nl=Nl_use, Nm=Nm_use)
         solver_key = _normalize_linear_solver_name(solver)
         if solver_key == "krylov":
-            raise NotImplementedError("solver='krylov' is not implemented for physics.reduced_model='cetg'")
+            raise NotImplementedError(
+                "solver='krylov' is not implemented for physics.reduced_model='cetg'"
+            )
         if solver_key not in {"auto", "time", "gx_time"}:
-            raise ValueError("solver must be one of {'auto', 'time', 'explicit_time', 'gx_time', 'krylov'}")
+            raise ValueError(
+                "solver must be one of {'auto', 'time', 'explicit_time', 'gx_time', 'krylov'}"
+            )
         dt_val = float(cfg.time.dt if dt is None else dt)
         if dt_val <= 0.0:
             raise ValueError("dt must be > 0")
-        steps_val = int(steps) if steps is not None else int(round(float(cfg.time.t_max) / dt_val))
+        steps_val = (
+            int(steps)
+            if steps is not None
+            else int(round(float(cfg.time.t_max) / dt_val))
+        )
         if steps_val < 1:
             raise ValueError("steps must be >= 1")
-        sample_stride_use = int(cfg.time.sample_stride if sample_stride is None else sample_stride)
+        sample_stride_use = int(
+            cfg.time.sample_stride if sample_stride is None else sample_stride
+        )
         _status(f"running cETG time integration over {steps_val} steps")
         _t, diag, G_final, _fields = integrate_cetg_gx_diagnostics_state(
             g0,
@@ -391,14 +413,28 @@ def run_runtime_linear(
             cfl=float(cfg.time.cfl),
             cfl_fac=cfg.time.cfl_fac,
         )
-        signal = np.asarray(diag.phi_mode_t if diag.phi_mode_t is not None else np.zeros_like(np.asarray(diag.t)))
+        signal = np.asarray(
+            diag.phi_mode_t
+            if diag.phi_mode_t is not None
+            else np.zeros_like(np.asarray(diag.t))
+        )
         t_arr = np.asarray(diag.t, dtype=float)
         fit_window_tmin: float | None = None
         fit_window_tmax: float | None = None
-        _status(f"integration complete; fitting growth rate from {t_arr.size} saved samples")
+        _status(
+            f"integration complete; fitting growth rate from {t_arr.size} saved samples"
+        )
         if t_arr.size < 2:
-            gamma = float(np.asarray(diag.gamma_t)[-1]) if np.asarray(diag.gamma_t).size else 0.0
-            omega = float(np.asarray(diag.omega_t)[-1]) if np.asarray(diag.omega_t).size else 0.0
+            gamma = (
+                float(np.asarray(diag.gamma_t)[-1])
+                if np.asarray(diag.gamma_t).size
+                else 0.0
+            )
+            omega = (
+                float(np.asarray(diag.omega_t)[-1])
+                if np.asarray(diag.omega_t).size
+                else 0.0
+            )
         elif auto_window:
             gamma, omega, fit_window_tmin, fit_window_tmax = fit_growth_rate_auto(
                 t_arr,
@@ -469,10 +505,14 @@ def run_runtime_linear(
         state_for_quasilinear: np.ndarray | None = None,
     ) -> RuntimeLinearResult:
         ql_payload = None
-        state_for_ql = state_for_quasilinear if state_for_quasilinear is not None else result.state
+        state_for_ql = (
+            state_for_quasilinear if state_for_quasilinear is not None else result.state
+        )
         if ql_enabled:
             if state_for_ql is None:
-                raise RuntimeError("quasilinear diagnostics require a final linear state")
+                raise RuntimeError(
+                    "quasilinear diagnostics require a final linear state"
+                )
             ql_cfg = cfg.quasilinear
             _status("computing quasilinear transport weights")
             cache = build_linear_cache(grid, geom, params, Nl_use, Nm_use)
@@ -566,17 +606,25 @@ def run_runtime_linear(
         if sample_stride is not None:
             tcfg = replace(tcfg, sample_stride=int(sample_stride))
         if return_state_eff and solver_key == "gx_time":
-            raise ValueError("return_state/quasilinear diagnostics are not supported with solver='gx_time'")
+            raise ValueError(
+                "return_state/quasilinear diagnostics are not supported with solver='gx_time'"
+            )
         if return_state_eff:
             tcfg = replace(tcfg, save_state=True)
 
         need_density = fit_key in {"density", "auto"}
-        parallel_strategy = str(getattr(cfg.parallel, "strategy", "serial")).lower().replace("-", "_")
+        parallel_strategy = (
+            str(getattr(cfg.parallel, "strategy", "serial")).lower().replace("-", "_")
+        )
         if parallel_strategy != "serial":
             if tcfg.use_diffrax:
-                raise NotImplementedError("parallel linear RHS is currently supported only by the fixed-step cached integrator")
+                raise NotImplementedError(
+                    "parallel linear RHS is currently supported only by the fixed-step cached integrator"
+                )
             if need_density:
-                raise NotImplementedError("parallel linear RHS runtime path currently requires fit_signal='phi'")
+                raise NotImplementedError(
+                    "parallel linear RHS runtime path currently requires fit_signal='phi'"
+                )
         g_last = None
         if tcfg.use_diffrax:
             _status(
@@ -649,11 +697,15 @@ def run_runtime_linear(
                 density_t = None
 
         phi_t_np = np.asarray(phi_t)
-        t_arr = float(tcfg.dt) * float(tcfg.sample_stride) * (
-            np.arange(phi_t_np.shape[0], dtype=float) + 1.0
+        t_arr = (
+            float(tcfg.dt)
+            * float(tcfg.sample_stride)
+            * (np.arange(phi_t_np.shape[0], dtype=float) + 1.0)
         )
         density_np = None if density_t is None else np.asarray(density_t)
-        _status(f"integration complete; fitting growth rate from {t_arr.size} saved samples")
+        _status(
+            f"integration complete; fitting growth rate from {t_arr.size} saved samples"
+        )
 
         signal_out: np.ndarray | None = None
         z_out: np.ndarray | None = np.asarray(grid.z, dtype=float)
@@ -663,15 +715,17 @@ def run_runtime_linear(
         fit_signal_used: str | None = None
         if fit_key == "auto":
             phi_signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
-            gamma_phi, omega_phi, phi_tmin, phi_tmax, r2_phi, r2p_phi = fit_growth_rate_auto_with_stats(
-                t_arr,
-                phi_signal,
-                window_fraction=window_fraction,
-                min_points=min_points,
-                start_fraction=start_fraction,
-                growth_weight=growth_weight,
-                require_positive=require_positive,
-                min_amp_fraction=min_amp_fraction,
+            gamma_phi, omega_phi, phi_tmin, phi_tmax, r2_phi, r2p_phi = (
+                fit_growth_rate_auto_with_stats(
+                    t_arr,
+                    phi_signal,
+                    window_fraction=window_fraction,
+                    min_points=min_points,
+                    start_fraction=start_fraction,
+                    growth_weight=growth_weight,
+                    require_positive=require_positive,
+                    min_amp_fraction=min_amp_fraction,
+                )
             )
             best_gamma, best_omega = gamma_phi, omega_phi
             signal_out = np.asarray(phi_signal)
@@ -679,16 +733,20 @@ def run_runtime_linear(
             fit_signal_used = "phi"
             best_score = r2_phi + 0.2 * r2p_phi + growth_weight * gamma_phi
             if density_np is not None:
-                dens_signal = extract_mode_time_series(density_np, sel, method=mode_method)
-                gamma_den, omega_den, den_tmin, den_tmax, r2_den, r2p_den = fit_growth_rate_auto_with_stats(
-                    t_arr,
-                    dens_signal,
-                    window_fraction=window_fraction,
-                    min_points=min_points,
-                    start_fraction=start_fraction,
-                    growth_weight=growth_weight,
-                    require_positive=require_positive,
-                    min_amp_fraction=min_amp_fraction,
+                dens_signal = extract_mode_time_series(
+                    density_np, sel, method=mode_method
+                )
+                gamma_den, omega_den, den_tmin, den_tmax, r2_den, r2p_den = (
+                    fit_growth_rate_auto_with_stats(
+                        t_arr,
+                        dens_signal,
+                        window_fraction=window_fraction,
+                        min_points=min_points,
+                        start_fraction=start_fraction,
+                        growth_weight=growth_weight,
+                        require_positive=require_positive,
+                        min_amp_fraction=min_amp_fraction,
+                    )
                 )
                 score_den = r2_den + 0.2 * r2p_den + growth_weight * gamma_den
                 if score_den > best_score:
@@ -700,12 +758,16 @@ def run_runtime_linear(
             _status(f"automatic fit selected signal '{fit_signal_used}'")
         else:
             signal = extract_mode_time_series(
-                density_np if fit_key == "density" and density_np is not None else phi_t_np,
+                density_np
+                if fit_key == "density" and density_np is not None
+                else phi_t_np,
                 sel,
                 method=mode_method,
             )
             signal_out = np.asarray(signal)
-            fit_signal_used = "density" if fit_key == "density" and density_np is not None else "phi"
+            fit_signal_used = (
+                "density" if fit_key == "density" and density_np is not None else "phi"
+            )
             if auto_window:
                 gamma, omega, fit_window_tmin, fit_window_tmax = fit_growth_rate_auto(
                     t_arr,
@@ -719,7 +781,9 @@ def run_runtime_linear(
                 )
             else:
                 gamma, omega = fit_growth_rate(t_arr, signal, tmin=tmin, tmax=tmax)
-                fit_window_tmin, fit_window_tmax = _resolved_fit_bounds(t_arr, tmin, tmax)
+                fit_window_tmin, fit_window_tmax = _resolved_fit_bounds(
+                    t_arr, tmin, tmax
+                )
         try:
             eigenfunction_out = np.asarray(
                 extract_eigenfunction(
@@ -748,7 +812,9 @@ def run_runtime_linear(
             selection=sel,
             t=t_arr,
             signal=signal_out,
-            state=None if g_last is None or not return_state_eff else np.asarray(g_last),
+            state=None
+            if g_last is None or not return_state_eff
+            else np.asarray(g_last),
             z=z_out if eigenfunction_out is not None else None,
             eigenfunction=eigenfunction_out,
             fit_window_tmin=fit_window_tmin,
@@ -825,7 +891,9 @@ def run_runtime_scan(
     if batch_ky and solver_key == "krylov":
         raise ValueError("batch_ky is only supported for time integration")
     if batch_ky and bool(getattr(cfg.quasilinear, "enabled", False)):
-        raise NotImplementedError("quasilinear scan artifacts currently require serial ky evaluation")
+        raise NotImplementedError(
+            "quasilinear scan artifacts currently require serial ky evaluation"
+        )
     if batch_ky:
         return _run_runtime_scan_batch(
             cfg,
@@ -879,7 +947,9 @@ def run_runtime_scan(
         }
         for ky in ky_arr
     ]
-    results = independent_map(_run_runtime_scan_ky_task, tasks, workers=workers, executor=parallel_executor)
+    results = independent_map(
+        _run_runtime_scan_ky_task, tasks, workers=workers, executor=parallel_executor
+    )
     for i, res in enumerate(results):
         gamma[i] = float(res.gamma)
         omega[i] = float(res.omega)
@@ -892,7 +962,9 @@ def run_runtime_scan(
         quasilinear=tuple(ql_payloads) if ql_payloads else None,
         parallel={
             "requested_workers": int(workers),
-            "effective_workers": int(min(max(int(workers), 1), max(int(ky_arr.size), 1))),
+            "effective_workers": int(
+                min(max(int(workers), 1), max(int(ky_arr.size), 1))
+            ),
             "executor": str(parallel_executor).strip().lower(),
             "identity_contract": "independent ky workers must preserve serial ky ordering and values",
             "quasilinear_state_extraction": bool(ql_payloads),
@@ -923,128 +995,47 @@ def _run_runtime_scan_batch(
     fit_signal: str,
     show_progress: bool,
 ) -> RuntimeLinearScanResult:
-    """Batch a ky scan using one time integration over the full grid."""
+    """Compatibility wrapper for the extracted combined-ky scan batch helper."""
 
-    geom = build_runtime_geometry(cfg)
-    grid_cfg = apply_geometry_grid_defaults(geom, cfg.grid)
-    grid = build_spectral_grid(grid_cfg)
-    params = build_runtime_linear_params(cfg, Nm=Nm, geom=geom)
-    terms = build_runtime_linear_terms(cfg)
-
-    ky_indices = np.asarray([select_ky_index(np.asarray(grid.ky), ky) for ky in ky_arr], dtype=int)
-    nspecies = max(len([s for s in cfg.species if s.kinetic]), 1)
-
-    g0 = None
-    for ky_idx in ky_indices:
-        g0_local = _build_initial_condition(
-            grid,
-            geom,
-            cfg,
-            ky_index=int(ky_idx),
-            kx_index=0,
-            Nl=Nl,
-            Nm=Nm,
-            nspecies=nspecies,
-        )
-        g0 = g0_local if g0 is None else g0 + g0_local
-    if g0 is None:
-        raise ValueError("No ky values provided for batch scan")
-
-    tcfg = cfg.time
-    if method is not None:
-        tcfg = replace(tcfg, method=str(method))
-    if dt is not None:
-        tcfg = replace(tcfg, dt=float(dt))
-    if steps is not None:
-        tcfg = replace(tcfg, t_max=float(steps) * float(tcfg.dt))
-    if sample_stride is not None:
-        tcfg = replace(tcfg, sample_stride=int(sample_stride))
-
-    steps_val = int(round(tcfg.t_max / tcfg.dt))
-    diag = integrate_linear_diagnostics(
-        g0,
-        grid,
-        geom,
-        params,
-        dt=tcfg.dt,
-        steps=steps_val,
-        method=tcfg.method,
-        terms=terms,
-        sample_stride=tcfg.sample_stride,
-        species_index=0,
-        record_hl_energy=False,
+    deps = SimpleNamespace(
+        build_runtime_geometry=build_runtime_geometry,
+        build_runtime_linear_params=build_runtime_linear_params,
+        build_runtime_linear_terms=build_runtime_linear_terms,
+        build_initial_condition=_build_initial_condition,
+        apply_geometry_grid_defaults=apply_geometry_grid_defaults,
+        build_spectral_grid=build_spectral_grid,
+        select_ky_index=select_ky_index,
+        midplane_index=_midplane_index,
+        integrate_linear_diagnostics=integrate_linear_diagnostics,
+        extract_mode_time_series=extract_mode_time_series,
+        fit_growth_rate_auto_with_stats=fit_growth_rate_auto_with_stats,
+        fit_growth_rate_auto=fit_growth_rate_auto,
+        fit_growth_rate=fit_growth_rate,
+        apply_diagnostic_normalization=apply_diagnostic_normalization,
+    )
+    return _run_runtime_scan_batch_impl(
+        cfg,
+        ky_arr,
+        Nl=Nl,
+        Nm=Nm,
+        method=method,
+        dt=dt,
+        steps=steps,
+        sample_stride=sample_stride,
+        auto_window=auto_window,
+        tmin=tmin,
+        tmax=tmax,
+        window_fraction=window_fraction,
+        min_points=min_points,
+        start_fraction=start_fraction,
+        growth_weight=growth_weight,
+        require_positive=require_positive,
+        min_amp_fraction=min_amp_fraction,
+        mode_method=mode_method,
+        fit_signal=fit_signal,
         show_progress=show_progress,
+        deps=deps,
     )
-    phi_t = diag[1]
-    density_t = diag[2]
-    phi_t_np = np.asarray(phi_t)
-    dens_t_np = np.asarray(density_t)
-    t_arr = float(tcfg.dt) * float(tcfg.sample_stride) * (
-        np.arange(phi_t_np.shape[0], dtype=float) + 1.0
-    )
-
-    gamma = np.zeros_like(ky_arr, dtype=float)
-    omega = np.zeros_like(ky_arr, dtype=float)
-    fit_key = fit_signal.strip().lower()
-    if fit_key not in {"phi", "density", "auto"}:
-        raise ValueError("fit_signal must be 'phi', 'density', or 'auto'")
-
-    for i, ky_idx in enumerate(ky_indices):
-        sel = ModeSelection(ky_index=int(ky_idx), kx_index=0, z_index=_midplane_index(grid))
-        if fit_key == "auto":
-            phi_signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
-            gamma_phi, omega_phi, _, _, r2_phi, r2p_phi = fit_growth_rate_auto_with_stats(
-                t_arr,
-                phi_signal,
-                window_fraction=window_fraction,
-                min_points=min_points,
-                start_fraction=start_fraction,
-                growth_weight=growth_weight,
-                require_positive=require_positive,
-                min_amp_fraction=min_amp_fraction,
-            )
-            dens_signal = extract_mode_time_series(dens_t_np, sel, method=mode_method)
-            gamma_den, omega_den, _, _, r2_den, r2p_den = fit_growth_rate_auto_with_stats(
-                t_arr,
-                dens_signal,
-                window_fraction=window_fraction,
-                min_points=min_points,
-                start_fraction=start_fraction,
-                growth_weight=growth_weight,
-                require_positive=require_positive,
-                min_amp_fraction=min_amp_fraction,
-            )
-            score_phi = r2_phi + 0.2 * r2p_phi + growth_weight * gamma_phi
-            score_den = r2_den + 0.2 * r2p_den + growth_weight * gamma_den
-            g_val, o_val = (gamma_phi, omega_phi) if score_phi >= score_den else (gamma_den, omega_den)
-        else:
-            signal = extract_mode_time_series(
-                dens_t_np if fit_key == "density" else phi_t_np, sel, method=mode_method
-            )
-            if auto_window:
-                g_val, o_val, _tmin, _tmax = fit_growth_rate_auto(
-                    t_arr,
-                    signal,
-                    window_fraction=window_fraction,
-                    min_points=min_points,
-                    start_fraction=start_fraction,
-                    growth_weight=growth_weight,
-                    require_positive=require_positive,
-                    min_amp_fraction=min_amp_fraction,
-                )
-            else:
-                g_val, o_val = fit_growth_rate(t_arr, signal, tmin=tmin, tmax=tmax)
-
-        g_val, o_val = apply_diagnostic_normalization(
-            g_val,
-            o_val,
-            rho_star=float(np.asarray(params.rho_star)),
-            diagnostic_norm=cfg.normalization.diagnostic_norm,
-        )
-        gamma[i] = float(g_val)
-        omega[i] = float(o_val)
-
-    return RuntimeLinearScanResult(ky=ky_arr, gamma=gamma, omega=omega)
 
 
 def run_runtime_nonlinear(
@@ -1106,9 +1097,17 @@ def run_runtime_nonlinear(
             raise ValueError("dt must be > 0")
         cetg_params = build_cetg_model_params(cfg, geom, Nl=Nl_use, Nm=Nm_use)
         cetg_term_cfg = build_runtime_term_config(cfg)
-        sample_stride_use = cfg.time.sample_stride if sample_stride is None else int(sample_stride)
-        diag_stride = cfg.time.diagnostics_stride if diagnostics_stride is None else int(diagnostics_stride)
-        diagnostics_on = cfg.time.diagnostics if diagnostics is None else bool(diagnostics)
+        sample_stride_use = (
+            cfg.time.sample_stride if sample_stride is None else int(sample_stride)
+        )
+        diag_stride = (
+            cfg.time.diagnostics_stride
+            if diagnostics_stride is None
+            else int(diagnostics_stride)
+        )
+        diagnostics_on = (
+            cfg.time.diagnostics if diagnostics is None else bool(diagnostics)
+        )
         _status(
             f"nonlinear diagnostics={'on' if diagnostics_on else 'off'} sample_stride={int(sample_stride_use)} diagnostics_stride={int(diag_stride)}"
         )
@@ -1136,12 +1135,14 @@ def run_runtime_nonlinear(
                 )
                 if chunk_show_progress:
                     kwargs["show_progress"] = True
-                t_chunk, diag_chunk, G_next, fields_next = integrate_cetg_gx_diagnostics_state(
-                    G_chunk,
-                    grid,
-                    cetg_params,
-                    cetg_term_cfg,
-                    **kwargs,
+                t_chunk, diag_chunk, G_next, fields_next = (
+                    integrate_cetg_gx_diagnostics_state(
+                        G_chunk,
+                        grid,
+                        cetg_params,
+                        cetg_term_cfg,
+                        **kwargs,
+                    )
                 )
                 G_chunk = G_next
                 return t_chunk, diag_chunk, G_next, fields_next
@@ -1167,10 +1168,14 @@ def run_runtime_nonlinear(
                 summarize_fields=diagnostics_on is False,
             )
 
-        steps_val = int(round(float(cfg.time.t_max) / dt_val)) if steps is None else int(steps)
+        steps_val = (
+            int(round(float(cfg.time.t_max) / dt_val)) if steps is None else int(steps)
+        )
         if steps_val < 1:
             raise ValueError("steps must be >= 1")
-        _status(f"running cETG nonlinear integration over {steps_val} steps with dt={dt_val:.6g}")
+        _status(
+            f"running cETG nonlinear integration over {steps_val} steps with dt={dt_val:.6g}"
+        )
         _t, diag, G_final, cetg_fields_final = integrate_cetg_gx_diagnostics_state(
             G0,
             grid,
@@ -1247,7 +1252,9 @@ def run_runtime_nonlinear(
     fixed_kx_index_use: int | None = None
     if fixed_mode_on:
         if fixed_ky_index is None or fixed_kx_index is None:
-            raise ValueError("expert.iky_fixed and expert.ikx_fixed must be set when expert.fixed_mode=true")
+            raise ValueError(
+                "expert.iky_fixed and expert.ikx_fixed must be set when expert.fixed_mode=true"
+            )
         fixed_ky_index_use = int(fixed_ky_index)
         fixed_kx_index_use = int(fixed_kx_index)
 
@@ -1256,10 +1263,22 @@ def run_runtime_nonlinear(
         f"nonlinear diagnostics={'on' if diagnostics_on else 'off'} fixed_mode={'on' if fixed_mode_on else 'off'} source={cfg.expert.source}"
     )
     if diagnostics_on or fixed_mode_on or return_state or adaptive_chunked or source_on:
-        sample_stride_use = cfg.time.sample_stride if sample_stride is None else int(sample_stride)
-        diag_stride = cfg.time.diagnostics_stride if diagnostics_stride is None else int(diagnostics_stride)
-        laguerre_mode_use = cfg.time.laguerre_nonlinear_mode if laguerre_mode is None else str(laguerre_mode)
-        resolved_diag_kw = {} if resolved_diagnostics else {"resolved_diagnostics": False}
+        sample_stride_use = (
+            cfg.time.sample_stride if sample_stride is None else int(sample_stride)
+        )
+        diag_stride = (
+            cfg.time.diagnostics_stride
+            if diagnostics_stride is None
+            else int(diagnostics_stride)
+        )
+        laguerre_mode_use = (
+            cfg.time.laguerre_nonlinear_mode
+            if laguerre_mode is None
+            else str(laguerre_mode)
+        )
+        resolved_diag_kw = (
+            {} if resolved_diagnostics else {"resolved_diagnostics": False}
+        )
         _status(
             f"sample_stride={int(sample_stride_use)} diagnostics_stride={int(diag_stride)} laguerre_mode={laguerre_mode_use}"
         )
@@ -1286,7 +1305,9 @@ def run_runtime_nonlinear(
                     dt_min=float(cfg.time.dt_min),
                     dt_max=cfg.time.dt_max,
                     cfl=float(cfg.time.cfl),
-                    cfl_fac=resolve_cfl_fac(str(method or cfg.time.method), cfg.time.cfl_fac),
+                    cfl_fac=resolve_cfl_fac(
+                        str(method or cfg.time.method), cfg.time.cfl_fac
+                    ),
                     collision_split=bool(cfg.time.collision_split),
                     collision_scheme=str(cfg.time.collision_scheme),
                     implicit_restart=int(cfg.time.implicit_restart),
@@ -1299,12 +1320,14 @@ def run_runtime_nonlinear(
                 kwargs.update(resolved_diag_kw)
                 if chunk_show_progress:
                     kwargs["show_progress"] = True
-                t_chunk, diag_chunk, G_next, fields_next = integrate_nonlinear_gx_diagnostics_state(
-                    G_chunk,
-                    grid,
-                    geom,
-                    params,
-                    **kwargs,
+                t_chunk, diag_chunk, G_next, fields_next = (
+                    integrate_nonlinear_gx_diagnostics_state(
+                        G_chunk,
+                        grid,
+                        geom,
+                        params,
+                        **kwargs,
+                    )
                 )
                 G_chunk = G_next
                 return t_chunk, diag_chunk, G_next, fields_next
@@ -1323,7 +1346,9 @@ def run_runtime_nonlinear(
             G_final = chunk_result.state
             fields_final = chunk_result.fields
         else:
-            _status(f"running nonlinear diagnostics integrator over {steps_val} steps with dt={dt_val:.6g}")
+            _status(
+                f"running nonlinear diagnostics integrator over {steps_val} steps with dt={dt_val:.6g}"
+            )
             diagnostics_call_kwargs: dict[str, Any] = dict(
                 dt=dt_val,
                 steps=steps_val,
@@ -1341,7 +1366,9 @@ def run_runtime_nonlinear(
                 dt_min=float(cfg.time.dt_min),
                 dt_max=cfg.time.dt_max,
                 cfl=float(cfg.time.cfl),
-                cfl_fac=resolve_cfl_fac(str(method or cfg.time.method), cfg.time.cfl_fac),
+                cfl_fac=resolve_cfl_fac(
+                    str(method or cfg.time.method), cfg.time.cfl_fac
+                ),
                 collision_split=bool(cfg.time.collision_split),
                 collision_scheme=str(cfg.time.collision_scheme),
                 implicit_restart=int(cfg.time.implicit_restart),
@@ -1362,7 +1389,9 @@ def run_runtime_nonlinear(
                 **diagnostics_call_kwargs,
             )
         if diagnostics_on:
-            _status(f"completed nonlinear run with {int(np.asarray(t).size)} saved samples")
+            _status(
+                f"completed nonlinear run with {int(np.asarray(t).size)} saved samples"
+            )
             state_out = np.asarray(G_final) if return_state else None
             return build_runtime_nonlinear_result(
                 t=np.asarray(t),
@@ -1374,7 +1403,9 @@ def run_runtime_nonlinear(
                 summarize_fields=False,
             )
         if fields_final is None:
-            raise RuntimeError("adaptive nonlinear runtime did not produce final fields")
+            raise RuntimeError(
+                "adaptive nonlinear runtime did not produce final fields"
+            )
         _status("diagnostics disabled; returning final nonlinear field summary")
         return build_runtime_nonlinear_result(
             t=np.asarray([]),
@@ -1387,7 +1418,9 @@ def run_runtime_nonlinear(
         )
 
     # Diagnostics disabled: use the config-driven integrator for final state.
-    _status(f"diagnostics disabled; running final-state nonlinear integrator over {steps_val} steps with dt={dt_val:.6g}")
+    _status(
+        f"diagnostics disabled; running final-state nonlinear integrator over {steps_val} steps with dt={dt_val:.6g}"
+    )
     t_cfg = replace(cfg.time, dt=dt_val, t_max=dt_val * steps_val)
     if show_progress:
         G_final, fields = integrate_nonlinear_from_config(
@@ -1455,7 +1488,9 @@ def run_linear_case(
 
     cfg, raw = load_runtime_from_toml(config_path)
     run_cfg = dict(raw.get("run", {}))
-    fit_cfg = {k: v for k, v in raw.get("fit", {}).items() if k in _RUNTIME_CASE_FIT_KEYS}
+    fit_cfg = {
+        k: v for k, v in raw.get("fit", {}).items() if k in _RUNTIME_CASE_FIT_KEYS
+    }
 
     result = run_runtime_linear(
         cfg,
@@ -1466,7 +1501,9 @@ def run_linear_case(
         method=method if method is not None else run_cfg.get("method", None),
         dt=dt if dt is not None else run_cfg.get("dt", None),
         steps=steps if steps is not None else run_cfg.get("steps", None),
-        sample_stride=sample_stride if sample_stride is not None else raw.get("time", {}).get("sample_stride", None),
+        sample_stride=sample_stride
+        if sample_stride is not None
+        else raw.get("time", {}).get("sample_stride", None),
         show_progress=show_progress,
         **fit_cfg,
     )
@@ -1509,8 +1546,16 @@ def run_nonlinear_case(
     method_use = method if method is not None else run_cfg.get("method", None)
     dt_use = dt if dt is not None else time_cfg.get("dt", None)
     steps_use = steps if steps is not None else run_cfg.get("steps", None)
-    sample_stride_use = sample_stride if sample_stride is not None else time_cfg.get("sample_stride", None)
-    diagnostics_stride_use = diagnostics_stride if diagnostics_stride is not None else time_cfg.get("diagnostics_stride", None)
+    sample_stride_use = (
+        sample_stride
+        if sample_stride is not None
+        else time_cfg.get("sample_stride", None)
+    )
+    diagnostics_stride_use = (
+        diagnostics_stride
+        if diagnostics_stride is not None
+        else time_cfg.get("diagnostics_stride", None)
+    )
 
     if cfg.output.path:
         result, paths = run_runtime_nonlinear_with_artifacts(
