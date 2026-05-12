@@ -12,7 +12,9 @@ import numpy as np
 
 from spectraxgk.geometry import FluxTubeGeometryLike
 from spectraxgk.grids import SpectralGrid
-from spectraxgk.linear import LinearCache, LinearParams, _as_species_array, build_H, build_linear_cache
+from spectraxgk.linear_cache import LinearCache, build_linear_cache
+from spectraxgk.linear_moments import build_H
+from spectraxgk.linear_params import LinearParams, _as_species_array
 from spectraxgk.terms.config import FieldState, TermConfig
 from spectraxgk.terms.fields import _solve_fields_impl, solve_fields
 from spectraxgk.terms.linear_terms import (
@@ -67,8 +69,20 @@ def _rhs_field_views(
 
     apar = fields.apar if fields.apar is not None else jnp.zeros_like(fields.phi)
     bpar = fields.bpar if fields.bpar is not None else jnp.zeros_like(fields.phi)
-    h_apar = None if force_electrostatic_fields or fields.apar is None or _is_static_zero(terms.apar) else fields.apar
-    h_bpar = None if force_electrostatic_fields or fields.bpar is None or _is_static_zero(terms.bpar) else fields.bpar
+    h_apar = (
+        None
+        if force_electrostatic_fields
+        or fields.apar is None
+        or _is_static_zero(terms.apar)
+        else fields.apar
+    )
+    h_bpar = (
+        None
+        if force_electrostatic_fields
+        or fields.bpar is None
+        or _is_static_zero(terms.bpar)
+        else fields.bpar
+    )
     return apar, bpar, h_apar, h_bpar
 
 
@@ -147,7 +161,9 @@ def assemble_rhs_cached(
         G = G[None, ...]
         squeeze_species = True
     if G.ndim != 6:
-        raise ValueError("G must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)")
+        raise ValueError(
+            "G must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)"
+        )
     if cache.Jl.shape[0] != G.shape[0]:
         raise ValueError("Cache species dimension does not match G")
 
@@ -365,7 +381,9 @@ def assemble_rhs_terms_cached(
         G = G[None, ...]
         squeeze_species = True
     if G.ndim != 6:
-        raise ValueError("G must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)")
+        raise ValueError(
+            "G must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)"
+        )
     if cache.Jl.shape[0] != G.shape[0]:
         raise ValueError("Cache species dimension does not match G")
 
@@ -593,7 +611,9 @@ def assemble_rhs_cached_jit(
 ) -> Tuple[jnp.ndarray, FieldState]:
     """Jitted wrapper for cached RHS assembly."""
 
-    return assemble_rhs_cached(G, cache, params, terms=terms, dt=dt, external_phi=external_phi)
+    return assemble_rhs_cached(
+        G, cache, params, terms=terms, dt=dt, external_phi=external_phi
+    )
 
 
 @functools.partial(jax.jit)
@@ -640,7 +660,9 @@ def compute_fields_cached(
         G = G[None, ...]
         squeeze_species = True
     if G.ndim != 6:
-        raise ValueError("G must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)")
+        raise ValueError(
+            "G must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)"
+        )
     if cache.Jl.shape[0] != G.shape[0]:
         raise ValueError("Cache species dimension does not match G")
 
@@ -692,4 +714,6 @@ def assemble_rhs(
     """Assemble the RHS from term-wise modules."""
 
     cache = cache or build_linear_cache(grid, geom, params, Nl, Nm)
-    return assemble_rhs_cached(G, cache, params, terms=terms, dt=dt, external_phi=external_phi)
+    return assemble_rhs_cached(
+        G, cache, params, terms=terms, dt=dt, external_phi=external_phi
+    )

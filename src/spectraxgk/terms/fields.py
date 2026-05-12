@@ -5,7 +5,7 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 
-from spectraxgk.linear import quasineutrality_phi
+from spectraxgk.linear_moments import quasineutrality_phi
 from spectraxgk.terms.config import FieldState
 
 
@@ -102,20 +102,33 @@ def _solve_fields_impl(
             * jnp.sum(JlB * Gm0, axis=1),
             axis=0,
         )
-        qb = -jnp.sum(density[:, None, None, None] * charge[:, None, None, None] * g01, axis=0)
-        aphi = bpar_beta * jnp.sum(
-            density[:, None, None, None] * charge[:, None, None, None] * g01,
-            axis=0,
-        ) * bmag_inv2[None, None, :]
-        ab = 1.0 + bpar_beta * jnp.sum(
-            density[:, None, None, None] * temp[:, None, None, None] * g11,
-            axis=0,
-        ) * bmag_inv2[None, None, :]
+        qb = -jnp.sum(
+            density[:, None, None, None] * charge[:, None, None, None] * g01, axis=0
+        )
+        aphi = (
+            bpar_beta
+            * jnp.sum(
+                density[:, None, None, None] * charge[:, None, None, None] * g01,
+                axis=0,
+            )
+            * bmag_inv2[None, None, :]
+        )
+        ab = (
+            1.0
+            + bpar_beta
+            * jnp.sum(
+                density[:, None, None, None] * temp[:, None, None, None] * g11,
+                axis=0,
+            )
+            * bmag_inv2[None, None, :]
+        )
         denom = qphi * ab - qb * aphi
         denom_safe = jnp.where(denom == 0.0, jnp.inf, denom)
         phi_em = (ab * nbar - qb * jperpbar) / denom_safe
         bpar_em = (-aphi * nbar + qphi * jperpbar) / denom_safe
-        return jnp.where(cache.mask0, 0.0, phi_em), jnp.where(cache.mask0, 0.0, bpar_em * jnp.sign(w_bpar))
+        return jnp.where(cache.mask0, 0.0, phi_em), jnp.where(
+            cache.mask0, 0.0, bpar_em * jnp.sign(w_bpar)
+        )
 
     phi, bpar = jax.lax.cond(
         (beta > 0.0) & (w_bpar != 0.0),

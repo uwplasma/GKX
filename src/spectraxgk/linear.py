@@ -10,13 +10,26 @@ import jax.numpy as jnp
 import numpy as np
 from jax.scipy.sparse.linalg import gmres
 
-from spectraxgk.basis import hermite_ladder_coeffs
 from spectraxgk.geometry import FluxTubeGeometryLike
 from spectraxgk.grids import SpectralGrid
 from spectraxgk.linear_linked import (
     _build_linked_end_damping_profile,  # noqa: F401 - legacy private helper re-export
     _build_linked_fft_maps,  # noqa: F401 - legacy private helper re-export
     _signed_to_index,  # noqa: F401 - legacy private helper re-export
+)
+from spectraxgk.linear_moments import (
+    apply_hermite_v,  # noqa: F401 - legacy public helper re-export
+    apply_hermite_v2,  # noqa: F401 - legacy public helper re-export
+    apply_laguerre_x,  # noqa: F401 - legacy public helper re-export
+    build_H,
+    compute_b,  # noqa: F401 - legacy public helper re-export
+    diamagnetic_drive_coeffs,  # noqa: F401 - legacy public helper re-export
+    energy_operator,  # noqa: F401 - legacy public helper re-export
+    grad_z_periodic,  # noqa: F401 - legacy public helper re-export
+    lenard_bernstein_eigenvalues,  # noqa: F401 - legacy public helper re-export
+    quasineutrality_phi,  # noqa: F401 - legacy public helper re-export
+    shift_axis,  # noqa: F401 - legacy public helper re-export
+    streaming_term,  # noqa: F401 - legacy public helper re-export
 )
 from spectraxgk.linear_cache import (
     LinearCache,
@@ -35,7 +48,7 @@ from spectraxgk.linear_params import (
     PreconditionerSpec,
     _as_species_array,
     _check_nonnegative,  # noqa: F401 - legacy private helper re-export
-    _check_positive,
+    _check_positive,  # noqa: F401 - legacy private helper re-export
     _is_tracer,  # noqa: F401 - legacy private helper re-export
     _resolve_implicit_preconditioner,
     _x64_enabled,
@@ -50,251 +63,6 @@ _SSPX3_W1 = 0.5 * (_SSPX3_WGTFAC - 1.0)
 _SSPX3_W2 = 0.5 * ((6.0 ** (2.0 / 3.0)) - 1.0 - _SSPX3_WGTFAC)
 _SSPX3_W3 = (1.0 / _SSPX3_ADT) - 1.0 - _SSPX3_W2 * (_SSPX3_W1 + 1.0)
 _FUSED_ELECTROSTATIC_SLICE_KERNEL_CACHE: dict[tuple[Any, ...], tuple[Any, Any]] = {}
-
-
-def grad_z_periodic(f: jnp.ndarray, dz: float | jnp.ndarray) -> jnp.ndarray:
-    """Spectral periodic derivative along the last axis."""
-
-    _check_positive(dz, "dz")
-    n = f.shape[-1]
-    dz_val = jnp.asarray(dz, dtype=jnp.real(f).dtype)
-    kz = 2.0 * jnp.pi * jnp.fft.fftfreq(n, d=dz_val)
-    f_hat = jnp.fft.fft(f, axis=-1)
-    df_hat = (1j * kz) * f_hat
-    return jnp.fft.ifft(df_hat, axis=-1)
-
-
-def compute_b(
-    grid: SpectralGrid, geom: FluxTubeGeometryLike, rho: float
-) -> jnp.ndarray:
-    """Compute b = rho^2 * k_perp^2(kx, ky, theta) for s-alpha geometry."""
-
-    _check_positive(rho, "rho")
-    kx0 = grid.kx[None, :, None]
-    ky = grid.ky[:, None, None]
-    theta = grid.z[None, None, :]
-    kperp2 = geom.k_perp2(kx0, ky, theta)
-    return (rho * rho) * kperp2
-
-
-def lenard_bernstein_eigenvalues(
-    Nl: int, Nm: int, nu_hermite: float, nu_laguerre: float
-) -> jnp.ndarray:
-    """Diagonal Lenard-Bernstein rates in Hermite-Laguerre space."""
-
-    ell = jnp.arange(Nl)
-    m = jnp.arange(Nm)
-    return nu_laguerre * ell[:, None] + nu_hermite * m[None, :]
-
-
-def apply_hermite_v(G: jnp.ndarray) -> jnp.ndarray:
-    """Multiply Hermite coefficients by v_parallel (ladder form)."""
-
-    axis_m = -4
-    Nm = G.shape[axis_m]
-    sqrt_p, sqrt_m = hermite_ladder_coeffs(Nm - 1)
-    sqrt_p = sqrt_p[:Nm]
-    sqrt_m = sqrt_m[:Nm]
-    G_plus = shift_axis(G, 1, axis_m)
-    G_minus = shift_axis(G, -1, axis_m)
-    shape = [1] * G.ndim
-    shape[axis_m] = Nm
-    sqrt_p = sqrt_p.reshape(shape)
-    sqrt_m = sqrt_m.reshape(shape)
-    return sqrt_p * G_plus + sqrt_m * G_minus
-
-
-def apply_hermite_v2(G: jnp.ndarray) -> jnp.ndarray:
-    """Multiply Hermite coefficients by v_parallel^2."""
-
-    return apply_hermite_v(apply_hermite_v(G))
-
-
-def apply_laguerre_x(G: jnp.ndarray) -> jnp.ndarray:
-    """Multiply Laguerre coefficients by the perpendicular energy variable."""
-
-    axis_l = -5
-    Nl = G.shape[axis_l]
-    ell = jnp.arange(Nl)
-    G_plus = shift_axis(G, 1, axis_l)
-    G_minus = shift_axis(G, -1, axis_l)
-    ell_shape = [1] * G.ndim
-    ell_shape[axis_l] = Nl
-    ell_col = ell.reshape(ell_shape)
-    return (2.0 * ell_col + 1.0) * G - (ell_col + 1.0) * G_plus - ell_col * G_minus
-
-
-def shift_axis(arr: jnp.ndarray, offset: int, axis: int) -> jnp.ndarray:
-    """Shift an array along an axis with zero padding (non-periodic)."""
-
-    axis = axis % arr.ndim
-    if offset == 0:
-        return arr
-    axis_len = arr.shape[axis]
-    if abs(offset) >= axis_len:
-        return jnp.zeros_like(arr)
-    out = jnp.zeros_like(arr)
-    if offset > 0:
-        body = jax.lax.slice_in_dim(arr, offset, axis_len, axis=axis)
-        starts = [0] * arr.ndim
-        starts[axis] = 0
-        return jax.lax.dynamic_update_slice(out, body, starts)
-    body = jax.lax.slice_in_dim(arr, 0, axis_len + offset, axis=axis)
-    starts = [0] * arr.ndim
-    starts[axis] = -offset
-    return jax.lax.dynamic_update_slice(out, body, starts)
-
-
-def energy_operator(
-    G: jnp.ndarray, coeff_const: float, coeff_par: float, coeff_perp: float
-) -> jnp.ndarray:
-    """Apply the energy operator (1 + v_par^2 + mu) in Hermite-Laguerre space."""
-
-    return (
-        coeff_const * G
-        + coeff_par * apply_hermite_v2(G)
-        + coeff_perp * apply_laguerre_x(G)
-    )
-
-
-def diamagnetic_drive_coeffs(
-    Nl: int,
-    Nm: int,
-    eta_i: jnp.ndarray,
-    coeff_const: float,
-    coeff_par: float,
-    coeff_perp: float,
-) -> jnp.ndarray:
-    """Return velocity-space coefficients for (1 + eta_i(E - 3/2))."""
-
-    e00 = jnp.zeros((Nl, Nm, 1, 1, 1))
-    e00 = e00.at[0, 0, 0, 0, 0].set(1.0)
-    energy_e00 = energy_operator(e00, coeff_const, coeff_par, coeff_perp)
-    coeffs = e00 + eta_i * (energy_e00 - 1.5 * e00)
-    return coeffs[:, :, 0, 0, 0]
-
-
-def quasineutrality_phi(
-    G: jnp.ndarray,
-    Jl: jnp.ndarray,
-    tau_e: float | jnp.ndarray,
-    charge: jnp.ndarray,
-    density: jnp.ndarray,
-    tz: jnp.ndarray,
-) -> jnp.ndarray:
-    """Solve electrostatic quasineutrality for phi with optional adiabatic closure."""
-
-    _check_nonnegative(tau_e, "tau_e")
-    Gm0 = G[:, :, 0, ...]
-    num = jnp.sum(
-        density[:, None, None, None]
-        * charge[:, None, None, None]
-        * jnp.sum(Jl * Gm0, axis=1),
-        axis=0,
-    )
-    g0 = jnp.sum(Jl * Jl, axis=1)
-    zt = jnp.where(tz == 0.0, 0.0, 1.0 / tz)
-    den = tau_e + jnp.sum(
-        density[:, None, None, None]
-        * charge[:, None, None, None]
-        * zt[:, None, None, None]
-        * (1.0 - g0),
-        axis=0,
-    )
-    den_safe = jnp.where(den == 0.0, jnp.inf, den)
-    return num / den_safe
-
-
-def build_H(
-    G: jnp.ndarray,
-    Jl: jnp.ndarray,
-    phi: jnp.ndarray,
-    tz: jnp.ndarray,
-    apar: jnp.ndarray | None = None,
-    vth: jnp.ndarray | None = None,
-    bpar: jnp.ndarray | None = None,
-    JlB: jnp.ndarray | None = None,
-) -> jnp.ndarray:
-    """Map G -> H for mirror/curvature/grad-B/collision terms.
-
-    GX builds H by adding the field terms for m=0 (phi, Bpar) and the
-    A_parallel term for m=1, while the streaming term applies its own
-    pre-derivative field contributions. We mirror that behavior here.
-    """
-
-    squeeze_species = False
-    if G.ndim == 5:
-        G = G[None, ...]
-        squeeze_species = True
-    if Jl.ndim == 4:
-        Jl = Jl[None, ...]
-    tz_arr = jnp.asarray(tz)
-    if tz_arr.ndim == 0:
-        tz_arr = tz_arr[None]
-    zt_arr = jnp.where(tz_arr == 0.0, 0.0, 1.0 / tz_arr)
-    Nm = G.shape[-4]
-    m0_mask = (jnp.arange(Nm, dtype=jnp.int32) == 0).astype(G.dtype)
-    m0_mask = m0_mask.reshape((1, 1, Nm, 1, 1, 1))
-    phi_term = (zt_arr[:, None, None, None, None] * Jl * phi)[:, :, None, ...]
-    H = G + m0_mask * phi_term
-    if apar is not None:
-        if vth is None:
-            raise ValueError("vth must be provided when apar is supplied")
-        m1_mask = (jnp.arange(Nm, dtype=jnp.int32) == 1).astype(G.dtype)
-        m1_mask = m1_mask.reshape((1, 1, Nm, 1, 1, 1))
-        vth_arr = jnp.asarray(vth)
-        if vth_arr.ndim == 0:
-            vth_arr = vth_arr[None]
-        apar_term = (
-            zt_arr[:, None, None, None, None]
-            * vth_arr[:, None, None, None, None]
-            * Jl
-            * apar
-        )[:, :, None, ...]
-        H = H - m1_mask * apar_term
-    if bpar is not None:
-        if JlB is None:
-            raise ValueError("JlB must be provided when bpar is supplied")
-        bpar_term = (JlB * bpar)[:, :, None, ...]
-        H = H + m0_mask * bpar_term
-    return H[0] if squeeze_species else H
-
-
-def streaming_term(
-    H: jnp.ndarray, dz: float | jnp.ndarray, vth: float | jnp.ndarray
-) -> jnp.ndarray:
-    """Streaming term using Hermite ladder and real-space z derivative."""
-
-    _check_positive(vth, "vth")
-    dH_dz = grad_z_periodic(H, dz)
-    axis_m = -4
-    Nm = H.shape[axis_m]
-    sqrt_p, sqrt_m = hermite_ladder_coeffs(Nm - 1)
-    sqrt_p = sqrt_p[:Nm]
-    sqrt_m = sqrt_m[:Nm]
-
-    pad = [(0, 0)] * H.ndim
-    pad[axis_m] = (1, 1)
-    dH_pad = jnp.pad(dH_dz, pad)
-    slc_plus = [slice(None)] * H.ndim
-    slc_minus = [slice(None)] * H.ndim
-    slc_plus[axis_m] = slice(2, None)
-    slc_minus[axis_m] = slice(0, -2)
-    dH_plus = dH_pad[tuple(slc_plus)]
-    dH_minus = dH_pad[tuple(slc_minus)]
-
-    shape = [1] * H.ndim
-    shape[axis_m] = Nm
-    sqrt_p = sqrt_p.reshape(shape)
-    sqrt_m = sqrt_m.reshape(shape)
-    ladder = sqrt_p * dH_plus + sqrt_m * dH_minus
-    vth_arr = jnp.asarray(vth)
-    if vth_arr.ndim == 0:
-        vth_arr = vth_arr[None]
-    v_shape = [1] * H.ndim
-    v_shape[0] = vth_arr.shape[0]
-    vth_arr = vth_arr.reshape(v_shape)
-    return vth_arr * ladder
 
 
 def linear_rhs(
@@ -482,7 +250,7 @@ def _streaming_electrostatic_from_phi_velocity_sharded(
 ) -> jnp.ndarray:
     """Apply electrostatic streaming with a precomputed electrostatic field."""
 
-    from spectraxgk.terms.operators import grad_z_periodic
+    from spectraxgk.terms.operators import grad_z_periodic as operator_grad_z_periodic
     from spectraxgk.velocity_sharding import periodic_streaming_shard_map
 
     particle_streaming = -periodic_streaming_shard_map(
@@ -497,7 +265,7 @@ def _streaming_electrostatic_from_phi_velocity_sharded(
     )
     field_streaming = jnp.asarray(
         params.kpar_scale, dtype=real_dtype
-    ) * grad_z_periodic(field_rhs, kz=cache.kz)
+    ) * operator_grad_z_periodic(field_rhs, kz=cache.kz)
     return particle_streaming + field_streaming[0]
 
 
@@ -587,7 +355,10 @@ def _linear_rhs_electrostatic_slices_velocity_sharded_fused(
 
     from jax.sharding import Mesh, NamedSharding, PartitionSpec
 
-    from spectraxgk.terms.operators import grad_z_periodic, shift_axis
+    from spectraxgk.terms.operators import (
+        grad_z_periodic as operator_grad_z_periodic,
+        shift_axis as operator_shift_axis,
+    )
 
     dims = ("l", "m", "ky", "kx", "z")
     m_axis = dims.index("m")
@@ -658,8 +429,8 @@ def _linear_rhs_electrostatic_slices_velocity_sharded_fused(
     omega_star_s = omega_star.reshape((1, omega_star.shape[0], 1, 1))
     tprim_s = jnp.asarray(params.R_over_LTi, dtype=real_dtype).reshape(-1)[0]
     fprim_s = jnp.asarray(params.R_over_Ln, dtype=real_dtype).reshape(-1)[0]
-    jl_m1 = shift_axis(jl, -1, axis=0)
-    jl_p1 = shift_axis(jl, 1, axis=0)
+    jl_m1 = operator_shift_axis(jl, -1, axis=0)
+    jl_p1 = operator_shift_axis(jl, 1, axis=0)
     l4 = jnp.asarray(cache.l4, dtype=real_dtype).reshape((arr.shape[0], 1, 1, 1))
     w_streaming = jnp.asarray(term_weights.streaming, dtype=real_dtype)
     w_mirror = jnp.asarray(term_weights.mirror, dtype=real_dtype)
@@ -689,7 +460,7 @@ def _linear_rhs_electrostatic_slices_velocity_sharded_fused(
         if mask0 is not None:
             phi = jnp.where(mask0, 0.0, phi)
 
-        dlocal_dz = grad_z_periodic(local, kz=cache.kz)
+        dlocal_dz = operator_grad_z_periodic(local, kz=cache.kz)
         lower = shift_m(dlocal_dz, offset=-1)
         upper = shift_m(dlocal_dz, offset=1)
         streaming = -vth_s * (
@@ -698,7 +469,7 @@ def _linear_rhs_electrostatic_slices_velocity_sharded_fused(
         field_drive_m1 = (global_m == 1).astype(local.dtype) * (-zt * vth_s * jl * phi)[
             :, None, ...
         ]
-        streaming = streaming + kpar_scale * grad_z_periodic(
+        streaming = streaming + kpar_scale * operator_grad_z_periodic(
             field_drive_m1, kz=cache.kz
         )
 
@@ -707,9 +478,13 @@ def _linear_rhs_electrostatic_slices_velocity_sharded_fused(
         h_m_m1 = shift_m(h, offset=-1)
         mirror_term = (
             -jnp.sqrt(global_m_real + 1.0) * ell_p1 * h_m_p1
-            - jnp.sqrt(global_m_real + 1.0) * ell * shift_axis(h_m_p1, -1, axis=0)
+            - jnp.sqrt(global_m_real + 1.0)
+            * ell
+            * operator_shift_axis(h_m_p1, -1, axis=0)
             + jnp.sqrt(global_m_real) * ell * h_m_m1
-            + jnp.sqrt(global_m_real) * ell_p1 * shift_axis(h_m_m1, 1, axis=0)
+            + jnp.sqrt(global_m_real)
+            * ell_p1
+            * operator_shift_axis(h_m_m1, 1, axis=0)
         )
         mirror = -vth_s * bgrad * mirror_term
 
@@ -721,9 +496,9 @@ def _linear_rhs_electrostatic_slices_velocity_sharded_fused(
             + jnp.sqrt(global_m_real * (global_m_real - 1.0)) * h_m_m2
         )
         gradb_term = (
-            (ell + 1.0) * shift_axis(h, 1, axis=0)
+            (ell + 1.0) * operator_shift_axis(h, 1, axis=0)
             + (2.0 * ell + 1.0) * h
-            + ell * shift_axis(h, -1, axis=0)
+            + ell * operator_shift_axis(h, -1, axis=0)
         )
         curvature = -(imag * tz_s * omega_d_scale * cv) * curv_term
         gradb = -(imag * tz_s * omega_d_scale * gb) * gradb_term
