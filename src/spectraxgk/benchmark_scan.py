@@ -6,6 +6,7 @@ keeps small, deterministic scan decisions separate from solver orchestration.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -132,6 +133,13 @@ class ScanFitWindowPolicy:
     min_slope_frac: float = 0.0
     slope_var_weight: float = 0.0
     window_method: str = "loglinear"
+    fit_growth_rate_fn: Callable[..., tuple[float, float]] = fit_growth_rate
+    fit_growth_rate_auto_fn: Callable[..., tuple[float, float, float, float]] = (
+        fit_growth_rate_auto
+    )
+    normalize_growth_rate_fn: Callable[
+        [float, float, LinearParams, str], tuple[float, float]
+    ] = _normalize_growth_rate
 
     def window_at(self, idx: int) -> tuple[float | None, float | None]:
         return indexed_float_value(self.tmin, idx), indexed_float_value(self.tmax, idx)
@@ -179,18 +187,20 @@ class ScanFitWindowPolicy:
         t = np.arange(signal.shape[0]) * float(dt) * int(stride)
         use_auto, tmin_i, tmax_i = self.use_auto_window(t, idx)
         if use_auto:
-            gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
+            gamma, omega, _tmin, _tmax = self.fit_growth_rate_auto_fn(
                 t,
                 signal,
                 **self.auto_kwargs(),
             )
         else:
             try:
-                gamma, omega = fit_growth_rate(t, signal, tmin=tmin_i, tmax=tmax_i)
+                gamma, omega = self.fit_growth_rate_fn(
+                    t, signal, tmin=tmin_i, tmax=tmax_i
+                )
             except ValueError:
-                gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
+                gamma, omega, _tmin, _tmax = self.fit_growth_rate_auto_fn(
                     t,
                     signal,
                     **self.auto_kwargs(),
                 )
-        return _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
+        return self.normalize_growth_rate_fn(gamma, omega, params, diagnostic_norm)

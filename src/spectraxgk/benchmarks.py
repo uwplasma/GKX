@@ -853,6 +853,9 @@ def run_cyclone_scan(
         min_slope_frac=min_slope_frac,
         slope_var_weight=slope_var_weight,
         window_method=window_method,
+        fit_growth_rate_fn=fit_growth_rate,
+        fit_growth_rate_auto_fn=fit_growth_rate_auto,
+        normalize_growth_rate_fn=_normalize_growth_rate,
     )
 
     def _fit_signal(
@@ -2028,6 +2031,9 @@ def run_etg_scan(
         min_slope_frac=min_slope_frac,
         slope_var_weight=slope_var_weight,
         window_method=window_method,
+        fit_growth_rate_fn=fit_growth_rate,
+        fit_growth_rate_auto_fn=fit_growth_rate_auto,
+        normalize_growth_rate_fn=_normalize_growth_rate,
     )
 
     def _fit_signal(
@@ -2771,6 +2777,9 @@ def run_kinetic_scan(
         growth_weight=growth_weight,
         require_positive=require_positive,
         min_amp_fraction=min_amp_fraction,
+        fit_growth_rate_fn=fit_growth_rate,
+        fit_growth_rate_auto_fn=fit_growth_rate_auto,
+        normalize_growth_rate_fn=_normalize_growth_rate,
     )
 
     def _fit_signal(
@@ -3343,6 +3352,9 @@ def run_tem_scan(
         growth_weight=growth_weight,
         require_positive=require_positive,
         min_amp_fraction=min_amp_fraction,
+        fit_growth_rate_fn=fit_growth_rate,
+        fit_growth_rate_auto_fn=fit_growth_rate_auto,
+        normalize_growth_rate_fn=_normalize_growth_rate,
     )
 
     def _fit_signal(
@@ -3633,6 +3645,9 @@ def run_kbm_beta_scan(
         growth_weight=growth_weight,
         require_positive=require_positive,
         min_amp_fraction=min_amp_fraction,
+        fit_growth_rate_fn=fit_growth_rate,
+        fit_growth_rate_auto_fn=fit_growth_rate_auto,
+        normalize_growth_rate_fn=_normalize_growth_rate,
     )
 
     if init_species_index < 0 or init_species_index >= 2:
