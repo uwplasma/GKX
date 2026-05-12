@@ -11,7 +11,7 @@ from __future__ import annotations
 import importlib
 from dataclasses import replace as dc_replace
 import time
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import jax
 import jax.numpy as jnp
@@ -85,6 +85,12 @@ _SOLVER_OBJECTIVE_ALIASES = {
     "frequency": "omega",
     "quasilinear_flux": "mixing_length_heat_flux_proxy",
 }
+
+
+def _report_float(report: dict[str, object], key: str) -> float:
+    """Read a numeric finite-difference report field with mypy-safe casting."""
+
+    return float(cast(Any, report[key]))
 
 
 def solver_scalar_objective_from_vector(
@@ -524,17 +530,17 @@ def vmec_boozer_scalar_objective_line_search_report(  # pragma: no cover
             max_curvature_ratio=max_curvature_ratio,
             **kwargs,
         )
-        base_value = float(report["base_value"])
+        base_value = _report_float(report, "base_value")
         if best_value is None:
             best_value = base_value
-        derivative = float(report["central_derivative"])
+        derivative = _report_float(report, "central_derivative")
         row: dict[str, object] = {
             "step": step_index,
             "delta": delta,
             "objective": base_value,
             "central_derivative": derivative,
             "finite_difference_passed": bool(report["passed"]),
-            "curvature_ratio": float(report["curvature_ratio"]),
+            "curvature_ratio": _report_float(report, "curvature_ratio"),
             "accepted": False,
             "candidate_delta": None,
             "candidate_objective": None,
@@ -560,7 +566,7 @@ def vmec_boozer_scalar_objective_line_search_report(  # pragma: no cover
             max_curvature_ratio=max_curvature_ratio,
             **kwargs,
         )
-        candidate_value = float(candidate["base_value"])
+        candidate_value = _report_float(candidate, "base_value")
         row["candidate_delta"] = candidate_delta
         row["candidate_objective"] = candidate_value
         candidate_ok = bool(candidate["passed"]) and (
@@ -576,7 +582,7 @@ def vmec_boozer_scalar_objective_line_search_report(  # pragma: no cover
         row["accepted"] = True
         history.append(row)
 
-    initial_objective = float(history[0]["objective"]) if history else float("nan")
+    initial_objective = float(cast(Any, history[0]["objective"])) if history else float("nan")
     final_objective = float(best_value) if best_value is not None else initial_objective
     return {
         "kind": "vmec_boozer_scalar_objective_line_search_report",
