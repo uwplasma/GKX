@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import replace
 import json
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
@@ -35,7 +34,10 @@ from spectraxgk.runtime import (
 from spectraxgk.runtime_artifact_diagnostics import (
     validate_finite_runtime_result as _validate_finite_runtime_result,
 )
-from spectraxgk.runtime_orchestration import run_runtime_nonlinear_artifact_handoff
+from spectraxgk.runtime_orchestration import (
+    RuntimeArtifactHandoffDeps,
+    run_runtime_nonlinear_artifact_handoff,
+)
 
 
 def _artifact_base(path: Path) -> Path:
@@ -407,7 +409,7 @@ def run_runtime_nonlinear_with_artifacts(
     show_progress: bool = False,
     status_callback: Any = None,
 ) -> tuple[RuntimeNonlinearResult, dict[str, str]]:
-    deps = SimpleNamespace(
+    deps = RuntimeArtifactHandoffDeps(
         is_gx_netcdf_target=_is_gx_netcdf_target,
         resolve_restart_path=lambda path, run_cfg: _resolve_restart_path(
             path, run_cfg, for_write=False
