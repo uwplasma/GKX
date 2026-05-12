@@ -414,8 +414,18 @@ jobs:
           python tools/run_wide_coverage_gate.py \
             --shards 48 \
             --combine-only \
+            --require-shard-data \
+            --shard-manifest coverage-wide-shard-manifest.json \
             --fail-under 95 \
             --xml coverage-wide.xml
+
+      - name: Upload wide coverage shard manifest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-wide-shard-manifest
+          path: coverage-wide-shard-manifest.json
+          if-no-files-found: ignore
 
       - name: Upload wide coverage report
         uses: codecov/codecov-action@v5

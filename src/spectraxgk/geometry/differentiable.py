@@ -407,6 +407,119 @@ def finite_difference_jacobian(
     return jnp.stack(columns, axis=1)
 
 
+def _sensitivity_conditioning_metadata(
+    jacobian_ad: Any,
+    jacobian_fd: Any,
+    params: Any,
+    *,
+    fd_step: float,
+    observable_names: Sequence[str] | None = None,
+    param_names: Sequence[str] | None = None,
+    relative_floor: float = 1.0e-12,
+) -> dict[str, object]:
+    """Return JSON-friendly conditioning metadata for AD/FD Jacobian gates."""
+
+    jac_ad = np.asarray(jacobian_ad, dtype=float)
+    jac_fd = np.asarray(jacobian_fd, dtype=float)
+    p = np.asarray(params, dtype=float).reshape(-1)
+    if jac_ad.ndim != 2 or jac_fd.ndim != 2:
+        raise ValueError("jacobians must be two-dimensional")
+    if jac_ad.shape != jac_fd.shape:
+        raise ValueError("AD and finite-difference jacobians must have matching shapes")
+    if jac_ad.shape[1] != p.size:
+        raise ValueError("parameter length must match jacobian columns")
+
+    obs_names = (
+        [str(name) for name in observable_names]
+        if observable_names is not None
+        else [f"observable_{idx}" for idx in range(jac_ad.shape[0])]
+    )
+    par_names = (
+        [str(name) for name in param_names]
+        if param_names is not None
+        else [f"param_{idx}" for idx in range(jac_ad.shape[1])]
+    )
+    if len(obs_names) != jac_ad.shape[0]:
+        raise ValueError("observable_names length must match jacobian rows")
+    if len(par_names) != jac_ad.shape[1]:
+        raise ValueError("param_names length must match jacobian columns")
+
+    finite_ad = bool(np.all(np.isfinite(jac_ad)))
+    finite_fd = bool(np.all(np.isfinite(jac_fd)))
+    finite_params = bool(np.all(np.isfinite(p)))
+    if finite_ad and jac_ad.size:
+        singular_values = np.linalg.svd(jac_ad, compute_uv=False)
+        rank = int(np.linalg.matrix_rank(jac_ad))
+        if singular_values.size == 0 or float(singular_values[-1]) <= 0.0:
+            condition_number = float("inf")
+        else:
+            condition_number = float(singular_values[0] / singular_values[-1])
+        column_norms = np.linalg.norm(jac_ad, axis=0)
+        row_norms = np.linalg.norm(jac_ad, axis=1)
+    else:
+        singular_values = np.asarray([], dtype=float)
+        rank = 0
+        condition_number = float("inf")
+        column_norms = np.full((jac_ad.shape[1],), np.nan)
+        row_norms = np.full((jac_ad.shape[0],), np.nan)
+
+    floor = float(relative_floor)
+    diff = jac_ad - jac_fd
+    abs_error = np.abs(diff)
+    rel_error = abs_error / np.maximum(np.abs(jac_fd), floor)
+
+    def _worst_entry(values: np.ndarray) -> dict[str, object] | None:
+        if values.size == 0 or not np.any(np.isfinite(values)):
+            return None
+        flat_idx = int(np.nanargmax(values))
+        row, col = np.unravel_index(flat_idx, values.shape)
+        return {
+            "observable_index": int(row),
+            "observable_name": obs_names[int(row)],
+            "parameter_index": int(col),
+            "parameter_name": par_names[int(col)],
+            "value": float(values[row, col]),
+            "ad": float(jac_ad[row, col]),
+            "finite_difference": float(jac_fd[row, col]),
+        }
+
+    h = abs(float(fd_step))
+    fd_step_by_parameter = [
+        {
+            "parameter_index": int(idx),
+            "parameter_name": par_names[int(idx)],
+            "parameter_value": float(p[idx]) if idx < p.size else float("nan"),
+            "absolute_step": h,
+            "relative_step": float(h / max(abs(float(p[idx])), 1.0)),
+        }
+        for idx in range(p.size)
+    ]
+
+    return {
+        "jacobian_shape": [int(jac_ad.shape[0]), int(jac_ad.shape[1])],
+        "finite_ad_jacobian": finite_ad,
+        "finite_fd_jacobian": finite_fd,
+        "finite_parameters": finite_params,
+        "sensitivity_map_rank": rank,
+        "jacobian_condition_number": condition_number,
+        "jacobian_singular_values": singular_values.tolist(),
+        "ad_column_norms": column_norms.tolist(),
+        "ad_row_norms": row_norms.tolist(),
+        "max_ad_column_norm": float(np.nanmax(column_norms))
+        if column_norms.size
+        else 0.0,
+        "min_ad_column_norm": float(np.nanmin(column_norms))
+        if column_norms.size
+        else 0.0,
+        "fd_step": float(fd_step),
+        "relative_error_floor": floor,
+        "finite_difference_step_by_parameter": fd_step_by_parameter,
+        "fd_near_zero_reference_count": int(np.sum(np.abs(jac_fd) < floor)),
+        "worst_abs_error": _worst_entry(abs_error),
+        "worst_rel_error": _worst_entry(rel_error),
+    }
+
+
 def _array_parity_metrics(
     candidate: Any, reference: Any, *, floor: float = 1.0e-12
 ) -> dict[str, object]:
@@ -662,6 +775,14 @@ def vmec_boundary_aspect_sensitivity_report(
         lambda x: jnp.asarray([aspect_fn(x)]), p, step=fd_step
     )[0]
     diff = grad_ad - grad_fd
+    conditioning = _sensitivity_conditioning_metadata(
+        jnp.asarray(grad_ad)[None, :],
+        jnp.asarray(grad_fd)[None, :],
+        p,
+        fd_step=float(fd_step),
+        observable_names=("aspect_ratio",),
+        param_names=("ripple", "elongation"),
+    )
     return {
         "available": True,
         "backend_info": info,
@@ -669,6 +790,7 @@ def vmec_boundary_aspect_sensitivity_report(
         "grad_ad": np.asarray(grad_ad).tolist(),
         "grad_fd": np.asarray(grad_fd).tolist(),
         "max_abs_ad_fd_error": float(np.max(np.abs(np.asarray(diff)))),
+        "conditioning": conditioning,
         "fd_step": float(fd_step),
         "mpol": int(mpol),
         "ntor": int(ntor),
@@ -1346,6 +1468,15 @@ def vmec_jax_metric_tensor_sensitivity_report(  # pragma: no cover
         "jacobian_fd": np.asarray(jac_fd).tolist(),
         "max_abs_ad_fd_error": float(np.asarray(max_abs)),
         "max_rel_ad_fd_error": float(np.asarray(max_rel)),
+        "conditioning": _sensitivity_conditioning_metadata(
+            jac_ad,
+            jac_fd,
+            p,
+            fd_step=float(fd_step),
+            observable_names=_VMEC_METRIC_OBSERVABLE_NAMES,
+            param_names=("delta_Rcos", "delta_Zsin"),
+            relative_floor=1.0e-12,
+        ),
         "radial_index": int(ridx),
         "mode_index": int(midx),
         "surface_index": int(sidx),
@@ -1549,6 +1680,15 @@ def vmec_jax_field_line_tensor_sensitivity_report(  # pragma: no cover
         "jacobian_fd": np.asarray(jac_fd).tolist(),
         "max_abs_ad_fd_error": float(np.asarray(max_abs)),
         "max_rel_ad_fd_error": float(np.asarray(max_rel)),
+        "conditioning": _sensitivity_conditioning_metadata(
+            jac_ad,
+            jac_fd,
+            p,
+            fd_step=float(fd_step),
+            observable_names=_VMEC_FIELD_LINE_OBSERVABLE_NAMES,
+            param_names=("delta_Rcos", "delta_Zsin"),
+            relative_floor=1.0e-10,
+        ),
         "radial_index": int(ridx),
         "mode_index": int(midx),
         "surface_index": int(sidx),
@@ -2801,6 +2941,7 @@ def geometry_sensitivity_report(
     jac_fd = finite_difference_jacobian(observable_fn, p, step=fd_step)
     diff = jac_ad - jac_fd
     scale = jnp.maximum(jnp.abs(jac_fd), 1.0e-12)
+    param_names = tuple(f"param_{idx}" for idx in range(int(p.shape[0])))
 
     return {
         "observable_names": list(_GEOMETRY_OBSERVABLE_NAMES),
@@ -2811,6 +2952,15 @@ def geometry_sensitivity_report(
         "max_abs_ad_fd_error": float(np.max(np.abs(np.asarray(diff)))),
         "max_rel_ad_fd_error": float(
             np.max(np.abs(np.asarray(diff) / np.asarray(scale)))
+        ),
+        "conditioning": _sensitivity_conditioning_metadata(
+            jac_ad,
+            jac_fd,
+            p,
+            fd_step=float(fd_step),
+            observable_names=_GEOMETRY_OBSERVABLE_NAMES,
+            param_names=param_names,
+            relative_floor=1.0e-12,
         ),
         "fd_step": float(fd_step),
         "source_model": str(source_model),
@@ -2901,11 +3051,13 @@ def geometry_inverse_design_report(
     uq = covariance_diagnostics(
         np.asarray(jac_ad), np.asarray(residual), regularization=regularization
     )
+    selected_observable_names = [
+        str(_GEOMETRY_OBSERVABLE_NAMES[int(i)]) for i in indices_np
+    ]
+    param_names = tuple(f"param_{idx}" for idx in range(int(params.shape[0])))
 
     return {
-        "observable_names": [
-            str(_GEOMETRY_OBSERVABLE_NAMES[int(i)]) for i in indices_np
-        ],
+        "observable_names": selected_observable_names,
         "initial_params": np.asarray(params).tolist(),
         "final_params": np.asarray(p).tolist(),
         "target_observables": np.asarray(target).tolist(),
@@ -2918,6 +3070,15 @@ def geometry_inverse_design_report(
         "max_abs_ad_fd_error": float(np.max(np.abs(np.asarray(diff)))),
         "max_rel_ad_fd_error": float(
             np.max(np.abs(np.asarray(diff) / np.asarray(scale)))
+        ),
+        "conditioning": _sensitivity_conditioning_metadata(
+            jac_ad,
+            jac_fd,
+            p,
+            fd_step=float(fd_step),
+            observable_names=selected_observable_names,
+            param_names=param_names,
+            relative_floor=1.0e-12,
         ),
         "uq": uq,
         "fd_step": float(fd_step),

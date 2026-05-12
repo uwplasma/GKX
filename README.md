@@ -721,7 +721,7 @@ Default `pytest` runs skip integration tests for faster feedback. Use:
 pytest
 pytest -m integration
 python tools/run_tests_fast.py
-python tools/run_wide_coverage_gate.py --shards 24 --timeout 300 --fail-under 95 --pytest-arg=-o --pytest-arg=addopts= --pytest-arg=-m --pytest-arg="not slow"
+python tools/run_wide_coverage_gate.py --shards 48 --timeout 300 --fail-under 95 --pytest-arg=-o --pytest-arg=addopts= --pytest-arg=-m --pytest-arg="not slow"
 ```
 
 `tools/run_tests_fast.py` runs per-file pytest shards with a 300 s per-file
@@ -731,8 +731,11 @@ pass.
 
 For laptops or shared workstations, run the same wide gate one bounded shard at
 a time with `--only-shard N --keep-existing-coverage --skip-combine`, then
-finish with `--combine-only --fail-under 95`; this keeps every local pytest
-process under the release timeout instead of launching one long run.
+finish with `--combine-only --fail-under 95`. CI adds
+`--require-shard-data --shard-manifest coverage-wide-shard-manifest.json` so
+the final coverage badge cannot be refreshed from an incomplete shard upload.
+This keeps every local pytest process under the release timeout instead of
+launching one long run.
 
 ## Plotting outputs
 
