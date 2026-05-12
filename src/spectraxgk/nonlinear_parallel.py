@@ -67,11 +67,14 @@ class NonlinearDomainDecompositionPlan:
 class NonlinearDomainIdentityReport:
     """Numerical identity report for a decomposed nonlinear prototype step."""
 
+    gate_name: str
     plan: NonlinearDomainDecompositionPlan
     atol: float
     rtol: float
     max_abs_error: float
     max_rel_error: float
+    plan_valid: bool
+    blocked_reasons: tuple[str, ...]
     identity_passed: bool
     decomposed_path_enabled: bool
     claim_scope: str
@@ -82,6 +85,59 @@ class NonlinearDomainIdentityReport:
         data = asdict(self)
         data["plan"] = self.plan.to_dict()
         return data
+
+
+_NONLINEAR_DOMAIN_GATE_NAME = "nonlinear_domain_local_stencil_identity"
+_NONLINEAR_DOMAIN_CLAIM_SCOPE = (
+    "diagnostic nonlinear state-domain identity gate only; "
+    "bounded local-stencil prototype with no production routing or speedup claim"
+)
+
+
+def _nonlinear_domain_plan_blockers(
+    plan: NonlinearDomainDecompositionPlan,
+) -> tuple[str, ...]:
+    blockers: list[str] = []
+
+    if not plan.state_shape:
+        blockers.append("state_shape_empty")
+        axis_is_valid = False
+    else:
+        axis_is_valid = 0 <= int(plan.axis) < len(plan.state_shape)
+
+    if any(int(size) <= 0 for size in plan.state_shape):
+        blockers.append("state_shape_non_positive")
+    if not axis_is_valid:
+        blockers.append("axis_not_canonical")
+    if int(plan.halo) != 1:
+        blockers.append("unsupported_halo")
+    if not plan.chunk_sizes:
+        blockers.append("chunk_sizes_empty")
+    if any(int(size) <= 0 for size in plan.chunk_sizes):
+        blockers.append("chunk_size_non_positive")
+    if axis_is_valid and plan.chunk_sizes:
+        domain_size = int(plan.state_shape[int(plan.axis)])
+        if sum(int(size) for size in plan.chunk_sizes) != domain_size:
+            blockers.append("chunk_sizes_do_not_cover_axis")
+
+    return tuple(blockers)
+
+
+def _nonlinear_domain_identity_blockers(
+    serial_state: jax.Array,
+    decomposed_state: jax.Array,
+    plan: NonlinearDomainDecompositionPlan,
+) -> tuple[str, ...]:
+    blockers = list(_nonlinear_domain_plan_blockers(plan))
+    serial_shape = tuple(int(size) for size in serial_state.shape)
+    decomposed_shape = tuple(int(size) for size in decomposed_state.shape)
+
+    if serial_shape != plan.state_shape:
+        blockers.append("serial_shape_does_not_match_plan")
+    if decomposed_shape != serial_shape:
+        blockers.append("decomposed_shape_does_not_match_serial")
+
+    return tuple(blockers)
 
 
 @dataclass(frozen=True)
@@ -316,6 +372,12 @@ def prototype_nonlinear_domain_decomposed_step(
 ) -> jax.Array:
     """Apply the same local nonlinear step through static halo chunks."""
 
+    plan_blockers = _nonlinear_domain_plan_blockers(plan)
+    if plan_blockers:
+        raise ValueError(
+            "invalid nonlinear domain decomposition plan: "
+            + ", ".join(plan_blockers)
+        )
     if tuple(state.shape) != plan.state_shape:
         raise ValueError("state shape does not match decomposition plan")
 
@@ -341,24 +403,42 @@ def nonlinear_domain_identity_report(
 ) -> NonlinearDomainIdentityReport:
     """Compare decomposed and serial states and fail closed on any mismatch."""
 
-    abs_error = jnp.abs(decomposed_state - serial_state)
-    scale = jnp.maximum(jnp.abs(serial_state), jnp.asarray(atol, dtype=jnp.real(abs_error).dtype))
-    rel_error = abs_error / scale
-    max_abs_error = float(jnp.max(abs_error))
-    max_rel_error = float(jnp.max(rel_error))
-    identity_passed = bool(max_abs_error <= float(atol) and max_rel_error <= float(rtol))
+    blocked_reasons = _nonlinear_domain_identity_blockers(
+        serial_state,
+        decomposed_state,
+        plan,
+    )
+    if tuple(serial_state.shape) == tuple(decomposed_state.shape):
+        abs_error = jnp.abs(decomposed_state - serial_state)
+        scale = jnp.maximum(
+            jnp.abs(serial_state),
+            jnp.asarray(atol, dtype=jnp.real(abs_error).dtype),
+        )
+        rel_error = abs_error / scale
+        max_abs_error = float(jnp.max(abs_error))
+        max_rel_error = float(jnp.max(rel_error))
+    else:
+        max_abs_error = float("inf")
+        max_rel_error = float("inf")
+
+    plan_valid = not _nonlinear_domain_plan_blockers(plan)
+    identity_passed = bool(
+        not blocked_reasons
+        and max_abs_error <= float(atol)
+        and max_rel_error <= float(rtol)
+    )
     return NonlinearDomainIdentityReport(
+        gate_name=_NONLINEAR_DOMAIN_GATE_NAME,
         plan=plan,
         atol=float(atol),
         rtol=float(rtol),
         max_abs_error=max_abs_error,
         max_rel_error=max_rel_error,
+        plan_valid=plan_valid,
+        blocked_reasons=blocked_reasons,
         identity_passed=identity_passed,
         decomposed_path_enabled=identity_passed,
-        claim_scope=(
-            "diagnostic nonlinear state-domain identity gate only; "
-            "no production routing or speedup claim"
-        ),
+        claim_scope=_NONLINEAR_DOMAIN_CLAIM_SCOPE,
     )
 
 

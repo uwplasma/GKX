@@ -341,6 +341,7 @@ def vmec_boozer_scalar_objective_finite_difference_report(  # pragma: no cover
     objective: SolverScalarObjective = "growth",
     radial_index: int | None = None,
     mode_index: int = 1,
+    base_delta: float = 0.0,
     perturbation_step: float = 1.0e-7,
     response_atol: float = 0.0,
     max_curvature_ratio: float = 5.0,
@@ -351,7 +352,8 @@ def vmec_boozer_scalar_objective_finite_difference_report(  # pragma: no cover
     This report is the safe optimization pre-step for full-chain stellarator
     objectives. It perturbs one VMEC ``Rcos`` coefficient in a solved
     ``vmec_jax`` state, evaluates the in-memory VMEC/Boozer/SPECTRAX-GK scalar
-    objective at ``x-h``, ``x``, and ``x+h``, and records the central
+    objective at ``x0+base_delta-h``, ``x0+base_delta``, and
+    ``x0+base_delta+h``, and records the central
     finite-difference sensitivity.
 
     It is intentionally not an AD claim. Growth-rate objectives can later be
@@ -384,10 +386,12 @@ def vmec_boozer_scalar_objective_finite_difference_report(  # pragma: no cover
         default_mid_surface=default_radial_index,
     )
 
+    base_delta_float = float(base_delta)
+
     def evaluate(delta: float) -> tuple[float, list[float]]:
         traced_state = dc_replace(
             state,
-            Rcos=base_Rcos.at[radial_index_int, mode_index_int].add(float(delta)),
+            Rcos=base_Rcos.at[radial_index_int, mode_index_int].add(base_delta_float + float(delta)),
         )
         vector = vmec_boozer_solver_objective_vector_from_state(
             traced_state,
@@ -442,6 +446,7 @@ def vmec_boozer_scalar_objective_finite_difference_report(  # pragma: no cover
         "objective": str(objective),
         "parameter_name": parameter_name,
         "parameter_indices": {"Rcos": [radial_index_int, mode_index_int]},
+        "base_delta": base_delta_float,
         "perturbation_step": step,
         "response_atol": float(response_atol),
         "max_curvature_ratio": curvature_ratio_limit,
@@ -465,6 +470,142 @@ def vmec_boozer_scalar_objective_finite_difference_report(  # pragma: no cover
             "drivers, then promote growth objectives with implicit AD/FD gates and "
             "quasilinear objectives with branch-continuity plus finite-difference/SPSA audits."
         ),
+    }
+
+
+def vmec_boozer_scalar_objective_line_search_report(  # pragma: no cover
+    *,
+    case_name: str = "nfp4_QH_warm_start",
+    objective: SolverScalarObjective = "growth",
+    radial_index: int | None = None,
+    mode_index: int = 1,
+    initial_delta: float = 0.0,
+    perturbation_step: float = 1.0e-7,
+    update_step: float = 1.0e-8,
+    max_steps: int = 3,
+    min_improvement: float = 0.0,
+    response_atol: float = 0.0,
+    max_curvature_ratio: float = 5.0,
+    **kwargs: Any,
+) -> dict[str, object]:
+    """Run a curvature-gated one-parameter VMEC/Boozer objective line search.
+
+    This is the first safe optimizer scaffold for the real in-memory
+    VMEC/Boozer/SPECTRAX-GK path. Each accepted update must pass the scalar
+    finite-difference curvature gate, and candidate steps are accepted only
+    when the scalar objective decreases. It is still a one-coefficient audit,
+    not a broad stellarator-optimization claim.
+    """
+
+    max_steps_int = int(max_steps)
+    if max_steps_int < 1:
+        raise ValueError("max_steps must be >= 1")
+    update_step_float = float(update_step)
+    if update_step_float <= 0.0:
+        raise ValueError("update_step must be positive")
+    min_improvement_float = float(min_improvement)
+    if min_improvement_float < 0.0:
+        raise ValueError("min_improvement must be non-negative")
+
+    delta = float(initial_delta)
+    history: list[dict[str, object]] = []
+    best_value: float | None = None
+    accepted_steps = 0
+    stop_reason = "max_steps"
+    for step_index in range(max_steps_int):
+        report = vmec_boozer_scalar_objective_finite_difference_report(
+            case_name=case_name,
+            objective=objective,
+            radial_index=radial_index,
+            mode_index=mode_index,
+            base_delta=delta,
+            perturbation_step=perturbation_step,
+            response_atol=response_atol,
+            max_curvature_ratio=max_curvature_ratio,
+            **kwargs,
+        )
+        base_value = float(report["base_value"])
+        if best_value is None:
+            best_value = base_value
+        derivative = float(report["central_derivative"])
+        row: dict[str, object] = {
+            "step": step_index,
+            "delta": delta,
+            "objective": base_value,
+            "central_derivative": derivative,
+            "finite_difference_passed": bool(report["passed"]),
+            "curvature_ratio": float(report["curvature_ratio"]),
+            "accepted": False,
+            "candidate_delta": None,
+            "candidate_objective": None,
+        }
+        if not bool(report["passed"]):
+            stop_reason = "finite_difference_gate_failed"
+            history.append(row)
+            break
+        if not np.isfinite(derivative) or abs(derivative) == 0.0:
+            stop_reason = "zero_or_nonfinite_derivative"
+            history.append(row)
+            break
+        direction = -float(np.sign(derivative))
+        candidate_delta = delta + direction * update_step_float
+        candidate = vmec_boozer_scalar_objective_finite_difference_report(
+            case_name=case_name,
+            objective=objective,
+            radial_index=radial_index,
+            mode_index=mode_index,
+            base_delta=candidate_delta,
+            perturbation_step=perturbation_step,
+            response_atol=response_atol,
+            max_curvature_ratio=max_curvature_ratio,
+            **kwargs,
+        )
+        candidate_value = float(candidate["base_value"])
+        row["candidate_delta"] = candidate_delta
+        row["candidate_objective"] = candidate_value
+        candidate_ok = bool(candidate["passed"]) and (
+            candidate_value < base_value - min_improvement_float
+        )
+        if not candidate_ok:
+            stop_reason = "no_accepted_candidate"
+            history.append(row)
+            break
+        delta = candidate_delta
+        best_value = candidate_value
+        accepted_steps += 1
+        row["accepted"] = True
+        history.append(row)
+
+    initial_objective = float(history[0]["objective"]) if history else float("nan")
+    final_objective = float(best_value) if best_value is not None else initial_objective
+    return {
+        "kind": "vmec_boozer_scalar_objective_line_search_report",
+        "passed": bool(accepted_steps > 0 and final_objective < initial_objective),
+        "source_scope": "mode21_vmec_boozer_state",
+        "claim_scope": (
+            "curvature-gated one-parameter VMEC/Boozer/SPECTRAX-GK scalar objective "
+            "line search; not a multi-parameter stellarator optimization or nonlinear transport claim"
+        ),
+        "case_name": str(case_name),
+        "objective": str(objective),
+        "radial_index": None if radial_index is None else int(radial_index),
+        "mode_index": int(mode_index),
+        "initial_delta": float(initial_delta),
+        "final_delta": delta,
+        "perturbation_step": float(perturbation_step),
+        "update_step": update_step_float,
+        "max_steps": max_steps_int,
+        "accepted_steps": accepted_steps,
+        "stop_reason": stop_reason,
+        "initial_objective": initial_objective,
+        "final_objective": final_objective,
+        "relative_reduction": (
+            float((initial_objective - final_objective) / abs(initial_objective))
+            if np.isfinite(initial_objective) and abs(initial_objective) > 0.0
+            else None
+        ),
+        "history": history,
+        "options": {key: value for key, value in kwargs.items() if isinstance(value, (str, int, float, bool, type(None)))},
     }
 
 
@@ -1565,5 +1706,6 @@ __all__ = [
     "tiny_differentiable_objective_gradient_report",
     "vmec_boozer_scalar_objective_finite_difference_report",
     "vmec_boozer_scalar_objective_from_state",
+    "vmec_boozer_scalar_objective_line_search_report",
     "vmec_boozer_solver_objective_vector_from_state",
 ]

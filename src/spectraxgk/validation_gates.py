@@ -43,6 +43,28 @@ class NonlinearWindowMetrics:
 
 
 @dataclass(frozen=True)
+class NonlinearHeatFluxConvergenceMetrics:
+    """Post-transient heat-flux averaging convergence summary."""
+
+    tmin: float
+    tmax: float
+    nsamples: int
+    heat_flux_mean: float
+    heat_flux_std: float
+    heat_flux_cv: float
+    heat_flux_rms: float
+    terminal_tmin: float
+    terminal_tmax: float
+    terminal_nsamples: int
+    terminal_heat_flux_mean: float
+    mean_rel_delta: float
+    trend: float
+    abs_trend: float
+    start_fraction: float
+    terminal_fraction: float
+
+
+@dataclass(frozen=True)
 class ZonalFlowResponseMetrics:
     """Late-time residual and GAM-envelope metrics for zonal-flow responses."""
 
@@ -333,6 +355,70 @@ def nonlinear_window_gate_report(
     return gate_report(case, source, gates)
 
 
+def nonlinear_heat_flux_convergence_gate_report(
+    metrics: NonlinearHeatFluxConvergenceMetrics,
+    *,
+    case: str,
+    source: str,
+    max_mean_rel_delta: float = 0.05,
+    max_cv: float = 0.15,
+    max_abs_trend: float = 0.10,
+    min_samples: int = 8,
+) -> GateReport:
+    """Gate post-transient heat-flux averaging stability.
+
+    This is an internal promotion gate for nonlinear transport claims: the
+    post-transient average must agree with its terminal subwindow, have bounded
+    coefficient of variation, show limited normalized drift across the window,
+    and contain enough samples to be more than a reduced-window proxy.
+    """
+
+    mean_limit = float(max_mean_rel_delta)
+    cv_limit = float(max_cv)
+    trend_limit = float(max_abs_trend)
+    sample_floor = int(min_samples)
+    if mean_limit < 0.0 or cv_limit < 0.0 or trend_limit < 0.0:
+        raise ValueError("heat-flux convergence thresholds must be non-negative")
+    if sample_floor <= 0:
+        raise ValueError("min_samples must be positive")
+
+    gates = (
+        evaluate_scalar_gate(
+            "heat_flux_terminal_mean_rel_delta",
+            metrics.mean_rel_delta,
+            0.0,
+            atol=mean_limit,
+            rtol=0.0,
+            notes=f"Passes when terminal-window mean differs by <= {mean_limit:.6g}.",
+        ),
+        evaluate_scalar_gate(
+            "heat_flux_window_cv",
+            metrics.heat_flux_cv,
+            0.0,
+            atol=cv_limit,
+            rtol=0.0,
+            notes=f"Passes when post-transient heat-flux CV <= {cv_limit:.6g}.",
+        ),
+        evaluate_scalar_gate(
+            "heat_flux_window_abs_trend",
+            metrics.abs_trend,
+            0.0,
+            atol=trend_limit,
+            rtol=0.0,
+            notes=f"Passes when normalized drift across the window <= {trend_limit:.6g}.",
+        ),
+        evaluate_scalar_gate(
+            "heat_flux_window_sample_deficit",
+            max(0.0, float(sample_floor - int(metrics.nsamples))),
+            0.0,
+            atol=0.0,
+            rtol=0.0,
+            notes=f"Passes when post-transient window has at least {sample_floor} samples.",
+        ),
+    )
+    return gate_report(case, source, gates)
+
+
 def zonal_response_gate_report(
     observed: ZonalFlowResponseMetrics,
     reference: ZonalFlowResponseMetrics,
@@ -545,6 +631,7 @@ __all__ = [
     "EigenfunctionReferenceBundle",
     "GateReport",
     "LateTimeLinearMetrics",
+    "NonlinearHeatFluxConvergenceMetrics",
     "NonlinearWindowMetrics",
     "ObservedOrderMetrics",
     "ScalarGateResult",
@@ -555,6 +642,7 @@ __all__ = [
     "gate_report",
     "gate_report_to_dict",
     "linear_metrics_gate_report",
+    "nonlinear_heat_flux_convergence_gate_report",
     "nonlinear_window_gate_report",
     "observed_order_gate_report",
     "zonal_response_gate_report",

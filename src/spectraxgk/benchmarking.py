@@ -25,6 +25,7 @@ from spectraxgk.validation_gates import (
     EigenfunctionReferenceBundle,
     GateReport as GateReport,
     LateTimeLinearMetrics,
+    NonlinearHeatFluxConvergenceMetrics,
     NonlinearWindowMetrics,
     ObservedOrderMetrics,
     ScalarGateResult as ScalarGateResult,
@@ -35,6 +36,7 @@ from spectraxgk.validation_gates import (
     gate_report as gate_report,
     gate_report_to_dict as gate_report_to_dict,
     linear_metrics_gate_report as linear_metrics_gate_report,
+    nonlinear_heat_flux_convergence_gate_report as nonlinear_heat_flux_convergence_gate_report,
     nonlinear_window_gate_report as nonlinear_window_gate_report,
     observed_order_gate_report as observed_order_gate_report,
     zonal_response_gate_report as zonal_response_gate_report,
@@ -649,6 +651,89 @@ def windowed_nonlinear_metrics(
         phi_mode_envelope_mean=envelope_mean,
         phi_mode_envelope_std=envelope_std,
         phi_mode_envelope_max=envelope_max,
+    )
+
+
+def nonlinear_heat_flux_convergence_metrics(
+    t: np.ndarray,
+    heat_flux: np.ndarray,
+    *,
+    start_fraction: float = 0.5,
+    terminal_fraction: float = 0.5,
+    mean_floor: float = 1.0e-30,
+) -> NonlinearHeatFluxConvergenceMetrics:
+    """Summarize whether a post-transient heat-flux average is stable.
+
+    ``start_fraction`` discards startup samples. ``terminal_fraction`` compares
+    the retained post-transient mean with the final subwindow of that retained
+    region. The normalized trend is the least-squares slope multiplied by the
+    post-transient time span and divided by the absolute post-transient mean.
+    """
+
+    t_arr = np.asarray(t, dtype=float)
+    q_arr = np.asarray(heat_flux, dtype=float)
+    if t_arr.ndim != 1 or q_arr.ndim != 1 or t_arr.size != q_arr.size:
+        raise ValueError("t and heat_flux must be one-dimensional arrays of equal length")
+    if t_arr.size == 0:
+        raise ValueError("t and heat_flux must be non-empty")
+    if not 0.0 <= float(start_fraction) < 1.0:
+        raise ValueError("start_fraction must be in [0, 1)")
+    if not 0.0 < float(terminal_fraction) <= 1.0:
+        raise ValueError("terminal_fraction must be in (0, 1]")
+    if float(mean_floor) < 0.0:
+        raise ValueError("mean_floor must be non-negative")
+
+    finite = np.isfinite(t_arr) & np.isfinite(q_arr)
+    t_arr = t_arr[finite]
+    q_arr = q_arr[finite]
+    if t_arr.size == 0:
+        raise ValueError("t and heat_flux must contain at least one finite paired sample")
+    if t_arr.size > 1 and np.any(np.diff(t_arr) <= 0.0):
+        raise ValueError("t must be strictly increasing after finite-sample filtering")
+
+    tail_fraction = max(np.finfo(float).eps, 1.0 - float(start_fraction))
+    mask, tmin, tmax = _tail_window(t_arr, tail_fraction)
+    t_win = t_arr[mask]
+    q_win = q_arr[mask]
+    if q_win.size == 0:
+        raise ValueError("post-transient heat-flux window is empty")
+
+    terminal_start = max(0, int(np.floor((1.0 - float(terminal_fraction)) * q_win.size)))
+    t_terminal = t_win[terminal_start:]
+    q_terminal = q_win[terminal_start:]
+    if q_terminal.size == 0:
+        raise ValueError("terminal heat-flux window is empty")
+
+    mean = float(np.mean(q_win))
+    std = float(np.std(q_win))
+    rms = float(np.sqrt(np.mean(np.square(q_win))))
+    terminal_mean = float(np.mean(q_terminal))
+    scale = max(abs(mean), float(mean_floor))
+    cv = float(std / scale) if scale > 0.0 else float("inf")
+    mean_rel_delta = float(abs(terminal_mean - mean) / scale) if scale > 0.0 else float("inf")
+
+    trend = 0.0
+    if t_win.size >= 2 and float(t_win[-1] - t_win[0]) > 0.0:
+        slope, _offset = np.polyfit(t_win, q_win, 1)
+        trend = float(slope * (t_win[-1] - t_win[0]) / scale) if scale > 0.0 else float("inf")
+
+    return NonlinearHeatFluxConvergenceMetrics(
+        tmin=float(tmin if tmin is not None else t_win[0]),
+        tmax=float(tmax if tmax is not None else t_win[-1]),
+        nsamples=int(q_win.size),
+        heat_flux_mean=mean,
+        heat_flux_std=std,
+        heat_flux_cv=cv,
+        heat_flux_rms=rms,
+        terminal_tmin=float(t_terminal[0]),
+        terminal_tmax=float(t_terminal[-1]),
+        terminal_nsamples=int(q_terminal.size),
+        terminal_heat_flux_mean=terminal_mean,
+        mean_rel_delta=mean_rel_delta,
+        trend=trend,
+        abs_trend=float(abs(trend)),
+        start_fraction=float(start_fraction),
+        terminal_fraction=float(terminal_fraction),
     )
 
 

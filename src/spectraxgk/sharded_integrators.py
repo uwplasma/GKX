@@ -109,7 +109,8 @@ def integrate_nonlinear_sharded(
     primitive for identity gates and profiler localization. It is not a
     production nonlinear domain decomposition or speedup claim until the exact
     workload has communication-complete identity, conservation, transport, and
-    profiler gates.
+    profiler gates. Domain-sharding identity reports are metadata gates only;
+    they do not authorize routing through this whole-state integrator.
     """
 
     _validate_steps(steps)
