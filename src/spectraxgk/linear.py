@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field as dataclass_field
 from functools import partial
 from typing import Any, Callable
 
@@ -12,16 +11,22 @@ import numpy as np
 from jax.scipy.sparse.linalg import gmres
 
 from spectraxgk.basis import hermite_ladder_coeffs
-from spectraxgk.geometry import (
-    FluxTubeGeometryLike,
-    ensure_flux_tube_geometry_data,
-)
-from spectraxgk.gyroaverage import J_l_all, bessel_j0, bessel_j1, gx_laguerre_transform
+from spectraxgk.geometry import FluxTubeGeometryLike
 from spectraxgk.grids import SpectralGrid
 from spectraxgk.linear_linked import (
-    _build_linked_end_damping_profile,
-    _build_linked_fft_maps,
+    _build_linked_end_damping_profile,  # noqa: F401 - legacy private helper re-export
+    _build_linked_fft_maps,  # noqa: F401 - legacy private helper re-export
     _signed_to_index,  # noqa: F401 - legacy private helper re-export
+)
+from spectraxgk.linear_cache import (
+    LinearCache,
+    _build_end_damping_profile_array,  # noqa: F401 - legacy private helper re-export
+    _build_gyroaverage_cache_arrays,  # noqa: F401 - legacy private helper re-export
+    _build_low_rank_moment_cache_arrays,  # noqa: F401 - legacy private helper re-export
+    _numpy_dtype_for_jax,  # noqa: F401 - legacy private helper re-export
+    build_linear_cache,
+    collision_damping,
+    hypercollision_damping,
 )
 from spectraxgk.linear_params import (
     LinearParams,
@@ -31,7 +36,7 @@ from spectraxgk.linear_params import (
     _as_species_array,
     _check_nonnegative,  # noqa: F401 - legacy private helper re-export
     _check_positive,
-    _is_tracer,
+    _is_tracer,  # noqa: F401 - legacy private helper re-export
     _resolve_implicit_preconditioner,
     _x64_enabled,
     linear_terms_to_term_config,
@@ -59,7 +64,9 @@ def grad_z_periodic(f: jnp.ndarray, dz: float | jnp.ndarray) -> jnp.ndarray:
     return jnp.fft.ifft(df_hat, axis=-1)
 
 
-def compute_b(grid: SpectralGrid, geom: FluxTubeGeometryLike, rho: float) -> jnp.ndarray:
+def compute_b(
+    grid: SpectralGrid, geom: FluxTubeGeometryLike, rho: float
+) -> jnp.ndarray:
     """Compute b = rho^2 * k_perp^2(kx, ky, theta) for s-alpha geometry."""
 
     _check_positive(rho, "rho")
@@ -78,657 +85,6 @@ def lenard_bernstein_eigenvalues(
     ell = jnp.arange(Nl)
     m = jnp.arange(Nm)
     return nu_laguerre * ell[:, None] + nu_hermite * m[None, :]
-
-
-def _numpy_dtype_for_jax(real_dtype: jnp.dtype) -> type[np.float32] | type[np.float64]:
-    return np.float64 if real_dtype == jnp.float64 else np.float32
-
-
-def _build_low_rank_moment_cache_arrays(
-    Nl: int,
-    Nm: int,
-    params: LinearParams,
-    real_dtype: jnp.dtype,
-) -> dict[str, jnp.ndarray]:
-    """Build small moment-space cache arrays without many eager JAX dispatches."""
-
-    np_dtype: Any = _numpy_dtype_for_jax(real_dtype)
-    ell: Any = np.arange(Nl, dtype=np_dtype).reshape(Nl, 1, 1, 1, 1)
-    m: Any = np.arange(Nm, dtype=np_dtype).reshape(1, Nm, 1, 1, 1)
-    lb_lam_np = (
-        float(params.nu_laguerre) * np.arange(Nl, dtype=np_dtype)[:, None]
-        + float(params.nu_hermite) * np.arange(Nm, dtype=np_dtype)[None, :]
-    )
-    sqrt_shape = (1, 1, Nm, 1, 1, 1)
-    hermite_index: Any = np.arange(Nm, dtype=np_dtype)
-    sqrt_p_np = np.sqrt(hermite_index + np_dtype(1.0)).reshape(sqrt_shape)
-    sqrt_m_ladder_np = np.sqrt(hermite_index).reshape(sqrt_shape)
-    l_norm = np_dtype(max(Nl - 1, 1))
-    m_norm = np_dtype(max(Nm - 1, 1))
-    l_norm_full = np_dtype(max(Nl, 1))
-    m_norm_full = np_dtype(max(Nm, 1))
-    m_norm_kz = np_dtype(max(Nm - 1, 1))
-    p_hyper_l = np_dtype(params.p_hyper_l)
-    p_hyper_m = np_dtype(params.p_hyper_m)
-    p_hyper_lm = np_dtype(params.p_hyper_lm)
-    normalized_m = m / m_norm_kz
-    return {
-        "lb_lam": jnp.asarray(lb_lam_np, dtype=real_dtype),
-        "l": jnp.asarray(ell, dtype=real_dtype),
-        "m": jnp.asarray(m, dtype=real_dtype),
-        "l4": jnp.asarray(np.arange(Nl, dtype=np_dtype).reshape(Nl, 1, 1, 1), dtype=real_dtype),
-        "sqrt_m": jnp.asarray(np.sqrt(m), dtype=real_dtype),
-        "sqrt_m_p1": jnp.asarray(np.sqrt(m + np_dtype(1.0)), dtype=real_dtype),
-        "sqrt_p": jnp.asarray(sqrt_p_np, dtype=real_dtype),
-        "sqrt_m_ladder": jnp.asarray(sqrt_m_ladder_np, dtype=real_dtype),
-        "hyper_ratio": jnp.asarray((ell / l_norm) ** params.p_hyper + (m / m_norm) ** params.p_hyper, dtype=real_dtype),
-        "ratio_l": jnp.asarray((ell / l_norm_full) ** p_hyper_l, dtype=real_dtype),
-        "ratio_m": jnp.asarray((m / m_norm_full) ** p_hyper_m, dtype=real_dtype),
-        "ratio_lm": jnp.asarray(((2.0 * ell + m) / (2.0 * l_norm_full + m_norm_full)) ** p_hyper_lm, dtype=real_dtype),
-        "mask_const": jnp.asarray((m > 2.0) | (ell > 1.0), dtype=bool),
-        "mask_kz": jnp.asarray(m > 2.0, dtype=bool),
-        "m_pow": jnp.asarray(normalized_m**p_hyper_m, dtype=real_dtype),
-        "m_norm_kz_factor": jnp.asarray((p_hyper_m + 0.5) / np.sqrt(m_norm_kz), dtype=real_dtype),
-    }
-
-
-def _build_end_damping_profile_array(
-    Nz: int,
-    widthfrac: float,
-    boundary: str,
-    real_dtype: jnp.dtype,
-) -> jnp.ndarray:
-    """Build the one-dimensional end-damping profile as one host array."""
-
-    np_dtype = np.float32
-    width = max(1, int(np.floor(float(widthfrac) * int(Nz))))
-    idx = np.arange(Nz, dtype=np_dtype)
-    width_f = np_dtype(width)
-    left_mask = idx <= width_f
-    right_mask = idx >= (Nz - width_f)
-    x_left = np.where(left_mask, idx / width_f, 0.0)
-    x_right = np.where(right_mask, (Nz - idx) / width_f, 0.0)
-    nu_left = np.where(left_mask, 1.0 - 2.0 * x_left * x_left / (1.0 + x_left**4), 0.0)
-    nu_right = np.where(right_mask, 1.0 - 2.0 * x_right * x_right / (1.0 + x_right**4), 0.0)
-    damp_profile_np = np.maximum(nu_left, nu_right).astype(np_dtype)
-    if boundary == "periodic":
-        damp_profile_np = np.zeros_like(damp_profile_np)
-    return jnp.asarray(damp_profile_np, dtype=real_dtype)
-
-
-def _build_gyroaverage_cache_arrays(
-    b: jnp.ndarray,
-    Nl: int,
-    real_dtype: jnp.dtype,
-) -> tuple[jnp.ndarray, jnp.ndarray]:
-    """Build species-major gyroaverage factors without a Python-level vmap."""
-
-    Jl = jnp.moveaxis(J_l_all(b, l_max=Nl - 1), 0, 1).astype(real_dtype)
-    JlB = Jl + shift_axis(Jl, -1, axis=1)
-    return Jl, JlB.astype(real_dtype)
-
-
-def hypercollision_damping(
-    cache: "LinearCache",
-    params: "LinearParams",
-    real_dtype: jnp.dtype,
-) -> jnp.ndarray:
-    """Assemble GX-style hypercollision damping factors."""
-
-    Nl = jnp.asarray(max(int(cache.l.shape[0]), 1), dtype=real_dtype)
-    Nm = jnp.asarray(max(int(cache.m.shape[1]), 1), dtype=real_dtype)
-
-    nu_hyper = jnp.asarray(params.nu_hyper, dtype=real_dtype)
-    nu_hyper_l = jnp.asarray(params.nu_hyper_l, dtype=real_dtype)
-    nu_hyper_m = jnp.asarray(params.nu_hyper_m, dtype=real_dtype)
-    nu_hyper_lm = jnp.asarray(params.nu_hyper_lm, dtype=real_dtype)
-    w_const = jnp.asarray(params.hypercollisions_const, dtype=real_dtype)
-    w_kz = jnp.asarray(params.hypercollisions_kz, dtype=real_dtype)
-
-    vth = jnp.asarray(params.vth, dtype=real_dtype)
-    vth_s = vth if vth.ndim == 0 else vth[:, None, None, None, None, None]
-
-    ratio_l = cache.ratio_l.astype(real_dtype)
-    ratio_m = cache.ratio_m.astype(real_dtype)
-    ratio_lm = cache.ratio_lm.astype(real_dtype)
-    scaled_nu_l = Nl * nu_hyper_l
-    scaled_nu_m = Nm * nu_hyper_m
-    mask_const = cache.mask_const
-    const_coeff = (
-        vth_s * (scaled_nu_l * ratio_l + scaled_nu_m * ratio_m)
-        + nu_hyper_lm * ratio_lm
-    )
-
-    hyper = nu_hyper * cache.hyper_ratio.astype(real_dtype)
-    hyper = hyper + w_const * jnp.where(mask_const, const_coeff, 0.0)
-
-    abs_kz = jnp.abs(cache.kz).astype(real_dtype)[None, None, None, None, None, :]
-    nu_hyp_m = (
-        nu_hyper_m
-        * cache.m_norm_kz_factor.astype(real_dtype)
-        * 2.3
-        * vth_s
-        * jnp.abs(jnp.asarray(params.kpar_scale, dtype=real_dtype))
-    )
-    kz_term = nu_hyp_m * cache.m_pow.astype(real_dtype) * abs_kz
-    hyper = hyper + w_kz * jnp.where(cache.mask_kz, kz_term, 0.0)
-    return hyper
-
-
-def collision_damping(
-    cache: "LinearCache",
-    params: "LinearParams",
-    real_dtype: jnp.dtype,
-    *,
-    squeeze_species: bool = False,
-) -> jnp.ndarray:
-    """Assemble collision damping from cached low-rank factors.
-
-    Runtime caches store ``lb_lam`` as the Hermite-Laguerre Lenard-Bernstein
-    diagonal only, with shape ``(Nl, Nm)``. Older tests may still provide a
-    pre-expanded array; support that for compatibility.
-    """
-
-    lb_lam = cache.lb_lam.astype(real_dtype)
-    if lb_lam.ndim == 2:
-        b = jnp.asarray(cache.b, dtype=real_dtype)
-        ns = int(b.shape[0])
-        nu = _as_species_array(params.nu, ns, "nu").astype(real_dtype)
-        nu_s = nu[:, None, None, None, None, None]
-        damping = nu_s * lb_lam[None, :, :, None, None, None]
-        damping = damping + nu_s * b[:, None, None, ...]
-        if squeeze_species:
-            damping = damping[0]
-        return damping.astype(real_dtype)
-
-    if lb_lam.ndim == 6:
-        ns = int(lb_lam.shape[0])
-        nu = _as_species_array(params.nu, ns, "nu").astype(real_dtype)
-        damping = nu[:, None, None, None, None, None] * lb_lam
-        if squeeze_species:
-            damping = damping[0]
-        return damping.astype(real_dtype)
-
-    return (jnp.asarray(params.nu, dtype=real_dtype) * lb_lam).astype(real_dtype)
-
-
-@jax.tree_util.register_pytree_node_class
-@dataclass(frozen=True)
-class LinearCache:
-    """Precomputed arrays for the linear operator."""
-
-    Jl: jnp.ndarray
-    b: jnp.ndarray
-    kperp2: jnp.ndarray
-    kperp2_bmag: bool
-    bmag: jnp.ndarray
-    omega_d: jnp.ndarray
-    cv_d: jnp.ndarray
-    gb_d: jnp.ndarray
-    bgrad: jnp.ndarray
-    jacobian: jnp.ndarray
-    mask0: jnp.ndarray
-    dz: jnp.ndarray
-    kz: jnp.ndarray
-    ky: jnp.ndarray
-    kx: jnp.ndarray
-    kx_grid: jnp.ndarray
-    ky_grid: jnp.ndarray
-    dealias_mask: jnp.ndarray
-    kxfac: jnp.ndarray
-    lb_lam: jnp.ndarray
-    collision_lam: jnp.ndarray
-    hyper_ratio: jnp.ndarray
-    ratio_l: jnp.ndarray
-    ratio_m: jnp.ndarray
-    ratio_lm: jnp.ndarray
-    mask_const: jnp.ndarray
-    mask_kz: jnp.ndarray
-    m_pow: jnp.ndarray
-    m_norm_kz_factor: jnp.ndarray
-    damp_profile: jnp.ndarray
-    linked_damp_profile: jnp.ndarray
-    l: jnp.ndarray  # noqa: E741 - public cache field for the Laguerre index.
-    m: jnp.ndarray
-    l4: jnp.ndarray
-    sqrt_m: jnp.ndarray
-    sqrt_m_p1: jnp.ndarray
-    sqrt_p: jnp.ndarray
-    sqrt_m_ladder: jnp.ndarray
-    JlB: jnp.ndarray
-    laguerre_to_grid: jnp.ndarray
-    laguerre_to_spectral: jnp.ndarray
-    laguerre_roots: jnp.ndarray
-    laguerre_j0: jnp.ndarray
-    laguerre_j1_over_alpha: jnp.ndarray
-    kx_link_plus: jnp.ndarray
-    kx_link_minus: jnp.ndarray
-    kx_link_mask_plus: jnp.ndarray
-    kx_link_mask_minus: jnp.ndarray
-    linked_inverse_permutation: jnp.ndarray = dataclass_field(
-        default_factory=lambda: jnp.asarray([], dtype=jnp.int32)
-    )
-    linked_gather_map: jnp.ndarray = dataclass_field(
-        default_factory=lambda: jnp.asarray([], dtype=jnp.int32)
-    )
-    linked_gather_mask: jnp.ndarray = dataclass_field(
-        default_factory=lambda: jnp.asarray([], dtype=bool)
-    )
-    linked_full_cover: bool = False
-    linked_use_gather: bool = False
-    linked_indices: tuple[jnp.ndarray, ...] = ()
-    linked_kz: tuple[jnp.ndarray, ...] = ()
-    use_twist_shift: bool = False
-    jtwist: int = 0
-
-    def tree_flatten(self):
-        children = (
-            self.Jl,
-            self.b,
-            self.kperp2,
-            self.kperp2_bmag,
-            self.bmag,
-            self.omega_d,
-            self.cv_d,
-            self.gb_d,
-            self.bgrad,
-            self.jacobian,
-            self.mask0,
-            self.dz,
-            self.kz,
-            self.ky,
-            self.kx,
-            self.kx_grid,
-            self.ky_grid,
-            self.dealias_mask,
-            self.kxfac,
-            self.lb_lam,
-            self.collision_lam,
-            self.hyper_ratio,
-            self.ratio_l,
-            self.ratio_m,
-            self.ratio_lm,
-            self.mask_const,
-            self.mask_kz,
-            self.m_pow,
-            self.m_norm_kz_factor,
-            self.damp_profile,
-            self.linked_damp_profile,
-            self.l,
-            self.m,
-            self.l4,
-            self.sqrt_m,
-            self.sqrt_m_p1,
-            self.sqrt_p,
-            self.sqrt_m_ladder,
-            self.JlB,
-            self.laguerre_to_grid,
-            self.laguerre_to_spectral,
-            self.laguerre_roots,
-            self.laguerre_j0,
-            self.laguerre_j1_over_alpha,
-            self.kx_link_plus,
-            self.kx_link_minus,
-            self.kx_link_mask_plus,
-            self.kx_link_mask_minus,
-            self.linked_inverse_permutation,
-            self.linked_gather_map,
-            self.linked_gather_mask,
-        )
-        linked_idx = self.linked_indices or ()
-        linked_kz = self.linked_kz or ()
-        children = children + tuple(linked_idx) + tuple(linked_kz)
-        aux_data = (
-            self.use_twist_shift,
-            self.jtwist,
-            len(linked_idx),
-            len(linked_kz),
-            self.linked_full_cover,
-            self.linked_use_gather,
-        )
-        return children, aux_data
-
-    @classmethod
-    def tree_unflatten(cls, aux_data, children):
-        (
-            use_twist_shift,
-            jtwist,
-            n_linked_idx,
-            n_linked_kz,
-            linked_full_cover,
-            linked_use_gather,
-        ) = aux_data
-        base_count = 51
-        base_children = children[:base_count]
-        linked_idx = tuple(children[base_count : base_count + n_linked_idx])
-        linked_kz = tuple(
-            children[base_count + n_linked_idx : base_count + n_linked_idx + n_linked_kz]
-        )
-        return cls(
-            *base_children,
-            linked_indices=linked_idx,
-            linked_kz=linked_kz,
-            use_twist_shift=use_twist_shift,
-            jtwist=jtwist,
-            linked_full_cover=linked_full_cover,
-            linked_use_gather=linked_use_gather,
-        )
-
-def build_linear_cache(
-    grid: SpectralGrid,
-    geom: FluxTubeGeometryLike,
-    params: LinearParams,
-    Nl: int,
-    Nm: int,
-) -> LinearCache:
-    """Build reusable arrays for the linear RHS."""
-
-    real_dtype = jnp.float64 if _x64_enabled() else jnp.float32
-    dz = jnp.asarray(grid.z[1] - grid.z[0], dtype=real_dtype)
-    kz = jnp.asarray(2.0 * jnp.pi * jnp.fft.fftfreq(grid.z.size, d=dz), dtype=real_dtype)
-    rho_star = jnp.asarray(params.rho_star, dtype=real_dtype)
-    kx_raw = jnp.asarray(grid.kx, dtype=real_dtype)
-    ky_raw = jnp.asarray(grid.ky, dtype=real_dtype)
-    kx_eff = rho_star * kx_raw
-    ky_eff = rho_star * ky_raw
-    kx_grid = jnp.asarray(grid.kx_grid, dtype=real_dtype) * rho_star
-    ky_grid = jnp.asarray(grid.ky_grid, dtype=real_dtype) * rho_star
-    dealias_mask = jnp.asarray(grid.dealias_mask, dtype=bool)
-    kxfac_val = float(getattr(grid, "kxfac", 1.0))
-    theta = jnp.asarray(grid.z, dtype=real_dtype)
-    geom_data = ensure_flux_tube_geometry_data(geom, theta)
-    gds2, gds21, gds22 = geom_data.metric_coeffs(theta)
-    gds22_arr = gds22 if gds22.ndim else jnp.full_like(theta, gds22)
-    bmag = geom_data.bmag(theta).astype(real_dtype)
-    bgrad = geom_data.bgrad(theta).astype(real_dtype)
-    jacobian = geom_data.jacobian(theta).astype(real_dtype)
-    cv, gb, cv0, gb0 = geom_data.drift_coeffs(theta)
-    boundary = str(getattr(grid, "boundary", "periodic")).lower()
-    use_twist_shift = boundary in {"linked", "fix aspect", "continuous drifts"}
-    use_ntft = bool(getattr(grid, "non_twist", False))
-    y0 = getattr(grid, "y0", None)
-    if y0 is None:
-        if grid.ky.size > 1:
-            y0 = float(1.0 / float(grid.ky[1] - grid.ky[0]))
-        else:
-            y0 = 1.0
-    shat_arr = jnp.asarray(geom_data.s_hat, dtype=real_dtype)
-    shat_host = None if _is_tracer(shat_arr) else float(np.asarray(shat_arr))
-    x0_eff = float(getattr(grid, "x0", 1.0))
-    jtwist = 0
-    x0_target = x0_eff
-    if use_twist_shift:
-        if shat_host is None:
-            raise ValueError("traced magnetic shear is not supported with twist-shift boundaries")
-        shat = shat_host
-        gds21_min = float(gds21[0]) if gds21.ndim else float(gds21)
-        gds22_min = float(gds22[0]) if gds22.ndim else float(gds22)
-        twist_shift_geo_fac = 0.0
-        if gds22_min != 0.0:
-            twist_shift_geo_fac = float(2.0 * shat * gds21_min / gds22_min)
-        if twist_shift_geo_fac != 0.0:
-            jtwist_val = getattr(grid, "jtwist", None)
-            if jtwist_val is not None:
-                jtwist = int(jtwist_val)
-            else:
-                jtwist = int(np.round(twist_shift_geo_fac))
-            if jtwist == 0:
-                jtwist = 1
-            x0_target = float(y0) * abs(jtwist) / abs(twist_shift_geo_fac)
-            if use_ntft:
-                x0_eff = x0_target
-        else:
-            jtwist_val = getattr(grid, "jtwist", None)
-            if jtwist_val is not None:
-                jtwist = int(jtwist_val)
-            else:
-                jtwist = 1
-        if use_ntft and float(getattr(grid, "x0", x0_eff)) != 0.0:
-            kx_eff = kx_eff * (float(getattr(grid, "x0", x0_eff)) / float(x0_eff))
-        if not use_ntft and x0_target != 0.0 and x0_target != x0_eff:
-            scale = float(x0_eff) / float(x0_target)
-            kx_eff = kx_eff * scale
-            kx_grid = kx_grid * scale
-            x0_eff = x0_target
-    kperp2_bmag = bool(getattr(geom_data, "kperp2_bmag", True))
-    if use_ntft:
-        ftwist = (geom_data.s_hat * gds21 / gds22_arr).astype(real_dtype)
-        kxfac_val = float(getattr(grid, "kxfac", 1.0))
-        delta = jnp.asarray(0.01313, dtype=real_dtype)
-        ftwist_next = jnp.roll(ftwist, -1)
-        mid_idx = int(grid.z.size // 2)
-        mid_next = (mid_idx + 1) % grid.z.size
-        ftwist_mid = ftwist[mid_idx]
-        ftwist_mid_next = ftwist[mid_next]
-        m0 = -jnp.rint(
-            float(x0_eff)
-            * ky_raw[:, None]
-            * ((1.0 - delta) * ftwist[None, :] + delta * ftwist_next[None, :])
-        ) + jnp.rint(
-            float(x0_eff)
-            * ky_raw[:, None]
-            * ((1.0 - delta) * ftwist_mid + delta * ftwist_mid_next)
-        )
-        m0 = m0.astype(real_dtype)
-        shat_inv = 1.0 / shat_arr
-        delta_kx = ky_eff[:, None] * ftwist[None, :] + (rho_star * m0 / float(x0_eff))
-        term_ky = ky_eff[:, None, None] ** 2 * (
-            gds2[None, None, :]
-            - 2.0 * ftwist[None, None, :] * gds21[None, None, :] * shat_inv
-            + (ftwist[None, None, :] ** 2) * gds22_arr[None, None, :] * shat_inv * shat_inv
-        )
-        term_kx = (kx_eff[None, :, None] + delta_kx[:, None, :]) ** 2 * gds22_arr[
-            None, None, :
-        ] * shat_inv * shat_inv
-        bmag_inv = 1.0 / bmag
-        kperp2 = term_ky + term_kx
-        if kperp2_bmag:
-            kperp2 = kperp2 * (bmag_inv[None, None, :] ** 2)
-        kx_shift = kx_eff[None, :, None] + (rho_star * m0 / float(x0_eff))[:, None, :]
-        cv_d = ky_eff[:, None, None] * cv[None, None, :] + shat_inv * kx_shift * cv0[
-            None, None, :
-        ]
-        gb_d = ky_eff[:, None, None] * gb[None, None, :] + shat_inv * kx_shift * gb0[
-            None, None, :
-        ]
-        omega_d = cv_d + gb_d
-    else:
-        kx0 = kx_eff[None, :, None]
-        ky0 = ky_eff[:, None, None]
-        theta_b = theta[None, None, :]
-        kperp2 = geom_data.k_perp2(kx0, ky0, theta_b).astype(real_dtype)
-        cv_d, gb_d = geom_data.drift_components(kx_eff, ky_eff, theta)
-        cv_d = cv_d.astype(real_dtype)
-        gb_d = gb_d.astype(real_dtype)
-        omega_d = (cv_d + gb_d).astype(real_dtype)
-    apply_dealias_mask = dealias_mask is not None and int(grid.ky.size) > 1
-    if apply_dealias_mask:
-        mask = dealias_mask[:, :, None]
-        kperp2 = kperp2 * mask
-        cv_d = cv_d * mask
-        gb_d = gb_d * mask
-        omega_d = omega_d * mask
-    rho = jnp.asarray(params.rho, dtype=real_dtype)
-    if rho.ndim == 0:
-        rho = rho[None]
-    b = (rho[:, None, None, None] * rho[:, None, None, None]) * kperp2[None, ...]
-    bessel_bmag_power = float(getattr(geom_data, "bessel_bmag_power", 0.0))
-    if bessel_bmag_power != 0.0:
-        bmag_factor = bmag[None, None, None, :] ** (-bessel_bmag_power)
-        b = b * bmag_factor
-    Jl, JlB = _build_gyroaverage_cache_arrays(b, Nl, real_dtype)
-    lag_to_grid_np, lag_to_spec_np, lag_roots_np = gx_laguerre_transform(Nl)
-    laguerre_to_grid = jnp.asarray(lag_to_grid_np, dtype=real_dtype)
-    laguerre_to_spectral = jnp.asarray(lag_to_spec_np, dtype=real_dtype)
-    laguerre_roots = jnp.asarray(lag_roots_np, dtype=real_dtype)
-    alpha = jnp.sqrt(
-        jnp.maximum(
-            0.0,
-            2.0 * laguerre_roots[None, :, None, None, None] * b[:, None, ...],
-        )
-    )
-    laguerre_j0 = bessel_j0(alpha).astype(real_dtype)
-    laguerre_j1 = bessel_j1(alpha)
-    laguerre_j1_over_alpha = jnp.where(alpha < 1.0e-8, 0.5, laguerre_j1 / alpha).astype(
-        real_dtype
-    )
-    mask0 = (grid.ky == 0.0)[:, None, None] & (grid.kx == 0.0)[None, :, None]
-    moment_cache = _build_low_rank_moment_cache_arrays(Nl, Nm, params, real_dtype)
-    lb_lam = moment_cache["lb_lam"]
-    ell_cache = moment_cache["l"]
-    m = moment_cache["m"]
-    l4 = moment_cache["l4"]
-    sqrt_m = moment_cache["sqrt_m"]
-    sqrt_m_p1 = moment_cache["sqrt_m_p1"]
-    sqrt_p = moment_cache["sqrt_p"]
-    sqrt_m_ladder = moment_cache["sqrt_m_ladder"]
-    hyper_ratio = moment_cache["hyper_ratio"]
-    ratio_l = moment_cache["ratio_l"]
-    ratio_m = moment_cache["ratio_m"]
-    ratio_lm = moment_cache["ratio_lm"]
-    mask_const = moment_cache["mask_const"]
-    mask_kz = moment_cache["mask_kz"]
-    m_pow = moment_cache["m_pow"]
-    m_norm_kz_factor = moment_cache["m_norm_kz_factor"]
-    damp_profile = _build_end_damping_profile_array(
-        int(grid.z.size),
-        float(params.damp_ends_widthfrac),
-        boundary,
-        real_dtype,
-    )
-    linked_damp_profile = jnp.asarray([], dtype=real_dtype)
-    if use_twist_shift:
-        iky = jnp.rint(grid.ky * float(y0)).astype(jnp.int32)
-        shift = jnp.asarray(jtwist, dtype=jnp.int32) * iky
-        kx_idx = jnp.arange(grid.kx.size, dtype=jnp.int32)[None, :]
-        kx_link_plus = kx_idx + shift[:, None]
-        kx_link_minus = kx_idx - shift[:, None]
-        kx_link_mask_plus = (kx_link_plus >= 0) & (kx_link_plus < grid.kx.size)
-        kx_link_mask_minus = (kx_link_minus >= 0) & (kx_link_minus < grid.kx.size)
-        kx_link_plus = jnp.clip(kx_link_plus, 0, grid.kx.size - 1)
-        kx_link_minus = jnp.clip(kx_link_minus, 0, grid.kx.size - 1)
-    else:
-        jtwist = 0
-        kx_idx = jnp.arange(grid.kx.size, dtype=jnp.int32)[None, :]
-        kx_link_plus = jnp.broadcast_to(kx_idx, (grid.ky.size, grid.kx.size))
-        kx_link_minus = kx_link_plus
-        kx_link_mask_plus = jnp.ones((grid.ky.size, grid.kx.size), dtype=bool)
-        kx_link_mask_minus = kx_link_mask_plus
-    linked_indices: tuple[jnp.ndarray, ...] = ()
-    linked_kz: tuple[jnp.ndarray, ...] = ()
-    linked_inverse_permutation = jnp.asarray([], dtype=jnp.int32)
-    linked_full_cover = False
-    linked_gather_map = jnp.asarray([], dtype=jnp.int32)
-    linked_gather_mask = jnp.asarray([], dtype=bool)
-    linked_use_gather = False
-    if use_twist_shift:
-        ky_mode = getattr(grid, "ky_mode", None)
-        linked_indices, linked_kz = _build_linked_fft_maps(
-            np.asarray(grid.kx),
-            np.asarray(grid.ky),
-            float(y0),
-            int(jtwist),
-            float(dz),
-            int(grid.z.size),
-            real_dtype,
-            None if ky_mode is None else np.asarray(ky_mode),
-        )
-        if linked_indices:
-            idx_flat = np.concatenate(
-                [np.asarray(idx, dtype=np.int32).reshape(-1) for idx in linked_indices],
-                axis=0,
-            )
-            n_modes = int(grid.ky.size * grid.kx.size)
-            if idx_flat.size == n_modes:
-                ref = np.arange(n_modes, dtype=np.int32)
-                if np.array_equal(np.sort(idx_flat), ref):
-                    linked_inverse_permutation = jnp.asarray(
-                        np.argsort(idx_flat).astype(np.int32)
-                    )
-                    linked_full_cover = True
-            if idx_flat.size > 0:
-                gather_map = np.zeros(n_modes, dtype=np.int32)
-                gather_mask = np.zeros(n_modes, dtype=bool)
-                gather_map[idx_flat] = np.arange(idx_flat.size, dtype=np.int32)
-                gather_mask[idx_flat] = True
-                linked_gather_map = jnp.asarray(gather_map, dtype=jnp.int32)
-                linked_gather_mask = jnp.asarray(gather_mask, dtype=bool)
-                linked_use_gather = True
-        if boundary != "periodic":
-            linked_damp_profile = jnp.asarray(
-                _build_linked_end_damping_profile(
-                    linked_indices=linked_indices,
-                    ny=int(grid.ky.size),
-                    nx=int(grid.kx.size),
-                    nz=int(grid.z.size),
-                    widthfrac=float(params.damp_ends_widthfrac),
-                    ky_mode=(
-                        None
-                        if getattr(grid, "ky_mode", None) is None
-                        else np.asarray(grid.ky_mode, dtype=np.int32)
-                    ),
-                ),
-                dtype=real_dtype,
-            )
-    return LinearCache(
-        Jl=Jl,
-        b=b.astype(real_dtype),
-        kperp2=kperp2,
-        kperp2_bmag=kperp2_bmag,
-        bmag=bmag,
-        omega_d=omega_d,
-        cv_d=cv_d,
-        gb_d=gb_d,
-        bgrad=bgrad,
-        jacobian=jacobian,
-        mask0=mask0,
-        dz=dz,
-        kz=kz,
-        ky=ky_eff.astype(real_dtype),
-        kx=kx_eff.astype(real_dtype),
-        kx_grid=kx_grid,
-        ky_grid=ky_grid,
-        dealias_mask=dealias_mask,
-        kxfac=jnp.asarray(kxfac_val, dtype=real_dtype),
-        lb_lam=lb_lam,
-        collision_lam=jnp.asarray([], dtype=real_dtype),
-        hyper_ratio=hyper_ratio.astype(real_dtype),
-        ratio_l=ratio_l.astype(real_dtype),
-        ratio_m=ratio_m.astype(real_dtype),
-        ratio_lm=ratio_lm.astype(real_dtype),
-        mask_const=mask_const,
-        mask_kz=mask_kz,
-        m_pow=m_pow.astype(real_dtype),
-        m_norm_kz_factor=m_norm_kz_factor.astype(real_dtype),
-        damp_profile=damp_profile,
-        linked_damp_profile=linked_damp_profile,
-        l=ell_cache,
-        m=m,
-        l4=l4,
-        sqrt_m=sqrt_m.astype(real_dtype),
-        sqrt_m_p1=sqrt_m_p1.astype(real_dtype),
-        sqrt_p=sqrt_p,
-        sqrt_m_ladder=sqrt_m_ladder,
-        JlB=JlB.astype(real_dtype),
-        laguerre_to_grid=laguerre_to_grid,
-        laguerre_to_spectral=laguerre_to_spectral,
-        laguerre_roots=laguerre_roots,
-        laguerre_j0=laguerre_j0,
-        laguerre_j1_over_alpha=laguerre_j1_over_alpha,
-        kx_link_plus=kx_link_plus,
-        kx_link_minus=kx_link_minus,
-        kx_link_mask_plus=kx_link_mask_plus,
-        kx_link_mask_minus=kx_link_mask_minus,
-        linked_full_cover=linked_full_cover,
-        linked_inverse_permutation=linked_inverse_permutation,
-        linked_gather_map=linked_gather_map,
-        linked_gather_mask=linked_gather_mask,
-        linked_use_gather=linked_use_gather,
-        linked_indices=linked_indices,
-        linked_kz=linked_kz,
-        use_twist_shift=use_twist_shift,
-        jtwist=int(jtwist),
-    )
 
 
 def apply_hermite_v(G: jnp.ndarray) -> jnp.ndarray:
@@ -765,11 +121,7 @@ def apply_laguerre_x(G: jnp.ndarray) -> jnp.ndarray:
     ell_shape = [1] * G.ndim
     ell_shape[axis_l] = Nl
     ell_col = ell.reshape(ell_shape)
-    return (
-        (2.0 * ell_col + 1.0) * G
-        - (ell_col + 1.0) * G_plus
-        - ell_col * G_minus
-    )
+    return (2.0 * ell_col + 1.0) * G - (ell_col + 1.0) * G_plus - ell_col * G_minus
 
 
 def shift_axis(arr: jnp.ndarray, offset: int, axis: int) -> jnp.ndarray:
@@ -798,7 +150,11 @@ def energy_operator(
 ) -> jnp.ndarray:
     """Apply the energy operator (1 + v_par^2 + mu) in Hermite-Laguerre space."""
 
-    return coeff_const * G + coeff_par * apply_hermite_v2(G) + coeff_perp * apply_laguerre_x(G)
+    return (
+        coeff_const * G
+        + coeff_par * apply_hermite_v2(G)
+        + coeff_perp * apply_laguerre_x(G)
+    )
 
 
 def diamagnetic_drive_coeffs(
@@ -889,7 +245,12 @@ def build_H(
         vth_arr = jnp.asarray(vth)
         if vth_arr.ndim == 0:
             vth_arr = vth_arr[None]
-        apar_term = (zt_arr[:, None, None, None, None] * vth_arr[:, None, None, None, None] * Jl * apar)[:, :, None, ...]
+        apar_term = (
+            zt_arr[:, None, None, None, None]
+            * vth_arr[:, None, None, None, None]
+            * Jl
+            * apar
+        )[:, :, None, ...]
         H = H - m1_mask * apar_term
     if bpar is not None:
         if JlB is None:
@@ -964,7 +325,9 @@ def linear_rhs(
     elif G.ndim == 6:
         Nl, Nm = G.shape[1], G.shape[2]
     else:
-        raise ValueError("G must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)")
+        raise ValueError(
+            "G must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)"
+        )
     cache = build_linear_cache(grid, geom, params, Nl, Nm)
     return linear_rhs_cached(G, cache, params, terms=terms, dt=dt)
 
@@ -991,7 +354,11 @@ def linear_rhs_cached(
     term_cfg = linear_terms_to_term_config(terms)
 
     if use_jit:
-        rhs_fn = assemble_rhs_cached_electrostatic_jit if force_electrostatic_fields else assemble_rhs_cached_jit
+        rhs_fn = (
+            assemble_rhs_cached_electrostatic_jit
+            if force_electrostatic_fields
+            else assemble_rhs_cached_jit
+        )
         dG, fields = rhs_fn(G, cache, params, term_cfg, dt)
     else:
         dG, fields = assemble_rhs_cached(
@@ -1040,7 +407,9 @@ def _is_electrostatic_field_terms(terms: LinearTerms | None) -> bool:
     return float(term_weights.apar) == 0.0 and float(term_weights.bpar) == 0.0
 
 
-def _resolve_parallel_devices(*, num_devices: int | None = None, devices: Any | None = None) -> list[Any]:
+def _resolve_parallel_devices(
+    *, num_devices: int | None = None, devices: Any | None = None
+) -> list[Any]:
     """Return an explicit device list for opt-in parallel diagnostics."""
 
     if devices is None:
@@ -1050,7 +419,9 @@ def _resolve_parallel_devices(*, num_devices: int | None = None, devices: Any | 
             if device_count < 1:
                 raise ValueError("num_devices must be >= 1")
             if len(device_list) < device_count:
-                raise ValueError(f"requested {device_count} devices, but only {len(device_list)} are available")
+                raise ValueError(
+                    f"requested {device_count} devices, but only {len(device_list)} are available"
+                )
             device_list = device_list[:device_count]
     else:
         device_list = list(devices)
@@ -1078,15 +449,24 @@ def linear_rhs_streaming_velocity_sharded(
     collisions, and nonlinear terms are exposed through the runtime path.
     """
 
-    from spectraxgk.velocity_sharding import build_velocity_sharding_plan, periodic_streaming_shard_map
+    from spectraxgk.velocity_sharding import (
+        build_velocity_sharding_plan,
+        periodic_streaming_shard_map,
+    )
 
     arr = jnp.asarray(G)
     if arr.ndim not in (5, 6):
-        raise ValueError("G must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)")
+        raise ValueError(
+            "G must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)"
+        )
 
     device_list = _resolve_parallel_devices(num_devices=num_devices, devices=devices)
-    plan = build_velocity_sharding_plan(arr.shape, num_devices=len(device_list), axes=("hermite",))
-    dG = -periodic_streaming_shard_map(arr, plan, kz=cache.kz, vth=params.vth, devices=device_list)
+    plan = build_velocity_sharding_plan(
+        arr.shape, num_devices=len(device_list), axes=("hermite",)
+    )
+    dG = -periodic_streaming_shard_map(
+        arr, plan, kz=cache.kz, vth=params.vth, devices=device_list
+    )
     phi = jnp.zeros(arr.shape[-3:], dtype=arr.dtype)
     return dG, phi
 
@@ -1105,13 +485,19 @@ def _streaming_electrostatic_from_phi_velocity_sharded(
     from spectraxgk.terms.operators import grad_z_periodic
     from spectraxgk.velocity_sharding import periodic_streaming_shard_map
 
-    particle_streaming = -periodic_streaming_shard_map(arr, plan, kz=cache.kz, vth=params.vth, devices=devices)
+    particle_streaming = -periodic_streaming_shard_map(
+        arr, plan, kz=cache.kz, vth=params.vth, devices=devices
+    )
     real_dtype = jnp.real(arr).dtype
     G6 = arr[None, ...]
     tz = _as_species_array(params.tz, 1, "tz").astype(real_dtype)
     vth = _as_species_array(params.vth, 1, "vth").astype(real_dtype)
-    field_rhs = _electrostatic_streaming_field_rhs(G6, phi=phi, Jl=cache.Jl, tz=tz, vth=vth)
-    field_streaming = jnp.asarray(params.kpar_scale, dtype=real_dtype) * grad_z_periodic(field_rhs, kz=cache.kz)
+    field_rhs = _electrostatic_streaming_field_rhs(
+        G6, phi=phi, Jl=cache.Jl, tz=tz, vth=vth
+    )
+    field_streaming = jnp.asarray(
+        params.kpar_scale, dtype=real_dtype
+    ) * grad_z_periodic(field_rhs, kz=cache.kz)
     return particle_streaming + field_streaming[0]
 
 
@@ -1152,16 +538,25 @@ def linear_rhs_streaming_electrostatic_velocity_sharded(
     field-line grids and excludes electromagnetic fields by construction.
     """
 
-    from spectraxgk.velocity_sharding import build_velocity_sharding_plan, electrostatic_phi_shard_map
+    from spectraxgk.velocity_sharding import (
+        build_velocity_sharding_plan,
+        electrostatic_phi_shard_map,
+    )
 
     arr = jnp.asarray(G)
     if arr.ndim != 5:
-        raise NotImplementedError("velocity-sharded electrostatic streaming currently supports single-species 5D states")
+        raise NotImplementedError(
+            "velocity-sharded electrostatic streaming currently supports single-species 5D states"
+        )
     if bool(getattr(cache, "use_twist_shift", False)):
-        raise NotImplementedError("velocity-sharded electrostatic streaming currently requires a periodic z grid")
+        raise NotImplementedError(
+            "velocity-sharded electrostatic streaming currently requires a periodic z grid"
+        )
 
     device_list = _resolve_parallel_devices(num_devices=num_devices, devices=devices)
-    plan = build_velocity_sharding_plan(arr.shape, num_devices=len(device_list), axes=("hermite",))
+    plan = build_velocity_sharding_plan(
+        arr.shape, num_devices=len(device_list), axes=("hermite",)
+    )
     phi = electrostatic_phi_shard_map(
         arr,
         plan,
@@ -1173,7 +568,9 @@ def linear_rhs_streaming_electrostatic_velocity_sharded(
         mask0=cache.mask0,
         devices=device_list,
     )
-    return _streaming_electrostatic_from_phi_velocity_sharded(arr, cache, params, phi=phi, plan=plan, devices=device_list), phi
+    return _streaming_electrostatic_from_phi_velocity_sharded(
+        arr, cache, params, phi=phi, plan=plan, devices=device_list
+    ), phi
 
 
 def _linear_rhs_electrostatic_slices_velocity_sharded_fused(
@@ -1199,9 +596,13 @@ def _linear_rhs_electrostatic_slices_velocity_sharded_fused(
         raise ValueError("fused Hermite route requires more than one Hermite chunk")
     if int(arr.shape[m_axis]) % m_chunks != 0:
         raise ValueError("Hermite dimension must divide evenly across Hermite chunks")
-    active_non_hermite = tuple(active_axis for active_axis in plan.active_axes if active_axis != "m")
+    active_non_hermite = tuple(
+        active_axis for active_axis in plan.active_axes if active_axis != "m"
+    )
     if active_non_hermite:
-        raise NotImplementedError("fused electrostatic slice route currently supports only an active 'm' axis")
+        raise NotImplementedError(
+            "fused electrostatic slice route currently supports only an active 'm' axis"
+        )
 
     device_list = list(devices)
     if len(device_list) < m_chunks:
@@ -1229,17 +630,31 @@ def _linear_rhs_electrostatic_slices_velocity_sharded_fused(
     zt = jnp.where(tz_s == 0.0, 0.0, 1.0 / tz_s)
     vth_s = jnp.asarray(params.vth, dtype=real_dtype).reshape(-1)[0]
     g0 = jnp.sum(jl * jl, axis=0)
-    den_safe = jnp.where(tau + density_s * charge_s * zt * (1.0 - g0) == 0.0, jnp.inf, tau + density_s * charge_s * zt * (1.0 - g0))
+    den_safe = jnp.where(
+        tau + density_s * charge_s * zt * (1.0 - g0) == 0.0,
+        jnp.inf,
+        tau + density_s * charge_s * zt * (1.0 - g0),
+    )
     mask0 = None if cache.mask0 is None else jnp.asarray(cache.mask0)
     ell = jnp.arange(arr.shape[0], dtype=real_dtype).reshape((arr.shape[0], 1, 1, 1, 1))
     ell_p1 = ell + 1.0
-    bgrad = jnp.asarray(cache.bgrad, dtype=real_dtype).reshape((1, 1, 1, 1, int(jnp.asarray(cache.bgrad).shape[-1])))
-    cv = jnp.asarray(cache.cv_d, dtype=real_dtype).reshape((1, 1) + tuple(jnp.asarray(cache.cv_d).shape))
-    gb = jnp.asarray(cache.gb_d, dtype=real_dtype).reshape((1, 1) + tuple(jnp.asarray(cache.gb_d).shape))
+    bgrad = jnp.asarray(cache.bgrad, dtype=real_dtype).reshape(
+        (1, 1, 1, 1, int(jnp.asarray(cache.bgrad).shape[-1]))
+    )
+    cv = jnp.asarray(cache.cv_d, dtype=real_dtype).reshape(
+        (1, 1) + tuple(jnp.asarray(cache.cv_d).shape)
+    )
+    gb = jnp.asarray(cache.gb_d, dtype=real_dtype).reshape(
+        (1, 1) + tuple(jnp.asarray(cache.gb_d).shape)
+    )
     omega_d_scale = jnp.asarray(params.omega_d_scale, dtype=real_dtype)
     kpar_scale = jnp.asarray(params.kpar_scale, dtype=real_dtype)
     imag = jnp.asarray(1j, dtype=arr.dtype)
-    omega_star = imag * jnp.asarray(params.omega_star_scale, dtype=real_dtype) * jnp.asarray(cache.ky, dtype=real_dtype)
+    omega_star = (
+        imag
+        * jnp.asarray(params.omega_star_scale, dtype=real_dtype)
+        * jnp.asarray(cache.ky, dtype=real_dtype)
+    )
     omega_star_s = omega_star.reshape((1, omega_star.shape[0], 1, 1))
     tprim_s = jnp.asarray(params.R_over_LTi, dtype=real_dtype).reshape(-1)[0]
     fprim_s = jnp.asarray(params.R_over_Ln, dtype=real_dtype).reshape(-1)[0]
@@ -1277,9 +692,15 @@ def _linear_rhs_electrostatic_slices_velocity_sharded_fused(
         dlocal_dz = grad_z_periodic(local, kz=cache.kz)
         lower = shift_m(dlocal_dz, offset=-1)
         upper = shift_m(dlocal_dz, offset=1)
-        streaming = -vth_s * (jnp.sqrt(global_m_real + 1.0) * upper + jnp.sqrt(global_m_real) * lower)
-        field_drive_m1 = (global_m == 1).astype(local.dtype) * (-zt * vth_s * jl * phi)[:, None, ...]
-        streaming = streaming + kpar_scale * grad_z_periodic(field_drive_m1, kz=cache.kz)
+        streaming = -vth_s * (
+            jnp.sqrt(global_m_real + 1.0) * upper + jnp.sqrt(global_m_real) * lower
+        )
+        field_drive_m1 = (global_m == 1).astype(local.dtype) * (-zt * vth_s * jl * phi)[
+            :, None, ...
+        ]
+        streaming = streaming + kpar_scale * grad_z_periodic(
+            field_drive_m1, kz=cache.kz
+        )
 
         h = local + (global_m == 0).astype(local.dtype) * (zt * jl * phi)[:, None, ...]
         h_m_p1 = shift_m(h, offset=1)
@@ -1299,20 +720,40 @@ def _linear_rhs_electrostatic_slices_velocity_sharded_fused(
             + (2.0 * global_m_real + 1.0) * h
             + jnp.sqrt(global_m_real * (global_m_real - 1.0)) * h_m_m2
         )
-        gradb_term = (ell + 1.0) * shift_axis(h, 1, axis=0) + (2.0 * ell + 1.0) * h + ell * shift_axis(h, -1, axis=0)
+        gradb_term = (
+            (ell + 1.0) * shift_axis(h, 1, axis=0)
+            + (2.0 * ell + 1.0) * h
+            + ell * shift_axis(h, -1, axis=0)
+        )
         curvature = -(imag * tz_s * omega_d_scale * cv) * curv_term
         gradb = -(imag * tz_s * omega_d_scale * gb) * gradb_term
 
-        drive_m0 = omega_star_s * phi * (
-            jl_m1 * (l4 * tprim_s)
-            + jl * (fprim_s + 2.0 * l4 * tprim_s)
-            + jl_p1 * ((l4 + 1.0) * tprim_s)
+        drive_m0 = (
+            omega_star_s
+            * phi
+            * (
+                jl_m1 * (l4 * tprim_s)
+                + jl * (fprim_s + 2.0 * l4 * tprim_s)
+                + jl_p1 * ((l4 + 1.0) * tprim_s)
+            )
         )
-        drive_m2 = omega_star_s * phi * jl * (tprim_s / jnp.sqrt(jnp.asarray(2.0, dtype=real_dtype)))
+        drive_m2 = (
+            omega_star_s
+            * phi
+            * jl
+            * (tprim_s / jnp.sqrt(jnp.asarray(2.0, dtype=real_dtype)))
+        )
         diamagnetic = (global_m == 0).astype(local.dtype) * drive_m0[:, None, ...]
-        diamagnetic = diamagnetic + (global_m == 2).astype(local.dtype) * drive_m2[:, None, ...]
+        diamagnetic = (
+            diamagnetic + (global_m == 2).astype(local.dtype) * drive_m2[:, None, ...]
+        )
 
-        rhs = w_streaming * streaming + w_mirror * mirror + w_curv * curvature + w_gradb * gradb
+        rhs = (
+            w_streaming * streaming
+            + w_mirror * mirror
+            + w_curv * curvature
+            + w_gradb * gradb
+        )
         rhs = rhs + w_diamag * diamagnetic
         return rhs, phi
 
@@ -1369,15 +810,23 @@ def linear_rhs_electrostatic_slices_velocity_sharded(
 
     term_weights = terms if terms is not None else LinearTerms()
     if not _is_electrostatic_slice_terms(term_weights):
-        raise NotImplementedError("electrostatic slice route allows only electrostatic linear terms")
+        raise NotImplementedError(
+            "electrostatic slice route allows only electrostatic linear terms"
+        )
     arr = jnp.asarray(G)
     if arr.ndim != 5:
-        raise NotImplementedError("velocity-sharded electrostatic slice route currently supports single-species 5D states")
+        raise NotImplementedError(
+            "velocity-sharded electrostatic slice route currently supports single-species 5D states"
+        )
     if bool(getattr(cache, "use_twist_shift", False)):
-        raise NotImplementedError("velocity-sharded electrostatic slice route currently requires a periodic z grid")
+        raise NotImplementedError(
+            "velocity-sharded electrostatic slice route currently requires a periodic z grid"
+        )
 
     device_list = _resolve_parallel_devices(num_devices=num_devices, devices=devices)
-    plan = build_velocity_sharding_plan(arr.shape, num_devices=len(device_list), axes=("hermite",))
+    plan = build_velocity_sharding_plan(
+        arr.shape, num_devices=len(device_list), axes=("hermite",)
+    )
     if len(device_list) > 1:
         return _linear_rhs_electrostatic_slices_velocity_sharded_fused(
             arr,
@@ -1474,7 +923,10 @@ def linear_rhs_parallel_cached(
     otherwise callers must request a narrower explicit backend.
     """
 
-    if parallel is None or str(getattr(parallel, "strategy", "serial")).lower() == "serial":
+    if (
+        parallel is None
+        or str(getattr(parallel, "strategy", "serial")).lower() == "serial"
+    ):
         return linear_rhs_cached(
             G,
             cache,
@@ -1490,7 +942,9 @@ def linear_rhs_parallel_cached(
     axis = str(getattr(parallel, "axis", "hermite")).lower().replace("-", "_")
     if strategy == "velocity" and backend == "auto":
         if axis not in {"m", "hermite"}:
-            raise NotImplementedError("velocity sharding currently supports only the Hermite axis")
+            raise NotImplementedError(
+                "velocity sharding currently supports only the Hermite axis"
+            )
         if _is_electrostatic_slice_terms(terms):
             backend = "electrostatic_linear_slices"
         else:
@@ -1498,22 +952,36 @@ def linear_rhs_parallel_cached(
                 "backend='auto' can only select gated electrostatic velocity routes; "
                 "disable collision/EM/end-damping terms or request an explicit backend"
             )
-    if strategy == "velocity" and backend in {"streaming_only", "linear_streaming_only"}:
+    if strategy == "velocity" and backend in {
+        "streaming_only",
+        "linear_streaming_only",
+    }:
         if axis not in {"m", "hermite"}:
-            raise NotImplementedError("streaming-only velocity sharding currently supports only the Hermite axis")
+            raise NotImplementedError(
+                "streaming-only velocity sharding currently supports only the Hermite axis"
+            )
         if not _is_streaming_only_terms(terms):
-            raise NotImplementedError("velocity streaming route requires streaming-only LinearTerms")
+            raise NotImplementedError(
+                "velocity streaming route requires streaming-only LinearTerms"
+            )
         return linear_rhs_streaming_velocity_sharded(
             G,
             cache,
             params,
             num_devices=getattr(parallel, "num_devices", None),
         )
-    if strategy == "velocity" and backend in {"streaming_electrostatic", "linear_streaming_electrostatic"}:
+    if strategy == "velocity" and backend in {
+        "streaming_electrostatic",
+        "linear_streaming_electrostatic",
+    }:
         if axis not in {"m", "hermite"}:
-            raise NotImplementedError("electrostatic streaming velocity sharding currently supports only the Hermite axis")
+            raise NotImplementedError(
+                "electrostatic streaming velocity sharding currently supports only the Hermite axis"
+            )
         if not _is_streaming_only_terms(terms):
-            raise NotImplementedError("electrostatic velocity streaming route requires streaming-only LinearTerms")
+            raise NotImplementedError(
+                "electrostatic velocity streaming route requires streaming-only LinearTerms"
+            )
         return linear_rhs_streaming_electrostatic_velocity_sharded(
             G,
             cache,
@@ -1521,11 +989,18 @@ def linear_rhs_parallel_cached(
             num_devices=getattr(parallel, "num_devices", None),
             use_custom_vjp=use_custom_vjp,
         )
-    if strategy == "velocity" and backend in {"electrostatic_linear_slices", "linear_electrostatic_slices"}:
+    if strategy == "velocity" and backend in {
+        "electrostatic_linear_slices",
+        "linear_electrostatic_slices",
+    }:
         if axis not in {"m", "hermite"}:
-            raise NotImplementedError("electrostatic slice velocity sharding currently supports only the Hermite axis")
+            raise NotImplementedError(
+                "electrostatic slice velocity sharding currently supports only the Hermite axis"
+            )
         if not _is_electrostatic_slice_terms(terms):
-            raise NotImplementedError("electrostatic slice route requires collision/EM terms to be disabled")
+            raise NotImplementedError(
+                "electrostatic slice route requires collision/EM terms to be disabled"
+            )
         return linear_rhs_electrostatic_slices_velocity_sharded(
             G,
             cache,
@@ -1555,7 +1030,9 @@ def _integrate_linear_cached_impl(
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Time integrate the linear system using cached geometry arrays."""
     if method not in {"euler", "rk2", "rk4", "imex", "imex2", "sspx3"}:
-        raise ValueError("method must be one of {'euler', 'rk2', 'rk4', 'imex', 'imex2', 'sspx3'}")
+        raise ValueError(
+            "method must be one of {'euler', 'rk2', 'rk4', 'imex', 'imex2', 'sspx3'}"
+        )
     if terms is None:
         terms = LinearTerms()
 
@@ -1567,10 +1044,17 @@ def _integrate_linear_cached_impl(
     hyper_damp = hypercollision_damping(cache, params, real_dtype)
     if G0.ndim == 5 and hyper_damp.ndim == 6:
         hyper_damp = hyper_damp[0]
-    damping = collision_damping(cache, params, real_dtype, squeeze_species=(G0.ndim == 5)) + hyper_damp
+    damping = (
+        collision_damping(cache, params, real_dtype, squeeze_species=(G0.ndim == 5))
+        + hyper_damp
+    )
     damping = damping.astype(real_dtype)
 
-    parallel_strategy = "serial" if parallel is None else str(getattr(parallel, "strategy", "serial")).lower().replace("-", "_")
+    parallel_strategy = (
+        "serial"
+        if parallel is None
+        else str(getattr(parallel, "strategy", "serial")).lower().replace("-", "_")
+    )
 
     def rhs(G_in: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
         if parallel_strategy == "serial":
@@ -1582,7 +1066,9 @@ def _integrate_linear_cached_impl(
                 dt=dt_val,
                 force_electrostatic_fields=force_electrostatic_fields,
             )
-        return linear_rhs_parallel_cached(G_in, cache, params, terms=terms, parallel=parallel, dt=dt_val)
+        return linear_rhs_parallel_cached(
+            G_in, cache, params, terms=terms, parallel=parallel, dt=dt_val
+        )
 
     def advance(G):
         dG, _phi = rhs(G)
@@ -1602,6 +1088,7 @@ def _integrate_linear_cached_impl(
             k2, _ = rhs(G + 0.5 * dt_val * k1)
             return G + dt_val * k2
         if method == "sspx3":
+
             def _euler_step(G_state: jnp.ndarray) -> jnp.ndarray:
                 dG_state, _ = rhs(G_state)
                 return G_state + (_SSPX3_ADT * dt_val) * dG_state
@@ -1658,6 +1145,7 @@ def _integrate_linear_cached_impl(
     def sample_step(G, idx):
         def inner_step(i, state):
             return advance(state)
+
         G_out = jax.lax.fori_loop(0, sample_stride, inner_step, G)
         _dG_out, phi_out = rhs(G_out)
         if show_progress:
@@ -1777,7 +1265,15 @@ def _build_implicit_operator(
     dt: float,
     terms: LinearTerms | None,
     implicit_preconditioner: PreconditionerSpec,
-) -> tuple[jnp.ndarray, tuple[int, ...], int, jnp.ndarray, Callable[[jnp.ndarray], jnp.ndarray], Callable[[jnp.ndarray], jnp.ndarray], bool]:
+) -> tuple[
+    jnp.ndarray,
+    tuple[int, ...],
+    int,
+    jnp.ndarray,
+    Callable[[jnp.ndarray], jnp.ndarray],
+    Callable[[jnp.ndarray], jnp.ndarray],
+    bool,
+]:
     if terms is None:
         terms = LinearTerms()
     base_dtype = jnp.complex128 if _x64_enabled() else jnp.complex64
@@ -1795,7 +1291,9 @@ def _build_implicit_operator(
     ns = shape[0]
 
     hyper_damp = hypercollision_damping(cache, params, real_dtype)
-    damping = collision_damping(cache, params, real_dtype, squeeze_species=False) + hyper_damp
+    damping = (
+        collision_damping(cache, params, real_dtype, squeeze_species=False) + hyper_damp
+    )
     damping = damping.astype(real_dtype)
 
     ell = cache.l.astype(real_dtype)
@@ -1829,7 +1327,10 @@ def _build_implicit_operator(
     w_stream = jnp.asarray(terms.streaming, dtype=real_dtype)
     kpar_b = kpar[None, None, None, None, None, :]
     precond_pas = 1.0 / (
-        1.0 + dt_val * damping - dt_val * diag + imag * dt_val * w_stream * vth_b * kpar_b
+        1.0
+        + dt_val * damping
+        - dt_val * diag
+        + imag * dt_val * w_stream * vth_b * kpar_b
     )
     precond_pas = precond_pas.astype(G.dtype)
     resolved_precond = _resolve_implicit_preconditioner(implicit_preconditioner)
@@ -1860,7 +1361,9 @@ def _build_implicit_operator(
         dl = jnp.broadcast_to(dl, batch_shape)
         d = jnp.broadcast_to(d, batch_shape)
         du = jnp.broadcast_to(du, batch_shape)
-        y_hat_mlast = jax.lax.linalg.tridiagonal_solve(dl, d, du, x_hat_mlast[..., None])[..., 0]
+        y_hat_mlast = jax.lax.linalg.tridiagonal_solve(
+            dl, d, du, x_hat_mlast[..., None]
+        )[..., 0]
         y_hat = jnp.moveaxis(y_hat_mlast, -1, 2)
         return jnp.fft.ifft(y_hat, axis=-1)
 
@@ -1919,7 +1422,9 @@ def _build_implicit_operator(
             dl = jnp.broadcast_to(dl, batch_shape)
             d = jnp.broadcast_to(d, batch_shape)
             du = jnp.broadcast_to(du, batch_shape)
-            y_hat_mlast = jax.lax.linalg.tridiagonal_solve(dl, d, du, x_hat_mlast[..., None])[..., 0]
+            y_hat_mlast = jax.lax.linalg.tridiagonal_solve(
+                dl, d, du, x_hat_mlast[..., None]
+            )[..., 0]
             y_hat = jnp.moveaxis(y_hat_mlast, -1, 2)
             y_link = jnp.fft.ifft(y_hat, axis=-1)
             y_link = y_link.reshape(*lead_shape, nChains * nLinks, Nz)
@@ -2003,14 +1508,20 @@ def _build_implicit_operator(
     def apply_precond_hermite_line(x_flat: jnp.ndarray) -> jnp.ndarray:
         x = x_flat.reshape(shape)
         x = x * precond_full
-        x = _solve_hermite_lines_linked(x) if cache.use_twist_shift else _solve_hermite_lines_fft(x, kz=cache.kz)
+        x = (
+            _solve_hermite_lines_linked(x)
+            if cache.use_twist_shift
+            else _solve_hermite_lines_fft(x, kz=cache.kz)
+        )
         return x.reshape(size)
 
     def apply_precond_hermite_line_coarse(x_flat: jnp.ndarray) -> jnp.ndarray:
         x = x_flat.reshape(shape)
         x_line = apply_precond_hermite_line(x.reshape(size)).reshape(shape)
         x_coarse_in = _project_kx_coarse(x)
-        x_coarse_full = apply_precond_hermite_line(x_coarse_in.reshape(size)).reshape(shape)
+        x_coarse_full = apply_precond_hermite_line(x_coarse_in.reshape(size)).reshape(
+            shape
+        )
         x_line_coarse_full = _project_kx_coarse(x_line)
         return (x_line + (x_coarse_full - x_line_coarse_full)).reshape(size)
 
@@ -2030,9 +1541,20 @@ def _build_implicit_operator(
             precond_op = apply_precond_pas
         elif key in {"pas-coarse", "pas_schur", "block-schur", "schur", "pas-hybrid"}:
             precond_op = apply_precond_pas_coarse
-        elif key in {"hermite-line", "hermite_line", "hermite", "streaming-line", "streaming_line"}:
+        elif key in {
+            "hermite-line",
+            "hermite_line",
+            "hermite",
+            "streaming-line",
+            "streaming_line",
+        }:
             precond_op = apply_precond_hermite_line
-        elif key in {"hermite-line-coarse", "hermite_line_coarse", "hermite_coarse", "streaming-line-coarse"}:
+        elif key in {
+            "hermite-line-coarse",
+            "hermite_line_coarse",
+            "hermite_coarse",
+            "streaming-line-coarse",
+        }:
             precond_op = apply_precond_hermite_line_coarse
         elif key in {"identity", "none", "off"}:
             precond_op = apply_identity
@@ -2081,8 +1603,8 @@ def _integrate_linear_implicit_cached(
     if steps % sample_stride != 0:
         raise ValueError("steps must be divisible by sample_stride")
 
-    G, shape, size, dt_val, precond_op, matvec, squeeze_species = _build_implicit_operator(
-        G0, cache, params, dt, terms, implicit_preconditioner
+    G, shape, size, dt_val, precond_op, matvec, squeeze_species = (
+        _build_implicit_operator(G0, cache, params, dt, terms, implicit_preconditioner)
     )
 
     def fixed_point(G_in: jnp.ndarray, G_rhs: jnp.ndarray) -> jnp.ndarray:
@@ -2132,6 +1654,7 @@ def _integrate_linear_implicit_cached(
     if sample_stride <= 1:
         G_out, phi_t = jax.lax.scan(step_fn, G, None, length=steps)
     else:
+
         def sample_step(G_in, _):
             def inner_step(_i, g):
                 return solve_step(g)
@@ -2191,15 +1714,23 @@ def integrate_linear(
         elif G0.ndim == 6:
             Nl, Nm = G0.shape[1], G0.shape[2]
         else:
-            raise ValueError("G0 must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)")
+            raise ValueError(
+                "G0 must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)"
+            )
         cache = build_linear_cache(grid, geom, params, Nl, Nm)
     if method == "semi-implicit":
         method = "imex"
-    parallel_strategy = "serial" if parallel is None else str(getattr(parallel, "strategy", "serial")).lower().replace("-", "_")
+    parallel_strategy = (
+        "serial"
+        if parallel is None
+        else str(getattr(parallel, "strategy", "serial")).lower().replace("-", "_")
+    )
     force_electrostatic_fields = _is_electrostatic_field_terms(terms)
     if method == "implicit":
         if parallel_strategy != "serial":
-            raise NotImplementedError("parallel linear integration currently supports only explicit fixed-step methods")
+            raise NotImplementedError(
+                "parallel linear integration currently supports only explicit fixed-step methods"
+            )
         return _integrate_linear_implicit_cached(
             G0,
             cache,
@@ -2219,7 +1750,9 @@ def integrate_linear(
         )
     if parallel_strategy != "serial":
         if donate:
-            raise NotImplementedError("parallel linear integration does not currently support donated input buffers")
+            raise NotImplementedError(
+                "parallel linear integration does not currently support donated input buffers"
+            )
         return _integrate_linear_cached_impl(
             G0,
             cache,
@@ -2283,7 +1816,9 @@ def integrate_linear_diagnostics(
         elif G0.ndim == 6:
             Nl, Nm = G0.shape[1], G0.shape[2]
         else:
-            raise ValueError("G0 must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)")
+            raise ValueError(
+                "G0 must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)"
+            )
         cache = build_linear_cache(grid, geom, params, Nl, Nm)
 
     base_dtype = jnp.complex128 if _x64_enabled() else jnp.complex64
@@ -2294,27 +1829,44 @@ def integrate_linear_diagnostics(
     hyper_damp = hypercollision_damping(cache, params, real_dtype)
     if G0.ndim == 5 and hyper_damp.ndim == 6:
         hyper_damp = hyper_damp[0]
-    damping = collision_damping(cache, params, real_dtype, squeeze_species=(G0.ndim == 5)) + hyper_damp
+    damping = (
+        collision_damping(cache, params, real_dtype, squeeze_species=(G0.ndim == 5))
+        + hyper_damp
+    )
     damping = damping.astype(real_dtype)
 
     def advance(G_in: jnp.ndarray) -> jnp.ndarray:
-        dG, _phi = linear_rhs_cached(G_in, cache, params, terms=terms, use_jit=False, dt=dt_val)
+        dG, _phi = linear_rhs_cached(
+            G_in, cache, params, terms=terms, use_jit=False, dt=dt_val
+        )
         if method == "imex":
             dG_explicit = dG + damping * G_in
             return (G_in + dt_val * dG_explicit) / (1.0 + dt_val * damping)
         if method == "imex2":
             dG_explicit = dG + damping * G_in
-            G_half = (G_in + 0.5 * dt_val * dG_explicit) / (1.0 + 0.5 * dt_val * damping)
-            dG_half, _phi = linear_rhs_cached(G_half, cache, params, terms=terms, use_jit=False, dt=dt_val)
+            G_half = (G_in + 0.5 * dt_val * dG_explicit) / (
+                1.0 + 0.5 * dt_val * damping
+            )
+            dG_half, _phi = linear_rhs_cached(
+                G_half, cache, params, terms=terms, use_jit=False, dt=dt_val
+            )
             dG_half_exp = dG_half + damping * G_half
             return (G_in + dt_val * dG_half_exp) / (1.0 + dt_val * damping)
         if method == "euler":
             return G_in + dt_val * dG
         if method == "rk2":
             k1 = dG
-            k2, _ = linear_rhs_cached(G_in + 0.5 * dt_val * k1, cache, params, terms=terms, use_jit=False, dt=dt_val)
+            k2, _ = linear_rhs_cached(
+                G_in + 0.5 * dt_val * k1,
+                cache,
+                params,
+                terms=terms,
+                use_jit=False,
+                dt=dt_val,
+            )
             return G_in + dt_val * k2
         if method == "sspx3":
+
             def _euler_step(G_state: jnp.ndarray) -> jnp.ndarray:
                 dG_state, _phi_state = linear_rhs_cached(
                     G_state,
@@ -2338,9 +1890,25 @@ def integrate_linear_diagnostics(
             )
         if method == "rk4":
             k1 = dG
-            k2, _ = linear_rhs_cached(G_in + 0.5 * dt_val * k1, cache, params, terms=terms, use_jit=False, dt=dt_val)
-            k3, _ = linear_rhs_cached(G_in + 0.5 * dt_val * k2, cache, params, terms=terms, use_jit=False, dt=dt_val)
-            k4, _ = linear_rhs_cached(G_in + dt_val * k3, cache, params, terms=terms, use_jit=False, dt=dt_val)
+            k2, _ = linear_rhs_cached(
+                G_in + 0.5 * dt_val * k1,
+                cache,
+                params,
+                terms=terms,
+                use_jit=False,
+                dt=dt_val,
+            )
+            k3, _ = linear_rhs_cached(
+                G_in + 0.5 * dt_val * k2,
+                cache,
+                params,
+                terms=terms,
+                use_jit=False,
+                dt=dt_val,
+            )
+            k4, _ = linear_rhs_cached(
+                G_in + dt_val * k3, cache, params, terms=terms, use_jit=False, dt=dt_val
+            )
             return G_in + (dt_val / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
         raise ValueError(f"Unsupported method '{method}'")
 
@@ -2368,7 +1936,9 @@ def integrate_linear_diagnostics(
 
     def step(G_in, idx):
         G_out = advance(G_in)
-        _dG, phi = linear_rhs_cached(G_out, cache, params, terms=terms, use_jit=False, dt=dt_val)
+        _dG, phi = linear_rhs_cached(
+            G_out, cache, params, terms=terms, use_jit=False, dt=dt_val
+        )
         density = density_from_G(G_out)
         if show_progress:
             from spectraxgk.utils.callbacks import print_callback, should_emit_progress
@@ -2403,15 +1973,21 @@ def integrate_linear_diagnostics(
         indices = jnp.arange(steps)
         G_out, outputs = jax.lax.scan(step, G0, indices)
     else:
+
         def sample_step(G_in, idx):
             def inner_step(_i, g):
                 return advance(g)
 
             G_out_local = jax.lax.fori_loop(0, sample_stride, inner_step, G_in)
-            _dG, phi_out = linear_rhs_cached(G_out_local, cache, params, terms=terms, use_jit=False, dt=dt_val)
+            _dG, phi_out = linear_rhs_cached(
+                G_out_local, cache, params, terms=terms, use_jit=False, dt=dt_val
+            )
             density_out = density_from_G(G_out_local)
             if show_progress:
-                from spectraxgk.utils.callbacks import print_callback, should_emit_progress
+                from spectraxgk.utils.callbacks import (
+                    print_callback,
+                    should_emit_progress,
+                )
 
                 completed_idx = jnp.minimum((idx + 1) * sample_stride, steps) - 1
                 sim_time = jnp.minimum((idx + 1) * sample_stride, steps) * dt_val
