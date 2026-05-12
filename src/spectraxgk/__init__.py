@@ -277,6 +277,7 @@ from spectraxgk.solver_objective_gradients import (
     solver_objective_vector_from_geometry,
     solver_scalar_objective_from_vector,
     solver_ready_geometry_mapping,
+    vmec_boozer_scalar_objective_finite_difference_report,
     vmec_boozer_scalar_objective_from_state,
     vmec_boozer_solver_objective_vector_from_state,
 )
@@ -554,6 +555,7 @@ __all__ = [
     "solver_objective_vector_from_geometry",
     "solver_scalar_objective_from_vector",
     "solver_ready_geometry_mapping",
+    "vmec_boozer_scalar_objective_finite_difference_report",
     "vmec_boozer_scalar_objective_from_state",
     "vmec_boozer_solver_objective_vector_from_state",
     "eigenfunction_gate_report",

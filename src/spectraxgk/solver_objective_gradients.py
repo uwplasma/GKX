@@ -310,6 +310,164 @@ def vmec_boozer_scalar_objective_from_state(  # pragma: no cover
     return solver_scalar_objective_from_vector(vector, objective)
 
 
+def _load_vmec_jax_example_state_bundle(case_name: str) -> dict[str, Any]:  # pragma: no cover
+    """Load a local ``vmec_jax`` example state bundle for offline gates."""
+
+    discover_differentiable_geometry_backends()
+    driver = importlib.import_module("vmec_jax.driver")
+    config_mod = importlib.import_module("vmec_jax.config")
+    static_mod = importlib.import_module("vmec_jax.static")
+    wout_mod = importlib.import_module("vmec_jax.wout")
+
+    input_path, wout_path = driver.example_paths(str(case_name))
+    cfg_vmec, indata = config_mod.load_config(str(input_path))
+    static = static_mod.build_static(cfg_vmec)
+    wout = wout_mod.read_wout(wout_path)
+    state = wout_mod.state_from_wout(wout)
+    return {
+        "case_name": str(case_name),
+        "input_path": str(input_path),
+        "wout_path": str(wout_path),
+        "state": state,
+        "static": static,
+        "indata": indata,
+        "wout": wout,
+    }
+
+
+def vmec_boozer_scalar_objective_finite_difference_report(  # pragma: no cover
+    *,
+    case_name: str = "nfp4_QH_warm_start",
+    objective: SolverScalarObjective = "growth",
+    radial_index: int | None = None,
+    mode_index: int = 1,
+    perturbation_step: float = 1.0e-7,
+    response_atol: float = 0.0,
+    max_curvature_ratio: float = 5.0,
+    **kwargs: Any,
+) -> dict[str, object]:
+    """Finite-difference a scalar objective through a VMEC state coefficient.
+
+    This report is the safe optimization pre-step for full-chain stellarator
+    objectives. It perturbs one VMEC ``Rcos`` coefficient in a solved
+    ``vmec_jax`` state, evaluates the in-memory VMEC/Boozer/SPECTRAX-GK scalar
+    objective at ``x-h``, ``x``, and ``x+h``, and records the central
+    finite-difference sensitivity.
+
+    It is intentionally not an AD claim. Growth-rate objectives can later be
+    promoted with implicit eigenpair gates; quasilinear objectives involving
+    eigenvectors need this finite-difference/SPSA path or a custom adjoint
+    before they are used in production optimization loops.
+    """
+
+    step = float(perturbation_step)
+    if step <= 0.0:
+        raise ValueError("perturbation_step must be positive")
+    curvature_ratio_limit = float(max_curvature_ratio)
+    if curvature_ratio_limit < 0.0:
+        raise ValueError("max_curvature_ratio must be non-negative")
+    bundle = _load_vmec_jax_example_state_bundle(str(case_name))
+    state = bundle["state"]
+    base_Rcos = jnp.asarray(state.Rcos)
+    if base_Rcos.ndim != 2 or int(base_Rcos.shape[1]) < 2:
+        raise RuntimeError("vmec_jax state Rcos array must expose at least one non-axisymmetric mode")
+    default_radial_index = int(base_Rcos.shape[0] // 2)
+    radial_index_int = default_radial_index if radial_index is None else int(radial_index)
+    mode_index_int = int(mode_index)
+    if not (0 <= radial_index_int < int(base_Rcos.shape[0])):
+        raise ValueError("radial_index is outside the VMEC state radial grid")
+    if not (0 <= mode_index_int < int(base_Rcos.shape[1])):
+        raise ValueError("mode_index is outside the VMEC state mode table")
+    parameter_name = _vmec_boozer_state_parameter_name(
+        radial_index_int,
+        mode_index_int,
+        default_mid_surface=default_radial_index,
+    )
+
+    def evaluate(delta: float) -> tuple[float, list[float]]:
+        traced_state = dc_replace(
+            state,
+            Rcos=base_Rcos.at[radial_index_int, mode_index_int].add(float(delta)),
+        )
+        vector = vmec_boozer_solver_objective_vector_from_state(
+            traced_state,
+            bundle["static"],
+            bundle["indata"],
+            bundle["wout"],
+            **kwargs,
+        )
+        scalar = solver_scalar_objective_from_vector(vector, objective)
+        vector_np = np.asarray(vector, dtype=float)
+        return float(np.asarray(scalar)), vector_np.tolist()
+
+    minus_value, minus_vector = evaluate(-step)
+    base_value, base_vector = evaluate(0.0)
+    plus_value, plus_vector = evaluate(step)
+    central_derivative = (plus_value - minus_value) / (2.0 * step)
+    response_abs = abs(plus_value - minus_value)
+    curvature_abs = abs(plus_value - 2.0 * base_value + minus_value)
+    curvature_scale = max(abs(response_abs), float(response_atol), 1.0e-300)
+    curvature_ratio = curvature_abs / curvature_scale
+    finite = bool(
+        np.all(
+            np.isfinite(
+                np.asarray(
+                    [
+                        minus_value,
+                        base_value,
+                        plus_value,
+                        central_derivative,
+                        *minus_vector,
+                        *base_vector,
+                        *plus_vector,
+                    ],
+                    dtype=float,
+                )
+            )
+        )
+    )
+    response_resolved = bool(response_abs >= float(response_atol))
+    finite_difference_consistent = bool(curvature_ratio <= curvature_ratio_limit)
+    return {
+        "kind": "vmec_boozer_scalar_objective_finite_difference_report",
+        "passed": bool(finite and response_resolved and finite_difference_consistent),
+        "source_scope": "mode21_vmec_boozer_state",
+        "claim_scope": (
+            "finite-difference sensitivity of one scalar objective through "
+            "VMECState -> booz_xform_jax -> SPECTRAX-GK value evaluator; not an AD or nonlinear transport claim"
+        ),
+        "case_name": str(case_name),
+        "input_path": bundle["input_path"],
+        "wout_path": bundle["wout_path"],
+        "objective": str(objective),
+        "parameter_name": parameter_name,
+        "parameter_indices": {"Rcos": [radial_index_int, mode_index_int]},
+        "perturbation_step": step,
+        "response_atol": float(response_atol),
+        "max_curvature_ratio": curvature_ratio_limit,
+        "response_abs": response_abs,
+        "curvature_abs": curvature_abs,
+        "curvature_ratio": curvature_ratio,
+        "finite_values": finite,
+        "response_resolved": response_resolved,
+        "finite_difference_consistent": finite_difference_consistent,
+        "minus_value": minus_value,
+        "base_value": base_value,
+        "plus_value": plus_value,
+        "central_derivative": float(central_derivative),
+        "objective_names": list(SOLVER_OBJECTIVE_NAMES),
+        "minus_objective_vector": minus_vector,
+        "base_objective_vector": base_vector,
+        "plus_objective_vector": plus_vector,
+        "options": {key: value for key, value in kwargs.items() if isinstance(value, (str, int, float, bool, type(None)))},
+        "next_action": (
+            "Use this finite-difference path to seed real VMEC/Boozer optimizer "
+            "drivers, then promote growth objectives with implicit AD/FD gates and "
+            "quasilinear objectives with branch-continuity plus finite-difference/SPSA audits."
+        ),
+    }
+
+
 def solver_objective_branch_gradient_report(
     params: jnp.ndarray | np.ndarray | None = None,
     *,
@@ -1405,6 +1563,7 @@ __all__ = [
     "solver_scalar_objective_from_vector",
     "solver_ready_geometry_mapping",
     "tiny_differentiable_objective_gradient_report",
+    "vmec_boozer_scalar_objective_finite_difference_report",
     "vmec_boozer_scalar_objective_from_state",
     "vmec_boozer_solver_objective_vector_from_state",
 ]
