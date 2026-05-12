@@ -46,7 +46,8 @@ jobs:
           python tools/check_quasilinear_promotion_guardrails.py \
             --out-json docs/_static/quasilinear_promotion_guardrails.json
           python tools/build_parallelization_completion_status.py \
-            --out-prefix docs/_static/parallelization_completion_status
+            --out-prefix docs/_static/parallelization_completion_status \
+            --skip-figures
           python tools/build_technical_release_status.py \
             --out-json docs/_static/technical_release_status.json \
             --fail-under 98
