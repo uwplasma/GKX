@@ -2659,6 +2659,61 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
     }
 
 
+def flux_tube_geometry_from_vmec_boozer_state(  # pragma: no cover
+    state: Any,
+    static: Any,
+    indata: Any,
+    wout: Any,
+    *,
+    surface_index: int | None = None,
+    torflux: float | None = None,
+    alpha: float = 0.0,
+    ntheta: int = 32,
+    mboz: int = _VMEC_BOOZER_PARITY_MIN_MODE_COUNT,
+    nboz: int = _VMEC_BOOZER_PARITY_MIN_MODE_COUNT,
+    jit: bool = False,
+    surface_stencil_width: int | None = None,
+    reference_length: float | None = None,
+    reference_b: float | None = None,
+    source_model: str = "mode21_vmec_boozer_state",
+    validate_finite: bool = True,
+) -> FluxTubeGeometryData:
+    """Build solver-ready geometry directly from a solved ``vmec_jax`` state.
+
+    This is the production-facing in-memory bridge for differentiable
+    optimization workflows. It keeps the path inside JAX-compatible objects:
+
+    ``VMECState -> BoozXformInputs -> booz_xform_jax -> FluxTubeGeometryData``.
+
+    Runtime VMEC file generation can still use the NetCDF/EIK route, but
+    differentiable stellarator optimization should call this function or a
+    higher-level objective wrapper around it so gradients never pass through
+    filesystem artifacts.
+    """
+
+    mapping = vmec_jax_boozer_equal_arc_core_profiles_from_state(
+        state,
+        static,
+        indata,
+        wout,
+        surface_index=surface_index,
+        torflux=torflux,
+        alpha=alpha,
+        ntheta=ntheta,
+        mboz=mboz,
+        nboz=nboz,
+        jit=jit,
+        surface_stencil_width=surface_stencil_width,
+        reference_length=reference_length,
+        reference_b=reference_b,
+    )
+    return flux_tube_geometry_from_mapping(
+        mapping,
+        source_model=source_model,
+        validate_finite=validate_finite,
+    )
+
+
 def vmec_jax_flux_tube_sensitivity_report(  # pragma: no cover
     *,
     params: jnp.ndarray | None = None,
@@ -3352,6 +3407,7 @@ __all__ = [
     "evaluate_boozer_bmag_on_field_line",
     "finite_difference_jacobian",
     "flux_tube_geometry_from_mapping",
+    "flux_tube_geometry_from_vmec_boozer_state",
     "flux_tube_geometry_observables",
     "geometry_inverse_design_report",
     "geometry_observable_names",
