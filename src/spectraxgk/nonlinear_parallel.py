@@ -85,6 +85,31 @@ class NonlinearDomainIdentityReport:
 
 
 @dataclass(frozen=True)
+class NonlinearSpectralCommunicationReport:
+    """Numerical identity report for nonlinear spectral communication layouts."""
+
+    state_shape: tuple[int, int, int, int, int]
+    y_chunks: tuple[int, ...]
+    x_chunks: tuple[int, ...]
+    atol: float
+    rtol: float
+    fft_max_abs_error: float
+    fft_max_rel_error: float
+    bracket_max_abs_error: float
+    bracket_max_rel_error: float
+    field_max_abs_error: float
+    field_max_rel_error: float
+    identity_passed: bool
+    decomposed_path_enabled: bool
+    claim_scope: str
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-friendly representation of the communication report."""
+
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class NonlinearParallelStrategy:
     """Readiness contract for one nonlinear parallelization candidate."""
 
@@ -187,7 +212,7 @@ _STRATEGIES: tuple[NonlinearParallelStrategy, ...] = (
     ),
     NonlinearParallelStrategy(
         name="fft_axis_domain",
-        readiness="blocked",
+        readiness="diagnostic",
         independent_work=False,
         changes_solver_layout=True,
         identity_gates=(
@@ -197,7 +222,11 @@ _STRATEGIES: tuple[NonlinearParallelStrategy, ...] = (
         ),
         physics_gates=("fft_axis_nonlinear_window_physics_gate",),
         profiler_gates=("distributed_fft_scaling_profile",),
-        notes="Blocked until distributed FFT identity gates exist.",
+        notes=(
+            "Diagnostic split/reassemble spectral communication identity exists; "
+            "production promotion still requires runtime distributed FFT routing, "
+            "conservation, transport-window, and profiler gates."
+        ),
     ),
 )
 
@@ -350,6 +379,249 @@ def nonlinear_domain_parallel_identity_gate(
     return gated_state, report
 
 
+def _validate_spectral_state_shape(
+    shape: tuple[int, ...],
+) -> tuple[int, int, int, int, int]:
+    if len(shape) != 5:
+        raise ValueError("spectral state shape must be (Nl, Nm, Ny, Nx, Nz)")
+    nl, nm, ny, nx, nz = (int(item) for item in shape)
+    if min(nl, nm, ny, nx, nz) <= 0:
+        raise ValueError("spectral state dimensions must be positive")
+    if ny < 2 or nx < 2:
+        raise ValueError("spectral communication gate requires Ny and Nx >= 2")
+    return (nl, nm, ny, nx, nz)
+
+
+def deterministic_nonlinear_spectral_state(
+    shape: tuple[int, int, int, int, int] = (2, 3, 6, 4, 2),
+) -> jax.Array:
+    """Return deterministic complex spectral coefficients for communication gates.
+
+    The layout is ``(Nl, Nm, Ny, Nx, Nz)`` with the FFT axes in ``(Ny, Nx)``.
+    """
+
+    nl, nm, ny, nx, nz = _validate_spectral_state_shape(tuple(shape))
+    laguerre = jnp.arange(nl, dtype=jnp.float32)[:, None, None, None, None]
+    hermite = jnp.arange(nm, dtype=jnp.float32)[None, :, None, None, None]
+    y = jnp.arange(ny, dtype=jnp.float32)[None, None, :, None, None]
+    x = jnp.arange(nx, dtype=jnp.float32)[None, None, None, :, None]
+    z = jnp.arange(nz, dtype=jnp.float32)[None, None, None, None, :]
+    phase = (
+        0.41 * (laguerre + 1.0)
+        + 0.29 * (hermite + 1.0)
+        + 0.17 * y
+        + 0.23 * x
+        + 0.31 * (z + 1.0)
+    )
+    envelope = 1.0 / (1.0 + laguerre + hermite + 0.25 * y + 0.5 * x + z)
+    real_part = envelope * jnp.sin(phase)
+    imag_part = 0.5 * envelope * jnp.cos(1.7 * phase)
+    return real_part.astype(jnp.float32) + 1j * imag_part.astype(jnp.float32)
+
+
+def _validate_chunks(axis_size: int, chunks: tuple[int, ...], *, name: str) -> tuple[int, ...]:
+    if not chunks:
+        raise ValueError(f"{name} must contain at least one chunk")
+    normalized = tuple(int(item) for item in chunks)
+    if any(item <= 0 for item in normalized):
+        raise ValueError(f"{name} entries must be positive")
+    if sum(normalized) != int(axis_size):
+        raise ValueError(f"{name} must sum to the decomposed axis size")
+    return normalized
+
+
+def _split_reassemble(arr: jax.Array, *, axis: int, chunks: tuple[int, ...]) -> jax.Array:
+    canonical_axis = axis % arr.ndim
+    normalized_chunks = _validate_chunks(
+        int(arr.shape[canonical_axis]),
+        chunks,
+        name="chunks",
+    )
+    split_points = []
+    offset = 0
+    for chunk in normalized_chunks[:-1]:
+        offset += chunk
+        split_points.append(offset)
+    return jnp.concatenate(jnp.split(arr, split_points, axis=canonical_axis), axis=canonical_axis)
+
+
+def _spectral_layout_round_trip(
+    arr: jax.Array,
+    *,
+    y_axis: int,
+    x_axis: int,
+    y_chunks: tuple[int, ...],
+    x_chunks: tuple[int, ...],
+) -> jax.Array:
+    """Simulate the split/transposed/reassembled layout changes used by FFTs."""
+
+    y_axis = y_axis % arr.ndim
+    x_axis = x_axis % arr.ndim
+    communicated = _split_reassemble(arr, axis=y_axis, chunks=y_chunks)
+    transposed = jnp.swapaxes(communicated, y_axis, x_axis)
+    reassembled = _split_reassemble(transposed, axis=x_axis, chunks=y_chunks)
+    reassembled = _split_reassemble(reassembled, axis=y_axis, chunks=x_chunks)
+    return jnp.swapaxes(reassembled, y_axis, x_axis)
+
+
+def _spectral_wave_numbers(ny: int, nx: int, dtype: Any) -> tuple[jax.Array, jax.Array]:
+    ky = jnp.fft.fftfreq(ny, d=1.0 / float(ny)).astype(dtype)
+    kx = jnp.fft.fftfreq(nx, d=1.0 / float(nx)).astype(dtype)
+    return ky, kx
+
+
+def _field_from_spectral_density(density_hat: jax.Array) -> jax.Array:
+    ny, nx, _nz = (int(item) for item in density_hat.shape)
+    real_dtype = jnp.real(density_hat).dtype
+    ky, kx = _spectral_wave_numbers(ny, nx, real_dtype)
+    kperp2 = ky[:, None, None] ** 2 + kx[None, :, None] ** 2
+    phi_hat = density_hat / (1.0 + kperp2)
+    return phi_hat.at[0, 0, :].set(0.0)
+
+
+def _field_from_state(state_hat: jax.Array) -> jax.Array:
+    density_hat = jnp.sum(state_hat[:, 0, :, :, :], axis=0)
+    return _field_from_spectral_density(density_hat)
+
+
+def _spectral_bracket(state_hat: jax.Array, phi_hat: jax.Array) -> jax.Array:
+    _nl, _nm, ny, nx, _nz = _validate_spectral_state_shape(tuple(state_hat.shape))
+    real_dtype = jnp.real(state_hat).dtype
+    ky, kx = _spectral_wave_numbers(ny, nx, real_dtype)
+    ky_state = ky[None, None, :, None, None]
+    kx_state = kx[None, None, None, :, None]
+    ky_field = ky[:, None, None]
+    kx_field = kx[None, :, None]
+
+    state_dx = jnp.fft.ifft2(1j * kx_state * state_hat, axes=(-3, -2))
+    state_dy = jnp.fft.ifft2(1j * ky_state * state_hat, axes=(-3, -2))
+    phi_dx = jnp.fft.ifft2(1j * kx_field * phi_hat, axes=(0, 1))
+    phi_dy = jnp.fft.ifft2(1j * ky_field * phi_hat, axes=(0, 1))
+    bracket_xy = phi_dx[None, None, :, :, :] * state_dy - phi_dy[
+        None, None, :, :, :
+    ] * state_dx
+    return jnp.fft.fft2(bracket_xy, axes=(-3, -2))
+
+
+def _max_abs_rel_error(
+    reference: jax.Array,
+    candidate: jax.Array,
+    *,
+    atol: float,
+) -> tuple[float, float]:
+    abs_error = jnp.abs(candidate - reference)
+    scale = jnp.maximum(jnp.abs(reference), jnp.asarray(atol, dtype=jnp.real(abs_error).dtype))
+    rel_error = abs_error / scale
+    return float(jnp.max(abs_error)), float(jnp.max(rel_error))
+
+
+def nonlinear_spectral_communication_identity_report(
+    serial_fft_roundtrip: jax.Array,
+    communicated_fft_roundtrip: jax.Array,
+    serial_bracket: jax.Array,
+    communicated_bracket: jax.Array,
+    serial_field: jax.Array,
+    communicated_field: jax.Array,
+    *,
+    state_shape: tuple[int, int, int, int, int],
+    y_chunks: tuple[int, ...],
+    x_chunks: tuple[int, ...],
+    atol: float = 5.0e-6,
+    rtol: float = 5.0e-6,
+) -> NonlinearSpectralCommunicationReport:
+    """Compare spectral communication outputs and fail closed on mismatches."""
+
+    fft_abs, fft_rel = _max_abs_rel_error(
+        serial_fft_roundtrip,
+        communicated_fft_roundtrip,
+        atol=atol,
+    )
+    bracket_abs, bracket_rel = _max_abs_rel_error(
+        serial_bracket,
+        communicated_bracket,
+        atol=atol,
+    )
+    field_abs, field_rel = _max_abs_rel_error(
+        serial_field,
+        communicated_field,
+        atol=atol,
+    )
+    identity_passed = bool(
+        fft_abs <= float(atol)
+        and fft_rel <= float(rtol)
+        and bracket_abs <= float(atol)
+        and bracket_rel <= float(rtol)
+        and field_abs <= float(atol)
+        and field_rel <= float(rtol)
+    )
+    return NonlinearSpectralCommunicationReport(
+        state_shape=state_shape,
+        y_chunks=tuple(int(item) for item in y_chunks),
+        x_chunks=tuple(int(item) for item in x_chunks),
+        atol=float(atol),
+        rtol=float(rtol),
+        fft_max_abs_error=fft_abs,
+        fft_max_rel_error=fft_rel,
+        bracket_max_abs_error=bracket_abs,
+        bracket_max_rel_error=bracket_rel,
+        field_max_abs_error=field_abs,
+        field_max_rel_error=field_rel,
+        identity_passed=identity_passed,
+        decomposed_path_enabled=identity_passed,
+        claim_scope=(
+            "diagnostic spectral communication identity gate only; "
+            "split/reassemble layout simulation with no production routing or speedup claim"
+        ),
+    )
+
+
+def nonlinear_spectral_communication_identity_gate(
+    state_hat: jax.Array,
+    *,
+    y_chunks: tuple[int, ...] = (3, 3),
+    x_chunks: tuple[int, ...] = (2, 2),
+    atol: float = 5.0e-6,
+    rtol: float = 5.0e-6,
+) -> NonlinearSpectralCommunicationReport:
+    """Validate FFT, bracket, and field layout identity under split/reassemble."""
+
+    state_shape = _validate_spectral_state_shape(tuple(state_hat.shape))
+    _nl, _nm, ny, nx, _nz = state_shape
+    y_chunks = _validate_chunks(ny, y_chunks, name="y_chunks")
+    x_chunks = _validate_chunks(nx, x_chunks, name="x_chunks")
+
+    communicated_state = _spectral_layout_round_trip(
+        state_hat,
+        y_axis=-3,
+        x_axis=-2,
+        y_chunks=y_chunks,
+        x_chunks=x_chunks,
+    )
+    serial_fft = jnp.fft.fft2(jnp.fft.ifft2(state_hat, axes=(-3, -2)), axes=(-3, -2))
+    communicated_fft = jnp.fft.fft2(
+        jnp.fft.ifft2(communicated_state, axes=(-3, -2)),
+        axes=(-3, -2),
+    )
+    serial_field = _field_from_state(state_hat)
+    communicated_field = _field_from_state(communicated_state)
+    serial_bracket = _spectral_bracket(state_hat, serial_field)
+    communicated_bracket = _spectral_bracket(communicated_state, communicated_field)
+
+    return nonlinear_spectral_communication_identity_report(
+        serial_fft,
+        communicated_fft,
+        serial_bracket,
+        communicated_bracket,
+        serial_field,
+        communicated_field,
+        state_shape=state_shape,
+        y_chunks=y_chunks,
+        x_chunks=x_chunks,
+        atol=atol,
+        rtol=rtol,
+    )
+
+
 def nonlinear_parallel_strategies() -> tuple[NonlinearParallelStrategy, ...]:
     """Return all nonlinear parallelization strategy contracts."""
 
@@ -390,14 +662,18 @@ __all__ = [
     "NonlinearDomainIdentityReport",
     "NonlinearParallelStrategy",
     "NonlinearParallelStrategyName",
+    "NonlinearSpectralCommunicationReport",
     "ParallelReadiness",
     "build_nonlinear_domain_decomposition_plan",
     "classify_nonlinear_parallel_strategy",
     "deterministic_nonlinear_domain_state",
+    "deterministic_nonlinear_spectral_state",
     "nonlinear_domain_identity_report",
     "nonlinear_domain_parallel_identity_gate",
     "nonlinear_parallel_strategies",
     "nonlinear_parallel_strategy",
+    "nonlinear_spectral_communication_identity_gate",
+    "nonlinear_spectral_communication_identity_report",
     "prototype_nonlinear_domain_decomposed_step",
     "prototype_nonlinear_domain_serial_step",
     "release_ready_nonlinear_parallel_strategies",
