@@ -105,10 +105,11 @@ def integrate_nonlinear_sharded(
     """Integrate the nonlinear system with an explicit pjit-sharded scan.
 
     The state array can be partitioned along a ``resolve_state_sharding`` axis
-    such as ``ky`` or ``kx``. This is a whole-state sharding primitive for
-    production multi-device experiments; it preserves the serial numerical
-    update and should be paired with a numerical-identity gate before using its
-    timings in performance claims.
+    such as ``ky`` or ``kx``. This is a diagnostic whole-state sharding
+    primitive for identity gates and profiler localization. It is not a
+    production nonlinear domain decomposition or speedup claim until the exact
+    workload has communication-complete identity, conservation, transport, and
+    profiler gates.
     """
 
     _validate_steps(steps)

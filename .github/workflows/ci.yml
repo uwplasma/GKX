@@ -430,6 +430,10 @@ jobs:
             --shard-manifest coverage-wide-shard-manifest.json \
             --fail-under 95 \
             --xml coverage-wide.xml
+          python tools/check_validation_coverage_manifest.py \
+            --coverage-xml coverage-wide.xml \
+            --enforce-package-coverage \
+            --out-json docs/_static/validation_coverage_manifest_summary.json
 
       - name: Upload wide coverage shard manifest
         if: always()
@@ -437,6 +441,14 @@ jobs:
         with:
           name: coverage-wide-shard-manifest
           path: coverage-wide-shard-manifest.json
+          if-no-files-found: ignore
+
+      - name: Upload validation coverage manifest summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-coverage-manifest-summary
+          path: docs/_static/validation_coverage_manifest_summary.json
           if-no-files-found: ignore
 
       - name: Upload wide coverage report
