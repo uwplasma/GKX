@@ -58,11 +58,13 @@ from spectraxgk.runtime_orchestration import (
     run_runtime_scan_batch as _run_runtime_scan_batch_impl,
 )
 from spectraxgk.runtime_policies import (
+    RuntimeIndependentParallelPlan,
     _infer_runtime_nonlinear_steps,
     _midplane_index,
     _normalize_linear_solver_name,
     _parallel_requests_combined_ky_scan,
     _runtime_external_phi,
+    _runtime_independent_parallel_plan,
     _select_nonlinear_mode_indices,
     _zero_kx_index,
 )
@@ -90,6 +92,7 @@ from spectraxgk.vmec_eik import generate_runtime_vmec_eik
 _GX_RAND_MAX = float((1 << 31) - 1)
 
 __all__ = [
+    "RuntimeIndependentParallelPlan",
     "RuntimeLinearResult",
     "RuntimeLinearScanResult",
     "RuntimeNonlinearResult",
@@ -112,6 +115,7 @@ __all__ = [
     "_run_runtime_scan_batch",
     "_runtime_default_krylov_config",
     "_runtime_external_phi",
+    "_runtime_independent_parallel_plan",
     "_runtime_model_key",
     "_select_nonlinear_mode_indices",
     "_slice_gx_diagnostics",
@@ -947,28 +951,33 @@ def run_runtime_scan(
         }
         for ky in ky_arr
     ]
+    parallel_plan = _runtime_independent_parallel_plan(
+        cfg, problem_size=int(ky_arr.size), workers=workers, executor=parallel_executor
+    )
     results = independent_map(
-        _run_runtime_scan_ky_task, tasks, workers=workers, executor=parallel_executor
+        _run_runtime_scan_ky_task,
+        tasks,
+        workers=parallel_plan.requested_workers,
+        executor=parallel_plan.executor,
     )
     for i, res in enumerate(results):
         gamma[i] = float(res.gamma)
         omega[i] = float(res.omega)
         if res.quasilinear is not None:
             ql_payloads.append(res.quasilinear)
+    parallel_payload = parallel_plan.to_dict()
+    parallel_payload.update(
+        {
+            "identity_contract": "independent ky workers must preserve serial ky ordering and values",
+            "quasilinear_state_extraction": bool(ql_payloads),
+        }
+    )
     return RuntimeLinearScanResult(
         ky=ky_arr,
         gamma=gamma,
         omega=omega,
         quasilinear=tuple(ql_payloads) if ql_payloads else None,
-        parallel={
-            "requested_workers": int(workers),
-            "effective_workers": int(
-                min(max(int(workers), 1), max(int(ky_arr.size), 1))
-            ),
-            "executor": str(parallel_executor).strip().lower(),
-            "identity_contract": "independent ky workers must preserve serial ky ordering and values",
-            "quasilinear_state_extraction": bool(ql_payloads),
-        },
+        parallel=parallel_payload,
     )
 
 

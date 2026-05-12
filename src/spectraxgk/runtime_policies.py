@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict, dataclass
+from typing import Any
+
 import numpy as np
 
 from spectraxgk.analysis import select_ky_index
@@ -9,14 +12,42 @@ from spectraxgk.grids import SpectralGrid
 from spectraxgk.runtime_config import RuntimeConfig
 
 __all__ = [
+    "RuntimeIndependentParallelPlan",
     "_infer_runtime_nonlinear_steps",
     "_midplane_index",
     "_normalize_linear_solver_name",
     "_parallel_requests_combined_ky_scan",
     "_runtime_external_phi",
+    "_runtime_independent_parallel_plan",
     "_select_nonlinear_mode_indices",
     "_zero_kx_index",
 ]
+
+
+@dataclass(frozen=True)
+class RuntimeIndependentParallelPlan:
+    """Resolved independent-worker policy for runtime scan workloads."""
+
+    requested_workers: int
+    effective_workers: int
+    executor: str
+    strategy: str
+    axis: str
+    source: str
+    problem_size: int
+
+    @property
+    def enabled(self) -> bool:
+        """Whether the resolved plan uses more than one independent worker."""
+
+        return self.effective_workers > 1
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-friendly policy payload for runtime artifacts."""
+
+        payload = asdict(self)
+        payload["enabled"] = self.enabled
+        return payload
 
 
 def _normalize_linear_solver_name(solver: str) -> str:
@@ -35,6 +66,79 @@ def _parallel_requests_combined_ky_scan(cfg: RuntimeConfig) -> bool:
     return str(getattr(parallel, "strategy", "serial")).lower() == "combined_ky" and str(
         getattr(parallel, "axis", "ky")
     ).lower() == "ky"
+
+
+def _normalize_independent_executor(backend: str, fallback: str) -> str:
+    backend_key = str(backend).strip().lower().replace("-", "_")
+    fallback_key = str(fallback).strip().lower().replace("-", "_")
+    aliases = {
+        "thread": "thread",
+        "threads": "thread",
+        "process": "process",
+        "processes": "process",
+    }
+    if backend_key in {"", "auto"}:
+        try:
+            return aliases[fallback_key]
+        except KeyError as exc:
+            raise ValueError("parallel_executor must be 'thread' or 'process'") from exc
+    try:
+        return aliases[backend_key]
+    except KeyError as exc:
+        raise ValueError(
+            "runtime [parallel] backend for independent scans must be "
+            "'auto', 'thread', or 'process'"
+        ) from exc
+
+
+def _runtime_independent_parallel_plan(
+    cfg: RuntimeConfig,
+    *,
+    problem_size: int,
+    workers: int,
+    executor: str,
+) -> RuntimeIndependentParallelPlan:
+    """Resolve independent ``k_y`` worker policy from arguments and config."""
+
+    size = int(problem_size)
+    if size < 0:
+        raise ValueError("problem_size must be non-negative")
+    requested = int(workers)
+    if requested < 1:
+        raise ValueError("workers must be >= 1")
+    executor_key = _normalize_independent_executor("auto", executor)
+    source = "arguments"
+    strategy = "serial"
+    axis = "ky"
+
+    parallel = getattr(cfg, "parallel", None)
+    if parallel is not None:
+        strategy = str(getattr(parallel, "strategy", "serial")).strip().lower()
+        axis = str(getattr(parallel, "axis", "ky")).strip().lower()
+        if requested == 1 and strategy == "batch":
+            if axis != "ky":
+                raise ValueError(
+                    "runtime [parallel] strategy='batch' is supported only for axis='ky'"
+                )
+            configured_workers = getattr(parallel, "num_devices", None)
+            if configured_workers is None:
+                configured_workers = getattr(parallel, "batch_size", None)
+            requested = max(int(configured_workers or 1), 1)
+            executor_key = _normalize_independent_executor(
+                str(getattr(parallel, "backend", "auto")), executor
+            )
+            source = "runtime_config"
+
+    effective = 0 if size == 0 else min(requested, size)
+    return RuntimeIndependentParallelPlan(
+        requested_workers=requested,
+        effective_workers=effective,
+        executor=executor_key,
+        strategy=strategy,
+        axis=axis,
+        source=source,
+        problem_size=size,
+    )
 
 
 def _midplane_index(grid: SpectralGrid) -> int:
