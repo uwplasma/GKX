@@ -45,6 +45,9 @@ jobs:
           python tools/check_parallel_scaling_artifacts.py
           python tools/check_quasilinear_promotion_guardrails.py \
             --out-json docs/_static/quasilinear_promotion_guardrails.json
+          python tools/build_technical_release_status.py \
+            --out-json docs/_static/technical_release_status.json \
+            --fail-under 98
           python tools/check_release_readiness.py \
             --out-json docs/_static/release_readiness.json
 
@@ -120,6 +123,7 @@ jobs:
               tests/test_check_repository_size_manifest.py
               tests/test_check_release_artifact_manifest.py
               tests/test_check_release_readiness.py
+              tests/test_build_technical_release_status.py
               tests/test_check_release_version.py
               tests/test_check_quasilinear_calibration_inputs.py
               tests/test_compress_docs_previews.py
@@ -167,6 +171,7 @@ jobs:
           - name: parallel-autodiff
             files: >-
               tests/test_parallel.py
+              tests/test_parallelization_examples.py
               tests/test_sharding.py
               tests/test_sharded_integrators.py
               tests/test_generate_parallel_ky_scan_gate.py

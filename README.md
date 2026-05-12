@@ -475,24 +475,34 @@ it should not be read as a production nonlinear heat-flux optimization claim.
 
 For production parallelization of independent work, use
 `spectraxgk.batch_map` / `spectraxgk.ky_scan_batches` for ky scans,
-sensitivity sweeps, and UQ ensembles. These helpers preserve serial ordering,
-fall back to `vmap` on one device, and use JAX device batching when multiple
-devices are available. For full-state fixed-step nonlinear parallelization, set
-`TimeConfig.state_sharding = "auto"` (or `"ky"` / `"kx"`) in runtime TOMLs to
-partition the packed state array across available JAX devices. The release-gated
-nonlinear path is intentionally limited to those state axes: sharding across
-the `z` FFT axis is tracked as a future domain-decomposition lane because it
-requires a separate communication/layout design. The current profiler-backed
-artifacts are `docs/_static/nonlinear_sharding_profile.json` for the local
-control-flow gate and `docs/_static/nonlinear_sharding_profile_office_gpu.json`
-for the two-GPU office identity gate. Treat both as engineering gates, not as
-new runtime claims. The matched large strong-scaling sweep in
-`docs/performance.rst` now confirms this conservative stance: whole-state
-nonlinear sharding is identity-correct, but only modestly useful on logical
-CPUs and slower on two RTX A4000 GPUs for the current decomposition. Production
-parallelization should therefore focus first on independent `k_y` scans,
-UQ/ensemble batching, and a communication-aware nonlinear decomposition before
-any nonlinear multi-GPU speedup claim is promoted.
+sensitivity sweeps, and UQ ensembles. Runtime `k_y` scans can select the same
+independent-worker path from TOML:
+
+```toml
+[parallel]
+strategy = "batch"
+axis = "ky"
+num_devices = 4      # or batch_size = 4
+backend = "auto"     # "thread" or "process" are explicit alternatives
+```
+
+This path preserves serial ordering and uses independent solver calls; it does
+not change the solver layout. Whole-state fixed-step nonlinear sharding through
+`TimeConfig.state_sharding = "auto"` (or `"ky"` / `"kx"`) remains a
+correctness/profiler path for partitioning the packed state array across JAX
+devices. It is intentionally limited to state axes: sharding across the `z` FFT
+axis is tracked as a future domain-decomposition lane because it requires a
+separate communication/layout design. The current profiler-backed artifacts are
+`docs/_static/nonlinear_sharding_profile.json` for the local control-flow gate
+and `docs/_static/nonlinear_sharding_profile_office_gpu.json` for the two-GPU
+office identity gate. Treat both as engineering gates, not as runtime speedup
+claims. The matched large strong-scaling sweep in `docs/performance.rst`
+confirms this conservative stance: whole-state nonlinear sharding is
+identity-correct, but only modestly useful on logical CPUs and slower on two RTX
+A4000 GPUs for the current decomposition. Production parallelization should
+therefore focus on independent `k_y` scans, quasilinear studies, sensitivity
+sweeps, and UQ/ensemble batching until a communication-aware nonlinear
+decomposition has its own identity and throughput evidence.
 
 ![SPECTRAX-GK ky-batch parallelization identity gate](docs/_static/parallel_ky_scan_gate.png)
 
@@ -680,9 +690,10 @@ python tools/benchmark_runtime_memory.py --continue-on-error --log-dir tools_out
 
 Parallelization scaling figures are kept in the performance docs rather than
 the top-level README. The shipped public claim is the independent-work path for
-`k_y` scans and UQ ensembles; whole-state nonlinear sharding remains an
-identity/profiler artifact until a communication-aware nonlinear decomposition
-has matched CPU/GPU identity and throughput evidence.
+`k_y` scans, quasilinear studies, sensitivity sweeps, and UQ ensembles;
+whole-state nonlinear sharding remains an identity/profiler artifact until a
+communication-aware nonlinear decomposition has matched CPU/GPU identity and
+throughput evidence.
 
 ## Examples
 
