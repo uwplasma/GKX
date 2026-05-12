@@ -263,6 +263,7 @@ from spectraxgk.stellarator_optimization import (
 from spectraxgk.solver_objective_gradients import (
     SOLVER_GEOMETRY_PARAMETER_NAMES,
     SOLVER_OBJECTIVE_NAMES,
+    SolverScalarObjective,
     VMEC_BOOZER_FREQUENCY_OBJECTIVE_NAMES,
     VMEC_BOOZER_NONLINEAR_WINDOW_OBJECTIVE_NAMES,
     VMEC_BOOZER_QUASILINEAR_OBJECTIVE_NAMES,
@@ -274,7 +275,9 @@ from spectraxgk.solver_objective_gradients import (
     mode21_vmec_boozer_quasilinear_gradient_report,
     solver_objective_branch_gradient_report,
     solver_objective_vector_from_geometry,
+    solver_scalar_objective_from_vector,
     solver_ready_geometry_mapping,
+    vmec_boozer_scalar_objective_from_state,
     vmec_boozer_solver_objective_vector_from_state,
 )
 from spectraxgk.plotting import (
@@ -537,6 +540,7 @@ __all__ = [
     "stellarator_itg_objective_residual_vector",
     "SOLVER_GEOMETRY_PARAMETER_NAMES",
     "SOLVER_OBJECTIVE_NAMES",
+    "SolverScalarObjective",
     "VMEC_BOOZER_FREQUENCY_OBJECTIVE_NAMES",
     "VMEC_BOOZER_NONLINEAR_WINDOW_OBJECTIVE_NAMES",
     "VMEC_BOOZER_QUASILINEAR_OBJECTIVE_NAMES",
@@ -548,7 +552,9 @@ __all__ = [
     "mode21_vmec_boozer_quasilinear_gradient_report",
     "solver_objective_branch_gradient_report",
     "solver_objective_vector_from_geometry",
+    "solver_scalar_objective_from_vector",
     "solver_ready_geometry_mapping",
+    "vmec_boozer_scalar_objective_from_state",
     "vmec_boozer_solver_objective_vector_from_state",
     "eigenfunction_gate_report",
     "evaluate_scalar_gate",

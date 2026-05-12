@@ -11,7 +11,7 @@ from __future__ import annotations
 import importlib
 from dataclasses import replace as dc_replace
 import time
-from typing import Any
+from typing import Any, Literal
 
 import jax
 import jax.numpy as jnp
@@ -68,6 +68,46 @@ VMEC_BOOZER_NONLINEAR_WINDOW_OBJECTIVE_NAMES = (
     "nonlinear_window_heat_flux_cv",
     "nonlinear_window_heat_flux_trend",
 )
+SolverScalarObjective = Literal[
+    "growth",
+    "gamma",
+    "frequency",
+    "omega",
+    "kperp_eff2",
+    "linear_heat_flux_weight",
+    "linear_particle_flux_weight",
+    "quasilinear_flux",
+    "mixing_length_heat_flux_proxy",
+]
+_SOLVER_OBJECTIVE_INDEX = {name: index for index, name in enumerate(SOLVER_OBJECTIVE_NAMES)}
+_SOLVER_OBJECTIVE_ALIASES = {
+    "growth": "gamma",
+    "frequency": "omega",
+    "quasilinear_flux": "mixing_length_heat_flux_proxy",
+}
+
+
+def solver_scalar_objective_from_vector(
+    objective_vector: jnp.ndarray | np.ndarray,
+    objective: SolverScalarObjective = "growth",
+) -> jnp.ndarray:
+    """Select one scalar objective from ``SOLVER_OBJECTIVE_NAMES``.
+
+    This tiny selector keeps optimizer code honest about which scalar is being
+    minimized. It also centralizes aliases used by the examples:
+    ``growth -> gamma``, ``frequency -> omega``, and
+    ``quasilinear_flux -> mixing_length_heat_flux_proxy``.
+    """
+
+    key = str(objective).strip()
+    canonical = _SOLVER_OBJECTIVE_ALIASES.get(key, key)
+    if canonical not in _SOLVER_OBJECTIVE_INDEX:
+        valid = sorted(set(_SOLVER_OBJECTIVE_INDEX) | set(_SOLVER_OBJECTIVE_ALIASES))
+        raise ValueError(f"unknown solver objective {objective!r}; expected one of {valid}")
+    vector = jnp.ravel(jnp.asarray(objective_vector))
+    if int(vector.size) != len(SOLVER_OBJECTIVE_NAMES):
+        raise ValueError(f"objective_vector must have length {len(SOLVER_OBJECTIVE_NAMES)}")
+    return vector[_SOLVER_OBJECTIVE_INDEX[canonical]]
 
 
 def solver_objective_vector_from_geometry(
@@ -240,6 +280,34 @@ def vmec_boozer_solver_objective_vector_from_state(  # pragma: no cover
         **geometry_kwargs,
     )
     return solver_objective_vector_from_geometry(geom, **objective_kwargs)
+
+
+def vmec_boozer_scalar_objective_from_state(  # pragma: no cover
+    state: Any,
+    static: Any,
+    indata: Any,
+    wout: Any,
+    *,
+    objective: SolverScalarObjective = "growth",
+    **kwargs: Any,
+) -> jnp.ndarray:
+    """Evaluate one scalar optimization objective on the VMEC/Boozer path.
+
+    This is the optimizer-facing scalar wrapper around
+    :func:`vmec_boozer_solver_objective_vector_from_state`. It provides the
+    real linear-growth and quasilinear-flux objective hook needed by the
+    full-chain stellarator optimizer, while leaving branch and AD/FD promotion
+    to the explicit gates.
+    """
+
+    vector = vmec_boozer_solver_objective_vector_from_state(
+        state,
+        static,
+        indata,
+        wout,
+        **kwargs,
+    )
+    return solver_scalar_objective_from_vector(vector, objective)
 
 
 def solver_objective_branch_gradient_report(
@@ -1321,6 +1389,7 @@ def mode21_vmec_boozer_nonlinear_window_gradient_report(  # pragma: no cover
 __all__ = [
     "SOLVER_GEOMETRY_PARAMETER_NAMES",
     "SOLVER_OBJECTIVE_NAMES",
+    "SolverScalarObjective",
     "TINY_OBJECTIVE_NAMES",
     "VMEC_BOOZER_FREQUENCY_OBJECTIVE_NAMES",
     "VMEC_BOOZER_NONLINEAR_WINDOW_OBJECTIVE_NAMES",
@@ -1333,7 +1402,9 @@ __all__ = [
     "mode21_vmec_boozer_quasilinear_gradient_report",
     "solver_objective_branch_gradient_report",
     "solver_objective_vector_from_geometry",
+    "solver_scalar_objective_from_vector",
     "solver_ready_geometry_mapping",
     "tiny_differentiable_objective_gradient_report",
+    "vmec_boozer_scalar_objective_from_state",
     "vmec_boozer_solver_objective_vector_from_state",
 ]
