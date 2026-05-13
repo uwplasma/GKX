@@ -72,6 +72,12 @@ def external_vmec_family(case: str, source: str = "") -> str:
         return "updown_asym_external_vmec"
     if "itermodel" in text:
         return "itermodel_external_vmec"
+    if "li383" in text:
+        return "li383_external_vmec"
+    if "qi_stel" in text or "quasi-isodynamic" in text or "nfp3_qi" in text:
+        return "qi_external_vmec"
+    if "qa" in text and ("landremanpaul" in text or "quasi-axisymmetric" in text):
+        return "qa_external_vmec"
     if "dshape" in text or "d-shaped" in text or "d_shaped" in text:
         return "dshape_external_vmec"
     if "circular" in text:
@@ -80,6 +86,12 @@ def external_vmec_family(case: str, source: str = "") -> str:
         return "cth_like_external_vmec"
     if "qh" in text or "nfp4" in text:
         return "qh_external_vmec"
+    if "basic_non_stellsym" in text or "non_stellsym" in text:
+        return "non_stellsym_external_vmec"
+    if "purely_toroidal" in text:
+        return "purely_toroidal_external_vmec"
+    if "solovev" in text:
+        return "solovev_external_vmec"
     if "shaped_tokamak" in text:
         return "shaped_tokamak_external_vmec"
     return "external_vmec"
@@ -189,9 +201,16 @@ def _candidate_status(
     represented_families: set[str],
     failed_external_families: set[str],
     passed_training_audit_families: set[str],
+    min_launch_gamma: float,
 ) -> tuple[str, float, str]:
     if not row.unstable:
         return ("screen_rejected_stable_or_failed", 9.0, "screen row did not finish with positive growth")
+    if float(row.best_gamma or 0.0) < float(min_launch_gamma):
+        return (
+            "screen_marginal_needs_linear_refinement",
+            7.0,
+            "positive growth is below the nonlinear-launch threshold; refine the linear branch before launching a transport holdout",
+        )
     if row.family in failed_external_families and row.family != preferred_family:
         return (
             "recent_family_failed_external_gate",
@@ -224,6 +243,7 @@ def build_external_holdout_runbook(
     out_dir: str = "tools_out/external_vmec_holdouts",
     grids: tuple[str, ...] = ("n48:48:48:32:32", "n64:64:64:40:40"),
     dt: float = 0.05,
+    min_launch_gamma: float = 0.02,
     max_candidates: int = 6,
 ) -> dict[str, Any]:
     """Build a JSON-ready runbook for the next nonlinear holdout campaign.
@@ -253,6 +273,7 @@ def build_external_holdout_runbook(
             represented_families=represented,
             failed_external_families=failed_external,
             passed_training_audit_families=passed_training_audits,
+            min_launch_gamma=float(min_launch_gamma),
         )
         gamma_key = -(row.best_gamma if row.best_gamma is not None else -math.inf)
         ky_key = -(row.best_ky if row.best_ky is not None else -math.inf)
@@ -313,6 +334,7 @@ def build_external_holdout_runbook(
         "recommended_horizons": horizons,
         "recommended_grids": list(grids),
         "dt": float(dt),
+        "min_launch_gamma": float(min_launch_gamma),
         "selected_new_family_candidate": selected_new,
         "selected_preferred_family_audit": selected_preferred_audit,
         "ranked_candidates": ranked[: int(max_candidates)],
@@ -323,6 +345,7 @@ def build_external_holdout_runbook(
             "requires_grid_window_convergence": True,
             "requires_post_transient_window": True,
             "requires_independent_from_training_reference": True,
+            "minimum_screen_growth_rate_for_launch": float(min_launch_gamma),
         },
         "notes": (
             "Run the selected configurations on the large-run host, build a convergence gate with "
