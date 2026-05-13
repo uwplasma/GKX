@@ -214,6 +214,13 @@ calibration metadata as `split = holdout`.
 
 ![SPECTRAX-GK external-VMEC next holdout runbook](docs/_static/external_vmec_next_holdout_runbook.png)
 
+The latest new-family shaped-tokamak pressure candidate was run to `t=450` on
+the office GPUs at `48x48x32` and `64x64x40`. It is finite and late-window
+stable, but it is not admitted: the two grid levels differ by about `0.306` in
+both common-window and least-window heat-flux means, above the `0.15`
+convergence gate. The runbook now demotes unchanged reruns of that failed
+family and keeps ITERModel as the preferred audit target.
+
 Two of the strongest admitted external-VMEC nonlinear holdouts are shown below.
 These figures are part of the publication-facing evidence that the nonlinear
 inputs are converged enough to be used as negative transfer constraints rather

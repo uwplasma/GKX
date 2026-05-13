@@ -114,6 +114,26 @@ def _families_from_rows(rows: Iterable[dict[str, Any]]) -> set[str]:
     return families
 
 
+def _failed_external_families(gap_report: dict[str, Any]) -> set[str]:
+    """Return external-VMEC families with tracked failed convergence gates."""
+
+    families: set[str] = set()
+    excluded = gap_report.get("excluded_candidates", [])
+    if not isinstance(excluded, list):
+        return families
+    for row in excluded:
+        if not isinstance(row, dict):
+            continue
+        family = str(row.get("geometry", ""))
+        if "external_vmec" not in family:
+            continue
+        status = str(row.get("status", ""))
+        failed = row.get("gate_passed") is False or status == "excluded_failed_external_gate"
+        if failed:
+            families.add(family)
+    return families
+
+
 def _first_nearest_gap(gap_report: dict[str, Any]) -> dict[str, Any]:
     needed = gap_report.get("next_actual_nonlinear_holdout_needed", {})
     if not isinstance(needed, dict):
@@ -149,9 +169,16 @@ def _candidate_status(
     *,
     preferred_family: str | None,
     represented_families: set[str],
+    failed_external_families: set[str],
 ) -> tuple[str, float, str]:
     if not row.unstable:
         return ("screen_rejected_stable_or_failed", 9.0, "screen row did not finish with positive growth")
+    if row.family in failed_external_families and row.family != preferred_family:
+        return (
+            "recent_family_failed_external_gate",
+            6.0,
+            "this external-VMEC family has a tracked failed convergence gate; rerun only with a modified higher-resolution protocol",
+        )
     if preferred_family and row.family == preferred_family:
         if row.family in represented_families:
             return (
@@ -187,6 +214,7 @@ def build_external_holdout_runbook(
     admitted = gap_report.get("admitted_holdouts", [])
     training = gap_report.get("training_references", [])
     represented = _families_from_rows([*admitted, *training])
+    failed_external = _failed_external_families(gap_report)
     nearest_gap = _first_nearest_gap(gap_report)
     horizons = _recommended_horizons(nearest_gap)
     grid_args = " ".join(f"--grid {grid}" for grid in grids)
@@ -197,6 +225,7 @@ def build_external_holdout_runbook(
             row,
             preferred_family=preferred,
             represented_families=represented,
+            failed_external_families=failed_external,
         )
         gamma_key = -(row.best_gamma if row.best_gamma is not None else -math.inf)
         ky_key = -(row.best_ky if row.best_ky is not None else -math.inf)
