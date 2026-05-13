@@ -170,25 +170,27 @@ The first Cyclone nonlinear audit is tracked in `docs/quasilinear.rst` and is
 kept at `training_or_audit_only` until a held-out calibration set passes.
 
 The manuscript-facing quasilinear calibration panel now uses the full admitted
-electrostatic portfolio: two training geometries and five held-out nonlinear
+electrostatic portfolio: two training geometries and six held-out nonlinear
 windows spanning tokamak, stellarator, and external-VMEC cases.
 
 ![SPECTRAX-GK quasilinear stellarator train/holdout calibration](docs/_static/quasilinear_stellarator_train_holdout.png)
 
 The current training set is Cyclone plus the external-VMEC ITERModel case; the
-holdouts are Cyclone Miller, HSX, W7-X, D-shaped VMEC, and the up-down
-asymmetric VMEC tokamak. This is a stronger negative-transfer result than the
-earlier Cyclone-only fit: nonlinear input validation now passes, but the fitted
+holdouts are Cyclone Miller, HSX, W7-X, D-shaped VMEC, up-down asymmetric VMEC,
+and circular VMEC. This is a stronger transfer test than the earlier
+Cyclone-only fit: nonlinear input validation now passes, but the fitted
 one-constant mixing-length model still fails the held-out absolute-flux gate
-with mean relative error about `2.57`. The best current one-scalar saturation
-rule remains worse than the training-mean null baseline (`2.51` versus `1.39`),
+with mean relative error about `2.11`. The circular holdout itself is predicted
+well by the scaled one-constant diagnostic, but the aggregate model remains
+blocked by the other held-out cases. The best current one-scalar saturation
+rule remains worse than the training-mean null baseline (`2.11` versus `1.20`),
 so SPECTRAX-GK does not promote any simple or user-facing absolute quasilinear
 flux predictor from that legacy family.
 
 The richer held-out candidate is now the reduced `spectral_envelope_ridge`
 model below. It uses only two linear-spectrum envelope features, reaches mean
-relative error about `0.244`, and clears the leave-one-geometry-out
-interval-coverage gate on the current seven-case electrostatic portfolio. That
+relative error about `0.295`, and clears the leave-one-geometry-out
+interval-coverage gate at `7/8` on the current eight-case electrostatic portfolio. That
 is the current manuscript model-selection result: the simple rules are rejected,
 but a small spectrum-aware candidate is accepted as a scoped research candidate,
 not a runtime/TOML absolute-flux predictor or universal saturation law.
@@ -196,9 +198,9 @@ not a runtime/TOML absolute-flux predictor or universal saturation law.
 ![SPECTRAX-GK quasilinear candidate uncertainty gate](docs/_static/quasilinear_candidate_uncertainty.png)
 
 The companion holdout-gap report makes the remaining promotion blocker
-explicit instead of hiding it in the calibration plot. Five holdouts are
+explicit instead of hiding it in the calibration plot. Six holdouts are
 admitted and the scoped model-selection gate passes, but the current absolute
-heat-flux calibration still fails the aggregate holdout gate (`2.57 > 0.35`).
+heat-flux calibration still fails the aggregate holdout gate (`2.11 > 0.35`).
 The next useful data product is therefore another independent, converged
 electrostatic nonlinear holdout, preferably in the external-VMEC family, not
 another unvalidated fit parameter.
@@ -228,10 +230,16 @@ all pass.
 
 The up-down asymmetric external-VMEC tokamak closes at `t=450` on the same
 ladder. Its common-window and least-window relative differences are about
-`0.0435` and `0.0242`, respectively. These admitted windows strengthen the
-quasilinear calibration dataset without changing the core conclusion: the
-current absolute-flux model is still a rejected research candidate, not a
-shipped predictive transport law.
+`0.0435` and `0.0242`, respectively.
+
+![SPECTRAX-GK circular external-VMEC nonlinear convergence gate](docs/_static/external_vmec_circular_t450_high_grid_convergence_gate.png)
+
+The circular external-VMEC tokamak initially failed the shorter `t=150` and
+`t=250` admission gates, then closes at `t=450` on the same high-grid ladder:
+the common-window and least-window grid differences are about `0.0128` and
+`0.0468`. These admitted windows strengthen the quasilinear calibration dataset
+without changing the core conclusion: the current absolute-flux model is still
+a rejected research candidate, not a shipped predictive transport law.
 
 Autodiff validation (inverse/sensitivity demo):
 
