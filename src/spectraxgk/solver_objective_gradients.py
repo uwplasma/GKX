@@ -972,6 +972,144 @@ def vmec_boozer_aggregate_scalar_objective_line_search_report(  # pragma: no cov
     }
 
 
+def vmec_boozer_aggregate_line_search_holdout_report(  # pragma: no cover
+    *,
+    case_name: str = "nfp4_QH_warm_start",
+    objective: SolverScalarObjective = "growth",
+    reduction: Literal["mean", "weighted_mean", "max"] = "mean",
+    training_weights: tuple[float, ...] | list[float] | np.ndarray | None = None,
+    holdout_weights: tuple[float, ...] | list[float] | np.ndarray | None = None,
+    training_surface_indices: int | None | tuple[int | None, ...] | list[int | None] = (None,),
+    training_alphas: float | tuple[float, ...] | list[float] = (0.0,),
+    training_selected_ky_indices: int | tuple[int, ...] | list[int] = (1,),
+    holdout_surface_indices: int | None | tuple[int | None, ...] | list[int | None] = (None,),
+    holdout_alphas: float | tuple[float, ...] | list[float] = (0.0,),
+    holdout_selected_ky_indices: int | tuple[int, ...] | list[int] = (2,),
+    radial_index: int | None = None,
+    mode_index: int = 1,
+    initial_delta: float = 0.0,
+    perturbation_step: float = 1.0e-7,
+    update_step: float = 1.0e-8,
+    max_steps: int = 3,
+    min_improvement: float = 0.0,
+    min_holdout_improvement: float = 0.0,
+    response_atol: float = 0.0,
+    max_curvature_ratio: float = 5.0,
+    **kwargs: Any,
+) -> dict[str, object]:
+    """Audit a training aggregate update against held-out aggregate samples.
+
+    A report passes only when the training line search accepts at least one
+    curvature-gated update and the same final VMEC coefficient offset reduces
+    the held-out aggregate objective.  This is a reduced linear/quasilinear
+    validation split, not a nonlinear transport optimization claim.
+    """
+
+    min_holdout_improvement_float = float(min_holdout_improvement)
+    if min_holdout_improvement_float < 0.0:
+        raise ValueError("min_holdout_improvement must be non-negative")
+
+    training = vmec_boozer_aggregate_scalar_objective_line_search_report(
+        case_name=case_name,
+        objective=objective,
+        reduction=reduction,
+        weights=training_weights,
+        surface_indices=training_surface_indices,
+        alphas=training_alphas,
+        selected_ky_indices=training_selected_ky_indices,
+        radial_index=radial_index,
+        mode_index=mode_index,
+        initial_delta=initial_delta,
+        perturbation_step=perturbation_step,
+        update_step=update_step,
+        max_steps=max_steps,
+        min_improvement=min_improvement,
+        response_atol=response_atol,
+        max_curvature_ratio=max_curvature_ratio,
+        **kwargs,
+    )
+    final_delta = _report_float(training, "final_delta")
+
+    heldout_initial = vmec_boozer_aggregate_scalar_objective_finite_difference_report(
+        case_name=case_name,
+        objective=objective,
+        reduction=reduction,
+        weights=holdout_weights,
+        surface_indices=holdout_surface_indices,
+        alphas=holdout_alphas,
+        selected_ky_indices=holdout_selected_ky_indices,
+        radial_index=radial_index,
+        mode_index=mode_index,
+        base_delta=initial_delta,
+        perturbation_step=perturbation_step,
+        response_atol=response_atol,
+        max_curvature_ratio=max_curvature_ratio,
+        **kwargs,
+    )
+    heldout_final = vmec_boozer_aggregate_scalar_objective_finite_difference_report(
+        case_name=case_name,
+        objective=objective,
+        reduction=reduction,
+        weights=holdout_weights,
+        surface_indices=holdout_surface_indices,
+        alphas=holdout_alphas,
+        selected_ky_indices=holdout_selected_ky_indices,
+        radial_index=radial_index,
+        mode_index=mode_index,
+        base_delta=final_delta,
+        perturbation_step=perturbation_step,
+        response_atol=response_atol,
+        max_curvature_ratio=max_curvature_ratio,
+        **kwargs,
+    )
+    heldout_initial_value = _report_float(heldout_initial, "base_value")
+    heldout_final_value = _report_float(heldout_final, "base_value")
+    heldout_reduction = heldout_initial_value - heldout_final_value
+    heldout_passed = bool(
+        bool(heldout_initial["passed"])
+        and bool(heldout_final["passed"])
+        and heldout_reduction > min_holdout_improvement_float
+    )
+    training_passed = bool(training["passed"])
+    return {
+        "kind": "vmec_boozer_aggregate_line_search_holdout_report",
+        "passed": bool(training_passed and heldout_passed),
+        "source_scope": "mode21_vmec_boozer_state_train_holdout",
+        "claim_scope": (
+            "one-parameter aggregate reduced-objective line search with held-out "
+            "surface/field-line/ky validation; not a nonlinear turbulent transport "
+            "or broad stellarator optimization claim"
+        ),
+        "case_name": str(case_name),
+        "objective": str(objective),
+        "reduction": str(reduction),
+        "initial_delta": float(initial_delta),
+        "final_delta": final_delta,
+        "training_passed": training_passed,
+        "heldout_passed": heldout_passed,
+        "training_initial_objective": _report_float(training, "initial_objective"),
+        "training_final_objective": _report_float(training, "final_objective"),
+        "training_relative_reduction": training.get("relative_reduction"),
+        "heldout_initial_objective": heldout_initial_value,
+        "heldout_final_objective": heldout_final_value,
+        "heldout_relative_reduction": (
+            float(heldout_reduction / abs(heldout_initial_value))
+            if np.isfinite(heldout_initial_value) and abs(heldout_initial_value) > 0.0
+            else None
+        ),
+        "min_holdout_improvement": min_holdout_improvement_float,
+        "training_samples": training.get("samples", []),
+        "heldout_samples": heldout_initial.get("samples", []),
+        "training_report": training,
+        "heldout_initial_report": heldout_initial,
+        "heldout_final_report": heldout_final,
+        "next_action": (
+            "Promote only if this split gate passes on multiple held-out surfaces "
+            "or field lines and then survives nonlinear-window transport audits."
+        ),
+    }
+
+
 def vmec_boozer_scalar_objective_line_search_report(  # pragma: no cover
     *,
     case_name: str = "nfp4_QH_warm_start",
@@ -2203,6 +2341,7 @@ __all__ = [
     "solver_scalar_objective_from_vector",
     "solver_ready_geometry_mapping",
     "tiny_differentiable_objective_gradient_report",
+    "vmec_boozer_aggregate_line_search_holdout_report",
     "vmec_boozer_aggregate_scalar_objective_finite_difference_report",
     "vmec_boozer_aggregate_scalar_objective_from_state",
     "vmec_boozer_aggregate_scalar_objective_line_search_report",
