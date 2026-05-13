@@ -96,6 +96,15 @@ from spectraxgk.quasilinear_model_selection import (
     build_quasilinear_model_selection_status as build_quasilinear_model_selection_status,
     build_quasilinear_model_selection_status_from_paths as build_quasilinear_model_selection_status_from_paths,
 )
+from spectraxgk.quasilinear_window import (
+    NonlinearWindowConvergenceConfig,
+    NonlinearWindowEnsembleConfig,
+    nonlinear_window_convergence_from_csv,
+    nonlinear_window_convergence_from_summary,
+    nonlinear_window_convergence_report,
+    nonlinear_window_ensemble_report,
+    nonlinear_window_stats_promotion_ready,
+)
 from spectraxgk.external_holdout_plan import (
     ExternalHoldoutScreenRow,
     build_external_holdout_runbook,
@@ -429,6 +438,13 @@ __all__ = [
     "write_quasilinear_calibration_report",
     "build_quasilinear_model_selection_status",
     "build_quasilinear_model_selection_status_from_paths",
+    "NonlinearWindowConvergenceConfig",
+    "NonlinearWindowEnsembleConfig",
+    "nonlinear_window_convergence_from_csv",
+    "nonlinear_window_convergence_from_summary",
+    "nonlinear_window_convergence_report",
+    "nonlinear_window_ensemble_report",
+    "nonlinear_window_stats_promotion_ready",
     "ExternalHoldoutScreenRow",
     "build_external_holdout_runbook",
     "external_vmec_family",

@@ -38,6 +38,17 @@ class NonlinearWindowConvergenceConfig:
     require_all_finite: bool = True
 
 
+@dataclass(frozen=True)
+class NonlinearWindowEnsembleConfig:
+    """Gate settings for replicated nonlinear transport-window summaries."""
+
+    min_reports: int = 2
+    max_mean_rel_spread: float = 0.15
+    max_combined_sem_rel: float = 0.25
+    value_floor: float = 1.0e-12
+    require_individual_passed: bool = True
+
+
 def _json_number(value: float | int | np.generic | None) -> float | int | None:
     if value is None:
         return None
@@ -86,6 +97,17 @@ def _validate_config(config: NonlinearWindowConvergenceConfig) -> None:
         raise ValueError("max_terminal_mean_rel_delta must be non-negative")
     if float(config.max_sem_rel) < 0.0:
         raise ValueError("max_sem_rel must be non-negative")
+    if float(config.value_floor) <= 0.0:
+        raise ValueError("value_floor must be positive")
+
+
+def _validate_ensemble_config(config: NonlinearWindowEnsembleConfig) -> None:
+    if int(config.min_reports) < 2:
+        raise ValueError("min_reports must be at least 2")
+    if float(config.max_mean_rel_spread) < 0.0:
+        raise ValueError("max_mean_rel_spread must be non-negative")
+    if float(config.max_combined_sem_rel) < 0.0:
+        raise ValueError("max_combined_sem_rel must be non-negative")
     if float(config.value_floor) <= 0.0:
         raise ValueError("value_floor must be positive")
 
@@ -521,8 +543,186 @@ def nonlinear_window_stats_promotion_ready(
     return not failures, failures
 
 
+def _report_late_mean(report: dict[str, Any]) -> float | None:
+    statistics = report.get("statistics")
+    if not isinstance(statistics, dict):
+        return None
+    value = statistics.get("late_mean")
+    if value is None:
+        return None
+    try:
+        late_mean = float(value)
+    except (TypeError, ValueError):
+        return None
+    return late_mean if math.isfinite(late_mean) else None
+
+
+def _report_sem(report: dict[str, Any]) -> float | None:
+    statistics = report.get("statistics")
+    if not isinstance(statistics, dict):
+        return None
+    value = statistics.get("sem")
+    if value is None:
+        return None
+    try:
+        sem = float(value)
+    except (TypeError, ValueError):
+        return None
+    return sem if math.isfinite(sem) else None
+
+
+def nonlinear_window_ensemble_report(
+    reports: Sequence[dict[str, Any]],
+    *,
+    case: str = "nonlinear_window_ensemble",
+    comparison: str = "replicate_uncertainty",
+    config: NonlinearWindowEnsembleConfig | None = None,
+) -> dict[str, Any]:
+    """Gate repeated nonlinear-window summaries for seed/timestep robustness.
+
+    The input reports are expected to come from
+    :func:`nonlinear_window_convergence_report`. This helper does not inspect
+    raw time traces; it compares already-gated late-window means and their
+    uncertainty metadata so production promotion can require seed, initial
+    condition, or timestep robustness without rerunning simulations inside the
+    checker.
+    """
+
+    cfg = config or NonlinearWindowEnsembleConfig()
+    _validate_ensemble_config(cfg)
+    rows: list[dict[str, Any]] = []
+    means: list[float] = []
+    sems: list[float] = []
+    individual_ready = True
+    for idx, report in enumerate(reports):
+        if not isinstance(report, dict):
+            raise TypeError("reports must contain nonlinear window report dictionaries")
+        late_mean = _report_late_mean(report)
+        sem = _report_sem(report)
+        report_passed = bool(report.get("passed", False))
+        ready, failures = nonlinear_window_stats_promotion_ready(report)
+        row_passed = bool(report_passed and ready)
+        if not row_passed:
+            individual_ready = False
+        if late_mean is not None:
+            means.append(late_mean)
+        if sem is not None:
+            sems.append(sem)
+        raw_provenance = report.get("provenance")
+        provenance: dict[str, Any] = raw_provenance if isinstance(raw_provenance, dict) else {}
+        rows.append(
+            {
+                "index": int(idx),
+                "case": str(report.get("case", f"report_{idx}")),
+                "passed": report_passed,
+                "promotion_ready": ready,
+                "late_mean": _json_number(late_mean),
+                "sem": _json_number(sem),
+                "failures": failures,
+                "source_artifact": provenance.get("source_artifact"),
+                "summary_artifact": provenance.get("summary_artifact"),
+            }
+        )
+
+    mean_arr = np.asarray(means, dtype=float)
+    sem_arr = np.asarray(sems, dtype=float)
+    n_reports = len(rows)
+    scale = max(abs(float(np.mean(mean_arr))) if mean_arr.size else 0.0, float(cfg.value_floor))
+    mean_spread = float(np.max(mean_arr) - np.min(mean_arr)) if mean_arr.size else None
+    mean_rel_spread = None if mean_spread is None else float(mean_spread / scale)
+    sample_sem = (
+        float(np.std(mean_arr, ddof=1) / np.sqrt(mean_arr.size))
+        if mean_arr.size >= 2
+        else None
+    )
+    max_individual_sem = float(np.max(sem_arr)) if sem_arr.size else None
+    sem_candidates = [
+        value
+        for value in (sample_sem, max_individual_sem)
+        if value is not None and math.isfinite(float(value))
+    ]
+    combined_sem = max(sem_candidates) if sem_candidates else None
+    combined_sem_rel = None if combined_sem is None else float(combined_sem / scale)
+    mean_rel_spread_ok = (
+        mean_rel_spread is not None
+        and math.isfinite(mean_rel_spread)
+        and mean_rel_spread <= float(cfg.max_mean_rel_spread)
+    )
+    combined_sem_rel_ok = (
+        combined_sem_rel is not None
+        and math.isfinite(combined_sem_rel)
+        and combined_sem_rel <= float(cfg.max_combined_sem_rel)
+    )
+
+    gates = [
+        _gate(
+            "report_count",
+            n_reports >= int(cfg.min_reports),
+            f"reports={n_reports} min_reports={cfg.min_reports}",
+        ),
+        _gate(
+            "individual_windows_passed",
+            (not cfg.require_individual_passed) or individual_ready,
+            f"require_individual_passed={cfg.require_individual_passed}",
+        ),
+        _gate(
+            "finite_late_means",
+            mean_arr.size == n_reports and n_reports > 0,
+            f"finite_means={mean_arr.size} reports={n_reports}",
+        ),
+        _gate(
+            "mean_relative_spread",
+            mean_rel_spread_ok,
+            "mean_rel_spread={value} gate={gate}".format(
+                value=mean_rel_spread,
+                gate=cfg.max_mean_rel_spread,
+            ),
+        ),
+        _gate(
+            "combined_sem",
+            combined_sem_rel_ok,
+            "combined_sem_rel={value} gate={gate}".format(
+                value=combined_sem_rel,
+                gate=cfg.max_combined_sem_rel,
+            ),
+        ),
+    ]
+    passed = all(bool(gate["passed"]) for gate in gates)
+    return {
+        "kind": "nonlinear_window_ensemble_report",
+        "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
+        "case": str(case),
+        "comparison": str(comparison),
+        "passed": passed,
+        "statistics": {
+            "n_reports": n_reports,
+            "n_finite_means": int(mean_arr.size),
+            "ensemble_mean": _json_number(float(np.mean(mean_arr)) if mean_arr.size else None),
+            "mean_spread": _json_number(mean_spread),
+            "mean_rel_spread": _json_number(mean_rel_spread),
+            "sample_sem": _json_number(sample_sem),
+            "max_individual_sem": _json_number(max_individual_sem),
+            "combined_sem": _json_number(combined_sem),
+            "combined_sem_rel": _json_number(combined_sem_rel),
+        },
+        "gates": gates,
+        "gate_report": {
+            "case": str(case),
+            "source": "nonlinear_window_convergence_reports",
+            "passed": passed,
+            "max_abs_error": 0.0 if passed else 1.0,
+            "max_rel_error": 0.0 if passed else 1.0,
+            "gates": gates,
+        },
+        "rows": rows,
+        "config": asdict(cfg),
+    }
+
+
 __all__ = [
     "NonlinearWindowConvergenceConfig",
+    "NonlinearWindowEnsembleConfig",
+    "nonlinear_window_ensemble_report",
     "nonlinear_window_convergence_from_csv",
     "nonlinear_window_convergence_from_summary",
     "nonlinear_window_convergence_report",
