@@ -435,13 +435,19 @@ coefficient directions. The current promotion gate is therefore intentionally
 blocked until an independent production-grade held-out surface or field-line
 artifact passes. The alpha-heldout split shown below is a positive reduced
 field-line generalization check, but it is still not a nonlinear transport
-optimization claim.
+optimization claim. The surface-heldout split extends this to a true
+held-out `surface_index`, and the Li383 panel checks that the same aggregate
+finite-difference plus line-search machinery works on a second equilibrium.
 
 ![SPECTRAX-GK VMEC/Boozer multi-alpha aggregate-objective gate](docs/_static/vmec_boozer_multi_point_objective_gate.png)
 
 ![SPECTRAX-GK VMEC/Boozer growth-vs-quasilinear line-search comparison](docs/_static/vmec_boozer_aggregate_line_search_comparison.png)
 
 ![SPECTRAX-GK VMEC/Boozer aggregate alpha-heldout gate](docs/_static/vmec_boozer_aggregate_alpha_holdout_gate.png)
+
+![SPECTRAX-GK VMEC/Boozer aggregate surface-heldout gate](docs/_static/vmec_boozer_aggregate_surface_holdout_gate.png)
+
+![SPECTRAX-GK VMEC/Boozer second-equilibrium aggregate gate](docs/_static/vmec_boozer_second_equilibrium_aggregate_gate.png)
 
 ![SPECTRAX-GK nonlinear startup-window finite-difference audit](docs/_static/nonlinear_window_fd_audit.png)
 
