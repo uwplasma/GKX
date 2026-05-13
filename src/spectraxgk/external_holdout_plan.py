@@ -134,6 +134,24 @@ def _failed_external_families(gap_report: dict[str, Any]) -> set[str]:
     return families
 
 
+def _passed_training_audit_families(gap_report: dict[str, Any]) -> set[str]:
+    """Return represented families with a passed same-family audit gate."""
+
+    families: set[str] = set()
+    excluded = gap_report.get("excluded_candidates", [])
+    if not isinstance(excluded, list):
+        return families
+    for row in excluded:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get("status", "")) != "excluded_same_family_training_audit":
+            continue
+        family = str(row.get("geometry", ""))
+        if "external_vmec" in family and row.get("gate_passed") is True:
+            families.add(family)
+    return families
+
+
 def _first_nearest_gap(gap_report: dict[str, Any]) -> dict[str, Any]:
     needed = gap_report.get("next_actual_nonlinear_holdout_needed", {})
     if not isinstance(needed, dict):
@@ -170,6 +188,7 @@ def _candidate_status(
     preferred_family: str | None,
     represented_families: set[str],
     failed_external_families: set[str],
+    passed_training_audit_families: set[str],
 ) -> tuple[str, float, str]:
     if not row.unstable:
         return ("screen_rejected_stable_or_failed", 9.0, "screen row did not finish with positive growth")
@@ -181,6 +200,12 @@ def _candidate_status(
         )
     if preferred_family and row.family == preferred_family:
         if row.family in represented_families:
+            if row.family in passed_training_audit_families:
+                return (
+                    "preferred_family_audit_already_passed",
+                    5.0,
+                    "same-family audit already passed; relaunch only with a different independent geometry or a materially changed protocol",
+                )
             return (
                 "preferred_family_already_represented",
                 3.0,
@@ -215,6 +240,7 @@ def build_external_holdout_runbook(
     training = gap_report.get("training_references", [])
     represented = _families_from_rows([*admitted, *training])
     failed_external = _failed_external_families(gap_report)
+    passed_training_audits = _passed_training_audit_families(gap_report)
     nearest_gap = _first_nearest_gap(gap_report)
     horizons = _recommended_horizons(nearest_gap)
     grid_args = " ".join(f"--grid {grid}" for grid in grids)
@@ -226,6 +252,7 @@ def build_external_holdout_runbook(
             preferred_family=preferred,
             represented_families=represented,
             failed_external_families=failed_external,
+            passed_training_audit_families=passed_training_audits,
         )
         gamma_key = -(row.best_gamma if row.best_gamma is not None else -math.inf)
         ky_key = -(row.best_ky if row.best_ky is not None else -math.inf)

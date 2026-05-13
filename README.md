@@ -207,7 +207,7 @@ another unvalidated fit parameter.
 
 ![SPECTRAX-GK quasilinear holdout gap report](docs/_static/quasilinear_holdout_gap_report.png)
 
-The runbook below converts that gap into replayable nonlinear launch commands.
+The runbook below converts that gap into a fail-closed nonlinear launch plan.
 It is a planning artifact only: admission still requires the resulting
 post-transient traces to pass the grid/window convergence gate and enter the
 calibration metadata as `split = holdout`.
@@ -219,7 +219,11 @@ the office GPUs at `48x48x32` and `64x64x40`. It is finite and late-window
 stable, but it is not admitted: the two grid levels differ by about `0.306` in
 both common-window and least-window heat-flux means, above the `0.15`
 convergence gate. The runbook now demotes unchanged reruns of that failed
-family and keeps ITERModel as the preferred audit target.
+family. The follow-on ITERModel `t=450` same-family audit passed
+(`0.056`/`0.055` common/least grid differences), so the runbook no longer
+relaunches that unchanged audit; it records that the next useful data product
+must be a different independent electrostatic VMEC holdout or a materially
+changed high-resolution protocol.
 
 Two of the strongest admitted external-VMEC nonlinear holdouts are shown below.
 These figures are part of the publication-facing evidence that the nonlinear
