@@ -173,7 +173,7 @@ def _nearest_index_from_candidates(
 
 
 def _validate_dealias_mask_shape(
-    mask: np.ndarray,
+    mask: Any,
     *,
     ky_size: int,
     kx_size: int,
