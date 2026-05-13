@@ -92,6 +92,10 @@ from spectraxgk.quasilinear_calibration import (
     quasilinear_calibration_report,
     write_quasilinear_calibration_report,
 )
+from spectraxgk.quasilinear_model_selection import (
+    build_quasilinear_model_selection_status as build_quasilinear_model_selection_status,
+    build_quasilinear_model_selection_status_from_paths as build_quasilinear_model_selection_status_from_paths,
+)
 from spectraxgk.operators import hermite_streaming
 from spectraxgk.linear import (
     LinearCache,

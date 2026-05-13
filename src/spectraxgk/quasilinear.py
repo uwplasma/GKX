@@ -94,7 +94,7 @@ def normalize_quasilinear_channels(channels: Iterable[str] | str) -> tuple[str, 
         values = (channels,)
     else:
         values = tuple(str(ch).strip().lower() for ch in channels)
-    values = tuple(ch for ch in values if ch)
+    values = tuple(dict.fromkeys(ch for ch in values if ch))
     if not values:
         values = ("es",)
     unsupported = [ch for ch in values if ch != "es"]
