@@ -131,10 +131,61 @@ class NonlinearDomainIdentityReport:
         return data
 
 
+@dataclass(frozen=True)
+class NonlinearDomainTransportWindowReport:
+    """Transport-window identity report for the nonlinear domain prototype."""
+
+    gate_name: str
+    plan: NonlinearDomainDecompositionPlan
+    steps: int
+    dt: float
+    atol: float
+    rtol: float
+    max_abs_state_error: float
+    max_rel_state_error: float
+    max_abs_boundary_error: float
+    max_rel_boundary_error: float
+    mass_trace_max_abs_error: float
+    mass_trace_max_rel_error: float
+    free_energy_trace_max_abs_error: float
+    free_energy_trace_max_rel_error: float
+    flux_proxy_trace_max_abs_error: float
+    flux_proxy_trace_max_rel_error: float
+    serial_mass_drift: float
+    decomposed_mass_drift: float
+    serial_free_energy_drift: float
+    decomposed_free_energy_drift: float
+    plan_valid: bool
+    blocked_reasons: tuple[str, ...]
+    identity_passed: bool
+    decomposed_path_enabled: bool
+    claim_scope: str
+    boundary_indices: tuple[int, ...] = ()
+    serial_mass_trace: tuple[float, ...] = ()
+    decomposed_mass_trace: tuple[float, ...] = ()
+    serial_free_energy_trace: tuple[float, ...] = ()
+    decomposed_free_energy_trace: tuple[float, ...] = ()
+    serial_flux_proxy_trace: tuple[float, ...] = ()
+    decomposed_flux_proxy_trace: tuple[float, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-friendly representation of the transport-window report."""
+
+        data = asdict(self)
+        data["plan"] = self.plan.to_dict()
+        return data
+
+
 _NONLINEAR_DOMAIN_GATE_NAME = "nonlinear_domain_local_stencil_identity"
+_NONLINEAR_DOMAIN_TRANSPORT_GATE_NAME = "nonlinear_domain_transport_window_identity"
 _NONLINEAR_DOMAIN_CLAIM_SCOPE = (
     "diagnostic nonlinear state-domain identity gate only; "
     "bounded local-stencil prototype with no production routing or speedup claim"
+)
+_NONLINEAR_DOMAIN_TRANSPORT_CLAIM_SCOPE = (
+    "diagnostic nonlinear state-domain transport-window identity gate only; "
+    "serial-vs-halo-decomposed state, boundary, mass, free-energy, and flux-proxy "
+    "traces with no production routing or speedup claim"
 )
 
 
@@ -292,7 +343,10 @@ _STRATEGIES: tuple[NonlinearParallelStrategy, ...] = (
             "whole_state_kx_ky_final_field_identity",
             "whole_state_kx_ky_final_rhs_identity",
         ),
-        physics_gates=("nonlinear_window_diagnostic_identity_gate",),
+        physics_gates=(
+            "nonlinear_window_diagnostic_identity_gate",
+            "nonlinear_domain_transport_window_identity",
+        ),
         profiler_gates=("matched_cpu_gpu_whole_state_scaling_profile",),
         notes="Current pjit whole-state kx/ky sharding is a correctness/profiler artifact, not a speedup claim.",
     ),
@@ -521,6 +575,223 @@ def nonlinear_domain_parallel_identity_gate(
     report = nonlinear_domain_identity_report(serial, decomposed, plan, atol=atol, rtol=rtol)
     gated_state = decomposed if report.decomposed_path_enabled else serial
     return gated_state, report
+
+
+def _nonlinear_domain_transport_observables(
+    state: jax.Array,
+    plan: NonlinearDomainDecompositionPlan,
+) -> tuple[float, float, float]:
+    """Return scalar transport-window proxies for a domain-decomposed state."""
+
+    real_state = jnp.real(state)
+    mass = float(jnp.sum(real_state))
+    free_energy = float(jnp.sum(jnp.abs(state) ** 2))
+    axis_gradient = jnp.roll(real_state, shift=-1, axis=plan.axis) - real_state
+    boundary_indices = plan.boundary_indices
+    if boundary_indices:
+        selector = jnp.asarray(boundary_indices, dtype=jnp.int32)
+        boundary_gradient = jnp.take(axis_gradient, selector, axis=plan.axis)
+    else:
+        boundary_gradient = axis_gradient
+    flux_proxy = float(jnp.mean(jnp.abs(boundary_gradient)))
+    return mass, free_energy, flux_proxy
+
+
+def _append_transport_observables(
+    traces: dict[str, list[float]],
+    state: jax.Array,
+    plan: NonlinearDomainDecompositionPlan,
+) -> None:
+    mass, free_energy, flux_proxy = _nonlinear_domain_transport_observables(
+        state,
+        plan,
+    )
+    traces["mass"].append(mass)
+    traces["free_energy"].append(free_energy)
+    traces["flux_proxy"].append(flux_proxy)
+
+
+def _relative_trace_error(
+    reference: tuple[float, ...],
+    candidate: tuple[float, ...],
+    *,
+    floor: float,
+) -> tuple[float, float]:
+    if len(reference) != len(candidate):
+        return float("inf"), float("inf")
+    reference_arr = jnp.asarray(reference, dtype=jnp.float32)
+    candidate_arr = jnp.asarray(candidate, dtype=jnp.float32)
+    abs_error = jnp.abs(candidate_arr - reference_arr)
+    max_abs = float(jnp.max(abs_error))
+    scale = jnp.maximum(jnp.abs(reference_arr), jnp.asarray(floor, dtype=reference_arr.dtype))
+    max_rel = float(jnp.max(abs_error / scale))
+    return max_abs, max_rel
+
+
+def _trace_drift(trace: tuple[float, ...]) -> float:
+    if len(trace) < 2:
+        return 0.0
+    return float(trace[-1] - trace[0])
+
+
+def nonlinear_domain_transport_window_identity_gate(
+    state: jax.Array,
+    plan: NonlinearDomainDecompositionPlan,
+    *,
+    dt: float = 0.025,
+    steps: int = 4,
+    atol: float = 1.0e-6,
+    rtol: float = 1.0e-6,
+) -> NonlinearDomainTransportWindowReport:
+    """Validate a multi-step serial-vs-decomposed transport window.
+
+    The gate is deliberately stricter than a final-state check: it compares
+    state identity, decomposed-boundary identity, and per-step scalar traces for
+    mass, free-energy proxy, and boundary-flux proxy. The scalar drifts are
+    compared between serial and decomposed paths; they are not claimed to be
+    conserved by this damped diagnostic stencil.
+    """
+
+    if int(steps) < 1:
+        raise ValueError("steps must be at least one")
+
+    plan_blockers = _nonlinear_domain_plan_blockers(plan)
+    plan_valid = not plan_blockers
+    state_shape = tuple(int(size) for size in state.shape)
+    blocked_reasons = list(plan_blockers)
+    if state_shape != plan.state_shape:
+        blocked_reasons.append("state_shape_does_not_match_plan")
+
+    if blocked_reasons:
+        return NonlinearDomainTransportWindowReport(
+            gate_name=_NONLINEAR_DOMAIN_TRANSPORT_GATE_NAME,
+            plan=plan,
+            steps=int(steps),
+            dt=float(dt),
+            atol=float(atol),
+            rtol=float(rtol),
+            max_abs_state_error=float("inf"),
+            max_rel_state_error=float("inf"),
+            max_abs_boundary_error=float("inf"),
+            max_rel_boundary_error=float("inf"),
+            mass_trace_max_abs_error=float("inf"),
+            mass_trace_max_rel_error=float("inf"),
+            free_energy_trace_max_abs_error=float("inf"),
+            free_energy_trace_max_rel_error=float("inf"),
+            flux_proxy_trace_max_abs_error=float("inf"),
+            flux_proxy_trace_max_rel_error=float("inf"),
+            serial_mass_drift=float("inf"),
+            decomposed_mass_drift=float("inf"),
+            serial_free_energy_drift=float("inf"),
+            decomposed_free_energy_drift=float("inf"),
+            plan_valid=plan_valid,
+            blocked_reasons=tuple(blocked_reasons),
+            identity_passed=False,
+            decomposed_path_enabled=False,
+            claim_scope=_NONLINEAR_DOMAIN_TRANSPORT_CLAIM_SCOPE,
+            boundary_indices=plan.boundary_indices if plan_valid else (),
+        )
+
+    serial_state = state
+    decomposed_state = state
+    serial_traces: dict[str, list[float]] = {
+        "mass": [],
+        "free_energy": [],
+        "flux_proxy": [],
+    }
+    decomposed_traces: dict[str, list[float]] = {
+        "mass": [],
+        "free_energy": [],
+        "flux_proxy": [],
+    }
+    _append_transport_observables(serial_traces, serial_state, plan)
+    _append_transport_observables(decomposed_traces, decomposed_state, plan)
+    for _ in range(int(steps)):
+        serial_state = prototype_nonlinear_domain_serial_step(
+            serial_state,
+            axis=plan.axis,
+            dt=dt,
+        )
+        decomposed_state = prototype_nonlinear_domain_decomposed_step(
+            decomposed_state,
+            plan,
+            dt=dt,
+        )
+        _append_transport_observables(serial_traces, serial_state, plan)
+        _append_transport_observables(decomposed_traces, decomposed_state, plan)
+
+    state_report = nonlinear_domain_identity_report(
+        serial_state,
+        decomposed_state,
+        plan,
+        atol=atol,
+        rtol=rtol,
+    )
+    serial_mass_trace = tuple(serial_traces["mass"])
+    decomposed_mass_trace = tuple(decomposed_traces["mass"])
+    serial_free_energy_trace = tuple(serial_traces["free_energy"])
+    decomposed_free_energy_trace = tuple(decomposed_traces["free_energy"])
+    serial_flux_proxy_trace = tuple(serial_traces["flux_proxy"])
+    decomposed_flux_proxy_trace = tuple(decomposed_traces["flux_proxy"])
+    mass_abs, mass_rel = _relative_trace_error(
+        serial_mass_trace,
+        decomposed_mass_trace,
+        floor=atol,
+    )
+    free_energy_abs, free_energy_rel = _relative_trace_error(
+        serial_free_energy_trace,
+        decomposed_free_energy_trace,
+        floor=atol,
+    )
+    flux_proxy_abs, flux_proxy_rel = _relative_trace_error(
+        serial_flux_proxy_trace,
+        decomposed_flux_proxy_trace,
+        floor=atol,
+    )
+    identity_passed = bool(
+        state_report.identity_passed
+        and mass_abs <= float(atol)
+        and mass_rel <= float(rtol)
+        and free_energy_abs <= float(atol)
+        and free_energy_rel <= float(rtol)
+        and flux_proxy_abs <= float(atol)
+        and flux_proxy_rel <= float(rtol)
+    )
+
+    return NonlinearDomainTransportWindowReport(
+        gate_name=_NONLINEAR_DOMAIN_TRANSPORT_GATE_NAME,
+        plan=plan,
+        steps=int(steps),
+        dt=float(dt),
+        atol=float(atol),
+        rtol=float(rtol),
+        max_abs_state_error=state_report.max_abs_error,
+        max_rel_state_error=state_report.max_rel_error,
+        max_abs_boundary_error=state_report.boundary_max_abs_error,
+        max_rel_boundary_error=state_report.boundary_max_rel_error,
+        mass_trace_max_abs_error=mass_abs,
+        mass_trace_max_rel_error=mass_rel,
+        free_energy_trace_max_abs_error=free_energy_abs,
+        free_energy_trace_max_rel_error=free_energy_rel,
+        flux_proxy_trace_max_abs_error=flux_proxy_abs,
+        flux_proxy_trace_max_rel_error=flux_proxy_rel,
+        serial_mass_drift=_trace_drift(serial_mass_trace),
+        decomposed_mass_drift=_trace_drift(decomposed_mass_trace),
+        serial_free_energy_drift=_trace_drift(serial_free_energy_trace),
+        decomposed_free_energy_drift=_trace_drift(decomposed_free_energy_trace),
+        plan_valid=plan_valid,
+        blocked_reasons=tuple(blocked_reasons),
+        identity_passed=identity_passed,
+        decomposed_path_enabled=identity_passed,
+        claim_scope=_NONLINEAR_DOMAIN_TRANSPORT_CLAIM_SCOPE,
+        boundary_indices=state_report.boundary_indices,
+        serial_mass_trace=serial_mass_trace,
+        decomposed_mass_trace=decomposed_mass_trace,
+        serial_free_energy_trace=serial_free_energy_trace,
+        decomposed_free_energy_trace=decomposed_free_energy_trace,
+        serial_flux_proxy_trace=serial_flux_proxy_trace,
+        decomposed_flux_proxy_trace=decomposed_flux_proxy_trace,
+    )
 
 
 def _validate_spectral_state_shape(
@@ -882,6 +1153,7 @@ def release_ready_nonlinear_parallel_strategies() -> tuple[
 __all__ = [
     "NonlinearDomainDecompositionPlan",
     "NonlinearDomainIdentityReport",
+    "NonlinearDomainTransportWindowReport",
     "NonlinearParallelStrategy",
     "NonlinearParallelStrategyName",
     "NonlinearSpectralCommunicationReport",
@@ -892,6 +1164,7 @@ __all__ = [
     "deterministic_nonlinear_spectral_state",
     "nonlinear_domain_identity_report",
     "nonlinear_domain_parallel_identity_gate",
+    "nonlinear_domain_transport_window_identity_gate",
     "nonlinear_parallel_strategies",
     "nonlinear_parallel_strategy",
     "nonlinear_spectral_communication_identity_gate",

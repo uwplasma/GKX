@@ -49,6 +49,15 @@ class NonlinearWindowEnsembleConfig:
     require_individual_passed: bool = True
 
 
+@dataclass(frozen=True)
+class NonlinearWindowEnsembleManifestConfig:
+    """Artifact requirements before a replicated nonlinear ensemble can run."""
+
+    min_replicates_per_case: int = 2
+    required_variant_axes: tuple[str, ...] = ("seed", "timestep")
+    require_observed_windows_ready: bool = True
+
+
 def _json_number(value: float | int | np.generic | None) -> float | int | None:
     if value is None:
         return None
@@ -110,6 +119,16 @@ def _validate_ensemble_config(config: NonlinearWindowEnsembleConfig) -> None:
         raise ValueError("max_combined_sem_rel must be non-negative")
     if float(config.value_floor) <= 0.0:
         raise ValueError("value_floor must be positive")
+
+
+def _validate_ensemble_manifest_config(
+    config: NonlinearWindowEnsembleManifestConfig,
+) -> None:
+    if int(config.min_replicates_per_case) < 2:
+        raise ValueError("min_replicates_per_case must be at least 2")
+    axes = tuple(str(axis).strip() for axis in config.required_variant_axes)
+    if not axes or any(not axis for axis in axes):
+        raise ValueError("required_variant_axes must contain non-empty names")
 
 
 def _late_window_bounds(
@@ -719,9 +738,180 @@ def nonlinear_window_ensemble_report(
     }
 
 
+def nonlinear_window_ensemble_artifact_manifest(
+    records: Sequence[dict[str, Any]],
+    *,
+    case: str = "nonlinear_window_ensemble_artifact_manifest",
+    config: NonlinearWindowEnsembleManifestConfig | None = None,
+) -> dict[str, Any]:
+    """Return a promotion-blocking manifest for missing ensemble artifacts.
+
+    Each record should contain a ``report`` produced by
+    :func:`nonlinear_window_convergence_report`, plus optional ``variant``
+    metadata such as ``{"seed": 1, "timestep": 0.02}``. The manifest is
+    intentionally conservative: a production nonlinear optimization promotion
+    needs distinct passed artifacts for every required variant axis, so a
+    single late-window summary is recorded as useful convergence evidence but
+    not as replicated-ensemble evidence.
+    """
+
+    cfg = config or NonlinearWindowEnsembleManifestConfig()
+    _validate_ensemble_manifest_config(cfg)
+    required_axes = tuple(str(axis).strip() for axis in cfg.required_variant_axes)
+    rows: list[dict[str, Any]] = []
+    by_case: dict[str, list[dict[str, Any]]] = {}
+    for idx, raw_record in enumerate(records):
+        if not isinstance(raw_record, dict):
+            raise TypeError("records must contain dictionaries")
+        report = raw_record.get("report")
+        if not isinstance(report, dict):
+            raise ValueError("each record must contain a nonlinear-window report")
+        report_case = str(
+            raw_record.get("case")
+            or raw_record.get("ensemble_case")
+            or report.get("case")
+            or f"case_{idx}"
+        )
+        raw_variant = raw_record.get("variant")
+        variant: dict[str, Any] = raw_variant if isinstance(raw_variant, dict) else {}
+        ready, failures = nonlinear_window_stats_promotion_ready(report)
+        provenance = report.get("provenance")
+        provenance_dict: dict[str, Any] = provenance if isinstance(provenance, dict) else {}
+        row = {
+            "index": int(idx),
+            "case": report_case,
+            "summary_artifact": raw_record.get("summary_artifact")
+            or provenance_dict.get("summary_artifact"),
+            "source_artifact": raw_record.get("source_artifact")
+            or provenance_dict.get("source_artifact"),
+            "convergence_report_artifact": raw_record.get("convergence_report_artifact"),
+            "passed": bool(report.get("passed", False)),
+            "promotion_ready": ready,
+            "failures": failures,
+            "variant": {axis: variant.get(axis) for axis in required_axes},
+            "late_mean": _json_number(_report_late_mean(report)),
+            "sem": _json_number(_report_sem(report)),
+        }
+        rows.append(row)
+        by_case.setdefault(report_case, []).append(row)
+
+    case_rows: list[dict[str, Any]] = []
+    missing_artifacts: list[dict[str, Any]] = []
+    for report_case in sorted(by_case):
+        observed = by_case[report_case]
+        ready_rows = [row for row in observed if bool(row["promotion_ready"])]
+        per_axis: dict[str, Any] = {}
+        for axis in required_axes:
+            values = sorted(
+                {
+                    str(row["variant"].get(axis))
+                    for row in ready_rows
+                    if row["variant"].get(axis) not in (None, "")
+                }
+            )
+            missing_count = max(0, int(cfg.min_replicates_per_case) - len(values))
+            axis_passed = missing_count == 0
+            per_axis[axis] = {
+                "passed": axis_passed,
+                "observed_distinct_values": values,
+                "observed_distinct_count": len(values),
+                "required_distinct_count": int(cfg.min_replicates_per_case),
+                "missing_count": missing_count,
+            }
+            if missing_count:
+                missing_artifacts.append(
+                    {
+                        "case": report_case,
+                        "variant_axis": axis,
+                        "missing_count": missing_count,
+                        "observed_distinct_values": values,
+                        "required_distinct_count": int(cfg.min_replicates_per_case),
+                        "artifact_hint": (
+                            f"add {missing_count} passed nonlinear-window convergence "
+                            f"report(s) for case '{report_case}' with distinct {axis} "
+                            "metadata and trace provenance"
+                        ),
+                        "metadata_requirements": [
+                            "summary JSON or convergence report with source_artifact provenance",
+                            f"variant.{axis} or equivalent top-level {axis} metadata",
+                            "passed nonlinear_window_convergence_report gates",
+                        ],
+                    }
+                )
+        case_rows.append(
+            {
+                "case": report_case,
+                "n_observed_artifacts": len(observed),
+                "n_promotion_ready_artifacts": len(ready_rows),
+                "observed_summary_artifacts": [
+                    row["summary_artifact"] for row in observed if row["summary_artifact"]
+                ],
+                "observed_convergence_report_artifacts": [
+                    row["convergence_report_artifact"]
+                    for row in observed
+                    if row["convergence_report_artifact"]
+                ],
+                "variant_axes": per_axis,
+                "ensemble_gate_runnable": all(
+                    bool(per_axis[axis]["passed"]) for axis in required_axes
+                ),
+            }
+        )
+
+    observed_ready = all(bool(row["promotion_ready"]) for row in rows) if rows else False
+    axes_passed = not missing_artifacts and bool(case_rows)
+    gates = [
+        _gate(
+            "observed_window_artifacts_present",
+            bool(rows),
+            f"observed_artifacts={len(rows)}",
+        ),
+        _gate(
+            "observed_windows_promotion_ready",
+            (not cfg.require_observed_windows_ready) or observed_ready,
+            f"require_observed_windows_ready={cfg.require_observed_windows_ready}",
+        ),
+        _gate(
+            "seed_and_timestep_replicates_present",
+            axes_passed,
+            (
+                f"missing_artifact_groups={len(missing_artifacts)}"
+                if missing_artifacts
+                else "all required variant axes have enough passed artifacts"
+            ),
+        ),
+    ]
+    passed = all(bool(gate["passed"]) for gate in gates)
+    return {
+        "kind": "nonlinear_window_ensemble_readiness_manifest",
+        "claim_level": (
+            "replicated_seed_timestep_artifact_manifest_blocks_promotion_until_ready"
+        ),
+        "case": str(case),
+        "passed": passed,
+        "promotion_gate": {
+            "passed": passed,
+            "blockers": [gate["metric"] for gate in gates if not bool(gate["passed"])],
+            "requirements": [
+                "every observed late-window report must pass convergence metadata gates",
+                "each case must include distinct passed seed-replicate artifacts",
+                "each case must include distinct passed timestep-replicate artifacts",
+                "only after this manifest passes should the replicated ensemble gate be run",
+            ],
+        },
+        "gates": gates,
+        "cases": case_rows,
+        "observed_artifacts": rows,
+        "missing_artifacts": missing_artifacts,
+        "config": asdict(cfg),
+    }
+
+
 __all__ = [
     "NonlinearWindowConvergenceConfig",
     "NonlinearWindowEnsembleConfig",
+    "NonlinearWindowEnsembleManifestConfig",
+    "nonlinear_window_ensemble_artifact_manifest",
     "nonlinear_window_ensemble_report",
     "nonlinear_window_convergence_from_csv",
     "nonlinear_window_convergence_from_summary",

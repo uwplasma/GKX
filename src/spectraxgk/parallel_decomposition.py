@@ -13,7 +13,11 @@ from dataclasses import asdict, dataclass
 from typing import Any, Literal, TypeVar
 
 
-IndependentWorkload = Literal["independent_ky_scan", "uq_ensemble"]
+IndependentWorkload = Literal[
+    "independent_ky_scan",
+    "uq_ensemble",
+    "optimization_ensemble",
+]
 DiagnosticWorkload = Literal["diagnostic_nonlinear_domain"]
 DecompositionWorkload = IndependentWorkload | DiagnosticWorkload
 ClaimLevel = Literal[
@@ -22,7 +26,7 @@ ClaimLevel = Literal[
 ]
 
 _INDEPENDENT_WORKLOADS: frozenset[str] = frozenset(
-    {"independent_ky_scan", "uq_ensemble"}
+    {"independent_ky_scan", "uq_ensemble", "optimization_ensemble"}
 )
 
 T = TypeVar("T")
@@ -158,6 +162,8 @@ def _independent_claim_label(workload: IndependentWorkload) -> str:
         portfolio = "independent ky scan"
     elif workload == "uq_ensemble":
         portfolio = "independent UQ ensemble"
+    elif workload == "optimization_ensemble":
+        portfolio = "independent optimization ensemble"
     else:  # pragma: no cover - protected by caller validation
         raise ValueError(f"unknown independent workload: {workload}")
     return (
@@ -177,11 +183,15 @@ def build_independent_portfolio_decomposition(
 
     The assignment is deterministic, balanced, contiguous, and contains no
     empty shards. It covers release-ready independent portfolios only:
-    ``independent_ky_scan`` and ``uq_ensemble``.
+    ``independent_ky_scan``, ``uq_ensemble``, and
+    ``optimization_ensemble``.
     """
 
     if workload not in _INDEPENDENT_WORKLOADS:
-        raise ValueError("workload must be 'independent_ky_scan' or 'uq_ensemble'")
+        raise ValueError(
+            "workload must be 'independent_ky_scan', 'uq_ensemble', "
+            "or 'optimization_ensemble'"
+        )
     n = _validate_count("n_items", n_items, allow_zero=True)
     requested = _validate_count(
         "requested_shards",
