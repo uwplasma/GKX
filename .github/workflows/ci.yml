@@ -307,7 +307,7 @@ jobs:
           PY
 
       - name: Upload fast coverage report
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           files: coverage-fast.xml
           flags: fast-surface
@@ -456,7 +456,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Upload wide coverage report
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           files: coverage-wide.xml
           flags: wide-package
