@@ -205,6 +205,13 @@ another unvalidated fit parameter.
 
 ![SPECTRAX-GK quasilinear holdout gap report](docs/_static/quasilinear_holdout_gap_report.png)
 
+The runbook below converts that gap into replayable nonlinear launch commands.
+It is a planning artifact only: admission still requires the resulting
+post-transient traces to pass the grid/window convergence gate and enter the
+calibration metadata as `split = holdout`.
+
+![SPECTRAX-GK external-VMEC next holdout runbook](docs/_static/external_vmec_next_holdout_runbook.png)
+
 Two of the strongest admitted external-VMEC nonlinear holdouts are shown below.
 These figures are part of the publication-facing evidence that the nonlinear
 inputs are converged enough to be used as negative transfer constraints rather

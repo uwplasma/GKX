@@ -96,6 +96,12 @@ from spectraxgk.quasilinear_model_selection import (
     build_quasilinear_model_selection_status as build_quasilinear_model_selection_status,
     build_quasilinear_model_selection_status_from_paths as build_quasilinear_model_selection_status_from_paths,
 )
+from spectraxgk.external_holdout_plan import (
+    ExternalHoldoutScreenRow,
+    build_external_holdout_runbook,
+    external_vmec_family,
+    read_external_holdout_screen,
+)
 from spectraxgk.operators import hermite_streaming
 from spectraxgk.linear import (
     LinearCache,
@@ -417,6 +423,10 @@ __all__ = [
     "write_quasilinear_calibration_report",
     "build_quasilinear_model_selection_status",
     "build_quasilinear_model_selection_status_from_paths",
+    "ExternalHoldoutScreenRow",
+    "build_external_holdout_runbook",
+    "external_vmec_family",
+    "read_external_holdout_screen",
     "RuntimeLinearResult",
     "RuntimeLinearScanResult",
     "build_runtime_linear_params",
