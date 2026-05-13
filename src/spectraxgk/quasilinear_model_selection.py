@@ -35,6 +35,12 @@ def _as_dict(payload: dict[str, Any] | str | Path) -> dict[str, Any]:
     return out
 
 
+def _ensure_path_payload(name: str, payload: object) -> str | Path:
+    if not isinstance(payload, (str, Path)):
+        raise TypeError(f"{name} must be a path, got {type(payload).__name__}")
+    return payload
+
+
 def _accepted_candidates(gate: dict[str, Any]) -> list[str]:
     raw = gate.get("accepted_candidates", gate.get("accepted_rules", []))
     if not isinstance(raw, list):
@@ -128,6 +134,9 @@ def build_quasilinear_model_selection_status(
         for row in summaries
         if row["claim_level"] == "calibrated_absolute_flux" and bool(row["passed"])
     ]
+    calibration_reports_missing_holdout_metrics = [
+        row for row in summaries if row["holdout_mean_abs_relative_error"] is None
+    ]
 
     gates = [
         _gate(
@@ -205,6 +214,12 @@ def build_quasilinear_model_selection_status(
                 not promoted_absolute_reports,
                 f"promoted_reports={len(promoted_absolute_reports)}",
             ),
+            _gate(
+                "calibration_reports_have_holdout_metrics",
+                not calibration_reports_missing_holdout_metrics,
+                "missing_holdout_metrics="
+                f"{len(calibration_reports_missing_holdout_metrics)}",
+            ),
         ]
     )
 
@@ -260,10 +275,18 @@ def build_quasilinear_model_selection_status_from_paths(
 ) -> dict[str, Any]:
     """Path-based wrapper for artifact scripts and CI checks."""
 
+    calibration_report_paths = tuple(
+        _ensure_path_payload(f"calibration_reports[{idx}]", report)
+        for idx, report in enumerate(calibration_reports)
+    )
     return build_quasilinear_model_selection_status(
-        dataset_sufficiency=dataset_sufficiency,
-        candidate_uncertainty=candidate_uncertainty,
-        calibration_reports=tuple(calibration_reports),
+        dataset_sufficiency=_ensure_path_payload(
+            "dataset_sufficiency", dataset_sufficiency
+        ),
+        candidate_uncertainty=_ensure_path_payload(
+            "candidate_uncertainty", candidate_uncertainty
+        ),
+        calibration_reports=calibration_report_paths,
         required_candidate=required_candidate,
     )
 

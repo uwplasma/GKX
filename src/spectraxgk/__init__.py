@@ -206,6 +206,16 @@ from spectraxgk.parallel import (
     ky_scan_batches,
     parallel_identity_report,
 )
+from spectraxgk.parallel_decomposition import (
+    DecompositionContract,
+    ReconstructionIdentityReport,
+    ShardAssignment,
+    build_diagnostic_nonlinear_domain_decomposition,
+    build_independent_portfolio_decomposition,
+    reconstruct_serial,
+    serial_reconstruction_identity_report,
+    shard_sequence,
+)
 from spectraxgk.nonlinear_parallel import (
     NonlinearDomainDecompositionPlan,
     NonlinearDomainIdentityReport,
@@ -263,6 +273,13 @@ from spectraxgk.stellarator_optimization import (
     stellarator_itg_objective,
     stellarator_itg_objective_residual_names,
     stellarator_itg_objective_residual_vector,
+)
+from spectraxgk.stellarator_objective_portfolio import (
+    StellaratorObjectivePortfolioContract,
+    aggregate_objective_portfolio,
+    portfolio_objective_weight_vector,
+    portfolio_sample_weight_tensor,
+    validate_objective_portfolio_contract,
 )
 from spectraxgk.solver_objective_gradients import (
     SOLVER_GEOMETRY_PARAMETER_NAMES,
@@ -398,6 +415,8 @@ __all__ = [
     "integrated_quasilinear_flux_from_spectrum",
     "quasilinear_calibration_report",
     "write_quasilinear_calibration_report",
+    "build_quasilinear_model_selection_status",
+    "build_quasilinear_model_selection_status_from_paths",
     "RuntimeLinearResult",
     "RuntimeLinearScanResult",
     "build_runtime_linear_params",
@@ -497,6 +516,14 @@ __all__ = [
     "independent_map",
     "ky_scan_batches",
     "parallel_identity_report",
+    "DecompositionContract",
+    "ReconstructionIdentityReport",
+    "ShardAssignment",
+    "build_diagnostic_nonlinear_domain_decomposition",
+    "build_independent_portfolio_decomposition",
+    "reconstruct_serial",
+    "serial_reconstruction_identity_report",
+    "shard_sequence",
     "NonlinearDomainDecompositionPlan",
     "NonlinearDomainIdentityReport",
     "NonlinearParallelStrategy",
@@ -549,6 +576,11 @@ __all__ = [
     "stellarator_itg_objective",
     "stellarator_itg_objective_residual_names",
     "stellarator_itg_objective_residual_vector",
+    "StellaratorObjectivePortfolioContract",
+    "aggregate_objective_portfolio",
+    "portfolio_objective_weight_vector",
+    "portfolio_sample_weight_tensor",
+    "validate_objective_portfolio_contract",
     "SOLVER_GEOMETRY_PARAMETER_NAMES",
     "SOLVER_OBJECTIVE_NAMES",
     "SolverScalarObjective",
