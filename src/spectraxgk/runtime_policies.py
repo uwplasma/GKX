@@ -152,6 +152,62 @@ def _zero_kx_index(grid: SpectralGrid) -> int:
     return int(np.argmin(np.abs(kx)))
 
 
+def _nearest_index_from_candidates(
+    values: np.ndarray,
+    target: float,
+    candidates: np.ndarray,
+) -> int:
+    """Return the candidate index nearest to ``target`` in physical coordinates."""
+
+    values_arr = np.asarray(values, dtype=float)
+    candidate_arr = np.asarray(candidates, dtype=int)
+    if values_arr.size == 0:
+        raise ValueError("values must be non-empty")
+    if candidate_arr.size == 0:
+        raise ValueError("candidate indices must be non-empty")
+    return int(
+        candidate_arr[
+            int(np.argmin(np.abs(values_arr[candidate_arr] - float(target))))
+        ]
+    )
+
+
+def _validate_dealias_mask_shape(
+    mask: np.ndarray,
+    *,
+    ky_size: int,
+    kx_size: int,
+) -> np.ndarray:
+    """Return a boolean dealias mask after validating it matches ky/kx axes."""
+
+    mask_arr = np.asarray(mask, dtype=bool)
+    expected = (int(ky_size), int(kx_size))
+    if mask_arr.shape != expected:
+        raise ValueError(
+            "dealias_mask shape must match (ky, kx) grid sizes; "
+            f"got {mask_arr.shape}, expected {expected}"
+        )
+    return mask_arr
+
+
+def _active_ky_indices(mask: np.ndarray, ky_size: int) -> np.ndarray:
+    """Return ky rows with at least one retained kx, falling back to all ky."""
+
+    candidates = np.where(np.any(mask, axis=1))[0]
+    if candidates.size == 0:
+        return np.arange(int(ky_size), dtype=int)
+    return candidates
+
+
+def _active_kx_indices(mask: np.ndarray, ky_index: int, kx_size: int) -> np.ndarray:
+    """Return retained kx entries for ``ky_index``, falling back to all kx."""
+
+    candidates = np.where(mask[int(ky_index)])[0]
+    if candidates.size == 0:
+        return np.arange(int(kx_size), dtype=int)
+    return candidates
+
+
 def _select_nonlinear_mode_indices(
     grid: SpectralGrid,
     *,
@@ -164,18 +220,22 @@ def _select_nonlinear_mode_indices(
     kx_pick_target = 0.0 if kx_target is None else float(kx_target)
     if not use_dealias_mask:
         ky_pick = select_ky_index(ky, ky_target)
-        kx_pick = int(np.argmin(np.abs(kx - kx_pick_target)))
+        kx_pick = _nearest_index_from_candidates(
+            kx, kx_pick_target, np.arange(kx.size, dtype=int)
+        )
         return ky_pick, kx_pick
 
-    mask = np.asarray(grid.dealias_mask, dtype=bool)
-    ky_candidates = np.where(np.any(mask, axis=1))[0]
-    if ky_candidates.size == 0:
-        ky_candidates = np.arange(ky.size, dtype=int)
-    ky_pick = ky_candidates[int(np.argmin(np.abs(ky[ky_candidates] - float(ky_target))))]
-    kx_candidates = np.where(mask[ky_pick])[0]
-    if kx_candidates.size == 0:
-        kx_candidates = np.arange(kx.size, dtype=int)
-    kx_pick = kx_candidates[int(np.argmin(np.abs(kx[kx_candidates] - kx_pick_target)))]
+    mask = _validate_dealias_mask_shape(
+        grid.dealias_mask,
+        ky_size=ky.size,
+        kx_size=kx.size,
+    )
+    ky_pick = _nearest_index_from_candidates(
+        ky, ky_target, _active_ky_indices(mask, ky.size)
+    )
+    kx_pick = _nearest_index_from_candidates(
+        kx, kx_pick_target, _active_kx_indices(mask, ky_pick, kx.size)
+    )
     return int(ky_pick), int(kx_pick)
 
 

@@ -57,10 +57,51 @@ class NonlinearDomainDecompositionPlan:
             start += size
         return tuple(offsets)
 
+    @property
+    def chunk_bounds(self) -> tuple[tuple[int, int], ...]:
+        """Return half-open ``(start, stop)`` bounds for owned chunk cells."""
+
+        return tuple(
+            (offset, offset + size)
+            for offset, size in zip(self.offsets, self.chunk_sizes, strict=True)
+        )
+
+    @property
+    def boundary_indices(self) -> tuple[int, ...]:
+        """Return global cells that touch a decomposed halo interface."""
+
+        if (
+            not self.state_shape
+            or not (0 <= int(self.axis) < len(self.state_shape))
+            or len(self.chunk_sizes) <= 1
+        ):
+            return ()
+        domain_size = int(self.state_shape[int(self.axis)])
+        if domain_size <= 0:
+            return ()
+
+        indices: set[int] = set()
+        for offset in self.offsets:
+            indices.add((offset - 1) % domain_size)
+            indices.add(offset % domain_size)
+        return tuple(sorted(indices))
+
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-friendly representation of the decomposition plan."""
 
         return asdict(self)
+
+    def decomposition_metadata(self) -> dict[str, Any]:
+        """Return derived metadata for diagnostic decomposition artifacts."""
+
+        return {
+            **self.to_dict(),
+            "num_domains": self.num_domains,
+            "domain_size": self.domain_size,
+            "offsets": self.offsets,
+            "chunk_bounds": self.chunk_bounds,
+            "boundary_indices": self.boundary_indices,
+        }
 
 
 @dataclass(frozen=True)
@@ -78,6 +119,9 @@ class NonlinearDomainIdentityReport:
     identity_passed: bool
     decomposed_path_enabled: bool
     claim_scope: str
+    boundary_max_abs_error: float = 0.0
+    boundary_max_rel_error: float = 0.0
+    boundary_indices: tuple[int, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-friendly representation of the identity report."""
@@ -158,6 +202,9 @@ class NonlinearSpectralCommunicationReport:
     identity_passed: bool
     decomposed_path_enabled: bool
     claim_scope: str
+    blocked_reasons: tuple[str, ...] = ()
+    y_offsets: tuple[int, ...] = ()
+    x_offsets: tuple[int, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-friendly representation of the communication report."""
@@ -408,6 +455,8 @@ def nonlinear_domain_identity_report(
         decomposed_state,
         plan,
     )
+    plan_valid = not _nonlinear_domain_plan_blockers(plan)
+    boundary_indices = plan.boundary_indices if plan_valid else ()
     if tuple(serial_state.shape) == tuple(decomposed_state.shape):
         abs_error = jnp.abs(decomposed_state - serial_state)
         scale = jnp.maximum(
@@ -417,15 +466,27 @@ def nonlinear_domain_identity_report(
         rel_error = abs_error / scale
         max_abs_error = float(jnp.max(abs_error))
         max_rel_error = float(jnp.max(rel_error))
+        if boundary_indices:
+            boundary_selector = jnp.asarray(boundary_indices, dtype=jnp.int32)
+            boundary_abs_error = jnp.take(abs_error, boundary_selector, axis=plan.axis)
+            boundary_rel_error = jnp.take(rel_error, boundary_selector, axis=plan.axis)
+            boundary_max_abs_error = float(jnp.max(boundary_abs_error))
+            boundary_max_rel_error = float(jnp.max(boundary_rel_error))
+        else:
+            boundary_max_abs_error = 0.0
+            boundary_max_rel_error = 0.0
     else:
         max_abs_error = float("inf")
         max_rel_error = float("inf")
+        boundary_max_abs_error = float("inf")
+        boundary_max_rel_error = float("inf")
 
-    plan_valid = not _nonlinear_domain_plan_blockers(plan)
     identity_passed = bool(
         not blocked_reasons
         and max_abs_error <= float(atol)
         and max_rel_error <= float(rtol)
+        and boundary_max_abs_error <= float(atol)
+        and boundary_max_rel_error <= float(rtol)
     )
     return NonlinearDomainIdentityReport(
         gate_name=_NONLINEAR_DOMAIN_GATE_NAME,
@@ -439,6 +500,9 @@ def nonlinear_domain_identity_report(
         identity_passed=identity_passed,
         decomposed_path_enabled=identity_passed,
         claim_scope=_NONLINEAR_DOMAIN_CLAIM_SCOPE,
+        boundary_max_abs_error=boundary_max_abs_error,
+        boundary_max_rel_error=boundary_max_rel_error,
+        boundary_indices=boundary_indices,
     )
 
 
@@ -508,6 +572,15 @@ def _validate_chunks(axis_size: int, chunks: tuple[int, ...], *, name: str) -> t
     if sum(normalized) != int(axis_size):
         raise ValueError(f"{name} must sum to the decomposed axis size")
     return normalized
+
+
+def _chunk_offsets(chunks: tuple[int, ...]) -> tuple[int, ...]:
+    offsets: list[int] = []
+    start = 0
+    for chunk in chunks:
+        offsets.append(start)
+        start += int(chunk)
+    return tuple(offsets)
 
 
 def _split_reassemble(arr: jax.Array, *, axis: int, chunks: tuple[int, ...]) -> jax.Array:
@@ -589,10 +662,64 @@ def _max_abs_rel_error(
     *,
     atol: float,
 ) -> tuple[float, float]:
+    if tuple(reference.shape) != tuple(candidate.shape):
+        return float("inf"), float("inf")
     abs_error = jnp.abs(candidate - reference)
     scale = jnp.maximum(jnp.abs(reference), jnp.asarray(atol, dtype=jnp.real(abs_error).dtype))
     rel_error = abs_error / scale
     return float(jnp.max(abs_error)), float(jnp.max(rel_error))
+
+
+def _nonlinear_spectral_report_blockers(
+    serial_fft_roundtrip: jax.Array,
+    communicated_fft_roundtrip: jax.Array,
+    serial_bracket: jax.Array,
+    communicated_bracket: jax.Array,
+    serial_field: jax.Array,
+    communicated_field: jax.Array,
+    *,
+    state_shape: tuple[int, ...],
+    y_chunks: tuple[int, ...],
+    x_chunks: tuple[int, ...],
+) -> tuple[str, ...]:
+    blockers: list[str] = []
+
+    try:
+        normalized_state_shape = _validate_spectral_state_shape(tuple(state_shape))
+    except ValueError:
+        normalized_state_shape = None
+        blockers.append("state_shape_invalid")
+
+    if normalized_state_shape is not None:
+        _nl, _nm, ny, nx, nz = normalized_state_shape
+        try:
+            _validate_chunks(ny, y_chunks, name="y_chunks")
+        except ValueError:
+            blockers.append("y_chunks_invalid")
+        try:
+            _validate_chunks(nx, x_chunks, name="x_chunks")
+        except ValueError:
+            blockers.append("x_chunks_invalid")
+
+        expected_field_shape = (ny, nx, nz)
+        state_arrays = (
+            ("serial_fft_roundtrip", serial_fft_roundtrip),
+            ("communicated_fft_roundtrip", communicated_fft_roundtrip),
+            ("serial_bracket", serial_bracket),
+            ("communicated_bracket", communicated_bracket),
+        )
+        field_arrays = (
+            ("serial_field", serial_field),
+            ("communicated_field", communicated_field),
+        )
+        for name, arr in state_arrays:
+            if tuple(arr.shape) != normalized_state_shape:
+                blockers.append(f"{name}_shape_mismatch")
+        for name, arr in field_arrays:
+            if tuple(arr.shape) != expected_field_shape:
+                blockers.append(f"{name}_shape_mismatch")
+
+    return tuple(blockers)
 
 
 def nonlinear_spectral_communication_identity_report(
@@ -611,6 +738,17 @@ def nonlinear_spectral_communication_identity_report(
 ) -> NonlinearSpectralCommunicationReport:
     """Compare spectral communication outputs and fail closed on mismatches."""
 
+    blocked_reasons = _nonlinear_spectral_report_blockers(
+        serial_fft_roundtrip,
+        communicated_fft_roundtrip,
+        serial_bracket,
+        communicated_bracket,
+        serial_field,
+        communicated_field,
+        state_shape=state_shape,
+        y_chunks=y_chunks,
+        x_chunks=x_chunks,
+    )
     fft_abs, fft_rel = _max_abs_rel_error(
         serial_fft_roundtrip,
         communicated_fft_roundtrip,
@@ -627,7 +765,8 @@ def nonlinear_spectral_communication_identity_report(
         atol=atol,
     )
     identity_passed = bool(
-        fft_abs <= float(atol)
+        not blocked_reasons
+        and fft_abs <= float(atol)
         and fft_rel <= float(rtol)
         and bracket_abs <= float(atol)
         and bracket_rel <= float(rtol)
@@ -638,6 +777,8 @@ def nonlinear_spectral_communication_identity_report(
         state_shape=state_shape,
         y_chunks=tuple(int(item) for item in y_chunks),
         x_chunks=tuple(int(item) for item in x_chunks),
+        y_offsets=_chunk_offsets(y_chunks),
+        x_offsets=_chunk_offsets(x_chunks),
         atol=float(atol),
         rtol=float(rtol),
         fft_max_abs_error=fft_abs,
@@ -652,6 +793,7 @@ def nonlinear_spectral_communication_identity_report(
             "diagnostic spectral communication identity gate only; "
             "split/reassemble layout simulation with no production routing or speedup claim"
         ),
+        blocked_reasons=blocked_reasons,
     )
 
 

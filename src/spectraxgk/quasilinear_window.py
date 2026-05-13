@@ -30,6 +30,9 @@ class NonlinearWindowConvergenceConfig:
     bootstrap_samples: int = 256
     bootstrap_seed: int = 0
     max_running_mean_rel_drift: float = 0.15
+    terminal_fraction: float = 0.25
+    min_terminal_samples: int = 8
+    max_terminal_mean_rel_delta: float = 0.10
     max_sem_rel: float = 0.25
     value_floor: float = 1.0e-12
     require_all_finite: bool = True
@@ -75,6 +78,12 @@ def _validate_config(config: NonlinearWindowConvergenceConfig) -> None:
         raise ValueError("bootstrap_samples must be non-negative")
     if float(config.max_running_mean_rel_drift) < 0.0:
         raise ValueError("max_running_mean_rel_drift must be non-negative")
+    if not 0.0 < float(config.terminal_fraction) <= 1.0:
+        raise ValueError("terminal_fraction must be in (0, 1]")
+    if int(config.min_terminal_samples) < 1:
+        raise ValueError("min_terminal_samples must be positive")
+    if float(config.max_terminal_mean_rel_delta) < 0.0:
+        raise ValueError("max_terminal_mean_rel_delta must be non-negative")
     if float(config.max_sem_rel) < 0.0:
         raise ValueError("max_sem_rel must be non-negative")
     if float(config.value_floor) <= 0.0:
@@ -176,6 +185,12 @@ def nonlinear_window_convergence_report(
         "running_mean_rel_drift": None,
         "first_half_mean": None,
         "second_half_mean": None,
+        "terminal_mean": None,
+        "terminal_mean_delta": None,
+        "terminal_mean_rel_delta": None,
+        "terminal_tmin": None,
+        "terminal_tmax": None,
+        "terminal_n_samples": 0,
         "block_size": None,
         "n_blocks": 0,
         "bootstrap_samples": int(cfg.bootstrap_samples),
@@ -218,6 +233,15 @@ def nonlinear_window_convergence_report(
             second_half_mean = None
             drift = None
             rel_drift = None
+        terminal_start = min(
+            n_finite_late - 1,
+            max(0, int(math.floor((1.0 - float(cfg.terminal_fraction)) * n_finite_late))),
+        )
+        terminal_y = finite_late_y[terminal_start:]
+        terminal_t = finite_late_t[terminal_start:]
+        terminal_mean = float(np.mean(terminal_y))
+        terminal_delta = abs(terminal_mean - late_mean)
+        terminal_rel_delta = terminal_delta / scale
 
         block_size = (
             int(cfg.block_size)
@@ -256,6 +280,12 @@ def nonlinear_window_convergence_report(
                 "running_mean_rel_drift": rel_drift,
                 "first_half_mean": first_half_mean,
                 "second_half_mean": second_half_mean,
+                "terminal_mean": terminal_mean,
+                "terminal_mean_delta": terminal_delta,
+                "terminal_mean_rel_delta": terminal_rel_delta,
+                "terminal_tmin": float(terminal_t[0]),
+                "terminal_tmax": float(terminal_t[-1]),
+                "terminal_n_samples": int(terminal_y.size),
                 "block_size": int(block_size),
                 "n_blocks": n_blocks,
             }
@@ -277,6 +307,29 @@ def nonlinear_window_convergence_report(
             "running_mean_rel_drift={value} gate={gate}".format(
                 value=rel_drift,
                 gate=cfg.max_running_mean_rel_drift,
+            ),
+        )
+    )
+    gates.append(
+        _gate(
+            "terminal_sample_count",
+            int(stats["terminal_n_samples"]) >= int(cfg.min_terminal_samples),
+            "terminal_samples={value} min_terminal_samples={gate}".format(
+                value=stats["terminal_n_samples"],
+                gate=cfg.min_terminal_samples,
+            ),
+        )
+    )
+    terminal_rel_delta = stats["terminal_mean_rel_delta"]
+    gates.append(
+        _gate(
+            "terminal_mean_agreement",
+            _finite_number(terminal_rel_delta)
+            and float(terminal_rel_delta) <= float(cfg.max_terminal_mean_rel_delta),
+            "terminal_mean_rel_delta={value} gate={gate} terminal_fraction={fraction}".format(
+                value=terminal_rel_delta,
+                gate=cfg.max_terminal_mean_rel_delta,
+                fraction=cfg.terminal_fraction,
             ),
         )
     )
@@ -442,6 +495,7 @@ def nonlinear_window_stats_promotion_ready(
         "sem",
         "block_bootstrap_sem",
         "running_mean_rel_drift",
+        "terminal_mean_rel_delta",
     ):
         if not _finite_number(statistics.get(field)):
             failures.append(f"missing/non-finite statistics.{field}")

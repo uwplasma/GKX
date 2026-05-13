@@ -36,10 +36,60 @@ class AdaptiveChunkResult:
     fields: FieldState
 
 
+_TIME_PROGRESS_EPS = 1.0e-12
+
+
 def _format_duration(seconds: float) -> str:
     """Compatibility wrapper for tests and private imports."""
 
     return format_duration(seconds)
+
+
+def _offset_chunk_diagnostics_time(
+    diag: SimulationDiagnostics,
+    *,
+    offset: float,
+) -> SimulationDiagnostics:
+    """Return a chunk diagnostic payload shifted onto the accumulated time axis."""
+
+    return replace(diag, t=np.asarray(diag.t) + float(offset))
+
+
+def _chunk_end_time(
+    diag: SimulationDiagnostics,
+    *,
+    label: str,
+    chunk_index: int,
+) -> float:
+    """Return the last diagnostic time sample for one adaptive chunk."""
+
+    t_arr = np.asarray(diag.t, dtype=float)
+    if t_arr.size == 0:
+        raise RuntimeError(
+            f"adaptive {label} chunk {int(chunk_index)} produced no time samples"
+        )
+    return float(t_arr[-1])
+
+
+def _next_elapsed_time(
+    diag: SimulationDiagnostics,
+    *,
+    previous_elapsed: float,
+    label: str,
+    chunk_index: int,
+) -> float:
+    """Validate and return the accumulated end time for one adaptive chunk."""
+
+    t_next = _chunk_end_time(diag, label=label, chunk_index=chunk_index)
+    if t_next <= float(previous_elapsed) + _TIME_PROGRESS_EPS:
+        raise RuntimeError(f"adaptive {label} runtime made no time-step progress")
+    return t_next
+
+
+def _effective_diagnostics_stride(diagnostics_stride: int) -> int:
+    """Normalize runtime diagnostic stride while preserving legacy floor-at-one."""
+
+    return int(max(diagnostics_stride, 1))
 
 
 def run_adaptive_gx_chunk_loop(
@@ -77,20 +127,24 @@ def run_adaptive_gx_chunk_loop(
     for chunk in range(max_chunks):
         chunk_start = time.perf_counter()
         _t_chunk, diag_chunk, state_chunk, fields_final = integrate_chunk(show_progress)
-        diag_chunk = replace(diag_chunk, t=np.asarray(diag_chunk.t) + t_elapsed)
+        chunk_index = chunk + 1
+        diag_chunk = _offset_chunk_diagnostics_time(diag_chunk, offset=t_elapsed)
         validate_finite_gx_diagnostics(
-            diag_chunk, label=f"adaptive {label} chunk {chunk + 1}"
+            diag_chunk, label=f"adaptive {label} chunk {chunk_index}"
         )
         diag_chunks.append(diag_chunk)
-        t_next = float(np.asarray(diag_chunk.t)[-1])
-        if t_next <= t_elapsed + 1.0e-12:
-            raise RuntimeError(f"adaptive {label} runtime made no time-step progress")
+        t_next = _next_elapsed_time(
+            diag_chunk,
+            previous_elapsed=t_elapsed,
+            label=label,
+            chunk_index=chunk_index,
+        )
         t_elapsed = t_next
         chunk_wall = max(time.perf_counter() - chunk_start, 0.0)
         wall_elapsed = max(time.perf_counter() - wall_start, 0.0)
         message, _snapshot = build_runtime_progress_message(
             label=label,
-            chunk_index=chunk + 1,
+            chunk_index=chunk_index,
             t_elapsed=t_elapsed,
             t_max=float(t_max),
             chunk_wall_seconds=chunk_wall,
@@ -106,8 +160,9 @@ def run_adaptive_gx_chunk_loop(
 
     diag = concat_gx_diagnostics(diag_chunks)
     diag = truncate_gx_diagnostics(diag, t_max=float(t_max))
-    if int(max(diagnostics_stride, 1)) > 1:
-        diag = stride_gx_diagnostics(diag, stride=int(max(diagnostics_stride, 1)))
+    stride = _effective_diagnostics_stride(diagnostics_stride)
+    if stride > 1:
+        diag = stride_gx_diagnostics(diag, stride=stride)
     if fields_final is None:
         raise RuntimeError(f"adaptive {label} runtime did not produce final fields")
     return AdaptiveChunkResult(

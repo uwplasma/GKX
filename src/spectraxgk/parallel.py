@@ -34,6 +34,60 @@ class ParallelIdentityReport:
         return asdict(self)
 
 
+@dataclass(frozen=True)
+class IndependentWorkerMetadata:
+    """Resolved worker metadata for ordered independent Python tasks."""
+
+    requested_workers: int
+    actual_workers: int
+    problem_size: int
+    executor: str
+    parallel_enabled: bool
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-serializable worker metadata payload."""
+
+        return asdict(self)
+
+
+class IndependentMapExecutionError(RuntimeError):
+    """Worker failure annotated with independent-map execution metadata."""
+
+    def __init__(
+        self,
+        index: int,
+        executor: str,
+        actual_workers: int,
+        original_type: str,
+        original_message: str,
+    ) -> None:
+        self.index = int(index)
+        self.executor = str(executor)
+        self.actual_workers = int(actual_workers)
+        self.original_type = str(original_type)
+        self.original_message = str(original_message)
+        super().__init__(
+            "independent_map task "
+            f"{self.index} failed with executor='{self.executor}' "
+            f"and actual_workers={self.actual_workers}: "
+            f"{self.original_type}: {self.original_message}"
+        )
+
+    def __reduce__(self) -> tuple[type[IndependentMapExecutionError], tuple[Any, ...]]:
+        """Keep process-pool transport picklable on worker exceptions."""
+
+        return (
+            type(self),
+            (
+                self.index,
+                self.executor,
+                self.actual_workers,
+                self.original_type,
+                self.original_message,
+            ),
+        )
+
+
 def _tree_error_stats(reference: Any, observed: Any) -> tuple[float, float]:
     """Return max absolute and relative errors for matching pytrees."""
 
@@ -105,6 +159,40 @@ def parallel_identity_report(
         atol=tolerance_atol,
         rtol=tolerance_rtol,
         metadata=dict(metadata or {}),
+    )
+
+
+def _normalize_independent_executor(executor: str) -> str:
+    executor_key = str(executor).strip().lower()
+    if executor_key in {"thread", "threads"}:
+        return "thread"
+    if executor_key in {"process", "processes"}:
+        return "process"
+    raise ValueError("executor must be 'thread' or 'process'")
+
+
+def independent_worker_metadata(
+    problem_size: int,
+    *,
+    workers: int = 1,
+    executor: str = "thread",
+) -> IndependentWorkerMetadata:
+    """Resolve independent-task worker counts and normalized executor metadata."""
+
+    size = int(problem_size)
+    requested = int(workers)
+    if size < 0:
+        raise ValueError("problem_size must be non-negative")
+    if requested < 1:
+        raise ValueError("workers must be >= 1")
+    executor_key = _normalize_independent_executor(executor)
+    actual = min(requested, size) if size else 0
+    return IndependentWorkerMetadata(
+        requested_workers=requested,
+        actual_workers=actual,
+        problem_size=size,
+        executor=executor_key,
+        parallel_enabled=actual > 1,
     )
 
 
@@ -237,6 +325,22 @@ def ky_scan_batches(ky_values: np.ndarray, *, n_batches: int) -> list[np.ndarray
     return split_evenly(ky, n_batches)
 
 
+def _run_indexed_independent_task(
+    task: tuple[Callable[[Any], Any], int, Any, str, int],
+) -> tuple[int, Any]:
+    fn, index, item, executor, actual_workers = task
+    try:
+        return index, fn(item)
+    except Exception as exc:
+        raise IndependentMapExecutionError(
+            index,
+            executor,
+            actual_workers,
+            type(exc).__name__,
+            str(exc),
+        ) from exc
+
+
 def independent_map(
     fn: Callable[[Any], Any],
     values: Iterable[Any],
@@ -253,30 +357,108 @@ def independent_map(
     """
 
     items = list(values)
-    n_workers = int(workers)
-    if n_workers < 1:
-        raise ValueError("workers must be >= 1")
-    executor_key = str(executor).strip().lower()
-    if executor_key not in {"thread", "threads", "process", "processes"}:
-        raise ValueError("executor must be 'thread' or 'process'")
+    worker_metadata = independent_worker_metadata(
+        len(items),
+        workers=workers,
+        executor=executor,
+    )
     if not items:
         return []
-    if n_workers == 1 or len(items) == 1:
+    if worker_metadata.actual_workers == 1:
         return [fn(item) for item in items]
 
-    max_workers = min(n_workers, len(items))
-    if executor_key in {"thread", "threads"}:
-        with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            return list(pool.map(fn, items))
-    with ProcessPoolExecutor(max_workers=max_workers) as pool:
-        return list(pool.map(fn, items))
+    tasks = (
+        (fn, index, item, worker_metadata.executor, worker_metadata.actual_workers)
+        for index, item in enumerate(items)
+    )
+    executor_cls = (
+        ThreadPoolExecutor
+        if worker_metadata.executor == "thread"
+        else ProcessPoolExecutor
+    )
+    try:
+        with executor_cls(max_workers=worker_metadata.actual_workers) as pool:
+            indexed_results = list(pool.map(_run_indexed_independent_task, tasks))
+    except IndependentMapExecutionError:
+        raise
+    except Exception as exc:
+        raise RuntimeError(
+            "independent_map executor "
+            f"'{worker_metadata.executor}' failed before completing "
+            f"{worker_metadata.problem_size} task(s) with "
+            f"actual_workers={worker_metadata.actual_workers}: {exc}"
+        ) from exc
+
+    indices = [index for index, _ in indexed_results]
+    expected_indices = list(range(len(items)))
+    if indices != expected_indices:
+        raise RuntimeError(
+            "independent_map executor returned results out of serial order: "
+            f"{indices} != {expected_indices}"
+        )
+    return [result for _, result in indexed_results]
+
+
+def independent_map_identity_report(
+    fn: Callable[[Any], Any],
+    values: Iterable[Any],
+    *,
+    workers: int = 1,
+    executor: str = "thread",
+    atol: float = 1e-12,
+    rtol: float = 1e-10,
+    metadata: dict[str, Any] | None = None,
+) -> ParallelIdentityReport:
+    """Compare ``independent_map`` against a serial list-comprehension run."""
+
+    items = list(values)
+    worker_metadata = independent_worker_metadata(
+        len(items),
+        workers=workers,
+        executor=executor,
+    )
+    if worker_metadata.problem_size < 1:
+        raise ValueError("values must contain at least one item")
+
+    reference = [fn(item) for item in items]
+    observed = independent_map(
+        fn,
+        items,
+        workers=worker_metadata.requested_workers,
+        executor=worker_metadata.executor,
+    )
+    report_metadata = dict(metadata or {})
+    report_metadata.update(
+        {
+            "executor": worker_metadata.executor,
+            "parallel_enabled": worker_metadata.parallel_enabled,
+            "worker_metadata": worker_metadata.to_dict(),
+            "tree": str(jax.tree_util.tree_structure(reference)),
+        }
+    )
+    return parallel_identity_report(
+        reference,
+        observed,
+        kind="independent_map_serial_identity",
+        problem_size=worker_metadata.problem_size,
+        requested_workers=worker_metadata.requested_workers,
+        actual_workers=worker_metadata.actual_workers,
+        backend=f"python:{worker_metadata.executor}",
+        atol=atol,
+        rtol=rtol,
+        metadata=report_metadata,
+    )
 
 
 __all__ = [
+    "IndependentMapExecutionError",
+    "IndependentWorkerMetadata",
     "ParallelIdentityReport",
     "batch_map",
     "batch_map_identity_report",
     "independent_map",
+    "independent_map_identity_report",
+    "independent_worker_metadata",
     "ky_scan_batches",
     "pad_to_multiple",
     "parallel_identity_report",
