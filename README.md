@@ -427,6 +427,17 @@ as saturated transport.
 
 ![SPECTRAX-GK VMEC/Boozer gradient holdout matrix](docs/_static/vmec_boozer_gradient_holdout_matrix.png)
 
+The reduced VMEC/Boozer optimization path also has aggregate guardrails. The
+multi-point gate below checks a quasilinear objective over two field lines and
+two `k_y` samples at `mboz=nboz=21`; the growth-vs-quasilinear comparison shows
+that growth-rate and quasilinear objectives can choose different initial VMEC
+coefficient directions. The current promotion gate is therefore intentionally
+blocked until an independent held-out surface or field-line artifact passes.
+
+![SPECTRAX-GK VMEC/Boozer multi-alpha aggregate-objective gate](docs/_static/vmec_boozer_multi_point_objective_gate.png)
+
+![SPECTRAX-GK VMEC/Boozer growth-vs-quasilinear line-search comparison](docs/_static/vmec_boozer_aggregate_line_search_comparison.png)
+
 ![SPECTRAX-GK nonlinear startup-window finite-difference audit](docs/_static/nonlinear_window_fd_audit.png)
 
 ![SPECTRAX-GK VMEC/Boozer nonlinear startup-window finite-difference audit](docs/_static/vmec_boozer_nonlinear_window_fd_audit.png)
