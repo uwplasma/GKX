@@ -432,11 +432,16 @@ multi-point gate below checks a quasilinear objective over two field lines and
 two `k_y` samples at `mboz=nboz=21`; the growth-vs-quasilinear comparison shows
 that growth-rate and quasilinear objectives can choose different initial VMEC
 coefficient directions. The current promotion gate is therefore intentionally
-blocked until an independent held-out surface or field-line artifact passes.
+blocked until an independent production-grade held-out surface or field-line
+artifact passes. The alpha-heldout split shown below is a positive reduced
+field-line generalization check, but it is still not a nonlinear transport
+optimization claim.
 
 ![SPECTRAX-GK VMEC/Boozer multi-alpha aggregate-objective gate](docs/_static/vmec_boozer_multi_point_objective_gate.png)
 
 ![SPECTRAX-GK VMEC/Boozer growth-vs-quasilinear line-search comparison](docs/_static/vmec_boozer_aggregate_line_search_comparison.png)
+
+![SPECTRAX-GK VMEC/Boozer aggregate alpha-heldout gate](docs/_static/vmec_boozer_aggregate_alpha_holdout_gate.png)
 
 ![SPECTRAX-GK nonlinear startup-window finite-difference audit](docs/_static/nonlinear_window_fd_audit.png)
 
