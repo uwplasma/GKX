@@ -252,6 +252,14 @@ the common-window and least-window grid differences are about `0.0128` and
 without changing the core conclusion: the current absolute-flux model is still
 a rejected research candidate, not a shipped predictive transport law.
 
+The follow-up seed/timestep replicate gate initially failed at `t=450` because
+one seed still had a drifting terminal window. Extending the same three
+replicas to `t=700` closes the physical readiness gate on `t=[350,700]`: the
+ensemble mean heat flux is `18.97`, mean relative spread is `0.035`, and
+combined SEM/mean is `0.043`.
+
+![SPECTRAX-GK circular VMEC nonlinear replicate gate](docs/_static/external_vmec_circular_replicates/circular_replicate_t700_ensemble_gate.png)
+
 Autodiff validation (inverse/sensitivity demo):
 
 ![SPECTRAX-GK autodiff inverse demo](docs/_static/autodiff_inverse_growth.png)
@@ -512,11 +520,17 @@ tokamak external-VMEC candidate now passes the longer `t=250` high-grid gate:
 seed/timestep replicate campaign on the `64x64x40`, `t=250` D-shaped case
 passes the late-window ensemble gate on `t=[170,250]`: the three accepted
 windows have mean heat fluxes `18.8`, `20.8`, and `18.1`, with mean relative
-spread `0.141` below the `0.15` gate.
+spread `0.141` below the `0.15` gate. A circular external-VMEC replicate
+campaign required a longer horizon: the `t=450` ensemble spread was already
+small, but seed31 failed terminal-window stationarity, so the accepted artifact
+is the `t=700`, `t=[350,700]` replicate with mean relative spread `0.035` and
+combined SEM/mean `0.043`.
 
 ![SPECTRAX-GK nonlinear transport time-horizon audit](docs/_static/nonlinear_transport_time_horizon_audit.png)
 
 ![SPECTRAX-GK D-shaped VMEC nonlinear replicate gate](docs/_static/external_vmec_dshape_replicates/dshape_replicate_t250_ensemble_gate.png)
+
+![SPECTRAX-GK circular VMEC nonlinear replicate gate](docs/_static/external_vmec_circular_replicates/circular_replicate_t700_ensemble_gate.png)
 
 Differentiable stellarator ITG optimization examples live in
 `examples/optimization/`. They optimize the same QA, max-mode-1 control vector
