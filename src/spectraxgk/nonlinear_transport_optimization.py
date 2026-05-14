@@ -387,9 +387,9 @@ def production_nonlinear_optimization_guard_report(
         "config": asdict(cfg),
         "notes": (
             "This guard intentionally allows release when reduced/startup nonlinear "
-            "artifacts are scoped correctly, while keeping production nonlinear "
-            "turbulent-flux optimization unpromoted until optimized-equilibrium "
-            "long-window replicate audits exist."
+            "artifacts are scoped correctly. Production nonlinear turbulent-flux "
+            "optimization is promoted only when optimized-equilibrium long-window "
+            "replicate audits exist and pass."
         ),
     }
 

@@ -524,7 +524,13 @@ spread `0.141` below the `0.15` gate. A circular external-VMEC replicate
 campaign required a longer horizon: the `t=450` ensemble spread was already
 small, but seed31 failed terminal-window stationarity, so the accepted artifact
 is the `t=700`, `t=[350,700]` replicate with mean relative spread `0.035` and
-combined SEM/mean `0.043`.
+combined SEM/mean `0.043`. The selected optimized QA equilibrium was then run
+through the same long-window protocol at `n64` with two seed replicates and one
+timestep replicate. Its accepted `t=[350,700]` window has ensemble mean ion
+heat flux `10.19`, mean-relative spread `0.038`, and combined SEM/mean `0.021`.
+This is a passed post-transient optimized-equilibrium audit; it is not a
+universal absolute-flux model and should be compared case-by-case against the
+chosen baseline objective and geometry family.
 
 ![SPECTRAX-GK nonlinear transport time-horizon audit](docs/_static/nonlinear_transport_time_horizon_audit.png)
 
@@ -532,12 +538,17 @@ combined SEM/mean `0.043`.
 
 ![SPECTRAX-GK circular VMEC nonlinear replicate gate](docs/_static/external_vmec_circular_replicates/circular_replicate_t700_ensemble_gate.png)
 
+![SPECTRAX-GK optimized-equilibrium nonlinear replicate gate](docs/_static/optimized_equilibrium_replicates/optimized_equilibrium_replicate_t700_ensemble_gate.png)
+
 The production nonlinear optimization guard below is the enforced claim
 boundary. It passes as a release-safety check because startup/reduced nonlinear
 artifacts are scoped correctly and two long post-transient replicated holdout
-ensembles pass. It still blocks production nonlinear turbulent-flux
-optimization promotion because no optimized equilibrium has its own replicated
-post-transient nonlinear transport-window audit yet.
+ensembles pass. With the optimized-equilibrium `t=[350,700]` seed/timestep
+replicate now attached, the production nonlinear optimization promotion gate
+also passes for this scoped evidence set. The claim remains bounded: this proves
+that the selected optimized equilibrium has a converged replicated nonlinear
+transport-window audit, not that the current quasilinear model is a universal
+absolute-flux predictor or that nonlinear turbulence gradients are available.
 
 ![SPECTRAX-GK production nonlinear optimization guard](docs/_static/production_nonlinear_optimization_guard.png)
 
@@ -564,7 +575,8 @@ optimization claim. Full
 scoped to the next promotion gate: production nonlinear turbulence-gradient or
 robust finite-difference audits with converged post-transient heat-flux
 windows, continued production curvature/drift parity on additional equilibria,
-and nonlinear audits of the optimized equilibria. The current full-chain
+and matched baseline-to-optimized nonlinear audits for broader geometry
+families. The current full-chain
 linear/quasilinear and reduced nonlinear-window estimator gradient evidence
 covers QH and Li383 at `mboz=nboz=21`;
 it should not be read as a production nonlinear heat-flux optimization claim.
