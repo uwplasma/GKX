@@ -296,6 +296,12 @@ def production_nonlinear_optimization_guard_report(
     qualifying_optimized = [
         row for row in optimized_rows if bool(row["qualifies_for_production_optimization"])
     ]
+    rows_claiming_production = int(
+        _finite_float(optimization_scope.get("n_rows_claiming_production")) or 0
+    )
+    artifact_claims_production = bool(
+        optimization_scope.get("artifact_claims_production", False)
+    )
 
     safety_gates = [
         _gate(
@@ -305,11 +311,10 @@ def production_nonlinear_optimization_guard_report(
         ),
         _gate(
             "reduced_optimizer_not_promoted",
-            int(optimization_scope["n_rows_claiming_production"]) == 0
-            and not bool(optimization_scope["artifact_claims_production"]),
+            rows_claiming_production == 0 and not artifact_claims_production,
             (
-                f"rows_claiming_production={optimization_scope['n_rows_claiming_production']} "
-                f"artifact_claims_production={optimization_scope['artifact_claims_production']}"
+                f"rows_claiming_production={rows_claiming_production} "
+                f"artifact_claims_production={artifact_claims_production}"
             ),
         ),
         _gate(
