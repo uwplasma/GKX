@@ -45,9 +45,16 @@ def _booz_xform_jax_search_paths() -> list[Path]:
     return search_paths
 
 
-def _import_module_with_search_paths(name: str, search_paths: list[Path]) -> Any:
+def _import_module_with_search_paths(
+    name: str, search_paths: list[Path], *, required_attr: str | None = None
+) -> Any:
+    def _valid(module: Any) -> bool:
+        return required_attr is None or hasattr(module, required_attr)
+
     try:
-        return importlib.import_module(name)
+        module = importlib.import_module(name)
+        if _valid(module):
+            return module
     except Exception:
         pass
 
@@ -55,8 +62,13 @@ def _import_module_with_search_paths(name: str, search_paths: list[Path]) -> Any
         path_str = str(path)
         if path_str not in sys.path:
             sys.path.insert(0, path_str)
+        cached = sys.modules.get(name)
+        if cached is not None and not _valid(cached):
+            del sys.modules[name]
         try:
-            return importlib.import_module(name)
+            module = importlib.import_module(name)
+            if _valid(module):
+                return module
         except Exception:
             continue
     raise ImportError(name)
@@ -65,12 +77,17 @@ def _import_module_with_search_paths(name: str, search_paths: list[Path]) -> Any
 def _import_booz_backend() -> Any:
     search_paths = _booz_xform_jax_search_paths()
     try:
-        return _import_module_with_search_paths("booz_xform_jax", search_paths)
+        return _import_module_with_search_paths(
+            "booz_xform_jax", search_paths, required_attr="Booz_xform"
+        )
     except Exception:
         pass
 
     try:
-        return importlib.import_module("booz_xform")
+        module = importlib.import_module("booz_xform")
+        if not hasattr(module, "Booz_xform"):
+            raise ImportError("booz_xform backend does not expose Booz_xform")
+        return module
     except Exception as exc:
         raise ImportError("booz_xform_jax/booz_xform backend unavailable") from exc
 
