@@ -532,12 +532,21 @@ combined SEM/mean `0.043`.
 
 ![SPECTRAX-GK circular VMEC nonlinear replicate gate](docs/_static/external_vmec_circular_replicates/circular_replicate_t700_ensemble_gate.png)
 
+The production nonlinear optimization guard below is the enforced claim
+boundary. It passes as a release-safety check because startup/reduced nonlinear
+artifacts are scoped correctly and two long post-transient replicated holdout
+ensembles pass. It still blocks production nonlinear turbulent-flux
+optimization promotion because no optimized equilibrium has its own replicated
+post-transient nonlinear transport-window audit yet.
+
+![SPECTRAX-GK production nonlinear optimization guard](docs/_static/production_nonlinear_optimization_guard.png)
+
 Differentiable stellarator ITG optimization examples live in
 `examples/optimization/`. They optimize the same QA, max-mode-1 control vector
 with three turbulence objectives: small linear ITG growth rate, small
-quasilinear ITG heat-flux proxy, and a small late-window nonlinear heat-flux
-envelope. Each example reports AD-vs-finite-difference checks, UQ covariance
-diagnostics, objective histories, and polished figures.
+quasilinear ITG heat-flux proxy, and a small reduced late-window nonlinear
+heat-flux envelope. Each example reports AD-vs-finite-difference checks, UQ
+covariance diagnostics, objective histories, and polished figures.
 
 ![SPECTRAX-GK differentiable stellarator ITG optimization](docs/_static/stellarator_itg_optimization_comparison.png)
 

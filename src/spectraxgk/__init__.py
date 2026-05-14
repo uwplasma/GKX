@@ -107,6 +107,13 @@ from spectraxgk.quasilinear_window import (
     nonlinear_window_ensemble_report,
     nonlinear_window_stats_promotion_ready,
 )
+from spectraxgk.nonlinear_transport_optimization import (
+    ProductionNonlinearOptimizationGuardConfig,
+    optimized_equilibrium_transport_report,
+    production_nonlinear_optimization_guard_report,
+    reduced_artifact_scope_report,
+    replicated_transport_ensemble_report,
+)
 from spectraxgk.external_holdout_plan import (
     ExternalHoldoutScreenRow,
     build_external_holdout_runbook,
@@ -455,6 +462,11 @@ __all__ = [
     "nonlinear_window_ensemble_artifact_manifest",
     "nonlinear_window_ensemble_report",
     "nonlinear_window_stats_promotion_ready",
+    "ProductionNonlinearOptimizationGuardConfig",
+    "optimized_equilibrium_transport_report",
+    "production_nonlinear_optimization_guard_report",
+    "reduced_artifact_scope_report",
+    "replicated_transport_ensemble_report",
     "ExternalHoldoutScreenRow",
     "build_external_holdout_runbook",
     "external_vmec_family",

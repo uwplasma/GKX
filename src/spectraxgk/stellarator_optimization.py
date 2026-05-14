@@ -111,6 +111,22 @@ class StellaratorITGOptimizationResult:
         payload["initial_observables"] = list(self.initial_observables)
         payload["final_observables"] = list(self.final_observables)
         payload["history"] = list(self.history)
+        if self.objective_kind == "nonlinear_heat_flux":
+            payload["claim_level"] = (
+                "reduced_nonlinear_window_estimator_optimization_not_transport_average"
+            )
+            payload["nonlinear_transport_scope"] = {
+                "model": "smooth_logistic_heat_flux_envelope_from_linear_observables",
+                "transport_average_gate": False,
+                "production_nonlinear_optimization_claim": False,
+                "requires_for_production": [
+                    "long post-transient nonlinear transport window",
+                    "seed/initial-condition and timestep replicate ensemble",
+                    "optimized-equilibrium nonlinear audit",
+                ],
+            }
+        else:
+            payload["claim_level"] = "reduced_linear_or_quasilinear_objective_optimization"
         return payload
 
 
@@ -695,6 +711,8 @@ def compare_stellarator_itg_objectives(
     ]
     results = independent_map(_optimize_stellarator_itg_task, tasks, workers=workers, executor=parallel_executor)
     return {
+        "claim_level": "reduced_objective_optimization_comparison_not_full_production_vmec_gk",
+        "production_nonlinear_optimization_claim": False,
         "parameter_names": list(PARAMETER_NAMES),
         "observable_names": list(OBSERVABLE_NAMES),
         "results": [result.to_dict() for result in results],
