@@ -508,9 +508,15 @@ again by about `63%`. QH is therefore excluded from quasilinear calibration
 until a separate grid/window-converged transport gate passes. A new D-shaped
 tokamak external-VMEC candidate now passes the longer `t=250` high-grid gate:
 `48x48x32` and `64x64x40` differ by `13.9%` on the common late window and
-`10.8%` on independently selected least-trending windows.
+`10.8%` on independently selected least-trending windows. A follow-up
+seed/timestep replicate campaign on the `64x64x40`, `t=250` D-shaped case
+passes the late-window ensemble gate on `t=[170,250]`: the three accepted
+windows have mean heat fluxes `18.8`, `20.8`, and `18.1`, with mean relative
+spread `0.141` below the `0.15` gate.
 
 ![SPECTRAX-GK nonlinear transport time-horizon audit](docs/_static/nonlinear_transport_time_horizon_audit.png)
+
+![SPECTRAX-GK D-shaped VMEC nonlinear replicate gate](docs/_static/external_vmec_dshape_replicates/dshape_replicate_t250_ensemble_gate.png)
 
 Differentiable stellarator ITG optimization examples live in
 `examples/optimization/`. They optimize the same QA, max-mode-1 control vector
