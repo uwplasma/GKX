@@ -194,8 +194,8 @@ interval-coverage gate at `7/8` on the current eight-case electrostatic portfoli
 is the current manuscript model-selection result: the simple rules are rejected,
 but a small spectrum-aware candidate is accepted as a scoped research candidate.
 The model-selection status also consumes the selected optimized-equilibrium
-nonlinear audit as local transport evidence, while still refusing to promote a
-runtime/TOML absolute-flux predictor or universal saturation law.
+nonlinear audit as local transport evidence, but it is not a runtime/TOML
+absolute-flux predictor or universal saturation law.
 
 ![SPECTRAX-GK quasilinear candidate uncertainty gate](docs/_static/quasilinear_candidate_uncertainty.png)
 
