@@ -192,8 +192,10 @@ model below. It uses only two linear-spectrum envelope features, reaches mean
 relative error about `0.295`, and clears the leave-one-geometry-out
 interval-coverage gate at `7/8` on the current eight-case electrostatic portfolio. That
 is the current manuscript model-selection result: the simple rules are rejected,
-but a small spectrum-aware candidate is accepted as a scoped research candidate,
-not a runtime/TOML absolute-flux predictor or universal saturation law.
+but a small spectrum-aware candidate is accepted as a scoped research candidate.
+The model-selection status also consumes the selected optimized-equilibrium
+nonlinear audit as local transport evidence, while still refusing to promote a
+runtime/TOML absolute-flux predictor or universal saturation law.
 
 ![SPECTRAX-GK quasilinear candidate uncertainty gate](docs/_static/quasilinear_candidate_uncertainty.png)
 
@@ -540,6 +542,14 @@ chosen baseline objective and geometry family.
 
 ![SPECTRAX-GK optimized-equilibrium nonlinear replicate gate](docs/_static/optimized_equilibrium_replicates/optimized_equilibrium_replicate_t700_ensemble_gate.png)
 
+The matched no-ESS reference from the same `vmec_jax` QA campaign also passes
+the same `t=[350,700]` seed/timestep ensemble gate. Against that finite-transform
+reference, the optimized QA/ESS equilibrium reduces the late-window ion heat
+flux from `12.50` to `10.19`, a relative reduction of `18.4%` with `7.82`
+combined-SEMs separation.
+
+![SPECTRAX-GK matched no-ESS to optimized QA/ESS nonlinear audit](docs/_static/qa_no_ess_to_optimized_nonlinear_audit.png)
+
 The production nonlinear optimization guard below is the enforced claim
 boundary. It passes as a release-safety check because startup/reduced nonlinear
 artifacts are scoped correctly and two long post-transient replicated holdout
@@ -549,6 +559,10 @@ also passes for this scoped evidence set. The claim remains bounded: this proves
 that the selected optimized equilibrium has a converged replicated nonlinear
 transport-window audit, not that the current quasilinear model is a universal
 absolute-flux predictor or that nonlinear turbulence gradients are available.
+The separate nonlinear turbulence-gradient evidence gate is stricter and
+currently fails closed because the available gradient artifacts are
+startup/reduced-window diagnostics rather than production long-window transport
+gradients.
 
 ![SPECTRAX-GK production nonlinear optimization guard](docs/_static/production_nonlinear_optimization_guard.png)
 
