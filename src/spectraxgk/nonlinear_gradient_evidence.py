@@ -163,8 +163,6 @@ def _scope_blockers(payload: dict[str, Any]) -> list[str]:
     blockers = [marker for marker in NON_PRODUCTION_SCOPE_MARKERS if marker in text]
     if payload.get("transport_average_gate") is False:
         blockers.append("transport_average_gate_false")
-    if payload.get("production_nonlinear_window_gradient_gate") is False:
-        blockers.append("production_nonlinear_window_gradient_gate_false")
     return sorted(set(blockers))
 
 
@@ -762,19 +760,47 @@ def nonlinear_turbulence_gradient_evidence_gap_report(
         if isinstance(row, dict)
         and bool(row.get("qualifies_for_replicated_long_window_uncertainty", False))
     ]
+    failed_gradient_gates = [
+        {
+            "metric": str(gate.get("metric", "")),
+            "detail": str(gate.get("detail", "")),
+        }
+        for gate in gradient.get("gates", [])
+        if isinstance(gate, dict) and not bool(gate.get("passed", False))
+    ]
+    gradient_class = str(gradient.get("evidence_class", ""))
+    has_production_candidate = (
+        gradient_class == "production_long_window_turbulence_gradient_candidate"
+    )
     missing: list[dict[str, Any]] = []
     if "production_gradient_artifact" in blockers:
-        missing.append(
-            {
-                "blocker": "production_gradient_artifact",
-                "needed": (
-                    "central finite-difference or adjoint/VJP artifact computed "
-                    "from matched long post-transient nonlinear heat-flux windows"
-                ),
-                "current_artifact_class": gradient.get("evidence_class"),
-                "current_artifact_path": gradient.get("path"),
-            }
-        )
+        if has_production_candidate:
+            missing.append(
+                {
+                    "blocker": "production_gradient_artifact",
+                    "needed": (
+                        "the current matched long-window production-candidate "
+                        "finite-difference artifact must pass all recorded "
+                        "response, asymmetry, conditioning, and propagated "
+                        "gradient-uncertainty gates"
+                    ),
+                    "current_artifact_class": gradient.get("evidence_class"),
+                    "current_artifact_path": gradient.get("path"),
+                    "current_failed_gates": failed_gradient_gates,
+                }
+            )
+        else:
+            missing.append(
+                {
+                    "blocker": "production_gradient_artifact",
+                    "needed": (
+                        "central finite-difference or adjoint/VJP artifact computed "
+                        "from matched long post-transient nonlinear heat-flux windows"
+                    ),
+                    "current_artifact_class": gradient.get("evidence_class"),
+                    "current_artifact_path": gradient.get("path"),
+                }
+            )
     if "replicated_long_window_uncertainty" in blockers:
         missing.append(
             {
@@ -825,11 +851,17 @@ def nonlinear_turbulence_gradient_evidence_gap_report(
     }
     return {
         "kind": "nonlinear_turbulence_gradient_evidence_gap_report",
-        "claim_level": "fail_closed_missing_campaign_plan_not_gradient_evidence",
+        "claim_level": (
+            "fail_closed_production_candidate_gradient_gate_not_resolved"
+            if has_production_candidate and not passed
+            else "fail_closed_missing_campaign_plan_not_gradient_evidence"
+        ),
         "passed": passed,
         "promotion_blocked": not passed,
         "blockers": blockers,
         "missing_evidence": missing,
+        "current_gradient_candidate_present": has_production_candidate,
+        "current_gradient_failed_gates": failed_gradient_gates,
         "current_window_evidence_passed": bool(windows.get("passed", False)),
         "qualifying_window_ensemble_count": len(qualifying_windows),
         "required_campaign": {
