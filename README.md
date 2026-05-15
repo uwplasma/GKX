@@ -560,19 +560,18 @@ that the selected optimized equilibrium has a converged replicated nonlinear
 transport-window audit, not that the current quasilinear model is a universal
 absolute-flux predictor or that nonlinear turbulence gradients are available.
 The separate nonlinear turbulence-gradient evidence gate is stricter and
-currently fails closed even after the current real re-equilibrated QA/ESS
-`RBC(1,1)` paired campaign. The `t=[450,900]` baseline/plus/minus nonlinear
-ensembles pass their replicated window gates. The 8% boundary perturbation
-resolves a `9.9%` heat-flux response and brings the propagated gradient
-uncertainty down to `0.506x`, just above the `0.5x` release gate, but the
-forward/backward finite-difference asymmetry is `1.89`, so the perturbation is
-not local enough for a production gradient claim. The next promotion attempt
-should bracket the perturbation amplitude or choose a better-conditioned
-boundary/profile direction, not relax the gates.
+currently fails closed after a real re-equilibrated QA/ESS control sweep. The
+tracked lower-order `ZBS(1,0)` 5% campaign has three passed `t=[450,900]`
+baseline/plus/minus replicated nonlinear ensembles and a local central
+finite-difference response (`fd_asymmetry_rel = 0.274`), but the propagated
+gradient uncertainty is still too large (`0.768 > 0.5`). A companion `ZBS(1,1)`
+5% campaign passed the uncertainty gate (`0.225`) but remained mildly nonlocal
+(`fd_asymmetry_rel = 0.663`). These are useful production-candidate audits, not
+nonlinear turbulence-gradient validation.
 
 ![SPECTRAX-GK production nonlinear optimization guard](docs/_static/production_nonlinear_optimization_guard.png)
 
-![SPECTRAX-GK QA/ESS RBC(1,1) nonlinear gradient gate](docs/_static/qa_ess_rbc11_rel8_nonlinear_gradient_rbc_1_1_central_fd_gradient_gate.png)
+![SPECTRAX-GK QA/ESS ZBS(1,0) nonlinear gradient gate](docs/_static/qa_ess_zbs10_rel5_nonlinear_gradient_zbs_1_0_central_fd_gradient_gate.png)
 
 Differentiable stellarator ITG optimization examples live in
 `examples/optimization/`. They optimize the same QA, max-mode-1 control vector
