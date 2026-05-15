@@ -568,6 +568,12 @@ gradient uncertainty is still too large (`0.768 > 0.5`). A companion `ZBS(1,1)`
 5% campaign passed the uncertainty gate (`0.225`) but remained mildly nonlocal
 (`fd_asymmetry_rel = 0.663`). These are useful production-candidate audits, not
 nonlinear turbulence-gradient validation.
+The current candidate-ranking artifact compares the completed `RBC(1,1)`,
+`ZBS(1,1)`, and `ZBS(1,0)` long-window finite-difference campaigns and
+recommends an overdetermined least-squares/profile-gradient campaign next. The
+single-control sweeps have complementary locality and uncertainty failures, so
+the next step is a better-conditioned design rather than another blind
+single-coefficient rerun.
 
 ![SPECTRAX-GK production nonlinear optimization guard](docs/_static/production_nonlinear_optimization_guard.png)
 
