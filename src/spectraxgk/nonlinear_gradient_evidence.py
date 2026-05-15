@@ -562,6 +562,9 @@ def nonlinear_turbulence_gradient_finite_difference_report(
     finite_sems = all(value is not None for value in sems.values())
 
     if finite_means:
+        assert means["minus"] is not None
+        assert means["baseline"] is not None
+        assert means["plus"] is not None
         minus_mean = float(means["minus"])
         baseline_mean = float(means["baseline"])
         plus_mean = float(means["plus"])
@@ -588,6 +591,8 @@ def nonlinear_turbulence_gradient_finite_difference_report(
         fd_condition_number = math.nan
 
     if finite_sems:
+        assert sems["plus"] is not None
+        assert sems["minus"] is not None
         gradient_uncertainty = math.sqrt(float(sems["plus"]) ** 2 + float(sems["minus"]) ** 2) / (
             2.0 * delta
         )
