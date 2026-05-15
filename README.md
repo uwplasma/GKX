@@ -560,17 +560,19 @@ that the selected optimized equilibrium has a converged replicated nonlinear
 transport-window audit, not that the current quasilinear model is a universal
 absolute-flux predictor or that nonlinear turbulence gradients are available.
 The separate nonlinear turbulence-gradient evidence gate is stricter and
-currently fails closed even after the first real re-equilibrated QA/ESS
+currently fails closed even after the current real re-equilibrated QA/ESS
 `RBC(1,1)` paired campaign. The `t=[450,900]` baseline/plus/minus nonlinear
-ensembles pass their replicated window gates, but the 2% boundary perturbation
-only moves the heat flux by about `3.0%`; the propagated central-difference
-gradient uncertainty is `1.83x` the gradient, above the `0.5x` release gate.
-The next promotion attempt should therefore use a larger bounded perturbation or
-a lower-variance transport estimator, not relaxed wording.
+ensembles pass their replicated window gates. The 8% boundary perturbation
+resolves a `9.9%` heat-flux response and brings the propagated gradient
+uncertainty down to `0.506x`, just above the `0.5x` release gate, but the
+forward/backward finite-difference asymmetry is `1.89`, so the perturbation is
+not local enough for a production gradient claim. The next promotion attempt
+should bracket the perturbation amplitude or choose a better-conditioned
+boundary/profile direction, not relax the gates.
 
 ![SPECTRAX-GK production nonlinear optimization guard](docs/_static/production_nonlinear_optimization_guard.png)
 
-![SPECTRAX-GK QA/ESS RBC(1,1) nonlinear gradient gate](docs/_static/qa_ess_rbc11_nonlinear_gradient_rbc_1_1_central_fd_gradient_gate.png)
+![SPECTRAX-GK QA/ESS RBC(1,1) nonlinear gradient gate](docs/_static/qa_ess_rbc11_rel8_nonlinear_gradient_rbc_1_1_central_fd_gradient_gate.png)
 
 Differentiable stellarator ITG optimization examples live in
 `examples/optimization/`. They optimize the same QA, max-mode-1 control vector
