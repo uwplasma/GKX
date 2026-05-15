@@ -83,6 +83,7 @@ class NonlinearTurbulenceGradientGapConfig:
 class NonlinearTurbulenceGradientFiniteDifferenceConfig:
     """Acceptance limits for paired long-window finite-difference gradients."""
 
+    min_window_reports: int = 2
     max_window_mean_rel_spread: float = 0.15
     max_window_combined_sem_rel: float = 0.25
     max_gradient_uncertainty_rel: float = 0.50
@@ -94,6 +95,8 @@ class NonlinearTurbulenceGradientFiniteDifferenceConfig:
 
 def _json_number(value: Any) -> float | int | None:
     if value is None:
+        return None
+    if isinstance(value, bool):
         return None
     try:
         number = float(value)
@@ -274,6 +277,7 @@ def _gradient_conditioning_summary(
         (
             "gradient_sem_rel",
             "sem_rel",
+            "gradient_uncertainty_rel",
             "gradient_relative_uncertainty",
             "relative_uncertainty",
         ),
@@ -602,10 +606,24 @@ def nonlinear_turbulence_gradient_finite_difference_report(
         gradient_uncertainty = math.nan
         gradient_uncertainty_rel = math.nan
 
-    source_gates = [
-        _gate(f"{name}_ensemble_passed", bool(row["passed"]), f"path={row.get('path')}")
-        for name, row in rows.items()
-    ]
+    source_gates: list[dict[str, Any]] = []
+    for name, row in rows.items():
+        n_reports = _finite_float(row.get("n_reports"))
+        source_gates.extend(
+            [
+                _gate(
+                    f"{name}_ensemble_kind",
+                    row.get("kind") == "nonlinear_window_ensemble_report",
+                    f"kind={row.get('kind')}",
+                ),
+                _gate(f"{name}_ensemble_passed", bool(row["passed"]), f"path={row.get('path')}"),
+                _gate(
+                    f"{name}_ensemble_replicated",
+                    n_reports is not None and n_reports >= int(cfg.min_window_reports),
+                    f"n_reports={n_reports} min={cfg.min_window_reports}",
+                ),
+            ]
+        )
     window_gates: list[dict[str, Any]] = []
     for name, row in rows.items():
         mean_rel_spread = _finite_float(row.get("mean_rel_spread"))

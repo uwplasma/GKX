@@ -319,9 +319,14 @@ def _vmec_fieldlines(
             # (radius, mn_mode) dimensions. Older booz_xform_jax releases
             # reject that square shape as ambiguous; the classic booz_xform
             # reader handles it, so use it as a runtime EIK fallback.
-            fallback = _import_booz_backend("booz_xform")
-            booz_obj = _new_booz_object(fallback, str(vmec_fname))
+            try:
+                fallback = _import_booz_backend("booz_xform")
+                booz_obj = _new_booz_object(fallback, str(vmec_fname))
+            except Exception:
+                nc_obj.close()
+                raise
         else:
+            nc_obj.close()
             raise
     booz_obj.mboz = int(2 * mpol)
     booz_obj.nboz = int(2 * ntor)
