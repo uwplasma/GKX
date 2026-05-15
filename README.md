@@ -554,8 +554,8 @@ The production nonlinear optimization guard below is the enforced claim
 boundary. It passes as a release-safety check because startup/reduced nonlinear
 artifacts are scoped correctly and two long post-transient replicated holdout
 ensembles pass. With the optimized-equilibrium `t=[350,700]` seed/timestep
-replicate now attached, the production nonlinear optimization promotion gate
-also passes for this scoped evidence set. The claim remains bounded: this proves
+replicate now attached, the selected optimized-equilibrium transport audit also
+satisfies this guard. The claim remains bounded: this proves
 that the selected optimized equilibrium has a converged replicated nonlinear
 transport-window audit, not that the current quasilinear model is a universal
 absolute-flux predictor or that nonlinear turbulence gradients are available.
