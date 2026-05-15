@@ -74,22 +74,64 @@ def _import_module_with_search_paths(
     raise ImportError(name)
 
 
-def _import_booz_backend() -> Any:
+def _import_booz_xform_jax_backend() -> Any:
     search_paths = _booz_xform_jax_search_paths()
-    try:
-        return _import_module_with_search_paths(
-            "booz_xform_jax", search_paths, required_attr="Booz_xform"
+    return _import_module_with_search_paths(
+        "booz_xform_jax", search_paths, required_attr="Booz_xform"
+    )
+
+
+def _import_booz_xform_backend() -> Any:
+    module = importlib.import_module("booz_xform")
+    if not hasattr(module, "Booz_xform"):
+        raise ImportError("booz_xform backend does not expose Booz_xform")
+    return module
+
+
+def _import_booz_backend(preferred: str | None = None) -> Any:
+    choice = (preferred or os.environ.get("SPECTRAX_BOOZ_BACKEND", "auto")).strip().lower()
+    aliases = {
+        "auto": "auto",
+        "booz_xform_jax": "booz_xform_jax",
+        "jax": "booz_xform_jax",
+        "booz_xform": "booz_xform",
+        "fortran": "booz_xform",
+    }
+    if choice not in aliases:
+        raise ValueError(
+            "SPECTRAX_BOOZ_BACKEND must be one of "
+            "auto, booz_xform_jax, jax, booz_xform, or fortran"
         )
-    except Exception:
-        pass
+    choice = aliases[choice]
+    if choice == "booz_xform_jax":
+        return _import_booz_xform_jax_backend()
+    if choice == "booz_xform":
+        return _import_booz_xform_backend()
 
     try:
-        module = importlib.import_module("booz_xform")
-        if not hasattr(module, "Booz_xform"):
-            raise ImportError("booz_xform backend does not expose Booz_xform")
-        return module
+        return _import_booz_xform_jax_backend()
+    except Exception:
+        pass
+    try:
+        return _import_booz_xform_backend()
     except Exception as exc:
         raise ImportError("booz_xform_jax/booz_xform backend unavailable") from exc
+
+
+def _booz_read_wout_square_layout_failure(exc: BaseException) -> bool:
+    message = str(exc)
+    return (
+        isinstance(exc, ValueError)
+        and "rmnc0 has unexpected shape" in message
+        and "one dimension must equal ns=" in message
+    )
+
+
+def _new_booz_object(backend: Any, vmec_fname: str) -> Any:
+    booz_obj = backend.Booz_xform()
+    booz_obj.verbose = 0
+    booz_obj.read_wout(str(vmec_fname))
+    return booz_obj
 
 
 # ---------------------------------------------------------------------------
@@ -266,9 +308,21 @@ def _vmec_fieldlines(
     mpol = int(nc_obj.variables["mpol"][:])
     ntor = int(nc_obj.variables["ntor"][:])
 
-    booz_obj = bxform.Booz_xform()
-    booz_obj.verbose = 0
-    booz_obj.read_wout(str(vmec_fname))
+    try:
+        booz_obj = _new_booz_object(bxform, str(vmec_fname))
+    except Exception as exc:
+        if (
+            os.environ.get("SPECTRAX_BOOZ_BACKEND", "auto").strip().lower() in {"", "auto"}
+            and _booz_read_wout_square_layout_failure(exc)
+        ):
+            # Some VMEC-JAX wouts can have ns == mnmax with explicit
+            # (radius, mn_mode) dimensions. Older booz_xform_jax releases
+            # reject that square shape as ambiguous; the classic booz_xform
+            # reader handles it, so use it as a runtime EIK fallback.
+            fallback = _import_booz_backend("booz_xform")
+            booz_obj = _new_booz_object(fallback, str(vmec_fname))
+        else:
+            raise
     booz_obj.mboz = int(2 * mpol)
     booz_obj.nboz = int(2 * ntor)
     booz_obj.run()
