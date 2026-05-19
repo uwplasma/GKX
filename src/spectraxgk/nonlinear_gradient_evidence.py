@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Iterable, Sequence
 import json
 import math
+import re
 
 from spectraxgk.quasilinear_window import (
     NonlinearWindowEnsembleConfig,
@@ -155,6 +156,113 @@ def _ensemble_statistics_row(payload: dict[str, Any], *, path: str | None = None
         "mean_rel_spread": _json_number(statistics.get("mean_rel_spread")),
         "n_reports": _json_number(statistics.get("n_reports")),
         "statistics": statistics,
+        "rows": payload.get("rows", []) if isinstance(payload.get("rows"), list) else [],
+    }
+
+
+def _replicate_label_from_row(row: dict[str, Any]) -> str | None:
+    for key in ("variant_label", "source_artifact", "summary_artifact", "path"):
+        value = row.get(key)
+        if not isinstance(value, str):
+            continue
+        match = re.search(r"(seed[0-9]+|dt[0-9]+(?:p[0-9]+)?)", value)
+        if match:
+            return match.group(1)
+    return None
+
+
+def _late_mean_by_replicate(row: dict[str, Any]) -> dict[str, float]:
+    out: dict[str, float] = {}
+    rows = row.get("rows")
+    if not isinstance(rows, list):
+        return out
+    for entry in rows:
+        if not isinstance(entry, dict):
+            continue
+        label = _replicate_label_from_row(entry)
+        value = _finite_float(entry.get("late_mean"))
+        if label is None or value is None:
+            continue
+        out[label] = float(value)
+    return out
+
+
+def _paired_replicate_fd_diagnostics(
+    *,
+    rows: dict[str, dict[str, Any]],
+    delta: float,
+    value_floor: float,
+) -> dict[str, Any]:
+    minus_by_label = _late_mean_by_replicate(rows["minus"])
+    baseline_by_label = _late_mean_by_replicate(rows["baseline"])
+    plus_by_label = _late_mean_by_replicate(rows["plus"])
+    labels = sorted(set(minus_by_label) & set(plus_by_label))
+    pair_rows: list[dict[str, Any]] = []
+    gradients: list[float] = []
+    responses: list[float] = []
+    for label in labels:
+        minus_value = minus_by_label[label]
+        plus_value = plus_by_label[label]
+        response = plus_value - minus_value
+        gradient = response / (2.0 * delta)
+        pair = {
+            "label": label,
+            "minus_late_mean": _json_number(minus_value),
+            "plus_late_mean": _json_number(plus_value),
+            "response": _json_number(response),
+            "central_gradient": _json_number(gradient),
+        }
+        if label in baseline_by_label:
+            baseline_value = baseline_by_label[label]
+            forward_gradient = (plus_value - baseline_value) / delta
+            backward_gradient = (baseline_value - minus_value) / delta
+            pair["baseline_late_mean"] = _json_number(baseline_value)
+            pair["forward_gradient"] = _json_number(forward_gradient)
+            pair["backward_gradient"] = _json_number(backward_gradient)
+            pair["fd_asymmetry_rel"] = _json_number(
+                abs(forward_gradient - backward_gradient)
+                / max(abs(gradient), float(value_floor))
+            )
+        pair_rows.append(pair)
+        gradients.append(float(gradient))
+        responses.append(float(response))
+
+    gradient_mean = math.nan
+    gradient_sample_sem = math.nan
+    gradient_uncertainty_rel = math.nan
+    same_sign_fraction = math.nan
+    if gradients:
+        gradient_mean = float(sum(gradients) / len(gradients))
+        signs = [math.copysign(1.0, value) for value in gradients if value != 0.0]
+        if signs:
+            positive = sum(1 for value in signs if value > 0.0)
+            negative = len(signs) - positive
+            same_sign_fraction = max(positive, negative) / len(signs)
+        if len(gradients) >= 2:
+            variance = sum((value - gradient_mean) ** 2 for value in gradients) / (
+                len(gradients) - 1
+            )
+            gradient_sample_sem = math.sqrt(variance / len(gradients))
+            gradient_uncertainty_rel = gradient_sample_sem / max(
+                abs(gradient_mean),
+                float(value_floor),
+            )
+
+    return {
+        "claim_level": "diagnostic_only_not_a_production_gate",
+        "common_plus_minus_labels": labels,
+        "common_all_state_labels": sorted(
+            set(minus_by_label) & set(baseline_by_label) & set(plus_by_label)
+        ),
+        "n_pairs": len(pair_rows),
+        "paired_rows": pair_rows,
+        "central_gradient_mean": _json_number(gradient_mean),
+        "central_gradient_sample_sem": _json_number(gradient_sample_sem),
+        "central_gradient_uncertainty_rel": _json_number(gradient_uncertainty_rel),
+        "same_sign_fraction": _json_number(same_sign_fraction),
+        "mean_response": _json_number(
+            sum(responses) / len(responses) if responses else math.nan
+        ),
     }
 
 
@@ -720,6 +828,11 @@ def nonlinear_turbulence_gradient_finite_difference_report(
             "minus_window_sem": sems["minus"],
         },
         "source_ensembles": rows,
+        "paired_replicate_diagnostics": _paired_replicate_fd_diagnostics(
+            rows=rows,
+            delta=delta,
+            value_floor=float(cfg.value_floor),
+        ),
         "config": asdict(cfg),
         "gates": gates,
         "blockers": [gate["metric"] for gate in gates if not bool(gate["passed"])],
