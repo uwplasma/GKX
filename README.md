@@ -583,15 +583,21 @@ descent-oriented QA/ESS boundary direction with the same long-window campaign
 contract. That composite `t=900`, `n64` campaign has now been run as a full
 matched baseline/plus/minus seed/timestep audit. Baseline and minus ensembles
 pass, but the plus ensemble fails the spread gate and the central finite
-difference remains nonlocal/uncertain (`fd_asymmetry_rel = 1.37`,
-`gradient_uncertainty_rel = 1.13`), so the turbulence-gradient claim remains
-fail-closed.
+difference remains nonlocal/uncertain. A targeted plus-state cross follow-up
+completed three additional `t=900` GPU runs (`seed22_dt0p05`,
+`seed32_dt0p04`, `seed33_dt0p05`); all six plus outputs pass the runtime gate,
+but the plus ensemble still exceeds the spread threshold
+(`mean_rel_spread = 0.166 > 0.15`) and the central-FD gate remains blocked
+(`fd_asymmetry_rel = 2.84`, `gradient_uncertainty_rel = 1.22`). The
+turbulence-gradient claim therefore remains fail-closed.
 
 ![SPECTRAX-GK production nonlinear optimization guard](docs/_static/production_nonlinear_optimization_guard.png)
 
 ![SPECTRAX-GK QA/ESS ZBS(1,0) nonlinear gradient gate](docs/_static/qa_ess_zbs10_rel5_nonlinear_gradient_zbs_1_0_central_fd_gradient_gate.png)
 
 ![SPECTRAX-GK QA/ESS composite nonlinear gradient gate](docs/_static/qa_ess_descent_profile_rel2_nonlinear_gradient_profile_direction_zbs_1_1_zbs_1_0_rbc_1_1_central_fd_gradient_gate.png)
+
+![SPECTRAX-GK QA/ESS targeted nonlinear gradient follow-up](docs/_static/qa_ess_descent_profile_rel2_plus_delta_followup_replicate_spread_diagnostic.png)
 
 Differentiable stellarator ITG optimization examples live in
 `examples/optimization/`. They optimize the same QA, max-mode-1 control vector
