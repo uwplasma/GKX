@@ -1259,6 +1259,12 @@ def _bracket_sweep_recommendation(rows: Sequence[dict[str, Any]]) -> str:
             "uncertainty is acceptable only for nonlocal brackets; shrink the perturbation "
             "or choose a more local control before adding replicas"
         )
+    if response_ok and local_rows and quiet_rows:
+        return (
+            "the numerical bracket margins are resolved, local, and quiet, but no input "
+            "artifact has production long-window scope; rerun or re-export with matched "
+            "post-transient provenance before considering promotion"
+        )
     if response_ok and not local_rows and not quiet_rows:
         return (
             "the response is detectable but neither local nor statistically resolved; "
