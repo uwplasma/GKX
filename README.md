@@ -578,7 +578,10 @@ rather than another blind single-coefficient rerun. The tracked QA/ESS
 overdetermined launch plan now
 prepares `ZBS(1,1)`, `ZBS(1,0)`, and `RBC(1,1)` matched `t=900` campaigns at
 3% relative amplitude; it is a reproducible launch contract, not validation
-evidence.
+evidence. A companion composite-direction manifest defines a smaller 2%
+descent-oriented QA/ESS boundary direction with the same long-window campaign
+contract, again as a launch artifact rather than a promoted turbulence-gradient
+claim.
 
 ![SPECTRAX-GK production nonlinear optimization guard](docs/_static/production_nonlinear_optimization_guard.png)
 
