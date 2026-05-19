@@ -580,12 +580,18 @@ prepares `ZBS(1,1)`, `ZBS(1,0)`, and `RBC(1,1)` matched `t=900` campaigns at
 3% relative amplitude; it is a reproducible launch contract, not validation
 evidence. A companion composite-direction manifest defines a smaller 2%
 descent-oriented QA/ESS boundary direction with the same long-window campaign
-contract, again as a launch artifact rather than a promoted turbulence-gradient
-claim.
+contract. That composite `t=900`, `n64` campaign has now been run as a full
+matched baseline/plus/minus seed/timestep audit. Baseline and minus ensembles
+pass, but the plus ensemble fails the spread gate and the central finite
+difference remains nonlocal/uncertain (`fd_asymmetry_rel = 1.37`,
+`gradient_uncertainty_rel = 1.13`), so the turbulence-gradient claim remains
+fail-closed.
 
 ![SPECTRAX-GK production nonlinear optimization guard](docs/_static/production_nonlinear_optimization_guard.png)
 
 ![SPECTRAX-GK QA/ESS ZBS(1,0) nonlinear gradient gate](docs/_static/qa_ess_zbs10_rel5_nonlinear_gradient_zbs_1_0_central_fd_gradient_gate.png)
+
+![SPECTRAX-GK QA/ESS composite nonlinear gradient gate](docs/_static/qa_ess_descent_profile_rel2_nonlinear_gradient_profile_direction_zbs_1_1_zbs_1_0_rbc_1_1_central_fd_gradient_gate.png)
 
 Differentiable stellarator ITG optimization examples live in
 `examples/optimization/`. They optimize the same QA, max-mode-1 control vector
