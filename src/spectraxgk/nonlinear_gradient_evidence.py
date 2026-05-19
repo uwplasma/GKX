@@ -1211,6 +1211,22 @@ def _bracket_sweep_recommendation(rows: Sequence[dict[str, Any]]) -> str:
         for row in rows
         if float(row["margins"]["response"]) >= 1.0
     ]
+    response_ok_gradients = [
+        _finite_float(row.get("metrics", {}).get("central_gradient"))
+        for row in response_ok
+        if isinstance(row.get("metrics"), dict)
+    ]
+    response_ok_signs = {
+        math.copysign(1.0, float(value))
+        for value in response_ok_gradients
+        if value is not None and value != 0.0
+    }
+    if len(response_ok_signs) > 1:
+        return (
+            "same-control resolved brackets change central-gradient sign; do not add "
+            "replicas at one amplitude, and move to a locality/amplitude sweep with "
+            "stricter provenance or a smoother composite profile-gradient direction"
+        )
     local_rows = [
         row
         for row in response_ok
