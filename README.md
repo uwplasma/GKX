@@ -580,7 +580,10 @@ overdetermined launch plan now prepares `ZBS(1,1)`, `ZBS(1,0)`, and
 reproducible launch contract, not validation evidence. The associated
 VMEC-JAX re-equilibrations have completed and the nested nonlinear campaign
 manifests are written, so the remaining blocker is the 27 long-window nonlinear
-runtime outputs plus their ensemble, central-FD, and ranking gates. The status
+runtime outputs plus their ensemble, central-FD, and ranking gates. The
+post-runtime wrapper
+`tools/postprocess_overdetermined_nonlinear_gradient_campaign.py` now runs those
+gates and the final status checker as one fail-closed sequence. The status
 artifact `docs/_static/qa_ess_overdetermined_nonlinear_gradient_campaign_status.json`
 records this fail-closed state. A companion composite-direction manifest defines a smaller 2%
 descent-oriented QA/ESS boundary direction with the same long-window campaign
