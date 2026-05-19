@@ -67,7 +67,9 @@ def _variant_label(row: Mapping[str, Any]) -> tuple[str, str]:
         if isinstance(value, str) and value:
             axis = str(row.get("variant_axis", "") or "")
             if not axis:
-                if value.startswith("seed"):
+                if value.startswith("seed") and "_dt" in value:
+                    axis = "seed_timestep"
+                elif value.startswith("seed"):
                     axis = "seed"
                 elif value.startswith("dt"):
                     axis = "timestep"
@@ -82,9 +84,11 @@ def _variant_label(row: Mapping[str, Any]) -> tuple[str, str]:
     ]
     for candidate in candidates:
         seed = _SEED_RE.search(candidate)
+        dt = _DT_RE.search(candidate)
+        if seed is not None and dt is not None:
+            return f"seed{seed.group(1)}_dt{dt.group(1)}", "seed_timestep"
         if seed is not None:
             return f"seed{seed.group(1)}", "seed"
-        dt = _DT_RE.search(candidate)
         if dt is not None:
             return f"dt{dt.group(1)}", "timestep"
     return f"replicate_{row.get('index', 'unknown')}", "unknown"
