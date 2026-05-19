@@ -1198,6 +1198,13 @@ def _delta_key(row: dict[str, Any]) -> float:
 def _bracket_sweep_recommendation(rows: Sequence[dict[str, Any]]) -> str:
     if not rows:
         return "run at least two matched plus/minus perturbation amplitudes before claiming bracket locality"
+    parameter_names = {str(row.get("parameter_name", "")) for row in rows if row.get("parameter_name")}
+    if len(parameter_names) > 1:
+        return (
+            "mixed controls were supplied to a same-control bracket sweep; split the "
+            "artifacts by control or use the nonlinear turbulence-gradient candidate "
+            "ranking/overdetermined campaign planner"
+        )
     passed_rows = [row for row in rows if bool(row.get("passed", False))]
     if passed_rows:
         best = min(passed_rows, key=_delta_key)
@@ -1307,12 +1314,17 @@ def nonlinear_turbulence_gradient_bracket_sweep_report(
     ]
     rows.sort(key=_delta_key)
     parameter_names = sorted({row["parameter_name"] for row in rows if row["parameter_name"]})
+    same_control = len(parameter_names) <= 1
     passed_rows = [row for row in rows if bool(row.get("passed", False))]
     return {
         "kind": "nonlinear_turbulence_gradient_bracket_sweep",
         "claim_level": "same_control_bracket_locality_planning_not_gradient_promotion",
-        "passed": bool(passed_rows),
-        "promotion_ready_bracket_count": len(passed_rows),
+        "passed": bool(passed_rows) and same_control,
+        "promotion_ready_bracket_count": len(passed_rows) if same_control else 0,
+        "same_control_gate": {
+            "passed": same_control,
+            "parameter_names": parameter_names,
+        },
         "parameter_names": parameter_names,
         "recommendation": _bracket_sweep_recommendation(rows),
         "config": asdict(cfg),

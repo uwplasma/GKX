@@ -571,9 +571,11 @@ nonlinear turbulence-gradient validation.
 The current candidate-ranking artifact compares the completed `RBC(1,1)`,
 `ZBS(1,1)`, and `ZBS(1,0)` long-window finite-difference campaigns and
 recommends an overdetermined least-squares/profile-gradient campaign next. The
-single-control sweeps have complementary locality and uncertainty failures, so
-the next step is a better-conditioned design rather than another blind
-single-coefficient rerun. The tracked QA/ESS overdetermined launch plan now
+single-control sweeps have complementary locality and uncertainty failures. The
+tracked `RBC(1,1)` amplitude sweep also shows that the larger bracket worsens
+finite-difference locality, so the next step is a better-conditioned design
+rather than another blind single-coefficient rerun. The tracked QA/ESS
+overdetermined launch plan now
 prepares `ZBS(1,1)`, `ZBS(1,0)`, and `RBC(1,1)` matched `t=900` campaigns at
 3% relative amplitude; it is a reproducible launch contract, not validation
 evidence.
