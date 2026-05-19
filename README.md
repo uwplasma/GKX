@@ -560,47 +560,31 @@ that the selected optimized equilibrium has a converged replicated nonlinear
 transport-window audit, not that the current quasilinear model is a universal
 absolute-flux predictor or that nonlinear turbulence gradients are available.
 The separate nonlinear turbulence-gradient evidence gate is stricter and
-currently fails closed after a real re-equilibrated QA/ESS control sweep. The
-tracked lower-order `ZBS(1,0)` 5% campaign has three passed `t=[450,900]`
-baseline/plus/minus replicated nonlinear ensembles and a local central
-finite-difference response (`fd_asymmetry_rel = 0.274`), but the propagated
-gradient uncertainty is still too large (`0.768 > 0.5`). A companion `ZBS(1,1)`
-5% campaign passed the uncertainty gate (`0.225`) but remained mildly nonlocal
-(`fd_asymmetry_rel = 0.663`). These are useful production-candidate audits, not
-nonlinear turbulence-gradient validation.
-The current candidate-ranking artifact compares the completed `RBC(1,1)`,
-`ZBS(1,1)`, and `ZBS(1,0)` long-window finite-difference campaigns and
-recommends an overdetermined least-squares/profile-gradient campaign next. The
-single-control sweeps have complementary locality and uncertainty failures. The
-tracked `RBC(1,1)` amplitude sweep also shows that the larger bracket worsens
-finite-difference locality, so the next step is a better-conditioned design
-rather than another blind single-coefficient rerun. The tracked QA/ESS
-overdetermined launch plan now prepares `ZBS(1,1)`, `ZBS(1,0)`, and
-`RBC(1,1)` matched `t=900` campaigns at 3% relative amplitude; it is a
-reproducible launch contract, not validation evidence. The associated
-VMEC-JAX re-equilibrations have completed and the nested nonlinear campaign
-manifests are written, so the remaining blocker is the 27 long-window nonlinear
-runtime outputs plus their ensemble, central-FD, and ranking gates. The
-post-runtime wrapper
-`tools/postprocess_overdetermined_nonlinear_gradient_campaign.py` now runs those
-gates and the final status checker as one fail-closed sequence. The status
-artifact `docs/_static/qa_ess_overdetermined_nonlinear_gradient_campaign_status.json`
-records this fail-closed state. A companion composite-direction manifest defines a smaller 2%
-descent-oriented QA/ESS boundary direction with the same long-window campaign
-contract. That composite `t=900`, `n64` campaign has now been run as a full
-matched baseline/plus/minus seed/timestep audit. Baseline and minus ensembles
-pass, but the plus ensemble fails the spread gate and the central finite
-difference remains nonlocal/uncertain. A targeted plus-state cross follow-up
-completed three additional `t=900` GPU runs (`seed22_dt0p05`,
-`seed32_dt0p04`, `seed33_dt0p05`); all six plus outputs pass the runtime gate,
-but the plus ensemble still exceeds the spread threshold
-(`mean_rel_spread = 0.166 > 0.15`) and the central-FD gate remains blocked
-(`fd_asymmetry_rel = 2.84`, `gradient_uncertainty_rel = 1.22`). The
-turbulence-gradient claim therefore remains fail-closed.
+remains fail-closed after the completed QA/ESS overdetermined control campaign.
+All `27` matched `t=900`, `n64:64:64:40:40` runtime outputs completed and all
+runtime-output gates passed. The best overdetermined candidate is `RBC(1,1)`:
+it has a resolved response (`response_fraction = 0.086`) and passes the
+locality gate (`fd_asymmetry_rel = 0.338`), but it still misses the propagated
+uncertainty gate (`gradient_uncertainty_rel = 0.559 > 0.5`). `ZBS(1,1)` is
+statistically cleaner but nonlocal, and `ZBS(1,0)` is not response-resolved.
+The current release therefore documents nonlinear turbulence-gradient evidence
+as a rigorous negative/model-development result, not as a promoted production
+nonlinear-gradient or full nonlinear turbulent-flux optimization claim.
+
+The next scientifically efficient step is not another blind single-coefficient
+rerun. The tracked ranking artifact recommends keeping the claim fail-closed,
+targeting the best local but noisy `RBC(1,1)` direction with additional
+independent replicas or variance reduction only if the cost is justified, and
+replacing or shrinking nonlocal controls before another production campaign.
+A companion composite-direction manifest defines a smaller descent-oriented
+QA/ESS boundary direction with the same long-window contract; that audit also
+remains fail-closed after its plus-state spread and central-FD gates.
 
 ![SPECTRAX-GK production nonlinear optimization guard](docs/_static/production_nonlinear_optimization_guard.png)
 
 ![SPECTRAX-GK QA/ESS ZBS(1,0) nonlinear gradient gate](docs/_static/qa_ess_zbs10_rel5_nonlinear_gradient_zbs_1_0_central_fd_gradient_gate.png)
+
+![SPECTRAX-GK QA/ESS overdetermined RBC(1,1) nonlinear gradient gate](docs/_static/qa_ess_profile_gradient_rbc_1_1_nonlinear_gradient_rbc_1_1_central_fd_gradient_gate.png)
 
 ![SPECTRAX-GK QA/ESS composite nonlinear gradient gate](docs/_static/qa_ess_descent_profile_rel2_nonlinear_gradient_profile_direction_zbs_1_1_zbs_1_0_rbc_1_1_central_fd_gradient_gate.png)
 

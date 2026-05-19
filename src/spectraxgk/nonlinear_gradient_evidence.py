@@ -104,6 +104,7 @@ class NonlinearTurbulenceGradientCandidateRankingConfig:
     min_fd_response_fraction: float = 0.03
     score_cap: float = 2.0
     value_floor: float = 1.0e-12
+    campaign_context: str = "single_control_screen"
 
 
 @dataclass(frozen=True)
@@ -1046,10 +1047,31 @@ def nonlinear_turbulence_gradient_candidate_ranking_report(
         for row in rows
         if float(row["margins"]["uncertainty"]) >= 1.0 and float(row["margins"]["locality"]) < 1.0
     ]
+    overdetermined_followup = cfg.campaign_context == "overdetermined_followup"
     if passed_rows:
         recommendation = (
             "one or more candidates passes the production evidence gates; freeze "
             "the provenance and promote only the passed artifact"
+        )
+    elif overdetermined_followup and local_but_noisy and quiet_but_nonlocal:
+        recommendation = (
+            "the overdetermined follow-up completed with no promotable candidate; "
+            "keep the nonlinear-gradient claim fail-closed, target the best local "
+            "but noisy control with additional independent replicas or variance "
+            "reduction only if the cost is justified, and replace or shrink the "
+            "nonlocal controls before another production campaign"
+        )
+    elif overdetermined_followup and local_but_noisy:
+        recommendation = (
+            "the overdetermined follow-up found local but statistically unresolved "
+            "candidates; keep the claim fail-closed and add independent replicas "
+            "or a lower-variance observable before promotion"
+        )
+    elif overdetermined_followup and quiet_but_nonlocal:
+        recommendation = (
+            "the overdetermined follow-up found statistically quiet but nonlocal "
+            "candidates; keep the claim fail-closed and shrink the perturbation "
+            "or choose more local controls before adding replicas"
         )
     elif local_but_noisy and quiet_but_nonlocal:
         recommendation = (
