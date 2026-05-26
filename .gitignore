@@ -211,6 +211,9 @@ __marimo__/
 
 # Manually added
 *.mp4
+# VMEC files and simulation outputs are external validation/release artifacts,
+# not source files. Keep checked-in examples lightweight.
+*.nc
 .gitignore
 .DS_Store
 outputs/

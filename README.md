@@ -54,6 +54,7 @@ spectraxgk run-runtime-nonlinear \
   --out tools_out/cyclone_release.out.nc
 
 # Replace the VMEC equilibrium used by a VMEC-backed TOML (model = "vmec").
+# VMEC NetCDF files are not bundled in Git; keep them as external inputs.
 spectrax-gk run \
   --config examples/nonlinear/non-axisymmetric/runtime_hsx_nonlinear_vmec_geometry.toml \
   --vmec-file /path/to/wout_HSX_QHS_vacuum_ns201.nc \
