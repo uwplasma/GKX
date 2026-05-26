@@ -222,3 +222,5 @@ tools_out/
 # Allow documentation figures
 !docs/_static/*.png
 !docs/_static/*.pdf
+!docs/_static/**/*.png
+!docs/_static/**/*.pdf
