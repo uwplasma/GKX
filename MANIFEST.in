@@ -1,9 +1,9 @@
 recursive-include examples *.py *.toml
 recursive-include docs *.rst *.py
-recursive-include docs/_static *
 recursive-include src/spectraxgk/data *.csv
 include README.md LICENSE
 prune docs/_build
+prune docs/_static
 prune build
 prune dist
 prune tools_out

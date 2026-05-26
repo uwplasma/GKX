@@ -110,6 +110,31 @@ resolved diagnostics, and heat flux.
 - **Modular runtime/refactor surfaces** with focused tests for restart artifacts,
   diagnostics, validation gates, and public API boundaries.
 
+## Runtime and Memory
+
+![Runtime and memory comparison](docs/_static/runtime_memory_benchmark.png)
+
+SPECTRAX-GK is optimized for performance across CPU and GPU backends. The
+runtime panel above compares wall-time and peak memory usage for the shipped
+benchmark cases. Performance tracking covers:
+
+- **Cyclone ITG** (linear/nonlinear)
+- **KBM** and **ETG** configurations
+- **W7-X** and **HSX** stellarator geometries
+- **Miller** geometry models
+
+The refreshed shipped panel includes the W7-X and HSX linear and nonlinear
+rows. Regenerate this public panel from the shipped refresh summary with:
+
+```bash
+python tools/benchmark_runtime_memory.py \
+  --summary-glob tools_out/runtime_memory_summary_ship_refresh.json \
+  --csv-out tools_out/runtime_memory_results_ship_refresh_regenerated.csv \
+  --summary-out tools_out/runtime_memory_summary_ship_refresh_regenerated.json \
+  --plot-out docs/_static/runtime_memory_benchmark.png
+```
+
+
 ## Current claim scope
 
 The current release surface is deliberately scoped:
@@ -729,29 +754,7 @@ The window-statistics artifact uses case-specific mean-relative gates: KBM
 `0.10` for Cyclone and W7-X while their paper-level tightening lanes remain
 open.
 
-## Runtime and Memory
-
-![Runtime and memory comparison](docs/_static/runtime_memory_benchmark.png)
-
-SPECTRAX-GK is optimized for performance across CPU and GPU backends. The
-runtime panel above compares wall-time and peak memory usage for the shipped
-benchmark cases. Performance tracking covers:
-
-- **Cyclone ITG** (linear/nonlinear)
-- **KBM** and **ETG** configurations
-- **W7-X** and **HSX** stellarator geometries
-- **Miller** geometry models
-
-The refreshed shipped panel includes the W7-X and HSX linear and nonlinear
-rows. Regenerate this public panel from the shipped refresh summary with:
-
-```bash
-python tools/benchmark_runtime_memory.py \
-  --summary-glob tools_out/runtime_memory_summary_ship_refresh.json \
-  --csv-out tools_out/runtime_memory_results_ship_refresh_regenerated.csv \
-  --summary-out tools_out/runtime_memory_summary_ship_refresh_regenerated.json \
-  --plot-out docs/_static/runtime_memory_benchmark.png
-```
+## Runtime and Memory Details
 
 Experimental or not-yet-closed lanes such as KAW, TEM, and kinetic-electron
 Cyclone are tracked separately and do not appear in the shipped runtime panel.
