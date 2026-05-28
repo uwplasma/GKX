@@ -105,7 +105,7 @@ def _print_linear_run_header(
 
 def _status_printer(prefix: str):
     def _emit(message: str) -> None:
-        print(f"{prefix}: {message}")
+        print(f"{prefix}: {message}", flush=True)
 
     return _emit
 
@@ -148,39 +148,154 @@ def _default_example_config_path() -> Path | None:
 
 
 def _default_demo_plot_path() -> Path:
-    return Path("tools_out") / "spectraxgk_default_linear.png"
+    return Path("spectraxgk_default_linear.png")
+
+
+def _default_demo_artifact_base() -> Path:
+    return Path("spectraxgk_default_linear")
+
+
+def _default_demo_toml_path() -> Path:
+    return Path("spectraxgk_default_linear.toml")
+
+
+def _default_demo_settings() -> dict[str, object]:
+    return {
+        "ky": 0.3,
+        "Nl": 7,
+        "Nm": 14,
+        "solver": "time",
+        "method": "rk4",
+        "dt": 0.03,
+        "steps": 500,
+        "sample_stride": 5,
+        "fit_signal": "phi",
+        "mode_method": "z_index",
+    }
+
+
+def _default_demo_toml_text() -> str:
+    settings = _default_demo_settings()
+    return f"""# Reproducer for the no-input `spectraxgk` educational demo.
+# Run with:
+#   spectraxgk run-linear --config spectraxgk_default_linear.toml --progress
+
+case = "cyclone"
+
+[grid]
+Nx = 1
+Ny = 24
+Nz = 96
+Lx = 62.8
+Ly = 62.8
+boundary = "linked"
+y0 = 20.0
+ntheta = 32
+nperiod = 2
+
+[time]
+t_max = {float(settings["dt"]) * int(settings["steps"]):.6g}
+dt = {settings["dt"]}
+method = "{settings["method"]}"
+sample_stride = {settings["sample_stride"]}
+progress_bar = true
+
+[geometry]
+q = 1.4
+s_hat = 0.8
+epsilon = 0.18
+R0 = 2.77778
+
+[model]
+R_over_LTi = 2.49
+R_over_LTe = 0.0
+R_over_Ln = 0.8
+nu_i = 0.0
+
+[init]
+init_field = "density"
+init_amp = 1.0e-10
+gaussian_init = true
+gaussian_width = 0.5
+
+[terms]
+streaming = 1.0
+mirror = 1.0
+curvature = 1.0
+gradb = 1.0
+diamagnetic = 1.0
+collisions = 1.0
+hypercollisions = 1.0
+end_damping = 1.0
+apar = 1.0
+bpar = 0.0
+
+[run]
+ky = {settings["ky"]}
+Nl = {settings["Nl"]}
+Nm = {settings["Nm"]}
+solver = "{settings["solver"]}"
+method = "{settings["method"]}"
+dt = {settings["dt"]}
+steps = {settings["steps"]}
+sample_stride = {settings["sample_stride"]}
+
+[fit]
+fit_signal = "{settings["fit_signal"]}"
+mode_method = "{settings["mode_method"]}"
+auto_window = true
+window_fraction = 0.4
+start_fraction = 0.2
+min_points = 25
+"""
 
 
 def _cmd_default_demo() -> int:
     example_path = _default_example_config_path()
     if example_path is not None:
         _case_name, cfg, data = load_case_from_toml(str(example_path), None)
-        run_cfg = data.get("run", {})
-        fit_cfg = dict(data.get("fit", {}))
-        ky = float(run_cfg.get("ky", 0.3))
-        Nl = int(run_cfg.get("Nl", 24))
-        Nm = int(run_cfg.get("Nm", 12))
-        solver = str(run_cfg.get("solver", "auto"))
-        method = str(run_cfg.get("method", cfg.time.method))
-        dt = float(run_cfg.get("dt", cfg.time.dt))
-        steps = int(run_cfg.get("steps", int(round(float(cfg.time.t_max) / float(cfg.time.dt)))))
-        mode_method = str(fit_cfg.get("mode_method", "project"))
         source = str(example_path)
     else:
         cfg = CycloneBaseCase()
-        ky = 0.3
-        Nl = 24
-        Nm = 12
-        solver = "auto"
-        method = str(cfg.time.method)
-        dt = float(cfg.time.dt)
-        steps = int(round(float(cfg.time.t_max) / float(cfg.time.dt)))
-        fit_cfg = {"mode_method": "project"}
-        mode_method = "project"
+        data = {}
         source = "built-in Cyclone defaults (equivalent to examples/linear/axisymmetric/cyclone.toml)"
 
-    print("No input file specified; running the default Cyclone linear example.")
-    print(f"source={source}")
+    _ = data
+    settings = _default_demo_settings()
+    ky = float(settings["ky"])
+    Nl = int(settings["Nl"])
+    Nm = int(settings["Nm"])
+    solver = str(settings["solver"])
+    method = str(settings["method"])
+    dt = float(settings["dt"])
+    steps = int(settings["steps"])
+    sample_stride = int(settings["sample_stride"])
+    mode_method = str(settings["mode_method"])
+    fit_signal = str(settings["fit_signal"])
+    fit_cfg = {
+        "fit_signal": fit_signal,
+        "mode_method": mode_method,
+        "auto_window": True,
+        "window_fraction": 0.4,
+        "start_fraction": 0.2,
+        "min_points": 25,
+    }
+    toml_path = _default_demo_toml_path()
+    toml_path.write_text(_default_demo_toml_text(), encoding="utf-8")
+
+    print("No input file specified; running the default Cyclone initial-value demo.", flush=True)
+    print(f"source={source}", flush=True)
+    print(
+        "This first run may include JAX compilation; progress lines show elapsed "
+        "time and ETA once the time loop starts.",
+        flush=True,
+    )
+    print(
+        f"demo settings: ky={ky:.3f} Nl={Nl} Nm={Nm} solver={solver} "
+        f"method={method} dt={dt:g} steps={steps} sample_stride={sample_stride}",
+        flush=True,
+    )
+    print(f"wrote reproducible input: {toml_path}", flush=True)
     result = run_cyclone_linear(
         ky_target=ky,
         cfg=cfg,
@@ -190,6 +305,8 @@ def _cmd_default_demo() -> int:
         method=method,
         dt=dt,
         steps=steps,
+        sample_stride=sample_stride,
+        show_progress=True,
         status_callback=_status_printer("demo"),
         **fit_cfg,
     )
@@ -214,14 +331,14 @@ def _cmd_default_demo() -> int:
         eigenfunction=np.asarray(eigen),
         gamma=float(result.gamma),
         omega=float(result.omega),
-        title="SPECTRAX-GK default Cyclone linear example",
+        title="SPECTRAX-GK default Cyclone initial-value demo",
     )
     fig.savefig(out_path, dpi=220, bbox_inches="tight")
     import matplotlib.pyplot as plt
 
     plt.close(fig)
     bundle_paths = write_runtime_linear_artifacts(
-        out_path.with_suffix(""),
+        _default_demo_artifact_base(),
         RuntimeLinearResult(
             ky=float(result.ky),
             gamma=float(result.gamma),
@@ -233,13 +350,17 @@ def _cmd_default_demo() -> int:
             eigenfunction=np.asarray(eigen),
         ),
     )
-    print(f"gamma={float(result.gamma):.6f} omega={float(result.omega):.6f}")
-    print(f"saved {bundle_paths['summary']}")
+    print(f"gamma={float(result.gamma):.6f} omega={float(result.omega):.6f}", flush=True)
+    print(f"saved {bundle_paths['summary']}", flush=True)
     if "timeseries" in bundle_paths:
-        print(f"saved {bundle_paths['timeseries']}")
+        print(f"saved {bundle_paths['timeseries']}", flush=True)
     if "eigenfunction" in bundle_paths:
-        print(f"saved {bundle_paths['eigenfunction']}")
-    print(f"saved {out_path}")
+        print(f"saved {bundle_paths['eigenfunction']}", flush=True)
+    print(f"saved {out_path}", flush=True)
+    print(
+        f"rerun this numerical case with: spectraxgk run-linear --config {toml_path} --progress",
+        flush=True,
+    )
     return 0
 
 
@@ -338,6 +459,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_linear.add_argument("--method", type=str, default=None, help="time integrator method")
     run_linear.add_argument("--dt", type=float, default=None)
     run_linear.add_argument("--steps", type=int, default=None)
+    run_linear.add_argument("--sample-stride", type=int, default=None)
     run_linear.add_argument("--fit-signal", type=str, default=None, help="auto, phi, or density")
     run_linear.add_argument("--plot", action="store_true", help="Save fit/eigenfunction plots")
     run_linear.add_argument("--outdir", default=".", help="Output directory for plots")
@@ -515,7 +637,12 @@ def _cmd_run_linear(args: argparse.Namespace) -> int:
     method = args.method if args.method is not None else run_cfg.get("method", cfg.time.method)
     dt = args.dt if args.dt is not None else run_cfg.get("dt", cfg.time.dt)
     steps = args.steps if args.steps is not None else run_cfg.get("steps", int(round(cfg.time.t_max / cfg.time.dt)))
-    show_progress = _should_show_progress(args, bool(cfg.time.progress_bar))
+    sample_stride = (
+        args.sample_stride
+        if args.sample_stride is not None
+        else run_cfg.get("sample_stride", getattr(cfg.time, "sample_stride", None))
+    )
+    show_progress = _should_show_progress(args, bool(getattr(cfg.time, "progress_bar", False)))
 
     terms = load_linear_terms_from_toml(data)
     krylov_cfg = load_krylov_from_toml(data)
@@ -544,6 +671,7 @@ def _cmd_run_linear(args: argparse.Namespace) -> int:
         method=str(method),
         dt=float(dt),
         steps=int(steps),
+        sample_stride=None if sample_stride is None else int(sample_stride),
         krylov_cfg=krylov_cfg,
         terms=terms,
         fit_signal=str(fit_signal),
@@ -597,6 +725,7 @@ def _cmd_scan_linear(args: argparse.Namespace) -> int:
     Nm = args.Nm if args.Nm is not None else scan_cfg.get("Nm", 12)
     solver = args.solver if args.solver is not None else scan_cfg.get("solver", "auto")
     fit_signal = args.fit_signal if args.fit_signal is not None else fit_cfg.pop("fit_signal", "auto")
+    auto_window = bool(fit_cfg.pop("auto_window", True))
     method = args.method if args.method is not None else scan_cfg.get("method", cfg.time.method)
     dt = args.dt if args.dt is not None else scan_cfg.get("dt", cfg.time.dt)
     steps = args.steps if args.steps is not None else scan_cfg.get("steps", int(round(cfg.time.t_max / cfg.time.dt)))
@@ -615,6 +744,7 @@ def _cmd_scan_linear(args: argparse.Namespace) -> int:
         method=str(method),
         solver=str(solver),
         krylov_cfg=krylov_cfg,
+        auto_window=auto_window,
         window_kw=fit_cfg,
         run_kwargs={"terms": terms, "fit_signal": str(fit_signal)}
         if terms is not None

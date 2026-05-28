@@ -11,7 +11,7 @@ from __future__ import annotations
 import importlib
 from dataclasses import replace as dc_replace
 import time
-from typing import Any, Literal, cast
+from typing import Any, Literal, Sequence, cast
 
 import jax
 import jax.numpy as jnp
@@ -146,6 +146,20 @@ def _surface_index_tuple(value: int | None | tuple[int | None, ...] | list[int |
     return result
 
 
+def _surface_sample_axis(
+    surface_indices: int | None | Sequence[int | None],
+    torflux_values: float | Sequence[float] | None,
+) -> tuple[dict[str, float | int | None], ...]:
+    if torflux_values is not None:
+        if not (surface_indices is None or surface_indices == (None,)):
+            raise TypeError("use torflux_values or surface_indices, not both")
+        return tuple(
+            {"surface_index": None, "torflux": float(torflux)}
+            for torflux in _float_tuple(torflux_values, name="torflux_values")
+        )
+    return tuple({"surface_index": surface_index} for surface_index in _surface_index_tuple(surface_indices))
+
+
 def _int_tuple(value: int | tuple[int, ...] | list[int], *, name: str) -> tuple[int, ...]:
     result: tuple[int, ...]
     if isinstance(value, int):
@@ -168,6 +182,91 @@ def _float_tuple(value: float | tuple[float, ...] | list[float], *, name: str) -
     if not np.all(np.isfinite(np.asarray(result, dtype=float))):
         raise ValueError(f"{name} must be finite")
     return result
+
+
+def solver_grid_options_from_ky_values(
+    ky_values: float | tuple[float, ...] | list[float] | np.ndarray,
+    *,
+    ky_base: float | None = None,
+    min_ny: int = 4,
+) -> dict[str, object]:
+    """Return solver grid options for physical ``k_y rho_i`` scan values.
+
+    The linear objective evaluator selects FFT row indices, while user-facing
+    optimization and validation studies should be specified in physical
+    ``k_y rho_i``. This helper fixes that contract explicitly: values must be
+    positive integer multiples of the base spacing, ``Ly = 2*pi/ky_base``, and
+    ``Ny`` is chosen large enough that all requested modes are represented as
+    positive FFT rows.
+    """
+
+    values = _float_tuple(ky_values, name="ky_values")
+    value_array = np.asarray(values, dtype=float)
+    if np.any(value_array <= 0.0):
+        raise ValueError("ky_values must be positive")
+    base = float(np.min(value_array) if ky_base is None else ky_base)
+    if not np.isfinite(base) or base <= 0.0:
+        raise ValueError("ky_base must be positive and finite")
+    ratios = value_array / base
+    indices = np.rint(ratios).astype(int)
+    if np.any(indices < 1) or not np.allclose(ratios, indices, rtol=5.0e-10, atol=5.0e-12):
+        raise ValueError("ky_values must be positive integer multiples of ky_base")
+    if len(set(int(item) for item in indices)) != int(indices.size):
+        raise ValueError("ky_values map to duplicate selected ky indices")
+    ny = max(int(min_ny), 2 * int(np.max(indices)) + 2)
+    if ny < 3:
+        raise ValueError("min_ny must leave room for at least one positive ky mode")
+    ly = float(2.0 * np.pi / base)
+    grid = build_spectral_grid(GridConfig(Nx=1, Ny=ny, Nz=1, Lx=1.0, Ly=ly))
+    selected = tuple(int(item) for item in indices)
+    resolved = np.asarray(grid.ky, dtype=float)[list(selected)]
+    if not np.allclose(resolved, value_array, rtol=5.0e-6, atol=5.0e-8):
+        raise RuntimeError("internal ky grid construction did not reproduce requested ky_values")
+    return {
+        "ky_base": base,
+        "ly": ly,
+        "ny": int(ny),
+        "selected_ky_indices": selected,
+        "resolved_ky_values": tuple(float(item) for item in resolved),
+    }
+
+
+def _ky_sample_axis(
+    selected_ky_indices: int | Sequence[int],
+    ky_values: float | Sequence[float] | None,
+    *,
+    ky_base: float | None,
+    objective_kwargs: dict[str, Any],
+) -> tuple[tuple[dict[str, float | int], ...], dict[str, Any], dict[str, object] | None]:
+    if ky_values is None:
+        return (
+            tuple({"selected_ky_index": index} for index in _int_tuple(selected_ky_indices, name="selected_ky_indices")),
+            objective_kwargs,
+            None,
+        )
+    if selected_ky_indices != (1,):
+        raise TypeError("use ky_values or selected_ky_indices, not both")
+    grid_options = solver_grid_options_from_ky_values(
+        ky_values,
+        ky_base=ky_base,
+        min_ny=int(objective_kwargs.get("ny", 4)),
+    )
+    selected = tuple(int(item) for item in grid_options["selected_ky_indices"])
+    resolved = tuple(float(item) for item in grid_options["resolved_ky_values"])
+    requested = _float_tuple(ky_values, name="ky_values")
+    updated_kwargs = dict(objective_kwargs)
+    updated_kwargs["ny"] = int(grid_options["ny"])
+    updated_kwargs["ly"] = float(grid_options["ly"])
+    rows = tuple(
+        {
+            "selected_ky_index": index,
+            "ky": requested_value,
+            "selected_ky": resolved_value,
+            "ky_abs_error": abs(resolved_value - requested_value),
+        }
+        for index, requested_value, resolved_value in zip(selected, requested, resolved, strict=True)
+    )
+    return rows, updated_kwargs, grid_options
 
 
 def _aggregate_weights(weights: tuple[float, ...] | list[float] | np.ndarray | None, n_samples: int) -> np.ndarray:
@@ -382,8 +481,11 @@ def vmec_boozer_solver_objective_table_from_state(  # pragma: no cover
     wout: Any,
     *,
     surface_indices: int | None | tuple[int | None, ...] | list[int | None] = (None,),
+    torflux_values: float | tuple[float, ...] | list[float] | None = None,
     alphas: float | tuple[float, ...] | list[float] = (0.0,),
     selected_ky_indices: int | tuple[int, ...] | list[int] = (1,),
+    ky_values: float | tuple[float, ...] | list[float] | None = None,
+    ky_base: float | None = None,
     **kwargs: Any,
 ) -> jnp.ndarray:
     """Evaluate solver objectives over a surface/field-line/``k_y`` table.
@@ -392,22 +494,64 @@ def vmec_boozer_solver_objective_table_from_state(  # pragma: no cover
     surface, field line, or ``k_y`` point controls an aggregate objective.
     """
 
+    table, _metadata = vmec_boozer_solver_objective_table_with_metadata_from_state(
+        state,
+        static,
+        indata,
+        wout,
+        surface_indices=surface_indices,
+        torflux_values=torflux_values,
+        alphas=alphas,
+        selected_ky_indices=selected_ky_indices,
+        ky_values=ky_values,
+        ky_base=ky_base,
+        **kwargs,
+    )
+    return table
+
+
+def vmec_boozer_solver_objective_table_with_metadata_from_state(  # pragma: no cover
+    state: Any,
+    static: Any,
+    indata: Any,
+    wout: Any,
+    *,
+    surface_indices: int | None | tuple[int | None, ...] | list[int | None] = (None,),
+    torflux_values: float | tuple[float, ...] | list[float] | None = None,
+    alphas: float | tuple[float, ...] | list[float] = (0.0,),
+    selected_ky_indices: int | tuple[int, ...] | list[int] = (1,),
+    ky_values: float | tuple[float, ...] | list[float] | None = None,
+    ky_base: float | None = None,
+    **kwargs: Any,
+) -> tuple[jnp.ndarray, list[dict[str, object]]]:
+    """Evaluate VMEC/Boozer objective rows and return aligned sample metadata."""
+
     mutable_kwargs = dict(kwargs)
     if "selected_ky_index" in mutable_kwargs:
-        if selected_ky_indices != (1,):
+        if selected_ky_indices != (1,) or ky_values is not None:
             raise TypeError("use selected_ky_indices, not both selected_ky_index and selected_ky_indices")
         selected_ky_indices = int(mutable_kwargs.pop("selected_ky_index"))
     geometry_kwargs, objective_kwargs = _split_vmec_boozer_objective_kwargs(mutable_kwargs)
-    surfaces = _surface_index_tuple(surface_indices)
+    surfaces = _surface_sample_axis(surface_indices, torflux_values)
     alpha_values = _float_tuple(alphas, name="alphas")
-    ky_indices = _int_tuple(selected_ky_indices, name="selected_ky_indices")
+    ky_samples, objective_kwargs, ky_grid_options = _ky_sample_axis(
+        selected_ky_indices,
+        ky_values,
+        ky_base=ky_base,
+        objective_kwargs=objective_kwargs,
+    )
 
     rows: list[jnp.ndarray] = []
-    for surface_index in surfaces:
+    metadata: list[dict[str, object]] = []
+    for surface in surfaces:
         for alpha in alpha_values:
             geom_kwargs = dict(geometry_kwargs)
+            surface_index = surface.get("surface_index")
+            torflux = surface.get("torflux")
             if surface_index is not None:
-                geom_kwargs["surface_index"] = surface_index
+                geom_kwargs["surface_index"] = int(surface_index)
+            if torflux is not None:
+                geom_kwargs["torflux"] = float(torflux)
             geom_kwargs["alpha"] = alpha
             geom = flux_tube_geometry_from_vmec_boozer_state(
                 state,
@@ -416,13 +560,33 @@ def vmec_boozer_solver_objective_table_from_state(  # pragma: no cover
                 wout,
                 **geom_kwargs,
             )
-            for selected_ky_index in ky_indices:
+            for ky_sample in ky_samples:
                 obj_kwargs = dict(objective_kwargs)
+                selected_ky_index = int(ky_sample["selected_ky_index"])
                 obj_kwargs["selected_ky_index"] = selected_ky_index
                 rows.append(solver_objective_vector_from_geometry(geom, **obj_kwargs))
+                row_metadata: dict[str, object] = {
+                    "surface_index": None if surface_index is None else int(surface_index),
+                    "alpha": float(alpha),
+                    "selected_ky_index": selected_ky_index,
+                }
+                if torflux is not None:
+                    row_metadata["torflux"] = float(torflux)
+                    row_metadata["surface"] = float(torflux)
+                for key in ("ky", "selected_ky", "ky_abs_error"):
+                    if key in ky_sample:
+                        row_metadata[key] = float(ky_sample[key])
+                metadata.append(row_metadata)
     if not rows:
         raise RuntimeError("VMEC/Boozer objective table produced no samples")
-    return jnp.stack(rows)
+    if ky_grid_options is not None:
+        for row in metadata:
+            row["ky_grid_options"] = {
+                "ky_base": float(ky_grid_options["ky_base"]),
+                "ly": float(ky_grid_options["ly"]),
+                "ny": int(ky_grid_options["ny"]),
+            }
+    return jnp.stack(rows), metadata
 
 
 def vmec_boozer_aggregate_scalar_objective_from_state(  # pragma: no cover
@@ -665,8 +829,11 @@ def vmec_boozer_aggregate_scalar_objective_finite_difference_report(  # pragma: 
     reduction: Literal["mean", "weighted_mean", "max"] = "mean",
     weights: tuple[float, ...] | list[float] | np.ndarray | None = None,
     surface_indices: int | None | tuple[int | None, ...] | list[int | None] = (None,),
+    torflux_values: float | tuple[float, ...] | list[float] | None = None,
     alphas: float | tuple[float, ...] | list[float] = (0.0,),
     selected_ky_indices: int | tuple[int, ...] | list[int] = (1,),
+    ky_values: float | tuple[float, ...] | list[float] | None = None,
+    ky_base: float | None = None,
     radial_index: int | None = None,
     mode_index: int = 1,
     base_delta: float = 0.0,
@@ -683,12 +850,19 @@ def vmec_boozer_aggregate_scalar_objective_finite_difference_report(  # pragma: 
     curvature_ratio_limit = float(max_curvature_ratio)
     if curvature_ratio_limit < 0.0:
         raise ValueError("max_curvature_ratio must be non-negative")
-    surfaces = _surface_index_tuple(surface_indices)
+    surface_samples = _surface_sample_axis(surface_indices, torflux_values)
     alpha_values = _float_tuple(alphas, name="alphas")
-    ky_indices = _int_tuple(selected_ky_indices, name="selected_ky_indices")
-    n_samples = len(surfaces) * len(alpha_values) * len(ky_indices)
+    if ky_values is None:
+        ky_indices = _int_tuple(selected_ky_indices, name="selected_ky_indices")
+    else:
+        ky_grid_options = solver_grid_options_from_ky_values(
+            ky_values,
+            ky_base=ky_base,
+            min_ny=int(kwargs.get("ny", 4)),
+        )
+        ky_indices = tuple(int(item) for item in ky_grid_options["selected_ky_indices"])
+    n_samples = len(surface_samples) * len(alpha_values) * len(ky_indices)
     normalized_weights = _aggregate_weights(weights, n_samples)
-    samples = _aggregate_sample_metadata(surfaces, alpha_values, ky_indices, normalized_weights)
     bundle = _load_vmec_jax_example_state_bundle(str(case_name))
     state = bundle["state"]
     base_Rcos = jnp.asarray(state.Rcos)
@@ -709,19 +883,22 @@ def vmec_boozer_aggregate_scalar_objective_finite_difference_report(  # pragma: 
 
     base_delta_float = float(base_delta)
 
-    def evaluate(delta: float) -> tuple[float, list[float], list[list[float]]]:
+    def evaluate(delta: float) -> tuple[float, list[float], list[list[float]], list[dict[str, object]]]:
         traced_state = dc_replace(
             state,
             Rcos=base_Rcos.at[radial_index_int, mode_index_int].add(base_delta_float + float(delta)),
         )
-        table = vmec_boozer_solver_objective_table_from_state(
+        table, sample_metadata = vmec_boozer_solver_objective_table_with_metadata_from_state(
             traced_state,
             bundle["static"],
             bundle["indata"],
             bundle["wout"],
-            surface_indices=surfaces,
+            surface_indices=surface_indices,
+            torflux_values=torflux_values,
             alphas=alpha_values,
-            selected_ky_indices=ky_indices,
+            selected_ky_indices=selected_ky_indices,
+            ky_values=ky_values,
+            ky_base=ky_base,
             **kwargs,
         )
         scalar_values = np.asarray(
@@ -736,11 +913,14 @@ def vmec_boozer_aggregate_scalar_objective_finite_difference_report(  # pragma: 
             scalar = float(np.max(scalar_values))
         else:
             raise ValueError("reduction must be one of 'mean', 'weighted_mean', or 'max'")
-        return scalar, scalar_values.tolist(), np.asarray(table, dtype=float).tolist()
+        return scalar, scalar_values.tolist(), np.asarray(table, dtype=float).tolist(), sample_metadata
 
-    minus_value, minus_sample_values, minus_table = evaluate(-step)
-    base_value, base_sample_values, base_table = evaluate(0.0)
-    plus_value, plus_sample_values, plus_table = evaluate(step)
+    minus_value, minus_sample_values, minus_table, _minus_samples = evaluate(-step)
+    base_value, base_sample_values, base_table, base_samples = evaluate(0.0)
+    plus_value, plus_sample_values, plus_table, _plus_samples = evaluate(step)
+    if len(base_samples) != int(n_samples):
+        raise RuntimeError("VMEC/Boozer aggregate metadata size does not match objective table")
+    samples = [dict(row, weight=float(normalized_weights[index])) for index, row in enumerate(base_samples)]
     central_derivative = (plus_value - minus_value) / (2.0 * step)
     response_abs = abs(plus_value - minus_value)
     curvature_abs = abs(plus_value - 2.0 * base_value + minus_value)
@@ -782,6 +962,11 @@ def vmec_boozer_aggregate_scalar_objective_finite_difference_report(  # pragma: 
         "reduction": str(reduction),
         "samples": samples,
         "n_samples": n_samples,
+        "surface_indices": [None if row.get("surface_index") is None else int(row["surface_index"]) for row in surface_samples],
+        "torflux_values": None if torflux_values is None else list(_float_tuple(torflux_values, name="torflux_values")),
+        "alphas": list(alpha_values),
+        "selected_ky_indices": list(ky_indices),
+        "ky_values": None if ky_values is None else list(_float_tuple(ky_values, name="ky_values")),
         "parameter_name": parameter_name,
         "parameter_indices": {"Rcos": [radial_index_int, mode_index_int]},
         "base_delta": base_delta_float,
@@ -2339,6 +2524,7 @@ __all__ = [
     "solver_objective_branch_gradient_report",
     "solver_objective_vector_from_geometry",
     "solver_scalar_objective_from_vector",
+    "solver_grid_options_from_ky_values",
     "solver_ready_geometry_mapping",
     "tiny_differentiable_objective_gradient_report",
     "vmec_boozer_aggregate_line_search_holdout_report",
@@ -2349,5 +2535,6 @@ __all__ = [
     "vmec_boozer_scalar_objective_from_state",
     "vmec_boozer_scalar_objective_line_search_report",
     "vmec_boozer_solver_objective_table_from_state",
+    "vmec_boozer_solver_objective_table_with_metadata_from_state",
     "vmec_boozer_solver_objective_vector_from_state",
 ]

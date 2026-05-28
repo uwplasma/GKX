@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import is_dataclass, replace
+from dataclasses import fields, is_dataclass, replace
 from typing import Any, cast
 import os
 from pathlib import Path
@@ -222,7 +222,9 @@ def load_linear_terms_from_toml(data: dict) -> LinearTerms | None:
     terms = data.get("terms")
     if not isinstance(terms, dict):
         return None
-    return LinearTerms(**terms)
+    linear_fields = {field.name for field in fields(LinearTerms)}
+    linear_terms = {key: value for key, value in terms.items() if key in linear_fields}
+    return LinearTerms(**linear_terms)
 
 
 def load_krylov_from_toml(data: dict) -> KrylovConfig | None:

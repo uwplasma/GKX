@@ -53,39 +53,44 @@ spectraxgk run-runtime-nonlinear \
   --steps 200 \
   --out tools_out/cyclone_release.out.nc
 
-# Replace the VMEC equilibrium used by a VMEC-backed TOML (model = "vmec").
-# VMEC NetCDF files are not bundled in Git; keep them as external inputs.
-# The release-hosted HSX fixture is available at:
-# https://github.com/uwplasma/SPECTRAX-GK/releases/download/v1.6.1/wout_HSX_QHS_vacuum_ns201.nc
-spectrax-gk run \
-  --config examples/nonlinear/non-axisymmetric/runtime_hsx_nonlinear_vmec_geometry.toml \
-  --vmec-file /path/to/wout_HSX_QHS_vacuum_ns201.nc \
-  --out tools_out/hsx_run
+# Generate small VMEC-JAX equilibria locally, then run prefilled VMEC TOMLs.
+pip install vmec-jax
+cd examples/vmec
+./generate_wouts.sh
+cd ../..
 
-# Replace the imported EIK/NetCDF geometry used by an imported-geometry TOML.
-# --geometry-file does not switch model="vmec" into imported-geometry mode;
-# the TOML should already use model="vmec-eik", "gx-eik", or "gx-netcdf".
-spectrax-gk run \
-  --config examples/nonlinear/non-axisymmetric/runtime_w7x_nonlinear_imported_geometry.toml \
-  --geometry-file /path/to/w7x_adiabatic_electrons.eik.nc \
-  --out tools_out/w7x_run
+spectraxgk run \
+  --config examples/linear/axisymmetric/runtime_circular_vmec_linear.toml \
+  --out tools_out/circular_vmec_linear
+
+spectraxgk run \
+  --config examples/nonlinear/non-axisymmetric/runtime_hsx_nonlinear_vmec_geometry.toml \
+  --out tools_out/qhs_nonlinear_run
 
 # Turn any saved runtime bundle into a polished figure.
 spectraxgk --plot tools_out/cyclone_release.out.nc
-spectraxgk --plot tools_out/spectraxgk_default_linear.summary.json
+spectraxgk --plot spectraxgk_default_linear.summary.json
 ```
 
-Running `spectraxgk` with no TOML starts the default Cyclone linear example
-(equivalent to the standard `examples/linear/axisymmetric/cyclone.toml`
-surface), prints the fitted growth rate and frequency to the terminal, and
-writes a two-panel figure to `tools_out/spectraxgk_default_linear.png`. The
-left panel shows the linear `|\phi|^2` history on a log scale with the fitted
-`(\gamma, \omega)` annotation. The right panel shows the normalized real and
-imaginary eigenfunction.
+Running `spectraxgk` with no TOML starts a short Cyclone initial-value linear
+demo (equivalent to the standard `examples/linear/axisymmetric/cyclone.toml`
+surface), prints setup and live time-integration progress with elapsed time and
+ETA, and writes the demo artifacts in the current directory:
 
-When progress output is enabled, the executable prints live status lines with
-step/time progress, wall elapsed time, and an estimated wall-clock time
-remaining. Adaptive nonlinear runs also emit chunk-level elapsed/ETA updates.
+- `spectraxgk_default_linear.toml`: the input file that reproduces the run
+- `spectraxgk_default_linear.summary.json`
+- `spectraxgk_default_linear.timeseries.csv`
+- `spectraxgk_default_linear.eigenfunction.csv`
+- `spectraxgk_default_linear.png`
+
+The figure shows the linear `|\phi|^2` time history on a log scale with the
+fitted `(\gamma, \omega)` annotation, plus the normalized real and imaginary
+eigenfunction. Re-run the same numerical case with
+`spectraxgk run-linear --config spectraxgk_default_linear.toml --progress`.
+
+Longer runtime commands also print live status lines with step/time progress,
+wall elapsed time, and an estimated wall-clock time remaining when progress is
+enabled. Adaptive nonlinear runs emit chunk-level elapsed/ETA updates.
 
 The `--plot` mode reads saved runtime artifacts directly:
 
@@ -109,6 +114,55 @@ resolved diagnostics, and heat flux.
 - **Automated benchmark workflows** for reproducible validation and regression tracking.
 - **Modular runtime/refactor surfaces** with focused tests for restart artifacts,
   diagnostics, validation gates, and public API boundaries.
+
+## Self-Contained VMEC Geometry Examples
+
+The VMEC-backed examples no longer require users to generate separate EIK
+geometry files. The repository ships small `vmec_jax` input decks under
+`examples/vmec/`; users generate `wout_*.nc` locally and the runtime TOMLs
+already point to the expected relative paths. To build every bundled demo
+equilibrium, run:
+
+```bash
+pip install vmec-jax
+cd examples/vmec
+./generate_wouts.sh
+cd ../..
+```
+
+Then run the VMEC-backed examples from the repository root:
+
+```bash
+spectraxgk run --config examples/linear/axisymmetric/runtime_circular_vmec_linear.toml
+spectraxgk run --config examples/linear/non-axisymmetric/runtime_hsx_linear_quasilinear.toml
+spectraxgk run --config examples/linear/non-axisymmetric/runtime_w7x_linear_quasilinear_vmec.toml
+```
+
+The bundled QHS/QI/QA VMEC decks are self-contained demonstrators. Exact
+machine-specific HSX or W7-X validation should use the same TOMLs with
+`--vmec-file` pointing to the corresponding benchmark `wout_*.nc`.
+
+## Reduced Stellarator Optimization Gate
+
+The reduced multi-surface/alpha/`k_y` portfolio gate exercises the sample-set
+reducer planned for VMEC/Boozer row production without claiming production
+nonlinear transport optimization:
+
+```bash
+python examples/optimization/stellarator_itg_portfolio_gate.py \
+  --finite-difference-workers 2
+```
+
+It writes `docs/_static/stellarator_itg_portfolio_gate.{json,png,pdf}` by
+default and checks scalar plus row-wise AD/finite-difference agreement on the
+fixed reduced growth/quasilinear table. The JSON sidecar is the audit source;
+the PNG/PDF are renderings for review. The same reducer is now exposed for real
+`vmec_jax -> booz_xform_jax -> SPECTRAX-GK` surface/alpha/physical-`k_y` rows
+through `stellarator_itg_vmec_boozer_sample_objective_table_from_state` and
+`stellarator_itg_vmec_boozer_portfolio_objective_from_state`. Promotion still
+requires held-out real-geometry gates, and production nonlinear heat-flux
+optimization still requires long post-transient replicated windows for matched
+baseline and optimized equilibria.
 
 ## Runtime and Memory
 
@@ -155,7 +209,9 @@ The current release surface is deliberately scoped:
   zero-beta equal-arc geometry parity is claimable for the rows that pass the
   current `mboz=nboz=21` parity matrix, and reduced
   linear/quasilinear/nonlinear-window-estimator gradients are claimable only on
-  the tracked QH/Li383 gates. A half-mesh Boozer radial-index convention fix
+  the tracked QH/Li383 gates. The multi-surface/alpha/`k_y` portfolio gate is
+  reduced/model-development evidence for objective plumbing, not a nonlinear
+  heat-flux optimization claim. A half-mesh Boozer radial-index convention fix
   restored the fixed-resolution QI row (`drift=7.13e-2 < 8e-2`) and the
   evaluated QI robustness variants at `ntheta=8,16` now pass. The broader QI
   seed campaign remains artifact-limited because three input-only QI seeds have
@@ -513,6 +569,8 @@ optimization claim. The surface-heldout split extends this to a true
 held-out `surface_index`, and the Li383 panel checks that the same aggregate
 finite-difference plus line-search machinery works on a second equilibrium.
 
+![SPECTRAX-GK VMEC/Boozer physical-torflux aggregate gate](docs/_static/vmec_boozer_torflux_aggregate_objective_gate.png)
+
 ![SPECTRAX-GK VMEC/Boozer multi-alpha aggregate-objective gate](docs/_static/vmec_boozer_multi_point_objective_gate.png)
 
 ![SPECTRAX-GK VMEC/Boozer growth-vs-quasilinear line-search comparison](docs/_static/vmec_boozer_aggregate_line_search_comparison.png)
@@ -525,7 +583,7 @@ finite-difference plus line-search machinery works on a second equilibrium.
 
 The backend-free portfolio reducer below is the lightweight contract that
 multi-surface, multi-field-line, multi-`k_y` stellarator optimization drivers
-should satisfy before they call expensive VMEC/Boozer row producers. It checks
+should satisfy before they rely on expensive VMEC/Boozer row producers. It checks
 normalized sample/objective weights and AD/JVP/finite-difference consistency
 for the aggregate scalar objective; it is not a VMEC/Boozer or nonlinear
 turbulent-transport optimization claim by itself.

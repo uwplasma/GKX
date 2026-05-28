@@ -20,6 +20,15 @@ from spectraxgk.autodiff_validation import autodiff_finite_difference_report, co
 from spectraxgk.geometry.differentiable import discover_differentiable_geometry_backends
 from spectraxgk.parallel import independent_map
 from spectraxgk.quasilinear import quasilinear_feature_objective
+from spectraxgk.solver_objective_gradients import (
+    solver_scalar_objective_from_vector,
+    vmec_boozer_solver_objective_table_with_metadata_from_state,
+)
+from spectraxgk.stellarator_objective_portfolio import (
+    PortfolioReduction,
+    aggregate_objective_portfolio,
+    objective_portfolio_sensitivity_report,
+)
 
 
 StellaratorObjectiveKind = Literal["growth", "quasilinear_flux", "nonlinear_heat_flux"]
@@ -78,6 +87,65 @@ class StellaratorITGOptimizationConfig:
         if kind == "nonlinear_heat_flux":
             return replace(self, learning_rate=0.025, steps=max(self.steps, 110), turbulence_weight=1.0)
         raise ValueError(f"unknown stellarator objective kind {kind!r}")
+
+
+@dataclass(frozen=True)
+class StellaratorITGSampleSet:
+    """Reduced multi-surface/multi-alpha/multi-``k_y`` ITG portfolio contract."""
+
+    surfaces: tuple[float, ...] = (0.50, 0.64, 0.78)
+    alphas: tuple[float, ...] = (0.0, 1.0471975511965976)
+    ky_values: tuple[float, ...] = (0.10, 0.30, 0.50)
+    surface_weights: tuple[float, ...] | None = None
+    alpha_weights: tuple[float, ...] | None = None
+    ky_weights: tuple[float, ...] | None = None
+    reduction: PortfolioReduction = "weighted_mean"
+
+    def __post_init__(self) -> None:
+        for name, values in (
+            ("surfaces", self.surfaces),
+            ("alphas", self.alphas),
+            ("ky_values", self.ky_values),
+        ):
+            arr = np.asarray(values, dtype=float)
+            if arr.ndim != 1 or arr.size < 1 or not np.all(np.isfinite(arr)):
+                raise ValueError(f"{name} must be a non-empty finite vector")
+        if np.any(np.asarray(self.ky_values, dtype=float) <= 0.0):
+            raise ValueError("ky_values must be positive")
+        for name, weights, expected in (
+            ("surface_weights", self.surface_weights, len(self.surfaces)),
+            ("alpha_weights", self.alpha_weights, len(self.alphas)),
+            ("ky_weights", self.ky_weights, len(self.ky_values)),
+        ):
+            if weights is None:
+                continue
+            arr = np.asarray(weights, dtype=float)
+            if arr.ndim != 1 or arr.size != expected or not np.all(np.isfinite(arr)):
+                raise ValueError(f"{name} must be a finite length-{expected} vector")
+            if np.any(arr < 0.0) or float(np.sum(arr)) <= 0.0:
+                raise ValueError(f"{name} must be non-negative with positive sum")
+        if self.reduction not in ("weighted_mean", "mean", "max"):
+            raise ValueError("reduction must be weighted_mean, mean, or max")
+
+    @property
+    def n_samples(self) -> int:
+        """Number of surface/alpha/ky samples in the rectangular portfolio."""
+
+        return len(self.surfaces) * len(self.alphas) * len(self.ky_values)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-friendly representation."""
+
+        return {
+            "surfaces": list(self.surfaces),
+            "alphas": list(self.alphas),
+            "ky_values": list(self.ky_values),
+            "surface_weights": None if self.surface_weights is None else list(self.surface_weights),
+            "alpha_weights": None if self.alpha_weights is None else list(self.alpha_weights),
+            "ky_weights": None if self.ky_weights is None else list(self.ky_weights),
+            "reduction": self.reduction,
+            "n_samples": self.n_samples,
+        }
 
 
 @dataclass(frozen=True)
@@ -311,6 +379,362 @@ def qa_observable_vector(
 
     obs = qa_max_mode1_observables(params, config)
     return jnp.asarray([obs[name] for name in OBSERVABLE_NAMES])
+
+
+def _sampled_qa_itg_fields(
+    params: jnp.ndarray | Sequence[float],
+    config: StellaratorITGOptimizationConfig,
+    sample_set: StellaratorITGSampleSet,
+) -> dict[str, jnp.ndarray]:
+    """Return smooth reduced ITG fields over a surface/alpha/ky sample set."""
+
+    p = _validate_params(params)
+    dtype = p.dtype
+    core = _qa_core_features(p, config)
+    surfaces = jnp.asarray(sample_set.surfaces, dtype=dtype)[:, None, None]
+    alphas = jnp.asarray(sample_set.alphas, dtype=dtype)[None, :, None]
+    kys = jnp.asarray(sample_set.ky_values, dtype=dtype)[None, None, :]
+    surface_delta = surfaces - jnp.asarray(0.64, dtype=dtype)
+    ky_ratio = kys / jnp.asarray(0.30, dtype=dtype)
+    alpha_cos = jnp.cos(alphas)
+    alpha_sin = jnp.sin(alphas)
+    qa_residual = core["qa_residual"]
+    shear_metric = core["shear_metric"]
+
+    kperp_eff2 = core["kperp_eff2"] * (
+        0.58
+        + 0.46 * ky_ratio**2
+        + 0.10 * surface_delta**2
+        + 0.025 * alpha_cos**2
+        + 0.030 * qa_residual
+    )
+    drive_shift = (
+        0.030 * surface_delta
+        - 0.050 * (ky_ratio - 1.0) ** 2
+        + 0.018 * qa_residual * alpha_cos
+        + 0.010 * shear_metric * jnp.sin(alphas + 0.4 * surface_delta)
+    )
+    growth_rate = smooth_positive(core["growth_rate"] + drive_shift, beta=22.0)
+    frequency = core["frequency"] * (1.0 + 0.08 * surface_delta) + 0.035 * (ky_ratio - 1.0) + 0.010 * alpha_sin
+    linear_heat_flux_weight = core["linear_heat_flux_weight"] * (
+        1.0
+        + 0.11 * surface_delta**2
+        + 0.065 * jnp.abs(alpha_sin) * (1.0 + qa_residual)
+        + 0.055 * ky_ratio
+    )
+    ql_features = jnp.stack([growth_rate, kperp_eff2, linear_heat_flux_weight], axis=-1)
+    quasilinear_heat_flux = quasilinear_feature_objective(
+        ql_features,
+        rule="mixing_length",
+        csat=config.quasilinear_csat,
+        gamma_floor=0.0,
+    )
+    nonlinear_window_proxy = quasilinear_heat_flux * (
+        0.70
+        + 0.18 / (1.0 + kperp_eff2)
+        + 0.08 * jnp.tanh(8.0 * growth_rate)
+        + 0.025 * jnp.abs(alpha_cos)
+    )
+    return {
+        "growth": growth_rate,
+        "growth_rate": growth_rate,
+        "gamma": growth_rate,
+        "frequency": frequency,
+        "omega": frequency,
+        "linear_heat_flux_weight": linear_heat_flux_weight,
+        "kperp_eff2": kperp_eff2,
+        "quasilinear_flux": quasilinear_heat_flux,
+        "quasilinear_heat_flux": quasilinear_heat_flux,
+        "mixing_length_heat_flux_proxy": quasilinear_heat_flux,
+        "nonlinear_heat_flux": nonlinear_window_proxy,
+        "nonlinear_window_heat_flux_mean": nonlinear_window_proxy,
+    }
+
+
+def stellarator_itg_sample_objective_table(
+    params: jnp.ndarray | Sequence[float],
+    objectives: Sequence[str] = ("growth", "quasilinear_flux"),
+    config: StellaratorITGOptimizationConfig | None = None,
+    sample_set: StellaratorITGSampleSet | None = None,
+) -> jnp.ndarray:
+    """Return ``(surface, alpha, ky, objective)`` reduced ITG objective rows.
+
+    This is the backend-free rehearsal of the production VMEC/Boozer sample
+    table. It keeps the optimizer and gate semantics identical to the future
+    real-geometry path while remaining cheap enough for CI.
+    """
+
+    cfg = config or StellaratorITGOptimizationConfig()
+    samples = sample_set or StellaratorITGSampleSet()
+    fields = _sampled_qa_itg_fields(params, cfg, samples)
+    if not objectives:
+        raise ValueError("objectives must contain at least one objective name")
+    columns = []
+    for objective in objectives:
+        key = str(objective).strip().lower()
+        if key not in fields:
+            raise ValueError(f"unknown portfolio objective {objective!r}")
+        columns.append(fields[key])
+    return jnp.stack(columns, axis=-1)
+
+
+def stellarator_itg_reduced_portfolio_objective(
+    params: jnp.ndarray | Sequence[float],
+    objectives: Sequence[str] = ("growth", "quasilinear_flux"),
+    config: StellaratorITGOptimizationConfig | None = None,
+    sample_set: StellaratorITGSampleSet | None = None,
+    *,
+    objective_weights: Sequence[float] | None = None,
+) -> jnp.ndarray:
+    """Reduce a sampled ITG growth/QL portfolio to one differentiable scalar."""
+
+    samples = sample_set or StellaratorITGSampleSet()
+    table = stellarator_itg_sample_objective_table(params, objectives, config, samples)
+    return aggregate_objective_portfolio(
+        table,
+        surface_weights=samples.surface_weights,
+        alpha_weights=samples.alpha_weights,
+        ky_weights=samples.ky_weights,
+        objective_weights=objective_weights,
+        reduction=samples.reduction,
+    )
+
+
+def stellarator_itg_vmec_boozer_sample_objective_table_from_state(
+    state: Any,
+    static: Any,
+    indata: Any,
+    wout: Any,
+    objectives: Sequence[str] = ("growth", "quasilinear_flux"),
+    sample_set: StellaratorITGSampleSet | None = None,
+    **vmec_boozer_options: Any,
+) -> jnp.ndarray:
+    """Return real VMEC/Boozer/SPECTRAX-GK rows on a ``StellaratorITGSampleSet``.
+
+    This is the production bridge counterpart to
+    :func:`stellarator_itg_sample_objective_table`: the sample axes are
+    physical toroidal-flux, field-line alpha, and ``k_y rho_i`` values, while
+    the objective columns are selected from the solver objective vector.
+    """
+
+    samples = sample_set or StellaratorITGSampleSet()
+    objective_names = tuple(str(objective).strip().lower() for objective in objectives)
+    if not objective_names:
+        raise ValueError("objectives must contain at least one objective name")
+    flat_table, _metadata = vmec_boozer_solver_objective_table_with_metadata_from_state(
+        state,
+        static,
+        indata,
+        wout,
+        torflux_values=samples.surfaces,
+        alphas=samples.alphas,
+        ky_values=samples.ky_values,
+        **vmec_boozer_options,
+    )
+    columns = [
+        jnp.asarray([solver_scalar_objective_from_vector(row, objective) for row in flat_table])
+        for objective in objective_names
+    ]
+    flat_objectives = jnp.stack(columns, axis=-1)
+    return jnp.reshape(
+        flat_objectives,
+        (len(samples.surfaces), len(samples.alphas), len(samples.ky_values), len(objective_names)),
+    )
+
+
+def stellarator_itg_vmec_boozer_portfolio_objective_from_state(
+    state: Any,
+    static: Any,
+    indata: Any,
+    wout: Any,
+    objectives: Sequence[str] = ("growth", "quasilinear_flux"),
+    sample_set: StellaratorITGSampleSet | None = None,
+    *,
+    objective_weights: Sequence[float] | None = None,
+    **vmec_boozer_options: Any,
+) -> jnp.ndarray:
+    """Reduce real VMEC/Boozer/SPECTRAX-GK ITG rows to one portfolio scalar."""
+
+    samples = sample_set or StellaratorITGSampleSet()
+    table = stellarator_itg_vmec_boozer_sample_objective_table_from_state(
+        state,
+        static,
+        indata,
+        wout,
+        objectives,
+        samples,
+        **vmec_boozer_options,
+    )
+    return aggregate_objective_portfolio(
+        table,
+        surface_weights=samples.surface_weights,
+        alpha_weights=samples.alpha_weights,
+        ky_weights=samples.ky_weights,
+        objective_weights=objective_weights,
+        reduction=samples.reduction,
+    )
+
+
+def stellarator_itg_portfolio_sensitivity_report(
+    params: jnp.ndarray | Sequence[float],
+    objectives: Sequence[str] = ("growth", "quasilinear_flux"),
+    config: StellaratorITGOptimizationConfig | None = None,
+    sample_set: StellaratorITGSampleSet | None = None,
+    *,
+    objective_weights: Sequence[float] | None = None,
+    step: float | None = None,
+    rtol: float | None = None,
+    atol: float | None = None,
+    workers: int = 1,
+    parallel_executor: str = "thread",
+) -> dict[str, Any]:
+    """AD/FD, conditioning, and covariance gate for the reduced ITG portfolio."""
+
+    cfg = config or StellaratorITGOptimizationConfig()
+    samples = sample_set or StellaratorITGSampleSet()
+    objective_names = tuple(str(objective).strip().lower() for objective in objectives)
+    fd_step, default_rtol, default_atol = _precision_gate_tolerances(cfg.fd_step)
+    report = objective_portfolio_sensitivity_report(
+        lambda x: stellarator_itg_sample_objective_table(x, objective_names, cfg, samples),
+        _validate_params(params),
+        surface_weights=samples.surface_weights,
+        alpha_weights=samples.alpha_weights,
+        ky_weights=samples.ky_weights,
+        objective_weights=objective_weights,
+        reduction=samples.reduction,
+        step=fd_step if step is None else float(step),
+        rtol=default_rtol if rtol is None else float(rtol),
+        atol=default_atol if atol is None else float(atol),
+        min_rank=len(PARAMETER_NAMES),
+        condition_number_limit=1.0e8,
+        workers=workers,
+        parallel_executor=parallel_executor,
+    )
+    return {
+        "kind": "stellarator_itg_portfolio_sensitivity_report",
+        "claim_level": "reduced_multi_surface_alpha_ky_objective_gate_not_full_vmec_production",
+        "passed": bool(report["passed"]),
+        "parameter_names": list(PARAMETER_NAMES),
+        "objective_names": list(objective_names),
+        "sample_set": samples.to_dict(),
+        "backend_boundary": (
+            "same reducer/gate contract intended for vmec_jax -> booz_xform_jax "
+            "objective rows after geometry parity passes"
+        ),
+        "portfolio_report": report,
+    }
+
+
+def _portfolio_sample_rows(
+    sample_set: StellaratorITGSampleSet,
+    *,
+    sample_weights: np.ndarray,
+) -> list[dict[str, float]]:
+    rows: list[dict[str, float]] = []
+    for i, surface in enumerate(sample_set.surfaces):
+        for j, alpha in enumerate(sample_set.alphas):
+            for k, ky in enumerate(sample_set.ky_values):
+                rows.append(
+                    {
+                        "surface": float(surface),
+                        "alpha": float(alpha),
+                        "ky": float(ky),
+                        "weight": float(sample_weights[i, j, k]),
+                    }
+                )
+    return rows
+
+
+def _normalized_axis_weights(values: Sequence[float] | None, size: int) -> np.ndarray:
+    if values is None:
+        return np.full((int(size),), 1.0 / float(size), dtype=float)
+    arr = np.asarray(values, dtype=float)
+    return arr / float(np.sum(arr))
+
+
+def _normalized_sample_weight_array(sample_set: StellaratorITGSampleSet) -> np.ndarray:
+    surface = _normalized_axis_weights(sample_set.surface_weights, len(sample_set.surfaces))
+    alpha = _normalized_axis_weights(sample_set.alpha_weights, len(sample_set.alphas))
+    ky = _normalized_axis_weights(sample_set.ky_weights, len(sample_set.ky_values))
+    return surface[:, None, None] * alpha[None, :, None] * ky[None, None, :]
+
+
+def _normalized_objective_weights(
+    objective_weights: Sequence[float] | None,
+    size: int,
+) -> np.ndarray:
+    if objective_weights is None:
+        return np.full((int(size),), 1.0 / float(size), dtype=float)
+    arr = np.asarray(objective_weights, dtype=float)
+    if arr.ndim != 1 or arr.size != int(size) or not np.all(np.isfinite(arr)):
+        raise ValueError(f"objective_weights must be a finite length-{int(size)} vector")
+    if np.any(arr < 0.0) or float(np.sum(arr)) <= 0.0:
+        raise ValueError("objective_weights must be non-negative with positive sum")
+    return arr / float(np.sum(arr))
+
+
+def stellarator_itg_portfolio_gate_payload(
+    params: jnp.ndarray | Sequence[float] | None = None,
+    objectives: Sequence[str] = ("growth", "quasilinear_flux"),
+    config: StellaratorITGOptimizationConfig | None = None,
+    sample_set: StellaratorITGSampleSet | None = None,
+    *,
+    objective_weights: Sequence[float] | None = None,
+    finite_difference_workers: int = 1,
+    finite_difference_executor: str = "thread",
+) -> dict[str, Any]:
+    """Return the JSON-ready reduced ITG portfolio gate artifact payload."""
+
+    cfg = config or StellaratorITGOptimizationConfig()
+    samples = sample_set or StellaratorITGSampleSet()
+    p = default_stellarator_initial_params() if params is None else _validate_params(params)
+    objective_names = tuple(str(objective).strip().lower() for objective in objectives)
+    table = np.asarray(stellarator_itg_sample_objective_table(p, objective_names, cfg, samples), dtype=float)
+    obj_weights = _normalized_objective_weights(objective_weights, table.shape[-1])
+    sample_weights = _normalized_sample_weight_array(samples)
+    sample_values = np.sum(table * obj_weights[None, None, None, :], axis=-1)
+    reduced_value = float(
+        stellarator_itg_reduced_portfolio_objective(
+            p,
+            objective_names,
+            cfg,
+            samples,
+            objective_weights=objective_weights,
+        )
+    )
+    report = stellarator_itg_portfolio_sensitivity_report(
+        p,
+        objective_names,
+        cfg,
+        samples,
+        objective_weights=objective_weights,
+        workers=finite_difference_workers,
+        parallel_executor=finite_difference_executor,
+    )
+    return {
+        "kind": "stellarator_itg_portfolio_gate",
+        "claim_level": "reduced_multi_surface_alpha_ky_objective_gate_not_full_vmec_production",
+        "source_scope": "reduced_qa_max_mode1_surrogate_rows",
+        "production_nonlinear_optimization_claim": False,
+        "passed": bool(report["passed"]),
+        "parameter_names": list(PARAMETER_NAMES),
+        "objective_names": list(objective_names),
+        "initial_params": [float(value) for value in np.asarray(p)],
+        "sample_set": samples.to_dict(),
+        "samples": _portfolio_sample_rows(samples, sample_weights=sample_weights),
+        "objective_weights": obj_weights.tolist(),
+        "base_value": reduced_value,
+        "base_sample_values": sample_values.ravel().tolist(),
+        "base_objective_table": table.reshape((-1, table.shape[-1])).tolist(),
+        "base_objective_tensor": table.tolist(),
+        "portfolio_report": report["portfolio_report"],
+        "config": asdict(cfg),
+        "next_action": (
+            "Replace the reduced surrogate row producer with real vmec_jax -> "
+            "booz_xform_jax -> SPECTRAX-GK rows, then rerun the same gate "
+            "with held-out surface/alpha samples before optimization claims."
+        ),
+    }
 
 
 def nonlinear_heat_flux_trace(
@@ -733,6 +1157,7 @@ __all__ = [
     "PARAMETER_NAMES",
     "StellaratorITGOptimizationConfig",
     "StellaratorITGOptimizationResult",
+    "StellaratorITGSampleSet",
     "StellaratorObjectiveKind",
     "compare_stellarator_itg_objectives",
     "default_stellarator_initial_params",
@@ -741,9 +1166,15 @@ __all__ = [
     "optimize_stellarator_itg",
     "qa_max_mode1_observables",
     "qa_observable_vector",
+    "stellarator_itg_portfolio_gate_payload",
     "smooth_positive",
+    "stellarator_itg_portfolio_sensitivity_report",
     "stellarator_itg_residual_sensitivity_report",
     "stellarator_itg_objective",
     "stellarator_itg_objective_residual_names",
     "stellarator_itg_objective_residual_vector",
+    "stellarator_itg_reduced_portfolio_objective",
+    "stellarator_itg_sample_objective_table",
+    "stellarator_itg_vmec_boozer_portfolio_objective_from_state",
+    "stellarator_itg_vmec_boozer_sample_objective_table_from_state",
 ]

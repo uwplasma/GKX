@@ -517,7 +517,11 @@ def run_cyclone_linear(
                 if time_cfg_use is None
                 else float(time_cfg_use.t_max)
             )
-            stride = 1 if time_cfg_use is None else int(time_cfg_use.sample_stride)
+            stride = (
+                int(sample_stride)
+                if sample_stride is not None
+                else (1 if time_cfg_use is None else int(time_cfg_use.sample_stride))
+            )
             gx_time_cfg = ExplicitTimeConfig(
                 dt=float(dt),
                 t_max=t_max_val,

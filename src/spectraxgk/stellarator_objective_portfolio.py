@@ -471,7 +471,12 @@ def _finite_nested(value: Any) -> bool:
 
 def _sample_key(sample: dict[str, Any]) -> tuple[str, float, float]:
     surface = sample.get("surface_index", "__mid_surface__")
-    surface_key = "__mid_surface__" if surface is None else str(surface)
+    if surface is None and sample.get("torflux") is not None:
+        surface_key = f"torflux={_as_finite_float(sample.get('torflux'), name='sample torflux'):.16g}"
+    elif surface is None and sample.get("surface") is not None:
+        surface_key = f"surface={_as_finite_float(sample.get('surface'), name='sample surface'):.16g}"
+    else:
+        surface_key = "__mid_surface__" if surface is None else str(surface)
     alpha = _as_finite_float(sample.get("alpha"), name="sample alpha")
     ky_value = sample.get("ky", sample.get("ky_index", sample.get("selected_ky_index")))
     ky = _as_finite_float(ky_value, name="sample ky")

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
+import time
 
 import jax
 import jax.numpy as jnp
@@ -20,6 +22,7 @@ from spectraxgk.linear import (
 )
 from spectraxgk.terms.assembly import assemble_rhs_cached
 from spectraxgk.terms.config import FieldState, TermConfig
+from spectraxgk.utils.callbacks import progress_update_stride
 
 
 @dataclass(frozen=True)
@@ -43,6 +46,39 @@ _SSPX3_WGTFAC = float((9.0 - 2.0 * (6.0 ** (2.0 / 3.0))) ** 0.5)
 _SSPX3_W1 = 0.5 * (_SSPX3_WGTFAC - 1.0)
 _SSPX3_W2 = 0.5 * ((6.0 ** (2.0 / 3.0)) - 1.0 - _SSPX3_WGTFAC)
 _SSPX3_W3 = (1.0 / _SSPX3_ADT) - 1.0 - _SSPX3_W2 * (_SSPX3_W1 + 1.0)
+
+
+def _format_wall_time(seconds: float) -> str:
+    seconds_i = max(int(round(seconds)), 0)
+    minutes, secs = divmod(seconds_i, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours:d}:{minutes:02d}:{secs:02d}"
+    return f"{minutes:02d}:{secs:02d}"
+
+
+def _emit_time_progress(
+    *,
+    step: int,
+    total_steps: int,
+    t: float,
+    t_max: float,
+    started_at: float,
+    phi_max: float,
+) -> None:
+    elapsed = max(time.perf_counter() - started_at, 0.0)
+    rate = step / elapsed if elapsed > 1.0e-12 else 0.0
+    remaining = max(total_steps - step, 0)
+    eta = remaining / rate if rate > 1.0e-12 else math.inf
+    eta_text = "--:--" if not math.isfinite(eta) else _format_wall_time(eta)
+    pct = 100.0 * step / max(total_steps, 1)
+    print(
+        "[spectrax-gk] "
+        f"step={step}/{total_steps} progress={pct:5.1f}% "
+        f"t={t:.6g}/{t_max:.6g} elapsed={_format_wall_time(elapsed)} "
+        f"eta={eta_text} |phi|max={phi_max:.6e}",
+        flush=True,
+    )
 
 
 def _gx_state_mask(cache: LinearCache) -> jnp.ndarray:
@@ -514,6 +550,16 @@ def integrate_linear_gx(
     phi_list: list[np.ndarray] = []
     gamma_list: list[np.ndarray] = []
     omega_list: list[np.ndarray] = []
+    total_steps_est = max(int(math.ceil(max(t_max, 0.0) / max(dt, 1.0e-30))), 1)
+    progress_stride = progress_update_stride(total_steps_est, target_updates=20)
+    progress_started_at = time.perf_counter()
+    if show_progress:
+        print(
+            "[spectrax-gk] linear initial-value integration started "
+            f"(steps={total_steps_est}, dt={dt:.6g}, t_max={t_max:.6g}, "
+            f"sample_stride={sample_stride})",
+            flush=True,
+        )
 
     def _step(G_state, cache_state, params_state, term_cfg_state, dt_state):
         return _linear_explicit_step(
@@ -534,7 +580,9 @@ def integrate_linear_gx(
         step += 1
         t += dt
 
+        sampled = False
         if step % sample_stride == 0 or t >= t_max:
+            sampled = True
             gamma, omega = _gx_growth_rate_step(
                 phi,
                 phi_prev,
@@ -547,7 +595,32 @@ def integrate_linear_gx(
             phi_list.append(np.asarray(phi))
             gamma_list.append(np.asarray(gamma))
             omega_list.append(np.asarray(omega))
+            if show_progress and (
+                step == 1 or step >= total_steps_est or (step % progress_stride) == 0
+            ):
+                _emit_time_progress(
+                    step=step,
+                    total_steps=total_steps_est,
+                    t=float(t),
+                    t_max=t_max,
+                    started_at=progress_started_at,
+                    phi_max=float(jnp.max(jnp.abs(phi))),
+                )
+        if show_progress and not sampled and (
+            step == 1 or step >= total_steps_est or (step % progress_stride) == 0
+        ):
+            _emit_time_progress(
+                step=step,
+                total_steps=total_steps_est,
+                t=float(t),
+                t_max=t_max,
+                started_at=progress_started_at,
+                phi_max=float(jnp.max(jnp.abs(phi))),
+            )
         phi_prev = phi
+
+    if show_progress:
+        print("[spectrax-gk] linear initial-value integration complete", flush=True)
 
     return (
         np.asarray(ts),
