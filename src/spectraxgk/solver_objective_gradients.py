@@ -11,7 +11,7 @@ from __future__ import annotations
 import importlib
 from dataclasses import replace as dc_replace
 import time
-from typing import Any, Literal, Sequence, cast
+from typing import Any, Literal, cast
 
 import jax
 import jax.numpy as jnp
@@ -147,8 +147,8 @@ def _surface_index_tuple(value: int | None | tuple[int | None, ...] | list[int |
 
 
 def _surface_sample_axis(
-    surface_indices: int | None | Sequence[int | None],
-    torflux_values: float | Sequence[float] | None,
+    surface_indices: int | None | tuple[int | None, ...] | list[int | None],
+    torflux_values: float | tuple[float, ...] | list[float] | None,
 ) -> tuple[dict[str, float | int | None], ...]:
     if torflux_values is not None:
         if not (surface_indices is None or surface_indices == (None,)):
@@ -185,7 +185,7 @@ def _float_tuple(value: float | tuple[float, ...] | list[float], *, name: str) -
 
 
 def solver_grid_options_from_ky_values(
-    ky_values: float | tuple[float, ...] | list[float] | np.ndarray,
+    ky_values: float | tuple[float, ...] | list[float],
     *,
     ky_base: float | None = None,
     min_ny: int = 4,
@@ -232,8 +232,8 @@ def solver_grid_options_from_ky_values(
 
 
 def _ky_sample_axis(
-    selected_ky_indices: int | Sequence[int],
-    ky_values: float | Sequence[float] | None,
+    selected_ky_indices: int | tuple[int, ...] | list[int],
+    ky_values: float | tuple[float, ...] | list[float] | None,
     *,
     ky_base: float | None,
     objective_kwargs: dict[str, Any],
@@ -251,12 +251,14 @@ def _ky_sample_axis(
         ky_base=ky_base,
         min_ny=int(objective_kwargs.get("ny", 4)),
     )
-    selected = tuple(int(item) for item in grid_options["selected_ky_indices"])
-    resolved = tuple(float(item) for item in grid_options["resolved_ky_values"])
+    selected_grid = cast(tuple[int, ...], grid_options["selected_ky_indices"])
+    resolved_grid = cast(tuple[float, ...], grid_options["resolved_ky_values"])
+    selected = tuple(int(item) for item in selected_grid)
+    resolved = tuple(float(item) for item in resolved_grid)
     requested = _float_tuple(ky_values, name="ky_values")
     updated_kwargs = dict(objective_kwargs)
-    updated_kwargs["ny"] = int(grid_options["ny"])
-    updated_kwargs["ly"] = float(grid_options["ly"])
+    updated_kwargs["ny"] = int(cast(int, grid_options["ny"]))
+    updated_kwargs["ly"] = float(cast(float, grid_options["ly"]))
     rows = tuple(
         {
             "selected_ky_index": index,
@@ -574,17 +576,18 @@ def vmec_boozer_solver_objective_table_with_metadata_from_state(  # pragma: no c
                     row_metadata["torflux"] = float(torflux)
                     row_metadata["surface"] = float(torflux)
                 for key in ("ky", "selected_ky", "ky_abs_error"):
-                    if key in ky_sample:
-                        row_metadata[key] = float(ky_sample[key])
+                    value = ky_sample.get(key)
+                    if value is not None:
+                        row_metadata[key] = float(value)
                 metadata.append(row_metadata)
     if not rows:
         raise RuntimeError("VMEC/Boozer objective table produced no samples")
     if ky_grid_options is not None:
         for row in metadata:
             row["ky_grid_options"] = {
-                "ky_base": float(ky_grid_options["ky_base"]),
-                "ly": float(ky_grid_options["ly"]),
-                "ny": int(ky_grid_options["ny"]),
+                "ky_base": float(cast(float, ky_grid_options["ky_base"])),
+                "ly": float(cast(float, ky_grid_options["ly"])),
+                "ny": int(cast(int, ky_grid_options["ny"])),
             }
     return jnp.stack(rows), metadata
 
@@ -860,7 +863,8 @@ def vmec_boozer_aggregate_scalar_objective_finite_difference_report(  # pragma: 
             ky_base=ky_base,
             min_ny=int(kwargs.get("ny", 4)),
         )
-        ky_indices = tuple(int(item) for item in ky_grid_options["selected_ky_indices"])
+        selected_grid = cast(tuple[int, ...], ky_grid_options["selected_ky_indices"])
+        ky_indices = tuple(int(item) for item in selected_grid)
     n_samples = len(surface_samples) * len(alpha_values) * len(ky_indices)
     normalized_weights = _aggregate_weights(weights, n_samples)
     bundle = _load_vmec_jax_example_state_bundle(str(case_name))
@@ -962,7 +966,12 @@ def vmec_boozer_aggregate_scalar_objective_finite_difference_report(  # pragma: 
         "reduction": str(reduction),
         "samples": samples,
         "n_samples": n_samples,
-        "surface_indices": [None if row.get("surface_index") is None else int(row["surface_index"]) for row in surface_samples],
+        "surface_indices": [
+            None
+            if row.get("surface_index") is None
+            else int(cast(int, row["surface_index"]))
+            for row in surface_samples
+        ],
         "torflux_values": None if torflux_values is None else list(_float_tuple(torflux_values, name="torflux_values")),
         "alphas": list(alpha_values),
         "selected_ky_indices": list(ky_indices),

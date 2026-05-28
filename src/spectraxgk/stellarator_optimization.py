@@ -10,7 +10,7 @@ gyrokinetic loop into a release claim.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, replace
-from typing import Any, Literal, Sequence
+from typing import Any, Literal, Sequence, cast
 
 import jax
 import jax.numpy as jnp
@@ -21,6 +21,7 @@ from spectraxgk.geometry.differentiable import discover_differentiable_geometry_
 from spectraxgk.parallel import independent_map
 from spectraxgk.quasilinear import quasilinear_feature_objective
 from spectraxgk.solver_objective_gradients import (
+    SolverScalarObjective,
     solver_scalar_objective_from_vector,
     vmec_boozer_solver_objective_table_with_metadata_from_state,
 )
@@ -532,7 +533,10 @@ def stellarator_itg_vmec_boozer_sample_objective_table_from_state(
         **vmec_boozer_options,
     )
     columns = [
-        jnp.asarray([solver_scalar_objective_from_vector(row, objective) for row in flat_table])
+        jnp.asarray([
+            solver_scalar_objective_from_vector(row, cast(SolverScalarObjective, objective))
+            for row in flat_table
+        ])
         for objective in objective_names
     ]
     flat_objectives = jnp.stack(columns, axis=-1)

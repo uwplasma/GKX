@@ -159,7 +159,7 @@ def _default_demo_toml_path() -> Path:
     return Path("spectraxgk_default_linear.toml")
 
 
-def _default_demo_settings() -> dict[str, object]:
+def _default_demo_settings() -> dict[str, float | int | str]:
     return {
         "ky": 0.3,
         "Nl": 7,
@@ -272,14 +272,6 @@ def _cmd_default_demo() -> int:
     sample_stride = int(settings["sample_stride"])
     mode_method = str(settings["mode_method"])
     fit_signal = str(settings["fit_signal"])
-    fit_cfg = {
-        "fit_signal": fit_signal,
-        "mode_method": mode_method,
-        "auto_window": True,
-        "window_fraction": 0.4,
-        "start_fraction": 0.2,
-        "min_points": 25,
-    }
     toml_path = _default_demo_toml_path()
     toml_path.write_text(_default_demo_toml_text(), encoding="utf-8")
 
@@ -308,7 +300,12 @@ def _cmd_default_demo() -> int:
         sample_stride=sample_stride,
         show_progress=True,
         status_callback=_status_printer("demo"),
-        **fit_cfg,
+        fit_signal=fit_signal,
+        mode_method=mode_method,
+        auto_window=True,
+        window_fraction=0.4,
+        start_fraction=0.2,
+        min_points=25,
     )
     grid = build_spectral_grid(cfg.grid)
     signal = extract_mode_time_series(result.phi_t, result.selection, method=mode_method)
