@@ -327,6 +327,7 @@ from spectraxgk.stellarator_objective_portfolio import (
 from spectraxgk.zonal_objective import (
     ZONAL_FLOW_OBJECTIVE_NAMES,
     ZonalFlowObjectiveConfig,
+    zonal_flow_objective_artifact_from_records,
     zonal_flow_objective_rows,
     zonal_flow_objective_sensitivity_report,
     zonal_flow_reduced_objective,
@@ -672,6 +673,7 @@ __all__ = [
     "validate_objective_portfolio_contract",
     "ZONAL_FLOW_OBJECTIVE_NAMES",
     "ZonalFlowObjectiveConfig",
+    "zonal_flow_objective_artifact_from_records",
     "zonal_flow_objective_rows",
     "zonal_flow_objective_sensitivity_report",
     "zonal_flow_reduced_objective",
