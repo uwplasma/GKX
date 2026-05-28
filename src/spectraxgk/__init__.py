@@ -324,6 +324,13 @@ from spectraxgk.stellarator_objective_portfolio import (
     reduced_portfolio_artifact_guard_report,
     validate_objective_portfolio_contract,
 )
+from spectraxgk.zonal_objective import (
+    ZONAL_FLOW_OBJECTIVE_NAMES,
+    ZonalFlowObjectiveConfig,
+    zonal_flow_objective_rows,
+    zonal_flow_objective_sensitivity_report,
+    zonal_flow_reduced_objective,
+)
 from spectraxgk.solver_objective_gradients import (
     SOLVER_GEOMETRY_PARAMETER_NAMES,
     SOLVER_OBJECTIVE_NAMES,
@@ -663,6 +670,11 @@ __all__ = [
     "portfolio_sample_weight_tensor",
     "reduced_portfolio_artifact_guard_report",
     "validate_objective_portfolio_contract",
+    "ZONAL_FLOW_OBJECTIVE_NAMES",
+    "ZonalFlowObjectiveConfig",
+    "zonal_flow_objective_rows",
+    "zonal_flow_objective_sensitivity_report",
+    "zonal_flow_reduced_objective",
     "SOLVER_GEOMETRY_PARAMETER_NAMES",
     "SOLVER_OBJECTIVE_NAMES",
     "SolverScalarObjective",
