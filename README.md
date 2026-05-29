@@ -750,8 +750,8 @@ exist and pass their window gates.
 The control-variate campaign is a launch contract, not a promoted nonlinear
 gradient claim. The post-run reduction is automated by
 `tools/postprocess_nonlinear_gradient_control_mean_campaign.py`, which requires
-the full matched plus/minus seed set before producing the final control-mean
-gate.
+the full matched plus/minus seed set with outputs reaching the requested
+post-transient window before producing the final control-mean gate.
 
 ![SPECTRAX-GK QA/ESS overdetermined RBC(1,1) nonlinear gradient gate](docs/_static/qa_ess_profile_gradient_rbc_1_1_nonlinear_gradient_rbc_1_1_central_fd_gradient_gate.png)
 
