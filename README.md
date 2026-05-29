@@ -669,7 +669,15 @@ The newer QL-seeded VMEC-state screen admits `Rsin_mid_surface_m1` and
 `Zcos_mid_surface_m1` as internal state-control seeds only. The companion
 state-control runbook currently fails closed until those state controls are
 mapped to conditioned, perturbable VMEC input directions, so it does not yet
-launch nonlinear-gradient campaigns.
+launch nonlinear-gradient campaigns. The current launch-plan artifact writes
+three candidate VMEC input perturbation decks (`RBC(1,1)`, `ZBS(1,1)`, and
+`ZBS(1,0)`) and the response-matrix protocol, but it is explicitly not mapping
+evidence until the re-equilibrated VMEC responses have been extracted and pass
+condition/residual gates.
+
+![SPECTRAX-GK VMEC-state nonlinear-gradient launch runbook](docs/_static/nonlinear_gradient_state_control_runbook.png)
+
+![SPECTRAX-GK VMEC state-to-input mapping campaign](docs/_static/nonlinear_gradient_state_to_input_mapping_campaign.png)
 
 ![SPECTRAX-GK production nonlinear optimization guard](docs/_static/production_nonlinear_optimization_guard.png)
 

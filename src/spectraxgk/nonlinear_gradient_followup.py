@@ -891,6 +891,7 @@ def nonlinear_gradient_ql_seed_screen_report(
 def _mapping_control_rows(mapping_artifacts: Sequence[Mapping[str, Any]]) -> dict[str, dict[str, Any]]:
     rows_by_parameter: dict[str, dict[str, Any]] = {}
     for artifact_index, artifact in enumerate(mapping_artifacts):
+        artifact_passed = bool(artifact.get("passed", False))
         raw_rows = artifact.get("controls")
         if not isinstance(raw_rows, Sequence):
             raw_rows = artifact.get("mappings")
@@ -911,7 +912,9 @@ def _mapping_control_rows(mapping_artifacts: Sequence[Mapping[str, Any]]) -> dic
                 "input_control_argument": raw_row.get("input_control_argument"),
                 "input_direction": raw_row.get("input_direction"),
                 "input_parameter": raw_row.get("input_parameter"),
-                "passed": bool(raw_row.get("passed", artifact.get("passed", False))),
+                "passed": bool(raw_row.get("passed", False)) and artifact_passed,
+                "row_passed": bool(raw_row.get("passed", False)),
+                "artifact_passed": artifact_passed,
                 "condition_number": _json_number(
                     _metric(raw_row, "condition_number", "mapping_condition_number")
                 ),
@@ -960,6 +963,11 @@ def nonlinear_gradient_state_control_runbook_report(
 
     admitted_raw = ql_seed_screen.get("admitted_controls")
     admitted = admitted_raw if isinstance(admitted_raw, Sequence) else ()
+    ql_kind = ql_seed_screen.get("kind")
+    ql_screen_usable = (
+        ql_kind == "nonlinear_turbulence_gradient_ql_seed_screen"
+        and bool(ql_seed_screen.get("passed", False))
+    )
     mapping_by_parameter = _mapping_control_rows(mapping_artifacts)
     control_rows: list[dict[str, Any]] = []
     mapped_controls: list[dict[str, Any]] = []
@@ -971,6 +979,10 @@ def nonlinear_gradient_state_control_runbook_report(
             continue
         mapping = mapping_by_parameter.get(parameter)
         blockers: list[str] = []
+        if ql_kind != "nonlinear_turbulence_gradient_ql_seed_screen":
+            blockers.append("invalid_ql_seed_screen_kind")
+        if not bool(ql_seed_screen.get("passed", False)):
+            blockers.append("ql_seed_screen_failed")
         if mapping is None:
             blockers.append("missing_state_to_input_mapping")
             mapping_passed = False
@@ -980,8 +992,11 @@ def nonlinear_gradient_state_control_runbook_report(
             condition_number = _finite_float(mapping.get("condition_number"))
             relative_residual = _finite_float(mapping.get("relative_residual"))
             mapping_passed = bool(mapping.get("passed", False)) or not cfg.require_mapping_passed
-            if cfg.require_mapping_passed and not bool(mapping.get("passed", False)):
+            if cfg.require_mapping_passed and not bool(mapping.get("artifact_passed", False)):
                 blockers.append("mapping_artifact_failed")
+            if cfg.require_mapping_passed and not bool(mapping.get("passed", False)):
+                if "mapping_artifact_failed" not in blockers:
+                    blockers.append("mapping_artifact_failed")
             if condition_number is None:
                 blockers.append("missing_mapping_condition_number")
             elif condition_number > cfg.max_mapping_condition_number:
@@ -994,7 +1009,7 @@ def nonlinear_gradient_state_control_runbook_report(
         input_control = None if mapping is None else mapping.get("input_control_argument")
         if mapping is not None and not input_control:
             blockers.append("missing_input_control_argument")
-        mapped = bool(mapping is not None and mapping_passed and not blockers and input_control)
+        mapped = bool(ql_screen_usable and mapping is not None and mapping_passed and not blockers and input_control)
         row = {
             "state_parameter": parameter,
             "state_control_argument": raw_control.get("state_control_argument"),
@@ -1041,6 +1056,7 @@ def nonlinear_gradient_state_control_runbook_report(
             "mapped_control_count": len(mapped_controls),
             "required_mapped_control_count": cfg.min_mapped_controls,
             "mapping_artifact_count": len(mapping_artifacts),
+            "ql_seed_screen_usable": bool(ql_screen_usable),
         },
         "mapped_controls": mapped_controls,
         "controls": control_rows,
