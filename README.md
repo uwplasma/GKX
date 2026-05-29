@@ -706,7 +706,11 @@ zero promoted nonlinear-gradient controls, one legacy bounded-replica follow-up
 candidate, and `15` cases that need replacement, locality repair, or variance
 reduction before further long-window GPU time is justified. The current
 top-level action is now paired-seed or control-variate variance reduction for
-the plus-state limiter, not another blind long-window replica campaign.
+the plus-state limiter, not another blind long-window replica campaign. The
+paired-seed runbook confirms that common-label plus-minus differences reduce
+some common noise but are still too uncertain
+(`paired_response_uncertainty_rel = 0.984`), so the next campaign needs a real
+control-variate or better-conditioned observable before more GPU time.
 
 ![SPECTRAX-GK VMEC-state nonlinear-gradient launch runbook](docs/_static/nonlinear_gradient_state_control_runbook.png)
 
@@ -729,6 +733,8 @@ the plus-state limiter, not another blind long-window replica campaign.
 ![SPECTRAX-GK QA/ESS ZBS(1,0) nonlinear gradient gate](docs/_static/qa_ess_zbs10_rel5_nonlinear_gradient_zbs_1_0_central_fd_gradient_gate.png)
 
 ![SPECTRAX-GK QA/ESS ZBS(1,0) bounded nonlinear gradient follow-up](docs/_static/qa_ess_zbs10_rel7p5_nonlinear_gradient_zbs_1_0_central_fd_gradient_gate.png)
+
+![SPECTRAX-GK QA/ESS ZBS(1,0) variance-reduction plan](docs/_static/qa_ess_zbs10_rel7p5_variance_reduction_plan.png)
 
 ![SPECTRAX-GK QA/ESS overdetermined RBC(1,1) nonlinear gradient gate](docs/_static/qa_ess_profile_gradient_rbc_1_1_nonlinear_gradient_rbc_1_1_central_fd_gradient_gate.png)
 

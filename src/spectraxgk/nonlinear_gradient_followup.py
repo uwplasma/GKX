@@ -51,6 +51,17 @@ class NonlinearGradientCandidateDesignConfig:
 
 
 @dataclass(frozen=True)
+class NonlinearGradientVarianceReductionConfig:
+    """Controls for paired-seed/control-variate nonlinear-gradient planning."""
+
+    max_paired_response_uncertainty_rel: float = 0.50
+    sem_safety_factor: float = 1.10
+    min_common_pairs: int = 2
+    max_extra_paired_seeds: int = 4
+    value_floor: float = 1.0e-12
+
+
+@dataclass(frozen=True)
 class NonlinearGradientCompositeControlConfig:
     """Controls for constructing the next composite nonlinear-gradient direction."""
 
@@ -305,6 +316,149 @@ def _ensemble_state_variance_report(
         "failed_spread_states": failed_spread_states,
         "failed_sem_states": failed_sem_states,
         "recommendation": recommendation,
+    }
+
+
+def _state_means_by_label(source_ensembles: Mapping[str, Any], state: str) -> dict[str, float]:
+    raw = source_ensembles.get(state)
+    if not isinstance(raw, Mapping):
+        return {}
+    rows = raw.get("rows")
+    if not isinstance(rows, Sequence):
+        return {}
+    out: dict[str, float] = {}
+    for row in rows:
+        if not isinstance(row, Mapping):
+            continue
+        label = _label_from_row(row)
+        value = _finite_float(row.get("late_mean"))
+        if label is not None and value is not None:
+            out[label] = value
+    return out
+
+
+def _mean_and_sem(values: Sequence[float]) -> tuple[float | None, float | None]:
+    finite = [float(value) for value in values if math.isfinite(float(value))]
+    if not finite:
+        return None, None
+    mean = sum(finite) / len(finite)
+    if len(finite) < 2:
+        return mean, None
+    variance = sum((value - mean) ** 2 for value in finite) / (len(finite) - 1)
+    return mean, math.sqrt(variance / len(finite))
+
+
+def nonlinear_gradient_variance_reduction_plan(
+    artifact: Mapping[str, Any],
+    *,
+    path: str | None = None,
+    label: str | None = None,
+    case: str = "nonlinear_turbulence_gradient_variance_reduction_plan",
+    config: NonlinearGradientVarianceReductionConfig | None = None,
+) -> dict[str, Any]:
+    """Plan paired-seed/control-variate follow-up for a failed central-FD artifact.
+
+    The plan uses common seed/timestep labels across ``plus`` and ``minus``
+    ensembles to estimate the uncertainty of paired finite-difference
+    responses.  It is a campaign-design artifact, not nonlinear-gradient
+    evidence.
+    """
+
+    cfg = config or NonlinearGradientVarianceReductionConfig()
+    if cfg.max_paired_response_uncertainty_rel <= 0.0:
+        raise ValueError("max_paired_response_uncertainty_rel must be positive")
+    if cfg.sem_safety_factor <= 0.0:
+        raise ValueError("sem_safety_factor must be positive")
+    if cfg.min_common_pairs < 1:
+        raise ValueError("min_common_pairs must be positive")
+    if cfg.max_extra_paired_seeds < 0:
+        raise ValueError("max_extra_paired_seeds must be non-negative")
+
+    source_ensembles_raw = artifact.get("source_ensembles")
+    source_ensembles = source_ensembles_raw if isinstance(source_ensembles_raw, Mapping) else {}
+    variance = _ensemble_state_variance_report(
+        source_ensembles,
+        config=NonlinearGradientCandidateDesignConfig(
+            max_window_mean_rel_spread=0.15,
+            max_window_sem_rel=0.25,
+        ),
+    )
+    plus = _state_means_by_label(source_ensembles, "plus")
+    minus = _state_means_by_label(source_ensembles, "minus")
+    baseline = _state_means_by_label(source_ensembles, "baseline")
+    common_labels = sorted(set(plus).intersection(minus))
+    common_with_baseline = sorted(set(common_labels).intersection(baseline))
+
+    pair_rows: list[dict[str, Any]] = []
+    paired_differences: list[float] = []
+    for item in common_labels:
+        diff = plus[item] - minus[item]
+        paired_differences.append(diff)
+        row: dict[str, Any] = {
+            "label": item,
+            "plus_mean": _json_number(plus[item]),
+            "minus_mean": _json_number(minus[item]),
+            "plus_minus_difference": _json_number(diff),
+        }
+        if item in baseline:
+            row["baseline_mean"] = _json_number(baseline[item])
+            row["plus_baseline_difference"] = _json_number(plus[item] - baseline[item])
+            row["baseline_minus_difference"] = _json_number(baseline[item] - minus[item])
+        pair_rows.append(row)
+
+    paired_mean, paired_sem = _mean_and_sem(paired_differences)
+    paired_uncertainty_rel = None
+    if paired_mean is not None and paired_sem is not None:
+        paired_uncertainty_rel = abs(paired_sem) / max(abs(paired_mean), cfg.value_floor)
+
+    required_pairs = None
+    extra_pairs = None
+    if paired_uncertainty_rel is not None:
+        scale = (paired_uncertainty_rel / cfg.max_paired_response_uncertainty_rel) ** 2
+        scale *= cfg.sem_safety_factor
+        required_pairs = max(len(common_labels), int(math.ceil(len(common_labels) * scale)))
+        extra_pairs = max(0, required_pairs - len(common_labels))
+
+    if len(common_labels) < cfg.min_common_pairs:
+        action = "recover_or_add_matched_seed_pairs"
+        recommendation = "common plus/minus seed labels are insufficient for paired finite differences"
+    elif paired_uncertainty_rel is None:
+        action = "add_matched_seed_pairs"
+        recommendation = "paired response SEM cannot be estimated from fewer than two finite pairs"
+    elif paired_uncertainty_rel <= cfg.max_paired_response_uncertainty_rel:
+        action = "use_paired_seed_response_estimator"
+        recommendation = "paired seed response uncertainty is within the target gate"
+    elif extra_pairs is not None and extra_pairs <= cfg.max_extra_paired_seeds:
+        action = "add_matched_paired_seed_replicates"
+        recommendation = "add bounded matched plus/minus seed pairs before changing the observable"
+    else:
+        action = "design_control_variate_or_new_observable"
+        recommendation = (
+            "paired seed differences reduce common noise but are still too uncertain; "
+            "design a control-variate observable or better-conditioned response before more GPU time"
+        )
+
+    return {
+        "kind": "nonlinear_turbulence_gradient_variance_reduction_plan",
+        "claim_level": "campaign_design_not_gradient_evidence",
+        "case": case,
+        "path": path,
+        "label": str(label or artifact.get("parameter_name") or path or case),
+        "passed": action == "use_paired_seed_response_estimator",
+        "action": action,
+        "recommendation": recommendation,
+        "config": asdict(cfg),
+        "variance_reduction": variance,
+        "summary": {
+            "common_pair_count": len(common_labels),
+            "common_with_baseline_count": len(common_with_baseline),
+            "paired_response_mean": _json_number(paired_mean),
+            "paired_response_sem": _json_number(paired_sem),
+            "paired_response_uncertainty_rel": _json_number(paired_uncertainty_rel),
+            "required_pair_count": required_pairs,
+            "extra_pair_count": extra_pairs,
+        },
+        "pair_rows": pair_rows,
     }
 
 
