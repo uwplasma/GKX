@@ -77,6 +77,16 @@ class NonlinearGradientControlVariateCampaignConfig:
 
 
 @dataclass(frozen=True)
+class NonlinearGradientControlMeanGateConfig:
+    """Acceptance limits for an independent control-mean estimate."""
+
+    target_response_uncertainty_rel: float = 0.50
+    min_control_mean_pairs: int = 4
+    require_state_ensembles_passed: bool = True
+    value_floor: float = 1.0e-12
+
+
+@dataclass(frozen=True)
 class NonlinearGradientCompositeControlConfig:
     """Controls for constructing the next composite nonlinear-gradient direction."""
 
@@ -809,6 +819,132 @@ def nonlinear_gradient_control_variate_campaign_plan(
                 "uncertainty, and combined response uncertainty all pass"
             ),
         },
+    }
+
+
+def nonlinear_gradient_control_mean_gate(
+    variance_report: Mapping[str, Any],
+    *,
+    plus_ensemble: Mapping[str, Any],
+    minus_ensemble: Mapping[str, Any],
+    plus_path: str | None = None,
+    minus_path: str | None = None,
+    case: str = "nonlinear_turbulence_gradient_control_mean_gate",
+    candidate_name: str | None = None,
+    config: NonlinearGradientControlMeanGateConfig | None = None,
+) -> dict[str, Any]:
+    """Evaluate an independent control-mean estimate for a screened CV response."""
+
+    cfg = config or NonlinearGradientControlMeanGateConfig()
+    if cfg.target_response_uncertainty_rel <= 0.0:
+        raise ValueError("target_response_uncertainty_rel must be positive")
+    if cfg.min_control_mean_pairs < 1:
+        raise ValueError("min_control_mean_pairs must be positive")
+
+    summary_raw = variance_report.get("summary")
+    summary = summary_raw if isinstance(summary_raw, Mapping) else {}
+    requested_candidate = candidate_name or str(summary.get("best_control_variate") or "")
+    candidates_raw = variance_report.get("control_variate_candidates")
+    candidates = [row for row in candidates_raw if isinstance(row, Mapping)] if isinstance(candidates_raw, Sequence) else []
+    candidate = (
+        next((row for row in candidates if str(row.get("name")) == requested_candidate), None)
+        if requested_candidate
+        else None
+    )
+    if candidate is None and candidates:
+        candidate = min(
+            candidates,
+            key=lambda row: (
+                _finite_float(row.get("adjusted_response_uncertainty_rel")) or float("inf"),
+                -(_finite_float(row.get("sem_reduction_fraction")) or float("-inf")),
+            ),
+        )
+
+    blockers: list[str] = []
+    response_mean = _finite_float(summary.get("paired_response_mean"))
+    beta = _finite_float(None if candidate is None else candidate.get("beta"))
+    residual_sem = _finite_float(None if candidate is None else candidate.get("adjusted_response_sem"))
+    residual_uncertainty_rel = _finite_float(
+        None if candidate is None else candidate.get("adjusted_response_uncertainty_rel")
+    )
+    if candidate is None:
+        blockers.append("no_control_variate_candidate")
+    if response_mean is None or abs(response_mean) <= cfg.value_floor:
+        blockers.append("degenerate_response_mean")
+    if beta is None:
+        blockers.append("missing_control_variate_beta")
+    if residual_sem is None:
+        blockers.append("missing_residual_sem")
+    if cfg.require_state_ensembles_passed:
+        if not bool(plus_ensemble.get("passed", False)):
+            blockers.append("plus_control_ensemble_failed")
+        if not bool(minus_ensemble.get("passed", False)):
+            blockers.append("minus_control_ensemble_failed")
+
+    source = {"plus": plus_ensemble, "minus": minus_ensemble}
+    plus = _state_means_by_label(source, "plus")
+    minus = _state_means_by_label(source, "minus")
+    common_labels = sorted(set(plus).intersection(minus))
+    control_samples = [0.5 * (plus[item] + minus[item]) for item in common_labels]
+    response_samples = [plus[item] - minus[item] for item in common_labels]
+    control_mean, control_sem = _mean_and_sem(control_samples)
+    response_mean_independent, response_sem_independent = _mean_and_sem(response_samples)
+    if len(common_labels) < cfg.min_control_mean_pairs:
+        blockers.append("insufficient_control_mean_pairs")
+    if control_sem is None:
+        blockers.append("control_mean_sem_unavailable")
+
+    control_contribution_sem = None
+    combined_sem = None
+    combined_uncertainty_rel = None
+    if not blockers:
+        assert beta is not None
+        assert residual_sem is not None
+        assert response_mean is not None
+        assert control_sem is not None
+        control_contribution_sem = abs(beta) * control_sem
+        combined_sem = math.sqrt(residual_sem * residual_sem + control_contribution_sem * control_contribution_sem)
+        combined_uncertainty_rel = combined_sem / max(abs(response_mean), cfg.value_floor)
+        if combined_uncertainty_rel > cfg.target_response_uncertainty_rel:
+            blockers.append("combined_response_uncertainty_above_target")
+
+    pair_rows = [
+        {
+            "label": item,
+            "plus_mean": _json_number(plus[item]),
+            "minus_mean": _json_number(minus[item]),
+            "control_mean_sample": _json_number(0.5 * (plus[item] + minus[item])),
+            "response_sample": _json_number(plus[item] - minus[item]),
+        }
+        for item in common_labels
+    ]
+
+    return {
+        "kind": "nonlinear_turbulence_gradient_control_mean_gate",
+        "claim_level": "independent_control_mean_uncertainty_gate_not_gradient_promotion",
+        "case": case,
+        "passed": not blockers,
+        "candidate_name": None if candidate is None else str(candidate.get("name")),
+        "blockers": blockers,
+        "config": asdict(cfg),
+        "source_variance_report_case": variance_report.get("case"),
+        "plus_path": plus_path,
+        "minus_path": minus_path,
+        "summary": {
+            "common_pair_count": len(common_labels),
+            "paired_response_mean": _json_number(response_mean),
+            "residual_sem": _json_number(residual_sem),
+            "residual_uncertainty_rel": _json_number(residual_uncertainty_rel),
+            "control_mean": _json_number(control_mean),
+            "control_mean_sem": _json_number(control_sem),
+            "control_contribution_sem": _json_number(control_contribution_sem),
+            "combined_response_sem": _json_number(combined_sem),
+            "combined_response_uncertainty_rel": _json_number(combined_uncertainty_rel),
+            "independent_response_mean": _json_number(response_mean_independent),
+            "independent_response_sem": _json_number(response_sem_independent),
+            "control_variate_beta": _json_number(beta),
+        },
+        "pair_rows": pair_rows,
     }
 
 
