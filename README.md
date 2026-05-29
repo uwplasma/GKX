@@ -674,7 +674,10 @@ four `RBS/ZBC` perturbation families, measures a full-rank `2 x 4` response
 matrix with condition number `1.02`, and updates the state-control runbook with
 two mapped input-control directions. This closes the mapping guardrail for
 short-bracket nonlinear-gradient launches; it is not yet a promoted converged
-nonlinear turbulence-gradient or optimized-equilibrium transport claim.
+nonlinear turbulence-gradient or optimized-equilibrium transport claim. The
+checked short-bracket launch contract has also been written and its VMEC decks
+have solved normally, preparing two bounded nonlinear campaign manifests for
+the next evidence step.
 
 ![SPECTRAX-GK VMEC-state nonlinear-gradient launch runbook](docs/_static/nonlinear_gradient_state_control_runbook.png)
 
@@ -685,6 +688,8 @@ nonlinear turbulence-gradient or optimized-equilibrium transport claim.
 ![SPECTRAX-GK asymmetric VMEC state-to-input mapping campaign](docs/_static/nonlinear_gradient_asymmetric_state_to_input_mapping_campaign.png)
 
 ![SPECTRAX-GK asymmetric measured VMEC state-to-input response](docs/_static/nonlinear_gradient_asymmetric_state_to_input_mapping_response.png)
+
+![SPECTRAX-GK VMEC-state short-bracket launch status](docs/_static/nonlinear_gradient_state_control_short_bracket_launch_status.png)
 
 ![SPECTRAX-GK production nonlinear optimization guard](docs/_static/production_nonlinear_optimization_guard.png)
 
