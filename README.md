@@ -673,11 +673,17 @@ launch nonlinear-gradient campaigns. The current launch-plan artifact writes
 three candidate VMEC input perturbation decks (`RBC(1,1)`, `ZBS(1,1)`, and
 `ZBS(1,0)`) and the response-matrix protocol, but it is explicitly not mapping
 evidence until the re-equilibrated VMEC responses have been extracted and pass
-condition/residual gates.
+condition/residual gates. The first measured response matrix is now tracked and
+fails closed: these stellarator-symmetric `RBC/ZBS` directions produce zero
+response in the admitted `Rsin/Zcos` state controls, so the next mapping
+attempt must use an explicit `LASYM=true` `RBS/ZBC` branch or select admitted
+controls in the stellarator-symmetric subspace.
 
 ![SPECTRAX-GK VMEC-state nonlinear-gradient launch runbook](docs/_static/nonlinear_gradient_state_control_runbook.png)
 
 ![SPECTRAX-GK VMEC state-to-input mapping campaign](docs/_static/nonlinear_gradient_state_to_input_mapping_campaign.png)
+
+![SPECTRAX-GK measured VMEC state-to-input mapping response](docs/_static/nonlinear_gradient_state_to_input_mapping_response.png)
 
 ![SPECTRAX-GK production nonlinear optimization guard](docs/_static/production_nonlinear_optimization_guard.png)
 
