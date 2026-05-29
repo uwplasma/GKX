@@ -40,6 +40,8 @@ class NonlinearGradientCandidateDesignConfig:
 
     max_gradient_uncertainty_rel: float = 0.50
     max_fd_asymmetry_rel: float = 0.50
+    max_window_mean_rel_spread: float = 0.15
+    max_window_sem_rel: float = 0.25
     min_fd_response_fraction: float = 0.03
     sem_safety_factor: float = 1.10
     max_extra_replicates_per_state: int = 4
@@ -216,6 +218,96 @@ def _replicate_count(source_ensembles: Mapping[str, Any]) -> int | None:
     return min(counts) if counts else None
 
 
+def _ensemble_stats_value(raw: Mapping[str, Any], name: str) -> float | None:
+    statistics = raw.get("statistics")
+    if isinstance(statistics, Mapping):
+        value = _finite_float(statistics.get(name))
+        if value is not None:
+            return value
+    return _finite_float(raw.get(name))
+
+
+def _ensemble_state_variance_report(
+    source_ensembles: Mapping[str, Any],
+    *,
+    config: NonlinearGradientCandidateDesignConfig,
+) -> dict[str, Any]:
+    """Summarize which state limits a finite-difference variance-reduction plan."""
+
+    rows: list[dict[str, Any]] = []
+    for state in ("baseline", "plus", "minus"):
+        raw = source_ensembles.get(state)
+        if not isinstance(raw, Mapping):
+            continue
+        statistics = raw.get("statistics")
+        n_reports = _finite_int(raw.get("n_reports"))
+        if n_reports is None and isinstance(statistics, Mapping):
+            n_reports = _finite_int(statistics.get("n_reports"))
+        mean_rel_spread = _ensemble_stats_value(raw, "mean_rel_spread")
+        combined_sem_rel = _ensemble_stats_value(raw, "combined_sem_rel")
+        rows.append(
+            {
+                "state": state,
+                "passed": bool(raw.get("passed", False)),
+                "n_reports": n_reports,
+                "mean_rel_spread": _json_number(mean_rel_spread),
+                "combined_sem_rel": _json_number(combined_sem_rel),
+                "spread_gate_passed": (
+                    None
+                    if mean_rel_spread is None
+                    else bool(mean_rel_spread <= config.max_window_mean_rel_spread)
+                ),
+                "sem_gate_passed": (
+                    None
+                    if combined_sem_rel is None
+                    else bool(combined_sem_rel <= config.max_window_sem_rel)
+                ),
+            }
+        )
+
+    finite_spreads = [
+        (str(row["state"]), float(row["mean_rel_spread"]))
+        for row in rows
+        if row.get("mean_rel_spread") is not None
+    ]
+    limiting_state = None
+    max_mean_rel_spread = None
+    if finite_spreads:
+        limiting_state, max_mean_rel_spread = max(finite_spreads, key=lambda item: item[1])
+    failed_spread_states = [
+        str(row["state"])
+        for row in rows
+        if row.get("spread_gate_passed") is False
+    ]
+    failed_sem_states = [
+        str(row["state"])
+        for row in rows
+        if row.get("sem_gate_passed") is False
+    ]
+    recommendation = "no replicated-window variance limiter identified"
+    if failed_spread_states:
+        recommendation = (
+            "target paired-seed or control-variate variance reduction for "
+            f"{', '.join(failed_spread_states)} before adding blind replicas"
+        )
+    elif failed_sem_states:
+        recommendation = (
+            "target additional matched replicas for "
+            f"{', '.join(failed_sem_states)} before changing the bracket"
+        )
+    elif rows:
+        recommendation = "state ensembles pass spread/SEM gates; focus on finite-difference conditioning"
+
+    return {
+        "state_rows": rows,
+        "limiting_state": limiting_state,
+        "max_mean_rel_spread": _json_number(max_mean_rel_spread),
+        "failed_spread_states": failed_spread_states,
+        "failed_sem_states": failed_sem_states,
+        "recommendation": recommendation,
+    }
+
+
 def _required_replicates(
     *,
     current_count: int | None,
@@ -256,6 +348,7 @@ def _design_row(
 ) -> dict[str, Any]:
     source_ensembles_raw = artifact.get("source_ensembles")
     source_ensembles = source_ensembles_raw if isinstance(source_ensembles_raw, Mapping) else {}
+    variance_report = _ensemble_state_variance_report(source_ensembles, config=config)
     response_fraction = _metric(artifact, "response_fraction")
     asymmetry_rel = _metric(artifact, "fd_asymmetry_rel", "asymmetry_rel")
     uncertainty_rel = _metric(
@@ -329,6 +422,9 @@ def _design_row(
     elif uncertainty_ok:
         action = "inspect_pass_flag"
         recommendation = "scalar gates pass but the artifact did not promote; inspect metadata and provenance"
+    elif variance_report["failed_spread_states"]:
+        action = "design_variance_reduction_for_limiting_state"
+        recommendation = str(variance_report["recommendation"])
     elif bracket_only_feasible:
         action = "run_checked_larger_bracket"
         recommendation = (
@@ -365,6 +461,7 @@ def _design_row(
             "locality_ok": bool(locality_ok),
             "uncertainty_ok": bool(uncertainty_ok),
         },
+        "variance_reduction": variance_report,
         "current_replicates_per_state": current_replicates,
         "uncertainty_required_bracket_scale": _json_number(uncertainty_required_scale),
         "locality_safe_bracket_scale_limit": _json_number(locality_scale_limit),
@@ -399,6 +496,10 @@ def nonlinear_gradient_candidate_design_report(
         raise ValueError("max_gradient_uncertainty_rel must be positive")
     if cfg.max_fd_asymmetry_rel <= 0.0:
         raise ValueError("max_fd_asymmetry_rel must be positive")
+    if cfg.max_window_mean_rel_spread <= 0.0:
+        raise ValueError("max_window_mean_rel_spread must be positive")
+    if cfg.max_window_sem_rel <= 0.0:
+        raise ValueError("max_window_sem_rel must be positive")
     if cfg.min_fd_response_fraction <= 0.0:
         raise ValueError("min_fd_response_fraction must be positive")
     if cfg.sem_safety_factor <= 0.0:
@@ -424,11 +525,13 @@ def nonlinear_gradient_candidate_design_report(
     promoted = [row for row in candidates if row["action"] == "freeze_promoted_candidate"]
     bracket_ready = [row for row in candidates if row["action"] == "run_checked_larger_bracket"]
     replica_ready = [row for row in candidates if row["action"] == "add_limited_replicates_with_locality_cap"]
+    variance_limited = [row for row in candidates if row["action"] == "design_variance_reduction_for_limiting_state"]
     replacement = [
         row
         for row in candidates
         if row["action"] in {
             "design_better_conditioned_control_or_variance_reduction",
+            "design_variance_reduction_for_limiting_state",
             "increase_checked_bracket_or_replace_control",
             "shrink_or_replace_nonlocal_control",
         }
@@ -438,6 +541,8 @@ def nonlinear_gradient_candidate_design_report(
         next_action = "freeze promoted candidate provenance"
     elif bracket_ready:
         next_action = "run a bounded bracket/locality sweep before new long windows"
+    elif variance_limited:
+        next_action = "target paired-seed or control-variate variance reduction for limiting states"
     elif replica_ready:
         next_action = "combine locality-capped bracket scale with bounded matched replicas"
     elif replacement:
@@ -457,6 +562,7 @@ def nonlinear_gradient_candidate_design_report(
             "promoted_candidate_count": len(promoted),
             "bracket_ready_count": len(bracket_ready),
             "replica_ready_count": len(replica_ready),
+            "variance_limited_count": len(variance_limited),
             "replacement_or_variance_reduction_count": len(replacement),
         },
         "candidates": candidates,

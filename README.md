@@ -702,9 +702,11 @@ the response is finally resolved (`response_fraction = 0.0319`) and local
 (`fd_asymmetry_rel = 0.044`), but the plus-state variance is still too large
 for a production nonlinear turbulence-gradient claim. The refreshed
 next-campaign design panel now includes all `16` tracked central-FD artifacts:
-zero promoted nonlinear-gradient controls, one bounded-replica follow-up
+zero promoted nonlinear-gradient controls, one legacy bounded-replica follow-up
 candidate, and `15` cases that need replacement, locality repair, or variance
-reduction before further long-window GPU time is justified.
+reduction before further long-window GPU time is justified. The current
+top-level action is now paired-seed or control-variate variance reduction for
+the plus-state limiter, not another blind long-window replica campaign.
 
 ![SPECTRAX-GK VMEC-state nonlinear-gradient launch runbook](docs/_static/nonlinear_gradient_state_control_runbook.png)
 
