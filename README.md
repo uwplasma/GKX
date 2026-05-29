@@ -665,6 +665,11 @@ replacing or shrinking nonlocal controls before another production campaign.
 A companion composite-direction manifest defines a smaller descent-oriented
 QA/ESS boundary direction with the same long-window contract; that audit also
 remains fail-closed after its plus-state spread and central-FD gates.
+The newer QL-seeded VMEC-state screen admits `Rsin_mid_surface_m1` and
+`Zcos_mid_surface_m1` as internal state-control seeds only. The companion
+state-control runbook currently fails closed until those state controls are
+mapped to conditioned, perturbable VMEC input directions, so it does not yet
+launch nonlinear-gradient campaigns.
 
 ![SPECTRAX-GK production nonlinear optimization guard](docs/_static/production_nonlinear_optimization_guard.png)
 
@@ -958,7 +963,12 @@ workflow; it is not the same thing as the full-GK ETG nonlinear lane.
 
 ## Documentation
 
-Comprehensive documentation, including theory, algorithms, and API references, is available in `docs/`.
+Comprehensive documentation is available in `docs/`. Start with
+`docs/quickstart.rst`, then use `docs/theory.rst`, `docs/operators.rst`,
+`docs/numerics.rst`, `docs/quasilinear.rst`,
+`docs/stellarator_optimization.rst`, `docs/parallelization.rst`, and
+`docs/release_scope.rst` for the detailed equations, numerical algorithms,
+validation gates, examples, and current claim boundaries.
 
 ## Testing
 
