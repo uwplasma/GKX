@@ -37,6 +37,7 @@ from spectraxgk.quasilinear import effective_kperp2, phi_norm2
 
 SOLVER_GEOMETRY_PARAMETER_NAMES = ("bmag_ripple", "curvature_drift_scale")
 VMEC_BOOZER_STATE_PARAMETER_NAMES = ("Rcos_mid_surface_m1",)
+VMEC_BOOZER_STATE_PARAMETER_FAMILIES = ("Rcos", "Rsin", "Zcos", "Zsin", "Lcos", "Lsin")
 SOLVER_OBJECTIVE_NAMES = (
     "gamma",
     "omega",
@@ -693,6 +694,7 @@ def vmec_boozer_scalar_objective_finite_difference_report(  # pragma: no cover
     objective: SolverScalarObjective = "growth",
     radial_index: int | None = None,
     mode_index: int = 1,
+    parameter_family: str = "Rcos",
     base_delta: float = 0.0,
     perturbation_step: float = 1.0e-7,
     response_atol: float = 0.0,
@@ -702,7 +704,7 @@ def vmec_boozer_scalar_objective_finite_difference_report(  # pragma: no cover
     """Finite-difference a scalar objective through a VMEC state coefficient.
 
     This report is the safe optimization pre-step for full-chain stellarator
-    objectives. It perturbs one VMEC ``Rcos`` coefficient in a solved
+    objectives. It perturbs one VMEC state coefficient in a solved
     ``vmec_jax`` state, evaluates the in-memory VMEC/Boozer/SPECTRAX-GK scalar
     objective at ``x0+base_delta-h``, ``x0+base_delta``, and
     ``x0+base_delta+h``, and records the central
@@ -722,17 +724,16 @@ def vmec_boozer_scalar_objective_finite_difference_report(  # pragma: no cover
         raise ValueError("max_curvature_ratio must be non-negative")
     bundle = _load_vmec_jax_example_state_bundle(str(case_name))
     state = bundle["state"]
-    base_Rcos = jnp.asarray(state.Rcos)
-    if base_Rcos.ndim != 2 or int(base_Rcos.shape[1]) < 2:
-        raise RuntimeError("vmec_jax state Rcos array must expose at least one non-axisymmetric mode")
-    default_radial_index = int(base_Rcos.shape[0] // 2)
+    base_coeff = _vmec_boozer_state_array(state, parameter_family)
+    default_radial_index = int(base_coeff.shape[0] // 2)
     radial_index_int = default_radial_index if radial_index is None else int(radial_index)
     mode_index_int = int(mode_index)
-    if not (0 <= radial_index_int < int(base_Rcos.shape[0])):
+    if not (0 <= radial_index_int < int(base_coeff.shape[0])):
         raise ValueError("radial_index is outside the VMEC state radial grid")
-    if not (0 <= mode_index_int < int(base_Rcos.shape[1])):
+    if not (0 <= mode_index_int < int(base_coeff.shape[1])):
         raise ValueError("mode_index is outside the VMEC state mode table")
     parameter_name = _vmec_boozer_state_parameter_name(
+        parameter_family,
         radial_index_int,
         mode_index_int,
         default_mid_surface=default_radial_index,
@@ -741,9 +742,13 @@ def vmec_boozer_scalar_objective_finite_difference_report(  # pragma: no cover
     base_delta_float = float(base_delta)
 
     def evaluate(delta: float) -> tuple[float, list[float]]:
-        traced_state = dc_replace(
+        traced_state = _replace_vmec_boozer_state_coefficient(
             state,
-            Rcos=base_Rcos.at[radial_index_int, mode_index_int].add(base_delta_float + float(delta)),
+            parameter_family,
+            base_coeff,
+            radial_index_int,
+            mode_index_int,
+            base_delta_float + float(delta),
         )
         vector = vmec_boozer_solver_objective_vector_from_state(
             traced_state,
@@ -797,7 +802,7 @@ def vmec_boozer_scalar_objective_finite_difference_report(  # pragma: no cover
         "wout_path": bundle["wout_path"],
         "objective": str(objective),
         "parameter_name": parameter_name,
-        "parameter_indices": {"Rcos": [radial_index_int, mode_index_int]},
+        "parameter_indices": {str(parameter_family): [radial_index_int, mode_index_int]},
         "base_delta": base_delta_float,
         "perturbation_step": step,
         "response_atol": float(response_atol),
@@ -839,6 +844,7 @@ def vmec_boozer_aggregate_scalar_objective_finite_difference_report(  # pragma: 
     ky_base: float | None = None,
     radial_index: int | None = None,
     mode_index: int = 1,
+    parameter_family: str = "Rcos",
     base_delta: float = 0.0,
     perturbation_step: float = 1.0e-7,
     response_atol: float = 0.0,
@@ -869,17 +875,16 @@ def vmec_boozer_aggregate_scalar_objective_finite_difference_report(  # pragma: 
     normalized_weights = _aggregate_weights(weights, n_samples)
     bundle = _load_vmec_jax_example_state_bundle(str(case_name))
     state = bundle["state"]
-    base_Rcos = jnp.asarray(state.Rcos)
-    if base_Rcos.ndim != 2 or int(base_Rcos.shape[1]) < 2:
-        raise RuntimeError("vmec_jax state Rcos array must expose at least one non-axisymmetric mode")
-    default_radial_index = int(base_Rcos.shape[0] // 2)
+    base_coeff = _vmec_boozer_state_array(state, parameter_family)
+    default_radial_index = int(base_coeff.shape[0] // 2)
     radial_index_int = default_radial_index if radial_index is None else int(radial_index)
     mode_index_int = int(mode_index)
-    if not (0 <= radial_index_int < int(base_Rcos.shape[0])):
+    if not (0 <= radial_index_int < int(base_coeff.shape[0])):
         raise ValueError("radial_index is outside the VMEC state radial grid")
-    if not (0 <= mode_index_int < int(base_Rcos.shape[1])):
+    if not (0 <= mode_index_int < int(base_coeff.shape[1])):
         raise ValueError("mode_index is outside the VMEC state mode table")
     parameter_name = _vmec_boozer_state_parameter_name(
+        parameter_family,
         radial_index_int,
         mode_index_int,
         default_mid_surface=default_radial_index,
@@ -888,9 +893,13 @@ def vmec_boozer_aggregate_scalar_objective_finite_difference_report(  # pragma: 
     base_delta_float = float(base_delta)
 
     def evaluate(delta: float) -> tuple[float, list[float], list[list[float]], list[dict[str, object]]]:
-        traced_state = dc_replace(
+        traced_state = _replace_vmec_boozer_state_coefficient(
             state,
-            Rcos=base_Rcos.at[radial_index_int, mode_index_int].add(base_delta_float + float(delta)),
+            parameter_family,
+            base_coeff,
+            radial_index_int,
+            mode_index_int,
+            base_delta_float + float(delta),
         )
         table, sample_metadata = vmec_boozer_solver_objective_table_with_metadata_from_state(
             traced_state,
@@ -977,7 +986,7 @@ def vmec_boozer_aggregate_scalar_objective_finite_difference_report(  # pragma: 
         "selected_ky_indices": list(ky_indices),
         "ky_values": None if ky_values is None else list(_float_tuple(ky_values, name="ky_values")),
         "parameter_name": parameter_name,
-        "parameter_indices": {"Rcos": [radial_index_int, mode_index_int]},
+        "parameter_indices": {str(parameter_family): [radial_index_int, mode_index_int]},
         "base_delta": base_delta_float,
         "perturbation_step": step,
         "response_atol": float(response_atol),
@@ -1018,6 +1027,7 @@ def vmec_boozer_aggregate_scalar_objective_line_search_report(  # pragma: no cov
     selected_ky_indices: int | tuple[int, ...] | list[int] = (1,),
     radial_index: int | None = None,
     mode_index: int = 1,
+    parameter_family: str = "Rcos",
     initial_delta: float = 0.0,
     perturbation_step: float = 1.0e-7,
     update_step: float = 1.0e-8,
@@ -1063,6 +1073,7 @@ def vmec_boozer_aggregate_scalar_objective_line_search_report(  # pragma: no cov
             selected_ky_indices=selected_ky_indices,
             radial_index=radial_index,
             mode_index=mode_index,
+            parameter_family=parameter_family,
             base_delta=delta,
             perturbation_step=perturbation_step,
             response_atol=response_atol,
@@ -1107,6 +1118,7 @@ def vmec_boozer_aggregate_scalar_objective_line_search_report(  # pragma: no cov
             selected_ky_indices=selected_ky_indices,
             radial_index=radial_index,
             mode_index=mode_index,
+            parameter_family=parameter_family,
             base_delta=candidate_delta,
             perturbation_step=perturbation_step,
             response_atol=response_atol,
@@ -1181,6 +1193,7 @@ def vmec_boozer_aggregate_line_search_holdout_report(  # pragma: no cover
     holdout_selected_ky_indices: int | tuple[int, ...] | list[int] = (2,),
     radial_index: int | None = None,
     mode_index: int = 1,
+    parameter_family: str = "Rcos",
     initial_delta: float = 0.0,
     perturbation_step: float = 1.0e-7,
     update_step: float = 1.0e-8,
@@ -1213,6 +1226,7 @@ def vmec_boozer_aggregate_line_search_holdout_report(  # pragma: no cover
         selected_ky_indices=training_selected_ky_indices,
         radial_index=radial_index,
         mode_index=mode_index,
+        parameter_family=parameter_family,
         initial_delta=initial_delta,
         perturbation_step=perturbation_step,
         update_step=update_step,
@@ -1234,6 +1248,7 @@ def vmec_boozer_aggregate_line_search_holdout_report(  # pragma: no cover
         selected_ky_indices=holdout_selected_ky_indices,
         radial_index=radial_index,
         mode_index=mode_index,
+        parameter_family=parameter_family,
         base_delta=initial_delta,
         perturbation_step=perturbation_step,
         response_atol=response_atol,
@@ -1250,6 +1265,7 @@ def vmec_boozer_aggregate_line_search_holdout_report(  # pragma: no cover
         selected_ky_indices=holdout_selected_ky_indices,
         radial_index=radial_index,
         mode_index=mode_index,
+        parameter_family=parameter_family,
         base_delta=final_delta,
         perturbation_step=perturbation_step,
         response_atol=response_atol,
@@ -1310,6 +1326,7 @@ def vmec_boozer_scalar_objective_line_search_report(  # pragma: no cover
     objective: SolverScalarObjective = "growth",
     radial_index: int | None = None,
     mode_index: int = 1,
+    parameter_family: str = "Rcos",
     initial_delta: float = 0.0,
     perturbation_step: float = 1.0e-7,
     update_step: float = 1.0e-8,
@@ -1349,6 +1366,7 @@ def vmec_boozer_scalar_objective_line_search_report(  # pragma: no cover
             objective=objective,
             radial_index=radial_index,
             mode_index=mode_index,
+            parameter_family=parameter_family,
             base_delta=delta,
             perturbation_step=perturbation_step,
             response_atol=response_atol,
@@ -1385,6 +1403,7 @@ def vmec_boozer_scalar_objective_line_search_report(  # pragma: no cover
             objective=objective,
             radial_index=radial_index,
             mode_index=mode_index,
+            parameter_family=parameter_family,
             base_delta=candidate_delta,
             perturbation_step=perturbation_step,
             response_atol=response_atol,
@@ -1632,10 +1651,53 @@ def solver_objective_branch_gradient_report(
     }
 
 
-def _vmec_boozer_state_parameter_name(radial_index: int, mode_index: int, *, default_mid_surface: int) -> str:
+def _vmec_boozer_state_array(state: Any, parameter_family: str) -> jnp.ndarray:
+    family = str(parameter_family)
+    if family not in VMEC_BOOZER_STATE_PARAMETER_FAMILIES:
+        raise ValueError(
+            "parameter_family must be one of "
+            f"{', '.join(VMEC_BOOZER_STATE_PARAMETER_FAMILIES)}"
+        )
+    if not hasattr(state, family):
+        raise RuntimeError(f"vmec_jax state does not expose {family}")
+    array = jnp.asarray(getattr(state, family))
+    if array.ndim != 2 or int(array.shape[1]) < 2:
+        raise RuntimeError(
+            f"vmec_jax state {family} array must expose at least one non-axisymmetric mode"
+        )
+    return array
+
+
+def _replace_vmec_boozer_state_coefficient(
+    state: Any,
+    parameter_family: str,
+    base_array: jnp.ndarray,
+    radial_index: int,
+    mode_index: int,
+    delta: Any,
+) -> Any:
+    return dc_replace(
+        state,
+        **{
+            str(parameter_family): base_array.at[
+                int(radial_index),
+                int(mode_index),
+            ].add(delta)
+        },
+    )
+
+
+def _vmec_boozer_state_parameter_name(
+    parameter_family: str,
+    radial_index: int,
+    mode_index: int,
+    *,
+    default_mid_surface: int,
+) -> str:
+    family = str(parameter_family)
     if int(radial_index) == int(default_mid_surface):
-        return f"Rcos_mid_surface_m{int(mode_index)}"
-    return f"Rcos_r{int(radial_index)}_m{int(mode_index)}"
+        return f"{family}_mid_surface_m{int(mode_index)}"
+    return f"{family}_r{int(radial_index)}_m{int(mode_index)}"
 
 
 def _reduced_nonlinear_window_metrics_from_linear_observables(
@@ -1857,6 +1919,7 @@ def _mode21_vmec_boozer_linear_context(  # pragma: no cover
     case_name: str,
     radial_index: int | None,
     mode_index: int,
+    parameter_family: str,
     surface_index: int | None,
     ntheta: int,
     mboz: int,
@@ -1878,18 +1941,17 @@ def _mode21_vmec_boozer_linear_context(  # pragma: no cover
     static = static_mod.build_static(cfg_vmec)
     wout = wout_mod.read_wout(wout_path)
     state = wout_mod.state_from_wout(wout)
-    base_Rcos = jnp.asarray(state.Rcos)
-    if base_Rcos.ndim != 2 or int(base_Rcos.shape[1]) < 2:
-        raise RuntimeError("vmec_jax state Rcos array must expose at least one non-axisymmetric mode")
-    default_radial_index = int(base_Rcos.shape[0] // 2)
+    base_coeff = _vmec_boozer_state_array(state, parameter_family)
+    default_radial_index = int(base_coeff.shape[0] // 2)
     radial_index_int = default_radial_index if radial_index is None else int(radial_index)
     mode_index_int = int(mode_index)
-    if not (0 <= radial_index_int < int(base_Rcos.shape[0])):
+    if not (0 <= radial_index_int < int(base_coeff.shape[0])):
         raise ValueError("radial_index is outside the VMEC state radial grid")
-    if not (0 <= mode_index_int < int(base_Rcos.shape[1])):
+    if not (0 <= mode_index_int < int(base_coeff.shape[1])):
         raise ValueError("mode_index is outside the VMEC state mode table")
     parameter_names = (
         _vmec_boozer_state_parameter_name(
+            parameter_family,
             radial_index_int,
             mode_index_int,
             default_mid_surface=default_radial_index,
@@ -1903,7 +1965,14 @@ def _mode21_vmec_boozer_linear_context(  # pragma: no cover
     terms = _default_gradient_linear_terms()
 
     def geometry_for(x: jnp.ndarray):
-        traced_state = dc_replace(state, Rcos=base_Rcos.at[radial_index_int, mode_index_int].add(x[0]))
+        traced_state = _replace_vmec_boozer_state_coefficient(
+            state,
+            parameter_family,
+            base_coeff,
+            radial_index_int,
+            mode_index_int,
+            x[0],
+        )
         mapping = vmec_jax_boozer_equal_arc_core_profiles_from_state(
             traced_state,
             static,
@@ -1943,7 +2012,7 @@ def _mode21_vmec_boozer_linear_context(  # pragma: no cover
         "cfg": cfg,
         "grid": grid,
         "parameter_names": parameter_names,
-        "parameter_indices": {"Rcos": [radial_index_int, mode_index_int]},
+        "parameter_indices": {str(parameter_family): [radial_index_int, mode_index_int]},
         "surface_index": surface_index,
         "mboz": int(mboz),
         "nboz": int(nboz),
@@ -2162,6 +2231,7 @@ def mode21_vmec_boozer_linear_frequency_gradient_report(  # pragma: no cover
     case_name: str = "nfp4_QH_warm_start",
     radial_index: int | None = None,
     mode_index: int = 1,
+    parameter_family: str = "Rcos",
     surface_index: int | None = None,
     fd_step: float = 1.0e-6,
     rtol: float = 5.0e-2,
@@ -2188,6 +2258,7 @@ def mode21_vmec_boozer_linear_frequency_gradient_report(  # pragma: no cover
         case_name=str(case_name),
         radial_index=radial_index,
         mode_index=mode_index,
+        parameter_family=parameter_family,
         surface_index=surface_index,
         ntheta=ntheta,
         mboz=mboz,
@@ -2265,6 +2336,7 @@ def mode21_vmec_boozer_quasilinear_gradient_report(  # pragma: no cover
     case_name: str = "nfp4_QH_warm_start",
     radial_index: int | None = None,
     mode_index: int = 1,
+    parameter_family: str = "Rcos",
     surface_index: int | None = None,
     fd_step: float = 1.0e-6,
     rtol: float = 2.0e-2,
@@ -2290,6 +2362,7 @@ def mode21_vmec_boozer_quasilinear_gradient_report(  # pragma: no cover
         case_name=str(case_name),
         radial_index=radial_index,
         mode_index=mode_index,
+        parameter_family=parameter_family,
         surface_index=surface_index,
         ntheta=ntheta,
         mboz=mboz,
@@ -2376,6 +2449,7 @@ def mode21_vmec_boozer_nonlinear_window_gradient_report(  # pragma: no cover
     case_name: str = "nfp4_QH_warm_start",
     radial_index: int | None = None,
     mode_index: int = 1,
+    parameter_family: str = "Rcos",
     surface_index: int | None = None,
     fd_step: float = 1.0e-6,
     rtol: float = 7.5e-2,
@@ -2404,6 +2478,7 @@ def mode21_vmec_boozer_nonlinear_window_gradient_report(  # pragma: no cover
         case_name=str(case_name),
         radial_index=radial_index,
         mode_index=mode_index,
+        parameter_family=parameter_family,
         surface_index=surface_index,
         ntheta=ntheta,
         mboz=mboz,
@@ -2524,6 +2599,7 @@ __all__ = [
     "VMEC_BOOZER_FREQUENCY_OBJECTIVE_NAMES",
     "VMEC_BOOZER_NONLINEAR_WINDOW_OBJECTIVE_NAMES",
     "VMEC_BOOZER_QUASILINEAR_OBJECTIVE_NAMES",
+    "VMEC_BOOZER_STATE_PARAMETER_FAMILIES",
     "VMEC_BOOZER_STATE_PARAMETER_NAMES",
     "default_solver_geometry_design_params",
     "linear_solver_geometry_gradient_report",
