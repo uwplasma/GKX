@@ -666,24 +666,25 @@ A companion composite-direction manifest defines a smaller descent-oriented
 QA/ESS boundary direction with the same long-window contract; that audit also
 remains fail-closed after its plus-state spread and central-FD gates.
 The newer QL-seeded VMEC-state screen admits `Rsin_mid_surface_m1` and
-`Zcos_mid_surface_m1` as internal state-control seeds only. The companion
-state-control runbook currently fails closed until those state controls are
-mapped to conditioned, perturbable VMEC input directions, so it does not yet
-launch nonlinear-gradient campaigns. The current launch-plan artifact writes
-three candidate VMEC input perturbation decks (`RBC(1,1)`, `ZBS(1,1)`, and
-`ZBS(1,0)`) and the response-matrix protocol, but it is explicitly not mapping
-evidence until the re-equilibrated VMEC responses have been extracted and pass
-condition/residual gates. The first measured response matrix is now tracked and
-fails closed: these stellarator-symmetric `RBC/ZBS` directions produce zero
-response in the admitted `Rsin/Zcos` state controls, so the next mapping
-attempt must use an explicit `LASYM=true` `RBS/ZBC` branch or select admitted
-controls in the stellarator-symmetric subspace.
+`Zcos_mid_surface_m1` as internal state-control seeds only. The first
+state-to-input attempt deliberately failed closed: stellarator-symmetric
+`RBC/ZBS` perturbations produced zero response in those asymmetric
+`Rsin/Zcos` controls. The follow-up `LASYM=true` branch now writes and solves
+four `RBS/ZBC` perturbation families, measures a full-rank `2 x 4` response
+matrix with condition number `1.02`, and updates the state-control runbook with
+two mapped input-control directions. This closes the mapping guardrail for
+short-bracket nonlinear-gradient launches; it is not yet a promoted converged
+nonlinear turbulence-gradient or optimized-equilibrium transport claim.
 
 ![SPECTRAX-GK VMEC-state nonlinear-gradient launch runbook](docs/_static/nonlinear_gradient_state_control_runbook.png)
 
 ![SPECTRAX-GK VMEC state-to-input mapping campaign](docs/_static/nonlinear_gradient_state_to_input_mapping_campaign.png)
 
 ![SPECTRAX-GK measured VMEC state-to-input mapping response](docs/_static/nonlinear_gradient_state_to_input_mapping_response.png)
+
+![SPECTRAX-GK asymmetric VMEC state-to-input mapping campaign](docs/_static/nonlinear_gradient_asymmetric_state_to_input_mapping_campaign.png)
+
+![SPECTRAX-GK asymmetric measured VMEC state-to-input response](docs/_static/nonlinear_gradient_asymmetric_state_to_input_mapping_response.png)
 
 ![SPECTRAX-GK production nonlinear optimization guard](docs/_static/production_nonlinear_optimization_guard.png)
 
