@@ -65,6 +65,18 @@ class NonlinearGradientVarianceReductionConfig:
 
 
 @dataclass(frozen=True)
+class NonlinearGradientControlVariateCampaignConfig:
+    """Controls for an independent control-mean campaign."""
+
+    target_response_uncertainty_rel: float = 0.50
+    sem_safety_factor: float = 1.10
+    min_control_mean_pairs: int = 4
+    max_control_mean_pairs: int = 32
+    first_new_seed: int = 34
+    value_floor: float = 1.0e-12
+
+
+@dataclass(frozen=True)
 class NonlinearGradientCompositeControlConfig:
     """Controls for constructing the next composite nonlinear-gradient direction."""
 
@@ -374,7 +386,7 @@ def _control_variate_candidate(
             "admissible": False,
             "blockers": ["insufficient_common_samples"],
         }
-    control_mean = sum(control_samples) / len(control_samples)
+    control_mean, control_sem = _mean_and_sem(control_samples)
     response_variance = _sample_covariance(response_samples, response_samples)
     control_variance = _sample_covariance(control_samples, control_samples)
     covariance = _sample_covariance(response_samples, control_samples)
@@ -385,6 +397,7 @@ def _control_variate_candidate(
         or response_variance is None
         or control_variance is None
         or covariance is None
+        or control_mean is None
         or control_variance <= config.value_floor
     ):
         blockers.append("degenerate_control_or_response")
@@ -400,6 +413,7 @@ def _control_variate_candidate(
         for response, control in zip(response_samples, control_samples)
     ]
     adjusted_mean, adjusted_sem = _mean_and_sem(adjusted_samples)
+    sample_count = len(response_samples)
     adjusted_uncertainty_rel = None
     sem_reduction = None
     if adjusted_sem is not None:
@@ -422,8 +436,13 @@ def _control_variate_candidate(
         "beta": _json_number(beta),
         "correlation": _json_number(correlation),
         "control_mean_sample": _json_number(control_mean),
+        "control_sample_sem": _json_number(control_sem),
+        "control_sample_std": _json_number(None if control_sem is None else control_sem * math.sqrt(sample_count)),
         "adjusted_response_mean": _json_number(adjusted_mean),
         "adjusted_response_sem": _json_number(adjusted_sem),
+        "adjusted_response_sample_std": _json_number(
+            None if adjusted_sem is None else adjusted_sem * math.sqrt(sample_count)
+        ),
         "adjusted_response_uncertainty_rel": _json_number(adjusted_uncertainty_rel),
         "sem_reduction_fraction": _json_number(sem_reduction),
         "requires_independent_control_mean": bool(config.require_known_control_mean),
@@ -610,6 +629,186 @@ def nonlinear_gradient_variance_reduction_plan(
         },
         "control_variate_candidates": control_candidates,
         "pair_rows": pair_rows,
+    }
+
+
+def nonlinear_gradient_control_variate_campaign_plan(
+    variance_report: Mapping[str, Any],
+    *,
+    case: str = "nonlinear_turbulence_gradient_control_variate_campaign",
+    candidate_name: str | None = None,
+    config: NonlinearGradientControlVariateCampaignConfig | None = None,
+) -> dict[str, Any]:
+    """Design an independent control-mean campaign from a variance runbook.
+
+    The input is the output of :func:`nonlinear_gradient_variance_reduction_plan`.
+    The planner is intentionally fail-closed: a sample-centered control variate
+    can motivate new runs, but the campaign is only considered launch-ready when
+    an independent control-mean estimate can bring the combined uncertainty
+    under the target gate within the configured run budget.
+    """
+
+    cfg = config or NonlinearGradientControlVariateCampaignConfig()
+    if cfg.target_response_uncertainty_rel <= 0.0:
+        raise ValueError("target_response_uncertainty_rel must be positive")
+    if cfg.sem_safety_factor <= 0.0:
+        raise ValueError("sem_safety_factor must be positive")
+    if cfg.min_control_mean_pairs < 1:
+        raise ValueError("min_control_mean_pairs must be positive")
+    if cfg.max_control_mean_pairs < cfg.min_control_mean_pairs:
+        raise ValueError("max_control_mean_pairs must be at least min_control_mean_pairs")
+    if cfg.first_new_seed < 0:
+        raise ValueError("first_new_seed must be non-negative")
+
+    summary_raw = variance_report.get("summary")
+    summary = summary_raw if isinstance(summary_raw, Mapping) else {}
+    response_mean = _finite_float(summary.get("paired_response_mean"))
+    raw_response_uncertainty_rel = _finite_float(summary.get("paired_response_uncertainty_rel"))
+    requested_candidate = candidate_name or str(summary.get("best_control_variate") or "")
+    candidates_raw = variance_report.get("control_variate_candidates")
+    candidates = [row for row in candidates_raw if isinstance(row, Mapping)] if isinstance(candidates_raw, Sequence) else []
+    if requested_candidate:
+        candidate = next((row for row in candidates if str(row.get("name")) == requested_candidate), None)
+    else:
+        candidate = None
+    if candidate is None and candidates:
+        def _sort_key(row: Mapping[str, Any]) -> tuple[float, float]:
+            uncertainty = _finite_float(row.get("adjusted_response_uncertainty_rel"))
+            reduction = _finite_float(row.get("sem_reduction_fraction"))
+            return (
+                uncertainty if uncertainty is not None else float("inf"),
+                -(reduction if reduction is not None else float("-inf")),
+            )
+
+        candidate = min(candidates, key=_sort_key)
+
+    blockers: list[str] = []
+    if candidate is None:
+        blockers.append("no_control_variate_candidate")
+    candidate_name_out = None if candidate is None else str(candidate.get("name"))
+    beta = _finite_float(None if candidate is None else candidate.get("beta"))
+    residual_sem = _finite_float(None if candidate is None else candidate.get("adjusted_response_sem"))
+    residual_uncertainty_rel = _finite_float(
+        None if candidate is None else candidate.get("adjusted_response_uncertainty_rel")
+    )
+    control_sample_std = _finite_float(None if candidate is None else candidate.get("control_sample_std"))
+    control_sample_sem = _finite_float(None if candidate is None else candidate.get("control_sample_sem"))
+    current_pair_count = _finite_int(summary.get("common_with_baseline_count") or summary.get("common_pair_count"))
+    candidate_pair_count = _finite_int(None if candidate is None else candidate.get("n_samples"))
+    current_pair_count = candidate_pair_count or current_pair_count
+    candidate_blockers = list(candidate.get("blockers", [])) if isinstance(candidate, Mapping) else []
+
+    if response_mean is None or abs(response_mean) <= cfg.value_floor:
+        blockers.append("degenerate_response_mean")
+    if beta is None:
+        blockers.append("missing_control_variate_beta")
+    if residual_sem is None:
+        blockers.append("missing_residual_sem")
+    if control_sample_std is None or control_sample_std <= cfg.value_floor:
+        blockers.append("missing_or_degenerate_control_sample_std")
+    if current_pair_count is None or current_pair_count < 2:
+        blockers.append("insufficient_existing_pairs")
+    hard_candidate_blockers = [
+        str(item)
+        for item in candidate_blockers
+        if str(item) != "control_mean_not_independently_known"
+    ]
+    if hard_candidate_blockers:
+        blockers.extend(f"candidate_{item}" for item in hard_candidate_blockers)
+
+    target_abs_sem = None
+    independent_control_pairs = None
+    predicted_control_mean_sem = None
+    predicted_control_contribution_sem = None
+    predicted_combined_sem = None
+    predicted_combined_uncertainty_rel = None
+    residual_margin_sem = None
+    if not blockers:
+        assert response_mean is not None
+        assert beta is not None
+        assert residual_sem is not None
+        assert control_sample_std is not None
+        target_abs_sem = cfg.target_response_uncertainty_rel * max(abs(response_mean), cfg.value_floor)
+        residual_margin_squared = target_abs_sem * target_abs_sem - residual_sem * residual_sem
+        if residual_margin_squared <= 0.0:
+            blockers.append("residual_sem_already_exceeds_target")
+        else:
+            residual_margin_sem = math.sqrt(residual_margin_squared)
+            required = math.ceil(
+                cfg.sem_safety_factor
+                * (abs(beta) * control_sample_std / max(residual_margin_sem, cfg.value_floor)) ** 2
+            )
+            independent_control_pairs = max(cfg.min_control_mean_pairs, int(required))
+            predicted_control_mean_sem = control_sample_std / math.sqrt(independent_control_pairs)
+            predicted_control_contribution_sem = abs(beta) * predicted_control_mean_sem
+            predicted_combined_sem = math.sqrt(residual_sem * residual_sem + predicted_control_contribution_sem**2)
+            predicted_combined_uncertainty_rel = predicted_combined_sem / max(abs(response_mean), cfg.value_floor)
+            if independent_control_pairs > cfg.max_control_mean_pairs:
+                blockers.append("control_mean_pair_budget_exceeded")
+            if predicted_combined_uncertainty_rel > cfg.target_response_uncertainty_rel:
+                blockers.append("predicted_uncertainty_above_target")
+
+    action = (
+        "launch_independent_control_mean_campaign"
+        if not blockers
+        else "redesign_observable_or_raise_control_mean_budget"
+    )
+    planned_pairs = []
+    if independent_control_pairs is not None:
+        for offset in range(independent_control_pairs):
+            seed = cfg.first_new_seed + offset
+            planned_pairs.append(
+                {
+                    "pair_index": offset + 1,
+                    "variant_label": f"seed{seed}",
+                    "plus_state": "plus_delta",
+                    "minus_state": "minus_delta",
+                    "control_observable": "0.5 * (Q_plus + Q_minus)",
+                    "response_observable": "Q_plus - Q_minus",
+                }
+            )
+
+    return {
+        "kind": "nonlinear_turbulence_gradient_control_variate_campaign_plan",
+        "claim_level": "pre_run_campaign_design_not_gradient_evidence",
+        "case": case,
+        "passed": action == "launch_independent_control_mean_campaign",
+        "action": action,
+        "config": asdict(cfg),
+        "source_variance_report_case": variance_report.get("case"),
+        "candidate_name": candidate_name_out,
+        "candidate_blockers": candidate_blockers,
+        "blockers": blockers,
+        "summary": {
+            "raw_response_uncertainty_rel": _json_number(raw_response_uncertainty_rel),
+            "residual_uncertainty_rel": _json_number(residual_uncertainty_rel),
+            "predicted_combined_uncertainty_rel": _json_number(predicted_combined_uncertainty_rel),
+            "paired_response_mean": _json_number(response_mean),
+            "target_abs_sem": _json_number(target_abs_sem),
+            "residual_sem": _json_number(residual_sem),
+            "residual_margin_sem": _json_number(residual_margin_sem),
+            "control_sample_sem": _json_number(control_sample_sem),
+            "control_sample_std": _json_number(control_sample_std),
+            "control_variate_beta": _json_number(beta),
+            "current_common_pair_count": current_pair_count,
+            "required_independent_control_mean_pairs": independent_control_pairs,
+            "planned_new_run_count": None if independent_control_pairs is None else 2 * independent_control_pairs,
+            "predicted_control_mean_sem": _json_number(predicted_control_mean_sem),
+            "predicted_control_contribution_sem": _json_number(predicted_control_contribution_sem),
+            "predicted_combined_sem": _json_number(predicted_combined_sem),
+        },
+        "planned_pairs": planned_pairs,
+        "postprocess_contract": {
+            "control_mean_estimator": "mean over independent 0.5 * (Q_plus + Q_minus) matched pairs",
+            "response_estimator": (
+                "apply the screened beta to matched response samples using the independently "
+                "estimated control mean; include residual SEM and beta^2 Var(control_mean)"
+            ),
+            "promotion_rule": (
+                "do not promote until output gates, replicated-window gates, control-mean "
+                "uncertainty, and combined response uncertainty all pass"
+            ),
+        },
     }
 
 

@@ -715,7 +715,11 @@ control-variate screen is promising
 but it is deliberately fail-closed because the control mean is not independently
 known. The next campaign must either estimate that control expectation with an
 independent protocol or switch to a better-conditioned observable before more
-GPU time.
+GPU time. The follow-on launch contract estimates that `21` independent
+matched plus/minus control-mean pairs (`42` new nonlinear runs) would bring the
+combined response uncertainty to `0.480`, below the current `0.5` pre-run
+target, while still not promoting the nonlinear-gradient claim until those runs
+exist and pass their window gates.
 
 ![SPECTRAX-GK VMEC-state nonlinear-gradient launch runbook](docs/_static/nonlinear_gradient_state_control_runbook.png)
 
@@ -740,6 +744,8 @@ GPU time.
 ![SPECTRAX-GK QA/ESS ZBS(1,0) bounded nonlinear gradient follow-up](docs/_static/qa_ess_zbs10_rel7p5_nonlinear_gradient_zbs_1_0_central_fd_gradient_gate.png)
 
 ![SPECTRAX-GK QA/ESS ZBS(1,0) variance-reduction plan](docs/_static/qa_ess_zbs10_rel7p5_variance_reduction_plan.png)
+
+![SPECTRAX-GK QA/ESS ZBS(1,0) control-variate campaign plan](docs/_static/qa_ess_zbs10_rel7p5_control_variate_campaign_plan.png)
 
 ![SPECTRAX-GK QA/ESS overdetermined RBC(1,1) nonlinear gradient gate](docs/_static/qa_ess_profile_gradient_rbc_1_1_nonlinear_gradient_rbc_1_1_central_fd_gradient_gate.png)
 
