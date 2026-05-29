@@ -689,7 +689,11 @@ response fraction is only `0.0045`, far below the `0.03` resolved-response
 gate. This closes the larger-single-bracket hypothesis as negative evidence;
 the next nonlinear-gradient step is variance reduction, longer replicated
 windows, or a better-conditioned multi-control observable, not promotion of
-this single-control gradient.
+this single-control gradient. The refreshed next-campaign design panel now
+includes all `15` tracked central-FD artifacts: zero promoted nonlinear-gradient
+controls, one bounded-replica follow-up candidate, and `14` cases that need
+replacement, locality repair, or variance reduction before further long-window
+GPU time is justified.
 
 ![SPECTRAX-GK VMEC-state nonlinear-gradient launch runbook](docs/_static/nonlinear_gradient_state_control_runbook.png)
 
