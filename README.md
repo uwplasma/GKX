@@ -646,22 +646,25 @@ that the selected optimized equilibrium has a converged replicated nonlinear
 transport-window audit, not that the current quasilinear model is a universal
 absolute-flux predictor or that nonlinear turbulence gradients are available.
 The separate nonlinear turbulence-gradient evidence gate is stricter and
-remains fail-closed after the completed QA/ESS overdetermined control campaign.
-All `27` matched `t=900`, `n64:64:64:40:40` runtime outputs completed and all
-runtime-output gates passed. The best overdetermined candidate is `RBC(1,1)`:
-it has a resolved response (`response_fraction = 0.086`) and passes the
-locality gate (`fd_asymmetry_rel = 0.338`), but it still misses the propagated
-uncertainty gate (`gradient_uncertainty_rel = 0.559 > 0.5`). `ZBS(1,1)` is
-statistically cleaner but nonlocal, and `ZBS(1,0)` is not response-resolved.
+remains fail-closed after the completed QA/ESS overdetermined control campaign,
+the targeted `RBC(1,1)` seed follow-up, and the bounded `ZBS(1,0)` `7.5%`
+follow-up. The overdetermined `RBC(1,1)` candidate is local and
+response-resolved but remains too uncertain after five-member state ensembles
+(`gradient_uncertainty_rel = 0.683 > 0.5`). The newer `ZBS(1,0)` `7.5%`
+follow-up is the clearest locality result: all 12 `t=900` outputs pass, the
+response is resolved (`response_fraction = 0.0319`), and the finite-difference
+bracket is local (`fd_asymmetry_rel = 0.044`). It still fails promotion because
+the plus-state spread is too large (`mean_rel_spread = 0.196 > 0.15`) and the
+propagated uncertainty is too high (`gradient_uncertainty_rel = 1.81 > 0.5`).
 The current release therefore documents nonlinear turbulence-gradient evidence
-as a rigorous negative/model-development result, not as a promoted production
+as rigorous negative/model-development results, not as a promoted production
 nonlinear-gradient or full nonlinear turbulent-flux optimization claim.
 
 The next scientifically efficient step is not another blind single-coefficient
-rerun. The tracked ranking artifact recommends keeping the claim fail-closed,
-targeting the best local but noisy `RBC(1,1)` direction with additional
-independent replicas or variance reduction only if the cost is justified, and
-replacing or shrinking nonlocal controls before another production campaign.
+rerun. The tracked design artifact recommends keeping the claim fail-closed and
+moving to explicit variance reduction, a control-variate observable, or a
+better-conditioned multi-control direction before another expensive production
+campaign.
 A companion composite-direction manifest defines a smaller descent-oriented
 QA/ESS boundary direction with the same long-window contract; that audit also
 remains fail-closed after its plus-state spread and central-FD gates.
@@ -689,11 +692,19 @@ response fraction is only `0.0045`, far below the `0.03` resolved-response
 gate. This closes the larger-single-bracket hypothesis as negative evidence;
 the next nonlinear-gradient step is variance reduction, longer replicated
 windows, or a better-conditioned multi-control observable, not promotion of
-this single-control gradient. The refreshed next-campaign design panel now
-includes all `15` tracked central-FD artifacts: zero promoted nonlinear-gradient
-controls, one bounded-replica follow-up candidate, and `14` cases that need
-replacement, locality repair, or variance reduction before further long-window
-GPU time is justified.
+this single-control gradient. The bounded `ZBS(1,0)` follow-up at a `7.5%`
+bracket has now been run with `12` long `t=900` office-GPU outputs. All output
+gates pass over `t=[450,900]`; the baseline and minus ensembles pass, but the
+plus ensemble fails the spread gate (`mean_rel_spread = 0.196 > 0.15`) and the
+central finite-difference gate remains blocked by propagated uncertainty
+(`gradient_uncertainty_rel = 1.81 > 0.5`). This is useful negative evidence:
+the response is finally resolved (`response_fraction = 0.0319`) and local
+(`fd_asymmetry_rel = 0.044`), but the plus-state variance is still too large
+for a production nonlinear turbulence-gradient claim. The refreshed
+next-campaign design panel now includes all `16` tracked central-FD artifacts:
+zero promoted nonlinear-gradient controls, one bounded-replica follow-up
+candidate, and `15` cases that need replacement, locality repair, or variance
+reduction before further long-window GPU time is justified.
 
 ![SPECTRAX-GK VMEC-state nonlinear-gradient launch runbook](docs/_static/nonlinear_gradient_state_control_runbook.png)
 
@@ -714,6 +725,8 @@ GPU time is justified.
 ![SPECTRAX-GK production nonlinear optimization guard](docs/_static/production_nonlinear_optimization_guard.png)
 
 ![SPECTRAX-GK QA/ESS ZBS(1,0) nonlinear gradient gate](docs/_static/qa_ess_zbs10_rel5_nonlinear_gradient_zbs_1_0_central_fd_gradient_gate.png)
+
+![SPECTRAX-GK QA/ESS ZBS(1,0) bounded nonlinear gradient follow-up](docs/_static/qa_ess_zbs10_rel7p5_nonlinear_gradient_zbs_1_0_central_fd_gradient_gate.png)
 
 ![SPECTRAX-GK QA/ESS overdetermined RBC(1,1) nonlinear gradient gate](docs/_static/qa_ess_profile_gradient_rbc_1_1_nonlinear_gradient_rbc_1_1_central_fd_gradient_gate.png)
 
