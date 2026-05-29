@@ -681,9 +681,15 @@ the next evidence step. Those short-bracket nonlinear campaigns have now been
 run on the office GPUs: all `18` nonlinear outputs completed, all output and
 replicated-window gates passed, but both central finite-difference gates remain
 blocked because `alpha_delta=1e-3` gives small response fractions
-(`0.0045` and `0.0015`) with large finite-difference asymmetry. This is useful
-negative evidence for the next bracket-amplitude sweep, not a promoted
-nonlinear-gradient claim.
+(`0.0045` and `0.0015`) with large finite-difference asymmetry. The follow-up
+bracket-amplitude sweep also completed all `36` office GPU runs at
+`alpha_delta=3e-3` and `1e-2` with no runtime failures. It still passes output
+and ensemble gates but fails all four central finite-difference gates; the best
+response fraction is only `0.0045`, far below the `0.03` resolved-response
+gate. This closes the larger-single-bracket hypothesis as negative evidence;
+the next nonlinear-gradient step is variance reduction, longer replicated
+windows, or a better-conditioned multi-control observable, not promotion of
+this single-control gradient.
 
 ![SPECTRAX-GK VMEC-state nonlinear-gradient launch runbook](docs/_static/nonlinear_gradient_state_control_runbook.png)
 
@@ -698,6 +704,8 @@ nonlinear-gradient claim.
 ![SPECTRAX-GK VMEC-state short-bracket launch status](docs/_static/nonlinear_gradient_state_control_short_bracket_launch_status.png)
 
 ![SPECTRAX-GK VMEC-state short-bracket nonlinear audit](docs/_static/nonlinear_gradient_state_control_short_bracket_nonlinear_audit_status.png)
+
+![SPECTRAX-GK VMEC-state bracket-amplitude sweep status](docs/_static/nonlinear_gradient_state_control_bracket_sweep_status.png)
 
 ![SPECTRAX-GK production nonlinear optimization guard](docs/_static/production_nonlinear_optimization_guard.png)
 
