@@ -709,8 +709,13 @@ top-level action is now paired-seed or control-variate variance reduction for
 the plus-state limiter, not another blind long-window replica campaign. The
 paired-seed runbook confirms that common-label plus-minus differences reduce
 some common noise but are still too uncertain
-(`paired_response_uncertainty_rel = 0.984`), so the next campaign needs a real
-control-variate or better-conditioned observable before more GPU time.
+(`paired_response_uncertainty_rel = 0.984`). A midpoint common-mode
+control-variate screen is promising
+(`adjusted_response_uncertainty_rel = 0.238`, `sem_reduction_fraction = 0.759`),
+but it is deliberately fail-closed because the control mean is not independently
+known. The next campaign must either estimate that control expectation with an
+independent protocol or switch to a better-conditioned observable before more
+GPU time.
 
 ![SPECTRAX-GK VMEC-state nonlinear-gradient launch runbook](docs/_static/nonlinear_gradient_state_control_runbook.png)
 

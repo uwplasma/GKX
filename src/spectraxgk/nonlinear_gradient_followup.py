@@ -55,6 +55,9 @@ class NonlinearGradientVarianceReductionConfig:
     """Controls for paired-seed/control-variate nonlinear-gradient planning."""
 
     max_paired_response_uncertainty_rel: float = 0.50
+    max_control_variate_uncertainty_rel: float = 0.50
+    min_control_variate_sem_reduction: float = 0.25
+    require_known_control_mean: bool = True
     sem_safety_factor: float = 1.10
     min_common_pairs: int = 2
     max_extra_paired_seeds: int = 4
@@ -348,6 +351,85 @@ def _mean_and_sem(values: Sequence[float]) -> tuple[float | None, float | None]:
     return mean, math.sqrt(variance / len(finite))
 
 
+def _sample_covariance(x_values: Sequence[float], y_values: Sequence[float]) -> float | None:
+    if len(x_values) != len(y_values) or len(x_values) < 2:
+        return None
+    x_mean = sum(x_values) / len(x_values)
+    y_mean = sum(y_values) / len(y_values)
+    return sum((x - x_mean) * (y - y_mean) for x, y in zip(x_values, y_values)) / (len(x_values) - 1)
+
+
+def _control_variate_candidate(
+    *,
+    name: str,
+    response_samples: Sequence[float],
+    control_samples: Sequence[float],
+    response_mean: float | None,
+    raw_sem: float | None,
+    config: NonlinearGradientVarianceReductionConfig,
+) -> dict[str, Any]:
+    if len(response_samples) != len(control_samples) or len(response_samples) < 3:
+        return {
+            "name": name,
+            "admissible": False,
+            "blockers": ["insufficient_common_samples"],
+        }
+    control_mean = sum(control_samples) / len(control_samples)
+    response_variance = _sample_covariance(response_samples, response_samples)
+    control_variance = _sample_covariance(control_samples, control_samples)
+    covariance = _sample_covariance(response_samples, control_samples)
+    blockers: list[str] = []
+    if (
+        response_mean is None
+        or raw_sem is None
+        or response_variance is None
+        or control_variance is None
+        or covariance is None
+        or control_variance <= config.value_floor
+    ):
+        blockers.append("degenerate_control_or_response")
+        return {
+            "name": name,
+            "admissible": False,
+            "blockers": blockers,
+        }
+
+    beta = covariance / control_variance
+    adjusted_samples = [
+        response - beta * (control - control_mean)
+        for response, control in zip(response_samples, control_samples)
+    ]
+    adjusted_mean, adjusted_sem = _mean_and_sem(adjusted_samples)
+    adjusted_uncertainty_rel = None
+    sem_reduction = None
+    if adjusted_sem is not None:
+        adjusted_uncertainty_rel = abs(adjusted_sem) / max(abs(response_mean), config.value_floor)
+        sem_reduction = 1.0 - adjusted_sem / max(raw_sem, config.value_floor)
+    correlation = covariance / math.sqrt(max(response_variance * control_variance, config.value_floor))
+
+    if adjusted_uncertainty_rel is None or adjusted_uncertainty_rel > config.max_control_variate_uncertainty_rel:
+        blockers.append("control_variate_uncertainty_above_gate")
+    if sem_reduction is None or sem_reduction < config.min_control_variate_sem_reduction:
+        blockers.append("control_variate_sem_reduction_too_small")
+    if config.require_known_control_mean:
+        blockers.append("control_mean_not_independently_known")
+
+    return {
+        "name": name,
+        "admissible": not blockers,
+        "blockers": blockers,
+        "n_samples": len(response_samples),
+        "beta": _json_number(beta),
+        "correlation": _json_number(correlation),
+        "control_mean_sample": _json_number(control_mean),
+        "adjusted_response_mean": _json_number(adjusted_mean),
+        "adjusted_response_sem": _json_number(adjusted_sem),
+        "adjusted_response_uncertainty_rel": _json_number(adjusted_uncertainty_rel),
+        "sem_reduction_fraction": _json_number(sem_reduction),
+        "requires_independent_control_mean": bool(config.require_known_control_mean),
+    }
+
+
 def nonlinear_gradient_variance_reduction_plan(
     artifact: Mapping[str, Any],
     *,
@@ -367,6 +449,10 @@ def nonlinear_gradient_variance_reduction_plan(
     cfg = config or NonlinearGradientVarianceReductionConfig()
     if cfg.max_paired_response_uncertainty_rel <= 0.0:
         raise ValueError("max_paired_response_uncertainty_rel must be positive")
+    if cfg.max_control_variate_uncertainty_rel <= 0.0:
+        raise ValueError("max_control_variate_uncertainty_rel must be positive")
+    if cfg.min_control_variate_sem_reduction < 0.0:
+        raise ValueError("min_control_variate_sem_reduction must be non-negative")
     if cfg.sem_safety_factor <= 0.0:
         raise ValueError("sem_safety_factor must be positive")
     if cfg.min_common_pairs < 1:
@@ -411,6 +497,53 @@ def nonlinear_gradient_variance_reduction_plan(
     if paired_mean is not None and paired_sem is not None:
         paired_uncertainty_rel = abs(paired_sem) / max(abs(paired_mean), cfg.value_floor)
 
+    control_candidates: list[dict[str, Any]] = []
+    if common_with_baseline:
+        response_for_baseline = [plus[item] - minus[item] for item in common_with_baseline]
+        baseline_control = [baseline[item] for item in common_with_baseline]
+        midpoint_control = [0.5 * (plus[item] + minus[item]) for item in common_with_baseline]
+        control_candidates.append(
+            _control_variate_candidate(
+                name="baseline_transport_common_mode",
+                response_samples=response_for_baseline,
+                control_samples=baseline_control,
+                response_mean=paired_mean,
+                raw_sem=paired_sem,
+                config=cfg,
+            )
+        )
+        control_candidates.append(
+            _control_variate_candidate(
+                name="plus_minus_midpoint_common_mode",
+                response_samples=response_for_baseline,
+                control_samples=midpoint_control,
+                response_mean=paired_mean,
+                raw_sem=paired_sem,
+                config=cfg,
+            )
+        )
+
+    apparent_candidates = [
+        row
+        for row in control_candidates
+        if "control_variate_uncertainty_above_gate" not in row.get("blockers", [])
+        and "control_variate_sem_reduction_too_small" not in row.get("blockers", [])
+    ]
+    best_control_variate = None
+    if control_candidates:
+        def _candidate_sort_key(row: Mapping[str, Any]) -> tuple[float, float]:
+            uncertainty = _finite_float(row.get("adjusted_response_uncertainty_rel"))
+            reduction = _finite_float(row.get("sem_reduction_fraction"))
+            return (
+                uncertainty if uncertainty is not None else float("inf"),
+                -(reduction if reduction is not None else float("-inf")),
+            )
+
+        best_control_variate = min(
+            control_candidates,
+            key=_candidate_sort_key,
+        )
+
     required_pairs = None
     extra_pairs = None
     if paired_uncertainty_rel is not None:
@@ -428,6 +561,16 @@ def nonlinear_gradient_variance_reduction_plan(
     elif paired_uncertainty_rel <= cfg.max_paired_response_uncertainty_rel:
         action = "use_paired_seed_response_estimator"
         recommendation = "paired seed response uncertainty is within the target gate"
+    elif apparent_candidates and cfg.require_known_control_mean:
+        action = "estimate_control_mean_or_redesign_observable"
+        recommendation = (
+            "a common-mode control variate reduces residual scatter, but its expectation is not "
+            "independently known; estimate the control mean or redesign the observable before "
+            "using it as a production uncertainty reducer"
+        )
+    elif any(row.get("admissible") for row in control_candidates):
+        action = "use_control_variate_response_estimator"
+        recommendation = "control-variate response uncertainty is within the target gate"
     elif extra_pairs is not None and extra_pairs <= cfg.max_extra_paired_seeds:
         action = "add_matched_paired_seed_replicates"
         recommendation = "add bounded matched plus/minus seed pairs before changing the observable"
@@ -444,7 +587,11 @@ def nonlinear_gradient_variance_reduction_plan(
         "case": case,
         "path": path,
         "label": str(label or artifact.get("parameter_name") or path or case),
-        "passed": action == "use_paired_seed_response_estimator",
+        "passed": action
+        in {
+            "use_paired_seed_response_estimator",
+            "use_control_variate_response_estimator",
+        },
         "action": action,
         "recommendation": recommendation,
         "config": asdict(cfg),
@@ -457,7 +604,11 @@ def nonlinear_gradient_variance_reduction_plan(
             "paired_response_uncertainty_rel": _json_number(paired_uncertainty_rel),
             "required_pair_count": required_pairs,
             "extra_pair_count": extra_pairs,
+            "best_control_variate": (
+                None if best_control_variate is None else str(best_control_variate.get("name"))
+            ),
         },
+        "control_variate_candidates": control_candidates,
         "pair_rows": pair_rows,
     }
 
