@@ -9,6 +9,7 @@ the propagated gradient uncertainty is slightly too large.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Any, Mapping, Sequence
 import math
 import re
@@ -209,13 +210,22 @@ def _state_control_family(parameter_indices: Any) -> str | None:
 
 
 def _label_from_row(row: Mapping[str, Any]) -> str | None:
+    variant = row.get("variant")
+    if isinstance(variant, Mapping):
+        seed = variant.get("seed")
+        if seed is not None:
+            try:
+                return f"seed{int(seed)}"
+            except (TypeError, ValueError):
+                pass
     for key in ("variant_label", "source_artifact", "summary_artifact", "path"):
         value = row.get(key)
         if not isinstance(value, str):
             continue
-        match = re.search(r"(seed[0-9]+|dt[0-9]+(?:p[0-9]+)?)", value)
-        if match:
-            return match.group(1)
+        label_source = Path(value).name if key != "variant_label" else value
+        matches = re.findall(r"(seed[0-9]+|dt[0-9]+(?:p[0-9]+)?)", label_source)
+        if matches:
+            return matches[-1]
     return None
 
 
