@@ -1633,8 +1633,8 @@ def solver_objective_branch_gradient_report(
 
 
 def _vmec_boozer_state_parameter_name(radial_index: int, mode_index: int, *, default_mid_surface: int) -> str:
-    if int(radial_index) == int(default_mid_surface) and int(mode_index) == 1:
-        return VMEC_BOOZER_STATE_PARAMETER_NAMES[0]
+    if int(radial_index) == int(default_mid_surface):
+        return f"Rcos_mid_surface_m{int(mode_index)}"
     return f"Rcos_r{int(radial_index)}_m{int(mode_index)}"
 
 

@@ -77,7 +77,7 @@ class NonlinearGradientQLSeedScreenConfig:
     min_sign_consistency: float = 0.75
     max_objective_rel_error: float = 0.02
     min_abs_sensitivity: float = 1.0e-12
-    require_artifact_passed: bool = True
+    require_artifact_passed: bool = False
 
 
 def _finite_float(value: Any) -> float | None:
@@ -706,6 +706,7 @@ def _ql_seed_rows(
                 "path": path,
                 "case_name": case_name,
                 "source_kind": str(artifact.get("kind", "")),
+                "source_artifact_passed": artifact_passed,
                 "state_parameter": parameter,
                 "state_control_family": source_family,
                 "parameter_indices": parameter_indices if isinstance(parameter_indices, Mapping) else None,
@@ -830,6 +831,7 @@ def nonlinear_gradient_ql_seed_screen_report(
                     {
                         "case_name": row["case_name"],
                         "path": row["path"],
+                        "source_artifact_passed": row["source_artifact_passed"],
                         "implicit_sensitivity": row["metrics"]["implicit_sensitivity"],
                         "relative_error": row["metrics"]["relative_error"],
                     }
