@@ -712,14 +712,13 @@ some common noise but are still too uncertain
 (`paired_response_uncertainty_rel = 0.984`). A midpoint common-mode
 control-variate screen is promising
 (`adjusted_response_uncertainty_rel = 0.238`, `sem_reduction_fraction = 0.759`),
-but it is deliberately fail-closed because the control mean is not independently
-known. The next campaign must either estimate that control expectation with an
-independent protocol or switch to a better-conditioned observable before more
-GPU time. The follow-on launch contract estimates that `21` independent
-matched plus/minus control-mean pairs (`42` new nonlinear runs) would bring the
-combined response uncertainty to `0.480`, below the current `0.5` pre-run
-target, while still not promoting the nonlinear-gradient claim until those runs
-exist and pass their window gates.
+and the independent follow-up now closes that specific uncertainty blocker.
+The `21` matched plus/minus control-mean pairs (`42` nonlinear continuations)
+pass the strict late-window gate over `t=[600,1100]`: plus/minus ensemble
+spread is below `0.15`, no per-seed window rows fail, and the combined
+response uncertainty is `0.311 < 0.5`. This closes the
+rel7.5 variance-reduced nonlinear-gradient evidence lane, not a broad
+nonlinear turbulent-flux optimization claim.
 
 ![SPECTRAX-GK VMEC-state nonlinear-gradient launch runbook](docs/_static/nonlinear_gradient_state_control_runbook.png)
 
@@ -747,8 +746,11 @@ exist and pass their window gates.
 
 ![SPECTRAX-GK QA/ESS ZBS(1,0) control-variate campaign plan](docs/_static/qa_ess_zbs10_rel7p5_control_variate_campaign_plan.png)
 
-The control-variate campaign is a launch contract, not a promoted nonlinear
-gradient claim. The post-run reduction is automated by
+![SPECTRAX-GK QA/ESS ZBS(1,0) independent control-mean gate](docs/_static/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_gate.png)
+
+The control-variate campaign has both a launch contract and a completed
+independent control-mean gate for the rel7.5 evidence lane. The post-run
+reduction is automated by
 `tools/postprocess_nonlinear_gradient_control_mean_campaign.py`, which requires
 the full matched plus/minus seed set with outputs reaching the final
 post-transient window before producing the final control-mean gate. It accepts
