@@ -115,6 +115,40 @@ resolved diagnostics, and heat flux.
 - **Modular runtime/refactor surfaces** with focused tests for restart artifacts,
   diagnostics, validation gates, and public API boundaries.
 
+## QA Low-Turbulence Stellarator Optimization
+
+![Aspect-6 QA low-turbulence optimization comparison](docs/_static/qa_low_turbulence_comparison.png)
+
+This aspect-6 QA comparison follows the ``vmec_jax`` fixed-boundary
+optimization pattern: constrain quasisymmetry, enforce a minimum mean
+rotational transform ``iota >= 0.41``, hold the aspect ratio near ``A = 6``,
+and optionally add a differentiable reduced nonlinear ITG heat-flux residual.
+The figure compares two optimized reduced max-mode-1 designs:
+
+- **QA constraints**: quasisymmetry + aspect + iota-floor + regularization.
+- **QA + reduced NL Q**: the same constraints plus a late-window reduced
+  nonlinear heat-flux objective.
+
+At fixed ``a/L_n = 2.2`` and ``a/L_Ti = 6``, the transport-aware design lowers
+the reduced late-window heat flux from ``2.42e-2`` to ``2.16e-2`` in the
+tracked artifact, an ``11.0%`` reduction, while keeping ``A = 6.007``,
+``iota = 0.492``, and QA residual ``1.93e-3``. The ``Q_i`` versus ``a/L_n``
+scan at fixed ``a/L_Ti`` also has a smaller fitted slope for the
+transport-aware design. The 3D surfaces and LCFS ``|B|`` maps are reduced
+max-mode-1 visualizations, not solved VMEC equilibria; production nonlinear
+optimization claims still require long post-transient replicated SPECTRAX-GK
+transport-window audits.
+
+Regenerate the panel and machine-readable sidecars with:
+
+```bash
+python tools/build_qa_low_turbulence_comparison.py --pdf
+```
+
+The corresponding source and equations are documented in
+``docs/stellarator_optimization.rst`` and implemented in
+``spectraxgk.qa_low_turbulence``.
+
 ## Self-Contained VMEC Geometry Examples
 
 The VMEC-backed examples no longer require users to generate separate EIK
