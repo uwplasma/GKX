@@ -120,8 +120,9 @@ resolved diagnostics, and heat flux.
 ![Aspect-6 QA low-turbulence optimization comparison](docs/_static/qa_low_turbulence_comparison.png)
 
 This aspect-6 QA comparison follows the ``vmec_jax`` fixed-boundary
-optimization pattern: constrain quasisymmetry, enforce a minimum mean
-rotational transform ``iota >= 0.41``, hold the aspect ratio near ``A = 6``,
+optimization pattern: constrain quasisymmetry, enforce the formal minimum mean
+rotational transform ``iota >= 0.41``, keep the optimized designs above the
+higher operating floor ``iota >= 0.70``, hold the aspect ratio near ``A = 6``,
 and optionally add a differentiable reduced nonlinear ITG heat-flux residual.
 The figure compares two optimized reduced max-mode-1 designs:
 
@@ -130,14 +131,15 @@ The figure compares two optimized reduced max-mode-1 designs:
   nonlinear heat-flux objective.
 
 At fixed ``a/L_n = 2.2`` and ``a/L_Ti = 6``, the transport-aware design lowers
-the reduced late-window heat flux from ``2.42e-2`` to ``2.16e-2`` in the
-tracked artifact, an ``11.0%`` reduction, while keeping ``A = 6.007``,
-``iota = 0.492``, and QA residual ``1.93e-3``. The ``Q_i`` versus ``a/L_n``
-scan at fixed ``a/L_Ti`` also has a smaller fitted slope for the
-transport-aware design. The 3D surfaces and LCFS ``|B|`` maps are reduced
-max-mode-1 visualizations, not solved VMEC equilibria; production nonlinear
-optimization claims still require long post-transient replicated SPECTRAX-GK
-transport-window audits.
+the reduced late-window heat flux from ``1.81e-2`` to ``1.44e-2`` in the
+tracked artifact, a ``20.5%`` reduction, while keeping ``A = 5.976``,
+``iota = 0.756``, and QA residual ``1.01e-3``. The fixed-gradient trace now
+runs to ``t v_ti/a = 400`` and passes a long-window running-mean/half-window
+convergence gate. The ``Q_i`` versus ``a/L_n`` scan at fixed ``a/L_Ti`` also
+has a smaller fitted slope for the transport-aware design. The 3D surfaces and
+LCFS ``|B|`` maps are reduced max-mode-1 visualizations, not solved VMEC
+equilibria; production nonlinear optimization claims still require long
+post-transient replicated SPECTRAX-GK transport-window audits.
 
 Regenerate the panel and machine-readable sidecars with:
 

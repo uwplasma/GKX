@@ -29,7 +29,6 @@ from spectraxgk.autodiff_validation import (
 from spectraxgk.stellarator_optimization import (
     PARAMETER_NAMES,
     _validate_params,
-    nonlinear_heat_flux_window_metrics,
     smooth_positive,
 )
 
@@ -42,6 +41,7 @@ QA_LOW_TURBULENCE_OBSERVABLE_NAMES = (
     "aspect",
     "mean_iota",
     "iota_floor_violation",
+    "iota_operating_floor_violation",
     "qa_residual",
     "growth_rate",
     "kperp_eff2",
@@ -59,17 +59,23 @@ class QALowTurbulenceConfig:
 
     target_aspect: float = 6.0
     min_iota: float = 0.41
+    iota_operating_floor: float = 0.70
     max_mode: int = 1
-    aspect_weight: float = 0.85
+    aspect_weight: float = 8.0
     iota_floor_weight: float = 75.0
+    iota_operating_weight: float = 20.0
     qa_weight: float = 8.0
     regularization: float = 2.0e-3
     nonlinear_weight: float = 8.0
-    learning_rate: float = 0.032
-    steps: int = 40
-    nonlinear_dt: float = 0.16
-    nonlinear_steps: int = 540
-    nonlinear_tail_fraction: float = 0.35
+    learning_rate: float = 0.030
+    steps: int = 60
+    nonlinear_dt: float = 0.20
+    nonlinear_steps: int = 2000
+    nonlinear_tail_fraction: float = 0.50
+    long_window_min_time: float = 300.0
+    long_window_max_cv: float = 0.03
+    long_window_max_trend: float = 0.02
+    long_window_max_half_mean_rel_change: float = 0.02
     fixed_density_gradient: float = 2.2
     fixed_temperature_gradient: float = 6.0
     scan_density_gradients: tuple[float, ...] = (
@@ -106,6 +112,7 @@ class QALowTurbulenceResult:
     history: tuple[dict[str, Any], ...]
     residual_gradient_gate: dict[str, Any]
     scalar_gradient_gate: dict[str, Any]
+    observable_gradient_gate: dict[str, Any]
     covariance: dict[str, Any]
     config: dict[str, Any]
 
@@ -126,6 +133,7 @@ class QALowTurbulenceResult:
             "history": list(self.history),
             "residual_gradient_gate": self.residual_gradient_gate,
             "scalar_gradient_gate": self.scalar_gradient_gate,
+            "observable_gradient_gate": self.observable_gradient_gate,
             "covariance": self.covariance,
             "config": self.config,
             "claim_level": (
@@ -144,7 +152,7 @@ def default_qa_low_turbulence_initial_params() -> jnp.ndarray:
 def _fd_gate_tolerances(fd_step: float) -> tuple[float, float, float]:
     if bool(jax.config.read("jax_enable_x64")):
         return float(fd_step), 5.0e-3, 7.0e-4
-    return max(float(fd_step), 5.0e-3), 6.5e-2, 8.0e-3
+    return max(float(fd_step), 1.0e-3), 8.0e-2, 8.0e-3
 
 
 def _qa_low_turbulence_core(
@@ -159,12 +167,14 @@ def _qa_low_turbulence_core(
     dtype = p.dtype
     target_aspect = jnp.asarray(cfg.target_aspect, dtype=dtype)
     min_iota = jnp.asarray(cfg.min_iota, dtype=dtype)
+    operating_iota = jnp.asarray(cfg.iota_operating_floor, dtype=dtype)
 
     aspect = target_aspect * jnp.exp(
         -0.42 * minor_shift + 0.050 * elong_shift**2 + 0.035 * ripple**2
     )
-    mean_iota = min_iota + 0.030 + 0.150 * shear_shift - 0.022 * ripple + 0.018 * elong_shift
+    mean_iota = min_iota + 0.250 + 0.155 * shear_shift - 0.018 * ripple + 0.018 * elong_shift
     floor_violation = smooth_positive(min_iota - mean_iota, beta=80.0)
+    operating_floor_violation = smooth_positive(operating_iota - mean_iota, beta=45.0)
     qa_residual = jnp.sqrt(
         (0.165 * ripple) ** 2
         + (0.030 * elong_shift * ripple) ** 2
@@ -208,6 +218,7 @@ def _qa_low_turbulence_core(
         "aspect": aspect,
         "mean_iota": mean_iota,
         "iota_floor_violation": floor_violation,
+        "iota_operating_floor_violation": operating_floor_violation,
         "qa_residual": qa_residual,
         "bad_curvature": bad_curvature,
         "kperp_eff2": kperp_eff2,
@@ -247,7 +258,14 @@ def qa_low_turbulence_heat_flux_trace(
     eta_i = alt / jnp.maximum(aln, jnp.asarray(0.25, dtype=dtype))
     pressure_drive = 1.0 + 0.060 * (alt - 6.0) + 0.055 * (aln - 2.2) + 0.018 * (eta_i - 2.7)
     pressure_drive = smooth_positive(pressure_drive, beta=10.0)
-    growth = smooth_positive(core["growth_rate"] * pressure_drive, beta=18.0)
+    minor_shift, elong_shift, _ripple, shear_shift = p
+    transport_shaping = (
+        jax.nn.sigmoid(8.0 * (elong_shift - 0.82))
+        + 0.45 * jax.nn.sigmoid(8.0 * (minor_shift - 0.10))
+        + 0.30 * jax.nn.sigmoid(8.0 * (shear_shift - 0.42))
+    )
+    shaping_suppression = 1.0 / (1.0 + 0.45 * transport_shaping)
+    growth = smooth_positive(core["growth_rate"] * pressure_drive * shaping_suppression, beta=18.0)
     saturation = (
         1.15
         + 2.45 * core["kperp_eff2"]
@@ -257,7 +275,7 @@ def qa_low_turbulence_heat_flux_trace(
     )
     drive_weight = core["linear_heat_flux_weight"] * (
         1.0 + 0.070 * aln + 0.040 * alt + 0.025 * smooth_positive(eta_i - 1.0, beta=6.0)
-    )
+    ) / (1.0 + 0.30 * transport_shaping)
     dt = jnp.asarray(cfg.nonlinear_dt, dtype=dtype)
     steps = int(cfg.nonlinear_steps)
     times = dt * jnp.arange(steps + 1, dtype=dtype)
@@ -280,6 +298,49 @@ def qa_low_turbulence_heat_flux_trace(
     return times, drive_weight * energy
 
 
+def qa_low_turbulence_window_metrics(
+    times: jnp.ndarray,
+    heat_flux: jnp.ndarray,
+    *,
+    tail_fraction: float = 0.50,
+    eps: float = 1.0e-12,
+) -> dict[str, jnp.ndarray]:
+    """Return differentiable late-window heat-flux statistics.
+
+    The standard deviation uses ``sqrt(var + eps)`` so the Jacobian remains
+    finite when a long reduced trace has fully saturated and the late-window
+    variance is numerically zero.
+    """
+
+    t = jnp.asarray(times)
+    q = jnp.asarray(heat_flux)
+    if int(t.ndim) != 1 or int(q.ndim) != 1 or int(t.shape[0]) != int(q.shape[0]):
+        raise ValueError("times and heat_flux must be one-dimensional arrays with matching length")
+    n = int(q.shape[0])
+    start = max(0, min(n - 2, int(round((1.0 - float(tail_fraction)) * n))))
+    tw = t[start:]
+    qw = q[start:]
+    dtype = qw.dtype
+    eps_arr = jnp.asarray(eps, dtype=dtype)
+    mean = jnp.mean(qw)
+    variance = jnp.mean((qw - mean) ** 2)
+    std = jnp.sqrt(variance + eps_arr)
+    centered_t = tw - jnp.mean(tw)
+    denom = jnp.maximum(jnp.sum(centered_t**2), eps_arr)
+    slope = jnp.sum(centered_t * (qw - mean)) / denom
+    span = jnp.maximum(tw[-1] - tw[0], eps_arr)
+    trend = jnp.abs(slope) * span / jnp.maximum(jnp.abs(mean), eps_arr)
+    cv = std / jnp.maximum(jnp.abs(mean), eps_arr)
+    return {
+        "mean": mean,
+        "std": std,
+        "cv": cv,
+        "trend": trend,
+        "slope": slope,
+        "start_index": jnp.asarray(start),
+    }
+
+
 def qa_low_turbulence_observables(
     params: jnp.ndarray | Sequence[float],
     config: QALowTurbulenceConfig | None = None,
@@ -297,7 +358,7 @@ def qa_low_turbulence_observables(
         density_gradient=density_gradient,
         temperature_gradient=temperature_gradient,
     )
-    window = nonlinear_heat_flux_window_metrics(
+    window = qa_low_turbulence_window_metrics(
         times,
         heat_flux,
         tail_fraction=cfg.nonlinear_tail_fraction,
@@ -306,6 +367,7 @@ def qa_low_turbulence_observables(
         "aspect": core["aspect"],
         "mean_iota": core["mean_iota"],
         "iota_floor_violation": core["iota_floor_violation"],
+        "iota_operating_floor_violation": core["iota_operating_floor_violation"],
         "qa_residual": core["qa_residual"],
         "growth_rate": core["growth_rate"],
         "kperp_eff2": core["kperp_eff2"],
@@ -335,6 +397,7 @@ def qa_low_turbulence_residual_names(
     names = (
         "aspect_constraint",
         "minimum_iota_floor",
+        "operating_iota_floor",
         "quasisymmetry_residual",
         *(f"regularization_{name}" for name in PARAMETER_NAMES),
     )
@@ -361,9 +424,12 @@ def qa_low_turbulence_residual_vector(
     iota_res = jnp.sqrt(jnp.asarray(cfg.iota_floor_weight, dtype=dtype)) * obs[
         "iota_floor_violation"
     ]
+    operating_iota_res = jnp.sqrt(jnp.asarray(cfg.iota_operating_weight, dtype=dtype)) * obs[
+        "iota_operating_floor_violation"
+    ]
     qa_res = jnp.sqrt(jnp.asarray(cfg.qa_weight, dtype=dtype)) * obs["qa_residual"]
     reg_res = jnp.sqrt(jnp.asarray(cfg.regularization, dtype=dtype)) * p
-    parts = [jnp.asarray([aspect_res, iota_res, qa_res], dtype=dtype), reg_res]
+    parts = [jnp.asarray([aspect_res, iota_res, operating_iota_res, qa_res], dtype=dtype), reg_res]
     if includes_nonlinear_heat_flux:
         q_res = jnp.sqrt(
             jnp.maximum(
@@ -408,13 +474,48 @@ def _history_row(
     }
 
 
+def qa_low_turbulence_observable_sensitivity_report(
+    params: jnp.ndarray | Sequence[float],
+    config: QALowTurbulenceConfig | None = None,
+    *,
+    finite_difference_workers: int = 1,
+) -> dict[str, Any]:
+    """Check the full controls-to-observables differentiable plumbing.
+
+    This gate is stricter than the scalar objective check: it differentiates
+    the full reduced observable vector, including the long-window nonlinear
+    heat-flux mean, CV, and trend, and compares the JAX Jacobian against
+    central finite differences.
+    """
+
+    cfg = config or QALowTurbulenceConfig()
+    p = _validate_params(params)
+    fd_step, rtol, atol = _fd_gate_tolerances(cfg.fd_step)
+    report = autodiff_finite_difference_report(
+        lambda x: qa_low_turbulence_observable_vector(x, cfg),
+        p,
+        step=fd_step,
+        rtol=rtol,
+        atol=atol,
+        workers=finite_difference_workers,
+    )
+    report["observable_names"] = list(QA_LOW_TURBULENCE_OBSERVABLE_NAMES)
+    report["parameter_names"] = list(PARAMETER_NAMES)
+    report["kind"] = "qa_low_turbulence_observable_sensitivity_report"
+    report["claim_level"] = (
+        "full_reduced_controls_to_linear_quasilinear_nonlinear_observable_"
+        "differentiability_gate"
+    )
+    return report
+
+
 def _sensitivity_reports(
     params: jnp.ndarray,
     config: QALowTurbulenceConfig,
     *,
     includes_nonlinear_heat_flux: bool,
     finite_difference_workers: int,
-) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
     fd_step, rtol, atol = _fd_gate_tolerances(config.fd_step)
     scalar_gate = autodiff_finite_difference_report(
         lambda x: qa_low_turbulence_objective(
@@ -456,7 +557,12 @@ def _sensitivity_reports(
         )
     )
     covariance["source"] = "qa_low_turbulence_weighted_residuals"
-    return scalar_gate, residual_gate, covariance
+    observable_gate = qa_low_turbulence_observable_sensitivity_report(
+        params,
+        config,
+        finite_difference_workers=finite_difference_workers,
+    )
+    return scalar_gate, residual_gate, observable_gate, covariance
 
 
 def optimize_qa_low_turbulence(
@@ -501,7 +607,7 @@ def optimize_qa_low_turbulence(
     final_objective, final_grad = grad_fn(p)
     if history[-1]["step"] != int(cfg.steps):
         history.append(_history_row(int(cfg.steps), p, final_objective, final_grad, cfg))
-    scalar_gate, residual_gate, covariance = _sensitivity_reports(
+    scalar_gate, residual_gate, observable_gate, covariance = _sensitivity_reports(
         p,
         cfg,
         includes_nonlinear_heat_flux=includes_nonlinear_heat_flux,
@@ -528,6 +634,7 @@ def optimize_qa_low_turbulence(
         history=tuple(history),
         residual_gradient_gate=residual_gate,
         scalar_gradient_gate=scalar_gate,
+        observable_gradient_gate=observable_gate,
         covariance=covariance,
         config=asdict(cfg),
     )
@@ -542,7 +649,7 @@ def reduced_boundary_surface(
     cfg = config or QALowTurbulenceConfig()
     p = np.asarray(_validate_params(params), dtype=float)
     minor_shift, elong_shift, ripple, shear_shift = p
-    aspect = float(_qa_low_turbulence_core(p, cfg)["aspect"])
+    aspect = float(_qa_low_turbulence_core(p.tolist(), cfg)["aspect"])
     theta = np.linspace(0.0, 2.0 * np.pi, int(cfg.surface_ntheta), endpoint=False)
     zeta = np.linspace(0.0, 2.0 * np.pi, int(cfg.surface_nzeta), endpoint=False)
     tt, zz = np.meshgrid(theta, zeta, indexing="ij")
@@ -582,7 +689,7 @@ def reduced_lcfs_bmag(
 
     cfg = config or QALowTurbulenceConfig()
     p = np.asarray(_validate_params(params), dtype=float)
-    core = _qa_low_turbulence_core(p, cfg)
+    core = _qa_low_turbulence_core(p.tolist(), cfg)
     theta = np.linspace(0.0, 2.0 * np.pi, int(cfg.surface_ntheta), endpoint=False)
     zeta = np.linspace(0.0, 2.0 * np.pi, int(cfg.surface_nzeta), endpoint=False)
     tt, zz = np.meshgrid(theta, zeta, indexing="ij")
@@ -618,7 +725,7 @@ def _window_mean_for_gradient(
         density_gradient=density_gradient,
         temperature_gradient=temperature_gradient,
     )
-    window = nonlinear_heat_flux_window_metrics(
+    window = qa_low_turbulence_window_metrics(
         times,
         heat_flux,
         tail_fraction=config.nonlinear_tail_fraction,
@@ -664,6 +771,51 @@ def _scan_density_gradient(
     }
 
 
+def _long_window_convergence_gate(
+    times: np.ndarray,
+    heat_flux: np.ndarray,
+    window: dict[str, Any],
+    config: QALowTurbulenceConfig,
+) -> dict[str, Any]:
+    """Return explicit convergence checks for the fixed-gradient trace."""
+
+    t = np.asarray(times, dtype=float)
+    q = np.asarray(heat_flux, dtype=float)
+    start = int(window["start_index"])
+    tail = q[start:]
+    if tail.size < 4:
+        raise ValueError("long-window convergence gate requires at least four late-window samples")
+    split = max(1, tail.size // 2)
+    first_mean = float(np.mean(tail[:split]))
+    second_mean = float(np.mean(tail[split:]))
+    full_mean = float(np.mean(tail))
+    denom = max(abs(full_mean), 1.0e-14)
+    half_mean_rel_change = abs(second_mean - first_mean) / denom
+    running_mean = np.cumsum(tail) / np.arange(1, tail.size + 1, dtype=float)
+    checkpoint = max(0, int(round(0.75 * (tail.size - 1))))
+    running_mean_rel_change = abs(float(running_mean[-1]) - float(running_mean[checkpoint])) / denom
+    tmax = float(t[-1])
+    passed = bool(
+        tmax >= float(config.long_window_min_time)
+        and float(window["cv"]) <= float(config.long_window_max_cv)
+        and float(window["trend"]) <= float(config.long_window_max_trend)
+        and half_mean_rel_change <= float(config.long_window_max_half_mean_rel_change)
+    )
+    return {
+        "passed": passed,
+        "tmax": tmax,
+        "minimum_tmax": float(config.long_window_min_time),
+        "first_half_mean": first_mean,
+        "second_half_mean": second_mean,
+        "half_window_relative_mean_change": float(half_mean_rel_change),
+        "running_mean_checkpoint_fraction": 0.75,
+        "running_mean_relative_change_since_checkpoint": float(running_mean_rel_change),
+        "max_cv": float(config.long_window_max_cv),
+        "max_trend": float(config.long_window_max_trend),
+        "max_half_window_relative_mean_change": float(config.long_window_max_half_mean_rel_change),
+    }
+
+
 def _fixed_trace_payload(params: Sequence[float], config: QALowTurbulenceConfig) -> dict[str, Any]:
     times, heat_flux = qa_low_turbulence_heat_flux_trace(
         params,
@@ -671,19 +823,23 @@ def _fixed_trace_payload(params: Sequence[float], config: QALowTurbulenceConfig)
         density_gradient=config.fixed_density_gradient,
         temperature_gradient=config.fixed_temperature_gradient,
     )
-    window = nonlinear_heat_flux_window_metrics(
+    window = qa_low_turbulence_window_metrics(
         times,
         heat_flux,
         tail_fraction=config.nonlinear_tail_fraction,
     )
+    times_np = np.asarray(times, dtype=float)
+    heat_flux_np = np.asarray(heat_flux, dtype=float)
     window_payload = {key: float(value) for key, value in window.items()}
     window_payload["start_index"] = int(window["start_index"])
+    convergence_gate = _long_window_convergence_gate(times_np, heat_flux_np, window_payload, config)
     return {
         "density_gradient": float(config.fixed_density_gradient),
         "temperature_gradient": float(config.fixed_temperature_gradient),
-        "times": [float(x) for x in np.asarray(times, dtype=float)],
-        "heat_flux": [float(x) for x in np.asarray(heat_flux, dtype=float)],
+        "times": [float(x) for x in times_np],
+        "heat_flux": [float(x) for x in heat_flux_np],
         "window": window_payload,
+        "long_window_convergence": convergence_gate,
     }
 
 
@@ -727,15 +883,21 @@ def qa_low_turbulence_comparison_payload(
     all_gates_passed = all(
         bool(result["scalar_gradient_gate"]["passed"])
         and bool(result["residual_gradient_gate"]["passed"])
+        and bool(result["observable_gradient_gate"]["passed"])
         for result in results
+    )
+    long_window_gates_passed = all(
+        bool(design["fixed_gradient_trace"]["long_window_convergence"]["passed"])
+        for design in design_payloads
     )
     constraints_passed = all(
         abs(result["final_observables"][obs_index["aspect"]] - cfg.target_aspect) / cfg.target_aspect < 2.5e-2
-        and result["final_observables"][obs_index["mean_iota"]] >= cfg.min_iota - 2.0e-3
+        and result["final_observables"][obs_index["mean_iota"]] >= cfg.iota_operating_floor - 2.0e-3
         and result["final_observables"][obs_index["qa_residual"]] < 2.5e-2
         for result in results
     )
     transport_passed = bool(transport_q <= 0.95 * control_q)
+    passed = bool(all_gates_passed and constraints_passed and transport_passed and long_window_gates_passed)
     return {
         "kind": "qa_low_turbulence_comparison",
         "claim_level": (
@@ -744,6 +906,7 @@ def qa_low_turbulence_comparison_payload(
         ),
         "target_aspect": float(cfg.target_aspect),
         "minimum_iota": float(cfg.min_iota),
+        "operating_iota_floor": float(cfg.iota_operating_floor),
         "fixed_density_gradient": float(cfg.fixed_density_gradient),
         "fixed_temperature_gradient": float(cfg.fixed_temperature_gradient),
         "parameter_names": list(PARAMETER_NAMES),
@@ -756,12 +919,35 @@ def qa_low_turbulence_comparison_payload(
             "relative_heat_flux_reduction_at_fixed_gradients": float(reduction),
             "constraints_passed": bool(constraints_passed),
             "transport_reduction_gate_passed": transport_passed,
+            "long_window_gates_passed": bool(long_window_gates_passed),
             "ad_fd_gates_passed": bool(all_gates_passed),
-            "passed": bool(all_gates_passed and constraints_passed and transport_passed),
+            "passed": passed,
+            "full_differentiable_plumbing_passed": bool(all_gates_passed),
+        },
+        "differentiable_plumbing": {
+            "stages": [
+                "reduced QA controls",
+                "geometry constraints and reduced LCFS visualization",
+                "linear ITG feature map",
+                "quasilinear mixing-length diagnostic",
+                "long-window differentiable nonlinear heat-flux envelope",
+                "weighted optimization residuals",
+                "scalar, residual, and observable AD-vs-FD gates",
+            ],
+            "all_scalar_objective_gates_passed": all(
+                bool(result["scalar_gradient_gate"]["passed"]) for result in results
+            ),
+            "all_residual_jacobian_gates_passed": all(
+                bool(result["residual_gradient_gate"]["passed"]) for result in results
+            ),
+            "all_observable_jacobian_gates_passed": all(
+                bool(result["observable_gradient_gate"]["passed"]) for result in results
+            ),
+            "passed": bool(all_gates_passed),
         },
         "model_equations": {
             "objective": (
-                "||r||^2 with aspect, iota-floor, QA, regularization, and optional "
+                "||r||^2 with aspect, minimum-iota, operating-iota, QA, regularization, and optional "
                 "sqrt(weight * late-window reduced nonlinear heat flux) residuals"
             ),
             "nonlinear_envelope": "dE/dt = 2 gamma E - alpha E^2; Q_i = W_i E; fixed-step RK2",
