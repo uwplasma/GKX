@@ -145,7 +145,17 @@ Regenerate the panel and machine-readable sidecars with:
 
 ```bash
 python tools/build_qa_low_turbulence_comparison.py --pdf
+python tools/build_qa_low_turbulence_time_horizon_audit.py --pdf
 ```
+
+The time-horizon audit writes
+``docs/_static/qa_low_turbulence_time_horizon_audit.png`` and shows that the
+``t=400`` late-window means differ from the ``t=1000`` reduced-envelope
+reference by ``1.1e-7`` for the constraints-only design and by zero at printed
+precision for the transport-aware design; both CV and half-window drift are
+below ``1e-3``. Thus ``t=400`` is retained as sufficient for this reduced
+envelope, while full turbulent transport claims remain blocked on production
+nonlinear audits.
 
 The corresponding source and equations are documented in
 ``docs/stellarator_optimization.rst`` and implemented in
