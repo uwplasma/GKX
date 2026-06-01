@@ -18,6 +18,7 @@ is not supported by JAX.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import importlib
 from types import SimpleNamespace
 from typing import Any, Literal, Sequence, cast
 
@@ -214,22 +215,6 @@ def _transport_feature_table_from_state(
     selected_indices = cast(tuple[int, ...], grid_options["selected_ky_indices"])
     rows: list[jnp.ndarray] = []
     idx = {name: i for i, name in enumerate(SOLVER_OBJECTIVE_NAMES)}
-    geometry_options = {
-        "ntheta": int(config.ntheta),
-        "mboz": int(config.mboz),
-        "nboz": int(config.nboz),
-        "reference_length": config.reference_length,
-        "reference_b": config.reference_b,
-        "validate_finite": bool(config.validate_finite),
-    }
-    geometry_options = {key: value for key, value in geometry_options.items() if value is not None}
-    linear_options = {
-        "n_laguerre": int(config.n_laguerre),
-        "n_hermite": int(config.n_hermite),
-        "nx": int(config.nx),
-        "ny": int(grid_options["ny"]),
-        "ly": float(grid_options["ly"]),
-    }
     for torflux in samples.surfaces:
         for alpha in samples.alphas:
             geom = flux_tube_geometry_from_vmec_boozer_state(
@@ -239,11 +224,23 @@ def _transport_feature_table_from_state(
                 wout_reference,
                 torflux=float(torflux),
                 alpha=float(alpha),
-                **geometry_options,
+                ntheta=int(config.ntheta),
+                mboz=int(config.mboz),
+                nboz=int(config.nboz),
+                reference_length=config.reference_length,
+                reference_b=config.reference_b,
+                validate_finite=bool(config.validate_finite),
             )
             for selected_ky_index in selected_indices:
-                row_options = {**linear_options, "selected_ky_index": int(selected_ky_index)}
-                gamma = solver_growth_rate_from_geometry(geom, **row_options)
+                gamma = solver_growth_rate_from_geometry(
+                    geom,
+                    selected_ky_index=int(selected_ky_index),
+                    n_laguerre=int(config.n_laguerre),
+                    n_hermite=int(config.n_hermite),
+                    nx=int(config.nx),
+                    ny=int(grid_options["ny"]),
+                    ly=float(grid_options["ly"]),
+                )
                 if config.kind == "growth":
                     row = jnp.zeros((len(SOLVER_OBJECTIVE_NAMES),), dtype=jnp.asarray(gamma).dtype)
                     row = row.at[idx["gamma"]].set(gamma)
@@ -346,7 +343,7 @@ class VMECJAXSpectraxTransportObjective:
     def to_objective_term(self, *, target: float | np.ndarray, residual_weight: float) -> Any:
         """Return a VMEC-JAX ``ObjectiveTerm`` when VMEC-JAX is installed."""
 
-        from vmec_jax.optimization_workflow import ObjectiveTerm
+        objective_term = getattr(importlib.import_module("vmec_jax"), "ObjectiveTerm")
 
         def _prepare(ctx: Any) -> Any:
             wout_ref = self.wout_reference if self.wout_reference is not None else _reference_wout_from_context(ctx)
@@ -356,7 +353,7 @@ class VMECJAXSpectraxTransportObjective:
                 mboz=int(self.config.mboz),
                 nboz=int(self.config.nboz),
             )
-            return ObjectiveTerm(
+            return objective_term(
                 self.name,
                 self.J,
                 target=target,
@@ -371,7 +368,7 @@ class VMECJAXSpectraxTransportObjective:
                 },
             )
 
-        return ObjectiveTerm(
+        return objective_term(
             self.name,
             self.J,
             target=target,
