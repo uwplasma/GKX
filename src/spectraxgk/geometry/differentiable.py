@@ -2255,8 +2255,12 @@ def prewarm_vmec_boozer_equal_arc_cache(
     """Precompute Boozer constants before VMEC-JAX jits residual callbacks."""
 
     cfg = static.cfg
+    nfp_raw = getattr(wout, "nfp", None)
+    if nfp_raw is None:
+        nfp_raw = getattr(cfg, "nfp", 1)
+    nfp_int = 1 if nfp_raw is None else int(nfp_raw)
     _cached_booz_xform_constants(
-        nfp=int(getattr(wout, "nfp", getattr(cfg, "nfp", 1))),
+        nfp=nfp_int,
         mpol=int(cfg.mpol),
         ntor=int(cfg.ntor),
         ntheta=int(cfg.ntheta),
@@ -2371,16 +2375,29 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
         signgs=getattr(wout, "signgs", 1),
     )
     asym = bool(getattr(inputs, "bmns", None) is not None)
-    constants, grids = _cached_booz_xform_constants(
-        nfp=int(getattr(wout, "nfp", getattr(static.cfg, "nfp", 1))),
-        mpol=int(static.cfg.mpol),
-        ntor=int(static.cfg.ntor),
-        ntheta=int(static.cfg.ntheta),
-        nzeta=int(static.cfg.nzeta),
-        mboz=mboz_int,
-        nboz=nboz_int,
-        asym=asym,
-    )
+    cfg = getattr(static, "cfg", SimpleNamespace())
+    nfp_raw = getattr(wout, "nfp", None)
+    if nfp_raw is None:
+        nfp_raw = getattr(cfg, "nfp", 1)
+    nfp_int = 1 if nfp_raw is None else int(nfp_raw)
+    try:
+        constants, grids = _cached_booz_xform_constants(
+            nfp=nfp_int,
+            mpol=int(getattr(cfg, "mpol", max(2, base_Rcos.shape[1]))),
+            ntor=int(getattr(cfg, "ntor", max(1, base_Rcos.shape[1] - 1))),
+            ntheta=int(getattr(cfg, "ntheta", max(16, ntheta_int))),
+            nzeta=int(getattr(cfg, "nzeta", max(16, 2 * ntheta_int))),
+            mboz=mboz_int,
+            nboz=nboz_int,
+            asym=asym,
+        )
+    except (AttributeError, ModuleNotFoundError):
+        constants, grids = bx.prepare_booz_xform_constants_from_inputs(
+            inputs=inputs,
+            mboz=mboz_int,
+            nboz=nboz_int,
+            asym=asym,
+        )
     surface_indices = None
     if surface_stencil_width is not None:
         ns_b_est = max(1, ns_full - 1)
