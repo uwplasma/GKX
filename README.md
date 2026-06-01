@@ -120,26 +120,35 @@ resolved diagnostics, and heat flux.
 ![Aspect-6 QA low-turbulence optimization comparison](docs/_static/qa_low_turbulence_comparison.png)
 
 This aspect-6 QA comparison follows the ``vmec_jax`` fixed-boundary
-optimization pattern: constrain quasisymmetry, enforce the formal minimum mean
-rotational transform ``iota >= 0.41``, keep the optimized designs above the
-higher operating floor ``iota >= 0.70``, hold the aspect ratio near ``A = 6``,
-and optionally add a differentiable reduced nonlinear ITG heat-flux residual.
+optimization pattern: constrain quasisymmetry, target the rotational transform,
+audit the solved ``iota`` profile, hold the aspect ratio near ``A = 6``, and
+optionally add a differentiable reduced nonlinear ITG heat-flux residual.
 The figure compares two optimized reduced max-mode-1 designs:
 
-- **QA constraints**: quasisymmetry + aspect + iota-floor + regularization.
+- **QA constraints**: quasisymmetry + aspect + iota constraints + regularization.
 - **QA + reduced NL Q**: the same constraints plus a late-window reduced
   nonlinear heat-flux objective.
 
 At fixed ``a/L_n = 2.2`` and ``a/L_Ti = 6``, the transport-aware design lowers
-the reduced late-window heat flux from ``1.81e-2`` to ``1.44e-2`` in the
-tracked artifact, a ``20.5%`` reduction, while keeping ``A = 5.976``,
-``iota = 0.756``, and QA residual ``1.01e-3``. The fixed-gradient trace now
-runs to ``t v_ti/a = 400`` and passes a long-window running-mean/half-window
-convergence gate. The ``Q_i`` versus ``a/L_n`` scan at fixed ``a/L_Ti`` also
-has a smaller fitted slope for the transport-aware design. The 3D surfaces and
-LCFS ``|B|`` maps are reduced max-mode-1 visualizations, not solved VMEC
-equilibria; production nonlinear optimization claims still require long
-post-transient replicated SPECTRAX-GK transport-window audits.
+the reduced late-window heat flux from ``1.61e-2`` to ``1.43e-2`` in the
+tracked artifact, a ``10.7%`` reduction, while keeping ``A = 5.972``,
+``iota = 0.759``, helical shaping amplitude ``0.163``, and QA residual
+``2.36e-4``. The fixed-gradient trace now runs to ``t v_ti/a = 400`` and
+passes a long-window running-mean/half-window convergence gate. The ``Q_i``
+versus ``a/L_n`` scan at fixed ``a/L_Ti`` also has a smaller fitted slope for
+the transport-aware design. The 3D surfaces and LCFS ``|B|`` maps are
+non-axisymmetric reduced max-mode-1 visualizations, not solved VMEC
+equilibria. For the actual solved-boundary workflow, use
+``examples/optimization/vmec_jax_qa_low_turbulence_optimization.py``: it
+mirrors ``vmec_jax``'s QA optimizer, uses the original VMEC-JAX high-weight
+``MeanIota`` target ``iota = 0.41``, adds a signed solved-profile floor
+``iota(s) >= 0.41`` by default, targets ``A = 6``, and appends a small
+SPECTRAX-GK transport residual with ``mboz = nboz = 21``. Growth-only transport objectives
+differentiate the SPECTRAX-GK eigenvalue directly; quasilinear and reduced
+nonlinear-window objectives use that solver growth rate with differentiable
+geometry-level transport weights. Production nonlinear
+optimization claims still require long post-transient replicated SPECTRAX-GK
+transport-window audits on the resulting candidate equilibria.
 
 Regenerate the panel and machine-readable sidecars with:
 
@@ -148,18 +157,64 @@ python tools/build_qa_low_turbulence_comparison.py --pdf
 python tools/build_qa_low_turbulence_time_horizon_audit.py --pdf
 ```
 
+Those commands write the README figure to
+`docs/_static/qa_low_turbulence_comparison.png` and the companion audit figure
+to `docs/_static/qa_low_turbulence_time_horizon_audit.png`, with JSON/CSV/PDF
+sidecars for checking the plotted values.
+
+To play with the corresponding solved-boundary VMEC-JAX setup, use the example
+entry point in `examples/optimization/`. This path requires the optional
+`vmec_jax` and `booz_xform_jax` packages because it works from in-memory VMEC
+states rather than pre-generated geometry files:
+
+```bash
+# Assemble the QA + SPECTRAX-GK transport objective without launching a solve.
+python examples/optimization/QA_optimization_with_nonlinear_heat_flux.py \
+  --dry-run \
+  --use-simple-seed \
+  --max-mode 5 \
+  --min-vmec-mode 7
+
+# Baseline: VMEC-JAX QA/aspect/iota objective only.
+python examples/optimization/QA_optimization_with_nonlinear_heat_flux.py \
+  --constraints-only \
+  --use-simple-seed \
+  --max-mode 5 \
+  --min-vmec-mode 7 \
+  --outdir runs/qa_constraints_only
+
+# Transport-aware: same QA objective plus a small reduced nonlinear heat-flux residual.
+python examples/optimization/QA_optimization_with_nonlinear_heat_flux.py \
+  --use-simple-seed \
+  --max-mode 5 \
+  --min-vmec-mode 7 \
+  --outdir runs/qa_plus_reduced_nonlinear_heat_flux \
+  --spectrax-weight 0.05 \
+  --transport-kind nonlinear_window_heat_flux \
+  --surfaces 0.64 \
+  --alphas 0.0 \
+  --ky-values 0.3
+```
+
+For a bounded local smoke before a longer VMEC-JAX solve, use the growth-only
+one-evaluation preset documented in
+`examples/optimization/README.md`. The scientific promotion step after a real
+QA-only/transport-aware pair is a matched long-window SPECTRAX-GK nonlinear
+transport audit of both final WOUT files.
+
 The time-horizon audit writes
 ``docs/_static/qa_low_turbulence_time_horizon_audit.png`` and shows that the
 ``t=400`` late-window means differ from the ``t=1000`` reduced-envelope
-reference by ``1.1e-7`` for the constraints-only design and by zero at printed
-precision for the transport-aware design; both CV and half-window drift are
+reference by ``1.2e-7`` for the constraints-only design and by ``6.5e-8`` for
+the transport-aware design; both CV and half-window drift are
 below ``1e-3``. Thus ``t=400`` is retained as sufficient for this reduced
 envelope, while full turbulent transport claims remain blocked on production
 nonlinear audits.
 
 The corresponding source and equations are documented in
 ``docs/stellarator_optimization.rst`` and implemented in
-``spectraxgk.qa_low_turbulence``.
+``spectraxgk.qa_low_turbulence`` and
+``spectraxgk.vmec_jax_transport_objective``.
 
 ## Self-Contained VMEC Geometry Examples
 

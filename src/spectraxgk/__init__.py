@@ -343,6 +343,13 @@ from spectraxgk.stellarator_objective_portfolio import (
     reduced_portfolio_artifact_guard_report,
     validate_objective_portfolio_contract,
 )
+from spectraxgk.vmec_jax_transport_objective import (
+    VMECJAXSpectraxTransportObjective,
+    VMECJAXTransportObjectiveConfig,
+    VMECJAXTransportObjectiveKind,
+    spectrax_transport_objective_tuple,
+    vmec_jax_transport_objective_from_state,
+)
 from spectraxgk.zonal_objective import (
     ZONAL_FLOW_OBJECTIVE_NAMES,
     ZonalFlowObjectiveConfig,
@@ -366,6 +373,7 @@ from spectraxgk.solver_objective_gradients import (
     mode21_vmec_boozer_nonlinear_window_gradient_report,
     mode21_vmec_boozer_quasilinear_gradient_report,
     solver_objective_branch_gradient_report,
+    solver_growth_rate_from_geometry,
     solver_objective_vector_from_geometry,
     solver_grid_options_from_ky_values,
     solver_scalar_objective_from_vector,

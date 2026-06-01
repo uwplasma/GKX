@@ -62,9 +62,11 @@ class QALowTurbulenceConfig:
     iota_operating_floor: float = 0.70
     max_mode: int = 1
     aspect_weight: float = 8.0
-    iota_floor_weight: float = 75.0
-    iota_operating_weight: float = 20.0
+    iota_floor_weight: float = 160.0
+    iota_operating_weight: float = 70.0
     qa_weight: float = 8.0
+    target_helical_amplitude: float = 0.16
+    helical_shaping_weight: float = 24.0
     regularization: float = 2.0e-3
     nonlinear_weight: float = 8.0
     learning_rate: float = 0.030
@@ -172,13 +174,21 @@ def _qa_low_turbulence_core(
     aspect = target_aspect * jnp.exp(
         -0.42 * minor_shift + 0.050 * elong_shift**2 + 0.035 * ripple**2
     )
-    mean_iota = min_iota + 0.250 + 0.155 * shear_shift - 0.018 * ripple + 0.018 * elong_shift
+    target_helical = jnp.asarray(cfg.target_helical_amplitude, dtype=dtype)
+    helical_mismatch = ripple - target_helical
+    mean_iota = (
+        min_iota
+        + 0.235
+        + 0.155 * shear_shift
+        + 0.115 * ripple
+        + 0.018 * elong_shift
+    )
     floor_violation = smooth_positive(min_iota - mean_iota, beta=80.0)
     operating_floor_violation = smooth_positive(operating_iota - mean_iota, beta=45.0)
     qa_residual = jnp.sqrt(
-        (0.165 * ripple) ** 2
-        + (0.030 * elong_shift * ripple) ** 2
-        + (0.014 * minor_shift * ripple) ** 2
+        (0.040 * helical_mismatch) ** 2
+        + (0.012 * elong_shift * helical_mismatch) ** 2
+        + (0.010 * minor_shift * helical_mismatch) ** 2
         + (2.0e-4) ** 2
     )
 
@@ -187,7 +197,7 @@ def _qa_low_turbulence_core(
         0.020 * elong_shift**2
         + 0.030 * shear_shift**2
         + 0.018 * minor_shift**2
-        + 0.012 * ripple**2
+        + 0.006 * helical_mismatch**2
     )
     bad_curvature = (
         0.078
@@ -220,6 +230,7 @@ def _qa_low_turbulence_core(
         "iota_floor_violation": floor_violation,
         "iota_operating_floor_violation": operating_floor_violation,
         "qa_residual": qa_residual,
+        "helical_mismatch": helical_mismatch,
         "bad_curvature": bad_curvature,
         "kperp_eff2": kperp_eff2,
         "growth_rate": growth_rate,
@@ -399,6 +410,7 @@ def qa_low_turbulence_residual_names(
         "minimum_iota_floor",
         "operating_iota_floor",
         "quasisymmetry_residual",
+        "qa_helical_shaping_amplitude",
         *(f"regularization_{name}" for name in PARAMETER_NAMES),
     )
     if includes_nonlinear_heat_flux:
@@ -428,8 +440,14 @@ def qa_low_turbulence_residual_vector(
         "iota_operating_floor_violation"
     ]
     qa_res = jnp.sqrt(jnp.asarray(cfg.qa_weight, dtype=dtype)) * obs["qa_residual"]
+    helical_res = jnp.sqrt(jnp.asarray(cfg.helical_shaping_weight, dtype=dtype)) * (
+        _qa_low_turbulence_core(p, cfg)["helical_mismatch"]
+    )
     reg_res = jnp.sqrt(jnp.asarray(cfg.regularization, dtype=dtype)) * p
-    parts = [jnp.asarray([aspect_res, iota_res, operating_iota_res, qa_res], dtype=dtype), reg_res]
+    parts = [
+        jnp.asarray([aspect_res, iota_res, operating_iota_res, qa_res, helical_res], dtype=dtype),
+        reg_res,
+    ]
     if includes_nonlinear_heat_flux:
         q_res = jnp.sqrt(
             jnp.maximum(
@@ -658,16 +676,20 @@ def reduced_boundary_surface(
     elongation = 1.0 + 0.26 * float(elong_shift)
     helical = float(ripple)
     nfp = int(cfg.n_field_periods)
-    radius = major_radius + minor_radius * (
+    visual_helical_radial = 1.35 * helical
+    visual_helical_vertical = 1.05 * helical
+    axis_radius = major_radius * (1.0 + 0.22 * helical * np.cos(nfp * zz))
+    axis_height = minor_radius * 1.10 * helical * np.sin(nfp * zz)
+    radius = axis_radius + minor_radius * (
         np.cos(tt)
-        + 0.055 * helical * np.cos(tt - nfp * zz)
+        + visual_helical_radial * np.cos(tt - nfp * zz)
         + 0.030 * float(shear_shift) * np.cos(2.0 * tt)
-        + 0.020 * float(minor_shift) * np.cos(tt + nfp * zz)
+        + 0.060 * float(minor_shift) * np.cos(tt + nfp * zz)
     )
-    height = minor_radius * (
+    height = axis_height + minor_radius * (
         elongation * np.sin(tt)
-        + 0.045 * helical * np.sin(tt - nfp * zz)
-        + 0.018 * float(shear_shift) * np.sin(2.0 * tt)
+        + visual_helical_vertical * np.sin(tt - nfp * zz)
+        + 0.040 * float(shear_shift) * np.sin(2.0 * tt)
     )
     x = radius * np.cos(zz)
     y = radius * np.sin(zz)
@@ -677,6 +699,8 @@ def reduced_boundary_surface(
         "x": x.tolist(),
         "y": y.tolist(),
         "z": height.tolist(),
+        "visual_helical_radial_amplitude": float(visual_helical_radial),
+        "visual_helical_vertical_amplitude": float(visual_helical_vertical),
         "reduced_boundary_scope": "max-mode-1 visualization, not a solved VMEC equilibrium",
     }
 
@@ -701,7 +725,7 @@ def reduced_lcfs_bmag(
         1.0
         + 0.055 * np.cos(tt)
         + 0.018 * elong * np.cos(2.0 * tt)
-        + 0.105 * ripple * np.cos(tt - nfp * zz)
+        + 0.220 * ripple * np.cos(tt - nfp * zz)
         + 0.030 * qa_amp * np.cos(2.0 * tt - nfp * zz)
     )
     return {
@@ -922,7 +946,8 @@ def qa_low_turbulence_comparison_payload(
             "long_window_gates_passed": bool(long_window_gates_passed),
             "ad_fd_gates_passed": bool(all_gates_passed),
             "passed": passed,
-            "full_differentiable_plumbing_passed": bool(all_gates_passed),
+            "reduced_differentiable_plumbing_passed": bool(all_gates_passed),
+            "full_vmec_nonlinear_differentiable_plumbing_passed": False,
         },
         "differentiable_plumbing": {
             "stages": [
@@ -947,8 +972,9 @@ def qa_low_turbulence_comparison_payload(
         },
         "model_equations": {
             "objective": (
-                "||r||^2 with aspect, minimum-iota, operating-iota, QA, regularization, and optional "
-                "sqrt(weight * late-window reduced nonlinear heat flux) residuals"
+                "||r||^2 with aspect, minimum-iota, operating-iota, QA, QA-compatible "
+                "helical-shaping, regularization, and optional sqrt(weight * late-window reduced "
+                "nonlinear heat flux) residuals"
             ),
             "nonlinear_envelope": "dE/dt = 2 gamma E - alpha E^2; Q_i = W_i E; fixed-step RK2",
             "gradient_scan": "fixed a/L_T while scanning a/L_n and refitting late-window Q_i means",

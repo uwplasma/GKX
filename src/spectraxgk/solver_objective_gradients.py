@@ -449,6 +449,60 @@ def solver_objective_vector_from_geometry(
     )
 
 
+def solver_growth_rate_from_geometry(
+    geom: Any,
+    *,
+    selected_ky_index: int = 1,
+    n_laguerre: int = 2,
+    n_hermite: int = 3,
+    nx: int = 1,
+    ny: int = 4,
+    lx: float = 6.0,
+    ly: float = 12.0,
+    params_linear: LinearParams | None = None,
+    terms: LinearTerms | None = None,
+) -> jnp.ndarray:
+    """Evaluate the dominant linear growth rate without eigenvector AD."""
+
+    ntheta = int(jnp.asarray(geom.theta).shape[0])
+    if ntheta < 1:
+        raise ValueError("geometry must expose at least one theta sample")
+    n_laguerre_int = int(n_laguerre)
+    n_hermite_int = int(n_hermite)
+    if n_laguerre_int < 1 or n_hermite_int < 1:
+        raise ValueError("n_laguerre and n_hermite must be positive")
+
+    cfg = CycloneBaseCase(grid=GridConfig(Nx=int(nx), Ny=int(ny), Nz=ntheta, Lx=float(lx), Ly=float(ly)))
+    spectral_grid = build_spectral_grid(cfg.grid)
+    if not (0 <= int(selected_ky_index) < int(spectral_grid.ky.size)):
+        raise ValueError("selected_ky_index is outside the ky grid")
+    grid = select_ky_grid(spectral_grid, int(selected_ky_index))
+    linear_params = params_linear or _default_gradient_linear_params()
+    linear_terms = terms or _default_gradient_linear_terms()
+    cache = build_linear_cache(grid, geom, linear_params, n_laguerre_int, n_hermite_int)
+    state_shape = (
+        n_laguerre_int,
+        n_hermite_int,
+        int(grid.ky.size),
+        int(grid.kx.size),
+        int(grid.z.size),
+    )
+
+    def rhs_phi(state_arr: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
+        return linear_rhs_cached(
+            state_arr,
+            cache,
+            linear_params,
+            terms=linear_terms,
+            use_jit=False,
+            use_custom_vjp=False,
+        )
+
+    matrix = explicit_complex_operator_matrix(lambda state_arr: rhs_phi(state_arr)[0], state_shape)
+    eigenvalues = jnp.linalg.eigvals(matrix)
+    return jnp.max(jnp.real(eigenvalues))
+
+
 def vmec_boozer_solver_objective_vector_from_state(  # pragma: no cover
     state: Any,
     static: Any,

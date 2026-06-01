@@ -6,6 +6,7 @@ import importlib
 import os
 from collections.abc import Mapping, Sequence
 from dataclasses import replace as dc_replace
+from functools import lru_cache
 from pathlib import Path
 import tempfile
 from types import SimpleNamespace
@@ -317,7 +318,7 @@ def flux_tube_geometry_from_mapping(
         theta_scale=_scalar(data, "theta_scale", 1.0, validate_finite=validate_finite),
         nfp=nfp,
         kperp2_bmag=bool(data.get("kperp2_bmag", True)),
-        bessel_bmag_power=_scalar(data, "bessel_bmag_power", 0.0),
+        bessel_bmag_power=float(data["bessel_bmag_power"]) if "bessel_bmag_power" in data else 0.0,
         source_model=str(source_model),
         theta_closed_interval=bool(data.get("theta_closed_interval", False)),
     )
@@ -2208,6 +2209,64 @@ def vmec_jax_flux_tube_mapping_from_state(  # pragma: no cover
     }
 
 
+@lru_cache(maxsize=32)
+def _cached_booz_xform_constants(
+    *,
+    nfp: int,
+    mpol: int,
+    ntor: int,
+    ntheta: int,
+    nzeta: int,
+    mboz: int,
+    nboz: int,
+    asym: bool,
+) -> tuple[Any, Any]:
+    """Prepare Boozer constants outside traced VMEC-JAX residual callbacks."""
+
+    modes_mod = importlib.import_module("vmec_jax.modes")
+    bx = importlib.import_module("booz_xform_jax.jax_api")
+    main_modes = modes_mod.vmec_mode_table(int(mpol), int(ntor))
+    nyq_modes = modes_mod.nyquist_mode_table_from_grid(
+        mpol=int(mpol),
+        ntor=int(ntor),
+        ntheta=int(ntheta),
+        nzeta=int(nzeta),
+    )
+    return bx.prepare_booz_xform_constants(
+        nfp=int(nfp),
+        mboz=int(mboz),
+        nboz=int(nboz),
+        asym=bool(asym),
+        xm=np.asarray(main_modes.m, dtype=np.int32),
+        xn=np.asarray(main_modes.n * int(nfp), dtype=np.int32),
+        xm_nyq=np.asarray(nyq_modes.m, dtype=np.int32),
+        xn_nyq=np.asarray(nyq_modes.n * int(nfp), dtype=np.int32),
+    )
+
+
+def prewarm_vmec_boozer_equal_arc_cache(
+    static: Any,
+    wout: Any,
+    *,
+    mboz: int = _VMEC_BOOZER_PARITY_MIN_MODE_COUNT,
+    nboz: int = _VMEC_BOOZER_PARITY_MIN_MODE_COUNT,
+    asym: bool | None = None,
+) -> None:  # pragma: no cover - exercised by optional VMEC-JAX optimizer smoke tests.
+    """Precompute Boozer constants before VMEC-JAX jits residual callbacks."""
+
+    cfg = static.cfg
+    _cached_booz_xform_constants(
+        nfp=int(getattr(wout, "nfp", getattr(cfg, "nfp", 1))),
+        mpol=int(cfg.mpol),
+        ntor=int(cfg.ntor),
+        ntheta=int(cfg.ntheta),
+        nzeta=int(cfg.nzeta),
+        mboz=int(mboz),
+        nboz=int(nboz),
+        asym=bool(getattr(cfg, "lasym", False) if asym is None else asym),
+    )
+
+
 def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
     state: Any,
     static: Any,
@@ -2311,11 +2370,16 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
         indata=indata,
         signgs=getattr(wout, "signgs", 1),
     )
-    constants, grids = bx.prepare_booz_xform_constants_from_inputs(
-        inputs=inputs,
+    asym = bool(getattr(inputs, "bmns", None) is not None)
+    constants, grids = _cached_booz_xform_constants(
+        nfp=int(getattr(wout, "nfp", getattr(static.cfg, "nfp", 1))),
+        mpol=int(static.cfg.mpol),
+        ntor=int(static.cfg.ntor),
+        ntheta=int(static.cfg.ntheta),
+        nzeta=int(static.cfg.nzeta),
         mboz=mboz_int,
         nboz=nboz_int,
-        asym=bool(getattr(inputs, "bmns", None) is not None),
+        asym=asym,
     )
     surface_indices = None
     if surface_stencil_width is not None:
@@ -2341,7 +2405,7 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
     ns_b = int(bmnc_b_all.shape[0])
     if ns_b < 2:
         raise RuntimeError("booz_xform_jax output needs at least two radial surfaces")
-    ns_b_full = int(np.asarray(out.get("ns_b", ns_b)))
+    ns_b_full = max(int(ns_full) - 1, int(ns_b))
     s_half = _boozer_half_mesh_s_grid(
         out.get("jlist"),
         ns_b=ns_b,
@@ -2349,7 +2413,7 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
         dtype=base_Rcos.dtype,
     )
 
-    radial_spacing = float(s_half[1] - s_half[0])
+    radial_spacing = 1.0 / float(max(ns_b_full, 1))
     bmnc_b = _interp_radial(bmnc_b_all, s_half, s_value)
     rmnc_b = _interp_radial(
         jnp.asarray(out["rmnc_b"], dtype=base_Rcos.dtype), s_half, s_value
