@@ -143,10 +143,12 @@ equilibria. For the actual solved-boundary workflow, use
 mirrors ``vmec_jax``'s QA optimizer, uses the original VMEC-JAX high-weight
 ``MeanIota`` target ``iota = 0.41``, adds a signed solved-profile floor
 ``iota(s) >= 0.41`` by default, targets ``A = 6``, and appends a small
-SPECTRAX-GK transport residual with ``mboz = nboz = 21``. Growth-only transport objectives
-differentiate the SPECTRAX-GK eigenvalue directly; quasilinear and reduced
-nonlinear-window objectives use that solver growth rate with differentiable
-geometry-level transport weights. Production nonlinear
+SPECTRAX-GK transport residual with ``mboz = nboz = 21``. With
+``--use-simple-seed`` the driver follows the upstream VMEC-JAX QA script and
+solves the requested ``max_mode`` branch directly rather than using mode
+continuation. Growth-only transport objectives differentiate the SPECTRAX-GK
+eigenvalue directly; quasilinear and reduced nonlinear-window objectives use
+that solver growth rate with differentiable geometry-level transport weights. Production nonlinear
 optimization claims still require long post-transient replicated SPECTRAX-GK
 transport-window audits on the resulting candidate equilibria.
 
@@ -181,6 +183,7 @@ python examples/optimization/QA_optimization_with_nonlinear_heat_flux.py \
   --use-simple-seed \
   --max-mode 5 \
   --min-vmec-mode 7 \
+  --make-plots \
   --outdir runs/qa_constraints_only
 
 # Transport-aware: same QA objective plus a small reduced nonlinear heat-flux residual.
@@ -188,6 +191,7 @@ python examples/optimization/QA_optimization_with_nonlinear_heat_flux.py \
   --use-simple-seed \
   --max-mode 5 \
   --min-vmec-mode 7 \
+  --make-plots \
   --outdir runs/qa_plus_reduced_nonlinear_heat_flux \
   --spectrax-weight 0.05 \
   --transport-kind nonlinear_window_heat_flux \
@@ -195,6 +199,9 @@ python examples/optimization/QA_optimization_with_nonlinear_heat_flux.py \
   --alphas 0.0 \
   --ky-values 0.3
 ```
+
+On a GPU node, append `--solver-device gpu`; otherwise JAX will use the
+available default backend.
 
 For a bounded local smoke before a longer VMEC-JAX solve, use the growth-only
 one-evaluation preset documented in
