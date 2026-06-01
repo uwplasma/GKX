@@ -19,6 +19,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import importlib
+import os
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Literal, Sequence, cast
 
@@ -42,6 +44,51 @@ VMECJAXTransportObjectiveKind = Literal[
     "quasilinear_flux",
     "nonlinear_window_heat_flux",
 ]
+
+
+def _module_search_root(module_name: str) -> Path | None:
+    """Return the import root for an already importable optional backend."""
+
+    try:
+        module = importlib.import_module(module_name)
+    except Exception:
+        return None
+    raw_file = getattr(module, "__file__", None)
+    if raw_file is not None:
+        return Path(str(raw_file)).resolve(strict=False).parent.parent
+    raw_paths = getattr(module, "__path__", None)
+    if raw_paths is None:
+        return None
+    for raw in raw_paths:
+        path = Path(str(raw)).resolve(strict=False)
+        if path.exists():
+            return path
+    return None
+
+
+def _pin_current_optional_backend_paths() -> None:
+    """Keep geometry discovery on the same optional backends VMEC-JAX imported.
+
+    The differentiable-geometry bridge intentionally prefers explicit local
+    checkouts over globally installed packages.  When examples run from a fresh
+    temporary clone while another VMEC-JAX checkout exists in ``$HOME``, that
+    preference can otherwise evict the VMEC-JAX module that owns the traced
+    optimization state.  Pinning the currently importable backend paths makes
+    the VMEC-JAX/SPECTRAX-GK objective reproducible without requiring users to
+    hand-set environment variables.
+    """
+
+    if not (os.environ.get("SPECTRAX_VMEC_JAX_PATH") or os.environ.get("VMEC_JAX_PATH")):
+        root = _module_search_root("vmec_jax")
+        if root is not None:
+            os.environ.setdefault("SPECTRAX_VMEC_JAX_PATH", str(root))
+    if not (
+        os.environ.get("SPECTRAX_BOOZ_XFORM_JAX_PATH")
+        or os.environ.get("BOOZ_XFORM_JAX_PATH")
+    ):
+        root = _module_search_root("booz_xform_jax")
+        if root is not None:
+            os.environ.setdefault("SPECTRAX_BOOZ_XFORM_JAX_PATH", str(root))
 
 
 @dataclass(frozen=True)
@@ -284,6 +331,7 @@ def vmec_jax_transport_objective_from_state(
 ) -> jnp.ndarray:
     """Evaluate a scalar SPECTRAX-GK transport objective from a VMEC-JAX state."""
 
+    _pin_current_optional_backend_paths()
     cfg = config or VMECJAXTransportObjectiveConfig()
     samples = cfg.sample_set
     solver_options = cfg.objective_options()
@@ -343,9 +391,11 @@ class VMECJAXSpectraxTransportObjective:
     def to_objective_term(self, *, target: float | np.ndarray, residual_weight: float) -> Any:
         """Return a VMEC-JAX ``ObjectiveTerm`` when VMEC-JAX is installed."""
 
+        _pin_current_optional_backend_paths()
         objective_term = getattr(importlib.import_module("vmec_jax"), "ObjectiveTerm")
 
         def _prepare(ctx: Any) -> Any:
+            _pin_current_optional_backend_paths()
             wout_ref = self.wout_reference if self.wout_reference is not None else _reference_wout_from_context(ctx)
             prewarm_vmec_boozer_equal_arc_cache(
                 ctx.static,

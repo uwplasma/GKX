@@ -201,7 +201,11 @@ python examples/optimization/QA_optimization_with_nonlinear_heat_flux.py \
 ```
 
 On a GPU node, append `--solver-device gpu`; otherwise JAX will use the
-available default backend.
+available default backend. The QA-only branch defaults to the upstream
+VMEC-JAX `scipy` optimizer. The transport-aware branch defaults to
+`scalar_trust` because dense exact SciPy Jacobians are memory-heavy for the
+SPECTRAX-GK transport residual; override `--method` only when you have a
+specific optimizer/memory reason.
 
 For a bounded local smoke before a longer VMEC-JAX solve, use the growth-only
 one-evaluation preset documented in
