@@ -790,6 +790,13 @@ combined-SEMs separation.
 
 ![SPECTRAX-GK matched no-ESS to optimized QA/ESS nonlinear audit](docs/_static/qa_no_ess_to_optimized_nonlinear_audit.png)
 
+The newer projected VMEC-JAX transport-gradient step is documented separately
+as a negative transfer audit: the reduced single-sample transport metric
+improves by `3.55%`, but the matched long-window `t=[350,700]` nonlinear
+ensemble comparison changes the mean heat flux from `9.833` to `9.891`
+(`-0.585%` relative reduction). That candidate is not promoted as a nonlinear
+heat-flux optimum.
+
 The production nonlinear optimization guard below is the enforced claim
 boundary. It passes as a release-safety check because startup/reduced nonlinear
 artifacts are scoped correctly and two long post-transient replicated holdout
