@@ -53,6 +53,31 @@ def final_iota_profiles_from_vmec_result(result: Any) -> tuple[np.ndarray, np.nd
     return np.asarray(iotas, dtype=float), np.asarray(iotaf, dtype=float)
 
 
+def _final_quasisymmetry_from_vmec_result(result: Any) -> float | None:
+    """Return an independent final QS residual from a VMEC-JAX result."""
+
+    optimizer = getattr(result, "final_optimizer", None)
+    if optimizer is None:
+        return None
+    state = getattr(result, "final_state", None)
+    if state is not None:
+        try:
+            residuals = getattr(optimizer, "_evaluate_residuals_from_state")(state)
+            qs_total = getattr(optimizer, "_qs_total_from_state")(state, residuals)
+            value = _finite_float_or_none(qs_total)
+            if value is not None:
+                return value
+        except Exception:
+            pass
+    params = getattr(result, "final_params", None)
+    if params is not None:
+        try:
+            return _finite_float_or_none(getattr(optimizer, "quasisymmetry_objective")(params))
+        except Exception:
+            return None
+    return None
+
+
 def _history_from_candidate(candidate: Any) -> Mapping[str, Any]:
     if isinstance(candidate, Mapping):
         return candidate
@@ -81,7 +106,14 @@ def build_solved_vmec_candidate_gate(
     aspect = _finite_float_or_none(history.get("aspect_final"))
     mean_iota = _finite_float_or_none(history.get("iota_final"))
     mean_abs_iota = None if mean_iota is None else abs(mean_iota)
-    qs_residual = _finite_float_or_none(history.get("qs_final"))
+    qs_residual = None
+    qs_source = "history"
+    if not isinstance(candidate, Mapping):
+        qs_residual = _final_quasisymmetry_from_vmec_result(candidate)
+        if qs_residual is not None:
+            qs_source = "vmec_jax_state"
+    if qs_residual is None:
+        qs_residual = _finite_float_or_none(history.get("qs_final"))
     aspect_error = None if aspect is None else abs(aspect - float(target_aspect))
 
     if iota_profiles is None and not isinstance(candidate, Mapping):
@@ -126,6 +158,7 @@ def build_solved_vmec_candidate_gate(
             "value": qs_residual,
             "maximum": float(qs_residual_max),
             "margin": None if qs_residual is None else float(qs_residual_max) - qs_residual,
+            "source": qs_source,
             "passed": _finite_gate(qs_residual, upper=float(qs_residual_max)),
         },
         "iota_profile": {
