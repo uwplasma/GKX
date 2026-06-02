@@ -367,6 +367,12 @@ from spectraxgk.vmec_jax_transport_gradient import (
     build_boundary_transport_gradient_report,
     write_boundary_transport_gradient_report,
 )
+from spectraxgk.vmec_jax_transport_line_search import (
+    ProjectedLineSearchPolicy,
+    projected_line_search_input_manifest,
+    select_projected_line_search_candidate,
+    sparse_descent_direction_from_gradient_report,
+)
 from spectraxgk.zonal_objective import (
     ZONAL_FLOW_OBJECTIVE_NAMES,
     ZonalFlowObjectiveConfig,
@@ -728,6 +734,7 @@ __all__ = [
     "stellarator_itg_vmec_boozer_sample_objective_table_from_state",
     "StellaratorObjectivePortfolioContract",
     "ReducedPortfolioArtifactGuardConfig",
+    "ProjectedLineSearchPolicy",
     "VMECJAXSpectraxTransportObjective",
     "VMECJAXTransportObjectiveConfig",
     "VMECJAXTransportObjectiveKind",
@@ -742,6 +749,7 @@ __all__ = [
     "objective_portfolio_sensitivity_report",
     "portfolio_objective_weight_vector",
     "portfolio_sample_weight_tensor",
+    "projected_line_search_input_manifest",
     "reduced_portfolio_artifact_guard_report",
     "validate_objective_portfolio_contract",
     "ZONAL_FLOW_OBJECTIVE_NAMES",
@@ -771,6 +779,8 @@ __all__ = [
     "spectrax_transport_objective_tuple",
     "select_admitted_transport_candidate",
     "build_boundary_transport_gradient_report",
+    "select_projected_line_search_candidate",
+    "sparse_descent_direction_from_gradient_report",
     "vmec_jax_transport_objective_from_state",
     "write_boundary_transport_gradient_report",
     "solver_ready_geometry_mapping",
