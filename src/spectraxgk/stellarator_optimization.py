@@ -76,6 +76,9 @@ class StellaratorITGOptimizationConfig:
     nonlinear_steps: int = 520
     nonlinear_tail_fraction: float = 0.25
     quasilinear_csat: float = 0.75
+    reference_density_gradient: float = 2.2
+    reference_temperature_gradient: float = 6.0
+    scan_density_gradients: tuple[float, ...] = (0.8, 1.2, 1.6, 2.2, 3.0, 3.8, 4.8)
     fd_step: float = 1.0e-4
 
     def with_kind_defaults(self, kind: StellaratorObjectiveKind) -> "StellaratorITGOptimizationConfig":
@@ -278,6 +281,9 @@ def smooth_positive(x: jnp.ndarray | float, *, beta: float = 18.0) -> jnp.ndarra
 def _qa_core_features(
     params: jnp.ndarray | Sequence[float],
     config: StellaratorITGOptimizationConfig,
+    *,
+    density_gradient: float | jnp.ndarray | None = None,
+    temperature_gradient: float | jnp.ndarray | None = None,
 ) -> dict[str, jnp.ndarray]:
     """Return the linear/quasilinear QA-ITG features without nonlinear tracing."""
 
@@ -287,6 +293,18 @@ def _qa_core_features(
 
     aspect_target = jnp.asarray(config.target_aspect, dtype=dtype)
     iota_target = jnp.asarray(config.target_iota, dtype=dtype)
+    aln = jnp.asarray(
+        config.reference_density_gradient if density_gradient is None else density_gradient,
+        dtype=dtype,
+    )
+    alti = jnp.asarray(
+        config.reference_temperature_gradient if temperature_gradient is None else temperature_gradient,
+        dtype=dtype,
+    )
+    aln_ref = jnp.asarray(config.reference_density_gradient, dtype=dtype)
+    alti_ref = jnp.asarray(config.reference_temperature_gradient, dtype=dtype)
+    density_drive = (aln - aln_ref) / jnp.maximum(aln_ref, jnp.asarray(1.0e-8, dtype=dtype))
+    temperature_drive = (alti - alti_ref) / jnp.maximum(alti_ref, jnp.asarray(1.0e-8, dtype=dtype))
 
     aspect = aspect_target * jnp.exp(
         -0.48 * minor_shift + 0.060 * elong_shift**2 + 0.045 * ripple**2
@@ -307,7 +325,14 @@ def _qa_core_features(
         + 0.080 * shear_metric
         + 0.055 * elong_shift**2
     )
-    raw_drive = 1.8 * bad_curvature + 0.25 * shear_metric + 0.08 * (mean_iota - iota_target) ** 2 - 0.24
+    raw_drive = (
+        1.8 * bad_curvature
+        + 0.25 * shear_metric
+        + 0.08 * (mean_iota - iota_target) ** 2
+        + 0.035 * density_drive
+        + 0.10 * temperature_drive
+        - 0.24
+    )
     growth_rate = 0.025 + smooth_positive(raw_drive, beta=20.0)
     frequency = -0.42 * mean_iota + 0.090 * shear_shift - 0.045 * ripple
     linear_heat_flux_weight = (
@@ -316,6 +341,9 @@ def _qa_core_features(
         + 0.18 * elong_shift**2
         + 0.10 * shear_metric
         + 0.06 * jnp.sqrt((mean_iota - iota_target) ** 2 + 1.0e-10)
+    ) * jnp.maximum(
+        jnp.asarray(0.15, dtype=dtype),
+        1.0 + 0.12 * density_drive + 0.06 * temperature_drive,
     )
     ql_features = jnp.asarray([growth_rate, kperp_eff2, linear_heat_flux_weight], dtype=dtype)
     quasilinear_heat_flux = quasilinear_feature_objective(
@@ -340,6 +368,9 @@ def _qa_core_features(
 def qa_max_mode1_observables(
     params: jnp.ndarray | Sequence[float],
     config: StellaratorITGOptimizationConfig | None = None,
+    *,
+    density_gradient: float | jnp.ndarray | None = None,
+    temperature_gradient: float | jnp.ndarray | None = None,
 ) -> dict[str, jnp.ndarray]:
     """Map a QA max-mode-1 boundary/control vector to differentiable ITG observables.
 
@@ -353,8 +384,18 @@ def qa_max_mode1_observables(
 
     cfg = config or StellaratorITGOptimizationConfig()
     p = _validate_params(params)
-    core = _qa_core_features(p, cfg)
-    times, heat_flux = nonlinear_heat_flux_trace(p, cfg)
+    core = _qa_core_features(
+        p,
+        cfg,
+        density_gradient=density_gradient,
+        temperature_gradient=temperature_gradient,
+    )
+    times, heat_flux = nonlinear_heat_flux_trace(
+        p,
+        cfg,
+        density_gradient=density_gradient,
+        temperature_gradient=temperature_gradient,
+    )
     nl_summary = nonlinear_heat_flux_window_metrics(times, heat_flux, tail_fraction=cfg.nonlinear_tail_fraction)
 
     return {
@@ -744,12 +785,15 @@ def stellarator_itg_portfolio_gate_payload(
 def nonlinear_heat_flux_trace(
     params: jnp.ndarray | Sequence[float],
     config: StellaratorITGOptimizationConfig | None = None,
+    *,
+    density_gradient: float | jnp.ndarray | None = None,
+    temperature_gradient: float | jnp.ndarray | None = None,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Return a differentiable short-window ITG heat-flux envelope trace.
 
     The envelope evolves ``E`` with a fixed-step RK2 discretization,
 
-    ``dE/dt = 2 gamma E - alpha E^2``, ``Q_i(t) = W_i E``.
+    ``dE/dt = 2 gamma E - alpha E^2``, ``Q_env(t) = W_i E``.
 
     ``gamma`` and ``W_i`` come from the same differentiable QA/ITG feature map
     as the linear and quasilinear objectives. The output is therefore useful for
@@ -760,27 +804,18 @@ def nonlinear_heat_flux_trace(
     cfg = config or StellaratorITGOptimizationConfig()
     p = _validate_params(params)
     dtype = p.dtype
-    # Inline only the feature subset needed here to avoid recursion through
-    # qa_max_mode1_observables.
-    minor_shift, elong_shift, ripple, shear_shift = p
-    aspect_target = jnp.asarray(cfg.target_aspect, dtype=dtype)
-    iota_target = jnp.asarray(cfg.target_iota, dtype=dtype)
-    aspect = aspect_target * jnp.exp(-0.48 * minor_shift + 0.060 * elong_shift**2 + 0.045 * ripple**2)
-    mean_iota = iota_target + 0.19 * shear_shift - 0.030 * ripple + 0.018 * elong_shift
-    qa_residual = jnp.sqrt((0.18 * ripple) ** 2 + (0.035 * elong_shift * ripple) ** 2 + (2.0e-4) ** 2)
-    shear_metric = jnp.sqrt(shear_shift**2 + 4.0e-4)
-    bad_curvature = (
-        0.055
-        + 0.18 * qa_residual
-        + 0.030 * (aspect / aspect_target - 1.0) ** 2
-        + 0.035 * elong_shift**2
+    _, elong_shift, ripple, _ = p
+    core = _qa_core_features(
+        p,
+        cfg,
+        density_gradient=density_gradient,
+        temperature_gradient=temperature_gradient,
     )
-    kperp_eff2 = 0.34 + 0.18 / aspect + 0.42 * qa_residual + 0.080 * shear_metric + 0.055 * elong_shift**2
-    growth_rate = 0.025 + smooth_positive(
-        1.8 * bad_curvature + 0.25 * shear_metric + 0.08 * (mean_iota - iota_target) ** 2 - 0.24,
-        beta=20.0,
-    )
-    flux_weight = 0.38 + 2.4 * qa_residual + 0.18 * elong_shift**2 + 0.10 * shear_metric
+    growth_rate = core["growth_rate"]
+    kperp_eff2 = core["kperp_eff2"]
+    qa_residual = core["qa_residual"]
+    shear_metric = core["shear_metric"]
+    flux_weight = core["linear_heat_flux_weight"]
     saturation = 1.2 + 2.8 * kperp_eff2 + 0.45 * shear_metric + 1.4 * qa_residual
     drive_weight = flux_weight / (1.0 + 0.35 * kperp_eff2)
     dt = jnp.asarray(cfg.nonlinear_dt, dtype=dtype)
@@ -837,6 +872,62 @@ def nonlinear_heat_flux_window_metrics(
         "trend": trend,
         "slope": slope,
         "start_index": jnp.asarray(start),
+    }
+
+
+def stellarator_itg_density_gradient_scan(
+    params: jnp.ndarray | Sequence[float],
+    config: StellaratorITGOptimizationConfig | None = None,
+    *,
+    density_gradients: Sequence[float] | None = None,
+    temperature_gradient: float | None = None,
+) -> dict[str, Any]:
+    """Return a reduced ITG response scan versus normalized density gradient.
+
+    The scan uses the same explicit drive inputs as the reduced growth,
+    quasilinear, and nonlinear-envelope objectives. It is intended for
+    candidate ranking and figure QA before promotion to solved VMEC/Boozer
+    nonlinear SPECTRAX-GK scans.
+    """
+
+    cfg = config or StellaratorITGOptimizationConfig()
+    gradients = np.asarray(
+        cfg.scan_density_gradients if density_gradients is None else density_gradients,
+        dtype=float,
+    )
+    if gradients.ndim != 1 or gradients.size == 0 or not np.all(np.isfinite(gradients)):
+        raise ValueError("density_gradients must be a finite non-empty vector")
+    if np.any(gradients <= 0.0):
+        raise ValueError("density_gradients must be positive")
+    alti = cfg.reference_temperature_gradient if temperature_gradient is None else float(temperature_gradient)
+    means: list[float] = []
+    cvs: list[float] = []
+    trends: list[float] = []
+    growth_rates: list[float] = []
+    quasilinear_fluxes: list[float] = []
+    for aln in gradients:
+        obs = qa_max_mode1_observables(
+            params,
+            cfg,
+            density_gradient=float(aln),
+            temperature_gradient=alti,
+        )
+        means.append(float(obs["nonlinear_heat_flux_mean"]))
+        cvs.append(float(obs["nonlinear_heat_flux_cv"]))
+        trends.append(float(obs["nonlinear_heat_flux_trend"]))
+        growth_rates.append(float(obs["growth_rate"]))
+        quasilinear_fluxes.append(float(obs["quasilinear_heat_flux"]))
+    slope = float(np.polyfit(gradients, np.asarray(means, dtype=float), deg=1)[0])
+    return {
+        "density_gradient_axis": gradients.tolist(),
+        "fixed_temperature_gradient": float(alti),
+        "heat_flux_mean": means,
+        "heat_flux_cv": cvs,
+        "heat_flux_trend": trends,
+        "growth_rate": growth_rates,
+        "quasilinear_heat_flux": quasilinear_fluxes,
+        "linear_slope_dQ_d_a_over_Ln": slope,
+        "scope": "reduced_max_mode1_density_gradient_response_not_full_nonlinear_scan",
     }
 
 
@@ -1170,6 +1261,7 @@ __all__ = [
     "optimize_stellarator_itg",
     "qa_max_mode1_observables",
     "qa_observable_vector",
+    "stellarator_itg_density_gradient_scan",
     "stellarator_itg_portfolio_gate_payload",
     "smooth_positive",
     "stellarator_itg_portfolio_sensitivity_report",

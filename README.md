@@ -219,6 +219,31 @@ VMEC-JAX `scipy` optimizer. The transport-aware branch defaults to
 SPECTRAX-GK transport residual; override `--method` only when you have a
 specific optimizer/memory reason.
 
+If the goal is to reproduce the upstream VMEC-JAX `QA_optimization.py`
+baseline exactly, use its original aspect target `A=5` and disable the
+additional solved-profile iota-floor gate. That branch is intentionally
+different from the aspect-6 low-turbulence study above:
+
+```bash
+VMEC_JAX_ROOT=/path/to/vmec_jax
+python examples/optimization/QA_optimization_with_nonlinear_heat_flux.py \
+  --constraints-only \
+  --input "$VMEC_JAX_ROOT/examples/data/input.minimal_seed_nfp2" \
+  --use-simple-seed \
+  --max-mode 5 \
+  --min-vmec-mode 7 \
+  --target-aspect 5.0 \
+  --min-iota 0.41 \
+  --iota-objective target \
+  --disable-iota-profile-floor \
+  --method scipy \
+  --scipy-tr-solver exact \
+  --mboz 21 \
+  --nboz 21 \
+  --make-plots \
+  --outdir runs/qa_constraints_only_upstream_a5
+```
+
 For a bounded local smoke before a longer VMEC-JAX solve, use the growth-only
 one-evaluation preset documented in
 `examples/optimization/README.md`. The scientific promotion step after a real
@@ -891,7 +916,11 @@ Differentiable stellarator ITG optimization examples live in
 with three turbulence objectives: small linear ITG growth rate, small
 quasilinear ITG heat-flux proxy, and a small reduced late-window nonlinear
 heat-flux envelope. Each example reports AD-vs-finite-difference checks, UQ
-covariance diagnostics, objective histories, and polished figures.
+covariance diagnostics, objective histories, reduced density-gradient response
+curves, reduced fixed-gradient envelope traces, reduced LCFS `|B|` surfaces,
+and reduced Boozer-LCFS `|B|` maps. These are reduced diagnostics; solved-WOUT
+surfaces and turbulent nonlinear traces belong to the VMEC-JAX promotion audit
+above.
 
 ![SPECTRAX-GK differentiable stellarator ITG optimization](docs/_static/stellarator_itg_optimization_comparison.png)
 
