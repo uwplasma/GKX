@@ -44,6 +44,7 @@ VMECJAXTransportObjectiveKind = Literal[
     "quasilinear_flux",
     "nonlinear_window_heat_flux",
 ]
+VMECJAXTransportObjectiveTransform = Literal["raw", "scaled", "log1p"]
 
 
 def _module_search_root(module_name: str) -> Path | None:
@@ -109,6 +110,8 @@ class VMECJAXTransportObjectiveConfig:
     nonlinear_saturation_floor: float = 1.0e-10
     reference_length: float | None = None
     reference_b: float | None = None
+    objective_transform: VMECJAXTransportObjectiveTransform = "raw"
+    objective_scale: float = 1.0
     validate_finite: bool = True
 
     @property
@@ -132,6 +135,10 @@ class VMECJAXTransportObjectiveConfig:
             raise ValueError("nx must be positive and ny must be at least 3")
         if float(self.nonlinear_csat) <= 0.0:
             raise ValueError("nonlinear_csat must be positive")
+        if self.objective_transform not in ("raw", "scaled", "log1p"):
+            raise ValueError(f"unknown VMEC-JAX transport objective transform {self.objective_transform!r}")
+        if float(self.objective_scale) <= 0.0:
+            raise ValueError("objective_scale must be positive")
 
     def objective_options(self) -> dict[str, Any]:
         """Return SPECTRAX-GK solver options for this objective."""
@@ -322,6 +329,22 @@ def _transport_feature_table_from_state(
     )
 
 
+def _apply_objective_transform(
+    value: jnp.ndarray,
+    config: VMECJAXTransportObjectiveConfig,
+) -> jnp.ndarray:
+    """Return a dimensionless transport residual with optional safe scaling."""
+
+    raw = jnp.asarray(value)
+    if config.objective_transform == "raw":
+        return raw
+    scale = jnp.asarray(float(config.objective_scale), dtype=raw.dtype)
+    scaled = raw / jnp.maximum(scale, jnp.asarray(1.0e-30, dtype=raw.dtype))
+    if config.objective_transform == "scaled":
+        return scaled
+    return jnp.sign(scaled) * jnp.log1p(jnp.abs(scaled))
+
+
 def vmec_jax_transport_objective_from_state(
     state: Any,
     static: Any,
@@ -358,7 +381,7 @@ def vmec_jax_transport_objective_from_state(
     else:
         objective_table = table[..., SOLVER_OBJECTIVE_NAMES.index("mixing_length_heat_flux_proxy")][..., None]
         weights = (1.0,) if cfg.objective_weights is None else cfg.objective_weights
-    return aggregate_objective_portfolio(
+    value = aggregate_objective_portfolio(
         objective_table,
         surface_weights=samples.surface_weights,
         alpha_weights=samples.alpha_weights,
@@ -366,6 +389,7 @@ def vmec_jax_transport_objective_from_state(
         objective_weights=weights,
         reduction=samples.reduction,
     )
+    return _apply_objective_transform(value, cfg)
 
 
 @dataclass(frozen=True)
@@ -415,6 +439,8 @@ class VMECJAXSpectraxTransportObjective:
                     "mboz": int(self.config.mboz),
                     "nboz": int(self.config.nboz),
                     "ntheta": int(self.config.ntheta),
+                    "objective_transform": self.config.objective_transform,
+                    "objective_scale": float(self.config.objective_scale),
                 },
             )
 
@@ -430,6 +456,8 @@ class VMECJAXSpectraxTransportObjective:
                 "mboz": int(self.config.mboz),
                 "nboz": int(self.config.nboz),
                 "ntheta": int(self.config.ntheta),
+                "objective_transform": self.config.objective_transform,
+                "objective_scale": float(self.config.objective_scale),
             },
             prepare=_prepare,
         )
