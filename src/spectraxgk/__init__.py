@@ -362,6 +362,11 @@ from spectraxgk.vmec_jax_transport_admission import (
     candidate_transport_metric,
     select_admitted_transport_candidate,
 )
+from spectraxgk.vmec_jax_transport_gradient import (
+    boundary_spec_record,
+    build_boundary_transport_gradient_report,
+    write_boundary_transport_gradient_report,
+)
 from spectraxgk.zonal_objective import (
     ZONAL_FLOW_OBJECTIVE_NAMES,
     ZonalFlowObjectiveConfig,
@@ -731,6 +736,7 @@ __all__ = [
     "aggregate_objective_portfolio",
     "build_solved_vmec_candidate_gate",
     "build_transport_admission_report",
+    "boundary_spec_record",
     "candidate_transport_metric",
     "final_iota_profiles_from_vmec_result",
     "objective_portfolio_sensitivity_report",
@@ -764,7 +770,9 @@ __all__ = [
     "solver_scalar_objective_from_vector",
     "spectrax_transport_objective_tuple",
     "select_admitted_transport_candidate",
+    "build_boundary_transport_gradient_report",
     "vmec_jax_transport_objective_from_state",
+    "write_boundary_transport_gradient_report",
     "solver_ready_geometry_mapping",
     "vmec_boozer_aggregate_line_search_holdout_report",
     "vmec_boozer_aggregate_scalar_objective_finite_difference_report",
