@@ -9,6 +9,7 @@ time on it?
 from __future__ import annotations
 
 from collections.abc import Mapping
+from types import SimpleNamespace
 from typing import Any, cast
 
 import numpy as np
@@ -61,6 +62,28 @@ def _final_quasisymmetry_from_vmec_result(result: Any) -> float | None:
         return None
     state = getattr(result, "final_state", None)
     if state is not None:
+        try:
+            import jax.numpy as jnp
+            import vmec_jax as vj  # type: ignore[import-not-found]
+
+            static = getattr(optimizer, "_static")
+            qs = vj.QuasisymmetryRatioResidual(
+                helicity_m=int(getattr(optimizer, "_helicity_m", 1) or 1),
+                helicity_n=int(getattr(optimizer, "_helicity_n", 0) or 0),
+                surfaces=np.arange(0.0, 1.01, 0.1),
+            )
+            ctx = SimpleNamespace(
+                static=static,
+                indata=getattr(optimizer, "_indata"),
+                signgs=int(getattr(optimizer, "_signgs")),
+                flux=getattr(optimizer, "_flux"),
+                pressure=jnp.zeros_like(jnp.asarray(getattr(static, "s"))),
+            )
+            value = _finite_float_or_none(qs.total(ctx, state))
+            if value is not None:
+                return value
+        except Exception:
+            pass
         try:
             residuals = getattr(optimizer, "_evaluate_residuals_from_state")(state)
             qs_total = getattr(optimizer, "_qs_total_from_state")(state, residuals)
