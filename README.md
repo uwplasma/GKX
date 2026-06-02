@@ -157,12 +157,15 @@ solves the requested ``max_mode`` branch directly rather than using mode
 continuation. Growth-only transport objectives differentiate the SPECTRAX-GK
 eigenvalue directly; quasilinear and reduced nonlinear-window objectives use
 that solver growth rate with differentiable geometry-level transport weights.
-Production nonlinear optimization claims still require long post-transient
-replicated SPECTRAX-GK transport-window audits on the resulting candidate
-equilibria. The paper-facing solved-boundary comparison should use the final
-WOUTs from the QA-only and transport-aware VMEC-JAX branches, regenerate 3D
-``|B|``-colored surfaces and Boozer LCFS ``|B|`` maps from those WOUTs, and
-then launch the fixed-gradient nonlinear transport audits.
+  Production nonlinear optimization claims still require long post-transient
+  replicated SPECTRAX-GK transport-window audits on the resulting candidate
+  equilibria. Candidate admission is fail-closed: only authoritative final
+  `solved_wout_gate.json` files can promote a solved WOUT to long-window audits;
+  gates reconstructed from `history.json` are advisory diagnostics only. The
+  paper-facing solved-boundary comparison should use the final WOUTs from the
+  QA-only and transport-aware VMEC-JAX branches, regenerate 3D
+  ``|B|``-colored surfaces and Boozer LCFS ``|B|`` maps from those WOUTs, and
+  then launch the fixed-gradient nonlinear transport audits.
 
 Regenerate the panel and machine-readable sidecars with:
 
