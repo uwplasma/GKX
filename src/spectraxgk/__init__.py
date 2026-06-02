@@ -355,6 +355,13 @@ from spectraxgk.vmec_jax_candidate_gate import (
     build_solved_vmec_candidate_gate,
     final_iota_profiles_from_vmec_result,
 )
+from spectraxgk.vmec_jax_transport_admission import (
+    DEFAULT_TRANSPORT_METRIC_KEYS,
+    VMECJAXTransportAdmissionPolicy,
+    build_transport_admission_report,
+    candidate_transport_metric,
+    select_admitted_transport_candidate,
+)
 from spectraxgk.zonal_objective import (
     ZONAL_FLOW_OBJECTIVE_NAMES,
     ZonalFlowObjectiveConfig,
@@ -719,8 +726,12 @@ __all__ = [
     "VMECJAXSpectraxTransportObjective",
     "VMECJAXTransportObjectiveConfig",
     "VMECJAXTransportObjectiveKind",
+    "VMECJAXTransportAdmissionPolicy",
+    "DEFAULT_TRANSPORT_METRIC_KEYS",
     "aggregate_objective_portfolio",
     "build_solved_vmec_candidate_gate",
+    "build_transport_admission_report",
+    "candidate_transport_metric",
     "final_iota_profiles_from_vmec_result",
     "objective_portfolio_sensitivity_report",
     "portfolio_objective_weight_vector",
@@ -752,6 +763,7 @@ __all__ = [
     "solver_grid_options_from_ky_values",
     "solver_scalar_objective_from_vector",
     "spectrax_transport_objective_tuple",
+    "select_admitted_transport_candidate",
     "vmec_jax_transport_objective_from_state",
     "solver_ready_geometry_mapping",
     "vmec_boozer_aggregate_line_search_holdout_report",
