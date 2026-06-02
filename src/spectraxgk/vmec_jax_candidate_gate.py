@@ -9,7 +9,7 @@ time on it?
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 
@@ -40,7 +40,7 @@ def final_iota_profiles_from_vmec_result(result: Any) -> tuple[np.ndarray, np.nd
     if state is None or optimizer is None:
         return None
     try:
-        import vmec_jax as vj
+        import vmec_jax as vj  # type: ignore[import-not-found]
 
         _chips, iotas, iotaf = vj.equilibrium_iota_profiles_from_state(
             state=state,
@@ -136,7 +136,7 @@ def build_solved_vmec_candidate_gate(
             "passed": bool(profile_passed),
         },
     }
-    passed = all(bool(check["passed"]) for check in checks.values())
+    passed = all(bool(cast(Mapping[str, Any], check).get("passed")) for check in checks.values())
     return {
         "kind": "vmec_jax_solved_wout_candidate_gate",
         "passed": bool(passed),
