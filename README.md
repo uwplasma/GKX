@@ -123,20 +123,28 @@ This aspect-6 QA comparison follows the ``vmec_jax`` fixed-boundary
 optimization pattern: constrain quasisymmetry, target the rotational transform,
 audit the solved ``iota`` profile, hold the aspect ratio near ``A = 6``, and
 optionally add a differentiable reduced nonlinear ITG heat-flux residual.
-The figure compares two optimized reduced max-mode-1 designs:
+The figure compares two optimized reduced max-mode-1 designs. It is not the
+final WOUT from the upstream `vmec_jax/examples/optimization/QA_optimization.py`
+solve; it is the fast reduced artifact used to validate differentiable
+transport-objective plumbing before running expensive solved-boundary VMEC-JAX
+and full SPECTRAX-GK nonlinear audits:
 
 - **QA constraints**: quasisymmetry + aspect + iota constraints + regularization.
-- **QA + reduced NL Q**: the same constraints plus a late-window reduced
-  nonlinear heat-flux objective.
+- **QA + reduced NL envelope**: the same constraints plus a late-window reduced
+  nonlinear heat-flux envelope objective.
 
 At fixed ``a/L_n = 2.2`` and ``a/L_Ti = 6``, the transport-aware design lowers
 the reduced late-window heat flux from ``1.61e-2`` to ``1.43e-2`` in the
 tracked artifact, a ``10.7%`` reduction, while keeping ``A = 5.972``,
 ``iota = 0.759``, helical shaping amplitude ``0.163``, and QA residual
-``2.36e-4``. The fixed-gradient trace now runs to ``t v_ti/a = 400`` and
-passes a long-window running-mean/half-window convergence gate. The ``Q_i``
-versus ``a/L_n`` scan at fixed ``a/L_Ti`` also has a smaller fitted slope for
-the transport-aware design. The 3D surfaces and LCFS ``|B|`` maps are
+``2.36e-4``. The fixed-gradient reduced-envelope trace runs to
+``t v_ti/a = 400`` and passes a long-window running-mean/half-window
+convergence gate. Its smoothness is expected because it integrates
+``dE/dt = 2 gamma E - alpha E^2`` and plots ``Q_env = W_i E``; it is not a
+chaotic nonlinear SPECTRAX-GK turbulent trace. The ``Q_env`` versus ``a/L_n``
+scan at fixed ``a/L_Ti`` also has a smaller fitted slope for the
+transport-aware design. The 3D surfaces are colored by reduced ``|B|`` and the
+bottom row shows reduced Boozer-LCFS ``|B|`` surfaces, but both are
 non-axisymmetric reduced max-mode-1 visualizations, not solved VMEC
 equilibria. For the actual solved-boundary workflow, use
 ``examples/optimization/vmec_jax_qa_low_turbulence_optimization.py``: it
@@ -148,9 +156,13 @@ SPECTRAX-GK transport residual with ``mboz = nboz = 21``. With
 solves the requested ``max_mode`` branch directly rather than using mode
 continuation. Growth-only transport objectives differentiate the SPECTRAX-GK
 eigenvalue directly; quasilinear and reduced nonlinear-window objectives use
-that solver growth rate with differentiable geometry-level transport weights. Production nonlinear
-optimization claims still require long post-transient replicated SPECTRAX-GK
-transport-window audits on the resulting candidate equilibria.
+that solver growth rate with differentiable geometry-level transport weights.
+Production nonlinear optimization claims still require long post-transient
+replicated SPECTRAX-GK transport-window audits on the resulting candidate
+equilibria. The paper-facing solved-boundary comparison should use the final
+WOUTs from the QA-only and transport-aware VMEC-JAX branches, regenerate 3D
+``|B|``-colored surfaces and Boozer LCFS ``|B|`` maps from those WOUTs, and
+then launch the fixed-gradient nonlinear transport audits.
 
 Regenerate the panel and machine-readable sidecars with:
 

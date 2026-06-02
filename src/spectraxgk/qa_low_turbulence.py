@@ -9,7 +9,10 @@ between two low-order quasi-axisymmetric (QA) stellarator designs:
   ITG heat-flux envelope in the objective.
 
 The utilities are intended for optimization plumbing, sensitivity validation,
-and manuscript figure generation. They are not a substitute for a production
+and manuscript figure generation. The heat-flux trace is a smooth reduced
+envelope, not a turbulent nonlinear gyrokinetic time trace, and the visualized
+surfaces are reduced boundary models rather than solved VMEC-JAX equilibria.
+They are not a substitute for a production
 VMEC/Boozer/full-nonlinear-GK optimization loop.
 """
 
@@ -860,6 +863,8 @@ def _fixed_trace_payload(params: Sequence[float], config: QALowTurbulenceConfig)
     return {
         "density_gradient": float(config.fixed_density_gradient),
         "temperature_gradient": float(config.fixed_temperature_gradient),
+        "trace_kind": "smooth_reduced_nonlinear_envelope_not_full_turbulent_gk",
+        "trace_equation": "dE/dt = 2 gamma E - alpha E^2; Q_env = W E",
         "times": [float(x) for x in times_np],
         "heat_flux": [float(x) for x in heat_flux_np],
         "window": window_payload,
@@ -976,8 +981,8 @@ def qa_low_turbulence_comparison_payload(
                 "helical-shaping, regularization, and optional sqrt(weight * late-window reduced "
                 "nonlinear heat flux) residuals"
             ),
-            "nonlinear_envelope": "dE/dt = 2 gamma E - alpha E^2; Q_i = W_i E; fixed-step RK2",
-            "gradient_scan": "fixed a/L_T while scanning a/L_n and refitting late-window Q_i means",
+            "nonlinear_envelope": "dE/dt = 2 gamma E - alpha E^2; Q_env = W_i E; fixed-step RK2",
+            "gradient_scan": "fixed a/L_T while scanning a/L_n and refitting late-window Q_env means",
         },
         "config": asdict(cfg),
         "scope_notes": [
