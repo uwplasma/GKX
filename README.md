@@ -138,6 +138,21 @@ objective_tuples = [
 
 These scripts are the recommended starting point for producing real VMEC-JAX WOUTs with the same high-weight `iota = 0.41` target as the upstream QA example. Keep the SPECTRAX-GK transport weight small while tuning so the QA, aspect-ratio, and iota constraints remain the dominant solved-equilibrium gate. Full nonlinear turbulent-flux optimization claims still require matched long post-transient SPECTRAX-GK audits, seed/timestep replicates, and running-average convergence.
 
+For algorithm comparisons, run the full `max_mode=5`, `mboz=nboz=21` sweep on
+a GPU node and build the real-WOUT comparison panel with:
+
+```bash
+python tools/build_vmec_jax_qa_full_sweep_panel.py \
+  --run-root tools_out/vmec_jax_qa_full_sweep_YYYYMMDD \
+  --out docs/_static/vmec_jax_qa_full_sweep_panel.png --pdf
+```
+
+That panel compares the upstream QA baseline, growth-rate, quasilinear-flux,
+nonlinear-window, and projected/admission optimizer variants when available.
+It plots nonlinear `Q(t)` only after matched long-window SPECTRAX-GK audit
+traces exist for the final WOUTs; reduced optimizer objectives are not treated
+as saturated turbulent heat flux.
+
 Optimizer scope: the transport scripts default to `METHOD = "scalar_trust"`.
 SPECTRAX-GK transport objectives use reverse-mode custom-VJP pieces, while the
 pure VMEC-JAX dense `scipy`/`exact` least-squares path requests forward-mode
