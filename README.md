@@ -138,6 +138,15 @@ objective_tuples = [
 
 These scripts are the recommended starting point for producing real VMEC-JAX WOUTs with the same high-weight `iota = 0.41` target as the upstream QA example. Keep the SPECTRAX-GK transport weight small while tuning so the QA, aspect-ratio, and iota constraints remain the dominant solved-equilibrium gate. Full nonlinear turbulent-flux optimization claims still require matched long post-transient SPECTRAX-GK audits, seed/timestep replicates, and running-average convergence.
 
+Optimizer scope: the transport scripts default to `METHOD = "scalar_trust"`.
+SPECTRAX-GK transport objectives use reverse-mode custom-VJP pieces, while the
+pure VMEC-JAX dense `scipy`/`exact` least-squares path requests forward-mode
+JVP columns. For publication work, use a two-stage workflow: first solve the
+upstream QA baseline and verify aspect/iota/QS, then run a bounded
+transport-weight refinement with AD/finite-difference gradient checks and
+long-window nonlinear audits. Appending the transport tuple by itself is not a
+transport-optimization success claim.
+
 For configurable dry-runs, guarded transport-weight ladders, and solved-WOUT admission gates, use `examples/optimization/vmec_jax_qa_low_turbulence_optimization.py` and the tools documented in [Differentiable Stellarator Optimization](docs/stellarator_optimization.rst). The reduced panels below are retained as AD/FD and plotting-plumbing diagnostics; they are not the upstream VMEC-JAX QA baseline and should not be read as final `iota > 0.41` solved-VMEC optimization results.
 
 ## Self-Contained VMEC Geometry Examples
