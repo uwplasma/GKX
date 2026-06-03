@@ -114,13 +114,15 @@ def boundary_chain_accepted_parameter_indices(
             continue
         internal_ok = bool(row.get("frozen_axis_jvp_vjp_consistent"))
         exact_ok = bool(row.get("frozen_axis_matches_exact_fd"))
+        convention_ok = bool(row.get("frozen_axis_convention_verified", False))
         branch_ok = (
             bool(row.get("growth_branch_locality_checked"))
             and bool(row.get("growth_branch_locality_passed"))
             if bool(require_growth_branch_locality)
             else True
         )
-        if internal_ok and branch_ok and (exact_ok or not bool(require_exact_fd)):
+        derivative_ok = exact_ok if bool(require_exact_fd) else (exact_ok or convention_ok)
+        if internal_ok and branch_ok and derivative_ok:
             accepted.append(int(index))
     return tuple(dict.fromkeys(accepted))
 
@@ -167,6 +169,9 @@ def projected_line_search_input_manifest(
         manifest["boundary_chain_filter"] = {
             "enabled": True,
             "require_exact_fd": bool(require_boundary_chain_exact_fd),
+            "require_frozen_axis_convention_when_exact_fd_missing": not bool(
+                require_boundary_chain_exact_fd
+            ),
             "require_growth_branch_locality": bool(require_growth_branch_locality),
             "collection_classification": boundary_chain_collection.get("classification"),
             "accepted_parameter_indices": list(
