@@ -432,6 +432,10 @@ def build_boundary_chain_collection_summary(
                     isinstance(passes, Mapping)
                     and passes.get("frozen_axis_matches_exact_fd", False)
                 ),
+                "exact_fd_consistent": bool(
+                    isinstance(passes, Mapping)
+                    and passes.get("frozen_axis_matches_exact_fd", False)
+                ),
                 "frozen_axis_convention_verified": bool(
                     isinstance(passes, Mapping)
                     and passes.get("frozen_axis_convention_verified", False)
