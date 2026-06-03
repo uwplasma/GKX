@@ -144,8 +144,11 @@ a GPU node and build the real-WOUT comparison panel with:
 ```bash
 python tools/build_vmec_jax_qa_full_sweep_panel.py \
   --run-root tools_out/vmec_jax_qa_full_sweep_YYYYMMDD \
-  --out docs/_static/vmec_jax_qa_full_sweep_panel.png --pdf
+  --out docs/_static/vmec_jax_qa_full_sweep_panel.png
 ```
+
+Add ``--pdf`` locally when a vector export is needed for a manuscript; the
+repository tracks the lean PNG/JSON/CSV artifacts used by the README and docs.
 
 That panel compares the upstream QA baseline, growth-rate, quasilinear-flux,
 nonlinear-window, and projected/admission optimizer variants when available.
