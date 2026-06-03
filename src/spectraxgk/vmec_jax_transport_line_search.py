@@ -48,6 +48,7 @@ def sparse_descent_direction_from_gradient_report(
     top_n: int | None = None,
     boundary_chain_collection: Mapping[str, Any] | None = None,
     require_boundary_chain_exact_fd: bool = True,
+    require_growth_branch_locality: bool = False,
 ) -> np.ndarray:
     """Return a normalized sparse descent direction from a gradient report.
 
@@ -70,6 +71,7 @@ def sparse_descent_direction_from_gradient_report(
             boundary_chain_accepted_parameter_indices(
                 boundary_chain_collection,
                 require_exact_fd=bool(require_boundary_chain_exact_fd),
+                require_growth_branch_locality=bool(require_growth_branch_locality),
             )
         )
     )
@@ -96,6 +98,7 @@ def boundary_chain_accepted_parameter_indices(
     collection: Mapping[str, Any],
     *,
     require_exact_fd: bool = True,
+    require_growth_branch_locality: bool = False,
 ) -> tuple[int, ...]:
     """Return parameter indices admitted by a boundary-chain collection gate."""
 
@@ -111,7 +114,13 @@ def boundary_chain_accepted_parameter_indices(
             continue
         internal_ok = bool(row.get("frozen_axis_jvp_vjp_consistent"))
         exact_ok = bool(row.get("frozen_axis_matches_exact_fd"))
-        if internal_ok and (exact_ok or not bool(require_exact_fd)):
+        branch_ok = (
+            bool(row.get("growth_branch_locality_checked"))
+            and bool(row.get("growth_branch_locality_passed"))
+            if bool(require_growth_branch_locality)
+            else True
+        )
+        if internal_ok and branch_ok and (exact_ok or not bool(require_exact_fd)):
             accepted.append(int(index))
     return tuple(dict.fromkeys(accepted))
 
@@ -123,6 +132,7 @@ def projected_line_search_input_manifest(
     top_n: int | None = None,
     boundary_chain_collection: Mapping[str, Any] | None = None,
     require_boundary_chain_exact_fd: bool = True,
+    require_growth_branch_locality: bool = False,
 ) -> dict[str, Any]:
     """Build a JSON-safe manifest for projected line-search input generation."""
 
@@ -131,6 +141,7 @@ def projected_line_search_input_manifest(
         top_n=top_n,
         boundary_chain_collection=boundary_chain_collection,
         require_boundary_chain_exact_fd=bool(require_boundary_chain_exact_fd),
+        require_growth_branch_locality=bool(require_growth_branch_locality),
     )
     step_rows = []
     for step in steps:
@@ -156,11 +167,13 @@ def projected_line_search_input_manifest(
         manifest["boundary_chain_filter"] = {
             "enabled": True,
             "require_exact_fd": bool(require_boundary_chain_exact_fd),
+            "require_growth_branch_locality": bool(require_growth_branch_locality),
             "collection_classification": boundary_chain_collection.get("classification"),
             "accepted_parameter_indices": list(
                 boundary_chain_accepted_parameter_indices(
                     boundary_chain_collection,
                     require_exact_fd=bool(require_boundary_chain_exact_fd),
+                    require_growth_branch_locality=bool(require_growth_branch_locality),
                 )
             ),
         }
