@@ -212,9 +212,9 @@ python examples/optimization/QA_optimization_with_nonlinear_heat_flux.py \
   --outdir runs/qa_plus_reduced_nonlinear_heat_flux \
   --spectrax-weight 0.05 \
   --transport-kind nonlinear_window_heat_flux \
-  --surfaces 0.64 \
-  --alphas 0.0 \
-  --ky-values 0.3
+  --surfaces 0.45,0.64,0.78 \
+  --alphas 0.0,0.7853981633974483 \
+  --ky-values 0.190,0.300,0.476
 ```
 
 On a GPU node, append `--solver-device gpu`; otherwise JAX will use the
