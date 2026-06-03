@@ -153,6 +153,15 @@ It plots nonlinear `Q(t)` only after matched long-window SPECTRAX-GK audit
 traces exist for the final WOUTs; reduced optimizer objectives are not treated
 as saturated turbulent heat flux.
 
+![VMEC-JAX QA max-mode-5 optimizer sweep](docs/_static/vmec_jax_qa_full_sweep_panel.png)
+
+The sweep above was run on the office GPU node from a clean clone with
+`max_mode=5` and `mboz=nboz=21`. Direct scalar transport weighting often lowers
+the reduced metric only marginally while damaging aspect ratio, iota, or
+quasisymmetry. The projected/admission steps preserve the QA-style solved-WOUT
+gate and improve the reduced nonlinear-window metric, so they are the correct
+starting point for expensive long-window nonlinear `Q(t)` audits.
+
 Optimizer scope: the transport scripts default to `METHOD = "scalar_trust"`.
 SPECTRAX-GK transport objectives use reverse-mode custom-VJP pieces, while the
 pure VMEC-JAX dense `scipy`/`exact` least-squares path requests forward-mode
