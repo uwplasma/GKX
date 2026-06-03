@@ -370,6 +370,10 @@ from spectraxgk.vmec_jax_transport_gradient import (
     build_boundary_transport_gradient_report,
     write_boundary_transport_gradient_report,
 )
+from spectraxgk.vmec_jax_boundary_chain import (
+    boundary_chain_summary_from_probe,
+    build_boundary_chain_summary,
+)
 from spectraxgk.vmec_jax_transport_line_search import (
     ProjectedLineSearchPolicy,
     projected_line_search_input_manifest,
@@ -750,6 +754,8 @@ __all__ = [
     "build_nonlinear_audit_redesign_report",
     "build_transport_admission_report",
     "boundary_spec_record",
+    "boundary_chain_summary_from_probe",
+    "build_boundary_chain_summary",
     "candidate_transport_metric",
     "final_iota_profiles_from_vmec_result",
     "objective_portfolio_sensitivity_report",
