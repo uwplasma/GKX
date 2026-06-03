@@ -117,39 +117,28 @@ resolved diagnostics, and heat flux.
 
 ## Differentiable Stellarator Optimization
 
-SPECTRAX-GK includes three transparent optimization examples for reduced QA ITG design studies:
+For solved-boundary QA transport experiments, start from the VMEC-JAX-style scripts below. They intentionally mirror VMEC-JAX `examples/optimization/QA_optimization.py`: top-level editable constants, `MAX_MODE = 5`, `TARGET_ASPECT = 5.0`, `TARGET_IOTA = 0.41`, `IOTA_WEIGHT = 10_000.0`, and the original aspect/iota/quasisymmetry objective tuples. SPECTRAX-GK is added only as one extra transport residual in `objective_tuples`.
 
 ```bash
-python examples/optimization/stellarator_itg_growth_optimization.py
-python examples/optimization/stellarator_itg_quasilinear_flux_optimization.py
-python examples/optimization/stellarator_itg_nonlinear_heat_flux_optimization.py
-python examples/optimization/compare_stellarator_itg_optimizations.py
+python examples/optimization/QA_optimization_with_growth_rate.py
+python examples/optimization/QA_optimization_with_quasilinear_flux.py
+python examples/optimization/QA_optimization_with_nonlinear_heat_flux.py
 ```
 
-The scripts follow the editable structure of VMEC-JAX `examples/optimization/QA_optimization.py`: visible problem constants, explicit QA/aspect/iota residuals, one transport residual, an Adam optimizer loop, AD-vs-finite-difference gates, covariance diagnostics, and explicit artifact generation. The solved-boundary QA baseline for production studies should be the final WOUT from VMEC-JAX `QA_optimization.py` or from the SPECTRAX-GK constraints-only VMEC-JAX wrapper, not the reduced max-mode-1 visualization below.
+The key structure is deliberately explicit:
 
-![Differentiable QA stellarator ITG optimization comparison](docs/_static/stellarator_itg_optimization_comparison.png)
-
-The comparison panel shows the three objectives side by side: minimizing linear ITG growth rate, minimizing a mixing-length quasilinear heat-flux proxy, and minimizing a reduced nonlinear-window heat-flux envelope. The LCFS and Boozer-coordinate `|B|` views are reduced max-mode-1 diagnostics, plotted at higher angular resolution with a shared `jet` scale; they validate optimization plumbing and figure generation, not a final solved-VMEC nonlinear turbulence claim.
-
-For solved-boundary QA + transport experiments, use the VMEC-JAX-style driver:
-
-```bash
-python examples/optimization/QA_optimization_with_nonlinear_heat_flux.py \
-  --constraints-only \
-  --use-simple-seed \
-  --max-mode 5 \
-  --min-vmec-mode 7 \
-  --target-aspect 5.0 \
-  --disable-iota-profile-floor \
-  --make-plots
+```python
+objective_tuples = [
+    (aspect.J, TARGET_ASPECT, ASPECT_WEIGHT),
+    (iota.J, TARGET_IOTA, IOTA_WEIGHT),
+    (qs.J, 0.0, QS_WEIGHT),
+    (transport.J, 0.0, SPECTRAX_WEIGHT),
+]
 ```
 
-Then add a scoped SPECTRAX-GK transport residual for growth, quasilinear flux, or the reduced nonlinear-window estimator. Full nonlinear turbulent-flux optimization claims still require matched long post-transient SPECTRAX-GK audits, seed/timestep replicates, and running-average convergence.
+These scripts are the recommended starting point for producing real VMEC-JAX WOUTs with the same high-weight `iota = 0.41` target as the upstream QA example. Keep the SPECTRAX-GK transport weight small while tuning so the QA, aspect-ratio, and iota constraints remain the dominant solved-equilibrium gate. Full nonlinear turbulent-flux optimization claims still require matched long post-transient SPECTRAX-GK audits, seed/timestep replicates, and running-average convergence.
 
-![Aspect-6 QA low-turbulence optimization comparison](docs/_static/qa_low_turbulence_comparison.png)
-
-The aspect-6 low-turbulence panel remains a reduced, differentiable planning artifact: it compares constraints-only and transport-aware max-mode-1 designs and records AD/FD and late-window envelope gates. Full commands, equations, scope boundaries, and the VMEC-JAX/Boozer bridge are documented in [Differentiable Stellarator Optimization](docs/stellarator_optimization.rst).
+For configurable dry-runs, guarded transport-weight ladders, and solved-WOUT admission gates, use `examples/optimization/vmec_jax_qa_low_turbulence_optimization.py` and the tools documented in [Differentiable Stellarator Optimization](docs/stellarator_optimization.rst). The reduced panels below are retained as AD/FD and plotting-plumbing diagnostics; they are not the upstream VMEC-JAX QA baseline and should not be read as final `iota > 0.41` solved-VMEC optimization results.
 
 ## Self-Contained VMEC Geometry Examples
 
