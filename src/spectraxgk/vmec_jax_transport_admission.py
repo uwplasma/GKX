@@ -72,7 +72,7 @@ class VMECJAXNonlinearAuditPolicy:
     minimum_sample_count: int = 12
     recommended_surfaces: tuple[float, ...] = (0.45, 0.64, 0.78)
     recommended_alphas: tuple[float, ...] = (0.0, pi / 4.0)
-    recommended_ky_values: tuple[float, ...] = (0.190, 0.300, 0.476)
+    recommended_ky_values: tuple[float, ...] = (0.10, 0.30, 0.50)
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-safe representation."""
@@ -144,6 +144,19 @@ def _sample_values(sample_set: Any, *names: str) -> tuple[float, ...]:
     return ()
 
 
+def _ky_values_single_grid_compatible(values: Sequence[float]) -> bool:
+    """Return whether ``ky`` values can share the current single-``Ly`` grid."""
+
+    if not values:
+        return False
+    arr = np.asarray(values, dtype=float)
+    if arr.ndim != 1 or arr.size < 1 or not np.all(np.isfinite(arr)) or np.any(arr <= 0.0):
+        return False
+    base = float(np.min(arr))
+    ratios = arr / base
+    return bool(np.allclose(ratios, np.rint(ratios), rtol=5.0e-10, atol=5.0e-12))
+
+
 def transport_objective_sample_summary(
     sample_set: Any,
     *,
@@ -174,6 +187,8 @@ def transport_objective_sample_summary(
         blockers.append("insufficient_field_line_coverage")
     if ky_count < int(policy.minimum_ky_count):
         blockers.append("insufficient_ky_coverage")
+    if ky_count and not _ky_values_single_grid_compatible(ky_values):
+        blockers.append("ky_values_not_single_grid_compatible")
     if sample_count < int(policy.minimum_sample_count):
         blockers.append("insufficient_total_sample_count")
     return {
