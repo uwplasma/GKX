@@ -252,8 +252,13 @@ def build_boundary_chain_collection_summary(
                 "n_frozen_axis_internal_pass": 0,
                 "n_exact_fd_consistent": 0,
                 "n_branch_sensitive": 0,
+                "n_growth_branch_locality_checked": 0,
+                "n_growth_branch_locality_passed": 0,
             },
-            "next_action": "run at least one boundary-chain probe before interpreting the VMEC-JAX transport-gradient convention",
+            "next_action": (
+                "run at least one boundary-chain probe before interpreting the "
+                "VMEC-JAX transport-gradient convention"
+            ),
         }
 
     rows: list[dict[str, Any]] = []
@@ -272,6 +277,13 @@ def build_boundary_chain_collection_summary(
         passes = summary.get("passes", {})
         errors = summary.get("errors", {})
         metrics = summary.get("metrics", {})
+        growth_branch = payload.get("growth_branch_locality")
+        growth_checked = isinstance(growth_branch, Mapping) and bool(
+            growth_branch.get("enabled", True)
+        )
+        growth_passed = bool(
+            isinstance(growth_branch, Mapping) and growth_branch.get("passed", False)
+        )
         rows.append(
             {
                 "index": payload.get("index"),
@@ -310,6 +322,13 @@ def build_boundary_chain_collection_summary(
                     if isinstance(errors, Mapping)
                     else None
                 ),
+                "growth_branch_locality_checked": growth_checked,
+                "growth_branch_locality_passed": growth_passed,
+                "growth_branch_locality_classification": (
+                    growth_branch.get("classification")
+                    if isinstance(growth_branch, Mapping)
+                    else None
+                ),
             }
         )
 
@@ -323,6 +342,8 @@ def build_boundary_chain_collection_summary(
         if row["classification"]
         == "frozen_axis_replay_consistent_but_exact_fd_branch_sensitive"
     )
+    n_growth_checked = sum(1 for row in rows if row["growth_branch_locality_checked"])
+    n_growth_passed = sum(1 for row in rows if row["growth_branch_locality_passed"])
     finite = n_finite == n_total
     all_internal = finite and n_internal == n_total
     if not finite:
@@ -370,6 +391,8 @@ def build_boundary_chain_collection_summary(
             "n_frozen_axis_internal_pass": n_internal,
             "n_exact_fd_consistent": n_exact,
             "n_branch_sensitive": n_branch,
+            "n_growth_branch_locality_checked": n_growth_checked,
+            "n_growth_branch_locality_passed": n_growth_passed,
         },
         "rows": rows,
         "next_action": next_action,
