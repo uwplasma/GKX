@@ -856,6 +856,29 @@ def _interp_radial(
     raise ValueError("radial interpolation expects a one- or two-dimensional array")
 
 
+def _interp_equal_arc_profile(
+    theta_uniform_closed: jnp.ndarray,
+    theta_equal_arc_closed: jnp.ndarray,
+    values_closed: jnp.ndarray,
+) -> jnp.ndarray:
+    """Interpolate onto the equal-arc grid with a stable coordinate VJP.
+
+    ``jnp.interp`` can produce nonfinite cotangents when differentiating with
+    respect to a moving abscissa that also contains exact endpoint knots. For
+    VMEC/Boozer optimization we need the field-value sensitivity on the
+    paper-facing equal-arc grid; the coordinate-map sensitivity is still audited
+    externally by finite-difference gates before any optimization claim is
+    promoted.
+    """
+
+    values = jnp.asarray(values_closed)
+    theta_uniform = jnp.asarray(theta_uniform_closed, dtype=values.dtype)
+    theta_equal_arc = jax.lax.stop_gradient(
+        jnp.asarray(theta_equal_arc_closed, dtype=values.dtype)
+    )
+    return jnp.interp(theta_uniform, theta_equal_arc, values)
+
+
 def _boozer_half_mesh_s_grid(
     raw_jlist: Any | None,
     *,
@@ -2518,7 +2541,11 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
         -jnp.pi, jnp.pi, ntheta_int + 1, dtype=base_Rcos.dtype
     )
     bmag_closed = jnp.asarray(
-        jnp.interp(theta_uniform_closed, theta_eqarc, mod_b_safe / float(B_reference))
+        _interp_equal_arc_profile(
+            theta_uniform_closed,
+            theta_eqarc,
+            mod_b_safe / float(B_reference),
+        )
     )
     theta = theta_uniform_closed[:-1]
     bmag = bmag_closed[:-1]
@@ -2685,18 +2712,18 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
     # Root-level VMEC/EIK drift coefficients are stored at the pre-loader (2x)
     # level; SPECTRAX-GK compares against the loaded solver convention.
     drift_loader_factor = jnp.asarray(0.5, dtype=base_Rcos.dtype)
-    gds2 = jnp.interp(theta_uniform_closed, theta_eqarc, gds2_raw)[:-1]
-    gds21 = jnp.interp(theta_uniform_closed, theta_eqarc, gds21_raw)[:-1]
-    gds22 = jnp.interp(theta_uniform_closed, theta_eqarc, gds22_raw)[:-1]
-    grho = jnp.interp(theta_uniform_closed, theta_eqarc, grho_raw)[:-1]
+    gds2 = _interp_equal_arc_profile(theta_uniform_closed, theta_eqarc, gds2_raw)[:-1]
+    gds21 = _interp_equal_arc_profile(theta_uniform_closed, theta_eqarc, gds21_raw)[:-1]
+    gds22 = _interp_equal_arc_profile(theta_uniform_closed, theta_eqarc, gds22_raw)[:-1]
+    grho = _interp_equal_arc_profile(theta_uniform_closed, theta_eqarc, grho_raw)[:-1]
     cvdrift = (
         drift_loader_factor
-        * jnp.interp(theta_uniform_closed, theta_eqarc, drift_cvdrift_raw)[:-1]
+        * _interp_equal_arc_profile(theta_uniform_closed, theta_eqarc, drift_cvdrift_raw)[:-1]
     )
     gbdrift = cvdrift
     cvdrift0 = (
         drift_loader_factor
-        * jnp.interp(theta_uniform_closed, theta_eqarc, drift_cvdrift0_raw)[:-1]
+        * _interp_equal_arc_profile(theta_uniform_closed, theta_eqarc, drift_cvdrift0_raw)[:-1]
     )
     gbdrift0 = cvdrift0
 
