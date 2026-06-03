@@ -95,8 +95,8 @@ class QALowTurbulenceConfig:
         4.8,
     )
     fd_step: float = 1.0e-4
-    surface_ntheta: int = 52
-    surface_nzeta: int = 52
+    surface_ntheta: int = 72
+    surface_nzeta: int = 72
     n_field_periods: int = 2
 
 
