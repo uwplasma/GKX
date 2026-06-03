@@ -165,6 +165,23 @@ corresponding Boozer-LCFS `|B|` contours. It is included to avoid confusing
 reduced visualization fixtures with solved-equilibrium QA results. It is not a
 nonlinear heat-flux optimization claim.
 
+The panels below summarize the three SPECTRAX-GK transport-objective examples:
+small linear ITG growth rate, small quasilinear ITG heat-flux proxy, and a small
+reduced late-window nonlinear heat-flux envelope. These are reduced max-mode-1
+optimization-plumbing diagnostics with AD/finite-difference and UQ checks; the
+synthetic LCFS/Boozer views are not solved VMEC surfaces, and the smooth
+`Q_env` traces are not turbulent nonlinear-GK heat-flux traces.
+
+![SPECTRAX-GK reduced linear, quasilinear, and nonlinear-window optimization comparison](docs/_static/stellarator_itg_optimization_comparison.png)
+
+![SPECTRAX-GK stellarator ITG optimization UQ diagnostics](docs/_static/stellarator_itg_optimization_uq.png)
+
+The individual reproducible panels are
+`docs/_static/stellarator_itg_growth_optimization.png`,
+`docs/_static/stellarator_itg_quasilinear_optimization.png`, and
+`docs/_static/stellarator_itg_nonlinear_optimization.png`; regenerate them with
+the scripts in `examples/optimization/`.
+
 ## Self-Contained VMEC Geometry Examples
 
 The VMEC-backed examples no longer require users to generate separate EIK
@@ -822,26 +839,11 @@ stride-rounded final times but rejects intermediate checkpoint chunks.
 ![SPECTRAX-GK QA/ESS targeted nonlinear gradient follow-up](docs/_static/qa_ess_descent_profile_rel2_plus_delta_followup_replicate_spread_diagnostic.png)
 
 Differentiable stellarator ITG optimization examples live in
-`examples/optimization/`. They optimize the same QA, max-mode-1 control vector
-with three turbulence objectives: small linear ITG growth rate, small
-quasilinear ITG heat-flux proxy, and a small reduced late-window nonlinear
-heat-flux envelope. Each example reports AD-vs-finite-difference checks, UQ
-covariance diagnostics, objective histories, reduced density-gradient response
-curves, reduced fixed-gradient envelope traces, reduced LCFS `|B|` surfaces,
-and reduced Boozer-LCFS `|B|` maps. These are reduced diagnostics; solved-WOUT
-surfaces and turbulent nonlinear traces belong to the VMEC-JAX promotion audit
-above.
-
-![SPECTRAX-GK stellarator ITG optimization UQ diagnostics](docs/_static/stellarator_itg_optimization_uq.png)
-
-The UQ panel is the current README-level reduced differentiability gate: it
-verifies AD/FD derivative parity for each active reduced control and estimates
-local Gauss-Newton covariance from the final weighted objective residual. The
-companion reduced 3D-surface panel is intentionally kept out of the README
-because it is a synthetic max-mode-1 visualization, not a solved VMEC-JAX QA
-surface. These are validated optimization-plumbing diagnostics for
-stellarator-transport objectives, not a final absolute-flux optimization claim.
-Full
+`examples/optimization/`. The README-level comparison and UQ panels near the top
+verify AD/FD derivative parity for each active reduced control and estimate
+local Gauss-Newton covariance from the final weighted objective residual. These
+are validated optimization-plumbing diagnostics for stellarator-transport
+objectives, not a final absolute-flux optimization claim. Full
 `vmec_jax -> booz_xform_jax -> SPECTRAX-GK` nonlinear optimization remains
 scoped to the next promotion gate: production nonlinear turbulence-gradient or
 robust finite-difference audits with converged post-transient heat-flux
