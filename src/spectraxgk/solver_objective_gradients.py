@@ -86,6 +86,75 @@ _SOLVER_OBJECTIVE_ALIASES = {
     "frequency": "omega",
     "quasilinear_flux": "mixing_length_heat_flux_proxy",
 }
+
+
+def _select_dominant_eigen_triplet(
+    matrix: jnp.ndarray,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """Return the max-real eigenvalue and biorthogonal right/left vectors."""
+
+    eigvals, eigvecs = jnp.linalg.eig(matrix)
+    index = jnp.argmax(jnp.real(eigvals))
+    eigenvalue = eigvals[index]
+    right = eigvecs[:, index]
+    left_vals, left_vecs = jnp.linalg.eig(jnp.conj(jnp.swapaxes(matrix, 0, 1)))
+    left_index = jnp.argmin(jnp.abs(left_vals - jnp.conj(eigenvalue)))
+    left = left_vecs[:, left_index]
+    overlap = jnp.vdot(left, right)
+    tiny = jnp.asarray(1.0e-30, dtype=jnp.real(overlap).dtype)
+    safe_overlap = jnp.where(jnp.abs(overlap) > tiny, overlap, tiny + 0.0j)
+    left = left / jnp.conj(safe_overlap)
+    return eigenvalue, right, left
+
+
+@jax.custom_vjp
+def _dominant_real_eigenvalue_complex(matrix: jnp.ndarray) -> jnp.ndarray:
+    eigenvalue, _right, _left = _select_dominant_eigen_triplet(matrix)
+    return jnp.real(eigenvalue)
+
+
+def _dominant_real_eigenvalue_complex_fwd(
+    matrix: jnp.ndarray,
+) -> tuple[jnp.ndarray, tuple[jnp.ndarray, jnp.ndarray]]:
+    eigenvalue, right, left = _select_dominant_eigen_triplet(matrix)
+    return jnp.real(eigenvalue), (right, left)
+
+
+def _dominant_real_eigenvalue_complex_bwd(
+    residual: tuple[jnp.ndarray, jnp.ndarray],
+    cotangent: jnp.ndarray,
+) -> tuple[jnp.ndarray]:
+    right, left = residual
+    matrix_cotangent = jnp.asarray(cotangent) * jnp.outer(jnp.conj(left), right)
+    return (matrix_cotangent,)
+
+
+_dominant_real_eigenvalue_complex.defvjp(
+    _dominant_real_eigenvalue_complex_fwd,
+    _dominant_real_eigenvalue_complex_bwd,
+)
+
+
+def dominant_real_eigenvalue(matrix: jnp.ndarray) -> jnp.ndarray:
+    """Return the dominant growth rate with an implicit left/right VJP.
+
+    This helper treats the max-real eigenvalue branch selected at the primal
+    point as locally isolated. Its reverse rule uses
+    ``d lambda = w^H dA v`` with ``w^H v = 1`` instead of differentiating
+    through non-Hermitian eigenvectors. Branch isolation is still a physics
+    gate: callers that use this in optimization should keep finite-difference
+    or branch-continuity checks enabled near accepted candidates.
+    """
+
+    matrix_arr = jnp.asarray(matrix)
+    if matrix_arr.ndim != 2 or matrix_arr.shape[0] != matrix_arr.shape[1]:
+        raise ValueError("matrix must be square")
+    if not jnp.iscomplexobj(matrix_arr):
+        complex_dtype = jnp.complex128 if matrix_arr.dtype == jnp.float64 else jnp.complex64
+        matrix_arr = matrix_arr.astype(complex_dtype)
+    return _dominant_real_eigenvalue_complex(matrix_arr)
+
+
 _VMEC_BOOZER_GEOMETRY_OPTION_KEYS = {
     "surface_index",
     "torflux",
@@ -499,8 +568,7 @@ def solver_growth_rate_from_geometry(
         )
 
     matrix = explicit_complex_operator_matrix(lambda state_arr: rhs_phi(state_arr)[0], state_shape)
-    eigenvalues = jnp.linalg.eigvals(matrix)
-    return jnp.max(jnp.real(eigenvalues))
+    return dominant_real_eigenvalue(matrix)
 
 
 def vmec_boozer_solver_objective_vector_from_state(  # pragma: no cover
@@ -2656,6 +2724,7 @@ __all__ = [
     "VMEC_BOOZER_STATE_PARAMETER_FAMILIES",
     "VMEC_BOOZER_STATE_PARAMETER_NAMES",
     "default_solver_geometry_design_params",
+    "dominant_real_eigenvalue",
     "linear_solver_geometry_gradient_report",
     "mode21_vmec_boozer_linear_frequency_gradient_report",
     "mode21_vmec_boozer_nonlinear_window_gradient_report",
