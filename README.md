@@ -147,7 +147,23 @@ transport-weight refinement with AD/finite-difference gradient checks and
 long-window nonlinear audits. Appending the transport tuple by itself is not a
 transport-optimization success claim.
 
-For configurable dry-runs, guarded transport-weight ladders, and solved-WOUT admission gates, use `examples/optimization/vmec_jax_qa_low_turbulence_optimization.py` and the tools documented in [Differentiable Stellarator Optimization](docs/stellarator_optimization.rst). The reduced panels below are retained as AD/FD and plotting-plumbing diagnostics; they are not the upstream VMEC-JAX QA baseline and should not be read as final `iota > 0.41` solved-VMEC optimization results.
+For configurable dry-runs, guarded transport-weight ladders, and solved-WOUT
+admission gates, use
+`examples/optimization/vmec_jax_qa_low_turbulence_optimization.py` and the
+tools documented in
+[Differentiable Stellarator Optimization](docs/stellarator_optimization.rst).
+The reduced panels below are retained as AD/FD and plotting-plumbing
+diagnostics; they are not the upstream VMEC-JAX QA baseline and should not be
+read as final `iota > 0.41` solved-VMEC optimization results.
+
+![Solved VMEC-JAX QA boundary and Boozer diagnostics](docs/_static/vmec_jax_qa_solved_boundary_boozer_panel.png)
+
+The panel above is the solved-VMEC QA baseline diagnostic from the local
+VMEC-JAX `QA_optimization.py` workflow: the top row compares initial and
+optimized LCFS boundaries colored by `|B|`, and the bottom row shows the
+corresponding Boozer-LCFS `|B|` contours. It is included to avoid confusing
+reduced visualization fixtures with solved-equilibrium QA results. It is not a
+nonlinear heat-flux optimization claim.
 
 ## Self-Contained VMEC Geometry Examples
 
@@ -816,18 +832,16 @@ and reduced Boozer-LCFS `|B|` maps. These are reduced diagnostics; solved-WOUT
 surfaces and turbulent nonlinear traces belong to the VMEC-JAX promotion audit
 above.
 
-![SPECTRAX-GK differentiable stellarator ITG optimization](docs/_static/stellarator_itg_optimization_comparison.png)
-
 ![SPECTRAX-GK stellarator ITG optimization UQ diagnostics](docs/_static/stellarator_itg_optimization_uq.png)
 
-The panel above is the current release-scoped reduced differentiability gate: all three
-objectives keep the optimized QA configuration near aspect ratio `7` and
-`iota = 0.41` while reducing the tracked transport observables. It should be
-read together with the UQ panel, which verifies AD/FD derivative parity for
-each active control and estimates local Gauss-Newton covariance from the final
-weighted objective residual. These are validated optimization-plumbing
-diagnostics for stellarator-transport objectives, not a final absolute-flux
-optimization claim. Full
+The UQ panel is the current README-level reduced differentiability gate: it
+verifies AD/FD derivative parity for each active reduced control and estimates
+local Gauss-Newton covariance from the final weighted objective residual. The
+companion reduced 3D-surface panel is intentionally kept out of the README
+because it is a synthetic max-mode-1 visualization, not a solved VMEC-JAX QA
+surface. These are validated optimization-plumbing diagnostics for
+stellarator-transport objectives, not a final absolute-flux optimization claim.
+Full
 `vmec_jax -> booz_xform_jax -> SPECTRAX-GK` nonlinear optimization remains
 scoped to the next promotion gate: production nonlinear turbulence-gradient or
 robust finite-difference audits with converged post-transient heat-flux
