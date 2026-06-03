@@ -152,35 +152,14 @@ admission gates, use
 `examples/optimization/vmec_jax_qa_low_turbulence_optimization.py` and the
 tools documented in
 [Differentiable Stellarator Optimization](docs/stellarator_optimization.rst).
-The reduced panels below are retained as AD/FD and plotting-plumbing
-diagnostics; they are not the upstream VMEC-JAX QA baseline and should not be
-read as final `iota > 0.41` solved-VMEC optimization results.
 
 ![Solved VMEC-JAX QA boundary and Boozer diagnostics](docs/_static/vmec_jax_qa_solved_boundary_boozer_panel.png)
 
 The panel above is the solved-VMEC QA baseline diagnostic from the local
 VMEC-JAX `QA_optimization.py` workflow: the top row compares initial and
 optimized LCFS boundaries colored by `|B|`, and the bottom row shows the
-corresponding Boozer-LCFS `|B|` contours. It is included to avoid confusing
-reduced visualization fixtures with solved-equilibrium QA results. It is not a
-nonlinear heat-flux optimization claim.
-
-The panels below summarize the three SPECTRAX-GK transport-objective examples:
-small linear ITG growth rate, small quasilinear ITG heat-flux proxy, and a small
-reduced late-window nonlinear heat-flux envelope. These are reduced max-mode-1
-optimization-plumbing diagnostics with AD/finite-difference and UQ checks; the
-synthetic LCFS/Boozer views are not solved VMEC surfaces, and the smooth
-`Q_env` traces are not turbulent nonlinear-GK heat-flux traces.
-
-![SPECTRAX-GK reduced linear, quasilinear, and nonlinear-window optimization comparison](docs/_static/stellarator_itg_optimization_comparison.png)
-
-![SPECTRAX-GK stellarator ITG optimization UQ diagnostics](docs/_static/stellarator_itg_optimization_uq.png)
-
-The individual reproducible panels are
-`docs/_static/stellarator_itg_growth_optimization.png`,
-`docs/_static/stellarator_itg_quasilinear_optimization.png`, and
-`docs/_static/stellarator_itg_nonlinear_optimization.png`; regenerate them with
-the scripts in `examples/optimization/`.
+corresponding Boozer-LCFS `|B|` contours. It is the README-facing QA
+stellarator baseline. It is not a nonlinear heat-flux optimization claim.
 
 ## Self-Contained VMEC Geometry Examples
 
@@ -208,28 +187,6 @@ spectraxgk run --config examples/linear/non-axisymmetric/runtime_w7x_linear_quas
 The bundled QHS/QI/QA VMEC decks are self-contained demonstrators. Exact
 machine-specific HSX or W7-X validation should use the same TOMLs with
 `--vmec-file` pointing to the corresponding benchmark `wout_*.nc`.
-
-## Reduced Stellarator Optimization Gate
-
-The reduced multi-surface/alpha/`k_y` portfolio gate exercises the sample-set
-reducer planned for VMEC/Boozer row production without claiming production
-nonlinear transport optimization:
-
-```bash
-python examples/optimization/stellarator_itg_portfolio_gate.py \
-  --finite-difference-workers 2
-```
-
-It writes `docs/_static/stellarator_itg_portfolio_gate.{json,png,pdf}` by
-default and checks scalar plus row-wise AD/finite-difference agreement on the
-fixed reduced growth/quasilinear table. The JSON sidecar is the audit source;
-the PNG/PDF are renderings for review. The same reducer is now exposed for real
-`vmec_jax -> booz_xform_jax -> SPECTRAX-GK` surface/alpha/physical-`k_y` rows
-through `stellarator_itg_vmec_boozer_sample_objective_table_from_state` and
-`stellarator_itg_vmec_boozer_portfolio_objective_from_state`. Promotion still
-requires held-out real-geometry gates, and production nonlinear heat-flux
-optimization still requires long post-transient replicated windows for matched
-baseline and optimized equilibria.
 
 ## Runtime and Memory
 
@@ -839,20 +796,14 @@ stride-rounded final times but rejects intermediate checkpoint chunks.
 ![SPECTRAX-GK QA/ESS targeted nonlinear gradient follow-up](docs/_static/qa_ess_descent_profile_rel2_plus_delta_followup_replicate_spread_diagnostic.png)
 
 Differentiable stellarator ITG optimization examples live in
-`examples/optimization/`. The README-level comparison and UQ panels near the top
-verify AD/FD derivative parity for each active reduced control and estimate
-local Gauss-Newton covariance from the final weighted objective residual. These
-are validated optimization-plumbing diagnostics for stellarator-transport
-objectives, not a final absolute-flux optimization claim. Full
+`examples/optimization/` and are restricted to actual VMEC-JAX QA workflows:
+linear-growth, quasilinear-flux, nonlinear-window transport-objective scripts,
+and the guarded VMEC-JAX QA driver. Full
 `vmec_jax -> booz_xform_jax -> SPECTRAX-GK` nonlinear optimization remains
-scoped to the next promotion gate: production nonlinear turbulence-gradient or
-robust finite-difference audits with converged post-transient heat-flux
-windows, continued production curvature/drift parity on additional equilibria,
-and matched baseline-to-optimized nonlinear audits for broader geometry
-families. The current full-chain
-linear/quasilinear and reduced nonlinear-window estimator gradient evidence
-covers QH and Li383 at `mboz=nboz=21`;
-it should not be read as a production nonlinear heat-flux optimization claim.
+scoped to production nonlinear turbulence-gradient or robust finite-difference
+audits with converged post-transient heat-flux windows, continued
+curvature/drift parity on additional equilibria, and matched
+baseline-to-optimized nonlinear audits for broader geometry families.
 
 For production parallelization of independent work, use
 `spectraxgk.batch_map` / `spectraxgk.ky_scan_batches` for ky scans,
