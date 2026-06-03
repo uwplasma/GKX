@@ -109,19 +109,21 @@ def build_boundary_chain_summary(
     assert final is not None
     assert frozen_jvp is not None
     assert frozen_vjp is not None
+    final_state_abs = abs(final - exact)
+    final_state_rel = _relative_error(final, exact, floor=absolute_tolerance)
+    frozen_axis_abs = abs(frozen_jvp - exact)
+    frozen_axis_rel = _relative_error(frozen_jvp, exact, floor=absolute_tolerance)
+    frozen_jvp_vjp_abs = abs(frozen_jvp - frozen_vjp)
+    frozen_jvp_vjp_rel = _relative_error(
+        frozen_jvp, frozen_vjp, floor=absolute_tolerance
+    )
     errors: dict[str, float | None] = {
-        "final_state_vs_exact_fd_abs": abs(final - exact),
-        "final_state_vs_exact_fd_rel": _relative_error(
-            final, exact, floor=absolute_tolerance
-        ),
-        "frozen_axis_vs_exact_fd_abs": abs(frozen_jvp - exact),
-        "frozen_axis_vs_exact_fd_rel": _relative_error(
-            frozen_jvp, exact, floor=absolute_tolerance
-        ),
-        "frozen_axis_jvp_vjp_abs": abs(frozen_jvp - frozen_vjp),
-        "frozen_axis_jvp_vjp_rel": _relative_error(
-            frozen_jvp, frozen_vjp, floor=absolute_tolerance
-        ),
+        "final_state_vs_exact_fd_abs": final_state_abs,
+        "final_state_vs_exact_fd_rel": final_state_rel,
+        "frozen_axis_vs_exact_fd_abs": frozen_axis_abs,
+        "frozen_axis_vs_exact_fd_rel": frozen_axis_rel,
+        "frozen_axis_jvp_vjp_abs": frozen_jvp_vjp_abs,
+        "frozen_axis_jvp_vjp_rel": frozen_jvp_vjp_rel,
         "raw_initial_vs_exact_fd_abs": None if raw is None else abs(raw - exact),
         "raw_initial_vs_exact_fd_rel": (
             None
@@ -131,16 +133,16 @@ def build_boundary_chain_summary(
     }
     passes = {
         "final_state_matches_exact_fd": bool(
-            errors["final_state_vs_exact_fd_abs"] <= absolute_tolerance
-            or errors["final_state_vs_exact_fd_rel"] <= exact_relative_tolerance
+            final_state_abs <= absolute_tolerance
+            or final_state_rel <= exact_relative_tolerance
         ),
         "frozen_axis_matches_exact_fd": bool(
-            errors["frozen_axis_vs_exact_fd_abs"] <= absolute_tolerance
-            or errors["frozen_axis_vs_exact_fd_rel"] <= exact_relative_tolerance
+            frozen_axis_abs <= absolute_tolerance
+            or frozen_axis_rel <= exact_relative_tolerance
         ),
         "frozen_axis_jvp_vjp_consistent": bool(
-            errors["frozen_axis_jvp_vjp_abs"] <= absolute_tolerance
-            or errors["frozen_axis_jvp_vjp_rel"] <= internal_relative_tolerance
+            frozen_jvp_vjp_abs <= absolute_tolerance
+            or frozen_jvp_vjp_rel <= internal_relative_tolerance
         ),
         "raw_initial_matches_exact_fd": bool(
             raw is not None
