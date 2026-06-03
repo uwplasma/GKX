@@ -349,6 +349,7 @@ from spectraxgk.vmec_jax_transport_objective import (
     VMECJAXTransportObjectiveConfig,
     VMECJAXTransportObjectiveKind,
     spectrax_transport_objective_tuple,
+    vmec_jax_transport_growth_branch_locality_report_from_states,
     vmec_jax_transport_objective_from_state,
 )
 from spectraxgk.vmec_jax_candidate_gate import (
@@ -406,6 +407,7 @@ from spectraxgk.solver_objective_gradients import (
     mode21_vmec_boozer_linear_frequency_gradient_report,
     mode21_vmec_boozer_nonlinear_window_gradient_report,
     mode21_vmec_boozer_quasilinear_gradient_report,
+    solver_linear_operator_matrix_from_geometry,
     solver_objective_branch_gradient_report,
     solver_growth_rate_from_geometry,
     solver_objective_vector_from_geometry,
@@ -790,6 +792,7 @@ __all__ = [
     "mode21_vmec_boozer_linear_frequency_gradient_report",
     "mode21_vmec_boozer_nonlinear_window_gradient_report",
     "mode21_vmec_boozer_quasilinear_gradient_report",
+    "solver_linear_operator_matrix_from_geometry",
     "solver_objective_branch_gradient_report",
     "solver_growth_rate_from_geometry",
     "solver_objective_vector_from_geometry",
@@ -801,6 +804,7 @@ __all__ = [
     "build_boundary_transport_gradient_report",
     "select_projected_line_search_candidate",
     "sparse_descent_direction_from_gradient_report",
+    "vmec_jax_transport_growth_branch_locality_report_from_states",
     "vmec_jax_transport_objective_from_state",
     "write_boundary_transport_gradient_report",
     "solver_ready_geometry_mapping",
