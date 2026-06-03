@@ -861,21 +861,17 @@ def _interp_equal_arc_profile(
     theta_equal_arc_closed: jnp.ndarray,
     values_closed: jnp.ndarray,
 ) -> jnp.ndarray:
-    """Interpolate onto the equal-arc grid with a stable coordinate VJP.
+    """Interpolate onto the equal-arc grid through the coordinate map.
 
-    ``jnp.interp`` can produce nonfinite cotangents when differentiating with
-    respect to a moving abscissa that also contains exact endpoint knots. For
-    VMEC/Boozer optimization we need the field-value sensitivity on the
-    paper-facing equal-arc grid; the coordinate-map sensitivity is still audited
-    externally by finite-difference gates before any optimization claim is
-    promoted.
+    The Boozer transform feeding this remap must use safe divisions in inactive
+    Fourier branches; otherwise nonfinite upstream cotangents contaminate the
+    moving equal-arc coordinate sensitivity. Sparse boundary finite-difference
+    gates remain the promotion criterion for VMEC-JAX transport gradients.
     """
 
     values = jnp.asarray(values_closed)
     theta_uniform = jnp.asarray(theta_uniform_closed, dtype=values.dtype)
-    theta_equal_arc = jax.lax.stop_gradient(
-        jnp.asarray(theta_equal_arc_closed, dtype=values.dtype)
-    )
+    theta_equal_arc = jnp.asarray(theta_equal_arc_closed, dtype=values.dtype)
     return jnp.interp(theta_uniform, theta_equal_arc, values)
 
 
