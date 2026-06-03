@@ -46,6 +46,8 @@ def sparse_descent_direction_from_gradient_report(
     *,
     parameter_count: int | None = None,
     top_n: int | None = None,
+    boundary_chain_collection: Mapping[str, Any] | None = None,
+    require_boundary_chain_exact_fd: bool = True,
 ) -> np.ndarray:
     """Return a normalized sparse descent direction from a gradient report.
 
@@ -61,6 +63,16 @@ def sparse_descent_direction_from_gradient_report(
     if not isinstance(components, Sequence) or not components:
         raise ValueError("gradient report must contain top_gradient_components")
     limit = len(components) if top_n is None else max(0, int(top_n))
+    allowed_indices = (
+        None
+        if boundary_chain_collection is None
+        else set(
+            boundary_chain_accepted_parameter_indices(
+                boundary_chain_collection,
+                require_exact_fd=bool(require_boundary_chain_exact_fd),
+            )
+        )
+    )
     direction = np.zeros(count, dtype=float)
     for row in components[:limit]:
         if not isinstance(row, Mapping):
@@ -68,6 +80,8 @@ def sparse_descent_direction_from_gradient_report(
         index = int(row["parameter_index"])
         if index < 0 or index >= count:
             raise ValueError(f"gradient component index {index} is outside parameter_count={count}")
+        if allowed_indices is not None and index not in allowed_indices:
+            continue
         value = _finite_float(row.get("gradient"))
         if value is None:
             raise ValueError(f"gradient component {index} is not finite")
@@ -78,15 +92,46 @@ def sparse_descent_direction_from_gradient_report(
     return direction / norm
 
 
+def boundary_chain_accepted_parameter_indices(
+    collection: Mapping[str, Any],
+    *,
+    require_exact_fd: bool = True,
+) -> tuple[int, ...]:
+    """Return parameter indices admitted by a boundary-chain collection gate."""
+
+    rows = collection.get("rows")
+    if not isinstance(rows, Sequence):
+        raise ValueError("boundary-chain collection must contain rows")
+    accepted: list[int] = []
+    for row in rows:
+        if not isinstance(row, Mapping):
+            raise ValueError("boundary-chain collection rows must be mappings")
+        index = row.get("index")
+        if index is None:
+            continue
+        internal_ok = bool(row.get("frozen_axis_jvp_vjp_consistent"))
+        exact_ok = bool(row.get("frozen_axis_matches_exact_fd"))
+        if internal_ok and (exact_ok or not bool(require_exact_fd)):
+            accepted.append(int(index))
+    return tuple(dict.fromkeys(accepted))
+
+
 def projected_line_search_input_manifest(
     report: Mapping[str, Any],
     *,
     steps: Sequence[float],
     top_n: int | None = None,
+    boundary_chain_collection: Mapping[str, Any] | None = None,
+    require_boundary_chain_exact_fd: bool = True,
 ) -> dict[str, Any]:
     """Build a JSON-safe manifest for projected line-search input generation."""
 
-    direction = sparse_descent_direction_from_gradient_report(report, top_n=top_n)
+    direction = sparse_descent_direction_from_gradient_report(
+        report,
+        top_n=top_n,
+        boundary_chain_collection=boundary_chain_collection,
+        require_boundary_chain_exact_fd=bool(require_boundary_chain_exact_fd),
+    )
     step_rows = []
     for step in steps:
         step_f = float(step)
@@ -99,7 +144,7 @@ def projected_line_search_input_manifest(
                 "parameter_linf_norm": float(np.max(np.abs(step_f * direction))),
             }
         )
-    return {
+    manifest = {
         "kind": "vmec_jax_projected_transport_line_search_input_manifest",
         "parameter_count": int(direction.size),
         "top_n": int(len(report.get("top_gradient_components", ())) if top_n is None else top_n),
@@ -107,6 +152,19 @@ def projected_line_search_input_manifest(
         "direction_linf_norm": float(np.max(np.abs(direction))),
         "steps": step_rows,
     }
+    if boundary_chain_collection is not None:
+        manifest["boundary_chain_filter"] = {
+            "enabled": True,
+            "require_exact_fd": bool(require_boundary_chain_exact_fd),
+            "collection_classification": boundary_chain_collection.get("classification"),
+            "accepted_parameter_indices": list(
+                boundary_chain_accepted_parameter_indices(
+                    boundary_chain_collection,
+                    require_exact_fd=bool(require_boundary_chain_exact_fd),
+                )
+            ),
+        }
+    return manifest
 
 
 def _candidate_metric(row: Mapping[str, Any]) -> float | None:
@@ -178,6 +236,7 @@ def select_projected_line_search_candidate(
 
 __all__ = [
     "ProjectedLineSearchPolicy",
+    "boundary_chain_accepted_parameter_indices",
     "projected_line_search_input_manifest",
     "select_projected_line_search_candidate",
     "sparse_descent_direction_from_gradient_report",
