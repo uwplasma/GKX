@@ -795,7 +795,9 @@ as a negative transfer audit: the reduced single-sample transport metric
 improves by `3.55%`, but the matched long-window `t=[350,700]` nonlinear
 ensemble comparison changes the mean heat flux from `9.833` to `9.891`
 (`-0.585%` relative reduction). That candidate is not promoted as a nonlinear
-heat-flux optimum.
+heat-flux optimum. The generated redesign report requires the next projected
+transport objective to cover three surfaces, two field-line labels, and three
+`ky` values before another long nonlinear audit is promoted.
 
 The production nonlinear optimization guard below is the enforced claim
 boundary. It passes as a release-safety check because startup/reduced nonlinear

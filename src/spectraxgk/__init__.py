@@ -357,10 +357,13 @@ from spectraxgk.vmec_jax_candidate_gate import (
 )
 from spectraxgk.vmec_jax_transport_admission import (
     DEFAULT_TRANSPORT_METRIC_KEYS,
+    VMECJAXNonlinearAuditPolicy,
     VMECJAXTransportAdmissionPolicy,
+    build_nonlinear_audit_redesign_report,
     build_transport_admission_report,
     candidate_transport_metric,
     select_admitted_transport_candidate,
+    transport_objective_sample_summary,
 )
 from spectraxgk.vmec_jax_transport_gradient import (
     boundary_spec_record,
@@ -738,10 +741,12 @@ __all__ = [
     "VMECJAXSpectraxTransportObjective",
     "VMECJAXTransportObjectiveConfig",
     "VMECJAXTransportObjectiveKind",
+    "VMECJAXNonlinearAuditPolicy",
     "VMECJAXTransportAdmissionPolicy",
     "DEFAULT_TRANSPORT_METRIC_KEYS",
     "aggregate_objective_portfolio",
     "build_solved_vmec_candidate_gate",
+    "build_nonlinear_audit_redesign_report",
     "build_transport_admission_report",
     "boundary_spec_record",
     "candidate_transport_metric",
@@ -778,6 +783,7 @@ __all__ = [
     "solver_scalar_objective_from_vector",
     "spectrax_transport_objective_tuple",
     "select_admitted_transport_candidate",
+    "transport_objective_sample_summary",
     "build_boundary_transport_gradient_report",
     "select_projected_line_search_candidate",
     "sparse_descent_direction_from_gradient_report",
