@@ -10,7 +10,7 @@ and unit-testable without launching VMEC solves.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 import math
 
@@ -223,7 +223,161 @@ def boundary_chain_summary_from_probe(
     )
 
 
+def build_boundary_chain_collection_summary(
+    probes: Sequence[Mapping[str, Any]],
+    *,
+    exact_relative_tolerance: float = 1.0e-1,
+    internal_relative_tolerance: float = 1.0e-8,
+    absolute_tolerance: float = 1.0e-10,
+) -> dict[str, Any]:
+    """Summarize several boundary-chain probes as one promotion gate.
+
+    A single coefficient can look well-conditioned while neighboring boundary
+    modes still move the raw exact-solve initialization branch.  The collection
+    summary keeps the stricter manuscript/release decision explicit: frozen-axis
+    JVP/VJP replay must be internally transposed for every component, while
+    exact finite-difference agreement is counted separately from branch
+    sensitivity.
+    """
+
+    if not probes:
+        return {
+            "kind": "vmec_jax_boundary_chain_collection_summary",
+            "finite": False,
+            "classification": "empty_boundary_chain_collection",
+            "rows": [],
+            "counts": {
+                "n_total": 0,
+                "n_finite": 0,
+                "n_frozen_axis_internal_pass": 0,
+                "n_exact_fd_consistent": 0,
+                "n_branch_sensitive": 0,
+            },
+            "next_action": "run at least one boundary-chain probe before interpreting the VMEC-JAX transport-gradient convention",
+        }
+
+    rows: list[dict[str, Any]] = []
+    for payload in probes:
+        summary_payload = payload.get("summary")
+        summary = (
+            dict(summary_payload)
+            if isinstance(summary_payload, Mapping)
+            else boundary_chain_summary_from_probe(
+                payload,
+                exact_relative_tolerance=exact_relative_tolerance,
+                internal_relative_tolerance=internal_relative_tolerance,
+                absolute_tolerance=absolute_tolerance,
+            )
+        )
+        passes = summary.get("passes", {})
+        errors = summary.get("errors", {})
+        metrics = summary.get("metrics", {})
+        rows.append(
+            {
+                "index": payload.get("index"),
+                "name": payload.get("name"),
+                "classification": summary.get("classification"),
+                "finite": bool(summary.get("finite", False)),
+                "frozen_axis_jvp_vjp_consistent": bool(
+                    isinstance(passes, Mapping)
+                    and passes.get("frozen_axis_jvp_vjp_consistent", False)
+                ),
+                "frozen_axis_matches_exact_fd": bool(
+                    isinstance(passes, Mapping)
+                    and passes.get("frozen_axis_matches_exact_fd", False)
+                ),
+                "final_state_matches_exact_fd": bool(
+                    isinstance(passes, Mapping)
+                    and passes.get("final_state_matches_exact_fd", False)
+                ),
+                "exact_fd_cost_gradient": (
+                    metrics.get("exact_fd_cost_gradient")
+                    if isinstance(metrics, Mapping)
+                    else None
+                ),
+                "frozen_axis_replay_cost_gradient": (
+                    metrics.get("frozen_axis_replay_cost_gradient")
+                    if isinstance(metrics, Mapping)
+                    else None
+                ),
+                "frozen_axis_vs_exact_fd_rel": (
+                    errors.get("frozen_axis_vs_exact_fd_rel")
+                    if isinstance(errors, Mapping)
+                    else None
+                ),
+                "raw_initial_vs_exact_fd_rel": (
+                    errors.get("raw_initial_vs_exact_fd_rel")
+                    if isinstance(errors, Mapping)
+                    else None
+                ),
+            }
+        )
+
+    n_total = len(rows)
+    n_finite = sum(1 for row in rows if row["finite"])
+    n_internal = sum(1 for row in rows if row["frozen_axis_jvp_vjp_consistent"])
+    n_exact = sum(1 for row in rows if row["frozen_axis_matches_exact_fd"])
+    n_branch = sum(
+        1
+        for row in rows
+        if row["classification"]
+        == "frozen_axis_replay_consistent_but_exact_fd_branch_sensitive"
+    )
+    finite = n_finite == n_total
+    all_internal = finite and n_internal == n_total
+    if not finite:
+        classification = "nonfinite_boundary_chain_collection"
+        next_action = (
+            "repair nonfinite VMEC/Boozer/SPECTRAX derivatives before using "
+            "the boundary-gradient collection"
+        )
+    elif not all_internal:
+        classification = "internal_replay_failure"
+        next_action = (
+            "debug VMEC-JAX exact-tape replay because at least one frozen-axis "
+            "JVP/VJP contraction is not internally transposed"
+        )
+    elif n_exact == n_total:
+        classification = "all_components_exact_fd_and_frozen_axis_consistent"
+        next_action = (
+            "promote the frozen-axis convention for these sparse components, "
+            "while retaining solved-equilibrium and sparse-FD gates"
+        )
+    elif n_exact > 0 and n_branch > 0:
+        classification = "mixed_exact_fd_consistency_with_branch_sensitive_modes"
+        next_action = (
+            "use frozen-axis derivatives only as diagnostics; exclude or "
+            "regularize branch-sensitive modes before projected VMEC updates"
+        )
+    else:
+        classification = "branch_sensitive_boundary_chain_collection"
+        next_action = (
+            "do not promote this boundary-gradient collection until exact-solve "
+            "branch sensitivity is reduced or the frozen-axis convention is "
+            "validated against a better-conditioned finite-difference protocol"
+        )
+
+    return {
+        "kind": "vmec_jax_boundary_chain_collection_summary",
+        "finite": finite,
+        "classification": classification,
+        "exact_relative_tolerance": float(exact_relative_tolerance),
+        "internal_relative_tolerance": float(internal_relative_tolerance),
+        "absolute_tolerance": float(absolute_tolerance),
+        "counts": {
+            "n_total": n_total,
+            "n_finite": n_finite,
+            "n_frozen_axis_internal_pass": n_internal,
+            "n_exact_fd_consistent": n_exact,
+            "n_branch_sensitive": n_branch,
+        },
+        "rows": rows,
+        "next_action": next_action,
+    }
+
+
 __all__ = [
     "boundary_chain_summary_from_probe",
+    "build_boundary_chain_collection_summary",
     "build_boundary_chain_summary",
 ]

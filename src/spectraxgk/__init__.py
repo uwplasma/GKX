@@ -372,6 +372,7 @@ from spectraxgk.vmec_jax_transport_gradient import (
 )
 from spectraxgk.vmec_jax_boundary_chain import (
     boundary_chain_summary_from_probe,
+    build_boundary_chain_collection_summary,
     build_boundary_chain_summary,
 )
 from spectraxgk.vmec_jax_transport_line_search import (
