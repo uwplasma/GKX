@@ -67,7 +67,7 @@ spectraxgk run \
   --config examples/nonlinear/non-axisymmetric/runtime_hsx_nonlinear_vmec_geometry.toml \
   --out tools_out/qhs_nonlinear_run
 
-# Turn any saved runtime bundle into a polished figure.
+# Turn supported saved runtime artifacts into review figures.
 spectraxgk --plot tools_out/cyclone_release.out.nc
 spectraxgk --plot spectraxgk_default_linear.summary.json
 ```
@@ -820,7 +820,7 @@ above.
 
 ![SPECTRAX-GK stellarator ITG optimization UQ diagnostics](docs/_static/stellarator_itg_optimization_uq.png)
 
-The panel above is the current release-grade differentiability gate: all three
+The panel above is the current release-scoped reduced differentiability gate: all three
 objectives keep the optimized QA configuration near aspect ratio `7` and
 `iota = 0.41` while reducing the tracked transport observables. It should be
 read together with the UQ panel, which verifies AD/FD derivative parity for
@@ -1124,7 +1124,9 @@ launching one long run.
 
 ## Plotting outputs
 
-To visualize nonlinear diagnostics from a ``*.out.nc`` file:
+Use `spectraxgk --plot <artifact>` for supported saved linear summary bundles
+and nonlinear diagnostic/NetCDF bundles. For a nonlinear NetCDF-specific
+diagnostic figure:
 
 ```bash
 python examples/utilities/plot_runtime_outputs.py tools_out/cyclone_nonlinear.out.nc \
