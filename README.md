@@ -186,6 +186,12 @@ entry point in `examples/optimization/`. This path requires the optional
 `vmec_jax` and `booz_xform_jax` packages because it works from in-memory VMEC
 states rather than pre-generated geometry files:
 
+For differentiable VMEC/Boozer transport-gradient work, use a
+`booz_xform_jax` checkout at or after commit `1d5e8c` so inactive zero-mode
+Fourier branches do not create non-finite reverse-mode cotangents. SPECTRAX-GK
+keeps projected VMEC-boundary transport updates fail-closed until the sparse
+boundary AD/finite-difference gate passes.
+
 ```bash
 # Assemble the QA + SPECTRAX-GK transport objective without launching a solve.
 python examples/optimization/QA_optimization_with_nonlinear_heat_flux.py \
