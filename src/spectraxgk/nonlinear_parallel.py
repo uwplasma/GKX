@@ -934,6 +934,20 @@ def _spectral_tile_bounds(
     )
 
 
+def _normalize_spectral_tile_bounds(
+    tile_bounds: tuple[tuple[int, int, int, int], ...],
+) -> tuple[tuple[int, int, int, int], ...]:
+    """Return validated fixed-width tile bounds for mypy and runtime checks."""
+
+    normalized: list[tuple[int, int, int, int]] = []
+    for item in tile_bounds:
+        if len(item) != 4:
+            raise ValueError("each spectral tile bound must contain four integers")
+        y_start, y_stop, x_start, x_stop = (int(value) for value in item)
+        normalized.append((y_start, y_stop, x_start, x_stop))
+    return tuple(normalized)
+
+
 def _logical_spectral_tiles(
     arr: jax.Array,
     *,
@@ -1323,7 +1337,7 @@ def nonlinear_spectral_rhs_identity_report(
     effective_tile_bounds = (
         _spectral_tile_bounds(normalized_y_chunks, normalized_x_chunks)
         if tile_bounds is None
-        else tuple(tuple(int(value) for value in item) for item in tile_bounds)
+        else _normalize_spectral_tile_bounds(tile_bounds)
     )
     blocked_reasons = _nonlinear_spectral_rhs_report_blockers(
         serial_reconstruction,
