@@ -161,6 +161,19 @@ optimized LCFS boundaries colored by `|B|`, and the bottom row shows the
 corresponding Boozer-LCFS `|B|` contours. It is the README-facing QA
 stellarator baseline. It is not a nonlinear heat-flux optimization claim.
 
+![VMEC-JAX QA + SPECTRAX-GK transport optimization status](docs/_static/vmec_jax_qa_transport_optimization_status.png)
+
+The optimization-status panel summarizes the current max-mode-5 QA transport
+lane. The QA solved-equilibrium branch passes the aspect/iota/QS gate. The
+direct scalar transport-residual branch is blocked because it breaks solved
+equilibrium gates. The projected transport step preserves the gates but
+worsens the reduced nonlinear-window metric by `0.38%`, so it is not promoted
+as a better candidate. Scoped quasilinear model selection passes as a
+model-development diagnostic, while simple absolute-flux quasilinear rules
+remain blocked. The long-window nonlinear audit shown here is a separate
+replicated transport-window anchor, not proof that every reduced transport
+objective transfers to saturated turbulence.
+
 ## Self-Contained VMEC Geometry Examples
 
 The VMEC-backed examples no longer require users to generate separate EIK
