@@ -264,6 +264,37 @@ class NonlinearSpectralCommunicationReport:
 
 
 @dataclass(frozen=True)
+class NonlinearSpectralRHSIdentityReport:
+    """Numerical identity report for logical-shard nonlinear spectral RHS."""
+
+    state_shape: tuple[int, int, int, int, int]
+    y_chunks: tuple[int, ...]
+    x_chunks: tuple[int, ...]
+    tile_bounds: tuple[tuple[int, int, int, int], ...]
+    atol: float
+    rtol: float
+    reconstruction_max_abs_error: float
+    reconstruction_max_rel_error: float
+    field_max_abs_error: float
+    field_max_rel_error: float
+    bracket_max_abs_error: float
+    bracket_max_rel_error: float
+    rhs_max_abs_error: float
+    rhs_max_rel_error: float
+    identity_passed: bool
+    decomposed_path_enabled: bool
+    claim_scope: str
+    blocked_reasons: tuple[str, ...] = ()
+    y_offsets: tuple[int, ...] = ()
+    x_offsets: tuple[int, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-friendly representation of the RHS identity report."""
+
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class NonlinearParallelStrategy:
     """Readiness contract for one nonlinear parallelization candidate."""
 
@@ -376,11 +407,13 @@ _STRATEGIES: tuple[NonlinearParallelStrategy, ...] = (
             "distributed_fft_forward_inverse_identity",
             "distributed_fft_nonlinear_bracket_identity",
             "distributed_fft_field_solve_identity",
+            "logical_sharded_nonlinear_spectral_rhs_identity",
         ),
         physics_gates=("fft_axis_nonlinear_window_physics_gate",),
         profiler_gates=("distributed_fft_scaling_profile",),
         notes=(
-            "Diagnostic split/reassemble spectral communication identity exists; "
+            "Diagnostic split/reassemble spectral communication identity and "
+            "logical spectral RHS identity gates exist; "
             "production promotion still requires runtime distributed FFT routing, "
             "conservation, transport-window, and profiler gates."
         ),
@@ -888,6 +921,88 @@ def _spectral_layout_round_trip(
     return jnp.swapaxes(reassembled, y_axis, x_axis)
 
 
+def _spectral_tile_bounds(
+    y_chunks: tuple[int, ...],
+    x_chunks: tuple[int, ...],
+) -> tuple[tuple[int, int, int, int], ...]:
+    y_offsets = _chunk_offsets(y_chunks)
+    x_offsets = _chunk_offsets(x_chunks)
+    return tuple(
+        (y_start, y_start + y_size, x_start, x_start + x_size)
+        for y_start, y_size in zip(y_offsets, y_chunks, strict=True)
+        for x_start, x_size in zip(x_offsets, x_chunks, strict=True)
+    )
+
+
+def _logical_spectral_tiles(
+    arr: jax.Array,
+    *,
+    y_chunks: tuple[int, ...],
+    x_chunks: tuple[int, ...],
+    y_axis: int,
+    x_axis: int,
+) -> tuple[jax.Array, ...]:
+    canonical_y_axis = y_axis % arr.ndim
+    canonical_x_axis = x_axis % arr.ndim
+    normalized_y_chunks = _validate_chunks(
+        int(arr.shape[canonical_y_axis]),
+        y_chunks,
+        name="y_chunks",
+    )
+    normalized_x_chunks = _validate_chunks(
+        int(arr.shape[canonical_x_axis]),
+        x_chunks,
+        name="x_chunks",
+    )
+
+    tiles: list[jax.Array] = []
+    for y_start, y_stop, x_start, x_stop in _spectral_tile_bounds(
+        normalized_y_chunks,
+        normalized_x_chunks,
+    ):
+        y_tile = jax.lax.dynamic_slice_in_dim(
+            arr,
+            y_start,
+            y_stop - y_start,
+            axis=canonical_y_axis,
+        )
+        tiles.append(
+            jax.lax.dynamic_slice_in_dim(
+                y_tile,
+                x_start,
+                x_stop - x_start,
+                axis=canonical_x_axis,
+            )
+        )
+    return tuple(tiles)
+
+
+def _reconstruct_logical_spectral_tiles(
+    tiles: tuple[jax.Array, ...],
+    *,
+    y_chunks: tuple[int, ...],
+    x_chunks: tuple[int, ...],
+    y_axis: int,
+    x_axis: int,
+) -> jax.Array:
+    if len(tiles) != len(y_chunks) * len(x_chunks):
+        raise ValueError("tile count must match y_chunks by x_chunks")
+    if not tiles:
+        raise ValueError("at least one tile is required")
+
+    canonical_y_axis = y_axis % tiles[0].ndim
+    canonical_x_axis = x_axis % tiles[0].ndim
+    rows = []
+    tile_index = 0
+    for _y_chunk in y_chunks:
+        row_tiles = []
+        for _x_chunk in x_chunks:
+            row_tiles.append(tiles[tile_index])
+            tile_index += 1
+        rows.append(jnp.concatenate(row_tiles, axis=canonical_x_axis))
+    return jnp.concatenate(rows, axis=canonical_y_axis)
+
+
 def _spectral_wave_numbers(ny: int, nx: int, dtype: Any) -> tuple[jax.Array, jax.Array]:
     ky = jnp.fft.fftfreq(ny, d=1.0 / float(ny)).astype(dtype)
     kx = jnp.fft.fftfreq(nx, d=1.0 / float(nx)).astype(dtype)
@@ -925,6 +1040,12 @@ def _spectral_bracket(state_hat: jax.Array, phi_hat: jax.Array) -> jax.Array:
         None, None, :, :, :
     ] * state_dx
     return jnp.fft.fft2(bracket_xy, axes=(-3, -2))
+
+
+def _spectral_rhs_from_bracket(bracket_hat: jax.Array) -> jax.Array:
+    """Return the ExB advection contribution used by the identity micro-route."""
+
+    return -bracket_hat
 
 
 def _max_abs_rel_error(
@@ -1115,6 +1236,267 @@ def nonlinear_spectral_communication_identity_gate(
     )
 
 
+def _nonlinear_spectral_rhs_report_blockers(
+    serial_reconstruction: jax.Array,
+    logical_reconstruction: jax.Array,
+    serial_field: jax.Array,
+    logical_field: jax.Array,
+    serial_bracket: jax.Array,
+    logical_bracket: jax.Array,
+    serial_rhs: jax.Array,
+    logical_rhs: jax.Array,
+    *,
+    state_shape: tuple[int, ...],
+    y_chunks: tuple[int, ...],
+    x_chunks: tuple[int, ...],
+    tile_bounds: tuple[tuple[int, int, int, int], ...],
+) -> tuple[str, ...]:
+    blockers: list[str] = []
+
+    try:
+        normalized_state_shape = _validate_spectral_state_shape(tuple(state_shape))
+    except ValueError:
+        normalized_state_shape = None
+        blockers.append("state_shape_invalid")
+
+    normalized_y_chunks: tuple[int, ...] | None = None
+    normalized_x_chunks: tuple[int, ...] | None = None
+    if normalized_state_shape is not None:
+        _nl, _nm, ny, nx, nz = normalized_state_shape
+        try:
+            normalized_y_chunks = _validate_chunks(ny, y_chunks, name="y_chunks")
+        except ValueError:
+            blockers.append("y_chunks_invalid")
+        try:
+            normalized_x_chunks = _validate_chunks(nx, x_chunks, name="x_chunks")
+        except ValueError:
+            blockers.append("x_chunks_invalid")
+
+        expected_field_shape = (ny, nx, nz)
+        state_arrays = (
+            ("serial_reconstruction", serial_reconstruction),
+            ("logical_reconstruction", logical_reconstruction),
+            ("serial_bracket", serial_bracket),
+            ("logical_bracket", logical_bracket),
+            ("serial_rhs", serial_rhs),
+            ("logical_rhs", logical_rhs),
+        )
+        field_arrays = (
+            ("serial_field", serial_field),
+            ("logical_field", logical_field),
+        )
+        for name, arr in state_arrays:
+            if tuple(arr.shape) != normalized_state_shape:
+                blockers.append(f"{name}_shape_mismatch")
+        for name, arr in field_arrays:
+            if tuple(arr.shape) != expected_field_shape:
+                blockers.append(f"{name}_shape_mismatch")
+
+    if normalized_y_chunks is not None and normalized_x_chunks is not None:
+        if tile_bounds != _spectral_tile_bounds(normalized_y_chunks, normalized_x_chunks):
+            blockers.append("tile_bounds_not_row_major")
+
+    return tuple(blockers)
+
+
+def nonlinear_spectral_rhs_identity_report(
+    serial_reconstruction: jax.Array,
+    logical_reconstruction: jax.Array,
+    serial_field: jax.Array,
+    logical_field: jax.Array,
+    serial_bracket: jax.Array,
+    logical_bracket: jax.Array,
+    serial_rhs: jax.Array,
+    logical_rhs: jax.Array,
+    *,
+    state_shape: tuple[int, int, int, int, int],
+    y_chunks: tuple[int, ...],
+    x_chunks: tuple[int, ...],
+    tile_bounds: tuple[tuple[int, int, int, int], ...] | None = None,
+    atol: float = 5.0e-6,
+    rtol: float = 5.0e-6,
+) -> NonlinearSpectralRHSIdentityReport:
+    """Compare serial and logical-shard spectral RHS outputs fail-closed."""
+
+    normalized_y_chunks = tuple(int(item) for item in y_chunks)
+    normalized_x_chunks = tuple(int(item) for item in x_chunks)
+    effective_tile_bounds = (
+        _spectral_tile_bounds(normalized_y_chunks, normalized_x_chunks)
+        if tile_bounds is None
+        else tuple(tuple(int(value) for value in item) for item in tile_bounds)
+    )
+    blocked_reasons = _nonlinear_spectral_rhs_report_blockers(
+        serial_reconstruction,
+        logical_reconstruction,
+        serial_field,
+        logical_field,
+        serial_bracket,
+        logical_bracket,
+        serial_rhs,
+        logical_rhs,
+        state_shape=state_shape,
+        y_chunks=normalized_y_chunks,
+        x_chunks=normalized_x_chunks,
+        tile_bounds=effective_tile_bounds,
+    )
+    reconstruction_abs, reconstruction_rel = _max_abs_rel_error(
+        serial_reconstruction,
+        logical_reconstruction,
+        atol=atol,
+    )
+    field_abs, field_rel = _max_abs_rel_error(
+        serial_field,
+        logical_field,
+        atol=atol,
+    )
+    bracket_abs, bracket_rel = _max_abs_rel_error(
+        serial_bracket,
+        logical_bracket,
+        atol=atol,
+    )
+    rhs_abs, rhs_rel = _max_abs_rel_error(
+        serial_rhs,
+        logical_rhs,
+        atol=atol,
+    )
+    identity_passed = bool(
+        not blocked_reasons
+        and reconstruction_abs <= float(atol)
+        and reconstruction_rel <= float(rtol)
+        and field_abs <= float(atol)
+        and field_rel <= float(rtol)
+        and bracket_abs <= float(atol)
+        and bracket_rel <= float(rtol)
+        and rhs_abs <= float(atol)
+        and rhs_rel <= float(rtol)
+    )
+    return NonlinearSpectralRHSIdentityReport(
+        state_shape=state_shape,
+        y_chunks=normalized_y_chunks,
+        x_chunks=normalized_x_chunks,
+        y_offsets=_chunk_offsets(normalized_y_chunks),
+        x_offsets=_chunk_offsets(normalized_x_chunks),
+        tile_bounds=effective_tile_bounds,
+        atol=float(atol),
+        rtol=float(rtol),
+        reconstruction_max_abs_error=reconstruction_abs,
+        reconstruction_max_rel_error=reconstruction_rel,
+        field_max_abs_error=field_abs,
+        field_max_rel_error=field_rel,
+        bracket_max_abs_error=bracket_abs,
+        bracket_max_rel_error=bracket_rel,
+        rhs_max_abs_error=rhs_abs,
+        rhs_max_rel_error=rhs_rel,
+        identity_passed=identity_passed,
+        decomposed_path_enabled=identity_passed,
+        claim_scope=(
+            "diagnostic nonlinear spectral RHS identity gate only; "
+            "logical output-tile reconstruction with existing bracket contribution "
+            "and no production routing or speedup claim"
+        ),
+        blocked_reasons=blocked_reasons,
+    )
+
+
+def _logical_sharded_nonlinear_spectral_rhs(
+    state_hat: jax.Array,
+    *,
+    y_chunks: tuple[int, ...],
+    x_chunks: tuple[int, ...],
+) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array]:
+    state_tiles = _logical_spectral_tiles(
+        state_hat,
+        y_axis=-3,
+        x_axis=-2,
+        y_chunks=y_chunks,
+        x_chunks=x_chunks,
+    )
+    reconstructed_state = _reconstruct_logical_spectral_tiles(
+        state_tiles,
+        y_axis=-3,
+        x_axis=-2,
+        y_chunks=y_chunks,
+        x_chunks=x_chunks,
+    )
+    field = _field_from_state(reconstructed_state)
+    bracket = _spectral_bracket(reconstructed_state, field)
+    bracket_tiles = _logical_spectral_tiles(
+        bracket,
+        y_axis=-3,
+        x_axis=-2,
+        y_chunks=y_chunks,
+        x_chunks=x_chunks,
+    )
+    logical_bracket = _reconstruct_logical_spectral_tiles(
+        bracket_tiles,
+        y_axis=-3,
+        x_axis=-2,
+        y_chunks=y_chunks,
+        x_chunks=x_chunks,
+    )
+    rhs_tiles = tuple(_spectral_rhs_from_bracket(tile) for tile in bracket_tiles)
+    logical_rhs = _reconstruct_logical_spectral_tiles(
+        rhs_tiles,
+        y_axis=-3,
+        x_axis=-2,
+        y_chunks=y_chunks,
+        x_chunks=x_chunks,
+    )
+    return reconstructed_state, field, logical_bracket, logical_rhs
+
+
+def nonlinear_spectral_rhs_identity_gate(
+    state_hat: jax.Array,
+    *,
+    y_chunks: tuple[int, ...] = (3, 3),
+    x_chunks: tuple[int, ...] = (2, 2),
+    atol: float = 5.0e-6,
+    rtol: float = 5.0e-6,
+) -> NonlinearSpectralRHSIdentityReport:
+    """Validate serial-vs-logical-shard nonlinear spectral RHS identity.
+
+    This diagnostic route owns and reassembles spectral ``(y, x)`` output tiles
+    in row-major order. It deliberately does not install distributed FFT
+    runtime routing or make a speedup claim.
+    """
+
+    state_shape = _validate_spectral_state_shape(tuple(state_hat.shape))
+    _nl, _nm, ny, nx, _nz = state_shape
+    y_chunks = _validate_chunks(ny, y_chunks, name="y_chunks")
+    x_chunks = _validate_chunks(nx, x_chunks, name="x_chunks")
+
+    serial_field = _field_from_state(state_hat)
+    serial_bracket = _spectral_bracket(state_hat, serial_field)
+    serial_rhs = _spectral_rhs_from_bracket(serial_bracket)
+    (
+        logical_reconstruction,
+        logical_field,
+        logical_bracket,
+        logical_rhs,
+    ) = _logical_sharded_nonlinear_spectral_rhs(
+        state_hat,
+        y_chunks=y_chunks,
+        x_chunks=x_chunks,
+    )
+
+    return nonlinear_spectral_rhs_identity_report(
+        state_hat,
+        logical_reconstruction,
+        serial_field,
+        logical_field,
+        serial_bracket,
+        logical_bracket,
+        serial_rhs,
+        logical_rhs,
+        state_shape=state_shape,
+        y_chunks=y_chunks,
+        x_chunks=x_chunks,
+        tile_bounds=_spectral_tile_bounds(y_chunks, x_chunks),
+        atol=atol,
+        rtol=rtol,
+    )
+
+
 def nonlinear_parallel_strategies() -> tuple[NonlinearParallelStrategy, ...]:
     """Return all nonlinear parallelization strategy contracts."""
 
@@ -1157,6 +1539,7 @@ __all__ = [
     "NonlinearParallelStrategy",
     "NonlinearParallelStrategyName",
     "NonlinearSpectralCommunicationReport",
+    "NonlinearSpectralRHSIdentityReport",
     "ParallelReadiness",
     "build_nonlinear_domain_decomposition_plan",
     "classify_nonlinear_parallel_strategy",
@@ -1169,6 +1552,8 @@ __all__ = [
     "nonlinear_parallel_strategy",
     "nonlinear_spectral_communication_identity_gate",
     "nonlinear_spectral_communication_identity_report",
+    "nonlinear_spectral_rhs_identity_gate",
+    "nonlinear_spectral_rhs_identity_report",
     "prototype_nonlinear_domain_decomposed_step",
     "prototype_nonlinear_domain_serial_step",
     "release_ready_nonlinear_parallel_strategies",
