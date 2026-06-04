@@ -162,6 +162,24 @@ solved-WOUT gate. This is a QA baseline artifact only; transport reductions
 must be re-audited against this stricter WOUT before being promoted relative to
 it.
 
+After a strict baseline or candidate writes `input.final`, evaluate the
+18-point reduced transport-admission metrics without running another optimizer:
+
+```bash
+python tools/evaluate_vmec_jax_spectrax_transport_metric.py \
+  --input tools_out/vmec_jax_qa_strict_baseline/input.final \
+  --out-json tools_out/vmec_jax_qa_strict_baseline/growth_metric.json \
+  --transport-kind growth --mboz 21 --nboz 21 --solver-device cpu
+```
+
+Use `--transport-kind quasilinear_flux` or
+`--transport-kind nonlinear_window_heat_flux` for the other reduced objectives.
+On the passing strict QA baseline, the 18-point log1p metrics are growth
+`0.03657107649`, quasilinear flux `0.1230452010`, and nonlinear-window reduced
+heat flux `0.08010670290`. These values are admission bookkeeping only; matched
+long-window SPECTRAX-GK nonlinear audits remain required before claiming a
+turbulent-flux reduction.
+
 For algorithm comparisons, run the full `max_mode=5`, `mboz=nboz=21` sweep on
 a GPU node and build the real-WOUT comparison panel with:
 
