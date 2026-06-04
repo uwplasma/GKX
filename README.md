@@ -138,6 +138,30 @@ objective_tuples = [
 
 These scripts are the recommended starting point for producing real VMEC-JAX WOUTs with the same high-weight `iota = 0.41` target as the upstream QA example. Keep the SPECTRAX-GK transport weight small while tuning so the QA, aspect-ratio, and iota constraints remain the dominant solved-equilibrium gate. Full nonlinear turbulent-flux optimization claims still require matched long post-transient SPECTRAX-GK audits, seed/timestep replicates, and running-average convergence.
 
+For a paper-facing constraints-only QA baseline, use the configurable driver
+with the strict upstream preset:
+
+```bash
+python examples/optimization/vmec_jax_qa_low_turbulence_optimization.py \
+  --strict-upstream-qa-baseline --solver-device gpu \
+  --outdir tools_out/vmec_jax_qa_strict_baseline
+```
+
+That preset keeps the upstream objective recipe, simple seed, ESS scaling, and
+`MAX_MODE = 5` controls, but increases the solve budget, tightens the outer
+step tolerance, and uses a small default iota target buffer
+(`target iota = 0.4102`, admission gate `iota >= 0.41`). That avoids stopping
+a few `1e-7` below the lower-bound gate while preserving the same QA baseline
+physics and objective weighting.
+
+The strict constraints-only baseline audit in
+`docs/_static/vmec_jax_qa_strict_baseline/summary.json` was run on the office
+GPU node with the exact SciPy/ESS path. It terminates at `nfev=39` with
+aspect `5.000154`, mean iota `0.4101997`, QS residual `2.60e-4`, and a passed
+solved-WOUT gate. This is a QA baseline artifact only; transport reductions
+must be re-audited against this stricter WOUT before being promoted relative to
+it.
+
 For algorithm comparisons, run the full `max_mode=5`, `mboz=nboz=21` sweep on
 a GPU node and build the real-WOUT comparison panel with:
 
@@ -171,6 +195,12 @@ separation `z=1.56`). This is evidence for a scoped single-surface,
 single-field-line, single-`ky` transport improvement; broad
 stellarator-optimization claims still require multi-surface, multi-alpha, and
 multi-`ky` promotion gates.
+
+Scope note: the panel's matched nonlinear traces were generated from the
+earlier sweep baseline. The stricter exact QA baseline above is now the
+preferred constraints-only reference, so the projected-candidate nonlinear
+audits should be repeated against that WOUT before claiming reductions relative
+to the strict baseline.
 
 ![Matched projected QA nonlinear transport audit](docs/_static/vmec_jax_qa_projected_weight_0p001_matched_comparison.png)
 
