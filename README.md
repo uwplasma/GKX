@@ -162,8 +162,16 @@ The sweep above was run on the office GPU node from a clean clone with
 `max_mode=5` and `mboz=nboz=21`. Direct scalar transport weighting often lowers
 the reduced metric only marginally while damaging aspect ratio, iota, or
 quasisymmetry. The projected/admission steps preserve the QA-style solved-WOUT
-gate and improve the reduced nonlinear-window metric, so they are the correct
-starting point for expensive long-window nonlinear `Q(t)` audits.
+gate and improve the reduced nonlinear-window metric. The first matched
+single-point nonlinear audit for projected weight `5e-4` also passes: the
+baseline and candidate seed/timestep ensembles both use `t=[350,700]`, and the
+candidate lowers the late-window mean ion heat flux from `9.695` to `9.436`
+(`2.68%`, uncertainty separation `z=1.32`). This is evidence for a scoped
+single-surface, single-field-line, single-`ky` transport improvement; broad
+stellarator-optimization claims still require multi-surface, multi-alpha, and
+multi-`ky` promotion gates.
+
+![Matched projected QA nonlinear transport audit](docs/_static/vmec_jax_qa_projected_weight_0p0005_matched_comparison.png)
 
 Optimizer scope: the transport scripts default to `METHOD = "scalar_trust"`.
 SPECTRAX-GK transport objectives use reverse-mode custom-VJP pieces, while the
@@ -193,13 +201,13 @@ stellarator baseline. It is not a nonlinear heat-flux optimization claim.
 The optimization-status panel summarizes the current max-mode-5 QA transport
 lane. The QA solved-equilibrium branch passes the aspect/iota/QS gate. The
 direct scalar transport-residual branch is blocked because it breaks solved
-equilibrium gates. The projected transport step preserves the gates but
-worsens the reduced nonlinear-window metric by `0.38%`, so it is not promoted
-as a better candidate. Scoped quasilinear model selection passes as a
-model-development diagnostic, while simple absolute-flux quasilinear rules
-remain blocked. The long-window nonlinear audit shown here is a separate
-replicated transport-window anchor, not proof that every reduced transport
-objective transfers to saturated turbulence.
+equilibrium gates. Earlier projected-gradient artifacts in this status panel
+remain useful negative controls, while the newer full max-mode-5 sweep above
+adds the positive projected-weight `5e-4` matched audit. Scoped quasilinear
+model selection passes as a model-development diagnostic, while simple
+absolute-flux quasilinear rules remain blocked. The long-window nonlinear
+audits shown here are separate replicated transport-window anchors, not proof
+that every reduced transport objective transfers to saturated turbulence.
 
 ## Self-Contained VMEC Geometry Examples
 
@@ -700,14 +708,16 @@ combined-SEMs separation.
 
 ![SPECTRAX-GK matched no-ESS to optimized QA/ESS nonlinear audit](docs/_static/qa_no_ess_to_optimized_nonlinear_audit.png)
 
-The newer projected VMEC-JAX transport-gradient step is documented separately
-as a negative transfer audit: the reduced single-sample transport metric
-improves by `3.55%`, but the matched long-window `t=[350,700]` nonlinear
-ensemble comparison changes the mean heat flux from `9.833` to `9.891`
-(`-0.585%` relative reduction). That candidate is not promoted as a nonlinear
-heat-flux optimum. The generated redesign report requires the next projected
-transport objective to cover three surfaces, two field-line labels, and three
-`ky` values before another long nonlinear audit is promoted.
+An earlier aspect-6 projected VMEC-JAX transport-gradient step is documented
+separately as a negative transfer audit: the reduced single-sample transport
+metric improves by `3.55%`, but the matched long-window `t=[350,700]`
+nonlinear ensemble comparison changes the mean heat flux from `9.833` to
+`9.891` (`-0.585%` relative reduction). That older candidate is not promoted
+as a nonlinear heat-flux optimum. The newer full max-mode-5 projected
+weight-`5e-4` audit above is positive at one `(s, alpha, ky)` point, and the
+same redesign principle still applies before broad claims: cover three
+surfaces, two field-line labels, and three `ky` values before promoting a
+general turbulent-flux optimization result.
 
 The production nonlinear optimization guard below is the enforced claim
 boundary. It passes as a release-safety check because startup/reduced nonlinear
