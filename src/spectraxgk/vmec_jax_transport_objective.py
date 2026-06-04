@@ -17,7 +17,7 @@ is not supported by JAX.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import importlib
 import os
 from pathlib import Path
@@ -114,6 +114,7 @@ class VMECJAXTransportObjectiveConfig:
     reference_b: float | None = None
     objective_transform: VMECJAXTransportObjectiveTransform = "raw"
     objective_scale: float = 1.0
+    surface_chunk_size: int = 0
     validate_finite: bool = True
 
     @property
@@ -141,6 +142,10 @@ class VMECJAXTransportObjectiveConfig:
             raise ValueError(f"unknown VMEC-JAX transport objective transform {self.objective_transform!r}")
         if float(self.objective_scale) <= 0.0:
             raise ValueError("objective_scale must be positive")
+        if int(self.surface_chunk_size) < 0:
+            raise ValueError("surface_chunk_size must be non-negative")
+        if int(self.surface_chunk_size) > 0 and self.sample_set.reduction not in ("weighted_mean", "mean"):
+            raise ValueError("surface_chunk_size currently supports only mean or weighted_mean reductions")
 
     def objective_options(self) -> dict[str, Any]:
         """Return SPECTRAX-GK solver options for this objective."""
@@ -190,6 +195,66 @@ def _solver_table_to_nonlinear_window_proxy(
         jnp.asarray(config.nonlinear_saturation_floor, dtype=gamma_plus.dtype),
     )
     return float(config.nonlinear_csat) * jnp.maximum(heat_weight, 0.0) * mean_energy
+
+
+def _normalized_axis_weights(values: Sequence[float] | None, size: int) -> np.ndarray:
+    """Return normalized static weights for one separable sample axis."""
+
+    if int(size) <= 0:
+        raise ValueError("axis size must be positive")
+    if values is None:
+        return np.full((int(size),), 1.0 / float(size), dtype=float)
+    arr = np.asarray(tuple(float(value) for value in values), dtype=float)
+    if arr.shape != (int(size),) or not np.all(np.isfinite(arr)):
+        raise ValueError(f"weights must be a finite length-{int(size)} vector")
+    total = float(np.sum(arr))
+    if total <= 0.0:
+        raise ValueError("weights must have positive sum")
+    return arr / total
+
+
+def _surface_chunk_sample_sets(
+    sample_set: StellaratorITGSampleSet,
+    *,
+    chunk_size: int,
+) -> tuple[tuple[StellaratorITGSampleSet, float], ...]:
+    """Split a sample set by surface while preserving weighted-mean algebra."""
+
+    surfaces = tuple(float(value) for value in sample_set.surfaces)
+    if int(chunk_size) <= 0 or int(chunk_size) >= len(surfaces):
+        return ((sample_set, 1.0),)
+    if sample_set.reduction not in ("weighted_mean", "mean"):
+        raise ValueError("surface chunking currently supports only mean or weighted_mean reductions")
+    surface_weights = _normalized_axis_weights(sample_set.surface_weights, len(surfaces))
+    chunks: list[tuple[StellaratorITGSampleSet, float]] = []
+    for start in range(0, len(surfaces), int(chunk_size)):
+        indices = tuple(range(start, min(start + int(chunk_size), len(surfaces))))
+        chunk_surfaces = tuple(surfaces[index] for index in indices)
+        if sample_set.reduction == "mean":
+            chunk_weight = float(len(indices) / len(surfaces))
+            chunk_surface_weights = None
+        else:
+            chunk_weight = float(np.sum(surface_weights[list(indices)]))
+            chunk_surface_weights = (
+                None
+                if sample_set.surface_weights is None
+                else tuple(float(sample_set.surface_weights[index]) for index in indices)
+            )
+        chunks.append(
+            (
+                StellaratorITGSampleSet(
+                    surfaces=chunk_surfaces,
+                    alphas=sample_set.alphas,
+                    ky_values=sample_set.ky_values,
+                    surface_weights=chunk_surface_weights,
+                    alpha_weights=sample_set.alpha_weights,
+                    ky_weights=sample_set.ky_weights,
+                    reduction=sample_set.reduction,
+                ),
+                chunk_weight,
+            )
+        )
+    return tuple(chunks)
 
 
 def _static_grid_options_from_ky_values(
@@ -347,17 +412,15 @@ def _apply_objective_transform(
     return jnp.sign(scaled) * jnp.log1p(jnp.abs(scaled))
 
 
-def vmec_jax_transport_objective_from_state(
+def _transport_objective_raw_value_from_state(
     state: Any,
     static: Any,
     indata: Any,
     wout_reference: Any,
-    config: VMECJAXTransportObjectiveConfig | None = None,
+    cfg: VMECJAXTransportObjectiveConfig,
 ) -> jnp.ndarray:
-    """Evaluate a scalar SPECTRAX-GK transport objective from a VMEC-JAX state."""
+    """Evaluate the untransformed scalar transport objective."""
 
-    _pin_current_optional_backend_paths()
-    cfg = config or VMECJAXTransportObjectiveConfig()
     samples = cfg.sample_set
     solver_options = cfg.objective_options()
     grid_options = _static_grid_options_from_ky_values(
@@ -391,6 +454,71 @@ def vmec_jax_transport_objective_from_state(
         objective_weights=weights,
         reduction=samples.reduction,
     )
+    return jnp.asarray(value)
+
+
+def _chunked_transport_objective_raw_value_from_state(
+    state: Any,
+    static: Any,
+    indata: Any,
+    wout_reference: Any,
+    cfg: VMECJAXTransportObjectiveConfig,
+) -> jnp.ndarray:
+    """Evaluate a weighted-mean raw objective one surface chunk at a time."""
+
+    raw_value = None
+    for chunk_sample_set, chunk_weight in _surface_chunk_sample_sets(
+        cfg.sample_set,
+        chunk_size=int(cfg.surface_chunk_size),
+    ):
+        chunk_cfg = replace(
+            cfg,
+            sample_set=chunk_sample_set,
+            surface_chunk_size=0,
+            objective_transform="raw",
+            objective_scale=1.0,
+        )
+        chunk_value = _transport_objective_raw_value_from_state(
+            state,
+            static,
+            indata,
+            wout_reference,
+            chunk_cfg,
+        )
+        weighted = jnp.asarray(float(chunk_weight), dtype=jnp.asarray(chunk_value).dtype) * chunk_value
+        raw_value = weighted if raw_value is None else raw_value + weighted
+    if raw_value is None:
+        raise RuntimeError("surface chunking produced no objective chunks")
+    return jnp.asarray(raw_value)
+
+
+def vmec_jax_transport_objective_from_state(
+    state: Any,
+    static: Any,
+    indata: Any,
+    wout_reference: Any,
+    config: VMECJAXTransportObjectiveConfig | None = None,
+) -> jnp.ndarray:
+    """Evaluate a scalar SPECTRAX-GK transport objective from a VMEC-JAX state."""
+
+    _pin_current_optional_backend_paths()
+    cfg = config or VMECJAXTransportObjectiveConfig()
+    if int(cfg.surface_chunk_size) > 0:
+        value = _chunked_transport_objective_raw_value_from_state(
+            state,
+            static,
+            indata,
+            wout_reference,
+            cfg,
+        )
+    else:
+        value = _transport_objective_raw_value_from_state(
+            state,
+            static,
+            indata,
+            wout_reference,
+            cfg,
+        )
     return _apply_objective_transform(value, cfg)
 
 
@@ -628,6 +756,7 @@ class VMECJAXSpectraxTransportObjective:
                     "mboz": int(self.config.mboz),
                     "nboz": int(self.config.nboz),
                     "ntheta": int(self.config.ntheta),
+                    "surface_chunk_size": int(self.config.surface_chunk_size),
                     "objective_transform": self.config.objective_transform,
                     "objective_scale": float(self.config.objective_scale),
                 },
@@ -645,6 +774,7 @@ class VMECJAXSpectraxTransportObjective:
                 "mboz": int(self.config.mboz),
                 "nboz": int(self.config.nboz),
                 "ntheta": int(self.config.ntheta),
+                "surface_chunk_size": int(self.config.surface_chunk_size),
                 "objective_transform": self.config.objective_transform,
                 "objective_scale": float(self.config.objective_scale),
             },

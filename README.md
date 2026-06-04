@@ -179,6 +179,9 @@ On the passing strict QA baseline, the 18-point log1p metrics are growth
 heat flux `0.08010670290`. These values are admission bookkeeping only; matched
 long-window SPECTRAX-GK nonlinear audits remain required before claiming a
 turbulent-flux reduction.
+For 18-point VMEC-JAX/SPECTRAX-GK transport optimization on 16 GB GPUs, pass
+`--surface-chunk-size 1` to the driver so the same weighted-mean objective is
+evaluated one surface chunk at a time before applying the scalar transform.
 
 For algorithm comparisons, run the full `max_mode=5`, `mboz=nboz=21` sweep on
 a GPU node and build the real-WOUT comparison panel with:
