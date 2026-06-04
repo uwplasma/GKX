@@ -179,9 +179,16 @@ On the passing strict QA baseline, the 18-point log1p metrics are growth
 heat flux `0.08010670290`. These values are admission bookkeeping only; matched
 long-window SPECTRAX-GK nonlinear audits remain required before claiming a
 turbulent-flux reduction.
-For 18-point VMEC-JAX/SPECTRAX-GK transport optimization on 16 GB GPUs, pass
-`--surface-chunk-size 1` to the driver so the same weighted-mean objective is
-evaluated one surface chunk at a time before applying the scalar transform.
+
+For 18-point VMEC-JAX/SPECTRAX-GK transport diagnostics on 16 GB GPUs, use
+`--surface-chunk-size 1` in eval-only tools and
+`--surface-gradient-chunk-size 1` in gradient diagnostics. This preserves the
+weighted-mean objective algebra while lowering diagnostic memory. The full
+VMEC-JAX reverse-mode optimizer still OOMs at the strict max-mode-5,
+`mboz=nboz=21`, 18-point setting on the 16 GB office GPU path, so production
+candidate generation currently uses chunked gradient diagnostics plus a
+boundary-chain-gated projected line search, or CPU replay for the boundary
+chain, before any nonlinear audit is launched.
 
 For algorithm comparisons, run the full `max_mode=5`, `mboz=nboz=21` sweep on
 a GPU node and build the real-WOUT comparison panel with:
