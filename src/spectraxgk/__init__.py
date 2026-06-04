@@ -353,6 +353,7 @@ from spectraxgk.vmec_jax_transport_objective import (
     vmec_jax_transport_objective_from_state,
 )
 from spectraxgk.vmec_jax_candidate_gate import (
+    build_authoritative_wout_candidate_gate,
     build_solved_vmec_candidate_gate,
     build_wout_reproducibility_gate,
     final_iota_profiles_from_vmec_result,
@@ -756,6 +757,7 @@ __all__ = [
     "VMECJAXTransportAdmissionPolicy",
     "DEFAULT_TRANSPORT_METRIC_KEYS",
     "aggregate_objective_portfolio",
+    "build_authoritative_wout_candidate_gate",
     "build_solved_vmec_candidate_gate",
     "build_wout_reproducibility_gate",
     "build_nonlinear_audit_redesign_report",

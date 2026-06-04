@@ -169,6 +169,11 @@ but independent replay/rerun paths did not reproduce the same rotational
 transform: a one-evaluation VMEC-JAX replay reported `iota ~= 0.4085`, while a
 fresh fixed-boundary WOUT rerun reported `iota ~= 0.41169` instead of the
 optimizer-state `0.41020`.
+If the deterministic replayed WOUT is selected as the publication-facing
+equilibrium, run the authoritative rerun-WOUT gate as well. The current strict
+rerun WOUT passes that separate aspect/iota/QS check
+(`QS = 1.85e-4`), but downstream transport audits must then point to
+`wout_final_rerun.nc`, not the optimizer-state `wout_final.nc`.
 
 After a strict baseline or candidate writes `input.final`, evaluate the
 18-point reduced transport-admission metrics without running another optimizer:

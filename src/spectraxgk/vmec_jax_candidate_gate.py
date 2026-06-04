@@ -16,6 +16,9 @@ from typing import Any, cast
 import numpy as np
 
 
+DEFAULT_QS_WOUT_SURFACES = tuple(float(x) for x in np.linspace(0.0, 1.0, 11))
+
+
 def _finite_float_or_none(value: Any) -> float | None:
     try:
         result = float(value)
@@ -144,6 +147,136 @@ def _wout_summary(source: str | Path | Mapping[str, Any]) -> dict[str, Any]:
         "mean_iota": _finite_float_or_none(np.nanmean(profile)) if profile.size else None,
         "min_iotas_excluding_axis": _finite_float_or_none(np.nanmin(profile)) if profile.size else None,
         "min_iotaf": _finite_float_or_none(np.nanmin(finite_iotaf)) if finite_iotaf.size else None,
+    }
+
+
+def _wout_quasisymmetry(
+    source: str | Path | Mapping[str, Any],
+    *,
+    helicity_m: int,
+    helicity_n: int,
+    surfaces: tuple[float, ...],
+    ntheta: int,
+    nphi: int,
+) -> tuple[float | None, str, str | None]:
+    if isinstance(source, Mapping):
+        value = _finite_float_or_none(source.get("qs_residual", source.get("quasisymmetry")))
+        return value, str(source.get("qs_source", "mapping")), None if value is not None else "missing_qs_residual"
+    try:
+        import vmec_jax as vj  # type: ignore[import-not-found]
+
+        wout = vj.load_wout(source)
+        qs = vj.quasisymmetry_ratio_residual_from_wout(
+            wout,
+            surfaces=np.asarray(surfaces, dtype=float),
+            helicity_m=int(helicity_m),
+            helicity_n=int(helicity_n),
+            ntheta=int(ntheta),
+            nphi=int(nphi),
+        )
+        if isinstance(qs, Mapping):
+            value = _finite_float_or_none(qs.get("total"))
+        else:
+            value = _finite_float_or_none(qs)
+        return value, "vmec_jax_wout", None if value is not None else "nonfinite_qs_residual"
+    except Exception as exc:
+        return None, "vmec_jax_wout_error", f"{type(exc).__name__}: {exc}"
+
+
+def build_authoritative_wout_candidate_gate(
+    wout: str | Path | Mapping[str, Any],
+    *,
+    target_aspect: float,
+    aspect_atol: float,
+    min_abs_mean_iota: float,
+    qs_residual_max: float,
+    iota_profile_floor: float | None,
+    helicity_m: int = 1,
+    helicity_n: int = 0,
+    qs_surfaces: tuple[float, ...] = DEFAULT_QS_WOUT_SURFACES,
+    qs_ntheta: int = 63,
+    qs_nphi: int = 64,
+) -> dict[str, Any]:
+    """Build a solved-equilibrium gate directly from a WOUT artifact.
+
+    Use this when the deterministic replayed WOUT is the publication-facing
+    equilibrium.  It does not assert that the replayed WOUT matches an
+    optimizer-state WOUT; that remains the role of
+    :func:`build_wout_reproducibility_gate`.
+    """
+
+    summary = _wout_summary(wout)
+    aspect = _finite_float_or_none(summary.get("aspect"))
+    mean_iota = _finite_float_or_none(summary.get("mean_iota"))
+    min_iotas = _finite_float_or_none(summary.get("min_iotas_excluding_axis"))
+    min_iotaf = _finite_float_or_none(summary.get("min_iotaf"))
+    profile_floor_passed = True
+    if iota_profile_floor is not None:
+        profile_floor_passed = _finite_gate(min_iotas, lower=float(iota_profile_floor)) and _finite_gate(
+            min_iotaf,
+            lower=float(iota_profile_floor),
+        )
+    qs_value, qs_source, qs_error = _wout_quasisymmetry(
+        wout,
+        helicity_m=int(helicity_m),
+        helicity_n=int(helicity_n),
+        surfaces=tuple(float(x) for x in qs_surfaces),
+        ntheta=int(qs_ntheta),
+        nphi=int(qs_nphi),
+    )
+    checks = {
+        "aspect": {
+            "value": aspect,
+            "target": float(target_aspect),
+            "absolute_error": None if aspect is None else abs(aspect - float(target_aspect)),
+            "absolute_tolerance": float(aspect_atol),
+            "passed": _finite_gate(
+                None if aspect is None else abs(aspect - float(target_aspect)),
+                upper=float(aspect_atol),
+            ),
+        },
+        "mean_iota": {
+            "value": None if mean_iota is None else abs(mean_iota),
+            "minimum_abs": float(min_abs_mean_iota),
+            "margin": None if mean_iota is None else abs(mean_iota) - float(min_abs_mean_iota),
+            "passed": _finite_gate(None if mean_iota is None else abs(mean_iota), lower=float(min_abs_mean_iota)),
+        },
+        "iota_profile": {
+            "minimum_iotas_excluding_axis": min_iotas,
+            "minimum_iotaf": min_iotaf,
+            "floor": None if iota_profile_floor is None else float(iota_profile_floor),
+            "source": "wout",
+            "passed": bool(profile_floor_passed),
+        },
+        "quasisymmetry": {
+            "value": qs_value,
+            "maximum": float(qs_residual_max),
+            "margin": None if qs_value is None else float(qs_residual_max) - qs_value,
+            "source": qs_source,
+            "error": qs_error,
+            "helicity_m": int(helicity_m),
+            "helicity_n": int(helicity_n),
+            "surfaces": [float(x) for x in qs_surfaces],
+            "ntheta": int(qs_ntheta),
+            "nphi": int(qs_nphi),
+            "passed": _finite_gate(qs_value, upper=float(qs_residual_max)),
+        },
+    }
+    passed = all(bool(cast(Mapping[str, Any], check).get("passed")) for check in checks.values())
+    return {
+        "kind": "vmec_jax_authoritative_wout_candidate_gate",
+        "passed": bool(passed),
+        "authoritative_wout": summary,
+        "checks": checks,
+        "claim_level": (
+            "deterministic WOUT artifact passes solved-equilibrium admission; "
+            "optimizer-state reproducibility must be reported separately"
+        ),
+        "next_action": (
+            "this WOUT may be used as the authoritative equilibrium for downstream SPECTRAX-GK audits"
+            if passed
+            else "do not use this WOUT for downstream SPECTRAX-GK transport promotion"
+        ),
     }
 
 
@@ -359,6 +492,8 @@ def build_solved_vmec_candidate_gate(
 
 
 __all__ = [
+    "DEFAULT_QS_WOUT_SURFACES",
+    "build_authoritative_wout_candidate_gate",
     "build_solved_vmec_candidate_gate",
     "build_wout_reproducibility_gate",
     "final_iota_profiles_from_vmec_result",
