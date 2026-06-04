@@ -9,6 +9,7 @@ time on it?
 from __future__ import annotations
 
 from collections.abc import Mapping
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -106,6 +107,157 @@ def _history_from_candidate(candidate: Any) -> Mapping[str, Any]:
         return candidate
     history = getattr(candidate, "history", None)
     return history if isinstance(history, Mapping) else {}
+
+
+def _wout_summary(source: str | Path | Mapping[str, Any]) -> dict[str, Any]:
+    if isinstance(source, Mapping):
+        return {
+            "source": str(source.get("source", "mapping")),
+            "aspect": _finite_float_or_none(source.get("aspect")),
+            "mean_iota": _finite_float_or_none(source.get("mean_iota")),
+            "min_iotas_excluding_axis": _finite_float_or_none(source.get("min_iotas_excluding_axis")),
+            "min_iotaf": _finite_float_or_none(source.get("min_iotaf")),
+        }
+    path = Path(source)
+    try:
+        import netCDF4  # type: ignore[import-not-found]
+
+        with netCDF4.Dataset(path) as dataset:
+            aspect = _finite_float_or_none(np.asarray(dataset.variables["aspect"][:]))
+            iotas = np.asarray(dataset.variables["iotas"][:], dtype=float)
+            iotaf = np.asarray(dataset.variables["iotaf"][:], dtype=float)
+    except Exception as exc:
+        return {
+            "source": str(path),
+            "error": f"{type(exc).__name__}: {exc}",
+            "aspect": None,
+            "mean_iota": None,
+            "min_iotas_excluding_axis": None,
+            "min_iotaf": None,
+        }
+    finite_iotas = iotas[np.isfinite(iotas)]
+    finite_iotaf = iotaf[np.isfinite(iotaf)]
+    profile = finite_iotas[1:] if finite_iotas.size > 1 else finite_iotas
+    return {
+        "source": str(path),
+        "aspect": aspect,
+        "mean_iota": _finite_float_or_none(np.nanmean(profile)) if profile.size else None,
+        "min_iotas_excluding_axis": _finite_float_or_none(np.nanmin(profile)) if profile.size else None,
+        "min_iotaf": _finite_float_or_none(np.nanmin(finite_iotaf)) if finite_iotaf.size else None,
+    }
+
+
+def build_wout_reproducibility_gate(
+    reference_wout: str | Path | Mapping[str, Any],
+    rerun_wout: str | Path | Mapping[str, Any],
+    *,
+    target_aspect: float,
+    aspect_atol: float,
+    min_abs_mean_iota: float,
+    iota_profile_floor: float | None,
+    mean_iota_repro_atol: float = 5.0e-4,
+    aspect_repro_atol: float = 1.0e-6,
+    profile_repro_atol: float = 5.0e-4,
+) -> dict[str, Any]:
+    """Check that a saved VMEC input reproduces the optimizer-state WOUT.
+
+    VMEC-JAX can write both an optimizer-state ``wout_final.nc`` and an
+    ``input.final`` deck.  For publication-facing transport claims, the deck
+    must reproduce the WOUT when rerun; otherwise downstream SPECTRAX-GK
+    metrics may be attached to a different equilibrium than the optimized
+    state.  This gate compares the original WOUT against a fresh rerun WOUT and
+    also applies the solved-equilibrium aspect/iota/profile admission checks to
+    the rerun.
+    """
+
+    reference = _wout_summary(reference_wout)
+    rerun = _wout_summary(rerun_wout)
+    ref_aspect = _finite_float_or_none(reference.get("aspect"))
+    rerun_aspect = _finite_float_or_none(rerun.get("aspect"))
+    ref_iota = _finite_float_or_none(reference.get("mean_iota"))
+    rerun_iota = _finite_float_or_none(rerun.get("mean_iota"))
+    ref_min_iotas = _finite_float_or_none(reference.get("min_iotas_excluding_axis"))
+    rerun_min_iotas = _finite_float_or_none(rerun.get("min_iotas_excluding_axis"))
+    ref_min_iotaf = _finite_float_or_none(reference.get("min_iotaf"))
+    rerun_min_iotaf = _finite_float_or_none(rerun.get("min_iotaf"))
+
+    aspect_drift = None if ref_aspect is None or rerun_aspect is None else abs(rerun_aspect - ref_aspect)
+    iota_drift = None if ref_iota is None or rerun_iota is None else abs(abs(rerun_iota) - abs(ref_iota))
+    min_iotas_drift = (
+        None
+        if ref_min_iotas is None or rerun_min_iotas is None
+        else abs(rerun_min_iotas - ref_min_iotas)
+    )
+    min_iotaf_drift = (
+        None
+        if ref_min_iotaf is None or rerun_min_iotaf is None
+        else abs(rerun_min_iotaf - ref_min_iotaf)
+    )
+    profile_floor_passed = True
+    if iota_profile_floor is not None:
+        profile_floor_passed = _finite_gate(rerun_min_iotas, lower=float(iota_profile_floor)) and _finite_gate(
+            rerun_min_iotaf,
+            lower=float(iota_profile_floor),
+        )
+    checks = {
+        "rerun_aspect_admission": {
+            "value": rerun_aspect,
+            "target": float(target_aspect),
+            "absolute_error": None if rerun_aspect is None else abs(rerun_aspect - float(target_aspect)),
+            "absolute_tolerance": float(aspect_atol),
+            "passed": _finite_gate(
+                None if rerun_aspect is None else abs(rerun_aspect - float(target_aspect)),
+                upper=float(aspect_atol),
+            ),
+        },
+        "rerun_mean_iota_admission": {
+            "value": None if rerun_iota is None else abs(rerun_iota),
+            "minimum_abs": float(min_abs_mean_iota),
+            "margin": None if rerun_iota is None else abs(rerun_iota) - float(min_abs_mean_iota),
+            "passed": _finite_gate(None if rerun_iota is None else abs(rerun_iota), lower=float(min_abs_mean_iota)),
+        },
+        "rerun_iota_profile_admission": {
+            "minimum_iotas_excluding_axis": rerun_min_iotas,
+            "minimum_iotaf": rerun_min_iotaf,
+            "floor": None if iota_profile_floor is None else float(iota_profile_floor),
+            "passed": bool(profile_floor_passed),
+        },
+        "aspect_reproducibility": {
+            "reference": ref_aspect,
+            "rerun": rerun_aspect,
+            "absolute_drift": aspect_drift,
+            "absolute_tolerance": float(aspect_repro_atol),
+            "passed": _finite_gate(aspect_drift, upper=float(aspect_repro_atol)),
+        },
+        "mean_iota_reproducibility": {
+            "reference": None if ref_iota is None else abs(ref_iota),
+            "rerun": None if rerun_iota is None else abs(rerun_iota),
+            "absolute_drift": iota_drift,
+            "absolute_tolerance": float(mean_iota_repro_atol),
+            "passed": _finite_gate(iota_drift, upper=float(mean_iota_repro_atol)),
+        },
+        "iota_profile_reproducibility": {
+            "min_iotas_drift": min_iotas_drift,
+            "min_iotaf_drift": min_iotaf_drift,
+            "absolute_tolerance": float(profile_repro_atol),
+            "passed": _finite_gate(min_iotas_drift, upper=float(profile_repro_atol))
+            and _finite_gate(min_iotaf_drift, upper=float(profile_repro_atol)),
+        },
+    }
+    passed = all(bool(cast(Mapping[str, Any], check).get("passed")) for check in checks.values())
+    return {
+        "kind": "vmec_jax_wout_reproducibility_gate",
+        "passed": bool(passed),
+        "reference_wout": reference,
+        "rerun_wout": rerun,
+        "checks": checks,
+        "claim_level": "saved VMEC input must reproduce optimizer-state WOUT before SPECTRAX-GK transport promotion",
+        "next_action": (
+            "saved input/WOUT pair is reproducible enough for transport admission"
+            if passed
+            else "do not promote this saved input; rerun/refine the VMEC-JAX solve until input.final reproduces wout_final.nc"
+        ),
+    }
 
 
 def build_solved_vmec_candidate_gate(
@@ -208,5 +360,6 @@ def build_solved_vmec_candidate_gate(
 
 __all__ = [
     "build_solved_vmec_candidate_gate",
+    "build_wout_reproducibility_gate",
     "final_iota_profiles_from_vmec_result",
 ]

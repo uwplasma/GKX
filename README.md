@@ -160,7 +160,12 @@ GPU node with the exact SciPy/ESS path. It terminates at `nfev=39` with
 aspect `5.000154`, mean iota `0.4101997`, QS residual `2.60e-4`, and a passed
 solved-WOUT gate. This is a QA baseline artifact only; transport reductions
 must be re-audited against this stricter WOUT before being promoted relative to
-it.
+it. Before using any saved `input.final` deck for transport admission, require
+the WOUT reproducibility gate: rerun VMEC from `input.final` and compare the
+fresh `wout_final_rerun.nc` against the optimizer-state `wout_final.nc`. The
+current tooling exposes this as `--save-rerun-wouts --require-rerun-wout-gate`.
+This gate was added after the strict optimizer-state WOUT passed `iota >= 0.41`
+but a fresh rerun from the saved input reproduced only `iota ~= 0.4085`.
 
 After a strict baseline or candidate writes `input.final`, evaluate the
 18-point reduced transport-admission metrics without running another optimizer:
