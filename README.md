@@ -142,7 +142,7 @@ For a paper-facing constraints-only QA baseline, use the configurable driver
 with the strict upstream preset:
 
 ```bash
-python examples/optimization/vmec_jax_qa_low_turbulence_optimization.py \
+python tools/vmec_jax_qa_low_turbulence_optimization.py \
   --strict-upstream-qa-baseline --solver-device gpu \
   --outdir tools_out/vmec_jax_qa_strict_baseline
 ```
@@ -215,7 +215,7 @@ transport-optimization success claim.
 
 For configurable dry-runs, guarded transport-weight ladders, and solved-WOUT
 admission gates, use
-`examples/optimization/vmec_jax_qa_low_turbulence_optimization.py` and the
+`tools/vmec_jax_qa_low_turbulence_optimization.py` and the
 tools documented in
 [Differentiable Stellarator Optimization](docs/stellarator_optimization.rst).
 
