@@ -165,7 +165,10 @@ the WOUT reproducibility gate: rerun VMEC from `input.final` and compare the
 fresh `wout_final_rerun.nc` against the optimizer-state `wout_final.nc`. The
 current tooling exposes this as `--save-rerun-wouts --require-rerun-wout-gate`.
 This gate was added after the strict optimizer-state WOUT passed `iota >= 0.41`
-but a fresh rerun from the saved input reproduced only `iota ~= 0.4085`.
+but independent replay/rerun paths did not reproduce the same rotational
+transform: a one-evaluation VMEC-JAX replay reported `iota ~= 0.4085`, while a
+fresh fixed-boundary WOUT rerun reported `iota ~= 0.41169` instead of the
+optimizer-state `0.41020`.
 
 After a strict baseline or candidate writes `input.final`, evaluate the
 18-point reduced transport-admission metrics without running another optimizer:
