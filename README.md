@@ -439,7 +439,8 @@ absolute-flux predictor or universal saturation law.
 The companion holdout-gap report makes the remaining promotion blocker
 explicit instead of hiding it in the calibration plot. Six holdouts are
 admitted and the scoped model-selection gate passes, but the current absolute
-heat-flux calibration still fails the aggregate holdout gate (`2.11 > 0.35`).
+heat-flux calibration for the legacy one-constant/simple rules still fails the
+aggregate holdout gate (`2.11 > 0.35`).
 The next useful data product is therefore another independent, converged
 electrostatic nonlinear holdout, preferably in the external-VMEC family, not
 another unvalidated fit parameter.
