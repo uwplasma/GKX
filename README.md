@@ -123,7 +123,7 @@ SPECTRAX-GK ships VMEC-JAX-style QA optimization examples that append one differ
 
 The baseline is an admitted QA design (`A = 5.0000`, mean `iota = 0.41020`, QS residual `8.9e-6`). The transport-optimized rows are optimizer-output comparisons, not promoted turbulent-flux designs: their mean iota values remain physically acceptable for this diagnostic campaign (`|iota| >= 0.39`), and matched long post-transient nonlinear `Q(t)` audits are still required before making nonlinear heat-flux claims.
 
-The companion `RBC(1,1)` landscape scans the strict QA baseline over `[-50%, +50%]` with 21 points. Growth-rate and quasilinear values are still near marginal at this representative sample, so the plot shows absolute values. The reduced nonlinear-window metric picked `-50%` as a candidate, but the completed replicated `t=[350,700]` nonlinear audit rejects it: heat flux increases from `11.43 +/- 0.22` to `14.44 +/- 0.58`. The `+35%` branch is still under replicated audit and is not promoted.
+The companion `RBC(1,1)` landscape scans the strict QA baseline over `[-50%, +50%]` with 21 points. Growth-rate and quasilinear values are still near marginal at this representative sample, so the plot shows absolute values. The reduced nonlinear-window metric picked `-50%` as a candidate, but the completed replicated `t=[350,700]` nonlinear audit rejects it: heat flux increases from `11.43 +/- 0.22` to `14.44 +/- 0.58`. A secondary `+35%` basin passes the same long-window audit with `<Q_i>=10.51 +/- 0.25`, a `7.98%` reduction from baseline with `z=2.77`; this is a bounded one-control transport result, not yet a full nonlinear stellarator-optimization claim.
 
 ![QA RBC(1,1) reduced transport landscape](docs/_static/vmec_boundary_transport_landscape_rbc11.png)
 
@@ -663,8 +663,11 @@ baseline, not as a promoted nonlinear heat-flux result. The expanded scan covers
 growth-rate and quasilinear values remain near marginal, while the reduced
 nonlinear-window metric decreases from `2.81e-2` to `2.47e-2` at `-50%` and has
 a second lower-transport basin around `+35%`. Replicated long-window nonlinear
-ensembles must still be attached before either direction can seed a promoted
-turbulent-flux optimization claim.
+ensembles now show why the landscape cannot be used alone: `-50%` increases
+transport by `26.36%` and fails closed, while `+35%` passes with a `7.98%`
+reduction (`11.43 +/- 0.22` to `10.51 +/- 0.25`, `z=2.77`). The result is
+useful as a single-control seed for the next optimizer campaign, but it is not
+yet a broad nonlinear turbulent-flux optimization claim.
 The separate nonlinear turbulence-gradient evidence gate is stricter and
 remains fail-closed after the completed QA/ESS overdetermined control campaign,
 the targeted `RBC(1,1)` seed follow-up, and the bounded `ZBS(1,0)` `7.5%`
