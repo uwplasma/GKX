@@ -375,8 +375,8 @@ The current release surface is deliberately scoped:
   or nonlinear heat-flux optimization claims.
 - Production parallelization is currently the independent-work path for `k_y`
   scans, sensitivity sweeps, quasilinear studies, and UQ ensembles. Whole-state
-  nonlinear sharding is identity-correct but remains a profiler/diagnostic
-  path, not a nonlinear multi-GPU speedup claim.
+  nonlinear sharding and nonlinear domain sharding remain diagnostic unless the
+  exact workload has passing identity and profiler promotion gates.
 - W7-X zonal long-window recurrence/damping and W7-X TEM / kinetic-electron
   extensions are deferred from the current manuscript/release scope.
 
@@ -813,8 +813,9 @@ matched reference, not that the current quasilinear model is a universal
 absolute-flux predictor or that nonlinear turbulence gradients are available.
 
 For the next nonlinear optimizer campaign, the stricter campaign-admission
-sidecar combines the reduced prelaunch margin, deterministic cross-sample
-dispersion, and replicated `RBC(0,1)` landscape evidence. The weak strict
+sidecar is an admission-only launch contract that combines the reduced
+prelaunch margin, deterministic cross-sample dispersion, and replicated
+`RBC(0,1)` landscape evidence. The weak strict
 top-12 candidate remains blocked (`0.58%` nonlinear reduction, `z=0.20`), while
 the `+3% RBC(0,1)` point passes as a scoped one-coefficient launch direction
 (`4.678%` reduced prelaunch improvement; `26.65%` replicated nonlinear
@@ -942,8 +943,8 @@ Differentiable stellarator ITG optimization examples live in
 linear-growth, quasilinear-flux, nonlinear-window transport-objective scripts,
 and the guarded VMEC-JAX QA driver. Full
 `vmec_jax -> booz_xform_jax -> SPECTRAX-GK` nonlinear optimization remains
-scoped to production nonlinear turbulence-gradient or robust finite-difference
-audits with converged post-transient heat-flux windows, continued
+unpromoted unless production-grade nonlinear turbulence-gradient or robust
+finite-difference audits pass with converged post-transient heat-flux windows, continued
 curvature/drift parity on additional equilibria, and matched
 baseline-to-optimized nonlinear audits for broader geometry families.
 
@@ -976,7 +977,8 @@ identity-correct, but only modestly useful on logical CPUs and slower on two RTX
 A4000 GPUs for the current decomposition. Production parallelization should
 therefore focus on independent `k_y` scans, quasilinear studies, sensitivity
 sweeps, and UQ/ensemble batching until a communication-aware nonlinear
-decomposition has its own identity and throughput evidence.
+decomposition has its own workload-specific identity, transport-window, and
+matched profiler evidence.
 
 For UQ and optimization portfolios, `spectraxgk.independent_ensemble_provenance_gate`
 is the production identity/provenance check. It runs serial and
@@ -1127,7 +1129,8 @@ The matched W7-X/HSX runtime-mode stellarator profiler artifact
 (`docs/_static/nonlinear_rhs_profile_stellarator_runtime.json`) records W7-X
 and HSX GPU full-RHS calls near `2.7e-2 s` versus CPU calls near `3.1e-1 s`;
 those rows close the release-level performance evidence while keeping broader
-production nonlinear speedup claims scoped to future profiler-gated work.
+production nonlinear speedup claims scoped to future identity- and
+profiler-gated work.
 
 The full fused linear-RHS trace artifact
 (`docs/_static/full_linear_rhs_trace_summary.json`) now records the Cyclone
@@ -1170,8 +1173,8 @@ Parallelization scaling figures are kept in the performance docs rather than
 the top-level README. The shipped public claim is the independent-work path for
 `k_y` scans, quasilinear studies, sensitivity sweeps, and UQ ensembles;
 whole-state nonlinear sharding remains an identity/profiler artifact until a
-communication-aware nonlinear decomposition has matched CPU/GPU identity and
-throughput evidence.
+communication-aware nonlinear decomposition has matched CPU/GPU identity,
+transport-window, and profiler evidence.
 
 ## Examples
 
