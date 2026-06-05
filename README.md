@@ -117,178 +117,18 @@ resolved diagnostics, and heat flux.
 
 ## Differentiable Stellarator Optimization
 
-For solved-boundary QA transport experiments, start from the VMEC-JAX-style scripts below. They intentionally mirror VMEC-JAX `examples/optimization/QA_optimization.py`: top-level editable constants, `MAX_MODE = 5`, `TARGET_ASPECT = 5.0`, `TARGET_IOTA = 0.41`, `IOTA_WEIGHT = 10_000.0`, and the original aspect/iota/quasisymmetry objective tuples. SPECTRAX-GK is added only as one extra transport residual in `objective_tuples`.
+SPECTRAX-GK ships VMEC-JAX-style QA optimization examples that append one differentiable ITG transport residual to the usual aspect-ratio, iota, and quasisymmetry objective tuples. The canonical scripts are `examples/optimization/QA_optimization_linear_ITG.py`, `examples/optimization/QA_optimization_quasilinear_ITG.py`, `examples/optimization/QA_optimization_nonlinear_ITG.py`, and `examples/optimization/QA_parameter_scan.py`; full equations, gates, and audit provenance are in the [stellarator optimization docs](docs/stellarator_optimization.rst).
+
+![QA ITG optimization summary](docs/_static/qa_itg_optimization_summary_panel.png)
+
+The panel combines tracked VMEC-JAX WOUT geometry, solved-iota gates, SPECTRAX-GK ITG objective landscapes, and matched long-window nonlinear heat-flux audits. The current claim is scoped: reduced linear/quasilinear/nonlinear-window objectives are optimizer diagnostics, while turbulent-flux reductions require replicated post-transient nonlinear audits such as the ones shown.
 
 ```bash
-python examples/optimization/QA_optimization_with_growth_rate.py
-python examples/optimization/QA_optimization_with_quasilinear_flux.py
-python examples/optimization/QA_optimization_with_nonlinear_heat_flux.py
+python examples/optimization/QA_optimization_linear_ITG.py
+python examples/optimization/QA_optimization_quasilinear_ITG.py
+python examples/optimization/QA_optimization_nonlinear_ITG.py
+python examples/optimization/QA_parameter_scan.py
 ```
-
-The key structure is deliberately explicit:
-
-```python
-objective_tuples = [
-    (aspect.J, TARGET_ASPECT, ASPECT_WEIGHT),
-    (iota.J, TARGET_IOTA, IOTA_WEIGHT),
-    (qs.J, 0.0, QS_WEIGHT),
-    (transport.J, 0.0, SPECTRAX_WEIGHT),
-]
-```
-
-These scripts are the recommended starting point for producing real VMEC-JAX WOUTs with the same high-weight `iota = 0.41` target as the upstream QA example. Keep the SPECTRAX-GK transport weight small while tuning so the QA, aspect-ratio, and iota constraints remain the dominant solved-equilibrium gate. Full nonlinear turbulent-flux optimization claims still require matched long post-transient SPECTRAX-GK audits, seed/timestep replicates, and running-average convergence.
-By default the transport residual in each script uses the admission-grade
-`3 x 2 x 3` sample set: `s=(0.45,0.64,0.78)`, `alpha=(0,pi/4)`, and
-`k_y rho_i=(0.10,0.30,0.50)`. Use a one-point sample only for explicitly
-scoped debugging, then return to the 18-point default before nonlinear audit
-launch.
-
-For a paper-facing constraints-only QA baseline, use the configurable driver
-with the strict upstream preset:
-
-```bash
-python tools/vmec_jax_qa_low_turbulence_optimization.py \
-  --strict-upstream-qa-baseline --solver-device gpu \
-  --outdir tools_out/vmec_jax_qa_strict_baseline
-```
-
-That preset keeps the upstream objective recipe, simple seed, ESS scaling, and
-`MAX_MODE = 5` controls, but increases the solve budget, tightens the outer
-step tolerance, and uses a small default iota target buffer
-(`target iota = 0.4102`, admission gate `iota >= 0.41`). That avoids stopping
-a few `1e-7` below the lower-bound gate while preserving the same QA baseline
-physics and objective weighting.
-
-The strict constraints-only baseline audit in
-`docs/_static/vmec_jax_qa_strict_baseline/summary.json` was run on the office
-GPU node with the exact SciPy/ESS path. It terminates at `nfev=39` with
-aspect `5.000154`, mean iota `0.4101997`, QS residual `2.60e-4`, and a passed
-solved-WOUT gate. This is a QA baseline artifact only; transport reductions
-must be re-audited against this stricter WOUT before being promoted relative to
-it. Before using any saved `input.final` deck for transport admission, require
-the WOUT reproducibility gate: rerun VMEC from `input.final` and compare the
-fresh `wout_final_rerun.nc` against the optimizer-state `wout_final.nc`. The
-current tooling exposes this as `--save-rerun-wouts --require-rerun-wout-gate`.
-This gate was added after the strict optimizer-state WOUT passed `iota >= 0.41`
-but independent replay/rerun paths did not reproduce the same rotational
-transform: a one-evaluation VMEC-JAX replay reported `iota ~= 0.4085`, while a
-fresh fixed-boundary WOUT rerun reported `iota ~= 0.41169` instead of the
-optimizer-state `0.41020`.
-If the deterministic replayed WOUT is selected as the publication-facing
-equilibrium, run the authoritative rerun-WOUT gate as well. The current strict
-rerun WOUT passes that separate aspect/iota/QS check
-(`QS = 1.85e-4`), but downstream transport audits must then point to
-`wout_final_rerun.nc`, not the optimizer-state `wout_final.nc`.
-
-After a strict baseline or candidate writes `input.final`, evaluate the
-18-point reduced transport-admission metrics without running another optimizer:
-
-```bash
-python tools/evaluate_vmec_jax_spectrax_transport_metric.py \
-  --input tools_out/vmec_jax_qa_strict_baseline/input.final \
-  --out-json tools_out/vmec_jax_qa_strict_baseline/growth_metric.json \
-  --transport-kind growth --mboz 21 --nboz 21 --solver-device cpu
-```
-
-Use `--transport-kind quasilinear_flux` or
-`--transport-kind nonlinear_window_heat_flux` for the other reduced objectives.
-On the passing strict QA baseline, the 18-point log1p metrics are growth
-`0.03657107649`, quasilinear flux `0.1230452010`, and nonlinear-window reduced
-heat flux `0.08010670290`. These values are admission bookkeeping only; matched
-long-window SPECTRAX-GK nonlinear audits remain required before claiming a
-turbulent-flux reduction.
-
-For 18-point VMEC-JAX/SPECTRAX-GK transport diagnostics on 16 GB GPUs, use
-`--surface-chunk-size 1` in eval-only tools and
-`--surface-gradient-chunk-size 1` in gradient diagnostics. This preserves the
-weighted-mean objective algebra while lowering diagnostic memory. The full
-VMEC-JAX reverse-mode optimizer still OOMs at the strict max-mode-5,
-`mboz=nboz=21`, 18-point setting on the 16 GB office GPU path, so production
-candidate generation currently uses chunked gradient diagnostics plus a
-boundary-chain-gated projected line search, or CPU replay for the boundary
-chain, before any nonlinear audit is launched.
-
-For algorithm comparisons, run the full `max_mode=5`, `mboz=nboz=21` sweep on
-a GPU node and build the real-WOUT comparison panel with:
-
-```bash
-python tools/build_vmec_jax_qa_full_sweep_panel.py \
-  --run-root tools_out/vmec_jax_qa_full_sweep_YYYYMMDD \
-  --out docs/_static/vmec_jax_qa_full_sweep_panel.png
-```
-
-Add ``--pdf`` locally when a vector export is needed for a manuscript; the
-repository tracks the lean PNG/JSON/CSV artifacts used by the README and docs.
-
-That panel compares the upstream QA baseline, growth-rate, quasilinear-flux,
-nonlinear-window, and projected/admission optimizer variants when available.
-It plots nonlinear `Q(t)` only after matched long-window SPECTRAX-GK audit
-traces exist for the final WOUTs; reduced optimizer objectives are not treated
-as saturated turbulent heat flux.
-
-![VMEC-JAX QA max-mode-5 optimizer sweep](docs/_static/vmec_jax_qa_full_sweep_panel.png)
-
-The sweep above was run on the office GPU node from a clean clone with
-`max_mode=5` and `mboz=nboz=21`. Direct scalar transport weighting often lowers
-the reduced metric only marginally while damaging aspect ratio, iota, or
-quasisymmetry. The projected/admission steps preserve the QA-style solved-WOUT
-gate and improve the reduced nonlinear-window metric. The matched single-point
-nonlinear audits for projected weights `5e-4` and `1e-3` both pass: all
-baseline and candidate seed/timestep ensembles use `t=[350,700]`. The best
-audited candidate so far is projected weight `1e-3`, which lowers the
-late-window mean ion heat flux from `9.695` to `9.370` (`3.35%`, uncertainty
-separation `z=1.56`). This is evidence for a scoped single-surface,
-single-field-line, single-`ky` transport improvement; broad
-stellarator-optimization claims still require multi-surface, multi-alpha, and
-multi-`ky` promotion gates.
-
-Scope note: the panel's matched nonlinear traces were generated from the
-earlier sweep baseline. The stricter exact QA baseline above is now the
-preferred constraints-only reference, so the projected-candidate nonlinear
-audits should be repeated against that WOUT before claiming reductions relative
-to the strict baseline.
-
-![Matched projected QA nonlinear transport audit](docs/_static/vmec_jax_qa_projected_weight_0p001_matched_comparison.png)
-
-Optimizer scope: the transport scripts default to `METHOD = "scalar_trust"`.
-SPECTRAX-GK transport objectives use reverse-mode custom-VJP pieces, while the
-pure VMEC-JAX dense `scipy`/`exact` least-squares path requests forward-mode
-JVP columns. For publication work, use a two-stage workflow: first solve the
-upstream QA baseline and verify aspect/iota/QS, then run a bounded
-transport-weight refinement with AD/finite-difference gradient checks and
-long-window nonlinear audits. Appending the transport tuple by itself is not a
-transport-optimization success claim.
-
-For configurable dry-runs, guarded transport-weight ladders, and solved-WOUT
-admission gates, use
-`tools/vmec_jax_qa_low_turbulence_optimization.py` and the
-tools documented in
-[Differentiable Stellarator Optimization](docs/stellarator_optimization.rst).
-
-![Solved VMEC-JAX QA boundary and Boozer diagnostics](docs/_static/vmec_jax_qa_solved_boundary_boozer_panel.png)
-
-The panel above is the solved-VMEC QA baseline diagnostic from the local
-VMEC-JAX `QA_optimization.py` workflow: the top row compares initial and
-optimized LCFS boundaries colored by `|B|`, and the bottom row shows the
-corresponding Boozer-LCFS `|B|` contours. It is the README-facing QA
-stellarator baseline. It is not a nonlinear heat-flux optimization claim.
-
-![VMEC-JAX QA + SPECTRAX-GK transport optimization status](docs/_static/vmec_jax_qa_transport_optimization_status.png)
-
-The optimization-status panel summarizes the current max-mode-5 QA transport
-lane. The QA solved-equilibrium branch passes the aspect/iota/QS gate. The
-direct scalar transport-residual branch is blocked because it breaks solved
-equilibrium gates. Earlier projected-gradient artifacts in this status panel
-remain useful negative controls, while the newer full max-mode-5 sweep above
-adds the positive projected-weight `5e-4` and `1e-3` matched audits. Scoped quasilinear
-model selection passes as a model-development diagnostic, while simple
-absolute-flux quasilinear rules remain blocked. The long-window nonlinear
-audits shown here are separate replicated transport-window anchors. The
-prelaunch-policy row records both the passing 18-point selected-candidate gate
-and the deliberately failing weak-reference gate; the latter is a successful
-safety check because it blocks reduced margins that are too small to justify an
-expensive nonlinear audit. None of these rows proves that every reduced
-transport objective transfers to saturated turbulence.
 
 ## Self-Contained VMEC Geometry Examples
 
