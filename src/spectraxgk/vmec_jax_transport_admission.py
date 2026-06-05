@@ -102,6 +102,7 @@ class VMECJAXReducedPrelaunchPolicy:
     minimum_relative_reduction: float = 0.04
     failed_reference_safety_factor: float = 1.5
     require_sample_coverage: bool = True
+    maximum_cross_sample_sem_rel: float = 0.35
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-safe representation."""
@@ -111,6 +112,50 @@ class VMECJAXReducedPrelaunchPolicy:
             "minimum_relative_reduction": float(self.minimum_relative_reduction),
             "failed_reference_safety_factor": float(self.failed_reference_safety_factor),
             "require_sample_coverage": bool(self.require_sample_coverage),
+            "maximum_cross_sample_sem_rel": float(self.maximum_cross_sample_sem_rel),
+        }
+
+
+@dataclass(frozen=True)
+class VMECJAXNonlinearCampaignPolicy:
+    """Admission limits for launching the next nonlinear optimizer campaign.
+
+    This gate sits between a reduced candidate screen and a broader optimizer
+    campaign.  Passing it means the next campaign is worth launching; it does
+    not promote a production nonlinear turbulent-flux optimization claim.
+    """
+
+    minimum_landscape_relative_reduction: float = 0.10
+    minimum_landscape_uncertainty_z_score: float = 3.0
+    maximum_landscape_sem_rel: float = 0.05
+    minimum_landscape_replicate_count: int = 3
+    require_reduced_prelaunch_passed: bool = True
+    require_reduced_cross_sample_gate: bool = True
+    require_landscape_admission_passed: bool = True
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-safe representation."""
+
+        return {
+            "minimum_landscape_relative_reduction": float(
+                self.minimum_landscape_relative_reduction
+            ),
+            "minimum_landscape_uncertainty_z_score": float(
+                self.minimum_landscape_uncertainty_z_score
+            ),
+            "maximum_landscape_sem_rel": float(self.maximum_landscape_sem_rel),
+            "minimum_landscape_replicate_count": int(
+                self.minimum_landscape_replicate_count
+            ),
+            "require_reduced_prelaunch_passed": bool(
+                self.require_reduced_prelaunch_passed
+            ),
+            "require_reduced_cross_sample_gate": bool(
+                self.require_reduced_cross_sample_gate
+            ),
+            "require_landscape_admission_passed": bool(
+                self.require_landscape_admission_passed
+            ),
         }
 
 
@@ -125,6 +170,49 @@ def _ensemble_statistics(ensemble: Mapping[str, Any]) -> dict[str, Any]:
         "combined_sem_rel": _finite_float_or_none(stats.get("combined_sem_rel")),
         "n_reports": int(stats.get("n_reports", 0) or 0),
         "case": ensemble.get("case"),
+    }
+
+
+def _sample_statistics_summary(
+    sample_statistics: Mapping[str, Any] | None,
+    *,
+    policy: VMECJAXReducedPrelaunchPolicy,
+    role: str,
+) -> dict[str, Any]:
+    """Return a gate row for deterministic reduced-metric sample dispersion."""
+
+    if not isinstance(sample_statistics, Mapping):
+        return {
+            "role": role,
+            "available": False,
+            "weighted_mean": None,
+            "weighted_standard_error": None,
+            "cross_sample_sem_rel": None,
+            "passed": None,
+            "blockers": [],
+        }
+    weighted_mean = _finite_float_or_none(sample_statistics.get("weighted_mean"))
+    weighted_sem = _finite_float_or_none(
+        sample_statistics.get("weighted_standard_error")
+    )
+    blockers: list[str] = []
+    sem_rel = None
+    if weighted_mean is None:
+        blockers.append(f"{role}_missing_cross_sample_weighted_mean")
+    if weighted_sem is None:
+        blockers.append(f"{role}_missing_cross_sample_weighted_sem")
+    if weighted_mean is not None and weighted_sem is not None:
+        sem_rel = float(abs(weighted_sem) / max(abs(weighted_mean), 1.0e-300))
+        if sem_rel > float(policy.maximum_cross_sample_sem_rel):
+            blockers.append(f"{role}_cross_sample_sem_rel_too_large")
+    return {
+        "role": role,
+        "available": True,
+        "weighted_mean": weighted_mean,
+        "weighted_standard_error": weighted_sem,
+        "cross_sample_sem_rel": sem_rel,
+        "passed": not blockers,
+        "blockers": blockers,
     }
 
 
@@ -250,6 +338,8 @@ def build_reduced_nonlinear_audit_prelaunch_report(
     baseline_metric: float,
     candidate_metric: float,
     objective_sample_set: Any = None,
+    baseline_sample_statistics: Mapping[str, Any] | None = None,
+    candidate_sample_statistics: Mapping[str, Any] | None = None,
     failed_reference_relative_reduction: float | None = None,
     policy: VMECJAXReducedPrelaunchPolicy | None = None,
     nonlinear_policy: VMECJAXNonlinearAuditPolicy | None = None,
@@ -299,6 +389,27 @@ def build_reduced_nonlinear_audit_prelaunch_report(
     )
     if bool(policy.require_sample_coverage) and not bool(sample_summary["passed"]):
         blockers.extend(str(item) for item in sample_summary["blockers"])
+    cross_sample_rows = [
+        _sample_statistics_summary(
+            baseline_sample_statistics,
+            policy=policy,
+            role="baseline",
+        ),
+        _sample_statistics_summary(
+            candidate_sample_statistics,
+            policy=policy,
+            role="candidate",
+        ),
+    ]
+    cross_sample_available = all(bool(row["available"]) for row in cross_sample_rows)
+    cross_sample_passed = (
+        None
+        if not cross_sample_available
+        else all(bool(row["passed"]) for row in cross_sample_rows)
+    )
+    if cross_sample_available and cross_sample_passed is False:
+        for row in cross_sample_rows:
+            blockers.extend(str(item) for item in row["blockers"])
 
     return {
         "kind": "vmec_jax_reduced_nonlinear_audit_prelaunch_report",
@@ -315,6 +426,15 @@ def build_reduced_nonlinear_audit_prelaunch_report(
         "required_relative_reduced_reduction": threshold,
         "threshold_sources": threshold_sources,
         "objective_sample_summary": sample_summary,
+        "reduced_cross_sample_statistics": {
+            "available": cross_sample_available,
+            "passed": cross_sample_passed,
+            "rows": cross_sample_rows,
+            "claim_scope": (
+                "deterministic spread over the reduced surface/field-line/ky "
+                "objective grid; not stochastic nonlinear heat-flux uncertainty"
+            ),
+        },
         "passed": not blockers,
         "blockers": blockers,
         "gates": [
@@ -331,6 +451,16 @@ def build_reduced_nonlinear_audit_prelaunch_report(
                 "value": int(sample_summary["sample_count"]),
                 "threshold": int(nonlinear_policy.minimum_sample_count),
             },
+            {
+                "metric": "reduced_cross_sample_dispersion",
+                "passed": cross_sample_passed,
+                "value": [
+                    row["cross_sample_sem_rel"]
+                    for row in cross_sample_rows
+                    if row["cross_sample_sem_rel"] is not None
+                ],
+                "threshold": float(policy.maximum_cross_sample_sem_rel),
+            },
         ],
         "next_action": (
             "launch replicated long-window nonlinear audit only with baseline/candidate ensembles"
@@ -338,6 +468,180 @@ def build_reduced_nonlinear_audit_prelaunch_report(
             else (
                 "do not launch an expensive nonlinear audit; increase reduced-objective "
                 "margin or broaden the objective before spending GPU time"
+            )
+        ),
+    }
+
+
+def build_nonlinear_campaign_admission_report(
+    *,
+    reduced_prelaunch_report: Mapping[str, Any],
+    landscape_admission_report: Mapping[str, Any],
+    policy: VMECJAXNonlinearCampaignPolicy | None = None,
+) -> dict[str, Any]:
+    """Gate the next nonlinear optimizer campaign from existing evidence.
+
+    This report intentionally promotes only a *campaign launch*.  It requires a
+    reduced prelaunch pass and an uncertainty-separated replicated nonlinear
+    landscape point.  It does not convert that point into a general
+    multi-coefficient turbulent-flux optimization result.
+    """
+
+    policy = policy or VMECJAXNonlinearCampaignPolicy()
+    blockers: list[str] = []
+    gates: list[dict[str, Any]] = []
+
+    prelaunch_passed = bool(reduced_prelaunch_report.get("passed", False))
+    gates.append(
+        {
+            "metric": "reduced_prelaunch_gate",
+            "passed": prelaunch_passed,
+            "detail": reduced_prelaunch_report.get("blockers", []),
+        }
+    )
+    if bool(policy.require_reduced_prelaunch_passed) and not prelaunch_passed:
+        blockers.append("reduced_prelaunch_gate_failed")
+
+    sample_summary = reduced_prelaunch_report.get("objective_sample_summary")
+    sample_passed = (
+        bool(sample_summary.get("passed", False))
+        if isinstance(sample_summary, Mapping)
+        else False
+    )
+    gates.append(
+        {
+            "metric": "reduced_objective_sample_coverage",
+            "passed": sample_passed,
+            "value": (
+                int(sample_summary["sample_count"])
+                if isinstance(sample_summary, Mapping)
+                and sample_summary.get("sample_count") is not None
+                else None
+            ),
+            "detail": (
+                sample_summary.get("blockers", [])
+                if isinstance(sample_summary, Mapping)
+                else "missing objective_sample_summary"
+            ),
+        }
+    )
+    if not sample_passed:
+        blockers.append("reduced_objective_sample_coverage_failed")
+
+    cross_sample = reduced_prelaunch_report.get("reduced_cross_sample_statistics")
+    cross_sample_available = (
+        bool(cross_sample.get("available", False))
+        if isinstance(cross_sample, Mapping)
+        else False
+    )
+    cross_sample_passed = (
+        bool(cross_sample.get("passed", False))
+        if isinstance(cross_sample, Mapping)
+        and cross_sample.get("passed") is not None
+        else None
+    )
+    gates.append(
+        {
+            "metric": "reduced_cross_sample_dispersion",
+            "passed": cross_sample_passed,
+            "detail": (
+                cross_sample.get("rows", [])
+                if isinstance(cross_sample, Mapping)
+                else "missing reduced_cross_sample_statistics"
+            ),
+        }
+    )
+    if bool(policy.require_reduced_cross_sample_gate):
+        if not cross_sample_available:
+            blockers.append("reduced_cross_sample_statistics_missing")
+        elif cross_sample_passed is not True:
+            blockers.append("reduced_cross_sample_dispersion_failed")
+
+    landscape_passed = bool(landscape_admission_report.get("passed", False))
+    gates.append(
+        {
+            "metric": "replicated_landscape_admission",
+            "passed": landscape_passed,
+            "detail": landscape_admission_report.get("next_action"),
+        }
+    )
+    if bool(policy.require_landscape_admission_passed) and not landscape_passed:
+        blockers.append("replicated_landscape_admission_failed")
+
+    selected = landscape_admission_report.get("selected_candidate")
+    selected_map: Mapping[str, Any] = selected if isinstance(selected, Mapping) else {}
+    if not selected_map:
+        blockers.append("missing_selected_landscape_candidate")
+
+    relative_reduction = _finite_float_or_none(selected_map.get("relative_reduction"))
+    z_score = _finite_float_or_none(selected_map.get("uncertainty_z_score"))
+    sem_rel = _finite_float_or_none(selected_map.get("combined_sem_rel"))
+    n_reports = int(selected_map.get("n_reports", 0) or 0)
+    candidate_gates = [
+        (
+            "landscape_relative_reduction",
+            relative_reduction is not None
+            and relative_reduction
+            >= float(policy.minimum_landscape_relative_reduction),
+            relative_reduction,
+            float(policy.minimum_landscape_relative_reduction),
+            "selected_landscape_reduction_too_small",
+        ),
+        (
+            "landscape_uncertainty_separation",
+            z_score is not None
+            and z_score >= float(policy.minimum_landscape_uncertainty_z_score),
+            z_score,
+            float(policy.minimum_landscape_uncertainty_z_score),
+            "selected_landscape_uncertainty_separation_too_small",
+        ),
+        (
+            "landscape_candidate_sem_rel",
+            sem_rel is not None and sem_rel <= float(policy.maximum_landscape_sem_rel),
+            sem_rel,
+            float(policy.maximum_landscape_sem_rel),
+            "selected_landscape_sem_rel_too_large",
+        ),
+        (
+            "landscape_candidate_replicates",
+            n_reports >= int(policy.minimum_landscape_replicate_count),
+            n_reports,
+            int(policy.minimum_landscape_replicate_count),
+            "selected_landscape_insufficient_replicates",
+        ),
+    ]
+    for metric, passed, value, threshold, blocker in candidate_gates:
+        gates.append(
+            {
+                "metric": metric,
+                "passed": bool(passed),
+                "value": value,
+                "threshold": threshold,
+            }
+        )
+        if not passed:
+            blockers.append(blocker)
+
+    admitted = not blockers
+    return {
+        "kind": "vmec_jax_nonlinear_campaign_admission_report",
+        "claim_scope": (
+            "next nonlinear optimizer-campaign admission only; not a production "
+            "multi-coefficient turbulent-flux optimization claim"
+        ),
+        "policy": policy.to_dict(),
+        "passed": admitted,
+        "campaign_admitted": admitted,
+        "blockers": blockers,
+        "gates": gates,
+        "selected_landscape_candidate": dict(selected_map) if selected_map else None,
+        "next_action": (
+            "launch a bounded multi-control optimizer campaign from the admitted landscape direction, "
+            "with matched baseline/candidate t=[350,700] replicated nonlinear audits before promotion"
+            if admitted
+            else (
+                "do not launch a broader nonlinear optimizer campaign; fix the reduced gate, "
+                "cross-sample dispersion, or replicated landscape uncertainty first"
             )
         ),
     }
@@ -712,9 +1016,13 @@ def select_admitted_transport_candidate(
 __all__ = [
     "DEFAULT_TRANSPORT_METRIC_KEYS",
     "VMECJAXNonlinearAuditPolicy",
+    "VMECJAXNonlinearCampaignPolicy",
+    "VMECJAXReducedPrelaunchPolicy",
     "VMECJAXTransportAdmissionPolicy",
     "build_nonlinear_landscape_admission_report",
+    "build_nonlinear_campaign_admission_report",
     "build_nonlinear_audit_redesign_report",
+    "build_reduced_nonlinear_audit_prelaunch_report",
     "build_transport_admission_report",
     "candidate_transport_metric",
     "select_admitted_transport_candidate",

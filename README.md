@@ -803,13 +803,23 @@ general turbulent-flux optimization result.
 
 The production nonlinear optimization guard below is the enforced claim
 boundary. It passes as a release-safety check because startup/reduced nonlinear
-artifacts are scoped correctly and two long post-transient replicated holdout
-ensembles pass. With the optimized-equilibrium `t=[350,700]` seed/timestep
-replicate now attached, the selected optimized-equilibrium transport audit also
-satisfies this guard. The claim remains bounded: this proves
-that the selected optimized equilibrium has a converged replicated nonlinear
-transport-window audit, not that the current quasilinear model is a universal
+artifacts are scoped correctly, two long post-transient replicated holdout
+ensembles pass, the optimized-equilibrium window has explicit `seed31`,
+`seed32`, and `dt0p04` provenance, and the matched no-ESS-to-optimized audit
+shows an `18.4%` heat-flux reduction with `7.82` combined-SEMs separation. The
+claim remains bounded: this proves that the selected optimized equilibrium has
+a converged replicated nonlinear transport-window audit relative to that
+matched reference, not that the current quasilinear model is a universal
 absolute-flux predictor or that nonlinear turbulence gradients are available.
+
+For the next nonlinear optimizer campaign, the stricter campaign-admission
+sidecar combines the reduced prelaunch margin, deterministic cross-sample
+dispersion, and replicated `RBC(0,1)` landscape evidence. The weak strict
+top-12 candidate remains blocked (`0.58%` nonlinear reduction, `z=0.20`), while
+the `+3% RBC(0,1)` point passes as a scoped one-coefficient launch direction
+(`4.678%` reduced prelaunch improvement; `26.65%` replicated nonlinear
+reduction; `z=17.99`). This is a launch gate for a bounded multi-control
+campaign, not a broad nonlinear turbulent-flux optimization claim.
 The separate nonlinear turbulence-gradient evidence gate is stricter and
 remains fail-closed after the completed QA/ESS overdetermined control campaign,
 the targeted `RBC(1,1)` seed follow-up, and the bounded `ZBS(1,0)` `7.5%`

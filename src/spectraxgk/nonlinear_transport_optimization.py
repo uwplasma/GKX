@@ -13,6 +13,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 import math
+import re
 from typing import Any
 
 
@@ -52,6 +53,12 @@ class ProductionNonlinearOptimizationGuardConfig:
     max_mean_rel_spread: float = 0.15
     max_combined_sem_rel: float = 0.25
     require_optimized_equilibrium_transport: bool = True
+    require_matched_optimized_transport_audit: bool = True
+    require_seed_timestep_provenance: bool = True
+    min_seed_variants: int = 2
+    min_timestep_variants: int = 1
+    min_matched_optimized_relative_reduction: float = 0.05
+    min_matched_optimized_uncertainty_sigma: float = 1.0
     value_floor: float = 1.0e-12
 
     def validate(self) -> None:
@@ -65,6 +72,14 @@ class ProductionNonlinearOptimizationGuardConfig:
             raise ValueError("max_mean_rel_spread must be non-negative")
         if float(self.max_combined_sem_rel) < 0.0:
             raise ValueError("max_combined_sem_rel must be non-negative")
+        if int(self.min_seed_variants) < 1:
+            raise ValueError("min_seed_variants must be positive")
+        if int(self.min_timestep_variants) < 1:
+            raise ValueError("min_timestep_variants must be positive")
+        if float(self.min_matched_optimized_relative_reduction) < 0.0:
+            raise ValueError("min_matched_optimized_relative_reduction must be non-negative")
+        if float(self.min_matched_optimized_uncertainty_sigma) < 0.0:
+            raise ValueError("min_matched_optimized_uncertainty_sigma must be non-negative")
         if float(self.value_floor) <= 0.0:
             raise ValueError("value_floor must be positive")
 
@@ -121,6 +136,63 @@ def _claims_production(payload: Mapping[str, Any]) -> bool:
 
 def _gate(metric: str, passed: bool, detail: str) -> dict[str, Any]:
     return {"metric": metric, "passed": bool(passed), "detail": detail}
+
+
+def _variant_value_from_row(row: Mapping[str, Any], axis: str) -> str | None:
+    variant = row.get("variant")
+    if isinstance(variant, Mapping) and variant.get(axis) not in (None, ""):
+        return str(variant.get(axis))
+    for key in ("variant_label", "source_artifact", "summary_artifact", "path"):
+        value = row.get(key)
+        if not isinstance(value, str):
+            continue
+        if axis == "seed":
+            match = re.search(r"seed[0-9]+", value)
+        elif axis == "timestep":
+            match = re.search(r"dt[0-9]+(?:p[0-9]+)?", value)
+        else:
+            match = None
+        if match:
+            return match.group(0)
+    return None
+
+
+def _ensemble_variant_provenance_report(
+    payload: Mapping[str, Any],
+    *,
+    config: ProductionNonlinearOptimizationGuardConfig,
+) -> dict[str, Any]:
+    rows = payload.get("rows")
+    row_maps = [row for row in rows if isinstance(row, Mapping)] if isinstance(rows, Sequence) else []
+    seed_values = sorted(
+        {
+            value
+            for row in row_maps
+            if (value := _variant_value_from_row(row, "seed")) is not None
+        }
+    )
+    timestep_values = sorted(
+        {
+            value
+            for row in row_maps
+            if (value := _variant_value_from_row(row, "timestep")) is not None
+        }
+    )
+    seed_passed = len(seed_values) >= int(config.min_seed_variants)
+    timestep_passed = len(timestep_values) >= int(config.min_timestep_variants)
+    return {
+        "required": bool(config.require_seed_timestep_provenance),
+        "observed_row_count": len(row_maps),
+        "seed_values": seed_values,
+        "timestep_values": timestep_values,
+        "seed_gate_passed": seed_passed,
+        "timestep_gate_passed": timestep_passed,
+        "passed": seed_passed and timestep_passed,
+        "requirements": {
+            "min_seed_variants": int(config.min_seed_variants),
+            "min_timestep_variants": int(config.min_timestep_variants),
+        },
+    }
 
 
 def optimization_artifact_reduction_scope(payload: Mapping[str, Any]) -> dict[str, Any]:
@@ -198,7 +270,18 @@ def replicated_transport_ensemble_report(
     spread_ok = mean_rel_spread is not None and mean_rel_spread <= float(cfg.max_mean_rel_spread)
     sem_ok = combined_sem_rel is not None and combined_sem_rel <= float(cfg.max_combined_sem_rel)
     report_count_ok = n_reports >= int(cfg.min_reports_per_ensemble)
-    qualifies = bool(is_ensemble and passed and claim_scoped and finite_mean and spread_ok and sem_ok and report_count_ok)
+    provenance = _ensemble_variant_provenance_report(payload, config=cfg)
+    provenance_ok = (not cfg.require_seed_timestep_provenance) or bool(provenance["passed"])
+    qualifies = bool(
+        is_ensemble
+        and passed
+        and claim_scoped
+        and finite_mean
+        and spread_ok
+        and sem_ok
+        and report_count_ok
+        and provenance_ok
+    )
     return {
         "path": path,
         "kind": str(payload.get("kind", "")),
@@ -215,6 +298,8 @@ def replicated_transport_ensemble_report(
         "mean_rel_spread_ok": spread_ok,
         "combined_sem_rel_ok": sem_ok,
         "report_count_ok": report_count_ok,
+        "seed_timestep_provenance": provenance,
+        "seed_timestep_provenance_ok": provenance_ok,
         "qualifies_as_long_post_transient_replicate": qualifies,
     }
 
@@ -242,6 +327,87 @@ def optimized_equilibrium_transport_report(
     return row
 
 
+def matched_optimized_transport_report(
+    path: str,
+    payload: Mapping[str, Any],
+    *,
+    config: ProductionNonlinearOptimizationGuardConfig | None = None,
+) -> dict[str, Any]:
+    """Return whether a matched baseline-to-optimized audit promotes transport."""
+
+    cfg = config or ProductionNonlinearOptimizationGuardConfig()
+    cfg.validate()
+    comparison = payload.get("comparison")
+    comparison_map: Mapping[str, Any] = comparison if isinstance(comparison, Mapping) else {}
+    selected = payload.get("selected_optimized_audit")
+    selected_map: Mapping[str, Any] = selected if isinstance(selected, Mapping) else {}
+    baseline = payload.get("baseline_ensemble")
+    baseline_map: Mapping[str, Any] = baseline if isinstance(baseline, Mapping) else {}
+    optimized = payload.get("optimized_ensemble")
+    optimized_map: Mapping[str, Any] = optimized if isinstance(optimized, Mapping) else {}
+    relative_reduction = _finite_float(comparison_map.get("relative_reduction"))
+    uncertainty_sigma = _finite_float(
+        comparison_map.get("uncertainty_separation_sigma")
+        or comparison_map.get("uncertainty_z_score")
+    )
+    gates = payload.get("gates")
+    gate_rows = [row for row in gates if isinstance(row, Mapping)] if isinstance(gates, Sequence) else []
+    named_gate_passed = {
+        str(row.get("metric")): bool(row.get("passed", False))
+        for row in gate_rows
+    }
+    passed = _artifact_passed(payload)
+    baseline_qualified = bool(
+        baseline_map.get("qualifies", False)
+        or named_gate_passed.get("baseline_replicated_ensemble_qualified", False)
+    )
+    optimized_qualified = bool(
+        optimized_map.get("qualifies", False)
+        or named_gate_passed.get("optimized_replicated_ensemble_qualified", False)
+    )
+    selected_closed = bool(
+        selected_map.get("passed", False)
+        or named_gate_passed.get("selected_optimized_equilibrium_audit", False)
+    )
+    reduction_ok = (
+        relative_reduction is not None
+        and relative_reduction >= float(cfg.min_matched_optimized_relative_reduction)
+    )
+    uncertainty_ok = (
+        uncertainty_sigma is not None
+        and uncertainty_sigma >= float(cfg.min_matched_optimized_uncertainty_sigma)
+    )
+    blockers: list[str] = []
+    if not passed:
+        blockers.append("matched_optimized_audit_failed")
+    if not baseline_qualified:
+        blockers.append("baseline_replicated_ensemble_not_qualified")
+    if not optimized_qualified:
+        blockers.append("optimized_replicated_ensemble_not_qualified")
+    if not selected_closed:
+        blockers.append("selected_optimized_audit_not_closed")
+    if not reduction_ok:
+        blockers.append("insufficient_matched_optimized_reduction")
+    if not uncertainty_ok:
+        blockers.append("insufficient_matched_optimized_uncertainty_separation")
+    return {
+        "path": path,
+        "kind": str(payload.get("kind", "")),
+        "case": str(payload.get("case", "")),
+        "claim_level": str(payload.get("claim_level", "")),
+        "passed": passed,
+        "baseline_ensemble_qualified": baseline_qualified,
+        "optimized_ensemble_qualified": optimized_qualified,
+        "selected_optimized_audit_closed": selected_closed,
+        "relative_reduction": relative_reduction,
+        "uncertainty_separation_sigma": uncertainty_sigma,
+        "relative_reduction_ok": reduction_ok,
+        "uncertainty_separation_ok": uncertainty_ok,
+        "blockers": blockers,
+        "qualifies_for_production_optimization": not blockers,
+    }
+
+
 def production_nonlinear_optimization_guard_report(
     *,
     optimization_artifact: Mapping[str, Any] | None,
@@ -249,6 +415,7 @@ def production_nonlinear_optimization_guard_report(
     reduced_artifacts: Mapping[str, Mapping[str, Any]] | None = None,
     replicated_ensemble_artifacts: Mapping[str, Mapping[str, Any]] | None = None,
     optimized_equilibrium_artifacts: Mapping[str, Mapping[str, Any]] | None = None,
+    matched_optimized_transport_artifacts: Mapping[str, Mapping[str, Any]] | None = None,
     config: ProductionNonlinearOptimizationGuardConfig | None = None,
 ) -> dict[str, Any]:
     """Build the fail-closed nonlinear turbulent-flux optimization guard.
@@ -264,6 +431,7 @@ def production_nonlinear_optimization_guard_report(
     reduced_artifacts = reduced_artifacts or {}
     replicated_ensemble_artifacts = replicated_ensemble_artifacts or {}
     optimized_equilibrium_artifacts = optimized_equilibrium_artifacts or {}
+    matched_optimized_transport_artifacts = matched_optimized_transport_artifacts or {}
 
     optimization_scope = (
         optimization_artifact_reduction_scope(optimization_artifact)
@@ -290,11 +458,18 @@ def production_nonlinear_optimization_guard_report(
         optimized_equilibrium_transport_report(path, payload, config=cfg)
         for path, payload in sorted(optimized_equilibrium_artifacts.items())
     ]
+    matched_optimized_rows = [
+        matched_optimized_transport_report(path, payload, config=cfg)
+        for path, payload in sorted(matched_optimized_transport_artifacts.items())
+    ]
     qualifying_ensembles = [
         row for row in ensemble_rows if bool(row["qualifies_as_long_post_transient_replicate"])
     ]
     qualifying_optimized = [
         row for row in optimized_rows if bool(row["qualifies_for_production_optimization"])
+    ]
+    qualifying_matched_optimized = [
+        row for row in matched_optimized_rows if bool(row["qualifies_for_production_optimization"])
     ]
     rows_claiming_production = int(
         _finite_float(optimization_scope.get("n_rows_claiming_production")) or 0
@@ -341,6 +516,19 @@ def production_nonlinear_optimization_guard_report(
                 else "provide long post-transient replicated nonlinear transport windows for the optimized equilibrium"
             ),
         ),
+        _gate(
+            "matched_baseline_to_optimized_transport_reduction",
+            bool(qualifying_matched_optimized)
+            or not bool(cfg.require_matched_optimized_transport_audit),
+            (
+                "; ".join(str(row["path"]) for row in qualifying_matched_optimized)
+                if qualifying_matched_optimized
+                else (
+                    "provide a matched baseline-to-optimized nonlinear audit with "
+                    "positive relative reduction and uncertainty separation"
+                )
+            ),
+        ),
     ]
     promotion_blockers = [gate["metric"] for gate in promotion_gates if not bool(gate["passed"])]
     promoted = safe_to_release and not promotion_blockers
@@ -371,6 +559,7 @@ def production_nonlinear_optimization_guard_report(
             "blockers": promotion_blockers,
             "requirements": [
                 "optimized equilibrium must have long post-transient replicated nonlinear transport-window audits",
+                "matched baseline-to-optimized nonlinear audit must show a positive uncertainty-separated reduction",
                 "replicates must include independent seed/initial-condition and timestep evidence",
                 "optimized-equilibrium transport means must satisfy running-window, block/SEM, spread, and finite-flux gates",
             ],
@@ -379,9 +568,11 @@ def production_nonlinear_optimization_guard_report(
         "reduced_artifacts": reduced_rows,
         "replicated_ensemble_artifacts": ensemble_rows,
         "optimized_equilibrium_artifacts": optimized_rows,
+        "matched_optimized_transport_artifacts": matched_optimized_rows,
         "summary": {
             "qualifying_replicated_holdout_ensembles": len(qualifying_ensembles),
             "qualifying_optimized_equilibrium_ensembles": len(qualifying_optimized),
+            "qualifying_matched_optimized_transport_audits": len(qualifying_matched_optimized),
             "production_nonlinear_optimization_ready": int(promoted),
         },
         "config": asdict(cfg),
@@ -396,6 +587,7 @@ def production_nonlinear_optimization_guard_report(
 
 __all__ = [
     "ProductionNonlinearOptimizationGuardConfig",
+    "matched_optimized_transport_report",
     "optimization_artifact_reduction_scope",
     "optimized_equilibrium_transport_report",
     "production_nonlinear_optimization_guard_report",
