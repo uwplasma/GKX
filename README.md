@@ -115,7 +115,7 @@ resolved diagnostics, and heat flux.
 - **Modular runtime/refactor surfaces** with focused tests for restart artifacts,
   diagnostics, validation gates, and public API boundaries.
 
-## Differentiable Stellarator Optimization
+## QA ITG Optimization Panel
 
 SPECTRAX-GK ships VMEC-JAX-style QA optimization examples that append one differentiable ITG transport residual to the usual aspect-ratio, iota, and quasisymmetry objective tuples. The canonical scripts are `examples/optimization/QA_optimization_linear_ITG.py`, `examples/optimization/QA_optimization_quasilinear_ITG.py`, `examples/optimization/QA_optimization_nonlinear_ITG.py`, and `examples/optimization/QA_parameter_scan.py`; full equations, gates, and audit provenance are in the [stellarator optimization docs](docs/stellarator_optimization.rst).
 
