@@ -283,8 +283,12 @@ remain useful negative controls, while the newer full max-mode-5 sweep above
 adds the positive projected-weight `5e-4` and `1e-3` matched audits. Scoped quasilinear
 model selection passes as a model-development diagnostic, while simple
 absolute-flux quasilinear rules remain blocked. The long-window nonlinear
-audits shown here are separate replicated transport-window anchors, not proof
-that every reduced transport objective transfers to saturated turbulence.
+audits shown here are separate replicated transport-window anchors. The
+prelaunch-policy row records both the passing 18-point selected-candidate gate
+and the deliberately failing weak-reference gate; the latter is a successful
+safety check because it blocks reduced margins that are too small to justify an
+expensive nonlinear audit. None of these rows proves that every reduced
+transport objective transfers to saturated turbulence.
 
 ## Self-Contained VMEC Geometry Examples
 
