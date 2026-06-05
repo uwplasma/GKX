@@ -94,6 +94,26 @@ class VMECJAXNonlinearAuditPolicy:
         }
 
 
+@dataclass(frozen=True)
+class VMECJAXReducedPrelaunchPolicy:
+    """Fail-closed reduced-objective gate before expensive nonlinear audits."""
+
+    metric_key: str = "nonlinear_window_heat_flux"
+    minimum_relative_reduction: float = 0.04
+    failed_reference_safety_factor: float = 1.5
+    require_sample_coverage: bool = True
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-safe representation."""
+
+        return {
+            "metric_key": str(self.metric_key),
+            "minimum_relative_reduction": float(self.minimum_relative_reduction),
+            "failed_reference_safety_factor": float(self.failed_reference_safety_factor),
+            "require_sample_coverage": bool(self.require_sample_coverage),
+        }
+
+
 def _ensemble_statistics(ensemble: Mapping[str, Any]) -> dict[str, Any]:
     stats = ensemble.get("statistics", {})
     if not isinstance(stats, Mapping):
@@ -221,6 +241,104 @@ def build_nonlinear_landscape_admission_report(
             "use selected direction for the next uncertainty-aware optimizer admission step"
             if selected is not None
             else "do not launch a broader optimizer from this landscape without more resolved nonlinear evidence"
+        ),
+    }
+
+
+def build_reduced_nonlinear_audit_prelaunch_report(
+    *,
+    baseline_metric: float,
+    candidate_metric: float,
+    objective_sample_set: Any = None,
+    failed_reference_relative_reduction: float | None = None,
+    policy: VMECJAXReducedPrelaunchPolicy | None = None,
+    nonlinear_policy: VMECJAXNonlinearAuditPolicy | None = None,
+) -> dict[str, Any]:
+    """Gate reduced transport candidates before launching nonlinear audits.
+
+    This is intentionally conservative.  A reduced nonlinear-window improvement
+    should exceed both an absolute release threshold and, when available, a
+    safety factor above a known failed-transfer reference before spending
+    another long GPU campaign.
+    """
+
+    policy = policy or VMECJAXReducedPrelaunchPolicy()
+    nonlinear_policy = nonlinear_policy or VMECJAXNonlinearAuditPolicy()
+    baseline = _finite_float_or_none(baseline_metric)
+    candidate = _finite_float_or_none(candidate_metric)
+    failed_reference = _finite_float_or_none(failed_reference_relative_reduction)
+    blockers: list[str] = []
+    relative_reduction = None
+    if baseline is None:
+        blockers.append("missing_baseline_reduced_metric")
+    if candidate is None:
+        blockers.append("missing_candidate_reduced_metric")
+    if baseline is not None and candidate is not None:
+        relative_reduction = float((baseline - candidate) / max(abs(baseline), 1.0e-300))
+
+    threshold = float(policy.minimum_relative_reduction)
+    threshold_sources = {
+        "policy_minimum_relative_reduction": float(policy.minimum_relative_reduction),
+        "failed_reference_relative_reduction": failed_reference,
+        "failed_reference_safety_factor": float(policy.failed_reference_safety_factor),
+        "failed_reference_threshold": None,
+    }
+    if failed_reference is not None:
+        failed_threshold = float(policy.failed_reference_safety_factor) * failed_reference
+        threshold_sources["failed_reference_threshold"] = failed_threshold
+        threshold = max(threshold, failed_threshold)
+
+    if relative_reduction is None:
+        blockers.append("missing_relative_reduced_reduction")
+    elif relative_reduction < threshold:
+        blockers.append("insufficient_reduced_margin_for_nonlinear_audit")
+
+    sample_summary = transport_objective_sample_summary(
+        objective_sample_set,
+        policy=nonlinear_policy,
+    )
+    if bool(policy.require_sample_coverage) and not bool(sample_summary["passed"]):
+        blockers.extend(str(item) for item in sample_summary["blockers"])
+
+    return {
+        "kind": "vmec_jax_reduced_nonlinear_audit_prelaunch_report",
+        "claim_scope": (
+            "reduced-objective prelaunch guard only; passing this gate permits a "
+            "replicated nonlinear audit but does not promote a turbulence claim"
+        ),
+        "policy": policy.to_dict(),
+        "nonlinear_policy": nonlinear_policy.to_dict(),
+        "metric_key": str(policy.metric_key),
+        "baseline_metric": baseline,
+        "candidate_metric": candidate,
+        "relative_reduced_reduction": relative_reduction,
+        "required_relative_reduced_reduction": threshold,
+        "threshold_sources": threshold_sources,
+        "objective_sample_summary": sample_summary,
+        "passed": not blockers,
+        "blockers": blockers,
+        "gates": [
+            {
+                "metric": "reduced_margin_for_nonlinear_audit",
+                "passed": "insufficient_reduced_margin_for_nonlinear_audit" not in blockers
+                and "missing_relative_reduced_reduction" not in blockers,
+                "value": relative_reduction,
+                "threshold": threshold,
+            },
+            {
+                "metric": "multi_sample_objective_coverage",
+                "passed": bool(sample_summary["passed"]),
+                "value": int(sample_summary["sample_count"]),
+                "threshold": int(nonlinear_policy.minimum_sample_count),
+            },
+        ],
+        "next_action": (
+            "launch replicated long-window nonlinear audit only with baseline/candidate ensembles"
+            if not blockers
+            else (
+                "do not launch an expensive nonlinear audit; increase reduced-objective "
+                "margin or broaden the objective before spending GPU time"
+            )
         ),
     }
 
