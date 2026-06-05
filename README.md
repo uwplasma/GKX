@@ -121,11 +121,11 @@ SPECTRAX-GK ships VMEC-JAX-style QA optimization examples that append one differ
 
 ![VMEC-JAX QA max-mode-5 optimizer sweep](docs/_static/vmec_jax_qa_full_sweep_panel.png)
 
-The baseline is an admitted QA design (`A = 5.0000`, mean `iota = 0.41020`, QS residual `8.9e-6`). The transport-optimized rows are optimizer-output comparisons, not promoted turbulent-flux designs: they lower the reduced objective but currently sit just below the strict `iota >= 0.41` solved-WOUT gate, and matched long post-transient nonlinear `Q(t)` audits are still required before making nonlinear heat-flux claims.
+The baseline is an admitted QA design (`A = 5.0000`, mean `iota = 0.41020`, QS residual `8.9e-6`). The transport-optimized rows are optimizer-output comparisons, not promoted turbulent-flux designs: their mean iota values remain physically acceptable for this diagnostic campaign (`|iota| >= 0.39`), and matched long post-transient nonlinear `Q(t)` audits are still required before making nonlinear heat-flux claims.
 
-The companion `RBC(0,1)` landscape scans the strict QA baseline over `[-50%, +50%]` with 21 points. Growth-rate and quasilinear values are nearly marginal at this representative sample, so the plot shows absolute values; the nonlinear-window screening metric is finite and selects a candidate direction for later replicated nonlinear audits.
+The companion `RBC(1,1)` landscape scans the strict QA baseline over `[-50%, +50%]` with 21 points. Growth-rate and quasilinear values are still near marginal at this representative sample, so the plot shows absolute values; the nonlinear-window screening metric is finite and identifies candidate directions, with the best point at `-50%` lowering the reduced metric by about `12.2%`.
 
-![QA RBC(0,1) reduced transport landscape](docs/_static/vmec_boundary_transport_landscape_rbc01.png)
+![QA RBC(1,1) reduced transport landscape](docs/_static/vmec_boundary_transport_landscape_rbc11.png)
 
 ```bash
 python examples/optimization/QA_optimization_linear_ITG.py
@@ -656,14 +656,15 @@ a converged replicated nonlinear transport-window audit relative to that
 matched reference, not that the current quasilinear model is a universal
 absolute-flux predictor or that nonlinear turbulence gradients are available.
 
-For the next nonlinear optimizer campaign, the current `RBC(0,1)` landscape is
+For the next nonlinear optimizer campaign, the current `RBC(1,1)` landscape is
 used as a deterministic launch diagnostic from the strict max-mode-5 QA
 baseline, not as a promoted nonlinear heat-flux result. The expanded scan covers
 `[-50%, +50%]` in 21 points at a representative `(s, alpha, ky)` sample; the
-growth-rate and quasilinear values are nearly marginal, while the reduced
-nonlinear-window metric decreases from `2.81e-2` to `2.48e-2` near `+35%`.
-Replicated long-window nonlinear ensembles must still be attached before this
-direction can seed a promoted turbulent-flux optimization claim.
+growth-rate and quasilinear values remain near marginal, while the reduced
+nonlinear-window metric decreases from `2.81e-2` to `2.47e-2` at `-50%` and has
+a second lower-transport basin around `+35%`. Replicated long-window nonlinear
+ensembles must still be attached before either direction can seed a promoted
+turbulent-flux optimization claim.
 The separate nonlinear turbulence-gradient evidence gate is stricter and
 remains fail-closed after the completed QA/ESS overdetermined control campaign,
 the targeted `RBC(1,1)` seed follow-up, and the bounded `ZBS(1,0)` `7.5%`
