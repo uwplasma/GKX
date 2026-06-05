@@ -117,11 +117,15 @@ resolved diagnostics, and heat flux.
 
 ## QA ITG Optimization Panel
 
-SPECTRAX-GK ships VMEC-JAX-style QA optimization examples that append one differentiable ITG transport residual to the usual aspect-ratio, iota, and quasisymmetry objective tuples. The canonical scripts are `examples/optimization/QA_optimization_linear_ITG.py`, `examples/optimization/QA_optimization_quasilinear_ITG.py`, `examples/optimization/QA_optimization_nonlinear_ITG.py`, and `examples/optimization/QA_parameter_scan.py`; full equations, gates, and audit provenance are in the [stellarator optimization docs](docs/stellarator_optimization.rst).
+SPECTRAX-GK ships VMEC-JAX-style QA optimization examples that append one differentiable ITG transport residual to the usual aspect-ratio, iota, and quasisymmetry objective tuples. The strict baseline below follows the upstream VMEC-JAX `QA_optimization.py` max-mode-5 simple-seed setup; the transport rows restart from that solved QA state and optimize one representative ITG residual for linear growth, quasilinear flux, or nonlinear-window screening. Full equations, gates, and audit provenance are in the [stellarator optimization docs](docs/stellarator_optimization.rst).
 
-![QA ITG optimization summary](docs/_static/qa_itg_optimization_summary_panel.png)
+![VMEC-JAX QA max-mode-5 optimizer sweep](docs/_static/vmec_jax_qa_full_sweep_panel.png)
 
-The panel combines tracked VMEC-JAX WOUT geometry, solved-iota gates, SPECTRAX-GK ITG objective landscapes, and matched long-window nonlinear heat-flux audits. The current claim is scoped: reduced linear/quasilinear/nonlinear-window objectives are optimizer diagnostics, while turbulent-flux reductions require replicated post-transient nonlinear audits such as the ones shown.
+The baseline is an admitted QA design (`A = 5.0000`, mean `iota = 0.41020`, QS residual `8.9e-6`). The transport-optimized rows are optimizer-output comparisons, not promoted turbulent-flux designs: they lower the reduced objective but currently sit just below the strict `iota >= 0.41` solved-WOUT gate, and matched long post-transient nonlinear `Q(t)` audits are still required before making nonlinear heat-flux claims.
+
+The companion `RBC(0,1)` landscape scans the strict QA baseline over `[-50%, +50%]` with 21 points. Growth-rate and quasilinear values are nearly marginal at this representative sample, so the plot shows absolute values; the nonlinear-window screening metric is finite and selects a candidate direction for later replicated nonlinear audits.
+
+![QA RBC(0,1) reduced transport landscape](docs/_static/vmec_boundary_transport_landscape_rbc01.png)
 
 ```bash
 python examples/optimization/QA_optimization_linear_ITG.py
@@ -652,15 +656,14 @@ a converged replicated nonlinear transport-window audit relative to that
 matched reference, not that the current quasilinear model is a universal
 absolute-flux predictor or that nonlinear turbulence gradients are available.
 
-For the next nonlinear optimizer campaign, the stricter campaign-admission
-sidecar is an admission-only launch contract that combines the reduced
-prelaunch margin, deterministic cross-sample dispersion, and replicated
-`RBC(0,1)` landscape evidence. The weak strict
-top-12 candidate remains blocked (`0.58%` nonlinear reduction, `z=0.20`), while
-the `+3% RBC(0,1)` point passes as a scoped one-coefficient launch direction
-(`4.678%` reduced prelaunch improvement; `26.65%` replicated nonlinear
-reduction; `z=17.99`). This is a launch gate for a bounded multi-control
-campaign, not a broad nonlinear turbulent-flux optimization claim.
+For the next nonlinear optimizer campaign, the current `RBC(0,1)` landscape is
+used as a deterministic launch diagnostic from the strict max-mode-5 QA
+baseline, not as a promoted nonlinear heat-flux result. The expanded scan covers
+`[-50%, +50%]` in 21 points at a representative `(s, alpha, ky)` sample; the
+growth-rate and quasilinear values are nearly marginal, while the reduced
+nonlinear-window metric decreases from `2.81e-2` to `2.48e-2` near `+35%`.
+Replicated long-window nonlinear ensembles must still be attached before this
+direction can seed a promoted turbulent-flux optimization claim.
 The separate nonlinear turbulence-gradient evidence gate is stricter and
 remains fail-closed after the completed QA/ESS overdetermined control campaign,
 the targeted `RBC(1,1)` seed follow-up, and the bounded `ZBS(1,0)` `7.5%`
