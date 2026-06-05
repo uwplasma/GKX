@@ -137,6 +137,11 @@ objective_tuples = [
 ```
 
 These scripts are the recommended starting point for producing real VMEC-JAX WOUTs with the same high-weight `iota = 0.41` target as the upstream QA example. Keep the SPECTRAX-GK transport weight small while tuning so the QA, aspect-ratio, and iota constraints remain the dominant solved-equilibrium gate. Full nonlinear turbulent-flux optimization claims still require matched long post-transient SPECTRAX-GK audits, seed/timestep replicates, and running-average convergence.
+By default the transport residual in each script uses the admission-grade
+`3 x 2 x 3` sample set: `s=(0.45,0.64,0.78)`, `alpha=(0,pi/4)`, and
+`k_y rho_i=(0.10,0.30,0.50)`. Use a one-point sample only for explicitly
+scoped debugging, then return to the 18-point default before nonlinear audit
+launch.
 
 For a paper-facing constraints-only QA baseline, use the configurable driver
 with the strict upstream preset:
