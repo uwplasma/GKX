@@ -123,7 +123,7 @@ SPECTRAX-GK ships VMEC-JAX-style QA optimization examples that append one differ
 
 The baseline is an admitted QA design (`A = 5.0000`, mean `iota = 0.41020`, QS residual `8.9e-6`). The transport-optimized rows are optimizer-output comparisons, not promoted turbulent-flux designs: their mean iota values remain physically acceptable for this diagnostic campaign (`|iota| >= 0.39`), and matched long post-transient nonlinear `Q(t)` audits are still required before making nonlinear heat-flux claims.
 
-The companion `RBC(1,1)` landscape scans the strict QA baseline over `[-50%, +50%]` with 21 points. Growth-rate and quasilinear values are still near marginal at this representative sample, so the plot shows absolute values; the nonlinear-window screening metric is finite and identifies candidate directions, with the best point at `-50%` lowering the reduced metric by about `12.2%`.
+The companion `RBC(1,1)` landscape scans the strict QA baseline over `[-50%, +50%]` with 21 points. Growth-rate and quasilinear values are still near marginal at this representative sample, so the plot shows absolute values. The reduced nonlinear-window metric picked `-50%` as a candidate, but the completed replicated `t=[350,700]` nonlinear audit rejects it: heat flux increases from `11.43 +/- 0.22` to `14.44 +/- 0.58`. The `+35%` branch is still under replicated audit and is not promoted.
 
 ![QA RBC(1,1) reduced transport landscape](docs/_static/vmec_boundary_transport_landscape_rbc11.png)
 
