@@ -662,11 +662,14 @@ baseline, not as a promoted nonlinear heat-flux result. The refreshed scan
 covers `[-75%, +75%]` in 31 points and evaluates growth plus all explicit
 quasilinear rules on a three-surface, two-field-line, three-`k_y` sample set.
 The nonlinear row is populated only by long post-transient nonlinear
-heat-flux ensembles, using `t_max=700`, the averaging window `t=[350,700]`,
-the `n64:64:64:40:40` grid, and seed/timestep variants. Until those ensembles
-finish for the refreshed 31-point scan, the plot is a landscape/noise
-diagnostic and optimizer-design input, not a nonlinear turbulent-flux
-optimization claim.
+heat-flux ensembles, using `t_max=1500`, the averaging window `t=[1100,1500]`,
+the `n64:64:64:40:40` grid, and seed/timestep variants. The first `-75%`
+point showed why this matters: its earlier `t=[350,700]` window was still
+drifting. A neighboring `-70%` point still failed the `t=[700,1100]`
+timestep-spread gate but passed after continuation to `t=[1100,1500]`, so the
+full scan now uses that stricter late window. Until those ensembles finish for
+the refreshed 31-point scan, the plot is a landscape/noise diagnostic and
+optimizer-design input, not a nonlinear turbulent-flux optimization claim.
 The separate nonlinear turbulence-gradient evidence gate is stricter and
 remains fail-closed after the completed QA/ESS overdetermined control campaign,
 the targeted `RBC(1,1)` seed follow-up, and the bounded `ZBS(1,0)` `7.5%`
