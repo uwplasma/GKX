@@ -123,7 +123,7 @@ SPECTRAX-GK ships VMEC-JAX-style QA optimization examples that append one differ
 
 The baseline is an admitted QA design (`A = 5.0000`, mean `iota = 0.41020`, QS residual `8.9e-6`). The transport-optimized rows are optimizer-output comparisons, not promoted turbulent-flux designs: their mean iota values remain physically acceptable for this diagnostic campaign (`|iota| >= 0.39`), and matched long post-transient nonlinear `Q(t)` audits are still required before making nonlinear heat-flux claims.
 
-The companion `RBC(1,1)` landscape scans the strict QA baseline over `[-75%, +75%]` with 31 points. The top panel shows the linear growth rate and every shipped electrostatic quasilinear heat-flux rule over the same multi-surface, multi-field-line, multi-`k_y` sample used by the optimizer examples. The lower panel is reserved for true long-window post-transient nonlinear heat-flux means from concrete nonlinear outputs; reduced/startup nonlinear-window estimators are intentionally excluded from this plot and from optimization-promotion claims.
+The companion `RBC(1,1)` landscape scans the strict QA baseline over `[-75%, +75%]` with 31 points. The top panel shows the linear growth rate and every shipped electrostatic quasilinear heat-flux rule over the same multi-surface, multi-field-line, multi-`k_y` sample used by the optimizer examples. The lower panel overlays the strict long-window post-transient nonlinear heat-flux ensembles that have finished so far (`t=[1100,1500]`, seed/timestep replicated); the remaining coefficients are still pending and reduced/startup nonlinear-window estimators are intentionally excluded from this plot and from optimization-promotion claims.
 
 ![QA RBC(1,1) transport landscape](docs/_static/vmec_boundary_transport_landscape_rbc11_full.png)
 
@@ -179,9 +179,9 @@ rows. Regenerate this public panel from the shipped refresh summary with:
 
 ```bash
 python tools/benchmark_runtime_memory.py \
-  --summary-glob tools_out/runtime_memory_summary_ship_refresh.json \
-  --csv-out tools_out/runtime_memory_results_ship_refresh_regenerated.csv \
-  --summary-out tools_out/runtime_memory_summary_ship_refresh_regenerated.json \
+  --summary-glob docs/_static/runtime_memory_summary_ship_refresh.json \
+  --csv-out docs/_static/runtime_memory_results_ship_refresh.csv \
+  --summary-out docs/_static/runtime_memory_summary_ship_refresh.json \
   --plot-out docs/_static/runtime_memory_benchmark.png
 ```
 
@@ -218,7 +218,9 @@ The current release surface is deliberately scoped:
   `transport_average_gate = false`; they are not production turbulence-gradient
   or nonlinear heat-flux optimization claims.
 - Production parallelization is currently the independent-work path for `k_y`
-  scans, sensitivity sweeps, quasilinear studies, and UQ ensembles. Whole-state
+  scans, quasilinear studies, and UQ ensembles. Sensitivity sweeps can use the
+  same deterministic independent-work reconstruction, but they need a dedicated
+  scaling artifact before making a speedup claim. Whole-state
   nonlinear sharding and nonlinear domain sharding remain diagnostic unless the
   exact workload has passing identity and profiler promotion gates.
 - W7-X zonal long-window recurrence/damping and W7-X TEM / kinetic-electron
@@ -799,8 +801,9 @@ baseline-to-optimized nonlinear audits for broader geometry families.
 
 For production parallelization of independent work, use
 `spectraxgk.batch_map` / `spectraxgk.ky_scan_batches` for ky scans,
-sensitivity sweeps, and UQ ensembles. Runtime `k_y` scans can select the same
-independent-worker path from TOML:
+quasilinear/UQ ensembles, and sensitivity-sweep plumbing that does not claim a
+new scaling result. Runtime `k_y` scans can select the same independent-worker
+path from TOML:
 
 ```toml
 [parallel]
@@ -851,8 +854,9 @@ solver on 64 modes with `Ny=128`, `Nz=96`, `Nl=4`, `Nm=8`, and `240` RK2
 steps per mode. It passes exact `gamma`/`omega` identity against the one-worker
 reference. The refreshed release artifact reaches `7.18x` on eight local CPU
 workers and `1.88x` on two RTX A4000 GPUs on `ssh office`. This is the preferred
-production parallelization path for linear scans, quasilinear studies,
-sensitivity sweeps, and UQ ensembles.
+production parallelization path for linear scans, quasilinear studies, and UQ
+ensembles. Sensitivity sweeps are covered by the same independent-work
+ordering/provenance utilities, but not by a standalone scaling claim yet.
 
 ![SPECTRAX-GK parallelization closure status](docs/_static/parallelization_completion_status.png)
 
@@ -1020,10 +1024,11 @@ python tools/benchmark_runtime_memory.py --continue-on-error --log-dir tools_out
 
 Parallelization scaling figures are kept in the performance docs rather than
 the top-level README. The shipped public claim is the independent-work path for
-`k_y` scans, quasilinear studies, sensitivity sweeps, and UQ ensembles;
-whole-state nonlinear sharding remains an identity/profiler artifact until a
-communication-aware nonlinear decomposition has matched CPU/GPU identity,
-transport-window, and profiler evidence.
+`k_y` scans, quasilinear studies, and UQ ensembles; sensitivity sweeps use the
+same deterministic work partitioning but do not yet have a standalone scaling
+claim. Whole-state nonlinear sharding remains an identity/profiler artifact
+until a communication-aware nonlinear decomposition has matched CPU/GPU
+identity, transport-window, and profiler evidence.
 
 ## Examples
 
