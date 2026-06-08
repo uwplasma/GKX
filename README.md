@@ -293,6 +293,14 @@ matched, converged nonlinear holdouts before universal stellarator-flux claims.
 
 ![SPECTRAX-GK quasilinear stellarator usefulness summary](docs/_static/quasilinear_stellarator_usefulness.png)
 
+The companion screening-skill panel separates correlation/ranking usefulness
+from absolute-flux promotion. On the current eight-case electrostatic
+portfolio, only the `spectral_envelope_ridge` candidate passes the screening
+gate (`Spearman ~0.81`, pairwise order accuracy `~0.79`) and the mean-error
+gate; absolute-flux runtime promotion remains `none`.
+
+![SPECTRAX-GK quasilinear screening skill summary](docs/_static/quasilinear_screening_skill.png)
+
 The companion holdout-gap report makes the remaining promotion blocker
 explicit instead of hiding it in the calibration plot. Six holdouts are
 admitted and the scoped model-selection gate passes, but the current absolute
