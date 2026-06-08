@@ -297,7 +297,10 @@ The companion screening-skill panel separates correlation/ranking usefulness
 from absolute-flux promotion. On the current eight-case electrostatic
 portfolio, only the `spectral_envelope_ridge` candidate passes the screening
 gate (`Spearman ~0.81`, pairwise order accuracy `~0.79`) and the mean-error
-gate; absolute-flux runtime promotion remains `none`.
+gate. The held-out-only rank gate is deliberately shown separately and remains
+just below threshold (`Spearman ~0.71`, pairwise order accuracy `~0.73`), so
+absolute-flux runtime promotion remains `none` until more independent
+long-window nonlinear holdouts are admitted.
 
 ![SPECTRAX-GK quasilinear screening skill summary](docs/_static/quasilinear_screening_skill.png)
 
