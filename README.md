@@ -282,6 +282,17 @@ absolute-flux predictor or universal saturation law.
 
 ![SPECTRAX-GK quasilinear candidate uncertainty gate](docs/_static/quasilinear_candidate_uncertainty.png)
 
+The stellarator-specific summary below compares the admitted HSX and W7-X
+nonlinear windows with the current quasilinear candidates, while keeping QA and
+QH explicitly scoped: QA has matched nonlinear-audit evidence only, and QH is
+excluded until grid/window convergence passes. Simple one-constant
+quasilinear rules do not transfer as absolute stellarator heat-flux predictors
+on the admitted portfolio. The spectral-envelope ridge candidate is the best
+current scoped model-selection result, but QA/QH coverage still requires
+matched, converged nonlinear holdouts before universal stellarator-flux claims.
+
+![SPECTRAX-GK quasilinear stellarator usefulness summary](docs/_static/quasilinear_stellarator_usefulness.png)
+
 The companion holdout-gap report makes the remaining promotion blocker
 explicit instead of hiding it in the calibration plot. Six holdouts are
 admitted and the scoped model-selection gate passes, but the current absolute
