@@ -123,14 +123,15 @@ SPECTRAX-GK ships VMEC-JAX-style QA optimization examples that append one differ
 
 The baseline is an admitted QA design (`A = 5.0000`, mean `iota = 0.41020`, QS residual `8.9e-6`). The transport-optimized rows are optimizer-output comparisons, not promoted turbulent-flux designs: their solved-WOUT rows narrowly miss the strict mean-`iota >= 0.41` gate and are kept as diagnostic-only candidates until matched long post-transient nonlinear `Q(t)` audits, grid/window convergence, and strict geometry gates pass. Optimizer comparisons are valid only within matched `setup_summary.json` comparison fingerprints.
 
-A matched office nonlinear audit for the full-sweep QA rows has been harvested
-as negative admission evidence: the raw traces finish near `t=400`, while the
-strict promotion window is `t=[1100,1500]`, so no finite late-window ensemble
-mean or matched transport reduction is available. Those outputs are not used
-as quasilinear calibration holdouts. The audit generator now explicitly labels
-restart-ladder segment commands, emits direct full-horizon `t=1500` launch
-commands, and adds a terminal-output gate so this bookkeeping mismatch cannot
-be promoted accidentally.
+The first true `t=1500` office nonlinear audit triplets from the full-sweep QA
+campaign now pass the late-window seed/timestep gates for the growth and
+nonlinear-window candidate rows. Their `t=[1100,1500]` replicated means are
+`<Q_i>=11.51` and `<Q_i>=11.61`, respectively, with mean relative spreads below
+`4.3%`. These are stability/robustness audits, not optimization-success claims:
+the matched strict QA baseline and quasilinear-objective triplets are still
+running, so relative transport reduction and quasilinear calibration admission
+remain blocked. The earlier bookkeeping audit that stopped near `t=400` is kept
+only as negative launch-contract evidence.
 
 The companion `RBC(1,1)` landscape scans the strict QA baseline over `[-75%, +75%]` with 31 points. The top panel shows the linear growth rate and every shipped electrostatic quasilinear heat-flux rule over the same multi-surface, multi-field-line, multi-`k_y` sample used by the optimizer examples. The lower panel overlays the 23 strict long-window post-transient nonlinear heat-flux ensembles that have passed so far (`t=[1100,1500]`, seed/timestep replicated): the negative side, the zero-offset baseline, and seven positive coefficients (`+5%`, `+10%`, `+15%`, `+25%`, `+30%`, `+35%`, `+40%`). The `+20%` point is undergoing a longer-window repair after a narrow seed/timestep-spread miss; the remaining higher positive-side coefficients are still pending. Reduced/startup nonlinear-window estimators are intentionally excluded from this plot and from optimization-promotion claims.
 
