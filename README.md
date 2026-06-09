@@ -127,7 +127,10 @@ A matched office nonlinear audit for the full-sweep QA rows has been harvested
 as negative admission evidence: the raw traces finish near `t=400`, while the
 strict promotion window is `t=[1100,1500]`, so no finite late-window ensemble
 mean or matched transport reduction is available. Those outputs are not used
-as quasilinear calibration holdouts.
+as quasilinear calibration holdouts. The audit generator now explicitly labels
+restart-ladder segment commands, emits direct full-horizon `t=1500` launch
+commands, and adds a terminal-output gate so this bookkeeping mismatch cannot
+be promoted accidentally.
 
 The companion `RBC(1,1)` landscape scans the strict QA baseline over `[-75%, +75%]` with 31 points. The top panel shows the linear growth rate and every shipped electrostatic quasilinear heat-flux rule over the same multi-surface, multi-field-line, multi-`k_y` sample used by the optimizer examples. The lower panel overlays the 23 strict long-window post-transient nonlinear heat-flux ensembles that have passed so far (`t=[1100,1500]`, seed/timestep replicated): the negative side, the zero-offset baseline, and seven positive coefficients (`+5%`, `+10%`, `+15%`, `+25%`, `+30%`, `+35%`, `+40%`). The `+20%` point is undergoing a longer-window repair after a narrow seed/timestep-spread miss; the remaining higher positive-side coefficients are still pending. Reduced/startup nonlinear-window estimators are intentionally excluded from this plot and from optimization-promotion claims.
 
