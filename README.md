@@ -121,7 +121,7 @@ SPECTRAX-GK ships VMEC-JAX-style QA optimization examples that append one differ
 
 ![VMEC-JAX QA max-mode-5 optimizer sweep](docs/_static/vmec_jax_qa_full_sweep_panel.png)
 
-The baseline is an admitted QA design (`A = 5.0000`, mean `iota = 0.41020`, QS residual `8.9e-6`). The transport-optimized rows are optimizer-output comparisons, not promoted turbulent-flux designs: their solved-WOUT rows narrowly miss the strict mean-`iota >= 0.41` gate and are kept as diagnostic-only candidates until matched long post-transient nonlinear `Q(t)` audits, grid/window convergence, and strict geometry gates pass. Optimizer comparisons are valid only within matched `setup_summary.json` comparison fingerprints.
+The baseline is an admitted QA design (`A = 5.0000`, mean `iota = 0.41020`, QS residual `8.9e-6`). The transport-optimized rows are optimizer-output comparisons, not promoted turbulent-flux designs: their solved-WOUT rows narrowly miss the strict mean-`iota >= 0.41` gate, and the matched long post-transient nonlinear `Q(t)` audits below do not show a significant heat-flux reduction. Optimizer comparisons are valid only within matched `setup_summary.json` comparison fingerprints.
 
 The true `t=1500` office nonlinear audits now pass the late-window
 seed/timestep gates for the strict QA baseline, growth-objective candidate,
