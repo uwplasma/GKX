@@ -136,6 +136,17 @@ The companion `RBC(1,1)` landscape scans the strict QA baseline over `[-75%, +75
 
 ![QA RBC(1,1) transport landscape](docs/_static/vmec_boundary_transport_landscape_rbc11_full.png)
 
+The optimizer-strategy report below is built from the tracked QA optimizer and
+`RBC(1,1)` artifacts. It shows that the current deterministic transport rows
+reduce their internal objectives but remain diagnostic-only, while the admitted
+landscape contains a real lower-`Q_i` direction. The next campaign should use
+exact-adjoint least squares for the strict QA baseline, adjoint trust/L-BFGS
+with continuation for linear/quasilinear residuals, and SPSA/CMA-ES/Bayesian
+outer-loop comparators only for noisy long-window nonlinear heat-flux
+objectives.
+
+![QA optimizer strategy report](docs/_static/vmec_jax_qa_optimizer_strategy_report.png)
+
 ```bash
 python examples/optimization/QA_optimization_linear_ITG.py
 python examples/optimization/QA_optimization_quasilinear_ITG.py
