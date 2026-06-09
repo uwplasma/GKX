@@ -138,8 +138,10 @@ The companion `RBC(1,1)` landscape scans the strict QA baseline over `[-75%, +75
 
 The optimizer-strategy report below is built from the tracked QA optimizer and
 `RBC(1,1)` artifacts. It shows that the current deterministic transport rows
-reduce their internal objectives but remain diagnostic-only, while the admitted
-landscape contains a real lower-`Q_i` direction. The next campaign should use
+reduce their internal objectives but remain diagnostic-only, while the
+converged landscape contains a real lower-`Q_i` direction. The landscape is a
+noise/convergence diagnostic, not an admission source for optimized QA
+stellarators. The next campaign should use
 exact-adjoint least squares for the strict QA baseline, adjoint trust/L-BFGS
 with continuation for linear/quasilinear residuals, and SPSA/CMA-ES/Bayesian
 outer-loop comparators only for noisy long-window nonlinear heat-flux
