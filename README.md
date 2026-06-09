@@ -125,14 +125,16 @@ The baseline is an admitted QA design (`A = 5.0000`, mean `iota = 0.41020`, QS r
 
 The true `t=1500` office nonlinear audits now pass the late-window
 seed/timestep gates for the strict QA baseline, growth-objective candidate,
-and nonlinear-window candidate. Their `t=[1100,1500]` replicated means are
-`<Q_i>=11.58`, `11.51`, and `11.61`, respectively. Matched comparisons do not
-promote either completed transport candidate: the growth row reduces
-late-window heat flux by only `0.60%` (`z=0.26`, below the `4%` gate), while
-the nonlinear-window row is slightly worse (`-0.25%`, `z=-0.09`). The remaining
-quasilinear-objective triplet is still running, so quasilinear calibration
-admission remains blocked. The earlier bookkeeping audit that stopped near
-`t=400` is kept only as negative launch-contract evidence.
+quasilinear-objective candidate, and nonlinear-window candidate. Their
+`t=[1100,1500]` replicated means are `<Q_i>=11.58`, `11.51`, `11.64`, and
+`11.61`, respectively. Matched comparisons do not promote any transport
+candidate: the growth row reduces late-window heat flux by only `0.60%`
+(`z=0.26`, below the `4%` gate), while the quasilinear and nonlinear-window
+rows are slightly worse than baseline (`-0.49%`, `z=-0.19`; `-0.25%`,
+`z=-0.09`). The strict QA `t=1500` set is therefore closed as robust negative
+optimization-transfer evidence, not as a successful nonlinear turbulent-flux
+optimization. The earlier bookkeeping audit that stopped near `t=400` is kept
+only as negative launch-contract evidence.
 
 The companion `RBC(1,1)` landscape scans the strict QA baseline over `[-75%, +75%]` with 31 points. The top panel shows the linear growth rate and every shipped electrostatic quasilinear heat-flux rule over the same multi-surface, multi-field-line, multi-`k_y` sample used by the optimizer examples. The lower panel overlays the 23 strict long-window post-transient nonlinear heat-flux ensembles that have passed so far (`t=[1100,1500]`, seed/timestep replicated): the negative side, the zero-offset baseline, and seven positive coefficients (`+5%`, `+10%`, `+15%`, `+25%`, `+30%`, `+35%`, `+40%`). The `+20%` point is undergoing a longer-window repair after a narrow seed/timestep-spread miss; the remaining higher positive-side coefficients are still pending. Reduced/startup nonlinear-window estimators are intentionally excluded from this plot and from optimization-promotion claims.
 
