@@ -279,29 +279,31 @@ The first Cyclone nonlinear audit is tracked in `docs/quasilinear.rst` and is
 kept at `training_or_audit_only` until a held-out calibration set passes.
 
 The manuscript-facing quasilinear calibration panel now uses the full admitted
-electrostatic portfolio: two training geometries and six held-out nonlinear
-windows spanning tokamak, stellarator, and external-VMEC cases.
+electrostatic portfolio: two training geometries and seven held-out nonlinear
+windows spanning tokamak, stellarator, and external-VMEC cases. The newest
+entry is the CTH-like external-VMEC window admitted only under the documented
+high-grid policy below.
 
 ![SPECTRAX-GK quasilinear stellarator train/holdout calibration](docs/_static/quasilinear_stellarator_train_holdout.png)
 
 The current training set is Cyclone plus the external-VMEC ITERModel case; the
 holdouts are Cyclone Miller, HSX, W7-X, D-shaped VMEC, up-down asymmetric VMEC,
-and circular VMEC. This is a stronger transfer test than the earlier
-Cyclone-only fit: nonlinear input validation now passes, but the fitted
-one-constant mixing-length model still fails the held-out absolute-flux gate
-with mean relative error about `2.11`. The circular holdout itself is predicted
-well by the scaled one-constant diagnostic, but the aggregate model remains
-blocked by the other held-out cases. The best current one-scalar saturation
-rule remains worse than the training-mean null baseline (`2.11` versus `1.20`),
-so SPECTRAX-GK does not promote any simple or user-facing absolute quasilinear
-flux predictor from that legacy family.
+and circular VMEC, plus the high-grid-admitted CTH-like VMEC case. This is a
+stronger transfer test than the earlier Cyclone-only fit: nonlinear input
+validation now passes, but the fitted one-constant mixing-length model still
+fails the held-out absolute-flux gate with mean relative error about `1.91`.
+The circular and CTH-like holdouts are predicted reasonably by the scaled
+one-constant diagnostic, but the aggregate model remains blocked by the other
+held-out cases. SPECTRAX-GK therefore does not promote any simple or
+user-facing absolute quasilinear flux predictor from that legacy family.
 
 The richer held-out candidate is now the reduced `spectral_envelope_ridge`
 model below. It uses only two linear-spectrum envelope features, reaches mean
 relative error about `0.295`, and clears the leave-one-geometry-out
-interval-coverage gate at `7/8` on the current eight-case electrostatic portfolio. That
-is the current manuscript model-selection result: the simple rules are rejected,
-but a small spectrum-aware candidate is accepted as a scoped research candidate.
+interval-coverage gate at `7/8` on the pre-CTH eight-case electrostatic
+candidate portfolio. That is the current manuscript model-selection result:
+the simple rules are rejected, but a small spectrum-aware candidate is accepted
+as a scoped research candidate.
 The model-selection status also consumes the selected optimized-equilibrium
 nonlinear audit as local transport evidence, but it is not a runtime/TOML
 absolute-flux predictor or universal saturation law.
@@ -320,34 +322,35 @@ matched, converged nonlinear holdouts before universal stellarator-flux claims.
 ![SPECTRAX-GK quasilinear stellarator usefulness summary](docs/_static/quasilinear_stellarator_usefulness.png)
 
 The companion screening-skill panel separates correlation/ranking usefulness
-from absolute-flux promotion. On the current eight-case electrostatic
+from absolute-flux promotion. On the pre-CTH eight-case candidate-model
 portfolio, only the `spectral_envelope_ridge` candidate passes the screening
 gate (`Spearman ~0.81`, pairwise order accuracy `~0.79`) and the mean-error
 gate. The held-out-only rank gate is deliberately shown separately and remains
 just below threshold (`Spearman ~0.71`, pairwise order accuracy `~0.73`), so
 absolute-flux runtime promotion remains `none` until more independent
-long-window nonlinear holdouts are admitted.
+long-window nonlinear holdouts are admitted and the candidate-model sweep is
+regenerated on the expanded ledger.
 
 ![SPECTRAX-GK quasilinear screening skill summary](docs/_static/quasilinear_screening_skill.png)
 
 The companion holdout-gap report makes the remaining promotion blocker
-explicit instead of hiding it in the calibration plot. Six holdouts are
+explicit instead of hiding it in the calibration plot. Seven holdouts are
 admitted and the scoped model-selection gate passes, but the current absolute
 heat-flux calibration for the legacy one-constant/simple rules still fails the
-aggregate holdout gate (`2.11 > 0.35`).
-The next useful data product is therefore another independent, converged
-electrostatic nonlinear holdout, preferably in the external-VMEC family, not
-another unvalidated fit parameter.
+aggregate holdout gate (`1.91 > 0.35`). The external-VMEC and non-axisymmetric
+external-VMEC coverage gates are now satisfied by the CTH-like admission; the
+next useful data products are two more independent, converged electrostatic
+nonlinear holdouts plus a better saturation model, not another unvalidated fit
+parameter.
 
 ![SPECTRAX-GK quasilinear holdout gap report](docs/_static/quasilinear_holdout_gap_report.png)
 
-The runbook below converts that gap into a fail-closed nonlinear launch plan.
-Its current `READY` state is not an admission claim: it selects the CTH-like
-external-VMEC fixture only through an explicit modified-protocol repair
-(`gamma = 0.0488` at `ky = 0.2857`, `n48/n64/n80`, `t = 150,250,350`) after
-the earlier CTH-like grid/window gate failed. Admission still requires the
-resulting post-transient traces to pass the grid/window convergence gate and
-enter the calibration metadata as `split = holdout`.
+The runbook below converted that gap into a fail-closed nonlinear launch plan.
+It selected the CTH-like external-VMEC fixture only through an explicit
+modified-protocol repair (`gamma = 0.0488` at `ky = 0.2857`, `n48/n64/n80`,
+`t = 150,250,350`) after the earlier CTH-like grid/window gate failed. The
+follow-up high-grid policy and replicate evidence now admit that case as a
+scoped high-grid holdout; unchanged failed-family replays remain blocked.
 
 ![SPECTRAX-GK external-VMEC next holdout runbook](docs/_static/external_vmec_next_holdout_runbook.png)
 
@@ -362,16 +365,18 @@ relaunches that unchanged audit. The new CTH-like launch command is therefore
 a materially changed high-resolution protocol, not a replay of the failed
 `32->48` pilot.
 
-The completed CTH-like modified-protocol harvest is a useful convergence study,
-but not yet an admitted transport holdout. The full `n48/n64/n80` grid gates
-fail at every tracked horizon because the coarse `n48` trace is not converged.
+The completed CTH-like modified-protocol harvest is now a scoped high-grid
+transport holdout, not a normal full-ladder convergence claim. The full
+`n48/n64/n80` grid gates fail at every tracked horizon because the coarse
+`n48` trace is not converged; the tracked t=350 full-grid sidecar fails only
+the common/least grid-difference metrics (`0.296` and `0.272`).
 The `t=150` high-grid check has close `n64/n80` means (`0.026` common-window
 and `0.009` least-window relative differences) but still fails the late-window
 slope gate, so that window is treated as transient. The later high-grid
 windows pass: `t=250` and `t=350` agree in time to `0.018` common-window and
-`0.019` least-window relative change. That late high-grid result is necessary
-evidence only; replicate and explicit high-grid admission gates are still
-required before any calibration use.
+`0.019` least-window relative change. The explicit admission checker accepts
+only the retained `n64/n80` evidence, and records that the case must not be
+described as full `n48/n64/n80` convergence.
 
 ![SPECTRAX-GK CTH-like high-grid candidate gate](docs/_static/external_vmec_cth_like_modified_t350_high_grid_convergence_gate.png)
 
@@ -382,9 +387,11 @@ The first `t=[250,350]` replicate extraction was individually converged but
 failed the strict ensemble spread gate (`0.182 > 0.15`). Restart-continuing the
 same four variants to `t=700` gives a passed `t=[350,700]` ensemble gate:
 mean heat flux `9.60`, mean relative spread `0.041`, and combined SEM/mean
-`0.052`. This promotes CTH-like only to a replicated high-grid candidate; the
-case remains outside calibration until the high-grid admission policy is made
-explicit because the full `n48/n64/n80` grid gate still fails.
+`0.052`. Together with the full-grid failure sidecar, the passed high-grid
+gates, and the late time-horizon gate, this passes
+`tools/check_external_vmec_high_grid_admission.py` and enters the quasilinear
+ledger as `split = holdout`. The claim remains bounded: this improves the
+model-development holdout set but does not promote absolute quasilinear fluxes.
 
 ![SPECTRAX-GK CTH-like long-window replicate gate](docs/_static/external_vmec_cth_like_modified_replicates_t700/replicate_ensemble_gate.png)
 
