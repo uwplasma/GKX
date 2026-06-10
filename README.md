@@ -377,6 +377,17 @@ required before any calibration use.
 
 ![SPECTRAX-GK CTH-like late high-grid time-horizon gate](docs/_static/external_vmec_cth_like_modified_late_high_grid_time_horizon_gate.png)
 
+The follow-up `n80` seed/timestep audit confirms why the longer window matters.
+The first `t=[250,350]` replicate extraction was individually converged but
+failed the strict ensemble spread gate (`0.182 > 0.15`). Restart-continuing the
+same four variants to `t=700` gives a passed `t=[350,700]` ensemble gate:
+mean heat flux `9.60`, mean relative spread `0.041`, and combined SEM/mean
+`0.052`. This promotes CTH-like only to a replicated high-grid candidate; the
+case remains outside calibration until the high-grid admission policy is made
+explicit because the full `n48/n64/n80` grid gate still fails.
+
+![SPECTRAX-GK CTH-like long-window replicate gate](docs/_static/external_vmec_cth_like_modified_replicates_t700/replicate_ensemble_gate.png)
+
 Two of the strongest admitted external-VMEC nonlinear holdouts are shown below.
 These figures are part of the publication-facing evidence that the nonlinear
 inputs are converged enough to be used as negative transfer constraints rather
