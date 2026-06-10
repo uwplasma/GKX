@@ -362,6 +362,21 @@ relaunches that unchanged audit. The new CTH-like launch command is therefore
 a materially changed high-resolution protocol, not a replay of the failed
 `32->48` pilot.
 
+The completed CTH-like modified-protocol harvest is a useful convergence study,
+but not yet an admitted transport holdout. The full `n48/n64/n80` grid gates
+fail at every tracked horizon because the coarse `n48` trace is not converged.
+The `t=150` high-grid check has close `n64/n80` means (`0.026` common-window
+and `0.009` least-window relative differences) but still fails the late-window
+slope gate, so that window is treated as transient. The later high-grid
+windows pass: `t=250` and `t=350` agree in time to `0.018` common-window and
+`0.019` least-window relative change. That late high-grid result is necessary
+evidence only; replicate and explicit high-grid admission gates are still
+required before any calibration use.
+
+![SPECTRAX-GK CTH-like high-grid candidate gate](docs/_static/external_vmec_cth_like_modified_t350_high_grid_convergence_gate.png)
+
+![SPECTRAX-GK CTH-like late high-grid time-horizon gate](docs/_static/external_vmec_cth_like_modified_late_high_grid_time_horizon_gate.png)
+
 Two of the strongest admitted external-VMEC nonlinear holdouts are shown below.
 These figures are part of the publication-facing evidence that the nonlinear
 inputs are converged enough to be used as negative transfer constraints rather
