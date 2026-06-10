@@ -342,9 +342,12 @@ another unvalidated fit parameter.
 ![SPECTRAX-GK quasilinear holdout gap report](docs/_static/quasilinear_holdout_gap_report.png)
 
 The runbook below converts that gap into a fail-closed nonlinear launch plan.
-It is a planning artifact only: admission still requires the resulting
-post-transient traces to pass the grid/window convergence gate and enter the
-calibration metadata as `split = holdout`.
+Its current `READY` state is not an admission claim: it selects the CTH-like
+external-VMEC fixture only through an explicit modified-protocol repair
+(`gamma = 0.0488` at `ky = 0.2857`, `n48/n64/n80`, `t = 150,250,350`) after
+the earlier CTH-like grid/window gate failed. Admission still requires the
+resulting post-transient traces to pass the grid/window convergence gate and
+enter the calibration metadata as `split = holdout`.
 
 ![SPECTRAX-GK external-VMEC next holdout runbook](docs/_static/external_vmec_next_holdout_runbook.png)
 
@@ -355,9 +358,9 @@ both common-window and least-window heat-flux means, above the `0.15`
 convergence gate. The runbook now demotes unchanged reruns of that failed
 family. The follow-on ITERModel `t=450` same-family audit passed
 (`0.056`/`0.055` common/least grid differences), so the runbook no longer
-relaunches that unchanged audit; it records that the next useful data product
-must be a different independent electrostatic VMEC holdout or a materially
-changed high-resolution protocol.
+relaunches that unchanged audit. The new CTH-like launch command is therefore
+a materially changed high-resolution protocol, not a replay of the failed
+`32->48` pilot.
 
 Two of the strongest admitted external-VMEC nonlinear holdouts are shown below.
 These figures are part of the publication-facing evidence that the nonlinear

@@ -194,6 +194,17 @@ def _recommended_horizons(nearest_gap: dict[str, Any]) -> list[float]:
     return [horizon, horizon + 100.0, horizon + 200.0]
 
 
+def _validated_horizons(horizons: Iterable[float]) -> list[float]:
+    values = [float(value) for value in horizons]
+    if not values:
+        raise ValueError("at least one nonlinear holdout horizon is required")
+    if any(not math.isfinite(value) or value <= 0.0 for value in values):
+        raise ValueError("nonlinear holdout horizons must be finite and positive")
+    if values != sorted(values):
+        raise ValueError("nonlinear holdout horizons must be sorted increasingly")
+    return values
+
+
 def _candidate_status(
     row: ExternalHoldoutScreenRow,
     *,
@@ -202,6 +213,8 @@ def _candidate_status(
     failed_external_families: set[str],
     passed_training_audit_families: set[str],
     min_launch_gamma: float,
+    allow_modified_protocol_families: set[str],
+    modified_protocol_note: str,
 ) -> tuple[str, float, str]:
     if not row.unstable:
         return ("screen_rejected_stable_or_failed", 9.0, "screen row did not finish with positive growth")
@@ -210,6 +223,17 @@ def _candidate_status(
             "screen_marginal_needs_linear_refinement",
             7.0,
             "positive growth is below the nonlinear-launch threshold; refine the linear branch before launching a transport holdout",
+        )
+    if (
+        row.family in failed_external_families
+        and row.family in allow_modified_protocol_families
+        and row.family not in passed_training_audit_families
+    ):
+        return (
+            "modified_protocol_failed_family_candidate",
+            1.5,
+            "this external-VMEC family has a tracked failed convergence gate, but an explicit modified-protocol rerun was requested; "
+            f"protocol change: {modified_protocol_note}",
         )
     if row.family in failed_external_families and row.family != preferred_family:
         return (
@@ -245,6 +269,9 @@ def build_external_holdout_runbook(
     dt: float = 0.05,
     min_launch_gamma: float = 0.02,
     max_candidates: int = 6,
+    horizons: tuple[float, ...] | None = None,
+    allow_modified_protocol_families: tuple[str, ...] = (),
+    modified_protocol_note: str = "",
 ) -> dict[str, Any]:
     """Build a JSON-ready runbook for the next nonlinear holdout campaign.
 
@@ -262,8 +289,11 @@ def build_external_holdout_runbook(
     failed_external = _failed_external_families(gap_report)
     passed_training_audits = _passed_training_audit_families(gap_report)
     nearest_gap = _first_nearest_gap(gap_report)
-    horizons = _recommended_horizons(nearest_gap)
+    recommended_horizons = _validated_horizons(horizons) if horizons is not None else _recommended_horizons(nearest_gap)
     grid_args = " ".join(f"--grid {grid}" for grid in grids)
+    allowed_modified = {str(family).strip() for family in allow_modified_protocol_families if str(family).strip()}
+    if allowed_modified and not str(modified_protocol_note).strip():
+        raise ValueError("modified_protocol_note is required when allowing failed-family modified-protocol reruns")
 
     ranked: list[dict[str, Any]] = []
     for row in screen_rows:
@@ -274,6 +304,8 @@ def build_external_holdout_runbook(
             failed_external_families=failed_external,
             passed_training_audit_families=passed_training_audits,
             min_launch_gamma=float(min_launch_gamma),
+            allow_modified_protocol_families=allowed_modified,
+            modified_protocol_note=str(modified_protocol_note).strip(),
         )
         gamma_key = -(row.best_gamma if row.best_gamma is not None else -math.inf)
         ky_key = -(row.best_ky if row.best_ky is not None else -math.inf)
@@ -291,7 +323,12 @@ def build_external_holdout_runbook(
         ranked_row["rank"] = idx
         ranked_row.pop("_sort_key", None)
     selected_new = next(
-        (row for row in ranked if row["status"] in {"preferred_family_new_holdout", "new_family_holdout_candidate"}),
+        (
+            row
+            for row in ranked
+            if row["status"]
+            in {"preferred_family_new_holdout", "new_family_holdout_candidate", "modified_protocol_failed_family_candidate"}
+        ),
         None,
     )
     selected_preferred_audit = next(
@@ -308,7 +345,7 @@ def build_external_holdout_runbook(
             f"--out-dir {out_dir}/{str(selected_new['case']).replace('_nc', '')} "
             f"--ky {float(selected_new['best_ky']):.12g} "
             f"--dt {float(dt):.12g} "
-            f"--horizons {','.join(f'{value:.12g}' for value in horizons)} "
+            f"--horizons {','.join(f'{value:.12g}' for value in recommended_horizons)} "
             f"{grid_args}"
         )
     if selected_preferred_audit is not None:
@@ -319,7 +356,7 @@ def build_external_holdout_runbook(
             f"--out-dir {out_dir}/{str(selected_preferred_audit['case']).replace('_nc', '')}_audit "
             f"--ky {float(selected_preferred_audit['best_ky']):.12g} "
             f"--dt {float(dt):.12g} "
-            f"--horizons {','.join(f'{value:.12g}' for value in horizons)} "
+            f"--horizons {','.join(f'{value:.12g}' for value in recommended_horizons)} "
             f"{grid_args}"
         )
 
@@ -330,8 +367,11 @@ def build_external_holdout_runbook(
         "absolute_flux_promoted": False,
         "preferred_family": preferred,
         "represented_families": sorted(represented),
+        "failed_external_families": sorted(failed_external),
+        "allow_modified_protocol_families": sorted(allowed_modified),
+        "modified_protocol_note": str(modified_protocol_note).strip(),
         "nearest_tracked_gap": nearest_gap,
-        "recommended_horizons": horizons,
+        "recommended_horizons": recommended_horizons,
         "recommended_grids": list(grids),
         "dt": float(dt),
         "min_launch_gamma": float(min_launch_gamma),
@@ -345,6 +385,7 @@ def build_external_holdout_runbook(
             "requires_grid_window_convergence": True,
             "requires_post_transient_window": True,
             "requires_independent_from_training_reference": True,
+            "requires_explicit_modified_protocol_note_for_failed_families": True,
             "minimum_screen_growth_rate_for_launch": float(min_launch_gamma),
         },
         "notes": (
