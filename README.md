@@ -346,11 +346,14 @@ parameter.
 ![SPECTRAX-GK quasilinear holdout gap report](docs/_static/quasilinear_holdout_gap_report.png)
 
 The runbook below converted that gap into a fail-closed nonlinear launch plan.
-It selected the CTH-like external-VMEC fixture only through an explicit
-modified-protocol repair (`gamma = 0.0488` at `ky = 0.2857`, `n48/n64/n80`,
-`t = 150,250,350`) after the earlier CTH-like grid/window gate failed. The
-follow-up high-grid policy and replicate evidence now admit that case as a
-scoped high-grid holdout; unchanged failed-family replays remain blocked.
+The current selected launch is a modified shaped-tokamak-pressure external-VMEC
+repair (`gamma = 0.0473` at `ky = 0.4762`, `n64/n80/n96`, `t = 450,650`)
+after the earlier `n48/n64`, `t = 450` trace failed only the grid-agreement
+gate. The earlier CTH-like modified-protocol campaign is already admitted as a
+scoped high-grid holdout through the explicit high-grid policy and
+seed/timestep-replicate evidence; unchanged failed-family replays and the
+same-family ITERModel reproducibility audit remain blocked from independent
+holdout promotion.
 
 ![SPECTRAX-GK external-VMEC next holdout runbook](docs/_static/external_vmec_next_holdout_runbook.png)
 
@@ -360,9 +363,10 @@ stable, but it is not admitted: the two grid levels differ by about `0.306` in
 both common-window and least-window heat-flux means, above the `0.15`
 convergence gate. The runbook now demotes unchanged reruns of that failed
 family. The follow-on ITERModel `t=450` same-family audit passed
-(`0.056`/`0.055` common/least grid differences), so the runbook no longer
-relaunches that unchanged audit. The new CTH-like launch command is therefore
-a materially changed high-resolution protocol, not a replay of the failed
+(`0.056`/`0.055` common/least grid differences), but it is reproducibility
+evidence because ITERModel is already used as training data. The new
+shaped-tokamak-pressure launch command is therefore a materially changed
+higher-resolution protocol, not a replay of the failed
 `32->48` pilot.
 
 The completed CTH-like modified-protocol harvest is now a scoped high-grid
