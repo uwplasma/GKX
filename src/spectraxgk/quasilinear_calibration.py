@@ -15,6 +15,7 @@ from spectraxgk.quasilinear_window import (
     nonlinear_window_stats_promotion_ready,
 )
 
+ROOT = Path(__file__).resolve().parents[2]
 
 _NETCDF_HEAT_FLUX_COLUMNS = {
     "heat_flux": "Diagnostics/HeatFlux_st",
@@ -365,9 +366,10 @@ def _resolve_summary_artifact(summary_path: Path, source: object) -> Path:
     if diag_path.is_absolute():
         return diag_path
     candidates = (
+        (ROOT / diag_path).resolve(),
+        (Path.cwd() / diag_path).resolve(),
         (summary_path.parent / diag_path).resolve(),
         (summary_path.parent.parent / diag_path).resolve(),
-        (Path.cwd() / diag_path).resolve(),
     )
     return next(
         (candidate for candidate in candidates if candidate.exists()), candidates[0]
