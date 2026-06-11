@@ -99,7 +99,8 @@ def gx_Wg(
     nt = _species_array(params.density, ns) * _species_array(params.temp, ns)
     nt = nt[:, None, None, None, None, None]
 
-    g2 = jnp.abs(Gs) ** 2
+    mask = fac != 0.0
+    g2 = jnp.where(mask, jnp.abs(jnp.where(mask, Gs, 0.0)) ** 2, 0.0)
     return 0.5 * jnp.sum(g2 * fac * vol * nt)
 
 
@@ -591,7 +592,9 @@ def gx_Wg_resolved(
         Gs = G
     ns = Gs.shape[0]
     nt = _species_array(params.density, ns) * _species_array(params.temp, ns)
-    contrib = 0.5 * jnp.abs(Gs) ** 2 * fac * vol * nt[:, None, None, None, None, None]
+    mask = fac != 0.0
+    g2 = jnp.where(mask, jnp.abs(jnp.where(mask, Gs, 0.0)) ** 2, 0.0)
+    contrib = 0.5 * g2 * fac * vol * nt[:, None, None, None, None, None]
     Wg_kxst = jnp.sum(contrib, axis=(1, 2, 3, 5))
     Wg_kyst = jnp.sum(contrib, axis=(1, 2, 4, 5))
     Wg_kxkyst = jnp.sum(contrib, axis=(1, 2, 5))
