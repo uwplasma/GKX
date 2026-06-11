@@ -517,6 +517,32 @@ def nonlinear_window_stats_promotion_ready(
     failures: list[str] = []
     if not isinstance(stats, dict):
         return False, ["missing nonlinear_window_stats object"]
+    if stats.get("kind") == "nonlinear_window_ensemble_report":
+        if not bool(stats.get("passed", False)):
+            failures.append("nonlinear window ensemble report did not pass")
+        gate_report = stats.get("gate_report")
+        if not isinstance(gate_report, dict) or not bool(gate_report.get("passed", False)):
+            failures.append("missing passed ensemble gate_report")
+        statistics = stats.get("statistics")
+        if not isinstance(statistics, dict):
+            failures.append("missing ensemble statistics object")
+            statistics = {}
+        for field in ("ensemble_mean", "combined_sem", "combined_sem_rel"):
+            if not _finite_number(statistics.get(field)):
+                failures.append(f"missing/non-finite statistics.{field}")
+        rows = stats.get("rows")
+        if not isinstance(rows, list) or not rows:
+            failures.append("ensemble report has no rows")
+        else:
+            ready_rows = [row for row in rows if isinstance(row, dict) and bool(row.get("promotion_ready", False))]
+            if len(ready_rows) != len(rows):
+                failures.append("not all ensemble rows are promotion-ready")
+            if not any(
+                isinstance(row, dict) and str(row.get("source_artifact", "")).strip()
+                for row in rows
+            ):
+                failures.append("missing ensemble source_artifact provenance")
+        return not failures, failures
     if stats.get("kind") != "nonlinear_window_convergence_report":
         failures.append("unexpected nonlinear_window_stats kind")
     if not bool(stats.get("passed", False)):

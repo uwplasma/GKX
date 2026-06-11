@@ -224,10 +224,11 @@ The current release surface is deliberately scoped:
   validation, nonlinear-optimization, or speedup claim.
 - Electrostatic quasilinear weights and spectra are validated diagnostics. The
   one-constant and simple saturation-rule absolute-flux models are rejected on
-  the current train/holdout portfolio; the `spectral_envelope_ridge` result is
-  a scoped manuscript model-selection candidate, not a runtime/TOML
-  absolute-flux predictor. Electromagnetic quasilinear calibration remains
-  deferred.
+  the current train/holdout portfolio. The `spectral_envelope_ridge` model now
+  passes rank/correlation screening on the expanded admitted ledger, but it
+  misses the strict `0.35` uncertainty/model-selection transport gate
+  (`0.377`) and is not a runtime/TOML absolute-flux predictor. Electromagnetic
+  quasilinear calibration remains deferred.
 - The `vmec_jax -> booz_xform_jax -> SPECTRAX-GK` path is artifact-bound:
   zero-beta equal-arc geometry parity is claimable for the rows that pass the
   current `mboz=nboz=21` parity matrix, and reduced
@@ -297,16 +298,13 @@ one-constant diagnostic, but the aggregate model remains blocked by the other
 held-out cases. SPECTRAX-GK therefore does not promote any simple or
 user-facing absolute quasilinear flux predictor from that legacy family.
 
-The richer held-out candidate is now the reduced `spectral_envelope_ridge`
-model below. It uses only two linear-spectrum envelope features, reaches mean
-relative error about `0.295`, and clears the leave-one-geometry-out
-interval-coverage gate at `7/8` on the pre-CTH eight-case electrostatic
-candidate portfolio. That is the current manuscript model-selection result:
-the simple rules are rejected, but a small spectrum-aware candidate is accepted
-as a scoped research candidate.
-The model-selection status also consumes the selected optimized-equilibrium
-nonlinear audit as local transport evidence, but it is not a runtime/TOML
-absolute-flux predictor or universal saturation law.
+The richer held-out candidate below is the reduced `spectral_envelope_ridge`
+model. It uses only two linear-spectrum envelope features. After adding the
+high-grid CTH-like holdout, its leave-one-geometry-out mean relative error is
+about `0.377`, with interval coverage `8/9`. This is close to the `0.35`
+transport gate but does not pass it, and it no longer beats the training-mean
+null by enough to close the uncertainty/model-selection gate. The useful
+remaining claim is rank/correlation screening, not absolute-flux prediction.
 
 ![SPECTRAX-GK quasilinear candidate uncertainty gate](docs/_static/quasilinear_candidate_uncertainty.png)
 
@@ -322,26 +320,26 @@ matched, converged nonlinear holdouts before universal stellarator-flux claims.
 ![SPECTRAX-GK quasilinear stellarator usefulness summary](docs/_static/quasilinear_stellarator_usefulness.png)
 
 The companion screening-skill panel separates correlation/ranking usefulness
-from absolute-flux promotion. On the pre-CTH eight-case candidate-model
-portfolio, only the `spectral_envelope_ridge` candidate passes the screening
-gate (`Spearman ~0.81`, pairwise order accuracy `~0.79`) and the mean-error
-gate. The held-out-only rank gate is deliberately shown separately and remains
-just below threshold (`Spearman ~0.71`, pairwise order accuracy `~0.73`), so
-absolute-flux runtime promotion remains `none` until more independent
-long-window nonlinear holdouts are admitted and the candidate-model sweep is
-regenerated on the expanded ledger.
+from absolute-flux promotion. On the expanded nine-case portfolio, only
+`spectral_envelope_ridge` passes the full and held-out rank/correlation gates
+(`Spearman ~0.78` full, `~0.75` held-out; pairwise order accuracy `~0.78`
+full, `~0.76` held-out). The mean-error gate remains empty and absolute-flux
+runtime promotion remains `none`; the gate report still requires two more
+independent, converged nonlinear holdouts before screening promotion can be
+reconsidered.
 
 ![SPECTRAX-GK quasilinear screening skill summary](docs/_static/quasilinear_screening_skill.png)
 
 The companion holdout-gap report makes the remaining promotion blocker
 explicit instead of hiding it in the calibration plot. Seven holdouts are
-admitted and the scoped model-selection gate passes, but the current absolute
-heat-flux calibration for the legacy one-constant/simple rules still fails the
-aggregate holdout gate (`1.91 > 0.35`). The external-VMEC and non-axisymmetric
-external-VMEC coverage gates are now satisfied by the CTH-like admission; the
-next useful data products are two more independent, converged electrostatic
-nonlinear holdouts plus a better saturation model, not another unvalidated fit
-parameter.
+admitted, but both the strict model-selection gate and the current absolute
+heat-flux calibration remain failed. The legacy one-constant/simple rules
+still miss the aggregate holdout gate (`1.91 > 0.35`), while the
+spectral-envelope candidate misses the uncertainty transport gate
+(`0.377 > 0.35`). The external-VMEC and non-axisymmetric external-VMEC
+coverage gates are now satisfied by the CTH-like admission; the next useful
+data products are two more independent, converged electrostatic nonlinear
+holdouts plus a better saturation model, not another unvalidated fit parameter.
 
 ![SPECTRAX-GK quasilinear holdout gap report](docs/_static/quasilinear_holdout_gap_report.png)
 

@@ -593,6 +593,38 @@ def calibration_point_from_nonlinear_window_summary(
 
     summary_path = Path(summary_json)
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    if summary.get("kind") == "nonlinear_window_ensemble_report":
+        if not bool(summary.get("passed", False)):
+            raise ValueError("nonlinear ensemble summary did not pass")
+        ready, failures = nonlinear_window_stats_promotion_ready(summary)
+        if not ready:
+            raise ValueError(
+                "nonlinear ensemble summary is not promotion-ready: "
+                + "; ".join(failures)
+            )
+        statistics = summary.get("statistics", {})
+        observed_mean = float(statistics["ensemble_mean"])
+        observed_sem = float(statistics["combined_sem"])
+        note_items = [
+            notes,
+            "nonlinear_source=replicated_ensemble_gate",
+            f"nonlinear_ensemble_reports={statistics.get('n_reports')}",
+            f"nonlinear_ensemble_combined_sem_rel={statistics.get('combined_sem_rel')}",
+        ]
+        return QuasilinearCalibrationPoint(
+            case=str(case or summary.get("case", summary_path.stem)),
+            split=str(split),
+            predicted_heat_flux=float(predicted_heat_flux),
+            observed_heat_flux=observed_mean,
+            observed_heat_flux_std=observed_sem,
+            nonlinear_window_stats=summary,
+            saturation_rule=str(saturation_rule),
+            geometry=str(geometry),
+            electron_model=str(electron_model),
+            quasilinear_artifact=quasilinear_artifact,
+            nonlinear_artifact=str(summary_path),
+            notes="; ".join(str(item) for item in note_items if item),
+        )
     source = summary.get(diagnostics_source)
     if source is None:
         raise ValueError(
