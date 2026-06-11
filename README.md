@@ -227,8 +227,9 @@ The current release surface is deliberately scoped:
   the current train/holdout portfolio. The `spectral_envelope_ridge` model now
   passes rank/correlation screening on the expanded admitted ledger, but it
   misses the strict `0.35` uncertainty/model-selection transport gate
-  (`0.377`) and is not a runtime/TOML absolute-flux predictor. Electromagnetic
-  quasilinear calibration remains deferred.
+  (`0.377`). It is a scoped manuscript model-selection candidate, not a
+  runtime/TOML absolute-flux predictor. Electromagnetic quasilinear calibration
+  remains deferred.
 - The `vmec_jax -> booz_xform_jax -> SPECTRAX-GK` path is artifact-bound:
   zero-beta equal-arc geometry parity is claimable for the rows that pass the
   current `mboz=nboz=21` parity matrix, and reduced
