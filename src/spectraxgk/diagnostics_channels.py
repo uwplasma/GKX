@@ -15,6 +15,12 @@ from spectraxgk.linear import LinearCache, LinearParams
 from spectraxgk.terms.operators import shift_axis
 
 
+def _mask_modes(value: jnp.ndarray, active: jnp.ndarray) -> jnp.ndarray:
+    """Zero inactive spectral modes before products or moment reductions."""
+
+    return jnp.where(active, value, jnp.asarray(0, dtype=value.dtype))
+
+
 def _gx_heat_flux_channel_contrib_species(
     G: jnp.ndarray,
     phi: jnp.ndarray,
@@ -34,11 +40,12 @@ def _gx_heat_flux_channel_contrib_species(
         Gs = G
     ns = Gs.shape[0]
     fac = _gx_fac_mask_nonzero(grid, use_dealias=use_dealias)[:, :, None]
+    active = fac != 0.0
     flx = flux_fac[None, None, :]
     ky = grid.ky[:, None, None]
-    vphi = 1.0j * ky * phi
-    vapar = 1.0j * ky * apar
-    vbpar = 1.0j * ky * bpar
+    vphi = _mask_modes(1.0j * ky * phi, active)
+    vapar = _mask_modes(1.0j * ky * apar, active)
+    vbpar = _mask_modes(1.0j * ky * bpar, active)
     Jl, JlB, Jfac = _jl_family(cache)
     sqrt2 = jnp.sqrt(2.0)
     sqrt32 = jnp.sqrt(1.5)
@@ -52,7 +59,7 @@ def _gx_heat_flux_channel_contrib_species(
         Jl_s = Jl[s]
         JlB_s = JlB[s]
         Jfac_s = Jfac[s]
-        G_s = Gs[s]
+        G_s = _mask_modes(Gs[s], active[None, None, ...])
         Nm = G_s.shape[1]
 
         def _get_m(m_idx: int) -> jnp.ndarray:
@@ -105,11 +112,12 @@ def _gx_particle_flux_channel_contrib_species(
         zero = jnp.zeros(zero_shape, dtype=jnp.real(phi).dtype)
         return zero, zero, zero
     fac = _gx_fac_mask_nonzero(grid, use_dealias=use_dealias)[:, :, None]
+    active = fac != 0.0
     flx = flux_fac[None, None, :]
     ky = grid.ky[:, None, None]
-    vphi = 1.0j * ky * phi
-    vapar = 1.0j * ky * apar
-    vbpar = 1.0j * ky * bpar
+    vphi = _mask_modes(1.0j * ky * phi, active)
+    vapar = _mask_modes(1.0j * ky * apar, active)
+    vbpar = _mask_modes(1.0j * ky * bpar, active)
     Jl, JlB, _ = _jl_family(cache)
     dens = _species_array(params.density, ns)
     vth = _species_array(params.vth, ns)
@@ -120,7 +128,7 @@ def _gx_particle_flux_channel_contrib_species(
     for s in range(ns):
         Jl_s = Jl[s]
         JlB_s = JlB[s]
-        G_s = Gs[s]
+        G_s = _mask_modes(Gs[s], active[None, None, ...])
         Nm = G_s.shape[1]
 
         def _get_m(m_idx: int) -> jnp.ndarray:
@@ -172,6 +180,7 @@ def _gx_turbulent_heating_contrib_species(
 
     ns = Gs.shape[0]
     fac = _gx_fac_mask(grid, use_dealias=use_dealias)[:, :, None]
+    active = fac != 0.0
     vol = vol_fac[None, None, :]
     Jl, JlB, _ = _jl_family(cache)
     dens = _species_array(params.density, ns)
@@ -182,16 +191,22 @@ def _gx_turbulent_heating_contrib_species(
     dt_arr = jnp.asarray(dt, dtype=real_dtype)
     dt_safe = jnp.where(dt_arr == 0.0, jnp.asarray(jnp.inf, dtype=real_dtype), dt_arr)
 
-    dphidt = (phi - phi_old) / dt_safe
-    dadt = (apar - apar_old) / dt_safe
-    dbdt = (bpar - bpar_old) / dt_safe
+    phi_masked = _mask_modes(phi, active)
+    apar_masked = _mask_modes(apar, active)
+    bpar_masked = _mask_modes(bpar, active)
+    phi_old_masked = _mask_modes(phi_old, active)
+    apar_old_masked = _mask_modes(apar_old, active)
+    bpar_old_masked = _mask_modes(bpar_old, active)
+    dphidt = (phi_masked - phi_old_masked) / dt_safe
+    dadt = (apar_masked - apar_old_masked) / dt_safe
+    dbdt = (bpar_masked - bpar_old_masked) / dt_safe
 
     species_contrib = []
     for s in range(ns):
         Jl_s = Jl[s]
         JlB_s = JlB[s]
-        G_s = Gs[s]
-        G_prev_s = G_old_s[s]
+        G_s = _mask_modes(Gs[s], active[None, None, ...])
+        G_prev_s = _mask_modes(G_old_s[s], active[None, None, ...])
 
         def _get_m(source: jnp.ndarray, m_idx: int) -> jnp.ndarray:
             if source.shape[1] <= m_idx:
@@ -204,11 +219,11 @@ def _gx_turbulent_heating_contrib_species(
         G1_old = _get_m(G_prev_s, 1)
 
         H0_old = (
-            G0_old + zt[s] * Jl_s * phi_old[None, ...] + JlB_s * bpar_old[None, ...]
+            G0_old + zt[s] * Jl_s * phi_old_masked[None, ...] + JlB_s * bpar_old_masked[None, ...]
         )
-        H1_old = G1_old - zt[s] * vth[s] * Jl_s * apar_old[None, ...]
-        H0 = G0 + zt[s] * Jl_s * phi[None, ...] + JlB_s * bpar[None, ...]
-        H1 = G1 - zt[s] * vth[s] * Jl_s * apar[None, ...]
+        H1_old = G1_old - zt[s] * vth[s] * Jl_s * apar_old_masked[None, ...]
+        H0 = G0 + zt[s] * Jl_s * phi_masked[None, ...] + JlB_s * bpar_masked[None, ...]
+        H1 = G1 - zt[s] * vth[s] * Jl_s * apar_masked[None, ...]
 
         n_bar_old = jnp.sum(Jl_s * H0_old, axis=0)
         u_bar_old = jnp.sum(Jl_s * H1_old, axis=0)
@@ -227,9 +242,9 @@ def _gx_turbulent_heating_contrib_species(
             + tz[s] * jnp.conj(dbdt) * uB_bar_old
         )
         chi_dhdt = (
-            jnp.conj(phi_old) * dn_bardt
-            - vth[s] * jnp.conj(apar_old) * du_bardt
-            + tz[s] * jnp.conj(bpar_old) * duB_bardt
+            jnp.conj(phi_old_masked) * dn_bardt
+            - vth[s] * jnp.conj(apar_old_masked) * du_bardt
+            + tz[s] * jnp.conj(bpar_old_masked) * duB_bardt
         )
         species_contrib.append(
             0.5 * (h_dchidt.real - chi_dhdt.real) * dens[s] * fac * vol

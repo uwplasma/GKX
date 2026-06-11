@@ -76,6 +76,13 @@ __all__ = [
 ]
 
 
+def _masked_abs2(value: jnp.ndarray, active: jnp.ndarray) -> jnp.ndarray:
+    """Return ``abs(value)**2`` after zeroing inactive spectral modes."""
+
+    zero = jnp.asarray(0, dtype=value.dtype)
+    return jnp.abs(jnp.where(active, value, zero)) ** 2
+
+
 def gx_Wg(
     G: jnp.ndarray,
     grid: SpectralGrid,
@@ -99,8 +106,7 @@ def gx_Wg(
     nt = _species_array(params.density, ns) * _species_array(params.temp, ns)
     nt = nt[:, None, None, None, None, None]
 
-    mask = fac != 0.0
-    g2 = jnp.where(mask, jnp.abs(jnp.where(mask, Gs, 0.0)) ** 2, 0.0)
+    g2 = _masked_abs2(Gs, fac != 0.0)
     return 0.5 * jnp.sum(g2 * fac * vol * nt)
 
 
@@ -147,8 +153,9 @@ def gx_Wphi_krehm(
     for rho2_s in rho2:
         b = 0.5 * kperp2 * rho2_s
         gam0 = gamma0(b)
+        active = fac[:, :, None] != 0.0
         weight = (1.0 - gam0)[:, :, None] * fac[:, :, None]
-        contrib = 0.5 * (2.0 / rho2_s) * jnp.abs(phi) ** 2 * weight * vol
+        contrib = 0.5 * (2.0 / rho2_s) * _masked_abs2(phi, active) * weight * vol
         wphi = wphi + jnp.sum(contrib)
     return wphi * jnp.asarray(wphi_scale, dtype=jnp.real(phi).dtype)
 
@@ -172,7 +179,8 @@ def gx_Wphi(
     rho2 = rho * rho
 
     wphi = jnp.asarray(0.0, dtype=jnp.real(phi).dtype)
-    phi2 = jnp.abs(phi) ** 2
+    active = fac[:, :, None] != 0.0
+    phi2 = _masked_abs2(phi, active)
     for rho2_s in rho2:
         b = cache.kperp2 * rho2_s
         contrib = 0.5 * phi2 * (1.0 - gamma0(b)) * weight
@@ -197,7 +205,7 @@ def gx_Wapar_krehm(
     kperp2 = kx * kx + ky * ky
     fac = _gx_fac_mask(grid, use_dealias=use_dealias)
     weight = fac[:, :, None]
-    contrib = 0.5 * kperp2[:, :, None] * jnp.abs(apar) ** 2 * weight
+    contrib = 0.5 * kperp2[:, :, None] * _masked_abs2(apar, weight != 0.0) * weight
     return jnp.sum(contrib)
 
 
@@ -213,7 +221,7 @@ def gx_Wapar(
     fac = _gx_fac_mask_cached(cache, use_dealias=use_dealias)
     weight = fac[:, :, None] * vol_fac[None, None, :]
     bmag2 = cache.bmag[None, None, :] ** 2 if cache.kperp2_bmag else 1.0
-    contrib = 0.5 * jnp.abs(apar) ** 2 * cache.kperp2 * bmag2 * weight
+    contrib = 0.5 * _masked_abs2(apar, weight != 0.0) * cache.kperp2 * bmag2 * weight
     return jnp.sum(contrib)
 
 
@@ -529,7 +537,8 @@ def gx_phi2_resolved(
     """Return GX-style resolved ``Phi2`` reductions from a single field state."""
 
     fac = _gx_fac_mask(grid, use_dealias=use_dealias)
-    contrib = jnp.abs(phi) ** 2 * fac[:, :, None] * vol_fac[None, None, :]
+    active = fac[:, :, None] != 0.0
+    contrib = _masked_abs2(phi, active) * fac[:, :, None] * vol_fac[None, None, :]
     phi2_kxt, phi2_kyt, phi2_kxkyt, phi2_zt, phi2_t = _reduce_scalar_kykxz(contrib)
     zonal_mask = (jnp.asarray(grid.ky) == 0.0).astype(contrib.dtype)[:, None, None]
     zonal = contrib * zonal_mask
@@ -592,8 +601,7 @@ def gx_Wg_resolved(
         Gs = G
     ns = Gs.shape[0]
     nt = _species_array(params.density, ns) * _species_array(params.temp, ns)
-    mask = fac != 0.0
-    g2 = jnp.where(mask, jnp.abs(jnp.where(mask, Gs, 0.0)) ** 2, 0.0)
+    g2 = _masked_abs2(Gs, fac != 0.0)
     contrib = 0.5 * g2 * fac * vol * nt[:, None, None, None, None, None]
     Wg_kxst = jnp.sum(contrib, axis=(1, 2, 3, 5))
     Wg_kyst = jnp.sum(contrib, axis=(1, 2, 4, 5))
@@ -620,7 +628,8 @@ def gx_Wphi_resolved(
     rho = jnp.asarray(params.rho)
     if rho.ndim == 0:
         rho = rho[None]
-    phi2 = jnp.abs(phi) ** 2
+    active = fac[:, :, None] != 0.0
+    phi2 = _masked_abs2(phi, active)
     contrib_species = []
     scale = jnp.asarray(wphi_scale, dtype=jnp.real(phi).dtype)
     for rho2_s in rho * rho:
@@ -643,7 +652,7 @@ def gx_Wapar_resolved(
     fac = _gx_fac_mask_cached(cache, use_dealias=use_dealias)
     weight = fac[:, :, None] * vol_fac[None, None, :]
     bmag2 = cache.bmag[None, None, :] ** 2 if cache.kperp2_bmag else 1.0
-    total = 0.5 * jnp.abs(apar) ** 2 * cache.kperp2 * bmag2 * weight
+    total = 0.5 * _masked_abs2(apar, weight != 0.0) * cache.kperp2 * bmag2 * weight
     ns = max(int(nspecies), 1)
     contrib = jnp.broadcast_to(total[None, ...] / float(ns), (ns,) + total.shape)
     return _reduce_species_kykxz(contrib)
