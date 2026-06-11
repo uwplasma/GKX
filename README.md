@@ -362,6 +362,12 @@ scoped high-grid holdout under coarse-grid exclusion, not a full
 
 ![SPECTRAX-GK external-VMEC next holdout runbook](docs/_static/external_vmec_next_holdout_runbook.png)
 
+The regenerated runbook is intentionally blocked: no unchanged same-family or
+recently failed-family replay currently qualifies as a new independent holdout.
+The nearest tracked gap is the ITERModel `t=250` high-grid convergence
+near-miss, and any next launch needs a materially new geometry or protocol plus
+a passed post-transient transport-window gate before it can enter calibration.
+
 The completed CTH-like modified-protocol harvest is now a scoped high-grid
 transport holdout, not a normal full-ladder convergence claim. The full
 `n48/n64/n80` grid gates fail at every tracked horizon because the coarse
