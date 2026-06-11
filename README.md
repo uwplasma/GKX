@@ -308,6 +308,13 @@ remaining claim is rank/correlation screening, not absolute-flux prediction.
 
 ![SPECTRAX-GK quasilinear candidate uncertainty gate](docs/_static/quasilinear_candidate_uncertainty.png)
 
+The regularization audit below sweeps the ridge strength for the same
+spectral-envelope candidate. It is a guardrail against over-tuning: the best
+setting remains `lambda = 0.3`, with mean relative error `0.377 > 0.35`, so
+regularization choice does not rescue absolute-flux promotion.
+
+![SPECTRAX-GK quasilinear candidate regularization audit](docs/_static/quasilinear_candidate_regularization_sweep.png)
+
 The stellarator-specific summary below compares the admitted HSX and W7-X
 nonlinear windows with the current quasilinear candidates, while keeping QA and
 QH explicitly scoped: QA has matched nonlinear-audit evidence only, and QH is
