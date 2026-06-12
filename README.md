@@ -940,9 +940,10 @@ separate communication/layout design. The current profiler-backed artifacts are
 and `docs/_static/nonlinear_sharding_profile_office_gpu.json` for the two-GPU
 office identity gate. Treat both as engineering gates, not as runtime speedup
 claims. The matched large strong-scaling sweep in `docs/performance.rst`
-confirms this conservative stance: whole-state nonlinear sharding is
-identity-correct, but only modestly useful on logical CPUs and slower on two RTX
-A4000 GPUs for the current decomposition. Production parallelization should
+confirms this conservative stance: older whole-state nonlinear sharding
+artifacts were identity-correct but did not produce a production CPU/GPU speedup
+claim, and the current CPU profiler fails closed before unsafe multi-device
+FFT-layout routes. Production parallelization should
 therefore focus on independent `k_y` scans, quasilinear studies, sensitivity
 sweeps, and UQ/ensemble batching until a communication-aware nonlinear
 decomposition has its own workload-specific identity, transport-window, and
