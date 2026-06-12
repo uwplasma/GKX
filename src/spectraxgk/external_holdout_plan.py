@@ -68,7 +68,7 @@ def external_vmec_family(case: str, source: str = "") -> str:
     """Return a stable family label for an external-VMEC candidate."""
 
     text = f"{case} {source}".lower()
-    if "updown" in text or "up-down" in text:
+    if "updown" in text or "up-down" in text or "up_down" in text:
         return "updown_asym_external_vmec"
     if "itermodel" in text:
         return "itermodel_external_vmec"

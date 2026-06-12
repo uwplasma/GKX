@@ -376,14 +376,16 @@ scoped high-grid holdout under coarse-grid exclusion, not a full
 
 ![SPECTRAX-GK external-VMEC next holdout runbook](docs/_static/external_vmec_next_holdout_runbook.png)
 
-The external-VMEC runbook now fails closed after the corrected QH warm-start
-audit. The staged `n64/n80`, `dt=0.04` QH ladder reached `t=250`, `450`, and
-`700`, but the long-window high-grid disagreements stayed above the relaxed
-20% gate (`t700`: `0.349` common-window, `0.367` least-window). QH is therefore
-negative grid-convergence evidence, not a quasilinear calibration holdout. The
-next nonlinear holdout requires a genuinely independent VMEC candidate or a
-materially changed higher-resolution protocol before any new launch command is
-written.
+The external-VMEC runbook remains fail-closed after the corrected QH
+warm-start audit: the staged `n64/n80`, `dt=0.04` QH ladder reached `t=250`,
+`450`, and `700`, but the long-window high-grid disagreements stayed above the
+relaxed 20% gate (`t700`: `0.349` common-window, `0.367` least-window). QH is
+negative grid-convergence evidence, not a quasilinear calibration holdout. A
+new bounded linear screen identified the independent Solovev VMEC candidate
+(`gamma=0.0944` at `ky=0.2857`), so the runbook now writes the Solovev
+nonlinear launch plan. That is a launch contract only: Solovev is not admitted
+to quasilinear calibration unless its long-window nonlinear grid, replicate,
+and recalibration gates pass.
 
 The completed CTH-like modified-protocol harvest is now a scoped high-grid
 transport holdout, not a normal full-ladder convergence claim. The full
