@@ -224,12 +224,14 @@ The current release surface is deliberately scoped:
   validation, nonlinear-optimization, or speedup claim.
 - Electrostatic quasilinear weights and spectra are validated diagnostics. The
   one-constant and simple saturation-rule absolute-flux models are rejected on
-  the current train/holdout portfolio. After adding the shaped-pressure
-  external-VMEC holdout, `spectral_envelope_ridge` remains the best reduced
-  candidate but fails both strict transport (`0.424 > 0.35`) and rank/screening
-  gates. It is a scoped manuscript model-development diagnostic, not a
-  runtime/TOML absolute-flux predictor. Electromagnetic quasilinear calibration
-  remains deferred.
+  the current 11-case train/holdout portfolio. After admitting the replicated
+  QP external-VMEC holdout, the one-constant positive-growth mixing-length
+  model still fails the held-out transport gate (`3.13 > 0.35`). The richer
+  `spectral_envelope_ridge` candidate is the best reduced model-development
+  diagnostic but still fails strict transport (`0.400 > 0.35`) and
+  rank/screening gates. SPECTRAX-GK therefore ships QL diagnostics and guarded
+  model-development figures, not a runtime/TOML universal absolute-flux
+  predictor. Electromagnetic quasilinear calibration remains deferred.
 - The `vmec_jax -> booz_xform_jax -> SPECTRAX-GK` path is artifact-bound:
   zero-beta equal-arc geometry parity is claimable for the rows that pass the
   current `mboz=nboz=21` parity matrix, and reduced
@@ -281,30 +283,33 @@ The first Cyclone nonlinear audit is tracked in `docs/quasilinear.rst` and is
 kept at `training_or_audit_only` until a held-out calibration set passes.
 
 The manuscript-facing quasilinear calibration panel now uses the full admitted
-electrostatic portfolio: two training geometries and eight held-out nonlinear
+electrostatic portfolio: two training geometries and nine held-out nonlinear
 windows spanning tokamak, stellarator, and external-VMEC cases. The newest
-entry is the shaped-pressure external-VMEC window admitted only under the
-documented high-grid policy below.
+admitted entry is the replicated QP external-VMEC window; the QI candidate is
+finite but remains excluded because its `n48/n64` heat-flux means differ by
+about `38%` at `t=250`, above the `15%` grid/window gate.
 
 ![SPECTRAX-GK quasilinear stellarator train/holdout calibration](docs/_static/quasilinear_stellarator_train_holdout.png)
 
 The current training set is Cyclone plus the external-VMEC ITERModel case; the
 holdouts are Cyclone Miller, HSX, W7-X, D-shaped VMEC, up-down asymmetric VMEC,
-circular VMEC, CTH-like VMEC, and shaped-pressure VMEC. This is a stronger
-transfer test than the earlier Cyclone-only fit: nonlinear input validation
-passes, but the fitted one-constant mixing-length model still fails the held-out
-absolute-flux gate with mean relative error about `3.42`. The shaped-pressure
-holdout is the current worst transfer case, so SPECTRAX-GK does not promote any
-simple or user-facing absolute quasilinear flux predictor from that legacy
-family.
+circular VMEC, CTH-like VMEC, shaped-pressure VMEC, and QP VMEC. This is a
+stronger transfer test than the earlier Cyclone-only fit: nonlinear input
+validation passes, but the fitted one-constant mixing-length model still fails
+the held-out absolute-flux gate with mean relative error about `3.13`. The
+simple-rule sweep is also negative: linear-weight is the least-bad simple rule
+at `2.56`, positive-growth mixing length is `3.13`, absolute-growth mixing
+length is `4.05`, and even the training-mean null is `0.98`. SPECTRAX-GK does
+not promote any simple or user-facing absolute QL flux predictor from this
+legacy family.
 
 The richer held-out candidate below is the reduced `spectral_envelope_ridge`
 model. It uses only two linear-spectrum envelope features. After adding the
 shaped-pressure high-grid holdout, its leave-one-geometry-out mean relative
-error is about `0.424`, with interval coverage `8/10`. This is above the
-`0.35` transport gate and the rank/correlation screening gates are no longer
-accepted. The useful remaining claim is model development, not absolute-flux
-prediction.
+error is about `0.400`, with interval coverage `9/11`. This is above the
+`0.35` transport gate and the rank/correlation screening gates are not
+accepted. The useful remaining claim is model development and hypothesis
+generation for better saturation physics, not absolute-flux prediction.
 
 ![SPECTRAX-GK quasilinear candidate uncertainty gate](docs/_static/quasilinear_candidate_uncertainty.png)
 
@@ -319,7 +324,7 @@ independent nonlinear holdouts, not threshold loosening.
 
 The regularization audit below sweeps the ridge strength for the same
 spectral-envelope candidate. It is a guardrail against over-tuning: the best
-setting is now `lambda = 0.7`, with mean relative error `0.423 > 0.35`, so
+setting is now `lambda = 0`, with mean relative error `0.393 > 0.35`, so
 regularization choice does not rescue absolute-flux promotion.
 
 ![SPECTRAX-GK quasilinear candidate regularization audit](docs/_static/quasilinear_candidate_regularization_sweep.png)
@@ -336,25 +341,24 @@ matched, converged nonlinear holdouts before universal stellarator-flux claims.
 ![SPECTRAX-GK quasilinear stellarator usefulness summary](docs/_static/quasilinear_stellarator_usefulness.png)
 
 The companion screening-skill panel separates correlation/ranking usefulness
-from absolute-flux promotion. After adding the shaped-pressure external-VMEC
-holdout, the 10-case portfolio is harder: `spectral_envelope_ridge` remains
-the best screened model, but it no longer passes the full or held-out
-rank/correlation gates (`Spearman ~0.66` full, `~0.60` held-out; pairwise
-order accuracy `~0.71` full, `~0.68` held-out). The mean-error gate remains
+from absolute-flux promotion. On the 11-case portfolio,
+`spectral_envelope_ridge` remains the best screened model, but it does not pass
+the full or held-out rank/correlation gates (`Spearman ~0.664` full, `~0.650`
+held-out; pairwise order accuracy `~0.727` full, `~0.722` held-out; all below
+the `0.75` gates). The mean-error gate remains
 empty and absolute-flux runtime promotion remains `none`.
 
 ![SPECTRAX-GK quasilinear screening skill summary](docs/_static/quasilinear_screening_skill.png)
 
 The companion holdout-gap report makes the remaining promotion blockers
-explicit instead of hiding them in the calibration plot. Eight holdouts are
+explicit instead of hiding them in the calibration plot. Nine holdouts are
 admitted, but both the strict model-selection gate and the current absolute
 heat-flux calibration remain failed. The one-constant/simple rules miss the
-aggregate holdout gate (`3.42 > 0.35` for positive-growth mixing length), and
+aggregate holdout gate (`3.13 > 0.35` for positive-growth mixing length), and
 the best spectral-envelope candidate still misses the uncertainty transport
-gate (`0.424 > 0.35`). External-VMEC coverage is now stronger, but absolute
-promotion still needs at least one more independent converged holdout and,
-more importantly, a better saturation model that passes held-out transport and
-screening gates.
+gate (`0.400 > 0.35`). The independent-holdout-count blocker is closed; the
+remaining blockers are transport error and screening/ranking skill, so the next
+step is better saturation physics rather than threshold loosening.
 
 ![SPECTRAX-GK quasilinear holdout gap report](docs/_static/quasilinear_holdout_gap_report.png)
 
