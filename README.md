@@ -948,6 +948,12 @@ sweeps, and UQ/ensemble batching until a communication-aware nonlinear
 decomposition has its own workload-specific identity, transport-window, and
 matched profiler evidence.
 
+On current JAX/XLA CPU backends, the nonlinear whole-state `pjit` profiler
+skips active multi-device CPU sharding by default because FFT layout/collective
+failures can abort the process before Python can catch the error. CPU
+forced-device runs remain useful for independent-work and non-FFT-axis checks;
+they are not used as production nonlinear domain-speedup evidence.
+
 For UQ and optimization portfolios, `spectraxgk.independent_ensemble_provenance_gate`
 is the production identity/provenance check. It runs serial and
 `independent_map` ensemble members, verifies result ordering and numerical
