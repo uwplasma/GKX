@@ -1753,6 +1753,68 @@ def nonlinear_spectral_integrator_identity_gate(
     )
 
 
+def integrate_logical_decomposed_nonlinear_spectral(
+    state_hat: jax.Array,
+    *,
+    y_chunks: tuple[int, ...] = (3, 3),
+    x_chunks: tuple[int, ...] = (2, 2),
+    dt: float = 0.005,
+    steps: int = 4,
+    atol: float = 5.0e-6,
+    rtol: float = 5.0e-6,
+) -> tuple[jax.Array, NonlinearSpectralIntegratorIdentityReport]:
+    """Integrate with the logical decomposed spectral route after identity gating.
+
+    This is the callable route behind the nonlinear spectral integrator identity
+    artifact.  Each step requests the logical tiled RHS; if the local RHS gate
+    fails, that step uses the serial RHS instead.  The returned report is the
+    independent serial-vs-routed identity gate for the full fixed-step window.
+    Passing this function's report is required before timing the route, but it
+    is still not a production distributed-FFT implementation or speedup claim.
+    """
+
+    if int(steps) < 1:
+        raise ValueError("steps must be at least one")
+    state_shape = _validate_spectral_state_shape(tuple(state_hat.shape))
+    _nl, _nm, ny, nx, _nz = state_shape
+    y_chunks = _validate_chunks(ny, y_chunks, name="y_chunks")
+    x_chunks = _validate_chunks(nx, x_chunks, name="x_chunks")
+
+    routed_state = state_hat
+    dt_array = jnp.asarray(float(dt), dtype=jnp.real(state_hat).dtype)
+    for _ in range(int(steps)):
+        logical_rhs, rhs_report = logical_decomposed_nonlinear_spectral_rhs(
+            routed_state,
+            y_chunks=y_chunks,
+            x_chunks=x_chunks,
+            atol=atol,
+            rtol=rtol,
+        )
+        if rhs_report.decomposed_path_enabled:
+            step_rhs = logical_rhs
+        else:
+            _field, _bracket, step_rhs = _serial_nonlinear_spectral_rhs(routed_state)
+        routed_state = routed_state + dt_array * step_rhs
+
+    report = nonlinear_spectral_integrator_identity_gate(
+        state_hat,
+        y_chunks=y_chunks,
+        x_chunks=x_chunks,
+        dt=dt,
+        steps=steps,
+        atol=atol,
+        rtol=rtol,
+    )
+    if report.decomposed_path_enabled:
+        return routed_state, report
+
+    serial_state = state_hat
+    for _ in range(int(steps)):
+        _field, _bracket, serial_rhs = _serial_nonlinear_spectral_rhs(serial_state)
+        serial_state = serial_state + dt_array * serial_rhs
+    return serial_state, report
+
+
 def nonlinear_parallel_strategies() -> tuple[NonlinearParallelStrategy, ...]:
     """Return all nonlinear parallelization strategy contracts."""
 
@@ -1802,6 +1864,7 @@ __all__ = [
     "classify_nonlinear_parallel_strategy",
     "deterministic_nonlinear_domain_state",
     "deterministic_nonlinear_spectral_state",
+    "integrate_logical_decomposed_nonlinear_spectral",
     "nonlinear_domain_identity_report",
     "nonlinear_domain_parallel_identity_gate",
     "nonlinear_domain_transport_window_identity_gate",
