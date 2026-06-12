@@ -371,11 +371,13 @@ scoped high-grid holdout under coarse-grid exclusion, not a full
 
 ![SPECTRAX-GK external-VMEC next holdout runbook](docs/_static/external_vmec_next_holdout_runbook.png)
 
-The regenerated runbook is intentionally blocked: no unchanged same-family or
-recently failed-family replay currently qualifies as a new independent holdout.
-The nearest tracked gap is the ITERModel `t=250` high-grid convergence
-near-miss, and any next launch needs a materially new geometry or protocol plus
-a passed post-transient transport-window gate before it can enter calibration.
+The regenerated runbook now selects the `nfp4_QH_warm_start` VMEC candidate
+from `vmec_jax` as a modified-protocol QH launch plan. The bounded linear
+screen finds a weak but finite branch (`gamma=0.02295` at `ky=0.4762`), so the
+next nonlinear audit is explicitly scoped to `n64/n80`, `dt=0.04`, and
+`t=250,450,700`. This is not a transport validation and does not admit QH into
+the quasilinear calibration: previous QH nonlinear gates remain excluded until
+the fresh high-grid, time-horizon, and replicate gates pass.
 
 The completed CTH-like modified-protocol harvest is now a scoped high-grid
 transport holdout, not a normal full-ladder convergence claim. The full
