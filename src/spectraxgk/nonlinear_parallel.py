@@ -270,6 +270,8 @@ class NonlinearSpectralRHSIdentityReport:
     state_shape: tuple[int, int, int, int, int]
     y_chunks: tuple[int, ...]
     x_chunks: tuple[int, ...]
+    y_offsets: tuple[int, ...]
+    x_offsets: tuple[int, ...]
     tile_bounds: tuple[tuple[int, int, int, int], ...]
     atol: float
     rtol: float
@@ -285,11 +287,50 @@ class NonlinearSpectralRHSIdentityReport:
     decomposed_path_enabled: bool
     claim_scope: str
     blocked_reasons: tuple[str, ...] = ()
-    y_offsets: tuple[int, ...] = ()
-    x_offsets: tuple[int, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-friendly representation of the RHS identity report."""
+
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class NonlinearSpectralIntegratorIdentityReport:
+    """Multi-step identity report for logical-shard nonlinear spectral routing."""
+
+    state_shape: tuple[int, int, int, int, int]
+    y_chunks: tuple[int, ...]
+    x_chunks: tuple[int, ...]
+    y_offsets: tuple[int, ...]
+    x_offsets: tuple[int, ...]
+    tile_bounds: tuple[tuple[int, int, int, int], ...]
+    steps: int
+    dt: float
+    atol: float
+    rtol: float
+    final_state_max_abs_error: float
+    final_state_max_rel_error: float
+    free_energy_trace_max_abs_error: float
+    free_energy_trace_max_rel_error: float
+    field_energy_trace_max_abs_error: float
+    field_energy_trace_max_rel_error: float
+    flux_proxy_trace_max_abs_error: float
+    flux_proxy_trace_max_rel_error: float
+    serial_free_energy_drift: float
+    logical_free_energy_drift: float
+    identity_passed: bool
+    decomposed_path_enabled: bool
+    claim_scope: str
+    blocked_reasons: tuple[str, ...] = ()
+    serial_free_energy_trace: tuple[float, ...] = ()
+    logical_free_energy_trace: tuple[float, ...] = ()
+    serial_field_energy_trace: tuple[float, ...] = ()
+    logical_field_energy_trace: tuple[float, ...] = ()
+    serial_flux_proxy_trace: tuple[float, ...] = ()
+    logical_flux_proxy_trace: tuple[float, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-friendly representation of the integrator report."""
 
         return asdict(self)
 
@@ -408,6 +449,7 @@ _STRATEGIES: tuple[NonlinearParallelStrategy, ...] = (
             "distributed_fft_nonlinear_bracket_identity",
             "distributed_fft_field_solve_identity",
             "logical_sharded_nonlinear_spectral_rhs_identity",
+            "logical_sharded_nonlinear_spectral_integrator_identity",
         ),
         physics_gates=("fft_axis_nonlinear_window_physics_gate",),
         profiler_gates=("distributed_fft_scaling_profile",),
@@ -1062,6 +1104,13 @@ def _spectral_rhs_from_bracket(bracket_hat: jax.Array) -> jax.Array:
     return -bracket_hat
 
 
+def _serial_nonlinear_spectral_rhs(state_hat: jax.Array) -> tuple[jax.Array, jax.Array, jax.Array]:
+    field = _field_from_state(state_hat)
+    bracket = _spectral_bracket(state_hat, field)
+    rhs = _spectral_rhs_from_bracket(bracket)
+    return field, bracket, rhs
+
+
 def _max_abs_rel_error(
     reference: jax.Array,
     candidate: jax.Array,
@@ -1479,9 +1528,7 @@ def nonlinear_spectral_rhs_identity_gate(
     y_chunks = _validate_chunks(ny, y_chunks, name="y_chunks")
     x_chunks = _validate_chunks(nx, x_chunks, name="x_chunks")
 
-    serial_field = _field_from_state(state_hat)
-    serial_bracket = _spectral_bracket(state_hat, serial_field)
-    serial_rhs = _spectral_rhs_from_bracket(serial_bracket)
+    serial_field, serial_bracket, serial_rhs = _serial_nonlinear_spectral_rhs(state_hat)
     (
         logical_reconstruction,
         logical_field,
@@ -1508,6 +1555,201 @@ def nonlinear_spectral_rhs_identity_gate(
         tile_bounds=_spectral_tile_bounds(y_chunks, x_chunks),
         atol=atol,
         rtol=rtol,
+    )
+
+
+def logical_decomposed_nonlinear_spectral_rhs(
+    state_hat: jax.Array,
+    *,
+    y_chunks: tuple[int, ...] = (3, 3),
+    x_chunks: tuple[int, ...] = (2, 2),
+    atol: float = 5.0e-6,
+    rtol: float = 5.0e-6,
+) -> tuple[jax.Array, NonlinearSpectralRHSIdentityReport]:
+    """Return the logical-shard nonlinear spectral RHS after identity gating.
+
+    The returned RHS uses the logical decomposed route only when it is exactly
+    equivalent to the serial reference under the provided tolerances. Otherwise
+    the serial RHS is returned and ``decomposed_path_enabled`` is false. This is
+    still a local diagnostic route, not a distributed runtime implementation.
+    """
+
+    state_shape = _validate_spectral_state_shape(tuple(state_hat.shape))
+    _nl, _nm, ny, nx, _nz = state_shape
+    y_chunks = _validate_chunks(ny, y_chunks, name="y_chunks")
+    x_chunks = _validate_chunks(nx, x_chunks, name="x_chunks")
+    serial_field, serial_bracket, serial_rhs = _serial_nonlinear_spectral_rhs(state_hat)
+    (
+        logical_reconstruction,
+        logical_field,
+        logical_bracket,
+        logical_rhs,
+    ) = _logical_sharded_nonlinear_spectral_rhs(
+        state_hat,
+        y_chunks=y_chunks,
+        x_chunks=x_chunks,
+    )
+    report = nonlinear_spectral_rhs_identity_report(
+        state_hat,
+        logical_reconstruction,
+        serial_field,
+        logical_field,
+        serial_bracket,
+        logical_bracket,
+        serial_rhs,
+        logical_rhs,
+        state_shape=state_shape,
+        y_chunks=y_chunks,
+        x_chunks=x_chunks,
+        tile_bounds=_spectral_tile_bounds(y_chunks, x_chunks),
+        atol=atol,
+        rtol=rtol,
+    )
+    gated_rhs = logical_rhs if report.decomposed_path_enabled else serial_rhs
+    return gated_rhs, report
+
+
+def _spectral_integrator_observables(state_hat: jax.Array) -> tuple[float, float, float]:
+    field = _field_from_state(state_hat)
+    free_energy = float(jnp.sum(jnp.abs(state_hat) ** 2))
+    field_energy = float(jnp.sum(jnp.abs(field) ** 2))
+    bracket = _spectral_bracket(state_hat, field)
+    flux_proxy = float(jnp.mean(jnp.abs(_spectral_rhs_from_bracket(bracket))))
+    return free_energy, field_energy, flux_proxy
+
+
+def _append_spectral_observables(
+    traces: dict[str, list[float]],
+    state_hat: jax.Array,
+) -> None:
+    free_energy, field_energy, flux_proxy = _spectral_integrator_observables(state_hat)
+    traces["free_energy"].append(free_energy)
+    traces["field_energy"].append(field_energy)
+    traces["flux_proxy"].append(flux_proxy)
+
+
+def nonlinear_spectral_integrator_identity_gate(
+    state_hat: jax.Array,
+    *,
+    y_chunks: tuple[int, ...] = (3, 3),
+    x_chunks: tuple[int, ...] = (2, 2),
+    dt: float = 0.005,
+    steps: int = 4,
+    atol: float = 5.0e-6,
+    rtol: float = 5.0e-6,
+) -> NonlinearSpectralIntegratorIdentityReport:
+    """Validate serial-vs-logical-shard nonlinear spectral integration.
+
+    This gate compares a fixed-step explicit-Euler micro-integration using the
+    same nonlinear spectral RHS on serial and logical tiled routes. It verifies
+    final-state identity and per-step free-energy, field-energy, and flux-proxy
+    traces. Passing this gate is necessary but not sufficient for production
+    nonlinear domain parallelization.
+    """
+
+    if int(steps) < 1:
+        raise ValueError("steps must be at least one")
+    state_shape = _validate_spectral_state_shape(tuple(state_hat.shape))
+    _nl, _nm, ny, nx, _nz = state_shape
+    y_chunks = _validate_chunks(ny, y_chunks, name="y_chunks")
+    x_chunks = _validate_chunks(nx, x_chunks, name="x_chunks")
+
+    serial_state = state_hat
+    logical_state = state_hat
+    serial_traces: dict[str, list[float]] = {
+        "free_energy": [],
+        "field_energy": [],
+        "flux_proxy": [],
+    }
+    logical_traces: dict[str, list[float]] = {
+        "free_energy": [],
+        "field_energy": [],
+        "flux_proxy": [],
+    }
+    _append_spectral_observables(serial_traces, serial_state)
+    _append_spectral_observables(logical_traces, logical_state)
+    dt_array = jnp.asarray(float(dt), dtype=jnp.real(state_hat).dtype)
+    blocked_reasons: list[str] = []
+
+    for _ in range(int(steps)):
+        _serial_field, _serial_bracket, serial_rhs = _serial_nonlinear_spectral_rhs(serial_state)
+        logical_rhs, rhs_report = logical_decomposed_nonlinear_spectral_rhs(
+            logical_state,
+            y_chunks=y_chunks,
+            x_chunks=x_chunks,
+            atol=atol,
+            rtol=rtol,
+        )
+        blocked_reasons.extend(rhs_report.blocked_reasons)
+        if not rhs_report.identity_passed:
+            blocked_reasons.append("per_step_rhs_identity_failed")
+        serial_state = serial_state + dt_array * serial_rhs
+        logical_state = logical_state + dt_array * logical_rhs
+        _append_spectral_observables(serial_traces, serial_state)
+        _append_spectral_observables(logical_traces, logical_state)
+
+    state_abs, state_rel = _max_abs_rel_error(serial_state, logical_state, atol=atol)
+    serial_free = tuple(serial_traces["free_energy"])
+    logical_free = tuple(logical_traces["free_energy"])
+    serial_field_energy = tuple(serial_traces["field_energy"])
+    logical_field_energy = tuple(logical_traces["field_energy"])
+    serial_flux = tuple(serial_traces["flux_proxy"])
+    logical_flux = tuple(logical_traces["flux_proxy"])
+    free_abs, free_rel = _relative_trace_error(serial_free, logical_free, floor=atol)
+    field_abs, field_rel = _relative_trace_error(
+        serial_field_energy,
+        logical_field_energy,
+        floor=atol,
+    )
+    flux_abs, flux_rel = _relative_trace_error(serial_flux, logical_flux, floor=atol)
+    unique_blockers = tuple(sorted(set(blocked_reasons)))
+    identity_passed = bool(
+        not unique_blockers
+        and state_abs <= float(atol)
+        and state_rel <= float(rtol)
+        and free_abs <= float(atol)
+        and free_rel <= float(rtol)
+        and field_abs <= float(atol)
+        and field_rel <= float(rtol)
+        and flux_abs <= float(atol)
+        and flux_rel <= float(rtol)
+    )
+    return NonlinearSpectralIntegratorIdentityReport(
+        state_shape=state_shape,
+        y_chunks=y_chunks,
+        x_chunks=x_chunks,
+        y_offsets=_chunk_offsets(y_chunks),
+        x_offsets=_chunk_offsets(x_chunks),
+        tile_bounds=_spectral_tile_bounds(y_chunks, x_chunks),
+        steps=int(steps),
+        dt=float(dt),
+        atol=float(atol),
+        rtol=float(rtol),
+        final_state_max_abs_error=state_abs,
+        final_state_max_rel_error=state_rel,
+        free_energy_trace_max_abs_error=free_abs,
+        free_energy_trace_max_rel_error=free_rel,
+        field_energy_trace_max_abs_error=field_abs,
+        field_energy_trace_max_rel_error=field_rel,
+        flux_proxy_trace_max_abs_error=flux_abs,
+        flux_proxy_trace_max_rel_error=flux_rel,
+        serial_free_energy_drift=_trace_drift(serial_free),
+        logical_free_energy_drift=_trace_drift(logical_free),
+        identity_passed=identity_passed,
+        decomposed_path_enabled=identity_passed,
+        claim_scope=(
+            "diagnostic nonlinear spectral integrator identity gate only; "
+            "fixed-step serial-vs-logical-shard RHS routing with final-state "
+            "and transport-proxy trace identity, no production distributed FFT "
+            "routing or speedup claim"
+        ),
+        blocked_reasons=unique_blockers,
+        serial_free_energy_trace=serial_free,
+        logical_free_energy_trace=logical_free,
+        serial_field_energy_trace=serial_field_energy,
+        logical_field_energy_trace=logical_field_energy,
+        serial_flux_proxy_trace=serial_flux,
+        logical_flux_proxy_trace=logical_flux,
     )
 
 
@@ -1553,6 +1795,7 @@ __all__ = [
     "NonlinearParallelStrategy",
     "NonlinearParallelStrategyName",
     "NonlinearSpectralCommunicationReport",
+    "NonlinearSpectralIntegratorIdentityReport",
     "NonlinearSpectralRHSIdentityReport",
     "ParallelReadiness",
     "build_nonlinear_domain_decomposition_plan",
@@ -1566,6 +1809,8 @@ __all__ = [
     "nonlinear_parallel_strategy",
     "nonlinear_spectral_communication_identity_gate",
     "nonlinear_spectral_communication_identity_report",
+    "logical_decomposed_nonlinear_spectral_rhs",
+    "nonlinear_spectral_integrator_identity_gate",
     "nonlinear_spectral_rhs_identity_gate",
     "nonlinear_spectral_rhs_identity_report",
     "prototype_nonlinear_domain_decomposed_step",
