@@ -11,6 +11,7 @@ ACCEPTABLE_EXTERNAL_VMEC_HOLDOUT_CLAIM_LEVELS = frozenset(
         "passed_grid_convergence_candidate_for_transport_holdout",
         "passed_grid_converged_external_vmec_transport_window",
         "passed_high_grid_transport_holdout_admission_under_coarse_grid_exclusion",
+        "passed_replicated_external_vmec_transport_holdout_under_explicit_spread_gate",
     }
 )
 
@@ -18,6 +19,7 @@ EXTERNAL_VMEC_HOLDOUT_GATE_KINDS = frozenset(
     {
         "external_vmec_high_grid_admission_gate",
         "external_vmec_nonlinear_grid_convergence_gate",
+        "external_vmec_replicate_admission_gate",
         "external_vmec_transport_window_summary",
     }
 )
