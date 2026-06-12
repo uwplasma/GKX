@@ -231,7 +231,8 @@ The current release surface is deliberately scoped:
   diagnostic but still fails strict transport (`0.400 > 0.35`) and
   rank/screening gates. SPECTRAX-GK therefore ships QL diagnostics and guarded
   model-development figures, not a runtime/TOML universal absolute-flux
-  predictor. Electromagnetic quasilinear calibration remains deferred.
+  predictor. This is a scoped manuscript model-development diagnostic, not a runtime/TOML absolute-flux predictor.
+  Electromagnetic quasilinear calibration remains deferred.
 - The `vmec_jax -> booz_xform_jax -> SPECTRAX-GK` path is artifact-bound:
   zero-beta equal-arc geometry parity is claimable for the rows that pass the
   current `mboz=nboz=21` parity matrix, and reduced
