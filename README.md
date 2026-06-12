@@ -667,13 +667,17 @@ The reduced VMEC/Boozer optimization path also has aggregate guardrails. The
 multi-point gate below checks a quasilinear objective over two field lines and
 two `k_y` samples at `mboz=nboz=21`; the growth-vs-quasilinear comparison shows
 that growth-rate and quasilinear objectives can choose different initial VMEC
-coefficient directions. The current promotion gate is therefore intentionally
-blocked until an independent production-grade held-out surface or field-line
-artifact passes. The alpha-heldout split shown below is a positive reduced
-field-line generalization check, but it is still not a nonlinear transport
-optimization claim. The surface-heldout split extends this to a true
-held-out `surface_index`, and the Li383 panel checks that the same aggregate
-finite-difference plus line-search machinery works on a second equilibrium.
+coefficient directions. The VMEC/Boozer aggregate promotion gate now has the
+missing production-scope nonlinear holdout: a QH `vmec_jax -> booz_xform_jax`
+surface/field-line transport run at `torflux=0.78`, `alpha=1.2`, and
+`ky rho_i ~= 0.2` passes the `t=[350,700]` replicated window with
+`<Q_i>=7.998`, mean-relative spread `0.0837`, and combined SEM/mean `0.0242`.
+This closes the VMEC/Boozer held-out plumbing gate. It is still not, by itself,
+a broad nonlinear turbulent-transport optimization claim. The alpha-heldout
+split shown below is a positive reduced field-line generalization check, the
+surface-heldout split extends this to a true held-out `surface_index`, and the
+Li383 panel checks that the same aggregate finite-difference plus line-search
+machinery works on a second equilibrium.
 
 ![SPECTRAX-GK VMEC/Boozer physical-torflux aggregate gate](docs/_static/vmec_boozer_torflux_aggregate_objective_gate.png)
 
@@ -686,6 +690,8 @@ finite-difference plus line-search machinery works on a second equilibrium.
 ![SPECTRAX-GK VMEC/Boozer aggregate surface-heldout gate](docs/_static/vmec_boozer_aggregate_surface_holdout_gate.png)
 
 ![SPECTRAX-GK VMEC/Boozer second-equilibrium aggregate gate](docs/_static/vmec_boozer_second_equilibrium_aggregate_gate.png)
+
+![SPECTRAX-GK VMEC/Boozer QH held-out nonlinear transport gate](docs/_static/vmec_boozer_holdout_transport/vmec_boozer_qh_torflux078_alpha120_holdout_ensemble_gate.png)
 
 The backend-free portfolio reducer below is the lightweight contract that
 multi-surface, multi-field-line, multi-`k_y` stellarator optimization drivers
@@ -757,15 +763,16 @@ general turbulent-flux optimization result.
 
 The production nonlinear optimization guard below is the enforced claim
 boundary. It passes as a release-safety check because startup/reduced nonlinear
-artifacts are scoped correctly, two long post-transient replicated holdout
-ensembles pass, the optimized-equilibrium window has explicit `seed31`,
-`seed32`, and `dt0p04` provenance, and the matched no-ESS-to-optimized audit
-shows an `18.4%` heat-flux reduction with `7.82` combined-SEMs separation. The
-claim remains bounded: this is one positive optimized-equilibrium audit, while
-production promotion remains blocked until at least three independent
-optimized-equilibrium ensembles and three matched baseline-to-optimized audits
-pass. It does not prove that the current quasilinear model is a universal
-absolute-flux predictor or that nonlinear turbulence gradients are available.
+artifacts are scoped correctly, three long post-transient replicated holdout
+ensembles pass (D-shaped, circular, and QH VMEC/Boozer), the selected
+optimized-equilibrium window has explicit `seed31`, `seed32`, and `dt0p04`
+provenance, and the matched no-ESS-to-optimized audit shows an `18.4%`
+heat-flux reduction with `7.82` combined-SEMs separation. The claim remains
+bounded: this is one positive optimized-equilibrium audit, while production
+promotion remains blocked until at least three independent optimized-equilibrium
+ensembles and three matched baseline-to-optimized audits pass. It does not prove
+that the current quasilinear model is a universal absolute-flux predictor or
+that nonlinear turbulence gradients are available.
 
 For the next nonlinear optimizer campaign, the current `RBC(1,1)` landscape is
 used as a deterministic launch diagnostic from the strict max-mode-5 QA
