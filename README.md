@@ -371,13 +371,14 @@ scoped high-grid holdout under coarse-grid exclusion, not a full
 
 ![SPECTRAX-GK external-VMEC next holdout runbook](docs/_static/external_vmec_next_holdout_runbook.png)
 
-The regenerated runbook now selects the `nfp4_QH_warm_start` VMEC candidate
-from `vmec_jax` as a modified-protocol QH launch plan. The bounded linear
-screen finds a weak but finite branch (`gamma=0.02295` at `ky=0.4762`), so the
-next nonlinear audit is explicitly scoped to `n64/n80`, `dt=0.04`, and
-`t=250,450,700`. This is not a transport validation and does not admit QH into
-the quasilinear calibration: previous QH nonlinear gates remain excluded until
-the fresh high-grid, time-horizon, and replicate gates pass.
+The external-VMEC runbook now fails closed after the corrected QH warm-start
+audit. The staged `n64/n80`, `dt=0.04` QH ladder reached `t=250`, `450`, and
+`700`, but the long-window high-grid disagreements stayed above the relaxed
+20% gate (`t700`: `0.349` common-window, `0.367` least-window). QH is therefore
+negative grid-convergence evidence, not a quasilinear calibration holdout. The
+next nonlinear holdout requires a genuinely independent VMEC candidate or a
+materially changed higher-resolution protocol before any new launch command is
+written.
 
 The completed CTH-like modified-protocol harvest is now a scoped high-grid
 transport holdout, not a normal full-ladder convergence claim. The full
@@ -698,8 +699,10 @@ The external nfp4 QH pilot has now been extended to `t=150`, where its late
 heat-flux window is meaningful rather than noise-floor-scale; it remains a
 feasibility result because the `48x48x32` grid check changes the late
 heat-flux level by about `52%`, and the follow-on `64x64x40` check changes it
-again by about `63%`. QH is therefore excluded from quasilinear calibration
-until a separate grid/window-converged transport gate passes. A new D-shaped
+again by about `63%`. A later corrected warm-start ladder extended the
+`64x64x40` and `80x80x48` comparison to `t=250`, `450`, and `700`; the
+`t=700` late-window heat-flux shift remains about `35-37%`, so QH is closed as
+negative grid-convergence evidence for the current quasilinear ledger. A new D-shaped
 tokamak external-VMEC candidate now passes the longer `t=250` high-grid gate:
 `48x48x32` and `64x64x40` differ by `13.9%` on the common late window and
 `10.8%` on independently selected least-trending windows. A follow-up
