@@ -308,6 +308,15 @@ prediction.
 
 ![SPECTRAX-GK quasilinear candidate uncertainty gate](docs/_static/quasilinear_candidate_uncertainty.png)
 
+The residual-anatomy panel below explains the failed gate instead of hiding it
+behind one aggregate number. External axisymmetric VMEC holdouts now dominate
+the error budget, with the shaped-pressure case the largest outlier; HSX and
+W7-X are comparatively well tracked by the reduced candidate. This points the
+next model-development step toward richer saturation physics and additional
+independent nonlinear holdouts, not threshold loosening.
+
+![SPECTRAX-GK quasilinear residual anatomy](docs/_static/quasilinear_error_anatomy.png)
+
 The regularization audit below sweeps the ridge strength for the same
 spectral-envelope candidate. It is a guardrail against over-tuning: the best
 setting is now `lambda = 0.7`, with mean relative error `0.423 > 0.35`, so
