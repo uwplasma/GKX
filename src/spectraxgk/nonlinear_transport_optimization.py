@@ -54,6 +54,8 @@ class ProductionNonlinearOptimizationGuardConfig:
     max_combined_sem_rel: float = 0.25
     require_optimized_equilibrium_transport: bool = True
     require_matched_optimized_transport_audit: bool = True
+    min_optimized_equilibrium_ensembles: int = 3
+    min_matched_optimized_audits: int = 3
     require_seed_timestep_provenance: bool = True
     min_seed_variants: int = 2
     min_timestep_variants: int = 1
@@ -72,6 +74,10 @@ class ProductionNonlinearOptimizationGuardConfig:
             raise ValueError("max_mean_rel_spread must be non-negative")
         if float(self.max_combined_sem_rel) < 0.0:
             raise ValueError("max_combined_sem_rel must be non-negative")
+        if int(self.min_optimized_equilibrium_ensembles) < 1:
+            raise ValueError("min_optimized_equilibrium_ensembles must be positive")
+        if int(self.min_matched_optimized_audits) < 1:
+            raise ValueError("min_matched_optimized_audits must be positive")
         if int(self.min_seed_variants) < 1:
             raise ValueError("min_seed_variants must be positive")
         if int(self.min_timestep_variants) < 1:
@@ -509,23 +515,27 @@ def production_nonlinear_optimization_guard_report(
     promotion_gates = [
         _gate(
             "optimized_equilibrium_replicated_transport_window",
-            bool(qualifying_optimized) or not bool(cfg.require_optimized_equilibrium_transport),
+            len(qualifying_optimized) >= int(cfg.min_optimized_equilibrium_ensembles)
+            or not bool(cfg.require_optimized_equilibrium_transport),
             (
                 "; ".join(str(row["path"]) for row in qualifying_optimized)
                 if qualifying_optimized
-                else "provide long post-transient replicated nonlinear transport windows for the optimized equilibrium"
+                else (
+                    "provide long post-transient replicated nonlinear transport "
+                    "windows for at least three independent optimized equilibria"
+                )
             ),
         ),
         _gate(
             "matched_baseline_to_optimized_transport_reduction",
-            bool(qualifying_matched_optimized)
+            len(qualifying_matched_optimized) >= int(cfg.min_matched_optimized_audits)
             or not bool(cfg.require_matched_optimized_transport_audit),
             (
                 "; ".join(str(row["path"]) for row in qualifying_matched_optimized)
                 if qualifying_matched_optimized
                 else (
-                    "provide a matched baseline-to-optimized nonlinear audit with "
-                    "positive relative reduction and uncertainty separation"
+                    "provide at least three matched baseline-to-optimized nonlinear "
+                    "audits with positive relative reduction and uncertainty separation"
                 )
             ),
         ),
@@ -559,7 +569,7 @@ def production_nonlinear_optimization_guard_report(
             "blockers": promotion_blockers,
             "requirements": [
                 "optimized equilibrium must have long post-transient replicated nonlinear transport-window audits",
-                "matched baseline-to-optimized nonlinear audit must show a positive uncertainty-separated reduction",
+                "at least three matched baseline-to-optimized nonlinear audits must show positive uncertainty-separated reductions",
                 "replicates must include independent seed/initial-condition and timestep evidence",
                 "optimized-equilibrium transport means must satisfy running-window, block/SEM, spread, and finite-flux gates",
             ],

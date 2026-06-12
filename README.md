@@ -761,9 +761,10 @@ artifacts are scoped correctly, two long post-transient replicated holdout
 ensembles pass, the optimized-equilibrium window has explicit `seed31`,
 `seed32`, and `dt0p04` provenance, and the matched no-ESS-to-optimized audit
 shows an `18.4%` heat-flux reduction with `7.82` combined-SEMs separation. The
-claim remains bounded: this proves that the selected optimized equilibrium has
-a converged replicated nonlinear transport-window audit relative to that
-matched reference, not that the current quasilinear model is a universal
+claim remains bounded: this is one positive optimized-equilibrium audit, while
+production promotion remains blocked until at least three independent
+optimized-equilibrium ensembles and three matched baseline-to-optimized audits
+pass. It does not prove that the current quasilinear model is a universal
 absolute-flux predictor or that nonlinear turbulence gradients are available.
 
 For the next nonlinear optimizer campaign, the current `RBC(1,1)` landscape is
