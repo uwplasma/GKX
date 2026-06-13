@@ -548,6 +548,32 @@ class NonlinearSpectralDevicePencilTransportWindowReport:
 
 
 @dataclass(frozen=True)
+class NonlinearSpectralDevicePencilFFTBatchModel:
+    """cuFFT batch-pressure preflight model for the device-z pencil route."""
+
+    state_shape: tuple[int, int, int, int, int]
+    device_count: int
+    local_z_extent: int
+    max_fft_axis_extent: int
+    max_fft_batch_count: int
+    unchunked_fft_batch_count: int
+    suggested_z_chunk_size: int | None
+    effective_z_chunk_size: int
+    chunked_fft_batch_count: int
+    chunking_required: bool
+    chunking_active: bool
+    disable_gpu_preallocation_recommended: bool
+    profiling_candidate: bool
+    feasibility_blockers: tuple[str, ...]
+    claim_scope: str
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-friendly representation of the batch model."""
+
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class NonlinearParallelStrategy:
     """Readiness contract for one nonlinear parallelization candidate."""
 
@@ -1336,6 +1362,93 @@ def nonlinear_spectral_pencil_work_model(
             "communication/work model for a pencil-FFT nonlinear bracket route "
             "with explicit transpose stages and no global reconstruction; not a "
             "runtime speedup claim without identity and profiler artifacts"
+        ),
+    )
+
+
+def _largest_power_of_two_not_above(value: int) -> int:
+    if int(value) < 1:
+        return 0
+    return 1 << (int(value).bit_length() - 1)
+
+
+def device_z_pencil_fft_batch_pressure_model(
+    state_shape: tuple[int, int, int, int, int],
+    *,
+    device_count: int,
+    max_fft_batch_count: int = 65_536,
+    z_chunk_size: int | None = None,
+) -> NonlinearSpectralDevicePencilFFTBatchModel:
+    """Estimate cuFFT batch pressure for the device-z pencil micro-route.
+
+    The profiler traces showed that large GPU cases can fail before timing when
+    axis-wise FFTs create too-large batched cuFFT plans. This backend-free model
+    predicts that pressure and suggests a local ``z_chunk_size`` that keeps the
+    largest state-gradient axis FFT batch below ``max_fft_batch_count``. It is a
+    profiling preflight, not a speedup or physics claim.
+    """
+
+    nl, nm, ny, nx, nz = _validate_spectral_state_shape(tuple(state_shape))
+    count = int(device_count)
+    max_batch = int(max_fft_batch_count)
+    if count < 1:
+        raise ValueError("device_count must be at least one")
+    if max_batch < 1:
+        raise ValueError("max_fft_batch_count must be at least one")
+    if z_chunk_size is not None and int(z_chunk_size) < 1:
+        raise ValueError("z_chunk_size must be at least one")
+
+    blockers: list[str] = []
+    if nz % count != 0:
+        blockers.append("z_extent_not_divisible_by_device_count")
+        local_z_extent = int(math.ceil(float(nz) / float(count)))
+    else:
+        local_z_extent = int(nz // count)
+
+    max_axis_extent = int(max(ny, nx))
+    batch_per_z_plane = int(nl * nm * max_axis_extent)
+    unchunked_batch = int(batch_per_z_plane * local_z_extent)
+    chunking_required = bool(unchunked_batch > max_batch)
+    max_planes_under_cap = int(max_batch // max(batch_per_z_plane, 1))
+    if chunking_required:
+        suggested = _largest_power_of_two_not_above(max_planes_under_cap)
+        if suggested < 1:
+            suggested = 1
+            blockers.append("fft_batch_pressure_exceeds_single_z_plane")
+        suggested = min(int(suggested), int(local_z_extent))
+    else:
+        suggested = None
+
+    requested_chunk = int(z_chunk_size) if z_chunk_size is not None else suggested
+    if requested_chunk is None:
+        effective_chunk = int(local_z_extent)
+    else:
+        effective_chunk = int(min(max(requested_chunk, 1), local_z_extent))
+    chunked_batch = int(batch_per_z_plane * effective_chunk)
+    chunking_active = bool(effective_chunk < local_z_extent)
+    if chunking_required and chunked_batch > max_batch:
+        blockers.append("z_chunk_size_still_exceeds_fft_batch_cap")
+    profiling_candidate = bool(not blockers)
+
+    return NonlinearSpectralDevicePencilFFTBatchModel(
+        state_shape=(nl, nm, ny, nx, nz),
+        device_count=count,
+        local_z_extent=local_z_extent,
+        max_fft_axis_extent=max_axis_extent,
+        max_fft_batch_count=max_batch,
+        unchunked_fft_batch_count=unchunked_batch,
+        suggested_z_chunk_size=suggested,
+        effective_z_chunk_size=effective_chunk,
+        chunked_fft_batch_count=chunked_batch,
+        chunking_required=chunking_required,
+        chunking_active=chunking_active,
+        disable_gpu_preallocation_recommended=bool(chunking_required),
+        profiling_candidate=profiling_candidate,
+        feasibility_blockers=tuple(blockers),
+        claim_scope=(
+            "cuFFT batch-pressure preflight for device-z pencil profiling; "
+            "suggests z chunking before launching expensive CPU/GPU runs and "
+            "does not constitute a nonlinear speedup claim"
         ),
     )
 
@@ -3049,6 +3162,7 @@ __all__ = [
     "NonlinearParallelStrategy",
     "NonlinearParallelStrategyName",
     "NonlinearSpectralCommunicationReport",
+    "NonlinearSpectralDevicePencilFFTBatchModel",
     "NonlinearSpectralDevicePencilRHSIdentityReport",
     "NonlinearSpectralDevicePencilTransportWindowReport",
     "NonlinearSpectralDomainWorkModel",
@@ -3062,6 +3176,7 @@ __all__ = [
     "classify_nonlinear_parallel_strategy",
     "deterministic_nonlinear_domain_state",
     "deterministic_nonlinear_spectral_state",
+    "device_z_pencil_fft_batch_pressure_model",
     "device_z_pencil_nonlinear_spectral_rhs",
     "device_z_pencil_nonlinear_spectral_transport_window_identity_gate",
     "integrate_logical_decomposed_nonlinear_spectral",
