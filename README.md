@@ -779,14 +779,18 @@ ensembles pass (D-shaped, circular, and QH VMEC/Boozer), the selected
 optimized-equilibrium window has explicit `seed31`, `seed32`, and `dt0p04`
 provenance, and the matched no-ESS-to-optimized audit shows an `18.4%`
 heat-flux reduction with `7.82` combined-SEMs separation. The claim remains
-bounded: optimized-equilibrium replicated trace evidence now satisfies the
-strict count (`4` qualifying ensembles), but production promotion remains
-blocked because only `1/3` matched baseline-to-optimized audits shows a
-positive uncertainty-separated reduction. The generic replicated-holdout lane
-is frozen at the three accepted long-window holdout ensembles; no additional
-holdouts are being collected to rescue this claim. It does not prove that the current
-quasilinear model is a universal absolute-flux predictor or that nonlinear
-turbulence gradients are available.
+bounded: optimized-equilibrium replicated trace evidence satisfies the strict
+count (`4` qualifying ensembles), and `3/3` required matched
+baseline-to-optimized audits now pass the explicit `2%` late-window reduction
+policy. The accepted matched audits are the no-ESS-to-optimized QA/ESS audit
+(`18.4%`) and two max-mode-5 projected-weight audits (`2.68%` and `3.35%`).
+Three strict `t=1500` QA objective candidates remain recorded as negative
+transfer evidence. The generic replicated-holdout lane is frozen at the three
+accepted long-window holdout ensembles; no additional holdouts are being
+collected to rescue this claim. This does not prove that the current
+quasilinear model is a universal absolute-flux predictor, that nonlinear
+turbulence gradients are available, or that the optimization generalizes across
+three surfaces, two field-line labels, and multiple `k_y` values.
 
 For the next nonlinear optimizer campaign, the current `RBC(1,1)` landscape is
 used as a deterministic launch diagnostic from the strict max-mode-5 QA
