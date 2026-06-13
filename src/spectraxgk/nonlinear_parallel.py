@@ -1529,6 +1529,19 @@ def _host_max_abs_rel_error(
     return float(np.max(abs_error)), float(np.max(rel_error))
 
 
+def _host_staged_array_for_sharding(array: jax.Array) -> np.ndarray:
+    """Return a host-backed array before applying explicit device sharding.
+
+    On the CUDA stack used for the current device-z diagnostic, direct
+    ``device_put`` from a single-device JAX array into a z-sharded
+    ``NamedSharding`` can misplace the second z shard. Host staging keeps the
+    identity gate about the candidate nonlinear route instead of about that
+    source-device resharding behavior.
+    """
+
+    return np.asarray(jax.device_get(array))
+
+
 def _nonlinear_spectral_report_blockers(
     serial_fft_roundtrip: jax.Array,
     communicated_fft_roundtrip: jax.Array,
@@ -2208,7 +2221,10 @@ def device_z_pencil_nonlinear_spectral_rhs(
             in_shardings=sharding,
             out_shardings=(field_sharding, sharding, sharding),
         )
-        sharded_state = jax.device_put(state_hat, sharding)
+        sharded_state = jax.device_put(
+            _host_staged_array_for_sharding(state_hat),
+            sharding,
+        )
         _candidate_field, _candidate_bracket, candidate_rhs = sharded_rhs_fn(
             sharded_state,
         )
