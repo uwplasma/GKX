@@ -336,8 +336,9 @@ QH explicitly scoped: QA has matched nonlinear-audit evidence only, and QH is
 excluded until grid/window convergence passes. Simple one-constant
 quasilinear rules do not transfer as absolute stellarator heat-flux predictors
 on the admitted portfolio. The spectral-envelope ridge candidate is the best
-current scoped model-selection result, but QA/QH coverage still requires
-matched, converged nonlinear holdouts before universal stellarator-flux claims.
+current scoped model-selection result, but the frozen ledger now points to
+missing saturation physics rather than additional holdout collection before
+universal stellarator-flux claims.
 
 ![SPECTRAX-GK quasilinear stellarator usefulness summary](docs/_static/quasilinear_stellarator_usefulness.png)
 
