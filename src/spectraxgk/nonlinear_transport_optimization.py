@@ -325,6 +325,9 @@ def optimized_equilibrium_transport_report(
         or "optimized-equilibrium" in text
         or "post_optimization" in text
         or "post-optimization" in text
+        or "growth_from_strict_baseline" in text
+        or "quasilinear_from_strict_baseline" in text
+        or "nonlinear_window_from_strict_baseline" in text
     )
     row["optimized_equilibrium_marker"] = optimized_marker
     row["qualifies_for_production_optimization"] = bool(

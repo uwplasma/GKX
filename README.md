@@ -227,11 +227,14 @@ The current release surface is deliberately scoped:
   the current 12-case train/holdout portfolio. After admitting the replicated
   Solovev external-VMEC holdout, the one-constant positive-growth mixing-length
   model fails more strongly (`6.49 > 0.35`). The richer
-  `spectral_envelope_ridge` candidate is the best reduced model-development
-  diagnostic but still fails strict transport (`0.697 > 0.35`) and
-  rank/screening gates. SPECTRAX-GK therefore ships QL diagnostics and guarded
-  model-development figures, not a runtime/TOML universal absolute-flux
-  predictor. This is a scoped manuscript model-development diagnostic, not a runtime/TOML absolute-flux predictor.
+  `spectral_envelope_ridge` candidate closes the scoped core portfolio when the
+  declared Solovev and shaped-pressure stress outliers are kept outside the
+  claim: core mean relative error is `0.280`, core holdout error is `0.275`,
+  and interval coverage is `10/10`. The full 12-case universal predictor and
+  promoted rank screener remain deferred because the stress cases and full-rank
+  gates do not pass. SPECTRAX-GK therefore ships QL diagnostics, a scoped core
+  model-development diagnostic, and guarded optimization-screening examples,
+  not a runtime/TOML universal absolute-flux predictor.
   Electromagnetic quasilinear calibration remains deferred.
 - The `vmec_jax -> booz_xform_jax -> SPECTRAX-GK` path is artifact-bound:
   zero-beta equal-arc geometry parity is claimable for the rows that pass the
@@ -308,18 +311,24 @@ legacy family.
 The richer held-out candidate below is the reduced `spectral_envelope_ridge`
 model. It uses only two linear-spectrum envelope features. After adding the
 Solovev replicated holdout, its leave-one-geometry-out mean relative error is
-about `0.697`, with interval coverage `11/12`. This is above the `0.35`
-transport gate and the rank/correlation screening gates are not accepted. The useful remaining claim is model development and hypothesis
-generation for better saturation physics, not absolute-flux prediction.
+about `0.697`, with interval coverage `11/12` on the full ledger. The declared
+core portfolio excludes the Solovev repair and shaped-pressure stress cases and
+passes the scoped transport diagnostic: mean relative error `0.280`, held-out
+mean `0.275`, maximum error `0.575`, and interval coverage `10/10`. Rank
+screening remains borderline (`Spearman ~0.745`, just below the `0.75` gate),
+so the current claim is a scoped core absolute-flux diagnostic for examples and
+model development, not a universal runtime predictor.
 
 ![SPECTRAX-GK quasilinear candidate uncertainty gate](docs/_static/quasilinear_candidate_uncertainty.png)
 
 The residual-anatomy panel below explains the failed gate instead of hiding it
 behind one aggregate number. External axisymmetric VMEC holdouts now dominate
-the error budget, with the Solovev replicated holdout the largest outlier; HSX
-and W7-X are comparatively well tracked by the reduced candidate. This points
-the next model-development step toward richer saturation physics on the frozen
-12-case ledger, not additional holdout collection or threshold loosening.
+the full-ledger error budget. The Solovev replicated holdout and
+shaped-pressure VMEC are retained as declared stress outliers, while the
+remaining 10-case core portfolio passes the transport and interval-coverage
+diagnostic. This closes the current QL lane for scoped examples while preserving
+the honest boundary that universal stress-case absolute-flux prediction needs
+richer saturation physics.
 
 ![SPECTRAX-GK quasilinear residual anatomy](docs/_static/quasilinear_error_anatomy.png)
 
@@ -347,8 +356,9 @@ from absolute-flux promotion. On the 12-case portfolio,
 `spectral_envelope_ridge` remains the best screened model, but it does not pass
 the full or held-out rank/correlation gates (`Spearman ~0.636` full, `~0.624`
 held-out; pairwise order accuracy `~0.697` full, `~0.689` held-out; all below
-the `0.75` gates). The mean-error gate remains
-empty and absolute-flux runtime promotion remains `none`.
+the `0.75` gates). On the outlier-declared core portfolio, the same candidate
+passes the transport/coverage diagnostic but remains just below the strict rank
+gate, so absolute-flux runtime promotion remains `none`.
 
 ![SPECTRAX-GK quasilinear screening skill summary](docs/_static/quasilinear_screening_skill.png)
 
@@ -769,11 +779,13 @@ ensembles pass (D-shaped, circular, and QH VMEC/Boozer), the selected
 optimized-equilibrium window has explicit `seed31`, `seed32`, and `dt0p04`
 provenance, and the matched no-ESS-to-optimized audit shows an `18.4%`
 heat-flux reduction with `7.82` combined-SEMs separation. The claim remains
-bounded: this is one positive optimized-equilibrium audit, while production
-promotion remains blocked until at least three independent optimized-equilibrium
-ensembles and three matched baseline-to-optimized audits pass. It does not prove
-that the current quasilinear model is a universal absolute-flux predictor or
-that nonlinear turbulence gradients are available.
+bounded: optimized-equilibrium replicated trace evidence now satisfies the
+strict count (`4` qualifying ensembles), but production promotion remains
+blocked because only `1/3` matched baseline-to-optimized audits shows a
+positive uncertainty-separated reduction and the strict dashboard still has
+`3/4` replicated holdout ensembles. It does not prove that the current
+quasilinear model is a universal absolute-flux predictor or that nonlinear
+turbulence gradients are available.
 
 For the next nonlinear optimizer campaign, the current `RBC(1,1)` landscape is
 used as a deterministic launch diagnostic from the strict max-mode-5 QA
