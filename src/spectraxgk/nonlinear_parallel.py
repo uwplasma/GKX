@@ -1511,6 +1511,24 @@ def _max_abs_rel_error(
     return float(jnp.max(abs_error)), float(jnp.max(rel_error))
 
 
+def _host_max_abs_rel_error(
+    reference: jax.Array,
+    candidate: jax.Array,
+    *,
+    atol: float,
+) -> tuple[float, float]:
+    """Return max errors after materializing arrays on the host."""
+
+    reference_host = np.asarray(jax.device_get(reference))
+    candidate_host = np.asarray(jax.device_get(candidate))
+    if reference_host.shape != candidate_host.shape:
+        return float("inf"), float("inf")
+    abs_error = np.abs(candidate_host - reference_host)
+    scale = np.maximum(np.abs(reference_host), float(atol))
+    rel_error = abs_error / scale
+    return float(np.max(abs_error)), float(np.max(rel_error))
+
+
 def _nonlinear_spectral_report_blockers(
     serial_fft_roundtrip: jax.Array,
     communicated_fft_roundtrip: jax.Array,
@@ -2175,19 +2193,27 @@ def device_z_pencil_nonlinear_spectral_rhs(
         )
         return serial_rhs, report
 
-    def _rhs_only(local_state: jax.Array) -> jax.Array:
-        return _pencil_nonlinear_spectral_rhs(local_state)[2]
+    def _full_fused_tuple(local_state: jax.Array) -> tuple[jax.Array, jax.Array, jax.Array]:
+        return _pencil_nonlinear_spectral_rhs(local_state)
 
     with mesh:
+        from jax.sharding import NamedSharding, PartitionSpec
+
+        field_sharding = NamedSharding(
+            mesh,
+            PartitionSpec(None, None, axis_name),
+        )
         sharded_rhs_fn = jax.jit(
-            _rhs_only,
+            _full_fused_tuple,
             in_shardings=sharding,
-            out_shardings=sharding,
+            out_shardings=(field_sharding, sharding, sharding),
         )
         sharded_state = jax.device_put(state_hat, sharding)
-        candidate_rhs = sharded_rhs_fn(sharded_state)
+        _candidate_field, _candidate_bracket, candidate_rhs = sharded_rhs_fn(
+            sharded_state,
+        )
 
-    rhs_abs, rhs_rel = _max_abs_rel_error(serial_rhs, candidate_rhs, atol=atol)
+    rhs_abs, rhs_rel = _host_max_abs_rel_error(serial_rhs, candidate_rhs, atol=atol)
     identity_passed = bool(rhs_abs <= float(atol) and rhs_rel <= float(rtol))
     blockers_list: list[str] = []
     if not identity_passed:
@@ -2209,7 +2235,8 @@ def device_z_pencil_nonlinear_spectral_rhs(
         claim_scope=(
             "device z-sharded fused pencil nonlinear RHS identity gate; FFT axes "
             "remain local per device and no global spectral reconstruction is used, "
-            "but no speedup claim is allowed without matched profiler gates"
+            "host-gathered RHS identity is required, and no speedup claim is allowed "
+            "without matched profiler gates"
         ),
         blocked_reasons=tuple(blockers_list),
     )
