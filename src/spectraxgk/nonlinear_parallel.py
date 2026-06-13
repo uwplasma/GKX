@@ -2413,6 +2413,87 @@ def _device_z_pencil_shard_map_rhs_fn(  # pragma: no cover - exercised by profil
     )
 
 
+def _spectral_physical_transport_observable_sums(
+    state_hat: jax.Array,
+    bracket_hat: jax.Array,
+) -> jax.Array:
+    """Return additive physical-space observable sums for local z slabs."""
+
+    _nl, _nm, ny, nx, _nz = _validate_spectral_state_shape(tuple(state_hat.shape))
+    real_dtype = jnp.real(state_hat).dtype
+    ky, _kx = _spectral_wave_numbers(ny, nx, real_dtype)
+    field = _field_from_state(state_hat)
+    density_hat = jnp.sum(state_hat[:, 0, :, :, :], axis=0)
+    density_xy = _pencil_ifft2(density_hat, y_axis=0, x_axis=1)
+    phi_y = _pencil_ifft2(1j * ky[:, None, None] * field, y_axis=0, x_axis=1)
+    flux_density = jnp.abs(jnp.real(jnp.conj(density_xy) * (-phi_y)))
+    bracket_abs2 = jnp.abs(bracket_hat) ** 2
+    return jnp.asarray(
+        [
+            jnp.sum(jnp.abs(state_hat) ** 2),
+            jnp.sum(jnp.abs(field) ** 2),
+            jnp.sum(flux_density),
+            jnp.asarray(flux_density.size, dtype=real_dtype),
+            jnp.sum(bracket_abs2),
+            jnp.asarray(bracket_abs2.size, dtype=real_dtype),
+        ],
+        dtype=real_dtype,
+    )
+
+
+def _spectral_physical_transport_observable_vector_from_sums(
+    sums: jax.Array,
+) -> jax.Array:
+    """Convert additive observable sums into ``[Wg, Wphi, Q, bracket_rms]``."""
+
+    real_dtype = sums.dtype
+    flux_count = jnp.maximum(sums[3], jnp.asarray(1.0, dtype=real_dtype))
+    bracket_count = jnp.maximum(sums[5], jnp.asarray(1.0, dtype=real_dtype))
+    return jnp.asarray(
+        [
+            sums[0],
+            sums[1],
+            sums[2] / flux_count,
+            jnp.sqrt(sums[4] / bracket_count),
+        ],
+        dtype=real_dtype,
+    )
+
+
+def _device_z_pencil_shard_map_observables_fn(  # pragma: no cover - exercised by profile artifacts.
+    mesh: Any,
+    *,
+    axis_name: str,
+    z_chunk_size: int | None = None,
+) -> Any:
+    """Return a shard-map scalar observable reducer for z-sharded states."""
+
+    from jax.sharding import PartitionSpec
+
+    def _local_observables(local_state: jax.Array) -> jax.Array:
+        if z_chunk_size is not None:
+            _field, bracket, _rhs = _pencil_nonlinear_spectral_rhs_z_chunked(
+                local_state,
+                z_chunk_size=int(z_chunk_size),
+            )
+        else:
+            _field, bracket, _rhs = _pencil_nonlinear_spectral_rhs(local_state)
+        local_sums = _spectral_physical_transport_observable_sums(local_state, bracket)
+        global_sums = jax.lax.psum(local_sums, axis_name)
+        return _spectral_physical_transport_observable_vector_from_sums(global_sums)
+
+    state_spec = PartitionSpec(None, None, None, None, axis_name)
+    return jax.jit(
+        jax.shard_map(
+            _local_observables,
+            mesh=mesh,
+            in_specs=state_spec,
+            out_specs=PartitionSpec(),
+            check_vma=False,
+        )
+    )
+
+
 def device_z_pencil_nonlinear_spectral_rhs(
     state_hat: jax.Array,
     *,
@@ -2515,6 +2596,7 @@ def device_z_pencil_nonlinear_spectral_transport_window_identity_gate(
     steps: int = 4,
     atol: float = 5.0e-6,
     rtol: float = 1.0e-4,
+    observable_mode: Literal["host_gather", "sharded_reduce"] = "host_gather",
 ) -> NonlinearSpectralDevicePencilTransportWindowReport:
     """Validate a multi-step serial-vs-device-z-sharded nonlinear window.
 
@@ -2528,6 +2610,8 @@ def device_z_pencil_nonlinear_spectral_transport_window_identity_gate(
 
     if int(steps) < 1:
         raise ValueError("steps must be at least one")
+    if observable_mode not in {"host_gather", "sharded_reduce"}:
+        raise ValueError("observable_mode must be 'host_gather' or 'sharded_reduce'")
     state_shape = _validate_spectral_state_shape(tuple(state_hat.shape))
     mesh, sharding, blockers, requested_count, active_count = (
         _device_z_sharding_for_spectral_state(
@@ -2600,19 +2684,30 @@ def device_z_pencil_nonlinear_spectral_transport_window_identity_gate(
             axis_name=axis_name,
             z_chunk_size=z_chunk_size,
         )
+        sharded_observables_fn = _device_z_pencil_shard_map_observables_fn(
+            mesh,
+            axis_name=axis_name,
+            z_chunk_size=z_chunk_size,
+        )
         device_state = jax.device_put(
             _host_staged_array_for_sharding(state_hat),
             sharding,
         )
-        device_state_for_observables = jnp.asarray(jax.device_get(device_state))
-        _device_field, device_bracket, _device_rhs = _serial_nonlinear_spectral_rhs(
-            device_state_for_observables,
-        )
-        _append_spectral_physical_observables(
-            device_traces,
-            device_state_for_observables,
-            device_bracket,
-        )
+        if observable_mode == "sharded_reduce":
+            _append_spectral_physical_observable_vector(
+                device_traces,
+                sharded_observables_fn(device_state),
+            )
+        else:
+            device_state_for_observables = jnp.asarray(jax.device_get(device_state))
+            _device_field, device_bracket, _device_rhs = _serial_nonlinear_spectral_rhs(
+                device_state_for_observables,
+            )
+            _append_spectral_physical_observables(
+                device_traces,
+                device_state_for_observables,
+                device_bracket,
+            )
 
         for _ in range(int(steps)):
             _serial_field, _serial_bracket, serial_rhs = _serial_nonlinear_spectral_rhs(
@@ -2630,15 +2725,21 @@ def device_z_pencil_nonlinear_spectral_transport_window_identity_gate(
                 serial_state,
                 serial_bracket,
             )
-            device_state_for_observables = jnp.asarray(jax.device_get(device_state))
-            _device_field, device_bracket, _device_rhs = _serial_nonlinear_spectral_rhs(
-                device_state_for_observables,
-            )
-            _append_spectral_physical_observables(
-                device_traces,
-                device_state_for_observables,
-                device_bracket,
-            )
+            if observable_mode == "sharded_reduce":
+                _append_spectral_physical_observable_vector(
+                    device_traces,
+                    sharded_observables_fn(device_state),
+                )
+            else:
+                device_state_for_observables = jnp.asarray(jax.device_get(device_state))
+                _device_field, device_bracket, _device_rhs = _serial_nonlinear_spectral_rhs(
+                    device_state_for_observables,
+                )
+                _append_spectral_physical_observables(
+                    device_traces,
+                    device_state_for_observables,
+                    device_bracket,
+                )
 
     device_final_state = jnp.asarray(jax.device_get(device_state))
     state_abs, state_rel = _host_max_abs_rel_error(
@@ -2729,18 +2830,27 @@ def _spectral_physical_transport_observables(
 ) -> tuple[float, float, float, float]:
     """Return physical-space transport-window observables for the micro-route."""
 
-    _nl, _nm, ny, nx, _nz = _validate_spectral_state_shape(tuple(state_hat.shape))
-    real_dtype = jnp.real(state_hat).dtype
-    ky, _kx = _spectral_wave_numbers(ny, nx, real_dtype)
-    field = _field_from_state(state_hat)
-    density_hat = jnp.sum(state_hat[:, 0, :, :, :], axis=0)
-    density_xy = _pencil_ifft2(density_hat, y_axis=0, x_axis=1)
-    phi_y = _pencil_ifft2(1j * ky[:, None, None] * field, y_axis=0, x_axis=1)
-    physical_flux = float(jnp.mean(jnp.abs(jnp.real(jnp.conj(density_xy) * (-phi_y)))))
-    free_energy = float(jnp.sum(jnp.abs(state_hat) ** 2))
-    field_energy = float(jnp.sum(jnp.abs(field) ** 2))
-    bracket_rms = float(jnp.sqrt(jnp.mean(jnp.abs(bracket_hat) ** 2)))
-    return free_energy, field_energy, physical_flux, bracket_rms
+    values = _spectral_physical_transport_observable_vector_from_sums(
+        _spectral_physical_transport_observable_sums(state_hat, bracket_hat)
+    )
+    return (
+        float(values[0]),
+        float(values[1]),
+        float(values[2]),
+        float(values[3]),
+    )
+
+
+def _append_spectral_physical_observable_vector(
+    traces: dict[str, list[float]],
+    values: jax.Array,
+) -> None:
+    """Append ``[Wg, Wphi, Q, bracket_rms]`` scalar observables."""
+
+    traces["free_energy"].append(float(values[0]))
+    traces["field_energy"].append(float(values[1]))
+    traces["physical_flux"].append(float(values[2]))
+    traces["bracket_rms"].append(float(values[3]))
 
 
 def _append_spectral_physical_observables(
