@@ -782,8 +782,9 @@ heat-flux reduction with `7.82` combined-SEMs separation. The claim remains
 bounded: optimized-equilibrium replicated trace evidence now satisfies the
 strict count (`4` qualifying ensembles), but production promotion remains
 blocked because only `1/3` matched baseline-to-optimized audits shows a
-positive uncertainty-separated reduction and the strict dashboard still has
-`3/4` replicated holdout ensembles. It does not prove that the current
+positive uncertainty-separated reduction. The generic replicated-holdout lane
+is frozen at the three accepted long-window holdout ensembles; no additional
+holdouts are being collected to rescue this claim. It does not prove that the current
 quasilinear model is a universal absolute-flux predictor or that nonlinear
 turbulence gradients are available.
 
