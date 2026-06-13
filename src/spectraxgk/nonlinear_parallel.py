@@ -10,10 +10,11 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 import math
-from typing import Any, Literal
+from typing import Any, Literal, Sequence
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 
 NonlinearParallelStrategyName = Literal[
@@ -477,6 +478,31 @@ class NonlinearSpectralPencilTransportWindowReport:
 
 
 @dataclass(frozen=True)
+class NonlinearSpectralDevicePencilRHSIdentityReport:
+    """Identity report for a device-sharded fused pencil nonlinear RHS."""
+
+    state_shape: tuple[int, int, int, int, int]
+    sharded_axis: str
+    axis_name: str
+    requested_device_count: int
+    active_device_count: int
+    atol: float
+    rtol: float
+    rhs_max_abs_error: float
+    rhs_max_rel_error: float
+    identity_passed: bool
+    device_sharding_active: bool
+    decomposed_path_enabled: bool
+    claim_scope: str
+    blocked_reasons: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-friendly representation of the identity report."""
+
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class NonlinearParallelStrategy:
     """Readiness contract for one nonlinear parallelization candidate."""
 
@@ -593,13 +619,14 @@ _STRATEGIES: tuple[NonlinearParallelStrategy, ...] = (
             "logical_sharded_nonlinear_spectral_integrator_identity",
             "pencil_fft_fused_nonlinear_rhs_identity",
             "pencil_fft_physical_transport_window_identity",
+            "device_z_pencil_fused_nonlinear_rhs_identity",
         ),
         physics_gates=("fft_axis_nonlinear_window_physics_gate",),
         profiler_gates=("distributed_fft_scaling_profile",),
         notes=(
             "Diagnostic split/reassemble spectral communication, logical spectral "
             "RHS, and pencil-FFT fused-bracket identity gates exist; production "
-            "promotion still requires device-level distributed FFT routing, "
+            "promotion still requires device-level transport-window routing, "
             "conservation, transport-window, and profiler speedup gates."
         ),
     ),
@@ -2066,6 +2093,130 @@ def pencil_decomposed_nonlinear_spectral_rhs(
     return gated_rhs, report
 
 
+def _device_z_sharding_for_spectral_state(
+    state_hat: jax.Array,
+    *,
+    devices: Sequence[Any] | None,
+    axis_name: str,
+) -> tuple[Any | None, Any | None, tuple[str, ...], int, int]:
+    """Return a z-axis sharding for the fused-bracket route, or blockers.
+
+    The nonlinear pseudo-spectral bracket transforms only the ``(ky, kx)``
+    axes. Sharding over ``z`` therefore keeps the FFTs local to each device and
+    avoids the global tile reconstruction that blocked the older logical route.
+    """
+
+    state_shape = _validate_spectral_state_shape(tuple(state_hat.shape))
+    *_, nz = state_shape
+    device_tuple = tuple(devices) if devices is not None else tuple(jax.devices())
+    requested_device_count = len(device_tuple)
+    blockers: list[str] = []
+    if requested_device_count < 2:
+        blockers.append("requires_at_least_two_devices")
+        return None, None, tuple(blockers), requested_device_count, 0
+
+    active_device_count = requested_device_count
+    if nz % active_device_count != 0:
+        blockers.append("z_extent_not_divisible_by_device_count")
+        return None, None, tuple(blockers), requested_device_count, 0
+
+    from jax.sharding import Mesh, NamedSharding, PartitionSpec
+
+    mesh = Mesh(np.asarray(device_tuple[:active_device_count]), (axis_name,))
+    sharding = NamedSharding(mesh, PartitionSpec(None, None, None, None, axis_name))
+    return mesh, sharding, (), requested_device_count, active_device_count
+
+
+def device_z_pencil_nonlinear_spectral_rhs(
+    state_hat: jax.Array,
+    *,
+    devices: Sequence[Any] | None = None,
+    axis_name: str = "z",
+    atol: float = 5.0e-6,
+    rtol: float = 1.0e-4,
+) -> tuple[jax.Array, NonlinearSpectralDevicePencilRHSIdentityReport]:
+    """Return the z-sharded fused pencil nonlinear RHS after identity gating.
+
+    This is the first real device-sharded nonlinear spectral route in this
+    module. It shards over the field-line ``z`` axis so that the FFT axes remain
+    local on every device. The function falls back to the serial RHS unless a
+    multi-device sharding exists and the sharded fused-bracket RHS matches the
+    serial reference within the requested tolerances.
+    """
+
+    state_shape = _validate_spectral_state_shape(tuple(state_hat.shape))
+    mesh, sharding, blockers, requested_count, active_count = (
+        _device_z_sharding_for_spectral_state(
+            state_hat,
+            devices=devices,
+            axis_name=axis_name,
+        )
+    )
+    _serial_field, _serial_bracket, serial_rhs = _serial_nonlinear_spectral_rhs(state_hat)
+    if blockers or mesh is None or sharding is None:
+        report = NonlinearSpectralDevicePencilRHSIdentityReport(
+            state_shape=state_shape,
+            sharded_axis="z",
+            axis_name=str(axis_name),
+            requested_device_count=int(requested_count),
+            active_device_count=int(active_count),
+            atol=float(atol),
+            rtol=float(rtol),
+            rhs_max_abs_error=float("inf"),
+            rhs_max_rel_error=float("inf"),
+            identity_passed=False,
+            device_sharding_active=False,
+            decomposed_path_enabled=False,
+            claim_scope=(
+                "device z-sharded fused pencil nonlinear RHS gate; skipped because "
+                "the requested local device topology cannot support the z shard"
+            ),
+            blocked_reasons=blockers,
+        )
+        return serial_rhs, report
+
+    def _rhs_only(local_state: jax.Array) -> jax.Array:
+        return _pencil_nonlinear_spectral_rhs(local_state)[2]
+
+    with mesh:
+        sharded_rhs_fn = jax.jit(
+            _rhs_only,
+            in_shardings=sharding,
+            out_shardings=sharding,
+        )
+        sharded_state = jax.device_put(state_hat, sharding)
+        candidate_rhs = sharded_rhs_fn(sharded_state)
+
+    rhs_abs, rhs_rel = _max_abs_rel_error(serial_rhs, candidate_rhs, atol=atol)
+    identity_passed = bool(rhs_abs <= float(atol) and rhs_rel <= float(rtol))
+    blockers_list: list[str] = []
+    if not identity_passed:
+        blockers_list.append("device_z_pencil_rhs_identity_failed")
+
+    report = NonlinearSpectralDevicePencilRHSIdentityReport(
+        state_shape=state_shape,
+        sharded_axis="z",
+        axis_name=str(axis_name),
+        requested_device_count=int(requested_count),
+        active_device_count=int(active_count),
+        atol=float(atol),
+        rtol=float(rtol),
+        rhs_max_abs_error=rhs_abs,
+        rhs_max_rel_error=rhs_rel,
+        identity_passed=identity_passed,
+        device_sharding_active=True,
+        decomposed_path_enabled=identity_passed,
+        claim_scope=(
+            "device z-sharded fused pencil nonlinear RHS identity gate; FFT axes "
+            "remain local per device and no global spectral reconstruction is used, "
+            "but no speedup claim is allowed without matched profiler gates"
+        ),
+        blocked_reasons=tuple(blockers_list),
+    )
+    gated_rhs = candidate_rhs if report.decomposed_path_enabled else serial_rhs
+    return gated_rhs, report
+
+
 def _spectral_physical_transport_observables(
     state_hat: jax.Array,
     bracket_hat: jax.Array,
@@ -2505,6 +2656,7 @@ __all__ = [
     "NonlinearParallelStrategy",
     "NonlinearParallelStrategyName",
     "NonlinearSpectralCommunicationReport",
+    "NonlinearSpectralDevicePencilRHSIdentityReport",
     "NonlinearSpectralDomainWorkModel",
     "NonlinearSpectralIntegratorIdentityReport",
     "NonlinearSpectralPencilRHSIdentityReport",
@@ -2516,6 +2668,7 @@ __all__ = [
     "classify_nonlinear_parallel_strategy",
     "deterministic_nonlinear_domain_state",
     "deterministic_nonlinear_spectral_state",
+    "device_z_pencil_nonlinear_spectral_rhs",
     "integrate_logical_decomposed_nonlinear_spectral",
     "nonlinear_domain_identity_report",
     "nonlinear_domain_parallel_identity_gate",
