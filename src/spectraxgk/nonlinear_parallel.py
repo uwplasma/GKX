@@ -1523,6 +1523,45 @@ def _pencil_spectral_bracket(state_hat: jax.Array, phi_hat: jax.Array) -> jax.Ar
     return _pencil_fft2(bracket_xy, y_axis=-3, x_axis=-2)
 
 
+def _pencil_spectral_bracket_z_chunked(
+    state_hat: jax.Array,
+    phi_hat: jax.Array,
+    *,
+    z_chunk_size: int,
+) -> jax.Array:
+    """Return the pencil bracket by processing independent z slabs.
+
+    The nonlinear bracket has no coupling along ``z`` inside this local
+    pseudo-spectral micro-route. Chunking the local z extent therefore preserves
+    the operator while reducing cuFFT batched-plan pressure on GPUs.
+    """
+
+    _nl, _nm, _ny, _nx, nz = _validate_spectral_state_shape(tuple(state_hat.shape))
+    chunk_size = int(z_chunk_size)
+    if chunk_size < 1:
+        raise ValueError("z_chunk_size must be at least one")
+    if chunk_size >= nz:
+        return _pencil_spectral_bracket(state_hat, phi_hat)
+
+    bracket_chunks: list[jax.Array] = []
+    for start in range(0, nz, chunk_size):
+        size = min(chunk_size, nz - start)
+        state_chunk = jax.lax.dynamic_slice_in_dim(
+            state_hat,
+            start,
+            size,
+            axis=-1,
+        )
+        phi_chunk = jax.lax.dynamic_slice_in_dim(
+            phi_hat,
+            start,
+            size,
+            axis=-1,
+        )
+        bracket_chunks.append(_pencil_spectral_bracket(state_chunk, phi_chunk))
+    return jnp.concatenate(bracket_chunks, axis=-1)
+
+
 def _spectral_rhs_from_bracket(bracket_hat: jax.Array) -> jax.Array:
     """Return the ExB advection contribution used by the identity micro-route."""
 
@@ -1539,6 +1578,21 @@ def _serial_nonlinear_spectral_rhs(state_hat: jax.Array) -> tuple[jax.Array, jax
 def _pencil_nonlinear_spectral_rhs(state_hat: jax.Array) -> tuple[jax.Array, jax.Array, jax.Array]:
     field = _field_from_state(state_hat)
     bracket = _pencil_spectral_bracket(state_hat, field)
+    rhs = _spectral_rhs_from_bracket(bracket)
+    return field, bracket, rhs
+
+
+def _pencil_nonlinear_spectral_rhs_z_chunked(
+    state_hat: jax.Array,
+    *,
+    z_chunk_size: int,
+) -> tuple[jax.Array, jax.Array, jax.Array]:
+    field = _field_from_state(state_hat)
+    bracket = _pencil_spectral_bracket_z_chunked(
+        state_hat,
+        field,
+        z_chunk_size=z_chunk_size,
+    )
     rhs = _spectral_rhs_from_bracket(bracket)
     return field, bracket, rhs
 
@@ -2220,12 +2274,18 @@ def _device_z_pencil_shard_map_rhs_fn(  # pragma: no cover - exercised by profil
     mesh: Any,
     *,
     axis_name: str,
+    z_chunk_size: int | None = None,
 ) -> Any:
     """Return a jitted shard-map RHS for z-sharded spectral states."""
 
     from jax.sharding import PartitionSpec
 
     def _local_rhs(local_state: jax.Array) -> jax.Array:
+        if z_chunk_size is not None:
+            return _pencil_nonlinear_spectral_rhs_z_chunked(
+                local_state,
+                z_chunk_size=int(z_chunk_size),
+            )[2]
         return _pencil_nonlinear_spectral_rhs(local_state)[2]
 
     state_spec = PartitionSpec(None, None, None, None, axis_name)
@@ -2245,6 +2305,7 @@ def device_z_pencil_nonlinear_spectral_rhs(
     *,
     devices: Sequence[Any] | None = None,
     axis_name: str = "z",
+    z_chunk_size: int | None = None,
     atol: float = 5.0e-6,
     rtol: float = 1.0e-4,
 ) -> tuple[jax.Array, NonlinearSpectralDevicePencilRHSIdentityReport]:
@@ -2289,7 +2350,11 @@ def device_z_pencil_nonlinear_spectral_rhs(
         return serial_rhs, report
 
     with mesh:  # pragma: no cover - exercised by CPU/GPU profile artifacts.
-        sharded_rhs_fn = _device_z_pencil_shard_map_rhs_fn(mesh, axis_name=axis_name)
+        sharded_rhs_fn = _device_z_pencil_shard_map_rhs_fn(
+            mesh,
+            axis_name=axis_name,
+            z_chunk_size=z_chunk_size,
+        )
         sharded_state = jax.device_put(
             _host_staged_array_for_sharding(state_hat),
             sharding,
@@ -2332,6 +2397,7 @@ def device_z_pencil_nonlinear_spectral_transport_window_identity_gate(
     *,
     devices: Sequence[Any] | None = None,
     axis_name: str = "z",
+    z_chunk_size: int | None = None,
     dt: float = 0.005,
     steps: int = 4,
     atol: float = 5.0e-6,
@@ -2416,7 +2482,11 @@ def device_z_pencil_nonlinear_spectral_transport_window_identity_gate(
 
     dt_array = jnp.asarray(float(dt), dtype=jnp.real(state_hat).dtype)
     with mesh:  # pragma: no cover - exercised by CPU/GPU profile artifacts.
-        sharded_rhs_fn = _device_z_pencil_shard_map_rhs_fn(mesh, axis_name=axis_name)
+        sharded_rhs_fn = _device_z_pencil_shard_map_rhs_fn(
+            mesh,
+            axis_name=axis_name,
+            z_chunk_size=z_chunk_size,
+        )
         device_state = jax.device_put(
             _host_staged_array_for_sharding(state_hat),
             sharding,
