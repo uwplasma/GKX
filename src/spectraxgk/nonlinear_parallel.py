@@ -2206,28 +2206,27 @@ def device_z_pencil_nonlinear_spectral_rhs(
         )
         return serial_rhs, report
 
-    def _full_fused_tuple(local_state: jax.Array) -> tuple[jax.Array, jax.Array, jax.Array]:
-        return _pencil_nonlinear_spectral_rhs(local_state)
+    def _local_rhs(local_state: jax.Array) -> jax.Array:
+        return _pencil_nonlinear_spectral_rhs(local_state)[2]
 
     with mesh:
-        from jax.sharding import NamedSharding, PartitionSpec
+        from jax.sharding import PartitionSpec
 
-        field_sharding = NamedSharding(
-            mesh,
-            PartitionSpec(None, None, axis_name),
-        )
+        state_spec = PartitionSpec(None, None, None, None, axis_name)
         sharded_rhs_fn = jax.jit(
-            _full_fused_tuple,
-            in_shardings=sharding,
-            out_shardings=(field_sharding, sharding, sharding),
+            jax.shard_map(
+                _local_rhs,
+                mesh=mesh,
+                in_specs=state_spec,
+                out_specs=state_spec,
+                check_vma=False,
+            )
         )
         sharded_state = jax.device_put(
             _host_staged_array_for_sharding(state_hat),
             sharding,
         )
-        _candidate_field, _candidate_bracket, candidate_rhs = sharded_rhs_fn(
-            sharded_state,
-        )
+        candidate_rhs = sharded_rhs_fn(sharded_state)
 
     rhs_abs, rhs_rel = _host_max_abs_rel_error(serial_rhs, candidate_rhs, atol=atol)
     identity_passed = bool(rhs_abs <= float(atol) and rhs_rel <= float(rtol))
@@ -2249,10 +2248,10 @@ def device_z_pencil_nonlinear_spectral_rhs(
         device_sharding_active=True,
         decomposed_path_enabled=identity_passed,
         claim_scope=(
-            "device z-sharded fused pencil nonlinear RHS identity gate; FFT axes "
-            "remain local per device and no global spectral reconstruction is used, "
-            "host-gathered RHS identity is required, and no speedup claim is allowed "
-            "without matched profiler gates"
+            "device z-sharded shard_map fused pencil nonlinear RHS identity gate; "
+            "FFT axes remain local per device and no global spectral reconstruction "
+            "is used, host-gathered RHS identity is required, and no speedup claim "
+            "is allowed without matched profiler gates"
         ),
         blocked_reasons=tuple(blockers_list),
     )
