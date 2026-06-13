@@ -211,6 +211,19 @@ python tools/benchmark_runtime_memory.py \
   --plot-out docs/_static/runtime_memory_benchmark.png
 ```
 
+Representative shipped rows from `docs/_static/runtime_memory_results_ship_refresh.csv`:
+
+| Case | SPECTRAX-GK CPU | SPECTRAX-GK GPU | Reference backend | Peak RSS range |
+| --- | ---: | ---: | ---: | ---: |
+| Cyclone ITG linear | 39.6 s | 24.2 s | 981.7 s | 1.1-2.0 GiB |
+| W7-X nonlinear | 474.0 s | 50.8 s | 111.0 s | 2.0-6.3 GiB |
+| HSX nonlinear | 646.5 s | 49.3 s | 135.7 s | 2.1-6.4 GiB |
+| Cyclone Miller nonlinear | 339.2 s | 47.1 s | 77.8 s | 2.1-4.9 GiB |
+
+These are cold wall-clock rows from the tracked benchmark host and include
+startup/compilation for JAX. Treat them as release-accounting data for the
+listed workloads, not as a universal throughput model for longer warm runs.
+
 
 ## Current claim scope
 
@@ -960,12 +973,14 @@ office identity gate. Treat both as engineering gates, not as runtime speedup
 claims. The matched large strong-scaling sweep in `docs/performance.rst`
 confirms this conservative stance: older whole-state nonlinear sharding
 artifacts were identity-correct but did not produce a production CPU/GPU speedup
-claim, and the current CPU profiler fails closed before unsafe multi-device
-FFT-layout routes. Production parallelization should
-therefore focus on independent `k_y` scans, quasilinear studies, sensitivity
-sweeps, and UQ/ensemble batching until a communication-aware nonlinear
-decomposition has its own workload-specific identity, transport-window, and
-matched profiler evidence.
+claim, and the newer device-z pencil route passes RHS and fixed-step
+transport-window identity but remains below the two-GPU speedup gate. The final
+release decision for this tranche is to ship production independent-work
+parallelization and defer production nonlinear domain decomposition until the
+RHS/update route streams scalar diagnostics in-place and clears matched CPU/GPU
+identity plus speedup gates. Production parallelization should therefore focus
+on independent `k_y` scans, quasilinear studies, sensitivity sweeps, and
+UQ/ensemble batching until that communication-aware nonlinear route is complete.
 
 On current JAX/XLA CPU backends, the nonlinear whole-state `pjit` profiler
 skips active multi-device CPU sharding by default because FFT layout/collective
@@ -1017,6 +1032,14 @@ serial reconstruction identity for independent `k_y` and UQ portfolios, while
 labeling nonlinear state-domain partitioning as diagnostic metadata only.
 
 ![SPECTRAX-GK parallel decomposition contract status](docs/_static/parallel_decomposition_status.png)
+
+The latest nonlinear device-z observable split also stays diagnostic: the
+auto-chunked two-GPU transport-window route preserves final-state and transport
+observable identity, but the compute-only speedup is `1.19x` and the scalar
+observable gate is about `42.6x` more expensive than the sharded compute row.
+The next performance tranche is therefore fused device-side diagnostic
+accumulation inside the nonlinear RHS/update, followed by full-solver
+serial-vs-decomposed transport-window gates.
 
 ![SPECTRAX-GK quasilinear UQ ensemble strong scaling](docs/_static/quasilinear_uq_ensemble_scaling_large.png)
 
