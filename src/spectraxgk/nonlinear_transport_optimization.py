@@ -345,16 +345,28 @@ def matched_optimized_transport_report(
     cfg.validate()
     comparison = payload.get("comparison")
     comparison_map: Mapping[str, Any] = comparison if isinstance(comparison, Mapping) else {}
+    statistics = payload.get("statistics")
+    statistics_map: Mapping[str, Any] = statistics if isinstance(statistics, Mapping) else {}
     selected = payload.get("selected_optimized_audit")
     selected_map: Mapping[str, Any] = selected if isinstance(selected, Mapping) else {}
     baseline = payload.get("baseline_ensemble")
     baseline_map: Mapping[str, Any] = baseline if isinstance(baseline, Mapping) else {}
     optimized = payload.get("optimized_ensemble")
     optimized_map: Mapping[str, Any] = optimized if isinstance(optimized, Mapping) else {}
-    relative_reduction = _finite_float(comparison_map.get("relative_reduction"))
+    strict_baseline = payload.get("baseline")
+    strict_baseline_map: Mapping[str, Any] = strict_baseline if isinstance(strict_baseline, Mapping) else {}
+    strict_candidate = payload.get("candidate")
+    strict_candidate_map: Mapping[str, Any] = strict_candidate if isinstance(strict_candidate, Mapping) else {}
+    relative_reduction = _finite_float(
+        comparison_map.get("relative_reduction")
+        if "relative_reduction" in comparison_map
+        else statistics_map.get("relative_reduction")
+    )
     uncertainty_sigma = _finite_float(
         comparison_map.get("uncertainty_separation_sigma")
         or comparison_map.get("uncertainty_z_score")
+        or statistics_map.get("uncertainty_separation_sigma")
+        or statistics_map.get("uncertainty_z_score")
     )
     gates = payload.get("gates")
     gate_rows = [row for row in gates if isinstance(row, Mapping)] if isinstance(gates, Sequence) else []
@@ -365,15 +377,22 @@ def matched_optimized_transport_report(
     passed = _artifact_passed(payload)
     baseline_qualified = bool(
         baseline_map.get("qualifies", False)
+        or strict_baseline_map.get("passed", False)
+        or strict_baseline_map.get("raw_passed", False)
         or named_gate_passed.get("baseline_replicated_ensemble_qualified", False)
+        or named_gate_passed.get("baseline_ensemble_passed", False)
     )
     optimized_qualified = bool(
         optimized_map.get("qualifies", False)
+        or strict_candidate_map.get("passed", False)
+        or strict_candidate_map.get("raw_passed", False)
         or named_gate_passed.get("optimized_replicated_ensemble_qualified", False)
+        or named_gate_passed.get("candidate_ensemble_passed", False)
     )
     selected_closed = bool(
         selected_map.get("passed", False)
         or named_gate_passed.get("selected_optimized_equilibrium_audit", False)
+        or (strict_baseline_map and strict_candidate_map and baseline_qualified and optimized_qualified)
     )
     reduction_ok = (
         relative_reduction is not None
@@ -477,6 +496,23 @@ def production_nonlinear_optimization_guard_report(
     qualifying_matched_optimized = [
         row for row in matched_optimized_rows if bool(row["qualifies_for_production_optimization"])
     ]
+    failed_matched_optimized = [
+        {
+            "path": str(row["path"]),
+            "case": str(row["case"]),
+            "relative_reduction": row["relative_reduction"],
+            "uncertainty_separation_sigma": row["uncertainty_separation_sigma"],
+            "blockers": list(row["blockers"]),
+        }
+        for row in matched_optimized_rows
+        if not bool(row["qualifies_for_production_optimization"])
+    ]
+    reduction_values = [
+        float(row["relative_reduction"])
+        for row in matched_optimized_rows
+        if row["relative_reduction"] is not None
+    ]
+    best_matched_reduction = max(reduction_values) if reduction_values else None
     rows_claiming_production = int(
         _finite_float(optimization_scope.get("n_rows_claiming_production")) or 0
     )
@@ -583,7 +619,26 @@ def production_nonlinear_optimization_guard_report(
             "qualifying_replicated_holdout_ensembles": len(qualifying_ensembles),
             "qualifying_optimized_equilibrium_ensembles": len(qualifying_optimized),
             "qualifying_matched_optimized_transport_audits": len(qualifying_matched_optimized),
+            "total_matched_optimized_transport_audits": len(matched_optimized_rows),
+            "failed_matched_optimized_transport_audits": len(failed_matched_optimized),
+            "best_matched_optimized_relative_reduction": best_matched_reduction,
             "production_nonlinear_optimization_ready": int(promoted),
+        },
+        "evidence_gap": {
+            "claim_boundary": (
+                "Existing strict matched audits are included as negative evidence. "
+                "They do not promote broad nonlinear turbulent-flux optimization unless "
+                "they pass the same long-window reduction and uncertainty-separation gates."
+            ),
+            "failed_matched_optimized_transport_audits": failed_matched_optimized,
+            "required_additional_optimized_equilibrium_ensembles": max(
+                int(cfg.min_optimized_equilibrium_ensembles) - len(qualifying_optimized),
+                0,
+            ),
+            "required_additional_matched_optimized_audits": max(
+                int(cfg.min_matched_optimized_audits) - len(qualifying_matched_optimized),
+                0,
+            ),
         },
         "config": asdict(cfg),
         "notes": (
