@@ -336,6 +336,37 @@ class NonlinearSpectralIntegratorIdentityReport:
 
 
 @dataclass(frozen=True)
+class NonlinearSpectralDomainWorkModel:
+    """Communication/work model for the logical nonlinear spectral-domain route."""
+
+    state_shape: tuple[int, int, int, int, int]
+    y_chunks: tuple[int, ...]
+    x_chunks: tuple[int, ...]
+    y_offsets: tuple[int, ...]
+    x_offsets: tuple[int, ...]
+    tile_bounds: tuple[tuple[int, int, int, int], ...]
+    num_tiles: int
+    state_elements: int
+    field_elements: int
+    owned_state_elements_per_step: int
+    state_allgather_elements_per_step: int
+    bracket_allgather_elements_per_step: int
+    field_broadcast_elements_per_step: int
+    total_communication_elements_per_step: int
+    communication_to_owned_work_ratio: float
+    parallel_efficiency_ceiling: float
+    max_communication_to_owned_work_ratio: float
+    production_speedup_feasible: bool
+    feasibility_blockers: tuple[str, ...]
+    claim_scope: str
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-friendly representation of the work model."""
+
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class NonlinearParallelStrategy:
     """Readiness contract for one nonlinear parallelization candidate."""
 
@@ -973,6 +1004,79 @@ def _spectral_tile_bounds(
         (y_start, y_start + y_size, x_start, x_start + x_size)
         for y_start, y_size in zip(y_offsets, y_chunks, strict=True)
         for x_start, x_size in zip(x_offsets, x_chunks, strict=True)
+    )
+
+
+def nonlinear_spectral_domain_work_model(
+    state_shape: tuple[int, int, int, int, int],
+    *,
+    y_chunks: tuple[int, ...],
+    x_chunks: tuple[int, ...],
+    max_communication_to_owned_work_ratio: float = 0.5,
+) -> NonlinearSpectralDomainWorkModel:
+    """Estimate communication pressure for the current logical spectral route.
+
+    The current diagnostic route reconstructs global spectral state/bracket
+    arrays before returning owned output tiles. That is useful for identity
+    gating, but it implies allgather/broadcast traffic that can dominate the
+    owned tile work. This model is a conservative fail-closed screen for that
+    route; it is not a performance prediction for a future distributed FFT.
+    """
+
+    nl, nm, ny, nx, nz = _validate_spectral_state_shape(tuple(state_shape))
+    normalized_y_chunks = _validate_chunks(ny, y_chunks, name="y_chunks")
+    normalized_x_chunks = _validate_chunks(nx, x_chunks, name="x_chunks")
+    num_tiles = len(normalized_y_chunks) * len(normalized_x_chunks)
+    state_elements = int(nl * nm * ny * nx * nz)
+    field_elements = int(ny * nx * nz)
+    communication_factor = max(num_tiles - 1, 0)
+    state_allgather_elements = int(state_elements * communication_factor)
+    bracket_allgather_elements = int(state_elements * communication_factor)
+    field_broadcast_elements = int(field_elements * communication_factor)
+    total_communication_elements = (
+        state_allgather_elements
+        + bracket_allgather_elements
+        + field_broadcast_elements
+    )
+    owned_state_elements = state_elements
+    ratio = (
+        float(total_communication_elements) / float(owned_state_elements)
+        if owned_state_elements > 0
+        else float("inf")
+    )
+    efficiency_ceiling = 1.0 / (1.0 + ratio) if ratio >= 0.0 else 0.0
+
+    blockers: list[str] = []
+    if num_tiles < 2:
+        blockers.append("single_tile_no_domain_decomposition")
+    if ratio > float(max_communication_to_owned_work_ratio):
+        blockers.append("global_reconstruction_communication_dominates_owned_work")
+    production_speedup_feasible = bool(not blockers)
+
+    return NonlinearSpectralDomainWorkModel(
+        state_shape=(nl, nm, ny, nx, nz),
+        y_chunks=normalized_y_chunks,
+        x_chunks=normalized_x_chunks,
+        y_offsets=_chunk_offsets(normalized_y_chunks),
+        x_offsets=_chunk_offsets(normalized_x_chunks),
+        tile_bounds=_spectral_tile_bounds(normalized_y_chunks, normalized_x_chunks),
+        num_tiles=num_tiles,
+        state_elements=state_elements,
+        field_elements=field_elements,
+        owned_state_elements_per_step=owned_state_elements,
+        state_allgather_elements_per_step=state_allgather_elements,
+        bracket_allgather_elements_per_step=bracket_allgather_elements,
+        field_broadcast_elements_per_step=field_broadcast_elements,
+        total_communication_elements_per_step=total_communication_elements,
+        communication_to_owned_work_ratio=ratio,
+        parallel_efficiency_ceiling=efficiency_ceiling,
+        max_communication_to_owned_work_ratio=float(max_communication_to_owned_work_ratio),
+        production_speedup_feasible=production_speedup_feasible,
+        feasibility_blockers=tuple(blockers),
+        claim_scope=(
+            "diagnostic communication/work model for the current global-reconstruction "
+            "logical spectral route; not a distributed FFT performance claim"
+        ),
     )
 
 
@@ -1857,6 +1961,7 @@ __all__ = [
     "NonlinearParallelStrategy",
     "NonlinearParallelStrategyName",
     "NonlinearSpectralCommunicationReport",
+    "NonlinearSpectralDomainWorkModel",
     "NonlinearSpectralIntegratorIdentityReport",
     "NonlinearSpectralRHSIdentityReport",
     "ParallelReadiness",
@@ -1872,6 +1977,7 @@ __all__ = [
     "nonlinear_parallel_strategy",
     "nonlinear_spectral_communication_identity_gate",
     "nonlinear_spectral_communication_identity_report",
+    "nonlinear_spectral_domain_work_model",
     "logical_decomposed_nonlinear_spectral_rhs",
     "nonlinear_spectral_integrator_identity_gate",
     "nonlinear_spectral_rhs_identity_gate",
