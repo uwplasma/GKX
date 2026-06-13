@@ -318,8 +318,8 @@ The residual-anatomy panel below explains the failed gate instead of hiding it
 behind one aggregate number. External axisymmetric VMEC holdouts now dominate
 the error budget, with the Solovev replicated holdout the largest outlier; HSX
 and W7-X are comparatively well tracked by the reduced candidate. This points
-the next model-development step toward richer saturation physics and additional
-independent nonlinear holdouts, not threshold loosening.
+the next model-development step toward richer saturation physics on the frozen
+12-case ledger, not additional holdout collection or threshold loosening.
 
 ![SPECTRAX-GK quasilinear residual anatomy](docs/_static/quasilinear_error_anatomy.png)
 
