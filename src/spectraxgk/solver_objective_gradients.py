@@ -9,11 +9,9 @@ than reduced optimization proxies, but still narrower than a full
 from __future__ import annotations
 
 import importlib
-from dataclasses import replace as dc_replace
 import time
 from typing import Any, Literal, cast
 
-import jax
 import jax.numpy as jnp
 import numpy as np
 
@@ -27,7 +25,6 @@ from spectraxgk.geometry.differentiable import (
     discover_differentiable_geometry_backends,
     flux_tube_geometry_from_mapping,
     flux_tube_geometry_from_vmec_boozer_state,
-    observable_gradient_validation_report,
     vmec_jax_boozer_equal_arc_core_profiles_from_state,
 )
 from spectraxgk.grids import build_spectral_grid, select_ky_grid
@@ -47,6 +44,17 @@ from spectraxgk.solver_eigen_objectives import (
     dominant_eigenvalue_branch_locality_report,
     dominant_real_eigenvalue,
 )
+from spectraxgk.solver_geometry_objectives import (
+    SOLVER_GEOMETRY_PARAMETER_NAMES,
+    TINY_OBJECTIVE_NAMES,
+    _objective_gate_rows,
+    default_solver_geometry_design_params,
+    solver_ready_geometry_mapping,
+    tiny_differentiable_objective_gradient_report,
+)
+from spectraxgk.solver_nonlinear_window_objective import (
+    _reduced_nonlinear_window_metrics_from_linear_observables,
+)
 from spectraxgk.solver_objective_sampling import (
     _aggregate_sample_metadata,
     _aggregate_weights,
@@ -57,15 +65,12 @@ from spectraxgk.solver_objective_sampling import (
     _surface_sample_axis,
     solver_grid_options_from_ky_values,
 )
-
-
-SOLVER_GEOMETRY_PARAMETER_NAMES = ("bmag_ripple", "curvature_drift_scale")
-VMEC_BOOZER_STATE_PARAMETER_NAMES = ("Rcos_mid_surface_m1",)
-VMEC_BOOZER_STATE_PARAMETER_FAMILIES = ("Rcos", "Rsin", "Zcos", "Zsin", "Lcos", "Lsin")
-TINY_OBJECTIVE_NAMES = (
-    "mean_bmag",
-    "drift_rms",
-    "metric_weighted_bmag_proxy",
+from spectraxgk.solver_vmec_state import (
+    VMEC_BOOZER_STATE_PARAMETER_FAMILIES,
+    VMEC_BOOZER_STATE_PARAMETER_NAMES,
+    _replace_vmec_boozer_state_coefficient,
+    _vmec_boozer_state_array,
+    _vmec_boozer_state_parameter_name,
 )
 VMEC_BOOZER_FREQUENCY_OBJECTIVE_NAMES = ("gamma", "omega")
 VMEC_BOOZER_QUASILINEAR_OBJECTIVE_NAMES = (
@@ -1338,246 +1343,6 @@ def solver_objective_branch_gradient_report(
         "objective_gates": rows,
         "eigenpair_gate": gate,
     }
-
-
-def _vmec_boozer_state_array(state: Any, parameter_family: str) -> jnp.ndarray:
-    family = str(parameter_family)
-    if family not in VMEC_BOOZER_STATE_PARAMETER_FAMILIES:
-        raise ValueError(
-            "parameter_family must be one of "
-            f"{', '.join(VMEC_BOOZER_STATE_PARAMETER_FAMILIES)}"
-        )
-    if not hasattr(state, family):
-        raise RuntimeError(f"vmec_jax state does not expose {family}")
-    array = jnp.asarray(getattr(state, family))
-    if array.ndim != 2 or int(array.shape[1]) < 2:
-        raise RuntimeError(
-            f"vmec_jax state {family} array must expose at least one non-axisymmetric mode"
-        )
-    return array
-
-
-def _replace_vmec_boozer_state_coefficient(
-    state: Any,
-    parameter_family: str,
-    base_array: jnp.ndarray,
-    radial_index: int,
-    mode_index: int,
-    delta: Any,
-) -> Any:
-    return dc_replace(
-        state,
-        **{
-            str(parameter_family): base_array.at[
-                int(radial_index),
-                int(mode_index),
-            ].add(delta)
-        },
-    )
-
-
-def _vmec_boozer_state_parameter_name(
-    parameter_family: str,
-    radial_index: int,
-    mode_index: int,
-    *,
-    default_mid_surface: int,
-) -> str:
-    family = str(parameter_family)
-    if int(radial_index) == int(default_mid_surface):
-        return f"{family}_mid_surface_m{int(mode_index)}"
-    return f"{family}_r{int(radial_index)}_m{int(mode_index)}"
-
-
-def _reduced_nonlinear_window_metrics_from_linear_observables(
-    gamma: jnp.ndarray,
-    kperp_eff2: jnp.ndarray,
-    heat_weight: jnp.ndarray,
-    *,
-    dt: float = 0.18,
-    steps: int = 96,
-    tail_fraction: float = 0.30,
-) -> jnp.ndarray:
-    """Return smooth reduced nonlinear-window metrics from linear observables.
-
-    This helper is intentionally a bounded estimator gate, not a replacement
-    for converged nonlinear turbulence.  It propagates a differentiable
-    logistic heat-flux envelope whose drive is the isolated linear growth rate
-    and whose amplitude is weighted by the electrostatic linear heat-flux
-    response.  The output is ``[window_mean, coefficient_of_variation,
-    normalized_trend]`` over the late-time window.
-    """
-
-    steps_int = int(steps)
-    if steps_int < 4:
-        raise ValueError("steps must be at least 4 for a nonlinear-window metric")
-    tail_fraction_float = float(tail_fraction)
-    if not (0.0 < tail_fraction_float <= 1.0):
-        raise ValueError("tail_fraction must be in (0, 1]")
-
-    dtype = jnp.result_type(gamma, kperp_eff2, heat_weight)
-    eps = jnp.asarray(1.0e-12, dtype=dtype)
-    dt_arr = jnp.asarray(float(dt), dtype=dtype)
-    beta = jnp.asarray(18.0, dtype=dtype)
-    growth = jax.nn.softplus(beta * gamma) / beta
-    kperp_pos = jnp.maximum(kperp_eff2, eps)
-    heat_scale = jnp.sqrt(heat_weight * heat_weight + eps)
-    saturation = jnp.asarray(1.0, dtype=dtype) + 2.5 * kperp_pos + 0.25 * heat_scale
-    energy_sat = 2.0 * growth / jnp.maximum(saturation, eps)
-    energy0 = jnp.maximum(jnp.asarray(1.0e-6, dtype=dtype), 0.08 * energy_sat)
-    flux_scale = heat_scale / (1.0 + 0.35 * kperp_pos)
-
-    def rk2_step(energy: jnp.ndarray, _unused: None) -> tuple[jnp.ndarray, jnp.ndarray]:
-        rhs0 = 2.0 * growth * energy - saturation * energy * energy
-        energy_mid = jnp.maximum(energy + 0.5 * dt_arr * rhs0, eps)
-        rhs_mid = 2.0 * growth * energy_mid - saturation * energy_mid * energy_mid
-        energy_next = jnp.maximum(energy + dt_arr * rhs_mid, eps)
-        return energy_next, flux_scale * energy_next
-
-    first_flux = flux_scale * energy0
-    _energy_final, stepped_flux = jax.lax.scan(rk2_step, energy0, None, length=steps_int)
-    flux_trace = jnp.concatenate([jnp.reshape(first_flux, (1,)), stepped_flux])
-    n_samples = steps_int + 1
-    start_index = max(0, min(n_samples - 2, int((1.0 - tail_fraction_float) * n_samples)))
-    window = flux_trace[start_index:]
-    mean = jnp.mean(window)
-    centered_flux = window - mean
-    std = jnp.sqrt(jnp.mean(centered_flux * centered_flux))
-    cv = std / jnp.maximum(jnp.abs(mean), eps)
-    times = dt_arr * jnp.arange(window.size, dtype=dtype)
-    centered_time = times - jnp.mean(times)
-    slope = jnp.sum(centered_time * centered_flux) / jnp.maximum(jnp.sum(centered_time * centered_time), eps)
-    normalized_trend = slope * (dt_arr * jnp.asarray(window.size, dtype=dtype)) / jnp.maximum(jnp.abs(mean), eps)
-    return jnp.asarray([mean, cv, normalized_trend], dtype=dtype)
-
-
-def default_solver_geometry_design_params() -> jnp.ndarray:
-    """Return the small geometry-design vector used by the release gate."""
-
-    return jnp.asarray([0.05, 0.20], dtype=jnp.float32)
-
-
-def solver_ready_geometry_mapping(params: jnp.ndarray, theta: jnp.ndarray) -> dict[str, Any]:
-    """Map a two-parameter design vector into solver-ready flux-tube arrays."""
-
-    p = jnp.asarray(params)
-    if p.ndim != 1 or int(p.size) != 2:
-        raise ValueError("params must be a length-2 vector [bmag_ripple, curvature_drift_scale]")
-    ripple = p[0]
-    drift = p[1]
-    theta_arr = jnp.asarray(theta)
-    ones = jnp.ones_like(theta_arr)
-    zeros = jnp.zeros_like(theta_arr)
-    bmag = 1.0 + ripple * jnp.cos(theta_arr)
-    return {
-        "theta": theta_arr,
-        "gradpar": 0.7 * ones,
-        "bmag": bmag,
-        "bgrad": -ripple * jnp.sin(theta_arr),
-        "gds2": 1.0 + 0.1 * ripple * jnp.cos(theta_arr),
-        "gds21": 0.05 * ripple * jnp.sin(theta_arr),
-        "gds22": 1.0 + 0.05 * ripple * jnp.cos(theta_arr),
-        "cvdrift": drift * jnp.cos(theta_arr),
-        "gbdrift": drift * jnp.cos(theta_arr),
-        "cvdrift0": zeros,
-        "gbdrift0": zeros,
-        "jacobian": ones / (0.7 * bmag),
-        "grho": ones,
-        "q": 1.4,
-        "s_hat": 0.0,
-        "R0": 1.0,
-        "nfp": 1,
-    }
-
-
-def tiny_differentiable_objective_gradient_report(
-    params: jnp.ndarray | np.ndarray | None = None,
-    *,
-    fd_step: float = 1.0e-4,
-    rtol: float = 2.0e-4,
-    atol: float = 2.0e-6,
-) -> dict[str, object]:
-    """Validate a tiny differentiable objective on the solver-ready geometry map.
-
-    This is a lightweight objective-observable gate for CI and documentation. It
-    checks the reusable AD/finite-difference report path without running the
-    linear eigensolver or optional VMEC/Boozer backends.
-    """
-
-    p = default_solver_geometry_design_params() if params is None else jnp.asarray(params)
-    if p.ndim != 1 or int(p.size) != 2:
-        raise ValueError("params must be a length-2 vector")
-    theta = jnp.linspace(-jnp.pi, jnp.pi, 16, endpoint=False, dtype=p.dtype)
-
-    def objective_observables(x: jnp.ndarray) -> jnp.ndarray:
-        geom = flux_tube_geometry_from_mapping(
-            solver_ready_geometry_mapping(x, theta),
-            source_model="tiny_solver_ready_objective_gradient_gate",
-            validate_finite=False,
-        )
-        bmag = jnp.asarray(geom.bmag_profile)
-        gds2 = jnp.asarray(geom.gds2_profile)
-        drift = jnp.asarray(geom.cv_profile)
-        gb = jnp.asarray(geom.gb_profile)
-        drift_rms = jnp.sqrt(jnp.mean(drift * drift + gb * gb))
-        metric_weighted_bmag = jnp.mean(gds2 * bmag) + 0.25 * x[1] * x[1]
-        return jnp.asarray([jnp.mean(bmag), drift_rms, metric_weighted_bmag])
-
-    report = observable_gradient_validation_report(
-        objective_observables,
-        p,
-        fd_step=float(fd_step),
-        rtol=float(rtol),
-        atol=float(atol),
-        observable_names=TINY_OBJECTIVE_NAMES,
-        param_names=SOLVER_GEOMETRY_PARAMETER_NAMES,
-        relative_floor=1.0e-12,
-        report_kind="tiny_solver_ready_objective_gradient_ad_fd_gate",
-    )
-    report.update(
-        {
-            "source_scope": "solver_ready_geometry_contract",
-            "claim_scope": (
-                "tiny differentiable objective-observable gate only; not a "
-                "linear eigenpair, VMEC/Boozer, or nonlinear transport claim"
-            ),
-        }
-    )
-    return report
-
-
-def _objective_gate_rows(
-    report: dict[str, object],
-    *,
-    parameter_names: tuple[str, ...] = SOLVER_GEOMETRY_PARAMETER_NAMES,
-    objective_names: tuple[str, ...] = SOLVER_OBJECTIVE_NAMES,
-    rtol: float,
-    atol: float,
-) -> list[dict[str, object]]:
-    implicit = np.asarray(report["jacobian_implicit"], dtype=float)
-    finite_difference = np.asarray(report["jacobian_fd"], dtype=float)
-    rows: list[dict[str, object]] = []
-    for i, objective in enumerate(objective_names):
-        for j, parameter in enumerate(parameter_names):
-            fd_value = float(finite_difference[i, j])
-            implicit_value = float(implicit[i, j])
-            abs_error = abs(implicit_value - fd_value)
-            rel_error = abs_error / max(abs(fd_value), float(atol))
-            rows.append(
-                {
-                    "objective": objective,
-                    "parameter": parameter,
-                    "implicit": implicit_value,
-                    "finite_difference": fd_value,
-                    "abs_error": abs_error,
-                    "rel_error": rel_error,
-                    "atol": float(atol),
-                    "rtol": float(rtol),
-                    "passed": bool(abs_error <= float(atol) or rel_error <= float(rtol)),
-                }
-            )
-    return rows
-
 
 
 def _mode21_vmec_boozer_linear_context(  # pragma: no cover
