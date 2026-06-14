@@ -7,12 +7,10 @@ and initializer builders out of the large benchmark runner module while preservi
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
-from importlib import resources
+from dataclasses import replace
 from typing import Sequence
 import warnings
 
-import jax.numpy as jnp
 import numpy as np
 
 from spectraxgk.analysis import (
@@ -20,13 +18,75 @@ from spectraxgk.analysis import (
     extract_mode_time_series,
     fit_growth_rate_auto_with_stats,
 )
-from spectraxgk.config import InitializationConfig, KineticElectronBaseCase
-from spectraxgk.geometry import FluxTubeGeometryLike
+from spectraxgk.benchmark_initialization import (
+    _build_gaussian_profile,
+    _build_initial_condition,
+    _kinetic_reference_init_cfg,
+)
+from spectraxgk.benchmark_reference import (
+    CycloneComparison,
+    CycloneReference,
+    CycloneRunResult,
+    CycloneScanResult,
+    LinearRunResult,
+    LinearScanResult,
+    _load_reference_with_header,
+    compare_cyclone_to_reference,
+    load_cyclone_reference,
+    load_cyclone_reference_kinetic,
+    load_etg_reference,
+    load_kbm_reference,
+    load_tem_reference,
+)
 from spectraxgk.grids import SpectralGrid
 from spectraxgk.linear import LinearParams
 from spectraxgk.linear_krylov import KrylovConfig
 from spectraxgk.normalization import apply_diagnostic_normalization
 from spectraxgk.species import Species, build_linear_params
+
+
+__all__ = [
+    "REFERENCE_NU_HYPER_L",
+    "REFERENCE_NU_HYPER_M",
+    "REFERENCE_P_HYPER_L",
+    "REFERENCE_P_HYPER_M",
+    "REFERENCE_DAMP_ENDS_AMP",
+    "REFERENCE_DAMP_ENDS_WIDTHFRAC",
+    "KBM_GX_SOLVER_LOCK",
+    "KBM_GX_SOLVER_LOCK_TOL",
+    "CycloneComparison",
+    "CycloneReference",
+    "CycloneRunResult",
+    "CycloneScanResult",
+    "LinearRunResult",
+    "LinearScanResult",
+    "_apply_gx_hypercollisions",
+    "_build_gaussian_profile",
+    "_build_initial_condition",
+    "_electron_only_params",
+    "_extract_mode_only_signal",
+    "_gx_linked_end_damping",
+    "_gx_p_hyper_m",
+    "_is_array_like",
+    "_iter_ky_batches",
+    "_kbm_use_multi_target_krylov",
+    "_kinetic_reference_init_cfg",
+    "_load_reference_with_header",
+    "_midplane_index",
+    "_normalize_growth_rate",
+    "_resolve_streaming_window",
+    "_score_fit_signal_auto",
+    "_select_fit_signal",
+    "_select_fit_signal_auto",
+    "_two_species_params",
+    "compare_cyclone_to_reference",
+    "load_cyclone_reference",
+    "load_cyclone_reference_kinetic",
+    "load_etg_reference",
+    "load_kbm_reference",
+    "load_tem_reference",
+    "select_kbm_solver_auto",
+]
 
 
 REFERENCE_NU_HYPER_L = 0.0
@@ -396,121 +456,6 @@ def _normalize_growth_rate(
     )
 
 
-def _build_gaussian_profile(
-    z: np.ndarray,
-    *,
-    kx: float,
-    ky: float,
-    s_hat: float,
-    init_cfg: InitializationConfig,
-) -> np.ndarray:
-    if ky == 0.0:
-        return np.zeros_like(z)
-    theta0 = kx / (s_hat * ky)
-    envelope = (
-        init_cfg.gaussian_envelope_constant
-        + init_cfg.gaussian_envelope_sine * np.sin(z - theta0)
-    )
-    width = init_cfg.gaussian_width
-    if width <= 0.0:
-        raise ValueError("gaussian_width must be > 0")
-    return envelope * np.exp(-(((z - theta0) / width) ** 2))
-
-
-def _build_initial_condition(
-    grid: SpectralGrid,
-    geom: FluxTubeGeometryLike,
-    *,
-    ky_index: int | Sequence[int] | np.ndarray,
-    kx_index: int,
-    Nl: int,
-    Nm: int,
-    init_cfg: InitializationConfig,
-) -> jnp.ndarray:
-    init_field = init_cfg.init_field.lower()
-    field_map = {
-        "density": (0, 0),
-        "upar": (0, 1),
-        "tpar": (0, 2),
-        "tperp": (1, 0),
-        "qpar": (0, 3),
-        "qperp": (1, 1),
-    }
-    # GX scales some moments when init_field="all" (see moments.cu).
-    all_scales = {
-        "density": 1.0,
-        "upar": 1.0,
-        "tpar": 1.0 / np.sqrt(2.0),
-        "tperp": 1.0,
-        "qpar": 1.0 / np.sqrt(6.0),
-        "qperp": 1.0,
-    }
-    if init_field != "all" and init_field not in field_map:
-        raise ValueError(
-            "init_field must be one of {'density','upar','tpar','tperp','qpar','qperp','all'}"
-        )
-
-    G0 = np.zeros((Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
-    amp = float(init_cfg.init_amp)
-    ky_idx = np.atleast_1d(np.asarray(ky_index, dtype=int))
-    for ky_i in ky_idx:
-        if init_cfg.gaussian_init:
-            profile = _build_gaussian_profile(
-                np.asarray(grid.z),
-                kx=float(grid.kx[kx_index]),
-                ky=float(grid.ky[ky_i]),
-                s_hat=geom.s_hat,
-                init_cfg=init_cfg,
-            )
-            init_vals = amp * profile * (1.0 + 1.0j)
-        else:
-            init_vals = amp * (1.0 + 1.0j) * np.ones_like(grid.z)
-        if grid.ky[ky_i] != 0.0:
-            if init_field == "all":
-                for field_name, (l_idx, m_idx) in field_map.items():
-                    if l_idx < Nl and m_idx < Nm:
-                        scale = all_scales.get(field_name, 1.0)
-                        G0[l_idx, m_idx, ky_i, kx_index, :] = init_vals * scale
-            else:
-                l_idx, m_idx = field_map[init_field]
-                if l_idx >= Nl or m_idx >= Nm:
-                    raise ValueError("init_field moment exceeds (Nl, Nm) resolution")
-                G0[l_idx, m_idx, ky_i, kx_index, :] = init_vals
-    return jnp.asarray(G0)
-
-
-def _kinetic_reference_init_cfg(
-    init_cfg: InitializationConfig, *, gx_reference: bool
-) -> InitializationConfig:
-    """Restore the historical kinetic benchmark seed on the GX-reference path.
-
-    Older kinetic parity runs seeded a constant electron-density moment rather than
-    the newer tiny Gaussian default. Preserve explicit user overrides by only
-    replacing the exact current kinetic default init.
-    """
-
-    if not gx_reference:
-        return init_cfg
-    kinetic_default_init = KineticElectronBaseCase().init
-    if init_cfg != kinetic_default_init:
-        return init_cfg
-    return InitializationConfig(
-        init_field="density",
-        init_amp=1.0e-3,
-        init_single=True,
-        random_seed=kinetic_default_init.random_seed,
-        gaussian_init=False,
-        gaussian_width=kinetic_default_init.gaussian_width,
-        gaussian_envelope_constant=kinetic_default_init.gaussian_envelope_constant,
-        gaussian_envelope_sine=kinetic_default_init.gaussian_envelope_sine,
-        kpar_init=kinetic_default_init.kpar_init,
-        init_file=kinetic_default_init.init_file,
-        init_file_scale=kinetic_default_init.init_file_scale,
-        init_file_mode=kinetic_default_init.init_file_mode,
-        init_electrons_only=kinetic_default_init.init_electrons_only,
-    )
-
-
 def _kbm_use_multi_target_krylov(
     kcfg: KrylovConfig,
     targets: Sequence[float] | None,
@@ -530,155 +475,6 @@ def _kbm_use_multi_target_krylov(
     if kcfg.shift_selection.strip().lower() == "shift":
         return False
     return True
-
-
-@dataclass(frozen=True)
-class CycloneReference:
-    ky: np.ndarray
-    omega: np.ndarray
-    gamma: np.ndarray
-
-
-@dataclass(frozen=True)
-class CycloneRunResult:
-    t: np.ndarray
-    phi_t: np.ndarray
-    gamma: float
-    omega: float
-    ky: float
-    selection: ModeSelection
-
-
-@dataclass(frozen=True)
-class CycloneScanResult:
-    ky: np.ndarray
-    gamma: np.ndarray
-    omega: np.ndarray
-
-
-@dataclass(frozen=True)
-class CycloneComparison:
-    ky: float
-    gamma: float
-    omega: float
-    gamma_ref: float
-    omega_ref: float
-    rel_gamma: float
-    rel_omega: float
-
-
-@dataclass(frozen=True)
-class LinearRunResult:
-    t: np.ndarray
-    phi_t: np.ndarray
-    gamma: float
-    omega: float
-    ky: float
-    selection: ModeSelection
-    gamma_t: np.ndarray | None = None
-    omega_t: np.ndarray | None = None
-
-
-@dataclass(frozen=True)
-class LinearScanResult:
-    ky: np.ndarray
-    gamma: np.ndarray
-    omega: np.ndarray
-
-
-def load_cyclone_reference() -> CycloneReference:
-    """Load Cyclone base case reference data (adiabatic electrons)."""
-
-    data_path = resources.files("spectraxgk").joinpath(
-        "data", "cyclone_reference_adiabatic.csv"
-    )
-    arr = np.loadtxt(str(data_path), delimiter=",", skiprows=1)
-    ky = arr[:, 0]
-    omega = arr[:, 1]
-    gamma = arr[:, 2]
-    return CycloneReference(ky=ky, omega=omega, gamma=gamma)
-
-
-def _load_reference_with_header(filename: str) -> CycloneReference:
-    """Load reference CSVs with columns ky,gamma,omega."""
-
-    data_path = resources.files("spectraxgk").joinpath("data", filename)
-    arr = np.genfromtxt(str(data_path), delimiter=",", names=True, dtype=float)
-    ky = np.atleast_1d(np.asarray(arr["ky"], dtype=float))
-    gamma = np.atleast_1d(np.asarray(arr["gamma"], dtype=float))
-    omega = np.atleast_1d(np.asarray(arr["omega"], dtype=float))
-    return CycloneReference(ky=ky, omega=omega, gamma=gamma)
-
-
-def load_cyclone_reference_kinetic() -> CycloneReference:
-    """Load Cyclone base case reference data (kinetic electrons)."""
-
-    data_path = resources.files("spectraxgk").joinpath(
-        "data", "cyclone_reference_kinetic.csv"
-    )
-    arr = np.loadtxt(str(data_path), delimiter=",", skiprows=1)
-    ky = arr[:, 0]
-    omega = arr[:, 1]
-    gamma = arr[:, 2]
-    return CycloneReference(ky=ky, omega=omega, gamma=gamma)
-
-
-def load_kbm_reference() -> CycloneReference:
-    """Load KBM reference data (finite beta, kinetic electrons)."""
-
-    data_path = resources.files("spectraxgk").joinpath("data", "kbm_reference.csv")
-    arr = np.loadtxt(str(data_path), delimiter=",", skiprows=1)
-    ky = arr[:, 0]
-    omega = arr[:, 1]
-    gamma = arr[:, 2]
-    return CycloneReference(ky=ky, omega=omega, gamma=gamma)
-
-
-def load_etg_reference() -> CycloneReference:
-    """Load GX-backed ETG reference data for the tracked two-species ETG lane."""
-
-    data_path = resources.files("spectraxgk").joinpath("data", "etg_reference.csv")
-    arr = np.loadtxt(str(data_path), delimiter=",", skiprows=1)
-    ky = arr[:, 0]
-    omega = arr[:, 1]
-    gamma = arr[:, 2]
-    return CycloneReference(ky=ky, omega=omega, gamma=gamma)
-
-
-def load_tem_reference() -> CycloneReference:
-    """Load the provisional TEM reference digitized from the literature.
-
-    This lane is not backed by a GX reference dump. It remains an extended
-    stress case while the literature case definition is being reconstructed.
-    """
-
-    data_path = resources.files("spectraxgk").joinpath("data", "tem_reference.csv")
-    arr = np.loadtxt(str(data_path), delimiter=",", skiprows=1)
-    ky = arr[:, 0]
-    omega = arr[:, 1]
-    gamma = arr[:, 2]
-    return CycloneReference(ky=ky, omega=omega, gamma=gamma)
-
-
-def compare_cyclone_to_reference(
-    result: CycloneRunResult, reference: CycloneReference
-) -> CycloneComparison:
-    """Compare a Cyclone run result against the reference data set."""
-
-    idx = int(np.argmin(np.abs(reference.ky - result.ky)))
-    gamma_ref = float(reference.gamma[idx])
-    omega_ref = float(reference.omega[idx])
-    rel_gamma = (result.gamma - gamma_ref) / gamma_ref if gamma_ref != 0.0 else np.nan
-    rel_omega = (result.omega - omega_ref) / omega_ref if omega_ref != 0.0 else np.nan
-    return CycloneComparison(
-        ky=float(reference.ky[idx]),
-        gamma=result.gamma,
-        omega=result.omega,
-        gamma_ref=gamma_ref,
-        omega_ref=omega_ref,
-        rel_gamma=rel_gamma,
-        rel_omega=rel_omega,
-    )
 
 
 def _two_species_params(
@@ -821,4 +617,3 @@ def _electron_only_params(
     if damp_ends_widthfrac is not None:
         params = replace(params, damp_ends_widthfrac=float(damp_ends_widthfrac))
     return params
-
