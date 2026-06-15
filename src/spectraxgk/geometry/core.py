@@ -40,10 +40,6 @@ def effective_boundary(
     return str(boundary)
 
 
-gx_zero_shat_enabled = zero_shear_enabled
-gx_effective_boundary = effective_boundary
-
-
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
 class SAlphaGeometry:
@@ -623,9 +619,6 @@ def _bgrad_from_bmag(
     return bgrad
 
 
-_gx_bgrad_from_bmag = _bgrad_from_bmag
-
-
 def load_imported_geometry_netcdf(path: str | Path) -> FluxTubeGeometryData:
     """Load sampled flux-tube geometry from an imported NetCDF/eik file."""
 
@@ -893,9 +886,6 @@ def twist_shift_params(
     return jtwist, x0
 
 
-gx_twist_shift_params = twist_shift_params
-
-
 def apply_geometry_grid_defaults(
     geom: FluxTubeGeometryLike,
     grid: GridConfig,
@@ -950,5 +940,3 @@ def apply_geometry_grid_defaults(
 
 
 apply_imported_geometry_grid_defaults = apply_geometry_grid_defaults
-apply_gx_geometry_grid_defaults = apply_imported_geometry_grid_defaults
-load_gx_geometry_netcdf = load_imported_geometry_netcdf

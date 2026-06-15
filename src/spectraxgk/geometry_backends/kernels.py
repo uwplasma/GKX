@@ -269,9 +269,3 @@ def reflect_and_append(arr: jnp.ndarray, parity: str) -> jnp.ndarray:
         return jnp.concatenate((x[::-1][:-1], x))
     return jnp.concatenate((-x[::-1][:-1], jnp.asarray([0.0], dtype=x.dtype), x[1:]))
 
-
-# Legacy aliases retained for archived scripts and comparison tools.
-gx_derm = centered_reflected_difference
-gx_dermv = weighted_centered_difference
-gx_nperiod_data_extend = extend_nperiod_data
-gx_reflect_n_append = reflect_and_append
