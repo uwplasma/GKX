@@ -10,7 +10,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from spectraxgk.geometry import FluxTubeGeometryLike, ensure_flux_tube_geometry_data
-from spectraxgk.gyroaverage import J_l_all, bessel_j0, bessel_j1, gx_laguerre_transform
+from spectraxgk.gyroaverage import J_l_all, bessel_j0, bessel_j1, laguerre_transform
 from spectraxgk.grids import SpectralGrid
 from spectraxgk.linear_linked import (
     _build_linked_end_damping_profile,
@@ -559,7 +559,7 @@ def build_linear_cache(
         bmag_factor = bmag[None, None, None, :] ** (-bessel_bmag_power)
         b = b * bmag_factor
     Jl, JlB = _build_gyroaverage_cache_arrays(b, Nl, real_dtype)
-    lag_to_grid_np, lag_to_spec_np, lag_roots_np = gx_laguerre_transform(Nl)
+    lag_to_grid_np, lag_to_spec_np, lag_roots_np = laguerre_transform(Nl)
     laguerre_to_grid = jnp.asarray(lag_to_grid_np, dtype=real_dtype)
     laguerre_to_spectral = jnp.asarray(lag_to_spec_np, dtype=real_dtype)
     laguerre_roots = jnp.asarray(lag_roots_np, dtype=real_dtype)
