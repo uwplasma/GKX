@@ -203,7 +203,7 @@ def _load_nonlinear_netcdf(path: Path) -> tuple[np.ndarray, np.ndarray | None, n
 
 
 def plot_saved_output(path: str | Path, *, out: str | Path | None = None) -> Path:
-    """Plot a saved linear or nonlinear runtime artifact bundle."""
+    """Plot a saved linear or nonlinear output bundle."""
 
     in_path = Path(path)
     base = _artifact_base(in_path)
@@ -247,7 +247,7 @@ def plot_saved_output(path: str | Path, *, out: str | Path | None = None) -> Pat
                 title=f"SPECTRAX-GK nonlinear runtime: {base.name}",
             )
         else:
-            raise ValueError(f"Unsupported runtime artifact kind: {kind!r}")
+            raise ValueError(f"Unsupported saved-output kind: {kind!r}")
 
     fig.savefig(out_path, dpi=220, bbox_inches="tight")
     plt.close(fig)

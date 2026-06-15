@@ -42,7 +42,7 @@ spectrax-gk
 # Run directly from a checked-in TOML.
 spectraxgk examples/linear/axisymmetric/cyclone.toml
 
-# Compute linear quasilinear transport weights and write JSON/CSV artifacts.
+# Compute linear quasilinear transport weights and write JSON/CSV outputs.
 spectraxgk run-runtime-linear \
   --config examples/linear/axisymmetric/runtime_cyclone_quasilinear.toml \
   --out tools_out/cyclone_quasilinear
@@ -67,7 +67,7 @@ spectraxgk run \
   --config examples/nonlinear/non-axisymmetric/runtime_hsx_nonlinear_vmec_geometry.toml \
   --out tools_out/qhs_nonlinear_run
 
-# Turn supported saved runtime artifacts into review figures.
+# Turn supported saved outputs into review figures.
 spectraxgk --plot tools_out/cyclone_release.out.nc
 spectraxgk --plot spectraxgk_default_linear.summary.json
 ```
@@ -75,7 +75,7 @@ spectraxgk --plot spectraxgk_default_linear.summary.json
 Running `spectraxgk` with no TOML starts a short Cyclone initial-value linear
 demo (equivalent to the standard `examples/linear/axisymmetric/cyclone.toml`
 surface), prints setup and live time-integration progress with elapsed time and
-ETA, and writes the demo artifacts in the current directory:
+ETA, and writes the demo outputs in the current directory:
 
 - `spectraxgk_default_linear.toml`: the input file that reproduces the run
 - `spectraxgk_default_linear.summary.json`
@@ -92,7 +92,7 @@ Longer runtime commands also print live status lines with step/time progress,
 wall elapsed time, and an estimated wall-clock time remaining when progress is
 enabled. Adaptive nonlinear runs emit chunk-level elapsed/ETA updates.
 
-The `--plot` mode reads saved runtime artifacts directly:
+The `--plot` mode reads saved outputs directly:
 
 - linear bundles: `*.summary.json` + `*.timeseries.csv` + `*.eigenfunction.csv`
 - nonlinear bundles: `*.summary.json` + `*.diagnostics.csv` or `*.out.nc`
