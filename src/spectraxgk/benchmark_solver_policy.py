@@ -32,13 +32,21 @@ def _midplane_index(grid: SpectralGrid) -> int:
     return min(idx, int(grid.z.size) - 1)
 
 
-def select_kbm_solver_auto(solver: str, *, ky_target: float, gx_reference: bool) -> str:
+def select_kbm_solver_auto(
+    solver: str,
+    *,
+    ky_target: float,
+    reference_aligned: bool | None = None,
+    gx_reference: bool | None = None,
+) -> str:
     """Return deterministic KBM solver choice for auto mode."""
 
     solver_key = solver.strip().lower()
     if solver_key != "auto":
         return solver_key
-    if not gx_reference:
+    if gx_reference is not None:
+        reference_aligned = gx_reference
+    if not bool(True if reference_aligned is None else reference_aligned):
         return "time"
     ky_abs = abs(float(ky_target))
     for ky_ref, solver_ref in KBM_EXPLICIT_SOLVER_LOCK:

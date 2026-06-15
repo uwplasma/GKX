@@ -23,7 +23,14 @@ from spectraxgk.benchmarks import (
 )
 from spectraxgk.geometry import SAlphaGeometry
 from spectraxgk.grids import build_spectral_grid
-from spectraxgk.io import load_case_from_toml, load_krylov_from_toml, load_linear_terms_from_toml, load_runtime_from_toml, load_toml, resolve_runtime_path
+from spectraxgk.io import (
+    load_case_from_toml,
+    load_krylov_from_toml,
+    load_linear_terms_from_toml,
+    load_runtime_from_toml,
+    load_toml,
+    resolve_runtime_path,
+)
 from spectraxgk._version import __version__
 from spectraxgk.plotting import (
     growth_fit_figure,
@@ -56,7 +63,11 @@ _RUNTIME_TOP_LEVEL_KEYS = {
     "output",
     "quasilinear",
 }
-_LEGACY_CASE_TOP_LEVEL_KEYS = {"case", "model", "gx_reference"}
+_LEGACY_CASE_TOP_LEVEL_KEYS = {
+    "case",
+    "model",
+    "reference_alignment",
+}
 
 
 def _is_runtime_toml(data: dict) -> bool:
@@ -275,7 +286,10 @@ def _cmd_default_demo() -> int:
     toml_path = _default_demo_toml_path()
     toml_path.write_text(_default_demo_toml_text(), encoding="utf-8")
 
-    print("No input file specified; running the default Cyclone initial-value demo.", flush=True)
+    print(
+        "No input file specified; running the default Cyclone initial-value demo.",
+        flush=True,
+    )
     print(f"source={source}", flush=True)
     print(
         "This first run may include JAX compilation; progress lines show elapsed "
@@ -308,7 +322,9 @@ def _cmd_default_demo() -> int:
         min_points=25,
     )
     grid = build_spectral_grid(cfg.grid)
-    signal = extract_mode_time_series(result.phi_t, result.selection, method=mode_method)
+    signal = extract_mode_time_series(
+        result.phi_t, result.selection, method=mode_method
+    )
     eigen = normalize_eigenfunction(
         extract_eigenfunction(
             result.phi_t,
@@ -347,7 +363,9 @@ def _cmd_default_demo() -> int:
             eigenfunction=np.asarray(eigen),
         ),
     )
-    print(f"gamma={float(result.gamma):.6f} omega={float(result.omega):.6f}", flush=True)
+    print(
+        f"gamma={float(result.gamma):.6f} omega={float(result.omega):.6f}", flush=True
+    )
     print(f"saved {bundle_paths['summary']}", flush=True)
     if "timeseries" in bundle_paths:
         print(f"saved {bundle_paths['timeseries']}", flush=True)
@@ -379,24 +397,42 @@ def _cmd_plot_saved_output(argv: list[str]) -> int:
 
 
 def _add_quasilinear_flags(cmd: argparse.ArgumentParser) -> None:
-    cmd.add_argument("--quasilinear", action="store_true", help="Compute quasilinear transport diagnostics")
+    cmd.add_argument(
+        "--quasilinear",
+        action="store_true",
+        help="Compute quasilinear transport diagnostics",
+    )
     cmd.add_argument("--ql-mode", type=str, default=None, help="weights or saturated")
-    cmd.add_argument("--ql-saturation-rule", type=str, default=None, help="none, mixing_length, or lapillonne_2011")
-    cmd.add_argument("--ql-csat", type=float, default=None, help="Saturation-rule calibration constant")
+    cmd.add_argument(
+        "--ql-saturation-rule",
+        type=str,
+        default=None,
+        help="none, mixing_length, or lapillonne_2011",
+    )
+    cmd.add_argument(
+        "--ql-csat",
+        type=float,
+        default=None,
+        help="Saturation-rule calibration constant",
+    )
     cmd.add_argument(
         "--ql-normalization",
         type=str,
         default=None,
         help="phi_rms, phi_midplane, or field_energy",
     )
-    cmd.add_argument("--ql-output", type=str, default=None, help="Optional quasilinear artifact path")
+    cmd.add_argument(
+        "--ql-output", type=str, default=None, help="Optional quasilinear artifact path"
+    )
 
 
 # Path-valued CLI flags (--vmec-file, --geometry-file, --init-file) follow
 # shell conventions: relative paths resolve against cwd, ~ expands to $HOME,
 # and $VAR is expanded from the environment. See _apply_runtime_path_overrides.
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog=Path(sys.argv[0]).name if sys.argv else "spectraxgk")
+    parser = argparse.ArgumentParser(
+        prog=Path(sys.argv[0]).name if sys.argv else "spectraxgk"
+    )
     parser.add_argument(
         "--version",
         action="version",
@@ -425,17 +461,44 @@ def build_parser() -> argparse.ArgumentParser:
     generic_run.add_argument("--sample-stride", type=int, default=None)
     generic_run.add_argument("--diagnostics-stride", type=int, default=None)
     diag_group = generic_run.add_mutually_exclusive_group()
-    diag_group.add_argument("--diagnostics", action="store_true", help="Enable diagnostics output")
-    diag_group.add_argument("--no-diagnostics", action="store_true", help="Disable diagnostics output")
-    generic_run.add_argument("--laguerre-mode", type=str, default=None, help="grid or spectral (nonlinear only)")
-    generic_run.add_argument("--init-file", type=str, default=None, help="Optional init file for nonlinear runs")
-    generic_run.add_argument("--vmec-file", type=str, default=None, help="Override [geometry].vmec_file")
-    generic_run.add_argument("--geometry-file", type=str, default=None, help="Override [geometry].geometry_file")
-    generic_run.add_argument("--out", type=str, default=None, help="Optional artifact path/prefix")
+    diag_group.add_argument(
+        "--diagnostics", action="store_true", help="Enable diagnostics output"
+    )
+    diag_group.add_argument(
+        "--no-diagnostics", action="store_true", help="Disable diagnostics output"
+    )
+    generic_run.add_argument(
+        "--laguerre-mode",
+        type=str,
+        default=None,
+        help="grid or spectral (nonlinear only)",
+    )
+    generic_run.add_argument(
+        "--init-file",
+        type=str,
+        default=None,
+        help="Optional init file for nonlinear runs",
+    )
+    generic_run.add_argument(
+        "--vmec-file", type=str, default=None, help="Override [geometry].vmec_file"
+    )
+    generic_run.add_argument(
+        "--geometry-file",
+        type=str,
+        default=None,
+        help="Override [geometry].geometry_file",
+    )
+    generic_run.add_argument(
+        "--out", type=str, default=None, help="Optional artifact path/prefix"
+    )
     _add_quasilinear_flags(generic_run)
     generic_progress = generic_run.add_mutually_exclusive_group()
-    generic_progress.add_argument("--progress", action="store_true", help="Enable progress output")
-    generic_progress.add_argument("--no-progress", action="store_true", help="Disable progress output")
+    generic_progress.add_argument(
+        "--progress", action="store_true", help="Enable progress output"
+    )
+    generic_progress.add_argument(
+        "--no-progress", action="store_true", help="Disable progress output"
+    )
     generic_run.set_defaults(func=_cmd_run)
 
     info = sub.add_parser("cyclone-info", help="Print Cyclone base case defaults")
@@ -446,37 +509,65 @@ def build_parser() -> argparse.ArgumentParser:
     kperp.add_argument("--ky", type=float, default=0.3)
     kperp.set_defaults(func=_cmd_cyclone_kperp)
 
-    run_linear = sub.add_parser("run-linear", help="Run a single linear case from a TOML config")
+    run_linear = sub.add_parser(
+        "run-linear", help="Run a single linear case from a TOML config"
+    )
     run_linear.add_argument("--config", required=True, help="Path to TOML config")
-    run_linear.add_argument("--case", default=None, help="Case name (cyclone, etg, ...)")
+    run_linear.add_argument(
+        "--case", default=None, help="Case name (cyclone, etg, ...)"
+    )
     run_linear.add_argument("--ky", type=float, default=None, help="Single ky value")
     run_linear.add_argument("--Nl", type=int, default=None)
     run_linear.add_argument("--Nm", type=int, default=None)
-    run_linear.add_argument("--solver", type=str, default=None, help="auto, time, or krylov")
-    run_linear.add_argument("--method", type=str, default=None, help="time integrator method")
+    run_linear.add_argument(
+        "--solver", type=str, default=None, help="auto, time, or krylov"
+    )
+    run_linear.add_argument(
+        "--method", type=str, default=None, help="time integrator method"
+    )
     run_linear.add_argument("--dt", type=float, default=None)
     run_linear.add_argument("--steps", type=int, default=None)
     run_linear.add_argument("--sample-stride", type=int, default=None)
-    run_linear.add_argument("--fit-signal", type=str, default=None, help="auto, phi, or density")
-    run_linear.add_argument("--plot", action="store_true", help="Save fit/eigenfunction plots")
+    run_linear.add_argument(
+        "--fit-signal", type=str, default=None, help="auto, phi, or density"
+    )
+    run_linear.add_argument(
+        "--plot", action="store_true", help="Save fit/eigenfunction plots"
+    )
     run_linear.add_argument("--outdir", default=".", help="Output directory for plots")
     run_linear_progress = run_linear.add_mutually_exclusive_group()
-    run_linear_progress.add_argument("--progress", action="store_true", help="Enable progress output")
-    run_linear_progress.add_argument("--no-progress", action="store_true", help="Disable progress output")
+    run_linear_progress.add_argument(
+        "--progress", action="store_true", help="Enable progress output"
+    )
+    run_linear_progress.add_argument(
+        "--no-progress", action="store_true", help="Disable progress output"
+    )
     run_linear.set_defaults(func=_cmd_run_linear)
 
     scan_linear = sub.add_parser("scan-linear", help="Run a ky scan from a TOML config")
     scan_linear.add_argument("--config", required=True, help="Path to TOML config")
-    scan_linear.add_argument("--case", default=None, help="Case name (cyclone, etg, ...)")
-    scan_linear.add_argument("--ky-values", type=str, default=None, help="Comma-separated ky list")
+    scan_linear.add_argument(
+        "--case", default=None, help="Case name (cyclone, etg, ...)"
+    )
+    scan_linear.add_argument(
+        "--ky-values", type=str, default=None, help="Comma-separated ky list"
+    )
     scan_linear.add_argument("--Nl", type=int, default=None)
     scan_linear.add_argument("--Nm", type=int, default=None)
-    scan_linear.add_argument("--solver", type=str, default=None, help="auto, time, or krylov")
-    scan_linear.add_argument("--method", type=str, default=None, help="time integrator method")
+    scan_linear.add_argument(
+        "--solver", type=str, default=None, help="auto, time, or krylov"
+    )
+    scan_linear.add_argument(
+        "--method", type=str, default=None, help="time integrator method"
+    )
     scan_linear.add_argument("--dt", type=float, default=None)
     scan_linear.add_argument("--steps", type=int, default=None)
-    scan_linear.add_argument("--fit-signal", type=str, default=None, help="auto, phi, or density")
-    scan_linear.add_argument("--plot", action="store_true", help="Save comparison plot if reference exists")
+    scan_linear.add_argument(
+        "--fit-signal", type=str, default=None, help="auto, phi, or density"
+    )
+    scan_linear.add_argument(
+        "--plot", action="store_true", help="Save comparison plot if reference exists"
+    )
     scan_linear.add_argument("--outdir", default=".", help="Output directory for plots")
     scan_linear.set_defaults(func=_cmd_scan_linear)
 
@@ -488,19 +579,38 @@ def build_parser() -> argparse.ArgumentParser:
     run_runtime.add_argument("--ky", type=float, default=None, help="Single ky value")
     run_runtime.add_argument("--Nl", type=int, default=None)
     run_runtime.add_argument("--Nm", type=int, default=None)
-    run_runtime.add_argument("--solver", type=str, default=None, help="auto, time, or krylov")
-    run_runtime.add_argument("--method", type=str, default=None, help="time integrator method")
+    run_runtime.add_argument(
+        "--solver", type=str, default=None, help="auto, time, or krylov"
+    )
+    run_runtime.add_argument(
+        "--method", type=str, default=None, help="time integrator method"
+    )
     run_runtime.add_argument("--dt", type=float, default=None)
     run_runtime.add_argument("--steps", type=int, default=None)
     run_runtime.add_argument("--sample-stride", type=int, default=None)
-    run_runtime.add_argument("--fit-signal", type=str, default=None, help="auto, phi, or density")
-    run_runtime.add_argument("--vmec-file", type=str, default=None, help="Override [geometry].vmec_file")
-    run_runtime.add_argument("--geometry-file", type=str, default=None, help="Override [geometry].geometry_file")
-    run_runtime.add_argument("--out", type=str, default=None, help="Optional artifact path/prefix")
+    run_runtime.add_argument(
+        "--fit-signal", type=str, default=None, help="auto, phi, or density"
+    )
+    run_runtime.add_argument(
+        "--vmec-file", type=str, default=None, help="Override [geometry].vmec_file"
+    )
+    run_runtime.add_argument(
+        "--geometry-file",
+        type=str,
+        default=None,
+        help="Override [geometry].geometry_file",
+    )
+    run_runtime.add_argument(
+        "--out", type=str, default=None, help="Optional artifact path/prefix"
+    )
     _add_quasilinear_flags(run_runtime)
     run_runtime_progress = run_runtime.add_mutually_exclusive_group()
-    run_runtime_progress.add_argument("--progress", action="store_true", help="Enable progress output")
-    run_runtime_progress.add_argument("--no-progress", action="store_true", help="Disable progress output")
+    run_runtime_progress.add_argument(
+        "--progress", action="store_true", help="Enable progress output"
+    )
+    run_runtime_progress.add_argument(
+        "--no-progress", action="store_true", help="Disable progress output"
+    )
     run_runtime.set_defaults(func=_cmd_run_runtime_linear)
 
     scan_runtime = sub.add_parser(
@@ -508,15 +618,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="Run a ky scan from unified runtime TOML config",
     )
     scan_runtime.add_argument("--config", required=True, help="Path to TOML config")
-    scan_runtime.add_argument("--ky-values", type=str, default=None, help="Comma-separated ky list")
+    scan_runtime.add_argument(
+        "--ky-values", type=str, default=None, help="Comma-separated ky list"
+    )
     scan_runtime.add_argument("--Nl", type=int, default=None)
     scan_runtime.add_argument("--Nm", type=int, default=None)
-    scan_runtime.add_argument("--solver", type=str, default=None, help="auto, time, or krylov")
-    scan_runtime.add_argument("--method", type=str, default=None, help="time integrator method")
+    scan_runtime.add_argument(
+        "--solver", type=str, default=None, help="auto, time, or krylov"
+    )
+    scan_runtime.add_argument(
+        "--method", type=str, default=None, help="time integrator method"
+    )
     scan_runtime.add_argument("--dt", type=float, default=None)
     scan_runtime.add_argument("--steps", type=int, default=None)
     scan_runtime.add_argument("--sample-stride", type=int, default=None)
-    scan_runtime.add_argument("--batch-ky", action="store_true", help="Integrate all ky in one batch")
+    scan_runtime.add_argument(
+        "--batch-ky", action="store_true", help="Integrate all ky in one batch"
+    )
     scan_runtime.add_argument(
         "--workers",
         type=int,
@@ -529,12 +647,20 @@ def build_parser() -> argparse.ArgumentParser:
         default="thread",
         help="Executor for independent ky workers.",
     )
-    scan_runtime.add_argument("--fit-signal", type=str, default=None, help="auto, phi, or density")
-    scan_runtime.add_argument("--out", type=str, default=None, help="Optional scan artifact path/prefix")
+    scan_runtime.add_argument(
+        "--fit-signal", type=str, default=None, help="auto, phi, or density"
+    )
+    scan_runtime.add_argument(
+        "--out", type=str, default=None, help="Optional scan artifact path/prefix"
+    )
     _add_quasilinear_flags(scan_runtime)
     scan_runtime_progress = scan_runtime.add_mutually_exclusive_group()
-    scan_runtime_progress.add_argument("--progress", action="store_true", help="Enable progress output")
-    scan_runtime_progress.add_argument("--no-progress", action="store_true", help="Disable progress output")
+    scan_runtime_progress.add_argument(
+        "--progress", action="store_true", help="Enable progress output"
+    )
+    scan_runtime_progress.add_argument(
+        "--no-progress", action="store_true", help="Disable progress output"
+    )
     scan_runtime.set_defaults(func=_cmd_scan_runtime_linear)
 
     run_runtime_nl = sub.add_parser(
@@ -542,7 +668,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Run one nonlinear point from unified runtime TOML config",
     )
     run_runtime_nl.add_argument("--config", required=True, help="Path to TOML config")
-    run_runtime_nl.add_argument("--ky", type=float, default=None, help="Single ky value")
+    run_runtime_nl.add_argument(
+        "--ky", type=float, default=None, help="Single ky value"
+    )
     run_runtime_nl.add_argument("--Nl", type=int, default=None)
     run_runtime_nl.add_argument("--Nm", type=int, default=None)
     run_runtime_nl.add_argument("--dt", type=float, default=None)
@@ -551,21 +679,40 @@ def build_parser() -> argparse.ArgumentParser:
     run_runtime_nl.add_argument("--sample-stride", type=int, default=None)
     run_runtime_nl.add_argument("--diagnostics-stride", type=int, default=None)
     diag_group = run_runtime_nl.add_mutually_exclusive_group()
-    diag_group.add_argument("--diagnostics", action="store_true", help="Enable diagnostics output")
-    diag_group.add_argument("--no-diagnostics", action="store_true", help="Disable diagnostics output")
+    diag_group.add_argument(
+        "--diagnostics", action="store_true", help="Enable diagnostics output"
+    )
+    diag_group.add_argument(
+        "--no-diagnostics", action="store_true", help="Disable diagnostics output"
+    )
     run_runtime_nl.add_argument(
         "--laguerre-mode",
         type=str,
         default=None,
         help="grid or spectral (nonlinear Laguerre handling)",
     )
-    run_runtime_nl.add_argument("--init-file", type=str, default=None, help="Optional init file (GX g_state)")
-    run_runtime_nl.add_argument("--vmec-file", type=str, default=None, help="Override [geometry].vmec_file")
-    run_runtime_nl.add_argument("--geometry-file", type=str, default=None, help="Override [geometry].geometry_file")
-    run_runtime_nl.add_argument("--out", type=str, default=None, help="Optional artifact path/prefix")
+    run_runtime_nl.add_argument(
+        "--init-file", type=str, default=None, help="Optional init file (GX g_state)"
+    )
+    run_runtime_nl.add_argument(
+        "--vmec-file", type=str, default=None, help="Override [geometry].vmec_file"
+    )
+    run_runtime_nl.add_argument(
+        "--geometry-file",
+        type=str,
+        default=None,
+        help="Override [geometry].geometry_file",
+    )
+    run_runtime_nl.add_argument(
+        "--out", type=str, default=None, help="Optional artifact path/prefix"
+    )
     run_runtime_nl_progress = run_runtime_nl.add_mutually_exclusive_group()
-    run_runtime_nl_progress.add_argument("--progress", action="store_true", help="Enable progress output")
-    run_runtime_nl_progress.add_argument("--no-progress", action="store_true", help="Disable progress output")
+    run_runtime_nl_progress.add_argument(
+        "--progress", action="store_true", help="Enable progress output"
+    )
+    run_runtime_nl_progress.add_argument(
+        "--no-progress", action="store_true", help="Disable progress output"
+    )
     run_runtime_nl.set_defaults(func=_cmd_run_runtime_nonlinear)
 
     return parser
@@ -587,7 +734,11 @@ def main() -> int:
         "scan-runtime-linear",
         "run-runtime-nonlinear",
     }
-    if len(sys.argv) > 1 and not sys.argv[1].startswith("-") and sys.argv[1] not in known_cmds:
+    if (
+        len(sys.argv) > 1
+        and not sys.argv[1].startswith("-")
+        and sys.argv[1] not in known_cmds
+    ):
         if Path(sys.argv[1]).exists():
             data = load_toml(sys.argv[1])
             command = "run" if _is_runtime_toml(data) else "run-linear"
@@ -608,7 +759,9 @@ def _resolve_case(case_name: str):
         return CycloneBaseCase, run_cyclone_linear
     if name == "etg":
         return ETGBaseCase, run_etg_linear
-    raise ValueError(f"Unsupported case '{case_name}' in executable dispatcher (supported: cyclone, etg)")
+    raise ValueError(
+        f"Unsupported case '{case_name}' in executable dispatcher (supported: cyclone, etg)"
+    )
 
 
 def _load_scan_ky(data: dict) -> np.ndarray:
@@ -630,16 +783,30 @@ def _cmd_run_linear(args: argparse.Namespace) -> int:
     Nl = args.Nl if args.Nl is not None else run_cfg.get("Nl", 24)
     Nm = args.Nm if args.Nm is not None else run_cfg.get("Nm", 12)
     solver = args.solver if args.solver is not None else run_cfg.get("solver", "auto")
-    fit_signal = args.fit_signal if args.fit_signal is not None else fit_cfg.pop("fit_signal", "auto")
-    method = args.method if args.method is not None else run_cfg.get("method", cfg.time.method)
+    fit_signal = (
+        args.fit_signal
+        if args.fit_signal is not None
+        else fit_cfg.pop("fit_signal", "auto")
+    )
+    method = (
+        args.method
+        if args.method is not None
+        else run_cfg.get("method", cfg.time.method)
+    )
     dt = args.dt if args.dt is not None else run_cfg.get("dt", cfg.time.dt)
-    steps = args.steps if args.steps is not None else run_cfg.get("steps", int(round(cfg.time.t_max / cfg.time.dt)))
+    steps = (
+        args.steps
+        if args.steps is not None
+        else run_cfg.get("steps", int(round(cfg.time.t_max / cfg.time.dt)))
+    )
     sample_stride = (
         args.sample_stride
         if args.sample_stride is not None
         else run_cfg.get("sample_stride", getattr(cfg.time, "sample_stride", None))
     )
-    show_progress = _should_show_progress(args, bool(getattr(cfg.time, "progress_bar", False)))
+    show_progress = _should_show_progress(
+        args, bool(getattr(cfg.time, "progress_bar", False))
+    )
 
     terms = load_linear_terms_from_toml(data)
     krylov_cfg = load_krylov_from_toml(data)
@@ -683,7 +850,9 @@ def _cmd_run_linear(args: argparse.Namespace) -> int:
         outdir.mkdir(parents=True, exist_ok=True)
         grid = build_spectral_grid(cfg.grid)
         if result.t.size > 1:
-            signal = extract_mode_time_series(result.phi_t, result.selection, method="project")
+            signal = extract_mode_time_series(
+                result.phi_t, result.selection, method="project"
+            )
             fig, _ax = growth_fit_figure(result.t, signal)
             fig.savefig(outdir / f"{case_name}_ky{result.ky:.3f}_fit.png")
         z_np = np.asarray(grid.z)
@@ -712,7 +881,9 @@ def _cmd_scan_linear(args: argparse.Namespace) -> int:
     fit_cfg = dict(data.get("fit", {}))
 
     if args.ky_values is not None:
-        ky_values = np.asarray([float(x) for x in args.ky_values.split(",") if x.strip() != ""])
+        ky_values = np.asarray(
+            [float(x) for x in args.ky_values.split(",") if x.strip() != ""]
+        )
     else:
         ky_values = _load_scan_ky(data)
     if ky_values.size == 0:
@@ -721,11 +892,23 @@ def _cmd_scan_linear(args: argparse.Namespace) -> int:
     Nl = args.Nl if args.Nl is not None else scan_cfg.get("Nl", 24)
     Nm = args.Nm if args.Nm is not None else scan_cfg.get("Nm", 12)
     solver = args.solver if args.solver is not None else scan_cfg.get("solver", "auto")
-    fit_signal = args.fit_signal if args.fit_signal is not None else fit_cfg.pop("fit_signal", "auto")
+    fit_signal = (
+        args.fit_signal
+        if args.fit_signal is not None
+        else fit_cfg.pop("fit_signal", "auto")
+    )
     auto_window = bool(fit_cfg.pop("auto_window", True))
-    method = args.method if args.method is not None else scan_cfg.get("method", cfg.time.method)
+    method = (
+        args.method
+        if args.method is not None
+        else scan_cfg.get("method", cfg.time.method)
+    )
     dt = args.dt if args.dt is not None else scan_cfg.get("dt", cfg.time.dt)
-    steps = args.steps if args.steps is not None else scan_cfg.get("steps", int(round(cfg.time.t_max / cfg.time.dt)))
+    steps = (
+        args.steps
+        if args.steps is not None
+        else scan_cfg.get("steps", int(round(cfg.time.t_max / cfg.time.dt)))
+    )
 
     terms = load_linear_terms_from_toml(data)
     krylov_cfg = load_krylov_from_toml(data)
@@ -803,14 +986,20 @@ def _apply_runtime_path_overrides(cfg, args: argparse.Namespace):
     vmec_cli = getattr(args, "vmec_file", None)
     geom_cli = getattr(args, "geometry_file", None)
     if vmec_cli is not None:
-        geometry = replace(geometry, vmec_file=resolve_runtime_path(str(vmec_cli), base_dir=cwd))
+        geometry = replace(
+            geometry, vmec_file=resolve_runtime_path(str(vmec_cli), base_dir=cwd)
+        )
     if geom_cli is not None:
-        geometry = replace(geometry, geometry_file=resolve_runtime_path(str(geom_cli), base_dir=cwd))
+        geometry = replace(
+            geometry, geometry_file=resolve_runtime_path(str(geom_cli), base_dir=cwd)
+        )
 
     init = cfg.init
     init_cli = getattr(args, "init_file", None)
     if init_cli is not None:
-        init = replace(init, init_file=resolve_runtime_path(str(init_cli), base_dir=cwd))
+        init = replace(
+            init, init_file=resolve_runtime_path(str(init_cli), base_dir=cwd)
+        )
 
     return replace(cfg, geometry=geometry, init=init)
 
@@ -848,8 +1037,14 @@ def _cmd_run_runtime_linear(args: argparse.Namespace) -> int:
     ky = float(args.ky if args.ky is not None else run_cfg.get("ky", 0.3))
     Nl = int(args.Nl if args.Nl is not None else run_cfg.get("Nl", 24))
     Nm = int(args.Nm if args.Nm is not None else run_cfg.get("Nm", 12))
-    solver = str(args.solver if args.solver is not None else run_cfg.get("solver", "auto"))
-    fit_signal = str(args.fit_signal if args.fit_signal is not None else run_cfg.get("fit_signal", "auto"))
+    solver = str(
+        args.solver if args.solver is not None else run_cfg.get("solver", "auto")
+    )
+    fit_signal = str(
+        args.fit_signal
+        if args.fit_signal is not None
+        else run_cfg.get("fit_signal", "auto")
+    )
     method = args.method if args.method is not None else run_cfg.get("method", None)
     dt = args.dt if args.dt is not None else run_cfg.get("dt", None)
     steps = args.steps if args.steps is not None else run_cfg.get("steps", None)
@@ -859,7 +1054,9 @@ def _cmd_run_runtime_linear(args: argparse.Namespace) -> int:
         else run_cfg.get("sample_stride", cfg.time.sample_stride)
     )
     dt_use = float(dt if dt is not None else cfg.time.dt)
-    steps_use = int(steps) if steps is not None else int(round(float(cfg.time.t_max) / dt_use))
+    steps_use = (
+        int(steps) if steps is not None else int(round(float(cfg.time.t_max) / dt_use))
+    )
     method_use = str(method if method is not None else cfg.time.method)
     show_progress = _should_show_progress(args, bool(cfg.time.progress_bar))
 
@@ -927,7 +1124,9 @@ def _cmd_scan_runtime_linear(args: argparse.Namespace) -> int:
     fit_cfg = {k: v for k, v in data.get("fit", {}).items() if k in _RUNTIME_FIT_KEYS}
 
     if args.ky_values is not None:
-        ky_values = np.asarray([float(x) for x in args.ky_values.split(",") if x.strip()], dtype=float)
+        ky_values = np.asarray(
+            [float(x) for x in args.ky_values.split(",") if x.strip()], dtype=float
+        )
     else:
         ky_raw = scan_cfg.get("ky", [])
         ky_values = np.asarray(ky_raw, dtype=float)
@@ -936,8 +1135,14 @@ def _cmd_scan_runtime_linear(args: argparse.Namespace) -> int:
 
     Nl = int(args.Nl if args.Nl is not None else scan_cfg.get("Nl", 24))
     Nm = int(args.Nm if args.Nm is not None else scan_cfg.get("Nm", 12))
-    solver = str(args.solver if args.solver is not None else scan_cfg.get("solver", "auto"))
-    fit_signal = str(args.fit_signal if args.fit_signal is not None else scan_cfg.get("fit_signal", "auto"))
+    solver = str(
+        args.solver if args.solver is not None else scan_cfg.get("solver", "auto")
+    )
+    fit_signal = str(
+        args.fit_signal
+        if args.fit_signal is not None
+        else scan_cfg.get("fit_signal", "auto")
+    )
     method = args.method if args.method is not None else scan_cfg.get("method", None)
     dt = args.dt if args.dt is not None else scan_cfg.get("dt", None)
     steps = args.steps if args.steps is not None else scan_cfg.get("steps", None)
@@ -1004,16 +1209,18 @@ def _cmd_run_runtime_nonlinear(args: argparse.Namespace) -> int:
         steps = int(round(cfg.time.t_max / cfg.time.dt))
     else:
         steps = None
-    method = str(args.method if args.method is not None else run_cfg.get("method", cfg.time.method))
+    method = str(
+        args.method
+        if args.method is not None
+        else run_cfg.get("method", cfg.time.method)
+    )
     sample_stride = int(
         args.sample_stride
         if args.sample_stride is not None
         else run_cfg.get("sample_stride", cfg.time.sample_stride)
     )
     diagnostics_stride = (
-        None
-        if args.diagnostics_stride is None
-        else int(args.diagnostics_stride)
+        None if args.diagnostics_stride is None else int(args.diagnostics_stride)
     )
     if args.no_diagnostics:
         diagnostics = False
@@ -1021,8 +1228,10 @@ def _cmd_run_runtime_nonlinear(args: argparse.Namespace) -> int:
         diagnostics = True
     else:
         diagnostics = run_cfg.get("diagnostics", cfg.time.diagnostics)
-    laguerre_mode = args.laguerre_mode if args.laguerre_mode is not None else run_cfg.get(
-        "laguerre_mode"
+    laguerre_mode = (
+        args.laguerre_mode
+        if args.laguerre_mode is not None
+        else run_cfg.get("laguerre_mode")
     )
     show_progress = _should_show_progress(args, bool(cfg.time.progress_bar))
 

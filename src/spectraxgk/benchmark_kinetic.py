@@ -16,7 +16,7 @@ from spectraxgk.analysis import (
 )
 from spectraxgk.benchmark_defaults import (
     KINETIC_KRYLOV_DEFAULT,
-    KINETIC_KRYLOV_GX_REFERENCE,
+    KINETIC_KRYLOV_REFERENCE_ALIGNED,
     Kinetic_OMEGA_D_SCALE,
     Kinetic_OMEGA_STAR_SCALE,
     Kinetic_RHO_STAR,
@@ -90,7 +90,8 @@ def run_kinetic_linear(
     init_species_index: int = 1,
     density_species_index: int = 1,
     diagnostic_norm: str = "none",
-    gx_reference: bool | None = True,
+    reference_aligned: bool | None = True,
+    gx_reference: bool | None = None,
     show_progress: bool = False,
 ) -> LinearRunResult:
     """Run a kinetic-electron ITG/TEM benchmark and extract growth rate."""
@@ -98,11 +99,19 @@ def run_kinetic_linear(
     cfg = cfg or KineticElectronBaseCase()
     grid_full = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
-    gx_reference_use = bool(gx_reference)
-    if gx_reference_use and diagnostic_norm == "none":
+    if gx_reference is not None:
+        reference_aligned = gx_reference
+    reference_aligned_use = bool(
+        True if reference_aligned is None else reference_aligned
+    )
+    if reference_aligned_use and diagnostic_norm == "none":
         diagnostic_norm = "gx"
-    init_cfg_use = _kinetic_reference_init_cfg(cfg.init, gx_reference=gx_reference_use)
-    damp_ends_amp, damp_ends_widthfrac = _linked_boundary_end_damping(gx_reference_use)
+    init_cfg_use = _kinetic_reference_init_cfg(
+        cfg.init, reference_aligned=reference_aligned_use
+    )
+    damp_ends_amp, damp_ends_widthfrac = _linked_boundary_end_damping(
+        reference_aligned_use
+    )
     if params is None:
         params = _two_species_params(
             cfg.model,
@@ -114,7 +123,7 @@ def run_kinetic_linear(
             damp_ends_widthfrac=damp_ends_widthfrac,
             nhermite=Nm,
         )
-        if gx_reference_use:
+        if reference_aligned_use:
             params = _apply_reference_hypercollisions(params, nhermite=Nm)
     if terms is None:
         terms = LinearTerms(bpar=0.0)
@@ -145,7 +154,9 @@ def run_kinetic_linear(
     G0_jax = jnp.asarray(G0)
     if solver.lower() == "krylov":
         krylov_cfg = krylov_cfg or (
-            KINETIC_KRYLOV_GX_REFERENCE if gx_reference_use else KINETIC_KRYLOV_DEFAULT
+            KINETIC_KRYLOV_REFERENCE_ALIGNED
+            if reference_aligned_use
+            else KINETIC_KRYLOV_DEFAULT
         )
         cache = build_linear_cache(grid, geom, params, Nl, Nm)
         eig, vec = dominant_eigenpair(
@@ -356,7 +367,8 @@ def run_kinetic_scan(
     init_species_index: int = 1,
     density_species_index: int = 1,
     diagnostic_norm: str = "none",
-    gx_reference: bool | None = True,
+    reference_aligned: bool | None = True,
+    gx_reference: bool | None = None,
     show_progress: bool = False,
 ) -> LinearScanResult:
     """Run a kinetic-electron ITG/TEM benchmark for a list of ky values.
@@ -367,11 +379,19 @@ def run_kinetic_scan(
     cfg = cfg or KineticElectronBaseCase()
     grid_full = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
-    gx_reference_use = bool(gx_reference)
-    if gx_reference_use and diagnostic_norm == "none":
+    if gx_reference is not None:
+        reference_aligned = gx_reference
+    reference_aligned_use = bool(
+        True if reference_aligned is None else reference_aligned
+    )
+    if reference_aligned_use and diagnostic_norm == "none":
         diagnostic_norm = "gx"
-    init_cfg_use = _kinetic_reference_init_cfg(cfg.init, gx_reference=gx_reference_use)
-    damp_ends_amp, damp_ends_widthfrac = _linked_boundary_end_damping(gx_reference_use)
+    init_cfg_use = _kinetic_reference_init_cfg(
+        cfg.init, reference_aligned=reference_aligned_use
+    )
+    damp_ends_amp, damp_ends_widthfrac = _linked_boundary_end_damping(
+        reference_aligned_use
+    )
     if params is None:
         params = _two_species_params(
             cfg.model,
@@ -383,7 +403,7 @@ def run_kinetic_scan(
             damp_ends_widthfrac=damp_ends_widthfrac,
             nhermite=Nm,
         )
-        if gx_reference_use:
+        if reference_aligned_use:
             params = _apply_reference_hypercollisions(params, nhermite=Nm)
     if terms is None:
         terms = LinearTerms(bpar=0.0)
@@ -484,8 +504,8 @@ def run_kinetic_scan(
         G0_jax = jnp.asarray(G0)
         if solver_key == "krylov":
             cfg_use = krylov_cfg or (
-                KINETIC_KRYLOV_GX_REFERENCE
-                if gx_reference_use
+                KINETIC_KRYLOV_REFERENCE_ALIGNED
+                if reference_aligned_use
                 else KINETIC_KRYLOV_DEFAULT
             )
             eig, _vec = dominant_eigenpair(

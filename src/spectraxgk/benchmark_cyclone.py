@@ -55,7 +55,10 @@ from spectraxgk.config import (
 from spectraxgk.diffrax_integrators import integrate_linear_diffrax_streaming
 from spectraxgk.geometry import SAlphaGeometry
 from spectraxgk.grids import build_spectral_grid, select_ky_grid
-from spectraxgk.explicit_time_integrators import ExplicitTimeConfig, integrate_linear_explicit
+from spectraxgk.explicit_time_integrators import (
+    ExplicitTimeConfig,
+    integrate_linear_explicit,
+)
 from spectraxgk.linear import (
     LinearParams,
     LinearTerms,
@@ -108,6 +111,7 @@ def run_cyclone_linear(
     init_cfg: InitializationConfig | None = None,
     diagnostic_norm: str = "none",
     use_jit: bool = True,
+    reference_aligned: bool | None = None,
     gx_reference: bool | None = None,
     show_progress: bool = False,
     status_callback: Callable[[str], None] | None = None,
@@ -122,11 +126,15 @@ def run_cyclone_linear(
     init_cfg = init_cfg or getattr(cfg, "init", None) or InitializationConfig()
     _status("building spectral grid")
     grid_full = build_spectral_grid(cfg.grid)
-    gx_reference_use = (
-        bool(cfg.gx_reference) if gx_reference is None else bool(gx_reference)
+    if gx_reference is not None:
+        reference_aligned = gx_reference
+    reference_aligned_use = (
+        bool(cfg.reference_aligned)
+        if reference_aligned is None
+        else bool(reference_aligned)
     )
     geom_cfg = cfg.geometry
-    if gx_reference_use:
+    if reference_aligned_use:
         geom_cfg = replace(geom_cfg, drift_scale=1.0)
         if diagnostic_norm == "none":
             diagnostic_norm = "gx"
@@ -202,7 +210,7 @@ def run_cyclone_linear(
         omega_ok = False
         if kcfg.shift is None:
             try:
-                _status("estimating frequency seed with short GX time march")
+                _status("estimating frequency seed with short explicit time march")
                 t_seed = min(150.0, float(kcfg.power_dt) * 15000.0)
                 time_cfg = ExplicitTimeConfig(
                     dt=float(kcfg.power_dt),
@@ -225,12 +233,14 @@ def run_cyclone_linear(
                 sel = ModeSelection(
                     ky_index=0, kx_index=0, z_index=_midplane_index(grid)
                 )
-                gamma_seed, omega_seed, _g, _o, _t_mid = instantaneous_growth_rate_from_phi(
-                    phi_t,
-                    t_short,
-                    sel,
-                    navg_fraction=0.5,
-                    mode_method="z_index",
+                gamma_seed, omega_seed, _g, _o, _t_mid = (
+                    instantaneous_growth_rate_from_phi(
+                        phi_t,
+                        t_short,
+                        sel,
+                        navg_fraction=0.5,
+                        mode_method="z_index",
+                    )
                 )
                 omega_ok = np.isfinite(omega_seed) and abs(omega_seed) > 1.0e-8
                 seed_ok = omega_ok and np.isfinite(gamma_seed) and gamma_seed > 0.0
@@ -279,12 +289,14 @@ def run_cyclone_linear(
                     sel_seed = ModeSelection(
                         ky_index=0, kx_index=0, z_index=_midplane_index(grid)
                     )
-                    gamma_seed, omega_seed, _g, _o, _t_mid = instantaneous_growth_rate_from_phi(
-                        phi_t,
-                        t_short,
-                        sel_seed,
-                        navg_fraction=0.5,
-                        mode_method="z_index",
+                    gamma_seed, omega_seed, _g, _o, _t_mid = (
+                        instantaneous_growth_rate_from_phi(
+                            phi_t,
+                            t_short,
+                            sel_seed,
+                            navg_fraction=0.5,
+                            mode_method="z_index",
+                        )
                     )
                     omega_ok = np.isfinite(omega_seed) and abs(omega_seed) > 1.0e-8
                     seed_ok = omega_ok and np.isfinite(gamma_seed) and gamma_seed > 0.0
@@ -370,8 +382,8 @@ def run_cyclone_linear(
             if sample_stride is not None:
                 time_cfg_use = replace(time_cfg_use, sample_stride=sample_stride)
 
-        if gx_reference_use:
-            # GX integrator applies damping with per-time scaling internally.
+        if reference_aligned_use:
+            # reference-aligned integrator applies damping with per-time scaling internally.
             params_use = params
             _status("running reference-aligned explicit integrator")
             t_max_val = (
@@ -635,6 +647,7 @@ def run_cyclone_scan(
     streaming_fit: bool = True,
     streaming_amp_floor: float = 1.0e-30,
     mode_follow: bool = True,
+    reference_aligned: bool | None = None,
     gx_reference: bool | None = None,
     show_progress: bool = False,
 ) -> CycloneScanResult:
@@ -646,11 +659,15 @@ def run_cyclone_scan(
     cfg = cfg or CycloneBaseCase()
     init_cfg = getattr(cfg, "init", None) or InitializationConfig()
     grid_full = build_spectral_grid(cfg.grid)
-    gx_reference_use = (
-        bool(cfg.gx_reference) if gx_reference is None else bool(gx_reference)
+    if gx_reference is not None:
+        reference_aligned = gx_reference
+    reference_aligned_use = (
+        bool(cfg.reference_aligned)
+        if reference_aligned is None
+        else bool(reference_aligned)
     )
     geom_cfg = cfg.geometry
-    if gx_reference_use:
+    if reference_aligned_use:
         geom_cfg = replace(geom_cfg, drift_scale=1.0)
         if diagnostic_norm == "none":
             diagnostic_norm = "gx"
@@ -680,7 +697,7 @@ def run_cyclone_scan(
     fit_key = normalize_fit_signal(fit_signal)
     auto_solver = solver_key == "auto"
     if auto_solver:
-        solver_key = "explicit_time" if gx_reference_use else "time"
+        solver_key = "explicit_time" if reference_aligned_use else "time"
     streaming_fit, mode_only = apply_auto_fit_scan_policy(
         fit_key, streaming_fit=streaming_fit, mode_only=mode_only
     )
@@ -797,12 +814,14 @@ def run_cyclone_scan(
                     sel = ModeSelection(
                         ky_index=0, kx_index=0, z_index=_midplane_index(grid)
                     )
-                    gamma_seed, omega_seed, _g, _o, _t_mid = instantaneous_growth_rate_from_phi(
-                        phi_seed,
-                        t_short,
-                        sel,
-                        navg_fraction=0.5,
-                        mode_method="z_index",
+                    gamma_seed, omega_seed, _g, _o, _t_mid = (
+                        instantaneous_growth_rate_from_phi(
+                            phi_seed,
+                            t_short,
+                            sel,
+                            navg_fraction=0.5,
+                            mode_method="z_index",
+                        )
                     )
                     omega_ok = np.isfinite(omega_seed) and abs(omega_seed) > 1.0e-8
                     seed_ok = omega_ok and np.isfinite(gamma_seed) and gamma_seed > 0.0
@@ -847,12 +866,14 @@ def run_cyclone_scan(
                     sel_seed = ModeSelection(
                         ky_index=0, kx_index=0, z_index=_midplane_index(grid)
                     )
-                    gamma_seed, omega_seed, _g, _o, _t_mid = instantaneous_growth_rate_from_phi(
-                        phi_seed,
-                        t_short,
-                        sel_seed,
-                        navg_fraction=0.5,
-                        mode_method="z_index",
+                    gamma_seed, omega_seed, _g, _o, _t_mid = (
+                        instantaneous_growth_rate_from_phi(
+                            phi_seed,
+                            t_short,
+                            sel_seed,
+                            navg_fraction=0.5,
+                            mode_method="z_index",
+                        )
                     )
                     omega_ok = np.isfinite(omega_seed) and abs(omega_seed) > 1.0e-8
                     seed_ok = omega_ok and np.isfinite(gamma_seed) and gamma_seed > 0.0
@@ -951,7 +972,7 @@ def run_cyclone_scan(
             dt_i = float(dt[idx]) if isinstance(dt, np.ndarray) else float(dt)
             steps_i = int(steps[idx]) if isinstance(steps, np.ndarray) else int(steps)
             t_max_val = dt_i * float(steps_i)
-            if gx_reference_use and time_cfg is None:
+            if reference_aligned_use and time_cfg is None:
                 fixed_dt_i = True
                 dt_min_i = dt_i
                 dt_max_i: float | None = dt_i
@@ -988,7 +1009,7 @@ def run_cyclone_scan(
             sel_local = ModeSelection(
                 ky_index=0, kx_index=0, z_index=_midplane_index(grid)
             )
-            gx_growth_ok = True
+            explicit_growth_ok = True
             try:
                 gamma, omega, _g, _o, _t_mid = instantaneous_growth_rate_from_phi(
                     phi_gx, t, sel_local, navg_fraction=0.5, mode_method="z_index"
@@ -997,20 +1018,22 @@ def run_cyclone_scan(
                     gamma, omega, params, diagnostic_norm
                 )
             except ValueError:
-                gx_growth_ok = False
+                explicit_growth_ok = False
                 gamma = float("nan")
                 omega = float("nan")
-            if gx_reference_use and prev_omega is None and omega < 0.0:
+            if reference_aligned_use and prev_omega is None and omega < 0.0:
                 omega = abs(omega)
             need_reselect = (
-                (gx_reference_use and gx_growth_ok)
+                (reference_aligned_use and explicit_growth_ok)
                 and prev_omega is not None
                 and prev_omega > 0.0
                 and (omega <= 0.0 or ((idx >= 2) and (omega < 0.85 * prev_omega)))
             )
-            if need_reselect or not gx_growth_ok:
+            if need_reselect or not explicit_growth_ok:
                 target_omega: float | None = (
-                    prev_omega if (gx_growth_ok and prev_omega is not None) else None
+                    prev_omega
+                    if (explicit_growth_ok and prev_omega is not None)
+                    else None
                 )
                 if (
                     target_omega is not None
@@ -1051,7 +1074,7 @@ def run_cyclone_scan(
                 gamma_k, omega_k = _normalize_growth_rate(
                     gamma_k, omega_k, params, diagnostic_norm
                 )
-                if not gx_growth_ok:
+                if not explicit_growth_ok:
                     gamma, omega = gamma_k, omega_k
                 else:
                     assert target_omega is not None

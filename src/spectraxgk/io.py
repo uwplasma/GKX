@@ -6,6 +6,7 @@ from dataclasses import fields, is_dataclass, replace
 from typing import Any, cast
 import os
 from pathlib import Path
+
 try:
     import tomllib  # Python 3.11+
 except ModuleNotFoundError:  # pragma: no cover - only on Python <3.11
@@ -119,16 +120,18 @@ def load_case_from_toml(path: str | Path, case_name: str | None = None):
         case_name = str(data.get("case", "cyclone")).lower()
     registry = _case_registry()
     if case_name not in registry:
-        raise ValueError(f"Unknown case '{case_name}'. Available: {', '.join(registry)}")
+        raise ValueError(
+            f"Unknown case '{case_name}'. Available: {', '.join(registry)}"
+        )
     cfg = registry[case_name]()
-    gx_reference = None
-    gx_reference_raw = data.get("gx_reference")
-    if isinstance(gx_reference_raw, dict):
-        enabled = gx_reference_raw.get("enabled")
+    reference_aligned = None
+    reference_raw = data.get("reference_alignment")
+    if isinstance(reference_raw, dict):
+        enabled = reference_raw.get("enabled")
         if enabled is not None:
-            gx_reference = bool(enabled)
-    elif gx_reference_raw is not None:
-        gx_reference = bool(gx_reference_raw)
+            reference_aligned = bool(enabled)
+    elif reference_raw is not None:
+        reference_aligned = bool(reference_raw)
 
     overrides = {
         "grid": data.get("grid"),
@@ -137,8 +140,8 @@ def load_case_from_toml(path: str | Path, case_name: str | None = None):
         "model": data.get("model"),
         "init": data.get("init"),
     }
-    if gx_reference is not None and hasattr(cfg, "gx_reference"):
-        overrides["gx_reference"] = gx_reference
+    if reference_aligned is not None and hasattr(cfg, "reference_aligned"):
+        overrides["reference_aligned"] = reference_aligned
     cfg = _merge_dataclass(cfg, overrides)
     return case_name, cfg, data
 
@@ -186,7 +189,9 @@ def load_runtime_from_toml(path: str | Path) -> tuple[RuntimeConfig, dict]:
     species_raw = data.get("species")
     if species_raw is not None:
         if not isinstance(species_raw, list):
-            raise TypeError("[[species]] entries must be provided as an array of tables")
+            raise TypeError(
+                "[[species]] entries must be provided as an array of tables"
+            )
         species: list[RuntimeSpeciesConfig] = []
         for item in species_raw:
             if not isinstance(item, dict):
@@ -199,18 +204,29 @@ def load_runtime_from_toml(path: str | Path) -> tuple[RuntimeConfig, dict]:
         geometry=replace(
             cfg.geometry,
             vmec_file=resolve_runtime_path(cfg.geometry.vmec_file, base_dir=base_dir),
-            geometry_file=resolve_runtime_path(cfg.geometry.geometry_file, base_dir=base_dir),
+            geometry_file=resolve_runtime_path(
+                cfg.geometry.geometry_file, base_dir=base_dir
+            ),
         ),
-        init=replace(cfg.init, init_file=resolve_runtime_path(cfg.init.init_file, base_dir=base_dir)),
+        init=replace(
+            cfg.init,
+            init_file=resolve_runtime_path(cfg.init.init_file, base_dir=base_dir),
+        ),
         output=replace(
             cfg.output,
             path=resolve_runtime_path(cfg.output.path, base_dir=base_dir),
-            restart_to_file=resolve_runtime_path(cfg.output.restart_to_file, base_dir=base_dir),
-            restart_from_file=resolve_runtime_path(cfg.output.restart_from_file, base_dir=base_dir),
+            restart_to_file=resolve_runtime_path(
+                cfg.output.restart_to_file, base_dir=base_dir
+            ),
+            restart_from_file=resolve_runtime_path(
+                cfg.output.restart_from_file, base_dir=base_dir
+            ),
         ),
         quasilinear=replace(
             cfg.quasilinear,
-            output_path=resolve_runtime_path(cfg.quasilinear.output_path, base_dir=base_dir),
+            output_path=resolve_runtime_path(
+                cfg.quasilinear.output_path, base_dir=base_dir
+            ),
         ),
     )
     return cfg, data

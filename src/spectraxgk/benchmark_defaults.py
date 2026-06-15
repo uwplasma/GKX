@@ -32,7 +32,7 @@ __all__ = [
     "KBM_OMEGA_STAR_SCALE",
     "KBM_RHO_STAR",
     "KINETIC_KRYLOV_DEFAULT",
-    "KINETIC_KRYLOV_GX_REFERENCE",
+    "KINETIC_KRYLOV_REFERENCE_ALIGNED",
     "Kinetic_OMEGA_D_SCALE",
     "Kinetic_OMEGA_STAR_SCALE",
     "Kinetic_RHO_STAR",
@@ -99,7 +99,9 @@ KINETIC_KRYLOV_DEFAULT = KrylovConfig(
     fallback_method="propagator",
 )
 
-KINETIC_KRYLOV_GX_REFERENCE = replace(KINETIC_KRYLOV_DEFAULT, shift_source="history")
+KINETIC_KRYLOV_REFERENCE_ALIGNED = replace(
+    KINETIC_KRYLOV_DEFAULT, shift_source="history"
+)
 
 ETG_KRYLOV_DEFAULT = KrylovConfig(
     method="propagator",

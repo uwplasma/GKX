@@ -113,7 +113,8 @@ def run_kbm_beta_scan(
     apar_beta_scale: float | None = None,
     ampere_g0_scale: float | None = None,
     bpar_beta_scale: float | None = None,
-    gx_reference: bool | None = True,
+    reference_aligned: bool | None = True,
+    gx_reference: bool | None = None,
 ) -> LinearScanResult:
     """Run a KBM beta scan at fixed ky.
 
@@ -125,10 +126,16 @@ def run_kbm_beta_scan(
     geom = SAlphaGeometry.from_config(cfg.geometry)
     if terms is None:
         terms = LinearTerms(bpar=0.0)
-    gx_reference_use = bool(gx_reference)
-    if gx_reference_use and diagnostic_norm == "none":
+    if gx_reference is not None:
+        reference_aligned = gx_reference
+    reference_aligned_use = bool(
+        True if reference_aligned is None else reference_aligned
+    )
+    if reference_aligned_use and diagnostic_norm == "none":
         diagnostic_norm = "gx"
-    damp_ends_amp, damp_ends_widthfrac = _linked_boundary_end_damping(gx_reference_use)
+    damp_ends_amp, damp_ends_widthfrac = _linked_boundary_end_damping(
+        reference_aligned_use
+    )
 
     solver_key = normalize_solver_key(solver)
     fit_key = normalize_fit_signal(fit_signal)
@@ -212,7 +219,9 @@ def run_kbm_beta_scan(
 
         G0_jax = jnp.asarray(G0)
         solver_use = select_kbm_solver_auto(
-            solver_key, ky_target=ky_target, gx_reference=gx_reference_use
+            solver_key,
+            ky_target=ky_target,
+            reference_aligned=reference_aligned_use,
         )
 
         if solver_use == "explicit_time":
@@ -238,37 +247,43 @@ def run_kbm_beta_scan(
                     else float(ExplicitTimeConfig.cfl_fac)
                 ),
             )
-            t_arr, _phi_t, gamma_t, omega_t, _gx_diag = integrate_linear_explicit_diagnostics(
-                G0_jax,
-                grid,
-                cache,
-                params,
-                geom,
-                explicit_time_cfg,
-                terms=terms,
-                mode_method=explicit_mode_method,
-                z_index=sel.z_index,
-                jit=True,
+            t_arr, _phi_t, gamma_t, omega_t, _gx_diag = (
+                integrate_linear_explicit_diagnostics(
+                    G0_jax,
+                    grid,
+                    cache,
+                    params,
+                    geom,
+                    explicit_time_cfg,
+                    terms=terms,
+                    mode_method=explicit_mode_method,
+                    z_index=sel.z_index,
+                    jit=True,
+                )
             )
             if t_arr.size > 1:
                 phi_np = np.asarray(_phi_t)
                 t_np = np.asarray(t_arr, dtype=float)
                 if mode_method in {"z_index", "max"}:
                     try:
-                        gamma, omega, _g_t, _o_t, _t_mid = instantaneous_growth_rate_from_phi(
-                            phi_np,
-                            t_np,
-                            sel,
-                            navg_fraction=0.5,
-                            mode_method=mode_method,
+                        gamma, omega, _g_t, _o_t, _t_mid = (
+                            instantaneous_growth_rate_from_phi(
+                                phi_np,
+                                t_np,
+                                sel,
+                                navg_fraction=0.5,
+                                mode_method=mode_method,
+                            )
                         )
                     except ValueError:
                         try:
-                            gamma, omega, _g_t, _o_t = windowed_growth_rate_from_omega_series(
-                                np.asarray(gamma_t),
-                                np.asarray(omega_t),
-                                sel,
-                                navg_fraction=0.5,
+                            gamma, omega, _g_t, _o_t = (
+                                windowed_growth_rate_from_omega_series(
+                                    np.asarray(gamma_t),
+                                    np.asarray(omega_t),
+                                    sel,
+                                    navg_fraction=0.5,
+                                )
                             )
                         except ValueError:
                             signal = extract_mode_time_series(
@@ -677,7 +692,8 @@ def run_kbm_linear(
     apar_beta_scale: float | None = None,
     ampere_g0_scale: float | None = None,
     bpar_beta_scale: float | None = None,
-    gx_reference: bool | None = True,
+    reference_aligned: bool | None = True,
+    gx_reference: bool | None = None,
     show_progress: bool = False,
 ) -> LinearRunResult:
     """Run a single linear KBM point and return the stored field history."""
@@ -689,10 +705,16 @@ def run_kbm_linear(
     grid_full = build_spectral_grid(apply_geometry_grid_defaults(geom, cfg_use.grid))
     if terms is None:
         terms = LinearTerms(bpar=0.0)
-    gx_reference_use = bool(gx_reference)
-    if gx_reference_use and diagnostic_norm == "none":
+    if gx_reference is not None:
+        reference_aligned = gx_reference
+    reference_aligned_use = bool(
+        True if reference_aligned is None else reference_aligned
+    )
+    if reference_aligned_use and diagnostic_norm == "none":
         diagnostic_norm = "gx"
-    damp_ends_amp, damp_ends_widthfrac = _linked_boundary_end_damping(gx_reference_use)
+    damp_ends_amp, damp_ends_widthfrac = _linked_boundary_end_damping(
+        reference_aligned_use
+    )
 
     fit_key = fit_signal.strip().lower()
     if fit_key not in {"phi", "density", "auto"}:
@@ -743,7 +765,7 @@ def run_kbm_linear(
     solver_key = select_kbm_solver_auto(
         solver,
         ky_target=float(ky_target),
-        gx_reference=gx_reference_use,
+        reference_aligned=reference_aligned_use,
     )
     krylov_cfg_use = krylov_cfg or KBM_KRYLOV_DEFAULT
 
@@ -781,7 +803,9 @@ def run_kbm_linear(
         return gamma_val, omega_val
 
     if solver_key == "explicit_time":
-        explicit_mode_method = mode_method if mode_method in {"z_index", "max"} else "z_index"
+        explicit_mode_method = (
+            mode_method if mode_method in {"z_index", "max"} else "z_index"
+        )
         explicit_time_cfg = ExplicitTimeConfig(
             dt=dt,
             t_max=dt * steps,
@@ -801,37 +825,43 @@ def run_kbm_linear(
                 else float(ExplicitTimeConfig.cfl_fac)
             ),
         )
-        t_arr, phi_t, gamma_t, omega_t, _gx_diag = integrate_linear_explicit_diagnostics(
-            G0_jax,
-            grid,
-            cache,
-            params,
-            geom,
-            explicit_time_cfg,
-            terms=terms,
-            mode_method=explicit_mode_method,
-            z_index=sel.z_index,
-            jit=True,
+        t_arr, phi_t, gamma_t, omega_t, _gx_diag = (
+            integrate_linear_explicit_diagnostics(
+                G0_jax,
+                grid,
+                cache,
+                params,
+                geom,
+                explicit_time_cfg,
+                terms=terms,
+                mode_method=explicit_mode_method,
+                z_index=sel.z_index,
+                jit=True,
+            )
         )
         t_out = np.asarray(t_arr, dtype=float)
         phi_t_np = np.asarray(phi_t)
         if t_out.size > 1:
             if mode_method in {"z_index", "max"}:
                 try:
-                    gamma, omega, _g_t, _o_t, _t_mid = instantaneous_growth_rate_from_phi(
-                        phi_t_np,
-                        t_out,
-                        sel,
-                        navg_fraction=0.5,
-                        mode_method=mode_method,
+                    gamma, omega, _g_t, _o_t, _t_mid = (
+                        instantaneous_growth_rate_from_phi(
+                            phi_t_np,
+                            t_out,
+                            sel,
+                            navg_fraction=0.5,
+                            mode_method=mode_method,
+                        )
                     )
                 except ValueError:
                     try:
-                        gamma, omega, _g_t, _o_t = windowed_growth_rate_from_omega_series(
-                            np.asarray(gamma_t),
-                            np.asarray(omega_t),
-                            sel,
-                            navg_fraction=0.5,
+                        gamma, omega, _g_t, _o_t = (
+                            windowed_growth_rate_from_omega_series(
+                                np.asarray(gamma_t),
+                                np.asarray(omega_t),
+                                sel,
+                                navg_fraction=0.5,
+                            )
                         )
                     except ValueError:
                         signal = extract_mode_time_series(
@@ -1167,7 +1197,8 @@ def run_kbm_scan(
     apar_beta_scale: float | None = None,
     ampere_g0_scale: float | None = None,
     bpar_beta_scale: float | None = None,
-    gx_reference: bool | None = True,
+    reference_aligned: bool | None = True,
+    gx_reference: bool | None = None,
 ) -> LinearScanResult:
     """Run a KBM ky scan at fixed beta.
 
@@ -1234,6 +1265,7 @@ def run_kbm_scan(
             apar_beta_scale=apar_beta_scale,
             ampere_g0_scale=ampere_g0_scale,
             bpar_beta_scale=bpar_beta_scale,
+            reference_aligned=reference_aligned,
             gx_reference=gx_reference,
         )
         ky_out.append(float(ky_val))
