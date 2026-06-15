@@ -186,7 +186,7 @@ class SAlphaGeometry:
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
 class SlabGeometry:
-    """GX slab geometry contract."""
+    """Reference slab geometry contract."""
 
     s_hat: float = 0.0
     z0: float | None = None
@@ -436,7 +436,7 @@ class FluxTubeGeometryData:
     def trim_terminal_theta_point(self) -> FluxTubeGeometryData:
         """Return a copy without the terminal theta sample.
 
-        GX `*.eik.nc` files commonly store a closed theta interval, while the
+        Imported `*.eik.nc` files commonly store a closed theta interval, while the
         spectral solver uses the matching open interval with the terminal point
         excluded. Trimming keeps the imported coefficients aligned with the
         runtime grid without changing the physical extent.
@@ -594,18 +594,18 @@ def _periodic_spectral_derivative(values: np.ndarray, spacing: float) -> np.ndar
     return np.fft.ifft(deriv_hat).real.astype(values.dtype, copy=False)
 
 
-def _gx_bgrad_from_bmag(
+def _bgrad_from_bmag(
     theta: np.ndarray, bmag: np.ndarray, gradpar_val: float, *, closed: bool
 ) -> np.ndarray:
-    """Reconstruct GX's mirror term from ``bmag`` on the solver theta grid."""
+    """Reconstruct the mirror term from ``bmag`` on the solver theta grid."""
 
     if theta.ndim != 1 or bmag.ndim != 1:
         raise ValueError(
-            "GX bgrad reconstruction expects one-dimensional theta and bmag profiles"
+            "Imported geometry bgrad reconstruction expects one-dimensional theta and bmag profiles"
         )
     if theta.shape != bmag.shape:
         raise ValueError(
-            "theta and bmag must have the same shape for GX bgrad reconstruction"
+            "theta and bmag must have the same shape for Imported geometry bgrad reconstruction"
         )
     if theta.size < 2:
         return np.zeros_like(bmag)
@@ -623,14 +623,17 @@ def _gx_bgrad_from_bmag(
     return bgrad
 
 
-def load_gx_geometry_netcdf(path: str | Path) -> FluxTubeGeometryData:
-    """Load sampled geometry from a imported NetCDF file."""
+_gx_bgrad_from_bmag = _bgrad_from_bmag
+
+
+def load_imported_geometry_netcdf(path: str | Path) -> FluxTubeGeometryData:
+    """Load sampled flux-tube geometry from an imported NetCDF/eik file."""
 
     try:
         from netCDF4 import Dataset
     except ImportError as exc:  # pragma: no cover - optional import
         raise ImportError(
-            "netCDF4 is required to load GX geometry NetCDF files"
+            "netCDF4 is required to load imported geometry NetCDF files"
         ) from exc
 
     def _read_scalar(variables, *names: str, default: float | None = None) -> float:
@@ -642,7 +645,7 @@ def load_gx_geometry_netcdf(path: str | Path) -> FluxTubeGeometryData:
                 if arr.ndim == 1 and np.allclose(arr, arr[0]):
                     return float(arr[0])
                 raise ValueError(
-                    f"GX geometry variable '{name}' must be scalar or constant on theta"
+                    f"Imported geometry variable '{name}' must be scalar or constant on theta"
                 )
         if default is None:
             raise KeyError(names[0])
@@ -654,16 +657,16 @@ def load_gx_geometry_netcdf(path: str | Path) -> FluxTubeGeometryData:
                 arr = np.asarray(variables[name][:], dtype=float)
                 if arr.ndim != 1:
                     raise ValueError(
-                        f"GX geometry variable '{name}' must be one-dimensional on theta"
+                        f"Imported geometry variable '{name}' must be one-dimensional on theta"
                     )
                 return arr
         raise KeyError(names[0])
 
     def _infer_root_theta_closed_interval(theta: np.ndarray, variables) -> bool:
-        """Infer whether a root-level GX ``*.eik.nc`` file includes a terminal theta endpoint.
+        """Infer whether a root-level ``*.eik.nc`` file includes a terminal theta endpoint.
 
         VMEC-style ``*.eik.nc`` files often include the periodic terminal point, while
-        GX's Miller helper writes an already-open theta grid. Root-level files therefore
+        Miller helper writes an already-open theta grid. Root-level files therefore
         cannot be treated as closed intervals unconditionally.
         """
 
@@ -696,8 +699,8 @@ def load_gx_geometry_netcdf(path: str | Path) -> FluxTubeGeometryData:
 
     root = Dataset(Path(path), "r")
     try:
-        is_grouped_gx_output = "Geometry" in root.groups and "Grids" in root.groups
-        if is_grouped_gx_output:
+        is_grouped_output = "Geometry" in root.groups and "Grids" in root.groups
+        if is_grouped_output:
             geom_vars = root.groups["Geometry"].variables
             grid_vars = root.groups["Grids"].variables
             theta = _read_profile(grid_vars, "theta")
@@ -713,24 +716,24 @@ def load_gx_geometry_netcdf(path: str | Path) -> FluxTubeGeometryData:
         gradpar_val = _read_scalar(geom_vars, "gradpar")
         bmag = _read_profile(geom_vars, "bmag")
         drhodpsi = _read_scalar(geom_vars, "drhodpsi", default=1.0)
-        if is_grouped_gx_output and "bgrad" in geom_vars:
+        if is_grouped_output and "bgrad" in geom_vars:
             bgrad = _read_profile(geom_vars, "bgrad")
         else:
-            bgrad = _gx_bgrad_from_bmag(
+            bgrad = _bgrad_from_bmag(
                 np.asarray(theta, dtype=float),
                 np.asarray(bmag, dtype=float),
                 gradpar_val,
                 closed=theta_closed_interval,
             )
-        if is_grouped_gx_output:
+        if is_grouped_output:
             cvdrift = _read_profile(geom_vars, "cvdrift")
             gbdrift = _read_profile(geom_vars, "gbdrift")
             cvdrift0 = _read_profile(geom_vars, "cvdrift0")
             gbdrift0 = _read_profile(geom_vars, "gbdrift0")
             jacobian = _read_profile(geom_vars, "jacobian", "jacob")
         else:
-            # Root-level VMEC ``*.eik.nc`` files carry the pre-GX drift
-            # normalization and a Jacobian that GX replaces at load time.
+            # Root-level VMEC ``*.eik.nc`` files carry a pre-load drift
+            # normalization and Jacobian that are converted at load time.
             cvdrift = 0.5 * _read_profile(geom_vars, "cvdrift")
             gbdrift = 0.5 * _read_profile(geom_vars, "gbdrift")
             cvdrift0 = 0.5 * _read_profile(geom_vars, "cvdrift0")
@@ -767,7 +770,7 @@ def load_gx_geometry_netcdf(path: str | Path) -> FluxTubeGeometryData:
             nfp=int(round(_read_scalar(geom_vars, "nfp", default=1.0))),
             kperp2_bmag=True,
             bessel_bmag_power=0.0,
-            source_model="gx-netcdf",
+            source_model="imported-netcdf",
             theta_closed_interval=theta_closed_interval,
         )
     finally:
@@ -786,6 +789,9 @@ def build_flux_tube_geometry(cfg: GeometryConfig) -> FluxTubeGeometryLike:
     if model in {"slab"}:
         return SlabGeometry.from_config(cfg)
     if model in {
+        "imported-netcdf",
+        "imported-nc",
+        "imported-eik",
         "gx-netcdf",
         "gx-nc",
         "netcdf",
@@ -799,10 +805,10 @@ def build_flux_tube_geometry(cfg: GeometryConfig) -> FluxTubeGeometryLike:
             raise ValueError(
                 "geometry.geometry_file must be set for imported NetCDF/eik geometry"
             )
-        return load_gx_geometry_netcdf(cfg.geometry_file)
+        return load_imported_geometry_netcdf(cfg.geometry_file)
     raise ValueError(
         "geometry.model must be one of "
-        "{'s-alpha', 'slab', 'gx-netcdf', 'gx-eik', 'vmec-eik', 'desc-eik'}"
+        "{'s-alpha', 'slab', 'imported-netcdf', 'imported-eik', 'vmec-eik', 'desc-eik'}"
     )
 
 
@@ -894,14 +900,14 @@ def apply_geometry_grid_defaults(
     geom: FluxTubeGeometryLike,
     grid: GridConfig,
 ) -> GridConfig:
-    """Apply GX-aligned grid defaults implied by the selected geometry."""
+    """Apply imported-geometry grid defaults implied by the selected geometry."""
 
     grid_out = grid
     if isinstance(geom, FluxTubeGeometryData):
         theta = np.asarray(geom.theta, dtype=float)
         if theta.ndim != 1 or theta.size < 2:
             raise ValueError(
-                "Imported GX geometry theta grid must be one-dimensional with at least two points"
+                "Imported geometry theta grid must be one-dimensional with at least two points"
             )
         if geom.theta_closed_interval:
             nz = int(theta.size - 1)
@@ -937,10 +943,12 @@ def apply_geometry_grid_defaults(
         float(getattr(geom, "s_hat", 0.0)),
         zero_shat=bool(getattr(geom, "zero_shat", False)),
     ):
-        # GX zero-shear promotion switches the lane onto the periodic
+        # Zero-shear promotion switches the lane onto the periodic
         # grad-parallel operator, so any linked-FFT metadata must be cleared.
         grid_out = replace(grid_out, jtwist=None)
     return grid_out
 
 
-apply_gx_geometry_grid_defaults = apply_geometry_grid_defaults
+apply_imported_geometry_grid_defaults = apply_geometry_grid_defaults
+apply_gx_geometry_grid_defaults = apply_imported_geometry_grid_defaults
+load_gx_geometry_netcdf = load_imported_geometry_netcdf

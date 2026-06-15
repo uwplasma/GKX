@@ -178,7 +178,9 @@ def build_runtime_geometry(cfg: RuntimeConfig) -> FluxTubeGeometryLike:
         return build_flux_tube_geometry(geom_cfg)
     if model == "miller":
         eik_path = generate_runtime_miller_eik(cfg)
-        geom_cfg = replace(cfg.geometry, model="gx-eik", geometry_file=str(eik_path))
+        geom_cfg = replace(
+            cfg.geometry, model="imported-eik", geometry_file=str(eik_path)
+        )
         return build_flux_tube_geometry(geom_cfg)
     return build_flux_tube_geometry(cfg.geometry)
 
@@ -1186,25 +1188,27 @@ def run_runtime_nonlinear(
         _status(
             f"running cETG nonlinear integration over {steps_val} steps with dt={dt_val:.6g}"
         )
-        _t, diag, G_final, cetg_fields_final = integrate_cetg_explicit_diagnostics_state(
-            G0,
-            grid,
-            cetg_params,
-            cetg_term_cfg,
-            dt=dt_val,
-            steps=steps_val,
-            method=str(method or cfg.time.method),
-            sample_stride=int(sample_stride_use),
-            diagnostics_stride=int(diag_stride),
-            compressed_real_fft=bool(cfg.time.compressed_real_fft),
-            omega_ky_index=int(ky_index),
-            omega_kx_index=int(kx_index),
-            fixed_dt=bool(cfg.time.fixed_dt),
-            dt_min=float(cfg.time.dt_min),
-            dt_max=cfg.time.dt_max,
-            cfl=float(cfg.time.cfl),
-            cfl_fac=cfg.time.cfl_fac,
-            **progress_kw,
+        _t, diag, G_final, cetg_fields_final = (
+            integrate_cetg_explicit_diagnostics_state(
+                G0,
+                grid,
+                cetg_params,
+                cetg_term_cfg,
+                dt=dt_val,
+                steps=steps_val,
+                method=str(method or cfg.time.method),
+                sample_stride=int(sample_stride_use),
+                diagnostics_stride=int(diag_stride),
+                compressed_real_fft=bool(cfg.time.compressed_real_fft),
+                omega_ky_index=int(ky_index),
+                omega_kx_index=int(kx_index),
+                fixed_dt=bool(cfg.time.fixed_dt),
+                dt_min=float(cfg.time.dt_min),
+                dt_max=cfg.time.dt_max,
+                cfl=float(cfg.time.cfl),
+                cfl_fac=cfg.time.cfl_fac,
+                **progress_kw,
+            )
         )
         if diagnostics_on is False:
             _status("diagnostics disabled; returning final cETG state summary")
@@ -1391,12 +1395,14 @@ def run_runtime_nonlinear(
             diagnostics_call_kwargs.update(resolved_diag_kw)
             if show_progress:
                 diagnostics_call_kwargs["show_progress"] = True
-            t, diag, G_final, fields_final = integrate_nonlinear_explicit_diagnostics_state(
-                G0,
-                grid,
-                geom,
-                params,
-                **diagnostics_call_kwargs,
+            t, diag, G_final, fields_final = (
+                integrate_nonlinear_explicit_diagnostics_state(
+                    G0,
+                    grid,
+                    geom,
+                    params,
+                    **diagnostics_call_kwargs,
+                )
             )
         if diagnostics_on:
             _status(

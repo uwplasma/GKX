@@ -159,7 +159,9 @@ def build_runtime_geometry(cfg: RuntimeConfig) -> FluxTubeGeometryLike:
         return build_flux_tube_geometry(geom_cfg)
     if model == "miller":
         eik_path = generate_runtime_miller_eik(cfg)
-        geom_cfg = replace(cfg.geometry, model="gx-eik", geometry_file=str(eik_path))
+        geom_cfg = replace(
+            cfg.geometry, model="imported-eik", geometry_file=str(eik_path)
+        )
         return build_flux_tube_geometry(geom_cfg)
     return build_flux_tube_geometry(cfg.geometry)
 
