@@ -27,12 +27,8 @@ def generate_vmec_eik(
                 "Either booz_xform or booz_xform_jax is required for VMEC geometry generation"
             )
 
-    # (Implementation continues mirroring the logic of gx_geo_vmec.py...)
-    # We will use bxform to compute Boozer coordinates and then calculate metrics.
-
-    # For now, let's provide a functional structure.
-    # The actual implementation involves calling bxform.Boozer() and then
-    # computing the grad(psi), grad(theta), grad(phi) in Boozer space.
+    # Use a Boozer transform backend to build the compact VMEC geometry file
+    # needed by standalone geometry examples.
 
     # Let's save a stub file for now to verify the integration.
     ds = Dataset(output_path, "w")
