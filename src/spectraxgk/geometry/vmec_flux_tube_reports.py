@@ -215,11 +215,11 @@ def vmec_jax_flux_tube_array_parity_report(  # pragma: no cover
         }
 
     try:
-        from spectraxgk.from_gx.vmec import (
+        from spectraxgk.geometry_backends.vmec import (
             generate_vmec_eik_internal,
             internal_vmec_backend_available,
         )
-        from spectraxgk.geometry import load_gx_geometry_netcdf
+        from spectraxgk.geometry import load_imported_geometry_netcdf
 
         if not internal_vmec_backend_available():
             return {
@@ -295,7 +295,7 @@ def vmec_jax_flux_tube_array_parity_report(  # pragma: no cover
         with tempfile.TemporaryDirectory(prefix="spectrax_vmec_eik_parity_") as tmp:
             eik_path = Path(tmp) / f"{case_name}.eik.nc"
             generate_vmec_eik_internal(output_path=eik_path, request=request)
-            imported = load_gx_geometry_netcdf(eik_path)
+            imported = load_imported_geometry_netcdf(eik_path)
             if imported.theta.shape[0] == direct.theta.shape[0] + 1:
                 imported = imported.trim_terminal_theta_point()
 

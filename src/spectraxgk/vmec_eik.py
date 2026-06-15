@@ -10,7 +10,10 @@ import math
 from pathlib import Path
 
 from spectraxgk.config import REFERENCE_ELECTRON_MASS
-from spectraxgk.from_gx.vmec import generate_vmec_eik_internal, internal_vmec_backend_available
+from spectraxgk.geometry_backends.vmec import (
+    generate_vmec_eik_internal,
+    internal_vmec_backend_available,
+)
 from spectraxgk.runtime_config import RuntimeConfig
 
 
@@ -84,8 +87,12 @@ def build_vmec_geometry_request(cfg: RuntimeConfig) -> VmecGeometryRequest:
     if not species:
         raise ValueError("RuntimeConfig.species must contain at least one species")
 
-    y0 = float(cfg.grid.y0) if cfg.grid.y0 is not None else float(cfg.grid.Ly) / (2.0 * math.pi)
-    # Match GX VMEC defaults: unless the user exposes an explicit VMEC x0 control,
+    y0 = (
+        float(cfg.grid.y0)
+        if cfg.grid.y0 is not None
+        else float(cfg.grid.Ly) / (2.0 * math.pi)
+    )
+    # Match imported VMEC defaults: unless the user exposes an explicit VMEC x0 control,
     # leave x0 unset so the geometry helper chooses the flux-tube cut.
     x0 = None
     ntheta = int(cfg.grid.ntheta) if cfg.grid.ntheta is not None else int(cfg.grid.Nz)
@@ -122,12 +129,16 @@ def build_vmec_geometry_request(cfg: RuntimeConfig) -> VmecGeometryRequest:
         alpha=float(cfg.geometry.alpha),
         torflux=float(cfg.geometry.torflux),
         npol=_infer_vmec_npol(cfg),
-        npol_min=None if cfg.geometry.npol_min is None else float(cfg.geometry.npol_min),
+        npol_min=None
+        if cfg.geometry.npol_min is None
+        else float(cfg.geometry.npol_min),
         isaxisym=bool(cfg.geometry.isaxisym),
         which_crossing=cfg.geometry.which_crossing,
         include_shear_variation=bool(cfg.geometry.include_shear_variation),
         include_pressure_variation=bool(cfg.geometry.include_pressure_variation),
-        betaprim=None if cfg.geometry.betaprim is None else float(cfg.geometry.betaprim),
+        betaprim=None
+        if cfg.geometry.betaprim is None
+        else float(cfg.geometry.betaprim),
         z=tuple(z),
         mass=tuple(mass),
         dens=tuple(dens),
@@ -152,7 +163,9 @@ def default_vmec_eik_output_path(
         "vmec_size": stat.st_size,
         "vmec_mtime_ns": stat.st_mtime_ns,
     }
-    digest = hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+    digest = hashlib.sha256(
+        json.dumps(payload, sort_keys=True).encode("utf-8")
+    ).hexdigest()[:16]
     stem = vmec_path.stem.removeprefix("wout_")
     return _DEFAULT_CACHE_DIR / f"{stem}_{digest}.eik.nc"
 
@@ -209,7 +222,11 @@ def generate_runtime_vmec_eik(
         default_cache_output = True
     resolved_path = _resolve_output_path(resolved_output)
 
-    if default_cache_output and not force and _is_reusable_vmec_eik_cache(resolved_path):
+    if (
+        default_cache_output
+        and not force
+        and _is_reusable_vmec_eik_cache(resolved_path)
+    ):
         return resolved_path
 
     if not internal_vmec_backend_available():
@@ -221,7 +238,7 @@ def generate_runtime_vmec_eik(
     return generate_vmec_eik_internal(output_path=resolved_path, request=request)
 
 
-# Compatibility aliases kept for callers still using the older GX-prefixed
+# Compatibility aliases kept for callers still using the older prefixed
 # request and builder names.
 GXVmecGeometryRequest = VmecGeometryRequest
 build_gx_vmec_geometry_request = build_vmec_geometry_request

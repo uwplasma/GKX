@@ -1,10 +1,11 @@
-"""Internal geometry backends progressively ported from GX.
+"""Legacy compatibility package for renamed internal geometry backends.
 
-These modules host JAX-friendly implementations intended to remove the hard
-runtime dependency on an external GX repository.
+New SPECTRAX-GK internals should import from ``spectraxgk.geometry_backends``.
+This package remains only to avoid breaking older user scripts and archived
+comparison tooling.
 """
 
-from spectraxgk.from_gx.vmec import internal_vmec_backend_available
-from spectraxgk.from_gx.miller import internal_miller_backend_available
+from spectraxgk.geometry_backends.miller import internal_miller_backend_available
+from spectraxgk.geometry_backends.vmec import internal_vmec_backend_available
 
 __all__ = ["internal_vmec_backend_available", "internal_miller_backend_available"]

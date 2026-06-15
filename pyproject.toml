@@ -110,9 +110,9 @@ module = [
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = ["spectraxgk.from_gx.vmec", "spectraxgk.geometry.vmec"]
+module = ["spectraxgk.geometry_backends.vmec", "spectraxgk.geometry.vmec"]
 ignore_errors = true
 
 [[tool.mypy.overrides]]
-module = ["spectraxgk.from_gx.miller"]
+module = ["spectraxgk.geometry_backends.miller"]
 disable_error_code = ["arg-type"]

@@ -8,7 +8,10 @@ import json
 import math
 from pathlib import Path
 
-from spectraxgk.from_gx.miller import generate_miller_eik_internal, internal_miller_backend_available
+from spectraxgk.geometry_backends.miller import (
+    generate_miller_eik_internal,
+    internal_miller_backend_available,
+)
 from spectraxgk.runtime_config import RuntimeConfig
 
 
@@ -57,9 +60,15 @@ def build_miller_geometry_request(cfg: RuntimeConfig) -> MillerGeometryRequest:
     """Build a Miller generation request from a runtime config."""
 
     if str(cfg.geometry.model).strip().lower() != "miller":
-        raise ValueError("geometry.model must be 'miller' for Miller geometry generation")
+        raise ValueError(
+            "geometry.model must be 'miller' for Miller geometry generation"
+        )
 
-    y0 = float(cfg.grid.y0) if cfg.grid.y0 is not None else float(cfg.grid.Ly) / (2.0 * math.pi)
+    y0 = (
+        float(cfg.grid.y0)
+        if cfg.grid.y0 is not None
+        else float(cfg.grid.Ly) / (2.0 * math.pi)
+    )
     ntheta = _infer_miller_ntheta(cfg)
     if ntheta < 2:
         raise ValueError("Miller geometry generation requires ntheta >= 2")
@@ -73,7 +82,9 @@ def build_miller_geometry_request(cfg: RuntimeConfig) -> MillerGeometryRequest:
         q=float(cfg.geometry.q),
         s_hat=float(cfg.geometry.s_hat),
         Rmaj=float(cfg.geometry.R0),
-        R_geo=float(cfg.geometry.R0 if cfg.geometry.R_geo is None else cfg.geometry.R_geo),
+        R_geo=float(
+            cfg.geometry.R0 if cfg.geometry.R_geo is None else cfg.geometry.R_geo
+        ),
         shift=float(cfg.geometry.shift),
         akappa=float(cfg.geometry.akappa),
         akappri=float(cfg.geometry.akappri),
@@ -89,7 +100,9 @@ def default_miller_eik_output_path(
     """Return a stable cache path for a Miller-generated ``*.eiknc.nc`` file."""
 
     payload = {"cache_version": _MILLER_EIK_CACHE_VERSION, **asdict(request)}
-    digest = hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+    digest = hashlib.sha256(
+        json.dumps(payload, sort_keys=True).encode("utf-8")
+    ).hexdigest()[:16]
     return _DEFAULT_CACHE_DIR / f"miller_{digest}.eiknc.nc"
 
 
@@ -133,6 +146,6 @@ def generate_runtime_miller_eik(
 
 
 # Compatibility aliases kept for existing callers and tests that still import
-# the older GX-prefixed API names.
+# the older prefixed API names.
 GXMillerGeometryRequest = MillerGeometryRequest
 build_gx_miller_geometry_request = build_miller_geometry_request
