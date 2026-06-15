@@ -485,7 +485,7 @@ from spectraxgk.gx_integrators import (
     integrate_linear_gx,
     integrate_linear_gx_diagnostics,
 )
-from spectraxgk.diagnostics import GXDiagnostics, SimulationDiagnostics
+from spectraxgk.diagnostics import SimulationDiagnostics
 
 LinearExplicitTimeConfig = ExplicitTimeConfig
 integrate_linear_explicit = integrate_linear_gx
@@ -628,7 +628,6 @@ __all__ = [
     "integrate_linear_explicit",
     "integrate_linear_gx_diagnostics",
     "integrate_linear_explicit_diagnostics",
-    "GXDiagnostics",
     "SimulationDiagnostics",
     "nonlinear_rhs_cached",
     "integrate_linear_from_config",

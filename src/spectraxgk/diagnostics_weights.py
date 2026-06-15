@@ -1,4 +1,4 @@
-"""Shared GX diagnostic weighting, mask, and gyroaverage helpers."""
+"""Shared diagnostic weighting, mask, and gyroaverage helpers."""
 
 from __future__ import annotations
 
@@ -14,10 +14,10 @@ from spectraxgk.linear import LinearCache
 from spectraxgk.terms.operators import shift_axis
 
 
-def gx_volume_factors(
+def fieldline_quadrature_weights(
     geom: FluxTubeGeometryLike, grid: SpectralGrid
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
-    """Return (vol_fac, flux_fac) matching GX's volume weights."""
+    """Return (vol_fac, flux_fac) for field-line volume and flux-surface weighting."""
 
     theta = grid.z
     if isinstance(geom, FluxTubeGeometryData):
@@ -34,8 +34,8 @@ def gx_volume_factors(
     return vol_fac, flux_fac
 
 
-def _gx_fac_mask(grid: SpectralGrid, *, use_dealias: bool) -> jnp.ndarray:
-    """Return GX-style fac*mask for (ky, kx) weighting."""
+def _hermitian_mode_weight(grid: SpectralGrid, *, use_dealias: bool) -> jnp.ndarray:
+    """Return Hermitian spectral weight for (ky, kx) weighting."""
 
     ky = grid.ky
     has_negative = jnp.any(ky < 0.0)
@@ -48,8 +48,8 @@ def _gx_fac_mask(grid: SpectralGrid, *, use_dealias: bool) -> jnp.ndarray:
     return fac * mask
 
 
-def _gx_fac_mask_nonzero(grid: SpectralGrid, *, use_dealias: bool) -> jnp.ndarray:
-    """Return fac*mask that excludes ky=0 and uses GX positive-ky weighting."""
+def _transport_mode_weight(grid: SpectralGrid, *, use_dealias: bool) -> jnp.ndarray:
+    """Return fac*mask that excludes ky=0 and uses positive-ky transport weighting."""
 
     ky = grid.ky
     # GX flux kernels operate on the rFFT-positive ky set and already include
@@ -64,8 +64,8 @@ def _gx_fac_mask_nonzero(grid: SpectralGrid, *, use_dealias: bool) -> jnp.ndarra
     return fac * mask
 
 
-def _gx_fac_mask_cached(cache: LinearCache, *, use_dealias: bool) -> jnp.ndarray:
-    """Return GX-style fac*mask from a linear cache."""
+def _cached_hermitian_mode_weight(cache: LinearCache, *, use_dealias: bool) -> jnp.ndarray:
+    """Return Hermitian spectral weight from a linear cache."""
 
     ky = cache.ky
     has_negative = jnp.any(ky < 0.0)
@@ -86,7 +86,7 @@ def _species_array(val: float | jnp.ndarray, ns: int) -> jnp.ndarray:
 
 
 def _jl_family(cache: LinearCache) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    """Return (Jl, JlB, Jfac) arrays in GX conventions."""
+    """Return (Jl, JlB, Jfac) arrays in Laguerre-Hermite conventions."""
 
     Jl = cache.Jl
     if Jl.ndim == 5:

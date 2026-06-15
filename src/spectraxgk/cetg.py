@@ -418,7 +418,7 @@ def integrate_cetg_gx_diagnostics_state(
     cfl_fac: float | None = None,
     show_progress: bool = False,
 ) -> tuple[jnp.ndarray, SimulationDiagnostics, jnp.ndarray, FieldState]:
-    """Integrate the GX cETG model and stream GX-style diagnostics."""
+    """Integrate the GX cETG model and stream runtime diagnostics."""
 
     if method not in {"euler", "rk2", "rk3", "rk3_classic", "rk3_gx", "rk4", "k10", "sspx3"}:
         raise ValueError("Unsupported explicit cETG method")

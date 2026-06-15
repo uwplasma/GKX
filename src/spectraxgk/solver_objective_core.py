@@ -9,7 +9,7 @@ import numpy as np
 
 from spectraxgk.autodiff_validation import explicit_complex_operator_matrix
 from spectraxgk.config import CycloneBaseCase, GridConfig
-from spectraxgk.diagnostics import gx_heat_flux_species, gx_particle_flux_species, gx_volume_factors
+from spectraxgk.diagnostics import heat_flux_species, particle_flux_species, fieldline_quadrature_weights
 from spectraxgk.grids import build_spectral_grid, select_ky_grid
 from spectraxgk.linear import LinearParams, LinearTerms, build_linear_cache, linear_rhs_cached
 from spectraxgk.quasilinear import effective_kperp2, phi_norm2
@@ -215,12 +215,12 @@ def solver_objective_vector_from_geometry(
     state_arr = jnp.reshape(eigenvector, state_shape)
     _rhs, phi = rhs_phi(state_arr)
     zero_field = jnp.zeros_like(phi)
-    vol_fac, flux_fac = gx_volume_factors(geom, grid)
+    vol_fac, flux_fac = fieldline_quadrature_weights(geom, grid)
     norm2 = phi_norm2(phi, cache, linear_params, vol_fac)
     kperp_eff = effective_kperp2(phi, cache, vol_fac)
     heat_weight = jnp.real(
         jnp.sum(
-            gx_heat_flux_species(
+            heat_flux_species(
                 state_arr,
                 phi,
                 zero_field,
@@ -235,7 +235,7 @@ def solver_objective_vector_from_geometry(
     )
     particle_weight = jnp.real(
         jnp.sum(
-            gx_particle_flux_species(
+            particle_flux_species(
                 state_arr,
                 phi,
                 zero_field,

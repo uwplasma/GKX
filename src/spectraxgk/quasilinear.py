@@ -15,10 +15,10 @@ import jax.numpy as jnp
 import numpy as np
 
 from spectraxgk.diagnostics import (
-    gx_Wphi,
-    gx_heat_flux_species,
-    gx_particle_flux_species,
-    gx_volume_factors,
+    electrostatic_field_energy,
+    heat_flux_species,
+    particle_flux_species,
+    fieldline_quadrature_weights,
 )
 from spectraxgk.geometry import FluxTubeGeometryLike
 from spectraxgk.grids import SpectralGrid
@@ -166,7 +166,7 @@ def phi_norm2(
             jnp.asarray(eps, dtype=jnp.real(phi).dtype),
         )
     return jnp.maximum(
-        gx_Wphi(phi, cache, params, vol_fac, use_dealias=use_dealias),
+        electrostatic_field_energy(phi, cache, params, vol_fac, use_dealias=use_dealias),
         jnp.asarray(eps, dtype=jnp.real(phi).dtype),
     )
 
@@ -361,7 +361,7 @@ def compute_quasilinear_from_linear_state(
     zero_field = jnp.zeros_like(phi)
     apar = zero_field
     bpar = zero_field
-    vol_fac, flux_fac = gx_volume_factors(geom, grid)
+    vol_fac, flux_fac = fieldline_quadrature_weights(geom, grid)
 
     norm2 = phi_norm2(
         phi,
@@ -372,7 +372,7 @@ def compute_quasilinear_from_linear_state(
         use_dealias=use_dealias,
     )
     kperp_eff = effective_kperp2(phi, cache, vol_fac, use_dealias=use_dealias)
-    heat = gx_heat_flux_species(
+    heat = heat_flux_species(
         G,
         phi,
         apar,
@@ -384,7 +384,7 @@ def compute_quasilinear_from_linear_state(
         use_dealias=use_dealias,
         flux_scale=flux_scale,
     )
-    particle = gx_particle_flux_species(
+    particle = particle_flux_species(
         G,
         phi,
         apar,

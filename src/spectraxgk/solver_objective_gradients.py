@@ -20,7 +20,7 @@ from spectraxgk.autodiff_validation import (
     implicit_eigenpair_observable_sensitivity_report,
 )
 from spectraxgk.config import CycloneBaseCase, GridConfig
-from spectraxgk.diagnostics import gx_heat_flux_species, gx_particle_flux_species, gx_volume_factors
+from spectraxgk.diagnostics import heat_flux_species, particle_flux_species, fieldline_quadrature_weights
 from spectraxgk.geometry.differentiable import (
     discover_differentiable_geometry_backends,
     flux_tube_geometry_from_mapping,
@@ -1232,10 +1232,10 @@ def solver_objective_branch_gradient_report(
         state_arr = jnp.reshape(eigenvector, state_shape)
         _rhs, phi = rhs_phi(state_arr, cache)
         zero_field = jnp.zeros_like(phi)
-        _vol_fac, flux_fac = gx_volume_factors(geom, grid)
+        _vol_fac, flux_fac = fieldline_quadrature_weights(geom, grid)
         particle_weight = jnp.real(
             jnp.sum(
-                gx_particle_flux_species(
+                particle_flux_species(
                     state_arr,
                     phi,
                     zero_field,
@@ -1246,7 +1246,7 @@ def solver_objective_branch_gradient_report(
                     flux_fac,
                 )
             )
-            / phi_norm2(phi, cache, params_linear, gx_volume_factors(geom, grid)[0])
+            / phi_norm2(phi, cache, params_linear, fieldline_quadrature_weights(geom, grid)[0])
         )
         return jnp.asarray([gamma, omega, kperp_eff, heat_weight, particle_weight, ql_proxy])
 
@@ -1478,12 +1478,12 @@ def _mode21_vmec_boozer_quasilinear_features(
     state_arr = jnp.reshape(eigenvector, context["state_shape"])
     _rhs, phi = context["rhs_phi"](state_arr, cache)
     zero_field = jnp.zeros_like(phi)
-    vol_fac, flux_fac = gx_volume_factors(geom, grid)
+    vol_fac, flux_fac = fieldline_quadrature_weights(geom, grid)
     norm2 = phi_norm2(phi, cache, params_linear, vol_fac)
     kperp_eff = effective_kperp2(phi, cache, vol_fac)
     heat_weight = jnp.real(
         jnp.sum(
-            gx_heat_flux_species(
+            heat_flux_species(
                 state_arr,
                 phi,
                 zero_field,
@@ -1576,12 +1576,12 @@ def linear_solver_geometry_gradient_report(
         state = jnp.reshape(eigenvector, state_shape)
         _rhs, phi = rhs_phi(state, cache)
         zero_field = jnp.zeros_like(phi)
-        vol_fac, flux_fac = gx_volume_factors(geom, grid)
+        vol_fac, flux_fac = fieldline_quadrature_weights(geom, grid)
         norm2 = phi_norm2(phi, cache, params_linear, vol_fac)
         kperp_eff = effective_kperp2(phi, cache, vol_fac)
         heat_weight = jnp.real(
             jnp.sum(
-                gx_heat_flux_species(
+                heat_flux_species(
                     state,
                     phi,
                     zero_field,
@@ -1596,7 +1596,7 @@ def linear_solver_geometry_gradient_report(
         )
         particle_weight = jnp.real(
             jnp.sum(
-                gx_particle_flux_species(
+                particle_flux_species(
                     state,
                     phi,
                     zero_field,

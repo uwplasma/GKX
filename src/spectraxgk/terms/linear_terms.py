@@ -505,7 +505,7 @@ def hyperdiffusion_contribution(
     p_hyper_kperp: jnp.ndarray,
     weight: jnp.ndarray,
 ) -> jnp.ndarray:
-    """Hyperdiffusion in k_perp following GX conventions."""
+    """Hyperdiffusion in k_perp following Laguerre-Hermite conventions."""
 
     real_dtype = jnp.real(G).dtype
     if _is_static_zero(weight, real_dtype) or _is_static_zero(D_hyper, real_dtype):

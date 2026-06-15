@@ -655,12 +655,12 @@ def integrate_linear_gx_diagnostics(
     from spectraxgk.diagnostics import (
         SimulationDiagnostics,
         total_energy,
-        gx_heat_flux,
-        gx_particle_flux,
-        gx_volume_factors,
-        gx_Wapar,
-        gx_Wg,
-        gx_Wphi,
+        heat_flux_total,
+        particle_flux_total,
+        fieldline_quadrature_weights,
+        magnetic_vector_potential_energy,
+        distribution_free_energy,
+        electrostatic_field_energy,
     )
 
     if mode_method not in {"z_index", "max"}:
@@ -710,7 +710,7 @@ def integrate_linear_gx_diagnostics(
     heat_list: list[float] = []
     pflux_list: list[float] = []
 
-    vol_fac, flux_fac = gx_volume_factors(geom_eff, grid)
+    vol_fac, flux_fac = fieldline_quadrature_weights(geom_eff, grid)
     use_dealias = bool(time_cfg.use_dealias_mask)
 
     def _step(G_state, cache_state, params_state, term_cfg_state, dt_state):
@@ -749,19 +749,19 @@ def integrate_linear_gx_diagnostics(
             gamma_list.append(np.asarray(gamma))
             omega_list.append(np.asarray(omega))
 
-            Wg_val = gx_Wg(G, grid, params, vol_fac, use_dealias=use_dealias)
-            Wphi_val = gx_Wphi(
+            Wg_val = distribution_free_energy(G, grid, params, vol_fac, use_dealias=use_dealias)
+            Wphi_val = electrostatic_field_energy(
                 phi,
                 cache,
                 params,
                 vol_fac,
                 use_dealias=use_dealias,
             )
-            Wapar_val = gx_Wapar(apar, cache, vol_fac, use_dealias=use_dealias)
-            heat_val = gx_heat_flux(
+            Wapar_val = magnetic_vector_potential_energy(apar, cache, vol_fac, use_dealias=use_dealias)
+            heat_val = heat_flux_total(
                 G, phi, apar, bpar, cache, grid, params, flux_fac, use_dealias=use_dealias
             )
-            pflux_val = gx_particle_flux(
+            pflux_val = particle_flux_total(
                 G, phi, apar, bpar, cache, grid, params, flux_fac, use_dealias=use_dealias
             )
 

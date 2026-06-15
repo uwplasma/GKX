@@ -7,24 +7,22 @@ import numpy as np
 
 from spectraxgk.gyroaverage import gamma0
 from spectraxgk.diagnostics_channels import (
-    _gx_heat_flux_channel_contrib_species,
-    _gx_particle_flux_channel_contrib_species,
-    _gx_turbulent_heating_contrib_species,
+    _heat_flux_channel_contrib_species,
+    _particle_flux_channel_contrib_species,
+    _turbulent_heating_contrib_species,
 )
 from spectraxgk.diagnostics_metadata import (
     ArrayLike,
-    GXDiagnostics,
-    GXResolvedDiagnostics,
     ResolvedDiagnostics,
     SimulationDiagnostics,
 )
 from spectraxgk.diagnostics_weights import (
-    _gx_fac_mask,
-    _gx_fac_mask_cached,
-    _gx_fac_mask_nonzero,
+    _hermitian_mode_weight,
+    _cached_hermitian_mode_weight,
+    _transport_mode_weight,
     _jl_family,
     _species_array,
-    gx_volume_factors,
+    fieldline_quadrature_weights,
 )
 from spectraxgk.grids import SpectralGrid
 from spectraxgk.linear import LinearCache, LinearParams
@@ -32,46 +30,44 @@ from spectraxgk.linear import LinearCache, LinearParams
 
 __all__ = [
     "ArrayLike",
-    "GXDiagnostics",
-    "GXResolvedDiagnostics",
     "ResolvedDiagnostics",
     "SimulationDiagnostics",
-    "_gx_fac_mask",
-    "_gx_fac_mask_cached",
-    "_gx_fac_mask_nonzero",
-    "_gx_heat_flux_channel_contrib_species",
-    "_gx_particle_flux_channel_contrib_species",
-    "_gx_turbulent_heating_contrib_species",
+    "_hermitian_mode_weight",
+    "_cached_hermitian_mode_weight",
+    "_transport_mode_weight",
+    "_heat_flux_channel_contrib_species",
+    "_particle_flux_channel_contrib_species",
+    "_turbulent_heating_contrib_species",
     "_jl_family",
     "_reduce_scalar_kykxz",
     "_reduce_species_kykxz",
     "_species_array",
-    "gx_Wapar",
-    "gx_Wapar_krehm",
-    "gx_Wapar_resolved",
-    "gx_Wg",
-    "gx_Wg_resolved",
-    "gx_Wphi",
-    "gx_Wphi_krehm",
-    "gx_Wphi_resolved",
-    "gx_energy_total",
-    "gx_heat_flux",
-    "gx_heat_flux_resolved_species",
-    "gx_heat_flux_species",
-    "gx_heat_flux_split_resolved_species",
-    "gx_heat_flux_split_species",
-    "gx_particle_flux",
-    "gx_particle_flux_resolved_species",
-    "gx_particle_flux_species",
-    "gx_particle_flux_split_resolved_species",
-    "gx_particle_flux_split_species",
-    "gx_phi2_resolved",
-    "gx_phi_zonal_line_kxt",
-    "gx_phi_zonal_mode_kxt",
-    "gx_turbulent_heating",
-    "gx_turbulent_heating_resolved_species",
-    "gx_turbulent_heating_species",
-    "gx_volume_factors",
+    "magnetic_vector_potential_energy",
+    "magnetic_vector_potential_energy_krehm",
+    "magnetic_vector_potential_energy_resolved",
+    "distribution_free_energy",
+    "distribution_free_energy_resolved",
+    "electrostatic_field_energy",
+    "electrostatic_field_energy_krehm",
+    "electrostatic_field_energy_resolved",
+    "runtime_energy_total",
+    "heat_flux_total",
+    "heat_flux_resolved_species",
+    "heat_flux_species",
+    "heat_flux_channel_resolved_species",
+    "heat_flux_channel_species",
+    "particle_flux_total",
+    "particle_flux_resolved_species",
+    "particle_flux_species",
+    "particle_flux_channel_resolved_species",
+    "particle_flux_channel_species",
+    "phi2_resolved",
+    "zonal_phi_line_kxt",
+    "zonal_phi_mode_kxt",
+    "turbulent_heating_total",
+    "turbulent_heating_resolved_species",
+    "turbulent_heating_species",
+    "fieldline_quadrature_weights",
     "total_energy",
 ]
 
@@ -83,7 +79,7 @@ def _masked_abs2(value: jnp.ndarray, active: jnp.ndarray) -> jnp.ndarray:
     return jnp.abs(jnp.where(active, value, zero)) ** 2
 
 
-def gx_Wg(
+def distribution_free_energy(
     G: jnp.ndarray,
     grid: SpectralGrid,
     params: LinearParams,
@@ -91,9 +87,9 @@ def gx_Wg(
     *,
     use_dealias: bool = True,
 ) -> jnp.ndarray:
-    """GX Wg diagnostic (free energy in g)."""
+    """Distribution free-energy diagnostic (free energy in g)."""
 
-    fac = _gx_fac_mask(grid, use_dealias=use_dealias)
+    fac = _hermitian_mode_weight(grid, use_dealias=use_dealias)
     fac = fac[None, None, None, :, :, None]
     vol = vol_fac[None, None, None, None, None, :]
 
@@ -110,7 +106,7 @@ def gx_Wg(
     return 0.5 * jnp.sum(g2 * fac * vol * nt)
 
 
-def gx_Wphi_krehm(
+def electrostatic_field_energy_krehm(
     phi: jnp.ndarray,
     grid: SpectralGrid,
     params: LinearParams,
@@ -122,7 +118,7 @@ def gx_Wphi_krehm(
     gx_real_fft: bool = False,
     wphi_scale: float = 1.0,
 ) -> jnp.ndarray:
-    """GX Krehm electrostatic energy (Wphi) diagnostic."""
+    """Krehm electrostatic field-energy (Wphi) diagnostic."""
 
     kx_arr = grid.kx if kx is None else kx
     ky_arr = grid.ky if ky is None else ky
@@ -160,7 +156,7 @@ def gx_Wphi_krehm(
     return wphi * jnp.asarray(wphi_scale, dtype=jnp.real(phi).dtype)
 
 
-def gx_Wphi(
+def electrostatic_field_energy(
     phi: jnp.ndarray,
     cache: LinearCache,
     params: LinearParams,
@@ -169,9 +165,9 @@ def gx_Wphi(
     use_dealias: bool = True,
     wphi_scale: float = 1.0,
 ) -> jnp.ndarray:
-    """Standard GX electrostatic free energy diagnostic."""
+    """Electrostatic field-energy diagnostic."""
 
-    fac = _gx_fac_mask_cached(cache, use_dealias=use_dealias)
+    fac = _cached_hermitian_mode_weight(cache, use_dealias=use_dealias)
     weight = fac[:, :, None] * vol_fac[None, None, :]
     rho = jnp.asarray(params.rho)
     if rho.ndim == 0:
@@ -188,7 +184,7 @@ def gx_Wphi(
     return wphi * jnp.asarray(wphi_scale, dtype=jnp.real(phi).dtype)
 
 
-def gx_Wapar_krehm(
+def magnetic_vector_potential_energy_krehm(
     apar: jnp.ndarray,
     grid: SpectralGrid,
     *,
@@ -196,36 +192,36 @@ def gx_Wapar_krehm(
     ky: jnp.ndarray | None = None,
     use_dealias: bool = True,
 ) -> jnp.ndarray:
-    """GX Krehm magnetic energy (Wapar) diagnostic."""
+    """Krehm magnetic vector-potential energy (Wapar) diagnostic."""
 
     kx_arr = grid.kx if kx is None else kx
     ky_arr = grid.ky if ky is None else ky
     kx = jnp.asarray(kx_arr)[None, :]
     ky = jnp.asarray(ky_arr)[:, None]
     kperp2 = kx * kx + ky * ky
-    fac = _gx_fac_mask(grid, use_dealias=use_dealias)
+    fac = _hermitian_mode_weight(grid, use_dealias=use_dealias)
     weight = fac[:, :, None]
     contrib = 0.5 * kperp2[:, :, None] * _masked_abs2(apar, weight != 0.0) * weight
     return jnp.sum(contrib)
 
 
-def gx_Wapar(
+def magnetic_vector_potential_energy(
     apar: jnp.ndarray,
     cache: LinearCache,
     vol_fac: jnp.ndarray,
     *,
     use_dealias: bool = True,
 ) -> jnp.ndarray:
-    """Standard GX magnetic free energy diagnostic."""
+    """Magnetic vector-potential field-energy diagnostic."""
 
-    fac = _gx_fac_mask_cached(cache, use_dealias=use_dealias)
+    fac = _cached_hermitian_mode_weight(cache, use_dealias=use_dealias)
     weight = fac[:, :, None] * vol_fac[None, None, :]
     bmag2 = cache.bmag[None, None, :] ** 2 if cache.kperp2_bmag else 1.0
     contrib = 0.5 * _masked_abs2(apar, weight != 0.0) * cache.kperp2 * bmag2 * weight
     return jnp.sum(contrib)
 
 
-def gx_heat_flux_species(
+def heat_flux_species(
     G: jnp.ndarray,
     phi: jnp.ndarray,
     apar: jnp.ndarray,
@@ -238,9 +234,9 @@ def gx_heat_flux_species(
     use_dealias: bool = True,
     flux_scale: float = 1.0,
 ) -> jnp.ndarray:
-    """GX heat flux diagnostic per species (gyroBohm units)."""
+    """Heat-flux diagnostic per species (gyroBohm units)."""
 
-    es_contrib, apar_contrib, bpar_contrib = _gx_heat_flux_channel_contrib_species(
+    es_contrib, apar_contrib, bpar_contrib = _heat_flux_channel_contrib_species(
         G,
         phi,
         apar,
@@ -255,7 +251,7 @@ def gx_heat_flux_species(
     return jnp.sum(es_contrib + apar_contrib + bpar_contrib, axis=(1, 2, 3))
 
 
-def gx_heat_flux_split_species(
+def heat_flux_channel_species(
     G: jnp.ndarray,
     phi: jnp.ndarray,
     apar: jnp.ndarray,
@@ -270,7 +266,7 @@ def gx_heat_flux_split_species(
 ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     """Return ES, Apar, and Bpar heat-flux channels per species."""
 
-    es_contrib, apar_contrib, bpar_contrib = _gx_heat_flux_channel_contrib_species(
+    es_contrib, apar_contrib, bpar_contrib = _heat_flux_channel_contrib_species(
         G,
         phi,
         apar,
@@ -289,7 +285,7 @@ def gx_heat_flux_split_species(
     )
 
 
-def gx_heat_flux(
+def heat_flux_total(
     G: jnp.ndarray,
     phi: jnp.ndarray,
     apar: jnp.ndarray,
@@ -302,10 +298,10 @@ def gx_heat_flux(
     use_dealias: bool = True,
     flux_scale: float = 1.0,
 ) -> jnp.ndarray:
-    """GX total heat flux diagnostic."""
+    """Total heat-flux diagnostic."""
 
     return jnp.sum(
-        gx_heat_flux_species(
+        heat_flux_species(
             G,
             phi,
             apar,
@@ -320,7 +316,7 @@ def gx_heat_flux(
     )
 
 
-def gx_particle_flux_species(
+def particle_flux_species(
     G: jnp.ndarray,
     phi: jnp.ndarray,
     apar: jnp.ndarray,
@@ -333,9 +329,9 @@ def gx_particle_flux_species(
     use_dealias: bool = True,
     flux_scale: float = 1.0,
 ) -> jnp.ndarray:
-    """GX particle flux diagnostic per species."""
+    """Particle-flux diagnostic per species."""
 
-    es_contrib, apar_contrib, bpar_contrib = _gx_particle_flux_channel_contrib_species(
+    es_contrib, apar_contrib, bpar_contrib = _particle_flux_channel_contrib_species(
         G,
         phi,
         apar,
@@ -350,7 +346,7 @@ def gx_particle_flux_species(
     return jnp.sum(es_contrib + apar_contrib + bpar_contrib, axis=(1, 2, 3))
 
 
-def gx_particle_flux_split_species(
+def particle_flux_channel_species(
     G: jnp.ndarray,
     phi: jnp.ndarray,
     apar: jnp.ndarray,
@@ -365,7 +361,7 @@ def gx_particle_flux_split_species(
 ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     """Return ES, Apar, and Bpar particle-flux channels per species."""
 
-    es_contrib, apar_contrib, bpar_contrib = _gx_particle_flux_channel_contrib_species(
+    es_contrib, apar_contrib, bpar_contrib = _particle_flux_channel_contrib_species(
         G,
         phi,
         apar,
@@ -384,7 +380,7 @@ def gx_particle_flux_split_species(
     )
 
 
-def gx_particle_flux(
+def particle_flux_total(
     G: jnp.ndarray,
     phi: jnp.ndarray,
     apar: jnp.ndarray,
@@ -397,10 +393,10 @@ def gx_particle_flux(
     use_dealias: bool = True,
     flux_scale: float = 1.0,
 ) -> jnp.ndarray:
-    """GX total particle flux diagnostic."""
+    """Total particle-flux diagnostic."""
 
     return jnp.sum(
-        gx_particle_flux_species(
+        particle_flux_species(
             G,
             phi,
             apar,
@@ -415,7 +411,7 @@ def gx_particle_flux(
     )
 
 
-def gx_turbulent_heating_species(
+def turbulent_heating_species(
     G: jnp.ndarray,
     G_old: jnp.ndarray,
     phi: jnp.ndarray,
@@ -432,9 +428,9 @@ def gx_turbulent_heating_species(
     *,
     use_dealias: bool = True,
 ) -> jnp.ndarray:
-    """GX turbulent heating diagnostic per species."""
+    """Turbulent-heating diagnostic per species."""
 
-    contrib = _gx_turbulent_heating_contrib_species(
+    contrib = _turbulent_heating_contrib_species(
         G,
         G_old,
         phi,
@@ -453,7 +449,7 @@ def gx_turbulent_heating_species(
     return jnp.sum(contrib, axis=(1, 2, 3))
 
 
-def gx_turbulent_heating(
+def turbulent_heating_total(
     G: jnp.ndarray,
     G_old: jnp.ndarray,
     phi: jnp.ndarray,
@@ -470,10 +466,10 @@ def gx_turbulent_heating(
     *,
     use_dealias: bool = True,
 ) -> jnp.ndarray:
-    """GX total turbulent heating diagnostic."""
+    """Total turbulent-heating diagnostic."""
 
     return jnp.sum(
-        gx_turbulent_heating_species(
+        turbulent_heating_species(
             G,
             G_old,
             phi,
@@ -496,13 +492,13 @@ def total_energy(Wg: ArrayLike, Wphi: ArrayLike, Wapar: ArrayLike) -> ArrayLike:
     return Wg + Wphi + Wapar
 
 
-gx_energy_total = total_energy
+runtime_energy_total = total_energy
 
 
 def _reduce_scalar_kykxz(
     contrib: jnp.ndarray,
 ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    """Reduce a ``(ky, kx, z)`` contribution to GX spectra views."""
+    """Reduce a ``(ky, kx, z)`` contribution to spectral diagnostics views."""
 
     return (
         jnp.sum(contrib, axis=(0, 2)),
@@ -516,7 +512,7 @@ def _reduce_scalar_kykxz(
 def _reduce_species_kykxz(
     contrib: jnp.ndarray,
 ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    """Reduce a ``(species, ky, kx, z)`` contribution to GX spectra views."""
+    """Reduce a ``(species, ky, kx, z)`` contribution to spectral diagnostics views."""
 
     return (
         jnp.sum(contrib, axis=(1, 2, 3)),
@@ -527,16 +523,16 @@ def _reduce_species_kykxz(
     )
 
 
-def gx_phi2_resolved(
+def phi2_resolved(
     phi: jnp.ndarray,
     grid: SpectralGrid,
     vol_fac: jnp.ndarray,
     *,
     use_dealias: bool = True,
 ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    """Return GX-style resolved ``Phi2`` reductions from a single field state."""
+    """Return Resolved ``Phi2`` reductions from a single field state."""
 
-    fac = _gx_fac_mask(grid, use_dealias=use_dealias)
+    fac = _hermitian_mode_weight(grid, use_dealias=use_dealias)
     active = fac[:, :, None] != 0.0
     contrib = _masked_abs2(phi, active) * fac[:, :, None] * vol_fac[None, None, :]
     phi2_kxt, phi2_kyt, phi2_kxkyt, phi2_zt, phi2_t = _reduce_scalar_kykxz(contrib)
@@ -555,7 +551,7 @@ def gx_phi2_resolved(
     )
 
 
-def gx_phi_zonal_mode_kxt(
+def zonal_phi_mode_kxt(
     phi: jnp.ndarray,
     grid: SpectralGrid,
     vol_fac: jnp.ndarray,
@@ -572,7 +568,7 @@ def gx_phi_zonal_mode_kxt(
     return jnp.sum(zonal * vol_fac[None, None, :], axis=(0, 2))
 
 
-def gx_phi_zonal_line_kxt(
+def zonal_phi_line_kxt(
     phi: jnp.ndarray,
     grid: SpectralGrid,
 ) -> jnp.ndarray:
@@ -583,7 +579,7 @@ def gx_phi_zonal_line_kxt(
     return jnp.sum(zonal, axis=(0, 2)) / jnp.asarray(phi.shape[-1], dtype=phi.real.dtype)
 
 
-def gx_Wg_resolved(
+def distribution_free_energy_resolved(
     G: jnp.ndarray,
     grid: SpectralGrid,
     params: LinearParams,
@@ -591,9 +587,9 @@ def gx_Wg_resolved(
     *,
     use_dealias: bool = True,
 ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    """Return GX-style resolved free-energy reductions from a single state."""
+    """Return Resolved free-energy reductions from a single state."""
 
-    fac = _gx_fac_mask(grid, use_dealias=use_dealias)[None, None, None, :, :, None]
+    fac = _hermitian_mode_weight(grid, use_dealias=use_dealias)[None, None, None, :, :, None]
     vol = vol_fac[None, None, None, None, None, :]
     if G.ndim == 5:
         Gs = G[None, ...]
@@ -612,7 +608,7 @@ def gx_Wg_resolved(
     return Wg_st, Wg_kxst, Wg_kyst, Wg_kxkyst, Wg_zst, Wg_lmst
 
 
-def gx_Wphi_resolved(
+def electrostatic_field_energy_resolved(
     phi: jnp.ndarray,
     cache: LinearCache,
     params: LinearParams,
@@ -621,9 +617,9 @@ def gx_Wphi_resolved(
     use_dealias: bool = True,
     wphi_scale: float = 1.0,
 ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    """Return GX-style resolved electrostatic-energy reductions per species."""
+    """Return Resolved electrostatic-energy reductions per species."""
 
-    fac = _gx_fac_mask_cached(cache, use_dealias=use_dealias)
+    fac = _cached_hermitian_mode_weight(cache, use_dealias=use_dealias)
     weight = fac[:, :, None] * vol_fac[None, None, :]
     rho = jnp.asarray(params.rho)
     if rho.ndim == 0:
@@ -639,7 +635,7 @@ def gx_Wphi_resolved(
     return _reduce_species_kykxz(contrib)
 
 
-def gx_Wapar_resolved(
+def magnetic_vector_potential_energy_resolved(
     apar: jnp.ndarray,
     cache: LinearCache,
     vol_fac: jnp.ndarray,
@@ -647,9 +643,9 @@ def gx_Wapar_resolved(
     nspecies: int,
     use_dealias: bool = True,
 ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    """Return GX-style resolved magnetic-energy reductions per species."""
+    """Return Resolved magnetic-energy reductions per species."""
 
-    fac = _gx_fac_mask_cached(cache, use_dealias=use_dealias)
+    fac = _cached_hermitian_mode_weight(cache, use_dealias=use_dealias)
     weight = fac[:, :, None] * vol_fac[None, None, :]
     bmag2 = cache.bmag[None, None, :] ** 2 if cache.kperp2_bmag else 1.0
     total = 0.5 * _masked_abs2(apar, weight != 0.0) * cache.kperp2 * bmag2 * weight
@@ -658,7 +654,7 @@ def gx_Wapar_resolved(
     return _reduce_species_kykxz(contrib)
 
 
-def gx_heat_flux_resolved_species(
+def heat_flux_resolved_species(
     G: jnp.ndarray,
     phi: jnp.ndarray,
     apar: jnp.ndarray,
@@ -671,9 +667,9 @@ def gx_heat_flux_resolved_species(
     use_dealias: bool = True,
     flux_scale: float = 1.0,
 ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    """Return GX-style resolved heat-flux reductions per species."""
+    """Return Resolved heat-flux reductions per species."""
 
-    es_contrib, apar_contrib, bpar_contrib = _gx_heat_flux_channel_contrib_species(
+    es_contrib, apar_contrib, bpar_contrib = _heat_flux_channel_contrib_species(
         G,
         phi,
         apar,
@@ -688,7 +684,7 @@ def gx_heat_flux_resolved_species(
     return _reduce_species_kykxz(es_contrib + apar_contrib + bpar_contrib)
 
 
-def gx_heat_flux_split_resolved_species(
+def heat_flux_channel_resolved_species(
     G: jnp.ndarray,
     phi: jnp.ndarray,
     apar: jnp.ndarray,
@@ -707,7 +703,7 @@ def gx_heat_flux_split_resolved_species(
 ]:
     """Return resolved ES, Apar, and Bpar heat-flux channels per species."""
 
-    es_contrib, apar_contrib, bpar_contrib = _gx_heat_flux_channel_contrib_species(
+    es_contrib, apar_contrib, bpar_contrib = _heat_flux_channel_contrib_species(
         G,
         phi,
         apar,
@@ -726,7 +722,7 @@ def gx_heat_flux_split_resolved_species(
     )
 
 
-def gx_particle_flux_resolved_species(
+def particle_flux_resolved_species(
     G: jnp.ndarray,
     phi: jnp.ndarray,
     apar: jnp.ndarray,
@@ -739,9 +735,9 @@ def gx_particle_flux_resolved_species(
     use_dealias: bool = True,
     flux_scale: float = 1.0,
 ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    """Return GX-style resolved particle-flux reductions per species."""
+    """Return Resolved particle-flux reductions per species."""
 
-    es_contrib, apar_contrib, bpar_contrib = _gx_particle_flux_channel_contrib_species(
+    es_contrib, apar_contrib, bpar_contrib = _particle_flux_channel_contrib_species(
         G,
         phi,
         apar,
@@ -756,7 +752,7 @@ def gx_particle_flux_resolved_species(
     return _reduce_species_kykxz(es_contrib + apar_contrib + bpar_contrib)
 
 
-def gx_particle_flux_split_resolved_species(
+def particle_flux_channel_resolved_species(
     G: jnp.ndarray,
     phi: jnp.ndarray,
     apar: jnp.ndarray,
@@ -775,7 +771,7 @@ def gx_particle_flux_split_resolved_species(
 ]:
     """Return resolved ES, Apar, and Bpar particle-flux channels per species."""
 
-    es_contrib, apar_contrib, bpar_contrib = _gx_particle_flux_channel_contrib_species(
+    es_contrib, apar_contrib, bpar_contrib = _particle_flux_channel_contrib_species(
         G,
         phi,
         apar,
@@ -794,7 +790,7 @@ def gx_particle_flux_split_resolved_species(
     )
 
 
-def gx_turbulent_heating_resolved_species(
+def turbulent_heating_resolved_species(
     G: jnp.ndarray,
     G_old: jnp.ndarray,
     phi: jnp.ndarray,
@@ -811,9 +807,9 @@ def gx_turbulent_heating_resolved_species(
     *,
     use_dealias: bool = True,
 ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    """Return GX-style resolved turbulent-heating reductions per species."""
+    """Return Resolved turbulent-heating reductions per species."""
 
-    contrib = _gx_turbulent_heating_contrib_species(
+    contrib = _turbulent_heating_contrib_species(
         G,
         G_old,
         phi,

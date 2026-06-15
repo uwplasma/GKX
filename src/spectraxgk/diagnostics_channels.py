@@ -1,12 +1,12 @@
-"""Per-mode channel contribution kernels for GX diagnostics."""
+"""Per-mode channel contribution kernels for runtime diagnostics."""
 
 from __future__ import annotations
 
 import jax.numpy as jnp
 
 from spectraxgk.diagnostics_weights import (
-    _gx_fac_mask,
-    _gx_fac_mask_nonzero,
+    _hermitian_mode_weight,
+    _transport_mode_weight,
     _jl_family,
     _species_array,
 )
@@ -21,7 +21,7 @@ def _mask_modes(value: jnp.ndarray, active: jnp.ndarray) -> jnp.ndarray:
     return jnp.where(active, value, jnp.asarray(0, dtype=value.dtype))
 
 
-def _gx_heat_flux_channel_contrib_species(
+def _heat_flux_channel_contrib_species(
     G: jnp.ndarray,
     phi: jnp.ndarray,
     apar: jnp.ndarray,
@@ -39,7 +39,7 @@ def _gx_heat_flux_channel_contrib_species(
     else:
         Gs = G
     ns = Gs.shape[0]
-    fac = _gx_fac_mask_nonzero(grid, use_dealias=use_dealias)[:, :, None]
+    fac = _transport_mode_weight(grid, use_dealias=use_dealias)[:, :, None]
     active = fac != 0.0
     flx = flux_fac[None, None, :]
     ky = grid.ky[:, None, None]
@@ -89,7 +89,7 @@ def _gx_heat_flux_channel_contrib_species(
     )
 
 
-def _gx_particle_flux_channel_contrib_species(
+def _particle_flux_channel_contrib_species(
     G: jnp.ndarray,
     phi: jnp.ndarray,
     apar: jnp.ndarray,
@@ -111,7 +111,7 @@ def _gx_particle_flux_channel_contrib_species(
     if ns == 1:
         zero = jnp.zeros(zero_shape, dtype=jnp.real(phi).dtype)
         return zero, zero, zero
-    fac = _gx_fac_mask_nonzero(grid, use_dealias=use_dealias)[:, :, None]
+    fac = _transport_mode_weight(grid, use_dealias=use_dealias)[:, :, None]
     active = fac != 0.0
     flx = flux_fac[None, None, :]
     ky = grid.ky[:, None, None]
@@ -152,7 +152,7 @@ def _gx_particle_flux_channel_contrib_species(
     )
 
 
-def _gx_turbulent_heating_contrib_species(
+def _turbulent_heating_contrib_species(
     G: jnp.ndarray,
     G_old: jnp.ndarray,
     phi: jnp.ndarray,
@@ -179,7 +179,7 @@ def _gx_turbulent_heating_contrib_species(
         G_old_s = G_old
 
     ns = Gs.shape[0]
-    fac = _gx_fac_mask(grid, use_dealias=use_dealias)[:, :, None]
+    fac = _hermitian_mode_weight(grid, use_dealias=use_dealias)[:, :, None]
     active = fac != 0.0
     vol = vol_fac[None, None, :]
     Jl, JlB, _ = _jl_family(cache)

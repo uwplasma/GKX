@@ -1,4 +1,4 @@
-"""Diagnostic container dataclasses for GX-style runs."""
+"""Diagnostic container dataclasses for runtime outputs."""
 
 from __future__ import annotations
 
@@ -96,9 +96,3 @@ class SimulationDiagnostics:
     turbulent_heating_species_t: ArrayLike | None = None
     phi_mode_t: ArrayLike | None = None
     resolved: ResolvedDiagnostics | None = None
-
-
-# Compatibility aliases preserved while the broader rename propagates through
-# the comparison and audit tooling.
-GXResolvedDiagnostics = ResolvedDiagnostics
-GXDiagnostics = SimulationDiagnostics

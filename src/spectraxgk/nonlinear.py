@@ -37,24 +37,24 @@ from spectraxgk.gx_integrators import (
 from spectraxgk.diagnostics import (
     SimulationDiagnostics,
     total_energy,
-    gx_heat_flux_species,
-    gx_heat_flux_resolved_species,
-    gx_heat_flux_split_resolved_species,
-    gx_particle_flux_species,
-    gx_particle_flux_resolved_species,
-    gx_particle_flux_split_resolved_species,
-    gx_phi2_resolved,
-    gx_phi_zonal_line_kxt,
-    gx_phi_zonal_mode_kxt,
-    gx_turbulent_heating_species,
-    gx_turbulent_heating_resolved_species,
-    gx_volume_factors,
-    gx_Wapar,
-    gx_Wapar_resolved,
-    gx_Wg,
-    gx_Wg_resolved,
-    gx_Wphi,
-    gx_Wphi_resolved,
+    heat_flux_species,
+    heat_flux_resolved_species,
+    heat_flux_channel_resolved_species,
+    particle_flux_species,
+    particle_flux_resolved_species,
+    particle_flux_channel_resolved_species,
+    phi2_resolved,
+    zonal_phi_line_kxt,
+    zonal_phi_mode_kxt,
+    turbulent_heating_species,
+    turbulent_heating_resolved_species,
+    fieldline_quadrature_weights,
+    magnetic_vector_potential_energy,
+    magnetic_vector_potential_energy_resolved,
+    distribution_free_energy,
+    distribution_free_energy_resolved,
+    electrostatic_field_energy,
+    electrostatic_field_energy_resolved,
 )
 from spectraxgk.nonlinear_diagnostics import (
     _pack_resolved_diagnostics,
@@ -277,7 +277,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
     resolved_diagnostics: bool = True,
     show_progress: bool = False,
 ) -> tuple[jnp.ndarray, SimulationDiagnostics, jnp.ndarray, FieldState]:
-    """Integrate nonlinear system and return GX-style diagnostics plus final state."""
+    """Integrate nonlinear system and return runtime diagnostics plus final state."""
 
     geom_eff = ensure_flux_tube_geometry_data(geom, grid.z)
     if cache is None:
@@ -291,8 +291,8 @@ def _integrate_nonlinear_gx_diagnostics_impl(
 
     term_cfg = terms or TermConfig()
     if method in {"imex", "semi-implicit"}:
-        raise ValueError("Final-state GX diagnostics helper only supports explicit methods")
-    vol_fac, flux_fac = gx_volume_factors(geom_eff, grid)
+        raise ValueError("Final-state runtime diagnostics helper only supports explicit methods")
+    vol_fac, flux_fac = fieldline_quadrature_weights(geom_eff, grid)
     mask = _gx_omega_mode_mask(grid, cache, gx_real_fft=gx_real_fft)
     z_idx = _gx_midplane_index(grid.z.size) if z_index is None else int(z_index)
     use_dealias = bool(use_dealias_mask)
@@ -446,8 +446,8 @@ def _integrate_nonlinear_gx_diagnostics_impl(
             phi_mode = jnp.asarray(0.0 + 0.0j, dtype=phi.dtype)
         nspecies = int(G_state.shape[0]) if G_state.ndim == 6 else 1
         if not resolved_diagnostics:
-            Wg_val = gx_Wg(G_state, grid, params, vol_fac, use_dealias=use_dealias)
-            Wphi_val = gx_Wphi(
+            Wg_val = distribution_free_energy(G_state, grid, params, vol_fac, use_dealias=use_dealias)
+            Wphi_val = electrostatic_field_energy(
                 phi,
                 cache,
                 params,
@@ -455,8 +455,8 @@ def _integrate_nonlinear_gx_diagnostics_impl(
                 use_dealias=use_dealias,
                 wphi_scale=wphi_scale,
             )
-            Wapar_val = gx_Wapar(apar, cache, vol_fac, use_dealias=use_dealias)
-            heat_species = gx_heat_flux_species(
+            Wapar_val = magnetic_vector_potential_energy(apar, cache, vol_fac, use_dealias=use_dealias)
+            heat_species = heat_flux_species(
                 G_state,
                 phi,
                 apar,
@@ -468,7 +468,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
                 use_dealias=use_dealias,
                 flux_scale=flux_scale,
             )
-            pflux_species = gx_particle_flux_species(
+            pflux_species = particle_flux_species(
                 G_state,
                 phi,
                 apar,
@@ -480,7 +480,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
                 use_dealias=use_dealias,
                 flux_scale=flux_scale,
             )
-            turbulent_heat_species = gx_turbulent_heating_species(
+            turbulent_heat_species = turbulent_heating_species(
                 G_state,
                 G_prev_step,
                 phi,
@@ -523,17 +523,17 @@ def _integrate_nonlinear_gx_diagnostics_impl(
             phi2_zonal_t,
             phi2_zonal_kxt,
             phi2_zonal_zt,
-        ) = gx_phi2_resolved(phi, grid, vol_fac, use_dealias=use_dealias)
-        phi_zonal_mode_kxt = gx_phi_zonal_mode_kxt(phi, grid, vol_fac)
-        phi_zonal_line_kxt = gx_phi_zonal_line_kxt(phi, grid)
-        Wg_st, Wg_kxst, Wg_kyst, Wg_kxkyst, Wg_zst, Wg_lmst = gx_Wg_resolved(
+        ) = phi2_resolved(phi, grid, vol_fac, use_dealias=use_dealias)
+        phi_zonal_mode_kxt = zonal_phi_mode_kxt(phi, grid, vol_fac)
+        phi_zonal_line_kxt = zonal_phi_line_kxt(phi, grid)
+        Wg_st, Wg_kxst, Wg_kyst, Wg_kxkyst, Wg_zst, Wg_lmst = distribution_free_energy_resolved(
             G_state,
             grid,
             params,
             vol_fac,
             use_dealias=use_dealias,
         )
-        Wphi_st, Wphi_kxst, Wphi_kyst, Wphi_kxkyst, Wphi_zst = gx_Wphi_resolved(
+        Wphi_st, Wphi_kxst, Wphi_kyst, Wphi_kxkyst, Wphi_zst = electrostatic_field_energy_resolved(
             phi,
             cache,
             params,
@@ -541,14 +541,14 @@ def _integrate_nonlinear_gx_diagnostics_impl(
             use_dealias=use_dealias,
             wphi_scale=wphi_scale,
         )
-        Wapar_st, Wapar_kxst, Wapar_kyst, Wapar_kxkyst, Wapar_zst = gx_Wapar_resolved(
+        Wapar_st, Wapar_kxst, Wapar_kyst, Wapar_kxkyst, Wapar_zst = magnetic_vector_potential_energy_resolved(
             apar,
             cache,
             vol_fac,
             nspecies=nspecies,
             use_dealias=use_dealias,
         )
-        heat_species, HeatFlux_kxst, HeatFlux_kyst, HeatFlux_kxkyst, HeatFlux_zst = gx_heat_flux_resolved_species(
+        heat_species, HeatFlux_kxst, HeatFlux_kyst, HeatFlux_kxkyst, HeatFlux_zst = heat_flux_resolved_species(
             G_state,
             phi,
             apar,
@@ -560,7 +560,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
             use_dealias=use_dealias,
             flux_scale=flux_scale,
         )
-        (heat_es, heat_apar, heat_bpar) = gx_heat_flux_split_resolved_species(
+        (heat_es, heat_apar, heat_bpar) = heat_flux_channel_resolved_species(
             G_state,
             phi,
             apar,
@@ -578,7 +578,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
             ParticleFlux_kyst,
             ParticleFlux_kxkyst,
             ParticleFlux_zst,
-        ) = gx_particle_flux_resolved_species(
+        ) = particle_flux_resolved_species(
             G_state,
             phi,
             apar,
@@ -590,7 +590,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
             use_dealias=use_dealias,
             flux_scale=flux_scale,
         )
-        (pflux_es, pflux_apar, pflux_bpar) = gx_particle_flux_split_resolved_species(
+        (pflux_es, pflux_apar, pflux_bpar) = particle_flux_channel_resolved_species(
             G_state,
             phi,
             apar,
@@ -608,7 +608,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
             TurbulentHeating_kyst,
             TurbulentHeating_kxkyst,
             TurbulentHeating_zst,
-        ) = gx_turbulent_heating_resolved_species(
+        ) = turbulent_heating_resolved_species(
             G_state,
             G_prev_step,
             phi,
@@ -968,7 +968,7 @@ def integrate_nonlinear_gx_diagnostics(
     resolved_diagnostics: bool = True,
     show_progress: bool = False,
 ) -> tuple[jnp.ndarray, SimulationDiagnostics]:
-    """Integrate nonlinear system and return GX-style diagnostics."""
+    """Integrate nonlinear system and return runtime diagnostics."""
 
     if method in {"imex", "semi-implicit"}:
         return integrate_nonlinear_imex_gx_diagnostics(
@@ -1093,7 +1093,7 @@ def integrate_nonlinear_gx_diagnostics_state(
     resolved_diagnostics: bool = True,
     show_progress: bool = False,
 ) -> tuple[jnp.ndarray, SimulationDiagnostics, jnp.ndarray, FieldState]:
-    """Integrate nonlinear system and return GX diagnostics plus the final state."""
+    """Integrate nonlinear system and return runtime diagnostics plus the final state."""
 
     if method in {"imex", "semi-implicit"}:
         raise ValueError("integrate_nonlinear_gx_diagnostics_state only supports explicit methods")
@@ -1177,7 +1177,7 @@ def integrate_nonlinear_imex_gx_diagnostics(
     external_phi: jnp.ndarray | float | None = None,
     show_progress: bool = False,
 ) -> tuple[jnp.ndarray, SimulationDiagnostics]:
-    """IMEX nonlinear integrator with GX diagnostics."""
+    """IMEX nonlinear integrator with runtime diagnostics."""
 
     geom_eff = ensure_flux_tube_geometry_data(geom, grid.z)
     if cache is None:
@@ -1195,7 +1195,7 @@ def integrate_nonlinear_imex_gx_diagnostics(
         linear_cfg = replace(linear_cfg, collisions=0.0, hypercollisions=0.0)
     linear_rhs_fn = _linear_rhs_jit_for_terms(linear_cfg)
 
-    vol_fac, flux_fac = gx_volume_factors(geom_eff, grid)
+    vol_fac, flux_fac = fieldline_quadrature_weights(geom_eff, grid)
     mask = _gx_omega_mode_mask(grid, cache, gx_real_fft=gx_real_fft)
     z_idx = _gx_midplane_index(grid.z.size) if z_index is None else int(z_index)
     use_dealias = bool(use_dealias_mask)
@@ -1358,17 +1358,17 @@ def integrate_nonlinear_imex_gx_diagnostics(
             phi2_zonal_t,
             phi2_zonal_kxt,
             phi2_zonal_zt,
-        ) = gx_phi2_resolved(phi, grid, vol_fac, use_dealias=use_dealias)
-        phi_zonal_mode_kxt = gx_phi_zonal_mode_kxt(phi, grid, vol_fac)
-        phi_zonal_line_kxt = gx_phi_zonal_line_kxt(phi, grid)
-        Wg_st, Wg_kxst, Wg_kyst, Wg_kxkyst, Wg_zst, Wg_lmst = gx_Wg_resolved(
+        ) = phi2_resolved(phi, grid, vol_fac, use_dealias=use_dealias)
+        phi_zonal_mode_kxt = zonal_phi_mode_kxt(phi, grid, vol_fac)
+        phi_zonal_line_kxt = zonal_phi_line_kxt(phi, grid)
+        Wg_st, Wg_kxst, Wg_kyst, Wg_kxkyst, Wg_zst, Wg_lmst = distribution_free_energy_resolved(
             G_state,
             grid,
             params,
             vol_fac,
             use_dealias=use_dealias,
         )
-        Wphi_st, Wphi_kxst, Wphi_kyst, Wphi_kxkyst, Wphi_zst = gx_Wphi_resolved(
+        Wphi_st, Wphi_kxst, Wphi_kyst, Wphi_kxkyst, Wphi_zst = electrostatic_field_energy_resolved(
             phi,
             cache,
             params,
@@ -1376,14 +1376,14 @@ def integrate_nonlinear_imex_gx_diagnostics(
             use_dealias=use_dealias,
             wphi_scale=wphi_scale,
         )
-        Wapar_st, Wapar_kxst, Wapar_kyst, Wapar_kxkyst, Wapar_zst = gx_Wapar_resolved(
+        Wapar_st, Wapar_kxst, Wapar_kyst, Wapar_kxkyst, Wapar_zst = magnetic_vector_potential_energy_resolved(
             apar,
             cache,
             vol_fac,
             nspecies=nspecies,
             use_dealias=use_dealias,
         )
-        heat_species, HeatFlux_kxst, HeatFlux_kyst, HeatFlux_kxkyst, HeatFlux_zst = gx_heat_flux_resolved_species(
+        heat_species, HeatFlux_kxst, HeatFlux_kyst, HeatFlux_kxkyst, HeatFlux_zst = heat_flux_resolved_species(
             G_state,
             phi,
             apar,
@@ -1395,7 +1395,7 @@ def integrate_nonlinear_imex_gx_diagnostics(
             use_dealias=use_dealias,
             flux_scale=flux_scale,
         )
-        (heat_es, heat_apar, heat_bpar) = gx_heat_flux_split_resolved_species(
+        (heat_es, heat_apar, heat_bpar) = heat_flux_channel_resolved_species(
             G_state,
             phi,
             apar,
@@ -1413,7 +1413,7 @@ def integrate_nonlinear_imex_gx_diagnostics(
             ParticleFlux_kyst,
             ParticleFlux_kxkyst,
             ParticleFlux_zst,
-        ) = gx_particle_flux_resolved_species(
+        ) = particle_flux_resolved_species(
             G_state,
             phi,
             apar,
@@ -1425,7 +1425,7 @@ def integrate_nonlinear_imex_gx_diagnostics(
             use_dealias=use_dealias,
             flux_scale=flux_scale,
         )
-        (pflux_es, pflux_apar, pflux_bpar) = gx_particle_flux_split_resolved_species(
+        (pflux_es, pflux_apar, pflux_bpar) = particle_flux_channel_resolved_species(
             G_state,
             phi,
             apar,
@@ -1443,7 +1443,7 @@ def integrate_nonlinear_imex_gx_diagnostics(
             TurbulentHeating_kyst,
             TurbulentHeating_kxkyst,
             TurbulentHeating_zst,
-        ) = gx_turbulent_heating_resolved_species(
+        ) = turbulent_heating_resolved_species(
             G_state,
             G_prev_step,
             phi,
