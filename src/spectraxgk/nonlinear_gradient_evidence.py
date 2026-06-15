@@ -16,13 +16,6 @@ from typing import Any, Sequence
 import json
 import math
 
-from spectraxgk.quasilinear_window import (
-    NonlinearWindowEnsembleConfig,
-    nonlinear_window_ensemble_report,
-    nonlinear_window_stats_promotion_ready,
-)
-
-
 from spectraxgk.nonlinear_gradient_evidence_core import (
     NON_PRODUCTION_SCOPE_MARKERS,
     NonlinearTurbulenceGradientBracketSweepConfig,
@@ -31,14 +24,19 @@ from spectraxgk.nonlinear_gradient_evidence_core import (
     NonlinearTurbulenceGradientFiniteDifferenceConfig,
     NonlinearTurbulenceGradientGapConfig,
     _artifact_passed,
-    _ensemble_statistics_row,
     _explicit_production_scope,
     _finite_float,
     _gate,
     _gradient_conditioning_summary,
     _json_number,
-    _paired_replicate_fd_diagnostics,
     _scope_blockers,
+)
+from spectraxgk.nonlinear_gradient_evidence_fd import (
+    nonlinear_turbulence_gradient_finite_difference_report,
+)
+from spectraxgk.nonlinear_gradient_evidence_windows import (
+    _ensemble_row as _ensemble_row,
+    summarize_window_evidence,
 )
 
 
@@ -88,340 +86,10 @@ def classify_gradient_artifact(
         "explicit_production_scope": explicit_production,
         "scope_blockers": blockers,
         "conditioning": {
-            key: value
-            for key, value in conditioning.items()
-            if key not in {"gates"}
+            key: value for key, value in conditioning.items() if key not in {"gates"}
         },
         "gates": gates,
         "qualifies_for_production_turbulence_gradient": qualifies,
-    }
-
-
-def _ensemble_row(
-    payload: dict[str, Any],
-    *,
-    path: str | None,
-    source: str,
-    config: NonlinearTurbulenceGradientEvidenceConfig,
-) -> dict[str, Any]:
-    statistics = payload.get("statistics")
-    if not isinstance(statistics, dict):
-        statistics = {}
-    n_reports = _finite_float(statistics.get("n_reports"))
-    combined_sem_rel = _finite_float(statistics.get("combined_sem_rel"))
-    mean_rel_spread = _finite_float(statistics.get("mean_rel_spread"))
-    passed = _artifact_passed(payload)
-    qualifies = bool(
-        passed
-        and n_reports is not None
-        and int(n_reports) >= int(config.min_window_reports)
-        and combined_sem_rel is not None
-        and combined_sem_rel <= float(config.max_window_combined_sem_rel)
-        and mean_rel_spread is not None
-        and mean_rel_spread <= float(config.max_window_mean_rel_spread)
-    )
-    return {
-        "path": path,
-        "source": source,
-        "kind": str(payload.get("kind", "")),
-        "passed": passed,
-        "n_reports": None if n_reports is None else int(n_reports),
-        "combined_sem_rel": _json_number(combined_sem_rel),
-        "mean_rel_spread": _json_number(mean_rel_spread),
-        "qualifies_for_replicated_long_window_uncertainty": qualifies,
-        "statistics": statistics,
-    }
-
-
-def summarize_window_evidence(
-    window_artifacts: Sequence[dict[str, Any]],
-    *,
-    paths: Sequence[str | None] | None = None,
-    config: NonlinearTurbulenceGradientEvidenceConfig | None = None,
-) -> dict[str, Any]:
-    """Summarize replicated long-window uncertainty evidence.
-
-    Existing ``nonlinear_window_ensemble_report`` artifacts are consumed
-    directly.  If only individual ``nonlinear_window_convergence_report``
-    summaries are supplied, a derived ensemble is built from those summaries
-    using the configured uncertainty limits.
-    """
-
-    cfg = config or NonlinearTurbulenceGradientEvidenceConfig()
-    path_list = list(paths or [None] * len(window_artifacts))
-    if len(path_list) != len(window_artifacts):
-        raise ValueError("paths length must match window_artifacts length")
-
-    rows: list[dict[str, Any]] = []
-    convergence_reports: list[dict[str, Any]] = []
-    convergence_paths: list[str | None] = []
-    single_window_rows: list[dict[str, Any]] = []
-
-    for payload, path in zip(window_artifacts, path_list):
-        kind = str(payload.get("kind", ""))
-        if kind == "nonlinear_window_ensemble_report":
-            rows.append(_ensemble_row(payload, path=path, source="input_ensemble", config=cfg))
-        elif kind == "nonlinear_window_convergence_report":
-            ready, failures = nonlinear_window_stats_promotion_ready(payload)
-            single_window_rows.append(
-                {
-                    "path": path,
-                    "kind": kind,
-                    "case": str(payload.get("case", "")),
-                    "passed": _artifact_passed(payload),
-                    "promotion_ready": ready,
-                    "failures": failures,
-                }
-            )
-            convergence_reports.append(payload)
-            convergence_paths.append(path)
-        else:
-            rows.append(
-                {
-                    "path": path,
-                    "source": "unsupported_window_artifact",
-                    "kind": kind,
-                    "passed": _artifact_passed(payload),
-                    "qualifies_for_replicated_long_window_uncertainty": False,
-                }
-            )
-
-    derived_ensemble = None
-    if len(convergence_reports) >= int(cfg.min_window_reports):
-        derived_payload = nonlinear_window_ensemble_report(
-            convergence_reports,
-            case="derived_long_window_replicate_evidence",
-            comparison="derived_from_supplied_window_summaries",
-            config=NonlinearWindowEnsembleConfig(
-                min_reports=cfg.min_window_reports,
-                max_mean_rel_spread=cfg.max_window_mean_rel_spread,
-                max_combined_sem_rel=cfg.max_window_combined_sem_rel,
-                value_floor=cfg.value_floor,
-                require_individual_passed=True,
-            ),
-        )
-        derived_ensemble = _ensemble_row(
-            derived_payload,
-            path=None,
-            source="derived_from_window_summaries",
-            config=cfg,
-        )
-        derived_ensemble["input_paths"] = convergence_paths
-        rows.append(derived_ensemble)
-
-    qualifying_rows = [
-        row
-        for row in rows
-        if bool(row.get("qualifies_for_replicated_long_window_uncertainty", False))
-    ]
-    gates = [
-        _gate(
-            "replicated_long_window_uncertainty",
-            bool(qualifying_rows),
-            "qualifying_ensembles={count} min_window_reports={min_reports}".format(
-                count=len(qualifying_rows),
-                min_reports=cfg.min_window_reports,
-            ),
-        )
-    ]
-    return {
-        "passed": bool(qualifying_rows),
-        "gates": gates,
-        "ensemble_rows": rows,
-        "single_window_rows": single_window_rows,
-        "derived_ensemble": derived_ensemble,
-    }
-
-
-def nonlinear_turbulence_gradient_finite_difference_report(
-    *,
-    baseline: dict[str, Any],
-    plus: dict[str, Any],
-    minus: dict[str, Any],
-    delta_parameter: float,
-    parameter_name: str,
-    baseline_path: str | None = None,
-    plus_path: str | None = None,
-    minus_path: str | None = None,
-    config: NonlinearTurbulenceGradientFiniteDifferenceConfig | None = None,
-) -> dict[str, Any]:
-    """Build a production long-window central finite-difference gradient gate.
-
-    Inputs must be replicated ``nonlinear_window_ensemble_report`` payloads for
-    the same nonlinear case and analysis window, differing only by the perturbed
-    parameter.  The report computes the central finite-difference heat-flux
-    gradient and checks that the response is resolved above ensemble
-    uncertainty before allowing any turbulence-gradient claim.
-    """
-
-    cfg = config or NonlinearTurbulenceGradientFiniteDifferenceConfig()
-    delta = float(delta_parameter)
-    if not math.isfinite(delta) or delta <= 0.0:
-        raise ValueError("delta_parameter must be finite and positive")
-
-    rows = {
-        "minus": _ensemble_statistics_row(minus, path=minus_path),
-        "baseline": _ensemble_statistics_row(baseline, path=baseline_path),
-        "plus": _ensemble_statistics_row(plus, path=plus_path),
-    }
-    means = {name: _finite_float(row.get("ensemble_mean")) for name, row in rows.items()}
-    sems = {name: _finite_float(row.get("combined_sem")) for name, row in rows.items()}
-    finite_means = all(value is not None for value in means.values())
-    finite_sems = all(value is not None for value in sems.values())
-
-    if finite_means:
-        assert means["minus"] is not None
-        assert means["baseline"] is not None
-        assert means["plus"] is not None
-        minus_mean = float(means["minus"])
-        baseline_mean = float(means["baseline"])
-        plus_mean = float(means["plus"])
-        central_gradient = (plus_mean - minus_mean) / (2.0 * delta)
-        forward_gradient = (plus_mean - baseline_mean) / delta
-        backward_gradient = (baseline_mean - minus_mean) / delta
-        response = abs(plus_mean - minus_mean)
-        response_fraction = response / max(abs(baseline_mean), float(cfg.value_floor))
-        fd_asymmetry_rel = abs(forward_gradient - backward_gradient) / max(
-            abs(central_gradient),
-            float(cfg.value_floor),
-        )
-        fd_condition_number = (abs(plus_mean) + abs(minus_mean)) / max(
-            response,
-            float(cfg.value_floor),
-        )
-    else:
-        central_gradient = math.nan
-        forward_gradient = math.nan
-        backward_gradient = math.nan
-        response = math.nan
-        response_fraction = math.nan
-        fd_asymmetry_rel = math.nan
-        fd_condition_number = math.nan
-
-    if finite_sems:
-        assert sems["plus"] is not None
-        assert sems["minus"] is not None
-        gradient_uncertainty = math.sqrt(float(sems["plus"]) ** 2 + float(sems["minus"]) ** 2) / (
-            2.0 * delta
-        )
-        gradient_uncertainty_rel = gradient_uncertainty / max(
-            abs(central_gradient) if math.isfinite(central_gradient) else 0.0,
-            float(cfg.value_floor),
-        )
-    else:
-        gradient_uncertainty = math.nan
-        gradient_uncertainty_rel = math.nan
-
-    source_gates: list[dict[str, Any]] = []
-    for name, row in rows.items():
-        n_reports = _finite_float(row.get("n_reports"))
-        source_gates.extend(
-            [
-                _gate(
-                    f"{name}_ensemble_kind",
-                    row.get("kind") == "nonlinear_window_ensemble_report",
-                    f"kind={row.get('kind')}",
-                ),
-                _gate(f"{name}_ensemble_passed", bool(row["passed"]), f"path={row.get('path')}"),
-                _gate(
-                    f"{name}_ensemble_replicated",
-                    n_reports is not None and n_reports >= int(cfg.min_window_reports),
-                    f"n_reports={n_reports} min={cfg.min_window_reports}",
-                ),
-            ]
-        )
-    window_gates: list[dict[str, Any]] = []
-    for name, row in rows.items():
-        mean_rel_spread = _finite_float(row.get("mean_rel_spread"))
-        combined_sem_rel = _finite_float(row.get("combined_sem_rel"))
-        window_gates.extend(
-            [
-                _gate(
-                    f"{name}_window_mean_spread",
-                    mean_rel_spread is not None
-                    and mean_rel_spread <= float(cfg.max_window_mean_rel_spread),
-                    f"mean_rel_spread={mean_rel_spread} max={cfg.max_window_mean_rel_spread}",
-                ),
-                _gate(
-                    f"{name}_window_sem",
-                    combined_sem_rel is not None
-                    and combined_sem_rel <= float(cfg.max_window_combined_sem_rel),
-                    f"combined_sem_rel={combined_sem_rel} max={cfg.max_window_combined_sem_rel}",
-                ),
-            ]
-        )
-
-    gradient_gates = [
-        _gate("finite_window_means", finite_means, f"means={means}"),
-        _gate("finite_window_uncertainties", finite_sems, f"combined_sem={sems}"),
-        _gate(
-            "fd_response_resolved",
-            math.isfinite(response_fraction)
-            and response_fraction >= float(cfg.min_fd_response_fraction),
-            f"response_fraction={response_fraction} min={cfg.min_fd_response_fraction}",
-        ),
-        _gate(
-            "fd_asymmetry_bounded",
-            math.isfinite(fd_asymmetry_rel)
-            and fd_asymmetry_rel <= float(cfg.max_fd_asymmetry_rel),
-            f"fd_asymmetry_rel={fd_asymmetry_rel} max={cfg.max_fd_asymmetry_rel}",
-        ),
-        _gate(
-            "fd_condition_number_bounded",
-            math.isfinite(fd_condition_number)
-            and fd_condition_number <= float(cfg.max_fd_condition_number),
-            f"fd_condition_number={fd_condition_number} max={cfg.max_fd_condition_number}",
-        ),
-        _gate(
-            "gradient_uncertainty_bounded",
-            math.isfinite(gradient_uncertainty_rel)
-            and gradient_uncertainty_rel <= float(cfg.max_gradient_uncertainty_rel),
-            f"gradient_uncertainty_rel={gradient_uncertainty_rel} max={cfg.max_gradient_uncertainty_rel}",
-        ),
-    ]
-    gates = [*source_gates, *window_gates, *gradient_gates]
-    passed = all(bool(gate["passed"]) for gate in gates)
-    return {
-        "kind": "nonlinear_turbulence_gradient_central_fd_gate",
-        "claim_level": "production_long_window_nonlinear_turbulence_gradient_candidate",
-        "claim_scope": (
-            "production_long_window nonlinear turbulence gradient from matched replicated "
-            "post-transient heat-flux windows"
-        ),
-        "parameter_name": str(parameter_name),
-        "delta_parameter": delta,
-        "passed": passed,
-        "production_nonlinear_window_gradient_gate": passed,
-        "nonlinear_turbulence_gradient_gate": passed,
-        "metrics": {
-            "central_gradient": _json_number(central_gradient),
-            "forward_gradient": _json_number(forward_gradient),
-            "backward_gradient": _json_number(backward_gradient),
-            "response": _json_number(response),
-            "response_fraction": _json_number(response_fraction),
-            "fd_asymmetry_rel": _json_number(fd_asymmetry_rel),
-            "asymmetry_rel": _json_number(fd_asymmetry_rel),
-            "fd_condition_number": _json_number(fd_condition_number),
-            "condition_number": _json_number(fd_condition_number),
-            "gradient_uncertainty": _json_number(gradient_uncertainty),
-            "gradient_uncertainty_rel": _json_number(gradient_uncertainty_rel),
-            "gradient_relative_uncertainty": _json_number(gradient_uncertainty_rel),
-            "baseline_window_mean": means["baseline"],
-            "plus_window_mean": means["plus"],
-            "minus_window_mean": means["minus"],
-            "baseline_window_sem": sems["baseline"],
-            "plus_window_sem": sems["plus"],
-            "minus_window_sem": sems["minus"],
-        },
-        "source_ensembles": rows,
-        "paired_replicate_diagnostics": _paired_replicate_fd_diagnostics(
-            rows=rows,
-            delta=delta,
-            value_floor=float(cfg.value_floor),
-        ),
-        "config": asdict(cfg),
-        "gates": gates,
-        "blockers": [gate["metric"] for gate in gates if not bool(gate["passed"])],
     }
 
 
@@ -454,7 +122,9 @@ def _candidate_next_action(
     condition_margin: float,
 ) -> str:
     if passed:
-        return "promote only after the source campaign provenance is frozen in docs and CI"
+        return (
+            "promote only after the source campaign provenance is frozen in docs and CI"
+        )
     if response_margin < 1.0:
         return (
             "abandon or enlarge the perturbation only if locality remains bounded; "
@@ -504,7 +174,9 @@ def nonlinear_turbulence_gradient_candidate_ranking_report(
         raise ValueError("labels length must match artifacts")
 
     rows: list[dict[str, Any]] = []
-    for index, (artifact, path, label) in enumerate(zip(artifacts, path_list, label_list)):
+    for index, (artifact, path, label) in enumerate(
+        zip(artifacts, path_list, label_list)
+    ):
         evidence_cfg = NonlinearTurbulenceGradientEvidenceConfig(
             max_gradient_uncertainty_rel=cfg.max_gradient_uncertainty_rel,
             max_fd_asymmetry_rel=cfg.max_fd_asymmetry_rel,
@@ -512,14 +184,18 @@ def nonlinear_turbulence_gradient_candidate_ranking_report(
             min_fd_response_fraction=cfg.min_fd_response_fraction,
             value_floor=cfg.value_floor,
         )
-        classified = classify_gradient_artifact(artifact, path=path, config=evidence_cfg)
+        classified = classify_gradient_artifact(
+            artifact, path=path, config=evidence_cfg
+        )
         conditioning = classified.get("conditioning", {})
         if not isinstance(conditioning, dict):
             conditioning = {}
         response_fraction = _finite_float(conditioning.get("response_fraction"))
         fd_asymmetry_rel = _finite_float(conditioning.get("fd_asymmetry_rel"))
         fd_condition_number = _finite_float(conditioning.get("fd_condition_number"))
-        gradient_uncertainty_rel = _finite_float(conditioning.get("gradient_uncertainty_rel"))
+        gradient_uncertainty_rel = _finite_float(
+            conditioning.get("gradient_uncertainty_rel")
+        )
 
         response_margin = _metric_margin(
             response_fraction,
@@ -556,11 +232,17 @@ def nonlinear_turbulence_gradient_candidate_ranking_report(
             "uncertainty": uncertainty_margin,
         }
         weakest_margin = min(margins.values())
-        geometric_score = math.prod(max(value, 0.0) for value in margins.values()) ** 0.25
+        geometric_score = (
+            math.prod(max(value, 0.0) for value in margins.values()) ** 0.25
+        )
         if not bool(classified.get("explicit_production_scope", False)):
             geometric_score *= 0.5
-        passed = bool(classified.get("qualifies_for_production_turbulence_gradient", False))
-        parameter_name = str(artifact.get("parameter_name") or label or path or f"candidate_{index}")
+        passed = bool(
+            classified.get("qualifies_for_production_turbulence_gradient", False)
+        )
+        parameter_name = str(
+            artifact.get("parameter_name") or label or path or f"candidate_{index}"
+        )
         failed_gates = [
             str(gate.get("metric", ""))
             for gate in classified.get("gates", [])
@@ -581,7 +263,9 @@ def nonlinear_turbulence_gradient_candidate_ranking_report(
                     "response_fraction": conditioning.get("response_fraction"),
                     "fd_asymmetry_rel": conditioning.get("fd_asymmetry_rel"),
                     "fd_condition_number": conditioning.get("fd_condition_number"),
-                    "gradient_uncertainty_rel": conditioning.get("gradient_uncertainty_rel"),
+                    "gradient_uncertainty_rel": conditioning.get(
+                        "gradient_uncertainty_rel"
+                    ),
                 },
                 "margins": margins,
                 "weakest_margin": _json_number(weakest_margin),
@@ -611,12 +295,14 @@ def nonlinear_turbulence_gradient_candidate_ranking_report(
     local_but_noisy = [
         row
         for row in rows
-        if float(row["margins"]["locality"]) >= 1.0 and float(row["margins"]["uncertainty"]) < 1.0
+        if float(row["margins"]["locality"]) >= 1.0
+        and float(row["margins"]["uncertainty"]) < 1.0
     ]
     quiet_but_nonlocal = [
         row
         for row in rows
-        if float(row["margins"]["uncertainty"]) >= 1.0 and float(row["margins"]["locality"]) < 1.0
+        if float(row["margins"]["uncertainty"]) >= 1.0
+        and float(row["margins"]["locality"]) < 1.0
     ]
     overdetermined_followup = cfg.campaign_context == "overdetermined_followup"
     if passed_rows:
@@ -650,13 +336,9 @@ def nonlinear_turbulence_gradient_candidate_ranking_report(
             "single-control candidates have complementary locality and uncertainty failures"
         )
     elif local_but_noisy:
-        recommendation = (
-            "extend statistical power for the best local direction before changing controls"
-        )
+        recommendation = "extend statistical power for the best local direction before changing controls"
     elif quiet_but_nonlocal:
-        recommendation = (
-            "reduce bracket size or choose a nearby/local control before adding replicas"
-        )
+        recommendation = "reduce bracket size or choose a nearby/local control before adding replicas"
     else:
         recommendation = (
             "screen new profile-gradient or objective-gradient controls; current candidates "
@@ -711,7 +393,9 @@ def _bracket_sweep_row(
     response_fraction = _finite_float(conditioning.get("response_fraction"))
     fd_asymmetry_rel = _finite_float(conditioning.get("fd_asymmetry_rel"))
     fd_condition_number = _finite_float(conditioning.get("fd_condition_number"))
-    gradient_uncertainty_rel = _finite_float(conditioning.get("gradient_uncertainty_rel"))
+    gradient_uncertainty_rel = _finite_float(
+        conditioning.get("gradient_uncertainty_rel")
+    )
     paired_uncertainty_rel = _paired_uncertainty_rel(artifact)
     paired_same_sign = _paired_same_sign_fraction(artifact)
     response_margin = _metric_margin(
@@ -759,7 +443,9 @@ def _bracket_sweep_row(
         "path": path,
         "parameter_name": str(artifact.get("parameter_name", "")),
         "delta_parameter": _json_number(delta),
-        "passed": bool(classified.get("qualifies_for_production_turbulence_gradient", False)),
+        "passed": bool(
+            classified.get("qualifies_for_production_turbulence_gradient", False)
+        ),
         "metrics": {
             "central_gradient": conditioning.get("central_gradient"),
             "response_fraction": conditioning.get("response_fraction"),
@@ -772,7 +458,9 @@ def _bracket_sweep_row(
         },
         "margins": margins,
         "weakest_margin": _json_number(min(margins.values())),
-        "score": _json_number(math.prod(max(value, 0.0) for value in margins.values()) ** 0.25),
+        "score": _json_number(
+            math.prod(max(value, 0.0) for value in margins.values()) ** 0.25
+        ),
         "failed_gates": [
             str(gate.get("metric", ""))
             for gate in classified.get("gates", [])
@@ -791,7 +479,9 @@ def _delta_key(row: dict[str, Any]) -> float:
 def _bracket_sweep_recommendation(rows: Sequence[dict[str, Any]]) -> str:
     if not rows:
         return "run at least two matched plus/minus perturbation amplitudes before claiming bracket locality"
-    parameter_names = {str(row.get("parameter_name", "")) for row in rows if row.get("parameter_name")}
+    parameter_names = {
+        str(row.get("parameter_name", "")) for row in rows if row.get("parameter_name")
+    }
     if len(parameter_names) > 1:
         return (
             "mixed controls were supplied to a same-control bracket sweep; split the "
@@ -806,11 +496,7 @@ def _bracket_sweep_recommendation(rows: Sequence[dict[str, Any]]) -> str:
             f"smallest passing delta is {best.get('delta_parameter')}"
         )
 
-    response_ok = [
-        row
-        for row in rows
-        if float(row["margins"]["response"]) >= 1.0
-    ]
+    response_ok = [row for row in rows if float(row["margins"]["response"]) >= 1.0]
     response_ok_gradients = [
         _finite_float(row.get("metrics", {}).get("central_gradient"))
         for row in response_ok
@@ -828,14 +514,10 @@ def _bracket_sweep_recommendation(rows: Sequence[dict[str, Any]]) -> str:
             "stricter provenance or a smoother composite profile-gradient direction"
         )
     local_rows = [
-        row
-        for row in response_ok
-        if float(row["margins"]["locality"]) >= 1.0
+        row for row in response_ok if float(row["margins"]["locality"]) >= 1.0
     ]
     quiet_rows = [
-        row
-        for row in response_ok
-        if float(row["margins"]["uncertainty"]) >= 1.0
+        row for row in response_ok if float(row["margins"]["uncertainty"]) >= 1.0
     ]
     repeated_unstable = [
         row
@@ -906,7 +588,9 @@ def nonlinear_turbulence_gradient_bracket_sweep_report(
         for artifact, label, path in zip(artifacts, label_list, path_list)
     ]
     rows.sort(key=_delta_key)
-    parameter_names = sorted({row["parameter_name"] for row in rows if row["parameter_name"]})
+    parameter_names = sorted(
+        {row["parameter_name"] for row in rows if row["parameter_name"]}
+    )
     same_control = len(parameter_names) <= 1
     passed_rows = [row for row in rows if bool(row.get("passed", False))]
     return {
@@ -925,7 +609,9 @@ def nonlinear_turbulence_gradient_bracket_sweep_report(
     }
 
 
-def _required_run_rows(config: NonlinearTurbulenceGradientGapConfig) -> list[dict[str, Any]]:
+def _required_run_rows(
+    config: NonlinearTurbulenceGradientGapConfig,
+) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for state, multiplier in (
         ("minus_delta", 1.0 - config.perturbation_fraction),
