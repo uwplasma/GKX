@@ -162,7 +162,7 @@ from spectraxgk.analysis import (
     extract_eigenfunction,
     fit_growth_rate,
     fit_growth_rate_auto,
-    gx_growth_rate_from_phi,
+    instantaneous_growth_rate_from_phi,
     select_fit_window,
     select_ky_index,
 )
@@ -488,7 +488,7 @@ from spectraxgk.diagnostics import SimulationDiagnostics
 
 LinearExplicitTimeConfig = ExplicitTimeConfig
 integrate_nonlinear_diagnostics = integrate_nonlinear_explicit_diagnostics
-growth_rate_from_phi = gx_growth_rate_from_phi
+growth_rate_from_phi = instantaneous_growth_rate_from_phi
 
 __all__ = [
     "__version__",
@@ -635,7 +635,7 @@ __all__ = [
     "load_tem_reference",
     "fit_growth_rate",
     "fit_growth_rate_auto",
-    "gx_growth_rate_from_phi",
+    "instantaneous_growth_rate_from_phi",
     "growth_rate_from_phi",
     "select_fit_window",
     "CycloneReference",

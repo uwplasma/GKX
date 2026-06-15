@@ -13,8 +13,8 @@ from spectraxgk.analysis import (
     extract_mode_time_series,
     fit_growth_rate,
     fit_growth_rate_auto,
-    gx_growth_rate_from_omega_series,
-    gx_growth_rate_from_phi,
+    windowed_growth_rate_from_omega_series,
+    instantaneous_growth_rate_from_phi,
     select_ky_index,
 )
 from spectraxgk.benchmark_defaults import (
@@ -255,7 +255,7 @@ def run_kbm_beta_scan(
                 t_np = np.asarray(t_arr, dtype=float)
                 if mode_method in {"z_index", "max"}:
                     try:
-                        gamma, omega, _g_t, _o_t, _t_mid = gx_growth_rate_from_phi(
+                        gamma, omega, _g_t, _o_t, _t_mid = instantaneous_growth_rate_from_phi(
                             phi_np,
                             t_np,
                             sel,
@@ -264,7 +264,7 @@ def run_kbm_beta_scan(
                         )
                     except ValueError:
                         try:
-                            gamma, omega, _g_t, _o_t = gx_growth_rate_from_omega_series(
+                            gamma, omega, _g_t, _o_t = windowed_growth_rate_from_omega_series(
                                 np.asarray(gamma_t),
                                 np.asarray(omega_t),
                                 sel,
@@ -818,7 +818,7 @@ def run_kbm_linear(
         if t_out.size > 1:
             if mode_method in {"z_index", "max"}:
                 try:
-                    gamma, omega, _g_t, _o_t, _t_mid = gx_growth_rate_from_phi(
+                    gamma, omega, _g_t, _o_t, _t_mid = instantaneous_growth_rate_from_phi(
                         phi_t_np,
                         t_out,
                         sel,
@@ -827,7 +827,7 @@ def run_kbm_linear(
                     )
                 except ValueError:
                     try:
-                        gamma, omega, _g_t, _o_t = gx_growth_rate_from_omega_series(
+                        gamma, omega, _g_t, _o_t = windowed_growth_rate_from_omega_series(
                             np.asarray(gamma_t),
                             np.asarray(omega_t),
                             sel,

@@ -12,7 +12,7 @@ from spectraxgk.analysis import (
     ModeSelectionBatch,
     fit_growth_rate,
     fit_growth_rate_auto,
-    gx_growth_rate_from_phi,
+    instantaneous_growth_rate_from_phi,
     select_ky_index,
 )
 from spectraxgk.benchmark_defaults import (
@@ -381,7 +381,7 @@ def run_etg_linear(
         t = np.arange(phi_t_np.shape[0]) * dt * stride
         density_np = None if density_t is None else np.asarray(density_t)
         if gx_growth and fit_key == "phi":
-            gamma, omega, _gamma_t, _omega_t, _t_mid = gx_growth_rate_from_phi(
+            gamma, omega, _gamma_t, _omega_t, _t_mid = instantaneous_growth_rate_from_phi(
                 phi_t_np,
                 t,
                 sel,
@@ -963,7 +963,7 @@ def run_etg_scan(
                 sel_local = ModeSelection(
                     ky_index=local_idx, kx_index=0, z_index=_midplane_index(grid)
                 )
-                gamma, omega, _gamma_t, _omega_t, _t_mid = gx_growth_rate_from_phi(
+                gamma, omega, _gamma_t, _omega_t, _t_mid = instantaneous_growth_rate_from_phi(
                     phi_t_np,
                     t,
                     sel_local,

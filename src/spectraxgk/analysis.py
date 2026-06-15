@@ -734,7 +734,7 @@ def fit_growth_rate_auto_with_stats(
     return gamma, omega, tmin_out, tmax_out, float(r2_log), float(r2_phase)
 
 
-def gx_growth_rate_from_phi(
+def instantaneous_growth_rate_from_phi(
     phi_t: np.ndarray,
     t: np.ndarray | None,
     sel: ModeSelection,
@@ -743,7 +743,7 @@ def gx_growth_rate_from_phi(
     use_last: bool = False,
     mode_method: str = "z_index",
 ) -> Tuple[float, float, np.ndarray, np.ndarray, np.ndarray]:
-    """Compute GX-style instantaneous growth rates from phi ratios.
+    """Compute instantaneous growth and frequency from complex mode ratios.
 
     Returns (gamma_avg, omega_avg, gamma_t, omega_t, t_mid).
     """
@@ -784,7 +784,7 @@ def gx_growth_rate_from_phi(
     omega = omega[finite]
     t_mid = t_mid[finite]
     if gamma.size == 0:
-        raise ValueError("No finite GX growth-rate samples available")
+        raise ValueError("No finite instantaneous growth-rate samples available")
 
     if use_last:
         gamma_avg = float(gamma[-1])
@@ -796,7 +796,7 @@ def gx_growth_rate_from_phi(
     return gamma_avg, omega_avg, gamma, omega, t_mid
 
 
-def gx_growth_rate_from_omega_series(
+def windowed_growth_rate_from_omega_series(
     gamma_t: np.ndarray,
     omega_t: np.ndarray,
     sel: ModeSelection,
@@ -804,7 +804,7 @@ def gx_growth_rate_from_omega_series(
     navg_fraction: float = 0.5,
     use_last: bool = False,
 ) -> Tuple[float, float, np.ndarray, np.ndarray]:
-    """Compute GX-style averaged growth rates from precomputed omega_kxky(t).
+    """Compute window-averaged growth and frequency from precomputed time series.
 
     Parameters
     ----------
@@ -813,7 +813,7 @@ def gx_growth_rate_from_omega_series(
     sel:
         Mode selection used to choose the ``(ky, kx)`` series.
     navg_fraction:
-        Fractional start index for late-time averaging (GX-style).
+        Fractional start index for late-time averaging.
     use_last:
         If true, use the last finite sample instead of late-time average.
     """
@@ -832,7 +832,7 @@ def gx_growth_rate_from_omega_series(
     gamma = gamma[finite]
     omega = omega[finite]
     if gamma.size == 0:
-        raise ValueError("No finite GX omega-series samples available")
+        raise ValueError("No finite growth/frequency series samples available")
 
     if use_last:
         return float(gamma[-1]), float(omega[-1]), gamma, omega

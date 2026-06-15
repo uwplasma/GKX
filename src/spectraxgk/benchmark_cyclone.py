@@ -14,7 +14,7 @@ from spectraxgk.analysis import (
     extract_mode_time_series,
     fit_growth_rate,
     fit_growth_rate_auto,
-    gx_growth_rate_from_phi,
+    instantaneous_growth_rate_from_phi,
     select_ky_index,
 )
 from spectraxgk.benchmark_defaults import (
@@ -225,7 +225,7 @@ def run_cyclone_linear(
                 sel = ModeSelection(
                     ky_index=0, kx_index=0, z_index=_midplane_index(grid)
                 )
-                gamma_seed, omega_seed, _g, _o, _t_mid = gx_growth_rate_from_phi(
+                gamma_seed, omega_seed, _g, _o, _t_mid = instantaneous_growth_rate_from_phi(
                     phi_t,
                     t_short,
                     sel,
@@ -279,7 +279,7 @@ def run_cyclone_linear(
                     sel_seed = ModeSelection(
                         ky_index=0, kx_index=0, z_index=_midplane_index(grid)
                     )
-                    gamma_seed, omega_seed, _g, _o, _t_mid = gx_growth_rate_from_phi(
+                    gamma_seed, omega_seed, _g, _o, _t_mid = instantaneous_growth_rate_from_phi(
                         phi_t,
                         t_short,
                         sel_seed,
@@ -404,7 +404,7 @@ def run_cyclone_linear(
             sel_local = ModeSelection(
                 ky_index=0, kx_index=0, z_index=_midplane_index(grid)
             )
-            gamma, omega, _g, _o, _t_mid = gx_growth_rate_from_phi(
+            gamma, omega, _g, _o, _t_mid = instantaneous_growth_rate_from_phi(
                 phi_t, t, sel_local, navg_fraction=0.5, mode_method="z_index"
             )
             gamma, omega = _normalize_growth_rate(
@@ -797,7 +797,7 @@ def run_cyclone_scan(
                     sel = ModeSelection(
                         ky_index=0, kx_index=0, z_index=_midplane_index(grid)
                     )
-                    gamma_seed, omega_seed, _g, _o, _t_mid = gx_growth_rate_from_phi(
+                    gamma_seed, omega_seed, _g, _o, _t_mid = instantaneous_growth_rate_from_phi(
                         phi_seed,
                         t_short,
                         sel,
@@ -847,7 +847,7 @@ def run_cyclone_scan(
                     sel_seed = ModeSelection(
                         ky_index=0, kx_index=0, z_index=_midplane_index(grid)
                     )
-                    gamma_seed, omega_seed, _g, _o, _t_mid = gx_growth_rate_from_phi(
+                    gamma_seed, omega_seed, _g, _o, _t_mid = instantaneous_growth_rate_from_phi(
                         phi_seed,
                         t_short,
                         sel_seed,
@@ -990,7 +990,7 @@ def run_cyclone_scan(
             )
             gx_growth_ok = True
             try:
-                gamma, omega, _g, _o, _t_mid = gx_growth_rate_from_phi(
+                gamma, omega, _g, _o, _t_mid = instantaneous_growth_rate_from_phi(
                     phi_gx, t, sel_local, navg_fraction=0.5, mode_method="z_index"
                 )
                 gamma, omega = _normalize_growth_rate(
