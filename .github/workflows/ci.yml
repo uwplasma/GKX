@@ -170,7 +170,7 @@ jobs:
               tests/test_nonlinear_exb.py
               tests/test_hyperdiffusion.py
               tests/test_gx_consistency.py
-              tests/test_gx_diagnostics.py
+              tests/test_runtime_diagnostics.py
           - name: parallel-autodiff
             files: >-
               tests/test_parallel.py
