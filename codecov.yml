@@ -1,6 +1,14 @@
 # Codecov should mirror the CI coverage contract:
 # package coverage is measured for src/spectraxgk, while tools, docs,
 # examples, tests, and generated artifacts are validated by separate gates.
+# CI uploads a fast diagnostic report first and the package-wide release gate
+# second. Wait for both uploads and evaluate the project status only against
+# the package-wide flag so the required check cannot fail on the fast subset.
+codecov:
+  notify:
+    after_n_builds: 2
+    wait_for_ci: true
+
 ignore:
   - "docs/**/*"
   - "examples/**/*"
@@ -17,6 +25,8 @@ coverage:
       default:
         target: 95%
         threshold: 0.5%
+        flags:
+          - wide-package
     patch:
       default:
         informational: true
