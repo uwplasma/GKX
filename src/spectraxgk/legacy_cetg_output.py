@@ -66,7 +66,7 @@ def expand_legacy_positive_ky_state(
     *,
     ny_full: int,
 ) -> np.ndarray:
-    """Expand GX's positive-ky real-FFT layout to a full Hermitian ``ky`` grid."""
+    """Expand a positive-ky real-FFT layout to a full Hermitian ``ky`` grid."""
 
     state = np.asarray(state_positive_ky)
     if state.ndim != 6 or state.shape[0] != 1 or state.shape[2] != 1:
@@ -197,11 +197,3 @@ def load_legacy_cetg_output(path: str | Path) -> LegacyCetgOutput:
         )
     finally:
         root.close()
-
-
-# Compatibility aliases retained for archived comparison scripts.
-GXLegacyCetgOutput = LegacyCetgOutput
-GXLegacyCetgRestart = LegacyCetgRestart
-expand_gx_legacy_positive_ky_state = expand_legacy_positive_ky_state
-load_gx_legacy_cetg_restart = load_legacy_cetg_restart
-load_gx_legacy_cetg_output = load_legacy_cetg_output

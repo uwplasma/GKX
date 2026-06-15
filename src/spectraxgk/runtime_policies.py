@@ -52,7 +52,7 @@ class RuntimeIndependentParallelPlan:
 
 def _normalize_linear_solver_name(solver: str) -> str:
     solver_key = solver.strip().lower().replace("-", "_")
-    if solver_key in {"explicit_time", "gx_time"}:
+    if solver_key == "explicit_time":
         return "explicit_time"
     return solver_key
 

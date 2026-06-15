@@ -103,18 +103,11 @@ def _merge_dataclass(base: Any, overrides: dict | None) -> Any:
 
 
 def _normalize_geometry_overrides(overrides: dict | None) -> dict | None:
-    """Map legacy geometry helper keys to canonical schema names."""
+    """Return geometry overrides using the canonical runtime schema."""
 
     if not isinstance(overrides, dict):
         return overrides
-    out = dict(overrides)
-    if "gx_python" in out and "geometry_helper_python" not in out:
-        out["geometry_helper_python"] = out["gx_python"]
-    if "gx_repo" in out and "geometry_helper_repo" not in out:
-        out["geometry_helper_repo"] = out["gx_repo"]
-    out.pop("gx_python", None)
-    out.pop("gx_repo", None)
-    return out
+    return dict(overrides)
 
 
 def _case_registry():

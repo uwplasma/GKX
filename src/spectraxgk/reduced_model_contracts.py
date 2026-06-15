@@ -97,9 +97,3 @@ def load_reduced_model_contract(path: str | Path) -> ReducedModelContract:
         D_hyper=float(diss.get("D_hyper", 0.0)),
         dealias_kz=bool(expert.get("dealias_kz", False)),
     )
-
-
-# Compatibility aliases kept for callers that still use the historical
-# old prefixed names.
-GXReducedModelContract = ReducedModelContract
-load_gx_reduced_model_contract = load_reduced_model_contract

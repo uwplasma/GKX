@@ -122,12 +122,6 @@ def generate_runtime_miller_eik(
     if not backend:
         backend = "auto"
 
-    if backend == "gx":
-        raise ValueError(
-            "geometry_backend='gx' is no longer supported for runtime Miller geometry generation. "
-            "Use geometry_backend='internal' (or 'auto')."
-        )
-
     if backend not in {"auto", "internal"}:
         raise ValueError(
             f"Unknown geometry backend {cfg.geometry.geometry_backend!r}. "
@@ -143,9 +137,3 @@ def generate_runtime_miller_eik(
     if resolved_output is None:
         resolved_output = default_miller_eik_output_path(request)
     return generate_miller_eik_internal(output_path=resolved_output, request=request)
-
-
-# Compatibility aliases kept for existing callers and tests that still import
-# the older prefixed API names.
-GXMillerGeometryRequest = MillerGeometryRequest
-build_gx_miller_geometry_request = build_miller_geometry_request

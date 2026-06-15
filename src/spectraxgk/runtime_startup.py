@@ -114,7 +114,7 @@ def _resolve_runtime_hl_dims(
     """Resolve model-native Hermite/Laguerre dimensions."""
 
     model = _runtime_model_key(cfg)
-    if model in {"", "gyrokinetic", "full", "full-gk", "gx"}:
+    if model in {"", "gyrokinetic", "full", "full-gk"}:
         return int(24 if Nl is None else Nl), int(12 if Nm is None else Nm)
     if model == "cetg":
         Nl_use = 2 if Nl is None else int(Nl)
@@ -134,7 +134,7 @@ def _require_full_gk_runtime_model(cfg: RuntimeConfig) -> None:
     """Reject reduced-model configs until their dedicated solvers exist."""
 
     model = cfg.physics.reduced_model.strip().lower()
-    if model in {"", "gyrokinetic", "full", "full-gk", "gx"}:
+    if model in {"", "gyrokinetic", "full", "full-gk"}:
         return
     if model == "cetg":
         raise NotImplementedError(

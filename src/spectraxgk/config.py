@@ -182,14 +182,7 @@ class GeometryConfig:
         drift_scale: float = 1.0,
         kperp2_bmag: bool = True,
         bessel_bmag_power: float = 0.0,
-        *,
-        gx_python: str | None = None,
-        gx_repo: str | None = None,
     ) -> None:
-        if gx_python is not None and geometry_helper_python is None:
-            geometry_helper_python = gx_python
-        if gx_repo is not None and geometry_helper_repo is None:
-            geometry_helper_repo = gx_repo
         values = {
             "model": model,
             "geometry_backend": geometry_backend,
@@ -226,18 +219,6 @@ class GeometryConfig:
         }
         for name, value in values.items():
             object.__setattr__(self, name, value)
-
-    @property
-    def gx_python(self) -> str | None:
-        """Compatibility alias for ``geometry_helper_python``."""
-
-        return self.geometry_helper_python
-
-    @property
-    def gx_repo(self) -> str | None:
-        """Compatibility alias for ``geometry_helper_repo``."""
-
-        return self.geometry_helper_repo
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

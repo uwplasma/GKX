@@ -205,12 +205,6 @@ def generate_runtime_vmec_eik(
     if not backend:
         backend = "auto"
 
-    if backend == "gx":
-        raise ValueError(
-            "geometry_backend='gx' is no longer supported for runtime VMEC geometry generation. "
-            "Use geometry_backend='internal' (or 'auto')."
-        )
-
     if backend not in {"auto", "internal"}:
         raise ValueError(
             f"Unknown geometry backend {cfg.geometry.geometry_backend!r}. "
@@ -236,9 +230,3 @@ def generate_runtime_vmec_eik(
         )
 
     return generate_vmec_eik_internal(output_path=resolved_path, request=request)
-
-
-# Compatibility aliases kept for callers still using the older prefixed
-# request and builder names.
-GXVmecGeometryRequest = VmecGeometryRequest
-build_gx_vmec_geometry_request = build_vmec_geometry_request

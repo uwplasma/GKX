@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 
-DiagnosticNorm = Literal["none", "rho_star", "gx"]
+DiagnosticNorm = Literal["none", "rho_star"]
 
 
 @dataclass(frozen=True)
@@ -114,8 +114,6 @@ def apply_diagnostic_normalization(
     mode = diagnostic_norm.strip().lower()
     if mode in {"none", ""}:
         return float(gamma), float(omega)
-    if mode == "gx":
-        mode = "rho_star"
     if mode == "rho_star":
         scale = float(rho_star)
         return float(gamma) * scale, float(omega) * scale
