@@ -63,7 +63,9 @@ def normalize_eigenfunction(eigenfunction: np.ndarray, z: np.ndarray) -> np.ndar
     return eigenfunction / scale
 
 
-def phase_align_eigenfunction(eigenfunction: np.ndarray, reference: np.ndarray) -> tuple[np.ndarray, float]:
+def phase_align_eigenfunction(
+    eigenfunction: np.ndarray, reference: np.ndarray
+) -> tuple[np.ndarray, float]:
     """Phase-align ``eigenfunction`` to ``reference`` using the global complex phase."""
 
     lhs = np.asarray(eigenfunction, dtype=np.complex128)
@@ -77,7 +79,9 @@ def phase_align_eigenfunction(eigenfunction: np.ndarray, reference: np.ndarray) 
     return lhs * np.exp(1j * phase_shift), phase_shift
 
 
-def compare_eigenfunctions(eigenfunction: np.ndarray, reference: np.ndarray) -> EigenfunctionComparisonMetrics:
+def compare_eigenfunctions(
+    eigenfunction: np.ndarray, reference: np.ndarray
+) -> EigenfunctionComparisonMetrics:
     """Return normalized overlap and relative L2 error after global phase alignment."""
 
     lhs = np.asarray(eigenfunction, dtype=np.complex128)
@@ -126,11 +130,17 @@ def save_eigenfunction_reference_bundle(
     return out
 
 
-def load_eigenfunction_reference_bundle(path: str | Path) -> EigenfunctionReferenceBundle:
+def load_eigenfunction_reference_bundle(
+    path: str | Path,
+) -> EigenfunctionReferenceBundle:
     """Load a frozen reference eigenfunction bundle."""
 
     data = np.load(Path(path), allow_pickle=False)
-    metadata_json = str(np.asarray(data["metadata_json"]).item()) if "metadata_json" in data else "{}"
+    metadata_json = (
+        str(np.asarray(data["metadata_json"]).item())
+        if "metadata_json" in data
+        else "{}"
+    )
     return EigenfunctionReferenceBundle(
         theta=np.asarray(data["theta"], dtype=float),
         mode=np.asarray(data["mode"], dtype=np.complex128),
@@ -151,7 +161,7 @@ def load_diagnostic_time_series(
     component: str = "real",
     align_phase: bool = False,
 ) -> DiagnosticTimeSeries:
-    """Load a 1D diagnostics time series from a GX-style ``out.nc`` artifact."""
+    """Load a 1D diagnostics time series from a grouped NetCDF output artifact."""
 
     src = Path(path)
     with nc.Dataset(src) as ds:
@@ -169,10 +179,14 @@ def load_diagnostic_time_series(
             values = raw
         elif raw.ndim == 2:
             if kx_index is None:
-                raise ValueError(f"diagnostics variable {variable!r} requires kx_index for 2D extraction")
+                raise ValueError(
+                    f"diagnostics variable {variable!r} requires kx_index for 2D extraction"
+                )
             values = raw[:, int(kx_index)]
         else:
-            raise ValueError(f"diagnostics variable {variable!r} must reduce to a 1D time series")
+            raise ValueError(
+                f"diagnostics variable {variable!r} must reduce to a 1D time series"
+            )
 
         if time_group in ds.groups and time_var in ds.groups[time_group].variables:
             t = np.asarray(ds.groups[time_group].variables[time_var][:], dtype=float)
@@ -182,7 +196,9 @@ def load_diagnostic_time_series(
             raise ValueError(f"missing time variable {time_group}/{time_var} in {src}")
 
     if t.ndim != 1 or t.size != values.size:
-        raise ValueError(f"time axis for {variable!r} must be one-dimensional and match the diagnostics length")
+        raise ValueError(
+            f"time axis for {variable!r} must be one-dimensional and match the diagnostics length"
+        )
 
     values_arr = np.asarray(values)
     if np.iscomplexobj(values_arr):
@@ -202,11 +218,17 @@ def load_diagnostic_time_series(
         elif component_key == "abs":
             selected = np.abs(values_arr)
         else:
-            raise ValueError("component must be one of {'real', 'imag', 'abs', 'complex'}")
+            raise ValueError(
+                "component must be one of {'real', 'imag', 'abs', 'complex'}"
+            )
     else:
         if component not in {"real", "abs"}:
             raise ValueError("real diagnostics only support component='real' or 'abs'")
-        selected = np.abs(values_arr) if component == "abs" else np.asarray(values_arr, dtype=float)
+        selected = (
+            np.abs(values_arr)
+            if component == "abs"
+            else np.asarray(values_arr, dtype=float)
+        )
 
     return DiagnosticTimeSeries(
         t=t,
@@ -216,7 +238,9 @@ def load_diagnostic_time_series(
     )
 
 
-def _tail_window(t: np.ndarray, tail_fraction: float) -> tuple[np.ndarray, float | None, float | None]:
+def _tail_window(
+    t: np.ndarray, tail_fraction: float
+) -> tuple[np.ndarray, float | None, float | None]:
     if not 0.0 < float(tail_fraction) <= 1.0:
         raise ValueError("tail_fraction must be in (0, 1]")
     if t.ndim != 1:
@@ -232,7 +256,9 @@ def _tail_window(t: np.ndarray, tail_fraction: float) -> tuple[np.ndarray, float
     return mask, float(tt[0]) if tt.size else None, float(tt[-1]) if tt.size else None
 
 
-def late_time_window(t: np.ndarray, *, tail_fraction: float = 0.4) -> tuple[float, float]:
+def late_time_window(
+    t: np.ndarray, *, tail_fraction: float = 0.4
+) -> tuple[float, float]:
     """Return the start/end of a late-time tail window.
 
     This is the windowing convention used for manuscript-facing eigenfunction
@@ -249,7 +275,7 @@ def late_time_window(t: np.ndarray, *, tail_fraction: float = 0.4) -> tuple[floa
 def infer_triple_dealiased_ny(nky_positive: int) -> int:
     """Infer the full ``Ny`` from the number of positive ``k_y`` points.
 
-    GX-style reference outputs typically store only the non-negative
+    Reference real-FFT outputs typically store only the non-negative
     ``k_y`` branch. For the linked-boundary spectral grid used here, the
     corresponding real-space ``Ny`` follows ``Ny = 3 * (nky - 1) + 1``.
     """
@@ -348,7 +374,9 @@ def zonal_flow_response_metrics(
     t_arr = np.asarray(t, dtype=float)
     resp = np.asarray(response, dtype=float)
     if t_arr.ndim != 1 or resp.ndim != 1 or t_arr.size != resp.size:
-        raise ValueError("t and response must be one-dimensional arrays of equal length")
+        raise ValueError(
+            "t and response must be one-dimensional arrays of equal length"
+        )
     if t_arr.size < 4:
         raise ValueError("zonal-flow response requires at least four samples")
 
@@ -360,15 +388,21 @@ def zonal_flow_response_metrics(
 
     policy = str(initial_policy).strip().lower().replace("-", "_")
     if policy not in {"window_abs_mean", "first_abs"}:
-        raise ValueError("initial_policy must be one of {'window_abs_mean', 'first_abs'}")
+        raise ValueError(
+            "initial_policy must be one of {'window_abs_mean', 'first_abs'}"
+        )
     if peak_fit_max_peaks is not None and int(peak_fit_max_peaks) <= 0:
         raise ValueError("peak_fit_max_peaks must be > 0 when provided")
     damping_mode = str(damping_fit_mode).strip().lower().replace("-", "_")
     if damping_mode not in {"combined_envelope", "branchwise_extrema"}:
-        raise ValueError("damping_fit_mode must be one of {'combined_envelope', 'branchwise_extrema'}")
+        raise ValueError(
+            "damping_fit_mode must be one of {'combined_envelope', 'branchwise_extrema'}"
+        )
     frequency_mode = str(frequency_fit_mode).strip().lower().replace("-", "_")
     if frequency_mode not in {"peak_spacing", "hilbert_phase"}:
-        raise ValueError("frequency_fit_mode must be one of {'peak_spacing', 'hilbert_phase'}")
+        raise ValueError(
+            "frequency_fit_mode must be one of {'peak_spacing', 'hilbert_phase'}"
+        )
     if not 0.0 <= float(hilbert_trim_fraction) < 0.5:
         raise ValueError("hilbert_trim_fraction must be in [0, 0.5)")
 
@@ -382,7 +416,9 @@ def zonal_flow_response_metrics(
     elif policy == "first_abs":
         initial_level = float(abs(resp[0]))
     else:
-        lead_mask, _lead_tmin, _lead_tmax = _leading_window(t_arr, float(initial_fraction))
+        lead_mask, _lead_tmin, _lead_tmax = _leading_window(
+            t_arr, float(initial_fraction)
+        )
         initial_vals = resp[lead_mask]
         if initial_vals.size == 0:
             raise ValueError("response windows must be non-empty")
@@ -445,7 +481,9 @@ def zonal_flow_response_metrics(
         peak_fit_count = int(peak_fit_times.size)
         valid = np.isfinite(peak_fit_values) & (peak_fit_values > 0.0)
         if np.count_nonzero(valid) >= 2:
-            slope, _offset = np.polyfit(peak_fit_times[valid], np.log(peak_fit_values[valid]), 1)
+            slope, _offset = np.polyfit(
+                peak_fit_times[valid], np.log(peak_fit_values[valid]), 1
+            )
             gam_damping = float(-slope)
     else:
         branch_gammas: list[float] = []
@@ -465,11 +503,21 @@ def zonal_flow_response_metrics(
             peak_fit_count = int(np.sum(branch_counts))
 
     fit_peak_times = peak_times[fit_mask[peak_idx]]
-    if peak_fit_max_peaks is not None and damping_mode == "combined_envelope" and fit_peak_times.size:
-        fit_peak_times = fit_peak_times[: min(int(peak_fit_max_peaks), int(fit_peak_times.size))]
+    if (
+        peak_fit_max_peaks is not None
+        and damping_mode == "combined_envelope"
+        and fit_peak_times.size
+    ):
+        fit_peak_times = fit_peak_times[
+            : min(int(peak_fit_max_peaks), int(fit_peak_times.size))
+        ]
 
     if frequency_mode == "peak_spacing":
-        freq_peak_times = fit_peak_times if fit_peak_times.size >= 2 else peak_times[fit_mask[peak_idx]]
+        freq_peak_times = (
+            fit_peak_times
+            if fit_peak_times.size >= 2
+            else peak_times[fit_mask[peak_idx]]
+        )
         if freq_peak_times.size >= 2:
             dt_peaks = np.diff(freq_peak_times)
             dt_peaks = dt_peaks[np.isfinite(dt_peaks) & (dt_peaks > 0.0)]
@@ -623,7 +671,9 @@ def windowed_nonlinear_metrics(
     wphi = wphi[np.isfinite(wphi)]
     wg = wg[np.isfinite(wg)]
     if heat_flux.size == 0 or wphi.size == 0 or wg.size == 0:
-        raise ValueError("windowed diagnostics must contain finite heat/Wphi/Wg samples")
+        raise ValueError(
+            "windowed diagnostics must contain finite heat/Wphi/Wg samples"
+        )
 
     phi_mode = getattr(diagnostics, "phi_mode_t", None)
     envelope_mean: float | None = None
@@ -673,7 +723,9 @@ def nonlinear_heat_flux_convergence_metrics(
     t_arr = np.asarray(t, dtype=float)
     q_arr = np.asarray(heat_flux, dtype=float)
     if t_arr.ndim != 1 or q_arr.ndim != 1 or t_arr.size != q_arr.size:
-        raise ValueError("t and heat_flux must be one-dimensional arrays of equal length")
+        raise ValueError(
+            "t and heat_flux must be one-dimensional arrays of equal length"
+        )
     if t_arr.size == 0:
         raise ValueError("t and heat_flux must be non-empty")
     if not 0.0 <= float(start_fraction) < 1.0:
@@ -687,7 +739,9 @@ def nonlinear_heat_flux_convergence_metrics(
     t_arr = t_arr[finite]
     q_arr = q_arr[finite]
     if t_arr.size == 0:
-        raise ValueError("t and heat_flux must contain at least one finite paired sample")
+        raise ValueError(
+            "t and heat_flux must contain at least one finite paired sample"
+        )
     if t_arr.size > 1 and np.any(np.diff(t_arr) <= 0.0):
         raise ValueError("t must be strictly increasing after finite-sample filtering")
 
@@ -698,7 +752,9 @@ def nonlinear_heat_flux_convergence_metrics(
     if q_win.size == 0:
         raise ValueError("post-transient heat-flux window is empty")
 
-    terminal_start = max(0, int(np.floor((1.0 - float(terminal_fraction)) * q_win.size)))
+    terminal_start = max(
+        0, int(np.floor((1.0 - float(terminal_fraction)) * q_win.size))
+    )
     t_terminal = t_win[terminal_start:]
     q_terminal = q_win[terminal_start:]
     if q_terminal.size == 0:
@@ -710,12 +766,18 @@ def nonlinear_heat_flux_convergence_metrics(
     terminal_mean = float(np.mean(q_terminal))
     scale = max(abs(mean), float(mean_floor))
     cv = float(std / scale) if scale > 0.0 else float("inf")
-    mean_rel_delta = float(abs(terminal_mean - mean) / scale) if scale > 0.0 else float("inf")
+    mean_rel_delta = (
+        float(abs(terminal_mean - mean) / scale) if scale > 0.0 else float("inf")
+    )
 
     trend = 0.0
     if t_win.size >= 2 and float(t_win[-1] - t_win[0]) > 0.0:
         slope, _offset = np.polyfit(t_win, q_win, 1)
-        trend = float(slope * (t_win[-1] - t_win[0]) / scale) if scale > 0.0 else float("inf")
+        trend = (
+            float(slope * (t_win[-1] - t_win[0]) / scale)
+            if scale > 0.0
+            else float("inf")
+        )
 
     return NonlinearHeatFluxConvergenceMetrics(
         tmin=float(tmin if tmin is not None else t_win[0]),
@@ -737,13 +799,17 @@ def nonlinear_heat_flux_convergence_metrics(
     )
 
 
-def estimate_observed_order(step_sizes: np.ndarray, errors: np.ndarray) -> ObservedOrderMetrics:
+def estimate_observed_order(
+    step_sizes: np.ndarray, errors: np.ndarray
+) -> ObservedOrderMetrics:
     """Estimate observed order from successive step-size refinements."""
 
     h = np.asarray(step_sizes, dtype=float)
     err = np.asarray(errors, dtype=float)
     if h.ndim != 1 or err.ndim != 1 or h.size != err.size or h.size < 2:
-        raise ValueError("step_sizes and errors must be one-dimensional arrays of equal length >= 2")
+        raise ValueError(
+            "step_sizes and errors must be one-dimensional arrays of equal length >= 2"
+        )
     if np.any(~np.isfinite(h)) or np.any(~np.isfinite(err)):
         raise ValueError("step_sizes and errors must be finite")
     if np.any(h <= 0.0):
@@ -789,7 +855,11 @@ def branch_continuity_metrics(
         raise ValueError("ky, gamma, and omega must have equal length")
     if ky_arr.size < 2:
         raise ValueError("branch continuity requires at least two ky samples")
-    if np.any(~np.isfinite(ky_arr)) or np.any(~np.isfinite(gamma_arr)) or np.any(~np.isfinite(omega_arr)):
+    if (
+        np.any(~np.isfinite(ky_arr))
+        or np.any(~np.isfinite(gamma_arr))
+        or np.any(~np.isfinite(omega_arr))
+    ):
         raise ValueError("ky, gamma, and omega must be finite")
     floor = float(floor_fraction)
     if floor < 0.0:
@@ -798,7 +868,9 @@ def branch_continuity_metrics(
     def _relative_jumps(values: np.ndarray) -> np.ndarray:
         jumps = np.abs(np.diff(values))
         global_floor = max(float(np.nanmax(np.abs(values))) * floor, 1.0e-30)
-        local_scale = np.maximum(np.maximum(np.abs(values[:-1]), np.abs(values[1:])), global_floor)
+        local_scale = np.maximum(
+            np.maximum(np.abs(values[:-1]), np.abs(values[1:])), global_floor
+        )
         return jumps / local_scale
 
     overlap_min: float | None = None
@@ -858,7 +930,9 @@ def run_linear_scan(
         steps_i = int(steps[i]) if isinstance(steps, np.ndarray) else int(steps)
         tmin_i = tmin[i] if isinstance(tmin, np.ndarray) else tmin
         tmax_i = tmax[i] if isinstance(tmax, np.ndarray) else tmax
-        krylov_cfg_use = krylov_policy(float(ky)) if krylov_policy is not None else krylov_cfg
+        krylov_cfg_use = (
+            krylov_policy(float(ky)) if krylov_policy is not None else krylov_cfg
+        )
         result = run_linear_fn(
             ky_target=float(ky),
             cfg=cfg,
@@ -879,7 +953,9 @@ def run_linear_scan(
         omegas.append(float(result.omega))
         ky_out.append(float(result.ky))
 
-    return LinearScanResult(ky=np.array(ky_out), gamma=np.array(gammas), omega=np.array(omegas))
+    return LinearScanResult(
+        ky=np.array(ky_out), gamma=np.array(gammas), omega=np.array(omegas)
+    )
 
 
 def run_scan_and_mode(
@@ -909,6 +985,7 @@ def run_scan_and_mode(
     """Run a scan and extract a representative eigenfunction."""
 
     if select_ky is None:
+
         def select_ky(scan: LinearScanResult) -> float:
             return float(scan.ky[int(np.nanargmax(scan.gamma))])
 
@@ -960,7 +1037,13 @@ def run_scan_and_mode(
         _g, _w, tmin_fit, tmax_fit = fit_growth_rate_auto(run.t, signal, **window_kw)
     z_np = np.asarray(grid.z)
     eig = extract_eigenfunction(
-        run.phi_t, run.t, run.selection, z=z_np, method="snapshot", tmin=tmin_fit, tmax=tmax_fit
+        run.phi_t,
+        run.t,
+        run.selection,
+        z=z_np,
+        method="snapshot",
+        tmin=tmin_fit,
+        tmax=tmax_fit,
     )
     return ScanAndModeResult(
         scan=scan,

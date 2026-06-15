@@ -50,8 +50,18 @@ def _state_dims(ndim: int) -> tuple[str, ...]:
     raise ValueError("state_shape must have 5 or 6 dimensions")
 
 
-def _normalize_axes(axes: Sequence[str] | None, *, has_species: bool) -> tuple[str, ...]:
-    raw = axes if axes is not None else (("species", "hermite", "laguerre") if has_species else ("hermite", "laguerre"))
+def _normalize_axes(
+    axes: Sequence[str] | None, *, has_species: bool
+) -> tuple[str, ...]:
+    raw = (
+        axes
+        if axes is not None
+        else (
+            ("species", "hermite", "laguerre")
+            if has_species
+            else ("hermite", "laguerre")
+        )
+    )
     normalized: list[str] = []
     for axis in raw:
         key = str(axis).strip().lower().replace("-", "_")
@@ -59,7 +69,9 @@ def _normalize_axes(axes: Sequence[str] | None, *, has_species: bool) -> tuple[s
             raise ValueError(f"Unknown velocity-sharding axis '{axis}'")
         dim = _AXIS_ALIASES[key]
         if dim == "s" and not has_species:
-            raise ValueError("species sharding requires a 6D state with an explicit species axis")
+            raise ValueError(
+                "species sharding requires a 6D state with an explicit species axis"
+            )
         if dim not in normalized:
             normalized.append(dim)
     return tuple(normalized)
@@ -72,7 +84,9 @@ def _largest_factor_at_most(total: int, limit: int) -> int:
     return 1
 
 
-def _axis_chunks(dim_sizes: dict[str, int], num_devices: int, axes: tuple[str, ...]) -> dict[str, int]:
+def _axis_chunks(
+    dim_sizes: dict[str, int], num_devices: int, axes: tuple[str, ...]
+) -> dict[str, int]:
     remaining = int(num_devices)
     chunks = {dim: 1 for dim in dim_sizes}
     for axis in axes:
@@ -106,7 +120,7 @@ def build_velocity_sharding_plan(
     axes: Sequence[str] | None = None,
     hermite_ghost_depth: int = 1,
 ) -> VelocityShardingPlan:
-    """Build a GX-inspired species/Hermite velocity-space decomposition plan.
+    """Build a species/Hermite velocity-space decomposition plan.
 
     The plan is metadata only. It does not move arrays or claim speedup. It
     records which axes should be split, where Hermite ghost exchange is needed,
@@ -132,7 +146,9 @@ def build_velocity_sharding_plan(
     shard_shape = tuple(_chunked_axis_size(dim_sizes[dim], chunks[dim]) for dim in dims)
 
     needs_hermite_exchange = bool(chunks.get("m", 1) > 1 and ghost_depth > 0)
-    field_reduction_axes = tuple(axis for axis in ("s", "l", "m") if chunks.get(axis, 1) > 1)
+    field_reduction_axes = tuple(
+        axis for axis in ("s", "l", "m") if chunks.get(axis, 1) > 1
+    )
     needs_field_reduction = bool(field_reduction_axes)
     total_shard_slots = int(np.prod([chunks[dim] for dim in dims], dtype=int))
     load_balance = float(devices / total_shard_slots) if total_shard_slots else 0.0
@@ -176,7 +192,9 @@ def hermite_neighbor_reference(state: Any) -> tuple[Any, Any]:
     m_axis = dims.index("m")
     zero_ghost = jnp.zeros_like(_slice_axis(arr, m_axis, 0, 1))
     lower = jnp.concatenate([zero_ghost, _slice_axis(arr, m_axis, 0, -1)], axis=m_axis)
-    upper = jnp.concatenate([_slice_axis(arr, m_axis, 1, None), zero_ghost], axis=m_axis)
+    upper = jnp.concatenate(
+        [_slice_axis(arr, m_axis, 1, None), zero_ghost], axis=m_axis
+    )
     return lower, upper
 
 
@@ -213,7 +231,9 @@ def hermite_neighbor_shard_map(
 
     arr = jnp.asarray(state)
     if tuple(arr.shape) != tuple(plan.state_shape):
-        raise ValueError("state shape does not match the supplied velocity sharding plan")
+        raise ValueError(
+            "state shape does not match the supplied velocity sharding plan"
+        )
     dims = _state_dims(arr.ndim)
     m_axis = dims.index("m")
     m_chunks = int(plan.chunks.get("m", 1))
@@ -221,7 +241,9 @@ def hermite_neighbor_shard_map(
         raise ValueError("Hermite chunk count must be >= 1")
     active_non_hermite = tuple(axis for axis in plan.active_axes if axis != "m")
     if active_non_hermite:
-        raise NotImplementedError("Hermite shard-map exchange currently supports only an active 'm' axis")
+        raise NotImplementedError(
+            "Hermite shard-map exchange currently supports only an active 'm' axis"
+        )
     if m_chunks == 1:
         return hermite_neighbor_reference(arr)
     if int(arr.shape[m_axis]) % m_chunks != 0:
@@ -244,8 +266,12 @@ def hermite_neighbor_shard_map(
         last = _slice_axis(local, m_axis, -1, None)
         prev_boundary = jax.lax.ppermute(last, axis_name, prev_pairs)
         next_boundary = jax.lax.ppermute(first, axis_name, next_pairs)
-        lower = jnp.concatenate([prev_boundary, _slice_axis(local, m_axis, 0, -1)], axis=m_axis)
-        upper = jnp.concatenate([_slice_axis(local, m_axis, 1, None), next_boundary], axis=m_axis)
+        lower = jnp.concatenate(
+            [prev_boundary, _slice_axis(local, m_axis, 0, -1)], axis=m_axis
+        )
+        upper = jnp.concatenate(
+            [_slice_axis(local, m_axis, 1, None), next_boundary], axis=m_axis
+        )
         return lower, upper
 
     mapped = jax.shard_map(
@@ -275,7 +301,9 @@ def hermite_shift_shard_map(
     shift = int(offset)
     arr = jnp.asarray(state)
     if tuple(arr.shape) != tuple(plan.state_shape):
-        raise ValueError("state shape does not match the supplied velocity sharding plan")
+        raise ValueError(
+            "state shape does not match the supplied velocity sharding plan"
+        )
     if shift == 0:
         return arr
     dims = _state_dims(arr.ndim)
@@ -285,7 +313,9 @@ def hermite_shift_shard_map(
         return jnp.zeros_like(arr)
     active_non_hermite = tuple(axis for axis in plan.active_axes if axis != "m")
     if active_non_hermite:
-        raise NotImplementedError("Hermite shard-map shift currently supports only an active 'm' axis")
+        raise NotImplementedError(
+            "Hermite shard-map shift currently supports only an active 'm' axis"
+        )
     if m_chunks == 1:
         return hermite_shift_reference(arr, offset=shift)
     if int(arr.shape[m_axis]) % m_chunks != 0:
@@ -293,7 +323,9 @@ def hermite_shift_shard_map(
     local_m = int(arr.shape[m_axis]) // m_chunks
     depth = abs(shift)
     if depth > local_m:
-        raise NotImplementedError("Hermite shard-map shift currently requires abs(offset) <= local shard size")
+        raise NotImplementedError(
+            "Hermite shard-map shift currently requires abs(offset) <= local shard size"
+        )
 
     device_list = list(devices) if devices is not None else list(jax.devices())
     if len(device_list) < m_chunks:
@@ -311,10 +343,14 @@ def hermite_shift_shard_map(
         if shift < 0:
             boundary = _slice_axis(local, m_axis, -depth, None)
             received = jax.lax.ppermute(boundary, axis_name, prev_pairs)
-            return jnp.concatenate([received, _slice_axis(local, m_axis, 0, -depth)], axis=m_axis)
+            return jnp.concatenate(
+                [received, _slice_axis(local, m_axis, 0, -depth)], axis=m_axis
+            )
         boundary = _slice_axis(local, m_axis, 0, depth)
         received = jax.lax.ppermute(boundary, axis_name, next_pairs)
-        return jnp.concatenate([_slice_axis(local, m_axis, depth, None), received], axis=m_axis)
+        return jnp.concatenate(
+            [_slice_axis(local, m_axis, depth, None), received], axis=m_axis
+        )
 
     mapped = jax.shard_map(
         exchange,
@@ -357,7 +393,9 @@ def velocity_field_reduce_shard_map(
 
     arr = jnp.asarray(state)
     if tuple(arr.shape) != tuple(plan.state_shape):
-        raise ValueError("state shape does not match the supplied velocity sharding plan")
+        raise ValueError(
+            "state shape does not match the supplied velocity sharding plan"
+        )
     dims = _state_dims(arr.ndim)
     key = _AXIS_ALIASES.get(str(axis).strip().lower().replace("-", "_"))
     if key is None:
@@ -365,13 +403,19 @@ def velocity_field_reduce_shard_map(
     if key not in dims:
         raise ValueError(f"axis '{axis}' is not present in a {arr.ndim}D state")
     if key != "m":
-        raise NotImplementedError("field-reduction shard-map gate currently supports only the Hermite axis")
+        raise NotImplementedError(
+            "field-reduction shard-map gate currently supports only the Hermite axis"
+        )
 
     m_axis = dims.index("m")
     m_chunks = int(plan.chunks.get("m", 1))
-    active_non_hermite = tuple(active_axis for active_axis in plan.active_axes if active_axis != "m")
+    active_non_hermite = tuple(
+        active_axis for active_axis in plan.active_axes if active_axis != "m"
+    )
     if active_non_hermite:
-        raise NotImplementedError("field-reduction shard-map gate currently supports only an active 'm' axis")
+        raise NotImplementedError(
+            "field-reduction shard-map gate currently supports only an active 'm' axis"
+        )
     if m_chunks == 1:
         return velocity_field_reduce_reference(arr, axis=axis)
     if int(arr.shape[m_axis]) % m_chunks != 0:
@@ -414,7 +458,11 @@ def _hermite_ladder_coefficients(state: Any) -> tuple[Any, Any, int]:
     sqrt_p, sqrt_m = hermite_ladder_coeffs(nm - 1)
     shape = [1] * arr.ndim
     shape[m_axis] = nm
-    return sqrt_p.reshape(shape).astype(arr.dtype), sqrt_m.reshape(shape).astype(arr.dtype), m_axis
+    return (
+        sqrt_p.reshape(shape).astype(arr.dtype),
+        sqrt_m.reshape(shape).astype(arr.dtype),
+        m_axis,
+    )
 
 
 def _broadcast_vth(vth: Any, ndim: int, *, dtype: Any) -> Any:
@@ -437,7 +485,9 @@ def hermite_streaming_ladder_reference(state: Any, *, vth: Any = 1.0) -> Any:
     lower, upper = hermite_neighbor_reference(arr)
     sqrt_p, sqrt_m, _m_axis = _hermite_ladder_coefficients(arr)
     real_dtype = jnp.real(arr).dtype
-    return _broadcast_vth(vth, arr.ndim, dtype=real_dtype) * (sqrt_p * upper + sqrt_m * lower)
+    return _broadcast_vth(vth, arr.ndim, dtype=real_dtype) * (
+        sqrt_p * upper + sqrt_m * lower
+    )
 
 
 def hermite_streaming_ladder_shard_map(
@@ -453,10 +503,14 @@ def hermite_streaming_ladder_shard_map(
     import jax.numpy as jnp
 
     arr = jnp.asarray(state)
-    lower, upper = hermite_neighbor_shard_map(arr, plan, devices=devices, axis_name=axis_name)
+    lower, upper = hermite_neighbor_shard_map(
+        arr, plan, devices=devices, axis_name=axis_name
+    )
     sqrt_p, sqrt_m, _m_axis = _hermite_ladder_coefficients(arr)
     real_dtype = jnp.real(arr).dtype
-    return _broadcast_vth(vth, arr.ndim, dtype=real_dtype) * (sqrt_p * upper + sqrt_m * lower)
+    return _broadcast_vth(vth, arr.ndim, dtype=real_dtype) * (
+        sqrt_p * upper + sqrt_m * lower
+    )
 
 
 def periodic_streaming_reference(state: Any, *, kz: Any, vth: Any = 1.0) -> Any:
@@ -488,7 +542,9 @@ def periodic_streaming_shard_map(
 
     arr = jnp.asarray(state)
     dstate_dz = grad_z_periodic(arr, kz=kz)
-    return hermite_streaming_ladder_shard_map(dstate_dz, plan, vth=vth, devices=devices, axis_name=axis_name)
+    return hermite_streaming_ladder_shard_map(
+        dstate_dz, plan, vth=vth, devices=devices, axis_name=axis_name
+    )
 
 
 def mirror_drift_reference(
@@ -526,7 +582,12 @@ def mirror_drift_reference(
         vth_arr = vth_arr.reshape((vth_arr.reshape(-1).shape[0], 1, 1, 1, 1, 1))
     else:
         vth_arr = vth_arr.reshape(-1)[0]
-    return -jnp.asarray(weight, dtype=jnp.real(arr).dtype) * vth_arr * jnp.asarray(bgrad).reshape(bgrad_shape) * mirror_term
+    return (
+        -jnp.asarray(weight, dtype=jnp.real(arr).dtype)
+        * vth_arr
+        * jnp.asarray(bgrad).reshape(bgrad_shape)
+        * mirror_term
+    )
 
 
 def mirror_drift_shard_map(
@@ -552,8 +613,12 @@ def mirror_drift_shard_map(
     dims = _state_dims(arr.ndim)
     axis_l = dims.index("l")
     ell_p1 = ell + 1.0
-    H_m_p1 = hermite_shift_shard_map(arr, plan, offset=1, devices=devices, axis_name=axis_name)
-    H_m_m1 = hermite_shift_shard_map(arr, plan, offset=-1, devices=devices, axis_name=axis_name)
+    H_m_p1 = hermite_shift_shard_map(
+        arr, plan, offset=1, devices=devices, axis_name=axis_name
+    )
+    H_m_m1 = hermite_shift_shard_map(
+        arr, plan, offset=-1, devices=devices, axis_name=axis_name
+    )
     mirror_term = (
         -sqrt_m_p1 * ell_p1 * H_m_p1
         - sqrt_m_p1 * ell * shift_axis(H_m_p1, -1, axis=axis_l)
@@ -567,7 +632,12 @@ def mirror_drift_shard_map(
         vth_arr = vth_arr.reshape((vth_arr.reshape(-1).shape[0], 1, 1, 1, 1, 1))
     else:
         vth_arr = vth_arr.reshape(-1)[0]
-    return -jnp.asarray(weight, dtype=jnp.real(arr).dtype) * vth_arr * jnp.asarray(bgrad).reshape(bgrad_shape) * mirror_term
+    return (
+        -jnp.asarray(weight, dtype=jnp.real(arr).dtype)
+        * vth_arr
+        * jnp.asarray(bgrad).reshape(bgrad_shape)
+        * mirror_term
+    )
 
 
 def curvature_gradb_drift_reference(
@@ -598,7 +668,11 @@ def curvature_gradb_drift_reference(
         + (2.0 * m + 1.0) * arr
         + jnp.sqrt(m * (m - 1.0)) * H_m_m2
     )
-    gradb_term = (ell + 1.0) * shift_axis(arr, 1, axis=axis_l) + (2.0 * ell + 1.0) * arr + ell * shift_axis(arr, -1, axis=axis_l)
+    gradb_term = (
+        (ell + 1.0) * shift_axis(arr, 1, axis=axis_l)
+        + (2.0 * ell + 1.0) * arr
+        + ell * shift_axis(arr, -1, axis=axis_l)
+    )
     imag = jnp.asarray(1j, dtype=arr.dtype)
     real_dtype = jnp.real(arr).dtype
     if arr.ndim == 6:
@@ -611,7 +685,10 @@ def curvature_gradb_drift_reference(
         gb = jnp.asarray(gb_d, dtype=real_dtype)[None, None, ...]
     icv = imag * tz_s * jnp.asarray(omega_d_scale, dtype=real_dtype) * cv
     igb = imag * tz_s * jnp.asarray(omega_d_scale, dtype=real_dtype) * gb
-    return -jnp.asarray(weight_curv, dtype=real_dtype) * icv * curv_term - jnp.asarray(weight_gradb, dtype=real_dtype) * igb * gradb_term
+    return (
+        -jnp.asarray(weight_curv, dtype=real_dtype) * icv * curv_term
+        - jnp.asarray(weight_gradb, dtype=real_dtype) * igb * gradb_term
+    )
 
 
 def curvature_gradb_drift_shard_map(
@@ -638,14 +715,22 @@ def curvature_gradb_drift_shard_map(
     arr = jnp.asarray(H)
     dims = _state_dims(arr.ndim)
     axis_l = dims.index("l")
-    H_m_p2 = hermite_shift_shard_map(arr, plan, offset=2, devices=devices, axis_name=axis_name)
-    H_m_m2 = hermite_shift_shard_map(arr, plan, offset=-2, devices=devices, axis_name=axis_name)
+    H_m_p2 = hermite_shift_shard_map(
+        arr, plan, offset=2, devices=devices, axis_name=axis_name
+    )
+    H_m_m2 = hermite_shift_shard_map(
+        arr, plan, offset=-2, devices=devices, axis_name=axis_name
+    )
     curv_term = (
         jnp.sqrt((m + 1.0) * (m + 2.0)) * H_m_p2
         + (2.0 * m + 1.0) * arr
         + jnp.sqrt(m * (m - 1.0)) * H_m_m2
     )
-    gradb_term = (ell + 1.0) * shift_axis(arr, 1, axis=axis_l) + (2.0 * ell + 1.0) * arr + ell * shift_axis(arr, -1, axis=axis_l)
+    gradb_term = (
+        (ell + 1.0) * shift_axis(arr, 1, axis=axis_l)
+        + (2.0 * ell + 1.0) * arr
+        + ell * shift_axis(arr, -1, axis=axis_l)
+    )
     imag = jnp.asarray(1j, dtype=arr.dtype)
     real_dtype = jnp.real(arr).dtype
     if arr.ndim == 6:
@@ -658,7 +743,10 @@ def curvature_gradb_drift_shard_map(
         gb = jnp.asarray(gb_d, dtype=real_dtype)[None, None, ...]
     icv = imag * tz_s * jnp.asarray(omega_d_scale, dtype=real_dtype) * cv
     igb = imag * tz_s * jnp.asarray(omega_d_scale, dtype=real_dtype) * gb
-    return -jnp.asarray(weight_curv, dtype=real_dtype) * icv * curv_term - jnp.asarray(weight_gradb, dtype=real_dtype) * igb * gradb_term
+    return (
+        -jnp.asarray(weight_curv, dtype=real_dtype) * icv * curv_term
+        - jnp.asarray(weight_gradb, dtype=real_dtype) * igb * gradb_term
+    )
 
 
 def _diamagnetic_drive_from_global_m(
@@ -690,17 +778,30 @@ def _diamagnetic_drive_from_global_m(
     ell = jnp.asarray(l4, dtype=real_dtype).reshape((jl.shape[0], 1, 1, 1))
     tprim_s = jnp.asarray(tprim, dtype=real_dtype).reshape(-1)[0]
     fprim_s = jnp.asarray(fprim, dtype=real_dtype).reshape(-1)[0]
-    omega_star = jnp.asarray(1j, dtype=arr.dtype) * jnp.asarray(omega_star_scale, dtype=real_dtype) * jnp.asarray(ky, dtype=real_dtype)
+    omega_star = (
+        jnp.asarray(1j, dtype=arr.dtype)
+        * jnp.asarray(omega_star_scale, dtype=real_dtype)
+        * jnp.asarray(ky, dtype=real_dtype)
+    )
     omega_star_s = omega_star.reshape((1, omega_star.shape[0], 1, 1))
     phi_arr = jnp.asarray(phi, dtype=arr.dtype)
-    drive_m0 = omega_star_s * phi_arr * (
-        jl_m1 * (ell * tprim_s)
-        + jl * (fprim_s + 2.0 * ell * tprim_s)
-        + jl_p1 * ((ell + 1.0) * tprim_s)
+    drive_m0 = (
+        omega_star_s
+        * phi_arr
+        * (
+            jl_m1 * (ell * tprim_s)
+            + jl * (fprim_s + 2.0 * ell * tprim_s)
+            + jl_p1 * ((ell + 1.0) * tprim_s)
+        )
     )
     drive = (global_m == 0).astype(arr.dtype) * drive_m0[:, None, ...]
     if int(arr.shape[1]) > 0:
-        drive_m2 = omega_star_s * phi_arr * jl * (tprim_s / jnp.sqrt(jnp.asarray(2.0, dtype=real_dtype)))
+        drive_m2 = (
+            omega_star_s
+            * phi_arr
+            * jl
+            * (tprim_s / jnp.sqrt(jnp.asarray(2.0, dtype=real_dtype)))
+        )
         drive = drive + (global_m == 2).astype(arr.dtype) * drive_m2[:, None, ...]
     return jnp.asarray(weight, dtype=real_dtype) * drive
 
@@ -723,8 +824,12 @@ def diamagnetic_drive_reference(
 
     arr = jnp.asarray(state)
     if arr.ndim != 5:
-        raise NotImplementedError("diamagnetic_drive_reference currently supports single-species 5D states")
-    global_m = jnp.arange(arr.shape[1], dtype=jnp.int32).reshape((1, arr.shape[1], 1, 1, 1))
+        raise NotImplementedError(
+            "diamagnetic_drive_reference currently supports single-species 5D states"
+        )
+    global_m = jnp.arange(arr.shape[1], dtype=jnp.int32).reshape(
+        (1, arr.shape[1], 1, 1, 1)
+    )
     return _diamagnetic_drive_from_global_m(
         state=arr,
         global_m=global_m,
@@ -762,15 +867,23 @@ def diamagnetic_drive_shard_map(
 
     arr = jnp.asarray(state)
     if arr.ndim != 5:
-        raise NotImplementedError("diamagnetic_drive_shard_map currently supports single-species 5D states")
+        raise NotImplementedError(
+            "diamagnetic_drive_shard_map currently supports single-species 5D states"
+        )
     if tuple(arr.shape) != tuple(plan.state_shape):
-        raise ValueError("state shape does not match the supplied velocity sharding plan")
+        raise ValueError(
+            "state shape does not match the supplied velocity sharding plan"
+        )
     dims = _state_dims(arr.ndim)
     m_axis = dims.index("m")
     m_chunks = int(plan.chunks.get("m", 1))
-    active_non_hermite = tuple(active_axis for active_axis in plan.active_axes if active_axis != "m")
+    active_non_hermite = tuple(
+        active_axis for active_axis in plan.active_axes if active_axis != "m"
+    )
     if active_non_hermite:
-        raise NotImplementedError("diamagnetic drive gate currently supports only an active 'm' axis")
+        raise NotImplementedError(
+            "diamagnetic drive gate currently supports only an active 'm' axis"
+        )
     if m_chunks == 1:
         return diamagnetic_drive_reference(
             arr,
@@ -839,7 +952,9 @@ def electrostatic_phi_reference(
 
     arr = jnp.asarray(state)
     if arr.ndim != 5:
-        raise NotImplementedError("electrostatic_phi_reference currently supports single-species 5D states")
+        raise NotImplementedError(
+            "electrostatic_phi_reference currently supports single-species 5D states"
+        )
     jl = jnp.asarray(Jl)
     if jl.ndim == 5:
         jl = jl[0]
@@ -853,7 +968,11 @@ def electrostatic_phi_reference(
     nbar = density_s * charge_s * jnp.sum(jl * arr[:, 0, ...], axis=0)
     g0 = jnp.sum(jl * jl, axis=0)
     qneut = density_s * charge_s * zt * (1.0 - g0)
-    den_safe = jnp.where(jnp.asarray(tau_e, dtype=real_dtype) + qneut == 0.0, jnp.inf, jnp.asarray(tau_e, dtype=real_dtype) + qneut)
+    den_safe = jnp.where(
+        jnp.asarray(tau_e, dtype=real_dtype) + qneut == 0.0,
+        jnp.inf,
+        jnp.asarray(tau_e, dtype=real_dtype) + qneut,
+    )
     phi = nbar / den_safe
     if mask0 is not None:
         phi = jnp.where(jnp.asarray(mask0), 0.0, phi)
@@ -881,15 +1000,23 @@ def electrostatic_phi_shard_map(
 
     arr = jnp.asarray(state)
     if arr.ndim != 5:
-        raise NotImplementedError("electrostatic_phi_shard_map currently supports single-species 5D states")
+        raise NotImplementedError(
+            "electrostatic_phi_shard_map currently supports single-species 5D states"
+        )
     if tuple(arr.shape) != tuple(plan.state_shape):
-        raise ValueError("state shape does not match the supplied velocity sharding plan")
+        raise ValueError(
+            "state shape does not match the supplied velocity sharding plan"
+        )
     dims = _state_dims(arr.ndim)
     m_axis = dims.index("m")
     m_chunks = int(plan.chunks.get("m", 1))
-    active_non_hermite = tuple(active_axis for active_axis in plan.active_axes if active_axis != "m")
+    active_non_hermite = tuple(
+        active_axis for active_axis in plan.active_axes if active_axis != "m"
+    )
     if active_non_hermite:
-        raise NotImplementedError("electrostatic field-reduction gate currently supports only an active 'm' axis")
+        raise NotImplementedError(
+            "electrostatic field-reduction gate currently supports only an active 'm' axis"
+        )
     if m_chunks == 1:
         return electrostatic_phi_reference(
             arr,

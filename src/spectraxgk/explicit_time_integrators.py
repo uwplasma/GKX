@@ -91,7 +91,9 @@ def _completed_step_state_mask(cache: LinearCache) -> jnp.ndarray:
     return mask & ~zonal00
 
 
-def _apply_completed_step_state_mask(state: jnp.ndarray, cache: LinearCache) -> jnp.ndarray:
+def _apply_completed_step_state_mask(
+    state: jnp.ndarray, cache: LinearCache
+) -> jnp.ndarray:
     """Apply the completed-step mask to a spectral state array."""
 
     mask = _completed_step_state_mask(cache).astype(state.real.dtype)[..., None]
@@ -130,7 +132,9 @@ def _parallel_periods_from_grid(grid: SpectralGrid) -> float:
     return extent / (2.0 * np.pi)
 
 
-def _cfl_wavenumber_arrays(grid: SpectralGrid) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def _cfl_wavenumber_arrays(
+    grid: SpectralGrid,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     kx = np.asarray(grid.kx, dtype=float).reshape(-1)
     ky_full = np.asarray(grid.ky, dtype=float).reshape(-1)
     nz = int(grid.z.size)
@@ -138,8 +142,8 @@ def _cfl_wavenumber_arrays(grid: SpectralGrid) -> tuple[np.ndarray, np.ndarray, 
     kz = np.zeros(nz, dtype=float)
 
     # Preserve actual mode values on sliced ky grids. Reconstructing ky from
-    # (Ny, y0) maps a single selected positive ky back to ky=0 and breaks GX's
-    # CFL estimate for one-mode linear benchmark runs.
+    # (Ny, y0) maps a single selected positive ky back to ky=0 and breaks the
+    # one-mode CFL estimate used by linear benchmark runs.
     if ky_full.size == 0:
         ky = np.zeros(0, dtype=float)
     elif grid.ky_mode is not None:
@@ -191,7 +195,14 @@ def _geometry_frequency_maxima(
     gbdrift_max = float(np.max(np.abs(gb)))
     cvdrift0_max = float(np.max(np.abs(cv0)))
     gbdrift0_max = float(np.max(np.abs(gb0)))
-    return bmag_max, cvdrift_max, gbdrift_max, cvdrift0_max, gbdrift0_max, float(geom.gradpar())
+    return (
+        bmag_max,
+        cvdrift_max,
+        gbdrift_max,
+        cvdrift0_max,
+        gbdrift0_max,
+        float(geom.gradpar()),
+    )
 
 
 def _non_twist_shift_frequency_max(
@@ -211,8 +222,10 @@ def _non_twist_shift_frequency_max(
     nz = theta.size
     if nz <= 1:
         _cv_j, _gb_j, cv0_j, gb0_j = geom.drift_coeffs(theta_j)
-        return 0.0, float(np.max(np.abs(np.asarray(cv0_j)))), float(
-            np.max(np.abs(np.asarray(gb0_j)))
+        return (
+            0.0,
+            float(np.max(np.abs(np.asarray(cv0_j)))),
+            float(np.max(np.abs(np.asarray(gb0_j)))),
         )
     delta = 0.01313
     x0 = float(grid.x0)
@@ -231,7 +244,9 @@ def _non_twist_shift_frequency_max(
     gb0_max = float(np.max(np.abs(gb0)))
     m0_omega0 = 0.0
     for idz in range(nz):
-        term1 = ftwist[idz] - 2.0 * np.pi * zp * kxfac * shat * np.floor(idz / (1.0 * nz))
+        term1 = ftwist[idz] - 2.0 * np.pi * zp * kxfac * shat * np.floor(
+            idz / (1.0 * nz)
+        )
         term2 = ftwist[(idz + 1) % nz] - 2.0 * np.pi * zp * kxfac * shat * np.floor(
             (idz + 1) / (1.0 * nz)
         )
@@ -302,21 +317,34 @@ def _linear_frequency_bound(
 
     omega_max = np.zeros(3, dtype=float)
     if abs(shat) == 0.0:
-        omega_max[0] = tzmax * kx_max * (
-            vpar_max * vpar_max * abs(cvdrift0_max) + muB_max * abs(gbdrift0_max)
+        omega_max[0] = (
+            tzmax
+            * kx_max
+            * (vpar_max * vpar_max * abs(cvdrift0_max) + muB_max * abs(gbdrift0_max))
         )
     else:
         if non_twist:
-            omega_max[0] = tzmax * (kx_max + m0_max / float(grid.x0)) * (
-                vpar_max * vpar_max * abs(cvdrift0_max) + muB_max * abs(gbdrift0_max)
+            omega_max[0] = (
+                tzmax
+                * (kx_max + m0_max / float(grid.x0))
+                * (
+                    vpar_max * vpar_max * abs(cvdrift0_max)
+                    + muB_max * abs(gbdrift0_max)
+                )
             )
         else:
-            omega_max[0] = tzmax * kx_max / abs(shat) * (
-                vpar_max * vpar_max * abs(cvdrift0_max) + muB_max * abs(gbdrift0_max)
+            omega_max[0] = (
+                tzmax
+                * kx_max
+                / abs(shat)
+                * (
+                    vpar_max * vpar_max * abs(cvdrift0_max)
+                    + muB_max * abs(gbdrift0_max)
+                )
             )
 
-    omega_max[1] = tzmax * ky_max * (
-        vpar_max * vpar_max * cvdrift_max + muB_max * gbdrift_max
+    omega_max[1] = (
+        tzmax * ky_max * (vpar_max * vpar_max * cvdrift_max + muB_max * gbdrift_max)
     )
     if include_diamagnetic_drive and etamax < 1.0e5:
         omega_max[1] = omega_max[1] + ky_max * (
@@ -431,7 +459,9 @@ def _linear_explicit_step(
     method_key = method.strip().lower()
 
     def rhs(state: jnp.ndarray) -> jnp.ndarray:
-        dG, _fields = assemble_rhs_cached(state, cache, params, terms=term_cfg, dt=dt_val)
+        dG, _fields = assemble_rhs_cached(
+            state, cache, params, terms=term_cfg, dt=dt_val
+        )
         return dG
 
     k1 = rhs(G)
@@ -460,6 +490,7 @@ def _linear_explicit_step(
         k4 = rhs(G + dt_val * k3)
         G_next = G + (dt_val / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
     elif method_key == "sspx3":
+
         def _sspx3_euler_step(G_state: jnp.ndarray) -> jnp.ndarray:
             dG_state = rhs(G_state)
             return G_state + (_SSPX3_ADT * dt_val) * dG_state
@@ -468,8 +499,14 @@ def _linear_explicit_step(
         G2_euler = _sspx3_euler_step(G1)
         G2 = (1.0 - _SSPX3_W1) * G + (_SSPX3_W1 - 1.0) * G1 + G2_euler
         G3 = _sspx3_euler_step(G2)
-        G_next = (1.0 - _SSPX3_W2 - _SSPX3_W3) * G + _SSPX3_W3 * G1 + (_SSPX3_W2 - 1.0) * G2 + G3
+        G_next = (
+            (1.0 - _SSPX3_W2 - _SSPX3_W3) * G
+            + _SSPX3_W3 * G1
+            + (_SSPX3_W2 - 1.0) * G2
+            + G3
+        )
     elif method_key == "k10":
+
         def _k10_euler_step(G_state: jnp.ndarray) -> jnp.ndarray:
             dG_state = rhs(G_state)
             return G_state + (dt_val / 6.0) * dG_state
@@ -517,7 +554,16 @@ def integrate_linear_explicit(
         raise ValueError("mode_method must be 'z_index' or 'max'")
 
     method = time_cfg.method.strip().lower()
-    if method not in {"euler", "rk2", "rk3", "rk3_classic", "rk3_heun", "rk4", "k10", "sspx3"}:
+    if method not in {
+        "euler",
+        "rk2",
+        "rk3",
+        "rk3_classic",
+        "rk3_heun",
+        "rk4",
+        "k10",
+        "sspx3",
+    }:
         raise ValueError(
             "method must be one of {'euler', 'rk2', 'rk3', 'rk3_classic', 'rk3_heun', 'rk4', 'k10', 'sspx3'}"
         )
@@ -606,8 +652,10 @@ def integrate_linear_explicit(
                     started_at=progress_started_at,
                     phi_max=float(jnp.max(jnp.abs(phi))),
                 )
-        if show_progress and not sampled and (
-            step == 1 or step >= total_steps_est or (step % progress_stride) == 0
+        if (
+            show_progress
+            and not sampled
+            and (step == 1 or step >= total_steps_est or (step % progress_stride) == 0)
         ):
             _emit_time_progress(
                 step=step,
@@ -649,8 +697,14 @@ def integrate_linear_explicit_diagnostics(
     if show_progress:
         from rich.console import Console
         from rich.panel import Panel
+
         console = Console()
-        console.print(Panel.fit("[bold blue]SPECTRAX-GK[/bold blue] | [bold green]Explicit Linear Simulation Started[/bold green]", border_style="blue"))
+        console.print(
+            Panel.fit(
+                "[bold blue]SPECTRAX-GK[/bold blue] | [bold green]Explicit Linear Simulation Started[/bold green]",
+                border_style="blue",
+            )
+        )
 
     from spectraxgk.diagnostics import (
         SimulationDiagnostics,
@@ -669,7 +723,16 @@ def integrate_linear_explicit_diagnostics(
     if terms is None:
         terms = LinearTerms()
     method = time_cfg.method.strip().lower()
-    if method not in {"euler", "rk2", "rk3", "rk3_classic", "rk3_heun", "rk4", "k10", "sspx3"}:
+    if method not in {
+        "euler",
+        "rk2",
+        "rk3",
+        "rk3_classic",
+        "rk3_heun",
+        "rk4",
+        "k10",
+        "sspx3",
+    }:
         raise ValueError(
             "method must be one of {'euler', 'rk2', 'rk3', 'rk3_classic', 'rk3_heun', 'rk4', 'k10', 'sspx3'}"
         )
@@ -693,7 +756,9 @@ def integrate_linear_explicit_diagnostics(
     _, fields0 = assemble_rhs_cached(G, cache, params, terms=term_cfg, dt=dt)
     phi_prev = fields0.phi
 
-    omega_max = _linear_frequency_bound(grid, geom_eff, params, G.shape[-5], G.shape[-4])
+    omega_max = _linear_frequency_bound(
+        grid, geom_eff, params, G.shape[-5], G.shape[-4]
+    )
     wmax = float(np.sum(omega_max))
     if not time_cfg.fixed_dt and wmax > 0.0:
         dt_guess = float(time_cfg.cfl_fac) * float(time_cfg.cfl) / wmax
@@ -749,7 +814,9 @@ def integrate_linear_explicit_diagnostics(
             gamma_list.append(np.asarray(gamma))
             omega_list.append(np.asarray(omega))
 
-            Wg_val = distribution_free_energy(G, grid, params, vol_fac, use_dealias=use_dealias)
+            Wg_val = distribution_free_energy(
+                G, grid, params, vol_fac, use_dealias=use_dealias
+            )
             Wphi_val = electrostatic_field_energy(
                 phi,
                 cache,
@@ -757,12 +824,30 @@ def integrate_linear_explicit_diagnostics(
                 vol_fac,
                 use_dealias=use_dealias,
             )
-            Wapar_val = magnetic_vector_potential_energy(apar, cache, vol_fac, use_dealias=use_dealias)
+            Wapar_val = magnetic_vector_potential_energy(
+                apar, cache, vol_fac, use_dealias=use_dealias
+            )
             heat_val = heat_flux_total(
-                G, phi, apar, bpar, cache, grid, params, flux_fac, use_dealias=use_dealias
+                G,
+                phi,
+                apar,
+                bpar,
+                cache,
+                grid,
+                params,
+                flux_fac,
+                use_dealias=use_dealias,
             )
             pflux_val = particle_flux_total(
-                G, phi, apar, bpar, cache, grid, params, flux_fac, use_dealias=use_dealias
+                G,
+                phi,
+                apar,
+                bpar,
+                cache,
+                grid,
+                params,
+                flux_fac,
+                use_dealias=use_dealias,
             )
 
             Wg_list.append(float(Wg_val))
@@ -775,8 +860,13 @@ def integrate_linear_explicit_diagnostics(
                 # This path runs in a Python loop, so rich output is sufficient.
                 from rich.table import Table
                 from rich import box
+
                 pct = (t / t_max) * 100
-                table = Table(box=box.HORIZONTALS, show_header=(step <= sample_stride), header_style="bold magenta")
+                table = Table(
+                    box=box.HORIZONTALS,
+                    show_header=(step <= sample_stride),
+                    header_style="bold magenta",
+                )
                 if step <= sample_stride:
                     table.add_column("Progress", justify="right", style="cyan")
                     table.add_column("Step", justify="right", style="green")
@@ -790,7 +880,7 @@ def integrate_linear_explicit_diagnostics(
                     f"{float(t):.2f}",
                     f"{float(Wg_val):.4e}",
                     f"{float(Wphi_val):.4e}",
-                    f"{float(heat_val):.4e}"
+                    f"{float(heat_val):.4e}",
                 )
                 console.print(table)
 
@@ -798,7 +888,12 @@ def integrate_linear_explicit_diagnostics(
 
     if show_progress:
         from rich.panel import Panel
-        console.print(Panel.fit("[bold green]Simulation Complete![/bold green]", border_style="green"))
+
+        console.print(
+            Panel.fit(
+                "[bold green]Simulation Complete![/bold green]", border_style="green"
+            )
+        )
 
     diag = SimulationDiagnostics(
         t=np.asarray(ts),
@@ -812,7 +907,9 @@ def integrate_linear_explicit_diagnostics(
         heat_flux_t=np.asarray(heat_list),
         particle_flux_t=np.asarray(pflux_list),
         energy_t=np.asarray(
-            total_energy(np.asarray(Wg_list), np.asarray(Wphi_list), np.asarray(Wapar_list))
+            total_energy(
+                np.asarray(Wg_list), np.asarray(Wphi_list), np.asarray(Wapar_list)
+            )
         ),
     )
     return (

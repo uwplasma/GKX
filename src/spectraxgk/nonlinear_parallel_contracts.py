@@ -671,7 +671,7 @@ _STRATEGIES: tuple[NonlinearParallelStrategy, ...] = (
             "nonlinear_fixed_step_identity_gate",
         ),
         profiler_gates=("matched_velocity_species_hermite_scaling_profile",),
-        notes="GX-inspired production candidate; promotion requires end-to-end nonlinear identity gates.",
+        notes="Velocity-space production candidate; promotion requires end-to-end nonlinear identity gates.",
     ),
     NonlinearParallelStrategy(
         name="fft_axis_domain",
