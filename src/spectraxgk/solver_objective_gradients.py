@@ -13,30 +13,12 @@ from typing import Any, Literal
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.autodiff_validation import (
-    explicit_complex_operator_matrix,
-    implicit_eigenpair_observable_sensitivity_report,
-)
-from spectraxgk.config import CycloneBaseCase, GridConfig
-from spectraxgk.diagnostics import (
-    particle_flux_species,
-    fieldline_quadrature_weights,
-)
 from spectraxgk.geometry.differentiable import (
-    flux_tube_geometry_from_mapping,
     flux_tube_geometry_from_vmec_boozer_state,
 )
-from spectraxgk.grids import build_spectral_grid, select_ky_grid
-from spectraxgk.linear import (
-    build_linear_cache,
-    linear_rhs_cached,
-)
-from spectraxgk.quasilinear import phi_norm2
 from spectraxgk.solver_objective_core import (
     SOLVER_OBJECTIVE_NAMES,
     SolverScalarObjective,
-    _default_gradient_linear_params,
-    _default_gradient_linear_terms,
     solver_growth_rate_from_geometry,
     solver_linear_operator_matrix_from_geometry,
     solver_objective_vector_from_geometry,
@@ -60,6 +42,7 @@ from spectraxgk.solver_gradient_gates import (
     VMEC_BOOZER_QUASILINEAR_OBJECTIVE_NAMES,
     _mode21_vmec_boozer_linear_context as _mode21_vmec_boozer_linear_context_impl,
     linear_solver_geometry_gradient_report as _linear_solver_geometry_gradient_report_impl,
+    solver_objective_branch_gradient_report as _solver_objective_branch_gradient_report_impl,
     _mode21_vmec_boozer_quasilinear_features as _mode21_vmec_boozer_quasilinear_features_impl,
     mode21_vmec_boozer_linear_frequency_gradient_report as _mode21_vmec_boozer_linear_frequency_gradient_report_impl,
     mode21_vmec_boozer_nonlinear_window_gradient_report as _mode21_vmec_boozer_nonlinear_window_gradient_report_impl,
@@ -520,221 +503,17 @@ def solver_objective_branch_gradient_report(
     n_laguerre: int = 2,
     n_hermite: int = 1,
 ) -> dict[str, object]:
-    """Validate branch continuity and AD/FD sensitivities for solver objectives.
-
-    This gate is the lightweight counterpart of the VMEC/Boozer offline gates.
-    It uses the solver-ready differentiable geometry contract so CI can check
-    the objective path without optional geometry backends. The report requires
-    the max-growth branch to stay dominant under central finite-difference
-    perturbations and validates the objective sensitivities with the implicit
-    left/right eigenpair method.
-    """
-
-    p = (
-        default_solver_geometry_design_params()
-        if params is None
-        else jnp.asarray(params)
-    )
-    if p.ndim != 1 or int(p.size) != len(SOLVER_GEOMETRY_PARAMETER_NAMES):
-        raise ValueError(
-            f"params must be a length-{len(SOLVER_GEOMETRY_PARAMETER_NAMES)} vector"
-        )
-    n_laguerre_int = int(n_laguerre)
-    n_hermite_int = int(n_hermite)
-    if n_laguerre_int < 1 or n_hermite_int < 1:
-        raise ValueError("n_laguerre and n_hermite must be positive")
-
-    cfg = CycloneBaseCase(grid=GridConfig(Nx=1, Ny=6, Nz=4, Lx=6.0, Ly=12.0))
-    grid = select_ky_grid(build_spectral_grid(cfg.grid), 1)
-    state_shape = (
-        n_laguerre_int,
-        n_hermite_int,
-        grid.ky.size,
-        grid.kx.size,
-        grid.z.size,
-    )
-    params_linear = _default_gradient_linear_params()
-    terms = _default_gradient_linear_terms()
-    theta = jnp.asarray(grid.z)
-
-    def geometry_for(x: jnp.ndarray):
-        return flux_tube_geometry_from_mapping(
-            solver_ready_geometry_mapping(x, theta),
-            source_model="solver_ready_branch_gradient_gate",
-            validate_finite=False,
-        )
-
-    def cache_for(x: jnp.ndarray):
-        return build_linear_cache(
-            grid, geometry_for(x), params_linear, n_laguerre_int, n_hermite_int
-        )
-
-    def rhs_phi(state_arr: jnp.ndarray, cache: Any) -> tuple[jnp.ndarray, jnp.ndarray]:
-        return linear_rhs_cached(
-            state_arr,
-            cache,
-            params_linear,
-            terms=terms,
-            use_jit=False,
-            use_custom_vjp=False,
-        )
-
-    def matrix_fn(x: jnp.ndarray) -> jnp.ndarray:
-        cache = cache_for(x)
-        return explicit_complex_operator_matrix(
-            lambda state_arr: rhs_phi(state_arr, cache)[0], state_shape
-        )
-
-    def objective_fn(
-        eigenvalue: jnp.ndarray, eigenvector: jnp.ndarray, x: jnp.ndarray
-    ) -> jnp.ndarray:
-        gamma, omega, kperp_eff, heat_weight, ql_proxy = (
-            _mode21_vmec_boozer_quasilinear_features(
-                eigenvalue,
-                eigenvector,
-                x,
-                {
-                    "geometry_for": geometry_for,
-                    "grid": grid,
-                    "params_linear": params_linear,
-                    "n_laguerre": n_laguerre_int,
-                    "n_hermite": n_hermite_int,
-                    "state_shape": state_shape,
-                    "rhs_phi": rhs_phi,
-                },
-            )
-        )
-        geom = geometry_for(x)
-        cache = cache_for(x)
-        state_arr = jnp.reshape(eigenvector, state_shape)
-        _rhs, phi = rhs_phi(state_arr, cache)
-        zero_field = jnp.zeros_like(phi)
-        _vol_fac, flux_fac = fieldline_quadrature_weights(geom, grid)
-        particle_weight = jnp.real(
-            jnp.sum(
-                particle_flux_species(
-                    state_arr,
-                    phi,
-                    zero_field,
-                    zero_field,
-                    cache,
-                    grid,
-                    params_linear,
-                    flux_fac,
-                )
-            )
-            / phi_norm2(
-                phi, cache, params_linear, fieldline_quadrature_weights(geom, grid)[0]
-            )
-        )
-        return jnp.asarray(
-            [gamma, omega, kperp_eff, heat_weight, particle_weight, ql_proxy]
-        )
-
-    base_matrix = matrix_fn(p)
-    base_eigs = np.asarray(jnp.linalg.eigvals(base_matrix))
-    if base_eigs.ndim != 1 or base_eigs.size == 0:
-        raise ValueError("matrix_fn must return at least one eigenvalue")
-    base_index = int(np.argmax(np.real(base_eigs)))
-    base_value = base_eigs[base_index]
-    base_gap = (
-        float("inf")
-        if base_eigs.size == 1
-        else float(np.min(np.abs(np.delete(base_eigs, base_index) - base_value)))
-    )
-    eye = jnp.eye(int(p.size), dtype=p.dtype)
-    branch_rows = []
-    for i, name in enumerate(SOLVER_GEOMETRY_PARAMETER_NAMES):
-        for sign, label in ((-1.0, "minus"), (1.0, "plus")):
-            p_i = p + float(sign) * float(fd_step) * eye[i]
-            eigs_i = np.asarray(jnp.linalg.eigvals(matrix_fn(p_i)))
-            nearest_index = int(np.argmin(np.abs(eigs_i - base_value)))
-            dominant_index = int(np.argmax(np.real(eigs_i)))
-            nearest_value = eigs_i[nearest_index]
-            nearest_gap = (
-                float("inf")
-                if eigs_i.size == 1
-                else float(
-                    np.min(np.abs(np.delete(eigs_i, nearest_index) - nearest_value))
-                )
-            )
-            row_passed = bool(
-                nearest_index == dominant_index and nearest_gap >= float(gap_floor)
-            )
-            branch_rows.append(
-                {
-                    "parameter": name,
-                    "direction": label,
-                    "nearest_index": nearest_index,
-                    "dominant_index": dominant_index,
-                    "nearest_real": float(np.real(nearest_value)),
-                    "nearest_imag": float(np.imag(nearest_value)),
-                    "nearest_gap": nearest_gap,
-                    "passed": row_passed,
-                }
-            )
-
-    gate = implicit_eigenpair_observable_sensitivity_report(
-        matrix_fn,
-        objective_fn,
-        p,
-        step=fd_step,
+    return _solver_objective_branch_gradient_report_impl(
+        params=params,
+        fd_step=fd_step,
         rtol=rtol,
         atol=atol,
         gap_floor=gap_floor,
+        n_laguerre=n_laguerre,
+        n_hermite=n_hermite,
+        _quasilinear_features_fn=_mode21_vmec_boozer_quasilinear_features,
+        _objective_vector_fn=solver_objective_vector_from_geometry,
     )
-    rows = _objective_gate_rows(
-        gate,
-        parameter_names=SOLVER_GEOMETRY_PARAMETER_NAMES,
-        objective_names=SOLVER_OBJECTIVE_NAMES,
-        rtol=rtol,
-        atol=atol,
-    )
-    value_vector = solver_objective_vector_from_geometry(
-        geometry_for(p),
-        selected_ky_index=1,
-        n_laguerre=n_laguerre_int,
-        n_hermite=n_hermite_int,
-        ny=cfg.grid.Ny,
-    )
-    value_np = np.asarray(value_vector, dtype=float)
-    value_finite = bool(np.all(np.isfinite(value_np)))
-    branch_passed = bool(
-        base_gap >= float(gap_floor) and all(row["passed"] for row in branch_rows)
-    )
-    ad_fd_passed = bool(gate["passed"] and all(row["passed"] for row in rows))
-    return {
-        "kind": "solver_objective_branch_gradient_gate",
-        "passed": bool(value_finite and branch_passed and ad_fd_passed),
-        "source_scope": "solver_ready_geometry_contract",
-        "claim_scope": (
-            "solver-objective branch-continuity and implicit AD/FD gate on the "
-            "solver-ready geometry contract; VMEC/Boozer production gates remain separate"
-        ),
-        "parameter_names": list(SOLVER_GEOMETRY_PARAMETER_NAMES),
-        "objective_names": list(SOLVER_OBJECTIVE_NAMES),
-        "params": np.asarray(p, dtype=float).tolist(),
-        "grid": {
-            "Nx": int(cfg.grid.Nx),
-            "Ny": int(cfg.grid.Ny),
-            "Nz": int(cfg.grid.Nz),
-            "selected_ky_index": 1,
-        },
-        "n_laguerre": n_laguerre_int,
-        "n_hermite": n_hermite_int,
-        "state_size": int(np.prod(state_shape)),
-        "value_evaluator_finite": value_finite,
-        "value_evaluator_objectives": value_np.tolist(),
-        "branch_continuity_gate": branch_passed,
-        "base_selected_index": base_index,
-        "base_eigenvalue_real": float(np.real(base_value)),
-        "base_eigenvalue_imag": float(np.imag(base_value)),
-        "base_eigenvalue_gap": base_gap,
-        "branch_rows": branch_rows,
-        "ad_fd_gate": ad_fd_passed,
-        "objective_gates": rows,
-        "eigenpair_gate": gate,
-    }
 
 
 def linear_solver_geometry_gradient_report(
@@ -914,6 +693,7 @@ __all__ = [
     "_float_tuple",
     "_int_tuple",
     "_ky_sample_axis",
+    "_objective_gate_rows",
     "_surface_index_tuple",
     "_surface_sample_axis",
     "SOLVER_GEOMETRY_PARAMETER_NAMES",
