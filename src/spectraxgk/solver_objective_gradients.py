@@ -20,7 +20,11 @@ from spectraxgk.autodiff_validation import (
     implicit_eigenpair_observable_sensitivity_report,
 )
 from spectraxgk.config import CycloneBaseCase, GridConfig
-from spectraxgk.diagnostics import heat_flux_species, particle_flux_species, fieldline_quadrature_weights
+from spectraxgk.diagnostics import (
+    heat_flux_species,
+    particle_flux_species,
+    fieldline_quadrature_weights,
+)
 from spectraxgk.geometry.differentiable import (
     discover_differentiable_geometry_backends,
     flux_tube_geometry_from_mapping,
@@ -28,7 +32,12 @@ from spectraxgk.geometry.differentiable import (
     vmec_jax_boozer_equal_arc_core_profiles_from_state,
 )
 from spectraxgk.grids import build_spectral_grid, select_ky_grid
-from spectraxgk.linear import LinearParams, LinearTerms, build_linear_cache, linear_rhs_cached
+from spectraxgk.linear import (
+    LinearParams,
+    LinearTerms,
+    build_linear_cache,
+    linear_rhs_cached,
+)
 from spectraxgk.quasilinear import effective_kperp2, phi_norm2
 from spectraxgk.solver_objective_core import (
     SOLVER_OBJECTIVE_NAMES,
@@ -65,6 +74,24 @@ from spectraxgk.solver_objective_sampling import (
     _surface_sample_axis,
     solver_grid_options_from_ky_values,
 )
+from spectraxgk.solver_vmec_boozer_objectives import (
+    _split_vmec_boozer_objective_kwargs as _split_vmec_boozer_objective_kwargs_impl,
+)
+from spectraxgk.solver_vmec_boozer_objectives import (
+    vmec_boozer_aggregate_scalar_objective_from_state as _vmec_boozer_aggregate_scalar_objective_from_state_impl,
+)
+from spectraxgk.solver_vmec_boozer_objectives import (
+    vmec_boozer_scalar_objective_from_state as _vmec_boozer_scalar_objective_from_state_impl,
+)
+from spectraxgk.solver_vmec_boozer_objectives import (
+    vmec_boozer_solver_objective_table_from_state as _vmec_boozer_solver_objective_table_from_state_impl,
+)
+from spectraxgk.solver_vmec_boozer_objectives import (
+    vmec_boozer_solver_objective_table_with_metadata_from_state as _vmec_boozer_solver_objective_table_with_metadata_from_state_impl,
+)
+from spectraxgk.solver_vmec_boozer_objectives import (
+    vmec_boozer_solver_objective_vector_from_state as _vmec_boozer_solver_objective_vector_from_state_impl,
+)
 from spectraxgk.solver_vmec_state import (
     VMEC_BOOZER_STATE_PARAMETER_FAMILIES,
     VMEC_BOOZER_STATE_PARAMETER_NAMES,
@@ -72,6 +99,7 @@ from spectraxgk.solver_vmec_state import (
     _vmec_boozer_state_array,
     _vmec_boozer_state_parameter_name,
 )
+
 VMEC_BOOZER_FREQUENCY_OBJECTIVE_NAMES = ("gamma", "omega")
 VMEC_BOOZER_QUASILINEAR_OBJECTIVE_NAMES = (
     "gamma",
@@ -91,32 +119,6 @@ VMEC_BOOZER_NONLINEAR_WINDOW_OBJECTIVE_NAMES = (
     "nonlinear_window_heat_flux_trend",
 )
 
-_VMEC_BOOZER_GEOMETRY_OPTION_KEYS = {
-    "surface_index",
-    "torflux",
-    "alpha",
-    "ntheta",
-    "mboz",
-    "nboz",
-    "jit",
-    "surface_stencil_width",
-    "reference_length",
-    "reference_b",
-    "source_model",
-    "validate_finite",
-}
-_SOLVER_OBJECTIVE_OPTION_KEYS = {
-    "selected_ky_index",
-    "n_laguerre",
-    "n_hermite",
-    "nx",
-    "ny",
-    "lx",
-    "ly",
-    "params_linear",
-    "terms",
-}
-
 
 def _report_float(report: dict[str, object], key: str) -> float:
     """Read a numeric finite-difference report field with mypy-safe casting."""
@@ -124,23 +126,10 @@ def _report_float(report: dict[str, object], key: str) -> float:
     return float(cast(Any, report[key]))
 
 
-def _split_vmec_boozer_objective_kwargs(kwargs: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-    unknown = set(kwargs) - _VMEC_BOOZER_GEOMETRY_OPTION_KEYS - _SOLVER_OBJECTIVE_OPTION_KEYS
-    if unknown:
-        raise TypeError(f"unknown VMEC/Boozer objective options: {sorted(unknown)!r}")
-    geometry_kwargs = {
-        key: kwargs[key]
-        for key in _VMEC_BOOZER_GEOMETRY_OPTION_KEYS
-        if key in kwargs
-    }
-    objective_kwargs = {
-        key: kwargs[key]
-        for key in _SOLVER_OBJECTIVE_OPTION_KEYS
-        if key in kwargs
-    }
-    return geometry_kwargs, objective_kwargs
-
-
+def _split_vmec_boozer_objective_kwargs(
+    kwargs: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    return _split_vmec_boozer_objective_kwargs_impl(kwargs)
 
 
 def vmec_boozer_solver_objective_vector_from_state(  # pragma: no cover
@@ -150,25 +139,17 @@ def vmec_boozer_solver_objective_vector_from_state(  # pragma: no cover
     wout: Any,
     **kwargs: Any,
 ) -> jnp.ndarray:
-    """Evaluate solver objectives from the in-memory VMEC/Boozer bridge.
+    """Evaluate solver objectives from the in-memory VMEC/Boozer bridge."""
 
-    Keyword arguments accepted by
-    :func:`flux_tube_geometry_from_vmec_boozer_state` are consumed by the
-    geometry bridge. Keyword arguments accepted by
-    :func:`solver_objective_vector_from_geometry` are consumed by the linear
-    objective evaluator. Unknown keywords raise ``TypeError`` before any
-    expensive backend work starts.
-    """
-
-    geometry_kwargs, objective_kwargs = _split_vmec_boozer_objective_kwargs(kwargs)
-    geom = flux_tube_geometry_from_vmec_boozer_state(
+    return _vmec_boozer_solver_objective_vector_from_state_impl(
         state,
         static,
         indata,
         wout,
-        **geometry_kwargs,
+        geometry_fn=flux_tube_geometry_from_vmec_boozer_state,
+        objective_vector_fn=solver_objective_vector_from_geometry,
+        **kwargs,
     )
-    return solver_objective_vector_from_geometry(geom, **objective_kwargs)
 
 
 def vmec_boozer_solver_objective_table_from_state(  # pragma: no cover
@@ -185,13 +166,9 @@ def vmec_boozer_solver_objective_table_from_state(  # pragma: no cover
     ky_base: float | None = None,
     **kwargs: Any,
 ) -> jnp.ndarray:
-    """Evaluate solver objectives over a surface/field-line/``k_y`` table.
+    """Evaluate solver objectives over a surface/field-line/``k_y`` table."""
 
-    The full table is returned so optimization drivers can audit which
-    surface, field line, or ``k_y`` point controls an aggregate objective.
-    """
-
-    table, _metadata = vmec_boozer_solver_objective_table_with_metadata_from_state(
+    return _vmec_boozer_solver_objective_table_from_state_impl(
         state,
         static,
         indata,
@@ -202,9 +179,9 @@ def vmec_boozer_solver_objective_table_from_state(  # pragma: no cover
         selected_ky_indices=selected_ky_indices,
         ky_values=ky_values,
         ky_base=ky_base,
+        table_with_metadata_fn=vmec_boozer_solver_objective_table_with_metadata_from_state,
         **kwargs,
     )
-    return table
 
 
 def vmec_boozer_solver_objective_table_with_metadata_from_state(  # pragma: no cover
@@ -221,70 +198,23 @@ def vmec_boozer_solver_objective_table_with_metadata_from_state(  # pragma: no c
     ky_base: float | None = None,
     **kwargs: Any,
 ) -> tuple[jnp.ndarray, list[dict[str, object]]]:
-    """Evaluate VMEC/Boozer objective rows and return aligned sample metadata."""
+    """Evaluate VMEC/Boozer objective rows and return sample metadata."""
 
-    mutable_kwargs = dict(kwargs)
-    if "selected_ky_index" in mutable_kwargs:
-        if selected_ky_indices != (1,) or ky_values is not None:
-            raise TypeError("use selected_ky_indices, not both selected_ky_index and selected_ky_indices")
-        selected_ky_indices = int(mutable_kwargs.pop("selected_ky_index"))
-    geometry_kwargs, objective_kwargs = _split_vmec_boozer_objective_kwargs(mutable_kwargs)
-    surfaces = _surface_sample_axis(surface_indices, torflux_values)
-    alpha_values = _float_tuple(alphas, name="alphas")
-    ky_samples, objective_kwargs, ky_grid_options = _ky_sample_axis(
-        selected_ky_indices,
-        ky_values,
+    return _vmec_boozer_solver_objective_table_with_metadata_from_state_impl(
+        state,
+        static,
+        indata,
+        wout,
+        surface_indices=surface_indices,
+        torflux_values=torflux_values,
+        alphas=alphas,
+        selected_ky_indices=selected_ky_indices,
+        ky_values=ky_values,
         ky_base=ky_base,
-        objective_kwargs=objective_kwargs,
+        geometry_fn=flux_tube_geometry_from_vmec_boozer_state,
+        objective_vector_fn=solver_objective_vector_from_geometry,
+        **kwargs,
     )
-
-    rows: list[jnp.ndarray] = []
-    metadata: list[dict[str, object]] = []
-    for surface in surfaces:
-        for alpha in alpha_values:
-            geom_kwargs = dict(geometry_kwargs)
-            surface_index = surface.get("surface_index")
-            torflux = surface.get("torflux")
-            if surface_index is not None:
-                geom_kwargs["surface_index"] = int(surface_index)
-            if torflux is not None:
-                geom_kwargs["torflux"] = float(torflux)
-            geom_kwargs["alpha"] = alpha
-            geom = flux_tube_geometry_from_vmec_boozer_state(
-                state,
-                static,
-                indata,
-                wout,
-                **geom_kwargs,
-            )
-            for ky_sample in ky_samples:
-                obj_kwargs = dict(objective_kwargs)
-                selected_ky_index = int(ky_sample["selected_ky_index"])
-                obj_kwargs["selected_ky_index"] = selected_ky_index
-                rows.append(solver_objective_vector_from_geometry(geom, **obj_kwargs))
-                row_metadata: dict[str, object] = {
-                    "surface_index": None if surface_index is None else int(surface_index),
-                    "alpha": float(alpha),
-                    "selected_ky_index": selected_ky_index,
-                }
-                if torflux is not None:
-                    row_metadata["torflux"] = float(torflux)
-                    row_metadata["surface"] = float(torflux)
-                for key in ("ky", "selected_ky", "ky_abs_error"):
-                    value = ky_sample.get(key)
-                    if value is not None:
-                        row_metadata[key] = float(value)
-                metadata.append(row_metadata)
-    if not rows:
-        raise RuntimeError("VMEC/Boozer objective table produced no samples")
-    if ky_grid_options is not None:
-        for row in metadata:
-            row["ky_grid_options"] = {
-                "ky_base": float(cast(float, ky_grid_options["ky_base"])),
-                "ly": float(cast(float, ky_grid_options["ly"])),
-                "ny": int(cast(int, ky_grid_options["ny"])),
-            }
-    return jnp.stack(rows), metadata
 
 
 def vmec_boozer_aggregate_scalar_objective_from_state(  # pragma: no cover
@@ -301,32 +231,22 @@ def vmec_boozer_aggregate_scalar_objective_from_state(  # pragma: no cover
     selected_ky_indices: int | tuple[int, ...] | list[int] = (1,),
     **kwargs: Any,
 ) -> jnp.ndarray:
-    """Reduce a VMEC/Boozer multi-point objective table to one scalar.
+    """Reduce a VMEC/Boozer multi-point objective table to one scalar."""
 
-    ``mean`` and ``weighted_mean`` are smooth for fixed branch choices. ``max``
-    is a conservative worst-case diagnostic and needs active-set diagnostics
-    before it is promoted for gradient-based optimization.
-    """
-
-    table = vmec_boozer_solver_objective_table_from_state(
+    return _vmec_boozer_aggregate_scalar_objective_from_state_impl(
         state,
         static,
         indata,
         wout,
+        objective=objective,
+        reduction=reduction,
+        weights=weights,
         surface_indices=surface_indices,
         alphas=alphas,
         selected_ky_indices=selected_ky_indices,
+        table_fn=vmec_boozer_solver_objective_table_from_state,
         **kwargs,
     )
-    values = jnp.asarray([solver_scalar_objective_from_vector(row, objective) for row in table])
-    if str(reduction) == "mean":
-        return jnp.mean(values)
-    if str(reduction) == "weighted_mean":
-        normalized = _aggregate_weights(weights, int(values.size))
-        return jnp.sum(values * jnp.asarray(normalized, dtype=values.dtype))
-    if str(reduction) == "max":
-        return jnp.max(values)
-    raise ValueError("reduction must be one of 'mean', 'weighted_mean', or 'max'")
 
 
 def vmec_boozer_scalar_objective_from_state(  # pragma: no cover
@@ -338,26 +258,22 @@ def vmec_boozer_scalar_objective_from_state(  # pragma: no cover
     objective: SolverScalarObjective = "growth",
     **kwargs: Any,
 ) -> jnp.ndarray:
-    """Evaluate one scalar optimization objective on the VMEC/Boozer path.
+    """Evaluate one scalar optimization objective on the VMEC/Boozer path."""
 
-    This is the optimizer-facing scalar wrapper around
-    :func:`vmec_boozer_solver_objective_vector_from_state`. It provides the
-    real linear-growth and quasilinear-flux objective hook needed by the
-    full-chain stellarator optimizer, while leaving branch and AD/FD promotion
-    to the explicit gates.
-    """
-
-    vector = vmec_boozer_solver_objective_vector_from_state(
+    return _vmec_boozer_scalar_objective_from_state_impl(
         state,
         static,
         indata,
         wout,
+        objective=objective,
+        vector_fn=vmec_boozer_solver_objective_vector_from_state,
         **kwargs,
     )
-    return solver_scalar_objective_from_vector(vector, objective)
 
 
-def _load_vmec_jax_example_state_bundle(case_name: str) -> dict[str, Any]:  # pragma: no cover
+def _load_vmec_jax_example_state_bundle(
+    case_name: str,
+) -> dict[str, Any]:  # pragma: no cover
     """Load a local ``vmec_jax`` example state bundle for offline gates."""
 
     discover_differentiable_geometry_backends()
@@ -420,7 +336,9 @@ def vmec_boozer_scalar_objective_finite_difference_report(  # pragma: no cover
     state = bundle["state"]
     base_coeff = _vmec_boozer_state_array(state, parameter_family)
     default_radial_index = int(base_coeff.shape[0] // 2)
-    radial_index_int = default_radial_index if radial_index is None else int(radial_index)
+    radial_index_int = (
+        default_radial_index if radial_index is None else int(radial_index)
+    )
     mode_index_int = int(mode_index)
     if not (0 <= radial_index_int < int(base_coeff.shape[0])):
         raise ValueError("radial_index is outside the VMEC state radial grid")
@@ -496,7 +414,9 @@ def vmec_boozer_scalar_objective_finite_difference_report(  # pragma: no cover
         "wout_path": bundle["wout_path"],
         "objective": str(objective),
         "parameter_name": parameter_name,
-        "parameter_indices": {str(parameter_family): [radial_index_int, mode_index_int]},
+        "parameter_indices": {
+            str(parameter_family): [radial_index_int, mode_index_int]
+        },
         "base_delta": base_delta_float,
         "perturbation_step": step,
         "response_atol": float(response_atol),
@@ -515,7 +435,11 @@ def vmec_boozer_scalar_objective_finite_difference_report(  # pragma: no cover
         "minus_objective_vector": minus_vector,
         "base_objective_vector": base_vector,
         "plus_objective_vector": plus_vector,
-        "options": {key: value for key, value in kwargs.items() if isinstance(value, (str, int, float, bool, type(None)))},
+        "options": {
+            key: value
+            for key, value in kwargs.items()
+            if isinstance(value, (str, int, float, bool, type(None)))
+        },
         "next_action": (
             "Use this finite-difference path to seed real VMEC/Boozer optimizer "
             "drivers, then promote growth objectives with implicit AD/FD gates and "
@@ -571,7 +495,9 @@ def vmec_boozer_aggregate_scalar_objective_finite_difference_report(  # pragma: 
     state = bundle["state"]
     base_coeff = _vmec_boozer_state_array(state, parameter_family)
     default_radial_index = int(base_coeff.shape[0] // 2)
-    radial_index_int = default_radial_index if radial_index is None else int(radial_index)
+    radial_index_int = (
+        default_radial_index if radial_index is None else int(radial_index)
+    )
     mode_index_int = int(mode_index)
     if not (0 <= radial_index_int < int(base_coeff.shape[0])):
         raise ValueError("radial_index is outside the VMEC state radial grid")
@@ -586,7 +512,9 @@ def vmec_boozer_aggregate_scalar_objective_finite_difference_report(  # pragma: 
 
     base_delta_float = float(base_delta)
 
-    def evaluate(delta: float) -> tuple[float, list[float], list[list[float]], list[dict[str, object]]]:
+    def evaluate(
+        delta: float,
+    ) -> tuple[float, list[float], list[list[float]], list[dict[str, object]]]:
         traced_state = _replace_vmec_boozer_state_coefficient(
             state,
             parameter_family,
@@ -595,18 +523,20 @@ def vmec_boozer_aggregate_scalar_objective_finite_difference_report(  # pragma: 
             mode_index_int,
             base_delta_float + float(delta),
         )
-        table, sample_metadata = vmec_boozer_solver_objective_table_with_metadata_from_state(
-            traced_state,
-            bundle["static"],
-            bundle["indata"],
-            bundle["wout"],
-            surface_indices=surface_indices,
-            torflux_values=torflux_values,
-            alphas=alpha_values,
-            selected_ky_indices=selected_ky_indices,
-            ky_values=ky_values,
-            ky_base=ky_base,
-            **kwargs,
+        table, sample_metadata = (
+            vmec_boozer_solver_objective_table_with_metadata_from_state(
+                traced_state,
+                bundle["static"],
+                bundle["indata"],
+                bundle["wout"],
+                surface_indices=surface_indices,
+                torflux_values=torflux_values,
+                alphas=alpha_values,
+                selected_ky_indices=selected_ky_indices,
+                ky_values=ky_values,
+                ky_base=ky_base,
+                **kwargs,
+            )
         )
         scalar_values = np.asarray(
             [solver_scalar_objective_from_vector(row, objective) for row in table],
@@ -619,15 +549,27 @@ def vmec_boozer_aggregate_scalar_objective_finite_difference_report(  # pragma: 
         elif str(reduction) == "max":
             scalar = float(np.max(scalar_values))
         else:
-            raise ValueError("reduction must be one of 'mean', 'weighted_mean', or 'max'")
-        return scalar, scalar_values.tolist(), np.asarray(table, dtype=float).tolist(), sample_metadata
+            raise ValueError(
+                "reduction must be one of 'mean', 'weighted_mean', or 'max'"
+            )
+        return (
+            scalar,
+            scalar_values.tolist(),
+            np.asarray(table, dtype=float).tolist(),
+            sample_metadata,
+        )
 
     minus_value, minus_sample_values, minus_table, _minus_samples = evaluate(-step)
     base_value, base_sample_values, base_table, base_samples = evaluate(0.0)
     plus_value, plus_sample_values, plus_table, _plus_samples = evaluate(step)
     if len(base_samples) != int(n_samples):
-        raise RuntimeError("VMEC/Boozer aggregate metadata size does not match objective table")
-    samples = [dict(row, weight=float(normalized_weights[index])) for index, row in enumerate(base_samples)]
+        raise RuntimeError(
+            "VMEC/Boozer aggregate metadata size does not match objective table"
+        )
+    samples = [
+        dict(row, weight=float(normalized_weights[index]))
+        for index, row in enumerate(base_samples)
+    ]
     central_derivative = (plus_value - minus_value) / (2.0 * step)
     response_abs = abs(plus_value - minus_value)
     curvature_abs = abs(plus_value - 2.0 * base_value + minus_value)
@@ -675,12 +617,18 @@ def vmec_boozer_aggregate_scalar_objective_finite_difference_report(  # pragma: 
             else int(cast(int, row["surface_index"]))
             for row in surface_samples
         ],
-        "torflux_values": None if torflux_values is None else list(_float_tuple(torflux_values, name="torflux_values")),
+        "torflux_values": None
+        if torflux_values is None
+        else list(_float_tuple(torflux_values, name="torflux_values")),
         "alphas": list(alpha_values),
         "selected_ky_indices": list(ky_indices),
-        "ky_values": None if ky_values is None else list(_float_tuple(ky_values, name="ky_values")),
+        "ky_values": None
+        if ky_values is None
+        else list(_float_tuple(ky_values, name="ky_values")),
         "parameter_name": parameter_name,
-        "parameter_indices": {str(parameter_family): [radial_index_int, mode_index_int]},
+        "parameter_indices": {
+            str(parameter_family): [radial_index_int, mode_index_int]
+        },
         "base_delta": base_delta_float,
         "perturbation_step": step,
         "response_atol": float(response_atol),
@@ -702,7 +650,11 @@ def vmec_boozer_aggregate_scalar_objective_finite_difference_report(  # pragma: 
         "minus_objective_table": minus_table,
         "base_objective_table": base_table,
         "plus_objective_table": plus_table,
-        "options": {key: value for key, value in kwargs.items() if isinstance(value, (str, int, float, bool, type(None)))},
+        "options": {
+            key: value
+            for key, value in kwargs.items()
+            if isinstance(value, (str, int, float, bool, type(None)))
+        },
         "next_action": (
             "Use this gate before any multi-surface or multi-ky optimizer loop. "
             "Promote only after branch-continuity and held-out nonlinear-window evidence pass."
@@ -835,7 +787,9 @@ def vmec_boozer_aggregate_scalar_objective_line_search_report(  # pragma: no cov
         row["accepted"] = True
         history.append(row)
 
-    initial_objective = float(cast(Any, history[0]["objective"])) if history else float("nan")
+    initial_objective = (
+        float(cast(Any, history[0]["objective"])) if history else float("nan")
+    )
     final_objective = float(best_value) if best_value is not None else initial_objective
     return {
         "kind": "vmec_boozer_aggregate_scalar_objective_line_search_report",
@@ -868,7 +822,11 @@ def vmec_boozer_aggregate_scalar_objective_line_search_report(  # pragma: no cov
             else None
         ),
         "history": history,
-        "options": {key: value for key, value in kwargs.items() if isinstance(value, (str, int, float, bool, type(None)))},
+        "options": {
+            key: value
+            for key, value in kwargs.items()
+            if isinstance(value, (str, int, float, bool, type(None)))
+        },
     }
 
 
@@ -879,10 +837,14 @@ def vmec_boozer_aggregate_line_search_holdout_report(  # pragma: no cover
     reduction: Literal["mean", "weighted_mean", "max"] = "mean",
     training_weights: tuple[float, ...] | list[float] | np.ndarray | None = None,
     holdout_weights: tuple[float, ...] | list[float] | np.ndarray | None = None,
-    training_surface_indices: int | None | tuple[int | None, ...] | list[int | None] = (None,),
+    training_surface_indices: int | None | tuple[int | None, ...] | list[int | None] = (
+        None,
+    ),
     training_alphas: float | tuple[float, ...] | list[float] = (0.0,),
     training_selected_ky_indices: int | tuple[int, ...] | list[int] = (1,),
-    holdout_surface_indices: int | None | tuple[int | None, ...] | list[int | None] = (None,),
+    holdout_surface_indices: int | None | tuple[int | None, ...] | list[int | None] = (
+        None,
+    ),
     holdout_alphas: float | tuple[float, ...] | list[float] = (0.0,),
     holdout_selected_ky_indices: int | tuple[int, ...] | list[int] = (2,),
     radial_index: int | None = None,
@@ -1120,7 +1082,9 @@ def vmec_boozer_scalar_objective_line_search_report(  # pragma: no cover
         row["accepted"] = True
         history.append(row)
 
-    initial_objective = float(cast(Any, history[0]["objective"])) if history else float("nan")
+    initial_objective = (
+        float(cast(Any, history[0]["objective"])) if history else float("nan")
+    )
     final_objective = float(best_value) if best_value is not None else initial_objective
     return {
         "kind": "vmec_boozer_scalar_objective_line_search_report",
@@ -1149,7 +1113,11 @@ def vmec_boozer_scalar_objective_line_search_report(  # pragma: no cover
             else None
         ),
         "history": history,
-        "options": {key: value for key, value in kwargs.items() if isinstance(value, (str, int, float, bool, type(None)))},
+        "options": {
+            key: value
+            for key, value in kwargs.items()
+            if isinstance(value, (str, int, float, bool, type(None)))
+        },
     }
 
 
@@ -1173,9 +1141,15 @@ def solver_objective_branch_gradient_report(
     left/right eigenpair method.
     """
 
-    p = default_solver_geometry_design_params() if params is None else jnp.asarray(params)
+    p = (
+        default_solver_geometry_design_params()
+        if params is None
+        else jnp.asarray(params)
+    )
     if p.ndim != 1 or int(p.size) != len(SOLVER_GEOMETRY_PARAMETER_NAMES):
-        raise ValueError(f"params must be a length-{len(SOLVER_GEOMETRY_PARAMETER_NAMES)} vector")
+        raise ValueError(
+            f"params must be a length-{len(SOLVER_GEOMETRY_PARAMETER_NAMES)} vector"
+        )
     n_laguerre_int = int(n_laguerre)
     n_hermite_int = int(n_hermite)
     if n_laguerre_int < 1 or n_hermite_int < 1:
@@ -1183,7 +1157,13 @@ def solver_objective_branch_gradient_report(
 
     cfg = CycloneBaseCase(grid=GridConfig(Nx=1, Ny=6, Nz=4, Lx=6.0, Ly=12.0))
     grid = select_ky_grid(build_spectral_grid(cfg.grid), 1)
-    state_shape = (n_laguerre_int, n_hermite_int, grid.ky.size, grid.kx.size, grid.z.size)
+    state_shape = (
+        n_laguerre_int,
+        n_hermite_int,
+        grid.ky.size,
+        grid.kx.size,
+        grid.z.size,
+    )
     params_linear = _default_gradient_linear_params()
     terms = _default_gradient_linear_terms()
     theta = jnp.asarray(grid.z)
@@ -1196,7 +1176,9 @@ def solver_objective_branch_gradient_report(
         )
 
     def cache_for(x: jnp.ndarray):
-        return build_linear_cache(grid, geometry_for(x), params_linear, n_laguerre_int, n_hermite_int)
+        return build_linear_cache(
+            grid, geometry_for(x), params_linear, n_laguerre_int, n_hermite_int
+        )
 
     def rhs_phi(state_arr: jnp.ndarray, cache: Any) -> tuple[jnp.ndarray, jnp.ndarray]:
         return linear_rhs_cached(
@@ -1210,22 +1192,28 @@ def solver_objective_branch_gradient_report(
 
     def matrix_fn(x: jnp.ndarray) -> jnp.ndarray:
         cache = cache_for(x)
-        return explicit_complex_operator_matrix(lambda state_arr: rhs_phi(state_arr, cache)[0], state_shape)
+        return explicit_complex_operator_matrix(
+            lambda state_arr: rhs_phi(state_arr, cache)[0], state_shape
+        )
 
-    def objective_fn(eigenvalue: jnp.ndarray, eigenvector: jnp.ndarray, x: jnp.ndarray) -> jnp.ndarray:
-        gamma, omega, kperp_eff, heat_weight, ql_proxy = _mode21_vmec_boozer_quasilinear_features(
-            eigenvalue,
-            eigenvector,
-            x,
-            {
-                "geometry_for": geometry_for,
-                "grid": grid,
-                "params_linear": params_linear,
-                "n_laguerre": n_laguerre_int,
-                "n_hermite": n_hermite_int,
-                "state_shape": state_shape,
-                "rhs_phi": rhs_phi,
-            },
+    def objective_fn(
+        eigenvalue: jnp.ndarray, eigenvector: jnp.ndarray, x: jnp.ndarray
+    ) -> jnp.ndarray:
+        gamma, omega, kperp_eff, heat_weight, ql_proxy = (
+            _mode21_vmec_boozer_quasilinear_features(
+                eigenvalue,
+                eigenvector,
+                x,
+                {
+                    "geometry_for": geometry_for,
+                    "grid": grid,
+                    "params_linear": params_linear,
+                    "n_laguerre": n_laguerre_int,
+                    "n_hermite": n_hermite_int,
+                    "state_shape": state_shape,
+                    "rhs_phi": rhs_phi,
+                },
+            )
         )
         geom = geometry_for(x)
         cache = cache_for(x)
@@ -1246,9 +1234,13 @@ def solver_objective_branch_gradient_report(
                     flux_fac,
                 )
             )
-            / phi_norm2(phi, cache, params_linear, fieldline_quadrature_weights(geom, grid)[0])
+            / phi_norm2(
+                phi, cache, params_linear, fieldline_quadrature_weights(geom, grid)[0]
+            )
         )
-        return jnp.asarray([gamma, omega, kperp_eff, heat_weight, particle_weight, ql_proxy])
+        return jnp.asarray(
+            [gamma, omega, kperp_eff, heat_weight, particle_weight, ql_proxy]
+        )
 
     base_matrix = matrix_fn(p)
     base_eigs = np.asarray(jnp.linalg.eigvals(base_matrix))
@@ -1273,9 +1265,13 @@ def solver_objective_branch_gradient_report(
             nearest_gap = (
                 float("inf")
                 if eigs_i.size == 1
-                else float(np.min(np.abs(np.delete(eigs_i, nearest_index) - nearest_value)))
+                else float(
+                    np.min(np.abs(np.delete(eigs_i, nearest_index) - nearest_value))
+                )
             )
-            row_passed = bool(nearest_index == dominant_index and nearest_gap >= float(gap_floor))
+            row_passed = bool(
+                nearest_index == dominant_index and nearest_gap >= float(gap_floor)
+            )
             branch_rows.append(
                 {
                     "parameter": name,
@@ -1314,7 +1310,9 @@ def solver_objective_branch_gradient_report(
     )
     value_np = np.asarray(value_vector, dtype=float)
     value_finite = bool(np.all(np.isfinite(value_np)))
-    branch_passed = bool(base_gap >= float(gap_floor) and all(row["passed"] for row in branch_rows))
+    branch_passed = bool(
+        base_gap >= float(gap_floor) and all(row["passed"] for row in branch_rows)
+    )
     ad_fd_passed = bool(gate["passed"] and all(row["passed"] for row in rows))
     return {
         "kind": "solver_objective_branch_gradient_gate",
@@ -1327,7 +1325,12 @@ def solver_objective_branch_gradient_report(
         "parameter_names": list(SOLVER_GEOMETRY_PARAMETER_NAMES),
         "objective_names": list(SOLVER_OBJECTIVE_NAMES),
         "params": np.asarray(p, dtype=float).tolist(),
-        "grid": {"Nx": int(cfg.grid.Nx), "Ny": int(cfg.grid.Ny), "Nz": int(cfg.grid.Nz), "selected_ky_index": 1},
+        "grid": {
+            "Nx": int(cfg.grid.Nx),
+            "Ny": int(cfg.grid.Ny),
+            "Nz": int(cfg.grid.Nz),
+            "selected_ky_index": 1,
+        },
         "n_laguerre": n_laguerre_int,
         "n_hermite": n_hermite_int,
         "state_size": int(np.prod(state_shape)),
@@ -1374,7 +1377,9 @@ def _mode21_vmec_boozer_linear_context(  # pragma: no cover
     state = wout_mod.state_from_wout(wout)
     base_coeff = _vmec_boozer_state_array(state, parameter_family)
     default_radial_index = int(base_coeff.shape[0] // 2)
-    radial_index_int = default_radial_index if radial_index is None else int(radial_index)
+    radial_index_int = (
+        default_radial_index if radial_index is None else int(radial_index)
+    )
     mode_index_int = int(mode_index)
     if not (0 <= radial_index_int < int(base_coeff.shape[0])):
         raise ValueError("radial_index is outside the VMEC state radial grid")
@@ -1391,7 +1396,13 @@ def _mode21_vmec_boozer_linear_context(  # pragma: no cover
 
     cfg = CycloneBaseCase(grid=GridConfig(Nx=1, Ny=4, Nz=int(ntheta), Lx=6.0, Ly=12.0))
     grid = select_ky_grid(build_spectral_grid(cfg.grid), 1)
-    state_shape = (int(n_laguerre), int(n_hermite), grid.ky.size, grid.kx.size, grid.z.size)
+    state_shape = (
+        int(n_laguerre),
+        int(n_hermite),
+        grid.ky.size,
+        grid.kx.size,
+        grid.z.size,
+    )
     params_linear = _default_gradient_linear_params()
     terms = _default_gradient_linear_terms()
 
@@ -1422,7 +1433,9 @@ def _mode21_vmec_boozer_linear_context(  # pragma: no cover
         )
 
     def cache_for(x: jnp.ndarray):
-        return build_linear_cache(grid, geometry_for(x), params_linear, int(n_laguerre), int(n_hermite))
+        return build_linear_cache(
+            grid, geometry_for(x), params_linear, int(n_laguerre), int(n_hermite)
+        )
 
     def rhs_phi(state_arr: jnp.ndarray, cache: Any) -> tuple[jnp.ndarray, jnp.ndarray]:
         return linear_rhs_cached(
@@ -1436,14 +1449,18 @@ def _mode21_vmec_boozer_linear_context(  # pragma: no cover
 
     def matrix_fn(x: jnp.ndarray) -> jnp.ndarray:
         cache = cache_for(x)
-        return explicit_complex_operator_matrix(lambda state_arr: rhs_phi(state_arr, cache)[0], state_shape)
+        return explicit_complex_operator_matrix(
+            lambda state_arr: rhs_phi(state_arr, cache)[0], state_shape
+        )
 
     return {
         "case_name": str(case_name),
         "cfg": cfg,
         "grid": grid,
         "parameter_names": parameter_names,
-        "parameter_indices": {str(parameter_family): [radial_index_int, mode_index_int]},
+        "parameter_indices": {
+            str(parameter_family): [radial_index_int, mode_index_int]
+        },
         "surface_index": surface_index,
         "mboz": int(mboz),
         "nboz": int(nboz),
@@ -1497,7 +1514,11 @@ def _mode21_vmec_boozer_quasilinear_features(
         / norm2
     )
     gamma = jnp.real(eigenvalue)
-    ql_proxy = gamma * heat_weight / jnp.maximum(kperp_eff, jnp.asarray(1.0e-12, dtype=kperp_eff.dtype))
+    ql_proxy = (
+        gamma
+        * heat_weight
+        / jnp.maximum(kperp_eff, jnp.asarray(1.0e-12, dtype=kperp_eff.dtype))
+    )
     return gamma, jnp.imag(eigenvalue), kperp_eff, heat_weight, ql_proxy
 
 
@@ -1517,7 +1538,11 @@ def linear_solver_geometry_gradient_report(
     nearest-branch central finite differences.
     """
 
-    p = default_solver_geometry_design_params() if params is None else jnp.asarray(params)
+    p = (
+        default_solver_geometry_design_params()
+        if params is None
+        else jnp.asarray(params)
+    )
     if p.ndim != 1 or int(p.size) != 2:
         raise ValueError("params must be a length-2 vector")
 
@@ -1554,7 +1579,9 @@ def linear_solver_geometry_gradient_report(
         )
 
     def cache_for(x: jnp.ndarray):
-        return build_linear_cache(grid, geometry_for(x), params_linear, n_laguerre, n_hermite)
+        return build_linear_cache(
+            grid, geometry_for(x), params_linear, n_laguerre, n_hermite
+        )
 
     def rhs_phi(state: jnp.ndarray, cache: Any) -> tuple[jnp.ndarray, jnp.ndarray]:
         return linear_rhs_cached(
@@ -1568,9 +1595,13 @@ def linear_solver_geometry_gradient_report(
 
     def matrix_fn(x: jnp.ndarray) -> jnp.ndarray:
         cache = cache_for(x)
-        return explicit_complex_operator_matrix(lambda state: rhs_phi(state, cache)[0], state_shape)
+        return explicit_complex_operator_matrix(
+            lambda state: rhs_phi(state, cache)[0], state_shape
+        )
 
-    def objective_fn(eigenvalue: jnp.ndarray, eigenvector: jnp.ndarray, x: jnp.ndarray) -> jnp.ndarray:
+    def objective_fn(
+        eigenvalue: jnp.ndarray, eigenvector: jnp.ndarray, x: jnp.ndarray
+    ) -> jnp.ndarray:
         geom = geometry_for(x)
         cache = cache_for(x)
         state = jnp.reshape(eigenvector, state_shape)
@@ -1610,8 +1641,21 @@ def linear_solver_geometry_gradient_report(
             / norm2
         )
         gamma = jnp.real(eigenvalue)
-        ql_proxy = gamma * heat_weight / jnp.maximum(kperp_eff, jnp.asarray(1.0e-12, dtype=kperp_eff.dtype))
-        return jnp.asarray([gamma, jnp.imag(eigenvalue), kperp_eff, heat_weight, particle_weight, ql_proxy])
+        ql_proxy = (
+            gamma
+            * heat_weight
+            / jnp.maximum(kperp_eff, jnp.asarray(1.0e-12, dtype=kperp_eff.dtype))
+        )
+        return jnp.asarray(
+            [
+                gamma,
+                jnp.imag(eigenvalue),
+                kperp_eff,
+                heat_weight,
+                particle_weight,
+                ql_proxy,
+            ]
+        )
 
     gate = implicit_eigenpair_observable_sensitivity_report(
         matrix_fn,
@@ -1624,11 +1668,13 @@ def linear_solver_geometry_gradient_report(
     )
     rows = _objective_gate_rows(gate, rtol=rtol, atol=atol)
     by_objective = {
-        name: bool(all(row["passed"] for row in rows if row["objective"] == name)) for name in SOLVER_OBJECTIVE_NAMES
+        name: bool(all(row["passed"] for row in rows if row["objective"] == name))
+        for name in SOLVER_OBJECTIVE_NAMES
     }
     linear_growth_gate = bool(by_objective["gamma"] and by_objective["omega"])
     quasilinear_weight_gate = bool(
-        by_objective["linear_heat_flux_weight"] and by_objective["mixing_length_heat_flux_proxy"]
+        by_objective["linear_heat_flux_weight"]
+        and by_objective["mixing_length_heat_flux_proxy"]
     )
     return {
         "kind": "linear_solver_geometry_gradient_gate",
@@ -1641,7 +1687,12 @@ def linear_solver_geometry_gradient_report(
         "parameter_names": list(SOLVER_GEOMETRY_PARAMETER_NAMES),
         "objective_names": list(SOLVER_OBJECTIVE_NAMES),
         "params": np.asarray(p, dtype=float).tolist(),
-        "grid": {"Nx": int(cfg.grid.Nx), "Ny": int(cfg.grid.Ny), "Nz": int(cfg.grid.Nz), "selected_ky_index": 1},
+        "grid": {
+            "Nx": int(cfg.grid.Nx),
+            "Ny": int(cfg.grid.Ny),
+            "Nz": int(cfg.grid.Nz),
+            "selected_ky_index": 1,
+        },
         "n_laguerre": n_laguerre,
         "n_hermite": n_hermite,
         "state_size": int(np.prod(state_shape)),
@@ -1699,7 +1750,9 @@ def mode21_vmec_boozer_linear_frequency_gradient_report(  # pragma: no cover
         n_hermite=1,
     )
 
-    def objective_fn(eigenvalue: jnp.ndarray, _eigenvector: jnp.ndarray, _x: jnp.ndarray) -> jnp.ndarray:
+    def objective_fn(
+        eigenvalue: jnp.ndarray, _eigenvector: jnp.ndarray, _x: jnp.ndarray
+    ) -> jnp.ndarray:
         return jnp.asarray([jnp.real(eigenvalue), jnp.imag(eigenvalue)])
 
     gate = implicit_eigenpair_observable_sensitivity_report(
@@ -1734,7 +1787,9 @@ def mode21_vmec_boozer_linear_frequency_gradient_report(  # pragma: no cover
         "parameter_names": list(context["parameter_names"]),
         "objective_names": list(VMEC_BOOZER_FREQUENCY_OBJECTIVE_NAMES),
         "parameter_indices": context["parameter_indices"],
-        "surface_index": None if context["surface_index"] is None else int(context["surface_index"]),
+        "surface_index": None
+        if context["surface_index"] is None
+        else int(context["surface_index"]),
         "grid": {
             "Nx": int(context["cfg"].grid.Nx),
             "Ny": int(context["cfg"].grid.Ny),
@@ -1744,7 +1799,9 @@ def mode21_vmec_boozer_linear_frequency_gradient_report(  # pragma: no cover
         "mboz": context["mboz"],
         "nboz": context["nboz"],
         "surface_stencil_width": (
-            None if context["surface_stencil_width"] is None else int(context["surface_stencil_width"])
+            None
+            if context["surface_stencil_width"] is None
+            else int(context["surface_stencil_width"])
         ),
         "n_laguerre": context["n_laguerre"],
         "n_hermite": context["n_hermite"],
@@ -1803,12 +1860,16 @@ def mode21_vmec_boozer_quasilinear_gradient_report(  # pragma: no cover
         n_hermite=3,
     )
 
-    def objective_fn(eigenvalue: jnp.ndarray, eigenvector: jnp.ndarray, x: jnp.ndarray) -> jnp.ndarray:
-        gamma, omega, kperp_eff, heat_weight, ql_proxy = _mode21_vmec_boozer_quasilinear_features(
-            eigenvalue,
-            eigenvector,
-            x,
-            context,
+    def objective_fn(
+        eigenvalue: jnp.ndarray, eigenvector: jnp.ndarray, x: jnp.ndarray
+    ) -> jnp.ndarray:
+        gamma, omega, kperp_eff, heat_weight, ql_proxy = (
+            _mode21_vmec_boozer_quasilinear_features(
+                eigenvalue,
+                eigenvector,
+                x,
+                context,
+            )
         )
         return jnp.asarray([gamma, omega, kperp_eff, heat_weight, ql_proxy])
 
@@ -1844,7 +1905,9 @@ def mode21_vmec_boozer_quasilinear_gradient_report(  # pragma: no cover
         "parameter_names": list(context["parameter_names"]),
         "objective_names": list(VMEC_BOOZER_QUASILINEAR_OBJECTIVE_NAMES),
         "parameter_indices": context["parameter_indices"],
-        "surface_index": None if context["surface_index"] is None else int(context["surface_index"]),
+        "surface_index": None
+        if context["surface_index"] is None
+        else int(context["surface_index"]),
         "grid": {
             "Nx": int(context["cfg"].grid.Nx),
             "Ny": int(context["cfg"].grid.Ny),
@@ -1854,7 +1917,9 @@ def mode21_vmec_boozer_quasilinear_gradient_report(  # pragma: no cover
         "mboz": context["mboz"],
         "nboz": context["nboz"],
         "surface_stencil_width": (
-            None if context["surface_stencil_width"] is None else int(context["surface_stencil_width"])
+            None
+            if context["surface_stencil_width"] is None
+            else int(context["surface_stencil_width"])
         ),
         "n_laguerre": context["n_laguerre"],
         "n_hermite": context["n_hermite"],
@@ -1862,7 +1927,8 @@ def mode21_vmec_boozer_quasilinear_gradient_report(  # pragma: no cover
         "linear_growth_gradient_gate": bool(by_objective["gamma"]),
         "linear_frequency_gradient_gate": bool(by_objective["omega"]),
         "quasilinear_weight_gradient_gate": bool(
-            by_objective["linear_heat_flux_weight"] and by_objective["mixing_length_heat_flux_proxy"]
+            by_objective["linear_heat_flux_weight"]
+            and by_objective["mixing_length_heat_flux_proxy"]
         ),
         "nonlinear_window_gradient_gate": False,
         "elapsed_seconds": float(time.perf_counter() - start),
@@ -1919,20 +1985,26 @@ def mode21_vmec_boozer_nonlinear_window_gradient_report(  # pragma: no cover
         n_hermite=3,
     )
 
-    def objective_fn(eigenvalue: jnp.ndarray, eigenvector: jnp.ndarray, x: jnp.ndarray) -> jnp.ndarray:
-        gamma, omega, kperp_eff, heat_weight, ql_proxy = _mode21_vmec_boozer_quasilinear_features(
-            eigenvalue,
-            eigenvector,
-            x,
-            context,
+    def objective_fn(
+        eigenvalue: jnp.ndarray, eigenvector: jnp.ndarray, x: jnp.ndarray
+    ) -> jnp.ndarray:
+        gamma, omega, kperp_eff, heat_weight, ql_proxy = (
+            _mode21_vmec_boozer_quasilinear_features(
+                eigenvalue,
+                eigenvector,
+                x,
+                context,
+            )
         )
-        nl_mean, nl_cv, nl_trend = _reduced_nonlinear_window_metrics_from_linear_observables(
-            gamma,
-            kperp_eff,
-            heat_weight,
-            dt=nonlinear_dt,
-            steps=nonlinear_steps,
-            tail_fraction=tail_fraction,
+        nl_mean, nl_cv, nl_trend = (
+            _reduced_nonlinear_window_metrics_from_linear_observables(
+                gamma,
+                kperp_eff,
+                heat_weight,
+                dt=nonlinear_dt,
+                steps=nonlinear_steps,
+                tail_fraction=tail_fraction,
+            )
         )
         return jnp.asarray(
             [
@@ -1984,7 +2056,9 @@ def mode21_vmec_boozer_nonlinear_window_gradient_report(  # pragma: no cover
         "parameter_names": list(context["parameter_names"]),
         "objective_names": list(VMEC_BOOZER_NONLINEAR_WINDOW_OBJECTIVE_NAMES),
         "parameter_indices": context["parameter_indices"],
-        "surface_index": None if context["surface_index"] is None else int(context["surface_index"]),
+        "surface_index": None
+        if context["surface_index"] is None
+        else int(context["surface_index"]),
         "grid": {
             "Nx": int(context["cfg"].grid.Nx),
             "Ny": int(context["cfg"].grid.Ny),
@@ -1994,7 +2068,9 @@ def mode21_vmec_boozer_nonlinear_window_gradient_report(  # pragma: no cover
         "mboz": context["mboz"],
         "nboz": context["nboz"],
         "surface_stencil_width": (
-            None if context["surface_stencil_width"] is None else int(context["surface_stencil_width"])
+            None
+            if context["surface_stencil_width"] is None
+            else int(context["surface_stencil_width"])
         ),
         "n_laguerre": context["n_laguerre"],
         "n_hermite": context["n_hermite"],
@@ -2002,7 +2078,8 @@ def mode21_vmec_boozer_nonlinear_window_gradient_report(  # pragma: no cover
         "linear_growth_gradient_gate": bool(by_objective["gamma"]),
         "linear_frequency_gradient_gate": bool(by_objective["omega"]),
         "quasilinear_weight_gradient_gate": bool(
-            by_objective["linear_heat_flux_weight"] and by_objective["mixing_length_heat_flux_proxy"]
+            by_objective["linear_heat_flux_weight"]
+            and by_objective["mixing_length_heat_flux_proxy"]
         ),
         "nonlinear_window_gradient_gate": nonlinear_window_gate,
         "nonlinear_window_config": {
