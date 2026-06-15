@@ -10,3 +10,13 @@ ignore:
   - "outputs/**/*"
   - "plan.md"
   - "README.md"
+
+coverage:
+  status:
+    project:
+      default:
+        target: 95%
+        threshold: 0.5%
+    patch:
+      default:
+        informational: true
