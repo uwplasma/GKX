@@ -139,7 +139,7 @@ def _require_full_gk_runtime_model(cfg: RuntimeConfig) -> None:
     if model == "cetg":
         raise NotImplementedError(
             "physics.reduced_model='cetg' requires the dedicated collisional-slab ETG solver; "
-            "the full-GK runtime path does not emulate the GX cETG model."
+            "the full-GK runtime path does not emulate the cETG model."
         )
     if model == "krehm":
         raise NotImplementedError(

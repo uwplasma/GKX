@@ -12,7 +12,7 @@ import numpy as np
 
 from spectraxgk.cetg import (
     build_cetg_model_params,
-    integrate_cetg_gx_diagnostics_state,
+    integrate_cetg_explicit_diagnostics_state,
     validate_cetg_runtime_config,
 )
 from spectraxgk.config import resolve_cfl_fac
@@ -34,7 +34,7 @@ from spectraxgk.linear import (
     integrate_linear_diagnostics,
     linear_terms_to_term_config,
 )
-from spectraxgk.nonlinear import integrate_nonlinear_gx_diagnostics_state
+from spectraxgk.nonlinear import integrate_nonlinear_explicit_diagnostics_state
 from spectraxgk.linear_krylov import KrylovConfig, dominant_eigenpair
 from spectraxgk.normalization import apply_diagnostic_normalization
 from spectraxgk.parallel import independent_map
@@ -398,7 +398,7 @@ def run_runtime_linear(
             cfg.time.sample_stride if sample_stride is None else sample_stride
         )
         _status(f"running cETG time integration over {steps_val} steps")
-        _t, diag, G_final, _fields = integrate_cetg_gx_diagnostics_state(
+        _t, diag, G_final, _fields = integrate_cetg_explicit_diagnostics_state(
             g0,
             grid,
             cetg_params,
@@ -1145,7 +1145,7 @@ def run_runtime_nonlinear(
                 if chunk_show_progress:
                     kwargs["show_progress"] = True
                 t_chunk, diag_chunk, G_next, fields_next = (
-                    integrate_cetg_gx_diagnostics_state(
+                    integrate_cetg_explicit_diagnostics_state(
                         G_chunk,
                         grid,
                         cetg_params,
@@ -1185,7 +1185,7 @@ def run_runtime_nonlinear(
         _status(
             f"running cETG nonlinear integration over {steps_val} steps with dt={dt_val:.6g}"
         )
-        _t, diag, G_final, cetg_fields_final = integrate_cetg_gx_diagnostics_state(
+        _t, diag, G_final, cetg_fields_final = integrate_cetg_explicit_diagnostics_state(
             G0,
             grid,
             cetg_params,
@@ -1330,7 +1330,7 @@ def run_runtime_nonlinear(
                 if chunk_show_progress:
                     kwargs["show_progress"] = True
                 t_chunk, diag_chunk, G_next, fields_next = (
-                    integrate_nonlinear_gx_diagnostics_state(
+                    integrate_nonlinear_explicit_diagnostics_state(
                         G_chunk,
                         grid,
                         geom,
@@ -1390,7 +1390,7 @@ def run_runtime_nonlinear(
             diagnostics_call_kwargs.update(resolved_diag_kw)
             if show_progress:
                 diagnostics_call_kwargs["show_progress"] = True
-            t, diag, G_final, fields_final = integrate_nonlinear_gx_diagnostics_state(
+            t, diag, G_final, fields_final = integrate_nonlinear_explicit_diagnostics_state(
                 G0,
                 grid,
                 geom,

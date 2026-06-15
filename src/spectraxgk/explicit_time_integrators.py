@@ -1,4 +1,4 @@
-"""Reference-aligned linear time integrator implemented in JAX."""
+"""Explicit linear time integrators implemented in JAX."""
 
 from __future__ import annotations
 
@@ -81,30 +81,30 @@ def _emit_time_progress(
     )
 
 
-def _gx_state_mask(cache: LinearCache) -> jnp.ndarray:
-    """Return the GX state-space mask applied after each completed step."""
+def _completed_step_state_mask(cache: LinearCache) -> jnp.ndarray:
+    """Return the completed-step state-space mask applied after each completed step."""
 
-    mask = _gx_growth_mask(cache.ky, cache.kx, cache.dealias_mask)
+    mask = _growth_rate_mode_mask(cache.ky, cache.kx, cache.dealias_mask)
     ky_zero = jnp.isclose(jnp.asarray(cache.ky), 0.0)
     kx_zero = jnp.isclose(jnp.asarray(cache.kx), 0.0)
     zonal00 = ky_zero[:, None] & kx_zero[None, :]
     return mask & ~zonal00
 
 
-def _apply_gx_state_mask(state: jnp.ndarray, cache: LinearCache) -> jnp.ndarray:
-    """Apply GX's end-of-step mask to a spectral state array."""
+def _apply_completed_step_state_mask(state: jnp.ndarray, cache: LinearCache) -> jnp.ndarray:
+    """Apply the completed-step mask to a spectral state array."""
 
-    mask = _gx_state_mask(cache).astype(state.real.dtype)[..., None]
+    mask = _completed_step_state_mask(cache).astype(state.real.dtype)[..., None]
     shape = (1,) * (state.ndim - mask.ndim) + mask.shape
     return state * jnp.reshape(mask, shape)
 
 
-def _gx_growth_mask(
+def _growth_rate_mode_mask(
     ky: jnp.ndarray,
     kx: jnp.ndarray,
     dealias_mask: jnp.ndarray,
 ) -> jnp.ndarray:
-    """Return the diagnostic mask used by GX-style growth-rate extraction.
+    """Return the diagnostic mask used by explicit-time growth-rate extraction.
 
     Single selected nonzonal ``ky`` slices should remain diagnosable even when
     the originating full nonlinear mesh would mark that representative row as
@@ -122,7 +122,7 @@ def _gx_growth_mask(
     return mask & ~zonal00
 
 
-def _gx_zp_from_grid(grid: SpectralGrid) -> float:
+def _parallel_periods_from_grid(grid: SpectralGrid) -> float:
     if grid.z.size <= 1:
         return 1.0
     dz = float(np.asarray(grid.z[1] - grid.z[0]))
@@ -130,11 +130,11 @@ def _gx_zp_from_grid(grid: SpectralGrid) -> float:
     return extent / (2.0 * np.pi)
 
 
-def _gx_k_arrays(grid: SpectralGrid) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def _cfl_wavenumber_arrays(grid: SpectralGrid) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     kx = np.asarray(grid.kx, dtype=float).reshape(-1)
     ky_full = np.asarray(grid.ky, dtype=float).reshape(-1)
     nz = int(grid.z.size)
-    zp = _gx_zp_from_grid(grid)
+    zp = _parallel_periods_from_grid(grid)
     kz = np.zeros(nz, dtype=float)
 
     # Preserve actual mode values on sliced ky grids. Reconstructing ky from
@@ -156,7 +156,7 @@ def _gx_k_arrays(grid: SpectralGrid) -> tuple[np.ndarray, np.ndarray, np.ndarray
     return kx, ky, kz
 
 
-def _gx_laguerre_vmax(nl: int) -> float:
+def _laguerre_velocity_max(nl: int) -> float:
     if nl <= 0:
         return 0.0
     nj = max(1, (3 * nl) // 2 - 1)
@@ -165,7 +165,7 @@ def _gx_laguerre_vmax(nl: int) -> float:
     return float(roots[idx])
 
 
-def _gx_eta_max(tprim: np.ndarray, fprim: np.ndarray) -> float:
+def _gradient_ratio_max(tprim: np.ndarray, fprim: np.ndarray) -> float:
     if tprim.size == 0:
         return 0.0
     eta = np.zeros_like(tprim, dtype=float)
@@ -175,7 +175,7 @@ def _gx_eta_max(tprim: np.ndarray, fprim: np.ndarray) -> float:
     return float(np.max(eta))
 
 
-def _gx_geometry_maxima(
+def _geometry_frequency_maxima(
     geom: FluxTubeGeometryLike, theta: np.ndarray
 ) -> tuple[float, float, float, float, float, float]:
     theta_j = jnp.asarray(theta)
@@ -194,7 +194,7 @@ def _gx_geometry_maxima(
     return bmag_max, cvdrift_max, gbdrift_max, cvdrift0_max, gbdrift0_max, float(geom.gradpar())
 
 
-def _gx_m0_max_ntft(
+def _non_twist_shift_frequency_max(
     geom: FluxTubeGeometryLike,
     grid: SpectralGrid,
     ky_max: float,
@@ -217,7 +217,7 @@ def _gx_m0_max_ntft(
     delta = 0.01313
     x0 = float(grid.x0)
     kxfac = float(grid.kxfac)
-    zp = _gx_zp_from_grid(grid)
+    zp = _parallel_periods_from_grid(grid)
     mid = nz // 2
     mid_next = min(mid + 1, nz - 1)
     ref_term = (1.0 - delta) * ftwist[mid] + delta * ftwist[mid_next]
@@ -249,7 +249,7 @@ def _gx_m0_max_ntft(
     return m0_max, cv0_max, gb0_max
 
 
-def _gx_linear_omega_max(
+def _linear_frequency_bound(
     grid: SpectralGrid,
     geom: FluxTubeGeometryLike,
     params: LinearParams,
@@ -258,7 +258,7 @@ def _gx_linear_omega_max(
     *,
     include_diamagnetic_drive: bool = True,
 ) -> np.ndarray:
-    kx, ky, kz = _gx_k_arrays(grid)
+    kx, ky, kz = _cfl_wavenumber_arrays(grid)
     nz = kz.size
     nx = kx.size
     ny = int(grid.ky.shape[0])
@@ -280,11 +280,11 @@ def _gx_linear_omega_max(
     tzmax = float(np.max(np.abs(tz))) if tz.size else 0.0
     vtmax = float(np.max(np.abs(vth))) if vth.size else 0.0
     vtmin = float(np.min(np.abs(vth))) if vth.size else 1.0
-    etamax = _gx_eta_max(tprim, fprim)
+    etamax = _gradient_ratio_max(tprim, fprim)
     vpar_max = 2.0 * float(np.sqrt(max(nm, 1)))
-    muB_max = _gx_laguerre_vmax(nl)
+    muB_max = _laguerre_velocity_max(nl)
     bmag_max, cvdrift_max, gbdrift_max, cvdrift0_max, gbdrift0_max, gradpar = (
-        _gx_geometry_maxima(geom, np.asarray(grid.z, dtype=float))
+        _geometry_frequency_maxima(geom, np.asarray(grid.z, dtype=float))
     )
 
     shat = float(geom.s_hat)
@@ -292,7 +292,7 @@ def _gx_linear_omega_max(
     m0_max = 0.0
     if non_twist and abs(shat) > 0.0 and ky.size > 0:
         ky_m0 = float(ky[-1])
-        m0_max, cvdrift0_max, gbdrift0_max = _gx_m0_max_ntft(
+        m0_max, cvdrift0_max, gbdrift0_max = _non_twist_shift_frequency_max(
             geom,
             grid,
             ky_m0,
@@ -349,14 +349,14 @@ def _gx_linear_omega_max(
     return omega_max
 
 
-def _gx_midplane_index(nz: int) -> int:
+def _diagnostic_midplane_index(nz: int) -> int:
     if nz <= 1:
         return 0
     idx = nz // 2 + 1
     return min(idx, nz - 1)
 
 
-def _gx_growth_rate_step(
+def _instantaneous_growth_rate_step(
     phi_now: jnp.ndarray,
     phi_prev: jnp.ndarray,
     dt: float | jax.Array,
@@ -365,7 +365,7 @@ def _gx_growth_rate_step(
     mask: jnp.ndarray,
     mode_method: str = "z_index",
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
-    """GX instantaneous growth rates from phi ratios at the midplane."""
+    """Instantaneous growth rates from phi ratios at the midplane."""
 
     if mode_method == "z_index":
         phi_now_z = phi_now[..., z_index]
@@ -388,7 +388,7 @@ def _gx_growth_rate_step(
     return gamma, omega
 
 
-def _gx_term_config(terms: LinearTerms | None) -> TermConfig:
+def _linear_term_config(terms: LinearTerms | None) -> TermConfig:
     return linear_terms_to_term_config(terms)
 
 
@@ -399,19 +399,19 @@ def _rk4_step(
     term_cfg: TermConfig,
     dt: float,
 ) -> tuple[jnp.ndarray, FieldState]:
-    """Single GX-style RK4 step for linear dynamics."""
+    """Single Explicit RK4 step for linear dynamics."""
 
     return _linear_explicit_step(G, cache, params, term_cfg, dt, method="rk4")
 
 
-def _rk3_gx_step(
+def _rk3_heun_step(
     G: jnp.ndarray,
     cache: LinearCache,
     params: LinearParams,
     term_cfg: TermConfig,
     dt: float,
 ) -> tuple[jnp.ndarray, FieldState]:
-    """Single GX-style RK3/Heun step for linear dynamics."""
+    """Single Explicit RK3/Heun step for linear dynamics."""
 
     return _linear_explicit_step(G, cache, params, term_cfg, dt, method="rk3")
 
@@ -425,7 +425,7 @@ def _linear_explicit_step(
     *,
     method: str,
 ) -> tuple[jnp.ndarray, FieldState]:
-    """Single explicit linear step matching GX-style staged schemes."""
+    """Single explicit linear step matching explicit staged schemes."""
 
     dt_val = jnp.asarray(dt)
     method_key = method.strip().lower()
@@ -447,7 +447,7 @@ def _linear_explicit_step(
         G2 = 0.75 * G + 0.25 * (G1 + dt_val * k2)
         k3 = rhs(G2)
         G_next = (1.0 / 3.0) * G + (2.0 / 3.0) * (G2 + dt_val * k3)
-    elif method_key in {"rk3", "rk3_gx"}:
+    elif method_key in {"rk3", "rk3_heun"}:
         G1 = G + (dt_val / 3.0) * k1
         k2 = rhs(G1)
         G2 = G + (2.0 * dt_val / 3.0) * k2
@@ -486,18 +486,18 @@ def _linear_explicit_step(
         G_next = G_q2 + 0.6 * G_q1 + 0.1 * dt_val * dG_final
     else:
         raise ValueError(
-            "GX linear method must be one of {'euler', 'rk2', 'rk3', 'rk3_classic', 'rk3_gx', 'rk4', 'k10', 'sspx3'}"
+            "explicit linear method must be one of {'euler', 'rk2', 'rk3', 'rk3_classic', 'rk3_heun', 'rk4', 'k10', 'sspx3'}"
         )
 
-    # GX masks G only after the full explicit step, before the next field solve.
-    G_next = _apply_gx_state_mask(jnp.asarray(G_next), cache)
+    # Mask inactive modes only after the full explicit step, before the next field solve.
+    G_next = _apply_completed_step_state_mask(jnp.asarray(G_next), cache)
 
     # fields at the end of step
     _, fields = assemble_rhs_cached(G_next, cache, params, terms=term_cfg, dt=dt_val)
     return G_next, fields
 
 
-def integrate_linear_gx(
+def integrate_linear_explicit(
     G0: jnp.ndarray,
     grid: SpectralGrid,
     cache: LinearCache,
@@ -511,26 +511,26 @@ def integrate_linear_gx(
     jit: bool = True,
     show_progress: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """GX-style RK4 integrator with GX growth-rate diagnostics."""
+    """Explicit time integrator with growth-rate diagnostics."""
 
     if mode_method not in {"z_index", "max"}:
         raise ValueError("mode_method must be 'z_index' or 'max'")
 
     method = time_cfg.method.strip().lower()
-    if method not in {"euler", "rk2", "rk3", "rk3_classic", "rk3_gx", "rk4", "k10", "sspx3"}:
+    if method not in {"euler", "rk2", "rk3", "rk3_classic", "rk3_heun", "rk4", "k10", "sspx3"}:
         raise ValueError(
-            "method must be one of {'euler', 'rk2', 'rk3', 'rk3_classic', 'rk3_gx', 'rk4', 'k10', 'sspx3'}"
+            "method must be one of {'euler', 'rk2', 'rk3', 'rk3_classic', 'rk3_heun', 'rk4', 'k10', 'sspx3'}"
         )
-    term_cfg = _gx_term_config(terms)
+    term_cfg = _linear_term_config(terms)
     t_max = float(time_cfg.t_max)
     dt = float(time_cfg.dt)
     dt_min = float(time_cfg.dt_min)
-    # GX default behavior: when dt_max is unset, dt_max == dt.
+    # Explicit-time default behavior: when dt_max is unset, dt_max == dt.
     dt_max = float(time_cfg.dt_max) if time_cfg.dt_max is not None else dt
     sample_stride = int(max(time_cfg.sample_stride, 1))
 
-    z_idx = _gx_midplane_index(grid.z.size) if z_index is None else int(z_index)
-    mask = _gx_growth_mask(grid.ky, grid.kx, grid.dealias_mask)
+    z_idx = _diagnostic_midplane_index(grid.z.size) if z_index is None else int(z_index)
+    mask = _growth_rate_mode_mask(grid.ky, grid.kx, grid.dealias_mask)
 
     G = jnp.asarray(G0)
     t = 0.0
@@ -540,7 +540,7 @@ def integrate_linear_gx(
     _, fields0 = assemble_rhs_cached(G, cache, params, terms=term_cfg, dt=dt)
     phi_prev = fields0.phi
 
-    omega_max = _gx_linear_omega_max(grid, geom, params, G.shape[-5], G.shape[-4])
+    omega_max = _linear_frequency_bound(grid, geom, params, G.shape[-5], G.shape[-4])
     wmax = float(np.sum(omega_max))
     if not time_cfg.fixed_dt and wmax > 0.0:
         dt_guess = float(time_cfg.cfl_fac) * float(time_cfg.cfl) / wmax
@@ -583,7 +583,7 @@ def integrate_linear_gx(
         sampled = False
         if step % sample_stride == 0 or t >= t_max:
             sampled = True
-            gamma, omega = _gx_growth_rate_step(
+            gamma, omega = _instantaneous_growth_rate_step(
                 phi,
                 phi_prev,
                 dt,
@@ -630,7 +630,7 @@ def integrate_linear_gx(
     )
 
 
-def integrate_linear_gx_diagnostics(
+def integrate_linear_explicit_diagnostics(
     G0: jnp.ndarray,
     grid: SpectralGrid,
     cache: LinearCache,
@@ -644,13 +644,13 @@ def integrate_linear_gx_diagnostics(
     jit: bool = True,
     show_progress: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, SimulationDiagnostics]:
-    """GX-style RK4 integrator with GX growth-rate + energy/flux diagnostics."""
+    """Explicit time integrator with growth-rate plus energy/flux diagnostics."""
 
     if show_progress:
         from rich.console import Console
         from rich.panel import Panel
         console = Console()
-        console.print(Panel.fit("[bold blue]SPECTRAX-GK[/bold blue] | [bold green]GX Linear Simulation Started[/bold green]", border_style="blue"))
+        console.print(Panel.fit("[bold blue]SPECTRAX-GK[/bold blue] | [bold green]Explicit Linear Simulation Started[/bold green]", border_style="blue"))
 
     from spectraxgk.diagnostics import (
         SimulationDiagnostics,
@@ -669,22 +669,22 @@ def integrate_linear_gx_diagnostics(
     if terms is None:
         terms = LinearTerms()
     method = time_cfg.method.strip().lower()
-    if method not in {"euler", "rk2", "rk3", "rk3_classic", "rk3_gx", "rk4", "k10", "sspx3"}:
+    if method not in {"euler", "rk2", "rk3", "rk3_classic", "rk3_heun", "rk4", "k10", "sspx3"}:
         raise ValueError(
-            "method must be one of {'euler', 'rk2', 'rk3', 'rk3_classic', 'rk3_gx', 'rk4', 'k10', 'sspx3'}"
+            "method must be one of {'euler', 'rk2', 'rk3', 'rk3_classic', 'rk3_heun', 'rk4', 'k10', 'sspx3'}"
         )
-    term_cfg = _gx_term_config(terms)
+    term_cfg = _linear_term_config(terms)
     geom_eff = ensure_flux_tube_geometry_data(geom, grid.z)
 
     t_max = float(time_cfg.t_max)
     dt = float(time_cfg.dt)
     dt_min = float(time_cfg.dt_min)
-    # GX default behavior: when dt_max is unset, dt_max == dt.
+    # Explicit-time default behavior: when dt_max is unset, dt_max == dt.
     dt_max = float(time_cfg.dt_max) if time_cfg.dt_max is not None else dt
     sample_stride = int(max(time_cfg.sample_stride, 1))
 
-    z_idx = _gx_midplane_index(grid.z.size) if z_index is None else int(z_index)
-    mask = _gx_growth_mask(grid.ky, grid.kx, grid.dealias_mask)
+    z_idx = _diagnostic_midplane_index(grid.z.size) if z_index is None else int(z_index)
+    mask = _growth_rate_mode_mask(grid.ky, grid.kx, grid.dealias_mask)
 
     G = jnp.asarray(G0)
     t = 0.0
@@ -693,7 +693,7 @@ def integrate_linear_gx_diagnostics(
     _, fields0 = assemble_rhs_cached(G, cache, params, terms=term_cfg, dt=dt)
     phi_prev = fields0.phi
 
-    omega_max = _gx_linear_omega_max(grid, geom_eff, params, G.shape[-5], G.shape[-4])
+    omega_max = _linear_frequency_bound(grid, geom_eff, params, G.shape[-5], G.shape[-4])
     wmax = float(np.sum(omega_max))
     if not time_cfg.fixed_dt and wmax > 0.0:
         dt_guess = float(time_cfg.cfl_fac) * float(time_cfg.cfl) / wmax
@@ -735,7 +735,7 @@ def integrate_linear_gx_diagnostics(
             phi = fields.phi
             apar = fields.apar if fields.apar is not None else jnp.zeros_like(phi)
             bpar = fields.bpar if fields.bpar is not None else jnp.zeros_like(phi)
-            gamma, omega = _gx_growth_rate_step(
+            gamma, omega = _instantaneous_growth_rate_step(
                 phi,
                 phi_prev,
                 dt,
@@ -822,7 +822,3 @@ def integrate_linear_gx_diagnostics(
         np.asarray(omega_list),
         diag,
     )
-
-
-# Compatibility alias retained while callers migrate off the older name.
-GXTimeConfig = ExplicitTimeConfig

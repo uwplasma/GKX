@@ -11,7 +11,7 @@ import numpy as np
 from spectraxgk.config import resolve_cfl_fac
 from spectraxgk.diagnostics import SimulationDiagnostics, total_energy
 from spectraxgk.geometry import FluxTubeGeometryLike, SlabGeometry
-from spectraxgk.gx_integrators import _gx_growth_rate_step, _gx_midplane_index
+from spectraxgk.explicit_time_integrators import _instantaneous_growth_rate_step, _diagnostic_midplane_index
 from spectraxgk.grids import SpectralGrid
 from spectraxgk.runtime_config import RuntimeConfig
 from spectraxgk.terms.config import FieldState, TermConfig
@@ -47,7 +47,7 @@ def validate_cetg_runtime_config(
     Nl: int,
     Nm: int,
 ) -> None:
-    """Validate that a runtime config matches the GX cETG model contract."""
+    """Validate that a runtime config matches the cETG model contract."""
 
     if _model_key(cfg) != "cetg":
         raise ValueError("cETG helpers require physics.reduced_model='cetg'")
@@ -357,7 +357,7 @@ def _compute_cetg_diag(
 ]:
     G_int = _to_internal_state(G)
     phi = fields.phi
-    gamma_modes, omega_modes = _gx_growth_rate_step(phi, phi_prev, dt_step, z_index=z_index, mask=mask)
+    gamma_modes, omega_modes = _instantaneous_growth_rate_step(phi, phi_prev, dt_step, z_index=z_index, mask=mask)
     real_dtype = jnp.real(jnp.empty((), dtype=phi.dtype)).dtype
     if omega_ky_index is not None:
         ky_i = int(np.clip(omega_ky_index, 0, int(gamma_modes.shape[0]) - 1))
@@ -397,7 +397,7 @@ def _compute_cetg_diag(
     )
 
 
-def integrate_cetg_gx_diagnostics_state(
+def integrate_cetg_explicit_diagnostics_state(
     G0: jnp.ndarray,
     grid: SpectralGrid,
     params: CETGModelParams,
@@ -418,9 +418,9 @@ def integrate_cetg_gx_diagnostics_state(
     cfl_fac: float | None = None,
     show_progress: bool = False,
 ) -> tuple[jnp.ndarray, SimulationDiagnostics, jnp.ndarray, FieldState]:
-    """Integrate the GX cETG model and stream runtime diagnostics."""
+    """Integrate the cETG model and stream runtime diagnostics."""
 
-    if method not in {"euler", "rk2", "rk3", "rk3_classic", "rk3_gx", "rk4", "k10", "sspx3"}:
+    if method not in {"euler", "rk2", "rk3", "rk3_classic", "rk3_heun", "rk4", "k10", "sspx3"}:
         raise ValueError("Unsupported explicit cETG method")
 
     G0_int = _project_state(_to_internal_state(G0), grid, gx_real_fft=gx_real_fft)
@@ -431,7 +431,7 @@ def integrate_cetg_gx_diagnostics_state(
     dt_max_val = jnp.asarray(dt if dt_max is None else dt_max, dtype=real_dtype)
     cfl_val = jnp.asarray(cfl, dtype=real_dtype)
     cfl_fac_val = jnp.asarray(resolve_cfl_fac(method, cfl_fac), dtype=real_dtype)
-    z_idx = _gx_midplane_index(grid.z.size)
+    z_idx = _diagnostic_midplane_index(grid.z.size)
     mask = jnp.broadcast_to(jnp.asarray(grid.dealias_mask, dtype=bool), (grid.ky.size, grid.kx.size))
     linear_omega = jnp.asarray(_cetg_linear_omega_max(grid, params), dtype=real_dtype)
 
@@ -490,7 +490,7 @@ def integrate_cetg_gx_diagnostics_state(
             )
             k3, _ = rhs_fn(G2)
             G_new = (1.0 / 3.0) * G_state + (2.0 / 3.0) * (G2 + dt_local * k3)
-        elif method in {"rk3", "rk3_gx"}:
+        elif method in {"rk3", "rk3_heun"}:
             k1 = dG
             G1 = _project_state(G_state + (dt_local / 3.0) * k1, grid, gx_real_fft=gx_real_fft)
             k2, _ = rhs_fn(G1)

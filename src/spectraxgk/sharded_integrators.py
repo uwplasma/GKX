@@ -14,7 +14,7 @@ from spectraxgk.nonlinear import _make_hermitian_projector, nonlinear_rhs_cached
 from spectraxgk.terms.config import FieldState, TermConfig
 
 
-_EXPLICIT_METHODS = {"euler", "rk2", "rk3", "rk3_gx", "rk3_classic", "rk4", "sspx3"}
+_EXPLICIT_METHODS = {"euler", "rk2", "rk3", "rk3_heun", "rk3_classic", "rk4", "sspx3"}
 
 
 def _dt_array(dt: float, state_dtype: jnp.dtype) -> jnp.ndarray:
@@ -30,7 +30,7 @@ def _validate_explicit_method(method: str) -> str:
     method_key = str(method).strip().lower()
     if method_key not in _EXPLICIT_METHODS:
         raise ValueError(
-            "method must be one of {'euler', 'rk2', 'rk3', 'rk3_gx', 'rk3_classic', 'rk4', 'sspx3'}"
+            "method must be one of {'euler', 'rk2', 'rk3', 'rk3_heun', 'rk3_classic', 'rk4', 'sspx3'}"
         )
     return method_key
 
@@ -161,7 +161,7 @@ def integrate_nonlinear_sharded(
             G2 = _maybe_shard(_project(0.75 * G + 0.25 * (G1 + dt_val * k2)))
             k3, _ = _rhs(G2)
             G_next = (1.0 / 3.0) * G + (2.0 / 3.0) * (G2 + dt_val * k3)
-        elif method_key in {"rk3", "rk3_gx"}:
+        elif method_key in {"rk3", "rk3_heun"}:
             k2, _ = _rhs(_stage(G, k1, 1.0 / 3.0))
             k3, _ = _rhs(_stage(G, k2, 2.0 / 3.0))
             G3 = _stage(G, k3, 0.75)

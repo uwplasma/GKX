@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from spectraxgk.analysis import ModeSelection
-from spectraxgk.gx_integrators import ExplicitTimeConfig
+from spectraxgk.explicit_time_integrators import ExplicitTimeConfig
 from spectraxgk.linear_krylov import KrylovConfig
 
 from spectraxgk.config import (

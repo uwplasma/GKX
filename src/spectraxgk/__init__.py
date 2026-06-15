@@ -147,7 +147,7 @@ from spectraxgk.nonlinear import (
     build_nonlinear_imex_operator,
     integrate_nonlinear,
     integrate_nonlinear_cached,
-    integrate_nonlinear_gx_diagnostics,
+    integrate_nonlinear_explicit_diagnostics,
     nonlinear_rhs_cached,
 )
 from spectraxgk.runners import (
@@ -479,18 +479,15 @@ from spectraxgk.sharded_integrators import (
     integrate_linear_sharded,
     integrate_nonlinear_sharded,
 )
-from spectraxgk.gx_integrators import (
+from spectraxgk.explicit_time_integrators import (
     ExplicitTimeConfig,
-    GXTimeConfig,
-    integrate_linear_gx,
-    integrate_linear_gx_diagnostics,
+    integrate_linear_explicit,
+    integrate_linear_explicit_diagnostics,
 )
 from spectraxgk.diagnostics import SimulationDiagnostics
 
 LinearExplicitTimeConfig = ExplicitTimeConfig
-integrate_linear_explicit = integrate_linear_gx
-integrate_linear_explicit_diagnostics = integrate_linear_gx_diagnostics
-integrate_nonlinear_diagnostics = integrate_nonlinear_gx_diagnostics
+integrate_nonlinear_diagnostics = integrate_nonlinear_explicit_diagnostics
 growth_rate_from_phi = gx_growth_rate_from_phi
 
 __all__ = [
@@ -616,17 +613,14 @@ __all__ = [
     "integrate_nonlinear_sharded",
     "integrate_nonlinear",
     "integrate_nonlinear_cached",
-    "integrate_nonlinear_gx_diagnostics",
+    "integrate_nonlinear_explicit_diagnostics",
     "integrate_nonlinear_diagnostics",
     "integrate_nonlinear_diffrax",
     "build_nonlinear_imex_operator",
     "IMEXLinearOperator",
-    "GXTimeConfig",
     "ExplicitTimeConfig",
     "LinearExplicitTimeConfig",
-    "integrate_linear_gx",
     "integrate_linear_explicit",
-    "integrate_linear_gx_diagnostics",
     "integrate_linear_explicit_diagnostics",
     "SimulationDiagnostics",
     "nonlinear_rhs_cached",

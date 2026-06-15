@@ -28,11 +28,11 @@ from spectraxgk.terms.assembly import (
 from spectraxgk.terms.config import FieldState, TermConfig
 from spectraxgk.terms.integrators import integrate_nonlinear as integrate_nonlinear_scan
 from spectraxgk.terms.nonlinear import nonlinear_em_contribution
-from spectraxgk.gx_integrators import (
-    _gx_growth_rate_step,
-    _gx_laguerre_vmax,
-    _gx_linear_omega_max,
-    _gx_midplane_index,
+from spectraxgk.explicit_time_integrators import (
+    _instantaneous_growth_rate_step,
+    _laguerre_velocity_max,
+    _linear_frequency_bound,
+    _diagnostic_midplane_index,
 )
 from spectraxgk.diagnostics import (
     SimulationDiagnostics,
@@ -235,7 +235,7 @@ def integrate_nonlinear(
     )
 
 
-def _integrate_nonlinear_gx_diagnostics_impl(
+def _integrate_nonlinear_explicit_diagnostics_impl(
     G0: jnp.ndarray,
     grid: SpectralGrid,
     geom: FluxTubeGeometryLike,
@@ -294,7 +294,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
         raise ValueError("Final-state runtime diagnostics helper only supports explicit methods")
     vol_fac, flux_fac = fieldline_quadrature_weights(geom_eff, grid)
     mask = _gx_omega_mode_mask(grid, cache, gx_real_fft=gx_real_fft)
-    z_idx = _gx_midplane_index(grid.z.size) if z_index is None else int(z_index)
+    z_idx = _diagnostic_midplane_index(grid.z.size) if z_index is None else int(z_index)
     use_dealias = bool(use_dealias_mask)
     use_hermitian = bool(gx_real_fft) and bool(np.any(np.asarray(grid.ky) < 0.0))
     ny_full = int(grid.ky.size)
@@ -336,7 +336,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
         else jnp.asarray(jnp.nan, dtype=real_dtype)
     )
     dt_min_val = jnp.asarray(dt_min, dtype=real_dtype)
-    # GX default behavior: when dt_max is unset, dt_max == dt.
+    # Explicit-time default behavior: when dt_max is unset, dt_max == dt.
     dt_max_val = jnp.asarray(dt if dt_max is None else dt_max, dtype=real_dtype)
     cfl_val = jnp.asarray(cfl, dtype=real_dtype)
     cfl_fac_val = jnp.asarray(resolve_cfl_fac(method, cfl_fac), dtype=real_dtype)
@@ -352,10 +352,10 @@ def _integrate_nonlinear_gx_diagnostics_impl(
     nl = int(cache.l.shape[0])
     nm = int(cache.m.shape[1])
     vpar_max = 2.0 * float(np.sqrt(max(nm, 1))) * vtmax
-    muB_max = _gx_laguerre_vmax(nl) * tzmax
+    muB_max = _laguerre_velocity_max(nl) * tzmax
     kxfac_val = float(np.asarray(cache.kxfac))
     linear_omega = jnp.asarray(
-        _gx_linear_omega_max(
+        _linear_frequency_bound(
             grid,
             geom_eff,
             params,
@@ -425,7 +425,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
         apar_prev_step = fields_prev_step.apar if fields_prev_step.apar is not None else jnp.zeros_like(phi_prev_step)
         bpar_prev_step = fields_prev_step.bpar if fields_prev_step.bpar is not None else jnp.zeros_like(phi_prev_step)
 
-        gamma_modes, omega_modes = _gx_growth_rate_step(
+        gamma_modes, omega_modes = _instantaneous_growth_rate_step(
             phi, phi_prev_step, dt_step, z_index=z_idx, mask=mask
         )
         if omega_ky_index is not None:
@@ -723,7 +723,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
             G2 = _project_state(0.75 * G + 0.25 * (G1 + dt_local * k2))
             k3, _ = rhs_fn(G2)
             G_new = (1.0 / 3.0) * G + (2.0 / 3.0) * (G2 + dt_local * k3)
-        elif method in {"rk3", "rk3_gx"}:
+        elif method in {"rk3", "rk3_heun"}:
             k1 = dG
             G1 = _project_state(G + (dt_local / 3.0) * k1)
             k2, _ = rhs_fn(G1)
@@ -775,7 +775,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
             G_new = G_q2 + 0.6 * G_q1 + 0.1 * dt_local * dG_final
         else:
             raise ValueError(
-                "method must be one of {'euler', 'rk2', 'rk3', 'rk3_classic', 'rk3_gx', 'rk4', 'k10', 'sspx3'}"
+                "method must be one of {'euler', 'rk2', 'rk3', 'rk3_classic', 'rk3_heun', 'rk4', 'k10', 'sspx3'}"
             )
         if use_collision_split and damping is not None:
             G_new = _apply_collision_split(G_new, damping, dt_local, collision_scheme)
@@ -926,7 +926,7 @@ def _integrate_nonlinear_gx_diagnostics_impl(
     return t, diag_out, G_final, fields_final
 
 
-def integrate_nonlinear_gx_diagnostics(
+def integrate_nonlinear_explicit_diagnostics(
     G0: jnp.ndarray,
     grid: SpectralGrid,
     geom: FluxTubeGeometryLike,
@@ -971,7 +971,7 @@ def integrate_nonlinear_gx_diagnostics(
     """Integrate nonlinear system and return runtime diagnostics."""
 
     if method in {"imex", "semi-implicit"}:
-        return integrate_nonlinear_imex_gx_diagnostics(
+        return integrate_nonlinear_imex_diagnostics(
             G0,
             grid,
             geom,
@@ -1007,7 +1007,7 @@ def integrate_nonlinear_gx_diagnostics(
             show_progress=show_progress,
         )
 
-    t, diag_out, _G_final, _fields_final = _integrate_nonlinear_gx_diagnostics_impl(
+    t, diag_out, _G_final, _fields_final = _integrate_nonlinear_explicit_diagnostics_impl(
         G0,
         grid,
         geom,
@@ -1051,7 +1051,7 @@ def integrate_nonlinear_gx_diagnostics(
     return t, diag_out
 
 
-def integrate_nonlinear_gx_diagnostics_state(
+def integrate_nonlinear_explicit_diagnostics_state(
     G0: jnp.ndarray,
     grid: SpectralGrid,
     geom: FluxTubeGeometryLike,
@@ -1096,9 +1096,9 @@ def integrate_nonlinear_gx_diagnostics_state(
     """Integrate nonlinear system and return runtime diagnostics plus the final state."""
 
     if method in {"imex", "semi-implicit"}:
-        raise ValueError("integrate_nonlinear_gx_diagnostics_state only supports explicit methods")
+        raise ValueError("integrate_nonlinear_explicit_diagnostics_state only supports explicit methods")
 
-    return _integrate_nonlinear_gx_diagnostics_impl(
+    return _integrate_nonlinear_explicit_diagnostics_impl(
         G0,
         grid,
         geom,
@@ -1141,7 +1141,7 @@ def integrate_nonlinear_gx_diagnostics_state(
     )
 
 
-def integrate_nonlinear_imex_gx_diagnostics(
+def integrate_nonlinear_imex_diagnostics(
     G0: jnp.ndarray,
     grid: SpectralGrid,
     geom: FluxTubeGeometryLike,
@@ -1197,7 +1197,7 @@ def integrate_nonlinear_imex_gx_diagnostics(
 
     vol_fac, flux_fac = fieldline_quadrature_weights(geom_eff, grid)
     mask = _gx_omega_mode_mask(grid, cache, gx_real_fft=gx_real_fft)
-    z_idx = _gx_midplane_index(grid.z.size) if z_index is None else int(z_index)
+    z_idx = _diagnostic_midplane_index(grid.z.size) if z_index is None else int(z_index)
     use_dealias = bool(use_dealias_mask)
     use_hermitian = bool(gx_real_fft) and bool(np.any(np.asarray(grid.ky) < 0.0))
     ny_full = int(grid.ky.size)
@@ -1329,7 +1329,7 @@ def integrate_nonlinear_imex_gx_diagnostics(
         apar_prev_step = fields_prev_step.apar if fields_prev_step.apar is not None else jnp.zeros_like(phi_prev_step)
         bpar_prev_step = fields_prev_step.bpar if fields_prev_step.bpar is not None else jnp.zeros_like(phi_prev_step)
 
-        gamma_modes, omega_modes = _gx_growth_rate_step(
+        gamma_modes, omega_modes = _instantaneous_growth_rate_step(
             phi, phi_prev_step, dt_step, z_index=z_idx, mask=mask
         )
         if omega_ky_index is not None:

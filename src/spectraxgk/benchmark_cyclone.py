@@ -55,7 +55,7 @@ from spectraxgk.config import (
 from spectraxgk.diffrax_integrators import integrate_linear_diffrax_streaming
 from spectraxgk.geometry import SAlphaGeometry
 from spectraxgk.grids import build_spectral_grid, select_ky_grid
-from spectraxgk.gx_integrators import ExplicitTimeConfig, integrate_linear_gx
+from spectraxgk.explicit_time_integrators import ExplicitTimeConfig, integrate_linear_explicit
 from spectraxgk.linear import (
     LinearParams,
     LinearTerms,
@@ -211,7 +211,7 @@ def run_cyclone_linear(
                     fixed_dt=True,
                 )
                 G0_seed = _fresh_G0()
-                t_short, phi_t, _g_t, _o_t = integrate_linear_gx(
+                t_short, phi_t, _g_t, _o_t = integrate_linear_explicit(
                     G0_seed,
                     grid,
                     cache,
@@ -265,7 +265,7 @@ def run_cyclone_linear(
                         fixed_dt=True,
                     )
                     G0_seed = jnp.asarray(np.asarray(G0_seed))
-                    t_short, phi_t, _g_t, _o_t = integrate_linear_gx(
+                    t_short, phi_t, _g_t, _o_t = integrate_linear_explicit(
                         G0_seed,
                         grid,
                         cache_seed,
@@ -390,7 +390,7 @@ def run_cyclone_linear(
                 sample_stride=stride,
                 fixed_dt=True,
             )
-            t, phi_t, _g_t, _o_t = integrate_linear_gx(
+            t, phi_t, _g_t, _o_t = integrate_linear_explicit(
                 _fresh_G0(),
                 grid,
                 cache,
@@ -782,7 +782,7 @@ def run_cyclone_scan(
                         fixed_dt=True,
                     )
                     G0_seed = jnp.array(G0_jax)
-                    t_short, phi_seed, _g_t, _o_t = integrate_linear_gx(
+                    t_short, phi_seed, _g_t, _o_t = integrate_linear_explicit(
                         G0_seed,
                         grid,
                         cache,
@@ -832,7 +832,7 @@ def run_cyclone_scan(
                         sample_stride=1,
                         fixed_dt=True,
                     )
-                    t_short, phi_seed, _g_t, _o_t = integrate_linear_gx(
+                    t_short, phi_seed, _g_t, _o_t = integrate_linear_explicit(
                         G0_seed,
                         grid,
                         cache_seed,
@@ -974,7 +974,7 @@ def run_cyclone_scan(
                 cfl_fac=cfl_fac_i,
             )
             G0_time = jnp.array(G0_jax)
-            t, phi_gx, _g_t, _o_t = integrate_linear_gx(
+            t, phi_gx, _g_t, _o_t = integrate_linear_explicit(
                 G0_time,
                 grid,
                 cache,

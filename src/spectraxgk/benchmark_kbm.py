@@ -57,9 +57,9 @@ from spectraxgk.geometry import (
     build_flux_tube_geometry,
 )
 from spectraxgk.grids import build_spectral_grid, select_ky_grid
-from spectraxgk.gx_integrators import (
+from spectraxgk.explicit_time_integrators import (
     ExplicitTimeConfig,
-    integrate_linear_gx_diagnostics,
+    integrate_linear_explicit_diagnostics,
 )
 from spectraxgk.linear import (
     LinearParams,
@@ -238,7 +238,7 @@ def run_kbm_beta_scan(
                     else float(ExplicitTimeConfig.cfl_fac)
                 ),
             )
-            t_arr, _phi_t, gamma_t, omega_t, _gx_diag = integrate_linear_gx_diagnostics(
+            t_arr, _phi_t, gamma_t, omega_t, _gx_diag = integrate_linear_explicit_diagnostics(
                 G0_jax,
                 grid,
                 cache,
@@ -801,7 +801,7 @@ def run_kbm_linear(
                 else float(ExplicitTimeConfig.cfl_fac)
             ),
         )
-        t_arr, phi_t, gamma_t, omega_t, _gx_diag = integrate_linear_gx_diagnostics(
+        t_arr, phi_t, gamma_t, omega_t, _gx_diag = integrate_linear_explicit_diagnostics(
             G0_jax,
             grid,
             cache,
