@@ -25,7 +25,7 @@ from spectraxgk.terms.linear_terms import (
     hypercollisions_contribution,
     hyperdiffusion_contribution,
     mirror_contribution,
-    streaming_contribution_gx,
+    linked_streaming_contribution,
 )
 
 
@@ -232,7 +232,7 @@ def assemble_rhs_cached(
     )
     H = build_H(G, Jl, fields.phi, tz, apar=h_apar, vth=vth, bpar=h_bpar, JlB=JlB)
 
-    dG = streaming_contribution_gx(
+    dG = linked_streaming_contribution(
         G,
         phi=fields.phi,
         apar=h_apar,
@@ -448,7 +448,7 @@ def assemble_rhs_terms_cached(
     H = build_H(G, Jl, fields.phi, tz, apar=h_apar, vth=vth, bpar=h_bpar, JlB=JlB)
 
     contrib: dict[str, jnp.ndarray] = {}
-    contrib["streaming"] = streaming_contribution_gx(
+    contrib["streaming"] = linked_streaming_contribution(
         G,
         phi=fields.phi,
         apar=h_apar,

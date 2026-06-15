@@ -53,29 +53,33 @@ def streaming_contribution(
     if _is_static_zero(weight, jnp.real(H).dtype):
         return _zeros_like_result(H, weight)
     vth_s = vth if vth.ndim == 0 else vth[:, None, None, None, None, None]
-    return -weight * kpar_scale * streaming_term(
-        H,
-        kz,
-        vth_s,
-        sqrt_p,
-        sqrt_m,
-        dz=dz,
-        kx_link_plus=kx_link_plus,
-        kx_link_minus=kx_link_minus,
-        kx_mask_plus=kx_mask_plus,
-        kx_mask_minus=kx_mask_minus,
-        linked_indices=linked_indices,
-        linked_kz=linked_kz,
-        linked_inverse_permutation=linked_inverse_permutation,
-        linked_full_cover=linked_full_cover,
-        linked_gather_map=linked_gather_map,
-        linked_gather_mask=linked_gather_mask,
-        linked_use_gather=linked_use_gather,
-        use_twist_shift=use_twist_shift,
+    return (
+        -weight
+        * kpar_scale
+        * streaming_term(
+            H,
+            kz,
+            vth_s,
+            sqrt_p,
+            sqrt_m,
+            dz=dz,
+            kx_link_plus=kx_link_plus,
+            kx_link_minus=kx_link_minus,
+            kx_mask_plus=kx_mask_plus,
+            kx_mask_minus=kx_mask_minus,
+            linked_indices=linked_indices,
+            linked_kz=linked_kz,
+            linked_inverse_permutation=linked_inverse_permutation,
+            linked_full_cover=linked_full_cover,
+            linked_gather_map=linked_gather_map,
+            linked_gather_mask=linked_gather_mask,
+            linked_use_gather=linked_use_gather,
+            use_twist_shift=use_twist_shift,
+        )
     )
 
 
-def streaming_contribution_gx(
+def linked_streaming_contribution(
     G: jnp.ndarray,
     *,
     phi: jnp.ndarray,
@@ -124,22 +128,30 @@ def streaming_contribution_gx(
     if apar is not None:
         apar_s = apar[None, None, ...]
         drive_m0 = zt5 * (vth5 * vth5) * Jl * apar_s
-        field_rhs = field_rhs + (m_idx == 0).astype(field_rhs.dtype) * drive_m0[:, :, None, ...]
+        field_rhs = (
+            field_rhs + (m_idx == 0).astype(field_rhs.dtype) * drive_m0[:, :, None, ...]
+        )
     if Nm > 1:
         drive_m1 = -zt5 * vth5 * Jl * phi_s
         if bpar is not None:
             drive_m1 = drive_m1 - vth5 * JlB * bpar[None, None, ...]
-        field_rhs = field_rhs + (m_idx == 1).astype(field_rhs.dtype) * drive_m1[:, :, None, ...]
+        field_rhs = (
+            field_rhs + (m_idx == 1).astype(field_rhs.dtype) * drive_m1[:, :, None, ...]
+        )
     if Nm > 2 and apar is not None:
         drive_m2 = jnp.sqrt(2.0) * zt5 * (vth5 * vth5) * Jl * apar_s
-        field_rhs = field_rhs + (m_idx == 2).astype(field_rhs.dtype) * drive_m2[:, :, None, ...]
+        field_rhs = (
+            field_rhs + (m_idx == 2).astype(field_rhs.dtype) * drive_m2[:, :, None, ...]
+        )
     rhs = rhs + field_rhs
 
     rhs = kpar_scale * rhs
 
     if use_twist_shift:
         if linked_indices is None or linked_kz is None:
-            raise ValueError("linked_indices and linked_kz must be provided for linked streaming")
+            raise ValueError(
+                "linked_indices and linked_kz must be provided for linked streaming"
+            )
         dG = grad_z_linked_fft(
             rhs,
             dz=dz,
@@ -155,6 +167,9 @@ def streaming_contribution_gx(
         dG = grad_z_periodic(rhs, kz=kz)
 
     return weight * dG
+
+
+streaming_contribution_gx = linked_streaming_contribution
 
 
 def mirror_contribution(
@@ -246,10 +261,14 @@ def diamagnetic_contribution(
     tz_s = tz[:, None, None, None, None]
     omega_star_s = omega_star[None, None, :, None, None]
     omega_star_bpar = omega_star_s * tz_s
-    drive_m0 = omega_star_s * phi * (
-        Jl_m1 * (l4 * tprim_s)
-        + Jl * (fprim_s + 2.0 * l4 * tprim_s)
-        + Jl_p1 * ((l4 + 1.0) * tprim_s)
+    drive_m0 = (
+        omega_star_s
+        * phi
+        * (
+            Jl_m1 * (l4 * tprim_s)
+            + Jl * (fprim_s + 2.0 * l4 * tprim_s)
+            + Jl_p1 * ((l4 + 1.0) * tprim_s)
+        )
     )
     if bpar is not None:
         drive_m0 = drive_m0 + omega_star_bpar * bpar * (
@@ -261,14 +280,21 @@ def diamagnetic_contribution(
     if Nm > 2:
         drive_m2 = omega_star_s * phi * Jl * (tprim_s / jnp.sqrt(2.0))
         if bpar is not None:
-            drive_m2 = drive_m2 + omega_star_bpar * bpar * JlB * (tprim_s / jnp.sqrt(2.0))
+            drive_m2 = drive_m2 + omega_star_bpar * bpar * JlB * (
+                tprim_s / jnp.sqrt(2.0)
+            )
         drive = drive + (m_idx == 2).astype(dG.dtype) * drive_m2[:, :, None, ...]
     if Nm > 1 and apar is not None:
         vth_s = vth[:, None, None, None, None]
-        apar_drive = -vth_s * omega_star_s * apar * (
-            Jl_m1 * (l4 * tprim_s)
-            + Jl * (fprim_s + (2.0 * l4 + 1.0) * tprim_s)
-            + Jl_p1 * ((l4 + 1.0) * tprim_s)
+        apar_drive = (
+            -vth_s
+            * omega_star_s
+            * apar
+            * (
+                Jl_m1 * (l4 * tprim_s)
+                + Jl * (fprim_s + (2.0 * l4 + 1.0) * tprim_s)
+                + Jl_p1 * ((l4 + 1.0) * tprim_s)
+            )
         )
         drive = drive + (m_idx == 1).astype(dG.dtype) * apar_drive[:, :, None, ...]
     if Nm > 3 and apar is not None:
@@ -334,7 +360,9 @@ def collisions_contribution(
                         collision_base = collision_base + nu0 * b_s[None, None, ...]
             elif lb_arr.ndim == 6:
                 ns = int(lb_arr.shape[0])
-                collision_base = _species_nu(ns)[:, None, None, None, None, None] * lb_arr
+                collision_base = (
+                    _species_nu(ns)[:, None, None, None, None, None] * lb_arr
+                )
                 if H.ndim == 5:
                     collision_base = collision_base[0]
             else:
@@ -360,22 +388,19 @@ def collisions_contribution(
 
     Jl_m1 = shift_axis(Jl, -1, axis=1)
     Jl_p1 = shift_axis(Jl, 1, axis=1)
-    coeff_t = jnp.arange(Jl.shape[1], dtype=jnp.real(H).dtype)[None, :, None, None, None]
-    coeff_t = (
-        coeff_t * Jl_m1
-        + 2.0 * coeff_t * Jl
-        + (coeff_t + 1.0) * Jl_p1
-    )
+    coeff_t = jnp.arange(Jl.shape[1], dtype=jnp.real(H).dtype)[
+        None, :, None, None, None
+    ]
+    coeff_t = coeff_t * Jl_m1 + 2.0 * coeff_t * Jl + (coeff_t + 1.0) * Jl_p1
 
     uperp_bar = sqrt_b * jnp.sum(JlB * H_m0, axis=1)
     upar_bar = jnp.sum(Jl * H_m1, axis=1)
     if int(Jl.shape[1]) == 1:
         t_bar = jnp.sqrt(2.0) * jnp.sum(Jl * G_m2, axis=1)
     else:
-        t_bar = (
-            (jnp.sqrt(2.0) / 3.0) * jnp.sum(Jl * G_m2, axis=1)
-            + (2.0 / 3.0) * jnp.sum(coeff_t * H_m0, axis=1)
-        )
+        t_bar = (jnp.sqrt(2.0) / 3.0) * jnp.sum(Jl * G_m2, axis=1) + (
+            2.0 / 3.0
+        ) * jnp.sum(coeff_t * H_m0, axis=1)
 
     corr = jnp.zeros_like(H)
     m_idx = jnp.arange(Nm, dtype=jnp.int32)[None, None, :, None, None, None]
@@ -441,7 +466,9 @@ def hypercollisions_contribution(
         and _is_static_zero(weight * hypercollisions_const * nu_hyper_lm, real_dtype)
     )
     isotropic_branch_zero = _is_static_zero(weight * nu_hyper, real_dtype)
-    kz_branch_zero = _is_static_zero(weight * hypercollisions_kz * nu_hyper_m, real_dtype)
+    kz_branch_zero = _is_static_zero(
+        weight * hypercollisions_kz * nu_hyper_m, real_dtype
+    )
     if const_branch_zero and isotropic_branch_zero and kz_branch_zero:
         return _zeros_like_result(
             G,
@@ -466,16 +493,12 @@ def hypercollisions_contribution(
     dG = dG - weight * nu_hyper * hyper_ratio * G
 
     kz_weight = jnp.asarray(weight) * jnp.asarray(hypercollisions_kz)
-    if not isinstance(kz_weight, jax.core.Tracer) and np.all(np.asarray(kz_weight) == 0.0):
+    if not isinstance(kz_weight, jax.core.Tracer) and np.all(
+        np.asarray(kz_weight) == 0.0
+    ):
         return dG
 
-    nu_hyp_m = (
-        nu_hyper_m
-        * m_norm_kz_factor
-        * 2.3
-        * vth_s
-        * jnp.abs(kpar_scale)
-    )
+    nu_hyp_m = nu_hyper_m * m_norm_kz_factor * 2.3 * vth_s * jnp.abs(kpar_scale)
     kz_source = kz_weight * jnp.where(mask_kz, -nu_hyp_m * m_pow, 0.0) * G
     if linked_indices and linked_kz:
         kz_term = abs_z_linked_fft(
