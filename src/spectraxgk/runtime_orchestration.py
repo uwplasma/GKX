@@ -67,7 +67,7 @@ class NonlinearArtifactPolicy:
     """Resolved nonlinear artifact/restart policy for a single handoff."""
 
     out_path: Path | None
-    gx_target: bool
+    netcdf_output_target: bool
     diagnostics_on: bool
     restart_from: Path | None
     restart_to: Path | None
@@ -80,15 +80,15 @@ class NonlinearArtifactPolicy:
 class RuntimeArtifactHandoffDeps:
     """Patchable functions used by nonlinear artifact handoff orchestration."""
 
-    is_gx_netcdf_target: Callable[[Path], bool]
+    is_netcdf_output_target: Callable[[Path], bool]
     resolve_restart_path: Callable[[str | Path, Any], Path]
     resolve_restart_write_path: Callable[[str | Path, Any], Path]
-    gx_bundle_base: Callable[[Path], Path]
-    load_runtime_nonlinear_gx_diagnostics: Callable[[str | Path], SimulationDiagnostics]
-    condense_gx_diagnostics_for_output: Callable[
+    netcdf_bundle_base: Callable[[Path], Path]
+    load_nonlinear_netcdf_diagnostics: Callable[[str | Path], SimulationDiagnostics]
+    condense_diagnostics_for_netcdf_output: Callable[
         [SimulationDiagnostics], SimulationDiagnostics
     ]
-    concat_gx_diagnostics: Callable[
+    concat_runtime_diagnostics: Callable[
         [list[SimulationDiagnostics]], SimulationDiagnostics
     ]
     validate_finite_runtime_result: Callable[[Any], None]
@@ -324,11 +324,13 @@ def resolve_nonlinear_artifact_policy(
     """Resolve nonlinear output, restart, and checkpoint policy."""
 
     out_path = None if out is None else Path(out)
-    gx_target = out_path is not None and deps.is_gx_netcdf_target(out_path)
+    netcdf_output_target = out_path is not None and deps.is_netcdf_output_target(
+        out_path
+    )
     diagnostics_on = bool(cfg.time.diagnostics if diagnostics is None else diagnostics)
     restart_from = None
     restart_to = None
-    if gx_target:
+    if netcdf_output_target:
         assert out_path is not None
         restart_from = deps.resolve_restart_path(out_path, cfg)
         restart_to = deps.resolve_restart_write_path(out_path, cfg)
@@ -346,7 +348,7 @@ def resolve_nonlinear_artifact_policy(
 
     checkpoint_steps: int | None = None
     if (
-        gx_target
+        netcdf_output_target
         and remaining_steps is not None
         and bool(getattr(cfg.output, "save_for_restart", True))
     ):
@@ -360,7 +362,7 @@ def resolve_nonlinear_artifact_policy(
 
     return NonlinearArtifactPolicy(
         out_path=out_path,
-        gx_target=gx_target,
+        netcdf_output_target=netcdf_output_target,
         diagnostics_on=diagnostics_on,
         restart_from=restart_from,
         restart_to=restart_to,
@@ -417,14 +419,12 @@ def run_runtime_nonlinear_artifact_handoff(
         dt=dt,
         deps=deps,
     )
-    if policy.gx_target and not policy.diagnostics_on:
-        raise ValueError(
-            "GX-style nonlinear NetCDF artifacts require diagnostics output"
-        )
+    if policy.netcdf_output_target and not policy.diagnostics_on:
+        raise ValueError("NetCDF nonlinear output artifacts require diagnostics output")
 
     cfg_run = cfg
     resume_requested = policy.resume_requested
-    if policy.gx_target and cfg.init.init_file is None:
+    if policy.netcdf_output_target and cfg.init.init_file is None:
         if (
             bool(getattr(cfg.output, "restart_if_exists", False))
             and policy.restart_from is not None
@@ -456,14 +456,14 @@ def run_runtime_nonlinear_artifact_handoff(
     cumulative_diag: SimulationDiagnostics | None = None
     history_from_file = False
     if (
-        policy.gx_target
+        policy.netcdf_output_target
         and resume_requested
         and bool(getattr(cfg.output, "append_on_restart", True))
     ):
         assert policy.out_path is not None
-        history_path = Path(f"{deps.gx_bundle_base(policy.out_path)}.out.nc")
+        history_path = Path(f"{deps.netcdf_bundle_base(policy.out_path)}.out.nc")
         if history_path.exists():
-            cumulative_diag = deps.load_runtime_nonlinear_gx_diagnostics(history_path)
+            cumulative_diag = deps.load_nonlinear_netcdf_diagnostics(history_path)
             history_from_file = True
 
     remaining_steps = policy.remaining_steps
@@ -495,7 +495,7 @@ def run_runtime_nonlinear_artifact_handoff(
             diagnostics_stride=diagnostics_stride,
             laguerre_mode=laguerre_mode,
             diagnostics=diagnostics,
-            return_state=policy.gx_target,
+            return_state=policy.netcdf_output_target,
             show_progress=show_progress,
             status_callback=status_callback,
         )
@@ -504,7 +504,7 @@ def run_runtime_nonlinear_artifact_handoff(
         if result_chunk.diagnostics is not None:
             diag_chunk = result_chunk.diagnostics
             if history_from_file:
-                diag_chunk = deps.condense_gx_diagnostics_for_output(diag_chunk)
+                diag_chunk = deps.condense_diagnostics_for_netcdf_output(diag_chunk)
             if time_offset != 0.0:
                 diag_chunk = replace(
                     diag_chunk, t=np.asarray(diag_chunk.t) + time_offset
@@ -512,7 +512,7 @@ def run_runtime_nonlinear_artifact_handoff(
             cumulative_diag = (
                 diag_chunk
                 if cumulative_diag is None
-                else deps.concat_gx_diagnostics([cumulative_diag, diag_chunk])
+                else deps.concat_runtime_diagnostics([cumulative_diag, diag_chunk])
             )
             time_offset = (
                 float(np.asarray(cumulative_diag.t)[-1])

@@ -42,12 +42,12 @@ from spectraxgk.quasilinear import compute_quasilinear_from_linear_state
 from spectraxgk.runtime_config import RuntimeConfig
 from spectraxgk import runtime_startup
 from spectraxgk.runtime_diagnostics import (
-    concat_gx_diagnostics,
-    slice_gx_diagnostics,
-    stride_gx_diagnostics,
-    truncate_gx_diagnostics,
+    concat_runtime_diagnostics,
+    slice_runtime_diagnostics,
+    stride_runtime_diagnostics,
+    truncate_runtime_diagnostics,
 )
-from spectraxgk.runtime_chunks import run_adaptive_gx_chunk_loop
+from spectraxgk.runtime_chunks import run_adaptive_runtime_chunk_loop
 from spectraxgk.runtime_results import (
     RuntimeLinearResult,
     RuntimeLinearScanResult,
@@ -73,10 +73,10 @@ from spectraxgk.runtime_startup import (
     _build_initial_condition,
     _enforce_full_ky_hermitian,
     _expand_ky,
-    _gx_default_p_hyper_m,
+    _default_hermite_hypercollision_exponent,
     _require_full_gk_runtime_model,
     _resolve_runtime_hl_dims,
-    _reshape_gx_state,
+    _reshape_netcdf_state,
     _runtime_default_krylov_config,
     _runtime_model_key,
     _species_to_linear,
@@ -89,7 +89,7 @@ from spectraxgk.terms.config import TermConfig
 from spectraxgk.miller_eik import generate_runtime_miller_eik
 from spectraxgk.vmec_eik import generate_runtime_vmec_eik
 
-_GX_RAND_MAX = float((1 << 31) - 1)
+_GLIBC_RAND_MAX = float((1 << 31) - 1)
 
 __all__ = [
     "RuntimeIndependentParallelPlan",
@@ -98,30 +98,30 @@ __all__ = [
     "RuntimeNonlinearResult",
     "_build_gaussian_profile",
     "_build_initial_condition",
-    "_concat_gx_diagnostics",
+    "_concat_runtime_diagnostics",
     "_enforce_full_ky_hermitian",
     "_expand_ky",
-    "_gx_centered_random_pairs",
-    "_gx_default_p_hyper_m",
-    "_gx_init_mode_pairs",
-    "_gx_periodic_zp",
+    "_centered_glibc_random_pairs",
+    "_default_hermite_hypercollision_exponent",
+    "_dealiased_initial_mode_pairs",
+    "_periodic_zp_from_grid",
     "_infer_runtime_nonlinear_steps",
     "_load_initial_state_from_file",
     "_midplane_index",
     "_normalize_linear_solver_name",
     "_require_full_gk_runtime_model",
     "_resolve_runtime_hl_dims",
-    "_reshape_gx_state",
+    "_reshape_netcdf_state",
     "_run_runtime_scan_batch",
     "_runtime_default_krylov_config",
     "_runtime_external_phi",
     "_runtime_independent_parallel_plan",
     "_runtime_model_key",
     "_select_nonlinear_mode_indices",
-    "_slice_gx_diagnostics",
+    "_slice_runtime_diagnostics",
     "_species_to_linear",
-    "_stride_gx_diagnostics",
-    "_truncate_gx_diagnostics",
+    "_stride_runtime_diagnostics",
+    "_truncate_runtime_diagnostics",
     "_zero_kx_index",
     "build_runtime_geometry",
     "build_runtime_linear_params",
@@ -165,7 +165,7 @@ def _run_runtime_scan_ky_task(task: dict[str, Any]) -> RuntimeLinearResult:
 
 
 build_flux_tube_geometry = runtime_startup.build_flux_tube_geometry
-load_gx_restart_state = runtime_startup.load_gx_restart_state
+load_netcdf_restart_state = runtime_startup.load_netcdf_restart_state
 
 
 def build_runtime_geometry(cfg: RuntimeConfig) -> FluxTubeGeometryLike:
@@ -221,7 +221,7 @@ def _load_initial_state_from_file(
     """Load an initial state while preserving the runtime module patch surface."""
 
     if path.suffix.lower() == ".nc":
-        return load_gx_restart_state(
+        return load_netcdf_restart_state(
             path,
             nspecies=nspecies,
             Nl=Nl,
@@ -241,8 +241,8 @@ def _load_initial_state_from_file(
     )
 
 
-def _gx_centered_random_pairs(seed: int, count: int) -> np.ndarray:
-    """Return GX-style centered random pairs using glibc ``rand()`` semantics."""
+def _centered_glibc_random_pairs(seed: int, count: int) -> np.ndarray:
+    """Return centered random pairs using glibc ``rand()`` semantics."""
 
     if count <= 0:
         return np.empty((0, 2), dtype=np.float64)
@@ -251,15 +251,15 @@ def _gx_centered_random_pairs(seed: int, count: int) -> np.ndarray:
     state = np.zeros(344 + 2 * count, dtype=np.uint64)
     state[0] = np.uint64(seed_use)
     for i in range(1, 31):
-        state[i] = np.uint64((16807 * int(state[i - 1])) % int(_GX_RAND_MAX))
+        state[i] = np.uint64((16807 * int(state[i - 1])) % int(_GLIBC_RAND_MAX))
     for i in range(31, 34):
         state[i] = state[i - 31]
     for i in range(34, state.size):
         state[i] = (state[i - 31] + state[i - 3]) & np.uint64(0xFFFFFFFF)
 
     rand_vals = (state[344:] >> np.uint64(1)).astype(np.float64, copy=False)
-    half = 0.5 * _GX_RAND_MAX
-    inv = 1.0 / _GX_RAND_MAX
+    half = 0.5 * _GLIBC_RAND_MAX
+    inv = 1.0 / _GLIBC_RAND_MAX
     pairs = np.empty((count, 2), dtype=np.float64)
     for i in range(count):
         pairs[i, 0] = (rand_vals[2 * i] - half) * inv
@@ -267,8 +267,8 @@ def _gx_centered_random_pairs(seed: int, count: int) -> np.ndarray:
     return pairs
 
 
-def _gx_init_mode_pairs(grid: SpectralGrid) -> list[tuple[int, int]]:
-    """Return the GX startup-loop ``(kx, ky)`` pairs for multimode initial conditions."""
+def _dealiased_initial_mode_pairs(grid: SpectralGrid) -> list[tuple[int, int]]:
+    """Return the dealiased startup-loop ``(kx, ky)`` pairs for multimode initial conditions."""
 
     nx = int(np.asarray(grid.kx).size)
     ny = int(np.asarray(grid.ky).size)
@@ -279,8 +279,8 @@ def _gx_init_mode_pairs(grid: SpectralGrid) -> list[tuple[int, int]]:
     ]
 
 
-def _gx_periodic_zp(z: np.ndarray) -> float:
-    """Return GX's periodic ``Zp`` from the discrete theta grid."""
+def _periodic_zp_from_grid(z: np.ndarray) -> float:
+    """Return periodic ``Zp`` from the discrete theta grid."""
 
     z_arr = np.asarray(z, dtype=float)
     if z_arr.size <= 1:
@@ -292,10 +292,10 @@ def _gx_periodic_zp(z: np.ndarray) -> float:
     return period / (2.0 * np.pi)
 
 
-_slice_gx_diagnostics = slice_gx_diagnostics
-_truncate_gx_diagnostics = truncate_gx_diagnostics
-_stride_gx_diagnostics = stride_gx_diagnostics
-_concat_gx_diagnostics = concat_gx_diagnostics
+_slice_runtime_diagnostics = slice_runtime_diagnostics
+_truncate_runtime_diagnostics = truncate_runtime_diagnostics
+_stride_runtime_diagnostics = stride_runtime_diagnostics
+_concat_runtime_diagnostics = concat_runtime_diagnostics
 
 
 def run_runtime_linear(
@@ -1156,7 +1156,7 @@ def run_runtime_nonlinear(
                 G_chunk = G_next
                 return t_chunk, diag_chunk, G_next, fields_next
 
-            chunk_result = run_adaptive_gx_chunk_loop(
+            chunk_result = run_adaptive_runtime_chunk_loop(
                 integrate_chunk=_run_cetg_chunk,
                 t_max=float(cfg.time.t_max),
                 chunk_steps=chunk_steps,
@@ -1341,7 +1341,7 @@ def run_runtime_nonlinear(
                 G_chunk = G_next
                 return t_chunk, diag_chunk, G_next, fields_next
 
-            chunk_result = run_adaptive_gx_chunk_loop(
+            chunk_result = run_adaptive_runtime_chunk_loop(
                 integrate_chunk=_run_nonlinear_chunk,
                 t_max=float(cfg.time.t_max),
                 chunk_steps=chunk_steps,

@@ -17,23 +17,30 @@ import numpy as np
 
 from spectraxgk.geometry import FluxTubeGeometryLike, build_flux_tube_geometry
 from spectraxgk.grids import SpectralGrid
-from spectraxgk.linear import LinearParams, LinearTerms, build_linear_cache, linear_terms_to_term_config
+from spectraxgk.linear import (
+    LinearParams,
+    LinearTerms,
+    build_linear_cache,
+    linear_terms_to_term_config,
+)
 from spectraxgk.linear_krylov import KrylovConfig
 from spectraxgk.miller_eik import generate_runtime_miller_eik
 from spectraxgk.normalization import get_normalization_contract
-from spectraxgk.restart import load_gx_restart_state
+from spectraxgk.restart import load_netcdf_restart_state
 from spectraxgk.runtime_config import RuntimeConfig, RuntimeSpeciesConfig
 from spectraxgk.species import Species, build_linear_params
 from spectraxgk.terms.config import TermConfig
 from spectraxgk.vmec_eik import generate_runtime_vmec_eik
 
-_GX_RAND_MAX = float((1 << 31) - 1)
+_GLIBC_RAND_MAX = float((1 << 31) - 1)
 
 
 def _species_to_linear(species_cfg: Sequence[RuntimeSpeciesConfig]) -> list[Species]:
     kinetic = [s for s in species_cfg if bool(s.kinetic)]
     if not kinetic:
-        raise ValueError("RuntimeConfig.species must include at least one kinetic species")
+        raise ValueError(
+            "RuntimeConfig.species must include at least one kinetic species"
+        )
     return [
         Species(
             charge=float(s.charge),
@@ -48,8 +55,8 @@ def _species_to_linear(species_cfg: Sequence[RuntimeSpeciesConfig]) -> list[Spec
     ]
 
 
-def _gx_default_p_hyper_m(nhermite: int | None) -> float:
-    """Return the GX default Hermite hypercollision exponent."""
+def _default_hermite_hypercollision_exponent(nhermite: int | None) -> float:
+    """Return the default Hermite hypercollision exponent."""
 
     if nhermite is None:
         return 20.0
@@ -169,9 +176,15 @@ def build_runtime_linear_params(
     if geom is None:
         geom = build_runtime_geometry(cfg)
     contract = get_normalization_contract(cfg.normalization.contract)
-    rho_star = contract.rho_star if cfg.normalization.rho_star is None else float(cfg.normalization.rho_star)
+    rho_star = (
+        contract.rho_star
+        if cfg.normalization.rho_star is None
+        else float(cfg.normalization.rho_star)
+    )
     omega_d_scale = (
-        contract.omega_d_scale if cfg.normalization.omega_d_scale is None else float(cfg.normalization.omega_d_scale)
+        contract.omega_d_scale
+        if cfg.normalization.omega_d_scale is None
+        else float(cfg.normalization.omega_d_scale)
     )
     omega_star_scale = (
         contract.omega_star_scale
@@ -182,14 +195,20 @@ def build_runtime_linear_params(
     species = _species_to_linear(cfg.species)
     has_kinetic_electron = any(float(s.charge) < 0.0 for s in species)
     if cfg.physics.adiabatic_electrons and has_kinetic_electron:
-        raise ValueError("adiabatic_electrons=True conflicts with kinetic electron species")
+        raise ValueError(
+            "adiabatic_electrons=True conflicts with kinetic electron species"
+        )
 
     tau_e = float(cfg.physics.tau_e) if cfg.physics.adiabatic_electrons else 0.0
     beta = float(cfg.physics.beta) if cfg.physics.electromagnetic else 0.0
-    fapar = 1.0 if (cfg.physics.electromagnetic and cfg.physics.use_apar and beta > 0.0) else 0.0
+    fapar = (
+        1.0
+        if (cfg.physics.electromagnetic and cfg.physics.use_apar and beta > 0.0)
+        else 0.0
+    )
     p_hyper_m = cfg.collisions.p_hyper_m
     if p_hyper_m is None:
-        p_hyper_m = _gx_default_p_hyper_m(Nm)
+        p_hyper_m = _default_hermite_hypercollision_exponent(Nm)
 
     params = build_linear_params(
         species,
@@ -232,7 +251,9 @@ def build_runtime_linear_terms(cfg: RuntimeConfig) -> LinearTerms:
     em_on = bool(cfg.physics.electromagnetic)
     use_apar = em_on and bool(cfg.physics.use_apar)
     use_bpar = em_on and bool(cfg.physics.use_bpar)
-    collisions_on = bool(cfg.physics.collisions) and any(float(sp.nu) != 0.0 for sp in cfg.species)
+    collisions_on = bool(cfg.physics.collisions) and any(
+        float(sp.nu) != 0.0 for sp in cfg.species
+    )
     hyper_on = bool(cfg.physics.hypercollisions)
     return LinearTerms(
         streaming=float(cfg.terms.streaming),
@@ -271,7 +292,7 @@ def _build_gaussian_profile(
         return np.zeros_like(z)
     theta0 = kx / (s_hat * ky)
     env = envelope_constant + envelope_sine * np.sin(z - theta0)
-    return env * np.exp(-((z - theta0) / width) ** 2)
+    return env * np.exp(-(((z - theta0) / width) ** 2))
 
 
 def _build_single_phi_gaussian_profile(
@@ -305,10 +326,10 @@ def _build_single_phi_gaussian_profile(
         )
     center = 0.0
     env = envelope_constant + envelope_sine * np.sin(z - center)
-    return env * np.exp(-((z - center) / width) ** 2)
+    return env * np.exp(-(((z - center) / width) ** 2))
 
 
-def _reshape_gx_state(
+def _reshape_netcdf_state(
     raw: np.ndarray,
     *,
     nspec: int,
@@ -375,7 +396,7 @@ def _load_initial_state_from_file(
     nz: int,
 ) -> np.ndarray:
     if path.suffix.lower() == ".nc":
-        return load_gx_restart_state(
+        return load_netcdf_restart_state(
             path,
             nspecies=nspecies,
             Nl=Nl,
@@ -389,7 +410,9 @@ def _load_initial_state_from_file(
     expected_nyc = nspecies * Nl * Nm * nyc * nx * nz
     expected_full = nspecies * Nl * Nm * ny * nx * nz
     if raw.size == expected_nyc:
-        arr = _reshape_gx_state(raw, nspec=nspecies, nl=Nl, nm=Nm, nyc=nyc, nx=nx, nz=nz)
+        arr = _reshape_netcdf_state(
+            raw, nspec=nspecies, nl=Nl, nm=Nm, nyc=nyc, nx=nx, nz=nz
+        )
         return _expand_ky(arr, nyc=nyc)
     if raw.size == expected_full:
         return raw.reshape((nspecies, Nl, Nm, ny, nx, nz))
@@ -398,8 +421,8 @@ def _load_initial_state_from_file(
     )
 
 
-def _gx_centered_random_pairs(seed: int, count: int) -> np.ndarray:
-    """Return GX-style centered random pairs using glibc `rand()` semantics."""
+def _centered_glibc_random_pairs(seed: int, count: int) -> np.ndarray:
+    """Return centered random pairs using glibc `rand()` semantics."""
 
     if count <= 0:
         return np.empty((0, 2), dtype=np.float64)
@@ -408,15 +431,15 @@ def _gx_centered_random_pairs(seed: int, count: int) -> np.ndarray:
     state = np.zeros(344 + 2 * count, dtype=np.uint64)
     state[0] = np.uint64(seed_use)
     for i in range(1, 31):
-        state[i] = np.uint64((16807 * int(state[i - 1])) % int(_GX_RAND_MAX))
+        state[i] = np.uint64((16807 * int(state[i - 1])) % int(_GLIBC_RAND_MAX))
     for i in range(31, 34):
         state[i] = state[i - 31]
     for i in range(34, state.size):
         state[i] = (state[i - 31] + state[i - 3]) & np.uint64(0xFFFFFFFF)
 
     rand_vals = (state[344:] >> np.uint64(1)).astype(np.float64, copy=False)
-    half = 0.5 * _GX_RAND_MAX
-    inv = 1.0 / _GX_RAND_MAX
+    half = 0.5 * _GLIBC_RAND_MAX
+    inv = 1.0 / _GLIBC_RAND_MAX
     pairs = np.empty((count, 2), dtype=np.float64)
     for i in range(count):
         pairs[i, 0] = (rand_vals[2 * i] - half) * inv
@@ -424,18 +447,20 @@ def _gx_centered_random_pairs(seed: int, count: int) -> np.ndarray:
     return pairs
 
 
-def _gx_init_mode_pairs(grid: SpectralGrid) -> list[tuple[int, int]]:
-    """Return the GX startup-loop `(kx, ky)` pairs for multimode initial conditions."""
+def _dealiased_initial_mode_pairs(grid: SpectralGrid) -> list[tuple[int, int]]:
+    """Return the dealiased startup-loop `(kx, ky)` pairs for multimode initial conditions."""
 
     nx = int(np.asarray(grid.kx).size)
     ny = int(np.asarray(grid.ky).size)
     kx_max = 1 + (nx - 1) // 3
     ky_max = 1 + (ny - 1) // 3
-    return [(int(kx_i), int(ky_i)) for kx_i in range(kx_max) for ky_i in range(1, ky_max)]
+    return [
+        (int(kx_i), int(ky_i)) for kx_i in range(kx_max) for ky_i in range(1, ky_max)
+    ]
 
 
-def _gx_periodic_zp(z: np.ndarray) -> float:
-    """Return GX's periodic `Zp` from the discrete theta grid."""
+def _periodic_zp_from_grid(z: np.ndarray) -> float:
+    """Return periodic `Zp` from the discrete theta grid."""
 
     z_arr = np.asarray(z, dtype=float)
     if z_arr.size <= 1:
@@ -447,7 +472,9 @@ def _gx_periodic_zp(z: np.ndarray) -> float:
     return period / (2.0 * np.pi)
 
 
-def _as_runtime_species_array(value: float | jnp.ndarray, nspecies: int, name: str) -> np.ndarray:
+def _as_runtime_species_array(
+    value: float | jnp.ndarray, nspecies: int, name: str
+) -> np.ndarray:
     """Return a length-``nspecies`` NumPy array for startup-only algebra."""
 
     arr = np.asarray(value, dtype=float)
@@ -483,14 +510,18 @@ def _density_moments_for_target_phi(
     phi = np.asarray(phi_target, dtype=np.complex64)
     nspecies = int(np.asarray(cache.Jl).shape[0])
     if not species_targets:
-        raise ValueError("init_field='phi' requires at least one kinetic target species")
+        raise ValueError(
+            "init_field='phi' requires at least one kinetic target species"
+        )
     if min(species_targets) < 0 or max(species_targets) >= nspecies:
         raise ValueError("init_field='phi' target species index is out of range")
 
     mask0 = np.asarray(cache.mask0, dtype=bool)
     if np.all(mask0[int(ky_i), int(kx_i), :]):
         if np.any(np.abs(phi) > 0.0):
-            raise ValueError("init_field='phi' cannot initialize the masked ky=0, kx=0 gauge mode")
+            raise ValueError(
+                "init_field='phi' cannot initialize the masked ky=0, kx=0 gauge mode"
+            )
         return {int(idx): np.zeros_like(phi) for idx in species_targets}
 
     Jl = np.asarray(cache.Jl, dtype=float)
@@ -502,33 +533,52 @@ def _density_moments_for_target_phi(
     tau_e_arr = np.asarray(params.tau_e, dtype=float).reshape(-1)
     tau_e = float(tau_e_arr[0]) if tau_e_arr.size else 0.0
 
-    g0_species = np.sum(Jl[:, :, int(ky_i), int(kx_i), :] * Jl[:, :, int(ky_i), int(kx_i), :], axis=1)
-    qneut = np.sum(density[:, None] * charge[:, None] * zt[:, None] * (1.0 - g0_species), axis=0)
+    g0_species = np.sum(
+        Jl[:, :, int(ky_i), int(kx_i), :] * Jl[:, :, int(ky_i), int(kx_i), :], axis=1
+    )
+    qneut = np.sum(
+        density[:, None] * charge[:, None] * zt[:, None] * (1.0 - g0_species), axis=0
+    )
     denom = tau_e + qneut
     if not np.all(np.isfinite(denom)):
-        raise ValueError("init_field='phi' produced a non-finite quasineutrality denominator")
+        raise ValueError(
+            "init_field='phi' produced a non-finite quasineutrality denominator"
+        )
 
     nbar = denom.astype(np.complex64) * phi
     ky_is_zonal = np.isclose(float(np.asarray(cache.ky)[int(ky_i)]), 0.0)
     if tau_e > 0.0 and ky_is_zonal and int(kx_i) > 0:
         jac_sum = float(np.sum(jacobian))
-        phi_avg = np.sum(jacobian.astype(np.complex64) * phi) / jac_sum if jac_sum != 0.0 else np.mean(phi)
+        phi_avg = (
+            np.sum(jacobian.astype(np.complex64) * phi) / jac_sum
+            if jac_sum != 0.0
+            else np.mean(phi)
+        )
         nbar = denom.astype(np.complex64) * phi - np.complex64(tau_e) * phi_avg
 
     target_indices = np.asarray(species_targets, dtype=int)
-    coeff = density[target_indices, None] * charge[target_indices, None] * Jl[target_indices, 0, int(ky_i), int(kx_i), :]
+    coeff = (
+        density[target_indices, None]
+        * charge[target_indices, None]
+        * Jl[target_indices, 0, int(ky_i), int(kx_i), :]
+    )
     coeff_norm = np.sum(coeff * coeff, axis=0)
     tiny = 1.0e-30
     bad = (coeff_norm <= tiny) & (np.abs(nbar) > tiny)
     if np.any(bad):
-        raise ValueError("init_field='phi' cannot be represented by the selected density moments")
+        raise ValueError(
+            "init_field='phi' cannot be represented by the selected density moments"
+        )
 
     seed = np.where(
         coeff_norm[None, :] > tiny,
         (coeff / coeff_norm[None, :]).astype(np.complex64) * nbar[None, :],
         np.complex64(0.0),
     )
-    return {int(s_idx): np.asarray(seed[i], dtype=np.complex64) for i, s_idx in enumerate(target_indices)}
+    return {
+        int(s_idx): np.asarray(seed[i], dtype=np.complex64)
+        for i, s_idx in enumerate(target_indices)
+    }
 
 
 def _build_initial_condition(
@@ -569,7 +619,9 @@ def _build_initial_condition(
     if init_file_mode not in {"replace", "add"}:
         raise ValueError("init_file_mode must be one of {'replace', 'add'}")
 
-    g0: np.ndarray = np.zeros((nspecies, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
+    g0: np.ndarray = np.zeros(
+        (nspecies, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64
+    )
     loaded_state: np.ndarray | None = None
     if cfg.init.init_file is not None:
         loaded_state = _load_initial_state_from_file(
@@ -581,12 +633,14 @@ def _build_initial_condition(
             nx=grid.kx.size,
             nz=grid.z.size,
         )
-        loaded_state = np.asarray(loaded_state, dtype=np.complex64) * np.complex64(float(cfg.init.init_file_scale))
+        loaded_state = np.asarray(loaded_state, dtype=np.complex64) * np.complex64(
+            float(cfg.init.init_file_scale)
+        )
     amp = float(cfg.init.init_amp)
     ky_val = float(grid.ky[ky_index])
 
     z = np.asarray(grid.z)
-    z_period = _gx_periodic_zp(z)
+    z_period = _periodic_zp_from_grid(z)
     z_phase = np.cos(float(cfg.init.kpar_init) * z / z_period)
     if cfg.init.init_single and cfg.init.gaussian_init and init_field == "phi":
         vals = amp * _build_single_phi_gaussian_profile(
@@ -617,18 +671,24 @@ def _build_initial_condition(
     if nspecies == 1:
         species_targets: tuple[int, ...] = (0,)
     elif cfg.init.init_electrons_only:
-        electron_indices = tuple(i for i, sp in enumerate(cfg.species[:nspecies]) if float(sp.charge) < 0.0)
+        electron_indices = tuple(
+            i for i, sp in enumerate(cfg.species[:nspecies]) if float(sp.charge) < 0.0
+        )
         species_targets = electron_indices or (nspecies - 1,)
     else:
         species_targets = tuple(range(nspecies))
 
-    def _set_mode(l_idx: int, m_idx: int, ky_i: int, kx_i: int, vals_k: np.ndarray) -> None:
+    def _set_mode(
+        l_idx: int, m_idx: int, ky_i: int, kx_i: int, vals_k: np.ndarray
+    ) -> None:
         if l_idx >= Nl or m_idx >= Nm:
             return
         for s_idx in species_targets:
             g0[s_idx, l_idx, m_idx, ky_i, kx_i, :] = vals_k
 
-    def _set_named_mode(field_name: str, ky_i: int, kx_i: int, vals_k: np.ndarray) -> None:
+    def _set_named_mode(
+        field_name: str, ky_i: int, kx_i: int, vals_k: np.ndarray
+    ) -> None:
         l_idx, m_idx = field_map[field_name]
         _set_mode(l_idx, m_idx, ky_i, kx_i, vals_k * all_scales[field_name])
 
@@ -637,10 +697,15 @@ def _build_initial_condition(
     def _set_phi_mode(ky_i: int, kx_i: int, vals_k: np.ndarray) -> None:
         nonlocal phi_seed_context
         if Nl < 1 or Nm < 1:
-            raise ValueError("init_field='phi' requires at least one Laguerre and one Hermite moment")
+            raise ValueError(
+                "init_field='phi' requires at least one Laguerre and one Hermite moment"
+            )
         if phi_seed_context is None:
             phi_params = build_runtime_linear_params(cfg, Nm=Nm, geom=geom)
-            phi_seed_context = (build_linear_cache(grid, geom, phi_params, Nl, Nm), phi_params)
+            phi_seed_context = (
+                build_linear_cache(grid, geom, phi_params, Nl, Nm),
+                phi_params,
+            )
         cache, phi_params = phi_seed_context
         seeds = _density_moments_for_target_phi(
             np.asarray(vals_k, dtype=np.complex64),
@@ -655,7 +720,7 @@ def _build_initial_condition(
 
     if cfg.init.gaussian_init and not cfg.init.init_single:
         nx = grid.kx.size
-        for kx_i, ky_i in _gx_init_mode_pairs(grid):
+        for kx_i, ky_i in _dealiased_initial_mode_pairs(grid):
             ky_k = float(grid.ky[ky_i])
             if ky_k == 0.0:
                 continue
@@ -690,12 +755,14 @@ def _build_initial_condition(
                 l_idx, m_idx = field_map[init_field]
                 _set_mode(l_idx, m_idx, ky_i, kx_neg, vals_k)
     elif not cfg.init.init_single and not cfg.init.gaussian_init:
-        Zp = _gx_periodic_zp(z)
+        Zp = _periodic_zp_from_grid(z)
         kpar = float(cfg.init.kpar_init)
         z_phase = np.cos(kpar * z / Zp)
         nx = grid.kx.size
-        active_modes = _gx_init_mode_pairs(grid)
-        rand_pairs = amp * _gx_centered_random_pairs(int(cfg.init.random_seed), len(active_modes))
+        active_modes = _dealiased_initial_mode_pairs(grid)
+        rand_pairs = amp * _centered_glibc_random_pairs(
+            int(cfg.init.random_seed), len(active_modes)
+        )
         if init_field not in {"all", "phi"}:
             l_idx, m_idx = field_map[init_field]
             if l_idx >= Nl or m_idx >= Nm:

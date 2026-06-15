@@ -1,6 +1,6 @@
 """Runtime diagnostic chunk helpers.
 
-This module owns the GX-style diagnostic slicing, truncation, striding, and
+This module owns the runtime diagnostic slicing, truncation, striding, and
 concatenation helpers used by the runtime drivers. Keeping these utilities out
 of ``runtime.py`` makes the execution/control-flow layer smaller while
 preserving the existing public runtime behavior.
@@ -35,7 +35,7 @@ def _first_nonfinite_sample(
     return 0
 
 
-def validate_finite_gx_diagnostics(
+def validate_finite_runtime_diagnostics(
     diag: SimulationDiagnostics, *, label: str = "runtime"
 ) -> None:
     """Raise if a runtime diagnostic chunk contains NaN or infinite values.
@@ -95,7 +95,7 @@ def validate_finite_gx_diagnostics(
         )
 
 
-def slice_gx_diagnostics(
+def slice_runtime_diagnostics(
     diag: SimulationDiagnostics, stop: int
 ) -> SimulationDiagnostics:
     """Return the first ``stop`` diagnostic samples."""
@@ -152,7 +152,7 @@ def slice_gx_diagnostics(
     )
 
 
-def truncate_gx_diagnostics(
+def truncate_runtime_diagnostics(
     diag: SimulationDiagnostics, *, t_max: float
 ) -> SimulationDiagnostics:
     """Keep samples through the first entry that reaches ``t_max``."""
@@ -162,13 +162,13 @@ def truncate_gx_diagnostics(
         return diag
     stop = int(np.searchsorted(t_arr, float(t_max), side="left")) + 1
     stop = min(max(stop, 1), int(t_arr.size))
-    return slice_gx_diagnostics(diag, stop)
+    return slice_runtime_diagnostics(diag, stop)
 
 
-def stride_gx_diagnostics(
+def stride_runtime_diagnostics(
     diag: SimulationDiagnostics, *, stride: int
 ) -> SimulationDiagnostics:
-    """Apply the GX runtime output stride after concatenating chunk diagnostics."""
+    """Apply the runtime output stride after concatenating chunk diagnostics."""
 
     stride_use = int(max(stride, 1))
     if stride_use == 1:
@@ -223,7 +223,7 @@ def stride_gx_diagnostics(
     )
 
 
-def concat_gx_diagnostics(
+def concat_runtime_diagnostics(
     diags: Sequence[SimulationDiagnostics],
 ) -> SimulationDiagnostics:
     """Concatenate one or more diagnostic chunks."""

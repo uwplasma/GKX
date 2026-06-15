@@ -13,13 +13,13 @@ from spectraxgk.diagnostics import (
     SimulationDiagnostics,
     total_energy,
 )
-from spectraxgk.runtime_artifact_gx_layout import (
+from spectraxgk.netcdf_spectral_layout import (
     _condense_kx,
     _condense_ky,
     _condense_kykx,
     _require_netcdf4,
 )
-from spectraxgk.runtime_artifact_io import _gx_bundle_base
+from spectraxgk.runtime_artifact_io import _netcdf_bundle_base
 
 
 def _resolved_species_time(arr: Any | None, *, fallback: np.ndarray) -> np.ndarray:
@@ -45,7 +45,7 @@ def _resolve_restart_path(out: str | Path, cfg: Any, *, for_write: bool) -> Path
     )
     if configured is not None:
         return Path(configured)
-    base = _gx_bundle_base(Path(out))
+    base = _netcdf_bundle_base(Path(out))
     return Path(f"{base}.restart.nc")
 
 
@@ -70,10 +70,10 @@ def _condense_resolved_for_output(
     return ResolvedDiagnostics(**payload)
 
 
-def _condense_gx_diagnostics_for_output(
+def _condense_diagnostics_for_netcdf_output(
     diag: SimulationDiagnostics,
 ) -> SimulationDiagnostics:
-    # GX-style NetCDF artifacts do not persist the monitored complex mode trace.
+    # Nonlinear NetCDF output artifacts do not persist the monitored complex mode trace.
     # Drop it when appending from an existing artifact so restart concatenation
     # preserves the exact on-disk schema instead of mixing persisted and transient
     # diagnostics.
@@ -82,7 +82,7 @@ def _condense_gx_diagnostics_for_output(
     )
 
 
-def load_runtime_nonlinear_gx_diagnostics(path: str | Path) -> SimulationDiagnostics:
+def load_nonlinear_netcdf_diagnostics(path: str | Path) -> SimulationDiagnostics:
     Dataset = _require_netcdf4()
     with Dataset(Path(path), "r") as root:
         grids = root.groups["Grids"]
@@ -138,10 +138,10 @@ def load_runtime_nonlinear_gx_diagnostics(path: str | Path) -> SimulationDiagnos
 
 
 __all__ = [
-    "_condense_gx_diagnostics_for_output",
+    "_condense_diagnostics_for_netcdf_output",
     "_condense_resolved_for_output",
     "_read_optional_var",
     "_resolved_species_time",
     "_resolve_restart_path",
-    "load_runtime_nonlinear_gx_diagnostics",
+    "load_nonlinear_netcdf_diagnostics",
 ]

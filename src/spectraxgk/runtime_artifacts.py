@@ -7,7 +7,7 @@ from typing import Any
 
 from spectraxgk.runtime import (
     RuntimeNonlinearResult,
-    _concat_gx_diagnostics,
+    _concat_runtime_diagnostics,
     run_runtime_nonlinear,
 )
 from spectraxgk.runtime_artifact_diagnostics import (
@@ -18,7 +18,7 @@ from spectraxgk.runtime_orchestration import (
     run_runtime_nonlinear_artifact_handoff,
 )
 
-from spectraxgk.runtime_artifact_gx_layout import (
+from spectraxgk.netcdf_spectral_layout import (
     _complex_to_ri as _complex_to_ri,
     _condense_kx as _condense_kx,
     _condense_kx_for_output as _condense_kx_for_output,
@@ -26,17 +26,17 @@ from spectraxgk.runtime_artifact_gx_layout import (
     _condense_ky_for_output as _condense_ky_for_output,
     _condense_kykx as _condense_kykx,
     _condense_kykx_for_output as _condense_kykx_for_output,
-    _gx_active_field as _gx_active_field,
-    _gx_active_kx_count as _gx_active_kx_count,
-    _gx_active_kx_indices as _gx_active_kx_indices,
-    _gx_active_kx_values as _gx_active_kx_values,
-    _gx_active_ky_count as _gx_active_ky_count,
-    _gx_active_ky_indices as _gx_active_ky_indices,
-    _gx_active_ky_values as _gx_active_ky_values,
+    _dealiased_spectral_field as _dealiased_spectral_field,
+    _dealiased_kx_count as _dealiased_kx_count,
+    _dealiased_kx_indices as _dealiased_kx_indices,
+    _dealiased_kx_values as _dealiased_kx_values,
+    _dealiased_ky_count as _dealiased_ky_count,
+    _dealiased_ky_indices as _dealiased_ky_indices,
+    _dealiased_ky_values as _dealiased_ky_values,
     _maybe_var as _maybe_var,
     _real_space_axis as _real_space_axis,
     _require_netcdf4 as _require_netcdf4,
-    _restart_to_gx_layout as _restart_to_gx_layout,
+    _restart_to_netcdf_layout as _restart_to_netcdf_layout,
     _species_matrix as _species_matrix,
     _spectral_species_to_ri as _spectral_species_to_ri,
     _spectral_to_ri as _spectral_to_ri,
@@ -45,20 +45,20 @@ from spectraxgk.runtime_artifact_gx_layout import (
     _take_axis as _take_axis,
     _write_runtime_root_metadata as _write_runtime_root_metadata,
 )
-from spectraxgk.runtime_artifact_gx_netcdf import (
-    _build_artifact_grid_and_geometry as _build_artifact_grid_and_geometry,
+from spectraxgk.nonlinear_output_netcdf import (
+    _build_output_grid_and_geometry as _build_output_grid_and_geometry,
     _particle_moments as _particle_moments,
-    _write_gx_geometry_group as _write_gx_geometry_group,
-    _write_gx_inputs_group as _write_gx_inputs_group,
-    _write_runtime_nonlinear_gx_artifacts as _write_runtime_nonlinear_gx_artifacts,
+    _write_geometry_group as _write_geometry_group,
+    _write_input_parameters_group as _write_input_parameters_group,
+    _write_nonlinear_netcdf_outputs as _write_nonlinear_netcdf_outputs,
 )
 from spectraxgk.runtime_artifact_nonlinear_diagnostics import (
-    _condense_gx_diagnostics_for_output as _condense_gx_diagnostics_for_output,
+    _condense_diagnostics_for_netcdf_output as _condense_diagnostics_for_netcdf_output,
     _condense_resolved_for_output as _condense_resolved_for_output,
     _read_optional_var as _read_optional_var,
     _resolved_species_time as _resolved_species_time,
     _resolve_restart_path as _resolve_restart_path,
-    load_runtime_nonlinear_gx_diagnostics as load_runtime_nonlinear_gx_diagnostics,
+    load_nonlinear_netcdf_diagnostics as load_nonlinear_netcdf_diagnostics,
 )
 from spectraxgk.runtime_artifact_nonlinear import (
     _nonlinear_summary as _nonlinear_summary,
@@ -73,8 +73,8 @@ from spectraxgk.runtime_artifact_io import (
     _artifact_base as _artifact_base,
     _ensure_parent as _ensure_parent,
     _flatten_series as _flatten_series,
-    _gx_bundle_base,
-    _is_gx_netcdf_target,
+    _netcdf_bundle_base,
+    _is_netcdf_output_target,
     _write_csv as _write_csv,
     _write_json as _write_json,
     _write_state as _write_state,
@@ -100,17 +100,17 @@ def run_runtime_nonlinear_with_artifacts(
     status_callback: Any = None,
 ) -> tuple[RuntimeNonlinearResult, dict[str, str]]:
     deps = RuntimeArtifactHandoffDeps(
-        is_gx_netcdf_target=_is_gx_netcdf_target,
+        is_netcdf_output_target=_is_netcdf_output_target,
         resolve_restart_path=lambda path, run_cfg: _resolve_restart_path(
             path, run_cfg, for_write=False
         ),
         resolve_restart_write_path=lambda path, run_cfg: _resolve_restart_path(
             path, run_cfg, for_write=True
         ),
-        gx_bundle_base=_gx_bundle_base,
-        load_runtime_nonlinear_gx_diagnostics=load_runtime_nonlinear_gx_diagnostics,
-        condense_gx_diagnostics_for_output=_condense_gx_diagnostics_for_output,
-        concat_gx_diagnostics=_concat_gx_diagnostics,
+        netcdf_bundle_base=_netcdf_bundle_base,
+        load_nonlinear_netcdf_diagnostics=load_nonlinear_netcdf_diagnostics,
+        condense_diagnostics_for_netcdf_output=_condense_diagnostics_for_netcdf_output,
+        concat_runtime_diagnostics=_concat_runtime_diagnostics,
         validate_finite_runtime_result=lambda result: _validate_finite_runtime_result(
             result, label="nonlinear runtime chunk"
         ),
@@ -143,10 +143,10 @@ def write_runtime_nonlinear_artifacts(
     """Write summary/diagnostics/state artifacts for a nonlinear runtime run."""
 
     out_path = Path(out)
-    if _is_gx_netcdf_target(out_path):
+    if _is_netcdf_output_target(out_path):
         if cfg is None:
             raise ValueError(
-                "cfg is required to write GX-style nonlinear NetCDF artifacts"
+                "cfg is required to write nonlinear NetCDF output artifacts"
             )
-        return _write_runtime_nonlinear_gx_artifacts(out_path, result, cfg)
+        return _write_nonlinear_netcdf_outputs(out_path, result, cfg)
     return write_runtime_nonlinear_table_artifacts(out_path, result)

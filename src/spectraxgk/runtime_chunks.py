@@ -1,6 +1,6 @@
 """Adaptive runtime chunk execution helpers.
 
-These helpers own the repeated GX-style adaptive chunk loop used by the runtime
+These helpers own the repeated adaptive runtime chunk loop used by the runtime
 drivers. Keeping the loop outside ``runtime.py`` makes the execution layer
 smaller without changing the accepted diagnostics truncation/stride behavior.
 """
@@ -15,10 +15,10 @@ import numpy as np
 
 from spectraxgk.diagnostics import SimulationDiagnostics
 from spectraxgk.runtime_diagnostics import (
-    concat_gx_diagnostics,
-    stride_gx_diagnostics,
-    truncate_gx_diagnostics,
-    validate_finite_gx_diagnostics,
+    concat_runtime_diagnostics,
+    stride_runtime_diagnostics,
+    truncate_runtime_diagnostics,
+    validate_finite_runtime_diagnostics,
 )
 from spectraxgk.runtime_orchestration import (
     build_runtime_progress_message,
@@ -29,7 +29,7 @@ from spectraxgk.terms.config import FieldState
 
 @dataclass(frozen=True)
 class AdaptiveChunkResult:
-    """Concatenated result from one adaptive GX-style chunk loop."""
+    """Concatenated result from one adaptive runtime chunk loop."""
 
     diagnostics: SimulationDiagnostics
     state: Any
@@ -92,7 +92,7 @@ def _effective_diagnostics_stride(diagnostics_stride: int) -> int:
     return int(max(diagnostics_stride, 1))
 
 
-def run_adaptive_gx_chunk_loop(
+def run_adaptive_runtime_chunk_loop(
     *,
     integrate_chunk: Callable[
         [bool], tuple[Any, SimulationDiagnostics, Any, FieldState | None]
@@ -129,7 +129,7 @@ def run_adaptive_gx_chunk_loop(
         _t_chunk, diag_chunk, state_chunk, fields_final = integrate_chunk(show_progress)
         chunk_index = chunk + 1
         diag_chunk = _offset_chunk_diagnostics_time(diag_chunk, offset=t_elapsed)
-        validate_finite_gx_diagnostics(
+        validate_finite_runtime_diagnostics(
             diag_chunk, label=f"adaptive {label} chunk {chunk_index}"
         )
         diag_chunks.append(diag_chunk)
@@ -158,11 +158,11 @@ def run_adaptive_gx_chunk_loop(
             f"adaptive {label} runtime exceeded chunk limit before reaching t_max"
         )
 
-    diag = concat_gx_diagnostics(diag_chunks)
-    diag = truncate_gx_diagnostics(diag, t_max=float(t_max))
+    diag = concat_runtime_diagnostics(diag_chunks)
+    diag = truncate_runtime_diagnostics(diag, t_max=float(t_max))
     stride = _effective_diagnostics_stride(diagnostics_stride)
     if stride > 1:
-        diag = stride_gx_diagnostics(diag, stride=stride)
+        diag = stride_runtime_diagnostics(diag, stride=stride)
     if fields_final is None:
         raise RuntimeError(f"adaptive {label} runtime did not produce final fields")
     return AdaptiveChunkResult(

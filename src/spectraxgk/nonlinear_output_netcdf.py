@@ -1,4 +1,4 @@
-"""GX-style nonlinear NetCDF runtime artifact writer."""
+"""Nonlinear NetCDF output schema writer."""
 
 from __future__ import annotations
 
@@ -22,17 +22,17 @@ from spectraxgk.runtime import (
     build_runtime_geometry,
     build_runtime_linear_params,
 )
-from spectraxgk.runtime_artifact_gx_layout import (
+from spectraxgk.netcdf_spectral_layout import (
     _complex_to_ri,
     _condense_kx_for_output,
     _condense_ky_for_output,
     _condense_kykx_for_output,
-    _gx_active_field,
-    _gx_active_kx_values,
-    _gx_active_ky_values,
+    _dealiased_spectral_field,
+    _dealiased_kx_values,
+    _dealiased_ky_values,
     _real_space_axis,
     _require_netcdf4,
-    _restart_to_gx_layout,
+    _restart_to_netcdf_layout,
     _species_matrix,
     _spectral_species_to_ri,
     _spectral_to_ri,
@@ -42,7 +42,7 @@ from spectraxgk.runtime_artifact_gx_layout import (
 )
 from spectraxgk.runtime_artifact_io import (
     _ensure_parent,
-    _gx_bundle_base,
+    _netcdf_bundle_base,
 )
 from spectraxgk.runtime_artifact_nonlinear_diagnostics import (
     _resolved_species_time,
@@ -50,7 +50,7 @@ from spectraxgk.runtime_artifact_nonlinear_diagnostics import (
 )
 
 
-def _build_artifact_grid_and_geometry(cfg: Any) -> tuple[Any, Any]:
+def _build_output_grid_and_geometry(cfg: Any) -> tuple[Any, Any]:
     """Resolve artifact output onto the same geometry-implied grid as the solver."""
 
     geom_raw = build_runtime_geometry(cfg)
@@ -63,7 +63,7 @@ def _build_artifact_grid_and_geometry(cfg: Any) -> tuple[Any, Any]:
 def _particle_moments(state: np.ndarray, cfg: Any) -> dict[str, np.ndarray]:
     state_arr = np.asarray(state)
     ns, nl, nm, _ny, _nx, _nz = state_arr.shape
-    grid, geom = _build_artifact_grid_and_geometry(cfg)
+    grid, geom = _build_output_grid_and_geometry(cfg)
     params = build_runtime_linear_params(cfg, Nm=nm, geom=geom)
     cache = build_linear_cache(grid, geom, params, nl, nm)
     Jl = np.asarray(cache.Jl)
@@ -92,7 +92,7 @@ def _particle_moments(state: np.ndarray, cfg: Any) -> dict[str, np.ndarray]:
     }
 
 
-def _write_gx_geometry_group(
+def _write_geometry_group(
     group: Any,
     cfg: Any,
     *,
@@ -100,7 +100,7 @@ def _write_gx_geometry_group(
     geom: Any | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, Any]:
     if grid is None or geom is None:
-        grid, geom = _build_artifact_grid_and_geometry(cfg)
+        grid, geom = _build_output_grid_and_geometry(cfg)
     theta = np.asarray(grid.z, dtype=np.float32)
     group.createVariable("bmag", "f4", ("theta",))[:] = np.asarray(
         geom.bmag_profile, dtype=np.float32
@@ -160,7 +160,7 @@ def _write_gx_geometry_group(
     )
 
 
-def _write_gx_inputs_group(group: Any, cfg: Any, geom: Any) -> None:
+def _write_input_parameters_group(group: Any, cfg: Any, geom: Any) -> None:
     group.createVariable("igeo", "i4", ())[:] = np.int32(
         0 if str(cfg.geometry.model).lower() == "miller" else 1
     )
@@ -206,12 +206,12 @@ def _write_gx_inputs_group(group: Any, cfg: Any, geom: Any) -> None:
     group.createVariable("surfarea", "f4", ())[:] = np.float32(np.nan)
 
 
-def _write_runtime_nonlinear_gx_artifacts(
+def _write_nonlinear_netcdf_outputs(
     out: str | Path, result: Any, cfg: Any
 ) -> dict[str, str]:
     Dataset = _require_netcdf4()
     out_path = Path(out)
-    base = _gx_bundle_base(out_path)
+    base = _netcdf_bundle_base(out_path)
     out_nc_path = Path(f"{base}.out.nc")
     restart_path = _resolve_restart_path(out_path, cfg, for_write=True)
     big_path = Path(f"{base}.big.nc")
@@ -219,13 +219,13 @@ def _write_runtime_nonlinear_gx_artifacts(
     diag: SimulationDiagnostics | None = result.diagnostics
     if diag is None:
         raise ValueError(
-            "GX-style nonlinear NetCDF artifacts require nonlinear diagnostics output"
+            "nonlinear NetCDF output artifacts require nonlinear diagnostics output"
         )
 
-    grid, geom_data = _build_artifact_grid_and_geometry(cfg)
+    grid, geom_data = _build_output_grid_and_geometry(cfg)
     theta = np.asarray(grid.z, dtype=np.float32)
-    kx_vals = _gx_active_kx_values(np.asarray(grid.kx))
-    ky_vals = _gx_active_ky_values(np.asarray(grid.ky))
+    kx_vals = _dealiased_kx_values(np.asarray(grid.kx))
+    ky_vals = _dealiased_ky_values(np.asarray(grid.ky))
     full_nx = int(np.asarray(grid.kx).size)
     full_ny = int(np.asarray(grid.ky).size)
     active_nx = int(kx_vals.size)
@@ -275,7 +275,7 @@ def _write_runtime_nonlinear_gx_artifacts(
         grids.createVariable("theta", "f4", ("theta",))[:] = theta
 
         geom_group = root.createGroup("Geometry")
-        _write_gx_geometry_group(geom_group, cfg, grid=grid, geom=geom_data)
+        _write_geometry_group(geom_group, cfg, grid=grid, geom=geom_data)
 
         diag_group = root.createGroup("Diagnostics")
         resolved = diag.resolved
@@ -283,7 +283,7 @@ def _write_runtime_nonlinear_gx_artifacts(
         phi2_ky_out = None
         phi2_kykx_out = None
         if resolved is not None and resolved.Phi2_kxkyt is not None:
-            # GX stores Phi2 on the rFFT-positive ky view.  Deriving the one-
+            # The NetCDF schema stores Phi2 on the rFFT-positive ky view.  Deriving the one-
             # dimensional spectra from the condensed two-dimensional spectrum
             # keeps Phi2_t, Phi2_kxt, and Phi2_kyt mutually consistent when
             # SPECTRAX-GK evolved a full Hermitian ky layout internally.
@@ -682,24 +682,24 @@ def _write_runtime_nonlinear_gx_artifacts(
                 )[:, :, :] = np.asarray(resolved.TurbulentHeating_zst, dtype=np.float32)
 
         inputs = root.createGroup("Inputs")
-        _write_gx_inputs_group(inputs, cfg, geom_data)
+        _write_input_parameters_group(inputs, cfg, geom_data)
 
     paths = {"out": str(out_nc_path)}
 
     if result.state is not None:
-        gx_state = _restart_to_gx_layout(np.asarray(result.state))
+        restart_state_layout = _restart_to_netcdf_layout(np.asarray(result.state))
         _ensure_parent(restart_path)
         with Dataset(restart_path, "w") as root:
-            root.createDimension("Nspecies", gx_state.shape[0])
-            root.createDimension("Nm", gx_state.shape[1])
-            root.createDimension("Nl", gx_state.shape[2])
-            root.createDimension("Nz", gx_state.shape[3])
-            root.createDimension("Nkx", gx_state.shape[4])
-            root.createDimension("Nky", gx_state.shape[5])
+            root.createDimension("Nspecies", restart_state_layout.shape[0])
+            root.createDimension("Nm", restart_state_layout.shape[1])
+            root.createDimension("Nl", restart_state_layout.shape[2])
+            root.createDimension("Nz", restart_state_layout.shape[3])
+            root.createDimension("Nkx", restart_state_layout.shape[4])
+            root.createDimension("Nky", restart_state_layout.shape[5])
             root.createDimension("ri", 2)
             root.createVariable(
                 "G", "f4", ("Nspecies", "Nm", "Nl", "Nz", "Nkx", "Nky", "ri")
-            )[:, :, :, :, :, :, :] = gx_state
+            )[:, :, :, :, :, :, :] = restart_state_layout
             time_last = float(time_vals[-1]) if time_vals.size else 0.0
             root.createVariable("time", "f8", ())[:] = time_last
         paths["restart"] = str(restart_path)
@@ -717,9 +717,9 @@ def _write_runtime_nonlinear_gx_artifacts(
             if result.fields.bpar is None
             else np.asarray(result.fields.bpar)
         )
-        phi_active = _gx_active_field(phi_full)
-        apar_active = _gx_active_field(apar_full)
-        bpar_active = _gx_active_field(bpar_full)
+        phi_active = _dealiased_spectral_field(phi_full)
+        apar_active = _dealiased_spectral_field(apar_full)
+        bpar_active = _dealiased_spectral_field(bpar_full)
         basis_moments = (
             _state_basis_moments(np.asarray(result.state))
             if result.state is not None
@@ -754,7 +754,7 @@ def _write_runtime_nonlinear_gx_artifacts(
             grids.createVariable("y", "f4", ("y",))[:] = y_vals
             grids.createVariable("theta", "f4", ("theta",))[:] = theta
             geom_group = root.createGroup("Geometry")
-            _write_gx_geometry_group(geom_group, cfg)
+            _write_geometry_group(geom_group, cfg)
             diag_group = root.createGroup("Diagnostics")
             diag_group.createVariable("Phi", "f4", ("time", "ky", "kx", "theta", "ri"))[
                 0, ...
@@ -775,7 +775,7 @@ def _write_runtime_nonlinear_gx_artifacts(
                 0, ...
             ] = _spectral_to_xy(bpar_full)
             for name, values in basis_moments.items():
-                active = _gx_active_field(values, ky_axis=1, kx_axis=2)
+                active = _dealiased_spectral_field(values, ky_axis=1, kx_axis=2)
                 diag_group.createVariable(
                     name, "f4", ("time", "s", "ky", "kx", "theta", "ri")
                 )[0, ...] = _spectral_species_to_ri(active)
@@ -785,7 +785,7 @@ def _write_runtime_nonlinear_gx_artifacts(
                     np.float32, copy=False
                 )
             for name, values in particle_moments.items():
-                active = _gx_active_field(values, ky_axis=1, kx_axis=2)
+                active = _dealiased_spectral_field(values, ky_axis=1, kx_axis=2)
                 diag_group.createVariable(
                     name, "f4", ("time", "s", "ky", "kx", "theta", "ri")
                 )[0, ...] = _spectral_species_to_ri(active)
@@ -800,9 +800,9 @@ def _write_runtime_nonlinear_gx_artifacts(
 
 
 __all__ = [
-    "_build_artifact_grid_and_geometry",
+    "_build_output_grid_and_geometry",
     "_particle_moments",
-    "_write_gx_geometry_group",
-    "_write_gx_inputs_group",
-    "_write_runtime_nonlinear_gx_artifacts",
+    "_write_geometry_group",
+    "_write_input_parameters_group",
+    "_write_nonlinear_netcdf_outputs",
 ]

@@ -63,9 +63,10 @@ def _parallel_requests_combined_ky_scan(cfg: RuntimeConfig) -> bool:
     parallel = getattr(cfg, "parallel", None)
     if parallel is None:
         return False
-    return str(getattr(parallel, "strategy", "serial")).lower() == "combined_ky" and str(
-        getattr(parallel, "axis", "ky")
-    ).lower() == "ky"
+    return (
+        str(getattr(parallel, "strategy", "serial")).lower() == "combined_ky"
+        and str(getattr(parallel, "axis", "ky")).lower() == "ky"
+    )
 
 
 def _normalize_independent_executor(backend: str, fallback: str) -> str:
@@ -166,9 +167,7 @@ def _nearest_index_from_candidates(
     if candidate_arr.size == 0:
         raise ValueError("candidate indices must be non-empty")
     return int(
-        candidate_arr[
-            int(np.argmin(np.abs(values_arr[candidate_arr] - float(target))))
-        ]
+        candidate_arr[int(np.argmin(np.abs(values_arr[candidate_arr] - float(target))))]
     )
 
 
@@ -250,9 +249,11 @@ def _infer_runtime_nonlinear_steps(
     if steps is not None:
         steps_val = int(steps)
     elif bool(cfg.time.fixed_dt):
-        steps_val = int(np.round(float(cfg.time.t_max) / max(float(cfg.time.dt), 1.0e-12)))
+        steps_val = int(
+            np.round(float(cfg.time.t_max) / max(float(cfg.time.dt), 1.0e-12))
+        )
     else:
-        # Keep runtime inference aligned with GX-style adaptive stepping: when
+        # Keep runtime inference aligned with adaptive stepping: when
         # dt_max is unset, the nonlinear integrator clamps at dt itself.
         dt_cap = float(cfg.time.dt_max) if cfg.time.dt_max is not None else float(dt)
         steps_val = int(np.ceil(float(cfg.time.t_max) / max(dt_cap, 1.0e-12)))
@@ -262,7 +263,7 @@ def _infer_runtime_nonlinear_steps(
 
 
 def _runtime_external_phi(cfg: RuntimeConfig) -> float | None:
-    """Return a GX-style runtime external-phi source if requested."""
+    """Return a runtime external-phi source if requested."""
 
     source = str(cfg.expert.source).strip().lower()
     if source in {"", "default"}:

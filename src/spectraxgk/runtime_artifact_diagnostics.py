@@ -6,7 +6,7 @@ from typing import Any
 
 import numpy as np
 
-from spectraxgk.runtime_diagnostics import validate_finite_gx_diagnostics
+from spectraxgk.runtime_diagnostics import validate_finite_runtime_diagnostics
 
 _RUNTIME_FIELD_NAMES = ("phi", "apar", "bpar")
 
@@ -31,7 +31,7 @@ def validate_finite_runtime_result(result: Any, *, label: str) -> None:
     """Validate nonlinear runtime result payloads before artifact writes."""
 
     if result.diagnostics is not None:
-        validate_finite_gx_diagnostics(result.diagnostics, label=label)
+        validate_finite_runtime_diagnostics(result.diagnostics, label=label)
     validate_finite_array(result.state, label=f"{label} state")
     fields = result.fields
     if fields is None:

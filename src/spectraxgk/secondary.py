@@ -17,7 +17,7 @@ from spectraxgk.runtime_config import (
     RuntimeConfig,
     RuntimeExpertConfig,
 )
-from spectraxgk.restart import write_gx_restart_state
+from spectraxgk.restart import write_netcdf_restart_state
 
 
 @dataclass(frozen=True)
@@ -71,7 +71,7 @@ def _tail_mean_pair(
 def write_restart_state(path: str | Path, state: np.ndarray) -> Path:
     """Write a complex restart state in the runtime binary layout."""
 
-    return write_gx_restart_state(path, state)
+    return write_netcdf_restart_state(path, state)
 
 
 def _embed_linear_seed_on_full_grid(
@@ -96,7 +96,9 @@ def _embed_linear_seed_on_full_grid(
     if tuple(state.shape) == full_shape:
         return np.asarray(state, dtype=np.complex64)
     if state.ndim != 6 or state.shape[3] != 1:
-        raise ValueError(f"expected selected-ky linear state with shape (..., 1, Nx, Nz), got {state.shape}")
+        raise ValueError(
+            f"expected selected-ky linear state with shape (..., 1, Nx, Nz), got {state.shape}"
+        )
     ky = np.asarray(grid.ky, dtype=float)
     ky_idx = int(np.argmin(np.abs(ky - float(ky_target))))
     full_state = np.zeros(full_shape, dtype=np.complex64)
@@ -167,7 +169,9 @@ def build_secondary_stage2_config(
     )
     physics_cfg = replace(cfg.physics, linear=False, nonlinear=True)
     terms_cfg = replace(cfg.terms, nonlinear=1.0)
-    expert_cfg = RuntimeExpertConfig(fixed_mode=True, iky_fixed=int(iky_fixed), ikx_fixed=int(ikx_fixed))
+    expert_cfg = RuntimeExpertConfig(
+        fixed_mode=True, iky_fixed=int(iky_fixed), ikx_fixed=int(ikx_fixed)
+    )
     return replace(
         cfg,
         time=time_cfg,
@@ -223,7 +227,11 @@ def run_secondary_modes(
             t, signal = _leading_finite_prefix(result.diagnostics.t, phi_mode_t)
             if t.size >= 2 and np.max(np.abs(signal)) > 0.0:
                 t_span = float(t[-1] - t[0]) if t.size > 1 else 0.0
-                tmin = float(t[0] + (1.0 - float(fit_fraction)) * t_span) if t_span > 0.0 else None
+                tmin = (
+                    float(t[0] + (1.0 - float(fit_fraction)) * t_span)
+                    if t_span > 0.0
+                    else None
+                )
                 try:
                     gamma_fit, omega_fit = fit_growth_rate(t, signal, tmin=tmin)
                     gamma = float(gamma_fit)
