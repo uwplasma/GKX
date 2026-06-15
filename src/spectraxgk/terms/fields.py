@@ -65,7 +65,7 @@ def _solve_fields_impl(
     )
     qphi = tau_e + qneut
 
-    def _gx_quasineutrality_adiabatic() -> jnp.ndarray:
+    def _adiabatic_quasineutrality() -> jnp.ndarray:
         jacobian = jnp.asarray(cache.jacobian, dtype=real_dtype)
         jac = jacobian[None, None, :]
         denom = tau_e + qneut
@@ -83,7 +83,7 @@ def _solve_fields_impl(
 
     phi_es = jax.lax.cond(
         jnp.any(tau_e > 0.0),
-        lambda _: _gx_quasineutrality_adiabatic(),
+        lambda _: _adiabatic_quasineutrality(),
         lambda _: quasineutrality_phi(G, Jl, tau_e, charge, density, tz),
         operand=None,
     )

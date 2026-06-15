@@ -65,8 +65,8 @@ from spectraxgk.nonlinear_helpers import (
     IMEXLinearOperator,
     _apply_collision_split,
     _collision_damping,
-    _gx_nonlinear_omega_components,
-    _gx_omega_mode_mask,
+    _nonlinear_cfl_frequency_components,
+    _diagnostic_omega_mode_mask,
     _make_fixed_mode_projector,
     _make_hermitian_projector,
     build_nonlinear_imex_operator,
@@ -293,7 +293,7 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
     if method in {"imex", "semi-implicit"}:
         raise ValueError("Final-state runtime diagnostics helper only supports explicit methods")
     vol_fac, flux_fac = fieldline_quadrature_weights(geom_eff, grid)
-    mask = _gx_omega_mode_mask(grid, cache, compressed_real_fft=compressed_real_fft)
+    mask = _diagnostic_omega_mode_mask(grid, cache, compressed_real_fft=compressed_real_fft)
     z_idx = _diagnostic_midplane_index(grid.z.size) if z_index is None else int(z_index)
     use_dealias = bool(use_dealias_mask)
     use_hermitian = bool(compressed_real_fft) and bool(np.any(np.asarray(grid.ky) < 0.0))
@@ -379,7 +379,7 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
     def _update_dt(fields_state: FieldState, dt_prev: jnp.ndarray) -> jnp.ndarray:
         if fixed_dt:
             return jnp.asarray(dt_prev, dtype=real_dtype)
-        omega_nl_x, omega_nl_y = _gx_nonlinear_omega_components(
+        omega_nl_x, omega_nl_y = _nonlinear_cfl_frequency_components(
             fields_state,
             grid,
             cache,
@@ -1196,7 +1196,7 @@ def integrate_nonlinear_imex_diagnostics(
     linear_rhs_fn = _linear_rhs_jit_for_terms(linear_cfg)
 
     vol_fac, flux_fac = fieldline_quadrature_weights(geom_eff, grid)
-    mask = _gx_omega_mode_mask(grid, cache, compressed_real_fft=compressed_real_fft)
+    mask = _diagnostic_omega_mode_mask(grid, cache, compressed_real_fft=compressed_real_fft)
     z_idx = _diagnostic_midplane_index(grid.z.size) if z_index is None else int(z_index)
     use_dealias = bool(use_dealias_mask)
     use_hermitian = bool(compressed_real_fft) and bool(np.any(np.asarray(grid.ky) < 0.0))

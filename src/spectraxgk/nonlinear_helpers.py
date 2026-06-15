@@ -25,8 +25,8 @@ __all__ = [
     "IMEXLinearOperator",
     "_apply_collision_split",
     "_collision_damping",
-    "_gx_nonlinear_omega_components",
-    "_gx_omega_mode_mask",
+    "_nonlinear_cfl_frequency_components",
+    "_diagnostic_omega_mode_mask",
     "_make_fixed_mode_projector",
     "_make_hermitian_projector",
     "build_nonlinear_imex_operator",
@@ -48,7 +48,7 @@ class IMEXLinearOperator:
 def _make_hermitian_projector(
     ky_vals: np.ndarray, nx: int
 ) -> Callable[[jnp.ndarray], jnp.ndarray]:
-    """Project full-ky states onto the GX real-FFT Hermitian manifold."""
+    """Project full-ky states onto the compressed real-FFT Hermitian manifold."""
 
     ny_full = int(ky_vals.size)
     nyc = ny_full // 2 + 1
@@ -74,7 +74,7 @@ def _make_hermitian_projector(
     return project
 
 
-def _gx_nonlinear_omega_components(
+def _nonlinear_cfl_frequency_components(
     fields: FieldState,
     grid: SpectralGrid,
     cache: LinearCache,
@@ -86,7 +86,7 @@ def _gx_nonlinear_omega_components(
     vpar_max: float,
     muB_max: float,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
-    """GX-style nonlinear x/y CFL frequency components from grad(phi,apar,bpar)."""
+    """Nonlinear x/y CFL frequency components from grad(phi, apar, bpar)."""
 
     phi = fields.phi
     apar = fields.apar
@@ -213,13 +213,13 @@ def _gx_nonlinear_omega_components(
     )
 
 
-def _gx_omega_mode_mask(
+def _diagnostic_omega_mode_mask(
     grid: SpectralGrid,
     cache: LinearCache,
     *,
     compressed_real_fft: bool,
 ) -> jnp.ndarray:
-    """Mask used to reduce mode-wise GX omega/gamma diagnostics."""
+    """Mask used to reduce mode-wise nonlinear omega/gamma diagnostics."""
 
     ny = int(grid.ky.size)
     nx = int(grid.kx.size)

@@ -76,13 +76,13 @@ def _laguerre_to_spectral(
     )
 
 
-def _gx_j0_field(
+def _laguerre_j0_field(
     field: jnp.ndarray,
     b: jnp.ndarray,
     roots: jnp.ndarray,
     factor: float,
 ) -> jnp.ndarray:
-    """GX-style J0(field) on the Laguerre quadrature grid."""
+    """Apply J0(field) on the Laguerre quadrature grid."""
     b = jnp.asarray(b)
     roots = jnp.asarray(roots)
     field = jnp.asarray(field)
@@ -98,7 +98,7 @@ def _gx_j0_field(
     return j0 * field_b * jnp.asarray(factor, dtype=field.dtype)
 
 
-def _gx_j0_field_precomputed(
+def _laguerre_j0_field_precomputed(
     field: jnp.ndarray,
     j0: jnp.ndarray,
     factor: float,
@@ -108,14 +108,14 @@ def _gx_j0_field_precomputed(
     return j0 * field_b * jnp.asarray(factor, dtype=field.dtype)
 
 
-def _gx_bpar_term(
+def _laguerre_bpar_correction(
     bpar: jnp.ndarray,
     b: jnp.ndarray,
     roots: jnp.ndarray,
     tz: jnp.ndarray,
     factor: float,
 ) -> jnp.ndarray:
-    """GX-style bpar correction term on Laguerre quadrature grid."""
+    """Return the bpar correction term on the Laguerre quadrature grid."""
     b = jnp.asarray(b)
     roots = jnp.asarray(roots)
     bpar = jnp.asarray(bpar)
@@ -141,7 +141,7 @@ def _gx_bpar_term(
     return coeff * bpar_b * jnp.asarray(factor, dtype=bpar.dtype)
 
 
-def _gx_bpar_term_precomputed(
+def _laguerre_bpar_correction_precomputed(
     bpar: jnp.ndarray,
     j1_over_alpha: jnp.ndarray,
     roots: jnp.ndarray,
@@ -551,7 +551,7 @@ def nonlinear_em_contribution(
     compressed_real_fft: bool = True,
     laguerre_mode: str = "grid",
 ) -> jnp.ndarray:
-    """Nonlinear E×B + flutter contribution using GX-style gyroaveraging.
+    """Nonlinear E×B + flutter contribution using Laguerre gyroaveraging.
 
     ``apar_weight`` and ``bpar_weight`` are used as on/off toggles (nonzero
     enables the term); the fields themselves already include any scaling.
@@ -595,9 +595,9 @@ def nonlinear_em_contribution(
         chi_fields: list[jnp.ndarray] = []
         idx_phi = 0
         if laguerre_j0 is not None:
-            chi_phi = _gx_j0_field_precomputed(phi, laguerre_j0, 1.0)
+            chi_phi = _laguerre_j0_field_precomputed(phi, laguerre_j0, 1.0)
         else:
-            chi_phi = _gx_j0_field(phi, b, laguerre_roots, 1.0)
+            chi_phi = _laguerre_j0_field(phi, b, laguerre_roots, 1.0)
         if electrostatic_only:
             exb_phi = _spectral_bracket(
                 g_mu,
@@ -618,7 +618,7 @@ def nonlinear_em_contribution(
             idx_bpar = len(chi_fields)
             if laguerre_j1_over_alpha is not None:
                 chi_fields.append(
-                    _gx_bpar_term_precomputed(
+                    _laguerre_bpar_correction_precomputed(
                         bpar,
                         laguerre_j1_over_alpha,
                         laguerre_roots,
@@ -627,14 +627,14 @@ def nonlinear_em_contribution(
                     )
                 )
             else:
-                chi_fields.append(_gx_bpar_term(bpar, b, laguerre_roots, tz, 1.0))
+                chi_fields.append(_laguerre_bpar_correction(bpar, b, laguerre_roots, tz, 1.0))
         idx_apar = None
         if apar is not None and apar_weight != 0.0:
             idx_apar = len(chi_fields)
             if laguerre_j0 is not None:
-                chi_fields.append(_gx_j0_field_precomputed(apar, laguerre_j0, 1.0))
+                chi_fields.append(_laguerre_j0_field_precomputed(apar, laguerre_j0, 1.0))
             else:
-                chi_fields.append(_gx_j0_field(apar, b, laguerre_roots, 1.0))
+                chi_fields.append(_laguerre_j0_field(apar, b, laguerre_roots, 1.0))
         chi_stack = _stack_fields(g_mu, chi_fields)
         bracket_fn = _spectral_bracket_multi_real_fft if compressed_real_fft else _spectral_bracket_multi_full
         brackets = bracket_fn(
@@ -770,15 +770,15 @@ def nonlinear_em_components(
         chi_fields: list[jnp.ndarray] = []
         idx_phi = 0
         if laguerre_j0 is not None:
-            chi_fields.append(_gx_j0_field_precomputed(phi, laguerre_j0, 1.0))
+            chi_fields.append(_laguerre_j0_field_precomputed(phi, laguerre_j0, 1.0))
         else:
-            chi_fields.append(_gx_j0_field(phi, b, laguerre_roots, 1.0))
+            chi_fields.append(_laguerre_j0_field(phi, b, laguerre_roots, 1.0))
         idx_bpar = None
         if bpar is not None and bpar_weight != 0.0:
             idx_bpar = len(chi_fields)
             if laguerre_j1_over_alpha is not None:
                 chi_fields.append(
-                    _gx_bpar_term_precomputed(
+                    _laguerre_bpar_correction_precomputed(
                         bpar,
                         laguerre_j1_over_alpha,
                         laguerre_roots,
@@ -787,14 +787,14 @@ def nonlinear_em_components(
                     )
                 )
             else:
-                chi_fields.append(_gx_bpar_term(bpar, b, laguerre_roots, tz, 1.0))
+                chi_fields.append(_laguerre_bpar_correction(bpar, b, laguerre_roots, tz, 1.0))
         idx_apar = None
         if apar is not None and apar_weight != 0.0:
             idx_apar = len(chi_fields)
             if laguerre_j0 is not None:
-                chi_fields.append(_gx_j0_field_precomputed(apar, laguerre_j0, 1.0))
+                chi_fields.append(_laguerre_j0_field_precomputed(apar, laguerre_j0, 1.0))
             else:
-                chi_fields.append(_gx_j0_field(apar, b, laguerre_roots, 1.0))
+                chi_fields.append(_laguerre_j0_field(apar, b, laguerre_roots, 1.0))
         chi_stack = _stack_fields(g_mu, chi_fields)
         bracket_fn = _spectral_bracket_multi_real_fft if compressed_real_fft else _spectral_bracket_multi_full
         brackets = bracket_fn(
