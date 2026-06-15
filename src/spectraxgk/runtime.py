@@ -384,8 +384,7 @@ def run_runtime_linear(
             )
         if solver_key not in {"auto", "time", "explicit_time"}:
             raise ValueError(
-                "solver must be one of {'auto', 'time', 'explicit_time', 'krylov'}; "
-                "legacy alias 'gx_time' is accepted"
+                "solver must be one of {'auto', 'time', 'explicit_time', 'krylov'}"
             )
         dt_val = float(cfg.time.dt if dt is None else dt)
         if dt_val <= 0.0:

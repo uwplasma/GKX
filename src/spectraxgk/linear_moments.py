@@ -191,9 +191,10 @@ def build_H(
 ) -> jnp.ndarray:
     """Map G -> H for mirror/curvature/grad-B/collision terms.
 
-    GX builds H by adding the field terms for m=0 (phi, Bpar) and the
-    A_parallel term for m=1, while the streaming term applies its own
-    pre-derivative field contributions. We mirror that behavior here.
+    The moment-space field transform adds electrostatic and compressional
+    magnetic terms to ``m=0`` and the parallel-vector-potential term to
+    ``m=1``. The streaming term applies its own pre-derivative field
+    contributions.
     """
 
     squeeze_species = False

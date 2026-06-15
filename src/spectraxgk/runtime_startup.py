@@ -310,8 +310,8 @@ def _build_single_phi_gaussian_profile(
     """Return a single-mode Gaussian potential profile along the flux tube.
 
     The W7-X zonal-flow benchmark prescribes a Gaussian electrostatic-potential
-    perturbation centered in the middle of the flux tube. The multi-mode GX
-    Gaussian initializer is undefined for ``ky=0`` because its ballooning-angle
+    perturbation centered in the middle of the flux tube. A multi-mode
+    ballooning-angle Gaussian initializer is undefined for ``ky=0`` because its
     center uses ``kx / (s_hat * ky)``; for the zonal case the physically stated
     center is therefore the tube midpoint, ``z=0``.
     """

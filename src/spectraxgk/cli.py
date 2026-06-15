@@ -692,7 +692,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="grid or spectral (nonlinear Laguerre handling)",
     )
     run_runtime_nl.add_argument(
-        "--init-file", type=str, default=None, help="Optional init file (GX g_state)"
+        "--init-file",
+        type=str,
+        default=None,
+        help="Optional restart/init-state file containing a compatible distribution state",
     )
     run_runtime_nl.add_argument(
         "--vmec-file", type=str, default=None, help="Override [geometry].vmec_file"

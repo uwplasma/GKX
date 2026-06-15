@@ -75,7 +75,7 @@ def twothirds_mask(Ny: int, Nx: int) -> jnp.ndarray:
 
     ky = jnp.fft.fftfreq(Ny)
     kx = jnp.fft.fftfreq(Nx)
-    # GX excludes the boundary shell |k| = 1/3 and keeps only the strict 2/3 interior.
+    # The two-thirds dealiased convolution rule keeps only the strict interior.
     ky_ok = jnp.abs(ky) < (1.0 / 3.0)
     kx_ok = jnp.abs(kx) < (1.0 / 3.0)
     return ky_ok[:, None] & kx_ok[None, :]
