@@ -5,7 +5,12 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any, Dict, Tuple
 
-from spectraxgk.config import GeometryConfig, GridConfig, InitializationConfig, TimeConfig
+from spectraxgk.config import (
+    GeometryConfig,
+    GridConfig,
+    InitializationConfig,
+    TimeConfig,
+)
 
 
 @dataclass(frozen=True)
@@ -66,7 +71,7 @@ class RuntimeCollisionConfig:
     p_hyper_lm: float = 6.0
     D_hyper: float = 0.0
     p_hyper_kperp: float = 2.0
-    # GX default nonlinear dissipation path: kz-proportional hypercollisions.
+    # Reference nonlinear dissipation path: kz-proportional hypercollisions.
     hypercollisions_const: float = 0.0
     hypercollisions_kz: float = 1.0
     damp_ends_amp: float = 0.1
@@ -85,9 +90,15 @@ class RuntimeNormalizationConfig:
     rho_star: float | None = None
     omega_d_scale: float | None = None
     omega_star_scale: float | None = None
-    diagnostic_norm: str = "gx"
+    diagnostic_norm: str = "rho_star"
     flux_scale: float = 1.0
     wphi_scale: float = 1.0
+
+    def __post_init__(self) -> None:
+        diagnostic_norm = str(self.diagnostic_norm).strip().lower()
+        if diagnostic_norm == "gx":
+            diagnostic_norm = "rho_star"
+        object.__setattr__(self, "diagnostic_norm", diagnostic_norm)
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

@@ -137,7 +137,7 @@ def run_cyclone_linear(
     if reference_aligned_use:
         geom_cfg = replace(geom_cfg, drift_scale=1.0)
         if diagnostic_norm == "none":
-            diagnostic_norm = "gx"
+            diagnostic_norm = "rho_star"
         if mode_method not in {"z_index", "max"}:
             mode_method = "z_index"
     _status("building s-alpha geometry")
@@ -670,7 +670,7 @@ def run_cyclone_scan(
     if reference_aligned_use:
         geom_cfg = replace(geom_cfg, drift_scale=1.0)
         if diagnostic_norm == "none":
-            diagnostic_norm = "gx"
+            diagnostic_norm = "rho_star"
         if mode_method not in {"z_index", "max"}:
             mode_method = "z_index"
     geom = SAlphaGeometry.from_config(geom_cfg)

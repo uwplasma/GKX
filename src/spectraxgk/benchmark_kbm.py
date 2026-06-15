@@ -132,7 +132,7 @@ def run_kbm_beta_scan(
         True if reference_aligned is None else reference_aligned
     )
     if reference_aligned_use and diagnostic_norm == "none":
-        diagnostic_norm = "gx"
+        diagnostic_norm = "rho_star"
     damp_ends_amp, damp_ends_widthfrac = _linked_boundary_end_damping(
         reference_aligned_use
     )
@@ -711,7 +711,7 @@ def run_kbm_linear(
         True if reference_aligned is None else reference_aligned
     )
     if reference_aligned_use and diagnostic_norm == "none":
-        diagnostic_norm = "gx"
+        diagnostic_norm = "rho_star"
     damp_ends_amp, damp_ends_widthfrac = _linked_boundary_end_damping(
         reference_aligned_use
     )

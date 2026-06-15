@@ -105,7 +105,7 @@ def run_kinetic_linear(
         True if reference_aligned is None else reference_aligned
     )
     if reference_aligned_use and diagnostic_norm == "none":
-        diagnostic_norm = "gx"
+        diagnostic_norm = "rho_star"
     init_cfg_use = _kinetic_reference_init_cfg(
         cfg.init, reference_aligned=reference_aligned_use
     )
@@ -385,7 +385,7 @@ def run_kinetic_scan(
         True if reference_aligned is None else reference_aligned
     )
     if reference_aligned_use and diagnostic_norm == "none":
-        diagnostic_norm = "gx"
+        diagnostic_norm = "rho_star"
     init_cfg_use = _kinetic_reference_init_cfg(
         cfg.init, reference_aligned=reference_aligned_use
     )

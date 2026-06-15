@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 
-DiagnosticNorm = Literal["none", "gx", "rho_star"]
+DiagnosticNorm = Literal["none", "rho_star", "gx"]
 
 
 @dataclass(frozen=True)
@@ -97,7 +97,9 @@ def get_normalization_contract(case: str) -> NormalizationContract:
         return _CONTRACTS[key]
     except KeyError as exc:
         valid = ", ".join(sorted(_CONTRACTS))
-        raise ValueError(f"Unknown normalization case '{case}'. Valid keys: {valid}") from exc
+        raise ValueError(
+            f"Unknown normalization case '{case}'. Valid keys: {valid}"
+        ) from exc
 
 
 def apply_diagnostic_normalization(
@@ -112,7 +114,9 @@ def apply_diagnostic_normalization(
     mode = diagnostic_norm.strip().lower()
     if mode in {"none", ""}:
         return float(gamma), float(omega)
-    if mode in {"gx", "rho_star"}:
+    if mode == "gx":
+        mode = "rho_star"
+    if mode == "rho_star":
         scale = float(rho_star)
         return float(gamma) * scale, float(omega) * scale
     raise ValueError(f"Unknown diagnostic_norm '{diagnostic_norm}'")
