@@ -23,10 +23,7 @@ VALID_FIT_SIGNALS = frozenset({"phi", "density", "auto"})
 def normalize_solver_key(solver: str) -> str:
     """Normalize a benchmark solver selector to canonical SPECTRAX-GK keys."""
 
-    solver_key = solver.strip().lower().replace("-", "_")
-    if solver_key == "gx_time":
-        return "explicit_time"
-    return solver_key
+    return solver.strip().lower().replace("-", "_")
 
 
 def normalize_fit_signal(fit_signal: str) -> str:
