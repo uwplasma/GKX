@@ -16,10 +16,10 @@ __all__ = [
     "REFERENCE_NU_HYPER_M",
     "REFERENCE_P_HYPER_L",
     "REFERENCE_P_HYPER_M",
-    "_apply_gx_hypercollisions",
+    "_apply_reference_hypercollisions",
     "_electron_only_params",
-    "_gx_linked_end_damping",
-    "_gx_p_hyper_m",
+    "_linked_boundary_end_damping",
+    "_reference_hypercollision_power",
     "_two_species_params",
 ]
 
@@ -32,13 +32,13 @@ REFERENCE_DAMP_ENDS_AMP = 0.1
 REFERENCE_DAMP_ENDS_WIDTHFRAC = 1.0 / 8.0
 
 
-def _gx_p_hyper_m(nhermite: int | None) -> float:
+def _reference_hypercollision_power(nhermite: int | None) -> float:
     if nhermite is None:
         return REFERENCE_P_HYPER_M
     return float(min(REFERENCE_P_HYPER_M, max(int(nhermite) // 2, 1)))
 
 
-def _apply_gx_hypercollisions(
+def _apply_reference_hypercollisions(
     params: LinearParams, *, nhermite: int | None = None
 ) -> LinearParams:
     return replace(
@@ -47,14 +47,14 @@ def _apply_gx_hypercollisions(
         nu_hyper_l=REFERENCE_NU_HYPER_L,
         nu_hyper_m=REFERENCE_NU_HYPER_M,
         p_hyper_l=REFERENCE_P_HYPER_L,
-        p_hyper_m=_gx_p_hyper_m(nhermite),
+        p_hyper_m=_reference_hypercollision_power(nhermite),
         hypercollisions_const=0.0,
         hypercollisions_kz=1.0,
     )
 
 
-def _gx_linked_end_damping(gx_reference: bool) -> tuple[float, float]:
-    if gx_reference:
+def _linked_boundary_end_damping(reference_aligned: bool) -> tuple[float, float]:
+    if reference_aligned:
         return REFERENCE_DAMP_ENDS_AMP, REFERENCE_DAMP_ENDS_WIDTHFRAC
     return 0.0, 0.0
 
@@ -129,7 +129,7 @@ def _two_species_params(
         ampere_g0_scale=0.5 if ampere_g0_scale is None else float(ampere_g0_scale),
         bpar_beta_scale=0.5 if bpar_beta_scale is None else float(bpar_beta_scale),
     )
-    params = _apply_gx_hypercollisions(params, nhermite=nhermite)
+    params = _apply_reference_hypercollisions(params, nhermite=nhermite)
     if fapar_override is not None:
         params = replace(params, fapar=float(fapar_override))
     if damp_ends_amp is not None:
@@ -191,7 +191,7 @@ def _electron_only_params(
         ampere_g0_scale=0.5 if ampere_g0_scale is None else float(ampere_g0_scale),
         bpar_beta_scale=0.5 if bpar_beta_scale is None else float(bpar_beta_scale),
     )
-    params = _apply_gx_hypercollisions(params, nhermite=nhermite)
+    params = _apply_reference_hypercollisions(params, nhermite=nhermite)
     if fapar_override is not None:
         params = replace(params, fapar=float(fapar_override))
     if damp_ends_amp is not None:

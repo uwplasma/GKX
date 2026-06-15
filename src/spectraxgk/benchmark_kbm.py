@@ -28,7 +28,7 @@ from spectraxgk.benchmark_helpers import (
     LinearScanResult,
     _build_initial_condition,
     _extract_mode_only_signal,
-    _gx_linked_end_damping,
+    _linked_boundary_end_damping,
     _kbm_use_multi_target_krylov,
     _midplane_index,
     _normalize_growth_rate,
@@ -128,7 +128,7 @@ def run_kbm_beta_scan(
     gx_reference_use = bool(gx_reference)
     if gx_reference_use and diagnostic_norm == "none":
         diagnostic_norm = "gx"
-    damp_ends_amp, damp_ends_widthfrac = _gx_linked_end_damping(gx_reference_use)
+    damp_ends_amp, damp_ends_widthfrac = _linked_boundary_end_damping(gx_reference_use)
 
     solver_key = normalize_solver_key(solver)
     fit_key = normalize_fit_signal(fit_signal)
@@ -692,7 +692,7 @@ def run_kbm_linear(
     gx_reference_use = bool(gx_reference)
     if gx_reference_use and diagnostic_norm == "none":
         diagnostic_norm = "gx"
-    damp_ends_amp, damp_ends_widthfrac = _gx_linked_end_damping(gx_reference_use)
+    damp_ends_amp, damp_ends_widthfrac = _linked_boundary_end_damping(gx_reference_use)
 
     fit_key = fit_signal.strip().lower()
     if fit_key not in {"phi", "density", "auto"}:

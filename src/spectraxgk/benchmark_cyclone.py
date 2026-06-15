@@ -28,7 +28,7 @@ from spectraxgk.benchmark_helpers import (
     REFERENCE_DAMP_ENDS_WIDTHFRAC,
     CycloneRunResult,
     CycloneScanResult,
-    _apply_gx_hypercollisions,
+    _apply_reference_hypercollisions,
     _build_initial_condition,
     _iter_ky_batches,
     _midplane_index,
@@ -148,7 +148,7 @@ def run_cyclone_linear(
             damp_ends_amp=REFERENCE_DAMP_ENDS_AMP,
             damp_ends_widthfrac=REFERENCE_DAMP_ENDS_WIDTHFRAC,
         )
-        params = _apply_gx_hypercollisions(params, nhermite=Nm)
+        params = _apply_reference_hypercollisions(params, nhermite=Nm)
     if terms is None:
         if getattr(cfg.model, "adiabatic_ions", False):
             terms = LinearTerms(bpar=0.0)
@@ -670,7 +670,7 @@ def run_cyclone_scan(
             damp_ends_amp=REFERENCE_DAMP_ENDS_AMP,
             damp_ends_widthfrac=REFERENCE_DAMP_ENDS_WIDTHFRAC,
         )
-        params = _apply_gx_hypercollisions(params, nhermite=Nm)
+        params = _apply_reference_hypercollisions(params, nhermite=Nm)
     if terms is None:
         if getattr(cfg.model, "adiabatic_ions", False):
             terms = LinearTerms(bpar=0.0)

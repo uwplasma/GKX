@@ -24,10 +24,10 @@ from spectraxgk.benchmark_defaults import (
 from spectraxgk.benchmark_helpers import (
     LinearRunResult,
     LinearScanResult,
-    _apply_gx_hypercollisions,
+    _apply_reference_hypercollisions,
     _build_initial_condition,
     _extract_mode_only_signal,
-    _gx_linked_end_damping,
+    _linked_boundary_end_damping,
     _iter_ky_batches,
     _kinetic_reference_init_cfg,
     _midplane_index,
@@ -102,7 +102,7 @@ def run_kinetic_linear(
     if gx_reference_use and diagnostic_norm == "none":
         diagnostic_norm = "gx"
     init_cfg_use = _kinetic_reference_init_cfg(cfg.init, gx_reference=gx_reference_use)
-    damp_ends_amp, damp_ends_widthfrac = _gx_linked_end_damping(gx_reference_use)
+    damp_ends_amp, damp_ends_widthfrac = _linked_boundary_end_damping(gx_reference_use)
     if params is None:
         params = _two_species_params(
             cfg.model,
@@ -115,7 +115,7 @@ def run_kinetic_linear(
             nhermite=Nm,
         )
         if gx_reference_use:
-            params = _apply_gx_hypercollisions(params, nhermite=Nm)
+            params = _apply_reference_hypercollisions(params, nhermite=Nm)
     if terms is None:
         terms = LinearTerms(bpar=0.0)
 
@@ -371,7 +371,7 @@ def run_kinetic_scan(
     if gx_reference_use and diagnostic_norm == "none":
         diagnostic_norm = "gx"
     init_cfg_use = _kinetic_reference_init_cfg(cfg.init, gx_reference=gx_reference_use)
-    damp_ends_amp, damp_ends_widthfrac = _gx_linked_end_damping(gx_reference_use)
+    damp_ends_amp, damp_ends_widthfrac = _linked_boundary_end_damping(gx_reference_use)
     if params is None:
         params = _two_species_params(
             cfg.model,
@@ -384,7 +384,7 @@ def run_kinetic_scan(
             nhermite=Nm,
         )
         if gx_reference_use:
-            params = _apply_gx_hypercollisions(params, nhermite=Nm)
+            params = _apply_reference_hypercollisions(params, nhermite=Nm)
     if terms is None:
         terms = LinearTerms(bpar=0.0)
     solver_key = normalize_solver_key(solver)
