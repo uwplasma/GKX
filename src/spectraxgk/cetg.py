@@ -158,20 +158,20 @@ def _dz2(arr: jnp.ndarray, grid: SpectralGrid) -> jnp.ndarray:
     return jnp.fft.ifft(-(kz**2) * arr_k, axis=-1)
 
 
-def _use_hermitian_reconstruction(grid: SpectralGrid, *, gx_real_fft: bool) -> bool:
-    return bool(gx_real_fft) and bool(np.any(np.asarray(grid.ky, dtype=float) < 0.0))
+def _use_hermitian_reconstruction(grid: SpectralGrid, *, compressed_real_fft: bool) -> bool:
+    return bool(compressed_real_fft) and bool(np.any(np.asarray(grid.ky, dtype=float) < 0.0))
 
 
 def _project_state(
     G: jnp.ndarray,
     grid: SpectralGrid,
     *,
-    gx_real_fft: bool,
+    compressed_real_fft: bool,
 ) -> jnp.ndarray:
     G_proj = jnp.asarray(G)
     G_proj = G_proj * _xy_mask(grid, jnp.real(G_proj).dtype)
 
-    if not _use_hermitian_reconstruction(grid, gx_real_fft=gx_real_fft):
+    if not _use_hermitian_reconstruction(grid, compressed_real_fft=compressed_real_fft):
         return G_proj
     ny_full = int(grid.ky.size)
     nyc = ny_full // 2 + 1
@@ -244,7 +244,7 @@ def _cetg_nonlinear_rhs(
     fields: FieldState,
     grid: SpectralGrid,
     *,
-    gx_real_fft: bool,
+    compressed_real_fft: bool,
 ) -> jnp.ndarray:
     G_int = _to_internal_state(G)
     phi = fields.phi
@@ -255,7 +255,7 @@ def _cetg_nonlinear_rhs(
         ky_grid=grid.ky_grid,
         dealias_mask=grid.dealias_mask,
         kxfac=jnp.asarray(grid.kxfac, dtype=jnp.real(G_int).dtype),
-        gx_real_fft=gx_real_fft,
+        compressed_real_fft=compressed_real_fft,
     )[0]
     bracket = 0.5 * bracket
     bracket = bracket * _xy_mask(grid, jnp.real(bracket).dtype)
@@ -268,7 +268,7 @@ def cetg_rhs(
     params: CETGModelParams,
     terms: TermConfig,
     *,
-    gx_real_fft: bool,
+    compressed_real_fft: bool,
     fields_override: FieldState | None = None,
 ) -> tuple[jnp.ndarray, FieldState]:
     """Return the full cETG RHS and the electrostatic fields."""
@@ -281,9 +281,9 @@ def cetg_rhs(
             G_int,
             fields,
             grid,
-            gx_real_fft=gx_real_fft,
+            compressed_real_fft=compressed_real_fft,
         )
-    rhs = _project_state(rhs, grid, gx_real_fft=gx_real_fft)
+    rhs = _project_state(rhs, grid, compressed_real_fft=compressed_real_fft)
     return rhs, fields
 
 
@@ -408,7 +408,7 @@ def integrate_cetg_explicit_diagnostics_state(
     method: str,
     sample_stride: int = 1,
     diagnostics_stride: int = 1,
-    gx_real_fft: bool = True,
+    compressed_real_fft: bool = True,
     omega_ky_index: int | None = None,
     omega_kx_index: int | None = None,
     fixed_dt: bool = True,
@@ -423,7 +423,7 @@ def integrate_cetg_explicit_diagnostics_state(
     if method not in {"euler", "rk2", "rk3", "rk3_classic", "rk3_heun", "rk4", "k10", "sspx3"}:
         raise ValueError("Unsupported explicit cETG method")
 
-    G0_int = _project_state(_to_internal_state(G0), grid, gx_real_fft=gx_real_fft)
+    G0_int = _project_state(_to_internal_state(G0), grid, compressed_real_fft=compressed_real_fft)
     state_dtype = jnp.result_type(G0_int, jnp.complex64)
     real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
     dt_init = jnp.asarray(dt, dtype=real_dtype)
@@ -444,7 +444,7 @@ def integrate_cetg_explicit_diagnostics_state(
         return jnp.asarray(jnp.clip(dt_guess, dt_min_val, dt_max_val), dtype=real_dtype)
 
     def rhs_fn(G_state: jnp.ndarray) -> tuple[jnp.ndarray, FieldState]:
-        return cetg_rhs(G_state, grid, params, terms, gx_real_fft=gx_real_fft)
+        return cetg_rhs(G_state, grid, params, terms, compressed_real_fft=compressed_real_fft)
 
     fields0 = cetg_fields(G0_int, grid, params, apply_kz_dealias=False)
     dt0 = _update_dt(fields0, dt_init)
@@ -469,46 +469,46 @@ def integrate_cetg_explicit_diagnostics_state(
             grid,
             params,
             terms,
-            gx_real_fft=gx_real_fft,
+            compressed_real_fft=compressed_real_fft,
             fields_override=fields_state,
         )
         if method == "euler":
             G_new = G_state + dt_local * dG
         elif method == "rk2":
             k1 = dG
-            G_half = _project_state(G_state + 0.5 * dt_local * k1, grid, gx_real_fft=gx_real_fft)
+            G_half = _project_state(G_state + 0.5 * dt_local * k1, grid, compressed_real_fft=compressed_real_fft)
             k2, _ = rhs_fn(G_half)
             G_new = G_state + dt_local * k2
         elif method == "rk3_classic":
             k1 = dG
-            G1 = _project_state(G_state + dt_local * k1, grid, gx_real_fft=gx_real_fft)
+            G1 = _project_state(G_state + dt_local * k1, grid, compressed_real_fft=compressed_real_fft)
             k2, _ = rhs_fn(G1)
             G2 = _project_state(
                 0.75 * G_state + 0.25 * (G1 + dt_local * k2),
                 grid,
-                gx_real_fft=gx_real_fft,
+                compressed_real_fft=compressed_real_fft,
             )
             k3, _ = rhs_fn(G2)
             G_new = (1.0 / 3.0) * G_state + (2.0 / 3.0) * (G2 + dt_local * k3)
         elif method in {"rk3", "rk3_heun"}:
             k1 = dG
-            G1 = _project_state(G_state + (dt_local / 3.0) * k1, grid, gx_real_fft=gx_real_fft)
+            G1 = _project_state(G_state + (dt_local / 3.0) * k1, grid, compressed_real_fft=compressed_real_fft)
             k2, _ = rhs_fn(G1)
             G2 = _project_state(
                 G_state + (2.0 * dt_local / 3.0) * k2,
                 grid,
-                gx_real_fft=gx_real_fft,
+                compressed_real_fft=compressed_real_fft,
             )
             k3, _ = rhs_fn(G2)
-            G3 = _project_state(G_state + 0.75 * dt_local * k3, grid, gx_real_fft=gx_real_fft)
+            G3 = _project_state(G_state + 0.75 * dt_local * k3, grid, compressed_real_fft=compressed_real_fft)
             G_new = G3 + 0.25 * dt_local * k1
         elif method == "rk4":
             k1 = dG
-            G2 = _project_state(G_state + 0.5 * dt_local * k1, grid, gx_real_fft=gx_real_fft)
+            G2 = _project_state(G_state + 0.5 * dt_local * k1, grid, compressed_real_fft=compressed_real_fft)
             k2, _ = rhs_fn(G2)
-            G3 = _project_state(G_state + 0.5 * dt_local * k2, grid, gx_real_fft=gx_real_fft)
+            G3 = _project_state(G_state + 0.5 * dt_local * k2, grid, compressed_real_fft=compressed_real_fft)
             k3, _ = rhs_fn(G3)
-            G4 = _project_state(G_state + dt_local * k3, grid, gx_real_fft=gx_real_fft)
+            G4 = _project_state(G_state + dt_local * k3, grid, compressed_real_fft=compressed_real_fft)
             k4, _ = rhs_fn(G4)
             G_new = G_state + (dt_local / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
         elif method == "sspx3":
@@ -521,7 +521,7 @@ def integrate_cetg_explicit_diagnostics_state(
                 return _project_state(
                     G_stage + (_SSPX3_ADT * dt_local) * dG_stage,
                     grid,
-                    gx_real_fft=gx_real_fft,
+                    compressed_real_fft=compressed_real_fft,
                 )
 
             # The first SSPx3 Euler substep must use the carried field state that
@@ -532,7 +532,7 @@ def integrate_cetg_explicit_diagnostics_state(
             G2 = _project_state(
                 (1.0 - _SSPX3_W1) * G_state + (_SSPX3_W1 - 1.0) * G1 + G2_euler,
                 grid,
-                gx_real_fft=gx_real_fft,
+                compressed_real_fft=compressed_real_fft,
             )
             G3 = _sspx3_euler_step(G2)
             G_new = (
@@ -547,7 +547,7 @@ def integrate_cetg_explicit_diagnostics_state(
                 return _project_state(
                     G_stage + (dt_local / 6.0) * dG_stage,
                     grid,
-                    gx_real_fft=gx_real_fft,
+                    compressed_real_fft=compressed_real_fft,
                 )
 
             G_q1 = G_state
@@ -561,7 +561,7 @@ def integrate_cetg_explicit_diagnostics_state(
             dG_final, _ = rhs_fn(G_q1)
             G_new = G_q2 + 0.6 * G_q1 + 0.1 * dt_local * dG_final
 
-        G_new = _project_state(G_new, grid, gx_real_fft=gx_real_fft)
+        G_new = _project_state(G_new, grid, compressed_real_fft=compressed_real_fft)
         G_new = jnp.asarray(G_new, dtype=state_dtype)
         t_new = jnp.asarray(t_prev + dt_local, dtype=real_dtype)
         fields_new = cetg_fields(G_new, grid, params)

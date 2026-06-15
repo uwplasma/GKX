@@ -117,11 +117,6 @@ def real_fft_mesh(
     return kx, ky, kx_mesh, ky_mesh
 
 
-gx_real_fft_ky = real_fft_unique_ky
-gx_real_fft_kx = real_fft_ordered_kx
-gx_real_fft_mesh = real_fft_mesh
-
-
 def build_spectral_grid(cfg: GridConfig) -> SpectralGrid:
     Lx = cfg.Lx
     Ly = 2.0 * jnp.pi * cfg.y0 if cfg.y0 is not None else cfg.Ly
@@ -235,6 +230,3 @@ def select_real_fft_ky_grid(
         kxfac=grid.kxfac,
         ky_mode=ky_mode,
     )
-
-
-select_gx_real_fft_ky_grid = select_real_fft_ky_grid

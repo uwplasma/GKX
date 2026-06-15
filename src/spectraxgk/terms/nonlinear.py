@@ -202,7 +202,7 @@ def _stack_fields(G_hat: jnp.ndarray, fields: Sequence[jnp.ndarray]) -> jnp.ndar
     return jnp.stack(stacked, axis=0)
 
 
-def _spectral_bracket_multi_gx(
+def _spectral_bracket_multi_real_fft(
     G_hat: jnp.ndarray,
     chi_hat_stack: jnp.ndarray,
     *,
@@ -327,10 +327,10 @@ def _spectral_bracket(
     dealias_mask: jnp.ndarray,
     kxfac: jnp.ndarray,
     fft_norm: float | None = None,
-    gx_real_fft: bool = True,
+    compressed_real_fft: bool = True,
 ) -> jnp.ndarray:
-    if gx_real_fft:
-        return _spectral_bracket_gx(
+    if compressed_real_fft:
+        return _spectral_bracket_real_fft(
             G_hat,
             chi_hat,
             kx_grid=kx_grid,
@@ -350,7 +350,7 @@ def _spectral_bracket(
     )
 
 
-def _spectral_bracket_gx(
+def _spectral_bracket_real_fft(
     G_hat: jnp.ndarray,
     chi_hat: jnp.ndarray,
     *,
@@ -475,10 +475,10 @@ def _spectral_bracket_multi(
     dealias_mask: jnp.ndarray,
     kxfac: jnp.ndarray,
     fft_norm: float | None = None,
-    gx_real_fft: bool = True,
+    compressed_real_fft: bool = True,
 ) -> jnp.ndarray:
-    if gx_real_fft:
-        return _spectral_bracket_multi_gx(
+    if compressed_real_fft:
+        return _spectral_bracket_multi_real_fft(
             G_hat,
             chi_hat_stack,
             kx_grid=kx_grid,
@@ -506,7 +506,7 @@ def exb_nonlinear_contribution(
     kx_grid: jnp.ndarray,
     ky_grid: jnp.ndarray,
     weight: jnp.ndarray,
-    gx_real_fft: bool = True,
+    compressed_real_fft: bool = True,
 ) -> jnp.ndarray:
     """Return the nonlinear E×B contribution using a pseudospectral bracket."""
     phi = _apply_mask_xy(phi, dealias_mask)
@@ -517,7 +517,7 @@ def exb_nonlinear_contribution(
         ky_grid=ky_grid,
         dealias_mask=dealias_mask,
         kxfac=jnp.asarray(1.0),
-        gx_real_fft=gx_real_fft,
+        compressed_real_fft=compressed_real_fft,
     )
     real_dtype = jnp.real(jnp.empty((), dtype=G.dtype)).dtype
     return jnp.asarray(weight, dtype=real_dtype) * bracket_hat
@@ -548,7 +548,7 @@ def nonlinear_em_contribution(
     laguerre_j0: jnp.ndarray | None = None,
     laguerre_j1_over_alpha: jnp.ndarray | None = None,
     b: jnp.ndarray | None = None,
-    gx_real_fft: bool = True,
+    compressed_real_fft: bool = True,
     laguerre_mode: str = "grid",
 ) -> jnp.ndarray:
     """Nonlinear E×B + flutter contribution using GX-style gyroaveraging.
@@ -606,7 +606,7 @@ def nonlinear_em_contribution(
                 ky_grid=ky_grid,
                 dealias_mask=dealias_mask,
                 kxfac=kxfac,
-                gx_real_fft=gx_real_fft,
+                compressed_real_fft=compressed_real_fft,
             )
             total = _laguerre_to_spectral(exb_phi, laguerre_to_spectral)
             real_dtype = jnp.real(jnp.empty((), dtype=G.dtype)).dtype
@@ -636,7 +636,7 @@ def nonlinear_em_contribution(
             else:
                 chi_fields.append(_gx_j0_field(apar, b, laguerre_roots, 1.0))
         chi_stack = _stack_fields(g_mu, chi_fields)
-        bracket_fn = _spectral_bracket_multi_gx if gx_real_fft else _spectral_bracket_multi_full
+        bracket_fn = _spectral_bracket_multi_real_fft if compressed_real_fft else _spectral_bracket_multi_full
         brackets = bracket_fn(
             g_mu,
             chi_stack,
@@ -668,7 +668,7 @@ def nonlinear_em_contribution(
             ky_grid=ky_grid,
             dealias_mask=dealias_mask,
             kxfac=kxfac,
-            gx_real_fft=gx_real_fft,
+            compressed_real_fft=compressed_real_fft,
         )
         real_dtype = jnp.real(jnp.empty((), dtype=G.dtype)).dtype
         out = jnp.asarray(weight, dtype=real_dtype) * bracket_total
@@ -683,7 +683,7 @@ def nonlinear_em_contribution(
         idx_apar = len(chi_fields)
         chi_fields.append(Jl * apar[None, None, ...])
     chi_stack = _stack_fields(G, chi_fields)
-    bracket_fn = _spectral_bracket_multi_gx if gx_real_fft else _spectral_bracket_multi_full
+    bracket_fn = _spectral_bracket_multi_real_fft if compressed_real_fft else _spectral_bracket_multi_full
     brackets = bracket_fn(
         G,
         chi_stack,
@@ -729,7 +729,7 @@ def nonlinear_em_components(
     laguerre_j0: jnp.ndarray | None = None,
     laguerre_j1_over_alpha: jnp.ndarray | None = None,
     b: jnp.ndarray | None = None,
-    gx_real_fft: bool = True,
+    compressed_real_fft: bool = True,
     laguerre_mode: str = "grid",
 ) -> dict[str, jnp.ndarray]:
     """Return nonlinear E×B/flutter components for diagnostics/comparison checks."""
@@ -796,7 +796,7 @@ def nonlinear_em_components(
             else:
                 chi_fields.append(_gx_j0_field(apar, b, laguerre_roots, 1.0))
         chi_stack = _stack_fields(g_mu, chi_fields)
-        bracket_fn = _spectral_bracket_multi_gx if gx_real_fft else _spectral_bracket_multi_full
+        bracket_fn = _spectral_bracket_multi_real_fft if compressed_real_fft else _spectral_bracket_multi_full
         brackets = bracket_fn(
             g_mu,
             chi_stack,
@@ -837,7 +837,7 @@ def nonlinear_em_components(
             idx_apar = len(chi_fields)
             chi_fields.append(Jl * apar[None, None, ...])
         chi_stack = _stack_fields(G, chi_fields)
-        bracket_fn = _spectral_bracket_multi_gx if gx_real_fft else _spectral_bracket_multi_full
+        bracket_fn = _spectral_bracket_multi_real_fft if compressed_real_fft else _spectral_bracket_multi_full
         brackets = bracket_fn(
             G,
             chi_stack,

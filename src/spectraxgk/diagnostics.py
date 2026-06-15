@@ -115,7 +115,7 @@ def electrostatic_field_energy_krehm(
     kx: jnp.ndarray | None = None,
     ky: jnp.ndarray | None = None,
     use_dealias: bool = True,
-    gx_real_fft: bool = False,
+    compressed_real_fft: bool = False,
     wphi_scale: float = 1.0,
 ) -> jnp.ndarray:
     """Krehm electrostatic field-energy (Wphi) diagnostic."""
@@ -134,7 +134,7 @@ def electrostatic_field_energy_krehm(
         mask = mask.astype(ky.dtype)
     else:
         mask = jnp.ones_like(mask, dtype=ky.dtype)
-    if gx_real_fft:
+    if compressed_real_fft:
         fac = jnp.where(ky[:, 0] > 0.0, 2.0, jnp.where(ky[:, 0] == 0.0, 1.0, 0.0))[:, None]
     else:
         has_negative = bool(np.any(np.asarray(ky_arr) < 0.0))

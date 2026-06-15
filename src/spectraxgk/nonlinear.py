@@ -93,7 +93,7 @@ def nonlinear_rhs_cached(
     params: LinearParams,
     terms: TermConfig | None = None,
     *,
-    gx_real_fft: bool = True,
+    compressed_real_fft: bool = True,
     laguerre_mode: str = "grid",
     external_phi: jnp.ndarray | float | None = None,
 ) -> Tuple[jnp.ndarray, FieldState]:
@@ -131,7 +131,7 @@ def nonlinear_rhs_cached(
             laguerre_j0=cache.laguerre_j0,
             laguerre_j1_over_alpha=cache.laguerre_j1_over_alpha,
             b=cache.b,
-            gx_real_fft=gx_real_fft,
+            compressed_real_fft=compressed_real_fft,
             laguerre_mode=laguerre_mode,
         )
     return dG, fields
@@ -147,7 +147,7 @@ def integrate_nonlinear_cached(
     method: str = "rk4",
     terms: TermConfig | None = None,
     checkpoint: bool = False,
-    gx_real_fft: bool = True,
+    compressed_real_fft: bool = True,
     laguerre_mode: str = "grid",
     show_progress: bool = False,
 ) -> tuple[jnp.ndarray, FieldState]:
@@ -163,7 +163,7 @@ def integrate_nonlinear_cached(
             steps,
             terms=term_cfg,
             checkpoint=checkpoint,
-            gx_real_fft=gx_real_fft,
+            compressed_real_fft=compressed_real_fft,
             laguerre_mode=laguerre_mode,
             show_progress=show_progress,
         )
@@ -174,12 +174,12 @@ def integrate_nonlinear_cached(
             cache,
             params,
             term_cfg,
-            gx_real_fft=gx_real_fft,
+            compressed_real_fft=compressed_real_fft,
             laguerre_mode=laguerre_mode,
         )
 
     project_state = None
-    if gx_real_fft:
+    if compressed_real_fft:
         project_state = _make_hermitian_projector(np.asarray(cache.ky), int(np.asarray(cache.kx).size))
 
     return integrate_nonlinear_scan(
@@ -205,7 +205,7 @@ def integrate_nonlinear(
     cache: LinearCache | None = None,
     terms: TermConfig | None = None,
     checkpoint: bool = False,
-    gx_real_fft: bool = True,
+    compressed_real_fft: bool = True,
     laguerre_mode: str = "grid",
     show_progress: bool = False,
 ) -> tuple[jnp.ndarray, FieldState]:
@@ -229,7 +229,7 @@ def integrate_nonlinear(
         method=method,
         terms=terms,
         checkpoint=checkpoint,
-        gx_real_fft=gx_real_fft,
+        compressed_real_fft=compressed_real_fft,
         laguerre_mode=laguerre_mode,
         show_progress=show_progress,
     )
@@ -251,7 +251,7 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
     diagnostics_stride: int = 1,
     use_dealias_mask: bool = False,
     z_index: int | None = None,
-    gx_real_fft: bool = True,
+    compressed_real_fft: bool = True,
     laguerre_mode: str = "grid",
     omega_ky_index: int | None = None,
     omega_kx_index: int | None = None,
@@ -293,10 +293,10 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
     if method in {"imex", "semi-implicit"}:
         raise ValueError("Final-state runtime diagnostics helper only supports explicit methods")
     vol_fac, flux_fac = fieldline_quadrature_weights(geom_eff, grid)
-    mask = _gx_omega_mode_mask(grid, cache, gx_real_fft=gx_real_fft)
+    mask = _gx_omega_mode_mask(grid, cache, compressed_real_fft=compressed_real_fft)
     z_idx = _diagnostic_midplane_index(grid.z.size) if z_index is None else int(z_index)
     use_dealias = bool(use_dealias_mask)
-    use_hermitian = bool(gx_real_fft) and bool(np.any(np.asarray(grid.ky) < 0.0))
+    use_hermitian = bool(compressed_real_fft) and bool(np.any(np.asarray(grid.ky) < 0.0))
     ny_full = int(grid.ky.size)
     nyc = ny_full // 2 + 1
     nx = int(grid.kx.size)
@@ -383,7 +383,7 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
             fields_state,
             grid,
             cache,
-            gx_real_fft=gx_real_fft,
+            compressed_real_fft=compressed_real_fft,
             kx_max=kx_max,
             ky_max=ky_max,
             kxfac=kxfac_val,
@@ -404,7 +404,7 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
             cache,
             params,
             rhs_term_cfg,
-            gx_real_fft=gx_real_fft,
+            compressed_real_fft=compressed_real_fft,
             laguerre_mode=laguerre_mode,
             external_phi=external_phi,
         )
@@ -942,7 +942,7 @@ def integrate_nonlinear_explicit_diagnostics(
     diagnostics_stride: int = 1,
     use_dealias_mask: bool = False,
     z_index: int | None = None,
-    gx_real_fft: bool = True,
+    compressed_real_fft: bool = True,
     laguerre_mode: str = "grid",
     omega_ky_index: int | None = None,
     omega_kx_index: int | None = None,
@@ -986,7 +986,7 @@ def integrate_nonlinear_explicit_diagnostics(
             diagnostics_stride=diagnostics_stride,
             use_dealias_mask=use_dealias_mask,
             z_index=z_index,
-            gx_real_fft=gx_real_fft,
+            compressed_real_fft=compressed_real_fft,
             laguerre_mode=laguerre_mode,
             omega_ky_index=omega_ky_index,
             omega_kx_index=omega_kx_index,
@@ -1022,7 +1022,7 @@ def integrate_nonlinear_explicit_diagnostics(
         diagnostics_stride=diagnostics_stride,
         use_dealias_mask=use_dealias_mask,
         z_index=z_index,
-        gx_real_fft=gx_real_fft,
+        compressed_real_fft=compressed_real_fft,
         laguerre_mode=laguerre_mode,
         omega_ky_index=omega_ky_index,
         omega_kx_index=omega_kx_index,
@@ -1067,7 +1067,7 @@ def integrate_nonlinear_explicit_diagnostics_state(
     diagnostics_stride: int = 1,
     use_dealias_mask: bool = False,
     z_index: int | None = None,
-    gx_real_fft: bool = True,
+    compressed_real_fft: bool = True,
     laguerre_mode: str = "grid",
     omega_ky_index: int | None = None,
     omega_kx_index: int | None = None,
@@ -1113,7 +1113,7 @@ def integrate_nonlinear_explicit_diagnostics_state(
         diagnostics_stride=diagnostics_stride,
         use_dealias_mask=use_dealias_mask,
         z_index=z_index,
-        gx_real_fft=gx_real_fft,
+        compressed_real_fft=compressed_real_fft,
         laguerre_mode=laguerre_mode,
         omega_ky_index=omega_ky_index,
         omega_kx_index=omega_kx_index,
@@ -1157,7 +1157,7 @@ def integrate_nonlinear_imex_diagnostics(
     diagnostics_stride: int = 1,
     use_dealias_mask: bool = False,
     z_index: int | None = None,
-    gx_real_fft: bool = True,
+    compressed_real_fft: bool = True,
     laguerre_mode: str = "grid",
     omega_ky_index: int | None = None,
     omega_kx_index: int | None = None,
@@ -1196,10 +1196,10 @@ def integrate_nonlinear_imex_diagnostics(
     linear_rhs_fn = _linear_rhs_jit_for_terms(linear_cfg)
 
     vol_fac, flux_fac = fieldline_quadrature_weights(geom_eff, grid)
-    mask = _gx_omega_mode_mask(grid, cache, gx_real_fft=gx_real_fft)
+    mask = _gx_omega_mode_mask(grid, cache, compressed_real_fft=compressed_real_fft)
     z_idx = _diagnostic_midplane_index(grid.z.size) if z_index is None else int(z_index)
     use_dealias = bool(use_dealias_mask)
-    use_hermitian = bool(gx_real_fft) and bool(np.any(np.asarray(grid.ky) < 0.0))
+    use_hermitian = bool(compressed_real_fft) and bool(np.any(np.asarray(grid.ky) < 0.0))
     ny_full = int(grid.ky.size)
     nyc = ny_full // 2 + 1
     nx = int(grid.kx.size)
@@ -1239,7 +1239,7 @@ def integrate_nonlinear_imex_diagnostics(
         dt,
         terms=linear_cfg,
         implicit_preconditioner=implicit_preconditioner,
-        gx_real_fft=gx_real_fft,
+        compressed_real_fft=compressed_real_fft,
     )
 
     # Keep the scan carry in the same dtype as the implicit operator, especially
@@ -1289,7 +1289,7 @@ def integrate_nonlinear_imex_diagnostics(
             laguerre_j0=cache.laguerre_j0,
             laguerre_j1_over_alpha=cache.laguerre_j1_over_alpha,
             b=cache.b,
-            gx_real_fft=gx_real_fft,
+            compressed_real_fft=compressed_real_fft,
             laguerre_mode=laguerre_mode,
         )
 
@@ -1685,7 +1685,7 @@ def integrate_nonlinear_imex_cached(
     implicit_solve_method: str = "batched",
     implicit_preconditioner: str | None = None,
     implicit_operator: IMEXLinearOperator | None = None,
-    gx_real_fft: bool = True,
+    compressed_real_fft: bool = True,
     laguerre_mode: str = "grid",
     external_phi: jnp.ndarray | float | None = None,
     show_progress: bool = False,
@@ -1753,7 +1753,7 @@ def integrate_nonlinear_imex_cached(
             laguerre_j0=cache.laguerre_j0,
             laguerre_j1_over_alpha=cache.laguerre_j1_over_alpha,
             b=cache.b,
-            gx_real_fft=gx_real_fft,
+            compressed_real_fft=compressed_real_fft,
             laguerre_mode=laguerre_mode,
         )
 

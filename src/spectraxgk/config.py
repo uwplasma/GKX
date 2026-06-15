@@ -26,11 +26,6 @@ def resolve_cfl_fac(method: str, cfl_fac: float | None) -> float:
     return float(cfl_fac)
 
 
-# Compatibility alias for older callers that still expect the GX-prefixed
-# helper name.
-gx_default_cfl_fac = explicit_method_default_cfl_fac
-
-
 @dataclass(frozen=True)
 class InitializationConfig:
     """Initialization options for linear runs."""
@@ -108,7 +103,7 @@ class TimeConfig:
     nstep_restart: int | None = None
     collision_split: bool = False
     collision_scheme: str = "implicit"
-    gx_real_fft: bool = True
+    compressed_real_fft: bool = True
     nonlinear_dealias: bool = True
     laguerre_nonlinear_mode: str = "grid"
 

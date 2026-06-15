@@ -98,7 +98,7 @@ def integrate_nonlinear_sharded(
     method: str = "rk2",
     terms: TermConfig | None = None,
     state_sharding: Any | None = None,
-    gx_real_fft: bool = True,
+    compressed_real_fft: bool = True,
     laguerre_mode: str = "grid",
     return_fields: bool = True,
 ) -> tuple[jnp.ndarray, FieldState] | jnp.ndarray:
@@ -121,7 +121,7 @@ def integrate_nonlinear_sharded(
     G0 = jnp.asarray(G0, dtype=state_dtype)
     dt_val = _dt_array(dt, state_dtype)
 
-    projector = _make_hermitian_projector(np.asarray(cache.ky), int(np.asarray(cache.kx).size)) if gx_real_fft else None
+    projector = _make_hermitian_projector(np.asarray(cache.ky), int(np.asarray(cache.kx).size)) if compressed_real_fft else None
 
     def _maybe_shard(state: jnp.ndarray) -> jnp.ndarray:
         if state_sharding is None:
@@ -139,7 +139,7 @@ def integrate_nonlinear_sharded(
             cache,
             params,
             term_cfg,
-            gx_real_fft=gx_real_fft,
+            compressed_real_fft=compressed_real_fft,
             laguerre_mode=laguerre_mode,
         )
         return jnp.asarray(dG, dtype=state_dtype), fields

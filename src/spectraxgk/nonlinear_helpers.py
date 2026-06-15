@@ -79,7 +79,7 @@ def _gx_nonlinear_omega_components(
     grid: SpectralGrid,
     cache: LinearCache,
     *,
-    gx_real_fft: bool,
+    compressed_real_fft: bool,
     kx_max: float,
     ky_max: float,
     kxfac: float,
@@ -103,7 +103,7 @@ def _gx_nonlinear_omega_components(
     ifft_scale = jnp.asarray(fft_norm, dtype=real_dtype)
     use_batched_fft = jax.default_backend() != "cpu"
 
-    if gx_real_fft:
+    if compressed_real_fft:
         _, ky_vals, kx_nyc, ky_nyc = real_fft_mesh(cache.kx_grid, cache.ky_grid)
         nyc = int(ky_vals.shape[0])
         phi_nyc = phi[:nyc, :, :]
@@ -217,13 +217,13 @@ def _gx_omega_mode_mask(
     grid: SpectralGrid,
     cache: LinearCache,
     *,
-    gx_real_fft: bool,
+    compressed_real_fft: bool,
 ) -> jnp.ndarray:
     """Mask used to reduce mode-wise GX omega/gamma diagnostics."""
 
     ny = int(grid.ky.size)
     nx = int(grid.kx.size)
-    if gx_real_fft and bool(np.any(np.asarray(grid.ky) < 0.0)):
+    if compressed_real_fft and bool(np.any(np.asarray(grid.ky) < 0.0)):
         # Full-ky SPECTRAX layout stores the rFFT-unique modes in the first
         # Ny//2+1 entries, including the Nyquist row when Ny is even.
         ky_unique = jnp.arange(ny, dtype=jnp.int32)[:, None] < (ny // 2 + 1)
@@ -305,11 +305,11 @@ def build_nonlinear_imex_operator(
     *,
     terms: TermConfig | None = None,
     implicit_preconditioner: str | None = None,
-    gx_real_fft: bool = True,
+    compressed_real_fft: bool = True,
 ) -> IMEXLinearOperator:
     """Build and cache the matrix-free linear operator used by nonlinear IMEX."""
 
-    del gx_real_fft
+    del compressed_real_fft
     term_cfg = terms or TermConfig()
     linear_terms = term_config_to_linear_terms(term_cfg)
     G, shape, _size, dt_val, precond_op, matvec, squeeze_species = (

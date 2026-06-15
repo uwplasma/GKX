@@ -146,7 +146,7 @@ def integrate_nonlinear_from_config(
             show_progress=show_progress_use,
             progress_bar=show_progress_use,
             checkpoint=time_cfg.checkpoint,
-            gx_real_fft=time_cfg.gx_real_fft,
+            compressed_real_fft=time_cfg.compressed_real_fft,
             laguerre_mode=time_cfg.laguerre_nonlinear_mode,
             state_sharding=state_sharding,
         )
@@ -170,7 +170,7 @@ def integrate_nonlinear_from_config(
                 method=time_cfg.method,
                 terms=terms,
                 state_sharding=state_sharding,
-                gx_real_fft=time_cfg.gx_real_fft,
+                compressed_real_fft=time_cfg.compressed_real_fft,
                 laguerre_mode=time_cfg.laguerre_nonlinear_mode,
                 return_fields=True,
             ),
@@ -186,7 +186,7 @@ def integrate_nonlinear_from_config(
         cache=cache,
         terms=terms,
         checkpoint=time_cfg.checkpoint,
-        gx_real_fft=time_cfg.gx_real_fft,
+        compressed_real_fft=time_cfg.compressed_real_fft,
         laguerre_mode=time_cfg.laguerre_nonlinear_mode,
         show_progress=show_progress_use,
     )
