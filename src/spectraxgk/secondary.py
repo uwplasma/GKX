@@ -1,4 +1,4 @@
-"""Helpers for GX-style secondary-instability staged workflows."""
+"""Helpers for secondary-instability staged workflows."""
 
 from __future__ import annotations
 

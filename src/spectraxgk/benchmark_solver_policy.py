@@ -9,22 +9,22 @@ from spectraxgk.linear_krylov import KrylovConfig
 
 
 __all__ = [
-    "KBM_GX_SOLVER_LOCK",
-    "KBM_GX_SOLVER_LOCK_TOL",
+    "KBM_EXPLICIT_SOLVER_LOCK",
+    "KBM_EXPLICIT_SOLVER_LOCK_TOL",
     "_kbm_use_multi_target_krylov",
     "_midplane_index",
     "select_kbm_solver_auto",
 ]
-KBM_GX_SOLVER_LOCK: tuple[tuple[float, str], ...] = (
-    (0.10, "gx_time"),
-    (0.30, "gx_time"),
-    (0.40, "gx_time"),
+KBM_EXPLICIT_SOLVER_LOCK: tuple[tuple[float, str], ...] = (
+    (0.10, "explicit_time"),
+    (0.30, "explicit_time"),
+    (0.40, "explicit_time"),
 )
-KBM_GX_SOLVER_LOCK_TOL = 0.03
+KBM_EXPLICIT_SOLVER_LOCK_TOL = 0.03
 
 
 def _midplane_index(grid: SpectralGrid) -> int:
-    """Return GX-style midplane index for growth-rate diagnostics."""
+    """Return reference midplane index for growth-rate diagnostics."""
 
     if grid.z.size <= 1:
         return 0
@@ -41,10 +41,10 @@ def select_kbm_solver_auto(solver: str, *, ky_target: float, gx_reference: bool)
     if not gx_reference:
         return "time"
     ky_abs = abs(float(ky_target))
-    for ky_ref, solver_ref in KBM_GX_SOLVER_LOCK:
-        if abs(ky_abs - ky_ref) <= KBM_GX_SOLVER_LOCK_TOL:
+    for ky_ref, solver_ref in KBM_EXPLICIT_SOLVER_LOCK:
+        if abs(ky_abs - ky_ref) <= KBM_EXPLICIT_SOLVER_LOCK_TOL:
             return solver_ref
-    return "gx_time"
+    return "explicit_time"
 
 
 def _kbm_use_multi_target_krylov(

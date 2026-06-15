@@ -193,7 +193,7 @@ def run_cyclone_linear(
     def _run_krylov() -> tuple[float, float, np.ndarray, np.ndarray]:
         _status("starting Krylov solve")
         kcfg = krylov_cfg or CYCLONE_KRYLOV_DEFAULT
-        # GX-style time seed to stabilize branch selection.  If the caller
+        # reference-aligned explicit time seed to stabilize branch selection.  If the caller
         # supplied an explicit shift, respect it directly and avoid the seed
         # march; this keeps explicit-shift scans bounded and deterministic.
         gamma_seed = 0.0
@@ -373,7 +373,7 @@ def run_cyclone_linear(
         if gx_reference_use:
             # GX integrator applies damping with per-time scaling internally.
             params_use = params
-            _status("running GX-reference time integrator")
+            _status("running reference-aligned explicit integrator")
             t_max_val = (
                 float(dt) * int(steps)
                 if time_cfg_use is None
@@ -384,7 +384,7 @@ def run_cyclone_linear(
                 if sample_stride is not None
                 else (1 if time_cfg_use is None else int(time_cfg_use.sample_stride))
             )
-            gx_time_cfg = ExplicitTimeConfig(
+            explicit_time_cfg = ExplicitTimeConfig(
                 dt=float(dt),
                 t_max=t_max_val,
                 sample_stride=stride,
@@ -396,7 +396,7 @@ def run_cyclone_linear(
                 cache,
                 params_use,
                 geom,
-                gx_time_cfg,
+                explicit_time_cfg,
                 terms=terms,
                 mode_method="z_index",
                 show_progress=show_progress,
@@ -680,7 +680,7 @@ def run_cyclone_scan(
     fit_key = normalize_fit_signal(fit_signal)
     auto_solver = solver_key == "auto"
     if auto_solver:
-        solver_key = "gx_time" if gx_reference_use else "time"
+        solver_key = "explicit_time" if gx_reference_use else "time"
     streaming_fit, mode_only = apply_auto_fit_scan_policy(
         fit_key, streaming_fit=streaming_fit, mode_only=mode_only
     )
@@ -767,7 +767,7 @@ def run_cyclone_scan(
                 init_cfg=init_cfg,
             )
             cache = build_linear_cache(grid, geom, params, Nl, Nm)
-            # Use a short GX-style time integration to seed the branch.
+            # Use a short reference-aligned explicit time integration to seed the branch.
             gamma_seed = 0.0
             omega_seed = 0.0
             seed_ok = False
@@ -775,7 +775,7 @@ def run_cyclone_scan(
             if prev_eig is None:
                 try:
                     t_seed = min(150.0, float(cfg_use.power_dt) * 15000.0)
-                    gx_time_cfg = ExplicitTimeConfig(
+                    explicit_time_cfg = ExplicitTimeConfig(
                         dt=float(cfg_use.power_dt),
                         t_max=t_seed,
                         sample_stride=1,
@@ -788,7 +788,7 @@ def run_cyclone_scan(
                         cache,
                         params,
                         geom,
-                        gx_time_cfg,
+                        explicit_time_cfg,
                         terms=terms,
                         mode_method="z_index",
                         show_progress=show_progress,
@@ -826,7 +826,7 @@ def run_cyclone_scan(
                         init_cfg=init_cfg,
                     )
                     t_seed = min(150.0, float(cfg_use.power_dt) * 15000.0)
-                    gx_time_cfg = ExplicitTimeConfig(
+                    explicit_time_cfg = ExplicitTimeConfig(
                         dt=float(cfg_use.power_dt),
                         t_max=t_seed,
                         sample_stride=1,
@@ -838,7 +838,7 @@ def run_cyclone_scan(
                         cache_seed,
                         params,
                         geom,
-                        gx_time_cfg,
+                        explicit_time_cfg,
                         terms=terms,
                         mode_method="z_index",
                         show_progress=show_progress,
@@ -899,7 +899,7 @@ def run_cyclone_scan(
             )
             gamma = float(np.real(eig))
             omega = float(-np.imag(eig))
-            # If Krylov lands on the wrong branch, fall back to GX-style seed.
+            # If Krylov lands on the wrong branch, fall back to reference-aligned explicit seed.
             use_seed = False
             if seed_ok:
                 seed_strong = (gamma_seed > 0.0) and (abs(omega_seed) > 1.0e-6)
@@ -924,7 +924,7 @@ def run_cyclone_scan(
             omega_out[idx] = omega
         return CycloneScanResult(ky=ky_values_arr, gamma=gamma_out, omega=omega_out)
 
-    if solver_key == "gx_time":
+    if solver_key == "explicit_time":
         if ky_values_arr.size == 0:
             return CycloneScanResult(
                 ky=ky_values_arr, gamma=np.array([]), omega=np.array([])
@@ -963,7 +963,7 @@ def run_cyclone_scan(
                 dt_max_i = None if time_base.dt_max is None else float(time_base.dt_max)
                 cfl_i = float(time_base.cfl)
                 cfl_fac_i = resolve_cfl_fac(str(time_base.method), time_base.cfl_fac)
-            gx_time_cfg = ExplicitTimeConfig(
+            explicit_time_cfg = ExplicitTimeConfig(
                 dt=dt_i,
                 t_max=t_max_val,
                 sample_stride=1,
@@ -980,7 +980,7 @@ def run_cyclone_scan(
                 cache,
                 params,
                 geom,
-                gx_time_cfg,
+                explicit_time_cfg,
                 terms=terms,
                 mode_method="z_index",
                 show_progress=show_progress,

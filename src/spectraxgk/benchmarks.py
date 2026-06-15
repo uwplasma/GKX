@@ -37,8 +37,8 @@ from spectraxgk.benchmark_defaults import (
     TEM_RHO_STAR,
 )
 from spectraxgk.benchmark_helpers import (
-    KBM_GX_SOLVER_LOCK,
-    KBM_GX_SOLVER_LOCK_TOL,
+    KBM_EXPLICIT_SOLVER_LOCK,
+    KBM_EXPLICIT_SOLVER_LOCK_TOL,
     REFERENCE_DAMP_ENDS_AMP,
     REFERENCE_DAMP_ENDS_WIDTHFRAC,
     REFERENCE_NU_HYPER_L,
@@ -115,8 +115,8 @@ __all__ = [
     "ETG_OMEGA_STAR_SCALE",
     "ETG_RHO_STAR",
     "KBM_KRYLOV_DEFAULT",
-    "KBM_GX_SOLVER_LOCK",
-    "KBM_GX_SOLVER_LOCK_TOL",
+    "KBM_EXPLICIT_SOLVER_LOCK",
+    "KBM_EXPLICIT_SOLVER_LOCK_TOL",
     "KBM_OMEGA_D_SCALE",
     "KBM_OMEGA_STAR_SCALE",
     "KBM_RHO_STAR",

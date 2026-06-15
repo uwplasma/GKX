@@ -215,11 +215,11 @@ def run_kbm_beta_scan(
             solver_key, ky_target=ky_target, gx_reference=gx_reference_use
         )
 
-        if solver_use == "gx_time":
-            gx_mode_method = (
+        if solver_use == "explicit_time":
+            explicit_mode_method = (
                 mode_method if mode_method in {"z_index", "max"} else "z_index"
             )
-            gx_time_cfg = ExplicitTimeConfig(
+            explicit_time_cfg = ExplicitTimeConfig(
                 dt=dt_i,
                 t_max=dt_i * steps_i,
                 sample_stride=max(int(sample_stride or 1), 1),
@@ -244,9 +244,9 @@ def run_kbm_beta_scan(
                 cache,
                 params,
                 geom,
-                gx_time_cfg,
+                explicit_time_cfg,
                 terms=terms,
-                mode_method=gx_mode_method,
+                mode_method=explicit_mode_method,
                 z_index=sel.z_index,
                 jit=True,
             )
@@ -415,7 +415,7 @@ def run_kbm_beta_scan(
                 prev_vec = _vec
                 prev_eig = eig
 
-        if solver_use not in {"krylov", "gx_time"}:
+        if solver_use not in {"krylov", "explicit_time"}:
             time_cfg_i = None
             if time_cfg is not None:
                 time_cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
@@ -780,9 +780,9 @@ def run_kbm_linear(
                 )
         return gamma_val, omega_val
 
-    if solver_key == "gx_time":
-        gx_mode_method = mode_method if mode_method in {"z_index", "max"} else "z_index"
-        gx_time_cfg = ExplicitTimeConfig(
+    if solver_key == "explicit_time":
+        explicit_mode_method = mode_method if mode_method in {"z_index", "max"} else "z_index"
+        explicit_time_cfg = ExplicitTimeConfig(
             dt=dt,
             t_max=dt * steps,
             sample_stride=max(int(sample_stride or 1), 1),
@@ -807,9 +807,9 @@ def run_kbm_linear(
             cache,
             params,
             geom,
-            gx_time_cfg,
+            explicit_time_cfg,
             terms=terms,
-            mode_method=gx_mode_method,
+            mode_method=explicit_mode_method,
             z_index=sel.z_index,
             jit=True,
         )
@@ -1172,7 +1172,8 @@ def run_kbm_scan(
     """Run a KBM ky scan at fixed beta.
 
     This is a thin wrapper over :func:`run_kbm_beta_scan` used for
-    GX-reference workflows where the GX benchmark is a ky scan at fixed beta.
+    reference-comparison workflows where the external benchmark is a ky scan
+    at fixed beta.
     """
 
     cfg_in = cfg or KBMBaseCase()

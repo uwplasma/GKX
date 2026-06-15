@@ -45,8 +45,8 @@ from spectraxgk.benchmark_reference import (
     load_tem_reference,
 )
 from spectraxgk.benchmark_solver_policy import (
-    KBM_GX_SOLVER_LOCK,
-    KBM_GX_SOLVER_LOCK_TOL,
+    KBM_EXPLICIT_SOLVER_LOCK,
+    KBM_EXPLICIT_SOLVER_LOCK_TOL,
     _kbm_use_multi_target_krylov,
     _midplane_index,
     select_kbm_solver_auto,
@@ -147,8 +147,8 @@ __all__ = [
     "REFERENCE_P_HYPER_M",
     "REFERENCE_DAMP_ENDS_AMP",
     "REFERENCE_DAMP_ENDS_WIDTHFRAC",
-    "KBM_GX_SOLVER_LOCK",
-    "KBM_GX_SOLVER_LOCK_TOL",
+    "KBM_EXPLICIT_SOLVER_LOCK",
+    "KBM_EXPLICIT_SOLVER_LOCK_TOL",
     "CycloneComparison",
     "CycloneReference",
     "CycloneRunResult",

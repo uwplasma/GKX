@@ -228,7 +228,7 @@ def grad_z_linked_fft(
     linked_gather_mask: jnp.ndarray | None = None,
     linked_use_gather: bool = False,
 ) -> jnp.ndarray:
-    """Spectral z-derivative using GX-style linked FFT chains."""
+    """Spectral z-derivative using linked-chain FFT modes."""
 
     _check_positive(dz, "dz")
     return _linked_fft_apply(

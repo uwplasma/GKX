@@ -380,9 +380,10 @@ def run_runtime_linear(
             raise NotImplementedError(
                 "solver='krylov' is not implemented for physics.reduced_model='cetg'"
             )
-        if solver_key not in {"auto", "time", "gx_time"}:
+        if solver_key not in {"auto", "time", "explicit_time"}:
             raise ValueError(
-                "solver must be one of {'auto', 'time', 'explicit_time', 'gx_time', 'krylov'}"
+                "solver must be one of {'auto', 'time', 'explicit_time', 'krylov'}; "
+                "legacy alias 'gx_time' is accepted"
             )
         dt_val = float(cfg.time.dt if dt is None else dt)
         if dt_val <= 0.0:
@@ -609,9 +610,9 @@ def run_runtime_linear(
             tcfg = replace(tcfg, t_max=float(steps) * float(tcfg.dt))
         if sample_stride is not None:
             tcfg = replace(tcfg, sample_stride=int(sample_stride))
-        if return_state_eff and solver_key == "gx_time":
+        if return_state_eff and solver_key == "explicit_time":
             raise ValueError(
-                "return_state/quasilinear diagnostics are not supported with solver='gx_time'"
+                "return_state/quasilinear diagnostics are not supported with solver='explicit_time'"
             )
         if return_state_eff:
             tcfg = replace(tcfg, save_state=True)

@@ -34,7 +34,7 @@ def _apply_external_phi_source(
     *,
     external_phi: jnp.ndarray | float | None,
 ) -> FieldState:
-    """Apply a GX-style external electrostatic source after the field solve."""
+    """Apply a external electrostatic source after the field solve."""
 
     if external_phi is None:
         return fields

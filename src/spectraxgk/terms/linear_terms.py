@@ -100,7 +100,7 @@ def streaming_contribution_gx(
     linked_gather_mask: jnp.ndarray | None = None,
     linked_use_gather: bool = False,
 ) -> jnp.ndarray:
-    """GX-style streaming: ladder on g, add field terms, then apply parallel derivative."""
+    """Hermite-Laguerre streaming: ladder on g, add field terms, then apply parallel derivative."""
 
     if _is_static_zero(weight, jnp.real(G).dtype):
         return _zeros_like_result(G, weight)

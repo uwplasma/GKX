@@ -624,7 +624,7 @@ def _gx_bgrad_from_bmag(
 
 
 def load_gx_geometry_netcdf(path: str | Path) -> FluxTubeGeometryData:
-    """Load sampled geometry from a GX-style NetCDF file."""
+    """Load sampled geometry from a imported NetCDF file."""
 
     try:
         from netCDF4 import Dataset

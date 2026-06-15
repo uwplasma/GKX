@@ -31,7 +31,7 @@ def _build_linked_fft_maps(
     real_dtype: jnp.dtype,
     ky_mode: np.ndarray | None = None,
 ) -> tuple[tuple[jnp.ndarray, ...], tuple[jnp.ndarray, ...]]:
-    """Construct GX-style linked FFT index maps for the parallel derivative."""
+    """Construct linked-chain FFT index maps for the parallel derivative."""
 
     ny = ky.size
     nx = kx.size
