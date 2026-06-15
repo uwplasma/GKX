@@ -39,6 +39,8 @@ jobs:
           python tools/check_parallel_scaling_artifacts.py
           python tools/check_quasilinear_promotion_guardrails.py \
             --out-json /tmp/quasilinear_promotion_guardrails.json
+          python tools/check_vmec_boozer_differentiability_claim.py \
+            --out-json docs/_static/vmec_boozer_differentiability_claim_guard.json
           python tools/build_parallelization_completion_status.py \
             --out-prefix /tmp/parallelization_completion_status \
             --skip-figures
