@@ -140,7 +140,7 @@ def _build_linked_end_damping_profile(
     widthfrac: float,
     ky_mode: np.ndarray | None = None,
 ) -> np.ndarray:
-    """Construct the GX linked-boundary damping profile on the full FFT grid."""
+    """Construct the linked-boundary damping profile on the full FFT grid."""
 
     profile = np.zeros((ny, nx, nz), dtype=float)
     if not linked_indices or widthfrac <= 0.0 or ny <= 0 or nx <= 0 or nz <= 0:

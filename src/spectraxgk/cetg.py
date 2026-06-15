@@ -1,4 +1,4 @@
-"""Dedicated collisional-slab ETG model aligned with legacy GX."""
+"""Dedicated collisional-slab ETG reduced model."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ from spectraxgk.terms.nonlinear import _spectral_bracket_multi
 
 @dataclass(frozen=True)
 class CETGModelParams:
-    """GX cETG coefficients and normalization data."""
+    """Collisional-slab ETG coefficients and normalization data."""
 
     tau_fac: float
     z_ion: float
@@ -55,18 +55,18 @@ def validate_cetg_runtime_config(
     if _model_key(cfg) != "cetg":
         raise ValueError("cETG helpers require physics.reduced_model='cetg'")
     if int(Nl) != 2 or int(Nm) != 1:
-        raise ValueError("GX cETG requires exactly Nl=2 and Nm=1")
+        raise ValueError("cETG requires exactly Nl=2 and Nm=1")
     if not isinstance(geom, SlabGeometry):
-        raise ValueError("GX cETG currently requires geometry.model='slab'")
+        raise ValueError("cETG currently requires geometry.model='slab'")
     if not bool(cfg.physics.electrostatic) or bool(cfg.physics.electromagnetic):
-        raise ValueError("GX cETG is electrostatic-only")
+        raise ValueError("cETG is electrostatic-only")
     if not bool(cfg.physics.adiabatic_ions):
-        raise ValueError("GX cETG requires adiabatic_ions=true")
+        raise ValueError("cETG requires adiabatic_ions=true")
     kinetic = tuple(s for s in cfg.species if bool(s.kinetic))
     if len(kinetic) != 1:
-        raise ValueError("GX cETG requires exactly one kinetic species")
+        raise ValueError("cETG requires exactly one kinetic species")
     if float(kinetic[0].charge) >= 0.0:
-        raise ValueError("GX cETG requires the kinetic species to be an electron")
+        raise ValueError("cETG requires the kinetic species to be an electron")
 
 
 def build_cetg_model_params(
@@ -76,11 +76,11 @@ def build_cetg_model_params(
     Nl: int,
     Nm: int,
 ) -> CETGModelParams:
-    """Build the GX cETG coefficient set from the runtime config."""
+    """Build the cETG coefficient set from the runtime config."""
 
     validate_cetg_runtime_config(cfg, geom, Nl=Nl, Nm=Nm)
     if not isinstance(geom, SlabGeometry):
-        raise ValueError("GX cETG currently requires geometry.model='slab'")
+        raise ValueError("cETG currently requires geometry.model='slab'")
     kinetic = tuple(s for s in cfg.species if bool(s.kinetic))
     electron = kinetic[0]
     z_ion = float(cfg.physics.z_ion)
@@ -170,8 +170,9 @@ def _apply_kz_filter(
         return arr
     arr_k = jnp.fft.fft(arr, axis=-1)
     mask = _kz_mask(grid, arr_k.real.dtype, dealias_kz=True)
-    # Legacy GX periodic-z dealias uses CUFFT forward/inverse pairs without
-    # the 1/N rescale on the inverse, so the filtered field carries an Nz factor.
+    # The legacy periodic-z dealias contract uses forward/inverse FFT pairs
+    # without the 1/N rescale on the inverse, so the filtered field carries an
+    # Nz factor.
     return jnp.fft.ifft(arr_k * mask, axis=-1) * jnp.asarray(
         float(grid.z.size), dtype=arr_k.real.dtype
     )

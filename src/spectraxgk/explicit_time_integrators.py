@@ -405,7 +405,7 @@ def _instantaneous_growth_rate_step(
         phi_prev_z = jnp.take_along_axis(phi_prev, prev_idx, axis=-1)[..., 0]
     else:
         raise ValueError("mode_method must be 'z_index' or 'max'")
-    # Match GX growthRates kernel logic: require non-zero real and imaginary
+    # Keep the diagnostic conservative: require non-zero real and imaginary
     # parts of phi at the current step only.
     valid = (jnp.abs(jnp.real(phi_now_z)) > 0.0) & (jnp.abs(jnp.imag(phi_now_z)) > 0.0)
     ratio = jnp.where(phi_prev_z != 0.0, phi_now_z / phi_prev_z, 0.0 + 0.0j)

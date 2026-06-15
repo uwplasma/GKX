@@ -86,12 +86,12 @@ def _restore_linked_real_fft_conjugates(
     *,
     covered_rows: jnp.ndarray,
 ) -> jnp.ndarray:
-    """Restore the conjugate ``-ky`` rows on a full GX FFT grid.
+    """Restore the conjugate ``-ky`` rows on a full real-FFT spectral grid.
 
     The linked-FFT chains are built on the unique dealiased positive-``ky``
-    block. When the runtime carries the full GX-expanded ``ky`` layout, the
+    block. When the runtime carries the full real-FFT-expanded ``ky`` layout, the
     untouched negative rows must be reconstructed by real-FFT conjugate
-    symmetry so the linked derivative acts on the same state as GX.
+    symmetry so the linked derivative acts on the physical Hermitian state.
     """
 
     Ny = out.shape[-3]
@@ -254,7 +254,7 @@ def abs_z_linked_fft(
     linked_gather_mask: jnp.ndarray | None = None,
     linked_use_gather: bool = False,
 ) -> jnp.ndarray:
-    """Apply |kz| in linked-FFT space (GX abs_dz equivalent)."""
+    """Apply |kz| in linked-FFT space."""
 
     return _linked_fft_apply(
         f,

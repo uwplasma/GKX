@@ -64,7 +64,7 @@ def _build_initial_condition(
         "qpar": (0, 3),
         "qperp": (1, 1),
     }
-    # GX scales some moments when init_field="all" (see moments.cu).
+    # Moment-normalized initializer amplitudes for init_field="all".
     all_scales = {
         "density": 1.0,
         "upar": 1.0,

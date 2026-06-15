@@ -120,12 +120,12 @@ def _resolve_runtime_hl_dims(
         Nl_use = 2 if Nl is None else int(Nl)
         Nm_use = 1 if Nm is None else int(Nm)
         if Nl_use != 2 or Nm_use != 1:
-            raise ValueError("GX cETG requires exactly Nl=2 and Nm=1")
+            raise ValueError("cETG requires exactly Nl=2 and Nm=1")
         return Nl_use, Nm_use
     if model == "krehm":
         raise NotImplementedError(
             "physics.reduced_model='krehm' requires the dedicated KREHM solver; "
-            "the full-GK runtime path does not emulate the GX KREHM model."
+            "the full-GK runtime path does not emulate the KREHM reduced model."
         )
     raise ValueError(f"Unknown physics.reduced_model={cfg.physics.reduced_model!r}")
 
@@ -144,7 +144,7 @@ def _require_full_gk_runtime_model(cfg: RuntimeConfig) -> None:
     if model == "krehm":
         raise NotImplementedError(
             "physics.reduced_model='krehm' requires the dedicated KREHM solver; "
-            "the full-GK runtime path does not emulate the GX KREHM model."
+            "the full-GK runtime path does not emulate the KREHM reduced model."
         )
     raise ValueError(f"Unknown physics.reduced_model={cfg.physics.reduced_model!r}")
 

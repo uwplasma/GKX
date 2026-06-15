@@ -149,7 +149,7 @@ def build_secondary_stage2_config(
     iky_fixed: int = 1,
     ikx_fixed: int = 0,
 ) -> RuntimeConfig:
-    """Return a nonlinear stage-2 config matching GX's ``kh01a`` contract."""
+    """Return a nonlinear stage-2 config for the ``kh01a`` secondary contract."""
 
     time_cfg = replace(
         cfg.time,
@@ -197,9 +197,9 @@ def run_secondary_modes(
     ``fit_fraction`` controls the late-time fitting window on the complex
     ``phi_mode_t`` trace when it is available. ``gamma`` is reported from that
     fit, while ``omega`` remains tied to the late-time diagnostic tail so the
-    returned frequency matches the GX ``omega_kxkyt`` contract. The diagnostic
-    gamma/omega series remain as a fallback when the tracked mode trace is not
-    usable.
+    returned frequency matches the ``omega_kxkyt`` interchange contract. The
+    diagnostic gamma/omega series remain as a fallback when the tracked mode
+    trace is not usable.
     """
 
     rows: list[SecondaryModeResult] = []
