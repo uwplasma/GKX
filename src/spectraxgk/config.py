@@ -111,7 +111,7 @@ class TimeConfig:
         return asdict(self)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, init=False)
 class GeometryConfig:
     """Flux-tube geometry parameters or imported sampled geometry settings."""
 
@@ -119,7 +119,7 @@ class GeometryConfig:
     geometry_backend: str = "auto"
     geometry_file: str | None = None
     vmec_file: str | None = None
-    gx_python: str | None = None
+    geometry_helper_python: str | None = None
     rhoc: float = 0.5
     R_geo: float | None = None
     shift: float = 0.0
@@ -135,7 +135,7 @@ class GeometryConfig:
     include_shear_variation: bool = False
     include_pressure_variation: bool = False
     betaprim: float | None = None
-    gx_repo: str | None = None
+    geometry_helper_repo: str | None = None
     q: float = 1.4
     s_hat: float = 0.8
     z0: float | None = None
@@ -147,6 +147,97 @@ class GeometryConfig:
     drift_scale: float = 1.0
     kperp2_bmag: bool = True
     bessel_bmag_power: float = 0.0
+
+    def __init__(
+        self,
+        model: str = "s-alpha",
+        geometry_backend: str = "auto",
+        geometry_file: str | None = None,
+        vmec_file: str | None = None,
+        geometry_helper_python: str | None = None,
+        rhoc: float = 0.5,
+        R_geo: float | None = None,
+        shift: float = 0.0,
+        akappa: float = 1.0,
+        akappri: float = 0.0,
+        tri: float = 0.0,
+        tripri: float = 0.0,
+        torflux: float | None = None,
+        npol: float | None = None,
+        npol_min: float | None = None,
+        isaxisym: bool = False,
+        which_crossing: int | None = None,
+        include_shear_variation: bool = False,
+        include_pressure_variation: bool = False,
+        betaprim: float | None = None,
+        geometry_helper_repo: str | None = None,
+        q: float = 1.4,
+        s_hat: float = 0.8,
+        z0: float | None = None,
+        zero_shat: bool = False,
+        epsilon: float = 0.18,
+        R0: float = 1.0,
+        B0: float = 1.0,
+        alpha: float = 0.0,
+        drift_scale: float = 1.0,
+        kperp2_bmag: bool = True,
+        bessel_bmag_power: float = 0.0,
+        *,
+        gx_python: str | None = None,
+        gx_repo: str | None = None,
+    ) -> None:
+        if gx_python is not None and geometry_helper_python is None:
+            geometry_helper_python = gx_python
+        if gx_repo is not None and geometry_helper_repo is None:
+            geometry_helper_repo = gx_repo
+        values = {
+            "model": model,
+            "geometry_backend": geometry_backend,
+            "geometry_file": geometry_file,
+            "vmec_file": vmec_file,
+            "geometry_helper_python": geometry_helper_python,
+            "rhoc": rhoc,
+            "R_geo": R_geo,
+            "shift": shift,
+            "akappa": akappa,
+            "akappri": akappri,
+            "tri": tri,
+            "tripri": tripri,
+            "torflux": torflux,
+            "npol": npol,
+            "npol_min": npol_min,
+            "isaxisym": isaxisym,
+            "which_crossing": which_crossing,
+            "include_shear_variation": include_shear_variation,
+            "include_pressure_variation": include_pressure_variation,
+            "betaprim": betaprim,
+            "geometry_helper_repo": geometry_helper_repo,
+            "q": q,
+            "s_hat": s_hat,
+            "z0": z0,
+            "zero_shat": zero_shat,
+            "epsilon": epsilon,
+            "R0": R0,
+            "B0": B0,
+            "alpha": alpha,
+            "drift_scale": drift_scale,
+            "kperp2_bmag": kperp2_bmag,
+            "bessel_bmag_power": bessel_bmag_power,
+        }
+        for name, value in values.items():
+            object.__setattr__(self, name, value)
+
+    @property
+    def gx_python(self) -> str | None:
+        """Compatibility alias for ``geometry_helper_python``."""
+
+        return self.geometry_helper_python
+
+    @property
+    def gx_repo(self) -> str | None:
+        """Compatibility alias for ``geometry_helper_repo``."""
+
+        return self.geometry_helper_repo
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

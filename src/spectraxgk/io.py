@@ -102,6 +102,21 @@ def _merge_dataclass(base: Any, overrides: dict | None) -> Any:
     return cast(Any, replace(base, **updates))
 
 
+def _normalize_geometry_overrides(overrides: dict | None) -> dict | None:
+    """Map legacy geometry helper keys to canonical schema names."""
+
+    if not isinstance(overrides, dict):
+        return overrides
+    out = dict(overrides)
+    if "gx_python" in out and "geometry_helper_python" not in out:
+        out["geometry_helper_python"] = out["gx_python"]
+    if "gx_repo" in out and "geometry_helper_repo" not in out:
+        out["geometry_helper_repo"] = out["gx_repo"]
+    out.pop("gx_python", None)
+    out.pop("gx_repo", None)
+    return out
+
+
 def _case_registry():
     return {
         "cyclone": CycloneBaseCase,
@@ -136,7 +151,7 @@ def load_case_from_toml(path: str | Path, case_name: str | None = None):
     overrides = {
         "grid": data.get("grid"),
         "time": data.get("time"),
-        "geometry": data.get("geometry"),
+        "geometry": _normalize_geometry_overrides(data.get("geometry")),
         "model": data.get("model"),
         "init": data.get("init"),
     }
@@ -158,7 +173,7 @@ def load_runtime_from_toml(path: str | Path) -> tuple[RuntimeConfig, dict]:
         {
             "grid": data.get("grid"),
             "time": data.get("time"),
-            "geometry": data.get("geometry"),
+            "geometry": _normalize_geometry_overrides(data.get("geometry")),
             "init": data.get("init"),
         },
     )
