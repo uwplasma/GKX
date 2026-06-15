@@ -1,0 +1,12 @@
+# Codecov should mirror the CI coverage contract:
+# package coverage is measured for src/spectraxgk, while tools, docs,
+# examples, tests, and generated artifacts are validated by separate gates.
+ignore:
+  - "docs/**/*"
+  - "examples/**/*"
+  - "tests/**/*"
+  - "tools/**/*"
+  - "tools_out/**/*"
+  - "outputs/**/*"
+  - "plan.md"
+  - "README.md"
