@@ -169,9 +169,6 @@ def linked_streaming_contribution(
     return weight * dG
 
 
-streaming_contribution_gx = linked_streaming_contribution
-
-
 def mirror_contribution(
     H: jnp.ndarray,
     *,
