@@ -23,20 +23,23 @@ from spectraxgk.benchmark_defaults import (
     KBM_OMEGA_STAR_SCALE,
     KBM_RHO_STAR,
 )
-from spectraxgk.benchmark_helpers import (
-    LinearRunResult,
-    LinearScanResult,
-    _build_initial_condition,
+from spectraxgk.benchmark_batching import _resolve_streaming_window
+from spectraxgk.benchmark_fit_signals import (
     _extract_mode_only_signal,
-    _linked_boundary_end_damping,
-    _kbm_use_multi_target_krylov,
-    _midplane_index,
     _normalize_growth_rate,
-    _resolve_streaming_window,
     _select_fit_signal,
     _select_fit_signal_auto,
-    _two_species_params,
+)
+from spectraxgk.benchmark_initialization import _build_initial_condition
+from spectraxgk.benchmark_reference import LinearRunResult, LinearScanResult
+from spectraxgk.benchmark_solver_policy import (
+    _kbm_use_multi_target_krylov,
+    _midplane_index,
     select_kbm_solver_auto,
+)
+from spectraxgk.benchmark_species import (
+    _linked_boundary_end_damping,
+    _two_species_params,
 )
 from spectraxgk.benchmark_scan import (
     ScanFitWindowPolicy,

@@ -21,19 +21,24 @@ from spectraxgk.benchmark_defaults import (
     Kinetic_OMEGA_STAR_SCALE,
     Kinetic_RHO_STAR,
 )
-from spectraxgk.benchmark_helpers import (
-    LinearRunResult,
-    LinearScanResult,
-    _apply_reference_hypercollisions,
-    _build_initial_condition,
-    _extract_mode_only_signal,
-    _linked_boundary_end_damping,
+from spectraxgk.benchmark_batching import (
     _iter_ky_batches,
-    _kinetic_reference_init_cfg,
-    _midplane_index,
-    _normalize_growth_rate,
     _resolve_streaming_window,
+)
+from spectraxgk.benchmark_fit_signals import (
+    _extract_mode_only_signal,
+    _normalize_growth_rate,
     _select_fit_signal,
+)
+from spectraxgk.benchmark_initialization import (
+    _build_initial_condition,
+    _kinetic_reference_init_cfg,
+)
+from spectraxgk.benchmark_reference import LinearRunResult, LinearScanResult
+from spectraxgk.benchmark_solver_policy import _midplane_index
+from spectraxgk.benchmark_species import (
+    _apply_reference_hypercollisions,
+    _linked_boundary_end_damping,
     _two_species_params,
 )
 from spectraxgk.benchmark_scan import (

@@ -36,47 +36,57 @@ from spectraxgk.benchmark_defaults import (
     TEM_OMEGA_STAR_SCALE,
     TEM_RHO_STAR,
 )
-from spectraxgk.benchmark_helpers import (
-    KBM_EXPLICIT_SOLVER_LOCK,
-    KBM_EXPLICIT_SOLVER_LOCK_TOL,
-    REFERENCE_DAMP_ENDS_AMP,
-    REFERENCE_DAMP_ENDS_WIDTHFRAC,
-    REFERENCE_NU_HYPER_L,
-    REFERENCE_NU_HYPER_M,
-    REFERENCE_P_HYPER_L,
-    REFERENCE_P_HYPER_M,
+from spectraxgk.benchmark_batching import (
+    _is_array_like,
+    _iter_ky_batches,
+    _resolve_streaming_window,
+)
+from spectraxgk.benchmark_fit_signals import (
+    _extract_mode_only_signal,
+    _normalize_growth_rate,
+    _score_fit_signal_auto,
+    _select_fit_signal,
+    _select_fit_signal_auto,
+)
+from spectraxgk.benchmark_initialization import (
+    _build_gaussian_profile,
+    _build_initial_condition,
+    _kinetic_reference_init_cfg,
+)
+from spectraxgk.benchmark_reference import (
     CycloneComparison,
     CycloneReference,
     CycloneRunResult,
     CycloneScanResult,
     LinearRunResult,
     LinearScanResult,
-    _apply_reference_hypercollisions,
-    _build_gaussian_profile,
-    _build_initial_condition,
-    _electron_only_params,
-    _extract_mode_only_signal,
-    _linked_boundary_end_damping,
-    _reference_hypercollision_power,
-    _is_array_like,
-    _iter_ky_batches,
-    _kbm_use_multi_target_krylov,
-    _kinetic_reference_init_cfg,
     _load_reference_with_header,
-    _midplane_index,
-    _normalize_growth_rate,
-    _resolve_streaming_window,
-    _score_fit_signal_auto,
-    _select_fit_signal,
-    _select_fit_signal_auto,
-    _two_species_params,
     compare_cyclone_to_reference,
     load_cyclone_reference,
     load_cyclone_reference_kinetic,
     load_etg_reference,
     load_kbm_reference,
     load_tem_reference,
+)
+from spectraxgk.benchmark_solver_policy import (
+    KBM_EXPLICIT_SOLVER_LOCK,
+    KBM_EXPLICIT_SOLVER_LOCK_TOL,
+    _kbm_use_multi_target_krylov,
+    _midplane_index,
     select_kbm_solver_auto,
+)
+from spectraxgk.benchmark_species import (
+    REFERENCE_DAMP_ENDS_AMP,
+    REFERENCE_DAMP_ENDS_WIDTHFRAC,
+    REFERENCE_NU_HYPER_L,
+    REFERENCE_NU_HYPER_M,
+    REFERENCE_P_HYPER_L,
+    REFERENCE_P_HYPER_M,
+    _apply_reference_hypercollisions,
+    _electron_only_params,
+    _linked_boundary_end_damping,
+    _reference_hypercollision_power,
+    _two_species_params,
 )
 
 from spectraxgk.benchmark_cyclone import (

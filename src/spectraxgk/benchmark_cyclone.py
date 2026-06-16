@@ -23,19 +23,22 @@ from spectraxgk.benchmark_defaults import (
     CYCLONE_OMEGA_STAR_SCALE,
     CYCLONE_RHO_STAR,
 )
-from spectraxgk.benchmark_helpers import (
-    REFERENCE_DAMP_ENDS_AMP,
-    REFERENCE_DAMP_ENDS_WIDTHFRAC,
-    CycloneRunResult,
-    CycloneScanResult,
-    _apply_reference_hypercollisions,
-    _build_initial_condition,
+from spectraxgk.benchmark_batching import (
     _iter_ky_batches,
-    _midplane_index,
-    _normalize_growth_rate,
     _resolve_streaming_window,
+)
+from spectraxgk.benchmark_fit_signals import (
+    _normalize_growth_rate,
     _select_fit_signal,
     _select_fit_signal_auto,
+)
+from spectraxgk.benchmark_initialization import _build_initial_condition
+from spectraxgk.benchmark_reference import CycloneRunResult, CycloneScanResult
+from spectraxgk.benchmark_solver_policy import _midplane_index
+from spectraxgk.benchmark_species import (
+    REFERENCE_DAMP_ENDS_AMP,
+    REFERENCE_DAMP_ENDS_WIDTHFRAC,
+    _apply_reference_hypercollisions,
 )
 from spectraxgk.benchmark_scan import (
     ScanFitWindowPolicy,
