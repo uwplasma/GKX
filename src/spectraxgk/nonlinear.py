@@ -56,6 +56,7 @@ from spectraxgk.diagnostics import (
     electrostatic_field_energy,
     electrostatic_field_energy_resolved,
 )
+from spectraxgk.nonlinear_explicit_step import advance_explicit_nonlinear_state
 from spectraxgk.nonlinear_diagnostic_state import (
     NonlinearDiagnosticKernels,
     compute_nonlinear_diagnostic_tuple,
@@ -70,6 +71,7 @@ from spectraxgk.nonlinear_rhs import (
     nonlinear_em_term_cached_impl,
     nonlinear_rhs_cached_impl,
 )
+from spectraxgk.nonlinear_imex import solve_imex_step
 from spectraxgk.nonlinear_helpers import (
     IMEXLinearOperator,
     _apply_collision_split,
@@ -481,78 +483,15 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
         G, G_prev_step, fields_prev_step, diag_prev, t_prev, dt_prev = carry
         dG, fields = rhs_fn(G)
         dt_local = jnp.asarray(_update_dt(fields, dt_prev), dtype=real_dtype)
-        if method == "euler":
-            G_new = G + dt_local * dG
-        elif method == "rk2":
-            k1 = dG
-            G_half = _project_state(G + 0.5 * dt_local * k1)
-            k2, _ = rhs_fn(G_half)
-            G_new = G + dt_local * k2
-        elif method == "rk3_classic":
-            k1 = dG
-            G1 = _project_state(G + dt_local * k1)
-            k2, _ = rhs_fn(G1)
-            G2 = _project_state(0.75 * G + 0.25 * (G1 + dt_local * k2))
-            k3, _ = rhs_fn(G2)
-            G_new = (1.0 / 3.0) * G + (2.0 / 3.0) * (G2 + dt_local * k3)
-        elif method in {"rk3", "rk3_heun"}:
-            k1 = dG
-            G1 = _project_state(G + (dt_local / 3.0) * k1)
-            k2, _ = rhs_fn(G1)
-            G2 = _project_state(G + (2.0 * dt_local / 3.0) * k2)
-            k3, _ = rhs_fn(G2)
-            G3 = _project_state(G + 0.75 * dt_local * k3)
-            G_new = G3 + 0.25 * dt_local * k1
-        elif method == "rk4":
-            k1 = dG
-            G2 = _project_state(G + 0.5 * dt_local * k1)
-            k2, _ = rhs_fn(G2)
-            G3 = _project_state(G + 0.5 * dt_local * k2)
-            k3, _ = rhs_fn(G3)
-            G4 = _project_state(G + dt_local * k3)
-            k4, _ = rhs_fn(G4)
-            G_new = G + (dt_local / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
-        elif method == "sspx3":
-
-            def _sspx3_euler_step(G_state: jnp.ndarray) -> jnp.ndarray:
-                dG_state, _fields_state = rhs_fn(G_state)
-                return _project_state(G_state + (_SSPX3_ADT * dt_local) * dG_state)
-
-            G1 = _sspx3_euler_step(G)
-            G2_euler = _sspx3_euler_step(G1)
-            G2 = _project_state(
-                (1.0 - _SSPX3_W1) * G + (_SSPX3_W1 - 1.0) * G1 + G2_euler
-            )
-            G3 = _sspx3_euler_step(G2)
-            G_new = (
-                (1.0 - _SSPX3_W2 - _SSPX3_W3) * G
-                + _SSPX3_W3 * G1
-                + (_SSPX3_W2 - 1.0) * G2
-                + G3
-            )
-        elif method == "k10":
-
-            def _k10_euler_step(G_state):
-                dG_state, _ = rhs_fn(G_state)
-                return _project_state(G_state + (dt_local / 6.0) * dG_state)
-
-            G_q1 = G
-            G_q2 = G
-            for _ in range(5):
-                G_q1 = _k10_euler_step(G_q1)
-
-            G_q2 = 0.04 * G_q2 + 0.36 * G_q1
-            G_q1 = 15.0 * G_q2 - 5.0 * G_q1
-
-            for _ in range(4):
-                G_q1 = _k10_euler_step(G_q1)
-
-            dG_final, _ = rhs_fn(G_q1)
-            G_new = G_q2 + 0.6 * G_q1 + 0.1 * dt_local * dG_final
-        else:
-            raise ValueError(
-                "method must be one of {'euler', 'rk2', 'rk3', 'rk3_classic', 'rk3_heun', 'rk4', 'k10', 'sspx3'}"
-            )
+        G_new = advance_explicit_nonlinear_state(
+            G,
+            dG,
+            dt_local,
+            method=method,
+            rhs_fn=rhs_fn,
+            project_state=_project_state,
+            state_dtype=state_dtype,
+        )
         if use_collision_split and damping is not None:
             G_new = _apply_collision_split(G_new, damping, dt_local, collision_scheme)
         G_new = _project_state(G_new)
@@ -1124,29 +1063,26 @@ def integrate_nonlinear_imex_diagnostics(
             nonlinear_contribution_fn=nonlinear_em_contribution,
         )
 
-    def fixed_point(G_in: jnp.ndarray, G_rhs: jnp.ndarray) -> jnp.ndarray:
-        def body(_i, g):
-            dG, _fields = linear_rhs_fn(
-                g, cache, params, linear_cfg, external_phi=external_phi
-            )
-            g_next = G_rhs + dt_val * dG
-            return (1.0 - implicit_relax) * g + implicit_relax * g_next
-
-        return jax.lax.fori_loop(0, max(int(implicit_iters), 0), body, G_in)
-
     def solve_step(G_in: jnp.ndarray, G_rhs: jnp.ndarray) -> jnp.ndarray:
-        G_guess = fixed_point(G_in, G_rhs)
-        sol, _info = jax.scipy.sparse.linalg.gmres(
-            implicit_operator.matvec,
-            G_rhs.reshape(-1),
-            x0=G_guess.reshape(-1),
-            tol=implicit_tol,
-            maxiter=implicit_maxiter,
-            restart=implicit_restart,
-            M=implicit_operator.precond_op,
-            solve_method=implicit_solve_method,
+        return solve_imex_step(
+            G_in,
+            G_rhs,
+            linear_rhs_fn=linear_rhs_fn,
+            cache=cache,
+            params=params,
+            linear_cfg=linear_cfg,
+            external_phi=external_phi,
+            dt_val=dt_val,
+            implicit_iters=implicit_iters,
+            implicit_relax=implicit_relax,
+            matvec=implicit_operator.matvec,
+            shape=implicit_operator.shape,
+            implicit_tol=implicit_tol,
+            implicit_maxiter=implicit_maxiter,
+            implicit_restart=implicit_restart,
+            implicit_solve_method=implicit_solve_method,
+            precond_op=implicit_operator.precond_op,
         )
-        return sol.reshape(implicit_operator.shape)
 
     diagnostic_kernels = _nonlinear_diagnostic_kernels()
 
@@ -1405,29 +1341,26 @@ def integrate_nonlinear_imex_cached(
             nonlinear_contribution_fn=nonlinear_em_contribution,
         )
 
-    def fixed_point(G_in: jnp.ndarray, G_rhs: jnp.ndarray) -> jnp.ndarray:
-        def body(_i, g):
-            dG, _fields = linear_rhs_fn(
-                g, cache, params, linear_cfg, external_phi=external_phi
-            )
-            g_next = G_rhs + dt_val * dG
-            return (1.0 - implicit_relax) * g + implicit_relax * g_next
-
-        return jax.lax.fori_loop(0, max(int(implicit_iters), 0), body, G_in)
-
     def solve_step(G_in: jnp.ndarray, G_rhs: jnp.ndarray) -> jnp.ndarray:
-        G_guess = fixed_point(G_in, G_rhs)
-        sol, _info = jax.scipy.sparse.linalg.gmres(
-            matvec,
-            G_rhs.reshape(-1),
-            x0=G_guess.reshape(-1),
-            tol=implicit_tol,
-            maxiter=implicit_maxiter,
-            restart=implicit_restart,
-            M=precond_op,
-            solve_method=implicit_solve_method,
+        return solve_imex_step(
+            G_in,
+            G_rhs,
+            linear_rhs_fn=linear_rhs_fn,
+            cache=cache,
+            params=params,
+            linear_cfg=linear_cfg,
+            external_phi=external_phi,
+            dt_val=dt_val,
+            implicit_iters=implicit_iters,
+            implicit_relax=implicit_relax,
+            matvec=matvec,
+            shape=shape,
+            implicit_tol=implicit_tol,
+            implicit_maxiter=implicit_maxiter,
+            implicit_restart=implicit_restart,
+            implicit_solve_method=implicit_solve_method,
+            precond_op=precond_op,
         )
-        return sol.reshape(shape)
 
     def step(G_in, _):
         rhs = G_in + dt_val * nonlinear_term(G_in)

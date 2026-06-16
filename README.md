@@ -114,8 +114,8 @@ resolved diagnostics, and heat flux.
 - **Automated benchmark workflows** for reproducible validation and regression tracking.
 - **Modular runtime/refactor surfaces** with focused tests for restart artifacts,
   diagnostics, validation gates, nonlinear RHS routing, nonlinear diagnostic
-  state assembly, solver-objective gradient gates, VMEC/Boozer sensitivity
-  gates, and public API boundaries.
+  state assembly, explicit/IMEX nonlinear stepping, solver-objective gradient
+  gates, VMEC/Boozer sensitivity gates, and public API boundaries.
 
 ## QA ITG Optimization Panel
 
