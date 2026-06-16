@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 
-from spectraxgk.linear import LinearParams
+from spectraxgk.operators.linear.params import LinearParams
 from spectraxgk.species import Species, build_linear_params
 
 

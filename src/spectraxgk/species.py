@@ -8,7 +8,7 @@ from typing import Iterable
 import numpy as np
 import jax.numpy as jnp
 
-from spectraxgk.linear import LinearParams
+from spectraxgk.operators.linear.params import LinearParams
 
 
 @dataclass(frozen=True)

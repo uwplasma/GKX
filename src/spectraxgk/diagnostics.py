@@ -25,7 +25,8 @@ from spectraxgk.diagnostics_weights import (
     fieldline_quadrature_weights,
 )
 from spectraxgk.grids import SpectralGrid
-from spectraxgk.linear import LinearCache, LinearParams
+from spectraxgk.operators.linear.cache import LinearCache
+from spectraxgk.operators.linear.params import LinearParams
 
 
 __all__ = [

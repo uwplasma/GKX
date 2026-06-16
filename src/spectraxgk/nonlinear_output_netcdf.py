@@ -17,7 +17,7 @@ from spectraxgk.grids import (
     real_fft_ordered_kx,
     real_fft_unique_ky,
 )
-from spectraxgk.linear import build_linear_cache
+from spectraxgk.operators.linear.cache import build_linear_cache
 from spectraxgk.runtime import (
     build_runtime_geometry,
     build_runtime_linear_params,
