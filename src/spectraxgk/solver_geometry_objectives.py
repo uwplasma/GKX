@@ -7,10 +7,8 @@ from typing import Any
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.geometry.differentiable import (
-    flux_tube_geometry_from_mapping,
-    observable_gradient_validation_report,
-)
+from spectraxgk.geometry.autodiff_checks import observable_gradient_validation_report
+from spectraxgk.geometry.flux_tube_contract import flux_tube_geometry_from_mapping
 from spectraxgk.solver_objective_core import SOLVER_OBJECTIVE_NAMES
 
 

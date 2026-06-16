@@ -13,6 +13,8 @@ import numpy as np
 from spectraxgk.geometry.backend_discovery import (
     discover_differentiable_geometry_backends,
 )
+from spectraxgk.geometry.core import FluxTubeGeometryData
+from spectraxgk.geometry.flux_tube_contract import flux_tube_geometry_from_mapping
 from spectraxgk.geometry.numerics import (
     _boozer_half_mesh_s_grid,
     _cumulative_trapezoid,
@@ -565,7 +567,52 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
     }
 
 
+def flux_tube_geometry_from_vmec_boozer_state(  # pragma: no cover
+    state: Any,
+    static: Any,
+    indata: Any,
+    wout: Any,
+    *,
+    surface_index: int | None = None,
+    torflux: float | None = None,
+    alpha: float = 0.0,
+    ntheta: int = 32,
+    mboz: int = _VMEC_BOOZER_PARITY_MIN_MODE_COUNT,
+    nboz: int = _VMEC_BOOZER_PARITY_MIN_MODE_COUNT,
+    jit: bool = False,
+    surface_stencil_width: int | None = None,
+    reference_length: float | None = None,
+    reference_b: float | None = None,
+    source_model: str = "mode21_vmec_boozer_state",
+    validate_finite: bool = True,
+) -> FluxTubeGeometryData:
+    """Build solver-ready geometry directly from an in-memory VMEC/Boozer state."""
+
+    mapping = vmec_jax_boozer_equal_arc_core_profiles_from_state(
+        state,
+        static,
+        indata,
+        wout,
+        surface_index=surface_index,
+        torflux=torflux,
+        alpha=alpha,
+        ntheta=ntheta,
+        mboz=mboz,
+        nboz=nboz,
+        jit=jit,
+        surface_stencil_width=surface_stencil_width,
+        reference_length=reference_length,
+        reference_b=reference_b,
+    )
+    return flux_tube_geometry_from_mapping(
+        mapping,
+        source_model=source_model,
+        validate_finite=validate_finite,
+    )
+
+
 __all__ = [
+    "flux_tube_geometry_from_vmec_boozer_state",
     "prewarm_vmec_boozer_equal_arc_cache",
     "vmec_jax_boozer_equal_arc_core_profiles_from_state",
 ]

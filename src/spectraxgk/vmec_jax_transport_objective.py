@@ -27,7 +27,7 @@ from typing import Any, Literal, Sequence, cast
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.geometry.differentiable import (
+from spectraxgk.geometry.vmec_boozer_core import (
     flux_tube_geometry_from_vmec_boozer_state,
     prewarm_vmec_boozer_equal_arc_cache,
 )

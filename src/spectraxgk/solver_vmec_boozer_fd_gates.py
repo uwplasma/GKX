@@ -7,7 +7,7 @@ from typing import Any, Literal, cast
 
 import numpy as np
 
-from spectraxgk.geometry.differentiable import discover_differentiable_geometry_backends
+from spectraxgk.geometry.backend_discovery import discover_differentiable_geometry_backends
 from spectraxgk.solver_objective_core import (
     SOLVER_OBJECTIVE_NAMES,
     SolverScalarObjective,

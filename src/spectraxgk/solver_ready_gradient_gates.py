@@ -17,7 +17,7 @@ from spectraxgk.diagnostics import (
     heat_flux_species,
     particle_flux_species,
 )
-from spectraxgk.geometry.differentiable import flux_tube_geometry_from_mapping
+from spectraxgk.geometry.flux_tube_contract import flux_tube_geometry_from_mapping
 from spectraxgk.grids import build_spectral_grid, select_ky_grid
 from spectraxgk.linear import linear_rhs_cached
 from spectraxgk.operators.linear.cache import build_linear_cache

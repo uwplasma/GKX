@@ -15,9 +15,9 @@ from spectraxgk.autodiff_validation import (
 )
 from spectraxgk.config import CycloneBaseCase, GridConfig
 from spectraxgk.diagnostics import fieldline_quadrature_weights, heat_flux_species
-from spectraxgk.geometry.differentiable import (
-    discover_differentiable_geometry_backends,
-    flux_tube_geometry_from_mapping,
+from spectraxgk.geometry.backend_discovery import discover_differentiable_geometry_backends
+from spectraxgk.geometry.flux_tube_contract import flux_tube_geometry_from_mapping
+from spectraxgk.geometry.vmec_boozer_core import (
     vmec_jax_boozer_equal_arc_core_profiles_from_state,
 )
 from spectraxgk.grids import build_spectral_grid, select_ky_grid

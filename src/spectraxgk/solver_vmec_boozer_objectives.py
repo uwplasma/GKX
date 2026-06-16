@@ -8,7 +8,7 @@ from typing import Any, Literal, cast
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.geometry.differentiable import flux_tube_geometry_from_vmec_boozer_state
+from spectraxgk.geometry.vmec_boozer_core import flux_tube_geometry_from_vmec_boozer_state
 from spectraxgk.solver_objective_core import (
     SolverScalarObjective,
     solver_objective_vector_from_geometry,

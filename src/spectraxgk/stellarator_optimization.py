@@ -17,7 +17,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from spectraxgk.autodiff_validation import autodiff_finite_difference_report, covariance_diagnostics
-from spectraxgk.geometry.differentiable import discover_differentiable_geometry_backends
+from spectraxgk.geometry.backend_discovery import discover_differentiable_geometry_backends
 from spectraxgk.parallel import independent_map
 from spectraxgk.quasilinear import quasilinear_feature_objective
 from spectraxgk.solver_objective_core import (
