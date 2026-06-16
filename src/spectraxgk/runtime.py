@@ -85,11 +85,18 @@ from spectraxgk.runners import (
     integrate_linear_from_config,
     integrate_nonlinear_from_config,
 )
+from spectraxgk.workflows.cases import (
+    RUNTIME_CASE_FIT_KEYS as _WORKFLOW_RUNTIME_CASE_FIT_KEYS,
+    RuntimeCaseDeps,
+    run_linear_case as _run_linear_case_impl,
+    run_nonlinear_case as _run_nonlinear_case_impl,
+)
 from spectraxgk.terms.config import TermConfig
 from spectraxgk.miller_eik import generate_runtime_miller_eik
 from spectraxgk.vmec_eik import generate_runtime_vmec_eik
 
 _GLIBC_RAND_MAX = float((1 << 31) - 1)
+_RUNTIME_CASE_FIT_KEYS = _WORKFLOW_RUNTIME_CASE_FIT_KEYS
 
 __all__ = [
     "RuntimeIndependentParallelPlan",
@@ -1468,19 +1475,22 @@ def run_runtime_nonlinear(
     )
 
 
-_RUNTIME_CASE_FIT_KEYS = {
-    "auto_window",
-    "tmin",
-    "tmax",
-    "window_fraction",
-    "min_points",
-    "start_fraction",
-    "growth_weight",
-    "require_positive",
-    "min_amp_fraction",
-    "mode_method",
-    "fit_signal",
-}
+def _runtime_case_deps() -> RuntimeCaseDeps:
+    """Build case-workflow dependencies from this module's patchable globals."""
+
+    from spectraxgk.io import load_runtime_from_toml
+    from spectraxgk.runtime_artifacts import (
+        run_runtime_nonlinear_with_artifacts,
+        write_runtime_linear_artifacts,
+    )
+
+    return RuntimeCaseDeps(
+        load_runtime_from_toml=load_runtime_from_toml,
+        run_runtime_linear=run_runtime_linear,
+        run_runtime_nonlinear=run_runtime_nonlinear,
+        write_runtime_linear_artifacts=write_runtime_linear_artifacts,
+        run_runtime_nonlinear_with_artifacts=run_runtime_nonlinear_with_artifacts,
+    )
 
 
 def run_linear_case(
@@ -1498,36 +1508,19 @@ def run_linear_case(
 ) -> int:
     """Run a linear case from a runtime TOML with optional overrides."""
 
-    from spectraxgk.io import load_runtime_from_toml
-    from spectraxgk.runtime_artifacts import write_runtime_linear_artifacts
-
-    cfg, raw = load_runtime_from_toml(config_path)
-    run_cfg = dict(raw.get("run", {}))
-    fit_cfg = {
-        k: v for k, v in raw.get("fit", {}).items() if k in _RUNTIME_CASE_FIT_KEYS
-    }
-
-    result = run_runtime_linear(
-        cfg,
-        ky_target=float(ky if ky is not None else run_cfg.get("ky", 0.3)),
-        Nl=int(Nl if Nl is not None else run_cfg.get("Nl", 24)),
-        Nm=int(Nm if Nm is not None else run_cfg.get("Nm", 12)),
-        solver=str(solver if solver is not None else run_cfg.get("solver", "auto")),
-        method=method if method is not None else run_cfg.get("method", None),
-        dt=dt if dt is not None else run_cfg.get("dt", None),
-        steps=steps if steps is not None else run_cfg.get("steps", None),
-        sample_stride=sample_stride
-        if sample_stride is not None
-        else raw.get("time", {}).get("sample_stride", None),
+    return _run_linear_case_impl(
+        config_path,
+        ky=ky,
+        Nl=Nl,
+        Nm=Nm,
+        solver=solver,
+        method=method,
+        dt=dt,
+        steps=steps,
+        sample_stride=sample_stride,
         show_progress=show_progress,
-        **fit_cfg,
+        deps=_runtime_case_deps(),
     )
-    if cfg.output.path:
-        paths = write_runtime_linear_artifacts(cfg.output.path, result)
-        if "summary" in paths:
-            print(f"saved {paths['summary']}")
-    print(f"ky={result.ky:.6f} gamma={result.gamma:.8f} omega={result.omega:.8f}")
-    return 0
 
 
 def run_nonlinear_case(
@@ -1545,78 +1538,16 @@ def run_nonlinear_case(
 ) -> int:
     """Run a nonlinear case from a runtime TOML with optional overrides."""
 
-    from spectraxgk.io import load_runtime_from_toml
-    from spectraxgk.runtime_artifacts import run_runtime_nonlinear_with_artifacts
-
-    cfg, raw = load_runtime_from_toml(config_path)
-    run_cfg = dict(raw.get("run", {}))
-    time_cfg = dict(raw.get("time", {}))
-
-    def _status(message: str) -> None:
-        print(f"runtime: {message}")
-
-    ky_target = float(ky if ky is not None else run_cfg.get("ky", 0.3))
-    Nl_use = int(Nl if Nl is not None else run_cfg.get("Nl", 4))
-    Nm_use = int(Nm if Nm is not None else run_cfg.get("Nm", 8))
-    method_use = method if method is not None else run_cfg.get("method", None)
-    dt_use = dt if dt is not None else time_cfg.get("dt", None)
-    steps_use = steps if steps is not None else run_cfg.get("steps", None)
-    sample_stride_use = (
-        sample_stride
-        if sample_stride is not None
-        else time_cfg.get("sample_stride", None)
+    return _run_nonlinear_case_impl(
+        config_path,
+        ky=ky,
+        Nl=Nl,
+        Nm=Nm,
+        method=method,
+        dt=dt,
+        steps=steps,
+        sample_stride=sample_stride,
+        diagnostics_stride=diagnostics_stride,
+        show_progress=show_progress,
+        deps=_runtime_case_deps(),
     )
-    diagnostics_stride_use = (
-        diagnostics_stride
-        if diagnostics_stride is not None
-        else time_cfg.get("diagnostics_stride", None)
-    )
-
-    if cfg.output.path:
-        result, paths = run_runtime_nonlinear_with_artifacts(
-            cfg,
-            out=cfg.output.path,
-            ky_target=ky_target,
-            Nl=Nl_use,
-            Nm=Nm_use,
-            dt=dt_use,
-            steps=steps_use,
-            method=method_use,
-            sample_stride=sample_stride_use,
-            diagnostics_stride=diagnostics_stride_use,
-            diagnostics=True,
-            show_progress=show_progress,
-            status_callback=_status,
-        )
-        if "summary" in paths:
-            print(f"saved {paths['summary']}")
-    else:
-        result = run_runtime_nonlinear(
-            cfg,
-            ky_target=ky_target,
-            Nl=Nl_use,
-            Nm=Nm_use,
-            method=method_use,
-            dt=dt_use,
-            steps=steps_use,
-            sample_stride=sample_stride_use,
-            diagnostics_stride=diagnostics_stride_use,
-            diagnostics=True,
-            resolved_diagnostics=False,
-            show_progress=show_progress,
-            status_callback=_status,
-        )
-    if result.diagnostics is None or result.ky_selected is None:
-        print("completed without streamed diagnostics")
-        return 0
-    diag = result.diagnostics
-    print(
-        "ky={:.6f} Wg={:.8e} Wphi={:.8e} heat={:.8e} pflux={:.8e}".format(
-            float(result.ky_selected),
-            float(diag.Wg_t[-1]),
-            float(diag.Wphi_t[-1]),
-            float(diag.heat_flux_t[-1]),
-            float(diag.particle_flux_t[-1]),
-        )
-    )
-    return 0
