@@ -217,7 +217,7 @@ def optimization_artifact_reduction_scope(payload: Mapping[str, Any]) -> dict[st
         "n_reduced_nonlinear_rows": len(nonlinear_rows),
         "n_rows_claiming_production": len(unsafe_rows),
         "artifact_claims_production": artifact_claims_production,
-        "legacy_reduced_scope": bool(
+        "bounded_reduced_scope": bool(
             nonlinear_rows and not unsafe_rows and not artifact_claims_production
         ),
     }
@@ -471,7 +471,7 @@ def production_nonlinear_optimization_guard_report(
             "n_reduced_nonlinear_rows": 0,
             "n_rows_claiming_production": 0,
             "artifact_claims_production": False,
-            "legacy_reduced_scope": False,
+            "bounded_reduced_scope": False,
         }
     )
     reduced_rows = [

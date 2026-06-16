@@ -818,7 +818,7 @@ def _cmd_run_linear(args: argparse.Namespace) -> int:
     krylov_cfg = load_krylov_from_toml(data)
 
     _print_linear_run_header(
-        label=f"legacy linear {case_name} run",
+        label=f"named linear {case_name} run",
         config_path=str(args.config),
         ky=float(ky),
         Nl=int(Nl),
@@ -829,7 +829,7 @@ def _cmd_run_linear(args: argparse.Namespace) -> int:
         steps=int(steps),
         grid_shape=(int(cfg.grid.Nx), int(cfg.grid.Ny), int(cfg.grid.Nz)),
         show_progress=show_progress,
-        extra="detected legacy case TOML; using run-linear path",
+        extra="detected named case TOML; using run-linear path",
     )
 
     result = run_fn(

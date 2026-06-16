@@ -87,7 +87,7 @@ def _next_elapsed_time(
 
 
 def _effective_diagnostics_stride(diagnostics_stride: int) -> int:
-    """Normalize runtime diagnostic stride while preserving legacy floor-at-one."""
+    """Normalize runtime diagnostic stride with a floor at one."""
 
     return int(max(diagnostics_stride, 1))
 

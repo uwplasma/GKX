@@ -36,13 +36,15 @@ from spectraxgk.solver_geometry_objectives import (
     solver_ready_geometry_mapping,
     tiny_differentiable_objective_gradient_report,
 )
-from spectraxgk.solver_gradient_gates import (
+from spectraxgk.solver_ready_gradient_gates import (
+    linear_solver_geometry_gradient_report as _linear_solver_geometry_gradient_report_impl,
+    solver_objective_branch_gradient_report as _solver_objective_branch_gradient_report_impl,
+)
+from spectraxgk.solver_vmec_boozer_gradient_gates import (
     VMEC_BOOZER_FREQUENCY_OBJECTIVE_NAMES,
     VMEC_BOOZER_NONLINEAR_WINDOW_OBJECTIVE_NAMES,
     VMEC_BOOZER_QUASILINEAR_OBJECTIVE_NAMES,
     _mode21_vmec_boozer_linear_context as _mode21_vmec_boozer_linear_context_impl,
-    linear_solver_geometry_gradient_report as _linear_solver_geometry_gradient_report_impl,
-    solver_objective_branch_gradient_report as _solver_objective_branch_gradient_report_impl,
     _mode21_vmec_boozer_quasilinear_features as _mode21_vmec_boozer_quasilinear_features_impl,
     mode21_vmec_boozer_linear_frequency_gradient_report as _mode21_vmec_boozer_linear_frequency_gradient_report_impl,
     mode21_vmec_boozer_nonlinear_window_gradient_report as _mode21_vmec_boozer_nonlinear_window_gradient_report_impl,

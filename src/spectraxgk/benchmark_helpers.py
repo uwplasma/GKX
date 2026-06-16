@@ -1,8 +1,8 @@
-"""Compatibility facade for benchmark helper policies.
+"""Public bridge for benchmark helper policies.
 
 Implementation is split into focused benchmark helper modules while preserving
-legacy imports from ``spectraxgk.benchmark_helpers`` and the public
-``spectraxgk.benchmarks`` facade.
+the established ``spectraxgk.benchmark_helpers`` and
+``spectraxgk.benchmarks`` import surfaces.
 """
 
 from __future__ import annotations
@@ -75,10 +75,10 @@ def _call_with_facade_mode_extractor(
 ) -> Any:
     """Run fit-signal helpers through the compatibility facade extractor.
 
-    Older tests and user code monkeypatch ``spectraxgk.benchmark_helpers``
-    directly.  The focused implementation lives in ``benchmark_fit_signals``;
-    this thin bridge preserves the legacy indirection without duplicating the
-    fit-selection policy.
+    Tests and user code can monkeypatch ``spectraxgk.benchmark_helpers``
+    directly. The focused implementation lives in ``benchmark_fit_signals``;
+    this thin bridge preserves that hook without duplicating the fit-selection
+    policy.
     """
 
     if extract_mode_time_series is _DEFAULT_EXTRACT_MODE_TIME_SERIES:

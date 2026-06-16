@@ -2,9 +2,9 @@
 
 This module owns coordination policy that is not itself a solver kernel:
 progress/ETA formatting, combined-ky scan batching, and nonlinear artifact
-restart/checkpoint handoff.  Callers pass dependency tables so legacy
-``spectraxgk.runtime`` and ``spectraxgk.runtime_artifacts`` monkeypatch seams
-remain effective.
+restart/checkpoint handoff. Callers pass dependency tables so public runtime
+and artifact monkeypatch seams remain effective without duplicating orchestration
+code.
 """
 
 from __future__ import annotations

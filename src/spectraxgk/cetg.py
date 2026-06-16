@@ -170,9 +170,9 @@ def _apply_kz_filter(
         return arr
     arr_k = jnp.fft.fft(arr, axis=-1)
     mask = _kz_mask(grid, arr_k.real.dtype, dealias_kz=True)
-    # The legacy periodic-z dealias contract uses forward/inverse FFT pairs
-    # without the 1/N rescale on the inverse, so the filtered field carries an
-    # Nz factor.
+    # The periodic-z dealias contract uses forward/inverse FFT pairs without
+    # the 1/N rescale on the inverse, so the filtered field carries an Nz
+    # factor.
     return jnp.fft.ifft(arr_k * mask, axis=-1) * jnp.asarray(
         float(grid.z.size), dtype=arr_k.real.dtype
     )
