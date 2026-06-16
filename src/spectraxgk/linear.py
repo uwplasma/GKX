@@ -13,30 +13,30 @@ from jax.scipy.sparse.linalg import gmres
 from spectraxgk.geometry import FluxTubeGeometryLike
 from spectraxgk.grids import SpectralGrid
 from spectraxgk.operators.linear.linked import (
-    _build_linked_end_damping_profile,  # noqa: F401 - legacy private helper re-export
-    _build_linked_fft_maps,  # noqa: F401 - legacy private helper re-export
-    _signed_to_index,  # noqa: F401 - legacy private helper re-export
+    _build_linked_end_damping_profile,  # noqa: F401 - linear API helper re-export
+    _build_linked_fft_maps,  # noqa: F401 - linear API helper re-export
+    _signed_to_index,  # noqa: F401 - linear API helper re-export
 )
 from spectraxgk.operators.linear.moments import (
-    apply_hermite_v,  # noqa: F401 - legacy public helper re-export
-    apply_hermite_v2,  # noqa: F401 - legacy public helper re-export
-    apply_laguerre_x,  # noqa: F401 - legacy public helper re-export
-    build_H,  # noqa: F401 - legacy public helper re-export
-    compute_b,  # noqa: F401 - legacy public helper re-export
-    diamagnetic_drive_coeffs,  # noqa: F401 - legacy public helper re-export
-    energy_operator,  # noqa: F401 - legacy public helper re-export
-    grad_z_periodic,  # noqa: F401 - legacy public helper re-export
-    lenard_bernstein_eigenvalues,  # noqa: F401 - legacy public helper re-export
-    quasineutrality_phi,  # noqa: F401 - legacy public helper re-export
-    shift_axis,  # noqa: F401 - legacy public helper re-export
-    streaming_term,  # noqa: F401 - legacy public helper re-export
+    apply_hermite_v,  # noqa: F401 - linear API helper re-export
+    apply_hermite_v2,  # noqa: F401 - linear API helper re-export
+    apply_laguerre_x,  # noqa: F401 - linear API helper re-export
+    build_H,  # noqa: F401 - linear API helper re-export
+    compute_b,  # noqa: F401 - linear API helper re-export
+    diamagnetic_drive_coeffs,  # noqa: F401 - linear API helper re-export
+    energy_operator,  # noqa: F401 - linear API helper re-export
+    grad_z_periodic,  # noqa: F401 - linear API helper re-export
+    lenard_bernstein_eigenvalues,  # noqa: F401 - linear API helper re-export
+    quasineutrality_phi,  # noqa: F401 - linear API helper re-export
+    shift_axis,  # noqa: F401 - linear API helper re-export
+    streaming_term,  # noqa: F401 - linear API helper re-export
 )
 from spectraxgk.operators.linear.cache import (
     LinearCache,
-    _build_end_damping_profile_array,  # noqa: F401 - legacy private helper re-export
-    _build_gyroaverage_cache_arrays,  # noqa: F401 - legacy private helper re-export
-    _build_low_rank_moment_cache_arrays,  # noqa: F401 - legacy private helper re-export
-    _numpy_dtype_for_jax,  # noqa: F401 - legacy private helper re-export
+    _build_end_damping_profile_array,  # noqa: F401 - linear API helper re-export
+    _build_gyroaverage_cache_arrays,  # noqa: F401 - linear API helper re-export
+    _build_low_rank_moment_cache_arrays,  # noqa: F401 - linear API helper re-export
+    _numpy_dtype_for_jax,  # noqa: F401 - linear API helper re-export
     build_linear_cache,
     collision_damping,
     hypercollision_damping,
@@ -44,30 +44,30 @@ from spectraxgk.operators.linear.cache import (
 from spectraxgk.operators.linear.params import (
     LinearParams,
     LinearTerms,
-    Preconditioner,  # noqa: F401 - legacy public type alias re-export
+    Preconditioner,  # noqa: F401 - linear API type alias re-export
     PreconditionerSpec,
     _as_species_array,
-    _check_nonnegative,  # noqa: F401 - legacy private helper re-export
-    _check_positive,  # noqa: F401 - legacy private helper re-export
-    _is_tracer,  # noqa: F401 - legacy private helper re-export
+    _check_nonnegative,  # noqa: F401 - linear API helper re-export
+    _check_positive,  # noqa: F401 - linear API helper re-export
+    _is_tracer,  # noqa: F401 - linear API helper re-export
     _resolve_implicit_preconditioner,
     _x64_enabled,
     linear_terms_to_term_config,
-    term_config_to_linear_terms,  # noqa: F401 - legacy public helper re-export
+    term_config_to_linear_terms,  # noqa: F401 - linear API helper re-export
 )
 from spectraxgk.solvers.linear.parallel import (
-    _FUSED_ELECTROSTATIC_SLICE_KERNEL_CACHE,  # noqa: F401 - legacy private helper re-export
-    _electrostatic_streaming_field_rhs,  # noqa: F401 - legacy private helper re-export
+    _FUSED_ELECTROSTATIC_SLICE_KERNEL_CACHE,  # noqa: F401 - linear API helper re-export
+    _electrostatic_streaming_field_rhs,  # noqa: F401 - linear API helper re-export
     _is_electrostatic_field_terms,
-    _is_electrostatic_slice_terms,  # noqa: F401 - legacy private helper re-export
-    _is_streaming_only_terms,  # noqa: F401 - legacy private helper re-export
-    _linear_rhs_electrostatic_slices_velocity_sharded_fused,  # noqa: F401 - legacy private helper re-export
-    _resolve_parallel_devices,  # noqa: F401 - legacy private helper re-export
-    _streaming_electrostatic_from_phi_velocity_sharded,  # noqa: F401 - legacy private helper re-export
-    linear_rhs_electrostatic_slices_velocity_sharded,  # noqa: F401 - legacy public helper re-export
+    _is_electrostatic_slice_terms,  # noqa: F401 - linear API helper re-export
+    _is_streaming_only_terms,  # noqa: F401 - linear API helper re-export
+    _linear_rhs_electrostatic_slices_velocity_sharded_fused,  # noqa: F401 - linear API helper re-export
+    _resolve_parallel_devices,  # noqa: F401 - linear API helper re-export
+    _streaming_electrostatic_from_phi_velocity_sharded,  # noqa: F401 - linear API helper re-export
+    linear_rhs_electrostatic_slices_velocity_sharded,  # noqa: F401 - linear API helper re-export
     linear_rhs_parallel_cached,
-    linear_rhs_streaming_electrostatic_velocity_sharded,  # noqa: F401 - legacy public helper re-export
-    linear_rhs_streaming_velocity_sharded,  # noqa: F401 - legacy public helper re-export
+    linear_rhs_streaming_electrostatic_velocity_sharded,  # noqa: F401 - linear API helper re-export
+    linear_rhs_streaming_velocity_sharded,  # noqa: F401 - linear API helper re-export
 )
 
 
