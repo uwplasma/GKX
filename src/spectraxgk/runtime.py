@@ -35,7 +35,7 @@ from spectraxgk.linear import (
     linear_terms_to_term_config,
 )
 from spectraxgk.nonlinear import integrate_nonlinear_explicit_diagnostics_state
-from spectraxgk.linear_krylov import KrylovConfig, dominant_eigenpair
+from spectraxgk.solvers.linear.krylov import KrylovConfig, dominant_eigenpair
 from spectraxgk.normalization import apply_diagnostic_normalization
 from spectraxgk.parallel import independent_map
 from spectraxgk.quasilinear import compute_quasilinear_from_linear_state

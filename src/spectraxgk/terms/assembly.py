@@ -12,9 +12,9 @@ import numpy as np
 
 from spectraxgk.geometry import FluxTubeGeometryLike
 from spectraxgk.grids import SpectralGrid
-from spectraxgk.linear_cache import LinearCache, build_linear_cache
-from spectraxgk.linear_moments import build_H
-from spectraxgk.linear_params import LinearParams, _as_species_array
+from spectraxgk.operators.linear.cache import LinearCache, build_linear_cache
+from spectraxgk.operators.linear.moments import build_H
+from spectraxgk.operators.linear.params import LinearParams, _as_species_array
 from spectraxgk.terms.config import FieldState, TermConfig
 from spectraxgk.terms.fields import _solve_fields_impl, solve_fields
 from spectraxgk.terms.linear_terms import (

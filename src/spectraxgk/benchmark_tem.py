@@ -51,7 +51,7 @@ from spectraxgk.linear import (
     integrate_linear_diagnostics,
     linear_terms_to_term_config,
 )
-from spectraxgk.linear_krylov import KrylovConfig, dominant_eigenpair
+from spectraxgk.solvers.linear.krylov import KrylovConfig, dominant_eigenpair
 from spectraxgk.runners import integrate_linear_from_config
 from spectraxgk.terms.assembly import compute_fields_cached
 

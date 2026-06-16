@@ -20,7 +20,7 @@ from spectraxgk.config import (
     TEMBaseCase,
 )
 from spectraxgk.linear import LinearTerms
-from spectraxgk.linear_krylov import KrylovConfig
+from spectraxgk.solvers.linear.krylov import KrylovConfig
 from spectraxgk.runtime_config import (
     RuntimeCollisionConfig,
     RuntimeConfig,

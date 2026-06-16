@@ -23,7 +23,7 @@ from spectraxgk.linear import (
     build_linear_cache,
     linear_terms_to_term_config,
 )
-from spectraxgk.linear_krylov import KrylovConfig
+from spectraxgk.solvers.linear.krylov import KrylovConfig
 from spectraxgk.miller_eik import generate_runtime_miller_eik
 from spectraxgk.normalization import get_normalization_contract
 from spectraxgk.restart import load_netcdf_restart_state

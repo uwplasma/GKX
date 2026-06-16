@@ -12,12 +12,12 @@ from jax.scipy.sparse.linalg import gmres
 
 from spectraxgk.geometry import FluxTubeGeometryLike
 from spectraxgk.grids import SpectralGrid
-from spectraxgk.linear_linked import (
+from spectraxgk.operators.linear.linked import (
     _build_linked_end_damping_profile,  # noqa: F401 - legacy private helper re-export
     _build_linked_fft_maps,  # noqa: F401 - legacy private helper re-export
     _signed_to_index,  # noqa: F401 - legacy private helper re-export
 )
-from spectraxgk.linear_moments import (
+from spectraxgk.operators.linear.moments import (
     apply_hermite_v,  # noqa: F401 - legacy public helper re-export
     apply_hermite_v2,  # noqa: F401 - legacy public helper re-export
     apply_laguerre_x,  # noqa: F401 - legacy public helper re-export
@@ -31,7 +31,7 @@ from spectraxgk.linear_moments import (
     shift_axis,  # noqa: F401 - legacy public helper re-export
     streaming_term,  # noqa: F401 - legacy public helper re-export
 )
-from spectraxgk.linear_cache import (
+from spectraxgk.operators.linear.cache import (
     LinearCache,
     _build_end_damping_profile_array,  # noqa: F401 - legacy private helper re-export
     _build_gyroaverage_cache_arrays,  # noqa: F401 - legacy private helper re-export
@@ -41,7 +41,7 @@ from spectraxgk.linear_cache import (
     collision_damping,
     hypercollision_damping,
 )
-from spectraxgk.linear_params import (
+from spectraxgk.operators.linear.params import (
     LinearParams,
     LinearTerms,
     Preconditioner,  # noqa: F401 - legacy public type alias re-export
@@ -55,7 +55,7 @@ from spectraxgk.linear_params import (
     linear_terms_to_term_config,
     term_config_to_linear_terms,  # noqa: F401 - legacy public helper re-export
 )
-from spectraxgk.linear_parallel import (
+from spectraxgk.solvers.linear.parallel import (
     _FUSED_ELECTROSTATIC_SLICE_KERNEL_CACHE,  # noqa: F401 - legacy private helper re-export
     _electrostatic_streaming_field_rhs,  # noqa: F401 - legacy private helper re-export
     _is_electrostatic_field_terms,

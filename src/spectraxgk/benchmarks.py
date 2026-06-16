@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from spectraxgk.analysis import ModeSelection
 from spectraxgk.explicit_time_integrators import ExplicitTimeConfig
-from spectraxgk.linear_krylov import KrylovConfig
+from spectraxgk.solvers.linear.krylov import KrylovConfig
 
 from spectraxgk.config import (
     CycloneBaseCase,

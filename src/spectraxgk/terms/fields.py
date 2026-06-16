@@ -5,7 +5,7 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 
-from spectraxgk.linear_moments import quasineutrality_phi
+from spectraxgk.operators.linear.moments import quasineutrality_phi
 from spectraxgk.terms.config import FieldState
 
 
