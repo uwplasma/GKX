@@ -56,8 +56,7 @@ from spectraxgk.diagnostics import (
     electrostatic_field_energy,
     electrostatic_field_energy_resolved,
 )
-from spectraxgk.nonlinear_explicit_step import advance_explicit_nonlinear_state
-from spectraxgk.nonlinear_diagnostic_state import (
+from spectraxgk.operators.nonlinear.diagnostic_state import (
     NonlinearDiagnosticKernels,
     compute_nonlinear_diagnostic_tuple,
 )
@@ -66,12 +65,13 @@ from spectraxgk.nonlinear_diagnostics import (
     _sample_axis0,
     _sample_indices_with_final,
 )
-from spectraxgk.nonlinear_rhs import (
+from spectraxgk.operators.nonlinear.rhs import (
     linear_rhs_jit_for_terms_impl,
     nonlinear_em_term_cached_impl,
     nonlinear_rhs_cached_impl,
 )
-from spectraxgk.nonlinear_imex import solve_imex_step
+from spectraxgk.solvers.nonlinear.explicit import advance_explicit_nonlinear_state
+from spectraxgk.solvers.nonlinear.imex import solve_imex_step
 from spectraxgk.nonlinear_helpers import (
     IMEXLinearOperator,
     _apply_collision_split,

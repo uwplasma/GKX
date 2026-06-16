@@ -41,6 +41,7 @@ jobs:
           python tools/check_repository_size_manifest.py
           python tools/check_release_artifact_manifest.py
           python tools/check_release_version.py
+          python tools/check_package_architecture_manifest.py
           python tools/check_performance_optimization_manifest.py
           python tools/check_parallel_scaling_artifacts.py
           python tools/check_quasilinear_promotion_guardrails.py \
