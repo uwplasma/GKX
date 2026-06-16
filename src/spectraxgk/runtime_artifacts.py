@@ -10,7 +10,7 @@ from spectraxgk.runtime import (
     _concat_runtime_diagnostics,
     run_runtime_nonlinear,
 )
-from spectraxgk.runtime_artifact_diagnostics import (
+from spectraxgk.artifacts.validation import (
     validate_finite_runtime_result as _validate_finite_runtime_result,
 )
 from spectraxgk.runtime_orchestration import (
@@ -52,7 +52,7 @@ from spectraxgk.nonlinear_output_netcdf import (
     _write_input_parameters_group as _write_input_parameters_group,
     _write_nonlinear_netcdf_outputs as _write_nonlinear_netcdf_outputs,
 )
-from spectraxgk.runtime_artifact_nonlinear_diagnostics import (
+from spectraxgk.artifacts.nonlinear_diagnostics import (
     _condense_diagnostics_for_netcdf_output as _condense_diagnostics_for_netcdf_output,
     _condense_resolved_for_output as _condense_resolved_for_output,
     _read_optional_var as _read_optional_var,
@@ -60,16 +60,16 @@ from spectraxgk.runtime_artifact_nonlinear_diagnostics import (
     _resolve_restart_path as _resolve_restart_path,
     load_nonlinear_netcdf_diagnostics as load_nonlinear_netcdf_diagnostics,
 )
-from spectraxgk.runtime_artifact_nonlinear import (
+from spectraxgk.artifacts.nonlinear import (
     _nonlinear_summary as _nonlinear_summary,
     write_runtime_nonlinear_table_artifacts as write_runtime_nonlinear_table_artifacts,
 )
-from spectraxgk.runtime_artifact_linear import (
+from spectraxgk.artifacts.linear import (
     write_quasilinear_artifacts as write_quasilinear_artifacts,
     write_runtime_linear_artifacts as write_runtime_linear_artifacts,
     write_runtime_linear_scan_artifacts as write_runtime_linear_scan_artifacts,
 )
-from spectraxgk.runtime_artifact_io import (
+from spectraxgk.artifacts.io import (
     _artifact_base as _artifact_base,
     _ensure_parent as _ensure_parent,
     _flatten_series as _flatten_series,

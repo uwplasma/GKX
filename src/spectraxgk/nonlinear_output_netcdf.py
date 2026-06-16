@@ -40,11 +40,11 @@ from spectraxgk.netcdf_spectral_layout import (
     _state_basis_moments,
     _write_runtime_root_metadata,
 )
-from spectraxgk.runtime_artifact_io import (
+from spectraxgk.artifacts.io import (
     _ensure_parent,
     _netcdf_bundle_base,
 )
-from spectraxgk.runtime_artifact_nonlinear_diagnostics import (
+from spectraxgk.artifacts.nonlinear_diagnostics import (
     _resolved_species_time,
     _resolve_restart_path,
 )
