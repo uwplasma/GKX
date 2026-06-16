@@ -67,6 +67,7 @@ from spectraxgk.nonlinear_diagnostics import (
 )
 from spectraxgk.nonlinear_rhs import (
     linear_rhs_jit_for_terms_impl,
+    nonlinear_em_term_cached_impl,
     nonlinear_rhs_cached_impl,
 )
 from spectraxgk.nonlinear_helpers import (
@@ -1110,38 +1111,17 @@ def integrate_nonlinear_imex_diagnostics(
         )
 
     def nonlinear_term(G_in: jnp.ndarray) -> jnp.ndarray:
-        if term_cfg.nonlinear == 0.0:
-            return jnp.zeros_like(G_in)
-        weight = jnp.asarray(term_cfg.nonlinear, dtype=real_dtype)
-        fields = compute_fields_cached(
-            G_in, cache, params, terms=term_cfg, external_phi=external_phi
-        )
-        return nonlinear_em_contribution(
+        return nonlinear_em_term_cached_impl(
             G_in,
-            phi=fields.phi,
-            apar=fields.apar,
-            bpar=fields.bpar,
-            Jl=cache.Jl,
-            JlB=cache.JlB,
-            tz=jnp.asarray(params.tz),
-            vth=jnp.asarray(params.vth),
-            sqrt_m=cache.sqrt_m,
-            sqrt_m_p1=cache.sqrt_m_p1,
-            kx_grid=cache.kx_grid,
-            ky_grid=cache.ky_grid,
-            dealias_mask=cache.dealias_mask,
-            kxfac=cache.kxfac,
-            weight=weight,
-            apar_weight=float(term_cfg.apar),
-            bpar_weight=float(term_cfg.bpar),
-            laguerre_to_grid=cache.laguerre_to_grid,
-            laguerre_to_spectral=cache.laguerre_to_spectral,
-            laguerre_roots=cache.laguerre_roots,
-            laguerre_j0=cache.laguerre_j0,
-            laguerre_j1_over_alpha=cache.laguerre_j1_over_alpha,
-            b=cache.b,
+            cache,
+            params,
+            term_cfg,
+            real_dtype=real_dtype,
+            external_phi=external_phi,
             compressed_real_fft=compressed_real_fft,
             laguerre_mode=laguerre_mode,
+            fields_fn=compute_fields_cached,
+            nonlinear_contribution_fn=nonlinear_em_contribution,
         )
 
     def fixed_point(G_in: jnp.ndarray, G_rhs: jnp.ndarray) -> jnp.ndarray:
@@ -1413,40 +1393,16 @@ def integrate_nonlinear_imex_cached(
             )
 
     def nonlinear_term(G_in: jnp.ndarray) -> jnp.ndarray:
-        if term_cfg.nonlinear == 0.0:
-            return jnp.zeros_like(G_in)
-        weight = jnp.asarray(
-            term_cfg.nonlinear, dtype=jnp.real(jnp.empty((), G_in.dtype)).dtype
-        )
-        fields = compute_fields_cached(
-            G_in, cache, params, terms=term_cfg, external_phi=external_phi
-        )
-        return nonlinear_em_contribution(
+        return nonlinear_em_term_cached_impl(
             G_in,
-            phi=fields.phi,
-            apar=fields.apar,
-            bpar=fields.bpar,
-            Jl=cache.Jl,
-            JlB=cache.JlB,
-            tz=jnp.asarray(params.tz),
-            vth=jnp.asarray(params.vth),
-            sqrt_m=cache.sqrt_m,
-            sqrt_m_p1=cache.sqrt_m_p1,
-            kx_grid=cache.kx_grid,
-            ky_grid=cache.ky_grid,
-            dealias_mask=cache.dealias_mask,
-            kxfac=cache.kxfac,
-            weight=weight,
-            apar_weight=float(term_cfg.apar),
-            bpar_weight=float(term_cfg.bpar),
-            laguerre_to_grid=cache.laguerre_to_grid,
-            laguerre_to_spectral=cache.laguerre_to_spectral,
-            laguerre_roots=cache.laguerre_roots,
-            laguerre_j0=cache.laguerre_j0,
-            laguerre_j1_over_alpha=cache.laguerre_j1_over_alpha,
-            b=cache.b,
+            cache,
+            params,
+            term_cfg,
+            external_phi=external_phi,
             compressed_real_fft=compressed_real_fft,
             laguerre_mode=laguerre_mode,
+            fields_fn=compute_fields_cached,
+            nonlinear_contribution_fn=nonlinear_em_contribution,
         )
 
     def fixed_point(G_in: jnp.ndarray, G_rhs: jnp.ndarray) -> jnp.ndarray:
