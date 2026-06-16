@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Callable, Tuple
+from typing import Callable
 
 import jax
 import jax.numpy as jnp
@@ -61,6 +61,10 @@ from spectraxgk.nonlinear_diagnostics import (
     _sample_axis0,
     _sample_indices_with_final,
 )
+from spectraxgk.nonlinear_rhs import (
+    linear_rhs_jit_for_terms_impl,
+    nonlinear_rhs_cached_impl,
+)
 from spectraxgk.nonlinear_helpers import (
     IMEXLinearOperator,
     _apply_collision_split,
@@ -71,19 +75,22 @@ from spectraxgk.nonlinear_helpers import (
     _make_hermitian_projector,
     build_nonlinear_imex_operator,
 )
+
 _SSPX3_ADT = float((1.0 / 6.0) ** (1.0 / 3.0))
 _SSPX3_WGTFAC = float((9.0 - 2.0 * (6.0 ** (2.0 / 3.0))) ** 0.5)
 _SSPX3_W1 = 0.5 * (_SSPX3_WGTFAC - 1.0)
 _SSPX3_W2 = 0.5 * ((6.0 ** (2.0 / 3.0)) - 1.0 - _SSPX3_WGTFAC)
 _SSPX3_W3 = (1.0 / _SSPX3_ADT) - 1.0 - _SSPX3_W2 * (_SSPX3_W1 + 1.0)
 
+
 def _linear_rhs_jit_for_terms(term_cfg: TermConfig):
     """Return the narrowest compiled linear RHS path compatible with ``term_cfg``."""
 
-    return (
-        assemble_rhs_cached_electrostatic_jit
-        if _is_static_zero(term_cfg.apar) and _is_static_zero(term_cfg.bpar)
-        else assemble_rhs_cached_jit
+    return linear_rhs_jit_for_terms_impl(
+        term_cfg,
+        electrostatic_rhs_fn=assemble_rhs_cached_electrostatic_jit,
+        full_rhs_fn=assemble_rhs_cached_jit,
+        is_static_zero_fn=_is_static_zero,
     )
 
 
@@ -96,46 +103,22 @@ def nonlinear_rhs_cached(
     compressed_real_fft: bool = True,
     laguerre_mode: str = "grid",
     external_phi: jnp.ndarray | float | None = None,
-) -> Tuple[jnp.ndarray, FieldState]:
+) -> tuple[jnp.ndarray, FieldState]:
     """Compute the assembled nonlinear RHS and electromagnetic field state."""
 
-    term_cfg = terms or TermConfig()
-    linear_rhs_fn = _linear_rhs_jit_for_terms(term_cfg)
-    dG, fields = linear_rhs_fn(G, cache, params, term_cfg, external_phi=external_phi)
-    if term_cfg.nonlinear != 0.0:
-        real_dtype = jnp.real(jnp.empty((), dtype=G.dtype)).dtype
-        weight = jnp.asarray(term_cfg.nonlinear, dtype=real_dtype)
-        apar = None if fields.apar is None or _is_static_zero(term_cfg.apar) else fields.apar
-        bpar = None if fields.bpar is None or _is_static_zero(term_cfg.bpar) else fields.bpar
-        dG = dG + nonlinear_em_contribution(
-            G,
-            phi=fields.phi,
-            apar=apar,
-            bpar=bpar,
-            Jl=cache.Jl,
-            JlB=cache.JlB,
-            tz=jnp.asarray(params.tz),
-            vth=jnp.asarray(params.vth),
-            sqrt_m=cache.sqrt_m,
-            sqrt_m_p1=cache.sqrt_m_p1,
-            kx_grid=cache.kx_grid,
-            ky_grid=cache.ky_grid,
-            dealias_mask=cache.dealias_mask,
-            kxfac=cache.kxfac,
-            weight=weight,
-            apar_weight=float(term_cfg.apar),
-            bpar_weight=float(term_cfg.bpar),
-            laguerre_to_grid=cache.laguerre_to_grid,
-            laguerre_to_spectral=cache.laguerre_to_spectral,
-            laguerre_roots=cache.laguerre_roots,
-            laguerre_j0=cache.laguerre_j0,
-            laguerre_j1_over_alpha=cache.laguerre_j1_over_alpha,
-            b=cache.b,
-            compressed_real_fft=compressed_real_fft,
-            laguerre_mode=laguerre_mode,
-        )
-    return dG, fields
-
+    return nonlinear_rhs_cached_impl(
+        G,
+        cache,
+        params,
+        terms,
+        compressed_real_fft=compressed_real_fft,
+        laguerre_mode=laguerre_mode,
+        external_phi=external_phi,
+        electrostatic_rhs_fn=assemble_rhs_cached_electrostatic_jit,
+        full_rhs_fn=assemble_rhs_cached_jit,
+        is_static_zero_fn=_is_static_zero,
+        nonlinear_contribution_fn=nonlinear_em_contribution,
+    )
 
 
 def integrate_nonlinear_cached(
@@ -180,7 +163,9 @@ def integrate_nonlinear_cached(
 
     project_state = None
     if compressed_real_fft:
-        project_state = _make_hermitian_projector(np.asarray(cache.ky), int(np.asarray(cache.kx).size))
+        project_state = _make_hermitian_projector(
+            np.asarray(cache.ky), int(np.asarray(cache.kx).size)
+        )
 
     return integrate_nonlinear_scan(
         rhs_fn,
@@ -218,7 +203,9 @@ def integrate_nonlinear(
         elif G0.ndim == 6:
             Nl, Nm = G0.shape[1], G0.shape[2]
         else:
-            raise ValueError("G0 must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)")
+            raise ValueError(
+                "G0 must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)"
+            )
         cache = build_linear_cache(grid, geom_eff, params, Nl, Nm)
     return integrate_nonlinear_cached(
         G0,
@@ -286,23 +273,34 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
         elif G0.ndim == 6:
             Nl, Nm = G0.shape[1], G0.shape[2]
         else:
-            raise ValueError("G0 must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)")
+            raise ValueError(
+                "G0 must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)"
+            )
         cache = build_linear_cache(grid, geom_eff, params, Nl, Nm)
 
     term_cfg = terms or TermConfig()
     if method in {"imex", "semi-implicit"}:
-        raise ValueError("Final-state runtime diagnostics helper only supports explicit methods")
+        raise ValueError(
+            "Final-state runtime diagnostics helper only supports explicit methods"
+        )
     vol_fac, flux_fac = fieldline_quadrature_weights(geom_eff, grid)
-    mask = _diagnostic_omega_mode_mask(grid, cache, compressed_real_fft=compressed_real_fft)
+    mask = _diagnostic_omega_mode_mask(
+        grid, cache, compressed_real_fft=compressed_real_fft
+    )
     z_idx = _diagnostic_midplane_index(grid.z.size) if z_index is None else int(z_index)
     use_dealias = bool(use_dealias_mask)
-    use_hermitian = bool(compressed_real_fft) and bool(np.any(np.asarray(grid.ky) < 0.0))
+    use_hermitian = bool(compressed_real_fft) and bool(
+        np.any(np.asarray(grid.ky) < 0.0)
+    )
     ny_full = int(grid.ky.size)
     nyc = ny_full // 2 + 1
     nx = int(grid.kx.size)
     if nx > 1:
         kx_neg = jnp.concatenate(
-            [jnp.asarray([0], dtype=jnp.int32), jnp.arange(nx - 1, 0, -1, dtype=jnp.int32)]
+            [
+                jnp.asarray([0], dtype=jnp.int32),
+                jnp.arange(nx - 1, 0, -1, dtype=jnp.int32),
+            ]
         )
     else:
         kx_neg = jnp.asarray([0], dtype=jnp.int32)
@@ -370,11 +368,15 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
         float(term_cfg.collisions) != 0.0 or float(term_cfg.hypercollisions) != 0.0
     )
     rhs_term_cfg = (
-        replace(term_cfg, collisions=0.0, hypercollisions=0.0) if use_collision_split else term_cfg
+        replace(term_cfg, collisions=0.0, hypercollisions=0.0)
+        if use_collision_split
+        else term_cfg
     )
     damping = None
     if use_collision_split:
-        damping = _collision_damping(cache, params, term_cfg, real_dtype, squeeze_species=squeeze_species)
+        damping = _collision_damping(
+            cache, params, term_cfg, real_dtype, squeeze_species=squeeze_species
+        )
 
     def _update_dt(fields_state: FieldState, dt_prev: jnp.ndarray) -> jnp.ndarray:
         if fixed_dt:
@@ -409,7 +411,9 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
             external_phi=external_phi,
         )
 
-    fields0 = compute_fields_cached(G0, cache, params, terms=term_cfg, external_phi=external_phi)
+    fields0 = compute_fields_cached(
+        G0, cache, params, terms=term_cfg, external_phi=external_phi
+    )
 
     def _compute_diag_from_state(
         G_state: jnp.ndarray,
@@ -419,11 +423,23 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
         dt_step: jnp.ndarray,
     ):
         phi = fields_state.phi
-        apar = fields_state.apar if fields_state.apar is not None else jnp.zeros_like(phi)
-        bpar = fields_state.bpar if fields_state.bpar is not None else jnp.zeros_like(phi)
+        apar = (
+            fields_state.apar if fields_state.apar is not None else jnp.zeros_like(phi)
+        )
+        bpar = (
+            fields_state.bpar if fields_state.bpar is not None else jnp.zeros_like(phi)
+        )
         phi_prev_step = fields_prev_step.phi
-        apar_prev_step = fields_prev_step.apar if fields_prev_step.apar is not None else jnp.zeros_like(phi_prev_step)
-        bpar_prev_step = fields_prev_step.bpar if fields_prev_step.bpar is not None else jnp.zeros_like(phi_prev_step)
+        apar_prev_step = (
+            fields_prev_step.apar
+            if fields_prev_step.apar is not None
+            else jnp.zeros_like(phi_prev_step)
+        )
+        bpar_prev_step = (
+            fields_prev_step.bpar
+            if fields_prev_step.bpar is not None
+            else jnp.zeros_like(phi_prev_step)
+        )
 
         gamma_modes, omega_modes = _instantaneous_growth_rate_step(
             phi, phi_prev_step, dt_step, z_index=z_idx, mask=mask
@@ -431,8 +447,12 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
         if omega_ky_index is not None:
             ky_i = int(np.clip(omega_ky_index, 0, int(gamma_modes.shape[0]) - 1))
             kx_i = int(np.clip(omega_kx_index or 0, 0, int(gamma_modes.shape[1]) - 1))
-            gamma = jnp.nan_to_num(gamma_modes[ky_i, kx_i], nan=jnp.asarray(0.0, dtype=real_dtype))
-            omega = jnp.nan_to_num(omega_modes[ky_i, kx_i], nan=jnp.asarray(0.0, dtype=real_dtype))
+            gamma = jnp.nan_to_num(
+                gamma_modes[ky_i, kx_i], nan=jnp.asarray(0.0, dtype=real_dtype)
+            )
+            omega = jnp.nan_to_num(
+                omega_modes[ky_i, kx_i], nan=jnp.asarray(0.0, dtype=real_dtype)
+            )
             phi_mode = phi[ky_i, kx_i, z_idx]
         else:
             gamma = jnp.nan_to_num(
@@ -446,7 +466,9 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
             phi_mode = jnp.asarray(0.0 + 0.0j, dtype=phi.dtype)
         nspecies = int(G_state.shape[0]) if G_state.ndim == 6 else 1
         if not resolved_diagnostics:
-            Wg_val = distribution_free_energy(G_state, grid, params, vol_fac, use_dealias=use_dealias)
+            Wg_val = distribution_free_energy(
+                G_state, grid, params, vol_fac, use_dealias=use_dealias
+            )
             Wphi_val = electrostatic_field_energy(
                 phi,
                 cache,
@@ -455,7 +477,9 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
                 use_dealias=use_dealias,
                 wphi_scale=wphi_scale,
             )
-            Wapar_val = magnetic_vector_potential_energy(apar, cache, vol_fac, use_dealias=use_dealias)
+            Wapar_val = magnetic_vector_potential_energy(
+                apar, cache, vol_fac, use_dealias=use_dealias
+            )
             heat_species = heat_flux_species(
                 G_state,
                 phi,
@@ -526,39 +550,47 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
         ) = phi2_resolved(phi, grid, vol_fac, use_dealias=use_dealias)
         phi_zonal_mode_kxt = zonal_phi_mode_kxt(phi, grid, vol_fac)
         phi_zonal_line_kxt = zonal_phi_line_kxt(phi, grid)
-        Wg_st, Wg_kxst, Wg_kyst, Wg_kxkyst, Wg_zst, Wg_lmst = distribution_free_energy_resolved(
-            G_state,
-            grid,
-            params,
-            vol_fac,
-            use_dealias=use_dealias,
+        Wg_st, Wg_kxst, Wg_kyst, Wg_kxkyst, Wg_zst, Wg_lmst = (
+            distribution_free_energy_resolved(
+                G_state,
+                grid,
+                params,
+                vol_fac,
+                use_dealias=use_dealias,
+            )
         )
-        Wphi_st, Wphi_kxst, Wphi_kyst, Wphi_kxkyst, Wphi_zst = electrostatic_field_energy_resolved(
-            phi,
-            cache,
-            params,
-            vol_fac,
-            use_dealias=use_dealias,
-            wphi_scale=wphi_scale,
+        Wphi_st, Wphi_kxst, Wphi_kyst, Wphi_kxkyst, Wphi_zst = (
+            electrostatic_field_energy_resolved(
+                phi,
+                cache,
+                params,
+                vol_fac,
+                use_dealias=use_dealias,
+                wphi_scale=wphi_scale,
+            )
         )
-        Wapar_st, Wapar_kxst, Wapar_kyst, Wapar_kxkyst, Wapar_zst = magnetic_vector_potential_energy_resolved(
-            apar,
-            cache,
-            vol_fac,
-            nspecies=nspecies,
-            use_dealias=use_dealias,
+        Wapar_st, Wapar_kxst, Wapar_kyst, Wapar_kxkyst, Wapar_zst = (
+            magnetic_vector_potential_energy_resolved(
+                apar,
+                cache,
+                vol_fac,
+                nspecies=nspecies,
+                use_dealias=use_dealias,
+            )
         )
-        heat_species, HeatFlux_kxst, HeatFlux_kyst, HeatFlux_kxkyst, HeatFlux_zst = heat_flux_resolved_species(
-            G_state,
-            phi,
-            apar,
-            bpar,
-            cache,
-            grid,
-            params,
-            flux_fac,
-            use_dealias=use_dealias,
-            flux_scale=flux_scale,
+        heat_species, HeatFlux_kxst, HeatFlux_kyst, HeatFlux_kxkyst, HeatFlux_zst = (
+            heat_flux_resolved_species(
+                G_state,
+                phi,
+                apar,
+                bpar,
+                cache,
+                grid,
+                params,
+                flux_fac,
+                use_dealias=use_dealias,
+                flux_scale=flux_scale,
+            )
         )
         (heat_es, heat_apar, heat_bpar) = heat_flux_channel_resolved_species(
             G_state,
@@ -741,13 +773,16 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
             k4, _ = rhs_fn(G4)
             G_new = G + (dt_local / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
         elif method == "sspx3":
+
             def _sspx3_euler_step(G_state: jnp.ndarray) -> jnp.ndarray:
                 dG_state, _fields_state = rhs_fn(G_state)
                 return _project_state(G_state + (_SSPX3_ADT * dt_local) * dG_state)
 
             G1 = _sspx3_euler_step(G)
             G2_euler = _sspx3_euler_step(G1)
-            G2 = _project_state((1.0 - _SSPX3_W1) * G + (_SSPX3_W1 - 1.0) * G1 + G2_euler)
+            G2 = _project_state(
+                (1.0 - _SSPX3_W1) * G + (_SSPX3_W1 - 1.0) * G1 + G2_euler
+            )
             G3 = _sspx3_euler_step(G2)
             G_new = (
                 (1.0 - _SSPX3_W2 - _SSPX3_W3) * G
@@ -756,6 +791,7 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
                 + G3
             )
         elif method == "k10":
+
             def _k10_euler_step(G_state):
                 dG_state, _ = rhs_fn(G_state)
                 return _project_state(G_state + (dt_local / 6.0) * dG_state)
@@ -783,10 +819,14 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
         # Keep scan carry dtype stable under mixed-precision scalar constants.
         G_new = jnp.asarray(G_new, dtype=state_dtype)
         t_new = jnp.asarray(t_prev + dt_local, dtype=real_dtype)
-        fields_new = compute_fields_cached(G_new, cache, params, terms=term_cfg, external_phi=external_phi)
+        fields_new = compute_fields_cached(
+            G_new, cache, params, terms=term_cfg, external_phi=external_phi
+        )
 
         def _compute_diag(_):
-            return _compute_diag_from_state(G_new, fields_new, G_prev_step, fields_prev_step, dt_local)
+            return _compute_diag_from_state(
+                G_new, fields_new, G_prev_step, fields_prev_step, dt_local
+            )
 
         def _reuse_diag(_):
             return diag_prev
@@ -815,7 +855,11 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
                 lambda state: state,
                 G_new,
             )
-        return (G_new, G_new, fields_new, diag, t_new, dt_local), (diag, t_new, dt_local)
+        return (G_new, G_new, fields_new, diag, t_new, dt_local), (
+            diag,
+            t_new,
+            dt_local,
+        )
 
     step_fn = jax.checkpoint(step) if checkpoint else step
     dt0 = jnp.asarray(_update_dt(fields0, dt_init), dtype=real_dtype)
@@ -825,30 +869,62 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
     sampled_scan = stride > 1 and jax.default_backend() != "cpu"
     if sampled_scan:
         sample_idx_raw = _sample_indices_with_final(int(steps), stride)
-        sample_idx = np.asarray(sample_idx_raw if not isinstance(sample_idx_raw, slice) else np.arange(steps), dtype=np.int32)
+        sample_idx = np.asarray(
+            sample_idx_raw
+            if not isinstance(sample_idx_raw, slice)
+            else np.arange(steps),
+            dtype=np.int32,
+        )
         sample_steps = sample_idx + np.int32(1)
-        intervals = np.diff(np.concatenate([np.asarray([0], dtype=np.int32), sample_steps])).astype(np.int32)
+        intervals = np.diff(
+            np.concatenate([np.asarray([0], dtype=np.int32), sample_steps])
+        ).astype(np.int32)
 
         def sample_interval(carry, interval_steps):
             def run_one_step(_i, inner_carry):
-                G_i, G_prev_i, fields_prev_i, diag_prev_i, t_i, dt_i, idx_i = inner_carry
-                next_carry, _diag_step = step_fn((G_i, G_prev_i, fields_prev_i, diag_prev_i, t_i, dt_i), idx_i)
-                G_next, G_prev_next, fields_prev_next, diag_next, t_next, dt_next = next_carry
-                return (G_next, G_prev_next, fields_prev_next, diag_next, t_next, dt_next, idx_i + 1)
+                G_i, G_prev_i, fields_prev_i, diag_prev_i, t_i, dt_i, idx_i = (
+                    inner_carry
+                )
+                next_carry, _diag_step = step_fn(
+                    (G_i, G_prev_i, fields_prev_i, diag_prev_i, t_i, dt_i), idx_i
+                )
+                G_next, G_prev_next, fields_prev_next, diag_next, t_next, dt_next = (
+                    next_carry
+                )
+                return (
+                    G_next,
+                    G_prev_next,
+                    fields_prev_next,
+                    diag_next,
+                    t_next,
+                    dt_next,
+                    idx_i + 1,
+                )
 
             carry_next = jax.lax.fori_loop(0, interval_steps, run_one_step, carry)
-            G_next, _G_prev_next, _fields_prev_next, diag_next, t_next, dt_next, _idx_next = carry_next
+            (
+                G_next,
+                _G_prev_next,
+                _fields_prev_next,
+                diag_next,
+                t_next,
+                dt_next,
+                _idx_next,
+            ) = carry_next
             return carry_next, (diag_next, t_next, dt_next)
 
         (
-            G_final,
-            _G_prev_last,
-            _fields_prev_last,
-            _diag_last,
-            _t_last,
-            _dt_last,
-            _idx_last,
-        ), diag_out = jax.lax.scan(
+            (
+                G_final,
+                _G_prev_last,
+                _fields_prev_last,
+                _diag_last,
+                _t_last,
+                _dt_last,
+                _idx_last,
+            ),
+            diag_out,
+        ) = jax.lax.scan(
             sample_interval,
             (
                 G0,
@@ -864,7 +940,10 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
         )
     else:
         idx = jnp.arange(steps, dtype=jnp.int32)
-        (G_final, _G_prev_last, _fields_prev_last, _diag_last, _t_last, _dt_last), diag_out = jax.lax.scan(
+        (
+            (G_final, _G_prev_last, _fields_prev_last, _diag_last, _t_last, _dt_last),
+            diag_out,
+        ) = jax.lax.scan(
             step_fn,
             (
                 G0,
@@ -879,7 +958,21 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
         )
 
     diag, t, dt_series = diag_out
-    gamma_t, omega_t, Wg_t, Wphi_t, Wapar_t, heat_t, pflux_t, turbulent_heat_t, heat_s_t, pflux_s_t, turbulent_heat_s_t, phi_mode_t, resolved_t = diag
+    (
+        gamma_t,
+        omega_t,
+        Wg_t,
+        Wphi_t,
+        Wapar_t,
+        heat_t,
+        pflux_t,
+        turbulent_heat_t,
+        heat_s_t,
+        pflux_s_t,
+        turbulent_heat_s_t,
+        phi_mode_t,
+        resolved_t,
+    ) = diag
 
     if stride > 1 and not sampled_scan:
         output_sample_idx = _sample_indices_with_final(int(t.shape[0]), stride)
@@ -922,7 +1015,9 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
         phi_mode_t=phi_mode_t,
         resolved=resolved,
     )
-    fields_final = compute_fields_cached(G_final, cache, params, terms=term_cfg, external_phi=external_phi)
+    fields_final = compute_fields_cached(
+        G_final, cache, params, terms=term_cfg, external_phi=external_phi
+    )
     return t, diag_out, G_final, fields_final
 
 
@@ -1007,46 +1102,48 @@ def integrate_nonlinear_explicit_diagnostics(
             show_progress=show_progress,
         )
 
-    t, diag_out, _G_final, _fields_final = _integrate_nonlinear_explicit_diagnostics_impl(
-        G0,
-        grid,
-        geom,
-        params,
-        dt,
-        steps,
-        method=method,
-        cache=cache,
-        terms=terms,
-        checkpoint=checkpoint,
-        sample_stride=sample_stride,
-        diagnostics_stride=diagnostics_stride,
-        use_dealias_mask=use_dealias_mask,
-        z_index=z_index,
-        compressed_real_fft=compressed_real_fft,
-        laguerre_mode=laguerre_mode,
-        omega_ky_index=omega_ky_index,
-        omega_kx_index=omega_kx_index,
-        flux_scale=flux_scale,
-        wphi_scale=wphi_scale,
-        fixed_dt=fixed_dt,
-        dt_min=dt_min,
-        dt_max=dt_max,
-        cfl=cfl,
-        cfl_fac=cfl_fac,
-        collision_split=collision_split,
-        collision_scheme=collision_scheme,
-        implicit_tol=implicit_tol,
-        implicit_maxiter=implicit_maxiter,
-        implicit_iters=implicit_iters,
-        implicit_relax=implicit_relax,
-        implicit_restart=implicit_restart,
-        implicit_solve_method=implicit_solve_method,
-        implicit_preconditioner=implicit_preconditioner,
-        fixed_mode_ky_index=fixed_mode_ky_index,
-        fixed_mode_kx_index=fixed_mode_kx_index,
-        external_phi=external_phi,
-        resolved_diagnostics=resolved_diagnostics,
-        show_progress=show_progress,
+    t, diag_out, _G_final, _fields_final = (
+        _integrate_nonlinear_explicit_diagnostics_impl(
+            G0,
+            grid,
+            geom,
+            params,
+            dt,
+            steps,
+            method=method,
+            cache=cache,
+            terms=terms,
+            checkpoint=checkpoint,
+            sample_stride=sample_stride,
+            diagnostics_stride=diagnostics_stride,
+            use_dealias_mask=use_dealias_mask,
+            z_index=z_index,
+            compressed_real_fft=compressed_real_fft,
+            laguerre_mode=laguerre_mode,
+            omega_ky_index=omega_ky_index,
+            omega_kx_index=omega_kx_index,
+            flux_scale=flux_scale,
+            wphi_scale=wphi_scale,
+            fixed_dt=fixed_dt,
+            dt_min=dt_min,
+            dt_max=dt_max,
+            cfl=cfl,
+            cfl_fac=cfl_fac,
+            collision_split=collision_split,
+            collision_scheme=collision_scheme,
+            implicit_tol=implicit_tol,
+            implicit_maxiter=implicit_maxiter,
+            implicit_iters=implicit_iters,
+            implicit_relax=implicit_relax,
+            implicit_restart=implicit_restart,
+            implicit_solve_method=implicit_solve_method,
+            implicit_preconditioner=implicit_preconditioner,
+            fixed_mode_ky_index=fixed_mode_ky_index,
+            fixed_mode_kx_index=fixed_mode_kx_index,
+            external_phi=external_phi,
+            resolved_diagnostics=resolved_diagnostics,
+            show_progress=show_progress,
+        )
     )
     return t, diag_out
 
@@ -1096,7 +1193,9 @@ def integrate_nonlinear_explicit_diagnostics_state(
     """Integrate nonlinear system and return runtime diagnostics plus the final state."""
 
     if method in {"imex", "semi-implicit"}:
-        raise ValueError("integrate_nonlinear_explicit_diagnostics_state only supports explicit methods")
+        raise ValueError(
+            "integrate_nonlinear_explicit_diagnostics_state only supports explicit methods"
+        )
 
     return _integrate_nonlinear_explicit_diagnostics_impl(
         G0,
@@ -1186,7 +1285,9 @@ def integrate_nonlinear_imex_diagnostics(
         elif G0.ndim == 6:
             Nl, Nm = G0.shape[1], G0.shape[2]
         else:
-            raise ValueError("G0 must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)")
+            raise ValueError(
+                "G0 must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)"
+            )
         cache = build_linear_cache(grid, geom_eff, params, Nl, Nm)
 
     term_cfg = terms or TermConfig()
@@ -1196,16 +1297,23 @@ def integrate_nonlinear_imex_diagnostics(
     linear_rhs_fn = _linear_rhs_jit_for_terms(linear_cfg)
 
     vol_fac, flux_fac = fieldline_quadrature_weights(geom_eff, grid)
-    mask = _diagnostic_omega_mode_mask(grid, cache, compressed_real_fft=compressed_real_fft)
+    mask = _diagnostic_omega_mode_mask(
+        grid, cache, compressed_real_fft=compressed_real_fft
+    )
     z_idx = _diagnostic_midplane_index(grid.z.size) if z_index is None else int(z_index)
     use_dealias = bool(use_dealias_mask)
-    use_hermitian = bool(compressed_real_fft) and bool(np.any(np.asarray(grid.ky) < 0.0))
+    use_hermitian = bool(compressed_real_fft) and bool(
+        np.any(np.asarray(grid.ky) < 0.0)
+    )
     ny_full = int(grid.ky.size)
     nyc = ny_full // 2 + 1
     nx = int(grid.kx.size)
     if nx > 1:
         kx_neg = jnp.concatenate(
-            [jnp.asarray([0], dtype=jnp.int32), jnp.arange(nx - 1, 0, -1, dtype=jnp.int32)]
+            [
+                jnp.asarray([0], dtype=jnp.int32),
+                jnp.arange(nx - 1, 0, -1, dtype=jnp.int32),
+            ]
         )
     else:
         kx_neg = jnp.asarray([0], dtype=jnp.int32)
@@ -1258,13 +1366,17 @@ def integrate_nonlinear_imex_diagnostics(
     )
     damping = None
     if use_collision_split:
-        damping = _collision_damping(cache, params, term_cfg, real_dtype, squeeze_species=squeeze_species)
+        damping = _collision_damping(
+            cache, params, term_cfg, real_dtype, squeeze_species=squeeze_species
+        )
 
     def nonlinear_term(G_in: jnp.ndarray) -> jnp.ndarray:
         if term_cfg.nonlinear == 0.0:
             return jnp.zeros_like(G_in)
         weight = jnp.asarray(term_cfg.nonlinear, dtype=real_dtype)
-        fields = compute_fields_cached(G_in, cache, params, terms=term_cfg, external_phi=external_phi)
+        fields = compute_fields_cached(
+            G_in, cache, params, terms=term_cfg, external_phi=external_phi
+        )
         return nonlinear_em_contribution(
             G_in,
             phi=fields.phi,
@@ -1295,7 +1407,9 @@ def integrate_nonlinear_imex_diagnostics(
 
     def fixed_point(G_in: jnp.ndarray, G_rhs: jnp.ndarray) -> jnp.ndarray:
         def body(_i, g):
-            dG, _fields = linear_rhs_fn(g, cache, params, linear_cfg, external_phi=external_phi)
+            dG, _fields = linear_rhs_fn(
+                g, cache, params, linear_cfg, external_phi=external_phi
+            )
             g_next = G_rhs + dt_val * dG
             return (1.0 - implicit_relax) * g + implicit_relax * g_next
 
@@ -1323,11 +1437,23 @@ def integrate_nonlinear_imex_diagnostics(
         dt_step: jnp.ndarray,
     ):
         phi = fields_state.phi
-        apar = fields_state.apar if fields_state.apar is not None else jnp.zeros_like(phi)
-        bpar = fields_state.bpar if fields_state.bpar is not None else jnp.zeros_like(phi)
+        apar = (
+            fields_state.apar if fields_state.apar is not None else jnp.zeros_like(phi)
+        )
+        bpar = (
+            fields_state.bpar if fields_state.bpar is not None else jnp.zeros_like(phi)
+        )
         phi_prev_step = fields_prev_step.phi
-        apar_prev_step = fields_prev_step.apar if fields_prev_step.apar is not None else jnp.zeros_like(phi_prev_step)
-        bpar_prev_step = fields_prev_step.bpar if fields_prev_step.bpar is not None else jnp.zeros_like(phi_prev_step)
+        apar_prev_step = (
+            fields_prev_step.apar
+            if fields_prev_step.apar is not None
+            else jnp.zeros_like(phi_prev_step)
+        )
+        bpar_prev_step = (
+            fields_prev_step.bpar
+            if fields_prev_step.bpar is not None
+            else jnp.zeros_like(phi_prev_step)
+        )
 
         gamma_modes, omega_modes = _instantaneous_growth_rate_step(
             phi, phi_prev_step, dt_step, z_index=z_idx, mask=mask
@@ -1335,8 +1461,12 @@ def integrate_nonlinear_imex_diagnostics(
         if omega_ky_index is not None:
             ky_i = int(np.clip(omega_ky_index, 0, int(gamma_modes.shape[0]) - 1))
             kx_i = int(np.clip(omega_kx_index or 0, 0, int(gamma_modes.shape[1]) - 1))
-            gamma = jnp.nan_to_num(gamma_modes[ky_i, kx_i], nan=jnp.asarray(0.0, dtype=real_dtype))
-            omega = jnp.nan_to_num(omega_modes[ky_i, kx_i], nan=jnp.asarray(0.0, dtype=real_dtype))
+            gamma = jnp.nan_to_num(
+                gamma_modes[ky_i, kx_i], nan=jnp.asarray(0.0, dtype=real_dtype)
+            )
+            omega = jnp.nan_to_num(
+                omega_modes[ky_i, kx_i], nan=jnp.asarray(0.0, dtype=real_dtype)
+            )
             phi_mode = phi[ky_i, kx_i, z_idx]
         else:
             gamma = jnp.nan_to_num(
@@ -1361,39 +1491,47 @@ def integrate_nonlinear_imex_diagnostics(
         ) = phi2_resolved(phi, grid, vol_fac, use_dealias=use_dealias)
         phi_zonal_mode_kxt = zonal_phi_mode_kxt(phi, grid, vol_fac)
         phi_zonal_line_kxt = zonal_phi_line_kxt(phi, grid)
-        Wg_st, Wg_kxst, Wg_kyst, Wg_kxkyst, Wg_zst, Wg_lmst = distribution_free_energy_resolved(
-            G_state,
-            grid,
-            params,
-            vol_fac,
-            use_dealias=use_dealias,
+        Wg_st, Wg_kxst, Wg_kyst, Wg_kxkyst, Wg_zst, Wg_lmst = (
+            distribution_free_energy_resolved(
+                G_state,
+                grid,
+                params,
+                vol_fac,
+                use_dealias=use_dealias,
+            )
         )
-        Wphi_st, Wphi_kxst, Wphi_kyst, Wphi_kxkyst, Wphi_zst = electrostatic_field_energy_resolved(
-            phi,
-            cache,
-            params,
-            vol_fac,
-            use_dealias=use_dealias,
-            wphi_scale=wphi_scale,
+        Wphi_st, Wphi_kxst, Wphi_kyst, Wphi_kxkyst, Wphi_zst = (
+            electrostatic_field_energy_resolved(
+                phi,
+                cache,
+                params,
+                vol_fac,
+                use_dealias=use_dealias,
+                wphi_scale=wphi_scale,
+            )
         )
-        Wapar_st, Wapar_kxst, Wapar_kyst, Wapar_kxkyst, Wapar_zst = magnetic_vector_potential_energy_resolved(
-            apar,
-            cache,
-            vol_fac,
-            nspecies=nspecies,
-            use_dealias=use_dealias,
+        Wapar_st, Wapar_kxst, Wapar_kyst, Wapar_kxkyst, Wapar_zst = (
+            magnetic_vector_potential_energy_resolved(
+                apar,
+                cache,
+                vol_fac,
+                nspecies=nspecies,
+                use_dealias=use_dealias,
+            )
         )
-        heat_species, HeatFlux_kxst, HeatFlux_kyst, HeatFlux_kxkyst, HeatFlux_zst = heat_flux_resolved_species(
-            G_state,
-            phi,
-            apar,
-            bpar,
-            cache,
-            grid,
-            params,
-            flux_fac,
-            use_dealias=use_dealias,
-            flux_scale=flux_scale,
+        heat_species, HeatFlux_kxst, HeatFlux_kyst, HeatFlux_kxkyst, HeatFlux_zst = (
+            heat_flux_resolved_species(
+                G_state,
+                phi,
+                apar,
+                bpar,
+                cache,
+                grid,
+                params,
+                flux_fac,
+                use_dealias=use_dealias,
+                flux_scale=flux_scale,
+            )
         )
         (heat_es, heat_apar, heat_bpar) = heat_flux_channel_resolved_species(
             G_state,
@@ -1540,19 +1678,24 @@ def integrate_nonlinear_imex_diagnostics(
             ),
         )
 
-    fields0 = compute_fields_cached(G0, cache, params, terms=term_cfg, external_phi=external_phi)
+    fields0 = compute_fields_cached(
+        G0, cache, params, terms=term_cfg, external_phi=external_phi
+    )
 
     def step(carry, idx):
         G, G_prev_step, fields_prev_step, diag_prev, t_prev = carry
         rhs = G + dt_val * nonlinear_term(G)
         if method == "sspx3":
+
             def _euler_step(G_state: jnp.ndarray, dt_stage: jnp.ndarray) -> jnp.ndarray:
                 rhs_stage = G_state + dt_stage * nonlinear_term(G_state)
                 return solve_step(G_state, rhs_stage)
 
             G1 = _euler_step(G, _SSPX3_ADT * dt_val)
             G2_euler = _euler_step(G1, _SSPX3_ADT * dt_val)
-            G2 = _project_state((1.0 - _SSPX3_W1) * G + (_SSPX3_W1 - 1.0) * G1 + G2_euler)
+            G2 = _project_state(
+                (1.0 - _SSPX3_W1) * G + (_SSPX3_W1 - 1.0) * G1 + G2_euler
+            )
             G3 = _euler_step(G2, _SSPX3_ADT * dt_val)
             G_new = (
                 (1.0 - _SSPX3_W2 - _SSPX3_W3) * G
@@ -1568,10 +1711,14 @@ def integrate_nonlinear_imex_diagnostics(
         # Keep scan carry dtype stable under mixed-precision scalar constants.
         G_new = jnp.asarray(G_new, dtype=state_dtype)
         t_new = t_prev + dt_val
-        fields_new = compute_fields_cached(G_new, cache, params, terms=term_cfg, external_phi=external_phi)
+        fields_new = compute_fields_cached(
+            G_new, cache, params, terms=term_cfg, external_phi=external_phi
+        )
 
         def _compute_diag(_):
-            return _compute_diag_from_state(G_new, fields_new, G_prev_step, fields_prev_step, dt_val)
+            return _compute_diag_from_state(
+                G_new, fields_new, G_prev_step, fields_prev_step, dt_val
+            )
 
         def _reuse_diag(_):
             return diag_prev
@@ -1605,21 +1752,37 @@ def integrate_nonlinear_imex_diagnostics(
     step_fn = jax.checkpoint(step) if checkpoint else step
     diag_zero = _compute_diag_from_state(G0, fields0, G0, fields0, dt_val)
     idx = jnp.arange(steps, dtype=jnp.int32)
-    (G_final, _G_prev_last, _fields_prev_last, _diag_last, _t_last), diag_out = jax.lax.scan(
-        step_fn,
-        (
-            G0,
-            G0,
-            fields0,
-            diag_zero,
-            jnp.asarray(0.0, dtype=real_dtype),
-        ),
-        idx,
-        length=steps,
+    (G_final, _G_prev_last, _fields_prev_last, _diag_last, _t_last), diag_out = (
+        jax.lax.scan(
+            step_fn,
+            (
+                G0,
+                G0,
+                fields0,
+                diag_zero,
+                jnp.asarray(0.0, dtype=real_dtype),
+            ),
+            idx,
+            length=steps,
+        )
     )
 
     diag, t = diag_out
-    gamma_t, omega_t, Wg_t, Wphi_t, Wapar_t, heat_t, pflux_t, turbulent_heat_t, heat_s_t, pflux_s_t, turbulent_heat_s_t, phi_mode_t, resolved_t = diag
+    (
+        gamma_t,
+        omega_t,
+        Wg_t,
+        Wphi_t,
+        Wapar_t,
+        heat_t,
+        pflux_t,
+        turbulent_heat_t,
+        heat_s_t,
+        pflux_s_t,
+        turbulent_heat_s_t,
+        phi_mode_t,
+        resolved_t,
+    ) = diag
     dt_series = jnp.ones_like(t) * dt_val
 
     stride = int(max(sample_stride, diagnostics_stride, 1))
@@ -1637,7 +1800,9 @@ def integrate_nonlinear_imex_diagnostics(
         pflux_s_t = _sample_axis0(pflux_s_t, sample_idx)
         turbulent_heat_s_t = _sample_axis0(turbulent_heat_s_t, sample_idx)
         phi_mode_t = _sample_axis0(phi_mode_t, sample_idx)
-        resolved_t = tuple(_sample_axis0(np.asarray(arr), sample_idx) for arr in resolved_t)
+        resolved_t = tuple(
+            _sample_axis0(np.asarray(arr), sample_idx) for arr in resolved_t
+        )
         t = _sample_axis0(t, sample_idx)
         dt_series = _sample_axis0(dt_series, sample_idx)
 
@@ -1665,7 +1830,6 @@ def integrate_nonlinear_imex_diagnostics(
         resolved=resolved,
     )
     return t, diag_out
-
 
 
 def integrate_nonlinear_imex_cached(
@@ -1701,13 +1865,15 @@ def integrate_nonlinear_imex_cached(
     precond_op: Callable[[jnp.ndarray], jnp.ndarray] | None
     matvec: Callable[[jnp.ndarray], jnp.ndarray]
     if implicit_operator is None:
-        G, shape, _size, dt_val, precond_op, matvec, squeeze_species = _build_implicit_operator(
-            G0,
-            cache,
-            params,
-            dt,
-            linear_terms,
-            implicit_preconditioner,
+        G, shape, _size, dt_val, precond_op, matvec, squeeze_species = (
+            _build_implicit_operator(
+                G0,
+                cache,
+                params,
+                dt,
+                linear_terms,
+                implicit_preconditioner,
+            )
         )
     else:
         shape = implicit_operator.shape
@@ -1727,8 +1893,12 @@ def integrate_nonlinear_imex_cached(
     def nonlinear_term(G_in: jnp.ndarray) -> jnp.ndarray:
         if term_cfg.nonlinear == 0.0:
             return jnp.zeros_like(G_in)
-        weight = jnp.asarray(term_cfg.nonlinear, dtype=jnp.real(jnp.empty((), G_in.dtype)).dtype)
-        fields = compute_fields_cached(G_in, cache, params, terms=term_cfg, external_phi=external_phi)
+        weight = jnp.asarray(
+            term_cfg.nonlinear, dtype=jnp.real(jnp.empty((), G_in.dtype)).dtype
+        )
+        fields = compute_fields_cached(
+            G_in, cache, params, terms=term_cfg, external_phi=external_phi
+        )
         return nonlinear_em_contribution(
             G_in,
             phi=fields.phi,
@@ -1759,7 +1929,9 @@ def integrate_nonlinear_imex_cached(
 
     def fixed_point(G_in: jnp.ndarray, G_rhs: jnp.ndarray) -> jnp.ndarray:
         def body(_i, g):
-            dG, _fields = linear_rhs_fn(g, cache, params, linear_cfg, external_phi=external_phi)
+            dG, _fields = linear_rhs_fn(
+                g, cache, params, linear_cfg, external_phi=external_phi
+            )
             g_next = G_rhs + dt_val * dG
             return (1.0 - implicit_relax) * g + implicit_relax * g_next
 
@@ -1782,7 +1954,9 @@ def integrate_nonlinear_imex_cached(
     def step(G_in, _):
         rhs = G_in + dt_val * nonlinear_term(G_in)
         G_new = solve_step(G_in, rhs)
-        _dG_new, fields_new = linear_rhs_fn(G_new, cache, params, linear_cfg, external_phi=external_phi)
+        _dG_new, fields_new = linear_rhs_fn(
+            G_new, cache, params, linear_cfg, external_phi=external_phi
+        )
         return G_new, fields_new
 
     step_fn = jax.checkpoint(step) if checkpoint else step
