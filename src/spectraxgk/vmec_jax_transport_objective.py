@@ -31,9 +31,11 @@ from spectraxgk.geometry.differentiable import (
     flux_tube_geometry_from_vmec_boozer_state,
     prewarm_vmec_boozer_equal_arc_cache,
 )
-from spectraxgk.solver_objective_gradients import (
-    SOLVER_OBJECTIVE_NAMES,
+from spectraxgk.solver_eigen_objectives import (
     dominant_eigenvalue_branch_locality_report,
+)
+from spectraxgk.solver_objective_core import (
+    SOLVER_OBJECTIVE_NAMES,
     solver_growth_rate_from_geometry,
     solver_linear_operator_matrix_from_geometry,
 )

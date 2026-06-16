@@ -20,9 +20,11 @@ from spectraxgk.autodiff_validation import autodiff_finite_difference_report, co
 from spectraxgk.geometry.differentiable import discover_differentiable_geometry_backends
 from spectraxgk.parallel import independent_map
 from spectraxgk.quasilinear import quasilinear_feature_objective
-from spectraxgk.solver_objective_gradients import (
+from spectraxgk.solver_objective_core import (
     SolverScalarObjective,
     solver_scalar_objective_from_vector,
+)
+from spectraxgk.solver_vmec_boozer_objectives import (
     vmec_boozer_solver_objective_table_with_metadata_from_state,
 )
 from spectraxgk.stellarator_objective_portfolio import (
