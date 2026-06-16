@@ -113,8 +113,9 @@ resolved diagnostics, and heat flux.
   saturation-rule metadata and electrostatic channel validation gates.
 - **Automated benchmark workflows** for reproducible validation and regression tracking.
 - **Modular runtime/refactor surfaces** with focused tests for restart artifacts,
-  diagnostics, validation gates, nonlinear RHS routing, solver-objective
-  gradient gates, VMEC/Boozer sensitivity gates, and public API boundaries.
+  diagnostics, validation gates, nonlinear RHS routing, nonlinear diagnostic
+  state assembly, solver-objective gradient gates, VMEC/Boozer sensitivity
+  gates, and public API boundaries.
 
 ## QA ITG Optimization Panel
 
