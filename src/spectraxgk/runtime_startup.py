@@ -17,10 +17,10 @@ import numpy as np
 
 from spectraxgk.geometry import FluxTubeGeometryLike, build_flux_tube_geometry
 from spectraxgk.grids import SpectralGrid
-from spectraxgk.linear import (
+from spectraxgk.operators.linear.cache import build_linear_cache
+from spectraxgk.operators.linear.params import (
     LinearParams,
     LinearTerms,
-    build_linear_cache,
     linear_terms_to_term_config,
 )
 from spectraxgk.solvers.linear.krylov import KrylovConfig

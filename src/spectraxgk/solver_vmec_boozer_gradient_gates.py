@@ -21,7 +21,8 @@ from spectraxgk.geometry.differentiable import (
     vmec_jax_boozer_equal_arc_core_profiles_from_state,
 )
 from spectraxgk.grids import build_spectral_grid, select_ky_grid
-from spectraxgk.linear import build_linear_cache, linear_rhs_cached
+from spectraxgk.linear import linear_rhs_cached
+from spectraxgk.operators.linear.cache import build_linear_cache
 from spectraxgk.quasilinear import effective_kperp2, phi_norm2
 from spectraxgk.solver_geometry_objectives import _objective_gate_rows
 from spectraxgk.solver_nonlinear_window_objective import (

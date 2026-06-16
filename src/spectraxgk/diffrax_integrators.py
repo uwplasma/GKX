@@ -12,11 +12,10 @@ import numpy as np
 from spectraxgk.analysis import ModeSelection, ModeSelectionBatch
 from spectraxgk.geometry import FluxTubeGeometryLike
 from spectraxgk.grids import SpectralGrid
-from spectraxgk.linear import (
-    LinearCache,
+from spectraxgk.operators.linear.cache import LinearCache, build_linear_cache
+from spectraxgk.operators.linear.params import (
     LinearParams,
     LinearTerms,
-    build_linear_cache,
     linear_terms_to_term_config,
 )
 from spectraxgk.terms.assembly import assemble_rhs_cached, assemble_rhs_cached_jit, compute_fields_cached

@@ -11,12 +11,14 @@ import jax.numpy as jnp
 import numpy as np
 from jax.scipy.sparse.linalg import gmres
 
-from spectraxgk.linear import (
+from spectraxgk.operators.linear.cache import (
     LinearCache,
-    LinearParams,
-    LinearTerms,
     collision_damping,
     hypercollision_damping,
+)
+from spectraxgk.operators.linear.params import (
+    LinearParams,
+    LinearTerms,
     linear_terms_to_term_config,
 )
 from spectraxgk.terms.assembly import assemble_rhs_cached

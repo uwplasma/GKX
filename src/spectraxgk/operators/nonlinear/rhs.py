@@ -12,7 +12,8 @@ from typing import Any, Callable
 
 import jax.numpy as jnp
 
-from spectraxgk.linear import LinearCache, LinearParams
+from spectraxgk.operators.linear.cache import LinearCache
+from spectraxgk.operators.linear.params import LinearParams
 from spectraxgk.terms.assembly import (
     _is_static_zero,
     assemble_rhs_cached_electrostatic_jit,

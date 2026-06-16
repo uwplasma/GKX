@@ -62,12 +62,11 @@ from spectraxgk.explicit_time_integrators import (
     ExplicitTimeConfig,
     integrate_linear_explicit,
 )
-from spectraxgk.linear import (
+from spectraxgk.linear import integrate_linear, integrate_linear_diagnostics
+from spectraxgk.operators.linear.cache import build_linear_cache
+from spectraxgk.operators.linear.params import (
     LinearParams,
     LinearTerms,
-    build_linear_cache,
-    integrate_linear,
-    integrate_linear_diagnostics,
     linear_terms_to_term_config,
 )
 from spectraxgk.solvers.linear.krylov import KrylovConfig, dominant_eigenpair

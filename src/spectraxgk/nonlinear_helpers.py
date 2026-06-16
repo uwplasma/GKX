@@ -10,12 +10,14 @@ import jax
 import numpy as np
 
 from spectraxgk.grids import SpectralGrid, real_fft_mesh
-from spectraxgk.linear import (
+from spectraxgk.linear import _build_implicit_operator
+from spectraxgk.operators.linear.cache import (
     LinearCache,
-    LinearParams,
-    _build_implicit_operator,
     collision_damping as _base_collision_damping,
     hypercollision_damping,
+)
+from spectraxgk.operators.linear.params import (
+    LinearParams,
     term_config_to_linear_terms,
 )
 from spectraxgk.terms.config import FieldState, TermConfig
