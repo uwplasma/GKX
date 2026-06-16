@@ -50,25 +50,15 @@ from spectraxgk.solver_vmec_boozer_gradient_gates import (
     mode21_vmec_boozer_nonlinear_window_gradient_report as _mode21_vmec_boozer_nonlinear_window_gradient_report_impl,
     mode21_vmec_boozer_quasilinear_gradient_report as _mode21_vmec_boozer_quasilinear_gradient_report_impl,
 )
-from spectraxgk.solver_vmec_boozer_gates import (
+from spectraxgk.solver_vmec_boozer_fd_gates import (
     _load_vmec_jax_example_state_bundle as _load_vmec_jax_example_state_bundle_impl,
-)
-from spectraxgk.solver_vmec_boozer_gates import (
     _report_float as _report_float_impl,
-)
-from spectraxgk.solver_vmec_boozer_gates import (
-    vmec_boozer_aggregate_line_search_holdout_report as _vmec_boozer_aggregate_line_search_holdout_report_impl,
-)
-from spectraxgk.solver_vmec_boozer_gates import (
     vmec_boozer_aggregate_scalar_objective_finite_difference_report as _vmec_boozer_aggregate_scalar_objective_finite_difference_report_impl,
-)
-from spectraxgk.solver_vmec_boozer_gates import (
-    vmec_boozer_aggregate_scalar_objective_line_search_report as _vmec_boozer_aggregate_scalar_objective_line_search_report_impl,
-)
-from spectraxgk.solver_vmec_boozer_gates import (
     vmec_boozer_scalar_objective_finite_difference_report as _vmec_boozer_scalar_objective_finite_difference_report_impl,
 )
-from spectraxgk.solver_vmec_boozer_gates import (
+from spectraxgk.solver_vmec_boozer_line_search_gates import (
+    vmec_boozer_aggregate_line_search_holdout_report as _vmec_boozer_aggregate_line_search_holdout_report_impl,
+    vmec_boozer_aggregate_scalar_objective_line_search_report as _vmec_boozer_aggregate_scalar_objective_line_search_report_impl,
     vmec_boozer_scalar_objective_line_search_report as _vmec_boozer_scalar_objective_line_search_report_impl,
 )
 from spectraxgk.solver_nonlinear_window_objective import (
