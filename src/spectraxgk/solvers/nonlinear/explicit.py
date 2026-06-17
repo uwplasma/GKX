@@ -15,6 +15,11 @@ import jax.numpy as jnp
 RhsFn = Callable[[jnp.ndarray], tuple[jnp.ndarray, object]]
 ProjectFn = Callable[[jnp.ndarray], jnp.ndarray]
 ScanFn = Callable[..., tuple[jnp.ndarray, Any]]
+DiagnosticStepFn = Callable[
+    [tuple[Any, Any, Any, Any, Any, Any], Any],
+    tuple[tuple[Any, Any, Any, Any, Any, Any], tuple[Any, Any, Any]],
+]
+SampledDiagnosticScanFn = Callable[..., tuple[tuple[Any, Any, Any, Any, Any, Any], tuple[Any, Any, Any]]]
 
 _SSPX3_ADT = float((1.0 / 6.0) ** (1.0 / 3.0))
 _SSPX3_WGTFAC = float((9.0 - 2.0 * (6.0 ** (2.0 / 3.0))) ** 0.5)
@@ -142,8 +147,54 @@ def integrate_cached_explicit_scan(
     )
 
 
+def run_explicit_diagnostic_scan(
+    step_fn: DiagnosticStepFn,
+    initial_carry: tuple[Any, Any, Any, Any, Any, Any],
+    *,
+    steps: int,
+    stride: int,
+    sampled_scan: bool,
+    checkpoint: bool,
+    sampled_scan_fn: SampledDiagnosticScanFn,
+) -> tuple[jnp.ndarray, tuple[Any, Any, Any]]:
+    """Run the explicit diagnostic scan using sampled or dense retention."""
+
+    scan_step = jax.checkpoint(step_fn) if checkpoint else step_fn
+    if sampled_scan:
+        (
+            (
+                G_final,
+                _G_prev_last,
+                _fields_prev_last,
+                _diag_last,
+                _t_last,
+                _dt_last,
+            ),
+            scan_diag_out,
+        ) = sampled_scan_fn(
+            scan_step,
+            initial_carry,
+            steps=steps,
+            stride=stride,
+        )
+        return G_final, scan_diag_out
+
+    idx = jnp.arange(steps, dtype=jnp.int32)
+    (
+        (G_final, _G_prev_last, _fields_prev_last, _diag_last, _t_last, _dt_last),
+        scan_diag_out,
+    ) = jax.lax.scan(
+        scan_step,
+        initial_carry,
+        idx,
+        length=steps,
+    )
+    return G_final, scan_diag_out
+
+
 __all__ = [
     "advance_explicit_nonlinear_state",
     "checkpoint_explicit_step",
     "integrate_cached_explicit_scan",
+    "run_explicit_diagnostic_scan",
 ]

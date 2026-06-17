@@ -74,6 +74,7 @@ from spectraxgk.operators.nonlinear.rhs import (
 from spectraxgk.solvers.nonlinear.explicit import (
     advance_explicit_nonlinear_state,
     integrate_cached_explicit_scan,
+    run_explicit_diagnostic_scan,
 )
 from spectraxgk.solvers.nonlinear.imex import (
     advance_imex_nonlinear_state,
@@ -456,7 +457,6 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
             dt_local,
         )
 
-    step_fn = jax.checkpoint(step) if checkpoint else step
     dt0 = jnp.asarray(
         time_step_policy.update_dt(fields0, time_step_policy.dt_init), dtype=real_dtype
     )
@@ -464,48 +464,22 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
 
     stride = int(max(sample_stride, diagnostics_stride, 1))
     sampled_scan = stride > 1 and jax.default_backend() != "cpu"
-    if sampled_scan:
+    G_final, scan_diag_out = run_explicit_diagnostic_scan(
+        step,
         (
-            (
-                G_final,
-                _G_prev_last,
-                _fields_prev_last,
-                _diag_last,
-                _t_last,
-                _dt_last,
-            ),
-            scan_diag_out,
-        ) = run_sampled_explicit_diagnostic_scan(
-            step_fn,
-            (
-                G0,
-                G0,
-                fields0,
-                diag_zero,
-                jnp.asarray(0.0, dtype=real_dtype),
-                dt0,
-            ),
-            steps=steps,
-            stride=stride,
-        )
-    else:
-        idx = jnp.arange(steps, dtype=jnp.int32)
-        (
-            (G_final, _G_prev_last, _fields_prev_last, _diag_last, _t_last, _dt_last),
-            scan_diag_out,
-        ) = jax.lax.scan(
-            step_fn,
-            (
-                G0,
-                G0,
-                fields0,
-                diag_zero,
-                jnp.asarray(0.0, dtype=real_dtype),
-                dt0,
-            ),
-            idx,
-            length=steps,
-        )
+            G0,
+            G0,
+            fields0,
+            diag_zero,
+            jnp.asarray(0.0, dtype=real_dtype),
+            dt0,
+        ),
+        steps=steps,
+        stride=stride,
+        sampled_scan=sampled_scan,
+        checkpoint=checkpoint,
+        sampled_scan_fn=run_sampled_explicit_diagnostic_scan,
+    )
 
     diag, t, dt_series = scan_diag_out
     output_sample_idx = None
