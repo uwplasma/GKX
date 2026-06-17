@@ -12,9 +12,19 @@ from typing import Callable
 import jax
 import jax.numpy as jnp
 
+from spectraxgk.solvers.nonlinear.explicit import (
+    _SSPX3_ADT,
+    _SSPX3_W1,
+    _SSPX3_W2,
+    _SSPX3_W3,
+)
+
 LinearRhsFn = Callable[..., tuple[jnp.ndarray, object]]
 MatvecFn = Callable[[jnp.ndarray], jnp.ndarray]
+NonlinearTermFn = Callable[[jnp.ndarray], jnp.ndarray]
 PreconditionerFn = Callable[[jnp.ndarray], jnp.ndarray]
+ProjectFn = Callable[[jnp.ndarray], jnp.ndarray]
+SolveStepFn = Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray]
 
 
 def imex_fixed_point_guess(
@@ -89,4 +99,42 @@ def solve_imex_step(
     return sol.reshape(shape)
 
 
-__all__ = ["imex_fixed_point_guess", "solve_imex_step"]
+def advance_imex_nonlinear_state(
+    G: jnp.ndarray,
+    *,
+    dt_val: jnp.ndarray,
+    method: str,
+    nonlinear_term: NonlinearTermFn,
+    solve_step: SolveStepFn,
+    project_state: ProjectFn,
+) -> jnp.ndarray:
+    """Advance one IMEX nonlinear step with optional SSPX3 stage composition."""
+
+    if method == "sspx3":
+
+        def _euler_step(G_state: jnp.ndarray, dt_stage: jnp.ndarray) -> jnp.ndarray:
+            rhs_stage = G_state + dt_stage * nonlinear_term(G_state)
+            return solve_step(G_state, rhs_stage)
+
+        G1 = _euler_step(G, _SSPX3_ADT * dt_val)
+        G2_euler = _euler_step(G1, _SSPX3_ADT * dt_val)
+        G2 = project_state(
+            (1.0 - _SSPX3_W1) * G + (_SSPX3_W1 - 1.0) * G1 + G2_euler
+        )
+        G3 = _euler_step(G2, _SSPX3_ADT * dt_val)
+        return (
+            (1.0 - _SSPX3_W2 - _SSPX3_W3) * G
+            + _SSPX3_W3 * G1
+            + (_SSPX3_W2 - 1.0) * G2
+            + G3
+        )
+
+    rhs = G + dt_val * nonlinear_term(G)
+    return solve_step(G, rhs)
+
+
+__all__ = [
+    "advance_imex_nonlinear_state",
+    "imex_fixed_point_guess",
+    "solve_imex_step",
+]

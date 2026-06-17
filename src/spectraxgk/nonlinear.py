@@ -70,7 +70,10 @@ from spectraxgk.operators.nonlinear.rhs import (
     nonlinear_rhs_cached_impl,
 )
 from spectraxgk.solvers.nonlinear.explicit import advance_explicit_nonlinear_state
-from spectraxgk.solvers.nonlinear.imex import solve_imex_step
+from spectraxgk.solvers.nonlinear.imex import (
+    advance_imex_nonlinear_state,
+    solve_imex_step,
+)
 from spectraxgk.nonlinear_helpers import (
     IMEXLinearOperator,
     _apply_collision_split,
@@ -81,13 +84,6 @@ from spectraxgk.nonlinear_helpers import (
     _make_hermitian_projector,
     build_nonlinear_imex_operator,
 )
-
-_SSPX3_ADT = float((1.0 / 6.0) ** (1.0 / 3.0))
-_SSPX3_WGTFAC = float((9.0 - 2.0 * (6.0 ** (2.0 / 3.0))) ** 0.5)
-_SSPX3_W1 = 0.5 * (_SSPX3_WGTFAC - 1.0)
-_SSPX3_W2 = 0.5 * ((6.0 ** (2.0 / 3.0)) - 1.0 - _SSPX3_WGTFAC)
-_SSPX3_W3 = (1.0 / _SSPX3_ADT) - 1.0 - _SSPX3_W2 * (_SSPX3_W1 + 1.0)
-
 
 def _nonlinear_diagnostic_kernels() -> NonlinearDiagnosticKernels:
     """Return facade-level diagnostic kernels for compatibility monkeypatch seams."""
@@ -1121,27 +1117,14 @@ def integrate_nonlinear_imex_diagnostics(
 
     def step(carry, idx):
         G, G_prev_step, fields_prev_step, diag_prev, t_prev = carry
-        rhs = G + dt_val * nonlinear_term(G)
-        if method == "sspx3":
-
-            def _euler_step(G_state: jnp.ndarray, dt_stage: jnp.ndarray) -> jnp.ndarray:
-                rhs_stage = G_state + dt_stage * nonlinear_term(G_state)
-                return solve_step(G_state, rhs_stage)
-
-            G1 = _euler_step(G, _SSPX3_ADT * dt_val)
-            G2_euler = _euler_step(G1, _SSPX3_ADT * dt_val)
-            G2 = _project_state(
-                (1.0 - _SSPX3_W1) * G + (_SSPX3_W1 - 1.0) * G1 + G2_euler
-            )
-            G3 = _euler_step(G2, _SSPX3_ADT * dt_val)
-            G_new = (
-                (1.0 - _SSPX3_W2 - _SSPX3_W3) * G
-                + _SSPX3_W3 * G1
-                + (_SSPX3_W2 - 1.0) * G2
-                + G3
-            )
-        else:
-            G_new = solve_step(G, rhs)
+        G_new = advance_imex_nonlinear_state(
+            G,
+            dt_val=dt_val,
+            method=method,
+            nonlinear_term=nonlinear_term,
+            solve_step=solve_step,
+            project_state=_project_state,
+        )
         if use_collision_split and damping is not None:
             G_new = _apply_collision_split(G_new, damping, dt_val, collision_scheme)
         G_new = _project_state(G_new)
