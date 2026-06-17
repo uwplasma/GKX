@@ -8,7 +8,7 @@ preserving the existing public runtime behavior.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, fields as dataclass_fields
+from dataclasses import dataclass, fields as dataclass_fields, replace
 from typing import Any, Sequence
 
 import jax.numpy as jnp
@@ -26,6 +26,7 @@ from spectraxgk.diagnostics import (
     SimulationDiagnostics,
     total_energy,
 )
+from spectraxgk.runtime_results import RuntimeLinearResult
 
 
 @dataclass(frozen=True)
@@ -40,6 +41,81 @@ class RuntimeLinearFitResult:
     fit_window_tmin: float | None
     fit_window_tmax: float | None
     fit_signal_used: str
+
+
+@dataclass(frozen=True)
+class RuntimeQuasilinearFinalizationDeps:
+    """Injected dependencies for runtime quasilinear post-processing."""
+
+    build_linear_cache: Any
+    compute_quasilinear_from_linear_state: Any
+    linear_terms_to_term_config: Any
+
+
+def finalize_runtime_linear_quasilinear(
+    result: RuntimeLinearResult,
+    *,
+    enabled: bool,
+    cfg: Any,
+    grid: Any,
+    geom: Any,
+    params: Any,
+    terms: Any,
+    Nl: int,
+    Nm: int,
+    solver_name: str,
+    species_names: tuple[str, ...],
+    return_state_requested: bool,
+    state_for_quasilinear: np.ndarray | None = None,
+    deps: RuntimeQuasilinearFinalizationDeps,
+    status_callback: Any | None = None,
+) -> RuntimeLinearResult:
+    """Attach optional quasilinear diagnostics to a linear runtime result."""
+
+    ql_payload = None
+    state_for_ql = state_for_quasilinear if state_for_quasilinear is not None else result.state
+    if enabled:
+        if state_for_ql is None:
+            raise RuntimeError("quasilinear diagnostics require a final linear state")
+        ql_cfg = cfg.quasilinear
+        if status_callback is not None:
+            status_callback("computing quasilinear transport weights")
+        cache = deps.build_linear_cache(grid, geom, params, Nl, Nm)
+        ql_payload = deps.compute_quasilinear_from_linear_state(
+            state_for_ql,
+            cache=cache,
+            grid=grid,
+            geom=geom,
+            params=params,
+            ky=float(result.ky),
+            gamma=float(result.gamma),
+            omega=float(result.omega),
+            terms=deps.linear_terms_to_term_config(terms),
+            mode=str(ql_cfg.mode),
+            saturation_rule=str(ql_cfg.saturation_rule),
+            amplitude_normalization=str(ql_cfg.amplitude_normalization),
+            kperp_average=str(ql_cfg.kperp_average),
+            csat=float(ql_cfg.csat),
+            gamma_floor=float(ql_cfg.gamma_floor),
+            include_stable_modes=bool(ql_cfg.include_stable_modes),
+            channels=ql_cfg.channels,
+            species_names=species_names,
+            flux_scale=float(cfg.normalization.flux_scale),
+            metadata={
+                "runtime_config_enabled": True,
+                "solver": solver_name,
+                "delta_ky": ql_cfg.delta_ky,
+                "species_selection": ql_cfg.species,
+                "write_spectrum": bool(ql_cfg.write_spectrum),
+            },
+        ).to_dict()
+        if status_callback is not None:
+            status_callback("quasilinear transport weights complete")
+    return replace(
+        result,
+        state=result.state if return_state_requested else None,
+        quasilinear=ql_payload,
+    )
 
 
 def _resolved_fit_bounds(

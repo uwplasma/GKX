@@ -42,6 +42,8 @@ from spectraxgk.runtime_config import RuntimeConfig
 from spectraxgk import runtime_startup
 from spectraxgk.runtime_diagnostics import (
     concat_runtime_diagnostics,
+    finalize_runtime_linear_quasilinear,
+    RuntimeQuasilinearFinalizationDeps,
     slice_runtime_diagnostics,
     stride_runtime_diagnostics,
     truncate_runtime_diagnostics,
@@ -382,51 +384,26 @@ def run_runtime_linear(
         *,
         state_for_quasilinear: np.ndarray | None = None,
     ) -> RuntimeLinearResult:
-        ql_payload = None
-        state_for_ql = (
-            state_for_quasilinear if state_for_quasilinear is not None else result.state
-        )
-        if ql_enabled:
-            if state_for_ql is None:
-                raise RuntimeError(
-                    "quasilinear diagnostics require a final linear state"
-                )
-            ql_cfg = cfg.quasilinear
-            _status("computing quasilinear transport weights")
-            cache = build_linear_cache(grid, geom, params, Nl_use, Nm_use)
-            ql_payload = compute_quasilinear_from_linear_state(
-                state_for_ql,
-                cache=cache,
-                grid=grid,
-                geom=geom,
-                params=params,
-                ky=float(result.ky),
-                gamma=float(result.gamma),
-                omega=float(result.omega),
-                terms=linear_terms_to_term_config(terms),
-                mode=str(ql_cfg.mode),
-                saturation_rule=str(ql_cfg.saturation_rule),
-                amplitude_normalization=str(ql_cfg.amplitude_normalization),
-                kperp_average=str(ql_cfg.kperp_average),
-                csat=float(ql_cfg.csat),
-                gamma_floor=float(ql_cfg.gamma_floor),
-                include_stable_modes=bool(ql_cfg.include_stable_modes),
-                channels=ql_cfg.channels,
-                species_names=tuple(s.name for s in cfg.species if s.kinetic),
-                flux_scale=float(cfg.normalization.flux_scale),
-                metadata={
-                    "runtime_config_enabled": True,
-                    "solver": _normalize_linear_solver_name(solver),
-                    "delta_ky": ql_cfg.delta_ky,
-                    "species_selection": ql_cfg.species,
-                    "write_spectrum": bool(ql_cfg.write_spectrum),
-                },
-            ).to_dict()
-            _status("quasilinear transport weights complete")
-        return replace(
+        return finalize_runtime_linear_quasilinear(
             result,
-            state=result.state if return_state_requested else None,
-            quasilinear=ql_payload,
+            enabled=ql_enabled,
+            cfg=cfg,
+            grid=grid,
+            geom=geom,
+            params=params,
+            terms=terms,
+            Nl=Nl_use,
+            Nm=Nm_use,
+            solver_name=_normalize_linear_solver_name(solver),
+            species_names=tuple(s.name for s in cfg.species if s.kinetic),
+            return_state_requested=return_state_requested,
+            state_for_quasilinear=state_for_quasilinear,
+            deps=RuntimeQuasilinearFinalizationDeps(
+                build_linear_cache=build_linear_cache,
+                compute_quasilinear_from_linear_state=compute_quasilinear_from_linear_state,
+                linear_terms_to_term_config=linear_terms_to_term_config,
+            ),
+            status_callback=_status,
         )
 
     def _run_krylov() -> tuple[float, float, np.ndarray]:
