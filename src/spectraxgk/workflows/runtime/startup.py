@@ -26,7 +26,7 @@ from spectraxgk.operators.linear.params import (
 from spectraxgk.solvers.linear.krylov import KrylovConfig
 from spectraxgk.geometry.miller_eik import generate_runtime_miller_eik
 from spectraxgk.normalization import get_normalization_contract
-from spectraxgk.restart import load_netcdf_restart_state
+from spectraxgk.artifacts.restart import load_netcdf_restart_state
 from spectraxgk.workflows.runtime.config import RuntimeConfig, RuntimeSpeciesConfig
 from spectraxgk.species import Species, build_linear_params
 from spectraxgk.terms.config import TermConfig

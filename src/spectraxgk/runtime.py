@@ -618,7 +618,7 @@ def run_runtime_nonlinear(
 def _runtime_case_deps() -> RuntimeCaseDeps:
     """Build case-workflow dependencies from this module's patchable globals."""
 
-    from spectraxgk.io import load_runtime_from_toml
+    from spectraxgk.workflows.runtime.toml import load_runtime_from_toml
     from spectraxgk.workflows.runtime.artifacts import (
         run_runtime_nonlinear_with_artifacts,
         write_runtime_linear_artifacts,

@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from spectraxgk.io import load_toml
+from spectraxgk.workflows.runtime.toml import load_toml
 
 
 @dataclass(frozen=True)

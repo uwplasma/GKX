@@ -58,7 +58,7 @@ __all__ = [
 def default_runtime_case_deps() -> RuntimeCaseDeps:
     """Build default executable workflow dependencies."""
 
-    from spectraxgk.io import load_runtime_from_toml
+    from spectraxgk.workflows.runtime.toml import load_runtime_from_toml
     from spectraxgk.runtime import run_runtime_linear, run_runtime_nonlinear
     from spectraxgk.workflows.runtime.artifacts import (
         run_runtime_nonlinear_with_artifacts,

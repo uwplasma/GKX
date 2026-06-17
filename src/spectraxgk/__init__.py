@@ -36,7 +36,7 @@ from spectraxgk.geometry.differentiable import (
     vmec_metric_tensor_observable_names,
 )
 from spectraxgk.gyroaverage import J_l_all, gamma0
-from spectraxgk.io import (
+from spectraxgk.workflows.runtime.toml import (
     load_case_from_toml,
     load_krylov_from_toml,
     load_linear_terms_from_toml,

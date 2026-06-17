@@ -17,7 +17,7 @@ from spectraxgk.workflows.runtime.config import (
     RuntimeConfig,
     RuntimeExpertConfig,
 )
-from spectraxgk.restart import write_netcdf_restart_state
+from spectraxgk.artifacts.restart import write_netcdf_restart_state
 
 
 @dataclass(frozen=True)

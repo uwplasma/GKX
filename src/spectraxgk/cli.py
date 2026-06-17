@@ -22,7 +22,7 @@ from spectraxgk.benchmarks import (
 )
 from spectraxgk.geometry import SAlphaGeometry
 from spectraxgk.grids import build_spectral_grid
-from spectraxgk.io import (
+from spectraxgk.workflows.runtime.toml import (
     load_case_from_toml,
     load_krylov_from_toml,
     load_linear_terms_from_toml,
