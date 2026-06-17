@@ -585,13 +585,13 @@ def linear_rhs_parallel_cached(
     otherwise callers must request a narrower explicit backend.
     """
 
-    import spectraxgk.linear as linear_compat
+    from spectraxgk.operators.linear.rhs import linear_rhs_cached
 
     if (
         parallel is None
         or str(getattr(parallel, "strategy", "serial")).lower() == "serial"
     ):
-        return linear_compat.linear_rhs_cached(
+        return linear_rhs_cached(
             G,
             cache,
             params,
@@ -628,7 +628,7 @@ def linear_rhs_parallel_cached(
             raise NotImplementedError(
                 "velocity streaming route requires streaming-only LinearTerms"
             )
-        return linear_compat.linear_rhs_streaming_velocity_sharded(
+        return linear_rhs_streaming_velocity_sharded(
             G,
             cache,
             params,
@@ -646,7 +646,7 @@ def linear_rhs_parallel_cached(
             raise NotImplementedError(
                 "electrostatic velocity streaming route requires streaming-only LinearTerms"
             )
-        return linear_compat.linear_rhs_streaming_electrostatic_velocity_sharded(
+        return linear_rhs_streaming_electrostatic_velocity_sharded(
             G,
             cache,
             params,
@@ -665,7 +665,7 @@ def linear_rhs_parallel_cached(
             raise NotImplementedError(
                 "electrostatic slice route requires collision/EM terms to be disabled"
             )
-        return linear_compat.linear_rhs_electrostatic_slices_velocity_sharded(
+        return linear_rhs_electrostatic_slices_velocity_sharded(
             G,
             cache,
             params,

@@ -11,7 +11,7 @@ from spectraxgk.autodiff_validation import explicit_complex_operator_matrix
 from spectraxgk.config import CycloneBaseCase, GridConfig
 from spectraxgk.diagnostics import heat_flux_species, particle_flux_species, fieldline_quadrature_weights
 from spectraxgk.grids import build_spectral_grid, select_ky_grid
-from spectraxgk.linear import linear_rhs_cached
+from spectraxgk.operators.linear.rhs import linear_rhs_cached
 from spectraxgk.operators.linear.cache import build_linear_cache
 from spectraxgk.operators.linear.params import LinearParams, LinearTerms
 from spectraxgk.quasilinear import effective_kperp2, phi_norm2

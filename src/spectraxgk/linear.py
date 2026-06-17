@@ -52,8 +52,12 @@ from spectraxgk.operators.linear.params import (
     _is_tracer,  # noqa: F401 - linear API helper re-export
     _resolve_implicit_preconditioner,
     _x64_enabled,
-    linear_terms_to_term_config,
+    linear_terms_to_term_config,  # noqa: F401 - linear API helper re-export
     term_config_to_linear_terms,  # noqa: F401 - linear API helper re-export
+)
+from spectraxgk.operators.linear.rhs import (
+    linear_rhs,  # noqa: F401 - linear API helper re-export
+    linear_rhs_cached,
 )
 from spectraxgk.solvers.linear.parallel import (
     _FUSED_ELECTROSTATIC_SLICE_KERNEL_CACHE,  # noqa: F401 - linear API helper re-export
@@ -76,82 +80,6 @@ _SSPX3_WGTFAC = float((9.0 - 2.0 * (6.0 ** (2.0 / 3.0))) ** 0.5)
 _SSPX3_W1 = 0.5 * (_SSPX3_WGTFAC - 1.0)
 _SSPX3_W2 = 0.5 * ((6.0 ** (2.0 / 3.0)) - 1.0 - _SSPX3_WGTFAC)
 _SSPX3_W3 = (1.0 / _SSPX3_ADT) - 1.0 - _SSPX3_W2 * (_SSPX3_W1 + 1.0)
-
-
-def linear_rhs(
-    G: jnp.ndarray,
-    grid: SpectralGrid,
-    geom: FluxTubeGeometryLike,
-    params: LinearParams,
-    terms: LinearTerms | None = None,
-    *,
-    dt: jnp.ndarray | float | None = None,
-) -> tuple[jnp.ndarray, jnp.ndarray]:
-    """Compute the linear RHS and electrostatic potential.
-
-    Parameters
-    ----------
-    G : jnp.ndarray
-        Laguerre-Hermite moments with shape (Nl, Nm, Ny, Nx, Nz).
-    grid : SpectralGrid
-        Flux-tube spectral grid.
-    geom : SAlphaGeometry
-        Analytic s-alpha geometry.
-    params : LinearParams
-        Physical and normalization parameters.
-    """
-
-    if G.ndim == 5:
-        Nl, Nm = G.shape[0], G.shape[1]
-    elif G.ndim == 6:
-        Nl, Nm = G.shape[1], G.shape[2]
-    else:
-        raise ValueError(
-            "G must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)"
-        )
-    cache = build_linear_cache(grid, geom, params, Nl, Nm)
-    return linear_rhs_cached(G, cache, params, terms=terms, dt=dt)
-
-
-def linear_rhs_cached(
-    G: jnp.ndarray,
-    cache: LinearCache,
-    params: LinearParams,
-    terms: LinearTerms | None = None,
-    *,
-    use_jit: bool = True,
-    use_custom_vjp: bool = True,
-    dt: jnp.ndarray | float | None = None,
-    force_electrostatic_fields: bool = False,
-) -> tuple[jnp.ndarray, jnp.ndarray]:
-    """Compute the linear RHS using precomputed geometry arrays."""
-
-    from spectraxgk.terms.assembly import (
-        assemble_rhs_cached,
-        assemble_rhs_cached_electrostatic_jit,
-        assemble_rhs_cached_jit,
-    )
-
-    term_cfg = linear_terms_to_term_config(terms)
-
-    if use_jit:
-        rhs_fn = (
-            assemble_rhs_cached_electrostatic_jit
-            if force_electrostatic_fields
-            else assemble_rhs_cached_jit
-        )
-        dG, fields = rhs_fn(G, cache, params, term_cfg, dt)
-    else:
-        dG, fields = assemble_rhs_cached(
-            G,
-            cache,
-            params,
-            terms=term_cfg,
-            use_custom_vjp=use_custom_vjp,
-            dt=dt,
-            force_electrostatic_fields=force_electrostatic_fields,
-        )
-    return dG, fields.phi
 
 
 def _integrate_linear_cached_impl(

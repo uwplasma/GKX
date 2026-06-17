@@ -45,6 +45,7 @@ from spectraxgk.operators.linear.params import (
     linear_terms_to_term_config,
     term_config_to_linear_terms,
 )
+from spectraxgk.operators.linear.rhs import linear_rhs, linear_rhs_cached
 from spectraxgk.operators.linear.streaming import hermite_streaming
 
 __all__ = [
@@ -80,6 +81,8 @@ __all__ = [
     "hypercollision_damping",
     "lenard_bernstein_eigenvalues",
     "linear_terms_to_term_config",
+    "linear_rhs",
+    "linear_rhs_cached",
     "quasineutrality_phi",
     "shift_axis",
     "streaming_term",
