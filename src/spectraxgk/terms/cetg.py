@@ -15,7 +15,7 @@ from spectraxgk.solvers.time.explicit import (
     _instantaneous_growth_rate_step,
     _diagnostic_midplane_index,
 )
-from spectraxgk.grids import SpectralGrid
+from spectraxgk.core.grid import SpectralGrid
 from spectraxgk.workflows.runtime.config import RuntimeConfig
 from spectraxgk.terms.config import FieldState, TermConfig
 from spectraxgk.terms.integrators import _SSPX3_ADT, _SSPX3_W1, _SSPX3_W2, _SSPX3_W3

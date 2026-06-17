@@ -14,7 +14,7 @@ import numpy as np
 
 from spectraxgk.config import InitializationConfig, KineticElectronBaseCase
 from spectraxgk.geometry import FluxTubeGeometryLike
-from spectraxgk.grids import SpectralGrid
+from spectraxgk.core.grid import SpectralGrid
 
 
 __all__ = [

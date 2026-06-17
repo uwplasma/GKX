@@ -21,7 +21,7 @@ from spectraxgk.benchmarks import (
     run_etg_linear,
 )
 from spectraxgk.geometry import SAlphaGeometry
-from spectraxgk.grids import build_spectral_grid
+from spectraxgk.core.grid import build_spectral_grid
 from spectraxgk.workflows.runtime.toml import (
     load_case_from_toml,
     load_krylov_from_toml,

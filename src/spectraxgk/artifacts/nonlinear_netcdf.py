@@ -12,7 +12,7 @@ from spectraxgk.geometry import (
     apply_geometry_grid_defaults,
     ensure_flux_tube_geometry_data,
 )
-from spectraxgk.grids import (
+from spectraxgk.core.grid import (
     build_spectral_grid,
     real_fft_ordered_kx,
     real_fft_unique_ky,

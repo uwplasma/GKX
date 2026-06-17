@@ -8,7 +8,7 @@ from spectraxgk.diagnostics.analysis import ModeSelection, ModeSelectionBatch
 from spectraxgk.config import TimeConfig
 from spectraxgk.solvers.time.diffrax import integrate_linear_diffrax, integrate_nonlinear_diffrax
 from spectraxgk.geometry import FluxTubeGeometryLike
-from spectraxgk.grids import SpectralGrid
+from spectraxgk.core.grid import SpectralGrid
 from spectraxgk.linear import integrate_linear
 from spectraxgk.operators.linear.cache import LinearCache, build_linear_cache
 from spectraxgk.operators.linear.params import LinearParams, LinearTerms

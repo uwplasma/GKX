@@ -8,7 +8,7 @@ import jax
 import jax.numpy as jnp
 
 from spectraxgk.core.velocity import bessel_j0, bessel_j1
-from spectraxgk.grids import real_fft_mesh
+from spectraxgk.core.grid import real_fft_mesh
 
 def _fft2_xy(x: jnp.ndarray) -> jnp.ndarray:
     return jnp.fft.fft2(x, axes=(-3, -2))

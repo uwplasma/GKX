@@ -53,7 +53,7 @@ from spectraxgk.validation.benchmarks.scan import (
 from spectraxgk.config import KineticElectronBaseCase, TimeConfig
 from spectraxgk.solvers.time.diffrax import integrate_linear_diffrax_streaming
 from spectraxgk.geometry import SAlphaGeometry
-from spectraxgk.grids import build_spectral_grid, select_ky_grid
+from spectraxgk.core.grid import build_spectral_grid, select_ky_grid
 from spectraxgk.linear import integrate_linear, integrate_linear_diagnostics
 from spectraxgk.operators.linear.cache import build_linear_cache
 from spectraxgk.operators.linear.params import (

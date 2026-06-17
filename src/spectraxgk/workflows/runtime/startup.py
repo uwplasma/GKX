@@ -16,7 +16,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from spectraxgk.geometry import FluxTubeGeometryLike, build_flux_tube_geometry
-from spectraxgk.grids import SpectralGrid
+from spectraxgk.core.grid import SpectralGrid
 from spectraxgk.operators.linear.cache import build_linear_cache
 from spectraxgk.operators.linear.params import (
     LinearParams,

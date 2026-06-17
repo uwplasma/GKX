@@ -59,7 +59,7 @@ from spectraxgk.geometry import (
     apply_geometry_grid_defaults,
     build_flux_tube_geometry,
 )
-from spectraxgk.grids import build_spectral_grid, select_ky_grid
+from spectraxgk.core.grid import build_spectral_grid, select_ky_grid
 from spectraxgk.solvers.time.explicit import (
     ExplicitTimeConfig,
     integrate_linear_explicit_diagnostics,

@@ -17,7 +17,7 @@ from spectraxgk.diagnostics.analysis import (
     fit_growth_rate_auto,
 )
 from spectraxgk.benchmarks import LinearRunResult, LinearScanResult
-from spectraxgk.grids import SpectralGrid, build_spectral_grid
+from spectraxgk.core.grid import SpectralGrid, build_spectral_grid
 from spectraxgk.validation.gates import (
     BranchContinuationMetrics,
     DiagnosticTimeSeries,

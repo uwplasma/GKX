@@ -9,7 +9,7 @@ import numpy as np
 
 from spectraxgk.diagnostics.analysis import select_ky_index
 from spectraxgk.config import resolve_cfl_fac
-from spectraxgk.grids import SpectralGrid
+from spectraxgk.core.grid import SpectralGrid
 from spectraxgk.workflows.runtime.config import RuntimeConfig
 
 __all__ = [

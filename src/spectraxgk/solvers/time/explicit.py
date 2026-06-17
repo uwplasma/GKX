@@ -13,7 +13,7 @@ from numpy.polynomial.laguerre import laggauss
 
 from spectraxgk.diagnostics import SimulationDiagnostics
 from spectraxgk.geometry import FluxTubeGeometryLike, ensure_flux_tube_geometry_data
-from spectraxgk.grids import SpectralGrid
+from spectraxgk.core.grid import SpectralGrid
 from spectraxgk.operators.linear.cache import LinearCache
 from spectraxgk.operators.linear.params import (
     LinearParams,

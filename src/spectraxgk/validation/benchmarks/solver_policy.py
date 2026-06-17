@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Sequence
 
-from spectraxgk.grids import SpectralGrid
+from spectraxgk.core.grid import SpectralGrid
 from spectraxgk.solvers.linear.krylov import KrylovConfig
 
 

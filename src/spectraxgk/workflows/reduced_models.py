@@ -10,7 +10,7 @@ import numpy as np
 
 from spectraxgk.diagnostics.analysis import ModeSelection, select_ky_index
 from spectraxgk.geometry import apply_geometry_grid_defaults
-from spectraxgk.grids import build_spectral_grid, select_ky_grid
+from spectraxgk.core.grid import build_spectral_grid, select_ky_grid
 from spectraxgk.workflows.runtime.config import RuntimeConfig
 from spectraxgk.workflows.runtime.policies import _midplane_index, _normalize_linear_solver_name
 from spectraxgk.workflows.runtime.results import RuntimeLinearResult, RuntimeNonlinearResult

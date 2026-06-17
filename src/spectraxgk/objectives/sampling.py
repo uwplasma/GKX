@@ -7,7 +7,7 @@ from typing import Any, cast
 import numpy as np
 
 from spectraxgk.config import GridConfig
-from spectraxgk.grids import build_spectral_grid
+from spectraxgk.core.grid import build_spectral_grid
 
 
 def _surface_index_tuple(value: int | None | tuple[int | None, ...] | list[int | None]) -> tuple[int | None, ...]:
