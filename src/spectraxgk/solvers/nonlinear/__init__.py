@@ -16,6 +16,7 @@ from spectraxgk.solvers.nonlinear.imex import (
     make_imex_diagnostic_step,
     make_imex_nonlinear_term,
     make_imex_solve_step,
+    run_imex_diagnostic_scan,
     solve_imex_step,
 )
 
@@ -31,5 +32,6 @@ __all__ = [
     "make_imex_diagnostic_step",
     "make_imex_nonlinear_term",
     "make_imex_solve_step",
+    "run_imex_diagnostic_scan",
     "solve_imex_step",
 ]

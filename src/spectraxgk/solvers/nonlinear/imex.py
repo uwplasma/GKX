@@ -34,6 +34,7 @@ DiagnosticStepFn = Callable[
     [tuple[Any, Any, Any, Any, Any], Any],
     tuple[tuple[Any, Any, Any, Any, Any], tuple[Any, Any]],
 ]
+DiagnosticScanOutput = tuple[jnp.ndarray, tuple[Any, Any]]
 
 
 def imex_fixed_point_guess(
@@ -307,6 +308,29 @@ def make_imex_diagnostic_step(
     return step
 
 
+def run_imex_diagnostic_scan(
+    step_fn: DiagnosticStepFn,
+    initial_carry: tuple[Any, Any, Any, Any, Any],
+    *,
+    steps: int,
+    checkpoint: bool,
+) -> DiagnosticScanOutput:
+    """Run the fixed-step IMEX diagnostic scan."""
+
+    scan_step = jax.checkpoint(step_fn) if checkpoint else step_fn
+    idx = jnp.arange(steps, dtype=jnp.int32)
+    (
+        (G_final, _G_prev_last, _fields_prev_last, _diag_last, _t_last),
+        scan_diag_out,
+    ) = jax.lax.scan(
+        scan_step,
+        initial_carry,
+        idx,
+        length=steps,
+    )
+    return G_final, scan_diag_out
+
+
 def integrate_cached_imex_scan(
     G0: jnp.ndarray,
     cache: object,
@@ -423,5 +447,6 @@ __all__ = [
     "make_imex_diagnostic_step",
     "make_imex_nonlinear_term",
     "make_imex_solve_step",
+    "run_imex_diagnostic_scan",
     "solve_imex_step",
 ]

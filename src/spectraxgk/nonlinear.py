@@ -81,6 +81,7 @@ from spectraxgk.solvers.nonlinear.imex import (
     make_imex_diagnostic_step,
     make_imex_nonlinear_term,
     make_imex_solve_step,
+    run_imex_diagnostic_scan,
     solve_imex_step,
 )
 from spectraxgk.nonlinear_helpers import (
@@ -867,25 +868,21 @@ def integrate_nonlinear_imex_diagnostics(
         apply_collision_split_fn=_apply_collision_split,
     )
 
-    step_fn = jax.checkpoint(step) if checkpoint else step
     diag_zero = _compute_diag_from_state(G0, fields0, G0, fields0, dt_val)
-    idx = jnp.arange(steps, dtype=jnp.int32)
-    (G_final, _G_prev_last, _fields_prev_last, _diag_last, _t_last), diag_out = (
-        jax.lax.scan(
-            step_fn,
-            (
-                G0,
-                G0,
-                fields0,
-                diag_zero,
-                jnp.asarray(0.0, dtype=real_dtype),
-            ),
-            idx,
-            length=steps,
-        )
+    _G_final, scan_diag_out = run_imex_diagnostic_scan(
+        step,
+        (
+            G0,
+            G0,
+            fields0,
+            diag_zero,
+            jnp.asarray(0.0, dtype=real_dtype),
+        ),
+        steps=steps,
+        checkpoint=checkpoint,
     )
 
-    diag, t = diag_out
+    diag, t = scan_diag_out
     dt_series = jnp.ones_like(t) * dt_val
 
     stride = int(max(sample_stride, diagnostics_stride, 1))
