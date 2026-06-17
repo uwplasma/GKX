@@ -1,6 +1,6 @@
 """Spectral nonlinear parallelization kernels and work models.
 
-These helpers back the public ``spectraxgk.nonlinear_parallel`` facade. They
+These helpers back the public ``spectraxgk.operators.nonlinear.parallel`` facade. They
 remain diagnostic and identity-gated: passing local spectral-core checks is a
 precondition for timing or routing experiments, not a production nonlinear
 speedup claim by itself.
@@ -15,7 +15,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.nonlinear_parallel_contracts import (
+from spectraxgk.operators.nonlinear.parallel_contracts import (
     NonlinearSpectralDevicePencilFFTBatchModel,
     NonlinearSpectralDomainWorkModel,
     NonlinearSpectralPencilWorkModel,

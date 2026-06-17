@@ -2,7 +2,7 @@
 
 This module is intentionally free of numerical kernels.  It owns immutable
 contracts, JSON-friendly reports, and fail-closed policy helpers used by the
-``spectraxgk.nonlinear_parallel`` facade.
+``spectraxgk.operators.nonlinear.parallel`` facade.
 """
 
 from __future__ import annotations

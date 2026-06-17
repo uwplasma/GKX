@@ -107,7 +107,7 @@ from spectraxgk.validation.quasilinear.window import (
     nonlinear_window_ensemble_report,
     nonlinear_window_stats_promotion_ready,
 )
-from spectraxgk.nonlinear_transport_optimization import (
+from spectraxgk.validation.nonlinear_transport.optimization_guard import (
     ProductionNonlinearOptimizationGuardConfig,
     matched_optimized_transport_report,
     optimized_equilibrium_transport_report,
@@ -247,7 +247,7 @@ from spectraxgk.parallel_decomposition import (
     serial_reconstruction_identity_report,
     shard_sequence,
 )
-from spectraxgk.nonlinear_parallel import (
+from spectraxgk.operators.nonlinear.parallel import (
     NonlinearDomainDecompositionPlan,
     NonlinearDomainIdentityReport,
     NonlinearDomainTransportWindowReport,

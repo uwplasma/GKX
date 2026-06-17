@@ -5,7 +5,7 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 
-from spectraxgk.nonlinear_parallel_contracts import (
+from spectraxgk.operators.nonlinear.parallel_contracts import (
     NonlinearSpectralCommunicationReport,
     NonlinearSpectralIntegratorIdentityReport,
     NonlinearSpectralRHSIdentityReport,

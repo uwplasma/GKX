@@ -57,7 +57,7 @@ from spectraxgk.operators.nonlinear.diagnostic_state import (
     NonlinearDiagnosticKernels,
     make_nonlinear_diagnostic_tuple_fn,
 )
-from spectraxgk.nonlinear_diagnostics import (
+from spectraxgk.operators.nonlinear.diagnostics import (
     _pack_resolved_diagnostics,  # noqa: F401 - compatibility re-export
     _sample_axis0,  # noqa: F401 - compatibility re-export
     _sample_indices_with_final,  # noqa: F401 - compatibility re-export
@@ -86,7 +86,7 @@ from spectraxgk.solvers.nonlinear.imex import (
     run_imex_diagnostic_scan,
     solve_imex_step,
 )
-from spectraxgk.nonlinear_helpers import (
+from spectraxgk.operators.nonlinear.policies import (
     IMEXLinearOperator,
     NonlinearCollisionSplitPolicy,  # noqa: F401 - compatibility re-export
     NonlinearDiagnosticSetup,  # noqa: F401 - compatibility re-export

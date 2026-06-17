@@ -45,7 +45,7 @@ from spectraxgk.netcdf_spectral_layout import (
     _take_axis as _take_axis,
     _write_runtime_root_metadata as _write_runtime_root_metadata,
 )
-from spectraxgk.nonlinear_output_netcdf import (
+from spectraxgk.artifacts.nonlinear_netcdf import (
     _build_output_grid_and_geometry as _build_output_grid_and_geometry,
     _particle_moments as _particle_moments,
     _write_geometry_group as _write_geometry_group,
