@@ -10,7 +10,7 @@ import numpy as np
 from spectraxgk.analysis import select_ky_index
 from spectraxgk.config import resolve_cfl_fac
 from spectraxgk.grids import SpectralGrid
-from spectraxgk.runtime_config import RuntimeConfig
+from spectraxgk.workflows.runtime.config import RuntimeConfig
 
 __all__ = [
     "RuntimeIndependentParallelPlan",

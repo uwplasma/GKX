@@ -38,7 +38,7 @@ from spectraxgk.plotting import (
     scan_comparison_figure,
     set_plot_style,
 )
-from spectraxgk.runtime_artifacts import (
+from spectraxgk.workflows.runtime.artifacts import (
     run_runtime_nonlinear_with_artifacts,
     write_quasilinear_artifacts,
     write_runtime_linear_artifacts,

@@ -14,7 +14,7 @@ from spectraxgk.geometry_backends.vmec import (
     generate_vmec_eik_internal,
     internal_vmec_backend_available,
 )
-from spectraxgk.runtime_config import RuntimeConfig
+from spectraxgk.workflows.runtime.config import RuntimeConfig
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]

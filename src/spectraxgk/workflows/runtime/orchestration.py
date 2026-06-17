@@ -17,7 +17,7 @@ import numpy as np
 
 from spectraxgk.analysis import ModeSelection
 from spectraxgk.diagnostics import SimulationDiagnostics
-from spectraxgk.runtime_config import RuntimeConfig
+from spectraxgk.workflows.runtime.config import RuntimeConfig
 from spectraxgk.workflows.runtime.results import RuntimeLinearScanResult, RuntimeNonlinearResult
 
 __all__ = [

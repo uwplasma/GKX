@@ -9,7 +9,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from spectraxgk.analysis import ModeSelection
-from spectraxgk.runtime_config import RuntimeConfig
+from spectraxgk.workflows.runtime.config import RuntimeConfig
 from spectraxgk.workflows.runtime.diagnostics import RuntimeQuasilinearFinalizationDeps
 from spectraxgk.workflows.runtime.results import RuntimeLinearResult
 

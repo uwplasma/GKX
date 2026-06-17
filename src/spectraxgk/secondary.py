@@ -13,7 +13,7 @@ from spectraxgk.analysis import fit_growth_rate
 from spectraxgk.geometry import apply_geometry_grid_defaults, build_flux_tube_geometry
 from spectraxgk.grids import build_spectral_grid
 from spectraxgk.runtime import run_runtime_linear, run_runtime_nonlinear
-from spectraxgk.runtime_config import (
+from spectraxgk.workflows.runtime.config import (
     RuntimeConfig,
     RuntimeExpertConfig,
 )

@@ -36,7 +36,7 @@ from spectraxgk.solvers.linear.krylov import KrylovConfig, dominant_eigenpair
 from spectraxgk.normalization import apply_diagnostic_normalization
 from spectraxgk.parallel import independent_map
 from spectraxgk.quasilinear import compute_quasilinear_from_linear_state
-from spectraxgk.runtime_config import RuntimeConfig
+from spectraxgk.workflows.runtime.config import RuntimeConfig
 from spectraxgk.workflows.runtime import startup as runtime_startup
 from spectraxgk.workflows.runtime.diagnostics import (
     concat_runtime_diagnostics,
@@ -619,7 +619,7 @@ def _runtime_case_deps() -> RuntimeCaseDeps:
     """Build case-workflow dependencies from this module's patchable globals."""
 
     from spectraxgk.io import load_runtime_from_toml
-    from spectraxgk.runtime_artifacts import (
+    from spectraxgk.workflows.runtime.artifacts import (
         run_runtime_nonlinear_with_artifacts,
         write_runtime_linear_artifacts,
     )

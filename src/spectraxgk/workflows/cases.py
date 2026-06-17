@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, cast
 
-from spectraxgk.runtime_config import RuntimeConfig
+from spectraxgk.workflows.runtime.config import RuntimeConfig
 from spectraxgk.workflows.runtime.results import RuntimeLinearResult, RuntimeNonlinearResult
 
 RUNTIME_CASE_FIT_KEYS = {
@@ -60,7 +60,7 @@ def default_runtime_case_deps() -> RuntimeCaseDeps:
 
     from spectraxgk.io import load_runtime_from_toml
     from spectraxgk.runtime import run_runtime_linear, run_runtime_nonlinear
-    from spectraxgk.runtime_artifacts import (
+    from spectraxgk.workflows.runtime.artifacts import (
         run_runtime_nonlinear_with_artifacts,
         write_runtime_linear_artifacts,
     )

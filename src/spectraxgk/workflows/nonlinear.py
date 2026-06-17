@@ -8,7 +8,7 @@ from typing import Any, Callable
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.runtime_config import RuntimeConfig
+from spectraxgk.workflows.runtime.config import RuntimeConfig
 from spectraxgk.workflows.runtime.results import RuntimeNonlinearResult
 
 

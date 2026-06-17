@@ -16,7 +16,7 @@ from spectraxgk.explicit_time_integrators import (
     _diagnostic_midplane_index,
 )
 from spectraxgk.grids import SpectralGrid
-from spectraxgk.runtime_config import RuntimeConfig
+from spectraxgk.workflows.runtime.config import RuntimeConfig
 from spectraxgk.terms.config import FieldState, TermConfig
 from spectraxgk.terms.integrators import _SSPX3_ADT, _SSPX3_W1, _SSPX3_W2, _SSPX3_W3
 from spectraxgk.terms.nonlinear import _spectral_bracket_multi

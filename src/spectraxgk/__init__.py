@@ -60,7 +60,7 @@ from spectraxgk.runtime import (
     run_runtime_nonlinear,
     run_runtime_scan,
 )
-from spectraxgk.runtime_config import (
+from spectraxgk.workflows.runtime.config import (
     RuntimeCollisionConfig,
     RuntimeConfig,
     RuntimeNormalizationConfig,

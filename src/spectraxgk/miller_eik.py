@@ -12,7 +12,7 @@ from spectraxgk.geometry_backends.miller import (
     generate_miller_eik_internal,
     internal_miller_backend_available,
 )
-from spectraxgk.runtime_config import RuntimeConfig
+from spectraxgk.workflows.runtime.config import RuntimeConfig
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
