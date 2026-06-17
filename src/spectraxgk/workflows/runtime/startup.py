@@ -24,13 +24,13 @@ from spectraxgk.operators.linear.params import (
     linear_terms_to_term_config,
 )
 from spectraxgk.solvers.linear.krylov import KrylovConfig
-from spectraxgk.miller_eik import generate_runtime_miller_eik
+from spectraxgk.geometry.miller_eik import generate_runtime_miller_eik
 from spectraxgk.normalization import get_normalization_contract
 from spectraxgk.restart import load_netcdf_restart_state
 from spectraxgk.workflows.runtime.config import RuntimeConfig, RuntimeSpeciesConfig
 from spectraxgk.species import Species, build_linear_params
 from spectraxgk.terms.config import TermConfig
-from spectraxgk.vmec_eik import generate_runtime_vmec_eik
+from spectraxgk.geometry.vmec_eik import generate_runtime_vmec_eik
 
 _GLIBC_RAND_MAX = float((1 << 31) - 1)
 

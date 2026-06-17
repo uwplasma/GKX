@@ -3,7 +3,7 @@
 The modules in this package generate and postprocess Miller/VMEC flux-tube
 geometry into the solver-facing imported-geometry contract. They are internal
 implementation details; public callers should prefer ``spectraxgk.geometry``,
-``spectraxgk.miller_eik``, and ``spectraxgk.vmec_eik``.
+``spectraxgk.geometry.miller_eik``, and ``spectraxgk.geometry.vmec_eik``.
 """
 
 from spectraxgk.geometry_backends.miller import internal_miller_backend_available

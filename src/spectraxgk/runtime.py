@@ -105,8 +105,8 @@ from spectraxgk.workflows.reduced_models import (
     run_cetg_nonlinear_runtime,
 )
 from spectraxgk.terms.config import TermConfig
-from spectraxgk.miller_eik import generate_runtime_miller_eik
-from spectraxgk.vmec_eik import generate_runtime_vmec_eik
+from spectraxgk.geometry.miller_eik import generate_runtime_miller_eik
+from spectraxgk.geometry.vmec_eik import generate_runtime_vmec_eik
 
 _RUNTIME_CASE_FIT_KEYS = _WORKFLOW_RUNTIME_CASE_FIT_KEYS
 

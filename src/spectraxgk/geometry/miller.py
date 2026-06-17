@@ -283,7 +283,7 @@ def generate_miller_eik(
     # Jacobian and other metric elements (simplified implementation)
     # Following the formulas in the original Miller paper/script
 
-    # The package runtime uses ``spectraxgk.miller_eik`` for production Miller
+    # The package runtime uses ``spectraxgk.geometry.miller_eik`` for production Miller
     # files. This standalone helper keeps a compact NetCDF path for geometry
     # unit tests and examples that do not need the full runtime contract.
 

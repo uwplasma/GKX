@@ -17,7 +17,7 @@ from spectraxgk.geometry_backends.vmec import (
 from spectraxgk.workflows.runtime.config import RuntimeConfig
 
 
-_REPO_ROOT = Path(__file__).resolve().parents[2]
+_REPO_ROOT = Path(__file__).resolve().parents[3]
 _DEFAULT_CACHE_DIR = _REPO_ROOT / ".cache" / "spectrax" / "vmec_eik"
 _REQUIRED_EIK_VARIABLES = ("theta", "bmag", "gradpar", "q", "shat")
 
