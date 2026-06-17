@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 from spectraxgk.solvers.linear.krylov import KrylovConfig, dominant_eigenpair
+from spectraxgk.solvers.linear.implicit import (
+    _build_implicit_operator,
+    _integrate_linear_implicit_cached,
+)
 from spectraxgk.solvers.linear.parallel import (
     linear_rhs_electrostatic_slices_velocity_sharded,
     linear_rhs_parallel_cached,
@@ -12,6 +16,8 @@ from spectraxgk.solvers.linear.parallel import (
 
 __all__ = [
     "KrylovConfig",
+    "_build_implicit_operator",
+    "_integrate_linear_implicit_cached",
     "dominant_eigenpair",
     "linear_rhs_electrostatic_slices_velocity_sharded",
     "linear_rhs_parallel_cached",

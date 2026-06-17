@@ -12,7 +12,7 @@ import numpy as np
 from spectraxgk.config import resolve_cfl_fac
 from spectraxgk.geometry import FluxTubeGeometryLike, ensure_flux_tube_geometry_data
 from spectraxgk.grids import SpectralGrid
-from spectraxgk.linear import _build_implicit_operator
+from spectraxgk.solvers.linear.implicit import _build_implicit_operator
 from spectraxgk.operators.linear.cache import LinearCache, build_linear_cache
 from spectraxgk.operators.linear.params import (
     LinearParams,

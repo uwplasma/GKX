@@ -10,7 +10,7 @@ import jax
 import numpy as np
 
 from spectraxgk.grids import SpectralGrid, real_fft_mesh
-from spectraxgk.linear import _build_implicit_operator
+from spectraxgk.solvers.linear.implicit import _build_implicit_operator
 from spectraxgk.operators.linear.cache import (
     LinearCache,
     collision_damping as _base_collision_damping,
