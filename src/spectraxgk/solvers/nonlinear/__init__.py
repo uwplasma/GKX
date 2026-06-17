@@ -11,7 +11,9 @@ from spectraxgk.solvers.nonlinear.explicit import (
 )
 from spectraxgk.solvers.nonlinear.diagnostics import (
     ExplicitNonlinearDiagnosticsDeps,
+    IMEXNonlinearDiagnosticsDeps,
     integrate_explicit_nonlinear_diagnostics_impl,
+    integrate_imex_nonlinear_diagnostics_impl,
 )
 from spectraxgk.solvers.nonlinear.imex import (
     advance_imex_nonlinear_state,
@@ -30,6 +32,8 @@ __all__ = [
     "checkpoint_explicit_step",
     "ExplicitNonlinearDiagnosticsDeps",
     "integrate_explicit_nonlinear_diagnostics_impl",
+    "IMEXNonlinearDiagnosticsDeps",
+    "integrate_imex_nonlinear_diagnostics_impl",
     "integrate_cached_explicit_scan",
     "imex_fixed_point_guess",
     "make_explicit_diagnostic_step",

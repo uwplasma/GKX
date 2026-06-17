@@ -79,7 +79,9 @@ from spectraxgk.solvers.nonlinear.explicit import (
 )
 from spectraxgk.solvers.nonlinear.diagnostics import (
     ExplicitNonlinearDiagnosticsDeps,
+    IMEXNonlinearDiagnosticsDeps,
     integrate_explicit_nonlinear_diagnostics_impl,
+    integrate_imex_nonlinear_diagnostics_impl,
 )
 from spectraxgk.solvers.nonlinear.imex import (
     integrate_cached_imex_scan,
@@ -540,6 +542,37 @@ def integrate_nonlinear_explicit_diagnostics_state(
     )
 
 
+def _imex_nonlinear_diagnostics_deps() -> IMEXNonlinearDiagnosticsDeps:
+    """Collect facade-level dependencies for IMEX diagnostic integration."""
+
+    return IMEXNonlinearDiagnosticsDeps(
+        ensure_geometry_fn=ensure_flux_tube_geometry_data,
+        build_cache_fn=build_linear_cache,
+        quadrature_weights_fn=fieldline_quadrature_weights,
+        omega_mask_fn=_diagnostic_omega_mode_mask,
+        midplane_index_fn=_diagnostic_midplane_index,
+        linear_rhs_for_terms_fn=_linear_rhs_jit_for_terms,
+        build_diagnostic_setup_fn=build_nonlinear_diagnostic_setup,
+        build_imex_operator_fn=build_nonlinear_imex_operator,
+        build_collision_split_policy_fn=build_nonlinear_collision_split_policy,
+        collision_damping_fn=_collision_damping,
+        make_imex_nonlinear_term_fn=make_imex_nonlinear_term,
+        make_imex_solve_step_fn=make_imex_solve_step,
+        solve_imex_step_fn=solve_imex_step,
+        make_diagnostic_tuple_fn=make_nonlinear_diagnostic_tuple_fn,
+        make_imex_step_fn=make_imex_diagnostic_step,
+        run_imex_scan_fn=run_imex_diagnostic_scan,
+        finalize_scan_diagnostics_fn=finalize_nonlinear_scan_diagnostics,
+        select_step_diagnostics_fn=select_nonlinear_step_diagnostics,
+        emit_progress_fn=maybe_emit_nonlinear_progress,
+        apply_collision_split_fn=_apply_collision_split,
+        compute_fields_fn=compute_fields_cached,
+        nonlinear_term_fn=nonlinear_em_term_cached_impl,
+        nonlinear_contribution_fn=nonlinear_em_contribution,
+        diagnostic_kernels_fn=_nonlinear_diagnostic_kernels,
+    )
+
+
 def integrate_nonlinear_imex_diagnostics(
     G0: jnp.ndarray,
     grid: SpectralGrid,
@@ -578,173 +611,42 @@ def integrate_nonlinear_imex_diagnostics(
 ) -> tuple[jnp.ndarray, SimulationDiagnostics]:
     """IMEX nonlinear integrator with runtime diagnostics."""
 
-    term_cfg = terms or TermConfig()
-    linear_cfg = replace(term_cfg, nonlinear=0.0)
-    if collision_split:
-        linear_cfg = replace(linear_cfg, collisions=0.0, hypercollisions=0.0)
-    linear_rhs_fn = _linear_rhs_jit_for_terms(linear_cfg)
-
-    setup = build_nonlinear_diagnostic_setup(
+    return integrate_imex_nonlinear_diagnostics_impl(
         G0,
         grid,
         geom,
         params,
+        dt,
+        steps,
+        deps=_imex_nonlinear_diagnostics_deps(),
+        method=method,
         cache=cache,
+        terms=terms,
+        checkpoint=checkpoint,
+        sample_stride=sample_stride,
+        diagnostics_stride=diagnostics_stride,
         use_dealias_mask=use_dealias_mask,
         z_index=z_index,
         compressed_real_fft=compressed_real_fft,
-        fixed_mode_ky_index=fixed_mode_ky_index,
-        fixed_mode_kx_index=fixed_mode_kx_index,
-        ensure_geometry_fn=ensure_flux_tube_geometry_data,
-        build_cache_fn=build_linear_cache,
-        quadrature_weights_fn=fieldline_quadrature_weights,
-        omega_mask_fn=_diagnostic_omega_mode_mask,
-        midplane_index_fn=_diagnostic_midplane_index,
-    )
-    cache = setup.cache
-    _project_state = setup.project_state
-
-    initial_state_dtype = jnp.result_type(G0, jnp.complex64)
-    G0 = jnp.asarray(G0, dtype=initial_state_dtype)
-    G0 = _project_state(G0)
-
-    implicit_operator = build_nonlinear_imex_operator(
-        G0,
-        cache,
-        params,
-        dt,
-        terms=linear_cfg,
-        implicit_preconditioner=implicit_preconditioner,
-        compressed_real_fft=compressed_real_fft,
-    )
-
-    # Keep the scan carry in the same dtype as the implicit operator, especially
-    # under x64 where the operator promotes complex64 inputs to complex128.
-    state_dtype = implicit_operator.state_dtype
-    G0 = jnp.asarray(G0, dtype=state_dtype)
-    real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
-    dt_val = jnp.asarray(dt, dtype=real_dtype)
-    progress_total = jnp.asarray(float(steps) * float(dt), dtype=real_dtype)
-
-    squeeze_species = implicit_operator.squeeze_species
-    if squeeze_species and G0.ndim == len(implicit_operator.shape) - 1:
-        G0 = G0[None, ...]
-    collision_policy = build_nonlinear_collision_split_policy(
-        cache,
-        params,
-        term_cfg,
-        real_dtype,
-        squeeze_species=squeeze_species,
-        collision_split=collision_split,
-        collision_damping_fn=_collision_damping,
-    )
-
-    nonlinear_term = make_imex_nonlinear_term(
-        cache,
-        params,
-        term_cfg,
-        real_dtype=real_dtype,
-        external_phi=external_phi,
-        compressed_real_fft=compressed_real_fft,
         laguerre_mode=laguerre_mode,
-        fields_fn=compute_fields_cached,
-        nonlinear_term_fn=nonlinear_em_term_cached_impl,
-        nonlinear_contribution_fn=nonlinear_em_contribution,
-    )
-    solve_step = make_imex_solve_step(
-        linear_rhs_fn=linear_rhs_fn,
-        cache=cache,
-        params=params,
-        linear_cfg=linear_cfg,
-        external_phi=external_phi,
-        dt_val=dt_val,
-        implicit_iters=implicit_iters,
-        implicit_relax=implicit_relax,
-        matvec=implicit_operator.matvec,
-        shape=implicit_operator.shape,
-        implicit_tol=implicit_tol,
-        implicit_maxiter=implicit_maxiter,
-        implicit_restart=implicit_restart,
-        implicit_solve_method=implicit_solve_method,
-        precond_op=implicit_operator.precond_op,
-        solve_step_fn=solve_imex_step,
-    )
-
-    _compute_diag_from_state = make_nonlinear_diagnostic_tuple_fn(
-        grid=grid,
-        cache=cache,
-        params=params,
-        vol_fac=setup.vol_fac,
-        flux_fac=setup.flux_fac,
-        mask=setup.mask,
-        z_idx=setup.z_idx,
-        use_dealias=setup.use_dealias,
-        real_dtype=real_dtype,
         omega_ky_index=omega_ky_index,
         omega_kx_index=omega_kx_index,
         flux_scale=flux_scale,
         wphi_scale=wphi_scale,
-        resolved_diagnostics=True,
-        kernels=_nonlinear_diagnostic_kernels(),
-    )
-
-    fields0 = compute_fields_cached(
-        G0, cache, params, terms=term_cfg, external_phi=external_phi
-    )
-
-    step = make_imex_diagnostic_step(
-        method=method,
-        nonlinear_term=nonlinear_term,
-        solve_step=solve_step,
-        project_state=_project_state,
-        state_dtype=state_dtype,
-        real_dtype=real_dtype,
-        dt_val=dt_val,
-        compute_fields_fn=compute_fields_cached,
-        cache=cache,
-        params=params,
-        term_cfg=term_cfg,
-        external_phi=external_phi,
-        compute_diag_from_state=_compute_diag_from_state,
-        diagnostics_stride=diagnostics_stride,
-        select_diagnostics_fn=select_nonlinear_step_diagnostics,
-        show_progress=show_progress,
-        steps=steps,
-        progress_total=progress_total,
-        emit_progress_fn=maybe_emit_nonlinear_progress,
-        use_collision_split=collision_policy.active,
-        damping=collision_policy.damping,
+        collision_split=collision_split,
         collision_scheme=collision_scheme,
-        apply_collision_split_fn=_apply_collision_split,
+        implicit_tol=implicit_tol,
+        implicit_maxiter=implicit_maxiter,
+        implicit_iters=implicit_iters,
+        implicit_relax=implicit_relax,
+        implicit_restart=implicit_restart,
+        implicit_solve_method=implicit_solve_method,
+        implicit_preconditioner=implicit_preconditioner,
+        fixed_mode_ky_index=fixed_mode_ky_index,
+        fixed_mode_kx_index=fixed_mode_kx_index,
+        external_phi=external_phi,
+        show_progress=show_progress,
     )
-
-    diag_zero = _compute_diag_from_state(G0, fields0, G0, fields0, dt_val)
-    _G_final, scan_diag_out = run_imex_diagnostic_scan(
-        step,
-        (
-            G0,
-            G0,
-            fields0,
-            diag_zero,
-            jnp.asarray(0.0, dtype=real_dtype),
-        ),
-        steps=steps,
-        checkpoint=checkpoint,
-    )
-
-    diag, t = scan_diag_out
-    dt_series = jnp.ones_like(t) * dt_val
-
-    stride = int(max(sample_stride, diagnostics_stride, 1))
-    diag_out = finalize_nonlinear_scan_diagnostics(
-        diag,
-        t=t,
-        dt_series=dt_series,
-        stride=stride,
-        resolved_diagnostics=True,
-        resolved_to_numpy=True,
-    )
-    return jnp.asarray(diag_out.t), diag_out
 
 
 def integrate_nonlinear_imex_cached(
