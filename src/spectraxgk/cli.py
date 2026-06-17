@@ -31,7 +31,7 @@ from spectraxgk.workflows.runtime.toml import (
     resolve_runtime_path,
 )
 from spectraxgk._version import __version__
-from spectraxgk.plotting import (
+from spectraxgk.artifacts.plotting import (
     growth_fit_figure,
     linear_runtime_panel_figure,
     plot_saved_output,

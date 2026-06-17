@@ -455,7 +455,7 @@ from spectraxgk.objectives.solver_gradients import (
     vmec_boozer_solver_objective_table_with_metadata_from_state,
     vmec_boozer_solver_objective_vector_from_state,
 )
-from spectraxgk.plotting import (
+from spectraxgk.artifacts.plotting import (
     cyclone_comparison_figure,
     cyclone_reference_figure,
     etg_trend_figure,
