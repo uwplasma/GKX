@@ -23,13 +23,13 @@ from spectraxgk.operators.linear.rhs import linear_rhs_cached
 from spectraxgk.operators.linear.cache import build_linear_cache
 from spectraxgk.operators.linear.params import LinearParams, LinearTerms
 from spectraxgk.quasilinear import effective_kperp2, phi_norm2
-from spectraxgk.solver_geometry_objectives import (
+from spectraxgk.objectives.geometry import (
     SOLVER_GEOMETRY_PARAMETER_NAMES,
     _objective_gate_rows,
     default_solver_geometry_design_params,
     solver_ready_geometry_mapping,
 )
-from spectraxgk.solver_objective_core import (
+from spectraxgk.objectives.core import (
     SOLVER_OBJECTIVE_NAMES,
     solver_objective_vector_from_geometry,
     _default_gradient_linear_params,

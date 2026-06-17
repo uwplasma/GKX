@@ -9,12 +9,12 @@ import jax.numpy as jnp
 import numpy as np
 
 from spectraxgk.geometry.vmec_boozer_core import flux_tube_geometry_from_vmec_boozer_state
-from spectraxgk.solver_objective_core import (
+from spectraxgk.objectives.core import (
     SolverScalarObjective,
     solver_objective_vector_from_geometry,
     solver_scalar_objective_from_vector,
 )
-from spectraxgk.solver_objective_sampling import (
+from spectraxgk.objectives.sampling import (
     _aggregate_weights,
     _float_tuple,
     _ky_sample_axis,

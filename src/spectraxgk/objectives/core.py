@@ -15,7 +15,7 @@ from spectraxgk.operators.linear.rhs import linear_rhs_cached
 from spectraxgk.operators.linear.cache import build_linear_cache
 from spectraxgk.operators.linear.params import LinearParams, LinearTerms
 from spectraxgk.quasilinear import effective_kperp2, phi_norm2
-from spectraxgk.solver_eigen_objectives import dominant_real_eigenvalue
+from spectraxgk.objectives.eigen import dominant_real_eigenvalue
 
 
 SOLVER_OBJECTIVE_NAMES = (

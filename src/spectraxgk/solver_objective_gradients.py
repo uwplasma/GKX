@@ -14,7 +14,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from spectraxgk.geometry.vmec_boozer_core import flux_tube_geometry_from_vmec_boozer_state
-from spectraxgk.solver_objective_core import (
+from spectraxgk.objectives.core import (
     SOLVER_OBJECTIVE_NAMES,
     SolverScalarObjective,
     solver_growth_rate_from_geometry,
@@ -22,11 +22,11 @@ from spectraxgk.solver_objective_core import (
     solver_objective_vector_from_geometry,
     solver_scalar_objective_from_vector,
 )
-from spectraxgk.solver_eigen_objectives import (
+from spectraxgk.objectives.eigen import (
     dominant_eigenvalue_branch_locality_report,
     dominant_real_eigenvalue,
 )
-from spectraxgk.solver_geometry_objectives import (
+from spectraxgk.objectives.geometry import (
     SOLVER_GEOMETRY_PARAMETER_NAMES,
     TINY_OBJECTIVE_NAMES,
     _objective_gate_rows,
@@ -34,11 +34,11 @@ from spectraxgk.solver_geometry_objectives import (
     solver_ready_geometry_mapping,
     tiny_differentiable_objective_gradient_report,
 )
-from spectraxgk.solver_ready_gradient_gates import (
+from spectraxgk.objectives.gradient_gates import (
     linear_solver_geometry_gradient_report as _linear_solver_geometry_gradient_report_impl,
     solver_objective_branch_gradient_report as _solver_objective_branch_gradient_report_impl,
 )
-from spectraxgk.solver_vmec_boozer_gradient_gates import (
+from spectraxgk.objectives.vmec_boozer_gradients import (
     VMEC_BOOZER_FREQUENCY_OBJECTIVE_NAMES,
     VMEC_BOOZER_NONLINEAR_WINDOW_OBJECTIVE_NAMES,
     VMEC_BOOZER_QUASILINEAR_OBJECTIVE_NAMES,
@@ -48,21 +48,21 @@ from spectraxgk.solver_vmec_boozer_gradient_gates import (
     mode21_vmec_boozer_nonlinear_window_gradient_report as _mode21_vmec_boozer_nonlinear_window_gradient_report_impl,
     mode21_vmec_boozer_quasilinear_gradient_report as _mode21_vmec_boozer_quasilinear_gradient_report_impl,
 )
-from spectraxgk.solver_vmec_boozer_fd_gates import (
+from spectraxgk.objectives.vmec_boozer_fd import (
     _load_vmec_jax_example_state_bundle as _load_vmec_jax_example_state_bundle_impl,
     _report_float as _report_float_impl,
     vmec_boozer_aggregate_scalar_objective_finite_difference_report as _vmec_boozer_aggregate_scalar_objective_finite_difference_report_impl,
     vmec_boozer_scalar_objective_finite_difference_report as _vmec_boozer_scalar_objective_finite_difference_report_impl,
 )
-from spectraxgk.solver_vmec_boozer_line_search_gates import (
+from spectraxgk.objectives.vmec_boozer_line_search import (
     vmec_boozer_aggregate_line_search_holdout_report as _vmec_boozer_aggregate_line_search_holdout_report_impl,
     vmec_boozer_aggregate_scalar_objective_line_search_report as _vmec_boozer_aggregate_scalar_objective_line_search_report_impl,
     vmec_boozer_scalar_objective_line_search_report as _vmec_boozer_scalar_objective_line_search_report_impl,
 )
-from spectraxgk.solver_nonlinear_window_objective import (
+from spectraxgk.objectives.nonlinear_window import (
     _reduced_nonlinear_window_metrics_from_linear_observables,
 )
-from spectraxgk.solver_objective_sampling import (
+from spectraxgk.objectives.sampling import (
     _aggregate_sample_metadata,
     _aggregate_weights,
     _float_tuple,
@@ -72,25 +72,25 @@ from spectraxgk.solver_objective_sampling import (
     _surface_sample_axis,
     solver_grid_options_from_ky_values,
 )
-from spectraxgk.solver_vmec_boozer_objectives import (
+from spectraxgk.objectives.vmec_boozer import (
     _split_vmec_boozer_objective_kwargs as _split_vmec_boozer_objective_kwargs_impl,
 )
-from spectraxgk.solver_vmec_boozer_objectives import (
+from spectraxgk.objectives.vmec_boozer import (
     vmec_boozer_aggregate_scalar_objective_from_state as _vmec_boozer_aggregate_scalar_objective_from_state_impl,
 )
-from spectraxgk.solver_vmec_boozer_objectives import (
+from spectraxgk.objectives.vmec_boozer import (
     vmec_boozer_scalar_objective_from_state as _vmec_boozer_scalar_objective_from_state_impl,
 )
-from spectraxgk.solver_vmec_boozer_objectives import (
+from spectraxgk.objectives.vmec_boozer import (
     vmec_boozer_solver_objective_table_from_state as _vmec_boozer_solver_objective_table_from_state_impl,
 )
-from spectraxgk.solver_vmec_boozer_objectives import (
+from spectraxgk.objectives.vmec_boozer import (
     vmec_boozer_solver_objective_table_with_metadata_from_state as _vmec_boozer_solver_objective_table_with_metadata_from_state_impl,
 )
-from spectraxgk.solver_vmec_boozer_objectives import (
+from spectraxgk.objectives.vmec_boozer import (
     vmec_boozer_solver_objective_vector_from_state as _vmec_boozer_solver_objective_vector_from_state_impl,
 )
-from spectraxgk.solver_vmec_state import (
+from spectraxgk.objectives.vmec_state import (
     VMEC_BOOZER_STATE_PARAMETER_FAMILIES,
     VMEC_BOOZER_STATE_PARAMETER_NAMES,
     _replace_vmec_boozer_state_coefficient,

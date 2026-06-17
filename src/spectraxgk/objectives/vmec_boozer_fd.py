@@ -8,23 +8,23 @@ from typing import Any, Literal, cast
 import numpy as np
 
 from spectraxgk.geometry.backend_discovery import discover_differentiable_geometry_backends
-from spectraxgk.solver_objective_core import (
+from spectraxgk.objectives.core import (
     SOLVER_OBJECTIVE_NAMES,
     SolverScalarObjective,
     solver_scalar_objective_from_vector,
 )
-from spectraxgk.solver_objective_sampling import (
+from spectraxgk.objectives.sampling import (
     _aggregate_weights,
     _float_tuple,
     _int_tuple,
     _surface_sample_axis,
     solver_grid_options_from_ky_values,
 )
-from spectraxgk.solver_vmec_boozer_objectives import (
+from spectraxgk.objectives.vmec_boozer import (
     vmec_boozer_solver_objective_table_with_metadata_from_state,
     vmec_boozer_solver_objective_vector_from_state,
 )
-from spectraxgk.solver_vmec_state import (
+from spectraxgk.objectives.vmec_state import (
     _replace_vmec_boozer_state_coefficient,
     _vmec_boozer_state_array,
     _vmec_boozer_state_parameter_name,

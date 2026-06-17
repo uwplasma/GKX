@@ -31,10 +31,10 @@ from spectraxgk.geometry.vmec_boozer_core import (
     flux_tube_geometry_from_vmec_boozer_state,
     prewarm_vmec_boozer_equal_arc_cache,
 )
-from spectraxgk.solver_eigen_objectives import (
+from spectraxgk.objectives.eigen import (
     dominant_eigenvalue_branch_locality_report,
 )
-from spectraxgk.solver_objective_core import (
+from spectraxgk.objectives.core import (
     SOLVER_OBJECTIVE_NAMES,
     solver_growth_rate_from_geometry,
     solver_linear_operator_matrix_from_geometry,

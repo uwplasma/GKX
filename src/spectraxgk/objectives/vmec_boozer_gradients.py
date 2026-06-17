@@ -24,15 +24,15 @@ from spectraxgk.grids import build_spectral_grid, select_ky_grid
 from spectraxgk.operators.linear.rhs import linear_rhs_cached
 from spectraxgk.operators.linear.cache import build_linear_cache
 from spectraxgk.quasilinear import effective_kperp2, phi_norm2
-from spectraxgk.solver_geometry_objectives import _objective_gate_rows
-from spectraxgk.solver_nonlinear_window_objective import (
+from spectraxgk.objectives.geometry import _objective_gate_rows
+from spectraxgk.objectives.nonlinear_window import (
     _reduced_nonlinear_window_metrics_from_linear_observables,
 )
-from spectraxgk.solver_objective_core import (
+from spectraxgk.objectives.core import (
     _default_gradient_linear_params,
     _default_gradient_linear_terms,
 )
-from spectraxgk.solver_vmec_state import (
+from spectraxgk.objectives.vmec_state import (
     _replace_vmec_boozer_state_coefficient,
     _vmec_boozer_state_array,
     _vmec_boozer_state_parameter_name,

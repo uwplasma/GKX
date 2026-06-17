@@ -6,8 +6,8 @@ from typing import Any, Literal, cast
 
 import numpy as np
 
-from spectraxgk.solver_objective_core import SolverScalarObjective
-from spectraxgk.solver_vmec_boozer_fd_gates import (
+from spectraxgk.objectives.core import SolverScalarObjective
+from spectraxgk.objectives.vmec_boozer_fd import (
     _report_float,
     vmec_boozer_aggregate_scalar_objective_finite_difference_report,
     vmec_boozer_scalar_objective_finite_difference_report,
