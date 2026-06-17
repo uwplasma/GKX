@@ -81,6 +81,7 @@ from spectraxgk.solvers.nonlinear.imex import (
 from spectraxgk.nonlinear_helpers import (
     IMEXLinearOperator,
     NonlinearDiagnosticSetup,  # noqa: F401 - compatibility re-export
+    NonlinearTimeStepPolicy,  # noqa: F401 - compatibility re-export
     _apply_collision_split,
     _collision_damping,
     _nonlinear_cfl_frequency_components,
@@ -90,6 +91,7 @@ from spectraxgk.nonlinear_helpers import (
     _make_nonlinear_state_projector,  # noqa: F401 - compatibility re-export
     build_nonlinear_diagnostic_setup,
     build_nonlinear_imex_operator,
+    build_nonlinear_time_step_policy,
 )
 
 def _nonlinear_diagnostic_kernels() -> NonlinearDiagnosticKernels:
@@ -330,41 +332,25 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
     G0 = jnp.asarray(G0, dtype=state_dtype)
     G0 = _project_state(G0)
     real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
-    dt_init = jnp.asarray(dt, dtype=real_dtype)
-    progress_total = (
-        jnp.asarray(float(steps) * float(dt), dtype=real_dtype)
-        if fixed_dt
-        else jnp.asarray(jnp.nan, dtype=real_dtype)
-    )
-    dt_min_val = jnp.asarray(dt_min, dtype=real_dtype)
-    # Explicit-time default behavior: when dt_max is unset, dt_max == dt.
-    dt_max_val = jnp.asarray(dt if dt_max is None else dt_max, dtype=real_dtype)
-    cfl_val = jnp.asarray(cfl, dtype=real_dtype)
-    cfl_fac_val = jnp.asarray(resolve_cfl_fac(method, cfl_fac), dtype=real_dtype)
-
-    nx = int(grid.kx.size)
-    ny = int(grid.ky.size)
-    kx_np = np.asarray(cache.kx, dtype=float)
-    ky_np = np.asarray(cache.ky, dtype=float)
-    kx_max = float(abs(kx_np[(nx - 1) // 3])) if nx > 1 else 0.0
-    ky_max = float(abs(ky_np[(ny - 1) // 3])) if ny > 1 else 0.0
-    vtmax = float(np.max(np.abs(np.asarray(params.vth, dtype=float))))
-    tzmax = float(np.max(np.abs(np.asarray(params.tz, dtype=float))))
-    nl = int(cache.l.shape[0])
-    nm = int(cache.m.shape[1])
-    vpar_max = 2.0 * float(np.sqrt(max(nm, 1))) * vtmax
-    muB_max = _laguerre_velocity_max(nl) * tzmax
-    kxfac_val = float(np.asarray(cache.kxfac))
-    linear_omega = jnp.asarray(
-        _linear_frequency_bound(
-            grid,
-            geom_eff,
-            params,
-            nl,
-            nm,
-            include_diamagnetic_drive=False,
-        ),
-        dtype=real_dtype,
+    time_step_policy = build_nonlinear_time_step_policy(
+        grid,
+        geom_eff,
+        params,
+        cache,
+        method=method,
+        dt=dt,
+        steps=steps,
+        fixed_dt=fixed_dt,
+        dt_min=dt_min,
+        dt_max=dt_max,
+        cfl=cfl,
+        cfl_fac=cfl_fac,
+        compressed_real_fft=compressed_real_fft,
+        real_dtype=real_dtype,
+        resolve_cfl_fac_fn=resolve_cfl_fac,
+        linear_frequency_bound_fn=_linear_frequency_bound,
+        laguerre_velocity_max_fn=_laguerre_velocity_max,
+        cfl_frequency_components_fn=_nonlinear_cfl_frequency_components,
     )
     squeeze_species = G0.ndim == 5
     use_collision_split = bool(collision_split) and (
@@ -380,28 +366,6 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
         damping = _collision_damping(
             cache, params, term_cfg, real_dtype, squeeze_species=squeeze_species
         )
-
-    def _update_dt(fields_state: FieldState, dt_prev: jnp.ndarray) -> jnp.ndarray:
-        if fixed_dt:
-            return jnp.asarray(dt_prev, dtype=real_dtype)
-        omega_nl_x, omega_nl_y = _nonlinear_cfl_frequency_components(
-            fields_state,
-            grid,
-            cache,
-            compressed_real_fft=compressed_real_fft,
-            kx_max=kx_max,
-            ky_max=ky_max,
-            kxfac=kxfac_val,
-            vpar_max=vpar_max,
-            muB_max=muB_max,
-        )
-        wmax = (
-            jnp.maximum(linear_omega[0], omega_nl_x)
-            + jnp.maximum(linear_omega[1], omega_nl_y)
-            + linear_omega[2]
-        )
-        dt_guess = jnp.where(wmax > 0.0, cfl_fac_val * cfl_val / wmax, dt_prev)
-        return jnp.asarray(jnp.clip(dt_guess, dt_min_val, dt_max_val), dtype=real_dtype)
 
     def rhs_fn(G):
         return nonlinear_rhs_cached(
@@ -453,7 +417,9 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
     def step(carry, idx):
         G, G_prev_step, fields_prev_step, diag_prev, t_prev, dt_prev = carry
         dG, fields = rhs_fn(G)
-        dt_local = jnp.asarray(_update_dt(fields, dt_prev), dtype=real_dtype)
+        dt_local = jnp.asarray(
+            time_step_policy.update_dt(fields, dt_prev), dtype=real_dtype
+        )
         G_new = advance_explicit_nonlinear_state(
             G,
             dG,
@@ -491,7 +457,7 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
             idx=idx,
             steps=steps,
             t_new=t_new,
-            progress_total=progress_total,
+            progress_total=time_step_policy.progress_total,
         )
         return (G_new, G_new, fields_new, diag, t_new, dt_local), (
             diag,
@@ -500,7 +466,9 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
         )
 
     step_fn = jax.checkpoint(step) if checkpoint else step
-    dt0 = jnp.asarray(_update_dt(fields0, dt_init), dtype=real_dtype)
+    dt0 = jnp.asarray(
+        time_step_policy.update_dt(fields0, time_step_policy.dt_init), dtype=real_dtype
+    )
     diag_zero = _compute_diag_from_state(G0, fields0, G0, fields0, dt0)
 
     stride = int(max(sample_stride, diagnostics_stride, 1))
