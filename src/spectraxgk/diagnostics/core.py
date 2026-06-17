@@ -6,17 +6,17 @@ import jax.numpy as jnp
 import numpy as np
 
 from spectraxgk.gyroaverage import gamma0
-from spectraxgk.diagnostics_channels import (
+from spectraxgk.diagnostics.channels import (
     _heat_flux_channel_contrib_species,
     _particle_flux_channel_contrib_species,
     _turbulent_heating_contrib_species,
 )
-from spectraxgk.diagnostics_metadata import (
+from spectraxgk.diagnostics.metadata import (
     ArrayLike,
     ResolvedDiagnostics,
     SimulationDiagnostics,
 )
-from spectraxgk.diagnostics_weights import (
+from spectraxgk.diagnostics.weights import (
     _hermitian_mode_weight,
     _cached_hermitian_mode_weight,
     _transport_mode_weight,

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import jax.numpy as jnp
 
-from spectraxgk.diagnostics_weights import (
+from spectraxgk.diagnostics.weights import (
     _hermitian_mode_weight,
     _transport_mode_weight,
     _jl_family,
