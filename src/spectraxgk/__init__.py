@@ -150,7 +150,7 @@ from spectraxgk.nonlinear import (
     integrate_nonlinear_explicit_diagnostics,
     nonlinear_rhs_cached,
 )
-from spectraxgk.runners import (
+from spectraxgk.solvers.time.runners import (
     integrate_linear_from_config,
     integrate_nonlinear_from_config,
 )
@@ -470,7 +470,7 @@ from spectraxgk.plotting import (
     scan_comparison_figure,
     set_plot_style,
 )
-from spectraxgk.diffrax_integrators import (
+from spectraxgk.solvers.time.diffrax import (
     integrate_linear_diffrax,
     integrate_linear_diffrax_streaming,
     integrate_nonlinear_diffrax,
@@ -479,7 +479,7 @@ from spectraxgk.parallel.integrators import (
     integrate_linear_sharded,
     integrate_nonlinear_sharded,
 )
-from spectraxgk.explicit_time_integrators import (
+from spectraxgk.solvers.time.explicit import (
     ExplicitTimeConfig,
     integrate_linear_explicit,
     integrate_linear_explicit_diagnostics,

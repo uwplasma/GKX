@@ -6,7 +6,7 @@ from typing import Any, cast
 
 from spectraxgk.analysis import ModeSelection, ModeSelectionBatch
 from spectraxgk.config import TimeConfig
-from spectraxgk.diffrax_integrators import integrate_linear_diffrax, integrate_nonlinear_diffrax
+from spectraxgk.solvers.time.diffrax import integrate_linear_diffrax, integrate_nonlinear_diffrax
 from spectraxgk.geometry import FluxTubeGeometryLike
 from spectraxgk.grids import SpectralGrid
 from spectraxgk.linear import integrate_linear

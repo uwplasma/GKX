@@ -49,7 +49,7 @@ from spectraxgk.validation.benchmarks.scan import (
     should_use_ky_batch,
 )
 from spectraxgk.config import ETGBaseCase, TimeConfig
-from spectraxgk.diffrax_integrators import (
+from spectraxgk.solvers.time.diffrax import (
     integrate_linear_diffrax,
     integrate_linear_diffrax_streaming,
 )
@@ -63,7 +63,7 @@ from spectraxgk.operators.linear.params import (
     linear_terms_to_term_config,
 )
 from spectraxgk.solvers.linear.krylov import KrylovConfig, dominant_eigenpair
-from spectraxgk.runners import integrate_linear_from_config
+from spectraxgk.solvers.time.runners import integrate_linear_from_config
 from spectraxgk.terms.assembly import compute_fields_cached
 
 

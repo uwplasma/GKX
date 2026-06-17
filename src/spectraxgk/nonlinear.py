@@ -26,7 +26,7 @@ from spectraxgk.terms.assembly import (
 from spectraxgk.terms.config import FieldState, TermConfig
 from spectraxgk.terms.integrators import integrate_nonlinear as integrate_nonlinear_scan
 from spectraxgk.terms.nonlinear import nonlinear_em_contribution
-from spectraxgk.explicit_time_integrators import (
+from spectraxgk.solvers.time.explicit import (
     _instantaneous_growth_rate_step,
     _laguerre_velocity_max,
     _linear_frequency_bound,

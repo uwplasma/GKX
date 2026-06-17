@@ -83,7 +83,7 @@ from spectraxgk.workflows.runtime.startup import (
     _runtime_model_key,
     _species_to_linear,
 )
-from spectraxgk.runners import (
+from spectraxgk.solvers.time.runners import (
     integrate_linear_from_config,
     integrate_nonlinear_from_config,
 )

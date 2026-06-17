@@ -11,7 +11,7 @@ import numpy as np
 from spectraxgk.config import resolve_cfl_fac
 from spectraxgk.diagnostics import SimulationDiagnostics, total_energy
 from spectraxgk.geometry import FluxTubeGeometryLike, SlabGeometry
-from spectraxgk.explicit_time_integrators import (
+from spectraxgk.solvers.time.explicit import (
     _instantaneous_growth_rate_step,
     _diagnostic_midplane_index,
 )
