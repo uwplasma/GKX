@@ -18,7 +18,7 @@ from spectraxgk.analysis import (
 )
 from spectraxgk.benchmarks import LinearRunResult, LinearScanResult
 from spectraxgk.grids import SpectralGrid, build_spectral_grid
-from spectraxgk.validation_gates import (
+from spectraxgk.validation.gates import (
     BranchContinuationMetrics,
     DiagnosticTimeSeries,
     EigenfunctionComparisonMetrics,

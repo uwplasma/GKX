@@ -115,7 +115,7 @@ from spectraxgk.validation.nonlinear_transport.optimization_guard import (
     reduced_artifact_scope_report,
     replicated_transport_ensemble_report,
 )
-from spectraxgk.external_holdout_plan import (
+from spectraxgk.validation.external_holdout import (
     ExternalHoldoutScreenRow,
     build_external_holdout_runbook,
     external_vmec_family,
@@ -190,7 +190,7 @@ from spectraxgk.benchmarks import (
     run_cyclone_linear,
     run_cyclone_scan,
 )
-from spectraxgk.validation_gates import (
+from spectraxgk.validation.gates import (
     BranchContinuationMetrics,
     GateReport,
     LateTimeLinearMetrics,
@@ -413,7 +413,7 @@ from spectraxgk.objectives.vmec_transport_line_search import (
     select_projected_line_search_candidate,
     sparse_descent_direction_from_gradient_report,
 )
-from spectraxgk.zonal_objective import (
+from spectraxgk.objectives.zonal import (
     ZONAL_FLOW_OBJECTIVE_NAMES,
     ZonalFlowObjectiveConfig,
     zonal_flow_objective_artifact_from_records,
