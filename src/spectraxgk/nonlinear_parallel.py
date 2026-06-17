@@ -33,7 +33,7 @@ from spectraxgk.nonlinear_parallel_contracts import (
 )
 
 
-from spectraxgk.nonlinear_parallel_domain import (
+from spectraxgk.operators.nonlinear.domain_decomposition import (
     _relative_trace_error,
     _trace_drift,
     build_nonlinear_domain_decomposition_plan,
@@ -46,7 +46,7 @@ from spectraxgk.nonlinear_parallel_domain import (
 )
 
 
-from spectraxgk.nonlinear_parallel_spectral_core import (
+from spectraxgk.operators.nonlinear.spectral_core import (
     _chunk_offsets as _chunk_offsets,
     _field_from_spectral_density as _field_from_spectral_density,
     _field_from_state as _field_from_state,
@@ -93,7 +93,7 @@ from spectraxgk.operators.nonlinear.spectral_identity import (
     nonlinear_spectral_rhs_identity_report,
 )
 
-from spectraxgk.nonlinear_parallel_device_z import (
+from spectraxgk.operators.nonlinear.device_z import (
     _append_spectral_physical_observable_vector as _append_spectral_physical_observable_vector,
     _append_spectral_physical_observables as _append_spectral_physical_observables,
     _device_z_pencil_shard_map_observables_fn as _device_z_pencil_shard_map_observables_fn,

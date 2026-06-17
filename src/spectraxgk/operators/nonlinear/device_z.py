@@ -12,8 +12,8 @@ from spectraxgk.nonlinear_parallel_contracts import (
     NonlinearSpectralDevicePencilRHSIdentityReport,
     NonlinearSpectralDevicePencilTransportWindowReport,
 )
-from spectraxgk.nonlinear_parallel_domain import _relative_trace_error, _trace_drift
-from spectraxgk.nonlinear_parallel_spectral_core import (
+from spectraxgk.operators.nonlinear.domain_decomposition import _relative_trace_error, _trace_drift
+from spectraxgk.operators.nonlinear.spectral_core import (
     _field_from_state,
     _host_max_abs_rel_error,
     _host_staged_array_for_sharding,

@@ -10,8 +10,8 @@ from spectraxgk.nonlinear_parallel_contracts import (
     NonlinearSpectralIntegratorIdentityReport,
     NonlinearSpectralRHSIdentityReport,
 )
-from spectraxgk.nonlinear_parallel_domain import _relative_trace_error, _trace_drift
-from spectraxgk.nonlinear_parallel_spectral_core import (
+from spectraxgk.operators.nonlinear.domain_decomposition import _relative_trace_error, _trace_drift
+from spectraxgk.operators.nonlinear.spectral_core import (
     _chunk_offsets,
     _field_from_state,
     _logical_spectral_tiles,
