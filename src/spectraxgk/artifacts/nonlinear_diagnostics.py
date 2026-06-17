@@ -13,7 +13,7 @@ from spectraxgk.diagnostics import (
     SimulationDiagnostics,
     total_energy,
 )
-from spectraxgk.netcdf_spectral_layout import (
+from spectraxgk.artifacts.spectral_layout import (
     _condense_kx,
     _condense_ky,
     _condense_kykx,

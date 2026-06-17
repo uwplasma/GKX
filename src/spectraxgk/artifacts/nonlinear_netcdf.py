@@ -22,7 +22,7 @@ from spectraxgk.runtime import (
     build_runtime_geometry,
     build_runtime_linear_params,
 )
-from spectraxgk.netcdf_spectral_layout import (
+from spectraxgk.artifacts.spectral_layout import (
     _complex_to_ri,
     _condense_kx_for_output,
     _condense_ky_for_output,

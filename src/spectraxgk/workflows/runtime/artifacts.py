@@ -18,7 +18,7 @@ from spectraxgk.workflows.runtime.orchestration import (
     run_runtime_nonlinear_artifact_handoff,
 )
 
-from spectraxgk.netcdf_spectral_layout import (
+from spectraxgk.artifacts.spectral_layout import (
     _complex_to_ri as _complex_to_ri,
     _condense_kx as _condense_kx,
     _condense_kx_for_output as _condense_kx_for_output,
