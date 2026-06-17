@@ -25,7 +25,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.autodiff_validation import (
+from spectraxgk.validation.autodiff import (
     autodiff_finite_difference_report,
     covariance_diagnostics,
 )

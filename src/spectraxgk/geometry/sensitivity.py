@@ -9,7 +9,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.autodiff_validation import covariance_diagnostics
+from spectraxgk.validation.autodiff import covariance_diagnostics
 from spectraxgk.geometry.autodiff_checks import (
     _sensitivity_conditioning_metadata,
     finite_difference_jacobian,

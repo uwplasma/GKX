@@ -15,7 +15,7 @@ from typing import Any, Literal, cast
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.autodiff_validation import autodiff_finite_difference_report, covariance_diagnostics
+from spectraxgk.validation.autodiff import autodiff_finite_difference_report, covariance_diagnostics
 
 
 PortfolioReduction = Literal["weighted_mean", "mean", "max"]

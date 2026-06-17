@@ -7,7 +7,7 @@ from typing import Any, Literal
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.autodiff_validation import explicit_complex_operator_matrix
+from spectraxgk.validation.autodiff import explicit_complex_operator_matrix
 from spectraxgk.config import CycloneBaseCase, GridConfig
 from spectraxgk.diagnostics import heat_flux_species, particle_flux_species, fieldline_quadrature_weights
 from spectraxgk.grids import build_spectral_grid, select_ky_grid

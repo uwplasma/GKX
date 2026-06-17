@@ -214,7 +214,7 @@ from spectraxgk.validation.benchmarks.harness import (
     run_linear_scan,
     run_scan_and_mode,
 )
-from spectraxgk.autodiff_validation import (
+from spectraxgk.validation.autodiff import (
     autodiff_finite_difference_report,
     central_finite_difference_jacobian,
     covariance_diagnostics,
