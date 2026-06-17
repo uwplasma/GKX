@@ -26,7 +26,7 @@ from spectraxgk.analysis import (
     select_ky_index,
 )
 from spectraxgk.geometry import apply_geometry_grid_defaults, FluxTubeGeometryLike
-from spectraxgk.grids import SpectralGrid, build_spectral_grid, select_ky_grid
+from spectraxgk.grids import build_spectral_grid, select_ky_grid
 from spectraxgk.linear import integrate_linear_diagnostics
 from spectraxgk.operators.linear.cache import build_linear_cache
 from spectraxgk.operators.linear.params import (
@@ -95,7 +95,6 @@ from spectraxgk.terms.config import TermConfig
 from spectraxgk.miller_eik import generate_runtime_miller_eik
 from spectraxgk.vmec_eik import generate_runtime_vmec_eik
 
-_GLIBC_RAND_MAX = float((1 << 31) - 1)
 _RUNTIME_CASE_FIT_KEYS = _WORKFLOW_RUNTIME_CASE_FIT_KEYS
 
 __all__ = [
@@ -173,6 +172,9 @@ def _run_runtime_scan_ky_task(task: dict[str, Any]) -> RuntimeLinearResult:
 
 build_flux_tube_geometry = runtime_startup.build_flux_tube_geometry
 load_netcdf_restart_state = runtime_startup.load_netcdf_restart_state
+_centered_glibc_random_pairs = runtime_startup._centered_glibc_random_pairs
+_dealiased_initial_mode_pairs = runtime_startup._dealiased_initial_mode_pairs
+_periodic_zp_from_grid = runtime_startup._periodic_zp_from_grid
 
 
 def build_runtime_geometry(cfg: RuntimeConfig) -> FluxTubeGeometryLike:
@@ -248,57 +250,6 @@ def _load_initial_state_from_file(
         nx=nx,
         nz=nz,
     )
-
-
-def _centered_glibc_random_pairs(seed: int, count: int) -> np.ndarray:
-    """Return centered random pairs using glibc ``rand()`` semantics."""
-
-    if count <= 0:
-        return np.empty((0, 2), dtype=np.float64)
-
-    seed_use = 1 if int(seed) == 0 else int(seed)
-    state = np.zeros(344 + 2 * count, dtype=np.uint64)
-    state[0] = np.uint64(seed_use)
-    for i in range(1, 31):
-        state[i] = np.uint64((16807 * int(state[i - 1])) % int(_GLIBC_RAND_MAX))
-    for i in range(31, 34):
-        state[i] = state[i - 31]
-    for i in range(34, state.size):
-        state[i] = (state[i - 31] + state[i - 3]) & np.uint64(0xFFFFFFFF)
-
-    rand_vals = (state[344:] >> np.uint64(1)).astype(np.float64, copy=False)
-    half = 0.5 * _GLIBC_RAND_MAX
-    inv = 1.0 / _GLIBC_RAND_MAX
-    pairs = np.empty((count, 2), dtype=np.float64)
-    for i in range(count):
-        pairs[i, 0] = (rand_vals[2 * i] - half) * inv
-        pairs[i, 1] = (rand_vals[2 * i + 1] - half) * inv
-    return pairs
-
-
-def _dealiased_initial_mode_pairs(grid: SpectralGrid) -> list[tuple[int, int]]:
-    """Return the dealiased startup-loop ``(kx, ky)`` pairs for multimode initial conditions."""
-
-    nx = int(np.asarray(grid.kx).size)
-    ny = int(np.asarray(grid.ky).size)
-    kx_max = 1 + (nx - 1) // 3
-    ky_max = 1 + (ny - 1) // 3
-    return [
-        (int(kx_i), int(ky_i)) for kx_i in range(kx_max) for ky_i in range(1, ky_max)
-    ]
-
-
-def _periodic_zp_from_grid(z: np.ndarray) -> float:
-    """Return periodic ``Zp`` from the discrete theta grid."""
-
-    z_arr = np.asarray(z, dtype=float)
-    if z_arr.size <= 1:
-        return 1.0
-    dz = float(z_arr[1] - z_arr[0])
-    period = abs(dz) * float(z_arr.size)
-    if period <= 0.0:
-        return 1.0
-    return period / (2.0 * np.pi)
 
 
 _slice_runtime_diagnostics = slice_runtime_diagnostics
