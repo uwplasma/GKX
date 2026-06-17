@@ -31,6 +31,7 @@ __all__ = [
     "_diagnostic_omega_mode_mask",
     "_make_fixed_mode_projector",
     "_make_hermitian_projector",
+    "_make_nonlinear_state_projector",
     "build_nonlinear_imex_operator",
 ]
 
@@ -72,6 +73,36 @@ def _make_hermitian_projector(
         if kx_neg is not None:
             neg = neg[..., kx_neg, :]
         return jnp.concatenate([pos, neg], axis=-3)
+
+    return project
+
+
+def _make_nonlinear_state_projector(
+    fixed_state: jnp.ndarray | None,
+    *,
+    ky_vals: np.ndarray,
+    nx: int,
+    compressed_real_fft: bool,
+    fixed_mode_ky_index: int | None,
+    fixed_mode_kx_index: int | None,
+) -> Callable[[jnp.ndarray], jnp.ndarray]:
+    """Compose fixed-mode and Hermitian projections for nonlinear state scans."""
+
+    fixed_projector = _make_fixed_mode_projector(
+        fixed_state,
+        ky_index=fixed_mode_ky_index,
+        kx_index=fixed_mode_kx_index,
+    )
+    hermitian_projector = (
+        _make_hermitian_projector(np.asarray(ky_vals), nx=int(nx))
+        if compressed_real_fft
+        else (lambda G_state: G_state)
+    )
+
+    def project(G_state: jnp.ndarray) -> jnp.ndarray:
+        if fixed_projector is not None:
+            G_state = fixed_projector(G_state)
+        return hermitian_projector(G_state)
 
     return project
 

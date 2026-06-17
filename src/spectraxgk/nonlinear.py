@@ -80,8 +80,9 @@ from spectraxgk.nonlinear_helpers import (
     _collision_damping,
     _nonlinear_cfl_frequency_components,
     _diagnostic_omega_mode_mask,
-    _make_fixed_mode_projector,
+    _make_fixed_mode_projector,  # noqa: F401 - compatibility re-export
     _make_hermitian_projector,
+    _make_nonlinear_state_projector,
     build_nonlinear_imex_operator,
 )
 
@@ -316,39 +317,14 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
     )
     z_idx = _diagnostic_midplane_index(grid.z.size) if z_index is None else int(z_index)
     use_dealias = bool(use_dealias_mask)
-    use_hermitian = bool(compressed_real_fft) and bool(
-        np.any(np.asarray(grid.ky) < 0.0)
-    )
-    ny_full = int(grid.ky.size)
-    nyc = ny_full // 2 + 1
-    nx = int(grid.kx.size)
-    if nx > 1:
-        kx_neg = jnp.concatenate(
-            [
-                jnp.asarray([0], dtype=jnp.int32),
-                jnp.arange(nx - 1, 0, -1, dtype=jnp.int32),
-            ]
-        )
-    else:
-        kx_neg = jnp.asarray([0], dtype=jnp.int32)
-
-    fixed_projector = _make_fixed_mode_projector(
+    _project_state = _make_nonlinear_state_projector(
         G0,
-        ky_index=fixed_mode_ky_index,
-        kx_index=fixed_mode_kx_index,
+        ky_vals=np.asarray(grid.ky),
+        nx=int(grid.kx.size),
+        compressed_real_fft=compressed_real_fft,
+        fixed_mode_ky_index=fixed_mode_ky_index,
+        fixed_mode_kx_index=fixed_mode_kx_index,
     )
-
-    def _project_state(G_state: jnp.ndarray) -> jnp.ndarray:
-        if fixed_projector is not None:
-            G_state = fixed_projector(G_state)
-        if not use_hermitian or nyc <= 2:
-            return G_state
-        pos = G_state[..., :nyc, :, :]
-        neg_hi = nyc - 1 if (ny_full % 2 == 0) else nyc
-        neg = jnp.conj(pos[..., 1:neg_hi, :, :])[..., ::-1, :, :]
-        if nx > 1:
-            neg = neg[..., kx_neg, :]
-        return jnp.concatenate([pos, neg], axis=-3)
 
     state_dtype = jnp.result_type(G0, jnp.complex64)
     G0 = jnp.asarray(G0, dtype=state_dtype)
@@ -976,39 +952,14 @@ def integrate_nonlinear_imex_diagnostics(
     )
     z_idx = _diagnostic_midplane_index(grid.z.size) if z_index is None else int(z_index)
     use_dealias = bool(use_dealias_mask)
-    use_hermitian = bool(compressed_real_fft) and bool(
-        np.any(np.asarray(grid.ky) < 0.0)
-    )
-    ny_full = int(grid.ky.size)
-    nyc = ny_full // 2 + 1
-    nx = int(grid.kx.size)
-    if nx > 1:
-        kx_neg = jnp.concatenate(
-            [
-                jnp.asarray([0], dtype=jnp.int32),
-                jnp.arange(nx - 1, 0, -1, dtype=jnp.int32),
-            ]
-        )
-    else:
-        kx_neg = jnp.asarray([0], dtype=jnp.int32)
-
-    fixed_projector = _make_fixed_mode_projector(
+    _project_state = _make_nonlinear_state_projector(
         G0,
-        ky_index=fixed_mode_ky_index,
-        kx_index=fixed_mode_kx_index,
+        ky_vals=np.asarray(grid.ky),
+        nx=int(grid.kx.size),
+        compressed_real_fft=compressed_real_fft,
+        fixed_mode_ky_index=fixed_mode_ky_index,
+        fixed_mode_kx_index=fixed_mode_kx_index,
     )
-
-    def _project_state(G_state: jnp.ndarray) -> jnp.ndarray:
-        if fixed_projector is not None:
-            G_state = fixed_projector(G_state)
-        if not use_hermitian or nyc <= 2:
-            return G_state
-        pos = G_state[..., :nyc, :, :]
-        neg_hi = nyc - 1 if (ny_full % 2 == 0) else nyc
-        neg = jnp.conj(pos[..., 1:neg_hi, :, :])[..., ::-1, :, :]
-        if nx > 1:
-            neg = neg[..., kx_neg, :]
-        return jnp.concatenate([pos, neg], axis=-3)
 
     initial_state_dtype = jnp.result_type(G0, jnp.complex64)
     G0 = jnp.asarray(G0, dtype=initial_state_dtype)
