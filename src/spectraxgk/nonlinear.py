@@ -64,6 +64,8 @@ from spectraxgk.nonlinear_diagnostics import (
     _sample_indices_with_final,
     build_nonlinear_simulation_diagnostics,
     maybe_emit_nonlinear_progress,
+    run_sampled_explicit_diagnostic_scan,
+    sampled_scan_intervals,  # noqa: F401 - compatibility re-export
     select_nonlinear_step_diagnostics,
 )
 from spectraxgk.operators.nonlinear.rhs import (
@@ -474,51 +476,6 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
     stride = int(max(sample_stride, diagnostics_stride, 1))
     sampled_scan = stride > 1 and jax.default_backend() != "cpu"
     if sampled_scan:
-        sample_idx_raw = _sample_indices_with_final(int(steps), stride)
-        sampled_step_idx = np.asarray(
-            sample_idx_raw
-            if not isinstance(sample_idx_raw, slice)
-            else np.arange(steps),
-            dtype=np.int32,
-        )
-        sample_steps = sampled_step_idx + np.int32(1)
-        intervals = np.diff(
-            np.concatenate([np.asarray([0], dtype=np.int32), sample_steps])
-        ).astype(np.int32)
-
-        def sample_interval(carry, interval_steps):
-            def run_one_step(_i, inner_carry):
-                G_i, G_prev_i, fields_prev_i, diag_prev_i, t_i, dt_i, idx_i = (
-                    inner_carry
-                )
-                next_carry, _diag_step = step_fn(
-                    (G_i, G_prev_i, fields_prev_i, diag_prev_i, t_i, dt_i), idx_i
-                )
-                G_next, G_prev_next, fields_prev_next, diag_next, t_next, dt_next = (
-                    next_carry
-                )
-                return (
-                    G_next,
-                    G_prev_next,
-                    fields_prev_next,
-                    diag_next,
-                    t_next,
-                    dt_next,
-                    idx_i + 1,
-                )
-
-            carry_next = jax.lax.fori_loop(0, interval_steps, run_one_step, carry)
-            (
-                G_next,
-                _G_prev_next,
-                _fields_prev_next,
-                diag_next,
-                t_next,
-                dt_next,
-                _idx_next,
-            ) = carry_next
-            return carry_next, (diag_next, t_next, dt_next)
-
         (
             (
                 G_final,
@@ -527,11 +484,10 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
                 _diag_last,
                 _t_last,
                 _dt_last,
-                _idx_last,
             ),
-            diag_out,
-        ) = jax.lax.scan(
-            sample_interval,
+            scan_diag_out,
+        ) = run_sampled_explicit_diagnostic_scan(
+            step_fn,
             (
                 G0,
                 G0,
@@ -539,16 +495,15 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
                 diag_zero,
                 jnp.asarray(0.0, dtype=real_dtype),
                 dt0,
-                jnp.asarray(0, dtype=jnp.int32),
             ),
-            jnp.asarray(intervals, dtype=jnp.int32),
-            length=int(intervals.size),
+            steps=steps,
+            stride=stride,
         )
     else:
         idx = jnp.arange(steps, dtype=jnp.int32)
         (
             (G_final, _G_prev_last, _fields_prev_last, _diag_last, _t_last, _dt_last),
-            diag_out,
+            scan_diag_out,
         ) = jax.lax.scan(
             step_fn,
             (
@@ -563,7 +518,7 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
             length=steps,
         )
 
-    diag, t, dt_series = diag_out
+    diag, t, dt_series = scan_diag_out
     output_sample_idx = None
     if stride > 1 and not sampled_scan:
         output_sample_idx = _sample_indices_with_final(int(t.shape[0]), stride)

@@ -16,6 +16,8 @@ __all__ = [
     "_sample_indices_with_final",
     "build_nonlinear_simulation_diagnostics",
     "maybe_emit_nonlinear_progress",
+    "run_sampled_explicit_diagnostic_scan",
+    "sampled_scan_intervals",
     "select_nonlinear_step_diagnostics",
 ]
 
@@ -98,6 +100,88 @@ def _sample_indices_with_final(length: int, stride: int) -> slice | np.ndarray:
 
 def _sample_axis0(arr, indices: slice | np.ndarray):
     return arr[indices, ...]
+
+
+def sampled_scan_intervals(length: int, stride: int) -> np.ndarray:
+    """Return positive scan intervals that retain the requested final sample."""
+
+    sample_idx_raw = _sample_indices_with_final(int(length), int(stride))
+    sample_idx = np.asarray(
+        sample_idx_raw if not isinstance(sample_idx_raw, slice) else np.arange(length),
+        dtype=np.int32,
+    )
+    sample_steps = sample_idx + np.int32(1)
+    return np.diff(np.concatenate([np.asarray([0], dtype=np.int32), sample_steps])).astype(
+        np.int32
+    )
+
+
+def run_sampled_explicit_diagnostic_scan(
+    step_fn: Any,
+    initial_carry: tuple[Any, Any, Any, Any, Any, Any],
+    *,
+    steps: int,
+    stride: int,
+) -> tuple[tuple[Any, Any, Any, Any, Any, Any], tuple[Any, Any, Any]]:
+    """Run an explicit diagnostic scan only at retained sample intervals."""
+
+    intervals = sampled_scan_intervals(steps, stride)
+
+    def sample_interval(carry, interval_steps):
+        def run_one_step(_i, inner_carry):
+            G_i, G_prev_i, fields_prev_i, diag_prev_i, t_i, dt_i, idx_i = inner_carry
+            next_carry, _diag_step = step_fn(
+                (G_i, G_prev_i, fields_prev_i, diag_prev_i, t_i, dt_i), idx_i
+            )
+            G_next, G_prev_next, fields_prev_next, diag_next, t_next, dt_next = (
+                next_carry
+            )
+            return (
+                G_next,
+                G_prev_next,
+                fields_prev_next,
+                diag_next,
+                t_next,
+                dt_next,
+                idx_i + 1,
+            )
+
+        carry_next = jax.lax.fori_loop(0, interval_steps, run_one_step, carry)
+        (
+            _G_next,
+            _G_prev_next,
+            _fields_prev_next,
+            diag_next,
+            t_next,
+            dt_next,
+            _idx_next,
+        ) = carry_next
+        return carry_next, (diag_next, t_next, dt_next)
+
+    initial_carry_with_idx = (*initial_carry, jnp.asarray(0, dtype=jnp.int32))
+    final_carry, diag_out = jax.lax.scan(
+        sample_interval,
+        initial_carry_with_idx,
+        jnp.asarray(intervals, dtype=jnp.int32),
+        length=int(intervals.size),
+    )
+    (
+        G_final,
+        G_prev_last,
+        fields_prev_last,
+        diag_last,
+        t_last,
+        dt_last,
+        _idx_last,
+    ) = final_carry
+    return (
+        G_final,
+        G_prev_last,
+        fields_prev_last,
+        diag_last,
+        t_last,
+        dt_last,
+    ), diag_out
 
 
 def _sample_resolved_axis0(
