@@ -7,7 +7,6 @@ from typing import Any, Callable, Sequence
 from pathlib import Path
 from types import SimpleNamespace
 
-import jax.numpy as jnp
 import numpy as np
 
 from spectraxgk.cetg import (
@@ -95,6 +94,10 @@ from spectraxgk.workflows.cases import (
     run_nonlinear_case as _run_nonlinear_case_impl,
 )
 from spectraxgk.workflows.linear import FullLinearRuntimeDeps, run_full_linear_runtime
+from spectraxgk.workflows.nonlinear import (
+    FullNonlinearRuntimeDeps,
+    run_full_nonlinear_runtime,
+)
 from spectraxgk.workflows.reduced_models import (
     CETGLinearRuntimeDeps,
     CETGNonlinearRuntimeDeps,
@@ -596,219 +599,40 @@ def run_runtime_nonlinear(
             status_callback=status_callback,
         )
 
-    geom = build_runtime_geometry(cfg)
-    _status("building spectral grid")
-    grid_cfg = apply_geometry_grid_defaults(geom, cfg.grid)
-    grid = build_spectral_grid(grid_cfg)
-    _status("building runtime nonlinear parameters")
-    params = build_runtime_linear_params(cfg, Nm=Nm_use, geom=geom)
-    term_cfg = build_runtime_term_config(cfg)
-
-    ky_index, kx_index = _select_nonlinear_mode_indices(
-        grid,
+    return run_full_nonlinear_runtime(
+        cfg,
+        deps=FullNonlinearRuntimeDeps(
+            build_runtime_geometry=build_runtime_geometry,
+            apply_geometry_grid_defaults=apply_geometry_grid_defaults,
+            build_spectral_grid=build_spectral_grid,
+            build_runtime_linear_params=build_runtime_linear_params,
+            build_runtime_term_config=build_runtime_term_config,
+            select_nonlinear_mode_indices=_select_nonlinear_mode_indices,
+            build_initial_condition=_build_initial_condition,
+            species_to_linear=_species_to_linear,
+            infer_runtime_nonlinear_steps=_infer_runtime_nonlinear_steps,
+            runtime_external_phi=_runtime_external_phi,
+            build_runtime_nonlinear_diagnostics_kwargs=build_runtime_nonlinear_diagnostics_kwargs,
+            integrate_nonlinear_explicit_diagnostics_state=integrate_nonlinear_explicit_diagnostics_state,
+            run_adaptive_runtime_chunk_loop=run_adaptive_runtime_chunk_loop,
+            build_runtime_nonlinear_result=build_runtime_nonlinear_result,
+            integrate_nonlinear_from_config=integrate_nonlinear_from_config,
+        ),
         ky_target=ky_target,
         kx_target=kx_target,
-        use_dealias_mask=bool(cfg.time.nonlinear_dealias),
-    )
-    _status(
-        f"selected nonlinear mode ky={float(np.asarray(grid.ky[ky_index])):.6g} kx={float(np.asarray(grid.kx[kx_index])):.6g}"
-    )
-    _status("building initial condition")
-    G0 = _build_initial_condition(
-        grid,
-        geom,
-        cfg,
-        ky_index=ky_index,
-        kx_index=kx_index,
         Nl=Nl_use,
         Nm=Nm_use,
-        nspecies=len(_species_to_linear(cfg.species)),
-    )
-
-    dt_val = float(cfg.time.dt if dt is None else dt)
-    if dt_val <= 0.0:
-        raise ValueError("dt must be > 0")
-    adaptive_chunked = steps is None and not bool(cfg.time.fixed_dt)
-    steps_val = _infer_runtime_nonlinear_steps(cfg, dt=dt_val, steps=steps)
-
-    fixed_mode_on = bool(cfg.expert.fixed_mode)
-    fixed_ky_index = cfg.expert.iky_fixed
-    fixed_kx_index = cfg.expert.ikx_fixed
-    external_phi = _runtime_external_phi(cfg)
-    source_on = external_phi is not None
-    fixed_ky_index_use: int | None = None
-    fixed_kx_index_use: int | None = None
-    if fixed_mode_on:
-        if fixed_ky_index is None or fixed_kx_index is None:
-            raise ValueError(
-                "expert.iky_fixed and expert.ikx_fixed must be set when expert.fixed_mode=true"
-            )
-        fixed_ky_index_use = int(fixed_ky_index)
-        fixed_kx_index_use = int(fixed_kx_index)
-
-    diagnostics_on = cfg.time.diagnostics if diagnostics is None else bool(diagnostics)
-    _status(
-        f"nonlinear diagnostics={'on' if diagnostics_on else 'off'} fixed_mode={'on' if fixed_mode_on else 'off'} source={cfg.expert.source}"
-    )
-    if diagnostics_on or fixed_mode_on or return_state or adaptive_chunked or source_on:
-        sample_stride_use = (
-            cfg.time.sample_stride if sample_stride is None else int(sample_stride)
-        )
-        diag_stride = (
-            cfg.time.diagnostics_stride
-            if diagnostics_stride is None
-            else int(diagnostics_stride)
-        )
-        laguerre_mode_use = (
-            cfg.time.laguerre_nonlinear_mode
-            if laguerre_mode is None
-            else str(laguerre_mode)
-        )
-        _status(
-            f"sample_stride={int(sample_stride_use)} diagnostics_stride={int(diag_stride)} laguerre_mode={laguerre_mode_use}"
-        )
-        if adaptive_chunked:
-            chunk_steps = min(steps_val, 1024)
-            G_chunk = G0
-
-            def _run_nonlinear_chunk(chunk_show_progress: bool):
-                nonlocal G_chunk
-                kwargs = build_runtime_nonlinear_diagnostics_kwargs(
-                    cfg,
-                    dt=dt_val,
-                    steps=chunk_steps,
-                    method=method,
-                    term_config=term_cfg,
-                    sample_stride=1,
-                    diagnostics_stride=1,
-                    laguerre_mode=laguerre_mode_use,
-                    ky_index=int(ky_index),
-                    kx_index=int(kx_index),
-                    fixed_dt=False,
-                    fixed_mode_ky_index=fixed_ky_index_use,
-                    fixed_mode_kx_index=fixed_kx_index_use,
-                    external_phi=external_phi,
-                    resolved_diagnostics=resolved_diagnostics,
-                    show_progress=chunk_show_progress,
-                )
-                t_chunk, diag_chunk, G_next, fields_next = (
-                    integrate_nonlinear_explicit_diagnostics_state(
-                        G_chunk,
-                        grid,
-                        geom,
-                        params,
-                        **kwargs,
-                    )
-                )
-                G_chunk = G_next
-                return t_chunk, diag_chunk, G_next, fields_next
-
-            chunk_result = run_adaptive_runtime_chunk_loop(
-                integrate_chunk=_run_nonlinear_chunk,
-                t_max=float(cfg.time.t_max),
-                chunk_steps=chunk_steps,
-                label="nonlinear",
-                show_progress=show_progress,
-                status_callback=_status,
-                diagnostics_stride=max(int(sample_stride_use), int(diag_stride), 1),
-            )
-            diag = chunk_result.diagnostics
-            t = jnp.asarray(diag.t)
-            G_final = chunk_result.state
-            fields_final = chunk_result.fields
-        else:
-            _status(
-                f"running nonlinear diagnostics integrator over {steps_val} steps with dt={dt_val:.6g}"
-            )
-            diagnostics_call_kwargs = build_runtime_nonlinear_diagnostics_kwargs(
-                cfg,
-                dt=dt_val,
-                steps=steps_val,
-                method=method,
-                term_config=term_cfg,
-                sample_stride=int(sample_stride_use),
-                diagnostics_stride=int(diag_stride),
-                laguerre_mode=laguerre_mode_use,
-                ky_index=int(ky_index),
-                kx_index=int(kx_index),
-                fixed_dt=bool(cfg.time.fixed_dt),
-                fixed_mode_ky_index=fixed_ky_index_use,
-                fixed_mode_kx_index=fixed_kx_index_use,
-                external_phi=external_phi,
-                resolved_diagnostics=resolved_diagnostics,
-                show_progress=show_progress,
-            )
-            t, diag, G_final, fields_final = (
-                integrate_nonlinear_explicit_diagnostics_state(
-                    G0,
-                    grid,
-                    geom,
-                    params,
-                    **diagnostics_call_kwargs,
-                )
-            )
-        if diagnostics_on:
-            _status(
-                f"completed nonlinear run with {int(np.asarray(t).size)} saved samples"
-            )
-            state_out = np.asarray(G_final) if return_state else None
-            return build_runtime_nonlinear_result(
-                t=np.asarray(t),
-                diagnostics=diag,
-                fields=fields_final,
-                state=state_out,
-                ky_selected=float(np.asarray(grid.ky[ky_index])),
-                kx_selected=float(np.asarray(grid.kx[kx_index])),
-                summarize_fields=False,
-            )
-        if fields_final is None:
-            raise RuntimeError(
-                "adaptive nonlinear runtime did not produce final fields"
-            )
-        _status("diagnostics disabled; returning final nonlinear field summary")
-        return build_runtime_nonlinear_result(
-            t=np.asarray([]),
-            diagnostics=None,
-            fields=fields_final,
-            state=np.asarray(G_final) if return_state else None,
-            ky_selected=float(np.asarray(grid.ky[ky_index])),
-            kx_selected=float(np.asarray(grid.kx[kx_index])),
-            summarize_fields=True,
-        )
-
-    # Diagnostics disabled: use the config-driven integrator for final state.
-    _status(
-        f"diagnostics disabled; running final-state nonlinear integrator over {steps_val} steps with dt={dt_val:.6g}"
-    )
-    t_cfg = replace(cfg.time, dt=dt_val, t_max=dt_val * steps_val)
-    if show_progress:
-        G_final, fields = integrate_nonlinear_from_config(
-            G0,
-            grid,
-            geom,
-            params,
-            t_cfg,
-            terms=term_cfg,
-            show_progress=True,
-        )
-    else:
-        G_final, fields = integrate_nonlinear_from_config(
-            G0,
-            grid,
-            geom,
-            params,
-            t_cfg,
-            terms=term_cfg,
-        )
-    _status("completed nonlinear final-state integration")
-    return build_runtime_nonlinear_result(
-        t=np.asarray([]),
-        diagnostics=None,
-        fields=fields,
-        state=np.asarray(G_final) if return_state else None,
-        ky_selected=float(np.asarray(grid.ky[ky_index])),
-        kx_selected=float(np.asarray(grid.kx[kx_index])),
-        summarize_fields=True,
+        dt=dt,
+        steps=steps,
+        method=method,
+        sample_stride=sample_stride,
+        diagnostics_stride=diagnostics_stride,
+        laguerre_mode=laguerre_mode,
+        diagnostics=diagnostics,
+        resolved_diagnostics=resolved_diagnostics,
+        return_state=return_state,
+        show_progress=show_progress,
+        status_callback=status_callback,
     )
 
 
