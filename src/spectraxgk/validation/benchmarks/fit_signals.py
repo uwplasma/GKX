@@ -11,7 +11,7 @@ from spectraxgk.diagnostics.analysis import (
     extract_mode_time_series,
     fit_growth_rate_auto_with_stats,
 )
-from spectraxgk.normalization import apply_diagnostic_normalization
+from spectraxgk.diagnostics.normalization import apply_diagnostic_normalization
 from spectraxgk.operators.linear.params import LinearParams
 
 

@@ -42,7 +42,7 @@ from spectraxgk.workflows.runtime.toml import (
     load_linear_terms_from_toml,
     load_runtime_from_toml,
 )
-from spectraxgk.normalization import (
+from spectraxgk.diagnostics.normalization import (
     DiagnosticNorm,
     NormalizationContract,
     apply_diagnostic_normalization,

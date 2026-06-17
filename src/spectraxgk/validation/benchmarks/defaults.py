@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from spectraxgk.solvers.linear.krylov import KrylovConfig
-from spectraxgk.normalization import (
+from spectraxgk.diagnostics.normalization import (
     CYCLONE_NORMALIZATION,
     ETG_NORMALIZATION,
     KBM_NORMALIZATION,
