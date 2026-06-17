@@ -35,7 +35,6 @@ from spectraxgk.explicit_time_integrators import (
 )
 from spectraxgk.diagnostics import (
     SimulationDiagnostics,
-    total_energy,
     heat_flux_species,
     heat_flux_resolved_species,
     heat_flux_channel_resolved_species,
@@ -60,9 +59,10 @@ from spectraxgk.operators.nonlinear.diagnostic_state import (
     compute_nonlinear_diagnostic_tuple,
 )
 from spectraxgk.nonlinear_diagnostics import (
-    _pack_resolved_diagnostics,
-    _sample_axis0,
+    _pack_resolved_diagnostics,  # noqa: F401 - compatibility re-export
+    _sample_axis0,  # noqa: F401 - compatibility re-export
     _sample_indices_with_final,
+    build_nonlinear_simulation_diagnostics,
 )
 from spectraxgk.operators.nonlinear.rhs import (
     linear_rhs_jit_for_terms_impl,
@@ -519,13 +519,13 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
     sampled_scan = stride > 1 and jax.default_backend() != "cpu"
     if sampled_scan:
         sample_idx_raw = _sample_indices_with_final(int(steps), stride)
-        sample_idx = np.asarray(
+        sampled_step_idx = np.asarray(
             sample_idx_raw
             if not isinstance(sample_idx_raw, slice)
             else np.arange(steps),
             dtype=np.int32,
         )
-        sample_steps = sample_idx + np.int32(1)
+        sample_steps = sampled_step_idx + np.int32(1)
         intervals = np.diff(
             np.concatenate([np.asarray([0], dtype=np.int32), sample_steps])
         ).astype(np.int32)
@@ -608,67 +608,20 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
         )
 
     diag, t, dt_series = diag_out
-    (
-        gamma_t,
-        omega_t,
-        Wg_t,
-        Wphi_t,
-        Wapar_t,
-        heat_t,
-        pflux_t,
-        turbulent_heat_t,
-        heat_s_t,
-        pflux_s_t,
-        turbulent_heat_s_t,
-        phi_mode_t,
-        resolved_t,
-    ) = diag
-
+    output_sample_idx = None
     if stride > 1 and not sampled_scan:
         output_sample_idx = _sample_indices_with_final(int(t.shape[0]), stride)
-        gamma_t = _sample_axis0(gamma_t, output_sample_idx)
-        omega_t = _sample_axis0(omega_t, output_sample_idx)
-        Wg_t = _sample_axis0(Wg_t, output_sample_idx)
-        Wphi_t = _sample_axis0(Wphi_t, output_sample_idx)
-        Wapar_t = _sample_axis0(Wapar_t, output_sample_idx)
-        heat_t = _sample_axis0(heat_t, output_sample_idx)
-        pflux_t = _sample_axis0(pflux_t, output_sample_idx)
-        turbulent_heat_t = _sample_axis0(turbulent_heat_t, output_sample_idx)
-        heat_s_t = _sample_axis0(heat_s_t, output_sample_idx)
-        pflux_s_t = _sample_axis0(pflux_s_t, output_sample_idx)
-        turbulent_heat_s_t = _sample_axis0(turbulent_heat_s_t, output_sample_idx)
-        phi_mode_t = _sample_axis0(phi_mode_t, output_sample_idx)
-        resolved_t = tuple(_sample_axis0(arr, output_sample_idx) for arr in resolved_t)
-        t = _sample_axis0(t, output_sample_idx)
-        dt_series = _sample_axis0(dt_series, output_sample_idx)
-
-    resolved = _pack_resolved_diagnostics(resolved_t) if resolved_diagnostics else None
-
-    dt_mean = jnp.mean(dt_series)
-    energy_t = total_energy(Wg_t, Wphi_t, Wapar_t)
-    diag_out = SimulationDiagnostics(
+    diag_out = build_nonlinear_simulation_diagnostics(
+        diag,
         t=t,
-        dt_t=dt_series,
-        dt_mean=dt_mean,
-        gamma_t=gamma_t,
-        omega_t=omega_t,
-        Wg_t=Wg_t,
-        Wphi_t=Wphi_t,
-        Wapar_t=Wapar_t,
-        heat_flux_t=heat_t,
-        particle_flux_t=pflux_t,
-        energy_t=energy_t,
-        heat_flux_species_t=heat_s_t,
-        particle_flux_species_t=pflux_s_t,
-        turbulent_heating_t=turbulent_heat_t,
-        turbulent_heating_species_t=turbulent_heat_s_t,
-        phi_mode_t=phi_mode_t,
-        resolved=resolved,
+        dt_series=dt_series,
+        resolved_diagnostics=resolved_diagnostics,
+        sample_indices=output_sample_idx,
     )
     fields_final = compute_fields_cached(
         G_final, cache, params, terms=term_cfg, external_phi=external_phi
     )
-    return t, diag_out, G_final, fields_final
+    return jnp.asarray(diag_out.t), diag_out, G_final, fields_final
 
 
 def integrate_nonlinear_explicit_diagnostics(
@@ -1139,68 +1092,21 @@ def integrate_nonlinear_imex_diagnostics(
     )
 
     diag, t = diag_out
-    (
-        gamma_t,
-        omega_t,
-        Wg_t,
-        Wphi_t,
-        Wapar_t,
-        heat_t,
-        pflux_t,
-        turbulent_heat_t,
-        heat_s_t,
-        pflux_s_t,
-        turbulent_heat_s_t,
-        phi_mode_t,
-        resolved_t,
-    ) = diag
     dt_series = jnp.ones_like(t) * dt_val
 
     stride = int(max(sample_stride, diagnostics_stride, 1))
+    output_sample_idx = None
     if stride > 1:
-        sample_idx = _sample_indices_with_final(int(t.shape[0]), stride)
-        gamma_t = _sample_axis0(gamma_t, sample_idx)
-        omega_t = _sample_axis0(omega_t, sample_idx)
-        Wg_t = _sample_axis0(Wg_t, sample_idx)
-        Wphi_t = _sample_axis0(Wphi_t, sample_idx)
-        Wapar_t = _sample_axis0(Wapar_t, sample_idx)
-        heat_t = _sample_axis0(heat_t, sample_idx)
-        pflux_t = _sample_axis0(pflux_t, sample_idx)
-        turbulent_heat_t = _sample_axis0(turbulent_heat_t, sample_idx)
-        heat_s_t = _sample_axis0(heat_s_t, sample_idx)
-        pflux_s_t = _sample_axis0(pflux_s_t, sample_idx)
-        turbulent_heat_s_t = _sample_axis0(turbulent_heat_s_t, sample_idx)
-        phi_mode_t = _sample_axis0(phi_mode_t, sample_idx)
-        resolved_t = tuple(
-            _sample_axis0(np.asarray(arr), sample_idx) for arr in resolved_t
-        )
-        t = _sample_axis0(t, sample_idx)
-        dt_series = _sample_axis0(dt_series, sample_idx)
-
-    resolved = _pack_resolved_diagnostics(resolved_t)
-
-    dt_mean = jnp.mean(dt_series)
-    energy_t = total_energy(Wg_t, Wphi_t, Wapar_t)
-    diag_out = SimulationDiagnostics(
+        output_sample_idx = _sample_indices_with_final(int(t.shape[0]), stride)
+    diag_out = build_nonlinear_simulation_diagnostics(
+        diag,
         t=t,
-        dt_t=dt_series,
-        dt_mean=dt_mean,
-        gamma_t=gamma_t,
-        omega_t=omega_t,
-        Wg_t=Wg_t,
-        Wphi_t=Wphi_t,
-        Wapar_t=Wapar_t,
-        heat_flux_t=heat_t,
-        particle_flux_t=pflux_t,
-        energy_t=energy_t,
-        heat_flux_species_t=heat_s_t,
-        particle_flux_species_t=pflux_s_t,
-        turbulent_heating_t=turbulent_heat_t,
-        turbulent_heating_species_t=turbulent_heat_s_t,
-        phi_mode_t=phi_mode_t,
-        resolved=resolved,
+        dt_series=dt_series,
+        resolved_diagnostics=True,
+        sample_indices=output_sample_idx,
+        resolved_to_numpy=True,
     )
-    return t, diag_out
+    return jnp.asarray(diag_out.t), diag_out
 
 
 def integrate_nonlinear_imex_cached(

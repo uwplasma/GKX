@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+from typing import Any
+
+import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.diagnostics import ResolvedDiagnostics
+from spectraxgk.diagnostics_metadata import ResolvedDiagnostics, SimulationDiagnostics
 
 __all__ = [
     "_pack_resolved_diagnostics",
     "_sample_axis0",
     "_sample_indices_with_final",
+    "build_nonlinear_simulation_diagnostics",
 ]
 
 
@@ -91,3 +95,86 @@ def _sample_indices_with_final(length: int, stride: int) -> slice | np.ndarray:
 
 def _sample_axis0(arr, indices: slice | np.ndarray):
     return arr[indices, ...]
+
+
+def _sample_resolved_axis0(
+    resolved_t: tuple[Any, ...],
+    indices: slice | np.ndarray,
+    *,
+    resolved_to_numpy: bool,
+) -> tuple[Any, ...]:
+    return tuple(
+        _sample_axis0(np.asarray(arr) if resolved_to_numpy else arr, indices)
+        for arr in resolved_t
+    )
+
+
+def build_nonlinear_simulation_diagnostics(
+    diag: tuple[Any, ...],
+    t: Any,
+    dt_series: Any,
+    *,
+    resolved_diagnostics: bool,
+    sample_indices: slice | np.ndarray | None = None,
+    resolved_to_numpy: bool = False,
+) -> SimulationDiagnostics:
+    """Build sampled nonlinear diagnostics from the raw scan output tuple."""
+
+    (
+        gamma_t,
+        omega_t,
+        Wg_t,
+        Wphi_t,
+        Wapar_t,
+        heat_t,
+        pflux_t,
+        turbulent_heat_t,
+        heat_s_t,
+        pflux_s_t,
+        turbulent_heat_s_t,
+        phi_mode_t,
+        resolved_t,
+    ) = diag
+
+    if sample_indices is not None:
+        gamma_t = _sample_axis0(gamma_t, sample_indices)
+        omega_t = _sample_axis0(omega_t, sample_indices)
+        Wg_t = _sample_axis0(Wg_t, sample_indices)
+        Wphi_t = _sample_axis0(Wphi_t, sample_indices)
+        Wapar_t = _sample_axis0(Wapar_t, sample_indices)
+        heat_t = _sample_axis0(heat_t, sample_indices)
+        pflux_t = _sample_axis0(pflux_t, sample_indices)
+        turbulent_heat_t = _sample_axis0(turbulent_heat_t, sample_indices)
+        heat_s_t = _sample_axis0(heat_s_t, sample_indices)
+        pflux_s_t = _sample_axis0(pflux_s_t, sample_indices)
+        turbulent_heat_s_t = _sample_axis0(turbulent_heat_s_t, sample_indices)
+        phi_mode_t = _sample_axis0(phi_mode_t, sample_indices)
+        if resolved_diagnostics:
+            resolved_t = _sample_resolved_axis0(
+                resolved_t,
+                sample_indices,
+                resolved_to_numpy=resolved_to_numpy,
+            )
+        t = _sample_axis0(t, sample_indices)
+        dt_series = _sample_axis0(dt_series, sample_indices)
+
+    resolved = _pack_resolved_diagnostics(resolved_t) if resolved_diagnostics else None
+    return SimulationDiagnostics(
+        t=t,
+        dt_t=dt_series,
+        dt_mean=jnp.mean(dt_series),
+        gamma_t=gamma_t,
+        omega_t=omega_t,
+        Wg_t=Wg_t,
+        Wphi_t=Wphi_t,
+        Wapar_t=Wapar_t,
+        heat_flux_t=heat_t,
+        particle_flux_t=pflux_t,
+        energy_t=Wg_t + Wphi_t + Wapar_t,
+        heat_flux_species_t=heat_s_t,
+        particle_flux_species_t=pflux_s_t,
+        turbulent_heating_t=turbulent_heat_t,
+        turbulent_heating_species_t=turbulent_heat_s_t,
+        phi_mode_t=phi_mode_t,
+        resolved=resolved,
+    )
