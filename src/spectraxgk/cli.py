@@ -48,6 +48,12 @@ from spectraxgk.workflows.demo import (
     default_example_config_path as _default_example_config_path,
     run_default_linear_demo,
 )
+from spectraxgk.workflows.named_cases import (
+    NamedLinearCommandDeps,
+    load_scan_ky as _load_scan_ky_impl,
+    run_named_linear_command,
+    scan_named_linear_command,
+)
 from spectraxgk.runtime import run_runtime_linear, run_runtime_scan
 from spectraxgk.workflows.cases import (
     RuntimeCommandDeps,
@@ -537,199 +543,37 @@ def _resolve_case(case_name: str):
 
 
 def _load_scan_ky(data: dict) -> np.ndarray:
-    scan = data.get("scan", {})
-    ky_vals = scan.get("ky")
-    if ky_vals is None:
-        return np.asarray([])
-    return np.asarray(ky_vals, dtype=float)
+    return _load_scan_ky_impl(data)
 
 
 def _cmd_run_linear(args: argparse.Namespace) -> int:
-    case_name, cfg, data = load_case_from_toml(args.config, args.case)
-    case_cls, run_fn = _resolve_case(case_name)
-    _ = case_cls  # keep type checkers happy
-    run_cfg = data.get("run", {})
-    fit_cfg = dict(data.get("fit", {}))
-
-    ky = args.ky if args.ky is not None else run_cfg.get("ky", 0.3)
-    Nl = args.Nl if args.Nl is not None else run_cfg.get("Nl", 24)
-    Nm = args.Nm if args.Nm is not None else run_cfg.get("Nm", 12)
-    solver = args.solver if args.solver is not None else run_cfg.get("solver", "auto")
-    fit_signal = (
-        args.fit_signal
-        if args.fit_signal is not None
-        else fit_cfg.pop("fit_signal", "auto")
-    )
-    method = (
-        args.method
-        if args.method is not None
-        else run_cfg.get("method", cfg.time.method)
-    )
-    dt = args.dt if args.dt is not None else run_cfg.get("dt", cfg.time.dt)
-    steps = (
-        args.steps
-        if args.steps is not None
-        else run_cfg.get("steps", int(round(cfg.time.t_max / cfg.time.dt)))
-    )
-    sample_stride = (
-        args.sample_stride
-        if args.sample_stride is not None
-        else run_cfg.get("sample_stride", getattr(cfg.time, "sample_stride", None))
-    )
-    show_progress = _should_show_progress(
-        args, bool(getattr(cfg.time, "progress_bar", False))
-    )
-
-    terms = load_linear_terms_from_toml(data)
-    krylov_cfg = load_krylov_from_toml(data)
-
-    _print_linear_run_header(
-        label=f"named linear {case_name} run",
-        config_path=str(args.config),
-        ky=float(ky),
-        Nl=int(Nl),
-        Nm=int(Nm),
-        solver=str(solver),
-        method=str(method),
-        dt=float(dt),
-        steps=int(steps),
-        grid_shape=(int(cfg.grid.Nx), int(cfg.grid.Ny), int(cfg.grid.Nz)),
-        show_progress=show_progress,
-        extra="detected named case TOML; using run-linear path",
-    )
-
-    result = run_fn(
-        ky_target=float(ky),
-        cfg=cfg,
-        Nl=int(Nl),
-        Nm=int(Nm),
-        solver=str(solver),
-        method=str(method),
-        dt=float(dt),
-        steps=int(steps),
-        sample_stride=None if sample_stride is None else int(sample_stride),
-        krylov_cfg=krylov_cfg,
-        terms=terms,
-        fit_signal=str(fit_signal),
-        show_progress=show_progress,
-        status_callback=_status_printer(case_name),
-        **fit_cfg,
-    )
-    print(f"ky={result.ky:.4f} gamma={result.gamma:.6f} omega={result.omega:.6f}")
-
-    if args.plot:
-        outdir = Path(args.outdir)
-        outdir.mkdir(parents=True, exist_ok=True)
-        grid = build_spectral_grid(cfg.grid)
-        if result.t.size > 1:
-            signal = extract_mode_time_series(
-                result.phi_t, result.selection, method="project"
-            )
-            fig, _ax = growth_fit_figure(result.t, signal)
-            fig.savefig(outdir / f"{case_name}_ky{result.ky:.3f}_fit.png")
-        z_np = np.asarray(grid.z)
-        eigen = extract_eigenfunction(result.phi_t, result.t, result.selection, z=z_np)
-        eigen = normalize_eigenfunction(eigen, z_np)
-        set_plot_style()
-        import matplotlib.pyplot as plt
-
-        fig, ax = plt.subplots(1, 1, figsize=(5, 3))
-        ax.plot(grid.z, eigen.real, label="Re")
-        ax.plot(grid.z, eigen.imag, linestyle="--", label="Im")
-        ax.set_xlabel(r"$\\theta$")
-        ax.set_ylabel(r"$\\phi$")
-        ax.set_title(f"{case_name} ky={result.ky:.3f}")
-        ax.legend(loc="best")
-        fig.tight_layout()
-        fig.savefig(outdir / f"{case_name}_ky{result.ky:.3f}_eig.png")
-        plt.close(fig)
-    return 0
+    return run_named_linear_command(args, deps=_named_linear_command_deps())
 
 
 def _cmd_scan_linear(args: argparse.Namespace) -> int:
-    case_name, cfg, data = load_case_from_toml(args.config, args.case)
-    _case_cls, run_fn = _resolve_case(case_name)
-    scan_cfg = data.get("scan", {})
-    fit_cfg = dict(data.get("fit", {}))
+    return scan_named_linear_command(args, deps=_named_linear_command_deps())
 
-    if args.ky_values is not None:
-        ky_values = np.asarray(
-            [float(x) for x in args.ky_values.split(",") if x.strip() != ""]
-        )
-    else:
-        ky_values = _load_scan_ky(data)
-    if ky_values.size == 0:
-        raise ValueError("No ky values provided. Use --ky-values or [scan].ky in TOML.")
 
-    Nl = args.Nl if args.Nl is not None else scan_cfg.get("Nl", 24)
-    Nm = args.Nm if args.Nm is not None else scan_cfg.get("Nm", 12)
-    solver = args.solver if args.solver is not None else scan_cfg.get("solver", "auto")
-    fit_signal = (
-        args.fit_signal
-        if args.fit_signal is not None
-        else fit_cfg.pop("fit_signal", "auto")
+def _named_linear_command_deps() -> NamedLinearCommandDeps:
+    return NamedLinearCommandDeps(
+        load_case_from_toml=load_case_from_toml,
+        resolve_case=_resolve_case,
+        load_linear_terms_from_toml=load_linear_terms_from_toml,
+        load_krylov_from_toml=load_krylov_from_toml,
+        should_show_progress=_should_show_progress,
+        print_linear_run_header=_print_linear_run_header,
+        status_printer=_status_printer,
+        run_linear_scan=run_linear_scan,
+        build_spectral_grid=build_spectral_grid,
+        extract_mode_time_series=extract_mode_time_series,
+        growth_fit_figure=growth_fit_figure,
+        extract_eigenfunction=extract_eigenfunction,
+        normalize_eigenfunction=normalize_eigenfunction,
+        set_plot_style=set_plot_style,
+        load_cyclone_reference=load_cyclone_reference,
+        load_etg_reference=load_etg_reference,
+        scan_comparison_figure=scan_comparison_figure,
     )
-    auto_window = bool(fit_cfg.pop("auto_window", True))
-    method = (
-        args.method
-        if args.method is not None
-        else scan_cfg.get("method", cfg.time.method)
-    )
-    dt = args.dt if args.dt is not None else scan_cfg.get("dt", cfg.time.dt)
-    steps = (
-        args.steps
-        if args.steps is not None
-        else scan_cfg.get("steps", int(round(cfg.time.t_max / cfg.time.dt)))
-    )
-
-    terms = load_linear_terms_from_toml(data)
-    krylov_cfg = load_krylov_from_toml(data)
-
-    scan = run_linear_scan(
-        ky_values=ky_values,
-        run_linear_fn=run_fn,
-        cfg=cfg,
-        Nl=int(Nl),
-        Nm=int(Nm),
-        dt=float(dt),
-        steps=int(steps),
-        method=str(method),
-        solver=str(solver),
-        krylov_cfg=krylov_cfg,
-        auto_window=auto_window,
-        window_kw=fit_cfg,
-        run_kwargs={"terms": terms, "fit_signal": str(fit_signal)}
-        if terms is not None
-        else {"fit_signal": str(fit_signal)},
-    )
-
-    for ky, g, w in zip(scan.ky, scan.gamma, scan.omega):
-        print(f"ky={ky:.4f} gamma={g:.6f} omega={w:.6f}")
-
-    if args.plot:
-        outdir = Path(args.outdir)
-        outdir.mkdir(parents=True, exist_ok=True)
-        ref = None
-        if case_name == "cyclone":
-            ref = load_cyclone_reference()
-        elif case_name == "etg":
-            ref = load_etg_reference()
-        if ref is not None:
-            fig, _ax = scan_comparison_figure(
-                scan.ky,
-                scan.gamma,
-                scan.omega,
-                r"$k_y \rho_i$",
-                f"{case_name.upper()} scan",
-                x_ref=ref.ky,
-                gamma_ref=ref.gamma,
-                omega_ref=ref.omega,
-                log_x=True,
-            )
-            fig.savefig(outdir / f"{case_name}_scan_comparison.png")
-        else:
-            print("No reference available for this case; skipping comparison plot.")
-    return 0
 
 
 def _runtime_command_deps() -> RuntimeCommandDeps:
