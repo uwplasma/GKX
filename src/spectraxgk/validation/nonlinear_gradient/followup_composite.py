@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict
 from typing import Any, Mapping, Sequence
 
-from spectraxgk.nonlinear_gradient_followup_core import (
+from spectraxgk.validation.nonlinear_gradient.followup_core import (
     NonlinearGradientCompositeControlConfig,
     _coefficient_label_from_parameter,
     _json_number,

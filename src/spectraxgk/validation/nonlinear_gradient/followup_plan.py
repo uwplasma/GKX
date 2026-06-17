@@ -6,7 +6,7 @@ from dataclasses import asdict
 from typing import Any, Mapping, Sequence
 import math
 
-from spectraxgk.nonlinear_gradient_followup_core import (
+from spectraxgk.validation.nonlinear_gradient.followup_core import (
     STATE_TO_RUN_STATE,
     NonlinearGradientFollowupConfig,
     _artifact_passed,

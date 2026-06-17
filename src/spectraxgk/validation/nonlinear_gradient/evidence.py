@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 import json
 
-from spectraxgk.nonlinear_gradient_evidence_core import (
+from spectraxgk.validation.nonlinear_gradient.evidence_core import (
     NON_PRODUCTION_SCOPE_MARKERS,
     NonlinearTurbulenceGradientBracketSweepConfig,
     NonlinearTurbulenceGradientCandidateRankingConfig,
@@ -29,15 +29,15 @@ from spectraxgk.nonlinear_gradient_evidence_core import (
     _json_number as _json_number,
     _scope_blockers as _scope_blockers,
 )
-from spectraxgk.nonlinear_gradient_evidence_classification import (
+from spectraxgk.validation.nonlinear_gradient.evidence_classification import (
     classify_gradient_artifact,
 )
-from spectraxgk.nonlinear_gradient_evidence_gap import (
+from spectraxgk.validation.nonlinear_gradient.evidence_gap import (
     _required_run_rows as _required_run_rows,
     nonlinear_turbulence_gradient_evidence_gap_report,
     nonlinear_turbulence_gradient_evidence_report,
 )
-from spectraxgk.nonlinear_gradient_evidence_screening import (
+from spectraxgk.validation.nonlinear_gradient.evidence_screening import (
     _bracket_sweep_recommendation as _bracket_sweep_recommendation,
     _bracket_sweep_row as _bracket_sweep_row,
     _candidate_next_action as _candidate_next_action,
@@ -48,10 +48,10 @@ from spectraxgk.nonlinear_gradient_evidence_screening import (
     nonlinear_turbulence_gradient_bracket_sweep_report,
     nonlinear_turbulence_gradient_candidate_ranking_report,
 )
-from spectraxgk.nonlinear_gradient_evidence_fd import (
+from spectraxgk.validation.nonlinear_gradient.evidence_fd import (
     nonlinear_turbulence_gradient_finite_difference_report,
 )
-from spectraxgk.nonlinear_gradient_evidence_windows import (
+from spectraxgk.validation.nonlinear_gradient.evidence_windows import (
     _ensemble_row as _ensemble_row,
     summarize_window_evidence,
 )

@@ -1,6 +1,6 @@
 """Core helpers for nonlinear turbulence-gradient evidence gates.
 
-The public :mod:`spectraxgk.nonlinear_gradient_evidence` facade owns artifact
+The public :mod:`spectraxgk.validation.nonlinear_gradient.evidence` facade owns artifact
 report assembly.  This module keeps the small, deterministic claim-boundary
 pieces separate so they can be tested and reused without importing the full
 reporting layer.

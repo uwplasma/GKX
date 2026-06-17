@@ -6,7 +6,7 @@ from dataclasses import asdict
 from typing import Any
 import math
 
-from spectraxgk.nonlinear_gradient_evidence_core import (
+from spectraxgk.validation.nonlinear_gradient.evidence_core import (
     NonlinearTurbulenceGradientFiniteDifferenceConfig,
     _ensemble_statistics_row,
     _finite_float,

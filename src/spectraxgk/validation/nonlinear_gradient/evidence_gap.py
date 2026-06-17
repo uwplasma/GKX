@@ -5,15 +5,15 @@ from __future__ import annotations
 from dataclasses import asdict
 from typing import Any, Sequence
 
-from spectraxgk.nonlinear_gradient_evidence_classification import (
+from spectraxgk.validation.nonlinear_gradient.evidence_classification import (
     classify_gradient_artifact,
 )
-from spectraxgk.nonlinear_gradient_evidence_core import (
+from spectraxgk.validation.nonlinear_gradient.evidence_core import (
     NonlinearTurbulenceGradientEvidenceConfig,
     NonlinearTurbulenceGradientGapConfig,
     _gate,
 )
-from spectraxgk.nonlinear_gradient_evidence_windows import summarize_window_evidence
+from spectraxgk.validation.nonlinear_gradient.evidence_windows import summarize_window_evidence
 
 
 def _required_run_rows(

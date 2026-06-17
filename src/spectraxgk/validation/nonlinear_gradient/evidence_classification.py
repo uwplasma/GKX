@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from spectraxgk.nonlinear_gradient_evidence_core import (
+from spectraxgk.validation.nonlinear_gradient.evidence_core import (
     NonlinearTurbulenceGradientEvidenceConfig,
     _artifact_passed,
     _explicit_production_scope,

@@ -1,7 +1,7 @@
 """Shared configuration and statistics helpers for nonlinear-gradient follow-up.
 
 This module is intentionally side-effect free. Public campaign planners remain
-in ``spectraxgk.nonlinear_gradient_followup`` while reusable config, JSON
+in ``spectraxgk.validation.nonlinear_gradient.followup`` while reusable config, JSON
 sanitization, replicate parsing, and variance-reduction helpers live here for
 unit testing and future planner splits.
 """

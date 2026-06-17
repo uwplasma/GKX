@@ -8,7 +8,7 @@ the propagated gradient uncertainty is slightly too large.
 
 from __future__ import annotations
 
-from spectraxgk.nonlinear_gradient_followup_core import (
+from spectraxgk.validation.nonlinear_gradient.followup_core import (
     STATE_TO_RUN_STATE as STATE_TO_RUN_STATE,
     NonlinearGradientCandidateDesignConfig as NonlinearGradientCandidateDesignConfig,
     NonlinearGradientCompositeControlConfig as NonlinearGradientCompositeControlConfig,
@@ -37,31 +37,31 @@ from spectraxgk.nonlinear_gradient_followup_core import (
     _state_means_by_label as _state_means_by_label,
 )
 
-from spectraxgk.nonlinear_gradient_followup_candidate import (
+from spectraxgk.validation.nonlinear_gradient.followup_candidate import (
     _design_row as _design_row,
     _required_replicates_for_scaled_bracket as _required_replicates_for_scaled_bracket,
     nonlinear_gradient_candidate_design_report as nonlinear_gradient_candidate_design_report,
 )
-from spectraxgk.nonlinear_gradient_followup_composite import (
+from spectraxgk.validation.nonlinear_gradient.followup_composite import (
     _composite_control_row as _composite_control_row,
     nonlinear_gradient_composite_control_report as nonlinear_gradient_composite_control_report,
 )
-from spectraxgk.nonlinear_gradient_followup_plan import (
+from spectraxgk.validation.nonlinear_gradient.followup_plan import (
     _planned_matched_runs as _planned_matched_runs,
     _required_replicates as _required_replicates,
     nonlinear_gradient_followup_plan as nonlinear_gradient_followup_plan,
 )
-from spectraxgk.nonlinear_gradient_followup_ql_seed import (
+from spectraxgk.validation.nonlinear_gradient.followup_ql_seed import (
     _ql_seed_rows as _ql_seed_rows,
     _sign_consistency as _sign_consistency,
     nonlinear_gradient_ql_seed_screen_report as nonlinear_gradient_ql_seed_screen_report,
 )
-from spectraxgk.nonlinear_gradient_followup_state_runbook import (
+from spectraxgk.validation.nonlinear_gradient.followup_state_runbook import (
     _mapping_control_rows as _mapping_control_rows,
     nonlinear_gradient_state_control_runbook_report as nonlinear_gradient_state_control_runbook_report,
 )
 
-from spectraxgk.nonlinear_gradient_followup_variance import (
+from spectraxgk.validation.nonlinear_gradient.followup_variance import (
     nonlinear_gradient_control_mean_gate as nonlinear_gradient_control_mean_gate,
     nonlinear_gradient_control_variate_campaign_plan as nonlinear_gradient_control_variate_campaign_plan,
     nonlinear_gradient_variance_reduction_plan as nonlinear_gradient_variance_reduction_plan,

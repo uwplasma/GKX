@@ -6,10 +6,10 @@ from dataclasses import asdict
 from typing import Any, Sequence
 import math
 
-from spectraxgk.nonlinear_gradient_evidence_classification import (
+from spectraxgk.validation.nonlinear_gradient.evidence_classification import (
     classify_gradient_artifact,
 )
-from spectraxgk.nonlinear_gradient_evidence_core import (
+from spectraxgk.validation.nonlinear_gradient.evidence_core import (
     NonlinearTurbulenceGradientBracketSweepConfig,
     NonlinearTurbulenceGradientCandidateRankingConfig,
     NonlinearTurbulenceGradientEvidenceConfig,
