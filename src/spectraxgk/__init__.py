@@ -312,7 +312,7 @@ from spectraxgk.parallel.velocity import (
     velocity_field_reduce_reference,
     velocity_field_reduce_shard_map,
 )
-from spectraxgk.qa_low_turbulence import (
+from spectraxgk.objectives.qa_low_turbulence import (
     QA_LOW_TURBULENCE_DESIGN_NAMES,
     QA_LOW_TURBULENCE_OBSERVABLE_NAMES,
     QALowTurbulenceConfig,
