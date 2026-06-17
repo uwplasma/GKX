@@ -381,7 +381,61 @@ def compute_nonlinear_diagnostic_tuple(
     )
 
 
+def make_nonlinear_diagnostic_tuple_fn(
+    *,
+    grid: SpectralGrid,
+    cache: LinearCache,
+    params: LinearParams,
+    vol_fac: jnp.ndarray,
+    flux_fac: jnp.ndarray,
+    mask: jnp.ndarray,
+    z_idx: int,
+    use_dealias: bool,
+    real_dtype: Any,
+    omega_ky_index: int | None,
+    omega_kx_index: int | None,
+    flux_scale: float,
+    wphi_scale: float,
+    resolved_diagnostics: bool,
+    kernels: NonlinearDiagnosticKernels,
+) -> Callable[[jnp.ndarray, FieldState, jnp.ndarray, FieldState, jnp.ndarray], tuple[Any, ...]]:
+    """Return a reusable state-to-diagnostic tuple closure for scan policies."""
+
+    def compute_diag_from_state(
+        G_state: jnp.ndarray,
+        fields_state: FieldState,
+        G_prev_step: jnp.ndarray,
+        fields_prev_step: FieldState,
+        dt_step: jnp.ndarray,
+    ) -> tuple[Any, ...]:
+        return compute_nonlinear_diagnostic_tuple(
+            G_state,
+            fields_state,
+            G_prev_step,
+            fields_prev_step,
+            dt_step,
+            grid=grid,
+            cache=cache,
+            params=params,
+            vol_fac=vol_fac,
+            flux_fac=flux_fac,
+            mask=mask,
+            z_idx=z_idx,
+            use_dealias=use_dealias,
+            real_dtype=real_dtype,
+            omega_ky_index=omega_ky_index,
+            omega_kx_index=omega_kx_index,
+            flux_scale=flux_scale,
+            wphi_scale=wphi_scale,
+            resolved_diagnostics=resolved_diagnostics,
+            kernels=kernels,
+        )
+
+    return compute_diag_from_state
+
+
 __all__ = [
     "NonlinearDiagnosticKernels",
     "compute_nonlinear_diagnostic_tuple",
+    "make_nonlinear_diagnostic_tuple_fn",
 ]

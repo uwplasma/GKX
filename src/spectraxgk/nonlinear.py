@@ -56,7 +56,7 @@ from spectraxgk.diagnostics import (
 )
 from spectraxgk.operators.nonlinear.diagnostic_state import (
     NonlinearDiagnosticKernels,
-    compute_nonlinear_diagnostic_tuple,
+    make_nonlinear_diagnostic_tuple_fn,
 )
 from spectraxgk.nonlinear_diagnostics import (
     _pack_resolved_diagnostics,  # noqa: F401 - compatibility re-export
@@ -384,37 +384,23 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
         G0, cache, params, terms=term_cfg, external_phi=external_phi
     )
 
-    diagnostic_kernels = _nonlinear_diagnostic_kernels()
-
-    def _compute_diag_from_state(
-        G_state: jnp.ndarray,
-        fields_state: FieldState,
-        G_prev_step: jnp.ndarray,
-        fields_prev_step: FieldState,
-        dt_step: jnp.ndarray,
-    ):
-        return compute_nonlinear_diagnostic_tuple(
-            G_state,
-            fields_state,
-            G_prev_step,
-            fields_prev_step,
-            dt_step,
-            grid=grid,
-            cache=cache,
-            params=params,
-            vol_fac=setup.vol_fac,
-            flux_fac=setup.flux_fac,
-            mask=setup.mask,
-            z_idx=setup.z_idx,
-            use_dealias=setup.use_dealias,
-            real_dtype=real_dtype,
-            omega_ky_index=omega_ky_index,
-            omega_kx_index=omega_kx_index,
-            flux_scale=flux_scale,
-            wphi_scale=wphi_scale,
-            resolved_diagnostics=resolved_diagnostics,
-            kernels=diagnostic_kernels,
-        )
+    _compute_diag_from_state = make_nonlinear_diagnostic_tuple_fn(
+        grid=grid,
+        cache=cache,
+        params=params,
+        vol_fac=setup.vol_fac,
+        flux_fac=setup.flux_fac,
+        mask=setup.mask,
+        z_idx=setup.z_idx,
+        use_dealias=setup.use_dealias,
+        real_dtype=real_dtype,
+        omega_ky_index=omega_ky_index,
+        omega_kx_index=omega_kx_index,
+        flux_scale=flux_scale,
+        wphi_scale=wphi_scale,
+        resolved_diagnostics=resolved_diagnostics,
+        kernels=_nonlinear_diagnostic_kernels(),
+    )
 
     def step(carry, idx):
         G, G_prev_step, fields_prev_step, diag_prev, t_prev, dt_prev = carry
@@ -883,37 +869,23 @@ def integrate_nonlinear_imex_diagnostics(
         solve_step_fn=solve_imex_step,
     )
 
-    diagnostic_kernels = _nonlinear_diagnostic_kernels()
-
-    def _compute_diag_from_state(
-        G_state: jnp.ndarray,
-        fields_state: FieldState,
-        G_prev_step: jnp.ndarray,
-        fields_prev_step: FieldState,
-        dt_step: jnp.ndarray,
-    ):
-        return compute_nonlinear_diagnostic_tuple(
-            G_state,
-            fields_state,
-            G_prev_step,
-            fields_prev_step,
-            dt_step,
-            grid=grid,
-            cache=cache,
-            params=params,
-            vol_fac=setup.vol_fac,
-            flux_fac=setup.flux_fac,
-            mask=setup.mask,
-            z_idx=setup.z_idx,
-            use_dealias=setup.use_dealias,
-            real_dtype=real_dtype,
-            omega_ky_index=omega_ky_index,
-            omega_kx_index=omega_kx_index,
-            flux_scale=flux_scale,
-            wphi_scale=wphi_scale,
-            resolved_diagnostics=True,
-            kernels=diagnostic_kernels,
-        )
+    _compute_diag_from_state = make_nonlinear_diagnostic_tuple_fn(
+        grid=grid,
+        cache=cache,
+        params=params,
+        vol_fac=setup.vol_fac,
+        flux_fac=setup.flux_fac,
+        mask=setup.mask,
+        z_idx=setup.z_idx,
+        use_dealias=setup.use_dealias,
+        real_dtype=real_dtype,
+        omega_ky_index=omega_ky_index,
+        omega_kx_index=omega_kx_index,
+        flux_scale=flux_scale,
+        wphi_scale=wphi_scale,
+        resolved_diagnostics=True,
+        kernels=_nonlinear_diagnostic_kernels(),
+    )
 
     fields0 = compute_fields_cached(
         G0, cache, params, terms=term_cfg, external_phi=external_phi
