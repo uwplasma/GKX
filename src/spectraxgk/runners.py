@@ -13,8 +13,8 @@ from spectraxgk.linear import integrate_linear
 from spectraxgk.operators.linear.cache import LinearCache, build_linear_cache
 from spectraxgk.operators.linear.params import LinearParams, LinearTerms
 from spectraxgk.nonlinear import integrate_nonlinear
-from spectraxgk.sharding import resolve_state_sharding
-from spectraxgk.sharded_integrators import integrate_nonlinear_sharded
+from spectraxgk.parallel.state import resolve_state_sharding
+from spectraxgk.parallel.integrators import integrate_nonlinear_sharded
 from spectraxgk.terms.config import TermConfig
 
 

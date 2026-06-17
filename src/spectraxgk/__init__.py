@@ -237,7 +237,7 @@ from spectraxgk.parallel import (
     ky_scan_batches,
     parallel_identity_report,
 )
-from spectraxgk.parallel_decomposition import (
+from spectraxgk.parallel.decomposition import (
     DecompositionContract,
     ReconstructionIdentityReport,
     ShardAssignment,
@@ -290,7 +290,7 @@ from spectraxgk.operators.nonlinear.parallel import (
     prototype_nonlinear_domain_serial_step,
     release_ready_nonlinear_parallel_strategies,
 )
-from spectraxgk.velocity_sharding import (
+from spectraxgk.parallel.velocity import (
     VelocityShardingPlan,
     build_velocity_sharding_plan,
     curvature_gradb_drift_reference,
@@ -475,7 +475,7 @@ from spectraxgk.diffrax_integrators import (
     integrate_linear_diffrax_streaming,
     integrate_nonlinear_diffrax,
 )
-from spectraxgk.sharded_integrators import (
+from spectraxgk.parallel.integrators import (
     integrate_linear_sharded,
     integrate_nonlinear_sharded,
 )

@@ -477,7 +477,7 @@ def independent_ensemble_provenance_gate(
     serial_results = [result for _, result in serial_payloads]
     parallel_results = [result for _, result in parallel_payloads]
 
-    from spectraxgk.parallel_decomposition import (
+    from spectraxgk.parallel.decomposition import (
         build_independent_portfolio_decomposition,
         reconstruct_serial,
         serial_reconstruction_identity_report,

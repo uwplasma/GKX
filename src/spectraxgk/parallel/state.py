@@ -85,3 +85,6 @@ def resolve_state_sharding(
     spec_list: list[str | None] = [None] * len(dims)
     spec_list[dims.index(target_dim)] = axis_name
     return NamedSharding(mesh, PartitionSpec(*spec_list))
+
+
+__all__ = ["resolve_state_sharding"]

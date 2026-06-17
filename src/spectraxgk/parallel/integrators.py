@@ -123,7 +123,11 @@ def integrate_nonlinear_sharded(
     G0 = jnp.asarray(G0, dtype=state_dtype)
     dt_val = _dt_array(dt, state_dtype)
 
-    projector = _make_hermitian_projector(np.asarray(cache.ky), int(np.asarray(cache.kx).size)) if compressed_real_fft else None
+    projector = (
+        _make_hermitian_projector(np.asarray(cache.ky), int(np.asarray(cache.kx).size))
+        if compressed_real_fft
+        else None
+    )
 
     def _maybe_shard(state: jnp.ndarray) -> jnp.ndarray:
         if state_sharding is None:
@@ -199,3 +203,6 @@ def integrate_nonlinear_sharded(
     if return_fields:
         return pjit(run_with_fields, in_shardings=state_sharding, out_shardings=None)(G0)
     return pjit(run_final_only, in_shardings=state_sharding, out_shardings=state_sharding)(G0)
+
+
+__all__ = ["integrate_linear_sharded", "integrate_nonlinear_sharded"]

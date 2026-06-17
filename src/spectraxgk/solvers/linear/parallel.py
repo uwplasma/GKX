@@ -106,7 +106,7 @@ def linear_rhs_streaming_velocity_sharded(
     collisions, and nonlinear terms are exposed through the runtime path.
     """
 
-    from spectraxgk.velocity_sharding import (
+    from spectraxgk.parallel.velocity import (
         build_velocity_sharding_plan,
         periodic_streaming_shard_map,
     )
@@ -140,7 +140,7 @@ def _streaming_electrostatic_from_phi_velocity_sharded(
     """Apply electrostatic streaming with a precomputed electrostatic field."""
 
     from spectraxgk.terms.operators import grad_z_periodic as operator_grad_z_periodic
-    from spectraxgk.velocity_sharding import periodic_streaming_shard_map
+    from spectraxgk.parallel.velocity import periodic_streaming_shard_map
 
     particle_streaming = -periodic_streaming_shard_map(
         arr, plan, kz=cache.kz, vth=params.vth, devices=devices
@@ -195,7 +195,7 @@ def linear_rhs_streaming_electrostatic_velocity_sharded(
     field-line grids and excludes electromagnetic fields by construction.
     """
 
-    from spectraxgk.velocity_sharding import (
+    from spectraxgk.parallel.velocity import (
         build_velocity_sharding_plan,
         electrostatic_phi_shard_map,
     )
@@ -462,7 +462,7 @@ def linear_rhs_electrostatic_slices_velocity_sharded(
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Compute gated electrostatic streaming, drift, and diamagnetic slices."""
 
-    from spectraxgk.velocity_sharding import (
+    from spectraxgk.parallel.velocity import (
         build_velocity_sharding_plan,
         curvature_gradb_drift_shard_map,
         diamagnetic_drive_shard_map,
