@@ -6,7 +6,7 @@ from dataclasses import replace
 
 
 from spectraxgk.operators.linear.params import LinearParams
-from spectraxgk.species import Species, build_linear_params
+from spectraxgk.core.species import Species, build_linear_params
 
 
 __all__ = [

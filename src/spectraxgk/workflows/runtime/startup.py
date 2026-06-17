@@ -28,7 +28,7 @@ from spectraxgk.geometry.miller_eik import generate_runtime_miller_eik
 from spectraxgk.normalization import get_normalization_contract
 from spectraxgk.artifacts.restart import load_netcdf_restart_state
 from spectraxgk.workflows.runtime.config import RuntimeConfig, RuntimeSpeciesConfig
-from spectraxgk.species import Species, build_linear_params
+from spectraxgk.core.species import Species, build_linear_params
 from spectraxgk.terms.config import TermConfig
 from spectraxgk.geometry.vmec_eik import generate_runtime_vmec_eik
 

@@ -154,7 +154,7 @@ from spectraxgk.solvers.time.runners import (
     integrate_linear_from_config,
     integrate_nonlinear_from_config,
 )
-from spectraxgk.species import Species, build_linear_params
+from spectraxgk.core.species import Species, build_linear_params
 from spectraxgk.diagnostics.analysis import (
     ModeSelection,
     extract_mode,
