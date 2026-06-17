@@ -28,6 +28,12 @@ PreconditionerFn = Callable[[jnp.ndarray], jnp.ndarray]
 ProjectFn = Callable[[jnp.ndarray], jnp.ndarray]
 SolveStepFn = Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray]
 OperatorBuilderFn = Callable[..., Any]
+DiagnosticFn = Callable[..., Any]
+CollisionSplitFn = Callable[[jnp.ndarray, Any, jnp.ndarray, str], jnp.ndarray]
+DiagnosticStepFn = Callable[
+    [tuple[Any, Any, Any, Any, Any], Any],
+    tuple[tuple[Any, Any, Any, Any, Any], tuple[Any, Any]],
+]
 
 
 def imex_fixed_point_guess(
@@ -219,6 +225,88 @@ def advance_imex_nonlinear_state(
     return solve_step(G, rhs)
 
 
+def make_imex_diagnostic_step(
+    *,
+    method: str,
+    nonlinear_term: NonlinearTermFn,
+    solve_step: SolveStepFn,
+    project_state: ProjectFn,
+    state_dtype: jnp.dtype,
+    real_dtype: jnp.dtype,
+    dt_val: jnp.ndarray,
+    compute_fields_fn: FieldSolveFn,
+    cache: Any,
+    params: Any,
+    term_cfg: Any,
+    external_phi: jnp.ndarray | float | None,
+    compute_diag_from_state: DiagnosticFn,
+    diagnostics_stride: int,
+    select_diagnostics_fn: Callable[..., Any],
+    show_progress: bool,
+    steps: int,
+    progress_total: jnp.ndarray,
+    emit_progress_fn: Callable[..., jnp.ndarray],
+    use_collision_split: bool = False,
+    damping: Any | None = None,
+    collision_scheme: str = "implicit",
+    apply_collision_split_fn: CollisionSplitFn | None = None,
+) -> DiagnosticStepFn:
+    """Build one IMEX diagnostic scan step with injected runtime seams."""
+
+    def step(
+        carry: tuple[Any, Any, Any, Any, Any],
+        idx: Any,
+    ) -> tuple[tuple[Any, Any, Any, Any, Any], tuple[Any, Any]]:
+        G, G_prev_step, fields_prev_step, diag_prev, t_prev = carry
+        G_new = advance_imex_nonlinear_state(
+            G,
+            dt_val=dt_val,
+            method=method,
+            nonlinear_term=nonlinear_term,
+            solve_step=solve_step,
+            project_state=project_state,
+        )
+        if use_collision_split and damping is not None:
+            if apply_collision_split_fn is None:
+                raise ValueError(
+                    "apply_collision_split_fn is required when collision split is active"
+                )
+            G_new = apply_collision_split_fn(
+                G_new, damping, dt_val, collision_scheme
+            )
+        G_new = project_state(G_new)
+        # Keep scan carry dtype stable under mixed-precision scalar constants.
+        G_new = jnp.asarray(G_new, dtype=state_dtype)
+        t_new = jnp.asarray(t_prev + dt_val, dtype=real_dtype)
+        fields_new = compute_fields_fn(
+            G_new, cache, params, terms=term_cfg, external_phi=external_phi
+        )
+
+        def _compute_diag():
+            return compute_diag_from_state(
+                G_new, fields_new, G_prev_step, fields_prev_step, dt_val
+            )
+
+        diag = select_diagnostics_fn(
+            idx,
+            diagnostics_stride=diagnostics_stride,
+            diag_prev=diag_prev,
+            compute_diag_fn=_compute_diag,
+        )
+        G_new = emit_progress_fn(
+            G_new,
+            show_progress=show_progress,
+            diag=diag,
+            idx=idx,
+            steps=steps,
+            t_new=t_new,
+            progress_total=progress_total,
+        )
+        return (G_new, G_new, fields_new, diag, t_new), (diag, t_new)
+
+    return step
+
+
 def integrate_cached_imex_scan(
     G0: jnp.ndarray,
     cache: object,
@@ -332,6 +420,7 @@ __all__ = [
     "advance_imex_nonlinear_state",
     "imex_fixed_point_guess",
     "integrate_cached_imex_scan",
+    "make_imex_diagnostic_step",
     "make_imex_nonlinear_term",
     "make_imex_solve_step",
     "solve_imex_step",

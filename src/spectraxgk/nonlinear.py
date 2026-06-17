@@ -77,8 +77,8 @@ from spectraxgk.solvers.nonlinear.explicit import (
     run_explicit_diagnostic_scan,
 )
 from spectraxgk.solvers.nonlinear.imex import (
-    advance_imex_nonlinear_state,
     integrate_cached_imex_scan,
+    make_imex_diagnostic_step,
     make_imex_nonlinear_term,
     make_imex_solve_step,
     solve_imex_step,
@@ -841,47 +841,31 @@ def integrate_nonlinear_imex_diagnostics(
         G0, cache, params, terms=term_cfg, external_phi=external_phi
     )
 
-    def step(carry, idx):
-        G, G_prev_step, fields_prev_step, diag_prev, t_prev = carry
-        G_new = advance_imex_nonlinear_state(
-            G,
-            dt_val=dt_val,
-            method=method,
-            nonlinear_term=nonlinear_term,
-            solve_step=solve_step,
-            project_state=_project_state,
-        )
-        if use_collision_split and damping is not None:
-            G_new = _apply_collision_split(G_new, damping, dt_val, collision_scheme)
-        G_new = _project_state(G_new)
-        # Keep scan carry dtype stable under mixed-precision scalar constants.
-        G_new = jnp.asarray(G_new, dtype=state_dtype)
-        t_new = t_prev + dt_val
-        fields_new = compute_fields_cached(
-            G_new, cache, params, terms=term_cfg, external_phi=external_phi
-        )
-
-        def _compute_diag():
-            return _compute_diag_from_state(
-                G_new, fields_new, G_prev_step, fields_prev_step, dt_val
-            )
-
-        diag = select_nonlinear_step_diagnostics(
-            idx,
-            diagnostics_stride=diagnostics_stride,
-            diag_prev=diag_prev,
-            compute_diag_fn=_compute_diag,
-        )
-        G_new = maybe_emit_nonlinear_progress(
-            G_new,
-            show_progress=show_progress,
-            diag=diag,
-            idx=idx,
-            steps=steps,
-            t_new=t_new,
-            progress_total=progress_total,
-        )
-        return (G_new, G_new, fields_new, diag, t_new), (diag, t_new)
+    step = make_imex_diagnostic_step(
+        method=method,
+        nonlinear_term=nonlinear_term,
+        solve_step=solve_step,
+        project_state=_project_state,
+        state_dtype=state_dtype,
+        real_dtype=real_dtype,
+        dt_val=dt_val,
+        compute_fields_fn=compute_fields_cached,
+        cache=cache,
+        params=params,
+        term_cfg=term_cfg,
+        external_phi=external_phi,
+        compute_diag_from_state=_compute_diag_from_state,
+        diagnostics_stride=diagnostics_stride,
+        select_diagnostics_fn=select_nonlinear_step_diagnostics,
+        show_progress=show_progress,
+        steps=steps,
+        progress_total=progress_total,
+        emit_progress_fn=maybe_emit_nonlinear_progress,
+        use_collision_split=use_collision_split,
+        damping=damping,
+        collision_scheme=collision_scheme,
+        apply_collision_split_fn=_apply_collision_split,
+    )
 
     step_fn = jax.checkpoint(step) if checkpoint else step
     diag_zero = _compute_diag_from_state(G0, fields0, G0, fields0, dt_val)
