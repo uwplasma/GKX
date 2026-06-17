@@ -15,6 +15,7 @@ __all__ = [
     "_sample_axis0",
     "_sample_indices_with_final",
     "build_nonlinear_simulation_diagnostics",
+    "finalize_nonlinear_scan_diagnostics",
     "maybe_emit_nonlinear_progress",
     "run_sampled_explicit_diagnostic_scan",
     "sampled_scan_intervals",
@@ -264,6 +265,31 @@ def build_nonlinear_simulation_diagnostics(
         turbulent_heating_species_t=turbulent_heat_s_t,
         phi_mode_t=phi_mode_t,
         resolved=resolved,
+    )
+
+
+def finalize_nonlinear_scan_diagnostics(
+    diag: tuple[Any, ...],
+    t: Any,
+    dt_series: Any,
+    *,
+    stride: int,
+    sampled_scan: bool = False,
+    resolved_diagnostics: bool,
+    resolved_to_numpy: bool = False,
+) -> SimulationDiagnostics:
+    """Package raw nonlinear scan diagnostics after applying output sampling."""
+
+    sample_indices = None
+    if int(stride) > 1 and not sampled_scan:
+        sample_indices = _sample_indices_with_final(int(t.shape[0]), int(stride))
+    return build_nonlinear_simulation_diagnostics(
+        diag,
+        t=t,
+        dt_series=dt_series,
+        resolved_diagnostics=resolved_diagnostics,
+        sample_indices=sample_indices,
+        resolved_to_numpy=resolved_to_numpy,
     )
 
 

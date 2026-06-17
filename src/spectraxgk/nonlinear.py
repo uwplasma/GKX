@@ -59,8 +59,9 @@ from spectraxgk.operators.nonlinear.diagnostic_state import (
 from spectraxgk.nonlinear_diagnostics import (
     _pack_resolved_diagnostics,  # noqa: F401 - compatibility re-export
     _sample_axis0,  # noqa: F401 - compatibility re-export
-    _sample_indices_with_final,
-    build_nonlinear_simulation_diagnostics,
+    _sample_indices_with_final,  # noqa: F401 - compatibility re-export
+    build_nonlinear_simulation_diagnostics,  # noqa: F401 - compatibility re-export
+    finalize_nonlinear_scan_diagnostics,
     maybe_emit_nonlinear_progress,
     run_sampled_explicit_diagnostic_scan,
     sampled_scan_intervals,  # noqa: F401 - compatibility re-export
@@ -456,15 +457,13 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
     )
 
     diag, t, dt_series = scan_diag_out
-    output_sample_idx = None
-    if stride > 1 and not sampled_scan:
-        output_sample_idx = _sample_indices_with_final(int(t.shape[0]), stride)
-    diag_out = build_nonlinear_simulation_diagnostics(
+    diag_out = finalize_nonlinear_scan_diagnostics(
         diag,
         t=t,
         dt_series=dt_series,
+        stride=stride,
+        sampled_scan=sampled_scan,
         resolved_diagnostics=resolved_diagnostics,
-        sample_indices=output_sample_idx,
     )
     fields_final = compute_fields_cached(
         G_final, cache, params, terms=term_cfg, external_phi=external_phi
@@ -886,15 +885,12 @@ def integrate_nonlinear_imex_diagnostics(
     dt_series = jnp.ones_like(t) * dt_val
 
     stride = int(max(sample_stride, diagnostics_stride, 1))
-    output_sample_idx = None
-    if stride > 1:
-        output_sample_idx = _sample_indices_with_final(int(t.shape[0]), stride)
-    diag_out = build_nonlinear_simulation_diagnostics(
+    diag_out = finalize_nonlinear_scan_diagnostics(
         diag,
         t=t,
         dt_series=dt_series,
+        stride=stride,
         resolved_diagnostics=True,
-        sample_indices=output_sample_idx,
         resolved_to_numpy=True,
     )
     return jnp.asarray(diag_out.t), diag_out
