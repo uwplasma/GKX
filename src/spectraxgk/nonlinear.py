@@ -76,13 +76,15 @@ from spectraxgk.solvers.nonlinear.imex import (
 )
 from spectraxgk.nonlinear_helpers import (
     IMEXLinearOperator,
+    NonlinearDiagnosticSetup,  # noqa: F401 - compatibility re-export
     _apply_collision_split,
     _collision_damping,
     _nonlinear_cfl_frequency_components,
     _diagnostic_omega_mode_mask,
     _make_fixed_mode_projector,  # noqa: F401 - compatibility re-export
     _make_hermitian_projector,
-    _make_nonlinear_state_projector,
+    _make_nonlinear_state_projector,  # noqa: F401 - compatibility re-export
+    build_nonlinear_diagnostic_setup,
     build_nonlinear_imex_operator,
 )
 
@@ -294,37 +296,31 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
 ) -> tuple[jnp.ndarray, SimulationDiagnostics, jnp.ndarray, FieldState]:
     """Integrate nonlinear system and return runtime diagnostics plus final state."""
 
-    geom_eff = ensure_flux_tube_geometry_data(geom, grid.z)
-    if cache is None:
-        if G0.ndim == 5:
-            Nl, Nm = G0.shape[0], G0.shape[1]
-        elif G0.ndim == 6:
-            Nl, Nm = G0.shape[1], G0.shape[2]
-        else:
-            raise ValueError(
-                "G0 must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)"
-            )
-        cache = build_linear_cache(grid, geom_eff, params, Nl, Nm)
-
     term_cfg = terms or TermConfig()
     if method in {"imex", "semi-implicit"}:
         raise ValueError(
             "Final-state runtime diagnostics helper only supports explicit methods"
         )
-    vol_fac, flux_fac = fieldline_quadrature_weights(geom_eff, grid)
-    mask = _diagnostic_omega_mode_mask(
-        grid, cache, compressed_real_fft=compressed_real_fft
-    )
-    z_idx = _diagnostic_midplane_index(grid.z.size) if z_index is None else int(z_index)
-    use_dealias = bool(use_dealias_mask)
-    _project_state = _make_nonlinear_state_projector(
+    setup = build_nonlinear_diagnostic_setup(
         G0,
-        ky_vals=np.asarray(grid.ky),
-        nx=int(grid.kx.size),
+        grid,
+        geom,
+        params,
+        cache=cache,
+        use_dealias_mask=use_dealias_mask,
+        z_index=z_index,
         compressed_real_fft=compressed_real_fft,
         fixed_mode_ky_index=fixed_mode_ky_index,
         fixed_mode_kx_index=fixed_mode_kx_index,
+        ensure_geometry_fn=ensure_flux_tube_geometry_data,
+        build_cache_fn=build_linear_cache,
+        quadrature_weights_fn=fieldline_quadrature_weights,
+        omega_mask_fn=_diagnostic_omega_mode_mask,
+        midplane_index_fn=_diagnostic_midplane_index,
     )
+    geom_eff = setup.geom
+    cache = setup.cache
+    _project_state = setup.project_state
 
     state_dtype = jnp.result_type(G0, jnp.complex64)
     G0 = jnp.asarray(G0, dtype=state_dtype)
@@ -436,11 +432,11 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
             grid=grid,
             cache=cache,
             params=params,
-            vol_fac=vol_fac,
-            flux_fac=flux_fac,
-            mask=mask,
-            z_idx=z_idx,
-            use_dealias=use_dealias,
+            vol_fac=setup.vol_fac,
+            flux_fac=setup.flux_fac,
+            mask=setup.mask,
+            z_idx=setup.z_idx,
+            use_dealias=setup.use_dealias,
             real_dtype=real_dtype,
             omega_ky_index=omega_ky_index,
             omega_kx_index=omega_kx_index,
@@ -881,38 +877,31 @@ def integrate_nonlinear_imex_diagnostics(
 ) -> tuple[jnp.ndarray, SimulationDiagnostics]:
     """IMEX nonlinear integrator with runtime diagnostics."""
 
-    geom_eff = ensure_flux_tube_geometry_data(geom, grid.z)
-    if cache is None:
-        if G0.ndim == 5:
-            Nl, Nm = G0.shape[0], G0.shape[1]
-        elif G0.ndim == 6:
-            Nl, Nm = G0.shape[1], G0.shape[2]
-        else:
-            raise ValueError(
-                "G0 must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)"
-            )
-        cache = build_linear_cache(grid, geom_eff, params, Nl, Nm)
-
     term_cfg = terms or TermConfig()
     linear_cfg = replace(term_cfg, nonlinear=0.0)
     if collision_split:
         linear_cfg = replace(linear_cfg, collisions=0.0, hypercollisions=0.0)
     linear_rhs_fn = _linear_rhs_jit_for_terms(linear_cfg)
 
-    vol_fac, flux_fac = fieldline_quadrature_weights(geom_eff, grid)
-    mask = _diagnostic_omega_mode_mask(
-        grid, cache, compressed_real_fft=compressed_real_fft
-    )
-    z_idx = _diagnostic_midplane_index(grid.z.size) if z_index is None else int(z_index)
-    use_dealias = bool(use_dealias_mask)
-    _project_state = _make_nonlinear_state_projector(
+    setup = build_nonlinear_diagnostic_setup(
         G0,
-        ky_vals=np.asarray(grid.ky),
-        nx=int(grid.kx.size),
+        grid,
+        geom,
+        params,
+        cache=cache,
+        use_dealias_mask=use_dealias_mask,
+        z_index=z_index,
         compressed_real_fft=compressed_real_fft,
         fixed_mode_ky_index=fixed_mode_ky_index,
         fixed_mode_kx_index=fixed_mode_kx_index,
+        ensure_geometry_fn=ensure_flux_tube_geometry_data,
+        build_cache_fn=build_linear_cache,
+        quadrature_weights_fn=fieldline_quadrature_weights,
+        omega_mask_fn=_diagnostic_omega_mode_mask,
+        midplane_index_fn=_diagnostic_midplane_index,
     )
+    cache = setup.cache
+    _project_state = setup.project_state
 
     initial_state_dtype = jnp.result_type(G0, jnp.complex64)
     G0 = jnp.asarray(G0, dtype=initial_state_dtype)
@@ -1001,11 +990,11 @@ def integrate_nonlinear_imex_diagnostics(
             grid=grid,
             cache=cache,
             params=params,
-            vol_fac=vol_fac,
-            flux_fac=flux_fac,
-            mask=mask,
-            z_idx=z_idx,
-            use_dealias=use_dealias,
+            vol_fac=setup.vol_fac,
+            flux_fac=setup.flux_fac,
+            mask=setup.mask,
+            z_idx=setup.z_idx,
+            use_dealias=setup.use_dealias,
             real_dtype=real_dtype,
             omega_ky_index=omega_ky_index,
             omega_kx_index=omega_kx_index,

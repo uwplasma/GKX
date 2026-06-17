@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable
+from typing import Any, Callable
 
 import jax.numpy as jnp
 import jax
@@ -25,6 +25,7 @@ from spectraxgk.terms.nonlinear import _broadcast_grid, _ifft2_xy
 
 __all__ = [
     "IMEXLinearOperator",
+    "NonlinearDiagnosticSetup",
     "_apply_collision_split",
     "_collision_damping",
     "_nonlinear_cfl_frequency_components",
@@ -32,6 +33,7 @@ __all__ = [
     "_make_fixed_mode_projector",
     "_make_hermitian_projector",
     "_make_nonlinear_state_projector",
+    "build_nonlinear_diagnostic_setup",
     "build_nonlinear_imex_operator",
 ]
 
@@ -46,6 +48,78 @@ class IMEXLinearOperator:
     precond_op: Callable[[jnp.ndarray], jnp.ndarray] | None
     matvec: Callable[[jnp.ndarray], jnp.ndarray]
     squeeze_species: bool
+
+
+@dataclass(frozen=True)
+class NonlinearDiagnosticSetup:
+    """Shared cache, weights, masks, and projection policy for diagnostics."""
+
+    geom: Any
+    cache: LinearCache
+    vol_fac: jnp.ndarray
+    flux_fac: jnp.ndarray
+    mask: jnp.ndarray
+    z_idx: int
+    use_dealias: bool
+    project_state: Callable[[jnp.ndarray], jnp.ndarray]
+
+
+def _nonlinear_moment_counts(G0: jnp.ndarray) -> tuple[int, int]:
+    if G0.ndim == 5:
+        return int(G0.shape[0]), int(G0.shape[1])
+    if G0.ndim == 6:
+        return int(G0.shape[1]), int(G0.shape[2])
+    raise ValueError(
+        "G0 must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)"
+    )
+
+
+def build_nonlinear_diagnostic_setup(
+    G0: jnp.ndarray,
+    grid: SpectralGrid,
+    geom: Any,
+    params: LinearParams,
+    *,
+    cache: LinearCache | None,
+    use_dealias_mask: bool,
+    z_index: int | None,
+    compressed_real_fft: bool,
+    fixed_mode_ky_index: int | None,
+    fixed_mode_kx_index: int | None,
+    ensure_geometry_fn: Callable[..., Any],
+    build_cache_fn: Callable[..., LinearCache],
+    quadrature_weights_fn: Callable[..., tuple[jnp.ndarray, jnp.ndarray]],
+    omega_mask_fn: Callable[..., jnp.ndarray],
+    midplane_index_fn: Callable[[int], int],
+) -> NonlinearDiagnosticSetup:
+    """Build the shared diagnostic setup used by explicit and IMEX scans."""
+
+    geom_eff = ensure_geometry_fn(geom, grid.z)
+    if cache is None:
+        nl, nm = _nonlinear_moment_counts(G0)
+        cache = build_cache_fn(grid, geom_eff, params, nl, nm)
+
+    vol_fac, flux_fac = quadrature_weights_fn(geom_eff, grid)
+    mask = omega_mask_fn(grid, cache, compressed_real_fft=compressed_real_fft)
+    z_idx = midplane_index_fn(grid.z.size) if z_index is None else int(z_index)
+    project_state = _make_nonlinear_state_projector(
+        G0,
+        ky_vals=np.asarray(grid.ky),
+        nx=int(grid.kx.size),
+        compressed_real_fft=compressed_real_fft,
+        fixed_mode_ky_index=fixed_mode_ky_index,
+        fixed_mode_kx_index=fixed_mode_kx_index,
+    )
+    return NonlinearDiagnosticSetup(
+        geom=geom_eff,
+        cache=cache,
+        vol_fac=vol_fac,
+        flux_fac=flux_fac,
+        mask=mask,
+        z_idx=z_idx,
+        use_dealias=bool(use_dealias_mask),
+        project_state=project_state,
+    )
 
 
 def _make_hermitian_projector(
