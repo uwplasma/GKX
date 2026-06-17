@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any
 
-import jax
 import jax.numpy as jnp
 import numpy as np
 
@@ -77,6 +76,10 @@ from spectraxgk.solvers.nonlinear.explicit import (
     integrate_cached_explicit_scan,
     make_explicit_diagnostic_step,
     run_explicit_diagnostic_scan,
+)
+from spectraxgk.solvers.nonlinear.diagnostics import (
+    ExplicitNonlinearDiagnosticsDeps,
+    integrate_explicit_nonlinear_diagnostics_impl,
 )
 from spectraxgk.solvers.nonlinear.imex import (
     integrate_cached_imex_scan,
@@ -291,6 +294,37 @@ def integrate_nonlinear(
     )
 
 
+def _explicit_nonlinear_diagnostics_deps() -> ExplicitNonlinearDiagnosticsDeps:
+    """Collect facade-level dependencies for explicit diagnostic integration."""
+
+    return ExplicitNonlinearDiagnosticsDeps(
+        ensure_geometry_fn=ensure_flux_tube_geometry_data,
+        build_cache_fn=build_linear_cache,
+        quadrature_weights_fn=fieldline_quadrature_weights,
+        omega_mask_fn=_diagnostic_omega_mode_mask,
+        midplane_index_fn=_diagnostic_midplane_index,
+        resolve_cfl_fac_fn=resolve_cfl_fac,
+        linear_frequency_bound_fn=_linear_frequency_bound,
+        laguerre_velocity_max_fn=_laguerre_velocity_max,
+        cfl_frequency_components_fn=_nonlinear_cfl_frequency_components,
+        collision_damping_fn=_collision_damping,
+        nonlinear_rhs_fn=nonlinear_rhs_cached,
+        compute_fields_fn=compute_fields_cached,
+        diagnostic_kernels_fn=_nonlinear_diagnostic_kernels,
+        build_diagnostic_setup_fn=build_nonlinear_diagnostic_setup,
+        build_time_step_policy_fn=build_nonlinear_time_step_policy,
+        build_collision_split_policy_fn=build_nonlinear_collision_split_policy,
+        make_diagnostic_tuple_fn=make_nonlinear_diagnostic_tuple_fn,
+        make_explicit_step_fn=make_explicit_diagnostic_step,
+        run_explicit_scan_fn=run_explicit_diagnostic_scan,
+        run_sampled_explicit_scan_fn=run_sampled_explicit_diagnostic_scan,
+        finalize_scan_diagnostics_fn=finalize_nonlinear_scan_diagnostics,
+        select_step_diagnostics_fn=select_nonlinear_step_diagnostics,
+        emit_progress_fn=maybe_emit_nonlinear_progress,
+        apply_collision_split_fn=_apply_collision_split,
+    )
+
+
 def _integrate_nonlinear_explicit_diagnostics_impl(
     G0: jnp.ndarray,
     grid: SpectralGrid,
@@ -335,160 +369,48 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
 ) -> tuple[jnp.ndarray, SimulationDiagnostics, jnp.ndarray, FieldState]:
     """Integrate nonlinear system and return runtime diagnostics plus final state."""
 
-    term_cfg = terms or TermConfig()
-    if method in {"imex", "semi-implicit"}:
-        raise ValueError(
-            "Final-state runtime diagnostics helper only supports explicit methods"
-        )
-    setup = build_nonlinear_diagnostic_setup(
+    return integrate_explicit_nonlinear_diagnostics_impl(
         G0,
         grid,
         geom,
         params,
+        dt,
+        steps,
+        deps=_explicit_nonlinear_diagnostics_deps(),
+        method=method,
         cache=cache,
+        terms=terms,
+        checkpoint=checkpoint,
+        sample_stride=sample_stride,
+        diagnostics_stride=diagnostics_stride,
         use_dealias_mask=use_dealias_mask,
         z_index=z_index,
         compressed_real_fft=compressed_real_fft,
-        fixed_mode_ky_index=fixed_mode_ky_index,
-        fixed_mode_kx_index=fixed_mode_kx_index,
-        ensure_geometry_fn=ensure_flux_tube_geometry_data,
-        build_cache_fn=build_linear_cache,
-        quadrature_weights_fn=fieldline_quadrature_weights,
-        omega_mask_fn=_diagnostic_omega_mode_mask,
-        midplane_index_fn=_diagnostic_midplane_index,
-    )
-    geom_eff = setup.geom
-    cache = setup.cache
-    _project_state = setup.project_state
-
-    state_dtype = jnp.result_type(G0, jnp.complex64)
-    G0 = jnp.asarray(G0, dtype=state_dtype)
-    G0 = _project_state(G0)
-    real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
-    time_step_policy = build_nonlinear_time_step_policy(
-        grid,
-        geom_eff,
-        params,
-        cache,
-        method=method,
-        dt=dt,
-        steps=steps,
+        laguerre_mode=laguerre_mode,
+        omega_ky_index=omega_ky_index,
+        omega_kx_index=omega_kx_index,
+        flux_scale=flux_scale,
+        wphi_scale=wphi_scale,
         fixed_dt=fixed_dt,
         dt_min=dt_min,
         dt_max=dt_max,
         cfl=cfl,
         cfl_fac=cfl_fac,
-        compressed_real_fft=compressed_real_fft,
-        real_dtype=real_dtype,
-        resolve_cfl_fac_fn=resolve_cfl_fac,
-        linear_frequency_bound_fn=_linear_frequency_bound,
-        laguerre_velocity_max_fn=_laguerre_velocity_max,
-        cfl_frequency_components_fn=_nonlinear_cfl_frequency_components,
-    )
-    collision_policy = build_nonlinear_collision_split_policy(
-        cache,
-        params,
-        term_cfg,
-        real_dtype,
-        squeeze_species=G0.ndim == 5,
         collision_split=collision_split,
-        collision_damping_fn=_collision_damping,
-    )
-
-    def rhs_fn(G):
-        return nonlinear_rhs_cached(
-            G,
-            cache,
-            params,
-            collision_policy.rhs_terms,
-            compressed_real_fft=compressed_real_fft,
-            laguerre_mode=laguerre_mode,
-            external_phi=external_phi,
-        )
-
-    fields0 = compute_fields_cached(
-        G0, cache, params, terms=term_cfg, external_phi=external_phi
-    )
-
-    _compute_diag_from_state = make_nonlinear_diagnostic_tuple_fn(
-        grid=grid,
-        cache=cache,
-        params=params,
-        vol_fac=setup.vol_fac,
-        flux_fac=setup.flux_fac,
-        mask=setup.mask,
-        z_idx=setup.z_idx,
-        use_dealias=setup.use_dealias,
-        real_dtype=real_dtype,
-        omega_ky_index=omega_ky_index,
-        omega_kx_index=omega_kx_index,
-        flux_scale=flux_scale,
-        wphi_scale=wphi_scale,
-        resolved_diagnostics=resolved_diagnostics,
-        kernels=_nonlinear_diagnostic_kernels(),
-    )
-
-    step = make_explicit_diagnostic_step(
-        rhs_fn=rhs_fn,
-        method=method,
-        project_state=_project_state,
-        state_dtype=state_dtype,
-        real_dtype=real_dtype,
-        time_step_policy=time_step_policy,
-        compute_fields_fn=compute_fields_cached,
-        cache=cache,
-        params=params,
-        term_cfg=term_cfg,
-        external_phi=external_phi,
-        compute_diag_from_state=_compute_diag_from_state,
-        diagnostics_stride=diagnostics_stride,
-        select_diagnostics_fn=select_nonlinear_step_diagnostics,
-        show_progress=show_progress,
-        steps=steps,
-        emit_progress_fn=maybe_emit_nonlinear_progress,
-        use_collision_split=collision_policy.active,
-        damping=collision_policy.damping,
         collision_scheme=collision_scheme,
-        apply_collision_split_fn=_apply_collision_split,
-    )
-
-    dt0 = jnp.asarray(
-        time_step_policy.update_dt(fields0, time_step_policy.dt_init), dtype=real_dtype
-    )
-    diag_zero = _compute_diag_from_state(G0, fields0, G0, fields0, dt0)
-
-    stride = int(max(sample_stride, diagnostics_stride, 1))
-    sampled_scan = stride > 1 and jax.default_backend() != "cpu"
-    G_final, scan_diag_out = run_explicit_diagnostic_scan(
-        step,
-        (
-            G0,
-            G0,
-            fields0,
-            diag_zero,
-            jnp.asarray(0.0, dtype=real_dtype),
-            dt0,
-        ),
-        steps=steps,
-        stride=stride,
-        sampled_scan=sampled_scan,
-        checkpoint=checkpoint,
-        sampled_scan_fn=run_sampled_explicit_diagnostic_scan,
-    )
-
-    diag, t, dt_series = scan_diag_out
-    diag_out = finalize_nonlinear_scan_diagnostics(
-        diag,
-        t=t,
-        dt_series=dt_series,
-        stride=stride,
-        sampled_scan=sampled_scan,
+        implicit_tol=implicit_tol,
+        implicit_maxiter=implicit_maxiter,
+        implicit_iters=implicit_iters,
+        implicit_relax=implicit_relax,
+        implicit_restart=implicit_restart,
+        implicit_solve_method=implicit_solve_method,
+        implicit_preconditioner=implicit_preconditioner,
+        fixed_mode_ky_index=fixed_mode_ky_index,
+        fixed_mode_kx_index=fixed_mode_kx_index,
+        external_phi=external_phi,
         resolved_diagnostics=resolved_diagnostics,
+        show_progress=show_progress,
     )
-    fields_final = compute_fields_cached(
-        G_final, cache, params, terms=term_cfg, external_phi=external_phi
-    )
-    return jnp.asarray(diag_out.t), diag_out, G_final, fields_final
 
 
 def integrate_nonlinear_explicit_diagnostics(
