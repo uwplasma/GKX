@@ -93,6 +93,10 @@ from spectraxgk.workflows.cases import (
     run_linear_case as _run_linear_case_impl,
     run_nonlinear_case as _run_nonlinear_case_impl,
 )
+from spectraxgk.workflows.reduced_models import (
+    CETGLinearRuntimeDeps,
+    run_cetg_linear_runtime,
+)
 from spectraxgk.terms.config import TermConfig
 from spectraxgk.miller_eik import generate_runtime_miller_eik
 from spectraxgk.vmec_eik import generate_runtime_vmec_eik
@@ -293,17 +297,6 @@ def run_runtime_linear(
         if status_callback is not None:
             status_callback(message)
 
-    def _resolved_fit_bounds(
-        t_arr: np.ndarray,
-        tmin_fit: float | None,
-        tmax_fit: float | None,
-    ) -> tuple[float | None, float | None]:
-        if t_arr.size == 0:
-            return None, None
-        tmin_use = float(tmin_fit) if tmin_fit is not None else float(t_arr[0])
-        tmax_use = float(tmax_fit) if tmax_fit is not None else float(t_arr[-1])
-        return tmin_use, tmax_use
-
     ql_enabled = bool(getattr(cfg.quasilinear, "enabled", False))
     return_state_requested = bool(return_state)
     return_state_eff = return_state_requested or ql_enabled
@@ -315,118 +308,37 @@ def run_runtime_linear(
             raise NotImplementedError(
                 "quasilinear diagnostics are not yet validated for reduced_model='cetg'"
             )
-        geom = build_runtime_geometry(cfg)
-        validate_cetg_runtime_config(cfg, geom, Nl=Nl_use, Nm=Nm_use)
-        _status("building spectral grid")
-        grid_cfg = apply_geometry_grid_defaults(geom, cfg.grid)
-        grid_full = build_spectral_grid(grid_cfg)
-        ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
-        grid = select_ky_grid(grid_full, ky_index)
-        sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
-        _status(f"selected ky index {ky_index} at ky={float(grid.ky[0]):.4f}")
-        _status("building initial condition")
-        g0 = _build_initial_condition(
-            grid,
-            geom,
+        return run_cetg_linear_runtime(
             cfg,
-            ky_index=sel.ky_index,
-            kx_index=sel.kx_index,
+            deps=CETGLinearRuntimeDeps(
+                build_runtime_geometry=build_runtime_geometry,
+                validate_cetg_runtime_config=validate_cetg_runtime_config,
+                build_initial_condition=_build_initial_condition,
+                build_runtime_term_config=build_runtime_term_config,
+                build_cetg_model_params=build_cetg_model_params,
+                integrate_cetg_explicit_diagnostics_state=integrate_cetg_explicit_diagnostics_state,
+                fit_growth_rate_auto=fit_growth_rate_auto,
+                fit_growth_rate=fit_growth_rate,
+            ),
+            ky_target=ky_target,
             Nl=Nl_use,
             Nm=Nm_use,
-            nspecies=1,
-        )
-        cetg_terms = build_runtime_term_config(cfg)
-        cetg_params = build_cetg_model_params(cfg, geom, Nl=Nl_use, Nm=Nm_use)
-        solver_key = _normalize_linear_solver_name(solver)
-        if solver_key == "krylov":
-            raise NotImplementedError(
-                "solver='krylov' is not implemented for physics.reduced_model='cetg'"
-            )
-        if solver_key not in {"auto", "time", "explicit_time"}:
-            raise ValueError(
-                "solver must be one of {'auto', 'time', 'explicit_time', 'krylov'}"
-            )
-        dt_val = float(cfg.time.dt if dt is None else dt)
-        if dt_val <= 0.0:
-            raise ValueError("dt must be > 0")
-        steps_val = (
-            int(steps)
-            if steps is not None
-            else int(round(float(cfg.time.t_max) / dt_val))
-        )
-        if steps_val < 1:
-            raise ValueError("steps must be >= 1")
-        sample_stride_use = int(
-            cfg.time.sample_stride if sample_stride is None else sample_stride
-        )
-        _status(f"running cETG time integration over {steps_val} steps")
-        _t, diag, G_final, _fields = integrate_cetg_explicit_diagnostics_state(
-            g0,
-            grid,
-            cetg_params,
-            cetg_terms,
-            dt=dt_val,
-            steps=steps_val,
-            method=str(method or cfg.time.method),
-            sample_stride=sample_stride_use,
-            diagnostics_stride=1,
-            compressed_real_fft=bool(cfg.time.compressed_real_fft),
-            omega_ky_index=0,
-            omega_kx_index=0,
-            fixed_dt=bool(cfg.time.fixed_dt),
-            dt_min=float(cfg.time.dt_min),
-            dt_max=cfg.time.dt_max,
-            cfl=float(cfg.time.cfl),
-            cfl_fac=cfg.time.cfl_fac,
-        )
-        signal = np.asarray(
-            diag.phi_mode_t
-            if diag.phi_mode_t is not None
-            else np.zeros_like(np.asarray(diag.t))
-        )
-        t_arr = np.asarray(diag.t, dtype=float)
-        fit_window_tmin: float | None = None
-        fit_window_tmax: float | None = None
-        _status(
-            f"integration complete; fitting growth rate from {t_arr.size} saved samples"
-        )
-        if t_arr.size < 2:
-            gamma = (
-                float(np.asarray(diag.gamma_t)[-1])
-                if np.asarray(diag.gamma_t).size
-                else 0.0
-            )
-            omega = (
-                float(np.asarray(diag.omega_t)[-1])
-                if np.asarray(diag.omega_t).size
-                else 0.0
-            )
-        elif auto_window:
-            gamma, omega, fit_window_tmin, fit_window_tmax = fit_growth_rate_auto(
-                t_arr,
-                signal,
-                window_fraction=window_fraction,
-                min_points=min_points,
-                start_fraction=start_fraction,
-                growth_weight=growth_weight,
-                require_positive=require_positive,
-                min_amp_fraction=min_amp_fraction,
-            )
-        else:
-            gamma, omega = fit_growth_rate(t_arr, signal, tmin=tmin, tmax=tmax)
-            fit_window_tmin, fit_window_tmax = _resolved_fit_bounds(t_arr, tmin, tmax)
-        _status(f"fit complete: gamma={float(gamma):.6f} omega={float(omega):.6f}")
-        return RuntimeLinearResult(
-            ky=float(grid.ky[0]),
-            gamma=float(gamma),
-            omega=float(omega),
-            selection=sel,
-            t=t_arr,
-            signal=np.asarray(signal),
-            state=np.asarray(G_final) if return_state else None,
-            fit_window_tmin=fit_window_tmin,
-            fit_window_tmax=fit_window_tmax,
-            fit_signal_used="phi",
+            solver=solver,
+            method=method,
+            dt=dt,
+            steps=steps,
+            sample_stride=sample_stride,
+            auto_window=auto_window,
+            tmin=tmin,
+            tmax=tmax,
+            window_fraction=window_fraction,
+            min_points=min_points,
+            start_fraction=start_fraction,
+            growth_weight=growth_weight,
+            require_positive=require_positive,
+            min_amp_fraction=min_amp_fraction,
+            return_state=return_state,
+            status_callback=status_callback,
         )
 
     geom = build_runtime_geometry(cfg)
