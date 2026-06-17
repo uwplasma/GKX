@@ -8,11 +8,13 @@ from typing import Any
 import numpy as np
 
 from spectraxgk.analysis import select_ky_index
+from spectraxgk.config import resolve_cfl_fac
 from spectraxgk.grids import SpectralGrid
 from spectraxgk.runtime_config import RuntimeConfig
 
 __all__ = [
     "RuntimeIndependentParallelPlan",
+    "build_runtime_nonlinear_diagnostics_kwargs",
     "_infer_runtime_nonlinear_steps",
     "_midplane_index",
     "_normalize_linear_solver_name",
@@ -48,6 +50,68 @@ class RuntimeIndependentParallelPlan:
         payload = asdict(self)
         payload["enabled"] = self.enabled
         return payload
+
+
+def build_runtime_nonlinear_diagnostics_kwargs(
+    cfg: RuntimeConfig,
+    *,
+    dt: float,
+    steps: int,
+    method: str | None,
+    term_config: Any,
+    sample_stride: int,
+    diagnostics_stride: int,
+    laguerre_mode: str,
+    ky_index: int,
+    kx_index: int,
+    fixed_dt: bool,
+    fixed_mode_ky_index: int | None,
+    fixed_mode_kx_index: int | None,
+    external_phi: float | None,
+    resolved_diagnostics: bool,
+    show_progress: bool,
+) -> dict[str, Any]:
+    """Build keyword arguments for nonlinear diagnostic integration.
+
+    Runtime drivers use the same physics kwargs for fixed-window and adaptive
+    chunked diagnostics. Keeping them in one policy helper prevents drift
+    between the two branches while leaving the actual integrator call in the
+    public runtime facade.
+    """
+
+    method_use = str(method or cfg.time.method)
+    kwargs: dict[str, Any] = dict(
+        dt=float(dt),
+        steps=int(steps),
+        method=method_use,
+        terms=term_config,
+        sample_stride=int(sample_stride),
+        diagnostics_stride=int(diagnostics_stride),
+        use_dealias_mask=bool(cfg.time.nonlinear_dealias),
+        laguerre_mode=str(laguerre_mode),
+        omega_ky_index=int(ky_index),
+        omega_kx_index=int(kx_index),
+        flux_scale=float(cfg.normalization.flux_scale),
+        wphi_scale=float(cfg.normalization.wphi_scale),
+        fixed_dt=bool(fixed_dt),
+        dt_min=float(cfg.time.dt_min),
+        dt_max=cfg.time.dt_max,
+        cfl=float(cfg.time.cfl),
+        cfl_fac=resolve_cfl_fac(method_use, cfg.time.cfl_fac),
+        collision_split=bool(cfg.time.collision_split),
+        collision_scheme=str(cfg.time.collision_scheme),
+        implicit_restart=int(cfg.time.implicit_restart),
+        implicit_solve_method=str(cfg.time.implicit_solve_method),
+        implicit_preconditioner=cfg.time.implicit_preconditioner,
+        fixed_mode_ky_index=fixed_mode_ky_index,
+        fixed_mode_kx_index=fixed_mode_kx_index,
+        external_phi=external_phi,
+    )
+    if not resolved_diagnostics:
+        kwargs["resolved_diagnostics"] = False
+    if show_progress:
+        kwargs["show_progress"] = True
+    return kwargs
 
 
 def _normalize_linear_solver_name(solver: str) -> str:

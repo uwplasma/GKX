@@ -15,7 +15,6 @@ from spectraxgk.cetg import (
     integrate_cetg_explicit_diagnostics_state,
     validate_cetg_runtime_config,
 )
-from spectraxgk.config import resolve_cfl_fac
 from spectraxgk.analysis import (
     ModeSelection,
     extract_eigenfunction,
@@ -60,6 +59,7 @@ from spectraxgk.runtime_orchestration import (
 )
 from spectraxgk.runtime_policies import (
     RuntimeIndependentParallelPlan,
+    build_runtime_nonlinear_diagnostics_kwargs,
     _infer_runtime_nonlinear_steps,
     _midplane_index,
     _normalize_linear_solver_name,
@@ -1194,9 +1194,6 @@ def run_runtime_nonlinear(
             if laguerre_mode is None
             else str(laguerre_mode)
         )
-        resolved_diag_kw = (
-            {} if resolved_diagnostics else {"resolved_diagnostics": False}
-        )
         _status(
             f"sample_stride={int(sample_stride_use)} diagnostics_stride={int(diag_stride)} laguerre_mode={laguerre_mode_use}"
         )
@@ -1206,38 +1203,24 @@ def run_runtime_nonlinear(
 
             def _run_nonlinear_chunk(chunk_show_progress: bool):
                 nonlocal G_chunk
-                kwargs: dict[str, Any] = dict(
+                kwargs = build_runtime_nonlinear_diagnostics_kwargs(
+                    cfg,
                     dt=dt_val,
                     steps=chunk_steps,
-                    method=str(method or cfg.time.method),
-                    terms=term_cfg,
+                    method=method,
+                    term_config=term_cfg,
                     sample_stride=1,
                     diagnostics_stride=1,
-                    use_dealias_mask=bool(cfg.time.nonlinear_dealias),
                     laguerre_mode=laguerre_mode_use,
-                    omega_ky_index=int(ky_index),
-                    omega_kx_index=int(kx_index),
-                    flux_scale=float(cfg.normalization.flux_scale),
-                    wphi_scale=float(cfg.normalization.wphi_scale),
+                    ky_index=int(ky_index),
+                    kx_index=int(kx_index),
                     fixed_dt=False,
-                    dt_min=float(cfg.time.dt_min),
-                    dt_max=cfg.time.dt_max,
-                    cfl=float(cfg.time.cfl),
-                    cfl_fac=resolve_cfl_fac(
-                        str(method or cfg.time.method), cfg.time.cfl_fac
-                    ),
-                    collision_split=bool(cfg.time.collision_split),
-                    collision_scheme=str(cfg.time.collision_scheme),
-                    implicit_restart=int(cfg.time.implicit_restart),
-                    implicit_solve_method=str(cfg.time.implicit_solve_method),
-                    implicit_preconditioner=cfg.time.implicit_preconditioner,
                     fixed_mode_ky_index=fixed_ky_index_use,
                     fixed_mode_kx_index=fixed_kx_index_use,
                     external_phi=external_phi,
+                    resolved_diagnostics=resolved_diagnostics,
+                    show_progress=chunk_show_progress,
                 )
-                kwargs.update(resolved_diag_kw)
-                if chunk_show_progress:
-                    kwargs["show_progress"] = True
                 t_chunk, diag_chunk, G_next, fields_next = (
                     integrate_nonlinear_explicit_diagnostics_state(
                         G_chunk,
@@ -1267,38 +1250,24 @@ def run_runtime_nonlinear(
             _status(
                 f"running nonlinear diagnostics integrator over {steps_val} steps with dt={dt_val:.6g}"
             )
-            diagnostics_call_kwargs: dict[str, Any] = dict(
+            diagnostics_call_kwargs = build_runtime_nonlinear_diagnostics_kwargs(
+                cfg,
                 dt=dt_val,
                 steps=steps_val,
-                method=str(method or cfg.time.method),
-                terms=term_cfg,
+                method=method,
+                term_config=term_cfg,
                 sample_stride=int(sample_stride_use),
                 diagnostics_stride=int(diag_stride),
-                use_dealias_mask=bool(cfg.time.nonlinear_dealias),
                 laguerre_mode=laguerre_mode_use,
-                omega_ky_index=int(ky_index),
-                omega_kx_index=int(kx_index),
-                flux_scale=float(cfg.normalization.flux_scale),
-                wphi_scale=float(cfg.normalization.wphi_scale),
+                ky_index=int(ky_index),
+                kx_index=int(kx_index),
                 fixed_dt=bool(cfg.time.fixed_dt),
-                dt_min=float(cfg.time.dt_min),
-                dt_max=cfg.time.dt_max,
-                cfl=float(cfg.time.cfl),
-                cfl_fac=resolve_cfl_fac(
-                    str(method or cfg.time.method), cfg.time.cfl_fac
-                ),
-                collision_split=bool(cfg.time.collision_split),
-                collision_scheme=str(cfg.time.collision_scheme),
-                implicit_restart=int(cfg.time.implicit_restart),
-                implicit_solve_method=str(cfg.time.implicit_solve_method),
-                implicit_preconditioner=cfg.time.implicit_preconditioner,
                 fixed_mode_ky_index=fixed_ky_index_use,
                 fixed_mode_kx_index=fixed_kx_index_use,
                 external_phi=external_phi,
+                resolved_diagnostics=resolved_diagnostics,
+                show_progress=show_progress,
             )
-            diagnostics_call_kwargs.update(resolved_diag_kw)
-            if show_progress:
-                diagnostics_call_kwargs["show_progress"] = True
             t, diag, G_final, fields_final = (
                 integrate_nonlinear_explicit_diagnostics_state(
                     G0,
