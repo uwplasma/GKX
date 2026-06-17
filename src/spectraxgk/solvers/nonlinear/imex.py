@@ -7,7 +7,7 @@ and diagnostic IMEX paths.
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Any, Callable
 
 import jax
 import jax.numpy as jnp
@@ -27,6 +27,7 @@ NonlinearTermFn = Callable[[jnp.ndarray], jnp.ndarray]
 PreconditionerFn = Callable[[jnp.ndarray], jnp.ndarray]
 ProjectFn = Callable[[jnp.ndarray], jnp.ndarray]
 SolveStepFn = Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray]
+OperatorBuilderFn = Callable[..., Any]
 
 
 def imex_fixed_point_guess(
@@ -34,8 +35,8 @@ def imex_fixed_point_guess(
     G_rhs: jnp.ndarray,
     *,
     linear_rhs_fn: LinearRhsFn,
-    cache: object,
-    params: object,
+    cache: Any,
+    params: Any,
     linear_cfg: object,
     external_phi: jnp.ndarray | float | None,
     dt_val: jnp.ndarray,
@@ -218,9 +219,119 @@ def advance_imex_nonlinear_state(
     return solve_step(G, rhs)
 
 
+def integrate_cached_imex_scan(
+    G0: jnp.ndarray,
+    cache: object,
+    params: object,
+    dt: float,
+    steps: int,
+    *,
+    term_cfg: Any,
+    linear_cfg: Any,
+    linear_rhs_fn: LinearRhsFn,
+    build_operator_fn: OperatorBuilderFn,
+    build_implicit_operator_fn: Callable[..., tuple[Any, ...]] | None = None,
+    fields_fn: FieldSolveFn,
+    nonlinear_term_fn: NonlinearTermKernel,
+    nonlinear_contribution_fn: NonlinearTermKernel,
+    checkpoint: bool = False,
+    implicit_tol: float = 1.0e-6,
+    implicit_maxiter: int = 200,
+    implicit_iters: int = 3,
+    implicit_relax: float = 0.7,
+    implicit_restart: int = 20,
+    implicit_solve_method: str = "batched",
+    implicit_preconditioner: str | None = None,
+    implicit_operator: Any | None = None,
+    compressed_real_fft: bool = True,
+    laguerre_mode: str = "grid",
+    external_phi: jnp.ndarray | float | None = None,
+    show_progress: bool = False,
+) -> tuple[jnp.ndarray, Any]:
+    """Run the cached IMEX nonlinear scan.
+
+    The public facade injects field solves, operator construction, and RHS
+    kernels so debug and monkeypatch seams stay outside this pure solver owner.
+    """
+
+    del show_progress  # Progress belongs to diagnostics/runtime scans.
+    if implicit_operator is None:
+        build_kwargs = {}
+        if build_implicit_operator_fn is not None:
+            build_kwargs["build_implicit_operator_fn"] = build_implicit_operator_fn
+        implicit_operator = build_operator_fn(
+            G0,
+            cache,
+            params,
+            dt,
+            terms=linear_cfg,
+            implicit_preconditioner=implicit_preconditioner,
+            compressed_real_fft=compressed_real_fft,
+            **build_kwargs,
+        )
+
+    shape = implicit_operator.shape
+    dt_val = implicit_operator.dt_val
+    precond_op = implicit_operator.precond_op
+    matvec = implicit_operator.matvec
+    squeeze_species = implicit_operator.squeeze_species
+    G = jnp.asarray(G0, dtype=implicit_operator.state_dtype)
+    if squeeze_species and G.ndim == len(shape) - 1:
+        G = G[None, ...]
+    if G.shape != shape:
+        raise ValueError(
+            "implicit_operator shape mismatch: "
+            f"expected {shape}, got {tuple(G.shape)}"
+        )
+
+    nonlinear_term = make_imex_nonlinear_term(
+        cache,
+        params,
+        term_cfg,
+        external_phi=external_phi,
+        compressed_real_fft=compressed_real_fft,
+        laguerre_mode=laguerre_mode,
+        fields_fn=fields_fn,
+        nonlinear_term_fn=nonlinear_term_fn,
+        nonlinear_contribution_fn=nonlinear_contribution_fn,
+    )
+    solve_step = make_imex_solve_step(
+        linear_rhs_fn=linear_rhs_fn,
+        cache=cache,
+        params=params,
+        linear_cfg=linear_cfg,
+        external_phi=external_phi,
+        dt_val=dt_val,
+        implicit_iters=implicit_iters,
+        implicit_relax=implicit_relax,
+        matvec=matvec,
+        shape=shape,
+        implicit_tol=implicit_tol,
+        implicit_maxiter=implicit_maxiter,
+        implicit_restart=implicit_restart,
+        implicit_solve_method=implicit_solve_method,
+        precond_op=precond_op,
+        solve_step_fn=solve_imex_step,
+    )
+
+    def step(G_in: jnp.ndarray, _unused: Any) -> tuple[jnp.ndarray, Any]:
+        rhs = G_in + dt_val * nonlinear_term(G_in)
+        G_new = solve_step(G_in, rhs)
+        _dG_new, fields_new = linear_rhs_fn(
+            G_new, cache, params, linear_cfg, external_phi=external_phi
+        )
+        return G_new, fields_new
+
+    step_fn = jax.checkpoint(step) if checkpoint else step
+    G_out, fields_t = jax.lax.scan(step_fn, G, None, length=steps)
+    G_out = G_out[0] if squeeze_species else G_out
+    return G_out, fields_t
+
+
 __all__ = [
     "advance_imex_nonlinear_state",
     "imex_fixed_point_guess",
+    "integrate_cached_imex_scan",
     "make_imex_nonlinear_term",
     "make_imex_solve_step",
     "solve_imex_step",

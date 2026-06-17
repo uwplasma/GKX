@@ -74,6 +74,7 @@ from spectraxgk.operators.nonlinear.rhs import (
 from spectraxgk.solvers.nonlinear.explicit import advance_explicit_nonlinear_state
 from spectraxgk.solvers.nonlinear.imex import (
     advance_imex_nonlinear_state,
+    integrate_cached_imex_scan,
     make_imex_nonlinear_term,
     make_imex_solve_step,
     solve_imex_step,
@@ -994,71 +995,31 @@ def integrate_nonlinear_imex_cached(
     term_cfg = terms or TermConfig()
     linear_cfg = replace(term_cfg, nonlinear=0.0)
     linear_rhs_fn = _linear_rhs_jit_for_terms(linear_cfg)
-
-    if implicit_operator is None:
-        implicit_operator = build_nonlinear_imex_operator(
-            G0,
-            cache,
-            params,
-            dt,
-            terms=linear_cfg,
-            implicit_preconditioner=implicit_preconditioner,
-            compressed_real_fft=compressed_real_fft,
-            build_implicit_operator_fn=_build_implicit_operator,
-        )
-    shape = implicit_operator.shape
-    dt_val = implicit_operator.dt_val
-    precond_op = implicit_operator.precond_op
-    matvec = implicit_operator.matvec
-    squeeze_species = implicit_operator.squeeze_species
-    G = jnp.asarray(G0, dtype=implicit_operator.state_dtype)
-    if squeeze_species and G.ndim == len(shape) - 1:
-        G = G[None, ...]
-    if G.shape != shape:
-        raise ValueError(
-            "implicit_operator shape mismatch: "
-            f"expected {shape}, got {tuple(G.shape)}"
-        )
-
-    nonlinear_term = make_imex_nonlinear_term(
+    return integrate_cached_imex_scan(
+        G0,
         cache,
         params,
-        term_cfg,
-        external_phi=external_phi,
-        compressed_real_fft=compressed_real_fft,
-        laguerre_mode=laguerre_mode,
+        dt,
+        steps,
+        term_cfg=term_cfg,
+        linear_cfg=linear_cfg,
+        linear_rhs_fn=linear_rhs_fn,
+        build_operator_fn=build_nonlinear_imex_operator,
+        build_implicit_operator_fn=_build_implicit_operator,
         fields_fn=compute_fields_cached,
         nonlinear_term_fn=nonlinear_em_term_cached_impl,
         nonlinear_contribution_fn=nonlinear_em_contribution,
-    )
-    solve_step = make_imex_solve_step(
-        linear_rhs_fn=linear_rhs_fn,
-        cache=cache,
-        params=params,
-        linear_cfg=linear_cfg,
-        external_phi=external_phi,
-        dt_val=dt_val,
-        implicit_iters=implicit_iters,
-        implicit_relax=implicit_relax,
-        matvec=matvec,
-        shape=shape,
+        checkpoint=checkpoint,
         implicit_tol=implicit_tol,
         implicit_maxiter=implicit_maxiter,
+        implicit_iters=implicit_iters,
+        implicit_relax=implicit_relax,
         implicit_restart=implicit_restart,
         implicit_solve_method=implicit_solve_method,
-        precond_op=precond_op,
-        solve_step_fn=solve_imex_step,
+        implicit_preconditioner=implicit_preconditioner,
+        implicit_operator=implicit_operator,
+        compressed_real_fft=compressed_real_fft,
+        laguerre_mode=laguerre_mode,
+        external_phi=external_phi,
+        show_progress=show_progress,
     )
-
-    def step(G_in, _):
-        rhs = G_in + dt_val * nonlinear_term(G_in)
-        G_new = solve_step(G_in, rhs)
-        _dG_new, fields_new = linear_rhs_fn(
-            G_new, cache, params, linear_cfg, external_phi=external_phi
-        )
-        return G_new, fields_new
-
-    step_fn = jax.checkpoint(step) if checkpoint else step
-    G_out, fields_t = jax.lax.scan(step_fn, G, None, length=steps)
-    G_out = G_out[0] if squeeze_species else G_out
-    return G_out, fields_t
