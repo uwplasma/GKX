@@ -9,7 +9,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from spectraxgk.cetg import (
+from spectraxgk.terms.cetg import (
     build_cetg_model_params,
     integrate_cetg_explicit_diagnostics_state,
     validate_cetg_runtime_config,
