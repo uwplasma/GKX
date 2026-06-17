@@ -21,6 +21,8 @@ from spectraxgk.solvers.nonlinear.explicit import (
 
 LinearRhsFn = Callable[..., tuple[jnp.ndarray, object]]
 MatvecFn = Callable[[jnp.ndarray], jnp.ndarray]
+FieldSolveFn = Callable[..., object]
+NonlinearTermKernel = Callable[..., jnp.ndarray]
 NonlinearTermFn = Callable[[jnp.ndarray], jnp.ndarray]
 PreconditionerFn = Callable[[jnp.ndarray], jnp.ndarray]
 ProjectFn = Callable[[jnp.ndarray], jnp.ndarray]
@@ -99,6 +101,89 @@ def solve_imex_step(
     return sol.reshape(shape)
 
 
+def make_imex_nonlinear_term(
+    cache: object,
+    params: object,
+    term_cfg: object,
+    *,
+    real_dtype: object | None = None,
+    external_phi: jnp.ndarray | float | None,
+    compressed_real_fft: bool,
+    laguerre_mode: str,
+    fields_fn: FieldSolveFn,
+    nonlinear_term_fn: NonlinearTermKernel,
+    nonlinear_contribution_fn: NonlinearTermKernel | None = None,
+) -> NonlinearTermFn:
+    """Return the explicit nonlinear term closure used by IMEX scans."""
+
+    extra_kwargs = (
+        {}
+        if nonlinear_contribution_fn is None
+        else {"nonlinear_contribution_fn": nonlinear_contribution_fn}
+    )
+
+    def nonlinear_term(G_in: jnp.ndarray) -> jnp.ndarray:
+        return nonlinear_term_fn(
+            G_in,
+            cache,
+            params,
+            term_cfg,
+            real_dtype=real_dtype,
+            external_phi=external_phi,
+            compressed_real_fft=compressed_real_fft,
+            laguerre_mode=laguerre_mode,
+            fields_fn=fields_fn,
+            **extra_kwargs,
+        )
+
+    return nonlinear_term
+
+
+def make_imex_solve_step(
+    *,
+    linear_rhs_fn: LinearRhsFn,
+    cache: object,
+    params: object,
+    linear_cfg: object,
+    external_phi: jnp.ndarray | float | None,
+    dt_val: jnp.ndarray,
+    implicit_iters: int,
+    implicit_relax: float,
+    matvec: MatvecFn,
+    shape: tuple[int, ...],
+    implicit_tol: float,
+    implicit_maxiter: int,
+    implicit_restart: int,
+    implicit_solve_method: str,
+    precond_op: PreconditionerFn | None,
+    solve_step_fn: Callable[..., jnp.ndarray] = solve_imex_step,
+) -> SolveStepFn:
+    """Return the GMRES solve-step closure used by IMEX scan policies."""
+
+    def solve_step(G_in: jnp.ndarray, G_rhs: jnp.ndarray) -> jnp.ndarray:
+        return solve_step_fn(
+            G_in,
+            G_rhs,
+            linear_rhs_fn=linear_rhs_fn,
+            cache=cache,
+            params=params,
+            linear_cfg=linear_cfg,
+            external_phi=external_phi,
+            dt_val=dt_val,
+            implicit_iters=implicit_iters,
+            implicit_relax=implicit_relax,
+            matvec=matvec,
+            shape=shape,
+            implicit_tol=implicit_tol,
+            implicit_maxiter=implicit_maxiter,
+            implicit_restart=implicit_restart,
+            implicit_solve_method=implicit_solve_method,
+            precond_op=precond_op,
+        )
+
+    return solve_step
+
+
 def advance_imex_nonlinear_state(
     G: jnp.ndarray,
     *,
@@ -136,5 +221,7 @@ def advance_imex_nonlinear_state(
 __all__ = [
     "advance_imex_nonlinear_state",
     "imex_fixed_point_guess",
+    "make_imex_nonlinear_term",
+    "make_imex_solve_step",
     "solve_imex_step",
 ]

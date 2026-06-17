@@ -9,6 +9,8 @@ from spectraxgk.solvers.nonlinear.explicit import (
 from spectraxgk.solvers.nonlinear.imex import (
     advance_imex_nonlinear_state,
     imex_fixed_point_guess,
+    make_imex_nonlinear_term,
+    make_imex_solve_step,
     solve_imex_step,
 )
 
@@ -17,5 +19,7 @@ __all__ = [
     "advance_imex_nonlinear_state",
     "checkpoint_explicit_step",
     "imex_fixed_point_guess",
+    "make_imex_nonlinear_term",
+    "make_imex_solve_step",
     "solve_imex_step",
 ]

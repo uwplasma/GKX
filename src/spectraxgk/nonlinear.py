@@ -72,6 +72,8 @@ from spectraxgk.operators.nonlinear.rhs import (
 from spectraxgk.solvers.nonlinear.explicit import advance_explicit_nonlinear_state
 from spectraxgk.solvers.nonlinear.imex import (
     advance_imex_nonlinear_state,
+    make_imex_nonlinear_term,
+    make_imex_solve_step,
     solve_imex_step,
 )
 from spectraxgk.nonlinear_helpers import (
@@ -937,40 +939,36 @@ def integrate_nonlinear_imex_diagnostics(
             cache, params, term_cfg, real_dtype, squeeze_species=squeeze_species
         )
 
-    def nonlinear_term(G_in: jnp.ndarray) -> jnp.ndarray:
-        return nonlinear_em_term_cached_impl(
-            G_in,
-            cache,
-            params,
-            term_cfg,
-            real_dtype=real_dtype,
-            external_phi=external_phi,
-            compressed_real_fft=compressed_real_fft,
-            laguerre_mode=laguerre_mode,
-            fields_fn=compute_fields_cached,
-            nonlinear_contribution_fn=nonlinear_em_contribution,
-        )
-
-    def solve_step(G_in: jnp.ndarray, G_rhs: jnp.ndarray) -> jnp.ndarray:
-        return solve_imex_step(
-            G_in,
-            G_rhs,
-            linear_rhs_fn=linear_rhs_fn,
-            cache=cache,
-            params=params,
-            linear_cfg=linear_cfg,
-            external_phi=external_phi,
-            dt_val=dt_val,
-            implicit_iters=implicit_iters,
-            implicit_relax=implicit_relax,
-            matvec=implicit_operator.matvec,
-            shape=implicit_operator.shape,
-            implicit_tol=implicit_tol,
-            implicit_maxiter=implicit_maxiter,
-            implicit_restart=implicit_restart,
-            implicit_solve_method=implicit_solve_method,
-            precond_op=implicit_operator.precond_op,
-        )
+    nonlinear_term = make_imex_nonlinear_term(
+        cache,
+        params,
+        term_cfg,
+        real_dtype=real_dtype,
+        external_phi=external_phi,
+        compressed_real_fft=compressed_real_fft,
+        laguerre_mode=laguerre_mode,
+        fields_fn=compute_fields_cached,
+        nonlinear_term_fn=nonlinear_em_term_cached_impl,
+        nonlinear_contribution_fn=nonlinear_em_contribution,
+    )
+    solve_step = make_imex_solve_step(
+        linear_rhs_fn=linear_rhs_fn,
+        cache=cache,
+        params=params,
+        linear_cfg=linear_cfg,
+        external_phi=external_phi,
+        dt_val=dt_val,
+        implicit_iters=implicit_iters,
+        implicit_relax=implicit_relax,
+        matvec=implicit_operator.matvec,
+        shape=implicit_operator.shape,
+        implicit_tol=implicit_tol,
+        implicit_maxiter=implicit_maxiter,
+        implicit_restart=implicit_restart,
+        implicit_solve_method=implicit_solve_method,
+        precond_op=implicit_operator.precond_op,
+        solve_step_fn=solve_imex_step,
+    )
 
     diagnostic_kernels = _nonlinear_diagnostic_kernels()
 
@@ -1156,39 +1154,35 @@ def integrate_nonlinear_imex_cached(
                 f"expected {shape}, got {tuple(G.shape)}"
             )
 
-    def nonlinear_term(G_in: jnp.ndarray) -> jnp.ndarray:
-        return nonlinear_em_term_cached_impl(
-            G_in,
-            cache,
-            params,
-            term_cfg,
-            external_phi=external_phi,
-            compressed_real_fft=compressed_real_fft,
-            laguerre_mode=laguerre_mode,
-            fields_fn=compute_fields_cached,
-            nonlinear_contribution_fn=nonlinear_em_contribution,
-        )
-
-    def solve_step(G_in: jnp.ndarray, G_rhs: jnp.ndarray) -> jnp.ndarray:
-        return solve_imex_step(
-            G_in,
-            G_rhs,
-            linear_rhs_fn=linear_rhs_fn,
-            cache=cache,
-            params=params,
-            linear_cfg=linear_cfg,
-            external_phi=external_phi,
-            dt_val=dt_val,
-            implicit_iters=implicit_iters,
-            implicit_relax=implicit_relax,
-            matvec=matvec,
-            shape=shape,
-            implicit_tol=implicit_tol,
-            implicit_maxiter=implicit_maxiter,
-            implicit_restart=implicit_restart,
-            implicit_solve_method=implicit_solve_method,
-            precond_op=precond_op,
-        )
+    nonlinear_term = make_imex_nonlinear_term(
+        cache,
+        params,
+        term_cfg,
+        external_phi=external_phi,
+        compressed_real_fft=compressed_real_fft,
+        laguerre_mode=laguerre_mode,
+        fields_fn=compute_fields_cached,
+        nonlinear_term_fn=nonlinear_em_term_cached_impl,
+        nonlinear_contribution_fn=nonlinear_em_contribution,
+    )
+    solve_step = make_imex_solve_step(
+        linear_rhs_fn=linear_rhs_fn,
+        cache=cache,
+        params=params,
+        linear_cfg=linear_cfg,
+        external_phi=external_phi,
+        dt_val=dt_val,
+        implicit_iters=implicit_iters,
+        implicit_relax=implicit_relax,
+        matvec=matvec,
+        shape=shape,
+        implicit_tol=implicit_tol,
+        implicit_maxiter=implicit_maxiter,
+        implicit_restart=implicit_restart,
+        implicit_solve_method=implicit_solve_method,
+        precond_op=precond_op,
+        solve_step_fn=solve_imex_step,
+    )
 
     def step(G_in, _):
         rhs = G_in + dt_val * nonlinear_term(G_in)
