@@ -71,7 +71,10 @@ from spectraxgk.operators.nonlinear.rhs import (
     nonlinear_em_term_cached_impl,
     nonlinear_rhs_cached_impl,
 )
-from spectraxgk.solvers.nonlinear.explicit import advance_explicit_nonlinear_state
+from spectraxgk.solvers.nonlinear.explicit import (
+    advance_explicit_nonlinear_state,
+    integrate_cached_explicit_scan,
+)
 from spectraxgk.solvers.nonlinear.imex import (
     advance_imex_nonlinear_state,
     integrate_cached_imex_scan,
@@ -204,12 +207,13 @@ def integrate_nonlinear_cached(
             np.asarray(cache.ky), int(np.asarray(cache.kx).size)
         )
 
-    return integrate_nonlinear_scan(
-        rhs_fn,
+    return integrate_cached_explicit_scan(
         G0,
         dt,
         steps,
         method=method,
+        rhs_fn=rhs_fn,
+        scan_fn=integrate_nonlinear_scan,
         checkpoint=checkpoint,
         project_state=project_state,
         show_progress=show_progress,

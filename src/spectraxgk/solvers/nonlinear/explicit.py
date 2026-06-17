@@ -7,13 +7,14 @@ step policy remains pure, small, and directly testable.
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Any, Callable
 
 import jax
 import jax.numpy as jnp
 
 RhsFn = Callable[[jnp.ndarray], tuple[jnp.ndarray, object]]
 ProjectFn = Callable[[jnp.ndarray], jnp.ndarray]
+ScanFn = Callable[..., tuple[jnp.ndarray, Any]]
 
 _SSPX3_ADT = float((1.0 / 6.0) ** (1.0 / 3.0))
 _SSPX3_WGTFAC = float((9.0 - 2.0 * (6.0 ** (2.0 / 3.0))) ** 0.5)
@@ -115,4 +116,34 @@ def checkpoint_explicit_step(step: Callable[..., object], checkpoint: bool):
     return jax.checkpoint(step) if checkpoint else step
 
 
-__all__ = ["advance_explicit_nonlinear_state", "checkpoint_explicit_step"]
+def integrate_cached_explicit_scan(
+    G0: jnp.ndarray,
+    dt: float,
+    steps: int,
+    *,
+    method: str,
+    rhs_fn: RhsFn,
+    scan_fn: ScanFn,
+    checkpoint: bool = False,
+    project_state: ProjectFn | None = None,
+    show_progress: bool = False,
+) -> tuple[jnp.ndarray, Any]:
+    """Run a cached explicit nonlinear scan with injected RHS and projection."""
+
+    return scan_fn(
+        rhs_fn,
+        G0,
+        dt,
+        steps,
+        method=method,
+        checkpoint=checkpoint,
+        project_state=project_state,
+        show_progress=show_progress,
+    )
+
+
+__all__ = [
+    "advance_explicit_nonlinear_state",
+    "checkpoint_explicit_step",
+    "integrate_cached_explicit_scan",
+]
