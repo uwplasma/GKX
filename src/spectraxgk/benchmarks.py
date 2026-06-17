@@ -13,7 +13,7 @@ from spectraxgk.config import (
     KineticElectronBaseCase,
     TEMBaseCase,
 )
-from spectraxgk.benchmark_defaults import (
+from spectraxgk.validation.benchmarks.defaults import (
     CYCLONE_KRYLOV_DEFAULT,
     CYCLONE_OMEGA_D_SCALE,
     CYCLONE_OMEGA_STAR_SCALE,
@@ -36,24 +36,24 @@ from spectraxgk.benchmark_defaults import (
     TEM_OMEGA_STAR_SCALE,
     TEM_RHO_STAR,
 )
-from spectraxgk.benchmark_batching import (
+from spectraxgk.validation.benchmarks.batching import (
     _is_array_like,
     _iter_ky_batches,
     _resolve_streaming_window,
 )
-from spectraxgk.benchmark_fit_signals import (
+from spectraxgk.validation.benchmarks.fit_signals import (
     _extract_mode_only_signal,
     _normalize_growth_rate,
     _score_fit_signal_auto,
     _select_fit_signal,
     _select_fit_signal_auto,
 )
-from spectraxgk.benchmark_initialization import (
+from spectraxgk.validation.benchmarks.initialization import (
     _build_gaussian_profile,
     _build_initial_condition,
     _kinetic_reference_init_cfg,
 )
-from spectraxgk.benchmark_reference import (
+from spectraxgk.validation.benchmarks.reference import (
     CycloneComparison,
     CycloneReference,
     CycloneRunResult,
@@ -68,14 +68,14 @@ from spectraxgk.benchmark_reference import (
     load_kbm_reference,
     load_tem_reference,
 )
-from spectraxgk.benchmark_solver_policy import (
+from spectraxgk.validation.benchmarks.solver_policy import (
     KBM_EXPLICIT_SOLVER_LOCK,
     KBM_EXPLICIT_SOLVER_LOCK_TOL,
     _kbm_use_multi_target_krylov,
     _midplane_index,
     select_kbm_solver_auto,
 )
-from spectraxgk.benchmark_species import (
+from spectraxgk.validation.benchmarks.species import (
     REFERENCE_DAMP_ENDS_AMP,
     REFERENCE_DAMP_ENDS_WIDTHFRAC,
     REFERENCE_NU_HYPER_L,
@@ -89,28 +89,28 @@ from spectraxgk.benchmark_species import (
     _two_species_params,
 )
 
-from spectraxgk.benchmark_cyclone import (
+from spectraxgk.validation.benchmarks.cyclone import (
     run_cyclone_linear,
     run_cyclone_scan,
 )
 
-from spectraxgk.benchmark_kbm import (
+from spectraxgk.validation.benchmarks.kbm import (
     run_kbm_beta_scan,
     run_kbm_linear,
     run_kbm_scan,
 )
 
-from spectraxgk.benchmark_kinetic import (
+from spectraxgk.validation.benchmarks.kinetic import (
     run_kinetic_linear,
     run_kinetic_scan,
 )
 
-from spectraxgk.benchmark_etg import (
+from spectraxgk.validation.benchmarks.etg import (
     run_etg_linear,
     run_etg_scan,
 )
 
-from spectraxgk.benchmark_tem import (
+from spectraxgk.validation.benchmarks.tem import (
     run_tem_linear,
     run_tem_scan,
 )

@@ -17,31 +17,31 @@ from spectraxgk.analysis import (
     instantaneous_growth_rate_from_phi,
     select_ky_index,
 )
-from spectraxgk.benchmark_defaults import (
+from spectraxgk.validation.benchmarks.defaults import (
     KBM_KRYLOV_DEFAULT,
     KBM_OMEGA_D_SCALE,
     KBM_OMEGA_STAR_SCALE,
     KBM_RHO_STAR,
 )
-from spectraxgk.benchmark_batching import _resolve_streaming_window
-from spectraxgk.benchmark_fit_signals import (
+from spectraxgk.validation.benchmarks.batching import _resolve_streaming_window
+from spectraxgk.validation.benchmarks.fit_signals import (
     _extract_mode_only_signal,
     _normalize_growth_rate,
     _select_fit_signal,
     _select_fit_signal_auto,
 )
-from spectraxgk.benchmark_initialization import _build_initial_condition
-from spectraxgk.benchmark_reference import LinearRunResult, LinearScanResult
-from spectraxgk.benchmark_solver_policy import (
+from spectraxgk.validation.benchmarks.initialization import _build_initial_condition
+from spectraxgk.validation.benchmarks.reference import LinearRunResult, LinearScanResult
+from spectraxgk.validation.benchmarks.solver_policy import (
     _kbm_use_multi_target_krylov,
     _midplane_index,
     select_kbm_solver_auto,
 )
-from spectraxgk.benchmark_species import (
+from spectraxgk.validation.benchmarks.species import (
     _linked_boundary_end_damping,
     _two_species_params,
 )
-from spectraxgk.benchmark_scan import (
+from spectraxgk.validation.benchmarks.scan import (
     ScanFitWindowPolicy,
     apply_auto_fit_scan_policy,
     indexed_float_value,

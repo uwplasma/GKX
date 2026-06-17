@@ -13,8 +13,8 @@ from typing import Any
 import numpy as np
 
 from spectraxgk.analysis import fit_growth_rate, fit_growth_rate_auto
-from spectraxgk.benchmark_batching import _is_array_like
-from spectraxgk.benchmark_fit_signals import _normalize_growth_rate
+from spectraxgk.validation.benchmarks.batching import _is_array_like
+from spectraxgk.validation.benchmarks.fit_signals import _normalize_growth_rate
 from spectraxgk.operators.linear.params import LinearParams
 
 
