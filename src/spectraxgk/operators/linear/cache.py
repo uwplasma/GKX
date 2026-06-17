@@ -10,7 +10,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from spectraxgk.geometry import FluxTubeGeometryLike, ensure_flux_tube_geometry_data
-from spectraxgk.gyroaverage import J_l_all, bessel_j0, bessel_j1, laguerre_transform
+from spectraxgk.core.velocity import J_l_all, bessel_j0, bessel_j1, laguerre_transform
 from spectraxgk.grids import SpectralGrid
 from spectraxgk.operators.linear.linked import (
     _build_linked_end_damping_profile,

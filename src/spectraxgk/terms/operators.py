@@ -5,7 +5,7 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 
-from spectraxgk.basis import hermite_ladder_coeffs
+from spectraxgk.core.velocity import hermite_ladder_coeffs
 from spectraxgk.terms.validation import _check_positive
 
 

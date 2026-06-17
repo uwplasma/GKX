@@ -449,7 +449,7 @@ def velocity_field_reduce_shard_map(
 def _hermite_ladder_coefficients(state: Any) -> tuple[Any, Any, int]:
     import jax.numpy as jnp
 
-    from spectraxgk.basis import hermite_ladder_coeffs
+    from spectraxgk.core.velocity import hermite_ladder_coeffs
 
     arr = jnp.asarray(state)
     dims = _state_dims(arr.ndim)

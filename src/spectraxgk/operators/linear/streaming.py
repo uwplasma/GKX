@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import jax.numpy as jnp
 
-from spectraxgk.basis import hermite_ladder_coeffs
+from spectraxgk.core.velocity import hermite_ladder_coeffs
 
 
 def hermite_streaming(G: jnp.ndarray, kpar: jnp.ndarray, vth: float) -> jnp.ndarray:

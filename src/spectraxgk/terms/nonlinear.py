@@ -7,7 +7,7 @@ from typing import cast, Sequence
 import jax
 import jax.numpy as jnp
 
-from spectraxgk.gyroaverage import bessel_j0, bessel_j1
+from spectraxgk.core.velocity import bessel_j0, bessel_j1
 from spectraxgk.grids import real_fft_mesh
 
 def _fft2_xy(x: jnp.ndarray) -> jnp.ndarray:

@@ -5,7 +5,7 @@ from __future__ import annotations
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.gyroaverage import gamma0
+from spectraxgk.core.velocity import gamma0
 from spectraxgk.diagnostics.channels import (
     _heat_flux_channel_contrib_species,
     _particle_flux_channel_contrib_species,
