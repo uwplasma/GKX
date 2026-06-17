@@ -7,6 +7,13 @@ from spectraxgk.solvers.linear.implicit import (
     _build_implicit_operator,
     _integrate_linear_implicit_cached,
 )
+from spectraxgk.solvers.linear.integrators import (
+    _integrate_linear_cached,
+    _integrate_linear_cached_donate,
+    _integrate_linear_cached_impl,
+    integrate_linear,
+    integrate_linear_diagnostics,
+)
 from spectraxgk.solvers.linear.parallel import (
     linear_rhs_electrostatic_slices_velocity_sharded,
     linear_rhs_parallel_cached,
@@ -17,8 +24,13 @@ from spectraxgk.solvers.linear.parallel import (
 __all__ = [
     "KrylovConfig",
     "_build_implicit_operator",
+    "_integrate_linear_cached",
+    "_integrate_linear_cached_donate",
+    "_integrate_linear_cached_impl",
     "_integrate_linear_implicit_cached",
     "dominant_eigenpair",
+    "integrate_linear",
+    "integrate_linear_diagnostics",
     "linear_rhs_electrostatic_slices_velocity_sharded",
     "linear_rhs_parallel_cached",
     "linear_rhs_streaming_electrostatic_velocity_sharded",
