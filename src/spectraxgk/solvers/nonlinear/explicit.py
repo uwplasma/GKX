@@ -15,11 +15,17 @@ import jax.numpy as jnp
 RhsFn = Callable[[jnp.ndarray], tuple[jnp.ndarray, object]]
 ProjectFn = Callable[[jnp.ndarray], jnp.ndarray]
 ScanFn = Callable[..., tuple[jnp.ndarray, Any]]
+DiagnosticFn = Callable[..., Any]
+FieldSolveFn = Callable[..., Any]
+CollisionSplitFn = Callable[[jnp.ndarray, Any, jnp.ndarray, str], jnp.ndarray]
 DiagnosticStepFn = Callable[
     [tuple[Any, Any, Any, Any, Any, Any], Any],
     tuple[tuple[Any, Any, Any, Any, Any, Any], tuple[Any, Any, Any]],
 ]
-SampledDiagnosticScanFn = Callable[..., tuple[tuple[Any, Any, Any, Any, Any, Any], tuple[Any, Any, Any]]]
+SampledDiagnosticScanFn = Callable[
+    ...,
+    tuple[tuple[Any, Any, Any, Any, Any, Any], tuple[Any, Any, Any]],
+]
 
 _SSPX3_ADT = float((1.0 / 6.0) ** (1.0 / 3.0))
 _SSPX3_WGTFAC = float((9.0 - 2.0 * (6.0 ** (2.0 / 3.0))) ** 0.5)
@@ -147,6 +153,95 @@ def integrate_cached_explicit_scan(
     )
 
 
+def make_explicit_diagnostic_step(
+    *,
+    rhs_fn: RhsFn,
+    method: str,
+    project_state: ProjectFn,
+    state_dtype: jnp.dtype,
+    real_dtype: jnp.dtype,
+    time_step_policy: Any,
+    compute_fields_fn: FieldSolveFn,
+    cache: Any,
+    params: Any,
+    term_cfg: Any,
+    external_phi: jnp.ndarray | float | None,
+    compute_diag_from_state: DiagnosticFn,
+    diagnostics_stride: int,
+    select_diagnostics_fn: Callable[..., Any],
+    show_progress: bool,
+    steps: int,
+    emit_progress_fn: Callable[..., jnp.ndarray],
+    use_collision_split: bool = False,
+    damping: Any | None = None,
+    collision_scheme: str = "implicit",
+    apply_collision_split_fn: CollisionSplitFn | None = None,
+) -> DiagnosticStepFn:
+    """Build one explicit diagnostic scan step with injected runtime seams."""
+
+    def step(
+        carry: tuple[Any, Any, Any, Any, Any, Any],
+        idx: Any,
+    ) -> tuple[tuple[Any, Any, Any, Any, Any, Any], tuple[Any, Any, Any]]:
+        G, G_prev_step, fields_prev_step, diag_prev, t_prev, dt_prev = carry
+        dG, fields = rhs_fn(G)
+        dt_local = jnp.asarray(
+            time_step_policy.update_dt(fields, dt_prev), dtype=real_dtype
+        )
+        G_new = advance_explicit_nonlinear_state(
+            G,
+            dG,
+            dt_local,
+            method=method,
+            rhs_fn=rhs_fn,
+            project_state=project_state,
+            state_dtype=state_dtype,
+        )
+        if use_collision_split and damping is not None:
+            if apply_collision_split_fn is None:
+                raise ValueError(
+                    "apply_collision_split_fn is required when collision split is active"
+                )
+            G_new = apply_collision_split_fn(
+                G_new, damping, dt_local, collision_scheme
+            )
+        G_new = project_state(G_new)
+        # Keep scan carry dtype stable under mixed-precision scalar constants.
+        G_new = jnp.asarray(G_new, dtype=state_dtype)
+        t_new = jnp.asarray(t_prev + dt_local, dtype=real_dtype)
+        fields_new = compute_fields_fn(
+            G_new, cache, params, terms=term_cfg, external_phi=external_phi
+        )
+
+        def _compute_diag():
+            return compute_diag_from_state(
+                G_new, fields_new, G_prev_step, fields_prev_step, dt_local
+            )
+
+        diag = select_diagnostics_fn(
+            idx,
+            diagnostics_stride=diagnostics_stride,
+            diag_prev=diag_prev,
+            compute_diag_fn=_compute_diag,
+        )
+        G_new = emit_progress_fn(
+            G_new,
+            show_progress=show_progress,
+            diag=diag,
+            idx=idx,
+            steps=steps,
+            t_new=t_new,
+            progress_total=time_step_policy.progress_total,
+        )
+        return (G_new, G_new, fields_new, diag, t_new, dt_local), (
+            diag,
+            t_new,
+            dt_local,
+        )
+
+    return step
+
+
 def run_explicit_diagnostic_scan(
     step_fn: DiagnosticStepFn,
     initial_carry: tuple[Any, Any, Any, Any, Any, Any],
@@ -196,5 +291,6 @@ __all__ = [
     "advance_explicit_nonlinear_state",
     "checkpoint_explicit_step",
     "integrate_cached_explicit_scan",
+    "make_explicit_diagnostic_step",
     "run_explicit_diagnostic_scan",
 ]

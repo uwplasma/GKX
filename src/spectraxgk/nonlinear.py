@@ -72,8 +72,8 @@ from spectraxgk.operators.nonlinear.rhs import (
     nonlinear_rhs_cached_impl,
 )
 from spectraxgk.solvers.nonlinear.explicit import (
-    advance_explicit_nonlinear_state,
     integrate_cached_explicit_scan,
+    make_explicit_diagnostic_step,
     run_explicit_diagnostic_scan,
 )
 from spectraxgk.solvers.nonlinear.imex import (
@@ -406,56 +406,29 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
         kernels=_nonlinear_diagnostic_kernels(),
     )
 
-    def step(carry, idx):
-        G, G_prev_step, fields_prev_step, diag_prev, t_prev, dt_prev = carry
-        dG, fields = rhs_fn(G)
-        dt_local = jnp.asarray(
-            time_step_policy.update_dt(fields, dt_prev), dtype=real_dtype
-        )
-        G_new = advance_explicit_nonlinear_state(
-            G,
-            dG,
-            dt_local,
-            method=method,
-            rhs_fn=rhs_fn,
-            project_state=_project_state,
-            state_dtype=state_dtype,
-        )
-        if use_collision_split and damping is not None:
-            G_new = _apply_collision_split(G_new, damping, dt_local, collision_scheme)
-        G_new = _project_state(G_new)
-        # Keep scan carry dtype stable under mixed-precision scalar constants.
-        G_new = jnp.asarray(G_new, dtype=state_dtype)
-        t_new = jnp.asarray(t_prev + dt_local, dtype=real_dtype)
-        fields_new = compute_fields_cached(
-            G_new, cache, params, terms=term_cfg, external_phi=external_phi
-        )
-
-        def _compute_diag():
-            return _compute_diag_from_state(
-                G_new, fields_new, G_prev_step, fields_prev_step, dt_local
-            )
-
-        diag = select_nonlinear_step_diagnostics(
-            idx,
-            diagnostics_stride=diagnostics_stride,
-            diag_prev=diag_prev,
-            compute_diag_fn=_compute_diag,
-        )
-        G_new = maybe_emit_nonlinear_progress(
-            G_new,
-            show_progress=show_progress,
-            diag=diag,
-            idx=idx,
-            steps=steps,
-            t_new=t_new,
-            progress_total=time_step_policy.progress_total,
-        )
-        return (G_new, G_new, fields_new, diag, t_new, dt_local), (
-            diag,
-            t_new,
-            dt_local,
-        )
+    step = make_explicit_diagnostic_step(
+        rhs_fn=rhs_fn,
+        method=method,
+        project_state=_project_state,
+        state_dtype=state_dtype,
+        real_dtype=real_dtype,
+        time_step_policy=time_step_policy,
+        compute_fields_fn=compute_fields_cached,
+        cache=cache,
+        params=params,
+        term_cfg=term_cfg,
+        external_phi=external_phi,
+        compute_diag_from_state=_compute_diag_from_state,
+        diagnostics_stride=diagnostics_stride,
+        select_diagnostics_fn=select_nonlinear_step_diagnostics,
+        show_progress=show_progress,
+        steps=steps,
+        emit_progress_fn=maybe_emit_nonlinear_progress,
+        use_collision_split=use_collision_split,
+        damping=damping,
+        collision_scheme=collision_scheme,
+        apply_collision_split_fn=_apply_collision_split,
+    )
 
     dt0 = jnp.asarray(
         time_step_policy.update_dt(fields0, time_step_policy.dt_init), dtype=real_dtype
