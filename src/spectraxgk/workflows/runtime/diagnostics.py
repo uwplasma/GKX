@@ -26,7 +26,7 @@ from spectraxgk.diagnostics import (
     SimulationDiagnostics,
     total_energy,
 )
-from spectraxgk.runtime_results import RuntimeLinearResult
+from spectraxgk.workflows.runtime.results import RuntimeLinearResult
 
 
 @dataclass(frozen=True)

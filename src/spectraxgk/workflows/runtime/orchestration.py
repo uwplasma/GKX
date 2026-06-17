@@ -18,7 +18,7 @@ import numpy as np
 from spectraxgk.analysis import ModeSelection
 from spectraxgk.diagnostics import SimulationDiagnostics
 from spectraxgk.runtime_config import RuntimeConfig
-from spectraxgk.runtime_results import RuntimeLinearScanResult, RuntimeNonlinearResult
+from spectraxgk.workflows.runtime.results import RuntimeLinearScanResult, RuntimeNonlinearResult
 
 __all__ = [
     "NonlinearArtifactPolicy",

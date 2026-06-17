@@ -8,7 +8,7 @@ from typing import Any, Callable
 
 import numpy as np
 
-from spectraxgk.runtime_results import RuntimeLinearResult
+from spectraxgk.workflows.runtime.results import RuntimeLinearResult
 
 
 DEFAULT_DEMO_SETTINGS: dict[str, float | int | str] = {

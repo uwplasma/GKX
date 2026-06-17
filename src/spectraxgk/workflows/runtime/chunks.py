@@ -14,13 +14,13 @@ from typing import Any, Callable
 import numpy as np
 
 from spectraxgk.diagnostics import SimulationDiagnostics
-from spectraxgk.runtime_diagnostics import (
+from spectraxgk.workflows.runtime.diagnostics import (
     concat_runtime_diagnostics,
     stride_runtime_diagnostics,
     truncate_runtime_diagnostics,
     validate_finite_runtime_diagnostics,
 )
-from spectraxgk.runtime_orchestration import (
+from spectraxgk.workflows.runtime.orchestration import (
     build_runtime_progress_message,
     format_duration,
 )

@@ -9,7 +9,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from spectraxgk.runtime_config import RuntimeConfig
-from spectraxgk.runtime_results import RuntimeNonlinearResult
+from spectraxgk.workflows.runtime.results import RuntimeNonlinearResult
 
 
 @dataclass(frozen=True)

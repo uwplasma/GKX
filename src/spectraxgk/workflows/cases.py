@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Callable, cast
 
 from spectraxgk.runtime_config import RuntimeConfig
-from spectraxgk.runtime_results import RuntimeLinearResult, RuntimeNonlinearResult
+from spectraxgk.workflows.runtime.results import RuntimeLinearResult, RuntimeNonlinearResult
 
 RUNTIME_CASE_FIT_KEYS = {
     "auto_window",

@@ -11,8 +11,8 @@ from spectraxgk.analysis import ModeSelection, select_ky_index
 from spectraxgk.geometry import apply_geometry_grid_defaults
 from spectraxgk.grids import build_spectral_grid, select_ky_grid
 from spectraxgk.runtime_config import RuntimeConfig
-from spectraxgk.runtime_policies import _midplane_index, _normalize_linear_solver_name
-from spectraxgk.runtime_results import RuntimeLinearResult, RuntimeNonlinearResult
+from spectraxgk.workflows.runtime.policies import _midplane_index, _normalize_linear_solver_name
+from spectraxgk.workflows.runtime.results import RuntimeLinearResult, RuntimeNonlinearResult
 
 
 @dataclass(frozen=True)

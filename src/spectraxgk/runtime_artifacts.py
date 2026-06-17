@@ -13,7 +13,7 @@ from spectraxgk.runtime import (
 from spectraxgk.artifacts.validation import (
     validate_finite_runtime_result as _validate_finite_runtime_result,
 )
-from spectraxgk.runtime_orchestration import (
+from spectraxgk.workflows.runtime.orchestration import (
     RuntimeArtifactHandoffDeps,
     run_runtime_nonlinear_artifact_handoff,
 )

@@ -37,8 +37,8 @@ from spectraxgk.normalization import apply_diagnostic_normalization
 from spectraxgk.parallel import independent_map
 from spectraxgk.quasilinear import compute_quasilinear_from_linear_state
 from spectraxgk.runtime_config import RuntimeConfig
-from spectraxgk import runtime_startup
-from spectraxgk.runtime_diagnostics import (
+from spectraxgk.workflows.runtime import startup as runtime_startup
+from spectraxgk.workflows.runtime.diagnostics import (
     concat_runtime_diagnostics,
     finalize_runtime_linear_quasilinear,
     RuntimeQuasilinearFinalizationDeps,
@@ -47,18 +47,18 @@ from spectraxgk.runtime_diagnostics import (
     truncate_runtime_diagnostics,
     fit_runtime_linear_diagnostics,
 )
-from spectraxgk.runtime_chunks import run_adaptive_runtime_chunk_loop
-from spectraxgk.runtime_results import (
+from spectraxgk.workflows.runtime.chunks import run_adaptive_runtime_chunk_loop
+from spectraxgk.workflows.runtime.results import (
     RuntimeLinearResult,
     RuntimeLinearScanResult,
     RuntimeNonlinearResult,
     build_runtime_nonlinear_result,
 )
-from spectraxgk.runtime_orchestration import (
+from spectraxgk.workflows.runtime.orchestration import (
     run_runtime_scan_batch as _run_runtime_scan_batch_impl,
     run_runtime_scan_orchestration as _run_runtime_scan_orchestration_impl,
 )
-from spectraxgk.runtime_policies import (
+from spectraxgk.workflows.runtime.policies import (
     RuntimeIndependentParallelPlan,
     build_runtime_nonlinear_diagnostics_kwargs,
     _infer_runtime_nonlinear_steps,
@@ -70,7 +70,7 @@ from spectraxgk.runtime_policies import (
     _select_nonlinear_mode_indices,
     _zero_kx_index,
 )
-from spectraxgk.runtime_startup import (
+from spectraxgk.workflows.runtime.startup import (
     _build_gaussian_profile,
     _build_initial_condition,
     _enforce_full_ky_hermitian,
@@ -414,7 +414,7 @@ def run_runtime_scan(
     """Run a ky scan using the unified runtime config path.
 
     The public facade keeps runtime monkeypatch seams intact while scan
-    coordination lives in ``runtime_orchestration.py``.
+    coordination lives in ``workflows/runtime/orchestration.py``.
     """
 
     deps = SimpleNamespace(

@@ -10,8 +10,8 @@ import numpy as np
 
 from spectraxgk.analysis import ModeSelection
 from spectraxgk.runtime_config import RuntimeConfig
-from spectraxgk.runtime_diagnostics import RuntimeQuasilinearFinalizationDeps
-from spectraxgk.runtime_results import RuntimeLinearResult
+from spectraxgk.workflows.runtime.diagnostics import RuntimeQuasilinearFinalizationDeps
+from spectraxgk.workflows.runtime.results import RuntimeLinearResult
 
 
 @dataclass(frozen=True)
