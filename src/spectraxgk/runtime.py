@@ -45,6 +45,7 @@ from spectraxgk.runtime_diagnostics import (
     slice_runtime_diagnostics,
     stride_runtime_diagnostics,
     truncate_runtime_diagnostics,
+    fit_runtime_linear_diagnostics,
 )
 from spectraxgk.runtime_chunks import run_adaptive_runtime_chunk_loop
 from spectraxgk.runtime_results import (
@@ -672,100 +673,34 @@ def run_runtime_linear(
             f"integration complete; fitting growth rate from {t_arr.size} saved samples"
         )
 
-        signal_out: np.ndarray | None = None
-        z_out: np.ndarray | None = np.asarray(grid.z, dtype=float)
-        eigenfunction_out: np.ndarray | None = None
-        fit_window_tmin: float | None = None
-        fit_window_tmax: float | None = None
-        fit_signal_used: str | None = None
+        fit_result = fit_runtime_linear_diagnostics(
+            t=t_arr,
+            phi_t=phi_t_np,
+            density_t=density_np,
+            selection=sel,
+            z=np.asarray(grid.z, dtype=float),
+            fit_signal=fit_key,
+            mode_method=mode_method,
+            auto_window=auto_window,
+            tmin=tmin,
+            tmax=tmax,
+            window_fraction=window_fraction,
+            min_points=min_points,
+            start_fraction=start_fraction,
+            growth_weight=growth_weight,
+            require_positive=require_positive,
+            min_amp_fraction=min_amp_fraction,
+            extract_mode_time_series_fn=extract_mode_time_series,
+            fit_growth_rate_auto_with_stats_fn=fit_growth_rate_auto_with_stats,
+            fit_growth_rate_auto_fn=fit_growth_rate_auto,
+            fit_growth_rate_fn=fit_growth_rate,
+            extract_eigenfunction_fn=extract_eigenfunction,
+        )
         if fit_key == "auto":
-            phi_signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
-            gamma_phi, omega_phi, phi_tmin, phi_tmax, r2_phi, r2p_phi = (
-                fit_growth_rate_auto_with_stats(
-                    t_arr,
-                    phi_signal,
-                    window_fraction=window_fraction,
-                    min_points=min_points,
-                    start_fraction=start_fraction,
-                    growth_weight=growth_weight,
-                    require_positive=require_positive,
-                    min_amp_fraction=min_amp_fraction,
-                )
-            )
-            best_gamma, best_omega = gamma_phi, omega_phi
-            signal_out = np.asarray(phi_signal)
-            fit_window_tmin, fit_window_tmax = phi_tmin, phi_tmax
-            fit_signal_used = "phi"
-            best_score = r2_phi + 0.2 * r2p_phi + growth_weight * gamma_phi
-            if density_np is not None:
-                dens_signal = extract_mode_time_series(
-                    density_np, sel, method=mode_method
-                )
-                gamma_den, omega_den, den_tmin, den_tmax, r2_den, r2p_den = (
-                    fit_growth_rate_auto_with_stats(
-                        t_arr,
-                        dens_signal,
-                        window_fraction=window_fraction,
-                        min_points=min_points,
-                        start_fraction=start_fraction,
-                        growth_weight=growth_weight,
-                        require_positive=require_positive,
-                        min_amp_fraction=min_amp_fraction,
-                    )
-                )
-                score_den = r2_den + 0.2 * r2p_den + growth_weight * gamma_den
-                if score_den > best_score:
-                    best_gamma, best_omega = gamma_den, omega_den
-                    signal_out = np.asarray(dens_signal)
-                    fit_window_tmin, fit_window_tmax = den_tmin, den_tmax
-                    fit_signal_used = "density"
-            gamma, omega = best_gamma, best_omega
-            _status(f"automatic fit selected signal '{fit_signal_used}'")
-        else:
-            signal = extract_mode_time_series(
-                density_np
-                if fit_key == "density" and density_np is not None
-                else phi_t_np,
-                sel,
-                method=mode_method,
-            )
-            signal_out = np.asarray(signal)
-            fit_signal_used = (
-                "density" if fit_key == "density" and density_np is not None else "phi"
-            )
-            if auto_window:
-                gamma, omega, fit_window_tmin, fit_window_tmax = fit_growth_rate_auto(
-                    t_arr,
-                    signal,
-                    window_fraction=window_fraction,
-                    min_points=min_points,
-                    start_fraction=start_fraction,
-                    growth_weight=growth_weight,
-                    require_positive=require_positive,
-                    min_amp_fraction=min_amp_fraction,
-                )
-            else:
-                gamma, omega = fit_growth_rate(t_arr, signal, tmin=tmin, tmax=tmax)
-                fit_window_tmin, fit_window_tmax = _resolved_fit_bounds(
-                    t_arr, tmin, tmax
-                )
-        try:
-            eigenfunction_out = np.asarray(
-                extract_eigenfunction(
-                    phi_t_np,
-                    t_arr,
-                    sel,
-                    z=z_out,
-                    method="svd",
-                    tmin=fit_window_tmin,
-                    tmax=fit_window_tmax,
-                )
-            )
-        except Exception:
-            eigenfunction_out = None
+            _status(f"automatic fit selected signal '{fit_result.fit_signal_used}'")
         gamma, omega = apply_diagnostic_normalization(
-            gamma,
-            omega,
+            fit_result.gamma,
+            fit_result.omega,
             rho_star=float(np.asarray(params.rho_star)),
             diagnostic_norm=cfg.normalization.diagnostic_norm,
         )
@@ -776,15 +711,15 @@ def run_runtime_linear(
             omega=float(omega),
             selection=sel,
             t=t_arr,
-            signal=signal_out,
+            signal=fit_result.signal,
             state=None
             if g_last is None or not return_state_eff
             else np.asarray(g_last),
-            z=z_out if eigenfunction_out is not None else None,
-            eigenfunction=eigenfunction_out,
-            fit_window_tmin=fit_window_tmin,
-            fit_window_tmax=fit_window_tmax,
-            fit_signal_used=fit_signal_used,
+            z=fit_result.z if fit_result.eigenfunction is not None else None,
+            eigenfunction=fit_result.eigenfunction,
+            fit_window_tmin=fit_result.fit_window_tmin,
+            fit_window_tmax=fit_result.fit_window_tmax,
+            fit_signal_used=fit_result.fit_signal_used,
         )
 
     if solver_key == "krylov":
