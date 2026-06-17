@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 
@@ -14,6 +15,8 @@ __all__ = [
     "_sample_axis0",
     "_sample_indices_with_final",
     "build_nonlinear_simulation_diagnostics",
+    "maybe_emit_nonlinear_progress",
+    "select_nonlinear_step_diagnostics",
 ]
 
 
@@ -177,4 +180,60 @@ def build_nonlinear_simulation_diagnostics(
         turbulent_heating_species_t=turbulent_heat_s_t,
         phi_mode_t=phi_mode_t,
         resolved=resolved,
+    )
+
+
+def select_nonlinear_step_diagnostics(
+    idx: Any,
+    *,
+    diagnostics_stride: int,
+    diag_prev: Any,
+    compute_diag_fn: Any,
+) -> Any:
+    """Return a fresh or reused nonlinear step diagnostic tuple."""
+
+    diag_stride = int(max(diagnostics_stride, 1))
+    do_diag = (idx % diag_stride) == 0
+    return jax.lax.cond(
+        do_diag,
+        lambda _operand: compute_diag_fn(),
+        lambda _operand: diag_prev,
+        operand=None,
+    )
+
+
+def maybe_emit_nonlinear_progress(
+    state: Any,
+    *,
+    show_progress: bool,
+    diag: tuple[Any, ...],
+    idx: Any,
+    steps: int,
+    t_new: Any,
+    progress_total: Any,
+) -> Any:
+    """Emit nonlinear progress callbacks when requested and return ``state``."""
+
+    if not show_progress:
+        return state
+
+    from spectraxgk.utils.callbacks import print_callback, should_emit_progress
+
+    gamma_cb, omega_cb = diag[0], diag[1]
+    Wg_cb, Wphi_cb = diag[2], diag[3]
+    return jax.lax.cond(
+        should_emit_progress(idx, steps),
+        lambda value: print_callback(
+            value,
+            idx,
+            steps,
+            gamma_cb,
+            omega_cb,
+            Wphi_cb,
+            Wg_cb,
+            t_new,
+            progress_total,
+        ),
+        lambda value: value,
+        state,
     )

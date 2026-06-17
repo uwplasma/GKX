@@ -63,6 +63,8 @@ from spectraxgk.nonlinear_diagnostics import (
     _sample_axis0,  # noqa: F401 - compatibility re-export
     _sample_indices_with_final,
     build_nonlinear_simulation_diagnostics,
+    maybe_emit_nonlinear_progress,
+    select_nonlinear_step_diagnostics,
 )
 from spectraxgk.operators.nonlinear.rhs import (
     linear_rhs_jit_for_terms_impl,
@@ -471,38 +473,26 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
             G_new, cache, params, terms=term_cfg, external_phi=external_phi
         )
 
-        def _compute_diag(_):
+        def _compute_diag():
             return _compute_diag_from_state(
                 G_new, fields_new, G_prev_step, fields_prev_step, dt_local
             )
 
-        def _reuse_diag(_):
-            return diag_prev
-
-        diag_stride = int(max(diagnostics_stride, 1))
-        do_diag = (idx % diag_stride) == 0
-        diag = jax.lax.cond(do_diag, _compute_diag, _reuse_diag, operand=None)
-        if show_progress:
-            from spectraxgk.utils.callbacks import print_callback, should_emit_progress
-
-            gamma_cb, omega_cb = diag[0], diag[1]
-            Wg_cb, Wphi_cb = diag[2], diag[3]
-            G_new = jax.lax.cond(
-                should_emit_progress(idx, steps),
-                lambda state: print_callback(
-                    state,
-                    idx,
-                    steps,
-                    gamma_cb,
-                    omega_cb,
-                    Wphi_cb,
-                    Wg_cb,
-                    t_new,
-                    progress_total,
-                ),
-                lambda state: state,
-                G_new,
-            )
+        diag = select_nonlinear_step_diagnostics(
+            idx,
+            diagnostics_stride=diagnostics_stride,
+            diag_prev=diag_prev,
+            compute_diag_fn=_compute_diag,
+        )
+        G_new = maybe_emit_nonlinear_progress(
+            G_new,
+            show_progress=show_progress,
+            diag=diag,
+            idx=idx,
+            steps=steps,
+            t_new=t_new,
+            progress_total=progress_total,
+        )
         return (G_new, G_new, fields_new, diag, t_new, dt_local), (
             diag,
             t_new,
@@ -1026,38 +1016,26 @@ def integrate_nonlinear_imex_diagnostics(
             G_new, cache, params, terms=term_cfg, external_phi=external_phi
         )
 
-        def _compute_diag(_):
+        def _compute_diag():
             return _compute_diag_from_state(
                 G_new, fields_new, G_prev_step, fields_prev_step, dt_val
             )
 
-        def _reuse_diag(_):
-            return diag_prev
-
-        diag_stride = int(max(diagnostics_stride, 1))
-        do_diag = (idx % diag_stride) == 0
-        diag = jax.lax.cond(do_diag, _compute_diag, _reuse_diag, operand=None)
-        if show_progress:
-            from spectraxgk.utils.callbacks import print_callback, should_emit_progress
-
-            gamma_cb, omega_cb = diag[0], diag[1]
-            Wg_cb, Wphi_cb = diag[2], diag[3]
-            G_new = jax.lax.cond(
-                should_emit_progress(idx, steps),
-                lambda state: print_callback(
-                    state,
-                    idx,
-                    steps,
-                    gamma_cb,
-                    omega_cb,
-                    Wphi_cb,
-                    Wg_cb,
-                    t_new,
-                    progress_total,
-                ),
-                lambda state: state,
-                G_new,
-            )
+        diag = select_nonlinear_step_diagnostics(
+            idx,
+            diagnostics_stride=diagnostics_stride,
+            diag_prev=diag_prev,
+            compute_diag_fn=_compute_diag,
+        )
+        G_new = maybe_emit_nonlinear_progress(
+            G_new,
+            show_progress=show_progress,
+            diag=diag,
+            idx=idx,
+            steps=steps,
+            t_new=t_new,
+            progress_total=progress_total,
+        )
         return (G_new, G_new, fields_new, diag, t_new), (diag, t_new)
 
     step_fn = jax.checkpoint(step) if checkpoint else step
