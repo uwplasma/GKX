@@ -513,14 +513,17 @@ def build_nonlinear_imex_operator(
     terms: TermConfig | None = None,
     implicit_preconditioner: str | None = None,
     compressed_real_fft: bool = True,
+    build_implicit_operator_fn: Callable[..., tuple[Any, ...]] | None = None,
 ) -> IMEXLinearOperator:
     """Build and cache the matrix-free linear operator used by nonlinear IMEX."""
 
     del compressed_real_fft
     term_cfg = terms or TermConfig()
     linear_terms = term_config_to_linear_terms(term_cfg)
+    if build_implicit_operator_fn is None:
+        build_implicit_operator_fn = _build_implicit_operator
     G, shape, _size, dt_val, precond_op, matvec, squeeze_species = (
-        _build_implicit_operator(
+        build_implicit_operator_fn(
             G0,
             cache,
             params,

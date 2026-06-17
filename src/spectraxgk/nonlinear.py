@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Callable
 
 import jax
 import jax.numpy as jnp
@@ -16,7 +15,6 @@ from spectraxgk.solvers.linear.implicit import _build_implicit_operator
 from spectraxgk.operators.linear.cache import LinearCache, build_linear_cache
 from spectraxgk.operators.linear.params import (
     LinearParams,
-    term_config_to_linear_terms,
 )
 from spectraxgk.terms.assembly import (
     _is_static_zero,
@@ -997,35 +995,30 @@ def integrate_nonlinear_imex_cached(
     linear_cfg = replace(term_cfg, nonlinear=0.0)
     linear_rhs_fn = _linear_rhs_jit_for_terms(linear_cfg)
 
-    linear_terms = term_config_to_linear_terms(linear_cfg)
-
-    precond_op: Callable[[jnp.ndarray], jnp.ndarray] | None
-    matvec: Callable[[jnp.ndarray], jnp.ndarray]
     if implicit_operator is None:
-        G, shape, _size, dt_val, precond_op, matvec, squeeze_species = (
-            _build_implicit_operator(
-                G0,
-                cache,
-                params,
-                dt,
-                linear_terms,
-                implicit_preconditioner,
-            )
+        implicit_operator = build_nonlinear_imex_operator(
+            G0,
+            cache,
+            params,
+            dt,
+            terms=linear_cfg,
+            implicit_preconditioner=implicit_preconditioner,
+            compressed_real_fft=compressed_real_fft,
+            build_implicit_operator_fn=_build_implicit_operator,
         )
-    else:
-        shape = implicit_operator.shape
-        dt_val = implicit_operator.dt_val
-        precond_op = implicit_operator.precond_op
-        matvec = implicit_operator.matvec
-        squeeze_species = implicit_operator.squeeze_species
-        G = jnp.asarray(G0, dtype=implicit_operator.state_dtype)
-        if squeeze_species and G.ndim == len(shape) - 1:
-            G = G[None, ...]
-        if G.shape != shape:
-            raise ValueError(
-                "implicit_operator shape mismatch: "
-                f"expected {shape}, got {tuple(G.shape)}"
-            )
+    shape = implicit_operator.shape
+    dt_val = implicit_operator.dt_val
+    precond_op = implicit_operator.precond_op
+    matvec = implicit_operator.matvec
+    squeeze_species = implicit_operator.squeeze_species
+    G = jnp.asarray(G0, dtype=implicit_operator.state_dtype)
+    if squeeze_species and G.ndim == len(shape) - 1:
+        G = G[None, ...]
+    if G.shape != shape:
+        raise ValueError(
+            "implicit_operator shape mismatch: "
+            f"expected {shape}, got {tuple(G.shape)}"
+        )
 
     nonlinear_term = make_imex_nonlinear_term(
         cache,
