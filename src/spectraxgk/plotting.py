@@ -680,7 +680,7 @@ def eigenfunction_reference_overlay_figure(
 ) -> Tuple[plt.Figure, np.ndarray]:
     """Render a phase-aligned raw overlay against a frozen reference mode."""
 
-    from spectraxgk.benchmarking import compare_eigenfunctions, phase_align_eigenfunction
+    from spectraxgk.validation.benchmarks.harness import compare_eigenfunctions, phase_align_eigenfunction
 
     set_plot_style()
     theta_arr = np.asarray(theta, dtype=float)
@@ -744,7 +744,7 @@ def zonal_flow_response_figure(
 ) -> Tuple[plt.Figure, np.ndarray]:
     """Render a zonal-flow response trace and its envelope summary."""
 
-    from spectraxgk.benchmarking import zonal_flow_response_metrics
+    from spectraxgk.validation.benchmarks.harness import zonal_flow_response_metrics
 
     set_plot_style()
     t_arr = np.asarray(t, dtype=float)

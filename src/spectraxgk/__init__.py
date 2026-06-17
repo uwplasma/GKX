@@ -207,7 +207,7 @@ from spectraxgk.validation.gates import (
     observed_order_gate_report,
     zonal_response_gate_report,
 )
-from spectraxgk.benchmarking import (
+from spectraxgk.validation.benchmarks.harness import (
     ScanAndModeResult,
     branch_continuity_metrics,
     normalize_eigenfunction,
