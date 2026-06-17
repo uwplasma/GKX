@@ -10,7 +10,7 @@ from typing import Callable
 import netCDF4 as nc
 import numpy as np
 
-from spectraxgk.analysis import (
+from spectraxgk.diagnostics.analysis import (
     extract_eigenfunction,
     extract_mode_time_series,
     fit_growth_rate,

@@ -7,7 +7,7 @@ from dataclasses import replace
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.analysis import (
+from spectraxgk.diagnostics.analysis import (
     ModeSelection,
     ModeSelectionBatch,
     fit_growth_rate,

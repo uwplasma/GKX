@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from spectraxgk.analysis import ModeSelection
+from spectraxgk.diagnostics.analysis import ModeSelection
 from spectraxgk.solvers.time.explicit import ExplicitTimeConfig
 from spectraxgk.solvers.linear.krylov import KrylovConfig
 

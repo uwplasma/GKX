@@ -6,7 +6,7 @@ import warnings
 
 import numpy as np
 
-from spectraxgk.analysis import (
+from spectraxgk.diagnostics.analysis import (
     ModeSelection,
     extract_mode_time_series,
     fit_growth_rate_auto_with_stats,

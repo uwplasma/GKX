@@ -8,7 +8,7 @@ from typing import Sequence
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.analysis import (
+from spectraxgk.diagnostics.analysis import (
     ModeSelection,
     extract_mode_time_series,
     fit_growth_rate,

@@ -14,7 +14,7 @@ from spectraxgk.cetg import (
     integrate_cetg_explicit_diagnostics_state,
     validate_cetg_runtime_config,
 )
-from spectraxgk.analysis import (
+from spectraxgk.diagnostics.analysis import (
     extract_eigenfunction,
     extract_mode_time_series,
     fit_growth_rate,

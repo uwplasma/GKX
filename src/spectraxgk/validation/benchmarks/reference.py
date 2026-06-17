@@ -7,7 +7,7 @@ from importlib import resources
 
 import numpy as np
 
-from spectraxgk.analysis import ModeSelection
+from spectraxgk.diagnostics.analysis import ModeSelection
 
 
 __all__ = [

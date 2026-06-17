@@ -9,7 +9,7 @@ import jax.numpy as jnp
 
 import numpy as np
 
-from spectraxgk.analysis import ModeSelection, ModeSelectionBatch
+from spectraxgk.diagnostics.analysis import ModeSelection, ModeSelectionBatch
 from spectraxgk.geometry import FluxTubeGeometryLike
 from spectraxgk.grids import SpectralGrid
 from spectraxgk.operators.linear.cache import LinearCache, build_linear_cache

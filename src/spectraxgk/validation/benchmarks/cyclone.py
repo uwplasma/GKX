@@ -8,7 +8,7 @@ from typing import Callable
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.analysis import (
+from spectraxgk.diagnostics.analysis import (
     ModeSelection,
     ModeSelectionBatch,
     extract_mode_time_series,
