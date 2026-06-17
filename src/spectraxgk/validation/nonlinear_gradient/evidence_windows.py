@@ -11,7 +11,7 @@ from spectraxgk.validation.nonlinear_gradient.evidence_core import (
     _gate,
     _json_number,
 )
-from spectraxgk.quasilinear_window import (
+from spectraxgk.validation.quasilinear.window import (
     NonlinearWindowEnsembleConfig,
     nonlinear_window_ensemble_report,
     nonlinear_window_stats_promotion_ready,

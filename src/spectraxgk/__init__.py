@@ -82,7 +82,7 @@ from spectraxgk.quasilinear import (
     saturated_flux_from_linear_weight,
     shape_aware_power_law_objective,
 )
-from spectraxgk.quasilinear_calibration import (
+from spectraxgk.validation.quasilinear.calibration import (
     QuasilinearCalibrationPoint,
     apply_heat_flux_scale,
     calibration_point_from_nonlinear_window_summary,
@@ -92,11 +92,11 @@ from spectraxgk.quasilinear_calibration import (
     quasilinear_calibration_report,
     write_quasilinear_calibration_report,
 )
-from spectraxgk.quasilinear_model_selection import (
+from spectraxgk.validation.quasilinear.model_selection import (
     build_quasilinear_model_selection_status as build_quasilinear_model_selection_status,
     build_quasilinear_model_selection_status_from_paths as build_quasilinear_model_selection_status_from_paths,
 )
-from spectraxgk.quasilinear_window import (
+from spectraxgk.validation.quasilinear.window import (
     NonlinearWindowConvergenceConfig,
     NonlinearWindowEnsembleConfig,
     NonlinearWindowEnsembleManifestConfig,
