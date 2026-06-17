@@ -25,10 +25,12 @@ __all__ = [
     "RuntimeArtifactHandoffDeps",
     "RuntimeProgressSnapshot",
     "RuntimeScanBatchDeps",
+    "RuntimeScanDeps",
     "build_runtime_progress_message",
     "format_duration",
     "resolve_nonlinear_artifact_policy",
     "run_runtime_scan_batch",
+    "run_runtime_scan_orchestration",
     "run_runtime_nonlinear_artifact_handoff",
 ]
 
@@ -50,6 +52,143 @@ class RuntimeScanBatchDeps(Protocol):
     fit_growth_rate_auto: Callable[..., Any]
     fit_growth_rate: Callable[..., Any]
     apply_diagnostic_normalization: Callable[..., tuple[float, float]]
+
+
+class RuntimeScanDeps(Protocol):
+    """Dependency surface for runtime ky-scan orchestration."""
+
+    resolve_runtime_hl_dims: Callable[..., tuple[int, int]]
+    normalize_linear_solver_name: Callable[[str], str]
+    parallel_requests_combined_ky_scan: Callable[[RuntimeConfig], bool]
+    run_runtime_scan_batch: Callable[..., RuntimeLinearScanResult]
+    runtime_independent_parallel_plan: Callable[..., Any]
+    independent_map: Callable[..., list[Any]]
+    run_runtime_scan_ky_task: Callable[[dict[str, Any]], Any]
+
+
+def run_runtime_scan_orchestration(
+    cfg: RuntimeConfig,
+    ky_values: Any,
+    *,
+    Nl: int | None,
+    Nm: int | None,
+    solver: str,
+    method: str | None,
+    dt: float | None,
+    steps: int | None,
+    sample_stride: int | None,
+    batch_ky: bool,
+    auto_window: bool,
+    tmin: float | None,
+    tmax: float | None,
+    window_fraction: float,
+    min_points: int,
+    start_fraction: float,
+    growth_weight: float,
+    require_positive: bool,
+    min_amp_fraction: float,
+    krylov_cfg: Any,
+    mode_method: str,
+    fit_signal: str,
+    show_progress: bool,
+    workers: int,
+    parallel_executor: str,
+    deps: RuntimeScanDeps,
+) -> RuntimeLinearScanResult:
+    """Coordinate serial, independent-worker, or combined-ky runtime scans."""
+
+    ky_arr = np.asarray(ky_values, dtype=float)
+    Nl_use, Nm_use = deps.resolve_runtime_hl_dims(cfg, Nl=Nl, Nm=Nm)
+    solver_key = deps.normalize_linear_solver_name(solver)
+    batch_ky = bool(batch_ky or deps.parallel_requests_combined_ky_scan(cfg))
+    if batch_ky and solver_key == "krylov":
+        raise ValueError("batch_ky is only supported for time integration")
+    if batch_ky and bool(getattr(cfg.quasilinear, "enabled", False)):
+        raise NotImplementedError(
+            "quasilinear scan artifacts currently require serial ky evaluation"
+        )
+    if batch_ky:
+        return deps.run_runtime_scan_batch(
+            cfg,
+            ky_arr,
+            Nl=Nl_use,
+            Nm=Nm_use,
+            method=method,
+            dt=dt,
+            steps=steps,
+            sample_stride=sample_stride,
+            auto_window=auto_window,
+            tmin=tmin,
+            tmax=tmax,
+            window_fraction=window_fraction,
+            min_points=min_points,
+            start_fraction=start_fraction,
+            growth_weight=growth_weight,
+            require_positive=require_positive,
+            min_amp_fraction=min_amp_fraction,
+            mode_method=mode_method,
+            fit_signal=fit_signal,
+            show_progress=show_progress,
+        )
+
+    gamma = np.zeros_like(ky_arr)
+    omega = np.zeros_like(ky_arr)
+    ql_payloads: list[dict[str, Any]] = []
+    tasks = [
+        {
+            "cfg": cfg,
+            "ky": float(ky),
+            "Nl": Nl_use,
+            "Nm": Nm_use,
+            "solver": solver,
+            "method": method,
+            "dt": dt,
+            "steps": steps,
+            "sample_stride": sample_stride,
+            "auto_window": auto_window,
+            "tmin": tmin,
+            "tmax": tmax,
+            "window_fraction": window_fraction,
+            "min_points": min_points,
+            "start_fraction": start_fraction,
+            "growth_weight": growth_weight,
+            "require_positive": require_positive,
+            "min_amp_fraction": min_amp_fraction,
+            "krylov_cfg": krylov_cfg,
+            "mode_method": mode_method,
+            "fit_signal": fit_signal,
+            "show_progress": show_progress,
+        }
+        for ky in ky_arr
+    ]
+    parallel_plan = deps.runtime_independent_parallel_plan(
+        cfg, problem_size=int(ky_arr.size), workers=workers, executor=parallel_executor
+    )
+    results = deps.independent_map(
+        deps.run_runtime_scan_ky_task,
+        tasks,
+        workers=parallel_plan.requested_workers,
+        executor=parallel_plan.executor,
+    )
+    for i, res in enumerate(results):
+        gamma[i] = float(res.gamma)
+        omega[i] = float(res.omega)
+        if res.quasilinear is not None:
+            ql_payloads.append(res.quasilinear)
+    parallel_payload = parallel_plan.to_dict()
+    parallel_payload.update(
+        {
+            "identity_contract": "independent ky workers must preserve serial ky ordering and values",
+            "quasilinear_state_extraction": bool(ql_payloads),
+        }
+    )
+    return RuntimeLinearScanResult(
+        ky=ky_arr,
+        gamma=gamma,
+        omega=omega,
+        quasilinear=tuple(ql_payloads) if ql_payloads else None,
+        parallel=parallel_payload,
+    )
 
 
 @dataclass(frozen=True)
