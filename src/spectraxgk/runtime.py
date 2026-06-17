@@ -97,7 +97,9 @@ from spectraxgk.workflows.cases import (
 )
 from spectraxgk.workflows.reduced_models import (
     CETGLinearRuntimeDeps,
+    CETGNonlinearRuntimeDeps,
     run_cetg_linear_runtime,
+    run_cetg_nonlinear_runtime,
 )
 from spectraxgk.terms.config import TermConfig
 from spectraxgk.miller_eik import generate_runtime_miller_eik
@@ -803,151 +805,35 @@ def run_runtime_nonlinear(
         if status_callback is not None:
             status_callback(message)
 
-    progress_kw = {"show_progress": True} if show_progress else {}
     Nl_use, Nm_use = _resolve_runtime_hl_dims(cfg, Nl=Nl, Nm=Nm)
     _status("building runtime geometry")
     if _runtime_model_key(cfg) == "cetg":
-        geom = build_runtime_geometry(cfg)
-        validate_cetg_runtime_config(cfg, geom, Nl=Nl_use, Nm=Nm_use)
-        _status("building spectral grid")
-        grid_cfg = apply_geometry_grid_defaults(geom, cfg.grid)
-        grid = build_spectral_grid(grid_cfg)
-        ky_index, kx_index = _select_nonlinear_mode_indices(
-            grid,
+        return run_cetg_nonlinear_runtime(
+            cfg,
+            deps=CETGNonlinearRuntimeDeps(
+                build_runtime_geometry=build_runtime_geometry,
+                validate_cetg_runtime_config=validate_cetg_runtime_config,
+                select_nonlinear_mode_indices=_select_nonlinear_mode_indices,
+                build_initial_condition=_build_initial_condition,
+                build_cetg_model_params=build_cetg_model_params,
+                build_runtime_term_config=build_runtime_term_config,
+                integrate_cetg_explicit_diagnostics_state=integrate_cetg_explicit_diagnostics_state,
+                run_adaptive_runtime_chunk_loop=run_adaptive_runtime_chunk_loop,
+                build_runtime_nonlinear_result=build_runtime_nonlinear_result,
+            ),
             ky_target=ky_target,
             kx_target=kx_target,
-            use_dealias_mask=bool(cfg.time.nonlinear_dealias),
-        )
-        _status(
-            f"selected nonlinear mode ky={float(np.asarray(grid.ky[ky_index])):.6g} kx={float(np.asarray(grid.kx[kx_index])):.6g}"
-        )
-        _status("building initial condition")
-        G0 = _build_initial_condition(
-            grid,
-            geom,
-            cfg,
-            ky_index=ky_index,
-            kx_index=kx_index,
             Nl=Nl_use,
             Nm=Nm_use,
-            nspecies=1,
-        )
-        dt_val = float(cfg.time.dt if dt is None else dt)
-        if dt_val <= 0.0:
-            raise ValueError("dt must be > 0")
-        cetg_params = build_cetg_model_params(cfg, geom, Nl=Nl_use, Nm=Nm_use)
-        cetg_term_cfg = build_runtime_term_config(cfg)
-        sample_stride_use = (
-            cfg.time.sample_stride if sample_stride is None else int(sample_stride)
-        )
-        diag_stride = (
-            cfg.time.diagnostics_stride
-            if diagnostics_stride is None
-            else int(diagnostics_stride)
-        )
-        diagnostics_on = (
-            cfg.time.diagnostics if diagnostics is None else bool(diagnostics)
-        )
-        _status(
-            f"nonlinear diagnostics={'on' if diagnostics_on else 'off'} sample_stride={int(sample_stride_use)} diagnostics_stride={int(diag_stride)}"
-        )
-        adaptive_chunked = steps is None and not bool(cfg.time.fixed_dt)
-        if adaptive_chunked:
-            chunk_steps = 1024
-            G_chunk = G0
-
-            def _run_cetg_chunk(chunk_show_progress: bool):
-                nonlocal G_chunk
-                kwargs: dict[str, Any] = dict(
-                    dt=dt_val,
-                    steps=chunk_steps,
-                    method=str(method or cfg.time.method),
-                    sample_stride=1,
-                    diagnostics_stride=1,
-                    compressed_real_fft=bool(cfg.time.compressed_real_fft),
-                    omega_ky_index=int(ky_index),
-                    omega_kx_index=int(kx_index),
-                    fixed_dt=False,
-                    dt_min=float(cfg.time.dt_min),
-                    dt_max=cfg.time.dt_max,
-                    cfl=float(cfg.time.cfl),
-                    cfl_fac=cfg.time.cfl_fac,
-                )
-                if chunk_show_progress:
-                    kwargs["show_progress"] = True
-                t_chunk, diag_chunk, G_next, fields_next = (
-                    integrate_cetg_explicit_diagnostics_state(
-                        G_chunk,
-                        grid,
-                        cetg_params,
-                        cetg_term_cfg,
-                        **kwargs,
-                    )
-                )
-                G_chunk = G_next
-                return t_chunk, diag_chunk, G_next, fields_next
-
-            chunk_result = run_adaptive_runtime_chunk_loop(
-                integrate_chunk=_run_cetg_chunk,
-                t_max=float(cfg.time.t_max),
-                chunk_steps=chunk_steps,
-                label="cETG",
-                show_progress=show_progress,
-                status_callback=_status,
-            )
-            diag = chunk_result.diagnostics
-            G_final = chunk_result.state
-            cetg_fields_final = chunk_result.fields
-            return build_runtime_nonlinear_result(
-                t=np.asarray(diag.t),
-                diagnostics=diag,
-                fields=cetg_fields_final,
-                state=np.asarray(G_final) if return_state else None,
-                ky_selected=float(np.asarray(grid.ky[ky_index])),
-                kx_selected=float(np.asarray(grid.kx[kx_index])),
-                summarize_fields=diagnostics_on is False,
-            )
-
-        steps_val = (
-            int(round(float(cfg.time.t_max) / dt_val)) if steps is None else int(steps)
-        )
-        if steps_val < 1:
-            raise ValueError("steps must be >= 1")
-        _status(
-            f"running cETG nonlinear integration over {steps_val} steps with dt={dt_val:.6g}"
-        )
-        _t, diag, G_final, cetg_fields_final = (
-            integrate_cetg_explicit_diagnostics_state(
-                G0,
-                grid,
-                cetg_params,
-                cetg_term_cfg,
-                dt=dt_val,
-                steps=steps_val,
-                method=str(method or cfg.time.method),
-                sample_stride=int(sample_stride_use),
-                diagnostics_stride=int(diag_stride),
-                compressed_real_fft=bool(cfg.time.compressed_real_fft),
-                omega_ky_index=int(ky_index),
-                omega_kx_index=int(kx_index),
-                fixed_dt=bool(cfg.time.fixed_dt),
-                dt_min=float(cfg.time.dt_min),
-                dt_max=cfg.time.dt_max,
-                cfl=float(cfg.time.cfl),
-                cfl_fac=cfg.time.cfl_fac,
-                **progress_kw,
-            )
-        )
-        if diagnostics_on is False:
-            _status("diagnostics disabled; returning final cETG state summary")
-        return build_runtime_nonlinear_result(
-            t=np.asarray(diag.t),
-            diagnostics=diag,
-            fields=cetg_fields_final,
-            state=np.asarray(G_final) if return_state else None,
-            ky_selected=float(np.asarray(grid.ky[ky_index])),
-            kx_selected=float(np.asarray(grid.kx[kx_index])),
-            summarize_fields=diagnostics_on is False,
+            dt=dt,
+            steps=steps,
+            method=method,
+            sample_stride=sample_stride,
+            diagnostics_stride=diagnostics_stride,
+            diagnostics=diagnostics,
+            return_state=return_state,
+            show_progress=show_progress,
+            status_callback=status_callback,
         )
 
     geom = build_runtime_geometry(cfg)
