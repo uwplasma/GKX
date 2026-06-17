@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import Any
 
 import jax
 import jax.numpy as jnp
@@ -102,6 +103,28 @@ from spectraxgk.nonlinear_helpers import (
     build_nonlinear_imex_operator,
     build_nonlinear_time_step_policy,
 )
+
+_EXPLICIT_DIAGNOSTIC_OPTION_KEYS = (
+    "method", "cache", "terms", "checkpoint", "sample_stride",
+    "diagnostics_stride", "use_dealias_mask", "z_index", "compressed_real_fft",
+    "laguerre_mode", "omega_ky_index", "omega_kx_index", "flux_scale",
+    "wphi_scale", "fixed_dt", "dt_min", "dt_max", "cfl", "cfl_fac",
+    "collision_split", "collision_scheme", "implicit_tol", "implicit_maxiter",
+    "implicit_iters", "implicit_relax", "implicit_restart",
+    "implicit_solve_method", "implicit_preconditioner", "fixed_mode_ky_index",
+    "fixed_mode_kx_index", "external_phi", "resolved_diagnostics",
+    "show_progress",
+)
+_IMEX_DIAGNOSTIC_OPTION_KEYS = tuple(
+    key
+    for key in _EXPLICIT_DIAGNOSTIC_OPTION_KEYS
+    if key not in {"fixed_dt", "dt_min", "dt_max", "cfl", "cfl_fac", "resolved_diagnostics"}
+)
+
+
+def _options_from_scope(scope: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
+    return {key: scope[key] for key in keys}
+
 
 def _nonlinear_diagnostic_kernels() -> NonlinearDiagnosticKernels:
     """Return facade-level diagnostic kernels for compatibility monkeypatch seams."""
@@ -520,77 +543,17 @@ def integrate_nonlinear_explicit_diagnostics(
             params,
             dt=dt,
             steps=steps,
-            method=method,
-            cache=cache,
-            terms=terms,
-            checkpoint=checkpoint,
-            sample_stride=sample_stride,
-            diagnostics_stride=diagnostics_stride,
-            use_dealias_mask=use_dealias_mask,
-            z_index=z_index,
-            compressed_real_fft=compressed_real_fft,
-            laguerre_mode=laguerre_mode,
-            omega_ky_index=omega_ky_index,
-            omega_kx_index=omega_kx_index,
-            flux_scale=flux_scale,
-            wphi_scale=wphi_scale,
-            collision_split=collision_split,
-            collision_scheme=collision_scheme,
-            implicit_tol=implicit_tol,
-            implicit_maxiter=implicit_maxiter,
-            implicit_iters=implicit_iters,
-            implicit_relax=implicit_relax,
-            implicit_restart=implicit_restart,
-            implicit_solve_method=implicit_solve_method,
-            implicit_preconditioner=implicit_preconditioner,
-            fixed_mode_ky_index=fixed_mode_ky_index,
-            fixed_mode_kx_index=fixed_mode_kx_index,
-            external_phi=external_phi,
-            show_progress=show_progress,
+            **_options_from_scope(locals(), _IMEX_DIAGNOSTIC_OPTION_KEYS),
         )
 
-    t, diag_out, _G_final, _fields_final = (
-        _integrate_nonlinear_explicit_diagnostics_impl(
-            G0,
-            grid,
-            geom,
-            params,
-            dt,
-            steps,
-            method=method,
-            cache=cache,
-            terms=terms,
-            checkpoint=checkpoint,
-            sample_stride=sample_stride,
-            diagnostics_stride=diagnostics_stride,
-            use_dealias_mask=use_dealias_mask,
-            z_index=z_index,
-            compressed_real_fft=compressed_real_fft,
-            laguerre_mode=laguerre_mode,
-            omega_ky_index=omega_ky_index,
-            omega_kx_index=omega_kx_index,
-            flux_scale=flux_scale,
-            wphi_scale=wphi_scale,
-            fixed_dt=fixed_dt,
-            dt_min=dt_min,
-            dt_max=dt_max,
-            cfl=cfl,
-            cfl_fac=cfl_fac,
-            collision_split=collision_split,
-            collision_scheme=collision_scheme,
-            implicit_tol=implicit_tol,
-            implicit_maxiter=implicit_maxiter,
-            implicit_iters=implicit_iters,
-            implicit_relax=implicit_relax,
-            implicit_restart=implicit_restart,
-            implicit_solve_method=implicit_solve_method,
-            implicit_preconditioner=implicit_preconditioner,
-            fixed_mode_ky_index=fixed_mode_ky_index,
-            fixed_mode_kx_index=fixed_mode_kx_index,
-            external_phi=external_phi,
-            resolved_diagnostics=resolved_diagnostics,
-            show_progress=show_progress,
-        )
+    t, diag_out, _G_final, _fields_final = _integrate_nonlinear_explicit_diagnostics_impl(
+        G0,
+        grid,
+        geom,
+        params,
+        dt,
+        steps,
+        **_options_from_scope(locals(), _EXPLICIT_DIAGNOSTIC_OPTION_KEYS),
     )
     return t, diag_out
 
@@ -651,39 +614,7 @@ def integrate_nonlinear_explicit_diagnostics_state(
         params,
         dt,
         steps,
-        method=method,
-        cache=cache,
-        terms=terms,
-        checkpoint=checkpoint,
-        sample_stride=sample_stride,
-        diagnostics_stride=diagnostics_stride,
-        use_dealias_mask=use_dealias_mask,
-        z_index=z_index,
-        compressed_real_fft=compressed_real_fft,
-        laguerre_mode=laguerre_mode,
-        omega_ky_index=omega_ky_index,
-        omega_kx_index=omega_kx_index,
-        flux_scale=flux_scale,
-        wphi_scale=wphi_scale,
-        fixed_dt=fixed_dt,
-        dt_min=dt_min,
-        dt_max=dt_max,
-        cfl=cfl,
-        cfl_fac=cfl_fac,
-        collision_split=collision_split,
-        collision_scheme=collision_scheme,
-        implicit_tol=implicit_tol,
-        implicit_maxiter=implicit_maxiter,
-        implicit_iters=implicit_iters,
-        implicit_relax=implicit_relax,
-        implicit_restart=implicit_restart,
-        implicit_solve_method=implicit_solve_method,
-        implicit_preconditioner=implicit_preconditioner,
-        fixed_mode_ky_index=fixed_mode_ky_index,
-        fixed_mode_kx_index=fixed_mode_kx_index,
-        external_phi=external_phi,
-        resolved_diagnostics=resolved_diagnostics,
-        show_progress=show_progress,
+        **_options_from_scope(locals(), _EXPLICIT_DIAGNOSTIC_OPTION_KEYS),
     )
 
 
