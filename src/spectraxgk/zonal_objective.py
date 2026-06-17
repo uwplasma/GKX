@@ -14,7 +14,7 @@ from typing import Any, Literal
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.stellarator_objective_portfolio import (
+from spectraxgk.objectives.stellarator_portfolio import (
     PortfolioReduction,
     aggregate_objective_portfolio,
     objective_portfolio_sensitivity_report,

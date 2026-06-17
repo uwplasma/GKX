@@ -27,7 +27,7 @@ from spectraxgk.objectives.core import (
 from spectraxgk.objectives.vmec_boozer import (
     vmec_boozer_solver_objective_table_with_metadata_from_state,
 )
-from spectraxgk.stellarator_objective_portfolio import (
+from spectraxgk.objectives.stellarator_portfolio import (
     PortfolioReduction,
     aggregate_objective_portfolio,
     objective_portfolio_sensitivity_report,

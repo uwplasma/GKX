@@ -331,7 +331,7 @@ from spectraxgk.qa_low_turbulence import (
     reduced_boundary_surface,
     reduced_lcfs_bmag,
 )
-from spectraxgk.stellarator_optimization import (
+from spectraxgk.objectives.stellarator import (
     OBSERVABLE_NAMES as STELLARATOR_ITG_OBSERVABLE_NAMES,
     PARAMETER_NAMES as STELLARATOR_ITG_PARAMETER_NAMES,
     StellaratorITGOptimizationConfig,
@@ -357,7 +357,7 @@ from spectraxgk.stellarator_optimization import (
     stellarator_itg_vmec_boozer_portfolio_objective_from_state,
     stellarator_itg_vmec_boozer_sample_objective_table_from_state,
 )
-from spectraxgk.stellarator_objective_portfolio import (
+from spectraxgk.objectives.stellarator_portfolio import (
     ReducedPortfolioArtifactGuardConfig,
     StellaratorObjectivePortfolioContract,
     aggregate_objective_portfolio,
@@ -367,7 +367,7 @@ from spectraxgk.stellarator_objective_portfolio import (
     reduced_portfolio_artifact_guard_report,
     validate_objective_portfolio_contract,
 )
-from spectraxgk.vmec_jax_transport_objective import (
+from spectraxgk.objectives.vmec_transport import (
     VMECJAXSpectraxTransportObjective,
     VMECJAXTransportObjectiveConfig,
     VMECJAXTransportObjectiveKind,
@@ -375,13 +375,13 @@ from spectraxgk.vmec_jax_transport_objective import (
     vmec_jax_transport_growth_branch_locality_report_from_states,
     vmec_jax_transport_objective_from_state,
 )
-from spectraxgk.vmec_jax_candidate_gate import (
+from spectraxgk.validation.stellarator.candidate_gate import (
     build_authoritative_wout_candidate_gate,
     build_solved_vmec_candidate_gate,
     build_wout_reproducibility_gate,
     final_iota_profiles_from_vmec_result,
 )
-from spectraxgk.vmec_jax_transport_admission import (
+from spectraxgk.validation.stellarator.transport_admission import (
     DEFAULT_TRANSPORT_METRIC_KEYS,
     VMECJAXNonlinearAuditPolicy,
     VMECJAXNonlinearCampaignPolicy,
@@ -396,17 +396,17 @@ from spectraxgk.vmec_jax_transport_admission import (
     select_admitted_transport_candidate,
     transport_objective_sample_summary,
 )
-from spectraxgk.vmec_jax_transport_gradient import (
+from spectraxgk.objectives.vmec_transport_gradient import (
     boundary_spec_record,
     build_boundary_transport_gradient_report,
     write_boundary_transport_gradient_report,
 )
-from spectraxgk.vmec_jax_boundary_chain import (
+from spectraxgk.geometry.vmec_boundary_chain import (
     boundary_chain_summary_from_probe,
     build_boundary_chain_collection_summary,
     build_boundary_chain_summary,
 )
-from spectraxgk.vmec_jax_transport_line_search import (
+from spectraxgk.objectives.vmec_transport_line_search import (
     ProjectedLineSearchPolicy,
     boundary_chain_accepted_parameter_indices,
     projected_line_search_input_manifest,
@@ -421,7 +421,7 @@ from spectraxgk.zonal_objective import (
     zonal_flow_objective_sensitivity_report,
     zonal_flow_reduced_objective,
 )
-from spectraxgk.solver_objective_gradients import (
+from spectraxgk.objectives.solver_gradients import (
     SOLVER_GEOMETRY_PARAMETER_NAMES,
     SOLVER_OBJECTIVE_NAMES,
     SolverScalarObjective,

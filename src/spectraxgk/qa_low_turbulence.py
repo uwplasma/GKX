@@ -29,7 +29,7 @@ from spectraxgk.autodiff_validation import (
     autodiff_finite_difference_report,
     covariance_diagnostics,
 )
-from spectraxgk.stellarator_optimization import (
+from spectraxgk.objectives.stellarator import (
     PARAMETER_NAMES,
     _validate_params,
     smooth_positive,
