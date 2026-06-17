@@ -87,6 +87,7 @@ from spectraxgk.solvers.nonlinear.imex import (
 )
 from spectraxgk.nonlinear_helpers import (
     IMEXLinearOperator,
+    NonlinearCollisionSplitPolicy,  # noqa: F401 - compatibility re-export
     NonlinearDiagnosticSetup,  # noqa: F401 - compatibility re-export
     NonlinearTimeStepPolicy,  # noqa: F401 - compatibility re-export
     _apply_collision_split,
@@ -96,6 +97,7 @@ from spectraxgk.nonlinear_helpers import (
     _make_fixed_mode_projector,  # noqa: F401 - compatibility re-export
     _make_hermitian_projector,
     _make_nonlinear_state_projector,  # noqa: F401 - compatibility re-export
+    build_nonlinear_collision_split_policy,
     build_nonlinear_diagnostic_setup,
     build_nonlinear_imex_operator,
     build_nonlinear_time_step_policy,
@@ -360,27 +362,22 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
         laguerre_velocity_max_fn=_laguerre_velocity_max,
         cfl_frequency_components_fn=_nonlinear_cfl_frequency_components,
     )
-    squeeze_species = G0.ndim == 5
-    use_collision_split = bool(collision_split) and (
-        float(term_cfg.collisions) != 0.0 or float(term_cfg.hypercollisions) != 0.0
+    collision_policy = build_nonlinear_collision_split_policy(
+        cache,
+        params,
+        term_cfg,
+        real_dtype,
+        squeeze_species=G0.ndim == 5,
+        collision_split=collision_split,
+        collision_damping_fn=_collision_damping,
     )
-    rhs_term_cfg = (
-        replace(term_cfg, collisions=0.0, hypercollisions=0.0)
-        if use_collision_split
-        else term_cfg
-    )
-    damping = None
-    if use_collision_split:
-        damping = _collision_damping(
-            cache, params, term_cfg, real_dtype, squeeze_species=squeeze_species
-        )
 
     def rhs_fn(G):
         return nonlinear_rhs_cached(
             G,
             cache,
             params,
-            rhs_term_cfg,
+            collision_policy.rhs_terms,
             compressed_real_fft=compressed_real_fft,
             laguerre_mode=laguerre_mode,
             external_phi=external_phi,
@@ -426,8 +423,8 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
         show_progress=show_progress,
         steps=steps,
         emit_progress_fn=maybe_emit_nonlinear_progress,
-        use_collision_split=use_collision_split,
-        damping=damping,
+        use_collision_split=collision_policy.active,
+        damping=collision_policy.damping,
         collision_scheme=collision_scheme,
         apply_collision_split_fn=_apply_collision_split,
     )
@@ -779,14 +776,15 @@ def integrate_nonlinear_imex_diagnostics(
     squeeze_species = implicit_operator.squeeze_species
     if squeeze_species and G0.ndim == len(implicit_operator.shape) - 1:
         G0 = G0[None, ...]
-    use_collision_split = bool(collision_split) and (
-        float(term_cfg.collisions) != 0.0 or float(term_cfg.hypercollisions) != 0.0
+    collision_policy = build_nonlinear_collision_split_policy(
+        cache,
+        params,
+        term_cfg,
+        real_dtype,
+        squeeze_species=squeeze_species,
+        collision_split=collision_split,
+        collision_damping_fn=_collision_damping,
     )
-    damping = None
-    if use_collision_split:
-        damping = _collision_damping(
-            cache, params, term_cfg, real_dtype, squeeze_species=squeeze_species
-        )
 
     nonlinear_term = make_imex_nonlinear_term(
         cache,
@@ -861,8 +859,8 @@ def integrate_nonlinear_imex_diagnostics(
         steps=steps,
         progress_total=progress_total,
         emit_progress_fn=maybe_emit_nonlinear_progress,
-        use_collision_split=use_collision_split,
-        damping=damping,
+        use_collision_split=collision_policy.active,
+        damping=collision_policy.damping,
         collision_scheme=collision_scheme,
         apply_collision_split_fn=_apply_collision_split,
     )

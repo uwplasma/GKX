@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Callable
 
 import jax.numpy as jnp
@@ -25,6 +25,7 @@ from spectraxgk.terms.nonlinear import _broadcast_grid, _ifft2_xy
 
 __all__ = [
     "IMEXLinearOperator",
+    "NonlinearCollisionSplitPolicy",
     "NonlinearDiagnosticSetup",
     "NonlinearTimeStepPolicy",
     "_apply_collision_split",
@@ -34,6 +35,7 @@ __all__ = [
     "_make_fixed_mode_projector",
     "_make_hermitian_projector",
     "_make_nonlinear_state_projector",
+    "build_nonlinear_collision_split_policy",
     "build_nonlinear_diagnostic_setup",
     "build_nonlinear_imex_operator",
     "build_nonlinear_time_step_policy",
@@ -73,6 +75,15 @@ class NonlinearTimeStepPolicy:
     dt_init: jnp.ndarray
     progress_total: jnp.ndarray
     update_dt: Callable[[FieldState, jnp.ndarray], jnp.ndarray]
+
+
+@dataclass(frozen=True)
+class NonlinearCollisionSplitPolicy:
+    """Collision split settings shared by explicit and IMEX diagnostics."""
+
+    active: bool
+    rhs_terms: TermConfig
+    damping: jnp.ndarray | None
 
 
 def _nonlinear_moment_counts(G0: jnp.ndarray) -> tuple[int, int]:
@@ -462,6 +473,40 @@ def _collision_damping(
 
     damping = coll_w * damping + hyper_w * hyper_damp
     return damping.astype(real_dtype)
+
+
+def build_nonlinear_collision_split_policy(
+    cache: LinearCache,
+    params: LinearParams,
+    term_cfg: TermConfig,
+    real_dtype: jnp.dtype,
+    *,
+    squeeze_species: bool,
+    collision_split: bool,
+    collision_damping_fn: Callable[..., jnp.ndarray] = _collision_damping,
+) -> NonlinearCollisionSplitPolicy:
+    """Build collision splitting weights and RHS terms for nonlinear scans."""
+
+    active = bool(collision_split) and (
+        float(term_cfg.collisions) != 0.0 or float(term_cfg.hypercollisions) != 0.0
+    )
+    rhs_terms = (
+        replace(term_cfg, collisions=0.0, hypercollisions=0.0)
+        if active
+        else term_cfg
+    )
+    damping = (
+        collision_damping_fn(
+            cache, params, term_cfg, real_dtype, squeeze_species=squeeze_species
+        )
+        if active
+        else None
+    )
+    return NonlinearCollisionSplitPolicy(
+        active=active,
+        rhs_terms=rhs_terms,
+        damping=damping,
+    )
 
 
 def _apply_collision_split(
