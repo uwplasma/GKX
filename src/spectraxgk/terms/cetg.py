@@ -19,7 +19,7 @@ from spectraxgk.core.grid import SpectralGrid
 from spectraxgk.workflows.runtime.config import RuntimeConfig
 from spectraxgk.terms.config import FieldState, TermConfig
 from spectraxgk.terms.integrators import _SSPX3_ADT, _SSPX3_W1, _SSPX3_W2, _SSPX3_W3
-from spectraxgk.terms.nonlinear import _spectral_bracket_multi
+from spectraxgk.terms.brackets import _spectral_bracket_multi
 
 
 @dataclass(frozen=True)

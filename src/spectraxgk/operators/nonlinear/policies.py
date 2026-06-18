@@ -21,7 +21,7 @@ from spectraxgk.operators.linear.params import (
     term_config_to_linear_terms,
 )
 from spectraxgk.terms.config import FieldState, TermConfig
-from spectraxgk.terms.nonlinear import _broadcast_grid, _ifft2_xy
+from spectraxgk.terms.brackets import _broadcast_grid, _ifft2_xy
 
 __all__ = [
     "IMEXLinearOperator",
