@@ -76,6 +76,7 @@ from spectraxgk.operators.linear.params import (
 from spectraxgk.solvers.linear.krylov import KrylovConfig, dominant_eigenpair
 from spectraxgk.solvers.time.runners import integrate_linear_from_config
 from spectraxgk.terms.assembly import compute_fields_cached
+from spectraxgk.validation.benchmarks import kbm_linear_paths as _paths
 
 
 def run_kbm_linear(
@@ -190,7 +191,7 @@ def run_kbm_linear(
         ky_target=float(ky_target),
         reference_aligned=reference_aligned_use,
     )
-    krylov_cfg_use = krylov_cfg or KBM_KRYLOV_DEFAULT
+    _paths.sync_path_hooks(globals())
 
     def _fit_with_window(signal: np.ndarray, t_arr: np.ndarray) -> tuple[float, float]:
         use_auto = auto_window and tmin is None and tmax is None
@@ -226,209 +227,46 @@ def run_kbm_linear(
         return gamma_val, omega_val
 
     if solver_key == "explicit_time":
-        explicit_mode_method = (
-            mode_method if mode_method in {"z_index", "max"} else "z_index"
-        )
-        explicit_time_cfg = ExplicitTimeConfig(
+        return _paths.run_kbm_explicit_time_path(
+            G0_jax=G0_jax,
+            grid=grid,
+            cache=cache,
+            params=params,
+            geom=geom,
+            terms=terms,
+            sel=sel,
+            ky_target=ky_target,
             dt=dt,
-            t_max=dt * steps,
-            sample_stride=max(int(sample_stride or 1), 1),
-            fixed_dt=bool(time_cfg.fixed_dt) if time_cfg is not None else False,
-            use_dealias_mask=bool(getattr(time_cfg, "use_dealias_mask", False))
-            if time_cfg is not None
-            else False,
-            dt_min=float(time_cfg.dt_min) if time_cfg is not None else 1.0e-7,
-            dt_max=float(time_cfg.dt_max)
-            if (time_cfg is not None and time_cfg.dt_max is not None)
-            else None,
-            cfl=float(time_cfg.cfl) if time_cfg is not None else 0.9,
-            cfl_fac=(
-                resolve_cfl_fac(str(time_cfg.method), time_cfg.cfl_fac)
-                if time_cfg is not None
-                else float(ExplicitTimeConfig.cfl_fac)
-            ),
-        )
-        t_arr, phi_t, gamma_t, omega_t, _gx_diag = (
-            integrate_linear_explicit_diagnostics(
-                G0_jax,
-                grid,
-                cache,
-                params,
-                geom,
-                explicit_time_cfg,
-                terms=terms,
-                mode_method=explicit_mode_method,
-                z_index=sel.z_index,
-                jit=True,
-            )
-        )
-        t_out = np.asarray(t_arr, dtype=float)
-        phi_t_np = np.asarray(phi_t)
-        if t_out.size > 1:
-            if mode_method in {"z_index", "max"}:
-                try:
-                    gamma, omega, _g_t, _o_t, _t_mid = (
-                        instantaneous_growth_rate_from_phi(
-                            phi_t_np,
-                            t_out,
-                            sel,
-                            navg_fraction=0.5,
-                            mode_method=mode_method,
-                        )
-                    )
-                except ValueError:
-                    try:
-                        gamma, omega, _g_t, _o_t = (
-                            windowed_growth_rate_from_omega_series(
-                                np.asarray(gamma_t),
-                                np.asarray(omega_t),
-                                sel,
-                                navg_fraction=0.5,
-                            )
-                        )
-                    except ValueError:
-                        signal = extract_mode_time_series(
-                            phi_t_np, sel, method=mode_method
-                        )
-                        gamma, omega = _fit_with_window(signal, t_out)
-            else:
-                signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
-                if auto_window and tmin is None and tmax is None:
-                    gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
-                        t_out,
-                        signal,
-                        window_method="fixed",
-                        window_fraction=window_fraction,
-                        min_points=min_points,
-                        start_fraction=start_fraction,
-                        growth_weight=growth_weight,
-                        require_positive=require_positive,
-                        min_amp_fraction=min_amp_fraction,
-                    )
-                else:
-                    gamma, omega = _fit_with_window(signal, t_out)
-        else:
-            gamma = float("nan")
-            omega = float("nan")
-        gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
-        return LinearRunResult(
-            t=t_out,
-            phi_t=phi_t_np,
-            gamma=gamma,
-            omega=omega,
-            ky=float(ky_target),
-            selection=sel,
-            gamma_t=np.asarray(gamma_t),
-            omega_t=np.asarray(omega_t),
+            steps=steps,
+            time_cfg=time_cfg,
+            sample_stride=sample_stride,
+            mode_method=mode_method,
+            diagnostic_norm=diagnostic_norm,
+            auto_window=auto_window,
+            tmin=tmin,
+            tmax=tmax,
+            window_fraction=window_fraction,
+            min_points=min_points,
+            start_fraction=start_fraction,
+            growth_weight=growth_weight,
+            require_positive=require_positive,
+            min_amp_fraction=min_amp_fraction,
         )
 
     if solver_key == "krylov":
-        shift_val = krylov_cfg_use.shift
-        targets: Sequence[float] | None = (
-            kbm_target_factors if kbm_target_factors else None
-        )
-        use_multi_target = _kbm_use_multi_target_krylov(
-            krylov_cfg_use,
-            targets,
-            shift=shift_val,
-        )
-        if use_multi_target:
-            assert targets is not None
-            beta_transition = (
-                float(cfg_use.model.beta)
-                if kbm_beta_transition is None
-                else float(kbm_beta_transition)
-            )
-            eig_candidates = []
-            vec_candidates = []
-            for target in targets:
-                eig_i, vec_i = dominant_eigenpair(
-                    G0_jax,
-                    cache,
-                    params,
-                    terms=terms,
-                    v_ref=None,
-                    select_overlap=False,
-                    krylov_dim=krylov_cfg_use.krylov_dim,
-                    restarts=krylov_cfg_use.restarts,
-                    omega_min_factor=krylov_cfg_use.omega_min_factor,
-                    omega_target_factor=float(target),
-                    omega_cap_factor=krylov_cfg_use.omega_cap_factor,
-                    omega_sign=krylov_cfg_use.omega_sign,
-                    method=krylov_cfg_use.method,
-                    power_iters=krylov_cfg_use.power_iters,
-                    power_dt=krylov_cfg_use.power_dt,
-                    shift=None,
-                    shift_source="target",
-                    shift_tol=krylov_cfg_use.shift_tol,
-                    shift_maxiter=krylov_cfg_use.shift_maxiter,
-                    shift_restart=krylov_cfg_use.shift_restart,
-                    shift_solve_method=krylov_cfg_use.shift_solve_method,
-                    shift_preconditioner=krylov_cfg_use.shift_preconditioner,
-                    shift_selection="targeted",
-                    mode_family=krylov_cfg_use.mode_family,
-                    fallback_method=krylov_cfg_use.fallback_method,
-                    fallback_real_floor=krylov_cfg_use.fallback_real_floor,
-                )
-                eig_candidates.append(eig_i)
-                vec_candidates.append(vec_i)
-            if len(eig_candidates) >= 2 and np.isfinite(beta_transition):
-                idx = 1 if beta_use >= beta_transition else 0
-            else:
-                eig_arr = np.asarray([complex(np.asarray(e)) for e in eig_candidates])
-                growth = np.real(eig_arr)
-                idx = (
-                    0
-                    if np.all(~np.isfinite(growth))
-                    else int(
-                        np.nanargmax(np.where(np.isfinite(growth), growth, -np.inf))
-                    )
-                )
-            eig = eig_candidates[idx]
-            vec = vec_candidates[idx]
-        else:
-            eig, vec = dominant_eigenpair(
-                G0_jax,
-                cache,
-                params,
-                terms=terms,
-                v_ref=None,
-                select_overlap=False,
-                krylov_dim=krylov_cfg_use.krylov_dim,
-                restarts=krylov_cfg_use.restarts,
-                omega_min_factor=krylov_cfg_use.omega_min_factor,
-                omega_target_factor=krylov_cfg_use.omega_target_factor,
-                omega_cap_factor=krylov_cfg_use.omega_cap_factor,
-                omega_sign=krylov_cfg_use.omega_sign,
-                method=krylov_cfg_use.method,
-                power_iters=krylov_cfg_use.power_iters,
-                power_dt=krylov_cfg_use.power_dt,
-                shift=shift_val,
-                shift_source=krylov_cfg_use.shift_source,
-                shift_tol=krylov_cfg_use.shift_tol,
-                shift_maxiter=krylov_cfg_use.shift_maxiter,
-                shift_restart=krylov_cfg_use.shift_restart,
-                shift_solve_method=krylov_cfg_use.shift_solve_method,
-                shift_preconditioner=krylov_cfg_use.shift_preconditioner,
-                shift_selection=krylov_cfg_use.shift_selection,
-                mode_family=krylov_cfg_use.mode_family,
-                fallback_method=krylov_cfg_use.fallback_method,
-                fallback_real_floor=krylov_cfg_use.fallback_real_floor,
-            )
-        gamma = float(np.real(eig))
-        omega = float(-np.imag(eig))
-        if krylov_cfg_use.omega_sign != 0:
-            omega = float(np.sign(krylov_cfg_use.omega_sign)) * abs(omega)
-        gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
-        term_cfg = linear_terms_to_term_config(terms)
-        phi = compute_fields_cached(vec, cache, params, terms=term_cfg).phi
-        return LinearRunResult(
-            t=np.array([0.0], dtype=float),
-            phi_t=np.asarray(phi)[None, ...],
-            gamma=gamma,
-            omega=omega,
-            ky=float(ky_target),
-            selection=sel,
+        return _paths.run_kbm_krylov_path(
+            G0_jax=G0_jax,
+            cache=cache,
+            params=params,
+            terms=terms,
+            sel=sel,
+            ky_target=ky_target,
+            beta_use=beta_use,
+            cfg_use=cfg_use,
+            krylov_cfg=krylov_cfg,
+            kbm_target_factors=kbm_target_factors,
+            kbm_beta_transition=kbm_beta_transition,
+            diagnostic_norm=diagnostic_norm,
         )
 
     stride = 1 if sample_stride is None else int(sample_stride)
@@ -578,5 +416,4 @@ def run_kbm_linear(
         ky=float(ky_target),
         selection=sel,
     )
-
 
