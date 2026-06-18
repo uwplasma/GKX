@@ -89,10 +89,8 @@ from spectraxgk.validation.benchmarks.species import (
     _two_species_params,
 )
 
-from spectraxgk.validation.benchmarks.cyclone import (
-    run_cyclone_linear,
-    run_cyclone_scan,
-)
+from spectraxgk.validation.benchmarks.cyclone_linear import run_cyclone_linear
+from spectraxgk.validation.benchmarks.cyclone_scan import run_cyclone_scan
 
 from spectraxgk.validation.benchmarks.kbm import (
     run_kbm_beta_scan,
