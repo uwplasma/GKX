@@ -70,6 +70,7 @@ from spectraxgk.terms.assembly import compute_fields_cached
 
 
 from spectraxgk.validation.benchmarks.etg_linear import run_etg_linear
+from spectraxgk.validation.benchmarks import etg_scan_paths as _paths
 
 def run_etg_scan(
     ky_values: np.ndarray,
@@ -200,18 +201,6 @@ def run_etg_scan(
         normalize_growth_rate_fn=_normalize_growth_rate,
     )
 
-    def _fit_signal(
-        signal: np.ndarray, idx: int, dt_i: float, stride: int
-    ) -> tuple[float, float]:
-        return fit_policy.fit_signal(
-            signal,
-            idx=idx,
-            dt=dt_i,
-            stride=stride,
-            params=params,
-            diagnostic_norm=diagnostic_norm,
-        )
-
     ky_values_arr = np.asarray(ky_values, dtype=float)
     if use_batch:
         ky_iter = _iter_ky_batches(
@@ -226,6 +215,7 @@ def run_etg_scan(
     ky_slice: np.ndarray
     ky_indices: list[int]
     sel: ModeSelection | ModeSelectionBatch
+    _paths.sync_path_hooks(globals())
 
     for batch_start, ky_slice, valid_count in ky_iter:
         if use_batch:
@@ -266,326 +256,85 @@ def run_etg_scan(
         cache = build_linear_cache(grid, geom, params, Nl, Nm)
         G0_jax = jnp.asarray(G0)
         if solver_key == "krylov":
-            cfg_use = krylov_cfg or ETG_KRYLOV_DEFAULT
-            use_cont = bool(cfg_use.continuation)
-            v0_use = G0_jax
-            v_ref = None
-            shift_override = cfg_use.shift
-            shift_selection_use = cfg_use.shift_selection
-            if use_cont and prev_vec is not None and prev_vec.shape == G0_jax.shape:
-                v0_use = prev_vec
-                v_ref = prev_vec
-                if (
-                    cfg_use.method.strip().lower() == "shift_invert"
-                    and prev_eig is not None
-                ):
-                    if shift_override is None:
-                        shift_override = prev_eig
-                        # When continuation carries an explicit previous eigenvalue
-                        # as the shift, select the closest shifted branch first and
-                        # let overlap tracking keep the mode family coherent.
-                        shift_selection_use = "shift"
-            select_overlap = (
-                use_cont
-                and v_ref is not None
-                and (cfg_use.continuation_selection.strip().lower() == "overlap")
-            )
-            eig, vec = dominant_eigenpair(
-                v0_use,
-                cache,
-                params,
+            gamma, omega, prev_vec, prev_eig = _paths.run_etg_krylov_batch(
+                G0_jax=G0_jax,
+                cache=cache,
+                params=params,
                 terms=terms,
-                v_ref=v_ref,
-                select_overlap=select_overlap,
-                krylov_dim=cfg_use.krylov_dim,
-                restarts=cfg_use.restarts,
-                omega_min_factor=cfg_use.omega_min_factor,
-                omega_target_factor=cfg_use.omega_target_factor,
-                omega_cap_factor=cfg_use.omega_cap_factor,
-                omega_sign=cfg_use.omega_sign,
-                method=cfg_use.method,
-                power_iters=cfg_use.power_iters,
-                power_dt=cfg_use.power_dt,
-                shift=shift_override,
-                shift_source=cfg_use.shift_source,
-                shift_tol=cfg_use.shift_tol,
-                shift_maxiter=cfg_use.shift_maxiter,
-                shift_restart=cfg_use.shift_restart,
-                shift_solve_method=cfg_use.shift_solve_method,
-                shift_preconditioner=cfg_use.shift_preconditioner,
-                shift_selection=shift_selection_use,
-                mode_family=cfg_use.mode_family,
-                fallback_method=cfg_use.fallback_method,
-                fallback_real_floor=cfg_use.fallback_real_floor,
+                krylov_cfg=krylov_cfg,
+                prev_vec=prev_vec,
+                prev_eig=prev_eig,
+                diagnostic_norm=diagnostic_norm,
             )
-            if use_cont:
-                eig_host = complex(np.asarray(eig))
-                if np.isfinite(eig_host.real) and np.isfinite(eig_host.imag):
-                    prev_vec = vec
-                    prev_eig = eig_host
-                else:
-                    prev_vec = None
-                    prev_eig = None
-            gamma = float(np.real(eig))
-            omega = float(-np.imag(eig))
-            if cfg_use.omega_sign != 0:
-                omega = float(np.sign(cfg_use.omega_sign)) * abs(omega)
-            gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
             gammas.append(gamma)
             omegas.append(omega)
             ky_out.append(float(ky_slice[0]))
             continue
 
-        time_cfg_i = None
-        if time_cfg is not None:
-            time_cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
-            if sample_stride is not None:
-                time_cfg_i = replace(time_cfg_i, sample_stride=sample_stride)
-
-        params_use = params
-        if time_cfg_i is not None and time_cfg_i.use_diffrax and streaming_fit:
-            t_total = float(time_cfg_i.t_max)
-            tmin_i, tmax_i = _resolve_streaming_window(
-                t_total,
-                indexed_float_value(tmin, batch_start),
-                indexed_float_value(tmax, batch_start),
-                start_fraction,
-                window_fraction,
-                1.0,
-            )
-            _, gamma_vals, omega_vals = integrate_linear_diffrax_streaming(
-                G0_jax,
-                grid,
-                geom,
-                params_use,
-                dt=dt_i,
-                steps=steps_i,
-                method=time_cfg_i.diffrax_solver,
-                cache=cache,
-                terms=terms,
-                adaptive=time_cfg_i.diffrax_adaptive,
-                rtol=time_cfg_i.diffrax_rtol,
-                atol=time_cfg_i.diffrax_atol,
-                max_steps=time_cfg_i.diffrax_max_steps,
-                progress_bar=time_cfg_i.progress_bar,
-                checkpoint=time_cfg_i.checkpoint,
-                tmin=tmin_i,
-                tmax=tmax_i,
-                fit_signal=fit_key,
-                mode_ky_indices=np.arange(valid_count, dtype=int),
-                mode_kx_index=0,
-                mode_z_index=_midplane_index(grid),
-                mode_method=mode_method,
-                amp_floor=streaming_amp_floor,
-                density_species_index=electron_index if fit_key == "density" else None,
-                return_state=False,
-            )
-            gamma_arr = np.asarray(gamma_vals)
-            omega_arr = np.asarray(omega_vals)
-            for local_idx in range(valid_count):
-                ky_val = ky_slice[local_idx]
-                gamma_i, omega_i = _normalize_growth_rate(
-                    float(gamma_arr[local_idx]),
-                    float(omega_arr[local_idx]),
-                    params_use,
-                    diagnostic_norm,
-                )
-                gammas.append(gamma_i)
-                omegas.append(omega_i)
-                ky_out.append(float(ky_val))
+        time_result = _paths.run_etg_time_batch(
+            G0_jax=G0_jax,
+            grid=grid,
+            geom=geom,
+            params=params,
+            cache=cache,
+            terms=terms,
+            time_cfg=time_cfg,
+            dt_i=dt_i,
+            steps_i=steps_i,
+            method=method,
+            sample_stride=sample_stride,
+            fit_key=fit_key,
+            need_density=need_density,
+            streaming_fit=streaming_fit,
+            streaming_amp_floor=streaming_amp_floor,
+            mode_method=mode_method,
+            mode_only=mode_only,
+            sel=sel,
+            batch_start=batch_start,
+            valid_count=valid_count,
+            ky_slice=ky_slice,
+            tmin=tmin,
+            tmax=tmax,
+            start_fraction=start_fraction,
+            window_fraction=window_fraction,
+            electron_index=electron_index,
+            diagnostic_norm=diagnostic_norm,
+            show_progress=show_progress,
+            gammas=gammas,
+            omegas=omegas,
+            ky_out=ky_out,
+        )
+        if time_result.handled:
             continue
 
-        if time_cfg_i is not None:
-            save_field = (
-                "phi+density"
-                if fit_key == "auto"
-                else ("density" if fit_key == "density" else "phi")
-            )
-            save_mode = (
-                None
-                if fit_key == "auto"
-                else (sel if (mode_only and fit_key == "phi") else None)
-            )
-            _, saved = integrate_linear_from_config(
-                G0_jax,
-                grid,
-                geom,
-                params_use,
-                time_cfg_i,
-                cache=cache,
-                terms=terms,
-                save_mode=save_mode,
-                mode_method=mode_method,
-                save_field=save_field,
-                density_species_index=electron_index if need_density else None,
-                show_progress=show_progress,
-            )
-            if fit_key == "auto":
-                phi_t, density_t = saved
-            else:
-                phi_t = saved
-                density_t = None
-            stride = time_cfg_i.sample_stride
-        else:
-            stride = 1 if sample_stride is None else int(sample_stride)
-            if need_density:
-                _diag = integrate_linear_diagnostics(
-                    G0_jax,
-                    grid,
-                    geom,
-                    params_use,
-                    dt=dt_i,
-                    steps=steps_i,
-                    method=method,
-                    cache=cache,
-                    terms=terms,
-                    sample_stride=stride,
-                    species_index=1,
-                    show_progress=show_progress,
-                )
-                phi_t = _diag[1]
-                density_t = _diag[2] if len(_diag) > 2 else None
-            else:
-                _, phi_out_time = integrate_linear(
-                    G0_jax,
-                    grid,
-                    geom,
-                    params_use,
-                    dt=dt_i,
-                    steps=steps_i,
-                    method=method,
-                    cache=cache,
-                    terms=terms,
-                    sample_stride=stride,
-                    show_progress=show_progress,
-                )
-                phi_t = phi_out_time
-                density_t = None
-
-        phi_t_np = np.asarray(phi_t)
-        density_np = None if density_t is None else np.asarray(density_t)
-        if fit_key == "density" and density_np is None:
-            density_np = phi_t_np
-        t = np.arange(phi_t_np.shape[0]) * dt_i * stride
-
-        def _is_valid_growth(gamma_val: float, omega_val: float) -> bool:
-            if not np.isfinite(gamma_val) or not np.isfinite(omega_val):
-                return False
-            if require_positive and gamma_val <= 0.0:
-                return False
-            return True
-
-        for local_idx in range(valid_count):
-            ky_val = ky_slice[local_idx]
-            if fit_key == "auto":
-                sel_local = ModeSelection(
-                    ky_index=local_idx, kx_index=0, z_index=_midplane_index(grid)
-                )
-                _signal, _name, gamma, omega = _select_fit_signal_auto(
-                    t,
-                    phi_t_np,
-                    density_np,
-                    sel_local,
-                    mode_method=mode_method,
-                    tmin=indexed_float_value(tmin, batch_start + local_idx),
-                    tmax=indexed_float_value(tmax, batch_start + local_idx),
-                    window_fraction=window_fraction,
-                    min_points=min_points,
-                    start_fraction=start_fraction,
-                    growth_weight=growth_weight,
-                    require_positive=require_positive,
-                    min_amp_fraction=min_amp_fraction,
-                    max_amp_fraction=max_amp_fraction,
-                    window_method=window_method,
-                    max_fraction=max_fraction,
-                    end_fraction=end_fraction,
-                    num_windows=8,
-                    phase_weight=phase_weight,
-                    length_weight=length_weight,
-                    min_r2=min_r2,
-                    late_penalty=late_penalty,
-                    min_slope=min_slope,
-                    min_slope_frac=min_slope_frac,
-                    slope_var_weight=slope_var_weight,
-                )
-                gamma, omega = _normalize_growth_rate(
-                    gamma, omega, params_use, diagnostic_norm
-                )
-                if auto_solver and not _is_valid_growth(gamma, omega):
-                    res = run_etg_linear(
-                        ky_target=float(ky_val),
-                        cfg=cfg,
-                        Nl=Nl,
-                        Nm=Nm,
-                        dt=dt_i,
-                        steps=steps_i,
-                        method=method,
-                        params=params,
-                        solver="krylov",
-                        krylov_cfg=krylov_cfg,
-                        diagnostic_norm=diagnostic_norm,
-                        fit_signal="phi",
-                        show_progress=show_progress,
-                    )
-                    gamma = float(res.gamma)
-                    omega = float(res.omega)
-                gammas.append(gamma)
-                omegas.append(omega)
-                ky_out.append(float(ky_val))
-                continue
-
-            if mode_only and fit_key == "phi" and phi_t_np.ndim <= 2:
-                signal = _extract_mode_only_signal(phi_t_np, local_idx=local_idx)
-            else:
-                sel_local = ModeSelection(
-                    ky_index=local_idx, kx_index=0, z_index=_midplane_index(grid)
-                )
-                signal = _select_fit_signal(
-                    phi_t_np,
-                    density_np,
-                    sel_local,
-                    fit_signal=fit_key,
-                    mode_method=mode_method,
-                )
-            if gx_growth and fit_key == "phi":
-                sel_local = ModeSelection(
-                    ky_index=local_idx, kx_index=0, z_index=_midplane_index(grid)
-                )
-                gamma, omega, _gamma_t, _omega_t, _t_mid = instantaneous_growth_rate_from_phi(
-                    phi_t_np,
-                    t,
-                    sel_local,
-                    navg_fraction=gx_navg_fraction,
-                    mode_method=mode_method,
-                )
-                gamma, omega = _normalize_growth_rate(
-                    gamma, omega, params_use, diagnostic_norm
-                )
-            else:
-                gamma, omega = _fit_signal(
-                    signal, batch_start + local_idx, dt_i, stride
-                )
-            if auto_solver and not _is_valid_growth(gamma, omega):
-                res = run_etg_linear(
-                    ky_target=float(ky_val),
-                    cfg=cfg,
-                    Nl=Nl,
-                    Nm=Nm,
-                    dt=dt_i,
-                    steps=steps_i,
-                    method=method,
-                    params=params,
-                    solver="krylov",
-                    krylov_cfg=krylov_cfg,
-                    diagnostic_norm=diagnostic_norm,
-                    fit_signal="phi",
-                    show_progress=show_progress,
-                )
-                gamma = float(res.gamma)
-                omega = float(res.omega)
-            gammas.append(gamma)
-            omegas.append(omega)
-            ky_out.append(float(ky_val))
+        _paths.append_etg_time_fit_results(
+            result=time_result,
+            ky_slice=ky_slice,
+            valid_count=valid_count,
+            batch_start=batch_start,
+            fit_key=fit_key,
+            fit_policy=fit_policy,
+            params=params,
+            diagnostic_norm=diagnostic_norm,
+            mode_method=mode_method,
+            mode_only=mode_only,
+            mode_z_index=_midplane_index(grid),
+            gx_growth=gx_growth,
+            gx_navg_fraction=gx_navg_fraction,
+            auto_solver=auto_solver,
+            require_positive=require_positive,
+            cfg=cfg,
+            Nl=Nl,
+            Nm=Nm,
+            dt_i=dt_i,
+            steps_i=steps_i,
+            method=method,
+            krylov_cfg=krylov_cfg,
+            show_progress=show_progress,
+            gammas=gammas,
+            omegas=omegas,
+            ky_out=ky_out,
+        )
     return LinearScanResult(
         ky=np.array(ky_out), gamma=np.array(gammas), omega=np.array(omegas)
     )
