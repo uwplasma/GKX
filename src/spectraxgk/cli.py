@@ -56,7 +56,7 @@ from spectraxgk.workflows.named_cases import (
     scan_named_linear_command,
 )
 from spectraxgk.runtime import run_runtime_linear, run_runtime_scan
-from spectraxgk.workflows.cases import (
+from spectraxgk.workflows.runtime.commands import (
     RuntimeCommandDeps,
     print_linear_run_header as _print_linear_run_header,
     run_runtime_linear_command,
