@@ -92,11 +92,9 @@ from spectraxgk.validation.benchmarks.species import (
 from spectraxgk.validation.benchmarks.cyclone_linear import run_cyclone_linear
 from spectraxgk.validation.benchmarks.cyclone_scan import run_cyclone_scan
 
-from spectraxgk.validation.benchmarks.kbm import (
-    run_kbm_beta_scan,
-    run_kbm_linear,
-    run_kbm_scan,
-)
+from spectraxgk.validation.benchmarks.kbm_beta import run_kbm_beta_scan
+from spectraxgk.validation.benchmarks.kbm_linear import run_kbm_linear
+from spectraxgk.validation.benchmarks.kbm_scan import run_kbm_scan
 
 from spectraxgk.validation.benchmarks.kinetic_linear import run_kinetic_linear
 from spectraxgk.validation.benchmarks.kinetic_scan import run_kinetic_scan
