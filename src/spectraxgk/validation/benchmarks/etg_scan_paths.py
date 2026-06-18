@@ -321,8 +321,8 @@ def append_etg_time_fit_results(
     mode_method: str,
     mode_only: bool,
     mode_z_index: int,
-    gx_growth: bool,
-    gx_navg_fraction: float,
+    reference_growth_window: bool,
+    reference_navg_fraction: float,
     auto_solver: bool,
     require_positive: bool,
     cfg: Any,
@@ -400,13 +400,13 @@ def append_etg_time_fit_results(
                     fit_signal=fit_key,
                     mode_method=mode_method,
                 )
-            if gx_growth and fit_key == "phi":
+            if reference_growth_window and fit_key == "phi":
                 sel_local = ModeSelection(ky_index=local_idx, kx_index=0, z_index=mode_z_index)
                 gamma, omega, _gamma_t, _omega_t, _t_mid = instantaneous_growth_rate_from_phi(
                     phi_t_np,
                     t,
                     sel_local,
-                    navg_fraction=gx_navg_fraction,
+                    navg_fraction=reference_navg_fraction,
                     mode_method=mode_method,
                 )
                 gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)

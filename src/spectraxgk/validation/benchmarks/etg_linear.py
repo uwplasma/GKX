@@ -96,8 +96,8 @@ def run_etg_linear(
     fit_signal: str = "auto",
     streaming_fit: bool = False,
     streaming_amp_floor: float = 1.0e-30,
-    gx_growth: bool = False,
-    gx_navg_fraction: float = 0.5,
+    reference_growth_window: bool = False,
+    reference_navg_fraction: float = 0.5,
     diagnostic_norm: str = "none",
     show_progress: bool = False,
 ) -> LinearRunResult:
@@ -384,12 +384,12 @@ def run_etg_linear(
         phi_t_np = np.asarray(phi_t)
         t = np.arange(phi_t_np.shape[0]) * dt * stride
         density_np = None if density_t is None else np.asarray(density_t)
-        if gx_growth and fit_key == "phi":
+        if reference_growth_window and fit_key == "phi":
             gamma, omega, _gamma_t, _omega_t, _t_mid = instantaneous_growth_rate_from_phi(
                 phi_t_np,
                 t,
                 sel,
-                navg_fraction=gx_navg_fraction,
+                navg_fraction=reference_navg_fraction,
                 mode_method=mode_method,
             )
             gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
