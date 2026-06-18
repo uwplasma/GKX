@@ -120,7 +120,6 @@ module = [
   "spectraxgk.geometry_backends.vmec_remap",
   "spectraxgk.geometry_backends.vmec_splines",
   "spectraxgk.geometry_backends.vmec_types",
-  "spectraxgk.geometry.vmec",
 ]
 ignore_errors = true
 
