@@ -112,11 +112,22 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = [
   "spectraxgk.geometry_backends.vmec",
-  "spectraxgk.geometry_backends.vmec_*",
+  "spectraxgk.geometry_backends.vmec_backend_discovery",
+  "spectraxgk.geometry_backends.vmec_fieldlines",
+  "spectraxgk.geometry_backends.vmec_io",
+  "spectraxgk.geometry_backends.vmec_numerics",
+  "spectraxgk.geometry_backends.vmec_pipeline",
+  "spectraxgk.geometry_backends.vmec_remap",
+  "spectraxgk.geometry_backends.vmec_types",
   "spectraxgk.geometry.vmec",
 ]
 ignore_errors = true
 
 [[tool.mypy.overrides]]
-module = ["spectraxgk.geometry_backends.miller"]
+module = [
+  "spectraxgk.geometry_backends.miller",
+  "spectraxgk.geometry_backends.miller_core",
+  "spectraxgk.geometry_backends.miller_numerics",
+  "spectraxgk.geometry_backends.miller_profiles",
+]
 disable_error_code = ["arg-type"]
