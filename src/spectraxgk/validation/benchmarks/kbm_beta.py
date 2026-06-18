@@ -124,7 +124,6 @@ def run_kbm_beta_scan(
     ampere_g0_scale: float | None = None,
     bpar_beta_scale: float | None = None,
     reference_aligned: bool | None = True,
-    gx_reference: bool | None = None,
 ) -> LinearScanResult:
     """Run a KBM beta scan at fixed ky.
 
@@ -136,8 +135,6 @@ def run_kbm_beta_scan(
     geom = SAlphaGeometry.from_config(cfg.geometry)
     if terms is None:
         terms = LinearTerms(bpar=0.0)
-    if gx_reference is not None:
-        reference_aligned = gx_reference
     reference_aligned_use = bool(
         True if reference_aligned is None else reference_aligned
     )

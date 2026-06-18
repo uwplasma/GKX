@@ -121,7 +121,6 @@ def run_kbm_scan(
     ampere_g0_scale: float | None = None,
     bpar_beta_scale: float | None = None,
     reference_aligned: bool | None = True,
-    gx_reference: bool | None = None,
 ) -> LinearScanResult:
     """Run a KBM ky scan at fixed beta.
 
@@ -136,6 +135,9 @@ def run_kbm_scan(
     else:
         beta_use = float(beta_value)
     cfg_use = replace(cfg_in, model=replace(cfg_in.model, beta=beta_use))
+    reference_aligned_use = bool(
+        True if reference_aligned is None else reference_aligned
+    )
 
     ky_vals = np.asarray(ky_values, dtype=float)
     gamma_out: list[float] = []
@@ -188,8 +190,7 @@ def run_kbm_scan(
             apar_beta_scale=apar_beta_scale,
             ampere_g0_scale=ampere_g0_scale,
             bpar_beta_scale=bpar_beta_scale,
-            reference_aligned=reference_aligned,
-            gx_reference=gx_reference,
+            reference_aligned=reference_aligned_use,
         )
         ky_out.append(float(ky_val))
         gamma_out.append(float(out.gamma[0]))

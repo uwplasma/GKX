@@ -117,7 +117,6 @@ def run_kbm_linear(
     ampere_g0_scale: float | None = None,
     bpar_beta_scale: float | None = None,
     reference_aligned: bool | None = True,
-    gx_reference: bool | None = None,
     show_progress: bool = False,
 ) -> LinearRunResult:
     """Run a single linear KBM point and return the stored field history."""
@@ -129,8 +128,6 @@ def run_kbm_linear(
     grid_full = build_spectral_grid(apply_geometry_grid_defaults(geom, cfg_use.grid))
     if terms is None:
         terms = LinearTerms(bpar=0.0)
-    if gx_reference is not None:
-        reference_aligned = gx_reference
     reference_aligned_use = bool(
         True if reference_aligned is None else reference_aligned
     )

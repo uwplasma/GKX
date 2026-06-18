@@ -93,7 +93,6 @@ def run_kinetic_scan(
     density_species_index: int = 1,
     diagnostic_norm: str = "none",
     reference_aligned: bool | None = True,
-    gx_reference: bool | None = None,
     show_progress: bool = False,
 ) -> LinearScanResult:
     """Run a kinetic-electron ITG/TEM benchmark for a list of ky values.
@@ -104,8 +103,6 @@ def run_kinetic_scan(
     cfg = cfg or KineticElectronBaseCase()
     grid_full = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
-    if gx_reference is not None:
-        reference_aligned = gx_reference
     reference_aligned_use = bool(
         True if reference_aligned is None else reference_aligned
     )

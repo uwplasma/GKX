@@ -117,7 +117,6 @@ def run_cyclone_linear(
     diagnostic_norm: str = "none",
     use_jit: bool = True,
     reference_aligned: bool | None = None,
-    gx_reference: bool | None = None,
     show_progress: bool = False,
     status_callback: Callable[[str], None] | None = None,
 ) -> CycloneRunResult:
@@ -131,8 +130,6 @@ def run_cyclone_linear(
     init_cfg = init_cfg or getattr(cfg, "init", None) or InitializationConfig()
     _status("building spectral grid")
     grid_full = build_spectral_grid(cfg.grid)
-    if gx_reference is not None:
-        reference_aligned = gx_reference
     reference_aligned_use = (
         bool(cfg.reference_aligned)
         if reference_aligned is None

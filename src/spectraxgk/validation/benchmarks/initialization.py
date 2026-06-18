@@ -111,7 +111,6 @@ def _kinetic_reference_init_cfg(
     init_cfg: InitializationConfig,
     *,
     reference_aligned: bool | None = None,
-    gx_reference: bool | None = None,
 ) -> InitializationConfig:
     """Restore the historical kinetic benchmark seed on the reference path.
 
@@ -120,8 +119,6 @@ def _kinetic_reference_init_cfg(
     only replacing the exact current kinetic default init.
     """
 
-    if gx_reference is not None:
-        reference_aligned = gx_reference
     if not bool(True if reference_aligned is None else reference_aligned):
         return init_cfg
     kinetic_default_init = KineticElectronBaseCase().init

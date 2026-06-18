@@ -156,7 +156,6 @@ def run_cyclone_scan(
     streaming_amp_floor: float = 1.0e-30,
     mode_follow: bool = True,
     reference_aligned: bool | None = None,
-    gx_reference: bool | None = None,
     show_progress: bool = False,
 ) -> CycloneScanResult:
     """Run the linear Cyclone benchmark for a list of ky values.
@@ -167,8 +166,6 @@ def run_cyclone_scan(
     cfg = cfg or CycloneBaseCase()
     init_cfg = getattr(cfg, "init", None) or InitializationConfig()
     grid_full = build_spectral_grid(cfg.grid)
-    if gx_reference is not None:
-        reference_aligned = gx_reference
     reference_aligned_use = (
         bool(cfg.reference_aligned)
         if reference_aligned is None
