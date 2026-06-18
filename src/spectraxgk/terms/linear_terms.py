@@ -27,6 +27,17 @@ def _zeros_like_result(x: jnp.ndarray, *values: jnp.ndarray) -> jnp.ndarray:
     return jnp.zeros_like(x, dtype=jnp.result_type(x, *values))
 
 
+def _hermite_mode_drive(
+    template: jnp.ndarray,
+    mode: int,
+    drive: jnp.ndarray,
+) -> jnp.ndarray:
+    """Embed a single-Hermite-mode drive into a full state-shaped array."""
+
+    mask = jnp.arange(template.shape[2], dtype=jnp.int32)[None, None, :, None, None, None]
+    return (mask == int(mode)).astype(template.dtype) * drive[:, :, None, ...]
+
+
 def streaming_contribution(
     H: jnp.ndarray,
     *,
@@ -123,26 +134,19 @@ def linked_streaming_contribution(
 
     # field terms (pre-derivative); use contiguous m-axis masks instead of scatter updates.
     Nm = rhs.shape[2]
-    m_idx = jnp.arange(Nm, dtype=jnp.int32)[None, None, :, None, None, None]
     field_rhs = jnp.zeros_like(rhs)
     if apar is not None:
         apar_s = apar[None, None, ...]
         drive_m0 = zt5 * (vth5 * vth5) * Jl * apar_s
-        field_rhs = (
-            field_rhs + (m_idx == 0).astype(field_rhs.dtype) * drive_m0[:, :, None, ...]
-        )
+        field_rhs = field_rhs + _hermite_mode_drive(field_rhs, 0, drive_m0)
     if Nm > 1:
         drive_m1 = -zt5 * vth5 * Jl * phi_s
         if bpar is not None:
             drive_m1 = drive_m1 - vth5 * JlB * bpar[None, None, ...]
-        field_rhs = (
-            field_rhs + (m_idx == 1).astype(field_rhs.dtype) * drive_m1[:, :, None, ...]
-        )
+        field_rhs = field_rhs + _hermite_mode_drive(field_rhs, 1, drive_m1)
     if Nm > 2 and apar is not None:
         drive_m2 = jnp.sqrt(2.0) * zt5 * (vth5 * vth5) * Jl * apar_s
-        field_rhs = (
-            field_rhs + (m_idx == 2).astype(field_rhs.dtype) * drive_m2[:, :, None, ...]
-        )
+        field_rhs = field_rhs + _hermite_mode_drive(field_rhs, 2, drive_m2)
     rhs = rhs + field_rhs
 
     rhs = kpar_scale * rhs
@@ -247,7 +251,6 @@ def diamagnetic_contribution(
     weight: jnp.ndarray,
 ) -> jnp.ndarray:
     Nm = dG.shape[2]
-    m_idx = jnp.arange(Nm, dtype=jnp.int32)[None, None, :, None, None, None]
     Jl_m1 = shift_axis(Jl, -1, axis=1)
     Jl_p1 = shift_axis(Jl, 1, axis=1)
     JlB_m1 = shift_axis(JlB, -1, axis=1)
@@ -273,14 +276,14 @@ def diamagnetic_contribution(
             + JlB * (fprim_s + 2.0 * l4 * tprim_s)
             + JlB_p1 * ((l4 + 1.0) * tprim_s)
         )
-    drive = (m_idx == 0).astype(dG.dtype) * drive_m0[:, :, None, ...]
+    drive = _hermite_mode_drive(dG, 0, drive_m0)
     if Nm > 2:
         drive_m2 = omega_star_s * phi * Jl * (tprim_s / jnp.sqrt(2.0))
         if bpar is not None:
             drive_m2 = drive_m2 + omega_star_bpar * bpar * JlB * (
                 tprim_s / jnp.sqrt(2.0)
             )
-        drive = drive + (m_idx == 2).astype(dG.dtype) * drive_m2[:, :, None, ...]
+        drive = drive + _hermite_mode_drive(dG, 2, drive_m2)
     if Nm > 1 and apar is not None:
         vth_s = vth[:, None, None, None, None]
         apar_drive = (
@@ -293,11 +296,11 @@ def diamagnetic_contribution(
                 + Jl_p1 * ((l4 + 1.0) * tprim_s)
             )
         )
-        drive = drive + (m_idx == 1).astype(dG.dtype) * apar_drive[:, :, None, ...]
+        drive = drive + _hermite_mode_drive(dG, 1, apar_drive)
     if Nm > 3 and apar is not None:
         vth_s = vth[:, None, None, None, None]
         drive_m3 = -vth_s * omega_star_s * apar * Jl * (tprim_s * jnp.sqrt(3.0 / 2.0))
-        drive = drive + (m_idx == 3).astype(dG.dtype) * drive_m3[:, :, None, ...]
+        drive = drive + _hermite_mode_drive(dG, 3, drive_m3)
     return dG + weight * drive
 
 
@@ -400,18 +403,17 @@ def collisions_contribution(
         ) * jnp.sum(coeff_t * H_m0, axis=1)
 
     corr = jnp.zeros_like(H)
-    m_idx = jnp.arange(Nm, dtype=jnp.int32)[None, None, :, None, None, None]
     corr_m0 = (
         nu_s * sqrt_b[:, None, ...] * JlB * uperp_bar[:, None, ...]
         + nu_s * 2.0 * coeff_t * t_bar[:, None, ...]
     )
-    corr = corr + (m_idx == 0).astype(corr.dtype) * corr_m0[:, :, None, ...]
+    corr = corr + _hermite_mode_drive(corr, 0, corr_m0)
     if Nm > 1:
         corr_m1 = nu_s * Jl * upar_bar[:, None, ...]
-        corr = corr + (m_idx == 1).astype(corr.dtype) * corr_m1[:, :, None, ...]
+        corr = corr + _hermite_mode_drive(corr, 1, corr_m1)
     if Nm > 2:
         corr_m2 = nu_s * jnp.sqrt(2.0) * Jl * t_bar[:, None, ...]
-        corr = corr + (m_idx == 2).astype(corr.dtype) * corr_m2[:, :, None, ...]
+        corr = corr + _hermite_mode_drive(corr, 2, corr_m2)
     return base + weight * corr
 
 
