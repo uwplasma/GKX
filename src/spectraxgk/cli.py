@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Any
 
 import jax.numpy as jnp
-import numpy as np
 
 from spectraxgk.diagnostics.modes import extract_eigenfunction, extract_mode_time_series
 from spectraxgk.validation.benchmarks.harness import normalize_eigenfunction, run_linear_scan
@@ -51,7 +50,6 @@ from spectraxgk.workflows.demo import (
 )
 from spectraxgk.workflows.named_cases import (
     NamedLinearCommandDeps,
-    load_scan_ky as _load_scan_ky_impl,
     run_named_linear_command,
     scan_named_linear_command,
 )
@@ -62,7 +60,6 @@ from spectraxgk.workflows.runtime.commands import (
     print_linear_run_header as _print_linear_run_header,
     run_runtime_linear_command,
     run_runtime_nonlinear_command,
-    runtime_output_path as _runtime_output_path_impl,
     scan_runtime_linear_command,
     should_show_progress as _should_show_progress,
 )
@@ -73,10 +70,16 @@ _RUNTIME_TOP_LEVEL_KEYS = {
     "quasilinear",
 }
 _LEGACY_CASE_TOP_LEVEL_KEYS = {"case", "model", "reference_alignment"}
-
-
-def _runtime_output_path(args: argparse.Namespace, cfg) -> str | None:
-    return _runtime_output_path_impl(args, cfg)
+_KNOWN_COMMANDS = {
+    "run",
+    "cyclone-info",
+    "cyclone-kperp",
+    "run-linear",
+    "scan-linear",
+    "run-runtime-linear",
+    "scan-runtime-linear",
+    "run-runtime-nonlinear",
+}
 
 
 def _is_runtime_toml(data: dict) -> bool:
@@ -239,6 +242,151 @@ def _add_runtime_paths(
     cmd.add_argument("--out", type=str, default=None, help=out_help)
 
 
+def _add_config_flag(cmd: argparse.ArgumentParser) -> None:
+    cmd.add_argument("--config", required=True, help="Path to TOML config")
+
+
+def _add_ky_values_flag(cmd: argparse.ArgumentParser) -> None:
+    cmd.add_argument("--ky-values", type=str, default=None, help="Comma-separated ky list")
+
+
+def _add_plot_output_flags(cmd: argparse.ArgumentParser, *, plot_help: str) -> None:
+    cmd.add_argument("--plot", action="store_true", help=plot_help)
+    cmd.add_argument("--outdir", default=".", help="Output directory for plots")
+
+
+def _add_scan_worker_flags(cmd: argparse.ArgumentParser) -> None:
+    cmd.add_argument(
+        "--batch-ky", action="store_true", help="Integrate all ky in one batch"
+    )
+    cmd.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="Independent ky workers for the serial scan path, including quasilinear spectra.",
+    )
+    cmd.add_argument(
+        "--parallel-executor",
+        choices=("thread", "process"),
+        default="thread",
+        help="Executor for independent ky workers.",
+    )
+
+
+def _add_laguerre_mode_flag(cmd: argparse.ArgumentParser, *, help_text: str) -> None:
+    cmd.add_argument("--laguerre-mode", type=str, default=None, help=help_text)
+
+
+def _add_generic_run_parser(sub: argparse._SubParsersAction) -> None:
+    generic_run = sub.add_parser(
+        "run",
+        help="Run a simulation from a TOML config (auto-detect linear/nonlinear)",
+    )
+    _add_config_flag(generic_run)
+    _add_resolution_flags(generic_run)
+    generic_run.add_argument("--solver", type=str, default=None)
+    _add_time_solver_flags(generic_run, sample_stride=True, fit_signal=True)
+    generic_run.add_argument("--diagnostics-stride", type=int, default=None)
+    _add_diagnostics_flags(generic_run)
+    _add_laguerre_mode_flag(generic_run, help_text="grid or spectral (nonlinear only)")
+    _add_runtime_paths(generic_run, init_help="Optional init file for nonlinear runs")
+    _add_quasilinear_flags(generic_run)
+    _add_progress_flags(generic_run)
+    generic_run.set_defaults(func=_cmd_run)
+
+
+def _add_named_case_parsers(sub: argparse._SubParsersAction) -> None:
+    info = sub.add_parser("cyclone-info", help="Print Cyclone base case defaults")
+    info.set_defaults(func=_cmd_cyclone_info)
+
+    kperp = sub.add_parser("cyclone-kperp", help="Compute k_perp^2(theta)")
+    kperp.add_argument("--kx0", type=float, default=0.0)
+    kperp.add_argument("--ky", type=float, default=0.3)
+    kperp.set_defaults(func=_cmd_cyclone_kperp)
+
+    run_linear = sub.add_parser(
+        "run-linear", help="Run a single linear case from a TOML config"
+    )
+    _add_config_flag(run_linear)
+    run_linear.add_argument("--case", default=None, help="Case name (cyclone, etg, ...)")
+    _add_resolution_flags(run_linear, ky_help="Single ky value")
+    _add_time_solver_flags(
+        run_linear, solver=True, sample_stride=True, fit_signal=True
+    )
+    _add_plot_output_flags(run_linear, plot_help="Save fit/eigenfunction plots")
+    _add_progress_flags(run_linear)
+    run_linear.set_defaults(func=_cmd_run_linear)
+
+    scan_linear = sub.add_parser("scan-linear", help="Run a ky scan from a TOML config")
+    _add_config_flag(scan_linear)
+    scan_linear.add_argument(
+        "--case", default=None, help="Case name (cyclone, etg, ...)"
+    )
+    _add_ky_values_flag(scan_linear)
+    scan_linear.add_argument("--Nl", type=int, default=None)
+    scan_linear.add_argument("--Nm", type=int, default=None)
+    _add_time_solver_flags(scan_linear, solver=True, fit_signal=True)
+    _add_plot_output_flags(
+        scan_linear, plot_help="Save comparison plot if reference exists"
+    )
+    scan_linear.set_defaults(func=_cmd_scan_linear)
+
+
+def _add_runtime_parsers(sub: argparse._SubParsersAction) -> None:
+    run_runtime = sub.add_parser(
+        "run-runtime-linear",
+        help="Run one linear point from unified runtime TOML config",
+    )
+    _add_config_flag(run_runtime)
+    _add_resolution_flags(run_runtime, ky_help="Single ky value")
+    _add_time_solver_flags(
+        run_runtime, solver=True, sample_stride=True, fit_signal=True
+    )
+    _add_runtime_paths(run_runtime)
+    _add_quasilinear_flags(run_runtime)
+    _add_progress_flags(run_runtime)
+    run_runtime.set_defaults(func=_cmd_run_runtime_linear)
+
+    scan_runtime = sub.add_parser(
+        "scan-runtime-linear",
+        help="Run a ky scan from unified runtime TOML config",
+    )
+    _add_config_flag(scan_runtime)
+    _add_ky_values_flag(scan_runtime)
+    scan_runtime.add_argument("--Nl", type=int, default=None)
+    scan_runtime.add_argument("--Nm", type=int, default=None)
+    _add_time_solver_flags(
+        scan_runtime, solver=True, sample_stride=True, fit_signal=True
+    )
+    _add_scan_worker_flags(scan_runtime)
+    scan_runtime.add_argument(
+        "--out", type=str, default=None, help="Optional scan output path/prefix"
+    )
+    _add_quasilinear_flags(scan_runtime)
+    _add_progress_flags(scan_runtime)
+    scan_runtime.set_defaults(func=_cmd_scan_runtime_linear)
+
+    run_runtime_nl = sub.add_parser(
+        "run-runtime-nonlinear",
+        help="Run one nonlinear point from unified runtime TOML config",
+    )
+    _add_config_flag(run_runtime_nl)
+    _add_resolution_flags(run_runtime_nl, ky_help="Single ky value")
+    _add_time_solver_flags(run_runtime_nl)
+    run_runtime_nl.add_argument("--sample-stride", type=int, default=None)
+    run_runtime_nl.add_argument("--diagnostics-stride", type=int, default=None)
+    _add_diagnostics_flags(run_runtime_nl)
+    _add_laguerre_mode_flag(
+        run_runtime_nl, help_text="grid or spectral (nonlinear Laguerre handling)"
+    )
+    _add_runtime_paths(
+        run_runtime_nl,
+        init_help="Optional restart/init-state file containing a compatible distribution state",
+    )
+    _add_progress_flags(run_runtime_nl)
+    run_runtime_nl.set_defaults(func=_cmd_run_runtime_nonlinear)
+
+
 # Path-valued CLI flags (--vmec-file, --geometry-file, --init-file) follow
 # shell conventions: relative paths resolve against cwd, ~ expands to $HOME,
 # and $VAR is expanded from the environment. See _apply_runtime_path_overrides.
@@ -257,142 +405,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to TOML config (shorthand for 'run --config ...')",
     )
     sub = parser.add_subparsers(dest="cmd")
-
-    generic_run = sub.add_parser(
-        "run",
-        help="Run a simulation from a TOML config (auto-detect linear/nonlinear)",
-    )
-    generic_run.add_argument("--config", required=True, help="Path to TOML config")
-    _add_resolution_flags(generic_run)
-    generic_run.add_argument("--solver", type=str, default=None)
-    _add_time_solver_flags(generic_run, sample_stride=True, fit_signal=True)
-    generic_run.add_argument("--diagnostics-stride", type=int, default=None)
-    _add_diagnostics_flags(generic_run)
-    generic_run.add_argument(
-        "--laguerre-mode",
-        type=str,
-        default=None,
-        help="grid or spectral (nonlinear only)",
-    )
-    _add_runtime_paths(generic_run, init_help="Optional init file for nonlinear runs")
-    _add_quasilinear_flags(generic_run)
-    _add_progress_flags(generic_run)
-    generic_run.set_defaults(func=_cmd_run)
-
-    info = sub.add_parser("cyclone-info", help="Print Cyclone base case defaults")
-    info.set_defaults(func=_cmd_cyclone_info)
-
-    kperp = sub.add_parser("cyclone-kperp", help="Compute k_perp^2(theta)")
-    kperp.add_argument("--kx0", type=float, default=0.0)
-    kperp.add_argument("--ky", type=float, default=0.3)
-    kperp.set_defaults(func=_cmd_cyclone_kperp)
-
-    run_linear = sub.add_parser(
-        "run-linear", help="Run a single linear case from a TOML config"
-    )
-    run_linear.add_argument("--config", required=True, help="Path to TOML config")
-    run_linear.add_argument(
-        "--case", default=None, help="Case name (cyclone, etg, ...)"
-    )
-    _add_resolution_flags(run_linear, ky_help="Single ky value")
-    _add_time_solver_flags(
-        run_linear, solver=True, sample_stride=True, fit_signal=True
-    )
-    run_linear.add_argument(
-        "--plot", action="store_true", help="Save fit/eigenfunction plots"
-    )
-    run_linear.add_argument("--outdir", default=".", help="Output directory for plots")
-    _add_progress_flags(run_linear)
-    run_linear.set_defaults(func=_cmd_run_linear)
-
-    scan_linear = sub.add_parser("scan-linear", help="Run a ky scan from a TOML config")
-    scan_linear.add_argument("--config", required=True, help="Path to TOML config")
-    scan_linear.add_argument(
-        "--case", default=None, help="Case name (cyclone, etg, ...)"
-    )
-    scan_linear.add_argument(
-        "--ky-values", type=str, default=None, help="Comma-separated ky list"
-    )
-    scan_linear.add_argument("--Nl", type=int, default=None)
-    scan_linear.add_argument("--Nm", type=int, default=None)
-    _add_time_solver_flags(scan_linear, solver=True, fit_signal=True)
-    scan_linear.add_argument(
-        "--plot", action="store_true", help="Save comparison plot if reference exists"
-    )
-    scan_linear.add_argument("--outdir", default=".", help="Output directory for plots")
-    scan_linear.set_defaults(func=_cmd_scan_linear)
-
-    run_runtime = sub.add_parser(
-        "run-runtime-linear",
-        help="Run one linear point from unified runtime TOML config",
-    )
-    run_runtime.add_argument("--config", required=True, help="Path to TOML config")
-    _add_resolution_flags(run_runtime, ky_help="Single ky value")
-    _add_time_solver_flags(
-        run_runtime, solver=True, sample_stride=True, fit_signal=True
-    )
-    _add_runtime_paths(run_runtime)
-    _add_quasilinear_flags(run_runtime)
-    _add_progress_flags(run_runtime)
-    run_runtime.set_defaults(func=_cmd_run_runtime_linear)
-
-    scan_runtime = sub.add_parser(
-        "scan-runtime-linear",
-        help="Run a ky scan from unified runtime TOML config",
-    )
-    scan_runtime.add_argument("--config", required=True, help="Path to TOML config")
-    scan_runtime.add_argument(
-        "--ky-values", type=str, default=None, help="Comma-separated ky list"
-    )
-    scan_runtime.add_argument("--Nl", type=int, default=None)
-    scan_runtime.add_argument("--Nm", type=int, default=None)
-    _add_time_solver_flags(
-        scan_runtime, solver=True, sample_stride=True, fit_signal=True
-    )
-    scan_runtime.add_argument(
-        "--batch-ky", action="store_true", help="Integrate all ky in one batch"
-    )
-    scan_runtime.add_argument(
-        "--workers",
-        type=int,
-        default=1,
-        help="Independent ky workers for the serial scan path, including quasilinear spectra.",
-    )
-    scan_runtime.add_argument(
-        "--parallel-executor",
-        choices=("thread", "process"),
-        default="thread",
-        help="Executor for independent ky workers.",
-    )
-    scan_runtime.add_argument(
-        "--out", type=str, default=None, help="Optional scan output path/prefix"
-    )
-    _add_quasilinear_flags(scan_runtime)
-    _add_progress_flags(scan_runtime)
-    scan_runtime.set_defaults(func=_cmd_scan_runtime_linear)
-
-    run_runtime_nl = sub.add_parser(
-        "run-runtime-nonlinear",
-        help="Run one nonlinear point from unified runtime TOML config",
-    )
-    run_runtime_nl.add_argument("--config", required=True, help="Path to TOML config")
-    _add_resolution_flags(run_runtime_nl, ky_help="Single ky value")
-    _add_time_solver_flags(run_runtime_nl)
-    run_runtime_nl.add_argument("--sample-stride", type=int, default=None)
-    run_runtime_nl.add_argument("--diagnostics-stride", type=int, default=None)
-    _add_diagnostics_flags(run_runtime_nl)
-    run_runtime_nl.add_argument(
-        "--laguerre-mode",
-        type=str,
-        default=None,
-        help="grid or spectral (nonlinear Laguerre handling)",
-    )
-    _add_runtime_paths(
-        run_runtime_nl,
-        init_help="Optional restart/init-state file containing a compatible distribution state",
-    )
-    _add_progress_flags(run_runtime_nl)
-    run_runtime_nl.set_defaults(func=_cmd_run_runtime_nonlinear)
+    _add_generic_run_parser(sub)
+    _add_named_case_parsers(sub)
+    _add_runtime_parsers(sub)
 
     return parser
 
@@ -403,14 +418,10 @@ def main() -> int:
     if len(sys.argv) > 1 and sys.argv[1] == "--plot":
         return _cmd_plot_saved_output(sys.argv[1:])
 
-    known_cmds = {
-        "run", "cyclone-info", "cyclone-kperp", "run-linear", "scan-linear",
-        "run-runtime-linear", "scan-runtime-linear", "run-runtime-nonlinear",
-    }
     if (
         len(sys.argv) > 1
         and not sys.argv[1].startswith("-")
-        and sys.argv[1] not in known_cmds
+        and sys.argv[1] not in _KNOWN_COMMANDS
     ):
         if Path(sys.argv[1]).exists():
             data = load_toml(sys.argv[1])
@@ -435,10 +446,6 @@ def _resolve_case(case_name: str):
     raise ValueError(
         f"Unsupported case '{case_name}' in executable dispatcher (supported: cyclone, etg)"
     )
-
-
-def _load_scan_ky(data: dict) -> np.ndarray:
-    return _load_scan_ky_impl(data)
 
 
 def _cmd_run_linear(args: argparse.Namespace) -> int:
