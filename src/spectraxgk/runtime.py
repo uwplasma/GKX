@@ -38,6 +38,12 @@ from spectraxgk.parallel import independent_map
 from spectraxgk.quasilinear import compute_quasilinear_from_linear_state
 from spectraxgk.workflows.runtime.config import RuntimeConfig
 from spectraxgk.workflows.runtime import startup as runtime_startup
+from spectraxgk.workflows.runtime.execution import (
+    RuntimeLinearDispatchDeps,
+    RuntimeNonlinearDispatchDeps,
+    run_runtime_linear_impl,
+    run_runtime_nonlinear_impl,
+)
 from spectraxgk.workflows.runtime.diagnostics import (
     concat_runtime_diagnostics,
     finalize_runtime_linear_quasilinear,
@@ -250,84 +256,25 @@ _stride_runtime_diagnostics = stride_runtime_diagnostics
 _concat_runtime_diagnostics = concat_runtime_diagnostics
 
 
-def run_runtime_linear(
-    cfg: RuntimeConfig,
-    *,
-    ky_target: float = 0.3,
-    Nl: int | None = None,
-    Nm: int | None = None,
-    solver: str = "auto",
-    method: str | None = None,
-    dt: float | None = None,
-    steps: int | None = None,
-    sample_stride: int | None = None,
-    auto_window: bool = True,
-    tmin: float | None = None,
-    tmax: float | None = None,
-    window_fraction: float = 0.4,
-    min_points: int = 40,
-    start_fraction: float = 0.2,
-    growth_weight: float = 0.2,
-    require_positive: bool = True,
-    min_amp_fraction: float = 0.0,
-    krylov_cfg: KrylovConfig | None = None,
-    mode_method: str = "project",
-    fit_signal: str = "auto",
-    return_state: bool = False,
-    show_progress: bool = False,
-    status_callback: Callable[[str], None] | None = None,
-) -> RuntimeLinearResult:
-    """Run one linear point from a case-agnostic runtime config."""
+def _runtime_linear_dispatch_deps() -> RuntimeLinearDispatchDeps:
+    """Build linear runtime dispatch dependencies from patchable module globals."""
 
-    def _status(message: str) -> None:
-        if status_callback is not None:
-            status_callback(message)
-
-    ql_enabled = bool(getattr(cfg.quasilinear, "enabled", False))
-
-    Nl_use, Nm_use = _resolve_runtime_hl_dims(cfg, Nl=Nl, Nm=Nm)
-    _status("building runtime geometry")
-    if _runtime_model_key(cfg) == "cetg":
-        if ql_enabled:
-            raise NotImplementedError(
-                "quasilinear diagnostics are not yet validated for reduced_model='cetg'"
-            )
-        return run_cetg_linear_runtime(
-            cfg,
-            deps=CETGLinearRuntimeDeps(
-                build_runtime_geometry=build_runtime_geometry,
-                validate_cetg_runtime_config=validate_cetg_runtime_config,
-                build_initial_condition=_build_initial_condition,
-                build_runtime_term_config=build_runtime_term_config,
-                build_cetg_model_params=build_cetg_model_params,
-                integrate_cetg_explicit_diagnostics_state=integrate_cetg_explicit_diagnostics_state,
-                fit_growth_rate_auto=fit_growth_rate_auto,
-                fit_growth_rate=fit_growth_rate,
-            ),
-            ky_target=ky_target,
-            Nl=Nl_use,
-            Nm=Nm_use,
-            solver=solver,
-            method=method,
-            dt=dt,
-            steps=steps,
-            sample_stride=sample_stride,
-            auto_window=auto_window,
-            tmin=tmin,
-            tmax=tmax,
-            window_fraction=window_fraction,
-            min_points=min_points,
-            start_fraction=start_fraction,
-            growth_weight=growth_weight,
-            require_positive=require_positive,
-            min_amp_fraction=min_amp_fraction,
-            return_state=return_state,
-            status_callback=status_callback,
-        )
-
-    return run_full_linear_runtime(
-        cfg,
-        deps=FullLinearRuntimeDeps(
+    return RuntimeLinearDispatchDeps(
+        resolve_runtime_hl_dims=_resolve_runtime_hl_dims,
+        runtime_model_key=_runtime_model_key,
+        run_cetg_linear_runtime=run_cetg_linear_runtime,
+        cetg_deps=CETGLinearRuntimeDeps(
+            build_runtime_geometry=build_runtime_geometry,
+            validate_cetg_runtime_config=validate_cetg_runtime_config,
+            build_initial_condition=_build_initial_condition,
+            build_runtime_term_config=build_runtime_term_config,
+            build_cetg_model_params=build_cetg_model_params,
+            integrate_cetg_explicit_diagnostics_state=integrate_cetg_explicit_diagnostics_state,
+            fit_growth_rate_auto=fit_growth_rate_auto,
+            fit_growth_rate=fit_growth_rate,
+        ),
+        run_full_linear_runtime=run_full_linear_runtime,
+        full_deps=FullLinearRuntimeDeps(
             build_runtime_geometry=build_runtime_geometry,
             apply_geometry_grid_defaults=apply_geometry_grid_defaults,
             build_spectral_grid=build_spectral_grid,
@@ -357,9 +304,43 @@ def run_runtime_linear(
             fit_growth_rate=fit_growth_rate,
             extract_eigenfunction=extract_eigenfunction,
         ),
+    )
+
+
+def run_runtime_linear(
+    cfg: RuntimeConfig,
+    *,
+    ky_target: float = 0.3,
+    Nl: int | None = None,
+    Nm: int | None = None,
+    solver: str = "auto",
+    method: str | None = None,
+    dt: float | None = None,
+    steps: int | None = None,
+    sample_stride: int | None = None,
+    auto_window: bool = True,
+    tmin: float | None = None,
+    tmax: float | None = None,
+    window_fraction: float = 0.4,
+    min_points: int = 40,
+    start_fraction: float = 0.2,
+    growth_weight: float = 0.2,
+    require_positive: bool = True,
+    min_amp_fraction: float = 0.0,
+    krylov_cfg: KrylovConfig | None = None,
+    mode_method: str = "project",
+    fit_signal: str = "auto",
+    return_state: bool = False,
+    show_progress: bool = False,
+    status_callback: Callable[[str], None] | None = None,
+) -> RuntimeLinearResult:
+    """Run one linear point from a case-agnostic runtime config."""
+
+    return run_runtime_linear_impl(
+        cfg,
         ky_target=ky_target,
-        Nl=Nl_use,
-        Nm=Nm_use,
+        Nl=Nl,
+        Nm=Nm,
         solver=solver,
         method=method,
         dt=dt,
@@ -380,6 +361,7 @@ def run_runtime_linear(
         return_state=return_state,
         show_progress=show_progress,
         status_callback=status_callback,
+        deps=_runtime_linear_dispatch_deps(),
     )
 
 
@@ -522,6 +504,45 @@ def _run_runtime_scan_batch(
     )
 
 
+def _runtime_nonlinear_dispatch_deps() -> RuntimeNonlinearDispatchDeps:
+    """Build nonlinear runtime dispatch dependencies from patchable module globals."""
+
+    return RuntimeNonlinearDispatchDeps(
+        resolve_runtime_hl_dims=_resolve_runtime_hl_dims,
+        runtime_model_key=_runtime_model_key,
+        run_cetg_nonlinear_runtime=run_cetg_nonlinear_runtime,
+        cetg_deps=CETGNonlinearRuntimeDeps(
+            build_runtime_geometry=build_runtime_geometry,
+            validate_cetg_runtime_config=validate_cetg_runtime_config,
+            select_nonlinear_mode_indices=_select_nonlinear_mode_indices,
+            build_initial_condition=_build_initial_condition,
+            build_cetg_model_params=build_cetg_model_params,
+            build_runtime_term_config=build_runtime_term_config,
+            integrate_cetg_explicit_diagnostics_state=integrate_cetg_explicit_diagnostics_state,
+            run_adaptive_runtime_chunk_loop=run_adaptive_runtime_chunk_loop,
+            build_runtime_nonlinear_result=build_runtime_nonlinear_result,
+        ),
+        run_full_nonlinear_runtime=run_full_nonlinear_runtime,
+        full_deps=FullNonlinearRuntimeDeps(
+            build_runtime_geometry=build_runtime_geometry,
+            apply_geometry_grid_defaults=apply_geometry_grid_defaults,
+            build_spectral_grid=build_spectral_grid,
+            build_runtime_linear_params=build_runtime_linear_params,
+            build_runtime_term_config=build_runtime_term_config,
+            select_nonlinear_mode_indices=_select_nonlinear_mode_indices,
+            build_initial_condition=_build_initial_condition,
+            species_to_linear=_species_to_linear,
+            infer_runtime_nonlinear_steps=_infer_runtime_nonlinear_steps,
+            runtime_external_phi=_runtime_external_phi,
+            build_runtime_nonlinear_diagnostics_kwargs=build_runtime_nonlinear_diagnostics_kwargs,
+            integrate_nonlinear_explicit_diagnostics_state=integrate_nonlinear_explicit_diagnostics_state,
+            run_adaptive_runtime_chunk_loop=run_adaptive_runtime_chunk_loop,
+            build_runtime_nonlinear_result=build_runtime_nonlinear_result,
+            integrate_nonlinear_from_config=integrate_nonlinear_from_config,
+        ),
+    )
+
+
 def run_runtime_nonlinear(
     cfg: RuntimeConfig,
     *,
@@ -543,64 +564,12 @@ def run_runtime_nonlinear(
 ) -> RuntimeNonlinearResult:
     """Run a nonlinear point using the unified runtime config path."""
 
-    def _status(message: str) -> None:
-        if status_callback is not None:
-            status_callback(message)
-
-    Nl_use, Nm_use = _resolve_runtime_hl_dims(cfg, Nl=Nl, Nm=Nm)
-    _status("building runtime geometry")
-    if _runtime_model_key(cfg) == "cetg":
-        return run_cetg_nonlinear_runtime(
-            cfg,
-            deps=CETGNonlinearRuntimeDeps(
-                build_runtime_geometry=build_runtime_geometry,
-                validate_cetg_runtime_config=validate_cetg_runtime_config,
-                select_nonlinear_mode_indices=_select_nonlinear_mode_indices,
-                build_initial_condition=_build_initial_condition,
-                build_cetg_model_params=build_cetg_model_params,
-                build_runtime_term_config=build_runtime_term_config,
-                integrate_cetg_explicit_diagnostics_state=integrate_cetg_explicit_diagnostics_state,
-                run_adaptive_runtime_chunk_loop=run_adaptive_runtime_chunk_loop,
-                build_runtime_nonlinear_result=build_runtime_nonlinear_result,
-            ),
-            ky_target=ky_target,
-            kx_target=kx_target,
-            Nl=Nl_use,
-            Nm=Nm_use,
-            dt=dt,
-            steps=steps,
-            method=method,
-            sample_stride=sample_stride,
-            diagnostics_stride=diagnostics_stride,
-            diagnostics=diagnostics,
-            return_state=return_state,
-            show_progress=show_progress,
-            status_callback=status_callback,
-        )
-
-    return run_full_nonlinear_runtime(
+    return run_runtime_nonlinear_impl(
         cfg,
-        deps=FullNonlinearRuntimeDeps(
-            build_runtime_geometry=build_runtime_geometry,
-            apply_geometry_grid_defaults=apply_geometry_grid_defaults,
-            build_spectral_grid=build_spectral_grid,
-            build_runtime_linear_params=build_runtime_linear_params,
-            build_runtime_term_config=build_runtime_term_config,
-            select_nonlinear_mode_indices=_select_nonlinear_mode_indices,
-            build_initial_condition=_build_initial_condition,
-            species_to_linear=_species_to_linear,
-            infer_runtime_nonlinear_steps=_infer_runtime_nonlinear_steps,
-            runtime_external_phi=_runtime_external_phi,
-            build_runtime_nonlinear_diagnostics_kwargs=build_runtime_nonlinear_diagnostics_kwargs,
-            integrate_nonlinear_explicit_diagnostics_state=integrate_nonlinear_explicit_diagnostics_state,
-            run_adaptive_runtime_chunk_loop=run_adaptive_runtime_chunk_loop,
-            build_runtime_nonlinear_result=build_runtime_nonlinear_result,
-            integrate_nonlinear_from_config=integrate_nonlinear_from_config,
-        ),
         ky_target=ky_target,
         kx_target=kx_target,
-        Nl=Nl_use,
-        Nm=Nm_use,
+        Nl=Nl,
+        Nm=Nm,
         dt=dt,
         steps=steps,
         method=method,
@@ -612,6 +581,7 @@ def run_runtime_nonlinear(
         return_state=return_state,
         show_progress=show_progress,
         status_callback=status_callback,
+        deps=_runtime_nonlinear_dispatch_deps(),
     )
 
 
