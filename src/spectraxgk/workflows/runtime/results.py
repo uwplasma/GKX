@@ -8,7 +8,7 @@ from typing import Any
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.diagnostics.analysis import ModeSelection
+from spectraxgk.diagnostics.modes import ModeSelection
 from spectraxgk.diagnostics import SimulationDiagnostics
 from spectraxgk.terms.config import FieldState
 

@@ -7,7 +7,7 @@ from typing import Any
 
 import numpy as np
 
-from spectraxgk.diagnostics.analysis import select_ky_index
+from spectraxgk.diagnostics.modes import select_ky_index
 from spectraxgk.config import resolve_cfl_fac
 from spectraxgk.core.grid import SpectralGrid
 from spectraxgk.workflows.runtime.config import RuntimeConfig

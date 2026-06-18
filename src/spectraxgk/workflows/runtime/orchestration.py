@@ -15,7 +15,7 @@ from typing import Any, Callable, Protocol
 
 import numpy as np
 
-from spectraxgk.diagnostics.analysis import ModeSelection
+from spectraxgk.diagnostics.modes import ModeSelection
 from spectraxgk.diagnostics import SimulationDiagnostics
 from spectraxgk.workflows.runtime.config import RuntimeConfig
 from spectraxgk.workflows.runtime.results import RuntimeLinearScanResult, RuntimeNonlinearResult

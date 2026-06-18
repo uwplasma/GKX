@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from spectraxgk.benchmarks import CycloneReference, CycloneScanResult
-from spectraxgk.diagnostics.analysis import fit_growth_rate
+from spectraxgk.diagnostics.growth_rates import fit_growth_rate
 
 
 def set_plot_style() -> None:

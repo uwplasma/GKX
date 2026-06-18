@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from spectraxgk.diagnostics.analysis import ModeSelection, ModeSelectionBatch
+from spectraxgk.diagnostics.modes import ModeSelection, ModeSelectionBatch
 from spectraxgk.config import TimeConfig
 from spectraxgk.solvers.time.diffrax import integrate_linear_diffrax, integrate_nonlinear_diffrax
 from spectraxgk.geometry import FluxTubeGeometryLike

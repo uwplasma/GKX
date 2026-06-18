@@ -8,7 +8,7 @@ from typing import Any, Callable
 
 import numpy as np
 
-from spectraxgk.diagnostics.analysis import ModeSelection, select_ky_index
+from spectraxgk.diagnostics.modes import ModeSelection, select_ky_index
 from spectraxgk.geometry import apply_geometry_grid_defaults
 from spectraxgk.core.grid import build_spectral_grid, select_ky_grid
 from spectraxgk.workflows.runtime.config import RuntimeConfig

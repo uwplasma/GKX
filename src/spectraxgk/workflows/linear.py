@@ -8,7 +8,7 @@ from typing import Any, Callable
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.diagnostics.analysis import ModeSelection
+from spectraxgk.diagnostics.modes import ModeSelection
 from spectraxgk.workflows.runtime.config import RuntimeConfig
 from spectraxgk.workflows.runtime.diagnostics import RuntimeQuasilinearFinalizationDeps
 from spectraxgk.workflows.runtime.results import RuntimeLinearResult

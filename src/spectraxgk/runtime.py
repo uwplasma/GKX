@@ -14,12 +14,14 @@ from spectraxgk.terms.cetg import (
     integrate_cetg_explicit_diagnostics_state,
     validate_cetg_runtime_config,
 )
-from spectraxgk.diagnostics.analysis import (
-    extract_eigenfunction,
-    extract_mode_time_series,
+from spectraxgk.diagnostics.growth_rates import (
     fit_growth_rate,
     fit_growth_rate_auto,
     fit_growth_rate_auto_with_stats,
+)
+from spectraxgk.diagnostics.modes import (
+    extract_eigenfunction,
+    extract_mode_time_series,
     select_ky_index,
 )
 from spectraxgk.geometry import apply_geometry_grid_defaults, FluxTubeGeometryLike

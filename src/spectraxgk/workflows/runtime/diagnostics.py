@@ -13,12 +13,14 @@ from typing import Any
 
 import numpy as np
 
-from spectraxgk.diagnostics.analysis import (
-    extract_eigenfunction,
-    extract_mode_time_series,
+from spectraxgk.diagnostics.growth_rates import (
     fit_growth_rate,
     fit_growth_rate_auto,
     fit_growth_rate_auto_with_stats,
+)
+from spectraxgk.diagnostics.modes import (
+    extract_eigenfunction,
+    extract_mode_time_series,
 )
 from spectraxgk.workflows.runtime.diagnostic_arrays import (
     concat_runtime_diagnostics,
