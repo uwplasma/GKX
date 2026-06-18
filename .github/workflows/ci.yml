@@ -278,7 +278,7 @@ jobs:
           thresholds = {
               "cli.py": 95.0,
               "plotting.py": 95.0,
-              "runtime_artifacts.py": 95.0,
+              "workflows/runtime/artifacts.py": 95.0,
               "secondary.py": 95.0,
               "analysis.py": 95.0,
           }
