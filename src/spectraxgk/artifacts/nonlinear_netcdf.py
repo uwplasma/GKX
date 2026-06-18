@@ -27,6 +27,7 @@ from spectraxgk.artifacts.spectral_layout import (
     _dealiased_ky_values,
     _real_space_axis,
     _require_netcdf4,
+    _restart_to_netcdf_layout,
     _write_runtime_root_metadata,
 )
 from spectraxgk.artifacts.io import (
@@ -37,7 +38,6 @@ from spectraxgk.artifacts.nonlinear_diagnostics import _resolve_restart_path
 from spectraxgk.artifacts.nonlinear_netcdf_fields import _write_big_netcdf
 from spectraxgk.artifacts.nonlinear_netcdf_diagnostics import _write_diagnostics_group
 from spectraxgk.artifacts import nonlinear_netcdf_geometry as _geometry_helpers
-from spectraxgk.artifacts.nonlinear_netcdf_restart import _write_restart_netcdf
 
 
 def _sync_geometry_helper_dependencies() -> None:
@@ -78,6 +78,35 @@ def _write_geometry_group(
 
 def _write_input_parameters_group(group: Any, cfg: Any, geom: Any) -> None:
     return _geometry_helpers._write_input_parameters_group(group, cfg, geom)
+
+
+def _write_restart_netcdf(
+    Dataset: Any,
+    restart_path: str | Path,
+    state: Any,
+    time_vals: np.ndarray,
+) -> str | None:
+    """Write the compact restart file and return its path when state exists."""
+
+    if state is None:
+        return None
+    restart_state_layout = _restart_to_netcdf_layout(np.asarray(state))
+    path = Path(restart_path)
+    _ensure_parent(path)
+    with Dataset(path, "w") as root:
+        root.createDimension("Nspecies", restart_state_layout.shape[0])
+        root.createDimension("Nm", restart_state_layout.shape[1])
+        root.createDimension("Nl", restart_state_layout.shape[2])
+        root.createDimension("Nz", restart_state_layout.shape[3])
+        root.createDimension("Nkx", restart_state_layout.shape[4])
+        root.createDimension("Nky", restart_state_layout.shape[5])
+        root.createDimension("ri", 2)
+        root.createVariable(
+            "G", "f4", ("Nspecies", "Nm", "Nl", "Nz", "Nkx", "Nky", "ri")
+        )[:, :, :, :, :, :, :] = restart_state_layout
+        time_last = float(time_vals[-1]) if time_vals.size else 0.0
+        root.createVariable("time", "f8", ())[:] = time_last
+    return str(path)
 
 
 def _write_nonlinear_netcdf_outputs(
