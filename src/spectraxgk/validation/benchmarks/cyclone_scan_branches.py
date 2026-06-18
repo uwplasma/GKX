@@ -28,7 +28,7 @@ from spectraxgk.validation.benchmarks.cyclone_scan_seed import (
 
 @dataclass(frozen=True)
 class CycloneScanHooks:
-    """Patchable numerical hooks supplied by the public Cyclone facade."""
+    """Patchable numerical hooks supplied by the Cyclone scan owner module."""
 
     cyclone_scan_result: type[CycloneScanResult]
     explicit_time_config: type

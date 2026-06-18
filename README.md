@@ -1064,7 +1064,13 @@ tracked release scope:
 - **Nonlinear transport windows:** release-gated heat-flux and energy statistics
   for Cyclone, Cyclone Miller, KBM, W7-X, and HSX.
 
-The benchmark tooling in `tools/` ensures reproducibility and performance tracking.
+The root `benchmarks/` directory contains the maintained benchmark drivers,
+runtime TOMLs, and the small result index used by the documentation. The
+tooling in `tools/` regenerates the atlas and runtime/memory panels from those
+inputs while writing raw solver outputs to `tools_out/` or another scratch
+directory.
+Current promoted benchmark artifacts are indexed in
+`benchmarks/results/manifest.toml` and displayed in `docs/benchmarks.rst`.
 For the current release pass, the accepted nonlinear validation set is Cyclone,
 Cyclone Miller, KBM, W7-X, and HSX. Full-GK ETG nonlinear pilots, TEM/KAW stress
 lanes, kinetic-electron extensions, and W7-X zonal-flow recurrence/damping stay
@@ -1202,7 +1208,7 @@ The `examples/` directory is organized by physics and configuration:
 
 - **`linear/`**: Linear microinstability drivers for axisymmetric (Tokamak) and non-axisymmetric (Stellarator) geometries.
 - **`nonlinear/`**: Nonlinear turbulence simulations and transport analysis.
-- **`benchmarks/`**: Scripts for replicating published benchmark results and parameter scans.
+- **root `benchmarks/`**: Scripts, TOMLs, and result-index pointers for replicating published benchmark results and parameter scans.
 - **`theory_and_demos/`**: Pedagogical examples and demonstrations of the underlying numerical methods.
 
 Release-gated nonlinear example lanes include:

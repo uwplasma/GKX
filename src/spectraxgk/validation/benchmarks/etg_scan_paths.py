@@ -49,7 +49,7 @@ _PATCHABLE_NAMES = (
 
 
 def sync_path_hooks(source: dict[str, Any]) -> None:
-    """Mirror the public ETG facade's patchable hooks into this module."""
+    """Mirror the ETG scan owner module's patchable hooks into this module."""
 
     for name in _PATCHABLE_NAMES:
         if name in source:
