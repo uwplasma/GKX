@@ -7,14 +7,14 @@ owner modules explicit for tests and development.
 
 from __future__ import annotations
 
-from spectraxgk.nonlinear_core import (
+from spectraxgk.solvers.nonlinear.state_integration import (
     _linear_rhs_jit_for_terms,
     integrate_nonlinear,
     integrate_nonlinear_cached,
     integrate_nonlinear_imex_cached,
     nonlinear_rhs_cached,
 )
-from spectraxgk.nonlinear_diagnostics import (
+from spectraxgk.solvers.nonlinear.diagnostic_integration import (
     _EXPLICIT_DIAGNOSTIC_OPTION_KEYS,
     _IMEX_DIAGNOSTIC_OPTION_KEYS,
     _explicit_nonlinear_diagnostics_deps,

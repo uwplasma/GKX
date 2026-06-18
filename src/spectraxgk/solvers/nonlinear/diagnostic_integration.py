@@ -79,7 +79,7 @@ from spectraxgk.solvers.time.explicit import (
     _laguerre_velocity_max,
     _linear_frequency_bound,
 )
-from spectraxgk.nonlinear_core import _linear_rhs_jit_for_terms, nonlinear_rhs_cached
+from spectraxgk.solvers.nonlinear.state_integration import _linear_rhs_jit_for_terms, nonlinear_rhs_cached
 
 _EXPLICIT_DIAGNOSTIC_OPTION_KEYS = (
     "method", "cache", "terms", "checkpoint", "sample_stride",
