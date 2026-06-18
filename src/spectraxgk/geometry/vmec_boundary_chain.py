@@ -356,6 +356,69 @@ def boundary_chain_summary_from_probe(
     )
 
 
+def _mapping_value(payload: Any, key: str) -> Any:
+    return payload.get(key) if isinstance(payload, Mapping) else None
+
+
+def _mapping_flag(payload: Any, key: str) -> bool:
+    return bool(_mapping_value(payload, key))
+
+
+def _collection_row(payload: Mapping[str, Any], summary: Mapping[str, Any]) -> dict[str, Any]:
+    """Build one JSON-safe row for a boundary-chain collection summary."""
+
+    passes = summary.get("passes", {})
+    errors = summary.get("errors", {})
+    metrics = summary.get("metrics", {})
+    growth_branch = payload.get("growth_branch_locality")
+    growth_checked = isinstance(growth_branch, Mapping) and bool(
+        growth_branch.get("enabled", True)
+    )
+    growth_passed = bool(
+        isinstance(growth_branch, Mapping) and growth_branch.get("passed", False)
+    )
+    return {
+        "index": payload.get("index"),
+        "name": payload.get("name"),
+        "classification": summary.get("classification"),
+        "finite": bool(summary.get("finite", False)),
+        "frozen_axis_jvp_vjp_consistent": _mapping_flag(
+            passes, "frozen_axis_jvp_vjp_consistent"
+        ),
+        "frozen_axis_matches_exact_fd": _mapping_flag(
+            passes, "frozen_axis_matches_exact_fd"
+        ),
+        "exact_fd_consistent": _mapping_flag(passes, "frozen_axis_matches_exact_fd"),
+        "frozen_axis_convention_verified": _mapping_flag(
+            passes, "frozen_axis_convention_verified"
+        ),
+        "final_state_matches_exact_fd": _mapping_flag(
+            passes, "final_state_matches_exact_fd"
+        ),
+        "exact_fd_cost_gradient": _mapping_value(metrics, "exact_fd_cost_gradient"),
+        "frozen_axis_replay_cost_gradient": _mapping_value(
+            metrics, "frozen_axis_replay_cost_gradient"
+        ),
+        "frozen_axis_vs_exact_fd_rel": _mapping_value(
+            errors, "frozen_axis_vs_exact_fd_rel"
+        ),
+        "frozen_axis_initial_fd_vs_linear_rel": _mapping_value(
+            errors, "frozen_axis_initial_fd_vs_linear_rel"
+        ),
+        "frozen_axis_linear_jvp_vjp_rel": _mapping_value(
+            errors, "frozen_axis_linear_jvp_vjp_rel"
+        ),
+        "raw_initial_vs_exact_fd_rel": _mapping_value(
+            errors, "raw_initial_vs_exact_fd_rel"
+        ),
+        "growth_branch_locality_checked": growth_checked,
+        "growth_branch_locality_passed": growth_passed,
+        "growth_branch_locality_classification": _mapping_value(
+            growth_branch, "classification"
+        ),
+    }
+
+
 def build_boundary_chain_collection_summary(
     probes: Sequence[Mapping[str, Any]],
     *,
@@ -408,81 +471,7 @@ def build_boundary_chain_collection_summary(
                 absolute_tolerance=absolute_tolerance,
             )
         )
-        passes = summary.get("passes", {})
-        errors = summary.get("errors", {})
-        metrics = summary.get("metrics", {})
-        growth_branch = payload.get("growth_branch_locality")
-        growth_checked = isinstance(growth_branch, Mapping) and bool(
-            growth_branch.get("enabled", True)
-        )
-        growth_passed = bool(
-            isinstance(growth_branch, Mapping) and growth_branch.get("passed", False)
-        )
-        rows.append(
-            {
-                "index": payload.get("index"),
-                "name": payload.get("name"),
-                "classification": summary.get("classification"),
-                "finite": bool(summary.get("finite", False)),
-                "frozen_axis_jvp_vjp_consistent": bool(
-                    isinstance(passes, Mapping)
-                    and passes.get("frozen_axis_jvp_vjp_consistent", False)
-                ),
-                "frozen_axis_matches_exact_fd": bool(
-                    isinstance(passes, Mapping)
-                    and passes.get("frozen_axis_matches_exact_fd", False)
-                ),
-                "exact_fd_consistent": bool(
-                    isinstance(passes, Mapping)
-                    and passes.get("frozen_axis_matches_exact_fd", False)
-                ),
-                "frozen_axis_convention_verified": bool(
-                    isinstance(passes, Mapping)
-                    and passes.get("frozen_axis_convention_verified", False)
-                ),
-                "final_state_matches_exact_fd": bool(
-                    isinstance(passes, Mapping)
-                    and passes.get("final_state_matches_exact_fd", False)
-                ),
-                "exact_fd_cost_gradient": (
-                    metrics.get("exact_fd_cost_gradient")
-                    if isinstance(metrics, Mapping)
-                    else None
-                ),
-                "frozen_axis_replay_cost_gradient": (
-                    metrics.get("frozen_axis_replay_cost_gradient")
-                    if isinstance(metrics, Mapping)
-                    else None
-                ),
-                "frozen_axis_vs_exact_fd_rel": (
-                    errors.get("frozen_axis_vs_exact_fd_rel")
-                    if isinstance(errors, Mapping)
-                    else None
-                ),
-                "frozen_axis_initial_fd_vs_linear_rel": (
-                    errors.get("frozen_axis_initial_fd_vs_linear_rel")
-                    if isinstance(errors, Mapping)
-                    else None
-                ),
-                "frozen_axis_linear_jvp_vjp_rel": (
-                    errors.get("frozen_axis_linear_jvp_vjp_rel")
-                    if isinstance(errors, Mapping)
-                    else None
-                ),
-                "raw_initial_vs_exact_fd_rel": (
-                    errors.get("raw_initial_vs_exact_fd_rel")
-                    if isinstance(errors, Mapping)
-                    else None
-                ),
-                "growth_branch_locality_checked": growth_checked,
-                "growth_branch_locality_passed": growth_passed,
-                "growth_branch_locality_classification": (
-                    growth_branch.get("classification")
-                    if isinstance(growth_branch, Mapping)
-                    else None
-                ),
-            }
-        )
+        rows.append(_collection_row(payload, summary))
 
     n_total = len(rows)
     n_finite = sum(1 for row in rows if row["finite"])
