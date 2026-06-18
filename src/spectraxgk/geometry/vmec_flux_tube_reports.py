@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import replace as dc_replace
-import importlib
 from pathlib import Path
 import tempfile
 from types import SimpleNamespace
@@ -23,6 +21,12 @@ from spectraxgk.geometry.numerics import (
 from spectraxgk.geometry.sensitivity import geometry_sensitivity_report
 from spectraxgk.geometry.vmec_boozer_core import (
     vmec_jax_boozer_equal_arc_core_profiles_from_state,
+)
+from spectraxgk.geometry.vmec_state_sensitivity import (
+    _length_two_params,
+    _load_vmec_state_context,
+    _perturb_vmec_state,
+    _resolve_vmec_state_indices,
 )
 from spectraxgk.geometry.vmec_tensor_mapping import (
     vmec_jax_flux_tube_mapping_from_state,
@@ -50,9 +54,7 @@ def vmec_jax_flux_tube_sensitivity_report(  # pragma: no cover
     geometry observables through that path.
     """
 
-    p = jnp.asarray([1.0e-4, 1.0e-4] if params is None else params, dtype=jnp.float64)
-    if p.ndim != 1 or int(p.shape[0]) != 2:
-        raise ValueError("params must be a length-2 vector")
+    p = _length_two_params(params, default=1.0e-4)
 
     info = discover_differentiable_geometry_backends()
     if not info.get("vmec_jax_available", False):
@@ -66,48 +68,26 @@ def vmec_jax_flux_tube_sensitivity_report(  # pragma: no cover
         }
 
     try:
-        driver = importlib.import_module("vmec_jax.driver")
-        config_mod = importlib.import_module("vmec_jax.config")
-        static_mod = importlib.import_module("vmec_jax.static")
-        wout_mod = importlib.import_module("vmec_jax.wout")
-
-        input_path, wout_path = driver.example_paths(str(case_name))
-        if wout_path is None:
-            raise RuntimeError(
-                f"vmec_jax example {case_name!r} has no bundled wout reference"
-            )
-
-        cfg, _indata = config_mod.load_config(str(input_path))
-        static = static_mod.build_static(cfg)
-        wout = wout_mod.read_wout(wout_path)
-        state = wout_mod.state_from_wout(wout)
-
-        base_Rcos = jnp.asarray(state.Rcos)
-        base_Zsin = jnp.asarray(state.Zsin)
-        if base_Rcos.ndim != 2 or base_Zsin.ndim != 2:
-            raise RuntimeError(
-                "vmec_jax state Rcos/Zsin arrays must be two-dimensional"
-            )
-
-        ridx = (
-            int(base_Rcos.shape[0] // 2) if radial_index is None else int(radial_index)
+        ctx = _load_vmec_state_context(str(case_name))
+        ridx, midx, _sidx = _resolve_vmec_state_indices(
+            ctx.base_Rcos,
+            radial_index=radial_index,
+            mode_index=mode_index,
+            surface_index=surface_index,
+            surface_grid="field_line",
         )
-        midx = int(mode_index)
-        if not (0 <= ridx < int(base_Rcos.shape[0])):
-            raise ValueError("radial_index is outside the VMEC state radial grid")
-        if not (0 <= midx < int(base_Rcos.shape[1])):
-            raise ValueError("mode_index is outside the VMEC state mode table")
 
         def mapping_fn(x: jnp.ndarray) -> dict[str, Any]:
-            traced_state = dc_replace(
-                state,
-                Rcos=base_Rcos.at[ridx, midx].add(x[0]),
-                Zsin=base_Zsin.at[ridx, midx].add(x[1]),
+            traced_state = _perturb_vmec_state(
+                ctx,
+                x,
+                radial_index=ridx,
+                mode_index=midx,
             )
             return vmec_jax_flux_tube_mapping_from_state(
                 traced_state,
-                static,
-                wout,
+                ctx.static,
+                ctx.wout,
                 surface_index=surface_index,
                 alpha=float(alpha),
                 ntheta=int(ntheta),
@@ -135,8 +115,8 @@ def vmec_jax_flux_tube_sensitivity_report(  # pragma: no cover
         "available": True,
         "backend_info": info,
         "case_name": str(case_name),
-        "input_path": str(input_path),
-        "wout_path": str(wout_path),
+        "input_path": str(ctx.input_path),
+        "wout_path": str(ctx.wout_path),
         "source_model": "vmec_jax:state->tensor-flux-tube",
         "param_names": ["delta_Rcos", "delta_Zsin"],
         "params": np.asarray(p).tolist(),
@@ -146,7 +126,7 @@ def vmec_jax_flux_tube_sensitivity_report(  # pragma: no cover
         "iota": float(np.asarray(vmec_meta["iota"])),
         "alpha": float(alpha),
         "ntheta": int(ntheta),
-        "state_shape": [int(base_Rcos.shape[0]), int(base_Rcos.shape[1])],
+        "state_shape": [int(ctx.base_Rcos.shape[0]), int(ctx.base_Rcos.shape[1])],
         "sensitivity": sensitivity,
         "fd_step": float(fd_step),
         "reference_length": float(vmec_meta["reference_length"]),
@@ -229,23 +209,8 @@ def vmec_jax_flux_tube_array_parity_report(  # pragma: no cover
                 "reason": "internal VMEC/EIK backend is not available",
             }
 
-        driver = importlib.import_module("vmec_jax.driver")
-        config_mod = importlib.import_module("vmec_jax.config")
-        static_mod = importlib.import_module("vmec_jax.static")
-        wout_mod = importlib.import_module("vmec_jax.wout")
-
-        input_path, wout_path = driver.example_paths(str(case_name))
-        if wout_path is None:
-            raise RuntimeError(
-                f"vmec_jax example {case_name!r} has no bundled wout reference"
-            )
-
-        cfg, indata = config_mod.load_config(str(input_path))
-        static = static_mod.build_static(cfg)
-        wout = wout_mod.read_wout(wout_path)
-        state = wout_mod.state_from_wout(wout)
-
-        ns = int(jnp.asarray(state.Rcos).shape[0])
+        ctx = _load_vmec_state_context(str(case_name))
+        ns = int(ctx.base_Rcos.shape[0])
         sidx = (
             max(1, min(ns // 2, ns - 2))
             if surface_index is None
@@ -253,9 +218,9 @@ def vmec_jax_flux_tube_array_parity_report(  # pragma: no cover
         )
         torflux = float(sidx) / float(max(ns - 1, 1))
         direct_mapping = vmec_jax_flux_tube_mapping_from_state(
-            state,
-            static,
-            wout,
+            ctx.state,
+            ctx.static,
+            ctx.wout,
             surface_index=sidx,
             alpha=float(alpha),
             ntheta=ntheta_int,
@@ -267,7 +232,7 @@ def vmec_jax_flux_tube_array_parity_report(  # pragma: no cover
         )
 
         request = SimpleNamespace(
-            vmec_file=str(wout_path),
+            vmec_file=str(ctx.wout_path),
             ntheta=ntheta_int,
             boundary=str(boundary),
             y0=10.0,
@@ -369,10 +334,10 @@ def vmec_jax_flux_tube_array_parity_report(  # pragma: no cover
         if bool(info.get("booz_xform_jax_api_available", False)):
             try:
                 equal_arc_core = vmec_jax_boozer_equal_arc_core_profiles_from_state(
-                    state,
-                    static,
-                    indata,
-                    wout,
+                    ctx.state,
+                    ctx.static,
+                    ctx.indata,
+                    ctx.wout,
                     surface_index=sidx,
                     torflux=torflux,
                     alpha=float(alpha),
@@ -500,8 +465,8 @@ def vmec_jax_flux_tube_array_parity_report(  # pragma: no cover
         "available": True,
         "backend_info": info,
         "case_name": str(case_name),
-        "input_path": str(input_path),
-        "wout_path": str(wout_path),
+        "input_path": str(ctx.input_path),
+        "wout_path": str(ctx.wout_path),
         "source_model": "vmec_jax:state->tensor-flux-tube vs imported-vmec-eik",
         "surface_index": int(sidx),
         "torflux": float(torflux),

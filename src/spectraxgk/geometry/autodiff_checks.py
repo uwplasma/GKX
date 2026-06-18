@@ -262,6 +262,11 @@ def observable_gradient_validation_report(
     diff = ad_np - fd_np
     abs_error = np.abs(diff)
     rel_error = abs_error / np.maximum(np.abs(fd_np), floor)
+    # Relative error is ill-conditioned for entries whose finite-difference
+    # reference is numerically zero. Keep raw per-entry relative errors, but
+    # report the summary max over entries that do not already satisfy the
+    # absolute gate.
+    rel_error_gate = np.where(abs_error <= abs_tol, 0.0, rel_error)
     tangent_ad_np = np.asarray(tangent_ad, dtype=float)
     tangent_fd_np = np.asarray(tangent_fd, dtype=float)
     tangent_diff = tangent_ad_np - tangent_fd_np
@@ -390,7 +395,12 @@ def observable_gradient_validation_report(
         "abs_error": abs_error.tolist(),
         "rel_error": rel_error.tolist(),
         "max_abs_ad_fd_error": float(np.nanmax(abs_error)) if abs_error.size else 0.0,
-        "max_rel_ad_fd_error": float(np.nanmax(rel_error)) if rel_error.size else 0.0,
+        "max_rel_ad_fd_error": (
+            float(np.nanmax(rel_error_gate)) if rel_error_gate.size else 0.0
+        ),
+        "max_rel_ad_fd_error_raw": (
+            float(np.nanmax(rel_error)) if rel_error.size else 0.0
+        ),
         "gradient_checks": gradient_checks,
         "finite_flags": finite_flags,
         "tangent_direction": np.asarray(direction, dtype=float).tolist(),
