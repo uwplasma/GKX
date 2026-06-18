@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Any, Callable, Protocol
+from types import SimpleNamespace
+from typing import Any, Callable, Protocol, cast
 
 import numpy as np
 
@@ -40,6 +41,47 @@ class RuntimeScanDeps(Protocol):
     runtime_independent_parallel_plan: Callable[..., Any]
     independent_map: Callable[..., list[Any]]
     run_runtime_scan_ky_task: Callable[[dict[str, Any]], Any]
+
+
+def build_runtime_scan_orchestration_deps(facade: Any) -> RuntimeScanDeps:
+    """Build ky-scan orchestration deps from the public runtime facade."""
+
+    return cast(
+        RuntimeScanDeps,
+        SimpleNamespace(
+            resolve_runtime_hl_dims=facade._resolve_runtime_hl_dims,
+            normalize_linear_solver_name=facade._normalize_linear_solver_name,
+            parallel_requests_combined_ky_scan=facade._parallel_requests_combined_ky_scan,
+            run_runtime_scan_batch=facade._run_runtime_scan_batch,
+            runtime_independent_parallel_plan=facade._runtime_independent_parallel_plan,
+            independent_map=facade.independent_map,
+            run_runtime_scan_ky_task=facade._run_runtime_scan_ky_task,
+        ),
+    )
+
+
+def build_runtime_scan_batch_deps(facade: Any) -> RuntimeScanBatchDeps:
+    """Build combined-ky scan deps from the public runtime facade."""
+
+    return cast(
+        RuntimeScanBatchDeps,
+        SimpleNamespace(
+            build_runtime_geometry=facade.build_runtime_geometry,
+            build_runtime_linear_params=facade.build_runtime_linear_params,
+            build_runtime_linear_terms=facade.build_runtime_linear_terms,
+            build_initial_condition=facade._build_initial_condition,
+            apply_geometry_grid_defaults=facade.apply_geometry_grid_defaults,
+            build_spectral_grid=facade.build_spectral_grid,
+            select_ky_index=facade.select_ky_index,
+            midplane_index=facade._midplane_index,
+            integrate_linear_diagnostics=facade.integrate_linear_diagnostics,
+            extract_mode_time_series=facade.extract_mode_time_series,
+            fit_growth_rate_auto_with_stats=facade.fit_growth_rate_auto_with_stats,
+            fit_growth_rate_auto=facade.fit_growth_rate_auto,
+            fit_growth_rate=facade.fit_growth_rate,
+            apply_diagnostic_normalization=facade.apply_diagnostic_normalization,
+        ),
+    )
 
 
 def run_runtime_scan_orchestration(
@@ -333,4 +375,11 @@ def run_runtime_scan_batch(
     return RuntimeLinearScanResult(ky=ky_arr, gamma=gamma, omega=omega)
 
 
-__all__ = ["RuntimeScanBatchDeps", "RuntimeScanDeps", "run_runtime_scan_batch", "run_runtime_scan_orchestration"]
+__all__ = [
+    "RuntimeScanBatchDeps",
+    "RuntimeScanDeps",
+    "build_runtime_scan_batch_deps",
+    "build_runtime_scan_orchestration_deps",
+    "run_runtime_scan_batch",
+    "run_runtime_scan_orchestration",
+]

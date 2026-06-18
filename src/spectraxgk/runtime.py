@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any, Callable, Sequence
 from pathlib import Path
-from types import SimpleNamespace
 import sys
 
 import numpy as np
@@ -69,6 +68,8 @@ from spectraxgk.workflows.runtime.results import (
     build_runtime_nonlinear_result,
 )
 from spectraxgk.workflows.runtime.orchestration import (
+    build_runtime_scan_batch_deps,
+    build_runtime_scan_orchestration_deps,
     run_runtime_scan_batch as _run_runtime_scan_batch_impl,
     run_runtime_scan_orchestration as _run_runtime_scan_orchestration_impl,
 )
@@ -118,6 +119,43 @@ from spectraxgk.geometry.miller_eik import generate_runtime_miller_eik
 from spectraxgk.geometry.vmec_eik import generate_runtime_vmec_eik
 
 _RUNTIME_CASE_FIT_KEYS = _WORKFLOW_RUNTIME_CASE_FIT_KEYS
+
+# These symbols are intentionally imported into the runtime facade because the
+# dispatch/workflow dependency builders read them from ``sys.modules[__name__]``.
+_PATCHABLE_RUNTIME_GLOBALS = (
+    apply_diagnostic_normalization,
+    apply_geometry_grid_defaults,
+    build_cetg_model_params,
+    build_linear_cache,
+    build_runtime_nonlinear_diagnostics_kwargs,
+    build_runtime_nonlinear_result,
+    build_spectral_grid,
+    compute_quasilinear_from_linear_state,
+    dominant_eigenpair,
+    extract_eigenfunction,
+    extract_mode_time_series,
+    finalize_runtime_linear_quasilinear,
+    fit_growth_rate,
+    fit_growth_rate_auto,
+    fit_growth_rate_auto_with_stats,
+    fit_runtime_linear_diagnostics,
+    independent_map,
+    integrate_cetg_explicit_diagnostics_state,
+    integrate_linear_diagnostics,
+    integrate_linear_from_config,
+    integrate_nonlinear_explicit_diagnostics_state,
+    integrate_nonlinear_from_config,
+    linear_terms_to_term_config,
+    run_adaptive_runtime_chunk_loop,
+    run_cetg_linear_runtime,
+    run_cetg_nonlinear_runtime,
+    run_full_linear_runtime,
+    run_full_nonlinear_runtime,
+    select_ky_grid,
+    select_ky_index,
+    validate_cetg_runtime_config,
+    _parallel_requests_combined_ky_scan,
+)
 
 __all__ = [
     "RuntimeIndependentParallelPlan", "RuntimeLinearResult",
@@ -176,40 +214,6 @@ load_netcdf_restart_state = runtime_startup.load_netcdf_restart_state
 _centered_glibc_random_pairs = runtime_startup._centered_glibc_random_pairs
 _dealiased_initial_mode_pairs = runtime_startup._dealiased_initial_mode_pairs
 _periodic_zp_from_grid = runtime_startup._periodic_zp_from_grid
-
-_PATCHABLE_RUNTIME_DISPATCH_GLOBALS = (
-    apply_diagnostic_normalization,
-    apply_geometry_grid_defaults,
-    build_cetg_model_params,
-    build_linear_cache,
-    build_runtime_nonlinear_diagnostics_kwargs,
-    build_runtime_nonlinear_result,
-    build_spectral_grid,
-    compute_quasilinear_from_linear_state,
-    dominant_eigenpair,
-    extract_eigenfunction,
-    extract_mode_time_series,
-    finalize_runtime_linear_quasilinear,
-    fit_growth_rate,
-    fit_growth_rate_auto,
-    fit_growth_rate_auto_with_stats,
-    fit_runtime_linear_diagnostics,
-    integrate_cetg_explicit_diagnostics_state,
-    integrate_linear_diagnostics,
-    integrate_linear_from_config,
-    integrate_nonlinear_explicit_diagnostics_state,
-    integrate_nonlinear_from_config,
-    linear_terms_to_term_config,
-    run_adaptive_runtime_chunk_loop,
-    run_cetg_linear_runtime,
-    run_cetg_nonlinear_runtime,
-    run_full_linear_runtime,
-    run_full_nonlinear_runtime,
-    select_ky_grid,
-    select_ky_index,
-    validate_cetg_runtime_config,
-)
-
 
 def build_runtime_geometry(cfg: RuntimeConfig) -> FluxTubeGeometryLike:
     """Resolve runtime geometry while preserving the runtime module patch surface."""
@@ -420,18 +424,10 @@ def run_runtime_scan(
     )
 
 
-def _runtime_scan_orchestration_deps() -> SimpleNamespace:
+def _runtime_scan_orchestration_deps() -> Any:
     """Build ky-scan orchestration dependencies from patchable facade globals."""
 
-    return SimpleNamespace(
-        resolve_runtime_hl_dims=_resolve_runtime_hl_dims,
-        normalize_linear_solver_name=_normalize_linear_solver_name,
-        parallel_requests_combined_ky_scan=_parallel_requests_combined_ky_scan,
-        run_runtime_scan_batch=_run_runtime_scan_batch,
-        runtime_independent_parallel_plan=_runtime_independent_parallel_plan,
-        independent_map=independent_map,
-        run_runtime_scan_ky_task=_run_runtime_scan_ky_task,
-    )
+    return build_runtime_scan_orchestration_deps(sys.modules[__name__])
 
 
 def _run_runtime_scan_batch(
@@ -484,25 +480,10 @@ def _run_runtime_scan_batch(
     )
 
 
-def _runtime_scan_batch_deps() -> SimpleNamespace:
+def _runtime_scan_batch_deps() -> Any:
     """Build combined-ky scan dependencies from patchable facade globals."""
 
-    return SimpleNamespace(
-        build_runtime_geometry=build_runtime_geometry,
-        build_runtime_linear_params=build_runtime_linear_params,
-        build_runtime_linear_terms=build_runtime_linear_terms,
-        build_initial_condition=_build_initial_condition,
-        apply_geometry_grid_defaults=apply_geometry_grid_defaults,
-        build_spectral_grid=build_spectral_grid,
-        select_ky_index=select_ky_index,
-        midplane_index=_midplane_index,
-        integrate_linear_diagnostics=integrate_linear_diagnostics,
-        extract_mode_time_series=extract_mode_time_series,
-        fit_growth_rate_auto_with_stats=fit_growth_rate_auto_with_stats,
-        fit_growth_rate_auto=fit_growth_rate_auto,
-        fit_growth_rate=fit_growth_rate,
-        apply_diagnostic_normalization=apply_diagnostic_normalization,
-    )
+    return build_runtime_scan_batch_deps(sys.modules[__name__])
 
 
 def _runtime_nonlinear_dispatch_deps() -> RuntimeNonlinearDispatchDeps:
