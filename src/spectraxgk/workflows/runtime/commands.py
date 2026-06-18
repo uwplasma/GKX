@@ -44,6 +44,61 @@ class RuntimeCommandDeps:
     resolve_runtime_path: Callable[..., str | None]
 
 
+@dataclass(frozen=True)
+class RuntimeLinearCommandOptions:
+    """Resolved executable options for one linear runtime command."""
+
+    ky: float
+    Nl: int
+    Nm: int
+    solver: str
+    fit_signal: str
+    method: str | None
+    dt: float | None
+    steps: int | None
+    sample_stride: int
+    method_for_header: str
+    dt_for_header: float
+    steps_for_header: int
+    show_progress: bool
+
+
+@dataclass(frozen=True)
+class RuntimeScanCommandOptions:
+    """Resolved executable options for one linear scan command."""
+
+    ky_values: tuple[float, ...]
+    Nl: int
+    Nm: int
+    solver: str
+    fit_signal: str
+    method: str | None
+    dt: float | None
+    steps: int | None
+    sample_stride: int
+    batch_ky: bool
+    show_progress: bool
+    workers: int
+    parallel_executor: str
+
+
+@dataclass(frozen=True)
+class RuntimeNonlinearCommandOptions:
+    """Resolved executable options for one nonlinear runtime command."""
+
+    ky: float
+    Nl: int
+    Nm: int
+    method: str
+    dt: float
+    steps: int | None
+    sample_stride: int
+    diagnostics_stride: int | None
+    diagnostics: bool
+    laguerre_mode: str | None
+    show_progress: bool
+
+
 def attach_preloaded_runtime_config(
     args: Any,
     cfg: RuntimeConfig,
@@ -72,6 +127,142 @@ def load_runtime_command_config(
     if cfg is not None and data is not None:
         return cast(RuntimeConfig, cfg), cast(dict[str, Any], data)
     return deps.load_runtime_from_toml(args.config)
+
+
+def _arg_or_section(args: Any, section: dict[str, Any], name: str, default: Any) -> Any:
+    """Return a CLI override or a TOML section value."""
+
+    value = getattr(args, name, None)
+    if value is not None:
+        return value
+    return section.get(name, default)
+
+
+def _runtime_fit_config(data: dict[str, Any]) -> dict[str, Any]:
+    """Return fit options supported by runtime executable commands."""
+
+    return {
+        k: v for k, v in data.get("fit", {}).items() if k in RUNTIME_COMMAND_FIT_KEYS
+    }
+
+
+def _resolve_linear_command_options(
+    args: Any,
+    cfg: RuntimeConfig,
+    run_cfg: dict[str, Any],
+) -> RuntimeLinearCommandOptions:
+    """Resolve linear command options from CLI flags, TOML, and config defaults."""
+
+    dt = _arg_or_section(args, run_cfg, "dt", None)
+    steps = _arg_or_section(args, run_cfg, "steps", None)
+    method = _arg_or_section(args, run_cfg, "method", None)
+    dt_for_header = float(dt if dt is not None else cfg.time.dt)
+    return RuntimeLinearCommandOptions(
+        ky=float(_arg_or_section(args, run_cfg, "ky", 0.3)),
+        Nl=int(_arg_or_section(args, run_cfg, "Nl", 24)),
+        Nm=int(_arg_or_section(args, run_cfg, "Nm", 12)),
+        solver=str(_arg_or_section(args, run_cfg, "solver", "auto")),
+        fit_signal=str(_arg_or_section(args, run_cfg, "fit_signal", "auto")),
+        method=None if method is None else str(method),
+        dt=None if dt is None else float(dt),
+        steps=None if steps is None else int(steps),
+        sample_stride=int(
+            _arg_or_section(args, run_cfg, "sample_stride", cfg.time.sample_stride)
+        ),
+        method_for_header=str(method if method is not None else cfg.time.method),
+        dt_for_header=dt_for_header,
+        steps_for_header=(
+            int(steps)
+            if steps is not None
+            else int(round(float(cfg.time.t_max) / dt_for_header))
+        ),
+        show_progress=should_show_progress(args, bool(cfg.time.progress_bar)),
+    )
+
+
+def _parse_ky_values(args: Any, scan_cfg: dict[str, Any]) -> tuple[float, ...]:
+    """Resolve scan ky values from CLI or TOML, failing closed on empty scans."""
+
+    raw = getattr(args, "ky_values", None)
+    if raw is not None:
+        values = tuple(float(x) for x in str(raw).split(",") if x.strip())
+    else:
+        values = tuple(float(x) for x in scan_cfg.get("ky", ()))
+    if not values:
+        raise ValueError("No ky values provided. Use --ky-values or [scan].ky in TOML.")
+    return values
+
+
+def _resolve_scan_command_options(
+    args: Any,
+    cfg: RuntimeConfig,
+    scan_cfg: dict[str, Any],
+) -> RuntimeScanCommandOptions:
+    """Resolve linear-scan command options from CLI flags and TOML defaults."""
+
+    dt = _arg_or_section(args, scan_cfg, "dt", None)
+    steps = _arg_or_section(args, scan_cfg, "steps", None)
+    method = _arg_or_section(args, scan_cfg, "method", None)
+    return RuntimeScanCommandOptions(
+        ky_values=_parse_ky_values(args, scan_cfg),
+        Nl=int(_arg_or_section(args, scan_cfg, "Nl", 24)),
+        Nm=int(_arg_or_section(args, scan_cfg, "Nm", 12)),
+        solver=str(_arg_or_section(args, scan_cfg, "solver", "auto")),
+        fit_signal=str(_arg_or_section(args, scan_cfg, "fit_signal", "auto")),
+        method=None if method is None else str(method),
+        dt=None if dt is None else float(dt),
+        steps=None if steps is None else int(steps),
+        sample_stride=int(
+            _arg_or_section(args, scan_cfg, "sample_stride", cfg.time.sample_stride)
+        ),
+        batch_ky=bool(getattr(args, "batch_ky", False)),
+        show_progress=should_show_progress(args, bool(cfg.time.progress_bar)),
+        workers=int(getattr(args, "workers", 1)),
+        parallel_executor=str(getattr(args, "parallel_executor", "thread")),
+    )
+
+
+def _resolve_nonlinear_command_options(
+    args: Any,
+    cfg: RuntimeConfig,
+    run_cfg: dict[str, Any],
+) -> RuntimeNonlinearCommandOptions:
+    """Resolve nonlinear command options from CLI flags, TOML, and config defaults."""
+
+    steps_raw = _arg_or_section(args, run_cfg, "steps", None)
+    if steps_raw is not None:
+        steps: int | None = int(steps_raw)
+    elif bool(cfg.time.fixed_dt):
+        steps = int(round(cfg.time.t_max / cfg.time.dt))
+    else:
+        steps = None
+
+    if getattr(args, "no_diagnostics", False):
+        diagnostics = False
+    elif getattr(args, "diagnostics", False):
+        diagnostics = True
+    else:
+        diagnostics = bool(run_cfg.get("diagnostics", cfg.time.diagnostics))
+
+    diagnostics_stride = getattr(args, "diagnostics_stride", None)
+    laguerre_mode = _arg_or_section(args, run_cfg, "laguerre_mode", None)
+    return RuntimeNonlinearCommandOptions(
+        ky=float(_arg_or_section(args, run_cfg, "ky", 0.3)),
+        Nl=int(_arg_or_section(args, run_cfg, "Nl", 24)),
+        Nm=int(_arg_or_section(args, run_cfg, "Nm", 12)),
+        dt=float(_arg_or_section(args, run_cfg, "dt", cfg.time.dt)),
+        steps=steps,
+        method=str(_arg_or_section(args, run_cfg, "method", cfg.time.method)),
+        sample_stride=int(
+            _arg_or_section(args, run_cfg, "sample_stride", cfg.time.sample_stride)
+        ),
+        diagnostics_stride=(
+            None if diagnostics_stride is None else int(diagnostics_stride)
+        ),
+        diagnostics=diagnostics,
+        laguerre_mode=None if laguerre_mode is None else str(laguerre_mode),
+        show_progress=should_show_progress(args, bool(cfg.time.progress_bar)),
+    )
 
 
 def runtime_output_path(args: Any, cfg: RuntimeConfig) -> str | None:
@@ -198,66 +389,39 @@ def run_runtime_linear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:
     )
     cfg = apply_quasilinear_overrides(cfg, args)
     run_cfg = data.get("run", {})
-    fit_cfg = {
-        k: v for k, v in data.get("fit", {}).items() if k in RUNTIME_COMMAND_FIT_KEYS
-    }
-
-    ky = float(args.ky if args.ky is not None else run_cfg.get("ky", 0.3))
-    Nl = int(args.Nl if args.Nl is not None else run_cfg.get("Nl", 24))
-    Nm = int(args.Nm if args.Nm is not None else run_cfg.get("Nm", 12))
-    solver = str(
-        args.solver if args.solver is not None else run_cfg.get("solver", "auto")
-    )
-    fit_signal = str(
-        args.fit_signal
-        if args.fit_signal is not None
-        else run_cfg.get("fit_signal", "auto")
-    )
-    method = args.method if args.method is not None else run_cfg.get("method", None)
-    dt = args.dt if args.dt is not None else run_cfg.get("dt", None)
-    steps = args.steps if args.steps is not None else run_cfg.get("steps", None)
-    sample_stride = (
-        int(args.sample_stride)
-        if args.sample_stride is not None
-        else run_cfg.get("sample_stride", cfg.time.sample_stride)
-    )
-    dt_use = float(dt if dt is not None else cfg.time.dt)
-    steps_use = (
-        int(steps) if steps is not None else int(round(float(cfg.time.t_max) / dt_use))
-    )
-    method_use = str(method if method is not None else cfg.time.method)
-    show_progress = should_show_progress(args, bool(cfg.time.progress_bar))
+    fit_cfg = _runtime_fit_config(data)
+    opts = _resolve_linear_command_options(args, cfg, run_cfg)
 
     print_linear_run_header(
         label="runtime linear run",
         config_path=str(args.config),
-        ky=ky,
-        Nl=Nl,
-        Nm=Nm,
-        solver=solver,
-        method=method_use,
-        dt=dt_use,
-        steps=steps_use,
+        ky=opts.ky,
+        Nl=opts.Nl,
+        Nm=opts.Nm,
+        solver=opts.solver,
+        method=opts.method_for_header,
+        dt=opts.dt_for_header,
+        steps=opts.steps_for_header,
         grid_shape=(int(cfg.grid.Nx), int(cfg.grid.Ny), int(cfg.grid.Nz)),
-        show_progress=show_progress,
+        show_progress=opts.show_progress,
         extra=(
             f"model={cfg.physics.reduced_model} electrostatic={cfg.physics.electrostatic} "
-            f"electromagnetic={cfg.physics.electromagnetic} fit_signal={fit_signal}"
+            f"electromagnetic={cfg.physics.electromagnetic} fit_signal={opts.fit_signal}"
         ),
     )
 
     res = deps.run_runtime_linear(
         cfg,
-        ky_target=ky,
-        Nl=Nl,
-        Nm=Nm,
-        solver=solver,
-        method=method,
-        dt=dt,
-        steps=steps,
-        sample_stride=sample_stride,
-        fit_signal=fit_signal,
-        show_progress=show_progress,
+        ky_target=opts.ky,
+        Nl=opts.Nl,
+        Nm=opts.Nm,
+        solver=opts.solver,
+        method=opts.method,
+        dt=opts.dt,
+        steps=opts.steps,
+        sample_stride=opts.sample_stride,
+        fit_signal=opts.fit_signal,
+        show_progress=opts.show_progress,
         status_callback=_status_printer("runtime"),
         **fit_cfg,
     )
@@ -287,59 +451,27 @@ def run_runtime_linear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:
 def scan_runtime_linear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:
     """Execute the runtime-linear ky-scan subcommand after parser dispatch."""
 
-    import numpy as np
-
     cfg, data = load_runtime_command_config(args, deps=deps)
     cfg = apply_quasilinear_overrides(cfg, args)
     scan_cfg = data.get("scan", {})
-    fit_cfg = {
-        k: v for k, v in data.get("fit", {}).items() if k in RUNTIME_COMMAND_FIT_KEYS
-    }
-
-    if args.ky_values is not None:
-        ky_values = np.asarray(
-            [float(x) for x in args.ky_values.split(",") if x.strip()], dtype=float
-        )
-    else:
-        ky_values = np.asarray(scan_cfg.get("ky", []), dtype=float)
-    if ky_values.size == 0:
-        raise ValueError("No ky values provided. Use --ky-values or [scan].ky in TOML.")
-
-    Nl = int(args.Nl if args.Nl is not None else scan_cfg.get("Nl", 24))
-    Nm = int(args.Nm if args.Nm is not None else scan_cfg.get("Nm", 12))
-    solver = str(
-        args.solver if args.solver is not None else scan_cfg.get("solver", "auto")
-    )
-    fit_signal = str(
-        args.fit_signal
-        if args.fit_signal is not None
-        else scan_cfg.get("fit_signal", "auto")
-    )
-    method = args.method if args.method is not None else scan_cfg.get("method", None)
-    dt = args.dt if args.dt is not None else scan_cfg.get("dt", None)
-    steps = args.steps if args.steps is not None else scan_cfg.get("steps", None)
-    sample_stride = (
-        int(args.sample_stride)
-        if args.sample_stride is not None
-        else scan_cfg.get("sample_stride", cfg.time.sample_stride)
-    )
-    show_progress = should_show_progress(args, bool(cfg.time.progress_bar))
+    fit_cfg = _runtime_fit_config(data)
+    opts = _resolve_scan_command_options(args, cfg, scan_cfg)
 
     scan = deps.run_runtime_scan(
         cfg,
-        list(ky_values.tolist()),
-        Nl=Nl,
-        Nm=Nm,
-        solver=solver,
-        method=method,
-        dt=dt,
-        steps=steps,
-        sample_stride=sample_stride,
-        batch_ky=bool(args.batch_ky),
-        fit_signal=fit_signal,
-        show_progress=show_progress,
-        workers=int(getattr(args, "workers", 1)),
-        parallel_executor=str(getattr(args, "parallel_executor", "thread")),
+        list(opts.ky_values),
+        Nl=opts.Nl,
+        Nm=opts.Nm,
+        solver=opts.solver,
+        method=opts.method,
+        dt=opts.dt,
+        steps=opts.steps,
+        sample_stride=opts.sample_stride,
+        batch_ky=opts.batch_ky,
+        fit_signal=opts.fit_signal,
+        show_progress=opts.show_progress,
+        workers=opts.workers,
+        parallel_executor=opts.parallel_executor,
         **fit_cfg,
     )
     for ky, g, w in zip(scan.ky, scan.gamma, scan.omega):
@@ -364,70 +496,35 @@ def run_runtime_nonlinear_command(args: Any, *, deps: RuntimeCommandDeps) -> int
         cfg, args, resolve_runtime_path=deps.resolve_runtime_path
     )
     run_cfg = data.get("run", {})
-
-    ky = float(args.ky if args.ky is not None else run_cfg.get("ky", 0.3))
-    Nl = int(args.Nl if args.Nl is not None else run_cfg.get("Nl", 24))
-    Nm = int(args.Nm if args.Nm is not None else run_cfg.get("Nm", 12))
-    dt = float(args.dt if args.dt is not None else run_cfg.get("dt", cfg.time.dt))
-    if args.steps is not None:
-        steps: int | None = int(args.steps)
-    elif run_cfg.get("steps", None) is not None:
-        steps = int(run_cfg["steps"])
-    elif bool(cfg.time.fixed_dt):
-        steps = int(round(cfg.time.t_max / cfg.time.dt))
-    else:
-        steps = None
-    method = str(
-        args.method
-        if args.method is not None
-        else run_cfg.get("method", cfg.time.method)
-    )
-    sample_stride = int(
-        args.sample_stride
-        if args.sample_stride is not None
-        else run_cfg.get("sample_stride", cfg.time.sample_stride)
-    )
-    diagnostics_stride = (
-        None if args.diagnostics_stride is None else int(args.diagnostics_stride)
-    )
-    if args.no_diagnostics:
-        diagnostics = False
-    elif args.diagnostics:
-        diagnostics = True
-    else:
-        diagnostics = run_cfg.get("diagnostics", cfg.time.diagnostics)
-    laguerre_mode = (
-        args.laguerre_mode
-        if args.laguerre_mode is not None
-        else run_cfg.get("laguerre_mode")
-    )
-    show_progress = should_show_progress(args, bool(cfg.time.progress_bar))
+    opts = _resolve_nonlinear_command_options(args, cfg, run_cfg)
 
     print("starting runtime nonlinear run")
     print(
-        f"config={args.config} ky={ky:.4f} Nl={Nl} Nm={Nm} method={method} dt={dt:.6g} "
-        f"steps={'auto' if steps is None else steps}"
+        f"config={args.config} ky={opts.ky:.4f} Nl={opts.Nl} Nm={opts.Nm} "
+        f"method={opts.method} dt={opts.dt:.6g} "
+        f"steps={'auto' if opts.steps is None else opts.steps}"
     )
     print(
         f"grid=Nx{int(cfg.grid.Nx)} Ny{int(cfg.grid.Ny)} Nz{int(cfg.grid.Nz)} "
-        f"diagnostics={'on' if diagnostics else 'off'} progress={'on' if show_progress else 'off'}"
+        f"diagnostics={'on' if opts.diagnostics else 'off'} "
+        f"progress={'on' if opts.show_progress else 'off'}"
     )
 
     out_path = runtime_output_path(args, cfg)
     result, paths = deps.run_runtime_nonlinear_with_artifacts(
         cfg,
         out=out_path,
-        ky_target=ky,
-        Nl=Nl,
-        Nm=Nm,
-        dt=dt,
-        steps=steps,
-        method=method,
-        sample_stride=sample_stride,
-        diagnostics_stride=diagnostics_stride,
-        laguerre_mode=laguerre_mode,
-        diagnostics=diagnostics,
-        show_progress=show_progress,
+        ky_target=opts.ky,
+        Nl=opts.Nl,
+        Nm=opts.Nm,
+        dt=opts.dt,
+        steps=opts.steps,
+        method=opts.method,
+        sample_stride=opts.sample_stride,
+        diagnostics_stride=opts.diagnostics_stride,
+        laguerre_mode=opts.laguerre_mode,
+        diagnostics=opts.diagnostics,
+        show_progress=opts.show_progress,
         status_callback=_status_printer("runtime"),
     )
     diag = result.diagnostics
