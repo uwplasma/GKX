@@ -30,6 +30,33 @@ from spectraxgk.geometry.vmec_boozer_constants import (
 )
 
 
+def _interp_boozer_profile(
+    out: dict[str, Any],
+    name: str,
+    *,
+    dtype: Any,
+    s_half: jnp.ndarray,
+    s_value: float,
+) -> jnp.ndarray:
+    return _interp_radial(jnp.asarray(out[name], dtype=dtype), s_half, s_value)
+
+
+def _interp_boozer_profile_derivative(
+    out: dict[str, Any],
+    name: str,
+    *,
+    dtype: Any,
+    radial_spacing: float,
+    s_half: jnp.ndarray,
+    s_value: float,
+) -> jnp.ndarray:
+    return _interp_radial(
+        _radial_derivative_array(jnp.asarray(out[name], dtype=dtype), radial_spacing),
+        s_half,
+        s_value,
+    )
+
+
 def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
     state: Any,
     static: Any,
@@ -191,43 +218,29 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
 
     radial_spacing = 1.0 / float(max(ns_b_full, 1))
     bmnc_b = _interp_radial(bmnc_b_all, s_half, s_value)
-    rmnc_b = _interp_radial(
-        jnp.asarray(out["rmnc_b"], dtype=base_Rcos.dtype), s_half, s_value
-    )
-    zmns_b = _interp_radial(
-        jnp.asarray(out["zmns_b"], dtype=base_Rcos.dtype), s_half, s_value
-    )
-    numns_b = -_interp_radial(
-        jnp.asarray(out["pmns_b"], dtype=base_Rcos.dtype), s_half, s_value
-    )
-    d_bmnc_b_d_s = _interp_radial(
-        _radial_derivative_array(
-            jnp.asarray(out["bmnc_b"], dtype=base_Rcos.dtype), radial_spacing
-        ),
-        s_half,
-        s_value,
-    )
-    d_rmnc_b_d_s = _interp_radial(
-        _radial_derivative_array(
-            jnp.asarray(out["rmnc_b"], dtype=base_Rcos.dtype), radial_spacing
-        ),
-        s_half,
-        s_value,
-    )
-    d_zmns_b_d_s = _interp_radial(
-        _radial_derivative_array(
-            jnp.asarray(out["zmns_b"], dtype=base_Rcos.dtype), radial_spacing
-        ),
-        s_half,
-        s_value,
-    )
-    d_numns_b_d_s = -_interp_radial(
-        _radial_derivative_array(
-            jnp.asarray(out["pmns_b"], dtype=base_Rcos.dtype), radial_spacing
-        ),
-        s_half,
-        s_value,
-    )
+
+    def interp_profile(name: str) -> jnp.ndarray:
+        return _interp_boozer_profile(
+            out, name, dtype=base_Rcos.dtype, s_half=s_half, s_value=s_value
+        )
+
+    def interp_derivative(name: str) -> jnp.ndarray:
+        return _interp_boozer_profile_derivative(
+            out,
+            name,
+            dtype=base_Rcos.dtype,
+            radial_spacing=radial_spacing,
+            s_half=s_half,
+            s_value=s_value,
+        )
+
+    rmnc_b = interp_profile("rmnc_b")
+    zmns_b = interp_profile("zmns_b")
+    numns_b = -interp_profile("pmns_b")
+    d_bmnc_b_d_s = interp_derivative("bmnc_b")
+    d_rmnc_b_d_s = interp_derivative("rmnc_b")
+    d_zmns_b_d_s = interp_derivative("zmns_b")
+    d_numns_b_d_s = -interp_derivative("pmns_b")
     iota_profile = jnp.asarray(out["iota_b"], dtype=base_Rcos.dtype)
     iota = _interp_radial(iota_profile, s_half, s_value)
     d_iota_ds = _interp_radial(
@@ -448,23 +461,17 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
     # Root-level VMEC/EIK drift coefficients are stored at the pre-loader (2x)
     # level; SPECTRAX-GK compares against the loaded solver convention.
     drift_loader_factor = jnp.asarray(0.5, dtype=base_Rcos.dtype)
-    gds2 = _interp_equal_arc_profile(theta_uniform_closed, theta_eqarc, gds2_raw)[:-1]
-    gds21 = _interp_equal_arc_profile(theta_uniform_closed, theta_eqarc, gds21_raw)[:-1]
-    gds22 = _interp_equal_arc_profile(theta_uniform_closed, theta_eqarc, gds22_raw)[:-1]
-    grho = _interp_equal_arc_profile(theta_uniform_closed, theta_eqarc, grho_raw)[:-1]
-    cvdrift = (
-        drift_loader_factor
-        * _interp_equal_arc_profile(
-            theta_uniform_closed, theta_eqarc, drift_cvdrift_raw
-        )[:-1]
-    )
+
+    def equal_arc_open(profile: jnp.ndarray) -> jnp.ndarray:
+        return _interp_equal_arc_profile(theta_uniform_closed, theta_eqarc, profile)[:-1]
+
+    gds2 = equal_arc_open(gds2_raw)
+    gds21 = equal_arc_open(gds21_raw)
+    gds22 = equal_arc_open(gds22_raw)
+    grho = equal_arc_open(grho_raw)
+    cvdrift = drift_loader_factor * equal_arc_open(drift_cvdrift_raw)
     gbdrift = cvdrift
-    cvdrift0 = (
-        drift_loader_factor
-        * _interp_equal_arc_profile(
-            theta_uniform_closed, theta_eqarc, drift_cvdrift0_raw
-        )[:-1]
-    )
+    cvdrift0 = drift_loader_factor * equal_arc_open(drift_cvdrift0_raw)
     gbdrift0 = cvdrift0
 
     return {
