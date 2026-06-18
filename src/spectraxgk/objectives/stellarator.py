@@ -26,10 +26,8 @@ from spectraxgk.objectives.core import (
 from spectraxgk.objectives.vmec_boozer import (
     vmec_boozer_solver_objective_table_with_metadata_from_state,
 )
-from spectraxgk.objectives.stellarator_portfolio import (
-    aggregate_objective_portfolio,
-    objective_portfolio_sensitivity_report,
-)
+from spectraxgk.objectives.portfolio_contracts import aggregate_objective_portfolio
+from spectraxgk.objectives.portfolio_sensitivity import objective_portfolio_sensitivity_report
 from spectraxgk.objectives.stellarator_contracts import (
     OBSERVABLE_NAMES,
     PARAMETER_NAMES,

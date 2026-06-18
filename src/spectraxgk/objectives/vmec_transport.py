@@ -39,7 +39,7 @@ from spectraxgk.objectives.core import (
     solver_growth_rate_from_geometry,
     solver_linear_operator_matrix_from_geometry,
 )
-from spectraxgk.objectives.stellarator_portfolio import aggregate_objective_portfolio
+from spectraxgk.objectives.portfolio_contracts import aggregate_objective_portfolio
 from spectraxgk.objectives.stellarator import StellaratorITGSampleSet, smooth_positive
 
 

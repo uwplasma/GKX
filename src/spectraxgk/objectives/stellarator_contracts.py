@@ -7,7 +7,7 @@ from typing import Any, Literal
 
 import numpy as np
 
-from spectraxgk.objectives.stellarator_portfolio import PortfolioReduction
+from spectraxgk.objectives.portfolio_contracts import PortfolioReduction
 
 
 StellaratorObjectiveKind = Literal["growth", "quasilinear_flux", "nonlinear_heat_flux"]

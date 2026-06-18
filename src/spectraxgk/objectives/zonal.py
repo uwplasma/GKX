@@ -14,11 +14,11 @@ from typing import Any, Literal
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.objectives.stellarator_portfolio import (
+from spectraxgk.objectives.portfolio_contracts import (
     PortfolioReduction,
     aggregate_objective_portfolio,
-    objective_portfolio_sensitivity_report,
 )
+from spectraxgk.objectives.portfolio_sensitivity import objective_portfolio_sensitivity_report
 
 
 ZONAL_FLOW_OBJECTIVE_NAMES = (
