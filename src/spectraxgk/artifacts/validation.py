@@ -6,7 +6,9 @@ from typing import Any
 
 import numpy as np
 
-from spectraxgk.workflows.runtime.diagnostics import validate_finite_runtime_diagnostics
+from spectraxgk.workflows.runtime.diagnostic_arrays import (
+    validate_finite_runtime_diagnostics,
+)
 
 _RUNTIME_FIELD_NAMES = ("phi", "apar", "bpar")
 

@@ -14,7 +14,7 @@ from typing import Any, Callable
 import numpy as np
 
 from spectraxgk.diagnostics import SimulationDiagnostics
-from spectraxgk.workflows.runtime.diagnostics import (
+from spectraxgk.workflows.runtime.diagnostic_arrays import (
     concat_runtime_diagnostics,
     stride_runtime_diagnostics,
     truncate_runtime_diagnostics,

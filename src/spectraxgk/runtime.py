@@ -44,13 +44,15 @@ from spectraxgk.workflows.runtime.execution import (
     run_runtime_linear_impl,
     run_runtime_nonlinear_impl,
 )
-from spectraxgk.workflows.runtime.diagnostics import (
+from spectraxgk.workflows.runtime.diagnostic_arrays import (
     concat_runtime_diagnostics,
-    finalize_runtime_linear_quasilinear,
-    RuntimeQuasilinearFinalizationDeps,
     slice_runtime_diagnostics,
     stride_runtime_diagnostics,
     truncate_runtime_diagnostics,
+)
+from spectraxgk.workflows.runtime.diagnostics import (
+    finalize_runtime_linear_quasilinear,
+    RuntimeQuasilinearFinalizationDeps,
     fit_runtime_linear_diagnostics,
 )
 from spectraxgk.workflows.runtime.chunks import run_adaptive_runtime_chunk_loop
