@@ -100,10 +100,8 @@ from spectraxgk.validation.benchmarks.kbm import (
     run_kbm_scan,
 )
 
-from spectraxgk.validation.benchmarks.kinetic import (
-    run_kinetic_linear,
-    run_kinetic_scan,
-)
+from spectraxgk.validation.benchmarks.kinetic_linear import run_kinetic_linear
+from spectraxgk.validation.benchmarks.kinetic_scan import run_kinetic_scan
 
 from spectraxgk.validation.benchmarks.etg import (
     run_etg_linear,
