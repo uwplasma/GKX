@@ -103,7 +103,7 @@ from spectraxgk.solvers.time.runners import (
 )
 from spectraxgk.workflows.cases import (
     RUNTIME_CASE_FIT_KEYS as _WORKFLOW_RUNTIME_CASE_FIT_KEYS,
-    RuntimeCaseDeps,
+    default_runtime_case_deps as _default_runtime_case_deps,
     run_linear_case as _run_linear_case_impl,
     run_nonlinear_case as _run_nonlinear_case_impl,
 )
@@ -553,24 +553,6 @@ def run_runtime_nonlinear(
     )
 
 
-def _runtime_case_deps() -> RuntimeCaseDeps:
-    """Build case-workflow dependencies from this module's patchable globals."""
-
-    from spectraxgk.workflows.runtime.toml import load_runtime_from_toml
-    from spectraxgk.workflows.runtime.artifacts import (
-        run_runtime_nonlinear_with_artifacts,
-        write_runtime_linear_artifacts,
-    )
-
-    return RuntimeCaseDeps(
-        load_runtime_from_toml=load_runtime_from_toml,
-        run_runtime_linear=run_runtime_linear,
-        run_runtime_nonlinear=run_runtime_nonlinear,
-        write_runtime_linear_artifacts=write_runtime_linear_artifacts,
-        run_runtime_nonlinear_with_artifacts=run_runtime_nonlinear_with_artifacts,
-    )
-
-
 def run_linear_case(
     config_path: str | Path,
     *,
@@ -597,7 +579,7 @@ def run_linear_case(
         steps=steps,
         sample_stride=sample_stride,
         show_progress=show_progress,
-        deps=_runtime_case_deps(),
+        deps=_default_runtime_case_deps(),
     )
 
 
@@ -627,5 +609,5 @@ def run_nonlinear_case(
         sample_stride=sample_stride,
         diagnostics_stride=diagnostics_stride,
         show_progress=show_progress,
-        deps=_runtime_case_deps(),
+        deps=_default_runtime_case_deps(),
     )
