@@ -1,6 +1,6 @@
 """Public solvers API exports."""
 
-from spectraxgk.quasilinear import (
+from spectraxgk.diagnostics.quasilinear_transport import (
     QuasilinearTransportResult,
     compute_quasilinear_from_linear_state,
     effective_kperp2,

@@ -12,7 +12,7 @@ from spectraxgk.objectives.stellarator_contracts import (
     StellaratorITGOptimizationConfig,
     StellaratorITGSampleSet,
 )
-from spectraxgk.quasilinear import quasilinear_feature_objective
+from spectraxgk.diagnostics.quasilinear_transport import quasilinear_feature_objective
 
 
 def default_stellarator_initial_params() -> jnp.ndarray:

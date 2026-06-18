@@ -40,7 +40,7 @@ from spectraxgk.nonlinear import integrate_nonlinear_explicit_diagnostics_state
 from spectraxgk.solvers.linear.krylov import KrylovConfig, dominant_eigenpair
 from spectraxgk.diagnostics.normalization import apply_diagnostic_normalization
 from spectraxgk.parallel import independent_map
-from spectraxgk.quasilinear import compute_quasilinear_from_linear_state
+from spectraxgk.diagnostics.quasilinear_transport import compute_quasilinear_from_linear_state
 from spectraxgk.workflows.runtime.config import RuntimeConfig
 from spectraxgk.workflows.runtime import startup as runtime_startup
 from spectraxgk.workflows.runtime.execution import (

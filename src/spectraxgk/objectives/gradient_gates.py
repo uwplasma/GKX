@@ -22,7 +22,7 @@ from spectraxgk.core.grid import build_spectral_grid, select_ky_grid
 from spectraxgk.operators.linear.rhs import linear_rhs_cached
 from spectraxgk.operators.linear.cache import build_linear_cache
 from spectraxgk.operators.linear.params import LinearParams, LinearTerms
-from spectraxgk.quasilinear import effective_kperp2, phi_norm2
+from spectraxgk.diagnostics.quasilinear_transport import effective_kperp2, phi_norm2
 from spectraxgk.objectives.geometry import (
     SOLVER_GEOMETRY_PARAMETER_NAMES,
     _objective_gate_rows,
