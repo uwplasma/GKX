@@ -6,6 +6,7 @@ from dataclasses import replace
 from typing import Any, Callable, Sequence
 from pathlib import Path
 from types import SimpleNamespace
+import sys
 
 import numpy as np
 
@@ -43,6 +44,8 @@ from spectraxgk.workflows.runtime import startup as runtime_startup
 from spectraxgk.workflows.runtime.execution import (
     RuntimeLinearDispatchDeps,
     RuntimeNonlinearDispatchDeps,
+    build_runtime_linear_dispatch_deps,
+    build_runtime_nonlinear_dispatch_deps,
     run_runtime_linear_impl,
     run_runtime_nonlinear_impl,
 )
@@ -54,7 +57,6 @@ from spectraxgk.workflows.runtime.diagnostic_arrays import (
 )
 from spectraxgk.workflows.runtime.diagnostics import (
     finalize_runtime_linear_quasilinear,
-    RuntimeQuasilinearFinalizationDeps,
     fit_runtime_linear_diagnostics,
 )
 from spectraxgk.workflows.runtime.chunks import run_adaptive_runtime_chunk_loop
@@ -103,14 +105,9 @@ from spectraxgk.workflows.cases import (
     run_linear_case as _run_linear_case_impl,
     run_nonlinear_case as _run_nonlinear_case_impl,
 )
-from spectraxgk.workflows.linear import FullLinearRuntimeDeps, run_full_linear_runtime
-from spectraxgk.workflows.nonlinear import (
-    FullNonlinearRuntimeDeps,
-    run_full_nonlinear_runtime,
-)
+from spectraxgk.workflows.linear import run_full_linear_runtime
+from spectraxgk.workflows.nonlinear import run_full_nonlinear_runtime
 from spectraxgk.workflows.reduced_models import (
-    CETGLinearRuntimeDeps,
-    CETGNonlinearRuntimeDeps,
     run_cetg_linear_runtime,
     run_cetg_nonlinear_runtime,
 )
@@ -177,6 +174,39 @@ load_netcdf_restart_state = runtime_startup.load_netcdf_restart_state
 _centered_glibc_random_pairs = runtime_startup._centered_glibc_random_pairs
 _dealiased_initial_mode_pairs = runtime_startup._dealiased_initial_mode_pairs
 _periodic_zp_from_grid = runtime_startup._periodic_zp_from_grid
+
+_PATCHABLE_RUNTIME_DISPATCH_GLOBALS = (
+    apply_diagnostic_normalization,
+    apply_geometry_grid_defaults,
+    build_cetg_model_params,
+    build_linear_cache,
+    build_runtime_nonlinear_diagnostics_kwargs,
+    build_runtime_nonlinear_result,
+    build_spectral_grid,
+    compute_quasilinear_from_linear_state,
+    dominant_eigenpair,
+    extract_eigenfunction,
+    extract_mode_time_series,
+    finalize_runtime_linear_quasilinear,
+    fit_growth_rate,
+    fit_growth_rate_auto,
+    fit_growth_rate_auto_with_stats,
+    fit_runtime_linear_diagnostics,
+    integrate_cetg_explicit_diagnostics_state,
+    integrate_linear_diagnostics,
+    integrate_linear_from_config,
+    integrate_nonlinear_explicit_diagnostics_state,
+    integrate_nonlinear_from_config,
+    linear_terms_to_term_config,
+    run_adaptive_runtime_chunk_loop,
+    run_cetg_linear_runtime,
+    run_cetg_nonlinear_runtime,
+    run_full_linear_runtime,
+    run_full_nonlinear_runtime,
+    select_ky_grid,
+    select_ky_index,
+    validate_cetg_runtime_config,
+)
 
 
 def build_runtime_geometry(cfg: RuntimeConfig) -> FluxTubeGeometryLike:
@@ -263,52 +293,7 @@ _concat_runtime_diagnostics = concat_runtime_diagnostics
 def _runtime_linear_dispatch_deps() -> RuntimeLinearDispatchDeps:
     """Build linear runtime dispatch dependencies from patchable module globals."""
 
-    return RuntimeLinearDispatchDeps(
-        resolve_runtime_hl_dims=_resolve_runtime_hl_dims,
-        runtime_model_key=_runtime_model_key,
-        run_cetg_linear_runtime=run_cetg_linear_runtime,
-        cetg_deps=CETGLinearRuntimeDeps(
-            build_runtime_geometry=build_runtime_geometry,
-            validate_cetg_runtime_config=validate_cetg_runtime_config,
-            build_initial_condition=_build_initial_condition,
-            build_runtime_term_config=build_runtime_term_config,
-            build_cetg_model_params=build_cetg_model_params,
-            integrate_cetg_explicit_diagnostics_state=integrate_cetg_explicit_diagnostics_state,
-            fit_growth_rate_auto=fit_growth_rate_auto,
-            fit_growth_rate=fit_growth_rate,
-        ),
-        run_full_linear_runtime=run_full_linear_runtime,
-        full_deps=FullLinearRuntimeDeps(
-            build_runtime_geometry=build_runtime_geometry,
-            apply_geometry_grid_defaults=apply_geometry_grid_defaults,
-            build_spectral_grid=build_spectral_grid,
-            build_runtime_linear_params=build_runtime_linear_params,
-            build_runtime_linear_terms=build_runtime_linear_terms,
-            select_ky_index=select_ky_index,
-            select_ky_grid=select_ky_grid,
-            midplane_index=_midplane_index,
-            build_initial_condition=_build_initial_condition,
-            normalize_linear_solver_name=_normalize_linear_solver_name,
-            runtime_default_krylov_config=_runtime_default_krylov_config,
-            build_linear_cache=build_linear_cache,
-            dominant_eigenpair=dominant_eigenpair,
-            apply_diagnostic_normalization=apply_diagnostic_normalization,
-            integrate_linear_from_config=integrate_linear_from_config,
-            integrate_linear_diagnostics=integrate_linear_diagnostics,
-            fit_runtime_linear_diagnostics=fit_runtime_linear_diagnostics,
-            finalize_runtime_linear_quasilinear=finalize_runtime_linear_quasilinear,
-            quasilinear_finalization_deps=RuntimeQuasilinearFinalizationDeps(
-                build_linear_cache=build_linear_cache,
-                compute_quasilinear_from_linear_state=compute_quasilinear_from_linear_state,
-                linear_terms_to_term_config=linear_terms_to_term_config,
-            ),
-            extract_mode_time_series=extract_mode_time_series,
-            fit_growth_rate_auto_with_stats=fit_growth_rate_auto_with_stats,
-            fit_growth_rate_auto=fit_growth_rate_auto,
-            fit_growth_rate=fit_growth_rate,
-            extract_eigenfunction=extract_eigenfunction,
-        ),
-    )
+    return build_runtime_linear_dispatch_deps(sys.modules[__name__])
 
 
 def run_runtime_linear(
@@ -511,40 +496,7 @@ def _run_runtime_scan_batch(
 def _runtime_nonlinear_dispatch_deps() -> RuntimeNonlinearDispatchDeps:
     """Build nonlinear runtime dispatch dependencies from patchable module globals."""
 
-    return RuntimeNonlinearDispatchDeps(
-        resolve_runtime_hl_dims=_resolve_runtime_hl_dims,
-        runtime_model_key=_runtime_model_key,
-        run_cetg_nonlinear_runtime=run_cetg_nonlinear_runtime,
-        cetg_deps=CETGNonlinearRuntimeDeps(
-            build_runtime_geometry=build_runtime_geometry,
-            validate_cetg_runtime_config=validate_cetg_runtime_config,
-            select_nonlinear_mode_indices=_select_nonlinear_mode_indices,
-            build_initial_condition=_build_initial_condition,
-            build_cetg_model_params=build_cetg_model_params,
-            build_runtime_term_config=build_runtime_term_config,
-            integrate_cetg_explicit_diagnostics_state=integrate_cetg_explicit_diagnostics_state,
-            run_adaptive_runtime_chunk_loop=run_adaptive_runtime_chunk_loop,
-            build_runtime_nonlinear_result=build_runtime_nonlinear_result,
-        ),
-        run_full_nonlinear_runtime=run_full_nonlinear_runtime,
-        full_deps=FullNonlinearRuntimeDeps(
-            build_runtime_geometry=build_runtime_geometry,
-            apply_geometry_grid_defaults=apply_geometry_grid_defaults,
-            build_spectral_grid=build_spectral_grid,
-            build_runtime_linear_params=build_runtime_linear_params,
-            build_runtime_term_config=build_runtime_term_config,
-            select_nonlinear_mode_indices=_select_nonlinear_mode_indices,
-            build_initial_condition=_build_initial_condition,
-            species_to_linear=_species_to_linear,
-            infer_runtime_nonlinear_steps=_infer_runtime_nonlinear_steps,
-            runtime_external_phi=_runtime_external_phi,
-            build_runtime_nonlinear_diagnostics_kwargs=build_runtime_nonlinear_diagnostics_kwargs,
-            integrate_nonlinear_explicit_diagnostics_state=integrate_nonlinear_explicit_diagnostics_state,
-            run_adaptive_runtime_chunk_loop=run_adaptive_runtime_chunk_loop,
-            build_runtime_nonlinear_result=build_runtime_nonlinear_result,
-            integrate_nonlinear_from_config=integrate_nonlinear_from_config,
-        ),
-    )
+    return build_runtime_nonlinear_dispatch_deps(sys.modules[__name__])
 
 
 def run_runtime_nonlinear(
