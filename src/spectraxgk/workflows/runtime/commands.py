@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, cast
+from typing import Any, Callable, Sequence, cast
 
 from spectraxgk.workflows.runtime.config import RuntimeConfig
 from spectraxgk.workflows.runtime.results import RuntimeLinearResult, RuntimeNonlinearResult
@@ -378,6 +378,29 @@ def _status_printer(prefix: str) -> Callable[[str], None]:
         print(f"{prefix}: {message}", flush=True)
 
     return _emit
+
+
+def plot_saved_output_command(
+    argv: Sequence[str],
+    *,
+    plot_saved_output: Callable[..., Path],
+) -> int:
+    """Render a saved runtime artifact from the top-level ``--plot`` command."""
+
+    if len(argv) < 2:
+        print("usage: spectraxgk --plot OUTPUT_FILE [--out FIGURE.png]")
+        return 1
+    input_path = argv[1]
+    out_path = None
+    if len(argv) > 2:
+        if len(argv) == 4 and argv[2] == "--out":
+            out_path = argv[3]
+        else:
+            print("usage: spectraxgk --plot OUTPUT_FILE [--out FIGURE.png]")
+            return 1
+    rendered = plot_saved_output(input_path, out=out_path)
+    print(f"saved {rendered}")
+    return 0
 
 
 def run_runtime_linear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:

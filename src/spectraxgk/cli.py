@@ -58,6 +58,7 @@ from spectraxgk.workflows.runtime.commands import (
     RuntimeCommandDeps,
     attach_preloaded_runtime_config,
     print_linear_run_header as _print_linear_run_header,
+    plot_saved_output_command,
     run_runtime_linear_command,
     run_runtime_nonlinear_command,
     scan_runtime_linear_command,
@@ -142,22 +143,6 @@ def _cmd_default_demo() -> int:
         write_runtime_linear_artifacts=write_runtime_linear_artifacts,
     )
     return run_default_linear_demo(deps=deps, example_path=_default_example_config_path())
-
-def _cmd_plot_saved_output(argv: list[str]) -> int:
-    if len(argv) < 2:
-        print("usage: spectraxgk --plot OUTPUT_FILE [--out FIGURE.png]")
-        return 1
-    input_path = argv[1]
-    out_path = None
-    if len(argv) > 2:
-        if len(argv) == 4 and argv[2] == "--out":
-            out_path = argv[3]
-        else:
-            print("usage: spectraxgk --plot OUTPUT_FILE [--out FIGURE.png]")
-            return 1
-    rendered = plot_saved_output(input_path, out=out_path)
-    print(f"saved {rendered}")
-    return 0
 
 
 def _add_quasilinear_flags(cmd: argparse.ArgumentParser) -> None:
@@ -416,7 +401,7 @@ def main() -> int:
     if len(sys.argv) == 1:
         return _cmd_default_demo()
     if len(sys.argv) > 1 and sys.argv[1] == "--plot":
-        return _cmd_plot_saved_output(sys.argv[1:])
+        return plot_saved_output_command(sys.argv[1:], plot_saved_output=plot_saved_output)
 
     if (
         len(sys.argv) > 1
