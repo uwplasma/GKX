@@ -45,16 +45,18 @@ from spectraxgk.objectives.stellarator import (
     stellarator_itg_vmec_boozer_portfolio_objective_from_state,
     stellarator_itg_vmec_boozer_sample_objective_table_from_state,
 )
-from spectraxgk.objectives.stellarator_portfolio import (
+from spectraxgk.objectives.portfolio_artifacts import (
     ReducedPortfolioArtifactGuardConfig,
+    reduced_portfolio_artifact_guard_report,
+)
+from spectraxgk.objectives.portfolio_contracts import (
     StellaratorObjectivePortfolioContract,
     aggregate_objective_portfolio,
-    objective_portfolio_sensitivity_report,
     portfolio_objective_weight_vector,
     portfolio_sample_weight_tensor,
-    reduced_portfolio_artifact_guard_report,
     validate_objective_portfolio_contract,
 )
+from spectraxgk.objectives.portfolio_sensitivity import objective_portfolio_sensitivity_report
 from spectraxgk.objectives.vmec_transport import (
     VMECJAXSpectraxTransportObjective,
     VMECJAXTransportObjectiveConfig,
