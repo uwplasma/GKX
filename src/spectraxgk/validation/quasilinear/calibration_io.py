@@ -10,10 +10,14 @@ import numpy as np
 
 from spectraxgk.validation.quasilinear.calibration_core import QuasilinearCalibrationPoint
 from spectraxgk.validation.quasilinear.calibration_spectrum import integrated_quasilinear_flux_from_spectrum
-from spectraxgk.validation.quasilinear.window import (
+from spectraxgk.validation.quasilinear.window_config import (
     NonlinearWindowConvergenceConfig,
-    nonlinear_window_convergence_report,
+)
+from spectraxgk.validation.quasilinear.window_promotion import (
     nonlinear_window_stats_promotion_ready,
+)
+from spectraxgk.validation.quasilinear.window_statistics import (
+    nonlinear_window_convergence_report,
 )
 
 ROOT = Path(__file__).resolve().parents[2]

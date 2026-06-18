@@ -7,7 +7,9 @@ from typing import Any, Iterable
 
 import numpy as np
 
-from spectraxgk.validation.quasilinear.window import nonlinear_window_stats_promotion_ready
+from spectraxgk.validation.quasilinear.window_promotion import (
+    nonlinear_window_stats_promotion_ready,
+)
 
 @dataclass(frozen=True)
 class QuasilinearCalibrationPoint:
