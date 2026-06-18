@@ -9,7 +9,7 @@ from spectraxgk.operators.nonlinear.domain_decomposition import (
     _relative_trace_error,
     _trace_drift,
 )
-from spectraxgk.operators.nonlinear.parallel_contracts import (
+from spectraxgk.operators.nonlinear.parallel_contracts_spectral import (
     NonlinearSpectralIntegratorIdentityReport,
 )
 from spectraxgk.operators.nonlinear.spectral_core import (

@@ -10,7 +10,7 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 
-from spectraxgk.operators.nonlinear.parallel_contracts import (
+from spectraxgk.operators.nonlinear.parallel_contracts_domain import (
     _NONLINEAR_DOMAIN_CLAIM_SCOPE,
     _NONLINEAR_DOMAIN_GATE_NAME,
     _NONLINEAR_DOMAIN_TRANSPORT_CLAIM_SCOPE,

@@ -8,7 +8,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.operators.nonlinear.parallel_contracts import (
+from spectraxgk.operators.nonlinear.parallel_contracts_spectral import (
     NonlinearSpectralDevicePencilRHSIdentityReport,
     NonlinearSpectralDevicePencilTransportWindowReport,
 )

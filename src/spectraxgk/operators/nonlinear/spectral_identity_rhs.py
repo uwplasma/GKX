@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import jax
 
-from spectraxgk.operators.nonlinear.parallel_contracts import (
+from spectraxgk.operators.nonlinear.parallel_contracts_spectral import (
     NonlinearSpectralRHSIdentityReport,
 )
 from spectraxgk.operators.nonlinear.spectral_core import (

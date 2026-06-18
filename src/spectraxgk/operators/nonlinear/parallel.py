@@ -11,14 +11,12 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 
-from spectraxgk.operators.nonlinear.parallel_contracts import (
-    _STRATEGIES,
-    _STRATEGY_BY_NAME,
+from spectraxgk.operators.nonlinear.parallel_contracts_domain import (
     NonlinearDomainDecompositionPlan,
     NonlinearDomainIdentityReport,
     NonlinearDomainTransportWindowReport,
-    NonlinearParallelStrategy,
-    NonlinearParallelStrategyName,
+)
+from spectraxgk.operators.nonlinear.parallel_contracts_spectral import (
     NonlinearSpectralCommunicationReport,
     NonlinearSpectralDevicePencilFFTBatchModel,
     NonlinearSpectralDevicePencilRHSIdentityReport,
@@ -29,6 +27,12 @@ from spectraxgk.operators.nonlinear.parallel_contracts import (
     NonlinearSpectralPencilTransportWindowReport,
     NonlinearSpectralPencilWorkModel,
     NonlinearSpectralRHSIdentityReport,
+)
+from spectraxgk.operators.nonlinear.parallel_contracts_strategy import (
+    _STRATEGIES,
+    _STRATEGY_BY_NAME,
+    NonlinearParallelStrategy,
+    NonlinearParallelStrategyName,
     ParallelReadiness,
 )
 
@@ -78,19 +82,23 @@ from spectraxgk.operators.nonlinear.spectral_core import (
     nonlinear_spectral_pencil_work_model,
 )
 
-from spectraxgk.operators.nonlinear.spectral_identity import (
+from spectraxgk.operators.nonlinear.spectral_identity_integrator import (
     _append_spectral_observables as _append_spectral_observables,
-    _logical_sharded_nonlinear_spectral_rhs as _logical_sharded_nonlinear_spectral_rhs,
-    _nonlinear_spectral_report_blockers as _nonlinear_spectral_report_blockers,
-    _nonlinear_spectral_rhs_report_blockers as _nonlinear_spectral_rhs_report_blockers,
     _spectral_integrator_observables as _spectral_integrator_observables,
     integrate_logical_decomposed_nonlinear_spectral,
-    logical_decomposed_nonlinear_spectral_rhs,
+    nonlinear_spectral_integrator_identity_gate,
+)
+from spectraxgk.operators.nonlinear.spectral_identity_reports import (
+    _nonlinear_spectral_report_blockers as _nonlinear_spectral_report_blockers,
+    _nonlinear_spectral_rhs_report_blockers as _nonlinear_spectral_rhs_report_blockers,
     nonlinear_spectral_communication_identity_gate,
     nonlinear_spectral_communication_identity_report,
-    nonlinear_spectral_integrator_identity_gate,
-    nonlinear_spectral_rhs_identity_gate,
     nonlinear_spectral_rhs_identity_report,
+)
+from spectraxgk.operators.nonlinear.spectral_identity_rhs import (
+    _logical_sharded_nonlinear_spectral_rhs as _logical_sharded_nonlinear_spectral_rhs,
+    logical_decomposed_nonlinear_spectral_rhs,
+    nonlinear_spectral_rhs_identity_gate,
 )
 
 from spectraxgk.operators.nonlinear.device_z import (
