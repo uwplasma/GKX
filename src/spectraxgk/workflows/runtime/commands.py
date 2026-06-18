@@ -22,6 +22,9 @@ RUNTIME_COMMAND_FIT_KEYS = {
     "mode_method",
 }
 
+_PRELOADED_RUNTIME_CONFIG_ATTR = "_spectraxgk_preloaded_runtime_config"
+_PRELOADED_RUNTIME_DATA_ATTR = "_spectraxgk_preloaded_runtime_data"
+
 
 @dataclass(frozen=True)
 class RuntimeCommandDeps:
@@ -39,6 +42,36 @@ class RuntimeCommandDeps:
     write_runtime_linear_scan_artifacts: Callable[[str | Path, Any], dict[str, str]]
     write_quasilinear_artifacts: Callable[[str | Path, dict[str, Any]], dict[str, str]]
     resolve_runtime_path: Callable[..., str | None]
+
+
+def attach_preloaded_runtime_config(
+    args: Any,
+    cfg: RuntimeConfig,
+    data: dict[str, Any],
+) -> None:
+    """Attach already-loaded runtime TOML data to a parser namespace.
+
+    The generic ``run`` dispatcher inspects a config to choose linear or
+    nonlinear execution. Passing the loaded object forward avoids a second TOML
+    parse while direct subcommands remain self-contained.
+    """
+
+    setattr(args, _PRELOADED_RUNTIME_CONFIG_ATTR, cfg)
+    setattr(args, _PRELOADED_RUNTIME_DATA_ATTR, data)
+
+
+def load_runtime_command_config(
+    args: Any,
+    *,
+    deps: RuntimeCommandDeps,
+) -> tuple[RuntimeConfig, dict[str, Any]]:
+    """Load runtime TOML data, reusing the generic-dispatch preload if present."""
+
+    cfg = getattr(args, _PRELOADED_RUNTIME_CONFIG_ATTR, None)
+    data = getattr(args, _PRELOADED_RUNTIME_DATA_ATTR, None)
+    if cfg is not None and data is not None:
+        return cast(RuntimeConfig, cfg), cast(dict[str, Any], data)
+    return deps.load_runtime_from_toml(args.config)
 
 
 def runtime_output_path(args: Any, cfg: RuntimeConfig) -> str | None:
@@ -159,7 +192,7 @@ def _status_printer(prefix: str) -> Callable[[str], None]:
 def run_runtime_linear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:
     """Execute the runtime-linear subcommand after parser dispatch."""
 
-    cfg, data = deps.load_runtime_from_toml(args.config)
+    cfg, data = load_runtime_command_config(args, deps=deps)
     cfg = apply_runtime_path_overrides(
         cfg, args, resolve_runtime_path=deps.resolve_runtime_path
     )
@@ -256,7 +289,7 @@ def scan_runtime_linear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:
 
     import numpy as np
 
-    cfg, data = deps.load_runtime_from_toml(args.config)
+    cfg, data = load_runtime_command_config(args, deps=deps)
     cfg = apply_quasilinear_overrides(cfg, args)
     scan_cfg = data.get("scan", {})
     fit_cfg = {
@@ -326,7 +359,7 @@ def run_runtime_nonlinear_command(args: Any, *, deps: RuntimeCommandDeps) -> int
 
     import numpy as np
 
-    cfg, data = deps.load_runtime_from_toml(args.config)
+    cfg, data = load_runtime_command_config(args, deps=deps)
     cfg = apply_runtime_path_overrides(
         cfg, args, resolve_runtime_path=deps.resolve_runtime_path
     )

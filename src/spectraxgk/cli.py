@@ -58,6 +58,7 @@ from spectraxgk.workflows.named_cases import (
 from spectraxgk.runtime import run_runtime_linear, run_runtime_scan
 from spectraxgk.workflows.runtime.commands import (
     RuntimeCommandDeps,
+    attach_preloaded_runtime_config,
     print_linear_run_header as _print_linear_run_header,
     run_runtime_linear_command,
     run_runtime_nonlinear_command,
@@ -114,11 +115,12 @@ def _cmd_cyclone_kperp(args: argparse.Namespace) -> int:
 
 def _cmd_run(args: argparse.Namespace) -> int:
     try:
-        cfg, _raw = load_runtime_from_toml(args.config)
+        cfg, data = load_runtime_from_toml(args.config)
     except Exception as exc:
         print(f"Error loading {args.config}: {exc}")
         return 1
 
+    attach_preloaded_runtime_config(args, cfg, data)
     if cfg.physics.nonlinear:
         return _cmd_run_runtime_nonlinear(args)
     return _cmd_run_runtime_linear(args)
