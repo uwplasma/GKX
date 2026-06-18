@@ -10,9 +10,11 @@ import sys
 
 import numpy as np
 
-from spectraxgk.terms.cetg import (
-    build_cetg_model_params,
+from spectraxgk.terms.reduced.cetg_integrator import (
     integrate_cetg_explicit_diagnostics_state,
+)
+from spectraxgk.terms.reduced.cetg_model import (
+    build_cetg_model_params,
     validate_cetg_runtime_config,
 )
 from spectraxgk.diagnostics.growth_rates import (
