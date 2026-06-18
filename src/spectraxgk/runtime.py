@@ -390,15 +390,6 @@ def run_runtime_scan(
     coordination lives in ``workflows/runtime/orchestration.py``.
     """
 
-    deps = SimpleNamespace(
-        resolve_runtime_hl_dims=_resolve_runtime_hl_dims,
-        normalize_linear_solver_name=_normalize_linear_solver_name,
-        parallel_requests_combined_ky_scan=_parallel_requests_combined_ky_scan,
-        run_runtime_scan_batch=_run_runtime_scan_batch,
-        runtime_independent_parallel_plan=_runtime_independent_parallel_plan,
-        independent_map=independent_map,
-        run_runtime_scan_ky_task=_run_runtime_scan_ky_task,
-    )
     return _run_runtime_scan_orchestration_impl(
         cfg,
         ky_values,
@@ -425,7 +416,21 @@ def run_runtime_scan(
         show_progress=show_progress,
         workers=workers,
         parallel_executor=parallel_executor,
-        deps=deps,
+        deps=_runtime_scan_orchestration_deps(),
+    )
+
+
+def _runtime_scan_orchestration_deps() -> SimpleNamespace:
+    """Build ky-scan orchestration dependencies from patchable facade globals."""
+
+    return SimpleNamespace(
+        resolve_runtime_hl_dims=_resolve_runtime_hl_dims,
+        normalize_linear_solver_name=_normalize_linear_solver_name,
+        parallel_requests_combined_ky_scan=_parallel_requests_combined_ky_scan,
+        run_runtime_scan_batch=_run_runtime_scan_batch,
+        runtime_independent_parallel_plan=_runtime_independent_parallel_plan,
+        independent_map=independent_map,
+        run_runtime_scan_ky_task=_run_runtime_scan_ky_task,
     )
 
 
@@ -452,24 +457,8 @@ def _run_runtime_scan_batch(
     fit_signal: str,
     show_progress: bool,
 ) -> RuntimeLinearScanResult:
-    """Compatibility wrapper for the extracted combined-ky scan batch helper."""
+    """Facade wrapper for the extracted combined-ky scan batch helper."""
 
-    deps = SimpleNamespace(
-        build_runtime_geometry=build_runtime_geometry,
-        build_runtime_linear_params=build_runtime_linear_params,
-        build_runtime_linear_terms=build_runtime_linear_terms,
-        build_initial_condition=_build_initial_condition,
-        apply_geometry_grid_defaults=apply_geometry_grid_defaults,
-        build_spectral_grid=build_spectral_grid,
-        select_ky_index=select_ky_index,
-        midplane_index=_midplane_index,
-        integrate_linear_diagnostics=integrate_linear_diagnostics,
-        extract_mode_time_series=extract_mode_time_series,
-        fit_growth_rate_auto_with_stats=fit_growth_rate_auto_with_stats,
-        fit_growth_rate_auto=fit_growth_rate_auto,
-        fit_growth_rate=fit_growth_rate,
-        apply_diagnostic_normalization=apply_diagnostic_normalization,
-    )
     return _run_runtime_scan_batch_impl(
         cfg,
         ky_arr,
@@ -491,7 +480,28 @@ def _run_runtime_scan_batch(
         mode_method=mode_method,
         fit_signal=fit_signal,
         show_progress=show_progress,
-        deps=deps,
+        deps=_runtime_scan_batch_deps(),
+    )
+
+
+def _runtime_scan_batch_deps() -> SimpleNamespace:
+    """Build combined-ky scan dependencies from patchable facade globals."""
+
+    return SimpleNamespace(
+        build_runtime_geometry=build_runtime_geometry,
+        build_runtime_linear_params=build_runtime_linear_params,
+        build_runtime_linear_terms=build_runtime_linear_terms,
+        build_initial_condition=_build_initial_condition,
+        apply_geometry_grid_defaults=apply_geometry_grid_defaults,
+        build_spectral_grid=build_spectral_grid,
+        select_ky_index=select_ky_index,
+        midplane_index=_midplane_index,
+        integrate_linear_diagnostics=integrate_linear_diagnostics,
+        extract_mode_time_series=extract_mode_time_series,
+        fit_growth_rate_auto_with_stats=fit_growth_rate_auto_with_stats,
+        fit_growth_rate_auto=fit_growth_rate_auto,
+        fit_growth_rate=fit_growth_rate,
+        apply_diagnostic_normalization=apply_diagnostic_normalization,
     )
 
 
