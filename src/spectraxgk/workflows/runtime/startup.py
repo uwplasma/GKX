@@ -33,18 +33,22 @@ from spectraxgk.workflows.runtime.initial_conditions import (
     _build_single_phi_gaussian_profile,
     _centered_glibc_random_pairs,
     _dealiased_initial_mode_pairs,
-    _density_moments_for_target_phi,
     _enforce_full_ky_hermitian,
     _expand_ky,
     _load_initial_state_from_file,
     _periodic_zp_from_grid,
     _reshape_netcdf_state,
 )
+from spectraxgk.workflows.runtime.initial_phi import (
+    _as_runtime_species_array,
+    _density_moments_for_target_phi,
+)
 
 __all__ = [
     "_build_gaussian_profile",
     "_build_initial_condition",
     "_build_single_phi_gaussian_profile",
+    "_as_runtime_species_array",
     "_centered_glibc_random_pairs",
     "_dealiased_initial_mode_pairs",
     "_density_moments_for_target_phi",
