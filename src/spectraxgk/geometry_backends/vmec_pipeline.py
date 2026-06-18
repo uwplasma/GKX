@@ -105,17 +105,17 @@ def generate_vmec_eik_internal(
     )
 
     # Equal-arc remap onto uniform theta grid
-    _gradpar_eqarc, arrays_gx = _equal_arc_remap(
+    _gradpar_eqarc, arrays_equal_arc = _equal_arc_remap(
         theta=theta_cut,
         arrays=arrays_cut,
         ntheta=ntheta,
     )
 
-    R_arr = arrays_gx["Rplot"]
+    R_arr = arrays_equal_arc["Rplot"]
     Rmaj = float((np.max(R_arr) + np.min(R_arr)) / 2.0)
 
     profiles: dict[str, Any] = {
-        **arrays_gx,
+        **arrays_equal_arc,
         "dpsidrho": dpsidrho,
         "kxfac": 1.0,
         "Rmaj": Rmaj,
