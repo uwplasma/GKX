@@ -44,6 +44,21 @@ class RuntimeCommandDeps:
     resolve_runtime_path: Callable[..., str | None]
 
 
+def build_runtime_command_deps(facade: Any) -> RuntimeCommandDeps:
+    """Build runtime command dependencies from a patchable executable facade."""
+
+    return RuntimeCommandDeps(
+        load_runtime_from_toml=facade.load_runtime_from_toml,
+        run_runtime_linear=facade.run_runtime_linear,
+        run_runtime_scan=facade.run_runtime_scan,
+        run_runtime_nonlinear_with_artifacts=facade.run_runtime_nonlinear_with_artifacts,
+        write_runtime_linear_artifacts=facade.write_runtime_linear_artifacts,
+        write_runtime_linear_scan_artifacts=facade.write_runtime_linear_scan_artifacts,
+        write_quasilinear_artifacts=facade.write_quasilinear_artifacts,
+        resolve_runtime_path=facade.resolve_runtime_path,
+    )
+
+
 @dataclass(frozen=True)
 class RuntimeLinearCommandOptions:
     """Resolved executable options for one linear runtime command."""

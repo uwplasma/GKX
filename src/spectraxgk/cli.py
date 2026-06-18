@@ -57,6 +57,7 @@ from spectraxgk.runtime import run_runtime_linear, run_runtime_scan
 from spectraxgk.workflows.runtime.commands import (
     RuntimeCommandDeps,
     attach_preloaded_runtime_config,
+    build_runtime_command_deps,
     print_linear_run_header as _print_linear_run_header,
     plot_saved_output_command,
     run_runtime_linear_command,
@@ -81,6 +82,19 @@ _KNOWN_COMMANDS = {
     "scan-runtime-linear",
     "run-runtime-nonlinear",
 }
+
+# These imports remain on the executable facade so tests and downstream callers
+# can patch command dependencies without reaching into workflow internals.
+_PATCHABLE_RUNTIME_COMMAND_GLOBALS = (
+    load_runtime_from_toml,
+    resolve_runtime_path,
+    run_runtime_linear,
+    run_runtime_scan,
+    run_runtime_nonlinear_with_artifacts,
+    write_runtime_linear_artifacts,
+    write_runtime_linear_scan_artifacts,
+    write_quasilinear_artifacts,
+)
 
 
 def _is_runtime_toml(data: dict) -> bool:
@@ -464,16 +478,7 @@ def _named_linear_command_deps() -> NamedLinearCommandDeps:
 
 
 def _runtime_command_deps() -> RuntimeCommandDeps:
-    return RuntimeCommandDeps(
-        load_runtime_from_toml=load_runtime_from_toml,
-        run_runtime_linear=run_runtime_linear,
-        run_runtime_scan=run_runtime_scan,
-        run_runtime_nonlinear_with_artifacts=run_runtime_nonlinear_with_artifacts,
-        write_runtime_linear_artifacts=write_runtime_linear_artifacts,
-        write_runtime_linear_scan_artifacts=write_runtime_linear_scan_artifacts,
-        write_quasilinear_artifacts=write_quasilinear_artifacts,
-        resolve_runtime_path=resolve_runtime_path,
-    )
+    return build_runtime_command_deps(sys.modules[__name__])
 
 
 def _cmd_run_runtime_linear(args: argparse.Namespace) -> int:
