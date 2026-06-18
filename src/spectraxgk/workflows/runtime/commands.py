@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Sequence, cast
+from typing import Any, Callable, Mapping, Sequence, cast
 
 from spectraxgk.workflows.runtime.config import RuntimeConfig
 from spectraxgk.workflows.runtime.results import RuntimeLinearResult, RuntimeNonlinearResult
@@ -380,6 +380,14 @@ def _status_printer(prefix: str) -> Callable[[str], None]:
     return _emit
 
 
+def _print_saved_paths(paths: Mapping[str, str], keys: Sequence[str]) -> None:
+    """Print saved artifact paths in the command-defined display order."""
+
+    for key in keys:
+        if key in paths:
+            print(f"saved {paths[key]}")
+
+
 def plot_saved_output_command(
     argv: Sequence[str],
     *,
@@ -452,22 +460,21 @@ def run_runtime_linear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:
     out_path = runtime_output_path(args, cfg)
     if out_path is not None:
         paths = deps.write_runtime_linear_artifacts(out_path, res)
-        print(f"saved {paths['summary']}")
-        for key in (
-            "timeseries",
-            "eigenfunction",
-            "state",
-            "quasilinear_summary",
-            "quasilinear_species",
-        ):
-            if key in paths:
-                print(f"saved {paths[key]}")
+        _print_saved_paths(
+            paths,
+            (
+                "summary",
+                "timeseries",
+                "eigenfunction",
+                "state",
+                "quasilinear_summary",
+                "quasilinear_species",
+            ),
+        )
     ql_output = getattr(args, "ql_output", None) or cfg.quasilinear.output_path
     if ql_output is not None and res.quasilinear is not None:
         paths = deps.write_quasilinear_artifacts(str(ql_output), res.quasilinear)
-        print(f"saved {paths['quasilinear_summary']}")
-        if "quasilinear_species" in paths:
-            print(f"saved {paths['quasilinear_species']}")
+        _print_saved_paths(paths, ("quasilinear_summary", "quasilinear_species"))
     return 0
 
 
@@ -502,10 +509,7 @@ def scan_runtime_linear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:
     out_path = runtime_output_path(args, cfg) or cfg.quasilinear.output_path
     if out_path is not None:
         paths = deps.write_runtime_linear_scan_artifacts(out_path, scan)
-        print(f"saved {paths['summary']}")
-        print(f"saved {paths['scan']}")
-        if "quasilinear_spectrum" in paths:
-            print(f"saved {paths['quasilinear_spectrum']}")
+        _print_saved_paths(paths, ("summary", "scan", "quasilinear_spectrum"))
     return 0
 
 
@@ -567,7 +571,7 @@ def run_runtime_nonlinear_command(args: Any, *, deps: RuntimeCommandDeps) -> int
         f"Wapar={float(diag.Wapar_t[-1]):.6g}"
     )
     if out_path is not None:
-        for key in ("summary", "diagnostics", "state", "out", "big", "restart"):
-            if key in paths:
-                print(f"saved {paths[key]}")
+        _print_saved_paths(
+            paths, ("summary", "diagnostics", "state", "out", "big", "restart")
+        )
     return 0
