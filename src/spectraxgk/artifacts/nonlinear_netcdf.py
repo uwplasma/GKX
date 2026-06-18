@@ -27,17 +27,11 @@ from spectraxgk.artifacts.spectral_layout import (
     _condense_kx_for_output,
     _condense_ky_for_output,
     _condense_kykx_for_output,
-    _dealiased_spectral_field,
     _dealiased_kx_values,
     _dealiased_ky_values,
     _real_space_axis,
     _require_netcdf4,
-    _restart_to_netcdf_layout,
     _species_matrix,
-    _spectral_species_to_ri,
-    _spectral_to_ri,
-    _spectral_to_xy,
-    _state_basis_moments,
     _write_runtime_root_metadata,
 )
 from spectraxgk.artifacts.io import (
@@ -48,48 +42,34 @@ from spectraxgk.artifacts.nonlinear_diagnostics import (
     _resolved_species_time,
     _resolve_restart_path,
 )
+from spectraxgk.artifacts.nonlinear_netcdf_fields import _write_big_netcdf
+from spectraxgk.artifacts import nonlinear_netcdf_geometry as _geometry_helpers
+from spectraxgk.artifacts.nonlinear_netcdf_restart import _write_restart_netcdf
+
+
+def _sync_geometry_helper_dependencies() -> None:
+    """Preserve the historical monkeypatch seam on this facade module."""
+
+    _geometry_helpers.apply_geometry_grid_defaults = apply_geometry_grid_defaults
+    _geometry_helpers.ensure_flux_tube_geometry_data = ensure_flux_tube_geometry_data
+    _geometry_helpers.build_spectral_grid = build_spectral_grid
+    _geometry_helpers.real_fft_ordered_kx = real_fft_ordered_kx
+    _geometry_helpers.real_fft_unique_ky = real_fft_unique_ky
+    _geometry_helpers.build_linear_cache = build_linear_cache
+    _geometry_helpers.build_runtime_geometry = build_runtime_geometry
+    _geometry_helpers.build_runtime_linear_params = build_runtime_linear_params
 
 
 def _build_output_grid_and_geometry(cfg: Any) -> tuple[Any, Any]:
     """Resolve artifact output onto the same geometry-implied grid as the solver."""
 
-    geom_raw = build_runtime_geometry(cfg)
-    grid_cfg = apply_geometry_grid_defaults(geom_raw, cfg.grid)
-    grid = build_spectral_grid(grid_cfg)
-    geom = ensure_flux_tube_geometry_data(geom_raw, grid.z)
-    return grid, geom
+    _sync_geometry_helper_dependencies()
+    return _geometry_helpers._build_output_grid_and_geometry(cfg)
 
 
 def _particle_moments(state: np.ndarray, cfg: Any) -> dict[str, np.ndarray]:
-    state_arr = np.asarray(state)
-    ns, nl, nm, _ny, _nx, _nz = state_arr.shape
-    grid, geom = _build_output_grid_and_geometry(cfg)
-    params = build_runtime_linear_params(cfg, Nm=nm, geom=geom)
-    cache = build_linear_cache(grid, geom, params, nl, nm)
-    Jl = np.asarray(cache.Jl)
-    JlB = np.asarray(cache.JlB)
-    if Jl.ndim == 4:
-        Jl = Jl[None, ...]
-    if JlB.ndim == 4:
-        JlB = JlB[None, ...]
-    sqrt_b = np.sqrt(np.maximum(np.asarray(cache.kperp2, dtype=np.float32), 0.0))
-    g0 = (
-        state_arr[:, :, 0, ...]
-        if nm >= 1
-        else np.zeros((ns, nl) + state_arr.shape[3:], dtype=state_arr.dtype)
-    )
-    g1 = state_arr[:, :, 1, ...] if nm >= 2 else np.zeros_like(g0)
-    g2 = state_arr[:, :, 2, ...] if nm >= 3 else np.zeros_like(g0)
-    particle_density = np.sum(Jl * g0, axis=1)
-    particle_upar = np.sum(Jl * g1, axis=1)
-    particle_uperp = sqrt_b[None, ...] * np.sum(JlB * g0, axis=1)
-    particle_temp = np.sqrt(2.0, dtype=np.float32) * np.sum(Jl * g2, axis=1)
-    return {
-        "ParticleDensity": particle_density,
-        "ParticleUpar": particle_upar,
-        "ParticleUperp": particle_uperp,
-        "ParticleTemp": particle_temp,
-    }
+    _sync_geometry_helper_dependencies()
+    return _geometry_helpers._particle_moments(state, cfg)
 
 
 def _write_geometry_group(
@@ -99,111 +79,12 @@ def _write_geometry_group(
     grid: Any | None = None,
     geom: Any | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, Any]:
-    if grid is None or geom is None:
-        grid, geom = _build_output_grid_and_geometry(cfg)
-    theta = np.asarray(grid.z, dtype=np.float32)
-    group.createVariable("bmag", "f4", ("theta",))[:] = np.asarray(
-        geom.bmag_profile, dtype=np.float32
-    )
-    group.createVariable("bgrad", "f4", ("theta",))[:] = np.asarray(
-        geom.bgrad_profile, dtype=np.float32
-    )
-    group.createVariable("gbdrift", "f4", ("theta",))[:] = np.asarray(
-        geom.gb_profile, dtype=np.float32
-    )
-    group.createVariable("gbdrift0", "f4", ("theta",))[:] = np.asarray(
-        geom.gb0_profile, dtype=np.float32
-    )
-    group.createVariable("cvdrift", "f4", ("theta",))[:] = np.asarray(
-        geom.cv_profile, dtype=np.float32
-    )
-    group.createVariable("cvdrift0", "f4", ("theta",))[:] = np.asarray(
-        geom.cv0_profile, dtype=np.float32
-    )
-    group.createVariable("gds2", "f4", ("theta",))[:] = np.asarray(
-        geom.gds2_profile, dtype=np.float32
-    )
-    group.createVariable("gds21", "f4", ("theta",))[:] = np.asarray(
-        geom.gds21_profile, dtype=np.float32
-    )
-    group.createVariable("gds22", "f4", ("theta",))[:] = np.asarray(
-        geom.gds22_profile, dtype=np.float32
-    )
-    group.createVariable("grho", "f4", ("theta",))[:] = np.asarray(
-        geom.grho_profile, dtype=np.float32
-    )
-    group.createVariable("jacobian", "f4", ("theta",))[:] = np.asarray(
-        geom.jacobian_profile, dtype=np.float32
-    )
-    group.createVariable("gradpar", "f4", ())[:] = np.float32(geom.gradpar_value)
-    group.createVariable("nperiod", "i4", ())[:] = np.int32(
-        cfg.grid.nperiod if cfg.grid.nperiod is not None else 1
-    )
-    group.createVariable("q", "f4", ())[:] = np.float32(geom.q)
-    group.createVariable("shat", "f4", ())[:] = np.float32(geom.s_hat)
-    group.createVariable("shift", "f4", ())[:] = np.float32(
-        getattr(cfg.geometry, "shift", 0.0)
-    )
-    group.createVariable("rmaj", "f4", ())[:] = np.float32(geom.R0)
-    group.createVariable("aminor", "f4", ())[:] = np.float32(geom.epsilon * geom.R0)
-    group.createVariable("kxfac", "f4", ())[:] = np.float32(geom.kxfac)
-    group.createVariable("drhodpsi", "f4", ())[:] = np.float32(1.0)
-    group.createVariable("theta_scale", "f4", ())[:] = np.float32(geom.theta_scale)
-    group.createVariable("nfp", "i4", ())[:] = np.int32(geom.nfp)
-    group.createVariable("alpha", "f4", ())[:] = np.float32(geom.alpha)
-    group.createVariable("zeta_center", "f4", ())[:] = np.float32(0.0)
-    return (
-        theta,
-        np.asarray(real_fft_ordered_kx(grid.kx), dtype=np.float32),
-        np.asarray(real_fft_unique_ky(grid.ky), dtype=np.float32),
-        geom,
-    )
+    _sync_geometry_helper_dependencies()
+    return _geometry_helpers._write_geometry_group(group, cfg, grid=grid, geom=geom)
 
 
 def _write_input_parameters_group(group: Any, cfg: Any, geom: Any) -> None:
-    group.createVariable("igeo", "i4", ())[:] = np.int32(
-        0 if str(cfg.geometry.model).lower() == "miller" else 1
-    )
-    group.createVariable("slab", "i4", ())[:] = np.int32(
-        1 if str(cfg.geometry.model).lower() == "slab" else 0
-    )
-    group.createVariable("const_curv", "i4", ())[:] = np.int32(0)
-    group.createVariable("geofile_dum", "i4", ())[:] = np.int32(
-        1 if getattr(cfg.geometry, "geometry_file", None) else 0
-    )
-    group.createVariable("drhodpsi", "f4", ())[:] = np.float32(1.0)
-    group.createVariable("kxfac", "f4", ())[:] = np.float32(geom.kxfac)
-    group.createVariable("Rmaj", "f4", ())[:] = np.float32(geom.R0)
-    group.createVariable("shift", "f4", ())[:] = np.float32(
-        getattr(cfg.geometry, "shift", 0.0)
-    )
-    group.createVariable("eps", "f4", ())[:] = np.float32(geom.epsilon)
-    group.createVariable("q", "f4", ())[:] = np.float32(geom.q)
-    group.createVariable("shat", "f4", ())[:] = np.float32(geom.s_hat)
-    group.createVariable("kappa", "f4", ())[:] = np.float32(
-        getattr(cfg.geometry, "kappa", 1.0)
-    )
-    group.createVariable("kappa_prime", "f4", ())[:] = np.float32(
-        getattr(cfg.geometry, "akappri", 0.0)
-    )
-    group.createVariable("tri", "f4", ())[:] = np.float32(
-        getattr(cfg.geometry, "tri", 0.0)
-    )
-    group.createVariable("tri_prime", "f4", ())[:] = np.float32(
-        getattr(cfg.geometry, "tripri", 0.0)
-    )
-    group.createVariable("beta", "f4", ())[:] = np.float32(cfg.physics.beta)
-    group.createVariable("zero_shat", "i4", ())[:] = np.int32(
-        abs(float(geom.s_hat)) < 1.0e-30
-    )
-    group.createVariable("B_ref", "f4", ())[:] = np.float32(geom.B0)
-    group.createVariable("a_ref", "f4", ())[:] = np.float32(
-        max(float(geom.epsilon * geom.R0), 1.0)
-    )
-    group.createVariable("grhoavg", "f4", ())[:] = np.float32(
-        np.mean(np.asarray(geom.grho_profile, dtype=np.float32))
-    )
-    group.createVariable("surfarea", "f4", ())[:] = np.float32(np.nan)
+    return _geometry_helpers._write_input_parameters_group(group, cfg, geom)
 
 
 def _write_nonlinear_netcdf_outputs(
@@ -686,115 +567,32 @@ def _write_nonlinear_netcdf_outputs(
 
     paths = {"out": str(out_nc_path)}
 
-    if result.state is not None:
-        restart_state_layout = _restart_to_netcdf_layout(np.asarray(result.state))
-        _ensure_parent(restart_path)
-        with Dataset(restart_path, "w") as root:
-            root.createDimension("Nspecies", restart_state_layout.shape[0])
-            root.createDimension("Nm", restart_state_layout.shape[1])
-            root.createDimension("Nl", restart_state_layout.shape[2])
-            root.createDimension("Nz", restart_state_layout.shape[3])
-            root.createDimension("Nkx", restart_state_layout.shape[4])
-            root.createDimension("Nky", restart_state_layout.shape[5])
-            root.createDimension("ri", 2)
-            root.createVariable(
-                "G", "f4", ("Nspecies", "Nm", "Nl", "Nz", "Nkx", "Nky", "ri")
-            )[:, :, :, :, :, :, :] = restart_state_layout
-            time_last = float(time_vals[-1]) if time_vals.size else 0.0
-            root.createVariable("time", "f8", ())[:] = time_last
-        paths["restart"] = str(restart_path)
+    restart_written = _write_restart_netcdf(
+        Dataset,
+        restart_path,
+        result.state,
+        time_vals,
+    )
+    if restart_written is not None:
+        paths["restart"] = restart_written
 
-    if result.fields is not None:
-        _ensure_parent(big_path)
-        phi_full = np.asarray(result.fields.phi)
-        apar_full = (
-            np.zeros_like(phi_full)
-            if result.fields.apar is None
-            else np.asarray(result.fields.apar)
-        )
-        bpar_full = (
-            np.zeros_like(phi_full)
-            if result.fields.bpar is None
-            else np.asarray(result.fields.bpar)
-        )
-        phi_active = _dealiased_spectral_field(phi_full)
-        apar_active = _dealiased_spectral_field(apar_full)
-        bpar_active = _dealiased_spectral_field(bpar_full)
-        basis_moments = (
-            _state_basis_moments(np.asarray(result.state))
-            if result.state is not None
-            else {}
-        )
-        particle_moments = (
-            _particle_moments(np.asarray(result.state), cfg)
-            if result.state is not None
-            else {}
-        )
-        with Dataset(big_path, "w") as root:
-            root.createDimension("ri", 2)
-            root.createDimension("x", x_vals.size)
-            root.createDimension("y", y_vals.size)
-            root.createDimension("theta", theta.size)
-            root.createDimension("kx", kx_vals.size)
-            root.createDimension("ky", ky_vals.size)
-            root.createDimension("kz", theta.size)
-            root.createDimension("m", nm)
-            root.createDimension("l", nl)
-            root.createDimension("s", nspecies)
-            root.createDimension("time", 1)
-            _write_runtime_root_metadata(root, cfg, nspecies=nspecies, nl=nl, nm=nm)
-            grids = root.createGroup("Grids")
-            grids.createVariable("time", "f8", ("time",))[:] = np.asarray(
-                [float(time_vals[-1]) if time_vals.size else 0.0], dtype=np.float64
-            )
-            grids.createVariable("kx", "f4", ("kx",))[:] = kx_vals
-            grids.createVariable("ky", "f4", ("ky",))[:] = ky_vals
-            grids.createVariable("kz", "f4", ("kz",))[:] = theta
-            grids.createVariable("x", "f4", ("x",))[:] = x_vals
-            grids.createVariable("y", "f4", ("y",))[:] = y_vals
-            grids.createVariable("theta", "f4", ("theta",))[:] = theta
-            geom_group = root.createGroup("Geometry")
-            _write_geometry_group(geom_group, cfg)
-            diag_group = root.createGroup("Diagnostics")
-            diag_group.createVariable("Phi", "f4", ("time", "ky", "kx", "theta", "ri"))[
-                0, ...
-            ] = _spectral_to_ri(phi_active)
-            diag_group.createVariable(
-                "Apar", "f4", ("time", "ky", "kx", "theta", "ri")
-            )[0, ...] = _spectral_to_ri(apar_active)
-            diag_group.createVariable(
-                "Bpar", "f4", ("time", "ky", "kx", "theta", "ri")
-            )[0, ...] = _spectral_to_ri(bpar_active)
-            diag_group.createVariable("PhiXY", "f4", ("time", "y", "x", "theta"))[
-                0, ...
-            ] = _spectral_to_xy(phi_full)
-            diag_group.createVariable("AparXY", "f4", ("time", "y", "x", "theta"))[
-                0, ...
-            ] = _spectral_to_xy(apar_full)
-            diag_group.createVariable("BparXY", "f4", ("time", "y", "x", "theta"))[
-                0, ...
-            ] = _spectral_to_xy(bpar_full)
-            for name, values in basis_moments.items():
-                active = _dealiased_spectral_field(values, ky_axis=1, kx_axis=2)
-                diag_group.createVariable(
-                    name, "f4", ("time", "s", "ky", "kx", "theta", "ri")
-                )[0, ...] = _spectral_species_to_ri(active)
-                diag_group.createVariable(
-                    f"{name}XY", "f4", ("time", "s", "y", "x", "theta")
-                )[0, ...] = np.real(np.fft.ifft2(values, axes=(1, 2))).astype(
-                    np.float32, copy=False
-                )
-            for name, values in particle_moments.items():
-                active = _dealiased_spectral_field(values, ky_axis=1, kx_axis=2)
-                diag_group.createVariable(
-                    name, "f4", ("time", "s", "ky", "kx", "theta", "ri")
-                )[0, ...] = _spectral_species_to_ri(active)
-                diag_group.createVariable(
-                    f"{name}XY", "f4", ("time", "s", "y", "x", "theta")
-                )[0, ...] = np.real(np.fft.ifft2(values, axes=(1, 2))).astype(
-                    np.float32, copy=False
-                )
-        paths["big"] = str(big_path)
+    big_written = _write_big_netcdf(
+        Dataset,
+        big_path,
+        result,
+        cfg,
+        x_vals=x_vals,
+        y_vals=y_vals,
+        theta=theta,
+        kx_vals=kx_vals,
+        ky_vals=ky_vals,
+        nspecies=nspecies,
+        nl=nl,
+        nm=nm,
+        time_vals=time_vals,
+    )
+    if big_written is not None:
+        paths["big"] = big_written
 
     return paths
 
