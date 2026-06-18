@@ -4,10 +4,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from spectraxgk.parallel.core import *  # noqa: F403
-from spectraxgk.parallel.core import __all__ as _core_all
+from spectraxgk.parallel.batch import *  # noqa: F403
+from spectraxgk.parallel.batch import __all__ as _batch_all
 from spectraxgk.parallel.decomposition import *  # noqa: F403
 from spectraxgk.parallel.decomposition import __all__ as _decomposition_all
+from spectraxgk.parallel.identity import *  # noqa: F403
+from spectraxgk.parallel.identity import __all__ as _identity_all
+from spectraxgk.parallel.independent import *  # noqa: F403
+from spectraxgk.parallel.independent import __all__ as _independent_all
 from spectraxgk.parallel.state import *  # noqa: F403
 from spectraxgk.parallel.state import __all__ as _state_all
 from spectraxgk.parallel.velocity import *  # noqa: F403
@@ -34,7 +38,9 @@ def __getattr__(name: str) -> Any:
 __all__ = list(
     dict.fromkeys(
         [
-            *_core_all,
+            *_identity_all,
+            *_batch_all,
+            *_independent_all,
             *_decomposition_all,
             *_state_all,
             *_velocity_all,
