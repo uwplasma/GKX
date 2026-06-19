@@ -1,9 +1,9 @@
 """Diagnostic tuple assembly for nonlinear time integration.
 
-The nonlinear integrators keep their public compatibility facade in
-``spectraxgk.nonlinear``.  This module owns the pure state-to-diagnostics
-assembly logic, with diagnostic kernels injected by the facade so tests and
-interactive debugging can still monkeypatch the public module-level functions.
+The nonlinear integrators keep their public facade in ``spectraxgk.nonlinear``.
+This module owns the pure state-to-diagnostics assembly logic, with diagnostic
+kernels injected by the facade so tests and interactive debugging can still
+monkeypatch the public module-level functions.
 """
 
 from __future__ import annotations

@@ -1,8 +1,8 @@
 """Default normalization and Krylov policies for shipped benchmark lanes.
 
-The runner functions in :mod:`spectraxgk.benchmarks` keep these names available
-for compatibility, but the constants live here so benchmark policy is separated
-from the long-running scan orchestration.
+The runner functions in :mod:`spectraxgk.benchmarks` re-export these constants,
+but benchmark policy lives here so it is separated from long-running scan
+orchestration.
 """
 
 from __future__ import annotations
@@ -33,9 +33,9 @@ __all__ = [
     "KBM_RHO_STAR",
     "KINETIC_KRYLOV_DEFAULT",
     "KINETIC_KRYLOV_REFERENCE_ALIGNED",
-    "Kinetic_OMEGA_D_SCALE",
-    "Kinetic_OMEGA_STAR_SCALE",
-    "Kinetic_RHO_STAR",
+    "KINETIC_OMEGA_D_SCALE",
+    "KINETIC_OMEGA_STAR_SCALE",
+    "KINETIC_RHO_STAR",
     "TEM_KRYLOV_DEFAULT",
     "TEM_OMEGA_D_SCALE",
     "TEM_OMEGA_STAR_SCALE",
@@ -51,9 +51,9 @@ ETG_OMEGA_D_SCALE = ETG_NORMALIZATION.omega_d_scale
 ETG_OMEGA_STAR_SCALE = ETG_NORMALIZATION.omega_star_scale
 ETG_RHO_STAR = ETG_NORMALIZATION.rho_star
 
-Kinetic_OMEGA_D_SCALE = KINETIC_NORMALIZATION.omega_d_scale
-Kinetic_OMEGA_STAR_SCALE = KINETIC_NORMALIZATION.omega_star_scale
-Kinetic_RHO_STAR = KINETIC_NORMALIZATION.rho_star
+KINETIC_OMEGA_D_SCALE = KINETIC_NORMALIZATION.omega_d_scale
+KINETIC_OMEGA_STAR_SCALE = KINETIC_NORMALIZATION.omega_star_scale
+KINETIC_RHO_STAR = KINETIC_NORMALIZATION.rho_star
 
 TEM_OMEGA_D_SCALE = TEM_NORMALIZATION.omega_d_scale
 TEM_OMEGA_STAR_SCALE = TEM_NORMALIZATION.omega_star_scale

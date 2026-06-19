@@ -1,4 +1,4 @@
-"""Small numerical compatibility helpers for VMEC imported geometry."""
+"""Small numerical helpers for VMEC imported geometry."""
 
 from __future__ import annotations
 

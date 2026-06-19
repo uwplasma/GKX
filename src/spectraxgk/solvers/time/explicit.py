@@ -101,7 +101,7 @@ def _linear_explicit_step(
     *,
     method: str,
 ):
-    """Compatibility wrapper preserving the explicit-module monkeypatch seam."""
+    """Explicit-module step seam used by tests and interactive diagnostics."""
 
     return _linear_explicit_step_impl(
         G,

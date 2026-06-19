@@ -192,8 +192,8 @@ def collision_damping(
     """Assemble collision damping from cached low-rank factors.
 
     Runtime caches store ``lb_lam`` as the Hermite-Laguerre Lenard-Bernstein
-    diagonal only, with shape ``(Nl, Nm)``. Older tests may still provide a
-    pre-expanded array; support that for compatibility.
+    diagonal only, with shape ``(Nl, Nm)``. Direct unit tests may also provide
+    a pre-expanded array to exercise the damping assembly policy.
     """
 
     lb_lam = cache.lb_lam.astype(real_dtype)
@@ -217,4 +217,3 @@ def collision_damping(
         return damping.astype(real_dtype)
 
     return (jnp.asarray(params.nu, dtype=real_dtype) * lb_lam).astype(real_dtype)
-

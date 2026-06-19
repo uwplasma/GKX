@@ -17,9 +17,9 @@ from spectraxgk.diagnostics.analysis import (
 from spectraxgk.validation.benchmarks.defaults import (
     KINETIC_KRYLOV_DEFAULT,
     KINETIC_KRYLOV_REFERENCE_ALIGNED,
-    Kinetic_OMEGA_D_SCALE,
-    Kinetic_OMEGA_STAR_SCALE,
-    Kinetic_RHO_STAR,
+    KINETIC_OMEGA_D_SCALE,
+    KINETIC_OMEGA_STAR_SCALE,
+    KINETIC_RHO_STAR,
 )
 from spectraxgk.validation.benchmarks.batching import (
     _iter_ky_batches,
@@ -118,9 +118,9 @@ def run_kinetic_scan(
         params = _two_species_params(
             cfg.model,
             kpar_scale=float(geom.gradpar()),
-            omega_d_scale=Kinetic_OMEGA_D_SCALE,
-            omega_star_scale=Kinetic_OMEGA_STAR_SCALE,
-            rho_star=Kinetic_RHO_STAR,
+            omega_d_scale=KINETIC_OMEGA_D_SCALE,
+            omega_star_scale=KINETIC_OMEGA_STAR_SCALE,
+            rho_star=KINETIC_RHO_STAR,
             damp_ends_amp=damp_ends_amp,
             damp_ends_widthfrac=damp_ends_widthfrac,
             nhermite=Nm,

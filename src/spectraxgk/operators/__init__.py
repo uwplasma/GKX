@@ -1,4 +1,4 @@
-"""Operator kernels and compatibility exports.
+"""Operator kernels exposed by the public operator package.
 
 The public ``spectraxgk.operators`` surface remains intentionally small while
 implementation modules live in domain subpackages.
