@@ -26,6 +26,96 @@ from spectraxgk.operators.nonlinear.spectral_core import (
     _within_abs_or_rel_tolerance,
 )
 
+_TRANSPORT_TRACE_KEYS = (
+    "free_energy",
+    "field_energy",
+    "physical_flux",
+    "bracket_rms",
+)
+
+
+def _new_transport_trace_dict() -> dict[str, list[float]]:
+    """Return empty scalar traces used by the device-z transport-window gate."""
+
+    return {key: [] for key in _TRANSPORT_TRACE_KEYS}
+
+
+def _transport_trace_tuples(
+    traces: dict[str, list[float]],
+) -> dict[str, tuple[float, ...]]:
+    """Freeze mutable transport traces for report assembly."""
+
+    return {key: tuple(traces[key]) for key in _TRANSPORT_TRACE_KEYS}
+
+
+def _transport_trace_error_pairs(
+    serial: dict[str, tuple[float, ...]],
+    device: dict[str, tuple[float, ...]],
+    *,
+    floor: float,
+) -> dict[str, tuple[float, float]]:
+    """Return max absolute/relative errors for each transport trace."""
+
+    return {
+        key: _relative_trace_error(serial[key], device[key], floor=floor)
+        for key in _TRANSPORT_TRACE_KEYS
+    }
+
+
+def _blocked_device_z_transport_window_report(
+    *,
+    state_shape: tuple[int, int, int, int, int],
+    axis_name: str,
+    requested_count: int,
+    active_count: int,
+    steps: int,
+    dt: float,
+    atol: float,
+    rtol: float,
+    blocked_reasons: Sequence[str],
+    serial_traces: dict[str, list[float]],
+) -> NonlinearSpectralDevicePencilTransportWindowReport:
+    """Return a fail-closed transport-window report before sharded execution."""
+
+    serial = _transport_trace_tuples(serial_traces)
+    return NonlinearSpectralDevicePencilTransportWindowReport(
+        state_shape=state_shape,
+        sharded_axis="z",
+        axis_name=str(axis_name),
+        requested_device_count=int(requested_count),
+        active_device_count=int(active_count),
+        steps=int(steps),
+        dt=float(dt),
+        atol=float(atol),
+        rtol=float(rtol),
+        final_state_max_abs_error=float("inf"),
+        final_state_max_rel_error=float("inf"),
+        free_energy_trace_max_abs_error=float("inf"),
+        free_energy_trace_max_rel_error=float("inf"),
+        field_energy_trace_max_abs_error=float("inf"),
+        field_energy_trace_max_rel_error=float("inf"),
+        physical_flux_trace_max_abs_error=float("inf"),
+        physical_flux_trace_max_rel_error=float("inf"),
+        bracket_rms_trace_max_abs_error=float("inf"),
+        bracket_rms_trace_max_rel_error=float("inf"),
+        serial_free_energy_drift=_trace_drift(serial["free_energy"]),
+        device_free_energy_drift=0.0,
+        identity_passed=False,
+        device_sharding_active=False,
+        decomposed_path_enabled=False,
+        claim_scope=(
+            "device z-sharded shard_map nonlinear transport-window gate; "
+            "skipped because the requested local device topology cannot "
+            "support the z shard"
+        ),
+        blocked_reasons=tuple(blocked_reasons),
+        serial_free_energy_trace=serial["free_energy"],
+        serial_field_energy_trace=serial["field_energy"],
+        serial_physical_flux_trace=serial["physical_flux"],
+        serial_bracket_rms_trace=serial["bracket_rms"],
+    )
+
+
 def _device_z_sharding_for_spectral_state(
     state_hat: jax.Array,
     *,
@@ -294,18 +384,8 @@ def device_z_pencil_nonlinear_spectral_transport_window_identity_gate(
         )
     )
 
-    serial_traces: dict[str, list[float]] = {
-        "free_energy": [],
-        "field_energy": [],
-        "physical_flux": [],
-        "bracket_rms": [],
-    }
-    device_traces: dict[str, list[float]] = {
-        "free_energy": [],
-        "field_energy": [],
-        "physical_flux": [],
-        "bracket_rms": [],
-    }
+    serial_traces = _new_transport_trace_dict()
+    device_traces = _new_transport_trace_dict()
 
     serial_state = state_hat
     _serial_field, serial_bracket, _serial_rhs = _serial_nonlinear_spectral_rhs(
@@ -315,41 +395,17 @@ def device_z_pencil_nonlinear_spectral_transport_window_identity_gate(
 
     blocked_reasons = list(blockers)
     if blockers or mesh is None or sharding is None:
-        return NonlinearSpectralDevicePencilTransportWindowReport(
+        return _blocked_device_z_transport_window_report(
             state_shape=state_shape,
-            sharded_axis="z",
-            axis_name=str(axis_name),
-            requested_device_count=int(requested_count),
-            active_device_count=int(active_count),
-            steps=int(steps),
-            dt=float(dt),
-            atol=float(atol),
-            rtol=float(rtol),
-            final_state_max_abs_error=float("inf"),
-            final_state_max_rel_error=float("inf"),
-            free_energy_trace_max_abs_error=float("inf"),
-            free_energy_trace_max_rel_error=float("inf"),
-            field_energy_trace_max_abs_error=float("inf"),
-            field_energy_trace_max_rel_error=float("inf"),
-            physical_flux_trace_max_abs_error=float("inf"),
-            physical_flux_trace_max_rel_error=float("inf"),
-            bracket_rms_trace_max_abs_error=float("inf"),
-            bracket_rms_trace_max_rel_error=float("inf"),
-            serial_free_energy_drift=_trace_drift(tuple(serial_traces["free_energy"])),
-            device_free_energy_drift=0.0,
-            identity_passed=False,
-            device_sharding_active=False,
-            decomposed_path_enabled=False,
-            claim_scope=(
-                "device z-sharded shard_map nonlinear transport-window gate; "
-                "skipped because the requested local device topology cannot "
-                "support the z shard"
-            ),
-            blocked_reasons=tuple(blocked_reasons),
-            serial_free_energy_trace=tuple(serial_traces["free_energy"]),
-            serial_field_energy_trace=tuple(serial_traces["field_energy"]),
-            serial_physical_flux_trace=tuple(serial_traces["physical_flux"]),
-            serial_bracket_rms_trace=tuple(serial_traces["bracket_rms"]),
+            axis_name=axis_name,
+            requested_count=requested_count,
+            active_count=active_count,
+            steps=steps,
+            dt=dt,
+            atol=atol,
+            rtol=rtol,
+            blocked_reasons=blocked_reasons,
+            serial_traces=serial_traces,
         )
 
     dt_array = jnp.asarray(float(dt), dtype=jnp.real(state_hat).dtype)
@@ -424,30 +480,17 @@ def device_z_pencil_nonlinear_spectral_transport_window_identity_gate(
         device_final_state,
         atol=atol,
     )
-    serial_free = tuple(serial_traces["free_energy"])
-    device_free = tuple(device_traces["free_energy"])
-    serial_field_energy = tuple(serial_traces["field_energy"])
-    device_field_energy = tuple(device_traces["field_energy"])
-    serial_physical_flux = tuple(serial_traces["physical_flux"])
-    device_physical_flux = tuple(device_traces["physical_flux"])
-    serial_bracket_rms = tuple(serial_traces["bracket_rms"])
-    device_bracket_rms = tuple(device_traces["bracket_rms"])
-    free_abs, free_rel = _relative_trace_error(serial_free, device_free, floor=atol)
-    field_abs, field_rel = _relative_trace_error(
-        serial_field_energy,
-        device_field_energy,
+    serial_trace_values = _transport_trace_tuples(serial_traces)
+    device_trace_values = _transport_trace_tuples(device_traces)
+    trace_errors = _transport_trace_error_pairs(
+        serial_trace_values,
+        device_trace_values,
         floor=atol,
     )
-    flux_abs, flux_rel = _relative_trace_error(
-        serial_physical_flux,
-        device_physical_flux,
-        floor=atol,
-    )
-    bracket_abs, bracket_rel = _relative_trace_error(
-        serial_bracket_rms,
-        device_bracket_rms,
-        floor=atol,
-    )
+    free_abs, free_rel = trace_errors["free_energy"]
+    field_abs, field_rel = trace_errors["field_energy"]
+    flux_abs, flux_rel = trace_errors["physical_flux"]
+    bracket_abs, bracket_rel = trace_errors["bracket_rms"]
     identity_passed = bool(
         _within_abs_or_rel_tolerance(state_abs, state_rel, atol=atol, rtol=rtol)
         and _within_abs_or_rel_tolerance(free_abs, free_rel, atol=atol, rtol=rtol)
@@ -478,8 +521,8 @@ def device_z_pencil_nonlinear_spectral_transport_window_identity_gate(
         physical_flux_trace_max_rel_error=flux_rel,
         bracket_rms_trace_max_abs_error=bracket_abs,
         bracket_rms_trace_max_rel_error=bracket_rel,
-        serial_free_energy_drift=_trace_drift(serial_free),
-        device_free_energy_drift=_trace_drift(device_free),
+        serial_free_energy_drift=_trace_drift(serial_trace_values["free_energy"]),
+        device_free_energy_drift=_trace_drift(device_trace_values["free_energy"]),
         identity_passed=identity_passed,
         device_sharding_active=True,
         decomposed_path_enabled=identity_passed,
@@ -490,14 +533,14 @@ def device_z_pencil_nonlinear_spectral_transport_window_identity_gate(
             "speedup claim is allowed"
         ),
         blocked_reasons=tuple(sorted(set(blocked_reasons))),
-        serial_free_energy_trace=serial_free,
-        device_free_energy_trace=device_free,
-        serial_field_energy_trace=serial_field_energy,
-        device_field_energy_trace=device_field_energy,
-        serial_physical_flux_trace=serial_physical_flux,
-        device_physical_flux_trace=device_physical_flux,
-        serial_bracket_rms_trace=serial_bracket_rms,
-        device_bracket_rms_trace=device_bracket_rms,
+        serial_free_energy_trace=serial_trace_values["free_energy"],
+        device_free_energy_trace=device_trace_values["free_energy"],
+        serial_field_energy_trace=serial_trace_values["field_energy"],
+        device_field_energy_trace=device_trace_values["field_energy"],
+        serial_physical_flux_trace=serial_trace_values["physical_flux"],
+        device_physical_flux_trace=device_trace_values["physical_flux"],
+        serial_bracket_rms_trace=serial_trace_values["bracket_rms"],
+        device_bracket_rms_trace=device_trace_values["bracket_rms"],
     )
 
 def _spectral_physical_transport_observables(
