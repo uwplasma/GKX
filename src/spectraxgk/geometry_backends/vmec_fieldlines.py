@@ -214,6 +214,47 @@ def _input_iota_shear(
     return iota_input_val, s_hat_input_val
 
 
+def _hngc_shear_correction(
+    *,
+    s_val: float,
+    iota: np.ndarray,
+    shat: np.ndarray,
+    iota_input_val: float,
+    s_hat_input_val: float,
+    include_shear_variation: bool,
+) -> tuple[np.ndarray, float]:
+    """Return the Hegna-Nakajima shear correction and scale factor."""
+
+    if not include_shear_variation:
+        return np.zeros_like(np.asarray(iota, dtype=float)), 1.0
+    d_iota_d_s_1 = (
+        -(iota_input_val / (2.0 * s_val)) * s_hat_input_val
+        + (float(iota[0]) / (2.0 * s_val)) * float(shat[0])
+    ) * np.ones_like(np.asarray(iota, dtype=float))
+    return d_iota_d_s_1, float(shat[0]) / s_hat_input_val
+
+
+def _hngc_pressure_correction(
+    *,
+    s_val: float,
+    betaprim: float,
+    B_reference: float,
+    d_pressure_d_s: np.ndarray,
+    include_pressure_variation: bool,
+) -> tuple[np.ndarray, float]:
+    """Return the Hegna-Nakajima pressure correction and scale factor."""
+
+    pressure_profile = np.asarray(d_pressure_d_s, dtype=float)
+    if not include_pressure_variation:
+        return np.zeros_like(pressure_profile), 1.0
+
+    drive = betaprim * B_reference**2 / (4.0 * np.sqrt(s_val))
+    d_pressure_d_s_1 = drive * np.ones_like(pressure_profile) - _MU_0 * pressure_profile
+    dp_ds_safe = np.where(np.abs(pressure_profile) < 1.0e-30, 1.0e-8, pressure_profile)
+    pfac = drive / (_MU_0 * float(dp_ds_safe[0]))
+    return d_pressure_d_s_1, float(pfac)
+
+
 def _flux_surface_hngc_averages(
     *,
     xm_b: np.ndarray,
@@ -549,31 +590,21 @@ def _vmec_fieldlines(
     )
 
     # HNGC correction factors
-    d_iota_d_s_1 = (
-        -(iota_input_val / (2.0 * s_val)) * s_hat_input_val
-        + (float(iota[0]) / (2.0 * s_val)) * float(shat[0])
-    ) * np.ones((ns,))
-    sfac = float(shat[0]) / s_hat_input_val
-
-    if not include_shear_variation:
-        d_iota_d_s_1 = np.zeros((ns,))
-        sfac = 1.0
-
-    d_pressure_d_s_1 = betaprim / (4.0 * np.sqrt(s_val)) * B_reference**2 * np.ones(
-        (ns,)
-    ) - _MU_0 * d_pressure_d_s * np.ones((ns,))
-
-    dp_ds_safe = np.where(np.abs(d_pressure_d_s) < 1.0e-30, 1.0e-8, d_pressure_d_s)
-    pfac = (
-        betaprim
-        * B_reference**2
-        / (4.0 * np.sqrt(s_val))
-        / (_MU_0 * float(dp_ds_safe[0]))
+    d_iota_d_s_1, sfac = _hngc_shear_correction(
+        s_val=s_val,
+        iota=iota,
+        shat=shat,
+        iota_input_val=iota_input_val,
+        s_hat_input_val=s_hat_input_val,
+        include_shear_variation=include_shear_variation,
     )
-
-    if not include_pressure_variation:
-        pfac = 1.0
-        d_pressure_d_s_1 = np.zeros((ns,))
+    d_pressure_d_s_1, pfac = _hngc_pressure_correction(
+        s_val=s_val,
+        betaprim=betaprim,
+        B_reference=B_reference,
+        d_pressure_d_s=d_pressure_d_s,
+        include_pressure_variation=include_pressure_variation,
+    )
 
     D_HNGC = (
         1.0
