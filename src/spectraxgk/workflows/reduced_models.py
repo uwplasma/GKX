@@ -148,6 +148,37 @@ def _resolved_fit_bounds(
     return tmin_use, tmax_use
 
 
+def _cetg_integration_kwargs(
+    cfg: RuntimeConfig,
+    *,
+    dt: float,
+    steps: int,
+    method: str | None,
+    sample_stride: int,
+    diagnostics_stride: int,
+    ky_index: int,
+    kx_index: int,
+    fixed_dt: bool,
+) -> dict[str, Any]:
+    """Return shared cETG explicit-integrator options for runtime workflows."""
+
+    return {
+        "dt": dt,
+        "steps": int(steps),
+        "method": str(method or cfg.time.method),
+        "sample_stride": int(sample_stride),
+        "diagnostics_stride": int(diagnostics_stride),
+        "compressed_real_fft": bool(cfg.time.compressed_real_fft),
+        "omega_ky_index": int(ky_index),
+        "omega_kx_index": int(kx_index),
+        "fixed_dt": bool(fixed_dt),
+        "dt_min": float(cfg.time.dt_min),
+        "dt_max": cfg.time.dt_max,
+        "cfl": float(cfg.time.cfl),
+        "cfl_fac": cfg.time.cfl_fac,
+    }
+
+
 def run_cetg_linear_runtime(
     cfg: RuntimeConfig,
     *,
@@ -224,19 +255,17 @@ def run_cetg_linear_runtime(
         grid,
         cetg_params,
         cetg_terms,
-        dt=dt_val,
-        steps=steps_val,
-        method=str(method or cfg.time.method),
-        sample_stride=sample_stride_use,
-        diagnostics_stride=1,
-        compressed_real_fft=bool(cfg.time.compressed_real_fft),
-        omega_ky_index=0,
-        omega_kx_index=0,
-        fixed_dt=bool(cfg.time.fixed_dt),
-        dt_min=float(cfg.time.dt_min),
-        dt_max=cfg.time.dt_max,
-        cfl=float(cfg.time.cfl),
-        cfl_fac=cfg.time.cfl_fac,
+        **_cetg_integration_kwargs(
+            cfg,
+            dt=dt_val,
+            steps=steps_val,
+            method=method,
+            sample_stride=sample_stride_use,
+            diagnostics_stride=1,
+            ky_index=0,
+            kx_index=0,
+            fixed_dt=bool(cfg.time.fixed_dt),
+        ),
     )
     signal = np.asarray(
         diag.phi_mode_t if diag.phi_mode_t is not None else np.zeros_like(np.asarray(diag.t))
@@ -354,20 +383,16 @@ def run_cetg_nonlinear_runtime(
 
         def _run_cetg_chunk(chunk_show_progress: bool):
             nonlocal G_chunk
-            kwargs: dict[str, Any] = dict(
+            kwargs = _cetg_integration_kwargs(
+                cfg,
                 dt=dt_val,
                 steps=chunk_steps,
-                method=str(method or cfg.time.method),
+                method=method,
                 sample_stride=1,
                 diagnostics_stride=1,
-                compressed_real_fft=bool(cfg.time.compressed_real_fft),
-                omega_ky_index=int(ky_index),
-                omega_kx_index=int(kx_index),
+                ky_index=ky_index,
+                kx_index=kx_index,
                 fixed_dt=False,
-                dt_min=float(cfg.time.dt_min),
-                dt_max=cfg.time.dt_max,
-                cfl=float(cfg.time.cfl),
-                cfl_fac=cfg.time.cfl_fac,
             )
             if chunk_show_progress:
                 kwargs["show_progress"] = True
@@ -415,19 +440,17 @@ def run_cetg_nonlinear_runtime(
             grid,
             cetg_params,
             cetg_term_cfg,
-            dt=dt_val,
-            steps=steps_val,
-            method=str(method or cfg.time.method),
-            sample_stride=int(sample_stride_use),
-            diagnostics_stride=int(diag_stride),
-            compressed_real_fft=bool(cfg.time.compressed_real_fft),
-            omega_ky_index=int(ky_index),
-            omega_kx_index=int(kx_index),
-            fixed_dt=bool(cfg.time.fixed_dt),
-            dt_min=float(cfg.time.dt_min),
-            dt_max=cfg.time.dt_max,
-            cfl=float(cfg.time.cfl),
-            cfl_fac=cfg.time.cfl_fac,
+            **_cetg_integration_kwargs(
+                cfg,
+                dt=dt_val,
+                steps=steps_val,
+                method=method,
+                sample_stride=sample_stride_use,
+                diagnostics_stride=diag_stride,
+                ky_index=ky_index,
+                kx_index=kx_index,
+                fixed_dt=bool(cfg.time.fixed_dt),
+            ),
             **progress_kw,
         )
     )
