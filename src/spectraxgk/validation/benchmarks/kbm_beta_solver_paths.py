@@ -59,6 +59,34 @@ class KBMBetaKrylovResult:
     fallback_to_time: bool = False
 
 
+_KBM_KRYLOV_FORWARD_KEYS = (
+    "krylov_dim restarts omega_min_factor omega_target_factor omega_cap_factor omega_sign method "
+    "power_iters power_dt shift shift_source shift_tol shift_maxiter shift_restart shift_solve_method "
+    "shift_preconditioner shift_selection mode_family fallback_method fallback_real_floor"
+).split()
+
+
+def _dominant_kbm_eigenpair(
+    hooks: KBMBetaKrylovHooks,
+    G0_jax: Any,
+    cache: Any,
+    params: Any,
+    terms: Any,
+    krylov_cfg_use: Any,
+    **overrides: Any,
+) -> tuple[Any, Any]:
+    """Call the KBM Krylov solver with one shared target/shift policy."""
+
+    kwargs = {
+        "terms": terms,
+        "v_ref": None,
+        "select_overlap": False,
+        **{name: getattr(krylov_cfg_use, name) for name in _KBM_KRYLOV_FORWARD_KEYS},
+        **overrides,
+    }
+    return hooks.dominant_eigenpair(G0_jax, cache, params, **kwargs)
+
+
 def fit_kbm_beta_explicit_time_sample(
     *,
     G0_jax: Any,
@@ -676,33 +704,17 @@ def solve_kbm_beta_krylov_sample(
         eig_candidates = []
         vec_candidates = []
         for target in targets:
-            eig_i, vec_i = hooks.dominant_eigenpair(
+            eig_i, vec_i = _dominant_kbm_eigenpair(
+                hooks,
                 G0_jax,
                 cache,
                 params,
-                terms=terms,
-                v_ref=None,
-                select_overlap=False,
-                krylov_dim=krylov_cfg_use.krylov_dim,
-                restarts=krylov_cfg_use.restarts,
-                omega_min_factor=krylov_cfg_use.omega_min_factor,
+                terms,
+                krylov_cfg_use,
                 omega_target_factor=float(target),
-                omega_cap_factor=krylov_cfg_use.omega_cap_factor,
-                omega_sign=krylov_cfg_use.omega_sign,
-                method=krylov_cfg_use.method,
-                power_iters=krylov_cfg_use.power_iters,
-                power_dt=krylov_cfg_use.power_dt,
                 shift=None,
                 shift_source="target",
-                shift_tol=krylov_cfg_use.shift_tol,
-                shift_maxiter=krylov_cfg_use.shift_maxiter,
-                shift_restart=krylov_cfg_use.shift_restart,
-                shift_solve_method=krylov_cfg_use.shift_solve_method,
-                shift_preconditioner=krylov_cfg_use.shift_preconditioner,
                 shift_selection="targeted",
-                mode_family=krylov_cfg_use.mode_family,
-                fallback_method=krylov_cfg_use.fallback_method,
-                fallback_real_floor=krylov_cfg_use.fallback_real_floor,
             )
             eig_candidates.append(eig_i)
             vec_candidates.append(vec_i)
@@ -721,33 +733,17 @@ def solve_kbm_beta_krylov_sample(
                 eig = eig_candidates[idx]
                 vec = vec_candidates[idx]
     else:
-        eig, vec = hooks.dominant_eigenpair(
+        eig, vec = _dominant_kbm_eigenpair(
+            hooks,
             G0_jax,
             cache,
             params,
-            terms=terms,
+            terms,
+            krylov_cfg_use,
             v_ref=prev_vec,
             select_overlap=use_continuation,
-            krylov_dim=krylov_cfg_use.krylov_dim,
-            restarts=krylov_cfg_use.restarts,
-            omega_min_factor=krylov_cfg_use.omega_min_factor,
-            omega_target_factor=krylov_cfg_use.omega_target_factor,
-            omega_cap_factor=krylov_cfg_use.omega_cap_factor,
-            omega_sign=krylov_cfg_use.omega_sign,
-            method=krylov_cfg_use.method,
-            power_iters=krylov_cfg_use.power_iters,
-            power_dt=krylov_cfg_use.power_dt,
             shift=shift_val,
-            shift_source=krylov_cfg_use.shift_source,
-            shift_tol=krylov_cfg_use.shift_tol,
-            shift_maxiter=krylov_cfg_use.shift_maxiter,
-            shift_restart=krylov_cfg_use.shift_restart,
-            shift_solve_method=krylov_cfg_use.shift_solve_method,
-            shift_preconditioner=krylov_cfg_use.shift_preconditioner,
             shift_selection=shift_selection,
-            mode_family=krylov_cfg_use.mode_family,
-            fallback_method=krylov_cfg_use.fallback_method,
-            fallback_real_floor=krylov_cfg_use.fallback_real_floor,
         )
     gamma = float(np.real(eig))
     omega = float(-np.imag(eig))
