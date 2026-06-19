@@ -121,6 +121,40 @@ def _solver_ready_linear_context(
     )
 
 
+def _linear_transport_weights(
+    *,
+    state: jnp.ndarray,
+    phi: jnp.ndarray,
+    cache: Any,
+    grid: Any,
+    params_linear: LinearParams,
+    flux_fac: jnp.ndarray,
+    norm2: jnp.ndarray,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Return heat and particle weights for one normalized linear eigenmode."""
+
+    zero_field = jnp.zeros_like(phi)
+
+    def normalized_flux(flux_fn: Any) -> jnp.ndarray:
+        return jnp.real(
+            jnp.sum(
+                flux_fn(
+                    state,
+                    phi,
+                    zero_field,
+                    zero_field,
+                    cache,
+                    grid,
+                    params_linear,
+                    flux_fac,
+                )
+            )
+            / norm2
+        )
+
+    return normalized_flux(heat_flux_species), normalized_flux(particle_flux_species)
+
+
 def _linear_eigenpair_quasilinear_features(
     eigenvalue: jnp.ndarray,
     eigenvector: jnp.ndarray,
@@ -139,24 +173,17 @@ def _linear_eigenpair_quasilinear_features(
     )
     state_arr = jnp.reshape(eigenvector, context["state_shape"])
     _rhs, phi = context["rhs_phi"](state_arr, cache)
-    zero_field = jnp.zeros_like(phi)
     vol_fac, flux_fac = fieldline_quadrature_weights(geom, grid)
     norm2 = phi_norm2(phi, cache, params_linear, vol_fac)
     kperp_eff = effective_kperp2(phi, cache, vol_fac)
-    heat_weight = jnp.real(
-        jnp.sum(
-            heat_flux_species(
-                state_arr,
-                phi,
-                zero_field,
-                zero_field,
-                cache,
-                grid,
-                params_linear,
-                flux_fac,
-            )
-        )
-        / norm2
+    heat_weight, _particle_weight = _linear_transport_weights(
+        state=state_arr,
+        phi=phi,
+        cache=cache,
+        grid=grid,
+        params_linear=params_linear,
+        flux_fac=flux_fac,
+        norm2=norm2,
     )
     gamma = jnp.real(eigenvalue)
     ql_proxy = (
@@ -222,22 +249,15 @@ def solver_objective_branch_gradient_report(
         cache = context.cache_for(x)
         state_arr = jnp.reshape(eigenvector, context.state_shape)
         _rhs, phi = context.rhs_phi(state_arr, cache)
-        zero_field = jnp.zeros_like(phi)
         vol_fac, flux_fac = fieldline_quadrature_weights(geom, context.grid)
-        particle_weight = jnp.real(
-            jnp.sum(
-                particle_flux_species(
-                    state_arr,
-                    phi,
-                    zero_field,
-                    zero_field,
-                    cache,
-                    context.grid,
-                    context.params_linear,
-                    flux_fac,
-                )
-            )
-            / phi_norm2(phi, cache, context.params_linear, vol_fac)
+        _heat_weight_check, particle_weight = _linear_transport_weights(
+            state=state_arr,
+            phi=phi,
+            cache=cache,
+            grid=context.grid,
+            params_linear=context.params_linear,
+            flux_fac=flux_fac,
+            norm2=phi_norm2(phi, cache, context.params_linear, vol_fac),
         )
         return jnp.asarray(
             [gamma, omega, kperp_eff, heat_weight, particle_weight, ql_proxy]
@@ -388,39 +408,17 @@ def linear_solver_geometry_gradient_report(
         cache = context.cache_for(x)
         state = jnp.reshape(eigenvector, context.state_shape)
         _rhs, phi = context.rhs_phi(state, cache)
-        zero_field = jnp.zeros_like(phi)
         vol_fac, flux_fac = fieldline_quadrature_weights(geom, context.grid)
         norm2 = phi_norm2(phi, cache, context.params_linear, vol_fac)
         kperp_eff = effective_kperp2(phi, cache, vol_fac)
-        heat_weight = jnp.real(
-            jnp.sum(
-                heat_flux_species(
-                    state,
-                    phi,
-                    zero_field,
-                    zero_field,
-                    cache,
-                    context.grid,
-                    context.params_linear,
-                    flux_fac,
-                )
-            )
-            / norm2
-        )
-        particle_weight = jnp.real(
-            jnp.sum(
-                particle_flux_species(
-                    state,
-                    phi,
-                    zero_field,
-                    zero_field,
-                    cache,
-                    context.grid,
-                    context.params_linear,
-                    flux_fac,
-                )
-            )
-            / norm2
+        heat_weight, particle_weight = _linear_transport_weights(
+            state=state,
+            phi=phi,
+            cache=cache,
+            grid=context.grid,
+            params_linear=context.params_linear,
+            flux_fac=flux_fac,
+            norm2=norm2,
         )
         gamma = jnp.real(eigenvalue)
         ql_proxy = (
