@@ -384,23 +384,19 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
         iota=iota_safe,
         alpha=float(alpha),
     )
-    mod_b_safe = jnp.maximum(
-        jnp.abs(mod_b), jnp.asarray(1.0e-30, dtype=base_Rcos.dtype)
-    )
+    eps = jnp.asarray(1.0e-30, dtype=base_Rcos.dtype)
+    mod_b_safe = jnp.maximum(jnp.abs(mod_b), eps)
     sqrt_g_booz = (boozer_g + iota_safe * boozer_i) / (mod_b_safe * mod_b_safe)
     gradpar_raw = jnp.abs(
         jnp.asarray(float(L_reference), dtype=base_Rcos.dtype)
         * iota_safe
-        / jnp.maximum(
-            jnp.abs(mod_b_safe * sqrt_g_booz),
-            jnp.asarray(1.0e-30, dtype=base_Rcos.dtype),
-        )
+        / jnp.maximum(jnp.abs(mod_b_safe * sqrt_g_booz), eps)
     )
     inv_gradpar_int = _cumulative_trapezoid(1.0 / gradpar_raw, theta_closed)
     gradpar_eqarc = (
         2.0
         * jnp.pi
-        / jnp.maximum(inv_gradpar_int[-1], jnp.asarray(1.0e-30, dtype=base_Rcos.dtype))
+        / jnp.maximum(inv_gradpar_int[-1], eps)
     )
     theta_eqarc = gradpar_eqarc * inv_gradpar_int - jnp.pi
     theta_uniform_closed = jnp.linspace(
@@ -430,13 +426,8 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
             dtype=base_Rcos.dtype,
         )
     )
-    drhodpsi = 1.0 / jnp.maximum(
-        jnp.abs(dpsidrho), jnp.asarray(1.0e-30, dtype=base_Rcos.dtype)
-    )
-    jacobian = 1.0 / jnp.maximum(
-        jnp.abs(drhodpsi * gradpar_eqarc * bmag_safe),
-        jnp.asarray(1.0e-30, dtype=base_Rcos.dtype),
-    )
+    drhodpsi = 1.0 / jnp.maximum(jnp.abs(dpsidrho), eps)
+    jacobian = 1.0 / jnp.maximum(jnp.abs(drhodpsi * gradpar_eqarc * bmag_safe), eps)
 
     m = jnp.asarray(out["ixm_b"], dtype=base_Rcos.dtype)
     n = jnp.asarray(out["ixn_b"], dtype=base_Rcos.dtype)
@@ -480,9 +471,7 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
     grad_psi_y = (d_z_b_d_theta * d_x_d_phi - d_x_d_theta * d_z_b_d_phi) / sqrt_g_booz
     grad_psi_z = (d_x_d_theta * d_y_d_phi - d_y_d_theta * d_x_d_phi) / sqrt_g_booz
     g_sup_psi_psi = grad_psi_x**2 + grad_psi_y**2 + grad_psi_z**2
-    g_sup_psi_psi_safe = jnp.maximum(
-        g_sup_psi_psi, jnp.asarray(1.0e-30, dtype=base_Rcos.dtype)
-    )
+    g_sup_psi_psi_safe = jnp.maximum(g_sup_psi_psi, eps)
 
     etf = jnp.asarray(edge_toroidal_flux_over_2pi, dtype=base_Rcos.dtype)
     grad_theta_x = (d_y_d_phi * d_z_b_d_s - d_z_b_d_phi * d_y_d_s) / (sqrt_g_booz * etf)
@@ -544,7 +533,6 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
         boozer_g * d_sqrt_g_booz_d_theta - boozer_i * d_sqrt_g_booz_d_phi
     )
     curvature_denom = 2.0 * sqrt_g_booz * boozer_current_sum
-    eps = jnp.asarray(1.0e-30, dtype=base_Rcos.dtype)
     curvature_denom_safe = jnp.where(
         jnp.abs(curvature_denom) < eps,
         jnp.sign(curvature_denom + eps) * eps,
@@ -607,8 +595,7 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
         "cvdrift0": cvdrift0,
         "gbdrift0": gbdrift0,
         "grho": grho,
-        "q": 1.0
-        / jnp.maximum(jnp.abs(iota_safe), jnp.asarray(1.0e-30, dtype=base_Rcos.dtype)),
+        "q": 1.0 / jnp.maximum(jnp.abs(iota_safe), eps),
         "s_hat": s_hat,
         "iota": iota,
         "torflux": float(s_value),
