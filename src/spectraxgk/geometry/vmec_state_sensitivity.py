@@ -232,6 +232,48 @@ def _ad_fd_jacobian_diagnostics(
     }
 
 
+def _rms_with_floor(arr: jnp.ndarray, epsilon: jnp.ndarray | float) -> jnp.ndarray:
+    """Return a differentiable RMS with a small floor for zero-valued tensors."""
+
+    values = jnp.asarray(arr)
+    return jnp.sqrt(jnp.mean(values * values) + epsilon)
+
+
+def _vmec_field_line_sampling_coordinates(
+    wout: Any,
+    *,
+    surface_index: int,
+    alpha: float,
+    ntheta: int,
+    dtype: Any,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """Return VMEC field-line coordinates used by tensor sensitivity gates."""
+
+    ntheta_int = int(ntheta)
+    if ntheta_int < 4:
+        raise ValueError("ntheta must be >= 4")
+
+    iota_profile = jnp.asarray(getattr(wout, "iotas"))
+    sidx = int(surface_index)
+    if iota_profile.ndim != 1 or int(iota_profile.shape[0]) <= sidx:
+        raise RuntimeError(
+            "vmec_jax wout iotas profile is missing or incompatible with the state grid"
+        )
+    iota_line = iota_profile[sidx]
+    iota_safe = jnp.where(
+        jnp.abs(iota_line) < 1.0e-12,
+        jnp.sign(iota_line + 1.0e-30) * 1.0e-12,
+        iota_line,
+    )
+    theta_line = jnp.linspace(-jnp.pi, jnp.pi, ntheta_int, endpoint=False, dtype=dtype)
+    theta_vmec = jnp.mod(theta_line + jnp.pi, 2.0 * jnp.pi)
+    zeta_line = jnp.mod(
+        (theta_vmec - jnp.asarray(float(alpha), dtype=dtype)) / iota_safe,
+        2.0 * jnp.pi,
+    )
+    return iota_line, iota_safe, theta_line, theta_vmec, zeta_line
+
+
 def vmec_jax_boozer_flux_tube_sensitivity_report(  # pragma: no cover
     *,
     params: jnp.ndarray | None = None,
@@ -392,10 +434,6 @@ def vmec_jax_metric_tensor_sensitivity_report(  # pragma: no cover
 
         eps = jnp.asarray(float(rms_epsilon), dtype=p.dtype)
 
-        def _rms(arr: jnp.ndarray) -> jnp.ndarray:
-            arr = jnp.asarray(arr)
-            return jnp.sqrt(jnp.mean(arr * arr) + eps)
-
         def metric_observables(x: jnp.ndarray) -> jnp.ndarray:
             traced_state = _perturb_vmec_state(
                 ctx, x, radial_index=ridx, mode_index=midx
@@ -410,13 +448,13 @@ def vmec_jax_metric_tensor_sensitivity_report(  # pragma: no cover
             g_pp = jnp.asarray(geom.g_pp)[sidx]
             return jnp.asarray(
                 [
-                    _rms(sqrtg),
+                    _rms_with_floor(sqrtg, eps),
                     jnp.mean(g_ss),
                     jnp.mean(g_tt),
                     jnp.mean(g_pp),
-                    _rms(g_st),
-                    _rms(g_sp),
-                    _rms(g_tp),
+                    _rms_with_floor(g_st, eps),
+                    _rms_with_floor(g_sp, eps),
+                    _rms_with_floor(g_tp, eps),
                 ]
             )
 
@@ -486,9 +524,6 @@ def vmec_jax_field_line_tensor_sensitivity_report(  # pragma: no cover
     """
 
     p = _length_two_params(params, default=1.0e-4)
-    ntheta_int = int(ntheta)
-    if ntheta_int < 4:
-        raise ValueError("ntheta must be >= 4")
 
     info = discover_differentiable_geometry_backends()
     if not info.get("vmec_jax_available", False):
@@ -512,31 +547,18 @@ def vmec_jax_field_line_tensor_sensitivity_report(  # pragma: no cover
             surface_grid="field_line",
         )
 
-        iota_profile = jnp.asarray(getattr(ctx.wout, "iotas"))
-        if iota_profile.ndim != 1 or int(iota_profile.shape[0]) <= sidx:
-            raise RuntimeError(
-                "vmec_jax wout iotas profile is missing or incompatible with the state grid"
+        iota_line, _iota_safe, _theta_line, theta_vmec, zeta_line = (
+            _vmec_field_line_sampling_coordinates(
+                ctx.wout,
+                surface_index=sidx,
+                alpha=alpha,
+                ntheta=ntheta,
+                dtype=p.dtype,
             )
-        iota_line = iota_profile[sidx]
-        iota_safe = jnp.where(
-            jnp.abs(iota_line) < 1.0e-12,
-            jnp.sign(iota_line + 1.0e-30) * 1.0e-12,
-            iota_line,
         )
-        theta_line = jnp.linspace(
-            -jnp.pi, jnp.pi, ntheta_int, endpoint=False, dtype=p.dtype
-        )
-        theta_vmec = jnp.mod(theta_line + jnp.pi, 2.0 * jnp.pi)
-        zeta_line = jnp.mod(
-            (theta_vmec - jnp.asarray(float(alpha), dtype=p.dtype)) / iota_safe,
-            2.0 * jnp.pi,
-        )
+        ntheta_int = int(ntheta)
         b2_floor_arr = jnp.asarray(float(b2_floor), dtype=p.dtype)
         eps = jnp.asarray(float(rms_epsilon), dtype=p.dtype)
-
-        def _rms(arr: jnp.ndarray) -> jnp.ndarray:
-            arr = jnp.asarray(arr)
-            return jnp.sqrt(jnp.mean(arr * arr) + eps)
 
         def field_line_observables(x: jnp.ndarray) -> jnp.ndarray:
             traced_state = _perturb_vmec_state(
@@ -571,10 +593,10 @@ def vmec_jax_field_line_tensor_sensitivity_report(  # pragma: no cover
                 [
                     mean_b,
                     ripple,
-                    _rms(sqrtg),
+                    _rms_with_floor(sqrtg, eps),
                     jnp.mean(g_tt),
                     jnp.mean(g_pp),
-                    _rms(g_tp),
+                    _rms_with_floor(g_tp, eps),
                     jnp.mean(g_ss),
                 ]
             )
