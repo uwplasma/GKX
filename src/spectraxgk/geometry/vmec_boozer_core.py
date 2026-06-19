@@ -179,6 +179,96 @@ def _surface_indices_for_stencil(
     return jnp.arange(start, start + width, dtype=jnp.int32)
 
 
+def _run_boozer_transform_from_state(
+    state: Any,
+    static: Any,
+    indata: Any,
+    wout: Any,
+    request: _BoozerCoreRequest,
+    *,
+    jit: bool,
+    surface_stencil_width: int | None,
+) -> tuple[dict[str, Any], jnp.ndarray | None]:
+    info = discover_differentiable_geometry_backends()
+    if not (
+        info.get("vmec_jax_available", False)
+        and info.get("booz_xform_jax_api_available", False)
+    ):
+        raise RuntimeError("vmec_jax and booz_xform_jax functional APIs are required")
+
+    booz_input_mod = importlib.import_module("vmec_jax.booz_input")
+    bx = importlib.import_module("booz_xform_jax.jax_api")
+
+    inputs = booz_input_mod.booz_xform_inputs_from_state(
+        state=state,
+        static=static,
+        indata=indata,
+        signgs=getattr(wout, "signgs", 1),
+    )
+    asym = bool(getattr(inputs, "bmns", None) is not None)
+    cfg = getattr(static, "cfg", SimpleNamespace())
+    nfp_raw = getattr(wout, "nfp", None)
+    if nfp_raw is None:
+        nfp_raw = getattr(cfg, "nfp", 1)
+    nfp_int = 1 if nfp_raw is None else int(nfp_raw)
+    try:
+        constants, grids = _cached_booz_xform_constants(
+            nfp=nfp_int,
+            mpol=int(getattr(cfg, "mpol", max(2, request.base_Rcos.shape[1]))),
+            ntor=int(getattr(cfg, "ntor", max(1, request.base_Rcos.shape[1] - 1))),
+            ntheta=int(getattr(cfg, "ntheta", max(16, request.ntheta))),
+            nzeta=int(getattr(cfg, "nzeta", max(16, 2 * request.ntheta))),
+            mboz=request.mboz,
+            nboz=request.nboz,
+            asym=asym,
+        )
+    except (AttributeError, ModuleNotFoundError):
+        constants, grids = bx.prepare_booz_xform_constants_from_inputs(
+            inputs=inputs,
+            mboz=request.mboz,
+            nboz=request.nboz,
+            asym=asym,
+        )
+    surface_indices = _surface_indices_for_stencil(
+        surface_stencil_width=surface_stencil_width,
+        ns_full=request.ns_full,
+        torflux=request.torflux,
+    )
+    out = bx.booz_xform_from_inputs(
+        inputs=inputs,
+        constants=constants,
+        grids=grids,
+        surface_indices=surface_indices,
+        jit=bool(jit),
+    )
+    return out, surface_indices
+
+
+def _boozer_surface_grid(
+    out: dict[str, Any],
+    *,
+    base_dtype: Any,
+    ns_full: int,
+) -> tuple[jnp.ndarray, jnp.ndarray, float]:
+    bmnc_b_all = jnp.asarray(out["bmnc_b"], dtype=base_dtype)
+    if bmnc_b_all.ndim != 2:
+        raise RuntimeError(
+            "booz_xform_jax bmnc_b output must have shape (surface, mode)"
+        )
+    ns_b = int(bmnc_b_all.shape[0])
+    if ns_b < 2:
+        raise RuntimeError("booz_xform_jax output needs at least two radial surfaces")
+    ns_b_full = max(int(ns_full) - 1, int(ns_b))
+    s_half = _boozer_half_mesh_s_grid(
+        out.get("jlist"),
+        ns_b=ns_b,
+        ns_b_full=ns_b_full,
+        dtype=base_dtype,
+    )
+    radial_spacing = 1.0 / float(max(ns_b_full, 1))
+    return bmnc_b_all, s_half, radial_spacing
+
+
 def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
     state: Any,
     static: Any,
@@ -232,76 +322,18 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
     B_reference = scales.magnetic_field
     edge_toroidal_flux_over_2pi = scales.edge_toroidal_flux_over_2pi
 
-    info = discover_differentiable_geometry_backends()
-    if not (
-        info.get("vmec_jax_available", False)
-        and info.get("booz_xform_jax_api_available", False)
-    ):
-        raise RuntimeError("vmec_jax and booz_xform_jax functional APIs are required")
-
-    booz_input_mod = importlib.import_module("vmec_jax.booz_input")
-    bx = importlib.import_module("booz_xform_jax.jax_api")
-
-    inputs = booz_input_mod.booz_xform_inputs_from_state(
-        state=state,
-        static=static,
-        indata=indata,
-        signgs=getattr(wout, "signgs", 1),
-    )
-    asym = bool(getattr(inputs, "bmns", None) is not None)
-    cfg = getattr(static, "cfg", SimpleNamespace())
-    nfp_raw = getattr(wout, "nfp", None)
-    if nfp_raw is None:
-        nfp_raw = getattr(cfg, "nfp", 1)
-    nfp_int = 1 if nfp_raw is None else int(nfp_raw)
-    try:
-        constants, grids = _cached_booz_xform_constants(
-            nfp=nfp_int,
-            mpol=int(getattr(cfg, "mpol", max(2, base_Rcos.shape[1]))),
-            ntor=int(getattr(cfg, "ntor", max(1, base_Rcos.shape[1] - 1))),
-            ntheta=int(getattr(cfg, "ntheta", max(16, ntheta_int))),
-            nzeta=int(getattr(cfg, "nzeta", max(16, 2 * ntheta_int))),
-            mboz=mboz_int,
-            nboz=nboz_int,
-            asym=asym,
-        )
-    except (AttributeError, ModuleNotFoundError):
-        constants, grids = bx.prepare_booz_xform_constants_from_inputs(
-            inputs=inputs,
-            mboz=mboz_int,
-            nboz=nboz_int,
-            asym=asym,
-        )
-    surface_indices = _surface_indices_for_stencil(
+    out, surface_indices = _run_boozer_transform_from_state(
+        state,
+        static,
+        indata,
+        wout,
+        request,
+        jit=jit,
         surface_stencil_width=surface_stencil_width,
-        ns_full=ns_full,
-        torflux=s_value,
     )
-    out = bx.booz_xform_from_inputs(
-        inputs=inputs,
-        constants=constants,
-        grids=grids,
-        surface_indices=surface_indices,
-        jit=bool(jit),
+    bmnc_b_all, s_half, radial_spacing = _boozer_surface_grid(
+        out, base_dtype=base_Rcos.dtype, ns_full=ns_full
     )
-
-    bmnc_b_all = jnp.asarray(out["bmnc_b"], dtype=base_Rcos.dtype)
-    if bmnc_b_all.ndim != 2:
-        raise RuntimeError(
-            "booz_xform_jax bmnc_b output must have shape (surface, mode)"
-        )
-    ns_b = int(bmnc_b_all.shape[0])
-    if ns_b < 2:
-        raise RuntimeError("booz_xform_jax output needs at least two radial surfaces")
-    ns_b_full = max(int(ns_full) - 1, int(ns_b))
-    s_half = _boozer_half_mesh_s_grid(
-        out.get("jlist"),
-        ns_b=ns_b,
-        ns_b_full=ns_b_full,
-        dtype=base_Rcos.dtype,
-    )
-
-    radial_spacing = 1.0 / float(max(ns_b_full, 1))
     bmnc_b = _interp_radial(bmnc_b_all, s_half, s_value)
 
     def interp_profile(name: str) -> jnp.ndarray:
