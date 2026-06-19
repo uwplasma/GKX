@@ -355,6 +355,48 @@ def zonal_flow_reduced_objective(
     )
 
 
+def _zonal_row_table(
+    *,
+    normalized_records: Sequence[Mapping[str, float]],
+    surfaces: list[float],
+    alphas: list[float],
+    kx_values: list[float],
+    objective_rows: Any,
+    objective_weights: Any,
+) -> list[dict[str, float]]:
+    rows_np = np.asarray(objective_rows, dtype=float)
+    weights = np.asarray(objective_weights, dtype=float)
+    normalized_weights = weights / float(np.sum(weights))
+    surface_index = _axis_index(surfaces)
+    alpha_index = _axis_index(alphas)
+    kx_index = _axis_index(kx_values)
+    row_table: list[dict[str, float]] = []
+    base_keys = (
+        "surface",
+        "alpha",
+        "kx",
+        "residual_level",
+        "damping_rate",
+        "linear_growth_rate",
+        "recurrence_amplitude",
+    )
+    for item in normalized_records:
+        objective_row = rows_np[
+            surface_index[float(item["surface"])],
+            alpha_index[float(item["alpha"])],
+            kx_index[float(item["kx"])],
+            :,
+        ]
+        row = {key: float(item[key]) for key in base_keys}
+        row.update(
+            inverse_residual=float(objective_row[0]),
+            growth_over_residual=float(objective_row[2]),
+            sample_objective=float(np.dot(objective_row, normalized_weights)),
+        )
+        row_table.append(row)
+    return row_table
+
+
 def zonal_flow_objective_artifact_from_records(
     records: Iterable[Mapping[str, Any]],
     *,
@@ -426,28 +468,14 @@ def zonal_flow_objective_artifact_from_records(
         reduction=reduction,
     )
     rows_np = np.asarray(rows, dtype=float)
-    weights = np.asarray(cfg.objective_weights(), dtype=float)
-    normalized_weights = weights / float(np.sum(weights))
-    row_table: list[dict[str, float | str]] = []
-    for item in normalized:
-        i = surfaces.index(item["surface"])
-        j = alphas.index(item["alpha"])
-        k = kx_values.index(item["kx"])
-        objective_row = rows_np[i, j, k, :]
-        row_table.append(
-            {
-                "surface": item["surface"],
-                "alpha": item["alpha"],
-                "kx": item["kx"],
-                "residual_level": item["residual_level"],
-                "damping_rate": item["damping_rate"],
-                "linear_growth_rate": item["linear_growth_rate"],
-                "recurrence_amplitude": item["recurrence_amplitude"],
-                "inverse_residual": float(objective_row[0]),
-                "growth_over_residual": float(objective_row[2]),
-                "sample_objective": float(np.dot(objective_row, normalized_weights)),
-            }
-        )
+    row_table = _zonal_row_table(
+        normalized_records=normalized,
+        surfaces=surfaces,
+        alphas=alphas,
+        kx_values=kx_values,
+        objective_rows=rows_np,
+        objective_weights=cfg.objective_weights(),
+    )
 
     promotion_ready = missing_damping_count == 0 and missing_recurrence_count == 0
     payload_claim = claim_level or (
