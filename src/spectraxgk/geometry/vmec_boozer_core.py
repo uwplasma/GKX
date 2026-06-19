@@ -54,6 +54,52 @@ class _ReferenceScales:
     edge_toroidal_flux_over_2pi: float
 
 
+@dataclass(frozen=True)
+class _BoozerRadialProfiles:
+    bmnc_b: jnp.ndarray
+    rmnc_b: jnp.ndarray
+    zmns_b: jnp.ndarray
+    numns_b: jnp.ndarray
+    d_bmnc_b_d_s: jnp.ndarray
+    d_rmnc_b_d_s: jnp.ndarray
+    d_zmns_b_d_s: jnp.ndarray
+    d_numns_b_d_s: jnp.ndarray
+    iota: jnp.ndarray
+    d_iota_ds: jnp.ndarray
+    iota_safe: jnp.ndarray
+    s_hat: jnp.ndarray
+    boozer_i: jnp.ndarray
+    boozer_g: jnp.ndarray
+
+
+@dataclass(frozen=True)
+class _EqualArcFieldLine:
+    theta_closed: jnp.ndarray
+    theta_uniform_closed: jnp.ndarray
+    theta_eqarc: jnp.ndarray
+    theta: jnp.ndarray
+    mod_b_safe: jnp.ndarray
+    sqrt_g_booz: jnp.ndarray
+    gradpar_eqarc: jnp.ndarray
+    gradpar: jnp.ndarray
+    bmag: jnp.ndarray
+    bmag_safe: jnp.ndarray
+    bgrad: jnp.ndarray
+    jacobian: jnp.ndarray
+
+
+@dataclass(frozen=True)
+class _MetricDriftProfiles:
+    gds2: jnp.ndarray
+    gds21: jnp.ndarray
+    gds22: jnp.ndarray
+    grho: jnp.ndarray
+    cvdrift: jnp.ndarray
+    gbdrift: jnp.ndarray
+    cvdrift0: jnp.ndarray
+    gbdrift0: jnp.ndarray
+
+
 def _interp_boozer_profile(
     out: dict[str, Any],
     name: str,
@@ -274,6 +320,334 @@ def _boozer_surface_grid(
     return bmnc_b_all, s_half, radial_spacing
 
 
+def _interpolate_boozer_radial_profiles(
+    out: dict[str, Any],
+    request: _BoozerCoreRequest,
+    *,
+    s_half: jnp.ndarray,
+    radial_spacing: float,
+) -> _BoozerRadialProfiles:
+    dtype = request.base_Rcos.dtype
+    s_value = request.torflux
+    bmnc_b = _interp_radial(jnp.asarray(out["bmnc_b"], dtype=dtype), s_half, s_value)
+
+    def interp_profile(name: str) -> jnp.ndarray:
+        return _interp_boozer_profile(
+            out,
+            name,
+            dtype=dtype,
+            s_half=s_half,
+            s_value=s_value,
+        )
+
+    def interp_derivative(name: str) -> jnp.ndarray:
+        return _interp_boozer_profile_derivative(
+            out,
+            name,
+            dtype=dtype,
+            radial_spacing=radial_spacing,
+            s_half=s_half,
+            s_value=s_value,
+        )
+
+    iota_profile = jnp.asarray(out["iota_b"], dtype=dtype)
+    iota = _interp_radial(iota_profile, s_half, s_value)
+    d_iota_ds = _interp_radial(
+        _radial_derivative_profile(iota_profile, radial_spacing),
+        s_half,
+        s_value,
+    )
+    iota_safe = jnp.where(
+        jnp.abs(iota) < 1.0e-12,
+        jnp.sign(iota + 1.0e-30) * 1.0e-12,
+        iota,
+    )
+    s_hat = -2.0 * jnp.asarray(s_value, dtype=dtype) * d_iota_ds / iota_safe
+    boozer_i = _interp_radial(jnp.asarray(out["buco_b"], dtype=dtype), s_half, s_value)
+    boozer_g = _interp_radial(jnp.asarray(out["bvco_b"], dtype=dtype), s_half, s_value)
+    return _BoozerRadialProfiles(
+        bmnc_b=bmnc_b,
+        rmnc_b=interp_profile("rmnc_b"),
+        zmns_b=interp_profile("zmns_b"),
+        numns_b=-interp_profile("pmns_b"),
+        d_bmnc_b_d_s=interp_derivative("bmnc_b"),
+        d_rmnc_b_d_s=interp_derivative("rmnc_b"),
+        d_zmns_b_d_s=interp_derivative("zmns_b"),
+        d_numns_b_d_s=-interp_derivative("pmns_b"),
+        iota=iota,
+        d_iota_ds=d_iota_ds,
+        iota_safe=iota_safe,
+        s_hat=s_hat,
+        boozer_i=boozer_i,
+        boozer_g=boozer_g,
+    )
+
+
+def _build_equal_arc_field_line(
+    out: dict[str, Any],
+    request: _BoozerCoreRequest,
+    scales: _ReferenceScales,
+    profiles: _BoozerRadialProfiles,
+    *,
+    alpha: float,
+) -> _EqualArcFieldLine:
+    dtype = request.base_Rcos.dtype
+    theta_closed = jnp.linspace(-jnp.pi, jnp.pi, request.ntheta + 1, dtype=dtype)
+    mod_b, _dmod_b_dtheta = _evaluate_boozer_cosine_series_on_field_line(
+        theta_closed,
+        coeffs=profiles.bmnc_b,
+        ixm_b=jnp.asarray(out["ixm_b"]),
+        ixn_b=jnp.asarray(out["ixn_b"]),
+        iota=profiles.iota_safe,
+        alpha=float(alpha),
+    )
+    eps = jnp.asarray(1.0e-30, dtype=dtype)
+    mod_b_safe = jnp.maximum(jnp.abs(mod_b), eps)
+    sqrt_g_booz = (profiles.boozer_g + profiles.iota_safe * profiles.boozer_i) / (
+        mod_b_safe * mod_b_safe
+    )
+    gradpar_raw = jnp.abs(
+        jnp.asarray(float(scales.length), dtype=dtype)
+        * profiles.iota_safe
+        / jnp.maximum(jnp.abs(mod_b_safe * sqrt_g_booz), eps)
+    )
+    inv_gradpar_int = _cumulative_trapezoid(1.0 / gradpar_raw, theta_closed)
+    gradpar_eqarc = 2.0 * jnp.pi / jnp.maximum(inv_gradpar_int[-1], eps)
+    theta_eqarc = gradpar_eqarc * inv_gradpar_int - jnp.pi
+    theta_uniform_closed = jnp.linspace(-jnp.pi, jnp.pi, request.ntheta + 1, dtype=dtype)
+    bmag_closed = jnp.asarray(
+        _interp_equal_arc_profile(
+            theta_uniform_closed,
+            theta_eqarc,
+            mod_b_safe / float(scales.magnetic_field),
+        )
+    )
+    theta = theta_uniform_closed[:-1]
+    bmag = bmag_closed[:-1]
+    gradpar = gradpar_eqarc * jnp.ones_like(theta)
+    dtheta = 2.0 * jnp.pi / float(request.ntheta)
+    bmag_safe = jnp.maximum(jnp.abs(bmag), eps)
+    wave_number = 2.0 * jnp.pi * jnp.fft.fftfreq(request.ntheta, d=float(dtheta))
+    dbmag_dtheta = jnp.real(jnp.fft.ifft(1j * wave_number * jnp.fft.fft(bmag)))
+    bgrad = gradpar_eqarc * dbmag_dtheta / bmag_safe
+    dpsidrho = (
+        2.0
+        * jnp.sqrt(jnp.asarray(request.torflux, dtype=dtype))
+        * jnp.asarray(scales.edge_toroidal_flux_over_2pi, dtype=dtype)
+    )
+    drhodpsi = 1.0 / jnp.maximum(jnp.abs(dpsidrho), eps)
+    jacobian = 1.0 / jnp.maximum(jnp.abs(drhodpsi * gradpar_eqarc * bmag_safe), eps)
+    return _EqualArcFieldLine(
+        theta_closed=theta_closed,
+        theta_uniform_closed=theta_uniform_closed,
+        theta_eqarc=theta_eqarc,
+        theta=theta,
+        mod_b_safe=mod_b_safe,
+        sqrt_g_booz=sqrt_g_booz,
+        gradpar_eqarc=gradpar_eqarc,
+        gradpar=gradpar,
+        bmag=bmag,
+        bmag_safe=bmag_safe,
+        bgrad=bgrad,
+        jacobian=jacobian,
+    )
+
+
+def _build_metric_and_drift_profiles(
+    out: dict[str, Any],
+    request: _BoozerCoreRequest,
+    scales: _ReferenceScales,
+    profiles: _BoozerRadialProfiles,
+    equal_arc: _EqualArcFieldLine,
+    *,
+    alpha: float,
+) -> _MetricDriftProfiles:
+    dtype = request.base_Rcos.dtype
+    eps = jnp.asarray(1.0e-30, dtype=dtype)
+    spectral = evaluate_boozer_field_line_derivatives(
+        out,
+        theta_closed=equal_arc.theta_closed,
+        alpha=alpha,
+        iota_safe=profiles.iota_safe,
+        base_dtype=dtype,
+        bmnc_b=profiles.bmnc_b,
+        d_bmnc_b_d_s=profiles.d_bmnc_b_d_s,
+        rmnc_b=profiles.rmnc_b,
+        d_rmnc_b_d_s=profiles.d_rmnc_b_d_s,
+        zmns_b=profiles.zmns_b,
+        d_zmns_b_d_s=profiles.d_zmns_b_d_s,
+        numns_b=profiles.numns_b,
+        d_numns_b_d_s=profiles.d_numns_b_d_s,
+    )
+    cartesian = boozer_cartesian_derivatives(spectral)
+    etf = jnp.asarray(scales.edge_toroidal_flux_over_2pi, dtype=dtype)
+    etf_floor = jnp.asarray(1.0e-12, dtype=dtype)
+    etf_safe = jnp.where(jnp.abs(etf) < etf_floor, jnp.sign(etf + eps) * etf_floor, etf)
+    gradients = boozer_coordinate_gradients(
+        spectral=spectral,
+        cartesian=cartesian,
+        sqrt_g_booz=equal_arc.sqrt_g_booz,
+        etf_safe=etf_safe,
+    )
+    grad_psi_x = gradients.grad_psi_x
+    grad_psi_y = gradients.grad_psi_y
+    grad_psi_z = gradients.grad_psi_z
+    g_sup_psi_psi = grad_psi_x**2 + grad_psi_y**2 + grad_psi_z**2
+    g_sup_psi_psi_safe = jnp.maximum(g_sup_psi_psi, eps)
+
+    zeta_center = -jnp.asarray(float(alpha), dtype=dtype) / profiles.iota_safe
+    shear_phase = spectral.phi_b - zeta_center
+    grad_alpha_x = (
+        -shear_phase * profiles.d_iota_ds * grad_psi_x / etf_safe
+        + gradients.grad_theta_x
+        - profiles.iota_safe * gradients.grad_phi_x
+    )
+    grad_alpha_y = (
+        -shear_phase * profiles.d_iota_ds * grad_psi_y / etf_safe
+        + gradients.grad_theta_y
+        - profiles.iota_safe * gradients.grad_phi_y
+    )
+    grad_alpha_z = (
+        -shear_phase * profiles.d_iota_ds * grad_psi_z / etf_safe
+        + gradients.grad_theta_z
+        - profiles.iota_safe * gradients.grad_phi_z
+    )
+    grad_alpha_dot_grad_psi = (
+        grad_alpha_x * grad_psi_x
+        + grad_alpha_y * grad_psi_y
+        + grad_alpha_z * grad_psi_z
+    )
+    local_shear_l1 = grad_alpha_dot_grad_psi / g_sup_psi_psi_safe
+    s_arr = jnp.asarray(request.torflux, dtype=dtype)
+    L = jnp.asarray(float(scales.length), dtype=dtype)
+    Bref = jnp.asarray(float(scales.magnetic_field), dtype=dtype)
+    metric_bmag_sq = equal_arc.mod_b_safe * equal_arc.mod_b_safe
+    gds2_raw = (
+        (metric_bmag_sq / g_sup_psi_psi_safe + g_sup_psi_psi_safe * local_shear_l1**2)
+        * L
+        * L
+        * s_arr
+    )
+    gds21_raw = g_sup_psi_psi_safe * local_shear_l1 * profiles.s_hat / Bref
+    gds22_raw = (
+        g_sup_psi_psi_safe * profiles.s_hat * profiles.s_hat / (L * L * Bref * Bref * s_arr)
+    )
+    grho_raw = jnp.sqrt(g_sup_psi_psi_safe / (L * L * Bref * Bref * s_arr))
+
+    boozer_current_sum = profiles.boozer_g + profiles.iota_safe * profiles.boozer_i
+    d_sqrt_g_booz_d_theta = (
+        -2.0 * boozer_current_sum * spectral.d_mod_b_d_theta / (equal_arc.mod_b_safe**3)
+    )
+    d_sqrt_g_booz_d_phi = (
+        -2.0 * boozer_current_sum * spectral.d_mod_b_d_phi / (equal_arc.mod_b_safe**3)
+    )
+    curvature_numerator = (
+        profiles.boozer_g * d_sqrt_g_booz_d_theta
+        - profiles.boozer_i * d_sqrt_g_booz_d_phi
+    )
+    curvature_denom = 2.0 * equal_arc.sqrt_g_booz * boozer_current_sum
+    curvature_denom_safe = jnp.where(
+        jnp.abs(curvature_denom) < eps,
+        jnp.sign(curvature_denom + eps) * eps,
+        curvature_denom,
+    )
+    kappa_g = curvature_numerator / curvature_denom_safe
+    local_shear_l0 = -(local_shear_l1 + profiles.d_iota_ds / etf_safe * shear_phase)
+    kappa_n = spectral.d_mod_b_d_s / (equal_arc.mod_b_safe * etf_safe) + local_shear_l0 * kappa_g
+    b_cross_kappa_dot_grad_alpha = (kappa_n + kappa_g * local_shear_l1) * metric_bmag_sq
+    b_cross_kappa_dot_grad_psi = kappa_g * metric_bmag_sq
+    toroidal_flux_sign = jnp.sign(etf)
+    sqrt_s = jnp.sqrt(s_arr)
+    drift_cvdrift0_raw = (
+        -b_cross_kappa_dot_grad_psi
+        * 2.0
+        * profiles.s_hat
+        / jnp.maximum(metric_bmag_sq * sqrt_s, eps)
+        * toroidal_flux_sign
+    )
+    drift_cvdrift_raw = (
+        -2.0
+        * Bref
+        * L
+        * L
+        * sqrt_s
+        * b_cross_kappa_dot_grad_alpha
+        / metric_bmag_sq
+        * toroidal_flux_sign
+    )
+
+    def equal_arc_open(profile: jnp.ndarray) -> jnp.ndarray:
+        return _interp_equal_arc_profile(
+            equal_arc.theta_uniform_closed,
+            equal_arc.theta_eqarc,
+            profile,
+        )[:-1]
+
+    drift_loader_factor = jnp.asarray(0.5, dtype=dtype)
+    cvdrift = drift_loader_factor * equal_arc_open(drift_cvdrift_raw)
+    cvdrift0 = drift_loader_factor * equal_arc_open(drift_cvdrift0_raw)
+    return _MetricDriftProfiles(
+        gds2=equal_arc_open(gds2_raw),
+        gds21=equal_arc_open(gds21_raw),
+        gds22=equal_arc_open(gds22_raw),
+        grho=equal_arc_open(grho_raw),
+        cvdrift=cvdrift,
+        gbdrift=cvdrift,
+        cvdrift0=cvdrift0,
+        gbdrift0=cvdrift0,
+    )
+
+
+def _assemble_core_mapping(
+    request: _BoozerCoreRequest,
+    scales: _ReferenceScales,
+    profiles: _BoozerRadialProfiles,
+    equal_arc: _EqualArcFieldLine,
+    metric_drift: _MetricDriftProfiles,
+    *,
+    surface_stencil_width: int | None,
+    surface_indices: jnp.ndarray | None,
+) -> dict[str, Any]:
+    eps = jnp.asarray(1.0e-30, dtype=request.base_Rcos.dtype)
+    return {
+        "theta": equal_arc.theta,
+        "theta_equal_arc_closed": equal_arc.theta_eqarc,
+        "theta_uniform_closed": equal_arc.theta_uniform_closed,
+        "gradpar": equal_arc.gradpar,
+        "bmag": equal_arc.bmag,
+        "bgrad": equal_arc.bgrad,
+        "jacobian": equal_arc.jacobian,
+        "gds2": metric_drift.gds2,
+        "gds21": metric_drift.gds21,
+        "gds22": metric_drift.gds22,
+        "cvdrift": metric_drift.cvdrift,
+        "gbdrift": metric_drift.gbdrift,
+        "cvdrift0": metric_drift.cvdrift0,
+        "gbdrift0": metric_drift.gbdrift0,
+        "grho": metric_drift.grho,
+        "q": 1.0 / jnp.maximum(jnp.abs(profiles.iota_safe), eps),
+        "s_hat": profiles.s_hat,
+        "iota": profiles.iota,
+        "torflux": float(request.torflux),
+        "surface_index": int(request.surface_index),
+        "reference_length": float(scales.length),
+        "reference_b": float(scales.magnetic_field),
+        "mboz": int(request.mboz),
+        "nboz": int(request.nboz),
+        "surface_stencil_width": None
+        if surface_stencil_width is None
+        else int(surface_stencil_width),
+        "boozer_surface_indices": None
+        if surface_indices is None
+        else [int(x) for x in np.asarray(surface_indices)],
+        "field_line_convention": "Boozer theta, alpha=theta-iota*zeta, equal-arc remap",
+        "scope": (
+            "Boozer equal-arc bmag/gradpar/Jacobian plus zero-beta metric/drift parity; "
+            "finite-beta pressure corrections and broad-equilibrium drift gates remain open"
+        ),
+    }
+
+
 def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
     state: Any,
     static: Any,
@@ -312,21 +686,9 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
         nboz=nboz,
         surface_stencil_width=surface_stencil_width,
     )
-    ntheta_int = request.ntheta
-    mboz_int = request.mboz
-    nboz_int = request.nboz
-    base_Rcos = request.base_Rcos
-    ns_full = request.ns_full
-    sidx = request.surface_index
-    s_value = request.torflux
-
     scales = _resolve_reference_scales(
         wout, reference_length=reference_length, reference_b=reference_b
     )
-    L_reference = scales.length
-    B_reference = scales.magnetic_field
-    edge_toroidal_flux_over_2pi = scales.edge_toroidal_flux_over_2pi
-
     out, surface_indices = _run_boozer_transform_from_state(
         state,
         static,
@@ -336,275 +698,41 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
         jit=jit,
         surface_stencil_width=surface_stencil_width,
     )
-    bmnc_b_all, s_half, radial_spacing = _boozer_surface_grid(
-        out, base_dtype=base_Rcos.dtype, ns_full=ns_full
-    )
-    bmnc_b = _interp_radial(bmnc_b_all, s_half, s_value)
-
-    def interp_profile(name: str) -> jnp.ndarray:
-        return _interp_boozer_profile(
-            out, name, dtype=base_Rcos.dtype, s_half=s_half, s_value=s_value
-        )
-
-    def interp_derivative(name: str) -> jnp.ndarray:
-        return _interp_boozer_profile_derivative(
-            out,
-            name,
-            dtype=base_Rcos.dtype,
-            radial_spacing=radial_spacing,
-            s_half=s_half,
-            s_value=s_value,
-        )
-
-    rmnc_b = interp_profile("rmnc_b")
-    zmns_b = interp_profile("zmns_b")
-    numns_b = -interp_profile("pmns_b")
-    d_bmnc_b_d_s = interp_derivative("bmnc_b")
-    d_rmnc_b_d_s = interp_derivative("rmnc_b")
-    d_zmns_b_d_s = interp_derivative("zmns_b")
-    d_numns_b_d_s = -interp_derivative("pmns_b")
-    iota_profile = jnp.asarray(out["iota_b"], dtype=base_Rcos.dtype)
-    iota = _interp_radial(iota_profile, s_half, s_value)
-    d_iota_ds = _interp_radial(
-        _radial_derivative_profile(iota_profile, radial_spacing), s_half, s_value
-    )
-    iota_safe = jnp.where(
-        jnp.abs(iota) < 1.0e-12, jnp.sign(iota + 1.0e-30) * 1.0e-12, iota
-    )
-    s_hat = -2.0 * jnp.asarray(s_value, dtype=base_Rcos.dtype) * d_iota_ds / iota_safe
-
-    boozer_i = _interp_radial(
-        jnp.asarray(out["buco_b"], dtype=base_Rcos.dtype), s_half, s_value
-    )
-    boozer_g = _interp_radial(
-        jnp.asarray(out["bvco_b"], dtype=base_Rcos.dtype), s_half, s_value
-    )
-
-    theta_closed = jnp.linspace(-jnp.pi, jnp.pi, ntheta_int + 1, dtype=base_Rcos.dtype)
-    mod_b, _dmod_b_dtheta = _evaluate_boozer_cosine_series_on_field_line(
-        theta_closed,
-        coeffs=bmnc_b,
-        ixm_b=jnp.asarray(out["ixm_b"]),
-        ixn_b=jnp.asarray(out["ixn_b"]),
-        iota=iota_safe,
-        alpha=float(alpha),
-    )
-    eps = jnp.asarray(1.0e-30, dtype=base_Rcos.dtype)
-    mod_b_safe = jnp.maximum(jnp.abs(mod_b), eps)
-    sqrt_g_booz = (boozer_g + iota_safe * boozer_i) / (mod_b_safe * mod_b_safe)
-    gradpar_raw = jnp.abs(
-        jnp.asarray(float(L_reference), dtype=base_Rcos.dtype)
-        * iota_safe
-        / jnp.maximum(jnp.abs(mod_b_safe * sqrt_g_booz), eps)
-    )
-    inv_gradpar_int = _cumulative_trapezoid(1.0 / gradpar_raw, theta_closed)
-    gradpar_eqarc = (
-        2.0
-        * jnp.pi
-        / jnp.maximum(inv_gradpar_int[-1], eps)
-    )
-    theta_eqarc = gradpar_eqarc * inv_gradpar_int - jnp.pi
-    theta_uniform_closed = jnp.linspace(
-        -jnp.pi, jnp.pi, ntheta_int + 1, dtype=base_Rcos.dtype
-    )
-    bmag_closed = jnp.asarray(
-        _interp_equal_arc_profile(
-            theta_uniform_closed,
-            theta_eqarc,
-            mod_b_safe / float(B_reference),
-        )
-    )
-    theta = theta_uniform_closed[:-1]
-    bmag = bmag_closed[:-1]
-    gradpar = gradpar_eqarc * jnp.ones_like(theta)
-    dtheta = 2.0 * jnp.pi / float(ntheta_int)
-    bmag_safe = jnp.maximum(jnp.abs(bmag), jnp.asarray(1.0e-30, dtype=base_Rcos.dtype))
-    wave_number = 2.0 * jnp.pi * jnp.fft.fftfreq(ntheta_int, d=float(dtheta))
-    dbmag_dtheta = jnp.real(jnp.fft.ifft(1j * wave_number * jnp.fft.fft(bmag)))
-    bgrad = gradpar_eqarc * dbmag_dtheta / bmag_safe
-
-    dpsidrho = (
-        2.0
-        * jnp.sqrt(jnp.asarray(s_value, dtype=base_Rcos.dtype))
-        * jnp.asarray(
-            edge_toroidal_flux_over_2pi,
-            dtype=base_Rcos.dtype,
-        )
-    )
-    drhodpsi = 1.0 / jnp.maximum(jnp.abs(dpsidrho), eps)
-    jacobian = 1.0 / jnp.maximum(jnp.abs(drhodpsi * gradpar_eqarc * bmag_safe), eps)
-
-    spectral = evaluate_boozer_field_line_derivatives(
+    _bmnc_b_all, s_half, radial_spacing = _boozer_surface_grid(
         out,
-        theta_closed=theta_closed,
+        base_dtype=request.base_Rcos.dtype,
+        ns_full=request.ns_full,
+    )
+    profiles = _interpolate_boozer_radial_profiles(
+        out,
+        request,
+        s_half=s_half,
+        radial_spacing=radial_spacing,
+    )
+    equal_arc = _build_equal_arc_field_line(
+        out,
+        request,
+        scales,
+        profiles,
         alpha=alpha,
-        iota_safe=iota_safe,
-        base_dtype=base_Rcos.dtype,
-        bmnc_b=bmnc_b,
-        d_bmnc_b_d_s=d_bmnc_b_d_s,
-        rmnc_b=rmnc_b,
-        d_rmnc_b_d_s=d_rmnc_b_d_s,
-        zmns_b=zmns_b,
-        d_zmns_b_d_s=d_zmns_b_d_s,
-        numns_b=numns_b,
-        d_numns_b_d_s=d_numns_b_d_s,
     )
-
-    cartesian = boozer_cartesian_derivatives(spectral)
-    etf = jnp.asarray(edge_toroidal_flux_over_2pi, dtype=base_Rcos.dtype)
-    etf_floor = jnp.asarray(1.0e-12, dtype=base_Rcos.dtype)
-    etf_safe = jnp.where(
-        jnp.abs(etf) < etf_floor,
-        jnp.sign(etf + eps) * etf_floor,
-        etf,
+    metric_drift = _build_metric_and_drift_profiles(
+        out,
+        request,
+        scales,
+        profiles,
+        equal_arc,
+        alpha=alpha,
     )
-    gradients = boozer_coordinate_gradients(
-        spectral=spectral,
-        cartesian=cartesian,
-        sqrt_g_booz=sqrt_g_booz,
-        etf_safe=etf_safe,
+    return _assemble_core_mapping(
+        request,
+        scales,
+        profiles,
+        equal_arc,
+        metric_drift,
+        surface_stencil_width=surface_stencil_width,
+        surface_indices=surface_indices,
     )
-    grad_psi_x = gradients.grad_psi_x
-    grad_psi_y = gradients.grad_psi_y
-    grad_psi_z = gradients.grad_psi_z
-    g_sup_psi_psi = grad_psi_x**2 + grad_psi_y**2 + grad_psi_z**2
-    g_sup_psi_psi_safe = jnp.maximum(g_sup_psi_psi, eps)
-
-    zeta_center = -jnp.asarray(float(alpha), dtype=base_Rcos.dtype) / iota_safe
-    shear_phase = spectral.phi_b - zeta_center
-    grad_alpha_x = (
-        -shear_phase * d_iota_ds * grad_psi_x / etf_safe
-        + gradients.grad_theta_x
-        - iota_safe * gradients.grad_phi_x
-    )
-    grad_alpha_y = (
-        -shear_phase * d_iota_ds * grad_psi_y / etf_safe
-        + gradients.grad_theta_y
-        - iota_safe * gradients.grad_phi_y
-    )
-    grad_alpha_z = (
-        -shear_phase * d_iota_ds * grad_psi_z / etf_safe
-        + gradients.grad_theta_z
-        - iota_safe * gradients.grad_phi_z
-    )
-    grad_alpha_dot_grad_psi = (
-        grad_alpha_x * grad_psi_x
-        + grad_alpha_y * grad_psi_y
-        + grad_alpha_z * grad_psi_z
-    )
-    local_shear_l1 = grad_alpha_dot_grad_psi / g_sup_psi_psi_safe
-    s_arr = jnp.asarray(s_value, dtype=base_Rcos.dtype)
-    L = jnp.asarray(float(L_reference), dtype=base_Rcos.dtype)
-    Bref = jnp.asarray(float(B_reference), dtype=base_Rcos.dtype)
-    shat_metric = s_hat
-    metric_bmag_sq = mod_b_safe * mod_b_safe
-    gds2_raw = (
-        (metric_bmag_sq / g_sup_psi_psi_safe + g_sup_psi_psi_safe * local_shear_l1**2)
-        * L
-        * L
-        * s_arr
-    )
-    gds21_raw = g_sup_psi_psi_safe * local_shear_l1 * shat_metric / Bref
-    gds22_raw = (
-        g_sup_psi_psi_safe * shat_metric * shat_metric / (L * L * Bref * Bref * s_arr)
-    )
-    grho_raw = jnp.sqrt(g_sup_psi_psi_safe / (L * L * Bref * Bref * s_arr))
-
-    boozer_current_sum = boozer_g + iota_safe * boozer_i
-    d_sqrt_g_booz_d_theta = (
-        -2.0 * boozer_current_sum * spectral.d_mod_b_d_theta / (mod_b_safe**3)
-    )
-    d_sqrt_g_booz_d_phi = (
-        -2.0 * boozer_current_sum * spectral.d_mod_b_d_phi / (mod_b_safe**3)
-    )
-    curvature_numerator = (
-        boozer_g * d_sqrt_g_booz_d_theta - boozer_i * d_sqrt_g_booz_d_phi
-    )
-    curvature_denom = 2.0 * sqrt_g_booz * boozer_current_sum
-    curvature_denom_safe = jnp.where(
-        jnp.abs(curvature_denom) < eps,
-        jnp.sign(curvature_denom + eps) * eps,
-        curvature_denom,
-    )
-    kappa_g = curvature_numerator / curvature_denom_safe
-    local_shear_l0 = -(local_shear_l1 + d_iota_ds / etf_safe * shear_phase)
-    kappa_n = (
-        spectral.d_mod_b_d_s / (mod_b_safe * etf_safe) + local_shear_l0 * kappa_g
-    )
-    b_cross_kappa_dot_grad_alpha = (kappa_n + kappa_g * local_shear_l1) * metric_bmag_sq
-    b_cross_kappa_dot_grad_psi = kappa_g * metric_bmag_sq
-    toroidal_flux_sign = jnp.sign(etf)
-    sqrt_s = jnp.sqrt(s_arr)
-    drift_cvdrift0_raw = (
-        -b_cross_kappa_dot_grad_psi
-        * 2.0
-        * shat_metric
-        / jnp.maximum(metric_bmag_sq * sqrt_s, eps)
-        * toroidal_flux_sign
-    )
-    drift_cvdrift_raw = (
-        -2.0
-        * Bref
-        * L
-        * L
-        * sqrt_s
-        * b_cross_kappa_dot_grad_alpha
-        / metric_bmag_sq
-        * toroidal_flux_sign
-    )
-    # Root-level VMEC/EIK drift coefficients are stored at the pre-loader (2x)
-    # level; SPECTRAX-GK compares against the loaded solver convention.
-    drift_loader_factor = jnp.asarray(0.5, dtype=base_Rcos.dtype)
-
-    def equal_arc_open(profile: jnp.ndarray) -> jnp.ndarray:
-        return _interp_equal_arc_profile(theta_uniform_closed, theta_eqarc, profile)[:-1]
-
-    gds2 = equal_arc_open(gds2_raw)
-    gds21 = equal_arc_open(gds21_raw)
-    gds22 = equal_arc_open(gds22_raw)
-    grho = equal_arc_open(grho_raw)
-    cvdrift = drift_loader_factor * equal_arc_open(drift_cvdrift_raw)
-    gbdrift = cvdrift
-    cvdrift0 = drift_loader_factor * equal_arc_open(drift_cvdrift0_raw)
-    gbdrift0 = cvdrift0
-
-    return {
-        "theta": theta,
-        "theta_equal_arc_closed": theta_eqarc,
-        "theta_uniform_closed": theta_uniform_closed,
-        "gradpar": gradpar,
-        "bmag": bmag,
-        "bgrad": bgrad,
-        "jacobian": jacobian,
-        "gds2": gds2,
-        "gds21": gds21,
-        "gds22": gds22,
-        "cvdrift": cvdrift,
-        "gbdrift": gbdrift,
-        "cvdrift0": cvdrift0,
-        "gbdrift0": gbdrift0,
-        "grho": grho,
-        "q": 1.0 / jnp.maximum(jnp.abs(iota_safe), eps),
-        "s_hat": s_hat,
-        "iota": iota,
-        "torflux": float(s_value),
-        "surface_index": int(sidx),
-        "reference_length": float(L_reference),
-        "reference_b": float(B_reference),
-        "mboz": mboz_int,
-        "nboz": nboz_int,
-        "surface_stencil_width": None
-        if surface_stencil_width is None
-        else int(surface_stencil_width),
-        "boozer_surface_indices": None
-        if surface_indices is None
-        else [int(x) for x in np.asarray(surface_indices)],
-        "field_line_convention": "Boozer theta, alpha=theta-iota*zeta, equal-arc remap",
-        "scope": (
-            "Boozer equal-arc bmag/gradpar/Jacobian plus zero-beta metric/drift parity; "
-            "finite-beta pressure corrections and broad-equilibrium drift gates remain open"
-        ),
-    }
 
 
 def flux_tube_geometry_from_vmec_boozer_state(  # pragma: no cover
