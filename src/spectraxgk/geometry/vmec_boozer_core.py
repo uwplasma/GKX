@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import importlib
 from types import SimpleNamespace
 from typing import Any
@@ -30,6 +31,24 @@ from spectraxgk.geometry.vmec_boozer_constants import (
 )
 
 
+@dataclass(frozen=True)
+class _BoozerCoreRequest:
+    ntheta: int
+    mboz: int
+    nboz: int
+    base_Rcos: jnp.ndarray
+    ns_full: int
+    surface_index: int
+    torflux: float
+
+
+@dataclass(frozen=True)
+class _ReferenceScales:
+    length: float
+    magnetic_field: float
+    edge_toroidal_flux_over_2pi: float
+
+
 def _interp_boozer_profile(
     out: dict[str, Any],
     name: str,
@@ -55,6 +74,109 @@ def _interp_boozer_profile_derivative(
         s_half,
         s_value,
     )
+
+
+def _resolve_boozer_core_request(
+    state: Any,
+    *,
+    surface_index: int | None,
+    torflux: float | None,
+    ntheta: int,
+    mboz: int,
+    nboz: int,
+    surface_stencil_width: int | None,
+) -> _BoozerCoreRequest:
+    ntheta_int = int(ntheta)
+    if ntheta_int < 4:
+        raise ValueError("ntheta must be >= 4")
+    mboz_int = int(mboz)
+    nboz_int = int(nboz)
+    if (
+        mboz_int < _VMEC_BOOZER_PARITY_MIN_MODE_COUNT
+        or nboz_int < _VMEC_BOOZER_PARITY_MIN_MODE_COUNT
+    ):
+        raise ValueError(
+            "mboz and nboz must both be >= "
+            f"{_VMEC_BOOZER_PARITY_MIN_MODE_COUNT} for VMEC/Boozer parity gates"
+        )
+
+    base_Rcos = jnp.asarray(state.Rcos)
+    if base_Rcos.ndim != 2:
+        raise RuntimeError("vmec_jax state Rcos array must be two-dimensional")
+    ns_full = int(base_Rcos.shape[0])
+    if ns_full < 3:
+        raise RuntimeError("vmec_jax state needs at least three radial surfaces")
+
+    sidx = (
+        max(1, min(ns_full // 2, ns_full - 2))
+        if surface_index is None
+        else int(surface_index)
+    )
+    if not (0 < sidx < ns_full - 1):
+        raise ValueError("surface_index must be an interior VMEC radial index")
+    s_value = (
+        float(sidx) / float(max(ns_full - 1, 1)) if torflux is None else float(torflux)
+    )
+    if not (0.0 < s_value < 1.0):
+        raise ValueError("torflux must lie inside (0, 1)")
+    if surface_stencil_width is not None and int(surface_stencil_width) < 3:
+        raise ValueError("surface_stencil_width must be >= 3 when provided")
+    return _BoozerCoreRequest(
+        ntheta=ntheta_int,
+        mboz=mboz_int,
+        nboz=nboz_int,
+        base_Rcos=base_Rcos,
+        ns_full=ns_full,
+        surface_index=sidx,
+        torflux=s_value,
+    )
+
+
+def _resolve_reference_scales(
+    wout: Any,
+    *,
+    reference_length: float | None,
+    reference_b: float | None,
+) -> _ReferenceScales:
+    raw_length = (
+        float(getattr(wout, "Aminor_p", 1.0))
+        if reference_length is None
+        else float(reference_length)
+    )
+    length = raw_length if np.isfinite(raw_length) and abs(raw_length) > 0.0 else 1.0
+    phi_profile = np.asarray(getattr(wout, "phi", [0.0, np.pi]), dtype=float)
+    edge_toroidal_flux_over_2pi = -float(phi_profile[-1]) / (2.0 * np.pi)
+    if reference_b is None:
+        raw_b = 2.0 * abs(edge_toroidal_flux_over_2pi) / (length * length)
+        magnetic_field = raw_b if np.isfinite(raw_b) and abs(raw_b) > 0.0 else 1.0
+    else:
+        magnetic_field = float(reference_b)
+    magnetic_field = (
+        magnetic_field
+        if np.isfinite(magnetic_field) and abs(magnetic_field) > 0.0
+        else 1.0
+    )
+    return _ReferenceScales(
+        length=length,
+        magnetic_field=magnetic_field,
+        edge_toroidal_flux_over_2pi=edge_toroidal_flux_over_2pi,
+    )
+
+
+def _surface_indices_for_stencil(
+    *,
+    surface_stencil_width: int | None,
+    ns_full: int,
+    torflux: float,
+) -> jnp.ndarray | None:
+    if surface_stencil_width is None:
+        return None
+    ns_b_est = max(1, int(ns_full) - 1)
+    width = min(int(surface_stencil_width), ns_b_est)
+    center = int(round(float(torflux) * float(ns_b_est) - 0.5))
+    half_width = width // 2
+    start = max(0, min(center - half_width, ns_b_est - width))
+    return jnp.arange(start, start + width, dtype=jnp.int32)
 
 
 def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
@@ -86,19 +208,29 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
     separate promotion steps.
     """
 
-    ntheta_int = int(ntheta)
-    if ntheta_int < 4:
-        raise ValueError("ntheta must be >= 4")
-    mboz_int = int(mboz)
-    nboz_int = int(nboz)
-    if (
-        mboz_int < _VMEC_BOOZER_PARITY_MIN_MODE_COUNT
-        or nboz_int < _VMEC_BOOZER_PARITY_MIN_MODE_COUNT
-    ):
-        raise ValueError(
-            "mboz and nboz must both be >= "
-            f"{_VMEC_BOOZER_PARITY_MIN_MODE_COUNT} for VMEC/Boozer parity gates"
-        )
+    request = _resolve_boozer_core_request(
+        state,
+        surface_index=surface_index,
+        torflux=torflux,
+        ntheta=ntheta,
+        mboz=mboz,
+        nboz=nboz,
+        surface_stencil_width=surface_stencil_width,
+    )
+    ntheta_int = request.ntheta
+    mboz_int = request.mboz
+    nboz_int = request.nboz
+    base_Rcos = request.base_Rcos
+    ns_full = request.ns_full
+    sidx = request.surface_index
+    s_value = request.torflux
+
+    scales = _resolve_reference_scales(
+        wout, reference_length=reference_length, reference_b=reference_b
+    )
+    L_reference = scales.length
+    B_reference = scales.magnetic_field
+    edge_toroidal_flux_over_2pi = scales.edge_toroidal_flux_over_2pi
 
     info = discover_differentiable_geometry_backends()
     if not (
@@ -109,50 +241,6 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
 
     booz_input_mod = importlib.import_module("vmec_jax.booz_input")
     bx = importlib.import_module("booz_xform_jax.jax_api")
-
-    base_Rcos = jnp.asarray(state.Rcos)
-    if base_Rcos.ndim != 2:
-        raise RuntimeError("vmec_jax state Rcos array must be two-dimensional")
-    ns_full = int(base_Rcos.shape[0])
-    if ns_full < 3:
-        raise RuntimeError("vmec_jax state needs at least three radial surfaces")
-
-    sidx = (
-        max(1, min(ns_full // 2, ns_full - 2))
-        if surface_index is None
-        else int(surface_index)
-    )
-    if not (0 < sidx < ns_full - 1):
-        raise ValueError("surface_index must be an interior VMEC radial index")
-    s_value = (
-        float(sidx) / float(max(ns_full - 1, 1)) if torflux is None else float(torflux)
-    )
-    if not (0.0 < s_value < 1.0):
-        raise ValueError("torflux must lie inside (0, 1)")
-    if surface_stencil_width is not None and int(surface_stencil_width) < 3:
-        raise ValueError("surface_stencil_width must be >= 3 when provided")
-
-    raw_length = (
-        float(getattr(wout, "Aminor_p", 1.0))
-        if reference_length is None
-        else float(reference_length)
-    )
-    L_reference = (
-        raw_length if np.isfinite(raw_length) and abs(raw_length) > 0.0 else 1.0
-    )
-    if reference_b is None:
-        phi_profile = np.asarray(getattr(wout, "phi", [0.0, np.pi]), dtype=float)
-        edge_toroidal_flux_over_2pi = -float(phi_profile[-1]) / (2.0 * np.pi)
-        raw_b = 2.0 * abs(edge_toroidal_flux_over_2pi) / (L_reference * L_reference)
-        B_reference = raw_b if np.isfinite(raw_b) and abs(raw_b) > 0.0 else 1.0
-    else:
-        edge_toroidal_flux_over_2pi = -float(
-            np.asarray(getattr(wout, "phi", [0.0, np.pi]))[-1]
-        ) / (2.0 * np.pi)
-        B_reference = float(reference_b)
-    B_reference = (
-        B_reference if np.isfinite(B_reference) and abs(B_reference) > 0.0 else 1.0
-    )
 
     inputs = booz_input_mod.booz_xform_inputs_from_state(
         state=state,
@@ -184,14 +272,11 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
             nboz=nboz_int,
             asym=asym,
         )
-    surface_indices = None
-    if surface_stencil_width is not None:
-        ns_b_est = max(1, ns_full - 1)
-        width = min(int(surface_stencil_width), ns_b_est)
-        center = int(round(s_value * float(ns_b_est) - 0.5))
-        half_width = width // 2
-        start = max(0, min(center - half_width, ns_b_est - width))
-        surface_indices = jnp.arange(start, start + width, dtype=jnp.int32)
+    surface_indices = _surface_indices_for_stencil(
+        surface_stencil_width=surface_stencil_width,
+        ns_full=ns_full,
+        torflux=s_value,
+    )
     out = bx.booz_xform_from_inputs(
         inputs=inputs,
         constants=constants,
