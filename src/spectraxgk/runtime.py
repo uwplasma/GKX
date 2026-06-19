@@ -296,10 +296,16 @@ _stride_runtime_diagnostics = stride_runtime_diagnostics
 _concat_runtime_diagnostics = concat_runtime_diagnostics
 
 
+def _runtime_facade_module() -> Any:
+    """Return the patchable runtime facade module used by dependency builders."""
+
+    return sys.modules[__name__]
+
+
 def _runtime_linear_dispatch_deps() -> RuntimeLinearDispatchDeps:
     """Build linear runtime dispatch dependencies from patchable module globals."""
 
-    return build_runtime_linear_dispatch_deps(sys.modules[__name__])
+    return build_runtime_linear_dispatch_deps(_runtime_facade_module())
 
 
 def run_runtime_linear(
@@ -427,7 +433,7 @@ def run_runtime_scan(
 def _runtime_scan_orchestration_deps() -> Any:
     """Build ky-scan orchestration dependencies from patchable facade globals."""
 
-    return build_runtime_scan_orchestration_deps(sys.modules[__name__])
+    return build_runtime_scan_orchestration_deps(_runtime_facade_module())
 
 
 def _run_runtime_scan_batch(
@@ -483,13 +489,13 @@ def _run_runtime_scan_batch(
 def _runtime_scan_batch_deps() -> Any:
     """Build combined-ky scan dependencies from patchable facade globals."""
 
-    return build_runtime_scan_batch_deps(sys.modules[__name__])
+    return build_runtime_scan_batch_deps(_runtime_facade_module())
 
 
 def _runtime_nonlinear_dispatch_deps() -> RuntimeNonlinearDispatchDeps:
     """Build nonlinear runtime dispatch dependencies from patchable module globals."""
 
-    return build_runtime_nonlinear_dispatch_deps(sys.modules[__name__])
+    return build_runtime_nonlinear_dispatch_deps(_runtime_facade_module())
 
 
 def run_runtime_nonlinear(
