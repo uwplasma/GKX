@@ -100,6 +100,46 @@ def _boozer_mode_angle(
     return xm_b[mode_index] * theta_eval[None, ...] - xn_b[mode_index] * phi_b[None, ...]
 
 
+def _fieldline_boozer_coordinates(
+    theta1d: np.ndarray,
+    alpha_arr: np.ndarray,
+    iota: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Build ``theta_b`` and ``phi_b`` on alpha = theta_b - iota * phi_b."""
+
+    theta1d = np.asarray(theta1d)
+    alpha_arr = np.asarray(alpha_arr)
+    iota = np.asarray(iota)
+    theta_b = np.broadcast_to(
+        theta1d[None, None, :], (iota.size, alpha_arr.size, theta1d.size)
+    ).copy()
+    phi_b = (theta_b - alpha_arr[None, :, None]) / iota[:, None, None]
+    return theta_b, phi_b
+
+
+def _axisym_flip_required(
+    *,
+    isaxisym: bool,
+    xm_b: np.ndarray,
+    xn_b: np.ndarray,
+    theta_b: np.ndarray,
+    phi_b: np.ndarray,
+    rmnc_b: np.ndarray,
+    zmns_b: np.ndarray,
+) -> bool:
+    """Detect the axisymmetric theta flip convention from the first two points."""
+
+    if not isaxisym:
+        return False
+    angle_b_chk = _boozer_mode_angle(xm_b, xn_b, theta_b, phi_b, flipit=False)
+    r_check = np.einsum("ij,jikl->ikl", rmnc_b, np.cos(angle_b_chk))
+    z_check = np.einsum("ij,jikl->ikl", zmns_b, np.sin(angle_b_chk))
+    return bool(
+        r_check[0, 0, 0] > r_check[0, 0, 1]
+        or z_check[0, 0, 1] > z_check[0, 0, 0]
+    )
+
+
 def _safe_mode_denominator(
     xm_b: np.ndarray, xn_b: np.ndarray, iota: np.ndarray
 ) -> np.ndarray:
@@ -193,8 +233,6 @@ def _vmec_fieldlines(
     s = np.array([s_val])
     ns = 1
     alpha_arr = np.array([alpha])
-    nalpha = 1
-    nl = len(theta1d)
 
     d_pressure_d_s = vs.d_pressure_d_s(s)
     iota = vs.iota(s)
@@ -242,23 +280,18 @@ def _vmec_fieldlines(
     ) = _sample_boozer_mode_table(vs, s, ns)
     mnmax_b = rmnc_b.shape[1]
 
-    # Field line (theta_b, phi_b) along alpha = theta_b - iota * phi_b
-    theta_b = np.zeros((ns, nalpha, nl))
-    phi_b = np.zeros((ns, nalpha, nl))
-    for js in range(ns):
-        theta_b[js, :, :] = theta1d[None, :]
-        phi_b[js, :, :] = (theta1d[None, :] - alpha_arr[:, None]) / iota[js]
+    theta_b, phi_b = _fieldline_boozer_coordinates(theta1d, alpha_arr, iota)
+    flipit = _axisym_flip_required(
+        isaxisym=isaxisym,
+        xm_b=xm_b,
+        xn_b=xn_b,
+        theta_b=theta_b,
+        phi_b=phi_b,
+        rmnc_b=rmnc_b,
+        zmns_b=zmns_b,
+    )
 
-    # Flipit check for axisymmetric equilibria
-    angle_b_chk = _boozer_mode_angle(xm_b, xn_b, theta_b, phi_b, flipit=False)
-    R_b_chk = np.einsum("ij,jikl->ikl", rmnc_b, np.cos(angle_b_chk))
-    Z_b_chk = np.einsum("ij,jikl->ikl", zmns_b, np.sin(angle_b_chk))
-    flipit = 0
-    if isaxisym:
-        if R_b_chk[0, 0, 0] > R_b_chk[0, 0, 1] or Z_b_chk[0, 0, 1] > Z_b_chk[0, 0, 0]:
-            flipit = 1
-
-    angle_b = _boozer_mode_angle(xm_b, xn_b, theta_b, phi_b, flipit=bool(flipit))
+    angle_b = _boozer_mode_angle(xm_b, xn_b, theta_b, phi_b, flipit=flipit)
 
     cosangle_b = np.cos(angle_b)
     sinangle_b = np.sin(angle_b)
