@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import Any
 
 import jax.numpy as jnp
@@ -51,6 +51,509 @@ from spectraxgk.solvers.linear.krylov import KrylovConfig, dominant_eigenpair
 from spectraxgk.solvers.time.runners import integrate_linear_from_config
 from spectraxgk.terms.assembly import compute_fields_cached
 
+
+@dataclass(frozen=True)
+class _KineticLinearSetup:
+    cfg: KineticElectronBaseCase
+    grid_full: Any
+    geom: Any
+    params: LinearParams
+    terms: LinearTerms
+    init_cfg: Any
+    diagnostic_norm: str
+    reference_aligned: bool
+
+
+@dataclass(frozen=True)
+class _KineticLinearState:
+    grid: Any
+    selection: ModeSelection
+    state: jnp.ndarray
+
+
+@dataclass(frozen=True)
+class _KineticHistory:
+    t: np.ndarray
+    phi_t: np.ndarray
+    density_t: np.ndarray | None
+
+
+def _resolve_kinetic_linear_setup(
+    *,
+    cfg: KineticElectronBaseCase | None,
+    params: LinearParams | None,
+    terms: LinearTerms | None,
+    diagnostic_norm: str,
+    reference_aligned: bool | None,
+    Nm: int,
+) -> _KineticLinearSetup:
+    """Resolve kinetic benchmark setup shared by Krylov and time paths."""
+
+    cfg_use = cfg or KineticElectronBaseCase()
+    grid_full = build_spectral_grid(cfg_use.grid)
+    geom = SAlphaGeometry.from_config(cfg_use.geometry)
+    reference_aligned_use = bool(
+        True if reference_aligned is None else reference_aligned
+    )
+    diagnostic_norm_use = diagnostic_norm
+    if reference_aligned_use and diagnostic_norm_use == "none":
+        diagnostic_norm_use = "rho_star"
+    init_cfg_use = _kinetic_reference_init_cfg(
+        cfg_use.init, reference_aligned=reference_aligned_use
+    )
+    damp_ends_amp, damp_ends_widthfrac = _linked_boundary_end_damping(
+        reference_aligned_use
+    )
+    params_use = params
+    if params_use is None:
+        params_use = _two_species_params(
+            cfg_use.model,
+            kpar_scale=float(geom.gradpar()),
+            omega_d_scale=KINETIC_OMEGA_D_SCALE,
+            omega_star_scale=KINETIC_OMEGA_STAR_SCALE,
+            rho_star=KINETIC_RHO_STAR,
+            damp_ends_amp=damp_ends_amp,
+            damp_ends_widthfrac=damp_ends_widthfrac,
+            nhermite=Nm,
+        )
+        if reference_aligned_use:
+            params_use = _apply_reference_hypercollisions(params_use, nhermite=Nm)
+    terms_use = terms if terms is not None else LinearTerms(bpar=0.0)
+    return _KineticLinearSetup(
+        cfg=cfg_use,
+        grid_full=grid_full,
+        geom=geom,
+        params=params_use,
+        terms=terms_use,
+        init_cfg=init_cfg_use,
+        diagnostic_norm=diagnostic_norm_use,
+        reference_aligned=reference_aligned_use,
+    )
+
+
+def _validate_kinetic_species_indices(
+    *, init_species_index: int, density_species_index: int, nspecies: int = 2
+) -> None:
+    """Validate the kinetic two-species index contract."""
+
+    if init_species_index < 0 or init_species_index >= nspecies:
+        raise ValueError("init_species_index out of range for kinetic species")
+    if density_species_index < 0 or density_species_index >= nspecies:
+        raise ValueError("density_species_index out of range for kinetic species")
+
+
+def _build_kinetic_linear_state(
+    setup: _KineticLinearSetup,
+    *,
+    ky_target: float,
+    Nl: int,
+    Nm: int,
+    init_species_index: int,
+    density_species_index: int,
+) -> _KineticLinearState:
+    """Select the ky grid and build the kinetic initial perturbation."""
+
+    ky_index = select_ky_index(np.asarray(setup.grid_full.ky), ky_target)
+    grid = select_ky_grid(setup.grid_full, ky_index)
+    sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
+    nspecies = 2
+    _validate_kinetic_species_indices(
+        init_species_index=init_species_index,
+        density_species_index=density_species_index,
+        nspecies=nspecies,
+    )
+    G0 = np.zeros(
+        (nspecies, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size),
+        dtype=np.complex64,
+    )
+    G0_single = _build_initial_condition(
+        grid,
+        setup.geom,
+        ky_index=sel.ky_index,
+        kx_index=sel.kx_index,
+        Nl=Nl,
+        Nm=Nm,
+        init_cfg=setup.init_cfg,
+    )
+    G0[int(init_species_index)] = np.asarray(G0_single, dtype=np.complex64)
+    return _KineticLinearState(grid=grid, selection=sel, state=jnp.asarray(G0))
+
+
+def _kinetic_krylov_config(
+    setup: _KineticLinearSetup,
+    krylov_cfg: KrylovConfig | None,
+) -> KrylovConfig:
+    """Return the kinetic Krylov policy, including reference-aligned defaults."""
+
+    if krylov_cfg is not None:
+        return krylov_cfg
+    if setup.reference_aligned:
+        return KINETIC_KRYLOV_REFERENCE_ALIGNED
+    return KINETIC_KRYLOV_DEFAULT
+
+
+def _run_kinetic_krylov_path(
+    setup: _KineticLinearSetup,
+    state: _KineticLinearState,
+    *,
+    Nl: int,
+    Nm: int,
+    krylov_cfg: KrylovConfig | None,
+) -> LinearRunResult:
+    """Solve one kinetic benchmark point with the Krylov eigenpath."""
+
+    cfg_use = _kinetic_krylov_config(setup, krylov_cfg)
+    cache = build_linear_cache(state.grid, setup.geom, setup.params, Nl, Nm)
+    eig, vec = dominant_eigenpair(
+        state.state,
+        cache,
+        setup.params,
+        terms=setup.terms,
+        krylov_dim=cfg_use.krylov_dim,
+        restarts=cfg_use.restarts,
+        omega_min_factor=cfg_use.omega_min_factor,
+        omega_target_factor=cfg_use.omega_target_factor,
+        omega_cap_factor=cfg_use.omega_cap_factor,
+        omega_sign=cfg_use.omega_sign,
+        method=cfg_use.method,
+        power_iters=cfg_use.power_iters,
+        power_dt=cfg_use.power_dt,
+        shift=cfg_use.shift,
+        shift_source=cfg_use.shift_source,
+        shift_tol=cfg_use.shift_tol,
+        shift_maxiter=cfg_use.shift_maxiter,
+        shift_restart=cfg_use.shift_restart,
+        shift_solve_method=cfg_use.shift_solve_method,
+        shift_preconditioner=cfg_use.shift_preconditioner,
+        shift_selection=cfg_use.shift_selection,
+        mode_family=cfg_use.mode_family,
+        fallback_method=cfg_use.fallback_method,
+        fallback_real_floor=cfg_use.fallback_real_floor,
+    )
+    term_cfg = linear_terms_to_term_config(setup.terms)
+    phi = compute_fields_cached(vec, cache, setup.params, terms=term_cfg).phi
+    gamma = float(np.real(eig))
+    omega = float(-np.imag(eig))
+    gamma, omega = _normalize_growth_rate(
+        gamma, omega, setup.params, setup.diagnostic_norm
+    )
+    return _pack_kinetic_result(
+        state,
+        t=np.array([0.0]),
+        phi_t=np.asarray(phi)[None, ...],
+        gamma=gamma,
+        omega=omega,
+    )
+
+
+def _resolve_time_config(
+    time_cfg: TimeConfig | None,
+    *,
+    sample_stride: int | None,
+) -> TimeConfig | None:
+    """Apply user sample-stride override without changing time-config semantics."""
+
+    if time_cfg is None or sample_stride is None:
+        return time_cfg
+    return replace(time_cfg, sample_stride=sample_stride)
+
+
+def _integrate_configured_kinetic_history(
+    setup: _KineticLinearSetup,
+    state: _KineticLinearState,
+    *,
+    time_cfg: TimeConfig,
+    method_key: str,
+    fit_signal: str,
+    density_species_index: int,
+    Nl: int,
+    Nm: int,
+) -> tuple[Any, Any | None, float, int]:
+    """Integrate kinetic time history with an explicit runtime TimeConfig."""
+
+    dt = float(time_cfg.dt)
+    steps = int(round(time_cfg.t_max / time_cfg.dt))
+    cache = build_linear_cache(state.grid, setup.geom, setup.params, Nl, Nm)
+    if time_cfg.use_diffrax and not (
+        method_key.startswith("imex") or method_key.startswith("implicit")
+    ):
+        save_field = "density" if fit_signal == "density" else "phi"
+        _, phi_t = integrate_linear_from_config(
+            state.state,
+            state.grid,
+            setup.geom,
+            setup.params,
+            time_cfg,
+            cache=cache,
+            terms=setup.terms,
+            save_field=save_field,
+            density_species_index=density_species_index
+            if fit_signal == "density"
+            else None,
+        )
+        density_t = phi_t if fit_signal == "density" else None
+        return phi_t, density_t, dt, time_cfg.sample_stride
+
+    if fit_signal == "density":
+        diag = integrate_linear_diagnostics(
+            state.state,
+            state.grid,
+            setup.geom,
+            setup.params,
+            dt=dt,
+            steps=steps,
+            method=time_cfg.method,
+            cache=cache,
+            terms=setup.terms,
+            sample_stride=time_cfg.sample_stride,
+            species_index=density_species_index,
+        )
+        phi_t = diag[1]
+        density_t = diag[2] if len(diag) > 2 else None
+        return phi_t, density_t, dt, time_cfg.sample_stride
+
+    _, phi_t = integrate_linear_from_config(
+        state.state,
+        state.grid,
+        setup.geom,
+        setup.params,
+        time_cfg,
+        cache=cache,
+        terms=setup.terms,
+        density_species_index=density_species_index if fit_signal == "density" else None,
+    )
+    return phi_t, None, dt, time_cfg.sample_stride
+
+
+def _integrate_unconfigured_kinetic_history(
+    setup: _KineticLinearSetup,
+    state: _KineticLinearState,
+    *,
+    dt: float,
+    steps: int,
+    method: str,
+    sample_stride: int | None,
+    fit_signal: str,
+    density_species_index: int,
+    show_progress: bool,
+) -> tuple[Any, Any | None, float, int]:
+    """Integrate kinetic time history without a runtime TimeConfig."""
+
+    stride = 1 if sample_stride is None else int(sample_stride)
+    if fit_signal == "density":
+        diag = integrate_linear_diagnostics(
+            state.state,
+            state.grid,
+            setup.geom,
+            setup.params,
+            dt=dt,
+            steps=steps,
+            method=method,
+            terms=setup.terms,
+            sample_stride=stride,
+            species_index=density_species_index,
+        )
+        phi_t = diag[1]
+        density_t = diag[2] if len(diag) > 2 else None
+        return phi_t, density_t, float(dt), stride
+
+    _, phi_t = integrate_linear(
+        state.state,
+        state.grid,
+        setup.geom,
+        setup.params,
+        dt=dt,
+        steps=steps,
+        method=method,
+        terms=setup.terms,
+        sample_stride=stride,
+        show_progress=show_progress,
+    )
+    return phi_t, None, float(dt), stride
+
+
+def _integrate_kinetic_history(
+    setup: _KineticLinearSetup,
+    state: _KineticLinearState,
+    *,
+    time_cfg: TimeConfig | None,
+    dt: float,
+    steps: int,
+    method: str,
+    sample_stride: int | None,
+    fit_signal: str,
+    density_species_index: int,
+    show_progress: bool,
+    Nl: int,
+    Nm: int,
+) -> _KineticHistory:
+    """Integrate a kinetic time history and preserve saved-observable semantics."""
+
+    time_cfg_use = _resolve_time_config(time_cfg, sample_stride=sample_stride)
+    if time_cfg_use is not None:
+        phi_t, density_t, dt_eff, stride = _integrate_configured_kinetic_history(
+            setup,
+            state,
+            time_cfg=time_cfg_use,
+            method_key=method.lower(),
+            fit_signal=fit_signal,
+            density_species_index=density_species_index,
+            Nl=Nl,
+            Nm=Nm,
+        )
+    else:
+        phi_t, density_t, dt_eff, stride = _integrate_unconfigured_kinetic_history(
+            setup,
+            state,
+            dt=dt,
+            steps=steps,
+            method=method,
+            sample_stride=sample_stride,
+            fit_signal=fit_signal,
+            density_species_index=density_species_index,
+            show_progress=show_progress,
+        )
+    phi_t_np = np.asarray(phi_t)
+    t = np.arange(phi_t_np.shape[0]) * dt_eff * stride
+    density_np = None if density_t is None else np.asarray(density_t)
+    return _KineticHistory(t=t, phi_t=phi_t_np, density_t=density_np)
+
+
+def _fit_kinetic_history(
+    setup: _KineticLinearSetup,
+    state: _KineticLinearState,
+    history: _KineticHistory,
+    *,
+    fit_signal: str,
+    mode_method: str,
+    auto_window: bool,
+    tmin: float | None,
+    tmax: float | None,
+    window_fraction: float,
+    min_points: int,
+    start_fraction: float,
+    growth_weight: float,
+    require_positive: bool,
+    min_amp_fraction: float,
+) -> tuple[float, float]:
+    """Fit growth/frequency from a saved kinetic time history."""
+
+    signal = _select_fit_signal(
+        history.phi_t,
+        history.density_t,
+        state.selection,
+        fit_signal=fit_signal,
+        mode_method=mode_method,
+    )
+    use_auto = auto_window and tmin is None and tmax is None
+    if not use_auto and not scan_window_valid(history.t, tmin, tmax):
+        use_auto = True
+    auto_fit_kwargs: dict[str, Any] = {
+        "window_fraction": window_fraction,
+        "min_points": min_points,
+        "start_fraction": start_fraction,
+        "growth_weight": growth_weight,
+        "require_positive": require_positive,
+        "min_amp_fraction": min_amp_fraction,
+    }
+    if use_auto:
+        gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
+            history.t, signal, **auto_fit_kwargs
+        )
+    else:
+        try:
+            gamma, omega = fit_growth_rate(history.t, signal, tmin=tmin, tmax=tmax)
+        except ValueError:
+            gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
+                history.t, signal, **auto_fit_kwargs
+            )
+    return _normalize_growth_rate(
+        gamma, omega, setup.params, setup.diagnostic_norm
+    )
+
+
+def _run_kinetic_time_path(
+    setup: _KineticLinearSetup,
+    state: _KineticLinearState,
+    *,
+    time_cfg: TimeConfig | None,
+    dt: float,
+    steps: int,
+    method: str,
+    sample_stride: int | None,
+    fit_signal: str,
+    density_species_index: int,
+    show_progress: bool,
+    Nl: int,
+    Nm: int,
+    mode_method: str,
+    auto_window: bool,
+    tmin: float | None,
+    tmax: float | None,
+    window_fraction: float,
+    min_points: int,
+    start_fraction: float,
+    growth_weight: float,
+    require_positive: bool,
+    min_amp_fraction: float,
+) -> LinearRunResult:
+    """Run and fit the saved-time kinetic benchmark path."""
+
+    history = _integrate_kinetic_history(
+        setup,
+        state,
+        time_cfg=time_cfg,
+        dt=dt,
+        steps=steps,
+        method=method,
+        sample_stride=sample_stride,
+        fit_signal=fit_signal,
+        density_species_index=density_species_index,
+        show_progress=show_progress,
+        Nl=Nl,
+        Nm=Nm,
+    )
+    gamma, omega = _fit_kinetic_history(
+        setup,
+        state,
+        history,
+        fit_signal=fit_signal,
+        mode_method=mode_method,
+        auto_window=auto_window,
+        tmin=tmin,
+        tmax=tmax,
+        window_fraction=window_fraction,
+        min_points=min_points,
+        start_fraction=start_fraction,
+        growth_weight=growth_weight,
+        require_positive=require_positive,
+        min_amp_fraction=min_amp_fraction,
+    )
+    return _pack_kinetic_result(
+        state, t=history.t, phi_t=history.phi_t, gamma=gamma, omega=omega
+    )
+
+
+def _pack_kinetic_result(
+    state: _KineticLinearState,
+    *,
+    t: np.ndarray,
+    phi_t: np.ndarray,
+    gamma: float,
+    omega: float,
+) -> LinearRunResult:
+    """Pack the public kinetic linear benchmark result."""
+
+    return LinearRunResult(
+        t=t,
+        phi_t=phi_t,
+        gamma=gamma,
+        omega=omega,
+        ky=float(state.grid.ky[state.selection.ky_index]),
+        selection=state.selection,
+    )
+
+
 def run_kinetic_linear(
     ky_target: float = 0.3,
     Nl: int = 6,
@@ -84,233 +587,53 @@ def run_kinetic_linear(
 ) -> LinearRunResult:
     """Run a kinetic-electron ITG/TEM benchmark and extract growth rate."""
 
-    cfg = cfg or KineticElectronBaseCase()
-    grid_full = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
-    reference_aligned_use = bool(
-        True if reference_aligned is None else reference_aligned
+    setup = _resolve_kinetic_linear_setup(
+        cfg=cfg,
+        params=params,
+        terms=terms,
+        diagnostic_norm=diagnostic_norm,
+        reference_aligned=reference_aligned,
+        Nm=Nm,
     )
-    if reference_aligned_use and diagnostic_norm == "none":
-        diagnostic_norm = "rho_star"
-    init_cfg_use = _kinetic_reference_init_cfg(
-        cfg.init, reference_aligned=reference_aligned_use
-    )
-    damp_ends_amp, damp_ends_widthfrac = _linked_boundary_end_damping(
-        reference_aligned_use
-    )
-    if params is None:
-        params = _two_species_params(
-            cfg.model,
-            kpar_scale=float(geom.gradpar()),
-            omega_d_scale=KINETIC_OMEGA_D_SCALE,
-            omega_star_scale=KINETIC_OMEGA_STAR_SCALE,
-            rho_star=KINETIC_RHO_STAR,
-            damp_ends_amp=damp_ends_amp,
-            damp_ends_widthfrac=damp_ends_widthfrac,
-            nhermite=Nm,
-        )
-        if reference_aligned_use:
-            params = _apply_reference_hypercollisions(params, nhermite=Nm)
-    if terms is None:
-        terms = LinearTerms(bpar=0.0)
-
-    ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
-    grid = select_ky_grid(grid_full, ky_index)
-    sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
-
-    ns = 2
-    if init_species_index < 0 or init_species_index >= ns:
-        raise ValueError("init_species_index out of range for kinetic species")
-    if density_species_index < 0 or density_species_index >= ns:
-        raise ValueError("density_species_index out of range for kinetic species")
-    G0 = np.zeros(
-        (ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64
-    )
-    G0_single = _build_initial_condition(
-        grid,
-        geom,
-        ky_index=sel.ky_index,
-        kx_index=sel.kx_index,
+    state = _build_kinetic_linear_state(
+        setup,
+        ky_target=ky_target,
         Nl=Nl,
         Nm=Nm,
-        init_cfg=init_cfg_use,
+        init_species_index=init_species_index,
+        density_species_index=density_species_index,
     )
-    G0[int(init_species_index)] = np.asarray(G0_single, dtype=np.complex64)
-
-    G0_jax = jnp.asarray(G0)
     if solver.lower() == "krylov":
-        krylov_cfg = krylov_cfg or (
-            KINETIC_KRYLOV_REFERENCE_ALIGNED
-            if reference_aligned_use
-            else KINETIC_KRYLOV_DEFAULT
+        return _run_kinetic_krylov_path(
+            setup,
+            state,
+            Nl=Nl,
+            Nm=Nm,
+            krylov_cfg=krylov_cfg,
         )
-        cache = build_linear_cache(grid, geom, params, Nl, Nm)
-        eig, vec = dominant_eigenpair(
-            G0_jax,
-            cache,
-            params,
-            terms=terms,
-            krylov_dim=krylov_cfg.krylov_dim,
-            restarts=krylov_cfg.restarts,
-            omega_min_factor=krylov_cfg.omega_min_factor,
-            omega_target_factor=krylov_cfg.omega_target_factor,
-            omega_cap_factor=krylov_cfg.omega_cap_factor,
-            omega_sign=krylov_cfg.omega_sign,
-            method=krylov_cfg.method,
-            power_iters=krylov_cfg.power_iters,
-            power_dt=krylov_cfg.power_dt,
-            shift=krylov_cfg.shift,
-            shift_source=krylov_cfg.shift_source,
-            shift_tol=krylov_cfg.shift_tol,
-            shift_maxiter=krylov_cfg.shift_maxiter,
-            shift_restart=krylov_cfg.shift_restart,
-            shift_solve_method=krylov_cfg.shift_solve_method,
-            shift_preconditioner=krylov_cfg.shift_preconditioner,
-            shift_selection=krylov_cfg.shift_selection,
-            mode_family=krylov_cfg.mode_family,
-            fallback_method=krylov_cfg.fallback_method,
-            fallback_real_floor=krylov_cfg.fallback_real_floor,
-        )
-        term_cfg = linear_terms_to_term_config(terms)
-        phi = compute_fields_cached(vec, cache, params, terms=term_cfg).phi
-        phi_t_np = np.asarray(phi)[None, ...]
-        t = np.array([0.0])
-        gamma = float(np.real(eig))
-        omega = float(-np.imag(eig))
-        gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
-    else:
-        method_key = method.lower()
-        if time_cfg is not None:
-            time_cfg_use = time_cfg
-            if sample_stride is not None:
-                time_cfg_use = replace(time_cfg, sample_stride=sample_stride)
-            dt = float(time_cfg_use.dt)
-            steps = int(round(time_cfg_use.t_max / time_cfg_use.dt))
-            cache = build_linear_cache(grid, geom, params, Nl, Nm)
-            if time_cfg_use.use_diffrax and not (
-                method_key.startswith("imex") or method_key.startswith("implicit")
-            ):
-                save_field = "density" if fit_signal == "density" else "phi"
-                _, phi_t = integrate_linear_from_config(
-                    G0_jax,
-                    grid,
-                    geom,
-                    params,
-                    time_cfg_use,
-                    cache=cache,
-                    terms=terms,
-                    save_field=save_field,
-                    density_species_index=density_species_index
-                    if fit_signal == "density"
-                    else None,
-                )
-                density_t = phi_t if fit_signal == "density" else None
-            else:
-                if fit_signal == "density":
-                    _diag = integrate_linear_diagnostics(
-                        G0_jax,
-                        grid,
-                        geom,
-                        params,
-                        dt=dt,
-                        steps=steps,
-                        method=time_cfg_use.method,
-                        cache=cache,
-                        terms=terms,
-                        sample_stride=time_cfg_use.sample_stride,
-                        species_index=density_species_index,
-                    )
-                    phi_t = _diag[1]
-                    density_t = _diag[2] if len(_diag) > 2 else None
-                else:
-                    _, phi_t = integrate_linear_from_config(
-                        G0_jax,
-                        grid,
-                        geom,
-                        params,
-                        time_cfg_use,
-                        cache=cache,
-                        terms=terms,
-                        density_species_index=density_species_index
-                        if fit_signal == "density"
-                        else None,
-                    )
-                    density_t = None
-            stride = time_cfg_use.sample_stride
-        else:
-            stride = 1 if sample_stride is None else int(sample_stride)
-            if fit_signal == "density":
-                _diag = integrate_linear_diagnostics(
-                    G0_jax,
-                    grid,
-                    geom,
-                    params,
-                    dt=dt,
-                    steps=steps,
-                    method=method,
-                    terms=terms,
-                    sample_stride=stride,
-                    species_index=density_species_index,
-                )
-                phi_t = _diag[1]
-                density_t = _diag[2] if len(_diag) > 2 else None
-            else:
-                _, phi_t = integrate_linear(
-                    G0_jax,
-                    grid,
-                    geom,
-                    params,
-                    dt=dt,
-                    steps=steps,
-                    method=method,
-                    terms=terms,
-                    sample_stride=stride,
-                    show_progress=show_progress,
-                )
-                density_t = None
-
-        phi_t_np = np.asarray(phi_t)
-        t = np.arange(phi_t_np.shape[0]) * dt * stride
-        density_np = None if density_t is None else np.asarray(density_t)
-        signal = _select_fit_signal(
-            phi_t_np,
-            density_np,
-            sel,
-            fit_signal=fit_signal,
-            mode_method=mode_method,
-        )
-
-        use_auto = auto_window and tmin is None and tmax is None
-        if not use_auto and not scan_window_valid(t, tmin, tmax):
-            use_auto = True
-        auto_fit_kwargs: dict[str, Any] = {
-            "window_fraction": window_fraction,
-            "min_points": min_points,
-            "start_fraction": start_fraction,
-            "growth_weight": growth_weight,
-            "require_positive": require_positive,
-            "min_amp_fraction": min_amp_fraction,
-        }
-        if use_auto:
-            gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
-                t, signal, **auto_fit_kwargs
-            )
-        else:
-            try:
-                gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
-            except ValueError:
-                gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
-                    t, signal, **auto_fit_kwargs
-                )
-
-        gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
-    return LinearRunResult(
-        t=t,
-        phi_t=phi_t_np,
-        gamma=gamma,
-        omega=omega,
-        ky=float(grid.ky[sel.ky_index]),
-        selection=sel,
+    return _run_kinetic_time_path(
+        setup,
+        state,
+        time_cfg=time_cfg,
+        dt=dt,
+        steps=steps,
+        method=method,
+        sample_stride=sample_stride,
+        fit_signal=fit_signal,
+        density_species_index=density_species_index,
+        show_progress=show_progress,
+        Nl=Nl,
+        Nm=Nm,
+        mode_method=mode_method,
+        auto_window=auto_window,
+        tmin=tmin,
+        tmax=tmax,
+        window_fraction=window_fraction,
+        min_points=min_points,
+        start_fraction=start_fraction,
+        growth_weight=growth_weight,
+        require_positive=require_positive,
+        min_amp_fraction=min_amp_fraction,
     )
 
 
