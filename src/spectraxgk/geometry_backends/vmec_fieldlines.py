@@ -106,6 +106,28 @@ def _boozer_mode_sum(coefficients: np.ndarray, basis: np.ndarray) -> np.ndarray:
     return np.einsum("ij,ji...->i...", coefficients, basis)
 
 
+def _boozer_trig_basis(
+    xm_b: np.ndarray,
+    xn_b: np.ndarray,
+    angle: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Return Boozer trigonometric basis arrays and mode-weighted derivatives."""
+
+    cosangle = np.cos(angle)
+    sinangle = np.sin(angle)
+    mode_index = (slice(None),) + (None,) * (angle.ndim - 1)
+    m = xm_b[mode_index]
+    n = xn_b[mode_index]
+    return (
+        cosangle,
+        sinangle,
+        m * cosangle,
+        m * sinangle,
+        n * cosangle,
+        n * sinangle,
+    )
+
+
 def _fieldline_boozer_coordinates(
     theta1d: np.ndarray,
     alpha_arr: np.ndarray,
@@ -282,12 +304,14 @@ def _flux_surface_hngc_averages(
         flipit=bool(flipit),
     )
 
-    cosangle_b_2D = np.cos(angle_b_2D)
-    sinangle_b_2D = np.sin(angle_b_2D)
-    mcosangle_b_2D = xm_b[:, None, None, None, None] * cosangle_b_2D
-    ncosangle_b_2D = xn_b[:, None, None, None, None] * cosangle_b_2D
-    msinangle_b_2D = xm_b[:, None, None, None, None] * sinangle_b_2D
-    nsinangle_b_2D = xn_b[:, None, None, None, None] * sinangle_b_2D
+    (
+        cosangle_b_2D,
+        sinangle_b_2D,
+        mcosangle_b_2D,
+        msinangle_b_2D,
+        ncosangle_b_2D,
+        nsinangle_b_2D,
+    ) = _boozer_trig_basis(xm_b, xn_b, angle_b_2D)
 
     lambda_b_2D = _boozer_mode_sum(lambmnc_b, cosangle_b_2D)
     R_b_2D = _boozer_mode_sum(rmnc_b, cosangle_b_2D)
@@ -451,12 +475,14 @@ def _vmec_fieldlines(
 
     angle_b = _boozer_mode_angle(xm_b, xn_b, theta_b, phi_b, flipit=flipit)
 
-    cosangle_b = np.cos(angle_b)
-    sinangle_b = np.sin(angle_b)
-    mcosangle_b = xm_b[:, None, None, None] * cosangle_b
-    msinangle_b = xm_b[:, None, None, None] * sinangle_b
-    ncosangle_b = xn_b[:, None, None, None] * cosangle_b
-    nsinangle_b = xn_b[:, None, None, None] * sinangle_b
+    (
+        cosangle_b,
+        sinangle_b,
+        mcosangle_b,
+        msinangle_b,
+        ncosangle_b,
+        nsinangle_b,
+    ) = _boozer_trig_basis(xm_b, xn_b, angle_b)
 
     R_b = _boozer_mode_sum(rmnc_b, cosangle_b)
     d_R_b_d_s = _boozer_mode_sum(d_rmnc_b_d_s, cosangle_b)
