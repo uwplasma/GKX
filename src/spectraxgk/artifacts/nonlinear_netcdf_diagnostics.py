@@ -63,28 +63,25 @@ def _write_resolved_species_spectra(
         ] = np.asarray(z_arr, dtype=np.float32)
 
 
-def _write_diagnostics_group(
-    root: Any,
+def _phi2_outputs_for_netcdf(
+    resolved: Any,
     diag: Any,
-    cfg: Any,
     *,
-    nspecies: int,
     full_nx: int,
     full_ny: int,
     active_nx: int,
     active_ny: int,
-) -> None:
-    """Write scalar, species, resolved, and split nonlinear diagnostics."""
-    diag_group = root.createGroup("Diagnostics")
-    resolved = diag.resolved
+) -> tuple[np.ndarray, np.ndarray | None, np.ndarray | None, np.ndarray | None]:
+    """Return mutually consistent Phi2 spectra for the NetCDF schema."""
+
     phi2_kx_out = None
     phi2_ky_out = None
     phi2_kykx_out = None
     if resolved is not None and resolved.Phi2_kxkyt is not None:
-        # The NetCDF schema stores Phi2 on the rFFT-positive ky view.  Deriving the one-
-        # dimensional spectra from the condensed two-dimensional spectrum
-        # keeps Phi2_t, Phi2_kxt, and Phi2_kyt mutually consistent when
-        # SPECTRAX-GK evolved a full Hermitian ky layout internally.
+        # The NetCDF schema stores Phi2 on the rFFT-positive ky view. Deriving
+        # one-dimensional spectra from the condensed two-dimensional spectrum
+        # keeps Phi2_t, Phi2_kxt, and Phi2_kyt mutually consistent when the
+        # solver evolved a full Hermitian ky layout internally.
         phi2_kykx_out = _condense_kykx_for_output(
             np.asarray(resolved.Phi2_kxkyt, dtype=np.float32),
             full_ny=full_ny,
@@ -111,6 +108,110 @@ def _write_diagnostics_group(
         phi2_t = np.sum(phi2_kx_out, axis=1)
     else:
         phi2_t = np.asarray(diag.Wphi_t, dtype=np.float32)
+    return np.asarray(phi2_t, dtype=np.float32), phi2_kx_out, phi2_ky_out, phi2_kykx_out
+
+
+def _write_phi2_diagnostics(
+    diag_group: Any,
+    resolved: Any,
+    *,
+    phi2_kx_out: np.ndarray | None,
+    phi2_ky_out: np.ndarray | None,
+    phi2_kykx_out: np.ndarray | None,
+) -> None:
+    """Write resolved nonlinear potential-energy diagnostics."""
+
+    if resolved is None:
+        return
+    if phi2_kx_out is not None:
+        diag_group.createVariable("Phi2_kxt", "f4", ("time", "kx"))[:, :] = (
+            phi2_kx_out
+        )
+    if phi2_ky_out is not None:
+        diag_group.createVariable("Phi2_kyt", "f4", ("time", "ky"))[:, :] = (
+            phi2_ky_out
+        )
+    if phi2_kykx_out is not None:
+        diag_group.createVariable("Phi2_kxkyt", "f4", ("time", "ky", "kx"))[
+            :, :, :
+        ] = phi2_kykx_out
+    if resolved.Phi2_zt is not None:
+        diag_group.createVariable("Phi2_zt", "f4", ("time", "theta"))[:, :] = (
+            np.asarray(resolved.Phi2_zt, dtype=np.float32)
+        )
+
+
+def _write_zonal_phi_diagnostics(
+    diag_group: Any,
+    resolved: Any,
+    *,
+    full_nx: int,
+    active_nx: int,
+) -> None:
+    """Write zonal potential diagnostics and preserve complex-valued fields."""
+
+    if resolved is None:
+        return
+    if resolved.Phi2_zonal_t is not None:
+        diag_group.createVariable("Phi2_zonal_t", "f4", ("time",))[:] = (
+            np.asarray(resolved.Phi2_zonal_t, dtype=np.float32)
+        )
+    if resolved.Phi2_zonal_kxt is not None:
+        diag_group.createVariable("Phi2_zonal_kxt", "f4", ("time", "kx"))[:, :] = (
+            _condense_kx_for_output(
+                np.asarray(resolved.Phi2_zonal_kxt, dtype=np.float32),
+                full_nx=full_nx,
+                active_nx=active_nx,
+            )
+        )
+    if resolved.Phi2_zonal_zt is not None:
+        diag_group.createVariable("Phi2_zonal_zt", "f4", ("time", "theta"))[:, :] = (
+            np.asarray(resolved.Phi2_zonal_zt, dtype=np.float32)
+        )
+    if resolved.Phi_zonal_mode_kxt is not None:
+        diag_group.createVariable(
+            "Phi_zonal_mode_kxt", "f4", ("time", "kx", "ri")
+        )[:, :, :] = _complex_to_ri(
+            _condense_kx_for_output(
+                np.asarray(resolved.Phi_zonal_mode_kxt),
+                full_nx=full_nx,
+                active_nx=active_nx,
+            )
+        )
+    if resolved.Phi_zonal_line_kxt is not None:
+        diag_group.createVariable(
+            "Phi_zonal_line_kxt", "f4", ("time", "kx", "ri")
+        )[:, :, :] = _complex_to_ri(
+            _condense_kx_for_output(
+                np.asarray(resolved.Phi_zonal_line_kxt),
+                full_nx=full_nx,
+                active_nx=active_nx,
+            )
+        )
+
+
+def _write_diagnostics_group(
+    root: Any,
+    diag: Any,
+    cfg: Any,
+    *,
+    nspecies: int,
+    full_nx: int,
+    full_ny: int,
+    active_nx: int,
+    active_ny: int,
+) -> None:
+    """Write scalar, species, resolved, and split nonlinear diagnostics."""
+    diag_group = root.createGroup("Diagnostics")
+    resolved = diag.resolved
+    phi2_t, phi2_kx_out, phi2_ky_out, phi2_kykx_out = _phi2_outputs_for_netcdf(
+        resolved,
+        diag,
+        full_nx=full_nx,
+        full_ny=full_ny,
+        active_nx=active_nx,
+        active_ny=active_ny,
+    )
     diag_group.createVariable("Phi2_t", "f4", ("time",))[:] = phi2_t
     wg_s = _species_matrix(np.asarray(diag.Wg_t, dtype=np.float32), nspecies, None)
     wphi_s = _species_matrix(
@@ -202,58 +303,19 @@ def _write_diagnostics_group(
         turb_heat_st
     )
     if resolved is not None:
-        if phi2_kx_out is not None:
-            diag_group.createVariable("Phi2_kxt", "f4", ("time", "kx"))[:, :] = (
-                phi2_kx_out
-            )
-        if phi2_ky_out is not None:
-            diag_group.createVariable("Phi2_kyt", "f4", ("time", "ky"))[:, :] = (
-                phi2_ky_out
-            )
-        if phi2_kykx_out is not None:
-            diag_group.createVariable("Phi2_kxkyt", "f4", ("time", "ky", "kx"))[
-                :, :, :
-            ] = phi2_kykx_out
-        if resolved.Phi2_zt is not None:
-            diag_group.createVariable("Phi2_zt", "f4", ("time", "theta"))[:, :] = (
-                np.asarray(resolved.Phi2_zt, dtype=np.float32)
-            )
-        if resolved.Phi2_zonal_t is not None:
-            diag_group.createVariable("Phi2_zonal_t", "f4", ("time",))[:] = (
-                np.asarray(resolved.Phi2_zonal_t, dtype=np.float32)
-            )
-        if resolved.Phi2_zonal_kxt is not None:
-            diag_group.createVariable("Phi2_zonal_kxt", "f4", ("time", "kx"))[
-                :, :
-            ] = _condense_kx_for_output(
-                np.asarray(resolved.Phi2_zonal_kxt, dtype=np.float32),
-                full_nx=full_nx,
-                active_nx=active_nx,
-            )
-        if resolved.Phi2_zonal_zt is not None:
-            diag_group.createVariable("Phi2_zonal_zt", "f4", ("time", "theta"))[
-                :, :
-            ] = np.asarray(resolved.Phi2_zonal_zt, dtype=np.float32)
-        if resolved.Phi_zonal_mode_kxt is not None:
-            diag_group.createVariable(
-                "Phi_zonal_mode_kxt", "f4", ("time", "kx", "ri")
-            )[:, :, :] = _complex_to_ri(
-                _condense_kx_for_output(
-                    np.asarray(resolved.Phi_zonal_mode_kxt),
-                    full_nx=full_nx,
-                    active_nx=active_nx,
-                )
-            )
-        if resolved.Phi_zonal_line_kxt is not None:
-            diag_group.createVariable(
-                "Phi_zonal_line_kxt", "f4", ("time", "kx", "ri")
-            )[:, :, :] = _complex_to_ri(
-                _condense_kx_for_output(
-                    np.asarray(resolved.Phi_zonal_line_kxt),
-                    full_nx=full_nx,
-                    active_nx=active_nx,
-                )
-            )
+        _write_phi2_diagnostics(
+            diag_group,
+            resolved,
+            phi2_kx_out=phi2_kx_out,
+            phi2_ky_out=phi2_ky_out,
+            phi2_kykx_out=phi2_kykx_out,
+        )
+        _write_zonal_phi_diagnostics(
+            diag_group,
+            resolved,
+            full_nx=full_nx,
+            active_nx=active_nx,
+        )
         metric_specs = (
             (
                 "Wg",
