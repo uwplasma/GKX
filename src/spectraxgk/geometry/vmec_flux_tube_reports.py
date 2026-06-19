@@ -35,6 +35,134 @@ from spectraxgk.geometry.vmec_tensor_mapping import (
 _VMEC_BOOZER_PARITY_MIN_MODE_COUNT = 21
 
 
+def _normalized_max_abs(metrics: dict[str, object]) -> float:
+    raw_value = metrics.get("normalized_max_abs")
+    return float(raw_value) if isinstance(raw_value, int | float | np.floating) else np.inf
+
+
+def _array_metrics_from_pairs(pairs: dict[str, tuple[Any, Any]]) -> dict[str, dict[str, object]]:
+    return {
+        name: _array_parity_metrics(candidate, reference)
+        for name, (candidate, reference) in pairs.items()
+    }
+
+
+def _worst_array_error(metrics_by_name: dict[str, dict[str, object]], names: tuple[str, ...] | None = None) -> float:
+    selected_names = tuple(metrics_by_name) if names is None else names
+    values = [
+        _normalized_max_abs(metrics_by_name[name])
+        for name in selected_names
+        if bool(metrics_by_name[name].get("shape_match", False))
+    ]
+    return max(values) if values else np.inf
+
+
+def _empty_equal_arc_parity(error: str | None) -> dict[str, object]:
+    return {
+        "equal_arc_core_array_metrics": {},
+        "equal_arc_metric_array_metrics": {},
+        "equal_arc_drift_array_metrics": {},
+        "equal_arc_core_scalar_metrics": {},
+        "equal_arc_core_worst_normalized_max_abs": np.inf,
+        "equal_arc_core_worst_scalar_rel": np.inf,
+        "equal_arc_derivative_worst_normalized_max_abs": np.inf,
+        "equal_arc_metric_worst_normalized_max_abs": np.inf,
+        "equal_arc_drift_worst_normalized_max_abs": np.inf,
+        "equal_arc_core_passed": False,
+        "equal_arc_derivative_passed": False,
+        "equal_arc_metric_passed": False,
+        "equal_arc_drift_passed": False,
+        "equal_arc_core_error": error,
+    }
+
+
+def _equal_arc_parity_report(
+    *,
+    info: dict[str, object],
+    ctx: Any,
+    imported: Any,
+    surface_index: int,
+    torflux: float,
+    alpha: float,
+    ntheta: int,
+    mboz: int,
+    nboz: int,
+    core_tolerance: float,
+    derivative_tolerance: float,
+    metric_tolerance: float,
+    drift_tolerance: float,
+) -> dict[str, object]:
+    if not bool(info.get("booz_xform_jax_api_available", False)):
+        return _empty_equal_arc_parity("booz_xform_jax functional API is not available")
+    try:
+        equal_arc_core = vmec_jax_boozer_equal_arc_core_profiles_from_state(
+            ctx.state,
+            ctx.static,
+            ctx.indata,
+            ctx.wout,
+            surface_index=surface_index,
+            torflux=torflux,
+            alpha=float(alpha),
+            ntheta=ntheta,
+            mboz=mboz,
+            nboz=nboz,
+            jit=False,
+        )
+    except Exception as exc:  # pragma: no cover - optional-backend diagnostic detail
+        return _empty_equal_arc_parity(f"{type(exc).__name__}: {exc}")
+
+    core_metrics = _array_metrics_from_pairs(
+        {
+            "theta": (equal_arc_core["theta"], imported.theta),
+            "bmag": (equal_arc_core["bmag"], imported.bmag_profile),
+            "bgrad": (equal_arc_core["bgrad"], imported.bgrad_profile),
+            "jacobian": (equal_arc_core["jacobian"], imported.jacobian_profile),
+        }
+    )
+    metric_metrics = _array_metrics_from_pairs(
+        {
+            "gds2": (equal_arc_core["gds2"], imported.gds2_profile),
+            "gds21": (equal_arc_core["gds21"], imported.gds21_profile),
+            "gds22": (equal_arc_core["gds22"], imported.gds22_profile),
+            "grho": (equal_arc_core["grho"], imported.grho_profile),
+        }
+    )
+    drift_metrics = _array_metrics_from_pairs(
+        {
+            "cvdrift": (equal_arc_core["cvdrift"], imported.cv_profile),
+            "gbdrift": (equal_arc_core["gbdrift"], imported.gb_profile),
+            "cvdrift0": (equal_arc_core["cvdrift0"], imported.cv0_profile),
+            "gbdrift0": (equal_arc_core["gbdrift0"], imported.gb0_profile),
+        }
+    )
+    scalar_metrics = {
+        "gradpar": _scalar_parity_metrics(jnp.asarray(equal_arc_core["gradpar"])[0], imported.gradpar_value),
+        "q": _scalar_parity_metrics(equal_arc_core["q"], imported.q),
+        "s_hat": _scalar_parity_metrics(equal_arc_core["s_hat"], imported.s_hat),
+    }
+    core_worst = _worst_array_error(core_metrics, ("theta", "bmag", "jacobian"))
+    core_worst_scalar = max(float(values["rel"]) for values in scalar_metrics.values())
+    derivative_worst = _normalized_max_abs(core_metrics["bgrad"])
+    metric_worst = _worst_array_error(metric_metrics)
+    drift_worst = _worst_array_error(drift_metrics)
+    return {
+        "equal_arc_core_array_metrics": core_metrics,
+        "equal_arc_metric_array_metrics": metric_metrics,
+        "equal_arc_drift_array_metrics": drift_metrics,
+        "equal_arc_core_scalar_metrics": scalar_metrics,
+        "equal_arc_core_worst_normalized_max_abs": core_worst,
+        "equal_arc_core_worst_scalar_rel": core_worst_scalar,
+        "equal_arc_derivative_worst_normalized_max_abs": derivative_worst,
+        "equal_arc_metric_worst_normalized_max_abs": metric_worst,
+        "equal_arc_drift_worst_normalized_max_abs": drift_worst,
+        "equal_arc_core_passed": bool(core_worst <= float(core_tolerance) and core_worst_scalar <= float(core_tolerance)),
+        "equal_arc_derivative_passed": bool(derivative_worst <= float(derivative_tolerance)),
+        "equal_arc_metric_passed": bool(metric_worst <= float(metric_tolerance)),
+        "equal_arc_drift_passed": bool(drift_worst <= float(drift_tolerance)),
+        "equal_arc_core_error": None,
+    }
+
+
 def vmec_jax_flux_tube_sensitivity_report(  # pragma: no cover
     *,
     params: jnp.ndarray | None = None,
@@ -278,10 +406,7 @@ def vmec_jax_flux_tube_array_parity_report(  # pragma: no cover
             "jacobian": (direct.jacobian_profile, imported.jacobian_profile),
             "grho": (direct.grho_profile, imported.grho_profile),
         }
-        array_metrics = {
-            name: _array_parity_metrics(candidate, reference)
-            for name, (candidate, reference) in array_pairs.items()
-        }
+        array_metrics = _array_metrics_from_pairs(array_pairs)
         scalar_metrics = {
             "gradpar": _scalar_parity_metrics(
                 direct.gradpar_value, imported.gradpar_value
@@ -299,160 +424,28 @@ def vmec_jax_flux_tube_array_parity_report(  # pragma: no cover
             "jacobian",
             "grho",
         )
-        core_values: list[float] = []
-        for name in core_names:
-            metrics = array_metrics[name]
-            if not bool(metrics.get("shape_match", False)):
-                continue
-            raw_value = metrics.get("normalized_max_abs")
-            core_values.append(
-                float(raw_value)
-                if isinstance(raw_value, int | float | np.floating)
-                else np.inf
-            )
-        worst_core = max(core_values) if core_values else np.inf
+        worst_core = _worst_array_error(array_metrics, core_names)
         worst_scalar = max(float(values["rel"]) for values in scalar_metrics.values())
         production_parity_passed = bool(
             worst_core <= float(core_tolerance)
             and worst_scalar <= float(scalar_tolerance)
         )
 
-        equal_arc_core_error = None
-        equal_arc_core_array_metrics: dict[str, dict[str, object]] = {}
-        equal_arc_metric_array_metrics: dict[str, dict[str, object]] = {}
-        equal_arc_drift_array_metrics: dict[str, dict[str, object]] = {}
-        equal_arc_core_scalar_metrics: dict[str, dict[str, float]] = {}
-        equal_arc_core_worst = np.inf
-        equal_arc_core_worst_scalar = np.inf
-        equal_arc_derivative_worst = np.inf
-        equal_arc_metric_worst = np.inf
-        equal_arc_drift_worst = np.inf
-        equal_arc_core_passed = False
-        equal_arc_derivative_passed = False
-        equal_arc_metric_passed = False
-        equal_arc_drift_passed = False
-        if bool(info.get("booz_xform_jax_api_available", False)):
-            try:
-                equal_arc_core = vmec_jax_boozer_equal_arc_core_profiles_from_state(
-                    ctx.state,
-                    ctx.static,
-                    ctx.indata,
-                    ctx.wout,
-                    surface_index=sidx,
-                    torflux=torflux,
-                    alpha=float(alpha),
-                    ntheta=ntheta_int,
-                    mboz=mboz_int,
-                    nboz=nboz_int,
-                    jit=False,
-                )
-                equal_arc_core_pairs = {
-                    "theta": (equal_arc_core["theta"], imported.theta),
-                    "bmag": (equal_arc_core["bmag"], imported.bmag_profile),
-                    "bgrad": (equal_arc_core["bgrad"], imported.bgrad_profile),
-                    "jacobian": (equal_arc_core["jacobian"], imported.jacobian_profile),
-                }
-                equal_arc_metric_pairs = {
-                    "gds2": (equal_arc_core["gds2"], imported.gds2_profile),
-                    "gds21": (equal_arc_core["gds21"], imported.gds21_profile),
-                    "gds22": (equal_arc_core["gds22"], imported.gds22_profile),
-                    "grho": (equal_arc_core["grho"], imported.grho_profile),
-                }
-                equal_arc_drift_pairs = {
-                    "cvdrift": (equal_arc_core["cvdrift"], imported.cv_profile),
-                    "gbdrift": (equal_arc_core["gbdrift"], imported.gb_profile),
-                    "cvdrift0": (equal_arc_core["cvdrift0"], imported.cv0_profile),
-                    "gbdrift0": (equal_arc_core["gbdrift0"], imported.gb0_profile),
-                }
-                equal_arc_core_array_metrics = {
-                    name: _array_parity_metrics(candidate, reference)
-                    for name, (candidate, reference) in equal_arc_core_pairs.items()
-                }
-                equal_arc_metric_array_metrics = {
-                    name: _array_parity_metrics(candidate, reference)
-                    for name, (candidate, reference) in equal_arc_metric_pairs.items()
-                }
-                equal_arc_drift_array_metrics = {
-                    name: _array_parity_metrics(candidate, reference)
-                    for name, (candidate, reference) in equal_arc_drift_pairs.items()
-                }
-                equal_arc_core_scalar_metrics = {
-                    "gradpar": _scalar_parity_metrics(
-                        jnp.asarray(equal_arc_core["gradpar"])[0],
-                        imported.gradpar_value,
-                    ),
-                    "q": _scalar_parity_metrics(equal_arc_core["q"], imported.q),
-                    "s_hat": _scalar_parity_metrics(
-                        equal_arc_core["s_hat"], imported.s_hat
-                    ),
-                }
-                equal_arc_core_names = ("theta", "bmag", "jacobian")
-                equal_arc_values: list[float] = []
-                for name in equal_arc_core_names:
-                    metrics = equal_arc_core_array_metrics[name]
-                    if not bool(metrics.get("shape_match", False)):
-                        continue
-                    raw_value = metrics.get("normalized_max_abs")
-                    equal_arc_values.append(
-                        float(raw_value)
-                        if isinstance(raw_value, int | float | np.floating)
-                        else np.inf
-                    )
-                equal_arc_core_worst = (
-                    max(equal_arc_values) if equal_arc_values else np.inf
-                )
-                equal_arc_core_worst_scalar = max(
-                    float(values["rel"])
-                    for values in equal_arc_core_scalar_metrics.values()
-                )
-                derivative_metrics = equal_arc_core_array_metrics["bgrad"]
-                raw_derivative = derivative_metrics.get("normalized_max_abs")
-                equal_arc_derivative_worst = (
-                    float(raw_derivative)
-                    if isinstance(raw_derivative, int | float | np.floating)
-                    else np.inf
-                )
-                equal_arc_core_passed = bool(
-                    equal_arc_core_worst <= float(equal_arc_core_tolerance)
-                    and equal_arc_core_worst_scalar <= float(equal_arc_core_tolerance)
-                )
-                equal_arc_derivative_passed = bool(
-                    equal_arc_derivative_worst <= float(equal_arc_derivative_tolerance)
-                )
-                metric_values: list[float] = []
-                for metrics in equal_arc_metric_array_metrics.values():
-                    if not bool(metrics.get("shape_match", False)):
-                        continue
-                    raw_value = metrics.get("normalized_max_abs")
-                    metric_values.append(
-                        float(raw_value)
-                        if isinstance(raw_value, int | float | np.floating)
-                        else np.inf
-                    )
-                equal_arc_metric_worst = max(metric_values) if metric_values else np.inf
-                equal_arc_metric_passed = bool(
-                    equal_arc_metric_worst <= float(equal_arc_metric_tolerance)
-                )
-                drift_values: list[float] = []
-                for metrics in equal_arc_drift_array_metrics.values():
-                    if not bool(metrics.get("shape_match", False)):
-                        continue
-                    raw_value = metrics.get("normalized_max_abs")
-                    drift_values.append(
-                        float(raw_value)
-                        if isinstance(raw_value, int | float | np.floating)
-                        else np.inf
-                    )
-                equal_arc_drift_worst = max(drift_values) if drift_values else np.inf
-                equal_arc_drift_passed = bool(
-                    equal_arc_drift_worst <= float(equal_arc_drift_tolerance)
-                )
-            except (
-                Exception
-            ) as exc:  # pragma: no cover - optional-backend diagnostic detail
-                equal_arc_core_error = f"{type(exc).__name__}: {exc}"
-        else:
-            equal_arc_core_error = "booz_xform_jax functional API is not available"
+        equal_arc_parity = _equal_arc_parity_report(
+            info=info,
+            ctx=ctx,
+            imported=imported,
+            surface_index=sidx,
+            torflux=torflux,
+            alpha=alpha,
+            ntheta=ntheta_int,
+            mboz=mboz_int,
+            nboz=nboz_int,
+            core_tolerance=equal_arc_core_tolerance,
+            derivative_tolerance=equal_arc_derivative_tolerance,
+            metric_tolerance=equal_arc_metric_tolerance,
+            drift_tolerance=equal_arc_drift_tolerance,
+        )
     except Exception as exc:
         return {
             "available": False,
@@ -479,26 +472,11 @@ def vmec_jax_flux_tube_array_parity_report(  # pragma: no cover
         "include_pressure_variation": bool(include_pressure_variation),
         "array_metrics": array_metrics,
         "scalar_metrics": scalar_metrics,
-        "equal_arc_core_array_metrics": equal_arc_core_array_metrics,
-        "equal_arc_metric_array_metrics": equal_arc_metric_array_metrics,
-        "equal_arc_drift_array_metrics": equal_arc_drift_array_metrics,
-        "equal_arc_core_scalar_metrics": equal_arc_core_scalar_metrics,
-        "equal_arc_core_worst_normalized_max_abs": float(equal_arc_core_worst),
-        "equal_arc_core_worst_scalar_rel": float(equal_arc_core_worst_scalar),
-        "equal_arc_derivative_worst_normalized_max_abs": float(
-            equal_arc_derivative_worst
-        ),
-        "equal_arc_metric_worst_normalized_max_abs": float(equal_arc_metric_worst),
-        "equal_arc_drift_worst_normalized_max_abs": float(equal_arc_drift_worst),
+        **equal_arc_parity,
         "equal_arc_core_tolerance": float(equal_arc_core_tolerance),
         "equal_arc_derivative_tolerance": float(equal_arc_derivative_tolerance),
         "equal_arc_metric_tolerance": float(equal_arc_metric_tolerance),
         "equal_arc_drift_tolerance": float(equal_arc_drift_tolerance),
-        "equal_arc_core_passed": bool(equal_arc_core_passed),
-        "equal_arc_derivative_passed": bool(equal_arc_derivative_passed),
-        "equal_arc_metric_passed": bool(equal_arc_metric_passed),
-        "equal_arc_drift_passed": bool(equal_arc_drift_passed),
-        "equal_arc_core_error": equal_arc_core_error,
         "worst_core_normalized_max_abs": float(worst_core),
         "worst_scalar_rel": float(worst_scalar),
         "core_tolerance": float(core_tolerance),
