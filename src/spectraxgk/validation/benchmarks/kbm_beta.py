@@ -273,13 +273,8 @@ def run_kbm_beta_scan(
                 sample_stride=sample_stride,
                 mode_method=mode_method,
                 sel=sel,
-                window_fraction=window_fraction,
-                min_points=min_points,
-                start_fraction=start_fraction,
-                growth_weight=growth_weight,
-                require_positive=require_positive,
-                min_amp_fraction=min_amp_fraction,
                 diagnostic_norm=diagnostic_norm,
+                fit_policy=fit_policy,
                 hooks=explicit_hooks,
             )
         elif solver_use == "krylov":

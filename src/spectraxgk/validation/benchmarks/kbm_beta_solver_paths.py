@@ -101,13 +101,8 @@ def fit_kbm_beta_explicit_time_sample(
     sample_stride: int | None,
     mode_method: str,
     sel: Any,
-    window_fraction: float,
-    min_points: int,
-    start_fraction: float,
-    growth_weight: float,
-    require_positive: bool,
-    min_amp_fraction: float,
     diagnostic_norm: str,
+    fit_policy: Any,
     hooks: KBMBetaExplicitHooks,
 ) -> tuple[float, float]:
     """Run and fit one explicit-time KBM beta sample."""
@@ -149,61 +144,76 @@ def fit_kbm_beta_explicit_time_sample(
         )
     )
     if t_arr.size > 1:
-        phi_np = np.asarray(phi_t)
-        t_np = np.asarray(t_arr, dtype=float)
-        if mode_method in {"z_index", "max"}:
-            try:
-                gamma, omega, _gamma_t, _omega_t, _t_mid = (
-                    hooks.instantaneous_growth_rate_from_phi(
-                        phi_np,
-                        t_np,
-                        sel,
-                        navg_fraction=0.5,
-                        mode_method=mode_method,
-                    )
-                )
-            except ValueError:
-                try:
-                    gamma, omega, _gamma_t, _omega_t = (
-                        hooks.windowed_growth_rate_from_omega_series(
-                            np.asarray(gamma_t),
-                            np.asarray(omega_t),
-                            sel,
-                            navg_fraction=0.5,
-                        )
-                    )
-                except ValueError:
-                    signal = hooks.extract_mode_time_series(
-                        phi_np, sel, method=mode_method
-                    )
-                    gamma, omega, _tmin, _tmax = hooks.fit_growth_rate_auto(
-                        t_np,
-                        signal,
-                        window_method="fixed",
-                        window_fraction=window_fraction,
-                        min_points=min_points,
-                        start_fraction=start_fraction,
-                        growth_weight=growth_weight,
-                        require_positive=require_positive,
-                        min_amp_fraction=min_amp_fraction,
-                    )
-        else:
-            signal = hooks.extract_mode_time_series(phi_np, sel, method=mode_method)
-            gamma, omega, _tmin, _tmax = hooks.fit_growth_rate_auto(
-                t_np,
-                signal,
-                window_method="fixed",
-                window_fraction=window_fraction,
-                min_points=min_points,
-                start_fraction=start_fraction,
-                growth_weight=growth_weight,
-                require_positive=require_positive,
-                min_amp_fraction=min_amp_fraction,
-            )
+        gamma, omega = _fit_explicit_growth_history(
+            phi_t=phi_t,
+            t_arr=t_arr,
+            gamma_t=gamma_t,
+            omega_t=omega_t,
+            mode_method=mode_method,
+            sel=sel,
+            fit_policy=fit_policy,
+            hooks=hooks,
+        )
     else:
         gamma = float("nan")
         omega = float("nan")
     return hooks.normalize_growth_rate(gamma, omega, params, diagnostic_norm)
+
+
+def _fit_explicit_growth_history(
+    *,
+    phi_t: Any,
+    t_arr: Any,
+    gamma_t: Any,
+    omega_t: Any,
+    mode_method: str,
+    sel: Any,
+    fit_policy: Any,
+    hooks: KBMBetaExplicitHooks,
+) -> tuple[float, float]:
+    """Fit the explicit-time trace using the KBM fallback ladder."""
+
+    phi_np = np.asarray(phi_t)
+    t_np = np.asarray(t_arr, dtype=float)
+    if mode_method in {"z_index", "max"}:
+        try:
+            gamma, omega, _gamma_t, _omega_t, _t_mid = (
+                hooks.instantaneous_growth_rate_from_phi(
+                    phi_np,
+                    t_np,
+                    sel,
+                    navg_fraction=0.5,
+                    mode_method=mode_method,
+                )
+            )
+            return gamma, omega
+        except ValueError:
+            try:
+                gamma, omega, _gamma_t, _omega_t = (
+                    hooks.windowed_growth_rate_from_omega_series(
+                        np.asarray(gamma_t),
+                        np.asarray(omega_t),
+                        sel,
+                        navg_fraction=0.5,
+                    )
+                )
+                return gamma, omega
+            except ValueError:
+                pass
+
+    signal = hooks.extract_mode_time_series(phi_np, sel, method=mode_method)
+    gamma, omega, _tmin, _tmax = hooks.fit_growth_rate_auto(
+        t_np,
+        signal,
+        window_method="fixed",
+        window_fraction=fit_policy.window_fraction,
+        min_points=fit_policy.min_points,
+        start_fraction=fit_policy.start_fraction,
+        growth_weight=fit_policy.growth_weight,
+        require_positive=fit_policy.require_positive,
+        min_amp_fraction=fit_policy.min_amp_fraction,
+    )
+    return gamma, omega
 
 
 def fit_kbm_beta_time_sample(
@@ -547,18 +557,7 @@ def _fit_saved_time_sample(
             growth_weight=growth_weight,
             require_positive=require_positive,
             min_amp_fraction=min_amp_fraction,
-            max_amp_fraction=0.9,
-            window_method="loglinear",
-            max_fraction=0.8,
-            end_fraction=0.9,
-            num_windows=8,
-            phase_weight=0.2,
-            length_weight=0.05,
-            min_r2=0.0,
-            late_penalty=0.1,
-            min_slope=None,
-            min_slope_frac=0.0,
-            slope_var_weight=0.0,
+            **fit_policy.auto_kwargs(),
         )
         return hooks.normalize_growth_rate(gamma, omega, params, diagnostic_norm)
 
