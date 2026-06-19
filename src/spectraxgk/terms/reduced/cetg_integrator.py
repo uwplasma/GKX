@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Callable
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -28,6 +30,8 @@ from spectraxgk.terms.reduced.cetg_state import (
     _to_internal_state,
     _xy_mask,
 )
+
+_CETGRHS = Callable[[jnp.ndarray], tuple[jnp.ndarray, FieldState]]
 
 
 def _cetg_diag_weight(grid: SpectralGrid, dtype: jnp.dtype) -> jnp.ndarray:
@@ -127,6 +131,95 @@ def _compute_cetg_diag(
     )
 
 
+def _cetg_explicit_step(
+    G_state: jnp.ndarray,
+    dG: jnp.ndarray,
+    *,
+    dt_local: jnp.ndarray,
+    method: str,
+    grid: SpectralGrid,
+    compressed_real_fft: bool,
+    rhs_fn: _CETGRHS,
+) -> jnp.ndarray:
+    """Advance one projected cETG state with the requested explicit method."""
+
+    def project(G_stage: jnp.ndarray) -> jnp.ndarray:
+        return _project_state(
+            G_stage,
+            grid,
+            compressed_real_fft=compressed_real_fft,
+        )
+
+    if method == "euler":
+        return G_state + dt_local * dG
+    if method == "rk2":
+        k1 = dG
+        k2, _ = rhs_fn(project(G_state + 0.5 * dt_local * k1))
+        return G_state + dt_local * k2
+    if method == "rk3_classic":
+        k1 = dG
+        G1 = project(G_state + dt_local * k1)
+        k2, _ = rhs_fn(G1)
+        G2 = project(0.75 * G_state + 0.25 * (G1 + dt_local * k2))
+        k3, _ = rhs_fn(G2)
+        return (1.0 / 3.0) * G_state + (2.0 / 3.0) * (G2 + dt_local * k3)
+    if method in {"rk3", "rk3_heun"}:
+        k1 = dG
+        G1 = project(G_state + (dt_local / 3.0) * k1)
+        k2, _ = rhs_fn(G1)
+        G2 = project(G_state + (2.0 * dt_local / 3.0) * k2)
+        k3, _ = rhs_fn(G2)
+        G3 = project(G_state + 0.75 * dt_local * k3)
+        return G3 + 0.25 * dt_local * k1
+    if method == "rk4":
+        k1 = dG
+        G2 = project(G_state + 0.5 * dt_local * k1)
+        k2, _ = rhs_fn(G2)
+        G3 = project(G_state + 0.5 * dt_local * k2)
+        k3, _ = rhs_fn(G3)
+        G4 = project(G_state + dt_local * k3)
+        k4, _ = rhs_fn(G4)
+        return G_state + (dt_local / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+    if method == "sspx3":
+
+        def euler_substep(
+            G_stage: jnp.ndarray,
+            dG_stage: jnp.ndarray | None = None,
+        ) -> jnp.ndarray:
+            if dG_stage is None:
+                dG_stage, _ = rhs_fn(G_stage)
+            return project(G_stage + (_SSPX3_ADT * dt_local) * dG_stage)
+
+        # The first SSPx3 Euler substep must use the RHS that selected dt_local.
+        G1 = euler_substep(G_state, dG)
+        G2_euler = euler_substep(G1)
+        G2 = project(
+            (1.0 - _SSPX3_W1) * G_state + (_SSPX3_W1 - 1.0) * G1 + G2_euler
+        )
+        G3 = euler_substep(G2)
+        return (
+            (1.0 - _SSPX3_W2 - _SSPX3_W3) * G_state
+            + _SSPX3_W3 * G1
+            + (_SSPX3_W2 - 1.0) * G2
+            + G3
+        )
+
+    def k10_euler_step(G_stage: jnp.ndarray) -> jnp.ndarray:
+        dG_stage, _ = rhs_fn(G_stage)
+        return project(G_stage + (dt_local / 6.0) * dG_stage)
+
+    G_q1 = G_state
+    G_q2 = G_state
+    for _ in range(5):
+        G_q1 = k10_euler_step(G_q1)
+    G_q2 = 0.04 * G_q2 + 0.36 * G_q1
+    G_q1 = 15.0 * G_q2 - 5.0 * G_q1
+    for _ in range(4):
+        G_q1 = k10_euler_step(G_q1)
+    dG_final, _ = rhs_fn(G_q1)
+    return G_q2 + 0.6 * G_q1 + 0.1 * dt_local * dG_final
+
+
 def integrate_cetg_explicit_diagnostics_state(
     G0: jnp.ndarray,
     grid: SpectralGrid,
@@ -219,119 +312,15 @@ def integrate_cetg_explicit_diagnostics_state(
             compressed_real_fft=compressed_real_fft,
             fields_override=fields_state,
         )
-        if method == "euler":
-            G_new = G_state + dt_local * dG
-        elif method == "rk2":
-            k1 = dG
-            G_half = _project_state(
-                G_state + 0.5 * dt_local * k1,
-                grid,
-                compressed_real_fft=compressed_real_fft,
-            )
-            k2, _ = rhs_fn(G_half)
-            G_new = G_state + dt_local * k2
-        elif method == "rk3_classic":
-            k1 = dG
-            G1 = _project_state(
-                G_state + dt_local * k1, grid, compressed_real_fft=compressed_real_fft
-            )
-            k2, _ = rhs_fn(G1)
-            G2 = _project_state(
-                0.75 * G_state + 0.25 * (G1 + dt_local * k2),
-                grid,
-                compressed_real_fft=compressed_real_fft,
-            )
-            k3, _ = rhs_fn(G2)
-            G_new = (1.0 / 3.0) * G_state + (2.0 / 3.0) * (G2 + dt_local * k3)
-        elif method in {"rk3", "rk3_heun"}:
-            k1 = dG
-            G1 = _project_state(
-                G_state + (dt_local / 3.0) * k1,
-                grid,
-                compressed_real_fft=compressed_real_fft,
-            )
-            k2, _ = rhs_fn(G1)
-            G2 = _project_state(
-                G_state + (2.0 * dt_local / 3.0) * k2,
-                grid,
-                compressed_real_fft=compressed_real_fft,
-            )
-            k3, _ = rhs_fn(G2)
-            G3 = _project_state(
-                G_state + 0.75 * dt_local * k3,
-                grid,
-                compressed_real_fft=compressed_real_fft,
-            )
-            G_new = G3 + 0.25 * dt_local * k1
-        elif method == "rk4":
-            k1 = dG
-            G2 = _project_state(
-                G_state + 0.5 * dt_local * k1,
-                grid,
-                compressed_real_fft=compressed_real_fft,
-            )
-            k2, _ = rhs_fn(G2)
-            G3 = _project_state(
-                G_state + 0.5 * dt_local * k2,
-                grid,
-                compressed_real_fft=compressed_real_fft,
-            )
-            k3, _ = rhs_fn(G3)
-            G4 = _project_state(
-                G_state + dt_local * k3, grid, compressed_real_fft=compressed_real_fft
-            )
-            k4, _ = rhs_fn(G4)
-            G_new = G_state + (dt_local / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
-        elif method == "sspx3":
-
-            def _sspx3_euler_step(
-                G_stage: jnp.ndarray,
-                dG_stage: jnp.ndarray | None = None,
-            ) -> jnp.ndarray:
-                if dG_stage is None:
-                    dG_stage, _ = rhs_fn(G_stage)
-                return _project_state(
-                    G_stage + (_SSPX3_ADT * dt_local) * dG_stage,
-                    grid,
-                    compressed_real_fft=compressed_real_fft,
-                )
-
-            # The first SSPx3 Euler substep must use the carried field state that
-            # was already used to pick the adaptive timestep.
-            G1 = _sspx3_euler_step(G_state, dG)
-            G2_euler = _sspx3_euler_step(G1)
-            G2 = _project_state(
-                (1.0 - _SSPX3_W1) * G_state + (_SSPX3_W1 - 1.0) * G1 + G2_euler,
-                grid,
-                compressed_real_fft=compressed_real_fft,
-            )
-            G3 = _sspx3_euler_step(G2)
-            G_new = (
-                (1.0 - _SSPX3_W2 - _SSPX3_W3) * G_state
-                + _SSPX3_W3 * G1
-                + (_SSPX3_W2 - 1.0) * G2
-                + G3
-            )
-        else:
-
-            def _k10_euler_step(G_stage: jnp.ndarray) -> jnp.ndarray:
-                dG_stage, _ = rhs_fn(G_stage)
-                return _project_state(
-                    G_stage + (dt_local / 6.0) * dG_stage,
-                    grid,
-                    compressed_real_fft=compressed_real_fft,
-                )
-
-            G_q1 = G_state
-            G_q2 = G_state
-            for _ in range(5):
-                G_q1 = _k10_euler_step(G_q1)
-            G_q2 = 0.04 * G_q2 + 0.36 * G_q1
-            G_q1 = 15.0 * G_q2 - 5.0 * G_q1
-            for _ in range(4):
-                G_q1 = _k10_euler_step(G_q1)
-            dG_final, _ = rhs_fn(G_q1)
-            G_new = G_q2 + 0.6 * G_q1 + 0.1 * dt_local * dG_final
+        G_new = _cetg_explicit_step(
+            G_state,
+            dG,
+            dt_local=dt_local,
+            method=method,
+            grid=grid,
+            compressed_real_fft=compressed_real_fft,
+            rhs_fn=rhs_fn,
+        )
 
         G_new = _project_state(G_new, grid, compressed_real_fft=compressed_real_fft)
         G_new = jnp.asarray(G_new, dtype=state_dtype)
