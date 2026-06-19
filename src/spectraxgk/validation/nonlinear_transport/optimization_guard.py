@@ -28,77 +28,44 @@ from spectraxgk.validation.nonlinear_transport.optimization_reports import (
 )
 
 
-def production_nonlinear_optimization_guard_report(
+def _empty_optimization_scope() -> dict[str, Any]:
+    return {
+        "objective_kinds": [],
+        "contains_reduced_nonlinear_window_objective": False,
+        "n_results": 0,
+        "n_reduced_nonlinear_rows": 0,
+        "n_rows_claiming_production": 0,
+        "artifact_claims_production": False,
+        "bounded_reduced_scope": False,
+    }
+
+
+def _optimization_scope(optimization_artifact: Mapping[str, Any] | None) -> dict[str, Any]:
+    if isinstance(optimization_artifact, Mapping):
+        return optimization_artifact_reduction_scope(optimization_artifact)
+    return _empty_optimization_scope()
+
+
+def _sorted_report_rows(
+    artifacts: Mapping[str, Mapping[str, Any]],
+    report_fn: Any,
     *,
-    optimization_artifact: Mapping[str, Any] | None,
-    optimization_artifact_path: str = "",
-    reduced_artifacts: Mapping[str, Mapping[str, Any]] | None = None,
-    replicated_ensemble_artifacts: Mapping[str, Mapping[str, Any]] | None = None,
-    optimized_equilibrium_artifacts: Mapping[str, Mapping[str, Any]] | None = None,
-    matched_optimized_transport_artifacts: Mapping[str, Mapping[str, Any]]
-    | None = None,
     config: ProductionNonlinearOptimizationGuardConfig | None = None,
-) -> dict[str, Any]:
-    """Build the fail-closed nonlinear turbulent-flux optimization guard.
+) -> list[dict[str, Any]]:
+    if config is None:
+        return [report_fn(path, payload) for path, payload in sorted(artifacts.items())]
+    return [
+        report_fn(path, payload, config=config)
+        for path, payload in sorted(artifacts.items())
+    ]
 
-    The top-level ``passed`` field means the release is safe: reduced/startup
-    artifacts are correctly scoped and long-window replicated holdouts are
-    present. It does *not* mean production nonlinear optimization is promoted;
-    that is reported separately by ``production_nonlinear_optimization_promoted``.
-    """
 
-    cfg = config or ProductionNonlinearOptimizationGuardConfig()
-    cfg.validate()
-    reduced_artifacts = reduced_artifacts or {}
-    replicated_ensemble_artifacts = replicated_ensemble_artifacts or {}
-    optimized_equilibrium_artifacts = optimized_equilibrium_artifacts or {}
-    matched_optimized_transport_artifacts = matched_optimized_transport_artifacts or {}
+def _qualifying(rows: list[dict[str, Any]], key: str) -> list[dict[str, Any]]:
+    return [row for row in rows if bool(row[key])]
 
-    optimization_scope = (
-        optimization_artifact_reduction_scope(optimization_artifact)
-        if isinstance(optimization_artifact, Mapping)
-        else {
-            "objective_kinds": [],
-            "contains_reduced_nonlinear_window_objective": False,
-            "n_results": 0,
-            "n_reduced_nonlinear_rows": 0,
-            "n_rows_claiming_production": 0,
-            "artifact_claims_production": False,
-            "bounded_reduced_scope": False,
-        }
-    )
-    reduced_rows = [
-        reduced_artifact_scope_report(path, payload)
-        for path, payload in sorted(reduced_artifacts.items())
-    ]
-    ensemble_rows = [
-        replicated_transport_ensemble_report(path, payload, config=cfg)
-        for path, payload in sorted(replicated_ensemble_artifacts.items())
-    ]
-    optimized_rows = [
-        optimized_equilibrium_transport_report(path, payload, config=cfg)
-        for path, payload in sorted(optimized_equilibrium_artifacts.items())
-    ]
-    matched_optimized_rows = [
-        matched_optimized_transport_report(path, payload, config=cfg)
-        for path, payload in sorted(matched_optimized_transport_artifacts.items())
-    ]
-    qualifying_ensembles = [
-        row
-        for row in ensemble_rows
-        if bool(row["qualifies_as_long_post_transient_replicate"])
-    ]
-    qualifying_optimized = [
-        row
-        for row in optimized_rows
-        if bool(row["qualifies_for_production_optimization"])
-    ]
-    qualifying_matched_optimized = [
-        row
-        for row in matched_optimized_rows
-        if bool(row["qualifies_for_production_optimization"])
-    ]
-    failed_matched_optimized = [
+
+def _failed_matched_optimized(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
         {
             "path": str(row["path"]),
             "case": str(row["case"]),
@@ -106,23 +73,36 @@ def production_nonlinear_optimization_guard_report(
             "uncertainty_separation_sigma": row["uncertainty_separation_sigma"],
             "blockers": list(row["blockers"]),
         }
-        for row in matched_optimized_rows
+        for row in rows
         if not bool(row["qualifies_for_production_optimization"])
     ]
-    reduction_values = [
+
+
+def _best_matched_reduction(rows: list[dict[str, Any]]) -> float | None:
+    values = [
         float(row["relative_reduction"])
-        for row in matched_optimized_rows
+        for row in rows
         if row["relative_reduction"] is not None
     ]
-    best_matched_reduction = max(reduction_values) if reduction_values else None
+    return max(values) if values else None
+
+
+def _safety_gates(
+    *,
+    optimization_artifact: Mapping[str, Any] | None,
+    optimization_scope: Mapping[str, Any],
+    optimization_artifact_path: str,
+    reduced_rows: list[dict[str, Any]],
+    qualifying_ensembles: list[dict[str, Any]],
+    cfg: ProductionNonlinearOptimizationGuardConfig,
+) -> list[dict[str, object]]:
     rows_claiming_production = int(
         _finite_float(optimization_scope.get("n_rows_claiming_production")) or 0
     )
     artifact_claims_production = bool(
         optimization_scope.get("artifact_claims_production", False)
     )
-
-    safety_gates = [
+    return [
         _gate(
             "optimization_artifact_present",
             isinstance(optimization_artifact, Mapping)
@@ -151,12 +131,15 @@ def production_nonlinear_optimization_guard_report(
             f"qualifying_ensembles={len(qualifying_ensembles)} min={cfg.min_replicated_ensembles}",
         ),
     ]
-    safety_blockers = [
-        gate["metric"] for gate in safety_gates if not bool(gate["passed"])
-    ]
-    safe_to_release = not safety_blockers
 
-    promotion_gates = [
+
+def _promotion_gates(
+    *,
+    qualifying_optimized: list[dict[str, Any]],
+    qualifying_matched_optimized: list[dict[str, Any]],
+    cfg: ProductionNonlinearOptimizationGuardConfig,
+) -> list[dict[str, object]]:
+    return [
         _gate(
             "optimized_equilibrium_replicated_transport_window",
             len(qualifying_optimized) >= int(cfg.min_optimized_equilibrium_ensembles)
@@ -184,6 +167,129 @@ def production_nonlinear_optimization_guard_report(
             ),
         ),
     ]
+
+
+def _guard_summary(
+    *,
+    qualifying_ensembles: list[dict[str, Any]],
+    qualifying_optimized: list[dict[str, Any]],
+    qualifying_matched_optimized: list[dict[str, Any]],
+    matched_optimized_rows: list[dict[str, Any]],
+    failed_matched_optimized: list[dict[str, Any]],
+    best_matched_reduction: float | None,
+    promoted: bool,
+) -> dict[str, Any]:
+    return {
+        "qualifying_replicated_holdout_ensembles": len(qualifying_ensembles),
+        "qualifying_optimized_equilibrium_ensembles": len(qualifying_optimized),
+        "qualifying_matched_optimized_transport_audits": len(
+            qualifying_matched_optimized
+        ),
+        "total_matched_optimized_transport_audits": len(matched_optimized_rows),
+        "failed_matched_optimized_transport_audits": len(failed_matched_optimized),
+        "best_matched_optimized_relative_reduction": best_matched_reduction,
+        "production_nonlinear_optimization_ready": int(promoted),
+    }
+
+
+def _evidence_gap(
+    *,
+    failed_matched_optimized: list[dict[str, Any]],
+    qualifying_optimized: list[dict[str, Any]],
+    qualifying_matched_optimized: list[dict[str, Any]],
+    cfg: ProductionNonlinearOptimizationGuardConfig,
+) -> dict[str, Any]:
+    return {
+        "claim_boundary": (
+            "Existing strict matched audits are included as negative evidence. "
+            "They do not promote broad nonlinear turbulent-flux optimization unless "
+            "they pass the same long-window reduction and uncertainty-separation gates."
+        ),
+        "failed_matched_optimized_transport_audits": failed_matched_optimized,
+        "required_additional_optimized_equilibrium_ensembles": max(
+            int(cfg.min_optimized_equilibrium_ensembles) - len(qualifying_optimized),
+            0,
+        ),
+        "required_additional_matched_optimized_audits": max(
+            int(cfg.min_matched_optimized_audits)
+            - len(qualifying_matched_optimized),
+            0,
+        ),
+    }
+
+
+def production_nonlinear_optimization_guard_report(
+    *,
+    optimization_artifact: Mapping[str, Any] | None,
+    optimization_artifact_path: str = "",
+    reduced_artifacts: Mapping[str, Mapping[str, Any]] | None = None,
+    replicated_ensemble_artifacts: Mapping[str, Mapping[str, Any]] | None = None,
+    optimized_equilibrium_artifacts: Mapping[str, Mapping[str, Any]] | None = None,
+    matched_optimized_transport_artifacts: Mapping[str, Mapping[str, Any]]
+    | None = None,
+    config: ProductionNonlinearOptimizationGuardConfig | None = None,
+) -> dict[str, Any]:
+    """Build the fail-closed nonlinear turbulent-flux optimization guard.
+
+    The top-level ``passed`` field means the release is safe: reduced/startup
+    artifacts are correctly scoped and long-window replicated holdouts are
+    present. It does *not* mean production nonlinear optimization is promoted;
+    that is reported separately by ``production_nonlinear_optimization_promoted``.
+    """
+
+    cfg = config or ProductionNonlinearOptimizationGuardConfig()
+    cfg.validate()
+    reduced_artifacts = reduced_artifacts or {}
+    replicated_ensemble_artifacts = replicated_ensemble_artifacts or {}
+    optimized_equilibrium_artifacts = optimized_equilibrium_artifacts or {}
+    matched_optimized_transport_artifacts = matched_optimized_transport_artifacts or {}
+
+    optimization_scope = _optimization_scope(optimization_artifact)
+    reduced_rows = _sorted_report_rows(reduced_artifacts, reduced_artifact_scope_report)
+    ensemble_rows = _sorted_report_rows(
+        replicated_ensemble_artifacts,
+        replicated_transport_ensemble_report,
+        config=cfg,
+    )
+    optimized_rows = _sorted_report_rows(
+        optimized_equilibrium_artifacts,
+        optimized_equilibrium_transport_report,
+        config=cfg,
+    )
+    matched_optimized_rows = _sorted_report_rows(
+        matched_optimized_transport_artifacts,
+        matched_optimized_transport_report,
+        config=cfg,
+    )
+    qualifying_ensembles = _qualifying(
+        ensemble_rows, "qualifies_as_long_post_transient_replicate"
+    )
+    qualifying_optimized = _qualifying(
+        optimized_rows, "qualifies_for_production_optimization"
+    )
+    qualifying_matched_optimized = _qualifying(
+        matched_optimized_rows, "qualifies_for_production_optimization"
+    )
+    failed_matched_optimized = _failed_matched_optimized(matched_optimized_rows)
+    best_matched_reduction = _best_matched_reduction(matched_optimized_rows)
+    safety_gates = _safety_gates(
+        optimization_artifact=optimization_artifact,
+        optimization_scope=optimization_scope,
+        optimization_artifact_path=optimization_artifact_path,
+        reduced_rows=reduced_rows,
+        qualifying_ensembles=qualifying_ensembles,
+        cfg=cfg,
+    )
+    safety_blockers = [
+        gate["metric"] for gate in safety_gates if not bool(gate["passed"])
+    ]
+    safe_to_release = not safety_blockers
+
+    promotion_gates = _promotion_gates(
+        qualifying_optimized=qualifying_optimized,
+        qualifying_matched_optimized=qualifying_matched_optimized,
+        cfg=cfg,
+    )
     promotion_blockers = [
         gate["metric"] for gate in promotion_gates if not bool(gate["passed"])
     ]
@@ -225,35 +331,21 @@ def production_nonlinear_optimization_guard_report(
         "replicated_ensemble_artifacts": ensemble_rows,
         "optimized_equilibrium_artifacts": optimized_rows,
         "matched_optimized_transport_artifacts": matched_optimized_rows,
-        "summary": {
-            "qualifying_replicated_holdout_ensembles": len(qualifying_ensembles),
-            "qualifying_optimized_equilibrium_ensembles": len(qualifying_optimized),
-            "qualifying_matched_optimized_transport_audits": len(
-                qualifying_matched_optimized
-            ),
-            "total_matched_optimized_transport_audits": len(matched_optimized_rows),
-            "failed_matched_optimized_transport_audits": len(failed_matched_optimized),
-            "best_matched_optimized_relative_reduction": best_matched_reduction,
-            "production_nonlinear_optimization_ready": int(promoted),
-        },
-        "evidence_gap": {
-            "claim_boundary": (
-                "Existing strict matched audits are included as negative evidence. "
-                "They do not promote broad nonlinear turbulent-flux optimization unless "
-                "they pass the same long-window reduction and uncertainty-separation gates."
-            ),
-            "failed_matched_optimized_transport_audits": failed_matched_optimized,
-            "required_additional_optimized_equilibrium_ensembles": max(
-                int(cfg.min_optimized_equilibrium_ensembles)
-                - len(qualifying_optimized),
-                0,
-            ),
-            "required_additional_matched_optimized_audits": max(
-                int(cfg.min_matched_optimized_audits)
-                - len(qualifying_matched_optimized),
-                0,
-            ),
-        },
+        "summary": _guard_summary(
+            qualifying_ensembles=qualifying_ensembles,
+            qualifying_optimized=qualifying_optimized,
+            qualifying_matched_optimized=qualifying_matched_optimized,
+            matched_optimized_rows=matched_optimized_rows,
+            failed_matched_optimized=failed_matched_optimized,
+            best_matched_reduction=best_matched_reduction,
+            promoted=promoted,
+        ),
+        "evidence_gap": _evidence_gap(
+            failed_matched_optimized=failed_matched_optimized,
+            qualifying_optimized=qualifying_optimized,
+            qualifying_matched_optimized=qualifying_matched_optimized,
+            cfg=cfg,
+        ),
         "config": asdict(cfg),
         "notes": (
             "This guard intentionally allows release when reduced/startup nonlinear "
