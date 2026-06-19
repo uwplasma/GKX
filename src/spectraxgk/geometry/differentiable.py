@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from functools import wraps
 from typing import Any
 
@@ -61,20 +63,37 @@ _DEFAULT_DISCOVER_DIFFERENTIABLE_GEOMETRY_BACKENDS = (
 )
 
 
+@contextmanager
+def _patched_module_attrs(
+    module: Any, replacements: dict[str, Any]
+) -> Iterator[None]:
+    """Temporarily patch module attributes and restore them after the call."""
+
+    originals = {name: getattr(module, name) for name in replacements}
+    for name, value in replacements.items():
+        setattr(module, name, value)
+    try:
+        yield
+    finally:
+        for name, original in originals.items():
+            setattr(module, name, original)
+
+
 def _call_with_facade_backend_discovery(func: Any, *args: Any, **kwargs: Any) -> Any:
     if (
         discover_differentiable_geometry_backends
         is _DEFAULT_DISCOVER_DIFFERENTIABLE_GEOMETRY_BACKENDS
     ):
         return func(*args, **kwargs)
-    original = _booz_bridge.discover_differentiable_geometry_backends
-    _booz_bridge.discover_differentiable_geometry_backends = (
-        discover_differentiable_geometry_backends
-    )
-    try:
+    with _patched_module_attrs(
+        _booz_bridge,
+        {
+            "discover_differentiable_geometry_backends": (
+                discover_differentiable_geometry_backends
+            )
+        },
+    ):
         return func(*args, **kwargs)
-    finally:
-        _booz_bridge.discover_differentiable_geometry_backends = original
 
 
 @wraps(_booz_bridge.vmec_boundary_aspect_sensitivity_report)
@@ -106,43 +125,24 @@ def booz_xform_flux_tube_sensitivity_report(*args: Any, **kwargs: Any) -> Any:
 
 
 def _call_with_vmec_state_facade_hooks(func: Any, *args: Any, **kwargs: Any) -> Any:
-    originals = {
-        "discover_differentiable_geometry_backends": (
-            _vmec_state_sensitivity.discover_differentiable_geometry_backends
-        ),
-        "booz_xform_flux_tube_mapping_from_inputs": (
-            _vmec_state_sensitivity.booz_xform_flux_tube_mapping_from_inputs
-        ),
-        "geometry_sensitivity_report": (
-            _vmec_state_sensitivity.geometry_sensitivity_report
-        ),
-        "finite_difference_jacobian": (
-            _vmec_state_sensitivity.finite_difference_jacobian
-        ),
-        "_periodic_bilinear_sample_2d": (
-            _vmec_state_sensitivity._periodic_bilinear_sample_2d
-        ),
-        "_sensitivity_conditioning_metadata": (
-            _vmec_state_sensitivity._sensitivity_conditioning_metadata
-        ),
-    }
-    _vmec_state_sensitivity.discover_differentiable_geometry_backends = (
-        discover_differentiable_geometry_backends
-    )
-    _vmec_state_sensitivity.booz_xform_flux_tube_mapping_from_inputs = (
-        booz_xform_flux_tube_mapping_from_inputs
-    )
-    _vmec_state_sensitivity.geometry_sensitivity_report = geometry_sensitivity_report
-    _vmec_state_sensitivity.finite_difference_jacobian = finite_difference_jacobian
-    _vmec_state_sensitivity._periodic_bilinear_sample_2d = _periodic_bilinear_sample_2d
-    _vmec_state_sensitivity._sensitivity_conditioning_metadata = (
-        _sensitivity_conditioning_metadata
-    )
-    try:
+    with _patched_module_attrs(
+        _vmec_state_sensitivity,
+        {
+            "discover_differentiable_geometry_backends": (
+                discover_differentiable_geometry_backends
+            ),
+            "booz_xform_flux_tube_mapping_from_inputs": (
+                booz_xform_flux_tube_mapping_from_inputs
+            ),
+            "geometry_sensitivity_report": geometry_sensitivity_report,
+            "finite_difference_jacobian": finite_difference_jacobian,
+            "_periodic_bilinear_sample_2d": _periodic_bilinear_sample_2d,
+            "_sensitivity_conditioning_metadata": (
+                _sensitivity_conditioning_metadata
+            ),
+        },
+    ):
         return func(*args, **kwargs)
-    finally:
-        for name, original in originals.items():
-            setattr(_vmec_state_sensitivity, name, original)
 
 
 @wraps(_vmec_state_sensitivity.vmec_jax_boozer_flux_tube_sensitivity_report)
@@ -174,14 +174,13 @@ def vmec_jax_field_line_tensor_sensitivity_report(*args: Any, **kwargs: Any) -> 
 
 @wraps(_vmec_tensor_mapping.vmec_jax_flux_tube_mapping_from_state)
 def vmec_jax_flux_tube_mapping_from_state(*args: Any, **kwargs: Any) -> Any:
-    original = _vmec_tensor_mapping._periodic_bilinear_sample_2d
-    _vmec_tensor_mapping._periodic_bilinear_sample_2d = _periodic_bilinear_sample_2d
-    try:
+    with _patched_module_attrs(
+        _vmec_tensor_mapping,
+        {"_periodic_bilinear_sample_2d": _periodic_bilinear_sample_2d},
+    ):
         return _vmec_tensor_mapping.vmec_jax_flux_tube_mapping_from_state(
             *args, **kwargs
         )
-    finally:
-        _vmec_tensor_mapping._periodic_bilinear_sample_2d = original
 
 
 _cached_booz_xform_constants = _vmec_boozer_core._cached_booz_xform_constants
@@ -190,37 +189,24 @@ _cached_booz_xform_constants = _vmec_boozer_core._cached_booz_xform_constants
 def _call_with_vmec_boozer_core_facade_hooks(
     func: Any, *args: Any, **kwargs: Any
 ) -> Any:
-    originals = {
-        "discover_differentiable_geometry_backends": (
-            _vmec_boozer_core.discover_differentiable_geometry_backends
-        ),
-        "_boozer_half_mesh_s_grid": _vmec_boozer_core._boozer_half_mesh_s_grid,
-        "_cumulative_trapezoid": _vmec_boozer_core._cumulative_trapezoid,
-        "_evaluate_boozer_cosine_series_on_field_line": (
-            _vmec_boozer_core._evaluate_boozer_cosine_series_on_field_line
-        ),
-        "_interp_equal_arc_profile": _vmec_boozer_core._interp_equal_arc_profile,
-        "_interp_radial": _vmec_boozer_core._interp_radial,
-        "_radial_derivative_array": _vmec_boozer_core._radial_derivative_array,
-        "_radial_derivative_profile": _vmec_boozer_core._radial_derivative_profile,
-    }
-    _vmec_boozer_core.discover_differentiable_geometry_backends = (
-        discover_differentiable_geometry_backends
-    )
-    _vmec_boozer_core._boozer_half_mesh_s_grid = _boozer_half_mesh_s_grid
-    _vmec_boozer_core._cumulative_trapezoid = _cumulative_trapezoid
-    _vmec_boozer_core._evaluate_boozer_cosine_series_on_field_line = (
-        _evaluate_boozer_cosine_series_on_field_line
-    )
-    _vmec_boozer_core._interp_equal_arc_profile = _interp_equal_arc_profile
-    _vmec_boozer_core._interp_radial = _interp_radial
-    _vmec_boozer_core._radial_derivative_array = _radial_derivative_array
-    _vmec_boozer_core._radial_derivative_profile = _radial_derivative_profile
-    try:
+    with _patched_module_attrs(
+        _vmec_boozer_core,
+        {
+            "discover_differentiable_geometry_backends": (
+                discover_differentiable_geometry_backends
+            ),
+            "_boozer_half_mesh_s_grid": _boozer_half_mesh_s_grid,
+            "_cumulative_trapezoid": _cumulative_trapezoid,
+            "_evaluate_boozer_cosine_series_on_field_line": (
+                _evaluate_boozer_cosine_series_on_field_line
+            ),
+            "_interp_equal_arc_profile": _interp_equal_arc_profile,
+            "_interp_radial": _interp_radial,
+            "_radial_derivative_array": _radial_derivative_array,
+            "_radial_derivative_profile": _radial_derivative_profile,
+        },
+    ):
         return func(*args, **kwargs)
-    finally:
-        for name, original in originals.items():
-            setattr(_vmec_boozer_core, name, original)
 
 
 @wraps(_vmec_boozer_core.prewarm_vmec_boozer_equal_arc_cache)
@@ -297,45 +283,25 @@ def flux_tube_geometry_from_vmec_boozer_state(  # pragma: no cover
 
 
 def _call_with_vmec_report_facade_hooks(func: Any, *args: Any, **kwargs: Any) -> Any:
-    originals = {
-        "discover_differentiable_geometry_backends": (
-            _vmec_flux_tube_reports.discover_differentiable_geometry_backends
-        ),
-        "flux_tube_geometry_from_mapping": (
-            _vmec_flux_tube_reports.flux_tube_geometry_from_mapping
-        ),
-        "geometry_sensitivity_report": (
-            _vmec_flux_tube_reports.geometry_sensitivity_report
-        ),
-        "vmec_jax_boozer_equal_arc_core_profiles_from_state": (
-            _vmec_flux_tube_reports.vmec_jax_boozer_equal_arc_core_profiles_from_state
-        ),
-        "vmec_jax_flux_tube_mapping_from_state": (
-            _vmec_flux_tube_reports.vmec_jax_flux_tube_mapping_from_state
-        ),
-        "_array_parity_metrics": _vmec_flux_tube_reports._array_parity_metrics,
-        "_scalar_parity_metrics": _vmec_flux_tube_reports._scalar_parity_metrics,
-    }
-    _vmec_flux_tube_reports.discover_differentiable_geometry_backends = (
-        discover_differentiable_geometry_backends
-    )
-    _vmec_flux_tube_reports.flux_tube_geometry_from_mapping = (
-        flux_tube_geometry_from_mapping
-    )
-    _vmec_flux_tube_reports.geometry_sensitivity_report = geometry_sensitivity_report
-    _vmec_flux_tube_reports.vmec_jax_boozer_equal_arc_core_profiles_from_state = (
-        vmec_jax_boozer_equal_arc_core_profiles_from_state
-    )
-    _vmec_flux_tube_reports.vmec_jax_flux_tube_mapping_from_state = (
-        vmec_jax_flux_tube_mapping_from_state
-    )
-    _vmec_flux_tube_reports._array_parity_metrics = _array_parity_metrics
-    _vmec_flux_tube_reports._scalar_parity_metrics = _scalar_parity_metrics
-    try:
+    with _patched_module_attrs(
+        _vmec_flux_tube_reports,
+        {
+            "discover_differentiable_geometry_backends": (
+                discover_differentiable_geometry_backends
+            ),
+            "flux_tube_geometry_from_mapping": flux_tube_geometry_from_mapping,
+            "geometry_sensitivity_report": geometry_sensitivity_report,
+            "vmec_jax_boozer_equal_arc_core_profiles_from_state": (
+                vmec_jax_boozer_equal_arc_core_profiles_from_state
+            ),
+            "vmec_jax_flux_tube_mapping_from_state": (
+                vmec_jax_flux_tube_mapping_from_state
+            ),
+            "_array_parity_metrics": _array_parity_metrics,
+            "_scalar_parity_metrics": _scalar_parity_metrics,
+        },
+    ):
         return func(*args, **kwargs)
-    finally:
-        for name, original in originals.items():
-            setattr(_vmec_flux_tube_reports, name, original)
 
 
 @wraps(_vmec_flux_tube_reports.vmec_jax_flux_tube_sensitivity_report)
