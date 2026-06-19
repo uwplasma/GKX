@@ -203,6 +203,299 @@ class IMEXNonlinearDiagnosticsDeps:
     diagnostic_kernels_fn: Callable[..., Any]
 
 
+@dataclass(frozen=True)
+class _IMEXPreparedState:
+    term_cfg: TermConfig
+    linear_cfg: TermConfig
+    setup: Any
+    cache: Any
+    project_state: ProjectFn
+    implicit_operator: Any
+    G0: jnp.ndarray
+    state_dtype: Any
+    real_dtype: Any
+    dt_val: jnp.ndarray
+    progress_total: jnp.ndarray
+
+
+@dataclass(frozen=True)
+class _IMEXRuntimeOperators:
+    collision_policy: Any
+    nonlinear_term: NonlinearTermFn
+    solve_step: SolveStepFn
+
+
+def _prepare_imex_diagnostic_state(
+    G0: jnp.ndarray,
+    grid: SpectralGrid,
+    geom: FluxTubeGeometryLike,
+    params: LinearParams,
+    dt: float,
+    steps: int,
+    *,
+    deps: IMEXNonlinearDiagnosticsDeps,
+    cache: LinearCache | None,
+    terms: TermConfig | None,
+    collision_split: bool,
+    implicit_preconditioner: str | None,
+    compressed_real_fft: bool,
+    use_dealias_mask: bool,
+    z_index: int | None,
+    fixed_mode_ky_index: int | None,
+    fixed_mode_kx_index: int | None,
+) -> _IMEXPreparedState:
+    """Prepare fixed-step IMEX state, linear operator, and dtype policy."""
+
+    term_cfg = terms or TermConfig()
+    linear_cfg = replace(term_cfg, nonlinear=0.0)
+    if collision_split:
+        linear_cfg = replace(linear_cfg, collisions=0.0, hypercollisions=0.0)
+
+    setup = deps.build_diagnostic_setup_fn(
+        G0,
+        grid,
+        geom,
+        params,
+        cache=cache,
+        use_dealias_mask=use_dealias_mask,
+        z_index=z_index,
+        compressed_real_fft=compressed_real_fft,
+        fixed_mode_ky_index=fixed_mode_ky_index,
+        fixed_mode_kx_index=fixed_mode_kx_index,
+        ensure_geometry_fn=deps.ensure_geometry_fn,
+        build_cache_fn=deps.build_cache_fn,
+        quadrature_weights_fn=deps.quadrature_weights_fn,
+        omega_mask_fn=deps.omega_mask_fn,
+        midplane_index_fn=deps.midplane_index_fn,
+    )
+    initial_state_dtype = jnp.result_type(G0, jnp.complex64)
+    G0_projected = setup.project_state(jnp.asarray(G0, dtype=initial_state_dtype))
+    implicit_operator = deps.build_imex_operator_fn(
+        G0_projected,
+        setup.cache,
+        params,
+        dt,
+        terms=linear_cfg,
+        implicit_preconditioner=implicit_preconditioner,
+        compressed_real_fft=compressed_real_fft,
+    )
+    state_dtype = implicit_operator.state_dtype
+    G0_projected = jnp.asarray(G0_projected, dtype=state_dtype)
+    if (
+        implicit_operator.squeeze_species
+        and G0_projected.ndim == len(implicit_operator.shape) - 1
+    ):
+        G0_projected = G0_projected[None, ...]
+    real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
+    dt_val = jnp.asarray(dt, dtype=real_dtype)
+    progress_total = jnp.asarray(float(steps) * float(dt), dtype=real_dtype)
+    return _IMEXPreparedState(
+        term_cfg=term_cfg,
+        linear_cfg=linear_cfg,
+        setup=setup,
+        cache=setup.cache,
+        project_state=setup.project_state,
+        implicit_operator=implicit_operator,
+        G0=G0_projected,
+        state_dtype=state_dtype,
+        real_dtype=real_dtype,
+        dt_val=dt_val,
+        progress_total=progress_total,
+    )
+
+
+def _build_imex_runtime_operators(
+    prepared: _IMEXPreparedState,
+    params: LinearParams,
+    *,
+    deps: IMEXNonlinearDiagnosticsDeps,
+    linear_rhs_fn: Callable[..., Any],
+    collision_split: bool,
+    external_phi: jnp.ndarray | float | None,
+    compressed_real_fft: bool,
+    laguerre_mode: str,
+    implicit_iters: int,
+    implicit_relax: float,
+    implicit_tol: float,
+    implicit_maxiter: int,
+    implicit_restart: int,
+    implicit_solve_method: str,
+) -> _IMEXRuntimeOperators:
+    """Build collision, nonlinear, and linear solve operators for IMEX scans."""
+
+    collision_policy = deps.build_collision_split_policy_fn(
+        prepared.cache,
+        params,
+        prepared.term_cfg,
+        prepared.real_dtype,
+        squeeze_species=prepared.implicit_operator.squeeze_species,
+        collision_split=collision_split,
+        collision_damping_fn=deps.collision_damping_fn,
+    )
+    nonlinear_term = deps.make_imex_nonlinear_term_fn(
+        prepared.cache,
+        params,
+        prepared.term_cfg,
+        real_dtype=prepared.real_dtype,
+        external_phi=external_phi,
+        compressed_real_fft=compressed_real_fft,
+        laguerre_mode=laguerre_mode,
+        fields_fn=deps.compute_fields_fn,
+        nonlinear_term_fn=deps.nonlinear_term_fn,
+        nonlinear_contribution_fn=deps.nonlinear_contribution_fn,
+    )
+    solve_step = deps.make_imex_solve_step_fn(
+        linear_rhs_fn=linear_rhs_fn,
+        cache=prepared.cache,
+        params=params,
+        linear_cfg=prepared.linear_cfg,
+        external_phi=external_phi,
+        dt_val=prepared.dt_val,
+        implicit_iters=implicit_iters,
+        implicit_relax=implicit_relax,
+        matvec=prepared.implicit_operator.matvec,
+        shape=prepared.implicit_operator.shape,
+        implicit_tol=implicit_tol,
+        implicit_maxiter=implicit_maxiter,
+        implicit_restart=implicit_restart,
+        implicit_solve_method=implicit_solve_method,
+        precond_op=prepared.implicit_operator.precond_op,
+        solve_step_fn=deps.solve_imex_step_fn,
+    )
+    return _IMEXRuntimeOperators(
+        collision_policy=collision_policy,
+        nonlinear_term=nonlinear_term,
+        solve_step=solve_step,
+    )
+
+
+def _make_imex_diagnostic_callable(
+    prepared: _IMEXPreparedState,
+    grid: SpectralGrid,
+    params: LinearParams,
+    *,
+    deps: IMEXNonlinearDiagnosticsDeps,
+    omega_ky_index: int | None,
+    omega_kx_index: int | None,
+    flux_scale: float,
+    wphi_scale: float,
+) -> DiagnosticFn:
+    """Return the state-to-diagnostic tuple closure for fixed-step IMEX scans."""
+
+    return deps.make_diagnostic_tuple_fn(
+        grid=grid,
+        cache=prepared.cache,
+        params=params,
+        vol_fac=prepared.setup.vol_fac,
+        flux_fac=prepared.setup.flux_fac,
+        mask=prepared.setup.mask,
+        z_idx=prepared.setup.z_idx,
+        use_dealias=prepared.setup.use_dealias,
+        real_dtype=prepared.real_dtype,
+        omega_ky_index=omega_ky_index,
+        omega_kx_index=omega_kx_index,
+        flux_scale=flux_scale,
+        wphi_scale=wphi_scale,
+        resolved_diagnostics=True,
+        kernels=deps.diagnostic_kernels_fn(),
+    )
+
+
+def _make_imex_scan_step(
+    prepared: _IMEXPreparedState,
+    runtime_ops: _IMEXRuntimeOperators,
+    compute_diag_from_state: DiagnosticFn,
+    params: LinearParams,
+    *,
+    deps: IMEXNonlinearDiagnosticsDeps,
+    method: str,
+    diagnostics_stride: int,
+    show_progress: bool,
+    steps: int,
+    external_phi: jnp.ndarray | float | None,
+    collision_scheme: str,
+) -> DiagnosticStepFn:
+    """Build the fixed-step IMEX diagnostic scan step."""
+
+    return deps.make_imex_step_fn(
+        method=method,
+        nonlinear_term=runtime_ops.nonlinear_term,
+        solve_step=runtime_ops.solve_step,
+        project_state=prepared.project_state,
+        state_dtype=prepared.state_dtype,
+        real_dtype=prepared.real_dtype,
+        dt_val=prepared.dt_val,
+        compute_fields_fn=deps.compute_fields_fn,
+        cache=prepared.cache,
+        params=params,
+        term_cfg=prepared.term_cfg,
+        external_phi=external_phi,
+        compute_diag_from_state=compute_diag_from_state,
+        diagnostics_stride=diagnostics_stride,
+        select_diagnostics_fn=deps.select_step_diagnostics_fn,
+        show_progress=show_progress,
+        steps=steps,
+        progress_total=prepared.progress_total,
+        emit_progress_fn=deps.emit_progress_fn,
+        use_collision_split=runtime_ops.collision_policy.active,
+        damping=runtime_ops.collision_policy.damping,
+        collision_scheme=collision_scheme,
+        apply_collision_split_fn=deps.apply_collision_split_fn,
+    )
+
+
+def _run_imex_diagnostic_scan_and_finalize(
+    prepared: _IMEXPreparedState,
+    step: DiagnosticStepFn,
+    compute_diag_from_state: DiagnosticFn,
+    params: LinearParams,
+    *,
+    deps: IMEXNonlinearDiagnosticsDeps,
+    steps: int,
+    checkpoint: bool,
+    sample_stride: int,
+    diagnostics_stride: int,
+    external_phi: jnp.ndarray | float | None,
+) -> tuple[jnp.ndarray, SimulationDiagnostics]:
+    """Run the fixed-step IMEX scan and finalize diagnostics."""
+
+    fields0 = deps.compute_fields_fn(
+        prepared.G0,
+        prepared.cache,
+        params,
+        terms=prepared.term_cfg,
+        external_phi=external_phi,
+    )
+    diag_zero = compute_diag_from_state(
+        prepared.G0, fields0, prepared.G0, fields0, prepared.dt_val
+    )
+    _G_final, scan_diag_out = deps.run_imex_scan_fn(
+        step,
+        (
+            prepared.G0,
+            prepared.G0,
+            fields0,
+            diag_zero,
+            jnp.asarray(0.0, dtype=prepared.real_dtype),
+        ),
+        steps=steps,
+        checkpoint=checkpoint,
+    )
+
+    diag, t = scan_diag_out
+    dt_series = jnp.ones_like(t) * prepared.dt_val
+    stride = int(max(sample_stride, diagnostics_stride, 1))
+    diag_out = deps.finalize_scan_diagnostics_fn(
+        diag,
+        t=t,
+        dt_series=dt_series,
+        stride=stride,
+        resolved_diagnostics=True,
+        resolved_to_numpy=True,
+    )
+    return jnp.asarray(diag_out.t), diag_out
+
+
 def integrate_imex_nonlinear_diagnostics_impl(
     G0: jnp.ndarray,
     grid: SpectralGrid,
@@ -242,173 +535,76 @@ def integrate_imex_nonlinear_diagnostics_impl(
 ) -> tuple[jnp.ndarray, SimulationDiagnostics]:
     """Integrate an IMEX nonlinear run and return diagnostics."""
 
-    term_cfg = terms or TermConfig()
-    linear_cfg = replace(term_cfg, nonlinear=0.0)
-    if collision_split:
-        linear_cfg = replace(linear_cfg, collisions=0.0, hypercollisions=0.0)
-    linear_rhs_fn = deps.linear_rhs_for_terms_fn(linear_cfg)
-
-    setup = deps.build_diagnostic_setup_fn(
+    prepared = _prepare_imex_diagnostic_state(
         G0,
         grid,
         geom,
         params,
-        cache=cache,
-        use_dealias_mask=use_dealias_mask,
-        z_index=z_index,
-        compressed_real_fft=compressed_real_fft,
-        fixed_mode_ky_index=fixed_mode_ky_index,
-        fixed_mode_kx_index=fixed_mode_kx_index,
-        ensure_geometry_fn=deps.ensure_geometry_fn,
-        build_cache_fn=deps.build_cache_fn,
-        quadrature_weights_fn=deps.quadrature_weights_fn,
-        omega_mask_fn=deps.omega_mask_fn,
-        midplane_index_fn=deps.midplane_index_fn,
-    )
-    cache = setup.cache
-    project_state = setup.project_state
-
-    initial_state_dtype = jnp.result_type(G0, jnp.complex64)
-    G0 = jnp.asarray(G0, dtype=initial_state_dtype)
-    G0 = project_state(G0)
-
-    implicit_operator = deps.build_imex_operator_fn(
-        G0,
-        cache,
-        params,
         dt,
-        terms=linear_cfg,
+        steps,
+        deps=deps,
+        cache=cache,
+        terms=terms,
+        collision_split=collision_split,
         implicit_preconditioner=implicit_preconditioner,
         compressed_real_fft=compressed_real_fft,
+        use_dealias_mask=use_dealias_mask,
+        z_index=z_index,
+        fixed_mode_ky_index=fixed_mode_ky_index,
+        fixed_mode_kx_index=fixed_mode_kx_index,
     )
-
-    # Keep the scan carry in the same dtype as the implicit operator, especially
-    # under x64 where the operator promotes complex64 inputs to complex128.
-    state_dtype = implicit_operator.state_dtype
-    G0 = jnp.asarray(G0, dtype=state_dtype)
-    real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
-    dt_val = jnp.asarray(dt, dtype=real_dtype)
-    progress_total = jnp.asarray(float(steps) * float(dt), dtype=real_dtype)
-
-    squeeze_species = implicit_operator.squeeze_species
-    if squeeze_species and G0.ndim == len(implicit_operator.shape) - 1:
-        G0 = G0[None, ...]
-    collision_policy = deps.build_collision_split_policy_fn(
-        cache,
+    linear_rhs_fn = deps.linear_rhs_for_terms_fn(prepared.linear_cfg)
+    runtime_ops = _build_imex_runtime_operators(
+        prepared,
         params,
-        term_cfg,
-        real_dtype,
-        squeeze_species=squeeze_species,
+        deps=deps,
+        linear_rhs_fn=linear_rhs_fn,
         collision_split=collision_split,
-        collision_damping_fn=deps.collision_damping_fn,
-    )
-
-    nonlinear_term = deps.make_imex_nonlinear_term_fn(
-        cache,
-        params,
-        term_cfg,
-        real_dtype=real_dtype,
         external_phi=external_phi,
         compressed_real_fft=compressed_real_fft,
         laguerre_mode=laguerre_mode,
-        fields_fn=deps.compute_fields_fn,
-        nonlinear_term_fn=deps.nonlinear_term_fn,
-        nonlinear_contribution_fn=deps.nonlinear_contribution_fn,
-    )
-    solve_step = deps.make_imex_solve_step_fn(
-        linear_rhs_fn=linear_rhs_fn,
-        cache=cache,
-        params=params,
-        linear_cfg=linear_cfg,
-        external_phi=external_phi,
-        dt_val=dt_val,
         implicit_iters=implicit_iters,
         implicit_relax=implicit_relax,
-        matvec=implicit_operator.matvec,
-        shape=implicit_operator.shape,
         implicit_tol=implicit_tol,
         implicit_maxiter=implicit_maxiter,
         implicit_restart=implicit_restart,
         implicit_solve_method=implicit_solve_method,
-        precond_op=implicit_operator.precond_op,
-        solve_step_fn=deps.solve_imex_step_fn,
     )
-
-    compute_diag_from_state = deps.make_diagnostic_tuple_fn(
-        grid=grid,
-        cache=cache,
+    compute_diag_from_state = _make_imex_diagnostic_callable(
+        prepared,
+        grid,
         params=params,
-        vol_fac=setup.vol_fac,
-        flux_fac=setup.flux_fac,
-        mask=setup.mask,
-        z_idx=setup.z_idx,
-        use_dealias=setup.use_dealias,
-        real_dtype=real_dtype,
+        deps=deps,
         omega_ky_index=omega_ky_index,
         omega_kx_index=omega_kx_index,
         flux_scale=flux_scale,
         wphi_scale=wphi_scale,
-        resolved_diagnostics=True,
-        kernels=deps.diagnostic_kernels_fn(),
     )
-
-    fields0 = deps.compute_fields_fn(
-        G0, cache, params, terms=term_cfg, external_phi=external_phi
-    )
-
-    step = deps.make_imex_step_fn(
+    step = _make_imex_scan_step(
+        prepared,
+        runtime_ops,
+        compute_diag_from_state,
+        params,
+        deps=deps,
         method=method,
-        nonlinear_term=nonlinear_term,
-        solve_step=solve_step,
-        project_state=project_state,
-        state_dtype=state_dtype,
-        real_dtype=real_dtype,
-        dt_val=dt_val,
-        compute_fields_fn=deps.compute_fields_fn,
-        cache=cache,
-        params=params,
-        term_cfg=term_cfg,
-        external_phi=external_phi,
-        compute_diag_from_state=compute_diag_from_state,
         diagnostics_stride=diagnostics_stride,
-        select_diagnostics_fn=deps.select_step_diagnostics_fn,
         show_progress=show_progress,
         steps=steps,
-        progress_total=progress_total,
-        emit_progress_fn=deps.emit_progress_fn,
-        use_collision_split=collision_policy.active,
-        damping=collision_policy.damping,
+        external_phi=external_phi,
         collision_scheme=collision_scheme,
-        apply_collision_split_fn=deps.apply_collision_split_fn,
     )
-
-    diag_zero = compute_diag_from_state(G0, fields0, G0, fields0, dt_val)
-    _G_final, scan_diag_out = deps.run_imex_scan_fn(
+    return _run_imex_diagnostic_scan_and_finalize(
+        prepared,
         step,
-        (
-            G0,
-            G0,
-            fields0,
-            diag_zero,
-            jnp.asarray(0.0, dtype=real_dtype),
-        ),
+        compute_diag_from_state,
+        params,
+        deps=deps,
         steps=steps,
         checkpoint=checkpoint,
+        sample_stride=sample_stride,
+        diagnostics_stride=diagnostics_stride,
+        external_phi=external_phi,
     )
-
-    diag, t = scan_diag_out
-    dt_series = jnp.ones_like(t) * dt_val
-
-    stride = int(max(sample_stride, diagnostics_stride, 1))
-    diag_out = deps.finalize_scan_diagnostics_fn(
-        diag,
-        t=t,
-        dt_series=dt_series,
-        stride=stride,
-        resolved_diagnostics=True,
-        resolved_to_numpy=True,
-    )
-    return jnp.asarray(diag_out.t), diag_out
 
 
 __all__ = [
