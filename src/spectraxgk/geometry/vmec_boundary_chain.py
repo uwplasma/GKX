@@ -14,6 +14,24 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 import math
 
+_BRANCH_SENSITIVE_BOUNDARY_CHAIN_CLASSES = frozenset(
+    {
+        "frozen_axis_replay_consistent_but_exact_fd_branch_sensitive",
+        "frozen_axis_convention_verified_but_exact_fd_branch_sensitive",
+    }
+)
+
+_BOUNDARY_CHAIN_COUNT_KEYS = (
+    "n_total",
+    "n_finite",
+    "n_frozen_axis_internal_pass",
+    "n_frozen_axis_convention_verified",
+    "n_exact_fd_consistent",
+    "n_branch_sensitive",
+    "n_growth_branch_locality_checked",
+    "n_growth_branch_locality_passed",
+)
+
 
 def _finite_float(value: float | int | None) -> float | None:
     if value is None:
@@ -460,6 +478,41 @@ def _collection_row(payload: Mapping[str, Any], summary: Mapping[str, Any]) -> d
     }
 
 
+def _empty_boundary_chain_counts() -> dict[str, int]:
+    """Return the JSON-stable zero-count payload for collection gates."""
+
+    return {key: 0 for key in _BOUNDARY_CHAIN_COUNT_KEYS}
+
+
+def _boundary_chain_collection_counts(rows: Sequence[Mapping[str, Any]]) -> dict[str, int]:
+    """Count boundary-chain collection gates in one policy-owned place."""
+
+    counts = _empty_boundary_chain_counts()
+    counts["n_total"] = len(rows)
+    counts["n_finite"] = sum(1 for row in rows if bool(row["finite"]))
+    counts["n_frozen_axis_internal_pass"] = sum(
+        1 for row in rows if bool(row["frozen_axis_jvp_vjp_consistent"])
+    )
+    counts["n_frozen_axis_convention_verified"] = sum(
+        1 for row in rows if bool(row["frozen_axis_convention_verified"])
+    )
+    counts["n_exact_fd_consistent"] = sum(
+        1 for row in rows if bool(row["frozen_axis_matches_exact_fd"])
+    )
+    counts["n_branch_sensitive"] = sum(
+        1
+        for row in rows
+        if row["classification"] in _BRANCH_SENSITIVE_BOUNDARY_CHAIN_CLASSES
+    )
+    counts["n_growth_branch_locality_checked"] = sum(
+        1 for row in rows if bool(row["growth_branch_locality_checked"])
+    )
+    counts["n_growth_branch_locality_passed"] = sum(
+        1 for row in rows if bool(row["growth_branch_locality_passed"])
+    )
+    return counts
+
+
 def build_boundary_chain_collection_summary(
     probes: Sequence[Mapping[str, Any]],
     *,
@@ -483,16 +536,7 @@ def build_boundary_chain_collection_summary(
             "finite": False,
             "classification": "empty_boundary_chain_collection",
             "rows": [],
-            "counts": {
-                "n_total": 0,
-                "n_finite": 0,
-                "n_frozen_axis_internal_pass": 0,
-                "n_frozen_axis_convention_verified": 0,
-                "n_exact_fd_consistent": 0,
-                "n_branch_sensitive": 0,
-                "n_growth_branch_locality_checked": 0,
-                "n_growth_branch_locality_passed": 0,
-            },
+            "counts": _empty_boundary_chain_counts(),
             "next_action": (
                 "run at least one boundary-chain probe before interpreting the "
                 "VMEC-JAX transport-gradient convention"
@@ -514,22 +558,13 @@ def build_boundary_chain_collection_summary(
         )
         rows.append(_collection_row(payload, summary))
 
-    n_total = len(rows)
-    n_finite = sum(1 for row in rows if row["finite"])
-    n_internal = sum(1 for row in rows if row["frozen_axis_jvp_vjp_consistent"])
-    n_exact = sum(1 for row in rows if row["frozen_axis_matches_exact_fd"])
-    n_convention = sum(1 for row in rows if row["frozen_axis_convention_verified"])
-    n_branch = sum(
-        1
-        for row in rows
-        if row["classification"]
-        in {
-            "frozen_axis_replay_consistent_but_exact_fd_branch_sensitive",
-            "frozen_axis_convention_verified_but_exact_fd_branch_sensitive",
-        }
-    )
-    n_growth_checked = sum(1 for row in rows if row["growth_branch_locality_checked"])
-    n_growth_passed = sum(1 for row in rows if row["growth_branch_locality_passed"])
+    counts = _boundary_chain_collection_counts(rows)
+    n_total = counts["n_total"]
+    n_finite = counts["n_finite"]
+    n_internal = counts["n_frozen_axis_internal_pass"]
+    n_exact = counts["n_exact_fd_consistent"]
+    n_convention = counts["n_frozen_axis_convention_verified"]
+    n_branch = counts["n_branch_sensitive"]
     finite = n_finite == n_total
     all_internal = finite and n_internal == n_total
     if not finite:
@@ -586,16 +621,7 @@ def build_boundary_chain_collection_summary(
         "exact_relative_tolerance": float(exact_relative_tolerance),
         "internal_relative_tolerance": float(internal_relative_tolerance),
         "absolute_tolerance": float(absolute_tolerance),
-        "counts": {
-            "n_total": n_total,
-            "n_finite": n_finite,
-            "n_frozen_axis_internal_pass": n_internal,
-            "n_frozen_axis_convention_verified": n_convention,
-            "n_exact_fd_consistent": n_exact,
-            "n_branch_sensitive": n_branch,
-            "n_growth_branch_locality_checked": n_growth_checked,
-            "n_growth_branch_locality_passed": n_growth_passed,
-        },
+        "counts": counts,
         "rows": rows,
         "next_action": next_action,
     }
