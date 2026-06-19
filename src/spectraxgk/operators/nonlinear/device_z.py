@@ -116,6 +116,77 @@ def _blocked_device_z_transport_window_report(
     )
 
 
+def _blocked_device_z_rhs_report(
+    *,
+    state_shape: tuple[int, int, int, int, int],
+    axis_name: str,
+    requested_count: int,
+    active_count: int,
+    atol: float,
+    rtol: float,
+    blocked_reasons: Sequence[str],
+) -> NonlinearSpectralDevicePencilRHSIdentityReport:
+    """Return a fail-closed RHS identity report before sharded execution."""
+
+    return NonlinearSpectralDevicePencilRHSIdentityReport(
+        state_shape=state_shape,
+        sharded_axis="z",
+        axis_name=str(axis_name),
+        requested_device_count=int(requested_count),
+        active_device_count=int(active_count),
+        atol=float(atol),
+        rtol=float(rtol),
+        rhs_max_abs_error=float("inf"),
+        rhs_max_rel_error=float("inf"),
+        identity_passed=False,
+        device_sharding_active=False,
+        decomposed_path_enabled=False,
+        claim_scope=(
+            "device z-sharded fused pencil nonlinear RHS gate; skipped because "
+            "the requested local device topology cannot support the z shard"
+        ),
+        blocked_reasons=tuple(blocked_reasons),
+    )
+
+
+def _device_z_rhs_identity_report(
+    *,
+    state_shape: tuple[int, int, int, int, int],
+    axis_name: str,
+    requested_count: int,
+    active_count: int,
+    atol: float,
+    rtol: float,
+    rhs_abs: float,
+    rhs_rel: float,
+) -> NonlinearSpectralDevicePencilRHSIdentityReport:
+    """Return the passed/blocked RHS identity report after candidate comparison."""
+
+    identity_passed = bool(rhs_abs <= float(atol) and rhs_rel <= float(rtol))
+    blocked_reasons = () if identity_passed else ("device_z_pencil_rhs_identity_failed",)
+    return NonlinearSpectralDevicePencilRHSIdentityReport(
+        state_shape=state_shape,
+        sharded_axis="z",
+        axis_name=str(axis_name),
+        requested_device_count=int(requested_count),
+        active_device_count=int(active_count),
+        atol=float(atol),
+        rtol=float(rtol),
+        rhs_max_abs_error=float(rhs_abs),
+        rhs_max_rel_error=float(rhs_rel),
+        identity_passed=identity_passed,
+        device_sharding_active=True,
+        decomposed_path_enabled=identity_passed,
+        claim_scope=(
+            "device z-sharded shard_map fused pencil nonlinear RHS identity gate; "
+            "FFT axes remain local per device and no global spectral reconstruction "
+            "is used, host-gathered RHS identity is required, and no speedup claim "
+            "is allowed without matched profiler gates"
+        ),
+        blocked_reasons=blocked_reasons,
+    )
+
+
 def _device_z_sharding_for_spectral_state(
     state_hat: jax.Array,
     *,
@@ -286,23 +357,13 @@ def device_z_pencil_nonlinear_spectral_rhs(
         state_hat
     )
     if blockers or mesh is None or sharding is None:
-        report = NonlinearSpectralDevicePencilRHSIdentityReport(
+        report = _blocked_device_z_rhs_report(
             state_shape=state_shape,
-            sharded_axis="z",
-            axis_name=str(axis_name),
-            requested_device_count=int(requested_count),
-            active_device_count=int(active_count),
-            atol=float(atol),
-            rtol=float(rtol),
-            rhs_max_abs_error=float("inf"),
-            rhs_max_rel_error=float("inf"),
-            identity_passed=False,
-            device_sharding_active=False,
-            decomposed_path_enabled=False,
-            claim_scope=(
-                "device z-sharded fused pencil nonlinear RHS gate; skipped because "
-                "the requested local device topology cannot support the z shard"
-            ),
+            axis_name=axis_name,
+            requested_count=requested_count,
+            active_count=active_count,
+            atol=atol,
+            rtol=rtol,
             blocked_reasons=blockers,
         )
         return serial_rhs, report
@@ -320,31 +381,15 @@ def device_z_pencil_nonlinear_spectral_rhs(
         candidate_rhs = sharded_rhs_fn(sharded_state)
 
     rhs_abs, rhs_rel = _host_max_abs_rel_error(serial_rhs, candidate_rhs, atol=atol)
-    identity_passed = bool(rhs_abs <= float(atol) and rhs_rel <= float(rtol))
-    blockers_list: list[str] = []
-    if not identity_passed:
-        blockers_list.append("device_z_pencil_rhs_identity_failed")
-
-    report = NonlinearSpectralDevicePencilRHSIdentityReport(
+    report = _device_z_rhs_identity_report(
         state_shape=state_shape,
-        sharded_axis="z",
-        axis_name=str(axis_name),
-        requested_device_count=int(requested_count),
-        active_device_count=int(active_count),
-        atol=float(atol),
-        rtol=float(rtol),
-        rhs_max_abs_error=rhs_abs,
-        rhs_max_rel_error=rhs_rel,
-        identity_passed=identity_passed,
-        device_sharding_active=True,
-        decomposed_path_enabled=identity_passed,
-        claim_scope=(
-            "device z-sharded shard_map fused pencil nonlinear RHS identity gate; "
-            "FFT axes remain local per device and no global spectral reconstruction "
-            "is used, host-gathered RHS identity is required, and no speedup claim "
-            "is allowed without matched profiler gates"
-        ),
-        blocked_reasons=tuple(blockers_list),
+        axis_name=axis_name,
+        requested_count=requested_count,
+        active_count=active_count,
+        atol=atol,
+        rtol=rtol,
+        rhs_abs=rhs_abs,
+        rhs_rel=rhs_rel,
     )
     gated_rhs = candidate_rhs if report.decomposed_path_enabled else serial_rhs
     return gated_rhs, report
