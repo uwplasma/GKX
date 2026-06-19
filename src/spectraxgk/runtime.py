@@ -246,25 +246,17 @@ def _load_initial_state_from_file(
 ) -> np.ndarray:
     """Load an initial state while preserving the runtime module patch surface."""
 
+    shape_kwargs = {
+        "nspecies": nspecies,
+        "Nl": Nl,
+        "Nm": Nm,
+        "ny": ny,
+        "nx": nx,
+        "nz": nz,
+    }
     if path.suffix.lower() == ".nc":
-        return load_netcdf_restart_state(
-            path,
-            nspecies=nspecies,
-            Nl=Nl,
-            Nm=Nm,
-            ny=ny,
-            nx=nx,
-            nz=nz,
-        )
-    return runtime_startup._load_initial_state_from_file(
-        path,
-        nspecies=nspecies,
-        Nl=Nl,
-        Nm=Nm,
-        ny=ny,
-        nx=nx,
-        nz=nz,
-    )
+        return load_netcdf_restart_state(path, **shape_kwargs)
+    return runtime_startup._load_initial_state_from_file(path, **shape_kwargs)
 
 
 _slice_runtime_diagnostics = slice_runtime_diagnostics
