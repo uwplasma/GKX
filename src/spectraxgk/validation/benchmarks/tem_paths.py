@@ -13,7 +13,7 @@ from spectraxgk.diagnostics.analysis import ModeSelection, ModeSelectionBatch
 from spectraxgk.validation.benchmarks.batching import _iter_ky_batches
 from spectraxgk.validation.benchmarks.fit_signals import _extract_mode_only_signal
 from spectraxgk.validation.benchmarks.reference import LinearRunResult, LinearScanResult
-from spectraxgk.validation.benchmarks.scan import ScanFitWindowPolicy, indexed_float_value
+from spectraxgk.validation.benchmarks.scan import ScanFitWindowPolicy
 
 
 @dataclass(frozen=True)
@@ -200,10 +200,7 @@ def _append_tem_streaming_fit(
     params: Any,
     terms: Any,
     time_cfg_i: Any,
-    tmin: float | None,
-    tmax: float | None,
-    start_fraction: float,
-    window_fraction: float,
+    fit_policy: ScanFitWindowPolicy,
     mode_method: str,
     streaming_amp_floor: float,
     show_progress: bool,
@@ -213,12 +210,13 @@ def _append_tem_streaming_fit(
     ky_out: list[float],
 ) -> None:
     t_total = float(time_cfg_i.t_max)
+    tmin_i, tmax_i = fit_policy.window_at(context.batch_start)
     tmin_i, tmax_i = hooks.resolve_streaming_window(
         t_total,
-        indexed_float_value(tmin, context.batch_start),
-        indexed_float_value(tmax, context.batch_start),
-        start_fraction,
-        window_fraction,
+        tmin_i,
+        tmax_i,
+        fit_policy.start_fraction,
+        fit_policy.window_fraction,
         1.0,
     )
     _, gamma_vals, omega_vals = hooks.integrate_linear_diffrax_streaming(
@@ -604,10 +602,7 @@ def run_tem_scan_batches(
                 params=params,
                 terms=terms,
                 time_cfg_i=time_cfg_i,
-                tmin=tmin,
-                tmax=tmax,
-                start_fraction=start_fraction,
-                window_fraction=window_fraction,
+                fit_policy=fit_policy,
                 mode_method=mode_method,
                 streaming_amp_floor=streaming_amp_floor,
                 show_progress=show_progress,
