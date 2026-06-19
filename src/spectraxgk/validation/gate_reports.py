@@ -62,6 +62,25 @@ def evaluate_scalar_gate(
     )
 
 
+def _upper_limit_gate(
+    metric: str,
+    observed: float,
+    limit: float,
+    *,
+    notes: str = "",
+) -> ScalarGateResult:
+    """Gate quantities that should stay below a documented upper limit."""
+
+    return evaluate_scalar_gate(
+        metric,
+        observed,
+        0.0,
+        atol=float(limit),
+        rtol=0.0,
+        notes=notes,
+    )
+
+
 def gate_report(
     case: str,
     source: str,
@@ -221,36 +240,28 @@ def nonlinear_heat_flux_convergence_gate_report(
         raise ValueError("min_samples must be positive")
 
     gates = (
-        evaluate_scalar_gate(
+        _upper_limit_gate(
             "heat_flux_terminal_mean_rel_delta",
             metrics.mean_rel_delta,
-            0.0,
-            atol=mean_limit,
-            rtol=0.0,
+            mean_limit,
             notes=f"Passes when terminal-window mean differs by <= {mean_limit:.6g}.",
         ),
-        evaluate_scalar_gate(
+        _upper_limit_gate(
             "heat_flux_window_cv",
             metrics.heat_flux_cv,
-            0.0,
-            atol=cv_limit,
-            rtol=0.0,
+            cv_limit,
             notes=f"Passes when post-transient heat-flux CV <= {cv_limit:.6g}.",
         ),
-        evaluate_scalar_gate(
+        _upper_limit_gate(
             "heat_flux_window_abs_trend",
             metrics.abs_trend,
-            0.0,
-            atol=trend_limit,
-            rtol=0.0,
+            trend_limit,
             notes=f"Passes when normalized drift across the window <= {trend_limit:.6g}.",
         ),
-        evaluate_scalar_gate(
+        _upper_limit_gate(
             "heat_flux_window_sample_deficit",
             max(0.0, float(sample_floor - int(metrics.nsamples))),
             0.0,
-            atol=0.0,
-            rtol=0.0,
             notes=f"Passes when post-transient window has at least {sample_floor} samples.",
         ),
     )
@@ -336,12 +347,10 @@ def eigenfunction_gate_report(
                 rtol=0.0,
                 notes=f"Passes when overlap >= {min_overlap_f:.6g}.",
             ),
-            evaluate_scalar_gate(
+            _upper_limit_gate(
                 "eigenfunction_relative_l2",
                 comparison.relative_l2,
-                0.0,
-                atol=max_relative_l2_f,
-                rtol=0.0,
+                max_relative_l2_f,
                 notes=f"Passes when relative L2 <= {max_relative_l2_f:.6g}.",
             ),
         ),
@@ -371,12 +380,10 @@ def observed_order_gate_report(
     if min_order < 0.0 or order_tol < 0.0:
         raise ValueError("min_asymptotic_order and order_atol must be non-negative")
     gates = [
-        evaluate_scalar_gate(
+        _upper_limit_gate(
             "observed_order_deficit",
             max(0.0, min_order - float(metrics.asymptotic_order)),
-            0.0,
-            atol=order_tol,
-            rtol=0.0,
+            order_tol,
             notes=f"Passes when asymptotic observed order >= {min_order:.6g}.",
         )
     ]
@@ -385,12 +392,10 @@ def observed_order_gate_report(
         if min_pair_order < 0.0:
             raise ValueError("min_pairwise_order must be non-negative")
         gates.append(
-            evaluate_scalar_gate(
+            _upper_limit_gate(
                 "min_pairwise_order_deficit",
                 max(0.0, min_pair_order - float(np.min(metrics.orders))),
-                0.0,
-                atol=order_tol,
-                rtol=0.0,
+                order_tol,
                 notes=f"Passes when every pairwise observed order >= {min_pair_order:.6g}.",
             )
         )
@@ -399,12 +404,10 @@ def observed_order_gate_report(
         if final_error_limit < 0.0:
             raise ValueError("max_final_error must be non-negative")
         gates.append(
-            evaluate_scalar_gate(
+            _upper_limit_gate(
                 "final_error",
                 float(metrics.errors[-1]),
-                0.0,
-                atol=final_error_limit,
-                rtol=0.0,
+                final_error_limit,
                 notes=f"Passes when final-grid error <= {final_error_limit:.6g}.",
             )
         )
@@ -427,20 +430,16 @@ def branch_continuity_gate_report(
     if gamma_limit < 0.0 or omega_limit < 0.0:
         raise ValueError("maximum relative jumps must be non-negative")
     gates = [
-        evaluate_scalar_gate(
+        _upper_limit_gate(
             "max_rel_gamma_jump",
             float(metrics.max_rel_gamma_jump),
-            0.0,
-            atol=gamma_limit,
-            rtol=0.0,
+            gamma_limit,
             notes=f"Passes when adjacent gamma jumps <= {gamma_limit:.6g}.",
         ),
-        evaluate_scalar_gate(
+        _upper_limit_gate(
             "max_rel_omega_jump",
             float(metrics.max_rel_omega_jump),
-            0.0,
-            atol=omega_limit,
-            rtol=0.0,
+            omega_limit,
             notes=f"Passes when adjacent omega jumps <= {omega_limit:.6g}.",
         ),
     ]
@@ -450,12 +449,10 @@ def branch_continuity_gate_report(
             raise ValueError("min_successive_overlap must be in [0, 1]")
         observed = float("nan") if metrics.min_successive_overlap is None else float(metrics.min_successive_overlap)
         gates.append(
-            evaluate_scalar_gate(
+            _upper_limit_gate(
                 "successive_overlap_deficit",
                 max(0.0, min_overlap - observed) if np.isfinite(observed) else float("nan"),
                 0.0,
-                atol=0.0,
-                rtol=0.0,
                 notes=f"Passes when successive eigenfunction overlap >= {min_overlap:.6g}.",
             )
         )
