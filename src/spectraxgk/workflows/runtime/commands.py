@@ -4,10 +4,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Mapping, Sequence, cast
+from typing import Any, Callable, Sequence, cast
 
 from spectraxgk.workflows.runtime.config import RuntimeConfig
 from spectraxgk.workflows.runtime.results import RuntimeLinearResult, RuntimeNonlinearResult
+from spectraxgk.workflows.runtime.orchestration_artifacts import (
+    print_nonlinear_command_outputs,
+    write_linear_runtime_command_outputs,
+    write_scan_runtime_command_outputs,
+)
 
 RUNTIME_COMMAND_FIT_KEYS = {
     "auto_window",
@@ -24,24 +29,6 @@ RUNTIME_COMMAND_FIT_KEYS = {
 
 _PRELOADED_RUNTIME_CONFIG_ATTR = "_spectraxgk_preloaded_runtime_config"
 _PRELOADED_RUNTIME_DATA_ATTR = "_spectraxgk_preloaded_runtime_data"
-_LINEAR_ARTIFACT_DISPLAY_KEYS = (
-    "summary",
-    "timeseries",
-    "eigenfunction",
-    "state",
-    "quasilinear_summary",
-    "quasilinear_species",
-)
-_SCAN_ARTIFACT_DISPLAY_KEYS = ("summary", "scan", "quasilinear_spectrum")
-_QUASILINEAR_ARTIFACT_DISPLAY_KEYS = ("quasilinear_summary", "quasilinear_species")
-_NONLINEAR_ARTIFACT_DISPLAY_KEYS = (
-    "summary",
-    "diagnostics",
-    "state",
-    "out",
-    "big",
-    "restart",
-)
 
 
 @dataclass(frozen=True)
@@ -513,30 +500,6 @@ def _status_printer(prefix: str) -> Callable[[str], None]:
     return _emit
 
 
-def _print_saved_paths(paths: Mapping[str, str], keys: Sequence[str]) -> None:
-    """Print saved artifact paths in the command-defined display order."""
-
-    for key in keys:
-        if key in paths:
-            print(f"saved {paths[key]}")
-
-
-def _write_command_outputs(
-    out_path: str | None,
-    payload: Any | None,
-    *,
-    writer: Callable[[str | Path, Any], dict[str, str]],
-    display_keys: Sequence[str],
-) -> dict[str, str]:
-    """Write command artifacts when both destination and payload exist."""
-
-    if out_path is None or payload is None:
-        return {}
-    paths = writer(out_path, payload)
-    _print_saved_paths(paths, display_keys)
-    return paths
-
-
 def _write_linear_runtime_command_outputs(
     args: Any,
     cfg: RuntimeConfig,
@@ -546,19 +509,15 @@ def _write_linear_runtime_command_outputs(
 ) -> dict[str, dict[str, str]]:
     """Write all optional artifacts produced by one linear runtime command."""
 
-    linear_paths = _write_command_outputs(
-        runtime_output_path(args, cfg),
-        result,
-        writer=deps.write_runtime_linear_artifacts,
-        display_keys=_LINEAR_ARTIFACT_DISPLAY_KEYS,
+    return write_linear_runtime_command_outputs(
+        linear_out_path=runtime_output_path(args, cfg),
+        quasilinear_out_path=(
+            getattr(args, "ql_output", None) or cfg.quasilinear.output_path
+        ),
+        result=result,
+        linear_writer=deps.write_runtime_linear_artifacts,
+        quasilinear_writer=deps.write_quasilinear_artifacts,
     )
-    ql_paths = _write_command_outputs(
-        getattr(args, "ql_output", None) or cfg.quasilinear.output_path,
-        result.quasilinear,
-        writer=deps.write_quasilinear_artifacts,
-        display_keys=_QUASILINEAR_ARTIFACT_DISPLAY_KEYS,
-    )
-    return {"linear": linear_paths, "quasilinear": ql_paths}
 
 
 def _write_scan_runtime_command_outputs(
@@ -570,19 +529,11 @@ def _write_scan_runtime_command_outputs(
 ) -> dict[str, str]:
     """Write optional artifacts produced by one linear-scan runtime command."""
 
-    return _write_command_outputs(
+    return write_scan_runtime_command_outputs(
         runtime_output_path(args, cfg) or cfg.quasilinear.output_path,
         scan,
         writer=deps.write_runtime_linear_scan_artifacts,
-        display_keys=_SCAN_ARTIFACT_DISPLAY_KEYS,
     )
-
-
-def print_nonlinear_command_outputs(paths: Mapping[str, str], *, enabled: bool) -> None:
-    """Print nonlinear artifact paths after diagnostics confirm a saved run."""
-
-    if enabled:
-        _print_saved_paths(paths, _NONLINEAR_ARTIFACT_DISPLAY_KEYS)
 
 
 def plot_saved_output_command(
