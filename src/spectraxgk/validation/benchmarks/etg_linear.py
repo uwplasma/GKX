@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import Any
 
 import jax.numpy as jnp
 import numpy as np
@@ -435,30 +436,24 @@ def run_etg_linear(
         use_auto = auto_window and tmin is None and tmax is None
         if not use_auto and not scan_window_valid(t, tmin, tmax):
             use_auto = True
+        auto_fit_kwargs: dict[str, Any] = {
+            "window_fraction": window_fraction,
+            "min_points": min_points,
+            "start_fraction": start_fraction,
+            "growth_weight": growth_weight,
+            "require_positive": require_positive,
+            "min_amp_fraction": min_amp_fraction,
+        }
         if use_auto:
             gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
-                t,
-                signal,
-                window_fraction=window_fraction,
-                min_points=min_points,
-                start_fraction=start_fraction,
-                growth_weight=growth_weight,
-                require_positive=require_positive,
-                min_amp_fraction=min_amp_fraction,
+                t, signal, **auto_fit_kwargs
             )
         else:
             try:
                 gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
             except ValueError:
                 gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
-                    t,
-                    signal,
-                    window_fraction=window_fraction,
-                    min_points=min_points,
-                    start_fraction=start_fraction,
-                    growth_weight=growth_weight,
-                    require_positive=require_positive,
-                    min_amp_fraction=min_amp_fraction,
+                    t, signal, **auto_fit_kwargs
                 )
         gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
 
@@ -470,4 +465,3 @@ def run_etg_linear(
         ky=float(grid.ky[sel.ky_index]),
         selection=sel,
     )
-
