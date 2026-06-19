@@ -22,10 +22,13 @@ from spectraxgk.geometry_backends.vmec_fieldline_numerics import (
     _boozer_mode_sum,
     _boozer_trig_basis,
     _centered_fieldline_integral,
+    _fieldline_alpha_gradients,
     _fieldline_boozer_coordinates,
     _fieldline_boozer_tensors,
     _fieldline_cartesian_derivatives,
     _fieldline_coordinate_gradients,
+    _fieldline_local_shear,
+    _fieldline_metric_drifts,
     _flux_surface_hngc_averages,
     _hngc_pressure_correction,
     _hngc_shear_correction,
@@ -126,7 +129,6 @@ def _vmec_fieldlines(
     iota = vs.iota(s)
     d_iota_d_s = vs.d_iota_d_s(s)
     shat = (-2.0 * s / iota) * d_iota_d_s
-    sqrt_s = np.sqrt(s)
 
     nfp = vs.nfp
 
@@ -206,8 +208,6 @@ def _vmec_fieldlines(
     R_b = tensors.R_b
     Z_b = tensors.Z_b
     nu_b = tensors.nu_b
-    sqrt_g_booz = tensors.sqrt_g_booz
-    modB_b = tensors.modB_b
 
     Vprime = gmnc_b[:, 0]  # flux-surface volume element (m=0, n=0 Boozer mode)
 
@@ -243,27 +243,15 @@ def _vmec_fieldlines(
         cartesian=cartesian,
         edge_toroidal_flux_over_2pi=_etf,
     )
-    grad_psi_X = gradients.grad_psi_X
-    grad_psi_Y = gradients.grad_psi_Y
-    grad_psi_Z = gradients.grad_psi_Z
-
-    g_sup_psi_psi = grad_psi_X**2 + grad_psi_Y**2 + grad_psi_Z**2
-
-    grad_alpha_X = (
-        -(phi_b - zeta_center) * d_iota_d_s[:, None, None] * grad_psi_X / _etf
-        + gradients.grad_theta_b_X
-        - iota[:, None, None] * gradients.grad_phi_b_X
+    alpha_gradients = _fieldline_alpha_gradients(
+        gradients=gradients,
+        phi_b=phi_b,
+        zeta_center=zeta_center,
+        d_iota_d_s=d_iota_d_s,
+        iota=iota,
+        edge_toroidal_flux_over_2pi=_etf,
     )
-    grad_alpha_Y = (
-        -(phi_b - zeta_center) * d_iota_d_s[:, None, None] * grad_psi_Y / _etf
-        + gradients.grad_theta_b_Y
-        - iota[:, None, None] * gradients.grad_phi_b_Y
-    )
-    grad_alpha_Z = (
-        -(phi_b - zeta_center) * d_iota_d_s[:, None, None] * grad_psi_Z / _etf
-        + gradients.grad_theta_b_Z
-        - iota[:, None, None] * gradients.grad_phi_b_Z
-    )
+    g_sup_psi_psi = alpha_gradients.g_sup_psi_psi
 
     D1, D2 = _flux_surface_hngc_averages(
         xm_b=xm_b,
@@ -302,124 +290,46 @@ def _vmec_fieldlines(
         include_pressure_variation=include_pressure_variation,
     )
 
-    D_HNGC = (
-        1.0
-        / _etf
-        * (
-            d_iota_d_s_1[:, None, None] * (intinv_g / D1 - phi_b + zeta_center)
-            - d_pressure_d_s_1[:, None, None]
-            * Vprime[:, None, None]
-            * (G[:, None, None] + iota[:, None, None] * boozer_i[:, None, None])
-            * (int_lam_div_g - D2 * intinv_g / D1)
-        )
+    shear = _fieldline_local_shear(
+        edge_toroidal_flux_over_2pi=_etf,
+        d_iota_d_s=d_iota_d_s,
+        d_iota_d_s_1=d_iota_d_s_1,
+        d_pressure_d_s_1=d_pressure_d_s_1,
+        Vprime=Vprime,
+        G=G,
+        iota=iota,
+        boozer_i=boozer_i,
+        phi_b=phi_b,
+        zeta_center=zeta_center,
+        intinv_g=intinv_g,
+        int_lam_div_g=int_lam_div_g,
+        D1=D1,
+        D2=D2,
+        g_sup_psi_psi=g_sup_psi_psi,
+        grad_alpha_dot_grad_psi=alpha_gradients.grad_alpha_dot_grad_psi,
     )
-
-    # Integrated local shear L0, L1
-    grad_alpha_dot_grad_psi = (
-        grad_alpha_X * grad_psi_X
-        + grad_alpha_Y * grad_psi_Y
-        + grad_alpha_Z * grad_psi_Z
-    )
-
-    L0 = -1.0 * (
-        grad_alpha_dot_grad_psi / g_sup_psi_psi
-        + 1.0 / _etf * d_iota_d_s[:, None, None] * (phi_b - zeta_center)
-    )
-    L1 = (
-        -1.0 / _etf * d_iota_d_s_1[:, None, None] * (phi_b - zeta_center)
-        + grad_alpha_dot_grad_psi / g_sup_psi_psi
-        - D_HNGC
-    )
-
-    # Curvature components (normal and geodesic)
-    kappa_n = (
-        1.0
-        / modB_b**2
-        * (modB_b * tensors.d_B_b_d_s + _MU_0 * d_pressure_d_s[:, None, None])
-        / _etf
-        - beta_b
-        / (
-            2.0
-            * sqrt_g_booz
-            * (G[:, None, None] + iota[:, None, None] * boozer_i[:, None, None])
-        )
-        * tensors.d_sqrt_g_booz_d_phi_b
-        + L0
-        * (
-            G[:, None] * tensors.d_sqrt_g_booz_d_theta_b
-            - boozer_i[:, None] * tensors.d_sqrt_g_booz_d_phi_b
-        )
-        / (2.0 * sqrt_g_booz * (G[:, None] + iota[:, None] * boozer_i[:, None]))
-    )
-    kappa_g = (
-        G[:, None] * tensors.d_sqrt_g_booz_d_theta_b
-        - boozer_i[:, None] * tensors.d_sqrt_g_booz_d_phi_b
-    ) / (2.0 * sqrt_g_booz * (G[:, None] + iota[:, None] * boozer_i[:, None]))
-
-    B_cross_kappa_dot_grad_alpha = (kappa_n + kappa_g * L1) * modB_b**2
-    B_cross_kappa_dot_grad_psi = kappa_g * modB_b**2
-
-    # Geometry coefficients -------------------------------------------
-    bmag = modB_b / B_reference
-    gradpar_theta_b = -L_reference / modB_b / sqrt_g_booz * iota[:, None, None]
-
-    grad_alpha_dot_grad_alpha_b = modB_b**2 / g_sup_psi_psi + g_sup_psi_psi * L1**2
-    grad_alpha_dot_grad_psi_b = g_sup_psi_psi * L1
-
-    gds2 = grad_alpha_dot_grad_alpha_b * L_reference**2 * s[:, None, None]
-    gds21 = grad_alpha_dot_grad_psi_b * sfac * shat[:, None, None] / B_reference
-    gds22 = (
-        g_sup_psi_psi
-        * (sfac * shat[:, None, None]) ** 2
-        / (L_reference**2 * B_reference**2 * s[:, None, None])
-    )
-    grho = np.sqrt(g_sup_psi_psi / (L_reference**2 * B_reference**2 * s[:, None, None]))
-
-    gbdrift0 = (
-        -B_cross_kappa_dot_grad_psi
-        * 2.0
-        * sfac
-        * shat[:, None, None]
-        / (modB_b**2 * sqrt_s[:, None, None])
-        * toroidal_flux_sign
-    )
-    cvdrift0 = gbdrift0
-
-    cvdrift = (
-        -2.0
-        * B_reference
-        * L_reference**2
-        * sqrt_s[:, None, None]
-        * B_cross_kappa_dot_grad_alpha
-        / modB_b**2
-        * toroidal_flux_sign
-    )
-    gbdrift = cvdrift + (
-        2.0
-        * B_reference
-        * L_reference**2
-        * sqrt_s[:, None, None]
-        * _MU_0
-        * pfac
-        * d_pressure_d_s[:, None, None]
-        * toroidal_flux_sign
-        / (_etf * modB_b**2)
+    coeffs = _fieldline_metric_drifts(
+        tensors=tensors,
+        gradients=gradients,
+        alpha_gradients=alpha_gradients,
+        shear=shear,
+        s=s,
+        shat=shat,
+        sfac=sfac,
+        pfac=pfac,
+        L_reference=L_reference,
+        B_reference=B_reference,
+        toroidal_flux_sign=toroidal_flux_sign,
+        edge_toroidal_flux_over_2pi=_etf,
+        d_pressure_d_s=d_pressure_d_s,
+        beta_b=beta_b,
+        G=G,
+        iota=iota,
+        boozer_i=boozer_i,
     )
 
     theta_PEST = theta_b - iota[:, None, None] * nu_b
     theta_geo = np.arctan2(Z_b, R_b - R_mag_ax)
-
-    grad_y = (
-        L_reference
-        * np.sqrt(s[:, None, None])
-        * np.array([grad_alpha_X, grad_alpha_Y, grad_alpha_Z])
-    )
-    grad_x = (
-        sfac
-        * shat[:, None, None]
-        * np.array([grad_psi_X, grad_psi_Y, grad_psi_Z])
-        / (L_reference * B_reference * np.sqrt(s[:, None, None]))
-    )
 
     nc_obj.close()
 
@@ -437,19 +347,19 @@ def _vmec_fieldlines(
         R_b=R_b,
         Z_b=Z_b,
         betaprim=betaprim,
-        bmag=bmag,
-        gradpar_theta_b=gradpar_theta_b,
-        gradpar_phi=L_reference / modB_b / sqrt_g_booz,
-        gds2=gds2,
-        gds21=gds21,
-        gds22=gds22,
-        gbdrift=gbdrift,
-        gbdrift0=gbdrift0,
-        cvdrift=cvdrift,
-        cvdrift0=cvdrift0,
-        grho=grho,
-        grad_y=grad_y,
-        grad_x=grad_x,
+        bmag=coeffs.bmag,
+        gradpar_theta_b=coeffs.gradpar_theta_b,
+        gradpar_phi=coeffs.gradpar_phi,
+        gds2=coeffs.gds2,
+        gds21=coeffs.gds21,
+        gds22=coeffs.gds22,
+        gbdrift=coeffs.gbdrift,
+        gbdrift0=coeffs.gbdrift0,
+        cvdrift=coeffs.cvdrift,
+        cvdrift0=coeffs.cvdrift0,
+        grho=coeffs.grho,
+        grad_y=coeffs.grad_y,
+        grad_x=coeffs.grad_x,
         zeta_center=zeta_center,
         nfp=nfp,
         L_reference=L_reference,
