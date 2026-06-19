@@ -205,13 +205,7 @@ def _fit_explicit_growth_history(
     gamma, omega, _tmin, _tmax = hooks.fit_growth_rate_auto(
         t_np,
         signal,
-        window_method="fixed",
-        window_fraction=fit_policy.window_fraction,
-        min_points=fit_policy.min_points,
-        start_fraction=fit_policy.start_fraction,
-        growth_weight=fit_policy.growth_weight,
-        require_positive=fit_policy.require_positive,
-        min_amp_fraction=fit_policy.min_amp_fraction,
+        **{**fit_policy.auto_kwargs(), "window_method": "fixed"},
     )
     return gamma, omega
 
