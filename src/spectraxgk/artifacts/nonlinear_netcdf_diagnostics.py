@@ -16,6 +16,53 @@ from spectraxgk.artifacts.spectral_layout import (
 )
 
 
+def _write_resolved_species_spectra(
+    diag_group: Any,
+    prefix: str,
+    *,
+    kx_arr: Any,
+    ky_arr: Any,
+    kykx_arr: Any,
+    z_arr: Any,
+    full_nx: int,
+    full_ny: int,
+    active_nx: int,
+    active_ny: int,
+) -> None:
+    """Write optional ``(time, species, spectral)`` resolved diagnostics."""
+
+    if kx_arr is not None:
+        diag_group.createVariable(f"{prefix}_kxst", "f4", ("time", "s", "kx"))[
+            :, :, :
+        ] = _condense_kx_for_output(
+            np.asarray(kx_arr, dtype=np.float32),
+            full_nx=full_nx,
+            active_nx=active_nx,
+        )
+    if ky_arr is not None:
+        diag_group.createVariable(f"{prefix}_kyst", "f4", ("time", "s", "ky"))[
+            :, :, :
+        ] = _condense_ky_for_output(
+            np.asarray(ky_arr, dtype=np.float32),
+            full_ny=full_ny,
+            active_ny=active_ny,
+        )
+    if kykx_arr is not None:
+        diag_group.createVariable(
+            f"{prefix}_kxkyst", "f4", ("time", "s", "ky", "kx")
+        )[:, :, :, :] = _condense_kykx_for_output(
+            np.asarray(kykx_arr, dtype=np.float32),
+            full_ny=full_ny,
+            full_nx=full_nx,
+            active_ny=active_ny,
+            active_nx=active_nx,
+        )
+    if z_arr is not None:
+        diag_group.createVariable(f"{prefix}_zst", "f4", ("time", "s", "theta"))[
+            :, :, :
+        ] = np.asarray(z_arr, dtype=np.float32)
+
+
 def _write_diagnostics_group(
     root: Any,
     diag: Any,
@@ -245,36 +292,18 @@ def _write_diagnostics_group(
             ),
         )
         for prefix, kx_arr, ky_arr, kykx_arr, z_arr in metric_specs:
-            if kx_arr is not None:
-                diag_group.createVariable(
-                    f"{prefix}_kxst", "f4", ("time", "s", "kx")
-                )[:, :, :] = _condense_kx_for_output(
-                    np.asarray(kx_arr, dtype=np.float32),
-                    full_nx=full_nx,
-                    active_nx=active_nx,
-                )
-            if ky_arr is not None:
-                diag_group.createVariable(
-                    f"{prefix}_kyst", "f4", ("time", "s", "ky")
-                )[:, :, :] = _condense_ky_for_output(
-                    np.asarray(ky_arr, dtype=np.float32),
-                    full_ny=full_ny,
-                    active_ny=active_ny,
-                )
-            if kykx_arr is not None:
-                diag_group.createVariable(
-                    f"{prefix}_kxkyst", "f4", ("time", "s", "ky", "kx")
-                )[:, :, :, :] = _condense_kykx_for_output(
-                    np.asarray(kykx_arr, dtype=np.float32),
-                    full_ny=full_ny,
-                    full_nx=full_nx,
-                    active_ny=active_ny,
-                    active_nx=active_nx,
-                )
-            if z_arr is not None:
-                diag_group.createVariable(
-                    f"{prefix}_zst", "f4", ("time", "s", "theta")
-                )[:, :, :] = np.asarray(z_arr, dtype=np.float32)
+            _write_resolved_species_spectra(
+                diag_group,
+                prefix,
+                kx_arr=kx_arr,
+                ky_arr=ky_arr,
+                kykx_arr=kykx_arr,
+                z_arr=z_arr,
+                full_nx=full_nx,
+                full_ny=full_ny,
+                active_nx=active_nx,
+                active_ny=active_ny,
+            )
         if resolved.Wg_lmst is not None:
             diag_group.createVariable("Wg_lmst", "f4", ("time", "s", "m", "l"))[
                 :, :, :, :
@@ -371,66 +400,30 @@ def _write_diagnostics_group(
                 total_kykx if kykx_arr is None and fallback_total else kykx_arr
             )
             use_z = total_z if z_arr is None and fallback_total else z_arr
-            if use_kx is not None:
-                diag_group.createVariable(
-                    f"{prefix}_kxst", "f4", ("time", "s", "kx")
-                )[:, :, :] = _condense_kx_for_output(
-                    np.asarray(use_kx, dtype=np.float32),
-                    full_nx=full_nx,
-                    active_nx=active_nx,
-                )
-            if use_ky is not None:
-                diag_group.createVariable(
-                    f"{prefix}_kyst", "f4", ("time", "s", "ky")
-                )[:, :, :] = _condense_ky_for_output(
-                    np.asarray(use_ky, dtype=np.float32),
-                    full_ny=full_ny,
-                    active_ny=active_ny,
-                )
-            if use_kykx is not None:
-                diag_group.createVariable(
-                    f"{prefix}_kxkyst", "f4", ("time", "s", "ky", "kx")
-                )[:, :, :, :] = _condense_kykx_for_output(
-                    np.asarray(use_kykx, dtype=np.float32),
-                    full_ny=full_ny,
-                    full_nx=full_nx,
-                    active_ny=active_ny,
-                    active_nx=active_nx,
-                )
-            if use_z is not None:
-                diag_group.createVariable(
-                    f"{prefix}_zst", "f4", ("time", "s", "theta")
-                )[:, :, :] = np.asarray(use_z, dtype=np.float32)
-        if resolved.TurbulentHeating_kxst is not None:
-            diag_group.createVariable(
-                "TurbulentHeating_kxst", "f4", ("time", "s", "kx")
-            )[:, :, :] = _condense_kx_for_output(
-                np.asarray(resolved.TurbulentHeating_kxst, dtype=np.float32),
+            _write_resolved_species_spectra(
+                diag_group,
+                prefix,
+                kx_arr=use_kx,
+                ky_arr=use_ky,
+                kykx_arr=use_kykx,
+                z_arr=use_z,
                 full_nx=full_nx,
-                active_nx=active_nx,
-            )
-        if resolved.TurbulentHeating_kyst is not None:
-            diag_group.createVariable(
-                "TurbulentHeating_kyst", "f4", ("time", "s", "ky")
-            )[:, :, :] = _condense_ky_for_output(
-                np.asarray(resolved.TurbulentHeating_kyst, dtype=np.float32),
                 full_ny=full_ny,
+                active_nx=active_nx,
                 active_ny=active_ny,
             )
-        if resolved.TurbulentHeating_kxkyst is not None:
-            diag_group.createVariable(
-                "TurbulentHeating_kxkyst", "f4", ("time", "s", "ky", "kx")
-            )[:, :, :, :] = _condense_kykx_for_output(
-                np.asarray(resolved.TurbulentHeating_kxkyst, dtype=np.float32),
-                full_ny=full_ny,
-                full_nx=full_nx,
-                active_ny=active_ny,
-                active_nx=active_nx,
-            )
-        if resolved.TurbulentHeating_zst is not None:
-            diag_group.createVariable(
-                "TurbulentHeating_zst", "f4", ("time", "s", "theta")
-            )[:, :, :] = np.asarray(resolved.TurbulentHeating_zst, dtype=np.float32)
+        _write_resolved_species_spectra(
+            diag_group,
+            "TurbulentHeating",
+            kx_arr=resolved.TurbulentHeating_kxst,
+            ky_arr=resolved.TurbulentHeating_kyst,
+            kykx_arr=resolved.TurbulentHeating_kxkyst,
+            z_arr=resolved.TurbulentHeating_zst,
+            full_nx=full_nx,
+            full_ny=full_ny,
+            active_nx=active_nx,
+            active_ny=active_ny,
+        )
 
 
 
