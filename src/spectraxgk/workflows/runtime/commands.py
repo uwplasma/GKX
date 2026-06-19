@@ -162,6 +162,27 @@ def load_runtime_command_config(
     return deps.load_runtime_from_toml(args.config)
 
 
+def _prepare_runtime_command_config(
+    args: Any,
+    *,
+    deps: RuntimeCommandDeps,
+    path_overrides: bool,
+    quasilinear_overrides: bool,
+) -> tuple[RuntimeConfig, dict[str, Any]]:
+    """Load runtime command config and apply the command-specific overrides."""
+
+    cfg, data = load_runtime_command_config(args, deps=deps)
+    if path_overrides:
+        cfg = apply_runtime_path_overrides(
+            cfg,
+            args,
+            resolve_runtime_path=deps.resolve_runtime_path,
+        )
+    if quasilinear_overrides:
+        cfg = apply_quasilinear_overrides(cfg, args)
+    return cfg, data
+
+
 def _arg_or_section(args: Any, section: dict[str, Any], name: str, default: Any) -> Any:
     """Return a CLI override or a TOML section value."""
 
@@ -522,11 +543,12 @@ def plot_saved_output_command(
 def run_runtime_linear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:
     """Execute the runtime-linear subcommand after parser dispatch."""
 
-    cfg, data = load_runtime_command_config(args, deps=deps)
-    cfg = apply_runtime_path_overrides(
-        cfg, args, resolve_runtime_path=deps.resolve_runtime_path
+    cfg, data = _prepare_runtime_command_config(
+        args,
+        deps=deps,
+        path_overrides=True,
+        quasilinear_overrides=True,
     )
-    cfg = apply_quasilinear_overrides(cfg, args)
     run_cfg = data.get("run", {})
     fit_cfg = _runtime_fit_config(data)
     opts = _resolve_linear_command_options(args, cfg, run_cfg)
@@ -585,8 +607,12 @@ def run_runtime_linear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:
 def scan_runtime_linear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:
     """Execute the runtime-linear ky-scan subcommand after parser dispatch."""
 
-    cfg, data = load_runtime_command_config(args, deps=deps)
-    cfg = apply_quasilinear_overrides(cfg, args)
+    cfg, data = _prepare_runtime_command_config(
+        args,
+        deps=deps,
+        path_overrides=False,
+        quasilinear_overrides=True,
+    )
     scan_cfg = data.get("scan", {})
     fit_cfg = _runtime_fit_config(data)
     opts = _resolve_scan_command_options(args, cfg, scan_cfg)
@@ -623,9 +649,11 @@ def scan_runtime_linear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:
 def run_runtime_nonlinear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:
     """Execute the runtime-nonlinear subcommand after parser dispatch."""
 
-    cfg, data = load_runtime_command_config(args, deps=deps)
-    cfg = apply_runtime_path_overrides(
-        cfg, args, resolve_runtime_path=deps.resolve_runtime_path
+    cfg, data = _prepare_runtime_command_config(
+        args,
+        deps=deps,
+        path_overrides=True,
+        quasilinear_overrides=False,
     )
     run_cfg = data.get("run", {})
     opts = _resolve_nonlinear_command_options(args, cfg, run_cfg)
