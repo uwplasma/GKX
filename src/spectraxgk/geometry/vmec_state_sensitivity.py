@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import importlib
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace as dc_replace
 from typing import Any
 
@@ -200,6 +200,38 @@ def _vmec_state_sensitivity_metadata(
     }
 
 
+def _ad_fd_jacobian_diagnostics(
+    observable_fn: Callable[[jnp.ndarray], jnp.ndarray],
+    params: jnp.ndarray,
+    *,
+    fd_step: float,
+    observable_names: tuple[str, ...],
+    relative_floor: float,
+) -> dict[str, object]:
+    """Return AD/finite-difference Jacobian diagnostics for sensitivity gates."""
+
+    jac_ad = jax.jacfwd(observable_fn)(params)
+    jac_fd = finite_difference_jacobian(observable_fn, params, step=float(fd_step))
+    diff = jac_ad - jac_fd
+    max_abs = jnp.max(jnp.abs(diff))
+    max_rel = jnp.max(jnp.abs(diff) / (jnp.abs(jac_fd) + float(relative_floor)))
+    return {
+        "jacobian_ad": np.asarray(jac_ad).tolist(),
+        "jacobian_fd": np.asarray(jac_fd).tolist(),
+        "max_abs_ad_fd_error": float(np.asarray(max_abs)),
+        "max_rel_ad_fd_error": float(np.asarray(max_rel)),
+        "conditioning": _sensitivity_conditioning_metadata(
+            jac_ad,
+            jac_fd,
+            params,
+            fd_step=float(fd_step),
+            observable_names=observable_names,
+            param_names=("delta_Rcos", "delta_Zsin"),
+            relative_floor=float(relative_floor),
+        ),
+    }
+
+
 def vmec_jax_boozer_flux_tube_sensitivity_report(  # pragma: no cover
     *,
     params: jnp.ndarray | None = None,
@@ -389,11 +421,13 @@ def vmec_jax_metric_tensor_sensitivity_report(  # pragma: no cover
             )
 
         observables = metric_observables(p)
-        jac_ad = jax.jacfwd(metric_observables)(p)
-        jac_fd = finite_difference_jacobian(metric_observables, p, step=float(fd_step))
-        diff = jac_ad - jac_fd
-        max_abs = jnp.max(jnp.abs(diff))
-        max_rel = jnp.max(jnp.abs(diff) / (jnp.abs(jac_fd) + 1.0e-12))
+        jacobian_diagnostics = _ad_fd_jacobian_diagnostics(
+            metric_observables,
+            p,
+            fd_step=float(fd_step),
+            observable_names=_VMEC_METRIC_OBSERVABLE_NAMES,
+            relative_floor=1.0e-12,
+        )
         geom0 = geom_mod.eval_geom(ctx.state, ctx.static)
     except Exception as exc:
         return _failed_vmec_state_sensitivity_report(
@@ -417,19 +451,7 @@ def vmec_jax_metric_tensor_sensitivity_report(  # pragma: no cover
         "source_model": "vmec_jax:state->metric-tensors",
         "observable_names": list(_VMEC_METRIC_OBSERVABLE_NAMES),
         "observables": np.asarray(observables).tolist(),
-        "jacobian_ad": np.asarray(jac_ad).tolist(),
-        "jacobian_fd": np.asarray(jac_fd).tolist(),
-        "max_abs_ad_fd_error": float(np.asarray(max_abs)),
-        "max_rel_ad_fd_error": float(np.asarray(max_rel)),
-        "conditioning": _sensitivity_conditioning_metadata(
-            jac_ad,
-            jac_fd,
-            p,
-            fd_step=float(fd_step),
-            observable_names=_VMEC_METRIC_OBSERVABLE_NAMES,
-            param_names=("delta_Rcos", "delta_Zsin"),
-            relative_floor=1.0e-12,
-        ),
+        **jacobian_diagnostics,
         "metric_grid_shape": [int(v) for v in np.asarray(geom0.sqrtg).shape],
         "rms_epsilon": float(rms_epsilon),
     }
@@ -558,13 +580,13 @@ def vmec_jax_field_line_tensor_sensitivity_report(  # pragma: no cover
             )
 
         observables = field_line_observables(p)
-        jac_ad = jax.jacfwd(field_line_observables)(p)
-        jac_fd = finite_difference_jacobian(
-            field_line_observables, p, step=float(fd_step)
+        jacobian_diagnostics = _ad_fd_jacobian_diagnostics(
+            field_line_observables,
+            p,
+            fd_step=float(fd_step),
+            observable_names=_VMEC_FIELD_LINE_OBSERVABLE_NAMES,
+            relative_floor=1.0e-10,
         )
-        diff = jac_ad - jac_fd
-        max_abs = jnp.max(jnp.abs(diff))
-        max_rel = jnp.max(jnp.abs(diff) / (jnp.abs(jac_fd) + 1.0e-10))
         geom0 = geom_mod.eval_geom(ctx.state, ctx.static)
     except Exception as exc:
         return _failed_vmec_state_sensitivity_report(
@@ -589,19 +611,7 @@ def vmec_jax_field_line_tensor_sensitivity_report(  # pragma: no cover
         "field_line_convention": "VMEC theta, zeta=(theta-alpha)/iota with periodic bilinear sampling",
         "observable_names": list(_VMEC_FIELD_LINE_OBSERVABLE_NAMES),
         "observables": np.asarray(observables).tolist(),
-        "jacobian_ad": np.asarray(jac_ad).tolist(),
-        "jacobian_fd": np.asarray(jac_fd).tolist(),
-        "max_abs_ad_fd_error": float(np.asarray(max_abs)),
-        "max_rel_ad_fd_error": float(np.asarray(max_rel)),
-        "conditioning": _sensitivity_conditioning_metadata(
-            jac_ad,
-            jac_fd,
-            p,
-            fd_step=float(fd_step),
-            observable_names=_VMEC_FIELD_LINE_OBSERVABLE_NAMES,
-            param_names=("delta_Rcos", "delta_Zsin"),
-            relative_floor=1.0e-10,
-        ),
+        **jacobian_diagnostics,
         "iota": float(np.asarray(iota_line)),
         "alpha": float(alpha),
         "ntheta": int(ntheta_int),
