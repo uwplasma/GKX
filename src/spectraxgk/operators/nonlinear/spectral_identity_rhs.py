@@ -5,11 +5,15 @@ from __future__ import annotations
 import jax
 
 from spectraxgk.operators.nonlinear.parallel_contracts_spectral import (
+    NonlinearSpectralPencilRHSIdentityReport,
     NonlinearSpectralRHSIdentityReport,
 )
 from spectraxgk.operators.nonlinear.spectral_core import (
+    _chunk_offsets,
     _field_from_state,
     _logical_spectral_tiles,
+    _max_abs_rel_error,
+    _pencil_nonlinear_spectral_rhs,
     _reconstruct_logical_spectral_tiles,
     _serial_nonlinear_spectral_rhs,
     _spectral_bracket,
@@ -17,6 +21,7 @@ from spectraxgk.operators.nonlinear.spectral_core import (
     _spectral_tile_bounds,
     _validate_chunks,
     _validate_spectral_state_shape,
+    nonlinear_spectral_pencil_work_model,
 )
 from spectraxgk.operators.nonlinear.spectral_identity_reports import (
     nonlinear_spectral_rhs_identity_report,
@@ -171,8 +176,112 @@ def logical_decomposed_nonlinear_spectral_rhs(
     return gated_rhs, report
 
 
+def nonlinear_spectral_pencil_rhs_identity_gate(
+    state_hat: jax.Array,
+    *,
+    y_chunks: tuple[int, ...] = (3, 3),
+    x_chunks: tuple[int, ...] = (2, 2),
+    atol: float = 5.0e-6,
+    rtol: float = 1.0e-5,
+    max_communication_to_fft_work_ratio: float = 0.35,
+    min_predicted_speedup: float = 1.5,
+) -> NonlinearSpectralPencilRHSIdentityReport:
+    """Validate serial-vs-pencil nonlinear spectral RHS identity."""
+
+    state_shape = _validate_spectral_state_shape(tuple(state_hat.shape))
+    _nl, _nm, ny, nx, _nz = state_shape
+    y_chunks = _validate_chunks(ny, y_chunks, name="y_chunks")
+    x_chunks = _validate_chunks(nx, x_chunks, name="x_chunks")
+    work_model = nonlinear_spectral_pencil_work_model(
+        state_shape,
+        y_chunks=y_chunks,
+        x_chunks=x_chunks,
+        max_communication_to_fft_work_ratio=max_communication_to_fft_work_ratio,
+        min_predicted_speedup=min_predicted_speedup,
+    )
+
+    serial_field, serial_bracket, serial_rhs = _serial_nonlinear_spectral_rhs(state_hat)
+    pencil_field, pencil_bracket, pencil_rhs = _pencil_nonlinear_spectral_rhs(
+        state_hat
+    )
+    field_abs, field_rel = _max_abs_rel_error(serial_field, pencil_field, atol=atol)
+    bracket_abs, bracket_rel = _max_abs_rel_error(
+        serial_bracket, pencil_bracket, atol=atol
+    )
+    rhs_abs, rhs_rel = _max_abs_rel_error(serial_rhs, pencil_rhs, atol=atol)
+    identity_passed = bool(
+        field_abs <= float(atol)
+        and field_rel <= float(rtol)
+        and bracket_abs <= float(atol)
+        and bracket_rel <= float(rtol)
+        and rhs_abs <= float(atol)
+        and rhs_rel <= float(rtol)
+    )
+    decomposed_path_enabled = bool(
+        identity_passed and work_model.production_speedup_feasible
+    )
+    blocked_reasons: list[str] = []
+    if not identity_passed:
+        blocked_reasons.append("pencil_rhs_identity_failed")
+    blocked_reasons.extend(work_model.feasibility_blockers)
+
+    return NonlinearSpectralPencilRHSIdentityReport(
+        state_shape=state_shape,
+        y_chunks=y_chunks,
+        x_chunks=x_chunks,
+        y_offsets=_chunk_offsets(y_chunks),
+        x_offsets=_chunk_offsets(x_chunks),
+        atol=float(atol),
+        rtol=float(rtol),
+        field_max_abs_error=field_abs,
+        field_max_rel_error=field_rel,
+        bracket_max_abs_error=bracket_abs,
+        bracket_max_rel_error=bracket_rel,
+        rhs_max_abs_error=rhs_abs,
+        rhs_max_rel_error=rhs_rel,
+        identity_passed=identity_passed,
+        decomposed_path_enabled=decomposed_path_enabled,
+        work_model=work_model,
+        claim_scope=(
+            "diagnostic pencil-FFT nonlinear spectral RHS identity gate; "
+            "axis-wise FFT staging with no global reconstruction, but no "
+            "production speedup claim without profiler-backed scaling"
+        ),
+        blocked_reasons=tuple(blocked_reasons),
+    )
+
+
+def pencil_decomposed_nonlinear_spectral_rhs(
+    state_hat: jax.Array,
+    *,
+    y_chunks: tuple[int, ...] = (3, 3),
+    x_chunks: tuple[int, ...] = (2, 2),
+    atol: float = 5.0e-6,
+    rtol: float = 1.0e-5,
+) -> tuple[jax.Array, NonlinearSpectralPencilRHSIdentityReport]:
+    """Return the pencil nonlinear spectral RHS after identity/model gating."""
+
+    _serial_field, _serial_bracket, serial_rhs = _serial_nonlinear_spectral_rhs(
+        state_hat
+    )
+    _pencil_field, _pencil_bracket, pencil_rhs = _pencil_nonlinear_spectral_rhs(
+        state_hat
+    )
+    report = nonlinear_spectral_pencil_rhs_identity_gate(
+        state_hat,
+        y_chunks=y_chunks,
+        x_chunks=x_chunks,
+        atol=atol,
+        rtol=rtol,
+    )
+    gated_rhs = pencil_rhs if report.decomposed_path_enabled else serial_rhs
+    return gated_rhs, report
+
+
 __all__ = [
     "_logical_sharded_nonlinear_spectral_rhs",
     "logical_decomposed_nonlinear_spectral_rhs",
+    "nonlinear_spectral_pencil_rhs_identity_gate",
     "nonlinear_spectral_rhs_identity_gate",
+    "pencil_decomposed_nonlinear_spectral_rhs",
 ]

@@ -8,9 +8,6 @@ updates after direct numerical identity against serial reference operations.
 from __future__ import annotations
 
 
-import jax
-import jax.numpy as jnp
-
 from spectraxgk.operators.nonlinear.parallel_contracts_domain import (
     NonlinearDomainDecompositionPlan,
     NonlinearDomainIdentityReport,
@@ -38,8 +35,6 @@ from spectraxgk.operators.nonlinear.parallel_contracts_strategy import (
 
 
 from spectraxgk.operators.nonlinear.domain_decomposition import (
-    _relative_trace_error,
-    _trace_drift,
     build_nonlinear_domain_decomposition_plan,
     deterministic_nonlinear_domain_state,
     nonlinear_domain_identity_report,
@@ -87,6 +82,7 @@ from spectraxgk.operators.nonlinear.spectral_identity_integrator import (
     _spectral_integrator_observables as _spectral_integrator_observables,
     integrate_logical_decomposed_nonlinear_spectral,
     nonlinear_spectral_integrator_identity_gate,
+    nonlinear_spectral_pencil_transport_window_identity_gate,
 )
 from spectraxgk.operators.nonlinear.spectral_identity_reports import (
     _nonlinear_spectral_report_blockers as _nonlinear_spectral_report_blockers,
@@ -98,7 +94,9 @@ from spectraxgk.operators.nonlinear.spectral_identity_reports import (
 from spectraxgk.operators.nonlinear.spectral_identity_rhs import (
     _logical_sharded_nonlinear_spectral_rhs as _logical_sharded_nonlinear_spectral_rhs,
     logical_decomposed_nonlinear_spectral_rhs,
+    nonlinear_spectral_pencil_rhs_identity_gate,
     nonlinear_spectral_rhs_identity_gate,
+    pencil_decomposed_nonlinear_spectral_rhs,
 )
 
 from spectraxgk.operators.nonlinear.device_z import (
@@ -114,287 +112,6 @@ from spectraxgk.operators.nonlinear.device_z import (
 )
 
 
-def nonlinear_spectral_pencil_rhs_identity_gate(
-    state_hat: jax.Array,
-    *,
-    y_chunks: tuple[int, ...] = (3, 3),
-    x_chunks: tuple[int, ...] = (2, 2),
-    atol: float = 5.0e-6,
-    rtol: float = 1.0e-5,
-    max_communication_to_fft_work_ratio: float = 0.35,
-    min_predicted_speedup: float = 1.5,
-) -> NonlinearSpectralPencilRHSIdentityReport:
-    """Validate serial-vs-pencil nonlinear spectral RHS identity.
-
-    The pencil route uses stacked derivative transforms and explicit axis
-    transposes, avoiding the logical tile reconstruction used by the older
-    diagnostic route.  Passing this report only enables the routed path when
-    the communication model also predicts plausible speedup.
-    """
-
-    state_shape = _validate_spectral_state_shape(tuple(state_hat.shape))
-    _nl, _nm, ny, nx, _nz = state_shape
-    y_chunks = _validate_chunks(ny, y_chunks, name="y_chunks")
-    x_chunks = _validate_chunks(nx, x_chunks, name="x_chunks")
-    work_model = nonlinear_spectral_pencil_work_model(
-        state_shape,
-        y_chunks=y_chunks,
-        x_chunks=x_chunks,
-        max_communication_to_fft_work_ratio=max_communication_to_fft_work_ratio,
-        min_predicted_speedup=min_predicted_speedup,
-    )
-
-    serial_field, serial_bracket, serial_rhs = _serial_nonlinear_spectral_rhs(state_hat)
-    pencil_field, pencil_bracket, pencil_rhs = _pencil_nonlinear_spectral_rhs(state_hat)
-    field_abs, field_rel = _max_abs_rel_error(serial_field, pencil_field, atol=atol)
-    bracket_abs, bracket_rel = _max_abs_rel_error(
-        serial_bracket, pencil_bracket, atol=atol
-    )
-    rhs_abs, rhs_rel = _max_abs_rel_error(serial_rhs, pencil_rhs, atol=atol)
-    identity_passed = bool(
-        field_abs <= float(atol)
-        and field_rel <= float(rtol)
-        and bracket_abs <= float(atol)
-        and bracket_rel <= float(rtol)
-        and rhs_abs <= float(atol)
-        and rhs_rel <= float(rtol)
-    )
-    decomposed_path_enabled = bool(
-        identity_passed and work_model.production_speedup_feasible
-    )
-    blocked_reasons: list[str] = []
-    if not identity_passed:
-        blocked_reasons.append("pencil_rhs_identity_failed")
-    blocked_reasons.extend(work_model.feasibility_blockers)
-
-    return NonlinearSpectralPencilRHSIdentityReport(
-        state_shape=state_shape,
-        y_chunks=y_chunks,
-        x_chunks=x_chunks,
-        y_offsets=_chunk_offsets(y_chunks),
-        x_offsets=_chunk_offsets(x_chunks),
-        atol=float(atol),
-        rtol=float(rtol),
-        field_max_abs_error=field_abs,
-        field_max_rel_error=field_rel,
-        bracket_max_abs_error=bracket_abs,
-        bracket_max_rel_error=bracket_rel,
-        rhs_max_abs_error=rhs_abs,
-        rhs_max_rel_error=rhs_rel,
-        identity_passed=identity_passed,
-        decomposed_path_enabled=decomposed_path_enabled,
-        work_model=work_model,
-        claim_scope=(
-            "diagnostic pencil-FFT nonlinear spectral RHS identity gate; "
-            "axis-wise FFT staging with no global reconstruction, but no "
-            "production speedup claim without profiler-backed scaling"
-        ),
-        blocked_reasons=tuple(blocked_reasons),
-    )
-
-
-def pencil_decomposed_nonlinear_spectral_rhs(
-    state_hat: jax.Array,
-    *,
-    y_chunks: tuple[int, ...] = (3, 3),
-    x_chunks: tuple[int, ...] = (2, 2),
-    atol: float = 5.0e-6,
-    rtol: float = 1.0e-5,
-) -> tuple[jax.Array, NonlinearSpectralPencilRHSIdentityReport]:
-    """Return the pencil nonlinear spectral RHS after identity/model gating."""
-
-    _serial_field, _serial_bracket, serial_rhs = _serial_nonlinear_spectral_rhs(
-        state_hat
-    )
-    _pencil_field, _pencil_bracket, pencil_rhs = _pencil_nonlinear_spectral_rhs(
-        state_hat
-    )
-    report = nonlinear_spectral_pencil_rhs_identity_gate(
-        state_hat,
-        y_chunks=y_chunks,
-        x_chunks=x_chunks,
-        atol=atol,
-        rtol=rtol,
-    )
-    gated_rhs = pencil_rhs if report.decomposed_path_enabled else serial_rhs
-    return gated_rhs, report
-
-
-
-
-
-
-
-
-
-
-
-
-def nonlinear_spectral_pencil_transport_window_identity_gate(
-    state_hat: jax.Array,
-    *,
-    y_chunks: tuple[int, ...] = (3, 3),
-    x_chunks: tuple[int, ...] = (2, 2),
-    dt: float = 0.005,
-    steps: int = 4,
-    atol: float = 5.0e-6,
-    rtol: float = 1.0e-5,
-    max_communication_to_fft_work_ratio: float = 0.35,
-    min_predicted_speedup: float = 1.5,
-) -> NonlinearSpectralPencilTransportWindowReport:
-    """Validate a serial-vs-pencil nonlinear transport window.
-
-    The trace includes physical-space density/``E_r`` transport proxy values in
-    addition to free energy, field energy, bracket RMS, and final state identity.
-    This is a routing identity gate for the pseudo-spectral nonlinear kernel,
-    not a calibrated turbulent heat-flux validation.
-    """
-
-    if int(steps) < 1:
-        raise ValueError("steps must be at least one")
-    state_shape = _validate_spectral_state_shape(tuple(state_hat.shape))
-    _nl, _nm, ny, nx, _nz = state_shape
-    y_chunks = _validate_chunks(ny, y_chunks, name="y_chunks")
-    x_chunks = _validate_chunks(nx, x_chunks, name="x_chunks")
-    work_model = nonlinear_spectral_pencil_work_model(
-        state_shape,
-        y_chunks=y_chunks,
-        x_chunks=x_chunks,
-        max_communication_to_fft_work_ratio=max_communication_to_fft_work_ratio,
-        min_predicted_speedup=min_predicted_speedup,
-    )
-
-    serial_state = state_hat
-    pencil_state = state_hat
-    serial_traces: dict[str, list[float]] = {
-        "free_energy": [],
-        "field_energy": [],
-        "physical_flux": [],
-        "bracket_rms": [],
-    }
-    pencil_traces: dict[str, list[float]] = {
-        "free_energy": [],
-        "field_energy": [],
-        "physical_flux": [],
-        "bracket_rms": [],
-    }
-    _serial_field, serial_bracket, _serial_rhs = _serial_nonlinear_spectral_rhs(
-        serial_state
-    )
-    _pencil_field, pencil_bracket, _pencil_rhs = _pencil_nonlinear_spectral_rhs(
-        pencil_state
-    )
-    _append_spectral_physical_observables(serial_traces, serial_state, serial_bracket)
-    _append_spectral_physical_observables(pencil_traces, pencil_state, pencil_bracket)
-
-    dt_array = jnp.asarray(float(dt), dtype=jnp.real(state_hat).dtype)
-    for _ in range(int(steps)):
-        _serial_field, serial_bracket, serial_rhs = _serial_nonlinear_spectral_rhs(
-            serial_state,
-        )
-        _pencil_field, pencil_bracket, pencil_rhs = _pencil_nonlinear_spectral_rhs(
-            pencil_state,
-        )
-        serial_state = serial_state + dt_array * serial_rhs
-        pencil_state = pencil_state + dt_array * pencil_rhs
-        _serial_field, serial_bracket, _serial_rhs = _serial_nonlinear_spectral_rhs(
-            serial_state,
-        )
-        _pencil_field, pencil_bracket, _pencil_rhs = _pencil_nonlinear_spectral_rhs(
-            pencil_state,
-        )
-        _append_spectral_physical_observables(
-            serial_traces, serial_state, serial_bracket
-        )
-        _append_spectral_physical_observables(
-            pencil_traces, pencil_state, pencil_bracket
-        )
-
-    state_abs, state_rel = _max_abs_rel_error(serial_state, pencil_state, atol=atol)
-    serial_free = tuple(serial_traces["free_energy"])
-    pencil_free = tuple(pencil_traces["free_energy"])
-    serial_field_energy = tuple(serial_traces["field_energy"])
-    pencil_field_energy = tuple(pencil_traces["field_energy"])
-    serial_physical_flux = tuple(serial_traces["physical_flux"])
-    pencil_physical_flux = tuple(pencil_traces["physical_flux"])
-    serial_bracket_rms = tuple(serial_traces["bracket_rms"])
-    pencil_bracket_rms = tuple(pencil_traces["bracket_rms"])
-    free_abs, free_rel = _relative_trace_error(serial_free, pencil_free, floor=atol)
-    field_abs, field_rel = _relative_trace_error(
-        serial_field_energy,
-        pencil_field_energy,
-        floor=atol,
-    )
-    flux_abs, flux_rel = _relative_trace_error(
-        serial_physical_flux,
-        pencil_physical_flux,
-        floor=atol,
-    )
-    bracket_abs, bracket_rel = _relative_trace_error(
-        serial_bracket_rms,
-        pencil_bracket_rms,
-        floor=atol,
-    )
-    identity_passed = bool(
-        state_abs <= float(atol)
-        and state_rel <= float(rtol)
-        and free_abs <= float(atol)
-        and free_rel <= float(rtol)
-        and field_abs <= float(atol)
-        and field_rel <= float(rtol)
-        and flux_abs <= float(atol)
-        and flux_rel <= float(rtol)
-        and bracket_abs <= float(atol)
-        and bracket_rel <= float(rtol)
-    )
-    decomposed_path_enabled = bool(
-        identity_passed and work_model.production_speedup_feasible
-    )
-    blocked_reasons: list[str] = []
-    if not identity_passed:
-        blocked_reasons.append("pencil_transport_window_identity_failed")
-    blocked_reasons.extend(work_model.feasibility_blockers)
-
-    return NonlinearSpectralPencilTransportWindowReport(
-        state_shape=state_shape,
-        y_chunks=y_chunks,
-        x_chunks=x_chunks,
-        y_offsets=_chunk_offsets(y_chunks),
-        x_offsets=_chunk_offsets(x_chunks),
-        steps=int(steps),
-        dt=float(dt),
-        atol=float(atol),
-        rtol=float(rtol),
-        final_state_max_abs_error=state_abs,
-        final_state_max_rel_error=state_rel,
-        free_energy_trace_max_abs_error=free_abs,
-        free_energy_trace_max_rel_error=free_rel,
-        field_energy_trace_max_abs_error=field_abs,
-        field_energy_trace_max_rel_error=field_rel,
-        physical_flux_trace_max_abs_error=flux_abs,
-        physical_flux_trace_max_rel_error=flux_rel,
-        bracket_rms_trace_max_abs_error=bracket_abs,
-        bracket_rms_trace_max_rel_error=bracket_rel,
-        serial_free_energy_drift=_trace_drift(serial_free),
-        pencil_free_energy_drift=_trace_drift(pencil_free),
-        identity_passed=identity_passed,
-        decomposed_path_enabled=decomposed_path_enabled,
-        work_model=work_model,
-        claim_scope=(
-            "diagnostic serial-vs-pencil nonlinear physical-space transport-window "
-            "identity gate; includes a density-times-radial-E-field transport "
-            "proxy, but is not an absolute nonlinear turbulent heat-flux claim"
-        ),
-        blocked_reasons=tuple(blocked_reasons),
-        serial_free_energy_trace=serial_free,
-        pencil_free_energy_trace=pencil_free,
-        serial_field_energy_trace=serial_field_energy,
-        pencil_field_energy_trace=pencil_field_energy,
-        serial_physical_flux_trace=serial_physical_flux,
-        pencil_physical_flux_trace=pencil_physical_flux,
-        serial_bracket_rms_trace=serial_bracket_rms,
-        pencil_bracket_rms_trace=pencil_bracket_rms,
-    )
 
 
 def nonlinear_parallel_strategies() -> tuple[NonlinearParallelStrategy, ...]:

@@ -11,17 +11,23 @@ from spectraxgk.operators.nonlinear.domain_decomposition import (
 )
 from spectraxgk.operators.nonlinear.parallel_contracts_spectral import (
     NonlinearSpectralIntegratorIdentityReport,
+    NonlinearSpectralPencilTransportWindowReport,
 )
 from spectraxgk.operators.nonlinear.spectral_core import (
     _chunk_offsets,
     _field_from_state,
     _max_abs_rel_error,
+    _pencil_nonlinear_spectral_rhs,
     _serial_nonlinear_spectral_rhs,
     _spectral_bracket,
     _spectral_rhs_from_bracket,
     _spectral_tile_bounds,
     _validate_chunks,
     _validate_spectral_state_shape,
+    nonlinear_spectral_pencil_work_model,
+)
+from spectraxgk.operators.nonlinear.device_z import (
+    _append_spectral_physical_observables,
 )
 from spectraxgk.operators.nonlinear.spectral_identity_rhs import (
     logical_decomposed_nonlinear_spectral_rhs,
@@ -238,9 +244,171 @@ def integrate_logical_decomposed_nonlinear_spectral(
     return serial_state, report
 
 
+def nonlinear_spectral_pencil_transport_window_identity_gate(
+    state_hat: jax.Array,
+    *,
+    y_chunks: tuple[int, ...] = (3, 3),
+    x_chunks: tuple[int, ...] = (2, 2),
+    dt: float = 0.005,
+    steps: int = 4,
+    atol: float = 5.0e-6,
+    rtol: float = 1.0e-5,
+    max_communication_to_fft_work_ratio: float = 0.35,
+    min_predicted_speedup: float = 1.5,
+) -> NonlinearSpectralPencilTransportWindowReport:
+    """Validate a serial-vs-pencil nonlinear transport window."""
+
+    if int(steps) < 1:
+        raise ValueError("steps must be at least one")
+    state_shape = _validate_spectral_state_shape(tuple(state_hat.shape))
+    _nl, _nm, ny, nx, _nz = state_shape
+    y_chunks = _validate_chunks(ny, y_chunks, name="y_chunks")
+    x_chunks = _validate_chunks(nx, x_chunks, name="x_chunks")
+    work_model = nonlinear_spectral_pencil_work_model(
+        state_shape,
+        y_chunks=y_chunks,
+        x_chunks=x_chunks,
+        max_communication_to_fft_work_ratio=max_communication_to_fft_work_ratio,
+        min_predicted_speedup=min_predicted_speedup,
+    )
+
+    serial_state = state_hat
+    pencil_state = state_hat
+    serial_traces: dict[str, list[float]] = {
+        "free_energy": [],
+        "field_energy": [],
+        "physical_flux": [],
+        "bracket_rms": [],
+    }
+    pencil_traces: dict[str, list[float]] = {
+        "free_energy": [],
+        "field_energy": [],
+        "physical_flux": [],
+        "bracket_rms": [],
+    }
+    _serial_field, serial_bracket, _serial_rhs = _serial_nonlinear_spectral_rhs(
+        serial_state
+    )
+    _pencil_field, pencil_bracket, _pencil_rhs = _pencil_nonlinear_spectral_rhs(
+        pencil_state
+    )
+    _append_spectral_physical_observables(serial_traces, serial_state, serial_bracket)
+    _append_spectral_physical_observables(pencil_traces, pencil_state, pencil_bracket)
+
+    dt_array = jnp.asarray(float(dt), dtype=jnp.real(state_hat).dtype)
+    for _ in range(int(steps)):
+        _serial_field, serial_bracket, serial_rhs = _serial_nonlinear_spectral_rhs(
+            serial_state,
+        )
+        _pencil_field, pencil_bracket, pencil_rhs = _pencil_nonlinear_spectral_rhs(
+            pencil_state,
+        )
+        serial_state = serial_state + dt_array * serial_rhs
+        pencil_state = pencil_state + dt_array * pencil_rhs
+        _serial_field, serial_bracket, _serial_rhs = _serial_nonlinear_spectral_rhs(
+            serial_state,
+        )
+        _pencil_field, pencil_bracket, _pencil_rhs = _pencil_nonlinear_spectral_rhs(
+            pencil_state,
+        )
+        _append_spectral_physical_observables(
+            serial_traces, serial_state, serial_bracket
+        )
+        _append_spectral_physical_observables(
+            pencil_traces, pencil_state, pencil_bracket
+        )
+
+    state_abs, state_rel = _max_abs_rel_error(serial_state, pencil_state, atol=atol)
+    serial_free = tuple(serial_traces["free_energy"])
+    pencil_free = tuple(pencil_traces["free_energy"])
+    serial_field_energy = tuple(serial_traces["field_energy"])
+    pencil_field_energy = tuple(pencil_traces["field_energy"])
+    serial_physical_flux = tuple(serial_traces["physical_flux"])
+    pencil_physical_flux = tuple(pencil_traces["physical_flux"])
+    serial_bracket_rms = tuple(serial_traces["bracket_rms"])
+    pencil_bracket_rms = tuple(pencil_traces["bracket_rms"])
+    free_abs, free_rel = _relative_trace_error(serial_free, pencil_free, floor=atol)
+    field_abs, field_rel = _relative_trace_error(
+        serial_field_energy,
+        pencil_field_energy,
+        floor=atol,
+    )
+    flux_abs, flux_rel = _relative_trace_error(
+        serial_physical_flux,
+        pencil_physical_flux,
+        floor=atol,
+    )
+    bracket_abs, bracket_rel = _relative_trace_error(
+        serial_bracket_rms,
+        pencil_bracket_rms,
+        floor=atol,
+    )
+    identity_passed = bool(
+        state_abs <= float(atol)
+        and state_rel <= float(rtol)
+        and free_abs <= float(atol)
+        and free_rel <= float(rtol)
+        and field_abs <= float(atol)
+        and field_rel <= float(rtol)
+        and flux_abs <= float(atol)
+        and flux_rel <= float(rtol)
+        and bracket_abs <= float(atol)
+        and bracket_rel <= float(rtol)
+    )
+    decomposed_path_enabled = bool(
+        identity_passed and work_model.production_speedup_feasible
+    )
+    blocked_reasons: list[str] = []
+    if not identity_passed:
+        blocked_reasons.append("pencil_transport_window_identity_failed")
+    blocked_reasons.extend(work_model.feasibility_blockers)
+
+    return NonlinearSpectralPencilTransportWindowReport(
+        state_shape=state_shape,
+        y_chunks=y_chunks,
+        x_chunks=x_chunks,
+        y_offsets=_chunk_offsets(y_chunks),
+        x_offsets=_chunk_offsets(x_chunks),
+        steps=int(steps),
+        dt=float(dt),
+        atol=float(atol),
+        rtol=float(rtol),
+        final_state_max_abs_error=state_abs,
+        final_state_max_rel_error=state_rel,
+        free_energy_trace_max_abs_error=free_abs,
+        free_energy_trace_max_rel_error=free_rel,
+        field_energy_trace_max_abs_error=field_abs,
+        field_energy_trace_max_rel_error=field_rel,
+        physical_flux_trace_max_abs_error=flux_abs,
+        physical_flux_trace_max_rel_error=flux_rel,
+        bracket_rms_trace_max_abs_error=bracket_abs,
+        bracket_rms_trace_max_rel_error=bracket_rel,
+        serial_free_energy_drift=_trace_drift(serial_free),
+        pencil_free_energy_drift=_trace_drift(pencil_free),
+        identity_passed=identity_passed,
+        decomposed_path_enabled=decomposed_path_enabled,
+        work_model=work_model,
+        claim_scope=(
+            "diagnostic serial-vs-pencil nonlinear physical-space transport-window "
+            "identity gate; includes a density-times-radial-E-field transport "
+            "proxy, but is not an absolute nonlinear turbulent heat-flux claim"
+        ),
+        blocked_reasons=tuple(blocked_reasons),
+        serial_free_energy_trace=serial_free,
+        pencil_free_energy_trace=pencil_free,
+        serial_field_energy_trace=serial_field_energy,
+        pencil_field_energy_trace=pencil_field_energy,
+        serial_physical_flux_trace=serial_physical_flux,
+        pencil_physical_flux_trace=pencil_physical_flux,
+        serial_bracket_rms_trace=serial_bracket_rms,
+        pencil_bracket_rms_trace=pencil_bracket_rms,
+    )
+
+
 __all__ = [
     "_append_spectral_observables",
     "_spectral_integrator_observables",
     "integrate_logical_decomposed_nonlinear_spectral",
+    "nonlinear_spectral_pencil_transport_window_identity_gate",
     "nonlinear_spectral_integrator_identity_gate",
 ]
