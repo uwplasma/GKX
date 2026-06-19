@@ -594,22 +594,6 @@ def device_z_pencil_nonlinear_spectral_transport_window_identity_gate(
         device_bracket_rms_trace=device_trace_values["bracket_rms"],
     )
 
-def _spectral_physical_transport_observables(
-    state_hat: jax.Array,
-    bracket_hat: jax.Array,
-) -> tuple[float, float, float, float]:
-    """Return physical-space transport-window observables for the micro-route."""
-
-    values = _spectral_physical_transport_observable_vector_from_sums(
-        _spectral_physical_transport_observable_sums(state_hat, bracket_hat)
-    )
-    return (
-        float(values[0]),
-        float(values[1]),
-        float(values[2]),
-        float(values[3]),
-    )
-
 def _append_spectral_physical_observable_vector(
     traces: dict[str, list[float]],
     values: jax.Array,
@@ -626,13 +610,10 @@ def _append_spectral_physical_observables(
     state_hat: jax.Array,
     bracket_hat: jax.Array,
 ) -> None:
-    free_energy, field_energy, physical_flux, bracket_rms = (
-        _spectral_physical_transport_observables(state_hat, bracket_hat)
+    values = _spectral_physical_transport_observable_vector_from_sums(
+        _spectral_physical_transport_observable_sums(state_hat, bracket_hat)
     )
-    traces["free_energy"].append(free_energy)
-    traces["field_energy"].append(field_energy)
-    traces["physical_flux"].append(physical_flux)
-    traces["bracket_rms"].append(bracket_rms)
+    _append_spectral_physical_observable_vector(traces, values)
 
 __all__ = [
     "_append_device_z_transport_observables",
@@ -643,7 +624,6 @@ __all__ = [
     "_device_z_sharding_for_spectral_state",
     "_spectral_physical_transport_observable_sums",
     "_spectral_physical_transport_observable_vector_from_sums",
-    "_spectral_physical_transport_observables",
     "device_z_pencil_nonlinear_spectral_rhs",
     "device_z_pencil_nonlinear_spectral_transport_window_identity_gate",
 ]

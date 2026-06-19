@@ -109,7 +109,6 @@ from spectraxgk.operators.nonlinear.device_z import (
     _device_z_sharding_for_spectral_state as _device_z_sharding_for_spectral_state,
     _spectral_physical_transport_observable_sums as _spectral_physical_transport_observable_sums,
     _spectral_physical_transport_observable_vector_from_sums as _spectral_physical_transport_observable_vector_from_sums,
-    _spectral_physical_transport_observables as _spectral_physical_transport_observables,
     device_z_pencil_nonlinear_spectral_rhs,
     device_z_pencil_nonlinear_spectral_transport_window_identity_gate,
 )
