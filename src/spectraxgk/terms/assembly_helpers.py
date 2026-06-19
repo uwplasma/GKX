@@ -7,7 +7,8 @@ import jax.numpy as jnp
 import numpy as np
 
 from spectraxgk.terms.config import FieldState, TermConfig
-from spectraxgk.terms.linear_terms import collisions_contribution
+from spectraxgk.terms.linear_dissipation import collisions_contribution
+
 
 def _apply_external_phi_source(
     fields: FieldState,

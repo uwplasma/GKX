@@ -13,15 +13,18 @@ from spectraxgk.terms.assembly_helpers import (
 )
 from spectraxgk.terms.config import FieldState, TermConfig
 from spectraxgk.terms.fields import _solve_fields_impl, solve_fields
-from spectraxgk.terms.linear_terms import (
-    curvature_gradb_contribution,
-    diamagnetic_contribution,
+from spectraxgk.terms.linear_dissipation import (
     end_damping_contribution,
     hypercollisions_contribution,
     hyperdiffusion_contribution,
+)
+from spectraxgk.terms.linear_terms import (
+    curvature_gradb_contribution,
+    diamagnetic_contribution,
     linked_streaming_contribution,
     mirror_contribution,
 )
+
 
 def assemble_rhs_terms_cached(
     G: jnp.ndarray,
