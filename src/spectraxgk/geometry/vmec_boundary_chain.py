@@ -522,6 +522,73 @@ def _boundary_chain_collection_counts(rows: Sequence[Mapping[str, Any]]) -> dict
     return counts
 
 
+def _boundary_chain_collection_decision(
+    counts: Mapping[str, int],
+) -> tuple[bool, str, str]:
+    """Classify a boundary-chain collection from precomputed gate counts."""
+
+    n_total = int(counts["n_total"])
+    n_finite = int(counts["n_finite"])
+    n_internal = int(counts["n_frozen_axis_internal_pass"])
+    n_exact = int(counts["n_exact_fd_consistent"])
+    n_convention = int(counts["n_frozen_axis_convention_verified"])
+    n_branch = int(counts["n_branch_sensitive"])
+    finite = n_finite == n_total
+    all_internal = finite and n_internal == n_total
+    if not finite:
+        return (
+            finite,
+            "nonfinite_boundary_chain_collection",
+            "repair nonfinite VMEC/Boozer/SPECTRAX derivatives before using "
+            "the boundary-gradient collection",
+        )
+    if not all_internal:
+        return (
+            finite,
+            "internal_replay_failure",
+            "debug VMEC-JAX exact-tape replay because at least one frozen-axis "
+            "JVP/VJP contraction is not internally transposed",
+        )
+    if n_exact == n_total:
+        return (
+            finite,
+            "all_components_exact_fd_and_frozen_axis_consistent",
+            "promote the frozen-axis convention for these sparse components, "
+            "while retaining solved-equilibrium and sparse-FD gates",
+        )
+    if n_exact > 0 and n_convention == 0 and n_branch > 0:
+        return (
+            finite,
+            "mixed_exact_fd_consistency_with_branch_sensitive_modes",
+            "use frozen-axis derivatives only as diagnostics; exclude or "
+            "regularize branch-sensitive modes before projected VMEC updates",
+        )
+    if n_convention == n_total:
+        return (
+            finite,
+            "all_components_frozen_axis_convention_verified",
+            "raw exact-solve FD remains inconsistent, but every component "
+            "passes the explicit frozen-axis tangent convention; projected "
+            "updates may use these directions only with solved-equilibrium, "
+            "growth-branch, and nonlinear-audit gates",
+        )
+    if n_exact + n_convention > 0 and n_branch > 0:
+        return (
+            finite,
+            "mixed_exact_or_frozen_axis_convention_verified",
+            "use only components with exact-FD consistency or explicit "
+            "frozen-axis convention verification; unresolved branch-sensitive "
+            "modes remain excluded",
+        )
+    return (
+        finite,
+        "branch_sensitive_boundary_chain_collection",
+        "do not promote this boundary-gradient collection until exact-solve "
+        "branch sensitivity is reduced or the frozen-axis convention is "
+        "validated against a better-conditioned finite-difference protocol",
+    )
+
+
 def build_boundary_chain_collection_summary(
     probes: Sequence[Mapping[str, Any]],
     *,
@@ -568,60 +635,7 @@ def build_boundary_chain_collection_summary(
         rows.append(_collection_row(payload, summary))
 
     counts = _boundary_chain_collection_counts(rows)
-    n_total = counts["n_total"]
-    n_finite = counts["n_finite"]
-    n_internal = counts["n_frozen_axis_internal_pass"]
-    n_exact = counts["n_exact_fd_consistent"]
-    n_convention = counts["n_frozen_axis_convention_verified"]
-    n_branch = counts["n_branch_sensitive"]
-    finite = n_finite == n_total
-    all_internal = finite and n_internal == n_total
-    if not finite:
-        classification = "nonfinite_boundary_chain_collection"
-        next_action = (
-            "repair nonfinite VMEC/Boozer/SPECTRAX derivatives before using "
-            "the boundary-gradient collection"
-        )
-    elif not all_internal:
-        classification = "internal_replay_failure"
-        next_action = (
-            "debug VMEC-JAX exact-tape replay because at least one frozen-axis "
-            "JVP/VJP contraction is not internally transposed"
-        )
-    elif n_exact == n_total:
-        classification = "all_components_exact_fd_and_frozen_axis_consistent"
-        next_action = (
-            "promote the frozen-axis convention for these sparse components, "
-            "while retaining solved-equilibrium and sparse-FD gates"
-        )
-    elif n_exact > 0 and n_convention == 0 and n_branch > 0:
-        classification = "mixed_exact_fd_consistency_with_branch_sensitive_modes"
-        next_action = (
-            "use frozen-axis derivatives only as diagnostics; exclude or "
-            "regularize branch-sensitive modes before projected VMEC updates"
-        )
-    elif n_convention == n_total:
-        classification = "all_components_frozen_axis_convention_verified"
-        next_action = (
-            "raw exact-solve FD remains inconsistent, but every component "
-            "passes the explicit frozen-axis tangent convention; projected "
-            "updates may use these directions only with solved-equilibrium, "
-            "growth-branch, and nonlinear-audit gates"
-        )
-    elif n_exact + n_convention > 0 and n_branch > 0:
-        classification = "mixed_exact_or_frozen_axis_convention_verified"
-        next_action = (
-            "use only components with exact-FD consistency or explicit "
-            "frozen-axis convention verification; unresolved branch-sensitive "
-            "modes remain excluded"
-        )
-    else:
-        classification = "branch_sensitive_boundary_chain_collection"
-        next_action = (
-            "do not promote this boundary-gradient collection until exact-solve "
-            "branch sensitivity is reduced or the frozen-axis convention is "
-            "validated against a better-conditioned finite-difference protocol"
-        )
+    finite, classification, next_action = _boundary_chain_collection_decision(counts)
 
     return {
         "kind": "vmec_jax_boundary_chain_collection_summary",
