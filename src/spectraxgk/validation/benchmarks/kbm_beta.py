@@ -35,7 +35,9 @@ from spectraxgk.validation.benchmarks.fit_signals import (
 from spectraxgk.validation.benchmarks.kbm_beta_solver_paths import (
     KBMBetaExplicitHooks,
     KBMBetaKrylovHooks,
+    KBMBetaTimeHooks,
     fit_kbm_beta_explicit_time_sample,
+    fit_kbm_beta_time_sample,
     solve_kbm_beta_krylov_sample,
 )
 from spectraxgk.validation.benchmarks.initialization import _build_initial_condition
@@ -190,6 +192,18 @@ def run_kbm_beta_scan(
         use_multi_target_krylov=_kbm_use_multi_target_krylov,
         normalize_growth_rate=_normalize_growth_rate,
     )
+    time_hooks = KBMBetaTimeHooks(
+        integrate_linear_diffrax_streaming=integrate_linear_diffrax_streaming,
+        integrate_linear_from_config=integrate_linear_from_config,
+        integrate_linear_diagnostics=integrate_linear_diagnostics,
+        integrate_linear=integrate_linear,
+        resolve_streaming_window=_resolve_streaming_window,
+        midplane_index=_midplane_index,
+        select_fit_signal_auto=_select_fit_signal_auto,
+        extract_mode_only_signal=_extract_mode_only_signal,
+        select_fit_signal=_select_fit_signal,
+        normalize_growth_rate=_normalize_growth_rate,
+    )
 
     if init_species_index < 0 or init_species_index >= 2:
         raise ValueError("init_species_index out of range for kinetic species")
@@ -296,220 +310,38 @@ def run_kbm_beta_scan(
                 prev_eig = krylov_result.prev_eig
 
         if solver_use not in {"krylov", "explicit_time"}:
-            time_cfg_i = None
-            if time_cfg is not None:
-                time_cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
-                if sample_stride is not None:
-                    time_cfg_i = replace(time_cfg_i, sample_stride=sample_stride)
-
-            params_use = params
-            if time_cfg_i is not None and time_cfg_i.use_diffrax and streaming_fit:
-                t_total = float(time_cfg_i.t_max)
-                tmin_i, tmax_i = _resolve_streaming_window(
-                    t_total,
-                    indexed_float_value(tmin, i),
-                    indexed_float_value(tmax, i),
-                    start_fraction,
-                    window_fraction,
-                    1.0,
-                )
-                _, gamma_vals, omega_vals = integrate_linear_diffrax_streaming(
-                    G0_jax,
-                    grid,
-                    geom,
-                    params_use,
-                    dt=dt_i,
-                    steps=steps_i,
-                    method=time_cfg_i.diffrax_solver,
-                    cache=cache,
-                    terms=terms,
-                    adaptive=time_cfg_i.diffrax_adaptive,
-                    rtol=time_cfg_i.diffrax_rtol,
-                    atol=time_cfg_i.diffrax_atol,
-                    max_steps=time_cfg_i.diffrax_max_steps,
-                    progress_bar=time_cfg_i.progress_bar,
-                    checkpoint=time_cfg_i.checkpoint,
-                    tmin=tmin_i,
-                    tmax=tmax_i,
-                    fit_signal=fit_key,
-                    mode_ky_indices=[0],
-                    mode_kx_index=0,
-                    mode_z_index=_midplane_index(grid),
-                    mode_method=mode_method,
-                    amp_floor=streaming_amp_floor,
-                    density_species_index=density_species_index
-                    if fit_key == "density"
-                    else None,
-                    return_state=False,
-                )
-                gamma = float(np.asarray(gamma_vals)[0])
-                omega = float(np.asarray(omega_vals)[0])
-                gamma, omega = _normalize_growth_rate(
-                    gamma, omega, params_use, diagnostic_norm
-                )
-            else:
-                if time_cfg_i is not None:
-                    stride = time_cfg_i.sample_stride
-                    if time_cfg_i.use_diffrax:
-                        save_mode_method = (
-                            mode_method
-                            if mode_method in {"z_index", "max"}
-                            else "z_index"
-                        )
-                        _, phi_t = integrate_linear_from_config(
-                            G0_jax,
-                            grid,
-                            geom,
-                            params_use,
-                            time_cfg_i,
-                            cache=cache,
-                            terms=terms,
-                            save_mode=sel if mode_only else None,
-                            mode_method=save_mode_method,
-                            save_field="phi+density"
-                            if fit_key == "auto"
-                            else ("density" if fit_key == "density" else "phi"),
-                            density_species_index=density_species_index
-                            if fit_key in {"density", "auto"}
-                            else None,
-                        )
-                        if fit_key == "auto":
-                            phi_t, density_t = phi_t
-                        else:
-                            density_t = None
-                    else:
-                        if fit_key in {"density", "auto"}:
-                            diag_out = integrate_linear_diagnostics(
-                                G0_jax,
-                                grid,
-                                geom,
-                                params_use,
-                                dt=dt_i,
-                                steps=steps_i,
-                                method=method,
-                                cache=cache,
-                                terms=terms,
-                                sample_stride=stride,
-                                species_index=density_species_index,
-                            )
-                            phi_t = diag_out[1]
-                            density_t = diag_out[2] if len(diag_out) > 2 else None
-                        else:
-                            _, phi_t = integrate_linear(
-                                G0_jax,
-                                grid,
-                                geom,
-                                params_use,
-                                dt=dt_i,
-                                steps=steps_i,
-                                method=method,
-                                cache=cache,
-                                terms=terms,
-                                sample_stride=stride,
-                            )
-                            density_t = None
-                else:
-                    stride = 1 if sample_stride is None else int(sample_stride)
-                    if fit_key in {"density", "auto"}:
-                        diag_out = integrate_linear_diagnostics(
-                            G0_jax,
-                            grid,
-                            geom,
-                            params_use,
-                            dt=dt_i,
-                            steps=steps_i,
-                            method=method,
-                            cache=cache,
-                            terms=terms,
-                            sample_stride=stride,
-                            species_index=density_species_index,
-                        )
-                        phi_t = diag_out[1]
-                        density_t = diag_out[2] if len(diag_out) > 2 else None
-                    else:
-                        _, phi_t = integrate_linear(
-                            G0_jax,
-                            grid,
-                            geom,
-                            params_use,
-                            dt=dt_i,
-                            steps=steps_i,
-                            method=method,
-                            cache=cache,
-                            terms=terms,
-                            sample_stride=stride,
-                        )
-                        density_t = None
-
-                phi_t_np = np.asarray(phi_t)
-                density_np = None if density_t is None else np.asarray(density_t)
-                if fit_key == "density" and density_np is None:
-                    density_np = phi_t_np
-                if fit_key == "auto":
-                    signal, _name, gamma, omega = _select_fit_signal_auto(
-                        np.arange(phi_t_np.shape[0]) * dt_i * stride,
-                        phi_t_np,
-                        density_np,
-                        sel,
-                        mode_method=mode_method,
-                        tmin=indexed_float_value(tmin, i),
-                        tmax=indexed_float_value(tmax, i),
-                        window_fraction=window_fraction,
-                        min_points=min_points,
-                        start_fraction=start_fraction,
-                        growth_weight=growth_weight,
-                        require_positive=require_positive,
-                        min_amp_fraction=min_amp_fraction,
-                        max_amp_fraction=0.9,
-                        window_method="loglinear",
-                        max_fraction=0.8,
-                        end_fraction=0.9,
-                        num_windows=8,
-                        phase_weight=0.2,
-                        length_weight=0.05,
-                        min_r2=0.0,
-                        late_penalty=0.1,
-                        min_slope=None,
-                        min_slope_frac=0.0,
-                        slope_var_weight=0.0,
-                    )
-                    gamma, omega = _normalize_growth_rate(
-                        gamma, omega, params_use, diagnostic_norm
-                    )
-                    gammas.append(gamma)
-                    omegas.append(omega)
-                    beta_out.append(float(beta))
-                    continue
-
-                if (
-                    mode_only
-                    and fit_key == "density"
-                    and density_np is not None
-                    and density_np.ndim <= 3
-                ):
-                    signal = _extract_mode_only_signal(
-                        density_np,
-                        local_idx=0,
-                        species_index=density_species_index,
-                    )
-                elif mode_only and phi_t_np.ndim <= 2:
-                    signal = _extract_mode_only_signal(phi_t_np, local_idx=0)
-                else:
-                    signal = _select_fit_signal(
-                        phi_t_np,
-                        density_np,
-                        sel,
-                        fit_signal=fit_key,
-                        mode_method=mode_method,
-                    )
-                gamma, omega = fit_policy.fit_signal(
-                    signal,
-                    idx=i,
-                    dt=dt_i,
-                    stride=stride,
-                    params=params_use,
-                    diagnostic_norm=diagnostic_norm,
-                )
+            gamma, omega = fit_kbm_beta_time_sample(
+                G0_jax=G0_jax,
+                grid=grid,
+                geom=geom,
+                cache=cache,
+                params=params,
+                terms=terms,
+                dt_i=dt_i,
+                steps_i=steps_i,
+                method=method,
+                time_cfg=time_cfg,
+                sample_stride=sample_stride,
+                fit_key=fit_key,
+                streaming_fit=streaming_fit,
+                streaming_amp_floor=streaming_amp_floor,
+                mode_only=mode_only,
+                mode_method=mode_method,
+                sel=sel,
+                tmin=tmin,
+                tmax=tmax,
+                sample_index=i,
+                window_fraction=window_fraction,
+                min_points=min_points,
+                start_fraction=start_fraction,
+                growth_weight=growth_weight,
+                require_positive=require_positive,
+                min_amp_fraction=min_amp_fraction,
+                diagnostic_norm=diagnostic_norm,
+                density_species_index=density_species_index,
+                fit_policy=fit_policy,
+                hooks=time_hooks,
+            )
 
         gammas.append(gamma)
         omegas.append(omega)
