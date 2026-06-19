@@ -9,7 +9,7 @@ touching the time-integration control flow.
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Sequence
+from typing import Any, Callable, Sequence
 
 import jax.numpy as jnp
 
@@ -62,6 +62,7 @@ __all__ = [
     "build_runtime_linear_terms",
     "build_runtime_term_config",
     "load_netcdf_restart_state",
+    "runtime_geometry_config_for_builder",
 ]
 
 
@@ -179,21 +180,34 @@ def _require_full_gk_runtime_model(cfg: RuntimeConfig) -> None:
     raise ValueError(f"Unknown physics.reduced_model={cfg.physics.reduced_model!r}")
 
 
-def build_runtime_geometry(cfg: RuntimeConfig) -> FluxTubeGeometryLike:
-    """Resolve runtime geometry, generating `*.eik.nc` geometry when needed."""
+def runtime_geometry_config_for_builder(
+    cfg: RuntimeConfig,
+    *,
+    vmec_eik_builder: Callable[[RuntimeConfig], Any],
+    miller_eik_builder: Callable[[RuntimeConfig], Any],
+) -> Any:
+    """Return the geometry config consumed by the flux-tube builder."""
 
     model = cfg.geometry.model.strip().lower()
     if model == "vmec":
-        eik_path = generate_runtime_vmec_eik(cfg)
-        geom_cfg = replace(cfg.geometry, model="vmec-eik", geometry_file=str(eik_path))
-        return build_flux_tube_geometry(geom_cfg)
+        eik_path = vmec_eik_builder(cfg)
+        return replace(cfg.geometry, model="vmec-eik", geometry_file=str(eik_path))
     if model == "miller":
-        eik_path = generate_runtime_miller_eik(cfg)
-        geom_cfg = replace(
-            cfg.geometry, model="imported-eik", geometry_file=str(eik_path)
+        eik_path = miller_eik_builder(cfg)
+        return replace(cfg.geometry, model="imported-eik", geometry_file=str(eik_path))
+    return cfg.geometry
+
+
+def build_runtime_geometry(cfg: RuntimeConfig) -> FluxTubeGeometryLike:
+    """Resolve runtime geometry, generating `*.eik.nc` geometry when needed."""
+
+    return build_flux_tube_geometry(
+        runtime_geometry_config_for_builder(
+            cfg,
+            vmec_eik_builder=generate_runtime_vmec_eik,
+            miller_eik_builder=generate_runtime_miller_eik,
         )
-        return build_flux_tube_geometry(geom_cfg)
-    return build_flux_tube_geometry(cfg.geometry)
+    )
 
 
 def build_runtime_linear_params(

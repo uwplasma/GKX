@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
 from typing import Any, Callable, Sequence
 from pathlib import Path
 import sys
@@ -219,14 +218,11 @@ _periodic_zp_from_grid = runtime_startup._periodic_zp_from_grid
 def _runtime_geometry_config_for_builder(cfg: RuntimeConfig) -> Any:
     """Resolve the geometry config that should be passed to the flux-tube builder."""
 
-    model = cfg.geometry.model.strip().lower()
-    if model == "vmec":
-        eik_path = generate_runtime_vmec_eik(cfg)
-        return replace(cfg.geometry, model="vmec-eik", geometry_file=str(eik_path))
-    if model == "miller":
-        eik_path = generate_runtime_miller_eik(cfg)
-        return replace(cfg.geometry, model="imported-eik", geometry_file=str(eik_path))
-    return cfg.geometry
+    return runtime_startup.runtime_geometry_config_for_builder(
+        cfg,
+        vmec_eik_builder=generate_runtime_vmec_eik,
+        miller_eik_builder=generate_runtime_miller_eik,
+    )
 
 
 def build_runtime_geometry(cfg: RuntimeConfig) -> FluxTubeGeometryLike:
