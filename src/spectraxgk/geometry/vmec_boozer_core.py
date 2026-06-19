@@ -474,30 +474,44 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
     g_sup_psi_psi_safe = jnp.maximum(g_sup_psi_psi, eps)
 
     etf = jnp.asarray(edge_toroidal_flux_over_2pi, dtype=base_Rcos.dtype)
-    grad_theta_x = (d_y_d_phi * d_z_b_d_s - d_z_b_d_phi * d_y_d_s) / (sqrt_g_booz * etf)
-    grad_theta_y = (d_z_b_d_phi * d_x_d_s - d_x_d_phi * d_z_b_d_s) / (sqrt_g_booz * etf)
-    grad_theta_z = (d_x_d_phi * d_y_d_s - d_y_d_phi * d_x_d_s) / (sqrt_g_booz * etf)
+    etf_floor = jnp.asarray(1.0e-12, dtype=base_Rcos.dtype)
+    etf_safe = jnp.where(
+        jnp.abs(etf) < etf_floor,
+        jnp.sign(etf + eps) * etf_floor,
+        etf,
+    )
+    grad_theta_x = (d_y_d_phi * d_z_b_d_s - d_z_b_d_phi * d_y_d_s) / (
+        sqrt_g_booz * etf_safe
+    )
+    grad_theta_y = (d_z_b_d_phi * d_x_d_s - d_x_d_phi * d_z_b_d_s) / (
+        sqrt_g_booz * etf_safe
+    )
+    grad_theta_z = (d_x_d_phi * d_y_d_s - d_y_d_phi * d_x_d_s) / (
+        sqrt_g_booz * etf_safe
+    )
     grad_phi_x = (d_y_d_s * d_z_b_d_theta - d_z_b_d_s * d_y_d_theta) / (
-        sqrt_g_booz * etf
+        sqrt_g_booz * etf_safe
     )
     grad_phi_y = (d_z_b_d_s * d_x_d_theta - d_x_d_s * d_z_b_d_theta) / (
-        sqrt_g_booz * etf
+        sqrt_g_booz * etf_safe
     )
-    grad_phi_z = (d_x_d_s * d_y_d_theta - d_y_d_s * d_x_d_theta) / (sqrt_g_booz * etf)
+    grad_phi_z = (d_x_d_s * d_y_d_theta - d_y_d_s * d_x_d_theta) / (
+        sqrt_g_booz * etf_safe
+    )
     zeta_center = -jnp.asarray(float(alpha), dtype=base_Rcos.dtype) / iota_safe
     shear_phase = phi_b - zeta_center
     grad_alpha_x = (
-        -shear_phase * d_iota_ds * grad_psi_x / etf
+        -shear_phase * d_iota_ds * grad_psi_x / etf_safe
         + grad_theta_x
         - iota_safe * grad_phi_x
     )
     grad_alpha_y = (
-        -shear_phase * d_iota_ds * grad_psi_y / etf
+        -shear_phase * d_iota_ds * grad_psi_y / etf_safe
         + grad_theta_y
         - iota_safe * grad_phi_y
     )
     grad_alpha_z = (
-        -shear_phase * d_iota_ds * grad_psi_z / etf
+        -shear_phase * d_iota_ds * grad_psi_z / etf_safe
         + grad_theta_z
         - iota_safe * grad_phi_z
     )
@@ -538,7 +552,6 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
         jnp.sign(curvature_denom + eps) * eps,
         curvature_denom,
     )
-    etf_safe = jnp.where(jnp.abs(etf) < eps, jnp.sign(etf + eps) * eps, etf)
     kappa_g = curvature_numerator / curvature_denom_safe
     local_shear_l0 = -(local_shear_l1 + d_iota_ds / etf_safe * shear_phase)
     kappa_n = d_mod_b_d_s / (mod_b_safe * etf_safe) + local_shear_l0 * kappa_g
