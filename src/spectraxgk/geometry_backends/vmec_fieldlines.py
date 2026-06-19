@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Any
 import numpy as np
 from scipy.integrate import cumulative_trapezoid as _ctrap
 from scipy.integrate import simpson as _simps
@@ -18,6 +19,120 @@ from spectraxgk.geometry_backends.vmec_splines import _vmec_splines
 from spectraxgk.geometry_backends.vmec_types import _Struct
 
 _MU_0 = 4.0 * np.pi * 1.0e-7
+
+
+def _new_boozer_object_with_auto_fallback(
+    primary_backend: Any, vmec_fname: str | Path, nc_obj: Any
+) -> Any:
+    """Create a Boozer transform object, using the classic reader if needed.
+
+    Some VMEC-JAX WOUT files expose a square ``(radius, mode)`` layout that old
+    ``booz_xform_jax`` readers reject as ambiguous. In automatic backend mode,
+    the imported-geometry path can safely fall back to the classic
+    ``booz_xform`` reader; explicit backend selections remain fail-fast.
+    """
+
+    try:
+        return _new_booz_object(primary_backend, str(vmec_fname))
+    except Exception as exc:
+        auto_backend = os.environ.get("SPECTRAX_BOOZ_BACKEND", "auto").strip().lower()
+        if auto_backend in {"", "auto"} and _booz_read_wout_square_layout_failure(exc):
+            try:
+                fallback = _import_booz_backend("booz_xform")
+                return _new_booz_object(fallback, str(vmec_fname))
+            except Exception:
+                nc_obj.close()
+                raise
+        nc_obj.close()
+        raise
+
+
+def _sample_boozer_mode_table(vs: Any, s: np.ndarray, ns: int) -> tuple[np.ndarray, ...]:
+    """Sample Boozer Fourier amplitudes and radial derivatives at one surface."""
+
+    mnmax_b = vs.mnbooz
+    rmnc_b = np.zeros((ns, mnmax_b))
+    zmns_b = np.zeros((ns, mnmax_b))
+    numns_b = np.zeros((ns, mnmax_b))
+    d_rmnc_b_d_s = np.zeros((ns, mnmax_b))
+    d_zmns_b_d_s = np.zeros((ns, mnmax_b))
+    d_numns_b_d_s = np.zeros((ns, mnmax_b))
+    gmnc_b = np.zeros((ns, mnmax_b))
+    bmnc_b = np.zeros((ns, mnmax_b))
+    d_bmnc_b_d_s = np.zeros((ns, mnmax_b))
+
+    for jmn in range(mnmax_b):
+        rmnc_b[:, jmn] = vs.rmnc_b[jmn](s)
+        zmns_b[:, jmn] = vs.zmns_b[jmn](s)
+        numns_b[:, jmn] = vs.numns_b[jmn](s)
+        d_rmnc_b_d_s[:, jmn] = vs.d_rmnc_b_d_s[jmn](s)
+        d_zmns_b_d_s[:, jmn] = vs.d_zmns_b_d_s[jmn](s)
+        d_numns_b_d_s[:, jmn] = vs.d_numns_b_d_s[jmn](s)
+        gmnc_b[:, jmn] = vs.gmnc_b[jmn](s)
+        bmnc_b[:, jmn] = vs.bmnc_b[jmn](s)
+        d_bmnc_b_d_s[:, jmn] = vs.d_bmnc_b_d_s[jmn](s)
+
+    return (
+        rmnc_b,
+        zmns_b,
+        numns_b,
+        d_rmnc_b_d_s,
+        d_zmns_b_d_s,
+        d_numns_b_d_s,
+        gmnc_b,
+        bmnc_b,
+        d_bmnc_b_d_s,
+    )
+
+
+def _boozer_mode_angle(
+    xm_b: np.ndarray,
+    xn_b: np.ndarray,
+    theta_b: np.ndarray,
+    phi_b: np.ndarray,
+    *,
+    flipit: bool,
+) -> np.ndarray:
+    """Return ``m theta - n phi`` with the axisymmetric flip convention."""
+
+    mode_index = (slice(None),) + (None,) * theta_b.ndim
+    theta_eval = theta_b + np.pi if flipit else theta_b
+    return xm_b[mode_index] * theta_eval[None, ...] - xn_b[mode_index] * phi_b[None, ...]
+
+
+def _safe_mode_denominator(
+    xm_b: np.ndarray, xn_b: np.ndarray, iota: np.ndarray
+) -> np.ndarray:
+    """Guard resonant Boozer denominators without changing resolved modes."""
+
+    denom_mn = xm_b[1:] * iota[:, None] - xn_b[1:]
+    return np.where(
+        np.abs(denom_mn) < 1.0e-30,
+        np.sign(denom_mn + 1.0e-300) * 1.0e-30,
+        denom_mn,
+    )
+
+
+def _surface_average_2d(
+    values: np.ndarray, theta_b_grid: np.ndarray, phi_b_grid: np.ndarray
+) -> float:
+    """Average a 2-D Boozer-surface quantity over ``theta`` and ``phi``."""
+
+    integral = _simps(
+        [_simps(row, x=theta_b_grid) for row in values],
+        x=phi_b_grid,
+    )
+    return float(integral / (2.0 * np.pi) ** 2)
+
+
+def _centered_fieldline_integral(
+    integrand: np.ndarray, coordinate: np.ndarray, theta_1d: np.ndarray
+) -> np.ndarray:
+    """Cumulatively integrate along the field line and set theta=0 to zero."""
+
+    integrated = _ctrap(integrand, coordinate, initial=0)
+    midpoint_value = InterpolatedUnivariateSpline(theta_1d, integrated[0, 0])(0.0)
+    return integrated - midpoint_value
 
 
 def _vmec_fieldlines(
@@ -68,26 +183,7 @@ def _vmec_fieldlines(
     mpol = int(nc_obj.variables["mpol"][:])
     ntor = int(nc_obj.variables["ntor"][:])
 
-    try:
-        booz_obj = _new_booz_object(bxform, str(vmec_fname))
-    except Exception as exc:
-        if os.environ.get("SPECTRAX_BOOZ_BACKEND", "auto").strip().lower() in {
-            "",
-            "auto",
-        } and _booz_read_wout_square_layout_failure(exc):
-            # Some VMEC-JAX wouts can have ns == mnmax with explicit
-            # (radius, mn_mode) dimensions. Older booz_xform_jax releases
-            # reject that square shape as ambiguous; the classic booz_xform
-            # reader handles it, so use it as a runtime EIK fallback.
-            try:
-                fallback = _import_booz_backend("booz_xform")
-                booz_obj = _new_booz_object(fallback, str(vmec_fname))
-            except Exception:
-                nc_obj.close()
-                raise
-        else:
-            nc_obj.close()
-            raise
+    booz_obj = _new_boozer_object_with_auto_fallback(bxform, vmec_fname, nc_obj)
     booz_obj.mboz = int(2 * mpol)
     booz_obj.nboz = int(2 * ntor)
     booz_obj.run()
@@ -133,28 +229,18 @@ def _vmec_fieldlines(
 
     xm_b = vs.xm_b
     xn_b = vs.xn_b
-    mnmax_b = vs.mnbooz
-
-    rmnc_b = np.zeros((ns, mnmax_b))
-    zmns_b = np.zeros((ns, mnmax_b))
-    numns_b = np.zeros((ns, mnmax_b))
-    d_rmnc_b_d_s = np.zeros((ns, mnmax_b))
-    d_zmns_b_d_s = np.zeros((ns, mnmax_b))
-    d_numns_b_d_s = np.zeros((ns, mnmax_b))
-    gmnc_b = np.zeros((ns, mnmax_b))
-    bmnc_b = np.zeros((ns, mnmax_b))
-    d_bmnc_b_d_s = np.zeros((ns, mnmax_b))
-
-    for jmn in range(mnmax_b):
-        rmnc_b[:, jmn] = vs.rmnc_b[jmn](s)
-        zmns_b[:, jmn] = vs.zmns_b[jmn](s)
-        numns_b[:, jmn] = vs.numns_b[jmn](s)
-        d_rmnc_b_d_s[:, jmn] = vs.d_rmnc_b_d_s[jmn](s)
-        d_zmns_b_d_s[:, jmn] = vs.d_zmns_b_d_s[jmn](s)
-        d_numns_b_d_s[:, jmn] = vs.d_numns_b_d_s[jmn](s)
-        gmnc_b[:, jmn] = vs.gmnc_b[jmn](s)
-        bmnc_b[:, jmn] = vs.bmnc_b[jmn](s)
-        d_bmnc_b_d_s[:, jmn] = vs.d_bmnc_b_d_s[jmn](s)
+    (
+        rmnc_b,
+        zmns_b,
+        numns_b,
+        d_rmnc_b_d_s,
+        d_zmns_b_d_s,
+        d_numns_b_d_s,
+        gmnc_b,
+        bmnc_b,
+        d_bmnc_b_d_s,
+    ) = _sample_boozer_mode_table(vs, s, ns)
+    mnmax_b = rmnc_b.shape[1]
 
     # Field line (theta_b, phi_b) along alpha = theta_b - iota * phi_b
     theta_b = np.zeros((ns, nalpha, nl))
@@ -164,10 +250,7 @@ def _vmec_fieldlines(
         phi_b[js, :, :] = (theta1d[None, :] - alpha_arr[:, None]) / iota[js]
 
     # Flipit check for axisymmetric equilibria
-    angle_b_chk = (
-        xm_b[:, None, None, None] * theta_b[None, :, :, :]
-        - xn_b[:, None, None, None] * phi_b[None, :, :, :]
-    )
+    angle_b_chk = _boozer_mode_angle(xm_b, xn_b, theta_b, phi_b, flipit=False)
     R_b_chk = np.einsum("ij,jikl->ikl", rmnc_b, np.cos(angle_b_chk))
     Z_b_chk = np.einsum("ij,jikl->ikl", zmns_b, np.sin(angle_b_chk))
     flipit = 0
@@ -175,16 +258,7 @@ def _vmec_fieldlines(
         if R_b_chk[0, 0, 0] > R_b_chk[0, 0, 1] or Z_b_chk[0, 0, 1] > Z_b_chk[0, 0, 0]:
             flipit = 1
 
-    if flipit:
-        angle_b = (
-            xm_b[:, None, None, None] * (theta_b[None, :, :, :] + np.pi)
-            - xn_b[:, None, None, None] * phi_b[None, :, :, :]
-        )
-    else:
-        angle_b = (
-            xm_b[:, None, None, None] * theta_b[None, :, :, :]
-            - xn_b[:, None, None, None] * phi_b[None, :, :, :]
-        )
+    angle_b = _boozer_mode_angle(xm_b, xn_b, theta_b, phi_b, flipit=bool(flipit))
 
     cosangle_b = np.cos(angle_b)
     sinangle_b = np.sin(angle_b)
@@ -221,12 +295,7 @@ def _vmec_fieldlines(
     lambmnc_b = np.zeros((ns, mnmax_b))
     betamns_b = np.zeros((ns, mnmax_b))
 
-    denom_mn = xm_b[1:] * iota[:, None] - xn_b[1:]
-    safe_denom_mn = np.where(
-        np.abs(denom_mn) < 1.0e-30,
-        np.sign(denom_mn + 1.0e-300) * 1.0e-30,
-        denom_mn,
-    )
+    safe_denom_mn = _safe_mode_denominator(xm_b, xn_b, iota)
 
     delmnc_b[:, 1:] = gmnc_b[:, 1:] / Vprime[:, None]
     betamns_b[:, 1:] = (
@@ -316,16 +385,13 @@ def _vmec_fieldlines(
     phi_b_grid = np.linspace(-np.pi, np.pi, res_phi)
     th_b_2D, ph_b_2D = np.meshgrid(theta_b_grid, phi_b_grid)  # (res_phi, res_theta)
 
-    if flipit:
-        angle_b_2D = (
-            xm_b[:, None, None, None, None] * (th_b_2D[None, None, None, :, :] + np.pi)
-            - xn_b[:, None, None, None, None] * ph_b_2D[None, None, None, :, :]
-        )
-    else:
-        angle_b_2D = (
-            xm_b[:, None, None, None, None] * th_b_2D[None, None, None, :, :]
-            - xn_b[:, None, None, None, None] * ph_b_2D[None, None, None, :, :]
-        )
+    angle_b_2D = _boozer_mode_angle(
+        xm_b,
+        xn_b,
+        th_b_2D[None, None, :, :],
+        ph_b_2D[None, None, :, :],
+        flipit=bool(flipit),
+    )
 
     cosangle_b_2D = np.cos(angle_b_2D)
     sinangle_b_2D = np.sin(angle_b_2D)
@@ -378,32 +444,15 @@ def _vmec_fieldlines(
     lam_over_g_2D = lambda_b_2D * g_sup_psi_psi_2D_inv
 
     # Flux-surface averages over the (res_phi, res_theta) 2-D grid
-    D1 = (
-        _simps(
-            [_simps(row, x=theta_b_grid) for row in g_sup_psi_psi_2D_inv[0, 0]],
-            x=phi_b_grid,
-        )
-        / (2.0 * np.pi) ** 2
-    )
-
-    D2 = (
-        _simps(
-            [_simps(row, x=theta_b_grid) for row in lam_over_g_2D[0, 0]],
-            x=phi_b_grid,
-        )
-        / (2.0 * np.pi) ** 2
-    )
+    D1 = _surface_average_2d(g_sup_psi_psi_2D_inv[0, 0], theta_b_grid, phi_b_grid)
+    D2 = _surface_average_2d(lam_over_g_2D[0, 0], theta_b_grid, phi_b_grid)
 
     # Cumulative integrals along the field line
-    intinv_g = _ctrap(1.0 / g_sup_psi_psi, phi_b, initial=0)
-    int_lam_div_g = _ctrap(lambda_b / g_sup_psi_psi, phi_b, initial=0)
-
-    # Subtract the value at theta = 0 (field-line midpoint)
     theta_1d = theta_b[0, 0]
-    spl0 = InterpolatedUnivariateSpline(theta_1d, intinv_g[0, 0])
-    intinv_g = intinv_g - spl0(0.0)
-    spl1 = InterpolatedUnivariateSpline(theta_1d, int_lam_div_g[0, 0])
-    int_lam_div_g = int_lam_div_g - spl1(0.0)
+    intinv_g = _centered_fieldline_integral(1.0 / g_sup_psi_psi, phi_b, theta_1d)
+    int_lam_div_g = _centered_fieldline_integral(
+        lambda_b / g_sup_psi_psi, phi_b, theta_1d
+    )
 
     # HNGC correction factors
     d_iota_d_s_1 = (
