@@ -210,6 +210,58 @@ def _boundary_chain_passes(
     }
 
 
+def _boundary_chain_summary_decision(
+    passes: Mapping[str, bool], *, branch_sensitive: bool
+) -> tuple[str, str]:
+    """Classify one finite boundary-gradient probe from its pass flags."""
+
+    if not passes["frozen_axis_jvp_vjp_consistent"]:
+        return (
+            "frozen_axis_replay_internally_inconsistent",
+            "debug VMEC-JAX exact-tape JVP/VJP replay; the optimizer derivative "
+            "is not internally transposed",
+        )
+    if passes["frozen_axis_matches_exact_fd"]:
+        return (
+            "exact_fd_and_frozen_axis_replay_consistent",
+            "use the frozen-axis derivative as an optimization diagnostic; keep "
+            "sparse FD checks and solved-equilibrium gates before promotion",
+        )
+    if passes["frozen_axis_convention_verified"] and branch_sensitive:
+        return (
+            "frozen_axis_convention_verified_but_exact_fd_branch_sensitive",
+            "raw exact-solve FD is branch-sensitive, but the frozen-axis finite "
+            "difference, explicit tangent column, tape JVP, and tape VJP agree; "
+            "use only with solved-equilibrium, growth-branch, and projected "
+            "line-search gates",
+        )
+    if passes["frozen_axis_convention_verified"]:
+        return (
+            "frozen_axis_convention_verified_but_exact_fd_inconsistent",
+            "raw exact-solve FD is inconsistent with the optimizer convention, "
+            "but the frozen-axis tangent convention is verified; require "
+            "projected admission and matched nonlinear audits before promotion",
+        )
+    if branch_sensitive:
+        return (
+            "frozen_axis_replay_consistent_but_exact_fd_branch_sensitive",
+            "tighten VMEC solve convergence and compare against the frozen-axis "
+            "finite-difference convention; raw exact-solve FD is moving the "
+            "magnetic-axis initialization branch",
+        )
+    if not passes["final_state_matches_exact_fd"]:
+        return (
+            "final_state_cotangent_mismatch",
+            "audit the SPECTRAX final-state objective cotangent or the exact "
+            "final-state finite-difference branch before blaming boundary replay",
+        )
+    return (
+        "frozen_axis_replay_consistent_but_exact_fd_inconsistent",
+        "treat the raw exact-solve FD as a convergence/branch diagnostic; "
+        "increase VMEC iterations or reduce branch sensitivity before promotion",
+    )
+
+
 def build_boundary_chain_summary(
     *,
     exact_fd_cost_gradient: float,
@@ -321,52 +373,9 @@ def build_boundary_chain_summary(
 
     norm_ratio = metrics["raw_to_frozen_initial_norm_ratio"]
     branch_sensitive = bool(norm_ratio is not None and norm_ratio > 10.0)
-    if not passes["frozen_axis_jvp_vjp_consistent"]:
-        classification = "frozen_axis_replay_internally_inconsistent"
-        next_action = (
-            "debug VMEC-JAX exact-tape JVP/VJP replay; the optimizer derivative "
-            "is not internally transposed"
-        )
-    elif passes["frozen_axis_matches_exact_fd"]:
-        classification = "exact_fd_and_frozen_axis_replay_consistent"
-        next_action = (
-            "use the frozen-axis derivative as an optimization diagnostic; keep "
-            "sparse FD checks and solved-equilibrium gates before promotion"
-        )
-    elif passes["frozen_axis_convention_verified"] and branch_sensitive:
-        classification = "frozen_axis_convention_verified_but_exact_fd_branch_sensitive"
-        next_action = (
-            "raw exact-solve FD is branch-sensitive, but the frozen-axis finite "
-            "difference, explicit tangent column, tape JVP, and tape VJP agree; "
-            "use only with solved-equilibrium, growth-branch, and projected "
-            "line-search gates"
-        )
-    elif passes["frozen_axis_convention_verified"]:
-        classification = "frozen_axis_convention_verified_but_exact_fd_inconsistent"
-        next_action = (
-            "raw exact-solve FD is inconsistent with the optimizer convention, "
-            "but the frozen-axis tangent convention is verified; require "
-            "projected admission and matched nonlinear audits before promotion"
-        )
-    elif branch_sensitive:
-        classification = "frozen_axis_replay_consistent_but_exact_fd_branch_sensitive"
-        next_action = (
-            "tighten VMEC solve convergence and compare against the frozen-axis "
-            "finite-difference convention; raw exact-solve FD is moving the "
-            "magnetic-axis initialization branch"
-        )
-    elif not passes["final_state_matches_exact_fd"]:
-        classification = "final_state_cotangent_mismatch"
-        next_action = (
-            "audit the SPECTRAX final-state objective cotangent or the exact "
-            "final-state finite-difference branch before blaming boundary replay"
-        )
-    else:
-        classification = "frozen_axis_replay_consistent_but_exact_fd_inconsistent"
-        next_action = (
-            "treat the raw exact-solve FD as a convergence/branch diagnostic; "
-            "increase VMEC iterations or reduce branch sensitivity before promotion"
-        )
+    classification, next_action = _boundary_chain_summary_decision(
+        passes, branch_sensitive=branch_sensitive
+    )
 
     return {
         "kind": "vmec_jax_boundary_chain_summary",
