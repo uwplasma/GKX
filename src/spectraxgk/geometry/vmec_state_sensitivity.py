@@ -246,6 +246,29 @@ def _tensor_sensitivity_payload(
         ),
     }
 
+
+def _load_vmec_geom_sensitivity_context(
+    *,
+    case_name: str,
+    radial_index: int | None,
+    mode_index: int,
+    surface_index: int | None,
+    surface_grid: str,
+) -> tuple[_VMECStateContext, Any, int, int, int]:
+    """Load the shared VMEC geometry context for tensor AD/FD gates."""
+
+    ctx = _load_vmec_state_context(str(case_name))
+    geom_mod = importlib.import_module("vmec_jax.geom")
+    ridx, midx, sidx = _resolve_vmec_state_indices(
+        ctx.base_Rcos,
+        radial_index=radial_index,
+        mode_index=mode_index,
+        surface_index=surface_index,
+        surface_grid=surface_grid,
+    )
+    return ctx, geom_mod, ridx, midx, sidx
+
+
 def vmec_jax_boozer_flux_tube_sensitivity_report(  # pragma: no cover
     *,
     params: jnp.ndarray | None = None,
@@ -394,10 +417,8 @@ def vmec_jax_metric_tensor_sensitivity_report(  # pragma: no cover
         )
 
     try:
-        ctx = _load_vmec_state_context(str(case_name))
-        geom_mod = importlib.import_module("vmec_jax.geom")
-        ridx, midx, sidx = _resolve_vmec_state_indices(
-            ctx.base_Rcos,
+        ctx, geom_mod, ridx, midx, sidx = _load_vmec_geom_sensitivity_context(
+            case_name=str(case_name),
             radial_index=radial_index,
             mode_index=mode_index,
             surface_index=surface_index,
@@ -486,17 +507,15 @@ def vmec_jax_field_line_tensor_sensitivity_report(  # pragma: no cover
         )
 
     try:
-        ctx = _load_vmec_state_context(str(case_name))
-        geom_mod = importlib.import_module("vmec_jax.geom")
-        bcovar_mod = importlib.import_module("vmec_jax.vmec_bcovar")
-        field_mod = importlib.import_module("vmec_jax.field")
-        ridx, midx, sidx = _resolve_vmec_state_indices(
-            ctx.base_Rcos,
+        ctx, geom_mod, ridx, midx, sidx = _load_vmec_geom_sensitivity_context(
+            case_name=str(case_name),
             radial_index=radial_index,
             mode_index=mode_index,
             surface_index=surface_index,
             surface_grid="field_line",
         )
+        bcovar_mod = importlib.import_module("vmec_jax.vmec_bcovar")
+        field_mod = importlib.import_module("vmec_jax.field")
 
         iota_line, _iota_safe, _theta_line, theta_vmec, zeta_line = (
             _vmec_field_line_sampling_coordinates(
