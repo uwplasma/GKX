@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 import jax.numpy as jnp
@@ -35,6 +36,89 @@ from spectraxgk.objectives.core import (
     _default_gradient_linear_params,
     _default_gradient_linear_terms,
 )
+
+
+@dataclass(frozen=True)
+class _SolverReadyLinearContext:
+    cfg: CycloneBaseCase
+    grid: Any
+    n_laguerre: int
+    n_hermite: int
+    state_shape: tuple[int, int, int, int, int]
+    params_linear: LinearParams
+    terms: LinearTerms
+    theta: jnp.ndarray
+    source_model: str
+
+    def geometry_for(self, x: jnp.ndarray) -> Any:
+        return flux_tube_geometry_from_mapping(
+            solver_ready_geometry_mapping(x, self.theta),
+            source_model=self.source_model,
+            validate_finite=False,
+        )
+
+    def cache_for(self, x: jnp.ndarray) -> Any:
+        return build_linear_cache(
+            self.grid,
+            self.geometry_for(x),
+            self.params_linear,
+            self.n_laguerre,
+            self.n_hermite,
+        )
+
+    def rhs_phi(self, state: jnp.ndarray, cache: Any) -> tuple[jnp.ndarray, jnp.ndarray]:
+        return linear_rhs_cached(
+            state,
+            cache,
+            self.params_linear,
+            terms=self.terms,
+            use_jit=False,
+            use_custom_vjp=False,
+        )
+
+    def matrix_fn(self, x: jnp.ndarray) -> jnp.ndarray:
+        cache = self.cache_for(x)
+        return explicit_complex_operator_matrix(
+            lambda state: self.rhs_phi(state, cache)[0], self.state_shape
+        )
+
+    def quasilinear_feature_context(self) -> dict[str, Any]:
+        return {
+            "geometry_for": self.geometry_for,
+            "grid": self.grid,
+            "params_linear": self.params_linear,
+            "n_laguerre": self.n_laguerre,
+            "n_hermite": self.n_hermite,
+            "state_shape": self.state_shape,
+            "rhs_phi": self.rhs_phi,
+        }
+
+
+def _solver_ready_linear_context(
+    *,
+    n_laguerre: int,
+    n_hermite: int,
+    source_model: str,
+    params_linear: LinearParams | None = None,
+    terms: LinearTerms | None = None,
+) -> _SolverReadyLinearContext:
+    cfg = CycloneBaseCase(grid=GridConfig(Nx=1, Ny=6, Nz=4, Lx=6.0, Ly=12.0))
+    grid = select_ky_grid(build_spectral_grid(cfg.grid), 1)
+    return _SolverReadyLinearContext(
+        cfg=cfg,
+        grid=grid,
+        n_laguerre=n_laguerre,
+        n_hermite=n_hermite,
+        state_shape=(n_laguerre, n_hermite, grid.ky.size, grid.kx.size, grid.z.size),
+        params_linear=(
+            _default_gradient_linear_params()
+            if params_linear is None
+            else params_linear
+        ),
+        terms=_default_gradient_linear_terms() if terms is None else terms,
+        theta=jnp.asarray(grid.z),
+        source_model=source_model,
+    )
 
 
 def _linear_eigenpair_quasilinear_features(
@@ -119,46 +203,11 @@ def solver_objective_branch_gradient_report(
     if n_laguerre_int < 1 or n_hermite_int < 1:
         raise ValueError("n_laguerre and n_hermite must be positive")
 
-    cfg = CycloneBaseCase(grid=GridConfig(Nx=1, Ny=6, Nz=4, Lx=6.0, Ly=12.0))
-    grid = select_ky_grid(build_spectral_grid(cfg.grid), 1)
-    state_shape = (
-        n_laguerre_int,
-        n_hermite_int,
-        grid.ky.size,
-        grid.kx.size,
-        grid.z.size,
+    context = _solver_ready_linear_context(
+        n_laguerre=n_laguerre_int,
+        n_hermite=n_hermite_int,
+        source_model="solver_ready_branch_gradient_gate",
     )
-    params_linear = _default_gradient_linear_params()
-    terms = _default_gradient_linear_terms()
-    theta = jnp.asarray(grid.z)
-
-    def geometry_for(x: jnp.ndarray):
-        return flux_tube_geometry_from_mapping(
-            solver_ready_geometry_mapping(x, theta),
-            source_model="solver_ready_branch_gradient_gate",
-            validate_finite=False,
-        )
-
-    def cache_for(x: jnp.ndarray):
-        return build_linear_cache(
-            grid, geometry_for(x), params_linear, n_laguerre_int, n_hermite_int
-        )
-
-    def rhs_phi(state_arr: jnp.ndarray, cache: Any) -> tuple[jnp.ndarray, jnp.ndarray]:
-        return linear_rhs_cached(
-            state_arr,
-            cache,
-            params_linear,
-            terms=terms,
-            use_jit=False,
-            use_custom_vjp=False,
-        )
-
-    def matrix_fn(x: jnp.ndarray) -> jnp.ndarray:
-        cache = cache_for(x)
-        return explicit_complex_operator_matrix(
-            lambda state_arr: rhs_phi(state_arr, cache)[0], state_shape
-        )
 
     def objective_fn(
         eigenvalue: jnp.ndarray, eigenvector: jnp.ndarray, x: jnp.ndarray
@@ -167,22 +216,14 @@ def solver_objective_branch_gradient_report(
             eigenvalue,
             eigenvector,
             x,
-            {
-                "geometry_for": geometry_for,
-                "grid": grid,
-                "params_linear": params_linear,
-                "n_laguerre": n_laguerre_int,
-                "n_hermite": n_hermite_int,
-                "state_shape": state_shape,
-                "rhs_phi": rhs_phi,
-            },
+            context.quasilinear_feature_context(),
         )
-        geom = geometry_for(x)
-        cache = cache_for(x)
-        state_arr = jnp.reshape(eigenvector, state_shape)
-        _rhs, phi = rhs_phi(state_arr, cache)
+        geom = context.geometry_for(x)
+        cache = context.cache_for(x)
+        state_arr = jnp.reshape(eigenvector, context.state_shape)
+        _rhs, phi = context.rhs_phi(state_arr, cache)
         zero_field = jnp.zeros_like(phi)
-        _vol_fac, flux_fac = fieldline_quadrature_weights(geom, grid)
+        vol_fac, flux_fac = fieldline_quadrature_weights(geom, context.grid)
         particle_weight = jnp.real(
             jnp.sum(
                 particle_flux_species(
@@ -191,20 +232,18 @@ def solver_objective_branch_gradient_report(
                     zero_field,
                     zero_field,
                     cache,
-                    grid,
-                    params_linear,
+                    context.grid,
+                    context.params_linear,
                     flux_fac,
                 )
             )
-            / phi_norm2(
-                phi, cache, params_linear, fieldline_quadrature_weights(geom, grid)[0]
-            )
+            / phi_norm2(phi, cache, context.params_linear, vol_fac)
         )
         return jnp.asarray(
             [gamma, omega, kperp_eff, heat_weight, particle_weight, ql_proxy]
         )
 
-    base_matrix = matrix_fn(p)
+    base_matrix = context.matrix_fn(p)
     base_eigs = np.asarray(jnp.linalg.eigvals(base_matrix))
     if base_eigs.ndim != 1 or base_eigs.size == 0:
         raise ValueError("matrix_fn must return at least one eigenvalue")
@@ -220,7 +259,7 @@ def solver_objective_branch_gradient_report(
     for i, name in enumerate(SOLVER_GEOMETRY_PARAMETER_NAMES):
         for sign, label in ((-1.0, "minus"), (1.0, "plus")):
             p_i = p + float(sign) * float(fd_step) * eye[i]
-            eigs_i = np.asarray(jnp.linalg.eigvals(matrix_fn(p_i)))
+            eigs_i = np.asarray(jnp.linalg.eigvals(context.matrix_fn(p_i)))
             nearest_index = int(np.argmin(np.abs(eigs_i - base_value)))
             dominant_index = int(np.argmax(np.real(eigs_i)))
             nearest_value = eigs_i[nearest_index]
@@ -248,7 +287,7 @@ def solver_objective_branch_gradient_report(
             )
 
     gate = implicit_eigenpair_observable_sensitivity_report(
-        matrix_fn,
+        context.matrix_fn,
         objective_fn,
         p,
         step=fd_step,
@@ -264,11 +303,11 @@ def solver_objective_branch_gradient_report(
         atol=atol,
     )
     value_vector = _objective_vector_fn(
-        geometry_for(p),
+        context.geometry_for(p),
         selected_ky_index=1,
         n_laguerre=n_laguerre_int,
         n_hermite=n_hermite_int,
-        ny=cfg.grid.Ny,
+        ny=context.cfg.grid.Ny,
     )
     value_np = np.asarray(value_vector, dtype=float)
     value_finite = bool(np.all(np.isfinite(value_np)))
@@ -288,14 +327,14 @@ def solver_objective_branch_gradient_report(
         "objective_names": list(SOLVER_OBJECTIVE_NAMES),
         "params": np.asarray(p, dtype=float).tolist(),
         "grid": {
-            "Nx": int(cfg.grid.Nx),
-            "Ny": int(cfg.grid.Ny),
-            "Nz": int(cfg.grid.Nz),
+            "Nx": int(context.cfg.grid.Nx),
+            "Ny": int(context.cfg.grid.Ny),
+            "Nz": int(context.cfg.grid.Nz),
             "selected_ky_index": 1,
         },
         "n_laguerre": n_laguerre_int,
         "n_hermite": n_hermite_int,
-        "state_size": int(np.prod(state_shape)),
+        "state_size": int(np.prod(context.state_shape)),
         "value_evaluator_finite": value_finite,
         "value_evaluator_objectives": value_np.tolist(),
         "branch_continuity_gate": branch_passed,
@@ -334,69 +373,24 @@ def linear_solver_geometry_gradient_report(
     if p.ndim != 1 or int(p.size) != 2:
         raise ValueError("params must be a length-2 vector")
 
-    cfg = CycloneBaseCase(grid=GridConfig(Nx=1, Ny=6, Nz=4, Lx=6.0, Ly=12.0))
-    grid = select_ky_grid(build_spectral_grid(cfg.grid), 1)
     n_laguerre = 2
     n_hermite = 1
-    state_shape = (n_laguerre, n_hermite, grid.ky.size, grid.kx.size, grid.z.size)
-    params_linear = LinearParams(
-        R_over_Ln=2.2,
-        R_over_LTi=6.9,
-        nu=0.0,
-        nu_hyper=0.0,
-        hypercollisions_const=0.0,
-        hypercollisions_kz=0.0,
-        D_hyper=0.0,
-        beta=0.0,
-        fapar=0.0,
+    context = _solver_ready_linear_context(
+        n_laguerre=n_laguerre,
+        n_hermite=n_hermite,
+        source_model="solver_ready_geometry_gradient_gate",
     )
-    terms = LinearTerms(
-        collisions=0.0,
-        hypercollisions=0.0,
-        end_damping=0.0,
-        apar=0.0,
-        bpar=0.0,
-    )
-    theta = jnp.asarray(grid.z)
-
-    def geometry_for(x: jnp.ndarray):
-        return flux_tube_geometry_from_mapping(
-            solver_ready_geometry_mapping(x, theta),
-            source_model="solver_ready_geometry_gradient_gate",
-            validate_finite=False,
-        )
-
-    def cache_for(x: jnp.ndarray):
-        return build_linear_cache(
-            grid, geometry_for(x), params_linear, n_laguerre, n_hermite
-        )
-
-    def rhs_phi(state: jnp.ndarray, cache: Any) -> tuple[jnp.ndarray, jnp.ndarray]:
-        return linear_rhs_cached(
-            state,
-            cache,
-            params_linear,
-            terms=terms,
-            use_jit=False,
-            use_custom_vjp=False,
-        )
-
-    def matrix_fn(x: jnp.ndarray) -> jnp.ndarray:
-        cache = cache_for(x)
-        return explicit_complex_operator_matrix(
-            lambda state: rhs_phi(state, cache)[0], state_shape
-        )
 
     def objective_fn(
         eigenvalue: jnp.ndarray, eigenvector: jnp.ndarray, x: jnp.ndarray
     ) -> jnp.ndarray:
-        geom = geometry_for(x)
-        cache = cache_for(x)
-        state = jnp.reshape(eigenvector, state_shape)
-        _rhs, phi = rhs_phi(state, cache)
+        geom = context.geometry_for(x)
+        cache = context.cache_for(x)
+        state = jnp.reshape(eigenvector, context.state_shape)
+        _rhs, phi = context.rhs_phi(state, cache)
         zero_field = jnp.zeros_like(phi)
-        vol_fac, flux_fac = fieldline_quadrature_weights(geom, grid)
-        norm2 = phi_norm2(phi, cache, params_linear, vol_fac)
+        vol_fac, flux_fac = fieldline_quadrature_weights(geom, context.grid)
+        norm2 = phi_norm2(phi, cache, context.params_linear, vol_fac)
         kperp_eff = effective_kperp2(phi, cache, vol_fac)
         heat_weight = jnp.real(
             jnp.sum(
@@ -406,8 +400,8 @@ def linear_solver_geometry_gradient_report(
                     zero_field,
                     zero_field,
                     cache,
-                    grid,
-                    params_linear,
+                    context.grid,
+                    context.params_linear,
                     flux_fac,
                 )
             )
@@ -421,8 +415,8 @@ def linear_solver_geometry_gradient_report(
                     zero_field,
                     zero_field,
                     cache,
-                    grid,
-                    params_linear,
+                    context.grid,
+                    context.params_linear,
                     flux_fac,
                 )
             )
@@ -446,7 +440,7 @@ def linear_solver_geometry_gradient_report(
         )
 
     gate = implicit_eigenpair_observable_sensitivity_report(
-        matrix_fn,
+        context.matrix_fn,
         objective_fn,
         p,
         step=fd_step,
@@ -476,14 +470,14 @@ def linear_solver_geometry_gradient_report(
         "objective_names": list(SOLVER_OBJECTIVE_NAMES),
         "params": np.asarray(p, dtype=float).tolist(),
         "grid": {
-            "Nx": int(cfg.grid.Nx),
-            "Ny": int(cfg.grid.Ny),
-            "Nz": int(cfg.grid.Nz),
+            "Nx": int(context.cfg.grid.Nx),
+            "Ny": int(context.cfg.grid.Ny),
+            "Nz": int(context.cfg.grid.Nz),
             "selected_ky_index": 1,
         },
         "n_laguerre": n_laguerre,
         "n_hermite": n_hermite,
-        "state_size": int(np.prod(state_shape)),
+        "state_size": int(np.prod(context.state_shape)),
         "linear_growth_gradient_gate": linear_growth_gate,
         "quasilinear_weight_gradient_gate": quasilinear_weight_gate,
         "nonlinear_window_gradient_gate": False,
