@@ -138,7 +138,113 @@ def _ad_fd_jacobian_diagnostics(
     }
 
 
+def _metric_tensor_observable_fn(
+    *,
+    ctx: _VMECStateContext,
+    geom_mod: Any,
+    radial_index: int,
+    mode_index: int,
+    surface_index: int,
+    rms_epsilon: jnp.ndarray,
+) -> Callable[[jnp.ndarray], jnp.ndarray]:
+    def metric_observables(x: jnp.ndarray) -> jnp.ndarray:
+        traced_state = _perturb_vmec_state(
+            ctx, x, radial_index=radial_index, mode_index=mode_index
+        )
+        geom = geom_mod.eval_geom(traced_state, ctx.static)
+        sqrtg, g_ss, g_st, g_sp, g_tt, g_tp, g_pp = (
+            jnp.asarray(getattr(geom, name))[surface_index]
+            for name in ("sqrtg", "g_ss", "g_st", "g_sp", "g_tt", "g_tp", "g_pp")
+        )
+        return jnp.asarray(
+            [
+                _rms_with_floor(sqrtg, rms_epsilon),
+                jnp.mean(g_ss),
+                jnp.mean(g_tt),
+                jnp.mean(g_pp),
+                _rms_with_floor(g_st, rms_epsilon),
+                _rms_with_floor(g_sp, rms_epsilon),
+                _rms_with_floor(g_tp, rms_epsilon),
+            ]
+        )
 
+    return metric_observables
+
+
+def _field_line_tensor_observable_fn(
+    *,
+    ctx: _VMECStateContext,
+    geom_mod: Any,
+    bcovar_mod: Any,
+    field_mod: Any,
+    radial_index: int,
+    mode_index: int,
+    surface_index: int,
+    theta_vmec: jnp.ndarray,
+    zeta_line: jnp.ndarray,
+    b2_floor: jnp.ndarray,
+    rms_epsilon: jnp.ndarray,
+) -> Callable[[jnp.ndarray], jnp.ndarray]:
+    def field_line_observables(x: jnp.ndarray) -> jnp.ndarray:
+        traced_state = _perturb_vmec_state(
+            ctx, x, radial_index=radial_index, mode_index=mode_index
+        )
+        geom = geom_mod.eval_geom(traced_state, ctx.static)
+        bcovar = bcovar_mod.vmec_bcovar_half_mesh_from_wout(
+            state=traced_state,
+            static=ctx.static,
+            wout=ctx.wout,
+            pres=getattr(ctx.wout, "pres", None),
+        )
+        b2 = field_mod.b2_from_bsup(geom, bcovar.bsupu, bcovar.bsupv)
+        def sample(values: jnp.ndarray) -> jnp.ndarray:
+            return _periodic_bilinear_sample_2d(
+                values[surface_index], theta_vmec, zeta_line
+            )
+        bmag = jnp.sqrt(jnp.maximum(sample(b2), b2_floor))
+        sqrtg, g_tt, g_tp, g_pp, g_ss = (
+            sample(getattr(geom, name))
+            for name in ("sqrtg", "g_tt", "g_tp", "g_pp", "g_ss")
+        )
+        mean_b = jnp.mean(bmag)
+        ripple = jnp.std(bmag) / jnp.maximum(
+            jnp.abs(mean_b), jnp.asarray(1.0e-30, dtype=bmag.dtype)
+        )
+        return jnp.asarray(
+            [
+                mean_b,
+                ripple,
+                _rms_with_floor(sqrtg, rms_epsilon),
+                jnp.mean(g_tt),
+                jnp.mean(g_pp),
+                _rms_with_floor(g_tp, rms_epsilon),
+                jnp.mean(g_ss),
+            ]
+        )
+
+    return field_line_observables
+
+
+def _tensor_sensitivity_payload(
+    *,
+    observable_fn: Callable[[jnp.ndarray], jnp.ndarray],
+    params: jnp.ndarray,
+    fd_step: float,
+    observable_names: tuple[str, ...],
+    relative_floor: float,
+) -> dict[str, object]:
+    observables = observable_fn(params)
+    return {
+        "observable_names": list(observable_names),
+        "observables": np.asarray(observables).tolist(),
+        **_ad_fd_jacobian_diagnostics(
+            observable_fn,
+            params,
+            fd_step=float(fd_step),
+            observable_names=observable_names,
+            relative_floor=float(relative_floor),
+        ),
+    }
 
 def vmec_jax_boozer_flux_tube_sensitivity_report(  # pragma: no cover
     *,
@@ -298,36 +404,17 @@ def vmec_jax_metric_tensor_sensitivity_report(  # pragma: no cover
             surface_grid="metric",
         )
 
-        eps = jnp.asarray(float(rms_epsilon), dtype=p.dtype)
-
-        def metric_observables(x: jnp.ndarray) -> jnp.ndarray:
-            traced_state = _perturb_vmec_state(
-                ctx, x, radial_index=ridx, mode_index=midx
-            )
-            geom = geom_mod.eval_geom(traced_state, ctx.static)
-            sqrtg = jnp.asarray(geom.sqrtg)[sidx]
-            g_ss = jnp.asarray(geom.g_ss)[sidx]
-            g_st = jnp.asarray(geom.g_st)[sidx]
-            g_sp = jnp.asarray(geom.g_sp)[sidx]
-            g_tt = jnp.asarray(geom.g_tt)[sidx]
-            g_tp = jnp.asarray(geom.g_tp)[sidx]
-            g_pp = jnp.asarray(geom.g_pp)[sidx]
-            return jnp.asarray(
-                [
-                    _rms_with_floor(sqrtg, eps),
-                    jnp.mean(g_ss),
-                    jnp.mean(g_tt),
-                    jnp.mean(g_pp),
-                    _rms_with_floor(g_st, eps),
-                    _rms_with_floor(g_sp, eps),
-                    _rms_with_floor(g_tp, eps),
-                ]
-            )
-
-        observables = metric_observables(p)
-        jacobian_diagnostics = _ad_fd_jacobian_diagnostics(
-            metric_observables,
-            p,
+        metric_observables = _metric_tensor_observable_fn(
+            ctx=ctx,
+            geom_mod=geom_mod,
+            radial_index=ridx,
+            mode_index=midx,
+            surface_index=sidx,
+            rms_epsilon=jnp.asarray(float(rms_epsilon), dtype=p.dtype),
+        )
+        tensor_payload = _tensor_sensitivity_payload(
+            observable_fn=metric_observables,
+            params=p,
             fd_step=float(fd_step),
             observable_names=_VMEC_METRIC_OBSERVABLE_NAMES,
             relative_floor=1.0e-12,
@@ -353,9 +440,7 @@ def vmec_jax_metric_tensor_sensitivity_report(  # pragma: no cover
             fd_step=fd_step,
         ),
         "source_model": "vmec_jax:state->metric-tensors",
-        "observable_names": list(_VMEC_METRIC_OBSERVABLE_NAMES),
-        "observables": np.asarray(observables).tolist(),
-        **jacobian_diagnostics,
+        **tensor_payload,
         "metric_grid_shape": [int(v) for v in np.asarray(geom0.sqrtg).shape],
         "rms_epsilon": float(rms_epsilon),
     }
@@ -423,54 +508,22 @@ def vmec_jax_field_line_tensor_sensitivity_report(  # pragma: no cover
             )
         )
         ntheta_int = int(ntheta)
-        b2_floor_arr = jnp.asarray(float(b2_floor), dtype=p.dtype)
-        eps = jnp.asarray(float(rms_epsilon), dtype=p.dtype)
-
-        def field_line_observables(x: jnp.ndarray) -> jnp.ndarray:
-            traced_state = _perturb_vmec_state(
-                ctx, x, radial_index=ridx, mode_index=midx
-            )
-            geom = geom_mod.eval_geom(traced_state, ctx.static)
-            bcovar = bcovar_mod.vmec_bcovar_half_mesh_from_wout(
-                state=traced_state,
-                static=ctx.static,
-                wout=ctx.wout,
-                pres=getattr(ctx.wout, "pres", None),
-            )
-            b2 = field_mod.b2_from_bsup(geom, bcovar.bsupu, bcovar.bsupv)
-            bmag = jnp.sqrt(
-                jnp.maximum(
-                    _periodic_bilinear_sample_2d(b2[sidx], theta_vmec, zeta_line),
-                    b2_floor_arr,
-                )
-            )
-            sqrtg = _periodic_bilinear_sample_2d(
-                geom.sqrtg[sidx], theta_vmec, zeta_line
-            )
-            g_tt = _periodic_bilinear_sample_2d(geom.g_tt[sidx], theta_vmec, zeta_line)
-            g_tp = _periodic_bilinear_sample_2d(geom.g_tp[sidx], theta_vmec, zeta_line)
-            g_pp = _periodic_bilinear_sample_2d(geom.g_pp[sidx], theta_vmec, zeta_line)
-            g_ss = _periodic_bilinear_sample_2d(geom.g_ss[sidx], theta_vmec, zeta_line)
-            mean_b = jnp.mean(bmag)
-            ripple = jnp.std(bmag) / jnp.maximum(
-                jnp.abs(mean_b), jnp.asarray(1.0e-30, dtype=bmag.dtype)
-            )
-            return jnp.asarray(
-                [
-                    mean_b,
-                    ripple,
-                    _rms_with_floor(sqrtg, eps),
-                    jnp.mean(g_tt),
-                    jnp.mean(g_pp),
-                    _rms_with_floor(g_tp, eps),
-                    jnp.mean(g_ss),
-                ]
-            )
-
-        observables = field_line_observables(p)
-        jacobian_diagnostics = _ad_fd_jacobian_diagnostics(
-            field_line_observables,
-            p,
+        field_line_observables = _field_line_tensor_observable_fn(
+            ctx=ctx,
+            geom_mod=geom_mod,
+            bcovar_mod=bcovar_mod,
+            field_mod=field_mod,
+            radial_index=ridx,
+            mode_index=midx,
+            surface_index=sidx,
+            theta_vmec=theta_vmec,
+            zeta_line=zeta_line,
+            b2_floor=jnp.asarray(float(b2_floor), dtype=p.dtype),
+            rms_epsilon=jnp.asarray(float(rms_epsilon), dtype=p.dtype),
+        )
+        tensor_payload = _tensor_sensitivity_payload(
+            observable_fn=field_line_observables,
+            params=p,
             fd_step=float(fd_step),
             observable_names=_VMEC_FIELD_LINE_OBSERVABLE_NAMES,
             relative_floor=1.0e-10,
@@ -497,9 +550,7 @@ def vmec_jax_field_line_tensor_sensitivity_report(  # pragma: no cover
         ),
         "source_model": "vmec_jax:state->field-line-metric-and-b",
         "field_line_convention": "VMEC theta, zeta=(theta-alpha)/iota with periodic bilinear sampling",
-        "observable_names": list(_VMEC_FIELD_LINE_OBSERVABLE_NAMES),
-        "observables": np.asarray(observables).tolist(),
-        **jacobian_diagnostics,
+        **tensor_payload,
         "iota": float(np.asarray(iota_line)),
         "alpha": float(alpha),
         "ntheta": int(ntheta_int),
