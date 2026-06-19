@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, Sequence
+from typing import Any, Callable, Mapping, Sequence
 from pathlib import Path
 import sys
 
@@ -157,6 +157,24 @@ _PATCHABLE_RUNTIME_GLOBALS = (
     _parallel_requests_combined_ky_scan,
 )
 
+_RUNTIME_LINEAR_TIME_FIT_OPTION_KEYS = (
+    "method",
+    "dt",
+    "steps",
+    "sample_stride",
+    "auto_window",
+    "tmin",
+    "tmax",
+    "window_fraction",
+    "min_points",
+    "start_fraction",
+    "growth_weight",
+    "require_positive",
+    "min_amp_fraction",
+    "mode_method",
+    "fit_signal",
+)
+
 __all__ = [
     "RuntimeIndependentParallelPlan", "RuntimeLinearResult",
     "RuntimeLinearScanResult", "RuntimeNonlinearResult",
@@ -277,6 +295,12 @@ def _runtime_linear_dispatch_deps() -> RuntimeLinearDispatchDeps:
     return build_runtime_linear_dispatch_deps(_runtime_facade_module())
 
 
+def _runtime_linear_time_fit_options(values: Mapping[str, Any]) -> dict[str, Any]:
+    """Return shared runtime linear time-integration and fit options."""
+
+    return {name: values[name] for name in _RUNTIME_LINEAR_TIME_FIT_OPTION_KEYS}
+
+
 def run_runtime_linear(
     cfg: RuntimeConfig,
     *,
@@ -312,22 +336,8 @@ def run_runtime_linear(
         Nl=Nl,
         Nm=Nm,
         solver=solver,
-        method=method,
-        dt=dt,
-        steps=steps,
-        sample_stride=sample_stride,
-        auto_window=auto_window,
-        tmin=tmin,
-        tmax=tmax,
-        window_fraction=window_fraction,
-        min_points=min_points,
-        start_fraction=start_fraction,
-        growth_weight=growth_weight,
-        require_positive=require_positive,
-        min_amp_fraction=min_amp_fraction,
+        **_runtime_linear_time_fit_options(locals()),
         krylov_cfg=krylov_cfg,
-        mode_method=mode_method,
-        fit_signal=fit_signal,
         return_state=return_state,
         show_progress=show_progress,
         status_callback=status_callback,
@@ -375,23 +385,9 @@ def run_runtime_scan(
         Nl=Nl,
         Nm=Nm,
         solver=solver,
-        method=method,
-        dt=dt,
-        steps=steps,
-        sample_stride=sample_stride,
         batch_ky=batch_ky,
-        auto_window=auto_window,
-        tmin=tmin,
-        tmax=tmax,
-        window_fraction=window_fraction,
-        min_points=min_points,
-        start_fraction=start_fraction,
-        growth_weight=growth_weight,
-        require_positive=require_positive,
-        min_amp_fraction=min_amp_fraction,
+        **_runtime_linear_time_fit_options(locals()),
         krylov_cfg=krylov_cfg,
-        mode_method=mode_method,
-        fit_signal=fit_signal,
         show_progress=show_progress,
         workers=workers,
         parallel_executor=parallel_executor,
@@ -435,21 +431,7 @@ def _run_runtime_scan_batch(
         ky_arr,
         Nl=Nl,
         Nm=Nm,
-        method=method,
-        dt=dt,
-        steps=steps,
-        sample_stride=sample_stride,
-        auto_window=auto_window,
-        tmin=tmin,
-        tmax=tmax,
-        window_fraction=window_fraction,
-        min_points=min_points,
-        start_fraction=start_fraction,
-        growth_weight=growth_weight,
-        require_positive=require_positive,
-        min_amp_fraction=min_amp_fraction,
-        mode_method=mode_method,
-        fit_signal=fit_signal,
+        **_runtime_linear_time_fit_options(locals()),
         show_progress=show_progress,
         deps=_runtime_scan_batch_deps(),
     )
