@@ -215,21 +215,24 @@ _centered_glibc_random_pairs = runtime_startup._centered_glibc_random_pairs
 _dealiased_initial_mode_pairs = runtime_startup._dealiased_initial_mode_pairs
 _periodic_zp_from_grid = runtime_startup._periodic_zp_from_grid
 
-def build_runtime_geometry(cfg: RuntimeConfig) -> FluxTubeGeometryLike:
-    """Resolve runtime geometry while preserving the runtime module patch surface."""
+
+def _runtime_geometry_config_for_builder(cfg: RuntimeConfig) -> Any:
+    """Resolve the geometry config that should be passed to the flux-tube builder."""
 
     model = cfg.geometry.model.strip().lower()
     if model == "vmec":
         eik_path = generate_runtime_vmec_eik(cfg)
-        geom_cfg = replace(cfg.geometry, model="vmec-eik", geometry_file=str(eik_path))
-        return build_flux_tube_geometry(geom_cfg)
+        return replace(cfg.geometry, model="vmec-eik", geometry_file=str(eik_path))
     if model == "miller":
         eik_path = generate_runtime_miller_eik(cfg)
-        geom_cfg = replace(
-            cfg.geometry, model="imported-eik", geometry_file=str(eik_path)
-        )
-        return build_flux_tube_geometry(geom_cfg)
-    return build_flux_tube_geometry(cfg.geometry)
+        return replace(cfg.geometry, model="imported-eik", geometry_file=str(eik_path))
+    return cfg.geometry
+
+
+def build_runtime_geometry(cfg: RuntimeConfig) -> FluxTubeGeometryLike:
+    """Resolve runtime geometry while preserving the runtime module patch surface."""
+
+    return build_flux_tube_geometry(_runtime_geometry_config_for_builder(cfg))
 
 
 def build_runtime_linear_params(
