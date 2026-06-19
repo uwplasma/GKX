@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import Any, Sequence
 
 import jax.numpy as jnp
@@ -79,6 +79,461 @@ from spectraxgk.terms.assembly import compute_fields_cached
 from spectraxgk.validation.benchmarks import kbm_linear_paths as _paths
 
 
+@dataclass(frozen=True)
+class _KBMLinearSetup:
+    cfg: KBMBaseCase
+    beta: float
+    geom: Any
+    grid_full: Any
+    params: LinearParams
+    terms: LinearTerms
+    diagnostic_norm: str
+    reference_aligned: bool
+    fit_key: str
+
+
+@dataclass(frozen=True)
+class _KBMLinearState:
+    grid: Any
+    selection: ModeSelection
+    cache: Any
+    state: Any
+
+
+def _resolve_kbm_fit_signal(fit_signal: str) -> str:
+    fit_key = fit_signal.strip().lower()
+    if fit_key not in {"phi", "density", "auto"}:
+        raise ValueError("fit_signal must be 'phi', 'density', or 'auto'")
+    return fit_key
+
+
+def _validate_kbm_species_indices(
+    *, init_species_index: int, density_species_index: int, nspecies: int = 2
+) -> None:
+    if init_species_index < 0 or init_species_index >= nspecies:
+        raise ValueError("init_species_index out of range for kinetic species")
+    if density_species_index < 0 or density_species_index >= nspecies:
+        raise ValueError("density_species_index out of range for kinetic species")
+
+
+def _resolve_kbm_linear_setup(
+    *,
+    cfg: KBMBaseCase | None,
+    beta_value: float | None,
+    params: LinearParams | None,
+    terms: LinearTerms | None,
+    diagnostic_norm: str,
+    fit_signal: str,
+    reference_aligned: bool | None,
+    Nm: int,
+    fapar_override: float | None,
+    apar_beta_scale: float | None,
+    ampere_g0_scale: float | None,
+    bpar_beta_scale: float | None,
+) -> _KBMLinearSetup:
+    cfg_in = cfg or KBMBaseCase()
+    beta_use = float(cfg_in.model.beta) if beta_value is None else float(beta_value)
+    cfg_use = replace(cfg_in, model=replace(cfg_in.model, beta=beta_use))
+    geom = build_flux_tube_geometry(cfg_use.geometry)
+    grid_full = build_spectral_grid(apply_geometry_grid_defaults(geom, cfg_use.grid))
+    terms_use = terms if terms is not None else LinearTerms(bpar=0.0)
+    reference_aligned_use = bool(
+        True if reference_aligned is None else reference_aligned
+    )
+    diagnostic_norm_use = diagnostic_norm
+    if reference_aligned_use and diagnostic_norm_use == "none":
+        diagnostic_norm_use = "rho_star"
+    damp_ends_amp, damp_ends_widthfrac = _linked_boundary_end_damping(
+        reference_aligned_use
+    )
+    params_use = params
+    if params_use is None:
+        params_use = _two_species_params(
+            cfg_use.model,
+            kpar_scale=float(geom.gradpar()),
+            omega_d_scale=KBM_OMEGA_D_SCALE,
+            omega_star_scale=KBM_OMEGA_STAR_SCALE,
+            rho_star=KBM_RHO_STAR,
+            beta_override=beta_use,
+            fapar_override=fapar_override,
+            apar_beta_scale=apar_beta_scale,
+            ampere_g0_scale=ampere_g0_scale,
+            bpar_beta_scale=bpar_beta_scale,
+            damp_ends_amp=damp_ends_amp,
+            damp_ends_widthfrac=damp_ends_widthfrac,
+            nhermite=Nm,
+        )
+    return _KBMLinearSetup(
+        cfg=cfg_use,
+        beta=beta_use,
+        geom=geom,
+        grid_full=grid_full,
+        params=params_use,
+        terms=terms_use,
+        diagnostic_norm=diagnostic_norm_use,
+        reference_aligned=reference_aligned_use,
+        fit_key=_resolve_kbm_fit_signal(fit_signal),
+    )
+
+
+def _prepare_kbm_linear_state(
+    setup: _KBMLinearSetup,
+    *,
+    ky_target: float,
+    Nl: int,
+    Nm: int,
+    init_species_index: int,
+) -> _KBMLinearState:
+    ky_index = select_ky_index(np.asarray(setup.grid_full.ky), ky_target)
+    grid = select_ky_grid(setup.grid_full, ky_index)
+    sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
+    cache = build_linear_cache(grid, setup.geom, setup.params, Nl, Nm)
+    G0 = np.zeros(
+        (2, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64
+    )
+    G0_single = _build_initial_condition(
+        grid,
+        setup.geom,
+        ky_index=sel.ky_index,
+        kx_index=sel.kx_index,
+        Nl=Nl,
+        Nm=Nm,
+        init_cfg=setup.cfg.init,
+    )
+    G0[int(init_species_index)] = np.asarray(G0_single, dtype=np.complex64)
+    return _KBMLinearState(
+        grid=grid,
+        selection=sel,
+        cache=cache,
+        state=jnp.asarray(G0),
+    )
+
+
+def _fit_kbm_signal_with_window(
+    signal: np.ndarray,
+    t_arr: np.ndarray,
+    *,
+    auto_window: bool,
+    tmin: float | None,
+    tmax: float | None,
+    window_fraction: float,
+    min_points: int,
+    start_fraction: float,
+    growth_weight: float,
+    require_positive: bool,
+    min_amp_fraction: float,
+) -> tuple[float, float]:
+    use_auto = auto_window and tmin is None and tmax is None
+    if not use_auto and not scan_window_valid(t_arr, tmin, tmax):
+        use_auto = True
+    auto_fit_kwargs: dict[str, Any] = {
+        "window_fraction": window_fraction,
+        "min_points": min_points,
+        "start_fraction": start_fraction,
+        "growth_weight": growth_weight,
+        "require_positive": require_positive,
+        "min_amp_fraction": min_amp_fraction,
+    }
+    if use_auto:
+        gamma_val, omega_val, _tmin, _tmax = fit_growth_rate_auto(
+            t_arr, signal, **auto_fit_kwargs
+        )
+    else:
+        try:
+            gamma_val, omega_val = fit_growth_rate(t_arr, signal, tmin=tmin, tmax=tmax)
+        except ValueError:
+            gamma_val, omega_val, _tmin, _tmax = fit_growth_rate_auto(
+                t_arr, signal, **auto_fit_kwargs
+            )
+    return gamma_val, omega_val
+
+
+def _resolve_kbm_time_config(
+    time_cfg: TimeConfig | None,
+    *,
+    dt: float,
+    steps: int,
+    stride: int,
+    sample_stride: int | None,
+) -> TimeConfig | None:
+    if time_cfg is None:
+        return None
+    time_cfg_use = replace(time_cfg, dt=dt, t_max=dt * steps)
+    if sample_stride is not None:
+        time_cfg_use = replace(time_cfg_use, sample_stride=stride)
+    return time_cfg_use
+
+
+def _integrate_kbm_configured_history(
+    state: _KBMLinearState,
+    setup: _KBMLinearSetup,
+    *,
+    time_cfg: TimeConfig,
+    dt: float,
+    steps: int,
+    method: str,
+    density_species_index: int,
+    mode_method: str,
+    show_progress: bool,
+    stride: int,
+) -> tuple[np.ndarray, np.ndarray | None, int]:
+    stride = int(time_cfg.sample_stride)
+    if time_cfg.use_diffrax:
+        save_field = "phi+density" if setup.fit_key in {"density", "auto"} else "phi"
+        _, phi_out = integrate_linear_from_config(
+            state.state,
+            state.grid,
+            setup.geom,
+            setup.params,
+            time_cfg,
+            cache=state.cache,
+            terms=setup.terms,
+            save_mode=state.selection if setup.fit_key == "phi" else None,
+            mode_method=mode_method,
+            save_field=save_field,
+            density_species_index=density_species_index
+            if setup.fit_key in {"density", "auto"}
+            else None,
+        )
+        if setup.fit_key in {"density", "auto"}:
+            return np.asarray(phi_out[0]), np.asarray(phi_out[1]), stride
+        return np.asarray(phi_out), None, stride
+
+    if setup.fit_key in {"density", "auto"}:
+        diag_out = integrate_linear_diagnostics(
+            state.state,
+            state.grid,
+            setup.geom,
+            setup.params,
+            dt=dt,
+            steps=steps,
+            method=method,
+            cache=state.cache,
+            terms=setup.terms,
+            sample_stride=stride,
+            species_index=density_species_index,
+        )
+        density_np = None if len(diag_out) <= 2 else np.asarray(diag_out[2])
+        return np.asarray(diag_out[1]), density_np, stride
+
+    _, phi_out_time = integrate_linear(
+        state.state,
+        state.grid,
+        setup.geom,
+        setup.params,
+        dt=dt,
+        steps=steps,
+        method=method,
+        cache=state.cache,
+        terms=setup.terms,
+        sample_stride=stride,
+        show_progress=show_progress,
+    )
+    return np.asarray(phi_out_time), None, stride
+
+
+def _integrate_kbm_fixed_history(
+    state: _KBMLinearState,
+    setup: _KBMLinearSetup,
+    *,
+    dt: float,
+    steps: int,
+    method: str,
+    density_species_index: int,
+    stride: int,
+) -> tuple[np.ndarray, np.ndarray | None, int]:
+    if setup.fit_key in {"density", "auto"}:
+        diag_out = integrate_linear_diagnostics(
+            state.state,
+            state.grid,
+            setup.geom,
+            setup.params,
+            dt=dt,
+            steps=steps,
+            method=method,
+            cache=state.cache,
+            terms=setup.terms,
+            sample_stride=stride,
+            species_index=density_species_index,
+        )
+        density_np = None if len(diag_out) <= 2 else np.asarray(diag_out[2])
+        return np.asarray(diag_out[1]), density_np, stride
+
+    _, phi_out_time = integrate_linear(
+        state.state,
+        state.grid,
+        setup.geom,
+        setup.params,
+        dt=dt,
+        steps=steps,
+        method=method,
+        cache=state.cache,
+        terms=setup.terms,
+        sample_stride=stride,
+    )
+    return np.asarray(phi_out_time), None, stride
+
+
+def _integrate_kbm_saved_history(
+    state: _KBMLinearState,
+    setup: _KBMLinearSetup,
+    *,
+    time_cfg: TimeConfig | None,
+    dt: float,
+    steps: int,
+    method: str,
+    sample_stride: int | None,
+    density_species_index: int,
+    mode_method: str,
+    show_progress: bool,
+) -> tuple[np.ndarray, np.ndarray | None, int]:
+    stride = 1 if sample_stride is None else int(sample_stride)
+    time_cfg_use = _resolve_kbm_time_config(
+        time_cfg,
+        dt=dt,
+        steps=steps,
+        stride=stride,
+        sample_stride=sample_stride,
+    )
+    if time_cfg_use is not None:
+        return _integrate_kbm_configured_history(
+            state,
+            setup,
+            time_cfg=time_cfg_use,
+            dt=dt,
+            steps=steps,
+            method=method,
+            density_species_index=density_species_index,
+            mode_method=mode_method,
+            show_progress=show_progress,
+            stride=stride,
+        )
+    return _integrate_kbm_fixed_history(
+        state,
+        setup,
+        dt=dt,
+        steps=steps,
+        method=method,
+        density_species_index=density_species_index,
+        stride=stride,
+    )
+
+
+def _fit_kbm_auto_history(
+    state: _KBMLinearState,
+    setup: _KBMLinearSetup,
+    *,
+    phi_t: np.ndarray,
+    density_t: np.ndarray | None,
+    dt: float,
+    stride: int,
+    mode_method: str,
+    tmin: float | None,
+    tmax: float | None,
+    window_fraction: float,
+    min_points: int,
+    start_fraction: float,
+    growth_weight: float,
+    require_positive: bool,
+    min_amp_fraction: float,
+) -> tuple[float, float]:
+    _signal, _name, gamma, omega = _select_fit_signal_auto(
+        np.arange(phi_t.shape[0]) * dt * stride,
+        phi_t,
+        density_t,
+        state.selection,
+        mode_method=mode_method,
+        tmin=tmin,
+        tmax=tmax,
+        window_fraction=window_fraction,
+        min_points=min_points,
+        start_fraction=start_fraction,
+        growth_weight=growth_weight,
+        require_positive=require_positive,
+        min_amp_fraction=min_amp_fraction,
+        max_amp_fraction=0.9,
+        window_method="loglinear",
+        max_fraction=0.8,
+        end_fraction=0.9,
+        num_windows=8,
+        phase_weight=0.2,
+        length_weight=0.05,
+        min_r2=0.0,
+        late_penalty=0.1,
+        min_slope=None,
+        min_slope_frac=0.0,
+        slope_var_weight=0.0,
+    )
+    return gamma, omega
+
+
+def _fit_kbm_saved_history(
+    state: _KBMLinearState,
+    setup: _KBMLinearSetup,
+    *,
+    phi_t: np.ndarray,
+    density_t: np.ndarray | None,
+    dt: float,
+    stride: int,
+    mode_method: str,
+    auto_window: bool,
+    tmin: float | None,
+    tmax: float | None,
+    window_fraction: float,
+    min_points: int,
+    start_fraction: float,
+    growth_weight: float,
+    require_positive: bool,
+    min_amp_fraction: float,
+) -> tuple[float, float]:
+    density_np = (
+        phi_t if setup.fit_key == "density" and density_t is None else density_t
+    )
+    if setup.fit_key == "auto":
+        gamma, omega = _fit_kbm_auto_history(
+            state,
+            setup,
+            phi_t=phi_t,
+            density_t=density_np,
+            dt=dt,
+            stride=stride,
+            mode_method=mode_method,
+            tmin=tmin,
+            tmax=tmax,
+            window_fraction=window_fraction,
+            min_points=min_points,
+            start_fraction=start_fraction,
+            growth_weight=growth_weight,
+            require_positive=require_positive,
+            min_amp_fraction=min_amp_fraction,
+        )
+    else:
+        signal = _select_fit_signal(
+            phi_t,
+            density_np,
+            state.selection,
+            fit_signal=setup.fit_key,
+            mode_method=mode_method,
+        )
+        t_out = np.arange(signal.shape[0]) * dt * stride
+        gamma, omega = _fit_kbm_signal_with_window(
+            signal,
+            t_out,
+            auto_window=auto_window,
+            tmin=tmin,
+            tmax=tmax,
+            window_fraction=window_fraction,
+            min_points=min_points,
+            start_fraction=start_fraction,
+            growth_weight=growth_weight,
+            require_positive=require_positive,
+            min_amp_fraction=min_amp_fraction,
+        )
+    return _normalize_growth_rate(
+        gamma, omega, setup.params, setup.diagnostic_norm
+    )
+
+
 def run_kbm_linear(
     ky_target: float = 0.3,
     *,
@@ -121,118 +576,55 @@ def run_kbm_linear(
 ) -> LinearRunResult:
     """Run a single linear KBM point and return the stored field history."""
 
-    cfg_in = cfg or KBMBaseCase()
-    beta_use = float(cfg_in.model.beta) if beta_value is None else float(beta_value)
-    cfg_use = replace(cfg_in, model=replace(cfg_in.model, beta=beta_use))
-    geom = build_flux_tube_geometry(cfg_use.geometry)
-    grid_full = build_spectral_grid(apply_geometry_grid_defaults(geom, cfg_use.grid))
-    if terms is None:
-        terms = LinearTerms(bpar=0.0)
-    reference_aligned_use = bool(
-        True if reference_aligned is None else reference_aligned
+    setup = _resolve_kbm_linear_setup(
+        cfg=cfg,
+        beta_value=beta_value,
+        params=params,
+        terms=terms,
+        diagnostic_norm=diagnostic_norm,
+        fit_signal=fit_signal,
+        reference_aligned=reference_aligned,
+        Nm=Nm,
+        fapar_override=fapar_override,
+        apar_beta_scale=apar_beta_scale,
+        ampere_g0_scale=ampere_g0_scale,
+        bpar_beta_scale=bpar_beta_scale,
     )
-    if reference_aligned_use and diagnostic_norm == "none":
-        diagnostic_norm = "rho_star"
-    damp_ends_amp, damp_ends_widthfrac = _linked_boundary_end_damping(
-        reference_aligned_use
+    _validate_kbm_species_indices(
+        init_species_index=init_species_index,
+        density_species_index=density_species_index,
     )
-
-    fit_key = fit_signal.strip().lower()
-    if fit_key not in {"phi", "density", "auto"}:
-        raise ValueError("fit_signal must be 'phi', 'density', or 'auto'")
-
-    if init_species_index < 0 or init_species_index >= 2:
-        raise ValueError("init_species_index out of range for kinetic species")
-    if density_species_index < 0 or density_species_index >= 2:
-        raise ValueError("density_species_index out of range for kinetic species")
-
-    if params is None:
-        params = _two_species_params(
-            cfg_use.model,
-            kpar_scale=float(geom.gradpar()),
-            omega_d_scale=KBM_OMEGA_D_SCALE,
-            omega_star_scale=KBM_OMEGA_STAR_SCALE,
-            rho_star=KBM_RHO_STAR,
-            beta_override=beta_use,
-            fapar_override=fapar_override,
-            apar_beta_scale=apar_beta_scale,
-            ampere_g0_scale=ampere_g0_scale,
-            bpar_beta_scale=bpar_beta_scale,
-            damp_ends_amp=damp_ends_amp,
-            damp_ends_widthfrac=damp_ends_widthfrac,
-            nhermite=Nm,
-        )
-
-    ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
-    grid = select_ky_grid(grid_full, ky_index)
-    sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
-    cache = build_linear_cache(grid, geom, params, Nl, Nm)
-
-    G0 = np.zeros(
-        (2, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64
-    )
-    G0_single = _build_initial_condition(
-        grid,
-        geom,
-        ky_index=sel.ky_index,
-        kx_index=sel.kx_index,
+    state = _prepare_kbm_linear_state(
+        setup,
+        ky_target=ky_target,
         Nl=Nl,
         Nm=Nm,
-        init_cfg=cfg_use.init,
+        init_species_index=init_species_index,
     )
-    G0[int(init_species_index)] = np.asarray(G0_single, dtype=np.complex64)
-    G0_jax = jnp.asarray(G0)
 
     solver_key = select_kbm_solver_auto(
         solver,
         ky_target=float(ky_target),
-        reference_aligned=reference_aligned_use,
+        reference_aligned=setup.reference_aligned,
     )
     _paths.sync_path_hooks(globals())
 
-    def _fit_with_window(signal: np.ndarray, t_arr: np.ndarray) -> tuple[float, float]:
-        use_auto = auto_window and tmin is None and tmax is None
-        if not use_auto and not scan_window_valid(t_arr, tmin, tmax):
-            use_auto = True
-        auto_fit_kwargs: dict[str, Any] = {
-            "window_fraction": window_fraction,
-            "min_points": min_points,
-            "start_fraction": start_fraction,
-            "growth_weight": growth_weight,
-            "require_positive": require_positive,
-            "min_amp_fraction": min_amp_fraction,
-        }
-        if use_auto:
-            gamma_val, omega_val, _tmin, _tmax = fit_growth_rate_auto(
-                t_arr, signal, **auto_fit_kwargs
-            )
-        else:
-            try:
-                gamma_val, omega_val = fit_growth_rate(
-                    t_arr, signal, tmin=tmin, tmax=tmax
-                )
-            except ValueError:
-                gamma_val, omega_val, _tmin, _tmax = fit_growth_rate_auto(
-                    t_arr, signal, **auto_fit_kwargs
-                )
-        return gamma_val, omega_val
-
     if solver_key == "explicit_time":
         return _paths.run_kbm_explicit_time_path(
-            G0_jax=G0_jax,
-            grid=grid,
-            cache=cache,
-            params=params,
-            geom=geom,
-            terms=terms,
-            sel=sel,
+            G0_jax=state.state,
+            grid=state.grid,
+            cache=state.cache,
+            params=setup.params,
+            geom=setup.geom,
+            terms=setup.terms,
+            sel=state.selection,
             ky_target=ky_target,
             dt=dt,
             steps=steps,
             time_cfg=time_cfg,
             sample_stride=sample_stride,
             mode_method=mode_method,
-            diagnostic_norm=diagnostic_norm,
+            diagnostic_norm=setup.diagnostic_norm,
             auto_window=auto_window,
             tmin=tmin,
             tmax=tmax,
@@ -246,164 +638,55 @@ def run_kbm_linear(
 
     if solver_key == "krylov":
         return _paths.run_kbm_krylov_path(
-            G0_jax=G0_jax,
-            cache=cache,
-            params=params,
-            terms=terms,
-            sel=sel,
+            G0_jax=state.state,
+            cache=state.cache,
+            params=setup.params,
+            terms=setup.terms,
+            sel=state.selection,
             ky_target=ky_target,
-            beta_use=beta_use,
-            cfg_use=cfg_use,
+            beta_use=setup.beta,
+            cfg_use=setup.cfg,
             krylov_cfg=krylov_cfg,
             kbm_target_factors=kbm_target_factors,
             kbm_beta_transition=kbm_beta_transition,
-            diagnostic_norm=diagnostic_norm,
+            diagnostic_norm=setup.diagnostic_norm,
         )
 
-    stride = 1 if sample_stride is None else int(sample_stride)
-    time_cfg_use = time_cfg
-    if time_cfg_use is not None:
-        time_cfg_use = replace(time_cfg_use, dt=dt, t_max=dt * steps)
-        if sample_stride is not None:
-            time_cfg_use = replace(time_cfg_use, sample_stride=stride)
-    params_use = params
-    if time_cfg_use is not None:
-        stride = int(time_cfg_use.sample_stride)
-        if time_cfg_use.use_diffrax:
-            save_field = "phi+density" if fit_key in {"density", "auto"} else "phi"
-            _, phi_out = integrate_linear_from_config(
-                G0_jax,
-                grid,
-                geom,
-                params_use,
-                time_cfg_use,
-                cache=cache,
-                terms=terms,
-                save_mode=sel if fit_key == "phi" else None,
-                mode_method=mode_method,
-                save_field=save_field,
-                density_species_index=density_species_index
-                if fit_key in {"density", "auto"}
-                else None,
-            )
-            if fit_key in {"density", "auto"}:
-                phi_t_np, density_np = (np.asarray(phi_out[0]), np.asarray(phi_out[1]))
-            else:
-                phi_t_np = np.asarray(phi_out)
-                density_np = None
-        else:
-            if fit_key in {"density", "auto"}:
-                diag_out = integrate_linear_diagnostics(
-                    G0_jax,
-                    grid,
-                    geom,
-                    params_use,
-                    dt=dt,
-                    steps=steps,
-                    method=method,
-                    cache=cache,
-                    terms=terms,
-                    sample_stride=stride,
-                    species_index=density_species_index,
-                )
-                phi_t_np = np.asarray(diag_out[1])
-                density_np = None if len(diag_out) <= 2 else np.asarray(diag_out[2])
-            else:
-                _, phi_out_time = integrate_linear(
-                    G0_jax,
-                    grid,
-                    geom,
-                    params_use,
-                    dt=dt,
-                    steps=steps,
-                    method=method,
-                    cache=cache,
-                    terms=terms,
-                    sample_stride=stride,
-                    show_progress=show_progress,
-                )
-                phi_t_np = np.asarray(phi_out_time)
-                density_np = None
-    else:
-        if fit_key in {"density", "auto"}:
-            diag_out = integrate_linear_diagnostics(
-                G0_jax,
-                grid,
-                geom,
-                params_use,
-                dt=dt,
-                steps=steps,
-                method=method,
-                cache=cache,
-                terms=terms,
-                sample_stride=stride,
-                species_index=density_species_index,
-            )
-            phi_t_np = np.asarray(diag_out[1])
-            density_np = None if len(diag_out) <= 2 else np.asarray(diag_out[2])
-        else:
-            _, phi_out_time = integrate_linear(
-                G0_jax,
-                grid,
-                geom,
-                params_use,
-                dt=dt,
-                steps=steps,
-                method=method,
-                cache=cache,
-                terms=terms,
-                sample_stride=stride,
-            )
-            phi_t_np = np.asarray(phi_out_time)
-            density_np = None
-
-    if fit_key == "density" and density_np is None:
-        density_np = phi_t_np
-    if fit_key == "auto":
-        signal, _name, gamma, omega = _select_fit_signal_auto(
-            np.arange(phi_t_np.shape[0]) * dt * stride,
-            phi_t_np,
-            density_np,
-            sel,
-            mode_method=mode_method,
-            tmin=tmin,
-            tmax=tmax,
-            window_fraction=window_fraction,
-            min_points=min_points,
-            start_fraction=start_fraction,
-            growth_weight=growth_weight,
-            require_positive=require_positive,
-            min_amp_fraction=min_amp_fraction,
-            max_amp_fraction=0.9,
-            window_method="loglinear",
-            max_fraction=0.8,
-            end_fraction=0.9,
-            num_windows=8,
-            phase_weight=0.2,
-            length_weight=0.05,
-            min_r2=0.0,
-            late_penalty=0.1,
-            min_slope=None,
-            min_slope_frac=0.0,
-            slope_var_weight=0.0,
-        )
-        _ = signal
-    else:
-        signal = _select_fit_signal(
-            phi_t_np,
-            density_np,
-            sel,
-            fit_signal=fit_key,
-            mode_method=mode_method,
-        )
-        t_out = np.arange(signal.shape[0]) * dt * stride
-        gamma, omega = _fit_with_window(signal, t_out)
-    gamma, omega = _normalize_growth_rate(gamma, omega, params_use, diagnostic_norm)
+    phi_t_np, density_np, stride = _integrate_kbm_saved_history(
+        state,
+        setup,
+        time_cfg=time_cfg,
+        dt=dt,
+        steps=steps,
+        method=method,
+        sample_stride=sample_stride,
+        density_species_index=density_species_index,
+        mode_method=mode_method,
+        show_progress=show_progress,
+    )
+    gamma, omega = _fit_kbm_saved_history(
+        state,
+        setup,
+        phi_t=phi_t_np,
+        density_t=density_np,
+        dt=dt,
+        stride=stride,
+        mode_method=mode_method,
+        auto_window=auto_window,
+        tmin=tmin,
+        tmax=tmax,
+        window_fraction=window_fraction,
+        min_points=min_points,
+        start_fraction=start_fraction,
+        growth_weight=growth_weight,
+        require_positive=require_positive,
+        min_amp_fraction=min_amp_fraction,
+    )
     return LinearRunResult(
         t=np.arange(phi_t_np.shape[0]) * dt * stride,
         phi_t=phi_t_np,
         gamma=gamma,
         omega=omega,
         ky=float(ky_target),
-        selection=sel,
+        selection=state.selection,
     )
