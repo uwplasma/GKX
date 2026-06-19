@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 import jax.numpy as jnp
 
@@ -103,6 +103,26 @@ def _is_runtime_toml(data: dict) -> bool:
     if any(key in data for key in _RUNTIME_TOP_LEVEL_KEYS):
         return True
     return True
+
+
+def _toml_shorthand_command(data: dict[str, Any]) -> str:
+    """Return the executable command used for direct TOML path shorthand."""
+
+    return "run" if _is_runtime_toml(data) else "run-linear"
+
+
+def _direct_config_shorthand_args(argv: Sequence[str]) -> list[str] | None:
+    """Return parser arguments for ``spectraxgk case.toml`` shorthand."""
+
+    if not argv:
+        return None
+    config_arg = argv[0]
+    if config_arg.startswith("-") or config_arg in _KNOWN_COMMANDS:
+        return None
+    if not Path(config_arg).exists():
+        return None
+    command = _toml_shorthand_command(load_toml(config_arg))
+    return [command, "--config", config_arg, *argv[1:]]
 
 
 def _status_printer(prefix: str):
@@ -412,22 +432,17 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
-    if len(sys.argv) == 1:
+    argv = sys.argv[1:]
+    if not argv:
         return _cmd_default_demo()
-    if len(sys.argv) > 1 and sys.argv[1] == "--plot":
-        return plot_saved_output_command(sys.argv[1:], plot_saved_output=plot_saved_output)
+    if argv[0] == "--plot":
+        return plot_saved_output_command(argv, plot_saved_output=plot_saved_output)
 
-    if (
-        len(sys.argv) > 1
-        and not sys.argv[1].startswith("-")
-        and sys.argv[1] not in _KNOWN_COMMANDS
-    ):
-        if Path(sys.argv[1]).exists():
-            data = load_toml(sys.argv[1])
-            command = "run" if _is_runtime_toml(data) else "run-linear"
-            parser = build_parser()
-            args = parser.parse_args([command, "--config", sys.argv[1], *sys.argv[2:]])
-            return args.func(args)
+    shorthand_args = _direct_config_shorthand_args(argv)
+    if shorthand_args is not None:
+        parser = build_parser()
+        args = parser.parse_args(shorthand_args)
+        return args.func(args)
 
     parser = build_parser()
     args = parser.parse_args()
