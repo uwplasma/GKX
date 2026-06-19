@@ -634,37 +634,36 @@ def _vmec_fieldlines(
 
     nc_obj.close()
 
-    # Pack results
-    r = _Struct()
-    r.iota_input = iota_input_val
-    r.d_iota_d_s = d_iota_d_s
-    r.d_pressure_d_s = d_pressure_d_s
-    r.s_hat_input = s_hat_input_val
-    r.alpha = alpha
-    r.theta_b = theta_b
-    r.phi_b = phi_b
-    r.theta_PEST = theta_PEST
-    r.theta_geo = theta_geo
-    r.edge_toroidal_flux_over_2pi = edge_toroidal_flux_over_2pi
-    r.R_b = R_b
-    r.Z_b = Z_b
-    r.betaprim = betaprim
-    r.bmag = bmag
-    r.gradpar_theta_b = gradpar_theta_b
-    r.gradpar_phi = L_reference / modB_b / sqrt_g_booz
-    r.gds2 = gds2
-    r.gds21 = gds21
-    r.gds22 = gds22
-    r.gbdrift = gbdrift
-    r.gbdrift0 = gbdrift0
-    r.cvdrift = cvdrift
-    r.cvdrift0 = cvdrift0
-    r.grho = grho
-    r.grad_y = grad_y
-    r.grad_x = grad_x
-    r.zeta_center = zeta_center
-    r.nfp = nfp
-    r.L_reference = L_reference
-    r.B_reference = B_reference
-    r.dpsidrho = 2.0 * np.sqrt(s_val) * edge_toroidal_flux_over_2pi
-    return r
+    return _Struct(
+        iota_input=iota_input_val,
+        d_iota_d_s=d_iota_d_s,
+        d_pressure_d_s=d_pressure_d_s,
+        s_hat_input=s_hat_input_val,
+        alpha=alpha,
+        theta_b=theta_b,
+        phi_b=phi_b,
+        theta_PEST=theta_PEST,
+        theta_geo=theta_geo,
+        edge_toroidal_flux_over_2pi=edge_toroidal_flux_over_2pi,
+        R_b=R_b,
+        Z_b=Z_b,
+        betaprim=betaprim,
+        bmag=bmag,
+        gradpar_theta_b=gradpar_theta_b,
+        gradpar_phi=L_reference / modB_b / sqrt_g_booz,
+        gds2=gds2,
+        gds21=gds21,
+        gds22=gds22,
+        gbdrift=gbdrift,
+        gbdrift0=gbdrift0,
+        cvdrift=cvdrift,
+        cvdrift0=cvdrift0,
+        grho=grho,
+        grad_y=grad_y,
+        grad_x=grad_x,
+        zeta_center=zeta_center,
+        nfp=nfp,
+        L_reference=L_reference,
+        B_reference=B_reference,
+        dpsidrho=2.0 * np.sqrt(s_val) * edge_toroidal_flux_over_2pi,
+    )
