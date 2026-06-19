@@ -213,81 +213,191 @@ def fit_kbm_beta_time_sample(
 ) -> tuple[float, float]:
     """Run and fit one saved-time or streaming KBM beta sample."""
 
-    time_cfg_i = None
-    if time_cfg is not None:
-        time_cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
-        if sample_stride is not None:
-            time_cfg_i = replace(time_cfg_i, sample_stride=sample_stride)
-
+    time_cfg_i = _sample_time_config(time_cfg, dt_i, steps_i, sample_stride)
     if time_cfg_i is not None and time_cfg_i.use_diffrax and streaming_fit:
-        tmin_i, tmax_i = hooks.resolve_streaming_window(
-            float(time_cfg_i.t_max),
-            _indexed_float_value(tmin, sample_index),
-            _indexed_float_value(tmax, sample_index),
-            start_fraction,
-            window_fraction,
-            1.0,
-        )
-        _, gamma_vals, omega_vals = hooks.integrate_linear_diffrax_streaming(
-            G0_jax,
-            grid,
-            geom,
-            params,
-            dt=dt_i,
-            steps=steps_i,
-            method=time_cfg_i.diffrax_solver,
+        return _fit_streaming_time_sample(
+            G0_jax=G0_jax,
+            grid=grid,
+            geom=geom,
             cache=cache,
+            params=params,
             terms=terms,
-            adaptive=time_cfg_i.diffrax_adaptive,
-            rtol=time_cfg_i.diffrax_rtol,
-            atol=time_cfg_i.diffrax_atol,
-            max_steps=time_cfg_i.diffrax_max_steps,
-            progress_bar=time_cfg_i.progress_bar,
-            checkpoint=time_cfg_i.checkpoint,
-            tmin=tmin_i,
-            tmax=tmax_i,
-            fit_signal=fit_key,
-            mode_ky_indices=[0],
-            mode_kx_index=0,
-            mode_z_index=hooks.midplane_index(grid),
+            dt_i=dt_i,
+            steps_i=steps_i,
+            time_cfg_i=time_cfg_i,
+            fit_key=fit_key,
+            streaming_amp_floor=streaming_amp_floor,
             mode_method=mode_method,
-            amp_floor=streaming_amp_floor,
-            density_species_index=density_species_index
-            if fit_key == "density"
-            else None,
-            return_state=False,
+            tmin=tmin,
+            tmax=tmax,
+            sample_index=sample_index,
+            window_fraction=window_fraction,
+            start_fraction=start_fraction,
+            diagnostic_norm=diagnostic_norm,
+            density_species_index=density_species_index,
+            hooks=hooks,
         )
-        gamma = float(np.asarray(gamma_vals)[0])
-        omega = float(np.asarray(omega_vals)[0])
-        return hooks.normalize_growth_rate(gamma, omega, params, diagnostic_norm)
 
+    phi_t, density_t, stride = _integrate_time_sample_series(
+        G0_jax=G0_jax,
+        grid=grid,
+        geom=geom,
+        cache=cache,
+        params=params,
+        terms=terms,
+        dt_i=dt_i,
+        steps_i=steps_i,
+        method=method,
+        time_cfg_i=time_cfg_i,
+        sample_stride=sample_stride,
+        fit_key=fit_key,
+        mode_only=mode_only,
+        mode_method=mode_method,
+        sel=sel,
+        density_species_index=density_species_index,
+        hooks=hooks,
+    )
+    return _fit_saved_time_sample(
+        phi_t=phi_t,
+        density_t=density_t,
+        dt_i=dt_i,
+        stride=stride,
+        fit_key=fit_key,
+        mode_only=mode_only,
+        mode_method=mode_method,
+        sel=sel,
+        tmin=tmin,
+        tmax=tmax,
+        sample_index=sample_index,
+        window_fraction=window_fraction,
+        min_points=min_points,
+        start_fraction=start_fraction,
+        growth_weight=growth_weight,
+        require_positive=require_positive,
+        min_amp_fraction=min_amp_fraction,
+        diagnostic_norm=diagnostic_norm,
+        density_species_index=density_species_index,
+        params=params,
+        fit_policy=fit_policy,
+        hooks=hooks,
+    )
+
+
+def _sample_time_config(
+    time_cfg: Any,
+    dt_i: float,
+    steps_i: int,
+    sample_stride: int | None,
+) -> Any | None:
+    if time_cfg is None:
+        return None
+    cfg_i = replace(time_cfg, dt=dt_i, t_max=dt_i * steps_i)
+    if sample_stride is not None:
+        cfg_i = replace(cfg_i, sample_stride=sample_stride)
+    return cfg_i
+
+
+def _fit_streaming_time_sample(
+    *,
+    G0_jax: Any,
+    grid: Any,
+    geom: Any,
+    cache: Any,
+    params: Any,
+    terms: Any,
+    dt_i: float,
+    steps_i: int,
+    time_cfg_i: Any,
+    fit_key: str,
+    streaming_amp_floor: float,
+    mode_method: str,
+    tmin: Any,
+    tmax: Any,
+    sample_index: int,
+    window_fraction: float,
+    start_fraction: float,
+    diagnostic_norm: str,
+    density_species_index: int,
+    hooks: KBMBetaTimeHooks,
+) -> tuple[float, float]:
+    tmin_i, tmax_i = hooks.resolve_streaming_window(
+        float(time_cfg_i.t_max),
+        _indexed_float_value(tmin, sample_index),
+        _indexed_float_value(tmax, sample_index),
+        start_fraction,
+        window_fraction,
+        1.0,
+    )
+    _, gamma_vals, omega_vals = hooks.integrate_linear_diffrax_streaming(
+        G0_jax,
+        grid,
+        geom,
+        params,
+        dt=dt_i,
+        steps=steps_i,
+        method=time_cfg_i.diffrax_solver,
+        cache=cache,
+        terms=terms,
+        adaptive=time_cfg_i.diffrax_adaptive,
+        rtol=time_cfg_i.diffrax_rtol,
+        atol=time_cfg_i.diffrax_atol,
+        max_steps=time_cfg_i.diffrax_max_steps,
+        progress_bar=time_cfg_i.progress_bar,
+        checkpoint=time_cfg_i.checkpoint,
+        tmin=tmin_i,
+        tmax=tmax_i,
+        fit_signal=fit_key,
+        mode_ky_indices=[0],
+        mode_kx_index=0,
+        mode_z_index=hooks.midplane_index(grid),
+        mode_method=mode_method,
+        amp_floor=streaming_amp_floor,
+        density_species_index=density_species_index if fit_key == "density" else None,
+        return_state=False,
+    )
+    gamma = float(np.asarray(gamma_vals)[0])
+    omega = float(np.asarray(omega_vals)[0])
+    return hooks.normalize_growth_rate(gamma, omega, params, diagnostic_norm)
+
+
+def _integrate_time_sample_series(
+    *,
+    G0_jax: Any,
+    grid: Any,
+    geom: Any,
+    cache: Any,
+    params: Any,
+    terms: Any,
+    dt_i: float,
+    steps_i: int,
+    method: str,
+    time_cfg_i: Any | None,
+    sample_stride: int | None,
+    fit_key: str,
+    mode_only: bool,
+    mode_method: str,
+    sel: Any,
+    density_species_index: int,
+    hooks: KBMBetaTimeHooks,
+) -> tuple[Any, Any | None, int]:
     if time_cfg_i is not None:
-        stride = time_cfg_i.sample_stride
+        stride = int(time_cfg_i.sample_stride)
         if time_cfg_i.use_diffrax:
-            save_mode_method = (
-                mode_method if mode_method in {"z_index", "max"} else "z_index"
-            )
-            _, phi_t = hooks.integrate_linear_from_config(
-                G0_jax,
-                grid,
-                geom,
-                params,
-                time_cfg_i,
+            phi_t, density_t = _integrate_config_time_series(
+                G0_jax=G0_jax,
+                grid=grid,
+                geom=geom,
                 cache=cache,
+                params=params,
                 terms=terms,
-                save_mode=sel if mode_only else None,
-                mode_method=save_mode_method,
-                save_field="phi+density"
-                if fit_key == "auto"
-                else ("density" if fit_key == "density" else "phi"),
-                density_species_index=density_species_index
-                if fit_key in {"density", "auto"}
-                else None,
+                time_cfg_i=time_cfg_i,
+                fit_key=fit_key,
+                mode_only=mode_only,
+                mode_method=mode_method,
+                sel=sel,
+                density_species_index=density_species_index,
+                hooks=hooks,
             )
-            if fit_key == "auto":
-                phi_t, density_t = phi_t
-            else:
-                density_t = None
         else:
             phi_t, density_t = _integrate_saved_time_series(
                 G0_jax=G0_jax,
@@ -304,24 +414,92 @@ def fit_kbm_beta_time_sample(
                 density_species_index=density_species_index,
                 hooks=hooks,
             )
-    else:
-        stride = 1 if sample_stride is None else int(sample_stride)
-        phi_t, density_t = _integrate_saved_time_series(
-            G0_jax=G0_jax,
-            grid=grid,
-            geom=geom,
-            params=params,
-            cache=cache,
-            terms=terms,
-            dt_i=dt_i,
-            steps_i=steps_i,
-            method=method,
-            stride=stride,
-            fit_key=fit_key,
-            density_species_index=density_species_index,
-            hooks=hooks,
-        )
+        return phi_t, density_t, stride
 
+    stride = 1 if sample_stride is None else int(sample_stride)
+    phi_t, density_t = _integrate_saved_time_series(
+        G0_jax=G0_jax,
+        grid=grid,
+        geom=geom,
+        params=params,
+        cache=cache,
+        terms=terms,
+        dt_i=dt_i,
+        steps_i=steps_i,
+        method=method,
+        stride=stride,
+        fit_key=fit_key,
+        density_species_index=density_species_index,
+        hooks=hooks,
+    )
+    return phi_t, density_t, stride
+
+
+def _integrate_config_time_series(
+    *,
+    G0_jax: Any,
+    grid: Any,
+    geom: Any,
+    cache: Any,
+    params: Any,
+    terms: Any,
+    time_cfg_i: Any,
+    fit_key: str,
+    mode_only: bool,
+    mode_method: str,
+    sel: Any,
+    density_species_index: int,
+    hooks: KBMBetaTimeHooks,
+) -> tuple[Any, Any | None]:
+    save_mode_method = mode_method if mode_method in {"z_index", "max"} else "z_index"
+    _, phi_t = hooks.integrate_linear_from_config(
+        G0_jax,
+        grid,
+        geom,
+        params,
+        time_cfg_i,
+        cache=cache,
+        terms=terms,
+        save_mode=sel if mode_only else None,
+        mode_method=save_mode_method,
+        save_field="phi+density"
+        if fit_key == "auto"
+        else ("density" if fit_key == "density" else "phi"),
+        density_species_index=density_species_index
+        if fit_key in {"density", "auto"}
+        else None,
+    )
+    if fit_key == "auto":
+        phi_values, density_values = phi_t
+        return phi_values, density_values
+    return phi_t, None
+
+
+def _fit_saved_time_sample(
+    *,
+    phi_t: Any,
+    density_t: Any | None,
+    dt_i: float,
+    stride: int,
+    fit_key: str,
+    mode_only: bool,
+    mode_method: str,
+    sel: Any,
+    tmin: Any,
+    tmax: Any,
+    sample_index: int,
+    window_fraction: float,
+    min_points: int,
+    start_fraction: float,
+    growth_weight: float,
+    require_positive: bool,
+    min_amp_fraction: float,
+    diagnostic_norm: str,
+    density_species_index: int,
+    params: Any,
+    fit_policy: Any,
+    hooks: KBMBetaTimeHooks,
+) -> tuple[float, float]:
     phi_t_np = np.asarray(phi_t)
     density_np = None if density_t is None else np.asarray(density_t)
     if fit_key == "density" and density_np is None:
@@ -356,27 +534,16 @@ def fit_kbm_beta_time_sample(
         )
         return hooks.normalize_growth_rate(gamma, omega, params, diagnostic_norm)
 
-    if (
-        mode_only
-        and fit_key == "density"
-        and density_np is not None
-        and density_np.ndim <= 3
-    ):
-        signal = hooks.extract_mode_only_signal(
-            density_np,
-            local_idx=0,
-            species_index=density_species_index,
-        )
-    elif mode_only and phi_t_np.ndim <= 2:
-        signal = hooks.extract_mode_only_signal(phi_t_np, local_idx=0)
-    else:
-        signal = hooks.select_fit_signal(
-            phi_t_np,
-            density_np,
-            sel,
-            fit_signal=fit_key,
-            mode_method=mode_method,
-        )
+    signal = _select_time_fit_signal(
+        phi_t_np=phi_t_np,
+        density_np=density_np,
+        fit_key=fit_key,
+        mode_only=mode_only,
+        mode_method=mode_method,
+        sel=sel,
+        density_species_index=density_species_index,
+        hooks=hooks,
+    )
     return fit_policy.fit_signal(
         signal,
         idx=sample_index,
@@ -384,6 +551,39 @@ def fit_kbm_beta_time_sample(
         stride=stride,
         params=params,
         diagnostic_norm=diagnostic_norm,
+    )
+
+
+def _select_time_fit_signal(
+    *,
+    phi_t_np: Any,
+    density_np: Any | None,
+    fit_key: str,
+    mode_only: bool,
+    mode_method: str,
+    sel: Any,
+    density_species_index: int,
+    hooks: KBMBetaTimeHooks,
+) -> Any:
+    if (
+        mode_only
+        and fit_key == "density"
+        and density_np is not None
+        and density_np.ndim <= 3
+    ):
+        return hooks.extract_mode_only_signal(
+            density_np,
+            local_idx=0,
+            species_index=density_species_index,
+        )
+    if mode_only and phi_t_np.ndim <= 2:
+        return hooks.extract_mode_only_signal(phi_t_np, local_idx=0)
+    return hooks.select_fit_signal(
+        phi_t_np,
+        density_np,
+        sel,
+        fit_signal=fit_key,
+        mode_method=mode_method,
     )
 
 
