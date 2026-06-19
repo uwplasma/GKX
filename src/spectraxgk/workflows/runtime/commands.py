@@ -192,6 +192,35 @@ def _arg_or_section(args: Any, section: dict[str, Any], name: str, default: Any)
     return section.get(name, default)
 
 
+def _resolve_linear_fit_options(
+    args: Any, section: dict[str, Any]
+) -> tuple[str, str]:
+    """Resolve the linear eigensignal solver and fit signal."""
+
+    return (
+        str(_arg_or_section(args, section, "solver", "auto")),
+        str(_arg_or_section(args, section, "fit_signal", "auto")),
+    )
+
+
+def _resolve_grid_time_options(
+    args: Any, section: dict[str, Any], cfg: RuntimeConfig
+) -> tuple[int, int, str | None, float | None, int | None, int]:
+    """Resolve resolution, optional time controls, and output cadence."""
+
+    method = _arg_or_section(args, section, "method", None)
+    dt = _arg_or_section(args, section, "dt", None)
+    steps = _arg_or_section(args, section, "steps", None)
+    return (
+        int(_arg_or_section(args, section, "Nl", 24)),
+        int(_arg_or_section(args, section, "Nm", 12)),
+        None if method is None else str(method),
+        None if dt is None else float(dt),
+        None if steps is None else int(steps),
+        int(_arg_or_section(args, section, "sample_stride", cfg.time.sample_stride)),
+    )
+
+
 def _runtime_fit_config(data: dict[str, Any]) -> dict[str, Any]:
     """Return fit options supported by runtime executable commands."""
 
@@ -207,26 +236,25 @@ def _resolve_linear_command_options(
 ) -> RuntimeLinearCommandOptions:
     """Resolve linear command options from CLI flags, TOML, and config defaults."""
 
-    dt = _arg_or_section(args, run_cfg, "dt", None)
-    steps = _arg_or_section(args, run_cfg, "steps", None)
-    method = _arg_or_section(args, run_cfg, "method", None)
-    dt_for_header = float(dt if dt is not None else cfg.time.dt)
+    Nl, Nm, method, dt, steps, sample_stride = _resolve_grid_time_options(
+        args, run_cfg, cfg
+    )
+    solver, fit_signal = _resolve_linear_fit_options(args, run_cfg)
+    dt_for_header = dt if dt is not None else float(cfg.time.dt)
     return RuntimeLinearCommandOptions(
         ky=float(_arg_or_section(args, run_cfg, "ky", 0.3)),
-        Nl=int(_arg_or_section(args, run_cfg, "Nl", 24)),
-        Nm=int(_arg_or_section(args, run_cfg, "Nm", 12)),
-        solver=str(_arg_or_section(args, run_cfg, "solver", "auto")),
-        fit_signal=str(_arg_or_section(args, run_cfg, "fit_signal", "auto")),
-        method=None if method is None else str(method),
-        dt=None if dt is None else float(dt),
-        steps=None if steps is None else int(steps),
-        sample_stride=int(
-            _arg_or_section(args, run_cfg, "sample_stride", cfg.time.sample_stride)
-        ),
+        Nl=Nl,
+        Nm=Nm,
+        solver=solver,
+        fit_signal=fit_signal,
+        method=method,
+        dt=dt,
+        steps=steps,
+        sample_stride=sample_stride,
         method_for_header=str(method if method is not None else cfg.time.method),
         dt_for_header=dt_for_header,
         steps_for_header=(
-            int(steps)
+            steps
             if steps is not None
             else int(round(float(cfg.time.t_max) / dt_for_header))
         ),
@@ -254,21 +282,20 @@ def _resolve_scan_command_options(
 ) -> RuntimeScanCommandOptions:
     """Resolve linear-scan command options from CLI flags and TOML defaults."""
 
-    dt = _arg_or_section(args, scan_cfg, "dt", None)
-    steps = _arg_or_section(args, scan_cfg, "steps", None)
-    method = _arg_or_section(args, scan_cfg, "method", None)
+    Nl, Nm, method, dt, steps, sample_stride = _resolve_grid_time_options(
+        args, scan_cfg, cfg
+    )
+    solver, fit_signal = _resolve_linear_fit_options(args, scan_cfg)
     return RuntimeScanCommandOptions(
         ky_values=_parse_ky_values(args, scan_cfg),
-        Nl=int(_arg_or_section(args, scan_cfg, "Nl", 24)),
-        Nm=int(_arg_or_section(args, scan_cfg, "Nm", 12)),
-        solver=str(_arg_or_section(args, scan_cfg, "solver", "auto")),
-        fit_signal=str(_arg_or_section(args, scan_cfg, "fit_signal", "auto")),
-        method=None if method is None else str(method),
-        dt=None if dt is None else float(dt),
-        steps=None if steps is None else int(steps),
-        sample_stride=int(
-            _arg_or_section(args, scan_cfg, "sample_stride", cfg.time.sample_stride)
-        ),
+        Nl=Nl,
+        Nm=Nm,
+        solver=solver,
+        fit_signal=fit_signal,
+        method=method,
+        dt=dt,
+        steps=steps,
+        sample_stride=sample_stride,
         batch_ky=bool(getattr(args, "batch_ky", False)),
         show_progress=should_show_progress(args, bool(cfg.time.progress_bar)),
         workers=int(getattr(args, "workers", 1)),
@@ -283,13 +310,15 @@ def _resolve_nonlinear_command_options(
 ) -> RuntimeNonlinearCommandOptions:
     """Resolve nonlinear command options from CLI flags, TOML, and config defaults."""
 
-    steps_raw = _arg_or_section(args, run_cfg, "steps", None)
-    if steps_raw is not None:
-        steps: int | None = int(steps_raw)
+    Nl, Nm, method, dt, steps, sample_stride = _resolve_grid_time_options(
+        args, run_cfg, cfg
+    )
+    if steps is not None:
+        nonlinear_steps: int | None = steps
     elif bool(cfg.time.fixed_dt):
-        steps = int(round(cfg.time.t_max / cfg.time.dt))
+        nonlinear_steps = int(round(cfg.time.t_max / cfg.time.dt))
     else:
-        steps = None
+        nonlinear_steps = None
 
     if getattr(args, "no_diagnostics", False):
         diagnostics = False
@@ -302,14 +331,12 @@ def _resolve_nonlinear_command_options(
     laguerre_mode = _arg_or_section(args, run_cfg, "laguerre_mode", None)
     return RuntimeNonlinearCommandOptions(
         ky=float(_arg_or_section(args, run_cfg, "ky", 0.3)),
-        Nl=int(_arg_or_section(args, run_cfg, "Nl", 24)),
-        Nm=int(_arg_or_section(args, run_cfg, "Nm", 12)),
-        dt=float(_arg_or_section(args, run_cfg, "dt", cfg.time.dt)),
-        steps=steps,
-        method=str(_arg_or_section(args, run_cfg, "method", cfg.time.method)),
-        sample_stride=int(
-            _arg_or_section(args, run_cfg, "sample_stride", cfg.time.sample_stride)
-        ),
+        Nl=Nl,
+        Nm=Nm,
+        dt=dt if dt is not None else float(cfg.time.dt),
+        steps=nonlinear_steps,
+        method=method if method is not None else str(cfg.time.method),
+        sample_stride=sample_stride,
         diagnostics_stride=(
             None if diagnostics_stride is None else int(diagnostics_stride)
         ),
