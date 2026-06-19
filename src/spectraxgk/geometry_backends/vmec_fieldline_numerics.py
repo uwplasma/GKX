@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
@@ -11,6 +12,50 @@ from scipy.interpolate import InterpolatedUnivariateSpline
 
 
 _MU_0 = 4.0 * np.pi * 1.0e-7
+
+
+@dataclass(frozen=True)
+class _FieldlineBoozerTensors:
+    R_b: np.ndarray
+    d_R_b_d_s: np.ndarray
+    d_R_b_d_theta_b: np.ndarray
+    d_R_b_d_phi_b: np.ndarray
+    Z_b: np.ndarray
+    d_Z_b_d_s: np.ndarray
+    d_Z_b_d_theta_b: np.ndarray
+    d_Z_b_d_phi_b: np.ndarray
+    nu_b: np.ndarray
+    d_nu_b_d_s: np.ndarray
+    d_nu_b_d_theta_b: np.ndarray
+    d_nu_b_d_phi_b: np.ndarray
+    sqrt_g_booz: np.ndarray
+    d_sqrt_g_booz_d_theta_b: np.ndarray
+    d_sqrt_g_booz_d_phi_b: np.ndarray
+    modB_b: np.ndarray
+    d_B_b_d_s: np.ndarray
+
+
+@dataclass(frozen=True)
+class _FieldlineCartesianDerivatives:
+    d_X_d_theta_b: np.ndarray
+    d_X_d_phi_b: np.ndarray
+    d_X_d_s: np.ndarray
+    d_Y_d_theta_b: np.ndarray
+    d_Y_d_phi_b: np.ndarray
+    d_Y_d_s: np.ndarray
+
+
+@dataclass(frozen=True)
+class _FieldlineCoordinateGradients:
+    grad_psi_X: np.ndarray
+    grad_psi_Y: np.ndarray
+    grad_psi_Z: np.ndarray
+    grad_theta_b_X: np.ndarray
+    grad_theta_b_Y: np.ndarray
+    grad_theta_b_Z: np.ndarray
+    grad_phi_b_X: np.ndarray
+    grad_phi_b_Y: np.ndarray
+    grad_phi_b_Z: np.ndarray
 
 
 def _sample_boozer_mode_table(vs: Any, s: np.ndarray, ns: int) -> tuple[np.ndarray, ...]:
@@ -91,6 +136,143 @@ def _boozer_trig_basis(
         m * sinangle,
         n * cosangle,
         n * sinangle,
+    )
+
+
+def _fieldline_boozer_tensors(
+    *,
+    rmnc_b: np.ndarray,
+    zmns_b: np.ndarray,
+    numns_b: np.ndarray,
+    d_rmnc_b_d_s: np.ndarray,
+    d_zmns_b_d_s: np.ndarray,
+    d_numns_b_d_s: np.ndarray,
+    gmnc_b: np.ndarray,
+    bmnc_b: np.ndarray,
+    d_bmnc_b_d_s: np.ndarray,
+    cosangle_b: np.ndarray,
+    sinangle_b: np.ndarray,
+    mcosangle_b: np.ndarray,
+    msinangle_b: np.ndarray,
+    ncosangle_b: np.ndarray,
+    nsinangle_b: np.ndarray,
+) -> _FieldlineBoozerTensors:
+    """Evaluate Boozer spectral tensors and first derivatives on a field line."""
+
+    return _FieldlineBoozerTensors(
+        R_b=_boozer_mode_sum(rmnc_b, cosangle_b),
+        d_R_b_d_s=_boozer_mode_sum(d_rmnc_b_d_s, cosangle_b),
+        d_R_b_d_theta_b=-_boozer_mode_sum(rmnc_b, msinangle_b),
+        d_R_b_d_phi_b=_boozer_mode_sum(rmnc_b, nsinangle_b),
+        Z_b=_boozer_mode_sum(zmns_b, sinangle_b),
+        d_Z_b_d_s=_boozer_mode_sum(d_zmns_b_d_s, sinangle_b),
+        d_Z_b_d_theta_b=_boozer_mode_sum(zmns_b, mcosangle_b),
+        d_Z_b_d_phi_b=-_boozer_mode_sum(zmns_b, ncosangle_b),
+        nu_b=_boozer_mode_sum(numns_b, sinangle_b),
+        d_nu_b_d_s=_boozer_mode_sum(d_numns_b_d_s, sinangle_b),
+        d_nu_b_d_theta_b=_boozer_mode_sum(numns_b, mcosangle_b),
+        d_nu_b_d_phi_b=-_boozer_mode_sum(numns_b, ncosangle_b),
+        sqrt_g_booz=_boozer_mode_sum(gmnc_b, cosangle_b),
+        d_sqrt_g_booz_d_theta_b=-_boozer_mode_sum(gmnc_b, msinangle_b),
+        d_sqrt_g_booz_d_phi_b=_boozer_mode_sum(gmnc_b, nsinangle_b),
+        modB_b=_boozer_mode_sum(bmnc_b, cosangle_b),
+        d_B_b_d_s=_boozer_mode_sum(d_bmnc_b_d_s, cosangle_b),
+    )
+
+
+def _fieldline_cartesian_derivatives(
+    *,
+    tensors: _FieldlineBoozerTensors,
+    phi_b: np.ndarray,
+) -> _FieldlineCartesianDerivatives:
+    """Convert Boozer R/nu derivatives into cylindrical X/Y derivatives."""
+
+    phi_cyl = phi_b - tensors.nu_b
+    sinphi = np.sin(phi_cyl)
+    cosphi = np.cos(phi_cyl)
+    return _FieldlineCartesianDerivatives(
+        d_X_d_theta_b=(
+            tensors.d_R_b_d_theta_b * cosphi
+            - tensors.R_b * sinphi * (-tensors.d_nu_b_d_theta_b)
+        ),
+        d_X_d_phi_b=(
+            tensors.d_R_b_d_phi_b * cosphi
+            - tensors.R_b * sinphi * (1.0 - tensors.d_nu_b_d_phi_b)
+        ),
+        d_X_d_s=(
+            tensors.d_R_b_d_s * cosphi
+            - tensors.R_b * sinphi * (-tensors.d_nu_b_d_s)
+        ),
+        d_Y_d_theta_b=(
+            tensors.d_R_b_d_theta_b * sinphi
+            + tensors.R_b * cosphi * (-tensors.d_nu_b_d_theta_b)
+        ),
+        d_Y_d_phi_b=(
+            tensors.d_R_b_d_phi_b * sinphi
+            + tensors.R_b * cosphi * (1.0 - tensors.d_nu_b_d_phi_b)
+        ),
+        d_Y_d_s=(
+            tensors.d_R_b_d_s * sinphi
+            + tensors.R_b * cosphi * (-tensors.d_nu_b_d_s)
+        ),
+    )
+
+
+def _fieldline_coordinate_gradients(
+    *,
+    tensors: _FieldlineBoozerTensors,
+    cartesian: _FieldlineCartesianDerivatives,
+    edge_toroidal_flux_over_2pi: float,
+) -> _FieldlineCoordinateGradients:
+    """Return coordinate gradients from field-line basis-vector cross products."""
+
+    grad_psi_X = (
+        cartesian.d_Y_d_theta_b * tensors.d_Z_b_d_phi_b
+        - tensors.d_Z_b_d_theta_b * cartesian.d_Y_d_phi_b
+    ) / tensors.sqrt_g_booz
+    grad_psi_Y = (
+        tensors.d_Z_b_d_theta_b * cartesian.d_X_d_phi_b
+        - cartesian.d_X_d_theta_b * tensors.d_Z_b_d_phi_b
+    ) / tensors.sqrt_g_booz
+    grad_psi_Z = (
+        cartesian.d_X_d_theta_b * cartesian.d_Y_d_phi_b
+        - cartesian.d_Y_d_theta_b * cartesian.d_X_d_phi_b
+    ) / tensors.sqrt_g_booz
+    denominator = tensors.sqrt_g_booz * edge_toroidal_flux_over_2pi
+    return _FieldlineCoordinateGradients(
+        grad_psi_X=grad_psi_X,
+        grad_psi_Y=grad_psi_Y,
+        grad_psi_Z=grad_psi_Z,
+        grad_theta_b_X=(
+            cartesian.d_Y_d_phi_b * tensors.d_Z_b_d_s
+            - tensors.d_Z_b_d_phi_b * cartesian.d_Y_d_s
+        )
+        / denominator,
+        grad_theta_b_Y=(
+            tensors.d_Z_b_d_phi_b * cartesian.d_X_d_s
+            - cartesian.d_X_d_phi_b * tensors.d_Z_b_d_s
+        )
+        / denominator,
+        grad_theta_b_Z=(
+            cartesian.d_X_d_phi_b * cartesian.d_Y_d_s
+            - cartesian.d_Y_d_phi_b * cartesian.d_X_d_s
+        )
+        / denominator,
+        grad_phi_b_X=(
+            cartesian.d_Y_d_s * tensors.d_Z_b_d_theta_b
+            - tensors.d_Z_b_d_s * cartesian.d_Y_d_theta_b
+        )
+        / denominator,
+        grad_phi_b_Y=(
+            tensors.d_Z_b_d_s * cartesian.d_X_d_theta_b
+            - cartesian.d_X_d_s * tensors.d_Z_b_d_theta_b
+        )
+        / denominator,
+        grad_phi_b_Z=(
+            cartesian.d_X_d_s * cartesian.d_Y_d_theta_b
+            - cartesian.d_Y_d_s * cartesian.d_X_d_theta_b
+        )
+        / denominator,
     )
 
 
@@ -335,6 +517,9 @@ __all__ = [
     "_boozer_trig_basis",
     "_centered_fieldline_integral",
     "_fieldline_boozer_coordinates",
+    "_fieldline_boozer_tensors",
+    "_fieldline_cartesian_derivatives",
+    "_fieldline_coordinate_gradients",
     "_flux_surface_hngc_averages",
     "_hngc_pressure_correction",
     "_hngc_shear_correction",

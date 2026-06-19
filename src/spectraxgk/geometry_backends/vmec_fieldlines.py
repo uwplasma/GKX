@@ -23,6 +23,9 @@ from spectraxgk.geometry_backends.vmec_fieldline_numerics import (
     _boozer_trig_basis,
     _centered_fieldline_integral,
     _fieldline_boozer_coordinates,
+    _fieldline_boozer_tensors,
+    _fieldline_cartesian_derivatives,
+    _fieldline_coordinate_gradients,
     _flux_surface_hngc_averages,
     _hngc_pressure_correction,
     _hngc_shear_correction,
@@ -183,26 +186,28 @@ def _vmec_fieldlines(
         nsinangle_b,
     ) = _boozer_trig_basis(xm_b, xn_b, angle_b)
 
-    R_b = _boozer_mode_sum(rmnc_b, cosangle_b)
-    d_R_b_d_s = _boozer_mode_sum(d_rmnc_b_d_s, cosangle_b)
-    d_R_b_d_theta_b = -_boozer_mode_sum(rmnc_b, msinangle_b)
-    d_R_b_d_phi_b = _boozer_mode_sum(rmnc_b, nsinangle_b)
-
-    Z_b = _boozer_mode_sum(zmns_b, sinangle_b)
-    d_Z_b_d_s = _boozer_mode_sum(d_zmns_b_d_s, sinangle_b)
-    d_Z_b_d_theta_b = _boozer_mode_sum(zmns_b, mcosangle_b)
-    d_Z_b_d_phi_b = -_boozer_mode_sum(zmns_b, ncosangle_b)
-
-    nu_b = _boozer_mode_sum(numns_b, sinangle_b)
-    d_nu_b_d_s = _boozer_mode_sum(d_numns_b_d_s, sinangle_b)
-    d_nu_b_d_theta_b = _boozer_mode_sum(numns_b, mcosangle_b)
-    d_nu_b_d_phi_b = -_boozer_mode_sum(numns_b, ncosangle_b)
-
-    sqrt_g_booz = _boozer_mode_sum(gmnc_b, cosangle_b)
-    d_sqrt_g_booz_d_theta_b = -_boozer_mode_sum(gmnc_b, msinangle_b)
-    d_sqrt_g_booz_d_phi_b = _boozer_mode_sum(gmnc_b, nsinangle_b)
-    modB_b = _boozer_mode_sum(bmnc_b, cosangle_b)
-    d_B_b_d_s = _boozer_mode_sum(d_bmnc_b_d_s, cosangle_b)
+    tensors = _fieldline_boozer_tensors(
+        rmnc_b=rmnc_b,
+        zmns_b=zmns_b,
+        numns_b=numns_b,
+        d_rmnc_b_d_s=d_rmnc_b_d_s,
+        d_zmns_b_d_s=d_zmns_b_d_s,
+        d_numns_b_d_s=d_numns_b_d_s,
+        gmnc_b=gmnc_b,
+        bmnc_b=bmnc_b,
+        d_bmnc_b_d_s=d_bmnc_b_d_s,
+        cosangle_b=cosangle_b,
+        sinangle_b=sinangle_b,
+        mcosangle_b=mcosangle_b,
+        msinangle_b=msinangle_b,
+        ncosangle_b=ncosangle_b,
+        nsinangle_b=nsinangle_b,
+    )
+    R_b = tensors.R_b
+    Z_b = tensors.Z_b
+    nu_b = tensors.nu_b
+    sqrt_g_booz = tensors.sqrt_g_booz
+    modB_b = tensors.modB_b
 
     Vprime = gmnc_b[:, 0]  # flux-surface volume element (m=0, n=0 Boozer mode)
 
@@ -231,67 +236,33 @@ def _vmec_fieldlines(
     beta_b = _boozer_mode_sum(betamns_b, sinangle_b)
     lambda_b = _boozer_mode_sum(lambmnc_b, cosangle_b)
 
-    # Cartesian coordinate derivatives for basis vectors
-    phi_cyl = phi_b - nu_b
-    sinphi = np.sin(phi_cyl)
-    cosphi = np.cos(phi_cyl)
-
-    d_X_d_theta_b = d_R_b_d_theta_b * cosphi - R_b * sinphi * (-d_nu_b_d_theta_b)
-    d_X_d_phi_b = d_R_b_d_phi_b * cosphi - R_b * sinphi * (1.0 - d_nu_b_d_phi_b)
-    d_X_d_s = d_R_b_d_s * cosphi - R_b * sinphi * (-d_nu_b_d_s)
-
-    d_Y_d_theta_b = d_R_b_d_theta_b * sinphi + R_b * cosphi * (-d_nu_b_d_theta_b)
-    d_Y_d_phi_b = d_R_b_d_phi_b * sinphi + R_b * cosphi * (1.0 - d_nu_b_d_phi_b)
-    d_Y_d_s = d_R_b_d_s * sinphi + R_b * cosphi * (-d_nu_b_d_s)
-
-    # Dual (contravariant) gradient vectors via cross products
-    grad_psi_X = (
-        d_Y_d_theta_b * d_Z_b_d_phi_b - d_Z_b_d_theta_b * d_Y_d_phi_b
-    ) / sqrt_g_booz
-    grad_psi_Y = (
-        d_Z_b_d_theta_b * d_X_d_phi_b - d_X_d_theta_b * d_Z_b_d_phi_b
-    ) / sqrt_g_booz
-    grad_psi_Z = (
-        d_X_d_theta_b * d_Y_d_phi_b - d_Y_d_theta_b * d_X_d_phi_b
-    ) / sqrt_g_booz
+    _etf = edge_toroidal_flux_over_2pi
+    cartesian = _fieldline_cartesian_derivatives(tensors=tensors, phi_b=phi_b)
+    gradients = _fieldline_coordinate_gradients(
+        tensors=tensors,
+        cartesian=cartesian,
+        edge_toroidal_flux_over_2pi=_etf,
+    )
+    grad_psi_X = gradients.grad_psi_X
+    grad_psi_Y = gradients.grad_psi_Y
+    grad_psi_Z = gradients.grad_psi_Z
 
     g_sup_psi_psi = grad_psi_X**2 + grad_psi_Y**2 + grad_psi_Z**2
 
-    _etf = edge_toroidal_flux_over_2pi
-    grad_theta_b_X = (d_Y_d_phi_b * d_Z_b_d_s - d_Z_b_d_phi_b * d_Y_d_s) / (
-        sqrt_g_booz * _etf
-    )
-    grad_theta_b_Y = (d_Z_b_d_phi_b * d_X_d_s - d_X_d_phi_b * d_Z_b_d_s) / (
-        sqrt_g_booz * _etf
-    )
-    grad_theta_b_Z = (d_X_d_phi_b * d_Y_d_s - d_Y_d_phi_b * d_X_d_s) / (
-        sqrt_g_booz * _etf
-    )
-
-    grad_phi_b_X = (d_Y_d_s * d_Z_b_d_theta_b - d_Z_b_d_s * d_Y_d_theta_b) / (
-        sqrt_g_booz * _etf
-    )
-    grad_phi_b_Y = (d_Z_b_d_s * d_X_d_theta_b - d_X_d_s * d_Z_b_d_theta_b) / (
-        sqrt_g_booz * _etf
-    )
-    grad_phi_b_Z = (d_X_d_s * d_Y_d_theta_b - d_Y_d_s * d_X_d_theta_b) / (
-        sqrt_g_booz * _etf
-    )
-
     grad_alpha_X = (
         -(phi_b - zeta_center) * d_iota_d_s[:, None, None] * grad_psi_X / _etf
-        + grad_theta_b_X
-        - iota[:, None, None] * grad_phi_b_X
+        + gradients.grad_theta_b_X
+        - iota[:, None, None] * gradients.grad_phi_b_X
     )
     grad_alpha_Y = (
         -(phi_b - zeta_center) * d_iota_d_s[:, None, None] * grad_psi_Y / _etf
-        + grad_theta_b_Y
-        - iota[:, None, None] * grad_phi_b_Y
+        + gradients.grad_theta_b_Y
+        - iota[:, None, None] * gradients.grad_phi_b_Y
     )
     grad_alpha_Z = (
         -(phi_b - zeta_center) * d_iota_d_s[:, None, None] * grad_psi_Z / _etf
-        + grad_theta_b_Z
-        - iota[:, None, None] * grad_phi_b_Z
+        + gradients.grad_theta_b_Z
+        - iota[:, None, None] * gradients.grad_phi_b_Z
     )
 
     D1, D2 = _flux_surface_hngc_averages(
@@ -364,7 +335,7 @@ def _vmec_fieldlines(
     kappa_n = (
         1.0
         / modB_b**2
-        * (modB_b * d_B_b_d_s + _MU_0 * d_pressure_d_s[:, None, None])
+        * (modB_b * tensors.d_B_b_d_s + _MU_0 * d_pressure_d_s[:, None, None])
         / _etf
         - beta_b
         / (
@@ -372,16 +343,17 @@ def _vmec_fieldlines(
             * sqrt_g_booz
             * (G[:, None, None] + iota[:, None, None] * boozer_i[:, None, None])
         )
-        * d_sqrt_g_booz_d_phi_b
+        * tensors.d_sqrt_g_booz_d_phi_b
         + L0
         * (
-            G[:, None] * d_sqrt_g_booz_d_theta_b
-            - boozer_i[:, None] * d_sqrt_g_booz_d_phi_b
+            G[:, None] * tensors.d_sqrt_g_booz_d_theta_b
+            - boozer_i[:, None] * tensors.d_sqrt_g_booz_d_phi_b
         )
         / (2.0 * sqrt_g_booz * (G[:, None] + iota[:, None] * boozer_i[:, None]))
     )
     kappa_g = (
-        G[:, None] * d_sqrt_g_booz_d_theta_b - boozer_i[:, None] * d_sqrt_g_booz_d_phi_b
+        G[:, None] * tensors.d_sqrt_g_booz_d_theta_b
+        - boozer_i[:, None] * tensors.d_sqrt_g_booz_d_phi_b
     ) / (2.0 * sqrt_g_booz * (G[:, None] + iota[:, None] * boozer_i[:, None]))
 
     B_cross_kappa_dot_grad_alpha = (kappa_n + kappa_g * L1) * modB_b**2
