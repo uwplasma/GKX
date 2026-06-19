@@ -29,6 +29,11 @@ from spectraxgk.geometry.vmec_boozer_constants import (
     _cached_booz_xform_constants,
     prewarm_vmec_boozer_equal_arc_cache,
 )
+from spectraxgk.geometry.vmec_boozer_derivatives import (
+    boozer_cartesian_derivatives,
+    boozer_coordinate_gradients,
+    evaluate_boozer_field_line_derivatives,
+)
 
 
 @dataclass(frozen=True)
@@ -429,50 +434,23 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
     drhodpsi = 1.0 / jnp.maximum(jnp.abs(dpsidrho), eps)
     jacobian = 1.0 / jnp.maximum(jnp.abs(drhodpsi * gradpar_eqarc * bmag_safe), eps)
 
-    m = jnp.asarray(out["ixm_b"], dtype=base_Rcos.dtype)
-    n = jnp.asarray(out["ixn_b"], dtype=base_Rcos.dtype)
-    phi_b = (
-        theta_closed - jnp.asarray(float(alpha), dtype=base_Rcos.dtype)
-    ) / iota_safe
-    phase = m[:, None] * theta_closed[None, :] - n[:, None] * phi_b[None, :]
-    cos_phase = jnp.cos(phase)
-    sin_phase = jnp.sin(phase)
-    m_cos = m[:, None] * cos_phase
-    m_sin = m[:, None] * sin_phase
-    n_cos = n[:, None] * cos_phase
-    n_sin = n[:, None] * sin_phase
+    spectral = evaluate_boozer_field_line_derivatives(
+        out,
+        theta_closed=theta_closed,
+        alpha=alpha,
+        iota_safe=iota_safe,
+        base_dtype=base_Rcos.dtype,
+        bmnc_b=bmnc_b,
+        d_bmnc_b_d_s=d_bmnc_b_d_s,
+        rmnc_b=rmnc_b,
+        d_rmnc_b_d_s=d_rmnc_b_d_s,
+        zmns_b=zmns_b,
+        d_zmns_b_d_s=d_zmns_b_d_s,
+        numns_b=numns_b,
+        d_numns_b_d_s=d_numns_b_d_s,
+    )
 
-    r_b = jnp.sum(rmnc_b[:, None] * cos_phase, axis=0)
-    d_mod_b_d_s = jnp.sum(d_bmnc_b_d_s[:, None] * cos_phase, axis=0)
-    d_mod_b_d_theta = -jnp.sum(bmnc_b[:, None] * m_sin, axis=0)
-    d_mod_b_d_phi = jnp.sum(bmnc_b[:, None] * n_sin, axis=0)
-    d_r_b_d_s = jnp.sum(d_rmnc_b_d_s[:, None] * cos_phase, axis=0)
-    d_r_b_d_theta = -jnp.sum(rmnc_b[:, None] * m_sin, axis=0)
-    d_r_b_d_phi = jnp.sum(rmnc_b[:, None] * n_sin, axis=0)
-    d_z_b_d_s = jnp.sum(d_zmns_b_d_s[:, None] * sin_phase, axis=0)
-    d_z_b_d_theta = jnp.sum(zmns_b[:, None] * m_cos, axis=0)
-    d_z_b_d_phi = -jnp.sum(zmns_b[:, None] * n_cos, axis=0)
-    nu_b = jnp.sum(numns_b[:, None] * sin_phase, axis=0)
-    d_nu_b_d_s = jnp.sum(d_numns_b_d_s[:, None] * sin_phase, axis=0)
-    d_nu_b_d_theta = jnp.sum(numns_b[:, None] * m_cos, axis=0)
-    d_nu_b_d_phi = -jnp.sum(numns_b[:, None] * n_cos, axis=0)
-
-    phi_cyl = phi_b - nu_b
-    sin_phi = jnp.sin(phi_cyl)
-    cos_phi = jnp.cos(phi_cyl)
-    d_x_d_theta = d_r_b_d_theta * cos_phi - r_b * sin_phi * (-d_nu_b_d_theta)
-    d_x_d_phi = d_r_b_d_phi * cos_phi - r_b * sin_phi * (1.0 - d_nu_b_d_phi)
-    d_x_d_s = d_r_b_d_s * cos_phi - r_b * sin_phi * (-d_nu_b_d_s)
-    d_y_d_theta = d_r_b_d_theta * sin_phi + r_b * cos_phi * (-d_nu_b_d_theta)
-    d_y_d_phi = d_r_b_d_phi * sin_phi + r_b * cos_phi * (1.0 - d_nu_b_d_phi)
-    d_y_d_s = d_r_b_d_s * sin_phi + r_b * cos_phi * (-d_nu_b_d_s)
-
-    grad_psi_x = (d_y_d_theta * d_z_b_d_phi - d_z_b_d_theta * d_y_d_phi) / sqrt_g_booz
-    grad_psi_y = (d_z_b_d_theta * d_x_d_phi - d_x_d_theta * d_z_b_d_phi) / sqrt_g_booz
-    grad_psi_z = (d_x_d_theta * d_y_d_phi - d_y_d_theta * d_x_d_phi) / sqrt_g_booz
-    g_sup_psi_psi = grad_psi_x**2 + grad_psi_y**2 + grad_psi_z**2
-    g_sup_psi_psi_safe = jnp.maximum(g_sup_psi_psi, eps)
-
+    cartesian = boozer_cartesian_derivatives(spectral)
     etf = jnp.asarray(edge_toroidal_flux_over_2pi, dtype=base_Rcos.dtype)
     etf_floor = jnp.asarray(1.0e-12, dtype=base_Rcos.dtype)
     etf_safe = jnp.where(
@@ -480,40 +458,34 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
         jnp.sign(etf + eps) * etf_floor,
         etf,
     )
-    grad_theta_x = (d_y_d_phi * d_z_b_d_s - d_z_b_d_phi * d_y_d_s) / (
-        sqrt_g_booz * etf_safe
+    gradients = boozer_coordinate_gradients(
+        spectral=spectral,
+        cartesian=cartesian,
+        sqrt_g_booz=sqrt_g_booz,
+        etf_safe=etf_safe,
     )
-    grad_theta_y = (d_z_b_d_phi * d_x_d_s - d_x_d_phi * d_z_b_d_s) / (
-        sqrt_g_booz * etf_safe
-    )
-    grad_theta_z = (d_x_d_phi * d_y_d_s - d_y_d_phi * d_x_d_s) / (
-        sqrt_g_booz * etf_safe
-    )
-    grad_phi_x = (d_y_d_s * d_z_b_d_theta - d_z_b_d_s * d_y_d_theta) / (
-        sqrt_g_booz * etf_safe
-    )
-    grad_phi_y = (d_z_b_d_s * d_x_d_theta - d_x_d_s * d_z_b_d_theta) / (
-        sqrt_g_booz * etf_safe
-    )
-    grad_phi_z = (d_x_d_s * d_y_d_theta - d_y_d_s * d_x_d_theta) / (
-        sqrt_g_booz * etf_safe
-    )
+    grad_psi_x = gradients.grad_psi_x
+    grad_psi_y = gradients.grad_psi_y
+    grad_psi_z = gradients.grad_psi_z
+    g_sup_psi_psi = grad_psi_x**2 + grad_psi_y**2 + grad_psi_z**2
+    g_sup_psi_psi_safe = jnp.maximum(g_sup_psi_psi, eps)
+
     zeta_center = -jnp.asarray(float(alpha), dtype=base_Rcos.dtype) / iota_safe
-    shear_phase = phi_b - zeta_center
+    shear_phase = spectral.phi_b - zeta_center
     grad_alpha_x = (
         -shear_phase * d_iota_ds * grad_psi_x / etf_safe
-        + grad_theta_x
-        - iota_safe * grad_phi_x
+        + gradients.grad_theta_x
+        - iota_safe * gradients.grad_phi_x
     )
     grad_alpha_y = (
         -shear_phase * d_iota_ds * grad_psi_y / etf_safe
-        + grad_theta_y
-        - iota_safe * grad_phi_y
+        + gradients.grad_theta_y
+        - iota_safe * gradients.grad_phi_y
     )
     grad_alpha_z = (
         -shear_phase * d_iota_ds * grad_psi_z / etf_safe
-        + grad_theta_z
-        - iota_safe * grad_phi_z
+        + gradients.grad_theta_z
+        - iota_safe * gradients.grad_phi_z
     )
     grad_alpha_dot_grad_psi = (
         grad_alpha_x * grad_psi_x
@@ -540,9 +512,11 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
 
     boozer_current_sum = boozer_g + iota_safe * boozer_i
     d_sqrt_g_booz_d_theta = (
-        -2.0 * boozer_current_sum * d_mod_b_d_theta / (mod_b_safe**3)
+        -2.0 * boozer_current_sum * spectral.d_mod_b_d_theta / (mod_b_safe**3)
     )
-    d_sqrt_g_booz_d_phi = -2.0 * boozer_current_sum * d_mod_b_d_phi / (mod_b_safe**3)
+    d_sqrt_g_booz_d_phi = (
+        -2.0 * boozer_current_sum * spectral.d_mod_b_d_phi / (mod_b_safe**3)
+    )
     curvature_numerator = (
         boozer_g * d_sqrt_g_booz_d_theta - boozer_i * d_sqrt_g_booz_d_phi
     )
@@ -554,7 +528,9 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
     )
     kappa_g = curvature_numerator / curvature_denom_safe
     local_shear_l0 = -(local_shear_l1 + d_iota_ds / etf_safe * shear_phase)
-    kappa_n = d_mod_b_d_s / (mod_b_safe * etf_safe) + local_shear_l0 * kappa_g
+    kappa_n = (
+        spectral.d_mod_b_d_s / (mod_b_safe * etf_safe) + local_shear_l0 * kappa_g
+    )
     b_cross_kappa_dot_grad_alpha = (kappa_n + kappa_g * local_shear_l1) * metric_bmag_sq
     b_cross_kappa_dot_grad_psi = kappa_g * metric_bmag_sq
     toroidal_flux_sign = jnp.sign(etf)
