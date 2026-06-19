@@ -480,30 +480,24 @@ def run_tem_time_linear_path(
         )
     else:
         signal = hooks.extract_mode_time_series(phi_t_np, sel, method=mode_method)
+    auto_fit_kwargs: dict[str, Any] = {
+        "window_fraction": window_fraction,
+        "min_points": min_points,
+        "start_fraction": start_fraction,
+        "growth_weight": growth_weight,
+        "require_positive": require_positive,
+        "min_amp_fraction": min_amp_fraction,
+    }
     if auto_window and tmin is None and tmax is None:
         gamma, omega, _tmin, _tmax = hooks.fit_growth_rate_auto(
-            t,
-            signal,
-            window_fraction=window_fraction,
-            min_points=min_points,
-            start_fraction=start_fraction,
-            growth_weight=growth_weight,
-            require_positive=require_positive,
-            min_amp_fraction=min_amp_fraction,
+            t, signal, **auto_fit_kwargs
         )
     else:
         try:
             gamma, omega = hooks.fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
         except ValueError:
             gamma, omega, _tmin, _tmax = hooks.fit_growth_rate_auto(
-                t,
-                signal,
-                window_fraction=window_fraction,
-                min_points=min_points,
-                start_fraction=start_fraction,
-                growth_weight=growth_weight,
-                require_positive=require_positive,
-                min_amp_fraction=min_amp_fraction,
+                t, signal, **auto_fit_kwargs
             )
     gamma, omega = hooks.normalize_growth_rate(gamma, omega, params, diagnostic_norm)
     return hooks.linear_run_result(

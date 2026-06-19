@@ -74,30 +74,24 @@ def fit_kbm_window(
     use_auto = auto_window and tmin is None and tmax is None
     if not use_auto and not scan_window_valid(t_arr, tmin, tmax):
         use_auto = True
+    auto_fit_kwargs: dict[str, Any] = {
+        "window_fraction": window_fraction,
+        "min_points": min_points,
+        "start_fraction": start_fraction,
+        "growth_weight": growth_weight,
+        "require_positive": require_positive,
+        "min_amp_fraction": min_amp_fraction,
+    }
     if use_auto:
         gamma_val, omega_val, _tmin, _tmax = fit_growth_rate_auto(
-            t_arr,
-            signal,
-            window_fraction=window_fraction,
-            min_points=min_points,
-            start_fraction=start_fraction,
-            growth_weight=growth_weight,
-            require_positive=require_positive,
-            min_amp_fraction=min_amp_fraction,
+            t_arr, signal, **auto_fit_kwargs
         )
     else:
         try:
             gamma_val, omega_val = fit_growth_rate(t_arr, signal, tmin=tmin, tmax=tmax)
         except ValueError:
             gamma_val, omega_val, _tmin, _tmax = fit_growth_rate_auto(
-                t_arr,
-                signal,
-                window_fraction=window_fraction,
-                min_points=min_points,
-                start_fraction=start_fraction,
-                growth_weight=growth_weight,
-                require_positive=require_positive,
-                min_amp_fraction=min_amp_fraction,
+                t_arr, signal, **auto_fit_kwargs
             )
     return gamma_val, omega_val
 
