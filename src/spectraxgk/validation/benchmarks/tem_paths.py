@@ -399,78 +399,59 @@ def run_tem_time_linear_path(
     if fit_signal not in {"phi", "density"}:
         raise ValueError("fit_signal must be 'phi' or 'density'")
     cache = hooks.build_linear_cache(grid, geom, params, n_laguerre, n_hermite)
+    time_cfg_use = time_cfg
     if time_cfg is not None:
-        time_cfg_use = time_cfg
         if sample_stride is not None:
             time_cfg_use = replace(time_cfg, sample_stride=sample_stride)
+        assert time_cfg_use is not None
         dt = float(time_cfg_use.dt)
         steps = int(round(time_cfg_use.t_max / time_cfg_use.dt))
-        if fit_signal == "density":
-            diag = hooks.integrate_linear_diagnostics(
-                G0_jax,
-                grid,
-                geom,
-                params,
-                dt=dt,
-                steps=steps,
-                method=method,
-                cache=cache,
-                terms=terms,
-                sample_stride=time_cfg_use.sample_stride,
-                species_index=density_species_index,
-            )
-            if len(diag) == 4:
-                _, phi_t, density_t, _ = diag
-            else:
-                _, phi_t, density_t = diag
-        else:
-            _, phi_t = hooks.integrate_linear_from_config(
-                G0_jax,
-                grid,
-                geom,
-                params,
-                time_cfg_use,
-                cache=cache,
-                terms=terms,
-                show_progress=show_progress,
-            )
-            density_t = None
         stride = time_cfg_use.sample_stride
     else:
         stride = 1 if sample_stride is None else int(sample_stride)
-        if fit_signal == "density":
-            diag = hooks.integrate_linear_diagnostics(
-                G0_jax,
-                grid,
-                geom,
-                params,
-                dt=dt,
-                steps=steps,
-                method=method,
-                cache=cache,
-                terms=terms,
-                sample_stride=stride,
-                species_index=density_species_index,
-            )
-            if len(diag) == 4:
-                _, phi_t, density_t, _ = diag
-            else:
-                _, phi_t, density_t = diag
-        else:
-            _, phi_t = hooks.integrate_linear(
-                G0_jax,
-                grid,
-                geom,
-                params,
-                dt=dt,
-                steps=steps,
-                method=method,
-                cache=cache,
-                terms=terms,
-                sample_stride=stride,
-                show_progress=show_progress,
-            )
-            density_t = None
+
+    if fit_signal == "density":
+        diag = hooks.integrate_linear_diagnostics(
+            G0_jax,
+            grid,
+            geom,
+            params,
+            dt=dt,
+            steps=steps,
+            method=method,
+            cache=cache,
+            terms=terms,
+            sample_stride=stride,
+            species_index=density_species_index,
+        )
+        _, phi_t, density_t, *_ = diag
+    elif time_cfg_use is not None:
+        _, phi_t = hooks.integrate_linear_from_config(
+            G0_jax,
+            grid,
+            geom,
+            params,
+            time_cfg_use,
+            cache=cache,
+            terms=terms,
+            show_progress=show_progress,
+        )
+        density_t = None
+    else:
+        _, phi_t = hooks.integrate_linear(
+            G0_jax,
+            grid,
+            geom,
+            params,
+            dt=dt,
+            steps=steps,
+            method=method,
+            cache=cache,
+            terms=terms,
+            sample_stride=stride,
+            show_progress=show_progress,
+        )
+        density_t = None
 
     phi_t_np = np.asarray(phi_t)
     t = np.arange(phi_t_np.shape[0]) * dt * stride
