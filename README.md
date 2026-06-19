@@ -321,7 +321,7 @@ simple-rule sweep is also negative: linear-weight is the least-bad simple rule
 at `4.42`, positive-growth mixing length is `6.49`, absolute-growth mixing
 length is `6.85`, and even the training-mean null is `1.80`. SPECTRAX-GK does
 not promote any simple or user-facing absolute QL flux predictor from this
-legacy family.
+one-constant saturation-rule family.
 
 The richer held-out candidate below is the reduced `spectral_envelope_ridge`
 model. It uses only two linear-spectrum envelope features. After adding the
@@ -878,7 +878,7 @@ the response is finally resolved (`response_fraction = 0.0319`) and local
 (`fd_asymmetry_rel = 0.044`), but the plus-state variance is still too large
 for a production nonlinear turbulence-gradient claim. The refreshed
 next-campaign design panel now includes all `16` tracked central-FD artifacts:
-zero promoted nonlinear-gradient controls, one legacy bounded-replica follow-up
+zero promoted nonlinear-gradient controls, one bounded-replica follow-up
 candidate, and `15` cases that need replacement, locality repair, or variance
 reduction before further long-window GPU time is justified. The current
 top-level action is now paired-seed or control-variate variance reduction for
