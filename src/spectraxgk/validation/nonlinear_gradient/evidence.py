@@ -37,16 +37,20 @@ from spectraxgk.validation.nonlinear_gradient.evidence_gap import (
     nonlinear_turbulence_gradient_evidence_gap_report,
     nonlinear_turbulence_gradient_evidence_report,
 )
-from spectraxgk.validation.nonlinear_gradient.evidence_screening import (
+from spectraxgk.validation.nonlinear_gradient.evidence_brackets import (
     _bracket_sweep_recommendation as _bracket_sweep_recommendation,
     _bracket_sweep_row as _bracket_sweep_row,
-    _candidate_next_action as _candidate_next_action,
     _delta_key as _delta_key,
-    _metric_margin as _metric_margin,
     _paired_same_sign_fraction as _paired_same_sign_fraction,
     _paired_uncertainty_rel as _paired_uncertainty_rel,
     nonlinear_turbulence_gradient_bracket_sweep_report,
+)
+from spectraxgk.validation.nonlinear_gradient.evidence_screening import (
+    _candidate_next_action as _candidate_next_action,
     nonlinear_turbulence_gradient_candidate_ranking_report,
+)
+from spectraxgk.validation.nonlinear_gradient.evidence_scoring import (
+    _metric_margin as _metric_margin,
 )
 from spectraxgk.validation.nonlinear_gradient.evidence_fd import (
     nonlinear_turbulence_gradient_finite_difference_report,
