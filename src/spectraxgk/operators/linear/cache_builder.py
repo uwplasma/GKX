@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import jax.numpy as jnp
 import numpy as np
 
@@ -21,37 +23,26 @@ from spectraxgk.operators.linear.linked import (
 from spectraxgk.operators.linear.params import LinearParams, _is_tracer, _x64_enabled
 
 
-def build_linear_cache(
+def _resolve_twist_shift_policy(
     grid: SpectralGrid,
-    geom: FluxTubeGeometryLike,
-    params: LinearParams,
-    Nl: int,
-    Nm: int,
-) -> LinearCache:
-    """Build reusable arrays for the linear RHS."""
-
-    real_dtype = jnp.float64 if _x64_enabled() else jnp.float32
-    dz = jnp.asarray(grid.z[1] - grid.z[0], dtype=real_dtype)
-    kz = jnp.asarray(
-        2.0 * jnp.pi * jnp.fft.fftfreq(grid.z.size, d=dz), dtype=real_dtype
-    )
-    rho_star = jnp.asarray(params.rho_star, dtype=real_dtype)
-    kx_raw = jnp.asarray(grid.kx, dtype=real_dtype)
-    ky_raw = jnp.asarray(grid.ky, dtype=real_dtype)
-    kx_eff = rho_star * kx_raw
-    ky_eff = rho_star * ky_raw
-    kx_grid = jnp.asarray(grid.kx_grid, dtype=real_dtype) * rho_star
-    ky_grid = jnp.asarray(grid.ky_grid, dtype=real_dtype) * rho_star
-    dealias_mask = jnp.asarray(grid.dealias_mask, dtype=bool)
-    kxfac_val = float(getattr(grid, "kxfac", 1.0))
-    theta = jnp.asarray(grid.z, dtype=real_dtype)
-    geom_data = ensure_flux_tube_geometry_data(geom, theta)
-    gds2, gds21, gds22 = geom_data.metric_coeffs(theta)
-    gds22_arr = gds22 if gds22.ndim else jnp.full_like(theta, gds22)
-    bmag = geom_data.bmag(theta).astype(real_dtype)
-    bgrad = geom_data.bgrad(theta).astype(real_dtype)
-    jacobian = geom_data.jacobian(theta).astype(real_dtype)
-    cv, gb, cv0, gb0 = geom_data.drift_coeffs(theta)
+    geom_data: Any,
+    *,
+    gds21: jnp.ndarray,
+    gds22: jnp.ndarray,
+    kx_eff: jnp.ndarray,
+    kx_grid: jnp.ndarray,
+) -> tuple[
+    str,
+    bool,
+    bool,
+    float,
+    jnp.ndarray,
+    float,
+    int,
+    float,
+    jnp.ndarray,
+    jnp.ndarray,
+]:
     boundary = str(getattr(grid, "boundary", "periodic")).lower()
     use_twist_shift = boundary in {"linked", "fix aspect", "continuous drifts"}
     use_ntft = bool(getattr(grid, "non_twist", False))
@@ -61,7 +52,7 @@ def build_linear_cache(
             y0 = float(1.0 / float(grid.ky[1] - grid.ky[0]))
         else:
             y0 = 1.0
-    shat_arr = jnp.asarray(geom_data.s_hat, dtype=real_dtype)
+    shat_arr = jnp.asarray(geom_data.s_hat, dtype=kx_eff.dtype)
     shat_host = None if _is_tracer(shat_arr) else float(np.asarray(shat_arr))
     x0_eff = float(getattr(grid, "x0", 1.0))
     jtwist = 0
@@ -101,11 +92,47 @@ def build_linear_cache(
             kx_eff = kx_eff * scale
             kx_grid = kx_grid * scale
             x0_eff = x0_target
-    kperp2_bmag = bool(getattr(geom_data, "kperp2_bmag", True))
+    kxfac_val = float(getattr(grid, "kxfac", 1.0))
+    return (
+        boundary,
+        use_twist_shift,
+        use_ntft,
+        float(y0),
+        shat_arr,
+        x0_eff,
+        jtwist,
+        kxfac_val,
+        kx_eff,
+        kx_grid,
+    )
+
+
+def _build_kperp_and_drift_arrays(
+    grid: SpectralGrid,
+    geom_data: Any,
+    *,
+    theta: jnp.ndarray,
+    kx_eff: jnp.ndarray,
+    ky_eff: jnp.ndarray,
+    ky_raw: jnp.ndarray,
+    rho_star: jnp.ndarray,
+    gds2: jnp.ndarray,
+    gds21: jnp.ndarray,
+    gds22_arr: jnp.ndarray,
+    bmag: jnp.ndarray,
+    cv: jnp.ndarray,
+    gb: jnp.ndarray,
+    cv0: jnp.ndarray,
+    gb0: jnp.ndarray,
+    shat_arr: jnp.ndarray,
+    x0_eff: float,
+    kperp2_bmag: bool,
+    use_ntft: bool,
+    dealias_mask: jnp.ndarray,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     if use_ntft:
-        ftwist = (geom_data.s_hat * gds21 / gds22_arr).astype(real_dtype)
-        kxfac_val = float(getattr(grid, "kxfac", 1.0))
-        delta = jnp.asarray(0.01313, dtype=real_dtype)
+        ftwist = (geom_data.s_hat * gds21 / gds22_arr).astype(kx_eff.dtype)
+        delta = jnp.asarray(0.01313, dtype=kx_eff.dtype)
         ftwist_next = jnp.roll(ftwist, -1)
         mid_idx = int(grid.z.size // 2)
         mid_next = (mid_idx + 1) % grid.z.size
@@ -120,9 +147,11 @@ def build_linear_cache(
             * ky_raw[:, None]
             * ((1.0 - delta) * ftwist_mid + delta * ftwist_mid_next)
         )
-        m0 = m0.astype(real_dtype)
+        m0 = m0.astype(kx_eff.dtype)
         shat_inv = 1.0 / shat_arr
-        delta_kx = ky_eff[:, None] * ftwist[None, :] + (rho_star * m0 / float(x0_eff))
+        delta_kx = ky_eff[:, None] * ftwist[None, :] + (
+            rho_star * m0 / float(x0_eff)
+        )
         term_ky = ky_eff[:, None, None] ** 2 * (
             gds2[None, None, :]
             - 2.0 * ftwist[None, None, :] * gds21[None, None, :] * shat_inv
@@ -155,11 +184,11 @@ def build_linear_cache(
         kx0 = kx_eff[None, :, None]
         ky0 = ky_eff[:, None, None]
         theta_b = theta[None, None, :]
-        kperp2 = geom_data.k_perp2(kx0, ky0, theta_b).astype(real_dtype)
+        kperp2 = geom_data.k_perp2(kx0, ky0, theta_b).astype(kx_eff.dtype)
         cv_d, gb_d = geom_data.drift_components(kx_eff, ky_eff, theta)
-        cv_d = cv_d.astype(real_dtype)
-        gb_d = gb_d.astype(real_dtype)
-        omega_d = (cv_d + gb_d).astype(real_dtype)
+        cv_d = cv_d.astype(kx_eff.dtype)
+        gb_d = gb_d.astype(kx_eff.dtype)
+        omega_d = (cv_d + gb_d).astype(kx_eff.dtype)
     apply_dealias_mask = dealias_mask is not None and int(grid.ky.size) > 1
     if apply_dealias_mask:
         mask = dealias_mask[:, :, None]
@@ -167,6 +196,27 @@ def build_linear_cache(
         cv_d = cv_d * mask
         gb_d = gb_d * mask
         omega_d = omega_d * mask
+    return kperp2, cv_d, gb_d, omega_d
+
+
+def _build_laguerre_gyro_cache(
+    params: LinearParams,
+    *,
+    geom_data: Any,
+    kperp2: jnp.ndarray,
+    bmag: jnp.ndarray,
+    Nl: int,
+    real_dtype: Any,
+) -> tuple[
+    jnp.ndarray,
+    jnp.ndarray,
+    jnp.ndarray,
+    jnp.ndarray,
+    jnp.ndarray,
+    jnp.ndarray,
+    jnp.ndarray,
+    jnp.ndarray,
+]:
     rho = jnp.asarray(params.rho, dtype=real_dtype)
     if rho.ndim == 0:
         rho = rho[None]
@@ -191,24 +241,29 @@ def build_linear_cache(
     laguerre_j1_over_alpha = jnp.where(alpha < 1.0e-8, 0.5, laguerre_j1 / alpha).astype(
         real_dtype
     )
-    mask0 = (grid.ky == 0.0)[:, None, None] & (grid.kx == 0.0)[None, :, None]
-    moment_cache = _build_low_rank_moment_cache_arrays(Nl, Nm, params, real_dtype)
-    lb_lam = moment_cache["lb_lam"]
-    ell_cache = moment_cache["l"]
-    m = moment_cache["m"]
-    l4 = moment_cache["l4"]
-    sqrt_m = moment_cache["sqrt_m"]
-    sqrt_m_p1 = moment_cache["sqrt_m_p1"]
-    sqrt_p = moment_cache["sqrt_p"]
-    sqrt_m_ladder = moment_cache["sqrt_m_ladder"]
-    hyper_ratio = moment_cache["hyper_ratio"]
-    ratio_l = moment_cache["ratio_l"]
-    ratio_m = moment_cache["ratio_m"]
-    ratio_lm = moment_cache["ratio_lm"]
-    mask_const = moment_cache["mask_const"]
-    mask_kz = moment_cache["mask_kz"]
-    m_pow = moment_cache["m_pow"]
-    m_norm_kz_factor = moment_cache["m_norm_kz_factor"]
+    return (
+        b,
+        Jl,
+        JlB,
+        laguerre_to_grid,
+        laguerre_to_spectral,
+        laguerre_roots,
+        laguerre_j0,
+        laguerre_j1_over_alpha,
+    )
+
+
+def _build_linked_boundary_cache(
+    grid: SpectralGrid,
+    params: LinearParams,
+    *,
+    boundary: str,
+    use_twist_shift: bool,
+    y0: float,
+    jtwist: int,
+    dz: jnp.ndarray,
+    real_dtype: Any,
+) -> dict[str, Any]:
     damp_profile = _build_end_damping_profile_array(
         int(grid.z.size),
         float(params.damp_ends_widthfrac),
@@ -233,6 +288,7 @@ def build_linear_cache(
         kx_link_minus = kx_link_plus
         kx_link_mask_plus = jnp.ones((grid.ky.size, grid.kx.size), dtype=bool)
         kx_link_mask_minus = kx_link_mask_plus
+
     linked_indices: tuple[jnp.ndarray, ...] = ()
     linked_kz: tuple[jnp.ndarray, ...] = ()
     linked_inverse_permutation = jnp.asarray([], dtype=jnp.int32)
@@ -289,6 +345,142 @@ def build_linear_cache(
                 ),
                 dtype=real_dtype,
             )
+
+    return {
+        "damp_profile": damp_profile,
+        "linked_damp_profile": linked_damp_profile,
+        "kx_link_plus": kx_link_plus,
+        "kx_link_minus": kx_link_minus,
+        "kx_link_mask_plus": kx_link_mask_plus,
+        "kx_link_mask_minus": kx_link_mask_minus,
+        "linked_full_cover": linked_full_cover,
+        "linked_inverse_permutation": linked_inverse_permutation,
+        "linked_gather_map": linked_gather_map,
+        "linked_gather_mask": linked_gather_mask,
+        "linked_use_gather": linked_use_gather,
+        "linked_indices": linked_indices,
+        "linked_kz": linked_kz,
+        "jtwist": jtwist,
+    }
+
+
+def build_linear_cache(
+    grid: SpectralGrid,
+    geom: FluxTubeGeometryLike,
+    params: LinearParams,
+    Nl: int,
+    Nm: int,
+) -> LinearCache:
+    """Build reusable arrays for the linear RHS."""
+
+    real_dtype = jnp.float64 if _x64_enabled() else jnp.float32
+    dz = jnp.asarray(grid.z[1] - grid.z[0], dtype=real_dtype)
+    kz = jnp.asarray(
+        2.0 * jnp.pi * jnp.fft.fftfreq(grid.z.size, d=dz), dtype=real_dtype
+    )
+    rho_star = jnp.asarray(params.rho_star, dtype=real_dtype)
+    kx_raw = jnp.asarray(grid.kx, dtype=real_dtype)
+    ky_raw = jnp.asarray(grid.ky, dtype=real_dtype)
+    kx_eff = rho_star * kx_raw
+    ky_eff = rho_star * ky_raw
+    kx_grid = jnp.asarray(grid.kx_grid, dtype=real_dtype) * rho_star
+    ky_grid = jnp.asarray(grid.ky_grid, dtype=real_dtype) * rho_star
+    dealias_mask = jnp.asarray(grid.dealias_mask, dtype=bool)
+    theta = jnp.asarray(grid.z, dtype=real_dtype)
+    geom_data = ensure_flux_tube_geometry_data(geom, theta)
+    gds2, gds21, gds22 = geom_data.metric_coeffs(theta)
+    gds22_arr = gds22 if gds22.ndim else jnp.full_like(theta, gds22)
+    bmag = geom_data.bmag(theta).astype(real_dtype)
+    bgrad = geom_data.bgrad(theta).astype(real_dtype)
+    jacobian = geom_data.jacobian(theta).astype(real_dtype)
+    cv, gb, cv0, gb0 = geom_data.drift_coeffs(theta)
+    (
+        boundary,
+        use_twist_shift,
+        use_ntft,
+        y0,
+        shat_arr,
+        x0_eff,
+        jtwist,
+        kxfac_val,
+        kx_eff,
+        kx_grid,
+    ) = _resolve_twist_shift_policy(
+        grid,
+        geom_data,
+        gds21=gds21,
+        gds22=gds22,
+        kx_eff=kx_eff,
+        kx_grid=kx_grid,
+    )
+    kperp2_bmag = bool(getattr(geom_data, "kperp2_bmag", True))
+    kperp2, cv_d, gb_d, omega_d = _build_kperp_and_drift_arrays(
+        grid,
+        geom_data,
+        theta=theta,
+        kx_eff=kx_eff,
+        ky_eff=ky_eff,
+        ky_raw=ky_raw,
+        rho_star=rho_star,
+        gds2=gds2,
+        gds21=gds21,
+        gds22_arr=gds22_arr,
+        bmag=bmag,
+        cv=cv,
+        gb=gb,
+        cv0=cv0,
+        gb0=gb0,
+        shat_arr=shat_arr,
+        x0_eff=x0_eff,
+        kperp2_bmag=kperp2_bmag,
+        use_ntft=use_ntft,
+        dealias_mask=dealias_mask,
+    )
+    (
+        b,
+        Jl,
+        JlB,
+        laguerre_to_grid,
+        laguerre_to_spectral,
+        laguerre_roots,
+        laguerre_j0,
+        laguerre_j1_over_alpha,
+    ) = _build_laguerre_gyro_cache(
+        params,
+        geom_data=geom_data,
+        kperp2=kperp2,
+        bmag=bmag,
+        Nl=Nl,
+        real_dtype=real_dtype,
+    )
+    mask0 = (grid.ky == 0.0)[:, None, None] & (grid.kx == 0.0)[None, :, None]
+    moment_cache = _build_low_rank_moment_cache_arrays(Nl, Nm, params, real_dtype)
+    lb_lam = moment_cache["lb_lam"]
+    ell_cache = moment_cache["l"]
+    m = moment_cache["m"]
+    l4 = moment_cache["l4"]
+    sqrt_m = moment_cache["sqrt_m"]
+    sqrt_m_p1 = moment_cache["sqrt_m_p1"]
+    sqrt_p = moment_cache["sqrt_p"]
+    sqrt_m_ladder = moment_cache["sqrt_m_ladder"]
+    hyper_ratio = moment_cache["hyper_ratio"]
+    ratio_l = moment_cache["ratio_l"]
+    ratio_m = moment_cache["ratio_m"]
+    ratio_lm = moment_cache["ratio_lm"]
+    mask_const = moment_cache["mask_const"]
+    mask_kz = moment_cache["mask_kz"]
+    m_pow = moment_cache["m_pow"]
+    m_norm_kz_factor = moment_cache["m_norm_kz_factor"]
+    linked_cache = _build_linked_boundary_cache(
+        grid,
+        params,
+        boundary=boundary,
+        use_twist_shift=use_twist_shift,
+        y0=y0,
+        jtwist=jtwist,
+        dz=dz,
+        real_dtype=real_dtype,
+    )
     return LinearCache(
         Jl=Jl,
         b=b.astype(real_dtype),
@@ -319,8 +511,8 @@ def build_linear_cache(
         mask_kz=mask_kz,
         m_pow=m_pow.astype(real_dtype),
         m_norm_kz_factor=m_norm_kz_factor.astype(real_dtype),
-        damp_profile=damp_profile,
-        linked_damp_profile=linked_damp_profile,
+        damp_profile=linked_cache["damp_profile"],
+        linked_damp_profile=linked_cache["linked_damp_profile"],
         l=ell_cache,
         m=m,
         l4=l4,
@@ -334,17 +526,17 @@ def build_linear_cache(
         laguerre_roots=laguerre_roots,
         laguerre_j0=laguerre_j0,
         laguerre_j1_over_alpha=laguerre_j1_over_alpha,
-        kx_link_plus=kx_link_plus,
-        kx_link_minus=kx_link_minus,
-        kx_link_mask_plus=kx_link_mask_plus,
-        kx_link_mask_minus=kx_link_mask_minus,
-        linked_full_cover=linked_full_cover,
-        linked_inverse_permutation=linked_inverse_permutation,
-        linked_gather_map=linked_gather_map,
-        linked_gather_mask=linked_gather_mask,
-        linked_use_gather=linked_use_gather,
-        linked_indices=linked_indices,
-        linked_kz=linked_kz,
+        kx_link_plus=linked_cache["kx_link_plus"],
+        kx_link_minus=linked_cache["kx_link_minus"],
+        kx_link_mask_plus=linked_cache["kx_link_mask_plus"],
+        kx_link_mask_minus=linked_cache["kx_link_mask_minus"],
+        linked_full_cover=linked_cache["linked_full_cover"],
+        linked_inverse_permutation=linked_cache["linked_inverse_permutation"],
+        linked_gather_map=linked_cache["linked_gather_map"],
+        linked_gather_mask=linked_cache["linked_gather_mask"],
+        linked_use_gather=linked_cache["linked_use_gather"],
+        linked_indices=linked_cache["linked_indices"],
+        linked_kz=linked_cache["linked_kz"],
         use_twist_shift=use_twist_shift,
-        jtwist=int(jtwist),
+        jtwist=int(linked_cache["jtwist"]),
     )
