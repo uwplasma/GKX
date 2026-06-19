@@ -57,6 +57,54 @@ def _accepted_candidates(gate: dict[str, Any]) -> list[str]:
     return [str(item) for item in raw]
 
 
+def _required_candidate_metrics(
+    candidate: dict[str, Any],
+    candidate_gate: dict[str, Any],
+    *,
+    required_candidate: str,
+    transport_gate: float | None,
+    interval_coverage_gate: float | None,
+) -> dict[str, Any]:
+    """Collect the metric bundle used by required-candidate promotion gates."""
+
+    candidates = candidate.get("candidates", {})
+    required_payload = (
+        candidates.get(required_candidate, {}) if isinstance(candidates, dict) else {}
+    )
+    if not isinstance(required_payload, dict):
+        required_payload = {}
+
+    transport_threshold = (
+        _finite_float(candidate_gate.get("transport_mean_relative_error_gate"))
+        if transport_gate is None
+        else float(transport_gate)
+    )
+    coverage_threshold = (
+        _finite_float(candidate_gate.get("interval_coverage_gate"))
+        if interval_coverage_gate is None
+        else float(interval_coverage_gate)
+    )
+    return {
+        "accepted": _accepted_candidates(candidate_gate),
+        "required_payload": required_payload,
+        "candidate_error": _finite_float(
+            required_payload.get("mean_abs_relative_error")
+        ),
+        "candidate_coverage": _finite_float(
+            required_payload.get("prediction_interval_coverage")
+        ),
+        "transport_threshold": transport_threshold,
+        "coverage_threshold": coverage_threshold,
+        "null_error": _finite_float(
+            candidate_gate.get("null_training_mean_mean_abs_relative_error")
+        ),
+        "linear_error": _finite_float(
+            candidate_gate.get("linear_weight_mean_abs_relative_error")
+        ),
+        "promotion_eligible": bool(required_payload.get("promotion_eligible", True)),
+    }
+
+
 def _calibration_summary(report: dict[str, Any]) -> dict[str, Any]:
     by_split = report.get("by_split", {})
     holdout = by_split.get("holdout", {}) if isinstance(by_split, dict) else {}
@@ -232,35 +280,22 @@ def build_quasilinear_model_selection_status(
         if isinstance(candidate.get("promotion_gate", {}), dict)
         else {}
     )
-    candidates = candidate.get("candidates", {})
-    required_payload = (
-        candidates.get(required_candidate, {}) if isinstance(candidates, dict) else {}
+    candidate_metrics = _required_candidate_metrics(
+        candidate,
+        candidate_gate,
+        required_candidate=required_candidate,
+        transport_gate=transport_gate,
+        interval_coverage_gate=interval_coverage_gate,
     )
-    if not isinstance(required_payload, dict):
-        required_payload = {}
-
-    accepted = _accepted_candidates(candidate_gate)
-    candidate_error = _finite_float(required_payload.get("mean_abs_relative_error"))
-    candidate_coverage = _finite_float(
-        required_payload.get("prediction_interval_coverage")
-    )
-    transport_threshold = (
-        _finite_float(candidate_gate.get("transport_mean_relative_error_gate"))
-        if transport_gate is None
-        else float(transport_gate)
-    )
-    coverage_threshold = (
-        _finite_float(candidate_gate.get("interval_coverage_gate"))
-        if interval_coverage_gate is None
-        else float(interval_coverage_gate)
-    )
-    null_error = _finite_float(
-        candidate_gate.get("null_training_mean_mean_abs_relative_error")
-    )
-    linear_error = _finite_float(
-        candidate_gate.get("linear_weight_mean_abs_relative_error")
-    )
-    promotion_eligible = bool(required_payload.get("promotion_eligible", True))
+    accepted = candidate_metrics["accepted"]
+    required_payload = candidate_metrics["required_payload"]
+    candidate_error = candidate_metrics["candidate_error"]
+    candidate_coverage = candidate_metrics["candidate_coverage"]
+    transport_threshold = candidate_metrics["transport_threshold"]
+    coverage_threshold = candidate_metrics["coverage_threshold"]
+    null_error = candidate_metrics["null_error"]
+    linear_error = candidate_metrics["linear_error"]
+    promotion_eligible = candidate_metrics["promotion_eligible"]
 
     summaries = [_calibration_summary(report) for report in reports]
     promoted_absolute_reports = [
