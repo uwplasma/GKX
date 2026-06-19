@@ -23,6 +23,7 @@ from spectraxgk.workflows.runtime.orchestration_scan import (
     RuntimeScanDeps,
     build_runtime_scan_batch_deps,
     build_runtime_scan_orchestration_deps,
+    run_runtime_scan_ky_task,
     run_runtime_scan_batch,
     run_runtime_scan_orchestration,
 )
@@ -38,6 +39,7 @@ __all__ = [
     "build_runtime_scan_orchestration_deps",
     "format_duration",
     "resolve_nonlinear_artifact_policy",
+    "run_runtime_scan_ky_task",
     "run_runtime_nonlinear_artifact_handoff",
     "run_runtime_scan_batch",
     "run_runtime_scan_orchestration",

@@ -69,6 +69,7 @@ from spectraxgk.workflows.runtime.results import (
 from spectraxgk.workflows.runtime.orchestration import (
     build_runtime_scan_batch_deps,
     build_runtime_scan_orchestration_deps,
+    run_runtime_scan_ky_task as _run_runtime_scan_ky_task_impl,
     run_runtime_scan_batch as _run_runtime_scan_batch_impl,
     run_runtime_scan_orchestration as _run_runtime_scan_orchestration_impl,
 )
@@ -182,30 +183,7 @@ __all__ = [
 def _run_runtime_scan_ky_task(task: dict[str, Any]) -> RuntimeLinearResult:
     """Run one independent ky point for ordered scan-worker execution."""
 
-    return run_runtime_linear(
-        task["cfg"],
-        ky_target=float(task["ky"]),
-        Nl=int(task["Nl"]),
-        Nm=int(task["Nm"]),
-        solver=str(task["solver"]),
-        method=task["method"],
-        dt=task["dt"],
-        steps=task["steps"],
-        sample_stride=task["sample_stride"],
-        auto_window=bool(task["auto_window"]),
-        tmin=task["tmin"],
-        tmax=task["tmax"],
-        window_fraction=float(task["window_fraction"]),
-        min_points=int(task["min_points"]),
-        start_fraction=float(task["start_fraction"]),
-        growth_weight=float(task["growth_weight"]),
-        require_positive=bool(task["require_positive"]),
-        min_amp_fraction=float(task["min_amp_fraction"]),
-        krylov_cfg=task["krylov_cfg"],
-        mode_method=str(task["mode_method"]),
-        fit_signal=str(task["fit_signal"]),
-        show_progress=bool(task["show_progress"]),
-    )
+    return _run_runtime_scan_ky_task_impl(task, run_runtime_linear=run_runtime_linear)
 
 
 build_flux_tube_geometry = runtime_startup.build_flux_tube_geometry
