@@ -22,7 +22,6 @@ from spectraxgk.workflows.runtime.diagnostic_arrays import (
 )
 from spectraxgk.workflows.runtime.orchestration import (
     build_runtime_progress_message,
-    format_duration,
 )
 from spectraxgk.terms.config import FieldState
 
@@ -37,12 +36,6 @@ class AdaptiveChunkResult:
 
 
 _TIME_PROGRESS_EPS = 1.0e-12
-
-
-def _format_duration(seconds: float) -> str:
-    """Compatibility wrapper for tests and private imports."""
-
-    return format_duration(seconds)
 
 
 def _offset_chunk_diagnostics_time(
