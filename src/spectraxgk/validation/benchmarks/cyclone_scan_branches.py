@@ -210,6 +210,52 @@ def _valid_time_branch_growth(
     return True
 
 
+def _resolve_time_branch_growth(
+    gamma: float,
+    omega: float,
+    *,
+    ky_value: float,
+    n_laguerre: int,
+    n_hermite: int,
+    dt: float,
+    steps: int,
+    method: str,
+    params: Any,
+    cfg: Any,
+    time_cfg: Any | None,
+    krylov_cfg: Any | None,
+    diagnostic_norm: str,
+    auto_solver: bool,
+    require_positive: bool,
+    hooks: CycloneScanHooks,
+    show_progress: bool,
+) -> tuple[float, float]:
+    """Return fitted growth/frequency, using the Krylov fallback if required."""
+
+    if not auto_solver or _valid_time_branch_growth(
+        gamma, omega, require_positive=require_positive
+    ):
+        return gamma, omega
+
+    result = hooks.run_cyclone_linear(
+        ky_target=float(ky_value),
+        Nl=n_laguerre,
+        Nm=n_hermite,
+        dt=dt,
+        steps=steps,
+        method=method,
+        params=params,
+        cfg=cfg,
+        time_cfg=time_cfg,
+        solver="krylov",
+        krylov_cfg=krylov_cfg,
+        diagnostic_norm=diagnostic_norm,
+        fit_signal="phi",
+        show_progress=show_progress,
+    )
+    return float(result.gamma), float(result.omega)
+
+
 def run_time_cyclone_scan(
     *,
     ky_values: np.ndarray,
@@ -477,29 +523,25 @@ def run_time_cyclone_scan(
                     gamma, omega = hooks.normalize_growth_rate(
                         gamma, omega, params, diagnostic_norm
                     )
-                    if auto_solver and not _valid_time_branch_growth(
+                    gamma, omega = _resolve_time_branch_growth(
                         gamma,
                         omega,
+                        ky_value=float(ky_val),
+                        n_laguerre=n_laguerre,
+                        n_hermite=n_hermite,
+                        dt=dt_i,
+                        steps=steps_i,
+                        method=method,
+                        params=params,
+                        cfg=cfg,
+                        time_cfg=time_cfg,
+                        krylov_cfg=krylov_cfg,
+                        diagnostic_norm=diagnostic_norm,
+                        auto_solver=auto_solver,
                         require_positive=require_positive,
-                    ):
-                        res = hooks.run_cyclone_linear(
-                            ky_target=float(ky_val),
-                            Nl=n_laguerre,
-                            Nm=n_hermite,
-                            dt=dt_i,
-                            steps=steps_i,
-                            method=method,
-                            params=params,
-                            cfg=cfg,
-                            time_cfg=time_cfg,
-                            solver="krylov",
-                            krylov_cfg=krylov_cfg,
-                            diagnostic_norm=diagnostic_norm,
-                            fit_signal="phi",
-                            show_progress=show_progress,
-                        )
-                        gamma = float(res.gamma)
-                        omega = float(res.omega)
+                        hooks=hooks,
+                        show_progress=show_progress,
+                    )
                     gammas.append(gamma)
                     omegas.append(omega)
                     ky_out.append(float(ky_val))
@@ -517,29 +559,25 @@ def run_time_cyclone_scan(
                 params=params,
                 diagnostic_norm=diagnostic_norm,
             )
-            if auto_solver and not _valid_time_branch_growth(
+            gamma, omega = _resolve_time_branch_growth(
                 gamma,
                 omega,
+                ky_value=float(ky_val),
+                n_laguerre=n_laguerre,
+                n_hermite=n_hermite,
+                dt=dt_i,
+                steps=steps_i,
+                method=method,
+                params=params,
+                cfg=cfg,
+                time_cfg=time_cfg,
+                krylov_cfg=krylov_cfg,
+                diagnostic_norm=diagnostic_norm,
+                auto_solver=auto_solver,
                 require_positive=require_positive,
-            ):
-                res = hooks.run_cyclone_linear(
-                    ky_target=float(ky_val),
-                    Nl=n_laguerre,
-                    Nm=n_hermite,
-                    dt=dt_i,
-                    steps=steps_i,
-                    method=method,
-                    params=params,
-                    cfg=cfg,
-                    time_cfg=time_cfg,
-                    solver="krylov",
-                    krylov_cfg=krylov_cfg,
-                    diagnostic_norm=diagnostic_norm,
-                    fit_signal="phi",
-                    show_progress=show_progress,
-                )
-                gamma = float(res.gamma)
-                omega = float(res.omega)
+                hooks=hooks,
+                show_progress=show_progress,
+            )
             gammas.append(gamma)
             omegas.append(omega)
             ky_out.append(float(ky_val))
@@ -559,6 +597,7 @@ __all__ = [
     "seed_from_explicit_trace",
     "seed_shift",
     "use_explicit_seed",
+    "_resolve_time_branch_growth",
     "_valid_time_branch_growth",
     "run_explicit_time_cyclone_scan",
     "run_krylov_cyclone_scan",
