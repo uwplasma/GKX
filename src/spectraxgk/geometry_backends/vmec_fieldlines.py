@@ -100,6 +100,12 @@ def _boozer_mode_angle(
     return xm_b[mode_index] * theta_eval[None, ...] - xn_b[mode_index] * phi_b[None, ...]
 
 
+def _boozer_mode_sum(coefficients: np.ndarray, basis: np.ndarray) -> np.ndarray:
+    """Contract Boozer mode coefficients with a basis carrying ``(mode, surface, ...)``."""
+
+    return np.einsum("ij,ji...->i...", coefficients, basis)
+
+
 def _fieldline_boozer_coordinates(
     theta1d: np.ndarray,
     alpha_arr: np.ndarray,
@@ -132,8 +138,8 @@ def _axisym_flip_required(
     if not isaxisym:
         return False
     angle_b_chk = _boozer_mode_angle(xm_b, xn_b, theta_b, phi_b, flipit=False)
-    r_check = np.einsum("ij,jikl->ikl", rmnc_b, np.cos(angle_b_chk))
-    z_check = np.einsum("ij,jikl->ikl", zmns_b, np.sin(angle_b_chk))
+    r_check = _boozer_mode_sum(rmnc_b, np.cos(angle_b_chk))
+    z_check = _boozer_mode_sum(zmns_b, np.sin(angle_b_chk))
     return bool(
         r_check[0, 0, 0] > r_check[0, 0, 1]
         or z_check[0, 0, 1] > z_check[0, 0, 0]
@@ -209,16 +215,16 @@ def _flux_surface_hngc_averages(
     msinangle_b_2D = xm_b[:, None, None, None, None] * sinangle_b_2D
     nsinangle_b_2D = xn_b[:, None, None, None, None] * sinangle_b_2D
 
-    lambda_b_2D = np.einsum("ij,jiklm->iklm", lambmnc_b, cosangle_b_2D)
-    R_b_2D = np.einsum("ij,jiklm->iklm", rmnc_b, cosangle_b_2D)
-    d_R_b_d_theta_b_2D = -np.einsum("ij,jiklm->iklm", rmnc_b, msinangle_b_2D)
-    d_R_b_d_phi_b_2D = np.einsum("ij,jiklm->iklm", rmnc_b, ncosangle_b_2D)
-    d_Z_b_d_theta_b_2D = np.einsum("ij,jiklm->iklm", zmns_b, mcosangle_b_2D)
-    d_Z_b_d_phi_b_2D = -np.einsum("ij,jiklm->iklm", zmns_b, ncosangle_b_2D)
-    nu_b_2D = np.einsum("ij,jiklm->iklm", numns_b, sinangle_b_2D)
-    d_nu_b_d_theta_b_2D = np.einsum("ij,jiklm->iklm", numns_b, mcosangle_b_2D)
-    d_nu_b_d_phi_b_2D = -np.einsum("ij,jiklm->iklm", numns_b, nsinangle_b_2D)
-    sqrt_g_booz_2D = np.einsum("ij,jiklm->iklm", gmnc_b, cosangle_b_2D)
+    lambda_b_2D = _boozer_mode_sum(lambmnc_b, cosangle_b_2D)
+    R_b_2D = _boozer_mode_sum(rmnc_b, cosangle_b_2D)
+    d_R_b_d_theta_b_2D = -_boozer_mode_sum(rmnc_b, msinangle_b_2D)
+    d_R_b_d_phi_b_2D = _boozer_mode_sum(rmnc_b, ncosangle_b_2D)
+    d_Z_b_d_theta_b_2D = _boozer_mode_sum(zmns_b, mcosangle_b_2D)
+    d_Z_b_d_phi_b_2D = -_boozer_mode_sum(zmns_b, ncosangle_b_2D)
+    nu_b_2D = _boozer_mode_sum(numns_b, sinangle_b_2D)
+    d_nu_b_d_theta_b_2D = _boozer_mode_sum(numns_b, mcosangle_b_2D)
+    d_nu_b_d_phi_b_2D = -_boozer_mode_sum(numns_b, nsinangle_b_2D)
+    sqrt_g_booz_2D = _boozer_mode_sum(gmnc_b, cosangle_b_2D)
 
     ph_nat_2D = ph_b_2D - nu_b_2D
     sinphi_2D = np.sin(ph_nat_2D)
@@ -382,26 +388,26 @@ def _vmec_fieldlines(
     ncosangle_b = xn_b[:, None, None, None] * cosangle_b
     nsinangle_b = xn_b[:, None, None, None] * sinangle_b
 
-    R_b = np.einsum("ij,jikl->ikl", rmnc_b, cosangle_b)
-    d_R_b_d_s = np.einsum("ij,jikl->ikl", d_rmnc_b_d_s, cosangle_b)
-    d_R_b_d_theta_b = -np.einsum("ij,jikl->ikl", rmnc_b, msinangle_b)
-    d_R_b_d_phi_b = np.einsum("ij,jikl->ikl", rmnc_b, nsinangle_b)
+    R_b = _boozer_mode_sum(rmnc_b, cosangle_b)
+    d_R_b_d_s = _boozer_mode_sum(d_rmnc_b_d_s, cosangle_b)
+    d_R_b_d_theta_b = -_boozer_mode_sum(rmnc_b, msinangle_b)
+    d_R_b_d_phi_b = _boozer_mode_sum(rmnc_b, nsinangle_b)
 
-    Z_b = np.einsum("ij,jikl->ikl", zmns_b, sinangle_b)
-    d_Z_b_d_s = np.einsum("ij,jikl->ikl", d_zmns_b_d_s, sinangle_b)
-    d_Z_b_d_theta_b = np.einsum("ij,jikl->ikl", zmns_b, mcosangle_b)
-    d_Z_b_d_phi_b = -np.einsum("ij,jikl->ikl", zmns_b, ncosangle_b)
+    Z_b = _boozer_mode_sum(zmns_b, sinangle_b)
+    d_Z_b_d_s = _boozer_mode_sum(d_zmns_b_d_s, sinangle_b)
+    d_Z_b_d_theta_b = _boozer_mode_sum(zmns_b, mcosangle_b)
+    d_Z_b_d_phi_b = -_boozer_mode_sum(zmns_b, ncosangle_b)
 
-    nu_b = np.einsum("ij,jikl->ikl", numns_b, sinangle_b)
-    d_nu_b_d_s = np.einsum("ij,jikl->ikl", d_numns_b_d_s, sinangle_b)
-    d_nu_b_d_theta_b = np.einsum("ij,jikl->ikl", numns_b, mcosangle_b)
-    d_nu_b_d_phi_b = -np.einsum("ij,jikl->ikl", numns_b, ncosangle_b)
+    nu_b = _boozer_mode_sum(numns_b, sinangle_b)
+    d_nu_b_d_s = _boozer_mode_sum(d_numns_b_d_s, sinangle_b)
+    d_nu_b_d_theta_b = _boozer_mode_sum(numns_b, mcosangle_b)
+    d_nu_b_d_phi_b = -_boozer_mode_sum(numns_b, ncosangle_b)
 
-    sqrt_g_booz = np.einsum("ij,jikl->ikl", gmnc_b, cosangle_b)
-    d_sqrt_g_booz_d_theta_b = -np.einsum("ij,jikl->ikl", gmnc_b, msinangle_b)
-    d_sqrt_g_booz_d_phi_b = np.einsum("ij,jikl->ikl", gmnc_b, nsinangle_b)
-    modB_b = np.einsum("ij,jikl->ikl", bmnc_b, cosangle_b)
-    d_B_b_d_s = np.einsum("ij,jikl->ikl", d_bmnc_b_d_s, cosangle_b)
+    sqrt_g_booz = _boozer_mode_sum(gmnc_b, cosangle_b)
+    d_sqrt_g_booz_d_theta_b = -_boozer_mode_sum(gmnc_b, msinangle_b)
+    d_sqrt_g_booz_d_phi_b = _boozer_mode_sum(gmnc_b, nsinangle_b)
+    modB_b = _boozer_mode_sum(bmnc_b, cosangle_b)
+    d_B_b_d_s = _boozer_mode_sum(d_bmnc_b_d_s, cosangle_b)
 
     Vprime = gmnc_b[:, 0]  # flux-surface volume element (m=0, n=0 Boozer mode)
 
@@ -427,8 +433,8 @@ def _vmec_fieldlines(
         / (safe_denom_mn * (G[:, None] + iota[:, None] * boozer_i[:, None]))
     )
 
-    beta_b = np.einsum("ij,jikl->ikl", betamns_b, sinangle_b)
-    lambda_b = np.einsum("ij,jikl->ikl", lambmnc_b, cosangle_b)
+    beta_b = _boozer_mode_sum(betamns_b, sinangle_b)
+    lambda_b = _boozer_mode_sum(lambmnc_b, cosangle_b)
 
     # Cartesian coordinate derivatives for basis vectors
     phi_cyl = phi_b - nu_b
