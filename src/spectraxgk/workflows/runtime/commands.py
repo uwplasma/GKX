@@ -537,6 +537,47 @@ def _write_command_outputs(
     return paths
 
 
+def _write_linear_runtime_command_outputs(
+    args: Any,
+    cfg: RuntimeConfig,
+    result: RuntimeLinearResult,
+    *,
+    deps: RuntimeCommandDeps,
+) -> dict[str, dict[str, str]]:
+    """Write all optional artifacts produced by one linear runtime command."""
+
+    linear_paths = _write_command_outputs(
+        runtime_output_path(args, cfg),
+        result,
+        writer=deps.write_runtime_linear_artifacts,
+        display_keys=_LINEAR_ARTIFACT_DISPLAY_KEYS,
+    )
+    ql_paths = _write_command_outputs(
+        getattr(args, "ql_output", None) or cfg.quasilinear.output_path,
+        result.quasilinear,
+        writer=deps.write_quasilinear_artifacts,
+        display_keys=_QUASILINEAR_ARTIFACT_DISPLAY_KEYS,
+    )
+    return {"linear": linear_paths, "quasilinear": ql_paths}
+
+
+def _write_scan_runtime_command_outputs(
+    args: Any,
+    cfg: RuntimeConfig,
+    scan: Any,
+    *,
+    deps: RuntimeCommandDeps,
+) -> dict[str, str]:
+    """Write optional artifacts produced by one linear-scan runtime command."""
+
+    return _write_command_outputs(
+        runtime_output_path(args, cfg) or cfg.quasilinear.output_path,
+        scan,
+        writer=deps.write_runtime_linear_scan_artifacts,
+        display_keys=_SCAN_ARTIFACT_DISPLAY_KEYS,
+    )
+
+
 def print_nonlinear_command_outputs(paths: Mapping[str, str], *, enabled: bool) -> None:
     """Print nonlinear artifact paths after diagnostics confirm a saved run."""
 
@@ -614,20 +655,7 @@ def run_runtime_linear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:
         **fit_cfg,
     )
     print(f"ky={res.ky:.4f} gamma={res.gamma:.6f} omega={res.omega:.6f}")
-    out_path = runtime_output_path(args, cfg)
-    _write_command_outputs(
-        out_path,
-        res,
-        writer=deps.write_runtime_linear_artifacts,
-        display_keys=_LINEAR_ARTIFACT_DISPLAY_KEYS,
-    )
-    ql_output = getattr(args, "ql_output", None) or cfg.quasilinear.output_path
-    _write_command_outputs(
-        ql_output,
-        res.quasilinear,
-        writer=deps.write_quasilinear_artifacts,
-        display_keys=_QUASILINEAR_ARTIFACT_DISPLAY_KEYS,
-    )
+    _write_linear_runtime_command_outputs(args, cfg, res, deps=deps)
     return 0
 
 
@@ -663,13 +691,7 @@ def scan_runtime_linear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:
     )
     for ky, g, w in zip(scan.ky, scan.gamma, scan.omega):
         print(f"ky={ky:.4f} gamma={g:.6f} omega={w:.6f}")
-    out_path = runtime_output_path(args, cfg) or cfg.quasilinear.output_path
-    _write_command_outputs(
-        out_path,
-        scan,
-        writer=deps.write_runtime_linear_scan_artifacts,
-        display_keys=_SCAN_ARTIFACT_DISPLAY_KEYS,
-    )
+    _write_scan_runtime_command_outputs(args, cfg, scan, deps=deps)
     return 0
 
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Mapping
 
 from spectraxgk.workflows.runtime.config import RuntimeConfig
 from spectraxgk.workflows.runtime.results import RuntimeLinearResult, RuntimeNonlinearResult
@@ -35,6 +35,27 @@ RUNTIME_CASE_FIT_KEYS = {
     "mode_method",
     "fit_signal",
 }
+
+_CASE_LINEAR_SPECS = (
+    ("ky_target", "run", "ky", 0.3, float),
+    ("Nl", "run", "Nl", 24, int),
+    ("Nm", "run", "Nm", 12, int),
+    ("solver", "run", "solver", "auto", str),
+    ("method", "run", "method", None, None),
+    ("dt", "run", "dt", None, None),
+    ("steps", "run", "steps", None, None),
+    ("sample_stride", "time", "sample_stride", None, None),
+)
+_CASE_NONLINEAR_SPECS = (
+    ("ky_target", "run", "ky", 0.3, float),
+    ("Nl", "run", "Nl", 4, int),
+    ("Nm", "run", "Nm", 8, int),
+    ("method", "run", "method", None, None),
+    ("dt", "time", "dt", None, None),
+    ("steps", "run", "steps", None, None),
+    ("sample_stride", "time", "sample_stride", None, None),
+    ("diagnostics_stride", "time", "diagnostics_stride", None, None),
+)
 
 
 @dataclass(frozen=True)
@@ -87,6 +108,57 @@ def default_runtime_case_deps() -> RuntimeCaseDeps:
     )
 
 
+def _runtime_case_fit_config(raw: dict[str, Any]) -> dict[str, Any]:
+    """Return fit options accepted by programmatic runtime-case helpers."""
+
+    return {k: v for k, v in raw.get("fit", {}).items() if k in RUNTIME_CASE_FIT_KEYS}
+
+
+def _case_run_kwargs(
+    raw: dict[str, Any],
+    overrides: Mapping[str, Any],
+    specs: tuple[tuple[str, str, str, Any, Callable[[Any], Any] | None], ...],
+) -> dict[str, Any]:
+    """Resolve explicit Python arguments before falling back to TOML/defaults."""
+
+    run_cfg = dict(raw.get("run", {}))
+    time_cfg = dict(raw.get("time", {}))
+    sections = {"run": run_cfg, "time": time_cfg}
+    resolved: dict[str, Any] = {}
+    for output_name, section_name, input_name, default, converter in specs:
+        value = overrides.get(input_name)
+        if value is None:
+            value = sections[section_name].get(input_name, default)
+        resolved[output_name] = converter(value) if converter is not None else value
+    return resolved
+
+
+def _nonlinear_case_run_kwargs(
+    raw: dict[str, Any],
+    overrides: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Resolve keyword arguments for one programmatic nonlinear TOML case."""
+
+    resolved = _case_run_kwargs(raw, overrides, _CASE_NONLINEAR_SPECS)
+    resolved["diagnostics"] = True
+    return resolved
+
+
+def _linear_case_run_kwargs(
+    raw: dict[str, Any],
+    overrides: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Resolve keyword arguments for one programmatic linear TOML case."""
+
+    return _case_run_kwargs(raw, overrides, _CASE_LINEAR_SPECS)
+
+
+def _status_printer(message: str) -> None:
+    """Print programmatic runtime-case progress messages."""
+
+    print(f"runtime: {message}")
+
+
 def run_linear_case(
     config_path: str | Path,
     *,
@@ -105,25 +177,25 @@ def run_linear_case(
 
     case_deps = default_runtime_case_deps() if deps is None else deps
     cfg, raw = case_deps.load_runtime_from_toml(config_path)
-    run_cfg = dict(raw.get("run", {}))
-    fit_cfg = {
-        k: v for k, v in raw.get("fit", {}).items() if k in RUNTIME_CASE_FIT_KEYS
-    }
+    run_kwargs = _linear_case_run_kwargs(
+        raw,
+        {
+            "ky": ky,
+            "Nl": Nl,
+            "Nm": Nm,
+            "solver": solver,
+            "method": method,
+            "dt": dt,
+            "steps": steps,
+            "sample_stride": sample_stride,
+        },
+    )
+    run_kwargs["show_progress"] = show_progress
 
     result = case_deps.run_runtime_linear(
         cfg,
-        ky_target=float(ky if ky is not None else run_cfg.get("ky", 0.3)),
-        Nl=int(Nl if Nl is not None else run_cfg.get("Nl", 24)),
-        Nm=int(Nm if Nm is not None else run_cfg.get("Nm", 12)),
-        solver=str(solver if solver is not None else run_cfg.get("solver", "auto")),
-        method=method if method is not None else run_cfg.get("method", None),
-        dt=dt if dt is not None else run_cfg.get("dt", None),
-        steps=steps if steps is not None else run_cfg.get("steps", None),
-        sample_stride=sample_stride
-        if sample_stride is not None
-        else raw.get("time", {}).get("sample_stride", None),
-        show_progress=show_progress,
-        **fit_cfg,
+        **run_kwargs,
+        **_runtime_case_fit_config(raw),
     )
     if cfg.output.path:
         paths = case_deps.write_runtime_linear_artifacts(cfg.output.path, result)
@@ -151,62 +223,36 @@ def run_nonlinear_case(
 
     case_deps = default_runtime_case_deps() if deps is None else deps
     cfg, raw = case_deps.load_runtime_from_toml(config_path)
-    run_cfg = dict(raw.get("run", {}))
-    time_cfg = dict(raw.get("time", {}))
-
-    def _status(message: str) -> None:
-        print(f"runtime: {message}")
-
-    ky_target = float(ky if ky is not None else run_cfg.get("ky", 0.3))
-    Nl_use = int(Nl if Nl is not None else run_cfg.get("Nl", 4))
-    Nm_use = int(Nm if Nm is not None else run_cfg.get("Nm", 8))
-    method_use = method if method is not None else run_cfg.get("method", None)
-    dt_use = dt if dt is not None else time_cfg.get("dt", None)
-    steps_use = steps if steps is not None else run_cfg.get("steps", None)
-    sample_stride_use = (
-        sample_stride
-        if sample_stride is not None
-        else time_cfg.get("sample_stride", None)
+    run_kwargs = _nonlinear_case_run_kwargs(
+        raw,
+        {
+            "ky": ky,
+            "Nl": Nl,
+            "Nm": Nm,
+            "method": method,
+            "dt": dt,
+            "steps": steps,
+            "sample_stride": sample_stride,
+            "diagnostics_stride": diagnostics_stride,
+        },
     )
-    diagnostics_stride_use = (
-        diagnostics_stride
-        if diagnostics_stride is not None
-        else time_cfg.get("diagnostics_stride", None)
-    )
+    run_kwargs["show_progress"] = show_progress
 
     if cfg.output.path:
         result, paths = case_deps.run_runtime_nonlinear_with_artifacts(
             cfg,
             out=cfg.output.path,
-            ky_target=ky_target,
-            Nl=Nl_use,
-            Nm=Nm_use,
-            dt=dt_use,
-            steps=steps_use,
-            method=method_use,
-            sample_stride=sample_stride_use,
-            diagnostics_stride=diagnostics_stride_use,
-            diagnostics=True,
-            show_progress=show_progress,
-            status_callback=_status,
+            **run_kwargs,
+            status_callback=_status_printer,
         )
         if "summary" in paths:
             print(f"saved {paths['summary']}")
     else:
         result = case_deps.run_runtime_nonlinear(
             cfg,
-            ky_target=ky_target,
-            Nl=Nl_use,
-            Nm=Nm_use,
-            method=method_use,
-            dt=dt_use,
-            steps=steps_use,
-            sample_stride=sample_stride_use,
-            diagnostics_stride=diagnostics_stride_use,
-            diagnostics=True,
             resolved_diagnostics=False,
-            show_progress=show_progress,
-            status_callback=_status,
+            **run_kwargs,
+            status_callback=_status_printer,
         )
     if result.diagnostics is None or result.ky_selected is None:
         print("completed without streamed diagnostics")
@@ -222,5 +268,3 @@ def run_nonlinear_case(
         )
     )
     return 0
-
-
