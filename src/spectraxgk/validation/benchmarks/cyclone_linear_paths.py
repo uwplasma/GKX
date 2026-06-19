@@ -408,6 +408,28 @@ def run_cyclone_time_path(
     t_arr = np.arange(phi_t_np.shape[0]) * dt * stride
     density_np = None if density_t is None else np.asarray(density_t)
     status(f"integration complete; fitting growth rate from {phi_t_np.shape[0]} saved samples")
+    auto_fit_kwargs: dict[str, Any] = {
+        "tmin": tmin,
+        "tmax": tmax,
+        "window_fraction": window_fraction,
+        "min_points": min_points,
+        "start_fraction": start_fraction,
+        "growth_weight": growth_weight,
+        "require_positive": require_positive,
+        "min_amp_fraction": min_amp_fraction,
+        "max_amp_fraction": max_amp_fraction,
+        "window_method": window_method,
+        "max_fraction": max_fraction,
+        "end_fraction": end_fraction,
+        "num_windows": 8,
+        "phase_weight": phase_weight,
+        "length_weight": length_weight,
+        "min_r2": min_r2,
+        "late_penalty": late_penalty,
+        "min_slope": min_slope,
+        "min_slope_frac": min_slope_frac,
+        "slope_var_weight": slope_var_weight,
+    }
     if fit_key == "auto":
         _signal, name, gamma_out, omega_out = _select_fit_signal_auto(
             t_arr,
@@ -415,26 +437,7 @@ def run_cyclone_time_path(
             density_np,
             sel,
             mode_method=mode_method,
-            tmin=tmin,
-            tmax=tmax,
-            window_fraction=window_fraction,
-            min_points=min_points,
-            start_fraction=start_fraction,
-            growth_weight=growth_weight,
-            require_positive=require_positive,
-            min_amp_fraction=min_amp_fraction,
-            max_amp_fraction=max_amp_fraction,
-            window_method=window_method,
-            max_fraction=max_fraction,
-            end_fraction=end_fraction,
-            num_windows=8,
-            phase_weight=phase_weight,
-            length_weight=length_weight,
-            min_r2=min_r2,
-            late_penalty=late_penalty,
-            min_slope=min_slope,
-            min_slope_frac=min_slope_frac,
-            slope_var_weight=slope_var_weight,
+            **auto_fit_kwargs,
         )
         status(f"automatic fit selected signal '{name}'")
         if not np.isfinite(gamma_out) or not np.isfinite(omega_out):
@@ -451,23 +454,7 @@ def run_cyclone_time_path(
             gamma_out, omega_out, _tmin, _tmax = fit_growth_rate_auto(
                 t_arr,
                 signal,
-                window_fraction=window_fraction,
-                min_points=min_points,
-                start_fraction=start_fraction,
-                growth_weight=growth_weight,
-                require_positive=require_positive,
-                min_amp_fraction=min_amp_fraction,
-                max_fraction=max_fraction,
-                end_fraction=end_fraction,
-                max_amp_fraction=max_amp_fraction,
-                phase_weight=phase_weight,
-                length_weight=length_weight,
-                min_r2=min_r2,
-                late_penalty=late_penalty,
-                min_slope=min_slope,
-                min_slope_frac=min_slope_frac,
-                slope_var_weight=slope_var_weight,
-                window_method=window_method,
+                **auto_fit_kwargs,
             )
         else:
             gamma_out, omega_out = fit_growth_rate(t_arr, signal, tmin=tmin, tmax=tmax)
