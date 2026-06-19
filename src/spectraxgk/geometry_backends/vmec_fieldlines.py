@@ -175,6 +175,88 @@ def _centered_fieldline_integral(
     return integrated - midpoint_value
 
 
+def _flux_surface_hngc_averages(
+    *,
+    xm_b: np.ndarray,
+    xn_b: np.ndarray,
+    flipit: bool,
+    lambmnc_b: np.ndarray,
+    rmnc_b: np.ndarray,
+    zmns_b: np.ndarray,
+    numns_b: np.ndarray,
+    gmnc_b: np.ndarray,
+    res_theta: int,
+    res_phi: int,
+) -> tuple[float, float]:
+    """Return ``D1`` and ``D2`` Hegna-Nakajima flux-surface averages."""
+
+    theta_b_grid = np.linspace(-np.pi, np.pi, res_theta)
+    phi_b_grid = np.linspace(-np.pi, np.pi, res_phi)
+    th_b_2D, ph_b_2D = np.meshgrid(theta_b_grid, phi_b_grid)
+
+    angle_b_2D = _boozer_mode_angle(
+        xm_b,
+        xn_b,
+        th_b_2D[None, None, :, :],
+        ph_b_2D[None, None, :, :],
+        flipit=bool(flipit),
+    )
+
+    cosangle_b_2D = np.cos(angle_b_2D)
+    sinangle_b_2D = np.sin(angle_b_2D)
+    mcosangle_b_2D = xm_b[:, None, None, None, None] * cosangle_b_2D
+    ncosangle_b_2D = xn_b[:, None, None, None, None] * cosangle_b_2D
+    msinangle_b_2D = xm_b[:, None, None, None, None] * sinangle_b_2D
+    nsinangle_b_2D = xn_b[:, None, None, None, None] * sinangle_b_2D
+
+    lambda_b_2D = np.einsum("ij,jiklm->iklm", lambmnc_b, cosangle_b_2D)
+    R_b_2D = np.einsum("ij,jiklm->iklm", rmnc_b, cosangle_b_2D)
+    d_R_b_d_theta_b_2D = -np.einsum("ij,jiklm->iklm", rmnc_b, msinangle_b_2D)
+    d_R_b_d_phi_b_2D = np.einsum("ij,jiklm->iklm", rmnc_b, ncosangle_b_2D)
+    d_Z_b_d_theta_b_2D = np.einsum("ij,jiklm->iklm", zmns_b, mcosangle_b_2D)
+    d_Z_b_d_phi_b_2D = -np.einsum("ij,jiklm->iklm", zmns_b, ncosangle_b_2D)
+    nu_b_2D = np.einsum("ij,jiklm->iklm", numns_b, sinangle_b_2D)
+    d_nu_b_d_theta_b_2D = np.einsum("ij,jiklm->iklm", numns_b, mcosangle_b_2D)
+    d_nu_b_d_phi_b_2D = -np.einsum("ij,jiklm->iklm", numns_b, nsinangle_b_2D)
+    sqrt_g_booz_2D = np.einsum("ij,jiklm->iklm", gmnc_b, cosangle_b_2D)
+
+    ph_nat_2D = ph_b_2D - nu_b_2D
+    sinphi_2D = np.sin(ph_nat_2D)
+    cosphi_2D = np.cos(ph_nat_2D)
+
+    d_X_d_th_b_2D = d_R_b_d_theta_b_2D * cosphi_2D - R_b_2D * sinphi_2D * (
+        -d_nu_b_d_theta_b_2D
+    )
+    d_X_d_phi_2D = d_R_b_d_phi_b_2D * cosphi_2D - R_b_2D * sinphi_2D * (
+        1.0 - d_nu_b_d_phi_b_2D
+    )
+    d_Y_d_th_b_2D = d_R_b_d_theta_b_2D * sinphi_2D + R_b_2D * cosphi_2D * (
+        -d_nu_b_d_theta_b_2D
+    )
+    d_Y_d_phi_2D = d_R_b_d_phi_b_2D * sinphi_2D + R_b_2D * cosphi_2D * (
+        1.0 - d_nu_b_d_phi_b_2D
+    )
+
+    grad_psi_X_2D = (
+        d_Y_d_th_b_2D * d_Z_b_d_phi_b_2D - d_Z_b_d_theta_b_2D * d_Y_d_phi_2D
+    ) / sqrt_g_booz_2D
+    grad_psi_Y_2D = (
+        d_Z_b_d_theta_b_2D * d_X_d_phi_2D - d_X_d_th_b_2D * d_Z_b_d_phi_b_2D
+    ) / sqrt_g_booz_2D
+    grad_psi_Z_2D = (
+        d_X_d_th_b_2D * d_Y_d_phi_2D - d_Y_d_th_b_2D * d_X_d_phi_2D
+    ) / sqrt_g_booz_2D
+
+    g_sup_psi_psi_2D = grad_psi_X_2D**2 + grad_psi_Y_2D**2 + grad_psi_Z_2D**2
+    g_sup_psi_psi_2D_inv = 1.0 / g_sup_psi_psi_2D
+    lam_over_g_2D = lambda_b_2D * g_sup_psi_psi_2D_inv
+
+    return (
+        _surface_average_2d(g_sup_psi_psi_2D_inv[0, 0], theta_b_grid, phi_b_grid),
+        _surface_average_2d(lam_over_g_2D[0, 0], theta_b_grid, phi_b_grid),
+    )
+
+
 def _vmec_fieldlines(
     vmec_fname: str | Path,
     s_val: float,
@@ -411,74 +493,18 @@ def _vmec_fieldlines(
         - iota[:, None, None] * grad_phi_b_Z
     )
 
-    # ------------------------------------------------------------------
-    # Flux-surface integrals D1, D2 (Hegna-Nakajima correction)
-    # ------------------------------------------------------------------
-    theta_b_grid = np.linspace(-np.pi, np.pi, res_theta)
-    phi_b_grid = np.linspace(-np.pi, np.pi, res_phi)
-    th_b_2D, ph_b_2D = np.meshgrid(theta_b_grid, phi_b_grid)  # (res_phi, res_theta)
-
-    angle_b_2D = _boozer_mode_angle(
-        xm_b,
-        xn_b,
-        th_b_2D[None, None, :, :],
-        ph_b_2D[None, None, :, :],
+    D1, D2 = _flux_surface_hngc_averages(
+        xm_b=xm_b,
+        xn_b=xn_b,
         flipit=bool(flipit),
+        lambmnc_b=lambmnc_b,
+        rmnc_b=rmnc_b,
+        zmns_b=zmns_b,
+        numns_b=numns_b,
+        gmnc_b=gmnc_b,
+        res_theta=res_theta,
+        res_phi=res_phi,
     )
-
-    cosangle_b_2D = np.cos(angle_b_2D)
-    sinangle_b_2D = np.sin(angle_b_2D)
-    mcosangle_b_2D = xm_b[:, None, None, None, None] * cosangle_b_2D
-    ncosangle_b_2D = xn_b[:, None, None, None, None] * cosangle_b_2D
-    msinangle_b_2D = xm_b[:, None, None, None, None] * sinangle_b_2D
-    nsinangle_b_2D = xn_b[:, None, None, None, None] * sinangle_b_2D
-
-    lambda_b_2D = np.einsum("ij,jiklm->iklm", lambmnc_b, cosangle_b_2D)
-    R_b_2D = np.einsum("ij,jiklm->iklm", rmnc_b, cosangle_b_2D)
-    d_R_b_d_theta_b_2D = -np.einsum("ij,jiklm->iklm", rmnc_b, msinangle_b_2D)
-    d_R_b_d_phi_b_2D = np.einsum("ij,jiklm->iklm", rmnc_b, ncosangle_b_2D)
-    d_Z_b_d_theta_b_2D = np.einsum("ij,jiklm->iklm", zmns_b, mcosangle_b_2D)
-    d_Z_b_d_phi_b_2D = -np.einsum("ij,jiklm->iklm", zmns_b, ncosangle_b_2D)
-    nu_b_2D = np.einsum("ij,jiklm->iklm", numns_b, sinangle_b_2D)
-    d_nu_b_d_theta_b_2D = np.einsum("ij,jiklm->iklm", numns_b, mcosangle_b_2D)
-    d_nu_b_d_phi_b_2D = -np.einsum("ij,jiklm->iklm", numns_b, nsinangle_b_2D)
-    sqrt_g_booz_2D = np.einsum("ij,jiklm->iklm", gmnc_b, cosangle_b_2D)
-    Z_b_2D = np.einsum("ij,jiklm->iklm", zmns_b, sinangle_b_2D)  # noqa: F841
-
-    ph_nat_2D = ph_b_2D - nu_b_2D
-    sinphi_2D = np.sin(ph_nat_2D)
-    cosphi_2D = np.cos(ph_nat_2D)
-
-    d_X_d_th_b_2D = d_R_b_d_theta_b_2D * cosphi_2D - R_b_2D * sinphi_2D * (
-        -d_nu_b_d_theta_b_2D
-    )
-    d_X_d_phi_2D = d_R_b_d_phi_b_2D * cosphi_2D - R_b_2D * sinphi_2D * (
-        1.0 - d_nu_b_d_phi_b_2D
-    )
-    d_Y_d_th_b_2D = d_R_b_d_theta_b_2D * sinphi_2D + R_b_2D * cosphi_2D * (
-        -d_nu_b_d_theta_b_2D
-    )
-    d_Y_d_phi_2D = d_R_b_d_phi_b_2D * sinphi_2D + R_b_2D * cosphi_2D * (
-        1.0 - d_nu_b_d_phi_b_2D
-    )
-
-    grad_psi_X_2D = (
-        d_Y_d_th_b_2D * d_Z_b_d_phi_b_2D - d_Z_b_d_theta_b_2D * d_Y_d_phi_2D
-    ) / sqrt_g_booz_2D
-    grad_psi_Y_2D = (
-        d_Z_b_d_theta_b_2D * d_X_d_phi_2D - d_X_d_th_b_2D * d_Z_b_d_phi_b_2D
-    ) / sqrt_g_booz_2D
-    grad_psi_Z_2D = (
-        d_X_d_th_b_2D * d_Y_d_phi_2D - d_Y_d_th_b_2D * d_X_d_phi_2D
-    ) / sqrt_g_booz_2D
-
-    g_sup_psi_psi_2D = grad_psi_X_2D**2 + grad_psi_Y_2D**2 + grad_psi_Z_2D**2
-    g_sup_psi_psi_2D_inv = 1.0 / g_sup_psi_psi_2D
-    lam_over_g_2D = lambda_b_2D * g_sup_psi_psi_2D_inv
-
-    # Flux-surface averages over the (res_phi, res_theta) 2-D grid
-    D1 = _surface_average_2d(g_sup_psi_psi_2D_inv[0, 0], theta_b_grid, phi_b_grid)
-    D2 = _surface_average_2d(lam_over_g_2D[0, 0], theta_b_grid, phi_b_grid)
 
     # Cumulative integrals along the field line
     theta_1d = theta_b[0, 0]
