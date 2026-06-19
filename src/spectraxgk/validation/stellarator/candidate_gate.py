@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any
 
 import numpy as np
 
@@ -35,6 +35,71 @@ def _finite_gate(value: float | None, *, lower: float | None = None, upper: floa
     if upper is not None and value > float(upper):
         return False
     return True
+
+
+def _checks_passed(checks: Mapping[str, Mapping[str, Any]]) -> bool:
+    return all(bool(check.get("passed")) for check in checks.values())
+
+
+def _aspect_check(value: float | None, *, target: float, tolerance: float) -> dict[str, Any]:
+    error = None if value is None else abs(value - float(target))
+    return {
+        "value": value,
+        "target": float(target),
+        "absolute_error": error,
+        "absolute_tolerance": float(tolerance),
+        "passed": _finite_gate(error, upper=float(tolerance)),
+    }
+
+
+def _mean_iota_check(value: float | None, *, minimum_abs: float) -> dict[str, Any]:
+    magnitude = None if value is None else abs(value)
+    return {
+        "value": magnitude,
+        "minimum_abs": float(minimum_abs),
+        "margin": None if magnitude is None else magnitude - float(minimum_abs),
+        "passed": _finite_gate(magnitude, lower=float(minimum_abs)),
+    }
+
+
+def _profile_floor_passed(
+    min_iotas: float | None,
+    min_iotaf: float | None,
+    floor: float | None,
+) -> bool:
+    if floor is None:
+        return True
+    floor_value = float(floor)
+    return _finite_gate(min_iotas, lower=floor_value) and _finite_gate(min_iotaf, lower=floor_value)
+
+
+def _iota_profile_check(
+    min_iotas: float | None,
+    min_iotaf: float | None,
+    *,
+    floor: float | None,
+    source: str | None = None,
+) -> dict[str, Any]:
+    check: dict[str, Any] = {
+        "minimum_iotas_excluding_axis": min_iotas,
+        "minimum_iotaf": min_iotaf,
+        "floor": None if floor is None else float(floor),
+        "passed": _profile_floor_passed(min_iotas, min_iotaf, floor),
+    }
+    if source is not None:
+        check["source"] = source
+    return check
+
+
+def _profile_minima_from_arrays(iotas: np.ndarray, iotaf: np.ndarray) -> tuple[float | None, float | None]:
+    iotas = np.asarray(iotas, dtype=float)
+    iotaf = np.asarray(iotaf, dtype=float)
+    profile = iotas[1:] if iotas.size > 1 else iotas
+    full_profile = iotaf[np.isfinite(iotaf)]
+    return (
+        _finite_float_or_none(np.nanmin(profile)) if profile.size else None,
+        _finite_float_or_none(np.nanmin(full_profile)) if full_profile.size else None,
+    )
 
 
 def final_iota_profiles_from_vmec_result(result: Any) -> tuple[np.ndarray, np.ndarray] | None:
@@ -210,12 +275,6 @@ def build_authoritative_wout_candidate_gate(
     mean_iota = _finite_float_or_none(summary.get("mean_iota"))
     min_iotas = _finite_float_or_none(summary.get("min_iotas_excluding_axis"))
     min_iotaf = _finite_float_or_none(summary.get("min_iotaf"))
-    profile_floor_passed = True
-    if iota_profile_floor is not None:
-        profile_floor_passed = _finite_gate(min_iotas, lower=float(iota_profile_floor)) and _finite_gate(
-            min_iotaf,
-            lower=float(iota_profile_floor),
-        )
     qs_value, qs_source, qs_error = _wout_quasisymmetry(
         wout,
         helicity_m=int(helicity_m),
@@ -225,29 +284,14 @@ def build_authoritative_wout_candidate_gate(
         nphi=int(qs_nphi),
     )
     checks = {
-        "aspect": {
-            "value": aspect,
-            "target": float(target_aspect),
-            "absolute_error": None if aspect is None else abs(aspect - float(target_aspect)),
-            "absolute_tolerance": float(aspect_atol),
-            "passed": _finite_gate(
-                None if aspect is None else abs(aspect - float(target_aspect)),
-                upper=float(aspect_atol),
-            ),
-        },
-        "mean_iota": {
-            "value": None if mean_iota is None else abs(mean_iota),
-            "minimum_abs": float(min_abs_mean_iota),
-            "margin": None if mean_iota is None else abs(mean_iota) - float(min_abs_mean_iota),
-            "passed": _finite_gate(None if mean_iota is None else abs(mean_iota), lower=float(min_abs_mean_iota)),
-        },
-        "iota_profile": {
-            "minimum_iotas_excluding_axis": min_iotas,
-            "minimum_iotaf": min_iotaf,
-            "floor": None if iota_profile_floor is None else float(iota_profile_floor),
-            "source": "wout",
-            "passed": bool(profile_floor_passed),
-        },
+        "aspect": _aspect_check(aspect, target=target_aspect, tolerance=aspect_atol),
+        "mean_iota": _mean_iota_check(mean_iota, minimum_abs=min_abs_mean_iota),
+        "iota_profile": _iota_profile_check(
+            min_iotas,
+            min_iotaf,
+            floor=iota_profile_floor,
+            source="wout",
+        ),
         "quasisymmetry": {
             "value": qs_value,
             "maximum": float(qs_residual_max),
@@ -262,7 +306,7 @@ def build_authoritative_wout_candidate_gate(
             "passed": _finite_gate(qs_value, upper=float(qs_residual_max)),
         },
     }
-    passed = all(bool(cast(Mapping[str, Any], check).get("passed")) for check in checks.values())
+    passed = _checks_passed(checks)
     return {
         "kind": "vmec_jax_authoritative_wout_candidate_gate",
         "passed": bool(passed),
@@ -326,35 +370,14 @@ def build_wout_reproducibility_gate(
         if ref_min_iotaf is None or rerun_min_iotaf is None
         else abs(rerun_min_iotaf - ref_min_iotaf)
     )
-    profile_floor_passed = True
-    if iota_profile_floor is not None:
-        profile_floor_passed = _finite_gate(rerun_min_iotas, lower=float(iota_profile_floor)) and _finite_gate(
-            rerun_min_iotaf,
-            lower=float(iota_profile_floor),
-        )
     checks = {
-        "rerun_aspect_admission": {
-            "value": rerun_aspect,
-            "target": float(target_aspect),
-            "absolute_error": None if rerun_aspect is None else abs(rerun_aspect - float(target_aspect)),
-            "absolute_tolerance": float(aspect_atol),
-            "passed": _finite_gate(
-                None if rerun_aspect is None else abs(rerun_aspect - float(target_aspect)),
-                upper=float(aspect_atol),
-            ),
-        },
-        "rerun_mean_iota_admission": {
-            "value": None if rerun_iota is None else abs(rerun_iota),
-            "minimum_abs": float(min_abs_mean_iota),
-            "margin": None if rerun_iota is None else abs(rerun_iota) - float(min_abs_mean_iota),
-            "passed": _finite_gate(None if rerun_iota is None else abs(rerun_iota), lower=float(min_abs_mean_iota)),
-        },
-        "rerun_iota_profile_admission": {
-            "minimum_iotas_excluding_axis": rerun_min_iotas,
-            "minimum_iotaf": rerun_min_iotaf,
-            "floor": None if iota_profile_floor is None else float(iota_profile_floor),
-            "passed": bool(profile_floor_passed),
-        },
+        "rerun_aspect_admission": _aspect_check(rerun_aspect, target=target_aspect, tolerance=aspect_atol),
+        "rerun_mean_iota_admission": _mean_iota_check(rerun_iota, minimum_abs=min_abs_mean_iota),
+        "rerun_iota_profile_admission": _iota_profile_check(
+            rerun_min_iotas,
+            rerun_min_iotaf,
+            floor=iota_profile_floor,
+        ),
         "aspect_reproducibility": {
             "reference": ref_aspect,
             "rerun": rerun_aspect,
@@ -377,7 +400,7 @@ def build_wout_reproducibility_gate(
             and _finite_gate(min_iotaf_drift, upper=float(profile_repro_atol)),
         },
     }
-    passed = all(bool(cast(Mapping[str, Any], check).get("passed")) for check in checks.values())
+    passed = _checks_passed(checks)
     return {
         "kind": "vmec_jax_wout_reproducibility_gate",
         "passed": bool(passed),
@@ -413,7 +436,6 @@ def build_solved_vmec_candidate_gate(
     history = _history_from_candidate(candidate)
     aspect = _finite_float_or_none(history.get("aspect_final"))
     mean_iota = _finite_float_or_none(history.get("iota_final"))
-    mean_abs_iota = None if mean_iota is None else abs(mean_iota)
     qs_residual = None
     qs_source = "history"
     if not isinstance(candidate, Mapping):
@@ -422,7 +444,6 @@ def build_solved_vmec_candidate_gate(
             qs_source = "vmec_jax_state"
     if qs_residual is None:
         qs_residual = _finite_float_or_none(history.get("qs_final"))
-    aspect_error = None if aspect is None else abs(aspect - float(target_aspect))
 
     if iota_profiles is None and not isinstance(candidate, Mapping):
         profile_source = "vmec_jax_state"
@@ -430,38 +451,14 @@ def build_solved_vmec_candidate_gate(
 
     min_iota_profile: float | None = None
     min_iotaf_profile: float | None = None
-    profile_passed = iota_profile_floor is None
     if iota_profiles is not None:
-        iotas, iotaf = iota_profiles
-        iotas = np.asarray(iotas, dtype=float)
-        iotaf = np.asarray(iotaf, dtype=float)
-        profile = iotas[1:] if iotas.size > 1 else iotas
-        full_profile = iotaf[np.isfinite(iotaf)]
-        min_iota_profile = _finite_float_or_none(np.nanmin(profile)) if profile.size else None
-        min_iotaf_profile = _finite_float_or_none(np.nanmin(full_profile)) if full_profile.size else None
-        if iota_profile_floor is not None:
-            profile_passed = _finite_gate(min_iota_profile, lower=float(iota_profile_floor)) and _finite_gate(
-                min_iotaf_profile,
-                lower=float(iota_profile_floor),
-            )
+        min_iota_profile, min_iotaf_profile = _profile_minima_from_arrays(*iota_profiles)
     elif iota_profile_floor is not None:
         profile_source = "missing"
-        profile_passed = False
 
     checks = {
-        "aspect": {
-            "value": aspect,
-            "target": float(target_aspect),
-            "absolute_error": aspect_error,
-            "absolute_tolerance": float(aspect_atol),
-            "passed": _finite_gate(aspect_error, upper=float(aspect_atol)),
-        },
-        "mean_iota": {
-            "value": mean_abs_iota,
-            "minimum_abs": float(min_abs_mean_iota),
-            "margin": None if mean_abs_iota is None else mean_abs_iota - float(min_abs_mean_iota),
-            "passed": _finite_gate(mean_abs_iota, lower=float(min_abs_mean_iota)),
-        },
+        "aspect": _aspect_check(aspect, target=target_aspect, tolerance=aspect_atol),
+        "mean_iota": _mean_iota_check(mean_iota, minimum_abs=min_abs_mean_iota),
         "quasisymmetry": {
             "value": qs_residual,
             "maximum": float(qs_residual_max),
@@ -469,15 +466,14 @@ def build_solved_vmec_candidate_gate(
             "source": qs_source,
             "passed": _finite_gate(qs_residual, upper=float(qs_residual_max)),
         },
-        "iota_profile": {
-            "minimum_iotas_excluding_axis": min_iota_profile,
-            "minimum_iotaf": min_iotaf_profile,
-            "floor": None if iota_profile_floor is None else float(iota_profile_floor),
-            "source": profile_source,
-            "passed": bool(profile_passed),
-        },
+        "iota_profile": _iota_profile_check(
+            min_iota_profile,
+            min_iotaf_profile,
+            floor=iota_profile_floor,
+            source=profile_source,
+        ),
     }
-    passed = all(bool(cast(Mapping[str, Any], check).get("passed")) for check in checks.values())
+    passed = _checks_passed(checks)
     return {
         "kind": "vmec_jax_solved_wout_candidate_gate",
         "passed": bool(passed),
