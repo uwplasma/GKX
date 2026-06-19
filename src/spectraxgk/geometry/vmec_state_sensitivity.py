@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+from collections.abc import Mapping
 from dataclasses import dataclass, replace as dc_replace
 from typing import Any
 
@@ -132,6 +133,73 @@ def _length_two_params(params: jnp.ndarray | None, default: float) -> jnp.ndarra
     return p
 
 
+def _unavailable_vmec_state_sensitivity_report(
+    *,
+    backend_info: Mapping[str, object],
+    fd_step: float,
+    case_name: str,
+    reason: str,
+) -> dict[str, object]:
+    """Return a fail-closed optional-backend sensitivity report."""
+
+    return {
+        "available": False,
+        "backend_info": dict(backend_info),
+        "sensitivity": None,
+        "fd_step": float(fd_step),
+        "case_name": str(case_name),
+        "reason": str(reason),
+    }
+
+
+def _failed_vmec_state_sensitivity_report(
+    *,
+    backend_info: Mapping[str, object],
+    fd_step: float,
+    case_name: str,
+    exc: Exception,
+) -> dict[str, object]:
+    """Return a fail-closed report for exceptions raised inside backend probes."""
+
+    return {
+        "available": False,
+        "backend_info": dict(backend_info),
+        "sensitivity": None,
+        "fd_step": float(fd_step),
+        "case_name": str(case_name),
+        "error": f"{type(exc).__name__}: {exc}",
+    }
+
+
+def _vmec_state_sensitivity_metadata(
+    *,
+    backend_info: Mapping[str, object],
+    ctx: _VMECStateContext,
+    case_name: str,
+    params: jnp.ndarray,
+    radial_index: int,
+    mode_index: int,
+    surface_index: int,
+    fd_step: float,
+) -> dict[str, object]:
+    """Return shared metadata for VMEC-state sensitivity reports."""
+
+    return {
+        "available": True,
+        "backend_info": dict(backend_info),
+        "case_name": str(case_name),
+        "input_path": str(ctx.input_path),
+        "wout_path": str(ctx.wout_path),
+        "param_names": ["delta_Rcos", "delta_Zsin"],
+        "params": np.asarray(params).tolist(),
+        "radial_index": int(radial_index),
+        "mode_index": int(mode_index),
+        "surface_index": int(surface_index),
+        "state_shape": [int(ctx.base_Rcos.shape[0]), int(ctx.base_Rcos.shape[1])],
+        "fd_step": float(fd_step),
+    }
+
+
 def vmec_jax_boozer_flux_tube_sensitivity_report(  # pragma: no cover
     *,
     params: jnp.ndarray | None = None,
@@ -168,14 +236,12 @@ def vmec_jax_boozer_flux_tube_sensitivity_report(  # pragma: no cover
         info.get("vmec_jax_available", False)
         and info.get("booz_xform_jax_api_available", False)
     ):
-        return {
-            "available": False,
-            "backend_info": info,
-            "sensitivity": None,
-            "fd_step": float(fd_step),
-            "case_name": str(case_name),
-            "reason": "vmec_jax or booz_xform_jax functional API is not available",
-        }
+        return _unavailable_vmec_state_sensitivity_report(
+            backend_info=info,
+            fd_step=fd_step,
+            case_name=case_name,
+            reason="vmec_jax or booz_xform_jax functional API is not available",
+        )
 
     try:
         ctx = _load_vmec_state_context(str(case_name))
@@ -217,29 +283,25 @@ def vmec_jax_boozer_flux_tube_sensitivity_report(  # pragma: no cover
         mapping = mapping_fn(p)
         booz_meta = mapping["booz_xform"]
     except Exception as exc:
-        return {
-            "available": False,
-            "backend_info": info,
-            "sensitivity": None,
-            "fd_step": float(fd_step),
-            "case_name": str(case_name),
-            "error": f"{type(exc).__name__}: {exc}",
-        }
+        return _failed_vmec_state_sensitivity_report(
+            backend_info=info,
+            fd_step=fd_step,
+            case_name=case_name,
+            exc=exc,
+        )
 
     return {
-        "available": True,
-        "backend_info": info,
-        "case_name": str(case_name),
-        "input_path": str(ctx.input_path),
-        "wout_path": str(ctx.wout_path),
-        "param_names": ["delta_Rcos", "delta_Zsin"],
-        "params": np.asarray(p).tolist(),
-        "radial_index": int(ridx),
-        "mode_index": int(midx),
-        "surface_index": int(sidx),
-        "state_shape": [int(ctx.base_Rcos.shape[0]), int(ctx.base_Rcos.shape[1])],
+        **_vmec_state_sensitivity_metadata(
+            backend_info=info,
+            ctx=ctx,
+            case_name=case_name,
+            params=p,
+            radial_index=ridx,
+            mode_index=midx,
+            surface_index=sidx,
+            fd_step=fd_step,
+        ),
         "sensitivity": sensitivity,
-        "fd_step": float(fd_step),
         "mboz": int(mboz),
         "nboz": int(nboz),
         "ntheta": int(ntheta),
@@ -278,14 +340,12 @@ def vmec_jax_metric_tensor_sensitivity_report(  # pragma: no cover
 
     info = discover_differentiable_geometry_backends()
     if not info.get("vmec_jax_available", False):
-        return {
-            "available": False,
-            "backend_info": info,
-            "sensitivity": None,
-            "fd_step": float(fd_step),
-            "case_name": str(case_name),
-            "reason": "vmec_jax is not available",
-        }
+        return _unavailable_vmec_state_sensitivity_report(
+            backend_info=info,
+            fd_step=fd_step,
+            case_name=case_name,
+            reason="vmec_jax is not available",
+        )
 
     try:
         ctx = _load_vmec_state_context(str(case_name))
@@ -336,25 +396,26 @@ def vmec_jax_metric_tensor_sensitivity_report(  # pragma: no cover
         max_rel = jnp.max(jnp.abs(diff) / (jnp.abs(jac_fd) + 1.0e-12))
         geom0 = geom_mod.eval_geom(ctx.state, ctx.static)
     except Exception as exc:
-        return {
-            "available": False,
-            "backend_info": info,
-            "sensitivity": None,
-            "fd_step": float(fd_step),
-            "case_name": str(case_name),
-            "error": f"{type(exc).__name__}: {exc}",
-        }
+        return _failed_vmec_state_sensitivity_report(
+            backend_info=info,
+            fd_step=fd_step,
+            case_name=case_name,
+            exc=exc,
+        )
 
     return {
-        "available": True,
-        "backend_info": info,
-        "case_name": str(case_name),
-        "input_path": str(ctx.input_path),
-        "wout_path": str(ctx.wout_path),
+        **_vmec_state_sensitivity_metadata(
+            backend_info=info,
+            ctx=ctx,
+            case_name=case_name,
+            params=p,
+            radial_index=ridx,
+            mode_index=midx,
+            surface_index=sidx,
+            fd_step=fd_step,
+        ),
         "source_model": "vmec_jax:state->metric-tensors",
-        "param_names": ["delta_Rcos", "delta_Zsin"],
         "observable_names": list(_VMEC_METRIC_OBSERVABLE_NAMES),
-        "params": np.asarray(p).tolist(),
         "observables": np.asarray(observables).tolist(),
         "jacobian_ad": np.asarray(jac_ad).tolist(),
         "jacobian_fd": np.asarray(jac_fd).tolist(),
@@ -369,12 +430,7 @@ def vmec_jax_metric_tensor_sensitivity_report(  # pragma: no cover
             param_names=("delta_Rcos", "delta_Zsin"),
             relative_floor=1.0e-12,
         ),
-        "radial_index": int(ridx),
-        "mode_index": int(midx),
-        "surface_index": int(sidx),
-        "state_shape": [int(ctx.base_Rcos.shape[0]), int(ctx.base_Rcos.shape[1])],
         "metric_grid_shape": [int(v) for v in np.asarray(geom0.sqrtg).shape],
-        "fd_step": float(fd_step),
         "rms_epsilon": float(rms_epsilon),
     }
 
@@ -414,14 +470,12 @@ def vmec_jax_field_line_tensor_sensitivity_report(  # pragma: no cover
 
     info = discover_differentiable_geometry_backends()
     if not info.get("vmec_jax_available", False):
-        return {
-            "available": False,
-            "backend_info": info,
-            "sensitivity": None,
-            "fd_step": float(fd_step),
-            "case_name": str(case_name),
-            "reason": "vmec_jax is not available",
-        }
+        return _unavailable_vmec_state_sensitivity_report(
+            backend_info=info,
+            fd_step=fd_step,
+            case_name=case_name,
+            reason="vmec_jax is not available",
+        )
 
     try:
         ctx = _load_vmec_state_context(str(case_name))
@@ -513,26 +567,27 @@ def vmec_jax_field_line_tensor_sensitivity_report(  # pragma: no cover
         max_rel = jnp.max(jnp.abs(diff) / (jnp.abs(jac_fd) + 1.0e-10))
         geom0 = geom_mod.eval_geom(ctx.state, ctx.static)
     except Exception as exc:
-        return {
-            "available": False,
-            "backend_info": info,
-            "sensitivity": None,
-            "fd_step": float(fd_step),
-            "case_name": str(case_name),
-            "error": f"{type(exc).__name__}: {exc}",
-        }
+        return _failed_vmec_state_sensitivity_report(
+            backend_info=info,
+            fd_step=fd_step,
+            case_name=case_name,
+            exc=exc,
+        )
 
     return {
-        "available": True,
-        "backend_info": info,
-        "case_name": str(case_name),
-        "input_path": str(ctx.input_path),
-        "wout_path": str(ctx.wout_path),
+        **_vmec_state_sensitivity_metadata(
+            backend_info=info,
+            ctx=ctx,
+            case_name=case_name,
+            params=p,
+            radial_index=ridx,
+            mode_index=midx,
+            surface_index=sidx,
+            fd_step=fd_step,
+        ),
         "source_model": "vmec_jax:state->field-line-metric-and-b",
         "field_line_convention": "VMEC theta, zeta=(theta-alpha)/iota with periodic bilinear sampling",
-        "param_names": ["delta_Rcos", "delta_Zsin"],
         "observable_names": list(_VMEC_FIELD_LINE_OBSERVABLE_NAMES),
-        "params": np.asarray(p).tolist(),
         "observables": np.asarray(observables).tolist(),
         "jacobian_ad": np.asarray(jac_ad).tolist(),
         "jacobian_fd": np.asarray(jac_fd).tolist(),
@@ -547,15 +602,10 @@ def vmec_jax_field_line_tensor_sensitivity_report(  # pragma: no cover
             param_names=("delta_Rcos", "delta_Zsin"),
             relative_floor=1.0e-10,
         ),
-        "radial_index": int(ridx),
-        "mode_index": int(midx),
-        "surface_index": int(sidx),
         "iota": float(np.asarray(iota_line)),
         "alpha": float(alpha),
         "ntheta": int(ntheta_int),
-        "state_shape": [int(ctx.base_Rcos.shape[0]), int(ctx.base_Rcos.shape[1])],
         "metric_grid_shape": [int(v) for v in np.asarray(geom0.sqrtg).shape],
-        "fd_step": float(fd_step),
         "b2_floor": float(b2_floor),
         "rms_epsilon": float(rms_epsilon),
     }
