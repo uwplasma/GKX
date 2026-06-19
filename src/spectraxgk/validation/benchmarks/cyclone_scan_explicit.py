@@ -271,17 +271,7 @@ def run_explicit_time_cyclone_scan(
     return hooks.cyclone_scan_result(ky=ky_values, gamma=gamma_out, omega=omega_out)
 
 
-# Historical private names remain available through the old import surface.
-_explicit_time_config_for_scan_point = explicit_time_config_for_scan_point
-_explicit_reselection_target = explicit_reselection_target
-_krylov_reselected_frequency = krylov_reselected_frequency
-_choose_reselected_frequency = choose_reselected_frequency
-
 __all__ = [
-    "_choose_reselected_frequency",
-    "_explicit_reselection_target",
-    "_explicit_time_config_for_scan_point",
-    "_krylov_reselected_frequency",
     "choose_reselected_frequency",
     "explicit_reselection_target",
     "explicit_time_config_for_scan_point",

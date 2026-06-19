@@ -41,7 +41,7 @@ from spectraxgk.artifacts import nonlinear_netcdf_geometry as _geometry_helpers
 
 
 def _sync_geometry_helper_dependencies() -> None:
-    """Preserve the historical monkeypatch seam on this facade module."""
+    """Sync patchable geometry helper dependencies on this facade module."""
 
     _geometry_helpers.apply_geometry_grid_defaults = apply_geometry_grid_defaults
     _geometry_helpers.ensure_flux_tube_geometry_data = ensure_flux_tube_geometry_data

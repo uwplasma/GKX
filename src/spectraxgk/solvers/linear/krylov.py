@@ -2,8 +2,8 @@
 
 The compiled kernels live in focused eigenmode modules so that branch selection,
 operator application, preconditioning, and Arnoldi iterations can be tested and
-optimized independently.  This facade preserves the historical import path used
-by scripts while keeping monkeypatch seams for benchmark/runtime tests.
+optimized independently.  This facade keeps the documented script import path
+and the monkeypatch seams used by benchmark/runtime tests.
 """
 
 from __future__ import annotations

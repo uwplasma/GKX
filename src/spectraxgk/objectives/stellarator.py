@@ -53,7 +53,7 @@ from spectraxgk.validation.autodiff import autodiff_finite_difference_report
 
 
 def _sync_table_dependencies() -> None:
-    """Preserve the historical monkeypatch seam on the stellarator facade."""
+    """Sync patchable table dependencies on the stellarator facade."""
 
     _stellarator_tables.vmec_boozer_solver_objective_table_with_metadata_from_state = (
         vmec_boozer_solver_objective_table_with_metadata_from_state

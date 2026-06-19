@@ -1,9 +1,9 @@
 """Public solver-objective differentiability facade.
 
-Implementation is split across focused objective modules. This file preserves
-historical imports for scripts, docs, tools, and top-level ``spectraxgk`` API
-exports while keeping validation and VMEC/Boozer wrappers testable at their
-owner modules.
+Implementation is split across focused objective modules. This file keeps the
+documented imports for scripts, docs, tools, and top-level ``spectraxgk`` API
+exports while validation and VMEC/Boozer wrappers stay testable at their owner
+modules.
 """
 
 from __future__ import annotations

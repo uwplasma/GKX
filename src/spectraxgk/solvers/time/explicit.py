@@ -296,7 +296,7 @@ def integrate_linear_explicit_diagnostics(
     jit: bool = True,
     show_progress: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, SimulationDiagnostics]:
-    """Compatibility facade for diagnostics-rich explicit linear integration."""
+    """Public facade for diagnostics-rich explicit linear integration."""
 
     return _integrate_linear_explicit_diagnostics_impl(
         G0,

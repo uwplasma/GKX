@@ -2,7 +2,7 @@
 
 The implementation is split into contracts, reduced-model observables,
 residual/sensitivity gates, the optimizer loop, and artifact payload builders.
-This module preserves the historical import surface for examples and tests.
+This module keeps the documented import surface for examples and tests.
 """
 
 from __future__ import annotations

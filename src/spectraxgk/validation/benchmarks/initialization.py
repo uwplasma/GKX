@@ -112,11 +112,11 @@ def _kinetic_reference_init_cfg(
     *,
     reference_aligned: bool | None = None,
 ) -> InitializationConfig:
-    """Restore the historical kinetic benchmark seed on the reference path.
+    """Use the reference-aligned kinetic benchmark seed when requested.
 
-    Older kinetic parity runs seeded a constant electron-density moment rather
-    than the newer tiny Gaussian default. Preserve explicit user overrides by
-    only replacing the exact current kinetic default init.
+    Reference-aligned kinetic runs seed a constant electron-density moment.
+    Explicit user overrides are preserved by replacing only the exact current
+    kinetic default initialization.
     """
 
     if not bool(True if reference_aligned is None else reference_aligned):

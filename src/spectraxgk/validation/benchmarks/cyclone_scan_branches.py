@@ -12,17 +12,17 @@ from spectraxgk.validation.benchmarks.batching import _iter_ky_batches
 from spectraxgk.validation.benchmarks.reference import CycloneScanResult
 from spectraxgk.validation.benchmarks.scan import indexed_float_value
 from spectraxgk.validation.benchmarks.cyclone_scan_explicit import (
-    _choose_reselected_frequency,
-    _explicit_reselection_target,
-    _explicit_time_config_for_scan_point,
-    _krylov_reselected_frequency,
+    choose_reselected_frequency,
+    explicit_reselection_target,
+    explicit_time_config_for_scan_point,
+    krylov_reselected_frequency,
     run_explicit_time_cyclone_scan,
 )
 from spectraxgk.validation.benchmarks.cyclone_scan_seed import (
-    _reduced_seed_from_explicit_trace,
-    _seed_from_explicit_trace,
-    _seed_shift,
-    _use_explicit_seed,
+    reduced_seed_from_explicit_trace,
+    seed_from_explicit_trace,
+    seed_shift,
+    use_explicit_seed,
 )
 
 
@@ -113,7 +113,7 @@ def run_krylov_cyclone_scan(
         gamma_seed = 0.0
         omega_seed = 0.0
         if prev_eig is None:
-            seed_ok, omega_ok, gamma_seed, omega_seed = _seed_from_explicit_trace(
+            seed_ok, omega_ok, gamma_seed, omega_seed = seed_from_explicit_trace(
                 G0,
                 grid,
                 cache,
@@ -126,7 +126,7 @@ def run_krylov_cyclone_scan(
             )
         if not seed_ok:
             seed_ok, omega_ok, gamma_seed, omega_seed = (
-                _reduced_seed_from_explicit_trace(
+                reduced_seed_from_explicit_trace(
                     grid,
                     geom,
                     params,
@@ -140,7 +140,7 @@ def run_krylov_cyclone_scan(
                 )
             )
 
-        shift = _seed_shift(
+        shift = seed_shift(
             prev_eig,
             omega_ok=omega_ok,
             seed_ok=seed_ok,
@@ -177,7 +177,7 @@ def run_krylov_cyclone_scan(
         )
         gamma = float(np.real(eig))
         omega = float(-np.imag(eig))
-        if _use_explicit_seed(
+        if use_explicit_seed(
             gamma,
             omega,
             seed_ok=seed_ok,
@@ -550,15 +550,15 @@ def run_time_cyclone_scan(
 
 __all__ = [
     "CycloneScanHooks",
-    "_choose_reselected_frequency",
+    "choose_reselected_frequency",
     "_empty_scan_result",
-    "_explicit_reselection_target",
-    "_explicit_time_config_for_scan_point",
-    "_krylov_reselected_frequency",
-    "_reduced_seed_from_explicit_trace",
-    "_seed_from_explicit_trace",
-    "_seed_shift",
-    "_use_explicit_seed",
+    "explicit_reselection_target",
+    "explicit_time_config_for_scan_point",
+    "krylov_reselected_frequency",
+    "reduced_seed_from_explicit_trace",
+    "seed_from_explicit_trace",
+    "seed_shift",
+    "use_explicit_seed",
     "_valid_time_branch_growth",
     "run_explicit_time_cyclone_scan",
     "run_krylov_cyclone_scan",

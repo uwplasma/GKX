@@ -2,8 +2,8 @@
 
 The implementation is split into focused modules for dependency discovery,
 field-line assembly, flux-tube remapping, NetCDF writeout, and orchestration.
-This facade preserves the historical import surface while keeping the codebase
-small enough to test and review module by module.
+This facade keeps the public import surface small while implementation owners
+stay focused enough to test and review module by module.
 """
 
 from __future__ import annotations

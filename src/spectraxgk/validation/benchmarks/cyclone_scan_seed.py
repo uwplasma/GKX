@@ -157,17 +157,7 @@ def use_explicit_seed(
     )
 
 
-# Historical private names remain available through the old import surface.
-_seed_from_explicit_trace = seed_from_explicit_trace
-_reduced_seed_from_explicit_trace = reduced_seed_from_explicit_trace
-_seed_shift = seed_shift
-_use_explicit_seed = use_explicit_seed
-
 __all__ = [
-    "_reduced_seed_from_explicit_trace",
-    "_seed_from_explicit_trace",
-    "_seed_shift",
-    "_use_explicit_seed",
     "reduced_seed_from_explicit_trace",
     "seed_from_explicit_trace",
     "seed_shift",

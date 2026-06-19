@@ -71,7 +71,7 @@ _RUNTIME_TOP_LEVEL_KEYS = {
     "species", "physics", "collisions", "normalization", "expert", "output",
     "quasilinear",
 }
-_LEGACY_CASE_TOP_LEVEL_KEYS = {"case", "model", "reference_alignment"}
+_NAMED_CASE_TOP_LEVEL_KEYS = {"case", "model", "reference_alignment"}
 _KNOWN_COMMANDS = {
     "run",
     "cyclone-info",
@@ -98,7 +98,7 @@ _PATCHABLE_RUNTIME_COMMAND_GLOBALS = (
 
 
 def _is_runtime_toml(data: dict) -> bool:
-    if any(key in data for key in _LEGACY_CASE_TOP_LEVEL_KEYS):
+    if any(key in data for key in _NAMED_CASE_TOP_LEVEL_KEYS):
         return False
     if any(key in data for key in _RUNTIME_TOP_LEVEL_KEYS):
         return True
