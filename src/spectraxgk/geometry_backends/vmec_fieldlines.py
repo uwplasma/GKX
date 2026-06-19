@@ -181,6 +181,39 @@ def _centered_fieldline_integral(
     return integrated - midpoint_value
 
 
+def _validated_reference_scales(
+    vs: Any,
+    edge_toroidal_flux_over_2pi: float,
+) -> tuple[float, float, float]:
+    """Return positive finite reference scales used for VMEC normalization."""
+
+    L_reference = float(vs.Aminor_p)
+    if not np.isfinite(L_reference) or abs(L_reference) <= 0.0:
+        raise ValueError(
+            "VMEC geometry has an invalid reference length Aminor_p="
+            f"{L_reference!r}. External VMEC equilibria used for runtime "
+            "EIK generation must provide a positive finite minor radius."
+        )
+    B_reference = float(2.0 * abs(edge_toroidal_flux_over_2pi) / (L_reference**2))
+    R_mag_ax = float(vs.raxis_cc[0])
+    return L_reference, B_reference, R_mag_ax
+
+
+def _input_iota_shear(
+    iota: np.ndarray,
+    shat: np.ndarray,
+    iota_input: float | None,
+    s_hat_input: float | None,
+) -> tuple[float, float]:
+    """Resolve user iota/shear overrides and protect the zero-shear limit."""
+
+    iota_input_val = float(iota[0]) if iota_input is None else float(iota_input)
+    s_hat_input_val = float(shat[0]) if s_hat_input is None else float(s_hat_input)
+    if abs(s_hat_input_val) < 1.0e-30:
+        s_hat_input_val = 1.0e-8
+    return iota_input_val, s_hat_input_val
+
+
 def _flux_surface_hngc_averages(
     *,
     xm_b: np.ndarray,
@@ -332,23 +365,19 @@ def _vmec_fieldlines(
 
     edge_toroidal_flux_over_2pi = -vs.phiedge / (2.0 * np.pi)
     toroidal_flux_sign = np.sign(edge_toroidal_flux_over_2pi)
-    L_reference = vs.Aminor_p
-    if not np.isfinite(float(L_reference)) or abs(float(L_reference)) <= 0.0:
-        nc_obj.close()
-        raise ValueError(
-            "VMEC geometry has an invalid reference length Aminor_p="
-            f"{float(L_reference)!r}. External VMEC equilibria used for runtime "
-            "EIK generation must provide a positive finite minor radius."
+    try:
+        L_reference, B_reference, R_mag_ax = _validated_reference_scales(
+            vs, edge_toroidal_flux_over_2pi
         )
-    B_reference = 2.0 * abs(edge_toroidal_flux_over_2pi) / (L_reference**2)
-    R_mag_ax = float(vs.raxis_cc[0])
+    except ValueError:
+        nc_obj.close()
+        raise
 
     zeta_center = -alpha / float(iota[0])
 
-    iota_input_val = float(iota[0]) if iota_input is None else float(iota_input)
-    s_hat_input_val = float(shat[0]) if s_hat_input is None else float(s_hat_input)
-    if abs(s_hat_input_val) < 1.0e-30:
-        s_hat_input_val = 1.0e-8
+    iota_input_val, s_hat_input_val = _input_iota_shear(
+        iota, shat, iota_input, s_hat_input
+    )
 
     G = vs.Gfun(s)
     boozer_i = vs.Ifun(s)
