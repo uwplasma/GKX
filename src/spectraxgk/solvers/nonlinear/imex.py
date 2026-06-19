@@ -192,6 +192,56 @@ def make_imex_solve_step(
     return solve_step
 
 
+def _resolve_imex_operator(
+    *,
+    implicit_operator: Any | None,
+    G0: jnp.ndarray,
+    cache: object,
+    params: object,
+    dt: float,
+    linear_cfg: Any,
+    implicit_preconditioner: str | None,
+    compressed_real_fft: bool,
+    build_operator_fn: OperatorBuilderFn,
+    build_implicit_operator_fn: Callable[..., tuple[Any, ...]] | None,
+) -> Any:
+    """Build the implicit operator only when the caller did not provide one."""
+
+    if implicit_operator is not None:
+        return implicit_operator
+    build_kwargs = {}
+    if build_implicit_operator_fn is not None:
+        build_kwargs["build_implicit_operator_fn"] = build_implicit_operator_fn
+    return build_operator_fn(
+        G0,
+        cache,
+        params,
+        dt,
+        terms=linear_cfg,
+        implicit_preconditioner=implicit_preconditioner,
+        compressed_real_fft=compressed_real_fft,
+        **build_kwargs,
+    )
+
+
+def _state_for_imex_operator(
+    G0: jnp.ndarray, implicit_operator: Any
+) -> tuple[jnp.ndarray, tuple[int, ...], bool]:
+    """Cast and shape the initial state to match the implicit operator."""
+
+    shape = implicit_operator.shape
+    squeeze_species = implicit_operator.squeeze_species
+    G = jnp.asarray(G0, dtype=implicit_operator.state_dtype)
+    if squeeze_species and G.ndim == len(shape) - 1:
+        G = G[None, ...]
+    if G.shape != shape:
+        raise ValueError(
+            "implicit_operator shape mismatch: "
+            f"expected {shape}, got {tuple(G.shape)}"
+        )
+    return G, shape, squeeze_species
+
+
 def advance_imex_nonlinear_state(
     G: jnp.ndarray,
     *,
@@ -367,34 +417,23 @@ def integrate_cached_imex_scan(
     """
 
     del show_progress  # Progress belongs to diagnostics/runtime scans.
-    if implicit_operator is None:
-        build_kwargs = {}
-        if build_implicit_operator_fn is not None:
-            build_kwargs["build_implicit_operator_fn"] = build_implicit_operator_fn
-        implicit_operator = build_operator_fn(
-            G0,
-            cache,
-            params,
-            dt,
-            terms=linear_cfg,
-            implicit_preconditioner=implicit_preconditioner,
-            compressed_real_fft=compressed_real_fft,
-            **build_kwargs,
-        )
+    implicit_operator = _resolve_imex_operator(
+        implicit_operator=implicit_operator,
+        G0=G0,
+        cache=cache,
+        params=params,
+        dt=dt,
+        linear_cfg=linear_cfg,
+        implicit_preconditioner=implicit_preconditioner,
+        compressed_real_fft=compressed_real_fft,
+        build_operator_fn=build_operator_fn,
+        build_implicit_operator_fn=build_implicit_operator_fn,
+    )
 
-    shape = implicit_operator.shape
     dt_val = implicit_operator.dt_val
     precond_op = implicit_operator.precond_op
     matvec = implicit_operator.matvec
-    squeeze_species = implicit_operator.squeeze_species
-    G = jnp.asarray(G0, dtype=implicit_operator.state_dtype)
-    if squeeze_species and G.ndim == len(shape) - 1:
-        G = G[None, ...]
-    if G.shape != shape:
-        raise ValueError(
-            "implicit_operator shape mismatch: "
-            f"expected {shape}, got {tuple(G.shape)}"
-        )
+    G, shape, squeeze_species = _state_for_imex_operator(G0, implicit_operator)
 
     nonlinear_term = make_imex_nonlinear_term(
         cache,
