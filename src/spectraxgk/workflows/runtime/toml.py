@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import fields, is_dataclass, replace
-from typing import Any, cast
+from typing import Any, Callable, Sequence, cast
 import os
 from pathlib import Path
 
@@ -35,6 +35,27 @@ from spectraxgk.workflows.runtime.config import (
 )
 from spectraxgk.terms.config import TermConfig
 
+RUNTIME_TOML_TOP_LEVEL_KEYS = {
+    "species",
+    "physics",
+    "collisions",
+    "normalization",
+    "expert",
+    "output",
+    "quasilinear",
+}
+NAMED_CASE_TOML_TOP_LEVEL_KEYS = {"case", "model", "reference_alignment"}
+EXECUTABLE_TOML_SHORTHAND_COMMANDS = {
+    "run",
+    "cyclone-info",
+    "cyclone-kperp",
+    "run-linear",
+    "scan-linear",
+    "run-runtime-linear",
+    "scan-runtime-linear",
+    "run-runtime-nonlinear",
+}
+
 
 def load_toml(path: str | Path) -> dict:
     """Load a TOML file into a plain dictionary."""
@@ -42,6 +63,40 @@ def load_toml(path: str | Path) -> dict:
     path = Path(path)
     with path.open("rb") as f:
         return tomllib.load(f)
+
+
+def is_runtime_toml(data: dict[str, Any]) -> bool:
+    """Return whether parsed TOML data should use the runtime executable path."""
+
+    if any(key in data for key in NAMED_CASE_TOML_TOP_LEVEL_KEYS):
+        return False
+    if any(key in data for key in RUNTIME_TOML_TOP_LEVEL_KEYS):
+        return True
+    return True
+
+
+def toml_shorthand_command(data: dict[str, Any]) -> str:
+    """Return the executable command used for direct TOML path shorthand."""
+
+    return "run" if is_runtime_toml(data) else "run-linear"
+
+
+def direct_config_shorthand_args(
+    argv: Sequence[str],
+    *,
+    load_toml_func: Callable[[str | Path], dict[str, Any]] = load_toml,
+) -> list[str] | None:
+    """Return parser arguments for ``spectraxgk case.toml`` shorthand."""
+
+    if not argv:
+        return None
+    config_arg = argv[0]
+    if config_arg.startswith("-") or config_arg in EXECUTABLE_TOML_SHORTHAND_COMMANDS:
+        return None
+    if not Path(config_arg).exists():
+        return None
+    command = toml_shorthand_command(load_toml_func(config_arg))
+    return [command, "--config", config_arg, *argv[1:]]
 
 
 def resolve_runtime_path(value: str | None, *, base_dir: Path) -> str | None:

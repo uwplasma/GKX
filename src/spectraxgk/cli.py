@@ -21,6 +21,7 @@ from spectraxgk.benchmarks import (
 )
 from spectraxgk.geometry import SAlphaGeometry
 from spectraxgk.core.grid import build_spectral_grid
+from spectraxgk.workflows.runtime import toml as runtime_toml
 from spectraxgk.workflows.runtime.toml import (
     load_case_from_toml,
     load_krylov_from_toml,
@@ -67,22 +68,6 @@ from spectraxgk.workflows.runtime.commands import (
 )
 
 
-_RUNTIME_TOP_LEVEL_KEYS = {
-    "species", "physics", "collisions", "normalization", "expert", "output",
-    "quasilinear",
-}
-_NAMED_CASE_TOP_LEVEL_KEYS = {"case", "model", "reference_alignment"}
-_KNOWN_COMMANDS = {
-    "run",
-    "cyclone-info",
-    "cyclone-kperp",
-    "run-linear",
-    "scan-linear",
-    "run-runtime-linear",
-    "scan-runtime-linear",
-    "run-runtime-nonlinear",
-}
-
 # These imports remain on the executable facade so tests and downstream callers
 # can patch command dependencies without reaching into workflow internals.
 _PATCHABLE_RUNTIME_COMMAND_GLOBALS = (
@@ -97,32 +82,22 @@ _PATCHABLE_RUNTIME_COMMAND_GLOBALS = (
 )
 
 
-def _is_runtime_toml(data: dict) -> bool:
-    if any(key in data for key in _NAMED_CASE_TOP_LEVEL_KEYS):
-        return False
-    if any(key in data for key in _RUNTIME_TOP_LEVEL_KEYS):
-        return True
-    return True
+def _is_runtime_toml(data: dict[str, Any]) -> bool:
+    """Return whether TOML data should use the runtime executable path."""
+
+    return runtime_toml.is_runtime_toml(data)
 
 
 def _toml_shorthand_command(data: dict[str, Any]) -> str:
     """Return the executable command used for direct TOML path shorthand."""
 
-    return "run" if _is_runtime_toml(data) else "run-linear"
+    return runtime_toml.toml_shorthand_command(data)
 
 
 def _direct_config_shorthand_args(argv: Sequence[str]) -> list[str] | None:
     """Return parser arguments for ``spectraxgk case.toml`` shorthand."""
 
-    if not argv:
-        return None
-    config_arg = argv[0]
-    if config_arg.startswith("-") or config_arg in _KNOWN_COMMANDS:
-        return None
-    if not Path(config_arg).exists():
-        return None
-    command = _toml_shorthand_command(load_toml(config_arg))
-    return [command, "--config", config_arg, *argv[1:]]
+    return runtime_toml.direct_config_shorthand_args(argv, load_toml_func=load_toml)
 
 
 def _status_printer(prefix: str):
