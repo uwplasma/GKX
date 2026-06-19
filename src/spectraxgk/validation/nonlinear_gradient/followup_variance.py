@@ -20,6 +20,41 @@ from spectraxgk.validation.nonlinear_gradient.followup_core import (
     _state_means_by_label,
 )
 
+
+def _control_variate_candidate_sort_key(row: Mapping[str, Any]) -> tuple[float, float]:
+    uncertainty = _finite_float(row.get("adjusted_response_uncertainty_rel"))
+    reduction = _finite_float(row.get("sem_reduction_fraction"))
+    return (
+        uncertainty if uncertainty is not None else float("inf"),
+        -(reduction if reduction is not None else float("-inf")),
+    )
+
+
+def _control_variate_candidates(report: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    candidates_raw = report.get("control_variate_candidates")
+    if not isinstance(candidates_raw, Sequence):
+        return []
+    return [row for row in candidates_raw if isinstance(row, Mapping)]
+
+
+def _select_control_variate_candidate(
+    report: Mapping[str, Any],
+    candidate_name: str | None,
+) -> tuple[Mapping[str, Any], list[Mapping[str, Any]], Mapping[str, Any] | None]:
+    summary_raw = report.get("summary")
+    summary = summary_raw if isinstance(summary_raw, Mapping) else {}
+    requested = candidate_name or str(summary.get("best_control_variate") or "")
+    candidates = _control_variate_candidates(report)
+    candidate = (
+        next((row for row in candidates if str(row.get("name")) == requested), None)
+        if requested
+        else None
+    )
+    if candidate is None and candidates:
+        candidate = min(candidates, key=_control_variate_candidate_sort_key)
+    return summary, candidates, candidate
+
+
 def nonlinear_gradient_variance_reduction_plan(
     artifact: Mapping[str, Any],
     *,
@@ -121,17 +156,9 @@ def nonlinear_gradient_variance_reduction_plan(
     ]
     best_control_variate = None
     if control_candidates:
-        def _candidate_sort_key(row: Mapping[str, Any]) -> tuple[float, float]:
-            uncertainty = _finite_float(row.get("adjusted_response_uncertainty_rel"))
-            reduction = _finite_float(row.get("sem_reduction_fraction"))
-            return (
-                uncertainty if uncertainty is not None else float("inf"),
-                -(reduction if reduction is not None else float("-inf")),
-            )
-
         best_control_variate = min(
             control_candidates,
-            key=_candidate_sort_key,
+            key=_control_variate_candidate_sort_key,
         )
 
     required_pairs = None
@@ -230,27 +257,12 @@ def nonlinear_gradient_control_variate_campaign_plan(
     if cfg.first_new_seed < 0:
         raise ValueError("first_new_seed must be non-negative")
 
-    summary_raw = variance_report.get("summary")
-    summary = summary_raw if isinstance(summary_raw, Mapping) else {}
+    summary, _candidates, candidate = _select_control_variate_candidate(
+        variance_report,
+        candidate_name,
+    )
     response_mean = _finite_float(summary.get("paired_response_mean"))
     raw_response_uncertainty_rel = _finite_float(summary.get("paired_response_uncertainty_rel"))
-    requested_candidate = candidate_name or str(summary.get("best_control_variate") or "")
-    candidates_raw = variance_report.get("control_variate_candidates")
-    candidates = [row for row in candidates_raw if isinstance(row, Mapping)] if isinstance(candidates_raw, Sequence) else []
-    if requested_candidate:
-        candidate = next((row for row in candidates if str(row.get("name")) == requested_candidate), None)
-    else:
-        candidate = None
-    if candidate is None and candidates:
-        def _sort_key(row: Mapping[str, Any]) -> tuple[float, float]:
-            uncertainty = _finite_float(row.get("adjusted_response_uncertainty_rel"))
-            reduction = _finite_float(row.get("sem_reduction_fraction"))
-            return (
-                uncertainty if uncertainty is not None else float("inf"),
-                -(reduction if reduction is not None else float("-inf")),
-            )
-
-        candidate = min(candidates, key=_sort_key)
 
     blockers: list[str] = []
     if candidate is None:
@@ -400,24 +412,10 @@ def nonlinear_gradient_control_mean_gate(
     if cfg.min_control_mean_pairs < 1:
         raise ValueError("min_control_mean_pairs must be positive")
 
-    summary_raw = variance_report.get("summary")
-    summary = summary_raw if isinstance(summary_raw, Mapping) else {}
-    requested_candidate = candidate_name or str(summary.get("best_control_variate") or "")
-    candidates_raw = variance_report.get("control_variate_candidates")
-    candidates = [row for row in candidates_raw if isinstance(row, Mapping)] if isinstance(candidates_raw, Sequence) else []
-    candidate = (
-        next((row for row in candidates if str(row.get("name")) == requested_candidate), None)
-        if requested_candidate
-        else None
+    summary, _candidates, candidate = _select_control_variate_candidate(
+        variance_report,
+        candidate_name,
     )
-    if candidate is None and candidates:
-        candidate = min(
-            candidates,
-            key=lambda row: (
-                _finite_float(row.get("adjusted_response_uncertainty_rel")) or float("inf"),
-                -(_finite_float(row.get("sem_reduction_fraction")) or float("-inf")),
-            ),
-        )
 
     blockers: list[str] = []
     response_mean = _finite_float(summary.get("paired_response_mean"))
