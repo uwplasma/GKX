@@ -638,6 +638,50 @@ def _select_kbm_beta_eigen_candidate(
     return eig_candidates[idx], vec_candidates[idx]
 
 
+def _solve_multi_target_kbm_eigenpair(
+    *,
+    beta: float,
+    cfg: Any,
+    G0_jax: Any,
+    cache: Any,
+    params: Any,
+    terms: Any,
+    krylov_cfg_use: Any,
+    targets: Sequence[float],
+    kbm_beta_transition: float | None,
+    hooks: KBMBetaKrylovHooks,
+) -> tuple[Any, Any]:
+    """Solve all targeted KBM candidates and select the physical beta branch."""
+
+    beta_transition = (
+        float(cfg.model.beta)
+        if kbm_beta_transition is None
+        else float(kbm_beta_transition)
+    )
+    target_results = [
+        _dominant_kbm_eigenpair(
+            hooks,
+            G0_jax,
+            cache,
+            params,
+            terms,
+            krylov_cfg_use,
+            omega_target_factor=float(target),
+            shift=None,
+            shift_source="target",
+            shift_selection="targeted",
+        )
+        for target in targets
+    ]
+    eig_candidates, vec_candidates = zip(*target_results, strict=True)
+    return _select_kbm_beta_eigen_candidate(
+        beta=beta,
+        beta_transition=beta_transition,
+        eig_candidates=eig_candidates,
+        vec_candidates=vec_candidates,
+    )
+
+
 def solve_kbm_beta_krylov_sample(
     *,
     beta: float,
@@ -672,32 +716,17 @@ def solve_kbm_beta_krylov_sample(
     )
     if use_multi_target:
         assert targets is not None
-        beta_transition = (
-            float(cfg.model.beta)
-            if kbm_beta_transition is None
-            else float(kbm_beta_transition)
-        )
-        target_results = [
-            _dominant_kbm_eigenpair(
-                hooks,
-                G0_jax,
-                cache,
-                params,
-                terms,
-                krylov_cfg_use,
-                omega_target_factor=float(target),
-                shift=None,
-                shift_source="target",
-                shift_selection="targeted",
-            )
-            for target in targets
-        ]
-        eig_candidates, vec_candidates = zip(*target_results, strict=True)
-        eig, vec = _select_kbm_beta_eigen_candidate(
+        eig, vec = _solve_multi_target_kbm_eigenpair(
             beta=beta,
-            beta_transition=beta_transition,
-            eig_candidates=eig_candidates,
-            vec_candidates=vec_candidates,
+            cfg=cfg,
+            G0_jax=G0_jax,
+            cache=cache,
+            params=params,
+            terms=terms,
+            krylov_cfg_use=krylov_cfg_use,
+            targets=targets,
+            kbm_beta_transition=kbm_beta_transition,
+            hooks=hooks,
         )
     else:
         eig, vec = _dominant_kbm_eigenpair(
