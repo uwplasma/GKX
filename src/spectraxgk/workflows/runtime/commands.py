@@ -473,48 +473,19 @@ def _print_saved_paths(paths: Mapping[str, str], keys: Sequence[str]) -> None:
             print(f"saved {paths[key]}")
 
 
-def write_linear_command_outputs(
+def _write_command_outputs(
     out_path: str | None,
-    result: RuntimeLinearResult,
+    payload: Any | None,
     *,
-    deps: RuntimeCommandDeps,
+    writer: Callable[[str | Path, Any], dict[str, str]],
+    display_keys: Sequence[str],
 ) -> dict[str, str]:
-    """Write and print linear runtime artifacts when an output path is set."""
+    """Write command artifacts when both destination and payload exist."""
 
-    if out_path is None:
+    if out_path is None or payload is None:
         return {}
-    paths = deps.write_runtime_linear_artifacts(out_path, result)
-    _print_saved_paths(paths, _LINEAR_ARTIFACT_DISPLAY_KEYS)
-    return paths
-
-
-def write_linear_scan_command_outputs(
-    out_path: str | None,
-    scan: Any,
-    *,
-    deps: RuntimeCommandDeps,
-) -> dict[str, str]:
-    """Write and print linear-scan artifacts when an output path is set."""
-
-    if out_path is None:
-        return {}
-    paths = deps.write_runtime_linear_scan_artifacts(out_path, scan)
-    _print_saved_paths(paths, _SCAN_ARTIFACT_DISPLAY_KEYS)
-    return paths
-
-
-def write_quasilinear_command_outputs(
-    ql_output: str | None,
-    result: RuntimeLinearResult,
-    *,
-    deps: RuntimeCommandDeps,
-) -> dict[str, str]:
-    """Write and print standalone quasilinear artifacts when available."""
-
-    if ql_output is None or result.quasilinear is None:
-        return {}
-    paths = deps.write_quasilinear_artifacts(str(ql_output), result.quasilinear)
-    _print_saved_paths(paths, _QUASILINEAR_ARTIFACT_DISPLAY_KEYS)
+    paths = writer(out_path, payload)
+    _print_saved_paths(paths, display_keys)
     return paths
 
 
@@ -595,9 +566,19 @@ def run_runtime_linear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:
     )
     print(f"ky={res.ky:.4f} gamma={res.gamma:.6f} omega={res.omega:.6f}")
     out_path = runtime_output_path(args, cfg)
-    write_linear_command_outputs(out_path, res, deps=deps)
+    _write_command_outputs(
+        out_path,
+        res,
+        writer=deps.write_runtime_linear_artifacts,
+        display_keys=_LINEAR_ARTIFACT_DISPLAY_KEYS,
+    )
     ql_output = getattr(args, "ql_output", None) or cfg.quasilinear.output_path
-    write_quasilinear_command_outputs(ql_output, res, deps=deps)
+    _write_command_outputs(
+        ql_output,
+        res.quasilinear,
+        writer=deps.write_quasilinear_artifacts,
+        display_keys=_QUASILINEAR_ARTIFACT_DISPLAY_KEYS,
+    )
     return 0
 
 
@@ -630,7 +611,12 @@ def scan_runtime_linear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:
     for ky, g, w in zip(scan.ky, scan.gamma, scan.omega):
         print(f"ky={ky:.4f} gamma={g:.6f} omega={w:.6f}")
     out_path = runtime_output_path(args, cfg) or cfg.quasilinear.output_path
-    write_linear_scan_command_outputs(out_path, scan, deps=deps)
+    _write_command_outputs(
+        out_path,
+        scan,
+        writer=deps.write_runtime_linear_scan_artifacts,
+        display_keys=_SCAN_ARTIFACT_DISPLAY_KEYS,
+    )
     return 0
 
 

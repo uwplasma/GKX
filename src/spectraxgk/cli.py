@@ -380,7 +380,7 @@ def _add_runtime_parsers(sub: argparse._SubParsersAction) -> None:
     )
     _add_runtime_paths(
         run_runtime_nl,
-        init_help="Optional restart/init-state file containing a compatible distribution state",
+        init_help="Optional restart/init-state file containing a matching distribution state",
     )
     _add_progress_flags(run_runtime_nl)
     run_runtime_nl.set_defaults(func=_cmd_run_runtime_nonlinear)
