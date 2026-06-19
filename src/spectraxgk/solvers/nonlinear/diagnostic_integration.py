@@ -79,7 +79,12 @@ from spectraxgk.solvers.time.explicit import (
     _laguerre_velocity_max,
     _linear_frequency_bound,
 )
-from spectraxgk.solvers.nonlinear.state_integration import _linear_rhs_jit_for_terms, nonlinear_rhs_cached
+from spectraxgk.solvers.nonlinear.state_integration import (
+    _linear_rhs_jit_for_terms,
+    nonlinear_rhs_cached,
+)
+
+_IMEX_METHODS = {"imex", "semi-implicit"}
 
 _EXPLICIT_DIAGNOSTIC_OPTION_KEYS = (
     "method", "cache", "terms", "checkpoint", "sample_stride",
@@ -203,6 +208,7 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
 ) -> tuple[jnp.ndarray, SimulationDiagnostics, jnp.ndarray, FieldState]:
     """Integrate nonlinear system and return runtime diagnostics plus final state."""
 
+    options = _options_from_scope(locals(), _EXPLICIT_DIAGNOSTIC_OPTION_KEYS)
     return integrate_explicit_nonlinear_diagnostics_impl(
         G0,
         grid,
@@ -211,39 +217,7 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
         dt,
         steps,
         deps=_explicit_nonlinear_diagnostics_deps(),
-        method=method,
-        cache=cache,
-        terms=terms,
-        checkpoint=checkpoint,
-        sample_stride=sample_stride,
-        diagnostics_stride=diagnostics_stride,
-        use_dealias_mask=use_dealias_mask,
-        z_index=z_index,
-        compressed_real_fft=compressed_real_fft,
-        laguerre_mode=laguerre_mode,
-        omega_ky_index=omega_ky_index,
-        omega_kx_index=omega_kx_index,
-        flux_scale=flux_scale,
-        wphi_scale=wphi_scale,
-        fixed_dt=fixed_dt,
-        dt_min=dt_min,
-        dt_max=dt_max,
-        cfl=cfl,
-        cfl_fac=cfl_fac,
-        collision_split=collision_split,
-        collision_scheme=collision_scheme,
-        implicit_tol=implicit_tol,
-        implicit_maxiter=implicit_maxiter,
-        implicit_iters=implicit_iters,
-        implicit_relax=implicit_relax,
-        implicit_restart=implicit_restart,
-        implicit_solve_method=implicit_solve_method,
-        implicit_preconditioner=implicit_preconditioner,
-        fixed_mode_ky_index=fixed_mode_ky_index,
-        fixed_mode_kx_index=fixed_mode_kx_index,
-        external_phi=external_phi,
-        resolved_diagnostics=resolved_diagnostics,
-        show_progress=show_progress,
+        **options,
     )
 
 
@@ -291,7 +265,7 @@ def integrate_nonlinear_explicit_diagnostics(
 ) -> tuple[jnp.ndarray, SimulationDiagnostics]:
     """Integrate nonlinear system and return runtime diagnostics."""
 
-    if method in {"imex", "semi-implicit"}:
+    if method in _IMEX_METHODS:
         return integrate_nonlinear_imex_diagnostics(
             G0,
             grid,
@@ -358,7 +332,7 @@ def integrate_nonlinear_explicit_diagnostics_state(
 ) -> tuple[jnp.ndarray, SimulationDiagnostics, jnp.ndarray, FieldState]:
     """Integrate nonlinear system and return runtime diagnostics plus the final state."""
 
-    if method in {"imex", "semi-implicit"}:
+    if method in _IMEX_METHODS:
         raise ValueError(
             "integrate_nonlinear_explicit_diagnostics_state only supports explicit methods"
         )
@@ -443,6 +417,7 @@ def integrate_nonlinear_imex_diagnostics(
 ) -> tuple[jnp.ndarray, SimulationDiagnostics]:
     """IMEX nonlinear integrator with runtime diagnostics."""
 
+    options = _options_from_scope(locals(), _IMEX_DIAGNOSTIC_OPTION_KEYS)
     return integrate_imex_nonlinear_diagnostics_impl(
         G0,
         grid,
@@ -451,38 +426,13 @@ def integrate_nonlinear_imex_diagnostics(
         dt,
         steps,
         deps=_imex_nonlinear_diagnostics_deps(),
-        method=method,
-        cache=cache,
-        terms=terms,
-        checkpoint=checkpoint,
-        sample_stride=sample_stride,
-        diagnostics_stride=diagnostics_stride,
-        use_dealias_mask=use_dealias_mask,
-        z_index=z_index,
-        compressed_real_fft=compressed_real_fft,
-        laguerre_mode=laguerre_mode,
-        omega_ky_index=omega_ky_index,
-        omega_kx_index=omega_kx_index,
-        flux_scale=flux_scale,
-        wphi_scale=wphi_scale,
-        collision_split=collision_split,
-        collision_scheme=collision_scheme,
-        implicit_tol=implicit_tol,
-        implicit_maxiter=implicit_maxiter,
-        implicit_iters=implicit_iters,
-        implicit_relax=implicit_relax,
-        implicit_restart=implicit_restart,
-        implicit_solve_method=implicit_solve_method,
-        implicit_preconditioner=implicit_preconditioner,
-        fixed_mode_ky_index=fixed_mode_ky_index,
-        fixed_mode_kx_index=fixed_mode_kx_index,
-        external_phi=external_phi,
-        show_progress=show_progress,
+        **options,
     )
 
 
 __all__ = [
     "_EXPLICIT_DIAGNOSTIC_OPTION_KEYS",
+    "_IMEX_METHODS",
     "_IMEX_DIAGNOSTIC_OPTION_KEYS",
     "_explicit_nonlinear_diagnostics_deps",
     "_imex_nonlinear_diagnostics_deps",
