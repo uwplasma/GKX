@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import Any
 
 import jax.numpy as jnp
@@ -76,6 +76,310 @@ _ETG_KRYLOV_FORWARD_KEYS = (
 ).split()
 
 
+@dataclass(frozen=True)
+class _ETGLinearSetup:
+    """Solver-ready single-ky ETG state shared by Krylov and time paths."""
+
+    cfg: ETGBaseCase
+    grid: Any
+    geom: Any
+    params: Any
+    terms: LinearTerms
+    selection: ModeSelection
+    electron_index: int
+    initial_state: Any
+
+
+def _default_etg_params(cfg: ETGBaseCase, geom: Any, Nm: int) -> LinearParams:
+    """Build ETG benchmark species parameters using the tracked normalization."""
+
+    if getattr(cfg.model, "adiabatic_ions", False):
+        return _electron_only_params(
+            cfg.model,
+            kpar_scale=float(geom.gradpar()),
+            omega_d_scale=ETG_OMEGA_D_SCALE,
+            omega_star_scale=ETG_OMEGA_STAR_SCALE,
+            rho_star=ETG_RHO_STAR,
+            damp_ends_amp=0.0,
+            damp_ends_widthfrac=0.0,
+            nhermite=Nm,
+        )
+    return _two_species_params(
+        cfg.model,
+        kpar_scale=float(geom.gradpar()),
+        omega_d_scale=ETG_OMEGA_D_SCALE,
+        omega_star_scale=ETG_OMEGA_STAR_SCALE,
+        rho_star=ETG_RHO_STAR,
+        damp_ends_amp=0.0,
+        damp_ends_widthfrac=0.0,
+        nhermite=Nm,
+    )
+
+
+def _default_etg_terms() -> LinearTerms:
+    """Return the electrostatic ETG benchmark term contract."""
+
+    return LinearTerms(apar=0.0, bpar=0.0, hypercollisions=1.0)
+
+
+def _build_etg_linear_setup(
+    *,
+    cfg: ETGBaseCase | None,
+    params: LinearParams | None,
+    terms: LinearTerms | None,
+    ky_target: float,
+    Nl: int,
+    Nm: int,
+) -> _ETGLinearSetup:
+    """Create the selected-grid initial state for one ETG benchmark point."""
+
+    cfg_use = cfg or ETGBaseCase()
+    grid_full = build_spectral_grid(cfg_use.grid)
+    geom = SAlphaGeometry.from_config(cfg_use.geometry)
+    params_use = params if params is not None else _default_etg_params(cfg_use, geom, Nm)
+    terms_use = terms if terms is not None else _default_etg_terms()
+
+    ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
+    grid = select_ky_grid(grid_full, ky_index)
+    sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
+
+    charge = np.atleast_1d(np.asarray(params_use.charge_sign))
+    ns = int(charge.size)
+    electron_index = int(np.argmin(charge))
+    G0 = np.zeros(
+        (ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64
+    )
+    G0_single = _build_initial_condition(
+        grid,
+        geom,
+        ky_index=sel.ky_index,
+        kx_index=sel.kx_index,
+        Nl=Nl,
+        Nm=Nm,
+        init_cfg=cfg_use.init,
+    )
+    G0[electron_index] = np.asarray(G0_single, dtype=np.complex64)
+    return _ETGLinearSetup(
+        cfg=cfg_use,
+        grid=grid,
+        geom=geom,
+        params=params_use,
+        terms=terms_use,
+        selection=sel,
+        electron_index=electron_index,
+        initial_state=jnp.asarray(G0),
+    )
+
+
+def _etg_linear_result(
+    setup: _ETGLinearSetup,
+    *,
+    t: np.ndarray,
+    phi_t_np: np.ndarray,
+    gamma: float,
+    omega: float,
+) -> LinearRunResult:
+    """Pack a single-ky ETG run result with the selected physical ky."""
+
+    return LinearRunResult(
+        t=t,
+        phi_t=phi_t_np,
+        gamma=gamma,
+        omega=omega,
+        ky=float(setup.grid.ky[setup.selection.ky_index]),
+        selection=setup.selection,
+    )
+
+
+def _valid_etg_growth(
+    gamma_val: float, omega_val: float, *, require_positive: bool
+) -> bool:
+    """Return whether a Krylov ETG result is acceptable for auto solver mode."""
+
+    if not np.isfinite(gamma_val) or not np.isfinite(omega_val):
+        return False
+    if require_positive and gamma_val <= 0.0:
+        return False
+    return True
+
+
+def _run_etg_krylov_path(
+    setup: _ETGLinearSetup,
+    *,
+    Nl: int,
+    Nm: int,
+    krylov_cfg: KrylovConfig | None,
+    diagnostic_norm: str,
+) -> LinearRunResult:
+    """Solve one ETG point with the Krylov eigenpath."""
+
+    cfg_use = krylov_cfg or ETG_KRYLOV_DEFAULT
+    cache = build_linear_cache(setup.grid, setup.geom, setup.params, Nl, Nm)
+    krylov_kwargs = {
+        "terms": setup.terms,
+        **{name: getattr(cfg_use, name) for name in _ETG_KRYLOV_FORWARD_KEYS},
+    }
+    eig, vec = dominant_eigenpair(
+        setup.initial_state, cache, setup.params, **krylov_kwargs
+    )
+    term_cfg = linear_terms_to_term_config(setup.terms)
+    phi = compute_fields_cached(vec, cache, setup.params, terms=term_cfg).phi
+    gamma = float(np.real(eig))
+    omega = float(-np.imag(eig))
+    if cfg_use.omega_sign != 0:
+        omega = float(np.sign(cfg_use.omega_sign)) * abs(omega)
+    gamma, omega = _normalize_growth_rate(
+        gamma, omega, setup.params, diagnostic_norm
+    )
+    return _etg_linear_result(
+        setup,
+        t=np.array([0.0]),
+        phi_t_np=np.asarray(phi)[None, ...],
+        gamma=gamma,
+        omega=omega,
+    )
+
+
+def _resolve_etg_time_config(
+    cfg: ETGBaseCase,
+    time_cfg: TimeConfig | None,
+    *,
+    streaming_fit: bool,
+    dt: float,
+    steps: int,
+    sample_stride: int | None,
+) -> tuple[TimeConfig | None, float, int]:
+    """Resolve explicit ETG time configuration without changing fit semantics."""
+
+    time_cfg_use = time_cfg
+    if time_cfg_use is None and streaming_fit and cfg.time.use_diffrax:
+        max_steps = max(int(cfg.time.diffrax_max_steps), int(steps))
+        time_cfg_use = replace(
+            cfg.time,
+            dt=dt,
+            t_max=dt * steps,
+            diffrax_max_steps=max_steps,
+        )
+        if sample_stride is not None:
+            time_cfg_use = replace(time_cfg_use, sample_stride=sample_stride)
+    if time_cfg_use is not None:
+        if sample_stride is not None:
+            time_cfg_use = replace(time_cfg_use, sample_stride=sample_stride)
+        if time_cfg is not None:
+            dt = float(time_cfg_use.dt)
+            steps = int(round(time_cfg_use.t_max / time_cfg_use.dt))
+    return time_cfg_use, dt, steps
+
+
+def _fit_etg_time_trace(
+    setup: _ETGLinearSetup,
+    *,
+    phi_t: Any,
+    density_t: Any,
+    dt: float,
+    stride: int,
+    fit_key: str,
+    reference_growth_window: bool,
+    reference_navg_fraction: float,
+    mode_method: str,
+    tmin: float | None,
+    tmax: float | None,
+    auto_window: bool,
+    window_fraction: float,
+    min_points: int,
+    start_fraction: float,
+    growth_weight: float,
+    require_positive: bool,
+    min_amp_fraction: float,
+    diagnostic_norm: str,
+) -> LinearRunResult:
+    """Fit ETG growth and frequency from a saved time trace."""
+
+    phi_t_np = np.asarray(phi_t)
+    t = np.arange(phi_t_np.shape[0]) * dt * stride
+    density_np = None if density_t is None else np.asarray(density_t)
+    if reference_growth_window and fit_key == "phi":
+        gamma, omega, _gamma_t, _omega_t, _t_mid = instantaneous_growth_rate_from_phi(
+            phi_t_np,
+            t,
+            setup.selection,
+            navg_fraction=reference_navg_fraction,
+            mode_method=mode_method,
+        )
+        gamma, omega = _normalize_growth_rate(
+            gamma, omega, setup.params, diagnostic_norm
+        )
+        return _etg_linear_result(
+            setup, t=t, phi_t_np=phi_t_np, gamma=gamma, omega=omega
+        )
+    if fit_key == "auto":
+        signal, _name, gamma, omega = _select_fit_signal_auto(
+            t,
+            phi_t_np,
+            density_np,
+            setup.selection,
+            mode_method=mode_method,
+            tmin=tmin,
+            tmax=tmax,
+            window_fraction=window_fraction,
+            min_points=min_points,
+            start_fraction=start_fraction,
+            growth_weight=growth_weight,
+            require_positive=require_positive,
+            min_amp_fraction=min_amp_fraction,
+            max_amp_fraction=0.9,
+            window_method="loglinear",
+            max_fraction=0.8,
+            end_fraction=0.9,
+            num_windows=8,
+            phase_weight=0.2,
+            length_weight=0.05,
+            min_r2=0.0,
+            late_penalty=0.1,
+            min_slope=None,
+            min_slope_frac=0.0,
+            slope_var_weight=0.0,
+        )
+        gamma, omega = _normalize_growth_rate(
+            gamma, omega, setup.params, diagnostic_norm
+        )
+        return _etg_linear_result(
+            setup, t=t, phi_t_np=phi_t_np, gamma=gamma, omega=omega
+        )
+
+    signal = _select_fit_signal(
+        phi_t_np,
+        density_np,
+        setup.selection,
+        fit_signal=fit_key,
+        mode_method=mode_method,
+    )
+    use_auto = auto_window and tmin is None and tmax is None
+    if not use_auto and not scan_window_valid(t, tmin, tmax):
+        use_auto = True
+    auto_fit_kwargs: dict[str, Any] = {
+        "window_fraction": window_fraction,
+        "min_points": min_points,
+        "start_fraction": start_fraction,
+        "growth_weight": growth_weight,
+        "require_positive": require_positive,
+        "min_amp_fraction": min_amp_fraction,
+    }
+    if use_auto:
+        gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
+            t, signal, **auto_fit_kwargs
+        )
+    else:
+        try:
+            gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
+        except ValueError:
+            gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
+                t, signal, **auto_fit_kwargs
+            )
+    gamma, omega = _normalize_growth_rate(gamma, omega, setup.params, diagnostic_norm)
+    return _etg_linear_result(setup, t=t, phi_t_np=phi_t_np, gamma=gamma, omega=omega)
+
+
 def run_etg_linear(
     ky_target: float = 3.0,
     Nl: int = 6,
@@ -110,60 +414,21 @@ def run_etg_linear(
 ) -> LinearRunResult:
     """Run an ETG linear benchmark and extract growth rate."""
 
-    cfg = cfg or ETGBaseCase()
-    grid_full = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
-    if params is None:
-        if getattr(cfg.model, "adiabatic_ions", False):
-            params = _electron_only_params(
-                cfg.model,
-                kpar_scale=float(geom.gradpar()),
-                omega_d_scale=ETG_OMEGA_D_SCALE,
-                omega_star_scale=ETG_OMEGA_STAR_SCALE,
-                rho_star=ETG_RHO_STAR,
-                damp_ends_amp=0.0,
-                damp_ends_widthfrac=0.0,
-                nhermite=Nm,
-            )
-        else:
-            params = _two_species_params(
-                cfg.model,
-                kpar_scale=float(geom.gradpar()),
-                omega_d_scale=ETG_OMEGA_D_SCALE,
-                omega_star_scale=ETG_OMEGA_STAR_SCALE,
-                rho_star=ETG_RHO_STAR,
-                damp_ends_amp=0.0,
-                damp_ends_widthfrac=0.0,
-                nhermite=Nm,
-            )
-    if terms is None:
-        # The ETG benchmark contract is electrostatic for both the adiabatic-ion
-        # and two-species variants. Keep the default ETG wrappers aligned with
-        # the tracked ETG asset-generation tools.
-        terms = LinearTerms(apar=0.0, bpar=0.0, hypercollisions=1.0)
-
-    ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
-    grid = select_ky_grid(grid_full, ky_index)
-    sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
-
-    charge = np.atleast_1d(np.asarray(params.charge_sign))
-    ns = int(charge.size)
-    electron_index = int(np.argmin(charge))
-    G0 = np.zeros(
-        (ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64
-    )
-    G0_single = _build_initial_condition(
-        grid,
-        geom,
-        ky_index=sel.ky_index,
-        kx_index=sel.kx_index,
+    setup = _build_etg_linear_setup(
+        cfg=cfg,
+        params=params,
+        terms=terms,
+        ky_target=ky_target,
         Nl=Nl,
         Nm=Nm,
-        init_cfg=cfg.init,
     )
-    G0[electron_index] = np.asarray(G0_single, dtype=np.complex64)
-
-    G0_jax = jnp.asarray(G0)
+    cfg = setup.cfg
+    grid = setup.grid
+    geom = setup.geom
+    params = setup.params
+    terms = setup.terms
+    electron_index = setup.electron_index
+    G0_jax = setup.initial_state
     solver_key = solver.strip().lower()
     fit_key = fit_signal.strip().lower()
     if fit_key not in {"phi", "density", "auto"}:
@@ -174,51 +439,33 @@ def run_etg_linear(
     if auto_solver:
         solver_key = "krylov"
 
-    def _is_valid_growth(gamma_val: float, omega_val: float) -> bool:
-        if not np.isfinite(gamma_val) or not np.isfinite(omega_val):
-            return False
-        if require_positive and gamma_val <= 0.0:
-            return False
-        return True
-
     if solver_key == "krylov":
-        krylov_cfg = krylov_cfg or ETG_KRYLOV_DEFAULT
-        cache = build_linear_cache(grid, geom, params, Nl, Nm)
-        krylov_kwargs = {
-            "terms": terms,
-            **{name: getattr(krylov_cfg, name) for name in _ETG_KRYLOV_FORWARD_KEYS},
-        }
-        eig, vec = dominant_eigenpair(G0_jax, cache, params, **krylov_kwargs)
-        term_cfg = linear_terms_to_term_config(terms)
-        phi = compute_fields_cached(vec, cache, params, terms=term_cfg).phi
-        phi_t_np = np.asarray(phi)[None, ...]
-        t = np.array([0.0])
-        gamma = float(np.real(eig))
-        omega = float(-np.imag(eig))
-        if krylov_cfg.omega_sign != 0:
-            omega = float(np.sign(krylov_cfg.omega_sign)) * abs(omega)
-        gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
-        if auto_solver and not _is_valid_growth(gamma, omega):
+        krylov_result = _run_etg_krylov_path(
+            setup,
+            Nl=Nl,
+            Nm=Nm,
+            krylov_cfg=krylov_cfg,
+            diagnostic_norm=diagnostic_norm,
+        )
+        if auto_solver and not _valid_etg_growth(
+            krylov_result.gamma,
+            krylov_result.omega,
+            require_positive=require_positive,
+        ):
             solver_key = "time"
+        else:
+            return krylov_result
 
     if solver_key != "krylov":
-        time_cfg_use = time_cfg
-        if time_cfg_use is None and streaming_fit and cfg.time.use_diffrax:
-            max_steps = max(int(cfg.time.diffrax_max_steps), int(steps))
-            time_cfg_use = replace(
-                cfg.time,
-                dt=dt,
-                t_max=dt * steps,
-                diffrax_max_steps=max_steps,
-            )
-            if sample_stride is not None:
-                time_cfg_use = replace(time_cfg_use, sample_stride=sample_stride)
+        time_cfg_use, dt, steps = _resolve_etg_time_config(
+            cfg,
+            time_cfg,
+            streaming_fit=streaming_fit,
+            dt=dt,
+            steps=steps,
+            sample_stride=sample_stride,
+        )
         if time_cfg_use is not None:
-            if sample_stride is not None:
-                time_cfg_use = replace(time_cfg_use, sample_stride=sample_stride)
-            if time_cfg is not None:
-                dt = float(time_cfg_use.dt)
-                steps = int(round(time_cfg_use.t_max / time_cfg_use.dt))
             cache = build_linear_cache(grid, geom, params, Nl, Nm)
             if fit_key in {"density", "auto"}:
                 if streaming_fit and time_cfg_use.use_diffrax:
@@ -274,13 +521,12 @@ def run_etg_linear(
                     stride = time_cfg_use.sample_stride
                     phi_t_np = np.asarray(phi_t)
                     t = np.array([tmax_i])
-                    return LinearRunResult(
+                    return _etg_linear_result(
+                        setup,
                         t=t,
-                        phi_t=phi_t_np,
+                        phi_t_np=phi_t_np,
                         gamma=gamma,
                         omega=omega,
-                        ky=float(grid.ky[sel.ky_index]),
-                        selection=sel,
                     )
                 if time_cfg_use.use_diffrax:
                     _, saved = integrate_linear_diffrax(
@@ -367,101 +613,26 @@ def run_etg_linear(
                 )
                 density_t = None
 
-        phi_t_np = np.asarray(phi_t)
-        t = np.arange(phi_t_np.shape[0]) * dt * stride
-        density_np = None if density_t is None else np.asarray(density_t)
-        if reference_growth_window and fit_key == "phi":
-            gamma, omega, _gamma_t, _omega_t, _t_mid = instantaneous_growth_rate_from_phi(
-                phi_t_np,
-                t,
-                sel,
-                navg_fraction=reference_navg_fraction,
-                mode_method=mode_method,
-            )
-            gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
-            return LinearRunResult(
-                t=t,
-                phi_t=phi_t_np,
-                gamma=gamma,
-                omega=omega,
-                ky=float(grid.ky[sel.ky_index]),
-                selection=sel,
-            )
-        if fit_key == "auto":
-            signal, _name, gamma, omega = _select_fit_signal_auto(
-                t,
-                phi_t_np,
-                density_np,
-                sel,
-                mode_method=mode_method,
-                tmin=tmin,
-                tmax=tmax,
-                window_fraction=window_fraction,
-                min_points=min_points,
-                start_fraction=start_fraction,
-                growth_weight=growth_weight,
-                require_positive=require_positive,
-                min_amp_fraction=min_amp_fraction,
-                max_amp_fraction=0.9,
-                window_method="loglinear",
-                max_fraction=0.8,
-                end_fraction=0.9,
-                num_windows=8,
-                phase_weight=0.2,
-                length_weight=0.05,
-                min_r2=0.0,
-                late_penalty=0.1,
-                min_slope=None,
-                min_slope_frac=0.0,
-                slope_var_weight=0.0,
-            )
-            gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
-            return LinearRunResult(
-                t=t,
-                phi_t=phi_t_np,
-                gamma=gamma,
-                omega=omega,
-                ky=float(grid.ky[sel.ky_index]),
-                selection=sel,
-            )
-
-        signal = _select_fit_signal(
-            phi_t_np,
-            density_np,
-            sel,
-            fit_signal=fit_key,
+        return _fit_etg_time_trace(
+            setup,
+            phi_t=phi_t,
+            density_t=density_t,
+            dt=dt,
+            stride=stride,
+            fit_key=fit_key,
+            reference_growth_window=reference_growth_window,
+            reference_navg_fraction=reference_navg_fraction,
             mode_method=mode_method,
+            tmin=tmin,
+            tmax=tmax,
+            auto_window=auto_window,
+            window_fraction=window_fraction,
+            min_points=min_points,
+            start_fraction=start_fraction,
+            growth_weight=growth_weight,
+            require_positive=require_positive,
+            min_amp_fraction=min_amp_fraction,
+            diagnostic_norm=diagnostic_norm,
         )
 
-        use_auto = auto_window and tmin is None and tmax is None
-        if not use_auto and not scan_window_valid(t, tmin, tmax):
-            use_auto = True
-        auto_fit_kwargs: dict[str, Any] = {
-            "window_fraction": window_fraction,
-            "min_points": min_points,
-            "start_fraction": start_fraction,
-            "growth_weight": growth_weight,
-            "require_positive": require_positive,
-            "min_amp_fraction": min_amp_fraction,
-        }
-        if use_auto:
-            gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
-                t, signal, **auto_fit_kwargs
-            )
-        else:
-            try:
-                gamma, omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
-            except ValueError:
-                gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
-                    t, signal, **auto_fit_kwargs
-                )
-        gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
-
-    return LinearRunResult(
-        t=t,
-        phi_t=phi_t_np,
-        gamma=gamma,
-        omega=omega,
-        ky=float(grid.ky[sel.ky_index]),
-        selection=sel,
-    )
+    raise ValueError(f"Unsupported ETG linear solver '{solver}'.")
