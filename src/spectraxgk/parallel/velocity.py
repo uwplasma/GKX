@@ -21,9 +21,6 @@ from spectraxgk.parallel.velocity_hermite import (
 )
 from spectraxgk.parallel.velocity_plan import (
     VelocityShardingPlan,
-    _AXIS_ALIASES,  # noqa: F401 - private compatibility hook
-    _slice_axis,  # noqa: F401 - private compatibility hook
-    _state_dims,  # noqa: F401 - private compatibility hook
     build_velocity_sharding_plan,
 )
 from spectraxgk.parallel.velocity_streaming import (

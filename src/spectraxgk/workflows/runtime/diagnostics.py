@@ -1,10 +1,4 @@
-"""Runtime linear-fit and quasilinear diagnostic helpers.
-
-The finite-value and diagnostic-array composition helpers are re-exported here
-for compatibility, but their implementation lives in
-``workflows.runtime.diagnostic_arrays`` so this module can focus on fitted
-linear observables and quasilinear finalization.
-"""
+"""Runtime linear-fit and quasilinear diagnostic helpers."""
 
 from __future__ import annotations
 
@@ -22,25 +16,13 @@ from spectraxgk.diagnostics.modes import (
     extract_eigenfunction,
     extract_mode_time_series,
 )
-from spectraxgk.workflows.runtime.diagnostic_arrays import (
-    concat_runtime_diagnostics,
-    slice_runtime_diagnostics,
-    stride_runtime_diagnostics,
-    truncate_runtime_diagnostics,
-    validate_finite_runtime_diagnostics,
-)
 from spectraxgk.workflows.runtime.results import RuntimeLinearResult
 
 __all__ = [
     "RuntimeLinearFitResult",
     "RuntimeQuasilinearFinalizationDeps",
-    "concat_runtime_diagnostics",
     "finalize_runtime_linear_quasilinear",
     "fit_runtime_linear_diagnostics",
-    "slice_runtime_diagnostics",
-    "stride_runtime_diagnostics",
-    "truncate_runtime_diagnostics",
-    "validate_finite_runtime_diagnostics",
 ]
 
 

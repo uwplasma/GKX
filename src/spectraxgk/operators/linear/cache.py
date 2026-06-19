@@ -7,7 +7,6 @@ from spectraxgk.operators.linear.cache_arrays import (
     _build_gyroaverage_cache_arrays,
     _build_low_rank_moment_cache_arrays,
     _numpy_dtype_for_jax,
-    _shift_axis_for_cache,  # noqa: F401 - private compatibility helper
     collision_damping,
     hypercollision_damping,
 )
