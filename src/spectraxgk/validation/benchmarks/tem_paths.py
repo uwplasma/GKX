@@ -58,6 +58,13 @@ class _TEMBatchContext:
     cache: Any
 
 
+_TEM_KRYLOV_FORWARD_KEYS = (
+    "krylov_dim restarts omega_min_factor omega_target_factor omega_cap_factor omega_sign method "
+    "power_iters power_dt shift shift_source shift_tol shift_maxiter shift_restart shift_solve_method "
+    "shift_preconditioner shift_selection mode_family fallback_method fallback_real_floor"
+).split()
+
+
 def _krylov_eigenvalue(
     G0_jax: Any,
     cache: Any,
@@ -66,32 +73,11 @@ def _krylov_eigenvalue(
     cfg_use: Any,
     hooks: TEMPathHooks,
 ) -> tuple[Any, Any]:
-    return hooks.dominant_eigenpair(
-        G0_jax,
-        cache,
-        params,
-        terms=terms,
-        krylov_dim=cfg_use.krylov_dim,
-        restarts=cfg_use.restarts,
-        omega_min_factor=cfg_use.omega_min_factor,
-        omega_target_factor=cfg_use.omega_target_factor,
-        omega_cap_factor=cfg_use.omega_cap_factor,
-        omega_sign=cfg_use.omega_sign,
-        method=cfg_use.method,
-        power_iters=cfg_use.power_iters,
-        power_dt=cfg_use.power_dt,
-        shift=cfg_use.shift,
-        shift_source=cfg_use.shift_source,
-        shift_tol=cfg_use.shift_tol,
-        shift_maxiter=cfg_use.shift_maxiter,
-        shift_restart=cfg_use.shift_restart,
-        shift_solve_method=cfg_use.shift_solve_method,
-        shift_preconditioner=cfg_use.shift_preconditioner,
-        shift_selection=cfg_use.shift_selection,
-        mode_family=cfg_use.mode_family,
-        fallback_method=cfg_use.fallback_method,
-        fallback_real_floor=cfg_use.fallback_real_floor,
-    )
+    kwargs = {
+        "terms": terms,
+        **{name: getattr(cfg_use, name) for name in _TEM_KRYLOV_FORWARD_KEYS},
+    }
+    return hooks.dominant_eigenpair(G0_jax, cache, params, **kwargs)
 
 
 def _prepare_tem_scan_batch(
