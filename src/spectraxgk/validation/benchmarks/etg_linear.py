@@ -68,6 +68,12 @@ from spectraxgk.solvers.linear.krylov import KrylovConfig, dominant_eigenpair
 from spectraxgk.solvers.time.runners import integrate_linear_from_config
 from spectraxgk.terms.assembly import compute_fields_cached
 
+_ETG_KRYLOV_FORWARD_KEYS = (
+    "krylov_dim restarts omega_min_factor omega_target_factor omega_cap_factor omega_sign method "
+    "power_iters power_dt shift shift_source shift_tol shift_maxiter shift_restart shift_solve_method "
+    "shift_preconditioner shift_selection mode_family fallback_method fallback_real_floor"
+).split()
+
 
 def run_etg_linear(
     ky_target: float = 3.0,
@@ -177,32 +183,11 @@ def run_etg_linear(
     if solver_key == "krylov":
         krylov_cfg = krylov_cfg or ETG_KRYLOV_DEFAULT
         cache = build_linear_cache(grid, geom, params, Nl, Nm)
-        eig, vec = dominant_eigenpair(
-            G0_jax,
-            cache,
-            params,
-            terms=terms,
-            krylov_dim=krylov_cfg.krylov_dim,
-            restarts=krylov_cfg.restarts,
-            omega_min_factor=krylov_cfg.omega_min_factor,
-            omega_target_factor=krylov_cfg.omega_target_factor,
-            omega_cap_factor=krylov_cfg.omega_cap_factor,
-            omega_sign=krylov_cfg.omega_sign,
-            method=krylov_cfg.method,
-            power_iters=krylov_cfg.power_iters,
-            power_dt=krylov_cfg.power_dt,
-            shift=krylov_cfg.shift,
-            shift_source=krylov_cfg.shift_source,
-            shift_tol=krylov_cfg.shift_tol,
-            shift_maxiter=krylov_cfg.shift_maxiter,
-            shift_restart=krylov_cfg.shift_restart,
-            shift_solve_method=krylov_cfg.shift_solve_method,
-            shift_preconditioner=krylov_cfg.shift_preconditioner,
-            shift_selection=krylov_cfg.shift_selection,
-            mode_family=krylov_cfg.mode_family,
-            fallback_method=krylov_cfg.fallback_method,
-            fallback_real_floor=krylov_cfg.fallback_real_floor,
-        )
+        krylov_kwargs = {
+            "terms": terms,
+            **{name: getattr(krylov_cfg, name) for name in _ETG_KRYLOV_FORWARD_KEYS},
+        }
+        eig, vec = dominant_eigenpair(G0_jax, cache, params, **krylov_kwargs)
         term_cfg = linear_terms_to_term_config(terms)
         phi = compute_fields_cached(vec, cache, params, terms=term_cfg).phi
         phi_t_np = np.asarray(phi)[None, ...]
@@ -485,5 +470,4 @@ def run_etg_linear(
         ky=float(grid.ky[sel.ky_index]),
         selection=sel,
     )
-
 

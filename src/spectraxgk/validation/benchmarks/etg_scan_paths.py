@@ -26,7 +26,10 @@ from spectraxgk.linear import integrate_linear, integrate_linear_diagnostics
 from spectraxgk.solvers.linear.krylov import dominant_eigenpair
 from spectraxgk.solvers.time.diffrax import integrate_linear_diffrax_streaming
 from spectraxgk.solvers.time.runners import integrate_linear_from_config
-from spectraxgk.validation.benchmarks.etg_linear import run_etg_linear
+from spectraxgk.validation.benchmarks.etg_linear import (
+    _ETG_KRYLOV_FORWARD_KEYS,
+    run_etg_linear,
+)
 
 _PATCHABLE_NAMES = (
     "ModeSelection",
@@ -98,34 +101,15 @@ def run_etg_krylov_batch(
         and v_ref is not None
         and (cfg_use.continuation_selection.strip().lower() == "overlap")
     )
-    eig, vec = dominant_eigenpair(
-        v0_use,
-        cache,
-        params,
-        terms=terms,
-        v_ref=v_ref,
-        select_overlap=select_overlap,
-        krylov_dim=cfg_use.krylov_dim,
-        restarts=cfg_use.restarts,
-        omega_min_factor=cfg_use.omega_min_factor,
-        omega_target_factor=cfg_use.omega_target_factor,
-        omega_cap_factor=cfg_use.omega_cap_factor,
-        omega_sign=cfg_use.omega_sign,
-        method=cfg_use.method,
-        power_iters=cfg_use.power_iters,
-        power_dt=cfg_use.power_dt,
-        shift=shift_override,
-        shift_source=cfg_use.shift_source,
-        shift_tol=cfg_use.shift_tol,
-        shift_maxiter=cfg_use.shift_maxiter,
-        shift_restart=cfg_use.shift_restart,
-        shift_solve_method=cfg_use.shift_solve_method,
-        shift_preconditioner=cfg_use.shift_preconditioner,
-        shift_selection=shift_selection_use,
-        mode_family=cfg_use.mode_family,
-        fallback_method=cfg_use.fallback_method,
-        fallback_real_floor=cfg_use.fallback_real_floor,
-    )
+    krylov_kwargs = {
+        "terms": terms,
+        "v_ref": v_ref,
+        "select_overlap": select_overlap,
+        **{name: getattr(cfg_use, name) for name in _ETG_KRYLOV_FORWARD_KEYS},
+        "shift": shift_override,
+        "shift_selection": shift_selection_use,
+    }
+    eig, vec = dominant_eigenpair(v0_use, cache, params, **krylov_kwargs)
     if use_cont:
         eig_host = complex(np.asarray(eig))
         if np.isfinite(eig_host.real) and np.isfinite(eig_host.imag):
