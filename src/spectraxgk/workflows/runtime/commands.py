@@ -24,6 +24,24 @@ RUNTIME_COMMAND_FIT_KEYS = {
 
 _PRELOADED_RUNTIME_CONFIG_ATTR = "_spectraxgk_preloaded_runtime_config"
 _PRELOADED_RUNTIME_DATA_ATTR = "_spectraxgk_preloaded_runtime_data"
+_LINEAR_ARTIFACT_DISPLAY_KEYS = (
+    "summary",
+    "timeseries",
+    "eigenfunction",
+    "state",
+    "quasilinear_summary",
+    "quasilinear_species",
+)
+_SCAN_ARTIFACT_DISPLAY_KEYS = ("summary", "scan", "quasilinear_spectrum")
+_QUASILINEAR_ARTIFACT_DISPLAY_KEYS = ("quasilinear_summary", "quasilinear_species")
+_NONLINEAR_ARTIFACT_DISPLAY_KEYS = (
+    "summary",
+    "diagnostics",
+    "state",
+    "out",
+    "big",
+    "restart",
+)
 
 
 @dataclass(frozen=True)
@@ -455,6 +473,58 @@ def _print_saved_paths(paths: Mapping[str, str], keys: Sequence[str]) -> None:
             print(f"saved {paths[key]}")
 
 
+def write_linear_command_outputs(
+    out_path: str | None,
+    result: RuntimeLinearResult,
+    *,
+    deps: RuntimeCommandDeps,
+) -> dict[str, str]:
+    """Write and print linear runtime artifacts when an output path is set."""
+
+    if out_path is None:
+        return {}
+    paths = deps.write_runtime_linear_artifacts(out_path, result)
+    _print_saved_paths(paths, _LINEAR_ARTIFACT_DISPLAY_KEYS)
+    return paths
+
+
+def write_linear_scan_command_outputs(
+    out_path: str | None,
+    scan: Any,
+    *,
+    deps: RuntimeCommandDeps,
+) -> dict[str, str]:
+    """Write and print linear-scan artifacts when an output path is set."""
+
+    if out_path is None:
+        return {}
+    paths = deps.write_runtime_linear_scan_artifacts(out_path, scan)
+    _print_saved_paths(paths, _SCAN_ARTIFACT_DISPLAY_KEYS)
+    return paths
+
+
+def write_quasilinear_command_outputs(
+    ql_output: str | None,
+    result: RuntimeLinearResult,
+    *,
+    deps: RuntimeCommandDeps,
+) -> dict[str, str]:
+    """Write and print standalone quasilinear artifacts when available."""
+
+    if ql_output is None or result.quasilinear is None:
+        return {}
+    paths = deps.write_quasilinear_artifacts(str(ql_output), result.quasilinear)
+    _print_saved_paths(paths, _QUASILINEAR_ARTIFACT_DISPLAY_KEYS)
+    return paths
+
+
+def print_nonlinear_command_outputs(paths: Mapping[str, str], *, enabled: bool) -> None:
+    """Print nonlinear artifact paths after diagnostics confirm a saved run."""
+
+    if enabled:
+        _print_saved_paths(paths, _NONLINEAR_ARTIFACT_DISPLAY_KEYS)
+
+
 def plot_saved_output_command(
     argv: Sequence[str],
     *,
@@ -525,23 +595,9 @@ def run_runtime_linear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:
     )
     print(f"ky={res.ky:.4f} gamma={res.gamma:.6f} omega={res.omega:.6f}")
     out_path = runtime_output_path(args, cfg)
-    if out_path is not None:
-        paths = deps.write_runtime_linear_artifacts(out_path, res)
-        _print_saved_paths(
-            paths,
-            (
-                "summary",
-                "timeseries",
-                "eigenfunction",
-                "state",
-                "quasilinear_summary",
-                "quasilinear_species",
-            ),
-        )
+    write_linear_command_outputs(out_path, res, deps=deps)
     ql_output = getattr(args, "ql_output", None) or cfg.quasilinear.output_path
-    if ql_output is not None and res.quasilinear is not None:
-        paths = deps.write_quasilinear_artifacts(str(ql_output), res.quasilinear)
-        _print_saved_paths(paths, ("quasilinear_summary", "quasilinear_species"))
+    write_quasilinear_command_outputs(ql_output, res, deps=deps)
     return 0
 
 
@@ -574,9 +630,7 @@ def scan_runtime_linear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:
     for ky, g, w in zip(scan.ky, scan.gamma, scan.omega):
         print(f"ky={ky:.4f} gamma={g:.6f} omega={w:.6f}")
     out_path = runtime_output_path(args, cfg) or cfg.quasilinear.output_path
-    if out_path is not None:
-        paths = deps.write_runtime_linear_scan_artifacts(out_path, scan)
-        _print_saved_paths(paths, ("summary", "scan", "quasilinear_spectrum"))
+    write_linear_scan_command_outputs(out_path, scan, deps=deps)
     return 0
 
 
@@ -622,8 +676,5 @@ def run_runtime_nonlinear_command(args: Any, *, deps: RuntimeCommandDeps) -> int
     )
     if not print_nonlinear_run_summary(result):
         return 0
-    if out_path is not None:
-        _print_saved_paths(
-            paths, ("summary", "diagnostics", "state", "out", "big", "restart")
-        )
+    print_nonlinear_command_outputs(paths, enabled=out_path is not None)
     return 0
