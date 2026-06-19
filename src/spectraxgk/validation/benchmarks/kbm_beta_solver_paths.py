@@ -661,6 +661,27 @@ def _integrate_saved_time_series(
     return phi_t, None
 
 
+def _select_kbm_beta_eigen_candidate(
+    *,
+    beta: float,
+    beta_transition: float,
+    eig_candidates: Sequence[Any],
+    vec_candidates: Sequence[Any],
+) -> tuple[Any, Any]:
+    """Select the KBM branch from targeted Krylov candidates."""
+
+    if len(eig_candidates) >= 2 and np.isfinite(beta_transition):
+        idx = 1 if float(beta) >= float(beta_transition) else 0
+    else:
+        growth = np.real(np.asarray([complex(np.asarray(e)) for e in eig_candidates]))
+        idx = (
+            0
+            if np.all(~np.isfinite(growth))
+            else int(np.nanargmax(np.where(np.isfinite(growth), growth, -np.inf)))
+        )
+    return eig_candidates[idx], vec_candidates[idx]
+
+
 def solve_kbm_beta_krylov_sample(
     *,
     beta: float,
@@ -700,10 +721,8 @@ def solve_kbm_beta_krylov_sample(
             if kbm_beta_transition is None
             else float(kbm_beta_transition)
         )
-        eig_candidates = []
-        vec_candidates = []
-        for target in targets:
-            eig_i, vec_i = _dominant_kbm_eigenpair(
+        target_results = [
+            _dominant_kbm_eigenpair(
                 hooks,
                 G0_jax,
                 cache,
@@ -715,22 +734,15 @@ def solve_kbm_beta_krylov_sample(
                 shift_source="target",
                 shift_selection="targeted",
             )
-            eig_candidates.append(eig_i)
-            vec_candidates.append(vec_i)
-        if len(eig_candidates) >= 2 and np.isfinite(beta_transition):
-            idx = 1 if float(beta) >= beta_transition else 0
-            eig = eig_candidates[idx]
-            vec = vec_candidates[idx]
-        else:
-            eig_arr = np.asarray([complex(np.asarray(e)) for e in eig_candidates])
-            growth = np.real(eig_arr)
-            if np.all(~np.isfinite(growth)):
-                eig = eig_candidates[0]
-                vec = vec_candidates[0]
-            else:
-                idx = int(np.nanargmax(np.where(np.isfinite(growth), growth, -np.inf)))
-                eig = eig_candidates[idx]
-                vec = vec_candidates[idx]
+            for target in targets
+        ]
+        eig_candidates, vec_candidates = zip(*target_results, strict=True)
+        eig, vec = _select_kbm_beta_eigen_candidate(
+            beta=beta,
+            beta_transition=beta_transition,
+            eig_candidates=eig_candidates,
+            vec_candidates=vec_candidates,
+        )
     else:
         eig, vec = _dominant_kbm_eigenpair(
             hooks,
