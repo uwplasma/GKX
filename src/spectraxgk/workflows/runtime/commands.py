@@ -24,7 +24,10 @@ from spectraxgk.workflows.runtime.command_options import (
 )
 from spectraxgk.workflows.runtime.results import RuntimeLinearResult, RuntimeNonlinearResult
 from spectraxgk.workflows.runtime.command_artifacts import (
+    print_linear_run_header,
     print_nonlinear_command_outputs,
+    print_nonlinear_run_header,
+    print_nonlinear_run_summary,
     write_linear_runtime_command_outputs,
     write_scan_runtime_command_outputs,
 )
@@ -123,88 +126,6 @@ def runtime_output_path(args: Any, cfg: RuntimeConfig) -> str | None:
     if getattr(args, "out", None) is not None:
         return str(args.out)
     return cfg.output.path
-
-
-def print_linear_run_header(
-    *,
-    label: str,
-    config_path: str,
-    ky: float,
-    Nl: int,
-    Nm: int,
-    solver: str,
-    method: str,
-    dt: float,
-    steps: int,
-    grid_shape: tuple[int, int, int],
-    show_progress: bool,
-    extra: str | None = None,
-) -> None:
-    """Print the standard executable header for linear initial-value runs."""
-
-    print(f"starting {label}")
-    print(
-        f"config={config_path} ky={ky:.4f} Nl={Nl} Nm={Nm} "
-        f"solver={solver} method={method} dt={dt:.6g} steps={steps}"
-    )
-    print(
-        f"grid=Nx{grid_shape[0]} Ny{grid_shape[1]} Nz{grid_shape[2]} "
-        f"progress={'on' if show_progress else 'off'}"
-    )
-    if extra is not None:
-        print(extra)
-
-
-def print_nonlinear_run_header(
-    *,
-    config_path: str,
-    ky: float,
-    Nl: int,
-    Nm: int,
-    method: str,
-    dt: float,
-    steps: int | None,
-    grid_shape: tuple[int, int, int],
-    diagnostics: bool,
-    show_progress: bool,
-) -> None:
-    """Print the standard executable header for nonlinear initial-value runs."""
-
-    print("starting runtime nonlinear run")
-    print(
-        f"config={config_path} ky={ky:.4f} Nl={Nl} Nm={Nm} "
-        f"method={method} dt={dt:.6g} "
-        f"steps={'auto' if steps is None else steps}"
-    )
-    print(
-        f"grid=Nx{grid_shape[0]} Ny{grid_shape[1]} Nz{grid_shape[2]} "
-        f"diagnostics={'on' if diagnostics else 'off'} "
-        f"progress={'on' if show_progress else 'off'}"
-    )
-
-
-def print_nonlinear_run_summary(result: RuntimeNonlinearResult) -> bool:
-    """Print final nonlinear diagnostics and return whether diagnostics exist."""
-
-    import numpy as np
-
-    diag = result.diagnostics
-    if diag is None:
-        print("nonlinear run completed")
-        return False
-    t_values = np.asarray(diag.t)
-    t_last = float(t_values[-1]) if t_values.size else 0.0
-    print(
-        "nonlinear: "
-        f"t={t_last:.6g} "
-        f"ky_sel={result.ky_selected:.6g} "
-        f"kx_sel={result.kx_selected:.6g} "
-        f"dt_mean={float(diag.dt_mean):.6g} "
-        f"Wg={float(diag.Wg_t[-1]):.6g} "
-        f"Wphi={float(diag.Wphi_t[-1]):.6g} "
-        f"Wapar={float(diag.Wapar_t[-1]):.6g}"
-    )
-    return True
 
 
 def apply_runtime_path_overrides(
