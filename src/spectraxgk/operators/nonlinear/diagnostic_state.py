@@ -44,30 +44,20 @@ class NonlinearDiagnosticKernels:
     turbulent_heating_resolved_species: Callable[..., Any]
 
 
-def compute_nonlinear_diagnostic_tuple(
-    G_state: jnp.ndarray,
-    fields_state: FieldState,
-    G_prev_step: jnp.ndarray,
-    fields_prev_step: FieldState,
-    dt_step: jnp.ndarray,
-    *,
-    grid: SpectralGrid,
-    cache: LinearCache,
-    params: LinearParams,
-    vol_fac: jnp.ndarray,
-    flux_fac: jnp.ndarray,
-    mask: jnp.ndarray,
-    z_idx: int,
-    use_dealias: bool,
-    real_dtype: Any,
-    omega_ky_index: int | None,
-    omega_kx_index: int | None,
-    flux_scale: float,
-    wphi_scale: float,
-    resolved_diagnostics: bool,
-    kernels: NonlinearDiagnosticKernels,
-) -> tuple[Any, ...]:
-    """Build the nonlinear scan diagnostic tuple for one state."""
+@dataclass(frozen=True)
+class _DiagnosticFieldPair:
+    phi: jnp.ndarray
+    apar: jnp.ndarray
+    bpar: jnp.ndarray
+    phi_prev_step: jnp.ndarray
+    apar_prev_step: jnp.ndarray
+    bpar_prev_step: jnp.ndarray
+
+
+def _diagnostic_field_pair(
+    fields_state: FieldState, fields_prev_step: FieldState
+) -> _DiagnosticFieldPair:
+    """Return present/previous fields with disabled EM components zero-filled."""
 
     phi = fields_state.phi
     apar = fields_state.apar if fields_state.apar is not None else jnp.zeros_like(phi)
@@ -83,9 +73,31 @@ def compute_nonlinear_diagnostic_tuple(
         if fields_prev_step.bpar is not None
         else jnp.zeros_like(phi_prev_step)
     )
+    return _DiagnosticFieldPair(
+        phi=phi,
+        apar=apar,
+        bpar=bpar,
+        phi_prev_step=phi_prev_step,
+        apar_prev_step=apar_prev_step,
+        bpar_prev_step=bpar_prev_step,
+    )
+
+
+def _mode_growth_frequency(
+    fields: _DiagnosticFieldPair,
+    dt_step: jnp.ndarray,
+    *,
+    mask: jnp.ndarray,
+    z_idx: int,
+    omega_ky_index: int | None,
+    omega_kx_index: int | None,
+    real_dtype: Any,
+    kernels: NonlinearDiagnosticKernels,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """Return monitored nonlinear growth, frequency, and optional mode value."""
 
     gamma_modes, omega_modes = kernels.instantaneous_growth_rate_step(
-        phi, phi_prev_step, dt_step, z_index=z_idx, mask=mask
+        fields.phi, fields.phi_prev_step, dt_step, z_index=z_idx, mask=mask
     )
     if omega_ky_index is not None:
         ky_i = int(np.clip(omega_ky_index, 0, int(gamma_modes.shape[0]) - 1))
@@ -96,7 +108,7 @@ def compute_nonlinear_diagnostic_tuple(
         omega = jnp.nan_to_num(
             omega_modes[ky_i, kx_i], nan=jnp.asarray(0.0, dtype=real_dtype)
         )
-        phi_mode = phi[ky_i, kx_i, z_idx]
+        phi_mode = fields.phi[ky_i, kx_i, z_idx]
     else:
         gamma = jnp.nan_to_num(
             jnp.nanmean(jnp.where(mask, gamma_modes, jnp.nan)),
@@ -106,81 +118,124 @@ def compute_nonlinear_diagnostic_tuple(
             jnp.nanmean(jnp.where(mask, omega_modes, jnp.nan)),
             nan=jnp.asarray(0.0, dtype=real_dtype),
         )
-        phi_mode = jnp.asarray(0.0 + 0.0j, dtype=phi.dtype)
-    nspecies = int(G_state.shape[0]) if G_state.ndim == 6 else 1
-    if not resolved_diagnostics:
-        Wg_val = kernels.distribution_free_energy(
-            G_state, grid, params, vol_fac, use_dealias=use_dealias
-        )
-        Wphi_val = kernels.electrostatic_field_energy(
-            phi,
-            cache,
-            params,
-            vol_fac,
-            use_dealias=use_dealias,
-            wphi_scale=wphi_scale,
-        )
-        Wapar_val = kernels.magnetic_vector_potential_energy(
-            apar, cache, vol_fac, use_dealias=use_dealias
-        )
-        heat_species = kernels.heat_flux_species(
-            G_state,
-            phi,
-            apar,
-            bpar,
-            cache,
-            grid,
-            params,
-            flux_fac,
-            use_dealias=use_dealias,
-            flux_scale=flux_scale,
-        )
-        pflux_species = kernels.particle_flux_species(
-            G_state,
-            phi,
-            apar,
-            bpar,
-            cache,
-            grid,
-            params,
-            flux_fac,
-            use_dealias=use_dealias,
-            flux_scale=flux_scale,
-        )
-        turbulent_heat_species = kernels.turbulent_heating_species(
-            G_state,
-            G_prev_step,
-            phi,
-            apar,
-            bpar,
-            phi_prev_step,
-            apar_prev_step,
-            bpar_prev_step,
-            cache,
-            grid,
-            params,
-            vol_fac,
-            dt_step,
-            use_dealias=use_dealias,
-        )
-        heat_val = jnp.sum(heat_species)
-        pflux_val = jnp.sum(pflux_species)
-        turbulent_heat_val = jnp.sum(turbulent_heat_species)
-        return (
-            gamma,
-            omega,
-            Wg_val,
-            Wphi_val,
-            Wapar_val,
-            heat_val,
-            pflux_val,
-            turbulent_heat_val,
-            heat_species,
-            pflux_species,
-            turbulent_heat_species,
-            phi_mode,
-            (),
-        )
+        phi_mode = jnp.asarray(0.0 + 0.0j, dtype=fields.phi.dtype)
+    return gamma, omega, phi_mode
+
+
+def _compute_unresolved_diagnostic_tuple(
+    G_state: jnp.ndarray,
+    fields: _DiagnosticFieldPair,
+    G_prev_step: jnp.ndarray,
+    dt_step: jnp.ndarray,
+    *,
+    gamma: jnp.ndarray,
+    omega: jnp.ndarray,
+    phi_mode: jnp.ndarray,
+    grid: SpectralGrid,
+    cache: LinearCache,
+    params: LinearParams,
+    vol_fac: jnp.ndarray,
+    flux_fac: jnp.ndarray,
+    use_dealias: bool,
+    flux_scale: float,
+    wphi_scale: float,
+    kernels: NonlinearDiagnosticKernels,
+) -> tuple[Any, ...]:
+    """Build scalar nonlinear diagnostics when resolved spectra are disabled."""
+
+    Wg_val = kernels.distribution_free_energy(
+        G_state, grid, params, vol_fac, use_dealias=use_dealias
+    )
+    Wphi_val = kernels.electrostatic_field_energy(
+        fields.phi,
+        cache,
+        params,
+        vol_fac,
+        use_dealias=use_dealias,
+        wphi_scale=wphi_scale,
+    )
+    Wapar_val = kernels.magnetic_vector_potential_energy(
+        fields.apar, cache, vol_fac, use_dealias=use_dealias
+    )
+    heat_species = kernels.heat_flux_species(
+        G_state,
+        fields.phi,
+        fields.apar,
+        fields.bpar,
+        cache,
+        grid,
+        params,
+        flux_fac,
+        use_dealias=use_dealias,
+        flux_scale=flux_scale,
+    )
+    pflux_species = kernels.particle_flux_species(
+        G_state,
+        fields.phi,
+        fields.apar,
+        fields.bpar,
+        cache,
+        grid,
+        params,
+        flux_fac,
+        use_dealias=use_dealias,
+        flux_scale=flux_scale,
+    )
+    turbulent_heat_species = kernels.turbulent_heating_species(
+        G_state,
+        G_prev_step,
+        fields.phi,
+        fields.apar,
+        fields.bpar,
+        fields.phi_prev_step,
+        fields.apar_prev_step,
+        fields.bpar_prev_step,
+        cache,
+        grid,
+        params,
+        vol_fac,
+        dt_step,
+        use_dealias=use_dealias,
+    )
+    return (
+        gamma,
+        omega,
+        Wg_val,
+        Wphi_val,
+        Wapar_val,
+        jnp.sum(heat_species),
+        jnp.sum(pflux_species),
+        jnp.sum(turbulent_heat_species),
+        heat_species,
+        pflux_species,
+        turbulent_heat_species,
+        phi_mode,
+        (),
+    )
+
+
+def _compute_resolved_diagnostic_tuple(
+    G_state: jnp.ndarray,
+    fields: _DiagnosticFieldPair,
+    G_prev_step: jnp.ndarray,
+    dt_step: jnp.ndarray,
+    *,
+    gamma: jnp.ndarray,
+    omega: jnp.ndarray,
+    phi_mode: jnp.ndarray,
+    grid: SpectralGrid,
+    cache: LinearCache,
+    params: LinearParams,
+    vol_fac: jnp.ndarray,
+    flux_fac: jnp.ndarray,
+    nspecies: int,
+    use_dealias: bool,
+    flux_scale: float,
+    wphi_scale: float,
+    kernels: NonlinearDiagnosticKernels,
+) -> tuple[Any, ...]:
+    """Build scalar plus resolved nonlinear diagnostics in schema order."""
+
     (
         phi2_val,
         phi2_kxt,
@@ -190,9 +245,9 @@ def compute_nonlinear_diagnostic_tuple(
         phi2_zonal_t,
         phi2_zonal_kxt,
         phi2_zonal_zt,
-    ) = kernels.phi2_resolved(phi, grid, vol_fac, use_dealias=use_dealias)
-    phi_zonal_mode_kxt = kernels.zonal_phi_mode_kxt(phi, grid, vol_fac)
-    phi_zonal_line_kxt = kernels.zonal_phi_line_kxt(phi, grid)
+    ) = kernels.phi2_resolved(fields.phi, grid, vol_fac, use_dealias=use_dealias)
+    phi_zonal_mode_kxt = kernels.zonal_phi_mode_kxt(fields.phi, grid, vol_fac)
+    phi_zonal_line_kxt = kernels.zonal_phi_line_kxt(fields.phi, grid)
     Wg_st, Wg_kxst, Wg_kyst, Wg_kxkyst, Wg_zst, Wg_lmst = (
         kernels.distribution_free_energy_resolved(
             G_state,
@@ -204,7 +259,7 @@ def compute_nonlinear_diagnostic_tuple(
     )
     Wphi_st, Wphi_kxst, Wphi_kyst, Wphi_kxkyst, Wphi_zst = (
         kernels.electrostatic_field_energy_resolved(
-            phi,
+            fields.phi,
             cache,
             params,
             vol_fac,
@@ -214,7 +269,7 @@ def compute_nonlinear_diagnostic_tuple(
     )
     Wapar_st, Wapar_kxst, Wapar_kyst, Wapar_kxkyst, Wapar_zst = (
         kernels.magnetic_vector_potential_energy_resolved(
-            apar,
+            fields.apar,
             cache,
             vol_fac,
             nspecies=nspecies,
@@ -224,9 +279,9 @@ def compute_nonlinear_diagnostic_tuple(
     heat_species, HeatFlux_kxst, HeatFlux_kyst, HeatFlux_kxkyst, HeatFlux_zst = (
         kernels.heat_flux_resolved_species(
             G_state,
-            phi,
-            apar,
-            bpar,
+            fields.phi,
+            fields.apar,
+            fields.bpar,
             cache,
             grid,
             params,
@@ -237,9 +292,9 @@ def compute_nonlinear_diagnostic_tuple(
     )
     heat_es, heat_apar, heat_bpar = kernels.heat_flux_channel_resolved_species(
         G_state,
-        phi,
-        apar,
-        bpar,
+        fields.phi,
+        fields.apar,
+        fields.bpar,
         cache,
         grid,
         params,
@@ -255,9 +310,9 @@ def compute_nonlinear_diagnostic_tuple(
         ParticleFlux_zst,
     ) = kernels.particle_flux_resolved_species(
         G_state,
-        phi,
-        apar,
-        bpar,
+        fields.phi,
+        fields.apar,
+        fields.bpar,
         cache,
         grid,
         params,
@@ -267,9 +322,9 @@ def compute_nonlinear_diagnostic_tuple(
     )
     pflux_es, pflux_apar, pflux_bpar = kernels.particle_flux_channel_resolved_species(
         G_state,
-        phi,
-        apar,
-        bpar,
+        fields.phi,
+        fields.apar,
+        fields.bpar,
         cache,
         grid,
         params,
@@ -286,12 +341,12 @@ def compute_nonlinear_diagnostic_tuple(
     ) = kernels.turbulent_heating_resolved_species(
         G_state,
         G_prev_step,
-        phi,
-        apar,
-        bpar,
-        phi_prev_step,
-        apar_prev_step,
-        bpar_prev_step,
+        fields.phi,
+        fields.apar,
+        fields.bpar,
+        fields.phi_prev_step,
+        fields.apar_prev_step,
+        fields.bpar_prev_step,
         cache,
         grid,
         params,
@@ -299,21 +354,15 @@ def compute_nonlinear_diagnostic_tuple(
         dt_step,
         use_dealias=use_dealias,
     )
-    Wg_val = jnp.sum(Wg_st)
-    Wphi_val = jnp.sum(Wphi_st)
-    Wapar_val = jnp.sum(Wapar_st)
-    heat_val = jnp.sum(heat_species)
-    pflux_val = jnp.sum(pflux_species)
-    turbulent_heat_val = jnp.sum(turbulent_heat_species)
     return (
         gamma,
         omega,
-        Wg_val,
-        Wphi_val,
-        Wapar_val,
-        heat_val,
-        pflux_val,
-        turbulent_heat_val,
+        jnp.sum(Wg_st),
+        jnp.sum(Wphi_st),
+        jnp.sum(Wapar_st),
+        jnp.sum(heat_species),
+        jnp.sum(pflux_species),
+        jnp.sum(turbulent_heat_species),
         heat_species,
         pflux_species,
         turbulent_heat_species,
@@ -378,6 +427,83 @@ def compute_nonlinear_diagnostic_tuple(
             TurbulentHeating_kxkyst,
             TurbulentHeating_zst,
         ),
+    )
+
+
+def compute_nonlinear_diagnostic_tuple(
+    G_state: jnp.ndarray,
+    fields_state: FieldState,
+    G_prev_step: jnp.ndarray,
+    fields_prev_step: FieldState,
+    dt_step: jnp.ndarray,
+    *,
+    grid: SpectralGrid,
+    cache: LinearCache,
+    params: LinearParams,
+    vol_fac: jnp.ndarray,
+    flux_fac: jnp.ndarray,
+    mask: jnp.ndarray,
+    z_idx: int,
+    use_dealias: bool,
+    real_dtype: Any,
+    omega_ky_index: int | None,
+    omega_kx_index: int | None,
+    flux_scale: float,
+    wphi_scale: float,
+    resolved_diagnostics: bool,
+    kernels: NonlinearDiagnosticKernels,
+) -> tuple[Any, ...]:
+    """Build the nonlinear scan diagnostic tuple for one state."""
+
+    fields = _diagnostic_field_pair(fields_state, fields_prev_step)
+    gamma, omega, phi_mode = _mode_growth_frequency(
+        fields,
+        dt_step,
+        mask=mask,
+        z_idx=z_idx,
+        omega_ky_index=omega_ky_index,
+        omega_kx_index=omega_kx_index,
+        real_dtype=real_dtype,
+        kernels=kernels,
+    )
+    if not resolved_diagnostics:
+        return _compute_unresolved_diagnostic_tuple(
+            G_state,
+            fields,
+            G_prev_step,
+            dt_step,
+            gamma=gamma,
+            omega=omega,
+            phi_mode=phi_mode,
+            grid=grid,
+            cache=cache,
+            params=params,
+            vol_fac=vol_fac,
+            flux_fac=flux_fac,
+            use_dealias=use_dealias,
+            flux_scale=flux_scale,
+            wphi_scale=wphi_scale,
+            kernels=kernels,
+        )
+    nspecies = int(G_state.shape[0]) if G_state.ndim == 6 else 1
+    return _compute_resolved_diagnostic_tuple(
+        G_state,
+        fields,
+        G_prev_step,
+        dt_step,
+        gamma=gamma,
+        omega=omega,
+        phi_mode=phi_mode,
+        grid=grid,
+        cache=cache,
+        params=params,
+        vol_fac=vol_fac,
+        flux_fac=flux_fac,
+        nspecies=nspecies,
+        use_dealias=use_dealias,
+        flux_scale=flux_scale,
+        wphi_scale=wphi_scale,
+        kernels=kernels,
     )
 
 
