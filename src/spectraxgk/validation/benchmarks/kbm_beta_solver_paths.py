@@ -307,12 +307,6 @@ def fit_kbm_beta_time_sample(
         tmin=tmin,
         tmax=tmax,
         sample_index=sample_index,
-        window_fraction=window_fraction,
-        min_points=min_points,
-        start_fraction=start_fraction,
-        growth_weight=growth_weight,
-        require_positive=require_positive,
-        min_amp_fraction=min_amp_fraction,
         diagnostic_norm=diagnostic_norm,
         density_species_index=density_species_index,
         params=params,
@@ -418,43 +412,30 @@ def _integrate_time_sample_series(
     density_species_index: int,
     hooks: KBMBetaTimeHooks,
 ) -> tuple[Any, Any | None, int]:
-    if time_cfg_i is not None:
+    if time_cfg_i is not None and time_cfg_i.use_diffrax:
         stride = int(time_cfg_i.sample_stride)
-        if time_cfg_i.use_diffrax:
-            phi_t, density_t = _integrate_config_time_series(
-                G0_jax=G0_jax,
-                grid=grid,
-                geom=geom,
-                cache=cache,
-                params=params,
-                terms=terms,
-                time_cfg_i=time_cfg_i,
-                fit_key=fit_key,
-                mode_only=mode_only,
-                mode_method=mode_method,
-                sel=sel,
-                density_species_index=density_species_index,
-                hooks=hooks,
-            )
-        else:
-            phi_t, density_t = _integrate_saved_time_series(
-                G0_jax=G0_jax,
-                grid=grid,
-                geom=geom,
-                params=params,
-                cache=cache,
-                terms=terms,
-                dt_i=dt_i,
-                steps_i=steps_i,
-                method=method,
-                stride=stride,
-                fit_key=fit_key,
-                density_species_index=density_species_index,
-                hooks=hooks,
-            )
+        phi_t, density_t = _integrate_config_time_series(
+            G0_jax=G0_jax,
+            grid=grid,
+            geom=geom,
+            cache=cache,
+            params=params,
+            terms=terms,
+            time_cfg_i=time_cfg_i,
+            fit_key=fit_key,
+            mode_only=mode_only,
+            mode_method=mode_method,
+            sel=sel,
+            density_species_index=density_species_index,
+            hooks=hooks,
+        )
         return phi_t, density_t, stride
 
-    stride = 1 if sample_stride is None else int(sample_stride)
+    stride = (
+        int(time_cfg_i.sample_stride)
+        if time_cfg_i is not None
+        else 1 if sample_stride is None else int(sample_stride)
+    )
     phi_t, density_t = _integrate_saved_time_series(
         G0_jax=G0_jax,
         grid=grid,
@@ -526,12 +507,6 @@ def _fit_saved_time_sample(
     tmin: Any,
     tmax: Any,
     sample_index: int,
-    window_fraction: float,
-    min_points: int,
-    start_fraction: float,
-    growth_weight: float,
-    require_positive: bool,
-    min_amp_fraction: float,
     diagnostic_norm: str,
     density_species_index: int,
     params: Any,
@@ -551,12 +526,7 @@ def _fit_saved_time_sample(
             mode_method=mode_method,
             tmin=_indexed_float_value(tmin, sample_index),
             tmax=_indexed_float_value(tmax, sample_index),
-            window_fraction=window_fraction,
-            min_points=min_points,
-            start_fraction=start_fraction,
-            growth_weight=growth_weight,
-            require_positive=require_positive,
-            min_amp_fraction=min_amp_fraction,
+            num_windows=8,
             **fit_policy.auto_kwargs(),
         )
         return hooks.normalize_growth_rate(gamma, omega, params, diagnostic_norm)
