@@ -22,7 +22,7 @@ from spectraxgk.geometry.sensitivity import geometry_sensitivity_report
 from spectraxgk.geometry.vmec_boozer_core import (
     vmec_jax_boozer_equal_arc_core_profiles_from_state,
 )
-from spectraxgk.geometry.vmec_state_sensitivity import (
+from spectraxgk.geometry.vmec_state_controls import (
     _length_two_params,
     _load_vmec_state_context,
     _perturb_vmec_state,
