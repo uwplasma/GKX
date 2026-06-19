@@ -179,6 +179,31 @@ def _cetg_integration_kwargs(
     }
 
 
+def _build_cetg_nonlinear_result(
+    deps: CETGNonlinearRuntimeDeps,
+    *,
+    diag: Any,
+    fields: Any,
+    state: Any,
+    grid: Any,
+    ky_index: int,
+    kx_index: int,
+    return_state: bool,
+    diagnostics_on: bool,
+) -> RuntimeNonlinearResult:
+    """Pack cETG nonlinear diagnostics through the shared runtime result schema."""
+
+    return deps.build_runtime_nonlinear_result(
+        t=np.asarray(diag.t),
+        diagnostics=diag,
+        fields=fields,
+        state=np.asarray(state) if return_state else None,
+        ky_selected=float(np.asarray(grid.ky[ky_index])),
+        kx_selected=float(np.asarray(grid.kx[kx_index])),
+        summarize_fields=diagnostics_on is False,
+    )
+
+
 def run_cetg_linear_runtime(
     cfg: RuntimeConfig,
     *,
@@ -419,14 +444,16 @@ def run_cetg_nonlinear_runtime(
         diag = chunk_result.diagnostics
         G_final = chunk_result.state
         cetg_fields_final = chunk_result.fields
-        return deps.build_runtime_nonlinear_result(
-            t=np.asarray(diag.t),
-            diagnostics=diag,
+        return _build_cetg_nonlinear_result(
+            deps,
+            diag=diag,
             fields=cetg_fields_final,
-            state=np.asarray(G_final) if return_state else None,
-            ky_selected=float(np.asarray(grid.ky[ky_index])),
-            kx_selected=float(np.asarray(grid.kx[kx_index])),
-            summarize_fields=diagnostics_on is False,
+            state=G_final,
+            grid=grid,
+            ky_index=ky_index,
+            kx_index=kx_index,
+            return_state=return_state,
+            diagnostics_on=diagnostics_on,
         )
 
     steps_val = int(round(float(cfg.time.t_max) / dt_val)) if steps is None else int(steps)
@@ -456,12 +483,14 @@ def run_cetg_nonlinear_runtime(
     )
     if diagnostics_on is False:
         _status("diagnostics disabled; returning final cETG state summary")
-    return deps.build_runtime_nonlinear_result(
-        t=np.asarray(diag.t),
-        diagnostics=diag,
+    return _build_cetg_nonlinear_result(
+        deps,
+        diag=diag,
         fields=cetg_fields_final,
-        state=np.asarray(G_final) if return_state else None,
-        ky_selected=float(np.asarray(grid.ky[ky_index])),
-        kx_selected=float(np.asarray(grid.kx[kx_index])),
-        summarize_fields=diagnostics_on is False,
+        state=G_final,
+        grid=grid,
+        ky_index=ky_index,
+        kx_index=kx_index,
+        return_state=return_state,
+        diagnostics_on=diagnostics_on,
     )
