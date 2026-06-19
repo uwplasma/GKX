@@ -330,6 +330,58 @@ def print_linear_run_header(
         print(extra)
 
 
+def print_nonlinear_run_header(
+    *,
+    config_path: str,
+    ky: float,
+    Nl: int,
+    Nm: int,
+    method: str,
+    dt: float,
+    steps: int | None,
+    grid_shape: tuple[int, int, int],
+    diagnostics: bool,
+    show_progress: bool,
+) -> None:
+    """Print the standard executable header for nonlinear initial-value runs."""
+
+    print("starting runtime nonlinear run")
+    print(
+        f"config={config_path} ky={ky:.4f} Nl={Nl} Nm={Nm} "
+        f"method={method} dt={dt:.6g} "
+        f"steps={'auto' if steps is None else steps}"
+    )
+    print(
+        f"grid=Nx{grid_shape[0]} Ny{grid_shape[1]} Nz{grid_shape[2]} "
+        f"diagnostics={'on' if diagnostics else 'off'} "
+        f"progress={'on' if show_progress else 'off'}"
+    )
+
+
+def print_nonlinear_run_summary(result: RuntimeNonlinearResult) -> bool:
+    """Print final nonlinear diagnostics and return whether diagnostics exist."""
+
+    import numpy as np
+
+    diag = result.diagnostics
+    if diag is None:
+        print("nonlinear run completed")
+        return False
+    t_values = np.asarray(diag.t)
+    t_last = float(t_values[-1]) if t_values.size else 0.0
+    print(
+        "nonlinear: "
+        f"t={t_last:.6g} "
+        f"ky_sel={result.ky_selected:.6g} "
+        f"kx_sel={result.kx_selected:.6g} "
+        f"dt_mean={float(diag.dt_mean):.6g} "
+        f"Wg={float(diag.Wg_t[-1]):.6g} "
+        f"Wphi={float(diag.Wphi_t[-1]):.6g} "
+        f"Wapar={float(diag.Wapar_t[-1]):.6g}"
+    )
+    return True
+
+
 def apply_runtime_path_overrides(
     cfg: RuntimeConfig,
     args: Any,
@@ -531,8 +583,6 @@ def scan_runtime_linear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:
 def run_runtime_nonlinear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:
     """Execute the runtime-nonlinear subcommand after parser dispatch."""
 
-    import numpy as np
-
     cfg, data = load_runtime_command_config(args, deps=deps)
     cfg = apply_runtime_path_overrides(
         cfg, args, resolve_runtime_path=deps.resolve_runtime_path
@@ -540,16 +590,17 @@ def run_runtime_nonlinear_command(args: Any, *, deps: RuntimeCommandDeps) -> int
     run_cfg = data.get("run", {})
     opts = _resolve_nonlinear_command_options(args, cfg, run_cfg)
 
-    print("starting runtime nonlinear run")
-    print(
-        f"config={args.config} ky={opts.ky:.4f} Nl={opts.Nl} Nm={opts.Nm} "
-        f"method={opts.method} dt={opts.dt:.6g} "
-        f"steps={'auto' if opts.steps is None else opts.steps}"
-    )
-    print(
-        f"grid=Nx{int(cfg.grid.Nx)} Ny{int(cfg.grid.Ny)} Nz{int(cfg.grid.Nz)} "
-        f"diagnostics={'on' if opts.diagnostics else 'off'} "
-        f"progress={'on' if opts.show_progress else 'off'}"
+    print_nonlinear_run_header(
+        config_path=str(args.config),
+        ky=opts.ky,
+        Nl=opts.Nl,
+        Nm=opts.Nm,
+        method=opts.method,
+        dt=opts.dt,
+        steps=opts.steps,
+        grid_shape=(int(cfg.grid.Nx), int(cfg.grid.Ny), int(cfg.grid.Nz)),
+        diagnostics=opts.diagnostics,
+        show_progress=opts.show_progress,
     )
 
     out_path = runtime_output_path(args, cfg)
@@ -569,22 +620,8 @@ def run_runtime_nonlinear_command(args: Any, *, deps: RuntimeCommandDeps) -> int
         show_progress=opts.show_progress,
         status_callback=_status_printer("runtime"),
     )
-    diag = result.diagnostics
-    if diag is None:
-        print("nonlinear run completed")
+    if not print_nonlinear_run_summary(result):
         return 0
-    t_last = float(np.asarray(diag.t)[-1]) if np.asarray(diag.t).size else 0.0
-
-    print(
-        "nonlinear: "
-        f"t={t_last:.6g} "
-        f"ky_sel={result.ky_selected:.6g} "
-        f"kx_sel={result.kx_selected:.6g} "
-        f"dt_mean={float(diag.dt_mean):.6g} "
-        f"Wg={float(diag.Wg_t[-1]):.6g} "
-        f"Wphi={float(diag.Wphi_t[-1]):.6g} "
-        f"Wapar={float(diag.Wapar_t[-1]):.6g}"
-    )
     if out_path is not None:
         _print_saved_paths(
             paths, ("summary", "diagnostics", "state", "out", "big", "restart")
