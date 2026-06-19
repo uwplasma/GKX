@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, Sequence
+from typing import Any, Literal, Mapping, Sequence
 
 import jax
 import jax.numpy as jnp
@@ -60,6 +60,28 @@ def _transport_trace_error_pairs(
         key: _relative_trace_error(serial[key], device[key], floor=floor)
         for key in _TRANSPORT_TRACE_KEYS
     }
+
+
+def _device_z_transport_identity_passed(
+    *,
+    state_abs: float,
+    state_rel: float,
+    trace_errors: Mapping[str, tuple[float, float]],
+    atol: float,
+    rtol: float,
+) -> bool:
+    """Return whether final state and all transport traces pass identity gates."""
+
+    tolerances = [
+        (state_abs, state_rel),
+        *(trace_errors[key] for key in _TRANSPORT_TRACE_KEYS),
+    ]
+    return bool(
+        all(
+            _within_abs_or_rel_tolerance(abs_err, rel_err, atol=atol, rtol=rtol)
+            for abs_err, rel_err in tolerances
+        )
+    )
 
 
 def _blocked_device_z_transport_window_report(
@@ -542,12 +564,12 @@ def device_z_pencil_nonlinear_spectral_transport_window_identity_gate(
     field_abs, field_rel = trace_errors["field_energy"]
     flux_abs, flux_rel = trace_errors["physical_flux"]
     bracket_abs, bracket_rel = trace_errors["bracket_rms"]
-    identity_passed = bool(
-        _within_abs_or_rel_tolerance(state_abs, state_rel, atol=atol, rtol=rtol)
-        and _within_abs_or_rel_tolerance(free_abs, free_rel, atol=atol, rtol=rtol)
-        and _within_abs_or_rel_tolerance(field_abs, field_rel, atol=atol, rtol=rtol)
-        and _within_abs_or_rel_tolerance(flux_abs, flux_rel, atol=atol, rtol=rtol)
-        and _within_abs_or_rel_tolerance(bracket_abs, bracket_rel, atol=atol, rtol=rtol)
+    identity_passed = _device_z_transport_identity_passed(
+        state_abs=state_abs,
+        state_rel=state_rel,
+        trace_errors=trace_errors,
+        atol=atol,
+        rtol=rtol,
     )
     if not identity_passed:
         blocked_reasons.append("device_z_pencil_transport_window_identity_failed")
