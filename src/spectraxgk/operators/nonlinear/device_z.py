@@ -327,6 +327,32 @@ def _device_z_pencil_shard_map_observables_fn(  # pragma: no cover - exercised b
         )
     )
 
+def _append_device_z_transport_observables(
+    traces: dict[str, list[float]],
+    state_hat: jax.Array,
+    *,
+    observable_mode: Literal["host_gather", "sharded_reduce"],
+    sharded_observables_fn: Any | None,
+) -> None:
+    """Append device-z transport observables using the selected reduction route."""
+
+    if observable_mode == "sharded_reduce":
+        if sharded_observables_fn is None:
+            raise ValueError("sharded observable reducer is required")
+        _append_spectral_physical_observable_vector(
+            traces,
+            sharded_observables_fn(state_hat),
+        )
+        return
+
+    state_for_observables = jnp.asarray(jax.device_get(state_hat))
+    _field, bracket, _rhs = _serial_nonlinear_spectral_rhs(state_for_observables)
+    _append_spectral_physical_observables(
+        traces,
+        state_for_observables,
+        bracket,
+    )
+
 def device_z_pencil_nonlinear_spectral_rhs(
     state_hat: jax.Array,
     *,
@@ -469,21 +495,12 @@ def device_z_pencil_nonlinear_spectral_transport_window_identity_gate(
             _host_staged_array_for_sharding(state_hat),
             sharding,
         )
-        if observable_mode == "sharded_reduce":
-            _append_spectral_physical_observable_vector(
-                device_traces,
-                sharded_observables_fn(device_state),
-            )
-        else:
-            device_state_for_observables = jnp.asarray(jax.device_get(device_state))
-            _device_field, device_bracket, _device_rhs = _serial_nonlinear_spectral_rhs(
-                device_state_for_observables,
-            )
-            _append_spectral_physical_observables(
-                device_traces,
-                device_state_for_observables,
-                device_bracket,
-            )
+        _append_device_z_transport_observables(
+            device_traces,
+            device_state,
+            observable_mode=observable_mode,
+            sharded_observables_fn=sharded_observables_fn,
+        )
 
         for _ in range(int(steps)):
             _serial_field, _serial_bracket, serial_rhs = _serial_nonlinear_spectral_rhs(
@@ -501,23 +518,12 @@ def device_z_pencil_nonlinear_spectral_transport_window_identity_gate(
                 serial_state,
                 serial_bracket,
             )
-            if observable_mode == "sharded_reduce":
-                _append_spectral_physical_observable_vector(
-                    device_traces,
-                    sharded_observables_fn(device_state),
-                )
-            else:
-                device_state_for_observables = jnp.asarray(jax.device_get(device_state))
-                _device_field, device_bracket, _device_rhs = (
-                    _serial_nonlinear_spectral_rhs(
-                        device_state_for_observables,
-                    )
-                )
-                _append_spectral_physical_observables(
-                    device_traces,
-                    device_state_for_observables,
-                    device_bracket,
-                )
+            _append_device_z_transport_observables(
+                device_traces,
+                device_state,
+                observable_mode=observable_mode,
+                sharded_observables_fn=sharded_observables_fn,
+            )
 
     device_final_state = jnp.asarray(jax.device_get(device_state))
     state_abs, state_rel = _host_max_abs_rel_error(
@@ -629,6 +635,7 @@ def _append_spectral_physical_observables(
     traces["bracket_rms"].append(bracket_rms)
 
 __all__ = [
+    "_append_device_z_transport_observables",
     "_append_spectral_physical_observable_vector",
     "_append_spectral_physical_observables",
     "_device_z_pencil_shard_map_observables_fn",
