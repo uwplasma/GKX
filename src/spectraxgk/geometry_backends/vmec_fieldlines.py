@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import os
 from pathlib import Path
 from typing import Any
@@ -66,6 +67,402 @@ def _new_boozer_object_with_auto_fallback(
         raise
 
 
+
+@dataclass(frozen=True)
+class _VMECFieldlineScalars:
+    s: np.ndarray
+    ns: int
+    alpha_arr: np.ndarray
+    d_pressure_d_s: np.ndarray
+    iota: np.ndarray
+    d_iota_d_s: np.ndarray
+    shat: np.ndarray
+    nfp: int
+    edge_toroidal_flux_over_2pi: float
+    toroidal_flux_sign: float
+    L_reference: float
+    B_reference: float
+    R_mag_ax: float
+    zeta_center: float
+    iota_input_val: float
+    s_hat_input_val: float
+    G: np.ndarray
+    boozer_i: np.ndarray
+
+
+@dataclass(frozen=True)
+class _BoozerFieldlineSamples:
+    xm_b: np.ndarray
+    xn_b: np.ndarray
+    rmnc_b: np.ndarray
+    zmns_b: np.ndarray
+    numns_b: np.ndarray
+    d_rmnc_b_d_s: np.ndarray
+    d_zmns_b_d_s: np.ndarray
+    d_numns_b_d_s: np.ndarray
+    gmnc_b: np.ndarray
+    bmnc_b: np.ndarray
+    d_bmnc_b_d_s: np.ndarray
+    theta_b: np.ndarray
+    phi_b: np.ndarray
+    flipit: bool
+    tensors: Any
+    R_b: np.ndarray
+    Z_b: np.ndarray
+    nu_b: np.ndarray
+    Vprime: np.ndarray
+    mnmax_b: int
+
+
+@dataclass(frozen=True)
+class _HNGCModeCorrections:
+    beta_b: np.ndarray
+    lambda_b: np.ndarray
+    lambmnc_b: np.ndarray
+
+
+def _load_vmec_boozer_splines(vmec_fname: str | Path) -> tuple[Any, Any]:
+    """Open VMEC data, run Boozer transform, and build radial splines."""
+
+    bxform = _import_booz_backend()
+    from netCDF4 import Dataset as _NC
+
+    nc_obj = _NC(str(vmec_fname), "r")
+    try:
+        mpol = int(nc_obj.variables["mpol"][:])
+        ntor = int(nc_obj.variables["ntor"][:])
+        booz_obj = _new_boozer_object_with_auto_fallback(bxform, vmec_fname, nc_obj)
+        booz_obj.mboz = int(2 * mpol)
+        booz_obj.nboz = int(2 * ntor)
+        booz_obj.run()
+        return nc_obj, _vmec_splines(nc_obj, booz_obj)
+    except Exception:
+        nc_obj.close()
+        raise
+
+
+def _fieldline_scalar_profiles(
+    vs: Any,
+    *,
+    s_val: float,
+    alpha: float,
+    iota_input: float | None,
+    s_hat_input: float | None,
+) -> _VMECFieldlineScalars:
+    """Sample scalar VMEC profiles and normalize reference scales."""
+
+    s = np.array([s_val])
+    alpha_arr = np.array([alpha])
+    d_pressure_d_s = vs.d_pressure_d_s(s)
+    iota = vs.iota(s)
+    d_iota_d_s = vs.d_iota_d_s(s)
+    shat = (-2.0 * s / iota) * d_iota_d_s
+    edge_toroidal_flux_over_2pi = float(-vs.phiedge / (2.0 * np.pi))
+    toroidal_flux_sign = float(np.sign(edge_toroidal_flux_over_2pi))
+    L_reference, B_reference, R_mag_ax = _validated_reference_scales(
+        vs, edge_toroidal_flux_over_2pi
+    )
+    iota_input_val, s_hat_input_val = _input_iota_shear(
+        iota, shat, iota_input, s_hat_input
+    )
+    return _VMECFieldlineScalars(
+        s=s,
+        ns=1,
+        alpha_arr=alpha_arr,
+        d_pressure_d_s=d_pressure_d_s,
+        iota=iota,
+        d_iota_d_s=d_iota_d_s,
+        shat=shat,
+        nfp=vs.nfp,
+        edge_toroidal_flux_over_2pi=edge_toroidal_flux_over_2pi,
+        toroidal_flux_sign=toroidal_flux_sign,
+        L_reference=float(L_reference),
+        B_reference=float(B_reference),
+        R_mag_ax=float(R_mag_ax),
+        zeta_center=-alpha / float(iota[0]),
+        iota_input_val=iota_input_val,
+        s_hat_input_val=s_hat_input_val,
+        G=vs.Gfun(s),
+        boozer_i=vs.Ifun(s),
+    )
+
+
+def _sample_fieldline_boozer_state(
+    vs: Any,
+    scalars: _VMECFieldlineScalars,
+    *,
+    theta1d: np.ndarray,
+    isaxisym: bool,
+) -> _BoozerFieldlineSamples:
+    """Build Boozer mode tables, field-line coordinates, and tensor sums."""
+
+    xm_b = vs.xm_b
+    xn_b = vs.xn_b
+    (
+        rmnc_b,
+        zmns_b,
+        numns_b,
+        d_rmnc_b_d_s,
+        d_zmns_b_d_s,
+        d_numns_b_d_s,
+        gmnc_b,
+        bmnc_b,
+        d_bmnc_b_d_s,
+    ) = _sample_boozer_mode_table(vs, scalars.s, scalars.ns)
+    theta_b, phi_b = _fieldline_boozer_coordinates(
+        theta1d, scalars.alpha_arr, scalars.iota
+    )
+    flipit = _axisym_flip_required(
+        isaxisym=isaxisym,
+        xm_b=xm_b,
+        xn_b=xn_b,
+        theta_b=theta_b,
+        phi_b=phi_b,
+        rmnc_b=rmnc_b,
+        zmns_b=zmns_b,
+    )
+    angle_b = _boozer_mode_angle(xm_b, xn_b, theta_b, phi_b, flipit=flipit)
+    (
+        cosangle_b,
+        sinangle_b,
+        mcosangle_b,
+        msinangle_b,
+        ncosangle_b,
+        nsinangle_b,
+    ) = _boozer_trig_basis(xm_b, xn_b, angle_b)
+    tensors = _fieldline_boozer_tensors(
+        rmnc_b=rmnc_b,
+        zmns_b=zmns_b,
+        numns_b=numns_b,
+        d_rmnc_b_d_s=d_rmnc_b_d_s,
+        d_zmns_b_d_s=d_zmns_b_d_s,
+        d_numns_b_d_s=d_numns_b_d_s,
+        gmnc_b=gmnc_b,
+        bmnc_b=bmnc_b,
+        d_bmnc_b_d_s=d_bmnc_b_d_s,
+        cosangle_b=cosangle_b,
+        sinangle_b=sinangle_b,
+        mcosangle_b=mcosangle_b,
+        msinangle_b=msinangle_b,
+        ncosangle_b=ncosangle_b,
+        nsinangle_b=nsinangle_b,
+    )
+    return _BoozerFieldlineSamples(
+        xm_b=xm_b,
+        xn_b=xn_b,
+        rmnc_b=rmnc_b,
+        zmns_b=zmns_b,
+        numns_b=numns_b,
+        d_rmnc_b_d_s=d_rmnc_b_d_s,
+        d_zmns_b_d_s=d_zmns_b_d_s,
+        d_numns_b_d_s=d_numns_b_d_s,
+        gmnc_b=gmnc_b,
+        bmnc_b=bmnc_b,
+        d_bmnc_b_d_s=d_bmnc_b_d_s,
+        theta_b=theta_b,
+        phi_b=phi_b,
+        flipit=bool(flipit),
+        tensors=tensors,
+        R_b=tensors.R_b,
+        Z_b=tensors.Z_b,
+        nu_b=tensors.nu_b,
+        Vprime=gmnc_b[:, 0],
+        mnmax_b=rmnc_b.shape[1],
+    )
+
+
+def _hngc_mode_corrections(
+    scalars: _VMECFieldlineScalars, samples: _BoozerFieldlineSamples
+) -> _HNGCModeCorrections:
+    """Compute Lambda/beta Boozer-mode corrections for local equilibrium."""
+
+    delmnc_b = np.zeros((scalars.ns, samples.mnmax_b))
+    lambmnc_b = np.zeros((scalars.ns, samples.mnmax_b))
+    betamns_b = np.zeros((scalars.ns, samples.mnmax_b))
+    safe_denom_mn = _safe_mode_denominator(samples.xm_b, samples.xn_b, scalars.iota)
+    delmnc_b[:, 1:] = samples.gmnc_b[:, 1:] / samples.Vprime[:, None]
+    betamns_b[:, 1:] = (
+        delmnc_b[:, 1:]
+        / scalars.edge_toroidal_flux_over_2pi
+        * _MU_0
+        * scalars.d_pressure_d_s[:, None]
+        * samples.Vprime[:, None]
+        / safe_denom_mn
+    )
+    lambmnc_b[:, 1:] = (
+        delmnc_b[:, 1:]
+        * (samples.xm_b[1:] * scalars.G[:, None] + samples.xn_b[1:] * scalars.boozer_i[:, None])
+        / (
+            safe_denom_mn
+            * (scalars.G[:, None] + scalars.iota[:, None] * scalars.boozer_i[:, None])
+        )
+    )
+    angle_b = _boozer_mode_angle(
+        samples.xm_b,
+        samples.xn_b,
+        samples.theta_b,
+        samples.phi_b,
+        flipit=samples.flipit,
+    )
+    cosangle_b, sinangle_b, *_ = _boozer_trig_basis(samples.xm_b, samples.xn_b, angle_b)
+    return _HNGCModeCorrections(
+        beta_b=_boozer_mode_sum(betamns_b, sinangle_b),
+        lambda_b=_boozer_mode_sum(lambmnc_b, cosangle_b),
+        lambmnc_b=lambmnc_b,
+    )
+
+
+def _fieldline_metric_coefficients(
+    scalars: _VMECFieldlineScalars,
+    samples: _BoozerFieldlineSamples,
+    hngc: _HNGCModeCorrections,
+    *,
+    s_val: float,
+    betaprim: float,
+    include_shear_variation: bool,
+    include_pressure_variation: bool,
+    res_theta: int,
+    res_phi: int,
+) -> Any:
+    """Assemble local shear, HNGC corrections, and metric/drift coefficients."""
+
+    cartesian = _fieldline_cartesian_derivatives(
+        tensors=samples.tensors, phi_b=samples.phi_b
+    )
+    gradients = _fieldline_coordinate_gradients(
+        tensors=samples.tensors,
+        cartesian=cartesian,
+        edge_toroidal_flux_over_2pi=scalars.edge_toroidal_flux_over_2pi,
+    )
+    alpha_gradients = _fieldline_alpha_gradients(
+        gradients=gradients,
+        phi_b=samples.phi_b,
+        zeta_center=scalars.zeta_center,
+        d_iota_d_s=scalars.d_iota_d_s,
+        iota=scalars.iota,
+        edge_toroidal_flux_over_2pi=scalars.edge_toroidal_flux_over_2pi,
+    )
+    D1, D2 = _flux_surface_hngc_averages(
+        xm_b=samples.xm_b,
+        xn_b=samples.xn_b,
+        flipit=samples.flipit,
+        lambmnc_b=hngc.lambmnc_b,
+        rmnc_b=samples.rmnc_b,
+        zmns_b=samples.zmns_b,
+        numns_b=samples.numns_b,
+        gmnc_b=samples.gmnc_b,
+        res_theta=res_theta,
+        res_phi=res_phi,
+    )
+    theta_1d = samples.theta_b[0, 0]
+    intinv_g = _centered_fieldline_integral(
+        1.0 / alpha_gradients.g_sup_psi_psi, samples.phi_b, theta_1d
+    )
+    int_lam_div_g = _centered_fieldline_integral(
+        hngc.lambda_b / alpha_gradients.g_sup_psi_psi,
+        samples.phi_b,
+        theta_1d,
+    )
+    d_iota_d_s_1, sfac = _hngc_shear_correction(
+        s_val=s_val,
+        iota=scalars.iota,
+        shat=scalars.shat,
+        iota_input_val=scalars.iota_input_val,
+        s_hat_input_val=scalars.s_hat_input_val,
+        include_shear_variation=include_shear_variation,
+    )
+    d_pressure_d_s_1, pfac = _hngc_pressure_correction(
+        s_val=s_val,
+        betaprim=betaprim,
+        B_reference=scalars.B_reference,
+        d_pressure_d_s=scalars.d_pressure_d_s,
+        include_pressure_variation=include_pressure_variation,
+    )
+    shear = _fieldline_local_shear(
+        edge_toroidal_flux_over_2pi=scalars.edge_toroidal_flux_over_2pi,
+        d_iota_d_s=scalars.d_iota_d_s,
+        d_iota_d_s_1=d_iota_d_s_1,
+        d_pressure_d_s_1=d_pressure_d_s_1,
+        Vprime=samples.Vprime,
+        G=scalars.G,
+        iota=scalars.iota,
+        boozer_i=scalars.boozer_i,
+        phi_b=samples.phi_b,
+        zeta_center=scalars.zeta_center,
+        intinv_g=intinv_g,
+        int_lam_div_g=int_lam_div_g,
+        D1=D1,
+        D2=D2,
+        g_sup_psi_psi=alpha_gradients.g_sup_psi_psi,
+        grad_alpha_dot_grad_psi=alpha_gradients.grad_alpha_dot_grad_psi,
+    )
+    return _fieldline_metric_drifts(
+        tensors=samples.tensors,
+        gradients=gradients,
+        alpha_gradients=alpha_gradients,
+        shear=shear,
+        s=scalars.s,
+        shat=scalars.shat,
+        sfac=sfac,
+        pfac=pfac,
+        L_reference=scalars.L_reference,
+        B_reference=scalars.B_reference,
+        toroidal_flux_sign=scalars.toroidal_flux_sign,
+        edge_toroidal_flux_over_2pi=scalars.edge_toroidal_flux_over_2pi,
+        d_pressure_d_s=scalars.d_pressure_d_s,
+        beta_b=hngc.beta_b,
+        G=scalars.G,
+        iota=scalars.iota,
+        boozer_i=scalars.boozer_i,
+    )
+
+
+def _assemble_fieldline_struct(
+    scalars: _VMECFieldlineScalars,
+    samples: _BoozerFieldlineSamples,
+    coeffs: Any,
+    *,
+    s_val: float,
+    alpha: float,
+    betaprim: float,
+) -> _Struct:
+    theta_pest = samples.theta_b - scalars.iota[:, None, None] * samples.nu_b
+    theta_geo = np.arctan2(samples.Z_b, samples.R_b - scalars.R_mag_ax)
+    return _Struct(
+        iota_input=scalars.iota_input_val,
+        d_iota_d_s=scalars.d_iota_d_s,
+        d_pressure_d_s=scalars.d_pressure_d_s,
+        s_hat_input=scalars.s_hat_input_val,
+        alpha=alpha,
+        theta_b=samples.theta_b,
+        phi_b=samples.phi_b,
+        theta_PEST=theta_pest,
+        theta_geo=theta_geo,
+        edge_toroidal_flux_over_2pi=scalars.edge_toroidal_flux_over_2pi,
+        R_b=samples.R_b,
+        Z_b=samples.Z_b,
+        betaprim=betaprim,
+        bmag=coeffs.bmag,
+        gradpar_theta_b=coeffs.gradpar_theta_b,
+        gradpar_phi=coeffs.gradpar_phi,
+        gds2=coeffs.gds2,
+        gds21=coeffs.gds21,
+        gds22=coeffs.gds22,
+        gbdrift=coeffs.gbdrift,
+        gbdrift0=coeffs.gbdrift0,
+        cvdrift=coeffs.cvdrift,
+        cvdrift0=coeffs.cvdrift0,
+        grho=coeffs.grho,
+        grad_y=coeffs.grad_y,
+        grad_x=coeffs.grad_x,
+        zeta_center=scalars.zeta_center,
+        nfp=scalars.nfp,
+        L_reference=scalars.L_reference,
+        B_reference=scalars.B_reference,
+        dpsidrho=2.0 * np.sqrt(s_val) * scalars.edge_toroidal_flux_over_2pi,
+    )
+
+
 def _vmec_fieldlines(
     vmec_fname: str | Path,
     s_val: float,
@@ -107,262 +504,40 @@ def _vmec_fieldlines(
         integrals D1 and D2.
     """
 
-    bxform = _import_booz_backend()
-    from netCDF4 import Dataset as _NC
-
-    nc_obj = _NC(str(vmec_fname), "r")
-    mpol = int(nc_obj.variables["mpol"][:])
-    ntor = int(nc_obj.variables["ntor"][:])
-
-    booz_obj = _new_boozer_object_with_auto_fallback(bxform, vmec_fname, nc_obj)
-    booz_obj.mboz = int(2 * mpol)
-    booz_obj.nboz = int(2 * ntor)
-    booz_obj.run()
-
-    vs = _vmec_splines(nc_obj, booz_obj)
-
-    s = np.array([s_val])
-    ns = 1
-    alpha_arr = np.array([alpha])
-
-    d_pressure_d_s = vs.d_pressure_d_s(s)
-    iota = vs.iota(s)
-    d_iota_d_s = vs.d_iota_d_s(s)
-    shat = (-2.0 * s / iota) * d_iota_d_s
-
-    nfp = vs.nfp
-
-    edge_toroidal_flux_over_2pi = -vs.phiedge / (2.0 * np.pi)
-    toroidal_flux_sign = np.sign(edge_toroidal_flux_over_2pi)
+    nc_obj, vs = _load_vmec_boozer_splines(vmec_fname)
     try:
-        L_reference, B_reference, R_mag_ax = _validated_reference_scales(
-            vs, edge_toroidal_flux_over_2pi
+        scalars = _fieldline_scalar_profiles(
+            vs,
+            s_val=s_val,
+            alpha=alpha,
+            iota_input=iota_input,
+            s_hat_input=s_hat_input,
         )
-    except ValueError:
+        samples = _sample_fieldline_boozer_state(
+            vs,
+            scalars,
+            theta1d=theta1d,
+            isaxisym=isaxisym,
+        )
+        hngc = _hngc_mode_corrections(scalars, samples)
+        coeffs = _fieldline_metric_coefficients(
+            scalars,
+            samples,
+            hngc,
+            s_val=s_val,
+            betaprim=betaprim,
+            include_shear_variation=include_shear_variation,
+            include_pressure_variation=include_pressure_variation,
+            res_theta=res_theta,
+            res_phi=res_phi,
+        )
+        return _assemble_fieldline_struct(
+            scalars,
+            samples,
+            coeffs,
+            s_val=s_val,
+            alpha=alpha,
+            betaprim=betaprim,
+        )
+    finally:
         nc_obj.close()
-        raise
-
-    zeta_center = -alpha / float(iota[0])
-
-    iota_input_val, s_hat_input_val = _input_iota_shear(
-        iota, shat, iota_input, s_hat_input
-    )
-
-    G = vs.Gfun(s)
-    boozer_i = vs.Ifun(s)
-
-    xm_b = vs.xm_b
-    xn_b = vs.xn_b
-    (
-        rmnc_b,
-        zmns_b,
-        numns_b,
-        d_rmnc_b_d_s,
-        d_zmns_b_d_s,
-        d_numns_b_d_s,
-        gmnc_b,
-        bmnc_b,
-        d_bmnc_b_d_s,
-    ) = _sample_boozer_mode_table(vs, s, ns)
-    mnmax_b = rmnc_b.shape[1]
-
-    theta_b, phi_b = _fieldline_boozer_coordinates(theta1d, alpha_arr, iota)
-    flipit = _axisym_flip_required(
-        isaxisym=isaxisym,
-        xm_b=xm_b,
-        xn_b=xn_b,
-        theta_b=theta_b,
-        phi_b=phi_b,
-        rmnc_b=rmnc_b,
-        zmns_b=zmns_b,
-    )
-
-    angle_b = _boozer_mode_angle(xm_b, xn_b, theta_b, phi_b, flipit=flipit)
-
-    (
-        cosangle_b,
-        sinangle_b,
-        mcosangle_b,
-        msinangle_b,
-        ncosangle_b,
-        nsinangle_b,
-    ) = _boozer_trig_basis(xm_b, xn_b, angle_b)
-
-    tensors = _fieldline_boozer_tensors(
-        rmnc_b=rmnc_b,
-        zmns_b=zmns_b,
-        numns_b=numns_b,
-        d_rmnc_b_d_s=d_rmnc_b_d_s,
-        d_zmns_b_d_s=d_zmns_b_d_s,
-        d_numns_b_d_s=d_numns_b_d_s,
-        gmnc_b=gmnc_b,
-        bmnc_b=bmnc_b,
-        d_bmnc_b_d_s=d_bmnc_b_d_s,
-        cosangle_b=cosangle_b,
-        sinangle_b=sinangle_b,
-        mcosangle_b=mcosangle_b,
-        msinangle_b=msinangle_b,
-        ncosangle_b=ncosangle_b,
-        nsinangle_b=nsinangle_b,
-    )
-    R_b = tensors.R_b
-    Z_b = tensors.Z_b
-    nu_b = tensors.nu_b
-
-    Vprime = gmnc_b[:, 0]  # flux-surface volume element (m=0, n=0 Boozer mode)
-
-    # Lambda / beta corrections (Hegna-Nakajima)
-    delmnc_b = np.zeros((ns, mnmax_b))
-    lambmnc_b = np.zeros((ns, mnmax_b))
-    betamns_b = np.zeros((ns, mnmax_b))
-
-    safe_denom_mn = _safe_mode_denominator(xm_b, xn_b, iota)
-
-    delmnc_b[:, 1:] = gmnc_b[:, 1:] / Vprime[:, None]
-    betamns_b[:, 1:] = (
-        delmnc_b[:, 1:]
-        / edge_toroidal_flux_over_2pi
-        * _MU_0
-        * d_pressure_d_s[:, None]
-        * Vprime[:, None]
-        / safe_denom_mn
-    )
-    lambmnc_b[:, 1:] = (
-        delmnc_b[:, 1:]
-        * (xm_b[1:] * G[:, None] + xn_b[1:] * boozer_i[:, None])
-        / (safe_denom_mn * (G[:, None] + iota[:, None] * boozer_i[:, None]))
-    )
-
-    beta_b = _boozer_mode_sum(betamns_b, sinangle_b)
-    lambda_b = _boozer_mode_sum(lambmnc_b, cosangle_b)
-
-    _etf = edge_toroidal_flux_over_2pi
-    cartesian = _fieldline_cartesian_derivatives(tensors=tensors, phi_b=phi_b)
-    gradients = _fieldline_coordinate_gradients(
-        tensors=tensors,
-        cartesian=cartesian,
-        edge_toroidal_flux_over_2pi=_etf,
-    )
-    alpha_gradients = _fieldline_alpha_gradients(
-        gradients=gradients,
-        phi_b=phi_b,
-        zeta_center=zeta_center,
-        d_iota_d_s=d_iota_d_s,
-        iota=iota,
-        edge_toroidal_flux_over_2pi=_etf,
-    )
-    g_sup_psi_psi = alpha_gradients.g_sup_psi_psi
-
-    D1, D2 = _flux_surface_hngc_averages(
-        xm_b=xm_b,
-        xn_b=xn_b,
-        flipit=bool(flipit),
-        lambmnc_b=lambmnc_b,
-        rmnc_b=rmnc_b,
-        zmns_b=zmns_b,
-        numns_b=numns_b,
-        gmnc_b=gmnc_b,
-        res_theta=res_theta,
-        res_phi=res_phi,
-    )
-
-    # Cumulative integrals along the field line
-    theta_1d = theta_b[0, 0]
-    intinv_g = _centered_fieldline_integral(1.0 / g_sup_psi_psi, phi_b, theta_1d)
-    int_lam_div_g = _centered_fieldline_integral(
-        lambda_b / g_sup_psi_psi, phi_b, theta_1d
-    )
-
-    # HNGC correction factors
-    d_iota_d_s_1, sfac = _hngc_shear_correction(
-        s_val=s_val,
-        iota=iota,
-        shat=shat,
-        iota_input_val=iota_input_val,
-        s_hat_input_val=s_hat_input_val,
-        include_shear_variation=include_shear_variation,
-    )
-    d_pressure_d_s_1, pfac = _hngc_pressure_correction(
-        s_val=s_val,
-        betaprim=betaprim,
-        B_reference=B_reference,
-        d_pressure_d_s=d_pressure_d_s,
-        include_pressure_variation=include_pressure_variation,
-    )
-
-    shear = _fieldline_local_shear(
-        edge_toroidal_flux_over_2pi=_etf,
-        d_iota_d_s=d_iota_d_s,
-        d_iota_d_s_1=d_iota_d_s_1,
-        d_pressure_d_s_1=d_pressure_d_s_1,
-        Vprime=Vprime,
-        G=G,
-        iota=iota,
-        boozer_i=boozer_i,
-        phi_b=phi_b,
-        zeta_center=zeta_center,
-        intinv_g=intinv_g,
-        int_lam_div_g=int_lam_div_g,
-        D1=D1,
-        D2=D2,
-        g_sup_psi_psi=g_sup_psi_psi,
-        grad_alpha_dot_grad_psi=alpha_gradients.grad_alpha_dot_grad_psi,
-    )
-    coeffs = _fieldline_metric_drifts(
-        tensors=tensors,
-        gradients=gradients,
-        alpha_gradients=alpha_gradients,
-        shear=shear,
-        s=s,
-        shat=shat,
-        sfac=sfac,
-        pfac=pfac,
-        L_reference=L_reference,
-        B_reference=B_reference,
-        toroidal_flux_sign=toroidal_flux_sign,
-        edge_toroidal_flux_over_2pi=_etf,
-        d_pressure_d_s=d_pressure_d_s,
-        beta_b=beta_b,
-        G=G,
-        iota=iota,
-        boozer_i=boozer_i,
-    )
-
-    theta_PEST = theta_b - iota[:, None, None] * nu_b
-    theta_geo = np.arctan2(Z_b, R_b - R_mag_ax)
-
-    nc_obj.close()
-
-    return _Struct(
-        iota_input=iota_input_val,
-        d_iota_d_s=d_iota_d_s,
-        d_pressure_d_s=d_pressure_d_s,
-        s_hat_input=s_hat_input_val,
-        alpha=alpha,
-        theta_b=theta_b,
-        phi_b=phi_b,
-        theta_PEST=theta_PEST,
-        theta_geo=theta_geo,
-        edge_toroidal_flux_over_2pi=edge_toroidal_flux_over_2pi,
-        R_b=R_b,
-        Z_b=Z_b,
-        betaprim=betaprim,
-        bmag=coeffs.bmag,
-        gradpar_theta_b=coeffs.gradpar_theta_b,
-        gradpar_phi=coeffs.gradpar_phi,
-        gds2=coeffs.gds2,
-        gds21=coeffs.gds21,
-        gds22=coeffs.gds22,
-        gbdrift=coeffs.gbdrift,
-        gbdrift0=coeffs.gbdrift0,
-        cvdrift=coeffs.cvdrift,
-        cvdrift0=coeffs.cvdrift0,
-        grho=coeffs.grho,
-        grad_y=coeffs.grad_y,
-        grad_x=coeffs.grad_x,
-        zeta_center=zeta_center,
-        nfp=nfp,
-        L_reference=L_reference,
-        B_reference=B_reference,
-        dpsidrho=2.0 * np.sqrt(s_val) * edge_toroidal_flux_over_2pi,
-    )
