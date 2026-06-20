@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields, replace
 from typing import Any
 
 import jax.numpy as jnp
@@ -151,6 +151,62 @@ class _ETGScanAccumulator:
             gamma=np.array(self.gammas),
             omega=np.array(self.omegas),
         )
+
+
+@dataclass(frozen=True)
+class _ETGScanRequest:
+    ky_values: np.ndarray
+    Nl: int
+    Nm: int
+    dt: float | np.ndarray
+    steps: int | np.ndarray
+    method: str
+    params: LinearParams | None
+    cfg: ETGBaseCase | None
+    time_cfg: TimeConfig | None
+    solver: str
+    krylov_cfg: KrylovConfig | None
+    tmin: float | None
+    tmax: float | None
+    auto_window: bool
+    window_fraction: float
+    min_points: int
+    start_fraction: float
+    growth_weight: float
+    require_positive: bool
+    min_amp_fraction: float
+    max_fraction: float
+    end_fraction: float
+    max_amp_fraction: float
+    phase_weight: float
+    length_weight: float
+    min_r2: float
+    late_penalty: float
+    min_slope: float | None
+    min_slope_frac: float
+    slope_var_weight: float
+    window_method: str
+    mode_method: str
+    mode_only: bool
+    terms: LinearTerms | None
+    sample_stride: int | None
+    fit_signal: str
+    ky_batch: int
+    fixed_batch_shape: bool
+    streaming_fit: bool
+    streaming_amp_floor: float
+    reference_growth_window: bool
+    reference_navg_fraction: float
+    diagnostic_norm: str
+    show_progress: bool
+
+
+def _etg_scan_request_from_locals(values: dict[str, Any]) -> _ETGScanRequest:
+    """Pack public ``run_etg_scan`` arguments once for internal routing."""
+
+    return _ETGScanRequest(
+        **{field.name: values[field.name] for field in fields(_ETGScanRequest)}
+    )
 
 
 def _default_etg_scan_params(
@@ -435,27 +491,8 @@ def _run_etg_scan_batch(
     setup: _ETGScanSetup,
     batch: _ETGScanBatch,
     *,
-    time_cfg: TimeConfig | None,
-    method: str,
-    sample_stride: int | None,
-    streaming_amp_floor: float,
-    tmin: float | None,
-    tmax: float | None,
-    start_fraction: float,
-    window_fraction: float,
-    reference_growth_window: bool,
-    reference_navg_fraction: float,
-    require_positive: bool,
-    Nl: int,
-    Nm: int,
-    krylov_cfg: KrylovConfig | None,
-    diagnostic_norm: str,
-    show_progress: bool,
-    prev_vec: jnp.ndarray | None,
-    prev_eig: complex | None,
-    gammas: list[float],
-    omegas: list[float],
-    ky_out: list[float],
+    options: _ETGScanRuntimeOptions,
+    acc: _ETGScanAccumulator,
 ) -> tuple[jnp.ndarray | None, complex | None]:
     """Run one ETG scan batch and append growth/frequency outputs."""
 
@@ -465,14 +502,14 @@ def _run_etg_scan_batch(
             cache=batch.cache,
             params=setup.params,
             terms=setup.terms,
-            krylov_cfg=krylov_cfg,
-            prev_vec=prev_vec,
-            prev_eig=prev_eig,
-            diagnostic_norm=diagnostic_norm,
+            krylov_cfg=options.krylov_cfg,
+            prev_vec=acc.prev_vec,
+            prev_eig=acc.prev_eig,
+            diagnostic_norm=options.diagnostic_norm,
         )
-        gammas.append(gamma)
-        omegas.append(omega)
-        ky_out.append(float(batch.ky_slice[0]))
+        acc.gammas.append(gamma)
+        acc.omegas.append(omega)
+        acc.ky_out.append(float(batch.ky_slice[0]))
         return prev_vec, prev_eig
 
     time_result = _paths.run_etg_time_batch(
@@ -482,34 +519,34 @@ def _run_etg_scan_batch(
         params=setup.params,
         cache=batch.cache,
         terms=setup.terms,
-        time_cfg=time_cfg,
+        time_cfg=options.time_cfg,
         dt_i=batch.dt_i,
         steps_i=batch.steps_i,
-        method=method,
-        sample_stride=sample_stride,
+        method=options.method,
+        sample_stride=options.sample_stride,
         fit_key=setup.fit_key,
         need_density=setup.need_density,
         streaming_fit=setup.streaming_fit,
-        streaming_amp_floor=streaming_amp_floor,
+        streaming_amp_floor=options.streaming_amp_floor,
         mode_method=setup.mode_method,
         mode_only=setup.mode_only,
         sel=batch.sel,
         batch_start=batch.batch_start,
         valid_count=batch.valid_count,
         ky_slice=batch.ky_slice,
-        tmin=tmin,
-        tmax=tmax,
-        start_fraction=start_fraction,
-        window_fraction=window_fraction,
+        tmin=options.tmin,
+        tmax=options.tmax,
+        start_fraction=options.start_fraction,
+        window_fraction=options.window_fraction,
         electron_index=batch.electron_index,
-        diagnostic_norm=diagnostic_norm,
-        show_progress=show_progress,
-        gammas=gammas,
-        omegas=omegas,
-        ky_out=ky_out,
+        diagnostic_norm=options.diagnostic_norm,
+        show_progress=options.show_progress,
+        gammas=acc.gammas,
+        omegas=acc.omegas,
+        ky_out=acc.ky_out,
     )
     if time_result.handled:
-        return prev_vec, prev_eig
+        return acc.prev_vec, acc.prev_eig
 
     _paths.append_etg_time_fit_results(
         result=time_result,
@@ -519,27 +556,27 @@ def _run_etg_scan_batch(
         fit_key=setup.fit_key,
         fit_policy=setup.fit_policy,
         params=setup.params,
-        diagnostic_norm=diagnostic_norm,
+        diagnostic_norm=options.diagnostic_norm,
         mode_method=setup.mode_method,
         mode_only=setup.mode_only,
         mode_z_index=_midplane_index(batch.grid),
-        reference_growth_window=reference_growth_window,
-        reference_navg_fraction=reference_navg_fraction,
+        reference_growth_window=options.reference_growth_window,
+        reference_navg_fraction=options.reference_navg_fraction,
         auto_solver=setup.auto_solver,
-        require_positive=require_positive,
+        require_positive=options.require_positive,
         cfg=setup.cfg,
-        Nl=Nl,
-        Nm=Nm,
+        Nl=options.Nl,
+        Nm=options.Nm,
         dt_i=batch.dt_i,
         steps_i=batch.steps_i,
-        method=method,
-        krylov_cfg=krylov_cfg,
-        show_progress=show_progress,
-        gammas=gammas,
-        omegas=omegas,
-        ky_out=ky_out,
+        method=options.method,
+        krylov_cfg=options.krylov_cfg,
+        show_progress=options.show_progress,
+        gammas=acc.gammas,
+        omegas=acc.omegas,
+        ky_out=acc.ky_out,
     )
-    return prev_vec, prev_eig
+    return acc.prev_vec, acc.prev_eig
 
 
 def _run_etg_scan_loop(
@@ -571,29 +608,80 @@ def _run_etg_scan_loop(
         acc.prev_vec, acc.prev_eig = _run_etg_scan_batch(
             setup,
             batch,
-            time_cfg=options.time_cfg,
-            method=options.method,
-            sample_stride=options.sample_stride,
-            streaming_amp_floor=options.streaming_amp_floor,
-            tmin=options.tmin,
-            tmax=options.tmax,
-            start_fraction=options.start_fraction,
-            window_fraction=options.window_fraction,
-            reference_growth_window=options.reference_growth_window,
-            reference_navg_fraction=options.reference_navg_fraction,
-            require_positive=options.require_positive,
-            Nl=options.Nl,
-            Nm=options.Nm,
-            krylov_cfg=options.krylov_cfg,
-            diagnostic_norm=options.diagnostic_norm,
-            show_progress=options.show_progress,
-            prev_vec=acc.prev_vec,
-            prev_eig=acc.prev_eig,
-            gammas=acc.gammas,
-            omegas=acc.omegas,
-            ky_out=acc.ky_out,
+            options=options,
+            acc=acc,
         )
     return acc
+
+
+def _etg_scan_setup_from_request(request: _ETGScanRequest) -> _ETGScanSetup:
+    return _prepare_etg_scan_setup(
+        cfg=request.cfg,
+        params=request.params,
+        terms=request.terms,
+        Nm=request.Nm,
+        solver=request.solver,
+        fit_signal=request.fit_signal,
+        streaming_fit=request.streaming_fit,
+        mode_only=request.mode_only,
+        mode_method=request.mode_method,
+        ky_batch=request.ky_batch,
+        dt=request.dt,
+        steps=request.steps,
+        tmin=request.tmin,
+        tmax=request.tmax,
+        auto_window=request.auto_window,
+        window_fraction=request.window_fraction,
+        min_points=request.min_points,
+        start_fraction=request.start_fraction,
+        growth_weight=request.growth_weight,
+        require_positive=request.require_positive,
+        min_amp_fraction=request.min_amp_fraction,
+        max_fraction=request.max_fraction,
+        end_fraction=request.end_fraction,
+        max_amp_fraction=request.max_amp_fraction,
+        phase_weight=request.phase_weight,
+        length_weight=request.length_weight,
+        min_r2=request.min_r2,
+        late_penalty=request.late_penalty,
+        min_slope=request.min_slope,
+        min_slope_frac=request.min_slope_frac,
+        slope_var_weight=request.slope_var_weight,
+        window_method=request.window_method,
+    )
+
+
+def _etg_scan_runtime_options_from_request(
+    request: _ETGScanRequest,
+) -> _ETGScanRuntimeOptions:
+    return _ETGScanRuntimeOptions(
+        time_cfg=request.time_cfg,
+        method=request.method,
+        sample_stride=request.sample_stride,
+        streaming_amp_floor=request.streaming_amp_floor,
+        tmin=request.tmin,
+        tmax=request.tmax,
+        start_fraction=request.start_fraction,
+        window_fraction=request.window_fraction,
+        reference_growth_window=request.reference_growth_window,
+        reference_navg_fraction=request.reference_navg_fraction,
+        require_positive=request.require_positive,
+        Nl=request.Nl,
+        Nm=request.Nm,
+        dt=request.dt,
+        steps=request.steps,
+        ky_batch=request.ky_batch,
+        fixed_batch_shape=request.fixed_batch_shape,
+        krylov_cfg=request.krylov_cfg,
+        diagnostic_norm=request.diagnostic_norm,
+        show_progress=request.show_progress,
+    )
+
+
+def _run_etg_scan_request(request: _ETGScanRequest) -> LinearScanResult:
+    setup = _etg_scan_setup_from_request(request)
+    options = _etg_scan_runtime_options_from_request(request)
+    return _run_etg_scan_loop(setup, request.ky_values, options).result()
 
 
 def run_etg_scan(
@@ -647,60 +735,4 @@ def run_etg_scan(
     If ``time_cfg`` is provided, its ``dt`` and ``t_max`` override ``dt``/``steps``.
     """
 
-    setup = _prepare_etg_scan_setup(
-        cfg=cfg,
-        params=params,
-        terms=terms,
-        Nm=Nm,
-        solver=solver,
-        fit_signal=fit_signal,
-        streaming_fit=streaming_fit,
-        mode_only=mode_only,
-        mode_method=mode_method,
-        ky_batch=ky_batch,
-        dt=dt,
-        steps=steps,
-        tmin=tmin,
-        tmax=tmax,
-        auto_window=auto_window,
-        window_fraction=window_fraction,
-        min_points=min_points,
-        start_fraction=start_fraction,
-        growth_weight=growth_weight,
-        require_positive=require_positive,
-        min_amp_fraction=min_amp_fraction,
-        max_fraction=max_fraction,
-        end_fraction=end_fraction,
-        max_amp_fraction=max_amp_fraction,
-        phase_weight=phase_weight,
-        length_weight=length_weight,
-        min_r2=min_r2,
-        late_penalty=late_penalty,
-        min_slope=min_slope,
-        min_slope_frac=min_slope_frac,
-        slope_var_weight=slope_var_weight,
-        window_method=window_method,
-    )
-    options = _ETGScanRuntimeOptions(
-        time_cfg=time_cfg,
-        method=method,
-        sample_stride=sample_stride,
-        streaming_amp_floor=streaming_amp_floor,
-        tmin=tmin,
-        tmax=tmax,
-        start_fraction=start_fraction,
-        window_fraction=window_fraction,
-        reference_growth_window=reference_growth_window,
-        reference_navg_fraction=reference_navg_fraction,
-        require_positive=require_positive,
-        Nl=Nl,
-        Nm=Nm,
-        dt=dt,
-        steps=steps,
-        ky_batch=ky_batch,
-        fixed_batch_shape=fixed_batch_shape,
-        krylov_cfg=krylov_cfg,
-        diagnostic_norm=diagnostic_norm,
-        show_progress=show_progress,
-    )
-    return _run_etg_scan_loop(setup, ky_values, options).result()
+    return _run_etg_scan_request(_etg_scan_request_from_locals(locals()))
