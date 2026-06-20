@@ -104,6 +104,40 @@ class _TEMScanAccumulator:
         )
 
 
+@dataclass(frozen=True)
+class _TEMTimePathTiming:
+    """Resolved sampling controls for one TEM initial-value solve."""
+
+    dt: float
+    steps: int
+    stride: int
+    time_cfg: Any | None
+
+
+@dataclass(frozen=True)
+class _TEMTimePathTrace:
+    """Saved fields and sample times from one TEM initial-value solve."""
+
+    t: np.ndarray
+    phi_t: np.ndarray
+    density_t: np.ndarray | None
+
+
+@dataclass(frozen=True)
+class _TEMTimePathFitPolicy:
+    """Window-selection controls for fitting a TEM linear trace."""
+
+    auto_window: bool
+    tmin: float | None
+    tmax: float | None
+    window_fraction: float
+    min_points: int
+    start_fraction: float
+    growth_weight: float
+    require_positive: bool
+    min_amp_fraction: float
+
+
 _TEM_KRYLOV_FORWARD_KEYS = (
     "krylov_dim restarts omega_min_factor omega_target_factor omega_cap_factor omega_sign method "
     "power_iters power_dt shift shift_source shift_tol shift_maxiter shift_restart shift_solve_method "
@@ -533,6 +567,164 @@ def run_tem_krylov_linear_path(
     )
 
 
+def _validate_tem_time_fit_signal(fit_signal: str) -> None:
+    if fit_signal not in {"phi", "density"}:
+        raise ValueError("fit_signal must be 'phi' or 'density'")
+
+
+def _resolve_tem_time_path_timing(
+    *,
+    dt: float,
+    steps: int,
+    time_cfg: Any | None,
+    sample_stride: int | None,
+) -> _TEMTimePathTiming:
+    time_cfg_use = time_cfg
+    if time_cfg is not None:
+        if sample_stride is not None:
+            time_cfg_use = replace(time_cfg, sample_stride=sample_stride)
+        assert time_cfg_use is not None
+        return _TEMTimePathTiming(
+            dt=float(time_cfg_use.dt),
+            steps=int(round(time_cfg_use.t_max / time_cfg_use.dt)),
+            stride=int(time_cfg_use.sample_stride),
+            time_cfg=time_cfg_use,
+        )
+    return _TEMTimePathTiming(
+        dt=float(dt),
+        steps=int(steps),
+        stride=1 if sample_stride is None else int(sample_stride),
+        time_cfg=None,
+    )
+
+
+def _integrate_tem_time_path_trace(
+    *,
+    G0_jax: Any,
+    grid: Any,
+    geom: Any,
+    params: Any,
+    terms: Any,
+    cache: Any,
+    timing: _TEMTimePathTiming,
+    method: str,
+    fit_signal: str,
+    density_species_index: int,
+    show_progress: bool,
+    hooks: TEMPathHooks,
+) -> _TEMTimePathTrace:
+    if fit_signal == "density":
+        diag = hooks.integrate_linear_diagnostics(
+            G0_jax,
+            grid,
+            geom,
+            params,
+            dt=timing.dt,
+            steps=timing.steps,
+            method=method,
+            cache=cache,
+            terms=terms,
+            sample_stride=timing.stride,
+            species_index=density_species_index,
+        )
+        _, phi_t, density_t, *_ = diag
+    elif timing.time_cfg is not None:
+        _, phi_t = hooks.integrate_linear_from_config(
+            G0_jax,
+            grid,
+            geom,
+            params,
+            timing.time_cfg,
+            cache=cache,
+            terms=terms,
+            show_progress=show_progress,
+        )
+        density_t = None
+    else:
+        _, phi_t = hooks.integrate_linear(
+            G0_jax,
+            grid,
+            geom,
+            params,
+            dt=timing.dt,
+            steps=timing.steps,
+            method=method,
+            cache=cache,
+            terms=terms,
+            sample_stride=timing.stride,
+            show_progress=show_progress,
+        )
+        density_t = None
+
+    phi_t_np = np.asarray(phi_t)
+    return _TEMTimePathTrace(
+        t=np.arange(phi_t_np.shape[0]) * timing.dt * timing.stride,
+        phi_t=phi_t_np,
+        density_t=None if density_t is None else np.asarray(density_t),
+    )
+
+
+def _tem_time_path_signal(
+    trace: _TEMTimePathTrace,
+    *,
+    fit_signal: str,
+    sel: ModeSelection,
+    mode_method: str,
+    hooks: TEMPathHooks,
+) -> np.ndarray:
+    if fit_signal == "density" and trace.density_t is not None:
+        return hooks.extract_mode_time_series(trace.density_t, sel, method=mode_method)
+    return hooks.extract_mode_time_series(trace.phi_t, sel, method=mode_method)
+
+
+def _fit_tem_time_path_signal(
+    *,
+    t: np.ndarray,
+    signal: np.ndarray,
+    policy: _TEMTimePathFitPolicy,
+    hooks: TEMPathHooks,
+) -> tuple[float, float]:
+    auto_fit_kwargs: dict[str, Any] = {
+        "window_fraction": policy.window_fraction,
+        "min_points": policy.min_points,
+        "start_fraction": policy.start_fraction,
+        "growth_weight": policy.growth_weight,
+        "require_positive": policy.require_positive,
+        "min_amp_fraction": policy.min_amp_fraction,
+    }
+    if policy.auto_window and policy.tmin is None and policy.tmax is None:
+        gamma, omega, _tmin, _tmax = hooks.fit_growth_rate_auto(
+            t, signal, **auto_fit_kwargs
+        )
+        return gamma, omega
+    try:
+        return hooks.fit_growth_rate(t, signal, tmin=policy.tmin, tmax=policy.tmax)
+    except ValueError:
+        gamma, omega, _tmin, _tmax = hooks.fit_growth_rate_auto(
+            t, signal, **auto_fit_kwargs
+        )
+        return gamma, omega
+
+
+def _tem_time_path_result(
+    *,
+    trace: _TEMTimePathTrace,
+    gamma: float,
+    omega: float,
+    grid: Any,
+    sel: ModeSelection,
+    hooks: TEMPathHooks,
+) -> LinearRunResult:
+    return hooks.linear_run_result(
+        t=trace.t,
+        phi_t=trace.phi_t,
+        gamma=gamma,
+        omega=omega,
+        ky=float(grid.ky[sel.ky_index]),
+        selection=sel,
+    )
+
+
 def run_tem_time_linear_path(
     *,
     G0_jax: Any,
@@ -566,98 +758,60 @@ def run_tem_time_linear_path(
 ) -> LinearRunResult:
     """Run the single-ky TEM time-integration branch and fit the selected signal."""
 
-    if fit_signal not in {"phi", "density"}:
-        raise ValueError("fit_signal must be 'phi' or 'density'")
+    _validate_tem_time_fit_signal(fit_signal)
     cache = hooks.build_linear_cache(grid, geom, params, n_laguerre, n_hermite)
-    time_cfg_use = time_cfg
-    if time_cfg is not None:
-        if sample_stride is not None:
-            time_cfg_use = replace(time_cfg, sample_stride=sample_stride)
-        assert time_cfg_use is not None
-        dt = float(time_cfg_use.dt)
-        steps = int(round(time_cfg_use.t_max / time_cfg_use.dt))
-        stride = time_cfg_use.sample_stride
-    else:
-        stride = 1 if sample_stride is None else int(sample_stride)
-
-    if fit_signal == "density":
-        diag = hooks.integrate_linear_diagnostics(
-            G0_jax,
-            grid,
-            geom,
-            params,
-            dt=dt,
-            steps=steps,
-            method=method,
-            cache=cache,
-            terms=terms,
-            sample_stride=stride,
-            species_index=density_species_index,
-        )
-        _, phi_t, density_t, *_ = diag
-    elif time_cfg_use is not None:
-        _, phi_t = hooks.integrate_linear_from_config(
-            G0_jax,
-            grid,
-            geom,
-            params,
-            time_cfg_use,
-            cache=cache,
-            terms=terms,
-            show_progress=show_progress,
-        )
-        density_t = None
-    else:
-        _, phi_t = hooks.integrate_linear(
-            G0_jax,
-            grid,
-            geom,
-            params,
-            dt=dt,
-            steps=steps,
-            method=method,
-            cache=cache,
-            terms=terms,
-            sample_stride=stride,
-            show_progress=show_progress,
-        )
-        density_t = None
-
-    phi_t_np = np.asarray(phi_t)
-    t = np.arange(phi_t_np.shape[0]) * dt * stride
-    if fit_signal == "density" and density_t is not None:
-        signal = hooks.extract_mode_time_series(
-            np.asarray(density_t), sel, method=mode_method
-        )
-    else:
-        signal = hooks.extract_mode_time_series(phi_t_np, sel, method=mode_method)
-    auto_fit_kwargs: dict[str, Any] = {
-        "window_fraction": window_fraction,
-        "min_points": min_points,
-        "start_fraction": start_fraction,
-        "growth_weight": growth_weight,
-        "require_positive": require_positive,
-        "min_amp_fraction": min_amp_fraction,
-    }
-    if auto_window and tmin is None and tmax is None:
-        gamma, omega, _tmin, _tmax = hooks.fit_growth_rate_auto(
-            t, signal, **auto_fit_kwargs
-        )
-    else:
-        try:
-            gamma, omega = hooks.fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
-        except ValueError:
-            gamma, omega, _tmin, _tmax = hooks.fit_growth_rate_auto(
-                t, signal, **auto_fit_kwargs
-            )
+    timing = _resolve_tem_time_path_timing(
+        dt=dt,
+        steps=steps,
+        time_cfg=time_cfg,
+        sample_stride=sample_stride,
+    )
+    trace = _integrate_tem_time_path_trace(
+        G0_jax=G0_jax,
+        grid=grid,
+        geom=geom,
+        params=params,
+        terms=terms,
+        cache=cache,
+        timing=timing,
+        method=method,
+        fit_signal=fit_signal,
+        density_species_index=density_species_index,
+        show_progress=show_progress,
+        hooks=hooks,
+    )
+    signal = _tem_time_path_signal(
+        trace,
+        fit_signal=fit_signal,
+        sel=sel,
+        mode_method=mode_method,
+        hooks=hooks,
+    )
+    fit_policy = _TEMTimePathFitPolicy(
+        auto_window=auto_window,
+        tmin=tmin,
+        tmax=tmax,
+        window_fraction=window_fraction,
+        min_points=min_points,
+        start_fraction=start_fraction,
+        growth_weight=growth_weight,
+        require_positive=require_positive,
+        min_amp_fraction=min_amp_fraction,
+    )
+    gamma, omega = _fit_tem_time_path_signal(
+        t=trace.t,
+        signal=signal,
+        policy=fit_policy,
+        hooks=hooks,
+    )
     gamma, omega = hooks.normalize_growth_rate(gamma, omega, params, diagnostic_norm)
-    return hooks.linear_run_result(
-        t=t,
-        phi_t=phi_t_np,
+    return _tem_time_path_result(
+        trace=trace,
         gamma=gamma,
         omega=omega,
-        ky=float(grid.ky[sel.ky_index]),
-        selection=sel,
+        grid=grid,
+        sel=sel,
+        hooks=hooks,
     )
 
 
