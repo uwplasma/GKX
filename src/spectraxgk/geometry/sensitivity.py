@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Any
 
 import jax
@@ -24,6 +25,110 @@ from spectraxgk.geometry.flux_tube_contract import (
     flux_tube_geometry_from_mapping,
     flux_tube_geometry_observables,
 )
+
+
+@dataclass(frozen=True)
+class _GeometryInverseDesignProblem:
+    """Validated inputs for a local geometry inverse-design solve."""
+
+    params: jnp.ndarray
+    target: jnp.ndarray
+    indices_np: np.ndarray
+    indices: jnp.ndarray
+
+
+def _prepare_geometry_inverse_design_problem(
+    initial_params: jnp.ndarray,
+    target_observables: jnp.ndarray,
+    observable_indices: Sequence[int] | None,
+    *,
+    max_steps: int,
+    damping: float,
+) -> _GeometryInverseDesignProblem:
+    """Validate inverse-design inputs and construct selected observable indices."""
+
+    params = jnp.asarray(initial_params, dtype=_jax_float_dtype())
+    if params.ndim != 1:
+        raise ValueError("initial_params must be one-dimensional")
+    if int(max_steps) < 0:
+        raise ValueError("max_steps must be non-negative")
+    if float(damping) < 0.0:
+        raise ValueError("damping must be non-negative")
+
+    if observable_indices is None:
+        indices_np = np.arange(len(_GEOMETRY_OBSERVABLE_NAMES), dtype=int)
+    else:
+        indices_np = np.asarray(list(observable_indices), dtype=int)
+    if indices_np.ndim != 1 or indices_np.size == 0:
+        raise ValueError(
+            "observable_indices must be a non-empty one-dimensional sequence"
+        )
+    if np.any(indices_np < 0) or np.any(indices_np >= len(_GEOMETRY_OBSERVABLE_NAMES)):
+        raise ValueError("observable_indices contains an out-of-range observable index")
+
+    target = jnp.asarray(target_observables, dtype=params.dtype)
+    if target.ndim != 1 or int(target.shape[0]) != int(indices_np.size):
+        raise ValueError("target_observables length must match observable_indices")
+    return _GeometryInverseDesignProblem(
+        params=params,
+        target=target,
+        indices_np=indices_np,
+        indices=jnp.asarray(indices_np, dtype=jnp.int32),
+    )
+
+
+def _geometry_observable_fn(
+    mapping_fn: Any,
+    indices: jnp.ndarray,
+    *,
+    source_model: str,
+) -> Any:
+    """Build the selected solver-geometry observable map used by AD/FD checks."""
+
+    def observable_fn(x: jnp.ndarray) -> jnp.ndarray:
+        geom = flux_tube_geometry_from_mapping(
+            mapping_fn(x),
+            source_model=source_model,
+            validate_finite=False,
+        )
+        return flux_tube_geometry_observables(geom)[indices]
+
+    return observable_fn
+
+
+def _run_geometry_inverse_design_iterations(
+    observable_fn: Any,
+    params: jnp.ndarray,
+    target: jnp.ndarray,
+    *,
+    max_steps: int,
+    damping: float,
+) -> tuple[jnp.ndarray, jnp.ndarray, list[dict[str, object]]]:
+    """Run the small damped Gauss-Newton inverse-design loop."""
+
+    history: list[dict[str, object]] = []
+    p = params
+    residual = observable_fn(p) - target
+    for step in range(int(max_steps) + 1):
+        obs = observable_fn(p)
+        residual = obs - target
+        objective = 0.5 * jnp.dot(residual, residual)
+        history.append(
+            {
+                "step": int(step),
+                "params": np.asarray(p).tolist(),
+                "observables": np.asarray(obs).tolist(),
+                "objective": float(objective),
+                "residual_norm": float(jnp.linalg.norm(residual)),
+            }
+        )
+        if step == int(max_steps):
+            break
+        jac = jax.jacfwd(observable_fn)(p)
+        normal = jac.T @ jac + float(damping) * jnp.eye(int(p.shape[0]), dtype=p.dtype)
+        delta = jnp.linalg.solve(normal, jac.T @ residual)
+        p = p - delta
+    return p, residual, history
 
 
 def geometry_sensitivity_report(
@@ -94,60 +199,28 @@ def geometry_inverse_design_report(
     depending on a long equilibrium solve in CI.
     """
 
-    params = jnp.asarray(initial_params, dtype=_jax_float_dtype())
-    if params.ndim != 1:
-        raise ValueError("initial_params must be one-dimensional")
-    if int(max_steps) < 0:
-        raise ValueError("max_steps must be non-negative")
-    if float(damping) < 0.0:
-        raise ValueError("damping must be non-negative")
-
-    if observable_indices is None:
-        indices_np = np.arange(len(_GEOMETRY_OBSERVABLE_NAMES), dtype=int)
-    else:
-        indices_np = np.asarray(list(observable_indices), dtype=int)
-    if indices_np.ndim != 1 or indices_np.size == 0:
-        raise ValueError(
-            "observable_indices must be a non-empty one-dimensional sequence"
-        )
-    if np.any(indices_np < 0) or np.any(indices_np >= len(_GEOMETRY_OBSERVABLE_NAMES)):
-        raise ValueError("observable_indices contains an out-of-range observable index")
-
-    target = jnp.asarray(target_observables, dtype=params.dtype)
-    if target.ndim != 1 or int(target.shape[0]) != int(indices_np.size):
-        raise ValueError("target_observables length must match observable_indices")
-    indices = jnp.asarray(indices_np, dtype=jnp.int32)
-
-    def observable_fn(x: jnp.ndarray) -> jnp.ndarray:
-        geom = flux_tube_geometry_from_mapping(
-            mapping_fn(x),
-            source_model=source_model,
-            validate_finite=False,
-        )
-        return flux_tube_geometry_observables(geom)[indices]
-
-    history: list[dict[str, object]] = []
-    p = params
-    residual = observable_fn(p) - target
-    for step in range(int(max_steps) + 1):
-        obs = observable_fn(p)
-        residual = obs - target
-        objective = 0.5 * jnp.dot(residual, residual)
-        history.append(
-            {
-                "step": int(step),
-                "params": np.asarray(p).tolist(),
-                "observables": np.asarray(obs).tolist(),
-                "objective": float(objective),
-                "residual_norm": float(jnp.linalg.norm(residual)),
-            }
-        )
-        if step == int(max_steps):
-            break
-        jac = jax.jacfwd(observable_fn)(p)
-        normal = jac.T @ jac + float(damping) * jnp.eye(int(p.shape[0]), dtype=p.dtype)
-        delta = jnp.linalg.solve(normal, jac.T @ residual)
-        p = p - delta
+    problem = _prepare_geometry_inverse_design_problem(
+        initial_params,
+        target_observables,
+        observable_indices,
+        max_steps=max_steps,
+        damping=damping,
+    )
+    params = problem.params
+    target = problem.target
+    indices_np = problem.indices_np
+    observable_fn = _geometry_observable_fn(
+        mapping_fn,
+        problem.indices,
+        source_model=source_model,
+    )
+    p, residual, history = _run_geometry_inverse_design_iterations(
+        observable_fn,
+        params,
+        target,
+        max_steps=max_steps,
+        damping=damping,
+    )
 
     jac_ad = jax.jacfwd(observable_fn)(p)
     jac_fd = finite_difference_jacobian(observable_fn, p, step=fd_step)
