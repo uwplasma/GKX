@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import Any, Callable
 
 import jax.numpy as jnp
@@ -29,6 +29,35 @@ from spectraxgk.operators.linear.params import linear_terms_to_term_config
 from spectraxgk.solvers.linear.krylov import dominant_eigenpair
 from spectraxgk.solvers.time.runners import integrate_linear_from_config
 from spectraxgk.terms.assembly import compute_fields_cached
+
+
+@dataclass(frozen=True)
+class _CycloneTimeFitOptions:
+    """Private growth-window policy for Cyclone saved-time fits."""
+
+    fit_key: str
+    mode_method: str
+    tmin: float | None
+    tmax: float | None
+    auto_window: bool
+    window_fraction: float
+    min_points: int
+    start_fraction: float
+    growth_weight: float
+    require_positive: bool
+    min_amp_fraction: float
+    max_fraction: float
+    end_fraction: float
+    max_amp_fraction: float
+    phase_weight: float
+    length_weight: float
+    min_r2: float
+    late_penalty: float
+    min_slope: float | None
+    min_slope_frac: float
+    slope_var_weight: float
+    window_method: str
+
 
 _PATCHABLE_NAMES = (
     "ModeSelection",
@@ -235,6 +264,259 @@ def run_cyclone_krylov_path(
     return gamma_out, omega_out, phi_t_out, t_out
 
 
+def _resolve_cyclone_time_config(
+    *,
+    cfg: Any,
+    time_cfg: Any,
+    dt: float,
+    steps: int,
+    method: str,
+    sample_stride: int | None,
+) -> Any | None:
+    """Resolve a runtime time config using the existing Cyclone branch policy."""
+
+    method_key = method.lower()
+    time_cfg_use = None
+    if time_cfg is not None:
+        time_cfg_use = replace(time_cfg, dt=float(dt), t_max=float(dt) * int(steps))
+    elif cfg.time.use_diffrax and not (
+        method_key.startswith("imex") or method_key.startswith("implicit")
+    ):
+        time_cfg_use = replace(cfg.time, dt=float(dt), t_max=float(dt) * int(steps))
+    if time_cfg_use is not None and sample_stride is not None:
+        time_cfg_use = replace(time_cfg_use, sample_stride=sample_stride)
+    return time_cfg_use
+
+
+def _run_cyclone_reference_aligned_time(
+    *,
+    grid: Any,
+    cache: Any,
+    params: Any,
+    geom: Any,
+    terms: Any,
+    time_cfg_use: Any,
+    dt: float,
+    steps: int,
+    sample_stride: int | None,
+    diagnostic_norm: str,
+    show_progress: bool,
+    fresh_G0: Callable[[], jnp.ndarray],
+) -> tuple[float, float, np.ndarray, np.ndarray]:
+    """Run the reference-aligned explicit Cyclone time path."""
+
+    t_max_val = float(dt) * int(steps) if time_cfg_use is None else float(time_cfg_use.t_max)
+    stride = (
+        int(sample_stride)
+        if sample_stride is not None
+        else (1 if time_cfg_use is None else int(time_cfg_use.sample_stride))
+    )
+    explicit_time_cfg = ExplicitTimeConfig(
+        dt=float(dt),
+        t_max=t_max_val,
+        sample_stride=stride,
+        fixed_dt=True,
+    )
+    t, phi_ref, _g_t, _o_t = integrate_linear_explicit(
+        fresh_G0(),
+        grid,
+        cache,
+        params,
+        geom,
+        explicit_time_cfg,
+        terms=terms,
+        mode_method="z_index",
+        show_progress=show_progress,
+    )
+    sel_local = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
+    gamma, omega, _g, _o, _t_mid = instantaneous_growth_rate_from_phi(
+        phi_ref,
+        t,
+        sel_local,
+        navg_fraction=0.5,
+        mode_method="z_index",
+    )
+    gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
+    return gamma, omega, np.asarray(phi_ref), np.asarray(t)
+
+
+def _integrate_cyclone_configured_time(
+    *,
+    grid: Any,
+    geom: Any,
+    params: Any,
+    terms: Any,
+    time_cfg_use: Any,
+    need_density: bool,
+    show_progress: bool,
+    fresh_G0: Callable[[], jnp.ndarray],
+) -> tuple[Any, Any | None, int]:
+    """Integrate Cyclone with an explicit or synthesized runtime config."""
+
+    if need_density:
+        _, saved = integrate_linear_from_config(
+            fresh_G0(),
+            grid,
+            geom,
+            params,
+            time_cfg_use,
+            terms=terms,
+            save_field="phi+density",
+            density_species_index=0,
+            show_progress=show_progress,
+        )
+        phi_t, density_t = saved
+        return phi_t, density_t, time_cfg_use.sample_stride
+    _, phi_t = integrate_linear_from_config(
+        fresh_G0(),
+        grid,
+        geom,
+        params,
+        time_cfg_use,
+        terms=terms,
+        show_progress=show_progress,
+    )
+    return phi_t, None, time_cfg_use.sample_stride
+
+
+def _integrate_cyclone_unconfigured_time(
+    *,
+    grid: Any,
+    geom: Any,
+    params: Any,
+    terms: Any,
+    dt: float,
+    steps: int,
+    method: str,
+    sample_stride: int | None,
+    need_density: bool,
+    use_jit: bool,
+    show_progress: bool,
+    fresh_G0: Callable[[], jnp.ndarray],
+) -> tuple[Any, Any | None, int]:
+    """Integrate Cyclone with the fixed-step path selected by diagnostics needs."""
+
+    stride = 1 if sample_stride is None else int(sample_stride)
+    if need_density or not use_jit:
+        diag = integrate_linear_diagnostics(
+            fresh_G0(),
+            grid,
+            geom,
+            params,
+            dt=dt,
+            steps=steps,
+            method=method,
+            terms=terms,
+            sample_stride=stride,
+            species_index=0,
+            record_hl_energy=False,
+            show_progress=show_progress,
+        )
+        phi_t = diag[1]
+        density_t = diag[2] if len(diag) > 2 else None
+        return phi_t, density_t, stride
+    _, phi_out_time = integrate_linear(
+        fresh_G0(),
+        grid,
+        geom,
+        params,
+        dt=dt,
+        steps=steps,
+        method=method,
+        terms=terms,
+        sample_stride=stride,
+        show_progress=show_progress,
+    )
+    return phi_out_time, None, stride
+
+
+def _cyclone_auto_fit_kwargs(options: _CycloneTimeFitOptions) -> dict[str, Any]:
+    """Pack automatic-window options shared by Cyclone time-fit branches."""
+
+    return {
+        "tmin": options.tmin,
+        "tmax": options.tmax,
+        "window_fraction": options.window_fraction,
+        "min_points": options.min_points,
+        "start_fraction": options.start_fraction,
+        "growth_weight": options.growth_weight,
+        "require_positive": options.require_positive,
+        "min_amp_fraction": options.min_amp_fraction,
+        "max_amp_fraction": options.max_amp_fraction,
+        "window_method": options.window_method,
+        "max_fraction": options.max_fraction,
+        "end_fraction": options.end_fraction,
+        "num_windows": 8,
+        "phase_weight": options.phase_weight,
+        "length_weight": options.length_weight,
+        "min_r2": options.min_r2,
+        "late_penalty": options.late_penalty,
+        "min_slope": options.min_slope,
+        "min_slope_frac": options.min_slope_frac,
+        "slope_var_weight": options.slope_var_weight,
+    }
+
+
+def _fit_cyclone_time_trace(
+    *,
+    phi_t: Any,
+    density_t: Any | None,
+    dt: float,
+    stride: int,
+    sel: Any,
+    params: Any,
+    diagnostic_norm: str,
+    options: _CycloneTimeFitOptions,
+    status: Callable[[str], None],
+) -> tuple[float, float, np.ndarray, np.ndarray]:
+    """Fit Cyclone growth/frequency from the saved time trace."""
+
+    phi_t_np = np.asarray(phi_t)
+    t_arr = np.arange(phi_t_np.shape[0]) * dt * stride
+    density_np = None if density_t is None else np.asarray(density_t)
+    status(
+        f"integration complete; fitting growth rate from {phi_t_np.shape[0]} saved samples"
+    )
+    auto_fit_kwargs = _cyclone_auto_fit_kwargs(options)
+    if options.fit_key == "auto":
+        _signal, name, gamma_out, omega_out = _select_fit_signal_auto(
+            t_arr,
+            phi_t_np,
+            density_np,
+            sel,
+            mode_method=options.mode_method,
+            **auto_fit_kwargs,
+        )
+        status(f"automatic fit selected signal '{name}'")
+        if not np.isfinite(gamma_out) or not np.isfinite(omega_out):
+            gamma_out, omega_out = 0.0, 0.0
+    else:
+        signal = _select_fit_signal(
+            phi_t_np,
+            density_np,
+            sel,
+            fit_signal=options.fit_key,
+            mode_method=options.mode_method,
+        )
+        if options.auto_window and options.tmin is None and options.tmax is None:
+            gamma_out, omega_out, _tmin, _tmax = fit_growth_rate_auto(
+                t_arr,
+                signal,
+                **auto_fit_kwargs,
+            )
+        else:
+            gamma_out, omega_out = fit_growth_rate(
+                t_arr, signal, tmin=options.tmin, tmax=options.tmax
+            )
+    gamma_out, omega_out = _normalize_growth_rate(
+        gamma_out,
+        omega_out,
+        params,
+        diagnostic_norm,
+    )
+    return float(gamma_out), float(omega_out), phi_t_np, t_arr
+
+
 def run_cyclone_time_path(
     *,
     grid: Any,
@@ -282,187 +564,101 @@ def run_cyclone_time_path(
     """Run the Cyclone time-integration branch and fit late-time growth."""
 
     status(f"starting time integration path with fit_signal={fit_key}")
-    method_key = method.lower()
-    time_cfg_use = None
-    if time_cfg is not None:
-        time_cfg_use = replace(time_cfg, dt=float(dt), t_max=float(dt) * int(steps))
-        if sample_stride is not None:
-            time_cfg_use = replace(time_cfg_use, sample_stride=sample_stride)
-    elif cfg.time.use_diffrax and not (
-        method_key.startswith("imex") or method_key.startswith("implicit")
-    ):
-        time_cfg_use = replace(cfg.time, dt=float(dt), t_max=float(dt) * int(steps))
-        if sample_stride is not None:
-            time_cfg_use = replace(time_cfg_use, sample_stride=sample_stride)
-
-    phi_t: Any
+    time_cfg_use = _resolve_cyclone_time_config(
+        cfg=cfg,
+        time_cfg=time_cfg,
+        dt=dt,
+        steps=steps,
+        method=method,
+        sample_stride=sample_stride,
+    )
+    fit_options = _CycloneTimeFitOptions(
+        fit_key=fit_key,
+        mode_method=mode_method,
+        tmin=tmin,
+        tmax=tmax,
+        auto_window=auto_window,
+        window_fraction=window_fraction,
+        min_points=min_points,
+        start_fraction=start_fraction,
+        growth_weight=growth_weight,
+        require_positive=require_positive,
+        min_amp_fraction=min_amp_fraction,
+        max_fraction=max_fraction,
+        end_fraction=end_fraction,
+        max_amp_fraction=max_amp_fraction,
+        phase_weight=phase_weight,
+        length_weight=length_weight,
+        min_r2=min_r2,
+        late_penalty=late_penalty,
+        min_slope=min_slope,
+        min_slope_frac=min_slope_frac,
+        slope_var_weight=slope_var_weight,
+        window_method=window_method,
+    )
     if reference_aligned:
         status("running reference-aligned explicit integrator")
-        t_max_val = float(dt) * int(steps) if time_cfg_use is None else float(time_cfg_use.t_max)
-        stride = (
-            int(sample_stride)
-            if sample_stride is not None
-            else (1 if time_cfg_use is None else int(time_cfg_use.sample_stride))
-        )
-        explicit_time_cfg = ExplicitTimeConfig(
-            dt=float(dt),
-            t_max=t_max_val,
-            sample_stride=stride,
-            fixed_dt=True,
-        )
-        t, phi_ref, _g_t, _o_t = integrate_linear_explicit(
-            fresh_G0(),
-            grid,
-            cache,
-            params,
-            geom,
-            explicit_time_cfg,
+        return _run_cyclone_reference_aligned_time(
+            grid=grid,
+            cache=cache,
+            params=params,
+            geom=geom,
             terms=terms,
-            mode_method="z_index",
+            time_cfg_use=time_cfg_use,
+            dt=dt,
+            steps=steps,
+            sample_stride=sample_stride,
+            diagnostic_norm=diagnostic_norm,
             show_progress=show_progress,
+            fresh_G0=fresh_G0,
         )
-        sel_local = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
-        gamma, omega, _g, _o, _t_mid = instantaneous_growth_rate_from_phi(
-            phi_ref,
-            t,
-            sel_local,
-            navg_fraction=0.5,
-            mode_method="z_index",
-        )
-        gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
-        return gamma, omega, np.asarray(phi_ref), np.asarray(t)
 
-    density_t: Any | None
     if time_cfg_use is not None:
         status(
             f"running runtime-configured integrator over {int(steps)} steps with sample_stride={int(time_cfg_use.sample_stride)}"
         )
         if need_density:
             status("saving phi and density diagnostics for automatic fit selection")
-            _, saved = integrate_linear_from_config(
-                fresh_G0(),
-                grid,
-                geom,
-                params,
-                time_cfg_use,
-                terms=terms,
-                save_field="phi+density",
-                density_species_index=0,
-                show_progress=show_progress,
-            )
-            phi_t, density_t = saved
-        else:
-            _, phi_t = integrate_linear_from_config(
-                fresh_G0(),
-                grid,
-                geom,
-                params,
-                time_cfg_use,
-                terms=terms,
-                show_progress=show_progress,
-            )
-            density_t = None
-        stride = time_cfg_use.sample_stride
+        phi_t, density_t, stride = _integrate_cyclone_configured_time(
+            grid=grid,
+            geom=geom,
+            params=params,
+            terms=terms,
+            time_cfg_use=time_cfg_use,
+            need_density=need_density,
+            show_progress=show_progress,
+            fresh_G0=fresh_G0,
+        )
     else:
         stride = 1 if sample_stride is None else int(sample_stride)
-        if need_density or not use_jit:
-            status(
-                f"running explicit diagnostics integrator over {int(steps)} steps with sample_stride={stride}"
-            )
-            diag = integrate_linear_diagnostics(
-                fresh_G0(),
-                grid,
-                geom,
-                params,
-                dt=dt,
-                steps=steps,
-                method=method,
-                terms=terms,
-                sample_stride=stride,
-                species_index=0,
-                record_hl_energy=False,
-                show_progress=show_progress,
-            )
-            phi_t = diag[1]
-            density_t = diag[2] if len(diag) > 2 else None
-        else:
-            status(
-                f"running cached linear integrator over {int(steps)} steps with sample_stride={stride}"
-            )
-            _, phi_out_time = integrate_linear(
-                fresh_G0(),
-                grid,
-                geom,
-                params,
-                dt=dt,
-                steps=steps,
-                method=method,
-                terms=terms,
-                sample_stride=stride,
-                show_progress=show_progress,
-            )
-            phi_t = phi_out_time
-            density_t = None
+        status(
+            f"running {'explicit diagnostics' if need_density or not use_jit else 'cached linear'} integrator over {int(steps)} steps with sample_stride={stride}"
+        )
+        phi_t, density_t, stride = _integrate_cyclone_unconfigured_time(
+            grid=grid,
+            geom=geom,
+            params=params,
+            terms=terms,
+            dt=dt,
+            steps=steps,
+            method=method,
+            sample_stride=sample_stride,
+            need_density=need_density,
+            use_jit=use_jit,
+            show_progress=show_progress,
+            fresh_G0=fresh_G0,
+        )
 
-    phi_t_np = np.asarray(phi_t)
-    t_arr = np.arange(phi_t_np.shape[0]) * dt * stride
-    density_np = None if density_t is None else np.asarray(density_t)
-    status(f"integration complete; fitting growth rate from {phi_t_np.shape[0]} saved samples")
-    auto_fit_kwargs: dict[str, Any] = {
-        "tmin": tmin,
-        "tmax": tmax,
-        "window_fraction": window_fraction,
-        "min_points": min_points,
-        "start_fraction": start_fraction,
-        "growth_weight": growth_weight,
-        "require_positive": require_positive,
-        "min_amp_fraction": min_amp_fraction,
-        "max_amp_fraction": max_amp_fraction,
-        "window_method": window_method,
-        "max_fraction": max_fraction,
-        "end_fraction": end_fraction,
-        "num_windows": 8,
-        "phase_weight": phase_weight,
-        "length_weight": length_weight,
-        "min_r2": min_r2,
-        "late_penalty": late_penalty,
-        "min_slope": min_slope,
-        "min_slope_frac": min_slope_frac,
-        "slope_var_weight": slope_var_weight,
-    }
-    if fit_key == "auto":
-        _signal, name, gamma_out, omega_out = _select_fit_signal_auto(
-            t_arr,
-            phi_t_np,
-            density_np,
-            sel,
-            mode_method=mode_method,
-            **auto_fit_kwargs,
-        )
-        status(f"automatic fit selected signal '{name}'")
-        if not np.isfinite(gamma_out) or not np.isfinite(omega_out):
-            gamma_out, omega_out = 0.0, 0.0
-    else:
-        signal = _select_fit_signal(
-            phi_t_np,
-            density_np,
-            sel,
-            fit_signal=fit_key,
-            mode_method=mode_method,
-        )
-        if auto_window and tmin is None and tmax is None:
-            gamma_out, omega_out, _tmin, _tmax = fit_growth_rate_auto(
-                t_arr,
-                signal,
-                **auto_fit_kwargs,
-            )
-        else:
-            gamma_out, omega_out = fit_growth_rate(t_arr, signal, tmin=tmin, tmax=tmax)
-    gamma_out, omega_out = _normalize_growth_rate(
-        gamma_out,
-        omega_out,
-        params,
-        diagnostic_norm,
+    gamma_out, omega_out, phi_t_np, t_arr = _fit_cyclone_time_trace(
+        phi_t=phi_t,
+        density_t=density_t,
+        dt=dt,
+        stride=stride,
+        sel=sel,
+        params=params,
+        diagnostic_norm=diagnostic_norm,
+        options=fit_options,
+        status=status,
     )
     status(f"time integration fit complete: gamma={gamma_out:.6f} omega={omega_out:.6f}")
-    return float(gamma_out), float(omega_out), phi_t_np, t_arr
+    return gamma_out, omega_out, phi_t_np, t_arr
