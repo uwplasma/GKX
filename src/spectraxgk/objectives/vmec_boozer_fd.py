@@ -51,6 +51,40 @@ class _StateParameterContext:
     base_delta: float
 
 
+@dataclass(frozen=True)
+class _VmecBoozerDependencyFns:
+    load_state_bundle_fn: Any
+    state_array_fn: Any
+    replace_state_coefficient_fn: Any
+    parameter_name_fn: Any
+    table_with_metadata_fn: Any
+    scalar_selector_fn: Any
+
+
+@dataclass(frozen=True)
+class _AggregateSamplePlan:
+    surface_samples: tuple[dict[str, float | int | None], ...]
+    alpha_values: tuple[float, ...]
+    selected_ky_indices: tuple[int, ...]
+    normalized_weights: np.ndarray
+    n_samples: int
+
+
+@dataclass(frozen=True)
+class _AggregateEvaluation:
+    value: float
+    sample_values: list[float]
+    objective_table: list[list[float]]
+    sample_metadata: list[dict[str, object]]
+
+
+@dataclass(frozen=True)
+class _AggregateFiniteDifferenceTriplet:
+    minus: _AggregateEvaluation
+    base: _AggregateEvaluation
+    plus: _AggregateEvaluation
+
+
 def _report_float(report: dict[str, object], key: str) -> float:
     """Read a numeric finite-difference report field with mypy-safe casting."""
 
@@ -213,6 +247,252 @@ def _reduce_scalar_values(
     raise ValueError("reduction must be one of 'mean', 'weighted_mean', or 'max'")
 
 
+def _aggregate_dependency_fns(kwargs: dict[str, Any]) -> _VmecBoozerDependencyFns:
+    return _VmecBoozerDependencyFns(
+        load_state_bundle_fn=kwargs.pop(
+            "_load_state_bundle_fn", _load_vmec_jax_example_state_bundle
+        ),
+        state_array_fn=kwargs.pop("_state_array_fn", _vmec_boozer_state_array),
+        replace_state_coefficient_fn=kwargs.pop(
+            "_replace_state_coefficient_fn", _replace_vmec_boozer_state_coefficient
+        ),
+        parameter_name_fn=kwargs.pop(
+            "_parameter_name_fn", _vmec_boozer_state_parameter_name
+        ),
+        table_with_metadata_fn=kwargs.pop(
+            "_table_with_metadata_fn",
+            vmec_boozer_solver_objective_table_with_metadata_from_state,
+        ),
+        scalar_selector_fn=kwargs.pop(
+            "_scalar_selector_fn", solver_scalar_objective_from_vector
+        ),
+    )
+
+
+def _aggregate_sample_plan(
+    *,
+    surface_indices: int | None | tuple[int | None, ...] | list[int | None],
+    torflux_values: float | tuple[float, ...] | list[float] | None,
+    alphas: float | tuple[float, ...] | list[float],
+    selected_ky_indices: int | tuple[int, ...] | list[int],
+    ky_values: float | tuple[float, ...] | list[float] | None,
+    ky_base: float | None,
+    weights: tuple[float, ...] | list[float] | np.ndarray | None,
+    min_ny: int,
+) -> _AggregateSamplePlan:
+    surface_samples = _surface_sample_axis(surface_indices, torflux_values)
+    alpha_values = _float_tuple(alphas, name="alphas")
+    if ky_values is None:
+        ky_indices = _int_tuple(selected_ky_indices, name="selected_ky_indices")
+    else:
+        ky_grid_options = solver_grid_options_from_ky_values(
+            ky_values,
+            ky_base=ky_base,
+            min_ny=int(min_ny),
+        )
+        selected_grid = cast(tuple[int, ...], ky_grid_options["selected_ky_indices"])
+        ky_indices = tuple(int(item) for item in selected_grid)
+    n_samples = len(surface_samples) * len(alpha_values) * len(ky_indices)
+    return _AggregateSamplePlan(
+        surface_samples=surface_samples,
+        alpha_values=alpha_values,
+        selected_ky_indices=ky_indices,
+        normalized_weights=_aggregate_weights(weights, n_samples),
+        n_samples=n_samples,
+    )
+
+
+def _evaluate_aggregate_fd_point(
+    *,
+    delta: float,
+    ctx: _StateParameterContext,
+    fns: _VmecBoozerDependencyFns,
+    plan: _AggregateSamplePlan,
+    objective: SolverScalarObjective,
+    reduction: Literal["mean", "weighted_mean", "max"],
+    surface_indices: int | None | tuple[int | None, ...] | list[int | None],
+    torflux_values: float | tuple[float, ...] | list[float] | None,
+    selected_ky_indices: int | tuple[int, ...] | list[int],
+    ky_values: float | tuple[float, ...] | list[float] | None,
+    ky_base: float | None,
+    kwargs: dict[str, Any],
+) -> _AggregateEvaluation:
+    traced_state = _perturbed_state(ctx, fns.replace_state_coefficient_fn, delta)
+    table, sample_metadata = fns.table_with_metadata_fn(
+        traced_state,
+        ctx.bundle["static"],
+        ctx.bundle["indata"],
+        ctx.bundle["wout"],
+        surface_indices=surface_indices,
+        torflux_values=torflux_values,
+        alphas=plan.alpha_values,
+        selected_ky_indices=selected_ky_indices,
+        ky_values=ky_values,
+        ky_base=ky_base,
+        **kwargs,
+    )
+    scalar_values = np.asarray(
+        [fns.scalar_selector_fn(row, objective) for row in table],
+        dtype=float,
+    )
+    return _AggregateEvaluation(
+        value=_reduce_scalar_values(
+            scalar_values,
+            reduction=reduction,
+            weights=plan.normalized_weights,
+        ),
+        sample_values=scalar_values.tolist(),
+        objective_table=np.asarray(table, dtype=float).tolist(),
+        sample_metadata=sample_metadata,
+    )
+
+
+def _evaluate_aggregate_fd_triplet(
+    *,
+    settings: _FiniteDifferenceSettings,
+    ctx: _StateParameterContext,
+    fns: _VmecBoozerDependencyFns,
+    plan: _AggregateSamplePlan,
+    objective: SolverScalarObjective,
+    reduction: Literal["mean", "weighted_mean", "max"],
+    surface_indices: int | None | tuple[int | None, ...] | list[int | None],
+    torflux_values: float | tuple[float, ...] | list[float] | None,
+    selected_ky_indices: int | tuple[int, ...] | list[int],
+    ky_values: float | tuple[float, ...] | list[float] | None,
+    ky_base: float | None,
+    kwargs: dict[str, Any],
+) -> _AggregateFiniteDifferenceTriplet:
+    def evaluate(delta: float) -> _AggregateEvaluation:
+        return _evaluate_aggregate_fd_point(
+            delta=delta,
+            ctx=ctx,
+            fns=fns,
+            plan=plan,
+            objective=objective,
+            reduction=reduction,
+            surface_indices=surface_indices,
+            torflux_values=torflux_values,
+            selected_ky_indices=selected_ky_indices,
+            ky_values=ky_values,
+            ky_base=ky_base,
+            kwargs=kwargs,
+        )
+
+    return _AggregateFiniteDifferenceTriplet(
+        minus=evaluate(-settings.step),
+        base=evaluate(0.0),
+        plus=evaluate(settings.step),
+    )
+
+
+def _aggregate_fd_diagnostics(
+    triplet: _AggregateFiniteDifferenceTriplet,
+    settings: _FiniteDifferenceSettings,
+) -> dict[str, object]:
+    return _fd_diagnostics(
+        minus_value=triplet.minus.value,
+        base_value=triplet.base.value,
+        plus_value=triplet.plus.value,
+        settings=settings,
+        extra_values=[
+            *triplet.minus.sample_values,
+            *triplet.base.sample_values,
+            *triplet.plus.sample_values,
+        ],
+    )
+
+
+def _weighted_samples(
+    sample_metadata: list[dict[str, object]],
+    plan: _AggregateSamplePlan,
+) -> list[dict[str, object]]:
+    if len(sample_metadata) != int(plan.n_samples):
+        raise RuntimeError(
+            "VMEC/Boozer aggregate metadata size does not match objective table"
+        )
+    return [
+        dict(row, weight=float(plan.normalized_weights[index]))
+        for index, row in enumerate(sample_metadata)
+    ]
+
+
+def _aggregate_axis_report_fields(
+    *,
+    plan: _AggregateSamplePlan,
+    surface_samples: tuple[dict[str, float | int | None], ...],
+    torflux_values: float | tuple[float, ...] | list[float] | None,
+    ky_values: float | tuple[float, ...] | list[float] | None,
+) -> dict[str, object]:
+    return {
+        "surface_indices": [
+            None
+            if row.get("surface_index") is None
+            else int(cast(int, row["surface_index"]))
+            for row in surface_samples
+        ],
+        "torflux_values": None
+        if torflux_values is None
+        else list(_float_tuple(torflux_values, name="torflux_values")),
+        "alphas": list(plan.alpha_values),
+        "selected_ky_indices": list(plan.selected_ky_indices),
+        "ky_values": None
+        if ky_values is None
+        else list(_float_tuple(ky_values, name="ky_values")),
+    }
+
+
+def _aggregate_fd_report_payload(
+    *,
+    case_name: str,
+    objective: SolverScalarObjective,
+    reduction: Literal["mean", "weighted_mean", "max"],
+    ctx: _StateParameterContext,
+    plan: _AggregateSamplePlan,
+    diagnostics: dict[str, object],
+    options: dict[str, Any],
+    torflux_values: float | tuple[float, ...] | list[float] | None,
+    ky_values: float | tuple[float, ...] | list[float] | None,
+    minus_eval: _AggregateEvaluation,
+    base_eval: _AggregateEvaluation,
+    plus_eval: _AggregateEvaluation,
+) -> dict[str, object]:
+    return {
+        "kind": "vmec_boozer_aggregate_scalar_objective_finite_difference_report",
+        "source_scope": "mode21_vmec_boozer_state_multi_point",
+        "claim_scope": (
+            "finite-difference sensitivity of an aggregated linear/quasilinear "
+            "VMEC/Boozer/SPECTRAX-GK objective over fixed surfaces, field lines, and ky points; "
+            "not a nonlinear transport optimization claim"
+        ),
+        **_base_report_fields(
+            case_name=case_name,
+            objective=objective,
+            ctx=ctx,
+            options=options,
+        ),
+        **diagnostics,
+        "reduction": str(reduction),
+        "samples": _weighted_samples(base_eval.sample_metadata, plan),
+        "n_samples": plan.n_samples,
+        **_aggregate_axis_report_fields(
+            plan=plan,
+            surface_samples=plan.surface_samples,
+            torflux_values=torflux_values,
+            ky_values=ky_values,
+        ),
+        "minus_sample_values": minus_eval.sample_values,
+        "base_sample_values": base_eval.sample_values,
+        "plus_sample_values": plus_eval.sample_values,
+        "minus_objective_table": minus_eval.objective_table,
+        "base_objective_table": base_eval.objective_table,
+        "plus_objective_table": plus_eval.objective_table,
+        "next_action": (
+            "Use this gate before any multi-surface or multi-ky optimizer loop. "
+            "Promote only after branch-continuity and held-out nonlinear-window evidence pass."
+        ),
+    }
+
+
 def _load_vmec_jax_example_state_bundle(
     case_name: str,
 ) -> dict[str, Any]:  # pragma: no cover
@@ -368,151 +648,59 @@ def vmec_boozer_aggregate_scalar_objective_finite_difference_report(  # pragma: 
 ) -> dict[str, object]:
     """Finite-difference a multi-surface/multi-``k_y`` aggregate objective."""
 
-    load_state_bundle_fn = kwargs.pop(
-        "_load_state_bundle_fn", _load_vmec_jax_example_state_bundle
-    )
-    state_array_fn = kwargs.pop("_state_array_fn", _vmec_boozer_state_array)
-    replace_state_coefficient_fn = kwargs.pop(
-        "_replace_state_coefficient_fn", _replace_vmec_boozer_state_coefficient
-    )
-    parameter_name_fn = kwargs.pop(
-        "_parameter_name_fn", _vmec_boozer_state_parameter_name
-    )
-    table_with_metadata_fn = kwargs.pop(
-        "_table_with_metadata_fn",
-        vmec_boozer_solver_objective_table_with_metadata_from_state,
-    )
-    scalar_selector_fn = kwargs.pop(
-        "_scalar_selector_fn", solver_scalar_objective_from_vector
-    )
-
+    fns = _aggregate_dependency_fns(kwargs)
     settings = _finite_difference_settings(
         perturbation_step, response_atol, max_curvature_ratio
     )
-    surface_samples = _surface_sample_axis(surface_indices, torflux_values)
-    alpha_values = _float_tuple(alphas, name="alphas")
-    if ky_values is None:
-        ky_indices = _int_tuple(selected_ky_indices, name="selected_ky_indices")
-    else:
-        ky_grid_options = solver_grid_options_from_ky_values(
-            ky_values,
-            ky_base=ky_base,
-            min_ny=int(kwargs.get("ny", 4)),
-        )
-        selected_grid = cast(tuple[int, ...], ky_grid_options["selected_ky_indices"])
-        ky_indices = tuple(int(item) for item in selected_grid)
-    n_samples = len(surface_samples) * len(alpha_values) * len(ky_indices)
-    normalized_weights = _aggregate_weights(weights, n_samples)
+    sample_plan = _aggregate_sample_plan(
+        surface_indices=surface_indices,
+        torflux_values=torflux_values,
+        alphas=alphas,
+        selected_ky_indices=selected_ky_indices,
+        ky_values=ky_values,
+        ky_base=ky_base,
+        weights=weights,
+        min_ny=int(kwargs.get("ny", 4)),
+    )
     ctx = _state_parameter_context(
         case_name=case_name,
         parameter_family=parameter_family,
         radial_index=radial_index,
         mode_index=mode_index,
         base_delta=base_delta,
-        load_state_bundle_fn=load_state_bundle_fn,
-        state_array_fn=state_array_fn,
-        parameter_name_fn=parameter_name_fn,
+        load_state_bundle_fn=fns.load_state_bundle_fn,
+        state_array_fn=fns.state_array_fn,
+        parameter_name_fn=fns.parameter_name_fn,
     )
-
-    def evaluate(
-        delta: float,
-    ) -> tuple[float, list[float], list[list[float]], list[dict[str, object]]]:
-        traced_state = _perturbed_state(ctx, replace_state_coefficient_fn, delta)
-        table, sample_metadata = table_with_metadata_fn(
-            traced_state,
-            ctx.bundle["static"],
-            ctx.bundle["indata"],
-            ctx.bundle["wout"],
-            surface_indices=surface_indices,
-            torflux_values=torflux_values,
-            alphas=alpha_values,
-            selected_ky_indices=selected_ky_indices,
-            ky_values=ky_values,
-            ky_base=ky_base,
-            **kwargs,
-        )
-        scalar_values = np.asarray(
-            [scalar_selector_fn(row, objective) for row in table],
-            dtype=float,
-        )
-        return (
-            _reduce_scalar_values(
-                scalar_values,
-                reduction=reduction,
-                weights=normalized_weights,
-            ),
-            scalar_values.tolist(),
-            np.asarray(table, dtype=float).tolist(),
-            sample_metadata,
-        )
-
-    minus_value, minus_sample_values, minus_table, _minus_samples = evaluate(
-        -settings.step
-    )
-    base_value, base_sample_values, base_table, base_samples = evaluate(0.0)
-    plus_value, plus_sample_values, plus_table, _plus_samples = evaluate(settings.step)
-    if len(base_samples) != int(n_samples):
-        raise RuntimeError(
-            "VMEC/Boozer aggregate metadata size does not match objective table"
-        )
-    samples = [
-        dict(row, weight=float(normalized_weights[index]))
-        for index, row in enumerate(base_samples)
-    ]
-    diagnostics = _fd_diagnostics(
-        minus_value=minus_value,
-        base_value=base_value,
-        plus_value=plus_value,
+    triplet = _evaluate_aggregate_fd_triplet(
         settings=settings,
-        extra_values=[
-            *minus_sample_values,
-            *base_sample_values,
-            *plus_sample_values,
-        ],
+        ctx=ctx,
+        fns=fns,
+        plan=sample_plan,
+        objective=objective,
+        reduction=reduction,
+        surface_indices=surface_indices,
+        torflux_values=torflux_values,
+        selected_ky_indices=selected_ky_indices,
+        ky_values=ky_values,
+        ky_base=ky_base,
+        kwargs=kwargs,
     )
-    return {
-        "kind": "vmec_boozer_aggregate_scalar_objective_finite_difference_report",
-        "source_scope": "mode21_vmec_boozer_state_multi_point",
-        "claim_scope": (
-            "finite-difference sensitivity of an aggregated linear/quasilinear "
-            "VMEC/Boozer/SPECTRAX-GK objective over fixed surfaces, field lines, and ky points; "
-            "not a nonlinear transport optimization claim"
-        ),
-        **_base_report_fields(
-            case_name=case_name,
-            objective=objective,
-            ctx=ctx,
-            options=_public_options(kwargs),
-        ),
-        **diagnostics,
-        "reduction": str(reduction),
-        "samples": samples,
-        "n_samples": n_samples,
-        "surface_indices": [
-            None
-            if row.get("surface_index") is None
-            else int(cast(int, row["surface_index"]))
-            for row in surface_samples
-        ],
-        "torflux_values": None
-        if torflux_values is None
-        else list(_float_tuple(torflux_values, name="torflux_values")),
-        "alphas": list(alpha_values),
-        "selected_ky_indices": list(ky_indices),
-        "ky_values": None
-        if ky_values is None
-        else list(_float_tuple(ky_values, name="ky_values")),
-        "minus_sample_values": minus_sample_values,
-        "base_sample_values": base_sample_values,
-        "plus_sample_values": plus_sample_values,
-        "minus_objective_table": minus_table,
-        "base_objective_table": base_table,
-        "plus_objective_table": plus_table,
-        "next_action": (
-            "Use this gate before any multi-surface or multi-ky optimizer loop. "
-            "Promote only after branch-continuity and held-out nonlinear-window evidence pass."
-        ),
-    }
+    diagnostics = _aggregate_fd_diagnostics(triplet, settings)
+    return _aggregate_fd_report_payload(
+        case_name=case_name,
+        objective=objective,
+        reduction=reduction,
+        ctx=ctx,
+        plan=sample_plan,
+        diagnostics=diagnostics,
+        options=_public_options(kwargs),
+        torflux_values=torflux_values,
+        ky_values=ky_values,
+        minus_eval=triplet.minus,
+        base_eval=triplet.base,
+        plus_eval=triplet.plus,
+    )
 
 
 __all__ = [
