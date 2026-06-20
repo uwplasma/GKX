@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
 from spectraxgk.validation.nonlinear_gradient.followup_core import (
@@ -12,6 +13,13 @@ from spectraxgk.validation.nonlinear_gradient.followup_core import (
     _metric,
     _nested_metric,
 )
+
+
+@dataclass(frozen=True)
+class _CompositeLaunchPlan:
+    launch_ready: bool
+    command_template: str | None
+    next_action: str
 
 
 def _composite_control_row(
@@ -120,6 +128,135 @@ def _composite_control_row(
     }
 
 
+def _validate_composite_control_config(
+    cfg: NonlinearGradientCompositeControlConfig,
+) -> None:
+    if cfg.max_gradient_uncertainty_rel <= 0.0:
+        raise ValueError("max_gradient_uncertainty_rel must be positive")
+    if cfg.max_fd_asymmetry_rel <= 0.0:
+        raise ValueError("max_fd_asymmetry_rel must be positive")
+    if cfg.min_fd_response_fraction <= 0.0:
+        raise ValueError("min_fd_response_fraction must be positive")
+    if cfg.min_same_sign_fraction <= 0.0 or cfg.min_same_sign_fraction > 1.0:
+        raise ValueError("min_same_sign_fraction must be in (0, 1]")
+    if cfg.min_controls < 1:
+        raise ValueError("min_controls must be at least one")
+    if cfg.default_relative_delta <= 0.0:
+        raise ValueError("default_relative_delta must be positive")
+    if cfg.max_weight_abs <= 0.0:
+        raise ValueError("max_weight_abs must be positive")
+
+
+def _normalized_composite_metadata(
+    artifacts: Sequence[Mapping[str, Any]],
+    *,
+    paths: Sequence[str | None] | None,
+    labels: Sequence[str | None] | None,
+) -> tuple[list[str | None], list[str | None]]:
+    path_list = list(paths or [None] * len(artifacts))
+    label_list = list(labels or [None] * len(artifacts))
+    if len(path_list) != len(artifacts):
+        raise ValueError("paths length must match artifacts")
+    if len(label_list) != len(artifacts):
+        raise ValueError("labels length must match artifacts")
+    return path_list, label_list
+
+
+def _composite_control_rows(
+    artifacts: Sequence[Mapping[str, Any]],
+    *,
+    paths: Sequence[str | None],
+    labels: Sequence[str | None],
+    config: NonlinearGradientCompositeControlConfig,
+) -> list[dict[str, Any]]:
+    return [
+        _composite_control_row(
+            artifact, index=index, path=path, label=label, config=config
+        )
+        for index, (artifact, path, label) in enumerate(
+            zip(artifacts, paths, labels)
+        )
+    ]
+
+
+def _composite_controls(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    config: NonlinearGradientCompositeControlConfig,
+) -> list[dict[str, Any]]:
+    admissible_rows = [
+        row for row in rows if bool(row["admissible_for_composite_direction"])
+    ]
+    max_abs_descent = max(
+        (abs(float(row["metrics"]["descent_gradient"])) for row in admissible_rows),
+        default=0.0,
+    )
+    controls: list[dict[str, Any]] = []
+    if max_abs_descent <= config.value_floor:
+        return controls
+    for row in admissible_rows:
+        descent = float(row["metrics"]["descent_gradient"])
+        weight = config.max_weight_abs * descent / max_abs_descent
+        controls.append(
+            {
+                "parameter_name": row["parameter_name"],
+                "coefficient": row["coefficient"],
+                "weight": _json_number(weight),
+                "control_argument": f"{row['coefficient']}:{weight:.12g}",
+                "source_label": row["label"],
+                "source_path": row["path"],
+            }
+        )
+    return controls
+
+
+def _composite_launch_plan(
+    *,
+    controls: Sequence[Mapping[str, Any]],
+    case: str,
+    config: NonlinearGradientCompositeControlConfig,
+) -> _CompositeLaunchPlan:
+    launch_ready = len(controls) >= config.min_controls
+    if launch_ready:
+        control_args = " ".join(
+            f"--control {control['control_argument']}" for control in controls
+        )
+        command_template = (
+            "python tools/write_vmec_boundary_profile_perturbation_inputs.py "
+            "--baseline-input <input.vmec> "
+            "--out-dir docs/_static/<case>_composite_direction "
+            f"--case {case} "
+            f"{control_args} "
+            f"--relative-delta {config.default_relative_delta:.12g}"
+        )
+        return _CompositeLaunchPlan(
+            launch_ready=True,
+            command_template=command_template,
+            next_action=(
+                "launch a checked VMEC profile-direction bracket sweep before "
+                "long nonlinear windows"
+            ),
+        )
+    if controls:
+        return _CompositeLaunchPlan(
+            launch_ready=False,
+            command_template=None,
+            next_action=(
+                "only one admissible control remains; screen additional "
+                "local/resolved controls or explicitly run a single-control "
+                "bracket check before a long campaign"
+            ),
+        )
+    return _CompositeLaunchPlan(
+        launch_ready=False,
+        command_template=None,
+        next_action=(
+            "no admissible controls; screen new VMEC-boundary directions before "
+            "nonlinear GPU runs"
+        ),
+    )
+
+
 def nonlinear_gradient_composite_control_report(
     artifacts: Sequence[Mapping[str, Any]],
     *,
@@ -139,98 +276,31 @@ def nonlinear_gradient_composite_control_report(
     """
 
     cfg = config or NonlinearGradientCompositeControlConfig()
-    if cfg.max_gradient_uncertainty_rel <= 0.0:
-        raise ValueError("max_gradient_uncertainty_rel must be positive")
-    if cfg.max_fd_asymmetry_rel <= 0.0:
-        raise ValueError("max_fd_asymmetry_rel must be positive")
-    if cfg.min_fd_response_fraction <= 0.0:
-        raise ValueError("min_fd_response_fraction must be positive")
-    if cfg.min_same_sign_fraction <= 0.0 or cfg.min_same_sign_fraction > 1.0:
-        raise ValueError("min_same_sign_fraction must be in (0, 1]")
-    if cfg.min_controls < 1:
-        raise ValueError("min_controls must be at least one")
-    if cfg.default_relative_delta <= 0.0:
-        raise ValueError("default_relative_delta must be positive")
-    if cfg.max_weight_abs <= 0.0:
-        raise ValueError("max_weight_abs must be positive")
-
-    path_list = list(paths or [None] * len(artifacts))
-    label_list = list(labels or [None] * len(artifacts))
-    if len(path_list) != len(artifacts):
-        raise ValueError("paths length must match artifacts")
-    if len(label_list) != len(artifacts):
-        raise ValueError("labels length must match artifacts")
-
-    rows = [
-        _composite_control_row(
-            artifact, index=index, path=path, label=label, config=cfg
-        )
-        for index, (artifact, path, label) in enumerate(
-            zip(artifacts, path_list, label_list)
-        )
-    ]
-    admissible_rows = [
-        row for row in rows if bool(row["admissible_for_composite_direction"])
-    ]
-    max_abs_descent = max(
-        (abs(float(row["metrics"]["descent_gradient"])) for row in admissible_rows),
-        default=0.0,
+    _validate_composite_control_config(cfg)
+    path_list, label_list = _normalized_composite_metadata(
+        artifacts, paths=paths, labels=labels
     )
-    controls: list[dict[str, Any]] = []
-    if max_abs_descent > cfg.value_floor:
-        for row in admissible_rows:
-            descent = float(row["metrics"]["descent_gradient"])
-            weight = cfg.max_weight_abs * descent / max_abs_descent
-            controls.append(
-                {
-                    "parameter_name": row["parameter_name"],
-                    "coefficient": row["coefficient"],
-                    "weight": _json_number(weight),
-                    "control_argument": f"{row['coefficient']}:{weight:.12g}",
-                    "source_label": row["label"],
-                    "source_path": row["path"],
-                }
-            )
-
-    launch_ready = len(controls) >= cfg.min_controls
-    if launch_ready:
-        control_args = " ".join(
-            f"--control {control['control_argument']}" for control in controls
-        )
-        command_template = (
-            "python tools/write_vmec_boundary_profile_perturbation_inputs.py "
-            "--baseline-input <input.vmec> "
-            "--out-dir docs/_static/<case>_composite_direction "
-            f"--case {case} "
-            f"{control_args} "
-            f"--relative-delta {cfg.default_relative_delta:.12g}"
-        )
-        next_action = "launch a checked VMEC profile-direction bracket sweep before long nonlinear windows"
-    elif controls:
-        command_template = None
-        next_action = (
-            "only one admissible control remains; screen additional local/resolved controls "
-            "or explicitly run a single-control bracket check before a long campaign"
-        )
-    else:
-        command_template = None
-        next_action = "no admissible controls; screen new VMEC-boundary directions before nonlinear GPU runs"
+    rows = _composite_control_rows(
+        artifacts, paths=path_list, labels=label_list, config=cfg
+    )
+    controls = _composite_controls(rows, config=cfg)
+    launch_plan = _composite_launch_plan(controls=controls, case=case, config=cfg)
 
     return {
         "kind": "nonlinear_turbulence_gradient_composite_control_design",
         "claim_level": "composite_control_launch_plan_not_gradient_evidence",
         "case": case,
-        "passed": bool(launch_ready),
-        "next_action": next_action,
+        "passed": bool(launch_plan.launch_ready),
+        "next_action": launch_plan.next_action,
         "config": asdict(cfg),
         "summary": {
             "candidate_count": len(rows),
             "admissible_control_count": len(controls),
             "required_control_count": cfg.min_controls,
-            "launch_ready": bool(launch_ready),
+            "launch_ready": bool(launch_plan.launch_ready),
         },
         "controls": controls,
-        "write_profile_direction_command_template": command_template,
+        "write_profile_direction_command_template": launch_plan.command_template,
         "candidates": rows,
     }
 
