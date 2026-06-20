@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict
-from typing import Dict, Any
+from dataclasses import asdict, dataclass
+from typing import Any, Dict
 
-REFERENCE_ELECTRON_MASS = 2.7e-4
-REFERENCE_MASS_RATIO = 1.0 / REFERENCE_ELECTRON_MASS
+REFERENCE_ELECTRON_MASS: float = 2.7e-4
+REFERENCE_MASS_RATIO: float = 1.0 / REFERENCE_ELECTRON_MASS
 
 
 def explicit_method_default_cfl_fac(method: str) -> float:
@@ -24,11 +24,6 @@ def resolve_cfl_fac(method: str, cfl_fac: float | None) -> float:
     if cfl_fac is None:
         return explicit_method_default_cfl_fac(method)
     return float(cfl_fac)
-
-
-# Compatibility alias for older callers that still expect the GX-prefixed
-# helper name.
-gx_default_cfl_fac = explicit_method_default_cfl_fac
 
 
 @dataclass(frozen=True)
@@ -108,7 +103,7 @@ class TimeConfig:
     nstep_restart: int | None = None
     collision_split: bool = False
     collision_scheme: str = "implicit"
-    gx_real_fft: bool = True
+    compressed_real_fft: bool = True
     nonlinear_dealias: bool = True
     laguerre_nonlinear_mode: str = "grid"
 
@@ -116,7 +111,7 @@ class TimeConfig:
         return asdict(self)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, init=False)
 class GeometryConfig:
     """Flux-tube geometry parameters or imported sampled geometry settings."""
 
@@ -124,7 +119,7 @@ class GeometryConfig:
     geometry_backend: str = "auto"
     geometry_file: str | None = None
     vmec_file: str | None = None
-    gx_python: str | None = None
+    geometry_helper_python: str | None = None
     rhoc: float = 0.5
     R_geo: float | None = None
     shift: float = 0.0
@@ -140,7 +135,7 @@ class GeometryConfig:
     include_shear_variation: bool = False
     include_pressure_variation: bool = False
     betaprim: float | None = None
-    gx_repo: str | None = None
+    geometry_helper_repo: str | None = None
     q: float = 1.4
     s_hat: float = 0.8
     z0: float | None = None
@@ -153,296 +148,110 @@ class GeometryConfig:
     kperp2_bmag: bool = True
     bessel_bmag_power: float = 0.0
 
-    def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
-
-
-@dataclass(frozen=True)
-class ModelConfig:
-    """Dimensionless gradients for the Cyclone base case."""
-
-    R_over_LTi: float = 2.49
-    R_over_LTe: float = 0.0
-    R_over_Ln: float = 0.8
-    nu_i: float = 0.0
-
-    def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
-
-
-@dataclass(frozen=True)
-class CycloneBaseCase:
-    """Standard parameters for the Cyclone base case ITG benchmark."""
-
-    grid: GridConfig = GridConfig(
-        Nx=1,
-        Ny=24,
-        Nz=96,
-        Lx=62.8,
-        Ly=62.8,
-        boundary="linked",
-        y0=20.0,
-        ntheta=32,
-        nperiod=2,
-    )
-    time: TimeConfig = TimeConfig(
-        t_max=150.0,
-        dt=0.01,
-        method="rk4",
-        use_diffrax=True,
-        diffrax_solver="Dopri8",
-        diffrax_adaptive=True,
-        diffrax_rtol=1.0e-6,
-        diffrax_atol=1.0e-8,
-        diffrax_max_steps=200000,
-        fixed_dt=False,
-        dt_max=0.05,
-    )
-    geometry: GeometryConfig = GeometryConfig(
-        R0=2.77778,
-        drift_scale=1.0,
-    )
-    model: ModelConfig = ModelConfig()
-    init: InitializationConfig = InitializationConfig(
-        init_field="density",
-        init_amp=1.0e-10,
-        gaussian_init=True,
-        gaussian_width=0.5,
-        gaussian_envelope_constant=1.0,
-        gaussian_envelope_sine=0.0,
-    )
-    gx_reference: bool = True
-
-    def to_dict(self) -> Dict[str, Dict[str, Any]]:
-        return {
-            "grid": self.grid.to_dict(),
-            "time": self.time.to_dict(),
-            "geometry": self.geometry.to_dict(),
-            "model": self.model.to_dict(),
-            "init": self.init.to_dict(),
-            "gx_reference": {"enabled": self.gx_reference},
+    def __init__(
+        self,
+        model: str = "s-alpha",
+        geometry_backend: str = "auto",
+        geometry_file: str | None = None,
+        vmec_file: str | None = None,
+        geometry_helper_python: str | None = None,
+        rhoc: float = 0.5,
+        R_geo: float | None = None,
+        shift: float = 0.0,
+        akappa: float = 1.0,
+        akappri: float = 0.0,
+        tri: float = 0.0,
+        tripri: float = 0.0,
+        torflux: float | None = None,
+        npol: float | None = None,
+        npol_min: float | None = None,
+        isaxisym: bool = False,
+        which_crossing: int | None = None,
+        include_shear_variation: bool = False,
+        include_pressure_variation: bool = False,
+        betaprim: float | None = None,
+        geometry_helper_repo: str | None = None,
+        q: float = 1.4,
+        s_hat: float = 0.8,
+        z0: float | None = None,
+        zero_shat: bool = False,
+        epsilon: float = 0.18,
+        R0: float = 1.0,
+        B0: float = 1.0,
+        alpha: float = 0.0,
+        drift_scale: float = 1.0,
+        kperp2_bmag: bool = True,
+        bessel_bmag_power: float = 0.0,
+    ) -> None:
+        values = {
+            "model": model,
+            "geometry_backend": geometry_backend,
+            "geometry_file": geometry_file,
+            "vmec_file": vmec_file,
+            "geometry_helper_python": geometry_helper_python,
+            "rhoc": rhoc,
+            "R_geo": R_geo,
+            "shift": shift,
+            "akappa": akappa,
+            "akappri": akappri,
+            "tri": tri,
+            "tripri": tripri,
+            "torflux": torflux,
+            "npol": npol,
+            "npol_min": npol_min,
+            "isaxisym": isaxisym,
+            "which_crossing": which_crossing,
+            "include_shear_variation": include_shear_variation,
+            "include_pressure_variation": include_pressure_variation,
+            "betaprim": betaprim,
+            "geometry_helper_repo": geometry_helper_repo,
+            "q": q,
+            "s_hat": s_hat,
+            "z0": z0,
+            "zero_shat": zero_shat,
+            "epsilon": epsilon,
+            "R0": R0,
+            "B0": B0,
+            "alpha": alpha,
+            "drift_scale": drift_scale,
+            "kperp2_bmag": kperp2_bmag,
+            "bessel_bmag_power": bessel_bmag_power,
         }
-
-
-@dataclass(frozen=True)
-class ETGModelConfig:
-    """Dimensionless gradients and ratios for a canonical ETG setup."""
-
-    R_over_LTi: float = 2.49
-    R_over_LTe: float = 2.49
-    R_over_Ln: float = 0.8
-    R_over_Lni: float | None = None
-    R_over_Lne: float | None = None
-    Te_over_Ti: float = 1.0
-    mass_ratio: float = REFERENCE_MASS_RATIO
-    nu_i: float = 0.0
-    nu_e: float = 0.0
-    beta: float = 1.0e-5
-    adiabatic_ions: bool = True
+        for name, value in values.items():
+            object.__setattr__(self, name, value)
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
 
-@dataclass(frozen=True)
-class ETGBaseCase:
-    """Parameters for a reduced ETG linear benchmark."""
+from spectraxgk.validation.benchmarks.case_configs import (  # noqa: E402
+    CycloneBaseCase,
+    ETGBaseCase,
+    ETGModelConfig,
+    KBMBaseCase,
+    KineticElectronBaseCase,
+    KineticElectronModelConfig,
+    ModelConfig,
+    TEMBaseCase,
+    TEMModelConfig,
+)
 
-    grid: GridConfig = GridConfig(
-        Nx=1,
-        Ny=24,
-        Nz=96,
-        Lx=6.28,
-        Ly=6.28,
-        boundary="linked",
-        y0=0.2,
-        ntheta=32,
-        nperiod=2,
-    )
-    time: TimeConfig = TimeConfig(
-        t_max=10.0,
-        dt=0.05,
-        diffrax_solver="Dopri8",
-        diffrax_adaptive=True,
-        diffrax_rtol=1.0e-5,
-        diffrax_atol=1.0e-7,
-        diffrax_max_steps=200000,
-    )
-    geometry: GeometryConfig = GeometryConfig(R0=2.77778)
-    model: ETGModelConfig = ETGModelConfig()
-    init: InitializationConfig = InitializationConfig(
-        init_field="density",
-        init_amp=1.0e-10,
-        gaussian_init=True,
-    )
-
-    def to_dict(self) -> Dict[str, Dict[str, Any]]:
-        return {
-            "grid": self.grid.to_dict(),
-            "time": self.time.to_dict(),
-            "geometry": self.geometry.to_dict(),
-            "model": self.model.to_dict(),
-            "init": self.init.to_dict(),
-        }
-
-
-@dataclass(frozen=True)
-class KineticElectronModelConfig:
-    """Gradients and ratios for a kinetic-electron Cyclone-base-case setup."""
-
-    R_over_LTi: float = 2.49
-    R_over_LTe: float = 2.49
-    R_over_Ln: float = 0.8
-    Te_over_Ti: float = 1.0
-    mass_ratio: float = REFERENCE_MASS_RATIO
-    nu_i: float = 0.0
-    nu_e: float = 0.0
-    beta: float = 1.0e-5
-
-    def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
-
-
-@dataclass(frozen=True)
-class KineticElectronBaseCase:
-    """Parameters for kinetic-electron Cyclone benchmarks."""
-
-    grid: GridConfig = GridConfig(
-        Nx=1,
-        Ny=16,
-        Nz=96,
-        Lx=62.8,
-        Ly=62.8,
-        boundary="linked",
-        y0=10.0,
-        ntheta=32,
-        nperiod=2,
-    )
-    time: TimeConfig = TimeConfig(
-        t_max=40.0,
-        dt=0.01,
-        method="rk4",
-        diffrax_solver="Tsit5",
-        diffrax_adaptive=True,
-        diffrax_rtol=1.0e-4,
-        diffrax_atol=1.0e-7,
-        diffrax_max_steps=20000,
-    )
-    geometry: GeometryConfig = GeometryConfig(R0=2.77778)
-    model: KineticElectronModelConfig = KineticElectronModelConfig()
-    init: InitializationConfig = InitializationConfig(
-        init_field="density",
-        init_amp=1.0e-10,
-        gaussian_init=True,
-    )
-
-    def to_dict(self) -> Dict[str, Dict[str, Any]]:
-        return {
-            "grid": self.grid.to_dict(),
-            "time": self.time.to_dict(),
-            "geometry": self.geometry.to_dict(),
-            "model": self.model.to_dict(),
-            "init": self.init.to_dict(),
-        }
-
-
-@dataclass(frozen=True)
-class KBMBaseCase:
-    """Parameters for an electromagnetic KBM benchmark."""
-
-    grid: GridConfig = GridConfig(
-        Nx=1,
-        Ny=16,
-        Nz=96,
-        Lx=62.8,
-        Ly=62.8,
-        boundary="linked",
-        y0=10.0,
-        ntheta=32,
-        nperiod=2,
-    )
-    time: TimeConfig = TimeConfig(
-        t_max=40.0,
-        dt=0.01,
-        method="rk4",
-        diffrax_solver="Tsit5",
-        diffrax_adaptive=True,
-        diffrax_rtol=1.0e-4,
-        diffrax_atol=1.0e-7,
-        diffrax_max_steps=20000,
-    )
-    geometry: GeometryConfig = GeometryConfig(R0=2.77778)
-    model: KineticElectronModelConfig = KineticElectronModelConfig(beta=0.015)
-    init: InitializationConfig = InitializationConfig(
-        init_field="all",
-        init_amp=1.0e-10,
-        gaussian_init=True,
-    )
-
-    def to_dict(self) -> Dict[str, Dict[str, Any]]:
-        return {
-            "grid": self.grid.to_dict(),
-            "time": self.time.to_dict(),
-            "geometry": self.geometry.to_dict(),
-            "model": self.model.to_dict(),
-            "init": self.init.to_dict(),
-        }
-
-
-@dataclass(frozen=True)
-class TEMModelConfig:
-    """Parameters for a trapped-electron-mode benchmark."""
-
-    R_over_LTi: float = 20.0
-    R_over_LTe: float = 20.0
-    R_over_Ln: float = 20.0
-    Te_over_Ti: float = 1.0
-    mass_ratio: float = 370.0
-    nu_i: float = 0.0
-    nu_e: float = 0.0
-    beta: float = 1.0e-4
-
-    def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
-
-
-@dataclass(frozen=True)
-class TEMBaseCase:
-    """Parameters for the provisional literature-backed TEM stress case."""
-
-    grid: GridConfig = GridConfig(
-        Nx=1,
-        Ny=24,
-        Nz=96,
-        Lx=62.8,
-        Ly=62.8,
-        boundary="linked",
-        y0=20.0,
-        ntheta=32,
-        nperiod=2,
-    )
-    time: TimeConfig = TimeConfig(
-        t_max=8.0,
-        dt=0.01,
-        diffrax_solver="Tsit5",
-        diffrax_adaptive=True,
-        diffrax_rtol=1.0e-4,
-        diffrax_atol=1.0e-7,
-        diffrax_max_steps=20000,
-    )
-    geometry: GeometryConfig = GeometryConfig(q=2.7, s_hat=0.5, epsilon=0.18, R0=1.0)
-    model: TEMModelConfig = TEMModelConfig()
-    init: InitializationConfig = InitializationConfig(
-        init_field="density",
-        init_amp=1.0e-10,
-        gaussian_init=True,
-    )
-
-    def to_dict(self) -> Dict[str, Dict[str, Any]]:
-        return {
-            "grid": self.grid.to_dict(),
-            "time": self.time.to_dict(),
-            "geometry": self.geometry.to_dict(),
-            "model": self.model.to_dict(),
-            "init": self.init.to_dict(),
-        }
+__all__ = [
+    "CycloneBaseCase",
+    "ETGBaseCase",
+    "ETGModelConfig",
+    "GeometryConfig",
+    "GridConfig",
+    "InitializationConfig",
+    "KBMBaseCase",
+    "KineticElectronBaseCase",
+    "KineticElectronModelConfig",
+    "ModelConfig",
+    "REFERENCE_ELECTRON_MASS",
+    "REFERENCE_MASS_RATIO",
+    "TEMBaseCase",
+    "TEMModelConfig",
+    "TimeConfig",
+    "explicit_method_default_cfl_fac",
+    "resolve_cfl_fac",
+]

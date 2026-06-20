@@ -41,10 +41,13 @@ jobs:
           python tools/check_repository_size_manifest.py
           python tools/check_release_artifact_manifest.py
           python tools/check_release_version.py
+          python tools/check_package_architecture_manifest.py
           python tools/check_performance_optimization_manifest.py
           python tools/check_parallel_scaling_artifacts.py
           python tools/check_quasilinear_promotion_guardrails.py \
             --out-json docs/_static/quasilinear_promotion_guardrails.json
+          python tools/check_vmec_boozer_differentiability_claim.py \
+            --out-json docs/_static/vmec_boozer_differentiability_claim_guard.json
           python tools/build_parallelization_completion_status.py \
             --out-prefix docs/_static/parallelization_completion_status \
             --skip-figures
@@ -127,6 +130,7 @@ jobs:
               tests/test_check_release_artifact_manifest.py
               tests/test_check_release_readiness.py
               tests/test_build_technical_release_status.py
+              tests/test_release_scope_docs.py
               tests/test_check_release_version.py
               tests/test_check_quasilinear_calibration_inputs.py
               tests/test_compress_docs_previews.py
@@ -170,7 +174,7 @@ jobs:
               tests/test_nonlinear_exb.py
               tests/test_hyperdiffusion.py
               tests/test_gx_consistency.py
-              tests/test_gx_diagnostics.py
+              tests/test_runtime_diagnostics.py
           - name: parallel-autodiff
             files: >-
               tests/test_parallel.py
@@ -275,7 +279,7 @@ jobs:
           thresholds = {
               "cli.py": 95.0,
               "plotting.py": 95.0,
-              "runtime_artifacts.py": 95.0,
+              "workflows/runtime/artifacts.py": 95.0,
               "secondary.py": 95.0,
               "analysis.py": 95.0,
           }

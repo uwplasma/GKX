@@ -1,0 +1,324 @@
+"""TOML-based input helpers for the executable and driver scripts."""
+
+from __future__ import annotations
+
+from dataclasses import fields, is_dataclass, replace
+from typing import Any, Callable, Sequence, cast
+import os
+from pathlib import Path
+
+try:
+    import tomllib  # Python 3.11+
+except ModuleNotFoundError:  # pragma: no cover - only on Python <3.11
+    import tomli as tomllib  # type: ignore[import-not-found,no-redef]
+
+from spectraxgk.config import (
+    CycloneBaseCase,
+    ETGBaseCase,
+    KineticElectronBaseCase,
+    KBMBaseCase,
+    TEMBaseCase,
+)
+from spectraxgk.operators.linear.params import LinearTerms
+from spectraxgk.solvers.linear.krylov import KrylovConfig
+from spectraxgk.workflows.runtime.config import (
+    RuntimeCollisionConfig,
+    RuntimeConfig,
+    RuntimeExpertConfig,
+    RuntimeNormalizationConfig,
+    RuntimeOutputConfig,
+    RuntimeParallelConfig,
+    RuntimePhysicsConfig,
+    RuntimeQuasilinearConfig,
+    RuntimeSpeciesConfig,
+    RuntimeTermsConfig,
+)
+from spectraxgk.terms.config import TermConfig
+
+RUNTIME_TOML_TOP_LEVEL_KEYS = {
+    "species",
+    "physics",
+    "collisions",
+    "normalization",
+    "expert",
+    "output",
+    "quasilinear",
+}
+NAMED_CASE_TOML_TOP_LEVEL_KEYS = {"case", "model", "reference_alignment"}
+EXECUTABLE_TOML_SHORTHAND_COMMANDS = {
+    "run",
+    "cyclone-info",
+    "cyclone-kperp",
+    "run-linear",
+    "scan-linear",
+    "run-runtime-linear",
+    "scan-runtime-linear",
+    "run-runtime-nonlinear",
+}
+
+
+def load_toml(path: str | Path) -> dict:
+    """Load a TOML file into a plain dictionary."""
+
+    path = Path(path)
+    with path.open("rb") as f:
+        return tomllib.load(f)
+
+
+def is_runtime_toml(data: dict[str, Any]) -> bool:
+    """Return whether parsed TOML data should use the runtime executable path."""
+
+    if any(key in data for key in NAMED_CASE_TOML_TOP_LEVEL_KEYS):
+        return False
+    if any(key in data for key in RUNTIME_TOML_TOP_LEVEL_KEYS):
+        return True
+    return True
+
+
+def toml_shorthand_command(data: dict[str, Any]) -> str:
+    """Return the executable command used for direct TOML path shorthand."""
+
+    return "run" if is_runtime_toml(data) else "run-linear"
+
+
+def direct_config_shorthand_args(
+    argv: Sequence[str],
+    *,
+    load_toml_func: Callable[[str | Path], dict[str, Any]] = load_toml,
+) -> list[str] | None:
+    """Return parser arguments for ``spectraxgk case.toml`` shorthand."""
+
+    if not argv:
+        return None
+    config_arg = argv[0]
+    if config_arg.startswith("-") or config_arg in EXECUTABLE_TOML_SHORTHAND_COMMANDS:
+        return None
+    if not Path(config_arg).exists():
+        return None
+    command = toml_shorthand_command(load_toml_func(config_arg))
+    return [command, "--config", config_arg, *argv[1:]]
+
+
+def resolve_runtime_path(value: str | None, *, base_dir: Path) -> str | None:
+    """Expand and resolve a runtime config path.
+
+    Applies ``$VAR`` and ``~`` expansion, then resolves relative paths against
+    ``base_dir``. If an unresolved ``$VAR`` remains after expansion (env var not
+    set), the original value is returned unchanged so downstream code can raise
+    a clearer error. ``None`` is passed through.
+
+    Parameters
+    ----------
+    value : str or None
+        Raw path string from a TOML config or CLI flag.
+    base_dir : Path
+        Directory used to resolve relative paths. Callers typically pass the
+        config file's parent directory (TOML values) or ``Path.cwd()``
+        (CLI-supplied values).
+
+    Returns
+    -------
+    str or None
+        Absolute resolved path as a string, or ``None`` when ``value`` is ``None``.
+    """
+    if value is None:
+        return None
+    expanded = os.path.expanduser(os.path.expandvars(value))
+    if "$" in expanded:
+        return value
+    path = Path(expanded)
+    if not path.is_absolute():
+        path = (base_dir / path).resolve()
+    else:
+        path = path.resolve()
+    return str(path)
+
+
+def _merge_dataclass(base: Any, overrides: dict | None) -> Any:
+    """Recursively merge a dict into a dataclass, returning a new instance."""
+
+    if overrides is None:
+        return base
+    if not is_dataclass(base) or isinstance(base, type):
+        raise TypeError("base must be a dataclass instance")
+    updates = {}
+    for field in base.__dataclass_fields__.values():  # type: ignore[attr-defined]
+        name = field.name
+        if name not in overrides:
+            continue
+        value = overrides[name]
+        if value is None:
+            continue
+        current = getattr(base, name)
+        if is_dataclass(current) and isinstance(value, dict):
+            updates[name] = _merge_dataclass(current, value)
+        else:
+            updates[name] = value
+    return cast(Any, replace(base, **updates))
+
+
+def _normalize_geometry_overrides(overrides: dict | None) -> dict | None:
+    """Return geometry overrides using the canonical runtime schema."""
+
+    if not isinstance(overrides, dict):
+        return overrides
+    return dict(overrides)
+
+
+def _case_registry():
+    return {
+        "cyclone": CycloneBaseCase,
+        "etg": ETGBaseCase,
+        "kinetic_itg": KineticElectronBaseCase,
+        "kbm": KBMBaseCase,
+        "tem": TEMBaseCase,
+    }
+
+
+def load_case_from_toml(path: str | Path, case_name: str | None = None):
+    """Load a case config from TOML, returning (case_name, case_config, data)."""
+
+    data = load_toml(path)
+    if case_name is None:
+        case_name = str(data.get("case", "cyclone")).lower()
+    registry = _case_registry()
+    if case_name not in registry:
+        raise ValueError(
+            f"Unknown case '{case_name}'. Available: {', '.join(registry)}"
+        )
+    cfg = registry[case_name]()
+    reference_aligned = None
+    reference_raw = data.get("reference_alignment")
+    if isinstance(reference_raw, dict):
+        enabled = reference_raw.get("enabled")
+        if enabled is not None:
+            reference_aligned = bool(enabled)
+    elif reference_raw is not None:
+        reference_aligned = bool(reference_raw)
+
+    overrides = {
+        "grid": data.get("grid"),
+        "time": data.get("time"),
+        "geometry": _normalize_geometry_overrides(data.get("geometry")),
+        "model": data.get("model"),
+        "init": data.get("init"),
+    }
+    if reference_aligned is not None and hasattr(cfg, "reference_aligned"):
+        overrides["reference_aligned"] = reference_aligned
+    cfg = _merge_dataclass(cfg, overrides)
+    return case_name, cfg, data
+
+
+def load_runtime_from_toml(path: str | Path) -> tuple[RuntimeConfig, dict]:
+    """Load unified runtime config from TOML, returning ``(cfg, data)``."""
+
+    path = Path(path)
+    data = load_toml(path)
+    base_dir = path.resolve().parent
+    cfg: RuntimeConfig = RuntimeConfig()
+    cfg = _merge_dataclass(
+        cfg,
+        {
+            "grid": data.get("grid"),
+            "time": data.get("time"),
+            "geometry": _normalize_geometry_overrides(data.get("geometry")),
+            "init": data.get("init"),
+        },
+    )
+    physics = data.get("physics")
+    if isinstance(physics, dict):
+        cfg = replace(cfg, physics=RuntimePhysicsConfig(**physics))
+    collisions = data.get("collisions")
+    if isinstance(collisions, dict):
+        cfg = replace(cfg, collisions=RuntimeCollisionConfig(**collisions))
+    normalization = data.get("normalization")
+    if isinstance(normalization, dict):
+        cfg = replace(cfg, normalization=RuntimeNormalizationConfig(**normalization))
+    terms = data.get("terms")
+    if isinstance(terms, dict):
+        cfg = replace(cfg, terms=RuntimeTermsConfig(**terms))
+    expert = data.get("expert")
+    if isinstance(expert, dict):
+        cfg = replace(cfg, expert=RuntimeExpertConfig(**expert))
+    output = data.get("output")
+    if isinstance(output, dict):
+        cfg = replace(cfg, output=RuntimeOutputConfig(**output))
+    quasilinear = data.get("quasilinear")
+    if isinstance(quasilinear, dict):
+        cfg = replace(cfg, quasilinear=RuntimeQuasilinearConfig(**quasilinear))
+    parallel = data.get("parallel")
+    if isinstance(parallel, dict):
+        cfg = replace(cfg, parallel=RuntimeParallelConfig(**parallel))
+    species_raw = data.get("species")
+    if species_raw is not None:
+        if not isinstance(species_raw, list):
+            raise TypeError(
+                "[[species]] entries must be provided as an array of tables"
+            )
+        species: list[RuntimeSpeciesConfig] = []
+        for item in species_raw:
+            if not isinstance(item, dict):
+                raise TypeError("Each [[species]] entry must be a table")
+            species.append(RuntimeSpeciesConfig(**item))
+        if species:
+            cfg = replace(cfg, species=tuple(species))
+    cfg = replace(
+        cfg,
+        geometry=replace(
+            cfg.geometry,
+            vmec_file=resolve_runtime_path(cfg.geometry.vmec_file, base_dir=base_dir),
+            geometry_file=resolve_runtime_path(
+                cfg.geometry.geometry_file, base_dir=base_dir
+            ),
+        ),
+        init=replace(
+            cfg.init,
+            init_file=resolve_runtime_path(cfg.init.init_file, base_dir=base_dir),
+        ),
+        output=replace(
+            cfg.output,
+            path=resolve_runtime_path(cfg.output.path, base_dir=base_dir),
+            restart_to_file=resolve_runtime_path(
+                cfg.output.restart_to_file, base_dir=base_dir
+            ),
+            restart_from_file=resolve_runtime_path(
+                cfg.output.restart_from_file, base_dir=base_dir
+            ),
+        ),
+        quasilinear=replace(
+            cfg.quasilinear,
+            output_path=resolve_runtime_path(
+                cfg.quasilinear.output_path, base_dir=base_dir
+            ),
+        ),
+    )
+    return cfg, data
+
+
+def load_linear_terms_from_toml(data: dict) -> LinearTerms | None:
+    """Parse LinearTerms from a TOML dict."""
+
+    terms = data.get("terms")
+    if not isinstance(terms, dict):
+        return None
+    linear_fields = {field.name for field in fields(LinearTerms)}
+    linear_terms = {key: value for key, value in terms.items() if key in linear_fields}
+    return LinearTerms(**linear_terms)
+
+
+def load_krylov_from_toml(data: dict) -> KrylovConfig | None:
+    """Parse KrylovConfig from a TOML dict."""
+
+    krylov = data.get("krylov")
+    if not isinstance(krylov, dict):
+        return None
+    return KrylovConfig(**krylov)
+
+
+def load_term_config_from_toml(data: dict) -> TermConfig | None:
+    """Parse TermConfig for nonlinear runs from TOML dict."""
+
+    terms = data.get("terms")
+    if not isinstance(terms, dict):
+        return None
+    return TermConfig(**terms)

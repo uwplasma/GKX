@@ -42,7 +42,7 @@ spectrax-gk
 # Run directly from a checked-in TOML.
 spectraxgk examples/linear/axisymmetric/cyclone.toml
 
-# Compute linear quasilinear transport weights and write JSON/CSV artifacts.
+# Compute linear quasilinear transport weights and write JSON/CSV outputs.
 spectraxgk run-runtime-linear \
   --config examples/linear/axisymmetric/runtime_cyclone_quasilinear.toml \
   --out tools_out/cyclone_quasilinear
@@ -67,7 +67,7 @@ spectraxgk run \
   --config examples/nonlinear/non-axisymmetric/runtime_hsx_nonlinear_vmec_geometry.toml \
   --out tools_out/qhs_nonlinear_run
 
-# Turn supported saved runtime artifacts into review figures.
+# Turn supported saved outputs into review figures.
 spectraxgk --plot tools_out/cyclone_release.out.nc
 spectraxgk --plot spectraxgk_default_linear.summary.json
 ```
@@ -75,7 +75,7 @@ spectraxgk --plot spectraxgk_default_linear.summary.json
 Running `spectraxgk` with no TOML starts a short Cyclone initial-value linear
 demo (equivalent to the standard `examples/linear/axisymmetric/cyclone.toml`
 surface), prints setup and live time-integration progress with elapsed time and
-ETA, and writes the demo artifacts in the current directory:
+ETA, and writes the demo outputs in the current directory:
 
 - `spectraxgk_default_linear.toml`: the input file that reproduces the run
 - `spectraxgk_default_linear.summary.json`
@@ -92,7 +92,7 @@ Longer runtime commands also print live status lines with step/time progress,
 wall elapsed time, and an estimated wall-clock time remaining when progress is
 enabled. Adaptive nonlinear runs emit chunk-level elapsed/ETA updates.
 
-The `--plot` mode reads saved runtime artifacts directly:
+The `--plot` mode reads saved outputs directly:
 
 - linear bundles: `*.summary.json` + `*.timeseries.csv` + `*.eigenfunction.csv`
 - nonlinear bundles: `*.summary.json` + `*.diagnostics.csv` or `*.out.nc`
@@ -113,7 +113,9 @@ resolved diagnostics, and heat flux.
   saturation-rule metadata and electrostatic channel validation gates.
 - **Automated benchmark workflows** for reproducible validation and regression tracking.
 - **Modular runtime/refactor surfaces** with focused tests for restart artifacts,
-  diagnostics, validation gates, and public API boundaries.
+  diagnostics, validation gates, nonlinear RHS routing, nonlinear diagnostic
+  state assembly, explicit/IMEX nonlinear stepping, solver-objective gradient
+  gates, VMEC/Boozer sensitivity gates, and public API boundaries.
 
 ## QA ITG Optimization Panel
 
@@ -319,7 +321,7 @@ simple-rule sweep is also negative: linear-weight is the least-bad simple rule
 at `4.42`, positive-growth mixing length is `6.49`, absolute-growth mixing
 length is `6.85`, and even the training-mean null is `1.80`. SPECTRAX-GK does
 not promote any simple or user-facing absolute QL flux predictor from this
-legacy family.
+one-constant saturation-rule family.
 
 The richer held-out candidate below is the reduced `spectral_envelope_ridge`
 model. It uses only two linear-spectrum envelope features. After adding the
@@ -876,7 +878,7 @@ the response is finally resolved (`response_fraction = 0.0319`) and local
 (`fd_asymmetry_rel = 0.044`), but the plus-state variance is still too large
 for a production nonlinear turbulence-gradient claim. The refreshed
 next-campaign design panel now includes all `16` tracked central-FD artifacts:
-zero promoted nonlinear-gradient controls, one legacy bounded-replica follow-up
+zero promoted nonlinear-gradient controls, one bounded-replica follow-up
 candidate, and `15` cases that need replacement, locality repair, or variance
 reduction before further long-window GPU time is justified. The current
 top-level action is now paired-seed or control-variate variance reduction for
@@ -1037,6 +1039,8 @@ The latest nonlinear device-z observable split also stays diagnostic: the
 auto-chunked two-GPU transport-window route preserves final-state and transport
 observable identity, but the compute-only speedup is `1.19x` and the scalar
 observable gate is about `42.6x` more expensive than the sharded compute row.
+The refreshed fixed-window device-z profile reaches `1.48x` on two GPUs with
+identity preserved, still below the `1.5x` production speedup gate.
 The next performance tranche is therefore fused device-side diagnostic
 accumulation inside the nonlinear RHS/update, followed by full-solver
 serial-vs-decomposed transport-window gates.
@@ -1062,7 +1066,13 @@ tracked release scope:
 - **Nonlinear transport windows:** release-gated heat-flux and energy statistics
   for Cyclone, Cyclone Miller, KBM, W7-X, and HSX.
 
-The benchmark tooling in `tools/` ensures reproducibility and performance tracking.
+The root `benchmarks/` directory contains the maintained benchmark drivers,
+runtime TOMLs, and the small result index used by the documentation. The
+tooling in `tools/` regenerates the atlas and runtime/memory panels from those
+inputs while writing raw solver outputs to `tools_out/` or another scratch
+directory.
+Current promoted benchmark artifacts are indexed in
+`benchmarks/results/manifest.toml` and displayed in `docs/benchmarks.rst`.
 For the current release pass, the accepted nonlinear validation set is Cyclone,
 Cyclone Miller, KBM, W7-X, and HSX. Full-GK ETG nonlinear pilots, TEM/KAW stress
 lanes, kinetic-electron extensions, and W7-X zonal-flow recurrence/damping stay
@@ -1200,7 +1210,7 @@ The `examples/` directory is organized by physics and configuration:
 
 - **`linear/`**: Linear microinstability drivers for axisymmetric (Tokamak) and non-axisymmetric (Stellarator) geometries.
 - **`nonlinear/`**: Nonlinear turbulence simulations and transport analysis.
-- **`benchmarks/`**: Scripts for replicating published benchmark results and parameter scans.
+- **root `benchmarks/`**: Scripts, TOMLs, and result-index pointers for replicating published benchmark results and parameter scans.
 - **`theory_and_demos/`**: Pedagogical examples and demonstrations of the underlying numerical methods.
 
 Release-gated nonlinear example lanes include:

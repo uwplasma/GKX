@@ -4,15 +4,13 @@ from __future__ import annotations
 
 import argparse
 import sys
-from dataclasses import replace
 from pathlib import Path
-from typing import cast
+from typing import Any, Sequence
 
 import jax.numpy as jnp
-import numpy as np
 
-from spectraxgk.analysis import extract_eigenfunction, extract_mode_time_series
-from spectraxgk.benchmarking import normalize_eigenfunction, run_linear_scan
+from spectraxgk.diagnostics.modes import extract_eigenfunction, extract_mode_time_series
+from spectraxgk.validation.benchmarks.harness import normalize_eigenfunction, run_linear_scan
 from spectraxgk.benchmarks import (
     ETGBaseCase,
     CycloneBaseCase,
@@ -22,85 +20,84 @@ from spectraxgk.benchmarks import (
     run_etg_linear,
 )
 from spectraxgk.geometry import SAlphaGeometry
-from spectraxgk.grids import build_spectral_grid
-from spectraxgk.io import load_case_from_toml, load_krylov_from_toml, load_linear_terms_from_toml, load_runtime_from_toml, load_toml, resolve_runtime_path
+from spectraxgk.core.grid import build_spectral_grid
+from spectraxgk.workflows.runtime import toml as runtime_toml
+from spectraxgk.workflows.runtime.toml import (
+    load_case_from_toml,
+    load_krylov_from_toml,
+    load_linear_terms_from_toml,
+    load_runtime_from_toml,
+    load_toml,
+    resolve_runtime_path,
+)
 from spectraxgk._version import __version__
-from spectraxgk.plotting import (
+from spectraxgk.artifacts.plotting import (
     growth_fit_figure,
     linear_runtime_panel_figure,
     plot_saved_output,
     scan_comparison_figure,
     set_plot_style,
 )
-from spectraxgk.runtime_artifacts import (
+from spectraxgk.workflows.runtime.artifacts import (
     run_runtime_nonlinear_with_artifacts,
     write_quasilinear_artifacts,
     write_runtime_linear_artifacts,
     write_runtime_linear_scan_artifacts,
 )
-from spectraxgk.runtime import RuntimeLinearResult, run_runtime_linear, run_runtime_scan
+from spectraxgk.workflows.demo import (
+    DefaultDemoDeps,
+    default_example_config_path as _default_example_config_path,
+    run_default_linear_demo,
+)
+from spectraxgk.workflows.named_cases import (
+    NamedLinearCommandDeps,
+    run_named_linear_command,
+    scan_named_linear_command,
+)
+from spectraxgk.runtime import run_runtime_linear, run_runtime_scan
+from spectraxgk.workflows.runtime.commands import (
+    RuntimeCommandDeps,
+    attach_preloaded_runtime_config,
+    build_runtime_command_deps,
+    print_linear_run_header as _print_linear_run_header,
+    plot_saved_output_command,
+    run_runtime_linear_command,
+    run_runtime_nonlinear_command,
+    scan_runtime_linear_command,
+    should_show_progress as _should_show_progress,
+)
 
 
-def _runtime_output_path(args: argparse.Namespace, cfg) -> str | None:
-    if getattr(args, "out", None) is not None:
-        return str(args.out)
-    return cfg.output.path
+# These imports remain on the executable facade so tests and downstream callers
+# can patch command dependencies without reaching into workflow internals.
+_PATCHABLE_RUNTIME_COMMAND_GLOBALS = (
+    load_runtime_from_toml,
+    resolve_runtime_path,
+    run_runtime_linear,
+    run_runtime_scan,
+    run_runtime_nonlinear_with_artifacts,
+    write_runtime_linear_artifacts,
+    write_runtime_linear_scan_artifacts,
+    write_quasilinear_artifacts,
+)
 
 
-_RUNTIME_TOP_LEVEL_KEYS = {
-    "species",
-    "physics",
-    "collisions",
-    "normalization",
-    "expert",
-    "output",
-    "quasilinear",
-}
-_LEGACY_CASE_TOP_LEVEL_KEYS = {"case", "model", "gx_reference"}
+def _is_runtime_toml(data: dict[str, Any]) -> bool:
+    """Return whether TOML data should use the runtime executable path."""
+
+    return runtime_toml.is_runtime_toml(data)
 
 
-def _is_runtime_toml(data: dict) -> bool:
-    if any(key in data for key in _LEGACY_CASE_TOP_LEVEL_KEYS):
-        return False
-    if any(key in data for key in _RUNTIME_TOP_LEVEL_KEYS):
-        return True
-    return True
+def _toml_shorthand_command(data: dict[str, Any]) -> str:
+    """Return the executable command used for direct TOML path shorthand."""
+
+    return runtime_toml.toml_shorthand_command(data)
 
 
-def _should_show_progress(args: argparse.Namespace, configured: bool) -> bool:
-    if getattr(args, "progress", False):
-        return True
-    if getattr(args, "no_progress", False):
-        return False
-    return bool(configured or sys.stdout.isatty())
+def _direct_config_shorthand_args(argv: Sequence[str]) -> list[str] | None:
+    """Return parser arguments for ``spectraxgk case.toml`` shorthand."""
 
-
-def _print_linear_run_header(
-    *,
-    label: str,
-    config_path: str,
-    ky: float,
-    Nl: int,
-    Nm: int,
-    solver: str,
-    method: str,
-    dt: float,
-    steps: int,
-    grid_shape: tuple[int, int, int],
-    show_progress: bool,
-    extra: str | None = None,
-) -> None:
-    print(f"starting {label}")
-    print(
-        f"config={config_path} ky={ky:.4f} Nl={Nl} Nm={Nm} "
-        f"solver={solver} method={method} dt={dt:.6g} steps={steps}"
-    )
-    print(
-        f"grid=Nx{grid_shape[0]} Ny{grid_shape[1]} Nz{grid_shape[2]} "
-        f"progress={'on' if show_progress else 'off'}"
-    )
-    if extra is not None:
-        print(extra)
+    return runtime_toml.direct_config_shorthand_args(argv, load_toml_func=load_toml)
 
 
 def _status_printer(prefix: str):
@@ -131,272 +128,266 @@ def _cmd_cyclone_kperp(args: argparse.Namespace) -> int:
 
 def _cmd_run(args: argparse.Namespace) -> int:
     try:
-        cfg, _raw = load_runtime_from_toml(args.config)
+        cfg, data = load_runtime_from_toml(args.config)
     except Exception as exc:
         print(f"Error loading {args.config}: {exc}")
         return 1
 
+    attach_preloaded_runtime_config(args, cfg, data)
     if cfg.physics.nonlinear:
         return _cmd_run_runtime_nonlinear(args)
     return _cmd_run_runtime_linear(args)
 
 
-def _default_example_config_path() -> Path | None:
-    root = Path(__file__).resolve().parents[2]
-    path = root / "examples" / "linear" / "axisymmetric" / "cyclone.toml"
-    return path if path.exists() else None
-
-
-def _default_demo_plot_path() -> Path:
-    return Path("spectraxgk_default_linear.png")
-
-
-def _default_demo_artifact_base() -> Path:
-    return Path("spectraxgk_default_linear")
-
-
-def _default_demo_toml_path() -> Path:
-    return Path("spectraxgk_default_linear.toml")
-
-
-def _default_demo_settings() -> dict[str, float | int | str]:
-    return {
-        "ky": 0.3,
-        "Nl": 7,
-        "Nm": 14,
-        "solver": "time",
-        "method": "rk4",
-        "dt": 0.03,
-        "steps": 500,
-        "sample_stride": 5,
-        "fit_signal": "phi",
-        "mode_method": "z_index",
-    }
-
-
-def _default_demo_toml_text() -> str:
-    settings = _default_demo_settings()
-    return f"""# Reproducer for the no-input `spectraxgk` educational demo.
-# Run with:
-#   spectraxgk run-linear --config spectraxgk_default_linear.toml --progress
-
-case = "cyclone"
-
-[grid]
-Nx = 1
-Ny = 24
-Nz = 96
-Lx = 62.8
-Ly = 62.8
-boundary = "linked"
-y0 = 20.0
-ntheta = 32
-nperiod = 2
-
-[time]
-t_max = {float(settings["dt"]) * int(settings["steps"]):.6g}
-dt = {settings["dt"]}
-method = "{settings["method"]}"
-sample_stride = {settings["sample_stride"]}
-progress_bar = true
-
-[geometry]
-q = 1.4
-s_hat = 0.8
-epsilon = 0.18
-R0 = 2.77778
-
-[model]
-R_over_LTi = 2.49
-R_over_LTe = 0.0
-R_over_Ln = 0.8
-nu_i = 0.0
-
-[init]
-init_field = "density"
-init_amp = 1.0e-10
-gaussian_init = true
-gaussian_width = 0.5
-
-[terms]
-streaming = 1.0
-mirror = 1.0
-curvature = 1.0
-gradb = 1.0
-diamagnetic = 1.0
-collisions = 1.0
-hypercollisions = 1.0
-end_damping = 1.0
-apar = 1.0
-bpar = 0.0
-
-[run]
-ky = {settings["ky"]}
-Nl = {settings["Nl"]}
-Nm = {settings["Nm"]}
-solver = "{settings["solver"]}"
-method = "{settings["method"]}"
-dt = {settings["dt"]}
-steps = {settings["steps"]}
-sample_stride = {settings["sample_stride"]}
-
-[fit]
-fit_signal = "{settings["fit_signal"]}"
-mode_method = "{settings["mode_method"]}"
-auto_window = true
-window_fraction = 0.4
-start_fraction = 0.2
-min_points = 25
-"""
-
-
 def _cmd_default_demo() -> int:
-    example_path = _default_example_config_path()
-    if example_path is not None:
-        _case_name, cfg, data = load_case_from_toml(str(example_path), None)
-        source = str(example_path)
-    else:
-        cfg = CycloneBaseCase()
-        data = {}
-        source = "built-in Cyclone defaults (equivalent to examples/linear/axisymmetric/cyclone.toml)"
-
-    _ = data
-    settings = _default_demo_settings()
-    ky = float(settings["ky"])
-    Nl = int(settings["Nl"])
-    Nm = int(settings["Nm"])
-    solver = str(settings["solver"])
-    method = str(settings["method"])
-    dt = float(settings["dt"])
-    steps = int(settings["steps"])
-    sample_stride = int(settings["sample_stride"])
-    mode_method = str(settings["mode_method"])
-    fit_signal = str(settings["fit_signal"])
-    toml_path = _default_demo_toml_path()
-    toml_path.write_text(_default_demo_toml_text(), encoding="utf-8")
-
-    print("No input file specified; running the default Cyclone initial-value demo.", flush=True)
-    print(f"source={source}", flush=True)
-    print(
-        "This first run may include JAX compilation; progress lines show elapsed "
-        "time and ETA once the time loop starts.",
-        flush=True,
+    deps = DefaultDemoDeps(
+        load_case_from_toml=load_case_from_toml,
+        run_cyclone_linear=run_cyclone_linear,
+        cyclone_base_case=CycloneBaseCase,
+        build_spectral_grid=build_spectral_grid,
+        extract_mode_time_series=extract_mode_time_series,
+        extract_eigenfunction=extract_eigenfunction,
+        normalize_eigenfunction=normalize_eigenfunction,
+        linear_runtime_panel_figure=linear_runtime_panel_figure,
+        write_runtime_linear_artifacts=write_runtime_linear_artifacts,
     )
-    print(
-        f"demo settings: ky={ky:.3f} Nl={Nl} Nm={Nm} solver={solver} "
-        f"method={method} dt={dt:g} steps={steps} sample_stride={sample_stride}",
-        flush=True,
-    )
-    print(f"wrote reproducible input: {toml_path}", flush=True)
-    result = run_cyclone_linear(
-        ky_target=ky,
-        cfg=cfg,
-        Nl=Nl,
-        Nm=Nm,
-        solver=solver,
-        method=method,
-        dt=dt,
-        steps=steps,
-        sample_stride=sample_stride,
-        show_progress=True,
-        status_callback=_status_printer("demo"),
-        fit_signal=fit_signal,
-        mode_method=mode_method,
-        auto_window=True,
-        window_fraction=0.4,
-        start_fraction=0.2,
-        min_points=25,
-    )
-    grid = build_spectral_grid(cfg.grid)
-    signal = extract_mode_time_series(result.phi_t, result.selection, method=mode_method)
-    eigen = normalize_eigenfunction(
-        extract_eigenfunction(
-            result.phi_t,
-            result.t,
-            result.selection,
-            z=np.asarray(grid.z, dtype=float),
-            method="svd",
-        ),
-        np.asarray(grid.z, dtype=float),
-    )
-    out_path = _default_demo_plot_path()
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    fig, _axes = linear_runtime_panel_figure(
-        t=np.asarray(result.t, dtype=float),
-        signal=np.asarray(signal),
-        z=np.asarray(grid.z, dtype=float),
-        eigenfunction=np.asarray(eigen),
-        gamma=float(result.gamma),
-        omega=float(result.omega),
-        title="SPECTRAX-GK default Cyclone initial-value demo",
-    )
-    fig.savefig(out_path, dpi=220, bbox_inches="tight")
-    import matplotlib.pyplot as plt
-
-    plt.close(fig)
-    bundle_paths = write_runtime_linear_artifacts(
-        _default_demo_artifact_base(),
-        RuntimeLinearResult(
-            ky=float(result.ky),
-            gamma=float(result.gamma),
-            omega=float(result.omega),
-            selection=result.selection,
-            t=np.asarray(result.t, dtype=float),
-            signal=np.asarray(signal),
-            z=np.asarray(grid.z, dtype=float),
-            eigenfunction=np.asarray(eigen),
-        ),
-    )
-    print(f"gamma={float(result.gamma):.6f} omega={float(result.omega):.6f}", flush=True)
-    print(f"saved {bundle_paths['summary']}", flush=True)
-    if "timeseries" in bundle_paths:
-        print(f"saved {bundle_paths['timeseries']}", flush=True)
-    if "eigenfunction" in bundle_paths:
-        print(f"saved {bundle_paths['eigenfunction']}", flush=True)
-    print(f"saved {out_path}", flush=True)
-    print(
-        f"rerun this numerical case with: spectraxgk run-linear --config {toml_path} --progress",
-        flush=True,
-    )
-    return 0
-
-
-def _cmd_plot_saved_output(argv: list[str]) -> int:
-    if len(argv) < 2:
-        print("usage: spectraxgk --plot OUTPUT_FILE [--out FIGURE.png]")
-        return 1
-    input_path = argv[1]
-    out_path = None
-    if len(argv) > 2:
-        if len(argv) == 4 and argv[2] == "--out":
-            out_path = argv[3]
-        else:
-            print("usage: spectraxgk --plot OUTPUT_FILE [--out FIGURE.png]")
-            return 1
-    rendered = plot_saved_output(input_path, out=out_path)
-    print(f"saved {rendered}")
-    return 0
+    return run_default_linear_demo(deps=deps, example_path=_default_example_config_path())
 
 
 def _add_quasilinear_flags(cmd: argparse.ArgumentParser) -> None:
-    cmd.add_argument("--quasilinear", action="store_true", help="Compute quasilinear transport diagnostics")
-    cmd.add_argument("--ql-mode", type=str, default=None, help="weights or saturated")
-    cmd.add_argument("--ql-saturation-rule", type=str, default=None, help="none, mixing_length, or lapillonne_2011")
-    cmd.add_argument("--ql-csat", type=float, default=None, help="Saturation-rule calibration constant")
     cmd.add_argument(
-        "--ql-normalization",
+        "--quasilinear", action="store_true",
+        help="Compute quasilinear transport diagnostics",
+    )
+    for flag, kwargs in (
+        ("--ql-mode", {"help": "weights or saturated"}),
+        ("--ql-saturation-rule", {"help": "none, mixing_length, or lapillonne_2011"}),
+        ("--ql-csat", {"type": float, "help": "Saturation-rule calibration constant"}),
+        ("--ql-normalization", {"help": "phi_rms, phi_midplane, or field_energy"}),
+        ("--ql-output", {"help": "Optional quasilinear output path"}),
+    ):
+        options: dict[str, Any] = {"type": str, "default": None, **kwargs}
+        cmd.add_argument(flag, **options)
+
+
+def _add_progress_flags(cmd: argparse.ArgumentParser) -> None:
+    group = cmd.add_mutually_exclusive_group()
+    group.add_argument("--progress", action="store_true", help="Enable progress output")
+    group.add_argument(
+        "--no-progress", action="store_true", help="Disable progress output"
+    )
+
+
+def _add_diagnostics_flags(cmd: argparse.ArgumentParser) -> None:
+    group = cmd.add_mutually_exclusive_group()
+    group.add_argument(
+        "--diagnostics", action="store_true", help="Enable diagnostics output"
+    )
+    group.add_argument(
+        "--no-diagnostics", action="store_true", help="Disable diagnostics output"
+    )
+
+
+def _add_resolution_flags(
+    cmd: argparse.ArgumentParser,
+    *,
+    ky_help: str | None = None,
+) -> None:
+    cmd.add_argument("--ky", type=float, default=None, help=ky_help)
+    cmd.add_argument("--Nl", type=int, default=None)
+    cmd.add_argument("--Nm", type=int, default=None)
+
+
+def _add_time_solver_flags(
+    cmd: argparse.ArgumentParser,
+    *,
+    solver: bool = False,
+    sample_stride: bool = False,
+    fit_signal: bool = False,
+) -> None:
+    if solver:
+        cmd.add_argument("--solver", type=str, default=None, help="auto, time, or krylov")
+    cmd.add_argument("--method", type=str, default=None, help="time integrator method")
+    cmd.add_argument("--dt", type=float, default=None)
+    cmd.add_argument("--steps", type=int, default=None)
+    if sample_stride:
+        cmd.add_argument("--sample-stride", type=int, default=None)
+    if fit_signal:
+        cmd.add_argument("--fit-signal", type=str, default=None, help="auto, phi, or density")
+
+
+def _add_runtime_paths(
+    cmd: argparse.ArgumentParser,
+    *,
+    init_help: str | None = None,
+    out_help: str = "Optional output path/prefix",
+) -> None:
+    if init_help is not None:
+        cmd.add_argument("--init-file", type=str, default=None, help=init_help)
+    cmd.add_argument(
+        "--vmec-file", type=str, default=None, help="Override [geometry].vmec_file"
+    )
+    cmd.add_argument(
+        "--geometry-file",
         type=str,
         default=None,
-        help="phi_rms, phi_midplane, or field_energy",
+        help="Override [geometry].geometry_file",
     )
-    cmd.add_argument("--ql-output", type=str, default=None, help="Optional quasilinear artifact path")
+    cmd.add_argument("--out", type=str, default=None, help=out_help)
+
+
+def _add_config_flag(cmd: argparse.ArgumentParser) -> None:
+    cmd.add_argument("--config", required=True, help="Path to TOML config")
+
+
+def _add_ky_values_flag(cmd: argparse.ArgumentParser) -> None:
+    cmd.add_argument("--ky-values", type=str, default=None, help="Comma-separated ky list")
+
+
+def _add_plot_output_flags(cmd: argparse.ArgumentParser, *, plot_help: str) -> None:
+    cmd.add_argument("--plot", action="store_true", help=plot_help)
+    cmd.add_argument("--outdir", default=".", help="Output directory for plots")
+
+
+def _add_scan_worker_flags(cmd: argparse.ArgumentParser) -> None:
+    cmd.add_argument(
+        "--batch-ky", action="store_true", help="Integrate all ky in one batch"
+    )
+    cmd.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="Independent ky workers for the serial scan path, including quasilinear spectra.",
+    )
+    cmd.add_argument(
+        "--parallel-executor",
+        choices=("thread", "process"),
+        default="thread",
+        help="Executor for independent ky workers.",
+    )
+
+
+def _add_laguerre_mode_flag(cmd: argparse.ArgumentParser, *, help_text: str) -> None:
+    cmd.add_argument("--laguerre-mode", type=str, default=None, help=help_text)
+
+
+def _add_generic_run_parser(sub: argparse._SubParsersAction) -> None:
+    generic_run = sub.add_parser(
+        "run",
+        help="Run a simulation from a TOML config (auto-detect linear/nonlinear)",
+    )
+    _add_config_flag(generic_run)
+    _add_resolution_flags(generic_run)
+    generic_run.add_argument("--solver", type=str, default=None)
+    _add_time_solver_flags(generic_run, sample_stride=True, fit_signal=True)
+    generic_run.add_argument("--diagnostics-stride", type=int, default=None)
+    _add_diagnostics_flags(generic_run)
+    _add_laguerre_mode_flag(generic_run, help_text="grid or spectral (nonlinear only)")
+    _add_runtime_paths(generic_run, init_help="Optional init file for nonlinear runs")
+    _add_quasilinear_flags(generic_run)
+    _add_progress_flags(generic_run)
+    generic_run.set_defaults(func=_cmd_run)
+
+
+def _add_named_case_parsers(sub: argparse._SubParsersAction) -> None:
+    info = sub.add_parser("cyclone-info", help="Print Cyclone base case defaults")
+    info.set_defaults(func=_cmd_cyclone_info)
+
+    kperp = sub.add_parser("cyclone-kperp", help="Compute k_perp^2(theta)")
+    kperp.add_argument("--kx0", type=float, default=0.0)
+    kperp.add_argument("--ky", type=float, default=0.3)
+    kperp.set_defaults(func=_cmd_cyclone_kperp)
+
+    run_linear = sub.add_parser(
+        "run-linear", help="Run a single linear case from a TOML config"
+    )
+    _add_config_flag(run_linear)
+    run_linear.add_argument("--case", default=None, help="Case name (cyclone, etg, ...)")
+    _add_resolution_flags(run_linear, ky_help="Single ky value")
+    _add_time_solver_flags(
+        run_linear, solver=True, sample_stride=True, fit_signal=True
+    )
+    _add_plot_output_flags(run_linear, plot_help="Save fit/eigenfunction plots")
+    _add_progress_flags(run_linear)
+    run_linear.set_defaults(func=_cmd_run_linear)
+
+    scan_linear = sub.add_parser("scan-linear", help="Run a ky scan from a TOML config")
+    _add_config_flag(scan_linear)
+    scan_linear.add_argument(
+        "--case", default=None, help="Case name (cyclone, etg, ...)"
+    )
+    _add_ky_values_flag(scan_linear)
+    scan_linear.add_argument("--Nl", type=int, default=None)
+    scan_linear.add_argument("--Nm", type=int, default=None)
+    _add_time_solver_flags(scan_linear, solver=True, fit_signal=True)
+    _add_plot_output_flags(
+        scan_linear, plot_help="Save comparison plot if reference exists"
+    )
+    scan_linear.set_defaults(func=_cmd_scan_linear)
+
+
+def _add_runtime_parsers(sub: argparse._SubParsersAction) -> None:
+    run_runtime = sub.add_parser(
+        "run-runtime-linear",
+        help="Run one linear point from unified runtime TOML config",
+    )
+    _add_config_flag(run_runtime)
+    _add_resolution_flags(run_runtime, ky_help="Single ky value")
+    _add_time_solver_flags(
+        run_runtime, solver=True, sample_stride=True, fit_signal=True
+    )
+    _add_runtime_paths(run_runtime)
+    _add_quasilinear_flags(run_runtime)
+    _add_progress_flags(run_runtime)
+    run_runtime.set_defaults(func=_cmd_run_runtime_linear)
+
+    scan_runtime = sub.add_parser(
+        "scan-runtime-linear",
+        help="Run a ky scan from unified runtime TOML config",
+    )
+    _add_config_flag(scan_runtime)
+    _add_ky_values_flag(scan_runtime)
+    scan_runtime.add_argument("--Nl", type=int, default=None)
+    scan_runtime.add_argument("--Nm", type=int, default=None)
+    _add_time_solver_flags(
+        scan_runtime, solver=True, sample_stride=True, fit_signal=True
+    )
+    _add_scan_worker_flags(scan_runtime)
+    scan_runtime.add_argument(
+        "--out", type=str, default=None, help="Optional scan output path/prefix"
+    )
+    _add_quasilinear_flags(scan_runtime)
+    _add_progress_flags(scan_runtime)
+    scan_runtime.set_defaults(func=_cmd_scan_runtime_linear)
+
+    run_runtime_nl = sub.add_parser(
+        "run-runtime-nonlinear",
+        help="Run one nonlinear point from unified runtime TOML config",
+    )
+    _add_config_flag(run_runtime_nl)
+    _add_resolution_flags(run_runtime_nl, ky_help="Single ky value")
+    _add_time_solver_flags(run_runtime_nl)
+    run_runtime_nl.add_argument("--sample-stride", type=int, default=None)
+    run_runtime_nl.add_argument("--diagnostics-stride", type=int, default=None)
+    _add_diagnostics_flags(run_runtime_nl)
+    _add_laguerre_mode_flag(
+        run_runtime_nl, help_text="grid or spectral (nonlinear Laguerre handling)"
+    )
+    _add_runtime_paths(
+        run_runtime_nl,
+        init_help="Optional restart/init-state file containing a matching distribution state",
+    )
+    _add_progress_flags(run_runtime_nl)
+    run_runtime_nl.set_defaults(func=_cmd_run_runtime_nonlinear)
 
 
 # Path-valued CLI flags (--vmec-file, --geometry-file, --init-file) follow
 # shell conventions: relative paths resolve against cwd, ~ expands to $HOME,
 # and $VAR is expanded from the environment. See _apply_runtime_path_overrides.
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog=Path(sys.argv[0]).name if sys.argv else "spectraxgk")
+    parser = argparse.ArgumentParser(
+        prog=Path(sys.argv[0]).name if sys.argv else "spectraxgk"
+    )
     parser.add_argument(
         "--version",
         action="version",
@@ -408,192 +399,25 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to TOML config (shorthand for 'run --config ...')",
     )
     sub = parser.add_subparsers(dest="cmd")
-
-    generic_run = sub.add_parser(
-        "run",
-        help="Run a simulation from a TOML config (auto-detect linear/nonlinear)",
-    )
-    generic_run.add_argument("--config", required=True, help="Path to TOML config")
-    generic_run.add_argument("--ky", type=float, default=None)
-    generic_run.add_argument("--Nl", type=int, default=None)
-    generic_run.add_argument("--Nm", type=int, default=None)
-    generic_run.add_argument("--steps", type=int, default=None)
-    generic_run.add_argument("--dt", type=float, default=None)
-    generic_run.add_argument("--solver", type=str, default=None)
-    generic_run.add_argument("--method", type=str, default=None)
-    generic_run.add_argument("--fit-signal", type=str, default=None)
-    generic_run.add_argument("--sample-stride", type=int, default=None)
-    generic_run.add_argument("--diagnostics-stride", type=int, default=None)
-    diag_group = generic_run.add_mutually_exclusive_group()
-    diag_group.add_argument("--diagnostics", action="store_true", help="Enable diagnostics output")
-    diag_group.add_argument("--no-diagnostics", action="store_true", help="Disable diagnostics output")
-    generic_run.add_argument("--laguerre-mode", type=str, default=None, help="grid or spectral (nonlinear only)")
-    generic_run.add_argument("--init-file", type=str, default=None, help="Optional init file for nonlinear runs")
-    generic_run.add_argument("--vmec-file", type=str, default=None, help="Override [geometry].vmec_file")
-    generic_run.add_argument("--geometry-file", type=str, default=None, help="Override [geometry].geometry_file")
-    generic_run.add_argument("--out", type=str, default=None, help="Optional artifact path/prefix")
-    _add_quasilinear_flags(generic_run)
-    generic_progress = generic_run.add_mutually_exclusive_group()
-    generic_progress.add_argument("--progress", action="store_true", help="Enable progress output")
-    generic_progress.add_argument("--no-progress", action="store_true", help="Disable progress output")
-    generic_run.set_defaults(func=_cmd_run)
-
-    info = sub.add_parser("cyclone-info", help="Print Cyclone base case defaults")
-    info.set_defaults(func=_cmd_cyclone_info)
-
-    kperp = sub.add_parser("cyclone-kperp", help="Compute k_perp^2(theta)")
-    kperp.add_argument("--kx0", type=float, default=0.0)
-    kperp.add_argument("--ky", type=float, default=0.3)
-    kperp.set_defaults(func=_cmd_cyclone_kperp)
-
-    run_linear = sub.add_parser("run-linear", help="Run a single linear case from a TOML config")
-    run_linear.add_argument("--config", required=True, help="Path to TOML config")
-    run_linear.add_argument("--case", default=None, help="Case name (cyclone, etg, ...)")
-    run_linear.add_argument("--ky", type=float, default=None, help="Single ky value")
-    run_linear.add_argument("--Nl", type=int, default=None)
-    run_linear.add_argument("--Nm", type=int, default=None)
-    run_linear.add_argument("--solver", type=str, default=None, help="auto, time, or krylov")
-    run_linear.add_argument("--method", type=str, default=None, help="time integrator method")
-    run_linear.add_argument("--dt", type=float, default=None)
-    run_linear.add_argument("--steps", type=int, default=None)
-    run_linear.add_argument("--sample-stride", type=int, default=None)
-    run_linear.add_argument("--fit-signal", type=str, default=None, help="auto, phi, or density")
-    run_linear.add_argument("--plot", action="store_true", help="Save fit/eigenfunction plots")
-    run_linear.add_argument("--outdir", default=".", help="Output directory for plots")
-    run_linear_progress = run_linear.add_mutually_exclusive_group()
-    run_linear_progress.add_argument("--progress", action="store_true", help="Enable progress output")
-    run_linear_progress.add_argument("--no-progress", action="store_true", help="Disable progress output")
-    run_linear.set_defaults(func=_cmd_run_linear)
-
-    scan_linear = sub.add_parser("scan-linear", help="Run a ky scan from a TOML config")
-    scan_linear.add_argument("--config", required=True, help="Path to TOML config")
-    scan_linear.add_argument("--case", default=None, help="Case name (cyclone, etg, ...)")
-    scan_linear.add_argument("--ky-values", type=str, default=None, help="Comma-separated ky list")
-    scan_linear.add_argument("--Nl", type=int, default=None)
-    scan_linear.add_argument("--Nm", type=int, default=None)
-    scan_linear.add_argument("--solver", type=str, default=None, help="auto, time, or krylov")
-    scan_linear.add_argument("--method", type=str, default=None, help="time integrator method")
-    scan_linear.add_argument("--dt", type=float, default=None)
-    scan_linear.add_argument("--steps", type=int, default=None)
-    scan_linear.add_argument("--fit-signal", type=str, default=None, help="auto, phi, or density")
-    scan_linear.add_argument("--plot", action="store_true", help="Save comparison plot if reference exists")
-    scan_linear.add_argument("--outdir", default=".", help="Output directory for plots")
-    scan_linear.set_defaults(func=_cmd_scan_linear)
-
-    run_runtime = sub.add_parser(
-        "run-runtime-linear",
-        help="Run one linear point from unified runtime TOML config",
-    )
-    run_runtime.add_argument("--config", required=True, help="Path to TOML config")
-    run_runtime.add_argument("--ky", type=float, default=None, help="Single ky value")
-    run_runtime.add_argument("--Nl", type=int, default=None)
-    run_runtime.add_argument("--Nm", type=int, default=None)
-    run_runtime.add_argument("--solver", type=str, default=None, help="auto, time, or krylov")
-    run_runtime.add_argument("--method", type=str, default=None, help="time integrator method")
-    run_runtime.add_argument("--dt", type=float, default=None)
-    run_runtime.add_argument("--steps", type=int, default=None)
-    run_runtime.add_argument("--sample-stride", type=int, default=None)
-    run_runtime.add_argument("--fit-signal", type=str, default=None, help="auto, phi, or density")
-    run_runtime.add_argument("--vmec-file", type=str, default=None, help="Override [geometry].vmec_file")
-    run_runtime.add_argument("--geometry-file", type=str, default=None, help="Override [geometry].geometry_file")
-    run_runtime.add_argument("--out", type=str, default=None, help="Optional artifact path/prefix")
-    _add_quasilinear_flags(run_runtime)
-    run_runtime_progress = run_runtime.add_mutually_exclusive_group()
-    run_runtime_progress.add_argument("--progress", action="store_true", help="Enable progress output")
-    run_runtime_progress.add_argument("--no-progress", action="store_true", help="Disable progress output")
-    run_runtime.set_defaults(func=_cmd_run_runtime_linear)
-
-    scan_runtime = sub.add_parser(
-        "scan-runtime-linear",
-        help="Run a ky scan from unified runtime TOML config",
-    )
-    scan_runtime.add_argument("--config", required=True, help="Path to TOML config")
-    scan_runtime.add_argument("--ky-values", type=str, default=None, help="Comma-separated ky list")
-    scan_runtime.add_argument("--Nl", type=int, default=None)
-    scan_runtime.add_argument("--Nm", type=int, default=None)
-    scan_runtime.add_argument("--solver", type=str, default=None, help="auto, time, or krylov")
-    scan_runtime.add_argument("--method", type=str, default=None, help="time integrator method")
-    scan_runtime.add_argument("--dt", type=float, default=None)
-    scan_runtime.add_argument("--steps", type=int, default=None)
-    scan_runtime.add_argument("--sample-stride", type=int, default=None)
-    scan_runtime.add_argument("--batch-ky", action="store_true", help="Integrate all ky in one batch")
-    scan_runtime.add_argument(
-        "--workers",
-        type=int,
-        default=1,
-        help="Independent ky workers for the serial scan path, including quasilinear spectra.",
-    )
-    scan_runtime.add_argument(
-        "--parallel-executor",
-        choices=("thread", "process"),
-        default="thread",
-        help="Executor for independent ky workers.",
-    )
-    scan_runtime.add_argument("--fit-signal", type=str, default=None, help="auto, phi, or density")
-    scan_runtime.add_argument("--out", type=str, default=None, help="Optional scan artifact path/prefix")
-    _add_quasilinear_flags(scan_runtime)
-    scan_runtime_progress = scan_runtime.add_mutually_exclusive_group()
-    scan_runtime_progress.add_argument("--progress", action="store_true", help="Enable progress output")
-    scan_runtime_progress.add_argument("--no-progress", action="store_true", help="Disable progress output")
-    scan_runtime.set_defaults(func=_cmd_scan_runtime_linear)
-
-    run_runtime_nl = sub.add_parser(
-        "run-runtime-nonlinear",
-        help="Run one nonlinear point from unified runtime TOML config",
-    )
-    run_runtime_nl.add_argument("--config", required=True, help="Path to TOML config")
-    run_runtime_nl.add_argument("--ky", type=float, default=None, help="Single ky value")
-    run_runtime_nl.add_argument("--Nl", type=int, default=None)
-    run_runtime_nl.add_argument("--Nm", type=int, default=None)
-    run_runtime_nl.add_argument("--dt", type=float, default=None)
-    run_runtime_nl.add_argument("--steps", type=int, default=None)
-    run_runtime_nl.add_argument("--method", type=str, default=None)
-    run_runtime_nl.add_argument("--sample-stride", type=int, default=None)
-    run_runtime_nl.add_argument("--diagnostics-stride", type=int, default=None)
-    diag_group = run_runtime_nl.add_mutually_exclusive_group()
-    diag_group.add_argument("--diagnostics", action="store_true", help="Enable diagnostics output")
-    diag_group.add_argument("--no-diagnostics", action="store_true", help="Disable diagnostics output")
-    run_runtime_nl.add_argument(
-        "--laguerre-mode",
-        type=str,
-        default=None,
-        help="grid or spectral (nonlinear Laguerre handling)",
-    )
-    run_runtime_nl.add_argument("--init-file", type=str, default=None, help="Optional init file (GX g_state)")
-    run_runtime_nl.add_argument("--vmec-file", type=str, default=None, help="Override [geometry].vmec_file")
-    run_runtime_nl.add_argument("--geometry-file", type=str, default=None, help="Override [geometry].geometry_file")
-    run_runtime_nl.add_argument("--out", type=str, default=None, help="Optional artifact path/prefix")
-    run_runtime_nl_progress = run_runtime_nl.add_mutually_exclusive_group()
-    run_runtime_nl_progress.add_argument("--progress", action="store_true", help="Enable progress output")
-    run_runtime_nl_progress.add_argument("--no-progress", action="store_true", help="Disable progress output")
-    run_runtime_nl.set_defaults(func=_cmd_run_runtime_nonlinear)
+    _add_generic_run_parser(sub)
+    _add_named_case_parsers(sub)
+    _add_runtime_parsers(sub)
 
     return parser
 
 
 def main() -> int:
-    if len(sys.argv) == 1:
+    argv = sys.argv[1:]
+    if not argv:
         return _cmd_default_demo()
-    if len(sys.argv) > 1 and sys.argv[1] == "--plot":
-        return _cmd_plot_saved_output(sys.argv[1:])
+    if argv[0] == "--plot":
+        return plot_saved_output_command(argv, plot_saved_output=plot_saved_output)
 
-    known_cmds = {
-        "run",
-        "cyclone-info",
-        "cyclone-kperp",
-        "run-linear",
-        "scan-linear",
-        "run-runtime-linear",
-        "scan-runtime-linear",
-        "run-runtime-nonlinear",
-    }
-    if len(sys.argv) > 1 and not sys.argv[1].startswith("-") and sys.argv[1] not in known_cmds:
-        if Path(sys.argv[1]).exists():
-            data = load_toml(sys.argv[1])
-            command = "run" if _is_runtime_toml(data) else "run-linear"
-            parser = build_parser()
-            args = parser.parse_args([command, "--config", sys.argv[1], *sys.argv[2:]])
-            return args.func(args)
+    shorthand_args = _direct_config_shorthand_args(argv)
+    if shorthand_args is not None:
+        parser = build_parser()
+        args = parser.parse_args(shorthand_args)
+        return args.func(args)
 
     parser = build_parser()
     args = parser.parse_args()
@@ -608,473 +432,55 @@ def _resolve_case(case_name: str):
         return CycloneBaseCase, run_cyclone_linear
     if name == "etg":
         return ETGBaseCase, run_etg_linear
-    raise ValueError(f"Unsupported case '{case_name}' in executable dispatcher (supported: cyclone, etg)")
-
-
-def _load_scan_ky(data: dict) -> np.ndarray:
-    scan = data.get("scan", {})
-    ky_vals = scan.get("ky")
-    if ky_vals is None:
-        return np.asarray([])
-    return np.asarray(ky_vals, dtype=float)
+    raise ValueError(
+        f"Unsupported case '{case_name}' in executable dispatcher (supported: cyclone, etg)"
+    )
 
 
 def _cmd_run_linear(args: argparse.Namespace) -> int:
-    case_name, cfg, data = load_case_from_toml(args.config, args.case)
-    case_cls, run_fn = _resolve_case(case_name)
-    _ = case_cls  # keep type checkers happy
-    run_cfg = data.get("run", {})
-    fit_cfg = dict(data.get("fit", {}))
-
-    ky = args.ky if args.ky is not None else run_cfg.get("ky", 0.3)
-    Nl = args.Nl if args.Nl is not None else run_cfg.get("Nl", 24)
-    Nm = args.Nm if args.Nm is not None else run_cfg.get("Nm", 12)
-    solver = args.solver if args.solver is not None else run_cfg.get("solver", "auto")
-    fit_signal = args.fit_signal if args.fit_signal is not None else fit_cfg.pop("fit_signal", "auto")
-    method = args.method if args.method is not None else run_cfg.get("method", cfg.time.method)
-    dt = args.dt if args.dt is not None else run_cfg.get("dt", cfg.time.dt)
-    steps = args.steps if args.steps is not None else run_cfg.get("steps", int(round(cfg.time.t_max / cfg.time.dt)))
-    sample_stride = (
-        args.sample_stride
-        if args.sample_stride is not None
-        else run_cfg.get("sample_stride", getattr(cfg.time, "sample_stride", None))
-    )
-    show_progress = _should_show_progress(args, bool(getattr(cfg.time, "progress_bar", False)))
-
-    terms = load_linear_terms_from_toml(data)
-    krylov_cfg = load_krylov_from_toml(data)
-
-    _print_linear_run_header(
-        label=f"legacy linear {case_name} run",
-        config_path=str(args.config),
-        ky=float(ky),
-        Nl=int(Nl),
-        Nm=int(Nm),
-        solver=str(solver),
-        method=str(method),
-        dt=float(dt),
-        steps=int(steps),
-        grid_shape=(int(cfg.grid.Nx), int(cfg.grid.Ny), int(cfg.grid.Nz)),
-        show_progress=show_progress,
-        extra="detected legacy case TOML; using run-linear path",
-    )
-
-    result = run_fn(
-        ky_target=float(ky),
-        cfg=cfg,
-        Nl=int(Nl),
-        Nm=int(Nm),
-        solver=str(solver),
-        method=str(method),
-        dt=float(dt),
-        steps=int(steps),
-        sample_stride=None if sample_stride is None else int(sample_stride),
-        krylov_cfg=krylov_cfg,
-        terms=terms,
-        fit_signal=str(fit_signal),
-        show_progress=show_progress,
-        status_callback=_status_printer(case_name),
-        **fit_cfg,
-    )
-    print(f"ky={result.ky:.4f} gamma={result.gamma:.6f} omega={result.omega:.6f}")
-
-    if args.plot:
-        outdir = Path(args.outdir)
-        outdir.mkdir(parents=True, exist_ok=True)
-        grid = build_spectral_grid(cfg.grid)
-        if result.t.size > 1:
-            signal = extract_mode_time_series(result.phi_t, result.selection, method="project")
-            fig, _ax = growth_fit_figure(result.t, signal)
-            fig.savefig(outdir / f"{case_name}_ky{result.ky:.3f}_fit.png")
-        z_np = np.asarray(grid.z)
-        eigen = extract_eigenfunction(result.phi_t, result.t, result.selection, z=z_np)
-        eigen = normalize_eigenfunction(eigen, z_np)
-        set_plot_style()
-        import matplotlib.pyplot as plt
-
-        fig, ax = plt.subplots(1, 1, figsize=(5, 3))
-        ax.plot(grid.z, eigen.real, label="Re")
-        ax.plot(grid.z, eigen.imag, linestyle="--", label="Im")
-        ax.set_xlabel(r"$\\theta$")
-        ax.set_ylabel(r"$\\phi$")
-        ax.set_title(f"{case_name} ky={result.ky:.3f}")
-        ax.legend(loc="best")
-        fig.tight_layout()
-        fig.savefig(outdir / f"{case_name}_ky{result.ky:.3f}_eig.png")
-        plt.close(fig)
-    return 0
+    return run_named_linear_command(args, deps=_named_linear_command_deps())
 
 
 def _cmd_scan_linear(args: argparse.Namespace) -> int:
-    case_name, cfg, data = load_case_from_toml(args.config, args.case)
-    _case_cls, run_fn = _resolve_case(case_name)
-    scan_cfg = data.get("scan", {})
-    fit_cfg = dict(data.get("fit", {}))
+    return scan_named_linear_command(args, deps=_named_linear_command_deps())
 
-    if args.ky_values is not None:
-        ky_values = np.asarray([float(x) for x in args.ky_values.split(",") if x.strip() != ""])
-    else:
-        ky_values = _load_scan_ky(data)
-    if ky_values.size == 0:
-        raise ValueError("No ky values provided. Use --ky-values or [scan].ky in TOML.")
 
-    Nl = args.Nl if args.Nl is not None else scan_cfg.get("Nl", 24)
-    Nm = args.Nm if args.Nm is not None else scan_cfg.get("Nm", 12)
-    solver = args.solver if args.solver is not None else scan_cfg.get("solver", "auto")
-    fit_signal = args.fit_signal if args.fit_signal is not None else fit_cfg.pop("fit_signal", "auto")
-    auto_window = bool(fit_cfg.pop("auto_window", True))
-    method = args.method if args.method is not None else scan_cfg.get("method", cfg.time.method)
-    dt = args.dt if args.dt is not None else scan_cfg.get("dt", cfg.time.dt)
-    steps = args.steps if args.steps is not None else scan_cfg.get("steps", int(round(cfg.time.t_max / cfg.time.dt)))
-
-    terms = load_linear_terms_from_toml(data)
-    krylov_cfg = load_krylov_from_toml(data)
-
-    scan = run_linear_scan(
-        ky_values=ky_values,
-        run_linear_fn=run_fn,
-        cfg=cfg,
-        Nl=int(Nl),
-        Nm=int(Nm),
-        dt=float(dt),
-        steps=int(steps),
-        method=str(method),
-        solver=str(solver),
-        krylov_cfg=krylov_cfg,
-        auto_window=auto_window,
-        window_kw=fit_cfg,
-        run_kwargs={"terms": terms, "fit_signal": str(fit_signal)}
-        if terms is not None
-        else {"fit_signal": str(fit_signal)},
+def _named_linear_command_deps() -> NamedLinearCommandDeps:
+    return NamedLinearCommandDeps(
+        load_case_from_toml=load_case_from_toml,
+        resolve_case=_resolve_case,
+        load_linear_terms_from_toml=load_linear_terms_from_toml,
+        load_krylov_from_toml=load_krylov_from_toml,
+        should_show_progress=_should_show_progress,
+        print_linear_run_header=_print_linear_run_header,
+        status_printer=_status_printer,
+        run_linear_scan=run_linear_scan,
+        build_spectral_grid=build_spectral_grid,
+        extract_mode_time_series=extract_mode_time_series,
+        growth_fit_figure=growth_fit_figure,
+        extract_eigenfunction=extract_eigenfunction,
+        normalize_eigenfunction=normalize_eigenfunction,
+        set_plot_style=set_plot_style,
+        load_cyclone_reference=load_cyclone_reference,
+        load_etg_reference=load_etg_reference,
+        scan_comparison_figure=scan_comparison_figure,
     )
 
-    for ky, g, w in zip(scan.ky, scan.gamma, scan.omega):
-        print(f"ky={ky:.4f} gamma={g:.6f} omega={w:.6f}")
 
-    if args.plot:
-        outdir = Path(args.outdir)
-        outdir.mkdir(parents=True, exist_ok=True)
-        ref = None
-        if case_name == "cyclone":
-            ref = load_cyclone_reference()
-        elif case_name == "etg":
-            ref = load_etg_reference()
-        if ref is not None:
-            fig, _ax = scan_comparison_figure(
-                scan.ky,
-                scan.gamma,
-                scan.omega,
-                r"$k_y \rho_i$",
-                f"{case_name.upper()} scan",
-                x_ref=ref.ky,
-                gamma_ref=ref.gamma,
-                omega_ref=ref.omega,
-                log_x=True,
-            )
-            fig.savefig(outdir / f"{case_name}_scan_comparison.png")
-        else:
-            print("No reference available for this case; skipping comparison plot.")
-    return 0
-
-
-_RUNTIME_FIT_KEYS = {
-    "auto_window",
-    "tmin",
-    "tmax",
-    "window_fraction",
-    "min_points",
-    "start_fraction",
-    "growth_weight",
-    "require_positive",
-    "min_amp_fraction",
-    "mode_method",
-}
-
-
-def _apply_runtime_path_overrides(cfg, args: argparse.Namespace):
-    """Apply CLI path overrides for geometry and init files.
-
-    CLI-supplied paths are resolved against the shell's current working
-    directory (not the config file's parent), matching conventional CLI
-    behavior. ``~`` and ``$VAR`` are expanded via ``resolve_runtime_path``.
-    """
-    cwd = Path.cwd()
-    geometry = cfg.geometry
-    vmec_cli = getattr(args, "vmec_file", None)
-    geom_cli = getattr(args, "geometry_file", None)
-    if vmec_cli is not None:
-        geometry = replace(geometry, vmec_file=resolve_runtime_path(str(vmec_cli), base_dir=cwd))
-    if geom_cli is not None:
-        geometry = replace(geometry, geometry_file=resolve_runtime_path(str(geom_cli), base_dir=cwd))
-
-    init = cfg.init
-    init_cli = getattr(args, "init_file", None)
-    if init_cli is not None:
-        init = replace(init, init_file=resolve_runtime_path(str(init_cli), base_dir=cwd))
-
-    return replace(cfg, geometry=geometry, init=init)
-
-
-def _apply_quasilinear_overrides(cfg, args: argparse.Namespace):
-    """Apply CLI quasilinear diagnostic overrides."""
-
-    ql = cfg.quasilinear
-    updates = {}
-    if getattr(args, "quasilinear", False):
-        updates["enabled"] = True
-    mapping = {
-        "ql_mode": "mode",
-        "ql_saturation_rule": "saturation_rule",
-        "ql_csat": "csat",
-        "ql_normalization": "amplitude_normalization",
-        "ql_output": "output_path",
-    }
-    for arg_name, field_name in mapping.items():
-        value = getattr(args, arg_name, None)
-        if value is not None:
-            updates[field_name] = value
-    if not updates:
-        return cfg
-    return replace(cfg, quasilinear=replace(ql, **updates))
+def _runtime_command_deps() -> RuntimeCommandDeps:
+    return build_runtime_command_deps(sys.modules[__name__])
 
 
 def _cmd_run_runtime_linear(args: argparse.Namespace) -> int:
-    cfg, data = load_runtime_from_toml(args.config)
-    cfg = _apply_runtime_path_overrides(cfg, args)
-    cfg = _apply_quasilinear_overrides(cfg, args)
-    run_cfg = data.get("run", {})
-    fit_cfg = {k: v for k, v in data.get("fit", {}).items() if k in _RUNTIME_FIT_KEYS}
-
-    ky = float(args.ky if args.ky is not None else run_cfg.get("ky", 0.3))
-    Nl = int(args.Nl if args.Nl is not None else run_cfg.get("Nl", 24))
-    Nm = int(args.Nm if args.Nm is not None else run_cfg.get("Nm", 12))
-    solver = str(args.solver if args.solver is not None else run_cfg.get("solver", "auto"))
-    fit_signal = str(args.fit_signal if args.fit_signal is not None else run_cfg.get("fit_signal", "auto"))
-    method = args.method if args.method is not None else run_cfg.get("method", None)
-    dt = args.dt if args.dt is not None else run_cfg.get("dt", None)
-    steps = args.steps if args.steps is not None else run_cfg.get("steps", None)
-    sample_stride = (
-        int(args.sample_stride)
-        if args.sample_stride is not None
-        else run_cfg.get("sample_stride", cfg.time.sample_stride)
-    )
-    dt_use = float(dt if dt is not None else cfg.time.dt)
-    steps_use = int(steps) if steps is not None else int(round(float(cfg.time.t_max) / dt_use))
-    method_use = str(method if method is not None else cfg.time.method)
-    show_progress = _should_show_progress(args, bool(cfg.time.progress_bar))
-
-    _print_linear_run_header(
-        label="runtime linear run",
-        config_path=str(args.config),
-        ky=ky,
-        Nl=Nl,
-        Nm=Nm,
-        solver=solver,
-        method=method_use,
-        dt=dt_use,
-        steps=steps_use,
-        grid_shape=(int(cfg.grid.Nx), int(cfg.grid.Ny), int(cfg.grid.Nz)),
-        show_progress=show_progress,
-        extra=(
-            f"model={cfg.physics.reduced_model} electrostatic={cfg.physics.electrostatic} "
-            f"electromagnetic={cfg.physics.electromagnetic} fit_signal={fit_signal}"
-        ),
-    )
-
-    res = run_runtime_linear(
-        cfg,
-        ky_target=ky,
-        Nl=Nl,
-        Nm=Nm,
-        solver=solver,
-        method=method,
-        dt=dt,
-        steps=steps,
-        sample_stride=sample_stride,
-        fit_signal=fit_signal,
-        show_progress=show_progress,
-        status_callback=_status_printer("runtime"),
-        **fit_cfg,
-    )
-    print(f"ky={res.ky:.4f} gamma={res.gamma:.6f} omega={res.omega:.6f}")
-    out_path = _runtime_output_path(args, cfg)
-    if out_path is not None:
-        paths = write_runtime_linear_artifacts(out_path, res)
-        print(f"saved {paths['summary']}")
-        if "timeseries" in paths:
-            print(f"saved {paths['timeseries']}")
-        if "eigenfunction" in paths:
-            print(f"saved {paths['eigenfunction']}")
-        if "state" in paths:
-            print(f"saved {paths['state']}")
-        if "quasilinear_summary" in paths:
-            print(f"saved {paths['quasilinear_summary']}")
-        if "quasilinear_species" in paths:
-            print(f"saved {paths['quasilinear_species']}")
-    ql_output = getattr(args, "ql_output", None) or cfg.quasilinear.output_path
-    if ql_output is not None and res.quasilinear is not None:
-        paths = write_quasilinear_artifacts(str(ql_output), res.quasilinear)
-        print(f"saved {paths['quasilinear_summary']}")
-        if "quasilinear_species" in paths:
-            print(f"saved {paths['quasilinear_species']}")
-    return 0
+    return run_runtime_linear_command(args, deps=_runtime_command_deps())
 
 
 def _cmd_scan_runtime_linear(args: argparse.Namespace) -> int:
-    cfg, data = load_runtime_from_toml(args.config)
-    cfg = _apply_quasilinear_overrides(cfg, args)
-    scan_cfg = data.get("scan", {})
-    fit_cfg = {k: v for k, v in data.get("fit", {}).items() if k in _RUNTIME_FIT_KEYS}
-
-    if args.ky_values is not None:
-        ky_values = np.asarray([float(x) for x in args.ky_values.split(",") if x.strip()], dtype=float)
-    else:
-        ky_raw = scan_cfg.get("ky", [])
-        ky_values = np.asarray(ky_raw, dtype=float)
-    if ky_values.size == 0:
-        raise ValueError("No ky values provided. Use --ky-values or [scan].ky in TOML.")
-
-    Nl = int(args.Nl if args.Nl is not None else scan_cfg.get("Nl", 24))
-    Nm = int(args.Nm if args.Nm is not None else scan_cfg.get("Nm", 12))
-    solver = str(args.solver if args.solver is not None else scan_cfg.get("solver", "auto"))
-    fit_signal = str(args.fit_signal if args.fit_signal is not None else scan_cfg.get("fit_signal", "auto"))
-    method = args.method if args.method is not None else scan_cfg.get("method", None)
-    dt = args.dt if args.dt is not None else scan_cfg.get("dt", None)
-    steps = args.steps if args.steps is not None else scan_cfg.get("steps", None)
-    sample_stride = (
-        int(args.sample_stride)
-        if args.sample_stride is not None
-        else scan_cfg.get("sample_stride", cfg.time.sample_stride)
-    )
-    batch_ky = bool(args.batch_ky)
-    workers = int(getattr(args, "workers", 1))
-    parallel_executor = str(getattr(args, "parallel_executor", "thread"))
-    show_progress = (
-        True
-        if getattr(args, "progress", False)
-        else False
-        if getattr(args, "no_progress", False)
-        else bool(cfg.time.progress_bar)
-    )
-
-    ky_sequence = cast(list[float], ky_values.tolist())
-    scan = run_runtime_scan(
-        cfg,
-        ky_sequence,
-        Nl=Nl,
-        Nm=Nm,
-        solver=solver,
-        method=method,
-        dt=dt,
-        steps=steps,
-        sample_stride=sample_stride,
-        batch_ky=batch_ky,
-        fit_signal=fit_signal,
-        show_progress=show_progress,
-        workers=workers,
-        parallel_executor=parallel_executor,
-        **fit_cfg,
-    )
-    for ky, g, w in zip(scan.ky, scan.gamma, scan.omega):
-        print(f"ky={ky:.4f} gamma={g:.6f} omega={w:.6f}")
-    out_path = _runtime_output_path(args, cfg) or cfg.quasilinear.output_path
-    if out_path is not None:
-        paths = write_runtime_linear_scan_artifacts(out_path, scan)
-        print(f"saved {paths['summary']}")
-        print(f"saved {paths['scan']}")
-        if "quasilinear_spectrum" in paths:
-            print(f"saved {paths['quasilinear_spectrum']}")
-    return 0
+    return scan_runtime_linear_command(args, deps=_runtime_command_deps())
 
 
 def _cmd_run_runtime_nonlinear(args: argparse.Namespace) -> int:
-    cfg, data = load_runtime_from_toml(args.config)
-    cfg = _apply_runtime_path_overrides(cfg, args)
-    run_cfg = data.get("run", {})
-
-    ky = float(args.ky if args.ky is not None else run_cfg.get("ky", 0.3))
-    Nl = int(args.Nl if args.Nl is not None else run_cfg.get("Nl", 24))
-    Nm = int(args.Nm if args.Nm is not None else run_cfg.get("Nm", 12))
-    dt = float(args.dt if args.dt is not None else run_cfg.get("dt", cfg.time.dt))
-    if args.steps is not None:
-        steps: int | None = int(args.steps)
-    elif run_cfg.get("steps", None) is not None:
-        steps = int(run_cfg["steps"])
-    elif bool(cfg.time.fixed_dt):
-        steps = int(round(cfg.time.t_max / cfg.time.dt))
-    else:
-        steps = None
-    method = str(args.method if args.method is not None else run_cfg.get("method", cfg.time.method))
-    sample_stride = int(
-        args.sample_stride
-        if args.sample_stride is not None
-        else run_cfg.get("sample_stride", cfg.time.sample_stride)
-    )
-    diagnostics_stride = (
-        None
-        if args.diagnostics_stride is None
-        else int(args.diagnostics_stride)
-    )
-    if args.no_diagnostics:
-        diagnostics = False
-    elif args.diagnostics:
-        diagnostics = True
-    else:
-        diagnostics = run_cfg.get("diagnostics", cfg.time.diagnostics)
-    laguerre_mode = args.laguerre_mode if args.laguerre_mode is not None else run_cfg.get(
-        "laguerre_mode"
-    )
-    show_progress = _should_show_progress(args, bool(cfg.time.progress_bar))
-
-    print("starting runtime nonlinear run")
-    print(
-        f"config={args.config} ky={ky:.4f} Nl={Nl} Nm={Nm} method={method} dt={dt:.6g} "
-        f"steps={'auto' if steps is None else steps}"
-    )
-    print(
-        f"grid=Nx{int(cfg.grid.Nx)} Ny{int(cfg.grid.Ny)} Nz{int(cfg.grid.Nz)} "
-        f"diagnostics={'on' if diagnostics else 'off'} progress={'on' if show_progress else 'off'}"
-    )
-
-    out_path = _runtime_output_path(args, cfg)
-
-    result, paths = run_runtime_nonlinear_with_artifacts(
-        cfg,
-        out=out_path,
-        ky_target=ky,
-        Nl=Nl,
-        Nm=Nm,
-        dt=dt,
-        steps=steps,
-        method=method,
-        sample_stride=sample_stride,
-        diagnostics_stride=diagnostics_stride,
-        laguerre_mode=laguerre_mode,
-        diagnostics=diagnostics,
-        show_progress=show_progress,
-        status_callback=_status_printer("runtime"),
-    )
-    diag = result.diagnostics
-    if diag is None:
-        print("nonlinear run completed")
-        return 0
-    t_last = float(np.asarray(diag.t)[-1]) if np.asarray(diag.t).size else 0.0
-
-    print(
-        "nonlinear: "
-        f"t={t_last:.6g} "
-        f"ky_sel={result.ky_selected:.6g} "
-        f"kx_sel={result.kx_selected:.6g} "
-        f"dt_mean={float(diag.dt_mean):.6g} "
-        f"Wg={float(diag.Wg_t[-1]):.6g} "
-        f"Wphi={float(diag.Wphi_t[-1]):.6g} "
-        f"Wapar={float(diag.Wapar_t[-1]):.6g}"
-    )
-    if out_path is not None:
-        for key in ("summary", "diagnostics", "state", "out", "big", "restart"):
-            if key in paths:
-                print(f"saved {paths[key]}")
-    return 0
+    return run_runtime_nonlinear_command(args, deps=_runtime_command_deps())
 
 
 if __name__ == "__main__":  # pragma: no cover

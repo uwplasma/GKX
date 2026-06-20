@@ -2,29 +2,24 @@
 
 from __future__ import annotations
 
-import numpy as np
-
-import jax
 import jax.numpy as jnp
 
+from spectraxgk.terms.linear_dissipation import (
+    _hermite_mode_drive,
+    _hypercollision_kz_source as _hypercollision_kz_source,
+    _is_static_zero,
+    _zeros_like_result,
+    collisions_contribution as collisions_contribution,
+    end_damping_contribution as end_damping_contribution,
+    hypercollisions_contribution as hypercollisions_contribution,
+    hyperdiffusion_contribution as hyperdiffusion_contribution,
+)
 from spectraxgk.terms.operators import (
-    abs_z_linked_fft,
     grad_z_linked_fft,
     grad_z_periodic,
     shift_axis,
     streaming_term,
 )
-
-
-def _is_static_zero(value: jnp.ndarray, dtype: jnp.dtype | None = None) -> bool:
-    arr = jnp.asarray(value, dtype=dtype)
-    if isinstance(arr, jax.core.Tracer):
-        return False
-    return bool(np.all(np.asarray(arr) == 0.0))
-
-
-def _zeros_like_result(x: jnp.ndarray, *values: jnp.ndarray) -> jnp.ndarray:
-    return jnp.zeros_like(x, dtype=jnp.result_type(x, *values))
 
 
 def streaming_contribution(
@@ -53,17 +48,106 @@ def streaming_contribution(
     if _is_static_zero(weight, jnp.real(H).dtype):
         return _zeros_like_result(H, weight)
     vth_s = vth if vth.ndim == 0 else vth[:, None, None, None, None, None]
-    return -weight * kpar_scale * streaming_term(
-        H,
-        kz,
-        vth_s,
-        sqrt_p,
-        sqrt_m,
+    return (
+        -weight
+        * kpar_scale
+        * streaming_term(
+            H,
+            kz,
+            vth_s,
+            sqrt_p,
+            sqrt_m,
+            dz=dz,
+            kx_link_plus=kx_link_plus,
+            kx_link_minus=kx_link_minus,
+            kx_mask_plus=kx_mask_plus,
+            kx_mask_minus=kx_mask_minus,
+            linked_indices=linked_indices,
+            linked_kz=linked_kz,
+            linked_inverse_permutation=linked_inverse_permutation,
+            linked_full_cover=linked_full_cover,
+            linked_gather_map=linked_gather_map,
+            linked_gather_mask=linked_gather_mask,
+            linked_use_gather=linked_use_gather,
+            use_twist_shift=use_twist_shift,
+        )
+    )
+
+
+def _streaming_ladder_rhs(
+    G: jnp.ndarray,
+    *,
+    vth: jnp.ndarray,
+    sqrt_p: jnp.ndarray,
+    sqrt_m: jnp.ndarray,
+) -> jnp.ndarray:
+    axis_m = -4
+    G_p1 = shift_axis(G, 1, axis=axis_m)
+    G_m1 = shift_axis(G, -1, axis=axis_m)
+    vth_s = vth[:, None, None, None, None, None]
+    return -vth_s * (sqrt_p * G_p1 + sqrt_m * G_m1)
+
+
+def _field_inverse_temperature(
+    tz: jnp.ndarray,
+) -> jnp.ndarray:
+    tz_arr = tz[:, None, None, None, None, None]
+    zt = jnp.where(tz_arr == 0.0, 0.0, 1.0 / tz_arr)
+    return zt[:, 0, 0, 0, 0, 0][:, None, None, None, None]
+
+
+def _streaming_field_drive(
+    template: jnp.ndarray,
+    *,
+    phi: jnp.ndarray,
+    apar: jnp.ndarray | None,
+    bpar: jnp.ndarray | None,
+    Jl: jnp.ndarray,
+    JlB: jnp.ndarray,
+    tz: jnp.ndarray,
+    vth: jnp.ndarray,
+) -> jnp.ndarray:
+    zt5 = _field_inverse_temperature(tz)
+    vth5 = vth[:, None, None, None, None]
+    phi_s = phi[None, None, ...]
+    Nm = template.shape[2]
+    field_rhs = jnp.zeros_like(template)
+    if apar is not None:
+        apar_s = apar[None, None, ...]
+        drive_m0 = zt5 * (vth5 * vth5) * Jl * apar_s
+        field_rhs = field_rhs + _hermite_mode_drive(field_rhs, 0, drive_m0)
+    if Nm > 1:
+        drive_m1 = -zt5 * vth5 * Jl * phi_s
+        if bpar is not None:
+            drive_m1 = drive_m1 - vth5 * JlB * bpar[None, None, ...]
+        field_rhs = field_rhs + _hermite_mode_drive(field_rhs, 1, drive_m1)
+    if Nm > 2 and apar is not None:
+        drive_m2 = jnp.sqrt(2.0) * zt5 * (vth5 * vth5) * Jl * apar_s
+        field_rhs = field_rhs + _hermite_mode_drive(field_rhs, 2, drive_m2)
+    return field_rhs
+
+
+def _streaming_parallel_derivative(
+    rhs: jnp.ndarray,
+    *,
+    kz: jnp.ndarray,
+    dz: jnp.ndarray,
+    use_twist_shift: bool,
+    linked_indices: tuple[jnp.ndarray, ...] | None,
+    linked_kz: tuple[jnp.ndarray, ...] | None,
+    linked_inverse_permutation: jnp.ndarray | None,
+    linked_full_cover: bool,
+    linked_gather_map: jnp.ndarray | None,
+    linked_gather_mask: jnp.ndarray | None,
+    linked_use_gather: bool,
+) -> jnp.ndarray:
+    if not use_twist_shift:
+        return grad_z_periodic(rhs, kz=kz)
+    if linked_indices is None or linked_kz is None:
+        raise ValueError("linked_indices and linked_kz must be provided for linked streaming")
+    return grad_z_linked_fft(
+        rhs,
         dz=dz,
-        kx_link_plus=kx_link_plus,
-        kx_link_minus=kx_link_minus,
-        kx_mask_plus=kx_mask_plus,
-        kx_mask_minus=kx_mask_minus,
         linked_indices=linked_indices,
         linked_kz=linked_kz,
         linked_inverse_permutation=linked_inverse_permutation,
@@ -71,11 +155,10 @@ def streaming_contribution(
         linked_gather_map=linked_gather_map,
         linked_gather_mask=linked_gather_mask,
         linked_use_gather=linked_use_gather,
-        use_twist_shift=use_twist_shift,
     )
 
 
-def streaming_contribution_gx(
+def linked_streaming_contribution(
     G: jnp.ndarray,
     *,
     phi: jnp.ndarray,
@@ -100,61 +183,36 @@ def streaming_contribution_gx(
     linked_gather_mask: jnp.ndarray | None = None,
     linked_use_gather: bool = False,
 ) -> jnp.ndarray:
-    """GX-style streaming: ladder on g, add field terms, then apply parallel derivative."""
+    """Hermite-Laguerre streaming: ladder on g, add field terms, then apply parallel derivative."""
 
     if _is_static_zero(weight, jnp.real(G).dtype):
         return _zeros_like_result(G, weight)
 
-    axis_m = -4
-    G_p1 = shift_axis(G, 1, axis=axis_m)
-    G_m1 = shift_axis(G, -1, axis=axis_m)
-    vth_s = vth[:, None, None, None, None, None]
-    rhs = -vth_s * (sqrt_p * G_p1 + sqrt_m * G_m1)
-
-    tz_arr = tz[:, None, None, None, None, None]
-    zt = jnp.where(tz_arr == 0.0, 0.0, 1.0 / tz_arr)
-    zt5 = zt[:, 0, 0, 0, 0, 0][:, None, None, None, None]
-    vth5 = vth[:, None, None, None, None]
-    phi_s = phi[None, None, ...]
-
-    # field terms (pre-derivative); use contiguous m-axis masks instead of scatter updates.
-    Nm = rhs.shape[2]
-    m_idx = jnp.arange(Nm, dtype=jnp.int32)[None, None, :, None, None, None]
-    field_rhs = jnp.zeros_like(rhs)
-    if apar is not None:
-        apar_s = apar[None, None, ...]
-        drive_m0 = zt5 * (vth5 * vth5) * Jl * apar_s
-        field_rhs = field_rhs + (m_idx == 0).astype(field_rhs.dtype) * drive_m0[:, :, None, ...]
-    if Nm > 1:
-        drive_m1 = -zt5 * vth5 * Jl * phi_s
-        if bpar is not None:
-            drive_m1 = drive_m1 - vth5 * JlB * bpar[None, None, ...]
-        field_rhs = field_rhs + (m_idx == 1).astype(field_rhs.dtype) * drive_m1[:, :, None, ...]
-    if Nm > 2 and apar is not None:
-        drive_m2 = jnp.sqrt(2.0) * zt5 * (vth5 * vth5) * Jl * apar_s
-        field_rhs = field_rhs + (m_idx == 2).astype(field_rhs.dtype) * drive_m2[:, :, None, ...]
-    rhs = rhs + field_rhs
-
-    rhs = kpar_scale * rhs
-
-    if use_twist_shift:
-        if linked_indices is None or linked_kz is None:
-            raise ValueError("linked_indices and linked_kz must be provided for linked streaming")
-        dG = grad_z_linked_fft(
-            rhs,
-            dz=dz,
-            linked_indices=linked_indices,
-            linked_kz=linked_kz,
-            linked_inverse_permutation=linked_inverse_permutation,
-            linked_full_cover=linked_full_cover,
-            linked_gather_map=linked_gather_map,
-            linked_gather_mask=linked_gather_mask,
-            linked_use_gather=linked_use_gather,
-        )
-    else:
-        dG = grad_z_periodic(rhs, kz=kz)
-
-    return weight * dG
+    ladder_rhs = _streaming_ladder_rhs(G, vth=vth, sqrt_p=sqrt_p, sqrt_m=sqrt_m)
+    field_rhs = _streaming_field_drive(
+        ladder_rhs,
+        phi=phi,
+        apar=apar,
+        bpar=bpar,
+        Jl=Jl,
+        JlB=JlB,
+        tz=tz,
+        vth=vth,
+    )
+    rhs = kpar_scale * (ladder_rhs + field_rhs)
+    return weight * _streaming_parallel_derivative(
+        rhs,
+        kz=kz,
+        dz=dz,
+        use_twist_shift=use_twist_shift,
+        linked_indices=linked_indices,
+        linked_kz=linked_kz,
+        linked_inverse_permutation=linked_inverse_permutation,
+        linked_full_cover=linked_full_cover,
+        linked_gather_map=linked_gather_map,
+        linked_gather_mask=linked_gather_mask,
+        linked_use_gather=linked_use_gather,
+    )
 
 
 def mirror_contribution(
@@ -216,6 +274,117 @@ def curvature_gradb_contribution(
     return -weight_curv * icv * curv_term - weight_gradb * igb * gradb_term
 
 
+def _laguerre_gradient_profile(
+    J: jnp.ndarray,
+    *,
+    l4: jnp.ndarray,
+    tprim_s: jnp.ndarray,
+    fprim_s: jnp.ndarray,
+    thermal_shift: float,
+) -> jnp.ndarray:
+    J_m1 = shift_axis(J, -1, axis=1)
+    J_p1 = shift_axis(J, 1, axis=1)
+    return (
+        J_m1 * (l4 * tprim_s)
+        + J * (fprim_s + (2.0 * l4 + thermal_shift) * tprim_s)
+        + J_p1 * ((l4 + 1.0) * tprim_s)
+    )
+
+
+def _diamagnetic_scalar_factors(
+    *,
+    tprim: jnp.ndarray,
+    fprim: jnp.ndarray,
+    tz: jnp.ndarray,
+    omega_star_scale: jnp.ndarray,
+    ky: jnp.ndarray,
+    imag: jnp.ndarray,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    omega_star = imag * omega_star_scale * ky
+    tprim_s = tprim[:, None, None, None, None]
+    fprim_s = fprim[:, None, None, None, None]
+    tz_s = tz[:, None, None, None, None]
+    omega_star_s = omega_star[None, None, :, None, None]
+    return tprim_s, fprim_s, omega_star_s, omega_star_s * tz_s
+
+
+def _diamagnetic_m0_drive(
+    *,
+    phi: jnp.ndarray,
+    bpar: jnp.ndarray | None,
+    Jl: jnp.ndarray,
+    JlB: jnp.ndarray,
+    l4: jnp.ndarray,
+    tprim_s: jnp.ndarray,
+    fprim_s: jnp.ndarray,
+    omega_star_s: jnp.ndarray,
+    omega_star_bpar: jnp.ndarray,
+) -> jnp.ndarray:
+    drive_m0 = (
+        omega_star_s
+        * phi
+        * _laguerre_gradient_profile(
+            Jl, l4=l4, tprim_s=tprim_s, fprim_s=fprim_s, thermal_shift=0.0
+        )
+    )
+    if bpar is None:
+        return drive_m0
+    return drive_m0 + omega_star_bpar * bpar * _laguerre_gradient_profile(
+        JlB, l4=l4, tprim_s=tprim_s, fprim_s=fprim_s, thermal_shift=0.0
+    )
+
+
+def _diamagnetic_m2_drive(
+    *,
+    phi: jnp.ndarray,
+    bpar: jnp.ndarray | None,
+    Jl: jnp.ndarray,
+    JlB: jnp.ndarray,
+    tprim_s: jnp.ndarray,
+    omega_star_s: jnp.ndarray,
+    omega_star_bpar: jnp.ndarray,
+) -> jnp.ndarray:
+    thermal_factor = tprim_s / jnp.sqrt(2.0)
+    drive_m2 = omega_star_s * phi * Jl * thermal_factor
+    if bpar is None:
+        return drive_m2
+    return drive_m2 + omega_star_bpar * bpar * JlB * thermal_factor
+
+
+def _diamagnetic_apar_profile_drive(
+    *,
+    apar: jnp.ndarray,
+    Jl: jnp.ndarray,
+    l4: jnp.ndarray,
+    tprim_s: jnp.ndarray,
+    fprim_s: jnp.ndarray,
+    vth: jnp.ndarray,
+    omega_star_s: jnp.ndarray,
+) -> jnp.ndarray:
+    vth_s = vth[:, None, None, None, None]
+    return (
+        -vth_s
+        * omega_star_s
+        * apar
+        * _laguerre_gradient_profile(
+            Jl, l4=l4, tprim_s=tprim_s, fprim_s=fprim_s, thermal_shift=1.0
+        )
+    )
+
+
+def _diamagnetic_apar_temperature_drive(
+    *,
+    apar: jnp.ndarray,
+    Jl: jnp.ndarray,
+    tprim_s: jnp.ndarray,
+    vth: jnp.ndarray,
+    omega_star_s: jnp.ndarray,
+) -> jnp.ndarray:
+    vth_s = vth[:, None, None, None, None]
+    thermal_factor = tprim_s * jnp.sqrt(3.0 / 2.0)
+    return -vth_s * omega_star_s * apar * Jl * thermal_factor
+
+
 def diamagnetic_contribution(
     dG: jnp.ndarray,
     *,
@@ -235,315 +404,55 @@ def diamagnetic_contribution(
     weight: jnp.ndarray,
 ) -> jnp.ndarray:
     Nm = dG.shape[2]
-    m_idx = jnp.arange(Nm, dtype=jnp.int32)[None, None, :, None, None, None]
-    Jl_m1 = shift_axis(Jl, -1, axis=1)
-    Jl_p1 = shift_axis(Jl, 1, axis=1)
-    JlB_m1 = shift_axis(JlB, -1, axis=1)
-    JlB_p1 = shift_axis(JlB, 1, axis=1)
-    omega_star = imag * omega_star_scale * ky
-    tprim_s = tprim[:, None, None, None, None]
-    fprim_s = fprim[:, None, None, None, None]
-    tz_s = tz[:, None, None, None, None]
-    omega_star_s = omega_star[None, None, :, None, None]
-    omega_star_bpar = omega_star_s * tz_s
-    drive_m0 = omega_star_s * phi * (
-        Jl_m1 * (l4 * tprim_s)
-        + Jl * (fprim_s + 2.0 * l4 * tprim_s)
-        + Jl_p1 * ((l4 + 1.0) * tprim_s)
+    tprim_s, fprim_s, omega_star_s, omega_star_bpar = _diamagnetic_scalar_factors(
+        tprim=tprim,
+        fprim=fprim,
+        tz=tz,
+        omega_star_scale=omega_star_scale,
+        ky=ky,
+        imag=imag,
     )
-    if bpar is not None:
-        drive_m0 = drive_m0 + omega_star_bpar * bpar * (
-            JlB_m1 * (l4 * tprim_s)
-            + JlB * (fprim_s + 2.0 * l4 * tprim_s)
-            + JlB_p1 * ((l4 + 1.0) * tprim_s)
-        )
-    drive = (m_idx == 0).astype(dG.dtype) * drive_m0[:, :, None, ...]
+    drive_m0 = _diamagnetic_m0_drive(
+        phi=phi,
+        bpar=bpar,
+        Jl=Jl,
+        JlB=JlB,
+        l4=l4,
+        tprim_s=tprim_s,
+        fprim_s=fprim_s,
+        omega_star_s=omega_star_s,
+        omega_star_bpar=omega_star_bpar,
+    )
+    drive = _hermite_mode_drive(dG, 0, drive_m0)
     if Nm > 2:
-        drive_m2 = omega_star_s * phi * Jl * (tprim_s / jnp.sqrt(2.0))
-        if bpar is not None:
-            drive_m2 = drive_m2 + omega_star_bpar * bpar * JlB * (tprim_s / jnp.sqrt(2.0))
-        drive = drive + (m_idx == 2).astype(dG.dtype) * drive_m2[:, :, None, ...]
+        drive_m2 = _diamagnetic_m2_drive(
+            phi=phi,
+            bpar=bpar,
+            Jl=Jl,
+            JlB=JlB,
+            tprim_s=tprim_s,
+            omega_star_s=omega_star_s,
+            omega_star_bpar=omega_star_bpar,
+        )
+        drive = drive + _hermite_mode_drive(dG, 2, drive_m2)
     if Nm > 1 and apar is not None:
-        vth_s = vth[:, None, None, None, None]
-        apar_drive = -vth_s * omega_star_s * apar * (
-            Jl_m1 * (l4 * tprim_s)
-            + Jl * (fprim_s + (2.0 * l4 + 1.0) * tprim_s)
-            + Jl_p1 * ((l4 + 1.0) * tprim_s)
+        apar_drive = _diamagnetic_apar_profile_drive(
+            apar=apar,
+            Jl=Jl,
+            l4=l4,
+            tprim_s=tprim_s,
+            fprim_s=fprim_s,
+            vth=vth,
+            omega_star_s=omega_star_s,
         )
-        drive = drive + (m_idx == 1).astype(dG.dtype) * apar_drive[:, :, None, ...]
+        drive = drive + _hermite_mode_drive(dG, 1, apar_drive)
     if Nm > 3 and apar is not None:
-        vth_s = vth[:, None, None, None, None]
-        drive_m3 = -vth_s * omega_star_s * apar * Jl * (tprim_s * jnp.sqrt(3.0 / 2.0))
-        drive = drive + (m_idx == 3).astype(dG.dtype) * drive_m3[:, :, None, ...]
+        drive_m3 = _diamagnetic_apar_temperature_drive(
+            apar=apar,
+            Jl=Jl,
+            tprim_s=tprim_s,
+            vth=vth,
+            omega_star_s=omega_star_s,
+        )
+        drive = drive + _hermite_mode_drive(dG, 3, drive_m3)
     return dG + weight * drive
-
-
-def collisions_contribution(
-    H: jnp.ndarray,
-    *,
-    G: jnp.ndarray | None = None,
-    Jl: jnp.ndarray | None = None,
-    JlB: jnp.ndarray | None = None,
-    b: jnp.ndarray | None = None,
-    nu: jnp.ndarray,
-    collision_lam: jnp.ndarray | None = None,
-    lb_lam: jnp.ndarray | None = None,
-    weight: jnp.ndarray,
-) -> jnp.ndarray:
-    real_dtype = jnp.real(H).dtype
-
-    def _species_nu(ns: int) -> jnp.ndarray:
-        nu_arr = jnp.asarray(nu, dtype=real_dtype).reshape(-1)
-        if nu_arr.size == 1:
-            return jnp.broadcast_to(nu_arr, (ns,))
-        if int(nu_arr.size) != int(ns):
-            raise ValueError(f"nu must have length {ns} (got {nu_arr.size})")
-        return nu_arr
-
-    collision_base = None
-    if _is_static_zero(weight, real_dtype):
-        return jnp.zeros_like(H)
-    if collision_lam is not None:
-        collision_arr = jnp.asarray(collision_lam, dtype=real_dtype)
-        if collision_arr.size != 0:
-            collision_base = collision_arr
-    if collision_base is None and _is_static_zero(nu, real_dtype):
-        return jnp.zeros_like(H)
-    if collision_base is None:
-        if lb_lam is None:
-            collision_base = jnp.zeros_like(H, dtype=real_dtype)
-        else:
-            lb_arr = jnp.asarray(lb_lam, dtype=real_dtype)
-            if lb_arr.ndim == 2:
-                if H.ndim == 6:
-                    ns = int(H.shape[0])
-                    nu_s = _species_nu(ns)[:, None, None, None, None, None]
-                    collision_base = nu_s * lb_arr[None, :, :, None, None, None]
-                    if b is not None:
-                        b_s = jnp.asarray(b, dtype=real_dtype)
-                        if b_s.ndim == 3:
-                            b_s = jnp.broadcast_to(b_s, (ns,) + b_s.shape)
-                        collision_base = collision_base + nu_s * b_s[:, None, None, ...]
-                else:
-                    nu0 = _species_nu(1)[0]
-                    collision_base = nu0 * lb_arr[:, :, None, None, None]
-                    if b is not None:
-                        b_s = jnp.asarray(b, dtype=real_dtype)
-                        if b_s.ndim == 4:
-                            b_s = b_s[0]
-                        collision_base = collision_base + nu0 * b_s[None, None, ...]
-            elif lb_arr.ndim == 6:
-                ns = int(lb_arr.shape[0])
-                collision_base = _species_nu(ns)[:, None, None, None, None, None] * lb_arr
-                if H.ndim == 5:
-                    collision_base = collision_base[0]
-            else:
-                collision_base = jnp.asarray(nu, dtype=real_dtype) * lb_arr
-
-    base = -(H * collision_base) * weight
-    if G is None or Jl is None or JlB is None or b is None:
-        return base
-
-    nu_s = nu[:, None, None, None, None]
-    b_s = jnp.asarray(b, dtype=jnp.real(H).dtype)
-    sqrt_b = jnp.sqrt(jnp.maximum(b_s, 0.0))
-    H_m0 = H[:, :, 0, ...]
-    Nm = H.shape[2]
-    if Nm > 1:
-        H_m1 = H[:, :, 1, ...]
-    else:
-        H_m1 = jnp.zeros_like(H_m0)
-    if Nm > 2:
-        G_m2 = G[:, :, 2, ...]
-    else:
-        G_m2 = jnp.zeros_like(H_m0)
-
-    Jl_m1 = shift_axis(Jl, -1, axis=1)
-    Jl_p1 = shift_axis(Jl, 1, axis=1)
-    coeff_t = jnp.arange(Jl.shape[1], dtype=jnp.real(H).dtype)[None, :, None, None, None]
-    coeff_t = (
-        coeff_t * Jl_m1
-        + 2.0 * coeff_t * Jl
-        + (coeff_t + 1.0) * Jl_p1
-    )
-
-    uperp_bar = sqrt_b * jnp.sum(JlB * H_m0, axis=1)
-    upar_bar = jnp.sum(Jl * H_m1, axis=1)
-    if int(Jl.shape[1]) == 1:
-        t_bar = jnp.sqrt(2.0) * jnp.sum(Jl * G_m2, axis=1)
-    else:
-        t_bar = (
-            (jnp.sqrt(2.0) / 3.0) * jnp.sum(Jl * G_m2, axis=1)
-            + (2.0 / 3.0) * jnp.sum(coeff_t * H_m0, axis=1)
-        )
-
-    corr = jnp.zeros_like(H)
-    m_idx = jnp.arange(Nm, dtype=jnp.int32)[None, None, :, None, None, None]
-    corr_m0 = (
-        nu_s * sqrt_b[:, None, ...] * JlB * uperp_bar[:, None, ...]
-        + nu_s * 2.0 * coeff_t * t_bar[:, None, ...]
-    )
-    corr = corr + (m_idx == 0).astype(corr.dtype) * corr_m0[:, :, None, ...]
-    if Nm > 1:
-        corr_m1 = nu_s * Jl * upar_bar[:, None, ...]
-        corr = corr + (m_idx == 1).astype(corr.dtype) * corr_m1[:, :, None, ...]
-    if Nm > 2:
-        corr_m2 = nu_s * jnp.sqrt(2.0) * Jl * t_bar[:, None, ...]
-        corr = corr + (m_idx == 2).astype(corr.dtype) * corr_m2[:, :, None, ...]
-    return base + weight * corr
-
-
-def hypercollisions_contribution(
-    G: jnp.ndarray,
-    *,
-    vth: jnp.ndarray,
-    nu_hyper: jnp.ndarray,
-    nu_hyper_l: jnp.ndarray,
-    nu_hyper_m: jnp.ndarray,
-    nu_hyper_lm: jnp.ndarray,
-    hyper_ratio: jnp.ndarray,
-    ratio_l: jnp.ndarray,
-    ratio_m: jnp.ndarray,
-    ratio_lm: jnp.ndarray,
-    mask_const: jnp.ndarray,
-    mask_kz: jnp.ndarray,
-    m_pow: jnp.ndarray,
-    m_norm_kz_factor: jnp.ndarray,
-    kz: jnp.ndarray,
-    kpar_scale: jnp.ndarray,
-    hypercollisions_const: jnp.ndarray,
-    hypercollisions_kz: jnp.ndarray,
-    weight: jnp.ndarray,
-    linked_indices: tuple[jnp.ndarray, ...] | None = None,
-    linked_kz: tuple[jnp.ndarray, ...] | None = None,
-    linked_inverse_permutation: jnp.ndarray | None = None,
-    linked_full_cover: bool = False,
-    linked_gather_map: jnp.ndarray | None = None,
-    linked_gather_mask: jnp.ndarray | None = None,
-    linked_use_gather: bool = False,
-) -> jnp.ndarray:
-    real_dtype = jnp.real(G).dtype
-    if _is_static_zero(weight, real_dtype):
-        return _zeros_like_result(
-            G,
-            weight,
-            nu_hyper,
-            nu_hyper_l,
-            nu_hyper_m,
-            nu_hyper_lm,
-            hypercollisions_const,
-            hypercollisions_kz,
-        )
-
-    const_branch_zero = (
-        _is_static_zero(weight * hypercollisions_const * nu_hyper_l, real_dtype)
-        and _is_static_zero(weight * hypercollisions_const * nu_hyper_m, real_dtype)
-        and _is_static_zero(weight * hypercollisions_const * nu_hyper_lm, real_dtype)
-    )
-    isotropic_branch_zero = _is_static_zero(weight * nu_hyper, real_dtype)
-    kz_branch_zero = _is_static_zero(weight * hypercollisions_kz * nu_hyper_m, real_dtype)
-    if const_branch_zero and isotropic_branch_zero and kz_branch_zero:
-        return _zeros_like_result(
-            G,
-            weight,
-            nu_hyper,
-            nu_hyper_l,
-            nu_hyper_m,
-            nu_hyper_lm,
-            hypercollisions_const,
-            hypercollisions_kz,
-        )
-
-    l_norm = jnp.asarray(max(G.shape[1], 1), dtype=ratio_l.dtype)
-    m_norm = jnp.asarray(max(G.shape[2], 1), dtype=ratio_m.dtype)
-    scaled_nu_l = l_norm * nu_hyper_l
-    scaled_nu_m = m_norm * nu_hyper_m
-    vth_s = vth[:, None, None, None, None, None]
-    const_term = -(
-        vth_s * (scaled_nu_l * ratio_l + scaled_nu_m * ratio_m) + nu_hyper_lm * ratio_lm
-    )
-    dG = weight * hypercollisions_const * jnp.where(mask_const, const_term, 0.0) * G
-    dG = dG - weight * nu_hyper * hyper_ratio * G
-
-    kz_weight = jnp.asarray(weight) * jnp.asarray(hypercollisions_kz)
-    if not isinstance(kz_weight, jax.core.Tracer) and np.all(np.asarray(kz_weight) == 0.0):
-        return dG
-
-    nu_hyp_m = (
-        nu_hyper_m
-        * m_norm_kz_factor
-        * 2.3
-        * vth_s
-        * jnp.abs(kpar_scale)
-    )
-    kz_source = kz_weight * jnp.where(mask_kz, -nu_hyp_m * m_pow, 0.0) * G
-    if linked_indices and linked_kz:
-        kz_term = abs_z_linked_fft(
-            kz_source,
-            linked_indices=linked_indices,
-            linked_kz=linked_kz,
-            linked_inverse_permutation=linked_inverse_permutation,
-            linked_full_cover=linked_full_cover,
-            linked_gather_map=linked_gather_map,
-            linked_gather_mask=linked_gather_mask,
-            linked_use_gather=linked_use_gather,
-        )
-    else:
-        abs_kz = jnp.abs(kz)[None, None, None, None, None, :]
-        kz_term = abs_kz * kz_source
-    dG = dG + kz_term
-    return dG
-
-
-def hyperdiffusion_contribution(
-    G: jnp.ndarray,
-    *,
-    kx: jnp.ndarray,
-    ky: jnp.ndarray,
-    dealias_mask: jnp.ndarray,
-    D_hyper: jnp.ndarray,
-    p_hyper_kperp: jnp.ndarray,
-    weight: jnp.ndarray,
-) -> jnp.ndarray:
-    """Hyperdiffusion in k_perp following GX conventions."""
-
-    real_dtype = jnp.real(G).dtype
-    if _is_static_zero(weight, real_dtype) or _is_static_zero(D_hyper, real_dtype):
-        return _zeros_like_result(G, weight, D_hyper)
-
-    kx2 = kx * kx
-    ky2 = ky * ky
-    kperp2 = ky2[:, None] + kx2[None, :]
-
-    nx = kx.size
-    ny = ky.size
-    kx_idx = max((nx - 1) // 3, 0)
-    ky_idx = max((ny - 1) // 3, 0)
-    kperp2_max = kx2[kx_idx] + ky2[ky_idx]
-    kperp2_max = jnp.where(kperp2_max > 0.0, kperp2_max, 1.0)
-
-    Dfac = D_hyper * (kperp2 / kperp2_max) ** p_hyper_kperp
-    mask = dealias_mask.astype(Dfac.dtype)
-    Dfac = Dfac * mask
-    return -weight * Dfac[None, None, :, :, None] * G
-
-
-def end_damping_contribution(
-    H: jnp.ndarray,
-    *,
-    ky: jnp.ndarray,
-    damp_profile: jnp.ndarray,
-    linked_damp_profile: jnp.ndarray | None,
-    damp_amp: jnp.ndarray,
-    weight: jnp.ndarray,
-) -> jnp.ndarray:
-    real_dtype = jnp.real(H).dtype
-    if _is_static_zero(weight, real_dtype) or _is_static_zero(damp_amp, real_dtype):
-        return _zeros_like_result(H, weight, damp_amp)
-
-    if linked_damp_profile is not None and getattr(linked_damp_profile, "size", 0) != 0:
-        damp = weight * damp_amp * linked_damp_profile[None, None, None, ...]
-        return -(damp * H)
-    damp = weight * damp_amp * damp_profile[None, None, None, None, None, :]
-    ky_mask = (ky > 0.0).astype(damp.dtype)[None, None, None, :, None, None]
-    return -(ky_mask * damp * H)
