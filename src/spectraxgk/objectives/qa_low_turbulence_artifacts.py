@@ -242,6 +242,119 @@ def _fixed_trace_payload(
     }
 
 
+def _optimized_qa_designs(
+    config: QALowTurbulenceConfig,
+    *,
+    finite_difference_workers: int,
+) -> tuple[Any, Any]:
+    control = optimize_qa_low_turbulence(
+        includes_nonlinear_heat_flux=False,
+        config=config,
+        finite_difference_workers=finite_difference_workers,
+    )
+    transport = optimize_qa_low_turbulence(
+        includes_nonlinear_heat_flux=True,
+        config=config,
+        finite_difference_workers=finite_difference_workers,
+    )
+    return control, transport
+
+
+def _design_payload(result: dict[str, Any], config: QALowTurbulenceConfig) -> dict[str, Any]:
+    params = result["final_params"]
+    return {
+        "design_name": result["design_name"],
+        "final_params": params,
+        "final_observables": result["final_observables"],
+        "density_gradient_scan": _scan_density_gradient(params, config),
+        "fixed_gradient_trace": _fixed_trace_payload(params, config),
+        "surface": reduced_boundary_surface(params, config),
+        "lcfs_bmag": reduced_lcfs_bmag(params, config),
+    }
+
+
+def _ad_fd_gates_passed(results: Sequence[dict[str, Any]]) -> bool:
+    return all(
+        bool(result["scalar_gradient_gate"]["passed"])
+        and bool(result["residual_gradient_gate"]["passed"])
+        and bool(result["observable_gradient_gate"]["passed"])
+        for result in results
+    )
+
+
+def _long_window_gates_passed(design_payloads: Sequence[dict[str, Any]]) -> bool:
+    return all(
+        bool(design["fixed_gradient_trace"]["long_window_convergence"]["passed"])
+        for design in design_payloads
+    )
+
+
+def _qa_constraints_passed(
+    results: Sequence[dict[str, Any]],
+    config: QALowTurbulenceConfig,
+    obs_index: dict[str, int],
+) -> bool:
+    return all(
+        abs(result["final_observables"][obs_index["aspect"]] - config.target_aspect)
+        / config.target_aspect
+        < 2.5e-2
+        and result["final_observables"][obs_index["mean_iota"]]
+        >= config.iota_operating_floor - 2.0e-3
+        and result["final_observables"][obs_index["qa_residual"]] < 2.5e-2
+        for result in results
+    )
+
+
+def _comparison_metrics_payload(
+    *,
+    control_q: float,
+    transport_q: float,
+    constraints_passed: bool,
+    transport_passed: bool,
+    long_window_gates_passed: bool,
+    all_gates_passed: bool,
+    passed: bool,
+) -> dict[str, object]:
+    reduction = 1.0 - transport_q / max(control_q, 1.0e-14)
+    return {
+        "control_design_heat_flux_mean": control_q,
+        "transport_design_heat_flux_mean": transport_q,
+        "relative_heat_flux_reduction_at_fixed_gradients": float(reduction),
+        "constraints_passed": bool(constraints_passed),
+        "transport_reduction_gate_passed": transport_passed,
+        "long_window_gates_passed": bool(long_window_gates_passed),
+        "ad_fd_gates_passed": bool(all_gates_passed),
+        "passed": passed,
+        "reduced_differentiable_plumbing_passed": bool(all_gates_passed),
+        "full_vmec_nonlinear_differentiable_plumbing_passed": False,
+    }
+
+
+def _differentiable_plumbing_payload(results: Sequence[dict[str, Any]]) -> dict[str, object]:
+    all_gates_passed = _ad_fd_gates_passed(results)
+    return {
+        "stages": [
+            "reduced QA controls",
+            "geometry constraints and reduced LCFS visualization",
+            "linear ITG feature map",
+            "quasilinear mixing-length diagnostic",
+            "long-window differentiable nonlinear heat-flux envelope",
+            "weighted optimization residuals",
+            "scalar, residual, and observable AD-vs-FD gates",
+        ],
+        "all_scalar_objective_gates_passed": all(
+            bool(result["scalar_gradient_gate"]["passed"]) for result in results
+        ),
+        "all_residual_jacobian_gates_passed": all(
+            bool(result["residual_gradient_gate"]["passed"]) for result in results
+        ),
+        "all_observable_jacobian_gates_passed": all(
+            bool(result["observable_gradient_gate"]["passed"]) for result in results
+        ),
+        "passed": bool(all_gates_passed),
+    }
+
+
 def qa_low_turbulence_comparison_payload(
     config: QALowTurbulenceConfig | None = None,
     *,
@@ -250,14 +363,8 @@ def qa_low_turbulence_comparison_payload(
     """Build the full JSON-ready aspect-6 QA low-turbulence comparison."""
 
     cfg = config or QALowTurbulenceConfig()
-    control = optimize_qa_low_turbulence(
-        includes_nonlinear_heat_flux=False,
-        config=cfg,
-        finite_difference_workers=finite_difference_workers,
-    )
-    transport = optimize_qa_low_turbulence(
-        includes_nonlinear_heat_flux=True,
-        config=cfg,
+    control, transport = _optimized_qa_designs(
+        cfg,
         finite_difference_workers=finite_difference_workers,
     )
     results = [control.to_dict(), transport.to_dict()]
@@ -266,40 +373,10 @@ def qa_low_turbulence_comparison_payload(
     transport_q = float(
         transport.final_observables[obs_index["nonlinear_heat_flux_mean"]]
     )
-    reduction = 1.0 - transport_q / max(control_q, 1.0e-14)
-    design_payloads = []
-    for result in results:
-        params = result["final_params"]
-        design_payloads.append(
-            {
-                "design_name": result["design_name"],
-                "final_params": params,
-                "final_observables": result["final_observables"],
-                "density_gradient_scan": _scan_density_gradient(params, cfg),
-                "fixed_gradient_trace": _fixed_trace_payload(params, cfg),
-                "surface": reduced_boundary_surface(params, cfg),
-                "lcfs_bmag": reduced_lcfs_bmag(params, cfg),
-            }
-        )
-    all_gates_passed = all(
-        bool(result["scalar_gradient_gate"]["passed"])
-        and bool(result["residual_gradient_gate"]["passed"])
-        and bool(result["observable_gradient_gate"]["passed"])
-        for result in results
-    )
-    long_window_gates_passed = all(
-        bool(design["fixed_gradient_trace"]["long_window_convergence"]["passed"])
-        for design in design_payloads
-    )
-    constraints_passed = all(
-        abs(result["final_observables"][obs_index["aspect"]] - cfg.target_aspect)
-        / cfg.target_aspect
-        < 2.5e-2
-        and result["final_observables"][obs_index["mean_iota"]]
-        >= cfg.iota_operating_floor - 2.0e-3
-        and result["final_observables"][obs_index["qa_residual"]] < 2.5e-2
-        for result in results
-    )
+    design_payloads = [_design_payload(result, cfg) for result in results]
+    all_gates_passed = _ad_fd_gates_passed(results)
+    long_window_gates_passed = _long_window_gates_passed(design_payloads)
+    constraints_passed = _qa_constraints_passed(results, cfg, obs_index)
     transport_passed = bool(transport_q <= 0.95 * control_q)
     passed = bool(
         all_gates_passed
@@ -322,39 +399,16 @@ def qa_low_turbulence_comparison_payload(
         "observable_names": list(QA_LOW_TURBULENCE_OBSERVABLE_NAMES),
         "results": results,
         "designs": design_payloads,
-        "comparison_metrics": {
-            "control_design_heat_flux_mean": control_q,
-            "transport_design_heat_flux_mean": transport_q,
-            "relative_heat_flux_reduction_at_fixed_gradients": float(reduction),
-            "constraints_passed": bool(constraints_passed),
-            "transport_reduction_gate_passed": transport_passed,
-            "long_window_gates_passed": bool(long_window_gates_passed),
-            "ad_fd_gates_passed": bool(all_gates_passed),
-            "passed": passed,
-            "reduced_differentiable_plumbing_passed": bool(all_gates_passed),
-            "full_vmec_nonlinear_differentiable_plumbing_passed": False,
-        },
-        "differentiable_plumbing": {
-            "stages": [
-                "reduced QA controls",
-                "geometry constraints and reduced LCFS visualization",
-                "linear ITG feature map",
-                "quasilinear mixing-length diagnostic",
-                "long-window differentiable nonlinear heat-flux envelope",
-                "weighted optimization residuals",
-                "scalar, residual, and observable AD-vs-FD gates",
-            ],
-            "all_scalar_objective_gates_passed": all(
-                bool(result["scalar_gradient_gate"]["passed"]) for result in results
-            ),
-            "all_residual_jacobian_gates_passed": all(
-                bool(result["residual_gradient_gate"]["passed"]) for result in results
-            ),
-            "all_observable_jacobian_gates_passed": all(
-                bool(result["observable_gradient_gate"]["passed"]) for result in results
-            ),
-            "passed": bool(all_gates_passed),
-        },
+        "comparison_metrics": _comparison_metrics_payload(
+            control_q=control_q,
+            transport_q=transport_q,
+            constraints_passed=constraints_passed,
+            transport_passed=transport_passed,
+            long_window_gates_passed=long_window_gates_passed,
+            all_gates_passed=all_gates_passed,
+            passed=passed,
+        ),
+        "differentiable_plumbing": _differentiable_plumbing_payload(results),
         "model_equations": {
             "objective": (
                 "||r||^2 with aspect, minimum-iota, operating-iota, QA, QA-compatible "
