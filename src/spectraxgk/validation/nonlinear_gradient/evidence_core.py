@@ -110,6 +110,17 @@ class NonlinearTurbulenceGradientBracketSweepConfig:
     value_floor: float = 1.0e-12
 
 
+@dataclass(frozen=True)
+class _GradientConditioningMetrics:
+    """Canonical metrics extracted from one nonlinear-gradient evidence artifact."""
+
+    derivative: float | None
+    response_fraction: float | None
+    asymmetry: float | None
+    condition_number: float | None
+    uncertainty_rel: float | None
+
+
 def _json_number(value: Any) -> float | int | None:
     if value is None:
         return None
@@ -334,28 +345,35 @@ def _objective_gate_values(payload: dict[str, Any]) -> list[float]:
     return values
 
 
-def _gradient_conditioning_summary(
-    payload: dict[str, Any],
-    *,
-    config: NonlinearTurbulenceGradientEvidenceConfig,
-) -> dict[str, Any]:
-    gradient = _nested_dict(payload, "gradient", "gradient_summary")
-    metrics = _nested_dict(payload, "metrics")
-    conditioning = _nested_dict(
-        payload,
-        "conditioning",
-        "conditioning_gate",
-        "finite_difference_conditioning",
-        "gradient_conditioning",
-    )
-    uncertainty = _nested_dict(
-        payload,
-        "uncertainty",
-        "uncertainty_gate",
-        "gradient_uncertainty",
-    )
-    candidates = (gradient, metrics, conditioning, uncertainty, payload)
+def _gradient_conditioning_candidates(payload: dict[str, Any]) -> tuple[dict[str, Any], ...]:
+    """Return nested dictionaries that may carry nonlinear-gradient metrics."""
 
+    return (
+        _nested_dict(payload, "gradient", "gradient_summary"),
+        _nested_dict(payload, "metrics"),
+        _nested_dict(
+            payload,
+            "conditioning",
+            "conditioning_gate",
+            "finite_difference_conditioning",
+            "gradient_conditioning",
+        ),
+        _nested_dict(
+            payload,
+            "uncertainty",
+            "uncertainty_gate",
+            "gradient_uncertainty",
+        ),
+        payload,
+    )
+
+
+def _extract_gradient_conditioning_metrics(
+    payload: dict[str, Any],
+) -> _GradientConditioningMetrics:
+    """Extract the canonical gate metrics from known artifact schema variants."""
+
+    candidates = _gradient_conditioning_candidates(payload)
     derivative = _first_finite(
         candidates,
         (
@@ -372,92 +390,122 @@ def _gradient_conditioning_summary(
     if derivative is None and objective_values:
         derivative = objective_values[0]
 
-    response_fraction = _first_finite(
-        candidates,
-        (
-            "response_fraction",
-            "resolved_response_fraction",
-            "fd_response_fraction",
+    return _GradientConditioningMetrics(
+        derivative=derivative,
+        response_fraction=_first_finite(
+            candidates,
+            (
+                "response_fraction",
+                "resolved_response_fraction",
+                "fd_response_fraction",
+            ),
         ),
-    )
-    asymmetry = _first_finite(
-        candidates,
-        (
-            "asymmetry_rel",
-            "derivative_asymmetry",
-            "fd_asymmetry_rel",
+        asymmetry=_first_finite(
+            candidates,
+            (
+                "asymmetry_rel",
+                "derivative_asymmetry",
+                "fd_asymmetry_rel",
+            ),
         ),
-    )
-    condition_number = _first_finite(
-        candidates,
-        (
-            "condition_number",
-            "fd_condition_number",
-            "sensitivity_condition_number",
+        condition_number=_first_finite(
+            candidates,
+            (
+                "condition_number",
+                "fd_condition_number",
+                "sensitivity_condition_number",
+            ),
         ),
-    )
-    uncertainty_rel = _first_finite(
-        candidates,
-        (
-            "gradient_sem_rel",
-            "sem_rel",
-            "gradient_uncertainty_rel",
-            "gradient_relative_uncertainty",
-            "relative_uncertainty",
+        uncertainty_rel=_first_finite(
+            candidates,
+            (
+                "gradient_sem_rel",
+                "sem_rel",
+                "gradient_uncertainty_rel",
+                "gradient_relative_uncertainty",
+                "relative_uncertainty",
+            ),
         ),
     )
 
-    gates = [
+
+def _gradient_conditioning_gates(
+    metrics: _GradientConditioningMetrics,
+    *,
+    config: NonlinearTurbulenceGradientEvidenceConfig,
+) -> list[dict[str, Any]]:
+    """Build production nonlinear-gradient conditioning gate rows."""
+
+    return [
         _gate(
             "finite_gradient_estimate",
-            derivative is not None,
-            f"central_gradient={derivative}",
+            metrics.derivative is not None,
+            f"central_gradient={metrics.derivative}",
         ),
         _gate(
             "fd_response_resolved",
-            response_fraction is not None
-            and response_fraction >= float(config.min_fd_response_fraction),
+            metrics.response_fraction is not None
+            and metrics.response_fraction >= float(config.min_fd_response_fraction),
             "response_fraction={value} min={gate}".format(
-                value=response_fraction,
+                value=metrics.response_fraction,
                 gate=config.min_fd_response_fraction,
             ),
         ),
         _gate(
             "fd_asymmetry_bounded",
-            asymmetry is not None and asymmetry <= float(config.max_fd_asymmetry_rel),
+            metrics.asymmetry is not None
+            and metrics.asymmetry <= float(config.max_fd_asymmetry_rel),
             "fd_asymmetry_rel={value} max={gate}".format(
-                value=asymmetry,
+                value=metrics.asymmetry,
                 gate=config.max_fd_asymmetry_rel,
             ),
         ),
         _gate(
             "fd_condition_number_bounded",
-            condition_number is not None
-            and condition_number <= float(config.max_fd_condition_number),
+            metrics.condition_number is not None
+            and metrics.condition_number <= float(config.max_fd_condition_number),
             "condition_number={value} max={gate}".format(
-                value=condition_number,
+                value=metrics.condition_number,
                 gate=config.max_fd_condition_number,
             ),
         ),
         _gate(
             "gradient_uncertainty_bounded",
-            uncertainty_rel is not None
-            and uncertainty_rel <= float(config.max_gradient_uncertainty_rel),
+            metrics.uncertainty_rel is not None
+            and metrics.uncertainty_rel <= float(config.max_gradient_uncertainty_rel),
             "gradient_uncertainty_rel={value} max={gate}".format(
-                value=uncertainty_rel,
+                value=metrics.uncertainty_rel,
                 gate=config.max_gradient_uncertainty_rel,
             ),
         ),
     ]
+
+
+def _gradient_conditioning_payload(
+    metrics: _GradientConditioningMetrics,
+    gates: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Pack nonlinear-gradient metric extraction and gates into the public schema."""
+
     return {
-        "central_gradient": _json_number(derivative),
-        "response_fraction": _json_number(response_fraction),
-        "fd_asymmetry_rel": _json_number(asymmetry),
-        "fd_condition_number": _json_number(condition_number),
-        "gradient_uncertainty_rel": _json_number(uncertainty_rel),
+        "central_gradient": _json_number(metrics.derivative),
+        "response_fraction": _json_number(metrics.response_fraction),
+        "fd_asymmetry_rel": _json_number(metrics.asymmetry),
+        "fd_condition_number": _json_number(metrics.condition_number),
+        "gradient_uncertainty_rel": _json_number(metrics.uncertainty_rel),
         "gates": gates,
         "passed": all(bool(gate["passed"]) for gate in gates),
     }
+
+
+def _gradient_conditioning_summary(
+    payload: dict[str, Any],
+    *,
+    config: NonlinearTurbulenceGradientEvidenceConfig,
+) -> dict[str, Any]:
+    metrics = _extract_gradient_conditioning_metrics(payload)
+    gates = _gradient_conditioning_gates(metrics, config=config)
+    return _gradient_conditioning_payload(metrics, gates)
 
 
 __all__ = [
