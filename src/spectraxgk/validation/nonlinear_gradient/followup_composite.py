@@ -22,6 +22,131 @@ class _CompositeLaunchPlan:
     next_action: str
 
 
+@dataclass(frozen=True)
+class _CompositeControlMetrics:
+    parameter_name: str
+    coefficient: str | None
+    response_fraction: float | None
+    asymmetry_rel: float | None
+    uncertainty_rel: float | None
+    central_gradient: float | None
+    paired_uncertainty_rel: float | None
+    same_sign_fraction: float | None
+
+
+def _composite_control_metrics(
+    artifact: Mapping[str, Any],
+    *,
+    index: int,
+    path: str | None,
+    label: str | None,
+) -> _CompositeControlMetrics:
+    """Extract canonical metrics for one candidate boundary coefficient."""
+
+    parameter_name = str(
+        artifact.get("parameter_name") or label or path or f"candidate_{index}"
+    )
+    return _CompositeControlMetrics(
+        parameter_name=parameter_name,
+        coefficient=_coefficient_label_from_parameter(artifact.get("parameter_name")),
+        response_fraction=_metric(artifact, "response_fraction"),
+        asymmetry_rel=_metric(artifact, "fd_asymmetry_rel", "asymmetry_rel"),
+        uncertainty_rel=_metric(
+            artifact,
+            "gradient_uncertainty_rel",
+            "gradient_relative_uncertainty",
+        ),
+        central_gradient=_metric(
+            artifact,
+            "central_gradient",
+            "central_fd_dq_dparameter",
+            "central_fd_dq_dtprim",
+        ),
+        paired_uncertainty_rel=_nested_metric(
+            artifact,
+            "paired_replicate_diagnostics",
+            "central_gradient_uncertainty_rel",
+        ),
+        same_sign_fraction=_nested_metric(
+            artifact,
+            "paired_replicate_diagnostics",
+            "same_sign_fraction",
+        ),
+    )
+
+
+def _composite_control_gate_status(
+    metrics: _CompositeControlMetrics,
+    *,
+    config: NonlinearGradientCompositeControlConfig,
+) -> dict[str, bool]:
+    """Return per-condition gate flags for a composite-control candidate."""
+
+    return {
+        "coefficient_ok": metrics.coefficient is not None,
+        "gradient_ok": bool(
+            metrics.central_gradient is not None
+            and abs(metrics.central_gradient) > config.value_floor
+        ),
+        "response_ok": bool(
+            metrics.response_fraction is not None
+            and metrics.response_fraction >= config.min_fd_response_fraction
+        ),
+        "locality_ok": bool(
+            metrics.asymmetry_rel is not None
+            and metrics.asymmetry_rel <= config.max_fd_asymmetry_rel
+        ),
+        "uncertainty_ok": bool(
+            metrics.uncertainty_rel is not None
+            and metrics.uncertainty_rel <= config.max_gradient_uncertainty_rel
+        ),
+        "same_sign_ok": bool(
+            metrics.same_sign_fraction is None
+            or metrics.same_sign_fraction >= config.min_same_sign_fraction
+        ),
+    }
+
+
+def _composite_control_blockers(gate_status: Mapping[str, bool]) -> list[str]:
+    """Return human-readable blockers for a failed composite-control row."""
+
+    blockers: list[str] = []
+    if not gate_status["coefficient_ok"]:
+        blockers.append("parameter_not_vmec_boundary_coefficient")
+    if not gate_status["gradient_ok"]:
+        blockers.append("missing_or_zero_central_gradient")
+    if not gate_status["response_ok"]:
+        blockers.append("unresolved_heat_flux_response")
+    if not gate_status["locality_ok"]:
+        blockers.append("nonlocal_finite_difference_bracket")
+    if not gate_status["uncertainty_ok"]:
+        blockers.append("gradient_uncertainty_too_large")
+    if not gate_status["same_sign_ok"]:
+        blockers.append("paired_replicate_sign_not_robust")
+    return blockers
+
+
+def _composite_control_metric_payload(
+    metrics: _CompositeControlMetrics,
+) -> dict[str, Any]:
+    """Return JSON-friendly metric payload for one composite-control row."""
+
+    descent_gradient = (
+        None if metrics.central_gradient is None else -float(metrics.central_gradient)
+    )
+    return {
+        "central_gradient": _json_number(metrics.central_gradient),
+        "descent_gradient": _json_number(descent_gradient),
+        "response_fraction": _json_number(metrics.response_fraction),
+        "fd_asymmetry_rel": _json_number(metrics.asymmetry_rel),
+        "gradient_uncertainty_rel": _json_number(metrics.uncertainty_rel),
+        "paired_gradient_uncertainty_rel": _json_number(
+            metrics.paired_uncertainty_rel
+        ),
+        "same_sign_fraction": _json_number(metrics.same_sign_fraction),
+    }
+
+
 def _composite_control_row(
     artifact: Mapping[str, Any],
     *,
@@ -30,101 +155,21 @@ def _composite_control_row(
     label: str | None,
     config: NonlinearGradientCompositeControlConfig,
 ) -> dict[str, Any]:
-    parameter_name = str(
-        artifact.get("parameter_name") or label or path or f"candidate_{index}"
+    metrics = _composite_control_metrics(
+        artifact, index=index, path=path, label=label
     )
-    coefficient = _coefficient_label_from_parameter(artifact.get("parameter_name"))
-    response_fraction = _metric(artifact, "response_fraction")
-    asymmetry_rel = _metric(artifact, "fd_asymmetry_rel", "asymmetry_rel")
-    uncertainty_rel = _metric(
-        artifact,
-        "gradient_uncertainty_rel",
-        "gradient_relative_uncertainty",
-    )
-    central_gradient = _metric(
-        artifact,
-        "central_gradient",
-        "central_fd_dq_dparameter",
-        "central_fd_dq_dtprim",
-    )
-    paired_uncertainty_rel = _nested_metric(
-        artifact,
-        "paired_replicate_diagnostics",
-        "central_gradient_uncertainty_rel",
-    )
-    same_sign_fraction = _nested_metric(
-        artifact,
-        "paired_replicate_diagnostics",
-        "same_sign_fraction",
-    )
-    response_ok = (
-        response_fraction is not None
-        and response_fraction >= config.min_fd_response_fraction
-    )
-    locality_ok = (
-        asymmetry_rel is not None and asymmetry_rel <= config.max_fd_asymmetry_rel
-    )
-    uncertainty_ok = (
-        uncertainty_rel is not None
-        and uncertainty_rel <= config.max_gradient_uncertainty_rel
-    )
-    same_sign_ok = (
-        same_sign_fraction is None
-        or same_sign_fraction >= config.min_same_sign_fraction
-    )
-    gradient_ok = (
-        central_gradient is not None and abs(central_gradient) > config.value_floor
-    )
-    coefficient_ok = coefficient is not None
-    admissible = bool(
-        coefficient_ok
-        and gradient_ok
-        and response_ok
-        and locality_ok
-        and uncertainty_ok
-        and same_sign_ok
-    )
-
-    blockers: list[str] = []
-    if not coefficient_ok:
-        blockers.append("parameter_not_vmec_boundary_coefficient")
-    if not gradient_ok:
-        blockers.append("missing_or_zero_central_gradient")
-    if not response_ok:
-        blockers.append("unresolved_heat_flux_response")
-    if not locality_ok:
-        blockers.append("nonlocal_finite_difference_bracket")
-    if not uncertainty_ok:
-        blockers.append("gradient_uncertainty_too_large")
-    if not same_sign_ok:
-        blockers.append("paired_replicate_sign_not_robust")
-
-    descent_gradient = None if central_gradient is None else -float(central_gradient)
+    gate_status = _composite_control_gate_status(metrics, config=config)
+    admissible = bool(all(gate_status.values()))
     return {
         "index": index,
-        "label": str(label or parameter_name),
+        "label": str(label or metrics.parameter_name),
         "path": path,
-        "parameter_name": parameter_name,
-        "coefficient": coefficient,
+        "parameter_name": metrics.parameter_name,
+        "coefficient": metrics.coefficient,
         "admissible_for_composite_direction": admissible,
-        "blockers": blockers,
-        "metrics": {
-            "central_gradient": _json_number(central_gradient),
-            "descent_gradient": _json_number(descent_gradient),
-            "response_fraction": _json_number(response_fraction),
-            "fd_asymmetry_rel": _json_number(asymmetry_rel),
-            "gradient_uncertainty_rel": _json_number(uncertainty_rel),
-            "paired_gradient_uncertainty_rel": _json_number(paired_uncertainty_rel),
-            "same_sign_fraction": _json_number(same_sign_fraction),
-        },
-        "gate_status": {
-            "coefficient_ok": coefficient_ok,
-            "gradient_ok": gradient_ok,
-            "response_ok": bool(response_ok),
-            "locality_ok": bool(locality_ok),
-            "uncertainty_ok": bool(uncertainty_ok),
-            "same_sign_ok": bool(same_sign_ok),
-        },
+        "blockers": _composite_control_blockers(gate_status),
+        "metrics": _composite_control_metric_payload(metrics),
+        "gate_status": gate_status,
     }
 
 
