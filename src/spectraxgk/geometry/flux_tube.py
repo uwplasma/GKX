@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from pathlib import Path
+from typing import Any
 
 import jax
 import jax.numpy as jnp
@@ -309,6 +310,192 @@ def _bgrad_from_bmag(
     return bgrad
 
 
+@dataclass(frozen=True)
+class _ImportedGeometrySelection:
+    geom_vars: Any
+    theta: np.ndarray
+    theta_closed_interval: bool
+    is_grouped_output: bool
+
+
+def _read_imported_scalar(
+    variables: Any, *names: str, default: float | None = None
+) -> float:
+    for name in names:
+        if name in variables:
+            arr = np.asarray(variables[name][:], dtype=float)
+            if arr.ndim == 0:
+                return float(arr)
+            if arr.ndim == 1 and np.allclose(arr, arr[0]):
+                return float(arr[0])
+            raise ValueError(
+                f"Imported geometry variable '{name}' must be scalar or constant on theta"
+            )
+    if default is None:
+        raise KeyError(names[0])
+    return float(default)
+
+
+def _read_imported_profile(variables: Any, *names: str) -> np.ndarray:
+    for name in names:
+        if name in variables:
+            arr = np.asarray(variables[name][:], dtype=float)
+            if arr.ndim != 1:
+                raise ValueError(
+                    f"Imported geometry variable '{name}' must be one-dimensional on theta"
+                )
+            return arr
+    raise KeyError(names[0])
+
+
+def _infer_root_theta_closed_interval(theta: np.ndarray, variables: Any) -> bool:
+    """Infer whether a root-level ``*.eik.nc`` file includes terminal theta."""
+
+    if theta.ndim != 1 or theta.size < 2:
+        return False
+    profile_names = (
+        "bmag",
+        "gds2",
+        "gds21",
+        "gds22",
+        "cvdrift",
+        "gbdrift",
+        "grho",
+    )
+    matches = 0
+    checked = 0
+    for name in profile_names:
+        if name not in variables:
+            continue
+        arr = np.asarray(variables[name][:], dtype=float)
+        if arr.ndim != 1 or arr.size != theta.size:
+            continue
+        checked += 1
+        scale = max(float(np.nanmax(np.abs(arr))), 1.0)
+        if abs(float(arr[-1] - arr[0])) <= max(1.0e-10, 1.0e-6 * scale):
+            matches += 1
+    if checked == 0:
+        return False
+    return matches >= max(1, checked // 2 + checked % 2)
+
+
+def _select_imported_geometry_variables(root: Any) -> _ImportedGeometrySelection:
+    """Select grouped-output or root-level imported-geometry variables."""
+
+    is_grouped_output = "Geometry" in root.groups and "Grids" in root.groups
+    if is_grouped_output:
+        theta = _read_imported_profile(root.groups["Grids"].variables, "theta")
+        return _ImportedGeometrySelection(
+            geom_vars=root.groups["Geometry"].variables,
+            theta=theta,
+            theta_closed_interval=False,
+            is_grouped_output=True,
+        )
+    theta = _read_imported_profile(root.variables, "theta")
+    return _ImportedGeometrySelection(
+        geom_vars=root.variables,
+        theta=theta,
+        theta_closed_interval=_infer_root_theta_closed_interval(
+            np.asarray(theta, dtype=float), root.variables
+        ),
+        is_grouped_output=False,
+    )
+
+
+def _imported_bgrad(
+    selection: _ImportedGeometrySelection,
+    bmag: np.ndarray,
+    gradpar_val: float,
+) -> np.ndarray:
+    if selection.is_grouped_output and "bgrad" in selection.geom_vars:
+        return _read_imported_profile(selection.geom_vars, "bgrad")
+    return _bgrad_from_bmag(
+        np.asarray(selection.theta, dtype=float),
+        np.asarray(bmag, dtype=float),
+        gradpar_val,
+        closed=selection.theta_closed_interval,
+    )
+
+
+def _imported_drifts_and_jacobian(
+    selection: _ImportedGeometrySelection,
+    bmag: np.ndarray,
+    *,
+    drhodpsi: float,
+    gradpar_val: float,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    geom_vars = selection.geom_vars
+    if selection.is_grouped_output:
+        return (
+            _read_imported_profile(geom_vars, "cvdrift"),
+            _read_imported_profile(geom_vars, "gbdrift"),
+            _read_imported_profile(geom_vars, "cvdrift0"),
+            _read_imported_profile(geom_vars, "gbdrift0"),
+            _read_imported_profile(geom_vars, "jacobian", "jacob"),
+        )
+    # Root-level VMEC ``*.eik.nc`` files carry a pre-load drift normalization
+    # and Jacobian that are converted at load time.
+    jacobian = 1.0 / np.abs(
+        float(drhodpsi) * float(gradpar_val) * np.asarray(bmag, dtype=float)
+    )
+    return (
+        0.5 * _read_imported_profile(geom_vars, "cvdrift"),
+        0.5 * _read_imported_profile(geom_vars, "gbdrift"),
+        0.5 * _read_imported_profile(geom_vars, "cvdrift0"),
+        0.5 * _read_imported_profile(geom_vars, "gbdrift0"),
+        jacobian,
+    )
+
+
+def _pack_imported_geometry_data(
+    selection: _ImportedGeometrySelection,
+    *,
+    gradpar_val: float,
+    bmag: np.ndarray,
+    bgrad: np.ndarray,
+    cvdrift: np.ndarray,
+    gbdrift: np.ndarray,
+    cvdrift0: np.ndarray,
+    gbdrift0: np.ndarray,
+    jacobian: np.ndarray,
+) -> FluxTubeGeometryData:
+    geom_vars = selection.geom_vars
+    rmaj = _read_imported_scalar(geom_vars, "rmaj", "Rmaj", default=1.0)
+    aminor = _read_imported_scalar(geom_vars, "aminor", default=0.0)
+    epsilon = aminor / rmaj if abs(rmaj) > 0.0 else 0.0
+    return FluxTubeGeometryData(
+        theta=jnp.asarray(selection.theta),
+        gradpar_value=gradpar_val,
+        bmag_profile=jnp.asarray(bmag),
+        bgrad_profile=jnp.asarray(bgrad),
+        gds2_profile=jnp.asarray(_read_imported_profile(geom_vars, "gds2")),
+        gds21_profile=jnp.asarray(_read_imported_profile(geom_vars, "gds21")),
+        gds22_profile=jnp.asarray(_read_imported_profile(geom_vars, "gds22")),
+        cv_profile=jnp.asarray(cvdrift),
+        gb_profile=jnp.asarray(gbdrift),
+        cv0_profile=jnp.asarray(cvdrift0),
+        gb0_profile=jnp.asarray(gbdrift0),
+        jacobian_profile=jnp.asarray(jacobian),
+        grho_profile=jnp.asarray(_read_imported_profile(geom_vars, "grho")),
+        q=_read_imported_scalar(geom_vars, "q", default=0.0),
+        s_hat=_read_imported_scalar(geom_vars, "shat", default=0.0),
+        epsilon=float(epsilon),
+        R0=float(rmaj),
+        B0=1.0,
+        alpha=_read_imported_scalar(geom_vars, "alpha", default=0.0),
+        drift_scale=1.0,
+        kxfac=_read_imported_scalar(geom_vars, "kxfac", default=1.0),
+        theta_scale=_read_imported_scalar(
+            geom_vars, "theta_scale", "scale", default=1.0
+        ),
+        nfp=int(round(_read_imported_scalar(geom_vars, "nfp", default=1.0))),
+        kperp2_bmag=True,
+        bessel_bmag_power=0.0,
+        source_model="imported-netcdf",
+        theta_closed_interval=selection.theta_closed_interval,
+    )
+
+
 def load_imported_geometry_netcdf(path: str | Path) -> FluxTubeGeometryData:
     """Load sampled flux-tube geometry from an imported NetCDF/eik file."""
 
@@ -319,143 +506,32 @@ def load_imported_geometry_netcdf(path: str | Path) -> FluxTubeGeometryData:
             "netCDF4 is required to load imported geometry NetCDF files"
         ) from exc
 
-    def _read_scalar(variables, *names: str, default: float | None = None) -> float:
-        for name in names:
-            if name in variables:
-                arr = np.asarray(variables[name][:], dtype=float)
-                if arr.ndim == 0:
-                    return float(arr)
-                if arr.ndim == 1 and np.allclose(arr, arr[0]):
-                    return float(arr[0])
-                raise ValueError(
-                    f"Imported geometry variable '{name}' must be scalar or constant on theta"
-                )
-        if default is None:
-            raise KeyError(names[0])
-        return float(default)
-
-    def _read_profile(variables, *names: str) -> np.ndarray:
-        for name in names:
-            if name in variables:
-                arr = np.asarray(variables[name][:], dtype=float)
-                if arr.ndim != 1:
-                    raise ValueError(
-                        f"Imported geometry variable '{name}' must be one-dimensional on theta"
-                    )
-                return arr
-        raise KeyError(names[0])
-
-    def _infer_root_theta_closed_interval(theta: np.ndarray, variables) -> bool:
-        """Infer whether a root-level ``*.eik.nc`` file includes a terminal theta endpoint.
-
-        VMEC-style ``*.eik.nc`` files often include the periodic terminal point, while
-        Miller helper writes an already-open theta grid. Root-level files therefore
-        cannot be treated as closed intervals unconditionally.
-        """
-
-        if theta.ndim != 1 or theta.size < 2:
-            return False
-        profile_names = (
-            "bmag",
-            "gds2",
-            "gds21",
-            "gds22",
-            "cvdrift",
-            "gbdrift",
-            "grho",
-        )
-        matches = 0
-        checked = 0
-        for name in profile_names:
-            if name not in variables:
-                continue
-            arr = np.asarray(variables[name][:], dtype=float)
-            if arr.ndim != 1 or arr.size != theta.size:
-                continue
-            checked += 1
-            scale = max(float(np.nanmax(np.abs(arr))), 1.0)
-            if abs(float(arr[-1] - arr[0])) <= max(1.0e-10, 1.0e-6 * scale):
-                matches += 1
-        if checked == 0:
-            return False
-        return matches >= max(1, checked // 2 + checked % 2)
-
     root = Dataset(Path(path), "r")
     try:
-        is_grouped_output = "Geometry" in root.groups and "Grids" in root.groups
-        if is_grouped_output:
-            geom_vars = root.groups["Geometry"].variables
-            grid_vars = root.groups["Grids"].variables
-            theta = _read_profile(grid_vars, "theta")
-            theta_closed_interval = False
-        else:
-            geom_vars = root.variables
-            grid_vars = root.variables
-            theta = _read_profile(root.variables, "theta")
-            theta_closed_interval = _infer_root_theta_closed_interval(
-                np.asarray(theta, dtype=float), root.variables
+        selection = _select_imported_geometry_variables(root)
+        geom_vars = selection.geom_vars
+        gradpar_val = _read_imported_scalar(geom_vars, "gradpar")
+        bmag = _read_imported_profile(geom_vars, "bmag")
+        drhodpsi = _read_imported_scalar(geom_vars, "drhodpsi", default=1.0)
+        bgrad = _imported_bgrad(selection, bmag, gradpar_val)
+        cvdrift, gbdrift, cvdrift0, gbdrift0, jacobian = (
+            _imported_drifts_and_jacobian(
+                selection,
+                bmag,
+                drhodpsi=drhodpsi,
+                gradpar_val=gradpar_val,
             )
-
-        gradpar_val = _read_scalar(geom_vars, "gradpar")
-        bmag = _read_profile(geom_vars, "bmag")
-        drhodpsi = _read_scalar(geom_vars, "drhodpsi", default=1.0)
-        if is_grouped_output and "bgrad" in geom_vars:
-            bgrad = _read_profile(geom_vars, "bgrad")
-        else:
-            bgrad = _bgrad_from_bmag(
-                np.asarray(theta, dtype=float),
-                np.asarray(bmag, dtype=float),
-                gradpar_val,
-                closed=theta_closed_interval,
-            )
-        if is_grouped_output:
-            cvdrift = _read_profile(geom_vars, "cvdrift")
-            gbdrift = _read_profile(geom_vars, "gbdrift")
-            cvdrift0 = _read_profile(geom_vars, "cvdrift0")
-            gbdrift0 = _read_profile(geom_vars, "gbdrift0")
-            jacobian = _read_profile(geom_vars, "jacobian", "jacob")
-        else:
-            # Root-level VMEC ``*.eik.nc`` files carry a pre-load drift
-            # normalization and Jacobian that are converted at load time.
-            cvdrift = 0.5 * _read_profile(geom_vars, "cvdrift")
-            gbdrift = 0.5 * _read_profile(geom_vars, "gbdrift")
-            cvdrift0 = 0.5 * _read_profile(geom_vars, "cvdrift0")
-            gbdrift0 = 0.5 * _read_profile(geom_vars, "gbdrift0")
-            jacobian = 1.0 / np.abs(
-                float(drhodpsi) * float(gradpar_val) * np.asarray(bmag, dtype=float)
-            )
-        rmaj = _read_scalar(geom_vars, "rmaj", "Rmaj", default=1.0)
-        aminor = _read_scalar(geom_vars, "aminor", default=0.0)
-        epsilon = aminor / rmaj if abs(rmaj) > 0.0 else 0.0
-        return FluxTubeGeometryData(
-            theta=jnp.asarray(theta),
-            gradpar_value=gradpar_val,
-            bmag_profile=jnp.asarray(bmag),
-            bgrad_profile=jnp.asarray(bgrad),
-            gds2_profile=jnp.asarray(_read_profile(geom_vars, "gds2")),
-            gds21_profile=jnp.asarray(_read_profile(geom_vars, "gds21")),
-            gds22_profile=jnp.asarray(_read_profile(geom_vars, "gds22")),
-            cv_profile=jnp.asarray(cvdrift),
-            gb_profile=jnp.asarray(gbdrift),
-            cv0_profile=jnp.asarray(cvdrift0),
-            gb0_profile=jnp.asarray(gbdrift0),
-            jacobian_profile=jnp.asarray(jacobian),
-            grho_profile=jnp.asarray(_read_profile(geom_vars, "grho")),
-            q=_read_scalar(geom_vars, "q", default=0.0),
-            s_hat=_read_scalar(geom_vars, "shat", default=0.0),
-            epsilon=float(epsilon),
-            R0=float(rmaj),
-            B0=1.0,
-            alpha=_read_scalar(geom_vars, "alpha", default=0.0),
-            drift_scale=1.0,
-            kxfac=_read_scalar(geom_vars, "kxfac", default=1.0),
-            theta_scale=_read_scalar(geom_vars, "theta_scale", "scale", default=1.0),
-            nfp=int(round(_read_scalar(geom_vars, "nfp", default=1.0))),
-            kperp2_bmag=True,
-            bessel_bmag_power=0.0,
-            source_model="imported-netcdf",
-            theta_closed_interval=theta_closed_interval,
+        )
+        return _pack_imported_geometry_data(
+            selection,
+            gradpar_val=gradpar_val,
+            bmag=bmag,
+            bgrad=bgrad,
+            cvdrift=cvdrift,
+            gbdrift=gbdrift,
+            cvdrift0=cvdrift0,
+            gbdrift0=gbdrift0,
+            jacobian=jacobian,
         )
     finally:
         root.close()
-
