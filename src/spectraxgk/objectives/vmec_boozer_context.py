@@ -30,21 +30,8 @@ from spectraxgk.diagnostics.quasilinear_transport import effective_kperp2, phi_n
 from spectraxgk.validation.autodiff import explicit_complex_operator_matrix
 
 
-def _mode21_vmec_boozer_linear_context(  # pragma: no cover
-    *,
-    case_name: str,
-    radial_index: int | None,
-    mode_index: int,
-    parameter_family: str,
-    surface_index: int | None,
-    ntheta: int,
-    mboz: int,
-    nboz: int,
-    surface_stencil_width: int | None,
-    n_laguerre: int,
-    n_hermite: int,
-) -> dict[str, Any]:
-    """Build shared VMEC/Boozer geometry and linear-RHS closures for gates."""
+def _load_vmec_boozer_example(case_name: str) -> tuple[Any, Any, Any, Any]:
+    """Load VMEC-JAX example inputs and the corresponding differentiable state."""
 
     discover_differentiable_geometry_backends()
     driver = importlib.import_module("vmec_jax.driver")
@@ -57,6 +44,18 @@ def _mode21_vmec_boozer_linear_context(  # pragma: no cover
     static = static_mod.build_static(cfg_vmec)
     wout = wout_mod.read_wout(wout_path)
     state = wout_mod.state_from_wout(wout)
+    return static, indata, wout, state
+
+
+def _resolve_mode21_state_parameter(
+    state: Any,
+    *,
+    parameter_family: str,
+    radial_index: int | None,
+    mode_index: int,
+) -> tuple[Any, int, int, tuple[str, ...]]:
+    """Resolve the VMEC state coefficient addressed by a mode-21 gate."""
+
     base_coeff = _vmec_boozer_state_array(state, parameter_family)
     default_radial_index = int(base_coeff.shape[0] // 2)
     radial_index_int = (
@@ -75,18 +74,50 @@ def _mode21_vmec_boozer_linear_context(  # pragma: no cover
             default_mid_surface=default_radial_index,
         ),
     )
+    return base_coeff, radial_index_int, mode_index_int, parameter_names
+
+
+def _mode21_linear_grid(ntheta: int) -> tuple[CycloneBaseCase, Any]:
+    """Build the compact linear grid used by VMEC/Boozer mode-21 gates."""
 
     cfg = CycloneBaseCase(grid=GridConfig(Nx=1, Ny=4, Nz=int(ntheta), Lx=6.0, Ly=12.0))
-    grid = select_ky_grid(build_spectral_grid(cfg.grid), 1)
-    state_shape = (
+    return cfg, select_ky_grid(build_spectral_grid(cfg.grid), 1)
+
+
+def _mode21_state_shape(
+    *,
+    n_laguerre: int,
+    n_hermite: int,
+    grid: Any,
+) -> tuple[int, int, int, int, int]:
+    """Return the flattened linear-state shape used by explicit matrices."""
+
+    return (
         int(n_laguerre),
         int(n_hermite),
         grid.ky.size,
         grid.kx.size,
         grid.z.size,
     )
-    params_linear = _default_gradient_linear_params()
-    terms = _default_gradient_linear_terms()
+
+
+def _make_mode21_geometry_for(
+    *,
+    state: Any,
+    static: Any,
+    indata: Any,
+    wout: Any,
+    parameter_family: str,
+    base_coeff: Any,
+    radial_index_int: int,
+    mode_index_int: int,
+    surface_index: int | None,
+    ntheta: int,
+    mboz: int,
+    nboz: int,
+    surface_stencil_width: int | None,
+):
+    """Create the VMEC-state coefficient to solver geometry closure."""
 
     def geometry_for(x: jnp.ndarray):
         traced_state = _replace_vmec_boozer_state_coefficient(
@@ -114,6 +145,21 @@ def _mode21_vmec_boozer_linear_context(  # pragma: no cover
             validate_finite=False,
         )
 
+    return geometry_for
+
+
+def _make_mode21_solver_closures(
+    *,
+    grid: Any,
+    geometry_for: Any,
+    params_linear: Any,
+    terms: Any,
+    n_laguerre: int,
+    n_hermite: int,
+    state_shape: tuple[int, int, int, int, int],
+) -> tuple[Any, Any, Any]:
+    """Create cache, RHS, and explicit-matrix closures for a mode-21 gate."""
+
     def cache_for(x: jnp.ndarray):
         return build_linear_cache(
             grid, geometry_for(x), params_linear, int(n_laguerre), int(n_hermite)
@@ -134,6 +180,67 @@ def _mode21_vmec_boozer_linear_context(  # pragma: no cover
         return explicit_complex_operator_matrix(
             lambda state_arr: rhs_phi(state_arr, cache)[0], state_shape
         )
+
+    return cache_for, rhs_phi, matrix_fn
+
+
+def _mode21_vmec_boozer_linear_context(  # pragma: no cover
+    *,
+    case_name: str,
+    radial_index: int | None,
+    mode_index: int,
+    parameter_family: str,
+    surface_index: int | None,
+    ntheta: int,
+    mboz: int,
+    nboz: int,
+    surface_stencil_width: int | None,
+    n_laguerre: int,
+    n_hermite: int,
+) -> dict[str, Any]:
+    """Build shared VMEC/Boozer geometry and linear-RHS closures for gates."""
+
+    static, indata, wout, state = _load_vmec_boozer_example(str(case_name))
+    base_coeff, radial_index_int, mode_index_int, parameter_names = (
+        _resolve_mode21_state_parameter(
+            state,
+            parameter_family=parameter_family,
+            radial_index=radial_index,
+            mode_index=mode_index,
+        )
+    )
+    cfg, grid = _mode21_linear_grid(int(ntheta))
+    state_shape = _mode21_state_shape(
+        n_laguerre=n_laguerre,
+        n_hermite=n_hermite,
+        grid=grid,
+    )
+    params_linear = _default_gradient_linear_params()
+    terms = _default_gradient_linear_terms()
+    geometry_for = _make_mode21_geometry_for(
+        state=state,
+        static=static,
+        indata=indata,
+        wout=wout,
+        parameter_family=parameter_family,
+        base_coeff=base_coeff,
+        radial_index_int=radial_index_int,
+        mode_index_int=mode_index_int,
+        surface_index=surface_index,
+        ntheta=ntheta,
+        mboz=mboz,
+        nboz=nboz,
+        surface_stencil_width=surface_stencil_width,
+    )
+    cache_for, rhs_phi, matrix_fn = _make_mode21_solver_closures(
+        grid=grid,
+        geometry_for=geometry_for,
+        params_linear=params_linear,
+        terms=terms,
+        n_laguerre=n_laguerre,
+        n_hermite=n_hermite,
+        state_shape=state_shape,
+    )
 
     return {
         "case_name": str(case_name),
