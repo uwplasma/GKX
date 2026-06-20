@@ -80,6 +80,96 @@ def derm(arr, ch, par="e"):
     return diff_arr
 
 
+def _weighted_centered_value(left, center, right, h0, h1, *, center_sign=1.0):
+    return (
+        right / h1**2
+        + center_sign * center * (1 / h0**2 - 1 / h1**2)
+        - left / h0**2
+    ) / (1 / h1 + 1 / h0)
+
+
+def _weighted_theta_interior(arr, brr, *, center_sign=1.0):
+    h1 = brr[:, 2:] - brr[:, 1:-1]
+    h0 = brr[:, 1:-1] - brr[:, :-2]
+    return _weighted_centered_value(
+        arr[:, :-2],
+        arr[:, 1:-1],
+        arr[:, 2:],
+        h0,
+        h1,
+        center_sign=center_sign,
+    )
+
+
+def _weighted_radial_interior(arr, brr, *, center_sign=1.0):
+    h1 = brr[2:, :] - brr[1:-1, :]
+    h0 = brr[1:-1, :] - brr[:-2, :]
+    return _weighted_centered_value(
+        arr[:-2, :],
+        arr[1:-1, :],
+        arr[2:, :],
+        h0,
+        h1,
+        center_sign=center_sign,
+    )
+
+
+def _one_sided_weighted_left(values, grid):
+    return (4 * values[..., 1] - 3 * values[..., 0] - values[..., 2]) / (
+        2 * (grid[..., 1] - grid[..., 0])
+    )
+
+
+def _one_sided_weighted_right(values, grid):
+    return (-4 * values[..., -2] + 3 * values[..., -1] + values[..., -3]) / (
+        2 * (grid[..., -1] - grid[..., -2])
+    )
+
+
+def _dermv_theta_1d(arr, brr, *, par):
+    n = np.shape(arr)[0]
+    arr2 = np.reshape(arr, (1, n))
+    brr2 = np.reshape(brr, (1, n))
+    diff_arr = np.zeros((1, n))
+    if par == "o":
+        diff_arr[0, 0] = _one_sided_weighted_left(arr2, brr2)[0]
+        diff_arr[0, -1] = _one_sided_weighted_right(arr2, brr2)[0]
+    diff_arr[:, 1:-1] = _weighted_theta_interior(arr2, brr2)
+    return diff_arr
+
+
+def _dermv_radial_1d(arr, brr):
+    n = np.shape(arr)[0]
+    arr2 = np.reshape(arr, (n, 1))
+    brr2 = np.reshape(brr, (n, 1))
+    diff_arr = np.zeros((n, 1))
+    diff_arr[0, 0] = (arr2[1, 0] - arr2[0, 0]) / (brr2[1, 0] - brr2[0, 0])
+    diff_arr[-1, 0] = (arr2[-1, 0] - arr2[-2, 0]) / (brr2[-1, 0] - brr2[-2, 0])
+    diff_arr[1:-1, :] = _weighted_radial_interior(
+        arr2, brr2, center_sign=-1.0
+    )
+    return diff_arr
+
+
+def _dermv_radial_2d(arr, brr):
+    diff_arr = np.zeros_like(arr)
+    diff_arr[0, :] = (arr[1, :] - arr[0, :]) / (brr[1, :] - brr[0, :])
+    diff_arr[-1, :] = (arr[-1, :] - arr[-2, :]) / (brr[-1, :] - brr[-2, :])
+    diff_arr[1:-1, :] = _weighted_radial_interior(arr, brr)
+    return diff_arr
+
+
+def _dermv_theta_2d(arr, brr, *, par):
+    diff_arr = np.zeros_like(arr)
+    if par == "o":
+        diff_arr[:, 0] = (arr[:, 1] - arr[:, 0]) / (brr[:, 1] - brr[:, 0])
+        diff_arr[:, -1] = (arr[:, -1] - arr[:, -2]) / (
+            brr[:, -1] - brr[:, -2]
+        )
+    diff_arr[:, 1:-1] = _weighted_theta_interior(arr, brr)
+    return diff_arr
+
+
 def dermv(arr, brr, ch, par="e"):
     # Finite difference subroutine
     # brr is the independent variable arr. Needed for weighted finite-difference
@@ -88,115 +178,13 @@ def dermv(arr, brr, ch, par="e"):
     # par = 'e' means even parity of the arr. PARITY OF THE INPUT ARRAY
     # par = 'o' means odd parity
     temp = np.shape(arr)
-    if (
-        len(temp) == 1 and ch == "l"
-    ):  # finite diff along the flux surface for a single array
-        if par == "e":
-            d1, d2 = np.shape(arr)[0], 1
-            arr = np.reshape(arr, (d2, d1))
-            brr = np.reshape(brr, (d2, d1))
-            diff_arr = np.zeros((d2, d1))
-            diff_arr[0, 0] = 0.0  # (arr_theta_-0 - arr_theta_+0)  = 0
-            diff_arr[0, -1] = 0.0
-            for i in range(1, d1 - 1):
-                h1 = brr[0, i + 1] - brr[0, i]
-                h0 = brr[0, i] - brr[0, i - 1]
-                diff_arr[0, i] = (
-                    arr[0, i + 1] / h1**2
-                    + arr[0, i] * (1 / h0**2 - 1 / h1**2)
-                    - arr[0, i - 1] / h0**2
-                ) / (1 / h1 + 1 / h0)
-        else:
-            d1, d2 = np.shape(arr)[0], 1
-            arr = np.reshape(arr, (d2, d1))
-            brr = np.reshape(brr, (d2, d1))
-            diff_arr = np.zeros((d2, d1))
-
-            h1 = np.abs(brr[0, 1]) - np.abs(brr[0, 0])
-            h0 = np.abs(brr[0, -1]) - np.abs(brr[0, -2])
-            diff_arr[0, 0] = (4 * arr[0, 1] - 3 * arr[0, 0] - arr[0, 2]) / (
-                2 * (brr[0, 1] - brr[0, 0])
-            )
-
-            diff_arr[0, -1] = (-4 * arr[0, -2] + 3 * arr[0, -1] + arr[0, -3]) / (
-                2 * (brr[0, -1] - brr[0, -2])
-            )
-            for i in range(1, d1 - 1):
-                h1 = brr[0, i + 1] - brr[0, i]
-                h0 = brr[0, i] - brr[0, i - 1]
-                diff_arr[0, i] = (
-                    arr[0, i + 1] / h1**2
-                    + arr[0, i] * (1 / h0**2 - 1 / h1**2)
-                    - arr[0, i - 1] / h0**2
-                ) / (1 / h1 + 1 / h0)
-
-    elif len(temp) == 1 and ch == "r":  # across surfaces for a single array
-        d1, d2 = np.shape(arr)[0], 1
-        diff_arr = np.zeros((d1, d2))
-        arr = np.reshape(arr, (d1, d2))
-        diff_arr[0, 0] = (
-            2 * (arr[1, 0] - arr[0, 0]) / (2 * (brr[1, 0] - brr[0, 0]))
-        )  # single dimension arrays like psi, F and q don't have parity
-        diff_arr[-1, 0] = (
-            2 * (arr[-1, 0] - arr[-2, 0]) / (2 * (brr[-1, 0] - brr[-2, 0]))
-        )
-        for i in range(1, d1 - 1):
-            h1 = brr[i + 1, 0] - brr[i, 0]
-            h0 = brr[i, 0] - brr[i - 1, 0]
-            diff_arr[i, 0] = (
-                arr[i + 1, 0] / h1**2
-                - arr[i, 0] * (1 / h0**2 - 1 / h1**2)
-                - arr[i - 1, 0] / h0**2
-            ) / (1 / h1 + 1 / h0)
-
-    else:
-        d1, d2 = np.shape(arr)[0], np.shape(arr)[1]
-
-        diff_arr = np.zeros((d1, d2))
-        if ch == "r":  # across surfaces for multi-dim array
-            diff_arr[0, :] = 2 * (arr[1, :] - arr[0, :]) / (2 * (brr[1, :] - brr[0, :]))
-            diff_arr[-1, :] = (
-                2 * (arr[-1, :] - arr[-2, :]) / (2 * (brr[-1, :] - brr[-2, :]))
-            )
-            for i in range(1, d1 - 1):
-                h1 = brr[i + 1, :] - brr[i, :]
-                h0 = brr[i, :] - brr[i - 1, :]
-                diff_arr[i, :] = (
-                    arr[i + 1, :] / h1**2
-                    + arr[i, :] * (1 / h0**2 - 1 / h1**2)
-                    - arr[i - 1, :] / h0**2
-                ) / (1 / h1 + 1 / h0)
-
-        else:  # along a surface for a multi-dim array
-            if par == "e":
-                diff_arr[:, 0] = np.zeros((d1,))
-                diff_arr[:, -1] = np.zeros((d1,))
-                for i in range(1, d2 - 1):
-                    h1 = brr[:, i + 1] - brr[:, i]
-                    h0 = brr[:, i] - brr[:, i - 1]
-                    diff_arr[:, i] = (
-                        arr[:, i + 1] / h1**2
-                        + arr[:, i] * (1 / h0**2 - 1 / h1**2)
-                        - arr[:, i - 1] / h0**2
-                    ) / (1 / h1 + 1 / h0)
-            else:
-                diff_arr[:, 0] = (
-                    2 * (arr[:, 1] - arr[:, 0]) / (2 * (brr[:, 1] - brr[:, 0]))
-                )
-                diff_arr[:, -1] = (
-                    2 * (arr[:, -1] - arr[:, -2]) / (2 * (brr[:, -1] - brr[:, -2]))
-                )
-                for i in range(1, d2 - 1):
-                    h1 = brr[:, i + 1] - brr[:, i]
-                    h0 = brr[:, i] - brr[:, i - 1]
-                    diff_arr[:, i] = (
-                        arr[:, i + 1] / h1**2
-                        + arr[:, i] * (1 / h0**2 - 1 / h1**2)
-                        - arr[:, i - 1] / h0**2
-                    ) / (1 / h1 + 1 / h0)
-
-    return diff_arr
-
+    if len(temp) == 1 and ch == "l":
+        return _dermv_theta_1d(arr, brr, par=par)
+    if len(temp) == 1 and ch == "r":
+        return _dermv_radial_1d(arr, brr)
+    if ch == "r":
+        return _dermv_radial_2d(arr, brr)
+    return _dermv_theta_2d(arr, brr, par=par)
 
 def nperiod_data_extend(arr, nperiod, istheta=0, par="e"):
     if nperiod > 1:
