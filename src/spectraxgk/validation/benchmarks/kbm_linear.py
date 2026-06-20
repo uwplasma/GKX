@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields, replace
 from typing import Any, Sequence
 
 import jax.numpy as jnp
@@ -125,6 +125,55 @@ class _KBMLinearRunOptions:
     sample_stride: int | None
     density_species_index: int
     show_progress: bool
+
+
+@dataclass(frozen=True)
+class _KBMLinearRequest:
+    ky_target: float
+    beta_value: float | None
+    Nl: int
+    Nm: int
+    dt: float
+    steps: int
+    method: str
+    params: LinearParams | None
+    cfg: KBMBaseCase | None
+    time_cfg: TimeConfig | None
+    solver: str
+    krylov_cfg: KrylovConfig | None
+    kbm_target_factors: Sequence[float] | None
+    kbm_beta_transition: float | None
+    tmin: float | None
+    tmax: float | None
+    auto_window: bool
+    window_fraction: float
+    min_points: int
+    start_fraction: float
+    growth_weight: float
+    require_positive: bool
+    min_amp_fraction: float
+    mode_method: str
+    terms: LinearTerms | None
+    sample_stride: int | None
+    fit_signal: str
+    streaming_fit: bool
+    init_species_index: int
+    density_species_index: int
+    diagnostic_norm: str
+    fapar_override: float | None
+    apar_beta_scale: float | None
+    ampere_g0_scale: float | None
+    bpar_beta_scale: float | None
+    reference_aligned: bool | None
+    show_progress: bool
+
+
+def _kbm_linear_request_from_locals(values: dict[str, Any]) -> _KBMLinearRequest:
+    """Pack public ``run_kbm_linear`` arguments once for internal routing."""
+
+    return _KBMLinearRequest(
+        **{field.name: values[field.name] for field in fields(_KBMLinearRequest)}
+    )
 
 
 def _resolve_kbm_fit_signal(fit_signal: str) -> str:
@@ -659,6 +708,80 @@ def _run_kbm_saved_time_solver_path(
     )
 
 
+def _kbm_linear_setup_from_request(request: _KBMLinearRequest) -> _KBMLinearSetup:
+    return _resolve_kbm_linear_setup(
+        cfg=request.cfg,
+        beta_value=request.beta_value,
+        params=request.params,
+        terms=request.terms,
+        diagnostic_norm=request.diagnostic_norm,
+        fit_signal=request.fit_signal,
+        reference_aligned=request.reference_aligned,
+        Nm=request.Nm,
+        fapar_override=request.fapar_override,
+        apar_beta_scale=request.apar_beta_scale,
+        ampere_g0_scale=request.ampere_g0_scale,
+        bpar_beta_scale=request.bpar_beta_scale,
+    )
+
+
+def _kbm_linear_options_from_request(
+    request: _KBMLinearRequest,
+) -> _KBMLinearRunOptions:
+    return _KBMLinearRunOptions(
+        ky_target=float(request.ky_target),
+        Nl=request.Nl,
+        Nm=request.Nm,
+        dt=request.dt,
+        steps=request.steps,
+        method=request.method,
+        time_cfg=request.time_cfg,
+        krylov_cfg=request.krylov_cfg,
+        kbm_target_factors=request.kbm_target_factors,
+        kbm_beta_transition=request.kbm_beta_transition,
+        auto_window=request.auto_window,
+        tmin=request.tmin,
+        tmax=request.tmax,
+        window_fraction=request.window_fraction,
+        min_points=request.min_points,
+        start_fraction=request.start_fraction,
+        growth_weight=request.growth_weight,
+        require_positive=request.require_positive,
+        min_amp_fraction=request.min_amp_fraction,
+        mode_method=request.mode_method,
+        sample_stride=request.sample_stride,
+        density_species_index=request.density_species_index,
+        show_progress=request.show_progress,
+    )
+
+
+def _run_kbm_linear_request(request: _KBMLinearRequest) -> LinearRunResult:
+    setup = _kbm_linear_setup_from_request(request)
+    _validate_kbm_species_indices(
+        init_species_index=request.init_species_index,
+        density_species_index=request.density_species_index,
+    )
+    state = _prepare_kbm_linear_state(
+        setup,
+        ky_target=request.ky_target,
+        Nl=request.Nl,
+        Nm=request.Nm,
+        init_species_index=request.init_species_index,
+    )
+    options = _kbm_linear_options_from_request(request)
+    solver_key = select_kbm_solver_auto(
+        request.solver,
+        ky_target=float(request.ky_target),
+        reference_aligned=setup.reference_aligned,
+    )
+    _paths.sync_path_hooks(globals())
+    if solver_key == "explicit_time":
+        return _run_kbm_explicit_solver_path(setup, state, options)
+    if solver_key == "krylov":
+        return _run_kbm_krylov_solver_path(setup, state, options)
+    return _run_kbm_saved_time_solver_path(setup, state, options)
+
+
 def run_kbm_linear(
     ky_target: float = 0.3,
     *,
@@ -701,68 +824,4 @@ def run_kbm_linear(
 ) -> LinearRunResult:
     """Run a single linear KBM point and return the stored field history."""
 
-    setup = _resolve_kbm_linear_setup(
-        cfg=cfg,
-        beta_value=beta_value,
-        params=params,
-        terms=terms,
-        diagnostic_norm=diagnostic_norm,
-        fit_signal=fit_signal,
-        reference_aligned=reference_aligned,
-        Nm=Nm,
-        fapar_override=fapar_override,
-        apar_beta_scale=apar_beta_scale,
-        ampere_g0_scale=ampere_g0_scale,
-        bpar_beta_scale=bpar_beta_scale,
-    )
-    _validate_kbm_species_indices(
-        init_species_index=init_species_index,
-        density_species_index=density_species_index,
-    )
-    state = _prepare_kbm_linear_state(
-        setup,
-        ky_target=ky_target,
-        Nl=Nl,
-        Nm=Nm,
-        init_species_index=init_species_index,
-    )
-    options = _KBMLinearRunOptions(
-        ky_target=float(ky_target),
-        Nl=Nl,
-        Nm=Nm,
-        dt=dt,
-        steps=steps,
-        method=method,
-        time_cfg=time_cfg,
-        krylov_cfg=krylov_cfg,
-        kbm_target_factors=kbm_target_factors,
-        kbm_beta_transition=kbm_beta_transition,
-        auto_window=auto_window,
-        tmin=tmin,
-        tmax=tmax,
-        window_fraction=window_fraction,
-        min_points=min_points,
-        start_fraction=start_fraction,
-        growth_weight=growth_weight,
-        require_positive=require_positive,
-        min_amp_fraction=min_amp_fraction,
-        mode_method=mode_method,
-        sample_stride=sample_stride,
-        density_species_index=density_species_index,
-        show_progress=show_progress,
-    )
-
-    solver_key = select_kbm_solver_auto(
-        solver,
-        ky_target=float(ky_target),
-        reference_aligned=setup.reference_aligned,
-    )
-    _paths.sync_path_hooks(globals())
-
-    if solver_key == "explicit_time":
-        return _run_kbm_explicit_solver_path(setup, state, options)
-
-    if solver_key == "krylov":
-        return _run_kbm_krylov_solver_path(setup, state, options)
-
-    return _run_kbm_saved_time_solver_path(setup, state, options)
+    return _run_kbm_linear_request(_kbm_linear_request_from_locals(locals()))
