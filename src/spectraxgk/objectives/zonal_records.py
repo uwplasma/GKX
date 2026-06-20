@@ -9,6 +9,7 @@ import numpy as np
 
 
 MissingDampingPolicy = Literal["fail", "zero"]
+_NormalizedZonalRecord = dict[str, float]
 
 
 def _first_present(record: Mapping[str, Any], keys: Sequence[str]) -> tuple[str | None, Any]:
@@ -66,6 +67,186 @@ def _axis_index(values: list[float]) -> dict[float, int]:
     return {value: index for index, value in enumerate(values)}
 
 
+def _normalize_zonal_objective_record(
+    record: Mapping[str, Any],
+    *,
+    surface_keys: Sequence[str],
+    alpha_keys: Sequence[str],
+    kx_keys: Sequence[str],
+    residual_keys: Sequence[str],
+    damping_keys: Sequence[str],
+    linear_growth_keys: Sequence[str],
+    recurrence_keys: Sequence[str],
+    missing_damping_policy: MissingDampingPolicy,
+) -> tuple[_NormalizedZonalRecord, bool, bool]:
+    """Normalize one record and report which optional metrics were absent."""
+
+    surface = _optional_metric(record, surface_keys, field="surface", default=0.0)
+    alpha = _optional_metric(record, alpha_keys, field="alpha", default=0.0)
+    kx = _required_float(record, kx_keys, field="kx")
+    residual_value = _required_float(record, residual_keys, field="residual_level")
+    if residual_value <= 0.0:
+        raise ValueError("residual_level must be strictly positive in every record")
+
+    damping_missing = False
+    damping_value = _optional_metric(record, damping_keys, field="damping_rate")
+    if damping_value is None:
+        damping_missing = True
+        if missing_damping_policy == "fail":
+            raise ValueError("record is missing finite damping_rate")
+        damping_value = 0.0
+
+    growth_value = _optional_metric(
+        record,
+        linear_growth_keys,
+        field="linear_growth_rate",
+        default=0.0,
+    )
+    recurrence_missing = False
+    recurrence_value = _optional_metric(
+        record,
+        recurrence_keys,
+        field="recurrence_amplitude",
+    )
+    if recurrence_value is None:
+        recurrence_missing = True
+        recurrence_value = 0.0
+
+    return (
+        {
+            "surface": float(surface if surface is not None else 0.0),
+            "alpha": float(alpha if alpha is not None else 0.0),
+            "kx": float(kx),
+            "residual_level": float(residual_value),
+            "damping_rate": float(damping_value),
+            "linear_growth_rate": float(growth_value if growth_value is not None else 0.0),
+            "recurrence_amplitude": float(recurrence_value),
+        },
+        damping_missing,
+        recurrence_missing,
+    )
+
+
+def _normalize_zonal_objective_records(
+    records: Iterable[Mapping[str, Any]],
+    *,
+    surface_keys: Sequence[str],
+    alpha_keys: Sequence[str],
+    kx_keys: Sequence[str],
+    residual_keys: Sequence[str],
+    damping_keys: Sequence[str],
+    linear_growth_keys: Sequence[str],
+    recurrence_keys: Sequence[str],
+    missing_damping_policy: MissingDampingPolicy,
+) -> tuple[list[_NormalizedZonalRecord], int, int]:
+    """Normalize raw zonal objective records and count optional omissions."""
+
+    normalized: list[_NormalizedZonalRecord] = []
+    missing_damping_count = 0
+    missing_recurrence_count = 0
+    for record in records:
+        row, damping_missing, recurrence_missing = _normalize_zonal_objective_record(
+            record,
+            surface_keys=surface_keys,
+            alpha_keys=alpha_keys,
+            kx_keys=kx_keys,
+            residual_keys=residual_keys,
+            damping_keys=damping_keys,
+            linear_growth_keys=linear_growth_keys,
+            recurrence_keys=recurrence_keys,
+            missing_damping_policy=missing_damping_policy,
+        )
+        normalized.append(row)
+        missing_damping_count += int(damping_missing)
+        missing_recurrence_count += int(recurrence_missing)
+
+    if not normalized:
+        raise ValueError("at least one zonal-flow objective record is required")
+    return normalized, missing_damping_count, missing_recurrence_count
+
+
+def _zonal_objective_axes(
+    normalized: Sequence[Mapping[str, float]],
+) -> tuple[list[float], list[float], list[float]]:
+    """Return sorted surface, alpha, and kx axes from normalized records."""
+
+    return (
+        sorted({row["surface"] for row in normalized}),
+        sorted({row["alpha"] for row in normalized}),
+        sorted({row["kx"] for row in normalized}),
+    )
+
+
+def _empty_zonal_metric_tensors(
+    surfaces: Sequence[float],
+    alphas: Sequence[float],
+    kx_values: Sequence[float],
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Allocate metric tensors on the record-defined axis product."""
+
+    shape = (len(surfaces), len(alphas), len(kx_values))
+    return (
+        np.full(shape, np.nan, dtype=float),
+        np.full(shape, np.nan, dtype=float),
+        np.full(shape, np.nan, dtype=float),
+        np.full(shape, np.nan, dtype=float),
+    )
+
+
+def _fill_zonal_metric_tensors(
+    normalized: Sequence[Mapping[str, float]],
+    *,
+    surfaces: list[float],
+    alphas: list[float],
+    kx_values: list[float],
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Fill metric tensors and reject duplicate grid points."""
+
+    residual_tensor, damping_tensor, growth_tensor, recurrence_tensor = (
+        _empty_zonal_metric_tensors(surfaces, alphas, kx_values)
+    )
+    surface_index = _axis_index(surfaces)
+    alpha_index = _axis_index(alphas)
+    kx_index = _axis_index(kx_values)
+    seen: set[tuple[int, int, int]] = set()
+    for row in normalized:
+        index = (
+            surface_index[row["surface"]],
+            alpha_index[row["alpha"]],
+            kx_index[row["kx"]],
+        )
+        if index in seen:
+            raise ValueError(
+                "duplicate zonal-flow objective record for "
+                f"surface={row['surface']}, alpha={row['alpha']}, kx={row['kx']}"
+            )
+        seen.add(index)
+        residual_tensor[index] = row["residual_level"]
+        damping_tensor[index] = row["damping_rate"]
+        growth_tensor[index] = row["linear_growth_rate"]
+        recurrence_tensor[index] = row["recurrence_amplitude"]
+    return residual_tensor, damping_tensor, growth_tensor, recurrence_tensor
+
+
+def _validate_zonal_metric_tensors(
+    *,
+    residual_tensor: np.ndarray,
+    damping_tensor: np.ndarray,
+    growth_tensor: np.ndarray,
+    recurrence_tensor: np.ndarray,
+) -> None:
+    """Require complete finite tensors for every zonal objective metric."""
+
+    for name, tensor in (
+        ("residual_level", residual_tensor),
+        ("damping_rate", damping_tensor),
+        ("linear_growth_rate", growth_tensor),
+        ("recurrence_amplitude", recurrence_tensor),
+    ):
+        if not np.all(np.isfinite(tensor)):
+            raise ValueError(f"records do not form a complete finite tensor for {name}")
+
+
 def _finite_metric_tensor_from_records(
     records: Iterable[Mapping[str, Any]],
     *,
@@ -92,93 +273,34 @@ def _finite_metric_tensor_from_records(
     if missing_damping_policy not in {"fail", "zero"}:
         raise ValueError("missing_damping_policy must be 'fail' or 'zero'")
 
-    normalized: list[dict[str, float]] = []
-    missing_damping_count = 0
-    missing_recurrence_count = 0
-    for record in records:
-        surface = _optional_metric(record, surface_keys, field="surface", default=0.0)
-        alpha = _optional_metric(record, alpha_keys, field="alpha", default=0.0)
-        kx = _required_float(record, kx_keys, field="kx")
-        residual_value = _required_float(record, residual_keys, field="residual_level")
-        if residual_value <= 0.0:
-            raise ValueError("residual_level must be strictly positive in every record")
-
-        damping_value = _optional_metric(record, damping_keys, field="damping_rate")
-        if damping_value is None:
-            missing_damping_count += 1
-            if missing_damping_policy == "fail":
-                raise ValueError("record is missing finite damping_rate")
-            damping_value = 0.0
-
-        growth_value = _optional_metric(
-            record,
-            linear_growth_keys,
-            field="linear_growth_rate",
-            default=0.0,
+    normalized, missing_damping_count, missing_recurrence_count = (
+        _normalize_zonal_objective_records(
+            records,
+            surface_keys=surface_keys,
+            alpha_keys=alpha_keys,
+            kx_keys=kx_keys,
+            residual_keys=residual_keys,
+            damping_keys=damping_keys,
+            linear_growth_keys=linear_growth_keys,
+            recurrence_keys=recurrence_keys,
+            missing_damping_policy=missing_damping_policy,
         )
-        recurrence_value = _optional_metric(
-            record,
-            recurrence_keys,
-            field="recurrence_amplitude",
+    )
+    surfaces, alphas, kx_values = _zonal_objective_axes(normalized)
+    residual_tensor, damping_tensor, growth_tensor, recurrence_tensor = (
+        _fill_zonal_metric_tensors(
+            normalized,
+            surfaces=surfaces,
+            alphas=alphas,
+            kx_values=kx_values,
         )
-        if recurrence_value is None:
-            missing_recurrence_count += 1
-            recurrence_value = 0.0
-
-        normalized.append(
-            {
-                "surface": float(surface if surface is not None else 0.0),
-                "alpha": float(alpha if alpha is not None else 0.0),
-                "kx": float(kx),
-                "residual_level": float(residual_value),
-                "damping_rate": float(damping_value),
-                "linear_growth_rate": float(
-                    growth_value if growth_value is not None else 0.0
-                ),
-                "recurrence_amplitude": float(recurrence_value),
-            }
-        )
-
-    if not normalized:
-        raise ValueError("at least one zonal-flow objective record is required")
-
-    surfaces = sorted({row["surface"] for row in normalized})
-    alphas = sorted({row["alpha"] for row in normalized})
-    kx_values = sorted({row["kx"] for row in normalized})
-    surface_index = _axis_index(surfaces)
-    alpha_index = _axis_index(alphas)
-    kx_index = _axis_index(kx_values)
-    shape = (len(surfaces), len(alphas), len(kx_values))
-    residual_tensor = np.full(shape, np.nan, dtype=float)
-    damping_tensor = np.full(shape, np.nan, dtype=float)
-    growth_tensor = np.full(shape, np.nan, dtype=float)
-    recurrence_tensor = np.full(shape, np.nan, dtype=float)
-    seen: set[tuple[int, int, int]] = set()
-    for row in normalized:
-        index = (
-            surface_index[row["surface"]],
-            alpha_index[row["alpha"]],
-            kx_index[row["kx"]],
-        )
-        if index in seen:
-            raise ValueError(
-                "duplicate zonal-flow objective record for "
-                f"surface={row['surface']}, alpha={row['alpha']}, kx={row['kx']}"
-            )
-        seen.add(index)
-        residual_tensor[index] = row["residual_level"]
-        damping_tensor[index] = row["damping_rate"]
-        growth_tensor[index] = row["linear_growth_rate"]
-        recurrence_tensor[index] = row["recurrence_amplitude"]
-
-    for name, tensor in (
-        ("residual_level", residual_tensor),
-        ("damping_rate", damping_tensor),
-        ("linear_growth_rate", growth_tensor),
-        ("recurrence_amplitude", recurrence_tensor),
-    ):
-        if not np.all(np.isfinite(tensor)):
-            raise ValueError(f"records do not form a complete finite tensor for {name}")
+    )
+    _validate_zonal_metric_tensors(
+        residual_tensor=residual_tensor,
+        damping_tensor=damping_tensor,
+        growth_tensor=growth_tensor,
+        recurrence_tensor=recurrence_tensor,
+    )
 
     return (
         surfaces,
