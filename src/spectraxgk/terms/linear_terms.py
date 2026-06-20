@@ -274,6 +274,117 @@ def curvature_gradb_contribution(
     return -weight_curv * icv * curv_term - weight_gradb * igb * gradb_term
 
 
+def _laguerre_gradient_profile(
+    J: jnp.ndarray,
+    *,
+    l4: jnp.ndarray,
+    tprim_s: jnp.ndarray,
+    fprim_s: jnp.ndarray,
+    thermal_shift: float,
+) -> jnp.ndarray:
+    J_m1 = shift_axis(J, -1, axis=1)
+    J_p1 = shift_axis(J, 1, axis=1)
+    return (
+        J_m1 * (l4 * tprim_s)
+        + J * (fprim_s + (2.0 * l4 + thermal_shift) * tprim_s)
+        + J_p1 * ((l4 + 1.0) * tprim_s)
+    )
+
+
+def _diamagnetic_scalar_factors(
+    *,
+    tprim: jnp.ndarray,
+    fprim: jnp.ndarray,
+    tz: jnp.ndarray,
+    omega_star_scale: jnp.ndarray,
+    ky: jnp.ndarray,
+    imag: jnp.ndarray,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    omega_star = imag * omega_star_scale * ky
+    tprim_s = tprim[:, None, None, None, None]
+    fprim_s = fprim[:, None, None, None, None]
+    tz_s = tz[:, None, None, None, None]
+    omega_star_s = omega_star[None, None, :, None, None]
+    return tprim_s, fprim_s, omega_star_s, omega_star_s * tz_s
+
+
+def _diamagnetic_m0_drive(
+    *,
+    phi: jnp.ndarray,
+    bpar: jnp.ndarray | None,
+    Jl: jnp.ndarray,
+    JlB: jnp.ndarray,
+    l4: jnp.ndarray,
+    tprim_s: jnp.ndarray,
+    fprim_s: jnp.ndarray,
+    omega_star_s: jnp.ndarray,
+    omega_star_bpar: jnp.ndarray,
+) -> jnp.ndarray:
+    drive_m0 = (
+        omega_star_s
+        * phi
+        * _laguerre_gradient_profile(
+            Jl, l4=l4, tprim_s=tprim_s, fprim_s=fprim_s, thermal_shift=0.0
+        )
+    )
+    if bpar is None:
+        return drive_m0
+    return drive_m0 + omega_star_bpar * bpar * _laguerre_gradient_profile(
+        JlB, l4=l4, tprim_s=tprim_s, fprim_s=fprim_s, thermal_shift=0.0
+    )
+
+
+def _diamagnetic_m2_drive(
+    *,
+    phi: jnp.ndarray,
+    bpar: jnp.ndarray | None,
+    Jl: jnp.ndarray,
+    JlB: jnp.ndarray,
+    tprim_s: jnp.ndarray,
+    omega_star_s: jnp.ndarray,
+    omega_star_bpar: jnp.ndarray,
+) -> jnp.ndarray:
+    thermal_factor = tprim_s / jnp.sqrt(2.0)
+    drive_m2 = omega_star_s * phi * Jl * thermal_factor
+    if bpar is None:
+        return drive_m2
+    return drive_m2 + omega_star_bpar * bpar * JlB * thermal_factor
+
+
+def _diamagnetic_apar_profile_drive(
+    *,
+    apar: jnp.ndarray,
+    Jl: jnp.ndarray,
+    l4: jnp.ndarray,
+    tprim_s: jnp.ndarray,
+    fprim_s: jnp.ndarray,
+    vth: jnp.ndarray,
+    omega_star_s: jnp.ndarray,
+) -> jnp.ndarray:
+    vth_s = vth[:, None, None, None, None]
+    return (
+        -vth_s
+        * omega_star_s
+        * apar
+        * _laguerre_gradient_profile(
+            Jl, l4=l4, tprim_s=tprim_s, fprim_s=fprim_s, thermal_shift=1.0
+        )
+    )
+
+
+def _diamagnetic_apar_temperature_drive(
+    *,
+    apar: jnp.ndarray,
+    Jl: jnp.ndarray,
+    tprim_s: jnp.ndarray,
+    vth: jnp.ndarray,
+    omega_star_s: jnp.ndarray,
+) -> jnp.ndarray:
+    vth_s = vth[:, None, None, None, None]
+    thermal_factor = tprim_s * jnp.sqrt(3.0 / 2.0)
+    return -vth_s * omega_star_s * apar * Jl * thermal_factor
+
+
 def diamagnetic_contribution(
     dG: jnp.ndarray,
     *,
@@ -293,54 +404,55 @@ def diamagnetic_contribution(
     weight: jnp.ndarray,
 ) -> jnp.ndarray:
     Nm = dG.shape[2]
-    Jl_m1 = shift_axis(Jl, -1, axis=1)
-    Jl_p1 = shift_axis(Jl, 1, axis=1)
-    JlB_m1 = shift_axis(JlB, -1, axis=1)
-    JlB_p1 = shift_axis(JlB, 1, axis=1)
-    omega_star = imag * omega_star_scale * ky
-    tprim_s = tprim[:, None, None, None, None]
-    fprim_s = fprim[:, None, None, None, None]
-    tz_s = tz[:, None, None, None, None]
-    omega_star_s = omega_star[None, None, :, None, None]
-    omega_star_bpar = omega_star_s * tz_s
-    drive_m0 = (
-        omega_star_s
-        * phi
-        * (
-            Jl_m1 * (l4 * tprim_s)
-            + Jl * (fprim_s + 2.0 * l4 * tprim_s)
-            + Jl_p1 * ((l4 + 1.0) * tprim_s)
-        )
+    tprim_s, fprim_s, omega_star_s, omega_star_bpar = _diamagnetic_scalar_factors(
+        tprim=tprim,
+        fprim=fprim,
+        tz=tz,
+        omega_star_scale=omega_star_scale,
+        ky=ky,
+        imag=imag,
     )
-    if bpar is not None:
-        drive_m0 = drive_m0 + omega_star_bpar * bpar * (
-            JlB_m1 * (l4 * tprim_s)
-            + JlB * (fprim_s + 2.0 * l4 * tprim_s)
-            + JlB_p1 * ((l4 + 1.0) * tprim_s)
-        )
+    drive_m0 = _diamagnetic_m0_drive(
+        phi=phi,
+        bpar=bpar,
+        Jl=Jl,
+        JlB=JlB,
+        l4=l4,
+        tprim_s=tprim_s,
+        fprim_s=fprim_s,
+        omega_star_s=omega_star_s,
+        omega_star_bpar=omega_star_bpar,
+    )
     drive = _hermite_mode_drive(dG, 0, drive_m0)
     if Nm > 2:
-        drive_m2 = omega_star_s * phi * Jl * (tprim_s / jnp.sqrt(2.0))
-        if bpar is not None:
-            drive_m2 = drive_m2 + omega_star_bpar * bpar * JlB * (
-                tprim_s / jnp.sqrt(2.0)
-            )
+        drive_m2 = _diamagnetic_m2_drive(
+            phi=phi,
+            bpar=bpar,
+            Jl=Jl,
+            JlB=JlB,
+            tprim_s=tprim_s,
+            omega_star_s=omega_star_s,
+            omega_star_bpar=omega_star_bpar,
+        )
         drive = drive + _hermite_mode_drive(dG, 2, drive_m2)
     if Nm > 1 and apar is not None:
-        vth_s = vth[:, None, None, None, None]
-        apar_drive = (
-            -vth_s
-            * omega_star_s
-            * apar
-            * (
-                Jl_m1 * (l4 * tprim_s)
-                + Jl * (fprim_s + (2.0 * l4 + 1.0) * tprim_s)
-                + Jl_p1 * ((l4 + 1.0) * tprim_s)
-            )
+        apar_drive = _diamagnetic_apar_profile_drive(
+            apar=apar,
+            Jl=Jl,
+            l4=l4,
+            tprim_s=tprim_s,
+            fprim_s=fprim_s,
+            vth=vth,
+            omega_star_s=omega_star_s,
         )
         drive = drive + _hermite_mode_drive(dG, 1, apar_drive)
     if Nm > 3 and apar is not None:
-        vth_s = vth[:, None, None, None, None]
-        drive_m3 = -vth_s * omega_star_s * apar * Jl * (tprim_s * jnp.sqrt(3.0 / 2.0))
+        drive_m3 = _diamagnetic_apar_temperature_drive(
+            apar=apar,
+            Jl=Jl,
+            tprim_s=tprim_s,
+            vth=vth,
+            omega_star_s=omega_star_s,
+        )
         drive = drive + _hermite_mode_drive(dG, 3, drive_m3)
     return dG + weight * drive
