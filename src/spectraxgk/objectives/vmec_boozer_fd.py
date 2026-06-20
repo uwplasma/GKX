@@ -62,6 +62,29 @@ class _VmecBoozerDependencyFns:
 
 
 @dataclass(frozen=True)
+class _VmecBoozerScalarDependencyFns:
+    load_state_bundle_fn: Any
+    state_array_fn: Any
+    replace_state_coefficient_fn: Any
+    parameter_name_fn: Any
+    vector_fn: Any
+    scalar_selector_fn: Any
+
+
+@dataclass(frozen=True)
+class _ScalarEvaluation:
+    value: float
+    vector: list[float]
+
+
+@dataclass(frozen=True)
+class _ScalarFiniteDifferenceTriplet:
+    minus: _ScalarEvaluation
+    base: _ScalarEvaluation
+    plus: _ScalarEvaluation
+
+
+@dataclass(frozen=True)
 class _AggregateSamplePlan:
     surface_samples: tuple[dict[str, float | int | None], ...]
     alpha_values: tuple[float, ...]
@@ -267,6 +290,146 @@ def _aggregate_dependency_fns(kwargs: dict[str, Any]) -> _VmecBoozerDependencyFn
             "_scalar_selector_fn", solver_scalar_objective_from_vector
         ),
     )
+
+
+def _scalar_dependency_fns(kwargs: dict[str, Any]) -> _VmecBoozerScalarDependencyFns:
+    """Return injected functions used by scalar VMEC/Boozer FD reports."""
+
+    return _VmecBoozerScalarDependencyFns(
+        load_state_bundle_fn=kwargs.pop(
+            "_load_state_bundle_fn", _load_vmec_jax_example_state_bundle
+        ),
+        state_array_fn=kwargs.pop("_state_array_fn", _vmec_boozer_state_array),
+        replace_state_coefficient_fn=kwargs.pop(
+            "_replace_state_coefficient_fn", _replace_vmec_boozer_state_coefficient
+        ),
+        parameter_name_fn=kwargs.pop(
+            "_parameter_name_fn", _vmec_boozer_state_parameter_name
+        ),
+        vector_fn=kwargs.pop(
+            "_vector_fn", vmec_boozer_solver_objective_vector_from_state
+        ),
+        scalar_selector_fn=kwargs.pop(
+            "_scalar_selector_fn", solver_scalar_objective_from_vector
+        ),
+    )
+
+
+def _evaluate_scalar_fd_point(
+    *,
+    delta: float,
+    ctx: _StateParameterContext,
+    fns: _VmecBoozerScalarDependencyFns,
+    objective: SolverScalarObjective,
+    kwargs: dict[str, Any],
+) -> _ScalarEvaluation:
+    """Evaluate one scalar objective and full objective vector at a perturbation."""
+
+    traced_state = _perturbed_state(ctx, fns.replace_state_coefficient_fn, delta)
+    vector = fns.vector_fn(
+        traced_state,
+        ctx.bundle["static"],
+        ctx.bundle["indata"],
+        ctx.bundle["wout"],
+        **kwargs,
+    )
+    scalar = fns.scalar_selector_fn(vector, objective)
+    vector_np = np.asarray(vector, dtype=float)
+    return _ScalarEvaluation(
+        value=float(np.asarray(scalar)),
+        vector=vector_np.tolist(),
+    )
+
+
+def _evaluate_scalar_fd_triplet(
+    *,
+    settings: _FiniteDifferenceSettings,
+    ctx: _StateParameterContext,
+    fns: _VmecBoozerScalarDependencyFns,
+    objective: SolverScalarObjective,
+    kwargs: dict[str, Any],
+) -> _ScalarFiniteDifferenceTriplet:
+    """Evaluate the minus/base/plus scalar FD triplet."""
+
+    return _ScalarFiniteDifferenceTriplet(
+        minus=_evaluate_scalar_fd_point(
+            delta=-settings.step,
+            ctx=ctx,
+            fns=fns,
+            objective=objective,
+            kwargs=kwargs,
+        ),
+        base=_evaluate_scalar_fd_point(
+            delta=0.0,
+            ctx=ctx,
+            fns=fns,
+            objective=objective,
+            kwargs=kwargs,
+        ),
+        plus=_evaluate_scalar_fd_point(
+            delta=settings.step,
+            ctx=ctx,
+            fns=fns,
+            objective=objective,
+            kwargs=kwargs,
+        ),
+    )
+
+
+def _scalar_fd_diagnostics(
+    triplet: _ScalarFiniteDifferenceTriplet,
+    *,
+    settings: _FiniteDifferenceSettings,
+) -> dict[str, object]:
+    """Return finite-difference diagnostics for one scalar triplet."""
+
+    return _fd_diagnostics(
+        minus_value=triplet.minus.value,
+        base_value=triplet.base.value,
+        plus_value=triplet.plus.value,
+        settings=settings,
+        extra_values=[
+            *triplet.minus.vector,
+            *triplet.base.vector,
+            *triplet.plus.vector,
+        ],
+    )
+
+
+def _scalar_fd_report_payload(
+    *,
+    case_name: str,
+    objective: SolverScalarObjective,
+    ctx: _StateParameterContext,
+    options: dict[str, Any],
+    diagnostics: dict[str, object],
+    triplet: _ScalarFiniteDifferenceTriplet,
+) -> dict[str, object]:
+    """Return the public scalar finite-difference report payload."""
+
+    return {
+        "kind": "vmec_boozer_scalar_objective_finite_difference_report",
+        "source_scope": "mode21_vmec_boozer_state",
+        "claim_scope": (
+            "finite-difference sensitivity of one scalar objective through "
+            "VMECState -> booz_xform_jax -> SPECTRAX-GK value evaluator; not an AD or nonlinear transport claim"
+        ),
+        **_base_report_fields(
+            case_name=case_name,
+            objective=objective,
+            ctx=ctx,
+            options=options,
+        ),
+        **diagnostics,
+        "minus_objective_vector": triplet.minus.vector,
+        "base_objective_vector": triplet.base.vector,
+        "plus_objective_vector": triplet.plus.vector,
+        "next_action": (
+            "Use this finite-difference path to seed real VMEC/Boozer optimizer "
+            "drivers, then promote growth objectives with implicit AD/FD gates and "
+            "quasilinear objectives with branch-continuity plus finite-difference/SPSA audits."
+        ),
+    }
 
 
 def _aggregate_sample_plan(
@@ -548,21 +711,7 @@ def vmec_boozer_scalar_objective_finite_difference_report(  # pragma: no cover
     before they are used in production optimization loops.
     """
 
-    load_state_bundle_fn = kwargs.pop(
-        "_load_state_bundle_fn", _load_vmec_jax_example_state_bundle
-    )
-    state_array_fn = kwargs.pop("_state_array_fn", _vmec_boozer_state_array)
-    replace_state_coefficient_fn = kwargs.pop(
-        "_replace_state_coefficient_fn", _replace_vmec_boozer_state_coefficient
-    )
-    parameter_name_fn = kwargs.pop(
-        "_parameter_name_fn", _vmec_boozer_state_parameter_name
-    )
-    vector_fn = kwargs.pop("_vector_fn", vmec_boozer_solver_objective_vector_from_state)
-    scalar_selector_fn = kwargs.pop(
-        "_scalar_selector_fn", solver_scalar_objective_from_vector
-    )
-
+    fns = _scalar_dependency_fns(kwargs)
     settings = _finite_difference_settings(
         perturbation_step, response_atol, max_curvature_ratio
     )
@@ -572,57 +721,25 @@ def vmec_boozer_scalar_objective_finite_difference_report(  # pragma: no cover
         radial_index=radial_index,
         mode_index=mode_index,
         base_delta=base_delta,
-        load_state_bundle_fn=load_state_bundle_fn,
-        state_array_fn=state_array_fn,
-        parameter_name_fn=parameter_name_fn,
+        load_state_bundle_fn=fns.load_state_bundle_fn,
+        state_array_fn=fns.state_array_fn,
+        parameter_name_fn=fns.parameter_name_fn,
     )
-
-    def evaluate(delta: float) -> tuple[float, list[float]]:
-        traced_state = _perturbed_state(ctx, replace_state_coefficient_fn, delta)
-        vector = vector_fn(
-            traced_state,
-            ctx.bundle["static"],
-            ctx.bundle["indata"],
-            ctx.bundle["wout"],
-            **kwargs,
-        )
-        scalar = scalar_selector_fn(vector, objective)
-        vector_np = np.asarray(vector, dtype=float)
-        return float(np.asarray(scalar)), vector_np.tolist()
-
-    minus_value, minus_vector = evaluate(-settings.step)
-    base_value, base_vector = evaluate(0.0)
-    plus_value, plus_vector = evaluate(settings.step)
-    diagnostics = _fd_diagnostics(
-        minus_value=minus_value,
-        base_value=base_value,
-        plus_value=plus_value,
+    triplet = _evaluate_scalar_fd_triplet(
         settings=settings,
-        extra_values=[*minus_vector, *base_vector, *plus_vector],
+        ctx=ctx,
+        fns=fns,
+        objective=objective,
+        kwargs=kwargs,
     )
-    return {
-        "kind": "vmec_boozer_scalar_objective_finite_difference_report",
-        "source_scope": "mode21_vmec_boozer_state",
-        "claim_scope": (
-            "finite-difference sensitivity of one scalar objective through "
-            "VMECState -> booz_xform_jax -> SPECTRAX-GK value evaluator; not an AD or nonlinear transport claim"
-        ),
-        **_base_report_fields(
-            case_name=case_name,
-            objective=objective,
-            ctx=ctx,
-            options=_public_options(kwargs),
-        ),
-        **diagnostics,
-        "minus_objective_vector": minus_vector,
-        "base_objective_vector": base_vector,
-        "plus_objective_vector": plus_vector,
-        "next_action": (
-            "Use this finite-difference path to seed real VMEC/Boozer optimizer "
-            "drivers, then promote growth objectives with implicit AD/FD gates and "
-            "quasilinear objectives with branch-continuity plus finite-difference/SPSA audits."
-        ),
-    }
+    return _scalar_fd_report_payload(
+        case_name=case_name,
+        objective=objective,
+        ctx=ctx,
+        options=_public_options(kwargs),
+        diagnostics=_scalar_fd_diagnostics(triplet, settings=settings),
+        triplet=triplet,
+    )
 
 
 def vmec_boozer_aggregate_scalar_objective_finite_difference_report(  # pragma: no cover
