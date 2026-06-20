@@ -35,12 +35,88 @@ class QuasilinearCalibrationPoint:
         return asdict(self)
 
 
+@dataclass(frozen=True)
+class _CalibrationReportControls:
+    saturation_rule: str
+    version: str
+    holdout_mean_rel_gate: float
+    observed_floor: float
+
+
 def _point_from_mapping(
     item: QuasilinearCalibrationPoint | dict[str, Any],
 ) -> QuasilinearCalibrationPoint:
     if isinstance(item, QuasilinearCalibrationPoint):
         return item
     return QuasilinearCalibrationPoint(**dict(item))
+
+
+def _normalized_calibration_points(
+    points: Iterable[QuasilinearCalibrationPoint | dict[str, Any]],
+) -> list[QuasilinearCalibrationPoint]:
+    pts = [_point_from_mapping(item) for item in points]
+    if not pts:
+        raise ValueError("at least one calibration point is required")
+    return pts
+
+
+def _calibration_report_controls(
+    *,
+    saturation_rule: str,
+    version: str,
+    holdout_mean_rel_gate: float,
+    observed_floor: float,
+) -> _CalibrationReportControls:
+    if observed_floor <= 0.0:
+        raise ValueError("observed_floor must be positive")
+    if holdout_mean_rel_gate <= 0.0:
+        raise ValueError("holdout_mean_rel_gate must be positive")
+    return _CalibrationReportControls(
+        saturation_rule=str(saturation_rule),
+        version=str(version),
+        holdout_mean_rel_gate=float(holdout_mean_rel_gate),
+        observed_floor=float(observed_floor),
+    )
+
+
+def _validate_calibration_points(
+    points: list[QuasilinearCalibrationPoint],
+    *,
+    saturation_rule: str,
+) -> None:
+    allowed_splits = {"train", "holdout", "audit"}
+    bad_splits = sorted({p.split for p in points if p.split not in allowed_splits})
+    if bad_splits:
+        raise ValueError(f"unsupported calibration split(s): {bad_splits}")
+    nonfinite_cases = [
+        p.case
+        for p in points
+        if not np.isfinite(p.predicted_heat_flux)
+        or not np.isfinite(p.observed_heat_flux)
+        or (
+            p.observed_heat_flux_std is not None
+            and not np.isfinite(p.observed_heat_flux_std)
+        )
+    ]
+    if nonfinite_cases:
+        raise ValueError(
+            f"calibration points contain non-finite values: {nonfinite_cases}"
+        )
+    negative_std_cases = [
+        p.case
+        for p in points
+        if p.observed_heat_flux_std is not None and p.observed_heat_flux_std < 0.0
+    ]
+    if negative_std_cases:
+        raise ValueError(
+            f"calibration points contain negative observed_heat_flux_std: {negative_std_cases}"
+        )
+    point_rules = {p.saturation_rule for p in points}
+    if point_rules != {str(saturation_rule)}:
+        raise ValueError(
+            "all calibration points must use the report saturation_rule "
+            f"{saturation_rule!r}; found {sorted(point_rules)}"
+        )
 
 
 def _split_metrics(
@@ -170,6 +246,93 @@ def apply_heat_flux_scale(
     return scaled
 
 
+def _maybe_apply_train_scale(
+    points: list[QuasilinearCalibrationPoint],
+    *,
+    fit_train_scale_enabled: bool,
+) -> tuple[list[QuasilinearCalibrationPoint], dict[str, Any] | None]:
+    if not fit_train_scale_enabled:
+        return points, None
+    scale_fit = fit_train_heat_flux_scale(points)
+    scaled_points = apply_heat_flux_scale(
+        points,
+        scale=float(scale_fit["scale"]),
+        note_label="train_fitted_heat_flux_scale",
+    )
+    return scaled_points, scale_fit
+
+
+def _calibration_split_metrics(
+    points: list[QuasilinearCalibrationPoint],
+    *,
+    observed_floor: float,
+) -> tuple[dict[str, list[QuasilinearCalibrationPoint]], dict[str, Any], dict[str, Any]]:
+    allowed_splits = {"train", "holdout", "audit"}
+    by_split_points = {
+        split: [p for p in points if p.split == split] for split in allowed_splits
+    }
+    by_split = {
+        split: _split_metrics(split_points, observed_floor=observed_floor)
+        for split, split_points in sorted(by_split_points.items())
+    }
+    all_metrics = _split_metrics(points, observed_floor=observed_floor)
+    return by_split_points, by_split, all_metrics
+
+
+def _calibration_report_claim(
+    *,
+    by_split: dict[str, Any],
+    holdout_window_convergence: dict[str, Any],
+    holdout_mean_rel_gate: float,
+) -> tuple[bool, str]:
+    holdout = by_split["holdout"]
+    has_train = by_split["train"]["n"] > 0
+    has_holdout = holdout["n"] > 0
+    holdout_error = holdout["mean_abs_relative_error"]
+    passed = bool(
+        has_train
+        and has_holdout
+        and holdout_error is not None
+        and holdout_error <= holdout_mean_rel_gate
+        and holdout_window_convergence["passed"]
+    )
+    claim_level = "calibrated_absolute_flux" if passed else "calibration_dataset"
+    if not has_holdout:
+        claim_level = "training_or_audit_only"
+    return passed, claim_level
+
+
+def _calibration_report_payload(
+    *,
+    controls: _CalibrationReportControls,
+    points: list[QuasilinearCalibrationPoint],
+    metrics: dict[str, Any],
+    by_split: dict[str, Any],
+    passed: bool,
+    claim_level: str,
+    holdout_window_convergence: dict[str, Any],
+    scale_fit: dict[str, Any] | None,
+    metadata: dict[str, Any] | None,
+) -> dict[str, Any]:
+    return {
+        "kind": "quasilinear_calibration_report",
+        "version": controls.version,
+        "saturation_rule": controls.saturation_rule,
+        "claim_level": claim_level,
+        "passed": passed,
+        "holdout_mean_rel_gate": controls.holdout_mean_rel_gate,
+        "observed_floor": controls.observed_floor,
+        "metrics": metrics,
+        "by_split": by_split,
+        "points": [p.to_dict() for p in points],
+        "metadata": {
+            **dict(metadata or {}),
+            "holdout_window_convergence": holdout_window_convergence,
+            **({} if scale_fit is None else {"heat_flux_scale_fit": scale_fit}),
+        },
+    }
+
+
 def quasilinear_calibration_report(
     points: Iterable[QuasilinearCalibrationPoint | dict[str, Any]],
     *,
@@ -187,97 +350,39 @@ def quasilinear_calibration_report(
     relative error passes the supplied gate.
     """
 
-    pts = [_point_from_mapping(item) for item in points]
-    if not pts:
-        raise ValueError("at least one calibration point is required")
-    if observed_floor <= 0.0:
-        raise ValueError("observed_floor must be positive")
-    if holdout_mean_rel_gate <= 0.0:
-        raise ValueError("holdout_mean_rel_gate must be positive")
-    allowed_splits = {"train", "holdout", "audit"}
-    bad_splits = sorted({p.split for p in pts if p.split not in allowed_splits})
-    if bad_splits:
-        raise ValueError(f"unsupported calibration split(s): {bad_splits}")
-    nonfinite_cases = [
-        p.case
-        for p in pts
-        if not np.isfinite(p.predicted_heat_flux)
-        or not np.isfinite(p.observed_heat_flux)
-        or (
-            p.observed_heat_flux_std is not None
-            and not np.isfinite(p.observed_heat_flux_std)
-        )
-    ]
-    if nonfinite_cases:
-        raise ValueError(
-            f"calibration points contain non-finite values: {nonfinite_cases}"
-        )
-    negative_std_cases = [
-        p.case
-        for p in pts
-        if p.observed_heat_flux_std is not None and p.observed_heat_flux_std < 0.0
-    ]
-    if negative_std_cases:
-        raise ValueError(
-            f"calibration points contain negative observed_heat_flux_std: {negative_std_cases}"
-        )
-    point_rules = {p.saturation_rule for p in pts}
-    if point_rules != {str(saturation_rule)}:
-        raise ValueError(
-            "all calibration points must use the report saturation_rule "
-            f"{saturation_rule!r}; found {sorted(point_rules)}"
-        )
-
-    scale_fit = None
-    if fit_train_scale:
-        scale_fit = fit_train_heat_flux_scale(pts)
-        pts = apply_heat_flux_scale(
-            pts,
-            scale=float(scale_fit["scale"]),
-            note_label="train_fitted_heat_flux_scale",
-        )
-
-    by_split_points = {
-        split: [p for p in pts if p.split == split] for split in allowed_splits
-    }
-    by_split = {
-        split: _split_metrics(split_points, observed_floor=observed_floor)
-        for split, split_points in sorted(by_split_points.items())
-    }
-    all_metrics = _split_metrics(pts, observed_floor=observed_floor)
-    holdout = by_split["holdout"]
-    has_train = by_split["train"]["n"] > 0
-    has_holdout = holdout["n"] > 0
-    holdout_error = holdout["mean_abs_relative_error"]
-    holdout_window_convergence = _holdout_window_convergence_summary(pts)
-    passed = bool(
-        has_train
-        and has_holdout
-        and holdout_error is not None
-        and holdout_error <= holdout_mean_rel_gate
-        and holdout_window_convergence["passed"]
+    controls = _calibration_report_controls(
+        saturation_rule=saturation_rule,
+        version=version,
+        holdout_mean_rel_gate=holdout_mean_rel_gate,
+        observed_floor=observed_floor,
     )
-    claim_level = "calibrated_absolute_flux" if passed else "calibration_dataset"
-    if not has_holdout:
-        claim_level = "training_or_audit_only"
-
-    return {
-        "kind": "quasilinear_calibration_report",
-        "version": str(version),
-        "saturation_rule": str(saturation_rule),
-        "claim_level": claim_level,
-        "passed": passed,
-        "holdout_mean_rel_gate": float(holdout_mean_rel_gate),
-        "observed_floor": float(observed_floor),
-        "metrics": all_metrics,
-        "by_split": by_split,
-        "points": [p.to_dict() for p in pts],
-        "metadata": {
-            **dict(metadata or {}),
-            "holdout_window_convergence": holdout_window_convergence,
-            **({} if scale_fit is None else {"heat_flux_scale_fit": scale_fit}),
-        },
-    }
+    pts = _normalized_calibration_points(points)
+    _validate_calibration_points(pts, saturation_rule=controls.saturation_rule)
+    pts, scale_fit = _maybe_apply_train_scale(
+        pts,
+        fit_train_scale_enabled=fit_train_scale,
+    )
+    _, by_split, all_metrics = _calibration_split_metrics(
+        pts,
+        observed_floor=controls.observed_floor,
+    )
+    holdout_window_convergence = _holdout_window_convergence_summary(pts)
+    passed, claim_level = _calibration_report_claim(
+        by_split=by_split,
+        holdout_window_convergence=holdout_window_convergence,
+        holdout_mean_rel_gate=controls.holdout_mean_rel_gate,
+    )
+    return _calibration_report_payload(
+        controls=controls,
+        points=pts,
+        metrics=all_metrics,
+        by_split=by_split,
+        passed=passed,
+        claim_level=claim_level,
+        holdout_window_convergence=holdout_window_convergence,
+        scale_fit=scale_fit,
+        metadata=metadata,
+    )
 
 
 
