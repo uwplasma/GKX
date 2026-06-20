@@ -101,6 +101,25 @@ class QuasilinearTransportResult:
         return payload
 
 
+@dataclass(frozen=True)
+class _QuasilinearOptions:
+    """Validated options for one quasilinear transport diagnostic."""
+
+    mode: str
+    channels: tuple[str, ...]
+    kperp_average: str
+
+
+@dataclass(frozen=True)
+class _LinearFluxWeights:
+    """Amplitude-normalized linear transport weights for all species."""
+
+    kperp_eff2: float
+    phi_norm2: float
+    heat: np.ndarray
+    particle: np.ndarray
+
+
 def normalize_quasilinear_channels(channels: Iterable[str] | str) -> tuple[str, ...]:
     """Normalize and validate quasilinear field channels."""
 
@@ -331,6 +350,136 @@ def shape_aware_power_law_objective(
     return jnp.asarray(csat, dtype=dtype) * x[..., 2] * envelope
 
 
+def _resolve_quasilinear_options(
+    *,
+    mode: str,
+    channels: Sequence[str] | str,
+    kperp_average: str,
+) -> _QuasilinearOptions:
+    """Validate model-selection knobs before computing linear weights."""
+
+    mode_key = mode.strip().lower()
+    if mode_key not in _SUPPORTED_MODES:
+        raise ValueError(f"Unknown quasilinear mode '{mode}'")
+    channels_use = normalize_quasilinear_channels(channels)
+    kperp_key = kperp_average.strip().lower()
+    if kperp_key != "phi_weighted":
+        raise NotImplementedError("Only phi_weighted kperp averaging is validated so far")
+    return _QuasilinearOptions(
+        mode=mode_key,
+        channels=channels_use,
+        kperp_average=kperp_key,
+    )
+
+
+def _linear_flux_weights_from_state(
+    state: jnp.ndarray | np.ndarray,
+    *,
+    cache: LinearCache,
+    grid: SpectralGrid,
+    geom: FluxTubeGeometryLike,
+    params: LinearParams,
+    terms: TermConfig | None,
+    amplitude_normalization: str,
+    use_dealias: bool,
+    flux_scale: float,
+) -> _LinearFluxWeights:
+    """Compute amplitude-invariant linear heat and particle flux weights."""
+
+    G = jnp.asarray(state)
+    fields = compute_fields_cached(G, cache, params, terms=terms)
+    phi = fields.phi
+    zero_field = jnp.zeros_like(phi)
+    vol_fac, flux_fac = fieldline_quadrature_weights(geom, grid)
+
+    norm2 = phi_norm2(
+        phi,
+        cache,
+        params,
+        vol_fac,
+        normalization=amplitude_normalization,
+        use_dealias=use_dealias,
+    )
+    kperp_eff = effective_kperp2(phi, cache, vol_fac, use_dealias=use_dealias)
+    heat = heat_flux_species(
+        G,
+        phi,
+        zero_field,
+        zero_field,
+        cache,
+        grid,
+        params,
+        flux_fac,
+        use_dealias=use_dealias,
+        flux_scale=flux_scale,
+    )
+    particle = particle_flux_species(
+        G,
+        phi,
+        zero_field,
+        zero_field,
+        cache,
+        grid,
+        params,
+        flux_fac,
+        use_dealias=use_dealias,
+        flux_scale=flux_scale,
+    )
+    return _LinearFluxWeights(
+        kperp_eff2=float(np.asarray(kperp_eff)),
+        phi_norm2=float(np.asarray(norm2)),
+        heat=np.asarray(jnp.real(heat / norm2), dtype=float).reshape(-1),
+        particle=np.asarray(jnp.real(particle / norm2), dtype=float).reshape(-1),
+    )
+
+
+def _quasilinear_species_labels(
+    species_names: Sequence[str] | None,
+    n_species: int,
+) -> tuple[str, ...]:
+    """Return validated species labels for the diagnostic payload."""
+
+    species = tuple(species_names or tuple(f"s{i}" for i in range(n_species)))
+    if len(species) != n_species:
+        return tuple(f"s{i}" for i in range(n_species))
+    return species
+
+
+def _saturated_species_fluxes(
+    *,
+    mode: str,
+    heat_weights: np.ndarray,
+    particle_weights: np.ndarray,
+    amplitude2: float | None,
+) -> tuple[tuple[float, ...] | None, tuple[float, ...] | None]:
+    """Apply a selected saturation rule to linear weights when requested."""
+
+    if mode != "saturated" or amplitude2 is None:
+        return None, None
+    return (
+        tuple(float(x) for x in heat_weights * amplitude2),
+        tuple(float(x) for x in particle_weights * amplitude2),
+    )
+
+
+def _quasilinear_metadata(
+    metadata: dict[str, Any] | None,
+    *,
+    amplitude2: float | None,
+    channels: tuple[str, ...],
+) -> dict[str, Any]:
+    """Attach explicit claim-scope metadata to a quasilinear payload."""
+
+    meta = dict(metadata or {})
+    meta.setdefault(
+        "claim_level",
+        "linear_weights" if amplitude2 is None else "uncalibrated_saturation_rule",
+    )
+    meta.setdefault("field_channels_validated", list(channels))
+    meta.setdefault("electromagnetic_channels", "disabled_until_validated")
+    return meta
+
+
 def compute_quasilinear_from_linear_state(
     state: jnp.ndarray | np.ndarray,
     *,
@@ -362,99 +511,58 @@ def compute_quasilinear_from_linear_state(
     rotations and real amplitude rescalings of the eigenstate.
     """
 
-    mode_key = mode.strip().lower()
-    if mode_key not in _SUPPORTED_MODES:
-        raise ValueError(f"Unknown quasilinear mode '{mode}'")
-    channels_use = normalize_quasilinear_channels(channels)
-    kperp_key = kperp_average.strip().lower()
-    if kperp_key != "phi_weighted":
-        raise NotImplementedError("Only phi_weighted kperp averaging is validated so far")
-
-    G = jnp.asarray(state)
-    fields = compute_fields_cached(G, cache, params, terms=terms)
-    phi = fields.phi
-    zero_field = jnp.zeros_like(phi)
-    apar = zero_field
-    bpar = zero_field
-    vol_fac, flux_fac = fieldline_quadrature_weights(geom, grid)
-
-    norm2 = phi_norm2(
-        phi,
-        cache,
-        params,
-        vol_fac,
-        normalization=amplitude_normalization,
-        use_dealias=use_dealias,
+    options = _resolve_quasilinear_options(
+        mode=mode,
+        channels=channels,
+        kperp_average=kperp_average,
     )
-    kperp_eff = effective_kperp2(phi, cache, vol_fac, use_dealias=use_dealias)
-    heat = heat_flux_species(
-        G,
-        phi,
-        apar,
-        bpar,
-        cache,
-        grid,
-        params,
-        flux_fac,
+    weights = _linear_flux_weights_from_state(
+        state,
+        cache=cache,
+        grid=grid,
+        geom=geom,
+        params=params,
+        terms=terms,
+        amplitude_normalization=amplitude_normalization,
         use_dealias=use_dealias,
         flux_scale=flux_scale,
     )
-    particle = particle_flux_species(
-        G,
-        phi,
-        apar,
-        bpar,
-        cache,
-        grid,
-        params,
-        flux_fac,
-        use_dealias=use_dealias,
-        flux_scale=flux_scale,
-    )
-    heat_weights = jnp.real(heat / norm2)
-    particle_weights = jnp.real(particle / norm2)
-
-    heat_np = np.asarray(heat_weights, dtype=float).reshape(-1)
-    particle_np = np.asarray(particle_weights, dtype=float).reshape(-1)
-    species = tuple(species_names or tuple(f"s{i}" for i in range(heat_np.size)))
-    if len(species) != heat_np.size:
-        species = tuple(f"s{i}" for i in range(heat_np.size))
-
+    species = _quasilinear_species_labels(species_names, weights.heat.size)
     amp2 = saturation_amplitude2(
         gamma=gamma,
-        kperp_eff2_value=float(np.asarray(kperp_eff)),
+        kperp_eff2_value=weights.kperp_eff2,
         rule=saturation_rule,
         csat=csat,
         gamma_floor=gamma_floor,
         include_stable_modes=include_stable_modes,
     )
-    saturated_heat = None
-    saturated_particle = None
-    if mode_key == "saturated" and amp2 is not None:
-        saturated_heat = tuple(float(x) for x in heat_np * amp2)
-        saturated_particle = tuple(float(x) for x in particle_np * amp2)
-
-    meta = dict(metadata or {})
-    meta.setdefault("claim_level", "linear_weights" if amp2 is None else "uncalibrated_saturation_rule")
-    meta.setdefault("field_channels_validated", list(channels_use))
-    meta.setdefault("electromagnetic_channels", "disabled_until_validated")
+    saturated_heat, saturated_particle = _saturated_species_fluxes(
+        mode=options.mode,
+        heat_weights=weights.heat,
+        particle_weights=weights.particle,
+        amplitude2=amp2,
+    )
 
     return QuasilinearTransportResult(
         ky=float(ky),
         gamma=float(gamma),
         omega=float(omega),
-        mode=mode_key,
+        mode=options.mode,
         saturation_rule=saturation_rule.strip().lower(),
         amplitude_normalization=amplitude_normalization.strip().lower(),
-        channels=channels_use,
-        kperp_average=kperp_key,
-        kperp_eff2=float(np.asarray(kperp_eff)),
-        phi_norm2=float(np.asarray(norm2)),
+        channels=options.channels,
+        kperp_average=options.kperp_average,
+        kperp_eff2=weights.kperp_eff2,
+        phi_norm2=weights.phi_norm2,
         amplitude2=None if amp2 is None else float(amp2),
-        heat_flux_weight_species=tuple(float(x) for x in heat_np),
-        particle_flux_weight_species=tuple(float(x) for x in particle_np),
+        heat_flux_weight_species=tuple(float(x) for x in weights.heat),
+        particle_flux_weight_species=tuple(float(x) for x in weights.particle),
         saturated_heat_flux_species=saturated_heat,
         saturated_particle_flux_species=saturated_particle,
         species=species,
-        metadata=meta,
+        metadata=_quasilinear_metadata(
+            metadata,
+            amplitude2=amp2,
+            channels=options.channels,
+        ),
     )
