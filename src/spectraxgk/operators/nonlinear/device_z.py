@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Literal, Sequence
 
 import jax
@@ -33,6 +34,24 @@ from spectraxgk.operators.nonlinear.spectral_core import (
     _spectral_wave_numbers,
     _validate_spectral_state_shape,
 )
+
+
+@dataclass(frozen=True)
+class _DeviceZShardingSetup:
+    state_shape: tuple[int, int, int, int, int]
+    mesh: Any | None
+    sharding: Any | None
+    blockers: tuple[str, ...]
+    requested_count: int
+    active_count: int
+
+
+@dataclass(frozen=True)
+class _DeviceZTransportSamples:
+    serial_state: jax.Array
+    device_state: jax.Array
+    serial_traces: dict[str, tuple[float, ...]]
+    device_traces: dict[str, tuple[float, ...]]
 
 
 def _device_z_sharding_for_spectral_state(
@@ -67,6 +86,31 @@ def _device_z_sharding_for_spectral_state(
     mesh = Mesh(np.asarray(device_tuple[:active_device_count]), (axis_name,))
     sharding = NamedSharding(mesh, PartitionSpec(None, None, None, None, axis_name))
     return mesh, sharding, (), requested_device_count, active_device_count
+
+
+def _device_z_sharding_setup(
+    state_hat: jax.Array,
+    *,
+    devices: Sequence[Any] | None,
+    axis_name: str,
+) -> _DeviceZShardingSetup:
+    state_shape = _validate_spectral_state_shape(tuple(state_hat.shape))
+    mesh, sharding, blockers, requested_count, active_count = (
+        _device_z_sharding_for_spectral_state(
+            state_hat,
+            devices=devices,
+            axis_name=axis_name,
+        )
+    )
+    return _DeviceZShardingSetup(
+        state_shape=state_shape,
+        mesh=mesh,
+        sharding=sharding,
+        blockers=blockers,
+        requested_count=requested_count,
+        active_count=active_count,
+    )
+
 
 def _device_z_pencil_shard_map_rhs_fn(  # pragma: no cover - exercised by profile artifacts.
     mesh: Any,
@@ -201,6 +245,78 @@ def _append_device_z_transport_observables(
         bracket,
     )
 
+
+def _serial_nonlinear_rhs(state_hat: jax.Array) -> jax.Array:
+    _serial_field, _serial_bracket, serial_rhs = _serial_nonlinear_spectral_rhs(
+        state_hat
+    )
+    return serial_rhs
+
+
+def _blocked_device_z_rhs_if_needed(
+    setup: _DeviceZShardingSetup,
+    *,
+    axis_name: str,
+    atol: float,
+    rtol: float,
+) -> NonlinearSpectralDevicePencilRHSIdentityReport | None:
+    if not setup.blockers and setup.mesh is not None and setup.sharding is not None:
+        return None
+    return _blocked_device_z_rhs_report(
+        state_shape=setup.state_shape,
+        axis_name=axis_name,
+        requested_count=setup.requested_count,
+        active_count=setup.active_count,
+        atol=atol,
+        rtol=rtol,
+        blocked_reasons=setup.blockers,
+    )
+
+
+def _run_device_z_sharded_rhs(
+    state_hat: jax.Array,
+    setup: _DeviceZShardingSetup,
+    *,
+    axis_name: str,
+    z_chunk_size: int | None,
+) -> jax.Array:
+    if setup.mesh is None or setup.sharding is None:
+        raise ValueError("device-z sharding setup is not active")
+    with setup.mesh:  # pragma: no cover - exercised by CPU/GPU profile artifacts.
+        sharded_rhs_fn = _device_z_pencil_shard_map_rhs_fn(
+            setup.mesh,
+            axis_name=axis_name,
+            z_chunk_size=z_chunk_size,
+        )
+        sharded_state = jax.device_put(
+            _host_staged_array_for_sharding(state_hat),
+            setup.sharding,
+        )
+        return sharded_rhs_fn(sharded_state)
+
+
+def _device_z_rhs_report(
+    setup: _DeviceZShardingSetup,
+    serial_rhs: jax.Array,
+    candidate_rhs: jax.Array,
+    *,
+    axis_name: str,
+    atol: float,
+    rtol: float,
+) -> NonlinearSpectralDevicePencilRHSIdentityReport:
+    rhs_abs, rhs_rel = _host_max_abs_rel_error(serial_rhs, candidate_rhs, atol=atol)
+    return _device_z_rhs_identity_report(
+        state_shape=setup.state_shape,
+        axis_name=axis_name,
+        requested_count=setup.requested_count,
+        active_count=setup.active_count,
+        atol=atol,
+        rtol=rtol,
+        rhs_abs=rhs_abs,
+        rhs_rel=rhs_rel,
+    )
+
+
 def device_z_pencil_nonlinear_spectral_rhs(
     state_hat: jax.Array,
     *,
@@ -219,54 +335,175 @@ def device_z_pencil_nonlinear_spectral_rhs(
     serial reference within the requested tolerances.
     """
 
-    state_shape = _validate_spectral_state_shape(tuple(state_hat.shape))
-    mesh, sharding, blockers, requested_count, active_count = (
-        _device_z_sharding_for_spectral_state(
-            state_hat,
-            devices=devices,
-            axis_name=axis_name,
-        )
-    )
-    _serial_field, _serial_bracket, serial_rhs = _serial_nonlinear_spectral_rhs(
-        state_hat
-    )
-    if blockers or mesh is None or sharding is None:
-        report = _blocked_device_z_rhs_report(
-            state_shape=state_shape,
-            axis_name=axis_name,
-            requested_count=requested_count,
-            active_count=active_count,
-            atol=atol,
-            rtol=rtol,
-            blocked_reasons=blockers,
-        )
-        return serial_rhs, report
-
-    with mesh:  # pragma: no cover - exercised by CPU/GPU profile artifacts.
-        sharded_rhs_fn = _device_z_pencil_shard_map_rhs_fn(
-            mesh,
-            axis_name=axis_name,
-            z_chunk_size=z_chunk_size,
-        )
-        sharded_state = jax.device_put(
-            _host_staged_array_for_sharding(state_hat),
-            sharding,
-        )
-        candidate_rhs = sharded_rhs_fn(sharded_state)
-
-    rhs_abs, rhs_rel = _host_max_abs_rel_error(serial_rhs, candidate_rhs, atol=atol)
-    report = _device_z_rhs_identity_report(
-        state_shape=state_shape,
+    setup = _device_z_sharding_setup(state_hat, devices=devices, axis_name=axis_name)
+    serial_rhs = _serial_nonlinear_rhs(state_hat)
+    if report := _blocked_device_z_rhs_if_needed(
+        setup,
         axis_name=axis_name,
-        requested_count=requested_count,
-        active_count=active_count,
         atol=atol,
         rtol=rtol,
-        rhs_abs=rhs_abs,
-        rhs_rel=rhs_rel,
+    ):
+        return serial_rhs, report
+
+    candidate_rhs = _run_device_z_sharded_rhs(
+        state_hat,
+        setup,
+        axis_name=axis_name,
+        z_chunk_size=z_chunk_size,
+    )
+    report = _device_z_rhs_report(
+        setup,
+        serial_rhs,
+        candidate_rhs,
+        axis_name=axis_name,
+        atol=atol,
+        rtol=rtol,
     )
     gated_rhs = candidate_rhs if report.decomposed_path_enabled else serial_rhs
     return gated_rhs, report
+
+
+def _validate_device_z_transport_window(
+    *,
+    steps: int,
+    observable_mode: Literal["host_gather", "sharded_reduce"],
+) -> None:
+    if int(steps) < 1:
+        raise ValueError("steps must be at least one")
+    if observable_mode not in {"host_gather", "sharded_reduce"}:
+        raise ValueError("observable_mode must be 'host_gather' or 'sharded_reduce'")
+
+
+def _append_serial_transport_observables(
+    traces: dict[str, list[float]],
+    serial_state: jax.Array,
+) -> None:
+    _serial_field, serial_bracket, _serial_rhs = _serial_nonlinear_spectral_rhs(
+        serial_state
+    )
+    _append_spectral_physical_observables(traces, serial_state, serial_bracket)
+
+
+def _initial_serial_transport_traces(state_hat: jax.Array) -> dict[str, list[float]]:
+    serial_traces = _new_transport_trace_dict()
+    _append_serial_transport_observables(serial_traces, state_hat)
+    return serial_traces
+
+
+def _blocked_device_z_transport_if_needed(
+    setup: _DeviceZShardingSetup,
+    *,
+    axis_name: str,
+    steps: int,
+    dt: float,
+    atol: float,
+    rtol: float,
+    serial_traces: dict[str, list[float]],
+) -> NonlinearSpectralDevicePencilTransportWindowReport | None:
+    if not setup.blockers and setup.mesh is not None and setup.sharding is not None:
+        return None
+    return _blocked_device_z_transport_window_report(
+        state_shape=setup.state_shape,
+        axis_name=axis_name,
+        requested_count=setup.requested_count,
+        active_count=setup.active_count,
+        steps=steps,
+        dt=dt,
+        atol=atol,
+        rtol=rtol,
+        blocked_reasons=list(setup.blockers),
+        serial_traces=serial_traces,
+    )
+
+
+def _run_device_z_transport_window(
+    state_hat: jax.Array,
+    setup: _DeviceZShardingSetup,
+    *,
+    axis_name: str,
+    z_chunk_size: int | None,
+    dt: float,
+    steps: int,
+    observable_mode: Literal["host_gather", "sharded_reduce"],
+) -> _DeviceZTransportSamples:
+    if setup.mesh is None or setup.sharding is None:
+        raise ValueError("device-z sharding setup is not active")
+
+    serial_traces = _initial_serial_transport_traces(state_hat)
+    device_traces = _new_transport_trace_dict()
+    serial_state = state_hat
+    dt_array = jnp.asarray(float(dt), dtype=jnp.real(state_hat).dtype)
+    with setup.mesh:  # pragma: no cover - exercised by CPU/GPU profile artifacts.
+        sharded_rhs_fn = _device_z_pencil_shard_map_rhs_fn(
+            setup.mesh,
+            axis_name=axis_name,
+            z_chunk_size=z_chunk_size,
+        )
+        sharded_observables_fn = _device_z_pencil_shard_map_observables_fn(
+            setup.mesh,
+            axis_name=axis_name,
+            z_chunk_size=z_chunk_size,
+        )
+        device_state = jax.device_put(
+            _host_staged_array_for_sharding(state_hat),
+            setup.sharding,
+        )
+        _append_device_z_transport_observables(
+            device_traces,
+            device_state,
+            observable_mode=observable_mode,
+            sharded_observables_fn=sharded_observables_fn,
+        )
+        for _ in range(int(steps)):
+            serial_state = serial_state + dt_array * _serial_nonlinear_rhs(serial_state)
+            device_state = device_state + dt_array * sharded_rhs_fn(device_state)
+            _append_serial_transport_observables(serial_traces, serial_state)
+            _append_device_z_transport_observables(
+                device_traces,
+                device_state,
+                observable_mode=observable_mode,
+                sharded_observables_fn=sharded_observables_fn,
+            )
+
+    return _DeviceZTransportSamples(
+        serial_state=serial_state,
+        device_state=jnp.asarray(jax.device_get(device_state)),
+        serial_traces=_transport_trace_tuples(serial_traces),
+        device_traces=_transport_trace_tuples(device_traces),
+    )
+
+
+def _device_z_transport_window_report_from_samples(
+    setup: _DeviceZShardingSetup,
+    samples: _DeviceZTransportSamples,
+    *,
+    axis_name: str,
+    steps: int,
+    dt: float,
+    atol: float,
+    rtol: float,
+) -> NonlinearSpectralDevicePencilTransportWindowReport:
+    state_abs, state_rel = _host_max_abs_rel_error(
+        samples.serial_state,
+        samples.device_state,
+        atol=atol,
+    )
+    return _device_z_transport_window_report(
+        state_shape=setup.state_shape,
+        axis_name=axis_name,
+        requested_count=setup.requested_count,
+        active_count=setup.active_count,
+        steps=steps,
+        dt=dt,
+        atol=atol,
+        rtol=rtol,
+        state_abs=state_abs,
+        state_rel=state_rel,
+        serial_trace_values=samples.serial_traces,
+        device_trace_values=samples.device_traces,
+        blocked_reasons=list(setup.blockers),
+    )
+
 
 def device_z_pencil_nonlinear_spectral_transport_window_identity_gate(
     state_hat: jax.Array,
@@ -290,111 +527,37 @@ def device_z_pencil_nonlinear_spectral_transport_window_identity_gate(
     device route on the same deterministic operator.
     """
 
-    if int(steps) < 1:
-        raise ValueError("steps must be at least one")
-    if observable_mode not in {"host_gather", "sharded_reduce"}:
-        raise ValueError("observable_mode must be 'host_gather' or 'sharded_reduce'")
-    state_shape = _validate_spectral_state_shape(tuple(state_hat.shape))
-    mesh, sharding, blockers, requested_count, active_count = (
-        _device_z_sharding_for_spectral_state(
-            state_hat,
-            devices=devices,
-            axis_name=axis_name,
-        )
-    )
-
-    serial_traces = _new_transport_trace_dict()
-    device_traces = _new_transport_trace_dict()
-
-    serial_state = state_hat
-    _serial_field, serial_bracket, _serial_rhs = _serial_nonlinear_spectral_rhs(
-        serial_state
-    )
-    _append_spectral_physical_observables(serial_traces, serial_state, serial_bracket)
-
-    blocked_reasons = list(blockers)
-    if blockers or mesh is None or sharding is None:
-        return _blocked_device_z_transport_window_report(
-            state_shape=state_shape,
-            axis_name=axis_name,
-            requested_count=requested_count,
-            active_count=active_count,
-            steps=steps,
-            dt=dt,
-            atol=atol,
-            rtol=rtol,
-            blocked_reasons=blocked_reasons,
-            serial_traces=serial_traces,
-        )
-
-    dt_array = jnp.asarray(float(dt), dtype=jnp.real(state_hat).dtype)
-    with mesh:  # pragma: no cover - exercised by CPU/GPU profile artifacts.
-        sharded_rhs_fn = _device_z_pencil_shard_map_rhs_fn(
-            mesh,
-            axis_name=axis_name,
-            z_chunk_size=z_chunk_size,
-        )
-        sharded_observables_fn = _device_z_pencil_shard_map_observables_fn(
-            mesh,
-            axis_name=axis_name,
-            z_chunk_size=z_chunk_size,
-        )
-        device_state = jax.device_put(
-            _host_staged_array_for_sharding(state_hat),
-            sharding,
-        )
-        _append_device_z_transport_observables(
-            device_traces,
-            device_state,
-            observable_mode=observable_mode,
-            sharded_observables_fn=sharded_observables_fn,
-        )
-
-        for _ in range(int(steps)):
-            _serial_field, _serial_bracket, serial_rhs = _serial_nonlinear_spectral_rhs(
-                serial_state,
-            )
-            serial_state = serial_state + dt_array * serial_rhs
-            device_rhs = sharded_rhs_fn(device_state)
-            device_state = device_state + dt_array * device_rhs
-
-            _serial_field, serial_bracket, _serial_rhs = _serial_nonlinear_spectral_rhs(
-                serial_state,
-            )
-            _append_spectral_physical_observables(
-                serial_traces,
-                serial_state,
-                serial_bracket,
-            )
-            _append_device_z_transport_observables(
-                device_traces,
-                device_state,
-                observable_mode=observable_mode,
-                sharded_observables_fn=sharded_observables_fn,
-            )
-
-    device_final_state = jnp.asarray(jax.device_get(device_state))
-    state_abs, state_rel = _host_max_abs_rel_error(
-        serial_state,
-        device_final_state,
-        atol=atol,
-    )
-    serial_trace_values = _transport_trace_tuples(serial_traces)
-    device_trace_values = _transport_trace_tuples(device_traces)
-    return _device_z_transport_window_report(
-        state_shape=state_shape,
+    _validate_device_z_transport_window(steps=steps, observable_mode=observable_mode)
+    setup = _device_z_sharding_setup(state_hat, devices=devices, axis_name=axis_name)
+    serial_traces = _initial_serial_transport_traces(state_hat)
+    if report := _blocked_device_z_transport_if_needed(
+        setup,
         axis_name=axis_name,
-        requested_count=requested_count,
-        active_count=active_count,
         steps=steps,
         dt=dt,
         atol=atol,
         rtol=rtol,
-        state_abs=state_abs,
-        state_rel=state_rel,
-        serial_trace_values=serial_trace_values,
-        device_trace_values=device_trace_values,
-        blocked_reasons=blocked_reasons,
+        serial_traces=serial_traces,
+    ):
+        return report
+
+    samples = _run_device_z_transport_window(
+        state_hat,
+        setup,
+        axis_name=axis_name,
+        z_chunk_size=z_chunk_size,
+        dt=dt,
+        steps=steps,
+        observable_mode=observable_mode,
+    )
+    return _device_z_transport_window_report_from_samples(
+        setup,
+        samples,
+        axis_name=axis_name,
+        steps=steps,
+        dt=dt,
+        atol=atol,
+        rtol=rtol,
     )
 
 def _append_spectral_physical_observable_vector(
