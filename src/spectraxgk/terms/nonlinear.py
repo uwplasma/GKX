@@ -47,6 +47,13 @@ class _LaguerreGridContext:
     b: jnp.ndarray
 
 
+@dataclass(frozen=True)
+class _PreparedNonlinearPath:
+    prep: _PreparedNonlinearInputs
+    laguerre: _LaguerreGridContext | None
+    electrostatic_only: bool
+
+
 def _prepare_nonlinear_inputs(
     G: jnp.ndarray,
     *,
@@ -208,6 +215,66 @@ def _spectral_chi_fields(
         idx_apar = len(chi_fields)
         chi_fields.append(prep.Jl * prep.apar[None, None, ...])
     return chi_fields, idx_bpar, idx_apar
+
+
+def _prepare_nonlinear_path(
+    G: jnp.ndarray,
+    *,
+    phi: jnp.ndarray,
+    apar: jnp.ndarray | None,
+    bpar: jnp.ndarray | None,
+    Jl: jnp.ndarray,
+    JlB: jnp.ndarray,
+    dealias_mask: jnp.ndarray,
+    apar_weight: float,
+    bpar_weight: float,
+    laguerre_to_grid: jnp.ndarray | None,
+    laguerre_to_spectral: jnp.ndarray | None,
+    laguerre_roots: jnp.ndarray | None,
+    laguerre_j0: jnp.ndarray | None,
+    laguerre_j1_over_alpha: jnp.ndarray | None,
+    b: jnp.ndarray | None,
+    laguerre_mode: str,
+) -> _PreparedNonlinearPath:
+    """Prepare common nonlinear bracket routing decisions."""
+
+    prep = _prepare_nonlinear_inputs(
+        G,
+        phi=phi,
+        apar=apar,
+        bpar=bpar,
+        Jl=Jl,
+        JlB=JlB,
+        dealias_mask=dealias_mask,
+    )
+    laguerre = None
+    if _use_laguerre_grid(
+        laguerre_to_grid=laguerre_to_grid,
+        laguerre_to_spectral=laguerre_to_spectral,
+        laguerre_roots=laguerre_roots,
+        b=b,
+        laguerre_mode=laguerre_mode,
+    ):
+        laguerre = _laguerre_context(
+            laguerre_to_grid=laguerre_to_grid,
+            laguerre_to_spectral=laguerre_to_spectral,
+            laguerre_roots=laguerre_roots,
+            laguerre_j0=laguerre_j0,
+            laguerre_j1_over_alpha=laguerre_j1_over_alpha,
+            b=b,
+        )
+    electrostatic_only = not _electromagnetic_enabled(
+        apar=prep.apar,
+        bpar=prep.bpar,
+        apar_weight=apar_weight,
+        bpar_weight=bpar_weight,
+    )
+    return _PreparedNonlinearPath(
+        prep=prep,
+        laguerre=laguerre,
+        electrostatic_only=electrostatic_only,
+    )
+
 
 def _apply_flutter(
     bracket_apar: jnp.ndarray,
@@ -557,7 +624,7 @@ def nonlinear_em_contribution(
     enables the term); the fields themselves already include any scaling.
     """
 
-    prep = _prepare_nonlinear_inputs(
+    path = _prepare_nonlinear_path(
         G,
         phi=phi,
         apar=apar,
@@ -565,34 +632,22 @@ def nonlinear_em_contribution(
         Jl=Jl,
         JlB=JlB,
         dealias_mask=dealias_mask,
-    )
-    use_laguerre = _use_laguerre_grid(
+        apar_weight=apar_weight,
+        bpar_weight=bpar_weight,
         laguerre_to_grid=laguerre_to_grid,
         laguerre_to_spectral=laguerre_to_spectral,
         laguerre_roots=laguerre_roots,
+        laguerre_j0=laguerre_j0,
+        laguerre_j1_over_alpha=laguerre_j1_over_alpha,
         b=b,
         laguerre_mode=laguerre_mode,
     )
-    electrostatic_only = not _electromagnetic_enabled(
-        apar=prep.apar,
-        bpar=prep.bpar,
-        apar_weight=apar_weight,
-        bpar_weight=bpar_weight,
-    )
 
-    if use_laguerre:
-        ctx = _laguerre_context(
-            laguerre_to_grid=laguerre_to_grid,
-            laguerre_to_spectral=laguerre_to_spectral,
-            laguerre_roots=laguerre_roots,
-            laguerre_j0=laguerre_j0,
-            laguerre_j1_over_alpha=laguerre_j1_over_alpha,
-            b=b,
-        )
+    if path.laguerre is not None:
         return _laguerre_contribution_from_prepared(
-            prep,
-            ctx,
-            electrostatic_only=electrostatic_only,
+            path.prep,
+            path.laguerre,
+            electrostatic_only=path.electrostatic_only,
             tz=tz,
             vth=vth,
             sqrt_m=sqrt_m,
@@ -608,8 +663,8 @@ def nonlinear_em_contribution(
         )
 
     return _spectral_contribution_from_prepared(
-        prep,
-        electrostatic_only=electrostatic_only,
+        path.prep,
+        electrostatic_only=path.electrostatic_only,
         vth=vth,
         sqrt_m=sqrt_m,
         sqrt_m_p1=sqrt_m_p1,
@@ -654,7 +709,7 @@ def nonlinear_em_components(
 ) -> dict[str, jnp.ndarray]:
     """Return nonlinear E×B/flutter components for diagnostics/comparison checks."""
 
-    prep = _prepare_nonlinear_inputs(
+    path = _prepare_nonlinear_path(
         G,
         phi=phi,
         apar=apar,
@@ -662,27 +717,21 @@ def nonlinear_em_components(
         Jl=Jl,
         JlB=JlB,
         dealias_mask=dealias_mask,
-    )
-    use_laguerre = _use_laguerre_grid(
+        apar_weight=apar_weight,
+        bpar_weight=bpar_weight,
         laguerre_to_grid=laguerre_to_grid,
         laguerre_to_spectral=laguerre_to_spectral,
         laguerre_roots=laguerre_roots,
+        laguerre_j0=laguerre_j0,
+        laguerre_j1_over_alpha=laguerre_j1_over_alpha,
         b=b,
         laguerre_mode=laguerre_mode,
     )
 
-    if use_laguerre:
-        ctx = _laguerre_context(
-            laguerre_to_grid=laguerre_to_grid,
-            laguerre_to_spectral=laguerre_to_spectral,
-            laguerre_roots=laguerre_roots,
-            laguerre_j0=laguerre_j0,
-            laguerre_j1_over_alpha=laguerre_j1_over_alpha,
-            b=b,
-        )
+    if path.laguerre is not None:
         components = _laguerre_components_from_prepared(
-            prep,
-            ctx,
+            path.prep,
+            path.laguerre,
             tz=tz,
             vth=vth,
             sqrt_m=sqrt_m,
@@ -698,7 +747,7 @@ def nonlinear_em_components(
         )
     else:
         components = _spectral_components_from_prepared(
-            prep,
+            path.prep,
             vth=vth,
             sqrt_m=sqrt_m,
             sqrt_m_p1=sqrt_m_p1,
@@ -713,7 +762,7 @@ def nonlinear_em_components(
         )
     return _squeeze_component_payload(
         components,
-        squeeze_species=prep.squeeze_species,
+        squeeze_species=path.prep.squeeze_species,
     )
 
 
