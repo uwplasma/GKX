@@ -69,6 +69,15 @@ class _CycloneKrylovSeed:
     omega_ok: bool = False
 
 
+@dataclass(frozen=True)
+class _CycloneTimeTrace:
+    """Saved field history and sampling stride for a Cyclone time run."""
+
+    phi_t: Any
+    density_t: Any | None
+    stride: int
+
+
 _PATCHABLE_NAMES = (
     "ModeSelection",
     "fit_growth_rate",
@@ -533,7 +542,7 @@ def _integrate_cyclone_configured_time(
     need_density: bool,
     show_progress: bool,
     fresh_G0: Callable[[], jnp.ndarray],
-) -> tuple[Any, Any | None, int]:
+) -> _CycloneTimeTrace:
     """Integrate Cyclone with an explicit or synthesized runtime config."""
 
     if need_density:
@@ -549,7 +558,7 @@ def _integrate_cyclone_configured_time(
             show_progress=show_progress,
         )
         phi_t, density_t = saved
-        return phi_t, density_t, time_cfg_use.sample_stride
+        return _CycloneTimeTrace(phi_t, density_t, int(time_cfg_use.sample_stride))
     _, phi_t = integrate_linear_from_config(
         fresh_G0(),
         grid,
@@ -559,7 +568,7 @@ def _integrate_cyclone_configured_time(
         terms=terms,
         show_progress=show_progress,
     )
-    return phi_t, None, time_cfg_use.sample_stride
+    return _CycloneTimeTrace(phi_t, None, int(time_cfg_use.sample_stride))
 
 
 def _integrate_cyclone_unconfigured_time(
@@ -576,7 +585,7 @@ def _integrate_cyclone_unconfigured_time(
     use_jit: bool,
     show_progress: bool,
     fresh_G0: Callable[[], jnp.ndarray],
-) -> tuple[Any, Any | None, int]:
+) -> _CycloneTimeTrace:
     """Integrate Cyclone with the fixed-step path selected by diagnostics needs."""
 
     stride = 1 if sample_stride is None else int(sample_stride)
@@ -597,7 +606,7 @@ def _integrate_cyclone_unconfigured_time(
         )
         phi_t = diag[1]
         density_t = diag[2] if len(diag) > 2 else None
-        return phi_t, density_t, stride
+        return _CycloneTimeTrace(phi_t, density_t, stride)
     _, phi_out_time = integrate_linear(
         fresh_G0(),
         grid,
@@ -610,7 +619,63 @@ def _integrate_cyclone_unconfigured_time(
         sample_stride=stride,
         show_progress=show_progress,
     )
-    return phi_out_time, None, stride
+    return _CycloneTimeTrace(phi_out_time, None, stride)
+
+
+def _integrate_cyclone_time_trace(
+    *,
+    grid: Any,
+    geom: Any,
+    params: Any,
+    terms: Any,
+    time_cfg_use: Any | None,
+    dt: float,
+    steps: int,
+    method: str,
+    sample_stride: int | None,
+    need_density: bool,
+    use_jit: bool,
+    show_progress: bool,
+    status: Callable[[str], None],
+    fresh_G0: Callable[[], jnp.ndarray],
+) -> _CycloneTimeTrace:
+    """Route Cyclone time integration to the configured or fixed-step backend."""
+
+    if time_cfg_use is not None:
+        status(
+            f"running runtime-configured integrator over {int(steps)} steps with sample_stride={int(time_cfg_use.sample_stride)}"
+        )
+        if need_density:
+            status("saving phi and density diagnostics for automatic fit selection")
+        return _integrate_cyclone_configured_time(
+            grid=grid,
+            geom=geom,
+            params=params,
+            terms=terms,
+            time_cfg_use=time_cfg_use,
+            need_density=need_density,
+            show_progress=show_progress,
+            fresh_G0=fresh_G0,
+        )
+
+    stride = 1 if sample_stride is None else int(sample_stride)
+    status(
+        f"running {'explicit diagnostics' if need_density or not use_jit else 'cached linear'} integrator over {int(steps)} steps with sample_stride={stride}"
+    )
+    return _integrate_cyclone_unconfigured_time(
+        grid=grid,
+        geom=geom,
+        params=params,
+        terms=terms,
+        dt=dt,
+        steps=steps,
+        method=method,
+        sample_stride=sample_stride,
+        need_density=need_density,
+        use_jit=use_jit,
+        show_progress=show_progress,
+        fresh_G0=fresh_G0,
+    )
 
 
 def _cyclone_auto_fit_kwargs(options: _CycloneTimeFitOptions) -> dict[str, Any]:
@@ -638,6 +703,59 @@ def _cyclone_auto_fit_kwargs(options: _CycloneTimeFitOptions) -> dict[str, Any]:
         "min_slope_frac": options.min_slope_frac,
         "slope_var_weight": options.slope_var_weight,
     }
+
+
+def _build_cyclone_time_fit_options(
+    *,
+    fit_key: str,
+    mode_method: str,
+    tmin: float | None,
+    tmax: float | None,
+    auto_window: bool,
+    window_fraction: float,
+    min_points: int,
+    start_fraction: float,
+    growth_weight: float,
+    require_positive: bool,
+    min_amp_fraction: float,
+    max_fraction: float,
+    end_fraction: float,
+    max_amp_fraction: float,
+    phase_weight: float,
+    length_weight: float,
+    min_r2: float,
+    late_penalty: float,
+    min_slope: float | None,
+    min_slope_frac: float,
+    slope_var_weight: float,
+    window_method: str,
+) -> _CycloneTimeFitOptions:
+    """Collect user/runtime fit knobs into the immutable fit policy object."""
+
+    return _CycloneTimeFitOptions(
+        fit_key=fit_key,
+        mode_method=mode_method,
+        tmin=tmin,
+        tmax=tmax,
+        auto_window=auto_window,
+        window_fraction=window_fraction,
+        min_points=min_points,
+        start_fraction=start_fraction,
+        growth_weight=growth_weight,
+        require_positive=require_positive,
+        min_amp_fraction=min_amp_fraction,
+        max_fraction=max_fraction,
+        end_fraction=end_fraction,
+        max_amp_fraction=max_amp_fraction,
+        phase_weight=phase_weight,
+        length_weight=length_weight,
+        min_r2=min_r2,
+        late_penalty=late_penalty,
+        min_slope=min_slope,
+        min_slope_frac=min_slope_frac,
+        slope_var_weight=slope_var_weight,
+        window_method=window_method,
+    )
 
 
 def _fit_cyclone_time_trace(
@@ -755,7 +873,7 @@ def run_cyclone_time_path(
         method=method,
         sample_stride=sample_stride,
     )
-    fit_options = _CycloneTimeFitOptions(
+    fit_options = _build_cyclone_time_fit_options(
         fit_key=fit_key,
         mode_method=mode_method,
         tmin=tmin,
@@ -796,47 +914,28 @@ def run_cyclone_time_path(
             fresh_G0=fresh_G0,
         )
 
-    if time_cfg_use is not None:
-        status(
-            f"running runtime-configured integrator over {int(steps)} steps with sample_stride={int(time_cfg_use.sample_stride)}"
-        )
-        if need_density:
-            status("saving phi and density diagnostics for automatic fit selection")
-        phi_t, density_t, stride = _integrate_cyclone_configured_time(
-            grid=grid,
-            geom=geom,
-            params=params,
-            terms=terms,
-            time_cfg_use=time_cfg_use,
-            need_density=need_density,
-            show_progress=show_progress,
-            fresh_G0=fresh_G0,
-        )
-    else:
-        stride = 1 if sample_stride is None else int(sample_stride)
-        status(
-            f"running {'explicit diagnostics' if need_density or not use_jit else 'cached linear'} integrator over {int(steps)} steps with sample_stride={stride}"
-        )
-        phi_t, density_t, stride = _integrate_cyclone_unconfigured_time(
-            grid=grid,
-            geom=geom,
-            params=params,
-            terms=terms,
-            dt=dt,
-            steps=steps,
-            method=method,
-            sample_stride=sample_stride,
-            need_density=need_density,
-            use_jit=use_jit,
-            show_progress=show_progress,
-            fresh_G0=fresh_G0,
-        )
+    trace = _integrate_cyclone_time_trace(
+        grid=grid,
+        geom=geom,
+        params=params,
+        terms=terms,
+        time_cfg_use=time_cfg_use,
+        dt=dt,
+        steps=steps,
+        method=method,
+        sample_stride=sample_stride,
+        need_density=need_density,
+        use_jit=use_jit,
+        show_progress=show_progress,
+        status=status,
+        fresh_G0=fresh_G0,
+    )
 
     gamma_out, omega_out, phi_t_np, t_arr = _fit_cyclone_time_trace(
-        phi_t=phi_t,
-        density_t=density_t,
+        phi_t=trace.phi_t,
+        density_t=trace.density_t,
         dt=dt,
-        stride=stride,
+        stride=trace.stride,
         sel=sel,
         params=params,
         diagnostic_norm=diagnostic_norm,
