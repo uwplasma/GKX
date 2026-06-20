@@ -46,6 +46,102 @@ def _relative_reduction(initial_objective: float, final_objective: float) -> flo
     return float((initial_objective - final_objective) / abs(initial_objective))
 
 
+def _scalar_probe_kwargs(
+    *,
+    case_name: str,
+    objective: SolverScalarObjective,
+    radial_index: int | None,
+    mode_index: int,
+    parameter_family: str,
+    extra_options: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "case_name": case_name,
+        "objective": objective,
+        "radial_index": radial_index,
+        "mode_index": mode_index,
+        "parameter_family": parameter_family,
+        **extra_options,
+    }
+
+
+def _aggregate_probe_kwargs(
+    *,
+    case_name: str,
+    objective: SolverScalarObjective,
+    reduction: Literal["mean", "weighted_mean", "max"],
+    weights: tuple[float, ...] | list[float] | np.ndarray | None,
+    surface_indices: int | None | tuple[int | None, ...] | list[int | None],
+    alphas: float | tuple[float, ...] | list[float],
+    selected_ky_indices: int | tuple[int, ...] | list[int],
+    radial_index: int | None,
+    mode_index: int,
+    parameter_family: str,
+    extra_options: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "case_name": case_name,
+        "objective": objective,
+        "reduction": reduction,
+        "weights": weights,
+        "surface_indices": surface_indices,
+        "alphas": alphas,
+        "selected_ky_indices": selected_ky_indices,
+        "radial_index": radial_index,
+        "mode_index": mode_index,
+        "parameter_family": parameter_family,
+        **extra_options,
+    }
+
+
+def _line_search_payload(
+    *,
+    kind: str,
+    source_scope: str,
+    claim_scope: str,
+    case_name: str,
+    objective: SolverScalarObjective,
+    radial_index: int | None,
+    mode_index: int,
+    initial_delta: float,
+    perturbation_step: float,
+    search: dict[str, object],
+    options: dict[str, object],
+    reduction: Literal["mean", "weighted_mean", "max"] | None = None,
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "kind": kind,
+        "passed": bool(search["passed"]),
+        "source_scope": source_scope,
+        "claim_scope": claim_scope,
+        "case_name": str(case_name),
+        "objective": str(objective),
+    }
+    if reduction is not None:
+        payload["reduction"] = str(reduction)
+        payload["samples"] = search["samples"]
+        payload["n_samples"] = search["n_samples"]
+    payload.update(
+        {
+            "radial_index": None if radial_index is None else int(radial_index),
+            "mode_index": int(mode_index),
+            "initial_delta": float(initial_delta),
+            "final_delta": search["final_delta"],
+            "perturbation_step": float(perturbation_step),
+            "update_step": search["update_step"],
+            "max_steps": search["max_steps"],
+            "accepted_steps": search["accepted_steps"],
+            "stop_reason": search["stop_reason"],
+            "initial_objective": search["initial_objective"],
+            "final_objective": search["final_objective"],
+            "relative_reduction": search["relative_reduction"],
+            "history": search["history"],
+            "options": options,
+        }
+    )
+    return payload
+
+
 def _run_one_parameter_line_search(
     *,
     finite_difference_report_fn: Any,
@@ -172,19 +268,19 @@ def vmec_boozer_aggregate_scalar_objective_line_search_report(  # pragma: no cov
         vmec_boozer_aggregate_scalar_objective_finite_difference_report,
     )
 
-    probe_kwargs = {
-        "case_name": case_name,
-        "objective": objective,
-        "reduction": reduction,
-        "weights": weights,
-        "surface_indices": surface_indices,
-        "alphas": alphas,
-        "selected_ky_indices": selected_ky_indices,
-        "radial_index": radial_index,
-        "mode_index": mode_index,
-        "parameter_family": parameter_family,
-        **kwargs,
-    }
+    probe_kwargs = _aggregate_probe_kwargs(
+        case_name=case_name,
+        objective=objective,
+        reduction=reduction,
+        weights=weights,
+        surface_indices=surface_indices,
+        alphas=alphas,
+        selected_ky_indices=selected_ky_indices,
+        radial_index=radial_index,
+        mode_index=mode_index,
+        parameter_family=parameter_family,
+        extra_options=kwargs,
+    )
     search = _run_one_parameter_line_search(
         finite_difference_report_fn=finite_difference_report_fn,
         probe_kwargs=probe_kwargs,
@@ -196,35 +292,220 @@ def vmec_boozer_aggregate_scalar_objective_line_search_report(  # pragma: no cov
         response_atol=response_atol,
         max_curvature_ratio=max_curvature_ratio,
     )
-    return {
-        "kind": "vmec_boozer_aggregate_scalar_objective_line_search_report",
-        "passed": bool(search["passed"]),
-        "source_scope": "mode21_vmec_boozer_state_multi_point",
-        "claim_scope": (
+    return _line_search_payload(
+        kind="vmec_boozer_aggregate_scalar_objective_line_search_report",
+        source_scope="mode21_vmec_boozer_state_multi_point",
+        claim_scope=(
             "curvature-gated one-parameter line search for an aggregated "
             "VMEC/Boozer/SPECTRAX-GK linear/quasilinear objective; not a "
             "multi-parameter or nonlinear turbulent transport optimization claim"
         ),
+        case_name=case_name,
+        objective=objective,
+        reduction=reduction,
+        radial_index=radial_index,
+        mode_index=mode_index,
+        initial_delta=initial_delta,
+        perturbation_step=perturbation_step,
+        search=search,
+        options=_serializable_scalar_options(kwargs),
+    )
+
+
+def _run_heldout_fd_probe(
+    finite_difference_report_fn: Any,
+    *,
+    case_name: str,
+    objective: SolverScalarObjective,
+    reduction: Literal["mean", "weighted_mean", "max"],
+    weights: tuple[float, ...] | list[float] | np.ndarray | None,
+    surface_indices: int | None | tuple[int | None, ...] | list[int | None],
+    alphas: float | tuple[float, ...] | list[float],
+    selected_ky_indices: int | tuple[int, ...] | list[int],
+    radial_index: int | None,
+    mode_index: int,
+    parameter_family: str,
+    base_delta: float,
+    perturbation_step: float,
+    response_atol: float,
+    max_curvature_ratio: float,
+    extra_options: dict[str, Any],
+) -> dict[str, object]:
+    return finite_difference_report_fn(
+        case_name=case_name,
+        objective=objective,
+        reduction=reduction,
+        weights=weights,
+        surface_indices=surface_indices,
+        alphas=alphas,
+        selected_ky_indices=selected_ky_indices,
+        radial_index=radial_index,
+        mode_index=mode_index,
+        parameter_family=parameter_family,
+        base_delta=base_delta,
+        perturbation_step=perturbation_step,
+        response_atol=response_atol,
+        max_curvature_ratio=max_curvature_ratio,
+        **extra_options,
+    )
+
+
+def _holdout_relative_reduction(
+    heldout_initial_value: float,
+    heldout_final_value: float,
+) -> float | None:
+    heldout_reduction = heldout_initial_value - heldout_final_value
+    if np.isfinite(heldout_initial_value) and abs(heldout_initial_value) > 0.0:
+        return float(heldout_reduction / abs(heldout_initial_value))
+    return None
+
+
+def _aggregate_holdout_payload(
+    *,
+    case_name: str,
+    objective: SolverScalarObjective,
+    reduction: Literal["mean", "weighted_mean", "max"],
+    radial_index: int | None,
+    mode_index: int,
+    initial_delta: float,
+    final_delta: float,
+    training: dict[str, object],
+    heldout_initial: dict[str, object],
+    heldout_final: dict[str, object],
+    min_holdout_improvement: float,
+) -> dict[str, object]:
+    heldout_initial_value = _report_float(heldout_initial, "base_value")
+    heldout_final_value = _report_float(heldout_final, "base_value")
+    heldout_reduction = heldout_initial_value - heldout_final_value
+    heldout_passed = bool(
+        bool(heldout_initial["passed"])
+        and bool(heldout_final["passed"])
+        and heldout_reduction > min_holdout_improvement
+    )
+    training_passed = bool(training["passed"])
+    return {
+        "kind": "vmec_boozer_aggregate_line_search_holdout_report",
+        "passed": bool(training_passed and heldout_passed),
+        "source_scope": "mode21_vmec_boozer_state_train_holdout",
+        "claim_scope": (
+            "one-parameter aggregate reduced-objective line search with held-out "
+            "surface/field-line/ky validation; not a nonlinear turbulent transport "
+            "or broad stellarator optimization claim"
+        ),
         "case_name": str(case_name),
         "objective": str(objective),
         "reduction": str(reduction),
-        "samples": search["samples"],
-        "n_samples": search["n_samples"],
-        "radial_index": None if radial_index is None else int(radial_index),
-        "mode_index": int(mode_index),
         "initial_delta": float(initial_delta),
-        "final_delta": search["final_delta"],
-        "perturbation_step": float(perturbation_step),
-        "update_step": search["update_step"],
-        "max_steps": search["max_steps"],
-        "accepted_steps": search["accepted_steps"],
-        "stop_reason": search["stop_reason"],
-        "initial_objective": search["initial_objective"],
-        "final_objective": search["final_objective"],
-        "relative_reduction": search["relative_reduction"],
-        "history": search["history"],
-        "options": _serializable_scalar_options(kwargs),
+        "final_delta": final_delta,
+        "training_passed": training_passed,
+        "heldout_passed": heldout_passed,
+        "training_initial_objective": _report_float(training, "initial_objective"),
+        "training_final_objective": _report_float(training, "final_objective"),
+        "training_relative_reduction": training.get("relative_reduction"),
+        "heldout_initial_objective": heldout_initial_value,
+        "heldout_final_objective": heldout_final_value,
+        "heldout_relative_reduction": _holdout_relative_reduction(
+            heldout_initial_value,
+            heldout_final_value,
+        ),
+        "min_holdout_improvement": min_holdout_improvement,
+        "training_samples": training.get("samples", []),
+        "heldout_samples": heldout_initial.get("samples", []),
+        "training_report": training,
+        "heldout_initial_report": heldout_initial,
+        "heldout_final_report": heldout_final,
+        "next_action": (
+            "Promote only if this split gate passes on multiple held-out surfaces "
+            "or field lines and then survives nonlinear-window transport audits."
+        ),
     }
+
+
+def _run_aggregate_training_line_search(
+    line_search_report_fn: Any,
+    *,
+    case_name: str,
+    objective: SolverScalarObjective,
+    reduction: Literal["mean", "weighted_mean", "max"],
+    weights: tuple[float, ...] | list[float] | np.ndarray | None,
+    surface_indices: int | None | tuple[int | None, ...] | list[int | None],
+    alphas: float | tuple[float, ...] | list[float],
+    selected_ky_indices: int | tuple[int, ...] | list[int],
+    radial_index: int | None,
+    mode_index: int,
+    parameter_family: str,
+    initial_delta: float,
+    perturbation_step: float,
+    update_step: float,
+    max_steps: int,
+    min_improvement: float,
+    response_atol: float,
+    max_curvature_ratio: float,
+    extra_options: dict[str, Any],
+) -> dict[str, object]:
+    return line_search_report_fn(
+        case_name=case_name,
+        objective=objective,
+        reduction=reduction,
+        weights=weights,
+        surface_indices=surface_indices,
+        alphas=alphas,
+        selected_ky_indices=selected_ky_indices,
+        radial_index=radial_index,
+        mode_index=mode_index,
+        parameter_family=parameter_family,
+        initial_delta=initial_delta,
+        perturbation_step=perturbation_step,
+        update_step=update_step,
+        max_steps=max_steps,
+        min_improvement=min_improvement,
+        response_atol=response_atol,
+        max_curvature_ratio=max_curvature_ratio,
+        **extra_options,
+    )
+
+
+def _run_holdout_fd_pair(
+    finite_difference_report_fn: Any,
+    *,
+    case_name: str,
+    objective: SolverScalarObjective,
+    reduction: Literal["mean", "weighted_mean", "max"],
+    weights: tuple[float, ...] | list[float] | np.ndarray | None,
+    surface_indices: int | None | tuple[int | None, ...] | list[int | None],
+    alphas: float | tuple[float, ...] | list[float],
+    selected_ky_indices: int | tuple[int, ...] | list[int],
+    radial_index: int | None,
+    mode_index: int,
+    parameter_family: str,
+    initial_delta: float,
+    final_delta: float,
+    perturbation_step: float,
+    response_atol: float,
+    max_curvature_ratio: float,
+    extra_options: dict[str, Any],
+) -> tuple[dict[str, object], dict[str, object]]:
+    def run_probe(base_delta: float) -> dict[str, object]:
+        return _run_heldout_fd_probe(
+            finite_difference_report_fn,
+            case_name=case_name,
+            objective=objective,
+            reduction=reduction,
+            weights=weights,
+            surface_indices=surface_indices,
+            alphas=alphas,
+            selected_ky_indices=selected_ky_indices,
+            radial_index=radial_index,
+            mode_index=mode_index,
+            parameter_family=parameter_family,
+            base_delta=base_delta,
+            perturbation_step=perturbation_step,
+            response_atol=response_atol,
+            max_curvature_ratio=max_curvature_ratio,
+            extra_options=extra_options,
+        )
+
+    return run_probe(initial_delta), run_probe(final_delta)
 
 
 def vmec_boozer_aggregate_line_search_holdout_report(  # pragma: no cover
@@ -278,7 +559,8 @@ def vmec_boozer_aggregate_line_search_holdout_report(  # pragma: no cover
     if min_holdout_improvement_float < 0.0:
         raise ValueError("min_holdout_improvement must be non-negative")
 
-    training = line_search_report_fn(
+    training = _run_aggregate_training_line_search(
+        line_search_report_fn,
         case_name=case_name,
         objective=objective,
         reduction=reduction,
@@ -296,11 +578,12 @@ def vmec_boozer_aggregate_line_search_holdout_report(  # pragma: no cover
         min_improvement=min_improvement,
         response_atol=response_atol,
         max_curvature_ratio=max_curvature_ratio,
-        **kwargs,
+        extra_options=kwargs,
     )
     final_delta = _report_float(training, "final_delta")
 
-    heldout_initial = finite_difference_report_fn(
+    heldout_initial, heldout_final = _run_holdout_fd_pair(
+        finite_difference_report_fn,
         case_name=case_name,
         objective=objective,
         reduction=reduction,
@@ -311,75 +594,26 @@ def vmec_boozer_aggregate_line_search_holdout_report(  # pragma: no cover
         radial_index=radial_index,
         mode_index=mode_index,
         parameter_family=parameter_family,
-        base_delta=initial_delta,
+        initial_delta=initial_delta,
+        final_delta=final_delta,
         perturbation_step=perturbation_step,
         response_atol=response_atol,
         max_curvature_ratio=max_curvature_ratio,
-        **kwargs,
+        extra_options=kwargs,
     )
-    heldout_final = finite_difference_report_fn(
+    return _aggregate_holdout_payload(
         case_name=case_name,
         objective=objective,
         reduction=reduction,
-        weights=holdout_weights,
-        surface_indices=holdout_surface_indices,
-        alphas=holdout_alphas,
-        selected_ky_indices=holdout_selected_ky_indices,
         radial_index=radial_index,
         mode_index=mode_index,
-        parameter_family=parameter_family,
-        base_delta=final_delta,
-        perturbation_step=perturbation_step,
-        response_atol=response_atol,
-        max_curvature_ratio=max_curvature_ratio,
-        **kwargs,
+        initial_delta=initial_delta,
+        final_delta=final_delta,
+        training=training,
+        heldout_initial=heldout_initial,
+        heldout_final=heldout_final,
+        min_holdout_improvement=min_holdout_improvement_float,
     )
-    heldout_initial_value = _report_float(heldout_initial, "base_value")
-    heldout_final_value = _report_float(heldout_final, "base_value")
-    heldout_reduction = heldout_initial_value - heldout_final_value
-    heldout_passed = bool(
-        bool(heldout_initial["passed"])
-        and bool(heldout_final["passed"])
-        and heldout_reduction > min_holdout_improvement_float
-    )
-    training_passed = bool(training["passed"])
-    return {
-        "kind": "vmec_boozer_aggregate_line_search_holdout_report",
-        "passed": bool(training_passed and heldout_passed),
-        "source_scope": "mode21_vmec_boozer_state_train_holdout",
-        "claim_scope": (
-            "one-parameter aggregate reduced-objective line search with held-out "
-            "surface/field-line/ky validation; not a nonlinear turbulent transport "
-            "or broad stellarator optimization claim"
-        ),
-        "case_name": str(case_name),
-        "objective": str(objective),
-        "reduction": str(reduction),
-        "initial_delta": float(initial_delta),
-        "final_delta": final_delta,
-        "training_passed": training_passed,
-        "heldout_passed": heldout_passed,
-        "training_initial_objective": _report_float(training, "initial_objective"),
-        "training_final_objective": _report_float(training, "final_objective"),
-        "training_relative_reduction": training.get("relative_reduction"),
-        "heldout_initial_objective": heldout_initial_value,
-        "heldout_final_objective": heldout_final_value,
-        "heldout_relative_reduction": (
-            float(heldout_reduction / abs(heldout_initial_value))
-            if np.isfinite(heldout_initial_value) and abs(heldout_initial_value) > 0.0
-            else None
-        ),
-        "min_holdout_improvement": min_holdout_improvement_float,
-        "training_samples": training.get("samples", []),
-        "heldout_samples": heldout_initial.get("samples", []),
-        "training_report": training,
-        "heldout_initial_report": heldout_initial,
-        "heldout_final_report": heldout_final,
-        "next_action": (
-            "Promote only if this split gate passes on multiple held-out surfaces "
-            "or field lines and then survives nonlinear-window transport audits."
-        ),
-    }
 
 
 def vmec_boozer_scalar_objective_line_search_report(  # pragma: no cover
@@ -412,14 +646,14 @@ def vmec_boozer_scalar_objective_line_search_report(  # pragma: no cover
         vmec_boozer_scalar_objective_finite_difference_report,
     )
 
-    probe_kwargs = {
-        "case_name": case_name,
-        "objective": objective,
-        "radial_index": radial_index,
-        "mode_index": mode_index,
-        "parameter_family": parameter_family,
-        **kwargs,
-    }
+    probe_kwargs = _scalar_probe_kwargs(
+        case_name=case_name,
+        objective=objective,
+        radial_index=radial_index,
+        mode_index=mode_index,
+        parameter_family=parameter_family,
+        extra_options=kwargs,
+    )
     search = _run_one_parameter_line_search(
         finite_difference_report_fn=finite_difference_report_fn,
         probe_kwargs=probe_kwargs,
@@ -431,31 +665,22 @@ def vmec_boozer_scalar_objective_line_search_report(  # pragma: no cover
         response_atol=response_atol,
         max_curvature_ratio=max_curvature_ratio,
     )
-    return {
-        "kind": "vmec_boozer_scalar_objective_line_search_report",
-        "passed": bool(search["passed"]),
-        "source_scope": "mode21_vmec_boozer_state",
-        "claim_scope": (
+    return _line_search_payload(
+        kind="vmec_boozer_scalar_objective_line_search_report",
+        source_scope="mode21_vmec_boozer_state",
+        claim_scope=(
             "curvature-gated one-parameter VMEC/Boozer/SPECTRAX-GK scalar objective "
             "line search; not a multi-parameter stellarator optimization or nonlinear transport claim"
         ),
-        "case_name": str(case_name),
-        "objective": str(objective),
-        "radial_index": None if radial_index is None else int(radial_index),
-        "mode_index": int(mode_index),
-        "initial_delta": float(initial_delta),
-        "final_delta": search["final_delta"],
-        "perturbation_step": float(perturbation_step),
-        "update_step": search["update_step"],
-        "max_steps": search["max_steps"],
-        "accepted_steps": search["accepted_steps"],
-        "stop_reason": search["stop_reason"],
-        "initial_objective": search["initial_objective"],
-        "final_objective": search["final_objective"],
-        "relative_reduction": search["relative_reduction"],
-        "history": search["history"],
-        "options": _serializable_scalar_options(kwargs),
-    }
+        case_name=case_name,
+        objective=objective,
+        radial_index=radial_index,
+        mode_index=mode_index,
+        initial_delta=initial_delta,
+        perturbation_step=perturbation_step,
+        search=search,
+        options=_serializable_scalar_options(kwargs),
+    )
 
 
 __all__ = [
