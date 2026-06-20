@@ -58,6 +58,52 @@ class _TEMBatchContext:
     cache: Any
 
 
+@dataclass(frozen=True)
+class _TEMScanRuntimeOptions:
+    """Options shared by every TEM scan batch."""
+
+    n_laguerre: int
+    n_hermite: int
+    dt: float | np.ndarray
+    steps: int | np.ndarray
+    method: str
+    time_cfg: Any | None
+    solver_key: str
+    krylov_cfg: Any | None
+    krylov_default: Any
+    fit_policy: ScanFitWindowPolicy
+    mode_method: str
+    mode_only: bool
+    sample_stride: int | None
+    ky_batch: int
+    fixed_batch_shape: bool
+    streaming_fit: bool
+    streaming_amp_floor: float
+    init_species_index: int
+    diagnostic_norm: str
+    use_batch: bool
+    show_progress: bool
+    hooks: TEMPathHooks
+
+
+@dataclass
+class _TEMScanAccumulator:
+    """Mutable TEM scan rows collected across batches."""
+
+    gammas: list[float]
+    omegas: list[float]
+    ky_out: list[float]
+
+    def result(self, hooks: TEMPathHooks) -> LinearScanResult:
+        """Pack accumulated rows with the public result type."""
+
+        return hooks.linear_scan_result(
+            ky=np.array(self.ky_out),
+            gamma=np.array(self.gammas),
+            omega=np.array(self.omegas),
+        )
+
+
 _TEM_KRYLOV_FORWARD_KEYS = (
     "krylov_dim restarts omega_min_factor omega_target_factor omega_cap_factor omega_sign method "
     "power_iters power_dt shift shift_source shift_tol shift_maxiter shift_restart shift_solve_method "
@@ -326,6 +372,132 @@ def _append_tem_saved_fit(
         ky_out.append(float(context.ky_slice[local_idx]))
 
 
+def _tem_scan_batches(
+    ky_values: np.ndarray,
+    options: _TEMScanRuntimeOptions,
+) -> Any:
+    """Select scalar or fixed-width ky batching for the TEM scan."""
+
+    if options.use_batch:
+        return _iter_ky_batches(
+            ky_values,
+            ky_batch=options.ky_batch,
+            fixed_batch_shape=options.fixed_batch_shape,
+        )
+    return _iter_ky_batches(ky_values, ky_batch=1, fixed_batch_shape=False)
+
+
+def _append_tem_scan_batch(
+    *,
+    context: _TEMBatchContext,
+    geom: Any,
+    params: Any,
+    terms: Any,
+    options: _TEMScanRuntimeOptions,
+    acc: _TEMScanAccumulator,
+) -> None:
+    """Route one prepared TEM batch through its selected solver path."""
+
+    hooks = options.hooks
+    if options.solver_key == "krylov":
+        _append_tem_krylov_fit(
+            context=context,
+            params=params,
+            terms=terms,
+            krylov_cfg=options.krylov_cfg,
+            krylov_default=options.krylov_default,
+            diagnostic_norm=options.diagnostic_norm,
+            hooks=hooks,
+            gammas=acc.gammas,
+            omegas=acc.omegas,
+            ky_out=acc.ky_out,
+        )
+        return
+
+    time_cfg_i = _tem_time_config_for_batch(
+        options.time_cfg,
+        dt=context.dt,
+        steps=context.steps,
+        sample_stride=options.sample_stride,
+    )
+    if time_cfg_i is not None and time_cfg_i.use_diffrax and options.streaming_fit:
+        _append_tem_streaming_fit(
+            context=context,
+            geom=geom,
+            params=params,
+            terms=terms,
+            time_cfg_i=time_cfg_i,
+            fit_policy=options.fit_policy,
+            mode_method=options.mode_method,
+            streaming_amp_floor=options.streaming_amp_floor,
+            show_progress=options.show_progress,
+            hooks=hooks,
+            gammas=acc.gammas,
+            omegas=acc.omegas,
+            ky_out=acc.ky_out,
+        )
+        return
+
+    _append_tem_saved_fit(
+        context=context,
+        geom=geom,
+        params=params,
+        terms=terms,
+        method=options.method,
+        time_cfg_i=time_cfg_i,
+        mode_method=options.mode_method,
+        mode_only=options.mode_only,
+        sample_stride=options.sample_stride,
+        fit_policy=options.fit_policy,
+        diagnostic_norm=options.diagnostic_norm,
+        hooks=hooks,
+        gammas=acc.gammas,
+        omegas=acc.omegas,
+        ky_out=acc.ky_out,
+    )
+
+
+def _run_tem_scan_loop(
+    *,
+    ky_values: np.ndarray,
+    grid_full: Any,
+    geom: Any,
+    params: Any,
+    terms: Any,
+    init_cfg: Any,
+    options: _TEMScanRuntimeOptions,
+) -> _TEMScanAccumulator:
+    """Prepare and execute all TEM scan batches."""
+
+    acc = _TEMScanAccumulator(gammas=[], omegas=[], ky_out=[])
+    for batch_start, ky_slice, valid_count in _tem_scan_batches(ky_values, options):
+        context = _prepare_tem_scan_batch(
+            batch_start=batch_start,
+            ky_slice=ky_slice,
+            valid_count=valid_count,
+            grid_full=grid_full,
+            geom=geom,
+            params=params,
+            init_cfg=init_cfg,
+            n_laguerre=options.n_laguerre,
+            n_hermite=options.n_hermite,
+            dt=options.dt,
+            steps=options.steps,
+            init_species_index=options.init_species_index,
+            use_batch=options.use_batch,
+            hooks=options.hooks,
+        )
+        _append_tem_scan_batch(
+            context=context,
+            geom=geom,
+            params=params,
+            terms=terms,
+            options=options,
+            acc=acc,
+        )
+    return acc
+
+
 def run_tem_krylov_linear_path(
     *,
     G0_jax: Any,
@@ -544,92 +716,36 @@ def run_tem_scan_batches(
         fit_growth_rate_auto_fn=hooks.fit_growth_rate_auto,
         normalize_growth_rate_fn=hooks.normalize_growth_rate,
     )
-    if use_batch:
-        ky_iter = _iter_ky_batches(
-            ky_values,
-            ky_batch=ky_batch,
-            fixed_batch_shape=fixed_batch_shape,
-        )
-    else:
-        ky_iter = _iter_ky_batches(ky_values, ky_batch=1, fixed_batch_shape=False)
-
-    gammas: list[float] = []
-    omegas: list[float] = []
-    ky_out: list[float] = []
-    for batch_start, ky_slice, valid_count in ky_iter:
-        context = _prepare_tem_scan_batch(
-            batch_start=batch_start,
-            ky_slice=ky_slice,
-            valid_count=valid_count,
-            grid_full=grid_full,
-            geom=geom,
-            params=params,
-            init_cfg=init_cfg,
-            n_laguerre=n_laguerre,
-            n_hermite=n_hermite,
-            dt=dt,
-            steps=steps,
-            init_species_index=init_species_index,
-            use_batch=use_batch,
-            hooks=hooks,
-        )
-        if solver_key == "krylov":
-            _append_tem_krylov_fit(
-                context=context,
-                params=params,
-                terms=terms,
-                krylov_cfg=krylov_cfg,
-                krylov_default=krylov_default,
-                diagnostic_norm=diagnostic_norm,
-                hooks=hooks,
-                gammas=gammas,
-                omegas=omegas,
-                ky_out=ky_out,
-            )
-            continue
-
-        time_cfg_i = _tem_time_config_for_batch(
-            time_cfg,
-            dt=context.dt,
-            steps=context.steps,
-            sample_stride=sample_stride,
-        )
-
-        if time_cfg_i is not None and time_cfg_i.use_diffrax and streaming_fit:
-            _append_tem_streaming_fit(
-                context=context,
-                geom=geom,
-                params=params,
-                terms=terms,
-                time_cfg_i=time_cfg_i,
-                fit_policy=fit_policy,
-                mode_method=mode_method,
-                streaming_amp_floor=streaming_amp_floor,
-                show_progress=show_progress,
-                hooks=hooks,
-                gammas=gammas,
-                omegas=omegas,
-                ky_out=ky_out,
-            )
-            continue
-
-        _append_tem_saved_fit(
-            context=context,
-            geom=geom,
-            params=params,
-            terms=terms,
-            method=method,
-            time_cfg_i=time_cfg_i,
-            mode_method=mode_method,
-            mode_only=mode_only,
-            sample_stride=sample_stride,
-            fit_policy=fit_policy,
-            diagnostic_norm=diagnostic_norm,
-            hooks=hooks,
-            gammas=gammas,
-            omegas=omegas,
-            ky_out=ky_out,
-        )
-    return hooks.linear_scan_result(
-        ky=np.array(ky_out), gamma=np.array(gammas), omega=np.array(omegas)
+    options = _TEMScanRuntimeOptions(
+        n_laguerre=n_laguerre,
+        n_hermite=n_hermite,
+        dt=dt,
+        steps=steps,
+        method=method,
+        time_cfg=time_cfg,
+        solver_key=solver_key,
+        krylov_cfg=krylov_cfg,
+        krylov_default=krylov_default,
+        fit_policy=fit_policy,
+        mode_method=mode_method,
+        mode_only=mode_only,
+        sample_stride=sample_stride,
+        ky_batch=ky_batch,
+        fixed_batch_shape=fixed_batch_shape,
+        streaming_fit=streaming_fit,
+        streaming_amp_floor=streaming_amp_floor,
+        init_species_index=init_species_index,
+        diagnostic_norm=diagnostic_norm,
+        use_batch=use_batch,
+        show_progress=show_progress,
+        hooks=hooks,
     )
+    return _run_tem_scan_loop(
+        ky_values=ky_values,
+        grid_full=grid_full,
+        geom=geom,
+        params=params,
+        terms=terms,
+        init_cfg=init_cfg,
+        options=options,
+    ).result(hooks)
