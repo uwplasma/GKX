@@ -90,6 +90,28 @@ class _ETGLinearSetup:
     initial_state: Any
 
 
+@dataclass(frozen=True)
+class _ETGTimePathOptions:
+    """Private fit and streaming policy for ETG saved-time integrations."""
+
+    fit_key: str
+    streaming_fit: bool
+    streaming_amp_floor: float
+    reference_growth_window: bool
+    reference_navg_fraction: float
+    mode_method: str
+    tmin: float | None
+    tmax: float | None
+    auto_window: bool
+    window_fraction: float
+    min_points: int
+    start_fraction: float
+    growth_weight: float
+    require_positive: bool
+    min_amp_fraction: float
+    diagnostic_norm: str
+
+
 def _default_etg_params(cfg: ETGBaseCase, geom: Any, Nm: int) -> LinearParams:
     """Build ETG benchmark species parameters using the tracked normalization."""
 
@@ -271,16 +293,104 @@ def _resolve_etg_time_config(
     return time_cfg_use, dt, steps
 
 
-def _fit_etg_time_trace(
+def _etg_auto_fit_options(
+    *,
+    window_fraction: float,
+    min_points: int,
+    start_fraction: float,
+    growth_weight: float,
+    require_positive: bool,
+    min_amp_fraction: float,
+) -> dict[str, Any]:
+    """Pack the shared automatic-window policy for ETG trace fits."""
+
+    return {
+        "window_fraction": window_fraction,
+        "min_points": min_points,
+        "start_fraction": start_fraction,
+        "growth_weight": growth_weight,
+        "require_positive": require_positive,
+        "min_amp_fraction": min_amp_fraction,
+    }
+
+
+def _fit_etg_reference_growth(
     setup: _ETGLinearSetup,
     *,
-    phi_t: Any,
-    density_t: Any,
-    dt: float,
-    stride: int,
-    fit_key: str,
-    reference_growth_window: bool,
+    phi_t_np: np.ndarray,
+    t: np.ndarray,
     reference_navg_fraction: float,
+    mode_method: str,
+    diagnostic_norm: str,
+) -> tuple[float, float]:
+    """Fit ETG ``phi`` with the legacy instantaneous-growth reference window."""
+
+    gamma, omega, _gamma_t, _omega_t, _t_mid = instantaneous_growth_rate_from_phi(
+        phi_t_np,
+        t,
+        setup.selection,
+        navg_fraction=reference_navg_fraction,
+        mode_method=mode_method,
+    )
+    return _normalize_growth_rate(gamma, omega, setup.params, diagnostic_norm)
+
+
+def _fit_etg_auto_signal(
+    setup: _ETGLinearSetup,
+    *,
+    phi_t_np: np.ndarray,
+    density_np: np.ndarray | None,
+    t: np.ndarray,
+    mode_method: str,
+    tmin: float | None,
+    tmax: float | None,
+    window_fraction: float,
+    min_points: int,
+    start_fraction: float,
+    growth_weight: float,
+    require_positive: bool,
+    min_amp_fraction: float,
+    diagnostic_norm: str,
+) -> tuple[float, float]:
+    """Select the most stable ETG signal and fit its automatic growth window."""
+
+    gamma, omega = _select_fit_signal_auto(
+        t,
+        phi_t_np,
+        density_np,
+        setup.selection,
+        mode_method=mode_method,
+        tmin=tmin,
+        tmax=tmax,
+        window_fraction=window_fraction,
+        min_points=min_points,
+        start_fraction=start_fraction,
+        growth_weight=growth_weight,
+        require_positive=require_positive,
+        min_amp_fraction=min_amp_fraction,
+        max_amp_fraction=0.9,
+        window_method="loglinear",
+        max_fraction=0.8,
+        end_fraction=0.9,
+        num_windows=8,
+        phase_weight=0.2,
+        length_weight=0.05,
+        min_r2=0.0,
+        late_penalty=0.1,
+        min_slope=None,
+        min_slope_frac=0.0,
+        slope_var_weight=0.0,
+    )[2:]
+    return _normalize_growth_rate(gamma, omega, setup.params, diagnostic_norm)
+
+
+def _fit_etg_selected_signal(
+    setup: _ETGLinearSetup,
+    *,
+    phi_t_np: np.ndarray,
+    density_np: np.ndarray | None,
+    t: np.ndarray,
+    fit_key: str,
     mode_method: str,
     tmin: float | None,
     tmax: float | None,
@@ -292,60 +402,8 @@ def _fit_etg_time_trace(
     require_positive: bool,
     min_amp_fraction: float,
     diagnostic_norm: str,
-) -> LinearRunResult:
-    """Fit ETG growth and frequency from a saved time trace."""
-
-    phi_t_np = np.asarray(phi_t)
-    t = np.arange(phi_t_np.shape[0]) * dt * stride
-    density_np = None if density_t is None else np.asarray(density_t)
-    if reference_growth_window and fit_key == "phi":
-        gamma, omega, _gamma_t, _omega_t, _t_mid = instantaneous_growth_rate_from_phi(
-            phi_t_np,
-            t,
-            setup.selection,
-            navg_fraction=reference_navg_fraction,
-            mode_method=mode_method,
-        )
-        gamma, omega = _normalize_growth_rate(
-            gamma, omega, setup.params, diagnostic_norm
-        )
-        return _etg_linear_result(
-            setup, t=t, phi_t_np=phi_t_np, gamma=gamma, omega=omega
-        )
-    if fit_key == "auto":
-        signal, _name, gamma, omega = _select_fit_signal_auto(
-            t,
-            phi_t_np,
-            density_np,
-            setup.selection,
-            mode_method=mode_method,
-            tmin=tmin,
-            tmax=tmax,
-            window_fraction=window_fraction,
-            min_points=min_points,
-            start_fraction=start_fraction,
-            growth_weight=growth_weight,
-            require_positive=require_positive,
-            min_amp_fraction=min_amp_fraction,
-            max_amp_fraction=0.9,
-            window_method="loglinear",
-            max_fraction=0.8,
-            end_fraction=0.9,
-            num_windows=8,
-            phase_weight=0.2,
-            length_weight=0.05,
-            min_r2=0.0,
-            late_penalty=0.1,
-            min_slope=None,
-            min_slope_frac=0.0,
-            slope_var_weight=0.0,
-        )
-        gamma, omega = _normalize_growth_rate(
-            gamma, omega, setup.params, diagnostic_norm
-        )
-        return _etg_linear_result(
-            setup, t=t, phi_t_np=phi_t_np, gamma=gamma, omega=omega
-        )
+) -> tuple[float, float]:
+    """Fit a caller-selected ETG signal with manual-window fallback."""
 
     signal = _select_fit_signal(
         phi_t_np,
@@ -354,17 +412,17 @@ def _fit_etg_time_trace(
         fit_signal=fit_key,
         mode_method=mode_method,
     )
+    auto_fit_kwargs = _etg_auto_fit_options(
+        window_fraction=window_fraction,
+        min_points=min_points,
+        start_fraction=start_fraction,
+        growth_weight=growth_weight,
+        require_positive=require_positive,
+        min_amp_fraction=min_amp_fraction,
+    )
     use_auto = auto_window and tmin is None and tmax is None
     if not use_auto and not scan_window_valid(t, tmin, tmax):
         use_auto = True
-    auto_fit_kwargs: dict[str, Any] = {
-        "window_fraction": window_fraction,
-        "min_points": min_points,
-        "start_fraction": start_fraction,
-        "growth_weight": growth_weight,
-        "require_positive": require_positive,
-        "min_amp_fraction": min_amp_fraction,
-    }
     if use_auto:
         gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
             t, signal, **auto_fit_kwargs
@@ -376,8 +434,328 @@ def _fit_etg_time_trace(
             gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
                 t, signal, **auto_fit_kwargs
             )
-    gamma, omega = _normalize_growth_rate(gamma, omega, setup.params, diagnostic_norm)
+    return _normalize_growth_rate(gamma, omega, setup.params, diagnostic_norm)
+
+
+def _fit_etg_time_trace(
+    setup: _ETGLinearSetup,
+    *,
+    phi_t: Any,
+    density_t: Any,
+    dt: float,
+    stride: int,
+    options: _ETGTimePathOptions,
+) -> LinearRunResult:
+    """Fit ETG growth and frequency from a saved time trace."""
+
+    phi_t_np = np.asarray(phi_t)
+    t = np.arange(phi_t_np.shape[0]) * dt * stride
+    density_np = None if density_t is None else np.asarray(density_t)
+    if options.reference_growth_window and options.fit_key == "phi":
+        gamma, omega = _fit_etg_reference_growth(
+            setup,
+            phi_t_np=phi_t_np,
+            t=t,
+            reference_navg_fraction=options.reference_navg_fraction,
+            mode_method=options.mode_method,
+            diagnostic_norm=options.diagnostic_norm,
+        )
+    elif options.fit_key == "auto":
+        gamma, omega = _fit_etg_auto_signal(
+            setup,
+            phi_t_np=phi_t_np,
+            density_np=density_np,
+            t=t,
+            mode_method=options.mode_method,
+            tmin=options.tmin,
+            tmax=options.tmax,
+            window_fraction=options.window_fraction,
+            min_points=options.min_points,
+            start_fraction=options.start_fraction,
+            growth_weight=options.growth_weight,
+            require_positive=options.require_positive,
+            min_amp_fraction=options.min_amp_fraction,
+            diagnostic_norm=options.diagnostic_norm,
+        )
+    else:
+        gamma, omega = _fit_etg_selected_signal(
+            setup,
+            phi_t_np=phi_t_np,
+            density_np=density_np,
+            t=t,
+            fit_key=options.fit_key,
+            mode_method=options.mode_method,
+            tmin=options.tmin,
+            tmax=options.tmax,
+            auto_window=options.auto_window,
+            window_fraction=options.window_fraction,
+            min_points=options.min_points,
+            start_fraction=options.start_fraction,
+            growth_weight=options.growth_weight,
+            require_positive=options.require_positive,
+            min_amp_fraction=options.min_amp_fraction,
+            diagnostic_norm=options.diagnostic_norm,
+        )
     return _etg_linear_result(setup, t=t, phi_t_np=phi_t_np, gamma=gamma, omega=omega)
+
+
+def _run_etg_streaming_density_fit(
+    setup: _ETGLinearSetup,
+    *,
+    time_cfg: TimeConfig,
+    cache: Any,
+    dt: float,
+    steps: int,
+    options: _ETGTimePathOptions,
+    show_progress: bool,
+) -> LinearRunResult:
+    """Run the memory-light Diffrax density streaming fit path."""
+
+    t_total = float(dt * steps)
+    tmin_i, tmax_i = _resolve_streaming_window(
+        t_total,
+        options.tmin,
+        options.tmax,
+        options.start_fraction,
+        options.window_fraction,
+        1.0,
+    )
+    G_last, gamma_vals, omega_vals = integrate_linear_diffrax_streaming(
+        setup.initial_state,
+        setup.grid,
+        setup.geom,
+        setup.params,
+        dt=dt,
+        steps=steps,
+        method=time_cfg.diffrax_solver,
+        cache=cache,
+        terms=setup.terms,
+        adaptive=False,
+        rtol=time_cfg.diffrax_rtol,
+        atol=time_cfg.diffrax_atol,
+        max_steps=time_cfg.diffrax_max_steps,
+        show_progress=show_progress,
+        progress_bar=time_cfg.progress_bar,
+        checkpoint=time_cfg.checkpoint,
+        tmin=tmin_i,
+        tmax=tmax_i,
+        fit_signal="density",
+        mode_ky_indices=np.array([0], dtype=int),
+        mode_kx_index=0,
+        mode_z_index=_midplane_index(setup.grid),
+        mode_method=options.mode_method,
+        amp_floor=options.streaming_amp_floor,
+        density_species_index=setup.electron_index,
+        return_state=True,
+    )
+    gamma = float(np.asarray(gamma_vals)[0])
+    omega = float(np.asarray(omega_vals)[0])
+    gamma, omega = _normalize_growth_rate(
+        gamma, omega, setup.params, options.diagnostic_norm
+    )
+    if G_last is not None and G_last.ndim == 7:
+        G_last = G_last[0]
+    if G_last is None:
+        raise ValueError("Expected final state from streaming fit; got None.")
+    term_cfg = linear_terms_to_term_config(setup.terms)
+    phi_last = compute_fields_cached(
+        G_last, cache, setup.params, terms=term_cfg
+    ).phi
+    return _etg_linear_result(
+        setup,
+        t=np.array([tmax_i]),
+        phi_t_np=np.asarray(jnp.asarray(phi_last)[None, ...]),
+        gamma=gamma,
+        omega=omega,
+    )
+
+
+def _integrate_etg_configured_history(
+    setup: _ETGLinearSetup,
+    *,
+    time_cfg: TimeConfig,
+    cache: Any,
+    dt: float,
+    steps: int,
+    fit_key: str,
+    show_progress: bool,
+) -> tuple[Any, Any | None, int]:
+    """Integrate ETG saved history using an explicit or synthesized TimeConfig."""
+
+    if fit_key in {"density", "auto"}:
+        if time_cfg.use_diffrax:
+            _, saved = integrate_linear_diffrax(
+                setup.initial_state,
+                setup.grid,
+                setup.geom,
+                setup.params,
+                dt=dt,
+                steps=steps,
+                method=time_cfg.diffrax_solver,
+                cache=cache,
+                terms=setup.terms,
+                adaptive=time_cfg.diffrax_adaptive,
+                rtol=time_cfg.diffrax_rtol,
+                atol=time_cfg.diffrax_atol,
+                max_steps=time_cfg.diffrax_max_steps,
+                show_progress=show_progress,
+                progress_bar=time_cfg.progress_bar,
+                checkpoint=time_cfg.checkpoint,
+                sample_stride=time_cfg.sample_stride,
+                return_state=time_cfg.save_state,
+                save_field="phi+density",
+                density_species_index=setup.electron_index,
+            )
+            phi_t, density_t = saved
+            return phi_t, density_t, time_cfg.sample_stride
+        diag = integrate_linear_diagnostics(
+            setup.initial_state,
+            setup.grid,
+            setup.geom,
+            setup.params,
+            dt=dt,
+            steps=steps,
+            method=time_cfg.method,
+            cache=cache,
+            terms=setup.terms,
+            sample_stride=time_cfg.sample_stride,
+            species_index=setup.electron_index,
+        )
+        phi_t = diag[1]
+        density_t = diag[2] if len(diag) > 2 else None
+        return phi_t, density_t, time_cfg.sample_stride
+
+    _, phi_t = integrate_linear_from_config(
+        setup.initial_state,
+        setup.grid,
+        setup.geom,
+        setup.params,
+        time_cfg,
+        cache=cache,
+        terms=setup.terms,
+        show_progress=show_progress,
+    )
+    return phi_t, None, time_cfg.sample_stride
+
+
+def _integrate_etg_unconfigured_history(
+    setup: _ETGLinearSetup,
+    *,
+    dt: float,
+    steps: int,
+    method: str,
+    fit_key: str,
+    sample_stride: int | None,
+    show_progress: bool,
+) -> tuple[Any, Any | None, int]:
+    """Integrate ETG saved history without a TimeConfig object."""
+
+    stride = 1 if sample_stride is None else int(sample_stride)
+    if fit_key in {"density", "auto"}:
+        diag = integrate_linear_diagnostics(
+            setup.initial_state,
+            setup.grid,
+            setup.geom,
+            setup.params,
+            dt=dt,
+            steps=steps,
+            method=method,
+            terms=setup.terms,
+            sample_stride=stride,
+            species_index=setup.electron_index,
+        )
+        phi_t = diag[1]
+        density_t = diag[2] if len(diag) > 2 else None
+        return phi_t, density_t, stride
+
+    _, phi_t = integrate_linear(
+        setup.initial_state,
+        setup.grid,
+        setup.geom,
+        setup.params,
+        dt=dt,
+        steps=steps,
+        method=method,
+        terms=setup.terms,
+        sample_stride=stride,
+        show_progress=show_progress,
+    )
+    return phi_t, None, stride
+
+
+def _run_etg_time_path(
+    setup: _ETGLinearSetup,
+    *,
+    Nl: int,
+    Nm: int,
+    time_cfg: TimeConfig | None,
+    dt: float,
+    steps: int,
+    method: str,
+    sample_stride: int | None,
+    options: _ETGTimePathOptions,
+    show_progress: bool,
+) -> LinearRunResult:
+    """Run ETG saved-time or streaming time paths and fit the trace."""
+
+    time_cfg_use, dt, steps = _resolve_etg_time_config(
+        setup.cfg,
+        time_cfg,
+        streaming_fit=options.streaming_fit,
+        dt=dt,
+        steps=steps,
+        sample_stride=sample_stride,
+    )
+    if time_cfg_use is not None:
+        cache = build_linear_cache(
+            setup.grid,
+            setup.geom,
+            setup.params,
+            Nl,
+            Nm,
+        )
+        if (
+            options.fit_key in {"density", "auto"}
+            and options.streaming_fit
+            and time_cfg_use.use_diffrax
+        ):
+            return _run_etg_streaming_density_fit(
+                setup,
+                time_cfg=time_cfg_use,
+                cache=cache,
+                dt=dt,
+                steps=steps,
+                options=options,
+                show_progress=show_progress,
+            )
+        phi_t, density_t, stride = _integrate_etg_configured_history(
+            setup,
+            time_cfg=time_cfg_use,
+            cache=cache,
+            dt=dt,
+            steps=steps,
+            fit_key=options.fit_key,
+            show_progress=show_progress,
+        )
+    else:
+        phi_t, density_t, stride = _integrate_etg_unconfigured_history(
+            setup,
+            dt=dt,
+            steps=steps,
+            method=method,
+            fit_key=options.fit_key,
+            sample_stride=sample_stride,
+            show_progress=show_progress,
+        )
+
+    return _fit_etg_time_trace(
+        setup,
+        phi_t=phi_t,
+        density_t=density_t,
+        dt=dt,
+        stride=stride,
+        options=options,
+    )
 
 
 def run_etg_linear(
@@ -422,19 +800,30 @@ def run_etg_linear(
         Nl=Nl,
         Nm=Nm,
     )
-    cfg = setup.cfg
-    grid = setup.grid
-    geom = setup.geom
-    params = setup.params
-    terms = setup.terms
-    electron_index = setup.electron_index
-    G0_jax = setup.initial_state
     solver_key = solver.strip().lower()
     fit_key = fit_signal.strip().lower()
     if fit_key not in {"phi", "density", "auto"}:
         raise ValueError("fit_signal must be 'phi', 'density', or 'auto'")
     if fit_key == "auto" and streaming_fit:
         streaming_fit = False
+    time_options = _ETGTimePathOptions(
+        fit_key=fit_key,
+        streaming_fit=streaming_fit,
+        streaming_amp_floor=streaming_amp_floor,
+        reference_growth_window=reference_growth_window,
+        reference_navg_fraction=reference_navg_fraction,
+        mode_method=mode_method,
+        tmin=tmin,
+        tmax=tmax,
+        auto_window=auto_window,
+        window_fraction=window_fraction,
+        min_points=min_points,
+        start_fraction=start_fraction,
+        growth_weight=growth_weight,
+        require_positive=require_positive,
+        min_amp_fraction=min_amp_fraction,
+        diagnostic_norm=diagnostic_norm,
+    )
     auto_solver = solver_key == "auto"
     if auto_solver:
         solver_key = "krylov"
@@ -457,182 +846,17 @@ def run_etg_linear(
             return krylov_result
 
     if solver_key != "krylov":
-        time_cfg_use, dt, steps = _resolve_etg_time_config(
-            cfg,
-            time_cfg,
-            streaming_fit=streaming_fit,
+        return _run_etg_time_path(
+            setup,
+            Nl=Nl,
+            Nm=Nm,
+            time_cfg=time_cfg,
             dt=dt,
             steps=steps,
+            method=method,
             sample_stride=sample_stride,
-        )
-        if time_cfg_use is not None:
-            cache = build_linear_cache(grid, geom, params, Nl, Nm)
-            if fit_key in {"density", "auto"}:
-                if streaming_fit and time_cfg_use.use_diffrax:
-                    t_total = float(dt * steps)
-                    tmin_i, tmax_i = _resolve_streaming_window(
-                        t_total, tmin, tmax, start_fraction, window_fraction, 1.0
-                    )
-                    G_last, gamma_vals, omega_vals = integrate_linear_diffrax_streaming(
-                        G0_jax,
-                        grid,
-                        geom,
-                        params,
-                        dt=dt,
-                        steps=steps,
-                        method=time_cfg_use.diffrax_solver,
-                        cache=cache,
-                        terms=terms,
-                        adaptive=False,
-                        rtol=time_cfg_use.diffrax_rtol,
-                        atol=time_cfg_use.diffrax_atol,
-                        max_steps=time_cfg_use.diffrax_max_steps,
-                        show_progress=show_progress,
-                        progress_bar=time_cfg_use.progress_bar,
-                        checkpoint=time_cfg_use.checkpoint,
-                        tmin=tmin_i,
-                        tmax=tmax_i,
-                        fit_signal="density",
-                        mode_ky_indices=np.array([0], dtype=int),
-                        mode_kx_index=0,
-                        mode_z_index=_midplane_index(grid),
-                        mode_method=mode_method,
-                        amp_floor=streaming_amp_floor,
-                        density_species_index=electron_index,
-                        return_state=True,
-                    )
-                    gamma = float(np.asarray(gamma_vals)[0])
-                    omega = float(np.asarray(omega_vals)[0])
-                    gamma, omega = _normalize_growth_rate(
-                        gamma, omega, params, diagnostic_norm
-                    )
-                    if G_last is not None and G_last.ndim == 7:
-                        G_last = G_last[0]
-                    term_cfg = linear_terms_to_term_config(terms)
-                    if G_last is None:
-                        raise ValueError(
-                            "Expected final state from streaming fit; got None."
-                        )
-                    phi_last = compute_fields_cached(
-                        G_last, cache, params, terms=term_cfg
-                    ).phi
-                    phi_t = jnp.asarray(phi_last)[None, ...]
-                    density_t = None
-                    stride = time_cfg_use.sample_stride
-                    phi_t_np = np.asarray(phi_t)
-                    t = np.array([tmax_i])
-                    return _etg_linear_result(
-                        setup,
-                        t=t,
-                        phi_t_np=phi_t_np,
-                        gamma=gamma,
-                        omega=omega,
-                    )
-                if time_cfg_use.use_diffrax:
-                    _, saved = integrate_linear_diffrax(
-                        G0_jax,
-                        grid,
-                        geom,
-                        params,
-                        dt=dt,
-                        steps=steps,
-                        method=time_cfg_use.diffrax_solver,
-                        cache=cache,
-                        terms=terms,
-                        adaptive=time_cfg_use.diffrax_adaptive,
-                        rtol=time_cfg_use.diffrax_rtol,
-                        atol=time_cfg_use.diffrax_atol,
-                        max_steps=time_cfg_use.diffrax_max_steps,
-                        show_progress=show_progress,
-                        progress_bar=time_cfg_use.progress_bar,
-                        checkpoint=time_cfg_use.checkpoint,
-                        sample_stride=time_cfg_use.sample_stride,
-                        return_state=time_cfg_use.save_state,
-                        save_field="phi+density",
-                        density_species_index=electron_index,
-                    )
-                    phi_t, density_t = saved
-                else:
-                    _diag = integrate_linear_diagnostics(
-                        G0_jax,
-                        grid,
-                        geom,
-                        params,
-                        dt=dt,
-                        steps=steps,
-                        method=time_cfg_use.method,
-                        cache=cache,
-                        terms=terms,
-                        sample_stride=time_cfg_use.sample_stride,
-                        species_index=electron_index,
-                    )
-                    phi_t = _diag[1]
-                    density_t = _diag[2] if len(_diag) > 2 else None
-            else:
-                _, phi_t = integrate_linear_from_config(
-                    G0_jax,
-                    grid,
-                    geom,
-                    params,
-                    time_cfg_use,
-                    cache=cache,
-                    terms=terms,
-                    show_progress=show_progress,
-                )
-                density_t = None
-            stride = time_cfg_use.sample_stride
-        else:
-            stride = 1 if sample_stride is None else int(sample_stride)
-            if fit_key in {"density", "auto"}:
-                _diag = integrate_linear_diagnostics(
-                    G0_jax,
-                    grid,
-                    geom,
-                    params,
-                    dt=dt,
-                    steps=steps,
-                    method=method,
-                    terms=terms,
-                    sample_stride=stride,
-                    species_index=electron_index,
-                )
-                phi_t = _diag[1]
-                density_t = _diag[2] if len(_diag) > 2 else None
-            else:
-                _, phi_t = integrate_linear(
-                    G0_jax,
-                    grid,
-                    geom,
-                    params,
-                    dt=dt,
-                    steps=steps,
-                    method=method,
-                    terms=terms,
-                    sample_stride=stride,
-                    show_progress=show_progress,
-                )
-                density_t = None
-
-        return _fit_etg_time_trace(
-            setup,
-            phi_t=phi_t,
-            density_t=density_t,
-            dt=dt,
-            stride=stride,
-            fit_key=fit_key,
-            reference_growth_window=reference_growth_window,
-            reference_navg_fraction=reference_navg_fraction,
-            mode_method=mode_method,
-            tmin=tmin,
-            tmax=tmax,
-            auto_window=auto_window,
-            window_fraction=window_fraction,
-            min_points=min_points,
-            start_fraction=start_fraction,
-            growth_weight=growth_weight,
-            require_positive=require_positive,
-            min_amp_fraction=min_amp_fraction,
-            diagnostic_norm=diagnostic_norm,
+            options=time_options,
+            show_progress=show_progress,
         )
 
     raise ValueError(f"Unsupported ETG linear solver '{solver}'.")
