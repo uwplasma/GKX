@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 import tempfile
 from types import SimpleNamespace
@@ -675,6 +676,154 @@ def _pack_vmec_array_parity_report(
     }
 
 
+@dataclass(frozen=True)
+class _VMECArrayParityOptions:
+    case_name: str
+    surface_index: int | None
+    alpha: float
+    ntheta: int
+    mboz: int
+    nboz: int
+    boundary: str
+    include_shear_variation: bool
+    include_pressure_variation: bool
+    core_tolerance: float
+    scalar_tolerance: float
+    equal_arc_core_tolerance: float
+    equal_arc_derivative_tolerance: float
+    equal_arc_metric_tolerance: float
+    equal_arc_drift_tolerance: float
+
+
+@dataclass(frozen=True)
+class _VMECArrayParityResult:
+    ctx: Any
+    surface_index: int
+    torflux: float
+    array_metrics: dict[str, dict[str, object]]
+    scalar_metrics: dict[str, dict[str, Any]]
+    equal_arc_parity: dict[str, object]
+    worst_core: float
+    worst_scalar: float
+    production_parity_passed: bool
+
+
+def _vmec_array_parity_options(
+    *,
+    case_name: str,
+    surface_index: int | None,
+    alpha: float,
+    ntheta: int,
+    mboz: int,
+    nboz: int,
+    boundary: str,
+    include_shear_variation: bool,
+    include_pressure_variation: bool,
+    core_tolerance: float,
+    scalar_tolerance: float,
+    equal_arc_core_tolerance: float,
+    equal_arc_derivative_tolerance: float,
+    equal_arc_metric_tolerance: float,
+    equal_arc_drift_tolerance: float,
+) -> _VMECArrayParityOptions:
+    ntheta_int, mboz_int, nboz_int = _validate_vmec_parity_inputs(ntheta, mboz, nboz)
+    return _VMECArrayParityOptions(
+        case_name=str(case_name),
+        surface_index=surface_index,
+        alpha=float(alpha),
+        ntheta=ntheta_int,
+        mboz=mboz_int,
+        nboz=nboz_int,
+        boundary=str(boundary),
+        include_shear_variation=bool(include_shear_variation),
+        include_pressure_variation=bool(include_pressure_variation),
+        core_tolerance=float(core_tolerance),
+        scalar_tolerance=float(scalar_tolerance),
+        equal_arc_core_tolerance=float(equal_arc_core_tolerance),
+        equal_arc_derivative_tolerance=float(equal_arc_derivative_tolerance),
+        equal_arc_metric_tolerance=float(equal_arc_metric_tolerance),
+        equal_arc_drift_tolerance=float(equal_arc_drift_tolerance),
+    )
+
+
+def _vmec_array_parity_backend_unavailable_reason(info: dict[str, object]) -> str | None:
+    if not info.get("vmec_jax_available", False):
+        return "vmec_jax is not available"
+    from spectraxgk.geometry_backends.vmec import internal_vmec_backend_available
+
+    if not internal_vmec_backend_available():
+        return "internal VMEC/EIK backend is not available"
+    return None
+
+
+def _vmec_array_parity_error_report(
+    *,
+    info: dict[str, object],
+    case_name: str,
+    exc: Exception,
+) -> dict[str, object]:
+    return {
+        "available": False,
+        "backend_info": info,
+        "case_name": str(case_name),
+        "error": f"{type(exc).__name__}: {exc}",
+    }
+
+
+def _vmec_array_parity_result(
+    *,
+    info: dict[str, object],
+    options: _VMECArrayParityOptions,
+) -> _VMECArrayParityResult:
+    ctx, sidx, torflux, direct, imported = _load_vmec_parity_geometries(
+        case_name=options.case_name,
+        surface_index=options.surface_index,
+        alpha=options.alpha,
+        ntheta=options.ntheta,
+        boundary=options.boundary,
+        include_shear_variation=options.include_shear_variation,
+        include_pressure_variation=options.include_pressure_variation,
+    )
+    (
+        array_metrics,
+        scalar_metrics,
+        worst_core,
+        worst_scalar,
+        production_parity_passed,
+    ) = _production_parity_metrics(
+        direct=direct,
+        imported=imported,
+        core_tolerance=options.core_tolerance,
+        scalar_tolerance=options.scalar_tolerance,
+    )
+    equal_arc_parity = _equal_arc_parity_report(
+        info=info,
+        ctx=ctx,
+        imported=imported,
+        surface_index=sidx,
+        torflux=torflux,
+        alpha=options.alpha,
+        ntheta=options.ntheta,
+        mboz=options.mboz,
+        nboz=options.nboz,
+        core_tolerance=options.equal_arc_core_tolerance,
+        derivative_tolerance=options.equal_arc_derivative_tolerance,
+        metric_tolerance=options.equal_arc_metric_tolerance,
+        drift_tolerance=options.equal_arc_drift_tolerance,
+    )
+    return _VMECArrayParityResult(
+        ctx=ctx,
+        surface_index=sidx,
+        torflux=torflux,
+        array_metrics=array_metrics,
+        scalar_metrics=scalar_metrics,
+        equal_arc_parity=equal_arc_parity,
+        worst_core=worst_core,
+        worst_scalar=worst_scalar,
+        production_parity_passed=production_parity_passed,
+    )
+
+
 def vmec_jax_flux_tube_array_parity_report(  # pragma: no cover
     *,
     case_name: str = "nfp4_QH_warm_start",
@@ -707,94 +856,62 @@ def vmec_jax_flux_tube_array_parity_report(  # pragma: no cover
     instead of the production Boozer equal-arc/Hegna-Nakajima convention.
     """
 
-    ntheta_int, mboz_int, nboz_int = _validate_vmec_parity_inputs(ntheta, mboz, nboz)
-
-    info = discover_differentiable_geometry_backends()
-    if not info.get("vmec_jax_available", False):
-        return _vmec_array_parity_unavailable_report(
-            info=info,
-            case_name=case_name,
-            reason="vmec_jax is not available",
-        )
-
-    try:
-        from spectraxgk.geometry_backends.vmec import internal_vmec_backend_available
-
-        if not internal_vmec_backend_available():
-            return _vmec_array_parity_unavailable_report(
-                info=info,
-                case_name=case_name,
-                reason="internal VMEC/EIK backend is not available",
-            )
-        ctx, sidx, torflux, direct, imported = _load_vmec_parity_geometries(
-            case_name=case_name,
-            surface_index=surface_index,
-            alpha=alpha,
-            ntheta=ntheta_int,
-            boundary=boundary,
-            include_shear_variation=include_shear_variation,
-            include_pressure_variation=include_pressure_variation,
-        )
-        (
-            array_metrics,
-            scalar_metrics,
-            worst_core,
-            worst_scalar,
-            production_parity_passed,
-        ) = _production_parity_metrics(
-            direct=direct,
-            imported=imported,
-            core_tolerance=core_tolerance,
-            scalar_tolerance=scalar_tolerance,
-        )
-        equal_arc_parity = _equal_arc_parity_report(
-            info=info,
-            ctx=ctx,
-            imported=imported,
-            surface_index=sidx,
-            torflux=torflux,
-            alpha=alpha,
-            ntheta=ntheta_int,
-            mboz=mboz_int,
-            nboz=nboz_int,
-            core_tolerance=equal_arc_core_tolerance,
-            derivative_tolerance=equal_arc_derivative_tolerance,
-            metric_tolerance=equal_arc_metric_tolerance,
-            drift_tolerance=equal_arc_drift_tolerance,
-        )
-    except Exception as exc:
-        return {
-            "available": False,
-            "backend_info": info,
-            "case_name": str(case_name),
-            "error": f"{type(exc).__name__}: {exc}",
-        }
-
-    return _pack_vmec_array_parity_report(
-        ctx=ctx,
-        info=info,
+    options = _vmec_array_parity_options(
         case_name=case_name,
-        surface_index=sidx,
-        torflux=torflux,
+        surface_index=surface_index,
         alpha=alpha,
-        ntheta=ntheta_int,
-        mboz=mboz_int,
-        nboz=nboz_int,
+        ntheta=ntheta,
+        mboz=mboz,
+        nboz=nboz,
         boundary=boundary,
         include_shear_variation=include_shear_variation,
         include_pressure_variation=include_pressure_variation,
-        array_metrics=array_metrics,
-        scalar_metrics=scalar_metrics,
-        equal_arc_parity=equal_arc_parity,
+        core_tolerance=core_tolerance,
+        scalar_tolerance=scalar_tolerance,
         equal_arc_core_tolerance=equal_arc_core_tolerance,
         equal_arc_derivative_tolerance=equal_arc_derivative_tolerance,
         equal_arc_metric_tolerance=equal_arc_metric_tolerance,
         equal_arc_drift_tolerance=equal_arc_drift_tolerance,
-        worst_core=worst_core,
-        worst_scalar=worst_scalar,
-        core_tolerance=core_tolerance,
-        scalar_tolerance=scalar_tolerance,
-        production_parity_passed=production_parity_passed,
+    )
+    info = discover_differentiable_geometry_backends()
+    unavailable_reason = _vmec_array_parity_backend_unavailable_reason(info)
+    if unavailable_reason is not None:
+        return _vmec_array_parity_unavailable_report(
+            info=info,
+            case_name=options.case_name,
+            reason=unavailable_reason,
+        )
+
+    try:
+        result = _vmec_array_parity_result(info=info, options=options)
+    except Exception as exc:
+        return _vmec_array_parity_error_report(info=info, case_name=options.case_name, exc=exc)
+
+    return _pack_vmec_array_parity_report(
+        ctx=result.ctx,
+        info=info,
+        case_name=options.case_name,
+        surface_index=result.surface_index,
+        torflux=result.torflux,
+        alpha=options.alpha,
+        ntheta=options.ntheta,
+        mboz=options.mboz,
+        nboz=options.nboz,
+        boundary=options.boundary,
+        include_shear_variation=options.include_shear_variation,
+        include_pressure_variation=options.include_pressure_variation,
+        array_metrics=result.array_metrics,
+        scalar_metrics=result.scalar_metrics,
+        equal_arc_parity=result.equal_arc_parity,
+        equal_arc_core_tolerance=options.equal_arc_core_tolerance,
+        equal_arc_derivative_tolerance=options.equal_arc_derivative_tolerance,
+        equal_arc_metric_tolerance=options.equal_arc_metric_tolerance,
+        equal_arc_drift_tolerance=options.equal_arc_drift_tolerance,
+        worst_core=result.worst_core,
+        worst_scalar=result.worst_scalar,
+        core_tolerance=options.core_tolerance,
+        scalar_tolerance=options.scalar_tolerance,
+        production_parity_passed=result.production_parity_passed,
     )
 
 
