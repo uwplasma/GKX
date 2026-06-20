@@ -7,7 +7,6 @@ from typing import Any
 import jax
 import jax.numpy as jnp
 import numpy as np
-from jax.experimental.pjit import pjit
 
 from spectraxgk.operators.linear.rhs import linear_rhs_cached
 from spectraxgk.operators.linear.cache import LinearCache
@@ -17,6 +16,7 @@ from spectraxgk.terms.config import FieldState, TermConfig
 
 
 _EXPLICIT_METHODS = {"euler", "rk2", "rk3", "rk3_heun", "rk3_classic", "rk4", "sspx3"}
+pjit = jax.jit
 
 
 def _dt_array(dt: float, state_dtype: jnp.dtype) -> jnp.ndarray:
