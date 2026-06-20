@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 import jax.numpy as jnp
@@ -136,6 +137,278 @@ def choose_reselected_frequency(
     return min(candidates, key=_score)
 
 
+@dataclass(frozen=True)
+class _CycloneExplicitPoint:
+    """Prepared state for one ky point in the explicit Cyclone scan."""
+
+    index: int
+    ky_value: float
+    grid: Any
+    state: Any
+    cache: Any
+    dt: float
+    steps: int
+
+
+@dataclass(frozen=True)
+class _CycloneExplicitFit:
+    """Raw explicit-time fit before optional branch reselection."""
+
+    gamma: float
+    omega: float
+    growth_ok: bool
+
+
+@dataclass
+class _CycloneExplicitContinuation:
+    """Previous-frequency state used by explicit branch reselection."""
+
+    prev_omega: float | None = None
+    prev_prev_omega: float | None = None
+
+    def update(self, omega: float) -> None:
+        self.prev_prev_omega = self.prev_omega
+        self.prev_omega = float(omega)
+
+
+def _prepare_explicit_scan_point(
+    *,
+    index: int,
+    ky_values: np.ndarray,
+    grid_full: Any,
+    geom: Any,
+    params: Any,
+    init_cfg: Any,
+    n_laguerre: int,
+    n_hermite: int,
+    dt: float | np.ndarray,
+    steps: int | np.ndarray,
+    hooks: Any,
+) -> _CycloneExplicitPoint:
+    """Build grid, initial condition, cache, and time step for one ky point."""
+
+    ky_val = float(ky_values[index])
+    ky_index = hooks.select_ky_index(np.asarray(grid_full.ky), ky_val)
+    grid = hooks.select_ky_grid(grid_full, ky_index)
+    state = hooks.build_initial_condition(
+        grid,
+        geom,
+        ky_index=0,
+        kx_index=0,
+        Nl=n_laguerre,
+        Nm=n_hermite,
+        init_cfg=init_cfg,
+    )
+    cache = hooks.build_linear_cache(grid, geom, params, n_laguerre, n_hermite)
+    dt_i = float(dt[index]) if isinstance(dt, np.ndarray) else float(dt)
+    steps_i = int(steps[index]) if isinstance(steps, np.ndarray) else int(steps)
+    return _CycloneExplicitPoint(
+        index=index,
+        ky_value=ky_val,
+        grid=grid,
+        state=state,
+        cache=cache,
+        dt=dt_i,
+        steps=steps_i,
+    )
+
+
+def _fit_explicit_scan_point(
+    point: _CycloneExplicitPoint,
+    *,
+    geom: Any,
+    params: Any,
+    terms: Any,
+    explicit_time_cfg: Any,
+    diagnostic_norm: str,
+    hooks: Any,
+    show_progress: bool,
+) -> _CycloneExplicitFit:
+    """Integrate one explicit-time trace and fit its instantaneous growth."""
+
+    t, phi_t, _g_t, _o_t = hooks.integrate_linear_explicit(
+        jnp.array(point.state),
+        point.grid,
+        point.cache,
+        params,
+        geom,
+        explicit_time_cfg,
+        terms=terms,
+        mode_method="z_index",
+        show_progress=show_progress,
+    )
+    sel_local = hooks.mode_selection(
+        ky_index=0,
+        kx_index=0,
+        z_index=hooks.midplane_index(point.grid),
+    )
+    try:
+        gamma, omega, _g, _o, _t_mid = hooks.instantaneous_growth_rate_from_phi(
+            phi_t,
+            t,
+            sel_local,
+            navg_fraction=0.5,
+            mode_method="z_index",
+        )
+        gamma, omega = hooks.normalize_growth_rate(
+            gamma,
+            omega,
+            params,
+            diagnostic_norm,
+        )
+        return _CycloneExplicitFit(float(gamma), float(omega), True)
+    except ValueError:
+        return _CycloneExplicitFit(float("nan"), float("nan"), False)
+
+
+def _explicit_scan_needs_reselection(
+    *,
+    reference_aligned: bool,
+    fit: _CycloneExplicitFit,
+    continuation: _CycloneExplicitContinuation,
+    index: int,
+) -> bool:
+    """Return whether explicit branch history suggests a Krylov reselection."""
+
+    return (
+        (reference_aligned and fit.growth_ok)
+        and continuation.prev_omega is not None
+        and continuation.prev_omega > 0.0
+        and (
+            fit.omega <= 0.0
+            or ((index >= 2) and (fit.omega < 0.85 * continuation.prev_omega))
+        )
+    )
+
+
+def _reselected_explicit_scan_fit(
+    point: _CycloneExplicitPoint,
+    fit: _CycloneExplicitFit,
+    *,
+    params: Any,
+    terms: Any,
+    kcfg: Any,
+    diagnostic_norm: str,
+    continuation: _CycloneExplicitContinuation,
+    hooks: Any,
+) -> _CycloneExplicitFit:
+    """Apply Krylov reselection when explicit-time branch tracking fails."""
+
+    target_omega = explicit_reselection_target(
+        explicit_growth_ok=fit.growth_ok,
+        prev_omega=continuation.prev_omega,
+        prev_prev_omega=continuation.prev_prev_omega,
+    )
+    gamma_k, omega_k = krylov_reselected_frequency(
+        point.state,
+        point.cache,
+        params,
+        terms,
+        kcfg,
+        hooks,
+        diagnostic_norm,
+    )
+    if not fit.growth_ok:
+        return _CycloneExplicitFit(gamma_k, omega_k, True)
+    assert target_omega is not None
+    gamma, omega = choose_reselected_frequency(
+        gamma=fit.gamma,
+        omega=fit.omega,
+        gamma_k=gamma_k,
+        omega_k=omega_k,
+        target_omega=target_omega,
+    )
+    return _CycloneExplicitFit(gamma, omega, True)
+
+
+def _final_explicit_scan_fit(
+    point: _CycloneExplicitPoint,
+    fit: _CycloneExplicitFit,
+    *,
+    params: Any,
+    terms: Any,
+    kcfg: Any,
+    diagnostic_norm: str,
+    reference_aligned: bool,
+    continuation: _CycloneExplicitContinuation,
+    hooks: Any,
+) -> _CycloneExplicitFit:
+    """Resolve sign convention and optional branch reselection for one point."""
+
+    if reference_aligned and continuation.prev_omega is None and fit.omega < 0.0:
+        fit = _CycloneExplicitFit(fit.gamma, abs(fit.omega), fit.growth_ok)
+    if _explicit_scan_needs_reselection(
+        reference_aligned=reference_aligned,
+        fit=fit,
+        continuation=continuation,
+        index=point.index,
+    ) or not fit.growth_ok:
+        return _reselected_explicit_scan_fit(
+            point,
+            fit,
+            params=params,
+            terms=terms,
+            kcfg=kcfg,
+            diagnostic_norm=diagnostic_norm,
+            continuation=continuation,
+            hooks=hooks,
+        )
+    return fit
+
+
+def _append_explicit_scan_point(
+    *,
+    point: _CycloneExplicitPoint,
+    geom: Any,
+    params: Any,
+    terms: Any,
+    time_cfg: Any | None,
+    time_base: Any,
+    kcfg: Any,
+    reference_aligned: bool,
+    diagnostic_norm: str,
+    continuation: _CycloneExplicitContinuation,
+    gamma_out: np.ndarray,
+    omega_out: np.ndarray,
+    hooks: Any,
+    show_progress: bool,
+) -> None:
+    """Evaluate one explicit scan point and update continuation/output arrays."""
+
+    explicit_time_cfg = explicit_time_config_for_scan_point(
+        dt_i=point.dt,
+        steps_i=point.steps,
+        reference_aligned=reference_aligned,
+        time_cfg=time_cfg,
+        time_base=time_base,
+        hooks=hooks,
+    )
+    fit = _fit_explicit_scan_point(
+        point,
+        geom=geom,
+        params=params,
+        terms=terms,
+        explicit_time_cfg=explicit_time_cfg,
+        diagnostic_norm=diagnostic_norm,
+        hooks=hooks,
+        show_progress=show_progress,
+    )
+    fit = _final_explicit_scan_fit(
+        point,
+        fit,
+        params=params,
+        terms=terms,
+        kcfg=kcfg,
+        diagnostic_norm=diagnostic_norm,
+        reference_aligned=reference_aligned,
+        continuation=continuation,
+        hooks=hooks,
+    )
+    gamma_out[point.index] = fit.gamma
+    omega_out[point.index] = fit.omega
+    continuation.update(fit.omega)
+
+
 def run_explicit_time_cyclone_scan(
     *,
     ky_values: np.ndarray,
@@ -168,106 +441,39 @@ def run_explicit_time_cyclone_scan(
 
     gamma_out = np.zeros_like(ky_values, dtype=float)
     omega_out = np.zeros_like(ky_values, dtype=float)
-    prev_omega: float | None = None
-    prev_prev_omega: float | None = None
+    continuation = _CycloneExplicitContinuation()
     kcfg = krylov_cfg or krylov_default
     time_base = time_cfg or cfg.time
-    for idx, ky_val in enumerate(ky_values):
-        ky_index = hooks.select_ky_index(np.asarray(grid_full.ky), float(ky_val))
-        grid = hooks.select_ky_grid(grid_full, ky_index)
-        G0 = hooks.build_initial_condition(
-            grid,
-            geom,
-            ky_index=0,
-            kx_index=0,
-            Nl=n_laguerre,
-            Nm=n_hermite,
+    for idx, _ky_val in enumerate(ky_values):
+        point = _prepare_explicit_scan_point(
+            index=idx,
+            ky_values=ky_values,
+            grid_full=grid_full,
+            geom=geom,
+            params=params,
             init_cfg=init_cfg,
-        )
-        cache = hooks.build_linear_cache(grid, geom, params, n_laguerre, n_hermite)
-        dt_i = float(dt[idx]) if isinstance(dt, np.ndarray) else float(dt)
-        steps_i = int(steps[idx]) if isinstance(steps, np.ndarray) else int(steps)
-        explicit_time_cfg = explicit_time_config_for_scan_point(
-            dt_i=dt_i,
-            steps_i=steps_i,
-            reference_aligned=reference_aligned,
-            time_cfg=time_cfg,
-            time_base=time_base,
+            n_laguerre=n_laguerre,
+            n_hermite=n_hermite,
+            dt=dt,
+            steps=steps,
             hooks=hooks,
         )
-        t, phi_t, _g_t, _o_t = hooks.integrate_linear_explicit(
-            jnp.array(G0),
-            grid,
-            cache,
-            params,
-            geom,
-            explicit_time_cfg,
+        _append_explicit_scan_point(
+            point=point,
+            geom=geom,
+            params=params,
             terms=terms,
-            mode_method="z_index",
+            time_cfg=time_cfg,
+            time_base=time_base,
+            kcfg=kcfg,
+            reference_aligned=reference_aligned,
+            diagnostic_norm=diagnostic_norm,
+            continuation=continuation,
+            gamma_out=gamma_out,
+            omega_out=omega_out,
+            hooks=hooks,
             show_progress=show_progress,
         )
-        sel_local = hooks.mode_selection(
-            ky_index=0,
-            kx_index=0,
-            z_index=hooks.midplane_index(grid),
-        )
-        explicit_growth_ok = True
-        try:
-            gamma, omega, _g, _o, _t_mid = hooks.instantaneous_growth_rate_from_phi(
-                phi_t,
-                t,
-                sel_local,
-                navg_fraction=0.5,
-                mode_method="z_index",
-            )
-            gamma, omega = hooks.normalize_growth_rate(
-                gamma,
-                omega,
-                params,
-                diagnostic_norm,
-            )
-        except ValueError:
-            explicit_growth_ok = False
-            gamma = float("nan")
-            omega = float("nan")
-        if reference_aligned and prev_omega is None and omega < 0.0:
-            omega = abs(omega)
-        need_reselect = (
-            (reference_aligned and explicit_growth_ok)
-            and prev_omega is not None
-            and prev_omega > 0.0
-            and (omega <= 0.0 or ((idx >= 2) and (omega < 0.85 * prev_omega)))
-        )
-        if need_reselect or not explicit_growth_ok:
-            target_omega = explicit_reselection_target(
-                explicit_growth_ok=explicit_growth_ok,
-                prev_omega=prev_omega,
-                prev_prev_omega=prev_prev_omega,
-            )
-            gamma_k, omega_k = krylov_reselected_frequency(
-                G0,
-                cache,
-                params,
-                terms,
-                kcfg,
-                hooks,
-                diagnostic_norm,
-            )
-            if not explicit_growth_ok:
-                gamma, omega = gamma_k, omega_k
-            else:
-                assert target_omega is not None
-                gamma, omega = choose_reselected_frequency(
-                    gamma=gamma,
-                    omega=omega,
-                    gamma_k=gamma_k,
-                    omega_k=omega_k,
-                    target_omega=target_omega,
-                )
-        gamma_out[idx] = gamma
-        omega_out[idx] = omega
-        prev_prev_omega = prev_omega
-        prev_omega = float(omega)
     return hooks.cyclone_scan_result(ky=ky_values, gamma=gamma_out, omega=omega_out)
 
 
