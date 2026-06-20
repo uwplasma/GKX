@@ -136,6 +136,22 @@ class CETGNonlinearRuntimeDeps:
     build_runtime_nonlinear_result: Callable[..., RuntimeNonlinearResult]
 
 
+@dataclass(frozen=True)
+class _CETGNonlinearSetup:
+    """Prepared cETG nonlinear state shared by fixed and adaptive branches."""
+
+    grid: Any
+    initial_state: Any
+    params: Any
+    term_config: Any
+    ky_index: int
+    kx_index: int
+    dt: float
+    sample_stride: int
+    diagnostics_stride: int
+    diagnostics_on: bool
+
+
 def _resolved_fit_bounds(
     t_arr: np.ndarray,
     tmin_fit: float | None,
@@ -201,6 +217,194 @@ def _build_cetg_nonlinear_result(
         ky_selected=float(np.asarray(grid.ky[ky_index])),
         kx_selected=float(np.asarray(grid.kx[kx_index])),
         summarize_fields=diagnostics_on is False,
+    )
+
+
+def _prepare_cetg_nonlinear_setup(
+    cfg: RuntimeConfig,
+    *,
+    deps: CETGNonlinearRuntimeDeps,
+    ky_target: float,
+    kx_target: float | None,
+    Nl: int,
+    Nm: int,
+    dt: float | None,
+    sample_stride: int | None,
+    diagnostics_stride: int | None,
+    diagnostics: bool | None,
+    status_callback: Callable[[str], None],
+) -> _CETGNonlinearSetup:
+    """Build the cETG nonlinear grid, state, coefficients, and output policy."""
+
+    geom = deps.build_runtime_geometry(cfg)
+    deps.validate_cetg_runtime_config(cfg, geom, Nl=Nl, Nm=Nm)
+    status_callback("building spectral grid")
+    grid_cfg = apply_geometry_grid_defaults(geom, cfg.grid)
+    grid = build_spectral_grid(grid_cfg)
+    ky_index, kx_index = deps.select_nonlinear_mode_indices(
+        grid,
+        ky_target=ky_target,
+        kx_target=kx_target,
+        use_dealias_mask=bool(cfg.time.nonlinear_dealias),
+    )
+    status_callback(
+        f"selected nonlinear mode ky={float(np.asarray(grid.ky[ky_index])):.6g} "
+        f"kx={float(np.asarray(grid.kx[kx_index])):.6g}"
+    )
+    status_callback("building initial condition")
+    initial_state = deps.build_initial_condition(
+        grid,
+        geom,
+        cfg,
+        ky_index=ky_index,
+        kx_index=kx_index,
+        Nl=Nl,
+        Nm=Nm,
+        nspecies=1,
+    )
+    dt_val = float(cfg.time.dt if dt is None else dt)
+    if dt_val <= 0.0:
+        raise ValueError("dt must be > 0")
+    setup = _CETGNonlinearSetup(
+        grid=grid,
+        initial_state=initial_state,
+        params=deps.build_cetg_model_params(cfg, geom, Nl=Nl, Nm=Nm),
+        term_config=deps.build_runtime_term_config(cfg),
+        ky_index=int(ky_index),
+        kx_index=int(kx_index),
+        dt=dt_val,
+        sample_stride=int(
+            cfg.time.sample_stride if sample_stride is None else sample_stride
+        ),
+        diagnostics_stride=int(
+            cfg.time.diagnostics_stride
+            if diagnostics_stride is None
+            else diagnostics_stride
+        ),
+        diagnostics_on=bool(cfg.time.diagnostics if diagnostics is None else diagnostics),
+    )
+    status_callback(
+        f"nonlinear diagnostics={'on' if setup.diagnostics_on else 'off'} "
+        f"sample_stride={setup.sample_stride} diagnostics_stride={setup.diagnostics_stride}"
+    )
+    return setup
+
+
+def _run_adaptive_cetg_nonlinear(
+    cfg: RuntimeConfig,
+    *,
+    deps: CETGNonlinearRuntimeDeps,
+    setup: _CETGNonlinearSetup,
+    method: str | None,
+    show_progress: bool,
+    return_state: bool,
+    status_callback: Callable[[str], None],
+) -> RuntimeNonlinearResult:
+    """Run the adaptive cETG nonlinear branch through the shared chunk loop."""
+
+    chunk_steps = 1024
+    G_chunk = setup.initial_state
+
+    def _run_cetg_chunk(chunk_show_progress: bool):
+        nonlocal G_chunk
+        kwargs = _cetg_integration_kwargs(
+            cfg,
+            dt=setup.dt,
+            steps=chunk_steps,
+            method=method,
+            sample_stride=1,
+            diagnostics_stride=1,
+            ky_index=setup.ky_index,
+            kx_index=setup.kx_index,
+            fixed_dt=False,
+        )
+        if chunk_show_progress:
+            kwargs["show_progress"] = True
+        t_chunk, diag_chunk, G_next, fields_next = (
+            deps.integrate_cetg_explicit_diagnostics_state(
+                G_chunk,
+                setup.grid,
+                setup.params,
+                setup.term_config,
+                **kwargs,
+            )
+        )
+        G_chunk = G_next
+        return t_chunk, diag_chunk, G_next, fields_next
+
+    chunk_result = deps.run_adaptive_runtime_chunk_loop(
+        integrate_chunk=_run_cetg_chunk,
+        t_max=float(cfg.time.t_max),
+        chunk_steps=chunk_steps,
+        label="cETG",
+        show_progress=show_progress,
+        status_callback=status_callback,
+    )
+    return _build_cetg_nonlinear_result(
+        deps,
+        diag=chunk_result.diagnostics,
+        fields=chunk_result.fields,
+        state=chunk_result.state,
+        grid=setup.grid,
+        ky_index=setup.ky_index,
+        kx_index=setup.kx_index,
+        return_state=return_state,
+        diagnostics_on=setup.diagnostics_on,
+    )
+
+
+def _run_fixed_step_cetg_nonlinear(
+    cfg: RuntimeConfig,
+    *,
+    deps: CETGNonlinearRuntimeDeps,
+    setup: _CETGNonlinearSetup,
+    steps: int | None,
+    method: str | None,
+    show_progress: bool,
+    return_state: bool,
+    status_callback: Callable[[str], None],
+) -> RuntimeNonlinearResult:
+    """Run the fixed-step cETG nonlinear branch and pack runtime diagnostics."""
+
+    steps_val = (
+        int(round(float(cfg.time.t_max) / setup.dt)) if steps is None else int(steps)
+    )
+    if steps_val < 1:
+        raise ValueError("steps must be >= 1")
+    status_callback(
+        f"running cETG nonlinear integration over {steps_val} steps with dt={setup.dt:.6g}"
+    )
+    progress_kw = {"show_progress": True} if show_progress else {}
+    _t, diag, G_final, fields_final = deps.integrate_cetg_explicit_diagnostics_state(
+        setup.initial_state,
+        setup.grid,
+        setup.params,
+        setup.term_config,
+        **_cetg_integration_kwargs(
+            cfg,
+            dt=setup.dt,
+            steps=steps_val,
+            method=method,
+            sample_stride=setup.sample_stride,
+            diagnostics_stride=setup.diagnostics_stride,
+            ky_index=setup.ky_index,
+            kx_index=setup.kx_index,
+            fixed_dt=bool(cfg.time.fixed_dt),
+        ),
+        **progress_kw,
+    )
+    if setup.diagnostics_on is False:
+        status_callback("diagnostics disabled; returning final cETG state summary")
+    return _build_cetg_nonlinear_result(
+        deps,
+        diag=diag,
+        fields=fields_final,
+        state=G_final,
+        grid=setup.grid,
+        ky_index=setup.ky_index,
+        kx_index=setup.kx_index,
+        return_state=return_state,
+        diagnostics_on=setup.diagnostics_on,
     )
 
 
@@ -359,138 +563,37 @@ def run_cetg_nonlinear_runtime(
         if status_callback is not None:
             status_callback(message)
 
-    geom = deps.build_runtime_geometry(cfg)
-    deps.validate_cetg_runtime_config(cfg, geom, Nl=Nl, Nm=Nm)
-    _status("building spectral grid")
-    grid_cfg = apply_geometry_grid_defaults(geom, cfg.grid)
-    grid = build_spectral_grid(grid_cfg)
-    ky_index, kx_index = deps.select_nonlinear_mode_indices(
-        grid,
+    setup = _prepare_cetg_nonlinear_setup(
+        cfg,
+        deps=deps,
         ky_target=ky_target,
         kx_target=kx_target,
-        use_dealias_mask=bool(cfg.time.nonlinear_dealias),
-    )
-    _status(
-        f"selected nonlinear mode ky={float(np.asarray(grid.ky[ky_index])):.6g} "
-        f"kx={float(np.asarray(grid.kx[kx_index])):.6g}"
-    )
-    _status("building initial condition")
-    G0 = deps.build_initial_condition(
-        grid,
-        geom,
-        cfg,
-        ky_index=ky_index,
-        kx_index=kx_index,
         Nl=Nl,
         Nm=Nm,
-        nspecies=1,
-    )
-    dt_val = float(cfg.time.dt if dt is None else dt)
-    if dt_val <= 0.0:
-        raise ValueError("dt must be > 0")
-    cetg_params = deps.build_cetg_model_params(cfg, geom, Nl=Nl, Nm=Nm)
-    cetg_term_cfg = deps.build_runtime_term_config(cfg)
-    sample_stride_use = cfg.time.sample_stride if sample_stride is None else int(sample_stride)
-    diag_stride = (
-        cfg.time.diagnostics_stride
-        if diagnostics_stride is None
-        else int(diagnostics_stride)
-    )
-    diagnostics_on = cfg.time.diagnostics if diagnostics is None else bool(diagnostics)
-    _status(
-        f"nonlinear diagnostics={'on' if diagnostics_on else 'off'} "
-        f"sample_stride={int(sample_stride_use)} diagnostics_stride={int(diag_stride)}"
+        dt=dt,
+        sample_stride=sample_stride,
+        diagnostics_stride=diagnostics_stride,
+        diagnostics=diagnostics,
+        status_callback=_status,
     )
     adaptive_chunked = steps is None and not bool(cfg.time.fixed_dt)
     if adaptive_chunked:
-        chunk_steps = 1024
-        G_chunk = G0
-
-        def _run_cetg_chunk(chunk_show_progress: bool):
-            nonlocal G_chunk
-            kwargs = _cetg_integration_kwargs(
-                cfg,
-                dt=dt_val,
-                steps=chunk_steps,
-                method=method,
-                sample_stride=1,
-                diagnostics_stride=1,
-                ky_index=ky_index,
-                kx_index=kx_index,
-                fixed_dt=False,
-            )
-            if chunk_show_progress:
-                kwargs["show_progress"] = True
-            t_chunk, diag_chunk, G_next, fields_next = (
-                deps.integrate_cetg_explicit_diagnostics_state(
-                    G_chunk,
-                    grid,
-                    cetg_params,
-                    cetg_term_cfg,
-                    **kwargs,
-                )
-            )
-            G_chunk = G_next
-            return t_chunk, diag_chunk, G_next, fields_next
-
-        chunk_result = deps.run_adaptive_runtime_chunk_loop(
-            integrate_chunk=_run_cetg_chunk,
-            t_max=float(cfg.time.t_max),
-            chunk_steps=chunk_steps,
-            label="cETG",
+        return _run_adaptive_cetg_nonlinear(
+            cfg,
+            deps=deps,
+            setup=setup,
+            method=method,
             show_progress=show_progress,
+            return_state=return_state,
             status_callback=_status,
         )
-        diag = chunk_result.diagnostics
-        G_final = chunk_result.state
-        cetg_fields_final = chunk_result.fields
-        return _build_cetg_nonlinear_result(
-            deps,
-            diag=diag,
-            fields=cetg_fields_final,
-            state=G_final,
-            grid=grid,
-            ky_index=ky_index,
-            kx_index=kx_index,
-            return_state=return_state,
-            diagnostics_on=diagnostics_on,
-        )
-
-    steps_val = int(round(float(cfg.time.t_max) / dt_val)) if steps is None else int(steps)
-    if steps_val < 1:
-        raise ValueError("steps must be >= 1")
-    _status(f"running cETG nonlinear integration over {steps_val} steps with dt={dt_val:.6g}")
-    progress_kw = {"show_progress": True} if show_progress else {}
-    _t, diag, G_final, cetg_fields_final = (
-        deps.integrate_cetg_explicit_diagnostics_state(
-            G0,
-            grid,
-            cetg_params,
-            cetg_term_cfg,
-            **_cetg_integration_kwargs(
-                cfg,
-                dt=dt_val,
-                steps=steps_val,
-                method=method,
-                sample_stride=sample_stride_use,
-                diagnostics_stride=diag_stride,
-                ky_index=ky_index,
-                kx_index=kx_index,
-                fixed_dt=bool(cfg.time.fixed_dt),
-            ),
-            **progress_kw,
-        )
-    )
-    if diagnostics_on is False:
-        _status("diagnostics disabled; returning final cETG state summary")
-    return _build_cetg_nonlinear_result(
-        deps,
-        diag=diag,
-        fields=cetg_fields_final,
-        state=G_final,
-        grid=grid,
-        ky_index=ky_index,
-        kx_index=kx_index,
+    return _run_fixed_step_cetg_nonlinear(
+        cfg,
+        deps=deps,
+        setup=setup,
+        steps=steps,
+        method=method,
+        show_progress=show_progress,
         return_state=return_state,
-        diagnostics_on=diagnostics_on,
+        status_callback=_status,
     )
