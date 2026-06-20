@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Mapping
 
 import jax.numpy as jnp
 import numpy as np
@@ -194,33 +194,13 @@ def _linear_eigenpair_quasilinear_features(
     return gamma, jnp.imag(eigenvalue), kperp_eff, heat_weight, ql_proxy
 
 
-def solver_objective_branch_gradient_report(
-    params: jnp.ndarray | np.ndarray | None = None,
+def _validate_branch_gradient_inputs(
+    params: jnp.ndarray | np.ndarray | None,
     *,
-    fd_step: float = 1.0e-3,
-    rtol: float = 1.0e-1,
-    atol: float = 2.0e-3,
-    gap_floor: float = 1.0e-6,
-    n_laguerre: int = 2,
-    n_hermite: int = 1,
-    _quasilinear_features_fn: Any = _linear_eigenpair_quasilinear_features,
-    _objective_vector_fn: Any = solver_objective_vector_from_geometry,
-) -> dict[str, object]:
-    """Validate branch continuity and AD/FD sensitivities for solver objectives.
-
-    This gate is the lightweight counterpart of the VMEC/Boozer offline gates.
-    It uses the solver-ready differentiable geometry contract so CI can check
-    the objective path without optional geometry backends. The report requires
-    the max-growth branch to stay dominant under central finite-difference
-    perturbations and validates the objective sensitivities with the implicit
-    left/right eigenpair method.
-    """
-
-    p = (
-        default_solver_geometry_design_params()
-        if params is None
-        else jnp.asarray(params)
-    )
+    n_laguerre: int,
+    n_hermite: int,
+) -> tuple[jnp.ndarray, int, int]:
+    p = default_solver_geometry_design_params() if params is None else jnp.asarray(params)
     if p.ndim != 1 or int(p.size) != len(SOLVER_GEOMETRY_PARAMETER_NAMES):
         raise ValueError(
             f"params must be a length-{len(SOLVER_GEOMETRY_PARAMETER_NAMES)} vector"
@@ -229,17 +209,17 @@ def solver_objective_branch_gradient_report(
     n_hermite_int = int(n_hermite)
     if n_laguerre_int < 1 or n_hermite_int < 1:
         raise ValueError("n_laguerre and n_hermite must be positive")
+    return p, n_laguerre_int, n_hermite_int
 
-    context = _solver_ready_linear_context(
-        n_laguerre=n_laguerre_int,
-        n_hermite=n_hermite_int,
-        source_model="solver_ready_branch_gradient_gate",
-    )
 
+def _solver_branch_objective_fn(
+    context: _SolverReadyLinearContext,
+    quasilinear_features_fn: Any,
+):
     def objective_fn(
         eigenvalue: jnp.ndarray, eigenvector: jnp.ndarray, x: jnp.ndarray
     ) -> jnp.ndarray:
-        gamma, omega, kperp_eff, heat_weight, ql_proxy = _quasilinear_features_fn(
+        gamma, omega, kperp_eff, heat_weight, ql_proxy = quasilinear_features_fn(
             eigenvalue,
             eigenvector,
             x,
@@ -263,8 +243,13 @@ def solver_objective_branch_gradient_report(
             [gamma, omega, kperp_eff, heat_weight, particle_weight, ql_proxy]
         )
 
-    base_matrix = context.matrix_fn(p)
-    base_eigs = np.asarray(jnp.linalg.eigvals(base_matrix))
+    return objective_fn
+
+
+def _base_branch_eigensystem(
+    matrix: jnp.ndarray,
+) -> tuple[np.ndarray, int, np.ndarray, float]:
+    base_eigs = np.asarray(jnp.linalg.eigvals(matrix))
     if base_eigs.ndim != 1 or base_eigs.size == 0:
         raise ValueError("matrix_fn must return at least one eigenvalue")
     base_index = int(np.argmax(np.real(base_eigs)))
@@ -274,6 +259,23 @@ def solver_objective_branch_gradient_report(
         if base_eigs.size == 1
         else float(np.min(np.abs(np.delete(base_eigs, base_index) - base_value)))
     )
+    return base_eigs, base_index, base_value, base_gap
+
+
+def _branch_row_gap(eigs: np.ndarray, selected_index: int, selected_value: np.ndarray) -> float:
+    if eigs.size == 1:
+        return float("inf")
+    return float(np.min(np.abs(np.delete(eigs, selected_index) - selected_value)))
+
+
+def _branch_continuity_rows(
+    *,
+    context: _SolverReadyLinearContext,
+    p: jnp.ndarray,
+    base_value: np.ndarray,
+    fd_step: float,
+    gap_floor: float,
+) -> list[dict[str, Any]]:
     eye = jnp.eye(int(p.size), dtype=p.dtype)
     branch_rows = []
     for i, name in enumerate(SOLVER_GEOMETRY_PARAMETER_NAMES):
@@ -283,16 +285,7 @@ def solver_objective_branch_gradient_report(
             nearest_index = int(np.argmin(np.abs(eigs_i - base_value)))
             dominant_index = int(np.argmax(np.real(eigs_i)))
             nearest_value = eigs_i[nearest_index]
-            nearest_gap = (
-                float("inf")
-                if eigs_i.size == 1
-                else float(
-                    np.min(np.abs(np.delete(eigs_i, nearest_index) - nearest_value))
-                )
-            )
-            row_passed = bool(
-                nearest_index == dominant_index and nearest_gap >= float(gap_floor)
-            )
+            nearest_gap = _branch_row_gap(eigs_i, nearest_index, nearest_value)
             branch_rows.append(
                 {
                     "parameter": name,
@@ -302,10 +295,25 @@ def solver_objective_branch_gradient_report(
                     "nearest_real": float(np.real(nearest_value)),
                     "nearest_imag": float(np.imag(nearest_value)),
                     "nearest_gap": nearest_gap,
-                    "passed": row_passed,
+                    "passed": bool(
+                        nearest_index == dominant_index
+                        and nearest_gap >= float(gap_floor)
+                    ),
                 }
             )
+    return branch_rows
 
+
+def _solver_objective_gate_payload(
+    *,
+    context: _SolverReadyLinearContext,
+    objective_fn: Any,
+    p: jnp.ndarray,
+    fd_step: float,
+    rtol: float,
+    atol: float,
+    gap_floor: float,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     gate = implicit_eigenpair_observable_sensitivity_report(
         context.matrix_fn,
         objective_fn,
@@ -322,19 +330,45 @@ def solver_objective_branch_gradient_report(
         rtol=rtol,
         atol=atol,
     )
-    value_vector = _objective_vector_fn(
+    return gate, rows
+
+
+def _solver_objective_value_vector(
+    *,
+    context: _SolverReadyLinearContext,
+    p: jnp.ndarray,
+    n_laguerre: int,
+    n_hermite: int,
+    objective_vector_fn: Any,
+) -> tuple[np.ndarray, bool]:
+    value_vector = objective_vector_fn(
         context.geometry_for(p),
         selected_ky_index=1,
-        n_laguerre=n_laguerre_int,
-        n_hermite=n_hermite_int,
+        n_laguerre=n_laguerre,
+        n_hermite=n_hermite,
         ny=context.cfg.grid.Ny,
     )
     value_np = np.asarray(value_vector, dtype=float)
-    value_finite = bool(np.all(np.isfinite(value_np)))
-    branch_passed = bool(
-        base_gap >= float(gap_floor) and all(row["passed"] for row in branch_rows)
-    )
-    ad_fd_passed = bool(gate["passed"] and all(row["passed"] for row in rows))
+    return value_np, bool(np.all(np.isfinite(value_np)))
+
+
+def _pack_solver_branch_gradient_report(
+    *,
+    context: _SolverReadyLinearContext,
+    p: jnp.ndarray,
+    n_laguerre: int,
+    n_hermite: int,
+    value_np: np.ndarray,
+    value_finite: bool,
+    branch_passed: bool,
+    ad_fd_passed: bool,
+    base_index: int,
+    base_value: np.ndarray,
+    base_gap: float,
+    branch_rows: list[dict[str, Any]],
+    rows: list[dict[str, Any]],
+    gate: dict[str, Any],
+) -> dict[str, object]:
     return {
         "kind": "solver_objective_branch_gradient_gate",
         "passed": bool(value_finite and branch_passed and ad_fd_passed),
@@ -352,8 +386,8 @@ def solver_objective_branch_gradient_report(
             "Nz": int(context.cfg.grid.Nz),
             "selected_ky_index": 1,
         },
-        "n_laguerre": n_laguerre_int,
-        "n_hermite": n_hermite_int,
+        "n_laguerre": n_laguerre,
+        "n_hermite": n_hermite,
         "state_size": int(np.prod(context.state_shape)),
         "value_evaluator_finite": value_finite,
         "value_evaluator_objectives": value_np.tolist(),
@@ -369,38 +403,97 @@ def solver_objective_branch_gradient_report(
     }
 
 
-def linear_solver_geometry_gradient_report(
+def solver_objective_branch_gradient_report(
     params: jnp.ndarray | np.ndarray | None = None,
     *,
     fd_step: float = 1.0e-3,
     rtol: float = 1.0e-1,
     atol: float = 2.0e-3,
     gap_floor: float = 1.0e-6,
+    n_laguerre: int = 2,
+    n_hermite: int = 1,
+    _quasilinear_features_fn: Any = _linear_eigenpair_quasilinear_features,
+    _objective_vector_fn: Any = solver_objective_vector_from_geometry,
 ) -> dict[str, object]:
-    """Validate solver-objective geometry gradients on the actual linear RHS.
+    """Validate branch continuity and AD/FD sensitivities for solver objectives.
 
-    The report differentiates a small electrostatic Cyclone-like linear
-    operator with respect to geometry arrays entering the production cache. It
-    uses implicit left/right eigenpair sensitivities and compares them with
-    nearest-branch central finite differences.
+    This gate is the lightweight counterpart of the VMEC/Boozer offline gates.
+    It uses the solver-ready differentiable geometry contract so CI can check
+    the objective path without optional geometry backends. The report requires
+    the max-growth branch to stay dominant under central finite-difference
+    perturbations and validates the objective sensitivities with the implicit
+    left/right eigenpair method.
     """
 
-    p = (
-        default_solver_geometry_design_params()
-        if params is None
-        else jnp.asarray(params)
-    )
-    if p.ndim != 1 or int(p.size) != 2:
-        raise ValueError("params must be a length-2 vector")
-
-    n_laguerre = 2
-    n_hermite = 1
-    context = _solver_ready_linear_context(
+    p, n_laguerre_int, n_hermite_int = _validate_branch_gradient_inputs(
+        params,
         n_laguerre=n_laguerre,
         n_hermite=n_hermite,
-        source_model="solver_ready_geometry_gradient_gate",
+    )
+    context = _solver_ready_linear_context(
+        n_laguerre=n_laguerre_int,
+        n_hermite=n_hermite_int,
+        source_model="solver_ready_branch_gradient_gate",
+    )
+    objective_fn = _solver_branch_objective_fn(context, _quasilinear_features_fn)
+    _base_eigs, base_index, base_value, base_gap = _base_branch_eigensystem(
+        context.matrix_fn(p)
+    )
+    branch_rows = _branch_continuity_rows(
+        context=context,
+        p=p,
+        base_value=base_value,
+        fd_step=fd_step,
+        gap_floor=gap_floor,
+    )
+    gate, rows = _solver_objective_gate_payload(
+        context=context,
+        objective_fn=objective_fn,
+        p=p,
+        fd_step=fd_step,
+        rtol=rtol,
+        atol=atol,
+        gap_floor=gap_floor,
+    )
+    value_np, value_finite = _solver_objective_value_vector(
+        context=context,
+        p=p,
+        n_laguerre=n_laguerre_int,
+        n_hermite=n_hermite_int,
+        objective_vector_fn=_objective_vector_fn,
+    )
+    branch_passed = bool(
+        base_gap >= float(gap_floor) and all(row["passed"] for row in branch_rows)
+    )
+    ad_fd_passed = bool(gate["passed"] and all(row["passed"] for row in rows))
+    return _pack_solver_branch_gradient_report(
+        context=context,
+        p=p,
+        n_laguerre=n_laguerre_int,
+        n_hermite=n_hermite_int,
+        value_np=value_np,
+        value_finite=value_finite,
+        branch_passed=branch_passed,
+        ad_fd_passed=ad_fd_passed,
+        base_index=base_index,
+        base_value=base_value,
+        base_gap=base_gap,
+        branch_rows=branch_rows,
+        rows=rows,
+        gate=gate,
     )
 
+
+def _validate_linear_geometry_gradient_params(
+    params: jnp.ndarray | np.ndarray | None,
+) -> jnp.ndarray:
+    p = default_solver_geometry_design_params() if params is None else jnp.asarray(params)
+    if p.ndim != 1 or int(p.size) != 2:
+        raise ValueError("params must be a length-2 vector")
+    return p
+
+
+def _linear_solver_objective_fn(context: _SolverReadyLinearContext):
     def objective_fn(
         eigenvalue: jnp.ndarray, eigenvector: jnp.ndarray, x: jnp.ndarray
     ) -> jnp.ndarray:
@@ -437,6 +530,19 @@ def linear_solver_geometry_gradient_report(
             ]
         )
 
+    return objective_fn
+
+
+def _linear_solver_gradient_gate_payload(
+    *,
+    context: _SolverReadyLinearContext,
+    objective_fn: Any,
+    p: jnp.ndarray,
+    fd_step: float,
+    rtol: float,
+    atol: float,
+    gap_floor: float,
+) -> tuple[dict[str, Any], list[dict[str, Any]], dict[str, bool]]:
     gate = implicit_eigenpair_observable_sensitivity_report(
         context.matrix_fn,
         objective_fn,
@@ -451,6 +557,19 @@ def linear_solver_geometry_gradient_report(
         name: bool(all(row["passed"] for row in rows if row["objective"] == name))
         for name in SOLVER_OBJECTIVE_NAMES
     }
+    return gate, rows, by_objective
+
+
+def _pack_linear_solver_geometry_gradient_report(
+    *,
+    context: _SolverReadyLinearContext,
+    p: jnp.ndarray,
+    n_laguerre: int,
+    n_hermite: int,
+    gate: dict[str, Any],
+    rows: list[dict[str, Any]],
+    by_objective: Mapping[str, bool],
+) -> dict[str, object]:
     linear_growth_gate = bool(by_objective["gamma"] and by_objective["omega"])
     quasilinear_weight_gate = bool(
         by_objective["linear_heat_flux_weight"]
@@ -486,6 +605,50 @@ def linear_solver_geometry_gradient_report(
             "VMEC/Boozer state coefficients, then add nonlinear-window objective gradients."
         ),
     }
+
+
+def linear_solver_geometry_gradient_report(
+    params: jnp.ndarray | np.ndarray | None = None,
+    *,
+    fd_step: float = 1.0e-3,
+    rtol: float = 1.0e-1,
+    atol: float = 2.0e-3,
+    gap_floor: float = 1.0e-6,
+) -> dict[str, object]:
+    """Validate solver-objective geometry gradients on the actual linear RHS.
+
+    The report differentiates a small electrostatic Cyclone-like linear
+    operator with respect to geometry arrays entering the production cache. It
+    uses implicit left/right eigenpair sensitivities and compares them with
+    nearest-branch central finite differences.
+    """
+
+    p = _validate_linear_geometry_gradient_params(params)
+    n_laguerre = 2
+    n_hermite = 1
+    context = _solver_ready_linear_context(
+        n_laguerre=n_laguerre,
+        n_hermite=n_hermite,
+        source_model="solver_ready_geometry_gradient_gate",
+    )
+    gate, rows, by_objective = _linear_solver_gradient_gate_payload(
+        context=context,
+        objective_fn=_linear_solver_objective_fn(context),
+        p=p,
+        fd_step=fd_step,
+        rtol=rtol,
+        atol=atol,
+        gap_floor=gap_floor,
+    )
+    return _pack_linear_solver_geometry_gradient_report(
+        context=context,
+        p=p,
+        n_laguerre=n_laguerre,
+        n_hermite=n_hermite,
+        gate=gate,
+        rows=rows,
+        by_objective=by_objective,
+    )
 
 
 __all__ = [
