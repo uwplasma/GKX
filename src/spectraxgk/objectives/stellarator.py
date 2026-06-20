@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from typing import Any, Sequence
 
 import jax
@@ -50,6 +50,25 @@ from spectraxgk.objectives.vmec_boozer import (
 )
 from spectraxgk.parallel import independent_map
 from spectraxgk.validation.autodiff import autodiff_finite_difference_report
+
+
+@dataclass(frozen=True)
+class _AdamState:
+    """State carried by the reduced Adam optimizer."""
+
+    params: jnp.ndarray
+    first_moment: jnp.ndarray
+    second_moment: jnp.ndarray
+
+
+@dataclass(frozen=True)
+class _StellaratorAdamRun:
+    """Completed reduced stellarator optimization trace."""
+
+    initial_params: jnp.ndarray
+    final_params: jnp.ndarray
+    initial_objective: float
+    history: list[dict[str, Any]]
 
 
 def _sync_table_dependencies() -> None:
@@ -111,6 +130,179 @@ def stellarator_itg_vmec_boozer_portfolio_objective_from_state(
     )
 
 
+def _initial_stellarator_params(
+    initial_params: jnp.ndarray | Sequence[float] | None,
+) -> jnp.ndarray:
+    """Return validated reduced stellarator optimization parameters."""
+
+    p0 = (
+        default_stellarator_initial_params()
+        if initial_params is None
+        else _validate_params(initial_params)
+    )
+    return jnp.asarray(p0)
+
+
+def _adam_update(
+    state: _AdamState,
+    grad: jnp.ndarray,
+    *,
+    step: int,
+    learning_rate: jnp.ndarray,
+) -> _AdamState:
+    """Apply the clipped Adam update used by reduced stellarator examples."""
+
+    beta1 = jnp.asarray(0.9, dtype=state.params.dtype)
+    beta2 = jnp.asarray(0.99, dtype=state.params.dtype)
+    eps = jnp.asarray(1.0e-8, dtype=state.params.dtype)
+    m = beta1 * state.first_moment + (1.0 - beta1) * grad
+    v = beta2 * state.second_moment + (1.0 - beta2) * (grad * grad)
+    m_hat = m / (1.0 - beta1 ** (step + 1))
+    v_hat = v / (1.0 - beta2 ** (step + 1))
+    params = state.params - learning_rate * m_hat / (jnp.sqrt(v_hat) + eps)
+    return _AdamState(
+        params=jnp.clip(params, -0.8, 0.8),
+        first_moment=m,
+        second_moment=v,
+    )
+
+
+def _run_stellarator_adam(
+    kind: StellaratorObjectiveKind,
+    cfg: StellaratorITGOptimizationConfig,
+    initial_params: jnp.ndarray,
+) -> _StellaratorAdamRun:
+    """Run the reduced differentiable Adam loop and collect JSON-ready history."""
+
+    value_and_grad = jax.jit(
+        jax.value_and_grad(lambda x: stellarator_itg_objective(x, kind, cfg))
+    )
+    obs_fn = jax.jit(lambda x: qa_observable_vector(x, cfg))
+    state = _AdamState(
+        params=jnp.asarray(initial_params),
+        first_moment=jnp.zeros_like(initial_params),
+        second_moment=jnp.zeros_like(initial_params),
+    )
+    learning_rate = jnp.asarray(cfg.learning_rate, dtype=state.params.dtype)
+    history: list[dict[str, Any]] = []
+    initial_value = float(stellarator_itg_objective(state.params, kind, cfg))
+
+    for step in range(int(cfg.steps) + 1):
+        value, grad = value_and_grad(state.params)
+        obs = obs_fn(state.params)
+        history.append(
+            {
+                "step": int(step),
+                "objective": float(value),
+                "params": np.asarray(state.params).tolist(),
+                "observables": np.asarray(obs).tolist(),
+                "gradient_norm": float(jnp.linalg.norm(grad)),
+            }
+        )
+        if step == int(cfg.steps):
+            break
+        state = _adam_update(
+            state,
+            grad,
+            step=step,
+            learning_rate=learning_rate,
+        )
+
+    return _StellaratorAdamRun(
+        initial_params=jnp.asarray(initial_params),
+        final_params=state.params,
+        initial_objective=initial_value,
+        history=history,
+    )
+
+
+def _stellarator_gradient_gate(
+    p: jnp.ndarray,
+    kind: StellaratorObjectiveKind,
+    cfg: StellaratorITGOptimizationConfig,
+    *,
+    workers: int,
+    executor: str,
+) -> dict[str, Any]:
+    """Run the AD/finite-difference gate for the optimized scalar objective."""
+
+    fd_step, rtol, atol = _precision_gate_tolerances(cfg.fd_step)
+    return autodiff_finite_difference_report(
+        lambda x: stellarator_itg_objective(x, kind, cfg),
+        p,
+        step=fd_step,
+        rtol=rtol,
+        atol=atol,
+        workers=workers,
+        parallel_executor=executor,
+    )
+
+
+def _stellarator_covariance_report(
+    p: jnp.ndarray,
+    kind: StellaratorObjectiveKind,
+    cfg: StellaratorITGOptimizationConfig,
+    *,
+    workers: int,
+    executor: str,
+) -> dict[str, Any]:
+    """Build residual sensitivity and local covariance metadata."""
+
+    residual_sensitivity = stellarator_itg_residual_sensitivity_report(
+        p,
+        kind,
+        cfg,
+        min_rank=len(PARAMETER_NAMES),
+        condition_number_limit=_RESIDUAL_CONDITION_NUMBER_LIMIT,
+        covariance_regularization=1.0e-8,
+        finite_difference_workers=workers,
+        finite_difference_executor=executor,
+    )
+    covariance = dict(residual_sensitivity["covariance"])
+    covariance["residual_jacobian_gate"] = residual_sensitivity[
+        "finite_difference_gate"
+    ]
+    covariance["residual_sensitivity_passed"] = bool(residual_sensitivity["passed"])
+    return covariance
+
+
+def _stellarator_nonlinear_trace_report(
+    kind: StellaratorObjectiveKind,
+    p0: jnp.ndarray,
+    p: jnp.ndarray,
+    cfg: StellaratorITGOptimizationConfig,
+) -> dict[str, Any] | None:
+    """Build nonlinear-window trace metadata for the reduced nonlinear objective."""
+
+    if kind != "nonlinear_heat_flux":
+        return None
+    times0, heat0 = nonlinear_heat_flux_trace(p0, cfg)
+    times1, heat1 = nonlinear_heat_flux_trace(p, cfg)
+    summary0 = nonlinear_heat_flux_window_metrics(
+        times0, heat0, tail_fraction=cfg.nonlinear_tail_fraction
+    )
+    summary1 = nonlinear_heat_flux_window_metrics(
+        times1, heat1, tail_fraction=cfg.nonlinear_tail_fraction
+    )
+    return {
+        "times": np.asarray(times1).tolist(),
+        "initial_heat_flux": np.asarray(heat0).tolist(),
+        "final_heat_flux": np.asarray(heat1).tolist(),
+        "initial_window": {
+            "mean": float(summary0["mean"]),
+            "cv": float(summary0["cv"]),
+            "trend": float(summary0["trend"]),
+            "start_index": int(summary0["start_index"]),
+        },
+        "final_window": {
+            "mean": float(summary1["mean"]),
+            "cv": float(summary1["cv"]),
+            "trend": float(summary1["trend"]),
+            "start_index": int(summary1["start_index"]),
+        },
+    }
+
+
 def optimize_stellarator_itg(
     kind: StellaratorObjectiveKind,
     initial_params: jnp.ndarray | Sequence[float] | None = None,
@@ -124,115 +316,44 @@ def optimize_stellarator_itg(
     backend_info = discover_differentiable_geometry_backends()
     base_cfg = config or StellaratorITGOptimizationConfig()
     cfg = base_cfg.with_kind_defaults(kind)
-    p0 = (
-        default_stellarator_initial_params()
-        if initial_params is None
-        else _validate_params(initial_params)
-    )
-    p = jnp.asarray(p0)
-    value_and_grad = jax.jit(
-        jax.value_and_grad(lambda x: stellarator_itg_objective(x, kind, cfg))
-    )
-    obs_fn = jax.jit(lambda x: qa_observable_vector(x, cfg))
+    p0 = _initial_stellarator_params(initial_params)
+    run = _run_stellarator_adam(kind, cfg, p0)
 
-    beta1 = jnp.asarray(0.9, dtype=p.dtype)
-    beta2 = jnp.asarray(0.99, dtype=p.dtype)
-    eps = jnp.asarray(1.0e-8, dtype=p.dtype)
-    lr = jnp.asarray(cfg.learning_rate, dtype=p.dtype)
-    m = jnp.zeros_like(p)
-    v = jnp.zeros_like(p)
-    history: list[dict[str, Any]] = []
-    initial_value = float(stellarator_itg_objective(p, kind, cfg))
-
-    for step in range(int(cfg.steps) + 1):
-        value, grad = value_and_grad(p)
-        obs = obs_fn(p)
-        history.append(
-            {
-                "step": int(step),
-                "objective": float(value),
-                "params": np.asarray(p).tolist(),
-                "observables": np.asarray(obs).tolist(),
-                "gradient_norm": float(jnp.linalg.norm(grad)),
-            }
-        )
-        if step == int(cfg.steps):
-            break
-        m = beta1 * m + (1.0 - beta1) * grad
-        v = beta2 * v + (1.0 - beta2) * (grad * grad)
-        m_hat = m / (1.0 - beta1 ** (step + 1))
-        v_hat = v / (1.0 - beta2 ** (step + 1))
-        p = p - lr * m_hat / (jnp.sqrt(v_hat) + eps)
-        p = jnp.clip(p, -0.8, 0.8)
-
-    final_value = float(stellarator_itg_objective(p, kind, cfg))
-    initial_obs = qa_observable_vector(p0, cfg)
-    final_obs = qa_observable_vector(p, cfg)
-    fd_step, rtol, atol = _precision_gate_tolerances(cfg.fd_step)
-    gradient_gate = autodiff_finite_difference_report(
-        lambda x: stellarator_itg_objective(x, kind, cfg),
-        p,
-        step=fd_step,
-        rtol=rtol,
-        atol=atol,
-        workers=finite_difference_workers,
-        parallel_executor=finite_difference_executor,
-    )
-    residual_sensitivity = stellarator_itg_residual_sensitivity_report(
-        p,
+    final_value = float(stellarator_itg_objective(run.final_params, kind, cfg))
+    initial_obs = qa_observable_vector(run.initial_params, cfg)
+    final_obs = qa_observable_vector(run.final_params, cfg)
+    gradient_gate = _stellarator_gradient_gate(
+        run.final_params,
         kind,
         cfg,
-        min_rank=len(PARAMETER_NAMES),
-        condition_number_limit=_RESIDUAL_CONDITION_NUMBER_LIMIT,
-        covariance_regularization=1.0e-8,
-        finite_difference_workers=finite_difference_workers,
-        finite_difference_executor=finite_difference_executor,
+        workers=finite_difference_workers,
+        executor=finite_difference_executor,
     )
-    covariance = dict(residual_sensitivity["covariance"])
-    covariance["residual_jacobian_gate"] = residual_sensitivity[
-        "finite_difference_gate"
-    ]
-    covariance["residual_sensitivity_passed"] = bool(residual_sensitivity["passed"])
-
-    nonlinear_trace = None
-    if kind == "nonlinear_heat_flux":
-        times0, heat0 = nonlinear_heat_flux_trace(p0, cfg)
-        times1, heat1 = nonlinear_heat_flux_trace(p, cfg)
-        summary0 = nonlinear_heat_flux_window_metrics(
-            times0, heat0, tail_fraction=cfg.nonlinear_tail_fraction
-        )
-        summary1 = nonlinear_heat_flux_window_metrics(
-            times1, heat1, tail_fraction=cfg.nonlinear_tail_fraction
-        )
-        nonlinear_trace = {
-            "times": np.asarray(times1).tolist(),
-            "initial_heat_flux": np.asarray(heat0).tolist(),
-            "final_heat_flux": np.asarray(heat1).tolist(),
-            "initial_window": {
-                "mean": float(summary0["mean"]),
-                "cv": float(summary0["cv"]),
-                "trend": float(summary0["trend"]),
-                "start_index": int(summary0["start_index"]),
-            },
-            "final_window": {
-                "mean": float(summary1["mean"]),
-                "cv": float(summary1["cv"]),
-                "trend": float(summary1["trend"]),
-                "start_index": int(summary1["start_index"]),
-            },
-        }
+    covariance = _stellarator_covariance_report(
+        run.final_params,
+        kind,
+        cfg,
+        workers=finite_difference_workers,
+        executor=finite_difference_executor,
+    )
+    nonlinear_trace = _stellarator_nonlinear_trace_report(
+        kind,
+        run.initial_params,
+        run.final_params,
+        cfg,
+    )
 
     return StellaratorITGOptimizationResult(
         objective_kind=kind,
         parameter_names=PARAMETER_NAMES,
         observable_names=OBSERVABLE_NAMES,
-        initial_params=tuple(float(x) for x in np.asarray(p0)),
-        final_params=tuple(float(x) for x in np.asarray(p)),
-        initial_objective=initial_value,
+        initial_params=tuple(float(x) for x in np.asarray(run.initial_params)),
+        final_params=tuple(float(x) for x in np.asarray(run.final_params)),
+        initial_objective=run.initial_objective,
         final_objective=final_value,
         initial_observables=tuple(float(x) for x in np.asarray(initial_obs)),
         final_observables=tuple(float(x) for x in np.asarray(final_obs)),
-        history=tuple(history),
+        history=tuple(run.history),
         gradient_gate=gradient_gate,
         covariance=covariance,
         nonlinear_trace=nonlinear_trace,
