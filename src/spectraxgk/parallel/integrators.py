@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Callable
 
 import jax
@@ -17,6 +18,16 @@ from spectraxgk.terms.config import FieldState, TermConfig
 
 _EXPLICIT_METHODS = {"euler", "rk2", "rk3", "rk3_heun", "rk3_classic", "rk4", "sspx3"}
 pjit = jax.jit
+
+
+@dataclass(frozen=True)
+class _NonlinearShardSetup:
+    G0: jnp.ndarray
+    dt_val: jnp.ndarray
+    state_dtype: jnp.dtype
+    method_key: str
+    terms: TermConfig
+    projector: Callable[[jnp.ndarray], jnp.ndarray] | None
 
 
 def _dt_array(dt: float, state_dtype: jnp.dtype) -> jnp.ndarray:
@@ -171,6 +182,148 @@ def _nonlinear_explicit_update(
     )
 
 
+def _prepare_nonlinear_sharded_setup(
+    G0: jnp.ndarray,
+    cache: LinearCache,
+    *,
+    dt: float,
+    method: str,
+    terms: TermConfig | None,
+    compressed_real_fft: bool,
+) -> _NonlinearShardSetup:
+    """Normalize nonlinear sharded integration inputs and projection policy."""
+
+    method_key = _validate_explicit_method(method)
+    state_dtype = jnp.result_type(G0, jnp.complex64)
+    G0_arr = jnp.asarray(G0, dtype=state_dtype)
+    projector = (
+        _make_hermitian_projector(np.asarray(cache.ky), int(np.asarray(cache.kx).size))
+        if compressed_real_fft
+        else None
+    )
+    return _NonlinearShardSetup(
+        G0=G0_arr,
+        dt_val=_dt_array(dt, state_dtype),
+        state_dtype=state_dtype,
+        method_key=method_key,
+        terms=terms or TermConfig(),
+        projector=projector,
+    )
+
+
+def _nonlinear_sharding_projector(
+    *,
+    state_sharding: Any | None,
+    projector: Callable[[jnp.ndarray], jnp.ndarray] | None,
+    state_dtype: jnp.dtype,
+) -> tuple[Callable[[jnp.ndarray], jnp.ndarray], Callable[[jnp.ndarray], jnp.ndarray]]:
+    """Return sharding and Hermitian-projection helpers for the scan loop."""
+
+    def maybe_shard(state: jnp.ndarray) -> jnp.ndarray:
+        if state_sharding is None:
+            return state
+        return jax.lax.with_sharding_constraint(state, state_sharding)
+
+    def project_shard(state: jnp.ndarray) -> jnp.ndarray:
+        if projector is not None:
+            state = jnp.asarray(projector(state), dtype=state_dtype)
+        return maybe_shard(state)
+
+    return maybe_shard, project_shard
+
+
+def _nonlinear_sharded_rhs(
+    *,
+    cache: LinearCache,
+    params: LinearParams,
+    terms: TermConfig,
+    state_dtype: jnp.dtype,
+    compressed_real_fft: bool,
+    laguerre_mode: str,
+) -> Callable[[jnp.ndarray], tuple[jnp.ndarray, FieldState]]:
+    """Build the nonlinear RHS closure used by sharded explicit scans."""
+
+    def rhs(state: jnp.ndarray) -> tuple[jnp.ndarray, FieldState]:
+        dG, fields = nonlinear_rhs_cached(
+            state,
+            cache,
+            params,
+            terms,
+            compressed_real_fft=compressed_real_fft,
+            laguerre_mode=laguerre_mode,
+        )
+        return jnp.asarray(dG, dtype=state_dtype), fields
+
+    return rhs
+
+
+def _nonlinear_sharded_step_fn(
+    *,
+    setup: _NonlinearShardSetup,
+    rhs: Callable[[jnp.ndarray], tuple[jnp.ndarray, FieldState]],
+    project_shard: Callable[[jnp.ndarray], jnp.ndarray],
+) -> Callable[[jnp.ndarray, None], tuple[jnp.ndarray, FieldState]]:
+    """Build one explicit sharded nonlinear scan step."""
+
+    def stage(state: jnp.ndarray, increment: jnp.ndarray, scale: float) -> jnp.ndarray:
+        return project_shard(
+            state
+            + jnp.asarray(scale, dtype=setup.dt_val.dtype) * setup.dt_val * increment
+        )
+
+    def step(G: jnp.ndarray, _) -> tuple[jnp.ndarray, FieldState]:
+        G = project_shard(G)
+        k1, _ = rhs(G)
+        G_next = _nonlinear_explicit_update(
+            setup.method_key,
+            G,
+            k1,
+            rhs=rhs,
+            stage=stage,
+            project_shard=project_shard,
+            dt_val=setup.dt_val,
+        )
+        G_next = project_shard(jnp.asarray(G_next, dtype=setup.state_dtype))
+        _dG_next, fields_next = rhs(G_next)
+        return G_next, fields_next
+
+    return step
+
+
+def _maybe_put_sharded_state(
+    G0: jnp.ndarray,
+    *,
+    state_sharding: Any | None,
+    maybe_shard: Callable[[jnp.ndarray], jnp.ndarray],
+) -> jnp.ndarray:
+    if state_sharding is None:
+        return G0
+    return maybe_shard(jax.device_put(G0, state_sharding))
+
+
+def _run_nonlinear_sharded_scan(
+    G0: jnp.ndarray,
+    *,
+    step: Callable[[jnp.ndarray, None], tuple[jnp.ndarray, FieldState]],
+    steps: int,
+    state_sharding: Any | None,
+    return_fields: bool,
+) -> tuple[jnp.ndarray, FieldState] | jnp.ndarray:
+    """Dispatch final-only or field-history nonlinear sharded scans."""
+
+    def run_with_fields(G_init):
+        G_final, fields_t = jax.lax.scan(step, G_init, xs=None, length=steps)
+        return G_final, fields_t
+
+    def run_final_only(G_init):
+        G_final, _fields_t = jax.lax.scan(step, G_init, xs=None, length=steps)
+        return G_final
+
+    if return_fields:
+        return pjit(run_with_fields, in_shardings=state_sharding, out_shardings=None)(G0)
+    return pjit(run_final_only, in_shardings=state_sharding, out_shardings=state_sharding)(G0)
+
+
 def integrate_nonlinear_sharded(
     G0: jnp.ndarray,
     cache: LinearCache,
@@ -197,79 +350,44 @@ def integrate_nonlinear_sharded(
     """
 
     _validate_steps(steps)
-    method_key = _validate_explicit_method(method)
-    term_cfg = terms or TermConfig()
-
-    state_dtype = jnp.result_type(G0, jnp.complex64)
-    G0 = jnp.asarray(G0, dtype=state_dtype)
-    dt_val = _dt_array(dt, state_dtype)
-
-    projector = (
-        _make_hermitian_projector(np.asarray(cache.ky), int(np.asarray(cache.kx).size))
-        if compressed_real_fft
-        else None
+    setup = _prepare_nonlinear_sharded_setup(
+        G0,
+        cache,
+        dt=dt,
+        method=method,
+        terms=terms,
+        compressed_real_fft=compressed_real_fft,
     )
-
-    def _maybe_shard(state: jnp.ndarray) -> jnp.ndarray:
-        if state_sharding is None:
-            return state
-        return jax.lax.with_sharding_constraint(state, state_sharding)
-
-    def _project(state: jnp.ndarray) -> jnp.ndarray:
-        if projector is None:
-            return state
-        return jnp.asarray(projector(state), dtype=state_dtype)
-
-    def _project_shard(state: jnp.ndarray) -> jnp.ndarray:
-        return _maybe_shard(_project(state))
-
-    def _rhs(state: jnp.ndarray) -> tuple[jnp.ndarray, FieldState]:
-        dG, fields = nonlinear_rhs_cached(
-            state,
-            cache,
-            params,
-            term_cfg,
-            compressed_real_fft=compressed_real_fft,
-            laguerre_mode=laguerre_mode,
-        )
-        return jnp.asarray(dG, dtype=state_dtype), fields
-
-    def _stage(state: jnp.ndarray, increment: jnp.ndarray, scale: float) -> jnp.ndarray:
-        return _project_shard(
-            state + jnp.asarray(scale, dtype=dt_val.dtype) * dt_val * increment
-        )
-
-    def step(G: jnp.ndarray, _):
-        G = _project_shard(G)
-        k1, _ = _rhs(G)
-        G_next = _nonlinear_explicit_update(
-            method_key,
-            G,
-            k1,
-            rhs=_rhs,
-            stage=_stage,
-            project_shard=_project_shard,
-            dt_val=dt_val,
-        )
-        G_next = _project_shard(jnp.asarray(G_next, dtype=state_dtype))
-        _dG_next, fields_next = _rhs(G_next)
-        return G_next, fields_next
-
-    def run_with_fields(G_init):
-        G_final, fields_t = jax.lax.scan(step, G_init, xs=None, length=steps)
-        return G_final, fields_t
-
-    def run_final_only(G_init):
-        G_final, _fields_t = jax.lax.scan(step, G_init, xs=None, length=steps)
-        return G_final
-
-    if state_sharding is not None:
-        G0 = jax.device_put(G0, state_sharding)
-        G0 = _maybe_shard(G0)
-
-    if return_fields:
-        return pjit(run_with_fields, in_shardings=state_sharding, out_shardings=None)(G0)
-    return pjit(run_final_only, in_shardings=state_sharding, out_shardings=state_sharding)(G0)
+    maybe_shard, project_shard = _nonlinear_sharding_projector(
+        state_sharding=state_sharding,
+        projector=setup.projector,
+        state_dtype=setup.state_dtype,
+    )
+    rhs = _nonlinear_sharded_rhs(
+        cache=cache,
+        params=params,
+        terms=setup.terms,
+        state_dtype=setup.state_dtype,
+        compressed_real_fft=compressed_real_fft,
+        laguerre_mode=laguerre_mode,
+    )
+    step = _nonlinear_sharded_step_fn(
+        setup=setup,
+        rhs=rhs,
+        project_shard=project_shard,
+    )
+    G_init = _maybe_put_sharded_state(
+        setup.G0,
+        state_sharding=state_sharding,
+        maybe_shard=maybe_shard,
+    )
+    return _run_nonlinear_sharded_scan(
+        G_init,
+        step=step,
+        steps=steps,
+        state_sharding=state_sharding,
+        return_fields=return_fields,
+    )
 
 
 __all__ = ["integrate_linear_sharded", "integrate_nonlinear_sharded"]
