@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from types import SimpleNamespace
 from typing import Any, Callable, Protocol, cast
 
@@ -41,6 +41,46 @@ class RuntimeScanDeps(Protocol):
     runtime_independent_parallel_plan: Callable[..., Any]
     independent_map: Callable[..., list[Any]]
     run_runtime_scan_ky_task: Callable[[dict[str, Any]], Any]
+
+
+@dataclass(frozen=True)
+class _BatchScanSetup:
+    geom: Any
+    grid: Any
+    params: Any
+    terms: Any
+    ky_indices: np.ndarray
+    nspecies: int
+
+
+@dataclass(frozen=True)
+class _BatchDiagnostics:
+    phi_t: np.ndarray
+    density_t: np.ndarray
+    time: np.ndarray
+
+
+@dataclass(frozen=True)
+class _RuntimeScanOptions:
+    method: str | None
+    dt: float | None
+    steps: int | None
+    sample_stride: int | None
+    auto_window: bool
+    tmin: float | None
+    tmax: float | None
+    window_fraction: float
+    min_points: int
+    start_fraction: float
+    growth_weight: float
+    require_positive: bool
+    min_amp_fraction: float
+    mode_method: str
+    fit_signal: str
+    show_progress: bool
+
+    def task_fields(self) -> dict[str, Any]:
+        return dict(vars(self))
 
 
 def build_runtime_scan_orchestration_deps(facade: Any) -> RuntimeScanDeps:
@@ -117,6 +157,317 @@ def run_runtime_scan_ky_task(
     )
 
 
+def _combined_ky_scan_requested(
+    *,
+    cfg: RuntimeConfig,
+    batch_ky: bool,
+    solver_key: str,
+    deps: RuntimeScanDeps,
+) -> bool:
+    requested = bool(batch_ky or deps.parallel_requests_combined_ky_scan(cfg))
+    if requested and solver_key == "krylov":
+        raise ValueError("batch_ky is only supported for time integration")
+    if requested and bool(getattr(cfg.quasilinear, "enabled", False)):
+        raise NotImplementedError(
+            "quasilinear scan artifacts currently require serial ky evaluation"
+        )
+    return requested
+
+
+def _scan_worker_tasks(
+    cfg: RuntimeConfig,
+    ky_arr: np.ndarray,
+    *,
+    Nl: int,
+    Nm: int,
+    solver: str,
+    krylov_cfg: Any,
+    options: _RuntimeScanOptions,
+) -> list[dict[str, Any]]:
+    return [
+        {
+            "cfg": cfg,
+            "ky": float(ky),
+            "Nl": Nl,
+            "Nm": Nm,
+            "solver": solver,
+            "krylov_cfg": krylov_cfg,
+            **options.task_fields(),
+        }
+        for ky in ky_arr
+    ]
+
+
+def _scan_result_from_worker_results(
+    ky_arr: np.ndarray,
+    results: list[Any],
+    parallel_plan: Any,
+) -> RuntimeLinearScanResult:
+    gamma = np.zeros_like(ky_arr)
+    omega = np.zeros_like(ky_arr)
+    ql_payloads: list[dict[str, Any]] = []
+    for i, res in enumerate(results):
+        gamma[i] = float(res.gamma)
+        omega[i] = float(res.omega)
+        if res.quasilinear is not None:
+            ql_payloads.append(res.quasilinear)
+    parallel_payload = parallel_plan.to_dict()
+    parallel_payload.update(
+        {
+            "identity_contract": "independent ky workers must preserve serial ky ordering and values",
+            "quasilinear_state_extraction": bool(ql_payloads),
+        }
+    )
+    return RuntimeLinearScanResult(
+        ky=ky_arr,
+        gamma=gamma,
+        omega=omega,
+        quasilinear=tuple(ql_payloads) if ql_payloads else None,
+        parallel=parallel_payload,
+    )
+
+
+def _run_combined_ky_scan(
+    cfg: RuntimeConfig,
+    ky_arr: np.ndarray,
+    *,
+    Nl: int,
+    Nm: int,
+    options: _RuntimeScanOptions,
+    deps: RuntimeScanDeps,
+) -> RuntimeLinearScanResult:
+    return deps.run_runtime_scan_batch(
+        cfg,
+        ky_arr,
+        Nl=Nl,
+        Nm=Nm,
+        **options.task_fields(),
+    )
+
+
+def _run_independent_ky_scan(
+    cfg: RuntimeConfig,
+    ky_arr: np.ndarray,
+    *,
+    Nl: int,
+    Nm: int,
+    solver: str,
+    krylov_cfg: Any,
+    options: _RuntimeScanOptions,
+    workers: int,
+    parallel_executor: str,
+    deps: RuntimeScanDeps,
+) -> RuntimeLinearScanResult:
+    tasks = _scan_worker_tasks(
+        cfg,
+        ky_arr,
+        Nl=Nl,
+        Nm=Nm,
+        solver=solver,
+        krylov_cfg=krylov_cfg,
+        options=options,
+    )
+    parallel_plan = deps.runtime_independent_parallel_plan(
+        cfg, problem_size=int(ky_arr.size), workers=workers, executor=parallel_executor
+    )
+    results = deps.independent_map(
+        deps.run_runtime_scan_ky_task,
+        tasks,
+        workers=parallel_plan.requested_workers,
+        executor=parallel_plan.executor,
+    )
+    return _scan_result_from_worker_results(ky_arr, results, parallel_plan)
+
+
+def _batch_scan_setup(
+    cfg: RuntimeConfig,
+    ky_arr: np.ndarray,
+    *,
+    Nl: int,
+    Nm: int,
+    deps: RuntimeScanBatchDeps,
+) -> _BatchScanSetup:
+    geom = deps.build_runtime_geometry(cfg)
+    grid_cfg = deps.apply_geometry_grid_defaults(geom, cfg.grid)
+    grid = deps.build_spectral_grid(grid_cfg)
+    params = deps.build_runtime_linear_params(cfg, Nm=Nm, geom=geom)
+    terms = deps.build_runtime_linear_terms(cfg)
+    ky_indices = np.asarray(
+        [deps.select_ky_index(np.asarray(grid.ky), ky) for ky in ky_arr], dtype=int
+    )
+    nspecies = max(len([s for s in cfg.species if s.kinetic]), 1)
+    return _BatchScanSetup(
+        geom=geom,
+        grid=grid,
+        params=params,
+        terms=terms,
+        ky_indices=ky_indices,
+        nspecies=nspecies,
+    )
+
+
+def _combined_batch_initial_condition(
+    cfg: RuntimeConfig,
+    setup: _BatchScanSetup,
+    *,
+    Nl: int,
+    Nm: int,
+    deps: RuntimeScanBatchDeps,
+) -> Any:
+    g0 = None
+    for ky_idx in setup.ky_indices:
+        g0_local = deps.build_initial_condition(
+            setup.grid,
+            setup.geom,
+            cfg,
+            ky_index=int(ky_idx),
+            kx_index=0,
+            Nl=Nl,
+            Nm=Nm,
+            nspecies=setup.nspecies,
+        )
+        g0 = g0_local if g0 is None else g0 + g0_local
+    if g0 is None:
+        raise ValueError("No ky values provided for batch scan")
+    return g0
+
+
+def _batch_time_config(
+    cfg: RuntimeConfig,
+    *,
+    options: _RuntimeScanOptions,
+) -> Any:
+    tcfg = cfg.time
+    if options.method is not None:
+        tcfg = replace(tcfg, method=str(options.method))
+    if options.dt is not None:
+        tcfg = replace(tcfg, dt=float(options.dt))
+    if options.steps is not None:
+        tcfg = replace(tcfg, t_max=float(options.steps) * float(tcfg.dt))
+    if options.sample_stride is not None:
+        tcfg = replace(tcfg, sample_stride=int(options.sample_stride))
+    return tcfg
+
+
+def _run_batch_diagnostics(
+    setup: _BatchScanSetup,
+    g0: Any,
+    tcfg: Any,
+    *,
+    show_progress: bool,
+    deps: RuntimeScanBatchDeps,
+) -> _BatchDiagnostics:
+    steps_val = int(round(tcfg.t_max / tcfg.dt))
+    diag = deps.integrate_linear_diagnostics(
+        g0,
+        setup.grid,
+        setup.geom,
+        setup.params,
+        dt=tcfg.dt,
+        steps=steps_val,
+        method=tcfg.method,
+        terms=setup.terms,
+        sample_stride=tcfg.sample_stride,
+        species_index=0,
+        record_hl_energy=False,
+        show_progress=show_progress,
+    )
+    phi_t_np = np.asarray(diag[1])
+    dens_t_np = np.asarray(diag[2])
+    t_arr = (
+        float(tcfg.dt)
+        * float(tcfg.sample_stride)
+        * (np.arange(phi_t_np.shape[0], dtype=float) + 1.0)
+    )
+    return _BatchDiagnostics(phi_t=phi_t_np, density_t=dens_t_np, time=t_arr)
+
+
+def _fit_signal_key(fit_signal: str) -> str:
+    fit_key = fit_signal.strip().lower()
+    if fit_key not in {"phi", "density", "auto"}:
+        raise ValueError("fit_signal must be 'phi', 'density', or 'auto'")
+    return fit_key
+
+
+def _auto_fit_scan_point(
+    diagnostics: _BatchDiagnostics,
+    sel: ModeSelection,
+    *,
+    options: _RuntimeScanOptions,
+    deps: RuntimeScanBatchDeps,
+) -> tuple[float, float]:
+    phi_signal = deps.extract_mode_time_series(
+        diagnostics.phi_t, sel, method=options.mode_method
+    )
+    gamma_phi, omega_phi, _, _, r2_phi, r2p_phi = (
+        deps.fit_growth_rate_auto_with_stats(
+            diagnostics.time,
+            phi_signal,
+            window_fraction=options.window_fraction,
+            min_points=options.min_points,
+            start_fraction=options.start_fraction,
+            growth_weight=options.growth_weight,
+            require_positive=options.require_positive,
+            min_amp_fraction=options.min_amp_fraction,
+        )
+    )
+    dens_signal = deps.extract_mode_time_series(
+        diagnostics.density_t, sel, method=options.mode_method
+    )
+    gamma_den, omega_den, _, _, r2_den, r2p_den = (
+        deps.fit_growth_rate_auto_with_stats(
+            diagnostics.time,
+            dens_signal,
+            window_fraction=options.window_fraction,
+            min_points=options.min_points,
+            start_fraction=options.start_fraction,
+            growth_weight=options.growth_weight,
+            require_positive=options.require_positive,
+            min_amp_fraction=options.min_amp_fraction,
+        )
+    )
+    score_phi = r2_phi + 0.2 * r2p_phi + options.growth_weight * gamma_phi
+    score_den = r2_den + 0.2 * r2p_den + options.growth_weight * gamma_den
+    return (gamma_phi, omega_phi) if score_phi >= score_den else (gamma_den, omega_den)
+
+
+def _fit_batch_scan_point(
+    diagnostics: _BatchDiagnostics,
+    sel: ModeSelection,
+    *,
+    fit_key: str,
+    options: _RuntimeScanOptions,
+    deps: RuntimeScanBatchDeps,
+) -> tuple[float, float]:
+    if fit_key == "auto":
+        return _auto_fit_scan_point(
+            diagnostics,
+            sel,
+            options=options,
+            deps=deps,
+        )
+    signal = deps.extract_mode_time_series(
+        diagnostics.density_t if fit_key == "density" else diagnostics.phi_t,
+        sel,
+        method=options.mode_method,
+    )
+    if options.auto_window:
+        g_val, o_val, _tmin, _tmax = deps.fit_growth_rate_auto(
+            diagnostics.time,
+            signal,
+            window_fraction=options.window_fraction,
+            min_points=options.min_points,
+            start_fraction=options.start_fraction,
+            growth_weight=options.growth_weight,
+            require_positive=options.require_positive,
+            min_amp_fraction=options.min_amp_fraction,
+        )
+        return g_val, o_val
+    return deps.fit_growth_rate(
+        diagnostics.time, signal, tmin=options.tmin, tmax=options.tmax
+    )
+
+
 def run_runtime_scan_orchestration(
     cfg: RuntimeConfig,
     ky_values: Any,
@@ -151,94 +502,47 @@ def run_runtime_scan_orchestration(
     ky_arr = np.asarray(ky_values, dtype=float)
     Nl_use, Nm_use = deps.resolve_runtime_hl_dims(cfg, Nl=Nl, Nm=Nm)
     solver_key = deps.normalize_linear_solver_name(solver)
-    batch_ky = bool(batch_ky or deps.parallel_requests_combined_ky_scan(cfg))
-    if batch_ky and solver_key == "krylov":
-        raise ValueError("batch_ky is only supported for time integration")
-    if batch_ky and bool(getattr(cfg.quasilinear, "enabled", False)):
-        raise NotImplementedError(
-            "quasilinear scan artifacts currently require serial ky evaluation"
-        )
-    if batch_ky:
-        return deps.run_runtime_scan_batch(
+    options = _RuntimeScanOptions(
+        method=method,
+        dt=dt,
+        steps=steps,
+        sample_stride=sample_stride,
+        auto_window=auto_window,
+        tmin=tmin,
+        tmax=tmax,
+        window_fraction=window_fraction,
+        min_points=min_points,
+        start_fraction=start_fraction,
+        growth_weight=growth_weight,
+        require_positive=require_positive,
+        min_amp_fraction=min_amp_fraction,
+        mode_method=mode_method,
+        fit_signal=fit_signal,
+        show_progress=show_progress,
+    )
+    if _combined_ky_scan_requested(
+        cfg=cfg, batch_ky=batch_ky, solver_key=solver_key, deps=deps
+    ):
+        return _run_combined_ky_scan(
             cfg,
             ky_arr,
             Nl=Nl_use,
             Nm=Nm_use,
-            method=method,
-            dt=dt,
-            steps=steps,
-            sample_stride=sample_stride,
-            auto_window=auto_window,
-            tmin=tmin,
-            tmax=tmax,
-            window_fraction=window_fraction,
-            min_points=min_points,
-            start_fraction=start_fraction,
-            growth_weight=growth_weight,
-            require_positive=require_positive,
-            min_amp_fraction=min_amp_fraction,
-            mode_method=mode_method,
-            fit_signal=fit_signal,
-            show_progress=show_progress,
+            options=options,
+            deps=deps,
         )
 
-    gamma = np.zeros_like(ky_arr)
-    omega = np.zeros_like(ky_arr)
-    ql_payloads: list[dict[str, Any]] = []
-    tasks = [
-        {
-            "cfg": cfg,
-            "ky": float(ky),
-            "Nl": Nl_use,
-            "Nm": Nm_use,
-            "solver": solver,
-            "method": method,
-            "dt": dt,
-            "steps": steps,
-            "sample_stride": sample_stride,
-            "auto_window": auto_window,
-            "tmin": tmin,
-            "tmax": tmax,
-            "window_fraction": window_fraction,
-            "min_points": min_points,
-            "start_fraction": start_fraction,
-            "growth_weight": growth_weight,
-            "require_positive": require_positive,
-            "min_amp_fraction": min_amp_fraction,
-            "krylov_cfg": krylov_cfg,
-            "mode_method": mode_method,
-            "fit_signal": fit_signal,
-            "show_progress": show_progress,
-        }
-        for ky in ky_arr
-    ]
-    parallel_plan = deps.runtime_independent_parallel_plan(
-        cfg, problem_size=int(ky_arr.size), workers=workers, executor=parallel_executor
-    )
-    results = deps.independent_map(
-        deps.run_runtime_scan_ky_task,
-        tasks,
-        workers=parallel_plan.requested_workers,
-        executor=parallel_plan.executor,
-    )
-    for i, res in enumerate(results):
-        gamma[i] = float(res.gamma)
-        omega[i] = float(res.omega)
-        if res.quasilinear is not None:
-            ql_payloads.append(res.quasilinear)
-    parallel_payload = parallel_plan.to_dict()
-    parallel_payload.update(
-        {
-            "identity_contract": "independent ky workers must preserve serial ky ordering and values",
-            "quasilinear_state_extraction": bool(ql_payloads),
-        }
-    )
-    return RuntimeLinearScanResult(
-        ky=ky_arr,
-        gamma=gamma,
-        omega=omega,
-        quasilinear=tuple(ql_payloads) if ql_payloads else None,
-        parallel=parallel_payload,
+    return _run_independent_ky_scan(
+        cfg,
+        ky_arr,
+        Nl=Nl_use,
+        Nm=Nm_use,
+        solver=solver,
+        krylov_cfg=krylov_cfg,
+        options=options,
+        workers=workers,
+        parallel_executor=parallel_executor,
+        deps=deps,
     )
 
 
@@ -268,138 +572,55 @@ def run_runtime_scan_batch(
 ) -> RuntimeLinearScanResult:
     """Batch a ky scan using one time integration over the full grid."""
 
-    geom = deps.build_runtime_geometry(cfg)
-    grid_cfg = deps.apply_geometry_grid_defaults(geom, cfg.grid)
-    grid = deps.build_spectral_grid(grid_cfg)
-    params = deps.build_runtime_linear_params(cfg, Nm=Nm, geom=geom)
-    terms = deps.build_runtime_linear_terms(cfg)
-
-    ky_indices = np.asarray(
-        [deps.select_ky_index(np.asarray(grid.ky), ky) for ky in ky_arr], dtype=int
+    setup = _batch_scan_setup(cfg, ky_arr, Nl=Nl, Nm=Nm, deps=deps)
+    g0 = _combined_batch_initial_condition(
+        cfg, setup, Nl=Nl, Nm=Nm, deps=deps
     )
-    nspecies = max(len([s for s in cfg.species if s.kinetic]), 1)
-
-    g0 = None
-    for ky_idx in ky_indices:
-        g0_local = deps.build_initial_condition(
-            grid,
-            geom,
-            cfg,
-            ky_index=int(ky_idx),
-            kx_index=0,
-            Nl=Nl,
-            Nm=Nm,
-            nspecies=nspecies,
-        )
-        g0 = g0_local if g0 is None else g0 + g0_local
-    if g0 is None:
-        raise ValueError("No ky values provided for batch scan")
-
-    tcfg = cfg.time
-    if method is not None:
-        tcfg = replace(tcfg, method=str(method))
-    if dt is not None:
-        tcfg = replace(tcfg, dt=float(dt))
-    if steps is not None:
-        tcfg = replace(tcfg, t_max=float(steps) * float(tcfg.dt))
-    if sample_stride is not None:
-        tcfg = replace(tcfg, sample_stride=int(sample_stride))
-
-    steps_val = int(round(tcfg.t_max / tcfg.dt))
-    diag = deps.integrate_linear_diagnostics(
-        g0,
-        grid,
-        geom,
-        params,
-        dt=tcfg.dt,
-        steps=steps_val,
-        method=tcfg.method,
-        terms=terms,
-        sample_stride=tcfg.sample_stride,
-        species_index=0,
-        record_hl_energy=False,
+    options = _RuntimeScanOptions(
+        method=method,
+        dt=dt,
+        steps=steps,
+        sample_stride=sample_stride,
+        auto_window=auto_window,
+        tmin=tmin,
+        tmax=tmax,
+        window_fraction=window_fraction,
+        min_points=min_points,
+        start_fraction=start_fraction,
+        growth_weight=growth_weight,
+        require_positive=require_positive,
+        min_amp_fraction=min_amp_fraction,
+        mode_method=mode_method,
+        fit_signal=fit_signal,
         show_progress=show_progress,
     )
-    phi_t_np = np.asarray(diag[1])
-    dens_t_np = np.asarray(diag[2])
-    t_arr = (
-        float(tcfg.dt)
-        * float(tcfg.sample_stride)
-        * (np.arange(phi_t_np.shape[0], dtype=float) + 1.0)
+    tcfg = _batch_time_config(cfg, options=options)
+    diagnostics = _run_batch_diagnostics(
+        setup,
+        g0,
+        tcfg,
+        show_progress=options.show_progress,
+        deps=deps,
     )
-
     gamma = np.zeros_like(ky_arr, dtype=float)
     omega = np.zeros_like(ky_arr, dtype=float)
-    fit_key = fit_signal.strip().lower()
-    if fit_key not in {"phi", "density", "auto"}:
-        raise ValueError("fit_signal must be 'phi', 'density', or 'auto'")
+    fit_key = _fit_signal_key(options.fit_signal)
 
-    for i, ky_idx in enumerate(ky_indices):
+    for i, ky_idx in enumerate(setup.ky_indices):
         sel = ModeSelection(
-            ky_index=int(ky_idx), kx_index=0, z_index=deps.midplane_index(grid)
+            ky_index=int(ky_idx), kx_index=0, z_index=deps.midplane_index(setup.grid)
         )
-        if fit_key == "auto":
-            phi_signal = deps.extract_mode_time_series(
-                phi_t_np, sel, method=mode_method
-            )
-            gamma_phi, omega_phi, _, _, r2_phi, r2p_phi = (
-                deps.fit_growth_rate_auto_with_stats(
-                    t_arr,
-                    phi_signal,
-                    window_fraction=window_fraction,
-                    min_points=min_points,
-                    start_fraction=start_fraction,
-                    growth_weight=growth_weight,
-                    require_positive=require_positive,
-                    min_amp_fraction=min_amp_fraction,
-                )
-            )
-            dens_signal = deps.extract_mode_time_series(
-                dens_t_np, sel, method=mode_method
-            )
-            gamma_den, omega_den, _, _, r2_den, r2p_den = (
-                deps.fit_growth_rate_auto_with_stats(
-                    t_arr,
-                    dens_signal,
-                    window_fraction=window_fraction,
-                    min_points=min_points,
-                    start_fraction=start_fraction,
-                    growth_weight=growth_weight,
-                    require_positive=require_positive,
-                    min_amp_fraction=min_amp_fraction,
-                )
-            )
-            score_phi = r2_phi + 0.2 * r2p_phi + growth_weight * gamma_phi
-            score_den = r2_den + 0.2 * r2p_den + growth_weight * gamma_den
-            g_val, o_val = (
-                (gamma_phi, omega_phi)
-                if score_phi >= score_den
-                else (gamma_den, omega_den)
-            )
-        else:
-            signal = deps.extract_mode_time_series(
-                dens_t_np if fit_key == "density" else phi_t_np,
-                sel,
-                method=mode_method,
-            )
-            if auto_window:
-                g_val, o_val, _tmin, _tmax = deps.fit_growth_rate_auto(
-                    t_arr,
-                    signal,
-                    window_fraction=window_fraction,
-                    min_points=min_points,
-                    start_fraction=start_fraction,
-                    growth_weight=growth_weight,
-                    require_positive=require_positive,
-                    min_amp_fraction=min_amp_fraction,
-                )
-            else:
-                g_val, o_val = deps.fit_growth_rate(t_arr, signal, tmin=tmin, tmax=tmax)
-
+        g_val, o_val = _fit_batch_scan_point(
+            diagnostics,
+            sel,
+            fit_key=fit_key,
+            options=options,
+            deps=deps,
+        )
         g_val, o_val = deps.apply_diagnostic_normalization(
             g_val,
             o_val,
-            rho_star=float(np.asarray(params.rho_star)),
+            rho_star=float(np.asarray(setup.params.rho_star)),
             diagnostic_norm=cfg.normalization.diagnostic_norm,
         )
         gamma[i] = float(g_val)
