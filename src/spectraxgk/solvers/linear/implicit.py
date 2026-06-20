@@ -448,6 +448,98 @@ def _build_implicit_operator(
     )
 
 
+def _implicit_fixed_point_guess(
+    G_in: jnp.ndarray,
+    *,
+    cache: LinearCache,
+    params: LinearParams,
+    terms: LinearTerms,
+    dt_val: jnp.ndarray,
+    implicit_iters: int,
+    implicit_relax: float,
+) -> jnp.ndarray:
+    """Build a bounded fixed-point warm start for the implicit GMRES solve."""
+
+    def body(_i, g):
+        dG, _phi = linear_rhs_cached(
+            g,
+            cache,
+            params,
+            terms=terms,
+            use_jit=False,
+            use_custom_vjp=False,
+            dt=dt_val,
+        )
+        g_next = G_in + dt_val * dG
+        return (1.0 - implicit_relax) * g + implicit_relax * g_next
+
+    return jax.lax.fori_loop(0, max(int(implicit_iters), 0), body, G_in)
+
+
+def _implicit_gmres_step(
+    G_in: jnp.ndarray,
+    *,
+    cache: LinearCache,
+    params: LinearParams,
+    terms: LinearTerms,
+    dt_val: jnp.ndarray,
+    size: int,
+    shape: tuple[int, ...],
+    matvec: Callable[[jnp.ndarray], jnp.ndarray],
+    precond_op: Callable[[jnp.ndarray], jnp.ndarray],
+    implicit_tol: float,
+    implicit_maxiter: int,
+    implicit_iters: int,
+    implicit_relax: float,
+    implicit_restart: int,
+    implicit_solve_method: str,
+) -> jnp.ndarray:
+    """Advance one implicit step with a fixed-point warm start and GMRES."""
+
+    G_guess = _implicit_fixed_point_guess(
+        G_in,
+        cache=cache,
+        params=params,
+        terms=terms,
+        dt_val=dt_val,
+        implicit_iters=implicit_iters,
+        implicit_relax=implicit_relax,
+    )
+    sol, _info = gmres(
+        matvec,
+        G_in.reshape(size),
+        x0=G_guess.reshape(size),
+        tol=implicit_tol,
+        maxiter=implicit_maxiter,
+        restart=implicit_restart,
+        M=precond_op,
+        solve_method=implicit_solve_method,
+    )
+    return sol.reshape(shape)
+
+
+def _implicit_phi_diagnostic(
+    G: jnp.ndarray,
+    *,
+    cache: LinearCache,
+    params: LinearParams,
+    terms: LinearTerms,
+    dt_val: jnp.ndarray,
+) -> jnp.ndarray:
+    """Evaluate the linear field diagnostic after an implicit step."""
+
+    _dG, phi = linear_rhs_cached(
+        G,
+        cache,
+        params,
+        terms=terms,
+        use_jit=False,
+        use_custom_vjp=False,
+        dt=dt_val,
+    )
+    return phi
+
+
 def _integrate_linear_implicit_cached(
     G0: jnp.ndarray,
     cache: LinearCache,
@@ -478,46 +570,33 @@ def _integrate_linear_implicit_cached(
         _build_implicit_operator(G0, cache, params, dt, terms, implicit_preconditioner)
     )
 
-    def fixed_point(G_in: jnp.ndarray, G_rhs: jnp.ndarray) -> jnp.ndarray:
-        def body(_i, g):
-            dG, _phi = linear_rhs_cached(
-                g,
-                cache,
-                params,
-                terms=terms,
-                use_jit=False,
-                use_custom_vjp=False,
-                dt=dt_val,
-            )
-            g_next = G_rhs + dt_val * dG
-            return (1.0 - implicit_relax) * g + implicit_relax * g_next
-
-        return jax.lax.fori_loop(0, max(int(implicit_iters), 0), body, G_in)
-
     def solve_step(G_in: jnp.ndarray) -> jnp.ndarray:
-        G_guess = fixed_point(G_in, G_in)
-        sol, _info = gmres(
-            matvec,
-            G_in.reshape(size),
-            x0=G_guess.reshape(size),
-            tol=implicit_tol,
-            maxiter=implicit_maxiter,
-            restart=implicit_restart,
-            M=precond_op,
-            solve_method=implicit_solve_method,
+        return _implicit_gmres_step(
+            G_in,
+            cache=cache,
+            params=params,
+            terms=terms,
+            dt_val=dt_val,
+            size=size,
+            shape=shape,
+            matvec=matvec,
+            precond_op=precond_op,
+            implicit_tol=implicit_tol,
+            implicit_maxiter=implicit_maxiter,
+            implicit_iters=implicit_iters,
+            implicit_relax=implicit_relax,
+            implicit_restart=implicit_restart,
+            implicit_solve_method=implicit_solve_method,
         )
-        return sol.reshape(shape)
 
     def step(G_in, _):
         G_new = solve_step(G_in)
-        _dG_new, phi_new = linear_rhs_cached(
+        phi_new = _implicit_phi_diagnostic(
             G_new,
-            cache,
-            params,
+            cache=cache,
+            params=params,
             terms=terms,
-            use_jit=False,
-            use_custom_vjp=False,
-            dt=dt_val,
+            dt_val=dt_val,
         )
         return G_new, phi_new
 
@@ -531,14 +610,12 @@ def _integrate_linear_implicit_cached(
                 return solve_step(g)
 
             G_out_local = jax.lax.fori_loop(0, sample_stride, inner_step, G_in)
-            _dG_out, phi_out = linear_rhs_cached(
+            phi_out = _implicit_phi_diagnostic(
                 G_out_local,
-                cache,
-                params,
+                cache=cache,
+                params=params,
                 terms=terms,
-                use_jit=False,
-                use_custom_vjp=False,
-                dt=dt_val,
+                dt_val=dt_val,
             )
             return G_out_local, phi_out
 
