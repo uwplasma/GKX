@@ -100,6 +100,33 @@ class _KBMLinearState:
     state: Any
 
 
+@dataclass(frozen=True)
+class _KBMLinearRunOptions:
+    ky_target: float
+    Nl: int
+    Nm: int
+    dt: float
+    steps: int
+    method: str
+    time_cfg: TimeConfig | None
+    krylov_cfg: KrylovConfig | None
+    kbm_target_factors: Sequence[float] | None
+    kbm_beta_transition: float | None
+    auto_window: bool
+    tmin: float | None
+    tmax: float | None
+    window_fraction: float
+    min_points: int
+    start_fraction: float
+    growth_weight: float
+    require_positive: bool
+    min_amp_fraction: float
+    mode_method: str
+    sample_stride: int | None
+    density_species_index: int
+    show_progress: bool
+
+
 def _resolve_kbm_fit_signal(fit_signal: str) -> str:
     fit_key = fit_signal.strip().lower()
     if fit_key not in {"phi", "density", "auto"}:
@@ -534,6 +561,104 @@ def _fit_kbm_saved_history(
     )
 
 
+def _run_kbm_explicit_solver_path(
+    setup: _KBMLinearSetup,
+    state: _KBMLinearState,
+    options: _KBMLinearRunOptions,
+) -> LinearRunResult:
+    return _paths.run_kbm_explicit_time_path(
+        G0_jax=state.state,
+        grid=state.grid,
+        cache=state.cache,
+        params=setup.params,
+        geom=setup.geom,
+        terms=setup.terms,
+        sel=state.selection,
+        ky_target=options.ky_target,
+        dt=options.dt,
+        steps=options.steps,
+        time_cfg=options.time_cfg,
+        sample_stride=options.sample_stride,
+        mode_method=options.mode_method,
+        diagnostic_norm=setup.diagnostic_norm,
+        auto_window=options.auto_window,
+        tmin=options.tmin,
+        tmax=options.tmax,
+        window_fraction=options.window_fraction,
+        min_points=options.min_points,
+        start_fraction=options.start_fraction,
+        growth_weight=options.growth_weight,
+        require_positive=options.require_positive,
+        min_amp_fraction=options.min_amp_fraction,
+    )
+
+
+def _run_kbm_krylov_solver_path(
+    setup: _KBMLinearSetup,
+    state: _KBMLinearState,
+    options: _KBMLinearRunOptions,
+) -> LinearRunResult:
+    return _paths.run_kbm_krylov_path(
+        G0_jax=state.state,
+        cache=state.cache,
+        params=setup.params,
+        terms=setup.terms,
+        sel=state.selection,
+        ky_target=options.ky_target,
+        beta_use=setup.beta,
+        cfg_use=setup.cfg,
+        krylov_cfg=options.krylov_cfg,
+        kbm_target_factors=options.kbm_target_factors,
+        kbm_beta_transition=options.kbm_beta_transition,
+        diagnostic_norm=setup.diagnostic_norm,
+    )
+
+
+def _run_kbm_saved_time_solver_path(
+    setup: _KBMLinearSetup,
+    state: _KBMLinearState,
+    options: _KBMLinearRunOptions,
+) -> LinearRunResult:
+    phi_t_np, density_np, stride = _integrate_kbm_saved_history(
+        state,
+        setup,
+        time_cfg=options.time_cfg,
+        dt=options.dt,
+        steps=options.steps,
+        method=options.method,
+        sample_stride=options.sample_stride,
+        density_species_index=options.density_species_index,
+        mode_method=options.mode_method,
+        show_progress=options.show_progress,
+    )
+    gamma, omega = _fit_kbm_saved_history(
+        state,
+        setup,
+        phi_t=phi_t_np,
+        density_t=density_np,
+        dt=options.dt,
+        stride=stride,
+        mode_method=options.mode_method,
+        auto_window=options.auto_window,
+        tmin=options.tmin,
+        tmax=options.tmax,
+        window_fraction=options.window_fraction,
+        min_points=options.min_points,
+        start_fraction=options.start_fraction,
+        growth_weight=options.growth_weight,
+        require_positive=options.require_positive,
+        min_amp_fraction=options.min_amp_fraction,
+    )
+    return LinearRunResult(
+        t=np.arange(phi_t_np.shape[0]) * options.dt * stride,
+        phi_t=phi_t_np,
+        gamma=gamma,
+        omega=omega,
+        ky=float(options.ky_target),
+        selection=state.selection,
+    )
+
+
 def run_kbm_linear(
     ky_target: float = 0.3,
     *,
@@ -601,77 +726,17 @@ def run_kbm_linear(
         Nm=Nm,
         init_species_index=init_species_index,
     )
-
-    solver_key = select_kbm_solver_auto(
-        solver,
+    options = _KBMLinearRunOptions(
         ky_target=float(ky_target),
-        reference_aligned=setup.reference_aligned,
-    )
-    _paths.sync_path_hooks(globals())
-
-    if solver_key == "explicit_time":
-        return _paths.run_kbm_explicit_time_path(
-            G0_jax=state.state,
-            grid=state.grid,
-            cache=state.cache,
-            params=setup.params,
-            geom=setup.geom,
-            terms=setup.terms,
-            sel=state.selection,
-            ky_target=ky_target,
-            dt=dt,
-            steps=steps,
-            time_cfg=time_cfg,
-            sample_stride=sample_stride,
-            mode_method=mode_method,
-            diagnostic_norm=setup.diagnostic_norm,
-            auto_window=auto_window,
-            tmin=tmin,
-            tmax=tmax,
-            window_fraction=window_fraction,
-            min_points=min_points,
-            start_fraction=start_fraction,
-            growth_weight=growth_weight,
-            require_positive=require_positive,
-            min_amp_fraction=min_amp_fraction,
-        )
-
-    if solver_key == "krylov":
-        return _paths.run_kbm_krylov_path(
-            G0_jax=state.state,
-            cache=state.cache,
-            params=setup.params,
-            terms=setup.terms,
-            sel=state.selection,
-            ky_target=ky_target,
-            beta_use=setup.beta,
-            cfg_use=setup.cfg,
-            krylov_cfg=krylov_cfg,
-            kbm_target_factors=kbm_target_factors,
-            kbm_beta_transition=kbm_beta_transition,
-            diagnostic_norm=setup.diagnostic_norm,
-        )
-
-    phi_t_np, density_np, stride = _integrate_kbm_saved_history(
-        state,
-        setup,
-        time_cfg=time_cfg,
+        Nl=Nl,
+        Nm=Nm,
         dt=dt,
         steps=steps,
         method=method,
-        sample_stride=sample_stride,
-        density_species_index=density_species_index,
-        mode_method=mode_method,
-        show_progress=show_progress,
-    )
-    gamma, omega = _fit_kbm_saved_history(
-        state,
-        setup,
-        phi_t=phi_t_np,
-        density_t=density_np,
-        dt=dt,
-        stride=stride,
-        mode_method=mode_method,
+        time_cfg=time_cfg,
+        krylov_cfg=krylov_cfg,
+        kbm_target_factors=kbm_target_factors,
+        kbm_beta_transition=kbm_beta_transition,
         auto_window=auto_window,
         tmin=tmin,
         tmax=tmax,
@@ -681,12 +746,23 @@ def run_kbm_linear(
         growth_weight=growth_weight,
         require_positive=require_positive,
         min_amp_fraction=min_amp_fraction,
+        mode_method=mode_method,
+        sample_stride=sample_stride,
+        density_species_index=density_species_index,
+        show_progress=show_progress,
     )
-    return LinearRunResult(
-        t=np.arange(phi_t_np.shape[0]) * dt * stride,
-        phi_t=phi_t_np,
-        gamma=gamma,
-        omega=omega,
-        ky=float(ky_target),
-        selection=state.selection,
+
+    solver_key = select_kbm_solver_auto(
+        solver,
+        ky_target=float(ky_target),
+        reference_aligned=setup.reference_aligned,
     )
+    _paths.sync_path_hooks(globals())
+
+    if solver_key == "explicit_time":
+        return _run_kbm_explicit_solver_path(setup, state, options)
+
+    if solver_key == "krylov":
+        return _run_kbm_krylov_solver_path(setup, state, options)
+
+    return _run_kbm_saved_time_solver_path(setup, state, options)
