@@ -74,6 +74,90 @@ def streaming_contribution(
     )
 
 
+def _streaming_ladder_rhs(
+    G: jnp.ndarray,
+    *,
+    vth: jnp.ndarray,
+    sqrt_p: jnp.ndarray,
+    sqrt_m: jnp.ndarray,
+) -> jnp.ndarray:
+    axis_m = -4
+    G_p1 = shift_axis(G, 1, axis=axis_m)
+    G_m1 = shift_axis(G, -1, axis=axis_m)
+    vth_s = vth[:, None, None, None, None, None]
+    return -vth_s * (sqrt_p * G_p1 + sqrt_m * G_m1)
+
+
+def _field_inverse_temperature(
+    tz: jnp.ndarray,
+) -> jnp.ndarray:
+    tz_arr = tz[:, None, None, None, None, None]
+    zt = jnp.where(tz_arr == 0.0, 0.0, 1.0 / tz_arr)
+    return zt[:, 0, 0, 0, 0, 0][:, None, None, None, None]
+
+
+def _streaming_field_drive(
+    template: jnp.ndarray,
+    *,
+    phi: jnp.ndarray,
+    apar: jnp.ndarray | None,
+    bpar: jnp.ndarray | None,
+    Jl: jnp.ndarray,
+    JlB: jnp.ndarray,
+    tz: jnp.ndarray,
+    vth: jnp.ndarray,
+) -> jnp.ndarray:
+    zt5 = _field_inverse_temperature(tz)
+    vth5 = vth[:, None, None, None, None]
+    phi_s = phi[None, None, ...]
+    Nm = template.shape[2]
+    field_rhs = jnp.zeros_like(template)
+    if apar is not None:
+        apar_s = apar[None, None, ...]
+        drive_m0 = zt5 * (vth5 * vth5) * Jl * apar_s
+        field_rhs = field_rhs + _hermite_mode_drive(field_rhs, 0, drive_m0)
+    if Nm > 1:
+        drive_m1 = -zt5 * vth5 * Jl * phi_s
+        if bpar is not None:
+            drive_m1 = drive_m1 - vth5 * JlB * bpar[None, None, ...]
+        field_rhs = field_rhs + _hermite_mode_drive(field_rhs, 1, drive_m1)
+    if Nm > 2 and apar is not None:
+        drive_m2 = jnp.sqrt(2.0) * zt5 * (vth5 * vth5) * Jl * apar_s
+        field_rhs = field_rhs + _hermite_mode_drive(field_rhs, 2, drive_m2)
+    return field_rhs
+
+
+def _streaming_parallel_derivative(
+    rhs: jnp.ndarray,
+    *,
+    kz: jnp.ndarray,
+    dz: jnp.ndarray,
+    use_twist_shift: bool,
+    linked_indices: tuple[jnp.ndarray, ...] | None,
+    linked_kz: tuple[jnp.ndarray, ...] | None,
+    linked_inverse_permutation: jnp.ndarray | None,
+    linked_full_cover: bool,
+    linked_gather_map: jnp.ndarray | None,
+    linked_gather_mask: jnp.ndarray | None,
+    linked_use_gather: bool,
+) -> jnp.ndarray:
+    if not use_twist_shift:
+        return grad_z_periodic(rhs, kz=kz)
+    if linked_indices is None or linked_kz is None:
+        raise ValueError("linked_indices and linked_kz must be provided for linked streaming")
+    return grad_z_linked_fft(
+        rhs,
+        dz=dz,
+        linked_indices=linked_indices,
+        linked_kz=linked_kz,
+        linked_inverse_permutation=linked_inverse_permutation,
+        linked_full_cover=linked_full_cover,
+        linked_gather_map=linked_gather_map,
+        linked_gather_mask=linked_gather_mask,
+        linked_use_gather=linked_use_gather,
+    )
+
+
 def linked_streaming_contribution(
     G: jnp.ndarray,
     *,
@@ -104,57 +188,31 @@ def linked_streaming_contribution(
     if _is_static_zero(weight, jnp.real(G).dtype):
         return _zeros_like_result(G, weight)
 
-    axis_m = -4
-    G_p1 = shift_axis(G, 1, axis=axis_m)
-    G_m1 = shift_axis(G, -1, axis=axis_m)
-    vth_s = vth[:, None, None, None, None, None]
-    rhs = -vth_s * (sqrt_p * G_p1 + sqrt_m * G_m1)
-
-    tz_arr = tz[:, None, None, None, None, None]
-    zt = jnp.where(tz_arr == 0.0, 0.0, 1.0 / tz_arr)
-    zt5 = zt[:, 0, 0, 0, 0, 0][:, None, None, None, None]
-    vth5 = vth[:, None, None, None, None]
-    phi_s = phi[None, None, ...]
-
-    # field terms (pre-derivative); use contiguous m-axis masks instead of scatter updates.
-    Nm = rhs.shape[2]
-    field_rhs = jnp.zeros_like(rhs)
-    if apar is not None:
-        apar_s = apar[None, None, ...]
-        drive_m0 = zt5 * (vth5 * vth5) * Jl * apar_s
-        field_rhs = field_rhs + _hermite_mode_drive(field_rhs, 0, drive_m0)
-    if Nm > 1:
-        drive_m1 = -zt5 * vth5 * Jl * phi_s
-        if bpar is not None:
-            drive_m1 = drive_m1 - vth5 * JlB * bpar[None, None, ...]
-        field_rhs = field_rhs + _hermite_mode_drive(field_rhs, 1, drive_m1)
-    if Nm > 2 and apar is not None:
-        drive_m2 = jnp.sqrt(2.0) * zt5 * (vth5 * vth5) * Jl * apar_s
-        field_rhs = field_rhs + _hermite_mode_drive(field_rhs, 2, drive_m2)
-    rhs = rhs + field_rhs
-
-    rhs = kpar_scale * rhs
-
-    if use_twist_shift:
-        if linked_indices is None or linked_kz is None:
-            raise ValueError(
-                "linked_indices and linked_kz must be provided for linked streaming"
-            )
-        dG = grad_z_linked_fft(
-            rhs,
-            dz=dz,
-            linked_indices=linked_indices,
-            linked_kz=linked_kz,
-            linked_inverse_permutation=linked_inverse_permutation,
-            linked_full_cover=linked_full_cover,
-            linked_gather_map=linked_gather_map,
-            linked_gather_mask=linked_gather_mask,
-            linked_use_gather=linked_use_gather,
-        )
-    else:
-        dG = grad_z_periodic(rhs, kz=kz)
-
-    return weight * dG
+    ladder_rhs = _streaming_ladder_rhs(G, vth=vth, sqrt_p=sqrt_p, sqrt_m=sqrt_m)
+    field_rhs = _streaming_field_drive(
+        ladder_rhs,
+        phi=phi,
+        apar=apar,
+        bpar=bpar,
+        Jl=Jl,
+        JlB=JlB,
+        tz=tz,
+        vth=vth,
+    )
+    rhs = kpar_scale * (ladder_rhs + field_rhs)
+    return weight * _streaming_parallel_derivative(
+        rhs,
+        kz=kz,
+        dz=dz,
+        use_twist_shift=use_twist_shift,
+        linked_indices=linked_indices,
+        linked_kz=linked_kz,
+        linked_inverse_permutation=linked_inverse_permutation,
+        linked_full_cover=linked_full_cover,
+        linked_gather_map=linked_gather_map,
+        linked_gather_mask=linked_gather_mask,
+        linked_use_gather=linked_use_gather,
+    )
 
 
 def mirror_contribution(
