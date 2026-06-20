@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields, replace
 from typing import Any
 
 import jax.numpy as jnp
@@ -133,6 +133,54 @@ class _KineticScanControls:
     setup: _KineticScanSetup
     run_options: _KineticScanRunOptions
     fit_options: _KineticScanFitOptions
+
+
+@dataclass(frozen=True)
+class _KineticScanControlRequest:
+    """Raw public scan inputs before setup, run, and fit policies are resolved."""
+
+    ky_values: np.ndarray
+    Nm: int
+    dt: float | np.ndarray
+    steps: int | np.ndarray
+    method: str
+    params: LinearParams | None
+    cfg: KineticElectronBaseCase | None
+    time_cfg: TimeConfig | None
+    solver: str
+    krylov_cfg: KrylovConfig | None
+    tmin: float | None
+    tmax: float | None
+    auto_window: bool
+    window_fraction: float
+    min_points: int
+    start_fraction: float
+    growth_weight: float
+    require_positive: bool
+    min_amp_fraction: float
+    mode_method: str
+    mode_only: bool
+    terms: LinearTerms | None
+    sample_stride: int | None
+    fit_signal: str
+    ky_batch: int
+    fixed_batch_shape: bool
+    streaming_fit: bool
+    streaming_amp_floor: float
+    init_species_index: int
+    density_species_index: int
+    diagnostic_norm: str
+    reference_aligned: bool | None
+    show_progress: bool
+
+
+def _kinetic_scan_control_request_from_locals(
+    values: dict[str, Any],
+) -> _KineticScanControlRequest:
+    """Build a request from ``run_kinetic_scan`` locals without forwarding Nl."""
+
+    names = {field.name for field in fields(_KineticScanControlRequest)}
+    return _KineticScanControlRequest(**{name: values[name] for name in names})
 
 
 def _resolve_kinetic_scan_setup(
@@ -724,105 +772,75 @@ def _kinetic_scan_result(output: _KineticScanOutput) -> LinearScanResult:
 
 
 def _prepare_kinetic_scan_controls(
-    *,
-    ky_values: np.ndarray,
-    Nm: int,
-    dt: float | np.ndarray,
-    steps: int | np.ndarray,
-    method: str,
-    params: LinearParams | None,
-    cfg: KineticElectronBaseCase | None,
-    time_cfg: TimeConfig | None,
-    solver: str,
-    krylov_cfg: KrylovConfig | None,
-    tmin: float | None,
-    tmax: float | None,
-    auto_window: bool,
-    window_fraction: float,
-    min_points: int,
-    start_fraction: float,
-    growth_weight: float,
-    require_positive: bool,
-    min_amp_fraction: float,
-    mode_method: str,
-    mode_only: bool,
-    terms: LinearTerms | None,
-    sample_stride: int | None,
-    fit_signal: str,
-    ky_batch: int,
-    fixed_batch_shape: bool,
-    streaming_fit: bool,
-    streaming_amp_floor: float,
-    init_species_index: int,
-    density_species_index: int,
-    diagnostic_norm: str,
-    reference_aligned: bool | None,
-    show_progress: bool,
+    request: _KineticScanControlRequest,
 ) -> _KineticScanControls:
     """Resolve setup, execution, and fitting controls for one kinetic scan."""
 
     setup = _resolve_kinetic_scan_setup(
-        cfg=cfg,
-        params=params,
-        terms=terms,
-        diagnostic_norm=diagnostic_norm,
-        reference_aligned=reference_aligned,
-        Nm=Nm,
+        cfg=request.cfg,
+        params=request.params,
+        terms=request.terms,
+        diagnostic_norm=request.diagnostic_norm,
+        reference_aligned=request.reference_aligned,
+        Nm=request.Nm,
     )
-    solver_key = normalize_solver_key(solver)
-    fit_key = normalize_fit_signal(fit_signal)
-    resolved_mode_method = resolve_scan_mode_method(mode_method, mode_only=mode_only)
+    solver_key = normalize_solver_key(request.solver)
+    fit_key = normalize_fit_signal(request.fit_signal)
+    resolved_mode_method = resolve_scan_mode_method(
+        request.mode_method,
+        mode_only=request.mode_only,
+    )
     use_batch = should_use_ky_batch(
-        ky_batch=ky_batch,
+        ky_batch=request.ky_batch,
         solver_key=solver_key,
-        dt=dt,
-        steps=steps,
-        tmin=tmin,
-        tmax=tmax,
+        dt=request.dt,
+        steps=request.steps,
+        tmin=request.tmin,
+        tmax=request.tmax,
     )
     fit_policy = _build_kinetic_scan_fit_policy(
-        tmin=tmin,
-        tmax=tmax,
-        auto_window=auto_window,
-        window_fraction=window_fraction,
-        min_points=min_points,
-        start_fraction=start_fraction,
-        growth_weight=growth_weight,
-        require_positive=require_positive,
-        min_amp_fraction=min_amp_fraction,
+        tmin=request.tmin,
+        tmax=request.tmax,
+        auto_window=request.auto_window,
+        window_fraction=request.window_fraction,
+        min_points=request.min_points,
+        start_fraction=request.start_fraction,
+        growth_weight=request.growth_weight,
+        require_positive=request.require_positive,
+        min_amp_fraction=request.min_amp_fraction,
     )
 
-    ky_values_arr = np.asarray(ky_values, dtype=float)
+    ky_values_arr = np.asarray(request.ky_values, dtype=float)
     _validate_kinetic_species_indices(
-        init_species_index=init_species_index,
-        density_species_index=density_species_index,
+        init_species_index=request.init_species_index,
+        density_species_index=request.density_species_index,
     )
     run_options = _build_kinetic_scan_run_options(
         ky_values=ky_values_arr,
-        time_cfg=time_cfg,
+        time_cfg=request.time_cfg,
         solver_key=solver_key,
-        krylov_cfg=krylov_cfg,
-        dt=dt,
-        steps=steps,
-        method=method,
-        sample_stride=sample_stride,
+        krylov_cfg=request.krylov_cfg,
+        dt=request.dt,
+        steps=request.steps,
+        method=request.method,
+        sample_stride=request.sample_stride,
         mode_method=resolved_mode_method,
-        mode_only=mode_only,
+        mode_only=request.mode_only,
         fit_key=fit_key,
-        ky_batch=ky_batch,
-        fixed_batch_shape=fixed_batch_shape,
-        streaming_fit=streaming_fit,
-        streaming_amp_floor=streaming_amp_floor,
-        init_species_index=init_species_index,
-        density_species_index=density_species_index,
+        ky_batch=request.ky_batch,
+        fixed_batch_shape=request.fixed_batch_shape,
+        streaming_fit=request.streaming_fit,
+        streaming_amp_floor=request.streaming_amp_floor,
+        init_species_index=request.init_species_index,
+        density_species_index=request.density_species_index,
         use_batch=use_batch,
-        show_progress=show_progress,
+        show_progress=request.show_progress,
     )
     fit_options = _KineticScanFitOptions(
-        tmin=tmin,
-        tmax=tmax,
-        start_fraction=start_fraction,
-        window_fraction=window_fraction,
+        tmin=request.tmin,
+        tmax=request.tmax,
+        start_fraction=request.start_fraction,
+        window_fraction=request.window_fraction,
         fit_policy=fit_policy,
     )
     return _KineticScanControls(
@@ -874,39 +892,7 @@ def run_kinetic_scan(
     """
 
     controls = _prepare_kinetic_scan_controls(
-        ky_values=ky_values,
-        Nm=Nm,
-        dt=dt,
-        steps=steps,
-        method=method,
-        params=params,
-        cfg=cfg,
-        time_cfg=time_cfg,
-        solver=solver,
-        krylov_cfg=krylov_cfg,
-        tmin=tmin,
-        tmax=tmax,
-        auto_window=auto_window,
-        window_fraction=window_fraction,
-        min_points=min_points,
-        start_fraction=start_fraction,
-        growth_weight=growth_weight,
-        require_positive=require_positive,
-        min_amp_fraction=min_amp_fraction,
-        mode_method=mode_method,
-        mode_only=mode_only,
-        terms=terms,
-        sample_stride=sample_stride,
-        fit_signal=fit_signal,
-        ky_batch=ky_batch,
-        fixed_batch_shape=fixed_batch_shape,
-        streaming_fit=streaming_fit,
-        streaming_amp_floor=streaming_amp_floor,
-        init_species_index=init_species_index,
-        density_species_index=density_species_index,
-        diagnostic_norm=diagnostic_norm,
-        reference_aligned=reference_aligned,
-        show_progress=show_progress,
+        _kinetic_scan_control_request_from_locals(locals())
     )
     output = _run_kinetic_scan_batches(
         setup=controls.setup,
