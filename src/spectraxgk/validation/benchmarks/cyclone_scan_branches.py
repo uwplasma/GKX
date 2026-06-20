@@ -132,6 +132,96 @@ class _CycloneTimeScanBatch:
     cache: Any
 
 
+@dataclass(frozen=True)
+class _CycloneHistoryFitOptions:
+    n_laguerre: int
+    n_hermite: int
+    method: str
+    params: Any
+    cfg: Any
+    time_cfg: Any | None
+    krylov_cfg: Any | None
+    tmin: float | None
+    tmax: float | None
+    window_fraction: float
+    min_points: int
+    start_fraction: float
+    growth_weight: float
+    require_positive: bool
+    min_amp_fraction: float
+    max_amp_fraction: float
+    max_fraction: float
+    end_fraction: float
+    phase_weight: float
+    length_weight: float
+    min_r2: float
+    late_penalty: float
+    min_slope: float | None
+    min_slope_frac: float
+    slope_var_weight: float
+    window_method: str
+    mode_method: str
+    mode_only: bool
+    fit_key: str
+    diagnostic_norm: str
+    auto_solver: bool
+    fit_policy: Any
+    hooks: CycloneScanHooks
+    show_progress: bool
+
+
+@dataclass(frozen=True)
+class _CycloneTimeRunOptions:
+    ky_values: np.ndarray
+    grid_full: Any
+    geom: Any
+    params: Any
+    terms: Any
+    cfg: Any
+    time_cfg: Any | None
+    init_cfg: Any
+    n_laguerre: int
+    n_hermite: int
+    dt: float | np.ndarray
+    steps: int | np.ndarray
+    method: str
+    sample_stride: int | None
+    mode_method: str
+    mode_only: bool
+    fit_key: str
+    need_density: bool
+    diagnostic_norm: str
+    use_jit: bool
+    ky_batch: int
+    fixed_batch_shape: bool
+    streaming_fit: bool
+    streaming_amp_floor: float
+    use_batch: bool
+    hooks: CycloneScanHooks
+    show_progress: bool
+
+
+@dataclass
+class _CycloneScanOutput:
+    gammas: list[float]
+    omegas: list[float]
+    ky: list[float]
+
+    @classmethod
+    def empty(cls) -> "_CycloneScanOutput":
+        return cls(gammas=[], omegas=[], ky=[])
+
+
+def _iter_cyclone_time_scan_batches(options: _CycloneTimeRunOptions):
+    if options.use_batch:
+        return _iter_ky_batches(
+            options.ky_values,
+            ky_batch=options.ky_batch,
+            fixed_batch_shape=options.fixed_batch_shape,
+        )
+    return _iter_ky_batches(options.ky_values, ky_batch=1, fixed_batch_shape=False)
+
+
 def _prepare_cyclone_time_batch(
     *,
     batch_start: int,
@@ -364,44 +454,134 @@ def _resolve_and_append_cyclone_fit(
     omega: float,
     ky_val: float,
     batch: _CycloneTimeScanBatch,
-    n_laguerre: int,
-    n_hermite: int,
-    method: str,
-    params: Any,
-    cfg: Any,
-    time_cfg: Any | None,
-    krylov_cfg: Any | None,
-    diagnostic_norm: str,
-    auto_solver: bool,
-    require_positive: bool,
-    hooks: CycloneScanHooks,
-    show_progress: bool,
-    gammas: list[float],
-    omegas: list[float],
-    ky_out: list[float],
+    options: _CycloneHistoryFitOptions,
+    output: _CycloneScanOutput,
 ) -> None:
     gamma, omega = _resolve_time_branch_growth(
         gamma,
         omega,
         ky_value=float(ky_val),
-        n_laguerre=n_laguerre,
-        n_hermite=n_hermite,
+        n_laguerre=options.n_laguerre,
+        n_hermite=options.n_hermite,
         dt=batch.dt,
         steps=batch.steps,
-        method=method,
-        params=params,
-        cfg=cfg,
-        time_cfg=time_cfg,
-        krylov_cfg=krylov_cfg,
-        diagnostic_norm=diagnostic_norm,
-        auto_solver=auto_solver,
-        require_positive=require_positive,
-        hooks=hooks,
-        show_progress=show_progress,
+        method=options.method,
+        params=options.params,
+        cfg=options.cfg,
+        time_cfg=options.time_cfg,
+        krylov_cfg=options.krylov_cfg,
+        diagnostic_norm=options.diagnostic_norm,
+        auto_solver=options.auto_solver,
+        require_positive=options.require_positive,
+        hooks=options.hooks,
+        show_progress=options.show_progress,
     )
-    gammas.append(gamma)
-    omegas.append(omega)
-    ky_out.append(float(ky_val))
+    output.gammas.append(gamma)
+    output.omegas.append(omega)
+    output.ky.append(float(ky_val))
+
+
+def _auto_history_fit_for_local_mode(
+    *,
+    t: np.ndarray,
+    phi_t: np.ndarray,
+    density_t: np.ndarray | None,
+    batch: _CycloneTimeScanBatch,
+    local_idx: int,
+    options: _CycloneHistoryFitOptions,
+) -> tuple[float, float]:
+    sel_local = options.hooks.mode_selection(
+        ky_index=local_idx,
+        kx_index=0,
+        z_index=options.hooks.midplane_index(batch.grid),
+    )
+    _signal, _name, gamma, omega = options.hooks.select_fit_signal_auto(
+        t,
+        phi_t,
+        density_t,
+        sel_local,
+        mode_method=options.mode_method,
+        tmin=indexed_float_value(options.tmin, batch.batch_start + local_idx),
+        tmax=indexed_float_value(options.tmax, batch.batch_start + local_idx),
+        window_fraction=options.window_fraction,
+        min_points=options.min_points,
+        start_fraction=options.start_fraction,
+        growth_weight=options.growth_weight,
+        require_positive=options.require_positive,
+        min_amp_fraction=options.min_amp_fraction,
+        max_amp_fraction=options.max_amp_fraction,
+        window_method=options.window_method,
+        max_fraction=options.max_fraction,
+        end_fraction=options.end_fraction,
+        num_windows=8,
+        phase_weight=options.phase_weight,
+        length_weight=options.length_weight,
+        min_r2=options.min_r2,
+        late_penalty=options.late_penalty,
+        min_slope=options.min_slope,
+        min_slope_frac=options.min_slope_frac,
+        slope_var_weight=options.slope_var_weight,
+    )
+    return options.hooks.normalize_growth_rate(
+        gamma, omega, options.params, options.diagnostic_norm
+    )
+
+
+def _history_signal_for_local_mode(
+    *,
+    phi_t: np.ndarray,
+    signal_t: np.ndarray | None,
+    batch: _CycloneTimeScanBatch,
+    local_idx: int,
+    options: _CycloneHistoryFitOptions,
+) -> np.ndarray:
+    if signal_t is not None:
+        return signal_t[:, local_idx] if signal_t.ndim > 1 else signal_t
+    sel_local = options.hooks.mode_selection(
+        ky_index=local_idx,
+        kx_index=0,
+        z_index=options.hooks.midplane_index(batch.grid),
+    )
+    return options.hooks.extract_mode_time_series(
+        phi_t, sel_local, method=options.mode_method
+    )
+
+
+def _history_fit_for_local_mode(
+    *,
+    phi_t: np.ndarray,
+    density_t: np.ndarray | None,
+    signal_t: np.ndarray | None,
+    t: np.ndarray,
+    batch: _CycloneTimeScanBatch,
+    local_idx: int,
+    stride: int,
+    options: _CycloneHistoryFitOptions,
+) -> tuple[float, float]:
+    if signal_t is None and options.fit_key == "auto":
+        return _auto_history_fit_for_local_mode(
+            t=t,
+            phi_t=phi_t,
+            density_t=density_t,
+            batch=batch,
+            local_idx=local_idx,
+            options=options,
+        )
+    signal = _history_signal_for_local_mode(
+        phi_t=phi_t,
+        signal_t=signal_t,
+        batch=batch,
+        local_idx=local_idx,
+        options=options,
+    )
+    return options.fit_policy.fit_signal(
+        signal,
+        idx=batch.batch_start + local_idx,
+        dt=batch.dt,
+        stride=stride,
+        params=options.params,
+        diagnostic_norm=options.diagnostic_norm,
+    )
 
 
 def _append_cyclone_history_fit_results(
@@ -410,139 +590,114 @@ def _append_cyclone_history_fit_results(
     phi_t: np.ndarray,
     density_t: np.ndarray | None,
     stride: int,
-    n_laguerre: int,
-    n_hermite: int,
-    method: str,
-    params: Any,
-    cfg: Any,
-    time_cfg: Any | None,
-    krylov_cfg: Any | None,
-    tmin: float | None,
-    tmax: float | None,
-    window_fraction: float,
-    min_points: int,
-    start_fraction: float,
-    growth_weight: float,
-    require_positive: bool,
-    min_amp_fraction: float,
-    max_amp_fraction: float,
-    max_fraction: float,
-    end_fraction: float,
-    phase_weight: float,
-    length_weight: float,
-    min_r2: float,
-    late_penalty: float,
-    min_slope: float | None,
-    min_slope_frac: float,
-    slope_var_weight: float,
-    window_method: str,
-    mode_method: str,
-    mode_only: bool,
-    fit_key: str,
-    diagnostic_norm: str,
-    auto_solver: bool,
-    fit_policy: Any,
-    hooks: CycloneScanHooks,
-    show_progress: bool,
-    gammas: list[float],
-    omegas: list[float],
-    ky_out: list[float],
+    options: _CycloneHistoryFitOptions,
+    output: _CycloneScanOutput,
 ) -> None:
-    signal_t = phi_t if mode_only and phi_t.ndim == 2 else None
+    signal_t = phi_t if options.mode_only and phi_t.ndim == 2 else None
     t = np.arange(phi_t.shape[0]) * batch.dt * stride
     for local_idx in range(batch.valid_count):
         ky_val = batch.ky_slice[local_idx]
-        if signal_t is None:
-            sel_local = hooks.mode_selection(
-                ky_index=local_idx,
-                kx_index=0,
-                z_index=hooks.midplane_index(batch.grid),
-            )
-            if fit_key == "auto":
-                _signal, _name, gamma, omega = hooks.select_fit_signal_auto(
-                    t,
-                    phi_t,
-                    density_t,
-                    sel_local,
-                    mode_method=mode_method,
-                    tmin=indexed_float_value(tmin, batch.batch_start + local_idx),
-                    tmax=indexed_float_value(tmax, batch.batch_start + local_idx),
-                    window_fraction=window_fraction,
-                    min_points=min_points,
-                    start_fraction=start_fraction,
-                    growth_weight=growth_weight,
-                    require_positive=require_positive,
-                    min_amp_fraction=min_amp_fraction,
-                    max_amp_fraction=max_amp_fraction,
-                    window_method=window_method,
-                    max_fraction=max_fraction,
-                    end_fraction=end_fraction,
-                    num_windows=8,
-                    phase_weight=phase_weight,
-                    length_weight=length_weight,
-                    min_r2=min_r2,
-                    late_penalty=late_penalty,
-                    min_slope=min_slope,
-                    min_slope_frac=min_slope_frac,
-                    slope_var_weight=slope_var_weight,
-                )
-                gamma, omega = hooks.normalize_growth_rate(
-                    gamma, omega, params, diagnostic_norm
-                )
-                _resolve_and_append_cyclone_fit(
-                    gamma=gamma,
-                    omega=omega,
-                    ky_val=float(ky_val),
-                    batch=batch,
-                    n_laguerre=n_laguerre,
-                    n_hermite=n_hermite,
-                    method=method,
-                    params=params,
-                    cfg=cfg,
-                    time_cfg=time_cfg,
-                    krylov_cfg=krylov_cfg,
-                    diagnostic_norm=diagnostic_norm,
-                    auto_solver=auto_solver,
-                    require_positive=require_positive,
-                    hooks=hooks,
-                    show_progress=show_progress,
-                    gammas=gammas,
-                    omegas=omegas,
-                    ky_out=ky_out,
-                )
-                continue
-            signal = hooks.extract_mode_time_series(phi_t, sel_local, method=mode_method)
-        else:
-            signal = signal_t[:, local_idx] if signal_t.ndim > 1 else signal_t
-        gamma, omega = fit_policy.fit_signal(
-            signal,
-            idx=batch.batch_start + local_idx,
-            dt=batch.dt,
+        gamma, omega = _history_fit_for_local_mode(
+            phi_t=phi_t,
+            density_t=density_t,
+            signal_t=signal_t,
+            t=t,
+            batch=batch,
+            local_idx=local_idx,
             stride=stride,
-            params=params,
-            diagnostic_norm=diagnostic_norm,
+            options=options,
         )
         _resolve_and_append_cyclone_fit(
             gamma=gamma,
             omega=omega,
             ky_val=float(ky_val),
             batch=batch,
-            n_laguerre=n_laguerre,
-            n_hermite=n_hermite,
-            method=method,
-            params=params,
-            cfg=cfg,
-            time_cfg=time_cfg,
-            krylov_cfg=krylov_cfg,
-            diagnostic_norm=diagnostic_norm,
-            auto_solver=auto_solver,
-            require_positive=require_positive,
-            hooks=hooks,
-            show_progress=show_progress,
-            gammas=gammas,
-            omegas=omegas,
-            ky_out=ky_out,
+            options=options,
+            output=output,
         )
+
+
+def _append_cyclone_time_batch_results(
+    *,
+    batch_start: int,
+    ky_slice: np.ndarray,
+    valid_count: int,
+    run_options: _CycloneTimeRunOptions,
+    fit_options: _CycloneHistoryFitOptions,
+    output: _CycloneScanOutput,
+) -> None:
+    batch = _prepare_cyclone_time_batch(
+        batch_start=batch_start,
+        ky_slice=ky_slice,
+        valid_count=valid_count,
+        use_batch=run_options.use_batch,
+        grid_full=run_options.grid_full,
+        geom=run_options.geom,
+        params=run_options.params,
+        init_cfg=run_options.init_cfg,
+        n_laguerre=run_options.n_laguerre,
+        n_hermite=run_options.n_hermite,
+        dt=run_options.dt,
+        steps=run_options.steps,
+        hooks=run_options.hooks,
+    )
+    time_cfg_i = _cyclone_time_config_for_batch(
+        run_options.time_cfg,
+        dt=batch.dt,
+        steps=batch.steps,
+        sample_stride=run_options.sample_stride,
+    )
+
+    if (
+        time_cfg_i is not None
+        and time_cfg_i.use_diffrax
+        and run_options.streaming_fit
+    ):
+        _append_cyclone_streaming_results(
+            batch,
+            geom=run_options.geom,
+            params=run_options.params,
+            terms=run_options.terms,
+            time_cfg=time_cfg_i,
+            tmin=fit_options.tmin,
+            tmax=fit_options.tmax,
+            start_fraction=fit_options.start_fraction,
+            window_fraction=fit_options.window_fraction,
+            mode_method=run_options.mode_method,
+            streaming_amp_floor=run_options.streaming_amp_floor,
+            diagnostic_norm=run_options.diagnostic_norm,
+            hooks=run_options.hooks,
+            show_progress=run_options.show_progress,
+            gammas=output.gammas,
+            omegas=output.omegas,
+            ky_out=output.ky,
+        )
+        return
+
+    phi_t_np, density_np, stride = _integrate_cyclone_time_history(
+        batch,
+        geom=run_options.geom,
+        params=run_options.params,
+        terms=run_options.terms,
+        time_cfg=time_cfg_i,
+        method=run_options.method,
+        mode_method=run_options.mode_method,
+        mode_only=run_options.mode_only,
+        sample_stride=run_options.sample_stride,
+        fit_key=run_options.fit_key,
+        need_density=run_options.need_density,
+        use_jit=run_options.use_jit,
+        hooks=run_options.hooks,
+        show_progress=run_options.show_progress,
+    )
+    _append_cyclone_history_fit_results(
+        batch,
+        phi_t=phi_t_np,
+        density_t=density_np,
+        stride=stride,
+        options=fit_options,
+        output=output,
+    )
 
 
 def run_time_cyclone_scan(
@@ -599,124 +754,87 @@ def run_time_cyclone_scan(
 ) -> CycloneScanResult:
     """Run the standard Cyclone scan time-integration branches."""
 
-    if use_batch:
-        ky_iter = _iter_ky_batches(
-            ky_values,
-            ky_batch=ky_batch,
-            fixed_batch_shape=fixed_batch_shape,
-        )
-    else:
-        ky_iter = _iter_ky_batches(ky_values, ky_batch=1, fixed_batch_shape=False)
-
-    gammas: list[float] = []
-    omegas: list[float] = []
-    ky_out: list[float] = []
-    for batch_start, ky_slice, valid_count in ky_iter:
-        batch = _prepare_cyclone_time_batch(
+    run_options = _CycloneTimeRunOptions(
+        ky_values=ky_values,
+        grid_full=grid_full,
+        geom=geom,
+        params=params,
+        terms=terms,
+        cfg=cfg,
+        time_cfg=time_cfg,
+        init_cfg=init_cfg,
+        n_laguerre=n_laguerre,
+        n_hermite=n_hermite,
+        dt=dt,
+        steps=steps,
+        method=method,
+        sample_stride=sample_stride,
+        mode_method=mode_method,
+        mode_only=mode_only,
+        fit_key=fit_key,
+        need_density=need_density,
+        diagnostic_norm=diagnostic_norm,
+        use_jit=use_jit,
+        ky_batch=ky_batch,
+        fixed_batch_shape=fixed_batch_shape,
+        streaming_fit=streaming_fit,
+        streaming_amp_floor=streaming_amp_floor,
+        use_batch=use_batch,
+        hooks=hooks,
+        show_progress=show_progress,
+    )
+    fit_options = _CycloneHistoryFitOptions(
+        n_laguerre=n_laguerre,
+        n_hermite=n_hermite,
+        method=method,
+        params=params,
+        cfg=cfg,
+        time_cfg=time_cfg,
+        krylov_cfg=krylov_cfg,
+        tmin=tmin,
+        tmax=tmax,
+        window_fraction=window_fraction,
+        min_points=min_points,
+        start_fraction=start_fraction,
+        growth_weight=growth_weight,
+        require_positive=require_positive,
+        min_amp_fraction=min_amp_fraction,
+        max_amp_fraction=max_amp_fraction,
+        max_fraction=max_fraction,
+        end_fraction=end_fraction,
+        phase_weight=phase_weight,
+        length_weight=length_weight,
+        min_r2=min_r2,
+        late_penalty=late_penalty,
+        min_slope=min_slope,
+        min_slope_frac=min_slope_frac,
+        slope_var_weight=slope_var_weight,
+        window_method=window_method,
+        mode_method=mode_method,
+        mode_only=mode_only,
+        fit_key=fit_key,
+        diagnostic_norm=diagnostic_norm,
+        auto_solver=auto_solver,
+        fit_policy=fit_policy,
+        hooks=hooks,
+        show_progress=show_progress,
+    )
+    output = _CycloneScanOutput.empty()
+    for batch_start, ky_slice, valid_count in _iter_cyclone_time_scan_batches(
+        run_options
+    ):
+        _append_cyclone_time_batch_results(
             batch_start=batch_start,
             ky_slice=ky_slice,
             valid_count=valid_count,
-            use_batch=use_batch,
-            grid_full=grid_full,
-            geom=geom,
-            params=params,
-            init_cfg=init_cfg,
-            n_laguerre=n_laguerre,
-            n_hermite=n_hermite,
-            dt=dt,
-            steps=steps,
-            hooks=hooks,
-        )
-        time_cfg_i = _cyclone_time_config_for_batch(
-            time_cfg,
-            dt=batch.dt,
-            steps=batch.steps,
-            sample_stride=sample_stride,
-        )
-
-        if time_cfg_i is not None and time_cfg_i.use_diffrax and streaming_fit:
-            _append_cyclone_streaming_results(
-                batch,
-                geom=geom,
-                params=params,
-                terms=terms,
-                time_cfg=time_cfg_i,
-                tmin=tmin,
-                tmax=tmax,
-                start_fraction=start_fraction,
-                window_fraction=window_fraction,
-                mode_method=mode_method,
-                streaming_amp_floor=streaming_amp_floor,
-                diagnostic_norm=diagnostic_norm,
-                hooks=hooks,
-                show_progress=show_progress,
-                gammas=gammas,
-                omegas=omegas,
-                ky_out=ky_out,
-            )
-            continue
-
-        phi_t_np, density_np, stride = _integrate_cyclone_time_history(
-            batch,
-            geom=geom,
-            params=params,
-            terms=terms,
-            time_cfg=time_cfg_i,
-            method=method,
-            mode_method=mode_method,
-            mode_only=mode_only,
-            sample_stride=sample_stride,
-            fit_key=fit_key,
-            need_density=need_density,
-            use_jit=use_jit,
-            hooks=hooks,
-            show_progress=show_progress,
-        )
-        _append_cyclone_history_fit_results(
-            batch,
-            phi_t=phi_t_np,
-            density_t=density_np,
-            stride=stride,
-            n_laguerre=n_laguerre,
-            n_hermite=n_hermite,
-            method=method,
-            params=params,
-            cfg=cfg,
-            time_cfg=time_cfg,
-            krylov_cfg=krylov_cfg,
-            tmin=tmin,
-            tmax=tmax,
-            window_fraction=window_fraction,
-            min_points=min_points,
-            start_fraction=start_fraction,
-            growth_weight=growth_weight,
-            require_positive=require_positive,
-            min_amp_fraction=min_amp_fraction,
-            max_amp_fraction=max_amp_fraction,
-            max_fraction=max_fraction,
-            end_fraction=end_fraction,
-            phase_weight=phase_weight,
-            length_weight=length_weight,
-            min_r2=min_r2,
-            late_penalty=late_penalty,
-            min_slope=min_slope,
-            min_slope_frac=min_slope_frac,
-            slope_var_weight=slope_var_weight,
-            window_method=window_method,
-            mode_method=mode_method,
-            mode_only=mode_only,
-            fit_key=fit_key,
-            diagnostic_norm=diagnostic_norm,
-            auto_solver=auto_solver,
-            fit_policy=fit_policy,
-            hooks=hooks,
-            show_progress=show_progress,
-            gammas=gammas,
-            omegas=omegas,
-            ky_out=ky_out,
+            run_options=run_options,
+            fit_options=fit_options,
+            output=output,
         )
     return hooks.cyclone_scan_result(
-        ky=np.array(ky_out), gamma=np.array(gammas), omega=np.array(omegas)
+        ky=np.array(output.ky),
+        gamma=np.array(output.gammas),
+        omega=np.array(output.omegas),
     )
 
 
