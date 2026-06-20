@@ -285,6 +285,131 @@ def _fit_kbm_explicit_rates(
     )
 
 
+def _dominant_kbm_krylov_eigenpair(
+    *,
+    G0_jax: Any,
+    cache: Any,
+    params: Any,
+    terms: Any,
+    krylov_cfg: Any,
+    omega_target_factor: float,
+    shift: Any,
+    shift_source: str,
+    shift_selection: str,
+) -> tuple[Any, Any]:
+    """Call the KBM Krylov eigensolver with an explicit target policy."""
+
+    return dominant_eigenpair(
+        G0_jax,
+        cache,
+        params,
+        terms=terms,
+        v_ref=None,
+        select_overlap=False,
+        krylov_dim=krylov_cfg.krylov_dim,
+        restarts=krylov_cfg.restarts,
+        omega_min_factor=krylov_cfg.omega_min_factor,
+        omega_target_factor=omega_target_factor,
+        omega_cap_factor=krylov_cfg.omega_cap_factor,
+        omega_sign=krylov_cfg.omega_sign,
+        method=krylov_cfg.method,
+        power_iters=krylov_cfg.power_iters,
+        power_dt=krylov_cfg.power_dt,
+        shift=shift,
+        shift_source=shift_source,
+        shift_tol=krylov_cfg.shift_tol,
+        shift_maxiter=krylov_cfg.shift_maxiter,
+        shift_restart=krylov_cfg.shift_restart,
+        shift_solve_method=krylov_cfg.shift_solve_method,
+        shift_preconditioner=krylov_cfg.shift_preconditioner,
+        shift_selection=shift_selection,
+        mode_family=krylov_cfg.mode_family,
+        fallback_method=krylov_cfg.fallback_method,
+        fallback_real_floor=krylov_cfg.fallback_real_floor,
+    )
+
+
+def _collect_kbm_target_candidates(
+    *,
+    G0_jax: Any,
+    cache: Any,
+    params: Any,
+    terms: Any,
+    krylov_cfg: Any,
+    targets: Sequence[float],
+) -> tuple[list[Any], list[Any]]:
+    """Evaluate the KBM Krylov solve at each target frequency factor."""
+
+    eig_candidates = []
+    vec_candidates = []
+    for target in targets:
+        eig_i, vec_i = _dominant_kbm_krylov_eigenpair(
+            G0_jax=G0_jax,
+            cache=cache,
+            params=params,
+            terms=terms,
+            krylov_cfg=krylov_cfg,
+            omega_target_factor=float(target),
+            shift=None,
+            shift_source="target",
+            shift_selection="targeted",
+        )
+        eig_candidates.append(eig_i)
+        vec_candidates.append(vec_i)
+    return eig_candidates, vec_candidates
+
+
+def _select_kbm_target_candidate(
+    *,
+    eig_candidates: Sequence[Any],
+    beta_use: float,
+    beta_transition: float,
+) -> int:
+    """Choose the KBM branch candidate from beta-continuity or max growth."""
+
+    if len(eig_candidates) >= 2 and np.isfinite(beta_transition):
+        return 1 if beta_use >= beta_transition else 0
+    eig_arr = np.asarray([complex(np.asarray(e)) for e in eig_candidates])
+    growth = np.real(eig_arr)
+    finite_growth = np.where(np.isfinite(growth), growth, -np.inf)
+    return 0 if np.all(~np.isfinite(growth)) else int(np.nanargmax(finite_growth))
+
+
+def _run_kbm_multi_target_krylov(
+    *,
+    G0_jax: Any,
+    cache: Any,
+    params: Any,
+    terms: Any,
+    beta_use: float,
+    cfg_use: Any,
+    krylov_cfg: Any,
+    targets: Sequence[float],
+    kbm_beta_transition: float | None,
+) -> tuple[Any, Any]:
+    """Run the KBM multi-target branch-continuity Krylov policy."""
+
+    beta_transition = (
+        float(cfg_use.model.beta)
+        if kbm_beta_transition is None
+        else float(kbm_beta_transition)
+    )
+    eig_candidates, vec_candidates = _collect_kbm_target_candidates(
+        G0_jax=G0_jax,
+        cache=cache,
+        params=params,
+        terms=terms,
+        krylov_cfg=krylov_cfg,
+        targets=targets,
+    )
+    idx = _select_kbm_target_candidate(
+        eig_candidates=eig_candidates,
+        beta_use=beta_use,
+        beta_transition=beta_transition,
+    )
+    return eig_candidates[idx], vec_candidates[idx]
+
+
 def run_kbm_explicit_time_path(
     *,
     G0_jax: Any,
@@ -364,6 +489,61 @@ def run_kbm_explicit_time_path(
     )
 
 
+def _run_kbm_single_target_krylov(
+    *,
+    G0_jax: Any,
+    cache: Any,
+    params: Any,
+    terms: Any,
+    krylov_cfg: Any,
+    shift_val: Any,
+) -> tuple[Any, Any]:
+    """Run the KBM Krylov policy with the configured single target."""
+
+    return _dominant_kbm_krylov_eigenpair(
+        G0_jax=G0_jax,
+        cache=cache,
+        params=params,
+        terms=terms,
+        krylov_cfg=krylov_cfg,
+        omega_target_factor=krylov_cfg.omega_target_factor,
+        shift=shift_val,
+        shift_source=krylov_cfg.shift_source,
+        shift_selection=krylov_cfg.shift_selection,
+    )
+
+
+def _kbm_krylov_result(
+    *,
+    eig: Any,
+    vec: Any,
+    cache: Any,
+    params: Any,
+    terms: Any,
+    sel: Any,
+    ky_target: float,
+    diagnostic_norm: str,
+    krylov_cfg: Any,
+) -> LinearRunResult:
+    """Package a KBM Krylov eigenpair as a linear benchmark result."""
+
+    gamma = float(np.real(eig))
+    omega = float(-np.imag(eig))
+    if krylov_cfg.omega_sign != 0:
+        omega = float(np.sign(krylov_cfg.omega_sign)) * abs(omega)
+    gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
+    term_cfg = linear_terms_to_term_config(terms)
+    phi = compute_fields_cached(vec, cache, params, terms=term_cfg).phi
+    return LinearRunResult(
+        t=np.array([0.0], dtype=float),
+        phi_t=np.asarray(phi)[None, ...],
+        gamma=gamma,
+        omega=omega,
+        ky=float(ky_target),
+        selection=sel,
+    )
+
+
 def run_kbm_krylov_path(
     *,
     G0_jax: Any,
@@ -391,93 +571,34 @@ def run_kbm_krylov_path(
     )
     if use_multi_target:
         assert targets is not None
-        beta_transition = (
-            float(cfg_use.model.beta)
-            if kbm_beta_transition is None
-            else float(kbm_beta_transition)
-        )
-        eig_candidates = []
-        vec_candidates = []
-        for target in targets:
-            eig_i, vec_i = dominant_eigenpair(
-                G0_jax,
-                cache,
-                params,
-                terms=terms,
-                v_ref=None,
-                select_overlap=False,
-                krylov_dim=krylov_cfg_use.krylov_dim,
-                restarts=krylov_cfg_use.restarts,
-                omega_min_factor=krylov_cfg_use.omega_min_factor,
-                omega_target_factor=float(target),
-                omega_cap_factor=krylov_cfg_use.omega_cap_factor,
-                omega_sign=krylov_cfg_use.omega_sign,
-                method=krylov_cfg_use.method,
-                power_iters=krylov_cfg_use.power_iters,
-                power_dt=krylov_cfg_use.power_dt,
-                shift=None,
-                shift_source="target",
-                shift_tol=krylov_cfg_use.shift_tol,
-                shift_maxiter=krylov_cfg_use.shift_maxiter,
-                shift_restart=krylov_cfg_use.shift_restart,
-                shift_solve_method=krylov_cfg_use.shift_solve_method,
-                shift_preconditioner=krylov_cfg_use.shift_preconditioner,
-                shift_selection="targeted",
-                mode_family=krylov_cfg_use.mode_family,
-                fallback_method=krylov_cfg_use.fallback_method,
-                fallback_real_floor=krylov_cfg_use.fallback_real_floor,
-            )
-            eig_candidates.append(eig_i)
-            vec_candidates.append(vec_i)
-        if len(eig_candidates) >= 2 and np.isfinite(beta_transition):
-            idx = 1 if beta_use >= beta_transition else 0
-        else:
-            eig_arr = np.asarray([complex(np.asarray(e)) for e in eig_candidates])
-            growth = np.real(eig_arr)
-            idx = 0 if np.all(~np.isfinite(growth)) else int(np.nanargmax(np.where(np.isfinite(growth), growth, -np.inf)))
-        eig = eig_candidates[idx]
-        vec = vec_candidates[idx]
-    else:
-        eig, vec = dominant_eigenpair(
-            G0_jax,
-            cache,
-            params,
+        eig, vec = _run_kbm_multi_target_krylov(
+            G0_jax=G0_jax,
+            cache=cache,
+            params=params,
             terms=terms,
-            v_ref=None,
-            select_overlap=False,
-            krylov_dim=krylov_cfg_use.krylov_dim,
-            restarts=krylov_cfg_use.restarts,
-            omega_min_factor=krylov_cfg_use.omega_min_factor,
-            omega_target_factor=krylov_cfg_use.omega_target_factor,
-            omega_cap_factor=krylov_cfg_use.omega_cap_factor,
-            omega_sign=krylov_cfg_use.omega_sign,
-            method=krylov_cfg_use.method,
-            power_iters=krylov_cfg_use.power_iters,
-            power_dt=krylov_cfg_use.power_dt,
-            shift=shift_val,
-            shift_source=krylov_cfg_use.shift_source,
-            shift_tol=krylov_cfg_use.shift_tol,
-            shift_maxiter=krylov_cfg_use.shift_maxiter,
-            shift_restart=krylov_cfg_use.shift_restart,
-            shift_solve_method=krylov_cfg_use.shift_solve_method,
-            shift_preconditioner=krylov_cfg_use.shift_preconditioner,
-            shift_selection=krylov_cfg_use.shift_selection,
-            mode_family=krylov_cfg_use.mode_family,
-            fallback_method=krylov_cfg_use.fallback_method,
-            fallback_real_floor=krylov_cfg_use.fallback_real_floor,
+            beta_use=beta_use,
+            cfg_use=cfg_use,
+            krylov_cfg=krylov_cfg_use,
+            targets=targets,
+            kbm_beta_transition=kbm_beta_transition,
         )
-    gamma = float(np.real(eig))
-    omega = float(-np.imag(eig))
-    if krylov_cfg_use.omega_sign != 0:
-        omega = float(np.sign(krylov_cfg_use.omega_sign)) * abs(omega)
-    gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
-    term_cfg = linear_terms_to_term_config(terms)
-    phi = compute_fields_cached(vec, cache, params, terms=term_cfg).phi
-    return LinearRunResult(
-        t=np.array([0.0], dtype=float),
-        phi_t=np.asarray(phi)[None, ...],
-        gamma=gamma,
-        omega=omega,
-        ky=float(ky_target),
-        selection=sel,
+    else:
+        eig, vec = _run_kbm_single_target_krylov(
+            G0_jax=G0_jax,
+            cache=cache,
+            params=params,
+            terms=terms,
+            krylov_cfg=krylov_cfg_use,
+            shift_val=shift_val,
+        )
+    return _kbm_krylov_result(
+        eig=eig,
+        vec=vec,
+        cache=cache,
+        params=params,
+        terms=terms,
+        sel=sel,
+        ky_target=ky_target,
+        diagnostic_norm=diagnostic_norm,
+        krylov_cfg=krylov_cfg_use,
     )
