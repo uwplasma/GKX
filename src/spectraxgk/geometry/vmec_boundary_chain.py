@@ -251,6 +251,138 @@ def _boundary_chain_summary_decision(
     )
 
 
+def _boundary_chain_metrics_payload(
+    *,
+    exact_fd_cost_gradient: float,
+    final_cot_dot_exact_final_fd: float,
+    frozen_axis_replay_cost_gradient: float,
+    frozen_axis_vjp_cost_gradient: float,
+    frozen_axis_linear_replay_cost_gradient: float | None,
+    frozen_axis_linear_vjp_cost_gradient: float | None,
+    frozen_axis_initial_fd_vs_linear_abs_norm: float | None,
+    frozen_axis_initial_fd_vs_linear_rel: float | None,
+    raw_initial_replay_cost_gradient: float | None,
+    raw_initial_fd_norm: float | None,
+    frozen_axis_initial_fd_norm: float | None,
+) -> dict[str, float | None]:
+    """Collect finite scalar metrics from one boundary-chain probe."""
+
+    return {
+        "exact_fd_cost_gradient": _finite_float(exact_fd_cost_gradient),
+        "final_cot_dot_exact_final_fd": _finite_float(final_cot_dot_exact_final_fd),
+        "frozen_axis_replay_cost_gradient": _finite_float(
+            frozen_axis_replay_cost_gradient
+        ),
+        "frozen_axis_vjp_cost_gradient": _finite_float(
+            frozen_axis_vjp_cost_gradient
+        ),
+        "frozen_axis_linear_replay_cost_gradient": _finite_float(
+            frozen_axis_linear_replay_cost_gradient
+        ),
+        "frozen_axis_linear_vjp_cost_gradient": _finite_float(
+            frozen_axis_linear_vjp_cost_gradient
+        ),
+        "frozen_axis_initial_fd_vs_linear_abs_norm": _finite_float(
+            frozen_axis_initial_fd_vs_linear_abs_norm
+        ),
+        "frozen_axis_initial_fd_vs_linear_rel": _finite_float(
+            frozen_axis_initial_fd_vs_linear_rel
+        ),
+        "raw_initial_replay_cost_gradient": _finite_float(
+            raw_initial_replay_cost_gradient
+        ),
+        "raw_to_frozen_initial_norm_ratio": _norm_ratio(
+            raw_initial_fd_norm, frozen_axis_initial_fd_norm
+        ),
+    }
+
+
+def _required_boundary_chain_values(
+    metrics: Mapping[str, float | None],
+) -> tuple[float, float, float, float] | None:
+    """Return required finite values or ``None`` for a nonfinite probe."""
+
+    exact = metrics["exact_fd_cost_gradient"]
+    final = metrics["final_cot_dot_exact_final_fd"]
+    frozen_jvp = metrics["frozen_axis_replay_cost_gradient"]
+    frozen_vjp = metrics["frozen_axis_vjp_cost_gradient"]
+    if (
+        exact is None
+        or final is None
+        or frozen_jvp is None
+        or frozen_vjp is None
+    ):
+        return None
+    return exact, final, frozen_jvp, frozen_vjp
+
+
+def _nonfinite_boundary_chain_summary(
+    metrics: Mapping[str, float | None],
+) -> dict[str, Any]:
+    """Return the fail-closed payload for a nonfinite boundary-chain probe."""
+
+    return {
+        "kind": "vmec_jax_boundary_chain_summary",
+        "finite": False,
+        "classification": "nonfinite_boundary_chain_probe",
+        "metrics": dict(metrics),
+        "errors": {},
+        "passes": {},
+        "next_action": "repair nonfinite VMEC/Boozer/SPECTRAX derivatives before interpreting boundary gradients",
+    }
+
+
+def _finite_boundary_chain_summary(
+    *,
+    metrics: Mapping[str, float | None],
+    required: tuple[float, float, float, float],
+    exact_relative_tolerance: float,
+    internal_relative_tolerance: float,
+    absolute_tolerance: float,
+) -> dict[str, Any]:
+    """Build classification payload for a finite boundary-chain probe."""
+
+    exact, final, frozen_jvp, frozen_vjp = required
+    errors = _boundary_chain_error_metrics(
+        exact=exact,
+        final=final,
+        frozen_jvp=frozen_jvp,
+        frozen_vjp=frozen_vjp,
+        frozen_linear_jvp=metrics["frozen_axis_linear_replay_cost_gradient"],
+        frozen_linear_vjp=metrics["frozen_axis_linear_vjp_cost_gradient"],
+        tangent_diff_abs=metrics["frozen_axis_initial_fd_vs_linear_abs_norm"],
+        tangent_diff_rel=metrics["frozen_axis_initial_fd_vs_linear_rel"],
+        raw=metrics["raw_initial_replay_cost_gradient"],
+        absolute_tolerance=absolute_tolerance,
+    )
+    passes = _boundary_chain_passes(
+        errors,
+        raw=metrics["raw_initial_replay_cost_gradient"],
+        exact_relative_tolerance=exact_relative_tolerance,
+        internal_relative_tolerance=internal_relative_tolerance,
+        absolute_tolerance=absolute_tolerance,
+    )
+
+    norm_ratio = metrics["raw_to_frozen_initial_norm_ratio"]
+    branch_sensitive = bool(norm_ratio is not None and norm_ratio > 10.0)
+    classification, next_action = _boundary_chain_summary_decision(
+        passes, branch_sensitive=branch_sensitive
+    )
+
+    return {
+        "kind": "vmec_jax_boundary_chain_summary",
+        "finite": True,
+        "classification": classification,
+        "exact_relative_tolerance": float(exact_relative_tolerance),
+        "internal_relative_tolerance": float(internal_relative_tolerance),
+        "absolute_tolerance": float(absolute_tolerance),
+        "metrics": dict(metrics),
+        "errors": errors,
+        "passes": passes,
+        "next_action": next_action,
+    }
+
+
 def build_boundary_chain_summary(
     *,
     exact_fd_cost_gradient: float,
@@ -295,89 +427,29 @@ def build_boundary_chain_summary(
             advertised derivative.
     """
 
-    exact = _finite_float(exact_fd_cost_gradient)
-    final = _finite_float(final_cot_dot_exact_final_fd)
-    frozen_jvp = _finite_float(frozen_axis_replay_cost_gradient)
-    frozen_vjp = _finite_float(frozen_axis_vjp_cost_gradient)
-    frozen_linear_jvp = _finite_float(frozen_axis_linear_replay_cost_gradient)
-    frozen_linear_vjp = _finite_float(frozen_axis_linear_vjp_cost_gradient)
-    tangent_diff_abs = _finite_float(frozen_axis_initial_fd_vs_linear_abs_norm)
-    tangent_diff_rel = _finite_float(frozen_axis_initial_fd_vs_linear_rel)
-    raw = _finite_float(raw_initial_replay_cost_gradient)
-    finite = (
-        exact is not None
-        and final is not None
-        and frozen_jvp is not None
-        and frozen_vjp is not None
+    metrics = _boundary_chain_metrics_payload(
+        exact_fd_cost_gradient=exact_fd_cost_gradient,
+        final_cot_dot_exact_final_fd=final_cot_dot_exact_final_fd,
+        frozen_axis_replay_cost_gradient=frozen_axis_replay_cost_gradient,
+        frozen_axis_vjp_cost_gradient=frozen_axis_vjp_cost_gradient,
+        frozen_axis_linear_replay_cost_gradient=frozen_axis_linear_replay_cost_gradient,
+        frozen_axis_linear_vjp_cost_gradient=frozen_axis_linear_vjp_cost_gradient,
+        frozen_axis_initial_fd_vs_linear_abs_norm=frozen_axis_initial_fd_vs_linear_abs_norm,
+        frozen_axis_initial_fd_vs_linear_rel=frozen_axis_initial_fd_vs_linear_rel,
+        raw_initial_replay_cost_gradient=raw_initial_replay_cost_gradient,
+        raw_initial_fd_norm=raw_initial_fd_norm,
+        frozen_axis_initial_fd_norm=frozen_axis_initial_fd_norm,
     )
-
-    metrics: dict[str, float | None] = {
-        "exact_fd_cost_gradient": exact,
-        "final_cot_dot_exact_final_fd": final,
-        "frozen_axis_replay_cost_gradient": frozen_jvp,
-        "frozen_axis_vjp_cost_gradient": frozen_vjp,
-        "frozen_axis_linear_replay_cost_gradient": frozen_linear_jvp,
-        "frozen_axis_linear_vjp_cost_gradient": frozen_linear_vjp,
-        "frozen_axis_initial_fd_vs_linear_abs_norm": tangent_diff_abs,
-        "frozen_axis_initial_fd_vs_linear_rel": tangent_diff_rel,
-        "raw_initial_replay_cost_gradient": raw,
-        "raw_to_frozen_initial_norm_ratio": _norm_ratio(
-            raw_initial_fd_norm, frozen_axis_initial_fd_norm
-        ),
-    }
-    if not finite:
-        return {
-            "kind": "vmec_jax_boundary_chain_summary",
-            "finite": False,
-            "classification": "nonfinite_boundary_chain_probe",
-            "metrics": metrics,
-            "errors": {},
-            "passes": {},
-            "next_action": "repair nonfinite VMEC/Boozer/SPECTRAX derivatives before interpreting boundary gradients",
-        }
-
-    assert exact is not None
-    assert final is not None
-    assert frozen_jvp is not None
-    assert frozen_vjp is not None
-    errors = _boundary_chain_error_metrics(
-        exact=exact,
-        final=final,
-        frozen_jvp=frozen_jvp,
-        frozen_vjp=frozen_vjp,
-        frozen_linear_jvp=frozen_linear_jvp,
-        frozen_linear_vjp=frozen_linear_vjp,
-        tangent_diff_abs=tangent_diff_abs,
-        tangent_diff_rel=tangent_diff_rel,
-        raw=raw,
-        absolute_tolerance=absolute_tolerance,
-    )
-    passes = _boundary_chain_passes(
-        errors,
-        raw=raw,
+    required = _required_boundary_chain_values(metrics)
+    if required is None:
+        return _nonfinite_boundary_chain_summary(metrics)
+    return _finite_boundary_chain_summary(
+        metrics=metrics,
+        required=required,
         exact_relative_tolerance=exact_relative_tolerance,
         internal_relative_tolerance=internal_relative_tolerance,
         absolute_tolerance=absolute_tolerance,
     )
-
-    norm_ratio = metrics["raw_to_frozen_initial_norm_ratio"]
-    branch_sensitive = bool(norm_ratio is not None and norm_ratio > 10.0)
-    classification, next_action = _boundary_chain_summary_decision(
-        passes, branch_sensitive=branch_sensitive
-    )
-
-    return {
-        "kind": "vmec_jax_boundary_chain_summary",
-        "finite": True,
-        "classification": classification,
-        "exact_relative_tolerance": float(exact_relative_tolerance),
-        "internal_relative_tolerance": float(internal_relative_tolerance),
-        "absolute_tolerance": float(absolute_tolerance),
-        "metrics": metrics,
-        "errors": errors,
-        "passes": passes,
-        "next_action": next_action,
-    }
 
 
 def boundary_chain_summary_from_probe(
