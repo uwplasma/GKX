@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import numpy as np
 
 from spectraxgk.validation.benchmarks.harness_timeseries import (
@@ -11,6 +13,35 @@ from spectraxgk.validation.benchmarks.harness_timeseries import (
     _tail_window,
 )
 from spectraxgk.validation.gates import ZonalFlowResponseMetrics
+
+
+@dataclass(frozen=True)
+class _ZonalWindowState:
+    t_arr: np.ndarray
+    policy: str
+    damping_mode: str
+    frequency_mode: str
+    initial_level: float
+    tail_tmin: float
+    tail_tmax: float
+    response_norm: np.ndarray
+    residual_norm: float
+    residual_std_norm: float
+    response_rms: float
+    detrended_norm: np.ndarray
+    fit_mask: np.ndarray
+    fit_tmin: float
+    fit_tmax: float
+
+
+@dataclass(frozen=True)
+class _ZonalPeakFitState:
+    max_peak_idx: np.ndarray
+    min_peak_idx: np.ndarray
+    peak_idx: np.ndarray
+    gam_damping: float
+    peak_fit_count: int
+    gam_frequency: float
 
 
 def _coerce_zonal_trace(t: np.ndarray, response: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -354,33 +385,21 @@ def _zonal_metric_result(
     )
 
 
-def zonal_flow_response_metrics(
+def _zonal_window_state(
     t: np.ndarray,
     response: np.ndarray,
     *,
-    tail_fraction: float = 0.3,
-    initial_fraction: float = 0.1,
-    initial_policy: str = "window_abs_mean",
-    initial_level_override: float | None = None,
-    peak_fit_max_peaks: int | None = None,
-    damping_fit_mode: str = "combined_envelope",
-    frequency_fit_mode: str = "peak_spacing",
-    fit_window_tmin: float | None = None,
-    fit_window_tmax: float | None = None,
-    hilbert_trim_fraction: float = 0.2,
-) -> ZonalFlowResponseMetrics:
-    """Estimate residual level and GAM envelope metrics from a zonal response.
-
-    The input ``response`` should be a scalar zonal observable such as zonal
-    potential or a normalized zonal-energy proxy on a uniform time trace.
-    ``initial_policy="first_abs"`` follows Rosenbluth-Hinton/GAM convention by
-    normalizing to the initial potential magnitude; ``"window_abs_mean"`` keeps
-    the older robust behavior for generic noisy traces. ``initial_level_override``
-    supports benchmarks whose published normalization is an external initial
-    amplitude, for example a Gaussian potential maximum rather than the first
-    line-averaged sample.
-    """
-
+    tail_fraction: float,
+    initial_fraction: float,
+    initial_policy: str,
+    initial_level_override: float | None,
+    peak_fit_max_peaks: int | None,
+    damping_fit_mode: str,
+    frequency_fit_mode: str,
+    fit_window_tmin: float | None,
+    fit_window_tmax: float | None,
+    hilbert_trim_fraction: float,
+) -> _ZonalWindowState:
     t_arr, resp = _coerce_zonal_trace(t, response)
     policy, damping_mode, frequency_mode = _normalized_zonal_options(
         initial_policy=initial_policy,
@@ -410,56 +429,137 @@ def zonal_flow_response_metrics(
         tail_fraction=tail_fraction,
         initial_level=initial_level,
     )
-    detrended_norm = response_norm - residual_norm
-    fit_mask, fit_tmin, fit_tmax = _explicit_time_window(t_arr, tmin=fit_window_tmin, tmax=fit_window_tmax)
-    max_peak_idx, min_peak_idx, peak_idx = _zonal_peak_indices(detrended_norm)
-    peak_times = t_arr[peak_idx]
-    peak_values = np.abs(detrended_norm[peak_idx])
-    gam_damping, peak_fit_count = _zonal_damping_fit(
+    fit_mask, fit_tmin, fit_tmax = _explicit_time_window(
+        t_arr, tmin=fit_window_tmin, tmax=fit_window_tmax
+    )
+    return _ZonalWindowState(
+        t_arr=t_arr,
+        policy=policy,
         damping_mode=damping_mode,
+        frequency_mode=frequency_mode,
+        initial_level=initial_level,
+        tail_tmin=tail_tmin,
+        tail_tmax=tail_tmax,
+        response_norm=response_norm,
+        residual_norm=residual_norm,
+        residual_std_norm=residual_std_norm,
+        response_rms=response_rms,
+        detrended_norm=response_norm - residual_norm,
+        fit_mask=fit_mask,
+        fit_tmin=fit_tmin,
+        fit_tmax=fit_tmax,
+    )
+
+
+def _zonal_peak_fit_state(
+    state: _ZonalWindowState,
+    *,
+    peak_fit_max_peaks: int | None,
+    hilbert_trim_fraction: float,
+) -> _ZonalPeakFitState:
+    max_peak_idx, min_peak_idx, peak_idx = _zonal_peak_indices(state.detrended_norm)
+    peak_times = state.t_arr[peak_idx]
+    peak_values = np.abs(state.detrended_norm[peak_idx])
+    gam_damping, peak_fit_count = _zonal_damping_fit(
+        damping_mode=state.damping_mode,
         peak_times=peak_times,
         peak_values=peak_values,
-        fit_mask=fit_mask,
+        fit_mask=state.fit_mask,
         peak_idx=peak_idx,
-        t_arr=t_arr,
-        detrended_norm=detrended_norm,
+        t_arr=state.t_arr,
+        detrended_norm=state.detrended_norm,
         max_peak_idx=max_peak_idx,
         min_peak_idx=min_peak_idx,
         peak_fit_max_peaks=peak_fit_max_peaks,
     )
     gam_frequency = _zonal_frequency_fit(
-        frequency_mode=frequency_mode,
+        frequency_mode=state.frequency_mode,
         peak_times=peak_times,
-        fit_mask=fit_mask,
+        fit_mask=state.fit_mask,
         peak_idx=peak_idx,
         peak_fit_max_peaks=peak_fit_max_peaks,
-        damping_mode=damping_mode,
-        t_arr=t_arr,
-        detrended_norm=detrended_norm,
+        damping_mode=state.damping_mode,
+        t_arr=state.t_arr,
+        detrended_norm=state.detrended_norm,
         hilbert_trim_fraction=hilbert_trim_fraction,
     )
-
-    return _zonal_metric_result(
-        initial_level=initial_level,
-        policy=policy,
-        residual_norm=residual_norm,
-        residual_std_norm=residual_std_norm,
-        response_rms=response_rms,
-        gam_frequency=gam_frequency,
-        gam_damping=gam_damping,
-        damping_mode=damping_mode,
-        frequency_mode=frequency_mode,
-        peak_fit_count=peak_fit_count,
-        tmin=tail_tmin,
-        tmax=tail_tmax,
-        fit_tmin=fit_tmin,
-        fit_tmax=fit_tmax,
-        t_arr=t_arr,
-        response_norm=response_norm,
-        detrended_norm=detrended_norm,
+    return _ZonalPeakFitState(
         max_peak_idx=max_peak_idx,
         min_peak_idx=min_peak_idx,
         peak_idx=peak_idx,
+        gam_damping=gam_damping,
+        peak_fit_count=peak_fit_count,
+        gam_frequency=gam_frequency,
+    )
+
+
+def zonal_flow_response_metrics(
+    t: np.ndarray,
+    response: np.ndarray,
+    *,
+    tail_fraction: float = 0.3,
+    initial_fraction: float = 0.1,
+    initial_policy: str = "window_abs_mean",
+    initial_level_override: float | None = None,
+    peak_fit_max_peaks: int | None = None,
+    damping_fit_mode: str = "combined_envelope",
+    frequency_fit_mode: str = "peak_spacing",
+    fit_window_tmin: float | None = None,
+    fit_window_tmax: float | None = None,
+    hilbert_trim_fraction: float = 0.2,
+) -> ZonalFlowResponseMetrics:
+    """Estimate residual level and GAM envelope metrics from a zonal response.
+
+    The input ``response`` should be a scalar zonal observable such as zonal
+    potential or a normalized zonal-energy proxy on a uniform time trace.
+    ``initial_policy="first_abs"`` follows Rosenbluth-Hinton/GAM convention by
+    normalizing to the initial potential magnitude; ``"window_abs_mean"`` keeps
+    the older robust behavior for generic noisy traces. ``initial_level_override``
+    supports benchmarks whose published normalization is an external initial
+    amplitude, for example a Gaussian potential maximum rather than the first
+    line-averaged sample.
+    """
+
+    state = _zonal_window_state(
+        t,
+        response,
+        tail_fraction=tail_fraction,
+        initial_fraction=initial_fraction,
+        initial_policy=initial_policy,
+        initial_level_override=initial_level_override,
+        peak_fit_max_peaks=peak_fit_max_peaks,
+        damping_fit_mode=damping_fit_mode,
+        frequency_fit_mode=frequency_fit_mode,
+        fit_window_tmin=fit_window_tmin,
+        fit_window_tmax=fit_window_tmax,
+        hilbert_trim_fraction=hilbert_trim_fraction,
+    )
+    peaks = _zonal_peak_fit_state(
+        state,
+        peak_fit_max_peaks=peak_fit_max_peaks,
+        hilbert_trim_fraction=hilbert_trim_fraction,
+    )
+    return _zonal_metric_result(
+        initial_level=state.initial_level,
+        policy=state.policy,
+        residual_norm=state.residual_norm,
+        residual_std_norm=state.residual_std_norm,
+        response_rms=state.response_rms,
+        gam_frequency=peaks.gam_frequency,
+        gam_damping=peaks.gam_damping,
+        damping_mode=state.damping_mode,
+        frequency_mode=state.frequency_mode,
+        peak_fit_count=peaks.peak_fit_count,
+        tmin=state.tail_tmin,
+        tmax=state.tail_tmax,
+        fit_tmin=state.fit_tmin,
+        fit_tmax=state.fit_tmax,
+        t_arr=state.t_arr,
+        response_norm=state.response_norm,
+        detrended_norm=state.detrended_norm,
+        max_peak_idx=peaks.max_peak_idx,
+        min_peak_idx=peaks.min_peak_idx,
+        peak_idx=peaks.peak_idx,
     )
 
 
