@@ -275,6 +275,110 @@ def _resolve_twist_shift_policy(
     )
 
 
+def _build_ntft_kperp_and_drift_arrays(
+    grid: SpectralGrid,
+    geom_data: Any,
+    *,
+    kx_eff: jnp.ndarray,
+    ky_eff: jnp.ndarray,
+    ky_raw: jnp.ndarray,
+    rho_star: jnp.ndarray,
+    gds2: jnp.ndarray,
+    gds21: jnp.ndarray,
+    gds22_arr: jnp.ndarray,
+    bmag: jnp.ndarray,
+    cv: jnp.ndarray,
+    gb: jnp.ndarray,
+    cv0: jnp.ndarray,
+    gb0: jnp.ndarray,
+    shat_arr: jnp.ndarray,
+    x0_eff: float,
+    kperp2_bmag: bool,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    ftwist = (geom_data.s_hat * gds21 / gds22_arr).astype(kx_eff.dtype)
+    delta = jnp.asarray(0.01313, dtype=kx_eff.dtype)
+    ftwist_next = jnp.roll(ftwist, -1)
+    mid_idx = int(grid.z.size // 2)
+    mid_next = (mid_idx + 1) % grid.z.size
+    ftwist_mid = ftwist[mid_idx]
+    ftwist_mid_next = ftwist[mid_next]
+    m0 = -jnp.rint(
+        float(x0_eff)
+        * ky_raw[:, None]
+        * ((1.0 - delta) * ftwist[None, :] + delta * ftwist_next[None, :])
+    ) + jnp.rint(
+        float(x0_eff)
+        * ky_raw[:, None]
+        * ((1.0 - delta) * ftwist_mid + delta * ftwist_mid_next)
+    )
+    m0 = m0.astype(kx_eff.dtype)
+    shat_inv = 1.0 / shat_arr
+    delta_kx = ky_eff[:, None] * ftwist[None, :] + (rho_star * m0 / float(x0_eff))
+    term_ky = ky_eff[:, None, None] ** 2 * (
+        gds2[None, None, :]
+        - 2.0 * ftwist[None, None, :] * gds21[None, None, :] * shat_inv
+        + (ftwist[None, None, :] ** 2)
+        * gds22_arr[None, None, :]
+        * shat_inv
+        * shat_inv
+    )
+    term_kx = (
+        (kx_eff[None, :, None] + delta_kx[:, None, :]) ** 2
+        * gds22_arr[None, None, :]
+        * shat_inv
+        * shat_inv
+    )
+    kperp2 = term_ky + term_kx
+    if kperp2_bmag:
+        kperp2 = kperp2 * ((1.0 / bmag)[None, None, :] ** 2)
+    kx_shift = kx_eff[None, :, None] + (rho_star * m0 / float(x0_eff))[:, None, :]
+    cv_d = ky_eff[:, None, None] * cv[None, None, :] + (
+        shat_inv * kx_shift * cv0[None, None, :]
+    )
+    gb_d = ky_eff[:, None, None] * gb[None, None, :] + (
+        shat_inv * kx_shift * gb0[None, None, :]
+    )
+    return kperp2, cv_d, gb_d, cv_d + gb_d
+
+
+def _build_standard_kperp_and_drift_arrays(
+    geom_data: Any,
+    *,
+    theta: jnp.ndarray,
+    kx_eff: jnp.ndarray,
+    ky_eff: jnp.ndarray,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    kx0 = kx_eff[None, :, None]
+    ky0 = ky_eff[:, None, None]
+    theta_b = theta[None, None, :]
+    kperp2 = geom_data.k_perp2(kx0, ky0, theta_b).astype(kx_eff.dtype)
+    cv_d, gb_d = geom_data.drift_components(kx_eff, ky_eff, theta)
+    cv_d = cv_d.astype(kx_eff.dtype)
+    gb_d = gb_d.astype(kx_eff.dtype)
+    omega_d = (cv_d + gb_d).astype(kx_eff.dtype)
+    return kperp2, cv_d, gb_d, omega_d
+
+
+def _apply_dealias_to_kperp_and_drifts(
+    *,
+    grid: SpectralGrid,
+    dealias_mask: jnp.ndarray,
+    kperp2: jnp.ndarray,
+    cv_d: jnp.ndarray,
+    gb_d: jnp.ndarray,
+    omega_d: jnp.ndarray,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    apply_dealias_mask = dealias_mask is not None and int(grid.ky.size) > 1
+    if not apply_dealias_mask:
+        return kperp2, cv_d, gb_d, omega_d
+    mask = dealias_mask[:, :, None]
+    kperp2 = kperp2 * mask
+    cv_d = cv_d * mask
+    gb_d = gb_d * mask
+    omega_d = omega_d * mask
+    return kperp2, cv_d, gb_d, omega_d
+
+
 def _build_kperp_and_drift_arrays(
     grid: SpectralGrid,
     geom_data: Any,
@@ -299,71 +403,40 @@ def _build_kperp_and_drift_arrays(
     dealias_mask: jnp.ndarray,
 ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     if use_ntft:
-        ftwist = (geom_data.s_hat * gds21 / gds22_arr).astype(kx_eff.dtype)
-        delta = jnp.asarray(0.01313, dtype=kx_eff.dtype)
-        ftwist_next = jnp.roll(ftwist, -1)
-        mid_idx = int(grid.z.size // 2)
-        mid_next = (mid_idx + 1) % grid.z.size
-        ftwist_mid = ftwist[mid_idx]
-        ftwist_mid_next = ftwist[mid_next]
-        m0 = -jnp.rint(
-            float(x0_eff)
-            * ky_raw[:, None]
-            * ((1.0 - delta) * ftwist[None, :] + delta * ftwist_next[None, :])
-        ) + jnp.rint(
-            float(x0_eff)
-            * ky_raw[:, None]
-            * ((1.0 - delta) * ftwist_mid + delta * ftwist_mid_next)
+        kperp2, cv_d, gb_d, omega_d = _build_ntft_kperp_and_drift_arrays(
+            grid,
+            geom_data,
+            kx_eff=kx_eff,
+            ky_eff=ky_eff,
+            ky_raw=ky_raw,
+            rho_star=rho_star,
+            gds2=gds2,
+            gds21=gds21,
+            gds22_arr=gds22_arr,
+            bmag=bmag,
+            cv=cv,
+            gb=gb,
+            cv0=cv0,
+            gb0=gb0,
+            shat_arr=shat_arr,
+            x0_eff=x0_eff,
+            kperp2_bmag=kperp2_bmag,
         )
-        m0 = m0.astype(kx_eff.dtype)
-        shat_inv = 1.0 / shat_arr
-        delta_kx = ky_eff[:, None] * ftwist[None, :] + (
-            rho_star * m0 / float(x0_eff)
-        )
-        term_ky = ky_eff[:, None, None] ** 2 * (
-            gds2[None, None, :]
-            - 2.0 * ftwist[None, None, :] * gds21[None, None, :] * shat_inv
-            + (ftwist[None, None, :] ** 2)
-            * gds22_arr[None, None, :]
-            * shat_inv
-            * shat_inv
-        )
-        term_kx = (
-            (kx_eff[None, :, None] + delta_kx[:, None, :]) ** 2
-            * gds22_arr[None, None, :]
-            * shat_inv
-            * shat_inv
-        )
-        bmag_inv = 1.0 / bmag
-        kperp2 = term_ky + term_kx
-        if kperp2_bmag:
-            kperp2 = kperp2 * (bmag_inv[None, None, :] ** 2)
-        kx_shift = kx_eff[None, :, None] + (rho_star * m0 / float(x0_eff))[:, None, :]
-        cv_d = (
-            ky_eff[:, None, None] * cv[None, None, :]
-            + shat_inv * kx_shift * cv0[None, None, :]
-        )
-        gb_d = (
-            ky_eff[:, None, None] * gb[None, None, :]
-            + shat_inv * kx_shift * gb0[None, None, :]
-        )
-        omega_d = cv_d + gb_d
     else:
-        kx0 = kx_eff[None, :, None]
-        ky0 = ky_eff[:, None, None]
-        theta_b = theta[None, None, :]
-        kperp2 = geom_data.k_perp2(kx0, ky0, theta_b).astype(kx_eff.dtype)
-        cv_d, gb_d = geom_data.drift_components(kx_eff, ky_eff, theta)
-        cv_d = cv_d.astype(kx_eff.dtype)
-        gb_d = gb_d.astype(kx_eff.dtype)
-        omega_d = (cv_d + gb_d).astype(kx_eff.dtype)
-    apply_dealias_mask = dealias_mask is not None and int(grid.ky.size) > 1
-    if apply_dealias_mask:
-        mask = dealias_mask[:, :, None]
-        kperp2 = kperp2 * mask
-        cv_d = cv_d * mask
-        gb_d = gb_d * mask
-        omega_d = omega_d * mask
+        kperp2, cv_d, gb_d, omega_d = _build_standard_kperp_and_drift_arrays(
+            geom_data,
+            theta=theta,
+            kx_eff=kx_eff,
+            ky_eff=ky_eff,
+        )
+    kperp2, cv_d, gb_d, omega_d = _apply_dealias_to_kperp_and_drifts(
+        grid=grid,
+        dealias_mask=dealias_mask,
+        kperp2=kperp2,
+        cv_d=cv_d,
+        gb_d=gb_d,
+        omega_d=omega_d,
+    )
     return kperp2, cv_d, gb_d, omega_d
 
 
