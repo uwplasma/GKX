@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -17,6 +18,26 @@ from spectraxgk.validation.quasilinear.model_selection_inputs import (
 
 DEFAULT_REQUIRED_CANDIDATE = "spectral_envelope_ridge"
 
+
+@dataclass(frozen=True)
+class _ModelSelectionArtifacts:
+    dataset: dict[str, Any]
+    candidate: dict[str, Any]
+    calibration_reports: list[dict[str, Any]]
+    optimized_audits: list[dict[str, Any]]
+
+
+@dataclass(frozen=True)
+class _ModelSelectionContext:
+    dataset_gate: dict[str, Any]
+    candidate_gate: dict[str, Any]
+    candidate_metrics: dict[str, Any]
+    calibration_summaries: list[dict[str, Any]]
+    promoted_absolute_reports: list[dict[str, Any]]
+    calibration_reports_missing_holdout_metrics: list[dict[str, Any]]
+    optimized_audit_summaries: list[dict[str, Any]]
+    qualifying_optimized_audits: list[dict[str, Any]]
+    optimized_audits_claiming_universal_absolute_flux: list[dict[str, Any]]
 
 
 def _promotion_gate(payload: dict[str, Any]) -> dict[str, Any]:
@@ -209,6 +230,158 @@ def _absolute_flux_promotion_status(
     }
 
 
+def _load_model_selection_artifacts(
+    *,
+    dataset_sufficiency: dict[str, Any] | str | Path,
+    candidate_uncertainty: dict[str, Any] | str | Path,
+    calibration_reports: Iterable[dict[str, Any] | str | Path],
+    optimized_equilibrium_nonlinear_audits: Iterable[
+        dict[str, Any] | str | Path
+    ],
+) -> _ModelSelectionArtifacts:
+    return _ModelSelectionArtifacts(
+        dataset=_as_dict(dataset_sufficiency),
+        candidate=_as_dict(candidate_uncertainty),
+        calibration_reports=[_as_dict(report) for report in calibration_reports],
+        optimized_audits=[
+            _as_dict(report) for report in optimized_equilibrium_nonlinear_audits
+        ],
+    )
+
+
+def _model_selection_context(
+    *,
+    artifacts: _ModelSelectionArtifacts,
+    required_candidate: str,
+    transport_gate: float | None,
+    interval_coverage_gate: float | None,
+) -> _ModelSelectionContext:
+    dataset_gate = _promotion_gate(artifacts.dataset)
+    candidate_gate = _promotion_gate(artifacts.candidate)
+    candidate_metrics = _required_candidate_metrics(
+        artifacts.candidate,
+        candidate_gate,
+        required_candidate=required_candidate,
+        transport_gate=transport_gate,
+        interval_coverage_gate=interval_coverage_gate,
+    )
+    summaries, promoted_reports, missing_holdout = _calibration_gate_context(
+        artifacts.calibration_reports
+    )
+    audit_summaries, qualifying_audits, universal_overclaims = (
+        _optimized_audit_gate_context(artifacts.optimized_audits)
+    )
+    return _ModelSelectionContext(
+        dataset_gate=dataset_gate,
+        candidate_gate=candidate_gate,
+        candidate_metrics=candidate_metrics,
+        calibration_summaries=summaries,
+        promoted_absolute_reports=promoted_reports,
+        calibration_reports_missing_holdout_metrics=missing_holdout,
+        optimized_audit_summaries=audit_summaries,
+        qualifying_optimized_audits=qualifying_audits,
+        optimized_audits_claiming_universal_absolute_flux=universal_overclaims,
+    )
+
+
+def _model_selection_gate_rows(
+    *,
+    context: _ModelSelectionContext,
+    required_candidate: str,
+    require_optimized_equilibrium_nonlinear_audit: bool,
+) -> list[dict[str, Any]]:
+    gates = _required_candidate_gate_rows(
+        dataset_gate=context.dataset_gate,
+        candidate_gate=context.candidate_gate,
+        candidate_metrics=context.candidate_metrics,
+        required_candidate=required_candidate,
+    )
+    gates.extend(
+        _claim_boundary_gate_rows(
+            promoted_absolute_reports=context.promoted_absolute_reports,
+            calibration_reports_missing_holdout_metrics=(
+                context.calibration_reports_missing_holdout_metrics
+            ),
+            optimized_audit_summaries=context.optimized_audit_summaries,
+            qualifying_optimized_audits=context.qualifying_optimized_audits,
+            optimized_audits_claiming_universal_absolute_flux=(
+                context.optimized_audits_claiming_universal_absolute_flux
+            ),
+            require_optimized_equilibrium_nonlinear_audit=(
+                require_optimized_equilibrium_nonlinear_audit
+            ),
+        )
+    )
+    return gates
+
+
+def _model_selection_metrics(context: _ModelSelectionContext) -> dict[str, Any]:
+    candidate_metrics = context.candidate_metrics
+    return {
+        "candidate_mean_abs_relative_error": candidate_metrics["candidate_error"],
+        "candidate_prediction_interval_coverage": candidate_metrics[
+            "candidate_coverage"
+        ],
+        "transport_mean_relative_error_gate": candidate_metrics[
+            "transport_threshold"
+        ],
+        "interval_coverage_gate": candidate_metrics["coverage_threshold"],
+        "null_training_mean_mean_abs_relative_error": candidate_metrics["null_error"],
+        "linear_weight_mean_abs_relative_error": candidate_metrics["linear_error"],
+    }
+
+
+def _model_selection_payload(
+    *,
+    context: _ModelSelectionContext,
+    gates: list[dict[str, Any]],
+    required_candidate: str,
+    require_optimized_equilibrium_nonlinear_audit: bool,
+) -> dict[str, Any]:
+    passed = all(bool(gate["passed"]) for gate in gates)
+    blockers = [gate["metric"] for gate in gates if not bool(gate["passed"])]
+    scoped_optimized_evidence = bool(context.qualifying_optimized_audits)
+    return {
+        "kind": "quasilinear_model_selection_status",
+        "claim_level": _claim_level(passed, scoped_optimized_evidence),
+        "passed": passed,
+        "required_candidate": str(required_candidate),
+        "accepted_candidates": context.candidate_metrics["accepted"],
+        "promotion_gate": {
+            "passed": passed,
+            "blockers": blockers,
+            "requires_dataset_sufficiency": True,
+            "requires_uncertainty_skill": True,
+            "requires_no_absolute_flux_promotion": True,
+            "requires_optimized_equilibrium_nonlinear_audit": bool(
+                require_optimized_equilibrium_nonlinear_audit
+            ),
+        },
+        "absolute_flux_promotion": _absolute_flux_promotion_status(
+            passed=passed,
+            scoped_optimized_evidence=scoped_optimized_evidence,
+            blockers=blockers,
+        ),
+        "metrics": _model_selection_metrics(context),
+        "gate_report": {
+            "case": "quasilinear_model_selection",
+            "passed": passed,
+            "max_abs_error": 0.0 if passed else 1.0,
+            "max_rel_error": 0.0 if passed else 1.0,
+            "gates": gates,
+        },
+        "calibration_reports": context.calibration_summaries,
+        "optimized_equilibrium_nonlinear_audits": context.optimized_audit_summaries,
+        "notes": (
+            "A passed status promotes only the scoped model-selection result. "
+            "Optimized-equilibrium nonlinear audits, when supplied, can support "
+            "only that audited equilibrium. The status does not promote a "
+            "runtime/TOML absolute-flux predictor or a universal nonlinear "
+            "transport model."
+        ),
+    }
+
+
 def build_quasilinear_model_selection_status(
     *,
     dataset_sufficiency: dict[str, Any] | str | Path,
@@ -234,101 +407,33 @@ def build_quasilinear_model_selection_status(
     absolute-flux claim.
     """
 
-    dataset = _as_dict(dataset_sufficiency)
-    candidate = _as_dict(candidate_uncertainty)
-    reports = [_as_dict(report) for report in calibration_reports]
-    optimized_audits = [
-        _as_dict(report) for report in optimized_equilibrium_nonlinear_audits
-    ]
-    dataset_gate = _promotion_gate(dataset)
-    candidate_gate = _promotion_gate(candidate)
-    candidate_metrics = _required_candidate_metrics(
-        candidate,
-        candidate_gate,
+    artifacts = _load_model_selection_artifacts(
+        dataset_sufficiency=dataset_sufficiency,
+        candidate_uncertainty=candidate_uncertainty,
+        calibration_reports=calibration_reports,
+        optimized_equilibrium_nonlinear_audits=optimized_equilibrium_nonlinear_audits,
+    )
+    context = _model_selection_context(
+        artifacts=artifacts,
         required_candidate=required_candidate,
         transport_gate=transport_gate,
         interval_coverage_gate=interval_coverage_gate,
     )
-    summaries, promoted_reports, missing_holdout = _calibration_gate_context(reports)
-    audit_summaries, qualifying_audits, universal_overclaims = (
-        _optimized_audit_gate_context(optimized_audits)
-    )
-    gates = _required_candidate_gate_rows(
-        dataset_gate=dataset_gate,
-        candidate_gate=candidate_gate,
-        candidate_metrics=candidate_metrics,
+    gates = _model_selection_gate_rows(
+        context=context,
         required_candidate=required_candidate,
-    )
-    gates.extend(
-        _claim_boundary_gate_rows(
-            promoted_absolute_reports=promoted_reports,
-            calibration_reports_missing_holdout_metrics=missing_holdout,
-            optimized_audit_summaries=audit_summaries,
-            qualifying_optimized_audits=qualifying_audits,
-            optimized_audits_claiming_universal_absolute_flux=universal_overclaims,
-            require_optimized_equilibrium_nonlinear_audit=(
-                require_optimized_equilibrium_nonlinear_audit
-            ),
-        )
-    )
-
-    passed = all(bool(gate["passed"]) for gate in gates)
-    blockers = [gate["metric"] for gate in gates if not bool(gate["passed"])]
-    scoped_optimized_evidence = bool(qualifying_audits)
-    return {
-        "kind": "quasilinear_model_selection_status",
-        "claim_level": _claim_level(passed, scoped_optimized_evidence),
-        "passed": passed,
-        "required_candidate": str(required_candidate),
-        "accepted_candidates": candidate_metrics["accepted"],
-        "promotion_gate": {
-            "passed": passed,
-            "blockers": blockers,
-            "requires_dataset_sufficiency": True,
-            "requires_uncertainty_skill": True,
-            "requires_no_absolute_flux_promotion": True,
-            "requires_optimized_equilibrium_nonlinear_audit": bool(
-                require_optimized_equilibrium_nonlinear_audit
-            ),
-        },
-        "absolute_flux_promotion": _absolute_flux_promotion_status(
-            passed=passed,
-            scoped_optimized_evidence=scoped_optimized_evidence,
-            blockers=blockers,
+        require_optimized_equilibrium_nonlinear_audit=(
+            require_optimized_equilibrium_nonlinear_audit
         ),
-        "metrics": {
-            "candidate_mean_abs_relative_error": candidate_metrics["candidate_error"],
-            "candidate_prediction_interval_coverage": candidate_metrics[
-                "candidate_coverage"
-            ],
-            "transport_mean_relative_error_gate": candidate_metrics[
-                "transport_threshold"
-            ],
-            "interval_coverage_gate": candidate_metrics["coverage_threshold"],
-            "null_training_mean_mean_abs_relative_error": candidate_metrics[
-                "null_error"
-            ],
-            "linear_weight_mean_abs_relative_error": candidate_metrics[
-                "linear_error"
-            ],
-        },
-        "gate_report": {
-            "case": "quasilinear_model_selection",
-            "passed": passed,
-            "max_abs_error": 0.0 if passed else 1.0,
-            "max_rel_error": 0.0 if passed else 1.0,
-            "gates": gates,
-        },
-        "calibration_reports": summaries,
-        "optimized_equilibrium_nonlinear_audits": audit_summaries,
-        "notes": (
-            "A passed status promotes only the scoped model-selection result. "
-            "Optimized-equilibrium nonlinear audits, when supplied, can support "
-            "only that audited equilibrium. The status does not promote a "
-            "runtime/TOML absolute-flux predictor or a universal nonlinear "
-            "transport model."
+    )
+    return _model_selection_payload(
+        context=context,
+        gates=gates,
+        required_candidate=required_candidate,
+        require_optimized_equilibrium_nonlinear_audit=(
+            require_optimized_equilibrium_nonlinear_audit
         ),
-    }
+    )
 
 def build_quasilinear_model_selection_status_from_paths(
     *,
