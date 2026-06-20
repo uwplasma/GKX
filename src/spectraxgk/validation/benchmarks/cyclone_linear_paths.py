@@ -78,6 +78,14 @@ class _CycloneTimeTrace:
     stride: int
 
 
+@dataclass(frozen=True)
+class _CycloneTimePathControls:
+    """Resolved runtime and fit controls for one Cyclone time path."""
+
+    time_cfg: Any | None
+    fit_options: _CycloneTimeFitOptions
+
+
 _PATCHABLE_NAMES = (
     "ModeSelection",
     "fit_growth_rate",
@@ -818,6 +826,127 @@ def _fit_cyclone_time_trace(
     return float(gamma_out), float(omega_out), phi_t_np, t_arr
 
 
+def _prepare_cyclone_time_path_controls(
+    *,
+    cfg: Any,
+    time_cfg: Any,
+    dt: float,
+    steps: int,
+    method: str,
+    sample_stride: int | None,
+    fit_key: str,
+    mode_method: str,
+    tmin: float | None,
+    tmax: float | None,
+    auto_window: bool,
+    window_fraction: float,
+    min_points: int,
+    start_fraction: float,
+    growth_weight: float,
+    require_positive: bool,
+    min_amp_fraction: float,
+    max_fraction: float,
+    end_fraction: float,
+    max_amp_fraction: float,
+    phase_weight: float,
+    length_weight: float,
+    min_r2: float,
+    late_penalty: float,
+    min_slope: float | None,
+    min_slope_frac: float,
+    slope_var_weight: float,
+    window_method: str,
+) -> _CycloneTimePathControls:
+    """Resolve time-config overrides and fit-window policy for Cyclone."""
+
+    return _CycloneTimePathControls(
+        time_cfg=_resolve_cyclone_time_config(
+            cfg=cfg,
+            time_cfg=time_cfg,
+            dt=dt,
+            steps=steps,
+            method=method,
+            sample_stride=sample_stride,
+        ),
+        fit_options=_build_cyclone_time_fit_options(
+            fit_key=fit_key,
+            mode_method=mode_method,
+            tmin=tmin,
+            tmax=tmax,
+            auto_window=auto_window,
+            window_fraction=window_fraction,
+            min_points=min_points,
+            start_fraction=start_fraction,
+            growth_weight=growth_weight,
+            require_positive=require_positive,
+            min_amp_fraction=min_amp_fraction,
+            max_fraction=max_fraction,
+            end_fraction=end_fraction,
+            max_amp_fraction=max_amp_fraction,
+            phase_weight=phase_weight,
+            length_weight=length_weight,
+            min_r2=min_r2,
+            late_penalty=late_penalty,
+            min_slope=min_slope,
+            min_slope_frac=min_slope_frac,
+            slope_var_weight=slope_var_weight,
+            window_method=window_method,
+        ),
+    )
+
+
+def _run_cyclone_saved_time_path(
+    *,
+    grid: Any,
+    geom: Any,
+    params: Any,
+    terms: Any,
+    sel: Any,
+    dt: float,
+    steps: int,
+    method: str,
+    sample_stride: int | None,
+    need_density: bool,
+    use_jit: bool,
+    diagnostic_norm: str,
+    show_progress: bool,
+    status: Callable[[str], None],
+    fresh_G0: Callable[[], jnp.ndarray],
+    controls: _CycloneTimePathControls,
+) -> tuple[float, float, np.ndarray, np.ndarray]:
+    """Run non-reference Cyclone time integration and fit the saved trace."""
+
+    trace = _integrate_cyclone_time_trace(
+        grid=grid,
+        geom=geom,
+        params=params,
+        terms=terms,
+        time_cfg_use=controls.time_cfg,
+        dt=dt,
+        steps=steps,
+        method=method,
+        sample_stride=sample_stride,
+        need_density=need_density,
+        use_jit=use_jit,
+        show_progress=show_progress,
+        status=status,
+        fresh_G0=fresh_G0,
+    )
+    gamma_out, omega_out, phi_t_np, t_arr = _fit_cyclone_time_trace(
+        phi_t=trace.phi_t,
+        density_t=trace.density_t,
+        dt=dt,
+        stride=trace.stride,
+        sel=sel,
+        params=params,
+        diagnostic_norm=diagnostic_norm,
+        options=controls.fit_options,
+        status=status,
+    )
+    status(f"time integration fit complete: gamma={gamma_out:.6f} omega={omega_out:.6f}")
+    return gamma_out, omega_out, phi_t_np, t_arr
+
+
 def run_cyclone_time_path(
     *,
     grid: Any,
@@ -865,15 +994,13 @@ def run_cyclone_time_path(
     """Run the Cyclone time-integration branch and fit late-time growth."""
 
     status(f"starting time integration path with fit_signal={fit_key}")
-    time_cfg_use = _resolve_cyclone_time_config(
+    controls = _prepare_cyclone_time_path_controls(
         cfg=cfg,
         time_cfg=time_cfg,
         dt=dt,
         steps=steps,
         method=method,
         sample_stride=sample_stride,
-    )
-    fit_options = _build_cyclone_time_fit_options(
         fit_key=fit_key,
         mode_method=mode_method,
         tmin=tmin,
@@ -905,7 +1032,7 @@ def run_cyclone_time_path(
             params=params,
             geom=geom,
             terms=terms,
-            time_cfg_use=time_cfg_use,
+            time_cfg_use=controls.time_cfg,
             dt=dt,
             steps=steps,
             sample_stride=sample_stride,
@@ -914,33 +1041,21 @@ def run_cyclone_time_path(
             fresh_G0=fresh_G0,
         )
 
-    trace = _integrate_cyclone_time_trace(
+    return _run_cyclone_saved_time_path(
         grid=grid,
         geom=geom,
         params=params,
         terms=terms,
-        time_cfg_use=time_cfg_use,
+        sel=sel,
         dt=dt,
         steps=steps,
         method=method,
         sample_stride=sample_stride,
         need_density=need_density,
         use_jit=use_jit,
+        diagnostic_norm=diagnostic_norm,
         show_progress=show_progress,
         status=status,
         fresh_G0=fresh_G0,
+        controls=controls,
     )
-
-    gamma_out, omega_out, phi_t_np, t_arr = _fit_cyclone_time_trace(
-        phi_t=trace.phi_t,
-        density_t=trace.density_t,
-        dt=dt,
-        stride=trace.stride,
-        sel=sel,
-        params=params,
-        diagnostic_norm=diagnostic_norm,
-        options=fit_options,
-        status=status,
-    )
-    status(f"time integration fit complete: gamma={gamma_out:.6f} omega={omega_out:.6f}")
-    return gamma_out, omega_out, phi_t_np, t_arr
