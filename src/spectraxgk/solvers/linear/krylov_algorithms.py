@@ -160,20 +160,15 @@ def _shift_invert_frequency_masks(
     omega_cap_factor: float,
     omega_sign: int,
 ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    omega_scale = _omega_scale(cache, params)
-    omega_cap = omega_cap_factor * omega_scale
-    omega_min = omega_min_factor * omega_scale
-    use_min = omega_min_factor > 0.0
-    mask0 = jnp.abs(imag_part) <= omega_cap
-    mask0 = jnp.where(use_min, mask0 & (jnp.abs(imag_part) >= omega_min), mask0)
-    mask0 = mask0 & finite
-    omega_phys = _physical_omega(imag_part)
-    omega_sign_val = jnp.asarray(omega_sign, dtype=imag_part.dtype)
-    use_sign = omega_sign_val != 0.0
-    mask_sign = (omega_sign_val * omega_phys) >= 0.0
-    signed_mask = jnp.where(use_sign, mask0 & mask_sign, mask0)
-    mask = jnp.where(jnp.any(signed_mask), signed_mask, mask0)
-    return mask0, mask, omega_scale
+    return _frequency_masks_from_imaginary_part(
+        imag_part=imag_part,
+        finite=finite,
+        cache=cache,
+        params=params,
+        omega_min_factor=omega_min_factor,
+        omega_cap_factor=omega_cap_factor,
+        omega_sign=omega_sign,
+    )
 
 
 def _shift_invert_nearest_shift_index(
@@ -234,6 +229,178 @@ def _shift_invert_mode_index(
     if select_overlap:
         idx = _select_by_overlap(eigvecs, V[:krylov_dim], v_ref, mask, idx)
     return idx
+
+
+def _frequency_masks_from_imaginary_part(
+    *,
+    imag_part: jnp.ndarray,
+    finite: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    omega_min_factor: float,
+    omega_cap_factor: float,
+    omega_sign: int,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    omega_scale = _omega_scale(cache, params)
+    omega_cap = omega_cap_factor * omega_scale
+    omega_min = omega_min_factor * omega_scale
+    use_min = omega_min_factor > 0.0
+    mask0 = jnp.abs(imag_part) <= omega_cap
+    mask0 = jnp.where(use_min, mask0 & (jnp.abs(imag_part) >= omega_min), mask0)
+    mask0 = mask0 & finite
+    omega_phys = _physical_omega(imag_part)
+    omega_sign_val = jnp.asarray(omega_sign, dtype=imag_part.dtype)
+    use_sign = omega_sign_val != 0.0
+    mask_sign = (omega_sign_val * omega_phys) >= 0.0
+    signed_mask = jnp.where(use_sign, mask0 & mask_sign, mask0)
+    mask = jnp.where(jnp.any(signed_mask), signed_mask, mask0)
+    return mask0, mask, omega_scale
+
+
+def _arnoldi_mode_index(
+    *,
+    eigvecs: jnp.ndarray,
+    V: jnp.ndarray,
+    v_ref: jnp.ndarray,
+    real_part: jnp.ndarray,
+    imag_part: jnp.ndarray,
+    mask0: jnp.ndarray,
+    mask: jnp.ndarray,
+    omega_scale: jnp.ndarray,
+    omega_target_factor: float,
+    omega_cap_factor: float,
+    omega_sign: int,
+    select_overlap: bool,
+    krylov_dim: int,
+    fallback_to_growth_when_no_mask: bool,
+) -> jnp.ndarray:
+    real_masked = jnp.where(mask, real_part, -jnp.inf)
+    idx_masked = jnp.argmax(real_masked)
+    idx_small = jnp.argmin(jnp.abs(imag_part))
+    use_mask = (omega_cap_factor > 0.0) & jnp.any(mask)
+    idx = jnp.where(use_mask, idx_masked, idx_small)
+    if fallback_to_growth_when_no_mask:
+        idx = jnp.where(jnp.any(mask0), idx, jnp.argmax(real_part))
+    idx = _select_by_target(
+        real_part,
+        imag_part,
+        mask,
+        omega_scale,
+        omega_target_factor,
+        omega_sign,
+        idx,
+    )
+    if select_overlap:
+        idx = _select_by_overlap(eigvecs, V[:krylov_dim], v_ref, mask, idx)
+    return idx
+
+
+def _ritz_vector_from_index(
+    V: jnp.ndarray,
+    eigvecs: jnp.ndarray,
+    idx: jnp.ndarray,
+    *,
+    krylov_dim: int,
+) -> jnp.ndarray:
+    y = eigvecs[:, idx]
+    return _normalize(jnp.tensordot(jnp.conj(y), V[:krylov_dim], axes=1))
+
+
+def _operator_arnoldi_restart_step(
+    v: jnp.ndarray,
+    v_ref: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    term_cfg: TermConfig,
+    *,
+    krylov_dim: int,
+    omega_min_factor: float,
+    omega_target_factor: float,
+    omega_cap_factor: float,
+    omega_sign: int,
+    select_overlap: bool,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    V, H = _arnoldi(v, _apply_operator, cache, params, term_cfg, krylov_dim)
+    Hk = H[:krylov_dim, :krylov_dim]
+    eigvals, eigvecs = jnp.linalg.eig(Hk)
+    real_part = jnp.real(eigvals)
+    imag_part = jnp.imag(eigvals)
+    mask0, mask, omega_scale = _frequency_masks_from_imaginary_part(
+        imag_part=imag_part,
+        finite=jnp.ones_like(real_part, dtype=bool),
+        cache=cache,
+        params=params,
+        omega_min_factor=omega_min_factor,
+        omega_cap_factor=omega_cap_factor,
+        omega_sign=omega_sign,
+    )
+    idx = _arnoldi_mode_index(
+        eigvecs=eigvecs,
+        V=V,
+        v_ref=v_ref,
+        real_part=real_part,
+        imag_part=imag_part,
+        mask0=mask0,
+        mask=mask,
+        omega_scale=omega_scale,
+        omega_target_factor=omega_target_factor,
+        omega_cap_factor=omega_cap_factor,
+        omega_sign=omega_sign,
+        select_overlap=select_overlap,
+        krylov_dim=krylov_dim,
+        fallback_to_growth_when_no_mask=True,
+    )
+    return _ritz_vector_from_index(V, eigvecs, idx, krylov_dim=krylov_dim), eigvals[idx]
+
+
+def _propagator_arnoldi_restart_step(
+    v: jnp.ndarray,
+    v_ref: jnp.ndarray,
+    apply_prop,
+    cache: LinearCache,
+    params: LinearParams,
+    term_cfg: TermConfig,
+    *,
+    krylov_dim: int,
+    dt_val: jnp.ndarray,
+    omega_min_factor: float,
+    omega_target_factor: float,
+    omega_cap_factor: float,
+    omega_sign: int,
+    select_overlap: bool,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    V, H = _arnoldi(v, apply_prop, cache, params, term_cfg, krylov_dim)
+    Hk = H[:krylov_dim, :krylov_dim]
+    eigvals, eigvecs = jnp.linalg.eig(Hk)
+    lam = jnp.log(eigvals) / dt_val
+    real_part = jnp.real(lam)
+    imag_part = jnp.imag(lam)
+    mask0, mask, omega_scale = _frequency_masks_from_imaginary_part(
+        imag_part=imag_part,
+        finite=jnp.ones_like(real_part, dtype=bool),
+        cache=cache,
+        params=params,
+        omega_min_factor=omega_min_factor,
+        omega_cap_factor=omega_cap_factor,
+        omega_sign=omega_sign,
+    )
+    idx = _arnoldi_mode_index(
+        eigvecs=eigvecs,
+        V=V,
+        v_ref=v_ref,
+        real_part=real_part,
+        imag_part=imag_part,
+        mask0=mask0,
+        mask=mask,
+        omega_scale=omega_scale,
+        omega_target_factor=omega_target_factor,
+        omega_cap_factor=omega_cap_factor,
+        omega_sign=omega_sign,
+        select_overlap=select_overlap,
+        krylov_dim=krylov_dim,
+        fallback_to_growth_when_no_mask=False,
+    )
+    return _ritz_vector_from_index(V, eigvecs, idx, krylov_dim=krylov_dim), lam[idx]
 
 
 def _shift_invert_restart_step(
@@ -394,48 +561,21 @@ def dominant_eigenpair_cached(
     eig0 = jnp.asarray(0.0, dtype=v0.dtype)
 
     def restart_body(i, state):
+        del i
         v, _eig_prev = state
-        V, H = _arnoldi(v, _apply_operator, cache, params, term_cfg, krylov_dim)
-        Hk = H[:krylov_dim, :krylov_dim]
-        eigvals, eigvecs = jnp.linalg.eig(Hk)
-        real_part = jnp.real(eigvals)
-        imag_part = jnp.imag(eigvals)
-        omega_scale = _omega_scale(cache, params)
-        omega_cap = omega_cap_factor * omega_scale
-        omega_min = omega_min_factor * omega_scale
-        use_cap = omega_cap_factor > 0.0
-        use_min = omega_min_factor > 0.0
-        mask0 = jnp.abs(imag_part) <= omega_cap
-        mask0 = jnp.where(use_min, mask0 & (jnp.abs(imag_part) >= omega_min), mask0)
-        mask0_any = jnp.any(mask0)
-        omega_phys = _physical_omega(imag_part)
-        omega_sign_val = jnp.asarray(omega_sign, dtype=imag_part.dtype)
-        use_sign = omega_sign_val != 0.0
-        mask_sign = (omega_sign_val * omega_phys) >= 0.0
-        mask = jnp.where(use_sign, mask0 & mask_sign, mask0)
-        use_sign_mask = jnp.any(mask)
-        mask = jnp.where(use_sign_mask, mask, mask0)
-        real_masked = jnp.where(mask, real_part, -jnp.inf)
-        idx_masked = jnp.argmax(real_masked)
-        idx_small = jnp.argmin(jnp.abs(imag_part))
-        use_mask = use_cap & jnp.any(mask)
-        idx = jnp.where(use_mask, idx_masked, idx_small)
-        idx = jnp.where(mask0_any, idx, jnp.argmax(real_part))
-        idx = _select_by_target(
-            real_part,
-            imag_part,
-            mask,
-            omega_scale,
-            omega_target_factor,
-            omega_sign,
-            idx,
+        v_next, eig = _operator_arnoldi_restart_step(
+            v,
+            v_ref,
+            cache,
+            params,
+            term_cfg,
+            krylov_dim=krylov_dim,
+            omega_min_factor=omega_min_factor,
+            omega_target_factor=omega_target_factor,
+            omega_cap_factor=omega_cap_factor,
+            omega_sign=omega_sign,
+            select_overlap=select_overlap,
         )
-        if select_overlap:
-            idx = _select_by_overlap(eigvecs, V[:krylov_dim], v_ref, mask, idx)
-        eig = eigvals[idx]
-        y = eigvecs[:, idx]
-        v_next = jnp.tensordot(jnp.conj(y), V[:krylov_dim], axes=1)
-        v_next = _normalize(v_next)
         return v_next, eig
 
     v, eig = jax.lax.fori_loop(0, restarts, restart_body, (v, eig0))
@@ -468,47 +608,23 @@ def dominant_eigenpair_propagator_cached(
         return _advance_imex2(x, cache, params, term_cfg, dt_val)
 
     def restart_body(i, state):
+        del i
         v, _eig_prev = state
-        V, H = _arnoldi(v, apply_prop, cache, params, term_cfg, krylov_dim)
-        Hk = H[:krylov_dim, :krylov_dim]
-        eigvals, eigvecs = jnp.linalg.eig(Hk)
-        lam = jnp.log(eigvals) / dt_val
-        real_part = jnp.real(lam)
-        imag_part = jnp.imag(lam)
-        omega_scale = _omega_scale(cache, params)
-        omega_cap = omega_cap_factor * omega_scale
-        omega_min = omega_min_factor * omega_scale
-        use_cap = omega_cap_factor > 0.0
-        use_min = omega_min_factor > 0.0
-        mask0 = jnp.abs(imag_part) <= omega_cap
-        mask0 = jnp.where(use_min, mask0 & (jnp.abs(imag_part) >= omega_min), mask0)
-        omega_phys = _physical_omega(imag_part)
-        omega_sign_val = jnp.asarray(omega_sign, dtype=imag_part.dtype)
-        use_sign = omega_sign_val != 0.0
-        mask_sign = (omega_sign_val * omega_phys) >= 0.0
-        mask = jnp.where(use_sign, mask0 & mask_sign, mask0)
-        use_sign_mask = jnp.any(mask)
-        mask = jnp.where(use_sign_mask, mask, mask0)
-        real_masked = jnp.where(mask, real_part, -jnp.inf)
-        idx_masked = jnp.argmax(real_masked)
-        idx_small = jnp.argmin(jnp.abs(imag_part))
-        use_mask = use_cap & jnp.any(mask)
-        idx = jnp.where(use_mask, idx_masked, idx_small)
-        idx = _select_by_target(
-            real_part,
-            imag_part,
-            mask,
-            omega_scale,
-            omega_target_factor,
-            omega_sign,
-            idx,
+        return _propagator_arnoldi_restart_step(
+            v,
+            v_ref,
+            apply_prop,
+            cache,
+            params,
+            term_cfg,
+            krylov_dim=krylov_dim,
+            dt_val=dt_val,
+            omega_min_factor=omega_min_factor,
+            omega_target_factor=omega_target_factor,
+            omega_cap_factor=omega_cap_factor,
+            omega_sign=omega_sign,
+            select_overlap=select_overlap,
         )
-        if select_overlap:
-            idx = _select_by_overlap(eigvecs, V[:krylov_dim], v_ref, mask, idx)
-        y = eigvecs[:, idx]
-        v_next = jnp.tensordot(jnp.conj(y), V[:krylov_dim], axes=1)
-        v_next = _normalize(v_next)
-        return v_next, lam[idx]
 
     v, eig_sel = jax.lax.fori_loop(
         0, restarts, restart_body, (v, jnp.asarray(0.0, dtype=v0.dtype))
