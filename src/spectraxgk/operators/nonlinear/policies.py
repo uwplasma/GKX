@@ -231,6 +231,146 @@ def build_nonlinear_time_step_policy(
     )
 
 
+def _compressed_real_cfl_gradient(
+    field: jnp.ndarray,
+    *,
+    nyc: int,
+    kx_b: jnp.ndarray,
+    ky_b: jnp.ndarray,
+    imag: jnp.ndarray,
+    ifft_scale: jnp.ndarray,
+    grid: SpectralGrid,
+    use_batched_fft: bool,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Return physical-space gradients for an rFFT-compressed spectral field."""
+
+    field_nyc = field[:nyc, :, :]
+    if use_batched_fft:
+        grad = jnp.stack([imag * kx_b * field_nyc, imag * ky_b * field_nyc], axis=0)
+        grad = (
+            jnp.fft.irfft2(grad, s=(grid.kx.size, grid.ky.size), axes=(-2, -3))
+            * ifft_scale
+        )
+        return grad[0], grad[1]
+    dfdx = jnp.fft.irfft2(
+        imag * kx_b * field_nyc,
+        s=(grid.kx.size, grid.ky.size),
+        axes=(-2, -3),
+    )
+    dfdy = jnp.fft.irfft2(
+        imag * ky_b * field_nyc,
+        s=(grid.kx.size, grid.ky.size),
+        axes=(-2, -3),
+    )
+    return dfdx * ifft_scale, dfdy * ifft_scale
+
+
+def _full_complex_cfl_gradient(
+    field: jnp.ndarray,
+    *,
+    kx_b: jnp.ndarray,
+    ky_b: jnp.ndarray,
+    imag: jnp.ndarray,
+    ifft_scale: jnp.ndarray,
+    use_batched_fft: bool,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Return physical-space gradients for a full complex spectral field."""
+
+    if use_batched_fft:
+        grad = (
+            _ifft2_xy(jnp.stack([imag * kx_b * field, imag * ky_b * field], axis=0))
+            * ifft_scale
+        )
+        return grad[0], grad[1]
+    dfdx = _ifft2_xy(imag * kx_b * field) * ifft_scale
+    dfdy = _ifft2_xy(imag * ky_b * field) * ifft_scale
+    return dfdx, dfdy
+
+
+def _field_gradient_for_cfl(
+    field: jnp.ndarray,
+    *,
+    compressed_real_fft: bool,
+    nyc: int,
+    kx_b: jnp.ndarray,
+    ky_b: jnp.ndarray,
+    imag: jnp.ndarray,
+    ifft_scale: jnp.ndarray,
+    grid: SpectralGrid,
+    use_batched_fft: bool,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Dispatch the nonlinear CFL gradient transform for the current layout."""
+
+    if compressed_real_fft:
+        return _compressed_real_cfl_gradient(
+            field,
+            nyc=nyc,
+            kx_b=kx_b,
+            ky_b=ky_b,
+            imag=imag,
+            ifft_scale=ifft_scale,
+            grid=grid,
+            use_batched_fft=use_batched_fft,
+        )
+    return _full_complex_cfl_gradient(
+        field,
+        kx_b=kx_b,
+        ky_b=ky_b,
+        imag=imag,
+        ifft_scale=ifft_scale,
+        use_batched_fft=use_batched_fft,
+    )
+
+
+def _accumulate_electromagnetic_cfl_gradients(
+    dphi_dx: jnp.ndarray,
+    dphi_dy: jnp.ndarray,
+    fields: FieldState,
+    *,
+    grad_fn: Callable[[jnp.ndarray], tuple[jnp.ndarray, jnp.ndarray]],
+    vpar_max: float,
+    muB_max: float,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Add optional Apar/Bpar gradient speeds to the electrostatic CFL speeds."""
+
+    speed_x = jnp.abs(dphi_dx)
+    speed_y = jnp.abs(dphi_dy)
+    if fields.apar is not None:
+        dap_dx, dap_dy = grad_fn(fields.apar)
+        speed_x = speed_x + vpar_max * jnp.abs(dap_dx)
+        speed_y = speed_y + vpar_max * jnp.abs(dap_dy)
+    if fields.bpar is not None:
+        dbp_dx, dbp_dy = grad_fn(fields.bpar)
+        speed_x = speed_x + muB_max * jnp.abs(dbp_dx)
+        speed_y = speed_y + muB_max * jnp.abs(dbp_dy)
+    return speed_x, speed_y
+
+
+def _cfl_frequencies_from_physical_speeds(
+    speed_x: jnp.ndarray,
+    speed_y: jnp.ndarray,
+    *,
+    real_dtype: jnp.dtype,
+    kxfac: jnp.ndarray,
+    kx_max: float,
+    ky_max: float,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Reduce physical-space nonlinear speeds to x/y CFL frequencies."""
+
+    vmax_x = jnp.max(speed_y)
+    vmax_y = jnp.max(speed_x)
+    scale = jnp.asarray(0.5, dtype=real_dtype)
+    omega_x = (
+        jnp.abs(kxfac) * jnp.asarray(kx_max, dtype=real_dtype) * vmax_x * scale
+    )
+    omega_y = (
+        jnp.abs(kxfac) * jnp.asarray(ky_max, dtype=real_dtype) * vmax_y * scale
+    )
+    return jnp.asarray(omega_x, dtype=real_dtype), jnp.asarray(
+        omega_y, dtype=real_dtype
+    )
+
+
 def _nonlinear_cfl_frequency_components(
     fields: FieldState,
     grid: SpectralGrid,
@@ -246,8 +386,6 @@ def _nonlinear_cfl_frequency_components(
     """Nonlinear x/y CFL frequency components from grad(phi, apar, bpar)."""
 
     phi = fields.phi
-    apar = fields.apar
-    bpar = fields.bpar
 
     ny = int(grid.ky.size)
     nyc = 1 + ny // 2
@@ -263,110 +401,41 @@ def _nonlinear_cfl_frequency_components(
     if compressed_real_fft:
         _, ky_vals, kx_nyc, ky_nyc = real_fft_mesh(cache.kx_grid, cache.ky_grid)
         nyc = int(ky_vals.shape[0])
-        phi_nyc = phi[:nyc, :, :]
-        kx_b = _broadcast_grid(kx_nyc, phi_nyc.ndim)
-        ky_b = _broadcast_grid(ky_nyc, phi_nyc.ndim)
-        if use_batched_fft:
-            grad_phi = jnp.stack(
-                [imag * kx_b * phi_nyc, imag * ky_b * phi_nyc], axis=0
-            )
-            grad_phi = (
-                jnp.fft.irfft2(
-                    grad_phi, s=(grid.kx.size, grid.ky.size), axes=(-2, -3)
-                )
-                * ifft_scale
-            )
-            dphi_dx = grad_phi[0]
-            dphi_dy = grad_phi[1]
-        else:
-            dphi_dx = jnp.fft.irfft2(
-                imag * kx_b * phi_nyc,
-                s=(grid.kx.size, grid.ky.size),
-                axes=(-2, -3),
-            )
-            dphi_dy = jnp.fft.irfft2(
-                imag * ky_b * phi_nyc,
-                s=(grid.kx.size, grid.ky.size),
-                axes=(-2, -3),
-            )
-            dphi_dx = dphi_dx * ifft_scale
-            dphi_dy = dphi_dy * ifft_scale
-
-        def _grad_real(field: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
-            field_nyc = field[:nyc, :, :]
-            if use_batched_fft:
-                grad = jnp.stack(
-                    [imag * kx_b * field_nyc, imag * ky_b * field_nyc], axis=0
-                )
-                grad = (
-                    jnp.fft.irfft2(
-                        grad, s=(grid.kx.size, grid.ky.size), axes=(-2, -3)
-                    )
-                    * ifft_scale
-                )
-                return grad[0], grad[1]
-            dfx = jnp.fft.irfft2(
-                imag * kx_b * field_nyc,
-                s=(grid.kx.size, grid.ky.size),
-                axes=(-2, -3),
-            )
-            dfy = jnp.fft.irfft2(
-                imag * ky_b * field_nyc,
-                s=(grid.kx.size, grid.ky.size),
-                axes=(-2, -3),
-            )
-            return dfx * ifft_scale, dfy * ifft_scale
-
+        kx_b = _broadcast_grid(kx_nyc, phi[:nyc, :, :].ndim)
+        ky_b = _broadcast_grid(ky_nyc, phi[:nyc, :, :].ndim)
     else:
         kx_b = _broadcast_grid(cache.kx_grid, phi.ndim)
         ky_b = _broadcast_grid(cache.ky_grid, phi.ndim)
-        if use_batched_fft:
-            grad_phi = (
-                _ifft2_xy(jnp.stack([imag * kx_b * phi, imag * ky_b * phi], axis=0))
-                * ifft_scale
-            )
-            dphi_dx = grad_phi[0]
-            dphi_dy = grad_phi[1]
-        else:
-            dphi_dx = _ifft2_xy(imag * kx_b * phi) * ifft_scale
-            dphi_dy = _ifft2_xy(imag * ky_b * phi) * ifft_scale
 
-        def _grad_real(field: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
-            if use_batched_fft:
-                grad = (
-                    _ifft2_xy(
-                        jnp.stack([imag * kx_b * field, imag * ky_b * field], axis=0)
-                    )
-                    * ifft_scale
-                )
-                return grad[0], grad[1]
-            dfx = _ifft2_xy(imag * kx_b * field) * ifft_scale
-            dfy = _ifft2_xy(imag * ky_b * field) * ifft_scale
-            return dfx, dfy
+    def grad_fn(field: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
+        return _field_gradient_for_cfl(
+            field,
+            compressed_real_fft=compressed_real_fft,
+            nyc=nyc,
+            kx_b=kx_b,
+            ky_b=ky_b,
+            imag=imag,
+            ifft_scale=ifft_scale,
+            grid=grid,
+            use_batched_fft=use_batched_fft,
+        )
 
-    dphi_dx = jnp.abs(dphi_dx)
-    dphi_dy = jnp.abs(dphi_dy)
-
-    if apar is not None:
-        dap_dx, dap_dy = _grad_real(apar)
-        dphi_dx = dphi_dx + vpar_max * jnp.abs(dap_dx)
-        dphi_dy = dphi_dy + vpar_max * jnp.abs(dap_dy)
-    if bpar is not None:
-        dbp_dx, dbp_dy = _grad_real(bpar)
-        dphi_dx = dphi_dx + muB_max * jnp.abs(dbp_dx)
-        dphi_dy = dphi_dy + muB_max * jnp.abs(dbp_dy)
-
-    vmax_x = jnp.max(dphi_dy)
-    vmax_y = jnp.max(dphi_dx)
-    scale = jnp.asarray(0.5, dtype=real_dtype)
-    omega_x = (
-        jnp.abs(kxfac_val) * jnp.asarray(kx_max, dtype=real_dtype) * vmax_x * scale
+    dphi_dx, dphi_dy = grad_fn(phi)
+    speed_x, speed_y = _accumulate_electromagnetic_cfl_gradients(
+        dphi_dx,
+        dphi_dy,
+        fields,
+        grad_fn=grad_fn,
+        vpar_max=vpar_max,
+        muB_max=muB_max,
     )
-    omega_y = (
-        jnp.abs(kxfac_val) * jnp.asarray(ky_max, dtype=real_dtype) * vmax_y * scale
-    )
-    return jnp.asarray(omega_x, dtype=real_dtype), jnp.asarray(
-        omega_y, dtype=real_dtype
+    return _cfl_frequencies_from_physical_speeds(
+        speed_x,
+        speed_y,
+        real_dtype=real_dtype,
+        kxfac=kxfac_val,
+        kx_max=kx_max,
+        ky_max=ky_max,
     )
 
 
