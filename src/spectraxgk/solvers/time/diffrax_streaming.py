@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Callable, Sequence
 
 import jax
@@ -27,6 +28,49 @@ from spectraxgk.solvers.time.diffrax_core import (
     _unpack_complex_state,
 )
 from spectraxgk.terms.assembly import compute_fields_cached
+
+
+@dataclass(frozen=True)
+class _StreamingFitOptions:
+    fit_signal: str
+    mode_ky_indices: Sequence[int] | np.ndarray | jnp.ndarray | None
+    mode_kx_index: int
+    mode_z_index: int
+    mode_method: str
+    amp_floor: float
+    density_species_index: int | None
+    tmin: float | None
+    tmax: float | None
+
+
+@dataclass(frozen=True)
+class _StreamingSolveOptions:
+    method: str
+    dt: float
+    steps: int
+    adaptive: bool
+    rtol: float
+    atol: float
+    max_steps: int
+    show_progress: bool
+    progress_bar: bool
+    checkpoint: bool
+    jit: bool | None
+    state_sharding: Any | None
+
+
+@dataclass(frozen=True)
+class _StreamingPreparedState:
+    dfx: Any
+    eqx: Any
+    cache: LinearCache
+    term_cfg: Any
+    G0_packed: jnp.ndarray
+    ky_idx: jnp.ndarray
+    solver: Any
+    terms_obj: Any
+    dt_val: jnp.ndarray
+    acc0: jnp.ndarray
 
 
 def _cache_for_streaming_state(
@@ -333,6 +377,125 @@ def _finalize_streaming_solution(
     return None, gamma, omega
 
 
+def _prepare_streaming_diffrax_state(
+    G0: jnp.ndarray,
+    grid: SpectralGrid,
+    geom: FluxTubeGeometryLike,
+    params: LinearParams,
+    cache: LinearCache | None,
+    terms: LinearTerms | None,
+    *,
+    fit: _StreamingFitOptions,
+    solve_options: _StreamingSolveOptions,
+) -> _StreamingPreparedState:
+    dfx, eqx = _require_diffrax()
+    state_dtype = jnp.result_type(G0, _base_complex_dtype())
+    G0 = jnp.asarray(G0, dtype=state_dtype)
+    real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
+    terms_use = LinearTerms() if terms is None else terms
+    cache_use = _cache_for_streaming_state(G0, grid, geom, params, cache)
+    term_cfg = linear_terms_to_term_config(terms_use)
+    use_custom_vjp = not (
+        _is_imex_solver(solve_options.method)
+        or _is_implicit_solver(solve_options.method)
+    )
+
+    G0_packed = _pack_complex_state(G0)
+    if solve_options.state_sharding is not None:
+        G0_packed = jax.device_put(G0_packed, solve_options.state_sharding)
+
+    ky_idx = _streaming_mode_indices(grid, fit.mode_ky_indices)
+    extract_mode = _streaming_mode_extractor(
+        ky_idx,
+        mode_kx_index=fit.mode_kx_index,
+        mode_z_index=fit.mode_z_index,
+        mode_method=fit.mode_method,
+    )
+    dt_val = jnp.asarray(solve_options.dt, dtype=real_dtype)
+    rhs = _build_streaming_rhs(
+        use_custom_vjp=use_custom_vjp,
+        fit_signal=fit.fit_signal,
+        extract_mode=extract_mode,
+        ky_idx=ky_idx,
+        mode_kx_index=fit.mode_kx_index,
+        mode_z_index=fit.mode_z_index,
+        mode_method=fit.mode_method,
+        density_species_index=fit.density_species_index,
+        amp_floor_val=jnp.asarray(fit.amp_floor, dtype=real_dtype),
+        tmin_val=jnp.asarray(0.0 if fit.tmin is None else fit.tmin, dtype=real_dtype),
+        tmax_val=jnp.asarray(
+            solve_options.dt * solve_options.steps if fit.tmax is None else fit.tmax,
+            dtype=real_dtype,
+        ),
+        real_dtype=real_dtype,
+        state_sharding=solve_options.state_sharding,
+    )
+    explicit_term = dfx.ODETerm(rhs)
+    if _is_imex_solver(solve_options.method):
+        terms_obj = dfx.MultiTerm(dfx.ODETerm(_zero_streaming_term_rhs), explicit_term)
+    else:
+        terms_obj = explicit_term
+
+    return _StreamingPreparedState(
+        dfx=dfx,
+        eqx=eqx,
+        cache=cache_use,
+        term_cfg=term_cfg,
+        G0_packed=G0_packed,
+        ky_idx=ky_idx,
+        solver=_solver_from_name(solve_options.method),
+        terms_obj=terms_obj,
+        dt_val=dt_val,
+        acc0=jnp.zeros((ky_idx.shape[0],), dtype=real_dtype),
+    )
+
+
+def _run_streaming_diffrax_solve(
+    prepared: _StreamingPreparedState,
+    params: LinearParams,
+    *,
+    solve_options: _StreamingSolveOptions,
+):
+    dfx = prepared.dfx
+    adaptive_eff = (
+        solve_options.adaptive
+        or _is_imex_solver(solve_options.method)
+        or _is_implicit_solver(solve_options.method)
+    )
+
+    def solve(G0_packed_in):
+        G0_packed_in = _maybe_apply_sharding(
+            G0_packed_in, solve_options.state_sharding
+        )
+        max_steps_eff = max(int(solve_options.max_steps), int(solve_options.steps))
+        return dfx.diffeqsolve(
+            prepared.terms_obj,
+            prepared.solver,
+            t0=jnp.asarray(0.0, dtype=prepared.dt_val.dtype),
+            t1=prepared.dt_val * solve_options.steps,
+            dt0=prepared.dt_val,
+            y0=(G0_packed_in, prepared.acc0, prepared.acc0, prepared.acc0),
+            args=(prepared.cache, params, prepared.term_cfg),
+            saveat=dfx.SaveAt(t1=True),
+            stepsize_controller=_stepsize_controller(
+                adaptive_eff, solve_options.rtol, solve_options.atol
+            ),
+            adjoint=_adjoint(solve_options.checkpoint),
+            max_steps=max_steps_eff,
+            throw=solve_options.state_sharding is None,
+            progress_meter=_progress_meter(
+                solve_options.show_progress or solve_options.progress_bar
+            ),
+        )
+
+    jit_eff = solve_options.jit
+    if jit_eff is None:
+        jit_eff = not (solve_options.show_progress or solve_options.progress_bar)
+    if jit_eff:
+        return prepared.eqx.filter_jit(solve, donate="all")(prepared.G0_packed)
+    return solve(prepared.G0_packed)
+
+
 def integrate_linear_diffrax_streaming(
     G0: jnp.ndarray,
     grid: SpectralGrid,
@@ -366,90 +529,51 @@ def integrate_linear_diffrax_streaming(
 ) -> tuple[jnp.ndarray | None, jnp.ndarray, jnp.ndarray]:
     """Integrate the linear system and stream a growth-rate fit without storing time series."""
 
-    dfx, eqx = _require_diffrax()
-    state_dtype = jnp.result_type(G0, _base_complex_dtype())
-    G0 = jnp.asarray(G0, dtype=state_dtype)
-    real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
-    if terms is None:
-        terms = LinearTerms()
-    cache = _cache_for_streaming_state(G0, grid, geom, params, cache)
-    term_cfg = linear_terms_to_term_config(terms)
-    use_custom_vjp = not (_is_imex_solver(method) or _is_implicit_solver(method))
-
-    G0_packed = _pack_complex_state(G0)
-    if state_sharding is not None:
-        G0_packed = jax.device_put(G0_packed, state_sharding)
-
-    ky_idx = _streaming_mode_indices(grid, mode_ky_indices)
-    extract_mode = _streaming_mode_extractor(
-        ky_idx,
-        mode_kx_index=mode_kx_index,
-        mode_z_index=mode_z_index,
-        mode_method=mode_method,
-    )
-    amp_floor_val = jnp.asarray(amp_floor, dtype=real_dtype)
-    tmin_val = jnp.asarray(0.0 if tmin is None else tmin, dtype=real_dtype)
-    tmax_val = jnp.asarray(dt * steps if tmax is None else tmax, dtype=real_dtype)
-    rhs = _build_streaming_rhs(
-        use_custom_vjp=use_custom_vjp,
+    fit = _StreamingFitOptions(
         fit_signal=fit_signal,
-        extract_mode=extract_mode,
-        ky_idx=ky_idx,
+        mode_ky_indices=mode_ky_indices,
         mode_kx_index=mode_kx_index,
         mode_z_index=mode_z_index,
         mode_method=mode_method,
+        amp_floor=amp_floor,
         density_species_index=density_species_index,
-        amp_floor_val=amp_floor_val,
-        tmin_val=tmin_val,
-        tmax_val=tmax_val,
-        real_dtype=real_dtype,
+        tmin=tmin,
+        tmax=tmax,
+    )
+    solve_options = _StreamingSolveOptions(
+        method=method,
+        dt=dt,
+        steps=steps,
+        adaptive=adaptive,
+        rtol=rtol,
+        atol=atol,
+        max_steps=max_steps,
+        show_progress=show_progress,
+        progress_bar=progress_bar,
+        checkpoint=checkpoint,
+        jit=jit,
         state_sharding=state_sharding,
     )
-
-    solver = _solver_from_name(method)
-    explicit_term = dfx.ODETerm(rhs)
-    if _is_imex_solver(method):
-        zero_term = dfx.ODETerm(_zero_streaming_term_rhs)
-        terms_obj = dfx.MultiTerm(zero_term, explicit_term)
-    else:
-        terms_obj = explicit_term
-
-    dt_val = jnp.asarray(dt, dtype=real_dtype)
-    adaptive_eff = adaptive or _is_imex_solver(method) or _is_implicit_solver(method)
-
-    acc0 = jnp.zeros((ky_idx.shape[0],), dtype=real_dtype)
-
-    def solve(G0_packed_in):
-        G0_packed_in = _maybe_apply_sharding(G0_packed_in, state_sharding)
-        max_steps_eff = max(int(max_steps), int(steps))
-        return dfx.diffeqsolve(
-            terms_obj,
-            solver,
-            t0=jnp.asarray(0.0, dtype=real_dtype),
-            t1=dt_val * steps,
-            dt0=dt_val,
-            y0=(G0_packed_in, acc0, acc0, acc0),
-            args=(cache, params, term_cfg),
-            saveat=dfx.SaveAt(t1=True),
-            stepsize_controller=_stepsize_controller(adaptive_eff, rtol, atol),
-            adjoint=_adjoint(checkpoint),
-            max_steps=max_steps_eff,
-            throw=state_sharding is None,
-            progress_meter=_progress_meter(show_progress or progress_bar),
-        )
-
-    if jit is None:
-        jit = not (show_progress or progress_bar)
-    if jit:
-        solve_jit = eqx.filter_jit(solve, donate="all")
-        sol = solve_jit(G0_packed)
-    else:
-        sol = solve(G0_packed)
-
+    prepared = _prepare_streaming_diffrax_state(
+        G0,
+        grid,
+        geom,
+        params,
+        cache,
+        terms,
+        fit=fit,
+        solve_options=solve_options,
+    )
+    sol = _run_streaming_diffrax_solve(
+        prepared,
+        params,
+        solve_options=solve_options,
+    )
     return _finalize_streaming_solution(
         sol,
-        packed_state_ndim=G0_packed.ndim,
+        packed_state_ndim=prepared.G0_packed.ndim,
         return_state=return_state,
     )
+
 
 __all__ = ["integrate_linear_diffrax_streaming"]
