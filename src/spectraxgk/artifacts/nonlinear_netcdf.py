@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -38,6 +39,32 @@ from spectraxgk.artifacts.nonlinear_diagnostics import _resolve_restart_path
 from spectraxgk.artifacts.nonlinear_netcdf_fields import _write_big_netcdf
 from spectraxgk.artifacts.nonlinear_netcdf_diagnostics import _write_diagnostics_group
 from spectraxgk.artifacts import nonlinear_netcdf_geometry as _geometry_helpers
+
+
+@dataclass(frozen=True)
+class _NonlinearNetCDFPaths:
+    out_nc_path: Path
+    restart_path: Path
+    big_path: Path
+
+
+@dataclass(frozen=True)
+class _NonlinearNetCDFLayout:
+    grid: Any
+    geom_data: Any
+    theta: np.ndarray
+    kx_vals: np.ndarray
+    ky_vals: np.ndarray
+    full_nx: int
+    full_ny: int
+    active_nx: int
+    active_ny: int
+    nspecies: int
+    time_vals: np.ndarray
+    x_vals: np.ndarray
+    y_vals: np.ndarray
+    nl: int
+    nm: int
 
 
 def _sync_geometry_helper_dependencies() -> None:
@@ -109,22 +136,37 @@ def _write_restart_netcdf(
     return str(path)
 
 
-def _write_nonlinear_netcdf_outputs(
-    out: str | Path, result: Any, cfg: Any
-) -> dict[str, str]:
-    Dataset = _require_netcdf4()
+def _nonlinear_netcdf_paths(out: str | Path, cfg: Any) -> _NonlinearNetCDFPaths:
     out_path = Path(out)
     base = _netcdf_bundle_base(out_path)
-    out_nc_path = Path(f"{base}.out.nc")
-    restart_path = _resolve_restart_path(out_path, cfg, for_write=True)
-    big_path = Path(f"{base}.big.nc")
+    return _NonlinearNetCDFPaths(
+        out_nc_path=Path(f"{base}.out.nc"),
+        restart_path=Path(_resolve_restart_path(out_path, cfg, for_write=True)),
+        big_path=Path(f"{base}.big.nc"),
+    )
 
+
+def _required_nonlinear_diagnostics(result: Any) -> SimulationDiagnostics:
     diag: SimulationDiagnostics | None = result.diagnostics
     if diag is None:
         raise ValueError(
             "nonlinear NetCDF output artifacts require nonlinear diagnostics output"
         )
+    return diag
 
+
+def _state_axis_size(state: Any, axis: int, default: int) -> int:
+    if state is None:
+        return int(default)
+    state_array = np.asarray(state)
+    return int(state_array.shape[axis]) if state_array.ndim == 6 else int(default)
+
+
+def _nonlinear_netcdf_layout(
+    result: Any,
+    cfg: Any,
+    diag: SimulationDiagnostics,
+) -> _NonlinearNetCDFLayout:
     grid, geom_data = _build_output_grid_and_geometry(cfg)
     theta = np.asarray(grid.z, dtype=np.float32)
     kx_vals = _dealiased_kx_values(np.asarray(grid.kx))
@@ -133,96 +175,162 @@ def _write_nonlinear_netcdf_outputs(
     full_ny = int(np.asarray(grid.ky).size)
     active_nx = int(kx_vals.size)
     active_ny = int(ky_vals.size)
-    nspecies = (
-        int(np.asarray(result.state).shape[0])
-        if result.state is not None and np.asarray(result.state).ndim == 6
-        else len(cfg.species)
-    )
+    nspecies = _state_axis_size(result.state, 0, len(cfg.species))
     time_vals = np.asarray(diag.t, dtype=np.float64)
     x_vals = _real_space_axis(int(grid.kx.size), float(2.0 * np.pi * grid.x0))
     y_extent = float(2.0 * np.pi * grid.y0)
     y_vals = _real_space_axis(int(grid.ky.size), y_extent)
-    nl = (
-        int(np.asarray(result.state).shape[1])
-        if result.state is not None and np.asarray(result.state).ndim == 6
-        else 1
-    )
-    nm = (
-        int(np.asarray(result.state).shape[2])
-        if result.state is not None and np.asarray(result.state).ndim == 6
-        else 1
+    return _NonlinearNetCDFLayout(
+        grid=grid,
+        geom_data=geom_data,
+        theta=theta,
+        kx_vals=kx_vals,
+        ky_vals=ky_vals,
+        full_nx=full_nx,
+        full_ny=full_ny,
+        active_nx=active_nx,
+        active_ny=active_ny,
+        nspecies=nspecies,
+        time_vals=time_vals,
+        x_vals=x_vals,
+        y_vals=y_vals,
+        nl=_state_axis_size(result.state, 1, 1),
+        nm=_state_axis_size(result.state, 2, 1),
     )
 
+
+def _create_nonlinear_dimensions(root: Any, layout: _NonlinearNetCDFLayout) -> None:
+    root.createDimension("ri", 2)
+    root.createDimension("x", layout.x_vals.size)
+    root.createDimension("y", layout.y_vals.size)
+    root.createDimension("theta", layout.theta.size)
+    root.createDimension("kx", layout.kx_vals.size)
+    root.createDimension("ky", layout.ky_vals.size)
+    root.createDimension("kz", layout.theta.size)
+    root.createDimension("m", layout.nm)
+    root.createDimension("l", layout.nl)
+    root.createDimension("s", layout.nspecies)
+    root.createDimension("time", layout.time_vals.size)
+
+
+def _write_grids_group(root: Any, layout: _NonlinearNetCDFLayout) -> None:
+    grids = root.createGroup("Grids")
+    grids.createVariable("time", "f8", ("time",))[:] = layout.time_vals
+    grids.createVariable("kx", "f4", ("kx",))[:] = layout.kx_vals
+    grids.createVariable("ky", "f4", ("ky",))[:] = layout.ky_vals
+    grids.createVariable("kz", "f4", ("kz",))[:] = layout.theta
+    grids.createVariable("x", "f4", ("x",))[:] = layout.x_vals
+    grids.createVariable("y", "f4", ("y",))[:] = layout.y_vals
+    grids.createVariable("theta", "f4", ("theta",))[:] = layout.theta
+
+
+def _write_primary_nonlinear_netcdf(
+    Dataset: Any,
+    out_nc_path: Path,
+    *,
+    diag: SimulationDiagnostics,
+    cfg: Any,
+    layout: _NonlinearNetCDFLayout,
+) -> None:
     _ensure_parent(out_nc_path)
     with Dataset(out_nc_path, "w") as root:
-        root.createDimension("ri", 2)
-        root.createDimension("x", x_vals.size)
-        root.createDimension("y", y_vals.size)
-        root.createDimension("theta", theta.size)
-        root.createDimension("kx", kx_vals.size)
-        root.createDimension("ky", ky_vals.size)
-        root.createDimension("kz", theta.size)
-        root.createDimension("m", nm)
-        root.createDimension("l", nl)
-        root.createDimension("s", nspecies)
-        root.createDimension("time", time_vals.size)
-        _write_runtime_root_metadata(root, cfg, nspecies=nspecies, nl=nl, nm=nm)
-
-        grids = root.createGroup("Grids")
-        grids.createVariable("time", "f8", ("time",))[:] = time_vals
-        grids.createVariable("kx", "f4", ("kx",))[:] = kx_vals
-        grids.createVariable("ky", "f4", ("ky",))[:] = ky_vals
-        grids.createVariable("kz", "f4", ("kz",))[:] = theta
-        grids.createVariable("x", "f4", ("x",))[:] = x_vals
-        grids.createVariable("y", "f4", ("y",))[:] = y_vals
-        grids.createVariable("theta", "f4", ("theta",))[:] = theta
+        _create_nonlinear_dimensions(root, layout)
+        _write_runtime_root_metadata(
+            root,
+            cfg,
+            nspecies=layout.nspecies,
+            nl=layout.nl,
+            nm=layout.nm,
+        )
+        _write_grids_group(root, layout)
 
         geom_group = root.createGroup("Geometry")
-        _write_geometry_group(geom_group, cfg, grid=grid, geom=geom_data)
+        _write_geometry_group(
+            geom_group,
+            cfg,
+            grid=layout.grid,
+            geom=layout.geom_data,
+        )
 
         _write_diagnostics_group(
             root,
             diag,
             cfg,
-            nspecies=nspecies,
-            full_nx=full_nx,
-            full_ny=full_ny,
-            active_nx=active_nx,
-            active_ny=active_ny,
+            nspecies=layout.nspecies,
+            full_nx=layout.full_nx,
+            full_ny=layout.full_ny,
+            active_nx=layout.active_nx,
+            active_ny=layout.active_ny,
         )
         inputs = root.createGroup("Inputs")
-        _write_input_parameters_group(inputs, cfg, geom_data)
+        _write_input_parameters_group(inputs, cfg, layout.geom_data)
 
-    paths = {"out": str(out_nc_path)}
 
+def _write_optional_nonlinear_netcdf_artifacts(
+    Dataset: Any,
+    paths: _NonlinearNetCDFPaths,
+    *,
+    result: Any,
+    cfg: Any,
+    layout: _NonlinearNetCDFLayout,
+) -> dict[str, str]:
+    written: dict[str, str] = {}
     restart_written = _write_restart_netcdf(
         Dataset,
-        restart_path,
+        paths.restart_path,
         result.state,
-        time_vals,
+        layout.time_vals,
     )
     if restart_written is not None:
-        paths["restart"] = restart_written
+        written["restart"] = restart_written
 
     big_written = _write_big_netcdf(
         Dataset,
-        big_path,
+        paths.big_path,
         result,
         cfg,
-        x_vals=x_vals,
-        y_vals=y_vals,
-        theta=theta,
-        kx_vals=kx_vals,
-        ky_vals=ky_vals,
-        nspecies=nspecies,
-        nl=nl,
-        nm=nm,
-        time_vals=time_vals,
+        x_vals=layout.x_vals,
+        y_vals=layout.y_vals,
+        theta=layout.theta,
+        kx_vals=layout.kx_vals,
+        ky_vals=layout.ky_vals,
+        nspecies=layout.nspecies,
+        nl=layout.nl,
+        nm=layout.nm,
+        time_vals=layout.time_vals,
     )
     if big_written is not None:
-        paths["big"] = big_written
+        written["big"] = big_written
+    return written
 
-    return paths
+
+def _write_nonlinear_netcdf_outputs(
+    out: str | Path, result: Any, cfg: Any
+) -> dict[str, str]:
+    Dataset = _require_netcdf4()
+    paths = _nonlinear_netcdf_paths(out, cfg)
+    diag = _required_nonlinear_diagnostics(result)
+    layout = _nonlinear_netcdf_layout(result, cfg, diag)
+
+    _write_primary_nonlinear_netcdf(
+        Dataset,
+        paths.out_nc_path,
+        diag=diag,
+        cfg=cfg,
+        layout=layout,
+    )
+
+    written = {"out": str(paths.out_nc_path)}
+    written.update(
+        _write_optional_nonlinear_netcdf_artifacts(
+            Dataset,
+            paths,
+            result=result,
+            cfg=cfg,
+            layout=layout,
+        )
+    )
+    return written
 
 
 __all__ = [
