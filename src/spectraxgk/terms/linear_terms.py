@@ -6,6 +6,7 @@ import jax.numpy as jnp
 
 from spectraxgk.terms.linear_dissipation import (
     _hermite_mode_drive,
+    _hypercollision_kz_source as _hypercollision_kz_source,
     _is_static_zero,
     _zeros_like_result,
     collisions_contribution as collisions_contribution,
