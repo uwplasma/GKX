@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields, replace
 from typing import Any, Callable
 
 import jax.numpy as jnp
@@ -84,6 +84,59 @@ class _CycloneTimePathControls:
 
     time_cfg: Any | None
     fit_options: _CycloneTimeFitOptions
+
+
+@dataclass(frozen=True)
+class _CycloneTimePathRequest:
+    """Public Cyclone time-path inputs packed for private solver routing."""
+
+    grid: Any
+    cache: Any
+    params: Any
+    geom: Any
+    terms: Any
+    cfg: Any
+    time_cfg: Any
+    sel: Any
+    dt: float
+    steps: int
+    method: str
+    sample_stride: int | None
+    fit_key: str
+    need_density: bool
+    reference_aligned: bool
+    use_jit: bool
+    diagnostic_norm: str
+    show_progress: bool
+    status: Callable[[str], None]
+    fresh_G0: Callable[[], jnp.ndarray]
+    mode_method: str
+    tmin: float | None
+    tmax: float | None
+    auto_window: bool
+    window_fraction: float
+    min_points: int
+    start_fraction: float
+    growth_weight: float
+    require_positive: bool
+    min_amp_fraction: float
+    max_fraction: float
+    end_fraction: float
+    max_amp_fraction: float
+    phase_weight: float
+    length_weight: float
+    min_r2: float
+    late_penalty: float
+    min_slope: float | None
+    min_slope_frac: float
+    slope_var_weight: float
+    window_method: str
+
+
+def _cyclone_time_path_request_from_locals(values: dict[str, Any]) -> _CycloneTimePathRequest:
+    return _CycloneTimePathRequest(
+        **{field.name: values[field.name] for field in fields(_CycloneTimePathRequest)}
+    )
 
 
 _PATCHABLE_NAMES = (
@@ -947,6 +1000,83 @@ def _run_cyclone_saved_time_path(
     return gamma_out, omega_out, phi_t_np, t_arr
 
 
+def _cyclone_time_path_controls_from_request(
+    request: _CycloneTimePathRequest,
+) -> _CycloneTimePathControls:
+    return _prepare_cyclone_time_path_controls(
+        cfg=request.cfg,
+        time_cfg=request.time_cfg,
+        dt=request.dt,
+        steps=request.steps,
+        method=request.method,
+        sample_stride=request.sample_stride,
+        fit_key=request.fit_key,
+        mode_method=request.mode_method,
+        tmin=request.tmin,
+        tmax=request.tmax,
+        auto_window=request.auto_window,
+        window_fraction=request.window_fraction,
+        min_points=request.min_points,
+        start_fraction=request.start_fraction,
+        growth_weight=request.growth_weight,
+        require_positive=request.require_positive,
+        min_amp_fraction=request.min_amp_fraction,
+        max_fraction=request.max_fraction,
+        end_fraction=request.end_fraction,
+        max_amp_fraction=request.max_amp_fraction,
+        phase_weight=request.phase_weight,
+        length_weight=request.length_weight,
+        min_r2=request.min_r2,
+        late_penalty=request.late_penalty,
+        min_slope=request.min_slope,
+        min_slope_frac=request.min_slope_frac,
+        slope_var_weight=request.slope_var_weight,
+        window_method=request.window_method,
+    )
+
+
+def _run_cyclone_time_path_request(
+    request: _CycloneTimePathRequest,
+) -> tuple[float, float, np.ndarray, np.ndarray]:
+    request.status(f"starting time integration path with fit_signal={request.fit_key}")
+    controls = _cyclone_time_path_controls_from_request(request)
+    if request.reference_aligned:
+        request.status("running reference-aligned explicit integrator")
+        return _run_cyclone_reference_aligned_time(
+            grid=request.grid,
+            cache=request.cache,
+            params=request.params,
+            geom=request.geom,
+            terms=request.terms,
+            time_cfg_use=controls.time_cfg,
+            dt=request.dt,
+            steps=request.steps,
+            sample_stride=request.sample_stride,
+            diagnostic_norm=request.diagnostic_norm,
+            show_progress=request.show_progress,
+            fresh_G0=request.fresh_G0,
+        )
+
+    return _run_cyclone_saved_time_path(
+        grid=request.grid,
+        geom=request.geom,
+        params=request.params,
+        terms=request.terms,
+        sel=request.sel,
+        dt=request.dt,
+        steps=request.steps,
+        method=request.method,
+        sample_stride=request.sample_stride,
+        need_density=request.need_density,
+        use_jit=request.use_jit,
+        diagnostic_norm=request.diagnostic_norm,
+        show_progress=request.show_progress,
+        status=request.status,
+        fresh_G0=request.fresh_G0,
+        controls=controls,
+    )
+
+
 def run_cyclone_time_path(
     *,
     grid: Any,
@@ -993,69 +1123,4 @@ def run_cyclone_time_path(
 ) -> tuple[float, float, np.ndarray, np.ndarray]:
     """Run the Cyclone time-integration branch and fit late-time growth."""
 
-    status(f"starting time integration path with fit_signal={fit_key}")
-    controls = _prepare_cyclone_time_path_controls(
-        cfg=cfg,
-        time_cfg=time_cfg,
-        dt=dt,
-        steps=steps,
-        method=method,
-        sample_stride=sample_stride,
-        fit_key=fit_key,
-        mode_method=mode_method,
-        tmin=tmin,
-        tmax=tmax,
-        auto_window=auto_window,
-        window_fraction=window_fraction,
-        min_points=min_points,
-        start_fraction=start_fraction,
-        growth_weight=growth_weight,
-        require_positive=require_positive,
-        min_amp_fraction=min_amp_fraction,
-        max_fraction=max_fraction,
-        end_fraction=end_fraction,
-        max_amp_fraction=max_amp_fraction,
-        phase_weight=phase_weight,
-        length_weight=length_weight,
-        min_r2=min_r2,
-        late_penalty=late_penalty,
-        min_slope=min_slope,
-        min_slope_frac=min_slope_frac,
-        slope_var_weight=slope_var_weight,
-        window_method=window_method,
-    )
-    if reference_aligned:
-        status("running reference-aligned explicit integrator")
-        return _run_cyclone_reference_aligned_time(
-            grid=grid,
-            cache=cache,
-            params=params,
-            geom=geom,
-            terms=terms,
-            time_cfg_use=controls.time_cfg,
-            dt=dt,
-            steps=steps,
-            sample_stride=sample_stride,
-            diagnostic_norm=diagnostic_norm,
-            show_progress=show_progress,
-            fresh_G0=fresh_G0,
-        )
-
-    return _run_cyclone_saved_time_path(
-        grid=grid,
-        geom=geom,
-        params=params,
-        terms=terms,
-        sel=sel,
-        dt=dt,
-        steps=steps,
-        method=method,
-        sample_stride=sample_stride,
-        need_density=need_density,
-        use_jit=use_jit,
-        diagnostic_norm=diagnostic_norm,
-        show_progress=show_progress,
-        status=status,
-        fresh_G0=fresh_G0,
-        controls=controls,
-    )
+    return _run_cyclone_time_path_request(_cyclone_time_path_request_from_locals(locals()))
