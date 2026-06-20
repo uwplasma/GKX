@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +15,41 @@ from spectraxgk.artifacts.io import (
     _write_json,
     _write_state,
 )
+
+
+@dataclass(frozen=True)
+class _LinearArtifactTargets:
+    base: Path
+    summary_path: Path
+    timeseries_path: Path
+
+
+@dataclass(frozen=True)
+class _LinearScanTargets:
+    base: Path
+    summary_path: Path
+    scan_path: Path
+
+
+@dataclass(frozen=True)
+class _LinearScanArrays:
+    ky: np.ndarray
+    gamma: np.ndarray
+    omega: np.ndarray
+
+
+@dataclass(frozen=True)
+class _QuasilinearSpectrumColumns:
+    ky: np.ndarray
+    mode_ky: np.ndarray
+    gamma: np.ndarray
+    omega: np.ndarray
+    kperp_eff2: np.ndarray
+    heat: np.ndarray
+    particle: np.ndarray
+    amp2: np.ndarray
+    saturated_heat: np.ndarray
+    saturated_particle: np.ndarray
 
 
 def write_quasilinear_artifacts(
@@ -77,138 +113,163 @@ def write_quasilinear_artifacts(
     return paths
 
 
-def write_runtime_linear_scan_artifacts(out: str | Path, result: Any) -> dict[str, str]:
-    """Write ky-scan growth/frequency and optional quasilinear spectra."""
-
+def _runtime_linear_scan_targets(out: str | Path) -> _LinearScanTargets:
     out_path = Path(out)
     base = _artifact_base(out_path)
     summary_path = (
         out_path if out_path.suffix.lower() == ".json" else Path(f"{base}.summary.json")
     )
-    csv_path = (
+    scan_path = (
         out_path if out_path.suffix.lower() == ".csv" else Path(f"{base}.scan.csv")
     )
-    ky = np.asarray(result.ky, dtype=float)
-    gamma = np.asarray(result.gamma, dtype=float)
-    omega = np.asarray(result.omega, dtype=float)
-    ql_payloads = tuple(getattr(result, "quasilinear", None) or ())
+    return _LinearScanTargets(base=base, summary_path=summary_path, scan_path=scan_path)
+
+
+def _runtime_linear_scan_arrays(result: Any) -> _LinearScanArrays:
+    return _LinearScanArrays(
+        ky=np.asarray(result.ky, dtype=float),
+        gamma=np.asarray(result.gamma, dtype=float),
+        omega=np.asarray(result.omega, dtype=float),
+    )
+
+
+def _runtime_linear_scan_summary(
+    *,
+    arrays: _LinearScanArrays,
+    result: Any,
+    ql_payloads: tuple[Any, ...],
+) -> dict[str, Any]:
     summary = {
         "kind": "linear_scan",
-        "n_ky": int(ky.size),
-        "ky_min": None if ky.size == 0 else float(np.min(ky)),
-        "ky_max": None if ky.size == 0 else float(np.max(ky)),
+        "n_ky": int(arrays.ky.size),
+        "ky_min": None if arrays.ky.size == 0 else float(np.min(arrays.ky)),
+        "ky_max": None if arrays.ky.size == 0 else float(np.max(arrays.ky)),
         "has_quasilinear": bool(ql_payloads),
     }
     parallel = getattr(result, "parallel", None)
     if isinstance(parallel, dict):
         summary["parallel"] = parallel
-    _write_json(summary_path, summary)
-    _write_csv(csv_path, ["ky", "gamma", "omega"], [ky, gamma, omega])
-    paths = {"summary": str(summary_path), "scan": str(csv_path)}
+    return summary
 
-    if ql_payloads:
-        ql_path = Path(f"{base}.quasilinear_spectrum.csv")
-        # The scan coordinate is the user-requested target ky.  Individual
-        # linear payloads also carry the selected signed grid-mode ky, which
-        # can differ for linked-boundary layouts.  Keep both so publication
-        # spectra remain ordered by requested ky without losing mode metadata.
-        ql_ky = (
-            np.asarray(ky, dtype=float)
-            if len(ql_payloads) == int(ky.size)
-            else np.asarray(
-                [float(p.get("ky", np.nan)) for p in ql_payloads], dtype=float
-            )
-        )
-        ql_mode_ky = np.asarray(
-            [float(p.get("ky", np.nan)) for p in ql_payloads], dtype=float
-        )
-        ql_gamma = np.asarray(
-            [float(p.get("gamma", np.nan)) for p in ql_payloads], dtype=float
-        )
-        ql_omega = np.asarray(
-            [float(p.get("omega", np.nan)) for p in ql_payloads], dtype=float
-        )
-        kperp_eff2 = np.asarray(
-            [float(p.get("kperp_eff2", np.nan)) for p in ql_payloads], dtype=float
-        )
-        heat = np.asarray(
-            [float(p.get("heat_flux_weight_total", np.nan)) for p in ql_payloads],
+
+def _payload_float(payload: Any, key: str) -> float:
+    return float(payload.get(key, np.nan))
+
+
+def _payload_optional_float(payload: Any, key: str) -> float:
+    value = payload.get(key)
+    return np.nan if value is None else float(value)
+
+
+def _quasilinear_scan_columns(
+    *,
+    ky: np.ndarray,
+    ql_payloads: tuple[Any, ...],
+) -> _QuasilinearSpectrumColumns:
+    # The scan coordinate is the user-requested target ky. Individual linear
+    # payloads also carry the selected signed grid-mode ky, which can differ
+    # for linked-boundary layouts.
+    ql_ky = (
+        np.asarray(ky, dtype=float)
+        if len(ql_payloads) == int(ky.size)
+        else np.asarray([_payload_float(p, "ky") for p in ql_payloads], dtype=float)
+    )
+    return _QuasilinearSpectrumColumns(
+        ky=ql_ky,
+        mode_ky=np.asarray([_payload_float(p, "ky") for p in ql_payloads], dtype=float),
+        gamma=np.asarray([_payload_float(p, "gamma") for p in ql_payloads], dtype=float),
+        omega=np.asarray([_payload_float(p, "omega") for p in ql_payloads], dtype=float),
+        kperp_eff2=np.asarray(
+            [_payload_float(p, "kperp_eff2") for p in ql_payloads], dtype=float
+        ),
+        heat=np.asarray(
+            [_payload_float(p, "heat_flux_weight_total") for p in ql_payloads],
             dtype=float,
-        )
-        particle = np.asarray(
-            [float(p.get("particle_flux_weight_total", np.nan)) for p in ql_payloads],
+        ),
+        particle=np.asarray(
+            [_payload_float(p, "particle_flux_weight_total") for p in ql_payloads],
             dtype=float,
-        )
-        amp2 = np.asarray(
+        ),
+        amp2=np.asarray(
+            [_payload_optional_float(p, "amplitude2") for p in ql_payloads],
+            dtype=float,
+        ),
+        saturated_heat=np.asarray(
             [
-                np.nan if p.get("amplitude2") is None else float(p.get("amplitude2"))
+                _payload_optional_float(p, "saturated_heat_flux_total")
                 for p in ql_payloads
             ],
             dtype=float,
-        )
-        sat_heat = np.asarray(
+        ),
+        saturated_particle=np.asarray(
             [
-                np.nan
-                if p.get("saturated_heat_flux_total") is None
-                else float(p.get("saturated_heat_flux_total"))
+                _payload_optional_float(p, "saturated_particle_flux_total")
                 for p in ql_payloads
             ],
             dtype=float,
-        )
-        sat_particle = np.asarray(
-            [
-                np.nan
-                if p.get("saturated_particle_flux_total") is None
-                else float(p.get("saturated_particle_flux_total"))
-                for p in ql_payloads
-            ],
-            dtype=float,
-        )
-        _write_csv(
-            ql_path,
-            [
-                "ky",
-                "mode_ky",
-                "gamma",
-                "omega",
-                "kperp_eff2",
-                "heat_flux_weight_total",
-                "particle_flux_weight_total",
-                "amplitude2",
-                "saturated_heat_flux_total",
-                "saturated_particle_flux_total",
-            ],
-            [
-                ql_ky,
-                ql_mode_ky,
-                ql_gamma,
-                ql_omega,
-                kperp_eff2,
-                heat,
-                particle,
-                amp2,
-                sat_heat,
-                sat_particle,
-            ],
-        )
-        paths["quasilinear_spectrum"] = str(ql_path)
-    return paths
+        ),
+    )
 
 
-def write_runtime_linear_artifacts(out: str | Path, result: Any) -> dict[str, str]:
-    """Write summary/timeseries/state artifacts for a linear runtime run."""
+def _write_quasilinear_scan_spectrum(
+    *,
+    base: Path,
+    ky: np.ndarray,
+    ql_payloads: tuple[Any, ...],
+) -> str | None:
+    if not ql_payloads:
+        return None
+    ql_path = Path(f"{base}.quasilinear_spectrum.csv")
+    columns = _quasilinear_scan_columns(ky=ky, ql_payloads=ql_payloads)
+    _write_csv(
+        ql_path,
+        [
+            "ky",
+            "mode_ky",
+            "gamma",
+            "omega",
+            "kperp_eff2",
+            "heat_flux_weight_total",
+            "particle_flux_weight_total",
+            "amplitude2",
+            "saturated_heat_flux_total",
+            "saturated_particle_flux_total",
+        ],
+        [
+            columns.ky,
+            columns.mode_ky,
+            columns.gamma,
+            columns.omega,
+            columns.kperp_eff2,
+            columns.heat,
+            columns.particle,
+            columns.amp2,
+            columns.saturated_heat,
+            columns.saturated_particle,
+        ],
+    )
+    return str(ql_path)
 
+
+def _runtime_linear_artifact_targets(out: str | Path) -> _LinearArtifactTargets:
     out_path = Path(out)
     base = _artifact_base(out_path)
     summary_path = (
         out_path if out_path.suffix.lower() == ".json" else Path(f"{base}.summary.json")
     )
-    csv_path = (
+    timeseries_path = (
         out_path
         if out_path.suffix.lower() == ".csv"
         else Path(f"{base}.timeseries.csv")
     )
+    return _LinearArtifactTargets(
+        base=base,
+        summary_path=summary_path,
+        timeseries_path=timeseries_path,
+    )
 
+
+def _runtime_linear_summary(result: Any) -> dict[str, Any]:
     summary = {
         "kind": "linear",
         "ky": float(result.ky),
@@ -237,45 +298,110 @@ def write_runtime_linear_artifacts(out: str | Path, result: Any) -> dict[str, st
     }
     if getattr(result, "quasilinear", None) is not None:
         summary["quasilinear"] = result.quasilinear
-    _write_json(summary_path, summary)
+    return summary
 
-    paths = {"summary": str(summary_path)}
-    if result.t is not None and result.signal is not None:
-        signal = _flatten_series(np.asarray(result.signal))
-        _write_csv(
-            csv_path,
-            headers=["t", "signal_real", "signal_imag", "signal_abs"],
-            cols=[
-                _flatten_series(np.asarray(result.t)),
-                np.real(signal),
-                np.imag(signal),
-                np.abs(signal),
-            ],
-        )
-        paths["timeseries"] = str(csv_path)
 
-    if result.z is not None and result.eigenfunction is not None:
-        eig_path = Path(f"{base}.eigenfunction.csv")
-        eig = np.asarray(result.eigenfunction)
-        _write_csv(
-            eig_path,
-            headers=["z", "eigen_real", "eigen_imag", "eigen_abs"],
-            cols=[
-                np.asarray(result.z, dtype=float),
-                np.real(eig),
-                np.imag(eig),
-                np.abs(eig),
-            ],
-        )
-        paths["eigenfunction"] = str(eig_path)
+def _write_runtime_linear_timeseries(path: Path, result: Any) -> str | None:
+    if result.t is None or result.signal is None:
+        return None
+    signal = _flatten_series(np.asarray(result.signal))
+    _write_csv(
+        path,
+        headers=["t", "signal_real", "signal_imag", "signal_abs"],
+        cols=[
+            _flatten_series(np.asarray(result.t)),
+            np.real(signal),
+            np.imag(signal),
+            np.abs(signal),
+        ],
+    )
+    return str(path)
 
+
+def _write_runtime_linear_eigenfunction(base: Path, result: Any) -> str | None:
+    if result.z is None or result.eigenfunction is None:
+        return None
+    eig_path = Path(f"{base}.eigenfunction.csv")
+    eig = np.asarray(result.eigenfunction)
+    _write_csv(
+        eig_path,
+        headers=["z", "eigen_real", "eigen_imag", "eigen_abs"],
+        cols=[
+            np.asarray(result.z, dtype=float),
+            np.real(eig),
+            np.imag(eig),
+            np.abs(eig),
+        ],
+    )
+    return str(eig_path)
+
+
+def _write_runtime_linear_state(base: Path, result: Any) -> str | None:
     state_path = _write_state(
         base, None if result.state is None else np.asarray(result.state)
     )
-    if state_path is not None:
-        paths["state"] = str(state_path)
+    return None if state_path is None else str(state_path)
+
+
+def _write_runtime_linear_optional_artifacts(
+    *,
+    targets: _LinearArtifactTargets,
+    result: Any,
+) -> dict[str, str]:
+    paths: dict[str, str] = {}
+    timeseries = _write_runtime_linear_timeseries(targets.timeseries_path, result)
+    if timeseries is not None:
+        paths["timeseries"] = timeseries
+    eigenfunction = _write_runtime_linear_eigenfunction(targets.base, result)
+    if eigenfunction is not None:
+        paths["eigenfunction"] = eigenfunction
+    state = _write_runtime_linear_state(targets.base, result)
+    if state is not None:
+        paths["state"] = state
     if getattr(result, "quasilinear", None) is not None:
-        paths.update(write_quasilinear_artifacts(base, result.quasilinear))
+        paths.update(write_quasilinear_artifacts(targets.base, result.quasilinear))
+    return paths
+
+
+def write_runtime_linear_scan_artifacts(out: str | Path, result: Any) -> dict[str, str]:
+    """Write ky-scan growth/frequency and optional quasilinear spectra."""
+
+    targets = _runtime_linear_scan_targets(out)
+    arrays = _runtime_linear_scan_arrays(result)
+    ql_payloads = tuple(getattr(result, "quasilinear", None) or ())
+    _write_json(
+        targets.summary_path,
+        _runtime_linear_scan_summary(
+            arrays=arrays,
+            result=result,
+            ql_payloads=ql_payloads,
+        ),
+    )
+    _write_csv(
+        targets.scan_path,
+        ["ky", "gamma", "omega"],
+        [arrays.ky, arrays.gamma, arrays.omega],
+    )
+    paths = {"summary": str(targets.summary_path), "scan": str(targets.scan_path)}
+    ql_spectrum = _write_quasilinear_scan_spectrum(
+        base=targets.base,
+        ky=arrays.ky,
+        ql_payloads=ql_payloads,
+    )
+    if ql_spectrum is not None:
+        paths["quasilinear_spectrum"] = ql_spectrum
+    return paths
+
+
+def write_runtime_linear_artifacts(out: str | Path, result: Any) -> dict[str, str]:
+    """Write summary/timeseries/state artifacts for a linear runtime run."""
+
+    targets = _runtime_linear_artifact_targets(out)
+    _write_json(targets.summary_path, _runtime_linear_summary(result))
+    paths = {"summary": str(targets.summary_path)}
+    paths.update(
+        _write_runtime_linear_optional_artifacts(targets=targets, result=result)
+    )
     return paths
 
 
