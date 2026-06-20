@@ -85,6 +85,27 @@ class ZonalFlowObjectiveConfig:
         return payload
 
 
+@dataclass(frozen=True)
+class _ZonalRecordTensor:
+    surfaces: list[float]
+    alphas: list[float]
+    kx_values: list[float]
+    residual: np.ndarray
+    damping: np.ndarray
+    growth: np.ndarray
+    recurrence: np.ndarray
+    normalized_records: list[dict[str, float]]
+    missing_damping_count: int
+    missing_recurrence_count: int
+
+
+@dataclass(frozen=True)
+class _ZonalObjectiveEvaluation:
+    rows_np: np.ndarray
+    reduced: jnp.ndarray
+    row_table: list[dict[str, float]]
+
+
 def _metric_tensor(value: Any, *, name: str, strictly_positive: bool = False) -> jnp.ndarray:
     array = jnp.asarray(value)
     if int(array.ndim) != 3:
@@ -190,6 +211,157 @@ def zonal_flow_reduced_objective(
     )
 
 
+def _zonal_record_tensor(
+    records: Iterable[Mapping[str, Any]],
+    *,
+    surface_keys: Sequence[str],
+    alpha_keys: Sequence[str],
+    kx_keys: Sequence[str],
+    residual_keys: Sequence[str],
+    damping_keys: Sequence[str],
+    linear_growth_keys: Sequence[str],
+    recurrence_keys: Sequence[str],
+    missing_damping_policy: MissingDampingPolicy,
+) -> _ZonalRecordTensor:
+    (
+        surfaces,
+        alphas,
+        kx_values,
+        residual,
+        damping,
+        growth,
+        recurrence,
+        normalized,
+        missing_damping_count,
+        missing_recurrence_count,
+    ) = _finite_metric_tensor_from_records(
+        records,
+        surface_keys=surface_keys,
+        alpha_keys=alpha_keys,
+        kx_keys=kx_keys,
+        residual_keys=residual_keys,
+        damping_keys=damping_keys,
+        linear_growth_keys=linear_growth_keys,
+        recurrence_keys=recurrence_keys,
+        missing_damping_policy=missing_damping_policy,
+    )
+    return _ZonalRecordTensor(
+        surfaces=surfaces,
+        alphas=alphas,
+        kx_values=kx_values,
+        residual=residual,
+        damping=damping,
+        growth=growth,
+        recurrence=recurrence,
+        normalized_records=normalized,
+        missing_damping_count=int(missing_damping_count),
+        missing_recurrence_count=int(missing_recurrence_count),
+    )
+
+
+def _evaluate_zonal_record_objective(
+    tensor: _ZonalRecordTensor,
+    *,
+    config: ZonalFlowObjectiveConfig,
+    reduction: PortfolioReduction,
+) -> _ZonalObjectiveEvaluation:
+    rows = zonal_flow_objective_rows(
+        residual_level=tensor.residual,
+        damping_rate=tensor.damping,
+        linear_growth_rate=tensor.growth,
+        recurrence_amplitude=tensor.recurrence,
+        config=config,
+    )
+    reduced = zonal_flow_reduced_objective(
+        residual_level=tensor.residual,
+        damping_rate=tensor.damping,
+        linear_growth_rate=tensor.growth,
+        recurrence_amplitude=tensor.recurrence,
+        config=config,
+        reduction=reduction,
+    )
+    rows_np = np.asarray(rows, dtype=float)
+    row_table = _zonal_row_table(
+        normalized_records=tensor.normalized_records,
+        surfaces=tensor.surfaces,
+        alphas=tensor.alphas,
+        kx_values=tensor.kx_values,
+        objective_rows=rows_np,
+        objective_weights=config.objective_weights(),
+    )
+    return _ZonalObjectiveEvaluation(
+        rows_np=rows_np,
+        reduced=reduced,
+        row_table=row_table,
+    )
+
+
+def _zonal_promotion_payload(
+    *,
+    tensor: _ZonalRecordTensor,
+    claim_level: str | None,
+) -> dict[str, object]:
+    promotion_ready = (
+        tensor.missing_damping_count == 0 and tensor.missing_recurrence_count == 0
+    )
+    payload_claim = claim_level or (
+        "promotable_zonal_flow_objective_rows"
+        if promotion_ready
+        else "diagnostic_zonal_flow_objective_rows_not_promoted_to_optimization_claim"
+    )
+    return {
+        "claim_level": payload_claim,
+        "promotion_ready": bool(promotion_ready),
+        "missing_damping_count": int(tensor.missing_damping_count),
+        "missing_recurrence_count": int(tensor.missing_recurrence_count),
+    }
+
+
+def _zonal_axes_payload(tensor: _ZonalRecordTensor) -> dict[str, list[float]]:
+    return {
+        "surface": [float(value) for value in tensor.surfaces],
+        "alpha": [float(value) for value in tensor.alphas],
+        "kx": [float(value) for value in tensor.kx_values],
+    }
+
+
+def _zonal_metrics_payload(tensor: _ZonalRecordTensor) -> dict[str, object]:
+    return {
+        "residual_level": tensor.residual.tolist(),
+        "damping_rate": tensor.damping.tolist(),
+        "linear_growth_rate": tensor.growth.tolist(),
+        "recurrence_amplitude": tensor.recurrence.tolist(),
+    }
+
+
+def _zonal_objective_artifact_payload(
+    *,
+    tensor: _ZonalRecordTensor,
+    evaluation: _ZonalObjectiveEvaluation,
+    config: ZonalFlowObjectiveConfig,
+    missing_damping_policy: MissingDampingPolicy,
+    claim_level: str | None,
+    source_paths: Sequence[str] | None,
+    reduction: PortfolioReduction,
+) -> dict[str, object]:
+    payload = {
+        "kind": "zonal_flow_objective_artifact",
+        "objective_names": list(ZONAL_FLOW_OBJECTIVE_NAMES),
+        "objective_config": config.to_dict(),
+        "missing_damping_policy": missing_damping_policy,
+        "axes": _zonal_axes_payload(tensor),
+        "sample_count": int(len(tensor.normalized_records)),
+        "metrics": _zonal_metrics_payload(tensor),
+        "objective_rows": evaluation.rows_np.tolist(),
+        "reduced_objective": float(np.asarray(evaluation.reduced)),
+        "row_table": evaluation.row_table,
+        "source_paths": list(source_paths or []),
+        "reduction": reduction,
+    }
+    payload.update(_zonal_promotion_payload(tensor=tensor, claim_level=claim_level))
+    return payload
+
+
 def zonal_flow_objective_artifact_from_records(
     records: Iterable[Mapping[str, Any]],
     *,
@@ -222,18 +394,7 @@ def zonal_flow_objective_artifact_from_records(
     """
 
     cfg = config or ZonalFlowObjectiveConfig()
-    (
-        surfaces,
-        alphas,
-        kx_values,
-        residual,
-        damping,
-        growth,
-        recurrence,
-        normalized,
-        missing_damping_count,
-        missing_recurrence_count,
-    ) = _finite_metric_tensor_from_records(
+    tensor = _zonal_record_tensor(
         records,
         surface_keys=surface_keys,
         alpha_keys=alpha_keys,
@@ -244,65 +405,20 @@ def zonal_flow_objective_artifact_from_records(
         recurrence_keys=recurrence_keys,
         missing_damping_policy=missing_damping_policy,
     )
-
-    rows = zonal_flow_objective_rows(
-        residual_level=residual,
-        damping_rate=damping,
-        linear_growth_rate=growth,
-        recurrence_amplitude=recurrence,
-        config=cfg,
-    )
-    reduced = zonal_flow_reduced_objective(
-        residual_level=residual,
-        damping_rate=damping,
-        linear_growth_rate=growth,
-        recurrence_amplitude=recurrence,
+    evaluation = _evaluate_zonal_record_objective(
+        tensor,
         config=cfg,
         reduction=reduction,
     )
-    rows_np = np.asarray(rows, dtype=float)
-    row_table = _zonal_row_table(
-        normalized_records=normalized,
-        surfaces=surfaces,
-        alphas=alphas,
-        kx_values=kx_values,
-        objective_rows=rows_np,
-        objective_weights=cfg.objective_weights(),
+    return _zonal_objective_artifact_payload(
+        tensor=tensor,
+        evaluation=evaluation,
+        config=cfg,
+        missing_damping_policy=missing_damping_policy,
+        claim_level=claim_level,
+        source_paths=source_paths,
+        reduction=reduction,
     )
-
-    promotion_ready = missing_damping_count == 0 and missing_recurrence_count == 0
-    payload_claim = claim_level or (
-        "promotable_zonal_flow_objective_rows"
-        if promotion_ready
-        else "diagnostic_zonal_flow_objective_rows_not_promoted_to_optimization_claim"
-    )
-    return {
-        "kind": "zonal_flow_objective_artifact",
-        "claim_level": payload_claim,
-        "promotion_ready": bool(promotion_ready),
-        "objective_names": list(ZONAL_FLOW_OBJECTIVE_NAMES),
-        "objective_config": cfg.to_dict(),
-        "missing_damping_policy": missing_damping_policy,
-        "missing_damping_count": int(missing_damping_count),
-        "missing_recurrence_count": int(missing_recurrence_count),
-        "axes": {
-            "surface": [float(value) for value in surfaces],
-            "alpha": [float(value) for value in alphas],
-            "kx": [float(value) for value in kx_values],
-        },
-        "sample_count": int(len(normalized)),
-        "metrics": {
-            "residual_level": residual.tolist(),
-            "damping_rate": damping.tolist(),
-            "linear_growth_rate": growth.tolist(),
-            "recurrence_amplitude": recurrence.tolist(),
-        },
-        "objective_rows": rows_np.tolist(),
-        "reduced_objective": float(np.asarray(reduced)),
-        "row_table": row_table,
-        "source_paths": list(source_paths or []),
-        "reduction": reduction,
-    }
 
 
 def _metric_mapping_rows(
