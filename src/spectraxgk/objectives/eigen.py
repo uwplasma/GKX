@@ -8,6 +8,7 @@ consistent before using the derivative in optimization gates.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, cast
 
 import jax
@@ -105,6 +106,238 @@ def _relative_slope_difference(a: float, b: float, *, floor: float) -> float:
     return abs(float(a) - float(b)) / max(abs(float(a)), abs(float(b)), float(floor), 1.0e-300)
 
 
+@dataclass(frozen=True)
+class _BranchLocalityTolerances:
+    """Validated tolerances for a dominant-eigenvalue branch locality check."""
+
+    step: float
+    gap_floor: float
+    slope_rtol: float
+    slope_atol: float
+
+
+@dataclass(frozen=True)
+class _BranchLocalitySpectrum:
+    """Eigenvalue spectra and selected base branch for the locality diagnostic."""
+
+    base_eigs: np.ndarray
+    plus_eigs: np.ndarray
+    minus_eigs: np.ndarray
+    base_index: int
+    base_value: np.complexfloating[Any, Any]
+    base_gap: float
+
+
+@dataclass(frozen=True)
+class _BranchLocalitySlopes:
+    """Central-difference slopes from dominant and nearest branch tracking."""
+
+    dominant: float
+    nearest: float
+    abs_difference: float
+    relative_difference: float
+
+
+def _validate_branch_locality_tolerances(
+    *,
+    step: float,
+    gap_floor: float,
+    slope_rtol: float,
+    slope_atol: float,
+) -> _BranchLocalityTolerances:
+    step_f = float(step)
+    if not np.isfinite(step_f) or step_f <= 0.0:
+        raise ValueError("step must be finite and positive")
+    gap_floor_f = float(gap_floor)
+    if gap_floor_f < 0.0:
+        raise ValueError("gap_floor must be non-negative")
+    slope_rtol_f = float(slope_rtol)
+    slope_atol_f = float(slope_atol)
+    if slope_rtol_f < 0.0 or slope_atol_f < 0.0:
+        raise ValueError("slope tolerances must be non-negative")
+    return _BranchLocalityTolerances(
+        step=step_f,
+        gap_floor=gap_floor_f,
+        slope_rtol=slope_rtol_f,
+        slope_atol=slope_atol_f,
+    )
+
+
+def _branch_locality_spectrum(
+    base_matrix: jnp.ndarray | np.ndarray,
+    plus_matrix: jnp.ndarray | np.ndarray,
+    minus_matrix: jnp.ndarray | np.ndarray,
+) -> _BranchLocalitySpectrum:
+    base_eigs = _eigenvalues_for_branch_report(base_matrix, name="base_matrix")
+    plus_eigs = _eigenvalues_for_branch_report(plus_matrix, name="plus_matrix")
+    minus_eigs = _eigenvalues_for_branch_report(minus_matrix, name="minus_matrix")
+    if plus_eigs.size != base_eigs.size or minus_eigs.size != base_eigs.size:
+        raise ValueError("base, plus, and minus matrices must have the same eigenvalue count")
+    base_index = int(np.argmax(np.real(base_eigs)))
+    base_value = base_eigs[base_index]
+    return _BranchLocalitySpectrum(
+        base_eigs=base_eigs,
+        plus_eigs=plus_eigs,
+        minus_eigs=minus_eigs,
+        base_index=base_index,
+        base_value=base_value,
+        base_gap=_branch_gap(base_eigs, base_index),
+    )
+
+
+def _branch_locality_row(
+    *,
+    label: str,
+    eigs: np.ndarray,
+    base_value: complex,
+) -> dict[str, object]:
+    dominant_index = int(np.argmax(np.real(eigs)))
+    nearest_index = int(np.argmin(np.abs(eigs - base_value)))
+    dominant_value = eigs[dominant_index]
+    nearest_value = eigs[nearest_index]
+    return {
+        "side": label,
+        "dominant_index": dominant_index,
+        "nearest_index": nearest_index,
+        "dominant_real": float(np.real(dominant_value)),
+        "dominant_imag": float(np.imag(dominant_value)),
+        "nearest_real": float(np.real(nearest_value)),
+        "nearest_imag": float(np.imag(nearest_value)),
+        "nearest_gap": _branch_gap(eigs, nearest_index),
+        "dominant_matches_nearest": bool(dominant_index == nearest_index),
+    }
+
+
+def _branch_locality_rows(
+    spectrum: _BranchLocalitySpectrum,
+) -> tuple[list[dict[str, object]], dict[str, dict[str, object]]]:
+    rows: list[dict[str, object]] = []
+    selected: dict[str, dict[str, object]] = {}
+    for label, eigs in (("minus", spectrum.minus_eigs), ("plus", spectrum.plus_eigs)):
+        row = _branch_locality_row(
+            label=label,
+            eigs=eigs,
+            base_value=complex(spectrum.base_value),
+        )
+        rows.append(row)
+        selected[label] = row
+    return rows, selected
+
+
+def _selected_branch_float(
+    selected: dict[str, dict[str, object]],
+    *,
+    side: str,
+    key: str,
+) -> float:
+    return float(cast(float, selected[side][key]))
+
+
+def _branch_locality_slopes(
+    selected: dict[str, dict[str, object]],
+    *,
+    tolerances: _BranchLocalityTolerances,
+) -> _BranchLocalitySlopes:
+    dominant = (
+        _selected_branch_float(selected, side="plus", key="dominant_real")
+        - _selected_branch_float(selected, side="minus", key="dominant_real")
+    ) / (2.0 * tolerances.step)
+    nearest = (
+        _selected_branch_float(selected, side="plus", key="nearest_real")
+        - _selected_branch_float(selected, side="minus", key="nearest_real")
+    ) / (2.0 * tolerances.step)
+    abs_difference = abs(dominant - nearest)
+    relative_difference = _relative_slope_difference(
+        dominant,
+        nearest,
+        floor=tolerances.slope_atol,
+    )
+    return _BranchLocalitySlopes(
+        dominant=dominant,
+        nearest=nearest,
+        abs_difference=abs_difference,
+        relative_difference=relative_difference,
+    )
+
+
+def _branch_rows_passed(
+    rows: list[dict[str, object]],
+    *,
+    gap_floor: float,
+) -> bool:
+    return all(
+        bool(row["dominant_matches_nearest"])
+        and float(cast(float, row["nearest_gap"])) >= gap_floor
+        for row in rows
+    )
+
+
+def _branch_slope_passed(
+    slopes: _BranchLocalitySlopes,
+    *,
+    tolerances: _BranchLocalityTolerances,
+) -> bool:
+    return bool(
+        slopes.abs_difference <= tolerances.slope_atol
+        or slopes.relative_difference <= tolerances.slope_rtol
+    )
+
+
+def _branch_locality_classification(
+    *,
+    base_isolated: bool,
+    branch_rows_passed: bool,
+    slope_passed: bool,
+) -> str:
+    if not base_isolated:
+        return "base_branch_underisolated"
+    if not branch_rows_passed:
+        return "dominant_branch_differs_from_nearest_branch"
+    if not slope_passed:
+        return "dominant_and_nearest_branch_slopes_differ"
+    return "dominant_branch_locally_consistent"
+
+
+def _branch_locality_next_action(*, passed: bool) -> str:
+    if passed:
+        return "dominant-growth finite differences are locally branch-consistent"
+    return (
+        "do not use dominant-growth finite differences as a local derivative; "
+        "reduce the perturbation, track the nearest branch explicitly, or "
+        "regularize the branch before promotion"
+    )
+
+
+def _branch_locality_payload(
+    *,
+    spectrum: _BranchLocalitySpectrum,
+    tolerances: _BranchLocalityTolerances,
+    slopes: _BranchLocalitySlopes,
+    rows: list[dict[str, object]],
+    passed: bool,
+    classification: str,
+) -> dict[str, object]:
+    return {
+        "kind": "dominant_eigenvalue_branch_locality_report",
+        "passed": passed,
+        "classification": classification,
+        "step": tolerances.step,
+        "gap_floor": tolerances.gap_floor,
+        "slope_rtol": tolerances.slope_rtol,
+        "slope_atol": tolerances.slope_atol,
+        "base_selected_index": spectrum.base_index,
+        "base_eigenvalue_real": float(np.real(spectrum.base_value)),
+        "base_eigenvalue_imag": float(np.imag(spectrum.base_value)),
+        "base_eigenvalue_gap": spectrum.base_gap,
+        "dominant_growth_fd_slope": float(slopes.dominant),
+        "nearest_branch_growth_fd_slope": float(slopes.nearest),
+        "slope_abs_difference": float(slopes.abs_difference),
+        "slope_relative_difference": float(slopes.relative_difference),
+        "branch_rows": rows,
+        "next_action": _branch_locality_next_action(passed=passed),
+    }
+
+
 def dominant_eigenvalue_branch_locality_report(
     base_matrix: jnp.ndarray | np.ndarray,
     plus_matrix: jnp.ndarray | np.ndarray,
@@ -132,102 +365,32 @@ def dominant_eigenvalue_branch_locality_report(
     eigenpair VJP.
     """
 
-    step_f = float(step)
-    if not np.isfinite(step_f) or step_f <= 0.0:
-        raise ValueError("step must be finite and positive")
-    gap_floor_f = float(gap_floor)
-    if gap_floor_f < 0.0:
-        raise ValueError("gap_floor must be non-negative")
-    if float(slope_rtol) < 0.0 or float(slope_atol) < 0.0:
-        raise ValueError("slope tolerances must be non-negative")
-
-    base_eigs = _eigenvalues_for_branch_report(base_matrix, name="base_matrix")
-    plus_eigs = _eigenvalues_for_branch_report(plus_matrix, name="plus_matrix")
-    minus_eigs = _eigenvalues_for_branch_report(minus_matrix, name="minus_matrix")
-    if plus_eigs.size != base_eigs.size or minus_eigs.size != base_eigs.size:
-        raise ValueError("base, plus, and minus matrices must have the same eigenvalue count")
-
-    base_index = int(np.argmax(np.real(base_eigs)))
-    base_value = base_eigs[base_index]
-    base_gap = _branch_gap(base_eigs, base_index)
-    rows: list[dict[str, object]] = []
-    selected: dict[str, dict[str, object]] = {}
-    for label, eigs in (("minus", minus_eigs), ("plus", plus_eigs)):
-        dominant_index = int(np.argmax(np.real(eigs)))
-        nearest_index = int(np.argmin(np.abs(eigs - base_value)))
-        dominant_value = eigs[dominant_index]
-        nearest_value = eigs[nearest_index]
-        row = {
-            "side": label,
-            "dominant_index": dominant_index,
-            "nearest_index": nearest_index,
-            "dominant_real": float(np.real(dominant_value)),
-            "dominant_imag": float(np.imag(dominant_value)),
-            "nearest_real": float(np.real(nearest_value)),
-            "nearest_imag": float(np.imag(nearest_value)),
-            "nearest_gap": _branch_gap(eigs, nearest_index),
-            "dominant_matches_nearest": bool(dominant_index == nearest_index),
-        }
-        rows.append(row)
-        selected[label] = row
-
-    dominant_growth_fd_slope = (
-        float(cast(float, selected["plus"]["dominant_real"]))
-        - float(cast(float, selected["minus"]["dominant_real"]))
-    ) / (2.0 * step_f)
-    nearest_branch_growth_fd_slope = (
-        float(cast(float, selected["plus"]["nearest_real"]))
-        - float(cast(float, selected["minus"]["nearest_real"]))
-    ) / (2.0 * step_f)
-    slope_abs_diff = abs(dominant_growth_fd_slope - nearest_branch_growth_fd_slope)
-    slope_rel_diff = _relative_slope_difference(
-        dominant_growth_fd_slope,
-        nearest_branch_growth_fd_slope,
-        floor=float(slope_atol),
+    tolerances = _validate_branch_locality_tolerances(
+        step=step,
+        gap_floor=gap_floor,
+        slope_rtol=slope_rtol,
+        slope_atol=slope_atol,
     )
-    branch_rows_passed = all(
-        bool(row["dominant_matches_nearest"]) and float(cast(float, row["nearest_gap"])) >= gap_floor_f
-        for row in rows
+    spectrum = _branch_locality_spectrum(base_matrix, plus_matrix, minus_matrix)
+    rows, selected = _branch_locality_rows(spectrum)
+    slopes = _branch_locality_slopes(selected, tolerances=tolerances)
+    branch_rows_ok = _branch_rows_passed(rows, gap_floor=tolerances.gap_floor)
+    base_isolated = bool(spectrum.base_gap >= tolerances.gap_floor)
+    slope_ok = _branch_slope_passed(slopes, tolerances=tolerances)
+    passed = bool(base_isolated and branch_rows_ok and slope_ok)
+    classification = _branch_locality_classification(
+        base_isolated=base_isolated,
+        branch_rows_passed=branch_rows_ok,
+        slope_passed=slope_ok,
     )
-    base_isolated = bool(base_gap >= gap_floor_f)
-    slope_passed = bool(slope_abs_diff <= float(slope_atol) or slope_rel_diff <= float(slope_rtol))
-    passed = bool(base_isolated and branch_rows_passed and slope_passed)
-    if not base_isolated:
-        classification = "base_branch_underisolated"
-    elif not branch_rows_passed:
-        classification = "dominant_branch_differs_from_nearest_branch"
-    elif not slope_passed:
-        classification = "dominant_and_nearest_branch_slopes_differ"
-    else:
-        classification = "dominant_branch_locally_consistent"
-
-    return {
-        "kind": "dominant_eigenvalue_branch_locality_report",
-        "passed": passed,
-        "classification": classification,
-        "step": step_f,
-        "gap_floor": gap_floor_f,
-        "slope_rtol": float(slope_rtol),
-        "slope_atol": float(slope_atol),
-        "base_selected_index": base_index,
-        "base_eigenvalue_real": float(np.real(base_value)),
-        "base_eigenvalue_imag": float(np.imag(base_value)),
-        "base_eigenvalue_gap": base_gap,
-        "dominant_growth_fd_slope": float(dominant_growth_fd_slope),
-        "nearest_branch_growth_fd_slope": float(nearest_branch_growth_fd_slope),
-        "slope_abs_difference": float(slope_abs_diff),
-        "slope_relative_difference": float(slope_rel_diff),
-        "branch_rows": rows,
-        "next_action": (
-            "dominant-growth finite differences are locally branch-consistent"
-            if passed
-            else (
-                "do not use dominant-growth finite differences as a local derivative; "
-                "reduce the perturbation, track the nearest branch explicitly, or "
-                "regularize the branch before promotion"
-            )
-        ),
-    }
+    return _branch_locality_payload(
+        spectrum=spectrum,
+        tolerances=tolerances,
+        slopes=slopes,
+        rows=rows,
+        passed=passed,
+        classification=classification,
+    )
 
 
 __all__ = [
