@@ -269,6 +269,146 @@ def _load_vmec_geom_sensitivity_context(
     return ctx, geom_mod, ridx, midx, sidx
 
 
+def _load_vmec_boozer_sensitivity_context(
+    *,
+    case_name: str,
+    radial_index: int | None,
+    mode_index: int,
+    surface_index: int | None,
+) -> tuple[_VMECStateContext, Any, int, int, int]:
+    """Load VMEC state data and Boozer input conversion hooks."""
+
+    ctx = _load_vmec_state_context(str(case_name))
+    booz_input_mod = importlib.import_module("vmec_jax.booz_input")
+    ridx, midx, sidx = _resolve_vmec_state_indices(
+        ctx.base_Rcos,
+        radial_index=radial_index,
+        mode_index=mode_index,
+        surface_index=surface_index,
+        surface_grid="half_mesh",
+    )
+    return ctx, booz_input_mod, ridx, midx, sidx
+
+
+def _vmec_to_boozer_mapping_fn(
+    *,
+    ctx: _VMECStateContext,
+    booz_input_mod: Any,
+    radial_index: int,
+    mode_index: int,
+    surface_index: int,
+    mboz: int,
+    nboz: int,
+    ntheta: int,
+) -> Callable[[jnp.ndarray], dict[str, Any]]:
+    """Return the differentiable VMEC-state to Boozer field-line mapping."""
+
+    def mapping_fn(x: jnp.ndarray) -> dict[str, Any]:
+        traced_state = _perturb_vmec_state(
+            ctx, x, radial_index=radial_index, mode_index=mode_index
+        )
+        inputs = booz_input_mod.booz_xform_inputs_from_state(
+            state=traced_state,
+            static=ctx.static,
+            indata=ctx.indata,
+            signgs=ctx.wout.signgs,
+        )
+        return booz_xform_flux_tube_mapping_from_inputs(
+            inputs,
+            mboz=int(mboz),
+            nboz=int(nboz),
+            ntheta=int(ntheta),
+            surface_index=int(surface_index),
+            magnetic_shear=0.35,
+            jit=False,
+        )
+
+    return mapping_fn
+
+
+def _boozer_flux_tube_report_payload(
+    *,
+    sensitivity: dict[str, object],
+    booz_meta: Mapping[str, Any],
+    mboz: int,
+    nboz: int,
+    ntheta: int,
+) -> dict[str, object]:
+    """Pack JSON-ready Boozer flux-tube payload fields."""
+
+    return {
+        "sensitivity": sensitivity,
+        "mboz": int(mboz),
+        "nboz": int(nboz),
+        "ntheta": int(ntheta),
+        "bmnc_b": np.asarray(booz_meta["bmnc_b"]).tolist(),
+        "ixm_b": np.asarray(booz_meta["ixm_b"]).tolist(),
+        "ixn_b": np.asarray(booz_meta["ixn_b"]).tolist(),
+        "iota_b": float(np.asarray(booz_meta["iota_b"])),
+    }
+
+
+def _field_line_tensor_report_payload(
+    *,
+    ctx: _VMECStateContext,
+    geom_mod: Any,
+    params: jnp.ndarray,
+    radial_index: int,
+    mode_index: int,
+    surface_index: int,
+    alpha: float,
+    ntheta: int,
+    fd_step: float,
+    b2_floor: float,
+    rms_epsilon: float,
+) -> dict[str, object]:
+    """Build the VMEC field-line tensor sensitivity payload."""
+
+    bcovar_mod = importlib.import_module("vmec_jax.vmec_bcovar")
+    field_mod = importlib.import_module("vmec_jax.field")
+    iota_line, _iota_safe, _theta_line, theta_vmec, zeta_line = (
+        _vmec_field_line_sampling_coordinates(
+            ctx.wout,
+            surface_index=surface_index,
+            alpha=alpha,
+            ntheta=ntheta,
+            dtype=params.dtype,
+        )
+    )
+    field_line_observables = _field_line_tensor_observable_fn(
+        ctx=ctx,
+        geom_mod=geom_mod,
+        bcovar_mod=bcovar_mod,
+        field_mod=field_mod,
+        radial_index=radial_index,
+        mode_index=mode_index,
+        surface_index=surface_index,
+        theta_vmec=theta_vmec,
+        zeta_line=zeta_line,
+        b2_floor=jnp.asarray(float(b2_floor), dtype=params.dtype),
+        rms_epsilon=jnp.asarray(float(rms_epsilon), dtype=params.dtype),
+    )
+    tensor_payload = _tensor_sensitivity_payload(
+        observable_fn=field_line_observables,
+        params=params,
+        fd_step=float(fd_step),
+        observable_names=_VMEC_FIELD_LINE_OBSERVABLE_NAMES,
+        relative_floor=1.0e-10,
+    )
+    geom0 = geom_mod.eval_geom(ctx.state, ctx.static)
+    return {
+        "source_model": "vmec_jax:state->field-line-metric-and-b",
+        "field_line_convention": "VMEC theta, zeta=(theta-alpha)/iota with periodic bilinear sampling",
+        **tensor_payload,
+        "iota": float(np.asarray(iota_line)),
+        "alpha": float(alpha),
+        "ntheta": int(ntheta),
+        "metric_grid_shape": [int(v) for v in np.asarray(geom0.sqrtg).shape],
+        "b2_floor": float(b2_floor),
+        "rms_epsilon": float(rms_epsilon),
+    }
+
+
 def vmec_jax_boozer_flux_tube_sensitivity_report(  # pragma: no cover
     *,
     params: jnp.ndarray | None = None,
@@ -313,36 +453,22 @@ def vmec_jax_boozer_flux_tube_sensitivity_report(  # pragma: no cover
         )
 
     try:
-        ctx = _load_vmec_state_context(str(case_name))
-        booz_input_mod = importlib.import_module("vmec_jax.booz_input")
-        ridx, midx, sidx = _resolve_vmec_state_indices(
-            ctx.base_Rcos,
+        ctx, booz_input_mod, ridx, midx, sidx = _load_vmec_boozer_sensitivity_context(
+            case_name=str(case_name),
             radial_index=radial_index,
             mode_index=mode_index,
             surface_index=surface_index,
-            surface_grid="half_mesh",
         )
-
-        def mapping_fn(x: jnp.ndarray) -> dict[str, Any]:
-            traced_state = _perturb_vmec_state(
-                ctx, x, radial_index=ridx, mode_index=midx
-            )
-            inputs = booz_input_mod.booz_xform_inputs_from_state(
-                state=traced_state,
-                static=ctx.static,
-                indata=ctx.indata,
-                signgs=ctx.wout.signgs,
-            )
-            return booz_xform_flux_tube_mapping_from_inputs(
-                inputs,
-                mboz=int(mboz),
-                nboz=int(nboz),
-                ntheta=int(ntheta),
-                surface_index=int(sidx),
-                magnetic_shear=0.35,
-                jit=False,
-            )
-
+        mapping_fn = _vmec_to_boozer_mapping_fn(
+            ctx=ctx,
+            booz_input_mod=booz_input_mod,
+            radial_index=ridx,
+            mode_index=midx,
+            surface_index=sidx,
+            mboz=mboz,
+            nboz=nboz,
+            ntheta=ntheta,
+        )
         sensitivity = geometry_sensitivity_report(
             mapping_fn,
             p,
@@ -370,14 +496,13 @@ def vmec_jax_boozer_flux_tube_sensitivity_report(  # pragma: no cover
             surface_index=sidx,
             fd_step=fd_step,
         ),
-        "sensitivity": sensitivity,
-        "mboz": int(mboz),
-        "nboz": int(nboz),
-        "ntheta": int(ntheta),
-        "bmnc_b": np.asarray(booz_meta["bmnc_b"]).tolist(),
-        "ixm_b": np.asarray(booz_meta["ixm_b"]).tolist(),
-        "ixn_b": np.asarray(booz_meta["ixn_b"]).tolist(),
-        "iota_b": float(np.asarray(booz_meta["iota_b"])),
+        **_boozer_flux_tube_report_payload(
+            sensitivity=sensitivity,
+            booz_meta=booz_meta,
+            mboz=mboz,
+            nboz=nboz,
+            ntheta=ntheta,
+        ),
     }
 
 
@@ -514,40 +639,19 @@ def vmec_jax_field_line_tensor_sensitivity_report(  # pragma: no cover
             surface_index=surface_index,
             surface_grid="field_line",
         )
-        bcovar_mod = importlib.import_module("vmec_jax.vmec_bcovar")
-        field_mod = importlib.import_module("vmec_jax.field")
-
-        iota_line, _iota_safe, _theta_line, theta_vmec, zeta_line = (
-            _vmec_field_line_sampling_coordinates(
-                ctx.wout,
-                surface_index=sidx,
-                alpha=alpha,
-                ntheta=ntheta,
-                dtype=p.dtype,
-            )
-        )
-        ntheta_int = int(ntheta)
-        field_line_observables = _field_line_tensor_observable_fn(
+        payload = _field_line_tensor_report_payload(
             ctx=ctx,
             geom_mod=geom_mod,
-            bcovar_mod=bcovar_mod,
-            field_mod=field_mod,
+            params=p,
             radial_index=ridx,
             mode_index=midx,
             surface_index=sidx,
-            theta_vmec=theta_vmec,
-            zeta_line=zeta_line,
-            b2_floor=jnp.asarray(float(b2_floor), dtype=p.dtype),
-            rms_epsilon=jnp.asarray(float(rms_epsilon), dtype=p.dtype),
-        )
-        tensor_payload = _tensor_sensitivity_payload(
-            observable_fn=field_line_observables,
-            params=p,
+            alpha=alpha,
+            ntheta=ntheta,
             fd_step=float(fd_step),
-            observable_names=_VMEC_FIELD_LINE_OBSERVABLE_NAMES,
-            relative_floor=1.0e-10,
+            b2_floor=b2_floor,
+            rms_epsilon=rms_epsilon,
         )
-        geom0 = geom_mod.eval_geom(ctx.state, ctx.static)
     except Exception as exc:
         return _failed_vmec_state_sensitivity_report(
             backend_info=info,
@@ -567,15 +671,7 @@ def vmec_jax_field_line_tensor_sensitivity_report(  # pragma: no cover
             surface_index=sidx,
             fd_step=fd_step,
         ),
-        "source_model": "vmec_jax:state->field-line-metric-and-b",
-        "field_line_convention": "VMEC theta, zeta=(theta-alpha)/iota with periodic bilinear sampling",
-        **tensor_payload,
-        "iota": float(np.asarray(iota_line)),
-        "alpha": float(alpha),
-        "ntheta": int(ntheta_int),
-        "metric_grid_shape": [int(v) for v in np.asarray(geom0.sqrtg).shape],
-        "b2_floor": float(b2_floor),
-        "rms_epsilon": float(rms_epsilon),
+        **payload,
     }
 
 
