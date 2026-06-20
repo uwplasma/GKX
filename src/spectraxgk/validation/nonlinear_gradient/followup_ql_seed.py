@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from typing import Any, Mapping, Sequence
 import math
 
@@ -12,6 +12,33 @@ from spectraxgk.validation.nonlinear_gradient.followup_core import (
     _json_number,
     _state_control_family,
 )
+
+
+@dataclass(frozen=True)
+class _QLSeedArtifactContext:
+    artifact_index: int
+    path: str | None
+    label: str
+    case_name: str
+    source_kind: str
+    source_artifact_passed: bool
+    state_control_family: str | None
+    parameter_indices: Mapping[str, Any] | None
+
+
+@dataclass(frozen=True)
+class _ObjectiveGateMetrics:
+    objective: str
+    parameter: str
+    implicit: float | None
+    finite_difference: float | None
+    rel_error: float | None
+    gate_passed: bool
+    sensitivity_resolved: bool
+    rel_error_ok: bool
+    accepted: bool
+    direction: float | None
+    blockers: list[str]
 
 
 def _ql_seed_rows(
@@ -25,73 +52,140 @@ def _ql_seed_rows(
     objective_gates = artifact.get("objective_gates")
     if not isinstance(objective_gates, Sequence):
         return []
-    artifact_passed = bool(artifact.get("passed", False))
-    case_name = str(artifact.get("case_name") or label or path or f"artifact_{index}")
-    parameter_indices = artifact.get("parameter_indices")
-    source_family = _state_control_family(parameter_indices)
+    context = _ql_seed_artifact_context(
+        artifact, index=index, path=path, label=label
+    )
     rows: list[dict[str, Any]] = []
     for gate_index, gate in enumerate(objective_gates):
         if not isinstance(gate, Mapping):
             continue
-        objective = str(gate.get("objective") or "")
-        if objective not in config.target_objectives:
+        metrics = _objective_gate_metrics(gate, context=context, config=config)
+        if metrics.objective not in config.target_objectives:
             continue
-        parameter = str(gate.get("parameter") or "")
-        implicit = _finite_float(gate.get("implicit"))
-        finite_difference = _finite_float(gate.get("finite_difference"))
-        rel_error = _finite_float(gate.get("rel_error"))
-        gate_passed = bool(gate.get("passed", False))
-        sensitivity_resolved = (
-            implicit is not None and abs(implicit) >= config.min_abs_sensitivity
-        )
-        rel_error_ok = (
-            rel_error is not None and rel_error <= config.max_objective_rel_error
-        )
-        accepted = bool(
-            parameter
-            and sensitivity_resolved
-            and rel_error_ok
-            and gate_passed
-            and (artifact_passed or not config.require_artifact_passed)
-        )
-        blockers: list[str] = []
-        if not parameter:
-            blockers.append("missing_parameter_name")
-        if not sensitivity_resolved:
-            blockers.append("unresolved_objective_sensitivity")
-        if not rel_error_ok:
-            blockers.append("ad_fd_relative_error_too_large")
-        if not gate_passed:
-            blockers.append("objective_gate_failed")
-        if config.require_artifact_passed and not artifact_passed:
-            blockers.append("source_artifact_failed")
-        direction = None if implicit is None else -math.copysign(1.0, implicit)
-        rows.append(
-            {
-                "artifact_index": index,
-                "gate_index": gate_index,
-                "label": str(label or case_name),
-                "path": path,
-                "case_name": case_name,
-                "source_kind": str(artifact.get("kind", "")),
-                "source_artifact_passed": artifact_passed,
-                "state_parameter": parameter,
-                "state_control_family": source_family,
-                "parameter_indices": parameter_indices
-                if isinstance(parameter_indices, Mapping)
-                else None,
-                "objective": objective,
-                "accepted_objective_gate": accepted,
-                "blockers": blockers,
-                "metrics": {
-                    "implicit_sensitivity": _json_number(implicit),
-                    "finite_difference_sensitivity": _json_number(finite_difference),
-                    "relative_error": _json_number(rel_error),
-                    "descent_direction_sign": _json_number(direction),
-                },
-            }
-        )
+        rows.append(_objective_row(context, gate_index=gate_index, metrics=metrics))
     return rows
+
+
+def _ql_seed_artifact_context(
+    artifact: Mapping[str, Any],
+    *,
+    index: int,
+    path: str | None,
+    label: str | None,
+) -> _QLSeedArtifactContext:
+    case_name = str(artifact.get("case_name") or label or path or f"artifact_{index}")
+    parameter_indices = artifact.get("parameter_indices")
+    return _QLSeedArtifactContext(
+        artifact_index=index,
+        path=path,
+        label=str(label or case_name),
+        case_name=case_name,
+        source_kind=str(artifact.get("kind", "")),
+        source_artifact_passed=bool(artifact.get("passed", False)),
+        state_control_family=_state_control_family(parameter_indices),
+        parameter_indices=parameter_indices if isinstance(parameter_indices, Mapping) else None,
+    )
+
+
+def _objective_gate_blockers(
+    *,
+    parameter: str,
+    sensitivity_resolved: bool,
+    rel_error_ok: bool,
+    gate_passed: bool,
+    source_artifact_passed: bool,
+    config: NonlinearGradientQLSeedScreenConfig,
+) -> list[str]:
+    blockers: list[str] = []
+    if not parameter:
+        blockers.append("missing_parameter_name")
+    if not sensitivity_resolved:
+        blockers.append("unresolved_objective_sensitivity")
+    if not rel_error_ok:
+        blockers.append("ad_fd_relative_error_too_large")
+    if not gate_passed:
+        blockers.append("objective_gate_failed")
+    if config.require_artifact_passed and not source_artifact_passed:
+        blockers.append("source_artifact_failed")
+    return blockers
+
+
+def _objective_gate_metrics(
+    gate: Mapping[str, Any],
+    *,
+    context: _QLSeedArtifactContext,
+    config: NonlinearGradientQLSeedScreenConfig,
+) -> _ObjectiveGateMetrics:
+    objective = str(gate.get("objective") or "")
+    parameter = str(gate.get("parameter") or "")
+    implicit = _finite_float(gate.get("implicit"))
+    finite_difference = _finite_float(gate.get("finite_difference"))
+    rel_error = _finite_float(gate.get("rel_error"))
+    gate_passed = bool(gate.get("passed", False))
+    sensitivity_resolved = (
+        implicit is not None and abs(implicit) >= config.min_abs_sensitivity
+    )
+    rel_error_ok = (
+        rel_error is not None and rel_error <= config.max_objective_rel_error
+    )
+    accepted = bool(
+        parameter
+        and sensitivity_resolved
+        and rel_error_ok
+        and gate_passed
+        and (context.source_artifact_passed or not config.require_artifact_passed)
+    )
+    direction = None if implicit is None else -math.copysign(1.0, implicit)
+    blockers = _objective_gate_blockers(
+        parameter=parameter,
+        sensitivity_resolved=sensitivity_resolved,
+        rel_error_ok=rel_error_ok,
+        gate_passed=gate_passed,
+        source_artifact_passed=context.source_artifact_passed,
+        config=config,
+    )
+    return _ObjectiveGateMetrics(
+        objective=objective,
+        parameter=parameter,
+        implicit=implicit,
+        finite_difference=finite_difference,
+        rel_error=rel_error,
+        gate_passed=gate_passed,
+        sensitivity_resolved=sensitivity_resolved,
+        rel_error_ok=rel_error_ok,
+        accepted=accepted,
+        direction=direction,
+        blockers=blockers,
+    )
+
+
+def _objective_row(
+    context: _QLSeedArtifactContext,
+    *,
+    gate_index: int,
+    metrics: _ObjectiveGateMetrics,
+) -> dict[str, Any]:
+    return {
+        "artifact_index": context.artifact_index,
+        "gate_index": gate_index,
+        "label": context.label,
+        "path": context.path,
+        "case_name": context.case_name,
+        "source_kind": context.source_kind,
+        "source_artifact_passed": context.source_artifact_passed,
+        "state_parameter": metrics.parameter,
+        "state_control_family": context.state_control_family,
+        "parameter_indices": context.parameter_indices,
+        "objective": metrics.objective,
+        "accepted_objective_gate": metrics.accepted,
+        "blockers": metrics.blockers,
+        "metrics": {
+            "implicit_sensitivity": _json_number(metrics.implicit),
+            "finite_difference_sensitivity": _json_number(metrics.finite_difference),
+            "relative_error": _json_number(metrics.rel_error),
+            "descent_direction_sign": _json_number(metrics.direction),
+        },
+    }
 
 
 def _sign_consistency(
@@ -104,6 +198,194 @@ def _sign_consistency(
     negative = len(signs) - positive
     dominant = 1.0 if positive >= negative else -1.0
     return dominant, max(positive, negative) / len(signs)
+
+
+def _validated_ql_seed_config(
+    config: NonlinearGradientQLSeedScreenConfig | None,
+) -> NonlinearGradientQLSeedScreenConfig:
+    cfg = config or NonlinearGradientQLSeedScreenConfig()
+    if not cfg.target_objectives:
+        raise ValueError("target_objectives must be non-empty")
+    if cfg.primary_objective not in cfg.target_objectives:
+        raise ValueError("primary_objective must be included in target_objectives")
+    if cfg.min_distinct_controls < 1:
+        raise ValueError("min_distinct_controls must be at least one")
+    if cfg.min_cases_per_control < 1:
+        raise ValueError("min_cases_per_control must be at least one")
+    if cfg.min_sign_consistency <= 0.0 or cfg.min_sign_consistency > 1.0:
+        raise ValueError("min_sign_consistency must be in (0, 1]")
+    if cfg.max_objective_rel_error < 0.0:
+        raise ValueError("max_objective_rel_error must be non-negative")
+    if cfg.min_abs_sensitivity <= 0.0:
+        raise ValueError("min_abs_sensitivity must be positive")
+    return cfg
+
+
+def _metadata_lists(
+    *,
+    artifacts: Sequence[Mapping[str, Any]],
+    paths: Sequence[str | None] | None,
+    labels: Sequence[str | None] | None,
+) -> tuple[list[str | None], list[str | None]]:
+    path_list = list(paths or [None] * len(artifacts))
+    label_list = list(labels or [None] * len(artifacts))
+    if len(path_list) != len(artifacts):
+        raise ValueError("paths length must match artifacts")
+    if len(label_list) != len(artifacts):
+        raise ValueError("labels length must match artifacts")
+    return path_list, label_list
+
+
+def _objective_rows(
+    artifacts: Sequence[Mapping[str, Any]],
+    *,
+    path_list: Sequence[str | None],
+    label_list: Sequence[str | None],
+    config: NonlinearGradientQLSeedScreenConfig,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for index, (artifact, path, label) in enumerate(
+        zip(artifacts, path_list, label_list)
+    ):
+        rows.extend(
+            _ql_seed_rows(artifact, index=index, path=path, label=label, config=config)
+        )
+    return rows
+
+
+def _group_primary_rows(
+    objective_rows: Sequence[Mapping[str, Any]],
+    *,
+    primary_objective: str,
+) -> dict[str, list[dict[str, Any]]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for row in objective_rows:
+        if row["objective"] == primary_objective:
+            grouped.setdefault(str(row["state_parameter"]), []).append(dict(row))
+    return grouped
+
+
+def _control_source_rows(accepted_rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "case_name": row["case_name"],
+            "path": row["path"],
+            "source_artifact_passed": row["source_artifact_passed"],
+            "implicit_sensitivity": row["metrics"]["implicit_sensitivity"],
+            "relative_error": row["metrics"]["relative_error"],
+        }
+        for row in accepted_rows
+    ]
+
+
+def _control_blockers(
+    *,
+    accepted_rows: Sequence[Mapping[str, Any]],
+    enough_cases: bool,
+    sign_ok: bool,
+) -> list[str]:
+    blockers: list[str] = []
+    if not accepted_rows:
+        blockers.append("no_accepted_primary_objective_rows")
+    if not enough_cases:
+        blockers.append("insufficient_case_coverage")
+    if not sign_ok:
+        blockers.append("cross_artifact_sign_not_consistent")
+    return blockers
+
+
+def _control_row(
+    parameter: str,
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    config: NonlinearGradientQLSeedScreenConfig,
+) -> dict[str, Any]:
+    accepted_rows = [row for row in rows if bool(row["accepted_objective_gate"])]
+    sensitivities = [
+        float(row["metrics"]["implicit_sensitivity"])
+        for row in accepted_rows
+        if row["metrics"]["implicit_sensitivity"] is not None
+    ]
+    dominant_sign, sign_fraction = _sign_consistency(
+        sensitivities,
+        value_floor=config.min_abs_sensitivity,
+    )
+    n_cases = len({str(row["case_name"]) for row in accepted_rows})
+    enough_cases = n_cases >= config.min_cases_per_control
+    sign_ok = sign_fraction is not None and sign_fraction >= config.min_sign_consistency
+    admitted = bool(enough_cases and sign_ok)
+    direction = None if dominant_sign is None else -dominant_sign
+    mean_abs_sensitivity = None
+    if sensitivities:
+        mean_abs_sensitivity = sum(abs(value) for value in sensitivities) / len(
+            sensitivities
+        )
+    return {
+        "state_parameter": parameter,
+        "state_control_family": accepted_rows[0].get("state_control_family")
+        if accepted_rows
+        else None,
+        "admitted_for_nonlinear_screen": admitted,
+        "blockers": _control_blockers(
+            accepted_rows=accepted_rows,
+            enough_cases=enough_cases,
+            sign_ok=bool(sign_ok),
+        ),
+        "primary_objective": config.primary_objective,
+        "n_accepted_rows": len(accepted_rows),
+        "n_cases": n_cases,
+        "dominant_sensitivity_sign": _json_number(dominant_sign),
+        "descent_direction_sign": _json_number(direction),
+        "sign_consistency_fraction": _json_number(sign_fraction),
+        "mean_abs_sensitivity": _json_number(mean_abs_sensitivity),
+        "state_control_argument": None
+        if direction is None
+        else f"{parameter}:{direction:.12g}",
+        "source_rows": _control_source_rows(accepted_rows),
+    }
+
+
+def _control_rows(
+    grouped: Mapping[str, Sequence[Mapping[str, Any]]],
+    *,
+    config: NonlinearGradientQLSeedScreenConfig,
+) -> list[dict[str, Any]]:
+    return [
+        _control_row(parameter, rows, config=config)
+        for parameter, rows in sorted(grouped.items())
+    ]
+
+
+def _next_action(
+    *,
+    passed: bool,
+    controls: Sequence[Mapping[str, Any]],
+) -> str:
+    if passed:
+        return "build checked short-bracket nonlinear-gradient screens for admitted VMEC-state controls"
+    if controls:
+        return (
+            "generate additional QL/linear sensitivity artifacts for distinct VMEC-state controls "
+            "before nonlinear GPU campaigns"
+        )
+    return "no usable QL/linear sensitivity rows; generate full-chain VMEC/Boozer gradient artifacts first"
+
+
+def _summary(
+    *,
+    artifact_count: int,
+    objective_rows: Sequence[Mapping[str, Any]],
+    controls: Sequence[Mapping[str, Any]],
+    admitted_controls: Sequence[Mapping[str, Any]],
+    config: NonlinearGradientQLSeedScreenConfig,
+) -> dict[str, int]:
+    return {
+        "artifact_count": artifact_count,
+        "objective_row_count": len(objective_rows),
+        "control_count": len(controls),
+        "admitted_control_count": len(admitted_controls),
+        "required_distinct_controls": config.min_distinct_controls,
+    }
 
 
 def nonlinear_gradient_ql_seed_screen_report(
@@ -124,132 +406,36 @@ def nonlinear_gradient_ql_seed_screen_report(
     ``RBC/ZBS`` input-file coefficients.
     """
 
-    cfg = config or NonlinearGradientQLSeedScreenConfig()
-    if not cfg.target_objectives:
-        raise ValueError("target_objectives must be non-empty")
-    if cfg.primary_objective not in cfg.target_objectives:
-        raise ValueError("primary_objective must be included in target_objectives")
-    if cfg.min_distinct_controls < 1:
-        raise ValueError("min_distinct_controls must be at least one")
-    if cfg.min_cases_per_control < 1:
-        raise ValueError("min_cases_per_control must be at least one")
-    if cfg.min_sign_consistency <= 0.0 or cfg.min_sign_consistency > 1.0:
-        raise ValueError("min_sign_consistency must be in (0, 1]")
-    if cfg.max_objective_rel_error < 0.0:
-        raise ValueError("max_objective_rel_error must be non-negative")
-    if cfg.min_abs_sensitivity <= 0.0:
-        raise ValueError("min_abs_sensitivity must be positive")
-
-    path_list = list(paths or [None] * len(artifacts))
-    label_list = list(labels or [None] * len(artifacts))
-    if len(path_list) != len(artifacts):
-        raise ValueError("paths length must match artifacts")
-    if len(label_list) != len(artifacts):
-        raise ValueError("labels length must match artifacts")
-
-    objective_rows: list[dict[str, Any]] = []
-    for index, (artifact, path, label) in enumerate(
-        zip(artifacts, path_list, label_list)
-    ):
-        objective_rows.extend(
-            _ql_seed_rows(artifact, index=index, path=path, label=label, config=cfg)
-        )
-
-    grouped: dict[str, list[dict[str, Any]]] = {}
-    for row in objective_rows:
-        if row["objective"] == cfg.primary_objective:
-            grouped.setdefault(str(row["state_parameter"]), []).append(row)
-
-    controls: list[dict[str, Any]] = []
-    for parameter, rows in sorted(grouped.items()):
-        accepted_rows = [row for row in rows if bool(row["accepted_objective_gate"])]
-        sensitivities = [
-            float(row["metrics"]["implicit_sensitivity"])
-            for row in accepted_rows
-            if row["metrics"]["implicit_sensitivity"] is not None
-        ]
-        dominant_sign, sign_fraction = _sign_consistency(
-            sensitivities,
-            value_floor=cfg.min_abs_sensitivity,
-        )
-        n_cases = len({str(row["case_name"]) for row in accepted_rows})
-        enough_cases = n_cases >= cfg.min_cases_per_control
-        sign_ok = (
-            sign_fraction is not None and sign_fraction >= cfg.min_sign_consistency
-        )
-        admitted = bool(enough_cases and sign_ok)
-        blockers: list[str] = []
-        if not accepted_rows:
-            blockers.append("no_accepted_primary_objective_rows")
-        if not enough_cases:
-            blockers.append("insufficient_case_coverage")
-        if not sign_ok:
-            blockers.append("cross_artifact_sign_not_consistent")
-        direction = None if dominant_sign is None else -dominant_sign
-        mean_abs_sensitivity = None
-        if sensitivities:
-            mean_abs_sensitivity = sum(abs(value) for value in sensitivities) / len(
-                sensitivities
-            )
-        controls.append(
-            {
-                "state_parameter": parameter,
-                "state_control_family": accepted_rows[0].get("state_control_family")
-                if accepted_rows
-                else None,
-                "admitted_for_nonlinear_screen": admitted,
-                "blockers": blockers,
-                "primary_objective": cfg.primary_objective,
-                "n_accepted_rows": len(accepted_rows),
-                "n_cases": n_cases,
-                "dominant_sensitivity_sign": _json_number(dominant_sign),
-                "descent_direction_sign": _json_number(direction),
-                "sign_consistency_fraction": _json_number(sign_fraction),
-                "mean_abs_sensitivity": _json_number(mean_abs_sensitivity),
-                "state_control_argument": None
-                if direction is None
-                else f"{parameter}:{direction:.12g}",
-                "source_rows": [
-                    {
-                        "case_name": row["case_name"],
-                        "path": row["path"],
-                        "source_artifact_passed": row["source_artifact_passed"],
-                        "implicit_sensitivity": row["metrics"]["implicit_sensitivity"],
-                        "relative_error": row["metrics"]["relative_error"],
-                    }
-                    for row in accepted_rows
-                ],
-            }
-        )
-
+    cfg = _validated_ql_seed_config(config)
+    path_list, label_list = _metadata_lists(
+        artifacts=artifacts, paths=paths, labels=labels
+    )
+    objective_rows = _objective_rows(
+        artifacts, path_list=path_list, label_list=label_list, config=cfg
+    )
+    grouped = _group_primary_rows(
+        objective_rows, primary_objective=cfg.primary_objective
+    )
+    controls = _control_rows(grouped, config=cfg)
     admitted_controls = [
         row for row in controls if bool(row["admitted_for_nonlinear_screen"])
     ]
     passed = len(admitted_controls) >= cfg.min_distinct_controls
-    if passed:
-        next_action = "build checked short-bracket nonlinear-gradient screens for admitted VMEC-state controls"
-    elif controls:
-        next_action = (
-            "generate additional QL/linear sensitivity artifacts for distinct VMEC-state controls "
-            "before nonlinear GPU campaigns"
-        )
-    else:
-        next_action = "no usable QL/linear sensitivity rows; generate full-chain VMEC/Boozer gradient artifacts first"
 
     return {
         "kind": "nonlinear_turbulence_gradient_ql_seed_screen",
         "claim_level": "ql_seeded_control_screen_not_nonlinear_gradient_evidence",
         "case": case,
         "passed": bool(passed),
-        "next_action": next_action,
+        "next_action": _next_action(passed=passed, controls=controls),
         "config": asdict(cfg),
-        "summary": {
-            "artifact_count": len(artifacts),
-            "objective_row_count": len(objective_rows),
-            "control_count": len(controls),
-            "admitted_control_count": len(admitted_controls),
-            "required_distinct_controls": cfg.min_distinct_controls,
-        },
+        "summary": _summary(
+            artifact_count=len(artifacts),
+            objective_rows=objective_rows,
+            controls=controls,
+            admitted_controls=admitted_controls,
+            config=cfg,
+        ),
         "admitted_controls": admitted_controls,
         "controls": controls,
         "objective_rows": objective_rows,
