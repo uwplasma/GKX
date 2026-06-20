@@ -101,6 +101,142 @@ def vmec_boundary_aspect_sensitivity_report(
     }
 
 
+def _booz_xform_unavailable_report(
+    *,
+    backend_info: dict[str, object],
+    fd_step: float,
+    mboz: int,
+    nboz: int,
+    error: str | None = None,
+) -> dict[str, object]:
+    """Pack the fail-closed Boozer bridge report used when the backend is absent."""
+
+    report: dict[str, object] = {
+        "available": False,
+        "backend_info": backend_info,
+        "objective": None,
+        "grad_ad": None,
+        "grad_fd": None,
+        "max_abs_ad_fd_error": None,
+        "fd_step": float(fd_step),
+        "mboz": int(mboz),
+        "nboz": int(nboz),
+    }
+    if error is not None:
+        report["error"] = error
+    return report
+
+
+def _booz_xform_demo_inputs(
+    ripple_value: Any,
+    *,
+    xm: jnp.ndarray,
+    xn: jnp.ndarray,
+) -> SimpleNamespace:
+    """Build a one-surface axisymmetric Boozer input bundle for derivative gates."""
+
+    r = jnp.asarray(ripple_value)
+    one = jnp.asarray(1.0, dtype=r.dtype)
+    zero = jnp.asarray(0.0, dtype=r.dtype)
+    minor = jnp.asarray(0.22, dtype=r.dtype)
+    return SimpleNamespace(
+        rmnc=jnp.asarray([[one, minor]], dtype=r.dtype),
+        zmns=jnp.asarray([[zero, minor]], dtype=r.dtype),
+        lmns=jnp.asarray([[zero, zero]], dtype=r.dtype),
+        bmnc=jnp.asarray([[one, r]], dtype=r.dtype),
+        bsubumnc=jnp.asarray([[0.1, 0.0]], dtype=r.dtype),
+        bsubvmnc=jnp.asarray([[one, zero]], dtype=r.dtype),
+        iota=jnp.asarray([0.41], dtype=r.dtype),
+        xm=xm,
+        xn=xn,
+        xm_nyq=xm,
+        xn_nyq=xn,
+        nfp=1,
+        bmns=None,
+        bsubumns=None,
+        bsubvmns=None,
+    )
+
+
+def _booz_xform_spectral_objective(
+    bx: Any,
+    *,
+    ripple_value: jnp.ndarray,
+    xm: jnp.ndarray,
+    xn: jnp.ndarray,
+    constants: Any,
+    grids: Any,
+) -> jnp.ndarray:
+    """Return the small Boozer magnetic-spectrum norm used by the bridge gate."""
+
+    out = bx.booz_xform_from_inputs(
+        inputs=_booz_xform_demo_inputs(ripple_value, xm=xm, xn=xn),
+        constants=constants,
+        grids=grids,
+        jit=False,
+    )
+    bmnc_b = jnp.asarray(out["bmnc_b"])
+    return jnp.sum(bmnc_b * bmnc_b)
+
+
+def _compute_booz_xform_spectral_sensitivity(
+    bx: Any,
+    *,
+    ripple: float,
+    fd_step: float,
+    mboz: int,
+    nboz: int,
+) -> dict[str, object]:
+    """Run the bounded Boozer spectral derivative and collect output arrays."""
+
+    xm = jnp.asarray([0, 1], dtype=jnp.int32)
+    xn = jnp.asarray([0, 0], dtype=jnp.int32)
+    base_inputs = _booz_xform_demo_inputs(
+        jnp.asarray(ripple, dtype=jnp.float64),
+        xm=xm,
+        xn=xn,
+    )
+    constants, grids = bx.prepare_booz_xform_constants_from_inputs(
+        inputs=base_inputs,
+        mboz=int(mboz),
+        nboz=int(nboz),
+        asym=False,
+    )
+
+    def objective_fn(ripple_value: jnp.ndarray) -> jnp.ndarray:
+        return _booz_xform_spectral_objective(
+            bx,
+            ripple_value=ripple_value,
+            xm=xm,
+            xn=xn,
+            constants=constants,
+            grids=grids,
+        )
+
+    r0 = jnp.asarray(float(ripple), dtype=jnp.float64)
+    grad_ad = jax.grad(objective_fn)(r0)
+    h = jnp.asarray(float(fd_step), dtype=r0.dtype)
+    grad_fd = (objective_fn(r0 + h) - objective_fn(r0 - h)) / (2.0 * h)
+    out = bx.booz_xform_from_inputs(
+        inputs=base_inputs,
+        constants=constants,
+        grids=grids,
+        jit=False,
+    )
+    return {
+        "objective": float(objective_fn(r0)),
+        "grad_ad": float(grad_ad),
+        "grad_fd": float(grad_fd),
+        "max_abs_ad_fd_error": float(jnp.abs(grad_ad - grad_fd)),
+        "bmnc_b": np.asarray(out["bmnc_b"]).tolist(),
+        "rmnc_b": np.asarray(out["rmnc_b"]).tolist(),
+        "zmns_b": np.asarray(out["zmns_b"]).tolist(),
+        "iota_b": np.asarray(out["iota_b"]).tolist(),
+        "ixm_b": np.asarray(out["ixm_b"]).tolist(),
+        "ixn_b": np.asarray(out["ixn_b"]).tolist(),
+    }
+
+
 def booz_xform_spectral_sensitivity_report(  # pragma: no cover
     *,
     ripple: float = 0.05,
@@ -125,106 +261,38 @@ def booz_xform_spectral_sensitivity_report(  # pragma: no cover
 
     info = discover_differentiable_geometry_backends()
     if not info.get("booz_xform_jax_api_available", False):
-        return {
-            "available": False,
-            "backend_info": info,
-            "objective": None,
-            "grad_ad": None,
-            "grad_fd": None,
-            "max_abs_ad_fd_error": None,
-            "fd_step": float(fd_step),
-            "mboz": int(mboz),
-            "nboz": int(nboz),
-        }
+        return _booz_xform_unavailable_report(
+            backend_info=info,
+            fd_step=fd_step,
+            mboz=mboz,
+            nboz=nboz,
+        )
 
     bx = importlib.import_module("booz_xform_jax.jax_api")
-
-    xm = jnp.asarray([0, 1], dtype=jnp.int32)
-    xn = jnp.asarray([0, 0], dtype=jnp.int32)
-
-    def _inputs(ripple_value: Any) -> SimpleNamespace:
-        r = jnp.asarray(ripple_value)
-        one = jnp.asarray(1.0, dtype=r.dtype)
-        zero = jnp.asarray(0.0, dtype=r.dtype)
-        minor = jnp.asarray(0.22, dtype=r.dtype)
-        return SimpleNamespace(
-            rmnc=jnp.asarray([[one, minor]], dtype=r.dtype),
-            zmns=jnp.asarray([[zero, minor]], dtype=r.dtype),
-            lmns=jnp.asarray([[zero, zero]], dtype=r.dtype),
-            bmnc=jnp.asarray([[one, r]], dtype=r.dtype),
-            bsubumnc=jnp.asarray([[0.1, 0.0]], dtype=r.dtype),
-            bsubvmnc=jnp.asarray([[one, zero]], dtype=r.dtype),
-            iota=jnp.asarray([0.41], dtype=r.dtype),
-            xm=xm,
-            xn=xn,
-            xm_nyq=xm,
-            xn_nyq=xn,
-            nfp=1,
-            bmns=None,
-            bsubumns=None,
-            bsubvmns=None,
-        )
-
     try:
-        base_inputs = _inputs(jnp.asarray(ripple, dtype=jnp.float64))
-        constants, grids = bx.prepare_booz_xform_constants_from_inputs(
-            inputs=base_inputs,
-            mboz=int(mboz),
-            nboz=int(nboz),
-            asym=False,
+        payload = _compute_booz_xform_spectral_sensitivity(
+            bx,
+            ripple=ripple,
+            fd_step=fd_step,
+            mboz=mboz,
+            nboz=nboz,
         )
-
-        def objective_fn(ripple_value: jnp.ndarray) -> jnp.ndarray:
-            out = bx.booz_xform_from_inputs(
-                inputs=_inputs(ripple_value),
-                constants=constants,
-                grids=grids,
-                jit=False,
-            )
-            bmnc_b = jnp.asarray(out["bmnc_b"])
-            return jnp.sum(bmnc_b * bmnc_b)
-
-        r0 = jnp.asarray(float(ripple), dtype=jnp.float64)
-        grad_ad = jax.grad(objective_fn)(r0)
-        h = jnp.asarray(float(fd_step), dtype=r0.dtype)
-        grad_fd = (objective_fn(r0 + h) - objective_fn(r0 - h)) / (2.0 * h)
-        out = bx.booz_xform_from_inputs(
-            inputs=base_inputs,
-            constants=constants,
-            grids=grids,
-            jit=False,
-        )
-        diff = grad_ad - grad_fd
     except Exception as exc:
-        return {
-            "available": False,
-            "backend_info": info,
-            "objective": None,
-            "grad_ad": None,
-            "grad_fd": None,
-            "max_abs_ad_fd_error": None,
-            "fd_step": float(fd_step),
-            "mboz": int(mboz),
-            "nboz": int(nboz),
-            "error": f"{type(exc).__name__}: {exc}",
-        }
+        return _booz_xform_unavailable_report(
+            backend_info=info,
+            fd_step=fd_step,
+            mboz=mboz,
+            nboz=nboz,
+            error=f"{type(exc).__name__}: {exc}",
+        )
 
     return {
         "available": True,
         "backend_info": info,
-        "objective": float(objective_fn(r0)),
-        "grad_ad": float(grad_ad),
-        "grad_fd": float(grad_fd),
-        "max_abs_ad_fd_error": float(jnp.abs(diff)),
         "fd_step": float(fd_step),
         "mboz": int(mboz),
         "nboz": int(nboz),
-        "bmnc_b": np.asarray(out["bmnc_b"]).tolist(),
-        "rmnc_b": np.asarray(out["rmnc_b"]).tolist(),
-        "zmns_b": np.asarray(out["zmns_b"]).tolist(),
-        "iota_b": np.asarray(out["iota_b"]).tolist(),
-        "ixm_b": np.asarray(out["ixm_b"]).tolist(),
-        "ixn_b": np.asarray(out["ixn_b"]).tolist(),
+        **payload,
     }
 
 
