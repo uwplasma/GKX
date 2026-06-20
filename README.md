@@ -1039,6 +1039,8 @@ The latest nonlinear device-z observable split also stays diagnostic: the
 auto-chunked two-GPU transport-window route preserves final-state and transport
 observable identity, but the compute-only speedup is `1.19x` and the scalar
 observable gate is about `42.6x` more expensive than the sharded compute row.
+The refreshed fixed-window device-z profile reaches `1.48x` on two GPUs with
+identity preserved, still below the `1.5x` production speedup gate.
 The next performance tranche is therefore fused device-side diagnostic
 accumulation inside the nonlinear RHS/update, followed by full-solver
 serial-vs-decomposed transport-window gates.
