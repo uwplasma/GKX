@@ -4,8 +4,7 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
-from dataclasses import dataclass
+from dataclasses import dataclass, fields, replace
 from typing import Any, Sequence
 
 import jax.numpy as jnp
@@ -180,6 +179,58 @@ class _KBMBetaScanOutput:
             gamma=np.array(self.gamma),
             omega=np.array(self.omega),
         )
+
+
+@dataclass(frozen=True)
+class _KBMBetaScanRequest:
+    """Raw public fixed-ky beta-scan inputs before policies are resolved."""
+
+    betas: np.ndarray
+    ky_target: float
+    Nl: int
+    Nm: int
+    dt: float | np.ndarray
+    steps: int | np.ndarray
+    method: str
+    cfg: KBMBaseCase | None
+    time_cfg: TimeConfig | None
+    solver: str
+    krylov_cfg: KrylovConfig | None
+    kbm_target_factors: Sequence[float] | None
+    kbm_beta_transition: float | None
+    tmin: float | None
+    tmax: float | None
+    auto_window: bool
+    window_fraction: float
+    min_points: int
+    start_fraction: float
+    growth_weight: float
+    require_positive: bool
+    min_amp_fraction: float
+    mode_method: str
+    mode_only: bool
+    terms: LinearTerms | None
+    sample_stride: int | None
+    fit_signal: str
+    ky_batch: int
+    fixed_batch_shape: bool
+    streaming_fit: bool
+    streaming_amp_floor: float
+    init_species_index: int
+    density_species_index: int
+    diagnostic_norm: str
+    fapar_override: float | None
+    apar_beta_scale: float | None
+    ampere_g0_scale: float | None
+    bpar_beta_scale: float | None
+    reference_aligned: bool | None
+
+
+def _kbm_beta_scan_request_from_locals(values: dict[str, Any]) -> _KBMBetaScanRequest:
+    """Build a beta-scan request from ``run_kbm_beta_scan`` locals."""
+
+    names = {field.name for field in fields(_KBMBetaScanRequest)}
+    return _KBMBetaScanRequest(**{name: values[name] for name in names})
 
 
 def _valid_kbm_growth(
@@ -701,6 +752,67 @@ def _run_kbm_beta_scan_loop(
     return output
 
 
+def _run_kbm_beta_scan_request(request: _KBMBetaScanRequest) -> LinearScanResult:
+    """Resolve KBM beta-scan policies and execute the fixed-ky beta sweep."""
+
+    _validate_kbm_species_indices(
+        init_species_index=request.init_species_index,
+        density_species_index=request.density_species_index,
+    )
+    fit_policy = _build_kbm_beta_fit_policy(
+        tmin=request.tmin,
+        tmax=request.tmax,
+        auto_window=request.auto_window,
+        window_fraction=request.window_fraction,
+        min_points=request.min_points,
+        start_fraction=request.start_fraction,
+        growth_weight=request.growth_weight,
+        require_positive=request.require_positive,
+        min_amp_fraction=request.min_amp_fraction,
+    )
+    setup = _build_kbm_beta_scan_setup(
+        cfg=request.cfg,
+        ky_target=request.ky_target,
+        terms=request.terms,
+        reference_aligned=request.reference_aligned,
+        diagnostic_norm=request.diagnostic_norm,
+        solver=request.solver,
+        fit_signal=request.fit_signal,
+        streaming_fit=request.streaming_fit,
+        mode_only=request.mode_only,
+        krylov_cfg=request.krylov_cfg,
+        fit_policy=fit_policy,
+    )
+    options = _build_kbm_beta_scan_options(
+        ky_target=request.ky_target,
+        Nl=request.Nl,
+        Nm=request.Nm,
+        dt=request.dt,
+        steps=request.steps,
+        method=request.method,
+        time_cfg=request.time_cfg,
+        kbm_target_factors=request.kbm_target_factors,
+        kbm_beta_transition=request.kbm_beta_transition,
+        tmin=request.tmin,
+        tmax=request.tmax,
+        require_positive=request.require_positive,
+        mode_method=request.mode_method,
+        sample_stride=request.sample_stride,
+        streaming_amp_floor=request.streaming_amp_floor,
+        init_species_index=request.init_species_index,
+        density_species_index=request.density_species_index,
+        fapar_override=request.fapar_override,
+        apar_beta_scale=request.apar_beta_scale,
+        ampere_g0_scale=request.ampere_g0_scale,
+        bpar_beta_scale=request.bpar_beta_scale,
+    )
+    return _run_kbm_beta_scan_loop(
+        np.asarray(request.betas, dtype=float),
+        setup=setup,
+        options=options,
+    ).result()
+
+
 def run_kbm_beta_scan(
     betas: np.ndarray,
     ky_target: float = 0.3,
@@ -747,59 +859,4 @@ def run_kbm_beta_scan(
     If ``time_cfg`` is provided, its ``dt`` and ``t_max`` override ``dt``/``steps``.
     """
 
-    _validate_kbm_species_indices(
-        init_species_index=init_species_index,
-        density_species_index=density_species_index,
-    )
-    fit_policy = _build_kbm_beta_fit_policy(
-        tmin=tmin,
-        tmax=tmax,
-        auto_window=auto_window,
-        window_fraction=window_fraction,
-        min_points=min_points,
-        start_fraction=start_fraction,
-        growth_weight=growth_weight,
-        require_positive=require_positive,
-        min_amp_fraction=min_amp_fraction,
-    )
-    setup = _build_kbm_beta_scan_setup(
-        cfg=cfg,
-        ky_target=ky_target,
-        terms=terms,
-        reference_aligned=reference_aligned,
-        diagnostic_norm=diagnostic_norm,
-        solver=solver,
-        fit_signal=fit_signal,
-        streaming_fit=streaming_fit,
-        mode_only=mode_only,
-        krylov_cfg=krylov_cfg,
-        fit_policy=fit_policy,
-    )
-    options = _build_kbm_beta_scan_options(
-        ky_target=ky_target,
-        Nl=Nl,
-        Nm=Nm,
-        dt=dt,
-        steps=steps,
-        method=method,
-        time_cfg=time_cfg,
-        kbm_target_factors=kbm_target_factors,
-        kbm_beta_transition=kbm_beta_transition,
-        tmin=tmin,
-        tmax=tmax,
-        require_positive=require_positive,
-        mode_method=mode_method,
-        sample_stride=sample_stride,
-        streaming_amp_floor=streaming_amp_floor,
-        init_species_index=init_species_index,
-        density_species_index=density_species_index,
-        fapar_override=fapar_override,
-        apar_beta_scale=apar_beta_scale,
-        ampere_g0_scale=ampere_g0_scale,
-        bpar_beta_scale=bpar_beta_scale,
-    )
-    return _run_kbm_beta_scan_loop(
-        np.asarray(betas, dtype=float),
-        setup=setup,
-        options=options,
-    ).result()
+    return _run_kbm_beta_scan_request(_kbm_beta_scan_request_from_locals(locals()))
