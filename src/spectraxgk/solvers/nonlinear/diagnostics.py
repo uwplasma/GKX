@@ -73,6 +73,61 @@ class _ExplicitRuntimePolicies:
     collision_policy: Any
 
 
+@dataclass(frozen=True)
+class _ExplicitDiagnosticOptions:
+    method: str
+    dt: float
+    steps: int
+    checkpoint: bool
+    sample_stride: int
+    diagnostics_stride: int
+    use_dealias_mask: bool
+    z_index: int | None
+    compressed_real_fft: bool
+    laguerre_mode: str
+    omega_ky_index: int | None
+    omega_kx_index: int | None
+    flux_scale: float
+    wphi_scale: float
+    fixed_dt: bool
+    dt_min: float
+    dt_max: float | None
+    cfl: float
+    cfl_fac: float | None
+    collision_split: bool
+    collision_scheme: str
+    fixed_mode_ky_index: int | None
+    fixed_mode_kx_index: int | None
+    external_phi: jnp.ndarray | float | None
+    resolved_diagnostics: bool
+    show_progress: bool
+
+
+@dataclass(frozen=True)
+class _ExplicitScanComponents:
+    prepared: _ExplicitPreparedState
+    policies: _ExplicitRuntimePolicies
+    step: Callable[..., Any]
+    compute_diag_from_state: Callable[..., Any]
+
+
+_EXPLICIT_DIAGNOSTIC_OPTION_KEYS = tuple(_ExplicitDiagnosticOptions.__annotations__)
+
+
+def _explicit_options_from_values(values: dict[str, Any]) -> _ExplicitDiagnosticOptions:
+    """Pack public keyword values into a single internal options object."""
+
+    return _ExplicitDiagnosticOptions(
+        **{key: values[key] for key in _EXPLICIT_DIAGNOSTIC_OPTION_KEYS}
+    )
+
+
+def _discard_imex_only_options(*_unused: Any) -> None:
+    """Document IMEX-only options accepted by the shared public signature."""
+
+    return None
+
+
 def _prepare_explicit_diagnostic_state(
     G0: jnp.ndarray,
     grid: SpectralGrid,
@@ -351,6 +406,139 @@ def _run_explicit_diagnostic_scan_and_finalize(
     return jnp.asarray(diag_out.t), diag_out, G_final, fields_final
 
 
+def _build_explicit_scan_closures(
+    prepared: _ExplicitPreparedState,
+    policies: _ExplicitRuntimePolicies,
+    grid: SpectralGrid,
+    params: LinearParams,
+    *,
+    deps: ExplicitNonlinearDiagnosticsDeps,
+    options: _ExplicitDiagnosticOptions,
+) -> tuple[Callable[..., Any], Callable[..., Any]]:
+    """Build diagnostic scan closures after state and policies are prepared."""
+
+    rhs_fn = _make_explicit_rhs_fn(
+        prepared,
+        policies,
+        params,
+        deps=deps,
+        compressed_real_fft=options.compressed_real_fft,
+        laguerre_mode=options.laguerre_mode,
+        external_phi=options.external_phi,
+    )
+    compute_diag_from_state = _make_explicit_diagnostic_callable(
+        prepared,
+        grid,
+        params=params,
+        deps=deps,
+        omega_ky_index=options.omega_ky_index,
+        omega_kx_index=options.omega_kx_index,
+        flux_scale=options.flux_scale,
+        wphi_scale=options.wphi_scale,
+        resolved_diagnostics=options.resolved_diagnostics,
+    )
+    step = _make_explicit_scan_step(
+        prepared,
+        policies,
+        rhs_fn,
+        compute_diag_from_state,
+        params,
+        deps=deps,
+        method=options.method,
+        diagnostics_stride=options.diagnostics_stride,
+        show_progress=options.show_progress,
+        steps=options.steps,
+        external_phi=options.external_phi,
+        collision_scheme=options.collision_scheme,
+    )
+    return step, compute_diag_from_state
+
+
+def _build_explicit_scan_components(
+    G0: jnp.ndarray,
+    grid: SpectralGrid,
+    geom: FluxTubeGeometryLike,
+    params: LinearParams,
+    *,
+    deps: ExplicitNonlinearDiagnosticsDeps,
+    cache: LinearCache | None,
+    terms: TermConfig | None,
+    options: _ExplicitDiagnosticOptions,
+) -> _ExplicitScanComponents:
+    """Prepare explicit nonlinear diagnostic closures from packed options."""
+
+    prepared = _prepare_explicit_diagnostic_state(
+        G0,
+        grid,
+        geom,
+        params,
+        deps=deps,
+        method=options.method,
+        cache=cache,
+        terms=terms,
+        use_dealias_mask=options.use_dealias_mask,
+        z_index=options.z_index,
+        compressed_real_fft=options.compressed_real_fft,
+        fixed_mode_ky_index=options.fixed_mode_ky_index,
+        fixed_mode_kx_index=options.fixed_mode_kx_index,
+    )
+    policies = _build_explicit_runtime_policies(
+        prepared,
+        grid,
+        params,
+        deps=deps,
+        method=options.method,
+        dt=options.dt,
+        steps=options.steps,
+        fixed_dt=options.fixed_dt,
+        dt_min=options.dt_min,
+        dt_max=options.dt_max,
+        cfl=options.cfl,
+        cfl_fac=options.cfl_fac,
+        compressed_real_fft=options.compressed_real_fft,
+        collision_split=options.collision_split,
+    )
+    step, compute_diag_from_state = _build_explicit_scan_closures(
+        prepared,
+        policies,
+        grid,
+        params,
+        deps=deps,
+        options=options,
+    )
+    return _ExplicitScanComponents(
+        prepared=prepared,
+        policies=policies,
+        step=step,
+        compute_diag_from_state=compute_diag_from_state,
+    )
+
+
+def _run_explicit_scan_components(
+    components: _ExplicitScanComponents,
+    params: LinearParams,
+    *,
+    deps: ExplicitNonlinearDiagnosticsDeps,
+    options: _ExplicitDiagnosticOptions,
+) -> tuple[jnp.ndarray, SimulationDiagnostics, jnp.ndarray, FieldState]:
+    """Run prepared explicit nonlinear diagnostic components."""
+
+    return _run_explicit_diagnostic_scan_and_finalize(
+        components.prepared,
+        components.policies,
+        components.step,
+        components.compute_diag_from_state,
+        params,
+        deps=deps,
+        steps=options.steps,
+        sample_stride=options.sample_stride,
+        diagnostics_stride=options.diagnostics_stride,
+        checkpoint=options.checkpoint,
+        resolved_diagnostics=options.resolved_diagnostics,
+        external_phi=options.external_phi,
+    )
+
+
 def integrate_explicit_nonlinear_diagnostics_impl(
     G0: jnp.ndarray,
     grid: SpectralGrid,
@@ -396,93 +584,27 @@ def integrate_explicit_nonlinear_diagnostics_impl(
 ) -> tuple[jnp.ndarray, SimulationDiagnostics, jnp.ndarray, FieldState]:
     """Integrate an explicit nonlinear run and return diagnostics plus final state."""
 
-    del implicit_tol
-    del implicit_maxiter
-    del implicit_iters
-    del implicit_relax
-    del implicit_restart
-    del implicit_solve_method
-    del implicit_preconditioner
-
-    prepared = _prepare_explicit_diagnostic_state(
+    _discard_imex_only_options(
+        implicit_tol,
+        implicit_maxiter,
+        implicit_iters,
+        implicit_relax,
+        implicit_restart,
+        implicit_solve_method,
+        implicit_preconditioner,
+    )
+    options = _explicit_options_from_values(locals())
+    components = _build_explicit_scan_components(
         G0,
         grid,
         geom,
         params,
         deps=deps,
-        method=method,
         cache=cache,
         terms=terms,
-        use_dealias_mask=use_dealias_mask,
-        z_index=z_index,
-        compressed_real_fft=compressed_real_fft,
-        fixed_mode_ky_index=fixed_mode_ky_index,
-        fixed_mode_kx_index=fixed_mode_kx_index,
+        options=options,
     )
-    policies = _build_explicit_runtime_policies(
-        prepared,
-        grid,
-        params,
-        deps=deps,
-        method=method,
-        dt=dt,
-        steps=steps,
-        fixed_dt=fixed_dt,
-        dt_min=dt_min,
-        dt_max=dt_max,
-        cfl=cfl,
-        cfl_fac=cfl_fac,
-        compressed_real_fft=compressed_real_fft,
-        collision_split=collision_split,
-    )
-    rhs_fn = _make_explicit_rhs_fn(
-        prepared,
-        policies,
-        params,
-        deps=deps,
-        compressed_real_fft=compressed_real_fft,
-        laguerre_mode=laguerre_mode,
-        external_phi=external_phi,
-    )
-    compute_diag_from_state = _make_explicit_diagnostic_callable(
-        prepared,
-        grid,
-        params=params,
-        deps=deps,
-        omega_ky_index=omega_ky_index,
-        omega_kx_index=omega_kx_index,
-        flux_scale=flux_scale,
-        wphi_scale=wphi_scale,
-        resolved_diagnostics=resolved_diagnostics,
-    )
-    step = _make_explicit_scan_step(
-        prepared,
-        policies,
-        rhs_fn,
-        compute_diag_from_state,
-        params,
-        deps=deps,
-        method=method,
-        diagnostics_stride=diagnostics_stride,
-        show_progress=show_progress,
-        steps=steps,
-        external_phi=external_phi,
-        collision_scheme=collision_scheme,
-    )
-    return _run_explicit_diagnostic_scan_and_finalize(
-        prepared,
-        policies,
-        step,
-        compute_diag_from_state,
-        params,
-        deps=deps,
-        steps=steps,
-        sample_stride=sample_stride,
-        diagnostics_stride=diagnostics_stride,
-        checkpoint=checkpoint,
-        resolved_diagnostics=resolved_diagnostics,
-        external_phi=external_phi,
-    )
+    return _run_explicit_scan_components(components, params, deps=deps, options=options)
 
 
 __all__ = [
