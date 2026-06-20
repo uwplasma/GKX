@@ -54,6 +54,12 @@ class _DeviceZTransportSamples:
     device_traces: dict[str, tuple[float, ...]]
 
 
+@dataclass(frozen=True)
+class _DeviceZComputeStates:
+    serial_state: jax.Array
+    device_state: jax.Array
+
+
 def _device_z_sharding_for_spectral_state(
     state_hat: jax.Array,
     *,
@@ -429,6 +435,14 @@ def _run_device_z_transport_window(
     if setup.mesh is None or setup.sharding is None:
         raise ValueError("device-z sharding setup is not active")
 
+    compute_states = _run_device_z_compute_window_states(
+        state_hat,
+        setup,
+        axis_name=axis_name,
+        z_chunk_size=z_chunk_size,
+        dt=dt,
+        steps=steps,
+    )
     serial_traces = _initial_serial_transport_traces(state_hat)
     device_traces = _new_transport_trace_dict()
     serial_state = state_hat
@@ -466,10 +480,78 @@ def _run_device_z_transport_window(
             )
 
     return _DeviceZTransportSamples(
-        serial_state=serial_state,
-        device_state=jnp.asarray(jax.device_get(device_state)),
+        serial_state=compute_states.serial_state,
+        device_state=compute_states.device_state,
         serial_traces=_transport_trace_tuples(serial_traces),
         device_traces=_transport_trace_tuples(device_traces),
+    )
+
+
+def _serial_transport_compute_state(
+    state_hat: jax.Array,
+    *,
+    dt: float,
+    steps: int,
+) -> jax.Array:
+    """Return the compute-only serial fixed-window state used for timing."""
+
+    dt_array = jnp.asarray(float(dt), dtype=jnp.real(state_hat).dtype)
+
+    def _route(item: jax.Array) -> jax.Array:
+        out = item
+        for _ in range(int(steps)):
+            out = out + dt_array * _serial_nonlinear_rhs(out)
+        return out
+
+    return jax.jit(_route)(state_hat)
+
+
+def _run_device_z_compute_window_states(
+    state_hat: jax.Array,
+    setup: _DeviceZShardingSetup,
+    *,
+    axis_name: str,
+    z_chunk_size: int | None,
+    dt: float,
+    steps: int,
+) -> _DeviceZComputeStates:
+    """Return final states from the compute-only serial and z-sharded routes.
+
+    The transport-window gate also collects scalar traces with host-visible
+    instrumentation. Final-state identity must match the compute-only route
+    that the profiler times, otherwise per-step diagnostics can create a
+    different numerical path than the speedup candidate.
+    """
+
+    if setup.mesh is None or setup.sharding is None:
+        raise ValueError("device-z sharding setup is not active")
+    dt_array = jnp.asarray(float(dt), dtype=jnp.real(state_hat).dtype)
+    serial_state = _serial_transport_compute_state(
+        state_hat,
+        dt=dt,
+        steps=steps,
+    )
+    with setup.mesh:  # pragma: no cover - exercised by CPU/GPU profile artifacts.
+        sharded_rhs_fn = _device_z_pencil_shard_map_rhs_fn(
+            setup.mesh,
+            axis_name=axis_name,
+            z_chunk_size=z_chunk_size,
+        )
+        sharded_state = jax.device_put(
+            _host_staged_array_for_sharding(state_hat),
+            setup.sharding,
+        )
+
+        def _route(item: jax.Array) -> jax.Array:
+            out = item
+            for _ in range(int(steps)):
+                out = out + dt_array * sharded_rhs_fn(out)
+            return out
+
+        device_state = jax.jit(_route)(sharded_state)
+    return _DeviceZComputeStates(
+        serial_state=serial_state,
+        device_state=jnp.asarray(jax.device_get(device_state)),
     )
 
 
@@ -594,8 +676,10 @@ __all__ = [
     "_device_z_transport_identity_passed",
     "_device_z_transport_window_report",
     "_new_transport_trace_dict",
+    "_run_device_z_compute_window_states",
     "_spectral_physical_transport_observable_sums",
     "_spectral_physical_transport_observable_vector_from_sums",
+    "_serial_transport_compute_state",
     "_transport_trace_error_pairs",
     "_transport_trace_tuples",
     "device_z_pencil_nonlinear_spectral_rhs",
