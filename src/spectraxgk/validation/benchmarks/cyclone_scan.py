@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields, replace
 from typing import Any, Callable
 
 import jax.numpy as jnp
@@ -129,6 +129,63 @@ class _CycloneScanExecutionOptions:
     streaming_amp_floor: float
     mode_follow: bool
     show_progress: bool
+
+
+@dataclass(frozen=True)
+class _CycloneScanRequest:
+    ky_values: np.ndarray
+    Nl: int
+    Nm: int
+    dt: float | np.ndarray
+    steps: int | np.ndarray
+    method: str
+    params: LinearParams | None
+    cfg: CycloneBaseCase | None
+    time_cfg: TimeConfig | None
+    solver: str
+    krylov_cfg: KrylovConfig | None
+    tmin: float | None
+    tmax: float | None
+    auto_window: bool
+    window_fraction: float
+    min_points: int
+    start_fraction: float
+    growth_weight: float
+    require_positive: bool
+    min_amp_fraction: float
+    max_fraction: float
+    end_fraction: float
+    max_amp_fraction: float
+    phase_weight: float
+    length_weight: float
+    min_r2: float
+    late_penalty: float
+    min_slope: float | None
+    min_slope_frac: float
+    slope_var_weight: float
+    window_method: str
+    mode_method: str
+    mode_only: bool
+    terms: LinearTerms | None
+    sample_stride: int | None
+    fit_signal: str
+    diagnostic_norm: str
+    use_jit: bool
+    ky_batch: int
+    fixed_batch_shape: bool
+    streaming_fit: bool
+    streaming_amp_floor: float
+    mode_follow: bool
+    reference_aligned: bool | None
+    show_progress: bool
+
+
+def _cyclone_scan_request_from_locals(values: dict[str, Any]) -> _CycloneScanRequest:
+    """Pack public ``run_cyclone_scan`` arguments once for internal routing."""
+
+    return _CycloneScanRequest(
+        **{field.name: values[field.name] for field in fields(_CycloneScanRequest)}
+    )
 
 
 def _scan_hooks() -> CycloneScanHooks:
@@ -518,6 +575,89 @@ def _dispatch_cyclone_scan(
     )
 
 
+def _cyclone_scan_fit_policy_from_request(
+    request: _CycloneScanRequest,
+) -> ScanFitWindowPolicy:
+    return _build_cyclone_scan_fit_policy(
+        tmin=request.tmin,
+        tmax=request.tmax,
+        auto_window=request.auto_window,
+        window_fraction=request.window_fraction,
+        min_points=request.min_points,
+        start_fraction=request.start_fraction,
+        growth_weight=request.growth_weight,
+        require_positive=request.require_positive,
+        min_amp_fraction=request.min_amp_fraction,
+        max_fraction=request.max_fraction,
+        end_fraction=request.end_fraction,
+        max_amp_fraction=request.max_amp_fraction,
+        phase_weight=request.phase_weight,
+        length_weight=request.length_weight,
+        min_r2=request.min_r2,
+        late_penalty=request.late_penalty,
+        min_slope=request.min_slope,
+        min_slope_frac=request.min_slope_frac,
+        slope_var_weight=request.slope_var_weight,
+        window_method=request.window_method,
+    )
+
+
+def _cyclone_scan_setup_from_request(
+    request: _CycloneScanRequest,
+    fit_policy: ScanFitWindowPolicy,
+) -> _CycloneScanSetup:
+    return _build_cyclone_scan_setup(
+        cfg=request.cfg,
+        params=request.params,
+        terms=request.terms,
+        Nm=request.Nm,
+        solver=request.solver,
+        fit_signal=request.fit_signal,
+        diagnostic_norm=request.diagnostic_norm,
+        mode_method=request.mode_method,
+        mode_only=request.mode_only,
+        streaming_fit=request.streaming_fit,
+        ky_batch=request.ky_batch,
+        dt=request.dt,
+        steps=request.steps,
+        tmin=request.tmin,
+        tmax=request.tmax,
+        reference_aligned=request.reference_aligned,
+        fit_policy=fit_policy,
+    )
+
+
+def _cyclone_scan_execution_options_from_request(
+    request: _CycloneScanRequest,
+) -> _CycloneScanExecutionOptions:
+    return _CycloneScanExecutionOptions(
+        ky_values=np.asarray(request.ky_values, dtype=float),
+        Nl=request.Nl,
+        Nm=request.Nm,
+        dt=request.dt,
+        steps=request.steps,
+        method=request.method,
+        time_cfg=request.time_cfg,
+        krylov_cfg=request.krylov_cfg,
+        tmin=request.tmin,
+        tmax=request.tmax,
+        sample_stride=request.sample_stride,
+        use_jit=request.use_jit,
+        ky_batch=request.ky_batch,
+        fixed_batch_shape=request.fixed_batch_shape,
+        streaming_amp_floor=request.streaming_amp_floor,
+        mode_follow=request.mode_follow,
+        show_progress=request.show_progress,
+    )
+
+
+def _run_cyclone_scan_request(request: _CycloneScanRequest) -> CycloneScanResult:
+    fit_policy = _cyclone_scan_fit_policy_from_request(request)
+    setup = _cyclone_scan_setup_from_request(request, fit_policy)
+    options = _cyclone_scan_execution_options_from_request(request)
+    return _dispatch_cyclone_scan(setup, options)
+
+
 def run_cyclone_scan(
     ky_values: np.ndarray,
     Nl: int = 6,
@@ -570,65 +710,4 @@ def run_cyclone_scan(
     If ``time_cfg`` is provided, its ``dt`` and ``t_max`` override ``dt``/``steps``.
     """
 
-    fit_policy = _build_cyclone_scan_fit_policy(
-        tmin=tmin,
-        tmax=tmax,
-        auto_window=auto_window,
-        window_fraction=window_fraction,
-        min_points=min_points,
-        start_fraction=start_fraction,
-        growth_weight=growth_weight,
-        require_positive=require_positive,
-        min_amp_fraction=min_amp_fraction,
-        max_fraction=max_fraction,
-        end_fraction=end_fraction,
-        max_amp_fraction=max_amp_fraction,
-        phase_weight=phase_weight,
-        length_weight=length_weight,
-        min_r2=min_r2,
-        late_penalty=late_penalty,
-        min_slope=min_slope,
-        min_slope_frac=min_slope_frac,
-        slope_var_weight=slope_var_weight,
-        window_method=window_method,
-    )
-    setup = _build_cyclone_scan_setup(
-        cfg=cfg,
-        params=params,
-        terms=terms,
-        Nm=Nm,
-        solver=solver,
-        fit_signal=fit_signal,
-        diagnostic_norm=diagnostic_norm,
-        mode_method=mode_method,
-        mode_only=mode_only,
-        streaming_fit=streaming_fit,
-        ky_batch=ky_batch,
-        dt=dt,
-        steps=steps,
-        tmin=tmin,
-        tmax=tmax,
-        reference_aligned=reference_aligned,
-        fit_policy=fit_policy,
-    )
-
-    options = _CycloneScanExecutionOptions(
-        ky_values=np.asarray(ky_values, dtype=float),
-        Nl=Nl,
-        Nm=Nm,
-        dt=dt,
-        steps=steps,
-        method=method,
-        time_cfg=time_cfg,
-        krylov_cfg=krylov_cfg,
-        tmin=tmin,
-        tmax=tmax,
-        sample_stride=sample_stride,
-        use_jit=use_jit,
-        ky_batch=ky_batch,
-        fixed_batch_shape=fixed_batch_shape,
-        streaming_amp_floor=streaming_amp_floor,
-        mode_follow=mode_follow,
-        show_progress=show_progress,
-    )
-    return _dispatch_cyclone_scan(setup, options)
+    return _run_cyclone_scan_request(_cyclone_scan_request_from_locals(locals()))
