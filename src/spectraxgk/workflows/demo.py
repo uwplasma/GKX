@@ -40,6 +40,34 @@ class DefaultDemoDeps:
     write_runtime_linear_artifacts: Callable[[str | Path, RuntimeLinearResult], dict[str, str]]
 
 
+@dataclass(frozen=True)
+class _DefaultDemoCase:
+    cfg: Any
+    source: str
+
+
+@dataclass(frozen=True)
+class _DefaultDemoRunSettings:
+    ky: float
+    n_laguerre: int
+    n_hermite: int
+    solver: str
+    method: str
+    dt: float
+    steps: int
+    sample_stride: int
+    mode_method: str
+    fit_signal: str
+
+
+@dataclass(frozen=True)
+class _DefaultDemoOutputs:
+    t: np.ndarray
+    signal: np.ndarray
+    z: np.ndarray
+    eigenfunction: np.ndarray
+
+
 __all__ = [
     "DEFAULT_DEMO_SETTINGS",
     "DefaultDemoDeps",
@@ -163,33 +191,44 @@ def _status_printer(prefix: str) -> Callable[[str], None]:
     return _emit
 
 
-def run_default_linear_demo(*, deps: DefaultDemoDeps, example_path: Path | None = None) -> int:
-    """Run the no-input Cyclone initial-value demo and write reusable artifacts."""
-
+def _load_default_demo_case(
+    *, deps: DefaultDemoDeps, example_path: Path | None
+) -> _DefaultDemoCase:
     bundled_example = default_example_config_path() if example_path is None else example_path
     if bundled_example is not None:
-        _case_name, cfg, data = deps.load_case_from_toml(str(bundled_example), None)
-        source = str(bundled_example)
-    else:
-        cfg = deps.cyclone_base_case()
-        data = {}
-        source = "built-in Cyclone defaults (equivalent to examples/linear/axisymmetric/cyclone.toml)"
+        _case_name, cfg, _data = deps.load_case_from_toml(str(bundled_example), None)
+        return _DefaultDemoCase(cfg=cfg, source=str(bundled_example))
+    return _DefaultDemoCase(
+        cfg=deps.cyclone_base_case(),
+        source=(
+            "built-in Cyclone defaults "
+            "(equivalent to examples/linear/axisymmetric/cyclone.toml)"
+        ),
+    )
 
-    _ = data
+
+def _default_demo_run_settings() -> _DefaultDemoRunSettings:
     settings = DEFAULT_DEMO_SETTINGS
-    ky = float(settings["ky"])
-    Nl = int(settings["Nl"])
-    Nm = int(settings["Nm"])
-    solver = str(settings["solver"])
-    method = str(settings["method"])
-    dt = float(settings["dt"])
-    steps = int(settings["steps"])
-    sample_stride = int(settings["sample_stride"])
-    mode_method = str(settings["mode_method"])
-    fit_signal = str(settings["fit_signal"])
-    toml_path = default_demo_toml_path()
-    toml_path.write_text(default_demo_toml_text(), encoding="utf-8")
+    return _DefaultDemoRunSettings(
+        ky=float(settings["ky"]),
+        n_laguerre=int(settings["Nl"]),
+        n_hermite=int(settings["Nm"]),
+        solver=str(settings["solver"]),
+        method=str(settings["method"]),
+        dt=float(settings["dt"]),
+        steps=int(settings["steps"]),
+        sample_stride=int(settings["sample_stride"]),
+        mode_method=str(settings["mode_method"]),
+        fit_signal=str(settings["fit_signal"]),
+    )
 
+
+def _print_default_demo_intro(
+    *,
+    source: str,
+    settings: _DefaultDemoRunSettings,
+    toml_path: Path,
+) -> None:
     print(
         "No input file specified; running the default Cyclone initial-value demo.",
         flush=True,
@@ -201,33 +240,52 @@ def run_default_linear_demo(*, deps: DefaultDemoDeps, example_path: Path | None 
         flush=True,
     )
     print(
-        f"demo settings: ky={ky:.3f} Nl={Nl} Nm={Nm} solver={solver} "
-        f"method={method} dt={dt:g} steps={steps} sample_stride={sample_stride}",
+        f"demo settings: ky={settings.ky:.3f} Nl={settings.n_laguerre} "
+        f"Nm={settings.n_hermite} solver={settings.solver} "
+        f"method={settings.method} dt={settings.dt:g} steps={settings.steps} "
+        f"sample_stride={settings.sample_stride}",
         flush=True,
     )
     print(f"wrote reproducible input: {toml_path}", flush=True)
-    result = deps.run_cyclone_linear(
-        ky_target=ky,
-        cfg=cfg,
-        Nl=Nl,
-        Nm=Nm,
-        solver=solver,
-        method=method,
-        dt=dt,
-        steps=steps,
-        sample_stride=sample_stride,
+
+
+def _run_default_demo_solver(
+    *,
+    deps: DefaultDemoDeps,
+    case: _DefaultDemoCase,
+    settings: _DefaultDemoRunSettings,
+) -> Any:
+    return deps.run_cyclone_linear(
+        ky_target=settings.ky,
+        cfg=case.cfg,
+        Nl=settings.n_laguerre,
+        Nm=settings.n_hermite,
+        solver=settings.solver,
+        method=settings.method,
+        dt=settings.dt,
+        steps=settings.steps,
+        sample_stride=settings.sample_stride,
         show_progress=True,
         status_callback=_status_printer("demo"),
-        fit_signal=fit_signal,
-        mode_method=mode_method,
+        fit_signal=settings.fit_signal,
+        mode_method=settings.mode_method,
         auto_window=True,
         window_fraction=0.4,
         start_fraction=0.2,
         min_points=25,
     )
-    grid = deps.build_spectral_grid(cfg.grid)
+
+
+def _extract_default_demo_outputs(
+    *,
+    deps: DefaultDemoDeps,
+    case: _DefaultDemoCase,
+    result: Any,
+    settings: _DefaultDemoRunSettings,
+) -> _DefaultDemoOutputs:
+    grid = deps.build_spectral_grid(case.cfg.grid)
     signal = deps.extract_mode_time_series(
-        result.phi_t, result.selection, method=mode_method
+        result.phi_t, result.selection, method=settings.mode_method
     )
     eigen = deps.normalize_eigenfunction(
         deps.extract_eigenfunction(
@@ -239,13 +297,27 @@ def run_default_linear_demo(*, deps: DefaultDemoDeps, example_path: Path | None 
         ),
         np.asarray(grid.z, dtype=float),
     )
-    out_path = default_demo_plot_path()
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    fig, _axes = deps.linear_runtime_panel_figure(
+    return _DefaultDemoOutputs(
         t=np.asarray(result.t, dtype=float),
         signal=np.asarray(signal),
         z=np.asarray(grid.z, dtype=float),
         eigenfunction=np.asarray(eigen),
+    )
+
+
+def _write_default_demo_plot(
+    *,
+    deps: DefaultDemoDeps,
+    result: Any,
+    outputs: _DefaultDemoOutputs,
+) -> Path:
+    out_path = default_demo_plot_path()
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    fig, _axes = deps.linear_runtime_panel_figure(
+        t=outputs.t,
+        signal=outputs.signal,
+        z=outputs.z,
+        eigenfunction=outputs.eigenfunction,
         gamma=float(result.gamma),
         omega=float(result.omega),
         title="SPECTRAX-GK default Cyclone initial-value demo",
@@ -254,19 +326,37 @@ def run_default_linear_demo(*, deps: DefaultDemoDeps, example_path: Path | None 
     import matplotlib.pyplot as plt
 
     plt.close(fig)
-    bundle_paths = deps.write_runtime_linear_artifacts(
+    return out_path
+
+
+def _write_default_demo_artifacts(
+    *,
+    deps: DefaultDemoDeps,
+    result: Any,
+    outputs: _DefaultDemoOutputs,
+) -> dict[str, str]:
+    return deps.write_runtime_linear_artifacts(
         default_demo_artifact_base(),
         RuntimeLinearResult(
             ky=float(result.ky),
             gamma=float(result.gamma),
             omega=float(result.omega),
             selection=result.selection,
-            t=np.asarray(result.t, dtype=float),
-            signal=np.asarray(signal),
-            z=np.asarray(grid.z, dtype=float),
-            eigenfunction=np.asarray(eigen),
+            t=outputs.t,
+            signal=outputs.signal,
+            z=outputs.z,
+            eigenfunction=outputs.eigenfunction,
         ),
     )
+
+
+def _print_default_demo_results(
+    *,
+    result: Any,
+    bundle_paths: dict[str, str],
+    out_path: Path,
+    toml_path: Path,
+) -> None:
     print(
         f"gamma={float(result.gamma):.6f} omega={float(result.omega):.6f}",
         flush=True,
@@ -280,5 +370,38 @@ def run_default_linear_demo(*, deps: DefaultDemoDeps, example_path: Path | None 
     print(
         f"rerun this numerical case with: spectraxgk run-linear --config {toml_path} --progress",
         flush=True,
+    )
+
+
+def run_default_linear_demo(*, deps: DefaultDemoDeps, example_path: Path | None = None) -> int:
+    """Run the no-input Cyclone initial-value demo and write reusable artifacts."""
+
+    case = _load_default_demo_case(deps=deps, example_path=example_path)
+    settings = _default_demo_run_settings()
+    toml_path = default_demo_toml_path()
+    toml_path.write_text(default_demo_toml_text(), encoding="utf-8")
+    _print_default_demo_intro(
+        source=case.source,
+        settings=settings,
+        toml_path=toml_path,
+    )
+    result = _run_default_demo_solver(deps=deps, case=case, settings=settings)
+    outputs = _extract_default_demo_outputs(
+        deps=deps,
+        case=case,
+        result=result,
+        settings=settings,
+    )
+    out_path = _write_default_demo_plot(deps=deps, result=result, outputs=outputs)
+    bundle_paths = _write_default_demo_artifacts(
+        deps=deps,
+        result=result,
+        outputs=outputs,
+    )
+    _print_default_demo_results(
+        result=result,
+        bundle_paths=bundle_paths,
+        out_path=out_path,
+        toml_path=toml_path,
     )
     return 0
