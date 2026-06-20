@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from typing import Any, Sequence
 
 from spectraxgk.validation.nonlinear_gradient.evidence_classification import (
@@ -14,6 +14,19 @@ from spectraxgk.validation.nonlinear_gradient.evidence_core import (
     _gate,
 )
 from spectraxgk.validation.nonlinear_gradient.evidence_windows import summarize_window_evidence
+
+
+@dataclass(frozen=True)
+class _EvidenceGapContext:
+    cfg: NonlinearTurbulenceGradientEvidenceConfig
+    gap_cfg: NonlinearTurbulenceGradientGapConfig
+    passed: bool
+    blockers: list[str]
+    gradient: dict[str, Any]
+    windows: dict[str, Any]
+    qualifying_windows: list[dict[str, Any]]
+    failed_gradient_gates: list[dict[str, str]]
+    has_production_candidate: bool
 
 
 def _required_run_rows(
@@ -51,91 +64,126 @@ def _required_run_rows(
     return rows
 
 
-def nonlinear_turbulence_gradient_evidence_gap_report(
-    evidence_report: dict[str, Any],
+def _gap_configs(
     *,
-    config: NonlinearTurbulenceGradientEvidenceConfig | None = None,
-    gap_config: NonlinearTurbulenceGradientGapConfig | None = None,
-) -> dict[str, Any]:
-    """Return the fail-closed run campaign needed to close gradient evidence.
+    config: NonlinearTurbulenceGradientEvidenceConfig | None,
+    gap_config: NonlinearTurbulenceGradientGapConfig | None,
+) -> tuple[
+    NonlinearTurbulenceGradientEvidenceConfig,
+    NonlinearTurbulenceGradientGapConfig,
+]:
+    return (
+        config or NonlinearTurbulenceGradientEvidenceConfig(),
+        gap_config or NonlinearTurbulenceGradientGapConfig(),
+    )
 
-    The report is deliberately prescriptive: it requires paired plus/minus
-    long-window nonlinear runs with the same seeds, timestep variant, grid, and
-    post-transient analysis window before a finite-difference turbulence
-    gradient can be promoted.  It does not infer a gradient from standalone
-    replicated transport windows.
-    """
 
-    cfg = config or NonlinearTurbulenceGradientEvidenceConfig()
-    gap_cfg = gap_config or NonlinearTurbulenceGradientGapConfig()
-    passed = bool(evidence_report.get("passed", False))
-    blockers = [str(item) for item in evidence_report.get("blockers", [])]
-    gradient = evidence_report.get("gradient_artifact")
-    if not isinstance(gradient, dict):
-        gradient = {}
-    windows = evidence_report.get("window_evidence")
-    if not isinstance(windows, dict):
-        windows = {}
-    qualifying_windows = [
+def _dict_or_empty(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _qualifying_window_rows(windows: dict[str, Any]) -> list[dict[str, Any]]:
+    rows = windows.get("ensemble_rows", [])
+    if not isinstance(rows, Sequence):
+        return []
+    return [
         row
-        for row in windows.get("ensemble_rows", [])
+        for row in rows
         if isinstance(row, dict)
         and bool(row.get("qualifies_for_replicated_long_window_uncertainty", False))
     ]
-    failed_gradient_gates = [
+
+
+def _failed_gradient_gates(gradient: dict[str, Any]) -> list[dict[str, str]]:
+    gates = gradient.get("gates", [])
+    if not isinstance(gates, Sequence):
+        return []
+    return [
         {
             "metric": str(gate.get("metric", "")),
             "detail": str(gate.get("detail", "")),
         }
-        for gate in gradient.get("gates", [])
+        for gate in gates
         if isinstance(gate, dict) and not bool(gate.get("passed", False))
     ]
-    gradient_class = str(gradient.get("evidence_class", ""))
-    has_production_candidate = (
-        gradient_class == "production_long_window_turbulence_gradient_candidate"
-    )
-    missing: list[dict[str, Any]] = []
-    if "production_gradient_artifact" in blockers:
-        if has_production_candidate:
-            missing.append(
-                {
-                    "blocker": "production_gradient_artifact",
-                    "needed": (
-                        "the current matched long-window production-candidate "
-                        "finite-difference artifact must pass all recorded "
-                        "response, asymmetry, conditioning, and propagated "
-                        "gradient-uncertainty gates"
-                    ),
-                    "current_artifact_class": gradient.get("evidence_class"),
-                    "current_artifact_path": gradient.get("path"),
-                    "current_failed_gates": failed_gradient_gates,
-                }
-            )
-        else:
-            missing.append(
-                {
-                    "blocker": "production_gradient_artifact",
-                    "needed": (
-                        "central finite-difference or adjoint/VJP artifact computed "
-                        "from matched long post-transient nonlinear heat-flux windows"
-                    ),
-                    "current_artifact_class": gradient.get("evidence_class"),
-                    "current_artifact_path": gradient.get("path"),
-                }
-            )
-    if "replicated_long_window_uncertainty" in blockers:
-        missing.append(
-            {
-                "blocker": "replicated_long_window_uncertainty",
-                "needed": (
-                    "at least one baseline/plus/minus campaign with replicated "
-                    "post-transient transport-window ensemble gates"
-                ),
-                "qualifying_window_ensembles": len(qualifying_windows),
-            }
-        )
 
-    finite_difference_audit = {
+
+def _gap_context(
+    evidence_report: dict[str, Any],
+    *,
+    cfg: NonlinearTurbulenceGradientEvidenceConfig,
+    gap_cfg: NonlinearTurbulenceGradientGapConfig,
+) -> _EvidenceGapContext:
+    gradient = _dict_or_empty(evidence_report.get("gradient_artifact"))
+    windows = _dict_or_empty(evidence_report.get("window_evidence"))
+    failed_gradient_gates = _failed_gradient_gates(gradient)
+    gradient_class = str(gradient.get("evidence_class", ""))
+    return _EvidenceGapContext(
+        cfg=cfg,
+        gap_cfg=gap_cfg,
+        passed=bool(evidence_report.get("passed", False)),
+        blockers=[str(item) for item in evidence_report.get("blockers", [])],
+        gradient=gradient,
+        windows=windows,
+        qualifying_windows=_qualifying_window_rows(windows),
+        failed_gradient_gates=failed_gradient_gates,
+        has_production_candidate=(
+            gradient_class == "production_long_window_turbulence_gradient_candidate"
+        ),
+    )
+
+
+def _production_gradient_missing_row(ctx: _EvidenceGapContext) -> dict[str, Any]:
+    if ctx.has_production_candidate:
+        return {
+            "blocker": "production_gradient_artifact",
+            "needed": (
+                "the current matched long-window production-candidate "
+                "finite-difference artifact must pass all recorded "
+                "response, asymmetry, conditioning, and propagated "
+                "gradient-uncertainty gates"
+            ),
+            "current_artifact_class": ctx.gradient.get("evidence_class"),
+            "current_artifact_path": ctx.gradient.get("path"),
+            "current_failed_gates": ctx.failed_gradient_gates,
+        }
+    return {
+        "blocker": "production_gradient_artifact",
+        "needed": (
+            "central finite-difference or adjoint/VJP artifact computed "
+            "from matched long post-transient nonlinear heat-flux windows"
+        ),
+        "current_artifact_class": ctx.gradient.get("evidence_class"),
+        "current_artifact_path": ctx.gradient.get("path"),
+    }
+
+
+def _replicated_window_missing_row(ctx: _EvidenceGapContext) -> dict[str, Any]:
+    return {
+        "blocker": "replicated_long_window_uncertainty",
+        "needed": (
+            "at least one baseline/plus/minus campaign with replicated "
+            "post-transient transport-window ensemble gates"
+        ),
+        "qualifying_window_ensembles": len(ctx.qualifying_windows),
+    }
+
+
+def _missing_evidence_rows(ctx: _EvidenceGapContext) -> list[dict[str, Any]]:
+    missing: list[dict[str, Any]] = []
+    if "production_gradient_artifact" in ctx.blockers:
+        missing.append(_production_gradient_missing_row(ctx))
+    if "replicated_long_window_uncertainty" in ctx.blockers:
+        missing.append(_replicated_window_missing_row(ctx))
+    return missing
+
+
+def _finite_difference_audit_contract(
+    *,
+    cfg: NonlinearTurbulenceGradientEvidenceConfig,
+    gap_cfg: NonlinearTurbulenceGradientGapConfig,
+) -> dict[str, Any]:
+    return {
         "required_output": (
             "docs/_static/{case}_{parameter}_central_fd_gradient_gate.json"
         ).format(
@@ -171,35 +219,73 @@ def nonlinear_turbulence_gradient_evidence_gap_report(
             "resolved above the transport-window uncertainty."
         ),
     }
+
+
+def _claim_level(ctx: _EvidenceGapContext) -> str:
+    if ctx.has_production_candidate and not ctx.passed:
+        return "fail_closed_production_candidate_gradient_gate_not_resolved"
+    return "fail_closed_missing_campaign_plan_not_gradient_evidence"
+
+
+def _required_campaign(
+    *,
+    gap_cfg: NonlinearTurbulenceGradientGapConfig,
+    finite_difference_audit: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "case_slug": gap_cfg.case_slug,
+        "parameter_name": gap_cfg.parameter_name,
+        "perturbation_fraction": gap_cfg.perturbation_fraction,
+        "required_runs": _required_run_rows(gap_cfg),
+        "finite_difference_audit": finite_difference_audit,
+    }
+
+
+def _gradient_evidence_requirements() -> list[str]:
+    return [
+        "run baseline, plus-delta, and minus-delta nonlinear simulations with identical numerical settings except the perturbed parameter",
+        "use the same seed/timestep replicate labels for all three parameter states",
+        "discard the startup transient and average only over the declared post-transient analysis window",
+        "build passed ensemble gates for baseline, plus, and minus states before computing the gradient",
+        "record finite-difference response, asymmetry, condition number, and gradient uncertainty in the production gradient artifact",
+    ]
+
+
+def nonlinear_turbulence_gradient_evidence_gap_report(
+    evidence_report: dict[str, Any],
+    *,
+    config: NonlinearTurbulenceGradientEvidenceConfig | None = None,
+    gap_config: NonlinearTurbulenceGradientGapConfig | None = None,
+) -> dict[str, Any]:
+    """Return the fail-closed run campaign needed to close gradient evidence.
+
+    The report is deliberately prescriptive: it requires paired plus/minus
+    long-window nonlinear runs with the same seeds, timestep variant, grid, and
+    post-transient analysis window before a finite-difference turbulence
+    gradient can be promoted.  It does not infer a gradient from standalone
+    replicated transport windows.
+    """
+
+    cfg, gap_cfg = _gap_configs(config=config, gap_config=gap_config)
+    ctx = _gap_context(evidence_report, cfg=cfg, gap_cfg=gap_cfg)
+    finite_difference_audit = _finite_difference_audit_contract(
+        cfg=cfg, gap_cfg=gap_cfg
+    )
     return {
         "kind": "nonlinear_turbulence_gradient_evidence_gap_report",
-        "claim_level": (
-            "fail_closed_production_candidate_gradient_gate_not_resolved"
-            if has_production_candidate and not passed
-            else "fail_closed_missing_campaign_plan_not_gradient_evidence"
+        "claim_level": _claim_level(ctx),
+        "passed": ctx.passed,
+        "promotion_blocked": not ctx.passed,
+        "blockers": ctx.blockers,
+        "missing_evidence": _missing_evidence_rows(ctx),
+        "current_gradient_candidate_present": ctx.has_production_candidate,
+        "current_gradient_failed_gates": ctx.failed_gradient_gates,
+        "current_window_evidence_passed": bool(ctx.windows.get("passed", False)),
+        "qualifying_window_ensemble_count": len(ctx.qualifying_windows),
+        "required_campaign": _required_campaign(
+            gap_cfg=gap_cfg, finite_difference_audit=finite_difference_audit
         ),
-        "passed": passed,
-        "promotion_blocked": not passed,
-        "blockers": blockers,
-        "missing_evidence": missing,
-        "current_gradient_candidate_present": has_production_candidate,
-        "current_gradient_failed_gates": failed_gradient_gates,
-        "current_window_evidence_passed": bool(windows.get("passed", False)),
-        "qualifying_window_ensemble_count": len(qualifying_windows),
-        "required_campaign": {
-            "case_slug": gap_cfg.case_slug,
-            "parameter_name": gap_cfg.parameter_name,
-            "perturbation_fraction": gap_cfg.perturbation_fraction,
-            "required_runs": _required_run_rows(gap_cfg),
-            "finite_difference_audit": finite_difference_audit,
-        },
-        "requirements": [
-            "run baseline, plus-delta, and minus-delta nonlinear simulations with identical numerical settings except the perturbed parameter",
-            "use the same seed/timestep replicate labels for all three parameter states",
-            "discard the startup transient and average only over the declared post-transient analysis window",
-            "build passed ensemble gates for baseline, plus, and minus states before computing the gradient",
-            "record finite-difference response, asymmetry, condition number, and gradient uncertainty in the production gradient artifact",
-        ],
+        "requirements": _gradient_evidence_requirements(),
         "notes": (
             "Standalone passed transport windows are necessary but not sufficient: "
             "production turbulence-gradient evidence requires paired parameter "
