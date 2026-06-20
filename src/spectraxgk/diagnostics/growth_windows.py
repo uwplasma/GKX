@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, replace
 from typing import Tuple
 
 import numpy as np
@@ -40,6 +41,40 @@ def _least_squares_line(tt: np.ndarray, y: np.ndarray) -> tuple[float, float, np
     A = np.vstack([tt, np.ones_like(tt)]).T
     slope, offset = np.linalg.lstsq(A, y, rcond=None)[0]
     return float(slope), float(offset), slope * tt + offset
+
+
+@dataclass(frozen=True)
+class _LoglinearWindowOptions:
+    min_points: int
+    start_fraction: float
+    max_fraction: float
+    end_fraction: float
+    num_windows: int
+    growth_weight: float
+    require_positive: bool
+    min_amp_fraction: float
+    max_amp_fraction: float
+    phase_weight: float
+    length_weight: float
+    min_r2: float
+    late_penalty: float
+    min_slope: float | None
+    min_slope_frac: float
+    slope_var_weight: float
+
+
+@dataclass(frozen=True)
+class _LoglinearSearchState:
+    t: np.ndarray
+    log_amp: np.ndarray
+    phase: np.ndarray
+    amp_lin: np.ndarray
+    slope_series: np.ndarray
+    lengths: np.ndarray
+    start_index: int
+    end_index_max: int
+    slope_thresh: float
+    max_amp: float
 
 
 def _amplitude_start_index(
@@ -121,42 +156,66 @@ def select_fit_window(
     return tmin, tmax
 
 
-def _validate_loglinear_options(
-    *,
-    min_points: int,
-    start_fraction: float,
-    max_fraction: float,
-    end_fraction: float,
-    num_windows: int,
-    growth_weight: float,
-    min_amp_fraction: float,
-    max_amp_fraction: float,
-    late_penalty: float,
-    min_slope_frac: float,
-    slope_var_weight: float,
-) -> None:
-    if min_points < 2:
+def _validate_loglinear_options(options: _LoglinearWindowOptions) -> None:
+    if options.min_points < 2:
         raise ValueError("min_points must be >= 2")
-    if not (0.0 <= start_fraction < 1.0):
+    if not (0.0 <= options.start_fraction < 1.0):
         raise ValueError("start_fraction must be in [0, 1)")
-    if not (0.0 < max_fraction <= 1.0):
+    if not (0.0 < options.max_fraction <= 1.0):
         raise ValueError("max_fraction must be in (0, 1]")
-    if not (0.0 < end_fraction <= 1.0):
+    if not (0.0 < options.end_fraction <= 1.0):
         raise ValueError("end_fraction must be in (0, 1]")
-    if num_windows < 1:
+    if options.num_windows < 1:
         raise ValueError("num_windows must be >= 1")
-    if growth_weight < 0.0:
+    if options.growth_weight < 0.0:
         raise ValueError("growth_weight must be >= 0")
-    if not (0.0 <= min_amp_fraction < 1.0):
+    if not (0.0 <= options.min_amp_fraction < 1.0):
         raise ValueError("min_amp_fraction must be in [0, 1)")
-    if not (0.0 < max_amp_fraction <= 1.0):
+    if not (0.0 < options.max_amp_fraction <= 1.0):
         raise ValueError("max_amp_fraction must be in (0, 1]")
-    if late_penalty < 0.0:
+    if options.late_penalty < 0.0:
         raise ValueError("late_penalty must be >= 0")
-    if min_slope_frac < 0.0:
+    if options.min_slope_frac < 0.0:
         raise ValueError("min_slope_frac must be >= 0")
-    if slope_var_weight < 0.0:
+    if options.slope_var_weight < 0.0:
         raise ValueError("slope_var_weight must be >= 0")
+
+
+def _prepare_loglinear_search_state(
+    t: np.ndarray,
+    signal: np.ndarray,
+    options: _LoglinearWindowOptions,
+) -> _LoglinearSearchState:
+    n = t.shape[0]
+    log_amp, phase = _log_amp_phase(signal)
+    amp_lin = np.abs(signal)
+    slope_thresh, slope_series = _loglinear_slope_threshold(
+        log_amp,
+        t,
+        min_slope=options.min_slope,
+        min_slope_frac=options.min_slope_frac,
+    )
+    return _LoglinearSearchState(
+        t=t,
+        log_amp=log_amp,
+        phase=phase,
+        amp_lin=amp_lin,
+        slope_series=slope_series,
+        lengths=_loglinear_lengths(
+            n,
+            min_points=options.min_points,
+            max_fraction=options.max_fraction,
+            num_windows=options.num_windows,
+        ),
+        start_index=_amplitude_start_index(
+            amp_lin,
+            start_index=int(options.start_fraction * n),
+            min_amp_fraction=options.min_amp_fraction,
+        ),
+        end_index_max=max(int(options.end_fraction * n), 2),
+        slope_thresh=slope_thresh,
+        max_amp=_loglinear_amp_cap(amp_lin),
+    )
 
 
 def _loglinear_lengths(
@@ -342,6 +401,66 @@ def _fallback_loglinear_slice(
     return best_score, best_slice
 
 
+def _search_loglinear_best_slice(
+    state: _LoglinearSearchState,
+    options: _LoglinearWindowOptions,
+) -> tuple[tuple[int, int], bool]:
+    n = state.t.shape[0]
+    best_score, best_slice, found_positive = _search_loglinear_windows(
+        t=state.t,
+        log_amp=state.log_amp,
+        phase=state.phase,
+        amp_lin=state.amp_lin,
+        slope_series=state.slope_series,
+        lengths=state.lengths,
+        start_index=state.start_index,
+        end_index_max=state.end_index_max,
+        require_positive=options.require_positive,
+        max_amp_fraction=options.max_amp_fraction,
+        max_amp=state.max_amp,
+        phase_weight=options.phase_weight,
+        growth_weight=options.growth_weight,
+        length_weight=options.length_weight,
+        min_r2=options.min_r2,
+        late_penalty=options.late_penalty,
+        slope_thresh=state.slope_thresh,
+        slope_var_weight=options.slope_var_weight,
+    )
+    if best_score != -np.inf:
+        return best_slice, found_positive
+
+    fallback_start = min(state.start_index, max(0, n - 2))
+    fallback_end_index_max = (
+        state.end_index_max if state.end_index_max >= options.min_points else n
+    )
+    _best_score, best_slice = _fallback_loglinear_slice(
+        t=state.t,
+        log_amp=state.log_amp,
+        phase=state.phase,
+        lengths=state.lengths,
+        fallback_start=fallback_start,
+        fallback_end_index_max=fallback_end_index_max,
+        phase_weight=options.phase_weight,
+    )
+    return best_slice, found_positive
+
+
+def _select_fit_window_loglinear_impl(
+    t: np.ndarray,
+    signal: np.ndarray,
+    options: _LoglinearWindowOptions,
+) -> Tuple[float, float]:
+    state = _prepare_loglinear_search_state(t, signal, options)
+    best_slice, found_positive = _search_loglinear_best_slice(state, options)
+    if options.require_positive and not found_positive:
+        return _select_fit_window_loglinear_impl(
+            t,
+            signal,
+            replace(options, require_positive=False),
+        )
+    return float(t[best_slice[0]]), float(t[best_slice[1] - 1])
+
+
 def select_fit_window_loglinear(
     t: np.ndarray,
     signal: np.ndarray,
@@ -365,89 +484,23 @@ def select_fit_window_loglinear(
     """Select a window where log-amplitude is closest to linear."""
 
     t, signal = _validated_fit_inputs(t, signal)
-    n = t.shape[0]
-    _validate_loglinear_options(
+    options = _LoglinearWindowOptions(
         min_points=min_points,
         start_fraction=start_fraction,
         max_fraction=max_fraction,
         end_fraction=end_fraction,
         num_windows=num_windows,
         growth_weight=growth_weight,
+        require_positive=require_positive,
         min_amp_fraction=min_amp_fraction,
         max_amp_fraction=max_amp_fraction,
-        late_penalty=late_penalty,
-        min_slope_frac=min_slope_frac,
-        slope_var_weight=slope_var_weight,
-    )
-    end_index_max = max(int(end_fraction * n), 2)
-    lengths = _loglinear_lengths(
-        n, min_points=min_points, max_fraction=max_fraction, num_windows=num_windows
-    )
-
-    log_amp, phase = _log_amp_phase(signal)
-    amp_lin = np.abs(signal)
-    slope_thresh, slope_series = _loglinear_slope_threshold(
-        log_amp, t, min_slope=min_slope, min_slope_frac=min_slope_frac
-    )
-    start_index = _amplitude_start_index(
-        amp_lin, start_index=int(start_fraction * n), min_amp_fraction=min_amp_fraction
-    )
-    best_score, best_slice, found_positive = _search_loglinear_windows(
-        t=t,
-        log_amp=log_amp,
-        phase=phase,
-        amp_lin=amp_lin,
-        slope_series=slope_series,
-        lengths=lengths,
-        start_index=start_index,
-        end_index_max=end_index_max,
-        require_positive=require_positive,
-        max_amp_fraction=max_amp_fraction,
-        max_amp=_loglinear_amp_cap(amp_lin),
         phase_weight=phase_weight,
-        growth_weight=growth_weight,
         length_weight=length_weight,
         min_r2=min_r2,
         late_penalty=late_penalty,
-        slope_thresh=slope_thresh,
+        min_slope=min_slope,
+        min_slope_frac=min_slope_frac,
         slope_var_weight=slope_var_weight,
     )
-
-    if best_score == -np.inf:
-        fallback_start = min(start_index, max(0, n - 2))
-        fallback_end_index_max = end_index_max if end_index_max >= min_points else n
-        best_score, best_slice = _fallback_loglinear_slice(
-            t=t,
-            log_amp=log_amp,
-            phase=phase,
-            lengths=lengths,
-            fallback_start=fallback_start,
-            fallback_end_index_max=fallback_end_index_max,
-            phase_weight=phase_weight,
-        )
-
-    if require_positive and not found_positive:
-        return select_fit_window_loglinear(
-            t,
-            signal,
-            min_points=min_points,
-            start_fraction=start_fraction,
-            max_fraction=max_fraction,
-            end_fraction=end_fraction,
-            num_windows=num_windows,
-            growth_weight=growth_weight,
-            require_positive=False,
-            min_amp_fraction=min_amp_fraction,
-            max_amp_fraction=max_amp_fraction,
-            phase_weight=phase_weight,
-            length_weight=length_weight,
-            min_r2=min_r2,
-            late_penalty=late_penalty,
-            min_slope=min_slope,
-            min_slope_frac=min_slope_frac,
-            slope_var_weight=slope_var_weight,
-        )
-
-    tmin = float(t[best_slice[0]])
-    tmax = float(t[best_slice[1] - 1])
-    return tmin, tmax
+    _validate_loglinear_options(options)
+    return _select_fit_window_loglinear_impl(t, signal, options)
