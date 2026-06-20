@@ -69,6 +69,37 @@ def _mode21_context(
     )
 
 
+def _mode21_enriched_linear_context(
+    *,
+    case_name: str,
+    radial_index: int | None,
+    mode_index: int,
+    parameter_family: str,
+    surface_index: int | None,
+    ntheta: int,
+    mboz: int,
+    nboz: int,
+    surface_stencil_width: int | None,
+    context_fn: Any,
+) -> dict[str, Any]:
+    """Return the richer moment-basis context used by QL/window gates."""
+
+    return _mode21_context(
+        case_name=case_name,
+        radial_index=radial_index,
+        mode_index=mode_index,
+        parameter_family=parameter_family,
+        surface_index=surface_index,
+        ntheta=ntheta,
+        mboz=mboz,
+        nboz=nboz,
+        surface_stencil_width=surface_stencil_width,
+        n_laguerre=2,
+        n_hermite=3,
+        context_fn=context_fn,
+    )
+
+
 def _run_mode21_gradient_gate(
     context: dict[str, Any],
     objective_fn: Any,
@@ -100,6 +131,54 @@ def _run_mode21_gradient_gate(
         for name in objective_names
     }
     return gate, rows, by_objective
+
+
+def _nonlinear_window_observable(
+    context: dict[str, Any],
+    *,
+    features_fn: Any,
+    window_metrics_fn: Any,
+    nonlinear_dt: float,
+    nonlinear_steps: int,
+    tail_fraction: float,
+) -> Any:
+    """Return the observable vector callable for the reduced window gate."""
+
+    return partial(
+        _nonlinear_window_observable_vector,
+        context=context,
+        features_fn=features_fn,
+        window_metrics_fn=window_metrics_fn,
+        nonlinear_dt=nonlinear_dt,
+        nonlinear_steps=nonlinear_steps,
+        tail_fraction=tail_fraction,
+    )
+
+
+def _nonlinear_window_objective_gate(by_objective: dict[str, bool]) -> bool:
+    """Return whether all reduced nonlinear-window objectives passed."""
+
+    return bool(
+        by_objective["nonlinear_window_heat_flux_mean"]
+        and by_objective["nonlinear_window_heat_flux_cv"]
+        and by_objective["nonlinear_window_heat_flux_trend"]
+    )
+
+
+def _nonlinear_window_config_payload(
+    *,
+    nonlinear_dt: float,
+    nonlinear_steps: int,
+    tail_fraction: float,
+) -> dict[str, object]:
+    """Return the public configuration payload for the reduced window gate."""
+
+    return {
+        "model": "smooth_logistic_heat_flux_envelope_from_linear_observables",
+        "dt": float(nonlinear_dt),
+        "steps": int(nonlinear_steps),
+        "tail_fraction": float(tail_fraction),
+    }
 
 
 def _mode21_gradient_base_payload(
@@ -353,7 +432,7 @@ def mode21_vmec_boozer_quasilinear_gradient_report(  # pragma: no cover
     """
 
     start = time.perf_counter()
-    context = _mode21_context(
+    context = _mode21_enriched_linear_context(
         case_name=case_name,
         radial_index=radial_index,
         mode_index=mode_index,
@@ -363,8 +442,6 @@ def mode21_vmec_boozer_quasilinear_gradient_report(  # pragma: no cover
         mboz=mboz,
         nboz=nboz,
         surface_stencil_width=surface_stencil_width,
-        n_laguerre=2,
-        n_hermite=3,
         context_fn=_linear_context_fn,
     )
 
@@ -440,7 +517,7 @@ def mode21_vmec_boozer_nonlinear_window_gradient_report(  # pragma: no cover
     """
 
     start = time.perf_counter()
-    context = _mode21_context(
+    context = _mode21_enriched_linear_context(
         case_name=case_name,
         radial_index=radial_index,
         mode_index=mode_index,
@@ -450,15 +527,12 @@ def mode21_vmec_boozer_nonlinear_window_gradient_report(  # pragma: no cover
         mboz=mboz,
         nboz=nboz,
         surface_stencil_width=surface_stencil_width,
-        n_laguerre=2,
-        n_hermite=3,
         context_fn=_linear_context_fn,
     )
 
     gate, rows, by_objective = _run_mode21_gradient_gate(
         context,
-        partial(
-            _nonlinear_window_observable_vector,
+        _nonlinear_window_observable(
             context=context,
             features_fn=_quasilinear_features_fn,
             window_metrics_fn=_window_metrics_fn,
@@ -471,11 +545,6 @@ def mode21_vmec_boozer_nonlinear_window_gradient_report(  # pragma: no cover
         rtol=rtol,
         atol=atol,
         gap_floor=gap_floor,
-    )
-    nonlinear_window_gate = bool(
-        by_objective["nonlinear_window_heat_flux_mean"]
-        and by_objective["nonlinear_window_heat_flux_cv"]
-        and by_objective["nonlinear_window_heat_flux_trend"]
     )
     payload = _mode21_gradient_base_payload(
         kind="mode21_vmec_boozer_nonlinear_window_gradient_gate",
@@ -494,13 +563,12 @@ def mode21_vmec_boozer_nonlinear_window_gradient_report(  # pragma: no cover
         rows=rows,
         gate=gate,
         quasilinear_weight_gate=_quasilinear_weight_gate(by_objective),
-        nonlinear_window_gate=nonlinear_window_gate,
-        nonlinear_window_config={
-            "model": "smooth_logistic_heat_flux_envelope_from_linear_observables",
-            "dt": float(nonlinear_dt),
-            "steps": int(nonlinear_steps),
-            "tail_fraction": float(tail_fraction),
-        },
+        nonlinear_window_gate=_nonlinear_window_objective_gate(by_objective),
+        nonlinear_window_config=_nonlinear_window_config_payload(
+            nonlinear_dt=nonlinear_dt,
+            nonlinear_steps=nonlinear_steps,
+            tail_fraction=tail_fraction,
+        ),
         elapsed_seconds=time.perf_counter() - start,
         next_action=(
             "Use this as a reduced nonlinear-window estimator-gradient gate only. Full stellarator "
