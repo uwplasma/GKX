@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +29,16 @@ _NETCDF_HEAT_FLUX_COLUMNS = {
     "heat_flux_apar": "Diagnostics/HeatFluxApar_st",
     "heat_flux_bpar": "Diagnostics/HeatFluxBpar_st",
 }
+
+
+@dataclass(frozen=True)
+class _WindowHeatFluxArtifact:
+    path: Path
+    window: dict[str, Any]
+    trace_t: np.ndarray
+    trace_heat: np.ndarray
+    convergence_variable: str
+
 
 def _resolve_summary_artifact(summary_path: Path, source: object) -> Path:
     diag_path = Path(str(source))
@@ -237,64 +248,66 @@ def _window_convergence_config(
     )
 
 
-def calibration_point_from_nonlinear_window_summary(
-    summary_json: str | Path,
+def _summary_case(
+    summary: dict[str, Any],
+    summary_path: Path,
+    case: str | None,
+) -> str:
+    return str(case or summary.get("case", summary_path.stem))
+
+
+def _ensemble_calibration_point(
     *,
+    summary: dict[str, Any],
+    summary_path: Path,
     predicted_heat_flux: float,
     split: str,
     saturation_rule: str,
-    diagnostics_source: str = "spectrax",
-    heat_flux_column: str = "heat_flux",
-    case: str | None = None,
-    geometry: str = "unspecified",
-    electron_model: str = "unspecified",
-    quasilinear_artifact: str | None = None,
-    species_index: int | None = None,
-    window_convergence_config: NonlinearWindowConvergenceConfig | None = None,
-    notes: str | None = None,
+    case: str | None,
+    geometry: str,
+    electron_model: str,
+    quasilinear_artifact: str | None,
+    notes: str | None,
 ) -> QuasilinearCalibrationPoint:
-    """Create a calibration point from a nonlinear window-summary JSON.
-
-    The helper reads the window bounds from a tracked nonlinear gate summary and
-    computes the mean/std of a heat-flux column from the selected diagnostics
-    CSV or runtime NetCDF. For NetCDF inputs, ``heat_flux_column='heat_flux'``
-    maps to ``Diagnostics/HeatFlux_st`` and species are summed by default.
-    """
-
-    summary_path = Path(summary_json)
-    summary = json.loads(summary_path.read_text(encoding="utf-8"))
-    if summary.get("kind") == "nonlinear_window_ensemble_report":
-        if not bool(summary.get("passed", False)):
-            raise ValueError("nonlinear ensemble summary did not pass")
-        ready, failures = nonlinear_window_stats_promotion_ready(summary)
-        if not ready:
-            raise ValueError(
-                "nonlinear ensemble summary is not promotion-ready: "
-                + "; ".join(failures)
-            )
-        statistics = summary.get("statistics", {})
-        observed_mean = float(statistics["ensemble_mean"])
-        observed_sem = float(statistics["combined_sem"])
-        note_items = [
-            notes,
-            "nonlinear_source=replicated_ensemble_gate",
-            f"nonlinear_ensemble_reports={statistics.get('n_reports')}",
-            f"nonlinear_ensemble_combined_sem_rel={statistics.get('combined_sem_rel')}",
-        ]
-        return QuasilinearCalibrationPoint(
-            case=str(case or summary.get("case", summary_path.stem)),
-            split=str(split),
-            predicted_heat_flux=float(predicted_heat_flux),
-            observed_heat_flux=observed_mean,
-            observed_heat_flux_std=observed_sem,
-            nonlinear_window_stats=summary,
-            saturation_rule=str(saturation_rule),
-            geometry=str(geometry),
-            electron_model=str(electron_model),
-            quasilinear_artifact=quasilinear_artifact,
-            nonlinear_artifact=str(summary_path),
-            notes="; ".join(str(item) for item in note_items if item),
+    if not bool(summary.get("passed", False)):
+        raise ValueError("nonlinear ensemble summary did not pass")
+    ready, failures = nonlinear_window_stats_promotion_ready(summary)
+    if not ready:
+        raise ValueError(
+            "nonlinear ensemble summary is not promotion-ready: "
+            + "; ".join(failures)
         )
+    statistics = summary.get("statistics", {})
+    note_items = [
+        notes,
+        "nonlinear_source=replicated_ensemble_gate",
+        f"nonlinear_ensemble_reports={statistics.get('n_reports')}",
+        f"nonlinear_ensemble_combined_sem_rel={statistics.get('combined_sem_rel')}",
+    ]
+    return QuasilinearCalibrationPoint(
+        case=_summary_case(summary, summary_path, case),
+        split=str(split),
+        predicted_heat_flux=float(predicted_heat_flux),
+        observed_heat_flux=float(statistics["ensemble_mean"]),
+        observed_heat_flux_std=float(statistics["combined_sem"]),
+        nonlinear_window_stats=summary,
+        saturation_rule=str(saturation_rule),
+        geometry=str(geometry),
+        electron_model=str(electron_model),
+        quasilinear_artifact=quasilinear_artifact,
+        nonlinear_artifact=str(summary_path),
+        notes="; ".join(str(item) for item in note_items if item),
+    )
+
+
+def _read_window_heat_flux_artifact(
+    *,
+    summary_path: Path,
+    summary: dict[str, Any],
+    diagnostics_source: str,
+    heat_flux_column: str,
+    species_index: int | None,
+) -> _WindowHeatFluxArtifact:
     source = summary.get(diagnostics_source)
     if source is None:
         raise ValueError(
@@ -326,25 +339,55 @@ def calibration_point_from_nonlinear_window_summary(
         raise NotImplementedError(
             "nonlinear calibration ingestion supports diagnostics CSV and NetCDF files"
         )
-    convergence = nonlinear_window_convergence_report(
-        trace_t,
-        trace_heat,
-        case=str(case or summary.get("case", summary_path.stem)),
-        observable=str(convergence_variable),
-        source_artifact=str(diag_path),
-        summary_artifact=str(summary_path),
-        config=_window_convergence_config(window, window_convergence_config),
+    return _WindowHeatFluxArtifact(
+        path=diag_path,
+        window=window,
+        trace_t=trace_t,
+        trace_heat=trace_heat,
+        convergence_variable=str(convergence_variable),
     )
+
+
+def _window_artifact_notes(artifact: _WindowHeatFluxArtifact, notes: str | None) -> str:
+    window = artifact.window
     note_items = [
         notes,
         None
-        if diag_path.suffix.lower() == ".csv"
+        if artifact.path.suffix.lower() == ".csv"
         else f"nonlinear_variable={window['variable']}",
         f"nonlinear_window=[{window['tmin']:.12g},{window['tmax']:.12g}]",
         f"nonlinear_window_samples={window['n_samples']}",
     ]
+    return "; ".join(str(item) for item in note_items if item)
+
+
+def _window_artifact_calibration_point(
+    *,
+    summary: dict[str, Any],
+    summary_path: Path,
+    artifact: _WindowHeatFluxArtifact,
+    predicted_heat_flux: float,
+    split: str,
+    saturation_rule: str,
+    case: str | None,
+    geometry: str,
+    electron_model: str,
+    quasilinear_artifact: str | None,
+    window_convergence_config: NonlinearWindowConvergenceConfig | None,
+    notes: str | None,
+) -> QuasilinearCalibrationPoint:
+    window = artifact.window
+    convergence = nonlinear_window_convergence_report(
+        artifact.trace_t,
+        artifact.trace_heat,
+        case=_summary_case(summary, summary_path, case),
+        observable=str(artifact.convergence_variable),
+        source_artifact=str(artifact.path),
+        summary_artifact=str(summary_path),
+        config=_window_convergence_config(window, window_convergence_config),
+    )
     return QuasilinearCalibrationPoint(
-        case=str(case or summary.get("case", summary_path.stem)),
+        case=_summary_case(summary, summary_path, case),
         split=str(split),
         predicted_heat_flux=float(predicted_heat_flux),
         observed_heat_flux=float(window["mean"]),
@@ -354,8 +397,71 @@ def calibration_point_from_nonlinear_window_summary(
         geometry=str(geometry),
         electron_model=str(electron_model),
         quasilinear_artifact=quasilinear_artifact,
-        nonlinear_artifact=str(diag_path),
-        notes="; ".join(str(item) for item in note_items if item),
+        nonlinear_artifact=str(artifact.path),
+        notes=_window_artifact_notes(artifact, notes),
+    )
+
+
+def calibration_point_from_nonlinear_window_summary(
+    summary_json: str | Path,
+    *,
+    predicted_heat_flux: float,
+    split: str,
+    saturation_rule: str,
+    diagnostics_source: str = "spectrax",
+    heat_flux_column: str = "heat_flux",
+    case: str | None = None,
+    geometry: str = "unspecified",
+    electron_model: str = "unspecified",
+    quasilinear_artifact: str | None = None,
+    species_index: int | None = None,
+    window_convergence_config: NonlinearWindowConvergenceConfig | None = None,
+    notes: str | None = None,
+) -> QuasilinearCalibrationPoint:
+    """Create a calibration point from a nonlinear window-summary JSON.
+
+    The helper reads the window bounds from a tracked nonlinear gate summary and
+    computes the mean/std of a heat-flux column from the selected diagnostics
+    CSV or runtime NetCDF. For NetCDF inputs, ``heat_flux_column='heat_flux'``
+    maps to ``Diagnostics/HeatFlux_st`` and species are summed by default.
+    """
+
+    summary_path = Path(summary_json)
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    if summary.get("kind") == "nonlinear_window_ensemble_report":
+        return _ensemble_calibration_point(
+            summary=summary,
+            summary_path=summary_path,
+            predicted_heat_flux=predicted_heat_flux,
+            split=split,
+            saturation_rule=saturation_rule,
+            case=case,
+            geometry=geometry,
+            electron_model=electron_model,
+            quasilinear_artifact=quasilinear_artifact,
+            notes=notes,
+        )
+
+    artifact = _read_window_heat_flux_artifact(
+        summary_path=summary_path,
+        summary=summary,
+        diagnostics_source=diagnostics_source,
+        heat_flux_column=heat_flux_column,
+        species_index=species_index,
+    )
+    return _window_artifact_calibration_point(
+        summary=summary,
+        summary_path=summary_path,
+        artifact=artifact,
+        predicted_heat_flux=predicted_heat_flux,
+        split=split,
+        saturation_rule=saturation_rule,
+        case=case,
+        geometry=geometry,
+        electron_model=electron_model,
+        quasilinear_artifact=quasilinear_artifact,
+        window_convergence_config=window_convergence_config,
+        notes=notes,
     )
 
 
