@@ -91,6 +91,59 @@ class _FieldlineMetricDrifts:
     grad_x: np.ndarray
 
 
+@dataclass(frozen=True)
+class _FieldlineCurvatureComponents:
+    b_cross_kappa_dot_grad_alpha: np.ndarray
+    b_cross_kappa_dot_grad_psi: np.ndarray
+
+
+@dataclass(frozen=True)
+class _FieldlineMetricProfiles:
+    bmag: np.ndarray
+    gradpar_theta_b: np.ndarray
+    gradpar_phi: np.ndarray
+    gds2: np.ndarray
+    gds21: np.ndarray
+    gds22: np.ndarray
+    grho: np.ndarray
+
+
+@dataclass(frozen=True)
+class _FieldlineDriftProfiles:
+    gbdrift: np.ndarray
+    gbdrift0: np.ndarray
+    cvdrift: np.ndarray
+    cvdrift0: np.ndarray
+
+
+@dataclass(frozen=True)
+class _FieldlineGradientVectors:
+    grad_y: np.ndarray
+    grad_x: np.ndarray
+
+
+@dataclass(frozen=True)
+class _FluxSurfaceGrid:
+    theta_b_grid: np.ndarray
+    phi_b_grid: np.ndarray
+    theta_b_2d: np.ndarray
+    phi_b_2d: np.ndarray
+
+
+@dataclass(frozen=True)
+class _FluxSurfaceBoozerGeometry:
+    lambda_b: np.ndarray
+    R_b: np.ndarray
+    d_R_b_d_theta_b: np.ndarray
+    d_R_b_d_phi_b: np.ndarray
+    d_Z_b_d_theta_b: np.ndarray
+    d_Z_b_d_phi_b: np.ndarray
+    nu_b: np.ndarray
+    d_nu_b_d_theta_b: np.ndarray
+    d_nu_b_d_phi_b: np.ndarray
+    sqrt_g_booz: np.ndarray
+
+
 def _sample_boozer_mode_table(vs: Any, s: np.ndarray, ns: int) -> tuple[np.ndarray, ...]:
     """Sample Boozer Fourier amplitudes and radial derivatives at one surface."""
 
@@ -408,12 +461,88 @@ def _fieldline_local_shear(
     return _FieldlineLocalShear(D_HNGC=D_HNGC, L0=L0, L1=L1)
 
 
-def _fieldline_metric_drifts(
+def _fieldline_curvature_components(
     *,
     tensors: _FieldlineBoozerTensors,
-    gradients: _FieldlineCoordinateGradients,
+    shear: _FieldlineLocalShear,
+    d_pressure_d_s: np.ndarray,
+    beta_b: np.ndarray,
+    G: np.ndarray,
+    iota: np.ndarray,
+    boozer_i: np.ndarray,
+    edge_toroidal_flux_over_2pi: float,
+) -> _FieldlineCurvatureComponents:
+    """Return curvature terms entering VMEC magnetic-drift coefficients."""
+
+    modB_b = tensors.modB_b
+    sqrt_g_booz = tensors.sqrt_g_booz
+    boozer_current = G[:, None] + iota[:, None] * boozer_i[:, None]
+    boozer_current_3d = G[:, None, None] + iota[:, None, None] * boozer_i[:, None, None]
+    kappa_g = (
+        G[:, None] * tensors.d_sqrt_g_booz_d_theta_b
+        - boozer_i[:, None] * tensors.d_sqrt_g_booz_d_phi_b
+    ) / (2.0 * sqrt_g_booz * boozer_current)
+    kappa_n = (
+        (modB_b * tensors.d_B_b_d_s + _MU_0 * d_pressure_d_s[:, None, None])
+        / (modB_b**2 * edge_toroidal_flux_over_2pi)
+        - beta_b
+        * tensors.d_sqrt_g_booz_d_phi_b
+        / (2.0 * sqrt_g_booz * boozer_current_3d)
+        + shear.L0
+        * (
+            G[:, None] * tensors.d_sqrt_g_booz_d_theta_b
+            - boozer_i[:, None] * tensors.d_sqrt_g_booz_d_phi_b
+        )
+        / (2.0 * sqrt_g_booz * boozer_current)
+    )
+    return _FieldlineCurvatureComponents(
+        b_cross_kappa_dot_grad_alpha=(kappa_n + kappa_g * shear.L1) * modB_b**2,
+        b_cross_kappa_dot_grad_psi=kappa_g * modB_b**2,
+    )
+
+
+def _fieldline_metric_profiles(
+    *,
+    tensors: _FieldlineBoozerTensors,
     alpha_gradients: _FieldlineAlphaGradients,
     shear: _FieldlineLocalShear,
+    s: np.ndarray,
+    shat: np.ndarray,
+    sfac: float,
+    L_reference: float,
+    B_reference: float,
+    iota: np.ndarray,
+) -> _FieldlineMetricProfiles:
+    """Return normalized metric profiles before magnetic-drift assembly."""
+
+    modB_b = tensors.modB_b
+    grad_alpha_dot_grad_alpha_b = (
+        modB_b**2 / alpha_gradients.g_sup_psi_psi
+        + alpha_gradients.g_sup_psi_psi * shear.L1**2
+    )
+    grad_alpha_dot_grad_psi_b = alpha_gradients.g_sup_psi_psi * shear.L1
+    return _FieldlineMetricProfiles(
+        bmag=modB_b / B_reference,
+        gradpar_theta_b=-L_reference / modB_b / tensors.sqrt_g_booz * iota[:, None, None],
+        gradpar_phi=L_reference / modB_b / tensors.sqrt_g_booz,
+        gds2=grad_alpha_dot_grad_alpha_b * L_reference**2 * s[:, None, None],
+        gds21=grad_alpha_dot_grad_psi_b * sfac * shat[:, None, None] / B_reference,
+        gds22=(
+            alpha_gradients.g_sup_psi_psi
+            * (sfac * shat[:, None, None]) ** 2
+            / (L_reference**2 * B_reference**2 * s[:, None, None])
+        ),
+        grho=np.sqrt(
+            alpha_gradients.g_sup_psi_psi
+            / (L_reference**2 * B_reference**2 * s[:, None, None])
+        ),
+    )
+
+
+def _fieldline_drift_profiles(
+    *,
+    curvature: _FieldlineCurvatureComponents,
+    tensors: _FieldlineBoozerTensors,
     s: np.ndarray,
     shat: np.ndarray,
     sfac: float,
@@ -423,80 +552,25 @@ def _fieldline_metric_drifts(
     toroidal_flux_sign: float,
     edge_toroidal_flux_over_2pi: float,
     d_pressure_d_s: np.ndarray,
-    beta_b: np.ndarray,
-    G: np.ndarray,
-    iota: np.ndarray,
-    boozer_i: np.ndarray,
-) -> _FieldlineMetricDrifts:
-    """Return normalized VMEC metric and magnetic-drift coefficients."""
+) -> _FieldlineDriftProfiles:
+    """Return normalized grad-B and curvature drift profiles."""
 
     modB_b = tensors.modB_b
-    sqrt_g_booz = tensors.sqrt_g_booz
     sqrt_s = np.sqrt(s)
-    kappa_n = (
-        1.0
-        / modB_b**2
-        * (modB_b * tensors.d_B_b_d_s + _MU_0 * d_pressure_d_s[:, None, None])
-        / edge_toroidal_flux_over_2pi
-        - beta_b
-        / (
-            2.0
-            * sqrt_g_booz
-            * (G[:, None, None] + iota[:, None, None] * boozer_i[:, None, None])
-        )
-        * tensors.d_sqrt_g_booz_d_phi_b
-        + shear.L0
-        * (
-            G[:, None] * tensors.d_sqrt_g_booz_d_theta_b
-            - boozer_i[:, None] * tensors.d_sqrt_g_booz_d_phi_b
-        )
-        / (2.0 * sqrt_g_booz * (G[:, None] + iota[:, None] * boozer_i[:, None]))
-    )
-    kappa_g = (
-        G[:, None] * tensors.d_sqrt_g_booz_d_theta_b
-        - boozer_i[:, None] * tensors.d_sqrt_g_booz_d_phi_b
-    ) / (2.0 * sqrt_g_booz * (G[:, None] + iota[:, None] * boozer_i[:, None]))
-
-    B_cross_kappa_dot_grad_alpha = (kappa_n + kappa_g * shear.L1) * modB_b**2
-    B_cross_kappa_dot_grad_psi = kappa_g * modB_b**2
-
-    bmag = modB_b / B_reference
-    gradpar_theta_b = -L_reference / modB_b / sqrt_g_booz * iota[:, None, None]
-    gradpar_phi = L_reference / modB_b / sqrt_g_booz
-
-    grad_alpha_dot_grad_alpha_b = (
-        modB_b**2 / alpha_gradients.g_sup_psi_psi
-        + alpha_gradients.g_sup_psi_psi * shear.L1**2
-    )
-    grad_alpha_dot_grad_psi_b = alpha_gradients.g_sup_psi_psi * shear.L1
-
-    gds2 = grad_alpha_dot_grad_alpha_b * L_reference**2 * s[:, None, None]
-    gds21 = grad_alpha_dot_grad_psi_b * sfac * shat[:, None, None] / B_reference
-    gds22 = (
-        alpha_gradients.g_sup_psi_psi
-        * (sfac * shat[:, None, None]) ** 2
-        / (L_reference**2 * B_reference**2 * s[:, None, None])
-    )
-    grho = np.sqrt(
-        alpha_gradients.g_sup_psi_psi
-        / (L_reference**2 * B_reference**2 * s[:, None, None])
-    )
-
     gbdrift0 = (
-        -B_cross_kappa_dot_grad_psi
+        -curvature.b_cross_kappa_dot_grad_psi
         * 2.0
         * sfac
         * shat[:, None, None]
         / (modB_b**2 * sqrt_s[:, None, None])
         * toroidal_flux_sign
     )
-    cvdrift0 = gbdrift0
     cvdrift = (
         -2.0
         * B_reference
         * L_reference**2
         * sqrt_s[:, None, None]
-        * B_cross_kappa_dot_grad_alpha
+        * curvature.b_cross_kappa_dot_grad_alpha
         / modB_b**2
         * toroidal_flux_sign
     )
@@ -511,7 +585,27 @@ def _fieldline_metric_drifts(
         * toroidal_flux_sign
         / (edge_toroidal_flux_over_2pi * modB_b**2)
     )
+    return _FieldlineDriftProfiles(
+        gbdrift=gbdrift,
+        gbdrift0=gbdrift0,
+        cvdrift=cvdrift,
+        cvdrift0=gbdrift0,
+    )
 
+
+def _fieldline_gradient_vectors(
+    *,
+    gradients: _FieldlineCoordinateGradients,
+    alpha_gradients: _FieldlineAlphaGradients,
+    s: np.ndarray,
+    shat: np.ndarray,
+    sfac: float,
+    L_reference: float,
+    B_reference: float,
+) -> _FieldlineGradientVectors:
+    """Return solver-normalized ``x`` and ``y`` gradient-vector components."""
+
+    sqrt_s = np.sqrt(s)
     grad_y = (
         L_reference
         * sqrt_s[:, None, None]
@@ -535,21 +629,97 @@ def _fieldline_metric_drifts(
         )
         / (L_reference * B_reference * sqrt_s[:, None, None])
     )
+    return _FieldlineGradientVectors(grad_y=grad_y, grad_x=grad_x)
+
+
+def _pack_fieldline_metric_drifts(
+    metrics: _FieldlineMetricProfiles,
+    drifts: _FieldlineDriftProfiles,
+    vectors: _FieldlineGradientVectors,
+) -> _FieldlineMetricDrifts:
     return _FieldlineMetricDrifts(
-        bmag=bmag,
-        gradpar_theta_b=gradpar_theta_b,
-        gradpar_phi=gradpar_phi,
-        gds2=gds2,
-        gds21=gds21,
-        gds22=gds22,
-        gbdrift=gbdrift,
-        gbdrift0=gbdrift0,
-        cvdrift=cvdrift,
-        cvdrift0=cvdrift0,
-        grho=grho,
-        grad_y=grad_y,
-        grad_x=grad_x,
+        bmag=metrics.bmag,
+        gradpar_theta_b=metrics.gradpar_theta_b,
+        gradpar_phi=metrics.gradpar_phi,
+        gds2=metrics.gds2,
+        gds21=metrics.gds21,
+        gds22=metrics.gds22,
+        gbdrift=drifts.gbdrift,
+        gbdrift0=drifts.gbdrift0,
+        cvdrift=drifts.cvdrift,
+        cvdrift0=drifts.cvdrift0,
+        grho=metrics.grho,
+        grad_y=vectors.grad_y,
+        grad_x=vectors.grad_x,
     )
+
+
+def _fieldline_metric_drifts(
+    *,
+    tensors: _FieldlineBoozerTensors,
+    gradients: _FieldlineCoordinateGradients,
+    alpha_gradients: _FieldlineAlphaGradients,
+    shear: _FieldlineLocalShear,
+    s: np.ndarray,
+    shat: np.ndarray,
+    sfac: float,
+    pfac: float,
+    L_reference: float,
+    B_reference: float,
+    toroidal_flux_sign: float,
+    edge_toroidal_flux_over_2pi: float,
+    d_pressure_d_s: np.ndarray,
+    beta_b: np.ndarray,
+    G: np.ndarray,
+    iota: np.ndarray,
+    boozer_i: np.ndarray,
+) -> _FieldlineMetricDrifts:
+    """Return normalized VMEC metric and magnetic-drift coefficients."""
+
+    curvature = _fieldline_curvature_components(
+        tensors=tensors,
+        shear=shear,
+        d_pressure_d_s=d_pressure_d_s,
+        beta_b=beta_b,
+        G=G,
+        iota=iota,
+        boozer_i=boozer_i,
+        edge_toroidal_flux_over_2pi=edge_toroidal_flux_over_2pi,
+    )
+    metrics = _fieldline_metric_profiles(
+        tensors=tensors,
+        alpha_gradients=alpha_gradients,
+        shear=shear,
+        s=s,
+        shat=shat,
+        sfac=sfac,
+        L_reference=L_reference,
+        B_reference=B_reference,
+        iota=iota,
+    )
+    drifts = _fieldline_drift_profiles(
+        curvature=curvature,
+        tensors=tensors,
+        s=s,
+        shat=shat,
+        sfac=sfac,
+        pfac=pfac,
+        L_reference=L_reference,
+        B_reference=B_reference,
+        toroidal_flux_sign=toroidal_flux_sign,
+        edge_toroidal_flux_over_2pi=edge_toroidal_flux_over_2pi,
+        d_pressure_d_s=d_pressure_d_s,
+    )
+    vectors = _fieldline_gradient_vectors(
+        gradients=gradients,
+        alpha_gradients=alpha_gradients,
+        s=s,
+        shat=shat,
+        sfac=sfac,
+        L_reference=L_reference,
+        B_reference=B_reference,
+    )
+    return _pack_fieldline_metric_drifts(metrics, drifts, vectors)
 
 
 def _fieldline_boozer_coordinates(
@@ -701,6 +871,112 @@ def _hngc_pressure_correction(
     return d_pressure_d_s_1, float(pfac)
 
 
+def _flux_surface_grid(res_theta: int, res_phi: int) -> _FluxSurfaceGrid:
+    theta_b_grid = np.linspace(-np.pi, np.pi, res_theta)
+    phi_b_grid = np.linspace(-np.pi, np.pi, res_phi)
+    theta_b_2d, phi_b_2d = np.meshgrid(theta_b_grid, phi_b_grid)
+    return _FluxSurfaceGrid(
+        theta_b_grid=theta_b_grid,
+        phi_b_grid=phi_b_grid,
+        theta_b_2d=theta_b_2d,
+        phi_b_2d=phi_b_2d,
+    )
+
+
+def _flux_surface_boozer_geometry(
+    *,
+    xm_b: np.ndarray,
+    xn_b: np.ndarray,
+    flipit: bool,
+    lambmnc_b: np.ndarray,
+    rmnc_b: np.ndarray,
+    zmns_b: np.ndarray,
+    numns_b: np.ndarray,
+    gmnc_b: np.ndarray,
+    grid: _FluxSurfaceGrid,
+) -> _FluxSurfaceBoozerGeometry:
+    angle_b_2d = _boozer_mode_angle(
+        xm_b,
+        xn_b,
+        grid.theta_b_2d[None, None, :, :],
+        grid.phi_b_2d[None, None, :, :],
+        flipit=bool(flipit),
+    )
+    cosangle, sinangle, mcosangle, msinangle, ncosangle, nsinangle = (
+        _boozer_trig_basis(xm_b, xn_b, angle_b_2d)
+    )
+    return _FluxSurfaceBoozerGeometry(
+        lambda_b=_boozer_mode_sum(lambmnc_b, cosangle),
+        R_b=_boozer_mode_sum(rmnc_b, cosangle),
+        d_R_b_d_theta_b=-_boozer_mode_sum(rmnc_b, msinangle),
+        d_R_b_d_phi_b=_boozer_mode_sum(rmnc_b, ncosangle),
+        d_Z_b_d_theta_b=_boozer_mode_sum(zmns_b, mcosangle),
+        d_Z_b_d_phi_b=-_boozer_mode_sum(zmns_b, ncosangle),
+        nu_b=_boozer_mode_sum(numns_b, sinangle),
+        d_nu_b_d_theta_b=_boozer_mode_sum(numns_b, mcosangle),
+        d_nu_b_d_phi_b=-_boozer_mode_sum(numns_b, nsinangle),
+        sqrt_g_booz=_boozer_mode_sum(gmnc_b, cosangle),
+    )
+
+
+def _flux_surface_grad_psi_norm_inv(
+    geometry: _FluxSurfaceBoozerGeometry,
+    grid: _FluxSurfaceGrid,
+) -> np.ndarray:
+    ph_nat_2d = grid.phi_b_2d - geometry.nu_b
+    sinphi_2d = np.sin(ph_nat_2d)
+    cosphi_2d = np.cos(ph_nat_2d)
+    d_x_d_theta_b = (
+        geometry.d_R_b_d_theta_b * cosphi_2d
+        - geometry.R_b * sinphi_2d * (-geometry.d_nu_b_d_theta_b)
+    )
+    d_x_d_phi = (
+        geometry.d_R_b_d_phi_b * cosphi_2d
+        - geometry.R_b * sinphi_2d * (1.0 - geometry.d_nu_b_d_phi_b)
+    )
+    d_y_d_theta_b = (
+        geometry.d_R_b_d_theta_b * sinphi_2d
+        + geometry.R_b * cosphi_2d * (-geometry.d_nu_b_d_theta_b)
+    )
+    d_y_d_phi = (
+        geometry.d_R_b_d_phi_b * sinphi_2d
+        + geometry.R_b * cosphi_2d * (1.0 - geometry.d_nu_b_d_phi_b)
+    )
+    grad_psi_x = (
+        d_y_d_theta_b * geometry.d_Z_b_d_phi_b
+        - geometry.d_Z_b_d_theta_b * d_y_d_phi
+    ) / geometry.sqrt_g_booz
+    grad_psi_y = (
+        geometry.d_Z_b_d_theta_b * d_x_d_phi
+        - d_x_d_theta_b * geometry.d_Z_b_d_phi_b
+    ) / geometry.sqrt_g_booz
+    grad_psi_z = (
+        d_x_d_theta_b * d_y_d_phi - d_y_d_theta_b * d_x_d_phi
+    ) / geometry.sqrt_g_booz
+    g_sup_psi_psi = grad_psi_x**2 + grad_psi_y**2 + grad_psi_z**2
+    return 1.0 / g_sup_psi_psi
+
+
+def _flux_surface_hngc_average_pair(
+    geometry: _FluxSurfaceBoozerGeometry,
+    grid: _FluxSurfaceGrid,
+) -> tuple[float, float]:
+    g_sup_psi_psi_inv = _flux_surface_grad_psi_norm_inv(geometry, grid)
+    lam_over_g = geometry.lambda_b * g_sup_psi_psi_inv
+    return (
+        _surface_average_2d(
+            g_sup_psi_psi_inv[0, 0],
+            grid.theta_b_grid,
+            grid.phi_b_grid,
+        ),
+        _surface_average_2d(
+            lam_over_g[0, 0],
+            grid.theta_b_grid,
+            grid.phi_b_grid,
+        ),
+    )
+
+
 def _flux_surface_hngc_averages(
     *,
     xm_b: np.ndarray,
@@ -716,73 +992,19 @@ def _flux_surface_hngc_averages(
 ) -> tuple[float, float]:
     """Return ``D1`` and ``D2`` Hegna-Nakajima flux-surface averages."""
 
-    theta_b_grid = np.linspace(-np.pi, np.pi, res_theta)
-    phi_b_grid = np.linspace(-np.pi, np.pi, res_phi)
-    th_b_2D, ph_b_2D = np.meshgrid(theta_b_grid, phi_b_grid)
-
-    angle_b_2D = _boozer_mode_angle(
-        xm_b,
-        xn_b,
-        th_b_2D[None, None, :, :],
-        ph_b_2D[None, None, :, :],
-        flipit=bool(flipit),
+    grid = _flux_surface_grid(res_theta, res_phi)
+    geometry = _flux_surface_boozer_geometry(
+        xm_b=xm_b,
+        xn_b=xn_b,
+        flipit=flipit,
+        lambmnc_b=lambmnc_b,
+        rmnc_b=rmnc_b,
+        zmns_b=zmns_b,
+        numns_b=numns_b,
+        gmnc_b=gmnc_b,
+        grid=grid,
     )
-
-    (
-        cosangle_b_2D,
-        sinangle_b_2D,
-        mcosangle_b_2D,
-        msinangle_b_2D,
-        ncosangle_b_2D,
-        nsinangle_b_2D,
-    ) = _boozer_trig_basis(xm_b, xn_b, angle_b_2D)
-
-    lambda_b_2D = _boozer_mode_sum(lambmnc_b, cosangle_b_2D)
-    R_b_2D = _boozer_mode_sum(rmnc_b, cosangle_b_2D)
-    d_R_b_d_theta_b_2D = -_boozer_mode_sum(rmnc_b, msinangle_b_2D)
-    d_R_b_d_phi_b_2D = _boozer_mode_sum(rmnc_b, ncosangle_b_2D)
-    d_Z_b_d_theta_b_2D = _boozer_mode_sum(zmns_b, mcosangle_b_2D)
-    d_Z_b_d_phi_b_2D = -_boozer_mode_sum(zmns_b, ncosangle_b_2D)
-    nu_b_2D = _boozer_mode_sum(numns_b, sinangle_b_2D)
-    d_nu_b_d_theta_b_2D = _boozer_mode_sum(numns_b, mcosangle_b_2D)
-    d_nu_b_d_phi_b_2D = -_boozer_mode_sum(numns_b, nsinangle_b_2D)
-    sqrt_g_booz_2D = _boozer_mode_sum(gmnc_b, cosangle_b_2D)
-
-    ph_nat_2D = ph_b_2D - nu_b_2D
-    sinphi_2D = np.sin(ph_nat_2D)
-    cosphi_2D = np.cos(ph_nat_2D)
-
-    d_X_d_th_b_2D = d_R_b_d_theta_b_2D * cosphi_2D - R_b_2D * sinphi_2D * (
-        -d_nu_b_d_theta_b_2D
-    )
-    d_X_d_phi_2D = d_R_b_d_phi_b_2D * cosphi_2D - R_b_2D * sinphi_2D * (
-        1.0 - d_nu_b_d_phi_b_2D
-    )
-    d_Y_d_th_b_2D = d_R_b_d_theta_b_2D * sinphi_2D + R_b_2D * cosphi_2D * (
-        -d_nu_b_d_theta_b_2D
-    )
-    d_Y_d_phi_2D = d_R_b_d_phi_b_2D * sinphi_2D + R_b_2D * cosphi_2D * (
-        1.0 - d_nu_b_d_phi_b_2D
-    )
-
-    grad_psi_X_2D = (
-        d_Y_d_th_b_2D * d_Z_b_d_phi_b_2D - d_Z_b_d_theta_b_2D * d_Y_d_phi_2D
-    ) / sqrt_g_booz_2D
-    grad_psi_Y_2D = (
-        d_Z_b_d_theta_b_2D * d_X_d_phi_2D - d_X_d_th_b_2D * d_Z_b_d_phi_b_2D
-    ) / sqrt_g_booz_2D
-    grad_psi_Z_2D = (
-        d_X_d_th_b_2D * d_Y_d_phi_2D - d_Y_d_th_b_2D * d_X_d_phi_2D
-    ) / sqrt_g_booz_2D
-
-    g_sup_psi_psi_2D = grad_psi_X_2D**2 + grad_psi_Y_2D**2 + grad_psi_Z_2D**2
-    g_sup_psi_psi_2D_inv = 1.0 / g_sup_psi_psi_2D
-    lam_over_g_2D = lambda_b_2D * g_sup_psi_psi_2D_inv
-
-    return (
-        _surface_average_2d(g_sup_psi_psi_2D_inv[0, 0], theta_b_grid, phi_b_grid),
-        _surface_average_2d(lam_over_g_2D[0, 0], theta_b_grid, phi_b_grid),
-    )
+    return _flux_surface_hngc_average_pair(geometry, grid)
 
 
 __all__ = [
