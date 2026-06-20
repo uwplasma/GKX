@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import numpy as np
 from numpy.polynomial.laguerre import laggauss
 import jax.numpy as jnp
@@ -19,6 +21,43 @@ __all__ = [
     "_non_twist_shift_frequency_max",
     "_parallel_periods_from_grid",
 ]
+
+
+@dataclass(frozen=True)
+class _CFLGridBounds:
+    kx: np.ndarray
+    ky: np.ndarray
+    kz: np.ndarray
+    kx_max: float
+    ky_max: float
+    kz_max: float
+    kperp_min: float
+
+
+@dataclass(frozen=True)
+class _SpeciesFrequencyScales:
+    tprim: np.ndarray
+    fprim: np.ndarray
+    temp: np.ndarray
+    dens: np.ndarray
+    charge: np.ndarray
+    tzmax: float
+    vtmax: float
+    vtmin: float
+    etamax: float
+    vpar_max: float
+    muB_max: float
+
+
+@dataclass(frozen=True)
+class _GeometryFrequencyScales:
+    bmag_max: float
+    cvdrift_max: float
+    gbdrift_max: float
+    cvdrift0_max: float
+    gbdrift0_max: float
+    gradpar: float
+    m0_max: float
 
 
 def _parallel_periods_from_grid(grid: SpectralGrid) -> float:
@@ -161,15 +200,7 @@ def _non_twist_shift_frequency_max(
     return m0_max, cv0_max, gb0_max
 
 
-def _linear_frequency_bound(
-    grid: SpectralGrid,
-    geom: FluxTubeGeometryLike,
-    params: LinearParams,
-    nl: int,
-    nm: int,
-    *,
-    include_diamagnetic_drive: bool = True,
-) -> np.ndarray:
+def _grid_frequency_bounds(grid: SpectralGrid) -> _CFLGridBounds:
     kx, ky, kz = _cfl_wavenumber_arrays(grid)
     nz = kz.size
     nx = kx.size
@@ -179,8 +210,25 @@ def _linear_frequency_bound(
     kz_max = float(abs(kz[nz // 2])) if nz > 0 else 0.0
     kx_min = float(abs(kx[1])) if nx > 1 else np.inf
     ky_min = float(abs(ky[1])) if ky.size > 1 else np.inf
-    kperp_min = float(min(kx_min, ky_min)) if np.isfinite(min(kx_min, ky_min)) else 0.0
+    finite_min = min(kx_min, ky_min)
+    kperp_min = float(finite_min) if np.isfinite(finite_min) else 0.0
+    return _CFLGridBounds(
+        kx=kx,
+        ky=ky,
+        kz=kz,
+        kx_max=kx_max,
+        ky_max=ky_max,
+        kz_max=kz_max,
+        kperp_min=kperp_min,
+    )
 
+
+def _species_frequency_scales(
+    params: LinearParams,
+    *,
+    nl: int,
+    nm: int,
+) -> _SpeciesFrequencyScales:
     tprim = np.atleast_1d(np.asarray(params.R_over_LTi, dtype=float))
     fprim = np.atleast_1d(np.asarray(params.R_over_Ln, dtype=float))
     tz = np.atleast_1d(np.asarray(params.tz, dtype=float))
@@ -192,85 +240,166 @@ def _linear_frequency_bound(
     tzmax = float(np.max(np.abs(tz))) if tz.size else 0.0
     vtmax = float(np.max(np.abs(vth))) if vth.size else 0.0
     vtmin = float(np.min(np.abs(vth))) if vth.size else 1.0
-    etamax = _gradient_ratio_max(tprim, fprim)
-    vpar_max = 2.0 * float(np.sqrt(max(nm, 1)))
-    muB_max = _laguerre_velocity_max(nl)
-    bmag_max, cvdrift_max, gbdrift_max, cvdrift0_max, gbdrift0_max, gradpar = (
-        _geometry_frequency_maxima(geom, np.asarray(grid.z, dtype=float))
+    return _SpeciesFrequencyScales(
+        tprim=tprim,
+        fprim=fprim,
+        temp=temp,
+        dens=dens,
+        charge=charge,
+        tzmax=tzmax,
+        vtmax=vtmax,
+        vtmin=vtmin,
+        etamax=_gradient_ratio_max(tprim, fprim),
+        vpar_max=2.0 * float(np.sqrt(max(nm, 1))),
+        muB_max=_laguerre_velocity_max(nl),
     )
+
+
+def _effective_geometry_frequency_scales(
+    geom: FluxTubeGeometryLike,
+    grid: SpectralGrid,
+    grid_bounds: _CFLGridBounds,
+    species: _SpeciesFrequencyScales,
+) -> _GeometryFrequencyScales:
+    (
+        bmag_max,
+        cvdrift_max,
+        gbdrift_max,
+        cvdrift0_max,
+        gbdrift0_max,
+        gradpar,
+    ) = _geometry_frequency_maxima(geom, np.asarray(grid.z, dtype=float))
 
     shat = float(geom.s_hat)
     non_twist = bool(getattr(grid, "non_twist", False))
     m0_max = 0.0
-    if non_twist and abs(shat) > 0.0 and ky.size > 0:
-        ky_m0 = float(ky[-1])
+    if non_twist and abs(shat) > 0.0 and grid_bounds.ky.size > 0:
         m0_max, cvdrift0_max, gbdrift0_max = _non_twist_shift_frequency_max(
             geom,
             grid,
-            ky_m0,
-            vpar_max=vpar_max,
-            muB_max=muB_max,
+            float(grid_bounds.ky[-1]),
+            vpar_max=species.vpar_max,
+            muB_max=species.muB_max,
         )
-
-    omega_max = np.zeros(3, dtype=float)
-    if abs(shat) == 0.0:
-        omega_max[0] = (
-            tzmax
-            * kx_max
-            * (vpar_max * vpar_max * abs(cvdrift0_max) + muB_max * abs(gbdrift0_max))
-        )
-    else:
-        if non_twist:
-            omega_max[0] = (
-                tzmax
-                * (kx_max + m0_max / float(grid.x0))
-                * (
-                    vpar_max * vpar_max * abs(cvdrift0_max)
-                    + muB_max * abs(gbdrift0_max)
-                )
-            )
-        else:
-            omega_max[0] = (
-                tzmax
-                * kx_max
-                / abs(shat)
-                * (
-                    vpar_max * vpar_max * abs(cvdrift0_max)
-                    + muB_max * abs(gbdrift0_max)
-                )
-            )
-
-    omega_max[1] = (
-        tzmax * ky_max * (vpar_max * vpar_max * cvdrift_max + muB_max * gbdrift_max)
+    return _GeometryFrequencyScales(
+        bmag_max=bmag_max,
+        cvdrift_max=cvdrift_max,
+        gbdrift_max=gbdrift_max,
+        cvdrift0_max=cvdrift0_max,
+        gbdrift0_max=gbdrift0_max,
+        gradpar=gradpar,
+        m0_max=m0_max,
     )
-    if include_diamagnetic_drive and etamax < 1.0e5:
-        omega_max[1] = omega_max[1] + ky_max * (
-            1.0 + etamax * (vpar_max * vpar_max / 2.0 + muB_max - 1.5)
-        )
 
-    beta = float(params.beta)
-    nspec_in = int(max(charge.size, 1))
-    if charge.size:
-        neg = charge < 0.0
+
+def _radial_drift_frequency(
+    geom: FluxTubeGeometryLike,
+    grid: SpectralGrid,
+    grid_bounds: _CFLGridBounds,
+    species: _SpeciesFrequencyScales,
+    geometry: _GeometryFrequencyScales,
+) -> float:
+    drift_strength = (
+        species.vpar_max * species.vpar_max * abs(geometry.cvdrift0_max)
+        + species.muB_max * abs(geometry.gbdrift0_max)
+    )
+    shat = float(geom.s_hat)
+    if abs(shat) == 0.0:
+        kx_effective = grid_bounds.kx_max
+    elif bool(getattr(grid, "non_twist", False)):
+        kx_effective = grid_bounds.kx_max + geometry.m0_max / float(grid.x0)
+    else:
+        kx_effective = grid_bounds.kx_max / abs(shat)
+    return species.tzmax * kx_effective * drift_strength
+
+
+def _binormal_drift_frequency(
+    grid_bounds: _CFLGridBounds,
+    species: _SpeciesFrequencyScales,
+    geometry: _GeometryFrequencyScales,
+    *,
+    include_diamagnetic_drive: bool,
+) -> float:
+    omega = species.tzmax * grid_bounds.ky_max * (
+        species.vpar_max * species.vpar_max * geometry.cvdrift_max
+        + species.muB_max * geometry.gbdrift_max
+    )
+    if include_diamagnetic_drive and species.etamax < 1.0e5:
+        omega += grid_bounds.ky_max * (
+            1.0
+            + species.etamax
+            * (species.vpar_max * species.vpar_max / 2.0 + species.muB_max - 1.5)
+        )
+    return omega
+
+
+def _electron_pressure_product(species: _SpeciesFrequencyScales) -> float:
+    if species.charge.size:
+        neg = species.charge < 0.0
         if np.any(neg):
-            ne = float(dens[neg][0])
-            Te = float(temp[neg][0])
+            ne = float(species.dens[neg][0])
+            Te = float(species.temp[neg][0])
         else:
-            ne = float(dens[0])
-            Te = float(temp[0])
+            ne = float(species.dens[0])
+            Te = float(species.temp[0])
     else:
         ne = 1.0
         Te = 1.0
-    nte = ne * Te
-    mime = (vtmax * vtmax) / (vtmin * vtmin) if vtmin > 0.0 else 0.0
-    kperprho2 = kperp_min * kperp_min / (bmag_max * bmag_max) if bmag_max > 0.0 else 0.0
+    return ne * Te
+
+
+def _parallel_streaming_frequency(
+    params: LinearParams,
+    grid_bounds: _CFLGridBounds,
+    species: _SpeciesFrequencyScales,
+    geometry: _GeometryFrequencyScales,
+) -> float:
+    beta = float(params.beta)
+    nspec_in = int(max(species.charge.size, 1))
+    nte = _electron_pressure_product(species)
+    mime = (
+        (species.vtmax * species.vtmax) / (species.vtmin * species.vtmin)
+        if species.vtmin > 0.0
+        else 0.0
+    )
+    kperprho2 = (
+        grid_bounds.kperp_min * grid_bounds.kperp_min / (geometry.bmag_max * geometry.bmag_max)
+        if geometry.bmag_max > 0.0
+        else 0.0
+    )
     if nspec_in > 1:
         denom = beta * nte / 2.0 * mime + kperprho2
         guard = 1.0 / np.sqrt(denom) if denom > 0.0 else 0.0
     else:
         guard = 0.0
-    omega_max[2] = vtmax * kz_max * abs(gradpar) * max(vpar_max, guard)
+    return (
+        species.vtmax
+        * grid_bounds.kz_max
+        * abs(geometry.gradpar)
+        * max(species.vpar_max, guard)
+    )
 
+
+def _linear_frequency_bound(
+    grid: SpectralGrid,
+    geom: FluxTubeGeometryLike,
+    params: LinearParams,
+    nl: int,
+    nm: int,
+    *,
+    include_diamagnetic_drive: bool = True,
+) -> np.ndarray:
+    grid_bounds = _grid_frequency_bounds(grid)
+    species = _species_frequency_scales(params, nl=nl, nm=nm)
+    geometry = _effective_geometry_frequency_scales(geom, grid, grid_bounds, species)
+    omega_max = np.zeros(3, dtype=float)
+    omega_max[0] = _radial_drift_frequency(geom, grid, grid_bounds, species, geometry)
+    omega_max[1] = _binormal_drift_frequency(
+        grid_bounds,
+        species,
+        geometry,
+        include_diamagnetic_drive=include_diamagnetic_drive,
+    )
+    omega_max[2] = _parallel_streaming_frequency(params, grid_bounds, species, geometry)
     return omega_max
-
 
