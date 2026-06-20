@@ -97,6 +97,200 @@ def _arnoldi(
     return V, H
 
 
+def _shift_invert_apply_factory(
+    v0: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    term_cfg: TermConfig,
+    *,
+    sigma_val: jnp.ndarray,
+    gmres_tol: float,
+    gmres_maxiter: int,
+    gmres_restart: int,
+    gmres_solve_method: str,
+    shift_preconditioner: str | None,
+):
+    shape = v0.shape
+    size = v0.size
+    _precond, precond_op = _build_shift_invert_precond(
+        v0, cache, params, term_cfg, sigma_val, shift_preconditioner
+    )
+
+    def matvec(x_flat: jnp.ndarray) -> jnp.ndarray:
+        x = x_flat.reshape(shape)
+        return (_apply_operator(x, cache, params, term_cfg) - sigma_val * x).reshape(size)
+
+    def apply_shift_invert(x: jnp.ndarray, _cache, _params, _term_cfg) -> jnp.ndarray:
+        b = x.reshape(size)
+        x0 = precond_op(b) if precond_op is not None else b
+        sol, _info = gmres(
+            matvec,
+            b,
+            x0=x0,
+            tol=gmres_tol,
+            maxiter=gmres_maxiter,
+            restart=gmres_restart,
+            M=precond_op,
+            solve_method=gmres_solve_method,
+        )
+        return sol.reshape(shape)
+
+    return apply_shift_invert
+
+
+def _shift_invert_spectrum(
+    eigvals: jnp.ndarray,
+    sigma_val: jnp.ndarray,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    safe = jnp.where(jnp.abs(eigvals) > 1.0e-14, eigvals, 1.0e-14 + 0.0j)
+    lam = sigma_val + 1.0 / safe
+    real_part = jnp.real(lam)
+    imag_part = jnp.imag(lam)
+    finite = jnp.isfinite(real_part) & jnp.isfinite(imag_part)
+    return lam, real_part, imag_part, finite
+
+
+def _shift_invert_frequency_masks(
+    *,
+    imag_part: jnp.ndarray,
+    finite: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    omega_min_factor: float,
+    omega_cap_factor: float,
+    omega_sign: int,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    omega_scale = _omega_scale(cache, params)
+    omega_cap = omega_cap_factor * omega_scale
+    omega_min = omega_min_factor * omega_scale
+    use_min = omega_min_factor > 0.0
+    mask0 = jnp.abs(imag_part) <= omega_cap
+    mask0 = jnp.where(use_min, mask0 & (jnp.abs(imag_part) >= omega_min), mask0)
+    mask0 = mask0 & finite
+    omega_phys = _physical_omega(imag_part)
+    omega_sign_val = jnp.asarray(omega_sign, dtype=imag_part.dtype)
+    use_sign = omega_sign_val != 0.0
+    mask_sign = (omega_sign_val * omega_phys) >= 0.0
+    signed_mask = jnp.where(use_sign, mask0 & mask_sign, mask0)
+    mask = jnp.where(jnp.any(signed_mask), signed_mask, mask0)
+    return mask0, mask, omega_scale
+
+
+def _shift_invert_nearest_shift_index(
+    *,
+    lam: jnp.ndarray,
+    sigma_val: jnp.ndarray,
+    finite: jnp.ndarray,
+    mask: jnp.ndarray,
+) -> jnp.ndarray:
+    dist = jnp.abs(lam - sigma_val)
+    dist = jnp.where(finite, dist, jnp.inf)
+    dist_masked = jnp.where(mask, dist, jnp.inf)
+    idx_masked = jnp.argmin(dist_masked)
+    idx_all = jnp.argmin(dist)
+    return jnp.where(jnp.any(mask), idx_masked, idx_all)
+
+
+def _shift_invert_mode_index(
+    *,
+    eigvecs: jnp.ndarray,
+    V: jnp.ndarray,
+    v_ref: jnp.ndarray,
+    lam: jnp.ndarray,
+    sigma_val: jnp.ndarray,
+    real_part: jnp.ndarray,
+    imag_part: jnp.ndarray,
+    finite: jnp.ndarray,
+    mask: jnp.ndarray,
+    omega_scale: jnp.ndarray,
+    omega_target_factor: float,
+    omega_sign: int,
+    select_growth: bool,
+    select_targeted: bool,
+    select_overlap: bool,
+    krylov_dim: int,
+) -> jnp.ndarray:
+    idx = _shift_invert_nearest_shift_index(
+        lam=lam,
+        sigma_val=sigma_val,
+        finite=finite,
+        mask=mask,
+    )
+    real_masked = jnp.where(mask, real_part, -jnp.inf)
+    if select_growth:
+        idx_growth = jnp.argmax(real_masked)
+        has_growth = jnp.any(mask & (real_part >= 0.0))
+        idx = jnp.where(has_growth, idx_growth, idx)
+    if select_targeted:
+        idx = _select_by_target(
+            real_part,
+            imag_part,
+            mask,
+            omega_scale,
+            omega_target_factor,
+            omega_sign,
+            idx,
+        )
+    if select_overlap:
+        idx = _select_by_overlap(eigvecs, V[:krylov_dim], v_ref, mask, idx)
+    return idx
+
+
+def _shift_invert_restart_step(
+    v: jnp.ndarray,
+    v_ref: jnp.ndarray,
+    apply_shift_invert,
+    cache: LinearCache,
+    params: LinearParams,
+    term_cfg: TermConfig,
+    *,
+    krylov_dim: int,
+    sigma_val: jnp.ndarray,
+    omega_min_factor: float,
+    omega_target_factor: float,
+    omega_cap_factor: float,
+    omega_sign: int,
+    select_targeted: bool,
+    select_growth: bool,
+    select_overlap: bool,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    V, H = _arnoldi(v, apply_shift_invert, cache, params, term_cfg, krylov_dim)
+    Hk = H[:krylov_dim, :krylov_dim]
+    eigvals, eigvecs = jnp.linalg.eig(Hk)
+    lam, real_part, imag_part, finite = _shift_invert_spectrum(eigvals, sigma_val)
+    mask0, mask, omega_scale = _shift_invert_frequency_masks(
+        imag_part=imag_part,
+        finite=finite,
+        cache=cache,
+        params=params,
+        omega_min_factor=omega_min_factor,
+        omega_cap_factor=omega_cap_factor,
+        omega_sign=omega_sign,
+    )
+    idx = _shift_invert_mode_index(
+        eigvecs=eigvecs,
+        V=V,
+        v_ref=v_ref,
+        lam=lam,
+        sigma_val=sigma_val,
+        real_part=real_part,
+        imag_part=imag_part,
+        finite=finite,
+        mask=mask,
+        omega_scale=omega_scale,
+        omega_target_factor=omega_target_factor,
+        omega_sign=omega_sign,
+        select_growth=select_growth,
+        select_targeted=select_targeted,
+        select_overlap=select_overlap,
+        krylov_dim=krylov_dim,
+    )
+    y = eigvecs[:, idx]
+    v_next = jnp.tensordot(jnp.conj(y), V[:krylov_dim], axes=1)
+    eig_out = jnp.where(jnp.any(mask0), lam[idx], jnp.nan + 1.0j * jnp.nan)
+    return _normalize(v_next), eig_out
+
+
 @partial(
     jax.jit,
     static_argnames=(
@@ -137,84 +331,39 @@ def dominant_eigenpair_shift_invert_cached(
     """Restarted shift-invert Arnoldi with GMRES solves."""
 
     sigma_val = jnp.asarray(sigma, dtype=v0.dtype)
-    shape = v0.shape
-    size = v0.size
-    _precond, precond_op = _build_shift_invert_precond(
-        v0, cache, params, term_cfg, sigma_val, shift_preconditioner
+    apply_shift_invert = _shift_invert_apply_factory(
+        v0,
+        cache,
+        params,
+        term_cfg,
+        sigma_val=sigma_val,
+        gmres_tol=gmres_tol,
+        gmres_maxiter=gmres_maxiter,
+        gmres_restart=gmres_restart,
+        gmres_solve_method=gmres_solve_method,
+        shift_preconditioner=shift_preconditioner,
     )
 
-    def matvec(x_flat: jnp.ndarray) -> jnp.ndarray:
-        x = x_flat.reshape(shape)
-        return (_apply_operator(x, cache, params, term_cfg) - sigma_val * x).reshape(size)
-
-    def apply_shift_invert(x: jnp.ndarray, _cache, _params, _term_cfg) -> jnp.ndarray:
-        b = x.reshape(size)
-        x0 = precond_op(b) if precond_op is not None else b
-        sol, _info = gmres(
-            matvec,
-            b,
-            x0=x0,
-            tol=gmres_tol,
-            maxiter=gmres_maxiter,
-            restart=gmres_restart,
-            M=precond_op,
-            solve_method=gmres_solve_method,
-        )
-        return sol.reshape(shape)
-
     def restart_body(i, state):
+        del i
         v, _eig_prev = state
-        V, H = _arnoldi(v, apply_shift_invert, cache, params, term_cfg, krylov_dim)
-        Hk = H[:krylov_dim, :krylov_dim]
-        eigvals, eigvecs = jnp.linalg.eig(Hk)
-        safe = jnp.where(jnp.abs(eigvals) > 1.0e-14, eigvals, 1.0e-14 + 0.0j)
-        lam = sigma_val + 1.0 / safe
-        real_part = jnp.real(lam)
-        imag_part = jnp.imag(lam)
-        finite = jnp.isfinite(real_part) & jnp.isfinite(imag_part)
-        omega_scale = _omega_scale(cache, params)
-        omega_cap = omega_cap_factor * omega_scale
-        omega_min = omega_min_factor * omega_scale
-        use_min = omega_min_factor > 0.0
-        mask0 = jnp.abs(imag_part) <= omega_cap
-        mask0 = jnp.where(use_min, mask0 & (jnp.abs(imag_part) >= omega_min), mask0)
-        mask0 = mask0 & finite
-        mask0_any = jnp.any(mask0)
-        omega_phys = _physical_omega(imag_part)
-        omega_sign_val = jnp.asarray(omega_sign, dtype=imag_part.dtype)
-        use_sign = omega_sign_val != 0.0
-        mask_sign = (omega_sign_val * omega_phys) >= 0.0
-        mask = jnp.where(use_sign, mask0 & mask_sign, mask0)
-        use_sign_mask = jnp.any(mask)
-        mask = jnp.where(use_sign_mask, mask, mask0)
-        dist = jnp.abs(lam - sigma_val)
-        dist = jnp.where(finite, dist, jnp.inf)
-        dist_masked = jnp.where(mask, dist, jnp.inf)
-        idx_masked = jnp.argmin(dist_masked)
-        idx_all = jnp.argmin(dist)
-        has_mask = jnp.any(mask)
-        idx = jnp.where(has_mask, idx_masked, idx_all)
-        real_masked = jnp.where(mask, real_part, -jnp.inf)
-        if select_growth:
-            idx_growth = jnp.argmax(real_masked)
-            has_growth = jnp.any(mask & (real_part >= 0.0))
-            idx = jnp.where(has_growth, idx_growth, idx)
-        if select_targeted:
-            idx = _select_by_target(
-                real_part,
-                imag_part,
-                mask,
-                omega_scale,
-                omega_target_factor,
-                omega_sign,
-                idx,
-            )
-        if select_overlap:
-            idx = _select_by_overlap(eigvecs, V[:krylov_dim], v_ref, mask, idx)
-        y = eigvecs[:, idx]
-        v_next = jnp.tensordot(jnp.conj(y), V[:krylov_dim], axes=1)
-        v_next = _normalize(v_next)
-        eig_out = jnp.where(mask0_any, lam[idx], jnp.nan + 1.0j * jnp.nan)
+        v_next, eig_out = _shift_invert_restart_step(
+            v,
+            v_ref,
+            apply_shift_invert,
+            cache,
+            params,
+            term_cfg,
+            krylov_dim=krylov_dim,
+            sigma_val=sigma_val,
+            omega_min_factor=omega_min_factor,
+            omega_target_factor=omega_target_factor,
+            omega_cap_factor=omega_cap_factor,
+            omega_sign=omega_sign,
+            select_targeted=select_targeted,
+            select_growth=select_growth,
+            select_overlap=select_overlap,
+        )
         return v_next, eig_out
 
     v, eig = jax.lax.fori_loop(
