@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Callable
 
 import jax
@@ -14,6 +15,140 @@ from spectraxgk.validation.autodiff_finite_difference import (
     central_finite_difference_jacobian,
     covariance_diagnostics,
 )
+
+
+@dataclass(frozen=True)
+class _EigenBranchSelection:
+    selector_key: str
+    index: int
+    eigenvalue: complex
+    gap: float
+    branch_isolated: bool
+
+
+@dataclass(frozen=True)
+class _ImplicitEigenpairData:
+    matrix: jnp.ndarray
+    eigenvalue: jnp.ndarray
+    eigenvector: jnp.ndarray
+    left_eigenvector: jnp.ndarray
+    selection: _EigenBranchSelection
+    left_index: int
+    overlap_abs: float
+
+
+@dataclass(frozen=True)
+class _ImplicitSensitivityData:
+    eigenvalue_sensitivity: jnp.ndarray
+    eigenvector_sensitivity: jnp.ndarray
+    jacobian_implicit: jnp.ndarray
+    jacobian_fd: jnp.ndarray
+    max_abs_error: float
+    max_rel_error: float
+    passed: bool
+
+
+def _params_vector(params: jnp.ndarray | np.ndarray) -> jnp.ndarray:
+    p = jnp.asarray(params, dtype=jnp.float64 if _jax_enable_x64() else jnp.float32)
+    if p.ndim != 1:
+        raise ValueError("params must be one-dimensional")
+    return p
+
+
+def _selector_key(selector: str) -> str:
+    return selector.strip().lower()
+
+
+def _selected_eigen_index(eig_np: np.ndarray, selector_key: str) -> int:
+    if selector_key == "max_real":
+        return int(np.argmax(np.real(eig_np)))
+    if selector_key.startswith("index:"):
+        index = int(selector_key.split(":", 1)[1])
+        if index < 0 or index >= eig_np.size:
+            raise ValueError(
+                f"selector index {index} is out of bounds for {eig_np.size} eigenvalues"
+            )
+        return index
+    raise ValueError("selector must be 'max_real' or 'index:N'")
+
+
+def _eigen_gap(eig_np: np.ndarray, *, index: int, selected: complex) -> float:
+    if eig_np.size == 1:
+        return float("inf")
+    others = np.delete(eig_np, index)
+    return float(np.min(np.abs(selected - others)))
+
+
+def _select_eigen_branch(
+    eigvals: jnp.ndarray,
+    *,
+    selector: str,
+    gap_floor: float,
+) -> _EigenBranchSelection:
+    eig_np = np.asarray(eigvals)
+    if eig_np.ndim != 1 or eig_np.size == 0:
+        raise ValueError(
+            "matrix_fn must return a square matrix with at least one eigenvalue"
+        )
+    selector_key = _selector_key(selector)
+    index = _selected_eigen_index(eig_np, selector_key)
+    selected = complex(eig_np[index])
+    gap = _eigen_gap(eig_np, index=index, selected=selected)
+    return _EigenBranchSelection(
+        selector_key=selector_key,
+        index=index,
+        eigenvalue=selected,
+        gap=gap,
+        branch_isolated=bool(gap >= float(gap_floor)),
+    )
+
+
+def _real_observable(
+    observable_fn: Callable[[jnp.ndarray, jnp.ndarray, jnp.ndarray], Any],
+    lam_i: jnp.ndarray,
+    v_i: jnp.ndarray,
+    p_i: jnp.ndarray,
+) -> jnp.ndarray:
+    obs = jnp.ravel(jnp.asarray(observable_fn(lam_i, v_i, p_i)))
+    if jnp.iscomplexobj(obs):
+        return jnp.concatenate([jnp.real(obs), jnp.imag(obs)])
+    return jnp.real(obs)
+
+
+def _selection_report_payload(
+    selection: _EigenBranchSelection,
+    *,
+    gap_floor: float,
+) -> dict[str, object]:
+    return {
+        "selector": selection.selector_key,
+        "selected_index": selection.index,
+        "eigenvalue_real": float(np.real(selection.eigenvalue)),
+        "eigenvalue_imag": float(np.imag(selection.eigenvalue)),
+        "eigenvalue_gap": selection.gap,
+        "gap_floor": float(gap_floor),
+        "branch_isolated": selection.branch_isolated,
+    }
+
+
+def _unsupported_eigen_ad_report(
+    selection: _EigenBranchSelection,
+    *,
+    exc: NotImplementedError,
+    step: float,
+    rtol: float,
+    atol: float,
+    gap_floor: float,
+) -> dict[str, object]:
+    return {
+        "passed": False,
+        "ad_supported": False,
+        "failure_reason": str(exc),
+        "step": float(step),
+        "rtol": float(rtol),
+        "atol": float(atol),
+        **_selection_report_payload(selection, gap_floor=gap_floor),
+    }
 
 
 def explicit_complex_operator_matrix(
@@ -64,39 +199,18 @@ def isolated_eigenvalue_sensitivity_report(
     assumption used for linear growth/frequency sensitivities.
     """
 
-    p = jnp.asarray(params, dtype=jnp.float64 if _jax_enable_x64() else jnp.float32)
-    if p.ndim != 1:
-        raise ValueError("params must be one-dimensional")
+    p = _params_vector(params)
     eig_base = jnp.linalg.eigvals(jnp.asarray(matrix_fn(p)))
-    eig_np = np.asarray(eig_base)
-    if eig_np.ndim != 1 or eig_np.size == 0:
-        raise ValueError(
-            "matrix_fn must return a square matrix with at least one eigenvalue"
-        )
-    selector_key = selector.strip().lower()
-    if selector_key == "max_real":
-        index = int(np.argmax(np.real(eig_np)))
-    elif selector_key.startswith("index:"):
-        index = int(selector_key.split(":", 1)[1])
-        if index < 0 or index >= eig_np.size:
-            raise ValueError(
-                f"selector index {index} is out of bounds for {eig_np.size} eigenvalues"
-            )
-    else:
-        raise ValueError("selector must be 'max_real' or 'index:N'")
-
-    selected = eig_np[index]
-    if eig_np.size == 1:
-        gap = float("inf")
-    else:
-        others = np.delete(eig_np, index)
-        gap = float(np.min(np.abs(selected - others)))
+    selection = _select_eigen_branch(
+        eig_base,
+        selector=selector,
+        gap_floor=gap_floor,
+    )
 
     def branch_fn(x: jnp.ndarray) -> jnp.ndarray:
-        value = jnp.linalg.eigvals(jnp.asarray(matrix_fn(x)))[index]
+        value = jnp.linalg.eigvals(jnp.asarray(matrix_fn(x)))[selection.index]
         return jnp.asarray([jnp.real(value), jnp.imag(value)])
 
-    branch_isolated = bool(gap >= float(gap_floor))
     try:
         report = autodiff_finite_difference_report(
             branch_fn,
@@ -106,32 +220,19 @@ def isolated_eigenvalue_sensitivity_report(
             atol=atol,
         )
     except NotImplementedError as exc:
-        return {
-            "passed": False,
-            "ad_supported": False,
-            "failure_reason": str(exc),
-            "step": float(step),
-            "rtol": float(rtol),
-            "atol": float(atol),
-            "selector": selector_key,
-            "selected_index": index,
-            "eigenvalue_real": float(np.real(selected)),
-            "eigenvalue_imag": float(np.imag(selected)),
-            "eigenvalue_gap": gap,
-            "gap_floor": float(gap_floor),
-            "branch_isolated": branch_isolated,
-        }
+        return _unsupported_eigen_ad_report(
+            selection,
+            exc=exc,
+            step=step,
+            rtol=rtol,
+            atol=atol,
+            gap_floor=gap_floor,
+        )
     return {
         **report,
-        "passed": bool(report["passed"]) and branch_isolated,
+        "passed": bool(report["passed"]) and selection.branch_isolated,
         "ad_supported": True,
-        "selector": selector_key,
-        "selected_index": index,
-        "eigenvalue_real": float(np.real(selected)),
-        "eigenvalue_imag": float(np.imag(selected)),
-        "eigenvalue_gap": gap,
-        "gap_floor": float(gap_floor),
-        "branch_isolated": branch_isolated,
+        **_selection_report_payload(selection, gap_floor=gap_floor),
     }
 
 
@@ -154,46 +255,26 @@ def isolated_eigenpair_observable_sensitivity_report(
     phase-invariant quantities such as ``gamma / <k_perp^2>``.
     """
 
-    p = jnp.asarray(params, dtype=jnp.float64 if _jax_enable_x64() else jnp.float32)
-    if p.ndim != 1:
-        raise ValueError("params must be one-dimensional")
+    p = _params_vector(params)
     eig_base, vec_base = jnp.linalg.eig(jnp.asarray(matrix_fn(p)))
+    selection = _select_eigen_branch(
+        eig_base,
+        selector=selector,
+        gap_floor=gap_floor,
+    )
     eig_np = np.asarray(eig_base)
-    if eig_np.ndim != 1 or eig_np.size == 0:
-        raise ValueError(
-            "matrix_fn must return a square matrix with at least one eigenvalue"
-        )
     if np.asarray(vec_base).shape[1] != eig_np.size:
         raise ValueError("eigenvector matrix shape is inconsistent with eigenvalues")
-    selector_key = selector.strip().lower()
-    if selector_key == "max_real":
-        index = int(np.argmax(np.real(eig_np)))
-    elif selector_key.startswith("index:"):
-        index = int(selector_key.split(":", 1)[1])
-        if index < 0 or index >= eig_np.size:
-            raise ValueError(
-                f"selector index {index} is out of bounds for {eig_np.size} eigenvalues"
-            )
-    else:
-        raise ValueError("selector must be 'max_real' or 'index:N'")
-
-    selected = eig_np[index]
-    if eig_np.size == 1:
-        gap = float("inf")
-    else:
-        others = np.delete(eig_np, index)
-        gap = float(np.min(np.abs(selected - others)))
 
     def branch_fn(x: jnp.ndarray) -> jnp.ndarray:
         eigvals, eigvecs = jnp.linalg.eig(jnp.asarray(matrix_fn(x)))
-        obs = jnp.ravel(
-            jnp.asarray(observable_fn(eigvals[index], eigvecs[:, index], x))
+        return _real_observable(
+            observable_fn,
+            eigvals[selection.index],
+            eigvecs[:, selection.index],
+            x,
         )
-        if jnp.iscomplexobj(obs):
-            obs = jnp.concatenate([jnp.real(obs), jnp.imag(obs)])
-        return obs
 
-    branch_isolated = bool(gap >= float(gap_floor))
     try:
         report = autodiff_finite_difference_report(
             branch_fn,
@@ -203,32 +284,300 @@ def isolated_eigenpair_observable_sensitivity_report(
             atol=atol,
         )
     except NotImplementedError as exc:
-        return {
-            "passed": False,
-            "ad_supported": False,
-            "failure_reason": str(exc),
-            "step": float(step),
-            "rtol": float(rtol),
-            "atol": float(atol),
-            "selector": selector_key,
-            "selected_index": index,
-            "eigenvalue_real": float(np.real(selected)),
-            "eigenvalue_imag": float(np.imag(selected)),
-            "eigenvalue_gap": gap,
-            "gap_floor": float(gap_floor),
-            "branch_isolated": branch_isolated,
-        }
+        return _unsupported_eigen_ad_report(
+            selection,
+            exc=exc,
+            step=step,
+            rtol=rtol,
+            atol=atol,
+            gap_floor=gap_floor,
+        )
     return {
         **report,
-        "passed": bool(report["passed"]) and branch_isolated,
+        "passed": bool(report["passed"]) and selection.branch_isolated,
         "ad_supported": True,
-        "selector": selector_key,
-        "selected_index": index,
-        "eigenvalue_real": float(np.real(selected)),
-        "eigenvalue_imag": float(np.imag(selected)),
-        "eigenvalue_gap": gap,
+        **_selection_report_payload(selection, gap_floor=gap_floor),
+    }
+
+
+def _square_matrix_at_params(
+    matrix_fn: Callable[[jnp.ndarray], Any],
+    p: jnp.ndarray,
+) -> jnp.ndarray:
+    matrix = jnp.asarray(matrix_fn(p))
+    if matrix.ndim != 2 or matrix.shape[0] != matrix.shape[1]:
+        raise ValueError("matrix_fn must return a square matrix")
+    return matrix
+
+
+def _normalized_left_eigenvector(
+    matrix: jnp.ndarray,
+    *,
+    eigenvalue: jnp.ndarray,
+    eigenvector: jnp.ndarray,
+) -> tuple[jnp.ndarray, int, float]:
+    left_vals, left_vecs = jnp.linalg.eig(jnp.conj(jnp.swapaxes(matrix, 0, 1)))
+    left_index = int(
+        np.argmin(np.abs(np.asarray(left_vals) - np.conj(np.asarray(eigenvalue))))
+    )
+    left_eigenvector = left_vecs[:, left_index]
+    overlap = jnp.vdot(left_eigenvector, eigenvector)
+    overlap_abs = float(np.abs(np.asarray(overlap)))
+    if overlap_abs <= 0.0 or not np.isfinite(overlap_abs):
+        raise ValueError("left/right eigenvectors are biorthogonally singular")
+    return left_eigenvector / jnp.conj(overlap), left_index, overlap_abs
+
+
+def _implicit_eigenpair_data(
+    matrix_fn: Callable[[jnp.ndarray], Any],
+    p: jnp.ndarray,
+    *,
+    selector: str,
+    gap_floor: float,
+) -> _ImplicitEigenpairData:
+    matrix = _square_matrix_at_params(matrix_fn, p)
+    eigvals, eigvecs = jnp.linalg.eig(matrix)
+    selection = _select_eigen_branch(
+        eigvals,
+        selector=selector,
+        gap_floor=gap_floor,
+    )
+    eigenvalue = eigvals[selection.index]
+    eigenvector = eigvecs[:, selection.index]
+    left_eigenvector, left_index, overlap_abs = _normalized_left_eigenvector(
+        matrix,
+        eigenvalue=eigenvalue,
+        eigenvector=eigenvector,
+    )
+    return _ImplicitEigenpairData(
+        matrix=matrix,
+        eigenvalue=eigenvalue,
+        eigenvector=eigenvector,
+        left_eigenvector=left_eigenvector,
+        selection=selection,
+        left_index=left_index,
+        overlap_abs=overlap_abs,
+    )
+
+
+def _matrix_parameter_jacobian(
+    matrix_fn: Callable[[jnp.ndarray], Any],
+    p: jnp.ndarray,
+    matrix_shape: tuple[int, ...],
+) -> jnp.ndarray:
+    def flat_matrix_fn(x: jnp.ndarray) -> jnp.ndarray:
+        return jnp.ravel(jnp.asarray(matrix_fn(x)))
+
+    dA_flat = jax.jacfwd(flat_matrix_fn)(p)
+    return jnp.reshape(dA_flat, matrix_shape + (p.size,))
+
+
+def _implicit_eigenpair_tangents(
+    data: _ImplicitEigenpairData,
+    dA: jnp.ndarray,
+    parameter_count: int,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    matrix = data.matrix
+    eigenvalue = data.eigenvalue
+    eigenvector = data.eigenvector
+    left_eigenvector = data.left_eigenvector
+    n = int(matrix.shape[0])
+    identity = jnp.eye(n, dtype=matrix.dtype)
+    top = jnp.concatenate([matrix - eigenvalue * identity, -eigenvector[:, None]], axis=1)
+    bottom = jnp.concatenate(
+        [jnp.conj(left_eigenvector)[None, :], jnp.zeros((1, 1), dtype=matrix.dtype)],
+        axis=1,
+    )
+    augmented = jnp.concatenate([top, bottom], axis=0)
+    rhs = jnp.stack(
+        [
+            jnp.concatenate(
+                [-dA[:, :, i] @ eigenvector, jnp.zeros((1,), dtype=matrix.dtype)]
+            )
+            for i in range(int(parameter_count))
+        ],
+        axis=1,
+    )
+    solution = jnp.linalg.solve(augmented, rhs)
+    return solution[n, :], solution[:n, :]
+
+
+def _packed_eigenpair_base(eigenvalue: jnp.ndarray, eigenvector: jnp.ndarray) -> jnp.ndarray:
+    return jnp.concatenate(
+        [
+            jnp.asarray([jnp.real(eigenvalue), jnp.imag(eigenvalue)]),
+            jnp.real(eigenvector),
+            jnp.imag(eigenvector),
+        ]
+    )
+
+
+def _packed_eigenpair_tangent(
+    eigenvalue_sensitivity: jnp.ndarray,
+    eigenvector_sensitivity: jnp.ndarray,
+    *,
+    index: int,
+) -> jnp.ndarray:
+    return jnp.concatenate(
+        [
+            jnp.asarray(
+                [
+                    jnp.real(eigenvalue_sensitivity[index]),
+                    jnp.imag(eigenvalue_sensitivity[index]),
+                ]
+            ),
+            jnp.real(eigenvector_sensitivity[:, index]),
+            jnp.imag(eigenvector_sensitivity[:, index]),
+        ]
+    )
+
+
+def _implicit_observable_jacobian(
+    observable_fn: Callable[[jnp.ndarray, jnp.ndarray, jnp.ndarray], Any],
+    p: jnp.ndarray,
+    data: _ImplicitEigenpairData,
+    *,
+    eigenvalue_sensitivity: jnp.ndarray,
+    eigenvector_sensitivity: jnp.ndarray,
+) -> jnp.ndarray:
+    n = int(data.matrix.shape[0])
+
+    def observable_real_from_eigenpair(packed: jnp.ndarray) -> jnp.ndarray:
+        lam_i = packed[0] + 1j * packed[1]
+        v_real_start = 2
+        v_imag_start = v_real_start + n
+        v_i = packed[v_real_start:v_imag_start] + 1j * packed[v_imag_start:]
+        return _real_observable(observable_fn, lam_i, v_i, p)
+
+    def observable_real_from_params(p_i: jnp.ndarray) -> jnp.ndarray:
+        return _real_observable(observable_fn, data.eigenvalue, data.eigenvector, p_i)
+
+    eigenpair_base = _packed_eigenpair_base(data.eigenvalue, data.eigenvector)
+    obs_jac_eigenpair = jax.jacfwd(observable_real_from_eigenpair)(eigenpair_base)
+    obs_jac_params = jax.jacfwd(observable_real_from_params)(p)
+    eye = jnp.eye(p.size, dtype=p.dtype)
+    implicit_cols = [
+        obs_jac_eigenpair
+        @ _packed_eigenpair_tangent(
+            eigenvalue_sensitivity,
+            eigenvector_sensitivity,
+            index=i,
+        )
+        + obs_jac_params @ eye[i]
+        for i in range(int(p.size))
+    ]
+    return jnp.stack(implicit_cols, axis=1)
+
+
+def _nearest_branch_observable(
+    matrix_fn: Callable[[jnp.ndarray], Any],
+    observable_fn: Callable[[jnp.ndarray, jnp.ndarray, jnp.ndarray], Any],
+    reference_eigenvalue: jnp.ndarray,
+) -> Callable[[jnp.ndarray], jnp.ndarray]:
+    def branch_observable(x: jnp.ndarray) -> jnp.ndarray:
+        eigvals_i, eigvecs_i = jnp.linalg.eig(jnp.asarray(matrix_fn(x)))
+        branch_index = int(
+            np.argmin(np.abs(np.asarray(eigvals_i) - np.asarray(reference_eigenvalue)))
+        )
+        return _real_observable(
+            observable_fn,
+            eigvals_i[branch_index],
+            eigvecs_i[:, branch_index],
+            x,
+        )
+
+    return branch_observable
+
+
+def _jacobian_error_metrics(
+    jacobian_implicit: jnp.ndarray,
+    jacobian_fd: jnp.ndarray,
+    *,
+    atol: float,
+) -> tuple[float, float]:
+    err = np.asarray(jacobian_implicit - jacobian_fd, dtype=float)
+    denom = np.maximum(np.asarray(np.abs(jacobian_fd), dtype=float), float(atol))
+    rel = np.abs(err) / denom
+    max_abs = float(np.max(np.abs(err))) if err.size else 0.0
+    max_rel = float(np.max(rel)) if rel.size else 0.0
+    return max_abs, max_rel
+
+
+def _implicit_sensitivity_data(
+    matrix_fn: Callable[[jnp.ndarray], Any],
+    observable_fn: Callable[[jnp.ndarray, jnp.ndarray, jnp.ndarray], Any],
+    p: jnp.ndarray,
+    data: _ImplicitEigenpairData,
+    *,
+    step: float,
+    rtol: float,
+    atol: float,
+) -> _ImplicitSensitivityData:
+    dA = _matrix_parameter_jacobian(matrix_fn, p, tuple(data.matrix.shape))
+    dlam, dv = _implicit_eigenpair_tangents(data, dA, int(p.size))
+    jac_implicit = _implicit_observable_jacobian(
+        observable_fn,
+        p,
+        data,
+        eigenvalue_sensitivity=dlam,
+        eigenvector_sensitivity=dv,
+    )
+    jac_fd = central_finite_difference_jacobian(
+        _nearest_branch_observable(matrix_fn, observable_fn, data.eigenvalue),
+        p,
+        step=step,
+    )
+    max_abs, max_rel = _jacobian_error_metrics(jac_implicit, jac_fd, atol=atol)
+    passed = bool(
+        data.selection.branch_isolated
+        and (max_abs <= float(atol) or max_rel <= float(rtol))
+    )
+    return _ImplicitSensitivityData(
+        eigenvalue_sensitivity=dlam,
+        eigenvector_sensitivity=dv,
+        jacobian_implicit=jac_implicit,
+        jacobian_fd=jac_fd,
+        max_abs_error=max_abs,
+        max_rel_error=max_rel,
+        passed=passed,
+    )
+
+
+def _pack_implicit_eigenpair_report(
+    *,
+    data: _ImplicitEigenpairData,
+    sensitivities: _ImplicitSensitivityData,
+    step: float,
+    rtol: float,
+    atol: float,
+    gap_floor: float,
+) -> dict[str, object]:
+    dlam_np = np.asarray(sensitivities.eigenvalue_sensitivity, dtype=complex)
+    return {
+        "passed": sensitivities.passed,
+        "ad_supported": True,
+        "sensitivity_method": "implicit_left_right_eigenpair",
+        "observable_chain_rule": "split_eigenpair_and_explicit_parameter",
+        "step": float(step),
+        "rtol": float(rtol),
+        "atol": float(atol),
+        "max_abs_error": sensitivities.max_abs_error,
+        "max_rel_error": sensitivities.max_rel_error,
+        "jacobian_implicit": np.asarray(
+            sensitivities.jacobian_implicit, dtype=float
+        ).tolist(),
+        "jacobian_fd": np.asarray(sensitivities.jacobian_fd, dtype=float).tolist(),
+        "eigenvalue_sensitivity_real": np.real(dlam_np).tolist(),
+        "eigenvalue_sensitivity_imag": np.imag(dlam_np).tolist(),
+        "selector": data.selection.selector_key,
+        "selected_index": data.selection.index,
+        "left_selected_index": data.left_index,
+        "eigenvalue_real": float(np.real(np.asarray(data.eigenvalue))),
+        "eigenvalue_imag": float(np.imag(np.asarray(data.eigenvalue))),
+        "eigenvalue_gap": data.selection.gap,
         "gap_floor": float(gap_floor),
-        "branch_isolated": branch_isolated,
+        "branch_isolated": data.selection.branch_isolated,
+        "biorthogonal_overlap_abs": data.overlap_abs,
     }
 
 
@@ -257,160 +606,30 @@ def implicit_eigenpair_observable_sensitivity_report(
     eigenvector ``w`` normalized by ``w^H v = 1``.
     """
 
-    p = jnp.asarray(params, dtype=jnp.float64 if _jax_enable_x64() else jnp.float32)
-    if p.ndim != 1:
-        raise ValueError("params must be one-dimensional")
-    A = jnp.asarray(matrix_fn(p))
-    if A.ndim != 2 or A.shape[0] != A.shape[1]:
-        raise ValueError("matrix_fn must return a square matrix")
-    eigvals, eigvecs = jnp.linalg.eig(A)
-    eig_np = np.asarray(eigvals)
-    if eig_np.size == 0:
-        raise ValueError("matrix_fn must return at least one eigenvalue")
-
-    selector_key = selector.strip().lower()
-    if selector_key == "max_real":
-        index = int(np.argmax(np.real(eig_np)))
-    elif selector_key.startswith("index:"):
-        index = int(selector_key.split(":", 1)[1])
-        if index < 0 or index >= eig_np.size:
-            raise ValueError(
-                f"selector index {index} is out of bounds for {eig_np.size} eigenvalues"
-            )
-    else:
-        raise ValueError("selector must be 'max_real' or 'index:N'")
-
-    lam = eigvals[index]
-    v = eigvecs[:, index]
-    if eig_np.size == 1:
-        gap = float("inf")
-    else:
-        gap = float(np.min(np.abs(np.delete(eig_np, index) - np.asarray(lam))))
-    branch_isolated = bool(gap >= float(gap_floor))
-
-    left_vals, left_vecs = jnp.linalg.eig(jnp.conj(jnp.swapaxes(A, 0, 1)))
-    left_index = int(
-        np.argmin(np.abs(np.asarray(left_vals) - np.conj(np.asarray(lam))))
+    p = _params_vector(params)
+    data = _implicit_eigenpair_data(
+        matrix_fn,
+        p,
+        selector=selector,
+        gap_floor=gap_floor,
     )
-    w = left_vecs[:, left_index]
-    overlap = jnp.vdot(w, v)
-    overlap_abs = float(np.abs(np.asarray(overlap)))
-    if overlap_abs <= 0.0 or not np.isfinite(overlap_abs):
-        raise ValueError("left/right eigenvectors are biorthogonally singular")
-    w = w / jnp.conj(overlap)
-
-    def flat_matrix_fn(x: jnp.ndarray) -> jnp.ndarray:
-        return jnp.ravel(jnp.asarray(matrix_fn(x)))
-
-    dA_flat = jax.jacfwd(flat_matrix_fn)(p)
-    dA = jnp.reshape(dA_flat, A.shape + (p.size,))
-    n = int(A.shape[0])
-    identity = jnp.eye(n, dtype=A.dtype)
-    top = jnp.concatenate([A - lam * identity, -v[:, None]], axis=1)
-    bottom = jnp.concatenate(
-        [jnp.conj(w)[None, :], jnp.zeros((1, 1), dtype=A.dtype)],
-        axis=1,
+    sensitivities = _implicit_sensitivity_data(
+        matrix_fn,
+        observable_fn,
+        p,
+        data,
+        step=step,
+        rtol=rtol,
+        atol=atol,
     )
-    augmented = jnp.concatenate([top, bottom], axis=0)
-    rhs_columns = []
-    for i in range(int(p.size)):
-        rhs_columns.append(
-            jnp.concatenate([-dA[:, :, i] @ v, jnp.zeros((1,), dtype=A.dtype)])
-        )
-    rhs = jnp.stack(rhs_columns, axis=1)
-    solution = jnp.linalg.solve(augmented, rhs)
-    dv = solution[:n, :]
-    dlam = solution[n, :]
-
-    def observable_real(
-        lam_i: jnp.ndarray, v_i: jnp.ndarray, p_i: jnp.ndarray
-    ) -> jnp.ndarray:
-        obs = jnp.ravel(jnp.asarray(observable_fn(lam_i, v_i, p_i)))
-        if jnp.iscomplexobj(obs):
-            return jnp.concatenate([jnp.real(obs), jnp.imag(obs)])
-        return jnp.real(obs)
-
-    def observable_real_from_eigenpair(packed: jnp.ndarray) -> jnp.ndarray:
-        lam_i = packed[0] + 1j * packed[1]
-        v_real_start = 2
-        v_imag_start = v_real_start + n
-        v_i = packed[v_real_start:v_imag_start] + 1j * packed[v_imag_start:]
-        return observable_real(lam_i, v_i, p)
-
-    def observable_real_from_params(p_i: jnp.ndarray) -> jnp.ndarray:
-        return observable_real(lam, v, p_i)
-
-    # Split the chain rule so expensive parameter-dependent context, e.g.
-    # VMEC/Boozer geometry reconstruction, is only differentiated along the
-    # actual parameter directions. Differentiating one packed vector
-    # [lambda, v, p] is mathematically equivalent but can replicate heavy
-    # geometry tangents for every eigenvector component.
-    eigenpair_base = jnp.concatenate(
-        [jnp.asarray([jnp.real(lam), jnp.imag(lam)]), jnp.real(v), jnp.imag(v)]
+    return _pack_implicit_eigenpair_report(
+        data=data,
+        sensitivities=sensitivities,
+        step=step,
+        rtol=rtol,
+        atol=atol,
+        gap_floor=gap_floor,
     )
-    obs_jac_eigenpair = jax.jacfwd(observable_real_from_eigenpair)(eigenpair_base)
-    obs_jac_params = jax.jacfwd(observable_real_from_params)(p)
-    implicit_cols = []
-    eye = jnp.eye(p.size, dtype=p.dtype)
-    for i in range(int(p.size)):
-        eigenpair_tangent = jnp.concatenate(
-            [
-                jnp.asarray([jnp.real(dlam[i]), jnp.imag(dlam[i])]),
-                jnp.real(dv[:, i]),
-                jnp.imag(dv[:, i]),
-            ]
-        )
-        implicit_cols.append(
-            obs_jac_eigenpair @ eigenpair_tangent + obs_jac_params @ eye[i]
-        )
-    jac_implicit = jnp.stack(implicit_cols, axis=1)
-
-    def branch_observable(x: jnp.ndarray) -> jnp.ndarray:
-        eigvals_i, eigvecs_i = jnp.linalg.eig(jnp.asarray(matrix_fn(x)))
-        branch_index = int(np.argmin(np.abs(np.asarray(eigvals_i) - np.asarray(lam))))
-        obs = jnp.ravel(
-            jnp.asarray(
-                observable_fn(eigvals_i[branch_index], eigvecs_i[:, branch_index], x)
-            )
-        )
-        if jnp.iscomplexobj(obs):
-            return jnp.concatenate([jnp.real(obs), jnp.imag(obs)])
-        return jnp.real(obs)
-
-    jac_fd = central_finite_difference_jacobian(branch_observable, p, step=step)
-    err = np.asarray(jac_implicit - jac_fd, dtype=float)
-    denom = np.maximum(np.asarray(np.abs(jac_fd), dtype=float), float(atol))
-    rel = np.abs(err) / denom
-    max_abs = float(np.max(np.abs(err))) if err.size else 0.0
-    max_rel = float(np.max(rel)) if rel.size else 0.0
-    passed = bool(
-        branch_isolated and (max_abs <= float(atol) or max_rel <= float(rtol))
-    )
-    dlam_np = np.asarray(dlam, dtype=complex)
-    return {
-        "passed": passed,
-        "ad_supported": True,
-        "sensitivity_method": "implicit_left_right_eigenpair",
-        "observable_chain_rule": "split_eigenpair_and_explicit_parameter",
-        "step": float(step),
-        "rtol": float(rtol),
-        "atol": float(atol),
-        "max_abs_error": max_abs,
-        "max_rel_error": max_rel,
-        "jacobian_implicit": np.asarray(jac_implicit, dtype=float).tolist(),
-        "jacobian_fd": np.asarray(jac_fd, dtype=float).tolist(),
-        "eigenvalue_sensitivity_real": np.real(dlam_np).tolist(),
-        "eigenvalue_sensitivity_imag": np.imag(dlam_np).tolist(),
-        "selector": selector_key,
-        "selected_index": index,
-        "left_selected_index": left_index,
-        "eigenvalue_real": float(np.real(np.asarray(lam))),
-        "eigenvalue_imag": float(np.imag(np.asarray(lam))),
-        "eigenvalue_gap": gap,
-        "gap_floor": float(gap_floor),
-        "branch_isolated": branch_isolated,
-        "biorthogonal_overlap_abs": overlap_abs,
-    }
 
 
 __all__ = [
