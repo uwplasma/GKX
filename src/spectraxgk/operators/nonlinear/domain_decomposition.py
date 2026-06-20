@@ -7,6 +7,8 @@ production nonlinear domain-decomposed solver route or a speedup claim.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import jax
 import jax.numpy as jnp
 
@@ -21,6 +23,31 @@ from spectraxgk.operators.nonlinear.parallel_contracts_domain import (
     _nonlinear_domain_identity_blockers,
     _nonlinear_domain_plan_blockers,
 )
+
+
+@dataclass(frozen=True)
+class _DomainTransportTraces:
+    mass: tuple[float, ...]
+    free_energy: tuple[float, ...]
+    flux_proxy: tuple[float, ...]
+
+
+@dataclass(frozen=True)
+class _DomainTransportWindowSamples:
+    serial_state: jax.Array
+    decomposed_state: jax.Array
+    serial_traces: _DomainTransportTraces
+    decomposed_traces: _DomainTransportTraces
+
+
+@dataclass(frozen=True)
+class _DomainTransportTraceErrors:
+    mass_abs: float
+    mass_rel: float
+    free_energy_abs: float
+    free_energy_rel: float
+    flux_proxy_abs: float
+    flux_proxy_rel: float
 
 
 def build_nonlinear_domain_decomposition_plan(
@@ -279,6 +306,200 @@ def _trace_drift(trace: tuple[float, ...]) -> float:
     return float(trace[-1] - trace[0])
 
 
+def _new_domain_transport_traces() -> dict[str, list[float]]:
+    return {
+        "mass": [],
+        "free_energy": [],
+        "flux_proxy": [],
+    }
+
+
+def _freeze_domain_transport_traces(
+    traces: dict[str, list[float]],
+) -> _DomainTransportTraces:
+    return _DomainTransportTraces(
+        mass=tuple(traces["mass"]),
+        free_energy=tuple(traces["free_energy"]),
+        flux_proxy=tuple(traces["flux_proxy"]),
+    )
+
+
+def _blocked_domain_transport_window_report(
+    plan: NonlinearDomainDecompositionPlan,
+    *,
+    steps: int,
+    dt: float,
+    atol: float,
+    rtol: float,
+    plan_valid: bool,
+    blocked_reasons: tuple[str, ...],
+) -> NonlinearDomainTransportWindowReport:
+    return NonlinearDomainTransportWindowReport(
+        gate_name=_NONLINEAR_DOMAIN_TRANSPORT_GATE_NAME,
+        plan=plan,
+        steps=int(steps),
+        dt=float(dt),
+        atol=float(atol),
+        rtol=float(rtol),
+        max_abs_state_error=float("inf"),
+        max_rel_state_error=float("inf"),
+        max_abs_boundary_error=float("inf"),
+        max_rel_boundary_error=float("inf"),
+        mass_trace_max_abs_error=float("inf"),
+        mass_trace_max_rel_error=float("inf"),
+        free_energy_trace_max_abs_error=float("inf"),
+        free_energy_trace_max_rel_error=float("inf"),
+        flux_proxy_trace_max_abs_error=float("inf"),
+        flux_proxy_trace_max_rel_error=float("inf"),
+        serial_mass_drift=float("inf"),
+        decomposed_mass_drift=float("inf"),
+        serial_free_energy_drift=float("inf"),
+        decomposed_free_energy_drift=float("inf"),
+        plan_valid=plan_valid,
+        blocked_reasons=blocked_reasons,
+        identity_passed=False,
+        decomposed_path_enabled=False,
+        claim_scope=_NONLINEAR_DOMAIN_TRANSPORT_CLAIM_SCOPE,
+        boundary_indices=plan.boundary_indices if plan_valid else (),
+    )
+
+
+def _run_domain_transport_window(
+    state: jax.Array,
+    plan: NonlinearDomainDecompositionPlan,
+    *,
+    steps: int,
+    dt: float,
+) -> _DomainTransportWindowSamples:
+    serial_state = state
+    decomposed_state = state
+    serial_trace_lists = _new_domain_transport_traces()
+    decomposed_trace_lists = _new_domain_transport_traces()
+    _append_transport_observables(serial_trace_lists, serial_state, plan)
+    _append_transport_observables(decomposed_trace_lists, decomposed_state, plan)
+    for _ in range(int(steps)):
+        serial_state = prototype_nonlinear_domain_serial_step(
+            serial_state,
+            axis=plan.axis,
+            dt=dt,
+        )
+        decomposed_state = prototype_nonlinear_domain_decomposed_step(
+            decomposed_state,
+            plan,
+            dt=dt,
+        )
+        _append_transport_observables(serial_trace_lists, serial_state, plan)
+        _append_transport_observables(decomposed_trace_lists, decomposed_state, plan)
+    return _DomainTransportWindowSamples(
+        serial_state=serial_state,
+        decomposed_state=decomposed_state,
+        serial_traces=_freeze_domain_transport_traces(serial_trace_lists),
+        decomposed_traces=_freeze_domain_transport_traces(decomposed_trace_lists),
+    )
+
+
+def _domain_transport_trace_errors(
+    serial: _DomainTransportTraces,
+    decomposed: _DomainTransportTraces,
+    *,
+    floor: float,
+) -> _DomainTransportTraceErrors:
+    mass_abs, mass_rel = _relative_trace_error(serial.mass, decomposed.mass, floor=floor)
+    free_energy_abs, free_energy_rel = _relative_trace_error(
+        serial.free_energy,
+        decomposed.free_energy,
+        floor=floor,
+    )
+    flux_proxy_abs, flux_proxy_rel = _relative_trace_error(
+        serial.flux_proxy,
+        decomposed.flux_proxy,
+        floor=floor,
+    )
+    return _DomainTransportTraceErrors(
+        mass_abs=mass_abs,
+        mass_rel=mass_rel,
+        free_energy_abs=free_energy_abs,
+        free_energy_rel=free_energy_rel,
+        flux_proxy_abs=flux_proxy_abs,
+        flux_proxy_rel=flux_proxy_rel,
+    )
+
+
+def _domain_transport_identity_passed(
+    state_report: NonlinearDomainIdentityReport,
+    errors: _DomainTransportTraceErrors,
+    *,
+    atol: float,
+    rtol: float,
+) -> bool:
+    return bool(
+        state_report.identity_passed
+        and errors.mass_abs <= float(atol)
+        and errors.mass_rel <= float(rtol)
+        and errors.free_energy_abs <= float(atol)
+        and errors.free_energy_rel <= float(rtol)
+        and errors.flux_proxy_abs <= float(atol)
+        and errors.flux_proxy_rel <= float(rtol)
+    )
+
+
+def _domain_transport_window_report(
+    plan: NonlinearDomainDecompositionPlan,
+    samples: _DomainTransportWindowSamples,
+    state_report: NonlinearDomainIdentityReport,
+    errors: _DomainTransportTraceErrors,
+    *,
+    steps: int,
+    dt: float,
+    atol: float,
+    rtol: float,
+    plan_valid: bool,
+    blocked_reasons: tuple[str, ...],
+) -> NonlinearDomainTransportWindowReport:
+    identity_passed = _domain_transport_identity_passed(
+        state_report,
+        errors,
+        atol=atol,
+        rtol=rtol,
+    )
+    serial = samples.serial_traces
+    decomposed = samples.decomposed_traces
+    return NonlinearDomainTransportWindowReport(
+        gate_name=_NONLINEAR_DOMAIN_TRANSPORT_GATE_NAME,
+        plan=plan,
+        steps=int(steps),
+        dt=float(dt),
+        atol=float(atol),
+        rtol=float(rtol),
+        max_abs_state_error=state_report.max_abs_error,
+        max_rel_state_error=state_report.max_rel_error,
+        max_abs_boundary_error=state_report.boundary_max_abs_error,
+        max_rel_boundary_error=state_report.boundary_max_rel_error,
+        mass_trace_max_abs_error=errors.mass_abs,
+        mass_trace_max_rel_error=errors.mass_rel,
+        free_energy_trace_max_abs_error=errors.free_energy_abs,
+        free_energy_trace_max_rel_error=errors.free_energy_rel,
+        flux_proxy_trace_max_abs_error=errors.flux_proxy_abs,
+        flux_proxy_trace_max_rel_error=errors.flux_proxy_rel,
+        serial_mass_drift=_trace_drift(serial.mass),
+        decomposed_mass_drift=_trace_drift(decomposed.mass),
+        serial_free_energy_drift=_trace_drift(serial.free_energy),
+        decomposed_free_energy_drift=_trace_drift(decomposed.free_energy),
+        plan_valid=plan_valid,
+        blocked_reasons=blocked_reasons,
+        identity_passed=identity_passed,
+        decomposed_path_enabled=identity_passed,
+        claim_scope=_NONLINEAR_DOMAIN_TRANSPORT_CLAIM_SCOPE,
+        boundary_indices=state_report.boundary_indices,
+        serial_mass_trace=serial.mass,
+        decomposed_mass_trace=decomposed.mass,
+        serial_free_energy_trace=serial.free_energy,
+        decomposed_free_energy_trace=decomposed.free_energy,
+        serial_flux_proxy_trace=serial.flux_proxy,
+        decomposed_flux_proxy_trace=decomposed.flux_proxy,
+    )
+
+
 def nonlinear_domain_transport_window_identity_gate(
     state: jax.Array,
     plan: NonlinearDomainDecompositionPlan,
@@ -308,134 +529,40 @@ def nonlinear_domain_transport_window_identity_gate(
         blocked_reasons.append("state_shape_does_not_match_plan")
 
     if blocked_reasons:
-        return NonlinearDomainTransportWindowReport(
-            gate_name=_NONLINEAR_DOMAIN_TRANSPORT_GATE_NAME,
-            plan=plan,
-            steps=int(steps),
-            dt=float(dt),
-            atol=float(atol),
-            rtol=float(rtol),
-            max_abs_state_error=float("inf"),
-            max_rel_state_error=float("inf"),
-            max_abs_boundary_error=float("inf"),
-            max_rel_boundary_error=float("inf"),
-            mass_trace_max_abs_error=float("inf"),
-            mass_trace_max_rel_error=float("inf"),
-            free_energy_trace_max_abs_error=float("inf"),
-            free_energy_trace_max_rel_error=float("inf"),
-            flux_proxy_trace_max_abs_error=float("inf"),
-            flux_proxy_trace_max_rel_error=float("inf"),
-            serial_mass_drift=float("inf"),
-            decomposed_mass_drift=float("inf"),
-            serial_free_energy_drift=float("inf"),
-            decomposed_free_energy_drift=float("inf"),
+        return _blocked_domain_transport_window_report(
+            plan,
+            steps=steps,
+            dt=dt,
+            atol=atol,
+            rtol=rtol,
             plan_valid=plan_valid,
             blocked_reasons=tuple(blocked_reasons),
-            identity_passed=False,
-            decomposed_path_enabled=False,
-            claim_scope=_NONLINEAR_DOMAIN_TRANSPORT_CLAIM_SCOPE,
-            boundary_indices=plan.boundary_indices if plan_valid else (),
         )
 
-    serial_state = state
-    decomposed_state = state
-    serial_traces: dict[str, list[float]] = {
-        "mass": [],
-        "free_energy": [],
-        "flux_proxy": [],
-    }
-    decomposed_traces: dict[str, list[float]] = {
-        "mass": [],
-        "free_energy": [],
-        "flux_proxy": [],
-    }
-    _append_transport_observables(serial_traces, serial_state, plan)
-    _append_transport_observables(decomposed_traces, decomposed_state, plan)
-    for _ in range(int(steps)):
-        serial_state = prototype_nonlinear_domain_serial_step(
-            serial_state,
-            axis=plan.axis,
-            dt=dt,
-        )
-        decomposed_state = prototype_nonlinear_domain_decomposed_step(
-            decomposed_state,
-            plan,
-            dt=dt,
-        )
-        _append_transport_observables(serial_traces, serial_state, plan)
-        _append_transport_observables(decomposed_traces, decomposed_state, plan)
-
+    samples = _run_domain_transport_window(state, plan, steps=steps, dt=dt)
     state_report = nonlinear_domain_identity_report(
-        serial_state,
-        decomposed_state,
+        samples.serial_state,
+        samples.decomposed_state,
         plan,
         atol=atol,
         rtol=rtol,
     )
-    serial_mass_trace = tuple(serial_traces["mass"])
-    decomposed_mass_trace = tuple(decomposed_traces["mass"])
-    serial_free_energy_trace = tuple(serial_traces["free_energy"])
-    decomposed_free_energy_trace = tuple(decomposed_traces["free_energy"])
-    serial_flux_proxy_trace = tuple(serial_traces["flux_proxy"])
-    decomposed_flux_proxy_trace = tuple(decomposed_traces["flux_proxy"])
-    mass_abs, mass_rel = _relative_trace_error(
-        serial_mass_trace,
-        decomposed_mass_trace,
+    errors = _domain_transport_trace_errors(
+        samples.serial_traces,
+        samples.decomposed_traces,
         floor=atol,
     )
-    free_energy_abs, free_energy_rel = _relative_trace_error(
-        serial_free_energy_trace,
-        decomposed_free_energy_trace,
-        floor=atol,
-    )
-    flux_proxy_abs, flux_proxy_rel = _relative_trace_error(
-        serial_flux_proxy_trace,
-        decomposed_flux_proxy_trace,
-        floor=atol,
-    )
-    identity_passed = bool(
-        state_report.identity_passed
-        and mass_abs <= float(atol)
-        and mass_rel <= float(rtol)
-        and free_energy_abs <= float(atol)
-        and free_energy_rel <= float(rtol)
-        and flux_proxy_abs <= float(atol)
-        and flux_proxy_rel <= float(rtol)
-    )
-
-    return NonlinearDomainTransportWindowReport(
-        gate_name=_NONLINEAR_DOMAIN_TRANSPORT_GATE_NAME,
+    return _domain_transport_window_report(
         plan=plan,
-        steps=int(steps),
-        dt=float(dt),
-        atol=float(atol),
-        rtol=float(rtol),
-        max_abs_state_error=state_report.max_abs_error,
-        max_rel_state_error=state_report.max_rel_error,
-        max_abs_boundary_error=state_report.boundary_max_abs_error,
-        max_rel_boundary_error=state_report.boundary_max_rel_error,
-        mass_trace_max_abs_error=mass_abs,
-        mass_trace_max_rel_error=mass_rel,
-        free_energy_trace_max_abs_error=free_energy_abs,
-        free_energy_trace_max_rel_error=free_energy_rel,
-        flux_proxy_trace_max_abs_error=flux_proxy_abs,
-        flux_proxy_trace_max_rel_error=flux_proxy_rel,
-        serial_mass_drift=_trace_drift(serial_mass_trace),
-        decomposed_mass_drift=_trace_drift(decomposed_mass_trace),
-        serial_free_energy_drift=_trace_drift(serial_free_energy_trace),
-        decomposed_free_energy_drift=_trace_drift(decomposed_free_energy_trace),
+        samples=samples,
+        state_report=state_report,
+        errors=errors,
+        steps=steps,
+        dt=dt,
+        atol=atol,
+        rtol=rtol,
         plan_valid=plan_valid,
         blocked_reasons=tuple(blocked_reasons),
-        identity_passed=identity_passed,
-        decomposed_path_enabled=identity_passed,
-        claim_scope=_NONLINEAR_DOMAIN_TRANSPORT_CLAIM_SCOPE,
-        boundary_indices=state_report.boundary_indices,
-        serial_mass_trace=serial_mass_trace,
-        decomposed_mass_trace=decomposed_mass_trace,
-        serial_free_energy_trace=serial_free_energy_trace,
-        decomposed_free_energy_trace=decomposed_free_energy_trace,
-        serial_flux_proxy_trace=serial_flux_proxy_trace,
-        decomposed_flux_proxy_trace=decomposed_flux_proxy_trace,
     )
 
 

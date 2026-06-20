@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import jax
 import jax.numpy as jnp
 
@@ -12,6 +14,7 @@ from spectraxgk.operators.nonlinear.domain_decomposition import (
 from spectraxgk.operators.nonlinear.parallel_contracts_spectral import (
     NonlinearSpectralIntegratorIdentityReport,
     NonlinearSpectralPencilTransportWindowReport,
+    NonlinearSpectralPencilWorkModel,
 )
 from spectraxgk.operators.nonlinear.spectral_core import (
     _chunk_offsets,
@@ -34,6 +37,60 @@ from spectraxgk.operators.nonlinear.spectral_identity_rhs import (
 )
 
 
+@dataclass(frozen=True)
+class _SpectralIntegratorTraces:
+    free_energy: tuple[float, ...]
+    field_energy: tuple[float, ...]
+    flux_proxy: tuple[float, ...]
+
+
+@dataclass(frozen=True)
+class _SpectralIntegratorSamples:
+    serial_state: jax.Array
+    logical_state: jax.Array
+    serial_traces: _SpectralIntegratorTraces
+    logical_traces: _SpectralIntegratorTraces
+    blocked_reasons: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class _SpectralIntegratorTraceErrors:
+    free_abs: float
+    free_rel: float
+    field_abs: float
+    field_rel: float
+    flux_abs: float
+    flux_rel: float
+
+
+@dataclass(frozen=True)
+class _SpectralPhysicalTraces:
+    free_energy: tuple[float, ...]
+    field_energy: tuple[float, ...]
+    physical_flux: tuple[float, ...]
+    bracket_rms: tuple[float, ...]
+
+
+@dataclass(frozen=True)
+class _SpectralPhysicalSamples:
+    serial_state: jax.Array
+    pencil_state: jax.Array
+    serial_traces: _SpectralPhysicalTraces
+    pencil_traces: _SpectralPhysicalTraces
+
+
+@dataclass(frozen=True)
+class _SpectralPhysicalTraceErrors:
+    free_abs: float
+    free_rel: float
+    field_abs: float
+    field_rel: float
+    flux_abs: float
+    flux_rel: float
+    bracket_abs: float
+    bracket_rel: float
+
+
 def _spectral_integrator_observables(
     state_hat: jax.Array,
 ) -> tuple[float, float, float]:
@@ -53,6 +110,190 @@ def _append_spectral_observables(
     traces["free_energy"].append(free_energy)
     traces["field_energy"].append(field_energy)
     traces["flux_proxy"].append(flux_proxy)
+
+
+def _new_spectral_integrator_traces() -> dict[str, list[float]]:
+    return {
+        "free_energy": [],
+        "field_energy": [],
+        "flux_proxy": [],
+    }
+
+
+def _freeze_spectral_integrator_traces(
+    traces: dict[str, list[float]],
+) -> _SpectralIntegratorTraces:
+    return _SpectralIntegratorTraces(
+        free_energy=tuple(traces["free_energy"]),
+        field_energy=tuple(traces["field_energy"]),
+        flux_proxy=tuple(traces["flux_proxy"]),
+    )
+
+
+def _run_logical_spectral_window(
+    state_hat: jax.Array,
+    *,
+    y_chunks: tuple[int, ...],
+    x_chunks: tuple[int, ...],
+    dt: float,
+    steps: int,
+    atol: float,
+    rtol: float,
+) -> _SpectralIntegratorSamples:
+    serial_state = state_hat
+    logical_state = state_hat
+    serial_trace_lists = _new_spectral_integrator_traces()
+    logical_trace_lists = _new_spectral_integrator_traces()
+    _append_spectral_observables(serial_trace_lists, serial_state)
+    _append_spectral_observables(logical_trace_lists, logical_state)
+    dt_array = jnp.asarray(float(dt), dtype=jnp.real(state_hat).dtype)
+    blocked_reasons: list[str] = []
+
+    for _ in range(int(steps)):
+        _serial_field, _serial_bracket, serial_rhs = _serial_nonlinear_spectral_rhs(
+            serial_state
+        )
+        logical_rhs, rhs_report = logical_decomposed_nonlinear_spectral_rhs(
+            logical_state,
+            y_chunks=y_chunks,
+            x_chunks=x_chunks,
+            atol=atol,
+            rtol=rtol,
+        )
+        blocked_reasons.extend(rhs_report.blocked_reasons)
+        if not rhs_report.identity_passed:
+            blocked_reasons.append("per_step_rhs_identity_failed")
+        serial_state = serial_state + dt_array * serial_rhs
+        logical_state = logical_state + dt_array * logical_rhs
+        _append_spectral_observables(serial_trace_lists, serial_state)
+        _append_spectral_observables(logical_trace_lists, logical_state)
+
+    return _SpectralIntegratorSamples(
+        serial_state=serial_state,
+        logical_state=logical_state,
+        serial_traces=_freeze_spectral_integrator_traces(serial_trace_lists),
+        logical_traces=_freeze_spectral_integrator_traces(logical_trace_lists),
+        blocked_reasons=tuple(sorted(set(blocked_reasons))),
+    )
+
+
+def _spectral_integrator_trace_errors(
+    serial: _SpectralIntegratorTraces,
+    logical: _SpectralIntegratorTraces,
+    *,
+    floor: float,
+) -> _SpectralIntegratorTraceErrors:
+    free_abs, free_rel = _relative_trace_error(
+        serial.free_energy,
+        logical.free_energy,
+        floor=floor,
+    )
+    field_abs, field_rel = _relative_trace_error(
+        serial.field_energy,
+        logical.field_energy,
+        floor=floor,
+    )
+    flux_abs, flux_rel = _relative_trace_error(
+        serial.flux_proxy,
+        logical.flux_proxy,
+        floor=floor,
+    )
+    return _SpectralIntegratorTraceErrors(
+        free_abs=free_abs,
+        free_rel=free_rel,
+        field_abs=field_abs,
+        field_rel=field_rel,
+        flux_abs=flux_abs,
+        flux_rel=flux_rel,
+    )
+
+
+def _spectral_integrator_identity_passed(
+    *,
+    state_abs: float,
+    state_rel: float,
+    errors: _SpectralIntegratorTraceErrors,
+    blocked_reasons: tuple[str, ...],
+    atol: float,
+    rtol: float,
+) -> bool:
+    return bool(
+        not blocked_reasons
+        and state_abs <= float(atol)
+        and state_rel <= float(rtol)
+        and errors.free_abs <= float(atol)
+        and errors.free_rel <= float(rtol)
+        and errors.field_abs <= float(atol)
+        and errors.field_rel <= float(rtol)
+        and errors.flux_abs <= float(atol)
+        and errors.flux_rel <= float(rtol)
+    )
+
+
+def _spectral_integrator_report(
+    state_shape: tuple[int, int, int, int, int],
+    samples: _SpectralIntegratorSamples,
+    errors: _SpectralIntegratorTraceErrors,
+    *,
+    y_chunks: tuple[int, ...],
+    x_chunks: tuple[int, ...],
+    steps: int,
+    dt: float,
+    atol: float,
+    rtol: float,
+) -> NonlinearSpectralIntegratorIdentityReport:
+    state_abs, state_rel = _max_abs_rel_error(
+        samples.serial_state,
+        samples.logical_state,
+        atol=atol,
+    )
+    identity_passed = _spectral_integrator_identity_passed(
+        state_abs=state_abs,
+        state_rel=state_rel,
+        errors=errors,
+        blocked_reasons=samples.blocked_reasons,
+        atol=atol,
+        rtol=rtol,
+    )
+    serial = samples.serial_traces
+    logical = samples.logical_traces
+    return NonlinearSpectralIntegratorIdentityReport(
+        state_shape=state_shape,
+        y_chunks=y_chunks,
+        x_chunks=x_chunks,
+        y_offsets=_chunk_offsets(y_chunks),
+        x_offsets=_chunk_offsets(x_chunks),
+        tile_bounds=_spectral_tile_bounds(y_chunks, x_chunks),
+        steps=int(steps),
+        dt=float(dt),
+        atol=float(atol),
+        rtol=float(rtol),
+        final_state_max_abs_error=state_abs,
+        final_state_max_rel_error=state_rel,
+        free_energy_trace_max_abs_error=errors.free_abs,
+        free_energy_trace_max_rel_error=errors.free_rel,
+        field_energy_trace_max_abs_error=errors.field_abs,
+        field_energy_trace_max_rel_error=errors.field_rel,
+        flux_proxy_trace_max_abs_error=errors.flux_abs,
+        flux_proxy_trace_max_rel_error=errors.flux_rel,
+        serial_free_energy_drift=_trace_drift(serial.free_energy),
+        logical_free_energy_drift=_trace_drift(logical.free_energy),
+        identity_passed=identity_passed,
+        decomposed_path_enabled=identity_passed,
+        claim_scope=(
+            "diagnostic nonlinear spectral integrator identity gate only; "
+            "fixed-step serial-vs-logical-shard RHS routing with final-state "
+            "and transport-proxy trace identity, no production distributed FFT "
+            "routing or speedup claim"
+        ),
+        blocked_reasons=samples.blocked_reasons,
+        serial_free_energy_trace=serial.free_energy,
+        logical_free_energy_trace=logical.free_energy,
+        serial_field_energy_trace=serial.field_energy,
+        logical_field_energy_trace=logical.field_energy,
+        serial_flux_proxy_trace=serial.flux_proxy,
+        logical_flux_proxy_trace=logical.flux_proxy,
+    )
 
 
 def nonlinear_spectral_integrator_identity_gate(
@@ -81,104 +322,30 @@ def nonlinear_spectral_integrator_identity_gate(
     y_chunks = _validate_chunks(ny, y_chunks, name="y_chunks")
     x_chunks = _validate_chunks(nx, x_chunks, name="x_chunks")
 
-    serial_state = state_hat
-    logical_state = state_hat
-    serial_traces: dict[str, list[float]] = {
-        "free_energy": [],
-        "field_energy": [],
-        "flux_proxy": [],
-    }
-    logical_traces: dict[str, list[float]] = {
-        "free_energy": [],
-        "field_energy": [],
-        "flux_proxy": [],
-    }
-    _append_spectral_observables(serial_traces, serial_state)
-    _append_spectral_observables(logical_traces, logical_state)
-    dt_array = jnp.asarray(float(dt), dtype=jnp.real(state_hat).dtype)
-    blocked_reasons: list[str] = []
-
-    for _ in range(int(steps)):
-        _serial_field, _serial_bracket, serial_rhs = _serial_nonlinear_spectral_rhs(
-            serial_state
-        )
-        logical_rhs, rhs_report = logical_decomposed_nonlinear_spectral_rhs(
-            logical_state,
-            y_chunks=y_chunks,
-            x_chunks=x_chunks,
-            atol=atol,
-            rtol=rtol,
-        )
-        blocked_reasons.extend(rhs_report.blocked_reasons)
-        if not rhs_report.identity_passed:
-            blocked_reasons.append("per_step_rhs_identity_failed")
-        serial_state = serial_state + dt_array * serial_rhs
-        logical_state = logical_state + dt_array * logical_rhs
-        _append_spectral_observables(serial_traces, serial_state)
-        _append_spectral_observables(logical_traces, logical_state)
-
-    state_abs, state_rel = _max_abs_rel_error(serial_state, logical_state, atol=atol)
-    serial_free = tuple(serial_traces["free_energy"])
-    logical_free = tuple(logical_traces["free_energy"])
-    serial_field_energy = tuple(serial_traces["field_energy"])
-    logical_field_energy = tuple(logical_traces["field_energy"])
-    serial_flux = tuple(serial_traces["flux_proxy"])
-    logical_flux = tuple(logical_traces["flux_proxy"])
-    free_abs, free_rel = _relative_trace_error(serial_free, logical_free, floor=atol)
-    field_abs, field_rel = _relative_trace_error(
-        serial_field_energy,
-        logical_field_energy,
-        floor=atol,
-    )
-    flux_abs, flux_rel = _relative_trace_error(serial_flux, logical_flux, floor=atol)
-    unique_blockers = tuple(sorted(set(blocked_reasons)))
-    identity_passed = bool(
-        not unique_blockers
-        and state_abs <= float(atol)
-        and state_rel <= float(rtol)
-        and free_abs <= float(atol)
-        and free_rel <= float(rtol)
-        and field_abs <= float(atol)
-        and field_rel <= float(rtol)
-        and flux_abs <= float(atol)
-        and flux_rel <= float(rtol)
-    )
-    return NonlinearSpectralIntegratorIdentityReport(
-        state_shape=state_shape,
+    samples = _run_logical_spectral_window(
+        state_hat,
         y_chunks=y_chunks,
         x_chunks=x_chunks,
-        y_offsets=_chunk_offsets(y_chunks),
-        x_offsets=_chunk_offsets(x_chunks),
-        tile_bounds=_spectral_tile_bounds(y_chunks, x_chunks),
-        steps=int(steps),
-        dt=float(dt),
-        atol=float(atol),
-        rtol=float(rtol),
-        final_state_max_abs_error=state_abs,
-        final_state_max_rel_error=state_rel,
-        free_energy_trace_max_abs_error=free_abs,
-        free_energy_trace_max_rel_error=free_rel,
-        field_energy_trace_max_abs_error=field_abs,
-        field_energy_trace_max_rel_error=field_rel,
-        flux_proxy_trace_max_abs_error=flux_abs,
-        flux_proxy_trace_max_rel_error=flux_rel,
-        serial_free_energy_drift=_trace_drift(serial_free),
-        logical_free_energy_drift=_trace_drift(logical_free),
-        identity_passed=identity_passed,
-        decomposed_path_enabled=identity_passed,
-        claim_scope=(
-            "diagnostic nonlinear spectral integrator identity gate only; "
-            "fixed-step serial-vs-logical-shard RHS routing with final-state "
-            "and transport-proxy trace identity, no production distributed FFT "
-            "routing or speedup claim"
-        ),
-        blocked_reasons=unique_blockers,
-        serial_free_energy_trace=serial_free,
-        logical_free_energy_trace=logical_free,
-        serial_field_energy_trace=serial_field_energy,
-        logical_field_energy_trace=logical_field_energy,
-        serial_flux_proxy_trace=serial_flux,
-        logical_flux_proxy_trace=logical_flux,
+        dt=dt,
+        steps=steps,
+        atol=atol,
+        rtol=rtol,
+    )
+    errors = _spectral_integrator_trace_errors(
+        samples.serial_traces,
+        samples.logical_traces,
+        floor=atol,
+    )
+    return _spectral_integrator_report(
+        state_shape,
+        samples,
+        errors,
+        y_chunks=y_chunks,
+        x_chunks=x_chunks,
+        steps=steps,
+        dt=dt,
+        atol=atol,
+        rtol=rtol,
     )
 
 
@@ -244,6 +411,231 @@ def integrate_logical_decomposed_nonlinear_spectral(
     return serial_state, report
 
 
+def _new_spectral_physical_traces() -> dict[str, list[float]]:
+    return {
+        "free_energy": [],
+        "field_energy": [],
+        "physical_flux": [],
+        "bracket_rms": [],
+    }
+
+
+def _freeze_spectral_physical_traces(
+    traces: dict[str, list[float]],
+) -> _SpectralPhysicalTraces:
+    return _SpectralPhysicalTraces(
+        free_energy=tuple(traces["free_energy"]),
+        field_energy=tuple(traces["field_energy"]),
+        physical_flux=tuple(traces["physical_flux"]),
+        bracket_rms=tuple(traces["bracket_rms"]),
+    )
+
+
+def _append_serial_and_pencil_physical_observables(
+    serial_traces: dict[str, list[float]],
+    pencil_traces: dict[str, list[float]],
+    serial_state: jax.Array,
+    pencil_state: jax.Array,
+) -> None:
+    _serial_field, serial_bracket, _serial_rhs = _serial_nonlinear_spectral_rhs(
+        serial_state
+    )
+    _pencil_field, pencil_bracket, _pencil_rhs = _pencil_nonlinear_spectral_rhs(
+        pencil_state
+    )
+    _append_spectral_physical_observables(serial_traces, serial_state, serial_bracket)
+    _append_spectral_physical_observables(pencil_traces, pencil_state, pencil_bracket)
+
+
+def _run_pencil_transport_window(
+    state_hat: jax.Array,
+    *,
+    dt: float,
+    steps: int,
+) -> _SpectralPhysicalSamples:
+    serial_state = state_hat
+    pencil_state = state_hat
+    serial_trace_lists = _new_spectral_physical_traces()
+    pencil_trace_lists = _new_spectral_physical_traces()
+    _append_serial_and_pencil_physical_observables(
+        serial_trace_lists,
+        pencil_trace_lists,
+        serial_state,
+        pencil_state,
+    )
+
+    dt_array = jnp.asarray(float(dt), dtype=jnp.real(state_hat).dtype)
+    for _ in range(int(steps)):
+        _serial_field, _serial_bracket, serial_rhs = _serial_nonlinear_spectral_rhs(
+            serial_state,
+        )
+        _pencil_field, _pencil_bracket, pencil_rhs = _pencil_nonlinear_spectral_rhs(
+            pencil_state,
+        )
+        serial_state = serial_state + dt_array * serial_rhs
+        pencil_state = pencil_state + dt_array * pencil_rhs
+        _append_serial_and_pencil_physical_observables(
+            serial_trace_lists,
+            pencil_trace_lists,
+            serial_state,
+            pencil_state,
+        )
+
+    return _SpectralPhysicalSamples(
+        serial_state=serial_state,
+        pencil_state=pencil_state,
+        serial_traces=_freeze_spectral_physical_traces(serial_trace_lists),
+        pencil_traces=_freeze_spectral_physical_traces(pencil_trace_lists),
+    )
+
+
+def _spectral_physical_trace_errors(
+    serial: _SpectralPhysicalTraces,
+    pencil: _SpectralPhysicalTraces,
+    *,
+    floor: float,
+) -> _SpectralPhysicalTraceErrors:
+    free_abs, free_rel = _relative_trace_error(
+        serial.free_energy,
+        pencil.free_energy,
+        floor=floor,
+    )
+    field_abs, field_rel = _relative_trace_error(
+        serial.field_energy,
+        pencil.field_energy,
+        floor=floor,
+    )
+    flux_abs, flux_rel = _relative_trace_error(
+        serial.physical_flux,
+        pencil.physical_flux,
+        floor=floor,
+    )
+    bracket_abs, bracket_rel = _relative_trace_error(
+        serial.bracket_rms,
+        pencil.bracket_rms,
+        floor=floor,
+    )
+    return _SpectralPhysicalTraceErrors(
+        free_abs=free_abs,
+        free_rel=free_rel,
+        field_abs=field_abs,
+        field_rel=field_rel,
+        flux_abs=flux_abs,
+        flux_rel=flux_rel,
+        bracket_abs=bracket_abs,
+        bracket_rel=bracket_rel,
+    )
+
+
+def _pencil_transport_identity_passed(
+    *,
+    state_abs: float,
+    state_rel: float,
+    errors: _SpectralPhysicalTraceErrors,
+    atol: float,
+    rtol: float,
+) -> bool:
+    return bool(
+        state_abs <= float(atol)
+        and state_rel <= float(rtol)
+        and errors.free_abs <= float(atol)
+        and errors.free_rel <= float(rtol)
+        and errors.field_abs <= float(atol)
+        and errors.field_rel <= float(rtol)
+        and errors.flux_abs <= float(atol)
+        and errors.flux_rel <= float(rtol)
+        and errors.bracket_abs <= float(atol)
+        and errors.bracket_rel <= float(rtol)
+    )
+
+
+def _pencil_transport_blockers(
+    *,
+    identity_passed: bool,
+    work_model: NonlinearSpectralPencilWorkModel,
+) -> tuple[str, ...]:
+    blocked_reasons: list[str] = []
+    if not identity_passed:
+        blocked_reasons.append("pencil_transport_window_identity_failed")
+    blocked_reasons.extend(work_model.feasibility_blockers)
+    return tuple(blocked_reasons)
+
+
+def _pencil_transport_window_report(
+    state_shape: tuple[int, int, int, int, int],
+    samples: _SpectralPhysicalSamples,
+    errors: _SpectralPhysicalTraceErrors,
+    *,
+    y_chunks: tuple[int, ...],
+    x_chunks: tuple[int, ...],
+    work_model: NonlinearSpectralPencilWorkModel,
+    steps: int,
+    dt: float,
+    atol: float,
+    rtol: float,
+) -> NonlinearSpectralPencilTransportWindowReport:
+    state_abs, state_rel = _max_abs_rel_error(
+        samples.serial_state,
+        samples.pencil_state,
+        atol=atol,
+    )
+    identity_passed = _pencil_transport_identity_passed(
+        state_abs=state_abs,
+        state_rel=state_rel,
+        errors=errors,
+        atol=atol,
+        rtol=rtol,
+    )
+    decomposed_path_enabled = bool(
+        identity_passed and work_model.production_speedup_feasible
+    )
+    serial = samples.serial_traces
+    pencil = samples.pencil_traces
+    return NonlinearSpectralPencilTransportWindowReport(
+        state_shape=state_shape,
+        y_chunks=y_chunks,
+        x_chunks=x_chunks,
+        y_offsets=_chunk_offsets(y_chunks),
+        x_offsets=_chunk_offsets(x_chunks),
+        steps=int(steps),
+        dt=float(dt),
+        atol=float(atol),
+        rtol=float(rtol),
+        final_state_max_abs_error=state_abs,
+        final_state_max_rel_error=state_rel,
+        free_energy_trace_max_abs_error=errors.free_abs,
+        free_energy_trace_max_rel_error=errors.free_rel,
+        field_energy_trace_max_abs_error=errors.field_abs,
+        field_energy_trace_max_rel_error=errors.field_rel,
+        physical_flux_trace_max_abs_error=errors.flux_abs,
+        physical_flux_trace_max_rel_error=errors.flux_rel,
+        bracket_rms_trace_max_abs_error=errors.bracket_abs,
+        bracket_rms_trace_max_rel_error=errors.bracket_rel,
+        serial_free_energy_drift=_trace_drift(serial.free_energy),
+        pencil_free_energy_drift=_trace_drift(pencil.free_energy),
+        identity_passed=identity_passed,
+        decomposed_path_enabled=decomposed_path_enabled,
+        work_model=work_model,
+        claim_scope=(
+            "diagnostic serial-vs-pencil nonlinear physical-space transport-window "
+            "identity gate; includes a density-times-radial-E-field transport "
+            "proxy, but is not an absolute nonlinear turbulent heat-flux claim"
+        ),
+        blocked_reasons=_pencil_transport_blockers(
+            identity_passed=identity_passed,
+            work_model=work_model,
+        ),
+        serial_free_energy_trace=serial.free_energy,
+        pencil_free_energy_trace=pencil.free_energy,
+        serial_field_energy_trace=serial.field_energy,
+        pencil_field_energy_trace=pencil.field_energy,
+        serial_physical_flux_trace=serial.physical_flux,
+        pencil_physical_flux_trace=pencil.physical_flux,
+        serial_bracket_rms_trace=serial.bracket_rms,
+        pencil_bracket_rms_trace=pencil.bracket_rms,
+    )
+
+
 def nonlinear_spectral_pencil_transport_window_identity_gate(
     state_hat: jax.Array,
     *,
@@ -271,137 +663,23 @@ def nonlinear_spectral_pencil_transport_window_identity_gate(
         max_communication_to_fft_work_ratio=max_communication_to_fft_work_ratio,
         min_predicted_speedup=min_predicted_speedup,
     )
-
-    serial_state = state_hat
-    pencil_state = state_hat
-    serial_traces: dict[str, list[float]] = {
-        "free_energy": [],
-        "field_energy": [],
-        "physical_flux": [],
-        "bracket_rms": [],
-    }
-    pencil_traces: dict[str, list[float]] = {
-        "free_energy": [],
-        "field_energy": [],
-        "physical_flux": [],
-        "bracket_rms": [],
-    }
-    _serial_field, serial_bracket, _serial_rhs = _serial_nonlinear_spectral_rhs(
-        serial_state
-    )
-    _pencil_field, pencil_bracket, _pencil_rhs = _pencil_nonlinear_spectral_rhs(
-        pencil_state
-    )
-    _append_spectral_physical_observables(serial_traces, serial_state, serial_bracket)
-    _append_spectral_physical_observables(pencil_traces, pencil_state, pencil_bracket)
-
-    dt_array = jnp.asarray(float(dt), dtype=jnp.real(state_hat).dtype)
-    for _ in range(int(steps)):
-        _serial_field, serial_bracket, serial_rhs = _serial_nonlinear_spectral_rhs(
-            serial_state,
-        )
-        _pencil_field, pencil_bracket, pencil_rhs = _pencil_nonlinear_spectral_rhs(
-            pencil_state,
-        )
-        serial_state = serial_state + dt_array * serial_rhs
-        pencil_state = pencil_state + dt_array * pencil_rhs
-        _serial_field, serial_bracket, _serial_rhs = _serial_nonlinear_spectral_rhs(
-            serial_state,
-        )
-        _pencil_field, pencil_bracket, _pencil_rhs = _pencil_nonlinear_spectral_rhs(
-            pencil_state,
-        )
-        _append_spectral_physical_observables(
-            serial_traces, serial_state, serial_bracket
-        )
-        _append_spectral_physical_observables(
-            pencil_traces, pencil_state, pencil_bracket
-        )
-
-    state_abs, state_rel = _max_abs_rel_error(serial_state, pencil_state, atol=atol)
-    serial_free = tuple(serial_traces["free_energy"])
-    pencil_free = tuple(pencil_traces["free_energy"])
-    serial_field_energy = tuple(serial_traces["field_energy"])
-    pencil_field_energy = tuple(pencil_traces["field_energy"])
-    serial_physical_flux = tuple(serial_traces["physical_flux"])
-    pencil_physical_flux = tuple(pencil_traces["physical_flux"])
-    serial_bracket_rms = tuple(serial_traces["bracket_rms"])
-    pencil_bracket_rms = tuple(pencil_traces["bracket_rms"])
-    free_abs, free_rel = _relative_trace_error(serial_free, pencil_free, floor=atol)
-    field_abs, field_rel = _relative_trace_error(
-        serial_field_energy,
-        pencil_field_energy,
+    samples = _run_pencil_transport_window(state_hat, dt=dt, steps=steps)
+    errors = _spectral_physical_trace_errors(
+        samples.serial_traces,
+        samples.pencil_traces,
         floor=atol,
     )
-    flux_abs, flux_rel = _relative_trace_error(
-        serial_physical_flux,
-        pencil_physical_flux,
-        floor=atol,
-    )
-    bracket_abs, bracket_rel = _relative_trace_error(
-        serial_bracket_rms,
-        pencil_bracket_rms,
-        floor=atol,
-    )
-    identity_passed = bool(
-        state_abs <= float(atol)
-        and state_rel <= float(rtol)
-        and free_abs <= float(atol)
-        and free_rel <= float(rtol)
-        and field_abs <= float(atol)
-        and field_rel <= float(rtol)
-        and flux_abs <= float(atol)
-        and flux_rel <= float(rtol)
-        and bracket_abs <= float(atol)
-        and bracket_rel <= float(rtol)
-    )
-    decomposed_path_enabled = bool(
-        identity_passed and work_model.production_speedup_feasible
-    )
-    blocked_reasons: list[str] = []
-    if not identity_passed:
-        blocked_reasons.append("pencil_transport_window_identity_failed")
-    blocked_reasons.extend(work_model.feasibility_blockers)
-
-    return NonlinearSpectralPencilTransportWindowReport(
-        state_shape=state_shape,
+    return _pencil_transport_window_report(
+        state_shape,
+        samples,
+        errors,
         y_chunks=y_chunks,
         x_chunks=x_chunks,
-        y_offsets=_chunk_offsets(y_chunks),
-        x_offsets=_chunk_offsets(x_chunks),
-        steps=int(steps),
-        dt=float(dt),
-        atol=float(atol),
-        rtol=float(rtol),
-        final_state_max_abs_error=state_abs,
-        final_state_max_rel_error=state_rel,
-        free_energy_trace_max_abs_error=free_abs,
-        free_energy_trace_max_rel_error=free_rel,
-        field_energy_trace_max_abs_error=field_abs,
-        field_energy_trace_max_rel_error=field_rel,
-        physical_flux_trace_max_abs_error=flux_abs,
-        physical_flux_trace_max_rel_error=flux_rel,
-        bracket_rms_trace_max_abs_error=bracket_abs,
-        bracket_rms_trace_max_rel_error=bracket_rel,
-        serial_free_energy_drift=_trace_drift(serial_free),
-        pencil_free_energy_drift=_trace_drift(pencil_free),
-        identity_passed=identity_passed,
-        decomposed_path_enabled=decomposed_path_enabled,
         work_model=work_model,
-        claim_scope=(
-            "diagnostic serial-vs-pencil nonlinear physical-space transport-window "
-            "identity gate; includes a density-times-radial-E-field transport "
-            "proxy, but is not an absolute nonlinear turbulent heat-flux claim"
-        ),
-        blocked_reasons=tuple(blocked_reasons),
-        serial_free_energy_trace=serial_free,
-        pencil_free_energy_trace=pencil_free,
-        serial_field_energy_trace=serial_field_energy,
-        pencil_field_energy_trace=pencil_field_energy,
-        serial_physical_flux_trace=serial_physical_flux,
-        pencil_physical_flux_trace=pencil_physical_flux,
-        serial_bracket_rms_trace=serial_bracket_rms,
-        pencil_bracket_rms_trace=pencil_bracket_rms,
+        steps=steps,
+        dt=dt,
+        atol=atol,
+        rtol=rtol,
     )
 
 
