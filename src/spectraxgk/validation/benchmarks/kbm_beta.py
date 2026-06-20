@@ -134,6 +134,54 @@ class _KBMBetaContinuation:
     prev_eig: Any = None
 
 
+@dataclass(frozen=True)
+class _KBMBetaScanOptions:
+    ky_target: float
+    n_laguerre: int
+    n_hermite: int
+    dt: float | np.ndarray
+    steps: int | np.ndarray
+    method: str
+    time_cfg: TimeConfig | None
+    kbm_target_factors: Sequence[float] | None
+    kbm_beta_transition: float | None
+    tmin: float | None
+    tmax: float | None
+    require_positive: bool
+    mode_method: str
+    sample_stride: int | None
+    streaming_amp_floor: float
+    init_species_index: int
+    density_species_index: int
+    fapar_override: float | None
+    apar_beta_scale: float | None
+    ampere_g0_scale: float | None
+    bpar_beta_scale: float | None
+
+
+@dataclass
+class _KBMBetaScanOutput:
+    beta: list[float]
+    gamma: list[float]
+    omega: list[float]
+
+    @classmethod
+    def empty(cls) -> "_KBMBetaScanOutput":
+        return cls(beta=[], gamma=[], omega=[])
+
+    def append(self, *, beta: float, gamma: float, omega: float) -> None:
+        self.beta.append(float(beta))
+        self.gamma.append(float(gamma))
+        self.omega.append(float(omega))
+
+    def result(self) -> LinearScanResult:
+        return LinearScanResult(
+            ky=np.array(self.beta),
+            gamma=np.array(self.gamma),
+            omega=np.array(self.omega),
+        )
+
+
 def _valid_kbm_growth(
     gamma_val: float, omega_val: float, *, require_positive: bool
 ) -> bool:
@@ -543,6 +591,116 @@ def _fit_kbm_beta_sample(
     return gamma, omega, continuation
 
 
+def _build_kbm_beta_scan_options(
+    *,
+    ky_target: float,
+    Nl: int,
+    Nm: int,
+    dt: float | np.ndarray,
+    steps: int | np.ndarray,
+    method: str,
+    time_cfg: TimeConfig | None,
+    kbm_target_factors: Sequence[float] | None,
+    kbm_beta_transition: float | None,
+    tmin: float | None,
+    tmax: float | None,
+    require_positive: bool,
+    mode_method: str,
+    sample_stride: int | None,
+    streaming_amp_floor: float,
+    init_species_index: int,
+    density_species_index: int,
+    fapar_override: float | None,
+    apar_beta_scale: float | None,
+    ampere_g0_scale: float | None,
+    bpar_beta_scale: float | None,
+) -> _KBMBetaScanOptions:
+    return _KBMBetaScanOptions(
+        ky_target=float(ky_target),
+        n_laguerre=int(Nl),
+        n_hermite=int(Nm),
+        dt=dt,
+        steps=steps,
+        method=method,
+        time_cfg=time_cfg,
+        kbm_target_factors=kbm_target_factors,
+        kbm_beta_transition=kbm_beta_transition,
+        tmin=tmin,
+        tmax=tmax,
+        require_positive=bool(require_positive),
+        mode_method=mode_method,
+        sample_stride=sample_stride,
+        streaming_amp_floor=float(streaming_amp_floor),
+        init_species_index=int(init_species_index),
+        density_species_index=int(density_species_index),
+        fapar_override=fapar_override,
+        apar_beta_scale=apar_beta_scale,
+        ampere_g0_scale=ampere_g0_scale,
+        bpar_beta_scale=bpar_beta_scale,
+    )
+
+
+def _run_kbm_beta_scan_point(
+    *,
+    setup: _KBMBetaScanSetup,
+    beta: float,
+    index: int,
+    options: _KBMBetaScanOptions,
+    continuation: _KBMBetaContinuation,
+) -> tuple[float, float, _KBMBetaContinuation]:
+    sample = _build_kbm_beta_sample(
+        setup,
+        beta=float(beta),
+        sample_index=index,
+        ky_target=options.ky_target,
+        Nl=options.n_laguerre,
+        Nm=options.n_hermite,
+        dt=options.dt,
+        steps=options.steps,
+        init_species_index=options.init_species_index,
+        fapar_override=options.fapar_override,
+        apar_beta_scale=options.apar_beta_scale,
+        ampere_g0_scale=options.ampere_g0_scale,
+        bpar_beta_scale=options.bpar_beta_scale,
+    )
+    return _fit_kbm_beta_sample(
+        setup,
+        sample,
+        method=options.method,
+        time_cfg=options.time_cfg,
+        sample_stride=options.sample_stride,
+        mode_method=options.mode_method,
+        tmin=options.tmin,
+        tmax=options.tmax,
+        streaming_amp_floor=options.streaming_amp_floor,
+        density_species_index=options.density_species_index,
+        continuation=continuation,
+        kbm_target_factors=options.kbm_target_factors,
+        kbm_beta_transition=options.kbm_beta_transition,
+        require_positive=options.require_positive,
+    )
+
+
+def _run_kbm_beta_scan_loop(
+    betas: np.ndarray,
+    *,
+    setup: _KBMBetaScanSetup,
+    options: _KBMBetaScanOptions,
+) -> _KBMBetaScanOutput:
+    output = _KBMBetaScanOutput.empty()
+    continuation = _KBMBetaContinuation()
+    for index, beta in enumerate(betas):
+        gamma, omega, continuation = _run_kbm_beta_scan_point(
+            setup=setup,
+            beta=float(beta),
+            index=index,
+            options=options,
+            continuation=continuation,
+        )
+        output.append(beta=float(beta), gamma=gamma, omega=omega)
+    return output
+
+
 def run_kbm_beta_scan(
     betas: np.ndarray,
     ky_target: float = 0.3,
@@ -617,48 +775,31 @@ def run_kbm_beta_scan(
         krylov_cfg=krylov_cfg,
         fit_policy=fit_policy,
     )
-
-    gammas: list[float] = []
-    omegas: list[float] = []
-    beta_out: list[float] = []
-    continuation = _KBMBetaContinuation()
-    for i, beta in enumerate(betas):
-        sample = _build_kbm_beta_sample(
-            setup,
-            beta=float(beta),
-            sample_index=i,
-            ky_target=ky_target,
-            Nl=Nl,
-            Nm=Nm,
-            dt=dt,
-            steps=steps,
-            init_species_index=init_species_index,
-            fapar_override=fapar_override,
-            apar_beta_scale=apar_beta_scale,
-            ampere_g0_scale=ampere_g0_scale,
-            bpar_beta_scale=bpar_beta_scale,
-        )
-        gamma, omega, continuation = _fit_kbm_beta_sample(
-            setup,
-            sample,
-            method=method,
-            time_cfg=time_cfg,
-            sample_stride=sample_stride,
-            mode_method=mode_method,
-            tmin=tmin,
-            tmax=tmax,
-            streaming_amp_floor=streaming_amp_floor,
-            density_species_index=density_species_index,
-            continuation=continuation,
-            kbm_target_factors=kbm_target_factors,
-            kbm_beta_transition=kbm_beta_transition,
-            require_positive=require_positive,
-        )
-
-        gammas.append(gamma)
-        omegas.append(omega)
-        beta_out.append(float(beta))
-
-    return LinearScanResult(
-        ky=np.array(beta_out), gamma=np.array(gammas), omega=np.array(omegas)
+    options = _build_kbm_beta_scan_options(
+        ky_target=ky_target,
+        Nl=Nl,
+        Nm=Nm,
+        dt=dt,
+        steps=steps,
+        method=method,
+        time_cfg=time_cfg,
+        kbm_target_factors=kbm_target_factors,
+        kbm_beta_transition=kbm_beta_transition,
+        tmin=tmin,
+        tmax=tmax,
+        require_positive=require_positive,
+        mode_method=mode_method,
+        sample_stride=sample_stride,
+        streaming_amp_floor=streaming_amp_floor,
+        init_species_index=init_species_index,
+        density_species_index=density_species_index,
+        fapar_override=fapar_override,
+        apar_beta_scale=apar_beta_scale,
+        ampere_g0_scale=ampere_g0_scale,
+        bpar_beta_scale=bpar_beta_scale,
     )
+    return _run_kbm_beta_scan_loop(
+        np.asarray(betas, dtype=float),
+        setup=setup,
+        options=options,
+    ).result()
