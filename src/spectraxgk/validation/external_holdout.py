@@ -260,6 +260,201 @@ def _candidate_status(
     return ("represented_family_audit_candidate", 4.0, "family already represented; useful as an audit, not first holdout leverage")
 
 
+@dataclass(frozen=True)
+class _ExternalHoldoutRunbookContext:
+    """Derived gap-report policy used to rank external-VMEC holdout screens."""
+
+    preferred_family: str | None
+    represented_families: set[str]
+    failed_external_families: set[str]
+    passed_training_audit_families: set[str]
+    nearest_gap: dict[str, Any]
+    recommended_horizons: list[float]
+    allowed_modified_families: set[str]
+    modified_protocol_note: str
+
+
+def _external_holdout_runbook_context(
+    *,
+    gap_report: dict[str, Any],
+    horizons: tuple[float, ...] | None,
+    allow_modified_protocol_families: tuple[str, ...],
+    modified_protocol_note: str,
+) -> _ExternalHoldoutRunbookContext:
+    """Collect gap-report state before ranking candidate nonlinear holdouts."""
+
+    preferred = _preferred_family(gap_report)
+    admitted = gap_report.get("admitted_holdouts", [])
+    training = gap_report.get("training_references", [])
+    nearest_gap = _first_nearest_gap(gap_report)
+    allowed_modified = {
+        str(family).strip()
+        for family in allow_modified_protocol_families
+        if str(family).strip()
+    }
+    note = str(modified_protocol_note).strip()
+    if allowed_modified and not note:
+        raise ValueError(
+            "modified_protocol_note is required when allowing failed-family modified-protocol reruns"
+        )
+    return _ExternalHoldoutRunbookContext(
+        preferred_family=preferred,
+        represented_families=_families_from_rows([*admitted, *training]),
+        failed_external_families=_failed_external_families(gap_report),
+        passed_training_audit_families=_passed_training_audit_families(gap_report),
+        nearest_gap=nearest_gap,
+        recommended_horizons=(
+            _validated_horizons(horizons)
+            if horizons is not None
+            else _recommended_horizons(nearest_gap)
+        ),
+        allowed_modified_families=allowed_modified,
+        modified_protocol_note=note,
+    )
+
+
+def _rank_external_holdout_candidates(
+    *,
+    screen_rows: Iterable[ExternalHoldoutScreenRow],
+    context: _ExternalHoldoutRunbookContext,
+    min_launch_gamma: float,
+) -> list[dict[str, Any]]:
+    """Rank linear-screen candidates for the next nonlinear holdout runbook."""
+
+    ranked: list[dict[str, Any]] = []
+    for row in screen_rows:
+        status, priority, reason = _candidate_status(
+            row,
+            preferred_family=context.preferred_family,
+            represented_families=context.represented_families,
+            failed_external_families=context.failed_external_families,
+            passed_training_audit_families=context.passed_training_audit_families,
+            min_launch_gamma=float(min_launch_gamma),
+            allow_modified_protocol_families=context.allowed_modified_families,
+            modified_protocol_note=context.modified_protocol_note,
+        )
+        gamma_key = -(row.best_gamma if row.best_gamma is not None else -math.inf)
+        ky_key = -(row.best_ky if row.best_ky is not None else -math.inf)
+        ranked.append(
+            {
+                **row.to_dict(),
+                "status": status,
+                "priority": priority,
+                "reason": reason,
+                "_sort_key": [priority, gamma_key, ky_key, row.case],
+            }
+        )
+    ranked = sorted(ranked, key=lambda item: tuple(item["_sort_key"]))
+    for idx, ranked_row in enumerate(ranked, start=1):
+        ranked_row["rank"] = idx
+        ranked_row.pop("_sort_key", None)
+    return ranked
+
+
+def _select_external_holdout_candidates(
+    ranked: list[dict[str, Any]],
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """Select the new-family launch and optional preferred-family audit rows."""
+
+    selected_new = next(
+        (
+            row
+            for row in ranked
+            if row["status"]
+            in {
+                "preferred_family_new_holdout",
+                "new_family_holdout_candidate",
+                "modified_protocol_failed_family_candidate",
+            }
+        ),
+        None,
+    )
+    selected_preferred_audit = next(
+        (row for row in ranked if row["status"] == "preferred_family_already_represented"),
+        None,
+    )
+    return selected_new, selected_preferred_audit
+
+
+def _external_holdout_launch_command(
+    *,
+    row: dict[str, Any],
+    case_suffix: str,
+    out_suffix: str,
+    out_dir: str,
+    dt: float,
+    horizons: list[float],
+    grid_args: str,
+) -> str:
+    """Build the replayable configuration-generation command for one row."""
+
+    case = str(row["case"]).replace("_nc", "")
+    return (
+        "python tools/write_external_vmec_holdout_configs.py "
+        f"--case {case}{case_suffix} "
+        f"--vmec-file {row['vmec_file']} "
+        f"--out-dir {out_dir}/{case}{out_suffix} "
+        f"--ky {float(row['best_ky']):.12g} "
+        f"--dt {float(dt):.12g} "
+        f"--horizons {','.join(f'{value:.12g}' for value in horizons)} "
+        f"{grid_args}"
+    )
+
+
+def _external_holdout_launch_commands(
+    *,
+    selected_new: dict[str, Any] | None,
+    selected_preferred_audit: dict[str, Any] | None,
+    out_dir: str,
+    grids: tuple[str, ...],
+    dt: float,
+    horizons: list[float],
+) -> list[str]:
+    """Build launch commands for the selected holdout rows."""
+
+    grid_args = " ".join(f"--grid {grid}" for grid in grids)
+    launch_commands: list[str] = []
+    if selected_new is not None:
+        launch_commands.append(
+            _external_holdout_launch_command(
+                row=selected_new,
+                case_suffix="_holdout",
+                out_suffix="",
+                out_dir=out_dir,
+                dt=dt,
+                horizons=horizons,
+                grid_args=grid_args,
+            )
+        )
+    if selected_preferred_audit is not None:
+        launch_commands.append(
+            _external_holdout_launch_command(
+                row=selected_preferred_audit,
+                case_suffix="_independent_audit",
+                out_suffix="_audit",
+                out_dir=out_dir,
+                dt=dt,
+                horizons=horizons,
+                grid_args=grid_args,
+            )
+        )
+    return launch_commands
+
+
+def _external_holdout_acceptance_gate(min_launch_gamma: float) -> dict[str, Any]:
+    """Return the fail-closed nonlinear admission requirements for the runbook."""
+
+    return {
+        "required_split": "holdout",
+        "required_claim_level": "passed_grid_convergence_candidate_for_transport_holdout",
+        "requires_grid_window_convergence": True,
+        "requires_post_transient_window": True,
+        "requires_independent_from_training_reference": True,
+        "requires_explicit_modified_protocol_note_for_failed_families": True,
+        "minimum_screen_growth_rate_for_launch": float(min_launch_gamma),
+    }
+
+
 def build_external_holdout_runbook(
     *,
     gap_report: dict[str, Any],
@@ -282,96 +477,39 @@ def build_external_holdout_runbook(
     ``split=holdout``.
     """
 
-    preferred = _preferred_family(gap_report)
-    admitted = gap_report.get("admitted_holdouts", [])
-    training = gap_report.get("training_references", [])
-    represented = _families_from_rows([*admitted, *training])
-    failed_external = _failed_external_families(gap_report)
-    passed_training_audits = _passed_training_audit_families(gap_report)
-    nearest_gap = _first_nearest_gap(gap_report)
-    recommended_horizons = _validated_horizons(horizons) if horizons is not None else _recommended_horizons(nearest_gap)
-    grid_args = " ".join(f"--grid {grid}" for grid in grids)
-    allowed_modified = {str(family).strip() for family in allow_modified_protocol_families if str(family).strip()}
-    if allowed_modified and not str(modified_protocol_note).strip():
-        raise ValueError("modified_protocol_note is required when allowing failed-family modified-protocol reruns")
-
-    ranked: list[dict[str, Any]] = []
-    for row in screen_rows:
-        status, priority, reason = _candidate_status(
-            row,
-            preferred_family=preferred,
-            represented_families=represented,
-            failed_external_families=failed_external,
-            passed_training_audit_families=passed_training_audits,
-            min_launch_gamma=float(min_launch_gamma),
-            allow_modified_protocol_families=allowed_modified,
-            modified_protocol_note=str(modified_protocol_note).strip(),
-        )
-        gamma_key = -(row.best_gamma if row.best_gamma is not None else -math.inf)
-        ky_key = -(row.best_ky if row.best_ky is not None else -math.inf)
-        ranked.append(
-            {
-                **row.to_dict(),
-                "status": status,
-                "priority": priority,
-                "reason": reason,
-                "_sort_key": [priority, gamma_key, ky_key, row.case],
-            }
-        )
-    ranked = sorted(ranked, key=lambda item: tuple(item["_sort_key"]))
-    for idx, ranked_row in enumerate(ranked, start=1):
-        ranked_row["rank"] = idx
-        ranked_row.pop("_sort_key", None)
-    selected_new = next(
-        (
-            row
-            for row in ranked
-            if row["status"]
-            in {"preferred_family_new_holdout", "new_family_holdout_candidate", "modified_protocol_failed_family_candidate"}
-        ),
-        None,
+    context = _external_holdout_runbook_context(
+        gap_report=gap_report,
+        horizons=horizons,
+        allow_modified_protocol_families=allow_modified_protocol_families,
+        modified_protocol_note=modified_protocol_note,
     )
-    selected_preferred_audit = next(
-        (row for row in ranked if row["status"] == "preferred_family_already_represented"),
-        None,
+    ranked = _rank_external_holdout_candidates(
+        screen_rows=screen_rows,
+        context=context,
+        min_launch_gamma=min_launch_gamma,
     )
-
-    launch_commands: list[str] = []
-    if selected_new is not None:
-        launch_commands.append(
-            "python tools/write_external_vmec_holdout_configs.py "
-            f"--case {str(selected_new['case']).replace('_nc', '')}_holdout "
-            f"--vmec-file {selected_new['vmec_file']} "
-            f"--out-dir {out_dir}/{str(selected_new['case']).replace('_nc', '')} "
-            f"--ky {float(selected_new['best_ky']):.12g} "
-            f"--dt {float(dt):.12g} "
-            f"--horizons {','.join(f'{value:.12g}' for value in recommended_horizons)} "
-            f"{grid_args}"
-        )
-    if selected_preferred_audit is not None:
-        launch_commands.append(
-            "python tools/write_external_vmec_holdout_configs.py "
-            f"--case {str(selected_preferred_audit['case']).replace('_nc', '')}_independent_audit "
-            f"--vmec-file {selected_preferred_audit['vmec_file']} "
-            f"--out-dir {out_dir}/{str(selected_preferred_audit['case']).replace('_nc', '')}_audit "
-            f"--ky {float(selected_preferred_audit['best_ky']):.12g} "
-            f"--dt {float(dt):.12g} "
-            f"--horizons {','.join(f'{value:.12g}' for value in recommended_horizons)} "
-            f"{grid_args}"
-        )
+    selected_new, selected_preferred_audit = _select_external_holdout_candidates(ranked)
+    launch_commands = _external_holdout_launch_commands(
+        selected_new=selected_new,
+        selected_preferred_audit=selected_preferred_audit,
+        out_dir=out_dir,
+        grids=grids,
+        dt=dt,
+        horizons=context.recommended_horizons,
+    )
 
     return {
         "kind": "external_vmec_holdout_runbook",
         "claim_level": "nonlinear_holdout_launch_plan_not_transport_validation",
         "passed": bool(selected_new is not None or selected_preferred_audit is not None),
         "absolute_flux_promoted": False,
-        "preferred_family": preferred,
-        "represented_families": sorted(represented),
-        "failed_external_families": sorted(failed_external),
-        "allow_modified_protocol_families": sorted(allowed_modified),
-        "modified_protocol_note": str(modified_protocol_note).strip(),
-        "nearest_tracked_gap": nearest_gap,
-        "recommended_horizons": recommended_horizons,
+        "preferred_family": context.preferred_family,
+        "represented_families": sorted(context.represented_families),
+        "failed_external_families": sorted(context.failed_external_families),
+        "allow_modified_protocol_families": sorted(context.allowed_modified_families),
+        "modified_protocol_note": context.modified_protocol_note,
+        "nearest_tracked_gap": context.nearest_gap,
+        "recommended_horizons": context.recommended_horizons,
         "recommended_grids": list(grids),
         "dt": float(dt),
         "min_launch_gamma": float(min_launch_gamma),
@@ -379,15 +517,7 @@ def build_external_holdout_runbook(
         "selected_preferred_family_audit": selected_preferred_audit,
         "ranked_candidates": ranked[: int(max_candidates)],
         "launch_commands": launch_commands,
-        "acceptance_gate": {
-            "required_split": "holdout",
-            "required_claim_level": "passed_grid_convergence_candidate_for_transport_holdout",
-            "requires_grid_window_convergence": True,
-            "requires_post_transient_window": True,
-            "requires_independent_from_training_reference": True,
-            "requires_explicit_modified_protocol_note_for_failed_families": True,
-            "minimum_screen_growth_rate_for_launch": float(min_launch_gamma),
-        },
+        "acceptance_gate": _external_holdout_acceptance_gate(min_launch_gamma),
         "notes": (
             "Run the selected configurations on the large-run host, build a convergence gate with "
             "tools/plot_external_vmec_nonlinear_convergence_gate.py, and admit the resulting transport "
