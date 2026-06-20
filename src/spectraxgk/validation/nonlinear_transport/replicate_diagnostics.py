@@ -26,6 +26,23 @@ class NonlinearReplicateSpreadConfig:
     value_floor: float = 1.0e-12
 
 
+@dataclass(frozen=True)
+class _StateSpreadDiagnostics:
+    state: str
+    passed: bool
+    stats: Mapping[str, Any]
+    rows: list[Mapping[str, Any]]
+    ensemble_mean: float | None
+    scale: float
+    mean_rel_spread: float | None
+    spread_gate: float
+    high_label: str | None
+    high_axis: str | None
+    low_label: str | None
+    low_axis: str | None
+    classification: str
+
+
 def _finite_float(value: Any) -> float | None:
     try:
         out = float(value)
@@ -140,6 +157,223 @@ def _classify_state(
     return "spread_limited_unknown_axis"
 
 
+def _validated_config(
+    config: NonlinearReplicateSpreadConfig | None,
+) -> NonlinearReplicateSpreadConfig:
+    cfg = config or NonlinearReplicateSpreadConfig()
+    if cfg.max_mean_rel_spread < 0.0:
+        raise ValueError("max_mean_rel_spread must be non-negative")
+    if cfg.value_floor <= 0.0:
+        raise ValueError("value_floor must be positive")
+    return cfg
+
+
+def _ensemble_rows(ensemble: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    rows_obj = ensemble.get("rows")
+    if not isinstance(rows_obj, Sequence):
+        return []
+    return [row for row in rows_obj if isinstance(row, Mapping)]
+
+
+def _finite_late_means(rows: Sequence[Mapping[str, Any]]) -> list[float]:
+    return [
+        mean
+        for row in rows
+        if (mean := _finite_float(row.get("late_mean"))) is not None
+    ]
+
+
+def _ensemble_mean_from_stats(
+    stats: Mapping[str, Any],
+    *,
+    finite_means: Sequence[float],
+) -> float | None:
+    ensemble_mean = _finite_float(stats.get("ensemble_mean"))
+    if ensemble_mean is None and finite_means:
+        ensemble_mean = sum(finite_means) / len(finite_means)
+    return ensemble_mean
+
+
+def _row_mean_pairs(
+    rows: Sequence[Mapping[str, Any]],
+) -> list[tuple[Mapping[str, Any], float]]:
+    pairs: list[tuple[Mapping[str, Any], float]] = []
+    for row in rows:
+        row_mean = _finite_float(row.get("late_mean"))
+        if row_mean is not None:
+            pairs.append((row, row_mean))
+    return pairs
+
+
+def _high_low_variant_labels(
+    rows: Sequence[Mapping[str, Any]],
+) -> tuple[str | None, str | None, str | None, str | None]:
+    pairs = _row_mean_pairs(rows)
+    if not pairs:
+        return None, None, None, None
+    high_row = max(pairs, key=lambda item: item[1])[0]
+    low_row = min(pairs, key=lambda item: item[1])[0]
+    high_label, high_axis = _variant_label(high_row)
+    low_label, low_axis = _variant_label(low_row)
+    return high_label, high_axis, low_label, low_axis
+
+
+def _spread_gate(
+    ensemble: Mapping[str, Any],
+    stats: Mapping[str, Any],
+    *,
+    config: NonlinearReplicateSpreadConfig,
+) -> float:
+    spread_gate = _finite_float(stats.get("max_mean_rel_spread"))
+    if spread_gate is None:
+        raw_config = ensemble.get("config")
+        if isinstance(raw_config, Mapping):
+            spread_gate = _finite_float(raw_config.get("max_mean_rel_spread"))
+    return float(config.max_mean_rel_spread if spread_gate is None else spread_gate)
+
+
+def _mean_rel_spread(
+    stats: Mapping[str, Any],
+    *,
+    finite_means: Sequence[float],
+    scale: float,
+) -> float | None:
+    mean_rel_spread = _finite_float(stats.get("mean_rel_spread"))
+    if mean_rel_spread is None and finite_means:
+        mean_rel_spread = (max(finite_means) - min(finite_means)) / scale
+    return mean_rel_spread
+
+
+def _state_diagnostics(
+    ensemble: Mapping[str, Any],
+    *,
+    state_index: int,
+    config: NonlinearReplicateSpreadConfig,
+) -> _StateSpreadDiagnostics:
+    state = _state_label(ensemble, state_index)
+    statistics = ensemble.get("statistics")
+    stats = statistics if isinstance(statistics, Mapping) else {}
+    rows = _ensemble_rows(ensemble)
+    finite_means = _finite_late_means(rows)
+    ensemble_mean = _ensemble_mean_from_stats(stats, finite_means=finite_means)
+    scale = max(abs(float(ensemble_mean or 0.0)), float(config.value_floor))
+    high_label, high_axis, low_label, low_axis = _high_low_variant_labels(rows)
+    mean_rel_spread = _mean_rel_spread(stats, finite_means=finite_means, scale=scale)
+    spread_gate = _spread_gate(ensemble, stats, config=config)
+    passed = bool(ensemble.get("passed", False))
+    classification = _classify_state(
+        passed=passed,
+        mean_rel_spread=mean_rel_spread,
+        spread_gate=spread_gate,
+        high_axis=high_axis,
+        low_axis=low_axis,
+    )
+    return _StateSpreadDiagnostics(
+        state=state,
+        passed=passed,
+        stats=stats,
+        rows=rows,
+        ensemble_mean=ensemble_mean,
+        scale=scale,
+        mean_rel_spread=mean_rel_spread,
+        spread_gate=spread_gate,
+        high_label=high_label,
+        high_axis=high_axis,
+        low_label=low_label,
+        low_axis=low_axis,
+        classification=classification,
+    )
+
+
+def _state_row(diagnostics: _StateSpreadDiagnostics) -> dict[str, Any]:
+    return {
+        "state": diagnostics.state,
+        "passed": diagnostics.passed,
+        "classification": diagnostics.classification,
+        "recommendation": _recommendation(diagnostics.classification),
+        "ensemble_mean": _json_number(diagnostics.ensemble_mean),
+        "mean_rel_spread": _json_number(diagnostics.mean_rel_spread),
+        "mean_rel_spread_gate": _json_number(diagnostics.spread_gate),
+        "combined_sem_rel": _json_number(
+            _finite_float(diagnostics.stats.get("combined_sem_rel"))
+        ),
+        "high_variant_label": diagnostics.high_label,
+        "high_variant_axis": diagnostics.high_axis,
+        "low_variant_label": diagnostics.low_label,
+        "low_variant_axis": diagnostics.low_axis,
+    }
+
+
+def _replicate_row(
+    row: Mapping[str, Any],
+    *,
+    diagnostics: _StateSpreadDiagnostics,
+    fallback_index: int,
+) -> dict[str, Any]:
+    mean = _finite_float(row.get("late_mean"))
+    sem = _finite_float(row.get("sem"))
+    label, axis = _variant_label(row)
+    rel_delta = None
+    if mean is not None and diagnostics.ensemble_mean is not None:
+        rel_delta = (mean - diagnostics.ensemble_mean) / diagnostics.scale
+    window_stats = row.get("window_statistics")
+    window = window_stats if isinstance(window_stats, Mapping) else {}
+    return {
+        "state": diagnostics.state,
+        "index": int(row.get("index", fallback_index)),
+        "variant_label": label,
+        "variant_axis": axis,
+        "late_mean": _json_number(mean),
+        "sem": _json_number(sem),
+        "ensemble_mean": _json_number(diagnostics.ensemble_mean),
+        "relative_delta": _json_number(rel_delta),
+        "passed": bool(row.get("passed", False)),
+        "promotion_ready": bool(row.get("promotion_ready", False)),
+        "source_artifact": row.get("source_artifact"),
+        "summary_artifact": row.get("summary_artifact"),
+        "running_mean_rel_drift": _json_number(
+            _finite_float(window.get("running_mean_rel_drift"))
+        ),
+        "terminal_mean_rel_delta": _json_number(
+            _finite_float(window.get("terminal_mean_rel_delta"))
+        ),
+        "sem_rel": _json_number(_finite_float(window.get("sem_rel"))),
+        "n_blocks": _json_number(_finite_float(window.get("n_blocks"))),
+    }
+
+
+def _replicate_rows(
+    diagnostics: _StateSpreadDiagnostics,
+    *,
+    start_index: int,
+) -> list[dict[str, Any]]:
+    return [
+        _replicate_row(row, diagnostics=diagnostics, fallback_index=start_index + i)
+        for i, row in enumerate(diagnostics.rows)
+    ]
+
+
+def _summary(
+    *,
+    ensembles: Sequence[Mapping[str, Any]],
+    replicate_rows: Sequence[Mapping[str, Any]],
+    failed_states: Sequence[str],
+    classifications: Mapping[str, int],
+) -> dict[str, Any]:
+    passed = not failed_states
+    return {
+        "n_states": len(ensembles),
+        "n_replicates": len(replicate_rows),
+        "failed_states": list(failed_states),
+        "classifications": dict(classifications),
+        "recommendation": (
+            "All replicated ensembles are within spread gates."
+            if passed
+            else "Keep the nonlinear-gradient claim fail-closed and target the failed states first."
+        ),
+    }
+
+
 def nonlinear_replicate_spread_report(
     ensembles: Sequence[Mapping[str, Any]],
     *,
@@ -159,113 +393,22 @@ def nonlinear_replicate_spread_report(
         Spread threshold and numerical floor used for relative deviations.
     """
 
-    cfg = config or NonlinearReplicateSpreadConfig()
-    if cfg.max_mean_rel_spread < 0.0:
-        raise ValueError("max_mean_rel_spread must be non-negative")
-    if cfg.value_floor <= 0.0:
-        raise ValueError("value_floor must be positive")
-
+    cfg = _validated_config(config)
     state_rows: list[dict[str, Any]] = []
     replicate_rows: list[dict[str, Any]] = []
     failed_states: list[str] = []
     classifications: dict[str, int] = {}
 
     for state_index, ensemble in enumerate(ensembles):
-        state = _state_label(ensemble, state_index)
-        statistics = ensemble.get("statistics")
-        stats = statistics if isinstance(statistics, Mapping) else {}
-        rows_obj = ensemble.get("rows")
-        rows = [row for row in rows_obj if isinstance(row, Mapping)] if isinstance(rows_obj, Sequence) else []
-        means = [_finite_float(row.get("late_mean")) for row in rows]
-        finite_means = [mean for mean in means if mean is not None]
-        ensemble_mean = _finite_float(stats.get("ensemble_mean"))
-        if ensemble_mean is None and finite_means:
-            ensemble_mean = sum(finite_means) / len(finite_means)
-        scale = max(abs(float(ensemble_mean or 0.0)), float(cfg.value_floor))
-
-        high_row: Mapping[str, Any] | None = None
-        low_row: Mapping[str, Any] | None = None
-        if rows and finite_means:
-            row_mean_pairs: list[tuple[Mapping[str, Any], float]] = []
-            for row in rows:
-                row_mean = _finite_float(row.get("late_mean"))
-                if row_mean is not None:
-                    row_mean_pairs.append((row, row_mean))
-            high_row = max(row_mean_pairs, key=lambda item: item[1])[0]
-            low_row = min(row_mean_pairs, key=lambda item: item[1])[0]
-
-        high_label, high_axis = _variant_label(high_row) if high_row is not None else (None, None)
-        low_label, low_axis = _variant_label(low_row) if low_row is not None else (None, None)
-        mean_rel_spread = _finite_float(stats.get("mean_rel_spread"))
-        if mean_rel_spread is None and finite_means:
-            mean_rel_spread = (max(finite_means) - min(finite_means)) / scale
-        spread_gate = _finite_float(stats.get("max_mean_rel_spread"))
-        if spread_gate is None:
-            raw_config = ensemble.get("config")
-            if isinstance(raw_config, Mapping):
-                spread_gate = _finite_float(raw_config.get("max_mean_rel_spread"))
-        if spread_gate is None:
-            spread_gate = float(cfg.max_mean_rel_spread)
-        passed = bool(ensemble.get("passed", False))
-        classification = _classify_state(
-            passed=passed,
-            mean_rel_spread=mean_rel_spread,
-            spread_gate=spread_gate,
-            high_axis=high_axis,
-            low_axis=low_axis,
-        )
+        diagnostics = _state_diagnostics(ensemble, state_index=state_index, config=cfg)
+        classification = diagnostics.classification
         classifications[classification] = classifications.get(classification, 0) + 1
         if classification != "passed_replicate_spread_gate":
-            failed_states.append(state)
-
-        state_rows.append(
-            {
-                "state": state,
-                "passed": passed,
-                "classification": classification,
-                "recommendation": _recommendation(classification),
-                "ensemble_mean": _json_number(ensemble_mean),
-                "mean_rel_spread": _json_number(mean_rel_spread),
-                "mean_rel_spread_gate": _json_number(spread_gate),
-                "combined_sem_rel": _json_number(_finite_float(stats.get("combined_sem_rel"))),
-                "high_variant_label": high_label,
-                "high_variant_axis": high_axis,
-                "low_variant_label": low_label,
-                "low_variant_axis": low_axis,
-            }
+            failed_states.append(diagnostics.state)
+        state_rows.append(_state_row(diagnostics))
+        replicate_rows.extend(
+            _replicate_rows(diagnostics, start_index=len(replicate_rows))
         )
-
-        for row in rows:
-            mean = _finite_float(row.get("late_mean"))
-            sem = _finite_float(row.get("sem"))
-            label, axis = _variant_label(row)
-            rel_delta = None if mean is None or ensemble_mean is None else (mean - ensemble_mean) / scale
-            window_stats = row.get("window_statistics")
-            window = window_stats if isinstance(window_stats, Mapping) else {}
-            replicate_rows.append(
-                {
-                    "state": state,
-                    "index": int(row.get("index", len(replicate_rows))),
-                    "variant_label": label,
-                    "variant_axis": axis,
-                    "late_mean": _json_number(mean),
-                    "sem": _json_number(sem),
-                    "ensemble_mean": _json_number(ensemble_mean),
-                    "relative_delta": _json_number(rel_delta),
-                    "passed": bool(row.get("passed", False)),
-                    "promotion_ready": bool(row.get("promotion_ready", False)),
-                    "source_artifact": row.get("source_artifact"),
-                    "summary_artifact": row.get("summary_artifact"),
-                    "running_mean_rel_drift": _json_number(
-                        _finite_float(window.get("running_mean_rel_drift"))
-                    ),
-                    "terminal_mean_rel_delta": _json_number(
-                        _finite_float(window.get("terminal_mean_rel_delta"))
-                    ),
-                    "sem_rel": _json_number(_finite_float(window.get("sem_rel"))),
-                    "n_blocks": _json_number(_finite_float(window.get("n_blocks"))),
-                }
-            )
 
     passed = not failed_states
     return {
@@ -273,17 +416,12 @@ def nonlinear_replicate_spread_report(
         "claim_level": "replicate_spread_diagnostic_not_simulation_claim",
         "case": str(case),
         "passed": passed,
-        "summary": {
-            "n_states": len(ensembles),
-            "n_replicates": len(replicate_rows),
-            "failed_states": failed_states,
-            "classifications": classifications,
-            "recommendation": (
-                "All replicated ensembles are within spread gates."
-                if passed
-                else "Keep the nonlinear-gradient claim fail-closed and target the failed states first."
-            ),
-        },
+        "summary": _summary(
+            ensembles=ensembles,
+            replicate_rows=replicate_rows,
+            failed_states=failed_states,
+            classifications=classifications,
+        ),
         "state_rows": state_rows,
         "replicate_rows": replicate_rows,
         "config": {
