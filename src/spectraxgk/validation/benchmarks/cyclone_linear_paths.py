@@ -59,6 +59,16 @@ class _CycloneTimeFitOptions:
     window_method: str
 
 
+@dataclass(frozen=True)
+class _CycloneKrylovSeed:
+    """Frequency seed extracted before the Cyclone Krylov solve."""
+
+    gamma: float = 0.0
+    omega: float = 0.0
+    seed_ok: bool = False
+    omega_ok: bool = False
+
+
 _PATCHABLE_NAMES = (
     "ModeSelection",
     "fit_growth_rate",
@@ -90,7 +100,133 @@ def sync_path_hooks(source: dict[str, Any]) -> None:
             globals()[name] = source[name]
 
 
-def run_cyclone_krylov_path(
+def _fit_cyclone_explicit_seed(
+    *,
+    state: Any,
+    grid: Any,
+    cache: Any,
+    params: Any,
+    geom: Any,
+    terms: Any,
+    kcfg: Any,
+    selection: ModeSelection,
+    show_progress: bool,
+) -> _CycloneKrylovSeed:
+    """Estimate a Cyclone growth/frequency seed with a short explicit march."""
+
+    t_seed = min(150.0, float(kcfg.power_dt) * 15000.0)
+    time_cfg = ExplicitTimeConfig(
+        dt=float(kcfg.power_dt),
+        t_max=t_seed,
+        sample_stride=1,
+        fixed_dt=True,
+    )
+    t_short, phi_t, _g_t, _o_t = integrate_linear_explicit(
+        state,
+        grid,
+        cache,
+        params,
+        geom,
+        time_cfg,
+        terms=terms,
+        mode_method="z_index",
+        show_progress=show_progress,
+    )
+    gamma_seed, omega_seed, _g, _o, _t_mid = instantaneous_growth_rate_from_phi(
+        phi_t,
+        t_short,
+        selection,
+        navg_fraction=0.5,
+        mode_method="z_index",
+    )
+    omega_ok = np.isfinite(omega_seed) and abs(omega_seed) > 1.0e-8
+    seed_ok = omega_ok and np.isfinite(gamma_seed) and gamma_seed > 0.0
+    return _CycloneKrylovSeed(
+        gamma=float(gamma_seed),
+        omega=float(omega_seed),
+        seed_ok=bool(seed_ok),
+        omega_ok=bool(omega_ok),
+    )
+
+
+def _estimate_cyclone_primary_seed(
+    *,
+    grid: Any,
+    cache: Any,
+    params: Any,
+    geom: Any,
+    terms: Any,
+    kcfg: Any,
+    selection: ModeSelection,
+    show_progress: bool,
+    fresh_G0: Callable[[], jnp.ndarray],
+) -> _CycloneKrylovSeed:
+    """Try the full-resolution explicit seed and preserve silent fallback."""
+
+    try:
+        return _fit_cyclone_explicit_seed(
+            state=fresh_G0(),
+            grid=grid,
+            cache=cache,
+            params=params,
+            geom=geom,
+            terms=terms,
+            kcfg=kcfg,
+            selection=selection,
+            show_progress=show_progress,
+        )
+    except Exception:
+        return _CycloneKrylovSeed()
+
+
+def _estimate_cyclone_reduced_seed(
+    *,
+    grid: Any,
+    params: Any,
+    geom: Any,
+    terms: Any,
+    Nl: int,
+    Nm: int,
+    init_cfg: Any,
+    kcfg: Any,
+    show_progress: bool,
+) -> _CycloneKrylovSeed:
+    """Try the reduced Hermite-Laguerre explicit seed and preserve fallback."""
+
+    try:
+        Nl_seed = min(Nl, 16)
+        Nm_seed = min(Nm, 12)
+        cache_seed = build_linear_cache(grid, geom, params, Nl_seed, Nm_seed)
+        G0_seed = _build_initial_condition(
+            grid,
+            geom,
+            ky_index=0,
+            kx_index=0,
+            Nl=Nl_seed,
+            Nm=Nm_seed,
+            init_cfg=init_cfg,
+        )
+        selection = ModeSelection(
+            ky_index=0,
+            kx_index=0,
+            z_index=_midplane_index(grid),
+        )
+        return _fit_cyclone_explicit_seed(
+            state=jnp.asarray(np.asarray(G0_seed)),
+            grid=grid,
+            cache=cache_seed,
+            params=params,
+            geom=geom,
+            terms=terms,
+            kcfg=kcfg,
+            selection=selection,
+            show_progress=show_progress,
+        )
+    except Exception:
+        return _CycloneKrylovSeed()
+
+
+def _estimate_cyclone_krylov_seed(
     *,
     grid: Any,
     cache: Any,
@@ -100,111 +236,67 @@ def run_cyclone_krylov_path(
     Nl: int,
     Nm: int,
     init_cfg: Any,
-    krylov_cfg: Any,
-    diagnostic_norm: str,
+    kcfg: Any,
+    selection: ModeSelection,
     show_progress: bool,
     status: Callable[[str], None],
     fresh_G0: Callable[[], jnp.ndarray],
-) -> tuple[float, float, np.ndarray, np.ndarray]:
-    """Run the Cyclone Krylov branch with the explicit seed policy."""
+) -> _CycloneKrylovSeed:
+    """Run the Cyclone primary then reduced seed ladder when no shift is given."""
 
-    status("starting Krylov solve")
-    kcfg = krylov_cfg or CYCLONE_KRYLOV_DEFAULT
-    gamma_seed = 0.0
-    omega_seed = 0.0
-    seed_ok = False
-    omega_ok = False
-    sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
-    if kcfg.shift is None:
-        try:
-            status("estimating frequency seed with short explicit time march")
-            t_seed = min(150.0, float(kcfg.power_dt) * 15000.0)
-            time_cfg = ExplicitTimeConfig(
-                dt=float(kcfg.power_dt),
-                t_max=t_seed,
-                sample_stride=1,
-                fixed_dt=True,
-            )
-            t_short, phi_t, _g_t, _o_t = integrate_linear_explicit(
-                fresh_G0(),
-                grid,
-                cache,
-                params,
-                geom,
-                time_cfg,
-                terms=terms,
-                mode_method="z_index",
-                show_progress=show_progress,
-            )
-            gamma_seed, omega_seed, _g, _o, _t_mid = instantaneous_growth_rate_from_phi(
-                phi_t,
-                t_short,
-                sel,
-                navg_fraction=0.5,
-                mode_method="z_index",
-            )
-            omega_ok = np.isfinite(omega_seed) and abs(omega_seed) > 1.0e-8
-            seed_ok = omega_ok and np.isfinite(gamma_seed) and gamma_seed > 0.0
-        except Exception:
-            seed_ok = False
-            omega_ok = False
+    if kcfg.shift is not None:
+        return _CycloneKrylovSeed()
+    status("estimating frequency seed with short explicit time march")
+    seed = _estimate_cyclone_primary_seed(
+        grid=grid,
+        cache=cache,
+        params=params,
+        geom=geom,
+        terms=terms,
+        kcfg=kcfg,
+        selection=selection,
+        show_progress=show_progress,
+        fresh_G0=fresh_G0,
+    )
+    if seed.seed_ok:
+        return seed
+    status("primary seed failed; retrying reduced Hermite-Laguerre seed")
+    return _estimate_cyclone_reduced_seed(
+        grid=grid,
+        params=params,
+        geom=geom,
+        terms=terms,
+        Nl=Nl,
+        Nm=Nm,
+        init_cfg=init_cfg,
+        kcfg=kcfg,
+        show_progress=show_progress,
+    )
 
-        if not seed_ok:
-            try:
-                status("primary seed failed; retrying reduced Hermite-Laguerre seed")
-                Nl_seed = min(Nl, 16)
-                Nm_seed = min(Nm, 12)
-                cache_seed = build_linear_cache(grid, geom, params, Nl_seed, Nm_seed)
-                G0_seed = _build_initial_condition(
-                    grid,
-                    geom,
-                    ky_index=sel.ky_index,
-                    kx_index=sel.kx_index,
-                    Nl=Nl_seed,
-                    Nm=Nm_seed,
-                    init_cfg=init_cfg,
-                )
-                t_seed = min(150.0, float(kcfg.power_dt) * 15000.0)
-                time_cfg = ExplicitTimeConfig(
-                    dt=float(kcfg.power_dt),
-                    t_max=t_seed,
-                    sample_stride=1,
-                    fixed_dt=True,
-                )
-                t_short, phi_t, _g_t, _o_t = integrate_linear_explicit(
-                    jnp.asarray(np.asarray(G0_seed)),
-                    grid,
-                    cache_seed,
-                    params,
-                    geom,
-                    time_cfg,
-                    terms=terms,
-                    mode_method="z_index",
-                    show_progress=show_progress,
-                )
-                sel_seed = ModeSelection(
-                    ky_index=0,
-                    kx_index=0,
-                    z_index=_midplane_index(grid),
-                )
-                gamma_seed, omega_seed, _g, _o, _t_mid = instantaneous_growth_rate_from_phi(
-                    phi_t,
-                    t_short,
-                    sel_seed,
-                    navg_fraction=0.5,
-                    mode_method="z_index",
-                )
-                omega_ok = np.isfinite(omega_seed) and abs(omega_seed) > 1.0e-8
-                seed_ok = omega_ok and np.isfinite(gamma_seed) and gamma_seed > 0.0
-            except Exception:
-                seed_ok = False
-                omega_ok = False
 
-    shift = None
-    if omega_ok:
-        shift = complex(float(gamma_seed) if seed_ok else 0.0, float(-omega_seed))
+def _cyclone_krylov_shift(seed: _CycloneKrylovSeed) -> complex | None:
+    """Convert a valid frequency seed into the shifted-eigenvalue target."""
+
+    if not seed.omega_ok:
+        return None
+    return complex(float(seed.gamma) if seed.seed_ok else 0.0, float(-seed.omega))
+
+
+def _solve_cyclone_dominant_pair(
+    *,
+    grid: Any,
+    cache: Any,
+    params: Any,
+    terms: Any,
+    kcfg: Any,
+    shift: complex | None,
+    status: Callable[[str], None],
+    fresh_G0: Callable[[], jnp.ndarray],
+) -> tuple[Any, Any]:
+    """Call the Cyclone dominant-eigenpair solver with one option policy."""
+
     status("running dominant eigenpair solve")
-    eig, vec = dominant_eigenpair(
+    return dominant_eigenpair(
         fresh_G0(),
         cache,
         params,
@@ -231,27 +323,59 @@ def run_cyclone_krylov_path(
         fallback_real_floor=kcfg.fallback_real_floor,
         status_callback=status,
     )
+
+
+def _apply_cyclone_seed_branch_guard(
+    *,
+    gamma: float,
+    omega: float,
+    seed: _CycloneKrylovSeed,
+) -> tuple[float, float]:
+    """Prefer a strong explicit seed when Krylov lands on an inconsistent branch."""
+
+    if not seed.seed_ok:
+        return gamma, omega
+    seed_strong = (seed.gamma > 0.0) and (abs(seed.omega) > 1.0e-6)
+    if not seed_strong:
+        return gamma, omega
+    omega_tol = 0.15 * max(abs(seed.omega), 1.0e-6)
+    gamma_tol = 0.15 * max(abs(seed.gamma), 1.0e-6)
+    use_seed = (
+        not np.isfinite(gamma)
+        or not np.isfinite(omega)
+        or (seed.gamma > 0.0 and gamma < 0.0)
+        or abs(omega - seed.omega) > omega_tol
+        or abs(gamma - seed.gamma) > gamma_tol
+    )
+    if not use_seed:
+        return gamma, omega
+    return float(seed.gamma), float(seed.omega)
+
+
+def _pack_cyclone_krylov_result(
+    *,
+    eig: Any,
+    vec: Any,
+    cache: Any,
+    params: Any,
+    terms: Any,
+    kcfg: Any,
+    seed: _CycloneKrylovSeed,
+    diagnostic_norm: str,
+) -> tuple[float, float, np.ndarray, np.ndarray]:
+    """Compute fields, guard branch selection, normalize, and pack Krylov output."""
+
     term_cfg = linear_terms_to_term_config(terms)
     phi = compute_fields_cached(vec, cache, params, terms=term_cfg).phi
     phi_t_out = np.asarray(phi)[None, ...]
     t_out = np.array([0.0])
     gamma_out = float(np.real(eig))
     omega_out = float(-np.imag(eig))
-    if seed_ok:
-        seed_strong = (gamma_seed > 0.0) and (abs(omega_seed) > 1.0e-6)
-        if seed_strong:
-            omega_tol = 0.15 * max(abs(omega_seed), 1.0e-6)
-            gamma_tol = 0.15 * max(abs(gamma_seed), 1.0e-6)
-            use_seed = (
-                not np.isfinite(gamma_out)
-                or not np.isfinite(omega_out)
-                or (gamma_seed > 0.0 and gamma_out < 0.0)
-                or abs(omega_out - omega_seed) > omega_tol
-                or abs(gamma_out - gamma_seed) > gamma_tol
-            )
-            if use_seed:
-                gamma_out = float(gamma_seed)
-                omega_out = float(omega_seed)
+    gamma_out, omega_out = _apply_cyclone_seed_branch_guard(
+        gamma=gamma_out,
+        omega=omega_out,
+        seed=seed,
+    )
     if kcfg.omega_sign != 0:
         omega_out = float(np.sign(kcfg.omega_sign)) * abs(omega_out)
     gamma_out, omega_out = _normalize_growth_rate(
@@ -259,6 +383,65 @@ def run_cyclone_krylov_path(
         omega_out,
         params,
         diagnostic_norm,
+    )
+    return gamma_out, omega_out, phi_t_out, t_out
+
+
+def run_cyclone_krylov_path(
+    *,
+    grid: Any,
+    cache: Any,
+    params: Any,
+    geom: Any,
+    terms: Any,
+    Nl: int,
+    Nm: int,
+    init_cfg: Any,
+    krylov_cfg: Any,
+    diagnostic_norm: str,
+    show_progress: bool,
+    status: Callable[[str], None],
+    fresh_G0: Callable[[], jnp.ndarray],
+) -> tuple[float, float, np.ndarray, np.ndarray]:
+    """Run the Cyclone Krylov branch with the explicit seed policy."""
+
+    status("starting Krylov solve")
+    kcfg = krylov_cfg or CYCLONE_KRYLOV_DEFAULT
+    selection = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
+    seed = _estimate_cyclone_krylov_seed(
+        grid=grid,
+        cache=cache,
+        params=params,
+        geom=geom,
+        terms=terms,
+        Nl=Nl,
+        Nm=Nm,
+        init_cfg=init_cfg,
+        kcfg=kcfg,
+        selection=selection,
+        show_progress=show_progress,
+        status=status,
+        fresh_G0=fresh_G0,
+    )
+    eig, vec = _solve_cyclone_dominant_pair(
+        grid=grid,
+        cache=cache,
+        params=params,
+        terms=terms,
+        kcfg=kcfg,
+        shift=_cyclone_krylov_shift(seed),
+        status=status,
+        fresh_G0=fresh_G0,
+    )
+    gamma_out, omega_out, phi_t_out, t_out = _pack_cyclone_krylov_result(
+        eig=eig,
+        vec=vec,
+        cache=cache,
+        params=params,
+        terms=terms,
+        kcfg=kcfg,
+        seed=seed,
+        diagnostic_norm=diagnostic_norm,
     )
     status(f"Krylov solve complete: gamma={gamma_out:.6f} omega={omega_out:.6f}")
     return gamma_out, omega_out, phi_t_out, t_out
