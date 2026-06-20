@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 import jax.numpy as jnp
@@ -27,6 +28,181 @@ from spectraxgk.solvers.linear.parallel_streaming import (
 )
 
 
+@dataclass(frozen=True)
+class _ParallelLinearRoute:
+    strategy: str
+    backend: str
+    axis: str
+    num_devices: int | None
+
+
+def _normalize_parallel_token(value: Any, default: str) -> str:
+    return str(value if value is not None else default).lower().replace("-", "_")
+
+
+def _parallel_linear_route(parallel: Any) -> _ParallelLinearRoute:
+    return _ParallelLinearRoute(
+        strategy=_normalize_parallel_token(getattr(parallel, "strategy", "serial"), "serial"),
+        backend=_normalize_parallel_token(getattr(parallel, "backend", "auto"), "auto"),
+        axis=_normalize_parallel_token(getattr(parallel, "axis", "hermite"), "hermite"),
+        num_devices=getattr(parallel, "num_devices", None),
+    )
+
+
+def _use_serial_linear_route(parallel: Any | None) -> bool:
+    return parallel is None or _parallel_linear_route(parallel).strategy == "serial"
+
+
+def _serial_linear_rhs_cached(
+    G: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    terms: LinearTerms | None,
+    *,
+    use_jit: bool,
+    use_custom_vjp: bool,
+    dt: jnp.ndarray | float | None,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    from spectraxgk.operators.linear.rhs import linear_rhs_cached
+
+    return linear_rhs_cached(
+        G,
+        cache,
+        params,
+        terms=terms,
+        use_jit=use_jit,
+        use_custom_vjp=use_custom_vjp,
+        dt=dt,
+    )
+
+
+def _require_hermite_axis(route: _ParallelLinearRoute, message: str) -> None:
+    if route.axis not in {"m", "hermite"}:
+        raise NotImplementedError(message)
+
+
+def _resolve_velocity_backend(
+    route: _ParallelLinearRoute,
+    terms: LinearTerms | None,
+) -> _ParallelLinearRoute:
+    if route.backend != "auto":
+        return route
+    _require_hermite_axis(
+        route,
+        "velocity sharding currently supports only the Hermite axis",
+    )
+    if _is_electrostatic_slice_terms(terms):
+        return _ParallelLinearRoute(
+            strategy=route.strategy,
+            backend="electrostatic_linear_slices",
+            axis=route.axis,
+            num_devices=route.num_devices,
+        )
+    raise NotImplementedError(
+        "backend='auto' can only select gated electrostatic velocity routes; "
+        "disable collision/EM/end-damping terms or request an explicit backend"
+    )
+
+
+def _streaming_velocity_rhs(
+    G: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    terms: LinearTerms | None,
+    route: _ParallelLinearRoute,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    _require_hermite_axis(
+        route,
+        "streaming-only velocity sharding currently supports only the Hermite axis",
+    )
+    if not _is_streaming_only_terms(terms):
+        raise NotImplementedError("velocity streaming route requires streaming-only LinearTerms")
+    return linear_rhs_streaming_velocity_sharded(
+        G,
+        cache,
+        params,
+        num_devices=route.num_devices,
+    )
+
+
+def _streaming_electrostatic_velocity_rhs(
+    G: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    terms: LinearTerms | None,
+    route: _ParallelLinearRoute,
+    *,
+    use_custom_vjp: bool,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    _require_hermite_axis(
+        route,
+        "electrostatic streaming velocity sharding currently supports only the Hermite axis",
+    )
+    if not _is_streaming_only_terms(terms):
+        raise NotImplementedError(
+            "electrostatic velocity streaming route requires streaming-only LinearTerms"
+        )
+    return linear_rhs_streaming_electrostatic_velocity_sharded(
+        G,
+        cache,
+        params,
+        num_devices=route.num_devices,
+        use_custom_vjp=use_custom_vjp,
+    )
+
+
+def _electrostatic_slice_velocity_rhs(
+    G: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    terms: LinearTerms | None,
+    route: _ParallelLinearRoute,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    _require_hermite_axis(
+        route,
+        "electrostatic slice velocity sharding currently supports only the Hermite axis",
+    )
+    if not _is_electrostatic_slice_terms(terms):
+        raise NotImplementedError(
+            "electrostatic slice route requires collision/EM terms to be disabled"
+        )
+    return linear_rhs_electrostatic_slices_velocity_sharded(
+        G,
+        cache,
+        params,
+        terms=terms,
+        num_devices=route.num_devices,
+    )
+
+
+def _velocity_parallel_rhs_cached(
+    G: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    terms: LinearTerms | None,
+    route: _ParallelLinearRoute,
+    *,
+    use_custom_vjp: bool,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    route = _resolve_velocity_backend(route, terms)
+    if route.backend in {"streaming_only", "linear_streaming_only"}:
+        return _streaming_velocity_rhs(G, cache, params, terms, route)
+    if route.backend in {"streaming_electrostatic", "linear_streaming_electrostatic"}:
+        return _streaming_electrostatic_velocity_rhs(
+            G,
+            cache,
+            params,
+            terms,
+            route,
+            use_custom_vjp=use_custom_vjp,
+        )
+    if route.backend in {"electrostatic_linear_slices", "linear_electrostatic_slices"}:
+        return _electrostatic_slice_velocity_rhs(G, cache, params, terms, route)
+    raise NotImplementedError(
+        "parallel linear RHS currently supports only strategy='velocity' with gated electrostatic backends"
+    )
+
+
 def linear_rhs_parallel_cached(
     G: jnp.ndarray,
     cache: LinearCache,
@@ -46,14 +222,8 @@ def linear_rhs_parallel_cached(
     complete currently gated electrostatic route when the term set is eligible;
     otherwise callers must request a narrower explicit backend.
     """
-
-    from spectraxgk.operators.linear.rhs import linear_rhs_cached
-
-    if (
-        parallel is None
-        or str(getattr(parallel, "strategy", "serial")).lower() == "serial"
-    ):
-        return linear_rhs_cached(
+    if _use_serial_linear_route(parallel):
+        return _serial_linear_rhs_cached(
             G,
             cache,
             params,
@@ -63,76 +233,15 @@ def linear_rhs_parallel_cached(
             dt=dt,
         )
 
-    strategy = str(getattr(parallel, "strategy", "serial")).lower().replace("-", "_")
-    backend = str(getattr(parallel, "backend", "auto")).lower().replace("-", "_")
-    axis = str(getattr(parallel, "axis", "hermite")).lower().replace("-", "_")
-    if strategy == "velocity" and backend == "auto":
-        if axis not in {"m", "hermite"}:
-            raise NotImplementedError(
-                "velocity sharding currently supports only the Hermite axis"
-            )
-        if _is_electrostatic_slice_terms(terms):
-            backend = "electrostatic_linear_slices"
-        else:
-            raise NotImplementedError(
-                "backend='auto' can only select gated electrostatic velocity routes; "
-                "disable collision/EM/end-damping terms or request an explicit backend"
-            )
-    if strategy == "velocity" and backend in {
-        "streaming_only",
-        "linear_streaming_only",
-    }:
-        if axis not in {"m", "hermite"}:
-            raise NotImplementedError(
-                "streaming-only velocity sharding currently supports only the Hermite axis"
-            )
-        if not _is_streaming_only_terms(terms):
-            raise NotImplementedError(
-                "velocity streaming route requires streaming-only LinearTerms"
-            )
-        return linear_rhs_streaming_velocity_sharded(
+    route = _parallel_linear_route(parallel)
+    if route.strategy == "velocity":
+        return _velocity_parallel_rhs_cached(
             G,
             cache,
             params,
-            num_devices=getattr(parallel, "num_devices", None),
-        )
-    if strategy == "velocity" and backend in {
-        "streaming_electrostatic",
-        "linear_streaming_electrostatic",
-    }:
-        if axis not in {"m", "hermite"}:
-            raise NotImplementedError(
-                "electrostatic streaming velocity sharding currently supports only the Hermite axis"
-            )
-        if not _is_streaming_only_terms(terms):
-            raise NotImplementedError(
-                "electrostatic velocity streaming route requires streaming-only LinearTerms"
-            )
-        return linear_rhs_streaming_electrostatic_velocity_sharded(
-            G,
-            cache,
-            params,
-            num_devices=getattr(parallel, "num_devices", None),
+            terms,
+            route,
             use_custom_vjp=use_custom_vjp,
-        )
-    if strategy == "velocity" and backend in {
-        "electrostatic_linear_slices",
-        "linear_electrostatic_slices",
-    }:
-        if axis not in {"m", "hermite"}:
-            raise NotImplementedError(
-                "electrostatic slice velocity sharding currently supports only the Hermite axis"
-            )
-        if not _is_electrostatic_slice_terms(terms):
-            raise NotImplementedError(
-                "electrostatic slice route requires collision/EM terms to be disabled"
-            )
-        return linear_rhs_electrostatic_slices_velocity_sharded(
-            G,
-            cache,
-            params,
-            terms=terms,
-            num_devices=getattr(parallel, "num_devices", None),
         )
 
     raise NotImplementedError(
