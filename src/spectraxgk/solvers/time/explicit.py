@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import math
 import time
+from typing import Any
 
 import jax
 import jax.numpy as jnp
@@ -92,6 +93,14 @@ class ExplicitTimeConfig:
     cfl_fac: float = 2.82
 
 
+@dataclass
+class _LinearHistory:
+    ts: list[float] = field(default_factory=list)
+    phi: list[np.ndarray] = field(default_factory=list)
+    gamma: list[np.ndarray] = field(default_factory=list)
+    omega: list[np.ndarray] = field(default_factory=list)
+
+
 def _linear_explicit_step(
     G: jnp.ndarray,
     cache: LinearCache,
@@ -138,6 +147,309 @@ def _rk3_heun_step(
     return _linear_explicit_step(G, cache, params, term_cfg, dt, method="rk3")
 
 
+def _resolve_explicit_method(method: str) -> str:
+    method_key = method.strip().lower()
+    if method_key not in {
+        "euler",
+        "rk2",
+        "rk3",
+        "rk3_classic",
+        "rk3_heun",
+        "rk4",
+        "k10",
+        "sspx3",
+    }:
+        raise ValueError(
+            "method must be one of {'euler', 'rk2', 'rk3', 'rk3_classic', 'rk3_heun', 'rk4', 'k10', 'sspx3'}"
+        )
+    return method_key
+
+
+def _validate_mode_method(mode_method: str) -> None:
+    if mode_method not in {"z_index", "max"}:
+        raise ValueError("mode_method must be 'z_index' or 'max'")
+
+
+def _adaptive_linear_dt(
+    time_cfg: ExplicitTimeConfig,
+    *,
+    dt: float,
+    dt_min: float,
+    dt_max: float,
+    wmax: float,
+) -> float:
+    if time_cfg.fixed_dt or wmax <= 0.0:
+        return dt
+    dt_guess = float(time_cfg.cfl_fac) * float(time_cfg.cfl) / wmax
+    return min(max(dt_guess, dt_min), dt_max)
+
+
+def _linear_explicit_timing(
+    time_cfg: ExplicitTimeConfig,
+    grid: SpectralGrid,
+    geom: FluxTubeGeometryLike,
+    params: LinearParams,
+    state_shape: tuple[int, ...],
+) -> tuple[float, float, float, float, int, float]:
+    t_max = float(time_cfg.t_max)
+    dt = float(time_cfg.dt)
+    dt_min = float(time_cfg.dt_min)
+    # Explicit-time default behavior: when dt_max is unset, dt_max == dt.
+    dt_max = float(time_cfg.dt_max) if time_cfg.dt_max is not None else dt
+    sample_stride = int(max(time_cfg.sample_stride, 1))
+    omega_max = _linear_frequency_bound(
+        grid, geom, params, state_shape[-5], state_shape[-4]
+    )
+    wmax = float(np.sum(omega_max))
+    dt = _adaptive_linear_dt(
+        time_cfg,
+        dt=dt,
+        dt_min=dt_min,
+        dt_max=dt_max,
+        wmax=wmax,
+    )
+    return t_max, dt, dt_min, dt_max, sample_stride, wmax
+
+
+def _make_linear_stepper(method: str, *, jit_enabled: bool):
+    def stepper(G_state, cache_state, params_state, term_cfg_state, dt_state):
+        return _linear_explicit_step(
+            G_state, cache_state, params_state, term_cfg_state, dt_state, method=method
+        )
+
+    if jit_enabled:
+        return jax.jit(stepper, donate_argnums=(0,))
+    return stepper
+
+
+def _append_linear_sample(
+    *,
+    t: float,
+    phi: jnp.ndarray,
+    phi_prev: jnp.ndarray,
+    dt: float,
+    z_idx: int,
+    mask: jnp.ndarray,
+    mode_method: str,
+    history: _LinearHistory,
+) -> None:
+    gamma, omega = _instantaneous_growth_rate_step(
+        phi,
+        phi_prev,
+        dt,
+        z_index=z_idx,
+        mask=mask,
+        mode_method=mode_method,
+    )
+    history.ts.append(t)
+    history.phi.append(np.asarray(phi))
+    history.gamma.append(np.asarray(gamma))
+    history.omega.append(np.asarray(omega))
+
+
+def _should_emit_linear_progress(
+    *,
+    step: int,
+    total_steps_est: int,
+    progress_stride: int,
+) -> bool:
+    return step == 1 or step >= total_steps_est or (step % progress_stride) == 0
+
+
+def _emit_linear_progress_if_due(
+    *,
+    show_progress: bool,
+    step: int,
+    total_steps_est: int,
+    progress_stride: int,
+    t: float,
+    t_max: float,
+    started_at: float,
+    phi: jnp.ndarray,
+) -> None:
+    if not show_progress:
+        return
+    if not _should_emit_linear_progress(
+        step=step,
+        total_steps_est=total_steps_est,
+        progress_stride=progress_stride,
+    ):
+        return
+    _emit_time_progress(
+        step=step,
+        total_steps=total_steps_est,
+        t=float(t),
+        t_max=t_max,
+        started_at=started_at,
+        phi_max=float(jnp.max(jnp.abs(phi))),
+    )
+
+
+def _emit_linear_start_if_requested(
+    *,
+    show_progress: bool,
+    total_steps_est: int,
+    dt: float,
+    t_max: float,
+    sample_stride: int,
+) -> None:
+    if show_progress:
+        print(
+            "[spectrax-gk] linear initial-value integration started "
+            f"(steps={total_steps_est}, dt={dt:.6g}, t_max={t_max:.6g}, "
+            f"sample_stride={sample_stride})",
+            flush=True,
+        )
+
+
+def _append_linear_sample_if_due(
+    *,
+    sampled: bool,
+    t: float,
+    phi: jnp.ndarray,
+    phi_prev: jnp.ndarray,
+    dt: float,
+    z_idx: int,
+    mask: jnp.ndarray,
+    mode_method: str,
+    history: _LinearHistory,
+) -> None:
+    if sampled:
+        _append_linear_sample(
+            t=t,
+            phi=phi,
+            phi_prev=phi_prev,
+            dt=dt,
+            z_idx=z_idx,
+            mask=mask,
+            mode_method=mode_method,
+            history=history,
+        )
+
+
+def _emit_linear_complete_if_requested(*, show_progress: bool) -> None:
+    if show_progress:
+        print("[spectrax-gk] linear initial-value integration complete", flush=True)
+
+
+def _take_linear_explicit_step(
+    *,
+    G: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    term_cfg: Any,
+    time_cfg: ExplicitTimeConfig,
+    stepper: Any,
+    dt: float,
+    dt_min: float,
+    dt_max: float,
+    wmax: float,
+) -> tuple[jnp.ndarray, Any, float]:
+    dt = _adaptive_linear_dt(
+        time_cfg,
+        dt=dt,
+        dt_min=dt_min,
+        dt_max=dt_max,
+        wmax=wmax,
+    )
+    G, fields = stepper(G, cache, params, term_cfg, dt)
+    return G, fields, dt
+
+
+def _linear_history_arrays(
+    history: _LinearHistory,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    return (
+        np.asarray(history.ts),
+        np.asarray(history.phi),
+        np.asarray(history.gamma),
+        np.asarray(history.omega),
+    )
+
+
+def _run_linear_explicit_loop(
+    *,
+    G: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    term_cfg: Any,
+    time_cfg: ExplicitTimeConfig,
+    method: str,
+    mode_method: str,
+    t_max: float,
+    dt: float,
+    dt_min: float,
+    dt_max: float,
+    wmax: float,
+    sample_stride: int,
+    z_idx: int,
+    mask: jnp.ndarray,
+    phi_prev: jnp.ndarray,
+    jit_enabled: bool,
+    show_progress: bool,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    t = 0.0
+    step = 0
+    history = _LinearHistory()
+    total_steps_est = max(int(math.ceil(max(t_max, 0.0) / max(dt, 1.0e-30))), 1)
+    progress_stride = progress_update_stride(total_steps_est, target_updates=20)
+    progress_started_at = time.perf_counter()
+    stepper = _make_linear_stepper(method, jit_enabled=jit_enabled)
+
+    _emit_linear_start_if_requested(
+        show_progress=show_progress,
+        total_steps_est=total_steps_est,
+        dt=dt,
+        t_max=t_max,
+        sample_stride=sample_stride,
+    )
+
+    while t < t_max - 1.0e-12:
+        G, fields, dt = _take_linear_explicit_step(
+            G=G,
+            cache=cache,
+            params=params,
+            term_cfg=term_cfg,
+            time_cfg=time_cfg,
+            stepper=stepper,
+            dt=dt,
+            dt_min=dt_min,
+            dt_max=dt_max,
+            wmax=wmax,
+        )
+        phi = fields.phi
+        step += 1
+        t += dt
+
+        sampled = step % sample_stride == 0 or t >= t_max
+        _append_linear_sample_if_due(
+            sampled=sampled,
+            t=t,
+            phi=phi,
+            phi_prev=phi_prev,
+            dt=dt,
+            z_idx=z_idx,
+            mask=mask,
+            mode_method=mode_method,
+            history=history,
+        )
+        _emit_linear_progress_if_due(
+            show_progress=show_progress,
+            step=step,
+            total_steps_est=total_steps_est,
+            progress_stride=progress_stride,
+            t=t,
+            t_max=t_max,
+            started_at=progress_started_at,
+            phi=phi,
+        )
+        phi_prev = phi
+
+    _emit_linear_complete_if_requested(show_progress=show_progress)
+
+    return _linear_history_arrays(history)
+
+
 def integrate_linear_explicit(
     G0: jnp.ndarray,
     grid: SpectralGrid,
@@ -154,131 +466,35 @@ def integrate_linear_explicit(
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Explicit time integrator with growth-rate diagnostics."""
 
-    if mode_method not in {"z_index", "max"}:
-        raise ValueError("mode_method must be 'z_index' or 'max'")
-
-    method = time_cfg.method.strip().lower()
-    if method not in {
-        "euler",
-        "rk2",
-        "rk3",
-        "rk3_classic",
-        "rk3_heun",
-        "rk4",
-        "k10",
-        "sspx3",
-    }:
-        raise ValueError(
-            "method must be one of {'euler', 'rk2', 'rk3', 'rk3_classic', 'rk3_heun', 'rk4', 'k10', 'sspx3'}"
-        )
+    _validate_mode_method(mode_method)
+    method = _resolve_explicit_method(time_cfg.method)
     term_cfg = _linear_term_config(terms)
-    t_max = float(time_cfg.t_max)
-    dt = float(time_cfg.dt)
-    dt_min = float(time_cfg.dt_min)
-    # Explicit-time default behavior: when dt_max is unset, dt_max == dt.
-    dt_max = float(time_cfg.dt_max) if time_cfg.dt_max is not None else dt
-    sample_stride = int(max(time_cfg.sample_stride, 1))
-
     z_idx = _diagnostic_midplane_index(grid.z.size) if z_index is None else int(z_index)
     mask = _growth_rate_mode_mask(grid.ky, grid.kx, grid.dealias_mask)
-
     G = jnp.asarray(G0)
-    t = 0.0
-    step = 0
-
-    # compute initial fields for growth-rate ratio
+    t_max, dt, dt_min, dt_max, sample_stride, wmax = _linear_explicit_timing(
+        time_cfg, grid, geom, params, G.shape
+    )
     _, fields0 = assemble_rhs_cached(G, cache, params, terms=term_cfg, dt=dt)
-    phi_prev = fields0.phi
-
-    omega_max = _linear_frequency_bound(grid, geom, params, G.shape[-5], G.shape[-4])
-    wmax = float(np.sum(omega_max))
-    if not time_cfg.fixed_dt and wmax > 0.0:
-        dt_guess = float(time_cfg.cfl_fac) * float(time_cfg.cfl) / wmax
-        dt = min(max(dt_guess, dt_min), dt_max)
-
-    ts: list[float] = []
-    phi_list: list[np.ndarray] = []
-    gamma_list: list[np.ndarray] = []
-    omega_list: list[np.ndarray] = []
-    total_steps_est = max(int(math.ceil(max(t_max, 0.0) / max(dt, 1.0e-30))), 1)
-    progress_stride = progress_update_stride(total_steps_est, target_updates=20)
-    progress_started_at = time.perf_counter()
-    if show_progress:
-        print(
-            "[spectrax-gk] linear initial-value integration started "
-            f"(steps={total_steps_est}, dt={dt:.6g}, t_max={t_max:.6g}, "
-            f"sample_stride={sample_stride})",
-            flush=True,
-        )
-
-    def _step(G_state, cache_state, params_state, term_cfg_state, dt_state):
-        return _linear_explicit_step(
-            G_state, cache_state, params_state, term_cfg_state, dt_state, method=method
-        )
-
-    stepper = _step
-    if jit:
-        stepper = jax.jit(_step, donate_argnums=(0,))
-
-    while t < t_max - 1.0e-12:
-        if not time_cfg.fixed_dt and wmax > 0.0:
-            dt_guess = float(time_cfg.cfl_fac) * float(time_cfg.cfl) / wmax
-            dt = min(max(dt_guess, dt_min), dt_max)
-
-        G, fields = stepper(G, cache, params, term_cfg, dt)
-        phi = fields.phi
-        step += 1
-        t += dt
-
-        sampled = False
-        if step % sample_stride == 0 or t >= t_max:
-            sampled = True
-            gamma, omega = _instantaneous_growth_rate_step(
-                phi,
-                phi_prev,
-                dt,
-                z_index=z_idx,
-                mask=mask,
-                mode_method=mode_method,
-            )
-            ts.append(t)
-            phi_list.append(np.asarray(phi))
-            gamma_list.append(np.asarray(gamma))
-            omega_list.append(np.asarray(omega))
-            if show_progress and (
-                step == 1 or step >= total_steps_est or (step % progress_stride) == 0
-            ):
-                _emit_time_progress(
-                    step=step,
-                    total_steps=total_steps_est,
-                    t=float(t),
-                    t_max=t_max,
-                    started_at=progress_started_at,
-                    phi_max=float(jnp.max(jnp.abs(phi))),
-                )
-        if (
-            show_progress
-            and not sampled
-            and (step == 1 or step >= total_steps_est or (step % progress_stride) == 0)
-        ):
-            _emit_time_progress(
-                step=step,
-                total_steps=total_steps_est,
-                t=float(t),
-                t_max=t_max,
-                started_at=progress_started_at,
-                phi_max=float(jnp.max(jnp.abs(phi))),
-            )
-        phi_prev = phi
-
-    if show_progress:
-        print("[spectrax-gk] linear initial-value integration complete", flush=True)
-
-    return (
-        np.asarray(ts),
-        np.asarray(phi_list),
-        np.asarray(gamma_list),
-        np.asarray(omega_list),
+    return _run_linear_explicit_loop(
+        G=G,
+        cache=cache,
+        params=params,
+        term_cfg=term_cfg,
+        time_cfg=time_cfg,
+        method=method,
+        mode_method=mode_method,
+        t_max=t_max,
+        dt=dt,
+        dt_min=dt_min,
+        dt_max=dt_max,
+        wmax=wmax,
+        sample_stride=sample_stride,
+        z_idx=z_idx,
+        mask=mask,
+        phi_prev=fields0.phi,
+        jit_enabled=jit,
+        show_progress=show_progress,
     )
 
 
