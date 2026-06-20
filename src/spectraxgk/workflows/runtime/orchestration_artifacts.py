@@ -57,6 +57,24 @@ class RuntimeArtifactHandoffDeps:
     write_runtime_nonlinear_artifacts: Callable[[str | Path, Any, Any], dict[str, str]]
 
 
+@dataclass(frozen=True)
+class _NonlinearArtifactRunOptions:
+    """Nonlinear runtime options forwarded unchanged to each checkpoint chunk."""
+
+    ky_target: float
+    kx_target: float | None
+    Nl: int | None
+    Nm: int | None
+    dt: float | None
+    method: str | None
+    sample_stride: int | None
+    diagnostics_stride: int | None
+    laguerre_mode: str | None
+    diagnostics: bool | None
+    show_progress: bool
+    status_callback: Any
+
+
 def resolve_nonlinear_artifact_policy(
     cfg: Any,
     *,
@@ -288,6 +306,137 @@ def _checkpoint_loop_done(
     )
 
 
+def _run_runtime_nonlinear_chunk(
+    cfg_run: Any,
+    *,
+    policy: NonlinearArtifactPolicy,
+    options: _NonlinearArtifactRunOptions,
+    chunk_steps: int | None,
+    deps: RuntimeArtifactHandoffDeps,
+) -> RuntimeNonlinearResult:
+    """Run and validate one nonlinear artifact/checkpoint chunk."""
+
+    result_chunk = deps.run_runtime_nonlinear(
+        cfg_run,
+        ky_target=options.ky_target,
+        kx_target=options.kx_target,
+        Nl=options.Nl,
+        Nm=options.Nm,
+        dt=options.dt,
+        steps=chunk_steps,
+        method=options.method,
+        sample_stride=options.sample_stride,
+        diagnostics_stride=options.diagnostics_stride,
+        laguerre_mode=options.laguerre_mode,
+        diagnostics=options.diagnostics,
+        return_state=policy.netcdf_output_target,
+        show_progress=options.show_progress,
+        status_callback=options.status_callback,
+    )
+    deps.validate_finite_runtime_result(result_chunk)
+    return result_chunk
+
+
+def _write_nonlinear_artifacts_if_requested(
+    policy: NonlinearArtifactPolicy,
+    result_effective: RuntimeNonlinearResult,
+    cfg: Any,
+    deps: RuntimeArtifactHandoffDeps,
+) -> dict[str, str]:
+    """Write nonlinear artifacts when an output target was requested."""
+
+    if policy.out_path is None:
+        return {}
+    return deps.write_runtime_nonlinear_artifacts(
+        policy.out_path, result_effective, cfg
+    )
+
+
+def _advance_checkpoint_or_stop(
+    cfg: Any,
+    *,
+    policy: NonlinearArtifactPolicy,
+    result_effective: RuntimeNonlinearResult,
+    remaining_steps: int | None,
+    time_offset: float,
+) -> tuple[bool, Any]:
+    """Return whether checkpointing is complete and the next run config."""
+
+    if policy.checkpoint_steps is None:
+        return True, cfg
+    if _checkpoint_loop_done(
+        policy=policy,
+        result_effective=result_effective,
+        remaining_steps=remaining_steps,
+        time_offset=time_offset,
+        cfg=cfg,
+    ):
+        return True, cfg
+    if policy.restart_to is None:
+        return True, cfg
+    return False, _advance_restart_run_config(cfg, policy.restart_to)
+
+
+def _run_artifact_checkpoint_loop(
+    cfg: Any,
+    cfg_run: Any,
+    *,
+    policy: NonlinearArtifactPolicy,
+    options: _NonlinearArtifactRunOptions,
+    cumulative_diag: SimulationDiagnostics | None,
+    history_from_file: bool,
+    deps: RuntimeArtifactHandoffDeps,
+) -> tuple[RuntimeNonlinearResult, dict[str, str]]:
+    """Run all nonlinear chunks needed by the resolved artifact policy."""
+
+    remaining_steps = policy.remaining_steps
+    time_offset = 0.0
+    if cumulative_diag is not None and np.asarray(cumulative_diag.t).size:
+        time_offset = float(np.asarray(cumulative_diag.t)[-1])
+
+    result_final: RuntimeNonlinearResult | None = None
+    paths: dict[str, str] = {}
+    while True:
+        chunk_steps = _next_runtime_chunk_steps(
+            remaining_steps=remaining_steps,
+            checkpoint_steps=policy.checkpoint_steps,
+        )
+        result_chunk = _run_runtime_nonlinear_chunk(
+            cfg_run,
+            policy=policy,
+            options=options,
+            chunk_steps=chunk_steps,
+            deps=deps,
+        )
+        result_effective, cumulative_diag, time_offset = _merge_chunk_diagnostics(
+            result_chunk,
+            cumulative_diag=cumulative_diag,
+            time_offset=time_offset,
+            history_from_file=history_from_file,
+            deps=deps,
+        )
+        result_final = result_effective
+        paths = _write_nonlinear_artifacts_if_requested(
+            policy, result_effective, cfg, deps
+        )
+        if remaining_steps is not None:
+            assert chunk_steps is not None
+            remaining_steps -= int(chunk_steps)
+        stop, cfg_run = _advance_checkpoint_or_stop(
+            cfg,
+            policy=policy,
+            result_effective=result_effective,
+            remaining_steps=remaining_steps,
+            time_offset=time_offset,
+        )
+        if stop:
+            break
+
+    if result_final is None:
+        raise RuntimeError("nonlinear runtime produced no result")
+    return result_final, paths
+
+
 def run_runtime_nonlinear_artifact_handoff(
     cfg: Any,
     *,
@@ -309,6 +458,20 @@ def run_runtime_nonlinear_artifact_handoff(
 ) -> tuple[RuntimeNonlinearResult, dict[str, str]]:
     """Run nonlinear runtime chunks and hand results to artifact writers."""
 
+    options = _NonlinearArtifactRunOptions(
+        ky_target=ky_target,
+        kx_target=kx_target,
+        Nl=Nl,
+        Nm=Nm,
+        dt=dt,
+        method=method,
+        sample_stride=sample_stride,
+        diagnostics_stride=diagnostics_stride,
+        laguerre_mode=laguerre_mode,
+        diagnostics=diagnostics,
+        show_progress=show_progress,
+        status_callback=status_callback,
+    )
     policy = resolve_nonlinear_artifact_policy(
         cfg,
         out=out,
@@ -327,72 +490,15 @@ def run_runtime_nonlinear_artifact_handoff(
         resume_requested=resume_requested,
         deps=deps,
     )
-
-    remaining_steps = policy.remaining_steps
-    checkpoint_steps = policy.checkpoint_steps
-    time_offset = 0.0
-    if cumulative_diag is not None and np.asarray(cumulative_diag.t).size:
-        time_offset = float(np.asarray(cumulative_diag.t)[-1])
-
-    result_final: RuntimeNonlinearResult | None = None
-    paths: dict[str, str] = {}
-    while True:
-        chunk_steps = _next_runtime_chunk_steps(
-            remaining_steps=remaining_steps,
-            checkpoint_steps=checkpoint_steps,
-        )
-        result_chunk = deps.run_runtime_nonlinear(
-            cfg_run,
-            ky_target=ky_target,
-            kx_target=kx_target,
-            Nl=Nl,
-            Nm=Nm,
-            dt=dt,
-            steps=chunk_steps,
-            method=method,
-            sample_stride=sample_stride,
-            diagnostics_stride=diagnostics_stride,
-            laguerre_mode=laguerre_mode,
-            diagnostics=diagnostics,
-            return_state=policy.netcdf_output_target,
-            show_progress=show_progress,
-            status_callback=status_callback,
-        )
-        deps.validate_finite_runtime_result(result_chunk)
-        result_effective, cumulative_diag, time_offset = _merge_chunk_diagnostics(
-            result_chunk,
-            cumulative_diag=cumulative_diag,
-            time_offset=time_offset,
-            history_from_file=history_from_file,
-            deps=deps,
-        )
-        result_final = result_effective
-
-        if policy.out_path is not None:
-            paths = deps.write_runtime_nonlinear_artifacts(
-                policy.out_path, result_effective, cfg
-            )
-
-        if checkpoint_steps is None:
-            break
-        if remaining_steps is not None:
-            assert chunk_steps is not None
-            remaining_steps -= int(chunk_steps)
-        if _checkpoint_loop_done(
-            policy=policy,
-            result_effective=result_effective,
-            remaining_steps=remaining_steps,
-            time_offset=time_offset,
-            cfg=cfg,
-        ):
-            break
-        if policy.restart_to is None:
-            break
-        cfg_run = _advance_restart_run_config(cfg, policy.restart_to)
-
-    if result_final is None:
-        raise RuntimeError("nonlinear runtime produced no result")
-    return result_final, paths
+    return _run_artifact_checkpoint_loop(
+        cfg,
+        cfg_run,
+        policy=policy,
+        options=options,
+        cumulative_diag=cumulative_diag,
+        history_from_file=history_from_file,
+        deps=deps,
+    )
 
 
 __all__ = [
