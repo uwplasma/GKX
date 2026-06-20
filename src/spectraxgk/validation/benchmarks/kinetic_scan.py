@@ -85,6 +85,49 @@ class _KineticScanBatch:
     cache: Any
 
 
+@dataclass(frozen=True)
+class _KineticScanRunOptions:
+    ky_values: np.ndarray
+    time_cfg: TimeConfig | None
+    solver_key: str
+    krylov_cfg: KrylovConfig | None
+    dt: float | np.ndarray
+    steps: int | np.ndarray
+    method: str
+    sample_stride: int | None
+    mode_method: str
+    mode_only: bool
+    fit_key: str
+    ky_batch: int
+    fixed_batch_shape: bool
+    streaming_fit: bool
+    streaming_amp_floor: float
+    init_species_index: int
+    density_species_index: int
+    use_batch: bool
+    show_progress: bool
+
+
+@dataclass(frozen=True)
+class _KineticScanFitOptions:
+    tmin: float | None
+    tmax: float | None
+    start_fraction: float
+    window_fraction: float
+    fit_policy: ScanFitWindowPolicy
+
+
+@dataclass
+class _KineticScanOutput:
+    gammas: list[float]
+    omegas: list[float]
+    ky: list[float]
+
+    @classmethod
+    def empty(cls) -> "_KineticScanOutput":
+        return cls(gammas=[], omegas=[], ky=[])
+
+
 def _resolve_kinetic_scan_setup(
     *,
     cfg: KineticElectronBaseCase | None,
@@ -142,6 +185,16 @@ def _validate_kinetic_species_indices(
         raise ValueError("init_species_index out of range for kinetic species")
     if density_species_index < 0 or density_species_index >= nspecies:
         raise ValueError("density_species_index out of range for kinetic species")
+
+
+def _iter_kinetic_scan_batches(options: _KineticScanRunOptions):
+    if options.use_batch:
+        return _iter_ky_batches(
+            options.ky_values,
+            ky_batch=options.ky_batch,
+            fixed_batch_shape=options.fixed_batch_shape,
+        )
+    return _iter_ky_batches(options.ky_values, ky_batch=1, fixed_batch_shape=False)
 
 
 def _prepare_kinetic_scan_batch(
@@ -279,9 +332,7 @@ def _append_kinetic_streaming_results(
     window_fraction: float,
     streaming_amp_floor: float,
     density_species_index: int,
-    gammas: list[float],
-    omegas: list[float],
-    ky_out: list[float],
+    output: _KineticScanOutput,
 ) -> None:
     t_total = float(time_cfg.t_max)
     tmin_i, tmax_i = _resolve_streaming_window(
@@ -328,9 +379,9 @@ def _append_kinetic_streaming_results(
             setup.params,
             setup.diagnostic_norm,
         )
-        gammas.append(gamma_i)
-        omegas.append(omega_i)
-        ky_out.append(float(batch.ky_slice[local_idx]))
+        output.gammas.append(gamma_i)
+        output.omegas.append(omega_i)
+        output.ky.append(float(batch.ky_slice[local_idx]))
 
 
 def _integrate_kinetic_scan_history(
@@ -416,9 +467,7 @@ def _append_kinetic_sampled_results(
     fit_policy: ScanFitWindowPolicy,
     density_species_index: int,
     stride: int,
-    gammas: list[float],
-    omegas: list[float],
-    ky_out: list[float],
+    output: _KineticScanOutput,
 ) -> None:
     density_np = phi_t if fit_key == "density" and density_t is None else density_t
     for local_idx in range(batch.valid_count):
@@ -456,9 +505,103 @@ def _append_kinetic_sampled_results(
             params=setup.params,
             diagnostic_norm=setup.diagnostic_norm,
         )
-        gammas.append(gamma)
-        omegas.append(omega)
-        ky_out.append(float(batch.ky_slice[local_idx]))
+        output.gammas.append(gamma)
+        output.omegas.append(omega)
+        output.ky.append(float(batch.ky_slice[local_idx]))
+
+
+def _append_kinetic_krylov_result(
+    batch: _KineticScanBatch,
+    setup: _KineticScanSetup,
+    *,
+    krylov_cfg: KrylovConfig | None,
+    output: _KineticScanOutput,
+) -> None:
+    gamma, omega = _run_kinetic_scan_krylov(batch, setup, krylov_cfg)
+    output.gammas.append(gamma)
+    output.omegas.append(omega)
+    output.ky.append(float(batch.ky_slice[0]))
+
+
+def _append_kinetic_time_batch_results(
+    *,
+    batch_start: int,
+    ky_slice: np.ndarray,
+    valid_count: int,
+    setup: _KineticScanSetup,
+    run_options: _KineticScanRunOptions,
+    fit_options: _KineticScanFitOptions,
+    Nl: int,
+    Nm: int,
+    output: _KineticScanOutput,
+) -> None:
+    batch = _prepare_kinetic_scan_batch(
+        setup,
+        batch_start=batch_start,
+        ky_slice=ky_slice,
+        valid_count=valid_count,
+        use_batch=run_options.use_batch,
+        dt=run_options.dt,
+        steps=run_options.steps,
+        Nl=Nl,
+        Nm=Nm,
+        init_species_index=run_options.init_species_index,
+    )
+    if run_options.solver_key == "krylov":
+        _append_kinetic_krylov_result(
+            batch, setup, krylov_cfg=run_options.krylov_cfg, output=output
+        )
+        return
+
+    time_cfg_i = _kinetic_scan_time_config(
+        run_options.time_cfg,
+        dt=batch.dt,
+        steps=batch.steps,
+        sample_stride=run_options.sample_stride,
+    )
+    if time_cfg_i is not None and time_cfg_i.use_diffrax and run_options.streaming_fit:
+        _append_kinetic_streaming_results(
+            batch,
+            setup,
+            time_cfg=time_cfg_i,
+            fit_key=run_options.fit_key,
+            mode_method=run_options.mode_method,
+            tmin=fit_options.tmin,
+            tmax=fit_options.tmax,
+            start_fraction=fit_options.start_fraction,
+            window_fraction=fit_options.window_fraction,
+            streaming_amp_floor=run_options.streaming_amp_floor,
+            density_species_index=run_options.density_species_index,
+            output=output,
+        )
+        return
+
+    phi_t, density_t, stride = _integrate_kinetic_scan_history(
+        batch,
+        setup,
+        time_cfg=time_cfg_i,
+        method=run_options.method,
+        fit_key=run_options.fit_key,
+        mode_only=run_options.mode_only,
+        mode_method=run_options.mode_method,
+        sample_stride=run_options.sample_stride,
+        density_species_index=run_options.density_species_index,
+        show_progress=run_options.show_progress,
+    )
+    _append_kinetic_sampled_results(
+        batch,
+        setup,
+        phi_t=phi_t,
+        density_t=density_t,
+        fit_key=run_options.fit_key,
+        mode_only=run_options.mode_only,
+        mode_method=run_options.mode_method,
+        fit_policy=fit_options.fit_policy,
+        density_species_index=run_options.density_species_index,
+        stride=stride,
+        output=output,
+    )
+
 
 def run_kinetic_scan(
     ky_values: np.ndarray,
@@ -511,10 +654,6 @@ def run_kinetic_scan(
     )
     solver_key = normalize_solver_key(solver)
     fit_key = normalize_fit_signal(fit_signal)
-    gammas = []
-    omegas = []
-    ky_out = []
-
     mode_method = resolve_scan_mode_method(mode_method, mode_only=mode_only)
     use_batch = should_use_ky_batch(
         ky_batch=ky_batch,
@@ -540,94 +679,56 @@ def run_kinetic_scan(
     )
 
     ky_values_arr = np.asarray(ky_values, dtype=float)
-    if use_batch:
-        ky_iter = _iter_ky_batches(
-            ky_values_arr,
-            ky_batch=ky_batch,
-            fixed_batch_shape=fixed_batch_shape,
-        )
-    else:
-        ky_iter = _iter_ky_batches(ky_values_arr, ky_batch=1, fixed_batch_shape=False)
-
     _validate_kinetic_species_indices(
         init_species_index=init_species_index,
         density_species_index=density_species_index,
     )
 
-    for batch_start, ky_slice, valid_count in ky_iter:
-        batch = _prepare_kinetic_scan_batch(
-            setup,
+    run_options = _KineticScanRunOptions(
+        ky_values=ky_values_arr,
+        time_cfg=time_cfg,
+        solver_key=solver_key,
+        krylov_cfg=krylov_cfg,
+        dt=dt,
+        steps=steps,
+        method=method,
+        sample_stride=sample_stride,
+        mode_method=mode_method,
+        mode_only=mode_only,
+        fit_key=fit_key,
+        ky_batch=ky_batch,
+        fixed_batch_shape=fixed_batch_shape,
+        streaming_fit=streaming_fit,
+        streaming_amp_floor=streaming_amp_floor,
+        init_species_index=init_species_index,
+        density_species_index=density_species_index,
+        use_batch=use_batch,
+        show_progress=show_progress,
+    )
+    fit_options = _KineticScanFitOptions(
+        tmin=tmin,
+        tmax=tmax,
+        start_fraction=start_fraction,
+        window_fraction=window_fraction,
+        fit_policy=fit_policy,
+    )
+    output = _KineticScanOutput.empty()
+    for batch_start, ky_slice, valid_count in _iter_kinetic_scan_batches(run_options):
+        _append_kinetic_time_batch_results(
             batch_start=batch_start,
             ky_slice=ky_slice,
             valid_count=valid_count,
-            use_batch=use_batch,
-            dt=dt,
-            steps=steps,
+            setup=setup,
+            run_options=run_options,
+            fit_options=fit_options,
             Nl=Nl,
             Nm=Nm,
-            init_species_index=init_species_index,
-        )
-        if solver_key == "krylov":
-            gamma, omega = _run_kinetic_scan_krylov(batch, setup, krylov_cfg)
-            gammas.append(gamma)
-            omegas.append(omega)
-            ky_out.append(float(ky_slice[0]))
-            continue
-
-        time_cfg_i = _kinetic_scan_time_config(
-            time_cfg,
-            dt=batch.dt,
-            steps=batch.steps,
-            sample_stride=sample_stride,
-        )
-        if time_cfg_i is not None and time_cfg_i.use_diffrax and streaming_fit:
-            _append_kinetic_streaming_results(
-                batch,
-                setup,
-                time_cfg=time_cfg_i,
-                fit_key=fit_key,
-                mode_method=mode_method,
-                tmin=tmin,
-                tmax=tmax,
-                start_fraction=start_fraction,
-                window_fraction=window_fraction,
-                streaming_amp_floor=streaming_amp_floor,
-                density_species_index=density_species_index,
-                gammas=gammas,
-                omegas=omegas,
-                ky_out=ky_out,
-            )
-            continue
-
-        phi_t, density_t, stride = _integrate_kinetic_scan_history(
-            batch,
-            setup,
-            time_cfg=time_cfg_i,
-            method=method,
-            fit_key=fit_key,
-            mode_only=mode_only,
-            mode_method=mode_method,
-            sample_stride=sample_stride,
-            density_species_index=density_species_index,
-            show_progress=show_progress,
-        )
-        _append_kinetic_sampled_results(
-            batch,
-            setup,
-            phi_t=phi_t,
-            density_t=density_t,
-            fit_key=fit_key,
-            mode_only=mode_only,
-            mode_method=mode_method,
-            fit_policy=fit_policy,
-            density_species_index=density_species_index,
-            stride=stride,
-            gammas=gammas,
-            omegas=omegas,
-            ky_out=ky_out,
+            output=output,
         )
     return LinearScanResult(
-        ky=np.array(ky_out), gamma=np.array(gammas), omega=np.array(omegas)
+        ky=np.array(output.ky),
+        gamma=np.array(output.gammas),
+        omega=np.array(output.omegas),
     )
 
 
