@@ -108,6 +108,29 @@ class _CycloneScanSetup:
     fit_policy: ScanFitWindowPolicy
 
 
+@dataclass(frozen=True)
+class _CycloneScanExecutionOptions:
+    """Resolved numerical controls passed to the Cyclone scan dispatcher."""
+
+    ky_values: np.ndarray
+    Nl: int
+    Nm: int
+    dt: float | np.ndarray
+    steps: int | np.ndarray
+    method: str
+    time_cfg: TimeConfig | None
+    krylov_cfg: KrylovConfig | None
+    tmin: float | None
+    tmax: float | None
+    sample_stride: int | None
+    use_jit: bool
+    ky_batch: int
+    fixed_batch_shape: bool
+    streaming_amp_floor: float
+    mode_follow: bool
+    show_progress: bool
+
+
 def _scan_hooks() -> CycloneScanHooks:
     return CycloneScanHooks(
         cyclone_scan_result=CycloneScanResult,
@@ -445,6 +468,56 @@ def _run_cyclone_scan_time_branch(
     )
 
 
+def _dispatch_cyclone_scan(
+    setup: _CycloneScanSetup,
+    options: _CycloneScanExecutionOptions,
+) -> CycloneScanResult:
+    """Dispatch a resolved Cyclone scan to the selected numerical path."""
+
+    if setup.solver_key == "krylov":
+        return _run_cyclone_scan_krylov_branch(
+            setup=setup,
+            ky_values=options.ky_values,
+            Nl=options.Nl,
+            Nm=options.Nm,
+            mode_follow=options.mode_follow,
+            krylov_cfg=options.krylov_cfg,
+            show_progress=options.show_progress,
+        )
+
+    if setup.solver_key == "explicit_time":
+        return _run_cyclone_scan_explicit_branch(
+            setup=setup,
+            ky_values=options.ky_values,
+            Nl=options.Nl,
+            Nm=options.Nm,
+            dt=options.dt,
+            steps=options.steps,
+            time_cfg=options.time_cfg,
+            krylov_cfg=options.krylov_cfg,
+            show_progress=options.show_progress,
+        )
+    return _run_cyclone_scan_time_branch(
+        setup=setup,
+        ky_values=options.ky_values,
+        Nl=options.Nl,
+        Nm=options.Nm,
+        dt=options.dt,
+        steps=options.steps,
+        method=options.method,
+        time_cfg=options.time_cfg,
+        krylov_cfg=options.krylov_cfg,
+        tmin=options.tmin,
+        tmax=options.tmax,
+        sample_stride=options.sample_stride,
+        use_jit=options.use_jit,
+        ky_batch=options.ky_batch,
+        fixed_batch_shape=options.fixed_batch_shape,
+        streaming_amp_floor=options.streaming_amp_floor,
+        show_progress=options.show_progress,
+    )
+
+
 def run_cyclone_scan(
     ky_values: np.ndarray,
     Nl: int = 6,
@@ -539,34 +612,8 @@ def run_cyclone_scan(
         fit_policy=fit_policy,
     )
 
-    ky_values_arr = np.asarray(ky_values, dtype=float)
-
-    if setup.solver_key == "krylov":
-        return _run_cyclone_scan_krylov_branch(
-            setup=setup,
-            ky_values=ky_values_arr,
-            Nl=Nl,
-            Nm=Nm,
-            mode_follow=mode_follow,
-            krylov_cfg=krylov_cfg,
-            show_progress=show_progress,
-        )
-
-    if setup.solver_key == "explicit_time":
-        return _run_cyclone_scan_explicit_branch(
-            setup=setup,
-            ky_values=ky_values_arr,
-            Nl=Nl,
-            Nm=Nm,
-            dt=dt,
-            steps=steps,
-            time_cfg=time_cfg,
-            krylov_cfg=krylov_cfg,
-            show_progress=show_progress,
-        )
-    return _run_cyclone_scan_time_branch(
-        setup=setup,
-        ky_values=ky_values_arr,
+    options = _CycloneScanExecutionOptions(
+        ky_values=np.asarray(ky_values, dtype=float),
         Nl=Nl,
         Nm=Nm,
         dt=dt,
@@ -581,5 +628,7 @@ def run_cyclone_scan(
         ky_batch=ky_batch,
         fixed_batch_shape=fixed_batch_shape,
         streaming_amp_floor=streaming_amp_floor,
+        mode_follow=mode_follow,
         show_progress=show_progress,
     )
+    return _dispatch_cyclone_scan(setup, options)
