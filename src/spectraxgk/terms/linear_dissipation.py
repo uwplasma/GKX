@@ -330,6 +330,102 @@ def _apply_parallel_hypercollision(
     return abs_kz * kz_source
 
 
+def _inactive_hypercollision_result(
+    G: jnp.ndarray,
+    *,
+    weight: jnp.ndarray,
+    nu_hyper: jnp.ndarray,
+    nu_hyper_l: jnp.ndarray,
+    nu_hyper_m: jnp.ndarray,
+    nu_hyper_lm: jnp.ndarray,
+    hypercollisions_const: jnp.ndarray,
+    hypercollisions_kz: jnp.ndarray,
+    dtype: jnp.dtype,
+) -> jnp.ndarray | None:
+    """Return a zero result when all hypercollision branches are statically off."""
+
+    if _is_static_zero(weight, dtype) or _hypercollision_operator_is_static_zero(
+        weight=weight,
+        nu_hyper=nu_hyper,
+        nu_hyper_l=nu_hyper_l,
+        nu_hyper_m=nu_hyper_m,
+        nu_hyper_lm=nu_hyper_lm,
+        hypercollisions_const=hypercollisions_const,
+        hypercollisions_kz=hypercollisions_kz,
+        dtype=dtype,
+    ):
+        return _hypercollision_zero_result(
+            G,
+            weight=weight,
+            nu_hyper=nu_hyper,
+            nu_hyper_l=nu_hyper_l,
+            nu_hyper_m=nu_hyper_m,
+            nu_hyper_lm=nu_hyper_lm,
+            hypercollisions_const=hypercollisions_const,
+            hypercollisions_kz=hypercollisions_kz,
+        )
+    return None
+
+
+def _hypercollision_kz_weight_is_static_zero(
+    *,
+    weight: jnp.ndarray,
+    hypercollisions_kz: jnp.ndarray,
+) -> bool:
+    """Return true when the parallel hypercollision branch is statically off."""
+
+    kz_weight = jnp.asarray(weight) * jnp.asarray(hypercollisions_kz)
+    return not isinstance(kz_weight, jax.core.Tracer) and bool(
+        np.all(np.asarray(kz_weight) == 0.0)
+    )
+
+
+def _parallel_hypercollision_contribution(
+    G: jnp.ndarray,
+    *,
+    weight: jnp.ndarray,
+    hypercollisions_kz: jnp.ndarray,
+    nu_hyper_m: jnp.ndarray,
+    m_norm_kz_factor: jnp.ndarray,
+    vth: jnp.ndarray,
+    kpar_scale: jnp.ndarray,
+    mask_kz: jnp.ndarray,
+    m_pow: jnp.ndarray,
+    kz: jnp.ndarray,
+    linked_indices: tuple[jnp.ndarray, ...] | None,
+    linked_kz: tuple[jnp.ndarray, ...] | None,
+    linked_inverse_permutation: jnp.ndarray | None,
+    linked_full_cover: bool,
+    linked_gather_map: jnp.ndarray | None,
+    linked_gather_mask: jnp.ndarray | None,
+    linked_use_gather: bool,
+) -> jnp.ndarray:
+    """Compute the ``|k_z|`` hypercollision branch, including linked tubes."""
+
+    kz_source = _hypercollision_kz_source(
+        G,
+        weight=weight,
+        hypercollisions_kz=hypercollisions_kz,
+        nu_hyper_m=nu_hyper_m,
+        m_norm_kz_factor=m_norm_kz_factor,
+        vth=vth,
+        kpar_scale=kpar_scale,
+        mask_kz=mask_kz,
+        m_pow=m_pow,
+    )
+    return _apply_parallel_hypercollision(
+        kz_source,
+        kz=kz,
+        linked_indices=linked_indices,
+        linked_kz=linked_kz,
+        linked_inverse_permutation=linked_inverse_permutation,
+        linked_full_cover=linked_full_cover,
+        linked_gather_map=linked_gather_map,
+        linked_gather_mask=linked_gather_mask,
+        linked_use_gather=linked_use_gather,
+    )
+
+
 def hypercollisions_contribution(
     G: jnp.ndarray,
     *,
@@ -360,19 +456,8 @@ def hypercollisions_contribution(
     linked_use_gather: bool = False,
 ) -> jnp.ndarray:
     real_dtype = jnp.real(G).dtype
-    if _is_static_zero(weight, real_dtype):
-        return _hypercollision_zero_result(
-            G,
-            weight=weight,
-            nu_hyper=nu_hyper,
-            nu_hyper_l=nu_hyper_l,
-            nu_hyper_m=nu_hyper_m,
-            nu_hyper_lm=nu_hyper_lm,
-            hypercollisions_const=hypercollisions_const,
-            hypercollisions_kz=hypercollisions_kz,
-        )
-
-    if _hypercollision_operator_is_static_zero(
+    inactive_result = _inactive_hypercollision_result(
+        G,
         weight=weight,
         nu_hyper=nu_hyper,
         nu_hyper_l=nu_hyper_l,
@@ -381,17 +466,9 @@ def hypercollisions_contribution(
         hypercollisions_const=hypercollisions_const,
         hypercollisions_kz=hypercollisions_kz,
         dtype=real_dtype,
-    ):
-        return _hypercollision_zero_result(
-            G,
-            weight=weight,
-            nu_hyper=nu_hyper,
-            nu_hyper_l=nu_hyper_l,
-            nu_hyper_m=nu_hyper_m,
-            nu_hyper_lm=nu_hyper_lm,
-            hypercollisions_const=hypercollisions_const,
-            hypercollisions_kz=hypercollisions_kz,
-        )
+    )
+    if inactive_result is not None:
+        return inactive_result
 
     dG = _constant_hypercollision_contribution(
         G,
@@ -409,13 +486,12 @@ def hypercollisions_contribution(
         weight=weight,
     )
 
-    kz_weight = jnp.asarray(weight) * jnp.asarray(hypercollisions_kz)
-    if not isinstance(kz_weight, jax.core.Tracer) and np.all(
-        np.asarray(kz_weight) == 0.0
+    if _hypercollision_kz_weight_is_static_zero(
+        weight=weight, hypercollisions_kz=hypercollisions_kz
     ):
         return dG
 
-    kz_source = _hypercollision_kz_source(
+    return dG + _parallel_hypercollision_contribution(
         G,
         weight=weight,
         hypercollisions_kz=hypercollisions_kz,
@@ -425,9 +501,6 @@ def hypercollisions_contribution(
         kpar_scale=kpar_scale,
         mask_kz=mask_kz,
         m_pow=m_pow,
-    )
-    kz_term = _apply_parallel_hypercollision(
-        kz_source,
         kz=kz,
         linked_indices=linked_indices,
         linked_kz=linked_kz,
@@ -437,7 +510,6 @@ def hypercollisions_contribution(
         linked_gather_mask=linked_gather_mask,
         linked_use_gather=linked_use_gather,
     )
-    return dG + kz_term
 
 
 def hyperdiffusion_contribution(
