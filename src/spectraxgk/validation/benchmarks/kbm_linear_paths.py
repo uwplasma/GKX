@@ -96,6 +96,195 @@ def fit_kbm_window(
     return gamma_val, omega_val
 
 
+def _build_kbm_explicit_time_config(
+    *,
+    dt: float,
+    steps: int,
+    time_cfg: Any,
+    sample_stride: int | None,
+) -> ExplicitTimeConfig:
+    """Build the explicit-time policy used by reference-aligned KBM runs."""
+
+    return ExplicitTimeConfig(
+        dt=dt,
+        t_max=dt * steps,
+        sample_stride=max(int(sample_stride or 1), 1),
+        fixed_dt=bool(time_cfg.fixed_dt) if time_cfg is not None else False,
+        use_dealias_mask=bool(getattr(time_cfg, "use_dealias_mask", False))
+        if time_cfg is not None
+        else False,
+        dt_min=float(time_cfg.dt_min) if time_cfg is not None else 1.0e-7,
+        dt_max=float(time_cfg.dt_max)
+        if (time_cfg is not None and time_cfg.dt_max is not None)
+        else None,
+        cfl=float(time_cfg.cfl) if time_cfg is not None else 0.9,
+        cfl_fac=(
+            resolve_cfl_fac(str(time_cfg.method), time_cfg.cfl_fac)
+            if time_cfg is not None
+            else float(ExplicitTimeConfig.cfl_fac)
+        ),
+    )
+
+
+def _fit_kbm_projected_rates(
+    *,
+    phi_t_np: np.ndarray,
+    gamma_t: Any,
+    omega_t: Any,
+    t_out: np.ndarray,
+    sel: Any,
+    mode_method: str,
+    auto_window: bool,
+    tmin: float | None,
+    tmax: float | None,
+    window_fraction: float,
+    min_points: int,
+    start_fraction: float,
+    growth_weight: float,
+    require_positive: bool,
+    min_amp_fraction: float,
+) -> tuple[float, float]:
+    """Fit KBM rates from instantaneous diagnostics with robust fallbacks."""
+
+    try:
+        gamma, omega, _g_t, _o_t, _t_mid = instantaneous_growth_rate_from_phi(
+            phi_t_np,
+            t_out,
+            sel,
+            navg_fraction=0.5,
+            mode_method=mode_method,
+        )
+        return gamma, omega
+    except ValueError:
+        try:
+            gamma, omega, _g_t, _o_t = windowed_growth_rate_from_omega_series(
+                np.asarray(gamma_t),
+                np.asarray(omega_t),
+                sel,
+                navg_fraction=0.5,
+            )
+            return gamma, omega
+        except ValueError:
+            signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
+            return fit_kbm_window(
+                signal,
+                t_out,
+                auto_window=auto_window,
+                tmin=tmin,
+                tmax=tmax,
+                window_fraction=window_fraction,
+                min_points=min_points,
+                start_fraction=start_fraction,
+                growth_weight=growth_weight,
+                require_positive=require_positive,
+                min_amp_fraction=min_amp_fraction,
+            )
+
+
+def _fit_kbm_trace_rates(
+    *,
+    phi_t_np: np.ndarray,
+    t_out: np.ndarray,
+    sel: Any,
+    mode_method: str,
+    auto_window: bool,
+    tmin: float | None,
+    tmax: float | None,
+    window_fraction: float,
+    min_points: int,
+    start_fraction: float,
+    growth_weight: float,
+    require_positive: bool,
+    min_amp_fraction: float,
+) -> tuple[float, float]:
+    """Fit KBM rates directly from the selected complex field trace."""
+
+    signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
+    if auto_window and tmin is None and tmax is None:
+        gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
+            t_out,
+            signal,
+            window_method="fixed",
+            window_fraction=window_fraction,
+            min_points=min_points,
+            start_fraction=start_fraction,
+            growth_weight=growth_weight,
+            require_positive=require_positive,
+            min_amp_fraction=min_amp_fraction,
+        )
+        return gamma, omega
+    return fit_kbm_window(
+        signal,
+        t_out,
+        auto_window=auto_window,
+        tmin=tmin,
+        tmax=tmax,
+        window_fraction=window_fraction,
+        min_points=min_points,
+        start_fraction=start_fraction,
+        growth_weight=growth_weight,
+        require_positive=require_positive,
+        min_amp_fraction=min_amp_fraction,
+    )
+
+
+def _fit_kbm_explicit_rates(
+    *,
+    phi_t_np: np.ndarray,
+    gamma_t: Any,
+    omega_t: Any,
+    t_out: np.ndarray,
+    sel: Any,
+    mode_method: str,
+    auto_window: bool,
+    tmin: float | None,
+    tmax: float | None,
+    window_fraction: float,
+    min_points: int,
+    start_fraction: float,
+    growth_weight: float,
+    require_positive: bool,
+    min_amp_fraction: float,
+) -> tuple[float, float]:
+    """Extract the explicit-time KBM growth rate and frequency."""
+
+    if t_out.size <= 1:
+        return float("nan"), float("nan")
+    if mode_method in {"z_index", "max"}:
+        return _fit_kbm_projected_rates(
+            phi_t_np=phi_t_np,
+            gamma_t=gamma_t,
+            omega_t=omega_t,
+            t_out=t_out,
+            sel=sel,
+            mode_method=mode_method,
+            auto_window=auto_window,
+            tmin=tmin,
+            tmax=tmax,
+            window_fraction=window_fraction,
+            min_points=min_points,
+            start_fraction=start_fraction,
+            growth_weight=growth_weight,
+            require_positive=require_positive,
+            min_amp_fraction=min_amp_fraction,
+        )
+    return _fit_kbm_trace_rates(
+        phi_t_np=phi_t_np,
+        t_out=t_out,
+        sel=sel,
+        mode_method=mode_method,
+        auto_window=auto_window,
+        tmin=tmin,
+        tmax=tmax,
+        window_fraction=window_fraction,
+        min_points=min_points,
+        start_fraction=start_fraction,
+        growth_weight=growth_weight,
+        require_positive=require_positive,
+        min_amp_fraction=min_amp_fraction,
+    )
+
+
 def run_kbm_explicit_time_path(
     *,
     G0_jax: Any,
@@ -125,24 +314,11 @@ def run_kbm_explicit_time_path(
     """Run KBM's reference-aligned explicit diagnostics branch."""
 
     explicit_mode_method = mode_method if mode_method in {"z_index", "max"} else "z_index"
-    explicit_time_cfg = ExplicitTimeConfig(
+    explicit_time_cfg = _build_kbm_explicit_time_config(
         dt=dt,
-        t_max=dt * steps,
-        sample_stride=max(int(sample_stride or 1), 1),
-        fixed_dt=bool(time_cfg.fixed_dt) if time_cfg is not None else False,
-        use_dealias_mask=bool(getattr(time_cfg, "use_dealias_mask", False))
-        if time_cfg is not None
-        else False,
-        dt_min=float(time_cfg.dt_min) if time_cfg is not None else 1.0e-7,
-        dt_max=float(time_cfg.dt_max)
-        if (time_cfg is not None and time_cfg.dt_max is not None)
-        else None,
-        cfl=float(time_cfg.cfl) if time_cfg is not None else 0.9,
-        cfl_fac=(
-            resolve_cfl_fac(str(time_cfg.method), time_cfg.cfl_fac)
-            if time_cfg is not None
-            else float(ExplicitTimeConfig.cfl_fac)
-        ),
+        steps=steps,
+        time_cfg=time_cfg,
+        sample_stride=sample_stride,
     )
     t_arr, phi_t, gamma_t, omega_t, _diag = integrate_linear_explicit_diagnostics(
         G0_jax,
@@ -158,70 +334,23 @@ def run_kbm_explicit_time_path(
     )
     t_out = np.asarray(t_arr, dtype=float)
     phi_t_np = np.asarray(phi_t)
-    if t_out.size > 1:
-        if mode_method in {"z_index", "max"}:
-            try:
-                gamma, omega, _g_t, _o_t, _t_mid = instantaneous_growth_rate_from_phi(
-                    phi_t_np,
-                    t_out,
-                    sel,
-                    navg_fraction=0.5,
-                    mode_method=mode_method,
-                )
-            except ValueError:
-                try:
-                    gamma, omega, _g_t, _o_t = windowed_growth_rate_from_omega_series(
-                        np.asarray(gamma_t),
-                        np.asarray(omega_t),
-                        sel,
-                        navg_fraction=0.5,
-                    )
-                except ValueError:
-                    signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
-                    gamma, omega = fit_kbm_window(
-                        signal,
-                        t_out,
-                        auto_window=auto_window,
-                        tmin=tmin,
-                        tmax=tmax,
-                        window_fraction=window_fraction,
-                        min_points=min_points,
-                        start_fraction=start_fraction,
-                        growth_weight=growth_weight,
-                        require_positive=require_positive,
-                        min_amp_fraction=min_amp_fraction,
-                    )
-        else:
-            signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
-            if auto_window and tmin is None and tmax is None:
-                gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
-                    t_out,
-                    signal,
-                    window_method="fixed",
-                    window_fraction=window_fraction,
-                    min_points=min_points,
-                    start_fraction=start_fraction,
-                    growth_weight=growth_weight,
-                    require_positive=require_positive,
-                    min_amp_fraction=min_amp_fraction,
-                )
-            else:
-                gamma, omega = fit_kbm_window(
-                    signal,
-                    t_out,
-                    auto_window=auto_window,
-                    tmin=tmin,
-                    tmax=tmax,
-                    window_fraction=window_fraction,
-                    min_points=min_points,
-                    start_fraction=start_fraction,
-                    growth_weight=growth_weight,
-                    require_positive=require_positive,
-                    min_amp_fraction=min_amp_fraction,
-                )
-    else:
-        gamma = float("nan")
-        omega = float("nan")
+    gamma, omega = _fit_kbm_explicit_rates(
+        phi_t_np=phi_t_np,
+        gamma_t=gamma_t,
+        omega_t=omega_t,
+        t_out=t_out,
+        sel=sel,
+        mode_method=mode_method,
+        auto_window=auto_window,
+        tmin=tmin,
+        tmax=tmax,
+        window_fraction=window_fraction,
+        min_points=min_points,
+        start_fraction=start_fraction,
+        growth_weight=growth_weight,
+        require_positive=require_positive,
+        min_amp_fraction=min_amp_fraction,
+    )
     gamma, omega = _normalize_growth_rate(gamma, omega, params, diagnostic_norm)
     return LinearRunResult(
         t=t_out,
