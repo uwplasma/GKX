@@ -58,6 +58,143 @@ def _ensemble_row(
     }
 
 
+def _single_window_row(
+    payload: dict[str, Any],
+    *,
+    path: str | None,
+    kind: str,
+) -> dict[str, Any]:
+    """Return a row for one convergence-window summary."""
+
+    ready, failures = nonlinear_window_stats_promotion_ready(payload)
+    return {
+        "path": path,
+        "kind": kind,
+        "case": str(payload.get("case", "")),
+        "passed": _artifact_passed(payload),
+        "promotion_ready": ready,
+        "failures": failures,
+    }
+
+
+def _unsupported_window_row(
+    payload: dict[str, Any],
+    *,
+    path: str | None,
+    kind: str,
+) -> dict[str, Any]:
+    """Return a non-qualifying row for an unsupported window artifact."""
+
+    return {
+        "path": path,
+        "source": "unsupported_window_artifact",
+        "kind": kind,
+        "passed": _artifact_passed(payload),
+        "qualifies_for_replicated_long_window_uncertainty": False,
+    }
+
+
+def _collect_window_artifact_rows(
+    window_artifacts: Sequence[dict[str, Any]],
+    path_list: Sequence[str | None],
+    *,
+    config: NonlinearTurbulenceGradientEvidenceConfig,
+) -> tuple[
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[str | None],
+]:
+    """Classify input window artifacts into ensemble and convergence rows."""
+
+    rows: list[dict[str, Any]] = []
+    convergence_reports: list[dict[str, Any]] = []
+    convergence_paths: list[str | None] = []
+    single_window_rows: list[dict[str, Any]] = []
+
+    for payload, path in zip(window_artifacts, path_list):
+        kind = str(payload.get("kind", ""))
+        if kind == "nonlinear_window_ensemble_report":
+            rows.append(
+                _ensemble_row(
+                    payload,
+                    path=path,
+                    source="input_ensemble",
+                    config=config,
+                )
+            )
+        elif kind == "nonlinear_window_convergence_report":
+            single_window_rows.append(
+                _single_window_row(payload, path=path, kind=kind)
+            )
+            convergence_reports.append(payload)
+            convergence_paths.append(path)
+        else:
+            rows.append(_unsupported_window_row(payload, path=path, kind=kind))
+    return rows, single_window_rows, convergence_reports, convergence_paths
+
+
+def _derived_ensemble_row(
+    convergence_reports: Sequence[dict[str, Any]],
+    convergence_paths: Sequence[str | None],
+    *,
+    config: NonlinearTurbulenceGradientEvidenceConfig,
+) -> dict[str, Any] | None:
+    """Build a replicated-window ensemble row from individual windows."""
+
+    if len(convergence_reports) < int(config.min_window_reports):
+        return None
+    derived_payload = nonlinear_window_ensemble_report(
+        convergence_reports,
+        case="derived_long_window_replicate_evidence",
+        comparison="derived_from_supplied_window_summaries",
+        config=NonlinearWindowEnsembleConfig(
+            min_reports=config.min_window_reports,
+            max_mean_rel_spread=config.max_window_mean_rel_spread,
+            max_combined_sem_rel=config.max_window_combined_sem_rel,
+            value_floor=config.value_floor,
+            require_individual_passed=True,
+        ),
+    )
+    row = _ensemble_row(
+        derived_payload,
+        path=None,
+        source="derived_from_window_summaries",
+        config=config,
+    )
+    row["input_paths"] = list(convergence_paths)
+    return row
+
+
+def _qualifying_window_rows(rows: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return ensemble rows that qualify as replicated long-window evidence."""
+
+    return [
+        row
+        for row in rows
+        if bool(row.get("qualifies_for_replicated_long_window_uncertainty", False))
+    ]
+
+
+def _window_evidence_gates(
+    qualifying_rows: Sequence[dict[str, Any]],
+    *,
+    config: NonlinearTurbulenceGradientEvidenceConfig,
+) -> list[dict[str, Any]]:
+    """Return the gate list for replicated long-window uncertainty evidence."""
+
+    return [
+        _gate(
+            "replicated_long_window_uncertainty",
+            bool(qualifying_rows),
+            "qualifying_ensembles={count} min_window_reports={min_reports}".format(
+                count=len(qualifying_rows),
+                min_reports=config.min_window_reports,
+            ),
+        )
+    ]
+
+
 def summarize_window_evidence(
     window_artifacts: Sequence[dict[str, Any]],
     *,
@@ -77,80 +214,19 @@ def summarize_window_evidence(
     if len(path_list) != len(window_artifacts):
         raise ValueError("paths length must match window_artifacts length")
 
-    rows: list[dict[str, Any]] = []
-    convergence_reports: list[dict[str, Any]] = []
-    convergence_paths: list[str | None] = []
-    single_window_rows: list[dict[str, Any]] = []
-
-    for payload, path in zip(window_artifacts, path_list):
-        kind = str(payload.get("kind", ""))
-        if kind == "nonlinear_window_ensemble_report":
-            rows.append(
-                _ensemble_row(payload, path=path, source="input_ensemble", config=cfg)
-            )
-        elif kind == "nonlinear_window_convergence_report":
-            ready, failures = nonlinear_window_stats_promotion_ready(payload)
-            single_window_rows.append(
-                {
-                    "path": path,
-                    "kind": kind,
-                    "case": str(payload.get("case", "")),
-                    "passed": _artifact_passed(payload),
-                    "promotion_ready": ready,
-                    "failures": failures,
-                }
-            )
-            convergence_reports.append(payload)
-            convergence_paths.append(path)
-        else:
-            rows.append(
-                {
-                    "path": path,
-                    "source": "unsupported_window_artifact",
-                    "kind": kind,
-                    "passed": _artifact_passed(payload),
-                    "qualifies_for_replicated_long_window_uncertainty": False,
-                }
-            )
-
-    derived_ensemble = None
-    if len(convergence_reports) >= int(cfg.min_window_reports):
-        derived_payload = nonlinear_window_ensemble_report(
-            convergence_reports,
-            case="derived_long_window_replicate_evidence",
-            comparison="derived_from_supplied_window_summaries",
-            config=NonlinearWindowEnsembleConfig(
-                min_reports=cfg.min_window_reports,
-                max_mean_rel_spread=cfg.max_window_mean_rel_spread,
-                max_combined_sem_rel=cfg.max_window_combined_sem_rel,
-                value_floor=cfg.value_floor,
-                require_individual_passed=True,
-            ),
-        )
-        derived_ensemble = _ensemble_row(
-            derived_payload,
-            path=None,
-            source="derived_from_window_summaries",
-            config=cfg,
-        )
-        derived_ensemble["input_paths"] = convergence_paths
+    rows, single_window_rows, convergence_reports, convergence_paths = (
+        _collect_window_artifact_rows(window_artifacts, path_list, config=cfg)
+    )
+    derived_ensemble = _derived_ensemble_row(
+        convergence_reports,
+        convergence_paths,
+        config=cfg,
+    )
+    if derived_ensemble is not None:
         rows.append(derived_ensemble)
 
-    qualifying_rows = [
-        row
-        for row in rows
-        if bool(row.get("qualifies_for_replicated_long_window_uncertainty", False))
-    ]
-    gates = [
-        _gate(
-            "replicated_long_window_uncertainty",
-            bool(qualifying_rows),
-            "qualifying_ensembles={count} min_window_reports={min_reports}".format(
-                count=len(qualifying_rows),
-                min_reports=cfg.min_window_reports,
-            ),
-        )
-    ]
+    qualifying_rows = _qualifying_window_rows(rows)
+    gates = _window_evidence_gates(qualifying_rows, config=cfg)
     return {
         "passed": bool(qualifying_rows),
         "gates": gates,
