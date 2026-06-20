@@ -82,6 +82,26 @@ class _LaguerreGyroCache:
     laguerre_j1_over_alpha: jnp.ndarray
 
 
+@dataclass(frozen=True)
+class _KxLinkCache:
+    kx_link_plus: jnp.ndarray
+    kx_link_minus: jnp.ndarray
+    kx_link_mask_plus: jnp.ndarray
+    kx_link_mask_minus: jnp.ndarray
+    jtwist: int
+
+
+@dataclass(frozen=True)
+class _LinkedFFTCache:
+    linked_indices: tuple[jnp.ndarray, ...]
+    linked_kz: tuple[jnp.ndarray, ...]
+    linked_inverse_permutation: jnp.ndarray
+    linked_full_cover: bool
+    linked_gather_map: jnp.ndarray
+    linked_gather_mask: jnp.ndarray
+    linked_use_gather: bool
+
+
 def _build_grid_cache_arrays(grid: SpectralGrid, params: LinearParams) -> _GridCacheArrays:
     real_dtype = jnp.float64 if _x64_enabled() else jnp.float32
     dz = jnp.asarray(grid.z[1] - grid.z[0], dtype=real_dtype)
@@ -392,6 +412,175 @@ def _build_laguerre_gyro_cache(
     )
 
 
+def _build_kx_link_cache(
+    grid: SpectralGrid,
+    *,
+    use_twist_shift: bool,
+    y0: float,
+    jtwist: int,
+) -> _KxLinkCache:
+    if use_twist_shift:
+        iky = jnp.rint(grid.ky * float(y0)).astype(jnp.int32)
+        shift = jnp.asarray(jtwist, dtype=jnp.int32) * iky
+        kx_idx = jnp.arange(grid.kx.size, dtype=jnp.int32)[None, :]
+        kx_link_plus = kx_idx + shift[:, None]
+        kx_link_minus = kx_idx - shift[:, None]
+        kx_link_mask_plus = (kx_link_plus >= 0) & (kx_link_plus < grid.kx.size)
+        kx_link_mask_minus = (kx_link_minus >= 0) & (kx_link_minus < grid.kx.size)
+        return _KxLinkCache(
+            kx_link_plus=jnp.clip(kx_link_plus, 0, grid.kx.size - 1),
+            kx_link_minus=jnp.clip(kx_link_minus, 0, grid.kx.size - 1),
+            kx_link_mask_plus=kx_link_mask_plus,
+            kx_link_mask_minus=kx_link_mask_minus,
+            jtwist=jtwist,
+        )
+
+    kx_idx = jnp.arange(grid.kx.size, dtype=jnp.int32)[None, :]
+    kx_link = jnp.broadcast_to(kx_idx, (grid.ky.size, grid.kx.size))
+    kx_mask = jnp.ones((grid.ky.size, grid.kx.size), dtype=bool)
+    return _KxLinkCache(
+        kx_link_plus=kx_link,
+        kx_link_minus=kx_link,
+        kx_link_mask_plus=kx_mask,
+        kx_link_mask_minus=kx_mask,
+        jtwist=0,
+    )
+
+
+def _empty_linked_fft_cache(real_dtype: Any) -> _LinkedFFTCache:
+    del real_dtype
+    return _LinkedFFTCache(
+        linked_indices=(),
+        linked_kz=(),
+        linked_inverse_permutation=jnp.asarray([], dtype=jnp.int32),
+        linked_full_cover=False,
+        linked_gather_map=jnp.asarray([], dtype=jnp.int32),
+        linked_gather_mask=jnp.asarray([], dtype=bool),
+        linked_use_gather=False,
+    )
+
+
+def _linked_fft_gather_metadata(
+    linked_indices: tuple[jnp.ndarray, ...],
+    *,
+    n_modes: int,
+) -> tuple[jnp.ndarray, bool, jnp.ndarray, jnp.ndarray, bool]:
+    if not linked_indices:
+        return (
+            jnp.asarray([], dtype=jnp.int32),
+            False,
+            jnp.asarray([], dtype=jnp.int32),
+            jnp.asarray([], dtype=bool),
+            False,
+        )
+
+    idx_flat = np.concatenate(
+        [np.asarray(idx, dtype=np.int32).reshape(-1) for idx in linked_indices],
+        axis=0,
+    )
+    linked_inverse_permutation = jnp.asarray([], dtype=jnp.int32)
+    linked_full_cover = False
+    if idx_flat.size == n_modes:
+        ref = np.arange(n_modes, dtype=np.int32)
+        if np.array_equal(np.sort(idx_flat), ref):
+            linked_inverse_permutation = jnp.asarray(
+                np.argsort(idx_flat).astype(np.int32)
+            )
+            linked_full_cover = True
+
+    if idx_flat.size == 0:
+        return (
+            linked_inverse_permutation,
+            linked_full_cover,
+            jnp.asarray([], dtype=jnp.int32),
+            jnp.asarray([], dtype=bool),
+            False,
+        )
+
+    gather_map = np.zeros(n_modes, dtype=np.int32)
+    gather_mask = np.zeros(n_modes, dtype=bool)
+    gather_map[idx_flat] = np.arange(idx_flat.size, dtype=np.int32)
+    gather_mask[idx_flat] = True
+    return (
+        linked_inverse_permutation,
+        linked_full_cover,
+        jnp.asarray(gather_map, dtype=jnp.int32),
+        jnp.asarray(gather_mask, dtype=bool),
+        True,
+    )
+
+
+def _build_linked_fft_cache(
+    grid: SpectralGrid,
+    *,
+    use_twist_shift: bool,
+    y0: float,
+    jtwist: int,
+    dz: jnp.ndarray,
+    real_dtype: Any,
+) -> _LinkedFFTCache:
+    if not use_twist_shift:
+        return _empty_linked_fft_cache(real_dtype)
+
+    ky_mode = getattr(grid, "ky_mode", None)
+    linked_indices, linked_kz = _build_linked_fft_maps(
+        np.asarray(grid.kx),
+        np.asarray(grid.ky),
+        float(y0),
+        int(jtwist),
+        float(dz),
+        int(grid.z.size),
+        real_dtype,
+        None if ky_mode is None else np.asarray(ky_mode),
+    )
+    (
+        linked_inverse_permutation,
+        linked_full_cover,
+        linked_gather_map,
+        linked_gather_mask,
+        linked_use_gather,
+    ) = _linked_fft_gather_metadata(
+        linked_indices,
+        n_modes=int(grid.ky.size * grid.kx.size),
+    )
+    return _LinkedFFTCache(
+        linked_indices=linked_indices,
+        linked_kz=linked_kz,
+        linked_inverse_permutation=linked_inverse_permutation,
+        linked_full_cover=linked_full_cover,
+        linked_gather_map=linked_gather_map,
+        linked_gather_mask=linked_gather_mask,
+        linked_use_gather=linked_use_gather,
+    )
+
+
+def _build_linked_damp_profile(
+    grid: SpectralGrid,
+    params: LinearParams,
+    *,
+    boundary: str,
+    linked_indices: tuple[jnp.ndarray, ...],
+    real_dtype: Any,
+) -> jnp.ndarray:
+    if boundary == "periodic":
+        return jnp.asarray([], dtype=real_dtype)
+    return jnp.asarray(
+        _build_linked_end_damping_profile(
+            linked_indices=linked_indices,
+            ny=int(grid.ky.size),
+            nx=int(grid.kx.size),
+            nz=int(grid.z.size),
+            widthfrac=float(params.damp_ends_widthfrac),
+            ky_mode=(
+                None
+                if getattr(grid, "ky_mode", None) is None
+                else np.asarray(grid.ky_mode, dtype=np.int32)
+            ),
+        ),
+        dtype=real_dtype,
+    )
+
+
 def _build_linked_boundary_cache(
     grid: SpectralGrid,
     params: LinearParams,
@@ -409,97 +598,47 @@ def _build_linked_boundary_cache(
         boundary,
         real_dtype,
     )
-    linked_damp_profile = jnp.asarray([], dtype=real_dtype)
-    if use_twist_shift:
-        iky = jnp.rint(grid.ky * float(y0)).astype(jnp.int32)
-        shift = jnp.asarray(jtwist, dtype=jnp.int32) * iky
-        kx_idx = jnp.arange(grid.kx.size, dtype=jnp.int32)[None, :]
-        kx_link_plus = kx_idx + shift[:, None]
-        kx_link_minus = kx_idx - shift[:, None]
-        kx_link_mask_plus = (kx_link_plus >= 0) & (kx_link_plus < grid.kx.size)
-        kx_link_mask_minus = (kx_link_minus >= 0) & (kx_link_minus < grid.kx.size)
-        kx_link_plus = jnp.clip(kx_link_plus, 0, grid.kx.size - 1)
-        kx_link_minus = jnp.clip(kx_link_minus, 0, grid.kx.size - 1)
-    else:
-        jtwist = 0
-        kx_idx = jnp.arange(grid.kx.size, dtype=jnp.int32)[None, :]
-        kx_link_plus = jnp.broadcast_to(kx_idx, (grid.ky.size, grid.kx.size))
-        kx_link_minus = kx_link_plus
-        kx_link_mask_plus = jnp.ones((grid.ky.size, grid.kx.size), dtype=bool)
-        kx_link_mask_minus = kx_link_mask_plus
-
-    linked_indices: tuple[jnp.ndarray, ...] = ()
-    linked_kz: tuple[jnp.ndarray, ...] = ()
-    linked_inverse_permutation = jnp.asarray([], dtype=jnp.int32)
-    linked_full_cover = False
-    linked_gather_map = jnp.asarray([], dtype=jnp.int32)
-    linked_gather_mask = jnp.asarray([], dtype=bool)
-    linked_use_gather = False
-    if use_twist_shift:
-        ky_mode = getattr(grid, "ky_mode", None)
-        linked_indices, linked_kz = _build_linked_fft_maps(
-            np.asarray(grid.kx),
-            np.asarray(grid.ky),
-            float(y0),
-            int(jtwist),
-            float(dz),
-            int(grid.z.size),
-            real_dtype,
-            None if ky_mode is None else np.asarray(ky_mode),
+    kx_links = _build_kx_link_cache(
+        grid,
+        use_twist_shift=use_twist_shift,
+        y0=y0,
+        jtwist=jtwist,
+    )
+    linked_fft = _build_linked_fft_cache(
+        grid,
+        use_twist_shift=use_twist_shift,
+        y0=y0,
+        jtwist=kx_links.jtwist,
+        dz=dz,
+        real_dtype=real_dtype,
+    )
+    linked_damp_profile = (
+        _build_linked_damp_profile(
+            grid,
+            params,
+            boundary=boundary,
+            linked_indices=linked_fft.linked_indices,
+            real_dtype=real_dtype,
         )
-        if linked_indices:
-            idx_flat = np.concatenate(
-                [np.asarray(idx, dtype=np.int32).reshape(-1) for idx in linked_indices],
-                axis=0,
-            )
-            n_modes = int(grid.ky.size * grid.kx.size)
-            if idx_flat.size == n_modes:
-                ref = np.arange(n_modes, dtype=np.int32)
-                if np.array_equal(np.sort(idx_flat), ref):
-                    linked_inverse_permutation = jnp.asarray(
-                        np.argsort(idx_flat).astype(np.int32)
-                    )
-                    linked_full_cover = True
-            if idx_flat.size > 0:
-                gather_map = np.zeros(n_modes, dtype=np.int32)
-                gather_mask = np.zeros(n_modes, dtype=bool)
-                gather_map[idx_flat] = np.arange(idx_flat.size, dtype=np.int32)
-                gather_mask[idx_flat] = True
-                linked_gather_map = jnp.asarray(gather_map, dtype=jnp.int32)
-                linked_gather_mask = jnp.asarray(gather_mask, dtype=bool)
-                linked_use_gather = True
-        if boundary != "periodic":
-            linked_damp_profile = jnp.asarray(
-                _build_linked_end_damping_profile(
-                    linked_indices=linked_indices,
-                    ny=int(grid.ky.size),
-                    nx=int(grid.kx.size),
-                    nz=int(grid.z.size),
-                    widthfrac=float(params.damp_ends_widthfrac),
-                    ky_mode=(
-                        None
-                        if getattr(grid, "ky_mode", None) is None
-                        else np.asarray(grid.ky_mode, dtype=np.int32)
-                    ),
-                ),
-                dtype=real_dtype,
-            )
+        if use_twist_shift
+        else jnp.asarray([], dtype=real_dtype)
+    )
 
     return {
         "damp_profile": damp_profile,
         "linked_damp_profile": linked_damp_profile,
-        "kx_link_plus": kx_link_plus,
-        "kx_link_minus": kx_link_minus,
-        "kx_link_mask_plus": kx_link_mask_plus,
-        "kx_link_mask_minus": kx_link_mask_minus,
-        "linked_full_cover": linked_full_cover,
-        "linked_inverse_permutation": linked_inverse_permutation,
-        "linked_gather_map": linked_gather_map,
-        "linked_gather_mask": linked_gather_mask,
-        "linked_use_gather": linked_use_gather,
-        "linked_indices": linked_indices,
-        "linked_kz": linked_kz,
-        "jtwist": jtwist,
+        "kx_link_plus": kx_links.kx_link_plus,
+        "kx_link_minus": kx_links.kx_link_minus,
+        "kx_link_mask_plus": kx_links.kx_link_mask_plus,
+        "kx_link_mask_minus": kx_links.kx_link_mask_minus,
+        "linked_full_cover": linked_fft.linked_full_cover,
+        "linked_inverse_permutation": linked_fft.linked_inverse_permutation,
+        "linked_gather_map": linked_fft.linked_gather_map,
+        "linked_gather_mask": linked_fft.linked_gather_mask,
+        "linked_use_gather": linked_fft.linked_use_gather,
+        "linked_indices": linked_fft.linked_indices,
+        "linked_kz": linked_fft.linked_kz,
+        "jtwist": kx_links.jtwist,
     }
 
 
