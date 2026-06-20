@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Literal, cast
 
 import numpy as np
@@ -12,6 +13,46 @@ from spectraxgk.objectives.vmec_boozer_fd import (
     vmec_boozer_aggregate_scalar_objective_finite_difference_report,
     vmec_boozer_scalar_objective_finite_difference_report,
 )
+
+
+@dataclass(frozen=True)
+class _AggregateHoldoutFunctions:
+    line_search_report_fn: Any
+    finite_difference_report_fn: Any
+
+
+@dataclass(frozen=True)
+class _AggregateHoldoutConfig:
+    case_name: str
+    objective: SolverScalarObjective
+    reduction: Literal["mean", "weighted_mean", "max"]
+    training_weights: tuple[float, ...] | list[float] | np.ndarray | None
+    holdout_weights: tuple[float, ...] | list[float] | np.ndarray | None
+    training_surface_indices: int | None | tuple[int | None, ...] | list[int | None]
+    training_alphas: float | tuple[float, ...] | list[float]
+    training_selected_ky_indices: int | tuple[int, ...] | list[int]
+    holdout_surface_indices: int | None | tuple[int | None, ...] | list[int | None]
+    holdout_alphas: float | tuple[float, ...] | list[float]
+    holdout_selected_ky_indices: int | tuple[int, ...] | list[int]
+    radial_index: int | None
+    mode_index: int
+    parameter_family: str
+    initial_delta: float
+    perturbation_step: float
+    update_step: float
+    max_steps: int
+    min_improvement: float
+    min_holdout_improvement: float
+    response_atol: float
+    max_curvature_ratio: float
+
+
+@dataclass(frozen=True)
+class _AggregateHoldoutReports:
+    training: dict[str, object]
+    heldout_initial: dict[str, object]
+    heldout_final: dict[str, object]
+    final_delta: float
 
 
 def _validate_line_search_controls(
@@ -508,6 +549,81 @@ def _run_holdout_fd_pair(
     return run_probe(initial_delta), run_probe(final_delta)
 
 
+def _aggregate_holdout_functions(kwargs: dict[str, Any]) -> _AggregateHoldoutFunctions:
+    return _AggregateHoldoutFunctions(
+        line_search_report_fn=kwargs.pop(
+            "_line_search_report_fn",
+            vmec_boozer_aggregate_scalar_objective_line_search_report,
+        ),
+        finite_difference_report_fn=kwargs.pop(
+            "_finite_difference_report_fn",
+            vmec_boozer_aggregate_scalar_objective_finite_difference_report,
+        ),
+    )
+
+
+def _validate_holdout_improvement(min_holdout_improvement: float) -> float:
+    min_holdout_improvement_float = float(min_holdout_improvement)
+    if min_holdout_improvement_float < 0.0:
+        raise ValueError("min_holdout_improvement must be non-negative")
+    return min_holdout_improvement_float
+
+
+def _run_aggregate_holdout_reports(
+    *,
+    config: _AggregateHoldoutConfig,
+    fns: _AggregateHoldoutFunctions,
+    extra_options: dict[str, Any],
+) -> _AggregateHoldoutReports:
+    training = _run_aggregate_training_line_search(
+        fns.line_search_report_fn,
+        case_name=config.case_name,
+        objective=config.objective,
+        reduction=config.reduction,
+        weights=config.training_weights,
+        surface_indices=config.training_surface_indices,
+        alphas=config.training_alphas,
+        selected_ky_indices=config.training_selected_ky_indices,
+        radial_index=config.radial_index,
+        mode_index=config.mode_index,
+        parameter_family=config.parameter_family,
+        initial_delta=config.initial_delta,
+        perturbation_step=config.perturbation_step,
+        update_step=config.update_step,
+        max_steps=config.max_steps,
+        min_improvement=config.min_improvement,
+        response_atol=config.response_atol,
+        max_curvature_ratio=config.max_curvature_ratio,
+        extra_options=extra_options,
+    )
+    final_delta = _report_float(training, "final_delta")
+    heldout_initial, heldout_final = _run_holdout_fd_pair(
+        fns.finite_difference_report_fn,
+        case_name=config.case_name,
+        objective=config.objective,
+        reduction=config.reduction,
+        weights=config.holdout_weights,
+        surface_indices=config.holdout_surface_indices,
+        alphas=config.holdout_alphas,
+        selected_ky_indices=config.holdout_selected_ky_indices,
+        radial_index=config.radial_index,
+        mode_index=config.mode_index,
+        parameter_family=config.parameter_family,
+        initial_delta=config.initial_delta,
+        final_delta=final_delta,
+        perturbation_step=config.perturbation_step,
+        response_atol=config.response_atol,
+        max_curvature_ratio=config.max_curvature_ratio,
+        extra_options=extra_options,
+    )
+    return _AggregateHoldoutReports(
+        training=training,
+        heldout_initial=heldout_initial,
+        heldout_final=heldout_final,
+        final_delta=final_delta,
+    )
+
+
 def vmec_boozer_aggregate_line_search_holdout_report(  # pragma: no cover
     *,
     case_name: str = "nfp4_QH_warm_start",
@@ -546,28 +662,19 @@ def vmec_boozer_aggregate_line_search_holdout_report(  # pragma: no cover
     validation split, not a nonlinear transport optimization claim.
     """
 
-    line_search_report_fn = kwargs.pop(
-        "_line_search_report_fn",
-        vmec_boozer_aggregate_scalar_objective_line_search_report,
-    )
-    finite_difference_report_fn = kwargs.pop(
-        "_finite_difference_report_fn",
-        vmec_boozer_aggregate_scalar_objective_finite_difference_report,
-    )
-
-    min_holdout_improvement_float = float(min_holdout_improvement)
-    if min_holdout_improvement_float < 0.0:
-        raise ValueError("min_holdout_improvement must be non-negative")
-
-    training = _run_aggregate_training_line_search(
-        line_search_report_fn,
+    fns = _aggregate_holdout_functions(kwargs)
+    config = _AggregateHoldoutConfig(
         case_name=case_name,
         objective=objective,
         reduction=reduction,
-        weights=training_weights,
-        surface_indices=training_surface_indices,
-        alphas=training_alphas,
-        selected_ky_indices=training_selected_ky_indices,
+        training_weights=training_weights,
+        holdout_weights=holdout_weights,
+        training_surface_indices=training_surface_indices,
+        training_alphas=training_alphas,
+        training_selected_ky_indices=training_selected_ky_indices,
+        holdout_surface_indices=holdout_surface_indices,
+        holdout_alphas=holdout_alphas,
+        holdout_selected_ky_indices=holdout_selected_ky_indices,
         radial_index=radial_index,
         mode_index=mode_index,
         parameter_family=parameter_family,
@@ -576,43 +683,29 @@ def vmec_boozer_aggregate_line_search_holdout_report(  # pragma: no cover
         update_step=update_step,
         max_steps=max_steps,
         min_improvement=min_improvement,
+        min_holdout_improvement=_validate_holdout_improvement(
+            min_holdout_improvement
+        ),
         response_atol=response_atol,
         max_curvature_ratio=max_curvature_ratio,
-        extra_options=kwargs,
     )
-    final_delta = _report_float(training, "final_delta")
-
-    heldout_initial, heldout_final = _run_holdout_fd_pair(
-        finite_difference_report_fn,
-        case_name=case_name,
-        objective=objective,
-        reduction=reduction,
-        weights=holdout_weights,
-        surface_indices=holdout_surface_indices,
-        alphas=holdout_alphas,
-        selected_ky_indices=holdout_selected_ky_indices,
-        radial_index=radial_index,
-        mode_index=mode_index,
-        parameter_family=parameter_family,
-        initial_delta=initial_delta,
-        final_delta=final_delta,
-        perturbation_step=perturbation_step,
-        response_atol=response_atol,
-        max_curvature_ratio=max_curvature_ratio,
+    reports = _run_aggregate_holdout_reports(
+        config=config,
+        fns=fns,
         extra_options=kwargs,
     )
     return _aggregate_holdout_payload(
-        case_name=case_name,
-        objective=objective,
-        reduction=reduction,
-        radial_index=radial_index,
-        mode_index=mode_index,
-        initial_delta=initial_delta,
-        final_delta=final_delta,
-        training=training,
-        heldout_initial=heldout_initial,
-        heldout_final=heldout_final,
-        min_holdout_improvement=min_holdout_improvement_float,
+        case_name=config.case_name,
+        objective=config.objective,
+        reduction=config.reduction,
+        radial_index=config.radial_index,
+        mode_index=config.mode_index,
+        initial_delta=config.initial_delta,
+        final_delta=reports.final_delta,
+        training=reports.training,
+        heldout_initial=reports.heldout_initial,
+        heldout_final=reports.heldout_final,
+        min_holdout_improvement=config.min_holdout_improvement,
     )
 
 
