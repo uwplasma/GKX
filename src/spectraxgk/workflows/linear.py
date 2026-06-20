@@ -494,6 +494,67 @@ def _run_time_linear(
     )
 
 
+def _run_krylov_linear_runtime(
+    ctx: _LinearRuntimeContext,
+    *,
+    deps: FullLinearRuntimeDeps,
+    krylov_cfg: Any | None,
+    status_callback: _StatusCallback,
+) -> RuntimeLinearResult:
+    """Run the Krylov branch and finalize any requested quasilinear diagnostics."""
+
+    gamma, omega, vec = _run_krylov_linear(
+        ctx,
+        deps=deps,
+        krylov_cfg=krylov_cfg,
+        status_callback=status_callback,
+    )
+    result = _linear_result_from_eigenvector(
+        ctx,
+        gamma=gamma,
+        omega=omega,
+        eigenvector=vec,
+    )
+    return _finalize_linear_result(
+        result,
+        ctx=ctx,
+        deps=deps,
+        state_for_quasilinear=vec,
+        status_callback=status_callback,
+    )
+
+
+def _finalize_auto_linear_runtime(
+    result: RuntimeLinearResult,
+    ctx: _LinearRuntimeContext,
+    *,
+    deps: FullLinearRuntimeDeps,
+    fit_policy: _LinearFitPolicy,
+    krylov_cfg: Any | None,
+    status_callback: _StatusCallback,
+) -> RuntimeLinearResult:
+    """Accept a valid time-path result or fall back to the Krylov branch."""
+
+    if _valid_growth(
+        result.gamma,
+        result.omega,
+        require_positive=fit_policy.require_positive,
+    ):
+        return _finalize_linear_result(
+            result,
+            ctx=ctx,
+            deps=deps,
+            status_callback=status_callback,
+        )
+    _status(status_callback, "time-path result rejected; falling back to Krylov solve")
+    return _run_krylov_linear_runtime(
+        ctx,
+        deps=deps,
+        krylov_cfg=krylov_cfg,
+        status_callback=status_callback,
+    )
+
+
 def run_full_linear_runtime(
     cfg: RuntimeConfig,
     *,
@@ -549,23 +610,10 @@ def run_full_linear_runtime(
     )
 
     if ctx.solver_key == "krylov":
-        gamma, omega, vec = _run_krylov_linear(
+        return _run_krylov_linear_runtime(
             ctx,
             deps=deps,
             krylov_cfg=krylov_cfg,
-            status_callback=status_callback,
-        )
-        result = _linear_result_from_eigenvector(
-            ctx,
-            gamma=gamma,
-            omega=omega,
-            eigenvector=vec,
-        )
-        return _finalize_linear_result(
-            result,
-            ctx=ctx,
-            deps=deps,
-            state_for_quasilinear=vec,
             status_callback=status_callback,
         )
 
@@ -581,35 +629,12 @@ def run_full_linear_runtime(
         status_callback=status_callback,
     )
     if ctx.solver_key == "auto":
-        if _valid_growth(
-            result.gamma,
-            result.omega,
-            require_positive=fit_policy.require_positive,
-        ):
-            return _finalize_linear_result(
-                result,
-                ctx=ctx,
-                deps=deps,
-                status_callback=status_callback,
-            )
-        _status(status_callback, "time-path result rejected; falling back to Krylov solve")
-        gamma, omega, vec = _run_krylov_linear(
-            ctx,
-            deps=deps,
-            krylov_cfg=krylov_cfg,
-            status_callback=status_callback,
-        )
-        result = _linear_result_from_eigenvector(
-            ctx,
-            gamma=gamma,
-            omega=omega,
-            eigenvector=vec,
-        )
-        return _finalize_linear_result(
+        return _finalize_auto_linear_runtime(
             result,
             ctx=ctx,
             deps=deps,
-            state_for_quasilinear=vec,
+            fit_policy=fit_policy,
+            krylov_cfg=krylov_cfg,
             status_callback=status_callback,
         )
 
