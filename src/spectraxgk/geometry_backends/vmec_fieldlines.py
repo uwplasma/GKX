@@ -121,6 +121,28 @@ class _HNGCModeCorrections:
     lambmnc_b: np.ndarray
 
 
+@dataclass(frozen=True)
+class _FieldlineMetricGeometry:
+    gradients: Any
+    alpha_gradients: Any
+
+
+@dataclass(frozen=True)
+class _FieldlineHNGCIntegrals:
+    D1: float
+    D2: float
+    intinv_g: np.ndarray
+    int_lam_div_g: np.ndarray
+
+
+@dataclass(frozen=True)
+class _FieldlineShearFactors:
+    d_iota_d_s_1: np.ndarray
+    d_pressure_d_s_1: np.ndarray
+    sfac: float
+    pfac: float
+
+
 def _load_vmec_boozer_splines(vmec_fname: str | Path) -> tuple[Any, Any]:
     """Open VMEC data, run Boozer transform, and build radial splines."""
 
@@ -312,19 +334,11 @@ def _hngc_mode_corrections(
     )
 
 
-def _fieldline_metric_coefficients(
+def _fieldline_metric_geometry(
     scalars: _VMECFieldlineScalars,
     samples: _BoozerFieldlineSamples,
-    hngc: _HNGCModeCorrections,
-    *,
-    s_val: float,
-    betaprim: float,
-    include_shear_variation: bool,
-    include_pressure_variation: bool,
-    res_theta: int,
-    res_phi: int,
-) -> Any:
-    """Assemble local shear, HNGC corrections, and metric/drift coefficients."""
+) -> _FieldlineMetricGeometry:
+    """Return coordinate gradients needed for field-line metric coefficients."""
 
     cartesian = _fieldline_cartesian_derivatives(
         tensors=samples.tensors, phi_b=samples.phi_b
@@ -342,6 +356,19 @@ def _fieldline_metric_coefficients(
         iota=scalars.iota,
         edge_toroidal_flux_over_2pi=scalars.edge_toroidal_flux_over_2pi,
     )
+    return _FieldlineMetricGeometry(gradients=gradients, alpha_gradients=alpha_gradients)
+
+
+def _fieldline_hngc_integrals(
+    samples: _BoozerFieldlineSamples,
+    hngc: _HNGCModeCorrections,
+    alpha_gradients: Any,
+    *,
+    res_theta: int,
+    res_phi: int,
+) -> _FieldlineHNGCIntegrals:
+    """Return flux-surface and field-line HNGC integrals."""
+
     D1, D2 = _flux_surface_hngc_averages(
         xm_b=samples.xm_b,
         xn_b=samples.xn_b,
@@ -363,6 +390,24 @@ def _fieldline_metric_coefficients(
         samples.phi_b,
         theta_1d,
     )
+    return _FieldlineHNGCIntegrals(
+        D1=D1,
+        D2=D2,
+        intinv_g=intinv_g,
+        int_lam_div_g=int_lam_div_g,
+    )
+
+
+def _fieldline_shear_factors(
+    scalars: _VMECFieldlineScalars,
+    *,
+    s_val: float,
+    betaprim: float,
+    include_shear_variation: bool,
+    include_pressure_variation: bool,
+) -> _FieldlineShearFactors:
+    """Return HNGC shear and pressure correction factors."""
+
     d_iota_d_s_1, sfac = _hngc_shear_correction(
         s_val=s_val,
         iota=scalars.iota,
@@ -378,33 +423,82 @@ def _fieldline_metric_coefficients(
         d_pressure_d_s=scalars.d_pressure_d_s,
         include_pressure_variation=include_pressure_variation,
     )
-    shear = _fieldline_local_shear(
-        edge_toroidal_flux_over_2pi=scalars.edge_toroidal_flux_over_2pi,
-        d_iota_d_s=scalars.d_iota_d_s,
+    return _FieldlineShearFactors(
         d_iota_d_s_1=d_iota_d_s_1,
         d_pressure_d_s_1=d_pressure_d_s_1,
+        sfac=sfac,
+        pfac=pfac,
+    )
+
+
+def _fieldline_shear(
+    scalars: _VMECFieldlineScalars,
+    samples: _BoozerFieldlineSamples,
+    geometry: _FieldlineMetricGeometry,
+    integrals: _FieldlineHNGCIntegrals,
+    factors: _FieldlineShearFactors,
+) -> Any:
+    """Return the local shear object used by metric/drift assembly."""
+
+    return _fieldline_local_shear(
+        edge_toroidal_flux_over_2pi=scalars.edge_toroidal_flux_over_2pi,
+        d_iota_d_s=scalars.d_iota_d_s,
+        d_iota_d_s_1=factors.d_iota_d_s_1,
+        d_pressure_d_s_1=factors.d_pressure_d_s_1,
         Vprime=samples.Vprime,
         G=scalars.G,
         iota=scalars.iota,
         boozer_i=scalars.boozer_i,
         phi_b=samples.phi_b,
         zeta_center=scalars.zeta_center,
-        intinv_g=intinv_g,
-        int_lam_div_g=int_lam_div_g,
-        D1=D1,
-        D2=D2,
-        g_sup_psi_psi=alpha_gradients.g_sup_psi_psi,
-        grad_alpha_dot_grad_psi=alpha_gradients.grad_alpha_dot_grad_psi,
+        intinv_g=integrals.intinv_g,
+        int_lam_div_g=integrals.int_lam_div_g,
+        D1=integrals.D1,
+        D2=integrals.D2,
+        g_sup_psi_psi=geometry.alpha_gradients.g_sup_psi_psi,
+        grad_alpha_dot_grad_psi=geometry.alpha_gradients.grad_alpha_dot_grad_psi,
     )
+
+
+def _fieldline_metric_coefficients(
+    scalars: _VMECFieldlineScalars,
+    samples: _BoozerFieldlineSamples,
+    hngc: _HNGCModeCorrections,
+    *,
+    s_val: float,
+    betaprim: float,
+    include_shear_variation: bool,
+    include_pressure_variation: bool,
+    res_theta: int,
+    res_phi: int,
+) -> Any:
+    """Assemble local shear, HNGC corrections, and metric/drift coefficients."""
+
+    geometry = _fieldline_metric_geometry(scalars, samples)
+    integrals = _fieldline_hngc_integrals(
+        samples,
+        hngc,
+        geometry.alpha_gradients,
+        res_theta=res_theta,
+        res_phi=res_phi,
+    )
+    factors = _fieldline_shear_factors(
+        scalars,
+        s_val=s_val,
+        betaprim=betaprim,
+        include_shear_variation=include_shear_variation,
+        include_pressure_variation=include_pressure_variation,
+    )
+    shear = _fieldline_shear(scalars, samples, geometry, integrals, factors)
     return _fieldline_metric_drifts(
         tensors=samples.tensors,
-        gradients=gradients,
-        alpha_gradients=alpha_gradients,
+        gradients=geometry.gradients,
+        alpha_gradients=geometry.alpha_gradients,
         shear=shear,
         s=scalars.s,
         shat=scalars.shat,
-        sfac=sfac,
-        pfac=pfac,
+        sfac=factors.sfac,
+        pfac=factors.pfac,
         L_reference=scalars.L_reference,
         B_reference=scalars.B_reference,
         toroidal_flux_sign=scalars.toroidal_flux_sign,
