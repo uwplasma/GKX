@@ -137,6 +137,21 @@ class CETGNonlinearRuntimeDeps:
 
 
 @dataclass(frozen=True)
+class _CETGLinearSetup:
+    """Prepared cETG linear state and fit selection metadata."""
+
+    grid: Any
+    initial_state: Any
+    params: Any
+    term_config: Any
+    selection: ModeSelection
+    ky_selected: float
+    dt: float
+    steps: int
+    sample_stride: int
+
+
+@dataclass(frozen=True)
 class _CETGNonlinearSetup:
     """Prepared cETG nonlinear state shared by fixed and adaptive branches."""
 
@@ -217,6 +232,173 @@ def _build_cetg_nonlinear_result(
         ky_selected=float(np.asarray(grid.ky[ky_index])),
         kx_selected=float(np.asarray(grid.kx[kx_index])),
         summarize_fields=diagnostics_on is False,
+    )
+
+
+def _prepare_cetg_linear_setup(
+    cfg: RuntimeConfig,
+    *,
+    deps: CETGLinearRuntimeDeps,
+    ky_target: float,
+    Nl: int,
+    Nm: int,
+    dt: float | None,
+    steps: int | None,
+    sample_stride: int | None,
+    status_callback: Callable[[str], None],
+) -> _CETGLinearSetup:
+    """Build the cETG linear grid, state, coefficients, and time policy."""
+
+    geom = deps.build_runtime_geometry(cfg)
+    deps.validate_cetg_runtime_config(cfg, geom, Nl=Nl, Nm=Nm)
+    status_callback("building spectral grid")
+    grid_cfg = apply_geometry_grid_defaults(geom, cfg.grid)
+    grid_full = build_spectral_grid(grid_cfg)
+    ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
+    grid = select_ky_grid(grid_full, ky_index)
+    selection = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
+    status_callback(f"selected ky index {ky_index} at ky={float(grid.ky[0]):.4f}")
+    status_callback("building initial condition")
+    initial_state = deps.build_initial_condition(
+        grid,
+        geom,
+        cfg,
+        ky_index=selection.ky_index,
+        kx_index=selection.kx_index,
+        Nl=Nl,
+        Nm=Nm,
+        nspecies=1,
+    )
+    dt_val = float(cfg.time.dt if dt is None else dt)
+    if dt_val <= 0.0:
+        raise ValueError("dt must be > 0")
+    steps_val = (
+        int(steps) if steps is not None else int(round(float(cfg.time.t_max) / dt_val))
+    )
+    if steps_val < 1:
+        raise ValueError("steps must be >= 1")
+    return _CETGLinearSetup(
+        grid=grid,
+        initial_state=initial_state,
+        params=deps.build_cetg_model_params(cfg, geom, Nl=Nl, Nm=Nm),
+        term_config=deps.build_runtime_term_config(cfg),
+        selection=selection,
+        ky_selected=float(grid.ky[0]),
+        dt=dt_val,
+        steps=steps_val,
+        sample_stride=int(
+            cfg.time.sample_stride if sample_stride is None else sample_stride
+        ),
+    )
+
+
+def _run_cetg_linear_time_series(
+    cfg: RuntimeConfig,
+    *,
+    deps: CETGLinearRuntimeDeps,
+    setup: _CETGLinearSetup,
+    method: str | None,
+    status_callback: Callable[[str], None],
+) -> tuple[Any, Any]:
+    """Run the cETG linear explicit-time integrator and return diagnostics/state."""
+
+    status_callback(f"running cETG time integration over {setup.steps} steps")
+    _t, diag, final_state, _fields = deps.integrate_cetg_explicit_diagnostics_state(
+        setup.initial_state,
+        setup.grid,
+        setup.params,
+        setup.term_config,
+        **_cetg_integration_kwargs(
+            cfg,
+            dt=setup.dt,
+            steps=setup.steps,
+            method=method,
+            sample_stride=setup.sample_stride,
+            diagnostics_stride=1,
+            ky_index=0,
+            kx_index=0,
+            fixed_dt=bool(cfg.time.fixed_dt),
+        ),
+    )
+    return diag, final_state
+
+
+def _fit_cetg_linear_time_series(
+    diag: Any,
+    *,
+    deps: CETGLinearRuntimeDeps,
+    auto_window: bool,
+    tmin: float | None,
+    tmax: float | None,
+    window_fraction: float,
+    min_points: int,
+    start_fraction: float,
+    growth_weight: float,
+    require_positive: bool,
+    min_amp_fraction: float,
+    status_callback: Callable[[str], None],
+) -> tuple[np.ndarray, np.ndarray, float, float, float | None, float | None]:
+    """Fit cETG linear growth and frequency from saved potential history."""
+
+    signal = np.asarray(
+        diag.phi_mode_t if diag.phi_mode_t is not None else np.zeros_like(np.asarray(diag.t))
+    )
+    t_arr = np.asarray(diag.t, dtype=float)
+    status_callback(
+        f"integration complete; fitting growth rate from {t_arr.size} saved samples"
+    )
+    if t_arr.size < 2:
+        gamma = (
+            float(np.asarray(diag.gamma_t)[-1]) if np.asarray(diag.gamma_t).size else 0.0
+        )
+        omega = (
+            float(np.asarray(diag.omega_t)[-1]) if np.asarray(diag.omega_t).size else 0.0
+        )
+        fit_window_tmin: float | None = None
+        fit_window_tmax: float | None = None
+    elif auto_window:
+        gamma, omega, fit_window_tmin, fit_window_tmax = deps.fit_growth_rate_auto(
+            t_arr,
+            signal,
+            window_fraction=window_fraction,
+            min_points=min_points,
+            start_fraction=start_fraction,
+            growth_weight=growth_weight,
+            require_positive=require_positive,
+            min_amp_fraction=min_amp_fraction,
+        )
+    else:
+        gamma, omega = deps.fit_growth_rate(t_arr, signal, tmin=tmin, tmax=tmax)
+        fit_window_tmin, fit_window_tmax = _resolved_fit_bounds(t_arr, tmin, tmax)
+    status_callback(f"fit complete: gamma={float(gamma):.6f} omega={float(omega):.6f}")
+    return t_arr, signal, float(gamma), float(omega), fit_window_tmin, fit_window_tmax
+
+
+def _build_cetg_linear_result(
+    setup: _CETGLinearSetup,
+    *,
+    t: np.ndarray,
+    signal: np.ndarray,
+    gamma: float,
+    omega: float,
+    final_state: Any,
+    fit_window_tmin: float | None,
+    fit_window_tmax: float | None,
+    return_state: bool,
+) -> RuntimeLinearResult:
+    """Pack a cETG linear run into the shared runtime linear result schema."""
+
+    return RuntimeLinearResult(
+        ky=setup.ky_selected,
+        gamma=float(gamma),
+        omega=float(omega),
+        selection=setup.selection,
+        t=t,
+        signal=signal,
+        state=np.asarray(final_state) if return_state else None,
+        fit_window_tmin=fit_window_tmin,
+        fit_window_tmax=fit_window_tmax,
+        fit_signal_used="phi",
     )
 
 
@@ -438,28 +620,6 @@ def run_cetg_linear_runtime(
         if status_callback is not None:
             status_callback(message)
 
-    geom = deps.build_runtime_geometry(cfg)
-    deps.validate_cetg_runtime_config(cfg, geom, Nl=Nl, Nm=Nm)
-    _status("building spectral grid")
-    grid_cfg = apply_geometry_grid_defaults(geom, cfg.grid)
-    grid_full = build_spectral_grid(grid_cfg)
-    ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
-    grid = select_ky_grid(grid_full, ky_index)
-    sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
-    _status(f"selected ky index {ky_index} at ky={float(grid.ky[0]):.4f}")
-    _status("building initial condition")
-    g0 = deps.build_initial_condition(
-        grid,
-        geom,
-        cfg,
-        ky_index=sel.ky_index,
-        kx_index=sel.kx_index,
-        Nl=Nl,
-        Nm=Nm,
-        nspecies=1,
-    )
-    cetg_terms = deps.build_runtime_term_config(cfg)
-    cetg_params = deps.build_cetg_model_params(cfg, geom, Nl=Nl, Nm=Nm)
     solver_key = _normalize_linear_solver_name(solver)
     if solver_key == "krylov":
         raise NotImplementedError(
@@ -469,73 +629,50 @@ def run_cetg_linear_runtime(
         raise ValueError(
             "solver must be one of {'auto', 'time', 'explicit_time', 'krylov'}"
         )
-    dt_val = float(cfg.time.dt if dt is None else dt)
-    if dt_val <= 0.0:
-        raise ValueError("dt must be > 0")
-    steps_val = (
-        int(steps) if steps is not None else int(round(float(cfg.time.t_max) / dt_val))
+    setup = _prepare_cetg_linear_setup(
+        cfg,
+        deps=deps,
+        ky_target=ky_target,
+        Nl=Nl,
+        Nm=Nm,
+        dt=dt,
+        steps=steps,
+        sample_stride=sample_stride,
+        status_callback=_status,
     )
-    if steps_val < 1:
-        raise ValueError("steps must be >= 1")
-    sample_stride_use = int(cfg.time.sample_stride if sample_stride is None else sample_stride)
-    _status(f"running cETG time integration over {steps_val} steps")
-    _t, diag, G_final, _fields = deps.integrate_cetg_explicit_diagnostics_state(
-        g0,
-        grid,
-        cetg_params,
-        cetg_terms,
-        **_cetg_integration_kwargs(
-            cfg,
-            dt=dt_val,
-            steps=steps_val,
-            method=method,
-            sample_stride=sample_stride_use,
-            diagnostics_stride=1,
-            ky_index=0,
-            kx_index=0,
-            fixed_dt=bool(cfg.time.fixed_dt),
-        ),
+    diag, final_state = _run_cetg_linear_time_series(
+        cfg,
+        deps=deps,
+        setup=setup,
+        method=method,
+        status_callback=_status,
     )
-    signal = np.asarray(
-        diag.phi_mode_t if diag.phi_mode_t is not None else np.zeros_like(np.asarray(diag.t))
-    )
-    t_arr = np.asarray(diag.t, dtype=float)
-    fit_window_tmin: float | None = None
-    fit_window_tmax: float | None = None
-    _status(f"integration complete; fitting growth rate from {t_arr.size} saved samples")
-    if t_arr.size < 2:
-        gamma = (
-            float(np.asarray(diag.gamma_t)[-1]) if np.asarray(diag.gamma_t).size else 0.0
-        )
-        omega = (
-            float(np.asarray(diag.omega_t)[-1]) if np.asarray(diag.omega_t).size else 0.0
-        )
-    elif auto_window:
-        gamma, omega, fit_window_tmin, fit_window_tmax = deps.fit_growth_rate_auto(
-            t_arr,
-            signal,
+    t_arr, signal, gamma, omega, fit_window_tmin, fit_window_tmax = (
+        _fit_cetg_linear_time_series(
+            diag,
+            deps=deps,
+            auto_window=auto_window,
+            tmin=tmin,
+            tmax=tmax,
             window_fraction=window_fraction,
             min_points=min_points,
             start_fraction=start_fraction,
             growth_weight=growth_weight,
             require_positive=require_positive,
             min_amp_fraction=min_amp_fraction,
+            status_callback=_status,
         )
-    else:
-        gamma, omega = deps.fit_growth_rate(t_arr, signal, tmin=tmin, tmax=tmax)
-        fit_window_tmin, fit_window_tmax = _resolved_fit_bounds(t_arr, tmin, tmax)
-    _status(f"fit complete: gamma={float(gamma):.6f} omega={float(omega):.6f}")
-    return RuntimeLinearResult(
-        ky=float(grid.ky[0]),
-        gamma=float(gamma),
-        omega=float(omega),
-        selection=sel,
+    )
+    return _build_cetg_linear_result(
+        setup,
         t=t_arr,
-        signal=np.asarray(signal),
-        state=np.asarray(G_final) if return_state else None,
+        signal=signal,
+        gamma=gamma,
+        omega=omega,
+        final_state=final_state,
         fit_window_tmin=fit_window_tmin,
         fit_window_tmax=fit_window_tmax,
-        fit_signal_used="phi",
+        return_state=return_state,
     )
 
 
