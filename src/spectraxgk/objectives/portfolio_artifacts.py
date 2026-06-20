@@ -56,6 +56,21 @@ class ReducedPortfolioArtifactGuardConfig:
         return asdict(self)
 
 
+@dataclass(frozen=True)
+class _PortfolioArtifactInputs:
+    """Canonical arrays and labels extracted from a portfolio artifact."""
+
+    sample_rows: np.ndarray
+    sample_weights: np.ndarray
+    surfaces: list[str]
+    alphas: list[float]
+    kys: list[float]
+    samples: list[dict[str, Any]]
+    full_table: np.ndarray
+    objective_names: list[str]
+    reduction: PortfolioReduction
+
+
 def _artifact_text(payload: dict[str, Any], *keys: str) -> str:
     return " ".join(str(payload.get(key, "")) for key in keys).lower()
 
@@ -305,6 +320,161 @@ def _gradient_artifact_gate(gradient_artifacts: list[dict[str, Any]]) -> dict[st
     }
 
 
+def _artifact_reduction(payload: dict[str, Any]) -> PortfolioReduction:
+    """Return the requested portfolio reduction after validating the artifact."""
+
+    reduction = str(payload.get("reduction", "weighted_mean"))
+    if reduction not in ("weighted_mean", "mean", "max"):
+        raise ValueError("artifact reduction must be weighted_mean, mean, or max")
+    return cast(PortfolioReduction, reduction)
+
+
+def _portfolio_artifact_inputs(
+    payload: dict[str, Any],
+) -> _PortfolioArtifactInputs:
+    """Extract the rectangular portfolio sample table and metadata."""
+
+    sample_rows, sample_weights, surfaces, alphas, kys = (
+        _artifact_sample_value_tensor(payload)
+    )
+    samples, _values = _artifact_sample_values(payload)
+    full_table = _artifact_full_objective_table(payload, n_samples=len(samples))
+    objective_names = [str(item) for item in payload.get("objective_names", [])]
+    return _PortfolioArtifactInputs(
+        sample_rows=sample_rows,
+        sample_weights=sample_weights,
+        surfaces=surfaces,
+        alphas=alphas,
+        kys=kys,
+        samples=samples,
+        full_table=full_table,
+        objective_names=objective_names,
+        reduction=_artifact_reduction(payload),
+    )
+
+
+def _portfolio_coverage_gate(
+    inputs: _PortfolioArtifactInputs,
+    *,
+    config: ReducedPortfolioArtifactGuardConfig,
+) -> dict[str, object]:
+    """Return the surface/alpha/ky coverage gate for the portfolio artifact."""
+
+    return {
+        "passed": bool(
+            len(inputs.alphas) >= int(config.min_alphas)
+            and len(inputs.kys) >= int(config.min_ky)
+        ),
+        "surface_labels": inputs.surfaces,
+        "alphas": inputs.alphas,
+        "ky_values": inputs.kys,
+        "n_surfaces": len(inputs.surfaces),
+        "n_alphas": len(inputs.alphas),
+        "n_ky": len(inputs.kys),
+        "n_samples": len(inputs.samples),
+        "min_alphas": int(config.min_alphas),
+        "min_ky": int(config.min_ky),
+    }
+
+
+def _portfolio_full_table_gate(
+    inputs: _PortfolioArtifactInputs,
+    *,
+    config: ReducedPortfolioArtifactGuardConfig,
+) -> dict[str, object]:
+    """Return the objective-table shape/finite-value gate."""
+
+    table = inputs.full_table
+    finite = bool(np.all(np.isfinite(table)))
+    return {
+        "passed": bool(
+            table.shape[0] == len(inputs.samples)
+            and table.shape[1] >= int(config.min_objectives)
+            and finite
+        ),
+        "shape": list(table.shape),
+        "finite": finite,
+    }
+
+
+def _portfolio_reducer_gate(
+    payload: dict[str, Any],
+    inputs: _PortfolioArtifactInputs,
+    *,
+    config: ReducedPortfolioArtifactGuardConfig,
+) -> dict[str, object]:
+    """Recompute and validate the artifact's scalar portfolio reduction."""
+
+    if inputs.reduction == "weighted_mean":
+        reduced_value = float(
+            aggregate_objective_portfolio(
+                inputs.sample_rows,
+                sample_weights=inputs.sample_weights,
+                reduction=inputs.reduction,
+            )
+        )
+        contract = validate_objective_portfolio_contract(
+            inputs.sample_rows,
+            sample_weights=inputs.sample_weights,
+            reduction=inputs.reduction,
+        )
+    else:
+        reduced_value = float(
+            aggregate_objective_portfolio(
+                inputs.sample_rows,
+                reduction=inputs.reduction,
+            )
+        )
+        contract = validate_objective_portfolio_contract(
+            inputs.sample_rows,
+            reduction=inputs.reduction,
+        )
+    artifact_value = _as_finite_float(payload.get("base_value"), name="base_value")
+    reducer_matches = bool(
+        np.isclose(
+            reduced_value,
+            artifact_value,
+            rtol=config.value_rtol,
+            atol=config.value_atol,
+        )
+    )
+    return {
+        "passed": reducer_matches,
+        "reduction": inputs.reduction,
+        "reduced_base_value": reduced_value,
+        "artifact_base_value": artifact_value,
+        "abs_error": float(abs(reduced_value - artifact_value)),
+        "rtol": float(config.value_rtol),
+        "atol": float(config.value_atol),
+        "contract": contract.to_dict(),
+    }
+
+
+def _portfolio_guard_passed(
+    *,
+    provenance_gate: dict[str, object],
+    coverage_gate: dict[str, object],
+    full_table_gate: dict[str, object],
+    objective_name_gate: dict[str, object],
+    reducer_gate: dict[str, object],
+    fd_gate: dict[str, object],
+    ad_fd_gate: dict[str, object],
+    claim_scope_gate: dict[str, object],
+) -> bool:
+    """Return whether all portfolio artifact promotion gates pass."""
+
+    return bool(
+        provenance_gate["passed"]
+        and coverage_gate["passed"]
+        and full_table_gate["passed"]
+        and objective_name_gate["passed"]
+        and reducer_gate["passed"]
+        and fd_gate["passed"]
+        and ad_fd_gate["passed"]
+        and claim_scope_gate["passed"]
+    )
+
+
 def reduced_portfolio_artifact_guard_report(
     row_artifact: dict[str, Any],
     *,
@@ -320,77 +490,26 @@ def reduced_portfolio_artifact_guard_report(
     """
 
     cfg = config or ReducedPortfolioArtifactGuardConfig()
-    sample_rows, sample_weights, surfaces, alphas, kys = _artifact_sample_value_tensor(row_artifact)
-    samples, _values = _artifact_sample_values(row_artifact)
-    full_table = _artifact_full_objective_table(row_artifact, n_samples=len(samples))
-    objective_names = [str(item) for item in row_artifact.get("objective_names", [])]
-    objective_name_gate = _artifact_objective_name_gate(objective_names, config=cfg)
-    reduction = str(row_artifact.get("reduction", "weighted_mean"))
-    if reduction not in ("weighted_mean", "mean", "max"):
-        raise ValueError("artifact reduction must be weighted_mean, mean, or max")
-    reducer_reduction = cast(PortfolioReduction, reduction)
-    if reduction == "weighted_mean":
-        reduced_value = float(
-            aggregate_objective_portfolio(
-                sample_rows,
-                sample_weights=sample_weights,
-                reduction=reducer_reduction,
-            )
-        )
-        contract = validate_objective_portfolio_contract(
-            sample_rows,
-            sample_weights=sample_weights,
-            reduction=reducer_reduction,
-        )
-    else:
-        reduced_value = float(aggregate_objective_portfolio(sample_rows, reduction=reducer_reduction))
-        contract = validate_objective_portfolio_contract(sample_rows, reduction=reducer_reduction)
-    artifact_value = _as_finite_float(row_artifact.get("base_value"), name="base_value")
-    reducer_matches = bool(np.isclose(reduced_value, artifact_value, rtol=cfg.value_rtol, atol=cfg.value_atol))
-    coverage_gate = {
-        "passed": bool(len(alphas) >= int(cfg.min_alphas) and len(kys) >= int(cfg.min_ky)),
-        "surface_labels": surfaces,
-        "alphas": alphas,
-        "ky_values": kys,
-        "n_surfaces": len(surfaces),
-        "n_alphas": len(alphas),
-        "n_ky": len(kys),
-        "n_samples": len(samples),
-        "min_alphas": int(cfg.min_alphas),
-        "min_ky": int(cfg.min_ky),
-    }
-    full_table_gate = {
-        "passed": bool(
-            full_table.shape[0] == len(samples)
-            and full_table.shape[1] >= int(cfg.min_objectives)
-            and np.all(np.isfinite(full_table))
-        ),
-        "shape": list(full_table.shape),
-        "finite": bool(np.all(np.isfinite(full_table))),
-    }
-    reducer_gate = {
-        "passed": reducer_matches,
-        "reduction": reduction,
-        "reduced_base_value": reduced_value,
-        "artifact_base_value": artifact_value,
-        "abs_error": float(abs(reduced_value - artifact_value)),
-        "rtol": float(cfg.value_rtol),
-        "atol": float(cfg.value_atol),
-        "contract": contract.to_dict(),
-    }
+    inputs = _portfolio_artifact_inputs(row_artifact)
+    objective_name_gate = _artifact_objective_name_gate(
+        inputs.objective_names, config=cfg
+    )
+    coverage_gate = _portfolio_coverage_gate(inputs, config=cfg)
+    full_table_gate = _portfolio_full_table_gate(inputs, config=cfg)
+    reducer_gate = _portfolio_reducer_gate(row_artifact, inputs, config=cfg)
     provenance_gate = _artifact_provenance_gate(row_artifact, config=cfg)
     claim_scope_gate = _artifact_claim_scope_gate(row_artifact)
     fd_gate = _artifact_fd_gate(row_artifact)
     ad_fd_gate = _gradient_artifact_gate(list(gradient_artifacts))
-    passed = bool(
-        provenance_gate["passed"]
-        and coverage_gate["passed"]
-        and full_table_gate["passed"]
-        and objective_name_gate["passed"]
-        and reducer_gate["passed"]
-        and fd_gate["passed"]
-        and ad_fd_gate["passed"]
-        and claim_scope_gate["passed"]
+    passed = _portfolio_guard_passed(
+        provenance_gate=provenance_gate,
+        coverage_gate=coverage_gate,
+        full_table_gate=full_table_gate,
+        objective_name_gate=objective_name_gate,
+        reducer_gate=reducer_gate,
+        fd_gate=fd_gate,
+        ad_fd_gate=ad_fd_gate,
+        claim_scope_gate=claim_scope_gate,
     )
     return {
         "kind": "vmec_boozer_reduced_portfolio_artifact_guard",
