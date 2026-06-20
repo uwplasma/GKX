@@ -128,6 +128,13 @@ class _KineticScanOutput:
         return cls(gammas=[], omegas=[], ky=[])
 
 
+@dataclass(frozen=True)
+class _KineticScanControls:
+    setup: _KineticScanSetup
+    run_options: _KineticScanRunOptions
+    fit_options: _KineticScanFitOptions
+
+
 def _resolve_kinetic_scan_setup(
     *,
     cfg: KineticElectronBaseCase | None,
@@ -603,6 +610,228 @@ def _append_kinetic_time_batch_results(
     )
 
 
+def _build_kinetic_scan_fit_policy(
+    *,
+    tmin: float | None,
+    tmax: float | None,
+    auto_window: bool,
+    window_fraction: float,
+    min_points: int,
+    start_fraction: float,
+    growth_weight: float,
+    require_positive: bool,
+    min_amp_fraction: float,
+) -> ScanFitWindowPolicy:
+    """Pack kinetic-scan growth-window options once for all batches."""
+
+    return ScanFitWindowPolicy(
+        tmin=tmin,
+        tmax=tmax,
+        auto_window=auto_window,
+        window_fraction=window_fraction,
+        min_points=min_points,
+        start_fraction=start_fraction,
+        growth_weight=growth_weight,
+        require_positive=require_positive,
+        min_amp_fraction=min_amp_fraction,
+        fit_growth_rate_fn=fit_growth_rate,
+        fit_growth_rate_auto_fn=fit_growth_rate_auto,
+        normalize_growth_rate_fn=_normalize_growth_rate,
+    )
+
+
+def _build_kinetic_scan_run_options(
+    *,
+    ky_values: np.ndarray,
+    time_cfg: TimeConfig | None,
+    solver_key: str,
+    krylov_cfg: KrylovConfig | None,
+    dt: float | np.ndarray,
+    steps: int | np.ndarray,
+    method: str,
+    sample_stride: int | None,
+    mode_method: str,
+    mode_only: bool,
+    fit_key: str,
+    ky_batch: int,
+    fixed_batch_shape: bool,
+    streaming_fit: bool,
+    streaming_amp_floor: float,
+    init_species_index: int,
+    density_species_index: int,
+    use_batch: bool,
+    show_progress: bool,
+) -> _KineticScanRunOptions:
+    """Pack kinetic scan runtime controls for batch execution."""
+
+    return _KineticScanRunOptions(
+        ky_values=ky_values,
+        time_cfg=time_cfg,
+        solver_key=solver_key,
+        krylov_cfg=krylov_cfg,
+        dt=dt,
+        steps=steps,
+        method=method,
+        sample_stride=sample_stride,
+        mode_method=mode_method,
+        mode_only=mode_only,
+        fit_key=fit_key,
+        ky_batch=ky_batch,
+        fixed_batch_shape=fixed_batch_shape,
+        streaming_fit=streaming_fit,
+        streaming_amp_floor=streaming_amp_floor,
+        init_species_index=init_species_index,
+        density_species_index=density_species_index,
+        use_batch=use_batch,
+        show_progress=show_progress,
+    )
+
+
+def _run_kinetic_scan_batches(
+    *,
+    setup: _KineticScanSetup,
+    run_options: _KineticScanRunOptions,
+    fit_options: _KineticScanFitOptions,
+    n_laguerre: int,
+    n_hermite: int,
+) -> _KineticScanOutput:
+    """Execute all kinetic ky batches and collect scan rows."""
+
+    output = _KineticScanOutput.empty()
+    for batch_start, ky_slice, valid_count in _iter_kinetic_scan_batches(run_options):
+        _append_kinetic_time_batch_results(
+            batch_start=batch_start,
+            ky_slice=ky_slice,
+            valid_count=valid_count,
+            setup=setup,
+            run_options=run_options,
+            fit_options=fit_options,
+            Nl=n_laguerre,
+            Nm=n_hermite,
+            output=output,
+        )
+    return output
+
+
+def _kinetic_scan_result(output: _KineticScanOutput) -> LinearScanResult:
+    """Pack kinetic scan rows into the public scan result."""
+
+    return LinearScanResult(
+        ky=np.array(output.ky),
+        gamma=np.array(output.gammas),
+        omega=np.array(output.omegas),
+    )
+
+
+def _prepare_kinetic_scan_controls(
+    *,
+    ky_values: np.ndarray,
+    Nm: int,
+    dt: float | np.ndarray,
+    steps: int | np.ndarray,
+    method: str,
+    params: LinearParams | None,
+    cfg: KineticElectronBaseCase | None,
+    time_cfg: TimeConfig | None,
+    solver: str,
+    krylov_cfg: KrylovConfig | None,
+    tmin: float | None,
+    tmax: float | None,
+    auto_window: bool,
+    window_fraction: float,
+    min_points: int,
+    start_fraction: float,
+    growth_weight: float,
+    require_positive: bool,
+    min_amp_fraction: float,
+    mode_method: str,
+    mode_only: bool,
+    terms: LinearTerms | None,
+    sample_stride: int | None,
+    fit_signal: str,
+    ky_batch: int,
+    fixed_batch_shape: bool,
+    streaming_fit: bool,
+    streaming_amp_floor: float,
+    init_species_index: int,
+    density_species_index: int,
+    diagnostic_norm: str,
+    reference_aligned: bool | None,
+    show_progress: bool,
+) -> _KineticScanControls:
+    """Resolve setup, execution, and fitting controls for one kinetic scan."""
+
+    setup = _resolve_kinetic_scan_setup(
+        cfg=cfg,
+        params=params,
+        terms=terms,
+        diagnostic_norm=diagnostic_norm,
+        reference_aligned=reference_aligned,
+        Nm=Nm,
+    )
+    solver_key = normalize_solver_key(solver)
+    fit_key = normalize_fit_signal(fit_signal)
+    resolved_mode_method = resolve_scan_mode_method(mode_method, mode_only=mode_only)
+    use_batch = should_use_ky_batch(
+        ky_batch=ky_batch,
+        solver_key=solver_key,
+        dt=dt,
+        steps=steps,
+        tmin=tmin,
+        tmax=tmax,
+    )
+    fit_policy = _build_kinetic_scan_fit_policy(
+        tmin=tmin,
+        tmax=tmax,
+        auto_window=auto_window,
+        window_fraction=window_fraction,
+        min_points=min_points,
+        start_fraction=start_fraction,
+        growth_weight=growth_weight,
+        require_positive=require_positive,
+        min_amp_fraction=min_amp_fraction,
+    )
+
+    ky_values_arr = np.asarray(ky_values, dtype=float)
+    _validate_kinetic_species_indices(
+        init_species_index=init_species_index,
+        density_species_index=density_species_index,
+    )
+    run_options = _build_kinetic_scan_run_options(
+        ky_values=ky_values_arr,
+        time_cfg=time_cfg,
+        solver_key=solver_key,
+        krylov_cfg=krylov_cfg,
+        dt=dt,
+        steps=steps,
+        method=method,
+        sample_stride=sample_stride,
+        mode_method=resolved_mode_method,
+        mode_only=mode_only,
+        fit_key=fit_key,
+        ky_batch=ky_batch,
+        fixed_batch_shape=fixed_batch_shape,
+        streaming_fit=streaming_fit,
+        streaming_amp_floor=streaming_amp_floor,
+        init_species_index=init_species_index,
+        density_species_index=density_species_index,
+        use_batch=use_batch,
+        show_progress=show_progress,
+    )
+    fit_options = _KineticScanFitOptions(
+        tmin=tmin,
+        tmax=tmax,
+        start_fraction=start_fraction,
+        window_fraction=window_fraction,
+        fit_policy=fit_policy,
+    )
+    return _KineticScanControls(
+        setup=setup,
+        run_options=run_options,
+        fit_options=fit_options,
+    )
+
+
 def run_kinetic_scan(
     ky_values: np.ndarray,
     Nl: int = 6,
@@ -644,26 +873,17 @@ def run_kinetic_scan(
     If ``time_cfg`` is provided, its ``dt`` and ``t_max`` override ``dt``/``steps``.
     """
 
-    setup = _resolve_kinetic_scan_setup(
-        cfg=cfg,
-        params=params,
-        terms=terms,
-        diagnostic_norm=diagnostic_norm,
-        reference_aligned=reference_aligned,
+    controls = _prepare_kinetic_scan_controls(
+        ky_values=ky_values,
         Nm=Nm,
-    )
-    solver_key = normalize_solver_key(solver)
-    fit_key = normalize_fit_signal(fit_signal)
-    mode_method = resolve_scan_mode_method(mode_method, mode_only=mode_only)
-    use_batch = should_use_ky_batch(
-        ky_batch=ky_batch,
-        solver_key=solver_key,
         dt=dt,
         steps=steps,
-        tmin=tmin,
-        tmax=tmax,
-    )
-    fit_policy = ScanFitWindowPolicy(
+        method=method,
+        params=params,
+        cfg=cfg,
+        time_cfg=time_cfg,
+        solver=solver,
+        krylov_cfg=krylov_cfg,
         tmin=tmin,
         tmax=tmax,
         auto_window=auto_window,
@@ -673,63 +893,29 @@ def run_kinetic_scan(
         growth_weight=growth_weight,
         require_positive=require_positive,
         min_amp_fraction=min_amp_fraction,
-        fit_growth_rate_fn=fit_growth_rate,
-        fit_growth_rate_auto_fn=fit_growth_rate_auto,
-        normalize_growth_rate_fn=_normalize_growth_rate,
-    )
-
-    ky_values_arr = np.asarray(ky_values, dtype=float)
-    _validate_kinetic_species_indices(
-        init_species_index=init_species_index,
-        density_species_index=density_species_index,
-    )
-
-    run_options = _KineticScanRunOptions(
-        ky_values=ky_values_arr,
-        time_cfg=time_cfg,
-        solver_key=solver_key,
-        krylov_cfg=krylov_cfg,
-        dt=dt,
-        steps=steps,
-        method=method,
-        sample_stride=sample_stride,
         mode_method=mode_method,
         mode_only=mode_only,
-        fit_key=fit_key,
+        terms=terms,
+        sample_stride=sample_stride,
+        fit_signal=fit_signal,
         ky_batch=ky_batch,
         fixed_batch_shape=fixed_batch_shape,
         streaming_fit=streaming_fit,
         streaming_amp_floor=streaming_amp_floor,
         init_species_index=init_species_index,
         density_species_index=density_species_index,
-        use_batch=use_batch,
+        diagnostic_norm=diagnostic_norm,
+        reference_aligned=reference_aligned,
         show_progress=show_progress,
     )
-    fit_options = _KineticScanFitOptions(
-        tmin=tmin,
-        tmax=tmax,
-        start_fraction=start_fraction,
-        window_fraction=window_fraction,
-        fit_policy=fit_policy,
+    output = _run_kinetic_scan_batches(
+        setup=controls.setup,
+        run_options=controls.run_options,
+        fit_options=controls.fit_options,
+        n_laguerre=Nl,
+        n_hermite=Nm,
     )
-    output = _KineticScanOutput.empty()
-    for batch_start, ky_slice, valid_count in _iter_kinetic_scan_batches(run_options):
-        _append_kinetic_time_batch_results(
-            batch_start=batch_start,
-            ky_slice=ky_slice,
-            valid_count=valid_count,
-            setup=setup,
-            run_options=run_options,
-            fit_options=fit_options,
-            Nl=Nl,
-            Nm=Nm,
-            output=output,
-        )
-    return LinearScanResult(
-        ky=np.array(output.ky),
-        gamma=np.array(output.gammas),
-        omega=np.array(output.omegas),
-    )
+    return _kinetic_scan_result(output)
 
 
 __all__ = ["run_kinetic_scan"]
