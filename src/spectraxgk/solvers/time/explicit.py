@@ -367,6 +367,15 @@ def _linear_history_arrays(
     )
 
 
+def _linear_loop_progress_clock(t_max: float, dt: float) -> tuple[int, int, float]:
+    total_steps_est = max(int(math.ceil(max(t_max, 0.0) / max(dt, 1.0e-30))), 1)
+    return (
+        total_steps_est,
+        progress_update_stride(total_steps_est, target_updates=20),
+        time.perf_counter(),
+    )
+
+
 def _run_linear_explicit_loop(
     *,
     G: jnp.ndarray,
@@ -388,12 +397,9 @@ def _run_linear_explicit_loop(
     jit_enabled: bool,
     show_progress: bool,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    t = 0.0
-    step = 0
+    t, step = 0.0, 0
     history = _LinearHistory()
-    total_steps_est = max(int(math.ceil(max(t_max, 0.0) / max(dt, 1.0e-30))), 1)
-    progress_stride = progress_update_stride(total_steps_est, target_updates=20)
-    progress_started_at = time.perf_counter()
+    total_steps_est, progress_stride, progress_started_at = _linear_loop_progress_clock(t_max, dt)
     stepper = _make_linear_stepper(method, jit_enabled=jit_enabled)
 
     _emit_linear_start_if_requested(
