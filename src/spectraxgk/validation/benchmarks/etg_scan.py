@@ -107,6 +107,52 @@ class _ETGScanBatch:
     cache: Any
 
 
+@dataclass(frozen=True)
+class _ETGScanRuntimeOptions:
+    """Runtime options that are constant across ETG scan batches."""
+
+    time_cfg: TimeConfig | None
+    method: str
+    sample_stride: int | None
+    streaming_amp_floor: float
+    tmin: float | None
+    tmax: float | None
+    start_fraction: float
+    window_fraction: float
+    reference_growth_window: bool
+    reference_navg_fraction: float
+    require_positive: bool
+    Nl: int
+    Nm: int
+    dt: float | np.ndarray
+    steps: int | np.ndarray
+    ky_batch: int
+    fixed_batch_shape: bool
+    krylov_cfg: KrylovConfig | None
+    diagnostic_norm: str
+    show_progress: bool
+
+
+@dataclass
+class _ETGScanAccumulator:
+    """Mutable scan output and continuation state for ETG batches."""
+
+    gammas: list[float]
+    omegas: list[float]
+    ky_out: list[float]
+    prev_vec: jnp.ndarray | None = None
+    prev_eig: complex | None = None
+
+    def result(self) -> LinearScanResult:
+        """Pack accumulated scan rows into the public result object."""
+
+        return LinearScanResult(
+            ky=np.array(self.ky_out),
+            gamma=np.array(self.gammas),
+            omega=np.array(self.omegas),
+        )
+
+
 def _default_etg_scan_params(
     cfg: ETGBaseCase,
     geom: Any,
@@ -496,6 +542,60 @@ def _run_etg_scan_batch(
     return prev_vec, prev_eig
 
 
+def _run_etg_scan_loop(
+    setup: _ETGScanSetup,
+    ky_values: np.ndarray,
+    options: _ETGScanRuntimeOptions,
+) -> _ETGScanAccumulator:
+    """Run all ETG scan batches and preserve Krylov continuation state."""
+
+    acc = _ETGScanAccumulator(gammas=[], omegas=[], ky_out=[])
+    ky_iter = _etg_scan_ky_batches(
+        ky_values,
+        use_batch=setup.use_batch,
+        ky_batch=options.ky_batch,
+        fixed_batch_shape=options.fixed_batch_shape,
+    )
+    _paths.sync_path_hooks(globals())
+    for batch_start, ky_slice, valid_count in ky_iter:
+        batch = _build_etg_scan_batch(
+            setup,
+            batch_start=batch_start,
+            ky_slice=ky_slice,
+            valid_count=valid_count,
+            Nl=options.Nl,
+            Nm=options.Nm,
+            dt=options.dt,
+            steps=options.steps,
+        )
+        acc.prev_vec, acc.prev_eig = _run_etg_scan_batch(
+            setup,
+            batch,
+            time_cfg=options.time_cfg,
+            method=options.method,
+            sample_stride=options.sample_stride,
+            streaming_amp_floor=options.streaming_amp_floor,
+            tmin=options.tmin,
+            tmax=options.tmax,
+            start_fraction=options.start_fraction,
+            window_fraction=options.window_fraction,
+            reference_growth_window=options.reference_growth_window,
+            reference_navg_fraction=options.reference_navg_fraction,
+            require_positive=options.require_positive,
+            Nl=options.Nl,
+            Nm=options.Nm,
+            krylov_cfg=options.krylov_cfg,
+            diagnostic_norm=options.diagnostic_norm,
+            show_progress=options.show_progress,
+            prev_vec=acc.prev_vec,
+            prev_eig=acc.prev_eig,
+            gammas=acc.gammas,
+            omegas=acc.omegas,
+            ky_out=acc.ky_out,
+        )
+    return acc
+
+
 def run_etg_scan(
     ky_values: np.ndarray,
     Nl: int = 6,
@@ -581,57 +681,26 @@ def run_etg_scan(
         slope_var_weight=slope_var_weight,
         window_method=window_method,
     )
-    gammas: list[float] = []
-    omegas: list[float] = []
-    ky_out: list[float] = []
-
-    ky_iter = _etg_scan_ky_batches(
-        ky_values,
-        use_batch=setup.use_batch,
+    options = _ETGScanRuntimeOptions(
+        time_cfg=time_cfg,
+        method=method,
+        sample_stride=sample_stride,
+        streaming_amp_floor=streaming_amp_floor,
+        tmin=tmin,
+        tmax=tmax,
+        start_fraction=start_fraction,
+        window_fraction=window_fraction,
+        reference_growth_window=reference_growth_window,
+        reference_navg_fraction=reference_navg_fraction,
+        require_positive=require_positive,
+        Nl=Nl,
+        Nm=Nm,
+        dt=dt,
+        steps=steps,
         ky_batch=ky_batch,
         fixed_batch_shape=fixed_batch_shape,
+        krylov_cfg=krylov_cfg,
+        diagnostic_norm=diagnostic_norm,
+        show_progress=show_progress,
     )
-    prev_vec: jnp.ndarray | None = None
-    prev_eig: complex | None = None
-    _paths.sync_path_hooks(globals())
-
-    for batch_start, ky_slice, valid_count in ky_iter:
-        batch = _build_etg_scan_batch(
-            setup,
-            batch_start=batch_start,
-            ky_slice=ky_slice,
-            valid_count=valid_count,
-            Nl=Nl,
-            Nm=Nm,
-            dt=dt,
-            steps=steps,
-        )
-
-        prev_vec, prev_eig = _run_etg_scan_batch(
-            setup,
-            batch,
-            time_cfg=time_cfg,
-            method=method,
-            sample_stride=sample_stride,
-            streaming_amp_floor=streaming_amp_floor,
-            tmin=tmin,
-            tmax=tmax,
-            start_fraction=start_fraction,
-            window_fraction=window_fraction,
-            reference_growth_window=reference_growth_window,
-            reference_navg_fraction=reference_navg_fraction,
-            require_positive=require_positive,
-            Nl=Nl,
-            Nm=Nm,
-            krylov_cfg=krylov_cfg,
-            diagnostic_norm=diagnostic_norm,
-            show_progress=show_progress,
-            prev_vec=prev_vec,
-            prev_eig=prev_eig,
-            gammas=gammas,
-            omegas=omegas,
-            ky_out=ky_out,
-        )
-    return LinearScanResult(
-        ky=np.array(ky_out), gamma=np.array(gammas), omega=np.array(omegas)
-    )
+    return _run_etg_scan_loop(setup, ky_values, options).result()
