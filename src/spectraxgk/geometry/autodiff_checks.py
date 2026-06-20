@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from typing import Any, Callable, cast
 
 import jax
@@ -51,6 +52,187 @@ def _json_ready(value: Any) -> Any:
     return value
 
 
+@dataclass(frozen=True)
+class _ConditioningArrays:
+    jac_ad: np.ndarray
+    jac_fd: np.ndarray
+    params: np.ndarray
+    obs_names: list[str]
+    par_names: list[str]
+
+
+@dataclass(frozen=True)
+class _JacobianConditioningStats:
+    finite_ad: bool
+    finite_fd: bool
+    finite_params: bool
+    singular_values: np.ndarray
+    rank: int
+    condition_number: float
+    column_norms: np.ndarray
+    row_norms: np.ndarray
+
+
+@dataclass(frozen=True)
+class _GradientValidationInputs:
+    p: jnp.ndarray
+    step: float
+    rel_tol: float
+    abs_tol: float
+    floor: float
+    cond_max: float | None
+
+
+@dataclass(frozen=True)
+class _GradientDerivativeData:
+    flat_fn: Callable[[jnp.ndarray], jnp.ndarray]
+    observables: jnp.ndarray
+    jac_ad: jnp.ndarray
+    jac_fd: jnp.ndarray
+    obs_names: list[str]
+    par_names: list[str]
+    direction: jnp.ndarray
+
+
+@dataclass(frozen=True)
+class _GradientGateData:
+    jacobian_errors: dict[str, np.ndarray]
+    tangent_errors: dict[str, np.ndarray | float]
+    finite_flags: dict[str, bool]
+    finite_passed: bool
+    gradient_checks: list[dict[str, object]]
+    derivative_passed: bool
+    tangent_passed: bool
+    conditioning: dict[str, object]
+    conditioning_gate: dict[str, object]
+    conditioning_passed: bool
+    rank_passed: bool
+    condition_number_passed: bool
+    failure_reasons: list[str]
+
+
+def _conditioned_jacobian_arrays(
+    jacobian_ad: Any,
+    jacobian_fd: Any,
+    params: Any,
+    *,
+    observable_names: Sequence[str] | None,
+    param_names: Sequence[str] | None,
+) -> _ConditioningArrays:
+    jac_ad = np.asarray(jacobian_ad, dtype=float)
+    jac_fd = np.asarray(jacobian_fd, dtype=float)
+    p = np.asarray(params, dtype=float).reshape(-1)
+    if jac_ad.ndim != 2 or jac_fd.ndim != 2:
+        raise ValueError("jacobians must be two-dimensional")
+    if jac_ad.shape != jac_fd.shape:
+        raise ValueError("AD and finite-difference jacobians must have matching shapes")
+    if jac_ad.shape[1] != p.size:
+        raise ValueError("parameter length must match jacobian columns")
+
+    obs_names, par_names = _resolve_report_names(
+        int(jac_ad.shape[0]),
+        int(jac_ad.shape[1]),
+        observable_names=observable_names,
+        param_names=param_names,
+    )
+    return _ConditioningArrays(
+        jac_ad=jac_ad,
+        jac_fd=jac_fd,
+        params=p,
+        obs_names=obs_names,
+        par_names=par_names,
+    )
+
+
+def _jacobian_conditioning_stats(arrays: _ConditioningArrays) -> _JacobianConditioningStats:
+    jac_ad = arrays.jac_ad
+    finite_ad = bool(np.all(np.isfinite(jac_ad)))
+    finite_fd = bool(np.all(np.isfinite(arrays.jac_fd)))
+    finite_params = bool(np.all(np.isfinite(arrays.params)))
+    if finite_ad and jac_ad.size:
+        singular_values = np.linalg.svd(jac_ad, compute_uv=False)
+        rank = int(np.linalg.matrix_rank(jac_ad))
+        condition_number = (
+            float("inf")
+            if singular_values.size == 0 or float(singular_values[-1]) <= 0.0
+            else float(singular_values[0] / singular_values[-1])
+        )
+        column_norms = np.linalg.norm(jac_ad, axis=0)
+        row_norms = np.linalg.norm(jac_ad, axis=1)
+    else:
+        singular_values = np.asarray([], dtype=float)
+        rank = 0
+        condition_number = float("inf")
+        column_norms = np.full((jac_ad.shape[1],), np.nan)
+        row_norms = np.full((jac_ad.shape[0],), np.nan)
+    return _JacobianConditioningStats(
+        finite_ad=finite_ad,
+        finite_fd=finite_fd,
+        finite_params=finite_params,
+        singular_values=singular_values,
+        rank=rank,
+        condition_number=condition_number,
+        column_norms=column_norms,
+        row_norms=row_norms,
+    )
+
+
+def _worst_conditioning_entry(
+    values: np.ndarray,
+    arrays: _ConditioningArrays,
+) -> dict[str, object] | None:
+    if values.size == 0 or not np.any(np.isfinite(values)):
+        return None
+    flat_idx = int(np.nanargmax(values))
+    row, col = np.unravel_index(flat_idx, values.shape)
+    return {
+        "observable_index": int(row),
+        "observable_name": arrays.obs_names[int(row)],
+        "parameter_index": int(col),
+        "parameter_name": arrays.par_names[int(col)],
+        "value": float(values[row, col]),
+        "ad": float(arrays.jac_ad[row, col]),
+        "finite_difference": float(arrays.jac_fd[row, col]),
+    }
+
+
+def _conditioning_fd_step_rows(
+    arrays: _ConditioningArrays,
+    *,
+    fd_step: float,
+) -> list[dict[str, object]]:
+    h = abs(float(fd_step))
+    return [
+        {
+            "parameter_index": int(idx),
+            "parameter_name": arrays.par_names[int(idx)],
+            "parameter_value": (
+                float(arrays.params[idx]) if idx < arrays.params.size else float("nan")
+            ),
+            "absolute_step": h,
+            "relative_step": float(h / max(abs(float(arrays.params[idx])), 1.0)),
+        }
+        for idx in range(arrays.params.size)
+    ]
+
+
+def _finite_norm_bounds(norms: np.ndarray) -> tuple[float, float]:
+    finite_norms = norms[np.isfinite(norms)]
+    if not finite_norms.size:
+        return float("nan"), float("nan")
+    return float(np.max(finite_norms)), float(np.min(finite_norms))
+
+
+def _conditioning_error_arrays(
+    arrays: _ConditioningArrays,
+    *,
+    relative_floor: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    abs_error = np.abs(arrays.jac_ad - arrays.jac_fd)
+    rel_error = abs_error / np.maximum(np.abs(arrays.jac_fd), float(relative_floor))
+    return abs_error, rel_error
+
+
 def _sensitivity_conditioning_metadata(
     jacobian_ad: Any,
     jacobian_fd: Any,
@@ -63,108 +245,39 @@ def _sensitivity_conditioning_metadata(
 ) -> dict[str, object]:
     """Return JSON-friendly conditioning metadata for AD/FD Jacobian gates."""
 
-    jac_ad = np.asarray(jacobian_ad, dtype=float)
-    jac_fd = np.asarray(jacobian_fd, dtype=float)
-    p = np.asarray(params, dtype=float).reshape(-1)
-    if jac_ad.ndim != 2 or jac_fd.ndim != 2:
-        raise ValueError("jacobians must be two-dimensional")
-    if jac_ad.shape != jac_fd.shape:
-        raise ValueError("AD and finite-difference jacobians must have matching shapes")
-    if jac_ad.shape[1] != p.size:
-        raise ValueError("parameter length must match jacobian columns")
-
-    obs_names = (
-        [str(name) for name in observable_names]
-        if observable_names is not None
-        else [f"observable_{idx}" for idx in range(jac_ad.shape[0])]
-    )
-    par_names = (
-        [str(name) for name in param_names]
-        if param_names is not None
-        else [f"param_{idx}" for idx in range(jac_ad.shape[1])]
-    )
-    if len(obs_names) != jac_ad.shape[0]:
-        raise ValueError("observable_names length must match jacobian rows")
-    if len(par_names) != jac_ad.shape[1]:
-        raise ValueError("param_names length must match jacobian columns")
-
-    finite_ad = bool(np.all(np.isfinite(jac_ad)))
-    finite_fd = bool(np.all(np.isfinite(jac_fd)))
-    finite_params = bool(np.all(np.isfinite(p)))
-    if finite_ad and jac_ad.size:
-        singular_values = np.linalg.svd(jac_ad, compute_uv=False)
-        rank = int(np.linalg.matrix_rank(jac_ad))
-        if singular_values.size == 0 or float(singular_values[-1]) <= 0.0:
-            condition_number = float("inf")
-        else:
-            condition_number = float(singular_values[0] / singular_values[-1])
-        column_norms = np.linalg.norm(jac_ad, axis=0)
-        row_norms = np.linalg.norm(jac_ad, axis=1)
-    else:
-        singular_values = np.asarray([], dtype=float)
-        rank = 0
-        condition_number = float("inf")
-        column_norms = np.full((jac_ad.shape[1],), np.nan)
-        row_norms = np.full((jac_ad.shape[0],), np.nan)
-
     floor = float(relative_floor)
-    diff = jac_ad - jac_fd
-    abs_error = np.abs(diff)
-    rel_error = abs_error / np.maximum(np.abs(jac_fd), floor)
-
-    def _worst_entry(values: np.ndarray) -> dict[str, object] | None:
-        if values.size == 0 or not np.any(np.isfinite(values)):
-            return None
-        flat_idx = int(np.nanargmax(values))
-        row, col = np.unravel_index(flat_idx, values.shape)
-        return {
-            "observable_index": int(row),
-            "observable_name": obs_names[int(row)],
-            "parameter_index": int(col),
-            "parameter_name": par_names[int(col)],
-            "value": float(values[row, col]),
-            "ad": float(jac_ad[row, col]),
-            "finite_difference": float(jac_fd[row, col]),
-        }
-
-    h = abs(float(fd_step))
-    fd_step_by_parameter = [
-        {
-            "parameter_index": int(idx),
-            "parameter_name": par_names[int(idx)],
-            "parameter_value": float(p[idx]) if idx < p.size else float("nan"),
-            "absolute_step": h,
-            "relative_step": float(h / max(abs(float(p[idx])), 1.0)),
-        }
-        for idx in range(p.size)
-    ]
-
-    finite_column_norms = column_norms[np.isfinite(column_norms)]
-    max_column_norm = (
-        float(np.max(finite_column_norms)) if finite_column_norms.size else float("nan")
+    arrays = _conditioned_jacobian_arrays(
+        jacobian_ad,
+        jacobian_fd,
+        params,
+        observable_names=observable_names,
+        param_names=param_names,
     )
-    min_column_norm = (
-        float(np.min(finite_column_norms)) if finite_column_norms.size else float("nan")
-    )
+    stats = _jacobian_conditioning_stats(arrays)
+    abs_error, rel_error = _conditioning_error_arrays(arrays, relative_floor=floor)
+    max_column_norm, min_column_norm = _finite_norm_bounds(stats.column_norms)
 
     return {
-        "jacobian_shape": [int(jac_ad.shape[0]), int(jac_ad.shape[1])],
-        "finite_ad_jacobian": finite_ad,
-        "finite_fd_jacobian": finite_fd,
-        "finite_parameters": finite_params,
-        "sensitivity_map_rank": rank,
-        "jacobian_condition_number": condition_number,
-        "jacobian_singular_values": singular_values.tolist(),
-        "ad_column_norms": column_norms.tolist(),
-        "ad_row_norms": row_norms.tolist(),
+        "jacobian_shape": [int(arrays.jac_ad.shape[0]), int(arrays.jac_ad.shape[1])],
+        "finite_ad_jacobian": stats.finite_ad,
+        "finite_fd_jacobian": stats.finite_fd,
+        "finite_parameters": stats.finite_params,
+        "sensitivity_map_rank": stats.rank,
+        "jacobian_condition_number": stats.condition_number,
+        "jacobian_singular_values": stats.singular_values.tolist(),
+        "ad_column_norms": stats.column_norms.tolist(),
+        "ad_row_norms": stats.row_norms.tolist(),
         "max_ad_column_norm": max_column_norm,
         "min_ad_column_norm": min_column_norm,
         "fd_step": float(fd_step),
         "relative_error_floor": floor,
-        "finite_difference_step_by_parameter": fd_step_by_parameter,
-        "fd_near_zero_reference_count": int(np.sum(np.abs(jac_fd) < floor)),
-        "worst_abs_error": _worst_entry(abs_error),
-        "worst_rel_error": _worst_entry(rel_error),
+        "finite_difference_step_by_parameter": _conditioning_fd_step_rows(
+            arrays,
+            fd_step=fd_step,
+        ),
+        "fd_near_zero_reference_count": int(np.sum(np.abs(arrays.jac_fd) < floor)),
+        "worst_abs_error": _worst_conditioning_entry(abs_error, arrays),
+        "worst_rel_error": _worst_conditioning_entry(rel_error, arrays),
     }
 
 
@@ -383,6 +496,21 @@ def _gradient_checks(
     return checks
 
 
+def _tangent_tolerance_passed(
+    tangent_errors: Mapping[str, np.ndarray | float],
+    *,
+    abs_tol: float,
+    rel_tol: float,
+) -> bool:
+    tangent_abs_error = cast(np.ndarray, tangent_errors["tangent_abs_error"])
+    tangent_rel_error = cast(np.ndarray, tangent_errors["tangent_rel_error"])
+    if not tangent_abs_error.size:
+        return True
+    return bool(
+        np.all((tangent_abs_error <= abs_tol) | (tangent_rel_error <= rel_tol))
+    )
+
+
 def _conditioning_gate(
     conditioning: Mapping[str, object],
     *,
@@ -448,6 +576,155 @@ def _failure_reasons(
         if not condition_number_passed:
             reasons.append("ill_conditioned")
     return reasons
+
+
+def _gradient_validation_inputs(
+    params: jnp.ndarray | np.ndarray,
+    *,
+    fd_step: float,
+    rtol: float,
+    atol: float,
+    relative_floor: float,
+    condition_number_max: float | None,
+) -> _GradientValidationInputs:
+    p, step, rel_tol, abs_tol, floor, cond_max = _validated_gradient_inputs(
+        params,
+        fd_step=fd_step,
+        rtol=rtol,
+        atol=atol,
+        relative_floor=relative_floor,
+        condition_number_max=condition_number_max,
+    )
+    return _GradientValidationInputs(
+        p=p,
+        step=step,
+        rel_tol=rel_tol,
+        abs_tol=abs_tol,
+        floor=floor,
+        cond_max=cond_max,
+    )
+
+
+def _gradient_derivative_data(
+    observable_fn: Callable[[jnp.ndarray], Any],
+    inputs: _GradientValidationInputs,
+    *,
+    observable_names: Sequence[str] | None,
+    param_names: Sequence[str] | None,
+    tangent: jnp.ndarray | np.ndarray | None,
+) -> _GradientDerivativeData:
+    flat_fn = _flat_observable_function(observable_fn)
+    observables, jac_ad, jac_fd = _autodiff_and_fd_jacobians(
+        flat_fn,
+        inputs.p,
+        step=inputs.step,
+    )
+    obs_names, par_names = _resolve_report_names(
+        int(jac_ad.shape[0]),
+        int(jac_ad.shape[1]),
+        observable_names=observable_names,
+        param_names=param_names,
+    )
+    return _GradientDerivativeData(
+        flat_fn=flat_fn,
+        observables=observables,
+        jac_ad=jac_ad,
+        jac_fd=jac_fd,
+        obs_names=obs_names,
+        par_names=par_names,
+        direction=_tangent_direction(inputs.p, tangent),
+    )
+
+
+def _gradient_gate_data(
+    derivatives: _GradientDerivativeData,
+    inputs: _GradientValidationInputs,
+    *,
+    min_rank: int | None,
+) -> _GradientGateData:
+    jacobian_errors = _jacobian_error_arrays(
+        derivatives.jac_ad,
+        derivatives.jac_fd,
+        floor=inputs.floor,
+        abs_tol=inputs.abs_tol,
+    )
+    tangent_errors = _tangent_error_arrays(
+        derivatives.flat_fn,
+        inputs.p,
+        derivatives.jac_ad,
+        derivatives.direction,
+        step=inputs.step,
+        floor=inputs.floor,
+    )
+    finite_flags = _finite_report_flags(
+        inputs.p,
+        derivatives.observables,
+        jacobian_errors,
+        derivatives.direction,
+        tangent_errors,
+    )
+    gradient_checks = _gradient_checks(
+        derivatives.obs_names,
+        derivatives.par_names,
+        jacobian_errors,
+        abs_tol=inputs.abs_tol,
+        rel_tol=inputs.rel_tol,
+    )
+    conditioning = _sensitivity_conditioning_metadata(
+        derivatives.jac_ad,
+        derivatives.jac_fd,
+        inputs.p,
+        fd_step=inputs.step,
+        observable_names=derivatives.obs_names,
+        param_names=derivatives.par_names,
+        relative_floor=inputs.floor,
+    )
+    (
+        conditioning_gate,
+        conditioning_passed,
+        rank_passed,
+        condition_number_passed,
+    ) = _conditioning_gate(
+        conditioning,
+        n_obs=int(derivatives.jac_ad.shape[0]),
+        n_params=int(derivatives.jac_ad.shape[1]),
+        min_rank=min_rank,
+        condition_number_max=inputs.cond_max,
+        finite_flags=finite_flags,
+    )
+    finite_passed = bool(all(finite_flags.values()))
+    derivative_passed = bool(
+        gradient_checks and all(bool(row["passed"]) for row in gradient_checks)
+    )
+    tangent_passed = _tangent_tolerance_passed(
+        tangent_errors,
+        abs_tol=inputs.abs_tol,
+        rel_tol=inputs.rel_tol,
+    )
+    failure_reasons = _failure_reasons(
+        finite_flags,
+        finite_passed=finite_passed,
+        derivative_passed=derivative_passed,
+        tangent_passed=tangent_passed,
+        conditioning_passed=conditioning_passed,
+        rank_passed=rank_passed,
+        condition_number_passed=condition_number_passed,
+    )
+    return _GradientGateData(
+        jacobian_errors=jacobian_errors,
+        tangent_errors=tangent_errors,
+        finite_flags=finite_flags,
+        finite_passed=finite_passed,
+        gradient_checks=gradient_checks,
+        derivative_passed=derivative_passed,
+        tangent_passed=tangent_passed,
+        conditioning=conditioning,
+        conditioning_gate=conditioning_gate,
+        conditioning_passed=conditioning_passed,
+        rank_passed=rank_passed,
+        condition_number_passed=condition_number_passed,
+        failure_reasons=failure_reasons,
+    )
 
 
 def _assemble_gradient_validation_report(
@@ -559,7 +836,7 @@ def observable_gradient_validation_report(
     represented as ``None`` while finite flags and failure reasons preserve why
     the gate failed.
     """
-    p, step, rel_tol, abs_tol, floor, cond_max = _validated_gradient_inputs(
+    inputs = _gradient_validation_inputs(
         params,
         fd_step=fd_step,
         rtol=rtol,
@@ -567,91 +844,40 @@ def observable_gradient_validation_report(
         relative_floor=relative_floor,
         condition_number_max=condition_number_max,
     )
-    flat_fn = _flat_observable_function(observable_fn)
-    observables, jac_ad, jac_fd = _autodiff_and_fd_jacobians(
-        flat_fn, p, step=step
-    )
-    n_obs, n_params = int(jac_ad.shape[0]), int(jac_ad.shape[1])
-    obs_names, par_names = _resolve_report_names(
-        n_obs,
-        n_params,
+    derivatives = _gradient_derivative_data(
+        observable_fn,
+        inputs,
         observable_names=observable_names,
         param_names=param_names,
+        tangent=tangent,
     )
-    direction = _tangent_direction(p, tangent)
-    jacobian_errors = _jacobian_error_arrays(
-        jac_ad, jac_fd, floor=floor, abs_tol=abs_tol
-    )
-    tangent_errors = _tangent_error_arrays(
-        flat_fn, p, jac_ad, direction, step=step, floor=floor
-    )
-    finite_flags = _finite_report_flags(
-        p, observables, jacobian_errors, direction, tangent_errors
-    )
-    finite_passed = bool(all(finite_flags.values()))
-    gradient_checks = _gradient_checks(
-        obs_names, par_names, jacobian_errors, abs_tol=abs_tol, rel_tol=rel_tol
-    )
-    derivative_passed = bool(
-        gradient_checks and all(bool(row["passed"]) for row in gradient_checks)
-    )
-    tangent_max_abs = float(tangent_errors["tangent_max_abs"])
-    tangent_max_rel = float(tangent_errors["tangent_max_rel"])
-    tangent_passed = bool(tangent_max_abs <= abs_tol or tangent_max_rel <= rel_tol)
-
-    conditioning = _sensitivity_conditioning_metadata(
-        jac_ad,
-        jac_fd,
-        p,
-        fd_step=step,
-        observable_names=obs_names,
-        param_names=par_names,
-        relative_floor=floor,
-    )
-    (
-        conditioning_gate,
-        conditioning_passed,
-        rank_passed,
-        condition_number_passed,
-    ) = _conditioning_gate(
-        conditioning,
-        n_obs=n_obs,
-        n_params=n_params,
+    gates = _gradient_gate_data(
+        derivatives,
+        inputs,
         min_rank=min_rank,
-        condition_number_max=cond_max,
-        finite_flags=finite_flags,
-    )
-    failure_reasons = _failure_reasons(
-        finite_flags,
-        finite_passed=finite_passed,
-        derivative_passed=derivative_passed,
-        tangent_passed=tangent_passed,
-        conditioning_passed=conditioning_passed,
-        rank_passed=rank_passed,
-        condition_number_passed=condition_number_passed,
     )
     return _assemble_gradient_validation_report(
         report_kind=report_kind,
-        finite_passed=finite_passed,
-        derivative_passed=derivative_passed,
-        tangent_passed=tangent_passed,
-        conditioning_passed=conditioning_passed,
-        failure_reasons=failure_reasons,
-        step=step,
-        rel_tol=rel_tol,
-        abs_tol=abs_tol,
-        floor=floor,
-        obs_names=obs_names,
-        par_names=par_names,
-        p=p,
-        observables=observables,
-        jacobian_errors=jacobian_errors,
-        gradient_checks=gradient_checks,
-        finite_flags=finite_flags,
-        direction=direction,
-        tangent_errors=tangent_errors,
-        conditioning_gate=conditioning_gate,
-        conditioning=conditioning,
+        finite_passed=gates.finite_passed,
+        derivative_passed=gates.derivative_passed,
+        tangent_passed=gates.tangent_passed,
+        conditioning_passed=gates.conditioning_passed,
+        failure_reasons=gates.failure_reasons,
+        step=inputs.step,
+        rel_tol=inputs.rel_tol,
+        abs_tol=inputs.abs_tol,
+        floor=inputs.floor,
+        obs_names=derivatives.obs_names,
+        par_names=derivatives.par_names,
+        p=inputs.p,
+        observables=derivatives.observables,
+        jacobian_errors=gates.jacobian_errors,
+        gradient_checks=gates.gradient_checks,
+        finite_flags=gates.finite_flags,
+        direction=derivatives.direction,
+        tangent_errors=gates.tangent_errors,
+        conditioning_gate=gates.conditioning_gate,
+        conditioning=gates.conditioning,
     )
 
 
