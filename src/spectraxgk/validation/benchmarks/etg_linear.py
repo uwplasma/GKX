@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields, replace
 from typing import Any
 
 import jax.numpy as jnp
@@ -110,6 +110,49 @@ class _ETGTimePathOptions:
     require_positive: bool
     min_amp_fraction: float
     diagnostic_norm: str
+
+
+@dataclass(frozen=True)
+class _ETGLinearRequest:
+    """Raw public ETG single-ky inputs before solver policies are resolved."""
+
+    ky_target: float
+    Nl: int
+    Nm: int
+    dt: float
+    steps: int
+    method: str
+    params: LinearParams | None
+    cfg: ETGBaseCase | None
+    time_cfg: TimeConfig | None
+    solver: str
+    krylov_cfg: KrylovConfig | None
+    tmin: float | None
+    tmax: float | None
+    auto_window: bool
+    window_fraction: float
+    min_points: int
+    start_fraction: float
+    growth_weight: float
+    require_positive: bool
+    min_amp_fraction: float
+    mode_method: str
+    terms: LinearTerms | None
+    sample_stride: int | None
+    fit_signal: str
+    streaming_fit: bool
+    streaming_amp_floor: float
+    reference_growth_window: bool
+    reference_navg_fraction: float
+    diagnostic_norm: str
+    show_progress: bool
+
+
+def _etg_linear_request_from_locals(values: dict[str, Any]) -> _ETGLinearRequest:
+    """Build an ETG request from ``run_etg_linear`` locals."""
+
+    names = {field.name for field in fields(_ETGLinearRequest)}
+    return _ETGLinearRequest(**{name: values[name] for name in names})
 
 
 def _default_etg_params(cfg: ETGBaseCase, geom: Any, Nm: int) -> LinearParams:
@@ -758,6 +801,80 @@ def _run_etg_time_path(
     )
 
 
+def _run_etg_linear_request(request: _ETGLinearRequest) -> LinearRunResult:
+    """Resolve ETG solver policies and execute one single-ky linear point."""
+
+    setup = _build_etg_linear_setup(
+        cfg=request.cfg,
+        params=request.params,
+        terms=request.terms,
+        ky_target=request.ky_target,
+        Nl=request.Nl,
+        Nm=request.Nm,
+    )
+    solver_key = request.solver.strip().lower()
+    fit_key = request.fit_signal.strip().lower()
+    if fit_key not in {"phi", "density", "auto"}:
+        raise ValueError("fit_signal must be 'phi', 'density', or 'auto'")
+    streaming_fit = request.streaming_fit
+    if fit_key == "auto" and streaming_fit:
+        streaming_fit = False
+    time_options = _ETGTimePathOptions(
+        fit_key=fit_key,
+        streaming_fit=streaming_fit,
+        streaming_amp_floor=request.streaming_amp_floor,
+        reference_growth_window=request.reference_growth_window,
+        reference_navg_fraction=request.reference_navg_fraction,
+        mode_method=request.mode_method,
+        tmin=request.tmin,
+        tmax=request.tmax,
+        auto_window=request.auto_window,
+        window_fraction=request.window_fraction,
+        min_points=request.min_points,
+        start_fraction=request.start_fraction,
+        growth_weight=request.growth_weight,
+        require_positive=request.require_positive,
+        min_amp_fraction=request.min_amp_fraction,
+        diagnostic_norm=request.diagnostic_norm,
+    )
+    auto_solver = solver_key == "auto"
+    if auto_solver:
+        solver_key = "krylov"
+
+    if solver_key == "krylov":
+        krylov_result = _run_etg_krylov_path(
+            setup,
+            Nl=request.Nl,
+            Nm=request.Nm,
+            krylov_cfg=request.krylov_cfg,
+            diagnostic_norm=request.diagnostic_norm,
+        )
+        if auto_solver and not _valid_etg_growth(
+            krylov_result.gamma,
+            krylov_result.omega,
+            require_positive=request.require_positive,
+        ):
+            solver_key = "time"
+        else:
+            return krylov_result
+
+    if solver_key != "krylov":
+        return _run_etg_time_path(
+            setup,
+            Nl=request.Nl,
+            Nm=request.Nm,
+            time_cfg=request.time_cfg,
+            dt=request.dt,
+            steps=request.steps,
+            method=request.method,
+            sample_stride=request.sample_stride,
+            options=time_options,
+            show_progress=request.show_progress,
+        )
+
+    raise ValueError(f"Unsupported ETG linear solver '{request.solver}'.")
+
+
 def run_etg_linear(
     ky_target: float = 3.0,
     Nl: int = 6,
@@ -792,71 +909,4 @@ def run_etg_linear(
 ) -> LinearRunResult:
     """Run an ETG linear benchmark and extract growth rate."""
 
-    setup = _build_etg_linear_setup(
-        cfg=cfg,
-        params=params,
-        terms=terms,
-        ky_target=ky_target,
-        Nl=Nl,
-        Nm=Nm,
-    )
-    solver_key = solver.strip().lower()
-    fit_key = fit_signal.strip().lower()
-    if fit_key not in {"phi", "density", "auto"}:
-        raise ValueError("fit_signal must be 'phi', 'density', or 'auto'")
-    if fit_key == "auto" and streaming_fit:
-        streaming_fit = False
-    time_options = _ETGTimePathOptions(
-        fit_key=fit_key,
-        streaming_fit=streaming_fit,
-        streaming_amp_floor=streaming_amp_floor,
-        reference_growth_window=reference_growth_window,
-        reference_navg_fraction=reference_navg_fraction,
-        mode_method=mode_method,
-        tmin=tmin,
-        tmax=tmax,
-        auto_window=auto_window,
-        window_fraction=window_fraction,
-        min_points=min_points,
-        start_fraction=start_fraction,
-        growth_weight=growth_weight,
-        require_positive=require_positive,
-        min_amp_fraction=min_amp_fraction,
-        diagnostic_norm=diagnostic_norm,
-    )
-    auto_solver = solver_key == "auto"
-    if auto_solver:
-        solver_key = "krylov"
-
-    if solver_key == "krylov":
-        krylov_result = _run_etg_krylov_path(
-            setup,
-            Nl=Nl,
-            Nm=Nm,
-            krylov_cfg=krylov_cfg,
-            diagnostic_norm=diagnostic_norm,
-        )
-        if auto_solver and not _valid_etg_growth(
-            krylov_result.gamma,
-            krylov_result.omega,
-            require_positive=require_positive,
-        ):
-            solver_key = "time"
-        else:
-            return krylov_result
-
-    if solver_key != "krylov":
-        return _run_etg_time_path(
-            setup,
-            Nl=Nl,
-            Nm=Nm,
-            time_cfg=time_cfg,
-            dt=dt,
-            steps=steps,
-            method=method,
-            sample_stride=sample_stride,
-            options=time_options,
-            show_progress=show_progress,
-        )
-
-    raise ValueError(f"Unsupported ETG linear solver '{solver}'.")
+    return _run_etg_linear_request(_etg_linear_request_from_locals(locals()))
