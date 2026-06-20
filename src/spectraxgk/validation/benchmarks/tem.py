@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, fields
+from typing import Any
+
 import jax.numpy as jnp
 import numpy as np
 
@@ -96,6 +99,181 @@ def _tem_params_and_terms(
     return params, terms
 
 
+@dataclass(frozen=True)
+class _TEMLinearRequest:
+    ky_target: float
+    Nl: int
+    Nm: int
+    dt: float
+    steps: int
+    method: str
+    params: LinearParams | None
+    cfg: TEMBaseCase | None
+    time_cfg: TimeConfig | None
+    solver: str
+    krylov_cfg: KrylovConfig | None
+    tmin: float | None
+    tmax: float | None
+    auto_window: bool
+    window_fraction: float
+    min_points: int
+    start_fraction: float
+    growth_weight: float
+    require_positive: bool
+    min_amp_fraction: float
+    mode_method: str
+    fit_signal: str
+    terms: LinearTerms | None
+    sample_stride: int | None
+    init_species_index: int
+    density_species_index: int
+    diagnostic_norm: str
+    show_progress: bool
+
+
+@dataclass(frozen=True)
+class _TEMLinearSetup:
+    cfg: TEMBaseCase
+    grid_full: Any
+    geom: SAlphaGeometry
+    params: LinearParams
+    terms: LinearTerms
+    hooks: _paths.TEMPathHooks
+
+
+@dataclass(frozen=True)
+class _TEMLinearState:
+    grid: Any
+    selection: ModeSelection
+    state: jnp.ndarray
+
+
+def _tem_linear_request_from_locals(values: dict[str, Any]) -> _TEMLinearRequest:
+    """Pack public ``run_tem_linear`` arguments once for internal routing."""
+
+    return _TEMLinearRequest(
+        **{field.name: values[field.name] for field in fields(_TEMLinearRequest)}
+    )
+
+
+def _validate_tem_species_indices(
+    *,
+    init_species_index: int,
+    density_species_index: int,
+) -> None:
+    ns = 2
+    if init_species_index < 0 or init_species_index >= ns:
+        raise ValueError("init_species_index out of range for kinetic species")
+    if density_species_index < 0 or density_species_index >= ns:
+        raise ValueError("density_species_index out of range for kinetic species")
+
+
+def _resolve_tem_linear_setup(request: _TEMLinearRequest) -> _TEMLinearSetup:
+    cfg = request.cfg or TEMBaseCase()
+    grid_full = build_spectral_grid(cfg.grid)
+    geom = SAlphaGeometry.from_config(cfg.geometry)
+    params, terms = _tem_params_and_terms(
+        cfg,
+        geom,
+        request.params,
+        request.terms,
+        request.Nm,
+    )
+    return _TEMLinearSetup(
+        cfg=cfg,
+        grid_full=grid_full,
+        geom=geom,
+        params=params,
+        terms=terms,
+        hooks=_tem_hooks(),
+    )
+
+
+def _prepare_tem_linear_state(
+    setup: _TEMLinearSetup,
+    request: _TEMLinearRequest,
+) -> _TEMLinearState:
+    _validate_tem_species_indices(
+        init_species_index=request.init_species_index,
+        density_species_index=request.density_species_index,
+    )
+    ky_index = select_ky_index(np.asarray(setup.grid_full.ky), request.ky_target)
+    grid = select_ky_grid(setup.grid_full, ky_index)
+    selection = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
+    state_np = np.zeros(
+        (2, request.Nl, request.Nm, grid.ky.size, grid.kx.size, grid.z.size),
+        dtype=np.complex64,
+    )
+    state_single = _build_initial_condition(
+        grid,
+        setup.geom,
+        ky_index=selection.ky_index,
+        kx_index=selection.kx_index,
+        Nl=request.Nl,
+        Nm=request.Nm,
+        init_cfg=setup.cfg.init,
+    )
+    state_np[int(request.init_species_index)] = np.asarray(
+        state_single,
+        dtype=np.complex64,
+    )
+    return _TEMLinearState(
+        grid=grid,
+        selection=selection,
+        state=jnp.asarray(state_np),
+    )
+
+
+def _run_tem_linear_request(request: _TEMLinearRequest) -> LinearRunResult:
+    setup = _resolve_tem_linear_setup(request)
+    state = _prepare_tem_linear_state(setup, request)
+    if request.solver.lower() == "krylov":
+        return _paths.run_tem_krylov_linear_path(
+            G0_jax=state.state,
+            grid=state.grid,
+            geom=setup.geom,
+            params=setup.params,
+            terms=setup.terms,
+            n_laguerre=request.Nl,
+            n_hermite=request.Nm,
+            sel=state.selection,
+            krylov_cfg=request.krylov_cfg,
+            krylov_default=TEM_KRYLOV_DEFAULT,
+            diagnostic_norm=request.diagnostic_norm,
+            hooks=setup.hooks,
+        )
+    return _paths.run_tem_time_linear_path(
+        G0_jax=state.state,
+        grid=state.grid,
+        geom=setup.geom,
+        params=setup.params,
+        terms=setup.terms,
+        n_laguerre=request.Nl,
+        n_hermite=request.Nm,
+        dt=request.dt,
+        steps=request.steps,
+        method=request.method,
+        time_cfg=request.time_cfg,
+        sample_stride=request.sample_stride,
+        fit_signal=request.fit_signal,
+        density_species_index=request.density_species_index,
+        sel=state.selection,
+        mode_method=request.mode_method,
+        auto_window=request.auto_window,
+        tmin=request.tmin,
+        tmax=request.tmax,
+        window_fraction=request.window_fraction,
+        min_points=request.min_points,
+        start_fraction=request.start_fraction,
+        growth_weight=request.growth_weight,
+        require_positive=request.require_positive,
+        min_amp_fraction=request.min_amp_fraction,
+        diagnostic_norm=request.diagnostic_norm,
+        show_progress=request.show_progress,
+        hooks=setup.hooks,
+    )
+
+
 def run_tem_linear(
     ky_target: float = 0.3,
     Nl: int = 6,
@@ -128,80 +306,7 @@ def run_tem_linear(
 ) -> LinearRunResult:
     """Run the TEM benchmark and extract growth rate."""
 
-    cfg = cfg or TEMBaseCase()
-    grid_full = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
-    params, terms = _tem_params_and_terms(cfg, geom, params, terms, Nm)
-
-    ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
-    grid = select_ky_grid(grid_full, ky_index)
-    sel = ModeSelection(ky_index=0, kx_index=0, z_index=_midplane_index(grid))
-
-    ns = 2
-    if init_species_index < 0 or init_species_index >= ns:
-        raise ValueError("init_species_index out of range for kinetic species")
-    if density_species_index < 0 or density_species_index >= ns:
-        raise ValueError("density_species_index out of range for kinetic species")
-    G0 = np.zeros(
-        (ns, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64
-    )
-    G0_single = _build_initial_condition(
-        grid,
-        geom,
-        ky_index=sel.ky_index,
-        kx_index=sel.kx_index,
-        Nl=Nl,
-        Nm=Nm,
-        init_cfg=cfg.init,
-    )
-    G0[int(init_species_index)] = np.asarray(G0_single, dtype=np.complex64)
-    G0_jax = jnp.asarray(G0)
-    hooks = _tem_hooks()
-    if solver.lower() == "krylov":
-        return _paths.run_tem_krylov_linear_path(
-            G0_jax=G0_jax,
-            grid=grid,
-            geom=geom,
-            params=params,
-            terms=terms,
-            n_laguerre=Nl,
-            n_hermite=Nm,
-            sel=sel,
-            krylov_cfg=krylov_cfg,
-            krylov_default=TEM_KRYLOV_DEFAULT,
-            diagnostic_norm=diagnostic_norm,
-            hooks=hooks,
-        )
-    return _paths.run_tem_time_linear_path(
-        G0_jax=G0_jax,
-        grid=grid,
-        geom=geom,
-        params=params,
-        terms=terms,
-        n_laguerre=Nl,
-        n_hermite=Nm,
-        dt=dt,
-        steps=steps,
-        method=method,
-        time_cfg=time_cfg,
-        sample_stride=sample_stride,
-        fit_signal=fit_signal,
-        density_species_index=density_species_index,
-        sel=sel,
-        mode_method=mode_method,
-        auto_window=auto_window,
-        tmin=tmin,
-        tmax=tmax,
-        window_fraction=window_fraction,
-        min_points=min_points,
-        start_fraction=start_fraction,
-        growth_weight=growth_weight,
-        require_positive=require_positive,
-        min_amp_fraction=min_amp_fraction,
-        diagnostic_norm=diagnostic_norm,
-        show_progress=show_progress,
-        hooks=hooks,
-    )
+    return _run_tem_linear_request(_tem_linear_request_from_locals(locals()))
 
 
 def run_tem_scan(
@@ -254,10 +359,10 @@ def run_tem_scan(
         tmin=tmin,
         tmax=tmax,
     )
-    if init_species_index < 0 or init_species_index >= 2:
-        raise ValueError("init_species_index out of range for kinetic species")
-    if density_species_index < 0 or density_species_index >= 2:
-        raise ValueError("density_species_index out of range for kinetic species")
+    _validate_tem_species_indices(
+        init_species_index=init_species_index,
+        density_species_index=density_species_index,
+    )
     return _paths.run_tem_scan_batches(
         ky_values=np.asarray(ky_values, dtype=float),
         grid_full=grid_full,
