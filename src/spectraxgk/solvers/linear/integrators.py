@@ -353,6 +353,153 @@ def _integrate_linear_cached_donate(
     )
 
 
+def _validate_linear_sampling(*, steps: int, sample_stride: int) -> None:
+    """Validate fixed-step sampling before JIT dispatch."""
+
+    if sample_stride < 1:
+        raise ValueError("sample_stride must be >= 1")
+    if steps % sample_stride != 0:
+        raise ValueError("steps must be divisible by sample_stride")
+
+
+def _linear_cache_or_build(
+    G0: jnp.ndarray,
+    grid: SpectralGrid,
+    geom: FluxTubeGeometryLike,
+    params: LinearParams,
+    cache: LinearCache | None,
+) -> LinearCache:
+    """Return a supplied linear cache or build one from the state dimensions."""
+
+    if cache is not None:
+        return cache
+    if G0.ndim == 5:
+        Nl, Nm = G0.shape[0], G0.shape[1]
+    elif G0.ndim == 6:
+        Nl, Nm = G0.shape[1], G0.shape[2]
+    else:
+        raise ValueError(
+            "G0 must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)"
+        )
+    return build_linear_cache(grid, geom, params, Nl, Nm)
+
+
+def _normalize_linear_method(method: str) -> str:
+    """Map public aliases onto the fixed-step method names used internally."""
+
+    return "imex" if method == "semi-implicit" else method
+
+
+def _dispatch_implicit_linear(
+    G0: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    *,
+    dt: float,
+    steps: int,
+    terms: LinearTerms,
+    implicit_tol: float,
+    implicit_maxiter: int,
+    implicit_iters: int,
+    implicit_relax: float,
+    implicit_restart: int,
+    implicit_solve_method: str,
+    implicit_preconditioner: PreconditionerSpec,
+    checkpoint: bool,
+    sample_stride: int,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Route the implicit linear integration policy."""
+
+    return _integrate_linear_implicit_cached(
+        G0,
+        cache,
+        params,
+        dt=dt,
+        steps=steps,
+        terms=terms,
+        implicit_tol=implicit_tol,
+        implicit_maxiter=implicit_maxiter,
+        implicit_iters=implicit_iters,
+        implicit_relax=implicit_relax,
+        implicit_restart=implicit_restart,
+        implicit_solve_method=implicit_solve_method,
+        implicit_preconditioner=implicit_preconditioner,
+        checkpoint=checkpoint,
+        sample_stride=sample_stride,
+    )
+
+
+def _dispatch_parallel_linear(
+    G0: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    *,
+    dt: float,
+    steps: int,
+    method: str,
+    terms: LinearTerms,
+    checkpoint: bool,
+    sample_stride: int,
+    donate: bool,
+    show_progress: bool,
+    parallel: Any,
+    force_electrostatic_fields: bool,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Route explicit non-serial linear integration."""
+
+    if donate:
+        raise NotImplementedError(
+            "parallel linear integration does not currently support donated input buffers"
+        )
+    return _integrate_linear_cached_impl(
+        G0,
+        cache,
+        params,
+        dt,
+        steps,
+        method=method,
+        checkpoint=checkpoint,
+        terms=terms,
+        sample_stride=sample_stride,
+        show_progress=show_progress,
+        parallel=parallel,
+        force_electrostatic_fields=force_electrostatic_fields,
+    )
+
+
+def _dispatch_serial_linear(
+    G0: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    *,
+    dt: float,
+    steps: int,
+    method: str,
+    terms: LinearTerms,
+    checkpoint: bool,
+    sample_stride: int,
+    donate: bool,
+    show_progress: bool,
+    force_electrostatic_fields: bool,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Route explicit serial linear integration, optionally donating ``G0``."""
+
+    integrator = _integrate_linear_cached_donate if donate else _integrate_linear_cached
+    return integrator(
+        G0,
+        cache,
+        params,
+        dt,
+        steps,
+        method=method,
+        checkpoint=checkpoint,
+        terms=terms,
+        sample_stride=sample_stride,
+        show_progress=show_progress,
+        force_electrostatic_fields=force_electrostatic_fields,
+    )
+
+
 def integrate_linear(
     G0: jnp.ndarray,
     grid: SpectralGrid,
@@ -377,36 +524,18 @@ def integrate_linear(
     parallel: Any | None = None,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Time integrate the linear system using a fixed-step scheme."""
-    if terms is None:
-        terms = LinearTerms()
-    if sample_stride < 1:
-        raise ValueError("sample_stride must be >= 1")
-    if steps % sample_stride != 0:
-        raise ValueError("steps must be divisible by sample_stride")
-    if cache is None:
-        if G0.ndim == 5:
-            Nl, Nm = G0.shape[0], G0.shape[1]
-        elif G0.ndim == 6:
-            Nl, Nm = G0.shape[1], G0.shape[2]
-        else:
-            raise ValueError(
-                "G0 must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)"
-            )
-        cache = build_linear_cache(grid, geom, params, Nl, Nm)
-    if method == "semi-implicit":
-        method = "imex"
-    parallel_strategy = (
-        "serial"
-        if parallel is None
-        else str(getattr(parallel, "strategy", "serial")).lower().replace("-", "_")
-    )
+    terms = LinearTerms() if terms is None else terms
+    _validate_linear_sampling(steps=steps, sample_stride=sample_stride)
+    cache = _linear_cache_or_build(G0, grid, geom, params, cache)
+    method = _normalize_linear_method(method)
+    parallel_strategy = _linear_parallel_strategy(parallel)
     force_electrostatic_fields = _is_electrostatic_field_terms(terms)
     if method == "implicit":
         if parallel_strategy != "serial":
             raise NotImplementedError(
                 "parallel linear integration currently supports only explicit fixed-step methods"
             )
-        return _integrate_linear_implicit_cached(
+        return _dispatch_implicit_linear(
             G0,
             cache,
             params,
@@ -424,35 +553,32 @@ def integrate_linear(
             sample_stride=sample_stride,
         )
     if parallel_strategy != "serial":
-        if donate:
-            raise NotImplementedError(
-                "parallel linear integration does not currently support donated input buffers"
-            )
-        return _integrate_linear_cached_impl(
+        return _dispatch_parallel_linear(
             G0,
             cache,
             params,
-            dt,
-            steps,
+            dt=dt,
+            steps=steps,
             method=method,
-            checkpoint=checkpoint,
             terms=terms,
+            checkpoint=checkpoint,
             sample_stride=sample_stride,
+            donate=donate,
             show_progress=show_progress,
             parallel=parallel,
             force_electrostatic_fields=force_electrostatic_fields,
         )
-    integrator = _integrate_linear_cached_donate if donate else _integrate_linear_cached
-    return integrator(
+    return _dispatch_serial_linear(
         G0,
         cache,
         params,
-        dt,
-        steps,
+        dt=dt,
+        steps=steps,
         method=method,
-        checkpoint=checkpoint,
         terms=terms,
+        checkpoint=checkpoint,
         sample_stride=sample_stride,
+        donate=donate,
         show_progress=show_progress,
         force_electrostatic_fields=force_electrostatic_fields,
     )
