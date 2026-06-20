@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import Sequence
 
 import jax.numpy as jnp
@@ -80,6 +80,244 @@ from spectraxgk.terms.assembly import compute_fields_cached
 
 from spectraxgk.validation.benchmarks.kbm_beta import run_kbm_beta_scan
 
+
+@dataclass(frozen=True)
+class _KBMScanCase:
+    cfg: KBMBaseCase
+    beta: float
+    reference_aligned: bool
+
+
+@dataclass(frozen=True)
+class _KBMScanOptions:
+    n_laguerre: int
+    n_hermite: int
+    dt: float | np.ndarray
+    steps: int | np.ndarray
+    method: str
+    time_cfg: TimeConfig | None
+    solver: str
+    krylov_cfg: KrylovConfig | None
+    kbm_target_factors: Sequence[float] | None
+    kbm_beta_transition: float | None
+    tmin: float | np.ndarray | None
+    tmax: float | np.ndarray | None
+    auto_window: bool
+    window_fraction: float
+    min_points: int
+    start_fraction: float
+    growth_weight: float
+    require_positive: bool
+    min_amp_fraction: float
+    mode_method: str
+    mode_only: bool
+    terms: LinearTerms | None
+    sample_stride: int | None
+    fit_signal: str
+    ky_batch: int
+    fixed_batch_shape: bool
+    streaming_fit: bool
+    streaming_amp_floor: float
+    init_species_index: int
+    density_species_index: int
+    diagnostic_norm: str
+    fapar_override: float | None
+    apar_beta_scale: float | None
+    ampere_g0_scale: float | None
+    bpar_beta_scale: float | None
+
+
+@dataclass
+class _KBMScanOutput:
+    ky: list[float]
+    gamma: list[float]
+    omega: list[float]
+
+    @classmethod
+    def empty(cls) -> "_KBMScanOutput":
+        return cls(ky=[], gamma=[], omega=[])
+
+    def append(self, *, ky: float, gamma: float, omega: float) -> None:
+        self.ky.append(float(ky))
+        self.gamma.append(float(gamma))
+        self.omega.append(float(omega))
+
+    def result(self) -> LinearScanResult:
+        return LinearScanResult(
+            ky=np.asarray(self.ky, dtype=float),
+            gamma=np.asarray(self.gamma, dtype=float),
+            omega=np.asarray(self.omega, dtype=float),
+        )
+
+
+def _resolve_kbm_scan_case(
+    *,
+    cfg: KBMBaseCase | None,
+    beta_value: float | None,
+    reference_aligned: bool | None,
+) -> _KBMScanCase:
+    cfg_in = cfg or KBMBaseCase()
+    beta_use = float(cfg_in.model.beta) if beta_value is None else float(beta_value)
+    return _KBMScanCase(
+        cfg=replace(cfg_in, model=replace(cfg_in.model, beta=beta_use)),
+        beta=beta_use,
+        reference_aligned=bool(True if reference_aligned is None else reference_aligned),
+    )
+
+
+def _build_kbm_scan_options(
+    *,
+    Nl: int,
+    Nm: int,
+    dt: float | np.ndarray,
+    steps: int | np.ndarray,
+    method: str,
+    time_cfg: TimeConfig | None,
+    solver: str,
+    krylov_cfg: KrylovConfig | None,
+    kbm_target_factors: Sequence[float] | None,
+    kbm_beta_transition: float | None,
+    tmin: float | np.ndarray | None,
+    tmax: float | np.ndarray | None,
+    auto_window: bool,
+    window_fraction: float,
+    min_points: int,
+    start_fraction: float,
+    growth_weight: float,
+    require_positive: bool,
+    min_amp_fraction: float,
+    mode_method: str,
+    mode_only: bool,
+    terms: LinearTerms | None,
+    sample_stride: int | None,
+    fit_signal: str,
+    ky_batch: int,
+    fixed_batch_shape: bool,
+    streaming_fit: bool,
+    streaming_amp_floor: float,
+    init_species_index: int,
+    density_species_index: int,
+    diagnostic_norm: str,
+    fapar_override: float | None,
+    apar_beta_scale: float | None,
+    ampere_g0_scale: float | None,
+    bpar_beta_scale: float | None,
+) -> _KBMScanOptions:
+    return _KBMScanOptions(
+        n_laguerre=Nl,
+        n_hermite=Nm,
+        dt=dt,
+        steps=steps,
+        method=method,
+        time_cfg=time_cfg,
+        solver=solver,
+        krylov_cfg=krylov_cfg,
+        kbm_target_factors=kbm_target_factors,
+        kbm_beta_transition=kbm_beta_transition,
+        tmin=tmin,
+        tmax=tmax,
+        auto_window=auto_window,
+        window_fraction=window_fraction,
+        min_points=min_points,
+        start_fraction=start_fraction,
+        growth_weight=growth_weight,
+        require_positive=require_positive,
+        min_amp_fraction=min_amp_fraction,
+        mode_method=mode_method,
+        mode_only=mode_only,
+        terms=terms,
+        sample_stride=sample_stride,
+        fit_signal=fit_signal,
+        ky_batch=ky_batch,
+        fixed_batch_shape=fixed_batch_shape,
+        streaming_fit=streaming_fit,
+        streaming_amp_floor=streaming_amp_floor,
+        init_species_index=init_species_index,
+        density_species_index=density_species_index,
+        diagnostic_norm=diagnostic_norm,
+        fapar_override=fapar_override,
+        apar_beta_scale=apar_beta_scale,
+        ampere_g0_scale=ampere_g0_scale,
+        bpar_beta_scale=bpar_beta_scale,
+    )
+
+
+def _indexed_kbm_scan_time_value(value: float | np.ndarray, index: int):
+    indexed = indexed_scan_value(value, index)
+    return value if indexed is None else indexed
+
+
+def _run_kbm_scan_point(
+    *,
+    ky_value: float,
+    index: int,
+    case: _KBMScanCase,
+    options: _KBMScanOptions,
+) -> tuple[float, float]:
+    dt_i = _indexed_kbm_scan_time_value(options.dt, index)
+    steps_i = _indexed_kbm_scan_time_value(options.steps, index)
+    out = run_kbm_beta_scan(
+        betas=np.asarray([case.beta], dtype=float),
+        ky_target=float(ky_value),
+        Nl=options.n_laguerre,
+        Nm=options.n_hermite,
+        dt=float(dt_i),
+        steps=int(steps_i),
+        method=options.method,
+        cfg=case.cfg,
+        time_cfg=options.time_cfg,
+        solver=options.solver,
+        krylov_cfg=options.krylov_cfg,
+        kbm_target_factors=options.kbm_target_factors,
+        kbm_beta_transition=options.kbm_beta_transition,
+        tmin=indexed_scan_value(options.tmin, index),
+        tmax=indexed_scan_value(options.tmax, index),
+        auto_window=options.auto_window,
+        window_fraction=options.window_fraction,
+        min_points=options.min_points,
+        start_fraction=options.start_fraction,
+        growth_weight=options.growth_weight,
+        require_positive=options.require_positive,
+        min_amp_fraction=options.min_amp_fraction,
+        mode_method=options.mode_method,
+        mode_only=options.mode_only,
+        terms=options.terms,
+        sample_stride=options.sample_stride,
+        fit_signal=options.fit_signal,
+        ky_batch=options.ky_batch,
+        fixed_batch_shape=options.fixed_batch_shape,
+        streaming_fit=options.streaming_fit,
+        streaming_amp_floor=options.streaming_amp_floor,
+        init_species_index=options.init_species_index,
+        density_species_index=options.density_species_index,
+        diagnostic_norm=options.diagnostic_norm,
+        fapar_override=options.fapar_override,
+        apar_beta_scale=options.apar_beta_scale,
+        ampere_g0_scale=options.ampere_g0_scale,
+        bpar_beta_scale=options.bpar_beta_scale,
+        reference_aligned=case.reference_aligned,
+    )
+    return float(out.gamma[0]), float(out.omega[0])
+
+
+def _run_kbm_scan_loop(
+    ky_values: np.ndarray,
+    *,
+    case: _KBMScanCase,
+    options: _KBMScanOptions,
+) -> _KBMScanOutput:
+    output = _KBMScanOutput.empty()
+    for index, ky_value in enumerate(np.asarray(ky_values, dtype=float)):
+        gamma, omega = _run_kbm_scan_point(
+            ky_value=float(ky_value),
+            index=index,
+            case=case,
+            options=options,
+        )
+        output.append(ky=float(ky_value), gamma=gamma, omega=omega)
+    return output
+
+
 def run_kbm_scan(
     ky_values: np.ndarray,
     *,
@@ -129,78 +367,49 @@ def run_kbm_scan(
     at fixed beta.
     """
 
-    cfg_in = cfg or KBMBaseCase()
-    if beta_value is None:
-        beta_use = float(cfg_in.model.beta)
-    else:
-        beta_use = float(beta_value)
-    cfg_use = replace(cfg_in, model=replace(cfg_in.model, beta=beta_use))
-    reference_aligned_use = bool(
-        True if reference_aligned is None else reference_aligned
+    case = _resolve_kbm_scan_case(
+        cfg=cfg,
+        beta_value=beta_value,
+        reference_aligned=reference_aligned,
     )
-
-    ky_vals = np.asarray(ky_values, dtype=float)
-    gamma_out: list[float] = []
-    omega_out: list[float] = []
-    ky_out: list[float] = []
-
-    for i, ky_val in enumerate(ky_vals):
-        dt_i = indexed_scan_value(dt, i)
-        steps_i = indexed_scan_value(steps, i)
-        if dt_i is None:
-            dt_i = dt
-        if steps_i is None:
-            steps_i = steps
-        out = run_kbm_beta_scan(
-            betas=np.asarray([beta_use], dtype=float),
-            ky_target=float(ky_val),
-            Nl=Nl,
-            Nm=Nm,
-            dt=float(dt_i),
-            steps=int(steps_i),
-            method=method,
-            cfg=cfg_use,
-            time_cfg=time_cfg,
-            solver=solver,
-            krylov_cfg=krylov_cfg,
-            kbm_target_factors=kbm_target_factors,
-            kbm_beta_transition=kbm_beta_transition,
-            tmin=indexed_scan_value(tmin, i),
-            tmax=indexed_scan_value(tmax, i),
-            auto_window=auto_window,
-            window_fraction=window_fraction,
-            min_points=min_points,
-            start_fraction=start_fraction,
-            growth_weight=growth_weight,
-            require_positive=require_positive,
-            min_amp_fraction=min_amp_fraction,
-            mode_method=mode_method,
-            mode_only=mode_only,
-            terms=terms,
-            sample_stride=sample_stride,
-            fit_signal=fit_signal,
-            ky_batch=ky_batch,
-            fixed_batch_shape=fixed_batch_shape,
-            streaming_fit=streaming_fit,
-            streaming_amp_floor=streaming_amp_floor,
-            init_species_index=init_species_index,
-            density_species_index=density_species_index,
-            diagnostic_norm=diagnostic_norm,
-            fapar_override=fapar_override,
-            apar_beta_scale=apar_beta_scale,
-            ampere_g0_scale=ampere_g0_scale,
-            bpar_beta_scale=bpar_beta_scale,
-            reference_aligned=reference_aligned_use,
-        )
-        ky_out.append(float(ky_val))
-        gamma_out.append(float(out.gamma[0]))
-        omega_out.append(float(out.omega[0]))
-
-    return LinearScanResult(
-        ky=np.asarray(ky_out, dtype=float),
-        gamma=np.asarray(gamma_out, dtype=float),
-        omega=np.asarray(omega_out, dtype=float),
+    options = _build_kbm_scan_options(
+        Nl=Nl,
+        Nm=Nm,
+        dt=dt,
+        steps=steps,
+        method=method,
+        time_cfg=time_cfg,
+        solver=solver,
+        krylov_cfg=krylov_cfg,
+        kbm_target_factors=kbm_target_factors,
+        kbm_beta_transition=kbm_beta_transition,
+        tmin=tmin,
+        tmax=tmax,
+        auto_window=auto_window,
+        window_fraction=window_fraction,
+        min_points=min_points,
+        start_fraction=start_fraction,
+        growth_weight=growth_weight,
+        require_positive=require_positive,
+        min_amp_fraction=min_amp_fraction,
+        mode_method=mode_method,
+        mode_only=mode_only,
+        terms=terms,
+        sample_stride=sample_stride,
+        fit_signal=fit_signal,
+        ky_batch=ky_batch,
+        fixed_batch_shape=fixed_batch_shape,
+        streaming_fit=streaming_fit,
+        streaming_amp_floor=streaming_amp_floor,
+        init_species_index=init_species_index,
+        density_species_index=density_species_index,
+        diagnostic_norm=diagnostic_norm,
+        fapar_override=fapar_override,
+        apar_beta_scale=apar_beta_scale,
+        ampere_g0_scale=ampere_g0_scale,
+        bpar_beta_scale=bpar_beta_scale,
     )
+    return _run_kbm_scan_loop(ky_values, case=case, options=options).result()
 
 
 __all__ = ["run_kbm_scan"]
