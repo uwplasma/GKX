@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields, replace
 from typing import Any, Callable
 
 import jax.numpy as jnp
@@ -117,6 +117,59 @@ class _CycloneLinearFitOptions:
     min_slope_frac: float
     slope_var_weight: float
     window_method: str
+
+
+@dataclass(frozen=True)
+class _CycloneLinearRequest:
+    ky_target: float
+    Nl: int
+    Nm: int
+    dt: float
+    steps: int
+    method: str
+    params: LinearParams | None
+    cfg: CycloneBaseCase | None
+    time_cfg: TimeConfig | None
+    solver: str
+    krylov_cfg: KrylovConfig | None
+    tmin: float | None
+    tmax: float | None
+    auto_window: bool
+    window_fraction: float
+    min_points: int
+    start_fraction: float
+    growth_weight: float
+    require_positive: bool
+    min_amp_fraction: float
+    max_fraction: float
+    end_fraction: float
+    max_amp_fraction: float
+    phase_weight: float
+    length_weight: float
+    min_r2: float
+    late_penalty: float
+    min_slope: float | None
+    min_slope_frac: float
+    slope_var_weight: float
+    window_method: str
+    mode_method: str
+    terms: LinearTerms | None
+    sample_stride: int | None
+    fit_signal: str
+    init_cfg: InitializationConfig | None
+    diagnostic_norm: str
+    use_jit: bool
+    reference_aligned: bool | None
+    show_progress: bool
+    status_callback: Callable[[str], None] | None
+
+
+def _cyclone_linear_request_from_locals(values: dict[str, Any]) -> _CycloneLinearRequest:
+    """Pack public ``run_cyclone_linear`` arguments once for internal routing."""
+
+    return _CycloneLinearRequest(
+        **{field.name: values[field.name] for field in fields(_CycloneLinearRequest)}
+    )
 
 
 def _default_cyclone_params(cfg: CycloneBaseCase, geom: SAlphaGeometry, Nm: int) -> LinearParams:
@@ -395,6 +448,89 @@ def _pack_cyclone_linear_result(
     )
 
 
+def _cyclone_linear_fit_options_from_request(
+    request: _CycloneLinearRequest,
+) -> _CycloneLinearFitOptions:
+    return _CycloneLinearFitOptions(
+        tmin=request.tmin,
+        tmax=request.tmax,
+        auto_window=request.auto_window,
+        window_fraction=request.window_fraction,
+        min_points=request.min_points,
+        start_fraction=request.start_fraction,
+        growth_weight=request.growth_weight,
+        require_positive=request.require_positive,
+        min_amp_fraction=request.min_amp_fraction,
+        max_fraction=request.max_fraction,
+        end_fraction=request.end_fraction,
+        max_amp_fraction=request.max_amp_fraction,
+        phase_weight=request.phase_weight,
+        length_weight=request.length_weight,
+        min_r2=request.min_r2,
+        late_penalty=request.late_penalty,
+        min_slope=request.min_slope,
+        min_slope_frac=request.min_slope_frac,
+        slope_var_weight=request.slope_var_weight,
+        window_method=request.window_method,
+    )
+
+
+def _emit_cyclone_linear_status(
+    callback: Callable[[str], None] | None,
+    message: str,
+) -> None:
+    if callback is not None:
+        callback(message)
+
+
+def _run_cyclone_linear_request(request: _CycloneLinearRequest) -> CycloneRunResult:
+    cfg = request.cfg or CycloneBaseCase()
+    init_cfg = request.init_cfg or getattr(cfg, "init", None) or InitializationConfig()
+
+    def status(message: str) -> None:
+        _emit_cyclone_linear_status(request.status_callback, message)
+
+    setup = _build_cyclone_linear_setup(
+        ky_target=request.ky_target,
+        Nl=request.Nl,
+        Nm=request.Nm,
+        cfg=cfg,
+        init_cfg=init_cfg,
+        params=request.params,
+        terms=request.terms,
+        fit_signal=request.fit_signal,
+        diagnostic_norm=request.diagnostic_norm,
+        mode_method=request.mode_method,
+        reference_aligned=request.reference_aligned,
+        status=status,
+    )
+    _paths.sync_path_hooks(globals())
+    gamma, omega, phi_t_np, t = _dispatch_cyclone_linear_solver(
+        solver_key=request.solver.strip().lower(),
+        setup=setup,
+        fit=_cyclone_linear_fit_options_from_request(request),
+        Nl=request.Nl,
+        Nm=request.Nm,
+        krylov_cfg=request.krylov_cfg,
+        time_cfg=request.time_cfg,
+        dt=request.dt,
+        steps=request.steps,
+        method=request.method,
+        sample_stride=request.sample_stride,
+        use_jit=request.use_jit,
+        show_progress=request.show_progress,
+        status=status,
+    )
+    status(f"completed Cyclone linear run at ky={float(setup.grid.ky[setup.selection.ky_index]):.4f}")
+    return _pack_cyclone_linear_result(
+        setup=setup,
+        gamma=gamma,
+        omega=omega,
+        phi_t_np=phi_t_np,
+        t=t,
+    )
+
+
 def run_cyclone_linear(
     ky_target: float = 0.3,
     Nl: int = 6, Nm: int = 12,
@@ -435,71 +571,4 @@ def run_cyclone_linear(
 ) -> CycloneRunResult:
     """Run the linear Cyclone benchmark and extract growth rate."""
 
-    def _status(message: str) -> None:
-        if status_callback is not None:
-            status_callback(message)
-
-    cfg = cfg or CycloneBaseCase()
-    init_cfg = init_cfg or getattr(cfg, "init", None) or InitializationConfig()
-    solver_key = solver.strip().lower()
-    setup = _build_cyclone_linear_setup(
-        ky_target=ky_target,
-        Nl=Nl,
-        Nm=Nm,
-        cfg=cfg,
-        init_cfg=init_cfg,
-        params=params,
-        terms=terms,
-        fit_signal=fit_signal,
-        diagnostic_norm=diagnostic_norm,
-        mode_method=mode_method,
-        reference_aligned=reference_aligned,
-        status=_status,
-    )
-    fit = _CycloneLinearFitOptions(
-        tmin=tmin,
-        tmax=tmax,
-        auto_window=auto_window,
-        window_fraction=window_fraction,
-        min_points=min_points,
-        start_fraction=start_fraction,
-        growth_weight=growth_weight,
-        require_positive=require_positive,
-        min_amp_fraction=min_amp_fraction,
-        max_fraction=max_fraction,
-        end_fraction=end_fraction,
-        max_amp_fraction=max_amp_fraction,
-        phase_weight=phase_weight,
-        length_weight=length_weight,
-        min_r2=min_r2,
-        late_penalty=late_penalty,
-        min_slope=min_slope,
-        min_slope_frac=min_slope_frac,
-        slope_var_weight=slope_var_weight,
-        window_method=window_method,
-    )
-    _paths.sync_path_hooks(globals())
-    gamma, omega, phi_t_np, t = _dispatch_cyclone_linear_solver(
-        solver_key=solver_key,
-        setup=setup,
-        fit=fit,
-        Nl=Nl,
-        Nm=Nm,
-        krylov_cfg=krylov_cfg,
-        time_cfg=time_cfg,
-        dt=dt,
-        steps=steps,
-        method=method,
-        sample_stride=sample_stride,
-        use_jit=use_jit,
-        show_progress=show_progress,
-        status=_status,
-    )
-    _status(f"completed Cyclone linear run at ky={float(setup.grid.ky[setup.selection.ky_index]):.4f}")
-    return _pack_cyclone_linear_result(
-        setup=setup,
-        gamma=gamma,
-        omega=omega,
-        phi_t_np=phi_t_np,
-        t=t,
-    )
+    return _run_cyclone_linear_request(_cyclone_linear_request_from_locals(locals()))
