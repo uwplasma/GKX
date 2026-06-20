@@ -104,6 +104,216 @@ def _planned_run(
     }
 
 
+def _validated_config(
+    config: NonlinearReplicateFollowupConfig | None,
+) -> NonlinearReplicateFollowupConfig:
+    cfg = config or NonlinearReplicateFollowupConfig()
+    if cfg.max_runs_per_state <= 0:
+        raise ValueError("max_runs_per_state must be positive")
+    if cfg.extra_seed_increment <= 0:
+        raise ValueError("extra_seed_increment must be positive")
+    return cfg
+
+
+def _state_rows_from_report(spread_report: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    state_rows_raw = spread_report.get("state_rows")
+    if not isinstance(state_rows_raw, Sequence):
+        return []
+    return [row for row in state_rows_raw if isinstance(row, Mapping)]
+
+
+def _failed_states_from_report(spread_report: Mapping[str, Any]) -> list[Any]:
+    summary = spread_report.get("summary")
+    if not isinstance(summary, Mapping):
+        return []
+    return list(summary.get("failed_states", []))
+
+
+def _state_metadata(
+    lookup: Mapping[tuple[str, str], dict[str, Any]],
+    state: str,
+) -> list[dict[str, Any]]:
+    return [row for key, row in lookup.items() if key[0] == state]
+
+
+def _mixed_seed_timestep_runs(
+    *,
+    state: str,
+    state_row: Mapping[str, Any],
+    state_metadata: Sequence[Mapping[str, Any]],
+    lookup: Mapping[tuple[str, str], dict[str, Any]],
+    cfg: NonlinearReplicateFollowupConfig,
+    missing_metadata: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    high_label = state_row.get("high_variant_label")
+    low_label = state_row.get("low_variant_label")
+    if not (high_label and low_label):
+        return []
+    high = lookup.get(_variant_key(state, str(high_label)))
+    low = lookup.get(_variant_key(state, str(low_label)))
+    if high is None or low is None:
+        missing_metadata.append(
+            {
+                "state": state,
+                "high_variant_label": high_label,
+                "low_variant_label": low_label,
+                "reason": "missing seed/timestep metadata for high or low variant",
+            }
+        )
+        return []
+    runs = [
+        _planned_run(
+            state=state,
+            seed=int(low["seed"]),
+            timestep=float(high["timestep"]),
+            reason="test whether the low window follows the seed when the timestep is nominal",
+            source_labels=[str(low_label), str(high_label)],
+        ),
+        _planned_run(
+            state=state,
+            seed=int(high["seed"]),
+            timestep=float(low["timestep"]),
+            reason="test whether the high window follows the seed when the timestep is refined",
+            source_labels=[str(high_label), str(low_label)],
+        ),
+    ]
+    if cfg.include_extra_nominal_seed:
+        extra_seed = _next_seed(state_metadata, increment=cfg.extra_seed_increment)
+        if extra_seed is not None:
+            runs.append(
+                _planned_run(
+                    state=state,
+                    seed=extra_seed,
+                    timestep=float(high["timestep"]),
+                    reason="add one independent nominal-timestep seed after the cross checks",
+                    source_labels=[str(high_label)],
+                )
+            )
+    return runs
+
+
+def _seed_spread_runs(
+    *,
+    state: str,
+    state_metadata: Sequence[Mapping[str, Any]],
+    cfg: NonlinearReplicateFollowupConfig,
+) -> list[dict[str, Any]]:
+    extra_seed = _next_seed(state_metadata, increment=cfg.extra_seed_increment)
+    nominal_dt = None
+    for row in state_metadata:
+        if str(row.get("variant_axis")) == "seed":
+            nominal_dt = _finite_float(row.get("timestep"))
+            break
+    if extra_seed is None or nominal_dt is None:
+        return []
+    return [
+        _planned_run(
+            state=state,
+            seed=extra_seed,
+            timestep=nominal_dt,
+            reason="seed spread dominates; add one independent nominal-timestep seed",
+            source_labels=[],
+        )
+    ]
+
+
+def _timestep_spread_runs(
+    *,
+    state: str,
+    state_metadata: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    nominal_seed = None
+    refined_dt = None
+    for row in state_metadata:
+        if str(row.get("variant_axis")) == "timestep":
+            nominal_seed = _finite_int(row.get("seed"))
+            refined_dt = _finite_float(row.get("timestep"))
+            break
+    if nominal_seed is None or refined_dt is None:
+        return []
+    return [
+        _planned_run(
+            state=state,
+            seed=nominal_seed,
+            timestep=refined_dt,
+            reason="timestep spread dominates; repeat the refined-timestep replicate before promotion",
+            source_labels=[],
+        )
+    ]
+
+
+def _dedupe_and_limit_runs(
+    runs: Sequence[Mapping[str, Any]],
+    *,
+    max_runs: int,
+) -> list[dict[str, Any]]:
+    deduped: list[dict[str, Any]] = []
+    seen: set[tuple[int, float]] = set()
+    for row in runs:
+        key = (int(row["seed"]), float(row["timestep"]))
+        if key not in seen:
+            seen.add(key)
+            deduped.append(dict(row))
+    return deduped[: int(max_runs)]
+
+
+def _runs_for_failed_state(
+    *,
+    state: str,
+    state_row: Mapping[str, Any],
+    state_metadata: Sequence[Mapping[str, Any]],
+    lookup: Mapping[tuple[str, str], dict[str, Any]],
+    cfg: NonlinearReplicateFollowupConfig,
+    missing_metadata: list[dict[str, Any]],
+) -> tuple[str, list[dict[str, Any]]]:
+    classification = str(state_row.get("classification", ""))
+    if classification == "mixed_seed_timestep_spread":
+        runs = _mixed_seed_timestep_runs(
+            state=state,
+            state_row=state_row,
+            state_metadata=state_metadata,
+            lookup=lookup,
+            cfg=cfg,
+            missing_metadata=missing_metadata,
+        )
+    elif classification == "seed_spread_limited":
+        runs = _seed_spread_runs(state=state, state_metadata=state_metadata, cfg=cfg)
+    elif classification == "timestep_spread_limited":
+        runs = _timestep_spread_runs(state=state, state_metadata=state_metadata)
+    else:
+        runs = []
+    return classification, _dedupe_and_limit_runs(
+        runs, max_runs=cfg.max_runs_per_state
+    )
+
+
+def _state_plan_payload(
+    *,
+    state: str,
+    classification: str,
+    planned_runs: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "state": state,
+        "classification": classification,
+        "planned_run_count": len(planned_runs),
+        "planned_runs": list(planned_runs),
+        "recommendation": (
+            "Run these targeted cross variants before rerunning the ensemble and central-FD gates."
+            if planned_runs
+            else "No runnable follow-up was selected; inspect metadata before spending more GPU time."
+        ),
+    }
+
+
+def _followup_config_payload(cfg: NonlinearReplicateFollowupConfig) -> dict[str, Any]:
+    return {
+        "include_extra_nominal_seed": bool(cfg.include_extra_nominal_seed),
+        "extra_seed_increment": int(cfg.extra_seed_increment),
+        "max_runs_per_state": int(cfg.max_runs_per_state),
+    }
+
+
 def nonlinear_replicate_followup_plan(
     spread_report: Mapping[str, Any],
     *,
@@ -113,16 +323,10 @@ def nonlinear_replicate_followup_plan(
 ) -> dict[str, Any]:
     """Return targeted cross-run follow-ups for failed replicate-spread states."""
 
-    cfg = config or NonlinearReplicateFollowupConfig()
-    if cfg.max_runs_per_state <= 0:
-        raise ValueError("max_runs_per_state must be positive")
-    if cfg.extra_seed_increment <= 0:
-        raise ValueError("extra_seed_increment must be positive")
-
+    cfg = _validated_config(config)
     lookup = _metadata_lookup(variant_metadata)
-    state_rows_raw = spread_report.get("state_rows")
-    state_rows = [row for row in state_rows_raw if isinstance(row, Mapping)] if isinstance(state_rows_raw, Sequence) else []
-    failed_states = list(spread_report.get("summary", {}).get("failed_states", [])) if isinstance(spread_report.get("summary"), Mapping) else []
+    state_rows = _state_rows_from_report(spread_report)
+    failed_states = _failed_states_from_report(spread_report)
     planned: list[dict[str, Any]] = []
     state_plans: list[dict[str, Any]] = []
     missing_metadata: list[dict[str, Any]] = []
@@ -131,113 +335,25 @@ def nonlinear_replicate_followup_plan(
         state = str(raw_state)
         state_row = _row_by_state(state_rows, state)
         if state_row is None:
-            missing_metadata.append({"state": state, "reason": "missing state row in spread report"})
+            missing_metadata.append(
+                {"state": state, "reason": "missing state row in spread report"}
+            )
             continue
-        classification = str(state_row.get("classification", ""))
-        high_label = state_row.get("high_variant_label")
-        low_label = state_row.get("low_variant_label")
-        state_metadata = [row for key, row in lookup.items() if key[0] == state]
-        runs: list[dict[str, Any]] = []
-        if classification == "mixed_seed_timestep_spread" and high_label and low_label:
-            high = lookup.get(_variant_key(state, str(high_label)))
-            low = lookup.get(_variant_key(state, str(low_label)))
-            if high is None or low is None:
-                missing_metadata.append(
-                    {
-                        "state": state,
-                        "high_variant_label": high_label,
-                        "low_variant_label": low_label,
-                        "reason": "missing seed/timestep metadata for high or low variant",
-                    }
-                )
-            else:
-                runs.append(
-                    _planned_run(
-                        state=state,
-                        seed=int(low["seed"]),
-                        timestep=float(high["timestep"]),
-                        reason="test whether the low window follows the seed when the timestep is nominal",
-                        source_labels=[str(low_label), str(high_label)],
-                    )
-                )
-                runs.append(
-                    _planned_run(
-                        state=state,
-                        seed=int(high["seed"]),
-                        timestep=float(low["timestep"]),
-                        reason="test whether the high window follows the seed when the timestep is refined",
-                        source_labels=[str(high_label), str(low_label)],
-                    )
-                )
-                if cfg.include_extra_nominal_seed:
-                    extra_seed = _next_seed(state_metadata, increment=cfg.extra_seed_increment)
-                    if extra_seed is not None:
-                        runs.append(
-                            _planned_run(
-                                state=state,
-                                seed=extra_seed,
-                                timestep=float(high["timestep"]),
-                                reason="add one independent nominal-timestep seed after the cross checks",
-                                source_labels=[str(high_label)],
-                            )
-                        )
-        elif classification == "seed_spread_limited":
-            extra_seed = _next_seed(state_metadata, increment=cfg.extra_seed_increment)
-            nominal_dt = None
-            for row in state_metadata:
-                if str(row.get("variant_axis")) == "seed":
-                    nominal_dt = _finite_float(row.get("timestep"))
-                    break
-            if extra_seed is not None and nominal_dt is not None:
-                runs.append(
-                    _planned_run(
-                        state=state,
-                        seed=extra_seed,
-                        timestep=nominal_dt,
-                        reason="seed spread dominates; add one independent nominal-timestep seed",
-                        source_labels=[],
-                    )
-                )
-        elif classification == "timestep_spread_limited":
-            nominal_seed = None
-            refined_dt = None
-            for row in state_metadata:
-                if str(row.get("variant_axis")) == "timestep":
-                    nominal_seed = _finite_int(row.get("seed"))
-                    refined_dt = _finite_float(row.get("timestep"))
-                    break
-            if nominal_seed is not None and refined_dt is not None:
-                runs.append(
-                    _planned_run(
-                        state=state,
-                        seed=nominal_seed,
-                        timestep=refined_dt,
-                        reason="timestep spread dominates; repeat the refined-timestep replicate before promotion",
-                        source_labels=[],
-                    )
-                )
-
-        deduped: list[dict[str, Any]] = []
-        seen: set[tuple[int, float]] = set()
-        for row in runs:
-            key = (int(row["seed"]), float(row["timestep"]))
-            if key not in seen:
-                seen.add(key)
-                deduped.append(row)
-        deduped = deduped[: int(cfg.max_runs_per_state)]
+        classification, deduped = _runs_for_failed_state(
+            state=state,
+            state_row=state_row,
+            state_metadata=_state_metadata(lookup, state),
+            lookup=lookup,
+            cfg=cfg,
+            missing_metadata=missing_metadata,
+        )
         planned.extend(deduped)
         state_plans.append(
-            {
-                "state": state,
-                "classification": classification,
-                "planned_run_count": len(deduped),
-                "planned_runs": deduped,
-                "recommendation": (
-                    "Run these targeted cross variants before rerunning the ensemble and central-FD gates."
-                    if deduped
-                    else "No runnable follow-up was selected; inspect metadata before spending more GPU time."
-                ),
-            }
+            _state_plan_payload(
+                state=state,
+                classification=classification,
+                planned_runs=deduped,
+            )
         )
 
     return {
@@ -258,11 +374,7 @@ def nonlinear_replicate_followup_plan(
         "state_plans": state_plans,
         "planned_runs": planned,
         "missing_metadata": missing_metadata,
-        "config": {
-            "include_extra_nominal_seed": bool(cfg.include_extra_nominal_seed),
-            "extra_seed_increment": int(cfg.extra_seed_increment),
-            "max_runs_per_state": int(cfg.max_runs_per_state),
-        },
+        "config": _followup_config_payload(cfg),
     }
 
 
