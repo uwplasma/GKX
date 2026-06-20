@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
 
 import jax
 import jax.numpy as jnp
@@ -90,6 +90,87 @@ def integrate_linear_sharded(
     return run_pjit(G0)
 
 
+def _rk3_classic_update(
+    G: jnp.ndarray,
+    k1: jnp.ndarray,
+    *,
+    rhs: Callable[[jnp.ndarray], tuple[jnp.ndarray, FieldState]],
+    stage: Callable[[jnp.ndarray, jnp.ndarray, float], jnp.ndarray],
+    project_shard: Callable[[jnp.ndarray], jnp.ndarray],
+    dt_val: jnp.ndarray,
+) -> jnp.ndarray:
+    G1 = stage(G, k1, 1.0)
+    k2, _ = rhs(G1)
+    G2 = project_shard(0.75 * G + 0.25 * (G1 + dt_val * k2))
+    k3, _ = rhs(G2)
+    return (1.0 / 3.0) * G + (2.0 / 3.0) * (G2 + dt_val * k3)
+
+
+def _rk3_heun_update(
+    G: jnp.ndarray,
+    k1: jnp.ndarray,
+    *,
+    rhs: Callable[[jnp.ndarray], tuple[jnp.ndarray, FieldState]],
+    stage: Callable[[jnp.ndarray, jnp.ndarray, float], jnp.ndarray],
+    dt_val: jnp.ndarray,
+) -> jnp.ndarray:
+    k2, _ = rhs(stage(G, k1, 1.0 / 3.0))
+    k3, _ = rhs(stage(G, k2, 2.0 / 3.0))
+    return stage(G, k3, 0.75) + 0.25 * dt_val * k1
+
+
+def _rk4_update(
+    G: jnp.ndarray,
+    k1: jnp.ndarray,
+    *,
+    rhs: Callable[[jnp.ndarray], tuple[jnp.ndarray, FieldState]],
+    stage: Callable[[jnp.ndarray, jnp.ndarray, float], jnp.ndarray],
+    dt_val: jnp.ndarray,
+) -> jnp.ndarray:
+    k2, _ = rhs(stage(G, k1, 0.5))
+    k3, _ = rhs(stage(G, k2, 0.5))
+    k4, _ = rhs(stage(G, k3, 1.0))
+    return G + (dt_val / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+
+
+def _nonlinear_explicit_update(
+    method_key: str,
+    G: jnp.ndarray,
+    k1: jnp.ndarray,
+    *,
+    rhs: Callable[[jnp.ndarray], tuple[jnp.ndarray, FieldState]],
+    stage: Callable[[jnp.ndarray, jnp.ndarray, float], jnp.ndarray],
+    project_shard: Callable[[jnp.ndarray], jnp.ndarray],
+    dt_val: jnp.ndarray,
+) -> jnp.ndarray:
+    if method_key == "euler":
+        return G + dt_val * k1
+    if method_key == "rk2":
+        k2, _ = rhs(stage(G, k1, 0.5))
+        return G + dt_val * k2
+    if method_key == "rk3_classic":
+        return _rk3_classic_update(
+            G,
+            k1,
+            rhs=rhs,
+            stage=stage,
+            project_shard=project_shard,
+            dt_val=dt_val,
+        )
+    if method_key in {"rk3", "rk3_heun"}:
+        return _rk3_heun_update(G, k1, rhs=rhs, stage=stage, dt_val=dt_val)
+    if method_key == "rk4":
+        return _rk4_update(G, k1, rhs=rhs, stage=stage, dt_val=dt_val)
+    return _rk3_classic_update(
+        G,
+        k1,
+        rhs=rhs,
+        stage=stage,
+        project_shard=project_shard,
+        dt_val=dt_val,
+    )
+
+
 def integrate_nonlinear_sharded(
     G0: jnp.ndarray,
     cache: LinearCache,
@@ -139,6 +220,9 @@ def integrate_nonlinear_sharded(
             return state
         return jnp.asarray(projector(state), dtype=state_dtype)
 
+    def _project_shard(state: jnp.ndarray) -> jnp.ndarray:
+        return _maybe_shard(_project(state))
+
     def _rhs(state: jnp.ndarray) -> tuple[jnp.ndarray, FieldState]:
         dG, fields = nonlinear_rhs_cached(
             state,
@@ -151,40 +235,23 @@ def integrate_nonlinear_sharded(
         return jnp.asarray(dG, dtype=state_dtype), fields
 
     def _stage(state: jnp.ndarray, increment: jnp.ndarray, scale: float) -> jnp.ndarray:
-        return _maybe_shard(_project(state + jnp.asarray(scale, dtype=dt_val.dtype) * dt_val * increment))
+        return _project_shard(
+            state + jnp.asarray(scale, dtype=dt_val.dtype) * dt_val * increment
+        )
 
     def step(G: jnp.ndarray, _):
-        G = _maybe_shard(_project(G))
+        G = _project_shard(G)
         k1, _ = _rhs(G)
-        if method_key == "euler":
-            G_next = G + dt_val * k1
-        elif method_key == "rk2":
-            k2, _ = _rhs(_stage(G, k1, 0.5))
-            G_next = G + dt_val * k2
-        elif method_key == "rk3_classic":
-            G1 = _stage(G, k1, 1.0)
-            k2, _ = _rhs(G1)
-            G2 = _maybe_shard(_project(0.75 * G + 0.25 * (G1 + dt_val * k2)))
-            k3, _ = _rhs(G2)
-            G_next = (1.0 / 3.0) * G + (2.0 / 3.0) * (G2 + dt_val * k3)
-        elif method_key in {"rk3", "rk3_heun"}:
-            k2, _ = _rhs(_stage(G, k1, 1.0 / 3.0))
-            k3, _ = _rhs(_stage(G, k2, 2.0 / 3.0))
-            G3 = _stage(G, k3, 0.75)
-            G_next = G3 + 0.25 * dt_val * k1
-        elif method_key == "rk4":
-            k2, _ = _rhs(_stage(G, k1, 0.5))
-            k3, _ = _rhs(_stage(G, k2, 0.5))
-            k4, _ = _rhs(_stage(G, k3, 1.0))
-            G_next = G + (dt_val / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
-        else:
-            G1 = _stage(G, k1, 1.0)
-            k2, _ = _rhs(G1)
-            G2 = _maybe_shard(_project(0.75 * G + 0.25 * (G1 + dt_val * k2)))
-            k3, _ = _rhs(G2)
-            G_next = (1.0 / 3.0) * G + (2.0 / 3.0) * (G2 + dt_val * k3)
-
-        G_next = _maybe_shard(_project(jnp.asarray(G_next, dtype=state_dtype)))
+        G_next = _nonlinear_explicit_update(
+            method_key,
+            G,
+            k1,
+            rhs=_rhs,
+            stage=_stage,
+            project_shard=_project_shard,
+            dt_val=dt_val,
+        )
+        G_next = _project_shard(jnp.asarray(G_next, dtype=state_dtype))
         _dG_next, fields_next = _rhs(G_next)
         return G_next, fields_next
 
