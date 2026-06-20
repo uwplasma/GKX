@@ -130,6 +130,7 @@ jobs:
               tests/test_check_release_artifact_manifest.py
               tests/test_check_release_readiness.py
               tests/test_build_technical_release_status.py
+              tests/test_release_scope_docs.py
               tests/test_check_release_version.py
               tests/test_check_quasilinear_calibration_inputs.py
               tests/test_compress_docs_previews.py
