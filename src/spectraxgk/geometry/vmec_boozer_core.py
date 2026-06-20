@@ -100,6 +100,32 @@ class _MetricDriftProfiles:
     gbdrift0: jnp.ndarray
 
 
+@dataclass(frozen=True)
+class _MetricDifferentialState:
+    spectral: Any
+    etf: jnp.ndarray
+    etf_safe: jnp.ndarray
+    eps: jnp.ndarray
+    g_sup_psi_psi_safe: jnp.ndarray
+    shear_phase: jnp.ndarray
+    local_shear_l1: jnp.ndarray
+    metric_bmag_sq: jnp.ndarray
+
+
+@dataclass(frozen=True)
+class _RawMetricProfiles:
+    gds2: jnp.ndarray
+    gds21: jnp.ndarray
+    gds22: jnp.ndarray
+    grho: jnp.ndarray
+
+
+@dataclass(frozen=True)
+class _RawDriftProfiles:
+    cvdrift: jnp.ndarray
+    cvdrift0: jnp.ndarray
+
+
 def _interp_boozer_profile(
     out: dict[str, Any],
     name: str,
@@ -453,7 +479,7 @@ def _build_equal_arc_field_line(
     )
 
 
-def _build_metric_and_drift_profiles(
+def _metric_differential_state(
     out: dict[str, Any],
     request: _BoozerCoreRequest,
     scales: _ReferenceScales,
@@ -461,7 +487,9 @@ def _build_metric_and_drift_profiles(
     equal_arc: _EqualArcFieldLine,
     *,
     alpha: float,
-) -> _MetricDriftProfiles:
+) -> _MetricDifferentialState:
+    """Evaluate Boozer differential geometry used by metrics and drifts."""
+
     dtype = request.base_Rcos.dtype
     eps = jnp.asarray(1.0e-30, dtype=dtype)
     spectral = evaluate_boozer_field_line_derivatives(
@@ -518,28 +546,76 @@ def _build_metric_and_drift_profiles(
         + grad_alpha_z * grad_psi_z
     )
     local_shear_l1 = grad_alpha_dot_grad_psi / g_sup_psi_psi_safe
+    metric_bmag_sq = equal_arc.mod_b_safe * equal_arc.mod_b_safe
+    return _MetricDifferentialState(
+        spectral=spectral,
+        etf=etf,
+        etf_safe=etf_safe,
+        eps=eps,
+        g_sup_psi_psi_safe=g_sup_psi_psi_safe,
+        shear_phase=shear_phase,
+        local_shear_l1=local_shear_l1,
+        metric_bmag_sq=metric_bmag_sq,
+    )
+
+
+def _raw_metric_profiles(
+    request: _BoozerCoreRequest,
+    scales: _ReferenceScales,
+    profiles: _BoozerRadialProfiles,
+    state: _MetricDifferentialState,
+) -> _RawMetricProfiles:
+    """Compute raw Boozer metric coefficients before equal-arc remap."""
+
+    dtype = request.base_Rcos.dtype
     s_arr = jnp.asarray(request.torflux, dtype=dtype)
     L = jnp.asarray(float(scales.length), dtype=dtype)
     Bref = jnp.asarray(float(scales.magnetic_field), dtype=dtype)
-    metric_bmag_sq = equal_arc.mod_b_safe * equal_arc.mod_b_safe
-    gds2_raw = (
-        (metric_bmag_sq / g_sup_psi_psi_safe + g_sup_psi_psi_safe * local_shear_l1**2)
+    gds2 = (
+        (
+            state.metric_bmag_sq / state.g_sup_psi_psi_safe
+            + state.g_sup_psi_psi_safe * state.local_shear_l1**2
+        )
         * L
         * L
         * s_arr
     )
-    gds21_raw = g_sup_psi_psi_safe * local_shear_l1 * profiles.s_hat / Bref
-    gds22_raw = (
-        g_sup_psi_psi_safe * profiles.s_hat * profiles.s_hat / (L * L * Bref * Bref * s_arr)
+    gds21 = state.g_sup_psi_psi_safe * state.local_shear_l1 * profiles.s_hat / Bref
+    gds22 = (
+        state.g_sup_psi_psi_safe
+        * profiles.s_hat
+        * profiles.s_hat
+        / (L * L * Bref * Bref * s_arr)
     )
-    grho_raw = jnp.sqrt(g_sup_psi_psi_safe / (L * L * Bref * Bref * s_arr))
+    grho = jnp.sqrt(state.g_sup_psi_psi_safe / (L * L * Bref * Bref * s_arr))
+    return _RawMetricProfiles(gds2=gds2, gds21=gds21, gds22=gds22, grho=grho)
 
+
+def _raw_drift_profiles(
+    request: _BoozerCoreRequest,
+    scales: _ReferenceScales,
+    profiles: _BoozerRadialProfiles,
+    equal_arc: _EqualArcFieldLine,
+    state: _MetricDifferentialState,
+) -> _RawDriftProfiles:
+    """Compute raw curvature drift coefficients before equal-arc remap."""
+
+    dtype = request.base_Rcos.dtype
+    s_arr = jnp.asarray(request.torflux, dtype=dtype)
+    L = jnp.asarray(float(scales.length), dtype=dtype)
+    Bref = jnp.asarray(float(scales.magnetic_field), dtype=dtype)
     boozer_current_sum = profiles.boozer_g + profiles.iota_safe * profiles.boozer_i
     d_sqrt_g_booz_d_theta = (
-        -2.0 * boozer_current_sum * spectral.d_mod_b_d_theta / (equal_arc.mod_b_safe**3)
+        -2.0
+        * boozer_current_sum
+        * state.spectral.d_mod_b_d_theta
+        / (equal_arc.mod_b_safe**3)
     )
     d_sqrt_g_booz_d_phi = (
-        -2.0 * boozer_current_sum * spectral.d_mod_b_d_phi / (equal_arc.mod_b_safe**3)
+        -2.0
+        * boozer_current_sum
+        * state.spectral.d_mod_b_d_phi
+        / (equal_arc.mod_b_safe**3)
     )
     curvature_numerator = (
         profiles.boozer_g * d_sqrt_g_booz_d_theta
@@ -547,55 +623,100 @@ def _build_metric_and_drift_profiles(
     )
     curvature_denom = 2.0 * equal_arc.sqrt_g_booz * boozer_current_sum
     curvature_denom_safe = jnp.where(
-        jnp.abs(curvature_denom) < eps,
-        jnp.sign(curvature_denom + eps) * eps,
+        jnp.abs(curvature_denom) < state.eps,
+        jnp.sign(curvature_denom + state.eps) * state.eps,
         curvature_denom,
     )
     kappa_g = curvature_numerator / curvature_denom_safe
-    local_shear_l0 = -(local_shear_l1 + profiles.d_iota_ds / etf_safe * shear_phase)
-    kappa_n = spectral.d_mod_b_d_s / (equal_arc.mod_b_safe * etf_safe) + local_shear_l0 * kappa_g
-    b_cross_kappa_dot_grad_alpha = (kappa_n + kappa_g * local_shear_l1) * metric_bmag_sq
-    b_cross_kappa_dot_grad_psi = kappa_g * metric_bmag_sq
-    toroidal_flux_sign = jnp.sign(etf)
+    local_shear_l0 = -(
+        state.local_shear_l1 + profiles.d_iota_ds / state.etf_safe * state.shear_phase
+    )
+    kappa_n = (
+        state.spectral.d_mod_b_d_s / (equal_arc.mod_b_safe * state.etf_safe)
+        + local_shear_l0 * kappa_g
+    )
+    b_cross_kappa_dot_grad_alpha = (
+        kappa_n + kappa_g * state.local_shear_l1
+    ) * state.metric_bmag_sq
+    b_cross_kappa_dot_grad_psi = kappa_g * state.metric_bmag_sq
+    toroidal_flux_sign = jnp.sign(state.etf)
     sqrt_s = jnp.sqrt(s_arr)
-    drift_cvdrift0_raw = (
+    cvdrift0 = (
         -b_cross_kappa_dot_grad_psi
         * 2.0
         * profiles.s_hat
-        / jnp.maximum(metric_bmag_sq * sqrt_s, eps)
+        / jnp.maximum(state.metric_bmag_sq * sqrt_s, state.eps)
         * toroidal_flux_sign
     )
-    drift_cvdrift_raw = (
+    cvdrift = (
         -2.0
         * Bref
         * L
         * L
         * sqrt_s
         * b_cross_kappa_dot_grad_alpha
-        / metric_bmag_sq
+        / state.metric_bmag_sq
         * toroidal_flux_sign
     )
+    return _RawDriftProfiles(cvdrift=cvdrift, cvdrift0=cvdrift0)
 
-    def equal_arc_open(profile: jnp.ndarray) -> jnp.ndarray:
-        return _interp_equal_arc_profile(
-            equal_arc.theta_uniform_closed,
-            equal_arc.theta_eqarc,
-            profile,
-        )[:-1]
 
+def _equal_arc_open_profile(
+    equal_arc: _EqualArcFieldLine, profile: jnp.ndarray
+) -> jnp.ndarray:
+    return _interp_equal_arc_profile(
+        equal_arc.theta_uniform_closed,
+        equal_arc.theta_eqarc,
+        profile,
+    )[:-1]
+
+
+def _pack_metric_drift_profiles(
+    request: _BoozerCoreRequest,
+    equal_arc: _EqualArcFieldLine,
+    metrics: _RawMetricProfiles,
+    drifts: _RawDriftProfiles,
+) -> _MetricDriftProfiles:
+    """Remap raw metric/drift coefficients onto the open equal-arc grid."""
+
+    dtype = request.base_Rcos.dtype
     drift_loader_factor = jnp.asarray(0.5, dtype=dtype)
-    cvdrift = drift_loader_factor * equal_arc_open(drift_cvdrift_raw)
-    cvdrift0 = drift_loader_factor * equal_arc_open(drift_cvdrift0_raw)
+    cvdrift = drift_loader_factor * _equal_arc_open_profile(equal_arc, drifts.cvdrift)
+    cvdrift0 = drift_loader_factor * _equal_arc_open_profile(
+        equal_arc, drifts.cvdrift0
+    )
     return _MetricDriftProfiles(
-        gds2=equal_arc_open(gds2_raw),
-        gds21=equal_arc_open(gds21_raw),
-        gds22=equal_arc_open(gds22_raw),
-        grho=equal_arc_open(grho_raw),
+        gds2=_equal_arc_open_profile(equal_arc, metrics.gds2),
+        gds21=_equal_arc_open_profile(equal_arc, metrics.gds21),
+        gds22=_equal_arc_open_profile(equal_arc, metrics.gds22),
+        grho=_equal_arc_open_profile(equal_arc, metrics.grho),
         cvdrift=cvdrift,
         gbdrift=cvdrift,
         cvdrift0=cvdrift0,
         gbdrift0=cvdrift0,
     )
+
+
+def _build_metric_and_drift_profiles(
+    out: dict[str, Any],
+    request: _BoozerCoreRequest,
+    scales: _ReferenceScales,
+    profiles: _BoozerRadialProfiles,
+    equal_arc: _EqualArcFieldLine,
+    *,
+    alpha: float,
+) -> _MetricDriftProfiles:
+    state = _metric_differential_state(
+        out,
+        request,
+        scales,
+        profiles,
+        equal_arc,
+        alpha=alpha,
+    )
+    metrics = _raw_metric_profiles(request, scales, profiles, state)
+    drifts = _raw_drift_profiles(request, scales, profiles, equal_arc, state)
+    return _pack_metric_drift_profiles(request, equal_arc, metrics, drifts)
 
 
 def _assemble_core_mapping(
@@ -648,6 +769,54 @@ def _assemble_core_mapping(
     }
 
 
+def _core_mapping_from_boozer_output(
+    out: dict[str, Any],
+    request: _BoozerCoreRequest,
+    scales: _ReferenceScales,
+    *,
+    alpha: float,
+    surface_stencil_width: int | None,
+    surface_indices: jnp.ndarray | None,
+) -> dict[str, Any]:
+    """Assemble solver-facing core profiles from Boozer transform output."""
+
+    _bmnc_b_all, s_half, radial_spacing = _boozer_surface_grid(
+        out,
+        base_dtype=request.base_Rcos.dtype,
+        ns_full=request.ns_full,
+    )
+    profiles = _interpolate_boozer_radial_profiles(
+        out,
+        request,
+        s_half=s_half,
+        radial_spacing=radial_spacing,
+    )
+    equal_arc = _build_equal_arc_field_line(
+        out,
+        request,
+        scales,
+        profiles,
+        alpha=alpha,
+    )
+    metric_drift = _build_metric_and_drift_profiles(
+        out,
+        request,
+        scales,
+        profiles,
+        equal_arc,
+        alpha=alpha,
+    )
+    return _assemble_core_mapping(
+        request,
+        scales,
+        profiles,
+        equal_arc,
+        metric_drift,
+        surface_stencil_width=surface_stencil_width,
+        surface_indices=surface_indices,
+    )
+
+
 def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
     state: Any,
     static: Any,
@@ -698,38 +867,11 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
         jit=jit,
         surface_stencil_width=surface_stencil_width,
     )
-    _bmnc_b_all, s_half, radial_spacing = _boozer_surface_grid(
-        out,
-        base_dtype=request.base_Rcos.dtype,
-        ns_full=request.ns_full,
-    )
-    profiles = _interpolate_boozer_radial_profiles(
-        out,
-        request,
-        s_half=s_half,
-        radial_spacing=radial_spacing,
-    )
-    equal_arc = _build_equal_arc_field_line(
+    return _core_mapping_from_boozer_output(
         out,
         request,
         scales,
-        profiles,
         alpha=alpha,
-    )
-    metric_drift = _build_metric_and_drift_profiles(
-        out,
-        request,
-        scales,
-        profiles,
-        equal_arc,
-        alpha=alpha,
-    )
-    return _assemble_core_mapping(
-        request,
-        scales,
-        profiles,
-        equal_arc,
-        metric_drift,
         surface_stencil_width=surface_stencil_width,
         surface_indices=surface_indices,
     )
