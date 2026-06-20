@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields, replace
 from typing import Any, Callable
 
 import numpy as np
@@ -216,6 +216,67 @@ class _CycloneScanOutput:
 class _CycloneTimeScanControls:
     run_options: _CycloneTimeRunOptions
     fit_options: _CycloneHistoryFitOptions
+
+
+@dataclass(frozen=True)
+class _CycloneTimeScanInputs:
+    ky_values: np.ndarray
+    grid_full: Any
+    geom: Any
+    params: Any
+    terms: Any
+    cfg: Any
+    time_cfg: Any | None
+    init_cfg: Any
+    n_laguerre: int
+    n_hermite: int
+    dt: float | np.ndarray
+    steps: int | np.ndarray
+    method: str
+    krylov_cfg: Any | None
+    tmin: float | None
+    tmax: float | None
+    window_fraction: float
+    min_points: int
+    start_fraction: float
+    growth_weight: float
+    require_positive: bool
+    min_amp_fraction: float
+    max_amp_fraction: float
+    max_fraction: float
+    end_fraction: float
+    phase_weight: float
+    length_weight: float
+    min_r2: float
+    late_penalty: float
+    min_slope: float | None
+    min_slope_frac: float
+    slope_var_weight: float
+    window_method: str
+    mode_method: str
+    mode_only: bool
+    sample_stride: int | None
+    fit_key: str
+    need_density: bool
+    diagnostic_norm: str
+    use_jit: bool
+    ky_batch: int
+    fixed_batch_shape: bool
+    streaming_fit: bool
+    streaming_amp_floor: float
+    auto_solver: bool
+    use_batch: bool
+    fit_policy: Any
+    hooks: CycloneScanHooks
+    show_progress: bool
+
+
+def _cyclone_time_scan_inputs_from_locals(values: dict[str, Any]) -> _CycloneTimeScanInputs:
+    """Pack public ``run_time_cyclone_scan`` arguments once for internal routing."""
+
+    return _CycloneTimeScanInputs(
+        **{field.name: values[field.name] for field in fields(_CycloneTimeScanInputs)}
+    )
 
 
 def _iter_cyclone_time_scan_batches(options: _CycloneTimeRunOptions):
@@ -847,123 +908,74 @@ def _build_cyclone_history_fit_options(
 
 
 def _prepare_cyclone_time_scan_controls(
-    *,
-    ky_values: np.ndarray,
-    grid_full: Any,
-    geom: Any,
-    params: Any,
-    terms: Any,
-    cfg: Any,
-    time_cfg: Any | None,
-    init_cfg: Any,
-    n_laguerre: int,
-    n_hermite: int,
-    dt: float | np.ndarray,
-    steps: int | np.ndarray,
-    method: str,
-    krylov_cfg: Any | None,
-    tmin: float | None,
-    tmax: float | None,
-    window_fraction: float,
-    min_points: int,
-    start_fraction: float,
-    growth_weight: float,
-    require_positive: bool,
-    min_amp_fraction: float,
-    max_amp_fraction: float,
-    max_fraction: float,
-    end_fraction: float,
-    phase_weight: float,
-    length_weight: float,
-    min_r2: float,
-    late_penalty: float,
-    min_slope: float | None,
-    min_slope_frac: float,
-    slope_var_weight: float,
-    window_method: str,
-    mode_method: str,
-    mode_only: bool,
-    sample_stride: int | None,
-    fit_key: str,
-    need_density: bool,
-    diagnostic_norm: str,
-    use_jit: bool,
-    ky_batch: int,
-    fixed_batch_shape: bool,
-    streaming_fit: bool,
-    streaming_amp_floor: float,
-    auto_solver: bool,
-    use_batch: bool,
-    fit_policy: Any,
-    hooks: CycloneScanHooks,
-    show_progress: bool,
+    inputs: _CycloneTimeScanInputs,
 ) -> _CycloneTimeScanControls:
     """Build all shared Cyclone time-scan controls before batch execution."""
 
     run_options = _build_cyclone_time_run_options(
-        ky_values=ky_values,
-        grid_full=grid_full,
-        geom=geom,
-        params=params,
-        terms=terms,
-        cfg=cfg,
-        time_cfg=time_cfg,
-        init_cfg=init_cfg,
-        n_laguerre=n_laguerre,
-        n_hermite=n_hermite,
-        dt=dt,
-        steps=steps,
-        method=method,
-        sample_stride=sample_stride,
-        mode_method=mode_method,
-        mode_only=mode_only,
-        fit_key=fit_key,
-        need_density=need_density,
-        diagnostic_norm=diagnostic_norm,
-        use_jit=use_jit,
-        ky_batch=ky_batch,
-        fixed_batch_shape=fixed_batch_shape,
-        streaming_fit=streaming_fit,
-        streaming_amp_floor=streaming_amp_floor,
-        use_batch=use_batch,
-        hooks=hooks,
-        show_progress=show_progress,
+        ky_values=inputs.ky_values,
+        grid_full=inputs.grid_full,
+        geom=inputs.geom,
+        params=inputs.params,
+        terms=inputs.terms,
+        cfg=inputs.cfg,
+        time_cfg=inputs.time_cfg,
+        init_cfg=inputs.init_cfg,
+        n_laguerre=inputs.n_laguerre,
+        n_hermite=inputs.n_hermite,
+        dt=inputs.dt,
+        steps=inputs.steps,
+        method=inputs.method,
+        sample_stride=inputs.sample_stride,
+        mode_method=inputs.mode_method,
+        mode_only=inputs.mode_only,
+        fit_key=inputs.fit_key,
+        need_density=inputs.need_density,
+        diagnostic_norm=inputs.diagnostic_norm,
+        use_jit=inputs.use_jit,
+        ky_batch=inputs.ky_batch,
+        fixed_batch_shape=inputs.fixed_batch_shape,
+        streaming_fit=inputs.streaming_fit,
+        streaming_amp_floor=inputs.streaming_amp_floor,
+        use_batch=inputs.use_batch,
+        hooks=inputs.hooks,
+        show_progress=inputs.show_progress,
     )
     fit_options = _build_cyclone_history_fit_options(
-        n_laguerre=n_laguerre,
-        n_hermite=n_hermite,
-        method=method,
-        params=params,
-        cfg=cfg,
-        time_cfg=time_cfg,
-        krylov_cfg=krylov_cfg,
-        tmin=tmin,
-        tmax=tmax,
-        window_fraction=window_fraction,
-        min_points=min_points,
-        start_fraction=start_fraction,
-        growth_weight=growth_weight,
-        require_positive=require_positive,
-        min_amp_fraction=min_amp_fraction,
-        max_amp_fraction=max_amp_fraction,
-        max_fraction=max_fraction,
-        end_fraction=end_fraction,
-        phase_weight=phase_weight,
-        length_weight=length_weight,
-        min_r2=min_r2,
-        late_penalty=late_penalty,
-        min_slope=min_slope,
-        min_slope_frac=min_slope_frac,
-        slope_var_weight=slope_var_weight,
-        window_method=window_method,
-        mode_method=mode_method,
-        mode_only=mode_only,
-        fit_key=fit_key,
-        diagnostic_norm=diagnostic_norm,
-        auto_solver=auto_solver,
-        fit_policy=fit_policy,
-        hooks=hooks,
-        show_progress=show_progress,
+        n_laguerre=inputs.n_laguerre,
+        n_hermite=inputs.n_hermite,
+        method=inputs.method,
+        params=inputs.params,
+        cfg=inputs.cfg,
+        time_cfg=inputs.time_cfg,
+        krylov_cfg=inputs.krylov_cfg,
+        tmin=inputs.tmin,
+        tmax=inputs.tmax,
+        window_fraction=inputs.window_fraction,
+        min_points=inputs.min_points,
+        start_fraction=inputs.start_fraction,
+        growth_weight=inputs.growth_weight,
+        require_positive=inputs.require_positive,
+        min_amp_fraction=inputs.min_amp_fraction,
+        max_amp_fraction=inputs.max_amp_fraction,
+        max_fraction=inputs.max_fraction,
+        end_fraction=inputs.end_fraction,
+        phase_weight=inputs.phase_weight,
+        length_weight=inputs.length_weight,
+        min_r2=inputs.min_r2,
+        late_penalty=inputs.late_penalty,
+        min_slope=inputs.min_slope,
+        min_slope_frac=inputs.min_slope_frac,
+        slope_var_weight=inputs.slope_var_weight,
+        window_method=inputs.window_method,
+        mode_method=inputs.mode_method,
+        mode_only=inputs.mode_only,
+        fit_key=inputs.fit_key,
+        diagnostic_norm=inputs.diagnostic_norm,
+        auto_solver=inputs.auto_solver,
+        fit_policy=inputs.fit_policy,
+        hooks=inputs.hooks,
+        show_progress=inputs.show_progress,
     )
     return _CycloneTimeScanControls(
         run_options=run_options,
@@ -1061,57 +1073,8 @@ def run_time_cyclone_scan(
 ) -> CycloneScanResult:
     """Run the standard Cyclone scan time-integration branches."""
 
-    controls = _prepare_cyclone_time_scan_controls(
-        ky_values=ky_values,
-        grid_full=grid_full,
-        geom=geom,
-        params=params,
-        terms=terms,
-        cfg=cfg,
-        time_cfg=time_cfg,
-        init_cfg=init_cfg,
-        n_laguerre=n_laguerre,
-        n_hermite=n_hermite,
-        dt=dt,
-        steps=steps,
-        method=method,
-        krylov_cfg=krylov_cfg,
-        tmin=tmin,
-        tmax=tmax,
-        window_fraction=window_fraction,
-        min_points=min_points,
-        start_fraction=start_fraction,
-        growth_weight=growth_weight,
-        require_positive=require_positive,
-        min_amp_fraction=min_amp_fraction,
-        max_amp_fraction=max_amp_fraction,
-        max_fraction=max_fraction,
-        end_fraction=end_fraction,
-        phase_weight=phase_weight,
-        length_weight=length_weight,
-        min_r2=min_r2,
-        late_penalty=late_penalty,
-        min_slope=min_slope,
-        min_slope_frac=min_slope_frac,
-        slope_var_weight=slope_var_weight,
-        window_method=window_method,
-        sample_stride=sample_stride,
-        mode_method=mode_method,
-        mode_only=mode_only,
-        fit_key=fit_key,
-        need_density=need_density,
-        diagnostic_norm=diagnostic_norm,
-        use_jit=use_jit,
-        ky_batch=ky_batch,
-        fixed_batch_shape=fixed_batch_shape,
-        streaming_fit=streaming_fit,
-        streaming_amp_floor=streaming_amp_floor,
-        auto_solver=auto_solver,
-        use_batch=use_batch,
-        fit_policy=fit_policy,
-        hooks=hooks,
-        show_progress=show_progress,
-    )
+    inputs = _cyclone_time_scan_inputs_from_locals(locals())
+    controls = _prepare_cyclone_time_scan_controls(inputs)
     output = _run_cyclone_time_scan_batches(
         run_options=controls.run_options,
         fit_options=controls.fit_options,
