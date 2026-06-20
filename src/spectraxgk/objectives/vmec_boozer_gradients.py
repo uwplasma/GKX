@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from functools import partial
 import time
 from typing import Any
 
@@ -37,6 +38,214 @@ VMEC_BOOZER_NONLINEAR_WINDOW_OBJECTIVE_NAMES = (
     "nonlinear_window_heat_flux_trend",
 )
 
+
+def _mode21_context(
+    *,
+    case_name: str,
+    radial_index: int | None,
+    mode_index: int,
+    parameter_family: str,
+    surface_index: int | None,
+    ntheta: int,
+    mboz: int,
+    nboz: int,
+    surface_stencil_width: int | None,
+    n_laguerre: int,
+    n_hermite: int,
+    context_fn: Any,
+) -> dict[str, Any]:
+    return context_fn(
+        case_name=str(case_name),
+        radial_index=radial_index,
+        mode_index=mode_index,
+        parameter_family=parameter_family,
+        surface_index=surface_index,
+        ntheta=ntheta,
+        mboz=mboz,
+        nboz=nboz,
+        surface_stencil_width=surface_stencil_width,
+        n_laguerre=n_laguerre,
+        n_hermite=n_hermite,
+    )
+
+
+def _run_mode21_gradient_gate(
+    context: dict[str, Any],
+    objective_fn: Any,
+    *,
+    objective_names: tuple[str, ...],
+    fd_step: float,
+    rtol: float,
+    atol: float,
+    gap_floor: float,
+) -> tuple[dict[str, Any], list[dict[str, Any]], dict[str, bool]]:
+    gate = implicit_eigenpair_observable_sensitivity_report(
+        context["matrix_fn"],
+        objective_fn,
+        jnp.asarray([0.0]),
+        step=fd_step,
+        rtol=rtol,
+        atol=atol,
+        gap_floor=gap_floor,
+    )
+    rows = _objective_gate_rows(
+        gate,
+        parameter_names=context["parameter_names"],
+        objective_names=objective_names,
+        rtol=rtol,
+        atol=atol,
+    )
+    by_objective = {
+        name: bool(all(row["passed"] for row in rows if row["objective"] == name))
+        for name in objective_names
+    }
+    return gate, rows, by_objective
+
+
+def _mode21_gradient_base_payload(
+    *,
+    kind: str,
+    context: dict[str, Any],
+    objective_names: tuple[str, ...],
+    gate: dict[str, Any],
+    rows: list[dict[str, Any]],
+    claim_scope: str,
+) -> dict[str, object]:
+    return {
+        "kind": kind,
+        "passed": bool(gate["passed"] and all(row["passed"] for row in rows)),
+        "source_scope": "mode21_vmec_boozer_state",
+        "claim_scope": claim_scope,
+        "case_name": context["case_name"],
+        "parameter_names": list(context["parameter_names"]),
+        "objective_names": list(objective_names),
+        "parameter_indices": context["parameter_indices"],
+        "surface_index": None
+        if context["surface_index"] is None
+        else int(context["surface_index"]),
+        "grid": {
+            "Nx": int(context["cfg"].grid.Nx),
+            "Ny": int(context["cfg"].grid.Ny),
+            "Nz": int(context["cfg"].grid.Nz),
+            "selected_ky_index": 1,
+        },
+        "mboz": context["mboz"],
+        "nboz": context["nboz"],
+        "surface_stencil_width": (
+            None
+            if context["surface_stencil_width"] is None
+            else int(context["surface_stencil_width"])
+        ),
+        "n_laguerre": context["n_laguerre"],
+        "n_hermite": context["n_hermite"],
+        "state_size": int(np.prod(context["state_shape"])),
+    }
+
+
+def _linear_frequency_observable(
+    eigenvalue: jnp.ndarray, _eigenvector: jnp.ndarray, _x: jnp.ndarray
+) -> jnp.ndarray:
+    return jnp.asarray([jnp.real(eigenvalue), jnp.imag(eigenvalue)])
+
+
+def _quasilinear_observable_vector(
+    eigenvalue: jnp.ndarray,
+    eigenvector: jnp.ndarray,
+    x: jnp.ndarray,
+    *,
+    context: dict[str, Any],
+    features_fn: Any,
+) -> jnp.ndarray:
+    gamma, omega, kperp_eff, heat_weight, ql_proxy = features_fn(
+        eigenvalue,
+        eigenvector,
+        x,
+        context,
+    )
+    return jnp.asarray([gamma, omega, kperp_eff, heat_weight, ql_proxy])
+
+
+def _nonlinear_window_observable_vector(
+    eigenvalue: jnp.ndarray,
+    eigenvector: jnp.ndarray,
+    x: jnp.ndarray,
+    *,
+    context: dict[str, Any],
+    features_fn: Any,
+    window_metrics_fn: Any,
+    nonlinear_dt: float,
+    nonlinear_steps: int,
+    tail_fraction: float,
+) -> jnp.ndarray:
+    gamma, omega, kperp_eff, heat_weight, ql_proxy = features_fn(
+        eigenvalue,
+        eigenvector,
+        x,
+        context,
+    )
+    nl_mean, nl_cv, nl_trend = window_metrics_fn(
+        gamma,
+        kperp_eff,
+        heat_weight,
+        dt=nonlinear_dt,
+        steps=nonlinear_steps,
+        tail_fraction=tail_fraction,
+    )
+    return jnp.asarray(
+        [
+            gamma,
+            omega,
+            kperp_eff,
+            heat_weight,
+            ql_proxy,
+            nl_mean,
+            nl_cv,
+            nl_trend,
+        ]
+    )
+
+
+def _quasilinear_weight_gate(by_objective: dict[str, bool]) -> bool:
+    return bool(
+        by_objective["linear_heat_flux_weight"]
+        and by_objective["mixing_length_heat_flux_proxy"]
+    )
+
+
+def _update_mode21_gradient_payload(
+    payload: dict[str, object],
+    *,
+    by_objective: dict[str, bool],
+    rows: list[dict[str, Any]],
+    gate: dict[str, Any],
+    quasilinear_weight_gate: bool,
+    nonlinear_window_gate: bool,
+    next_action: str,
+    elapsed_seconds: float | None = None,
+    nonlinear_window_config: dict[str, object] | None = None,
+) -> dict[str, object]:
+    payload.update(
+        {
+            "linear_growth_gradient_gate": bool(by_objective["gamma"]),
+            "linear_frequency_gradient_gate": bool(by_objective["omega"]),
+            "quasilinear_weight_gradient_gate": bool(quasilinear_weight_gate),
+            "nonlinear_window_gradient_gate": bool(nonlinear_window_gate),
+        }
+    )
+    if nonlinear_window_config is not None:
+        payload["nonlinear_window_config"] = nonlinear_window_config
+    if elapsed_seconds is not None:
+        payload["elapsed_seconds"] = float(elapsed_seconds)
+    payload.update(
+        {
+            "objective_gates": rows,
+            "eigenpair_gate": gate,
+            "next_action": next_action,
+        }
+    )
+    return payload
+
+
 def mode21_vmec_boozer_linear_frequency_gradient_report(  # pragma: no cover
     *,
     case_name: str = "nfp4_QH_warm_start",
@@ -66,8 +275,8 @@ def mode21_vmec_boozer_linear_frequency_gradient_report(  # pragma: no cover
     campaign lane.
     """
 
-    context = _linear_context_fn(
-        case_name=str(case_name),
+    context = _mode21_context(
+        case_name=case_name,
         radial_index=radial_index,
         mode_index=mode_index,
         parameter_family=parameter_family,
@@ -78,75 +287,41 @@ def mode21_vmec_boozer_linear_frequency_gradient_report(  # pragma: no cover
         surface_stencil_width=surface_stencil_width,
         n_laguerre=1,
         n_hermite=1,
+        context_fn=_linear_context_fn,
     )
 
-    def objective_fn(
-        eigenvalue: jnp.ndarray, _eigenvector: jnp.ndarray, _x: jnp.ndarray
-    ) -> jnp.ndarray:
-        return jnp.asarray([jnp.real(eigenvalue), jnp.imag(eigenvalue)])
-
-    gate = implicit_eigenpair_observable_sensitivity_report(
-        context["matrix_fn"],
-        objective_fn,
-        jnp.asarray([0.0]),
-        step=fd_step,
+    gate, rows, by_objective = _run_mode21_gradient_gate(
+        context,
+        _linear_frequency_observable,
+        objective_names=VMEC_BOOZER_FREQUENCY_OBJECTIVE_NAMES,
+        fd_step=fd_step,
         rtol=rtol,
         atol=atol,
         gap_floor=gap_floor,
     )
-    rows = _objective_gate_rows(
-        gate,
-        parameter_names=context["parameter_names"],
+    payload = _mode21_gradient_base_payload(
+        kind="mode21_vmec_boozer_linear_frequency_gradient_gate",
+        context=context,
         objective_names=VMEC_BOOZER_FREQUENCY_OBJECTIVE_NAMES,
-        rtol=rtol,
-        atol=atol,
-    )
-    by_objective = {
-        name: bool(all(row["passed"] for row in rows if row["objective"] == name))
-        for name in VMEC_BOOZER_FREQUENCY_OBJECTIVE_NAMES
-    }
-    return {
-        "kind": "mode21_vmec_boozer_linear_frequency_gradient_gate",
-        "passed": bool(gate["passed"] and all(row["passed"] for row in rows)),
-        "source_scope": "mode21_vmec_boozer_state",
-        "claim_scope": (
+        gate=gate,
+        rows=rows,
+        claim_scope=(
             "full vmec_jax state coefficient -> booz_xform_jax mode-21 equal-arc "
             "geometry -> SPECTRAX-GK linear-RHS eigenfrequency gradient"
         ),
-        "case_name": context["case_name"],
-        "parameter_names": list(context["parameter_names"]),
-        "objective_names": list(VMEC_BOOZER_FREQUENCY_OBJECTIVE_NAMES),
-        "parameter_indices": context["parameter_indices"],
-        "surface_index": None
-        if context["surface_index"] is None
-        else int(context["surface_index"]),
-        "grid": {
-            "Nx": int(context["cfg"].grid.Nx),
-            "Ny": int(context["cfg"].grid.Ny),
-            "Nz": int(context["cfg"].grid.Nz),
-            "selected_ky_index": 1,
-        },
-        "mboz": context["mboz"],
-        "nboz": context["nboz"],
-        "surface_stencil_width": (
-            None
-            if context["surface_stencil_width"] is None
-            else int(context["surface_stencil_width"])
-        ),
-        "n_laguerre": context["n_laguerre"],
-        "n_hermite": context["n_hermite"],
-        "state_size": int(np.prod(context["state_shape"])),
-        "linear_growth_gradient_gate": bool(by_objective["gamma"]),
-        "linear_frequency_gradient_gate": bool(by_objective["omega"]),
-        "quasilinear_weight_gradient_gate": False,
-        "nonlinear_window_gradient_gate": False,
-        "objective_gates": rows,
-        "eigenpair_gate": gate,
-        "next_action": (
+    )
+    return _update_mode21_gradient_payload(
+        payload,
+        by_objective=by_objective,
+        rows=rows,
+        gate=gate,
+        quasilinear_weight_gate=False,
+        nonlinear_window_gate=False,
+        next_action=(
             "Promote the full-chain gate from eigenfrequency to quasilinear flux weights after "
             "the heavy Nl>=2 diagnostic is profiled and conditioned below manuscript runtime caps."
         ),
-    }
+    )
 
 
 def mode21_vmec_boozer_quasilinear_gradient_report(  # pragma: no cover
@@ -178,8 +353,8 @@ def mode21_vmec_boozer_quasilinear_gradient_report(  # pragma: no cover
     """
 
     start = time.perf_counter()
-    context = _linear_context_fn(
-        case_name=str(case_name),
+    context = _mode21_context(
+        case_name=case_name,
         radial_index=radial_index,
         mode_index=mode_index,
         parameter_family=parameter_family,
@@ -190,85 +365,46 @@ def mode21_vmec_boozer_quasilinear_gradient_report(  # pragma: no cover
         surface_stencil_width=surface_stencil_width,
         n_laguerre=2,
         n_hermite=3,
+        context_fn=_linear_context_fn,
     )
 
-    def objective_fn(
-        eigenvalue: jnp.ndarray, eigenvector: jnp.ndarray, x: jnp.ndarray
-    ) -> jnp.ndarray:
-        gamma, omega, kperp_eff, heat_weight, ql_proxy = _quasilinear_features_fn(
-            eigenvalue,
-            eigenvector,
-            x,
-            context,
-        )
-        return jnp.asarray([gamma, omega, kperp_eff, heat_weight, ql_proxy])
-
-    gate = implicit_eigenpair_observable_sensitivity_report(
-        context["matrix_fn"],
-        objective_fn,
-        jnp.asarray([0.0]),
-        step=fd_step,
+    gate, rows, by_objective = _run_mode21_gradient_gate(
+        context,
+        partial(
+            _quasilinear_observable_vector,
+            context=context,
+            features_fn=_quasilinear_features_fn,
+        ),
+        objective_names=VMEC_BOOZER_QUASILINEAR_OBJECTIVE_NAMES,
+        fd_step=fd_step,
         rtol=rtol,
         atol=atol,
         gap_floor=gap_floor,
     )
-    rows = _objective_gate_rows(
-        gate,
-        parameter_names=context["parameter_names"],
+    payload = _mode21_gradient_base_payload(
+        kind="mode21_vmec_boozer_quasilinear_gradient_gate",
+        context=context,
         objective_names=VMEC_BOOZER_QUASILINEAR_OBJECTIVE_NAMES,
-        rtol=rtol,
-        atol=atol,
-    )
-    by_objective = {
-        name: bool(all(row["passed"] for row in rows if row["objective"] == name))
-        for name in VMEC_BOOZER_QUASILINEAR_OBJECTIVE_NAMES
-    }
-    return {
-        "kind": "mode21_vmec_boozer_quasilinear_gradient_gate",
-        "passed": bool(gate["passed"] and all(row["passed"] for row in rows)),
-        "source_scope": "mode21_vmec_boozer_state",
-        "claim_scope": (
+        gate=gate,
+        rows=rows,
+        claim_scope=(
             "full vmec_jax state coefficient -> booz_xform_jax mode-21 equal-arc "
             "geometry -> SPECTRAX-GK linear-RHS quasilinear heat-flux-weight gradient"
         ),
-        "case_name": context["case_name"],
-        "parameter_names": list(context["parameter_names"]),
-        "objective_names": list(VMEC_BOOZER_QUASILINEAR_OBJECTIVE_NAMES),
-        "parameter_indices": context["parameter_indices"],
-        "surface_index": None
-        if context["surface_index"] is None
-        else int(context["surface_index"]),
-        "grid": {
-            "Nx": int(context["cfg"].grid.Nx),
-            "Ny": int(context["cfg"].grid.Ny),
-            "Nz": int(context["cfg"].grid.Nz),
-            "selected_ky_index": 1,
-        },
-        "mboz": context["mboz"],
-        "nboz": context["nboz"],
-        "surface_stencil_width": (
-            None
-            if context["surface_stencil_width"] is None
-            else int(context["surface_stencil_width"])
-        ),
-        "n_laguerre": context["n_laguerre"],
-        "n_hermite": context["n_hermite"],
-        "state_size": int(np.prod(context["state_shape"])),
-        "linear_growth_gradient_gate": bool(by_objective["gamma"]),
-        "linear_frequency_gradient_gate": bool(by_objective["omega"]),
-        "quasilinear_weight_gradient_gate": bool(
-            by_objective["linear_heat_flux_weight"]
-            and by_objective["mixing_length_heat_flux_proxy"]
-        ),
-        "nonlinear_window_gradient_gate": False,
-        "elapsed_seconds": float(time.perf_counter() - start),
-        "objective_gates": rows,
-        "eigenpair_gate": gate,
-        "next_action": (
+    )
+    return _update_mode21_gradient_payload(
+        payload,
+        by_objective=by_objective,
+        rows=rows,
+        gate=gate,
+        quasilinear_weight_gate=_quasilinear_weight_gate(by_objective),
+        nonlinear_window_gate=False,
+        elapsed_seconds=time.perf_counter() - start,
+        next_action=(
             "Use this as the full-chain quasilinear gradient gate for reduced linear/quasilinear "
             "stellarator objectives; keep full nonlinear-window VMEC/Boozer gradients as a separate future lane."
         ),
-    }
+    )
 
 
 def mode21_vmec_boozer_nonlinear_window_gradient_report(  # pragma: no cover
@@ -304,8 +440,8 @@ def mode21_vmec_boozer_nonlinear_window_gradient_report(  # pragma: no cover
     """
 
     start = time.perf_counter()
-    context = _linear_context_fn(
-        case_name=str(case_name),
+    context = _mode21_context(
+        case_name=case_name,
         radial_index=radial_index,
         mode_index=mode_index,
         parameter_family=parameter_family,
@@ -316,116 +452,62 @@ def mode21_vmec_boozer_nonlinear_window_gradient_report(  # pragma: no cover
         surface_stencil_width=surface_stencil_width,
         n_laguerre=2,
         n_hermite=3,
+        context_fn=_linear_context_fn,
     )
 
-    def objective_fn(
-        eigenvalue: jnp.ndarray, eigenvector: jnp.ndarray, x: jnp.ndarray
-    ) -> jnp.ndarray:
-        gamma, omega, kperp_eff, heat_weight, ql_proxy = _quasilinear_features_fn(
-            eigenvalue,
-            eigenvector,
-            x,
-            context,
-        )
-        nl_mean, nl_cv, nl_trend = _window_metrics_fn(
-            gamma,
-            kperp_eff,
-            heat_weight,
-            dt=nonlinear_dt,
-            steps=nonlinear_steps,
+    gate, rows, by_objective = _run_mode21_gradient_gate(
+        context,
+        partial(
+            _nonlinear_window_observable_vector,
+            context=context,
+            features_fn=_quasilinear_features_fn,
+            window_metrics_fn=_window_metrics_fn,
+            nonlinear_dt=nonlinear_dt,
+            nonlinear_steps=nonlinear_steps,
             tail_fraction=tail_fraction,
-        )
-        return jnp.asarray(
-            [
-                gamma,
-                omega,
-                kperp_eff,
-                heat_weight,
-                ql_proxy,
-                nl_mean,
-                nl_cv,
-                nl_trend,
-            ]
-        )
-
-    gate = implicit_eigenpair_observable_sensitivity_report(
-        context["matrix_fn"],
-        objective_fn,
-        jnp.asarray([0.0]),
-        step=fd_step,
+        ),
+        objective_names=VMEC_BOOZER_NONLINEAR_WINDOW_OBJECTIVE_NAMES,
+        fd_step=fd_step,
         rtol=rtol,
         atol=atol,
         gap_floor=gap_floor,
     )
-    rows = _objective_gate_rows(
-        gate,
-        parameter_names=context["parameter_names"],
-        objective_names=VMEC_BOOZER_NONLINEAR_WINDOW_OBJECTIVE_NAMES,
-        rtol=rtol,
-        atol=atol,
-    )
-    by_objective = {
-        name: bool(all(row["passed"] for row in rows if row["objective"] == name))
-        for name in VMEC_BOOZER_NONLINEAR_WINDOW_OBJECTIVE_NAMES
-    }
     nonlinear_window_gate = bool(
         by_objective["nonlinear_window_heat_flux_mean"]
         and by_objective["nonlinear_window_heat_flux_cv"]
         and by_objective["nonlinear_window_heat_flux_trend"]
     )
-    return {
-        "kind": "mode21_vmec_boozer_nonlinear_window_gradient_gate",
-        "passed": bool(gate["passed"] and all(row["passed"] for row in rows)),
-        "source_scope": "mode21_vmec_boozer_state",
-        "claim_scope": (
+    payload = _mode21_gradient_base_payload(
+        kind="mode21_vmec_boozer_nonlinear_window_gradient_gate",
+        context=context,
+        objective_names=VMEC_BOOZER_NONLINEAR_WINDOW_OBJECTIVE_NAMES,
+        gate=gate,
+        rows=rows,
+        claim_scope=(
             "full vmec_jax state coefficient -> booz_xform_jax mode-21 equal-arc geometry "
             "-> SPECTRAX-GK linear-RHS eigenpair -> reduced nonlinear-window estimator gradient"
         ),
-        "case_name": context["case_name"],
-        "parameter_names": list(context["parameter_names"]),
-        "objective_names": list(VMEC_BOOZER_NONLINEAR_WINDOW_OBJECTIVE_NAMES),
-        "parameter_indices": context["parameter_indices"],
-        "surface_index": None
-        if context["surface_index"] is None
-        else int(context["surface_index"]),
-        "grid": {
-            "Nx": int(context["cfg"].grid.Nx),
-            "Ny": int(context["cfg"].grid.Ny),
-            "Nz": int(context["cfg"].grid.Nz),
-            "selected_ky_index": 1,
-        },
-        "mboz": context["mboz"],
-        "nboz": context["nboz"],
-        "surface_stencil_width": (
-            None
-            if context["surface_stencil_width"] is None
-            else int(context["surface_stencil_width"])
-        ),
-        "n_laguerre": context["n_laguerre"],
-        "n_hermite": context["n_hermite"],
-        "state_size": int(np.prod(context["state_shape"])),
-        "linear_growth_gradient_gate": bool(by_objective["gamma"]),
-        "linear_frequency_gradient_gate": bool(by_objective["omega"]),
-        "quasilinear_weight_gradient_gate": bool(
-            by_objective["linear_heat_flux_weight"]
-            and by_objective["mixing_length_heat_flux_proxy"]
-        ),
-        "nonlinear_window_gradient_gate": nonlinear_window_gate,
-        "nonlinear_window_config": {
+    )
+    return _update_mode21_gradient_payload(
+        payload,
+        by_objective=by_objective,
+        rows=rows,
+        gate=gate,
+        quasilinear_weight_gate=_quasilinear_weight_gate(by_objective),
+        nonlinear_window_gate=nonlinear_window_gate,
+        nonlinear_window_config={
             "model": "smooth_logistic_heat_flux_envelope_from_linear_observables",
             "dt": float(nonlinear_dt),
             "steps": int(nonlinear_steps),
             "tail_fraction": float(tail_fraction),
         },
-        "elapsed_seconds": float(time.perf_counter() - start),
-        "objective_gates": rows,
-        "eigenpair_gate": gate,
-        "next_action": (
+        elapsed_seconds=time.perf_counter() - start,
+        next_action=(
             "Use this as a reduced nonlinear-window estimator-gradient gate only. Full stellarator "
             "heat-flux optimization still requires converged nonlinear SPECTRAX-GK window gradients "
             "or robust adjoint/finite-difference audits on optimized equilibria."
         ),
-    }
+    )
 
 
 __all__ = [
