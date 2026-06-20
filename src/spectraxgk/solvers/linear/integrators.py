@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import Any
+from typing import Any, Callable
 
 import jax
 import jax.numpy as jnp
@@ -44,6 +44,155 @@ _SSPX3_WGTFAC = float((9.0 - 2.0 * (6.0 ** (2.0 / 3.0))) ** 0.5)
 _SSPX3_W1 = 0.5 * (_SSPX3_WGTFAC - 1.0)
 _SSPX3_W2 = 0.5 * ((6.0 ** (2.0 / 3.0)) - 1.0 - _SSPX3_WGTFAC)
 _SSPX3_W3 = (1.0 / _SSPX3_ADT) - 1.0 - _SSPX3_W2 * (_SSPX3_W1 + 1.0)
+_LINEAR_METHODS = {"euler", "rk2", "rk4", "imex", "imex2", "sspx3"}
+
+
+def _validate_linear_method(method: str) -> None:
+    if method not in _LINEAR_METHODS:
+        raise ValueError(
+            "method must be one of {'euler', 'rk2', 'rk4', 'imex', 'imex2', 'sspx3'}"
+        )
+
+
+def _prepared_linear_state_and_damping(
+    G0: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    base_dtype = jnp.complex128 if _x64_enabled() else jnp.complex64
+    state_dtype = jnp.result_type(G0, base_dtype)
+    G0 = jnp.asarray(G0, dtype=state_dtype)
+    real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
+    hyper_damp = hypercollision_damping(cache, params, real_dtype)
+    if G0.ndim == 5 and hyper_damp.ndim == 6:
+        hyper_damp = hyper_damp[0]
+    damping = (
+        collision_damping(cache, params, real_dtype, squeeze_species=(G0.ndim == 5))
+        + hyper_damp
+    )
+    return G0, damping.astype(real_dtype)
+
+
+def _linear_parallel_strategy(parallel: Any | None) -> str:
+    if parallel is None:
+        return "serial"
+    return str(getattr(parallel, "strategy", "serial")).lower().replace("-", "_")
+
+
+def _linear_rhs_callable(
+    *,
+    cache: LinearCache,
+    params: LinearParams,
+    terms: LinearTerms,
+    dt_val: jnp.ndarray,
+    parallel: Any | None,
+    parallel_strategy: str,
+    force_electrostatic_fields: bool,
+) -> Callable[[jnp.ndarray], tuple[jnp.ndarray, jnp.ndarray]]:
+    def rhs(G_in: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
+        if parallel_strategy == "serial":
+            return linear_rhs_cached(
+                G_in,
+                cache,
+                params,
+                terms=terms,
+                dt=dt_val,
+                force_electrostatic_fields=force_electrostatic_fields,
+            )
+        return linear_rhs_parallel_cached(
+            G_in, cache, params, terms=terms, parallel=parallel, dt=dt_val
+        )
+
+    return rhs
+
+
+def _sspx3_step(
+    G: jnp.ndarray,
+    *,
+    rhs: Callable[[jnp.ndarray], tuple[jnp.ndarray, jnp.ndarray]],
+    dt_val: jnp.ndarray,
+) -> jnp.ndarray:
+    def euler_step(G_state: jnp.ndarray) -> jnp.ndarray:
+        dG_state, _ = rhs(G_state)
+        return G_state + (_SSPX3_ADT * dt_val) * dG_state
+
+    G1 = euler_step(G)
+    G2_euler = euler_step(G1)
+    G2 = (1.0 - _SSPX3_W1) * G + (_SSPX3_W1 - 1.0) * G1 + G2_euler
+    G3 = euler_step(G2)
+    return (
+        (1.0 - _SSPX3_W2 - _SSPX3_W3) * G
+        + _SSPX3_W3 * G1
+        + (_SSPX3_W2 - 1.0) * G2
+        + G3
+    )
+
+
+def _advance_linear_state(
+    G: jnp.ndarray,
+    *,
+    rhs: Callable[[jnp.ndarray], tuple[jnp.ndarray, jnp.ndarray]],
+    damping: jnp.ndarray,
+    dt_val: jnp.ndarray,
+    method: str,
+) -> jnp.ndarray:
+    dG, _phi = rhs(G)
+    if method == "imex":
+        dG_explicit = dG + damping * G
+        return (G + dt_val * dG_explicit) / (1.0 + dt_val * damping)
+    if method == "imex2":
+        dG_explicit = dG + damping * G
+        G_half = (G + 0.5 * dt_val * dG_explicit) / (1.0 + 0.5 * dt_val * damping)
+        dG_half, _phi = rhs(G_half)
+        dG_half_exp = dG_half + damping * G_half
+        return (G + dt_val * dG_half_exp) / (1.0 + dt_val * damping)
+    if method == "euler":
+        return G + dt_val * dG
+    if method == "rk2":
+        k2, _ = rhs(G + 0.5 * dt_val * dG)
+        return G + dt_val * k2
+    if method == "sspx3":
+        return _sspx3_step(G, rhs=rhs, dt_val=dt_val)
+    k1 = dG
+    k2, _ = rhs(G + 0.5 * dt_val * k1)
+    k3, _ = rhs(G + 0.5 * dt_val * k2)
+    k4, _ = rhs(G + dt_val * k3)
+    return G + (dt_val / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+
+
+def _maybe_emit_linear_progress(
+    G: jnp.ndarray,
+    *,
+    idx: jnp.ndarray,
+    steps: int,
+    dt_val: jnp.ndarray,
+    phi: jnp.ndarray,
+    show_progress: bool,
+) -> jnp.ndarray:
+    if not show_progress:
+        return G
+    from spectraxgk.utils.callbacks import print_callback, should_emit_progress
+
+    sim_time = (idx + 1) * dt_val
+    sim_total = jnp.asarray(steps, dtype=dt_val.dtype) * dt_val
+    phi_max = jnp.max(jnp.abs(phi))
+    return jax.lax.cond(
+        should_emit_progress(idx, steps),
+        lambda state: print_callback(
+            state,
+            idx,
+            steps,
+            0.0,
+            0.0,
+            phi_max,
+            0.0,
+            sim_time,
+            sim_total,
+            metric_labels=("|phi|_max", "|n|_max"),
+        ),
+        lambda state: state,
+        G,
+    )
 
 
 def _integrate_linear_cached_impl(
@@ -61,150 +210,64 @@ def _integrate_linear_cached_impl(
     force_electrostatic_fields: bool = False,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Time integrate the linear system using cached geometry arrays."""
-    if method not in {"euler", "rk2", "rk4", "imex", "imex2", "sspx3"}:
-        raise ValueError(
-            "method must be one of {'euler', 'rk2', 'rk4', 'imex', 'imex2', 'sspx3'}"
-        )
+    _validate_linear_method(method)
     if terms is None:
         terms = LinearTerms()
-
-    base_dtype = jnp.complex128 if _x64_enabled() else jnp.complex64
-    state_dtype = jnp.result_type(G0, base_dtype)
-    G0 = jnp.asarray(G0, dtype=state_dtype)
-    real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
+    G0, damping = _prepared_linear_state_and_damping(G0, cache, params)
+    real_dtype = jnp.real(jnp.empty((), dtype=G0.dtype)).dtype
     dt_val = jnp.asarray(dt, dtype=real_dtype)
-    hyper_damp = hypercollision_damping(cache, params, real_dtype)
-    if G0.ndim == 5 and hyper_damp.ndim == 6:
-        hyper_damp = hyper_damp[0]
-    damping = (
-        collision_damping(cache, params, real_dtype, squeeze_species=(G0.ndim == 5))
-        + hyper_damp
-    )
-    damping = damping.astype(real_dtype)
-
-    parallel_strategy = (
-        "serial"
-        if parallel is None
-        else str(getattr(parallel, "strategy", "serial")).lower().replace("-", "_")
+    parallel_strategy = _linear_parallel_strategy(parallel)
+    rhs = _linear_rhs_callable(
+        cache=cache,
+        params=params,
+        terms=terms,
+        dt_val=dt_val,
+        parallel=parallel,
+        parallel_strategy=parallel_strategy,
+        force_electrostatic_fields=force_electrostatic_fields,
     )
 
-    def rhs(G_in: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
-        if parallel_strategy == "serial":
-            return linear_rhs_cached(
-                G_in,
-                cache,
-                params,
-                terms=terms,
-                dt=dt_val,
-                force_electrostatic_fields=force_electrostatic_fields,
-            )
-        return linear_rhs_parallel_cached(
-            G_in, cache, params, terms=terms, parallel=parallel, dt=dt_val
+    def advance(G: jnp.ndarray) -> jnp.ndarray:
+        return _advance_linear_state(
+            G,
+            rhs=rhs,
+            damping=damping,
+            dt_val=dt_val,
+            method=method,
         )
 
-    def advance(G):
-        dG, _phi = rhs(G)
-        if method == "imex":
-            dG_explicit = dG + damping * G
-            return (G + dt_val * dG_explicit) / (1.0 + dt_val * damping)
-        if method == "imex2":
-            dG_explicit = dG + damping * G
-            G_half = (G + 0.5 * dt_val * dG_explicit) / (1.0 + 0.5 * dt_val * damping)
-            dG_half, _phi = rhs(G_half)
-            dG_half_exp = dG_half + damping * G_half
-            return (G + dt_val * dG_half_exp) / (1.0 + dt_val * damping)
-        if method == "euler":
-            return G + dt_val * dG
-        if method == "rk2":
-            k1 = dG
-            k2, _ = rhs(G + 0.5 * dt_val * k1)
-            return G + dt_val * k2
-        if method == "sspx3":
-
-            def _euler_step(G_state: jnp.ndarray) -> jnp.ndarray:
-                dG_state, _ = rhs(G_state)
-                return G_state + (_SSPX3_ADT * dt_val) * dG_state
-
-            G1 = _euler_step(G)
-            G2_euler = _euler_step(G1)
-            G2 = (1.0 - _SSPX3_W1) * G + (_SSPX3_W1 - 1.0) * G1 + G2_euler
-            G3 = _euler_step(G2)
-            return (
-                (1.0 - _SSPX3_W2 - _SSPX3_W3) * G
-                + _SSPX3_W3 * G1
-                + (_SSPX3_W2 - 1.0) * G2
-                + G3
-            )
-        k1 = dG
-        k2, _ = rhs(G + 0.5 * dt_val * k1)
-        k3, _ = rhs(G + 0.5 * dt_val * k2)
-        k4, _ = rhs(G + dt_val * k3)
-        return G + (dt_val / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
-
-    def step(G, idx):
+    def step(G: jnp.ndarray, idx: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
         G_new = advance(G)
         _dG_new, phi_new = rhs(G_new)
-        if show_progress:
-            from spectraxgk.utils.callbacks import print_callback, should_emit_progress
-
-            sim_time = (idx + 1) * dt_val
-            sim_total = jnp.asarray(steps, dtype=dt_val.dtype) * dt_val
-            phi_max = jnp.max(jnp.abs(phi_new))
-            G_new = jax.lax.cond(
-                should_emit_progress(idx, steps),
-                lambda state: print_callback(
-                    state,
-                    idx,
-                    steps,
-                    0.0,
-                    0.0,
-                    phi_max,
-                    0.0,
-                    sim_time,
-                    sim_total,
-                    metric_labels=("|phi|_max", "|n|_max"),
-                ),
-                lambda state: state,
-                G_new,
-            )
-        return G_new, phi_new
+        return _maybe_emit_linear_progress(
+            G_new,
+            idx=idx,
+            steps=steps,
+            dt_val=dt_val,
+            phi=phi_new,
+            show_progress=show_progress,
+        ), phi_new
 
     step_fn = jax.checkpoint(step) if checkpoint else step
     indices = jnp.arange(steps)
     if sample_stride <= 1:
         return jax.lax.scan(step_fn, G0, indices)
 
-    def sample_step(G, idx):
-        def inner_step(i, state):
+    def sample_step(G: jnp.ndarray, idx: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
+        def inner_step(_i, state):
             return advance(state)
 
         G_out = jax.lax.fori_loop(0, sample_stride, inner_step, G)
         _dG_out, phi_out = rhs(G_out)
-        if show_progress:
-            from spectraxgk.utils.callbacks import print_callback, should_emit_progress
-
-            completed_idx = jnp.minimum((idx + 1) * sample_stride, steps) - 1
-            sim_time = jnp.minimum((idx + 1) * sample_stride, steps) * dt_val
-            sim_total = jnp.asarray(steps, dtype=dt_val.dtype) * dt_val
-            phi_max = jnp.max(jnp.abs(phi_out))
-            G_out = jax.lax.cond(
-                should_emit_progress(completed_idx, steps),
-                lambda state: print_callback(
-                    state,
-                    completed_idx,
-                    steps,
-                    0.0,
-                    0.0,
-                    phi_max,
-                    0.0,
-                    sim_time,
-                    sim_total,
-                    metric_labels=("|phi|_max", "|n|_max"),
-                ),
-                lambda state: state,
-                G_out,
-            )
-        return G_out, phi_out
+        completed_idx = jnp.minimum((idx + 1) * sample_stride, steps) - 1
+        return _maybe_emit_linear_progress(
+            G_out,
+            idx=completed_idx,
+            steps=steps,
+            dt_val=dt_val,
+            phi=phi_out,
+            show_progress=show_progress,
+        ), phi_out
 
     num_samples = steps // sample_stride
     sample_indices = jnp.arange(num_samples)
