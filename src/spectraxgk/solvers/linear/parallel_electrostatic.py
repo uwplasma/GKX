@@ -324,6 +324,61 @@ def _fused_diamagnetic_term(
     return diamagnetic + (global_m == 2).astype(local_dtype) * drive_m2[:, None, ...]
 
 
+def _fused_electrostatic_rhs_kernel(
+    local: jnp.ndarray,
+    data: SimpleNamespace,
+    route: SimpleNamespace,
+    *,
+    axis_name: str,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    global_m, global_m_real, m0 = _fused_mode_coordinates(
+        axis_name=axis_name,
+        local_m=route.local_m,
+        local_m_index=data.local_m_index,
+        real_dtype=data.real_dtype,
+        local_dtype=local.dtype,
+    )
+    phi = _fused_electrostatic_phi(local, data, m0=m0, axis_name=axis_name)
+    streaming = _fused_streaming_term(
+        local,
+        phi,
+        data,
+        route,
+        global_m=global_m,
+        global_m_real=global_m_real,
+        axis_name=axis_name,
+    )
+    h = _fused_distribution_with_field(local, phi, data, m0=m0)
+    mirror = _fused_mirror_term(
+        h,
+        data,
+        route,
+        global_m_real=global_m_real,
+        axis_name=axis_name,
+    )
+    curvature, gradb = _fused_curvature_gradb_terms(
+        h,
+        data,
+        route,
+        global_m_real=global_m_real,
+        axis_name=axis_name,
+    )
+    diamagnetic = _fused_diamagnetic_term(
+        phi,
+        data,
+        global_m=global_m,
+        local_dtype=local.dtype,
+    )
+    rhs = (
+        data.w_streaming * streaming
+        + data.w_mirror * mirror
+        + data.w_curv * curvature
+        + data.w_gradb * gradb
+        + data.w_diamag * diamagnetic
+    )
+    return rhs, phi
+
+
 def _fused_electrostatic_cache_key(
     arr: jnp.ndarray,
     cache: LinearCache,
@@ -398,51 +453,7 @@ def _linear_rhs_electrostatic_slices_velocity_sharded_fused(
     )
 
     def fused(local):
-        global_m, global_m_real, m0 = _fused_mode_coordinates(
-            axis_name=axis_name,
-            local_m=route.local_m,
-            local_m_index=data.local_m_index,
-            real_dtype=data.real_dtype,
-            local_dtype=local.dtype,
-        )
-        phi = _fused_electrostatic_phi(local, data, m0=m0, axis_name=axis_name)
-        streaming = _fused_streaming_term(
-            local,
-            phi,
-            data,
-            route,
-            global_m=global_m,
-            global_m_real=global_m_real,
-            axis_name=axis_name,
-        )
-        h = _fused_distribution_with_field(local, phi, data, m0=m0)
-        mirror = _fused_mirror_term(
-            h,
-            data,
-            route,
-            global_m_real=global_m_real,
-            axis_name=axis_name,
-        )
-        curvature, gradb = _fused_curvature_gradb_terms(
-            h,
-            data,
-            route,
-            global_m_real=global_m_real,
-            axis_name=axis_name,
-        )
-        diamagnetic = _fused_diamagnetic_term(
-            phi,
-            data,
-            global_m=global_m,
-            local_dtype=local.dtype,
-        )
-        rhs = (
-            data.w_streaming * streaming
-            + data.w_mirror * mirror
-            + data.w_curv * curvature
-            + data.w_gradb * gradb
-        )
-        return rhs + data.w_diamag * diamagnetic, phi
+        return _fused_electrostatic_rhs_kernel(local, data, route, axis_name=axis_name)
 
     cache_key = _fused_electrostatic_cache_key(
         arr,
@@ -461,24 +472,17 @@ def _linear_rhs_electrostatic_slices_velocity_sharded_fused(
     return mapped(jax.device_put(arr, sharding))
 
 
-def _linear_rhs_electrostatic_slices_velocity_sharded_serial(
+def _serial_electrostatic_phi(
     arr: jnp.ndarray,
     cache: LinearCache,
     params: LinearParams,
-    term_weights: LinearTerms,
     *,
     plan: Any,
     device_list: list[Any],
-) -> tuple[jnp.ndarray, jnp.ndarray]:
-    from spectraxgk.parallel.velocity import (
-        curvature_gradb_drift_shard_map,
-        diamagnetic_drive_shard_map,
-        electrostatic_phi_shard_map,
-        mirror_drift_shard_map,
-    )
+) -> jnp.ndarray:
+    from spectraxgk.parallel.velocity import electrostatic_phi_shard_map
 
-    real_dtype = jnp.real(arr).dtype
-    phi = electrostatic_phi_shard_map(
+    return electrostatic_phi_shard_map(
         arr,
         plan,
         Jl=cache.Jl,
@@ -489,58 +493,183 @@ def _linear_rhs_electrostatic_slices_velocity_sharded_serial(
         mask0=cache.mask0,
         devices=device_list,
     )
-    dG = jnp.zeros_like(arr)
-    if float(term_weights.streaming) != 0.0:
-        streaming = _streaming_electrostatic_from_phi_velocity_sharded(
-            arr,
-            cache,
-            params,
-            phi=phi,
-            plan=plan,
-            devices=device_list,
-        )
-        dG = dG + jnp.asarray(term_weights.streaming, dtype=real_dtype) * streaming
-    H = build_H(arr, cache.Jl, phi, jnp.asarray([params.tz], dtype=real_dtype))
-    if float(term_weights.mirror) != 0.0:
-        dG = dG + mirror_drift_shard_map(
-            H,
-            plan,
-            vth=jnp.asarray([params.vth], dtype=real_dtype),
-            bgrad=cache.bgrad,
-            ell=cache.l,
-            sqrt_m=cache.sqrt_m,
-            sqrt_m_p1=cache.sqrt_m_p1,
-            weight=jnp.asarray(term_weights.mirror, dtype=real_dtype),
-            devices=device_list,
-        )
-    if float(term_weights.curvature) != 0.0 or float(term_weights.gradb) != 0.0:
-        dG = dG + curvature_gradb_drift_shard_map(
-            H,
-            plan,
-            tz=jnp.asarray([params.tz], dtype=real_dtype),
-            omega_d_scale=params.omega_d_scale,
-            cv_d=cache.cv_d,
-            gb_d=cache.gb_d,
-            ell=cache.l,
-            m=cache.m,
-            weight_curv=jnp.asarray(term_weights.curvature, dtype=real_dtype),
-            weight_gradb=jnp.asarray(term_weights.gradb, dtype=real_dtype),
-            devices=device_list,
-        )
-    if float(term_weights.diamagnetic) != 0.0:
-        dG = dG + diamagnetic_drive_shard_map(
-            arr,
-            plan,
-            phi=phi,
-            Jl=cache.Jl,
-            l4=cache.l4,
-            tprim=params.R_over_LTi,
-            fprim=params.R_over_Ln,
-            omega_star_scale=params.omega_star_scale,
-            ky=cache.ky,
-            weight=jnp.asarray(term_weights.diamagnetic, dtype=real_dtype),
-            devices=device_list,
-        )
+
+
+def _serial_streaming_contribution(
+    arr: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    term_weights: LinearTerms,
+    phi: jnp.ndarray,
+    *,
+    plan: Any,
+    device_list: list[Any],
+    real_dtype: Any,
+) -> jnp.ndarray:
+    if float(term_weights.streaming) == 0.0:
+        return jnp.zeros_like(arr)
+    streaming = _streaming_electrostatic_from_phi_velocity_sharded(
+        arr,
+        cache,
+        params,
+        phi=phi,
+        plan=plan,
+        devices=device_list,
+    )
+    return jnp.asarray(term_weights.streaming, dtype=real_dtype) * streaming
+
+
+def _serial_electrostatic_distribution(
+    arr: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    phi: jnp.ndarray,
+    *,
+    real_dtype: Any,
+) -> jnp.ndarray:
+    return build_H(arr, cache.Jl, phi, jnp.asarray([params.tz], dtype=real_dtype))
+
+
+def _serial_mirror_contribution(
+    H: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    term_weights: LinearTerms,
+    *,
+    plan: Any,
+    device_list: list[Any],
+    real_dtype: Any,
+) -> jnp.ndarray:
+    from spectraxgk.parallel.velocity import mirror_drift_shard_map
+
+    if float(term_weights.mirror) == 0.0:
+        return jnp.zeros_like(H)
+    return mirror_drift_shard_map(
+        H,
+        plan,
+        vth=jnp.asarray([params.vth], dtype=real_dtype),
+        bgrad=cache.bgrad,
+        ell=cache.l,
+        sqrt_m=cache.sqrt_m,
+        sqrt_m_p1=cache.sqrt_m_p1,
+        weight=jnp.asarray(term_weights.mirror, dtype=real_dtype),
+        devices=device_list,
+    )
+
+
+def _serial_curvature_gradb_contribution(
+    H: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    term_weights: LinearTerms,
+    *,
+    plan: Any,
+    device_list: list[Any],
+    real_dtype: Any,
+) -> jnp.ndarray:
+    from spectraxgk.parallel.velocity import curvature_gradb_drift_shard_map
+
+    if float(term_weights.curvature) == 0.0 and float(term_weights.gradb) == 0.0:
+        return jnp.zeros_like(H)
+    return curvature_gradb_drift_shard_map(
+        H,
+        plan,
+        tz=jnp.asarray([params.tz], dtype=real_dtype),
+        omega_d_scale=params.omega_d_scale,
+        cv_d=cache.cv_d,
+        gb_d=cache.gb_d,
+        ell=cache.l,
+        m=cache.m,
+        weight_curv=jnp.asarray(term_weights.curvature, dtype=real_dtype),
+        weight_gradb=jnp.asarray(term_weights.gradb, dtype=real_dtype),
+        devices=device_list,
+    )
+
+
+def _serial_diamagnetic_contribution(
+    arr: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    term_weights: LinearTerms,
+    phi: jnp.ndarray,
+    *,
+    plan: Any,
+    device_list: list[Any],
+    real_dtype: Any,
+) -> jnp.ndarray:
+    from spectraxgk.parallel.velocity import diamagnetic_drive_shard_map
+
+    if float(term_weights.diamagnetic) == 0.0:
+        return jnp.zeros_like(arr)
+    return diamagnetic_drive_shard_map(
+        arr,
+        plan,
+        phi=phi,
+        Jl=cache.Jl,
+        l4=cache.l4,
+        tprim=params.R_over_LTi,
+        fprim=params.R_over_Ln,
+        omega_star_scale=params.omega_star_scale,
+        ky=cache.ky,
+        weight=jnp.asarray(term_weights.diamagnetic, dtype=real_dtype),
+        devices=device_list,
+    )
+
+
+def _linear_rhs_electrostatic_slices_velocity_sharded_serial(
+    arr: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    term_weights: LinearTerms,
+    *,
+    plan: Any,
+    device_list: list[Any],
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    real_dtype = jnp.real(arr).dtype
+    phi = _serial_electrostatic_phi(
+        arr, cache, params, plan=plan, device_list=device_list
+    )
+    dG = _serial_streaming_contribution(
+        arr,
+        cache,
+        params,
+        term_weights,
+        phi,
+        plan=plan,
+        device_list=device_list,
+        real_dtype=real_dtype,
+    )
+    H = _serial_electrostatic_distribution(
+        arr, cache, params, phi, real_dtype=real_dtype
+    )
+    dG = dG + _serial_mirror_contribution(
+        H,
+        cache,
+        params,
+        term_weights,
+        plan=plan,
+        device_list=device_list,
+        real_dtype=real_dtype,
+    )
+    dG = dG + _serial_curvature_gradb_contribution(
+        H,
+        cache,
+        params,
+        term_weights,
+        plan=plan,
+        device_list=device_list,
+        real_dtype=real_dtype,
+    )
+    dG = dG + _serial_diamagnetic_contribution(
+        arr,
+        cache,
+        params,
+        term_weights,
+        phi,
+        plan=plan,
+        device_list=device_list,
+        real_dtype=real_dtype,
+    )
     return dG, phi
 
 
