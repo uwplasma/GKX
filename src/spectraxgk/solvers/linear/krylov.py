@@ -8,7 +8,7 @@ and the monkeypatch seams used by benchmark/runtime tests.
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Any, Callable, Mapping
 
 import jax.numpy as jnp
 import numpy as np
@@ -365,6 +365,84 @@ def _shift_invert_branch(
     return eig_si, vec_si
 
 
+def _dominant_eigenpair_config_from_options(
+    options: Mapping[str, Any],
+) -> KrylovConfig:
+    return _normalized_config(
+        method=options["method"],
+        krylov_dim=options["krylov_dim"],
+        restarts=options["restarts"],
+        omega_min_factor=options["omega_min_factor"],
+        omega_target_factor=options["omega_target_factor"],
+        omega_cap_factor=options["omega_cap_factor"],
+        omega_sign=options["omega_sign"],
+        mode_family=options["mode_family"],
+        power_iters=options["power_iters"],
+        power_dt=options["power_dt"],
+        shift=options["shift"],
+        shift_source=options["shift_source"],
+        shift_tol=options["shift_tol"],
+        shift_maxiter=options["shift_maxiter"],
+        shift_restart=options["shift_restart"],
+        shift_solve_method=options["shift_solve_method"],
+        shift_preconditioner=options["shift_preconditioner"],
+        shift_selection=options["shift_selection"],
+        fallback_method=options["fallback_method"],
+        fallback_real_floor=options["fallback_real_floor"],
+    )
+
+
+def _dispatch_dominant_eigenpair(
+    v0: jnp.ndarray,
+    v_ref: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    term_cfg,
+    cfg: KrylovConfig,
+    status_callback: _StatusCallback,
+    *,
+    select_overlap: bool,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    if cfg.method == "power":
+        return _power_branch(v0, cache, params, term_cfg, cfg, status_callback)
+    if cfg.method == "propagator":
+        return _propagator_branch(
+            v0,
+            v_ref,
+            cache,
+            params,
+            term_cfg,
+            cfg,
+            status_callback,
+            select_overlap=select_overlap,
+        )
+    if cfg.method == "shift_invert":
+        return _shift_invert_branch(
+            v0,
+            v_ref,
+            cache,
+            params,
+            term_cfg,
+            cfg,
+            status_callback,
+            select_overlap=select_overlap,
+        )
+    if cfg.method != "arnoldi":
+        raise ValueError(
+            "Krylov method must be 'power', 'propagator', 'shift_invert', or 'arnoldi'"
+        )
+    return _arnoldi_branch(
+        v0,
+        v_ref,
+        cache,
+        params,
+        term_cfg,
+        cfg,
+        status_callback,
+        select_overlap=select_overlap,
+    )
+
+
 def dominant_eigenpair(
     v0: jnp.ndarray,
     cache: LinearCache,
@@ -396,63 +474,14 @@ def dominant_eigenpair(
     status_callback: Callable[[str], None] | None = None,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Python wrapper for the cached Krylov solver."""
-    cfg = _normalized_config(
-        method=method,
-        krylov_dim=krylov_dim,
-        restarts=restarts,
-        omega_min_factor=omega_min_factor,
-        omega_target_factor=omega_target_factor,
-        omega_cap_factor=omega_cap_factor,
-        omega_sign=omega_sign,
-        mode_family=mode_family,
-        power_iters=power_iters,
-        power_dt=power_dt,
-        shift=shift,
-        shift_source=shift_source,
-        shift_tol=shift_tol,
-        shift_maxiter=shift_maxiter,
-        shift_restart=shift_restart,
-        shift_solve_method=shift_solve_method,
-        shift_preconditioner=shift_preconditioner,
-        shift_selection=shift_selection,
-        fallback_method=fallback_method,
-        fallback_real_floor=fallback_real_floor,
-    )
+    cfg = _dominant_eigenpair_config_from_options(locals())
     term_cfg = linear_terms_to_term_config(terms)
     v_ref_use = v0 if v_ref is None else v_ref
     _status(
         status_callback,
         f"krylov method={cfg.method} dim={cfg.krylov_dim} restarts={cfg.restarts}",
     )
-    if cfg.method == "power":
-        return _power_branch(v0, cache, params, term_cfg, cfg, status_callback)
-    if cfg.method == "propagator":
-        return _propagator_branch(
-            v0,
-            v_ref_use,
-            cache,
-            params,
-            term_cfg,
-            cfg,
-            status_callback,
-            select_overlap=select_overlap,
-        )
-    if cfg.method == "shift_invert":
-        return _shift_invert_branch(
-            v0,
-            v_ref_use,
-            cache,
-            params,
-            term_cfg,
-            cfg,
-            status_callback,
-            select_overlap=select_overlap,
-        )
-    if cfg.method != "arnoldi":
-        raise ValueError(
-            "Krylov method must be 'power', 'propagator', 'shift_invert', or 'arnoldi'"
-        )
-    return _arnoldi_branch(
+    return _dispatch_dominant_eigenpair(
         v0,
         v_ref_use,
         cache,
