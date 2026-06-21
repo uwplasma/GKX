@@ -138,6 +138,95 @@ def centered_reflected_difference(
     raise ValueError("axis must be 'l' or 'r'")
 
 
+def _weighted_center_stencil(
+    x_left: jnp.ndarray,
+    x_center: jnp.ndarray,
+    x_right: jnp.ndarray,
+    g_left: jnp.ndarray,
+    g_center: jnp.ndarray,
+    g_right: jnp.ndarray,
+) -> jnp.ndarray:
+    h1 = g_right - g_center
+    h0 = g_center - g_left
+    return (
+        x_right / h1**2 + x_center * (1.0 / h0**2 - 1.0 / h1**2) - x_left / h0**2
+    ) / (1.0 / h1 + 1.0 / h0)
+
+
+def _weighted_centered_difference_1d_l(
+    x: jnp.ndarray, g: jnp.ndarray, *, parity: str
+) -> jnp.ndarray:
+    out = jnp.zeros_like(x)
+    if parity == "e":
+        out = out.at[0].set(0.0)
+        out = out.at[-1].set(0.0)
+    else:
+        out = out.at[0].set(
+            (4.0 * x[1] - 3.0 * x[0] - x[2]) / (2.0 * (g[1] - g[0]))
+        )
+        out = out.at[-1].set(
+            (-4.0 * x[-2] + 3.0 * x[-1] + x[-3]) / (2.0 * (g[-1] - g[-2]))
+        )
+    center = _weighted_center_stencil(
+        x[:-2], x[1:-1], x[2:], g[:-2], g[1:-1], g[2:]
+    )
+    return out.at[1:-1].set(center)
+
+
+def _weighted_centered_difference_1d_r(x: jnp.ndarray, g: jnp.ndarray) -> jnp.ndarray:
+    out = jnp.zeros_like(x)
+    out = out.at[0].set((2.0 * (x[1] - x[0])) / (2.0 * (g[1] - g[0])))
+    out = out.at[-1].set((2.0 * (x[-1] - x[-2])) / (2.0 * (g[-1] - g[-2])))
+    center = _weighted_center_stencil(
+        x[:-2], x[1:-1], x[2:], g[:-2], g[1:-1], g[2:]
+    )
+    return out.at[1:-1].set(center)
+
+
+def _weighted_centered_difference_2d_l(
+    x: jnp.ndarray, g: jnp.ndarray, *, parity: str
+) -> jnp.ndarray:
+    out = jnp.zeros_like(x)
+    if parity == "e":
+        out = out.at[:, 0].set(0.0)
+        out = out.at[:, -1].set(0.0)
+    else:
+        out = out.at[:, 0].set(
+            (2.0 * (x[:, 1] - x[:, 0])) / (2.0 * (g[:, 1] - g[:, 0]))
+        )
+        out = out.at[:, -1].set(
+            (2.0 * (x[:, -1] - x[:, -2])) / (2.0 * (g[:, -1] - g[:, -2]))
+        )
+    center = _weighted_center_stencil(
+        x[:, :-2],
+        x[:, 1:-1],
+        x[:, 2:],
+        g[:, :-2],
+        g[:, 1:-1],
+        g[:, 2:],
+    )
+    return out.at[:, 1:-1].set(center)
+
+
+def _weighted_centered_difference_2d_r(x: jnp.ndarray, g: jnp.ndarray) -> jnp.ndarray:
+    out = jnp.zeros_like(x)
+    out = out.at[0, :].set(
+        (2.0 * (x[1, :] - x[0, :])) / (2.0 * (g[1, :] - g[0, :]))
+    )
+    out = out.at[-1, :].set(
+        (2.0 * (x[-1, :] - x[-2, :])) / (2.0 * (g[-1, :] - g[-2, :]))
+    )
+    center = _weighted_center_stencil(
+        x[:-2, :],
+        x[1:-1, :],
+        x[2:, :],
+        g[:-2, :],
+        g[1:-1, :],
+        g[2:, :],
+    )
+    return out.at[1:-1, :].set(center)
+
+
 def weighted_centered_difference(
     arr: jnp.ndarray, grid: jnp.ndarray, *, axis: str, parity: str = "e"
 ) -> jnp.ndarray:
@@ -149,83 +238,20 @@ def weighted_centered_difference(
         raise ValueError("arr and grid must have identical shapes")
 
     if x.ndim == 1:
-        out = jnp.zeros_like(x)
         if axis == "l":
-            if parity == "e":
-                out = out.at[0].set(0.0)
-                out = out.at[-1].set(0.0)
-            else:
-                out = out.at[0].set(
-                    (4.0 * x[1] - 3.0 * x[0] - x[2]) / (2.0 * (g[1] - g[0]))
-                )
-                out = out.at[-1].set(
-                    (-4.0 * x[-2] + 3.0 * x[-1] + x[-3]) / (2.0 * (g[-1] - g[-2]))
-                )
-
-            h1 = g[2:] - g[1:-1]
-            h0 = g[1:-1] - g[:-2]
-            center = (
-                x[2:] / h1**2 + x[1:-1] * (1.0 / h0**2 - 1.0 / h1**2) - x[:-2] / h0**2
-            ) / (1.0 / h1 + 1.0 / h0)
-            out = out.at[1:-1].set(center)
-            return out
-
+            return _weighted_centered_difference_1d_l(x, g, parity=parity)
         if axis == "r":
-            out = out.at[0].set((2.0 * (x[1] - x[0])) / (2.0 * (g[1] - g[0])))
-            out = out.at[-1].set((2.0 * (x[-1] - x[-2])) / (2.0 * (g[-1] - g[-2])))
-            h1 = g[2:] - g[1:-1]
-            h0 = g[1:-1] - g[:-2]
-            center = (
-                x[2:] / h1**2 + x[1:-1] * (1.0 / h0**2 - 1.0 / h1**2) - x[:-2] / h0**2
-            ) / (1.0 / h1 + 1.0 / h0)
-            out = out.at[1:-1].set(center)
-            return out
-
+            return _weighted_centered_difference_1d_r(x, g)
         raise ValueError("axis must be 'l' or 'r'")
 
     if x.ndim != 2:
         raise ValueError("weighted_centered_difference expects 1D or 2D arrays")
 
     if axis == "l":
-        out = jnp.zeros_like(x)
-        if parity == "e":
-            out = out.at[:, 0].set(0.0)
-            out = out.at[:, -1].set(0.0)
-        else:
-            out = out.at[:, 0].set(
-                (2.0 * (x[:, 1] - x[:, 0])) / (2.0 * (g[:, 1] - g[:, 0]))
-            )
-            out = out.at[:, -1].set(
-                (2.0 * (x[:, -1] - x[:, -2])) / (2.0 * (g[:, -1] - g[:, -2]))
-            )
-
-        h1 = g[:, 2:] - g[:, 1:-1]
-        h0 = g[:, 1:-1] - g[:, :-2]
-        center = (
-            x[:, 2:] / h1**2
-            + x[:, 1:-1] * (1.0 / h0**2 - 1.0 / h1**2)
-            - x[:, :-2] / h0**2
-        ) / (1.0 / h1 + 1.0 / h0)
-        out = out.at[:, 1:-1].set(center)
-        return out
+        return _weighted_centered_difference_2d_l(x, g, parity=parity)
 
     if axis == "r":
-        out = jnp.zeros_like(x)
-        out = out.at[0, :].set(
-            (2.0 * (x[1, :] - x[0, :])) / (2.0 * (g[1, :] - g[0, :]))
-        )
-        out = out.at[-1, :].set(
-            (2.0 * (x[-1, :] - x[-2, :])) / (2.0 * (g[-1, :] - g[-2, :]))
-        )
-        h1 = g[2:, :] - g[1:-1, :]
-        h0 = g[1:-1, :] - g[:-2, :]
-        center = (
-            x[2:, :] / h1**2
-            + x[1:-1, :] * (1.0 / h0**2 - 1.0 / h1**2)
-            - x[:-2, :] / h0**2
-        ) / (1.0 / h1 + 1.0 / h0)
-        out = out.at[1:-1, :].set(center)
-        return out
+        return _weighted_centered_difference_2d_r(x, g)
 
     raise ValueError("axis must be 'l' or 'r'")
 
@@ -268,4 +294,3 @@ def reflect_and_append(arr: jnp.ndarray, parity: str) -> jnp.ndarray:
     if parity == "e":
         return jnp.concatenate((x[::-1][:-1], x))
     return jnp.concatenate((-x[::-1][:-1], jnp.asarray([0.0], dtype=x.dtype), x[1:]))
-
