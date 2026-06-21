@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 from typing import Any, Callable
 
@@ -152,6 +152,21 @@ class _CETGLinearSetup:
 
 
 @dataclass(frozen=True)
+class _CETGLinearFitOptions:
+    """Windowing policy for the cETG linear runtime fit."""
+
+    auto_window: bool
+    tmin: float | None
+    tmax: float | None
+    window_fraction: float
+    min_points: int
+    start_fraction: float
+    growth_weight: float
+    require_positive: bool
+    min_amp_fraction: float
+
+
+@dataclass(frozen=True)
 class _CETGNonlinearSetup:
     """Prepared cETG nonlinear state shared by fixed and adaptive branches."""
 
@@ -165,6 +180,26 @@ class _CETGNonlinearSetup:
     sample_stride: int
     diagnostics_stride: int
     diagnostics_on: bool
+
+
+def _validate_cetg_linear_solver(solver: str) -> None:
+    solver_key = _normalize_linear_solver_name(solver)
+    if solver_key == "krylov":
+        raise NotImplementedError(
+            "solver='krylov' is not implemented for physics.reduced_model='cetg'"
+        )
+    if solver_key not in {"auto", "time", "explicit_time"}:
+        raise ValueError(
+            "solver must be one of {'auto', 'time', 'explicit_time', 'krylov'}"
+        )
+
+
+def _cetg_linear_fit_options_from_locals(values: dict[str, Any]) -> _CETGLinearFitOptions:
+    """Pack linear cETG fit controls from the public runtime call."""
+
+    return _CETGLinearFitOptions(
+        **{field.name: values[field.name] for field in fields(_CETGLinearFitOptions)}
+    )
 
 
 def _resolved_fit_bounds(
@@ -372,6 +407,29 @@ def _fit_cetg_linear_time_series(
         fit_window_tmin, fit_window_tmax = _resolved_fit_bounds(t_arr, tmin, tmax)
     status_callback(f"fit complete: gamma={float(gamma):.6f} omega={float(omega):.6f}")
     return t_arr, signal, float(gamma), float(omega), fit_window_tmin, fit_window_tmax
+
+
+def _fit_cetg_linear_runtime_trace(
+    diag: Any,
+    *,
+    deps: CETGLinearRuntimeDeps,
+    fit_options: _CETGLinearFitOptions,
+    status_callback: Callable[[str], None],
+) -> tuple[np.ndarray, np.ndarray, float, float, float | None, float | None]:
+    return _fit_cetg_linear_time_series(
+        diag,
+        deps=deps,
+        auto_window=fit_options.auto_window,
+        tmin=fit_options.tmin,
+        tmax=fit_options.tmax,
+        window_fraction=fit_options.window_fraction,
+        min_points=fit_options.min_points,
+        start_fraction=fit_options.start_fraction,
+        growth_weight=fit_options.growth_weight,
+        require_positive=fit_options.require_positive,
+        min_amp_fraction=fit_options.min_amp_fraction,
+        status_callback=status_callback,
+    )
 
 
 def _build_cetg_linear_result(
@@ -620,15 +678,7 @@ def run_cetg_linear_runtime(
         if status_callback is not None:
             status_callback(message)
 
-    solver_key = _normalize_linear_solver_name(solver)
-    if solver_key == "krylov":
-        raise NotImplementedError(
-            "solver='krylov' is not implemented for physics.reduced_model='cetg'"
-        )
-    if solver_key not in {"auto", "time", "explicit_time"}:
-        raise ValueError(
-            "solver must be one of {'auto', 'time', 'explicit_time', 'krylov'}"
-        )
+    _validate_cetg_linear_solver(solver)
     setup = _prepare_cetg_linear_setup(
         cfg,
         deps=deps,
@@ -647,19 +697,12 @@ def run_cetg_linear_runtime(
         method=method,
         status_callback=_status,
     )
+    fit_options = _cetg_linear_fit_options_from_locals(locals())
     t_arr, signal, gamma, omega, fit_window_tmin, fit_window_tmax = (
-        _fit_cetg_linear_time_series(
+        _fit_cetg_linear_runtime_trace(
             diag,
             deps=deps,
-            auto_window=auto_window,
-            tmin=tmin,
-            tmax=tmax,
-            window_fraction=window_fraction,
-            min_points=min_points,
-            start_fraction=start_fraction,
-            growth_weight=growth_weight,
-            require_positive=require_positive,
-            min_amp_fraction=min_amp_fraction,
+            fit_options=fit_options,
             status_callback=_status,
         )
     )
