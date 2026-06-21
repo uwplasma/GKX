@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields, replace
 from typing import Any
 
 import jax.numpy as jnp
@@ -132,6 +132,14 @@ class _ETGTimeBatchContext:
     gammas: list[float]
     omegas: list[float]
     ky_out: list[float]
+
+
+def _etg_time_batch_context_from_locals(values: dict[str, Any]) -> _ETGTimeBatchContext:
+    """Pack ``run_etg_time_batch`` arguments for internal routing."""
+
+    return _ETGTimeBatchContext(
+        **{field.name: values[field.name] for field in fields(_ETGTimeBatchContext)}
+    )
 
 
 def run_etg_krylov_batch(
@@ -391,39 +399,7 @@ def run_etg_time_batch(
 ) -> ETGTimeBatchResult:
     """Integrate one ETG time-path batch and append streaming-fit results if used."""
 
-    context = _ETGTimeBatchContext(
-        G0_jax=G0_jax,
-        grid=grid,
-        geom=geom,
-        params=params,
-        cache=cache,
-        terms=terms,
-        time_cfg=time_cfg,
-        dt_i=dt_i,
-        steps_i=steps_i,
-        method=method,
-        sample_stride=sample_stride,
-        fit_key=fit_key,
-        need_density=need_density,
-        streaming_fit=streaming_fit,
-        streaming_amp_floor=streaming_amp_floor,
-        mode_method=mode_method,
-        mode_only=mode_only,
-        sel=sel,
-        batch_start=batch_start,
-        valid_count=valid_count,
-        ky_slice=ky_slice,
-        tmin=tmin,
-        tmax=tmax,
-        start_fraction=start_fraction,
-        window_fraction=window_fraction,
-        electron_index=electron_index,
-        diagnostic_norm=diagnostic_norm,
-        show_progress=show_progress,
-        gammas=gammas,
-        omegas=omegas,
-        ky_out=ky_out,
-    )
+    context = _etg_time_batch_context_from_locals(locals())
     time_cfg_i = _etg_time_config_for_batch(context)
     if time_cfg_i is not None and time_cfg_i.use_diffrax and streaming_fit:
         _append_etg_streaming_time_results(context, time_cfg_i=time_cfg_i)
