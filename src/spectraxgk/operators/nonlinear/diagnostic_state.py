@@ -73,6 +73,20 @@ class _ResolvedTransportGroups:
     turbulent_heating: tuple[Any, ...]
 
 
+@dataclass(frozen=True)
+class _ScalarEnergyDiagnostics:
+    free_energy: Any
+    electrostatic_energy: Any
+    magnetic_energy: Any
+
+
+@dataclass(frozen=True)
+class _ScalarTransportDiagnostics:
+    heat_flux: Any
+    particle_flux: Any
+    turbulent_heating: Any
+
+
 def _diagnostic_field_pair(
     fields_state: FieldState, fields_prev_step: FieldState
 ) -> _DiagnosticFieldPair:
@@ -141,6 +155,102 @@ def _mode_growth_frequency(
     return gamma, omega, phi_mode
 
 
+def _compute_scalar_energy_diagnostics(
+    G_state: jnp.ndarray,
+    fields: _DiagnosticFieldPair,
+    *,
+    grid: SpectralGrid,
+    cache: LinearCache,
+    params: LinearParams,
+    vol_fac: jnp.ndarray,
+    use_dealias: bool,
+    wphi_scale: float,
+    kernels: NonlinearDiagnosticKernels,
+) -> _ScalarEnergyDiagnostics:
+    """Evaluate unresolved free-field energy diagnostics."""
+
+    return _ScalarEnergyDiagnostics(
+        free_energy=kernels.distribution_free_energy(
+            G_state, grid, params, vol_fac, use_dealias=use_dealias
+        ),
+        electrostatic_energy=kernels.electrostatic_field_energy(
+            fields.phi,
+            cache,
+            params,
+            vol_fac,
+            use_dealias=use_dealias,
+            wphi_scale=wphi_scale,
+        ),
+        magnetic_energy=kernels.magnetic_vector_potential_energy(
+            fields.apar, cache, vol_fac, use_dealias=use_dealias
+        ),
+    )
+
+
+def _compute_scalar_transport_diagnostics(
+    G_state: jnp.ndarray,
+    fields: _DiagnosticFieldPair,
+    G_prev_step: jnp.ndarray,
+    dt_step: jnp.ndarray,
+    *,
+    grid: SpectralGrid,
+    cache: LinearCache,
+    params: LinearParams,
+    vol_fac: jnp.ndarray,
+    flux_fac: jnp.ndarray,
+    use_dealias: bool,
+    flux_scale: float,
+    kernels: NonlinearDiagnosticKernels,
+) -> _ScalarTransportDiagnostics:
+    """Evaluate unresolved species transport diagnostics."""
+
+    heat_flux = kernels.heat_flux_species(
+        G_state,
+        fields.phi,
+        fields.apar,
+        fields.bpar,
+        cache,
+        grid,
+        params,
+        flux_fac,
+        use_dealias=use_dealias,
+        flux_scale=flux_scale,
+    )
+    particle_flux = kernels.particle_flux_species(
+        G_state,
+        fields.phi,
+        fields.apar,
+        fields.bpar,
+        cache,
+        grid,
+        params,
+        flux_fac,
+        use_dealias=use_dealias,
+        flux_scale=flux_scale,
+    )
+    turbulent_heating = kernels.turbulent_heating_species(
+        G_state,
+        G_prev_step,
+        fields.phi,
+        fields.apar,
+        fields.bpar,
+        fields.phi_prev_step,
+        fields.apar_prev_step,
+        fields.bpar_prev_step,
+        cache,
+        grid,
+        params,
+        vol_fac,
+        dt_step,
+        use_dealias=use_dealias,
+    )
+    return _ScalarTransportDiagnostics(
+        heat_flux=heat_flux,
+        particle_flux=particle_flux,
+        turbulent_heating=turbulent_heating,
+    )
+
+
 def _compute_unresolved_diagnostic_tuple(
     G_state: jnp.ndarray,
     fields: _DiagnosticFieldPair,
@@ -162,72 +272,43 @@ def _compute_unresolved_diagnostic_tuple(
 ) -> tuple[Any, ...]:
     """Build scalar nonlinear diagnostics when resolved spectra are disabled."""
 
-    Wg_val = kernels.distribution_free_energy(
-        G_state, grid, params, vol_fac, use_dealias=use_dealias
-    )
-    Wphi_val = kernels.electrostatic_field_energy(
-        fields.phi,
-        cache,
-        params,
-        vol_fac,
+    energy = _compute_scalar_energy_diagnostics(
+        G_state,
+        fields,
+        grid=grid,
+        cache=cache,
+        params=params,
+        vol_fac=vol_fac,
         use_dealias=use_dealias,
         wphi_scale=wphi_scale,
+        kernels=kernels,
     )
-    Wapar_val = kernels.magnetic_vector_potential_energy(
-        fields.apar, cache, vol_fac, use_dealias=use_dealias
-    )
-    heat_species = kernels.heat_flux_species(
+    transport = _compute_scalar_transport_diagnostics(
         G_state,
-        fields.phi,
-        fields.apar,
-        fields.bpar,
-        cache,
-        grid,
-        params,
-        flux_fac,
-        use_dealias=use_dealias,
-        flux_scale=flux_scale,
-    )
-    pflux_species = kernels.particle_flux_species(
-        G_state,
-        fields.phi,
-        fields.apar,
-        fields.bpar,
-        cache,
-        grid,
-        params,
-        flux_fac,
-        use_dealias=use_dealias,
-        flux_scale=flux_scale,
-    )
-    turbulent_heat_species = kernels.turbulent_heating_species(
-        G_state,
+        fields,
         G_prev_step,
-        fields.phi,
-        fields.apar,
-        fields.bpar,
-        fields.phi_prev_step,
-        fields.apar_prev_step,
-        fields.bpar_prev_step,
-        cache,
-        grid,
-        params,
-        vol_fac,
         dt_step,
+        grid=grid,
+        cache=cache,
+        params=params,
+        vol_fac=vol_fac,
+        flux_fac=flux_fac,
         use_dealias=use_dealias,
+        flux_scale=flux_scale,
+        kernels=kernels,
     )
     return (
         gamma,
         omega,
-        Wg_val,
-        Wphi_val,
-        Wapar_val,
-        jnp.sum(heat_species),
-        jnp.sum(pflux_species),
-        jnp.sum(turbulent_heat_species),
-        heat_species,
-        pflux_species,
-        turbulent_heat_species,
+        energy.free_energy,
+        energy.electrostatic_energy,
+        energy.magnetic_energy,
+        jnp.sum(transport.heat_flux),
+        jnp.sum(transport.particle_flux),
+        jnp.sum(transport.turbulent_heating),
+        transport.heat_flux,
+        transport.particle_flux,
+        transport.turbulent_heating,
         phi_mode,
         (),
     )
@@ -294,6 +375,108 @@ def _as_three_channel_tuple(
     return tuple(es), tuple(apar), tuple(bpar)
 
 
+def _resolved_transport_kernel_args(
+    G_state: jnp.ndarray,
+    fields: _DiagnosticFieldPair,
+    *,
+    grid: SpectralGrid,
+    cache: LinearCache,
+    params: LinearParams,
+    flux_fac: jnp.ndarray,
+) -> tuple[Any, ...]:
+    """Return the common arguments used by resolved transport kernels."""
+
+    return (
+        G_state,
+        fields.phi,
+        fields.apar,
+        fields.bpar,
+        cache,
+        grid,
+        params,
+        flux_fac,
+    )
+
+
+def _compute_resolved_heat_groups(
+    common_args: tuple[Any, ...],
+    *,
+    use_dealias: bool,
+    flux_scale: float,
+    kernels: NonlinearDiagnosticKernels,
+) -> tuple[tuple[Any, ...], tuple[tuple[Any, ...], tuple[Any, ...], tuple[Any, ...]]]:
+    """Evaluate resolved heat-flux totals and ES/Apar/Bpar channels."""
+
+    heat_flux = kernels.heat_flux_resolved_species(
+        *common_args,
+        use_dealias=use_dealias,
+        flux_scale=flux_scale,
+    )
+    heat_channels = kernels.heat_flux_channel_resolved_species(
+        *common_args,
+        use_dealias=use_dealias,
+        flux_scale=flux_scale,
+    )
+    return tuple(heat_flux), _as_three_channel_tuple(heat_channels)
+
+
+def _compute_resolved_particle_groups(
+    common_args: tuple[Any, ...],
+    *,
+    use_dealias: bool,
+    flux_scale: float,
+    kernels: NonlinearDiagnosticKernels,
+) -> tuple[tuple[Any, ...], tuple[tuple[Any, ...], tuple[Any, ...], tuple[Any, ...]]]:
+    """Evaluate resolved particle-flux totals and ES/Apar/Bpar channels."""
+
+    particle_flux = kernels.particle_flux_resolved_species(
+        *common_args,
+        use_dealias=use_dealias,
+        flux_scale=flux_scale,
+    )
+    particle_channels = kernels.particle_flux_channel_resolved_species(
+        *common_args,
+        use_dealias=use_dealias,
+        flux_scale=flux_scale,
+    )
+    return tuple(particle_flux), _as_three_channel_tuple(particle_channels)
+
+
+def _compute_resolved_turbulent_heating(
+    G_state: jnp.ndarray,
+    fields: _DiagnosticFieldPair,
+    G_prev_step: jnp.ndarray,
+    dt_step: jnp.ndarray,
+    *,
+    grid: SpectralGrid,
+    cache: LinearCache,
+    params: LinearParams,
+    vol_fac: jnp.ndarray,
+    use_dealias: bool,
+    kernels: NonlinearDiagnosticKernels,
+) -> tuple[Any, ...]:
+    """Evaluate resolved turbulent heating spectra."""
+
+    return tuple(
+        kernels.turbulent_heating_resolved_species(
+            G_state,
+            G_prev_step,
+            fields.phi,
+            fields.apar,
+            fields.bpar,
+            fields.phi_prev_step,
+            fields.apar_prev_step,
+            fields.bpar_prev_step,
+            cache,
+            grid,
+            params,
+            vol_fac,
+            dt_step,
+            use_dealias=use_dealias,
+        )
+    )
+
+
 def _compute_resolved_transport_groups(
     G_state: jnp.ndarray,
     fields: _DiagnosticFieldPair,
@@ -311,78 +494,44 @@ def _compute_resolved_transport_groups(
 ) -> _ResolvedTransportGroups:
     """Evaluate resolved heat, particle, and turbulent-heating spectra."""
 
-    heat_channels = kernels.heat_flux_channel_resolved_species(
+    common_args = _resolved_transport_kernel_args(
         G_state,
-        fields.phi,
-        fields.apar,
-        fields.bpar,
-        cache,
-        grid,
-        params,
-        flux_fac,
+        fields,
+        grid=grid,
+        cache=cache,
+        params=params,
+        flux_fac=flux_fac,
+    )
+    heat_flux, heat_channels = _compute_resolved_heat_groups(
+        common_args,
         use_dealias=use_dealias,
         flux_scale=flux_scale,
+        kernels=kernels,
     )
-    particle_channels = kernels.particle_flux_channel_resolved_species(
-        G_state,
-        fields.phi,
-        fields.apar,
-        fields.bpar,
-        cache,
-        grid,
-        params,
-        flux_fac,
+    particle_flux, particle_channels = _compute_resolved_particle_groups(
+        common_args,
         use_dealias=use_dealias,
         flux_scale=flux_scale,
+        kernels=kernels,
     )
-    turbulent_heating = kernels.turbulent_heating_resolved_species(
+    turbulent_heating = _compute_resolved_turbulent_heating(
         G_state,
+        fields,
         G_prev_step,
-        fields.phi,
-        fields.apar,
-        fields.bpar,
-        fields.phi_prev_step,
-        fields.apar_prev_step,
-        fields.bpar_prev_step,
-        cache,
-        grid,
-        params,
-        vol_fac,
         dt_step,
+        grid=grid,
+        cache=cache,
+        params=params,
+        vol_fac=vol_fac,
         use_dealias=use_dealias,
+        kernels=kernels,
     )
     return _ResolvedTransportGroups(
-        heat_flux=tuple(
-            kernels.heat_flux_resolved_species(
-                G_state,
-                fields.phi,
-                fields.apar,
-                fields.bpar,
-                cache,
-                grid,
-                params,
-                flux_fac,
-                use_dealias=use_dealias,
-                flux_scale=flux_scale,
-            )
-        ),
-        heat_channels=_as_three_channel_tuple(heat_channels),
-        particle_flux=tuple(
-            kernels.particle_flux_resolved_species(
-                G_state,
-                fields.phi,
-                fields.apar,
-                fields.bpar,
-                cache,
-                grid,
-                params,
-                flux_fac,
-                use_dealias=use_dealias,
-                flux_scale=flux_scale,
-            )
-        ),
-        particle_channels=_as_three_channel_tuple(particle_channels),
-        turbulent_heating=tuple(turbulent_heating),
+        heat_flux=heat_flux,
+        heat_channels=heat_channels,
+        particle_flux=particle_flux,
+        particle_channels=particle_channels,
+        turbulent_heating=turbulent_heating,
     )
 
 
