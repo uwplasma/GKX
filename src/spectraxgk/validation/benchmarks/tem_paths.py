@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields, replace
 from typing import Any
 
 import jax.numpy as jnp
@@ -136,6 +136,49 @@ class _TEMTimePathFitPolicy:
     growth_weight: float
     require_positive: bool
     min_amp_fraction: float
+
+
+def _tem_time_path_fit_policy_from_locals(
+    values: dict[str, Any],
+) -> _TEMTimePathFitPolicy:
+    """Pack the single-run TEM fit policy from public path arguments."""
+
+    return _TEMTimePathFitPolicy(
+        **{field.name: values[field.name] for field in fields(_TEMTimePathFitPolicy)}
+    )
+
+
+def _tem_scan_fit_policy_from_locals(
+    values: dict[str, Any],
+    *,
+    hooks: TEMPathHooks,
+) -> ScanFitWindowPolicy:
+    """Pack TEM scan growth-window policy with patchable fit hooks."""
+
+    return ScanFitWindowPolicy(
+        tmin=values["tmin"],
+        tmax=values["tmax"],
+        auto_window=values["auto_window"],
+        window_fraction=values["window_fraction"],
+        min_points=values["min_points"],
+        start_fraction=values["start_fraction"],
+        growth_weight=values["growth_weight"],
+        require_positive=values["require_positive"],
+        min_amp_fraction=values["min_amp_fraction"],
+        fit_growth_rate_fn=hooks.fit_growth_rate,
+        fit_growth_rate_auto_fn=hooks.fit_growth_rate_auto,
+        normalize_growth_rate_fn=hooks.normalize_growth_rate,
+    )
+
+
+def _tem_scan_runtime_options_from_locals(
+    values: dict[str, Any],
+) -> _TEMScanRuntimeOptions:
+    """Pack scan runtime options once after the fit policy is resolved."""
+
+    return _TEMScanRuntimeOptions(
+        **{field.name: values[field.name] for field in fields(_TEMScanRuntimeOptions)}
+    )
 
 
 _TEM_KRYLOV_FORWARD_KEYS = (
@@ -787,17 +830,7 @@ def run_tem_time_linear_path(
         mode_method=mode_method,
         hooks=hooks,
     )
-    fit_policy = _TEMTimePathFitPolicy(
-        auto_window=auto_window,
-        tmin=tmin,
-        tmax=tmax,
-        window_fraction=window_fraction,
-        min_points=min_points,
-        start_fraction=start_fraction,
-        growth_weight=growth_weight,
-        require_positive=require_positive,
-        min_amp_fraction=min_amp_fraction,
-    )
+    fit_policy = _tem_time_path_fit_policy_from_locals(locals())
     gamma, omega = _fit_tem_time_path_signal(
         t=trace.t,
         signal=signal,
@@ -856,44 +889,8 @@ def run_tem_scan_batches(
 ) -> LinearScanResult:
     """Run TEM scan batches across Krylov, streaming, and saved-time branches."""
 
-    fit_policy = ScanFitWindowPolicy(
-        tmin=tmin,
-        tmax=tmax,
-        auto_window=auto_window,
-        window_fraction=window_fraction,
-        min_points=min_points,
-        start_fraction=start_fraction,
-        growth_weight=growth_weight,
-        require_positive=require_positive,
-        min_amp_fraction=min_amp_fraction,
-        fit_growth_rate_fn=hooks.fit_growth_rate,
-        fit_growth_rate_auto_fn=hooks.fit_growth_rate_auto,
-        normalize_growth_rate_fn=hooks.normalize_growth_rate,
-    )
-    options = _TEMScanRuntimeOptions(
-        n_laguerre=n_laguerre,
-        n_hermite=n_hermite,
-        dt=dt,
-        steps=steps,
-        method=method,
-        time_cfg=time_cfg,
-        solver_key=solver_key,
-        krylov_cfg=krylov_cfg,
-        krylov_default=krylov_default,
-        fit_policy=fit_policy,
-        mode_method=mode_method,
-        mode_only=mode_only,
-        sample_stride=sample_stride,
-        ky_batch=ky_batch,
-        fixed_batch_shape=fixed_batch_shape,
-        streaming_fit=streaming_fit,
-        streaming_amp_floor=streaming_amp_floor,
-        init_species_index=init_species_index,
-        diagnostic_norm=diagnostic_norm,
-        use_batch=use_batch,
-        show_progress=show_progress,
-        hooks=hooks,
-    )
+    fit_policy = _tem_scan_fit_policy_from_locals(locals(), hooks=hooks)
+    options = _tem_scan_runtime_options_from_locals(locals())
     return _run_tem_scan_loop(
         ky_values=ky_values,
         grid_full=grid_full,
