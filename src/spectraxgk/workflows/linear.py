@@ -79,6 +79,15 @@ class _LinearFitPolicy:
     min_amp_fraction: float
 
 
+@dataclass(frozen=True)
+class _LinearTimeSeriesRaw:
+    """Raw linear time-integration arrays before NumPy normalization."""
+
+    g_last: Any | None
+    phi_t: Any
+    density_t: Any | None
+
+
 def _status(callback: _StatusCallback, message: str) -> None:
     if callback is not None:
         callback(message)
@@ -333,6 +342,95 @@ def _validate_parallel_linear_time_path(ctx: _LinearRuntimeContext, tcfg: Any) -
         )
 
 
+def _integrate_linear_diffrax_path(
+    ctx: _LinearRuntimeContext,
+    *,
+    deps: FullLinearRuntimeDeps,
+    tcfg: Any,
+    mode_method: str,
+    need_density: bool,
+    show_progress: bool,
+) -> _LinearTimeSeriesRaw:
+    save_field = "phi+density" if need_density else "phi"
+    g_last, saved = deps.integrate_linear_from_config(
+        ctx.initial_state,
+        ctx.grid,
+        ctx.geom,
+        ctx.params,
+        tcfg,
+        terms=ctx.terms,
+        save_mode=None,
+        mode_method=mode_method,
+        save_field=save_field,
+        density_species_index=0 if need_density else None,
+        show_progress=show_progress,
+        parallel=ctx.cfg.parallel,
+    )
+    phi_t, density_t = saved if need_density else (saved, None)
+    return _LinearTimeSeriesRaw(g_last=g_last, phi_t=phi_t, density_t=density_t)
+
+
+def _integrate_linear_density_path(
+    ctx: _LinearRuntimeContext,
+    *,
+    deps: FullLinearRuntimeDeps,
+    tcfg: Any,
+    n_steps: int,
+    show_progress: bool,
+) -> _LinearTimeSeriesRaw:
+    diag = deps.integrate_linear_diagnostics(
+        ctx.initial_state,
+        ctx.grid,
+        ctx.geom,
+        ctx.params,
+        dt=tcfg.dt,
+        steps=n_steps,
+        method=tcfg.method,
+        terms=ctx.terms,
+        sample_stride=tcfg.sample_stride,
+        species_index=0,
+        record_hl_energy=False,
+        show_progress=show_progress,
+    )
+    return _LinearTimeSeriesRaw(
+        g_last=diag[0],
+        phi_t=diag[1],
+        density_t=diag[2] if len(diag) > 2 else None,
+    )
+
+
+def _integrate_linear_cached_phi_path(
+    ctx: _LinearRuntimeContext,
+    *,
+    deps: FullLinearRuntimeDeps,
+    tcfg: Any,
+    mode_method: str,
+    show_progress: bool,
+) -> _LinearTimeSeriesRaw:
+    g_last, phi_t = deps.integrate_linear_from_config(
+        ctx.initial_state,
+        ctx.grid,
+        ctx.geom,
+        ctx.params,
+        tcfg,
+        terms=ctx.terms,
+        save_mode=ctx.selection,
+        mode_method=mode_method,
+        save_field="phi",
+        show_progress=show_progress,
+        parallel=ctx.cfg.parallel,
+    )
+    return _LinearTimeSeriesRaw(g_last=g_last, phi_t=phi_t, density_t=None)
+
+
+def _linear_saved_sample_times(phi_t: np.ndarray, tcfg: Any) -> np.ndarray:
+    return (
+        float(tcfg.dt)
+        * float(tcfg.sample_stride)
+        * (np.arange(phi_t.shape[0], dtype=float) + 1.0)
+    )
+
+
 def _integrate_linear_time_series(
     ctx: _LinearRuntimeContext,
     *,
@@ -349,72 +447,42 @@ def _integrate_linear_time_series(
             status_callback,
             f"running diffrax integrator over {n_steps} steps with sample_stride={int(tcfg.sample_stride)}",
         )
-        save_field = "phi+density" if need_density else "phi"
-        g_last, saved = deps.integrate_linear_from_config(
-            ctx.initial_state,
-            ctx.grid,
-            ctx.geom,
-            ctx.params,
-            tcfg,
-            terms=ctx.terms,
-            save_mode=None,
+        raw = _integrate_linear_diffrax_path(
+            ctx,
+            deps=deps,
+            tcfg=tcfg,
             mode_method=mode_method,
-            save_field=save_field,
-            density_species_index=0 if need_density else None,
+            need_density=need_density,
             show_progress=show_progress,
-            parallel=ctx.cfg.parallel,
         )
-        phi_t, density_t = saved if need_density else (saved, None)
     elif need_density:
         _status(
             status_callback,
             f"running diagnostics integrator over {n_steps} steps with sample_stride={int(tcfg.sample_stride)}",
         )
-        diag = deps.integrate_linear_diagnostics(
-            ctx.initial_state,
-            ctx.grid,
-            ctx.geom,
-            ctx.params,
-            dt=tcfg.dt,
-            steps=n_steps,
-            method=tcfg.method,
-            terms=ctx.terms,
-            sample_stride=tcfg.sample_stride,
-            species_index=0,
-            record_hl_energy=False,
+        raw = _integrate_linear_density_path(
+            ctx,
+            deps=deps,
+            tcfg=tcfg,
+            n_steps=n_steps,
             show_progress=show_progress,
         )
-        g_last = diag[0]
-        phi_t = diag[1]
-        density_t = diag[2] if len(diag) > 2 else None
     else:
         _status(
             status_callback,
             f"running cached linear integrator over {n_steps} steps with sample_stride={int(tcfg.sample_stride)}",
         )
-        g_last, phi_t = deps.integrate_linear_from_config(
-            ctx.initial_state,
-            ctx.grid,
-            ctx.geom,
-            ctx.params,
-            tcfg,
-            terms=ctx.terms,
-            save_mode=ctx.selection,
+        raw = _integrate_linear_cached_phi_path(
+            ctx,
+            deps=deps,
+            tcfg=tcfg,
             mode_method=mode_method,
-            save_field="phi",
             show_progress=show_progress,
-            parallel=ctx.cfg.parallel,
         )
-        density_t = None
 
-    phi_t_np = np.asarray(phi_t)
-    t_arr = (
-        float(tcfg.dt)
-        * float(tcfg.sample_stride)
-        * (np.arange(phi_t_np.shape[0], dtype=float) + 1.0)
-    )
-    density_np = None if density_t is None else np.asarray(density_t)
-    return g_last, phi_t_np, density_np, t_arr
+    phi_t_np = np.asarray(raw.phi_t)
+    density_np = None if raw.density_t is None else np.asarray(raw.density_t)
+    return raw.g_last, phi_t_np, density_np, _linear_saved_sample_times(phi_t_np, tcfg)
 
 
 def _fit_linear_time_series(

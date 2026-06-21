@@ -73,6 +73,33 @@ class _RuntimeLinearFitCandidate:
     score: float
 
 
+@dataclass(frozen=True)
+class _RuntimeLinearFitOptions:
+    """Windowing and mode policy for runtime linear fits."""
+
+    mode_method: str
+    auto_window: bool
+    tmin: float | None
+    tmax: float | None
+    window_fraction: float
+    min_points: int
+    start_fraction: float
+    growth_weight: float
+    require_positive: bool
+    min_amp_fraction: float
+
+
+@dataclass(frozen=True)
+class _RuntimeLinearDiagnosticDeps:
+    """Injected numerical routines used by runtime linear diagnostics."""
+
+    extract_mode_time_series: Any
+    fit_growth_rate_auto_with_stats: Any
+    fit_growth_rate_auto: Any
+    fit_growth_rate: Any
+    extract_eigenfunction: Any
+
+
 def finalize_runtime_linear_quasilinear(
     result: RuntimeLinearResult,
     *,
@@ -179,32 +206,25 @@ def _fit_auto_candidate(
     data: np.ndarray,
     inputs: _RuntimeLinearFitInputs,
     selection: Any,
-    mode_method: str,
-    window_fraction: float,
-    min_points: int,
-    start_fraction: float,
-    growth_weight: float,
-    require_positive: bool,
-    min_amp_fraction: float,
-    extract_mode_time_series_fn: Any,
-    fit_growth_rate_auto_with_stats_fn: Any,
+    options: _RuntimeLinearFitOptions,
+    deps: _RuntimeLinearDiagnosticDeps,
 ) -> _RuntimeLinearFitCandidate:
     """Fit and score one channel for automatic runtime fit-signal selection."""
 
     signal = np.asarray(
-        extract_mode_time_series_fn(data, selection, method=mode_method)
+        deps.extract_mode_time_series(data, selection, method=options.mode_method)
     )
-    gamma, omega, tmin, tmax, r2, r2_phase = fit_growth_rate_auto_with_stats_fn(
+    gamma, omega, tmin, tmax, r2, r2_phase = deps.fit_growth_rate_auto_with_stats(
         inputs.t,
         signal,
-        window_fraction=window_fraction,
-        min_points=min_points,
-        start_fraction=start_fraction,
-        growth_weight=growth_weight,
-        require_positive=require_positive,
-        min_amp_fraction=min_amp_fraction,
+        window_fraction=options.window_fraction,
+        min_points=options.min_points,
+        start_fraction=options.start_fraction,
+        growth_weight=options.growth_weight,
+        require_positive=options.require_positive,
+        min_amp_fraction=options.min_amp_fraction,
     )
-    score = float(r2) + 0.2 * float(r2_phase) + growth_weight * float(gamma)
+    score = float(r2) + 0.2 * float(r2_phase) + options.growth_weight * float(gamma)
     return _RuntimeLinearFitCandidate(
         signal_name=name,
         signal=signal,
@@ -220,15 +240,8 @@ def _choose_auto_runtime_linear_fit(
     inputs: _RuntimeLinearFitInputs,
     *,
     selection: Any,
-    mode_method: str,
-    window_fraction: float,
-    min_points: int,
-    start_fraction: float,
-    growth_weight: float,
-    require_positive: bool,
-    min_amp_fraction: float,
-    extract_mode_time_series_fn: Any,
-    fit_growth_rate_auto_with_stats_fn: Any,
+    options: _RuntimeLinearFitOptions,
+    deps: _RuntimeLinearDiagnosticDeps,
 ) -> _RuntimeLinearFitCandidate:
     """Choose between phi and density using the runtime automatic fit score."""
 
@@ -238,15 +251,8 @@ def _choose_auto_runtime_linear_fit(
             data=inputs.phi,
             inputs=inputs,
             selection=selection,
-            mode_method=mode_method,
-            window_fraction=window_fraction,
-            min_points=min_points,
-            start_fraction=start_fraction,
-            growth_weight=growth_weight,
-            require_positive=require_positive,
-            min_amp_fraction=min_amp_fraction,
-            extract_mode_time_series_fn=extract_mode_time_series_fn,
-            fit_growth_rate_auto_with_stats_fn=fit_growth_rate_auto_with_stats_fn,
+            options=options,
+            deps=deps,
         )
     ]
     if inputs.density is not None:
@@ -256,15 +262,8 @@ def _choose_auto_runtime_linear_fit(
                 data=inputs.density,
                 inputs=inputs,
                 selection=selection,
-                mode_method=mode_method,
-                window_fraction=window_fraction,
-                min_points=min_points,
-                start_fraction=start_fraction,
-                growth_weight=growth_weight,
-                require_positive=require_positive,
-                min_amp_fraction=min_amp_fraction,
-                extract_mode_time_series_fn=extract_mode_time_series_fn,
-                fit_growth_rate_auto_with_stats_fn=fit_growth_rate_auto_with_stats_fn,
+                options=options,
+                deps=deps,
             )
         )
     return max(candidates, key=lambda candidate: candidate.score)
@@ -274,19 +273,8 @@ def _fit_requested_runtime_linear_signal(
     inputs: _RuntimeLinearFitInputs,
     *,
     selection: Any,
-    mode_method: str,
-    auto_window: bool,
-    tmin: float | None,
-    tmax: float | None,
-    window_fraction: float,
-    min_points: int,
-    start_fraction: float,
-    growth_weight: float,
-    require_positive: bool,
-    min_amp_fraction: float,
-    extract_mode_time_series_fn: Any,
-    fit_growth_rate_auto_fn: Any,
-    fit_growth_rate_fn: Any,
+    options: _RuntimeLinearFitOptions,
+    deps: _RuntimeLinearDiagnosticDeps,
 ) -> _RuntimeLinearFitCandidate:
     """Fit the explicitly requested phi or density runtime signal."""
 
@@ -294,22 +282,31 @@ def _fit_requested_runtime_linear_signal(
     signal_name = "density" if use_density else "phi"
     source = inputs.density if use_density else inputs.phi
     signal = np.asarray(
-        extract_mode_time_series_fn(source, selection, method=mode_method)
+        deps.extract_mode_time_series(source, selection, method=options.mode_method)
     )
-    if auto_window:
-        gamma, omega, fit_tmin, fit_tmax = fit_growth_rate_auto_fn(
+    if options.auto_window:
+        gamma, omega, fit_tmin, fit_tmax = deps.fit_growth_rate_auto(
             inputs.t,
             signal,
-            window_fraction=window_fraction,
-            min_points=min_points,
-            start_fraction=start_fraction,
-            growth_weight=growth_weight,
-            require_positive=require_positive,
-            min_amp_fraction=min_amp_fraction,
+            window_fraction=options.window_fraction,
+            min_points=options.min_points,
+            start_fraction=options.start_fraction,
+            growth_weight=options.growth_weight,
+            require_positive=options.require_positive,
+            min_amp_fraction=options.min_amp_fraction,
         )
     else:
-        gamma, omega = fit_growth_rate_fn(inputs.t, signal, tmin=tmin, tmax=tmax)
-        fit_tmin, fit_tmax = _resolved_fit_bounds(inputs.t, tmin, tmax)
+        gamma, omega = deps.fit_growth_rate(
+            inputs.t,
+            signal,
+            tmin=options.tmin,
+            tmax=options.tmax,
+        )
+        fit_tmin, fit_tmax = _resolved_fit_bounds(
+            inputs.t,
+            options.tmin,
+            options.tmax,
+        )
     return _RuntimeLinearFitCandidate(
         signal_name=signal_name,
         signal=signal,
@@ -327,13 +324,13 @@ def _extract_runtime_linear_eigenfunction(
     selection: Any,
     fit_window_tmin: float | None,
     fit_window_tmax: float | None,
-    extract_eigenfunction_fn: Any,
+    deps: _RuntimeLinearDiagnosticDeps,
 ) -> np.ndarray | None:
     """Extract a phi eigenfunction, returning None when the SVD path is ill-conditioned."""
 
     try:
         return np.asarray(
-            extract_eigenfunction_fn(
+            deps.extract_eigenfunction(
                 inputs.phi,
                 inputs.t,
                 selection,
@@ -345,6 +342,30 @@ def _extract_runtime_linear_eigenfunction(
         )
     except Exception:
         return None
+
+
+def _select_runtime_linear_fit(
+    inputs: _RuntimeLinearFitInputs,
+    *,
+    selection: Any,
+    options: _RuntimeLinearFitOptions,
+    deps: _RuntimeLinearDiagnosticDeps,
+) -> _RuntimeLinearFitCandidate:
+    """Select and fit the runtime diagnostic signal."""
+
+    if inputs.fit_key == "auto":
+        return _choose_auto_runtime_linear_fit(
+            inputs,
+            selection=selection,
+            options=options,
+            deps=deps,
+        )
+    return _fit_requested_runtime_linear_signal(
+        inputs,
+        selection=selection,
+        options=options,
+        deps=deps,
+    )
 
 
 def fit_runtime_linear_diagnostics(
@@ -380,44 +401,37 @@ def fit_runtime_linear_diagnostics(
         z=z,
         fit_signal=fit_signal,
     )
-    if inputs.fit_key == "auto":
-        fit = _choose_auto_runtime_linear_fit(
-            inputs,
-            selection=selection,
-            mode_method=mode_method,
-            window_fraction=window_fraction,
-            min_points=min_points,
-            start_fraction=start_fraction,
-            growth_weight=growth_weight,
-            require_positive=require_positive,
-            min_amp_fraction=min_amp_fraction,
-            extract_mode_time_series_fn=extract_mode_time_series_fn,
-            fit_growth_rate_auto_with_stats_fn=fit_growth_rate_auto_with_stats_fn,
-        )
-    else:
-        fit = _fit_requested_runtime_linear_signal(
-            inputs,
-            selection=selection,
-            mode_method=mode_method,
-            auto_window=auto_window,
-            tmin=tmin,
-            tmax=tmax,
-            window_fraction=window_fraction,
-            min_points=min_points,
-            start_fraction=start_fraction,
-            growth_weight=growth_weight,
-            require_positive=require_positive,
-            min_amp_fraction=min_amp_fraction,
-            extract_mode_time_series_fn=extract_mode_time_series_fn,
-            fit_growth_rate_auto_fn=fit_growth_rate_auto_fn,
-            fit_growth_rate_fn=fit_growth_rate_fn,
-        )
+    options = _RuntimeLinearFitOptions(
+        mode_method=mode_method,
+        auto_window=auto_window,
+        tmin=tmin,
+        tmax=tmax,
+        window_fraction=window_fraction,
+        min_points=min_points,
+        start_fraction=start_fraction,
+        growth_weight=growth_weight,
+        require_positive=require_positive,
+        min_amp_fraction=min_amp_fraction,
+    )
+    deps = _RuntimeLinearDiagnosticDeps(
+        extract_mode_time_series=extract_mode_time_series_fn,
+        fit_growth_rate_auto_with_stats=fit_growth_rate_auto_with_stats_fn,
+        fit_growth_rate_auto=fit_growth_rate_auto_fn,
+        fit_growth_rate=fit_growth_rate_fn,
+        extract_eigenfunction=extract_eigenfunction_fn,
+    )
+    fit = _select_runtime_linear_fit(
+        inputs,
+        selection=selection,
+        options=options,
+        deps=deps,
+    )
     eigenfunction = _extract_runtime_linear_eigenfunction(
         inputs,
         selection=selection,
         fit_window_tmin=fit.fit_window_tmin,
         fit_window_tmax=fit.fit_window_tmax,
-        extract_eigenfunction_fn=extract_eigenfunction_fn,
+        deps=deps,
     )
 
     return RuntimeLinearFitResult(
