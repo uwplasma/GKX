@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import warnings
 
 import numpy as np
@@ -22,6 +23,39 @@ __all__ = [
     "_select_fit_signal",
     "_select_fit_signal_auto",
 ]
+
+
+@dataclass(frozen=True)
+class _AutoFitSignalOptions:
+    tmin: float | None
+    tmax: float | None
+    window_fraction: float
+    min_points: int
+    start_fraction: float
+    growth_weight: float
+    require_positive: bool
+    min_amp_fraction: float
+    max_amp_fraction: float
+    window_method: str
+    max_fraction: float
+    end_fraction: float
+    num_windows: int
+    phase_weight: float
+    length_weight: float
+    min_r2: float
+    late_penalty: float
+    min_slope: float | None
+    min_slope_frac: float
+    slope_var_weight: float
+
+
+@dataclass(frozen=True)
+class _FitSignalCandidate:
+    signal: np.ndarray
+    name: str
+    gamma: float
+    omega: float
+    score: float
 
 
 def _select_fit_signal(
@@ -136,6 +170,58 @@ def _score_fit_signal_auto(
     return gamma, omega, score
 
 
+def _score_fit_signal_candidate(
+    t: np.ndarray,
+    source: np.ndarray,
+    sel: ModeSelection,
+    *,
+    name: str,
+    mode_method: str,
+    options: _AutoFitSignalOptions,
+) -> _FitSignalCandidate:
+    signal = extract_mode_time_series(source, sel, method=mode_method)
+    gamma, omega, score = _score_fit_signal_auto(
+        t,
+        signal,
+        tmin=options.tmin,
+        tmax=options.tmax,
+        window_fraction=options.window_fraction,
+        min_points=options.min_points,
+        start_fraction=options.start_fraction,
+        growth_weight=options.growth_weight,
+        require_positive=options.require_positive,
+        min_amp_fraction=options.min_amp_fraction,
+        max_amp_fraction=options.max_amp_fraction,
+        window_method=options.window_method,
+        max_fraction=options.max_fraction,
+        end_fraction=options.end_fraction,
+        num_windows=options.num_windows,
+        phase_weight=options.phase_weight,
+        length_weight=options.length_weight,
+        min_r2=options.min_r2,
+        late_penalty=options.late_penalty,
+        min_slope=options.min_slope,
+        min_slope_frac=options.min_slope_frac,
+        slope_var_weight=options.slope_var_weight,
+    )
+    return _FitSignalCandidate(
+        signal=signal,
+        name=name,
+        gamma=float(gamma),
+        omega=float(omega),
+        score=float(score),
+    )
+
+
+def _best_fit_signal_candidate(
+    current: _FitSignalCandidate,
+    candidate: _FitSignalCandidate,
+) -> _FitSignalCandidate:
+    if candidate.score > current.score:
+        return candidate
+    return current
+
+
 def _select_fit_signal_auto(
     t: np.ndarray,
     phi_t: np.ndarray,
@@ -166,10 +252,7 @@ def _select_fit_signal_auto(
 ) -> tuple[np.ndarray, str, float, float]:
     """Choose between phi/density signals based on fit quality."""
 
-    phi_signal = extract_mode_time_series(phi_t, sel, method=mode_method)
-    gamma_phi, omega_phi, score_phi = _score_fit_signal_auto(
-        t,
-        phi_signal,
+    options = _AutoFitSignalOptions(
         tmin=tmin,
         tmax=tmax,
         window_fraction=window_fraction,
@@ -191,46 +274,28 @@ def _select_fit_signal_auto(
         min_slope_frac=min_slope_frac,
         slope_var_weight=slope_var_weight,
     )
-    best_signal = phi_signal
-    best_name = "phi"
-    best_gamma = gamma_phi
-    best_omega = omega_phi
-    best_score = score_phi
-
+    best = _score_fit_signal_candidate(
+        t,
+        phi_t,
+        sel,
+        name="phi",
+        mode_method=mode_method,
+        options=options,
+    )
     if density_t is not None:
-        density_signal = extract_mode_time_series(density_t, sel, method=mode_method)
-        gamma_den, omega_den, score_den = _score_fit_signal_auto(
-            t,
-            density_signal,
-            tmin=tmin,
-            tmax=tmax,
-            window_fraction=window_fraction,
-            min_points=min_points,
-            start_fraction=start_fraction,
-            growth_weight=growth_weight,
-            require_positive=require_positive,
-            min_amp_fraction=min_amp_fraction,
-            max_amp_fraction=max_amp_fraction,
-            window_method=window_method,
-            max_fraction=max_fraction,
-            end_fraction=end_fraction,
-            num_windows=num_windows,
-            phase_weight=phase_weight,
-            length_weight=length_weight,
-            min_r2=min_r2,
-            late_penalty=late_penalty,
-            min_slope=min_slope,
-            min_slope_frac=min_slope_frac,
-            slope_var_weight=slope_var_weight,
+        best = _best_fit_signal_candidate(
+            best,
+            _score_fit_signal_candidate(
+                t,
+                density_t,
+                sel,
+                name="density",
+                mode_method=mode_method,
+                options=options,
+            ),
         )
-        if score_den > best_score:
-            best_signal = density_signal
-            best_name = "density"
-            best_gamma = gamma_den
-            best_omega = omega_den
-            best_score = score_den
 
-    return best_signal, best_name, float(best_gamma), float(best_omega)
+    return best.signal, best.name, best.gamma, best.omega
 
 
 def _extract_mode_only_signal(
