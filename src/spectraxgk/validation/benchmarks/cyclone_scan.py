@@ -109,6 +109,30 @@ class _CycloneScanSetup:
 
 
 @dataclass(frozen=True)
+class _CycloneReferencePolicy:
+    """Geometry and diagnostic defaults after reference-alignment resolution."""
+
+    reference_aligned: bool
+    geometry_config: Any
+    diagnostic_norm: str
+    mode_method: str
+
+
+@dataclass(frozen=True)
+class _CycloneScanSolverPolicy:
+    """Solver, fit-signal, and batching policy for a Cyclone scan."""
+
+    solver_key: str
+    fit_key: str
+    auto_solver: bool
+    mode_method: str
+    mode_only: bool
+    streaming_fit: bool
+    need_density: bool
+    use_batch: bool
+
+
+@dataclass(frozen=True)
 class _CycloneScanExecutionOptions:
     """Resolved numerical controls passed to the Cyclone scan dispatcher."""
 
@@ -298,6 +322,82 @@ def _build_cyclone_scan_fit_policy(
     )
 
 
+def _resolve_cyclone_reference_policy(
+    cfg: CycloneBaseCase,
+    *,
+    reference_aligned: bool | None,
+    diagnostic_norm: str,
+    mode_method: str,
+) -> _CycloneReferencePolicy:
+    reference_aligned_use = (
+        bool(cfg.reference_aligned)
+        if reference_aligned is None
+        else bool(reference_aligned)
+    )
+    geom_cfg = cfg.geometry
+    diagnostic_norm_use = diagnostic_norm
+    mode_method_use = mode_method
+    if reference_aligned_use:
+        geom_cfg = replace(geom_cfg, drift_scale=1.0)
+        if diagnostic_norm_use == "none":
+            diagnostic_norm_use = "rho_star"
+        if mode_method_use not in {"z_index", "max"}:
+            mode_method_use = "z_index"
+    return _CycloneReferencePolicy(
+        reference_aligned=reference_aligned_use,
+        geometry_config=geom_cfg,
+        diagnostic_norm=diagnostic_norm_use,
+        mode_method=mode_method_use,
+    )
+
+
+def _resolve_cyclone_scan_solver_policy(
+    *,
+    solver: str,
+    fit_signal: str,
+    reference_aligned: bool,
+    mode_method: str,
+    mode_only: bool,
+    streaming_fit: bool,
+    ky_batch: int,
+    dt: float | np.ndarray,
+    steps: int | np.ndarray,
+    tmin: float | None,
+    tmax: float | None,
+) -> _CycloneScanSolverPolicy:
+    solver_key = normalize_solver_key(solver)
+    fit_key = normalize_fit_signal(fit_signal)
+    auto_solver = solver_key == "auto"
+    if auto_solver:
+        solver_key = "explicit_time" if reference_aligned else "time"
+    streaming_fit_use, mode_only_use = apply_auto_fit_scan_policy(
+        fit_key,
+        streaming_fit=streaming_fit,
+        mode_only=mode_only,
+    )
+    mode_method_use = resolve_scan_mode_method(
+        mode_method,
+        mode_only=mode_only_use,
+    )
+    return _CycloneScanSolverPolicy(
+        solver_key=solver_key,
+        fit_key=fit_key,
+        auto_solver=auto_solver,
+        mode_method=mode_method_use,
+        mode_only=mode_only_use,
+        streaming_fit=streaming_fit_use,
+        need_density=fit_key in {"density", "auto"},
+        use_batch=should_use_ky_batch(
+            ky_batch=ky_batch,
+            solver_key=solver_key,
+            dt=dt,
+            steps=steps,
+            tmin=tmin,
+            tmax=tmax,
+        ),
+    )
+
+
 def _build_cyclone_scan_setup(
     *,
     cfg: CycloneBaseCase | None,
@@ -323,41 +423,27 @@ def _build_cyclone_scan_setup(
     cfg_use = cfg or CycloneBaseCase()
     init_cfg = getattr(cfg_use, "init", None) or InitializationConfig()
     grid_full = build_spectral_grid(cfg_use.grid)
-    reference_aligned_use = (
-        bool(cfg_use.reference_aligned)
-        if reference_aligned is None
-        else bool(reference_aligned)
+    reference_policy = _resolve_cyclone_reference_policy(
+        cfg_use,
+        reference_aligned=reference_aligned,
+        diagnostic_norm=diagnostic_norm,
+        mode_method=mode_method,
     )
-    geom_cfg = cfg_use.geometry
-    diagnostic_norm_use = diagnostic_norm
-    mode_method_use = mode_method
-    if reference_aligned_use:
-        geom_cfg = replace(geom_cfg, drift_scale=1.0)
-        if diagnostic_norm_use == "none":
-            diagnostic_norm_use = "rho_star"
-        if mode_method_use not in {"z_index", "max"}:
-            mode_method_use = "z_index"
-    geom = SAlphaGeometry.from_config(geom_cfg)
+    geom = SAlphaGeometry.from_config(reference_policy.geometry_config)
     params_use = (
         _default_cyclone_scan_params(cfg_use, geom, n_hermite=Nm)
         if params is None
         else params
     )
     terms_use = _default_cyclone_scan_terms(cfg_use) if terms is None else terms
-    solver_key = normalize_solver_key(solver)
-    fit_key = normalize_fit_signal(fit_signal)
-    auto_solver = solver_key == "auto"
-    if auto_solver:
-        solver_key = "explicit_time" if reference_aligned_use else "time"
-    streaming_fit_use, mode_only_use = apply_auto_fit_scan_policy(
-        fit_key, streaming_fit=streaming_fit, mode_only=mode_only
-    )
-    mode_method_use = resolve_scan_mode_method(
-        mode_method_use, mode_only=mode_only_use
-    )
-    use_batch = should_use_ky_batch(
+    solver_policy = _resolve_cyclone_scan_solver_policy(
+        solver=solver,
+        fit_signal=fit_signal,
+        reference_aligned=reference_policy.reference_aligned,
+        mode_method=reference_policy.mode_method,
+        mode_only=mode_only,
+        streaming_fit=streaming_fit,
         ky_batch=ky_batch,
-        solver_key=solver_key,
         dt=dt,
         steps=steps,
         tmin=tmin,
@@ -370,16 +456,16 @@ def _build_cyclone_scan_setup(
         geom=geom,
         params=params_use,
         terms=terms_use,
-        reference_aligned=reference_aligned_use,
-        diagnostic_norm=diagnostic_norm_use,
-        solver_key=solver_key,
-        fit_key=fit_key,
-        auto_solver=auto_solver,
-        mode_method=mode_method_use,
-        mode_only=mode_only_use,
-        streaming_fit=streaming_fit_use,
-        need_density=fit_key in {"density", "auto"},
-        use_batch=use_batch,
+        reference_aligned=reference_policy.reference_aligned,
+        diagnostic_norm=reference_policy.diagnostic_norm,
+        solver_key=solver_policy.solver_key,
+        fit_key=solver_policy.fit_key,
+        auto_solver=solver_policy.auto_solver,
+        mode_method=solver_policy.mode_method,
+        mode_only=solver_policy.mode_only,
+        streaming_fit=solver_policy.streaming_fit,
+        need_density=solver_policy.need_density,
+        use_batch=solver_policy.use_batch,
         fit_policy=fit_policy,
     )
 
