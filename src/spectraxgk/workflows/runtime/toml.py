@@ -209,66 +209,86 @@ def load_case_from_toml(path: str | Path, case_name: str | None = None):
     return case_name, cfg, data
 
 
-def load_runtime_from_toml(path: str | Path) -> tuple[RuntimeConfig, dict]:
-    """Load unified runtime config from TOML, returning ``(cfg, data)``."""
+def _runtime_base_config(data: dict[str, Any]) -> RuntimeConfig:
+    """Return a runtime config after applying common dataclass sections."""
 
-    path = Path(path)
-    data = load_toml(path)
-    base_dir = path.resolve().parent
-    cfg: RuntimeConfig = RuntimeConfig()
-    cfg = _merge_dataclass(
-        cfg,
-        {
-            "grid": data.get("grid"),
-            "time": data.get("time"),
-            "geometry": _normalize_geometry_overrides(data.get("geometry")),
-            "init": data.get("init"),
-        },
+    return cast(
+        RuntimeConfig,
+        _merge_dataclass(
+            RuntimeConfig(),
+            {
+                "grid": data.get("grid"),
+                "time": data.get("time"),
+                "geometry": _normalize_geometry_overrides(data.get("geometry")),
+                "init": data.get("init"),
+            },
+        ),
     )
-    physics = data.get("physics")
-    if isinstance(physics, dict):
-        cfg = replace(cfg, physics=RuntimePhysicsConfig(**physics))
-    collisions = data.get("collisions")
-    if isinstance(collisions, dict):
-        cfg = replace(cfg, collisions=RuntimeCollisionConfig(**collisions))
-    normalization = data.get("normalization")
-    if isinstance(normalization, dict):
-        cfg = replace(cfg, normalization=RuntimeNormalizationConfig(**normalization))
-    terms = data.get("terms")
-    if isinstance(terms, dict):
-        cfg = replace(cfg, terms=RuntimeTermsConfig(**terms))
-    expert = data.get("expert")
-    if isinstance(expert, dict):
-        cfg = replace(cfg, expert=RuntimeExpertConfig(**expert))
-    output = data.get("output")
-    if isinstance(output, dict):
-        cfg = replace(cfg, output=RuntimeOutputConfig(**output))
-    quasilinear = data.get("quasilinear")
-    if isinstance(quasilinear, dict):
-        cfg = replace(cfg, quasilinear=RuntimeQuasilinearConfig(**quasilinear))
-    parallel = data.get("parallel")
-    if isinstance(parallel, dict):
-        cfg = replace(cfg, parallel=RuntimeParallelConfig(**parallel))
-    species_raw = data.get("species")
-    if species_raw is not None:
-        if not isinstance(species_raw, list):
-            raise TypeError(
-                "[[species]] entries must be provided as an array of tables"
-            )
-        species: list[RuntimeSpeciesConfig] = []
-        for item in species_raw:
-            if not isinstance(item, dict):
-                raise TypeError("Each [[species]] entry must be a table")
-            species.append(RuntimeSpeciesConfig(**item))
-        if species:
-            cfg = replace(cfg, species=tuple(species))
-    cfg = replace(
+
+
+def _replace_runtime_section(
+    cfg: RuntimeConfig,
+    data: dict[str, Any],
+    key: str,
+    constructor: Callable[..., Any],
+) -> RuntimeConfig:
+    """Replace one runtime section when the TOML section is present."""
+
+    raw = data.get(key)
+    if not isinstance(raw, dict):
+        return cfg
+    return cast(RuntimeConfig, replace(cfg, **{key: constructor(**raw)}))
+
+
+def _apply_runtime_section_overrides(
+    cfg: RuntimeConfig,
+    data: dict[str, Any],
+) -> RuntimeConfig:
+    """Apply non-nested runtime config sections from TOML data."""
+
+    section_constructors: tuple[tuple[str, Callable[..., Any]], ...] = (
+        ("physics", RuntimePhysicsConfig),
+        ("collisions", RuntimeCollisionConfig),
+        ("normalization", RuntimeNormalizationConfig),
+        ("terms", RuntimeTermsConfig),
+        ("expert", RuntimeExpertConfig),
+        ("output", RuntimeOutputConfig),
+        ("quasilinear", RuntimeQuasilinearConfig),
+        ("parallel", RuntimeParallelConfig),
+    )
+    for key, constructor in section_constructors:
+        cfg = _replace_runtime_section(cfg, data, key, constructor)
+    return cfg
+
+
+def _runtime_species_from_toml(
+    species_raw: Any,
+) -> tuple[RuntimeSpeciesConfig, ...] | None:
+    """Parse optional ``[[species]]`` runtime entries."""
+
+    if species_raw is None:
+        return None
+    if not isinstance(species_raw, list):
+        raise TypeError("[[species]] entries must be provided as an array of tables")
+    species: list[RuntimeSpeciesConfig] = []
+    for item in species_raw:
+        if not isinstance(item, dict):
+            raise TypeError("Each [[species]] entry must be a table")
+        species.append(RuntimeSpeciesConfig(**item))
+    return tuple(species) if species else None
+
+
+def _resolve_runtime_config_paths(cfg: RuntimeConfig, *, base_dir: Path) -> RuntimeConfig:
+    """Resolve every path-valued runtime field against the TOML directory."""
+
+    return replace(
         cfg,
         geometry=replace(
             cfg.geometry,
             vmec_file=resolve_runtime_path(cfg.geometry.vmec_file, base_dir=base_dir),
             geometry_file=resolve_runtime_path(
-                cfg.geometry.geometry_file, base_dir=base_dir
+                cfg.geometry.geometry_file,
+                base_dir=base_dir,
             ),
         ),
         init=replace(
@@ -279,20 +299,35 @@ def load_runtime_from_toml(path: str | Path) -> tuple[RuntimeConfig, dict]:
             cfg.output,
             path=resolve_runtime_path(cfg.output.path, base_dir=base_dir),
             restart_to_file=resolve_runtime_path(
-                cfg.output.restart_to_file, base_dir=base_dir
+                cfg.output.restart_to_file,
+                base_dir=base_dir,
             ),
             restart_from_file=resolve_runtime_path(
-                cfg.output.restart_from_file, base_dir=base_dir
+                cfg.output.restart_from_file,
+                base_dir=base_dir,
             ),
         ),
         quasilinear=replace(
             cfg.quasilinear,
             output_path=resolve_runtime_path(
-                cfg.quasilinear.output_path, base_dir=base_dir
+                cfg.quasilinear.output_path,
+                base_dir=base_dir,
             ),
         ),
     )
-    return cfg, data
+
+
+def load_runtime_from_toml(path: str | Path) -> tuple[RuntimeConfig, dict]:
+    """Load unified runtime config from TOML, returning ``(cfg, data)``."""
+
+    path = Path(path)
+    data = load_toml(path)
+    base_dir = path.resolve().parent
+    cfg = _apply_runtime_section_overrides(_runtime_base_config(data), data)
+    species = _runtime_species_from_toml(data.get("species"))
+    if species is not None:
+        cfg = replace(cfg, species=species)
+    return _resolve_runtime_config_paths(cfg, base_dir=base_dir), data
 
 
 def load_linear_terms_from_toml(data: dict) -> LinearTerms | None:
