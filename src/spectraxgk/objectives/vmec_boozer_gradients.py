@@ -325,6 +325,80 @@ def _update_mode21_gradient_payload(
     return payload
 
 
+def _run_mode21_nonlinear_window_gradient_gate(
+    context: dict[str, Any],
+    *,
+    features_fn: Any,
+    window_metrics_fn: Any,
+    nonlinear_dt: float,
+    nonlinear_steps: int,
+    tail_fraction: float,
+    fd_step: float,
+    rtol: float,
+    atol: float,
+    gap_floor: float,
+) -> tuple[dict[str, Any], list[dict[str, Any]], dict[str, bool]]:
+    return _run_mode21_gradient_gate(
+        context,
+        _nonlinear_window_observable(
+            context=context,
+            features_fn=features_fn,
+            window_metrics_fn=window_metrics_fn,
+            nonlinear_dt=nonlinear_dt,
+            nonlinear_steps=nonlinear_steps,
+            tail_fraction=tail_fraction,
+        ),
+        objective_names=VMEC_BOOZER_NONLINEAR_WINDOW_OBJECTIVE_NAMES,
+        fd_step=fd_step,
+        rtol=rtol,
+        atol=atol,
+        gap_floor=gap_floor,
+    )
+
+
+def _mode21_nonlinear_window_gradient_payload(
+    *,
+    context: dict[str, Any],
+    gate: dict[str, Any],
+    rows: list[dict[str, Any]],
+    by_objective: dict[str, bool],
+    nonlinear_dt: float,
+    nonlinear_steps: int,
+    tail_fraction: float,
+    elapsed_seconds: float,
+) -> dict[str, object]:
+    payload = _mode21_gradient_base_payload(
+        kind="mode21_vmec_boozer_nonlinear_window_gradient_gate",
+        context=context,
+        objective_names=VMEC_BOOZER_NONLINEAR_WINDOW_OBJECTIVE_NAMES,
+        gate=gate,
+        rows=rows,
+        claim_scope=(
+            "full vmec_jax state coefficient -> booz_xform_jax mode-21 equal-arc geometry "
+            "-> SPECTRAX-GK linear-RHS eigenpair -> reduced nonlinear-window estimator gradient"
+        ),
+    )
+    return _update_mode21_gradient_payload(
+        payload,
+        by_objective=by_objective,
+        rows=rows,
+        gate=gate,
+        quasilinear_weight_gate=_quasilinear_weight_gate(by_objective),
+        nonlinear_window_gate=_nonlinear_window_objective_gate(by_objective),
+        nonlinear_window_config=_nonlinear_window_config_payload(
+            nonlinear_dt=nonlinear_dt,
+            nonlinear_steps=nonlinear_steps,
+            tail_fraction=tail_fraction,
+        ),
+        elapsed_seconds=elapsed_seconds,
+        next_action=(
+            "Use this as a reduced nonlinear-window estimator-gradient gate only. Full stellarator "
+            "heat-flux optimization still requires converged nonlinear SPECTRAX-GK window gradients "
+            "or robust adjoint/finite-difference audits on optimized equilibria."
+        ),
+    )
+
+
 def mode21_vmec_boozer_linear_frequency_gradient_report(  # pragma: no cover
     *,
     case_name: str = "nfp4_QH_warm_start",
@@ -530,51 +604,27 @@ def mode21_vmec_boozer_nonlinear_window_gradient_report(  # pragma: no cover
         context_fn=_linear_context_fn,
     )
 
-    gate, rows, by_objective = _run_mode21_gradient_gate(
+    gate, rows, by_objective = _run_mode21_nonlinear_window_gradient_gate(
         context,
-        _nonlinear_window_observable(
-            context=context,
-            features_fn=_quasilinear_features_fn,
-            window_metrics_fn=_window_metrics_fn,
-            nonlinear_dt=nonlinear_dt,
-            nonlinear_steps=nonlinear_steps,
-            tail_fraction=tail_fraction,
-        ),
-        objective_names=VMEC_BOOZER_NONLINEAR_WINDOW_OBJECTIVE_NAMES,
+        features_fn=_quasilinear_features_fn,
+        window_metrics_fn=_window_metrics_fn,
+        nonlinear_dt=nonlinear_dt,
+        nonlinear_steps=nonlinear_steps,
+        tail_fraction=tail_fraction,
         fd_step=fd_step,
         rtol=rtol,
         atol=atol,
         gap_floor=gap_floor,
     )
-    payload = _mode21_gradient_base_payload(
-        kind="mode21_vmec_boozer_nonlinear_window_gradient_gate",
+    return _mode21_nonlinear_window_gradient_payload(
         context=context,
-        objective_names=VMEC_BOOZER_NONLINEAR_WINDOW_OBJECTIVE_NAMES,
         gate=gate,
         rows=rows,
-        claim_scope=(
-            "full vmec_jax state coefficient -> booz_xform_jax mode-21 equal-arc geometry "
-            "-> SPECTRAX-GK linear-RHS eigenpair -> reduced nonlinear-window estimator gradient"
-        ),
-    )
-    return _update_mode21_gradient_payload(
-        payload,
         by_objective=by_objective,
-        rows=rows,
-        gate=gate,
-        quasilinear_weight_gate=_quasilinear_weight_gate(by_objective),
-        nonlinear_window_gate=_nonlinear_window_objective_gate(by_objective),
-        nonlinear_window_config=_nonlinear_window_config_payload(
-            nonlinear_dt=nonlinear_dt,
-            nonlinear_steps=nonlinear_steps,
-            tail_fraction=tail_fraction,
-        ),
+        nonlinear_dt=nonlinear_dt,
+        nonlinear_steps=nonlinear_steps,
+        tail_fraction=tail_fraction,
         elapsed_seconds=time.perf_counter() - start,
-        next_action=(
-            "Use this as a reduced nonlinear-window estimator-gradient gate only. Full stellarator "
-            "heat-flux optimization still requires converged nonlinear SPECTRAX-GK window gradients "
-            "or robust adjoint/finite-difference audits on optimized equilibria."
-        ),
     )
 
 
