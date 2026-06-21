@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -44,18 +45,16 @@ def _request_attr(request: Any, *names: str) -> Any:
     raise AttributeError(f"Miller request is missing all aliases: {', '.join(names)}")
 
 
-def generate_miller_eik_internal(
-    *, output_path: str | Path, request: Any | None = None
-) -> Path:
-    """Internal Miller->EIK pipeline entry point (in progress)."""
+@dataclass(frozen=True)
+class _MillerGeometryNormalizations:
+    dpsidrho_arr: np.ndarray
+    dpsidrho: float
+    bpol: np.ndarray
+    bmag: np.ndarray
 
-    if request is None:
-        raise NotImplementedError(
-            "Internal Miller geometry backend requires runtime request data. "
-            "Current status: low-level Miller geometry numerics are ported; final EIK writeout is pending."
-        )
 
-    params = MillerCoreParams(
+def _miller_params_from_request(request: Any) -> MillerCoreParams:
+    return MillerCoreParams(
         ntgrid=int(int(request.ntheta) / 2 + 1),
         nperiod=int(request.nperiod),
         rhoc=float(_request_attr(request, "rhoc")),
@@ -70,13 +69,14 @@ def generate_miller_eik_internal(
         tripri=float(_request_attr(request, "tripri")),
         betaprim=float(_request_attr(request, "betaprim")),
     )
-    state = build_collocation_surfaces(params)
-    gradients = compute_primary_gradients(state)
 
+
+def _miller_geometry_normalizations(
+    params: MillerCoreParams, state: dict[str, Any], gradients: dict[str, Any]
+) -> _MillerGeometryNormalizations:
     r = np.asarray(state["r"], dtype=float)
     qfac = np.asarray(state["qfac"], dtype=float)
     theta_common = np.asarray(state["theta_common_mag_axis"], dtype=float)
-
     jac = np.asarray(gradients["jac"], dtype=float)
     drhod_r = np.asarray(gradients["drhod_r"], dtype=float)
     drhod_z = np.asarray(gradients["drhod_z"], dtype=float)
@@ -92,11 +92,38 @@ def generate_miller_eik_internal(
         / _safe_denom(r[1])
     )
     btor = params.r_geo / _safe_denom(r[1])
-    bmag = np.sqrt(bpol**2 + btor**2)
+    return _MillerGeometryNormalizations(
+        dpsidrho_arr=np.asarray(dpsidrho_arr, dtype=float),
+        dpsidrho=dpsidrho,
+        bpol=bpol,
+        bmag=np.sqrt(bpol**2 + btor**2),
+    )
+
+
+def _miller_equal_arc_grid(
+    params: MillerCoreParams, theta_st: np.ndarray, straight_state: dict[str, Any]
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    return compute_equal_arc_theta(
+        theta_straight=theta_st[1],
+        gradpar=np.asarray(straight_state["gradpar_center"], dtype=float),
+        bmag=np.asarray(straight_state["bmag_center"], dtype=float),
+        bpol=np.asarray(straight_state["bpol_center"], dtype=float),
+        nperiod=params.nperiod,
+    )
+
+
+def _assemble_miller_profiles_for_request(request: Any) -> dict[str, Any]:
+    params = _miller_params_from_request(request)
+    state = build_collocation_surfaces(params)
+    gradients = compute_primary_gradients(state)
+    normalizations = _miller_geometry_normalizations(params, state, gradients)
+    theta_common = np.asarray(state["theta_common_mag_axis"], dtype=float)
+    r = np.asarray(state["r"], dtype=float)
+
     theta_st = compute_straight_field_theta(
         f_const=float(params.r_geo),
-        dpsidrho=np.asarray(dpsidrho_arr, dtype=float),
-        jac=jac,
+        dpsidrho=normalizations.dpsidrho_arr,
+        jac=np.asarray(gradients["jac"], dtype=float),
         r=r,
         theta_common=theta_common,
     )
@@ -104,32 +131,40 @@ def generate_miller_eik_internal(
         params=params,
         state=state,
         theta_st=theta_st,
-        dpsidrho=float(dpsidrho),
+        dpsidrho=normalizations.dpsidrho,
         f_const=float(params.r_geo),
     )
-    theta_eqarc_target_ex, gradpar_eqarc_ex, theta_eqarc_source_ex = (
-        compute_equal_arc_theta(
-            theta_straight=theta_st[1],
-            gradpar=np.asarray(straight_state["gradpar_center"], dtype=float),
-            bmag=np.asarray(straight_state["bmag_center"], dtype=float),
-            bpol=np.asarray(straight_state["bpol_center"], dtype=float),
-            nperiod=params.nperiod,
-        )
+    theta_target_ex, gradpar_target_ex, theta_source_ex = _miller_equal_arc_grid(
+        params, theta_st, straight_state
     )
-    profiles = assemble_miller_profiles(
+    return assemble_miller_profiles(
         params=params,
         state=state,
         gradients=gradients,
         straight_state=straight_state,
         theta_st_center=theta_st[1],
         theta_st_ex=nperiod_data_extend(theta_st[1], params.nperiod, istheta=1),
-        theta_source_ex=theta_eqarc_source_ex,
-        theta_target_ex=theta_eqarc_target_ex,
-        gradpar_target_ex=gradpar_eqarc_ex,
-        bmag_center=bmag,
-        bpol_center=bpol,
-        dpsidrho=float(dpsidrho),
+        theta_source_ex=theta_source_ex,
+        theta_target_ex=theta_target_ex,
+        gradpar_target_ex=gradpar_target_ex,
+        bmag_center=normalizations.bmag,
+        bpol_center=normalizations.bpol,
+        dpsidrho=normalizations.dpsidrho,
     )
+
+
+def generate_miller_eik_internal(
+    *, output_path: str | Path, request: Any | None = None
+) -> Path:
+    """Internal Miller->EIK pipeline entry point (in progress)."""
+
+    if request is None:
+        raise NotImplementedError(
+            "Internal Miller geometry backend requires runtime request data. "
+            "Current status: low-level Miller geometry numerics are ported; final EIK writeout is pending."
+        )
+
+    profiles = _assemble_miller_profiles_for_request(request)
     out = Path(output_path).expanduser().resolve()
     out.parent.mkdir(parents=True, exist_ok=True)
     write_miller_eik_netcdf(out, profiles)
