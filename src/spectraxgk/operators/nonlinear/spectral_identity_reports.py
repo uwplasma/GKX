@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import jax
 import jax.numpy as jnp
 
@@ -20,6 +22,112 @@ from spectraxgk.operators.nonlinear.spectral_core import (
     _validate_chunks,
     _validate_spectral_state_shape,
 )
+
+
+@dataclass(frozen=True)
+class _AbsRelError:
+    abs_error: float
+    rel_error: float
+
+
+@dataclass(frozen=True)
+class _CommunicationIdentityErrors:
+    fft: _AbsRelError
+    bracket: _AbsRelError
+    field: _AbsRelError
+
+
+@dataclass(frozen=True)
+class _RHSIdentityErrors:
+    reconstruction: _AbsRelError
+    field: _AbsRelError
+    bracket: _AbsRelError
+    rhs: _AbsRelError
+
+
+def _abs_rel_error(reference: jax.Array, candidate: jax.Array, *, atol: float) -> _AbsRelError:
+    abs_error, rel_error = _max_abs_rel_error(reference, candidate, atol=atol)
+    return _AbsRelError(abs_error, rel_error)
+
+
+def _error_pair_passes(error: _AbsRelError, *, atol: float, rtol: float) -> bool:
+    return bool(error.abs_error <= float(atol) and error.rel_error <= float(rtol))
+
+
+def _all_error_pairs_pass(
+    errors: tuple[_AbsRelError, ...],
+    *,
+    blocked_reasons: tuple[str, ...],
+    atol: float,
+    rtol: float,
+) -> bool:
+    return bool(
+        not blocked_reasons
+        and all(_error_pair_passes(error, atol=atol, rtol=rtol) for error in errors)
+    )
+
+
+def _communication_identity_errors(
+    *,
+    serial_fft_roundtrip: jax.Array,
+    communicated_fft_roundtrip: jax.Array,
+    serial_bracket: jax.Array,
+    communicated_bracket: jax.Array,
+    serial_field: jax.Array,
+    communicated_field: jax.Array,
+    atol: float,
+) -> _CommunicationIdentityErrors:
+    return _CommunicationIdentityErrors(
+        fft=_abs_rel_error(serial_fft_roundtrip, communicated_fft_roundtrip, atol=atol),
+        bracket=_abs_rel_error(serial_bracket, communicated_bracket, atol=atol),
+        field=_abs_rel_error(serial_field, communicated_field, atol=atol),
+    )
+
+
+def _rhs_identity_errors(
+    *,
+    serial_reconstruction: jax.Array,
+    logical_reconstruction: jax.Array,
+    serial_field: jax.Array,
+    logical_field: jax.Array,
+    serial_bracket: jax.Array,
+    logical_bracket: jax.Array,
+    serial_rhs: jax.Array,
+    logical_rhs: jax.Array,
+    atol: float,
+) -> _RHSIdentityErrors:
+    return _RHSIdentityErrors(
+        reconstruction=_abs_rel_error(
+            serial_reconstruction,
+            logical_reconstruction,
+            atol=atol,
+        ),
+        field=_abs_rel_error(serial_field, logical_field, atol=atol),
+        bracket=_abs_rel_error(serial_bracket, logical_bracket, atol=atol),
+        rhs=_abs_rel_error(serial_rhs, logical_rhs, atol=atol),
+    )
+
+
+def _normalized_spectral_chunks(
+    y_chunks: tuple[int, ...],
+    x_chunks: tuple[int, ...],
+) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    return tuple(int(item) for item in y_chunks), tuple(int(item) for item in x_chunks)
+
+
+def _rhs_identity_error_pairs(errors: _RHSIdentityErrors) -> tuple[_AbsRelError, ...]:
+    return (errors.reconstruction, errors.field, errors.bracket, errors.rhs)
+
+
+def _effective_spectral_tile_bounds(
+    *,
+    y_chunks: tuple[int, ...],
+    x_chunks: tuple[int, ...],
+    tile_bounds: tuple[tuple[int, int, int, int], ...] | None,
+) -> tuple[tuple[int, int, int, int], ...]:
+    if tile_bounds is None:
+        return _spectral_tile_bounds(y_chunks, x_chunks)
+    return _normalize_spectral_tile_bounds(tile_bounds)
 
 
 def _nonlinear_spectral_report_blockers(
@@ -101,29 +209,20 @@ def nonlinear_spectral_communication_identity_report(
         y_chunks=y_chunks,
         x_chunks=x_chunks,
     )
-    fft_abs, fft_rel = _max_abs_rel_error(
-        serial_fft_roundtrip,
-        communicated_fft_roundtrip,
+    errors = _communication_identity_errors(
+        serial_fft_roundtrip=serial_fft_roundtrip,
+        communicated_fft_roundtrip=communicated_fft_roundtrip,
+        serial_bracket=serial_bracket,
+        communicated_bracket=communicated_bracket,
+        serial_field=serial_field,
+        communicated_field=communicated_field,
         atol=atol,
     )
-    bracket_abs, bracket_rel = _max_abs_rel_error(
-        serial_bracket,
-        communicated_bracket,
+    identity_passed = _all_error_pairs_pass(
+        (errors.fft, errors.bracket, errors.field),
+        blocked_reasons=blocked_reasons,
         atol=atol,
-    )
-    field_abs, field_rel = _max_abs_rel_error(
-        serial_field,
-        communicated_field,
-        atol=atol,
-    )
-    identity_passed = bool(
-        not blocked_reasons
-        and fft_abs <= float(atol)
-        and fft_rel <= float(rtol)
-        and bracket_abs <= float(atol)
-        and bracket_rel <= float(rtol)
-        and field_abs <= float(atol)
-        and field_rel <= float(rtol)
+        rtol=rtol,
     )
     return NonlinearSpectralCommunicationReport(
         state_shape=state_shape,
@@ -133,12 +232,12 @@ def nonlinear_spectral_communication_identity_report(
         x_offsets=_chunk_offsets(x_chunks),
         atol=float(atol),
         rtol=float(rtol),
-        fft_max_abs_error=fft_abs,
-        fft_max_rel_error=fft_rel,
-        bracket_max_abs_error=bracket_abs,
-        bracket_max_rel_error=bracket_rel,
-        field_max_abs_error=field_abs,
-        field_max_rel_error=field_rel,
+        fft_max_abs_error=errors.fft.abs_error,
+        fft_max_rel_error=errors.fft.rel_error,
+        bracket_max_abs_error=errors.bracket.abs_error,
+        bracket_max_rel_error=errors.bracket.rel_error,
+        field_max_abs_error=errors.field.abs_error,
+        field_max_rel_error=errors.field.rel_error,
         identity_passed=identity_passed,
         decomposed_path_enabled=identity_passed,
         claim_scope=(
@@ -261,6 +360,46 @@ def _nonlinear_spectral_rhs_report_blockers(
     return tuple(blockers)
 
 
+def _build_rhs_identity_report(
+    *,
+    state_shape: tuple[int, int, int, int, int],
+    y_chunks: tuple[int, ...],
+    x_chunks: tuple[int, ...],
+    tile_bounds: tuple[tuple[int, int, int, int], ...],
+    atol: float,
+    rtol: float,
+    errors: _RHSIdentityErrors,
+    identity_passed: bool,
+    blocked_reasons: tuple[str, ...],
+) -> NonlinearSpectralRHSIdentityReport:
+    return NonlinearSpectralRHSIdentityReport(
+        state_shape=state_shape,
+        y_chunks=y_chunks,
+        x_chunks=x_chunks,
+        y_offsets=_chunk_offsets(y_chunks),
+        x_offsets=_chunk_offsets(x_chunks),
+        tile_bounds=tile_bounds,
+        atol=float(atol),
+        rtol=float(rtol),
+        reconstruction_max_abs_error=errors.reconstruction.abs_error,
+        reconstruction_max_rel_error=errors.reconstruction.rel_error,
+        field_max_abs_error=errors.field.abs_error,
+        field_max_rel_error=errors.field.rel_error,
+        bracket_max_abs_error=errors.bracket.abs_error,
+        bracket_max_rel_error=errors.bracket.rel_error,
+        rhs_max_abs_error=errors.rhs.abs_error,
+        rhs_max_rel_error=errors.rhs.rel_error,
+        identity_passed=identity_passed,
+        decomposed_path_enabled=identity_passed,
+        claim_scope=(
+            "diagnostic nonlinear spectral RHS identity gate only; "
+            "logical output-tile reconstruction with existing bracket contribution "
+            "and no production routing or speedup claim"
+        ),
+        blocked_reasons=blocked_reasons,
+    )
+
+
 def nonlinear_spectral_rhs_identity_report(
     serial_reconstruction: jax.Array,
     logical_reconstruction: jax.Array,
@@ -280,12 +419,14 @@ def nonlinear_spectral_rhs_identity_report(
 ) -> NonlinearSpectralRHSIdentityReport:
     """Compare serial and logical-shard spectral RHS outputs fail-closed."""
 
-    normalized_y_chunks = tuple(int(item) for item in y_chunks)
-    normalized_x_chunks = tuple(int(item) for item in x_chunks)
-    effective_tile_bounds = (
-        _spectral_tile_bounds(normalized_y_chunks, normalized_x_chunks)
-        if tile_bounds is None
-        else _normalize_spectral_tile_bounds(tile_bounds)
+    normalized_y_chunks, normalized_x_chunks = _normalized_spectral_chunks(
+        y_chunks,
+        x_chunks,
+    )
+    effective_tile_bounds = _effective_spectral_tile_bounds(
+        y_chunks=normalized_y_chunks,
+        x_chunks=normalized_x_chunks,
+        tile_bounds=tile_bounds,
     )
     blocked_reasons = _nonlinear_spectral_rhs_report_blockers(
         serial_reconstruction,
@@ -301,61 +442,32 @@ def nonlinear_spectral_rhs_identity_report(
         x_chunks=normalized_x_chunks,
         tile_bounds=effective_tile_bounds,
     )
-    reconstruction_abs, reconstruction_rel = _max_abs_rel_error(
-        serial_reconstruction,
-        logical_reconstruction,
+    errors = _rhs_identity_errors(
+        serial_reconstruction=serial_reconstruction,
+        logical_reconstruction=logical_reconstruction,
+        serial_field=serial_field,
+        logical_field=logical_field,
+        serial_bracket=serial_bracket,
+        logical_bracket=logical_bracket,
+        serial_rhs=serial_rhs,
+        logical_rhs=logical_rhs,
         atol=atol,
     )
-    field_abs, field_rel = _max_abs_rel_error(
-        serial_field,
-        logical_field,
+    identity_passed = _all_error_pairs_pass(
+        _rhs_identity_error_pairs(errors),
+        blocked_reasons=blocked_reasons,
         atol=atol,
+        rtol=rtol,
     )
-    bracket_abs, bracket_rel = _max_abs_rel_error(
-        serial_bracket,
-        logical_bracket,
-        atol=atol,
-    )
-    rhs_abs, rhs_rel = _max_abs_rel_error(
-        serial_rhs,
-        logical_rhs,
-        atol=atol,
-    )
-    identity_passed = bool(
-        not blocked_reasons
-        and reconstruction_abs <= float(atol)
-        and reconstruction_rel <= float(rtol)
-        and field_abs <= float(atol)
-        and field_rel <= float(rtol)
-        and bracket_abs <= float(atol)
-        and bracket_rel <= float(rtol)
-        and rhs_abs <= float(atol)
-        and rhs_rel <= float(rtol)
-    )
-    return NonlinearSpectralRHSIdentityReport(
+    return _build_rhs_identity_report(
         state_shape=state_shape,
         y_chunks=normalized_y_chunks,
         x_chunks=normalized_x_chunks,
-        y_offsets=_chunk_offsets(normalized_y_chunks),
-        x_offsets=_chunk_offsets(normalized_x_chunks),
         tile_bounds=effective_tile_bounds,
-        atol=float(atol),
-        rtol=float(rtol),
-        reconstruction_max_abs_error=reconstruction_abs,
-        reconstruction_max_rel_error=reconstruction_rel,
-        field_max_abs_error=field_abs,
-        field_max_rel_error=field_rel,
-        bracket_max_abs_error=bracket_abs,
-        bracket_max_rel_error=bracket_rel,
-        rhs_max_abs_error=rhs_abs,
-        rhs_max_rel_error=rhs_rel,
+        atol=atol,
+        rtol=rtol,
+        errors=errors,
         identity_passed=identity_passed,
-        decomposed_path_enabled=identity_passed,
-        claim_scope=(
-            "diagnostic nonlinear spectral RHS identity gate only; "
-            "logical output-tile reconstruction with existing bracket contribution "
-            "and no production routing or speedup claim"
-        ),
         blocked_reasons=blocked_reasons,
     )
 
