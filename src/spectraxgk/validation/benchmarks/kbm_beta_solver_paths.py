@@ -49,6 +49,35 @@ class KBMBetaTimeHooks:
 
 
 @dataclass(frozen=True)
+class KBMBetaTimeSampleRequest:
+    """Inputs for one saved-time or streaming KBM beta sample."""
+
+    G0_jax: Any
+    grid: Any
+    geom: Any
+    cache: Any
+    params: Any
+    terms: Any
+    dt_i: float
+    steps_i: int
+    method: str
+    time_cfg: Any
+    sample_stride: int | None
+    fit_key: str
+    streaming_fit: bool
+    streaming_amp_floor: float
+    mode_only: bool
+    mode_method: str
+    sel: Any
+    tmin: Any
+    tmax: Any
+    sample_index: int
+    diagnostic_norm: str
+    density_species_index: int
+    fit_policy: Any
+
+
+@dataclass(frozen=True)
 class KBMBetaKrylovResult:
     """Krylov growth result plus continuation state for the next beta point."""
 
@@ -239,9 +268,8 @@ def fit_kbm_beta_time_sample(
 ) -> tuple[float, float]:
     """Run and fit one saved-time or streaming KBM beta sample."""
 
-    time_cfg_i = _sample_time_config(time_cfg, dt_i, steps_i, sample_stride)
-    if time_cfg_i is not None and time_cfg_i.use_diffrax and streaming_fit:
-        return _fit_streaming_time_sample(
+    return _fit_kbm_beta_time_sample_request(
+        KBMBetaTimeSampleRequest(
             G0_jax=G0_jax,
             grid=grid,
             geom=geom,
@@ -250,54 +278,95 @@ def fit_kbm_beta_time_sample(
             terms=terms,
             dt_i=dt_i,
             steps_i=steps_i,
-            time_cfg_i=time_cfg_i,
+            method=method,
+            time_cfg=time_cfg,
+            sample_stride=sample_stride,
             fit_key=fit_key,
+            streaming_fit=streaming_fit,
             streaming_amp_floor=streaming_amp_floor,
+            mode_only=mode_only,
             mode_method=mode_method,
+            sel=sel,
             tmin=tmin,
             tmax=tmax,
             sample_index=sample_index,
-            fit_policy=fit_policy,
             diagnostic_norm=diagnostic_norm,
             density_species_index=density_species_index,
+            fit_policy=fit_policy,
+        ),
+        hooks=hooks,
+    )
+
+
+def _fit_kbm_beta_time_sample_request(
+    request: KBMBetaTimeSampleRequest,
+    *,
+    hooks: KBMBetaTimeHooks,
+) -> tuple[float, float]:
+    time_cfg_i = _sample_time_config(
+        request.time_cfg,
+        request.dt_i,
+        request.steps_i,
+        request.sample_stride,
+    )
+    if time_cfg_i is not None and time_cfg_i.use_diffrax and request.streaming_fit:
+        return _fit_streaming_time_sample(
+            G0_jax=request.G0_jax,
+            grid=request.grid,
+            geom=request.geom,
+            cache=request.cache,
+            params=request.params,
+            terms=request.terms,
+            dt_i=request.dt_i,
+            steps_i=request.steps_i,
+            time_cfg_i=time_cfg_i,
+            fit_key=request.fit_key,
+            streaming_amp_floor=request.streaming_amp_floor,
+            mode_method=request.mode_method,
+            tmin=request.tmin,
+            tmax=request.tmax,
+            sample_index=request.sample_index,
+            fit_policy=request.fit_policy,
+            diagnostic_norm=request.diagnostic_norm,
+            density_species_index=request.density_species_index,
             hooks=hooks,
         )
 
     phi_t, density_t, stride = _integrate_time_sample_series(
-        G0_jax=G0_jax,
-        grid=grid,
-        geom=geom,
-        cache=cache,
-        params=params,
-        terms=terms,
-        dt_i=dt_i,
-        steps_i=steps_i,
-        method=method,
+        G0_jax=request.G0_jax,
+        grid=request.grid,
+        geom=request.geom,
+        cache=request.cache,
+        params=request.params,
+        terms=request.terms,
+        dt_i=request.dt_i,
+        steps_i=request.steps_i,
+        method=request.method,
         time_cfg_i=time_cfg_i,
-        sample_stride=sample_stride,
-        fit_key=fit_key,
-        mode_only=mode_only,
-        mode_method=mode_method,
-        sel=sel,
-        density_species_index=density_species_index,
+        sample_stride=request.sample_stride,
+        fit_key=request.fit_key,
+        mode_only=request.mode_only,
+        mode_method=request.mode_method,
+        sel=request.sel,
+        density_species_index=request.density_species_index,
         hooks=hooks,
     )
     return _fit_saved_time_sample(
         phi_t=phi_t,
         density_t=density_t,
-        dt_i=dt_i,
+        dt_i=request.dt_i,
         stride=stride,
-        fit_key=fit_key,
-        mode_only=mode_only,
-        mode_method=mode_method,
-        sel=sel,
-        tmin=tmin,
-        tmax=tmax,
-        sample_index=sample_index,
-        diagnostic_norm=diagnostic_norm,
-        density_species_index=density_species_index,
-        params=params,
-        fit_policy=fit_policy,
+        fit_key=request.fit_key,
+        mode_only=request.mode_only,
+        mode_method=request.mode_method,
+        sel=request.sel,
+        tmin=request.tmin,
+        tmax=request.tmax,
+        sample_index=request.sample_index,
+        diagnostic_norm=request.diagnostic_norm,
+        density_species_index=request.density_species_index,
+        params=request.params,
+        fit_policy=request.fit_policy,
         hooks=hooks,
     )
 
