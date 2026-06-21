@@ -107,6 +107,114 @@ def _qa_low_turbulence_core(
     }
 
 
+def _qa_low_turbulence_gradient_drive(
+    config: QALowTurbulenceConfig,
+    dtype: jnp.dtype,
+    *,
+    density_gradient: float | None,
+    temperature_gradient: float | None,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """Return gradient inputs and the smooth pressure-drive multiplier."""
+
+    aln = jnp.asarray(config.fixed_density_gradient if density_gradient is None else density_gradient, dtype=dtype)
+    alt = jnp.asarray(
+        config.fixed_temperature_gradient if temperature_gradient is None else temperature_gradient,
+        dtype=dtype,
+    )
+    eta_i = alt / jnp.maximum(aln, jnp.asarray(0.25, dtype=dtype))
+    pressure_drive = 1.0 + 0.060 * (alt - 6.0) + 0.055 * (aln - 2.2) + 0.018 * (eta_i - 2.7)
+    return aln, alt, eta_i, smooth_positive(pressure_drive, beta=10.0)
+
+
+def _qa_low_turbulence_transport_shaping(p: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Return smooth transport-enhancement and suppression factors."""
+
+    minor_shift, elong_shift, _ripple, shear_shift = p
+    transport_shaping = (
+        jax.nn.sigmoid(8.0 * (elong_shift - 0.82))
+        + 0.45 * jax.nn.sigmoid(8.0 * (minor_shift - 0.10))
+        + 0.30 * jax.nn.sigmoid(8.0 * (shear_shift - 0.42))
+    )
+    shaping_suppression = 1.0 / (1.0 + 0.45 * transport_shaping)
+    return transport_shaping, shaping_suppression
+
+
+def _qa_low_turbulence_envelope_coefficients(
+    p: jnp.ndarray,
+    core: dict[str, jnp.ndarray],
+    config: QALowTurbulenceConfig,
+    *,
+    density_gradient: float | None,
+    temperature_gradient: float | None,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """Return growth, saturation, and heat-flux weight for the envelope model."""
+
+    dtype = p.dtype
+    aln, alt, eta_i, pressure_drive = _qa_low_turbulence_gradient_drive(
+        config,
+        dtype,
+        density_gradient=density_gradient,
+        temperature_gradient=temperature_gradient,
+    )
+    transport_shaping, shaping_suppression = _qa_low_turbulence_transport_shaping(p)
+    growth = smooth_positive(core["growth_rate"] * pressure_drive * shaping_suppression, beta=18.0)
+    saturation = (
+        1.15
+        + 2.45 * core["kperp_eff2"]
+        + 0.40 * core["qa_residual"]
+        + 0.055 * aln
+        + 0.030 * alt
+    )
+    drive_weight = (
+        core["linear_heat_flux_weight"]
+        * (1.0 + 0.070 * aln + 0.040 * alt + 0.025 * smooth_positive(eta_i - 1.0, beta=6.0))
+        / (1.0 + 0.30 * transport_shaping)
+    )
+    return growth, saturation, drive_weight
+
+
+def _qa_low_turbulence_initial_energy(
+    p: jnp.ndarray,
+    growth: jnp.ndarray,
+    saturation: jnp.ndarray,
+    dtype: jnp.dtype,
+) -> jnp.ndarray:
+    """Return a positive differentiable envelope seed."""
+
+    equilibrium_energy = 2.0 * growth / jnp.maximum(saturation, jnp.asarray(1.0e-12, dtype=dtype))
+    seed = jnp.asarray(1.0e-3, dtype=dtype) * (1.0 + 0.30 * p[2] ** 2 + 0.15 * p[1] ** 2)
+    return jnp.maximum(seed, 0.35 * equilibrium_energy)
+
+
+def _qa_low_turbulence_integrate_envelope(
+    *,
+    growth: jnp.ndarray,
+    saturation: jnp.ndarray,
+    drive_weight: jnp.ndarray,
+    initial_energy: jnp.ndarray,
+    dt: jnp.ndarray,
+    steps: int,
+    dtype: jnp.dtype,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Integrate the reduced logistic energy envelope with fixed-step RK2."""
+
+    times = dt * jnp.arange(steps + 1, dtype=dtype)
+
+    def rhs(energy: jnp.ndarray) -> jnp.ndarray:
+        return 2.0 * growth * energy - saturation * energy**2
+
+    def step_fn(energy: jnp.ndarray, _idx: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
+        k1 = rhs(energy)
+        predictor = jnp.maximum(energy + dt * k1, jnp.asarray(0.0, dtype=dtype))
+        k2 = rhs(predictor)
+        next_energy = jnp.maximum(energy + 0.5 * dt * (k1 + k2), jnp.asarray(0.0, dtype=dtype))
+        return next_energy, next_energy
+
+    _, tail = jax.lax.scan(step_fn, initial_energy, jnp.arange(steps, dtype=jnp.int32))
+    energy = jnp.concatenate([jnp.asarray([initial_energy], dtype=dtype), tail])
+    return times, drive_weight * energy
+
+
 def qa_low_turbulence_heat_flux_trace(
     params: jnp.ndarray | Sequence[float],
     config: QALowTurbulenceConfig | None = None,
@@ -125,76 +233,24 @@ def qa_low_turbulence_heat_flux_trace(
     p = _validate_params(params)
     core = _qa_low_turbulence_core(p, cfg)
     dtype = p.dtype
-    aln = jnp.asarray(
-        cfg.fixed_density_gradient if density_gradient is None else density_gradient,
-        dtype=dtype,
-    )
-    alt = jnp.asarray(
-        cfg.fixed_temperature_gradient
-        if temperature_gradient is None
-        else temperature_gradient,
-        dtype=dtype,
-    )
-    eta_i = alt / jnp.maximum(aln, jnp.asarray(0.25, dtype=dtype))
-    pressure_drive = (
-        1.0 + 0.060 * (alt - 6.0) + 0.055 * (aln - 2.2) + 0.018 * (eta_i - 2.7)
-    )
-    pressure_drive = smooth_positive(pressure_drive, beta=10.0)
-    minor_shift, elong_shift, _ripple, shear_shift = p
-    transport_shaping = (
-        jax.nn.sigmoid(8.0 * (elong_shift - 0.82))
-        + 0.45 * jax.nn.sigmoid(8.0 * (minor_shift - 0.10))
-        + 0.30 * jax.nn.sigmoid(8.0 * (shear_shift - 0.42))
-    )
-    shaping_suppression = 1.0 / (1.0 + 0.45 * transport_shaping)
-    growth = smooth_positive(
-        core["growth_rate"] * pressure_drive * shaping_suppression, beta=18.0
-    )
-    saturation = (
-        1.15
-        + 2.45 * core["kperp_eff2"]
-        + 0.40 * core["qa_residual"]
-        + 0.055 * aln
-        + 0.030 * alt
-    )
-    drive_weight = (
-        core["linear_heat_flux_weight"]
-        * (
-            1.0
-            + 0.070 * aln
-            + 0.040 * alt
-            + 0.025 * smooth_positive(eta_i - 1.0, beta=6.0)
-        )
-        / (1.0 + 0.30 * transport_shaping)
+    growth, saturation, drive_weight = _qa_low_turbulence_envelope_coefficients(
+        p,
+        core,
+        cfg,
+        density_gradient=density_gradient,
+        temperature_gradient=temperature_gradient,
     )
     dt = jnp.asarray(cfg.nonlinear_dt, dtype=dtype)
     steps = int(cfg.nonlinear_steps)
-    times = dt * jnp.arange(steps + 1, dtype=dtype)
-    equilibrium_energy = (
-        2.0 * growth / jnp.maximum(saturation, jnp.asarray(1.0e-12, dtype=dtype))
+    return _qa_low_turbulence_integrate_envelope(
+        growth=growth,
+        saturation=saturation,
+        drive_weight=drive_weight,
+        initial_energy=_qa_low_turbulence_initial_energy(p, growth, saturation, dtype),
+        dt=dt,
+        steps=steps,
+        dtype=dtype,
     )
-    seed = jnp.asarray(1.0e-3, dtype=dtype) * (
-        1.0 + 0.30 * p[2] ** 2 + 0.15 * p[1] ** 2
-    )
-    energy0 = jnp.maximum(seed, 0.35 * equilibrium_energy)
-
-    def rhs(energy: jnp.ndarray) -> jnp.ndarray:
-        return 2.0 * growth * energy - saturation * energy**2
-
-    def step_fn(
-        energy: jnp.ndarray, _idx: jnp.ndarray
-    ) -> tuple[jnp.ndarray, jnp.ndarray]:
-        k1 = rhs(energy)
-        predictor = jnp.maximum(energy + dt * k1, jnp.asarray(0.0, dtype=dtype))
-        k2 = rhs(predictor)
-        next_energy = jnp.maximum(
-            energy + 0.5 * dt * (k1 + k2), jnp.asarray(0.0, dtype=dtype)
-        )
-        return next_energy, next_energy
-
-    _, tail = jax.lax.scan(step_fn, energy0, jnp.arange(steps, dtype=jnp.int32))
-    energy = jnp.concatenate([jnp.asarray([energy0], dtype=dtype), tail])
-    return times, drive_weight * energy
 
 
 def qa_low_turbulence_window_metrics(
