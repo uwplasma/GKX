@@ -708,6 +708,42 @@ class _VMECArrayParityResult:
     production_parity_passed: bool
 
 
+def _pack_vmec_array_parity_result_report(
+    *,
+    result: _VMECArrayParityResult,
+    info: dict[str, object],
+    options: _VMECArrayParityOptions,
+) -> dict[str, object]:
+    """Pack computed VMEC parity data using the public report schema."""
+
+    return _pack_vmec_array_parity_report(
+        ctx=result.ctx,
+        info=info,
+        case_name=options.case_name,
+        surface_index=result.surface_index,
+        torflux=result.torflux,
+        alpha=options.alpha,
+        ntheta=options.ntheta,
+        mboz=options.mboz,
+        nboz=options.nboz,
+        boundary=options.boundary,
+        include_shear_variation=options.include_shear_variation,
+        include_pressure_variation=options.include_pressure_variation,
+        array_metrics=result.array_metrics,
+        scalar_metrics=result.scalar_metrics,
+        equal_arc_parity=result.equal_arc_parity,
+        equal_arc_core_tolerance=options.equal_arc_core_tolerance,
+        equal_arc_derivative_tolerance=options.equal_arc_derivative_tolerance,
+        equal_arc_metric_tolerance=options.equal_arc_metric_tolerance,
+        equal_arc_drift_tolerance=options.equal_arc_drift_tolerance,
+        worst_core=result.worst_core,
+        worst_scalar=result.worst_scalar,
+        core_tolerance=options.core_tolerance,
+        scalar_tolerance=options.scalar_tolerance,
+        production_parity_passed=result.production_parity_passed,
+    )
+
+
 def _vmec_array_parity_options(
     *,
     case_name: str,
@@ -887,31 +923,10 @@ def vmec_jax_flux_tube_array_parity_report(  # pragma: no cover
     except Exception as exc:
         return _vmec_array_parity_error_report(info=info, case_name=options.case_name, exc=exc)
 
-    return _pack_vmec_array_parity_report(
-        ctx=result.ctx,
+    return _pack_vmec_array_parity_result_report(
+        result=result,
         info=info,
-        case_name=options.case_name,
-        surface_index=result.surface_index,
-        torflux=result.torflux,
-        alpha=options.alpha,
-        ntheta=options.ntheta,
-        mboz=options.mboz,
-        nboz=options.nboz,
-        boundary=options.boundary,
-        include_shear_variation=options.include_shear_variation,
-        include_pressure_variation=options.include_pressure_variation,
-        array_metrics=result.array_metrics,
-        scalar_metrics=result.scalar_metrics,
-        equal_arc_parity=result.equal_arc_parity,
-        equal_arc_core_tolerance=options.equal_arc_core_tolerance,
-        equal_arc_derivative_tolerance=options.equal_arc_derivative_tolerance,
-        equal_arc_metric_tolerance=options.equal_arc_metric_tolerance,
-        equal_arc_drift_tolerance=options.equal_arc_drift_tolerance,
-        worst_core=result.worst_core,
-        worst_scalar=result.worst_scalar,
-        core_tolerance=options.core_tolerance,
-        scalar_tolerance=options.scalar_tolerance,
-        production_parity_passed=result.production_parity_passed,
+        options=options,
     )
 
 
