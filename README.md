@@ -117,6 +117,49 @@ resolved diagnostics, and heat flux.
   state assembly, explicit/IMEX nonlinear stepping, solver-objective gradient
   gates, VMEC/Boozer sensitivity gates, and public API boundaries.
 
+## Runtime and Memory
+
+![Runtime and memory comparison](docs/_static/runtime_memory_benchmark.png)
+
+SPECTRAX-GK is optimized for performance across CPU and GPU backends. The
+runtime panel above compares cold wall time and peak memory usage for the
+shipped benchmark cases, including startup/compilation for JAX rows. Treat these
+as release-accounting measurements for the listed workloads, not as a universal
+throughput model for longer warm runs.
+
+Performance tracking covers:
+
+- **Cyclone ITG** (linear/nonlinear)
+- **KBM** and **ETG** configurations
+- **W7-X** and **HSX** stellarator geometries
+- **Miller** geometry models
+
+The refreshed shipped panel includes the W7-X and HSX linear and nonlinear
+rows. It is generated only from reviewed measured artifacts:
+
+- `docs/_static/runtime_memory_summary_ship_refresh.json`
+- `docs/_static/runtime_memory_results_ship_refresh.csv`
+- `docs/_static/runtime_memory_benchmark.png`
+
+Regenerate the public panel from the shipped refresh summary with:
+
+```bash
+python tools/benchmark_runtime_memory.py \
+  --summary-glob docs/_static/runtime_memory_summary_ship_refresh.json \
+  --csv-out docs/_static/runtime_memory_results_ship_refresh.csv \
+  --summary-out docs/_static/runtime_memory_summary_ship_refresh.json \
+  --plot-out docs/_static/runtime_memory_benchmark.png
+```
+
+Representative shipped rows from `docs/_static/runtime_memory_results_ship_refresh.csv`:
+
+| Case | SPECTRAX-GK CPU | SPECTRAX-GK GPU | Reference backend | Peak RSS range |
+| --- | ---: | ---: | ---: | ---: |
+| Cyclone ITG linear | 39.6 s | 24.2 s | 981.7 s | 1.1-2.0 GiB |
+| W7-X nonlinear | 474.0 s | 50.8 s | 111.0 s | 2.0-6.3 GiB |
+| HSX nonlinear | 646.5 s | 49.3 s | 135.7 s | 2.1-6.4 GiB |
+| Cyclone Miller nonlinear | 339.2 s | 47.1 s | 77.8 s | 2.1-4.9 GiB |
+
 ## QA ITG Optimization Panel
 
 SPECTRAX-GK ships VMEC-JAX-style QA optimization examples that append one differentiable ITG transport residual to the usual aspect-ratio, iota, and quasisymmetry objective tuples. The strict baseline below follows the upstream VMEC-JAX `QA_optimization.py` max-mode-5 simple-seed setup; the transport rows restart from that solved QA state and optimize one representative ITG residual for linear growth, quasilinear flux, or nonlinear-window screening. Full equations, gates, and audit provenance are in the [stellarator optimization docs](docs/stellarator_optimization.rst).
@@ -188,44 +231,6 @@ spectraxgk run --config examples/linear/non-axisymmetric/runtime_w7x_linear_quas
 The bundled QHS/QI/QA VMEC decks are self-contained demonstrators. Exact
 machine-specific HSX or W7-X validation should use the same TOMLs with
 `--vmec-file` pointing to the corresponding benchmark `wout_*.nc`.
-
-## Runtime and Memory
-
-![Runtime and memory comparison](docs/_static/runtime_memory_benchmark.png)
-
-SPECTRAX-GK is optimized for performance across CPU and GPU backends. The
-runtime panel above compares wall-time and peak memory usage for the shipped
-benchmark cases. Performance tracking covers:
-
-- **Cyclone ITG** (linear/nonlinear)
-- **KBM** and **ETG** configurations
-- **W7-X** and **HSX** stellarator geometries
-- **Miller** geometry models
-
-The refreshed shipped panel includes the W7-X and HSX linear and nonlinear
-rows. Regenerate this public panel from the shipped refresh summary with:
-
-```bash
-python tools/benchmark_runtime_memory.py \
-  --summary-glob docs/_static/runtime_memory_summary_ship_refresh.json \
-  --csv-out docs/_static/runtime_memory_results_ship_refresh.csv \
-  --summary-out docs/_static/runtime_memory_summary_ship_refresh.json \
-  --plot-out docs/_static/runtime_memory_benchmark.png
-```
-
-Representative shipped rows from `docs/_static/runtime_memory_results_ship_refresh.csv`:
-
-| Case | SPECTRAX-GK CPU | SPECTRAX-GK GPU | Reference backend | Peak RSS range |
-| --- | ---: | ---: | ---: | ---: |
-| Cyclone ITG linear | 39.6 s | 24.2 s | 981.7 s | 1.1-2.0 GiB |
-| W7-X nonlinear | 474.0 s | 50.8 s | 111.0 s | 2.0-6.3 GiB |
-| HSX nonlinear | 646.5 s | 49.3 s | 135.7 s | 2.1-6.4 GiB |
-| Cyclone Miller nonlinear | 339.2 s | 47.1 s | 77.8 s | 2.1-4.9 GiB |
-
-These are cold wall-clock rows from the tracked benchmark host and include
-startup/compilation for JAX. Treat them as release-accounting data for the
-listed workloads, not as a universal throughput model for longer warm runs.
-
 
 ## Current claim scope
 
