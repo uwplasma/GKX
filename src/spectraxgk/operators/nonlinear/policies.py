@@ -84,6 +84,26 @@ class NonlinearTimeStepPolicy:
     update_dt: Callable[[FieldState, jnp.ndarray], jnp.ndarray]
 
 
+@dataclass(frozen=True)
+class _TimeStepLimits:
+    dt_init: jnp.ndarray
+    progress_total: jnp.ndarray
+    dt_min: jnp.ndarray
+    dt_max: jnp.ndarray
+    cfl: jnp.ndarray
+    cfl_fac: jnp.ndarray
+
+
+@dataclass(frozen=True)
+class _NonlinearCFLBounds:
+    kx_max: float
+    ky_max: float
+    vpar_max: float
+    muB_max: float
+    kxfac: float
+    linear_omega: jnp.ndarray
+
+
 def _nonlinear_moment_counts(G0: jnp.ndarray) -> tuple[int, int]:
     if G0.ndim == 5:
         return int(G0.shape[0]), int(G0.shape[1])
@@ -142,6 +162,109 @@ def build_nonlinear_diagnostic_setup(
     )
 
 
+def _build_time_step_limits(
+    *,
+    method: str,
+    dt: float,
+    steps: int,
+    fixed_dt: bool,
+    dt_min: float,
+    dt_max: float | None,
+    cfl: float,
+    cfl_fac: float | None,
+    real_dtype: Any,
+    resolve_cfl_fac_fn: Callable[[str, float | None], float],
+) -> _TimeStepLimits:
+    dt_init = jnp.asarray(dt, dtype=real_dtype)
+    progress_total = (
+        jnp.asarray(float(steps) * float(dt), dtype=real_dtype)
+        if fixed_dt
+        else jnp.asarray(jnp.nan, dtype=real_dtype)
+    )
+    return _TimeStepLimits(
+        dt_init=dt_init,
+        progress_total=progress_total,
+        dt_min=jnp.asarray(dt_min, dtype=real_dtype),
+        dt_max=jnp.asarray(dt if dt_max is None else dt_max, dtype=real_dtype),
+        cfl=jnp.asarray(cfl, dtype=real_dtype),
+        cfl_fac=jnp.asarray(resolve_cfl_fac_fn(method, cfl_fac), dtype=real_dtype),
+    )
+
+
+def _build_nonlinear_cfl_bounds(
+    grid: SpectralGrid,
+    geom: Any,
+    params: LinearParams,
+    cache: LinearCache,
+    *,
+    real_dtype: Any,
+    linear_frequency_bound_fn: Callable[..., Any],
+    laguerre_velocity_max_fn: Callable[[int], float],
+) -> _NonlinearCFLBounds:
+    nx = int(grid.kx.size)
+    ny = int(grid.ky.size)
+    kx_np = np.asarray(cache.kx, dtype=float)
+    ky_np = np.asarray(cache.ky, dtype=float)
+    nl = int(cache.l.shape[0])
+    nm = int(cache.m.shape[1])
+    vtmax = float(np.max(np.abs(np.asarray(params.vth, dtype=float))))
+    tzmax = float(np.max(np.abs(np.asarray(params.tz, dtype=float))))
+    return _NonlinearCFLBounds(
+        kx_max=float(abs(kx_np[(nx - 1) // 3])) if nx > 1 else 0.0,
+        ky_max=float(abs(ky_np[(ny - 1) // 3])) if ny > 1 else 0.0,
+        vpar_max=2.0 * float(np.sqrt(max(nm, 1))) * vtmax,
+        muB_max=laguerre_velocity_max_fn(nl) * tzmax,
+        kxfac=float(np.asarray(cache.kxfac)),
+        linear_omega=jnp.asarray(
+            linear_frequency_bound_fn(
+                grid,
+                geom,
+                params,
+                nl,
+                nm,
+                include_diamagnetic_drive=False,
+            ),
+            dtype=real_dtype,
+        ),
+    )
+
+
+def _make_nonlinear_dt_update(
+    grid: SpectralGrid,
+    cache: LinearCache,
+    *,
+    fixed_dt: bool,
+    compressed_real_fft: bool,
+    real_dtype: Any,
+    limits: _TimeStepLimits,
+    bounds: _NonlinearCFLBounds,
+    cfl_frequency_components_fn: Callable[..., tuple[jnp.ndarray, jnp.ndarray]],
+) -> Callable[[FieldState, jnp.ndarray], jnp.ndarray]:
+    def update_dt(fields_state: FieldState, dt_prev: jnp.ndarray) -> jnp.ndarray:
+        if fixed_dt:
+            return jnp.asarray(dt_prev, dtype=real_dtype)
+        omega_nl_x, omega_nl_y = cfl_frequency_components_fn(
+            fields_state,
+            grid,
+            cache,
+            compressed_real_fft=compressed_real_fft,
+            kx_max=bounds.kx_max,
+            ky_max=bounds.ky_max,
+            kxfac=bounds.kxfac,
+            vpar_max=bounds.vpar_max,
+            muB_max=bounds.muB_max,
+        )
+        wmax = (
+            jnp.maximum(bounds.linear_omega[0], omega_nl_x)
+            + jnp.maximum(bounds.linear_omega[1], omega_nl_y)
+            + bounds.linear_omega[2]
+        )
+        dt_guess = jnp.where(wmax > 0.0, limits.cfl_fac * limits.cfl / wmax, dt_prev)
+        return jnp.asarray(jnp.clip(dt_guess, limits.dt_min, limits.dt_max), dtype=real_dtype)
+
+    return update_dt
+
+
 def build_nonlinear_time_step_policy(
     grid: SpectralGrid,
     geom: Any,
@@ -165,68 +288,41 @@ def build_nonlinear_time_step_policy(
 ) -> NonlinearTimeStepPolicy:
     """Build the fixed/adaptive nonlinear time-step update policy."""
 
-    dt_init = jnp.asarray(dt, dtype=real_dtype)
-    progress_total = (
-        jnp.asarray(float(steps) * float(dt), dtype=real_dtype)
-        if fixed_dt
-        else jnp.asarray(jnp.nan, dtype=real_dtype)
+    limits = _build_time_step_limits(
+        method=method,
+        dt=dt,
+        steps=steps,
+        fixed_dt=fixed_dt,
+        dt_min=dt_min,
+        dt_max=dt_max,
+        cfl=cfl,
+        cfl_fac=cfl_fac,
+        real_dtype=real_dtype,
+        resolve_cfl_fac_fn=resolve_cfl_fac_fn,
     )
-    dt_min_val = jnp.asarray(dt_min, dtype=real_dtype)
-    # Explicit-time default behavior: when dt_max is unset, dt_max == dt.
-    dt_max_val = jnp.asarray(dt if dt_max is None else dt_max, dtype=real_dtype)
-    cfl_val = jnp.asarray(cfl, dtype=real_dtype)
-    cfl_fac_val = jnp.asarray(resolve_cfl_fac_fn(method, cfl_fac), dtype=real_dtype)
-
-    nx = int(grid.kx.size)
-    ny = int(grid.ky.size)
-    kx_np = np.asarray(cache.kx, dtype=float)
-    ky_np = np.asarray(cache.ky, dtype=float)
-    kx_max = float(abs(kx_np[(nx - 1) // 3])) if nx > 1 else 0.0
-    ky_max = float(abs(ky_np[(ny - 1) // 3])) if ny > 1 else 0.0
-    vtmax = float(np.max(np.abs(np.asarray(params.vth, dtype=float))))
-    tzmax = float(np.max(np.abs(np.asarray(params.tz, dtype=float))))
-    nl = int(cache.l.shape[0])
-    nm = int(cache.m.shape[1])
-    vpar_max = 2.0 * float(np.sqrt(max(nm, 1))) * vtmax
-    muB_max = laguerre_velocity_max_fn(nl) * tzmax
-    kxfac_val = float(np.asarray(cache.kxfac))
-    linear_omega = jnp.asarray(
-        linear_frequency_bound_fn(
-            grid,
-            geom,
-            params,
-            nl,
-            nm,
-            include_diamagnetic_drive=False,
-        ),
-        dtype=real_dtype,
+    bounds = _build_nonlinear_cfl_bounds(
+        grid,
+        geom,
+        params,
+        cache,
+        real_dtype=real_dtype,
+        linear_frequency_bound_fn=linear_frequency_bound_fn,
+        laguerre_velocity_max_fn=laguerre_velocity_max_fn,
     )
-
-    def update_dt(fields_state: FieldState, dt_prev: jnp.ndarray) -> jnp.ndarray:
-        if fixed_dt:
-            return jnp.asarray(dt_prev, dtype=real_dtype)
-        omega_nl_x, omega_nl_y = cfl_frequency_components_fn(
-            fields_state,
-            grid,
-            cache,
-            compressed_real_fft=compressed_real_fft,
-            kx_max=kx_max,
-            ky_max=ky_max,
-            kxfac=kxfac_val,
-            vpar_max=vpar_max,
-            muB_max=muB_max,
-        )
-        wmax = (
-            jnp.maximum(linear_omega[0], omega_nl_x)
-            + jnp.maximum(linear_omega[1], omega_nl_y)
-            + linear_omega[2]
-        )
-        dt_guess = jnp.where(wmax > 0.0, cfl_fac_val * cfl_val / wmax, dt_prev)
-        return jnp.asarray(jnp.clip(dt_guess, dt_min_val, dt_max_val), dtype=real_dtype)
+    update_dt = _make_nonlinear_dt_update(
+        grid,
+        cache,
+        fixed_dt=fixed_dt,
+        compressed_real_fft=compressed_real_fft,
+        real_dtype=real_dtype,
+        limits=limits,
+        bounds=bounds,
+        cfl_frequency_components_fn=cfl_frequency_components_fn,
+    )
 
     return NonlinearTimeStepPolicy(
-        dt_init=dt_init,
-        progress_total=progress_total,
+        dt_init=limits.dt_init,
+        progress_total=limits.progress_total,
         update_dt=update_dt,
     )
 
