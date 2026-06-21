@@ -88,6 +88,101 @@ def run_linear_scan(
     )
 
 
+def _select_representative_ky(
+    scan: LinearScanResult,
+    select_ky: Callable[[LinearScanResult], float] | None,
+) -> float:
+    if select_ky is not None:
+        return float(select_ky(scan))
+    return float(scan.ky[int(np.nanargmax(scan.gamma))])
+
+
+def _resolution_for_ky(
+    ky: float,
+    *,
+    Nl: int,
+    Nm: int,
+    resolution_policy: Callable[[float], tuple[int, int]] | None,
+) -> tuple[int, int]:
+    if resolution_policy is not None:
+        n_l, n_m = resolution_policy(float(ky))
+        return int(n_l), int(n_m)
+    return int(Nl), int(Nm)
+
+
+def _mode_control_value(
+    value: float | int | np.ndarray,
+    idx: int,
+    cast,
+):
+    if isinstance(value, np.ndarray):
+        return cast(value[idx])
+    return cast(value)
+
+
+def _run_representative_mode(
+    *,
+    scan: LinearScanResult,
+    ky_selected: float,
+    linear_fn,
+    cfg,
+    Nl: int,
+    Nm: int,
+    dt: float | np.ndarray,
+    steps: int | np.ndarray,
+    method: str,
+    mode_solver: str,
+    window_kw: dict,
+    mode_kwargs: dict | None,
+    resolution_policy: Callable[[float], tuple[int, int]] | None,
+) -> LinearRunResult:
+    n_l, n_m = _resolution_for_ky(
+        ky_selected, Nl=Nl, Nm=Nm, resolution_policy=resolution_policy
+    )
+    idx = int(np.argmin(np.abs(scan.ky - ky_selected)))
+    return linear_fn(
+        cfg=cfg,
+        ky_target=ky_selected,
+        Nl=n_l,
+        Nm=n_m,
+        dt=_mode_control_value(dt, idx, float),
+        steps=_mode_control_value(steps, idx, int),
+        method=method,
+        solver=mode_solver,
+        **window_kw,
+        **(mode_kwargs or {}),
+    )
+
+
+def _fit_representative_mode_window(
+    run: LinearRunResult,
+    window_kw: dict,
+) -> tuple[float | None, float | None]:
+    if run.t.size < 2:
+        return None, None
+    signal = extract_mode_time_series(run.phi_t, run.selection, method="project")
+    _g, _w, tmin_fit, tmax_fit = fit_growth_rate_auto(run.t, signal, **window_kw)
+    return tmin_fit, tmax_fit
+
+
+def _extract_representative_eigenfunction(
+    run: LinearRunResult,
+    grid: SpectralGrid,
+    *,
+    tmin_fit: float | None,
+    tmax_fit: float | None,
+) -> np.ndarray:
+    return extract_eigenfunction(
+        run.phi_t,
+        run.t,
+        run.selection,
+        z=np.asarray(grid.z),
+        method="snapshot",
+        tmin=tmin_fit,
+        tmax=tmax_fit,
+    )
+
+
 def run_scan_and_mode(
     *,
     ky_values: np.ndarray,
@@ -114,11 +209,6 @@ def run_scan_and_mode(
 ) -> ScanAndModeResult:
     """Run a scan and extract a representative eigenfunction."""
 
-    if select_ky is None:
-
-        def select_ky(scan: LinearScanResult) -> float:
-            return float(scan.ky[int(np.nanargmax(scan.gamma))])
-
     scan = run_linear_scan(
         ky_values=ky_values,
         run_linear_fn=linear_fn,
@@ -138,42 +228,26 @@ def run_scan_and_mode(
         resolution_policy=resolution_policy,
         krylov_policy=krylov_policy,
     )
-    ky_sel = float(select_ky(scan))
-    if resolution_policy is not None:
-        Nl_mode, Nm_mode = resolution_policy(ky_sel)
-    else:
-        Nl_mode, Nm_mode = int(Nl), int(Nm)
-    idx = int(np.argmin(np.abs(scan.ky - ky_sel)))
-    dt_mode = float(dt[idx]) if isinstance(dt, np.ndarray) else float(dt)
-    steps_mode = int(steps[idx]) if isinstance(steps, np.ndarray) else int(steps)
-    run: LinearRunResult = linear_fn(
+    ky_sel = _select_representative_ky(scan, select_ky)
+    run = _run_representative_mode(
+        scan=scan,
+        ky_selected=ky_sel,
+        linear_fn=linear_fn,
         cfg=cfg,
-        ky_target=ky_sel,
-        Nl=int(Nl_mode),
-        Nm=int(Nm_mode),
-        dt=dt_mode,
-        steps=steps_mode,
+        Nl=Nl,
+        Nm=Nm,
+        dt=dt,
+        steps=steps,
         method=method,
-        solver=mode_solver,
-        **window_kw,
-        **(mode_kwargs or {}),
+        mode_solver=mode_solver,
+        window_kw=window_kw,
+        mode_kwargs=mode_kwargs,
+        resolution_policy=resolution_policy,
     )
     grid = build_spectral_grid(cfg.grid)
-    if run.t.size < 2:
-        tmin_fit = None
-        tmax_fit = None
-    else:
-        signal = extract_mode_time_series(run.phi_t, run.selection, method="project")
-        _g, _w, tmin_fit, tmax_fit = fit_growth_rate_auto(run.t, signal, **window_kw)
-    z_np = np.asarray(grid.z)
-    eig = extract_eigenfunction(
-        run.phi_t,
-        run.t,
-        run.selection,
-        z=z_np,
-        method="snapshot",
-        tmin=tmin_fit,
-        tmax=tmax_fit,
+    tmin_fit, tmax_fit = _fit_representative_mode_window(run, window_kw)
+    eig = _extract_representative_eigenfunction(
+        run, grid, tmin_fit=tmin_fit, tmax_fit=tmax_fit
     )
     return ScanAndModeResult(
         scan=scan,
