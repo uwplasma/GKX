@@ -33,6 +33,7 @@ from spectraxgk.terms.reduced.cetg_state import (
 )
 
 _CETGRHS = Callable[[jnp.ndarray], tuple[jnp.ndarray, FieldState]]
+_CETGProject = Callable[[jnp.ndarray], jnp.ndarray]
 _SUPPORTED_CETG_EXPLICIT_METHODS = {
     "euler",
     "rk2",
@@ -55,6 +56,63 @@ def _cetg_flux_weight(grid: SpectralGrid, dtype: jnp.dtype) -> jnp.ndarray:
     flux = jnp.ones((grid.z.size,), dtype=dtype)
     flux = flux / jnp.maximum(jnp.sum(flux), jnp.asarray(1.0, dtype=dtype))
     return _xy_mask(grid, dtype) * flux[None, None, None, :]
+
+
+def _cetg_mode_diagnostics(
+    phi: jnp.ndarray,
+    phi_prev: jnp.ndarray,
+    dt_step: jnp.ndarray,
+    *,
+    mask: jnp.ndarray,
+    z_index: int,
+    omega_ky_index: int | None,
+    omega_kx_index: int | None,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    gamma_modes, omega_modes = _instantaneous_growth_rate_step(
+        phi, phi_prev, dt_step, z_index=z_index, mask=mask
+    )
+    real_dtype = jnp.real(jnp.empty((), dtype=phi.dtype)).dtype
+    if omega_ky_index is not None:
+        ky_i = int(np.clip(omega_ky_index, 0, int(gamma_modes.shape[0]) - 1))
+        kx_i = int(np.clip(omega_kx_index or 0, 0, int(gamma_modes.shape[1]) - 1))
+        gamma = jnp.nan_to_num(
+            gamma_modes[ky_i, kx_i], nan=jnp.asarray(0.0, dtype=real_dtype)
+        )
+        omega = jnp.nan_to_num(
+            omega_modes[ky_i, kx_i], nan=jnp.asarray(0.0, dtype=real_dtype)
+        )
+        return gamma, omega, phi[ky_i, kx_i, z_index]
+    gamma = jnp.nan_to_num(
+        jnp.nanmean(jnp.where(mask, gamma_modes, jnp.nan)),
+        nan=jnp.asarray(0.0, dtype=real_dtype),
+    )
+    omega = jnp.nan_to_num(
+        jnp.nanmean(jnp.where(mask, omega_modes, jnp.nan)),
+        nan=jnp.asarray(0.0, dtype=real_dtype),
+    )
+    return gamma, omega, jnp.asarray(0.0 + 0.0j, dtype=phi.dtype)
+
+
+def _cetg_energy_flux_diagnostics(
+    G_int: jnp.ndarray,
+    phi: jnp.ndarray,
+    grid: SpectralGrid,
+    params: CETGModelParams,
+    real_dtype: jnp.dtype,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    diag_weight = _cetg_diag_weight(grid, real_dtype)
+    flux_weight = _cetg_flux_weight(grid, real_dtype)
+    pressure = jnp.asarray(params.pressure, dtype=real_dtype)
+    W = 0.5 * pressure * jnp.sum(jnp.abs(G_int) ** 2 * diag_weight)
+    Phi2 = 0.5 * jnp.sum(jnp.abs(phi) ** 2 * diag_weight[0])
+    ky = jnp.asarray(grid.ky, dtype=real_dtype)[:, None, None]
+    vphi_r = -1j * ky * phi
+    qflux_species = jnp.asarray(
+        [jnp.sum(jnp.real(jnp.conj(vphi_r) * G_int[1]) * flux_weight[0]) * pressure],
+        dtype=real_dtype,
+    )
+    pflux_species = jnp.zeros((1,), dtype=real_dtype)
+    return W, Phi2, qflux_species[0], pflux_species[0], qflux_species, pflux_species
 
 
 def _compute_cetg_diag(
@@ -83,51 +141,19 @@ def _compute_cetg_diag(
 ]:
     G_int = _to_internal_state(G)
     phi = fields.phi
-    gamma_modes, omega_modes = _instantaneous_growth_rate_step(
-        phi, phi_prev, dt_step, z_index=z_index, mask=mask
-    )
     real_dtype = jnp.real(jnp.empty((), dtype=phi.dtype)).dtype
-    if omega_ky_index is not None:
-        ky_i = int(np.clip(omega_ky_index, 0, int(gamma_modes.shape[0]) - 1))
-        kx_i = int(np.clip(omega_kx_index or 0, 0, int(gamma_modes.shape[1]) - 1))
-        gamma = jnp.nan_to_num(
-            gamma_modes[ky_i, kx_i], nan=jnp.asarray(0.0, dtype=real_dtype)
-        )
-        omega = jnp.nan_to_num(
-            omega_modes[ky_i, kx_i], nan=jnp.asarray(0.0, dtype=real_dtype)
-        )
-        phi_mode = phi[ky_i, kx_i, z_index]
-    else:
-        gamma = jnp.nan_to_num(
-            jnp.nanmean(jnp.where(mask, gamma_modes, jnp.nan)),
-            nan=jnp.asarray(0.0, dtype=real_dtype),
-        )
-        omega = jnp.nan_to_num(
-            jnp.nanmean(jnp.where(mask, omega_modes, jnp.nan)),
-            nan=jnp.asarray(0.0, dtype=real_dtype),
-        )
-        phi_mode = jnp.asarray(0.0 + 0.0j, dtype=phi.dtype)
-
-    diag_weight = _cetg_diag_weight(grid, real_dtype)
-    flux_weight = _cetg_flux_weight(grid, real_dtype)
-    W = (
-        0.5
-        * jnp.asarray(params.pressure, dtype=real_dtype)
-        * jnp.sum(jnp.abs(G_int) ** 2 * diag_weight)
+    gamma, omega, phi_mode = _cetg_mode_diagnostics(
+        phi,
+        phi_prev,
+        dt_step,
+        mask=mask,
+        z_index=z_index,
+        omega_ky_index=omega_ky_index,
+        omega_kx_index=omega_kx_index,
     )
-    Phi2 = 0.5 * jnp.sum(jnp.abs(phi) ** 2 * diag_weight[0])
-    ky = jnp.asarray(grid.ky, dtype=real_dtype)[:, None, None]
-    vphi_r = -1j * ky * phi
-    qflux_species = jnp.asarray(
-        [
-            jnp.sum(jnp.real(jnp.conj(vphi_r) * G_int[1]) * flux_weight[0])
-            * jnp.asarray(params.pressure, dtype=real_dtype)
-        ],
-        dtype=real_dtype,
+    W, Phi2, qflux, pflux, qflux_species, pflux_species = (
+        _cetg_energy_flux_diagnostics(G_int, phi, grid, params, real_dtype)
     )
-    pflux_species = jnp.zeros((1,), dtype=real_dtype)
-    qflux = qflux_species[0]
-    pflux = pflux_species[0]
     return (
         gamma,
         omega,
@@ -140,6 +166,127 @@ def _compute_cetg_diag(
         pflux_species,
         phi_mode,
     )
+
+
+def _project_cetg_stage(
+    G_stage: jnp.ndarray,
+    grid: SpectralGrid,
+    *,
+    compressed_real_fft: bool,
+) -> jnp.ndarray:
+    return _project_state(
+        G_stage,
+        grid,
+        compressed_real_fft=compressed_real_fft,
+    )
+
+
+def _cetg_step_rk2(
+    G_state: jnp.ndarray,
+    dG: jnp.ndarray,
+    dt_local: jnp.ndarray,
+    rhs_fn: _CETGRHS,
+    project: _CETGProject,
+) -> jnp.ndarray:
+    k2, _ = rhs_fn(project(G_state + 0.5 * dt_local * dG))
+    return G_state + dt_local * k2
+
+
+def _cetg_step_rk3_classic(
+    G_state: jnp.ndarray,
+    dG: jnp.ndarray,
+    dt_local: jnp.ndarray,
+    rhs_fn: _CETGRHS,
+    project: _CETGProject,
+) -> jnp.ndarray:
+    G1 = project(G_state + dt_local * dG)
+    k2, _ = rhs_fn(G1)
+    G2 = project(0.75 * G_state + 0.25 * (G1 + dt_local * k2))
+    k3, _ = rhs_fn(G2)
+    return (1.0 / 3.0) * G_state + (2.0 / 3.0) * (G2 + dt_local * k3)
+
+
+def _cetg_step_rk3_heun(
+    G_state: jnp.ndarray,
+    dG: jnp.ndarray,
+    dt_local: jnp.ndarray,
+    rhs_fn: _CETGRHS,
+    project: _CETGProject,
+) -> jnp.ndarray:
+    G1 = project(G_state + (dt_local / 3.0) * dG)
+    k2, _ = rhs_fn(G1)
+    G2 = project(G_state + (2.0 * dt_local / 3.0) * k2)
+    k3, _ = rhs_fn(G2)
+    G3 = project(G_state + 0.75 * dt_local * k3)
+    return G3 + 0.25 * dt_local * dG
+
+
+def _cetg_step_rk4(
+    G_state: jnp.ndarray,
+    dG: jnp.ndarray,
+    dt_local: jnp.ndarray,
+    rhs_fn: _CETGRHS,
+    project: _CETGProject,
+) -> jnp.ndarray:
+    G2 = project(G_state + 0.5 * dt_local * dG)
+    k2, _ = rhs_fn(G2)
+    G3 = project(G_state + 0.5 * dt_local * k2)
+    k3, _ = rhs_fn(G3)
+    G4 = project(G_state + dt_local * k3)
+    k4, _ = rhs_fn(G4)
+    return G_state + (dt_local / 6.0) * (dG + 2.0 * k2 + 2.0 * k3 + k4)
+
+
+def _cetg_step_sspx3(
+    G_state: jnp.ndarray,
+    dG: jnp.ndarray,
+    dt_local: jnp.ndarray,
+    rhs_fn: _CETGRHS,
+    project: _CETGProject,
+) -> jnp.ndarray:
+    def euler_substep(
+        G_stage: jnp.ndarray,
+        dG_stage: jnp.ndarray | None = None,
+    ) -> jnp.ndarray:
+        if dG_stage is None:
+            dG_stage, _ = rhs_fn(G_stage)
+        return project(G_stage + (_SSPX3_ADT * dt_local) * dG_stage)
+
+    G1 = euler_substep(G_state, dG)
+    G2_euler = euler_substep(G1)
+    G2 = project(
+        (1.0 - _SSPX3_W1) * G_state + (_SSPX3_W1 - 1.0) * G1 + G2_euler
+    )
+    G3 = euler_substep(G2)
+    return (
+        (1.0 - _SSPX3_W2 - _SSPX3_W3) * G_state
+        + _SSPX3_W3 * G1
+        + (_SSPX3_W2 - 1.0) * G2
+        + G3
+    )
+
+
+def _cetg_step_k10(
+    G_state: jnp.ndarray,
+    dG: jnp.ndarray,
+    dt_local: jnp.ndarray,
+    rhs_fn: _CETGRHS,
+    project: _CETGProject,
+) -> jnp.ndarray:
+    def k10_euler_step(G_stage: jnp.ndarray) -> jnp.ndarray:
+        dG_stage, _ = rhs_fn(G_stage)
+        return project(G_stage + (dt_local / 6.0) * dG_stage)
+
+    G_q1 = G_state
+    G_q2 = G_state
+    for _ in range(5):
+        G_q1 = k10_euler_step(G_q1)
+    G_q2 = 0.04 * G_q2 + 0.36 * G_q1
+    G_q1 = 15.0 * G_q2 - 5.0 * G_q1
+    for _ in range(4):
+        G_q1 = k10_euler_step(G_q1)
+    dG_final, _ = rhs_fn(G_q1)
+    return G_q2 + 0.6 * G_q1 + 0.1 * dt_local * dG_final
 
 
 def _cetg_explicit_step(
@@ -155,80 +302,21 @@ def _cetg_explicit_step(
     """Advance one projected cETG state with the requested explicit method."""
 
     def project(G_stage: jnp.ndarray) -> jnp.ndarray:
-        return _project_state(
-            G_stage,
-            grid,
-            compressed_real_fft=compressed_real_fft,
-        )
+        return _project_cetg_stage(G_stage, grid, compressed_real_fft=compressed_real_fft)
 
     if method == "euler":
         return G_state + dt_local * dG
     if method == "rk2":
-        k1 = dG
-        k2, _ = rhs_fn(project(G_state + 0.5 * dt_local * k1))
-        return G_state + dt_local * k2
+        return _cetg_step_rk2(G_state, dG, dt_local, rhs_fn, project)
     if method == "rk3_classic":
-        k1 = dG
-        G1 = project(G_state + dt_local * k1)
-        k2, _ = rhs_fn(G1)
-        G2 = project(0.75 * G_state + 0.25 * (G1 + dt_local * k2))
-        k3, _ = rhs_fn(G2)
-        return (1.0 / 3.0) * G_state + (2.0 / 3.0) * (G2 + dt_local * k3)
+        return _cetg_step_rk3_classic(G_state, dG, dt_local, rhs_fn, project)
     if method in {"rk3", "rk3_heun"}:
-        k1 = dG
-        G1 = project(G_state + (dt_local / 3.0) * k1)
-        k2, _ = rhs_fn(G1)
-        G2 = project(G_state + (2.0 * dt_local / 3.0) * k2)
-        k3, _ = rhs_fn(G2)
-        G3 = project(G_state + 0.75 * dt_local * k3)
-        return G3 + 0.25 * dt_local * k1
+        return _cetg_step_rk3_heun(G_state, dG, dt_local, rhs_fn, project)
     if method == "rk4":
-        k1 = dG
-        G2 = project(G_state + 0.5 * dt_local * k1)
-        k2, _ = rhs_fn(G2)
-        G3 = project(G_state + 0.5 * dt_local * k2)
-        k3, _ = rhs_fn(G3)
-        G4 = project(G_state + dt_local * k3)
-        k4, _ = rhs_fn(G4)
-        return G_state + (dt_local / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+        return _cetg_step_rk4(G_state, dG, dt_local, rhs_fn, project)
     if method == "sspx3":
-
-        def euler_substep(
-            G_stage: jnp.ndarray,
-            dG_stage: jnp.ndarray | None = None,
-        ) -> jnp.ndarray:
-            if dG_stage is None:
-                dG_stage, _ = rhs_fn(G_stage)
-            return project(G_stage + (_SSPX3_ADT * dt_local) * dG_stage)
-
-        # The first SSPx3 Euler substep must use the RHS that selected dt_local.
-        G1 = euler_substep(G_state, dG)
-        G2_euler = euler_substep(G1)
-        G2 = project(
-            (1.0 - _SSPX3_W1) * G_state + (_SSPX3_W1 - 1.0) * G1 + G2_euler
-        )
-        G3 = euler_substep(G2)
-        return (
-            (1.0 - _SSPX3_W2 - _SSPX3_W3) * G_state
-            + _SSPX3_W3 * G1
-            + (_SSPX3_W2 - 1.0) * G2
-            + G3
-        )
-
-    def k10_euler_step(G_stage: jnp.ndarray) -> jnp.ndarray:
-        dG_stage, _ = rhs_fn(G_stage)
-        return project(G_stage + (dt_local / 6.0) * dG_stage)
-
-    G_q1 = G_state
-    G_q2 = G_state
-    for _ in range(5):
-        G_q1 = k10_euler_step(G_q1)
-    G_q2 = 0.04 * G_q2 + 0.36 * G_q1
-    G_q1 = 15.0 * G_q2 - 5.0 * G_q1
-    for _ in range(4):
-        G_q1 = k10_euler_step(G_q1)
-    dG_final, _ = rhs_fn(G_q1)
-    return G_q2 + 0.6 * G_q1 + 0.1 * dt_local * dG_final
+        return _cetg_step_sspx3(G_state, dG, dt_local, rhs_fn, project)
+    return _cetg_step_k10(G_state, dG, dt_local, rhs_fn, project)
 
 
 @dataclass(frozen=True)
