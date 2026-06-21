@@ -628,6 +628,96 @@ def _integrate_imex_nonlinear_diagnostics_core(
     )
 
 
+def _imex_preparation_options(
+    *,
+    cache: LinearCache | None,
+    terms: TermConfig | None,
+    collision_split: bool,
+    implicit_preconditioner: str | None,
+    compressed_real_fft: bool,
+    use_dealias_mask: bool,
+    z_index: int | None,
+    fixed_mode_ky_index: int | None,
+    fixed_mode_kx_index: int | None,
+) -> _IMEXPreparationOptions:
+    return _IMEXPreparationOptions(
+        cache=cache,
+        terms=terms,
+        collision_split=collision_split,
+        implicit_preconditioner=implicit_preconditioner,
+        compressed_real_fft=compressed_real_fft,
+        use_dealias_mask=use_dealias_mask,
+        z_index=z_index,
+        fixed_mode_ky_index=fixed_mode_ky_index,
+        fixed_mode_kx_index=fixed_mode_kx_index,
+    )
+
+
+def _imex_runtime_options(
+    *,
+    collision_split: bool,
+    external_phi: jnp.ndarray | float | None,
+    compressed_real_fft: bool,
+    laguerre_mode: str,
+    implicit_iters: int,
+    implicit_relax: float,
+    implicit_tol: float,
+    implicit_maxiter: int,
+    implicit_restart: int,
+    implicit_solve_method: str,
+) -> _IMEXRuntimeOptions:
+    return _IMEXRuntimeOptions(
+        collision_split=collision_split,
+        external_phi=external_phi,
+        compressed_real_fft=compressed_real_fft,
+        laguerre_mode=laguerre_mode,
+        implicit_iters=implicit_iters,
+        implicit_relax=implicit_relax,
+        implicit_tol=implicit_tol,
+        implicit_maxiter=implicit_maxiter,
+        implicit_restart=implicit_restart,
+        implicit_solve_method=implicit_solve_method,
+    )
+
+
+def _imex_diagnostic_options(
+    *,
+    omega_ky_index: int | None,
+    omega_kx_index: int | None,
+    flux_scale: float,
+    wphi_scale: float,
+) -> _IMEXDiagnosticOptions:
+    return _IMEXDiagnosticOptions(
+        omega_ky_index=omega_ky_index,
+        omega_kx_index=omega_kx_index,
+        flux_scale=flux_scale,
+        wphi_scale=wphi_scale,
+    )
+
+
+def _imex_scan_options(
+    *,
+    method: str,
+    steps: int,
+    checkpoint: bool,
+    sample_stride: int,
+    diagnostics_stride: int,
+    external_phi: jnp.ndarray | float | None,
+    show_progress: bool,
+    collision_scheme: str,
+) -> _IMEXScanOptions:
+    return _IMEXScanOptions(
+        method=method,
+        steps=steps,
+        checkpoint=checkpoint,
+        sample_stride=sample_stride,
+        diagnostics_stride=diagnostics_stride,
+        external_phi=external_phi,
+        show_progress=show_progress,
+        collision_scheme=collision_scheme,
+    )
+
+
 def integrate_imex_nonlinear_diagnostics_impl(
     G0: jnp.ndarray,
     grid: SpectralGrid,
@@ -666,8 +756,7 @@ def integrate_imex_nonlinear_diagnostics_impl(
     show_progress: bool = False,
 ) -> tuple[jnp.ndarray, SimulationDiagnostics]:
     """Integrate an IMEX nonlinear run and return diagnostics."""
-
-    preparation = _IMEXPreparationOptions(
+    preparation = _imex_preparation_options(
         cache=cache,
         terms=terms,
         collision_split=collision_split,
@@ -678,7 +767,7 @@ def integrate_imex_nonlinear_diagnostics_impl(
         fixed_mode_ky_index=fixed_mode_ky_index,
         fixed_mode_kx_index=fixed_mode_kx_index,
     )
-    runtime = _IMEXRuntimeOptions(
+    runtime = _imex_runtime_options(
         collision_split=collision_split,
         external_phi=external_phi,
         compressed_real_fft=compressed_real_fft,
@@ -690,13 +779,13 @@ def integrate_imex_nonlinear_diagnostics_impl(
         implicit_restart=implicit_restart,
         implicit_solve_method=implicit_solve_method,
     )
-    diagnostics = _IMEXDiagnosticOptions(
+    diagnostics = _imex_diagnostic_options(
         omega_ky_index=omega_ky_index,
         omega_kx_index=omega_kx_index,
         flux_scale=flux_scale,
         wphi_scale=wphi_scale,
     )
-    scan = _IMEXScanOptions(
+    scan = _imex_scan_options(
         method=method,
         steps=steps,
         checkpoint=checkpoint,
