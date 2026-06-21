@@ -52,6 +52,23 @@ class _ImplicitPreconditionerData:
     imag: jnp.ndarray
 
 
+_IMPLICIT_PRECONDITIONER_ALIASES = {
+    "full": frozenset({"auto", "diag", "diagonal", "physics", "block"}),
+    "damping": frozenset({"damping", "collisional", "hyper"}),
+    "pas": frozenset({"pas", "pas-line", "pas_line"}),
+    "pas_coarse": frozenset(
+        {"pas-coarse", "pas_schur", "block-schur", "schur", "pas-hybrid"}
+    ),
+    "hermite_line": frozenset(
+        {"hermite-line", "hermite_line", "hermite", "streaming-line", "streaming_line"}
+    ),
+    "hermite_line_coarse": frozenset(
+        {"hermite-line-coarse", "hermite_line_coarse", "hermite_coarse", "streaming-line-coarse"}
+    ),
+    "identity": frozenset({"identity", "none", "off"}),
+}
+
+
 def _prepare_implicit_state(
     G0: jnp.ndarray,
     dt: float,
@@ -299,6 +316,128 @@ def _project_kx_coarse(x: jnp.ndarray, cache: LinearCache) -> jnp.ndarray:
     return y_flat.reshape(*lead_shape, Ny, Nx, Nz)
 
 
+def _canonical_implicit_preconditioner(
+    implicit_preconditioner: PreconditionerSpec,
+) -> Callable[[jnp.ndarray], jnp.ndarray] | str:
+    resolved = _resolve_implicit_preconditioner(implicit_preconditioner)
+    if callable(resolved):
+        return resolved
+    key = resolved or "auto"
+    for canonical, aliases in _IMPLICIT_PRECONDITIONER_ALIASES.items():
+        if key in aliases:
+            return canonical
+    raise ValueError(f"Unknown implicit_preconditioner '{resolved}'")
+
+
+def _apply_factor_preconditioner(
+    x_flat: jnp.ndarray,
+    *,
+    state: _ImplicitState,
+    factor: jnp.ndarray,
+) -> jnp.ndarray:
+    x = x_flat.reshape(state.shape)
+    return (x * factor).reshape(state.size)
+
+
+def _apply_pas_coarse_preconditioner(
+    x_flat: jnp.ndarray,
+    *,
+    cache: LinearCache,
+    state: _ImplicitState,
+    data: _ImplicitPreconditionerData,
+) -> jnp.ndarray:
+    x = x_flat.reshape(state.shape)
+    x_line = x * data.precond_pas
+    x_coarse = _project_kx_coarse(x, cache) * data.precond_pas
+    x_line_coarse = _project_kx_coarse(x_line, cache)
+    return (x_line + (x_coarse - x_line_coarse)).reshape(state.size)
+
+
+def _apply_hermite_line_preconditioner(
+    x_flat: jnp.ndarray,
+    *,
+    cache: LinearCache,
+    params: LinearParams,
+    state: _ImplicitState,
+    data: _ImplicitPreconditionerData,
+) -> jnp.ndarray:
+    x = x_flat.reshape(state.shape) * data.precond_full
+    x = (
+        _solve_hermite_lines_linked(x, cache=cache, params=params, state=state, data=data)
+        if cache.use_twist_shift
+        else _solve_hermite_lines_fft(
+            x,
+            kz=cache.kz,
+            cache=cache,
+            params=params,
+            state=state,
+            data=data,
+        )
+    )
+    return x.reshape(state.size)
+
+
+def _apply_hermite_line_coarse_preconditioner(
+    x_flat: jnp.ndarray,
+    *,
+    cache: LinearCache,
+    params: LinearParams,
+    state: _ImplicitState,
+    data: _ImplicitPreconditionerData,
+) -> jnp.ndarray:
+    x = x_flat.reshape(state.shape)
+    x_line = _apply_hermite_line_preconditioner(
+        x.reshape(state.size), cache=cache, params=params, state=state, data=data
+    ).reshape(state.shape)
+    x_coarse_in = _project_kx_coarse(x, cache)
+    x_coarse_full = _apply_hermite_line_preconditioner(
+        x_coarse_in.reshape(state.size),
+        cache=cache,
+        params=params,
+        state=state,
+        data=data,
+    ).reshape(state.shape)
+    x_line_coarse_full = _project_kx_coarse(x_line, cache)
+    return (x_line + (x_coarse_full - x_line_coarse_full)).reshape(state.size)
+
+
+def _build_implicit_preconditioner_callable(
+    canonical: str,
+    *,
+    cache: LinearCache,
+    params: LinearParams,
+    state: _ImplicitState,
+    data: _ImplicitPreconditionerData,
+) -> Callable[[jnp.ndarray], jnp.ndarray]:
+    if canonical == "full":
+        return lambda x_flat: _apply_factor_preconditioner(
+            x_flat, state=state, factor=data.precond_full
+        )
+    if canonical == "damping":
+        return lambda x_flat: _apply_factor_preconditioner(
+            x_flat, state=state, factor=data.precond_damp
+        )
+    if canonical == "pas":
+        return lambda x_flat: _apply_factor_preconditioner(
+            x_flat, state=state, factor=data.precond_pas
+        )
+    if canonical == "pas_coarse":
+        return lambda x_flat: _apply_pas_coarse_preconditioner(
+            x_flat, cache=cache, state=state, data=data
+        )
+    if canonical == "hermite_line":
+        return lambda x_flat: _apply_hermite_line_preconditioner(
+            x_flat, cache=cache, params=params, state=state, data=data
+        )
+    if canonical == "hermite_line_coarse":
+        return lambda x_flat: _apply_hermite_line_coarse_preconditioner(
+            x_flat, cache=cache, params=params, state=state, data=data
+        )
+    if canonical == "identity":
+        return lambda x_flat: x_flat
+    raise ValueError(f"Unknown canonical implicit_preconditioner '{canonical}'")
+
+
 def _select_implicit_preconditioner(
     *,
     cache: LinearCache,
@@ -307,86 +446,16 @@ def _select_implicit_preconditioner(
     data: _ImplicitPreconditionerData,
     implicit_preconditioner: PreconditionerSpec,
 ) -> Callable[[jnp.ndarray], jnp.ndarray]:
-    def apply_precond_full(x_flat: jnp.ndarray) -> jnp.ndarray:
-        x = x_flat.reshape(state.shape)
-        return (x * data.precond_full).reshape(state.size)
-
-    def apply_precond_damp(x_flat: jnp.ndarray) -> jnp.ndarray:
-        x = x_flat.reshape(state.shape)
-        return (x * data.precond_damp).reshape(state.size)
-
-    def apply_precond_pas(x_flat: jnp.ndarray) -> jnp.ndarray:
-        x = x_flat.reshape(state.shape)
-        return (x * data.precond_pas).reshape(state.size)
-
-    def apply_precond_pas_coarse(x_flat: jnp.ndarray) -> jnp.ndarray:
-        x = x_flat.reshape(state.shape)
-        x_line = x * data.precond_pas
-        x_coarse = _project_kx_coarse(x, cache) * data.precond_pas
-        x_line_coarse = _project_kx_coarse(x_line, cache)
-        x_out = x_line + (x_coarse - x_line_coarse)
-        return x_out.reshape(state.size)
-
-    def apply_precond_hermite_line(x_flat: jnp.ndarray) -> jnp.ndarray:
-        x = x_flat.reshape(state.shape)
-        x = x * data.precond_full
-        x = (
-            _solve_hermite_lines_linked(x, cache=cache, params=params, state=state, data=data)
-            if cache.use_twist_shift
-            else _solve_hermite_lines_fft(
-                x,
-                kz=cache.kz,
-                cache=cache,
-                params=params,
-                state=state,
-                data=data,
-            )
-        )
-        return x.reshape(state.size)
-
-    def apply_precond_hermite_line_coarse(x_flat: jnp.ndarray) -> jnp.ndarray:
-        x = x_flat.reshape(state.shape)
-        x_line = apply_precond_hermite_line(x.reshape(state.size)).reshape(state.shape)
-        x_coarse_in = _project_kx_coarse(x, cache)
-        x_coarse_full = apply_precond_hermite_line(
-            x_coarse_in.reshape(state.size)
-        ).reshape(state.shape)
-        x_line_coarse_full = _project_kx_coarse(x_line, cache)
-        return (x_line + (x_coarse_full - x_line_coarse_full)).reshape(state.size)
-
-    def apply_identity(x_flat: jnp.ndarray) -> jnp.ndarray:
-        return x_flat
-
-    resolved_precond = _resolve_implicit_preconditioner(implicit_preconditioner)
-    if callable(resolved_precond):
-        return resolved_precond
-    key = resolved_precond or "auto"
-    if key in {"auto", "diag", "diagonal", "physics", "block"}:
-        return apply_precond_full
-    if key in {"damping", "collisional", "hyper"}:
-        return apply_precond_damp
-    if key in {"pas", "pas-line", "pas_line"}:
-        return apply_precond_pas
-    if key in {"pas-coarse", "pas_schur", "block-schur", "schur", "pas-hybrid"}:
-        return apply_precond_pas_coarse
-    if key in {
-        "hermite-line",
-        "hermite_line",
-        "hermite",
-        "streaming-line",
-        "streaming_line",
-    }:
-        return apply_precond_hermite_line
-    if key in {
-        "hermite-line-coarse",
-        "hermite_line_coarse",
-        "hermite_coarse",
-        "streaming-line-coarse",
-    }:
-        return apply_precond_hermite_line_coarse
-    if key in {"identity", "none", "off"}:
-        return apply_identity
-    raise ValueError(f"Unknown implicit_preconditioner '{resolved_precond}'")
+    canonical = _canonical_implicit_preconditioner(implicit_preconditioner)
+    if callable(canonical):
+        return canonical
+    return _build_implicit_preconditioner_callable(
+        canonical,
+        cache=cache,
+        params=params,
+        state=state,
+        data=data,
+    )
 
 
 def _build_implicit_matvec(
