@@ -21,6 +21,35 @@ class RuntimeLinearDispatchDeps:
     full_deps: Any
 
 
+@dataclass(frozen=True)
+class _RuntimeLinearRequest:
+    cfg: RuntimeConfig
+    ky_target: float
+    Nl: int | None
+    Nm: int | None
+    solver: str
+    method: str | None
+    dt: float | None
+    steps: int | None
+    sample_stride: int | None
+    auto_window: bool
+    tmin: float | None
+    tmax: float | None
+    window_fraction: float
+    min_points: int
+    start_fraction: float
+    growth_weight: float
+    require_positive: bool
+    min_amp_fraction: float
+    krylov_cfg: Any
+    mode_method: str
+    fit_signal: str
+    return_state: bool
+    show_progress: bool
+    status_callback: Callable[[str], None] | None
+    deps: RuntimeLinearDispatchDeps
+
+
 def build_runtime_linear_dispatch_deps(scope: Any) -> RuntimeLinearDispatchDeps:
     """Build linear dispatch dependencies from a patchable runtime facade scope."""
 
@@ -78,6 +107,97 @@ def build_runtime_linear_dispatch_deps(scope: Any) -> RuntimeLinearDispatchDeps:
     )
 
 
+def _runtime_linear_status(request: _RuntimeLinearRequest, message: str) -> None:
+    if request.status_callback is not None:
+        request.status_callback(message)
+
+
+def _reject_reduced_quasilinear_if_enabled(request: _RuntimeLinearRequest) -> None:
+    if bool(getattr(request.cfg.quasilinear, "enabled", False)):
+        raise NotImplementedError(
+            "quasilinear diagnostics are not yet validated for reduced_model='cetg'"
+        )
+
+
+def _run_reduced_linear_request(
+    request: _RuntimeLinearRequest,
+    *,
+    Nl_use: int,
+    Nm_use: int,
+) -> RuntimeLinearResult:
+    _reject_reduced_quasilinear_if_enabled(request)
+    return request.deps.run_cetg_linear_runtime(
+        request.cfg,
+        deps=request.deps.cetg_deps,
+        ky_target=request.ky_target,
+        Nl=Nl_use,
+        Nm=Nm_use,
+        solver=request.solver,
+        method=request.method,
+        dt=request.dt,
+        steps=request.steps,
+        sample_stride=request.sample_stride,
+        auto_window=request.auto_window,
+        tmin=request.tmin,
+        tmax=request.tmax,
+        window_fraction=request.window_fraction,
+        min_points=request.min_points,
+        start_fraction=request.start_fraction,
+        growth_weight=request.growth_weight,
+        require_positive=request.require_positive,
+        min_amp_fraction=request.min_amp_fraction,
+        return_state=request.return_state,
+        status_callback=request.status_callback,
+    )
+
+
+def _run_full_linear_request(
+    request: _RuntimeLinearRequest,
+    *,
+    Nl_use: int,
+    Nm_use: int,
+) -> RuntimeLinearResult:
+    return request.deps.run_full_linear_runtime(
+        request.cfg,
+        deps=request.deps.full_deps,
+        ky_target=request.ky_target,
+        Nl=Nl_use,
+        Nm=Nm_use,
+        solver=request.solver,
+        method=request.method,
+        dt=request.dt,
+        steps=request.steps,
+        sample_stride=request.sample_stride,
+        auto_window=request.auto_window,
+        tmin=request.tmin,
+        tmax=request.tmax,
+        window_fraction=request.window_fraction,
+        min_points=request.min_points,
+        start_fraction=request.start_fraction,
+        growth_weight=request.growth_weight,
+        require_positive=request.require_positive,
+        min_amp_fraction=request.min_amp_fraction,
+        krylov_cfg=request.krylov_cfg,
+        mode_method=request.mode_method,
+        fit_signal=request.fit_signal,
+        return_state=request.return_state,
+        show_progress=request.show_progress,
+        status_callback=request.status_callback,
+    )
+
+
+def _dispatch_runtime_linear_request(
+    request: _RuntimeLinearRequest,
+) -> RuntimeLinearResult:
+    Nl_use, Nm_use = request.deps.resolve_runtime_hl_dims(
+        request.cfg, Nl=request.Nl, Nm=request.Nm
+    )
+    _runtime_linear_status(request, "building runtime geometry")
+    if request.deps.runtime_model_key(request.cfg) == "cetg":
+        return _run_reduced_linear_request(request, Nl_use=Nl_use, Nm_use=Nm_use)
+    return _run_full_linear_request(request, Nl_use=Nl_use, Nm_use=Nm_use)
+
+
 def run_runtime_linear_impl(
     cfg: RuntimeConfig,
     *,
@@ -108,25 +228,12 @@ def run_runtime_linear_impl(
 ) -> RuntimeLinearResult:
     """Run one linear point from a case-agnostic runtime config."""
 
-    def _status(message: str) -> None:
-        if status_callback is not None:
-            status_callback(message)
-
-    ql_enabled = bool(getattr(cfg.quasilinear, "enabled", False))
-
-    Nl_use, Nm_use = deps.resolve_runtime_hl_dims(cfg, Nl=Nl, Nm=Nm)
-    _status("building runtime geometry")
-    if deps.runtime_model_key(cfg) == "cetg":
-        if ql_enabled:
-            raise NotImplementedError(
-                "quasilinear diagnostics are not yet validated for reduced_model='cetg'"
-            )
-        return deps.run_cetg_linear_runtime(
-            cfg,
-            deps=deps.cetg_deps,
+    return _dispatch_runtime_linear_request(
+        _RuntimeLinearRequest(
+            cfg=cfg,
             ky_target=ky_target,
-            Nl=Nl_use,
-            Nm=Nm_use,
+            Nl=Nl,
+            Nm=Nm,
             solver=solver,
             method=method,
             dt=dt,
@@ -141,36 +248,14 @@ def run_runtime_linear_impl(
             growth_weight=growth_weight,
             require_positive=require_positive,
             min_amp_fraction=min_amp_fraction,
+            krylov_cfg=krylov_cfg,
+            mode_method=mode_method,
+            fit_signal=fit_signal,
             return_state=return_state,
+            show_progress=show_progress,
             status_callback=status_callback,
+            deps=deps,
         )
-
-    return deps.run_full_linear_runtime(
-        cfg,
-        deps=deps.full_deps,
-        ky_target=ky_target,
-        Nl=Nl_use,
-        Nm=Nm_use,
-        solver=solver,
-        method=method,
-        dt=dt,
-        steps=steps,
-        sample_stride=sample_stride,
-        auto_window=auto_window,
-        tmin=tmin,
-        tmax=tmax,
-        window_fraction=window_fraction,
-        min_points=min_points,
-        start_fraction=start_fraction,
-        growth_weight=growth_weight,
-        require_positive=require_positive,
-        min_amp_fraction=min_amp_fraction,
-        krylov_cfg=krylov_cfg,
-        mode_method=mode_method,
-        fit_signal=fit_signal,
-        return_state=return_state,
-        show_progress=show_progress,
-        status_callback=status_callback,
     )
 
 
