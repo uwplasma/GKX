@@ -54,6 +54,22 @@ class _PreparedNonlinearPath:
     electrostatic_only: bool
 
 
+@dataclass(frozen=True)
+class _NonlinearBracketContext:
+    tz: jnp.ndarray
+    vth: jnp.ndarray
+    sqrt_m: jnp.ndarray
+    sqrt_m_p1: jnp.ndarray
+    kx_grid: jnp.ndarray
+    ky_grid: jnp.ndarray
+    dealias_mask: jnp.ndarray
+    kxfac: jnp.ndarray
+    weight: jnp.ndarray
+    apar_weight: float
+    bpar_weight: float
+    compressed_real_fft: bool
+
+
 def _prepare_nonlinear_inputs(
     G: jnp.ndarray,
     *,
@@ -273,6 +289,37 @@ def _prepare_nonlinear_path(
         prep=prep,
         laguerre=laguerre,
         electrostatic_only=electrostatic_only,
+    )
+
+
+def _nonlinear_bracket_context(
+    *,
+    tz: jnp.ndarray,
+    vth: jnp.ndarray,
+    sqrt_m: jnp.ndarray,
+    sqrt_m_p1: jnp.ndarray,
+    kx_grid: jnp.ndarray,
+    ky_grid: jnp.ndarray,
+    dealias_mask: jnp.ndarray,
+    kxfac: jnp.ndarray,
+    weight: jnp.ndarray,
+    apar_weight: float,
+    bpar_weight: float,
+    compressed_real_fft: bool,
+) -> _NonlinearBracketContext:
+    return _NonlinearBracketContext(
+        tz=tz,
+        vth=vth,
+        sqrt_m=sqrt_m,
+        sqrt_m_p1=sqrt_m_p1,
+        kx_grid=kx_grid,
+        ky_grid=ky_grid,
+        dealias_mask=dealias_mask,
+        kxfac=kxfac,
+        weight=weight,
+        apar_weight=apar_weight,
+        bpar_weight=bpar_weight,
+        compressed_real_fft=compressed_real_fft,
     )
 
 
@@ -590,6 +637,82 @@ def _squeeze_component_payload(
     }
 
 
+def _nonlinear_em_contribution_from_path(
+    path: _PreparedNonlinearPath,
+    ctx: _NonlinearBracketContext,
+) -> jnp.ndarray:
+    if path.laguerre is not None:
+        return _laguerre_contribution_from_prepared(
+            path.prep,
+            path.laguerre,
+            electrostatic_only=path.electrostatic_only,
+            tz=ctx.tz,
+            vth=ctx.vth,
+            sqrt_m=ctx.sqrt_m,
+            sqrt_m_p1=ctx.sqrt_m_p1,
+            kx_grid=ctx.kx_grid,
+            ky_grid=ctx.ky_grid,
+            dealias_mask=ctx.dealias_mask,
+            kxfac=ctx.kxfac,
+            weight=ctx.weight,
+            apar_weight=ctx.apar_weight,
+            bpar_weight=ctx.bpar_weight,
+            compressed_real_fft=ctx.compressed_real_fft,
+        )
+    return _spectral_contribution_from_prepared(
+        path.prep,
+        electrostatic_only=path.electrostatic_only,
+        vth=ctx.vth,
+        sqrt_m=ctx.sqrt_m,
+        sqrt_m_p1=ctx.sqrt_m_p1,
+        kx_grid=ctx.kx_grid,
+        ky_grid=ctx.ky_grid,
+        dealias_mask=ctx.dealias_mask,
+        kxfac=ctx.kxfac,
+        weight=ctx.weight,
+        apar_weight=ctx.apar_weight,
+        bpar_weight=ctx.bpar_weight,
+        compressed_real_fft=ctx.compressed_real_fft,
+    )
+
+
+def _nonlinear_em_components_from_path(
+    path: _PreparedNonlinearPath,
+    ctx: _NonlinearBracketContext,
+) -> dict[str, jnp.ndarray | None]:
+    if path.laguerre is not None:
+        return _laguerre_components_from_prepared(
+            path.prep,
+            path.laguerre,
+            tz=ctx.tz,
+            vth=ctx.vth,
+            sqrt_m=ctx.sqrt_m,
+            sqrt_m_p1=ctx.sqrt_m_p1,
+            kx_grid=ctx.kx_grid,
+            ky_grid=ctx.ky_grid,
+            dealias_mask=ctx.dealias_mask,
+            kxfac=ctx.kxfac,
+            weight=ctx.weight,
+            apar_weight=ctx.apar_weight,
+            bpar_weight=ctx.bpar_weight,
+            compressed_real_fft=ctx.compressed_real_fft,
+        )
+    return _spectral_components_from_prepared(
+        path.prep,
+        vth=ctx.vth,
+        sqrt_m=ctx.sqrt_m,
+        sqrt_m_p1=ctx.sqrt_m_p1,
+        kx_grid=ctx.kx_grid,
+        ky_grid=ctx.ky_grid,
+        dealias_mask=ctx.dealias_mask,
+        kxfac=ctx.kxfac,
+        weight=ctx.weight,
+        apar_weight=ctx.apar_weight,
+        bpar_weight=ctx.bpar_weight,
+        compressed_real_fft=ctx.compressed_real_fft,
+    )
+
+
 def nonlinear_em_contribution(
     G: jnp.ndarray,
     *,
@@ -642,29 +765,8 @@ def nonlinear_em_contribution(
         b=b,
         laguerre_mode=laguerre_mode,
     )
-
-    if path.laguerre is not None:
-        return _laguerre_contribution_from_prepared(
-            path.prep,
-            path.laguerre,
-            electrostatic_only=path.electrostatic_only,
-            tz=tz,
-            vth=vth,
-            sqrt_m=sqrt_m,
-            sqrt_m_p1=sqrt_m_p1,
-            kx_grid=kx_grid,
-            ky_grid=ky_grid,
-            dealias_mask=dealias_mask,
-            kxfac=kxfac,
-            weight=weight,
-            apar_weight=apar_weight,
-            bpar_weight=bpar_weight,
-            compressed_real_fft=compressed_real_fft,
-        )
-
-    return _spectral_contribution_from_prepared(
-        path.prep,
-        electrostatic_only=path.electrostatic_only,
+    ctx = _nonlinear_bracket_context(
+        tz=tz,
         vth=vth,
         sqrt_m=sqrt_m,
         sqrt_m_p1=sqrt_m_p1,
@@ -677,6 +779,7 @@ def nonlinear_em_contribution(
         bpar_weight=bpar_weight,
         compressed_real_fft=compressed_real_fft,
     )
+    return _nonlinear_em_contribution_from_path(path, ctx)
 
 
 def nonlinear_em_components(
@@ -727,39 +830,21 @@ def nonlinear_em_components(
         b=b,
         laguerre_mode=laguerre_mode,
     )
-
-    if path.laguerre is not None:
-        components = _laguerre_components_from_prepared(
-            path.prep,
-            path.laguerre,
-            tz=tz,
-            vth=vth,
-            sqrt_m=sqrt_m,
-            sqrt_m_p1=sqrt_m_p1,
-            kx_grid=kx_grid,
-            ky_grid=ky_grid,
-            dealias_mask=dealias_mask,
-            kxfac=kxfac,
-            weight=weight,
-            apar_weight=apar_weight,
-            bpar_weight=bpar_weight,
-            compressed_real_fft=compressed_real_fft,
-        )
-    else:
-        components = _spectral_components_from_prepared(
-            path.prep,
-            vth=vth,
-            sqrt_m=sqrt_m,
-            sqrt_m_p1=sqrt_m_p1,
-            kx_grid=kx_grid,
-            ky_grid=ky_grid,
-            dealias_mask=dealias_mask,
-            kxfac=kxfac,
-            weight=weight,
-            apar_weight=apar_weight,
-            bpar_weight=bpar_weight,
-            compressed_real_fft=compressed_real_fft,
-        )
+    ctx = _nonlinear_bracket_context(
+        tz=tz,
+        vth=vth,
+        sqrt_m=sqrt_m,
+        sqrt_m_p1=sqrt_m_p1,
+        kx_grid=kx_grid,
+        ky_grid=ky_grid,
+        dealias_mask=dealias_mask,
+        kxfac=kxfac,
+        weight=weight,
+        apar_weight=apar_weight,
+        bpar_weight=bpar_weight,
+        compressed_real_fft=compressed_real_fft,
+    )
+    components = _nonlinear_em_components_from_path(path, ctx)
     return _squeeze_component_payload(
         components,
         squeeze_species=path.prep.squeeze_species,
