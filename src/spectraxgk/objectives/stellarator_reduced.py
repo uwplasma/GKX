@@ -36,39 +36,41 @@ def smooth_positive(x: jnp.ndarray | float, *, beta: float = 18.0) -> jnp.ndarra
     return jax.nn.softplus(beta_arr * arr) / beta_arr
 
 
-def _qa_core_features(
-    params: jnp.ndarray | Sequence[float],
+def _qa_gradient_drives(
     config: StellaratorITGOptimizationConfig,
+    dtype: jnp.dtype,
     *,
-    density_gradient: float | jnp.ndarray | None = None,
-    temperature_gradient: float | jnp.ndarray | None = None,
-) -> dict[str, jnp.ndarray]:
-    """Return the linear/quasilinear QA-ITG features without nonlinear tracing."""
+    density_gradient: float | jnp.ndarray | None,
+    temperature_gradient: float | jnp.ndarray | None,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Return normalized density and temperature-gradient offsets."""
 
-    p = _validate_params(params)
-    minor_shift, elong_shift, ripple, shear_shift = p
-    dtype = p.dtype
-
-    aspect_target = jnp.asarray(config.target_aspect, dtype=dtype)
-    iota_target = jnp.asarray(config.target_iota, dtype=dtype)
-    aln = jnp.asarray(
-        config.reference_density_gradient if density_gradient is None else density_gradient,
-        dtype=dtype,
-    )
-    alti = jnp.asarray(
-        config.reference_temperature_gradient if temperature_gradient is None else temperature_gradient,
-        dtype=dtype,
-    )
     aln_ref = jnp.asarray(config.reference_density_gradient, dtype=dtype)
     alti_ref = jnp.asarray(config.reference_temperature_gradient, dtype=dtype)
+    aln = jnp.asarray(aln_ref if density_gradient is None else density_gradient, dtype=dtype)
+    alti = jnp.asarray(alti_ref if temperature_gradient is None else temperature_gradient, dtype=dtype)
     density_drive = (aln - aln_ref) / jnp.maximum(aln_ref, jnp.asarray(1.0e-8, dtype=dtype))
     temperature_drive = (alti - alti_ref) / jnp.maximum(alti_ref, jnp.asarray(1.0e-8, dtype=dtype))
+    return density_drive, temperature_drive
+
+
+def _qa_geometry_features(
+    minor_shift: jnp.ndarray,
+    elong_shift: jnp.ndarray,
+    ripple: jnp.ndarray,
+    shear_shift: jnp.ndarray,
+    aspect_target: jnp.ndarray,
+    iota_target: jnp.ndarray,
+) -> dict[str, jnp.ndarray]:
+    """Return reduced QA shape, iota, residual, and curvature metrics."""
 
     aspect = aspect_target * jnp.exp(
         -0.48 * minor_shift + 0.060 * elong_shift**2 + 0.045 * ripple**2
     )
     mean_iota = iota_target + 0.19 * shear_shift - 0.030 * ripple + 0.018 * elong_shift
-    qa_residual = jnp.sqrt((0.18 * ripple) ** 2 + (0.035 * elong_shift * ripple) ** 2 + (2.0e-4) ** 2)
+    qa_residual = jnp.sqrt(
+        (0.18 * ripple) ** 2 + (0.035 * elong_shift * ripple) ** 2 + (2.0e-4) ** 2
+    )
     shear_metric = jnp.sqrt(shear_shift**2 + 4.0e-4)
     bad_curvature = (
         0.055
@@ -76,6 +78,31 @@ def _qa_core_features(
         + 0.030 * (aspect / aspect_target - 1.0) ** 2
         + 0.035 * elong_shift**2
     )
+    return {
+        "aspect": aspect,
+        "mean_iota": mean_iota,
+        "qa_residual": qa_residual,
+        "shear_metric": shear_metric,
+        "bad_curvature": bad_curvature,
+    }
+
+
+def _qa_linear_itg_features(
+    geometry: dict[str, jnp.ndarray],
+    elong_shift: jnp.ndarray,
+    ripple: jnp.ndarray,
+    shear_shift: jnp.ndarray,
+    iota_target: jnp.ndarray,
+    density_drive: jnp.ndarray,
+    temperature_drive: jnp.ndarray,
+    dtype: jnp.dtype,
+) -> dict[str, jnp.ndarray]:
+    """Return reduced linear ITG frequency, growth, and flux-weight features."""
+
+    aspect = geometry["aspect"]
+    mean_iota = geometry["mean_iota"]
+    qa_residual = geometry["qa_residual"]
+    shear_metric = geometry["shear_metric"]
     kperp_eff2 = (
         0.34
         + 0.18 / aspect
@@ -84,7 +111,7 @@ def _qa_core_features(
         + 0.055 * elong_shift**2
     )
     raw_drive = (
-        1.8 * bad_curvature
+        1.8 * geometry["bad_curvature"]
         + 0.25 * shear_metric
         + 0.08 * (mean_iota - iota_target) ** 2
         + 0.035 * density_drive
@@ -103,22 +130,81 @@ def _qa_core_features(
         jnp.asarray(0.15, dtype=dtype),
         1.0 + 0.12 * density_drive + 0.06 * temperature_drive,
     )
-    ql_features = jnp.asarray([growth_rate, kperp_eff2, linear_heat_flux_weight], dtype=dtype)
-    quasilinear_heat_flux = quasilinear_feature_objective(
+    return {
+        "kperp_eff2": kperp_eff2,
+        "growth_rate": growth_rate,
+        "frequency": frequency,
+        "linear_heat_flux_weight": linear_heat_flux_weight,
+    }
+
+
+def _qa_quasilinear_heat_flux(
+    linear: dict[str, jnp.ndarray],
+    config: StellaratorITGOptimizationConfig,
+    dtype: jnp.dtype,
+) -> jnp.ndarray:
+    """Return the shipped reduced mixing-length heat-flux proxy."""
+
+    ql_features = jnp.asarray(
+        [linear["growth_rate"], linear["kperp_eff2"], linear["linear_heat_flux_weight"]],
+        dtype=dtype,
+    )
+    return quasilinear_feature_objective(
         ql_features,
         rule="mixing_length",
         csat=config.quasilinear_csat,
         gamma_floor=0.0,
     )
+
+
+def _qa_core_features(
+    params: jnp.ndarray | Sequence[float],
+    config: StellaratorITGOptimizationConfig,
+    *,
+    density_gradient: float | jnp.ndarray | None = None,
+    temperature_gradient: float | jnp.ndarray | None = None,
+) -> dict[str, jnp.ndarray]:
+    """Return the linear/quasilinear QA-ITG features without nonlinear tracing."""
+
+    p = _validate_params(params)
+    minor_shift, elong_shift, ripple, shear_shift = p
+    dtype = p.dtype
+    aspect_target = jnp.asarray(config.target_aspect, dtype=dtype)
+    iota_target = jnp.asarray(config.target_iota, dtype=dtype)
+    density_drive, temperature_drive = _qa_gradient_drives(
+        config,
+        dtype=dtype,
+        density_gradient=density_gradient,
+        temperature_gradient=temperature_gradient,
+    )
+    geometry = _qa_geometry_features(
+        minor_shift,
+        elong_shift,
+        ripple,
+        shear_shift,
+        aspect_target,
+        iota_target,
+    )
+    linear = _qa_linear_itg_features(
+        geometry,
+        elong_shift,
+        ripple,
+        shear_shift,
+        iota_target,
+        density_drive,
+        temperature_drive,
+        dtype=dtype,
+    )
+    quasilinear_heat_flux = _qa_quasilinear_heat_flux(linear, config, dtype)
     return {
-        "aspect": aspect,
-        "mean_iota": mean_iota,
-        "qa_residual": qa_residual,
-        "shear_metric": shear_metric,
-        "kperp_eff2": kperp_eff2,
-        "growth_rate": growth_rate,
-        "frequency": frequency,
-        "linear_heat_flux_weight": linear_heat_flux_weight,
+        "aspect": geometry["aspect"],
+        "mean_iota": geometry["mean_iota"],
+        "qa_residual": geometry["qa_residual"],
+        "shear_metric": geometry["shear_metric"],
+        "kperp_eff2": linear["kperp_eff2"],
+        "growth_rate": linear["growth_rate"],
+        "frequency": linear["frequency"],
+        "linear_heat_flux_weight": linear["linear_heat_flux_weight"],
         "quasilinear_heat_flux": quasilinear_heat_flux,
     }
 
