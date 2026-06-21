@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from typing import Any
 
 import jax
@@ -37,6 +38,16 @@ from spectraxgk.geometry.vmec_state_controls import (
     _perturb_vmec_state,
     _resolve_vmec_state_indices,
 )
+
+
+@dataclass(frozen=True)
+class _BoozerFluxTubeSensitivityRun:
+    ctx: _VMECStateContext
+    radial_index: int
+    mode_index: int
+    surface_index: int
+    sensitivity: dict[str, object]
+    booz_meta: Mapping[str, Any]
 
 
 def _unavailable_vmec_state_sensitivity_report(
@@ -348,6 +359,51 @@ def _boozer_flux_tube_report_payload(
     }
 
 
+def _run_vmec_boozer_flux_tube_sensitivity(
+    *,
+    params: jnp.ndarray,
+    case_name: str,
+    radial_index: int | None,
+    mode_index: int,
+    surface_index: int | None,
+    fd_step: float,
+    mboz: int,
+    nboz: int,
+    ntheta: int,
+) -> _BoozerFluxTubeSensitivityRun:
+    ctx, booz_input_mod, ridx, midx, sidx = _load_vmec_boozer_sensitivity_context(
+        case_name=str(case_name),
+        radial_index=radial_index,
+        mode_index=mode_index,
+        surface_index=surface_index,
+    )
+    mapping_fn = _vmec_to_boozer_mapping_fn(
+        ctx=ctx,
+        booz_input_mod=booz_input_mod,
+        radial_index=ridx,
+        mode_index=midx,
+        surface_index=sidx,
+        mboz=mboz,
+        nboz=nboz,
+        ntheta=ntheta,
+    )
+    sensitivity = geometry_sensitivity_report(
+        mapping_fn,
+        params,
+        fd_step=float(fd_step),
+        source_model="vmec_jax:state->booz_xform_jax:field-line-bmag",
+    )
+    mapping = mapping_fn(params)
+    return _BoozerFluxTubeSensitivityRun(
+        ctx=ctx,
+        radial_index=ridx,
+        mode_index=midx,
+        surface_index=sidx,
+        sensitivity=sensitivity,
+        booz_meta=mapping["booz_xform"],
+    )
+
+
 def _field_line_tensor_report_payload(
     *,
     ctx: _VMECStateContext,
@@ -453,30 +509,17 @@ def vmec_jax_boozer_flux_tube_sensitivity_report(  # pragma: no cover
         )
 
     try:
-        ctx, booz_input_mod, ridx, midx, sidx = _load_vmec_boozer_sensitivity_context(
+        run = _run_vmec_boozer_flux_tube_sensitivity(
+            params=p,
             case_name=str(case_name),
             radial_index=radial_index,
             mode_index=mode_index,
             surface_index=surface_index,
-        )
-        mapping_fn = _vmec_to_boozer_mapping_fn(
-            ctx=ctx,
-            booz_input_mod=booz_input_mod,
-            radial_index=ridx,
-            mode_index=midx,
-            surface_index=sidx,
+            fd_step=float(fd_step),
             mboz=mboz,
             nboz=nboz,
             ntheta=ntheta,
         )
-        sensitivity = geometry_sensitivity_report(
-            mapping_fn,
-            p,
-            fd_step=float(fd_step),
-            source_model="vmec_jax:state->booz_xform_jax:field-line-bmag",
-        )
-        mapping = mapping_fn(p)
-        booz_meta = mapping["booz_xform"]
     except Exception as exc:
         return _failed_vmec_state_sensitivity_report(
             backend_info=info,
@@ -488,17 +531,17 @@ def vmec_jax_boozer_flux_tube_sensitivity_report(  # pragma: no cover
     return {
         **_vmec_state_sensitivity_metadata(
             backend_info=info,
-            ctx=ctx,
+            ctx=run.ctx,
             case_name=case_name,
             params=p,
-            radial_index=ridx,
-            mode_index=midx,
-            surface_index=sidx,
+            radial_index=run.radial_index,
+            mode_index=run.mode_index,
+            surface_index=run.surface_index,
             fd_step=fd_step,
         ),
         **_boozer_flux_tube_report_payload(
-            sensitivity=sensitivity,
-            booz_meta=booz_meta,
+            sensitivity=run.sensitivity,
+            booz_meta=run.booz_meta,
             mboz=mboz,
             nboz=nboz,
             ntheta=ntheta,
