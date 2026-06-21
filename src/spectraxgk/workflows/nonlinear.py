@@ -368,6 +368,44 @@ def _run_final_state(
     )
 
 
+def _diagnostic_run_result(
+    ctx: _RunContext,
+    policy: _DiagnosticPolicy,
+    *,
+    deps: FullNonlinearRuntimeDeps,
+    t: Any,
+    diagnostics: Any,
+    fields: Any,
+    state: Any,
+    status: Callable[[str], None],
+) -> RuntimeNonlinearResult:
+    if policy.diagnostics_on:
+        status(f"completed nonlinear run with {int(np.asarray(t).size)} saved samples")
+        return _result(
+            ctx,
+            policy,
+            deps=deps,
+            t=t,
+            diagnostics=diagnostics,
+            fields=fields,
+            state=state,
+            summarize_fields=False,
+        )
+    if fields is None:
+        raise RuntimeError("adaptive nonlinear runtime did not produce final fields")
+    status("diagnostics disabled; returning final nonlinear field summary")
+    return _result(
+        ctx,
+        policy,
+        deps=deps,
+        t=np.asarray([]),
+        diagnostics=None,
+        fields=fields,
+        state=state,
+        summarize_fields=True,
+    )
+
+
 def run_full_nonlinear_runtime(
     cfg: RuntimeConfig,
     *,
@@ -423,30 +461,15 @@ def run_full_nonlinear_runtime(
     t, diag, G_final, fields_final = _run_diagnostics(
         cfg, ctx, policy, deps=deps, method=method, status=status
     )
-    if policy.diagnostics_on:
-        status(f"completed nonlinear run with {int(np.asarray(t).size)} saved samples")
-        return _result(
-            ctx,
-            policy,
-            deps=deps,
-            t=t,
-            diagnostics=diag,
-            fields=fields_final,
-            state=G_final,
-            summarize_fields=False,
-        )
-    if fields_final is None:
-        raise RuntimeError("adaptive nonlinear runtime did not produce final fields")
-    status("diagnostics disabled; returning final nonlinear field summary")
-    return _result(
+    return _diagnostic_run_result(
         ctx,
         policy,
         deps=deps,
-        t=np.asarray([]),
-        diagnostics=None,
+        t=t,
+        diagnostics=diag,
         fields=fields_final,
         state=G_final,
-        summarize_fields=True,
+        status=status,
     )
 
 
