@@ -480,6 +480,77 @@ def _quasilinear_metadata(
     return meta
 
 
+def _saturation_outputs(
+    *,
+    options: _QuasilinearOptions,
+    weights: _LinearFluxWeights,
+    gamma: float,
+    saturation_rule: str,
+    csat: float,
+    gamma_floor: float,
+    include_stable_modes: bool,
+) -> tuple[float | None, tuple[float, ...] | None, tuple[float, ...] | None]:
+    """Return saturation amplitude and saturated species fluxes."""
+
+    amp2 = saturation_amplitude2(
+        gamma=gamma,
+        kperp_eff2_value=weights.kperp_eff2,
+        rule=saturation_rule,
+        csat=csat,
+        gamma_floor=gamma_floor,
+        include_stable_modes=include_stable_modes,
+    )
+    saturated_heat, saturated_particle = _saturated_species_fluxes(
+        mode=options.mode,
+        heat_weights=weights.heat,
+        particle_weights=weights.particle,
+        amplitude2=amp2,
+    )
+    return amp2, saturated_heat, saturated_particle
+
+
+def _build_quasilinear_transport_result(
+    *,
+    ky: float,
+    gamma: float,
+    omega: float,
+    options: _QuasilinearOptions,
+    saturation_rule: str,
+    amplitude_normalization: str,
+    weights: _LinearFluxWeights,
+    species: tuple[str, ...],
+    amplitude2: float | None,
+    saturated_heat: tuple[float, ...] | None,
+    saturated_particle: tuple[float, ...] | None,
+    metadata: dict[str, Any] | None,
+) -> QuasilinearTransportResult:
+    """Pack one validated quasilinear diagnostic payload."""
+
+    return QuasilinearTransportResult(
+        ky=float(ky),
+        gamma=float(gamma),
+        omega=float(omega),
+        mode=options.mode,
+        saturation_rule=saturation_rule.strip().lower(),
+        amplitude_normalization=amplitude_normalization.strip().lower(),
+        channels=options.channels,
+        kperp_average=options.kperp_average,
+        kperp_eff2=weights.kperp_eff2,
+        phi_norm2=weights.phi_norm2,
+        amplitude2=None if amplitude2 is None else float(amplitude2),
+        heat_flux_weight_species=tuple(float(x) for x in weights.heat),
+        particle_flux_weight_species=tuple(float(x) for x in weights.particle),
+        saturated_heat_flux_species=saturated_heat,
+        saturated_particle_flux_species=saturated_particle,
+        species=species,
+        metadata=_quasilinear_metadata(
+            metadata,
+            amplitude2=amplitude2,
+            channels=options.channels,
+        ),
+    )
+
+
 def compute_quasilinear_from_linear_state(
     state: jnp.ndarray | np.ndarray,
     *,
@@ -528,41 +599,27 @@ def compute_quasilinear_from_linear_state(
         flux_scale=flux_scale,
     )
     species = _quasilinear_species_labels(species_names, weights.heat.size)
-    amp2 = saturation_amplitude2(
+    amp2, saturated_heat, saturated_particle = _saturation_outputs(
+        options=options,
+        weights=weights,
         gamma=gamma,
-        kperp_eff2_value=weights.kperp_eff2,
-        rule=saturation_rule,
+        saturation_rule=saturation_rule,
         csat=csat,
         gamma_floor=gamma_floor,
         include_stable_modes=include_stable_modes,
     )
-    saturated_heat, saturated_particle = _saturated_species_fluxes(
-        mode=options.mode,
-        heat_weights=weights.heat,
-        particle_weights=weights.particle,
-        amplitude2=amp2,
-    )
 
-    return QuasilinearTransportResult(
-        ky=float(ky),
-        gamma=float(gamma),
-        omega=float(omega),
-        mode=options.mode,
-        saturation_rule=saturation_rule.strip().lower(),
-        amplitude_normalization=amplitude_normalization.strip().lower(),
-        channels=options.channels,
-        kperp_average=options.kperp_average,
-        kperp_eff2=weights.kperp_eff2,
-        phi_norm2=weights.phi_norm2,
-        amplitude2=None if amp2 is None else float(amp2),
-        heat_flux_weight_species=tuple(float(x) for x in weights.heat),
-        particle_flux_weight_species=tuple(float(x) for x in weights.particle),
-        saturated_heat_flux_species=saturated_heat,
-        saturated_particle_flux_species=saturated_particle,
+    return _build_quasilinear_transport_result(
+        ky=ky,
+        gamma=gamma,
+        omega=omega,
+        options=options,
+        saturation_rule=saturation_rule,
+        amplitude_normalization=amplitude_normalization,
+        weights=weights,
         species=species,
-        metadata=_quasilinear_metadata(
-            metadata,
-            amplitude2=amp2,
-            channels=options.channels,
-        ),
+        amplitude2=amp2,
+        saturated_heat=saturated_heat,
+        saturated_particle=saturated_particle,
+        metadata=metadata,
     )
