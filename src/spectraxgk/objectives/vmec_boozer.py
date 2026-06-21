@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any, Literal, cast
 
 import jax.numpy as jnp
@@ -129,6 +129,69 @@ def vmec_boozer_solver_objective_table_from_state(  # pragma: no cover
     return table
 
 
+def _surface_geometry_kwargs(
+    base_geometry_kwargs: Mapping[str, Any],
+    surface: Mapping[str, object],
+    *,
+    alpha: float,
+) -> tuple[dict[str, Any], int | None, float | None]:
+    """Return geometry kwargs plus normalized surface metadata."""
+
+    geom_kwargs = dict(base_geometry_kwargs)
+    surface_index_raw = surface.get("surface_index")
+    torflux_raw = surface.get("torflux")
+    surface_index = None if surface_index_raw is None else int(cast(Any, surface_index_raw))
+    torflux = None if torflux_raw is None else float(cast(Any, torflux_raw))
+    if surface_index is not None:
+        geom_kwargs["surface_index"] = surface_index
+    if torflux is not None:
+        geom_kwargs["torflux"] = torflux
+    geom_kwargs["alpha"] = float(alpha)
+    return geom_kwargs, surface_index, torflux
+
+
+def _objective_row_metadata(
+    *,
+    surface_index: int | None,
+    torflux: float | None,
+    alpha: float,
+    selected_ky_index: int,
+    ky_sample: Mapping[str, object],
+) -> dict[str, object]:
+    """Return one row of table metadata using the public artifact schema."""
+
+    row_metadata: dict[str, object] = {
+        "surface_index": surface_index,
+        "alpha": float(alpha),
+        "selected_ky_index": int(selected_ky_index),
+    }
+    if torflux is not None:
+        row_metadata["torflux"] = float(torflux)
+        row_metadata["surface"] = float(torflux)
+    for key in ("ky", "selected_ky", "ky_abs_error"):
+        value = ky_sample.get(key)
+        if value is not None:
+            row_metadata[key] = float(cast(Any, value))
+    return row_metadata
+
+
+def _attach_ky_grid_options(
+    metadata: list[dict[str, object]],
+    ky_grid_options: Mapping[str, object] | None,
+) -> None:
+    """Attach physical-``k_y`` grid metadata to every table row in place."""
+
+    if ky_grid_options is None:
+        return
+    options = {
+        "ky_base": float(cast(float, ky_grid_options["ky_base"])),
+        "ly": float(cast(float, ky_grid_options["ly"])),
+        "ny": int(cast(int, ky_grid_options["ny"])),
+    }
+    for row in metadata:
+        row["ky_grid_options"] = options
+
+
 def vmec_boozer_solver_objective_table_with_metadata_from_state(  # pragma: no cover
     state: Any,
     static: Any,
@@ -173,14 +236,11 @@ def vmec_boozer_solver_objective_table_with_metadata_from_state(  # pragma: no c
     metadata: list[dict[str, object]] = []
     for surface in surfaces:
         for alpha in alpha_values:
-            geom_kwargs = dict(geometry_kwargs)
-            surface_index = surface.get("surface_index")
-            torflux = surface.get("torflux")
-            if surface_index is not None:
-                geom_kwargs["surface_index"] = int(surface_index)
-            if torflux is not None:
-                geom_kwargs["torflux"] = float(torflux)
-            geom_kwargs["alpha"] = alpha
+            geom_kwargs, surface_index, torflux = _surface_geometry_kwargs(
+                geometry_kwargs,
+                surface,
+                alpha=alpha,
+            )
             geom = geometry_builder(
                 state,
                 static,
@@ -193,30 +253,18 @@ def vmec_boozer_solver_objective_table_with_metadata_from_state(  # pragma: no c
                 selected_ky_index = int(ky_sample["selected_ky_index"])
                 obj_kwargs["selected_ky_index"] = selected_ky_index
                 rows.append(objective_evaluator(geom, **obj_kwargs))
-                row_metadata: dict[str, object] = {
-                    "surface_index": None
-                    if surface_index is None
-                    else int(surface_index),
-                    "alpha": float(alpha),
-                    "selected_ky_index": selected_ky_index,
-                }
-                if torflux is not None:
-                    row_metadata["torflux"] = float(torflux)
-                    row_metadata["surface"] = float(torflux)
-                for key in ("ky", "selected_ky", "ky_abs_error"):
-                    value = ky_sample.get(key)
-                    if value is not None:
-                        row_metadata[key] = float(value)
-                metadata.append(row_metadata)
+                metadata.append(
+                    _objective_row_metadata(
+                        surface_index=surface_index,
+                        torflux=torflux,
+                        alpha=alpha,
+                        selected_ky_index=selected_ky_index,
+                        ky_sample=ky_sample,
+                    )
+                )
     if not rows:
         raise RuntimeError("VMEC/Boozer objective table produced no samples")
-    if ky_grid_options is not None:
-        for row in metadata:
-            row["ky_grid_options"] = {
-                "ky_base": float(cast(float, ky_grid_options["ky_base"])),
-                "ly": float(cast(float, ky_grid_options["ly"])),
-                "ny": int(cast(int, ky_grid_options["ny"])),
-            }
+    _attach_ky_grid_options(metadata, ky_grid_options)
     return jnp.stack(rows), metadata
 
 
