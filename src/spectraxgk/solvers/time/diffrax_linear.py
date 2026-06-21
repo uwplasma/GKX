@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 import jax
@@ -27,6 +28,18 @@ from spectraxgk.solvers.time.diffrax_core import (
     _unpack_complex_state,
 )
 from spectraxgk.terms.assembly import compute_fields_cached
+
+
+@dataclass(frozen=True)
+class _LinearDiffraxRunBundle:
+    G0_packed: jnp.ndarray
+    cache: LinearCache
+    term_cfg: Any
+    rhs: Any
+    save_fn: Any
+    dt_val: jnp.ndarray
+    ts: jnp.ndarray
+    adaptive_eff: bool
 
 
 def _infer_linear_velocity_shape(G0: jnp.ndarray) -> tuple[int, int]:
@@ -304,6 +317,61 @@ def _linear_diffrax_output(sol: Any, *, return_state: bool) -> tuple[jnp.ndarray
     return None, sol.ys
 
 
+def _linear_diffrax_run_bundle(
+    G0: jnp.ndarray,
+    grid: SpectralGrid,
+    geom: FluxTubeGeometryLike,
+    params: LinearParams,
+    *,
+    dt: float,
+    steps: int,
+    method: str,
+    cache: LinearCache | None,
+    terms: LinearTerms | None,
+    adaptive: bool,
+    sample_stride: int,
+    return_state: bool,
+    save_mode: ModeSelection | ModeSelectionBatch | None,
+    mode_method: str,
+    save_field: str,
+    density_species_index: int | None,
+    state_sharding: Any | None,
+) -> _LinearDiffraxRunBundle:
+    G0, real_dtype, cache = _prepare_linear_state_and_cache(
+        G0, grid, geom, params, cache
+    )
+    term_cfg = linear_terms_to_term_config(terms or LinearTerms())
+    method_is_special = _is_imex_solver(method) or _is_implicit_solver(method)
+    use_custom_vjp = not method_is_special
+    dt_val, ts = _linear_save_times(
+        dt=dt,
+        steps=steps,
+        sample_stride=sample_stride,
+        real_dtype=real_dtype,
+    )
+    return _LinearDiffraxRunBundle(
+        G0_packed=_prepare_packed_linear_state(G0, state_sharding),
+        cache=cache,
+        term_cfg=term_cfg,
+        rhs=_make_linear_diffrax_rhs(
+            use_custom_vjp=use_custom_vjp,
+            state_sharding=state_sharding,
+        ),
+        save_fn=_make_linear_diffrax_save_fn(
+            save_field=save_field,
+            return_state=return_state,
+            save_mode=save_mode,
+            mode_method=mode_method,
+            density_species_index=density_species_index,
+            use_custom_vjp=use_custom_vjp,
+            state_sharding=state_sharding,
+        ),
+        dt_val=dt_val,
+        ts=ts,
+        adaptive_eff=adaptive or method_is_special,
+    )
+
+
 def integrate_linear_diffrax(
     G0: jnp.ndarray,
     grid: SpectralGrid,
@@ -334,46 +402,39 @@ def integrate_linear_diffrax(
     """Integrate the linear system with diffrax."""
 
     dfx, eqx = _require_diffrax()
-    G0, real_dtype, cache = _prepare_linear_state_and_cache(
-        G0, grid, geom, params, cache
-    )
-    term_cfg = linear_terms_to_term_config(terms or LinearTerms())
-    use_custom_vjp = not (_is_imex_solver(method) or _is_implicit_solver(method))
-    G0_packed = _prepare_packed_linear_state(G0, state_sharding)
-    rhs = _make_linear_diffrax_rhs(
-        use_custom_vjp=use_custom_vjp,
-        state_sharding=state_sharding,
-    )
-    save_fn = _make_linear_diffrax_save_fn(
-        save_field=save_field,
+    bundle = _linear_diffrax_run_bundle(
+        G0,
+        grid,
+        geom,
+        params,
+        dt=dt,
+        steps=steps,
+        method=method,
+        cache=cache,
+        terms=terms,
+        adaptive=adaptive,
+        sample_stride=sample_stride,
         return_state=return_state,
         save_mode=save_mode,
         mode_method=mode_method,
+        save_field=save_field,
         density_species_index=density_species_index,
-        use_custom_vjp=use_custom_vjp,
         state_sharding=state_sharding,
     )
-    dt_val, ts = _linear_save_times(
-        dt=dt,
-        steps=steps,
-        sample_stride=sample_stride,
-        real_dtype=real_dtype,
-    )
-    method_is_special = _is_imex_solver(method) or _is_implicit_solver(method)
     sol = _run_linear_diffrax_solve(
         dfx=dfx,
         eqx=eqx,
-        terms_obj=_linear_diffrax_terms_obj(dfx, method, rhs),
+        terms_obj=_linear_diffrax_terms_obj(dfx, method, bundle.rhs),
         solver=_solver_from_name(method),
-        save_fn=save_fn,
-        G0_packed=G0_packed,
-        cache=cache,
+        save_fn=bundle.save_fn,
+        G0_packed=bundle.G0_packed,
+        cache=bundle.cache,
         params=params,
-        term_cfg=term_cfg,
-        dt_val=dt_val,
+        term_cfg=bundle.term_cfg,
+        dt_val=bundle.dt_val,
         steps=steps,
-        ts=ts,
-        adaptive_eff=adaptive or method_is_special,
+        ts=bundle.ts,
+        adaptive_eff=bundle.adaptive_eff,
         rtol=rtol,
         atol=atol,
         max_steps=max_steps,
