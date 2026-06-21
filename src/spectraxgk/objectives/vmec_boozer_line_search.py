@@ -55,6 +55,29 @@ class _AggregateHoldoutReports:
     final_delta: float
 
 
+@dataclass(frozen=True)
+class _LineSearchProbeResult:
+    report: dict[str, object]
+    value: float
+    derivative: float
+    curvature_ratio: float
+    passed: bool
+    sample_metadata: list[dict[str, object]]
+    n_samples: int
+
+
+@dataclass(frozen=True)
+class _LineSearchStepOutcome:
+    delta: float
+    best_value: float | None
+    accepted_steps: int
+    stop_reason: str
+    sample_metadata: list[dict[str, object]]
+    n_samples: int
+    row: dict[str, object]
+    should_stop: bool
+
+
 def _validate_line_search_controls(
     *,
     max_steps: int,
@@ -183,6 +206,173 @@ def _line_search_payload(
     return payload
 
 
+def _line_search_probe_kwargs(
+    *,
+    probe_kwargs: dict[str, Any],
+    perturbation_step: float,
+    response_atol: float,
+    max_curvature_ratio: float,
+) -> dict[str, Any]:
+    return {
+        **probe_kwargs,
+        "perturbation_step": perturbation_step,
+        "response_atol": response_atol,
+        "max_curvature_ratio": max_curvature_ratio,
+    }
+
+
+def _capture_probe_sample_metadata(
+    report: dict[str, object],
+    sample_metadata: list[dict[str, object]],
+    n_samples: int,
+) -> tuple[list[dict[str, object]], int]:
+    if not sample_metadata and isinstance(report.get("samples"), list):
+        sample_metadata = cast(list[dict[str, object]], report["samples"])
+    return sample_metadata, int(cast(Any, report.get("n_samples", n_samples)))
+
+
+def _run_line_search_probe(
+    finite_difference_report_fn: Any,
+    *,
+    base_delta: float,
+    base_probe_kwargs: dict[str, Any],
+    sample_metadata: list[dict[str, object]],
+    n_samples: int,
+) -> _LineSearchProbeResult:
+    report = finite_difference_report_fn(base_delta=base_delta, **base_probe_kwargs)
+    sample_metadata, n_samples = _capture_probe_sample_metadata(
+        report,
+        sample_metadata,
+        n_samples,
+    )
+    return _LineSearchProbeResult(
+        report=report,
+        value=_report_float(report, "base_value"),
+        derivative=_report_float(report, "central_derivative"),
+        curvature_ratio=_report_float(report, "curvature_ratio"),
+        passed=bool(report["passed"]),
+        sample_metadata=sample_metadata,
+        n_samples=n_samples,
+    )
+
+
+def _line_search_history_row(
+    step_index: int,
+    delta: float,
+    probe: _LineSearchProbeResult,
+) -> dict[str, object]:
+    return {
+        "step": step_index,
+        "delta": delta,
+        "objective": probe.value,
+        "central_derivative": probe.derivative,
+        "finite_difference_passed": probe.passed,
+        "curvature_ratio": probe.curvature_ratio,
+        "accepted": False,
+        "candidate_delta": None,
+        "candidate_objective": None,
+    }
+
+
+def _candidate_delta(delta: float, derivative: float, update_step: float) -> float:
+    return delta - float(np.sign(derivative)) * update_step
+
+
+def _candidate_is_acceptable(
+    candidate: _LineSearchProbeResult,
+    *,
+    base_value: float,
+    min_improvement: float,
+) -> bool:
+    return bool(candidate.passed and candidate.value < base_value - min_improvement)
+
+
+def _run_one_line_search_step(
+    finite_difference_report_fn: Any,
+    *,
+    step_index: int,
+    delta: float,
+    best_value: float | None,
+    accepted_steps: int,
+    sample_metadata: list[dict[str, object]],
+    n_samples: int,
+    base_probe_kwargs: dict[str, Any],
+    update_step: float,
+    min_improvement: float,
+) -> _LineSearchStepOutcome:
+    probe = _run_line_search_probe(
+        finite_difference_report_fn,
+        base_delta=delta,
+        base_probe_kwargs=base_probe_kwargs,
+        sample_metadata=sample_metadata,
+        n_samples=n_samples,
+    )
+    sample_metadata = probe.sample_metadata
+    n_samples = probe.n_samples
+    best_value = probe.value if best_value is None else best_value
+    row = _line_search_history_row(step_index, delta, probe)
+    if not probe.passed:
+        return _LineSearchStepOutcome(
+            delta,
+            best_value,
+            accepted_steps,
+            "finite_difference_gate_failed",
+            sample_metadata,
+            n_samples,
+            row,
+            True,
+        )
+    if not np.isfinite(probe.derivative) or abs(probe.derivative) == 0.0:
+        return _LineSearchStepOutcome(
+            delta,
+            best_value,
+            accepted_steps,
+            "zero_or_nonfinite_derivative",
+            sample_metadata,
+            n_samples,
+            row,
+            True,
+        )
+
+    next_delta = _candidate_delta(delta, probe.derivative, update_step)
+    candidate = _run_line_search_probe(
+        finite_difference_report_fn,
+        base_delta=next_delta,
+        base_probe_kwargs=base_probe_kwargs,
+        sample_metadata=sample_metadata,
+        n_samples=n_samples,
+    )
+    row["candidate_delta"] = next_delta
+    row["candidate_objective"] = candidate.value
+    if not _candidate_is_acceptable(
+        candidate,
+        base_value=probe.value,
+        min_improvement=min_improvement,
+    ):
+        return _LineSearchStepOutcome(
+            delta,
+            best_value,
+            accepted_steps,
+            "no_accepted_candidate",
+            sample_metadata,
+            n_samples,
+            row,
+            True,
+        )
+
+    row["accepted"] = True
+    return _LineSearchStepOutcome(
+        next_delta,
+        candidate.value,
+        accepted_steps + 1,
+        "max_steps",
+        sample_metadata,
+        n_samples,
+        row,
+        False,
+    )
+
+
 def _run_one_parameter_line_search(
     *,
     finite_difference_report_fn: Any,
@@ -200,12 +390,12 @@ def _run_one_parameter_line_search(
         update_step=update_step,
         min_improvement=min_improvement,
     )
-    base_probe_kwargs = {
-        **probe_kwargs,
-        "perturbation_step": perturbation_step,
-        "response_atol": response_atol,
-        "max_curvature_ratio": max_curvature_ratio,
-    }
+    base_probe_kwargs = _line_search_probe_kwargs(
+        probe_kwargs=probe_kwargs,
+        perturbation_step=perturbation_step,
+        response_atol=response_atol,
+        max_curvature_ratio=max_curvature_ratio,
+    )
     delta = float(initial_delta)
     history: list[dict[str, object]] = []
     best_value: float | None = None
@@ -214,48 +404,27 @@ def _run_one_parameter_line_search(
     sample_metadata: list[dict[str, object]] = []
     n_samples = 0
     for step_index in range(max_steps_int):
-        report = finite_difference_report_fn(base_delta=delta, **base_probe_kwargs)
-        base_value = _report_float(report, "base_value")
-        if best_value is None:
-            best_value = base_value
-        if not sample_metadata and isinstance(report.get("samples"), list):
-            sample_metadata = cast(list[dict[str, object]], report["samples"])
-        n_samples = int(cast(Any, report.get("n_samples", n_samples)))
-        derivative = _report_float(report, "central_derivative")
-        row: dict[str, object] = {
-            "step": step_index,
-            "delta": delta,
-            "objective": base_value,
-            "central_derivative": derivative,
-            "finite_difference_passed": bool(report["passed"]),
-            "curvature_ratio": _report_float(report, "curvature_ratio"),
-            "accepted": False,
-            "candidate_delta": None,
-            "candidate_objective": None,
-        }
-        if not bool(report["passed"]):
-            stop_reason = "finite_difference_gate_failed"
-            history.append(row)
+        outcome = _run_one_line_search_step(
+            finite_difference_report_fn,
+            step_index=step_index,
+            delta=delta,
+            best_value=best_value,
+            accepted_steps=accepted_steps,
+            base_probe_kwargs=base_probe_kwargs,
+            sample_metadata=sample_metadata,
+            n_samples=n_samples,
+            update_step=update_step_float,
+            min_improvement=min_improvement_float,
+        )
+        delta = outcome.delta
+        best_value = outcome.best_value
+        accepted_steps = outcome.accepted_steps
+        stop_reason = outcome.stop_reason
+        sample_metadata = outcome.sample_metadata
+        n_samples = outcome.n_samples
+        history.append(outcome.row)
+        if outcome.should_stop:
             break
-        if not np.isfinite(derivative) or abs(derivative) == 0.0:
-            stop_reason = "zero_or_nonfinite_derivative"
-            history.append(row)
-            break
-        candidate_delta = delta - float(np.sign(derivative)) * update_step_float
-        candidate = finite_difference_report_fn(base_delta=candidate_delta, **base_probe_kwargs)
-        candidate_value = _report_float(candidate, "base_value")
-        row["candidate_delta"] = candidate_delta
-        row["candidate_objective"] = candidate_value
-        candidate_ok = bool(candidate["passed"]) and candidate_value < base_value - min_improvement_float
-        if not candidate_ok:
-            stop_reason = "no_accepted_candidate"
-            history.append(row)
-            break
-        delta = candidate_delta
-        best_value = candidate_value
-        accepted_steps += 1
-        row["accepted"] = True
-        history.append(row)
 
     initial_objective = float(cast(Any, history[0]["objective"])) if history else float("nan")
     final_objective = float(best_value) if best_value is not None else initial_objective
