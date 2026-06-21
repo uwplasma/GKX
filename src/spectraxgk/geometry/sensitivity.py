@@ -177,6 +177,85 @@ def geometry_sensitivity_report(
     return report
 
 
+def _geometry_inverse_design_selected_names(indices_np: np.ndarray) -> list[str]:
+    """Return stable names for the selected geometry observables."""
+
+    return [str(_GEOMETRY_OBSERVABLE_NAMES[int(i)]) for i in indices_np]
+
+
+def _geometry_inverse_design_derivative_report(
+    observable_fn: Any,
+    params: jnp.ndarray,
+    residual: jnp.ndarray,
+    *,
+    fd_step: float,
+    regularization: float,
+    observable_names: list[str],
+    param_names: tuple[str, ...],
+) -> dict[str, object]:
+    """Return AD/FD Jacobian, conditioning, and covariance diagnostics."""
+
+    jac_ad = jax.jacfwd(observable_fn)(params)
+    jac_fd = finite_difference_jacobian(observable_fn, params, step=fd_step)
+    diff = jac_ad - jac_fd
+    scale = jnp.maximum(jnp.abs(jac_fd), 1.0e-12)
+    return {
+        "jacobian_ad": np.asarray(jac_ad).tolist(),
+        "jacobian_fd": np.asarray(jac_fd).tolist(),
+        "max_abs_ad_fd_error": float(np.max(np.abs(np.asarray(diff)))),
+        "max_rel_ad_fd_error": float(np.max(np.abs(np.asarray(diff) / np.asarray(scale)))),
+        "conditioning": _sensitivity_conditioning_metadata(
+            jac_ad,
+            jac_fd,
+            params,
+            fd_step=float(fd_step),
+            observable_names=observable_names,
+            param_names=param_names,
+            relative_floor=1.0e-12,
+        ),
+        "uq": covariance_diagnostics(
+            np.asarray(jac_ad),
+            np.asarray(residual),
+            regularization=regularization,
+        ),
+    }
+
+
+def _pack_geometry_inverse_design_report(
+    problem: _GeometryInverseDesignProblem,
+    observable_fn: Any,
+    final_params: jnp.ndarray,
+    residual: jnp.ndarray,
+    history: list[dict[str, object]],
+    derivative_report: dict[str, object],
+    *,
+    fd_step: float,
+    damping: float,
+    regularization: float,
+    source_model: str,
+) -> dict[str, object]:
+    """Pack the public inverse-design report schema."""
+
+    observable_names = _geometry_inverse_design_selected_names(problem.indices_np)
+    payload: dict[str, object] = {
+        "observable_names": observable_names,
+        "initial_params": np.asarray(problem.params).tolist(),
+        "final_params": np.asarray(final_params).tolist(),
+        "target_observables": np.asarray(problem.target).tolist(),
+        "final_observables": np.asarray(observable_fn(final_params)).tolist(),
+        "final_residual": np.asarray(residual).tolist(),
+        "final_residual_norm": float(jnp.linalg.norm(residual)),
+        "history": history,
+        "fd_step": float(fd_step),
+        "damping": float(damping),
+        "regularization": float(regularization),
+        "source_model": str(source_model),
+        "backend_info": discover_differentiable_geometry_backends(),
+    }
+    payload.update(derivative_report)
+    return payload
+
+
 def geometry_inverse_design_report(
     mapping_fn: Any,
     initial_params: jnp.ndarray,
@@ -206,9 +285,6 @@ def geometry_inverse_design_report(
         max_steps=max_steps,
         damping=damping,
     )
-    params = problem.params
-    target = problem.target
-    indices_np = problem.indices_np
     observable_fn = _geometry_observable_fn(
         mapping_fn,
         problem.indices,
@@ -216,55 +292,34 @@ def geometry_inverse_design_report(
     )
     p, residual, history = _run_geometry_inverse_design_iterations(
         observable_fn,
-        params,
-        target,
+        problem.params,
+        problem.target,
         max_steps=max_steps,
         damping=damping,
     )
 
-    jac_ad = jax.jacfwd(observable_fn)(p)
-    jac_fd = finite_difference_jacobian(observable_fn, p, step=fd_step)
-    diff = jac_ad - jac_fd
-    scale = jnp.maximum(jnp.abs(jac_fd), 1.0e-12)
-    uq = covariance_diagnostics(
-        np.asarray(jac_ad), np.asarray(residual), regularization=regularization
+    observable_names = _geometry_inverse_design_selected_names(problem.indices_np)
+    derivative_report = _geometry_inverse_design_derivative_report(
+        observable_fn,
+        p,
+        residual,
+        fd_step=fd_step,
+        regularization=regularization,
+        observable_names=observable_names,
+        param_names=tuple(f"param_{idx}" for idx in range(int(problem.params.shape[0]))),
     )
-    selected_observable_names = [
-        str(_GEOMETRY_OBSERVABLE_NAMES[int(i)]) for i in indices_np
-    ]
-    param_names = tuple(f"param_{idx}" for idx in range(int(params.shape[0])))
-
-    return {
-        "observable_names": selected_observable_names,
-        "initial_params": np.asarray(params).tolist(),
-        "final_params": np.asarray(p).tolist(),
-        "target_observables": np.asarray(target).tolist(),
-        "final_observables": np.asarray(observable_fn(p)).tolist(),
-        "final_residual": np.asarray(residual).tolist(),
-        "final_residual_norm": float(jnp.linalg.norm(residual)),
-        "history": history,
-        "jacobian_ad": np.asarray(jac_ad).tolist(),
-        "jacobian_fd": np.asarray(jac_fd).tolist(),
-        "max_abs_ad_fd_error": float(np.max(np.abs(np.asarray(diff)))),
-        "max_rel_ad_fd_error": float(
-            np.max(np.abs(np.asarray(diff) / np.asarray(scale)))
-        ),
-        "conditioning": _sensitivity_conditioning_metadata(
-            jac_ad,
-            jac_fd,
-            p,
-            fd_step=float(fd_step),
-            observable_names=selected_observable_names,
-            param_names=param_names,
-            relative_floor=1.0e-12,
-        ),
-        "uq": uq,
-        "fd_step": float(fd_step),
-        "damping": float(damping),
-        "regularization": float(regularization),
-        "source_model": str(source_model),
-        "backend_info": discover_differentiable_geometry_backends(),
-    }
+    return _pack_geometry_inverse_design_report(
+        problem,
+        observable_fn,
+        p,
+        residual,
+        history,
+        derivative_report,
+        fd_step=fd_step,
+        damping=damping,
+        regularization=regularization,
+        source_model=source_model,
+    )
 
 
 __all__ = [
