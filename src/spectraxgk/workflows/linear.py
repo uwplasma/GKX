@@ -164,6 +164,33 @@ def _valid_growth(gamma: float, omega: float, *, require_positive: bool) -> bool
     return True
 
 
+def _build_linear_fit_policy(
+    *,
+    mode_method: str,
+    auto_window: bool,
+    tmin: float | None,
+    tmax: float | None,
+    window_fraction: float,
+    min_points: int,
+    start_fraction: float,
+    growth_weight: float,
+    require_positive: bool,
+    min_amp_fraction: float,
+) -> _LinearFitPolicy:
+    return _LinearFitPolicy(
+        mode_method=mode_method,
+        auto_window=auto_window,
+        tmin=tmin,
+        tmax=tmax,
+        window_fraction=window_fraction,
+        min_points=min_points,
+        start_fraction=start_fraction,
+        growth_weight=growth_weight,
+        require_positive=require_positive,
+        min_amp_fraction=min_amp_fraction,
+    )
+
+
 def _finalize_linear_result(
     result: RuntimeLinearResult,
     *,
@@ -555,6 +582,56 @@ def _finalize_auto_linear_runtime(
     )
 
 
+def _run_linear_runtime_branch(
+    ctx: _LinearRuntimeContext,
+    *,
+    deps: FullLinearRuntimeDeps,
+    method: str | None,
+    dt: float | None,
+    steps: int | None,
+    sample_stride: int | None,
+    fit_policy: _LinearFitPolicy,
+    krylov_cfg: Any | None,
+    show_progress: bool,
+    status_callback: _StatusCallback,
+) -> RuntimeLinearResult:
+    if ctx.solver_key == "krylov":
+        return _run_krylov_linear_runtime(
+            ctx,
+            deps=deps,
+            krylov_cfg=krylov_cfg,
+            status_callback=status_callback,
+        )
+
+    result = _run_time_linear(
+        ctx,
+        deps=deps,
+        method=method,
+        dt=dt,
+        steps=steps,
+        sample_stride=sample_stride,
+        fit_policy=fit_policy,
+        show_progress=show_progress,
+        status_callback=status_callback,
+    )
+    if ctx.solver_key == "auto":
+        return _finalize_auto_linear_runtime(
+            result,
+            ctx=ctx,
+            deps=deps,
+            fit_policy=fit_policy,
+            krylov_cfg=krylov_cfg,
+            status_callback=status_callback,
+        )
+
+    return _finalize_linear_result(
+        result,
+        ctx=ctx,
+        deps=deps,
+        status_callback=status_callback,
+    )
+
+
 def run_full_linear_runtime(
     cfg: RuntimeConfig,
     *,
@@ -596,7 +673,7 @@ def run_full_linear_runtime(
         return_state=return_state,
         status_callback=status_callback,
     )
-    fit_policy = _LinearFitPolicy(
+    fit_policy = _build_linear_fit_policy(
         mode_method=mode_method,
         auto_window=auto_window,
         tmin=tmin,
@@ -609,15 +686,7 @@ def run_full_linear_runtime(
         min_amp_fraction=min_amp_fraction,
     )
 
-    if ctx.solver_key == "krylov":
-        return _run_krylov_linear_runtime(
-            ctx,
-            deps=deps,
-            krylov_cfg=krylov_cfg,
-            status_callback=status_callback,
-        )
-
-    result = _run_time_linear(
+    return _run_linear_runtime_branch(
         ctx,
         deps=deps,
         method=method,
@@ -625,22 +694,7 @@ def run_full_linear_runtime(
         steps=steps,
         sample_stride=sample_stride,
         fit_policy=fit_policy,
+        krylov_cfg=krylov_cfg,
         show_progress=show_progress,
-        status_callback=status_callback,
-    )
-    if ctx.solver_key == "auto":
-        return _finalize_auto_linear_runtime(
-            result,
-            ctx=ctx,
-            deps=deps,
-            fit_policy=fit_policy,
-            krylov_cfg=krylov_cfg,
-            status_callback=status_callback,
-        )
-
-    return _finalize_linear_result(
-        result,
-        ctx=ctx,
-        deps=deps,
         status_callback=status_callback,
     )
