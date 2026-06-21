@@ -2,12 +2,50 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import numpy as np
 
 import jax
 import jax.numpy as jnp
 
 from spectraxgk.terms.operators import abs_z_linked_fft, shift_axis
+
+
+@dataclass(frozen=True)
+class _HypercollisionCoefficients:
+    vth: jnp.ndarray
+    nu_hyper: jnp.ndarray
+    nu_hyper_l: jnp.ndarray
+    nu_hyper_m: jnp.ndarray
+    nu_hyper_lm: jnp.ndarray
+    hyper_ratio: jnp.ndarray
+    ratio_l: jnp.ndarray
+    ratio_m: jnp.ndarray
+    ratio_lm: jnp.ndarray
+    hypercollisions_const: jnp.ndarray
+    hypercollisions_kz: jnp.ndarray
+
+
+@dataclass(frozen=True)
+class _HypercollisionMasks:
+    mask_const: jnp.ndarray
+    mask_kz: jnp.ndarray
+    m_pow: jnp.ndarray
+    m_norm_kz_factor: jnp.ndarray
+    kpar_scale: jnp.ndarray
+
+
+@dataclass(frozen=True)
+class _HypercollisionLinkedRoute:
+    kz: jnp.ndarray
+    linked_indices: tuple[jnp.ndarray, ...] | None
+    linked_kz: tuple[jnp.ndarray, ...] | None
+    linked_inverse_permutation: jnp.ndarray | None
+    linked_full_cover: bool
+    linked_gather_map: jnp.ndarray | None
+    linked_gather_mask: jnp.ndarray | None
+    linked_use_gather: bool
 
 
 def _is_static_zero(value: jnp.ndarray, dtype: jnp.dtype | None = None) -> bool:
@@ -426,6 +464,79 @@ def _parallel_hypercollision_contribution(
     )
 
 
+def _inactive_hypercollision_result_from_policy(
+    G: jnp.ndarray,
+    coeffs: _HypercollisionCoefficients,
+    *,
+    weight: jnp.ndarray,
+    dtype: jnp.dtype,
+) -> jnp.ndarray | None:
+    return _inactive_hypercollision_result(
+        G,
+        weight=weight,
+        nu_hyper=coeffs.nu_hyper,
+        nu_hyper_l=coeffs.nu_hyper_l,
+        nu_hyper_m=coeffs.nu_hyper_m,
+        nu_hyper_lm=coeffs.nu_hyper_lm,
+        hypercollisions_const=coeffs.hypercollisions_const,
+        hypercollisions_kz=coeffs.hypercollisions_kz,
+        dtype=dtype,
+    )
+
+
+def _constant_hypercollision_from_policy(
+    G: jnp.ndarray,
+    coeffs: _HypercollisionCoefficients,
+    masks: _HypercollisionMasks,
+    *,
+    weight: jnp.ndarray,
+) -> jnp.ndarray:
+    return _constant_hypercollision_contribution(
+        G,
+        vth=coeffs.vth,
+        nu_hyper=coeffs.nu_hyper,
+        nu_hyper_l=coeffs.nu_hyper_l,
+        nu_hyper_m=coeffs.nu_hyper_m,
+        nu_hyper_lm=coeffs.nu_hyper_lm,
+        hyper_ratio=coeffs.hyper_ratio,
+        ratio_l=coeffs.ratio_l,
+        ratio_m=coeffs.ratio_m,
+        ratio_lm=coeffs.ratio_lm,
+        mask_const=masks.mask_const,
+        hypercollisions_const=coeffs.hypercollisions_const,
+        weight=weight,
+    )
+
+
+def _parallel_hypercollision_from_policy(
+    G: jnp.ndarray,
+    coeffs: _HypercollisionCoefficients,
+    masks: _HypercollisionMasks,
+    route: _HypercollisionLinkedRoute,
+    *,
+    weight: jnp.ndarray,
+) -> jnp.ndarray:
+    return _parallel_hypercollision_contribution(
+        G,
+        weight=weight,
+        hypercollisions_kz=coeffs.hypercollisions_kz,
+        nu_hyper_m=coeffs.nu_hyper_m,
+        m_norm_kz_factor=masks.m_norm_kz_factor,
+        vth=coeffs.vth,
+        kpar_scale=masks.kpar_scale,
+        mask_kz=masks.mask_kz,
+        m_pow=masks.m_pow,
+        kz=route.kz,
+        linked_indices=route.linked_indices,
+        linked_kz=route.linked_kz,
+        linked_inverse_permutation=route.linked_inverse_permutation,
+        linked_full_cover=route.linked_full_cover,
+        linked_gather_map=route.linked_gather_map,
+        linked_gather_mask=route.linked_gather_mask,
+        linked_use_gather=route.linked_use_gather,
+    )
+
+
 def hypercollisions_contribution(
     G: jnp.ndarray,
     *,
@@ -455,23 +566,7 @@ def hypercollisions_contribution(
     linked_gather_mask: jnp.ndarray | None = None,
     linked_use_gather: bool = False,
 ) -> jnp.ndarray:
-    real_dtype = jnp.real(G).dtype
-    inactive_result = _inactive_hypercollision_result(
-        G,
-        weight=weight,
-        nu_hyper=nu_hyper,
-        nu_hyper_l=nu_hyper_l,
-        nu_hyper_m=nu_hyper_m,
-        nu_hyper_lm=nu_hyper_lm,
-        hypercollisions_const=hypercollisions_const,
-        hypercollisions_kz=hypercollisions_kz,
-        dtype=real_dtype,
-    )
-    if inactive_result is not None:
-        return inactive_result
-
-    dG = _constant_hypercollision_contribution(
-        G,
+    coeffs = _HypercollisionCoefficients(
         vth=vth,
         nu_hyper=nu_hyper,
         nu_hyper_l=nu_hyper_l,
@@ -481,26 +576,13 @@ def hypercollisions_contribution(
         ratio_l=ratio_l,
         ratio_m=ratio_m,
         ratio_lm=ratio_lm,
-        mask_const=mask_const,
         hypercollisions_const=hypercollisions_const,
-        weight=weight,
-    )
-
-    if _hypercollision_kz_weight_is_static_zero(
-        weight=weight, hypercollisions_kz=hypercollisions_kz
-    ):
-        return dG
-
-    return dG + _parallel_hypercollision_contribution(
-        G,
-        weight=weight,
         hypercollisions_kz=hypercollisions_kz,
-        nu_hyper_m=nu_hyper_m,
-        m_norm_kz_factor=m_norm_kz_factor,
-        vth=vth,
-        kpar_scale=kpar_scale,
-        mask_kz=mask_kz,
-        m_pow=m_pow,
+    )
+    masks = _HypercollisionMasks(
+        mask_const, mask_kz, m_pow, m_norm_kz_factor, kpar_scale
+    )
+    route = _HypercollisionLinkedRoute(
         kz=kz,
         linked_indices=linked_indices,
         linked_kz=linked_kz,
@@ -510,6 +592,18 @@ def hypercollisions_contribution(
         linked_gather_mask=linked_gather_mask,
         linked_use_gather=linked_use_gather,
     )
+    inactive_result = _inactive_hypercollision_result_from_policy(
+        G, coeffs, weight=weight, dtype=jnp.real(G).dtype
+    )
+    if inactive_result is not None:
+        return inactive_result
+
+    dG = _constant_hypercollision_from_policy(G, coeffs, masks, weight=weight)
+    if _hypercollision_kz_weight_is_static_zero(
+        weight=weight, hypercollisions_kz=coeffs.hypercollisions_kz
+    ):
+        return dG
+    return dG + _parallel_hypercollision_from_policy(G, coeffs, masks, route, weight=weight)
 
 
 def hyperdiffusion_contribution(
