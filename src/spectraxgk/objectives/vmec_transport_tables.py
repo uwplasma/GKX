@@ -22,6 +22,8 @@ from spectraxgk.objectives.vmec_transport_config import (
     _pin_current_optional_backend_paths,
 )
 
+_SOLVER_OBJECTIVE_INDEX = {name: i for i, name in enumerate(SOLVER_OBJECTIVE_NAMES)}
+
 
 def _solver_table_to_nonlinear_window_proxy(
     table: jnp.ndarray,
@@ -196,6 +198,67 @@ def _geometry_transport_weights(
     return kperp_eff2, heat_weight, particle_weight
 
 
+def _transport_sample_geometry(
+    state: Any,
+    static: Any,
+    indata: Any,
+    wout_reference: Any,
+    config: VMECJAXTransportObjectiveConfig,
+    *,
+    torflux: float,
+    alpha: float,
+) -> Any:
+    return flux_tube_geometry_from_vmec_boozer_state(
+        state,
+        static,
+        indata,
+        wout_reference,
+        torflux=float(torflux),
+        alpha=float(alpha),
+        ntheta=int(config.ntheta),
+        mboz=int(config.mboz),
+        nboz=int(config.nboz),
+        reference_length=config.reference_length,
+        reference_b=config.reference_b,
+        validate_finite=bool(config.validate_finite),
+    )
+
+
+def _solver_objective_row(gamma: jnp.ndarray) -> jnp.ndarray:
+    row = jnp.zeros(
+        (len(SOLVER_OBJECTIVE_NAMES),), dtype=jnp.asarray(gamma).dtype
+    )
+    return row.at[_SOLVER_OBJECTIVE_INDEX["gamma"]].set(gamma)
+
+
+def _transport_weighted_solver_row(
+    geom: Any,
+    gamma: jnp.ndarray,
+    *,
+    selected_ky_index: int,
+    ly: float,
+) -> jnp.ndarray:
+    kperp, heat_weight, particle_weight = _geometry_transport_weights(
+        geom,
+        selected_ky_index=int(selected_ky_index),
+        ly=float(ly),
+    )
+    ql_proxy = (
+        gamma
+        * heat_weight
+        / jnp.maximum(kperp, jnp.asarray(1.0e-12, dtype=jnp.asarray(gamma).dtype))
+    )
+    row = _solver_objective_row(gamma)
+    row = row.at[_SOLVER_OBJECTIVE_INDEX["kperp_eff2"]].set(kperp)
+    row = row.at[_SOLVER_OBJECTIVE_INDEX["linear_heat_flux_weight"]].set(heat_weight)
+    row = row.at[_SOLVER_OBJECTIVE_INDEX["linear_particle_flux_weight"]].set(
+        particle_weight
+    )
+    return row.at[_SOLVER_OBJECTIVE_INDEX["mixing_length_heat_flux_proxy"]].set(
+        ql_proxy
+    )
+
+
 def _transport_feature_table_from_state(
     state: Any,
     static: Any,
@@ -209,22 +272,16 @@ def _transport_feature_table_from_state(
     samples = config.sample_set
     selected_indices = cast(tuple[int, ...], grid_options["selected_ky_indices"])
     rows: list[jnp.ndarray] = []
-    idx = {name: i for i, name in enumerate(SOLVER_OBJECTIVE_NAMES)}
     for torflux in samples.surfaces:
         for alpha in samples.alphas:
-            geom = flux_tube_geometry_from_vmec_boozer_state(
+            geom = _transport_sample_geometry(
                 state,
                 static,
                 indata,
                 wout_reference,
                 torflux=float(torflux),
                 alpha=float(alpha),
-                ntheta=int(config.ntheta),
-                mboz=int(config.mboz),
-                nboz=int(config.nboz),
-                reference_length=config.reference_length,
-                reference_b=config.reference_b,
-                validate_finite=bool(config.validate_finite),
+                config=config,
             )
             for selected_ky_index in selected_indices:
                 gamma = solver_growth_rate_from_geometry(
@@ -237,34 +294,16 @@ def _transport_feature_table_from_state(
                     ly=float(grid_options["ly"]),
                 )
                 if config.kind == "growth":
-                    row = jnp.zeros(
-                        (len(SOLVER_OBJECTIVE_NAMES),), dtype=jnp.asarray(gamma).dtype
-                    )
-                    row = row.at[idx["gamma"]].set(gamma)
-                    rows.append(row)
+                    rows.append(_solver_objective_row(gamma))
                     continue
-                kperp, heat_weight, particle_weight = _geometry_transport_weights(
-                    geom,
-                    selected_ky_index=int(selected_ky_index),
-                    ly=float(grid_options["ly"]),
-                )
-                ql_proxy = (
-                    gamma
-                    * heat_weight
-                    / jnp.maximum(
-                        kperp,
-                        jnp.asarray(1.0e-12, dtype=jnp.asarray(gamma).dtype),
+                rows.append(
+                    _transport_weighted_solver_row(
+                        geom,
+                        gamma,
+                        selected_ky_index=int(selected_ky_index),
+                        ly=float(grid_options["ly"]),
                     )
                 )
-                row = jnp.zeros(
-                    (len(SOLVER_OBJECTIVE_NAMES),), dtype=jnp.asarray(gamma).dtype
-                )
-                row = row.at[idx["gamma"]].set(gamma)
-                row = row.at[idx["kperp_eff2"]].set(kperp)
-                row = row.at[idx["linear_heat_flux_weight"]].set(heat_weight)
-                row = row.at[idx["linear_particle_flux_weight"]].set(particle_weight)
-                row = row.at[idx["mixing_length_heat_flux_proxy"]].set(ql_proxy)
-                rows.append(row)
     if not rows:
         raise RuntimeError("VMEC-JAX transport objective produced no sample rows")
     return jnp.reshape(
