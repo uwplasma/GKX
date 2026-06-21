@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from typing import Any, Sequence
 import math
 
@@ -32,6 +32,107 @@ def _paired_same_sign_fraction(artifact: dict[str, Any]) -> float | None:
     return _finite_float(diagnostics.get("same_sign_fraction"))
 
 
+@dataclass(frozen=True)
+class _BracketConditioningMetrics:
+    central_gradient: Any
+    response_fraction: float | None
+    fd_asymmetry_rel: float | None
+    fd_condition_number: float | None
+    gradient_uncertainty_rel: float | None
+    paired_uncertainty_rel: float | None
+    paired_same_sign_fraction: float | None
+
+
+def _bracket_evidence_config(
+    config: NonlinearTurbulenceGradientBracketSweepConfig,
+) -> NonlinearTurbulenceGradientEvidenceConfig:
+    return NonlinearTurbulenceGradientEvidenceConfig(
+        max_gradient_uncertainty_rel=config.max_gradient_uncertainty_rel,
+        max_fd_asymmetry_rel=config.max_fd_asymmetry_rel,
+        max_fd_condition_number=config.max_fd_condition_number,
+        min_fd_response_fraction=config.min_fd_response_fraction,
+        value_floor=config.value_floor,
+    )
+
+
+def _bracket_conditioning_metrics(
+    artifact: dict[str, Any],
+    classified: dict[str, Any],
+) -> _BracketConditioningMetrics:
+    conditioning = classified.get("conditioning")
+    if not isinstance(conditioning, dict):
+        conditioning = {}
+    return _BracketConditioningMetrics(
+        central_gradient=conditioning.get("central_gradient"),
+        response_fraction=_finite_float(conditioning.get("response_fraction")),
+        fd_asymmetry_rel=_finite_float(conditioning.get("fd_asymmetry_rel")),
+        fd_condition_number=_finite_float(conditioning.get("fd_condition_number")),
+        gradient_uncertainty_rel=_finite_float(
+            conditioning.get("gradient_uncertainty_rel")
+        ),
+        paired_uncertainty_rel=_paired_uncertainty_rel(artifact),
+        paired_same_sign_fraction=_paired_same_sign_fraction(artifact),
+    )
+
+
+def _bracket_margin_scores(
+    metrics: _BracketConditioningMetrics,
+    config: NonlinearTurbulenceGradientBracketSweepConfig,
+) -> dict[str, float]:
+    return {
+        "response": _metric_margin(
+            metrics.response_fraction,
+            target=config.min_fd_response_fraction,
+            sense="min",
+            cap=config.score_cap,
+            value_floor=config.value_floor,
+        ),
+        "locality": _metric_margin(
+            metrics.fd_asymmetry_rel,
+            target=config.max_fd_asymmetry_rel,
+            sense="max",
+            cap=config.score_cap,
+            value_floor=config.value_floor,
+        ),
+        "uncertainty": _metric_margin(
+            metrics.gradient_uncertainty_rel,
+            target=config.max_gradient_uncertainty_rel,
+            sense="max",
+            cap=config.score_cap,
+            value_floor=config.value_floor,
+        ),
+        "conditioning": _metric_margin(
+            metrics.fd_condition_number,
+            target=config.max_fd_condition_number,
+            sense="max",
+            cap=config.score_cap,
+            value_floor=config.value_floor,
+        ),
+    }
+
+
+def _repeated_bracket_stable(
+    metrics: _BracketConditioningMetrics,
+    config: NonlinearTurbulenceGradientBracketSweepConfig,
+) -> bool:
+    return (
+        metrics.paired_uncertainty_rel is not None
+        and metrics.paired_uncertainty_rel
+        <= float(config.max_repeated_bracket_uncertainty_rel)
+        and metrics.paired_same_sign_fraction is not None
+        and metrics.paired_same_sign_fraction
+        >= float(config.min_repeated_bracket_same_sign_fraction)
+    )
+
+
+def _failed_bracket_gate_names(classified: dict[str, Any]) -> list[str]:
+    return [
+        str(gate.get("metric", ""))
+        for gate in classified.get("gates", [])
+        if isinstance(gate, dict) and not bool(gate.get("passed", False))
+    ]
+
+
 def _bracket_sweep_row(
     artifact: dict[str, Any],
     *,
@@ -39,66 +140,14 @@ def _bracket_sweep_row(
     path: str | None,
     config: NonlinearTurbulenceGradientBracketSweepConfig,
 ) -> dict[str, Any]:
-    evidence_cfg = NonlinearTurbulenceGradientEvidenceConfig(
-        max_gradient_uncertainty_rel=config.max_gradient_uncertainty_rel,
-        max_fd_asymmetry_rel=config.max_fd_asymmetry_rel,
-        max_fd_condition_number=config.max_fd_condition_number,
-        min_fd_response_fraction=config.min_fd_response_fraction,
-        value_floor=config.value_floor,
+    classified = classify_gradient_artifact(
+        artifact,
+        path=path,
+        config=_bracket_evidence_config(config),
     )
-    classified = classify_gradient_artifact(artifact, path=path, config=evidence_cfg)
-    conditioning = classified.get("conditioning")
-    if not isinstance(conditioning, dict):
-        conditioning = {}
+    metrics = _bracket_conditioning_metrics(artifact, classified)
     delta = _finite_float(artifact.get("delta_parameter"))
-    response_fraction = _finite_float(conditioning.get("response_fraction"))
-    fd_asymmetry_rel = _finite_float(conditioning.get("fd_asymmetry_rel"))
-    fd_condition_number = _finite_float(conditioning.get("fd_condition_number"))
-    gradient_uncertainty_rel = _finite_float(
-        conditioning.get("gradient_uncertainty_rel")
-    )
-    paired_uncertainty_rel = _paired_uncertainty_rel(artifact)
-    paired_same_sign = _paired_same_sign_fraction(artifact)
-    response_margin = _metric_margin(
-        response_fraction,
-        target=config.min_fd_response_fraction,
-        sense="min",
-        cap=config.score_cap,
-        value_floor=config.value_floor,
-    )
-    locality_margin = _metric_margin(
-        fd_asymmetry_rel,
-        target=config.max_fd_asymmetry_rel,
-        sense="max",
-        cap=config.score_cap,
-        value_floor=config.value_floor,
-    )
-    uncertainty_margin = _metric_margin(
-        gradient_uncertainty_rel,
-        target=config.max_gradient_uncertainty_rel,
-        sense="max",
-        cap=config.score_cap,
-        value_floor=config.value_floor,
-    )
-    condition_margin = _metric_margin(
-        fd_condition_number,
-        target=config.max_fd_condition_number,
-        sense="max",
-        cap=config.score_cap,
-        value_floor=config.value_floor,
-    )
-    margins = {
-        "response": response_margin,
-        "locality": locality_margin,
-        "uncertainty": uncertainty_margin,
-        "conditioning": condition_margin,
-    }
-    repeated_bracket_stable = (
-        paired_uncertainty_rel is not None
-        and paired_uncertainty_rel <= float(config.max_repeated_bracket_uncertainty_rel)
-        and paired_same_sign is not None
-        and paired_same_sign >= float(config.min_repeated_bracket_same_sign_fraction)
-    )
+    margins = _bracket_margin_scores(metrics, config)
     return {
         "label": str(label or artifact.get("parameter_name") or path or ""),
         "path": path,
@@ -108,25 +157,25 @@ def _bracket_sweep_row(
             classified.get("qualifies_for_production_turbulence_gradient", False)
         ),
         "metrics": {
-            "central_gradient": conditioning.get("central_gradient"),
-            "response_fraction": conditioning.get("response_fraction"),
-            "fd_asymmetry_rel": conditioning.get("fd_asymmetry_rel"),
-            "fd_condition_number": conditioning.get("fd_condition_number"),
-            "gradient_uncertainty_rel": conditioning.get("gradient_uncertainty_rel"),
-            "paired_gradient_uncertainty_rel": _json_number(paired_uncertainty_rel),
-            "paired_same_sign_fraction": _json_number(paired_same_sign),
-            "repeated_bracket_stable": repeated_bracket_stable,
+            "central_gradient": metrics.central_gradient,
+            "response_fraction": metrics.response_fraction,
+            "fd_asymmetry_rel": metrics.fd_asymmetry_rel,
+            "fd_condition_number": metrics.fd_condition_number,
+            "gradient_uncertainty_rel": metrics.gradient_uncertainty_rel,
+            "paired_gradient_uncertainty_rel": _json_number(
+                metrics.paired_uncertainty_rel
+            ),
+            "paired_same_sign_fraction": _json_number(
+                metrics.paired_same_sign_fraction
+            ),
+            "repeated_bracket_stable": _repeated_bracket_stable(metrics, config),
         },
         "margins": margins,
         "weakest_margin": _json_number(min(margins.values())),
         "score": _json_number(
             math.prod(max(value, 0.0) for value in margins.values()) ** 0.25
         ),
-        "failed_gates": [
-            str(gate.get("metric", ""))
-            for gate in classified.get("gates", [])
-            if isinstance(gate, dict) and not bool(gate.get("passed", False))
-        ],
+        "failed_gates": _failed_bracket_gate_names(classified),
     }
 
 
@@ -137,13 +186,49 @@ def _delta_key(row: dict[str, Any]) -> float:
     return float(delta)
 
 
-def _bracket_sweep_recommendation(rows: Sequence[dict[str, Any]]) -> str:
-    if not rows:
-        return "run at least two matched plus/minus perturbation amplitudes before claiming bracket locality"
-    parameter_names = {
+def _bracket_parameter_names(rows: Sequence[dict[str, Any]]) -> set[str]:
+    return {
         str(row.get("parameter_name", "")) for row in rows if row.get("parameter_name")
     }
-    if len(parameter_names) > 1:
+
+
+def _response_ok_rows(rows: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [row for row in rows if float(row["margins"]["response"]) >= 1.0]
+
+
+def _response_ok_signs(rows: Sequence[dict[str, Any]]) -> set[float]:
+    gradients = [
+        _finite_float(row.get("metrics", {}).get("central_gradient"))
+        for row in rows
+        if isinstance(row.get("metrics"), dict)
+    ]
+    return {
+        math.copysign(1.0, float(value))
+        for value in gradients
+        if value is not None and value != 0.0
+    }
+
+
+def _rows_with_margin(
+    rows: Sequence[dict[str, Any]],
+    margin_name: str,
+) -> list[dict[str, Any]]:
+    return [row for row in rows if float(row["margins"][margin_name]) >= 1.0]
+
+
+def _repeated_unstable_rows(rows: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        row
+        for row in rows
+        if row["metrics"].get("paired_gradient_uncertainty_rel") is not None
+        and not bool(row["metrics"].get("repeated_bracket_stable", False))
+    ]
+
+
+def _initial_bracket_sweep_recommendation(rows: Sequence[dict[str, Any]]) -> str | None:
+    if not rows:
+        return "run at least two matched plus/minus perturbation amplitudes before claiming bracket locality"
+    if len(_bracket_parameter_names(rows)) > 1:
         return (
             "mixed controls were supplied to a same-control bracket sweep; split the "
             "artifacts by control or use the nonlinear turbulence-gradient candidate "
@@ -156,36 +241,16 @@ def _bracket_sweep_recommendation(rows: Sequence[dict[str, Any]]) -> str:
             "promote only the passed same-control bracket after freezing provenance; "
             f"smallest passing delta is {best.get('delta_parameter')}"
         )
+    return None
 
-    response_ok = [row for row in rows if float(row["margins"]["response"]) >= 1.0]
-    response_ok_gradients = [
-        _finite_float(row.get("metrics", {}).get("central_gradient"))
-        for row in response_ok
-        if isinstance(row.get("metrics"), dict)
-    ]
-    response_ok_signs = {
-        math.copysign(1.0, float(value))
-        for value in response_ok_gradients
-        if value is not None and value != 0.0
-    }
-    if len(response_ok_signs) > 1:
-        return (
-            "same-control resolved brackets change central-gradient sign; do not add "
-            "replicas at one amplitude, and move to a locality/amplitude sweep with "
-            "stricter provenance or a smoother composite profile-gradient direction"
-        )
-    local_rows = [
-        row for row in response_ok if float(row["margins"]["locality"]) >= 1.0
-    ]
-    quiet_rows = [
-        row for row in response_ok if float(row["margins"]["uncertainty"]) >= 1.0
-    ]
-    repeated_unstable = [
-        row
-        for row in rows
-        if row["metrics"].get("paired_gradient_uncertainty_rel") is not None
-        and not bool(row["metrics"].get("repeated_bracket_stable", False))
-    ]
+
+def _resolved_bracket_sweep_recommendation(
+    *,
+    response_ok: Sequence[dict[str, Any]],
+    local_rows: Sequence[dict[str, Any]],
+    quiet_rows: Sequence[dict[str, Any]],
+    repeated_unstable: Sequence[dict[str, Any]],
+) -> str:
     if local_rows and not quiet_rows:
         if repeated_unstable:
             return (
@@ -216,6 +281,25 @@ def _bracket_sweep_recommendation(rows: Sequence[dict[str, Any]]) -> str:
     return (
         "the heat-flux response is not resolved at the tested amplitudes; abandon this "
         "control or enlarge the perturbation only if a locality sweep remains bounded"
+    )
+
+
+def _bracket_sweep_recommendation(rows: Sequence[dict[str, Any]]) -> str:
+    initial = _initial_bracket_sweep_recommendation(rows)
+    if initial is not None:
+        return initial
+    response_ok = _response_ok_rows(rows)
+    if len(_response_ok_signs(response_ok)) > 1:
+        return (
+            "same-control resolved brackets change central-gradient sign; do not add "
+            "replicas at one amplitude, and move to a locality/amplitude sweep with "
+            "stricter provenance or a smoother composite profile-gradient direction"
+        )
+    return _resolved_bracket_sweep_recommendation(
+        response_ok=response_ok,
+        local_rows=_rows_with_margin(response_ok, "locality"),
+        quiet_rows=_rows_with_margin(response_ok, "uncertainty"),
+        repeated_unstable=_repeated_unstable_rows(rows),
     )
 
 
