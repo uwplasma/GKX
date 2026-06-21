@@ -324,6 +324,94 @@ def build_authoritative_wout_candidate_gate(
     }
 
 
+def _wout_reproducibility_values(
+    reference: Mapping[str, Any],
+    rerun: Mapping[str, Any],
+) -> dict[str, float | None]:
+    return {
+        "ref_aspect": _finite_float_or_none(reference.get("aspect")),
+        "rerun_aspect": _finite_float_or_none(rerun.get("aspect")),
+        "ref_iota": _finite_float_or_none(reference.get("mean_iota")),
+        "rerun_iota": _finite_float_or_none(rerun.get("mean_iota")),
+        "ref_min_iotas": _finite_float_or_none(reference.get("min_iotas_excluding_axis")),
+        "rerun_min_iotas": _finite_float_or_none(rerun.get("min_iotas_excluding_axis")),
+        "ref_min_iotaf": _finite_float_or_none(reference.get("min_iotaf")),
+        "rerun_min_iotaf": _finite_float_or_none(rerun.get("min_iotaf")),
+    }
+
+
+def _wout_reproducibility_drifts(values: Mapping[str, float | None]) -> dict[str, float | None]:
+    ref_aspect = values["ref_aspect"]
+    rerun_aspect = values["rerun_aspect"]
+    ref_iota = values["ref_iota"]
+    rerun_iota = values["rerun_iota"]
+    ref_min_iotas = values["ref_min_iotas"]
+    rerun_min_iotas = values["rerun_min_iotas"]
+    ref_min_iotaf = values["ref_min_iotaf"]
+    rerun_min_iotaf = values["rerun_min_iotaf"]
+    return {
+        "aspect": None if ref_aspect is None or rerun_aspect is None else abs(rerun_aspect - ref_aspect),
+        "iota": None if ref_iota is None or rerun_iota is None else abs(abs(rerun_iota) - abs(ref_iota)),
+        "min_iotas": None
+        if ref_min_iotas is None or rerun_min_iotas is None
+        else abs(rerun_min_iotas - ref_min_iotas),
+        "min_iotaf": None
+        if ref_min_iotaf is None or rerun_min_iotaf is None
+        else abs(rerun_min_iotaf - ref_min_iotaf),
+    }
+
+
+def _wout_reproducibility_checks(
+    *,
+    values: Mapping[str, float | None],
+    drifts: Mapping[str, float | None],
+    target_aspect: float,
+    aspect_atol: float,
+    min_abs_mean_iota: float,
+    iota_profile_floor: float | None,
+    mean_iota_repro_atol: float,
+    aspect_repro_atol: float,
+    profile_repro_atol: float,
+) -> dict[str, dict[str, Any]]:
+    return {
+        "rerun_aspect_admission": _aspect_check(
+            values["rerun_aspect"],
+            target=target_aspect,
+            tolerance=aspect_atol,
+        ),
+        "rerun_mean_iota_admission": _mean_iota_check(
+            values["rerun_iota"],
+            minimum_abs=min_abs_mean_iota,
+        ),
+        "rerun_iota_profile_admission": _iota_profile_check(
+            values["rerun_min_iotas"],
+            values["rerun_min_iotaf"],
+            floor=iota_profile_floor,
+        ),
+        "aspect_reproducibility": {
+            "reference": values["ref_aspect"],
+            "rerun": values["rerun_aspect"],
+            "absolute_drift": drifts["aspect"],
+            "absolute_tolerance": float(aspect_repro_atol),
+            "passed": _finite_gate(drifts["aspect"], upper=float(aspect_repro_atol)),
+        },
+        "mean_iota_reproducibility": {
+            "reference": None if values["ref_iota"] is None else abs(values["ref_iota"]),
+            "rerun": None if values["rerun_iota"] is None else abs(values["rerun_iota"]),
+            "absolute_drift": drifts["iota"],
+            "absolute_tolerance": float(mean_iota_repro_atol),
+            "passed": _finite_gate(drifts["iota"], upper=float(mean_iota_repro_atol)),
+        },
+        "iota_profile_reproducibility": {
+            "min_iotas_drift": drifts["min_iotas"],
+            "min_iotaf_drift": drifts["min_iotaf"],
+            "absolute_tolerance": float(profile_repro_atol),
+            "passed": _finite_gate(drifts["min_iotas"], upper=float(profile_repro_atol))
+            and _finite_gate(drifts["min_iotaf"], upper=float(profile_repro_atol)),
+        },
+    }
+
+
 def build_wout_reproducibility_gate(
     reference_wout: str | Path | Mapping[str, Any],
     rerun_wout: str | Path | Mapping[str, Any],
@@ -349,57 +437,19 @@ def build_wout_reproducibility_gate(
 
     reference = _wout_summary(reference_wout)
     rerun = _wout_summary(rerun_wout)
-    ref_aspect = _finite_float_or_none(reference.get("aspect"))
-    rerun_aspect = _finite_float_or_none(rerun.get("aspect"))
-    ref_iota = _finite_float_or_none(reference.get("mean_iota"))
-    rerun_iota = _finite_float_or_none(rerun.get("mean_iota"))
-    ref_min_iotas = _finite_float_or_none(reference.get("min_iotas_excluding_axis"))
-    rerun_min_iotas = _finite_float_or_none(rerun.get("min_iotas_excluding_axis"))
-    ref_min_iotaf = _finite_float_or_none(reference.get("min_iotaf"))
-    rerun_min_iotaf = _finite_float_or_none(rerun.get("min_iotaf"))
-
-    aspect_drift = None if ref_aspect is None or rerun_aspect is None else abs(rerun_aspect - ref_aspect)
-    iota_drift = None if ref_iota is None or rerun_iota is None else abs(abs(rerun_iota) - abs(ref_iota))
-    min_iotas_drift = (
-        None
-        if ref_min_iotas is None or rerun_min_iotas is None
-        else abs(rerun_min_iotas - ref_min_iotas)
+    values = _wout_reproducibility_values(reference, rerun)
+    drifts = _wout_reproducibility_drifts(values)
+    checks = _wout_reproducibility_checks(
+        values=values,
+        drifts=drifts,
+        target_aspect=target_aspect,
+        aspect_atol=aspect_atol,
+        min_abs_mean_iota=min_abs_mean_iota,
+        iota_profile_floor=iota_profile_floor,
+        mean_iota_repro_atol=mean_iota_repro_atol,
+        aspect_repro_atol=aspect_repro_atol,
+        profile_repro_atol=profile_repro_atol,
     )
-    min_iotaf_drift = (
-        None
-        if ref_min_iotaf is None or rerun_min_iotaf is None
-        else abs(rerun_min_iotaf - ref_min_iotaf)
-    )
-    checks = {
-        "rerun_aspect_admission": _aspect_check(rerun_aspect, target=target_aspect, tolerance=aspect_atol),
-        "rerun_mean_iota_admission": _mean_iota_check(rerun_iota, minimum_abs=min_abs_mean_iota),
-        "rerun_iota_profile_admission": _iota_profile_check(
-            rerun_min_iotas,
-            rerun_min_iotaf,
-            floor=iota_profile_floor,
-        ),
-        "aspect_reproducibility": {
-            "reference": ref_aspect,
-            "rerun": rerun_aspect,
-            "absolute_drift": aspect_drift,
-            "absolute_tolerance": float(aspect_repro_atol),
-            "passed": _finite_gate(aspect_drift, upper=float(aspect_repro_atol)),
-        },
-        "mean_iota_reproducibility": {
-            "reference": None if ref_iota is None else abs(ref_iota),
-            "rerun": None if rerun_iota is None else abs(rerun_iota),
-            "absolute_drift": iota_drift,
-            "absolute_tolerance": float(mean_iota_repro_atol),
-            "passed": _finite_gate(iota_drift, upper=float(mean_iota_repro_atol)),
-        },
-        "iota_profile_reproducibility": {
-            "min_iotas_drift": min_iotas_drift,
-            "min_iotaf_drift": min_iotaf_drift,
-            "absolute_tolerance": float(profile_repro_atol),
-            "passed": _finite_gate(min_iotas_drift, upper=float(profile_repro_atol))
-            and _finite_gate(min_iotaf_drift, upper=float(profile_repro_atol)),
-        },
-    }
     passed = _checks_passed(checks)
     return {
         "kind": "vmec_jax_wout_reproducibility_gate",
