@@ -132,6 +132,42 @@ class _TEMLinearRequest:
 
 
 @dataclass(frozen=True)
+class _TEMScanRequest:
+    ky_values: np.ndarray
+    Nl: int
+    Nm: int
+    dt: float | np.ndarray
+    steps: int | np.ndarray
+    method: str
+    params: LinearParams | None
+    cfg: TEMBaseCase | None
+    time_cfg: TimeConfig | None
+    solver: str
+    krylov_cfg: KrylovConfig | None
+    tmin: float | None
+    tmax: float | None
+    auto_window: bool
+    window_fraction: float
+    min_points: int
+    start_fraction: float
+    growth_weight: float
+    require_positive: bool
+    min_amp_fraction: float
+    mode_method: str
+    mode_only: bool
+    terms: LinearTerms | None
+    sample_stride: int | None
+    ky_batch: int
+    fixed_batch_shape: bool
+    streaming_fit: bool
+    streaming_amp_floor: float
+    init_species_index: int
+    density_species_index: int
+    diagnostic_norm: str
+    show_progress: bool
+
+
+@dataclass(frozen=True)
 class _TEMLinearSetup:
     cfg: TEMBaseCase
     grid_full: Any
@@ -156,6 +192,14 @@ def _tem_linear_request_from_locals(values: dict[str, Any]) -> _TEMLinearRequest
     )
 
 
+def _tem_scan_request_from_locals(values: dict[str, Any]) -> _TEMScanRequest:
+    """Pack public ``run_tem_scan`` arguments once for internal routing."""
+
+    return _TEMScanRequest(
+        **{field.name: values[field.name] for field in fields(_TEMScanRequest)}
+    )
+
+
 def _validate_tem_species_indices(
     *,
     init_species_index: int,
@@ -169,6 +213,27 @@ def _validate_tem_species_indices(
 
 
 def _resolve_tem_linear_setup(request: _TEMLinearRequest) -> _TEMLinearSetup:
+    cfg = request.cfg or TEMBaseCase()
+    grid_full = build_spectral_grid(cfg.grid)
+    geom = SAlphaGeometry.from_config(cfg.geometry)
+    params, terms = _tem_params_and_terms(
+        cfg,
+        geom,
+        request.params,
+        request.terms,
+        request.Nm,
+    )
+    return _TEMLinearSetup(
+        cfg=cfg,
+        grid_full=grid_full,
+        geom=geom,
+        params=params,
+        terms=terms,
+        hooks=_tem_hooks(),
+    )
+
+
+def _resolve_tem_scan_setup(request: _TEMScanRequest) -> _TEMLinearSetup:
     cfg = request.cfg or TEMBaseCase()
     grid_full = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
@@ -221,6 +286,64 @@ def _prepare_tem_linear_state(
         grid=grid,
         selection=selection,
         state=jnp.asarray(state_np),
+    )
+
+
+def _run_tem_scan_request(request: _TEMScanRequest) -> LinearScanResult:
+    setup = _resolve_tem_scan_setup(request)
+    solver_key = normalize_solver_key(request.solver)
+    mode_method = resolve_scan_mode_method(
+        request.mode_method, mode_only=request.mode_only
+    )
+    use_batch = should_use_ky_batch(
+        ky_batch=request.ky_batch,
+        solver_key=solver_key,
+        dt=request.dt,
+        steps=request.steps,
+        tmin=request.tmin,
+        tmax=request.tmax,
+    )
+    _validate_tem_species_indices(
+        init_species_index=request.init_species_index,
+        density_species_index=request.density_species_index,
+    )
+    return _paths.run_tem_scan_batches(
+        ky_values=np.asarray(request.ky_values, dtype=float),
+        grid_full=setup.grid_full,
+        geom=setup.geom,
+        params=setup.params,
+        terms=setup.terms,
+        init_cfg=setup.cfg.init,
+        n_laguerre=request.Nl,
+        n_hermite=request.Nm,
+        dt=request.dt,
+        steps=request.steps,
+        method=request.method,
+        time_cfg=request.time_cfg,
+        solver_key=solver_key,
+        krylov_cfg=request.krylov_cfg,
+        krylov_default=TEM_KRYLOV_DEFAULT,
+        tmin=request.tmin,
+        tmax=request.tmax,
+        auto_window=request.auto_window,
+        window_fraction=request.window_fraction,
+        min_points=request.min_points,
+        start_fraction=request.start_fraction,
+        growth_weight=request.growth_weight,
+        require_positive=request.require_positive,
+        min_amp_fraction=request.min_amp_fraction,
+        mode_method=mode_method,
+        mode_only=request.mode_only,
+        sample_stride=request.sample_stride,
+        ky_batch=request.ky_batch,
+        fixed_batch_shape=request.fixed_batch_shape,
+        streaming_fit=request.streaming_fit,
+        streaming_amp_floor=request.streaming_amp_floor,
+        init_species_index=request.init_species_index,
+        diagnostic_norm=request.diagnostic_norm,
+        use_batch=use_batch,
+        hooks=setup.hooks,
+        show_progress=request.show_progress,
     )
 
 
@@ -345,59 +468,4 @@ def run_tem_scan(
 ) -> LinearScanResult:
     """Run the TEM benchmark for a list of ky values."""
 
-    cfg = cfg or TEMBaseCase()
-    grid_full = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
-    params, terms = _tem_params_and_terms(cfg, geom, params, terms, Nm)
-    solver_key = normalize_solver_key(solver)
-    mode_method = resolve_scan_mode_method(mode_method, mode_only=mode_only)
-    use_batch = should_use_ky_batch(
-        ky_batch=ky_batch,
-        solver_key=solver_key,
-        dt=dt,
-        steps=steps,
-        tmin=tmin,
-        tmax=tmax,
-    )
-    _validate_tem_species_indices(
-        init_species_index=init_species_index,
-        density_species_index=density_species_index,
-    )
-    return _paths.run_tem_scan_batches(
-        ky_values=np.asarray(ky_values, dtype=float),
-        grid_full=grid_full,
-        geom=geom,
-        params=params,
-        terms=terms,
-        init_cfg=cfg.init,
-        n_laguerre=Nl,
-        n_hermite=Nm,
-        dt=dt,
-        steps=steps,
-        method=method,
-        time_cfg=time_cfg,
-        solver_key=solver_key,
-        krylov_cfg=krylov_cfg,
-        krylov_default=TEM_KRYLOV_DEFAULT,
-        tmin=tmin,
-        tmax=tmax,
-        auto_window=auto_window,
-        window_fraction=window_fraction,
-        min_points=min_points,
-        start_fraction=start_fraction,
-        growth_weight=growth_weight,
-        require_positive=require_positive,
-        min_amp_fraction=min_amp_fraction,
-        mode_method=mode_method,
-        mode_only=mode_only,
-        sample_stride=sample_stride,
-        ky_batch=ky_batch,
-        fixed_batch_shape=fixed_batch_shape,
-        streaming_fit=streaming_fit,
-        streaming_amp_floor=streaming_amp_floor,
-        init_species_index=init_species_index,
-        diagnostic_norm=diagnostic_norm,
-        use_batch=use_batch,
-        hooks=_tem_hooks(),
-        show_progress=show_progress,
-    )
+    return _run_tem_scan_request(_tem_scan_request_from_locals(locals()))
