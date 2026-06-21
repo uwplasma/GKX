@@ -111,6 +111,15 @@ class _GradientGateData:
     failure_reasons: list[str]
 
 
+@dataclass(frozen=True)
+class _GradientConditioningGateData:
+    conditioning: dict[str, object]
+    conditioning_gate: dict[str, object]
+    conditioning_passed: bool
+    rank_passed: bool
+    condition_number_passed: bool
+
+
 def _conditioned_jacobian_arrays(
     jacobian_ad: Any,
     jacobian_fd: Any,
@@ -636,6 +645,46 @@ def _gradient_derivative_data(
     )
 
 
+def _gradient_conditioning_gate_data(
+    derivatives: _GradientDerivativeData,
+    inputs: _GradientValidationInputs,
+    finite_flags: Mapping[str, bool],
+    *,
+    min_rank: int | None,
+) -> _GradientConditioningGateData:
+    """Evaluate conditioning and rank gates for an AD/FD Jacobian pair."""
+
+    conditioning = _sensitivity_conditioning_metadata(
+        derivatives.jac_ad,
+        derivatives.jac_fd,
+        inputs.p,
+        fd_step=inputs.step,
+        observable_names=derivatives.obs_names,
+        param_names=derivatives.par_names,
+        relative_floor=inputs.floor,
+    )
+    (
+        conditioning_gate,
+        conditioning_passed,
+        rank_passed,
+        condition_number_passed,
+    ) = _conditioning_gate(
+        conditioning,
+        n_obs=int(derivatives.jac_ad.shape[0]),
+        n_params=int(derivatives.jac_ad.shape[1]),
+        min_rank=min_rank,
+        condition_number_max=inputs.cond_max,
+        finite_flags=finite_flags,
+    )
+    return _GradientConditioningGateData(
+        conditioning=conditioning,
+        conditioning_gate=conditioning_gate,
+        conditioning_passed=conditioning_passed,
+        rank_passed=rank_passed,
+        condition_number_passed=condition_number_passed,
+    )
+
+
 def _gradient_gate_data(
     derivatives: _GradientDerivativeData,
     inputs: _GradientValidationInputs,
@@ -670,27 +719,11 @@ def _gradient_gate_data(
         abs_tol=inputs.abs_tol,
         rel_tol=inputs.rel_tol,
     )
-    conditioning = _sensitivity_conditioning_metadata(
-        derivatives.jac_ad,
-        derivatives.jac_fd,
-        inputs.p,
-        fd_step=inputs.step,
-        observable_names=derivatives.obs_names,
-        param_names=derivatives.par_names,
-        relative_floor=inputs.floor,
-    )
-    (
-        conditioning_gate,
-        conditioning_passed,
-        rank_passed,
-        condition_number_passed,
-    ) = _conditioning_gate(
-        conditioning,
-        n_obs=int(derivatives.jac_ad.shape[0]),
-        n_params=int(derivatives.jac_ad.shape[1]),
+    conditioning = _gradient_conditioning_gate_data(
+        derivatives,
+        inputs,
+        finite_flags,
         min_rank=min_rank,
-        condition_number_max=inputs.cond_max,
-        finite_flags=finite_flags,
     )
     finite_passed = bool(all(finite_flags.values()))
     derivative_passed = bool(
@@ -706,9 +739,9 @@ def _gradient_gate_data(
         finite_passed=finite_passed,
         derivative_passed=derivative_passed,
         tangent_passed=tangent_passed,
-        conditioning_passed=conditioning_passed,
-        rank_passed=rank_passed,
-        condition_number_passed=condition_number_passed,
+        conditioning_passed=conditioning.conditioning_passed,
+        rank_passed=conditioning.rank_passed,
+        condition_number_passed=conditioning.condition_number_passed,
     )
     return _GradientGateData(
         jacobian_errors=jacobian_errors,
@@ -718,13 +751,63 @@ def _gradient_gate_data(
         gradient_checks=gradient_checks,
         derivative_passed=derivative_passed,
         tangent_passed=tangent_passed,
-        conditioning=conditioning,
-        conditioning_gate=conditioning_gate,
-        conditioning_passed=conditioning_passed,
-        rank_passed=rank_passed,
-        condition_number_passed=condition_number_passed,
+        conditioning=conditioning.conditioning,
+        conditioning_gate=conditioning.conditioning_gate,
+        conditioning_passed=conditioning.conditioning_passed,
+        rank_passed=conditioning.rank_passed,
+        condition_number_passed=conditioning.condition_number_passed,
         failure_reasons=failure_reasons,
     )
+
+
+def _jacobian_report_fields(
+    jacobian_errors: Mapping[str, np.ndarray],
+) -> dict[str, object]:
+    """Return JSON-ready Jacobian AD/FD comparison fields."""
+
+    ad_np = jacobian_errors["ad_np"]
+    fd_np = jacobian_errors["fd_np"]
+    abs_error = jacobian_errors["abs_error"]
+    rel_error = jacobian_errors["rel_error"]
+    rel_error_gate = jacobian_errors["rel_error_gate"]
+    return {
+        "jacobian_ad": ad_np.tolist(),
+        "jacobian_fd": fd_np.tolist(),
+        "abs_error": abs_error.tolist(),
+        "rel_error": rel_error.tolist(),
+        "max_abs_ad_fd_error": float(np.nanmax(abs_error)) if abs_error.size else 0.0,
+        "max_rel_ad_fd_error": (
+            float(np.nanmax(rel_error_gate)) if rel_error_gate.size else 0.0
+        ),
+        "max_rel_ad_fd_error_raw": (
+            float(np.nanmax(rel_error)) if rel_error.size else 0.0
+        ),
+    }
+
+
+def _tangent_report_fields(
+    direction: jnp.ndarray,
+    tangent_errors: Mapping[str, np.ndarray | float],
+) -> dict[str, object]:
+    """Return JSON-ready tangent AD/FD comparison fields."""
+
+    tangent_ad_np = cast(np.ndarray, tangent_errors["tangent_ad_np"])
+    tangent_fd_np = cast(np.ndarray, tangent_errors["tangent_fd_np"])
+    tangent_abs_error = cast(np.ndarray, tangent_errors["tangent_abs_error"])
+    tangent_rel_error = cast(np.ndarray, tangent_errors["tangent_rel_error"])
+    direction_np = np.asarray(direction, dtype=float)
+    return {
+        "tangent_direction": direction_np.tolist(),
+        "tangent_direction_norm": float(np.linalg.norm(direction_np)),
+        "tangent_ad": tangent_ad_np.tolist(),
+        "tangent_fd": tangent_fd_np.tolist(),
+        "tangent_abs_error": tangent_abs_error.tolist(),
+        "tangent_rel_error": tangent_rel_error.tolist(),
+        "tangent_max_abs_error": float(tangent_errors["tangent_max_abs"]),
+        "tangent_max_rel_error": float(tangent_errors["tangent_max_rel"]),
+        "tangent_ad_norm": float(np.linalg.norm(tangent_ad_np)),
+        "tangent_fd_norm": float(np.linalg.norm(tangent_fd_np)),
+    }
 
 
 def _assemble_gradient_validation_report(
@@ -751,17 +834,6 @@ def _assemble_gradient_validation_report(
     conditioning_gate: Mapping[str, object],
     conditioning: Mapping[str, object],
 ) -> dict[str, object]:
-    ad_np = jacobian_errors["ad_np"]
-    fd_np = jacobian_errors["fd_np"]
-    abs_error = jacobian_errors["abs_error"]
-    rel_error = jacobian_errors["rel_error"]
-    rel_error_gate = jacobian_errors["rel_error_gate"]
-    tangent_ad_np = cast(np.ndarray, tangent_errors["tangent_ad_np"])
-    tangent_fd_np = cast(np.ndarray, tangent_errors["tangent_fd_np"])
-    tangent_abs_error = cast(np.ndarray, tangent_errors["tangent_abs_error"])
-    tangent_rel_error = cast(np.ndarray, tangent_errors["tangent_rel_error"])
-    tangent_max_abs = float(tangent_errors["tangent_max_abs"])
-    tangent_max_rel = float(tangent_errors["tangent_max_rel"])
     report = {
         "kind": str(report_kind),
         "passed": bool(
@@ -783,34 +855,13 @@ def _assemble_gradient_validation_report(
         "parameter_names": list(par_names),
         "params": np.asarray(p, dtype=float).tolist(),
         "observables": np.asarray(observables, dtype=float).tolist(),
-        "jacobian_ad": ad_np.tolist(),
-        "jacobian_fd": fd_np.tolist(),
-        "abs_error": abs_error.tolist(),
-        "rel_error": rel_error.tolist(),
-        "max_abs_ad_fd_error": float(np.nanmax(abs_error)) if abs_error.size else 0.0,
-        "max_rel_ad_fd_error": (
-            float(np.nanmax(rel_error_gate)) if rel_error_gate.size else 0.0
-        ),
-        "max_rel_ad_fd_error_raw": (
-            float(np.nanmax(rel_error)) if rel_error.size else 0.0
-        ),
         "gradient_checks": list(gradient_checks),
         "finite_flags": dict(finite_flags),
-        "tangent_direction": np.asarray(direction, dtype=float).tolist(),
-        "tangent_direction_norm": float(
-            np.linalg.norm(np.asarray(direction, dtype=float))
-        ),
-        "tangent_ad": tangent_ad_np.tolist(),
-        "tangent_fd": tangent_fd_np.tolist(),
-        "tangent_abs_error": tangent_abs_error.tolist(),
-        "tangent_rel_error": tangent_rel_error.tolist(),
-        "tangent_max_abs_error": tangent_max_abs,
-        "tangent_max_rel_error": tangent_max_rel,
-        "tangent_ad_norm": float(np.linalg.norm(tangent_ad_np)),
-        "tangent_fd_norm": float(np.linalg.norm(tangent_fd_np)),
         "conditioning_gate": dict(conditioning_gate),
         "conditioning": dict(conditioning),
     }
+    report.update(_jacobian_report_fields(jacobian_errors))
+    report.update(_tangent_report_fields(direction, tangent_errors))
     return cast(dict[str, object], _json_ready(report))
 
 
