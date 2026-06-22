@@ -113,7 +113,7 @@ def linear_rhs_streaming_electrostatic_velocity_sharded(
 
     This route solves ``phi`` with the production electrostatic field solve,
     applies the Hermite velocity-sharded particle-streaming operator, and adds
-    the reference-aligned electrostatic streaming field term. It is limited to periodic
+    the benchmark-compatible electrostatic streaming field term. It is limited to periodic
     field-line grids and excludes electromagnetic fields by construction.
     """
 

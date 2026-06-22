@@ -141,7 +141,7 @@ def hypercollision_damping(
     params: "LinearParams",
     real_dtype: jnp.dtype,
 ) -> jnp.ndarray:
-    """Assemble reference-aligned hypercollision damping factors."""
+    """Assemble benchmark-compatible hypercollision damping factors."""
 
     Nl = jnp.asarray(max(int(cache.l.shape[0]), 1), dtype=real_dtype)
     Nm = jnp.asarray(max(int(cache.m.shape[1]), 1), dtype=real_dtype)

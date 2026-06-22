@@ -78,6 +78,35 @@ class _KineticHistory:
     density_t: np.ndarray | None
 
 
+@dataclass(frozen=True)
+class _KineticFitOptions:
+    fit_signal: str
+    mode_method: str
+    auto_window: bool
+    tmin: float | None
+    tmax: float | None
+    window_fraction: float
+    min_points: int
+    start_fraction: float
+    growth_weight: float
+    require_positive: bool
+    min_amp_fraction: float
+
+
+@dataclass(frozen=True)
+class _KineticTimePathOptions:
+    time_cfg: TimeConfig | None
+    dt: float
+    steps: int
+    method: str
+    sample_stride: int | None
+    density_species_index: int
+    show_progress: bool
+    n_laguerre: int
+    n_hermite: int
+    fit: _KineticFitOptions
+
+
 def _resolve_kinetic_linear_setup(
     *,
     cfg: KineticElectronBaseCase | None,
@@ -177,6 +206,40 @@ def _build_kinetic_linear_state(
     )
     G0[int(init_species_index)] = np.asarray(G0_single, dtype=np.complex64)
     return _KineticLinearState(grid=grid, selection=sel, state=jnp.asarray(G0))
+
+
+def _prepare_kinetic_linear_setup_and_state(
+    *,
+    cfg: KineticElectronBaseCase | None,
+    params: LinearParams | None,
+    terms: LinearTerms | None,
+    diagnostic_norm: str,
+    reference_aligned: bool | None,
+    ky_target: float,
+    n_laguerre: int,
+    n_hermite: int,
+    init_species_index: int,
+    density_species_index: int,
+) -> tuple[_KineticLinearSetup, _KineticLinearState]:
+    """Resolve the kinetic benchmark setup and selected-ky initial state."""
+
+    setup = _resolve_kinetic_linear_setup(
+        cfg=cfg,
+        params=params,
+        terms=terms,
+        diagnostic_norm=diagnostic_norm,
+        reference_aligned=reference_aligned,
+        Nm=n_hermite,
+    )
+    state = _build_kinetic_linear_state(
+        setup,
+        ky_target=ky_target,
+        Nl=n_laguerre,
+        Nm=n_hermite,
+        init_species_index=init_species_index,
+        density_species_index=density_species_index,
+    )
+    return setup, state
 
 
 def _kinetic_krylov_config(
@@ -424,17 +487,7 @@ def _fit_kinetic_history(
     state: _KineticLinearState,
     history: _KineticHistory,
     *,
-    fit_signal: str,
-    mode_method: str,
-    auto_window: bool,
-    tmin: float | None,
-    tmax: float | None,
-    window_fraction: float,
-    min_points: int,
-    start_fraction: float,
-    growth_weight: float,
-    require_positive: bool,
-    min_amp_fraction: float,
+    options: _KineticFitOptions,
 ) -> tuple[float, float]:
     """Fit growth/frequency from a saved kinetic time history."""
 
@@ -442,19 +495,19 @@ def _fit_kinetic_history(
         history.phi_t,
         history.density_t,
         state.selection,
-        fit_signal=fit_signal,
-        mode_method=mode_method,
+        fit_signal=options.fit_signal,
+        mode_method=options.mode_method,
     )
-    use_auto = auto_window and tmin is None and tmax is None
-    if not use_auto and not scan_window_valid(history.t, tmin, tmax):
+    use_auto = options.auto_window and options.tmin is None and options.tmax is None
+    if not use_auto and not scan_window_valid(history.t, options.tmin, options.tmax):
         use_auto = True
     auto_fit_kwargs: dict[str, Any] = {
-        "window_fraction": window_fraction,
-        "min_points": min_points,
-        "start_fraction": start_fraction,
-        "growth_weight": growth_weight,
-        "require_positive": require_positive,
-        "min_amp_fraction": min_amp_fraction,
+        "window_fraction": options.window_fraction,
+        "min_points": options.min_points,
+        "start_fraction": options.start_fraction,
+        "growth_weight": options.growth_weight,
+        "require_positive": options.require_positive,
+        "min_amp_fraction": options.min_amp_fraction,
     }
     if use_auto:
         gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
@@ -462,7 +515,9 @@ def _fit_kinetic_history(
         )
     else:
         try:
-            gamma, omega = fit_growth_rate(history.t, signal, tmin=tmin, tmax=tmax)
+            gamma, omega = fit_growth_rate(
+                history.t, signal, tmin=options.tmin, tmax=options.tmax
+            )
         except ValueError:
             gamma, omega, _tmin, _tmax = fit_growth_rate_auto(
                 history.t, signal, **auto_fit_kwargs
@@ -476,58 +531,29 @@ def _run_kinetic_time_path(
     setup: _KineticLinearSetup,
     state: _KineticLinearState,
     *,
-    time_cfg: TimeConfig | None,
-    dt: float,
-    steps: int,
-    method: str,
-    sample_stride: int | None,
-    fit_signal: str,
-    density_species_index: int,
-    show_progress: bool,
-    Nl: int,
-    Nm: int,
-    mode_method: str,
-    auto_window: bool,
-    tmin: float | None,
-    tmax: float | None,
-    window_fraction: float,
-    min_points: int,
-    start_fraction: float,
-    growth_weight: float,
-    require_positive: bool,
-    min_amp_fraction: float,
+    options: _KineticTimePathOptions,
 ) -> LinearRunResult:
     """Run and fit the saved-time kinetic benchmark path."""
 
     history = _integrate_kinetic_history(
         setup,
         state,
-        time_cfg=time_cfg,
-        dt=dt,
-        steps=steps,
-        method=method,
-        sample_stride=sample_stride,
-        fit_signal=fit_signal,
-        density_species_index=density_species_index,
-        show_progress=show_progress,
-        Nl=Nl,
-        Nm=Nm,
+        time_cfg=options.time_cfg,
+        dt=options.dt,
+        steps=options.steps,
+        method=options.method,
+        sample_stride=options.sample_stride,
+        fit_signal=options.fit.fit_signal,
+        density_species_index=options.density_species_index,
+        show_progress=options.show_progress,
+        Nl=options.n_laguerre,
+        Nm=options.n_hermite,
     )
     gamma, omega = _fit_kinetic_history(
         setup,
         state,
         history,
-        fit_signal=fit_signal,
-        mode_method=mode_method,
-        auto_window=auto_window,
-        tmin=tmin,
-        tmax=tmax,
-        window_fraction=window_fraction,
-        min_points=min_points,
-        start_fraction=start_fraction,
-        growth_weight=growth_weight,
-        require_positive=require_positive,
-        min_amp_fraction=min_amp_fraction,
+        options=options.fit,
     )
     return _pack_kinetic_result(
         state, t=history.t, phi_t=history.phi_t, gamma=gamma, omega=omega
@@ -551,6 +577,57 @@ def _pack_kinetic_result(
         omega=omega,
         ky=float(state.grid.ky[state.selection.ky_index]),
         selection=state.selection,
+    )
+
+
+def _kinetic_time_path_options(
+    *,
+    time_cfg: TimeConfig | None,
+    dt: float,
+    steps: int,
+    method: str,
+    sample_stride: int | None,
+    density_species_index: int,
+    show_progress: bool,
+    n_laguerre: int,
+    n_hermite: int,
+    fit_signal: str,
+    mode_method: str,
+    auto_window: bool,
+    tmin: float | None,
+    tmax: float | None,
+    window_fraction: float,
+    min_points: int,
+    start_fraction: float,
+    growth_weight: float,
+    require_positive: bool,
+    min_amp_fraction: float,
+) -> _KineticTimePathOptions:
+    """Pack public time-path keyword controls into the internal request object."""
+
+    return _KineticTimePathOptions(
+        time_cfg,
+        dt,
+        steps,
+        method,
+        sample_stride,
+        density_species_index,
+        show_progress,
+        n_laguerre,
+        n_hermite,
+        _KineticFitOptions(
+            fit_signal,
+            mode_method,
+            auto_window,
+            tmin,
+            tmax,
+            window_fraction,
+            min_points,
+            start_fraction,
+            growth_weight,
+            require_positive,
+            min_amp_fraction,
+        ),
     )
 
 
@@ -587,19 +664,15 @@ def run_kinetic_linear(
 ) -> LinearRunResult:
     """Run a kinetic-electron ITG/TEM benchmark and extract growth rate."""
 
-    setup = _resolve_kinetic_linear_setup(
+    setup, state = _prepare_kinetic_linear_setup_and_state(
         cfg=cfg,
         params=params,
         terms=terms,
         diagnostic_norm=diagnostic_norm,
         reference_aligned=reference_aligned,
-        Nm=Nm,
-    )
-    state = _build_kinetic_linear_state(
-        setup,
         ky_target=ky_target,
-        Nl=Nl,
-        Nm=Nm,
+        n_laguerre=Nl,
+        n_hermite=Nm,
         init_species_index=init_species_index,
         density_species_index=density_species_index,
     )
@@ -614,26 +687,28 @@ def run_kinetic_linear(
     return _run_kinetic_time_path(
         setup,
         state,
-        time_cfg=time_cfg,
-        dt=dt,
-        steps=steps,
-        method=method,
-        sample_stride=sample_stride,
-        fit_signal=fit_signal,
-        density_species_index=density_species_index,
-        show_progress=show_progress,
-        Nl=Nl,
-        Nm=Nm,
-        mode_method=mode_method,
-        auto_window=auto_window,
-        tmin=tmin,
-        tmax=tmax,
-        window_fraction=window_fraction,
-        min_points=min_points,
-        start_fraction=start_fraction,
-        growth_weight=growth_weight,
-        require_positive=require_positive,
-        min_amp_fraction=min_amp_fraction,
+        options=_kinetic_time_path_options(
+            time_cfg=time_cfg,
+            dt=dt,
+            steps=steps,
+            method=method,
+            sample_stride=sample_stride,
+            density_species_index=density_species_index,
+            show_progress=show_progress,
+            n_laguerre=Nl,
+            n_hermite=Nm,
+            fit_signal=fit_signal,
+            mode_method=mode_method,
+            auto_window=auto_window,
+            tmin=tmin,
+            tmax=tmax,
+            window_fraction=window_fraction,
+            min_points=min_points,
+            start_fraction=start_fraction,
+            growth_weight=growth_weight,
+            require_positive=require_positive,
+            min_amp_fraction=min_amp_fraction,
+        ),
     )
 
 
