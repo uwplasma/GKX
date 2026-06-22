@@ -96,6 +96,76 @@ def _scalar(
     return out
 
 
+def _theta_sample_count(theta: jnp.ndarray) -> int:
+    ntheta = int(theta.shape[0])
+    if ntheta < 1:
+        raise ValueError("theta must contain at least one sample")
+    return ntheta
+
+
+def _required_profiles(
+    data: Mapping[str, Any], ntheta: int, *, validate_finite: bool
+) -> dict[str, jnp.ndarray]:
+    return {
+        name: _array(data, name, ntheta, validate_finite=validate_finite)
+        for name in _ARRAY_FIELDS
+        if name != "theta"
+    }
+
+
+def _optional_profile(
+    data: Mapping[str, Any],
+    key: str,
+    ntheta: int,
+    default: jnp.ndarray,
+    *,
+    validate_finite: bool,
+) -> jnp.ndarray:
+    if key in data:
+        return _array(data, key, ntheta, validate_finite=validate_finite)
+    return default
+
+
+def _gradpar_value(gradpar: jnp.ndarray, *, validate_finite: bool) -> Any:
+    if _is_traced(gradpar):
+        return jnp.mean(gradpar)
+
+    gradpar_values = np.asarray(gradpar)
+    value = float(np.mean(gradpar_values))
+    if validate_finite and not np.allclose(
+        gradpar_values, value, rtol=1.0e-5, atol=1.0e-7
+    ):
+        raise ValueError("gradpar must be constant along the sampled field line")
+    return value
+
+
+def _positive_nfp(data: Mapping[str, Any]) -> int:
+    nfp = int(data.get("nfp", 1))
+    if nfp < 1:
+        raise ValueError("nfp must be a positive integer")
+    return nfp
+
+
+def _scalar_metadata(data: Mapping[str, Any], *, validate_finite: bool) -> dict[str, Any]:
+    return {
+        "q": _scalar(data, "q", 1.0, validate_finite=validate_finite),
+        "s_hat": _scalar(
+            data, "s_hat", data.get("shat", 0.0), validate_finite=validate_finite
+        ),
+        "epsilon": _scalar(data, "epsilon", 0.0, validate_finite=validate_finite),
+        "R0": _scalar(data, "R0", 1.0, validate_finite=validate_finite),
+        "B0": _scalar(data, "B0", 1.0, validate_finite=validate_finite),
+        "alpha": _scalar(data, "alpha", 0.0, validate_finite=validate_finite),
+        "drift_scale": _scalar(
+            data, "drift_scale", 1.0, validate_finite=validate_finite
+        ),
+        "kxfac": _scalar(data, "kxfac", 1.0, validate_finite=validate_finite),
+        "theta_scale": _scalar(
+            data, "theta_scale", 1.0, validate_finite=validate_finite
+        ),
+    }
+
+
 def flux_tube_geometry_from_mapping(
     data: Mapping[str, Any],
     *,
@@ -111,43 +181,22 @@ def flux_tube_geometry_from_mapping(
     """
 
     theta = _array(data, "theta", validate_finite=validate_finite)
-    ntheta = int(theta.shape[0])
-    if ntheta < 1:
-        raise ValueError("theta must contain at least one sample")
-    arrays = {
-        name: _array(data, name, ntheta, validate_finite=validate_finite)
-        for name in _ARRAY_FIELDS
-        if name != "theta"
-    }
-    jacobian = (
-        _array(data, "jacobian", ntheta, validate_finite=validate_finite)
-        if "jacobian" in data
-        else 1.0 / arrays["gradpar"] / arrays["bmag"]
+    ntheta = _theta_sample_count(theta)
+    arrays = _required_profiles(data, ntheta, validate_finite=validate_finite)
+    jacobian = _optional_profile(
+        data,
+        "jacobian",
+        ntheta,
+        1.0 / arrays["gradpar"] / arrays["bmag"],
+        validate_finite=validate_finite,
     )
-    grho = (
-        _array(data, "grho", ntheta, validate_finite=validate_finite)
-        if "grho" in data
-        else jnp.ones_like(theta)
+    grho = _optional_profile(
+        data, "grho", ntheta, jnp.ones_like(theta), validate_finite=validate_finite
     )
-
-    gradpar_value: Any
-    if _is_traced(arrays["gradpar"]):
-        gradpar_value = jnp.mean(arrays["gradpar"])
-    else:
-        gradpar_values = np.asarray(arrays["gradpar"])
-        gradpar_value = float(np.mean(gradpar_values))
-        if validate_finite and not np.allclose(
-            gradpar_values, gradpar_value, rtol=1.0e-5, atol=1.0e-7
-        ):
-            raise ValueError("gradpar must be constant along the sampled field line")
-
-    nfp = int(data.get("nfp", 1))
-    if nfp < 1:
-        raise ValueError("nfp must be a positive integer")
 
     return FluxTubeGeometryData(
         theta=theta,
-        gradpar_value=gradpar_value,
+        gradpar_value=_gradpar_value(arrays["gradpar"], validate_finite=validate_finite),
         bmag_profile=arrays["bmag"],
         bgrad_profile=arrays["bgrad"],
         gds2_profile=arrays["gds2"],
@@ -159,18 +208,8 @@ def flux_tube_geometry_from_mapping(
         gb0_profile=arrays["gbdrift0"],
         jacobian_profile=jacobian,
         grho_profile=grho,
-        q=_scalar(data, "q", 1.0, validate_finite=validate_finite),
-        s_hat=_scalar(
-            data, "s_hat", data.get("shat", 0.0), validate_finite=validate_finite
-        ),
-        epsilon=_scalar(data, "epsilon", 0.0, validate_finite=validate_finite),
-        R0=_scalar(data, "R0", 1.0, validate_finite=validate_finite),
-        B0=_scalar(data, "B0", 1.0, validate_finite=validate_finite),
-        alpha=_scalar(data, "alpha", 0.0, validate_finite=validate_finite),
-        drift_scale=_scalar(data, "drift_scale", 1.0, validate_finite=validate_finite),
-        kxfac=_scalar(data, "kxfac", 1.0, validate_finite=validate_finite),
-        theta_scale=_scalar(data, "theta_scale", 1.0, validate_finite=validate_finite),
-        nfp=nfp,
+        **_scalar_metadata(data, validate_finite=validate_finite),
+        nfp=_positive_nfp(data),
         kperp2_bmag=bool(data.get("kperp2_bmag", True)),
         bessel_bmag_power=float(data["bessel_bmag_power"])
         if "bessel_bmag_power" in data
