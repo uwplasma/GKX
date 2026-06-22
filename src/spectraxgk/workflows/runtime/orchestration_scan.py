@@ -83,6 +83,47 @@ class _RuntimeScanOptions:
         return dict(vars(self))
 
 
+def _runtime_scan_options(
+    *,
+    method: str | None,
+    dt: float | None,
+    steps: int | None,
+    sample_stride: int | None,
+    auto_window: bool,
+    tmin: float | None,
+    tmax: float | None,
+    window_fraction: float,
+    min_points: int,
+    start_fraction: float,
+    growth_weight: float,
+    require_positive: bool,
+    min_amp_fraction: float,
+    mode_method: str,
+    fit_signal: str,
+    show_progress: bool,
+) -> _RuntimeScanOptions:
+    """Collect scan-window, time-step, and diagnostic options in one object."""
+
+    return _RuntimeScanOptions(
+        method=method,
+        dt=dt,
+        steps=steps,
+        sample_stride=sample_stride,
+        auto_window=auto_window,
+        tmin=tmin,
+        tmax=tmax,
+        window_fraction=window_fraction,
+        min_points=min_points,
+        start_fraction=start_fraction,
+        growth_weight=growth_weight,
+        require_positive=require_positive,
+        min_amp_fraction=min_amp_fraction,
+        mode_method=mode_method,
+        fit_signal=fit_signal,
+        show_progress=show_progress,
+    )
+
+
 def build_runtime_scan_orchestration_deps(facade: Any) -> RuntimeScanDeps:
     """Build ky-scan orchestration deps from the public runtime facade."""
 
@@ -468,6 +509,40 @@ def _fit_batch_scan_point(
     )
 
 
+def _fit_batch_scan_result(
+    cfg: RuntimeConfig,
+    ky_arr: np.ndarray,
+    setup: _BatchScanSetup,
+    diagnostics: _BatchDiagnostics,
+    *,
+    options: _RuntimeScanOptions,
+    deps: RuntimeScanBatchDeps,
+) -> RuntimeLinearScanResult:
+    """Fit each requested ky from one combined-ky diagnostic time history."""
+
+    gamma = np.zeros_like(ky_arr, dtype=float)
+    omega = np.zeros_like(ky_arr, dtype=float)
+    fit_key = _fit_signal_key(options.fit_signal)
+    for i, ky_idx in enumerate(setup.ky_indices):
+        sel = ModeSelection(
+            ky_index=int(ky_idx), kx_index=0, z_index=deps.midplane_index(setup.grid)
+        )
+        g_val, o_val = _fit_batch_scan_point(
+            diagnostics,
+            sel,
+            fit_key=fit_key,
+            options=options,
+            deps=deps,
+        )
+        gamma[i], omega[i] = deps.apply_diagnostic_normalization(
+            g_val,
+            o_val,
+            rho_star=float(np.asarray(setup.params.rho_star)),
+            diagnostic_norm=cfg.normalization.diagnostic_norm,
+        )
+    return RuntimeLinearScanResult(ky=ky_arr, gamma=gamma, omega=omega)
+
+
 def run_runtime_scan_orchestration(
     cfg: RuntimeConfig,
     ky_values: Any,
@@ -502,7 +577,7 @@ def run_runtime_scan_orchestration(
     ky_arr = np.asarray(ky_values, dtype=float)
     Nl_use, Nm_use = deps.resolve_runtime_hl_dims(cfg, Nl=Nl, Nm=Nm)
     solver_key = deps.normalize_linear_solver_name(solver)
-    options = _RuntimeScanOptions(
+    options = _runtime_scan_options(
         method=method,
         dt=dt,
         steps=steps,
@@ -576,7 +651,7 @@ def run_runtime_scan_batch(
     g0 = _combined_batch_initial_condition(
         cfg, setup, Nl=Nl, Nm=Nm, deps=deps
     )
-    options = _RuntimeScanOptions(
+    options = _runtime_scan_options(
         method=method,
         dt=dt,
         steps=steps,
@@ -602,31 +677,9 @@ def run_runtime_scan_batch(
         show_progress=options.show_progress,
         deps=deps,
     )
-    gamma = np.zeros_like(ky_arr, dtype=float)
-    omega = np.zeros_like(ky_arr, dtype=float)
-    fit_key = _fit_signal_key(options.fit_signal)
-
-    for i, ky_idx in enumerate(setup.ky_indices):
-        sel = ModeSelection(
-            ky_index=int(ky_idx), kx_index=0, z_index=deps.midplane_index(setup.grid)
-        )
-        g_val, o_val = _fit_batch_scan_point(
-            diagnostics,
-            sel,
-            fit_key=fit_key,
-            options=options,
-            deps=deps,
-        )
-        g_val, o_val = deps.apply_diagnostic_normalization(
-            g_val,
-            o_val,
-            rho_star=float(np.asarray(setup.params.rho_star)),
-            diagnostic_norm=cfg.normalization.diagnostic_norm,
-        )
-        gamma[i] = float(g_val)
-        omega[i] = float(o_val)
-
-    return RuntimeLinearScanResult(ky=ky_arr, gamma=gamma, omega=omega)
+    return _fit_batch_scan_result(
+        cfg, ky_arr, setup, diagnostics, options=options, deps=deps
+    )
 
 
 __all__ = [
