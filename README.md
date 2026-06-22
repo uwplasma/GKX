@@ -812,6 +812,10 @@ collected to rescue this claim. This does not prove that the current
 quasilinear model is a universal absolute-flux predictor, that nonlinear
 turbulence gradients are available, or that the optimization generalizes across
 three surfaces, two field-line labels, and multiple `k_y` values.
+That broader gate is now reproducible with
+`tools/build_matched_nonlinear_transport_matrix.py`, which writes and reports
+the required 18-point matched baseline/candidate nonlinear matrix before any
+multi-surface turbulent-flux optimization language is allowed.
 
 For the next nonlinear optimizer campaign, the current `RBC(1,1)` landscape is
 used as a deterministic launch diagnostic from the strict max-mode-5 QA
