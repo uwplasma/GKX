@@ -841,6 +841,37 @@ def _run_aggregate_holdout_reports(
     )
 
 
+def _aggregate_holdout_config_from_values(
+    values: dict[str, Any],
+) -> _AggregateHoldoutConfig:
+    return _AggregateHoldoutConfig(
+        case_name=values["case_name"],
+        objective=values["objective"],
+        reduction=values["reduction"],
+        training_weights=values["training_weights"],
+        holdout_weights=values["holdout_weights"],
+        training_surface_indices=values["training_surface_indices"],
+        training_alphas=values["training_alphas"],
+        training_selected_ky_indices=values["training_selected_ky_indices"],
+        holdout_surface_indices=values["holdout_surface_indices"],
+        holdout_alphas=values["holdout_alphas"],
+        holdout_selected_ky_indices=values["holdout_selected_ky_indices"],
+        radial_index=values["radial_index"],
+        mode_index=values["mode_index"],
+        parameter_family=values["parameter_family"],
+        initial_delta=values["initial_delta"],
+        perturbation_step=values["perturbation_step"],
+        update_step=values["update_step"],
+        max_steps=values["max_steps"],
+        min_improvement=values["min_improvement"],
+        min_holdout_improvement=_validate_holdout_improvement(
+            values["min_holdout_improvement"]
+        ),
+        response_atol=values["response_atol"],
+        max_curvature_ratio=values["max_curvature_ratio"],
+    )
+
+
 def vmec_boozer_aggregate_line_search_holdout_report(  # pragma: no cover
     *,
     case_name: str = "nfp4_QH_warm_start",
@@ -880,32 +911,7 @@ def vmec_boozer_aggregate_line_search_holdout_report(  # pragma: no cover
     """
 
     fns = _aggregate_holdout_functions(kwargs)
-    config = _AggregateHoldoutConfig(
-        case_name=case_name,
-        objective=objective,
-        reduction=reduction,
-        training_weights=training_weights,
-        holdout_weights=holdout_weights,
-        training_surface_indices=training_surface_indices,
-        training_alphas=training_alphas,
-        training_selected_ky_indices=training_selected_ky_indices,
-        holdout_surface_indices=holdout_surface_indices,
-        holdout_alphas=holdout_alphas,
-        holdout_selected_ky_indices=holdout_selected_ky_indices,
-        radial_index=radial_index,
-        mode_index=mode_index,
-        parameter_family=parameter_family,
-        initial_delta=initial_delta,
-        perturbation_step=perturbation_step,
-        update_step=update_step,
-        max_steps=max_steps,
-        min_improvement=min_improvement,
-        min_holdout_improvement=_validate_holdout_improvement(
-            min_holdout_improvement
-        ),
-        response_atol=response_atol,
-        max_curvature_ratio=max_curvature_ratio,
-    )
+    config = _aggregate_holdout_config_from_values(locals())
     reports = _run_aggregate_holdout_reports(
         config=config,
         fns=fns,

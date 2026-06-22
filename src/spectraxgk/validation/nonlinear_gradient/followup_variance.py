@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from typing import Any, Mapping, Sequence
 import math
 
@@ -275,24 +275,25 @@ def _pack_variance_reduction_plan(
     }
 
 
-def nonlinear_gradient_variance_reduction_plan(
+@dataclass(frozen=True)
+class _VarianceReductionState:
+    variance: Mapping[str, Any]
+    common_labels: list[str]
+    common_with_baseline: list[str]
+    pair_rows: list[dict[str, Any]]
+    paired_mean: float | None
+    paired_sem: float | None
+    paired_uncertainty_rel: float | None
+    control_candidates: list[dict[str, Any]]
+    best_control_variate: Mapping[str, Any] | None
+    required_pairs: int | None
+    extra_pairs: int | None
+
+
+def _variance_reduction_state(
     artifact: Mapping[str, Any],
-    *,
-    path: str | None = None,
-    label: str | None = None,
-    case: str = "nonlinear_turbulence_gradient_variance_reduction_plan",
-    config: NonlinearGradientVarianceReductionConfig | None = None,
-) -> dict[str, Any]:
-    """Plan paired-seed/control-variate follow-up for a failed central-FD artifact.
-
-    The plan uses common seed/timestep labels across ``plus`` and ``minus``
-    ensembles to estimate the uncertainty of paired finite-difference
-    responses.  It is a campaign-design artifact, not nonlinear-gradient
-    evidence.
-    """
-
-    cfg = config or NonlinearGradientVarianceReductionConfig()
-    _validate_variance_reduction_config(cfg)
+    cfg: NonlinearGradientVarianceReductionConfig,
+) -> _VarianceReductionState:
     source_ensembles = _source_ensemble_mapping(artifact)
     variance = _ensemble_state_variance_report(
         source_ensembles,
@@ -304,8 +305,8 @@ def nonlinear_gradient_variance_reduction_plan(
     plus = _state_means_by_label(source_ensembles, "plus")
     minus = _state_means_by_label(source_ensembles, "minus")
     baseline = _state_means_by_label(source_ensembles, "baseline")
-    common_labels, common_with_baseline, pair_rows, paired_differences = _paired_variance_rows(
-        plus, minus, baseline
+    common_labels, common_with_baseline, pair_rows, paired_differences = (
+        _paired_variance_rows(plus, minus, baseline)
     )
     paired_mean, paired_sem = _mean_and_sem(paired_differences)
     paired_uncertainty_rel = _paired_uncertainty_rel(
@@ -330,33 +331,76 @@ def nonlinear_gradient_variance_reduction_plan(
         paired_uncertainty_rel=paired_uncertainty_rel,
         cfg=cfg,
     )
-    action, recommendation = _variance_followup_action(
-        common_pair_count=len(common_labels),
+    return _VarianceReductionState(
+        variance=variance,
+        common_labels=common_labels,
+        common_with_baseline=common_with_baseline,
+        pair_rows=pair_rows,
+        paired_mean=paired_mean,
+        paired_sem=paired_sem,
         paired_uncertainty_rel=paired_uncertainty_rel,
-        apparent_candidates=_apparently_useful_control_candidates(control_candidates),
         control_candidates=control_candidates,
+        best_control_variate=best_control_variate,
+        required_pairs=required_pairs,
         extra_pairs=extra_pairs,
+    )
+
+
+def _variance_reduction_decision(
+    state: _VarianceReductionState,
+    cfg: NonlinearGradientVarianceReductionConfig,
+) -> tuple[str, str]:
+    return _variance_followup_action(
+        common_pair_count=len(state.common_labels),
+        paired_uncertainty_rel=state.paired_uncertainty_rel,
+        apparent_candidates=_apparently_useful_control_candidates(
+            state.control_candidates
+        ),
+        control_candidates=state.control_candidates,
+        extra_pairs=state.extra_pairs,
         cfg=cfg,
     )
+
+
+def nonlinear_gradient_variance_reduction_plan(
+    artifact: Mapping[str, Any],
+    *,
+    path: str | None = None,
+    label: str | None = None,
+    case: str = "nonlinear_turbulence_gradient_variance_reduction_plan",
+    config: NonlinearGradientVarianceReductionConfig | None = None,
+) -> dict[str, Any]:
+    """Plan paired-seed/control-variate follow-up for a failed central-FD artifact.
+
+    The plan uses common seed/timestep labels across ``plus`` and ``minus``
+    ensembles to estimate the uncertainty of paired finite-difference
+    responses.  It is a campaign-design artifact, not nonlinear-gradient
+    evidence.
+    """
+
+    cfg = config or NonlinearGradientVarianceReductionConfig()
+    _validate_variance_reduction_config(cfg)
+    state = _variance_reduction_state(artifact, cfg)
+    action, recommendation = _variance_reduction_decision(state, cfg)
     return _pack_variance_reduction_plan(
         artifact=artifact,
         path=path,
         label=label,
         case=case,
         cfg=cfg,
-        variance=variance,
+        variance=state.variance,
         action=action,
         recommendation=recommendation,
-        common_pair_count=len(common_labels),
-        common_with_baseline_count=len(common_with_baseline),
-        paired_mean=paired_mean,
-        paired_sem=paired_sem,
-        paired_uncertainty_rel=paired_uncertainty_rel,
-        required_pairs=required_pairs,
-        extra_pairs=extra_pairs,
-        best_control_variate=best_control_variate,
-        control_candidates=control_candidates,
-        pair_rows=pair_rows,
+        common_pair_count=len(state.common_labels),
+        common_with_baseline_count=len(state.common_with_baseline),
+        paired_mean=state.paired_mean,
+        paired_sem=state.paired_sem,
+        paired_uncertainty_rel=state.paired_uncertainty_rel,
+        required_pairs=state.required_pairs,
+        extra_pairs=state.extra_pairs,
+        best_control_variate=state.best_control_variate,
+        control_candidates=state.control_candidates,
+        pair_rows=state.pair_rows,
     )
 
 
