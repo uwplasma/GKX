@@ -684,6 +684,76 @@ def _append_cyclone_history_fit_results(
         )
 
 
+def _append_cyclone_streaming_batch_if_requested(
+    batch: _CycloneTimeScanBatch,
+    *,
+    time_cfg: Any | None,
+    run_options: _CycloneTimeRunOptions,
+    fit_options: _CycloneHistoryFitOptions,
+    output: _CycloneScanOutput,
+) -> bool:
+    """Append Diffrax streaming fits when the batch selected that path."""
+
+    if time_cfg is None or not time_cfg.use_diffrax or not run_options.streaming_fit:
+        return False
+    _append_cyclone_streaming_results(
+        batch,
+        geom=run_options.geom,
+        params=run_options.params,
+        terms=run_options.terms,
+        time_cfg=time_cfg,
+        tmin=fit_options.tmin,
+        tmax=fit_options.tmax,
+        start_fraction=fit_options.start_fraction,
+        window_fraction=fit_options.window_fraction,
+        mode_method=run_options.mode_method,
+        streaming_amp_floor=run_options.streaming_amp_floor,
+        diagnostic_norm=run_options.diagnostic_norm,
+        hooks=run_options.hooks,
+        show_progress=run_options.show_progress,
+        gammas=output.gammas,
+        omegas=output.omegas,
+        ky_out=output.ky,
+    )
+    return True
+
+
+def _append_cyclone_integrated_history_results(
+    batch: _CycloneTimeScanBatch,
+    *,
+    time_cfg: Any | None,
+    run_options: _CycloneTimeRunOptions,
+    fit_options: _CycloneHistoryFitOptions,
+    output: _CycloneScanOutput,
+) -> None:
+    """Integrate one Cyclone time batch and append fitted local modes."""
+
+    phi_t_np, density_np, stride = _integrate_cyclone_time_history(
+        batch,
+        geom=run_options.geom,
+        params=run_options.params,
+        terms=run_options.terms,
+        time_cfg=time_cfg,
+        method=run_options.method,
+        mode_method=run_options.mode_method,
+        mode_only=run_options.mode_only,
+        sample_stride=run_options.sample_stride,
+        fit_key=run_options.fit_key,
+        need_density=run_options.need_density,
+        use_jit=run_options.use_jit,
+        hooks=run_options.hooks,
+        show_progress=run_options.show_progress,
+    )
+    _append_cyclone_history_fit_results(
+        batch,
+        phi_t=phi_t_np,
+        density_t=density_np,
+        stride=stride,
+        options=fit_options,
+        output=output,
+    )
+
+
 def _append_cyclone_time_batch_results(
     *,
     batch_start: int,
@@ -714,55 +784,20 @@ def _append_cyclone_time_batch_results(
         steps=batch.steps,
         sample_stride=run_options.sample_stride,
     )
-
-    if (
-        time_cfg_i is not None
-        and time_cfg_i.use_diffrax
-        and run_options.streaming_fit
+    if _append_cyclone_streaming_batch_if_requested(
+        batch,
+        time_cfg=time_cfg_i,
+        run_options=run_options,
+        fit_options=fit_options,
+        output=output,
     ):
-        _append_cyclone_streaming_results(
-            batch,
-            geom=run_options.geom,
-            params=run_options.params,
-            terms=run_options.terms,
-            time_cfg=time_cfg_i,
-            tmin=fit_options.tmin,
-            tmax=fit_options.tmax,
-            start_fraction=fit_options.start_fraction,
-            window_fraction=fit_options.window_fraction,
-            mode_method=run_options.mode_method,
-            streaming_amp_floor=run_options.streaming_amp_floor,
-            diagnostic_norm=run_options.diagnostic_norm,
-            hooks=run_options.hooks,
-            show_progress=run_options.show_progress,
-            gammas=output.gammas,
-            omegas=output.omegas,
-            ky_out=output.ky,
-        )
         return
 
-    phi_t_np, density_np, stride = _integrate_cyclone_time_history(
+    _append_cyclone_integrated_history_results(
         batch,
-        geom=run_options.geom,
-        params=run_options.params,
-        terms=run_options.terms,
         time_cfg=time_cfg_i,
-        method=run_options.method,
-        mode_method=run_options.mode_method,
-        mode_only=run_options.mode_only,
-        sample_stride=run_options.sample_stride,
-        fit_key=run_options.fit_key,
-        need_density=run_options.need_density,
-        use_jit=run_options.use_jit,
-        hooks=run_options.hooks,
-        show_progress=run_options.show_progress,
-    )
-    _append_cyclone_history_fit_results(
-        batch,
-        phi_t=phi_t_np,
-        density_t=density_np,
-        stride=stride,
-        options=fit_options,
+        run_options=run_options,
+        fit_options=fit_options,
         output=output,
     )
 
