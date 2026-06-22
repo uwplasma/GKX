@@ -152,18 +152,17 @@ def _claims_universal_absolute_flux(report: dict[str, Any]) -> bool:
     return False
 
 
-def _optimized_equilibrium_audit_summary(report: dict[str, Any]) -> dict[str, Any]:
-    """Summarize optimized-equilibrium nonlinear evidence without broad promotion."""
+def _optimized_equilibrium_rows(report: dict[str, Any]) -> list[object]:
+    rows = report.get("optimized_equilibrium_artifacts")
+    return rows if isinstance(rows, list) else []
 
-    kind = str(report.get("kind", ""))
-    claim_level = str(report.get("claim_level", ""))
-    path = report.get("source_artifact")
-    text = _claim_text(report)
-    optimized_rows = report.get("optimized_equilibrium_artifacts")
-    optimized_rows = optimized_rows if isinstance(optimized_rows, list) else []
+
+def _qualifying_optimized_count(
+    report: dict[str, Any], optimized_rows: list[object]
+) -> int:
     summary = report.get("summary")
     summary = summary if isinstance(summary, dict) else {}
-    qualifying_optimized_count = int(
+    return int(
         _finite_float(summary.get("qualifying_optimized_equilibrium_ensembles"))
         or sum(
             1
@@ -173,24 +172,61 @@ def _optimized_equilibrium_audit_summary(report: dict[str, Any]) -> dict[str, An
         )
         or 0
     )
-    optimized_marker = any(marker in text for marker in _OPTIMIZED_EQUILIBRIUM_MARKERS)
-    if optimized_rows:
-        optimized_marker = optimized_marker or any(
-            isinstance(row, dict)
-            and (
-                bool(row.get("optimized_equilibrium_marker", False))
-                or any(
-                    marker in str(row.get("path", "")).lower()
-                    for marker in _OPTIMIZED_EQUILIBRIUM_MARKERS
-                )
-                or any(
-                    marker in str(row.get("case", "")).lower()
-                    for marker in _OPTIMIZED_EQUILIBRIUM_MARKERS
-                )
-            )
-            for row in optimized_rows
-        )
 
+
+def _optimized_row_has_marker(row: object) -> bool:
+    if not isinstance(row, dict):
+        return False
+    return bool(row.get("optimized_equilibrium_marker", False)) or any(
+        marker in str(row.get(field, "")).lower()
+        for field in ("path", "case")
+        for marker in _OPTIMIZED_EQUILIBRIUM_MARKERS
+    )
+
+
+def _has_optimized_equilibrium_marker(
+    report: dict[str, Any], optimized_rows: list[object]
+) -> bool:
+    if any(marker in _claim_text(report) for marker in _OPTIMIZED_EQUILIBRIUM_MARKERS):
+        return True
+    return any(_optimized_row_has_marker(row) for row in optimized_rows)
+
+
+def _optimized_equilibrium_audit_passed(
+    report: dict[str, Any],
+    *,
+    production_guard: bool,
+    production_promoted: bool,
+    promotion_gate_passed: bool,
+    gate_report_passed: bool,
+    optimized_marker: bool,
+    qualifying_optimized_count: int,
+) -> bool:
+    if production_guard:
+        return bool(
+            production_promoted
+            and promotion_gate_passed
+            and qualifying_optimized_count > 0
+        )
+    return bool(
+        (
+            bool(report.get("passed", False))
+            or promotion_gate_passed
+            or gate_report_passed
+        )
+        and optimized_marker
+    )
+
+
+def _optimized_equilibrium_audit_summary(report: dict[str, Any]) -> dict[str, Any]:
+    """Summarize optimized-equilibrium nonlinear evidence without broad promotion."""
+
+    kind = str(report.get("kind", ""))
+    claim_level = str(report.get("claim_level", ""))
+    path = report.get("source_artifact")
+    optimized_rows = _optimized_equilibrium_rows(report)
+    qualifying_optimized_count = _qualifying_optimized_count(report, optimized_rows)
+    optimized_marker = _has_optimized_equilibrium_marker(report, optimized_rows)
     production_guard = kind == "production_nonlinear_turbulent_flux_optimization_guard"
     production_promoted = bool(
         report.get("production_nonlinear_optimization_promoted", False)
@@ -199,19 +235,15 @@ def _optimized_equilibrium_audit_summary(report: dict[str, Any]) -> dict[str, An
     gate_report_passed = _nested_gate_passed(report, "gate_report")
     top_level_passed = bool(report.get("passed", False))
     claims_universal = _claims_universal_absolute_flux(report)
-
-    if production_guard:
-        audit_passed = bool(
-            production_promoted
-            and promotion_gate_passed
-            and qualifying_optimized_count > 0
-        )
-    else:
-        audit_passed = bool(
-            (top_level_passed or promotion_gate_passed or gate_report_passed)
-            and optimized_marker
-        )
-
+    audit_passed = _optimized_equilibrium_audit_passed(
+        report,
+        production_guard=production_guard,
+        production_promoted=production_promoted,
+        promotion_gate_passed=promotion_gate_passed,
+        gate_report_passed=gate_report_passed,
+        optimized_marker=optimized_marker,
+        qualifying_optimized_count=qualifying_optimized_count,
+    )
     supports_scoped = bool(audit_passed and optimized_marker and not claims_universal)
     blockers: list[str] = []
     if not optimized_marker:
