@@ -326,7 +326,10 @@ def _straight_theta_center_gradpar(
     theta_st: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray]:
     c = 1
-    dt_st_l_dl_center = 1.0 / _safe_denom(dermv(l_st, theta_st, "l", "o")[c])
+    dt_st_l_dl_center = np.asarray(
+        1.0 / _safe_denom(dermv(l_st, theta_st, "l", "o")[c]),
+        dtype=float,
+    )
     gradpar_center = (
         -(1.0 / _safe_denom(r[c] * bmag[c])) * dpsi_dr[c] * dt_st_l_dl_center
     )

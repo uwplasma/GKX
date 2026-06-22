@@ -165,6 +165,61 @@ def _autodiff_gate(
     )
 
 
+def _portfolio_gradient_gates(
+    *,
+    funcs: _PortfolioSensitivityFunctions,
+    p: jnp.ndarray,
+    step: float,
+    rtol: float,
+    atol: float,
+    workers: int,
+    parallel_executor: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    scalar_gate = _autodiff_gate(
+        funcs.scalar,
+        p,
+        step=step,
+        rtol=rtol,
+        atol=atol,
+        workers=workers,
+        parallel_executor=parallel_executor,
+    )
+    row_gate = _autodiff_gate(
+        funcs.row_vector,
+        p,
+        step=step,
+        rtol=rtol,
+        atol=atol,
+        workers=workers,
+        parallel_executor=parallel_executor,
+    )
+    return scalar_gate, row_gate
+
+
+def _portfolio_conditioning_and_covariance(
+    *,
+    row_vector: jnp.ndarray,
+    row_jacobian_gate: Mapping[str, Any],
+    min_rank: int | None,
+    condition_number_limit: float,
+    covariance_regularization: float,
+) -> tuple[dict[str, object], dict[str, Any]]:
+    row_jacobian = np.asarray(row_jacobian_gate["jacobian_ad"], dtype=float)
+    row_residual = np.asarray(row_vector, dtype=float)
+    conditioning_gate = _conditioning_gate(
+        row_jacobian,
+        min_rank=min_rank,
+        condition_number_limit=condition_number_limit,
+    )
+    covariance = covariance_diagnostics(
+        row_jacobian,
+        row_residual,
+        regularization=covariance_regularization,
+    )
+    covariance["source"] = "objective_portfolio_rows"
+    return conditioning_gate, covariance
+
+
 def _portfolio_sensitivity_payload(
     *,
     p: jnp.ndarray,
@@ -233,37 +288,22 @@ def objective_portfolio_sensitivity_report(
     funcs = _portfolio_sensitivity_functions(objective_row_fn, weights=weights)
     base_rows = funcs.row_table(p)
     contract = _validate_portfolio_base_contract(base_rows, weights=weights)
-    scalar_gradient_gate = _autodiff_gate(
-        funcs.scalar,
-        p,
+    scalar_gradient_gate, row_jacobian_gate = _portfolio_gradient_gates(
+        funcs=funcs,
+        p=p,
         step=step,
         rtol=rtol,
         atol=atol,
         workers=workers,
         parallel_executor=parallel_executor,
     )
-    row_jacobian_gate = _autodiff_gate(
-        funcs.row_vector,
-        p,
-        step=step,
-        rtol=rtol,
-        atol=atol,
-        workers=workers,
-        parallel_executor=parallel_executor,
-    )
-    row_jacobian = np.asarray(row_jacobian_gate["jacobian_ad"], dtype=float)
-    row_residual = np.asarray(funcs.row_vector(p), dtype=float)
-    conditioning_gate = _conditioning_gate(
-        row_jacobian,
+    conditioning_gate, covariance = _portfolio_conditioning_and_covariance(
+        row_vector=funcs.row_vector(p),
+        row_jacobian_gate=row_jacobian_gate,
         min_rank=min_rank,
         condition_number_limit=condition_number_limit,
+        covariance_regularization=covariance_regularization,
     )
-    covariance = covariance_diagnostics(
-        row_jacobian,
-        row_residual,
-        regularization=covariance_regularization,
-    )
-    covariance["source"] = "objective_portfolio_rows"
 
     return _portfolio_sensitivity_payload(
         p=p,
