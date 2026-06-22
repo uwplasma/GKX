@@ -35,6 +35,33 @@ class MillerCoreParams:
     delrho: float = 1.0e-3
 
 
+@dataclass(frozen=True)
+class _StraightThetaDerivatives:
+    psi: np.ndarray
+    psi_diff: np.ndarray
+    jac: np.ndarray
+    dpsid_r: np.ndarray
+    dpsid_z: np.ndarray
+    dt_d_r: np.ndarray
+    dt_d_z: np.ndarray
+    dl: np.ndarray
+
+
+@dataclass(frozen=True)
+class _StraightThetaSurfaceShape:
+    theta_common_new: np.ndarray
+    u_ml: np.ndarray
+    r_c: np.ndarray
+
+
+@dataclass(frozen=True)
+class _StraightThetaMagneticProfiles:
+    dpsi_dr: np.ndarray
+    bpol: np.ndarray
+    bmag: np.ndarray
+    b2: np.ndarray
+
+
 def build_collocation_surfaces(
     params: MillerCoreParams,
 ) -> dict[str, np.ndarray | float]:
@@ -214,6 +241,98 @@ def compute_equal_arc_theta(
     return theta_uniform_ex, gradpar_uniform_ex, theta_eqarc_ex
 
 
+def _straight_theta_derivatives(
+    *,
+    params: MillerCoreParams,
+    r: np.ndarray,
+    z: np.ndarray,
+    theta_st: np.ndarray,
+    dpsidrho: float,
+) -> _StraightThetaDerivatives:
+    drhodpsi = 1.0 / float(dpsidrho)
+    psi = np.array(
+        [1.0 - params.delrho / drhodpsi, 1.0, 1.0 + params.delrho / drhodpsi],
+        dtype=float,
+    )
+    psi_diff = derm(psi, "r")
+    d_r_dpsi = derm(r, "r") / psi_diff[:, None]
+    d_r_dt = dermv(r, theta_st, "l", "e")
+    d_z_dpsi = derm(z, "r") / psi_diff[:, None]
+    d_z_dt = dermv(z, theta_st, "l", "o")
+    jac = d_r_dpsi * d_z_dt - d_z_dpsi * d_r_dt
+    return _StraightThetaDerivatives(
+        psi=psi,
+        psi_diff=psi_diff,
+        jac=jac,
+        dpsid_r=d_z_dt / jac,
+        dpsid_z=-d_r_dt / jac,
+        dt_d_r=-d_z_dpsi / jac,
+        dt_d_z=d_r_dpsi / jac,
+        dl=np.sqrt(derm(r, "l", "e") ** 2 + derm(z, "l", "o") ** 2),
+    )
+
+
+def _straight_theta_surface_shape(
+    *, params: MillerCoreParams, r: np.ndarray, z: np.ndarray
+) -> _StraightThetaSurfaceShape:
+    d_r_l = derm(r, "l", "e")
+    d_z_l = derm(z, "l", "o")
+    phi_n = np.zeros_like(r)
+    for i in range(r.shape[0]):
+        phi = np.arctan2(d_z_l[i], d_r_l[i])
+        phi_n[i] = np.concatenate(
+            (phi[phi >= 0.0] - np.pi / 2.0, phi[phi < 0.0] + 3.0 * np.pi / 2.0)
+        )
+    return _StraightThetaSurfaceShape(
+        theta_common_new=np.arctan2(z, r - params.rmaj),
+        u_ml=np.arctan2(d_z_l, d_r_l),
+        r_c=np.sqrt(d_r_l**2 + d_z_l**2) / derm(phi_n, "l", "o"),
+    )
+
+
+def _straight_theta_magnetic_profiles(
+    *,
+    r: np.ndarray,
+    psi_diff: np.ndarray,
+    dpsid_r: np.ndarray,
+    dpsid_z: np.ndarray,
+    f_const: float,
+) -> _StraightThetaMagneticProfiles:
+    dpsi_dr = np.sign(psi_diff)[:, None] * np.sqrt(dpsid_r**2 + dpsid_z**2)
+    b_p = np.abs(dpsi_dr) / _safe_denom(r)
+    b_t = f_const / _safe_denom(r)
+    b2 = b_p**2 + b_t**2
+    return _StraightThetaMagneticProfiles(
+        dpsi_dr=dpsi_dr,
+        bpol=b_p,
+        bmag=np.sqrt(b2),
+        b2=b2,
+    )
+
+
+def _straight_theta_arc_length(r: np.ndarray, z: np.ndarray) -> np.ndarray:
+    l_st = np.zeros_like(r)
+    for i in range(r.shape[0]):
+        l_st[i, 1:] = np.cumsum(np.sqrt(np.diff(r[i]) ** 2 + np.diff(z[i]) ** 2))
+    return l_st
+
+
+def _straight_theta_center_gradpar(
+    *,
+    r: np.ndarray,
+    bmag: np.ndarray,
+    dpsi_dr: np.ndarray,
+    l_st: np.ndarray,
+    theta_st: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    c = 1
+    dt_st_l_dl_center = 1.0 / _safe_denom(dermv(l_st, theta_st, "l", "o")[c])
+    gradpar_center = (
+        -(1.0 / _safe_denom(r[c] * bmag[c])) * dpsi_dr[c] * dt_st_l_dl_center
+    )
+    return dt_st_l_dl_center, gradpar_center
+
+
 def rebuild_straight_theta_state(
     *,
     params: MillerCoreParams,
@@ -226,74 +345,47 @@ def rebuild_straight_theta_state(
 
     r = np.asarray(state["r"], dtype=float).copy()
     z = np.asarray(state["z"], dtype=float).copy()
-
-    drhodpsi = 1.0 / float(dpsidrho)
-    psi = np.array(
-        [1.0 - params.delrho / drhodpsi, 1.0, 1.0 + params.delrho / drhodpsi],
-        dtype=float,
+    derivatives = _straight_theta_derivatives(
+        params=params, r=r, z=z, theta_st=theta_st, dpsidrho=dpsidrho
     )
-    psi_diff = derm(psi, "r")
-
-    d_r_dpsi = derm(r, "r") / psi_diff[:, None]
-    d_r_dt = dermv(r, theta_st, "l", "e")
-    d_z_dpsi = derm(z, "r") / psi_diff[:, None]
-    d_z_dt = dermv(z, theta_st, "l", "o")
-
-    jac = d_r_dpsi * d_z_dt - d_z_dpsi * d_r_dt
-    dpsid_r = d_z_dt / jac
-    dpsid_z = -d_r_dt / jac
-    dt_d_r = -d_z_dpsi / jac
-    dt_d_z = d_r_dpsi / jac
-
-    dl = np.sqrt(derm(r, "l", "e") ** 2 + derm(z, "l", "o") ** 2)
-    theta_common_new = np.arctan2(z, r - params.rmaj)
-
-    d_r_l = derm(r, "l", "e")
-    d_z_l = derm(z, "l", "o")
-    phi_n = np.zeros_like(r)
-    for i in range(r.shape[0]):
-        phi = np.arctan2(d_z_l[i], d_r_l[i])
-        phi_n[i] = np.concatenate(
-            (phi[phi >= 0.0] - np.pi / 2.0, phi[phi < 0.0] + 3.0 * np.pi / 2.0)
-        )
-    u_ml = np.arctan2(d_z_l, d_r_l)
-    r_c = dl / derm(phi_n, "l", "o")
-
-    dpsi_dr = np.sign(psi_diff)[:, None] * np.sqrt(dpsid_r**2 + dpsid_z**2)
-    b_p = np.abs(dpsi_dr) / _safe_denom(r)
-    b_t = f_const / _safe_denom(r)
-    b2 = b_p**2 + b_t**2
-    b = np.sqrt(b2)
-
-    l_st = np.zeros_like(r)
-    for i in range(r.shape[0]):
-        l_st[i, 1:] = np.cumsum(np.sqrt(np.diff(r[i]) ** 2 + np.diff(z[i]) ** 2))
-
-    c = 1
-    dt_st_l_dl_center = 1.0 / _safe_denom(dermv(l_st, theta_st, "l", "o")[c])
-    gradpar_center = -(1.0 / _safe_denom(r[c] * b[c])) * dpsi_dr[c] * dt_st_l_dl_center
+    shape = _straight_theta_surface_shape(params=params, r=r, z=z)
+    magnetic = _straight_theta_magnetic_profiles(
+        r=r,
+        psi_diff=derivatives.psi_diff,
+        dpsid_r=derivatives.dpsid_r,
+        dpsid_z=derivatives.dpsid_z,
+        f_const=f_const,
+    )
+    l_st = _straight_theta_arc_length(r, z)
+    dt_st_l_dl_center, gradpar_center = _straight_theta_center_gradpar(
+        r=r,
+        bmag=magnetic.bmag,
+        dpsi_dr=magnetic.dpsi_dr,
+        l_st=l_st,
+        theta_st=theta_st,
+    )
 
     return {
-        "psi": psi,
-        "psi_diff": psi_diff,
-        "jac": jac,
-        "dpsid_r": dpsid_r,
-        "dpsid_z": dpsid_z,
-        "dt_d_r": dt_d_r,
-        "dt_d_z": dt_d_z,
-        "dl": dl,
-        "theta_common_new": theta_common_new,
-        "u_ml": u_ml,
-        "r_c": r_c,
-        "dpsi_dr": dpsi_dr,
-        "bpol": b_p,
-        "bmag": b,
-        "b2": b2,
+        "psi": derivatives.psi,
+        "psi_diff": derivatives.psi_diff,
+        "jac": derivatives.jac,
+        "dpsid_r": derivatives.dpsid_r,
+        "dpsid_z": derivatives.dpsid_z,
+        "dt_d_r": derivatives.dt_d_r,
+        "dt_d_z": derivatives.dt_d_z,
+        "dl": derivatives.dl,
+        "theta_common_new": shape.theta_common_new,
+        "u_ml": shape.u_ml,
+        "r_c": shape.r_c,
+        "dpsi_dr": magnetic.dpsi_dr,
+        "bpol": magnetic.bpol,
+        "bmag": magnetic.bmag,
+        "b2": magnetic.b2,
         "l_st": l_st,
         "dt_st_l_dl_center": dt_st_l_dl_center,
         "gradpar_center": gradpar_center,
-        "bmag_center": b[c],
-        "bpol_center": b_p[c],
+        "bmag_center": magnetic.bmag[1],
+        "bpol_center": magnetic.bpol[1],
     }
 
 
