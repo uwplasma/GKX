@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 import jax
@@ -28,6 +29,23 @@ from spectraxgk.solvers.time.diffrax_core import (
 from spectraxgk.terms.assembly import compute_fields_cached
 from spectraxgk.terms.config import FieldState, TermConfig
 from spectraxgk.terms.nonlinear import nonlinear_em_contribution
+
+
+@dataclass(frozen=True)
+class _NonlinearDiffraxSetup:
+    dfx: Any
+    eqx: Any
+    G0_packed: jnp.ndarray
+    cache: LinearCache
+    term_cfg: TermConfig
+    state_dtype: Any
+    rhs_linear: Any
+    rhs_nonlinear: Any
+    dt_val: jnp.ndarray
+    ts: jnp.ndarray
+    real_dtype: Any
+    adaptive_eff: bool
+    use_custom_vjp: bool
 
 
 def _infer_nonlinear_velocity_shape(G0: jnp.ndarray) -> tuple[int, int]:
@@ -298,6 +316,61 @@ def _nonlinear_diffrax_output(sol: Any) -> tuple[jnp.ndarray, FieldState]:
     return G_last, FieldState(phi=phi_t)
 
 
+def _prepare_nonlinear_diffrax_setup(
+    G0: jnp.ndarray,
+    grid: SpectralGrid,
+    geom: FluxTubeGeometryLike,
+    params: LinearParams,
+    *,
+    dt: float,
+    steps: int,
+    method: str,
+    cache: LinearCache | None,
+    terms: TermConfig | None,
+    adaptive: bool,
+    state_sharding: Any | None,
+    compressed_real_fft: bool,
+    laguerre_mode: str,
+) -> _NonlinearDiffraxSetup:
+    dfx, eqx = _require_diffrax()
+    G0, state_dtype, cache = _prepare_nonlinear_state_and_cache(
+        G0, grid, geom, params, cache
+    )
+    term_cfg = terms or TermConfig()
+    method_is_special = _is_imex_solver(method) or _is_implicit_solver(method)
+    use_custom_vjp = not method_is_special
+    rhs_linear = _make_nonlinear_linear_rhs(
+        use_custom_vjp=use_custom_vjp,
+        state_sharding=state_sharding,
+    )
+    rhs_nonlinear = _make_nonlinear_explicit_rhs(
+        use_custom_vjp=use_custom_vjp,
+        state_sharding=state_sharding,
+        compressed_real_fft=compressed_real_fft,
+        laguerre_mode=laguerre_mode,
+    )
+    dt_val, ts, real_dtype = _nonlinear_save_times(
+        dt=dt,
+        steps=steps,
+        state_dtype=state_dtype,
+    )
+    return _NonlinearDiffraxSetup(
+        dfx=dfx,
+        eqx=eqx,
+        G0_packed=_prepare_packed_nonlinear_state(G0, state_sharding),
+        cache=cache,
+        term_cfg=term_cfg,
+        state_dtype=state_dtype,
+        rhs_linear=rhs_linear,
+        rhs_nonlinear=rhs_nonlinear,
+        dt_val=dt_val,
+        ts=ts,
+        real_dtype=real_dtype,
+        adaptive_eff=adaptive or method_is_special,
+        use_custom_vjp=use_custom_vjp,
+    )
+
+
 def integrate_nonlinear_diffrax(
     G0: jnp.ndarray,
     grid: SpectralGrid,
@@ -323,54 +396,46 @@ def integrate_nonlinear_diffrax(
 ) -> tuple[jnp.ndarray, FieldState]:
     """Integrate the nonlinear system with diffrax."""
 
-    dfx, eqx = _require_diffrax()
-    G0, state_dtype, cache = _prepare_nonlinear_state_and_cache(
-        G0, grid, geom, params, cache
-    )
-    term_cfg = terms or TermConfig()
-    use_custom_vjp = not (_is_imex_solver(method) or _is_implicit_solver(method))
-    G0_packed = _prepare_packed_nonlinear_state(G0, state_sharding)
-    rhs_linear = _make_nonlinear_linear_rhs(
-        use_custom_vjp=use_custom_vjp,
-        state_sharding=state_sharding,
-    )
-    rhs_nonlinear = _make_nonlinear_explicit_rhs(
-        use_custom_vjp=use_custom_vjp,
+    setup = _prepare_nonlinear_diffrax_setup(
+        G0,
+        grid,
+        geom,
+        params,
+        dt=dt,
+        steps=steps,
+        method=method,
+        cache=cache,
+        terms=terms,
+        adaptive=adaptive,
         state_sharding=state_sharding,
         compressed_real_fft=compressed_real_fft,
         laguerre_mode=laguerre_mode,
     )
-    dt_val, ts, real_dtype = _nonlinear_save_times(
-        dt=dt,
-        steps=steps,
-        state_dtype=state_dtype,
-    )
-    method_is_special = _is_imex_solver(method) or _is_implicit_solver(method)
     sol = _run_nonlinear_diffrax_solve(
-        dfx=dfx,
-        eqx=eqx,
+        dfx=setup.dfx,
+        eqx=setup.eqx,
         terms_obj=_nonlinear_diffrax_terms_obj(
-            dfx,
+            setup.dfx,
             method=method,
-            rhs_linear=rhs_linear,
-            rhs_nonlinear=rhs_nonlinear,
-            rhs_full=_make_full_nonlinear_rhs(rhs_linear, rhs_nonlinear),
+            rhs_linear=setup.rhs_linear,
+            rhs_nonlinear=setup.rhs_nonlinear,
+            rhs_full=_make_full_nonlinear_rhs(setup.rhs_linear, setup.rhs_nonlinear),
         ),
         solver=_solver_from_name(method),
         save_fn=_make_nonlinear_save_fn(
-            use_custom_vjp=use_custom_vjp,
+            use_custom_vjp=setup.use_custom_vjp,
             state_sharding=state_sharding,
-            state_dtype=state_dtype,
+            state_dtype=setup.state_dtype,
         ),
-        G0_packed=G0_packed,
-        cache=cache,
+        G0_packed=setup.G0_packed,
+        cache=setup.cache,
         params=params,
-        term_cfg=term_cfg,
-        dt_val=dt_val,
+        term_cfg=setup.term_cfg,
+        dt_val=setup.dt_val,
         steps=steps,
-        ts=ts,
-        real_dtype=real_dtype,
-        adaptive_eff=adaptive or method_is_special,
+        ts=setup.ts,
+        real_dtype=setup.real_dtype,
+        adaptive_eff=setup.adaptive_eff,
         rtol=rtol,
         atol=atol,
         max_steps=max_steps,

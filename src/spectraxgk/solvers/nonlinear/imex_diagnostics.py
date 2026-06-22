@@ -280,6 +280,13 @@ class _IMEXOptionBundle:
     scan: _IMEXScanOptions
 
 
+@dataclass(frozen=True)
+class _IMEXScanContext:
+    prepared: _IMEXPreparedState
+    step: DiagnosticStepFn
+    compute_diag_from_state: DiagnosticFn
+
+
 def _prepare_imex_diagnostic_state(
     G0: jnp.ndarray,
     grid: SpectralGrid,
@@ -551,7 +558,7 @@ def _run_imex_diagnostic_scan_and_finalize(
     return jnp.asarray(diag_out.t), diag_out
 
 
-def _integrate_imex_nonlinear_diagnostics_core(
+def _build_imex_scan_context(
     G0: jnp.ndarray,
     grid: SpectralGrid,
     geom: FluxTubeGeometryLike,
@@ -563,7 +570,7 @@ def _integrate_imex_nonlinear_diagnostics_core(
     runtime: _IMEXRuntimeOptions,
     diagnostics: _IMEXDiagnosticOptions,
     scan: _IMEXScanOptions,
-) -> tuple[jnp.ndarray, SimulationDiagnostics]:
+) -> _IMEXScanContext:
     prepared = _prepare_imex_diagnostic_state(
         G0,
         grid,
@@ -622,10 +629,38 @@ def _integrate_imex_nonlinear_diagnostics_core(
         external_phi=scan.external_phi,
         collision_scheme=scan.collision_scheme,
     )
+    return _IMEXScanContext(prepared, step, compute_diag_from_state)
+
+
+def _integrate_imex_nonlinear_diagnostics_core(
+    G0: jnp.ndarray,
+    grid: SpectralGrid,
+    geom: FluxTubeGeometryLike,
+    params: LinearParams,
+    dt: float,
+    *,
+    deps: IMEXNonlinearDiagnosticsDeps,
+    preparation: _IMEXPreparationOptions,
+    runtime: _IMEXRuntimeOptions,
+    diagnostics: _IMEXDiagnosticOptions,
+    scan: _IMEXScanOptions,
+) -> tuple[jnp.ndarray, SimulationDiagnostics]:
+    context = _build_imex_scan_context(
+        G0,
+        grid,
+        geom,
+        params,
+        dt,
+        deps=deps,
+        preparation=preparation,
+        runtime=runtime,
+        diagnostics=diagnostics,
+        scan=scan,
+    )
     return _run_imex_diagnostic_scan_and_finalize(
-        prepared,
-        step,
-        compute_diag_from_state,
+        context.prepared,
+        context.step,
+        context.compute_diag_from_state,
         params,
         deps=deps,
         steps=scan.steps,
