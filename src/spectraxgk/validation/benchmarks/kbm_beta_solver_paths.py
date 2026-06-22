@@ -751,6 +751,80 @@ def _solve_multi_target_kbm_eigenpair(
     )
 
 
+def _resolve_kbm_krylov_shift(
+    krylov_cfg_use: Any, *, use_continuation: bool, prev_eig: Any
+) -> tuple[Any, Any]:
+    shift_val = krylov_cfg_use.shift
+    if use_continuation and prev_eig is not None:
+        shift_val = complex(np.asarray(prev_eig))
+    return shift_val, krylov_cfg_use.shift_selection
+
+
+def _solve_kbm_beta_selected_eigenpair(
+    *,
+    beta: float,
+    cfg: Any,
+    G0_jax: Any,
+    cache: Any,
+    params: Any,
+    terms: Any,
+    krylov_cfg_use: Any,
+    use_continuation: bool,
+    prev_vec: Any,
+    targets: Sequence[float] | None,
+    kbm_beta_transition: float | None,
+    shift_val: Any,
+    shift_selection: Any,
+    hooks: KBMBetaKrylovHooks,
+) -> tuple[Any, Any]:
+    use_multi_target = hooks.use_multi_target_krylov(
+        krylov_cfg_use,
+        targets,
+        shift=shift_val,
+    )
+    if use_multi_target:
+        assert targets is not None
+        return _solve_multi_target_kbm_eigenpair(
+            beta=beta,
+            cfg=cfg,
+            G0_jax=G0_jax,
+            cache=cache,
+            params=params,
+            terms=terms,
+            krylov_cfg_use=krylov_cfg_use,
+            targets=targets,
+            kbm_beta_transition=kbm_beta_transition,
+            hooks=hooks,
+        )
+    return _dominant_kbm_eigenpair(
+        hooks,
+        G0_jax,
+        cache,
+        params,
+        terms,
+        krylov_cfg_use,
+        v_ref=prev_vec,
+        select_overlap=use_continuation,
+        shift=shift_val,
+        shift_selection=shift_selection,
+    )
+
+
+def _normalized_kbm_beta_krylov_growth(
+    eig: Any,
+    *,
+    krylov_cfg_use: Any,
+    params: Any,
+    diagnostic_norm: str,
+    hooks: KBMBetaKrylovHooks,
+) -> tuple[float, float]:
+    gamma = float(np.real(eig))
+    omega = float(-np.imag(eig))
+    if krylov_cfg_use.omega_sign != 0:
+        omega = float(np.sign(krylov_cfg_use.omega_sign)) * abs(omega)
+    return hooks.normalize_growth_rate(gamma, omega, params, diagnostic_norm)
+
+
 def solve_kbm_beta_krylov_sample(
     *,
     beta: float,
@@ -772,49 +846,35 @@ def solve_kbm_beta_krylov_sample(
 ) -> KBMBetaKrylovResult:
     """Run one Krylov KBM beta sample and decide whether time fallback is needed."""
 
-    shift_val = krylov_cfg_use.shift
-    shift_selection = krylov_cfg_use.shift_selection
-    if use_continuation and prev_eig is not None:
-        shift_val = complex(np.asarray(prev_eig))
-
-    targets: Sequence[float] | None = kbm_target_factors if kbm_target_factors else None
-    use_multi_target = hooks.use_multi_target_krylov(
+    shift_val, shift_selection = _resolve_kbm_krylov_shift(
         krylov_cfg_use,
-        targets,
-        shift=shift_val,
+        use_continuation=use_continuation,
+        prev_eig=prev_eig,
     )
-    if use_multi_target:
-        assert targets is not None
-        eig, vec = _solve_multi_target_kbm_eigenpair(
-            beta=beta,
-            cfg=cfg,
-            G0_jax=G0_jax,
-            cache=cache,
-            params=params,
-            terms=terms,
-            krylov_cfg_use=krylov_cfg_use,
-            targets=targets,
-            kbm_beta_transition=kbm_beta_transition,
-            hooks=hooks,
-        )
-    else:
-        eig, vec = _dominant_kbm_eigenpair(
-            hooks,
-            G0_jax,
-            cache,
-            params,
-            terms,
-            krylov_cfg_use,
-            v_ref=prev_vec,
-            select_overlap=use_continuation,
-            shift=shift_val,
-            shift_selection=shift_selection,
-        )
-    gamma = float(np.real(eig))
-    omega = float(-np.imag(eig))
-    if krylov_cfg_use.omega_sign != 0:
-        omega = float(np.sign(krylov_cfg_use.omega_sign)) * abs(omega)
-    gamma, omega = hooks.normalize_growth_rate(gamma, omega, params, diagnostic_norm)
+    targets: Sequence[float] | None = kbm_target_factors if kbm_target_factors else None
+    eig, vec = _solve_kbm_beta_selected_eigenpair(
+        beta=beta,
+        cfg=cfg,
+        G0_jax=G0_jax,
+        cache=cache,
+        params=params,
+        terms=terms,
+        krylov_cfg_use=krylov_cfg_use,
+        use_continuation=use_continuation,
+        prev_vec=prev_vec,
+        targets=targets,
+        kbm_beta_transition=kbm_beta_transition,
+        shift_val=shift_val,
+        shift_selection=shift_selection,
+        hooks=hooks,
+    )
+    gamma, omega = _normalized_kbm_beta_krylov_growth(
+        eig,
+        krylov_cfg_use=krylov_cfg_use,
+        params=params,
+        diagnostic_norm=diagnostic_norm,
+        hooks=hooks,
+    )
     if solver_key == "auto" and not is_valid_growth(gamma, omega):
         return KBMBetaKrylovResult(
             gamma=gamma,
