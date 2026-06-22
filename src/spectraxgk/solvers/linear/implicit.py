@@ -52,6 +52,16 @@ class _ImplicitPreconditionerData:
     imag: jnp.ndarray
 
 
+@dataclass(frozen=True)
+class _ImplicitSolveOptions:
+    tol: float
+    maxiter: int
+    iters: int
+    relax: float
+    restart: int
+    solve_method: str
+
+
 _IMPLICIT_PRECONDITIONER_ALIASES = {
     "full": frozenset({"auto", "diag", "diagonal", "physics", "block"}),
     "damping": frozenset({"damping", "collisional", "hyper"}),
@@ -609,6 +619,97 @@ def _implicit_phi_diagnostic(
     return phi
 
 
+def _validate_implicit_sample_policy(*, steps: int, sample_stride: int) -> None:
+    """Validate saved-sample cadence before building JAX scan closures."""
+
+    if sample_stride < 1:
+        raise ValueError("sample_stride must be >= 1")
+    if steps % sample_stride != 0:
+        raise ValueError("steps must be divisible by sample_stride")
+
+
+def _build_implicit_solve_step(
+    *,
+    cache: LinearCache,
+    params: LinearParams,
+    terms: LinearTerms,
+    dt_val: jnp.ndarray,
+    size: int,
+    shape: tuple[int, ...],
+    matvec: Callable[[jnp.ndarray], jnp.ndarray],
+    precond_op: Callable[[jnp.ndarray], jnp.ndarray],
+    options: _ImplicitSolveOptions,
+) -> Callable[[jnp.ndarray], jnp.ndarray]:
+    """Return the per-step GMRES solve closure used by scan paths."""
+
+    def solve_step(G_in: jnp.ndarray) -> jnp.ndarray:
+        return _implicit_gmres_step(
+            G_in,
+            cache=cache,
+            params=params,
+            terms=terms,
+            dt_val=dt_val,
+            size=size,
+            shape=shape,
+            matvec=matvec,
+            precond_op=precond_op,
+            implicit_tol=options.tol,
+            implicit_maxiter=options.maxiter,
+            implicit_iters=options.iters,
+            implicit_relax=options.relax,
+            implicit_restart=options.restart,
+            implicit_solve_method=options.solve_method,
+        )
+
+    return solve_step
+
+
+def _scan_implicit_outputs(
+    G: jnp.ndarray,
+    *,
+    cache: LinearCache,
+    params: LinearParams,
+    terms: LinearTerms,
+    dt_val: jnp.ndarray,
+    solve_step: Callable[[jnp.ndarray], jnp.ndarray],
+    steps: int,
+    sample_stride: int,
+    checkpoint: bool,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Integrate implicit steps and collect saved field diagnostics."""
+
+    def step(G_in, _):
+        G_new = solve_step(G_in)
+        phi_new = _implicit_phi_diagnostic(
+            G_new,
+            cache=cache,
+            params=params,
+            terms=terms,
+            dt_val=dt_val,
+        )
+        return G_new, phi_new
+
+    step_fn = jax.checkpoint(step) if checkpoint else step
+    if sample_stride <= 1:
+        return jax.lax.scan(step_fn, G, None, length=steps)
+
+    def sample_step(G_in, _):
+        def inner_step(_i, g):
+            return solve_step(g)
+
+        G_out_local = jax.lax.fori_loop(0, sample_stride, inner_step, G_in)
+        phi_out = _implicit_phi_diagnostic(
+            G_out_local,
+            cache=cache,
+            params=params,
+            terms=terms,
+            dt_val=dt_val,
+        )
+        return G_out_local, phi_out
+
+    return jax.lax.scan(sample_step, G, None, length=steps // sample_stride)
+
+
 def _integrate_linear_implicit_cached(
     G0: jnp.ndarray,
     cache: LinearCache,
@@ -628,68 +729,41 @@ def _integrate_linear_implicit_cached(
     sample_stride: int = 1,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Implicit linear integrator using GMRES with a diagonal preconditioner."""
-    if terms is None:
-        terms = LinearTerms()
-    if sample_stride < 1:
-        raise ValueError("sample_stride must be >= 1")
-    if steps % sample_stride != 0:
-        raise ValueError("steps must be divisible by sample_stride")
+    terms = LinearTerms() if terms is None else terms
+    _validate_implicit_sample_policy(steps=steps, sample_stride=sample_stride)
 
     G, shape, size, dt_val, precond_op, matvec, squeeze_species = (
         _build_implicit_operator(G0, cache, params, dt, terms, implicit_preconditioner)
     )
-
-    def solve_step(G_in: jnp.ndarray) -> jnp.ndarray:
-        return _implicit_gmres_step(
-            G_in,
-            cache=cache,
-            params=params,
-            terms=terms,
-            dt_val=dt_val,
-            size=size,
-            shape=shape,
-            matvec=matvec,
-            precond_op=precond_op,
-            implicit_tol=implicit_tol,
-            implicit_maxiter=implicit_maxiter,
-            implicit_iters=implicit_iters,
-            implicit_relax=implicit_relax,
-            implicit_restart=implicit_restart,
-            implicit_solve_method=implicit_solve_method,
-        )
-
-    def step(G_in, _):
-        G_new = solve_step(G_in)
-        phi_new = _implicit_phi_diagnostic(
-            G_new,
-            cache=cache,
-            params=params,
-            terms=terms,
-            dt_val=dt_val,
-        )
-        return G_new, phi_new
-
-    step_fn = jax.checkpoint(step) if checkpoint else step
-    if sample_stride <= 1:
-        G_out, phi_t = jax.lax.scan(step_fn, G, None, length=steps)
-    else:
-
-        def sample_step(G_in, _):
-            def inner_step(_i, g):
-                return solve_step(g)
-
-            G_out_local = jax.lax.fori_loop(0, sample_stride, inner_step, G_in)
-            phi_out = _implicit_phi_diagnostic(
-                G_out_local,
-                cache=cache,
-                params=params,
-                terms=terms,
-                dt_val=dt_val,
-            )
-            return G_out_local, phi_out
-
-        num_samples = steps // sample_stride
-        G_out, phi_t = jax.lax.scan(sample_step, G, None, length=num_samples)
+    solve_step = _build_implicit_solve_step(
+        cache=cache,
+        params=params,
+        terms=terms,
+        dt_val=dt_val,
+        size=size,
+        shape=shape,
+        matvec=matvec,
+        precond_op=precond_op,
+        options=_ImplicitSolveOptions(
+            tol=implicit_tol,
+            maxiter=implicit_maxiter,
+            iters=implicit_iters,
+            relax=implicit_relax,
+            restart=implicit_restart,
+            solve_method=implicit_solve_method,
+        ),
+    )
+    G_out, phi_t = _scan_implicit_outputs(
+        G,
+        cache=cache,
+        params=params,
+        terms=terms,
+        dt_val=dt_val,
+        solve_step=solve_step,
+        steps=steps,
+        sample_stride=sample_stride,
+        checkpoint=checkpoint,
+    )
 
     G_out = G_out[0] if squeeze_species else G_out
     return G_out, phi_t
