@@ -203,6 +203,7 @@ python examples/optimization/QA_optimization_linear_ITG.py
 python examples/optimization/QA_optimization_quasilinear_ITG.py
 python examples/optimization/QA_optimization_nonlinear_ITG.py
 python examples/optimization/QA_nonlinear_ITG_matched_audit.py
+python examples/optimization/QA_nonlinear_ITG_transport_matrix.py
 python examples/optimization/QA_parameter_scan.py
 ```
 
