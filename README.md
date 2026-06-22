@@ -202,6 +202,7 @@ objectives.
 python examples/optimization/QA_optimization_linear_ITG.py
 python examples/optimization/QA_optimization_quasilinear_ITG.py
 python examples/optimization/QA_optimization_nonlinear_ITG.py
+python examples/optimization/QA_nonlinear_ITG_matched_audit.py
 python examples/optimization/QA_parameter_scan.py
 ```
 
@@ -946,7 +947,7 @@ stride-rounded final times but rejects intermediate checkpoint chunks.
 Differentiable stellarator ITG optimization examples live in
 `examples/optimization/` and are restricted to actual VMEC-JAX QA workflows:
 linear-growth, quasilinear-flux, nonlinear-window transport-objective scripts,
-and the guarded VMEC-JAX QA driver. Full
+the matched nonlinear ITG audit, and the guarded VMEC-JAX QA driver. Full
 `vmec_jax -> booz_xform_jax -> SPECTRAX-GK` nonlinear optimization remains
 unpromoted unless production-grade nonlinear turbulence-gradient or robust
 finite-difference audits pass with converged post-transient heat-flux windows, continued
