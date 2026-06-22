@@ -50,6 +50,15 @@ class _BoozerFluxTubeSensitivityRun:
     booz_meta: Mapping[str, Any]
 
 
+@dataclass(frozen=True)
+class _VMECStateSensitivityReportRun:
+    ctx: _VMECStateContext
+    radial_index: int
+    mode_index: int
+    surface_index: int
+    payload: dict[str, object]
+
+
 def _unavailable_vmec_state_sensitivity_report(
     *,
     backend_info: Mapping[str, object],
@@ -258,6 +267,72 @@ def _tensor_sensitivity_payload(
     }
 
 
+def _vmec_state_sensitivity_report_from_run(
+    *,
+    backend_info: Mapping[str, object],
+    run: _VMECStateSensitivityReportRun,
+    case_name: str,
+    params: jnp.ndarray,
+    fd_step: float,
+) -> dict[str, object]:
+    """Pack shared VMEC-state metadata with a JSON-ready payload."""
+
+    return {
+        **_vmec_state_sensitivity_metadata(
+            backend_info=backend_info,
+            ctx=run.ctx,
+            case_name=case_name,
+            params=params,
+            radial_index=run.radial_index,
+            mode_index=run.mode_index,
+            surface_index=run.surface_index,
+            fd_step=fd_step,
+        ),
+        **run.payload,
+    }
+
+
+def _optional_vmec_state_sensitivity_report(
+    *,
+    params: jnp.ndarray | None,
+    default_param: float,
+    case_name: str,
+    fd_step: float,
+    backend_available: Callable[[Mapping[str, object]], bool],
+    unavailable_reason: str,
+    build_run: Callable[[jnp.ndarray], _VMECStateSensitivityReportRun],
+) -> dict[str, object]:
+    """Run an optional-backend VMEC-state gate with common fail-closed handling."""
+
+    p = _length_two_params(params, default=default_param)
+    info = discover_differentiable_geometry_backends()
+    if not backend_available(info):
+        return _unavailable_vmec_state_sensitivity_report(
+            backend_info=info,
+            fd_step=fd_step,
+            case_name=case_name,
+            reason=unavailable_reason,
+        )
+
+    try:
+        run = build_run(p)
+    except Exception as exc:
+        return _failed_vmec_state_sensitivity_report(
+            backend_info=info,
+            fd_step=fd_step,
+            case_name=case_name,
+            exc=exc,
+        )
+
+    return _vmec_state_sensitivity_report_from_run(
+        backend_info=info,
+        run=run,
+        case_name=case_name,
+        params=p,
+        fd_step=fd_step,
+    )
+
+
 def _load_vmec_geom_sensitivity_context(
     *,
     case_name: str,
@@ -404,6 +479,120 @@ def _run_vmec_boozer_flux_tube_sensitivity(
     )
 
 
+def _run_vmec_boozer_flux_tube_report(
+    *,
+    params: jnp.ndarray,
+    case_name: str,
+    radial_index: int | None,
+    mode_index: int,
+    surface_index: int | None,
+    fd_step: float,
+    mboz: int,
+    nboz: int,
+    ntheta: int,
+) -> _VMECStateSensitivityReportRun:
+    """Return a metadata-ready Boozer flux-tube sensitivity run."""
+
+    run = _run_vmec_boozer_flux_tube_sensitivity(
+        params=params,
+        case_name=case_name,
+        radial_index=radial_index,
+        mode_index=mode_index,
+        surface_index=surface_index,
+        fd_step=float(fd_step),
+        mboz=mboz,
+        nboz=nboz,
+        ntheta=ntheta,
+    )
+    return _VMECStateSensitivityReportRun(
+        ctx=run.ctx,
+        radial_index=run.radial_index,
+        mode_index=run.mode_index,
+        surface_index=run.surface_index,
+        payload=_boozer_flux_tube_report_payload(
+            sensitivity=run.sensitivity,
+            booz_meta=run.booz_meta,
+            mboz=mboz,
+            nboz=nboz,
+            ntheta=ntheta,
+        ),
+    )
+
+
+def _metric_tensor_report_payload(
+    *,
+    ctx: _VMECStateContext,
+    geom_mod: Any,
+    params: jnp.ndarray,
+    radial_index: int,
+    mode_index: int,
+    surface_index: int,
+    fd_step: float,
+    rms_epsilon: float,
+) -> dict[str, object]:
+    """Build the VMEC metric-tensor sensitivity payload."""
+
+    metric_observables = _metric_tensor_observable_fn(
+        ctx=ctx,
+        geom_mod=geom_mod,
+        radial_index=radial_index,
+        mode_index=mode_index,
+        surface_index=surface_index,
+        rms_epsilon=jnp.asarray(float(rms_epsilon), dtype=params.dtype),
+    )
+    tensor_payload = _tensor_sensitivity_payload(
+        observable_fn=metric_observables,
+        params=params,
+        fd_step=float(fd_step),
+        observable_names=_VMEC_METRIC_OBSERVABLE_NAMES,
+        relative_floor=1.0e-12,
+    )
+    geom0 = geom_mod.eval_geom(ctx.state, ctx.static)
+    return {
+        "source_model": "vmec_jax:state->metric-tensors",
+        **tensor_payload,
+        "metric_grid_shape": [int(v) for v in np.asarray(geom0.sqrtg).shape],
+        "rms_epsilon": float(rms_epsilon),
+    }
+
+
+def _run_vmec_metric_tensor_sensitivity(
+    *,
+    params: jnp.ndarray,
+    case_name: str,
+    radial_index: int | None,
+    mode_index: int,
+    surface_index: int | None,
+    fd_step: float,
+    rms_epsilon: float,
+) -> _VMECStateSensitivityReportRun:
+    """Return a metadata-ready VMEC metric-tensor sensitivity run."""
+
+    ctx, geom_mod, ridx, midx, sidx = _load_vmec_geom_sensitivity_context(
+        case_name=case_name,
+        radial_index=radial_index,
+        mode_index=mode_index,
+        surface_index=surface_index,
+        surface_grid="metric",
+    )
+    return _VMECStateSensitivityReportRun(
+        ctx=ctx,
+        radial_index=ridx,
+        mode_index=midx,
+        surface_index=sidx,
+        payload=_metric_tensor_report_payload(
+            ctx=ctx,
+            geom_mod=geom_mod,
+            params=params,
+            radial_index=ridx,
+            mode_index=midx,
+            surface_index=sidx,
+            fd_step=float(fd_step),
+            rms_epsilon=rms_epsilon,
+        ),
+    )
+
+
 def _field_line_tensor_report_payload(
     *,
     ctx: _VMECStateContext,
@@ -465,6 +654,49 @@ def _field_line_tensor_report_payload(
     }
 
 
+def _run_vmec_field_line_tensor_sensitivity(
+    *,
+    params: jnp.ndarray,
+    case_name: str,
+    radial_index: int | None,
+    mode_index: int,
+    surface_index: int | None,
+    alpha: float,
+    ntheta: int,
+    fd_step: float,
+    b2_floor: float,
+    rms_epsilon: float,
+) -> _VMECStateSensitivityReportRun:
+    """Return a metadata-ready VMEC field-line tensor sensitivity run."""
+
+    ctx, geom_mod, ridx, midx, sidx = _load_vmec_geom_sensitivity_context(
+        case_name=case_name,
+        radial_index=radial_index,
+        mode_index=mode_index,
+        surface_index=surface_index,
+        surface_grid="field_line",
+    )
+    return _VMECStateSensitivityReportRun(
+        ctx=ctx,
+        radial_index=ridx,
+        mode_index=midx,
+        surface_index=sidx,
+        payload=_field_line_tensor_report_payload(
+            ctx=ctx,
+            geom_mod=geom_mod,
+            params=params,
+            radial_index=ridx,
+            mode_index=midx,
+            surface_index=sidx,
+            alpha=alpha,
+            ntheta=ntheta,
+            fd_step=float(fd_step),
+            b2_floor=b2_floor,
+            rms_epsilon=rms_epsilon,
+        ),
+    )
+
+
 def vmec_jax_boozer_flux_tube_sensitivity_report(  # pragma: no cover
     *,
     params: jnp.ndarray | None = None,
@@ -494,22 +726,19 @@ def vmec_jax_boozer_flux_tube_sensitivity_report(  # pragma: no cover
     imported VMEC/EIK path.
     """
 
-    p = _length_two_params(params, default=1.0e-3)
-
-    info = discover_differentiable_geometry_backends()
-    if not (
-        info.get("vmec_jax_available", False)
-        and info.get("booz_xform_jax_api_available", False)
-    ):
-        return _unavailable_vmec_state_sensitivity_report(
-            backend_info=info,
-            fd_step=fd_step,
-            case_name=case_name,
-            reason="vmec_jax or booz_xform_jax functional API is not available",
-        )
-
-    try:
-        run = _run_vmec_boozer_flux_tube_sensitivity(
+    return _optional_vmec_state_sensitivity_report(
+        params=params,
+        default_param=1.0e-3,
+        case_name=str(case_name),
+        fd_step=float(fd_step),
+        backend_available=lambda info: bool(
+            info.get("vmec_jax_available", False)
+            and info.get("booz_xform_jax_api_available", False)
+        ),
+        unavailable_reason=(
+            "vmec_jax or booz_xform_jax functional API is not available"
+        ),
+        build_run=lambda p: _run_vmec_boozer_flux_tube_report(
             params=p,
             case_name=str(case_name),
             radial_index=radial_index,
@@ -519,34 +748,8 @@ def vmec_jax_boozer_flux_tube_sensitivity_report(  # pragma: no cover
             mboz=mboz,
             nboz=nboz,
             ntheta=ntheta,
-        )
-    except Exception as exc:
-        return _failed_vmec_state_sensitivity_report(
-            backend_info=info,
-            fd_step=fd_step,
-            case_name=case_name,
-            exc=exc,
-        )
-
-    return {
-        **_vmec_state_sensitivity_metadata(
-            backend_info=info,
-            ctx=run.ctx,
-            case_name=case_name,
-            params=p,
-            radial_index=run.radial_index,
-            mode_index=run.mode_index,
-            surface_index=run.surface_index,
-            fd_step=fd_step,
         ),
-        **_boozer_flux_tube_report_payload(
-            sensitivity=run.sensitivity,
-            booz_meta=run.booz_meta,
-            mboz=mboz,
-            nboz=nboz,
-            ntheta=ntheta,
-        ),
-    }
+    )
 
 
 def vmec_jax_metric_tensor_sensitivity_report(  # pragma: no cover
@@ -573,66 +776,23 @@ def vmec_jax_metric_tensor_sensitivity_report(  # pragma: no cover
     final Boozer-field-line metric parity gate.
     """
 
-    p = _length_two_params(params, default=1.0e-3)
-
-    info = discover_differentiable_geometry_backends()
-    if not info.get("vmec_jax_available", False):
-        return _unavailable_vmec_state_sensitivity_report(
-            backend_info=info,
-            fd_step=fd_step,
-            case_name=case_name,
-            reason="vmec_jax is not available",
-        )
-
-    try:
-        ctx, geom_mod, ridx, midx, sidx = _load_vmec_geom_sensitivity_context(
+    return _optional_vmec_state_sensitivity_report(
+        params=params,
+        default_param=1.0e-3,
+        case_name=str(case_name),
+        fd_step=float(fd_step),
+        backend_available=lambda info: bool(info.get("vmec_jax_available", False)),
+        unavailable_reason="vmec_jax is not available",
+        build_run=lambda p: _run_vmec_metric_tensor_sensitivity(
+            params=p,
             case_name=str(case_name),
             radial_index=radial_index,
             mode_index=mode_index,
             surface_index=surface_index,
-            surface_grid="metric",
-        )
-
-        metric_observables = _metric_tensor_observable_fn(
-            ctx=ctx,
-            geom_mod=geom_mod,
-            radial_index=ridx,
-            mode_index=midx,
-            surface_index=sidx,
-            rms_epsilon=jnp.asarray(float(rms_epsilon), dtype=p.dtype),
-        )
-        tensor_payload = _tensor_sensitivity_payload(
-            observable_fn=metric_observables,
-            params=p,
             fd_step=float(fd_step),
-            observable_names=_VMEC_METRIC_OBSERVABLE_NAMES,
-            relative_floor=1.0e-12,
-        )
-        geom0 = geom_mod.eval_geom(ctx.state, ctx.static)
-    except Exception as exc:
-        return _failed_vmec_state_sensitivity_report(
-            backend_info=info,
-            fd_step=fd_step,
-            case_name=case_name,
-            exc=exc,
-        )
-
-    return {
-        **_vmec_state_sensitivity_metadata(
-            backend_info=info,
-            ctx=ctx,
-            case_name=case_name,
-            params=p,
-            radial_index=ridx,
-            mode_index=midx,
-            surface_index=sidx,
-            fd_step=fd_step,
+            rms_epsilon=rms_epsilon,
         ),
-        "source_model": "vmec_jax:state->metric-tensors",
-        **tensor_payload,
-        "metric_grid_shape": [int(v) for v in np.asarray(geom0.sqrtg).shape],
-        "rms_epsilon": float(rms_epsilon),
-    }
+    )
 
 
 def vmec_jax_field_line_tensor_sensitivity_report(  # pragma: no cover
@@ -663,59 +823,26 @@ def vmec_jax_field_line_tensor_sensitivity_report(  # pragma: no cover
     compare against the imported VMEC/EIK path.
     """
 
-    p = _length_two_params(params, default=1.0e-4)
-
-    info = discover_differentiable_geometry_backends()
-    if not info.get("vmec_jax_available", False):
-        return _unavailable_vmec_state_sensitivity_report(
-            backend_info=info,
-            fd_step=fd_step,
-            case_name=case_name,
-            reason="vmec_jax is not available",
-        )
-
-    try:
-        ctx, geom_mod, ridx, midx, sidx = _load_vmec_geom_sensitivity_context(
+    return _optional_vmec_state_sensitivity_report(
+        params=params,
+        default_param=1.0e-4,
+        case_name=str(case_name),
+        fd_step=float(fd_step),
+        backend_available=lambda info: bool(info.get("vmec_jax_available", False)),
+        unavailable_reason="vmec_jax is not available",
+        build_run=lambda p: _run_vmec_field_line_tensor_sensitivity(
+            params=p,
             case_name=str(case_name),
             radial_index=radial_index,
             mode_index=mode_index,
             surface_index=surface_index,
-            surface_grid="field_line",
-        )
-        payload = _field_line_tensor_report_payload(
-            ctx=ctx,
-            geom_mod=geom_mod,
-            params=p,
-            radial_index=ridx,
-            mode_index=midx,
-            surface_index=sidx,
             alpha=alpha,
             ntheta=ntheta,
             fd_step=float(fd_step),
             b2_floor=b2_floor,
             rms_epsilon=rms_epsilon,
-        )
-    except Exception as exc:
-        return _failed_vmec_state_sensitivity_report(
-            backend_info=info,
-            fd_step=fd_step,
-            case_name=case_name,
-            exc=exc,
-        )
-
-    return {
-        **_vmec_state_sensitivity_metadata(
-            backend_info=info,
-            ctx=ctx,
-            case_name=case_name,
-            params=p,
-            radial_index=ridx,
-            mode_index=midx,
-            surface_index=sidx,
-            fd_step=fd_step,
         ),
-        **payload,
-    }
+    )
 
 
 __all__ = [
