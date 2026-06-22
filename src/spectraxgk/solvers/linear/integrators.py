@@ -500,6 +500,57 @@ def _dispatch_serial_linear(
     )
 
 
+def _dispatch_explicit_linear(
+    G0: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    *,
+    dt: float,
+    steps: int,
+    method: str,
+    terms: LinearTerms,
+    checkpoint: bool,
+    sample_stride: int,
+    donate: bool,
+    show_progress: bool,
+    parallel: Any | None,
+    parallel_strategy: str,
+    force_electrostatic_fields: bool,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Route explicit linear integration through serial or parallel kernels."""
+
+    if parallel_strategy != "serial":
+        return _dispatch_parallel_linear(
+            G0,
+            cache,
+            params,
+            dt=dt,
+            steps=steps,
+            method=method,
+            terms=terms,
+            checkpoint=checkpoint,
+            sample_stride=sample_stride,
+            donate=donate,
+            show_progress=show_progress,
+            parallel=parallel,
+            force_electrostatic_fields=force_electrostatic_fields,
+        )
+    return _dispatch_serial_linear(
+        G0,
+        cache,
+        params,
+        dt=dt,
+        steps=steps,
+        method=method,
+        terms=terms,
+        checkpoint=checkpoint,
+        sample_stride=sample_stride,
+        donate=donate,
+        show_progress=show_progress,
+        force_electrostatic_fields=force_electrostatic_fields,
+    )
+
+
 def integrate_linear(
     G0: jnp.ndarray,
     grid: SpectralGrid,
@@ -552,23 +603,7 @@ def integrate_linear(
             checkpoint=checkpoint,
             sample_stride=sample_stride,
         )
-    if parallel_strategy != "serial":
-        return _dispatch_parallel_linear(
-            G0,
-            cache,
-            params,
-            dt=dt,
-            steps=steps,
-            method=method,
-            terms=terms,
-            checkpoint=checkpoint,
-            sample_stride=sample_stride,
-            donate=donate,
-            show_progress=show_progress,
-            parallel=parallel,
-            force_electrostatic_fields=force_electrostatic_fields,
-        )
-    return _dispatch_serial_linear(
+    return _dispatch_explicit_linear(
         G0,
         cache,
         params,
@@ -580,6 +615,8 @@ def integrate_linear(
         sample_stride=sample_stride,
         donate=donate,
         show_progress=show_progress,
+        parallel=parallel,
+        parallel_strategy=parallel_strategy,
         force_electrostatic_fields=force_electrostatic_fields,
     )
 
