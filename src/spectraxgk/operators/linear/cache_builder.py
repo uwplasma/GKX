@@ -191,6 +191,69 @@ def _build_twist_shift_cache_policy(
     )
 
 
+def _default_twist_y0(grid: SpectralGrid) -> float:
+    y0 = getattr(grid, "y0", None)
+    if y0 is not None:
+        return float(y0)
+    if grid.ky.size > 1:
+        return float(1.0 / float(grid.ky[1] - grid.ky[0]))
+    return 1.0
+
+
+def _host_twist_shear(shat_arr: jnp.ndarray) -> float | None:
+    return None if _is_tracer(shat_arr) else float(np.asarray(shat_arr))
+
+
+def _edge_metric_scalar(value: jnp.ndarray) -> float:
+    return float(value[0]) if value.ndim else float(value)
+
+
+def _twist_shift_geometric_factor(
+    shat: float, *, gds21: jnp.ndarray, gds22: jnp.ndarray
+) -> float:
+    gds22_min = _edge_metric_scalar(gds22)
+    if gds22_min == 0.0:
+        return 0.0
+    return float(2.0 * shat * _edge_metric_scalar(gds21) / gds22_min)
+
+
+def _jtwist_and_x0_target(
+    grid: SpectralGrid,
+    *,
+    y0: float,
+    x0_eff: float,
+    twist_shift_geo_fac: float,
+) -> tuple[int, float]:
+    jtwist_val = getattr(grid, "jtwist", None)
+    if twist_shift_geo_fac == 0.0:
+        return int(jtwist_val) if jtwist_val is not None else 1, x0_eff
+    jtwist = int(jtwist_val) if jtwist_val is not None else int(
+        np.round(twist_shift_geo_fac)
+    )
+    jtwist = 1 if jtwist == 0 else jtwist
+    return jtwist, float(y0) * abs(jtwist) / abs(twist_shift_geo_fac)
+
+
+def _scaled_twist_shift_kx(
+    grid: SpectralGrid,
+    *,
+    use_ntft: bool,
+    x0_eff: float,
+    x0_target: float,
+    kx_eff: jnp.ndarray,
+    kx_grid: jnp.ndarray,
+) -> tuple[jnp.ndarray, jnp.ndarray, float]:
+    grid_x0 = float(getattr(grid, "x0", x0_eff))
+    if use_ntft:
+        if grid_x0 != 0.0:
+            kx_eff = kx_eff * (grid_x0 / float(x0_eff))
+        return kx_eff, kx_grid, x0_eff
+    if x0_target != 0.0 and x0_target != x0_eff:
+        scale = float(x0_eff) / float(x0_target)
+        return kx_eff * scale, kx_grid * scale, x0_target
+    return kx_eff, kx_grid, x0_eff
+
+
 def _resolve_twist_shift_policy(
     grid: SpectralGrid,
     geom_data: Any,
@@ -214,14 +277,9 @@ def _resolve_twist_shift_policy(
     boundary = str(getattr(grid, "boundary", "periodic")).lower()
     use_twist_shift = boundary in {"linked", "fix aspect", "continuous drifts"}
     use_ntft = bool(getattr(grid, "non_twist", False))
-    y0 = getattr(grid, "y0", None)
-    if y0 is None:
-        if grid.ky.size > 1:
-            y0 = float(1.0 / float(grid.ky[1] - grid.ky[0]))
-        else:
-            y0 = 1.0
+    y0 = _default_twist_y0(grid)
     shat_arr = jnp.asarray(geom_data.s_hat, dtype=kx_eff.dtype)
-    shat_host = None if _is_tracer(shat_arr) else float(np.asarray(shat_arr))
+    shat_host = _host_twist_shear(shat_arr)
     x0_eff = float(getattr(grid, "x0", 1.0))
     jtwist = 0
     x0_target = x0_eff
@@ -230,36 +288,22 @@ def _resolve_twist_shift_policy(
             raise ValueError(
                 "traced magnetic shear is not supported with twist-shift boundaries"
             )
-        shat = shat_host
-        gds21_min = float(gds21[0]) if gds21.ndim else float(gds21)
-        gds22_min = float(gds22[0]) if gds22.ndim else float(gds22)
-        twist_shift_geo_fac = 0.0
-        if gds22_min != 0.0:
-            twist_shift_geo_fac = float(2.0 * shat * gds21_min / gds22_min)
-        if twist_shift_geo_fac != 0.0:
-            jtwist_val = getattr(grid, "jtwist", None)
-            if jtwist_val is not None:
-                jtwist = int(jtwist_val)
-            else:
-                jtwist = int(np.round(twist_shift_geo_fac))
-            if jtwist == 0:
-                jtwist = 1
-            x0_target = float(y0) * abs(jtwist) / abs(twist_shift_geo_fac)
-            if use_ntft:
-                x0_eff = x0_target
-        else:
-            jtwist_val = getattr(grid, "jtwist", None)
-            if jtwist_val is not None:
-                jtwist = int(jtwist_val)
-            else:
-                jtwist = 1
-        if use_ntft and float(getattr(grid, "x0", x0_eff)) != 0.0:
-            kx_eff = kx_eff * (float(getattr(grid, "x0", x0_eff)) / float(x0_eff))
-        if not use_ntft and x0_target != 0.0 and x0_target != x0_eff:
-            scale = float(x0_eff) / float(x0_target)
-            kx_eff = kx_eff * scale
-            kx_grid = kx_grid * scale
+        twist_shift_geo_fac = _twist_shift_geometric_factor(
+            shat_host, gds21=gds21, gds22=gds22
+        )
+        jtwist, x0_target = _jtwist_and_x0_target(
+            grid, y0=y0, x0_eff=x0_eff, twist_shift_geo_fac=twist_shift_geo_fac
+        )
+        if use_ntft and twist_shift_geo_fac != 0.0:
             x0_eff = x0_target
+        kx_eff, kx_grid, x0_eff = _scaled_twist_shift_kx(
+            grid,
+            use_ntft=use_ntft,
+            x0_eff=x0_eff,
+            x0_target=x0_target,
+            kx_eff=kx_eff,
+            kx_grid=kx_grid,
+        )
     kxfac_val = float(getattr(grid, "kxfac", 1.0))
     return (
         boundary,
