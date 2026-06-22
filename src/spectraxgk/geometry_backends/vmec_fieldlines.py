@@ -115,6 +115,36 @@ class _BoozerFieldlineSamples:
 
 
 @dataclass(frozen=True)
+class _BoozerModeProfiles:
+    rmnc_b: np.ndarray
+    zmns_b: np.ndarray
+    numns_b: np.ndarray
+    d_rmnc_b_d_s: np.ndarray
+    d_zmns_b_d_s: np.ndarray
+    d_numns_b_d_s: np.ndarray
+    gmnc_b: np.ndarray
+    bmnc_b: np.ndarray
+    d_bmnc_b_d_s: np.ndarray
+
+
+@dataclass(frozen=True)
+class _BoozerFieldlineCoordinates:
+    theta_b: np.ndarray
+    phi_b: np.ndarray
+    flipit: bool
+
+
+@dataclass(frozen=True)
+class _BoozerTrigSamples:
+    cosangle_b: np.ndarray
+    sinangle_b: np.ndarray
+    mcosangle_b: np.ndarray
+    msinangle_b: np.ndarray
+    ncosangle_b: np.ndarray
+    nsinangle_b: np.ndarray
+
+
+@dataclass(frozen=True)
 class _HNGCModeCorrections:
     beta_b: np.ndarray
     lambda_b: np.ndarray
@@ -209,17 +239,11 @@ def _fieldline_scalar_profiles(
     )
 
 
-def _sample_fieldline_boozer_state(
-    vs: Any,
-    scalars: _VMECFieldlineScalars,
-    *,
-    theta1d: np.ndarray,
-    isaxisym: bool,
-) -> _BoozerFieldlineSamples:
-    """Build Boozer mode tables, field-line coordinates, and tensor sums."""
+def _sample_boozer_mode_profiles(
+    vs: Any, scalars: _VMECFieldlineScalars
+) -> _BoozerModeProfiles:
+    """Sample Boozer coefficients and their radial derivatives."""
 
-    xm_b = vs.xm_b
-    xn_b = vs.xn_b
     (
         rmnc_b,
         zmns_b,
@@ -231,6 +255,30 @@ def _sample_fieldline_boozer_state(
         bmnc_b,
         d_bmnc_b_d_s,
     ) = _sample_boozer_mode_table(vs, scalars.s, scalars.ns)
+    return _BoozerModeProfiles(
+        rmnc_b=rmnc_b,
+        zmns_b=zmns_b,
+        numns_b=numns_b,
+        d_rmnc_b_d_s=d_rmnc_b_d_s,
+        d_zmns_b_d_s=d_zmns_b_d_s,
+        d_numns_b_d_s=d_numns_b_d_s,
+        gmnc_b=gmnc_b,
+        bmnc_b=bmnc_b,
+        d_bmnc_b_d_s=d_bmnc_b_d_s,
+    )
+
+
+def _fieldline_coordinates_and_flip(
+    *,
+    theta1d: np.ndarray,
+    scalars: _VMECFieldlineScalars,
+    xm_b: np.ndarray,
+    xn_b: np.ndarray,
+    profiles: _BoozerModeProfiles,
+    isaxisym: bool,
+) -> _BoozerFieldlineCoordinates:
+    """Return field-line Boozer coordinates and axisymmetric orientation."""
+
     theta_b, phi_b = _fieldline_boozer_coordinates(
         theta1d, scalars.alpha_arr, scalars.iota
     )
@@ -240,10 +288,24 @@ def _sample_fieldline_boozer_state(
         xn_b=xn_b,
         theta_b=theta_b,
         phi_b=phi_b,
-        rmnc_b=rmnc_b,
-        zmns_b=zmns_b,
+        rmnc_b=profiles.rmnc_b,
+        zmns_b=profiles.zmns_b,
     )
-    angle_b = _boozer_mode_angle(xm_b, xn_b, theta_b, phi_b, flipit=flipit)
+    return _BoozerFieldlineCoordinates(
+        theta_b=theta_b,
+        phi_b=phi_b,
+        flipit=bool(flipit),
+    )
+
+
+def _fieldline_trig_samples(
+    xm_b: np.ndarray, xn_b: np.ndarray, coords: _BoozerFieldlineCoordinates
+) -> _BoozerTrigSamples:
+    """Return Boozer angle basis arrays used by tensor mode sums."""
+
+    angle_b = _boozer_mode_angle(
+        xm_b, xn_b, coords.theta_b, coords.phi_b, flipit=coords.flipit
+    )
     (
         cosangle_b,
         sinangle_b,
@@ -252,16 +314,7 @@ def _sample_fieldline_boozer_state(
         ncosangle_b,
         nsinangle_b,
     ) = _boozer_trig_basis(xm_b, xn_b, angle_b)
-    tensors = _fieldline_boozer_tensors(
-        rmnc_b=rmnc_b,
-        zmns_b=zmns_b,
-        numns_b=numns_b,
-        d_rmnc_b_d_s=d_rmnc_b_d_s,
-        d_zmns_b_d_s=d_zmns_b_d_s,
-        d_numns_b_d_s=d_numns_b_d_s,
-        gmnc_b=gmnc_b,
-        bmnc_b=bmnc_b,
-        d_bmnc_b_d_s=d_bmnc_b_d_s,
+    return _BoozerTrigSamples(
         cosangle_b=cosangle_b,
         sinangle_b=sinangle_b,
         mcosangle_b=mcosangle_b,
@@ -269,27 +322,67 @@ def _sample_fieldline_boozer_state(
         ncosangle_b=ncosangle_b,
         nsinangle_b=nsinangle_b,
     )
+
+
+def _sample_fieldline_boozer_state(
+    vs: Any,
+    scalars: _VMECFieldlineScalars,
+    *,
+    theta1d: np.ndarray,
+    isaxisym: bool,
+) -> _BoozerFieldlineSamples:
+    """Build Boozer mode tables, field-line coordinates, and tensor sums."""
+
+    xm_b = vs.xm_b
+    xn_b = vs.xn_b
+    profiles = _sample_boozer_mode_profiles(vs, scalars)
+    coords = _fieldline_coordinates_and_flip(
+        theta1d=theta1d,
+        scalars=scalars,
+        xm_b=xm_b,
+        xn_b=xn_b,
+        profiles=profiles,
+        isaxisym=isaxisym,
+    )
+    trig = _fieldline_trig_samples(xm_b, xn_b, coords)
+    tensors = _fieldline_boozer_tensors(
+        rmnc_b=profiles.rmnc_b,
+        zmns_b=profiles.zmns_b,
+        numns_b=profiles.numns_b,
+        d_rmnc_b_d_s=profiles.d_rmnc_b_d_s,
+        d_zmns_b_d_s=profiles.d_zmns_b_d_s,
+        d_numns_b_d_s=profiles.d_numns_b_d_s,
+        gmnc_b=profiles.gmnc_b,
+        bmnc_b=profiles.bmnc_b,
+        d_bmnc_b_d_s=profiles.d_bmnc_b_d_s,
+        cosangle_b=trig.cosangle_b,
+        sinangle_b=trig.sinangle_b,
+        mcosangle_b=trig.mcosangle_b,
+        msinangle_b=trig.msinangle_b,
+        ncosangle_b=trig.ncosangle_b,
+        nsinangle_b=trig.nsinangle_b,
+    )
     return _BoozerFieldlineSamples(
         xm_b=xm_b,
         xn_b=xn_b,
-        rmnc_b=rmnc_b,
-        zmns_b=zmns_b,
-        numns_b=numns_b,
-        d_rmnc_b_d_s=d_rmnc_b_d_s,
-        d_zmns_b_d_s=d_zmns_b_d_s,
-        d_numns_b_d_s=d_numns_b_d_s,
-        gmnc_b=gmnc_b,
-        bmnc_b=bmnc_b,
-        d_bmnc_b_d_s=d_bmnc_b_d_s,
-        theta_b=theta_b,
-        phi_b=phi_b,
-        flipit=bool(flipit),
+        rmnc_b=profiles.rmnc_b,
+        zmns_b=profiles.zmns_b,
+        numns_b=profiles.numns_b,
+        d_rmnc_b_d_s=profiles.d_rmnc_b_d_s,
+        d_zmns_b_d_s=profiles.d_zmns_b_d_s,
+        d_numns_b_d_s=profiles.d_numns_b_d_s,
+        gmnc_b=profiles.gmnc_b,
+        bmnc_b=profiles.bmnc_b,
+        d_bmnc_b_d_s=profiles.d_bmnc_b_d_s,
+        theta_b=coords.theta_b,
+        phi_b=coords.phi_b,
+        flipit=coords.flipit,
         tensors=tensors,
         R_b=tensors.R_b,
         Z_b=tensors.Z_b,
         nu_b=tensors.nu_b,
-        Vprime=gmnc_b[:, 0],
-        mnmax_b=rmnc_b.shape[1],
+        Vprime=profiles.gmnc_b[:, 0],
+        mnmax_b=profiles.rmnc_b.shape[1],
     )
 
 
