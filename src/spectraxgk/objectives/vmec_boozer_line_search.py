@@ -287,6 +287,80 @@ def _candidate_is_acceptable(
     return bool(candidate.passed and candidate.value < base_value - min_improvement)
 
 
+def _line_search_stop_outcome(
+    *,
+    delta: float,
+    best_value: float | None,
+    accepted_steps: int,
+    stop_reason: str,
+    sample_metadata: list[dict[str, object]],
+    n_samples: int,
+    row: dict[str, object],
+) -> _LineSearchStepOutcome:
+    return _LineSearchStepOutcome(
+        delta,
+        best_value,
+        accepted_steps,
+        stop_reason,
+        sample_metadata,
+        n_samples,
+        row,
+        True,
+    )
+
+
+def _evaluate_line_search_candidate(
+    finite_difference_report_fn: Any,
+    *,
+    delta: float,
+    probe: _LineSearchProbeResult,
+    best_value: float | None,
+    accepted_steps: int,
+    sample_metadata: list[dict[str, object]],
+    n_samples: int,
+    row: dict[str, object],
+    base_probe_kwargs: dict[str, Any],
+    update_step: float,
+    min_improvement: float,
+) -> _LineSearchStepOutcome:
+    next_delta = _candidate_delta(delta, probe.derivative, update_step)
+    candidate = _run_line_search_probe(
+        finite_difference_report_fn,
+        base_delta=next_delta,
+        base_probe_kwargs=base_probe_kwargs,
+        sample_metadata=sample_metadata,
+        n_samples=n_samples,
+    )
+    row["candidate_delta"] = next_delta
+    row["candidate_objective"] = candidate.value
+    if not _candidate_is_acceptable(
+        candidate,
+        base_value=probe.value,
+        min_improvement=min_improvement,
+    ):
+        return _line_search_stop_outcome(
+            delta=delta,
+            best_value=best_value,
+            accepted_steps=accepted_steps,
+            stop_reason="no_accepted_candidate",
+            sample_metadata=sample_metadata,
+            n_samples=n_samples,
+            row=row,
+        )
+
+    row["accepted"] = True
+    return _LineSearchStepOutcome(
+        next_delta,
+        candidate.value,
+        accepted_steps + 1,
+        "max_steps",
+        sample_metadata,
+        n_samples,
+        row,
+        False,
+    )
+
+
 def _run_one_line_search_step(
     finite_difference_report_fn: Any,
     *,
@@ -312,64 +386,38 @@ def _run_one_line_search_step(
     best_value = probe.value if best_value is None else best_value
     row = _line_search_history_row(step_index, delta, probe)
     if not probe.passed:
-        return _LineSearchStepOutcome(
-            delta,
-            best_value,
-            accepted_steps,
-            "finite_difference_gate_failed",
-            sample_metadata,
-            n_samples,
-            row,
-            True,
+        return _line_search_stop_outcome(
+            delta=delta,
+            best_value=best_value,
+            accepted_steps=accepted_steps,
+            stop_reason="finite_difference_gate_failed",
+            sample_metadata=sample_metadata,
+            n_samples=n_samples,
+            row=row,
         )
     if not np.isfinite(probe.derivative) or abs(probe.derivative) == 0.0:
-        return _LineSearchStepOutcome(
-            delta,
-            best_value,
-            accepted_steps,
-            "zero_or_nonfinite_derivative",
-            sample_metadata,
-            n_samples,
-            row,
-            True,
+        return _line_search_stop_outcome(
+            delta=delta,
+            best_value=best_value,
+            accepted_steps=accepted_steps,
+            stop_reason="zero_or_nonfinite_derivative",
+            sample_metadata=sample_metadata,
+            n_samples=n_samples,
+            row=row,
         )
 
-    next_delta = _candidate_delta(delta, probe.derivative, update_step)
-    candidate = _run_line_search_probe(
+    return _evaluate_line_search_candidate(
         finite_difference_report_fn,
-        base_delta=next_delta,
-        base_probe_kwargs=base_probe_kwargs,
+        delta=delta,
+        probe=probe,
+        best_value=best_value,
+        accepted_steps=accepted_steps,
         sample_metadata=sample_metadata,
         n_samples=n_samples,
-    )
-    row["candidate_delta"] = next_delta
-    row["candidate_objective"] = candidate.value
-    if not _candidate_is_acceptable(
-        candidate,
-        base_value=probe.value,
+        row=row,
+        base_probe_kwargs=base_probe_kwargs,
+        update_step=update_step,
         min_improvement=min_improvement,
-    ):
-        return _LineSearchStepOutcome(
-            delta,
-            best_value,
-            accepted_steps,
-            "no_accepted_candidate",
-            sample_metadata,
-            n_samples,
-            row,
-            True,
-        )
-
-    row["accepted"] = True
-    return _LineSearchStepOutcome(
-        next_delta,
-        candidate.value,
-        accepted_steps + 1,
-        "max_steps",
-        sample_metadata,
-        n_samples,
-        row,
-        False,
     )
 
 
