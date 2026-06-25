@@ -788,11 +788,13 @@ separately as a negative transfer audit: the reduced single-sample transport
 metric improves by `3.55%`, but the matched long-window `t=[350,700]`
 nonlinear ensemble comparison changes the mean heat flux from `9.833` to
 `9.891` (`-0.585%` relative reduction). That older candidate is not promoted
-as a nonlinear heat-flux optimum. The newer full max-mode-5 projected
-weight-`5e-4` and `1e-3` audits above are positive at one `(s, alpha, ky)` point,
-and the same redesign principle still applies before broad claims: cover three
-surfaces, two field-line labels, and three `ky` values before promoting a
-general turbulent-flux optimization result.
+as a nonlinear heat-flux optimum. The newer full max-mode-5 projected-weight
+single-point audits remain scoped candidate evidence only. The strict broad
+18-point matrix campaign did not promote a general optimized stellarator:
+accepted QA/ESS passed `9/18` samples, projected weight `1e-3` failed early with
+only `1/18` passing samples and mean reduction `0.748%`, and projected weight
+`5e-4` increased heat flux by `2.99%` on its first completed sample. Broad
+nonlinear turbulent-flux optimization is therefore deferred rather than claimed.
 
 The production nonlinear optimization guard below is the enforced claim
 boundary. It passes as a release-safety check because startup/reduced nonlinear
@@ -816,7 +818,9 @@ three surfaces, two field-line labels, and multiple `k_y` values.
 That broader gate is now reproducible with
 `tools/build_matched_nonlinear_transport_matrix.py`, which writes and reports
 the required 18-point matched baseline/candidate nonlinear matrix before any
-multi-surface turbulent-flux optimization language is allowed.
+multi-surface turbulent-flux optimization language is allowed. The current
+negative-evidence ledger is tracked at
+`docs/_static/broad_nonlinear_transport_matrix_negative_evidence.json`.
 
 For the next nonlinear optimizer campaign, the current `RBC(1,1)` landscape is
 used as a deterministic launch diagnostic from the strict max-mode-5 QA
