@@ -43,10 +43,10 @@ jobs:
           python tools/release/check_release_version.py
           python tools/release/check_package_architecture_manifest.py
           python tools/release/check_performance_optimization_manifest.py
-          python tools/check_parallel_scaling_artifacts.py
-          python tools/check_quasilinear_promotion_guardrails.py \
+          python tools/release/check_parallel_scaling_artifacts.py
+          python tools/release/check_quasilinear_promotion_guardrails.py \
             --out-json docs/_static/quasilinear_promotion_guardrails.json
-          python tools/check_vmec_boozer_differentiability_claim.py \
+          python tools/release/check_vmec_boozer_differentiability_claim.py \
             --out-json docs/_static/vmec_boozer_differentiability_claim_guard.json
           python tools/build_parallelization_completion_status.py \
             --out-prefix docs/_static/parallelization_completion_status \
@@ -438,7 +438,7 @@ jobs:
             --shard-manifest coverage-wide-shard-manifest.json \
             --fail-under 95 \
             --xml coverage-wide.xml
-          python tools/check_validation_coverage_manifest.py \
+          python tools/release/check_validation_coverage_manifest.py \
             --coverage-xml coverage-wide.xml \
             --enforce-package-coverage \
             --out-json docs/_static/validation_coverage_manifest_summary.json
@@ -495,8 +495,8 @@ jobs:
 
       - name: Build docs
         run: |
-          python tools/check_validation_coverage_manifest.py --out-json docs/_static/validation_coverage_manifest_summary.json
-          python tools/check_quasilinear_calibration_inputs.py \
+          python tools/release/check_validation_coverage_manifest.py --out-json docs/_static/validation_coverage_manifest_summary.json
+          python tools/release/check_quasilinear_calibration_inputs.py \
             --report docs/_static/quasilinear_cyclone_miller_train_holdout_report.json \
             --report docs/_static/quasilinear_hsx_train_holdout_report.json \
             --report docs/_static/quasilinear_w7x_train_holdout_report.json \
