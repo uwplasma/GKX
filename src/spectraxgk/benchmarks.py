@@ -68,7 +68,7 @@ from spectraxgk.validation.benchmarks.reference import (
     load_kbm_reference,
     load_tem_reference,
 )
-from spectraxgk.validation.benchmarks.solver_policy import (
+from spectraxgk.validation.benchmarks.defaults import (
     KBM_EXPLICIT_SOLVER_LOCK,
     KBM_EXPLICIT_SOLVER_LOCK_TOL,
     _kbm_use_multi_target_krylov,

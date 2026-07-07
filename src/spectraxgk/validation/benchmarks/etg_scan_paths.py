@@ -21,7 +21,7 @@ from spectraxgk.diagnostics.growth_rates import (
     _select_fit_signal_auto,
 )
 from spectraxgk.validation.benchmarks.scan import indexed_float_value
-from spectraxgk.validation.benchmarks.solver_policy import _midplane_index
+from spectraxgk.validation.benchmarks.defaults import _midplane_index
 from spectraxgk.linear import integrate_linear, integrate_linear_diagnostics
 from spectraxgk.solvers.linear.krylov import dominant_eigenpair
 from spectraxgk.solvers.time.diffrax import integrate_linear_diffrax_streaming

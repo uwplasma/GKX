@@ -42,7 +42,7 @@ from spectraxgk.validation.benchmarks.kbm_beta_solver_paths import (
 )
 from spectraxgk.validation.benchmarks.initialization import _build_initial_condition
 from spectraxgk.validation.benchmarks.reference import LinearRunResult, LinearScanResult
-from spectraxgk.validation.benchmarks.solver_policy import (
+from spectraxgk.validation.benchmarks.defaults import (
     _kbm_use_multi_target_krylov,
     _midplane_index,
     select_kbm_solver_auto,
