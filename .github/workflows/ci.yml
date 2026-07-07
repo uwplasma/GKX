@@ -38,7 +38,7 @@ jobs:
 
       - name: Repository size manifest
         run: |
-          python tools/check_repository_size_manifest.py
+          python tools/release/check_repository_size_manifest.py
           python tools/check_release_artifact_manifest.py
           python tools/check_release_version.py
           python tools/check_package_architecture_manifest.py
