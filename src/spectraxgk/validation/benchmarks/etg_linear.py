@@ -37,7 +37,7 @@ from spectraxgk.diagnostics.growth_rates import (
 from spectraxgk.validation.benchmarks.initialization import _build_initial_condition
 from spectraxgk.validation.benchmarks.defaults import LinearRunResult, LinearScanResult
 from spectraxgk.validation.benchmarks.defaults import _midplane_index
-from spectraxgk.validation.benchmarks.species import (
+from spectraxgk.validation.benchmarks.defaults import (
     _electron_only_params,
     _two_species_params,
 )

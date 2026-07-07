@@ -75,7 +75,7 @@ from spectraxgk.validation.benchmarks.defaults import (
     _midplane_index,
     select_kbm_solver_auto,
 )
-from spectraxgk.validation.benchmarks.species import (
+from spectraxgk.validation.benchmarks.defaults import (
     REFERENCE_DAMP_ENDS_AMP,
     REFERENCE_DAMP_ENDS_WIDTHFRAC,
     REFERENCE_NU_HYPER_L,

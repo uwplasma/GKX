@@ -37,7 +37,7 @@ from spectraxgk.diagnostics.growth_rates import (
 from spectraxgk.validation.benchmarks.initialization import _build_initial_condition
 from spectraxgk.validation.benchmarks.defaults import CycloneRunResult, CycloneScanResult
 from spectraxgk.validation.benchmarks.defaults import _midplane_index
-from spectraxgk.validation.benchmarks.species import (
+from spectraxgk.validation.benchmarks.defaults import (
     REFERENCE_DAMP_ENDS_AMP,
     REFERENCE_DAMP_ENDS_WIDTHFRAC,
     _apply_reference_hypercollisions,

@@ -32,7 +32,7 @@ from spectraxgk.validation.benchmarks.initialization import (
 from spectraxgk.validation.benchmarks.defaults import LinearRunResult
 from spectraxgk.validation.benchmarks.scan import scan_window_valid
 from spectraxgk.validation.benchmarks.defaults import _midplane_index
-from spectraxgk.validation.benchmarks.species import (
+from spectraxgk.validation.benchmarks.defaults import (
     _apply_reference_hypercollisions,
     _linked_boundary_end_damping,
     _two_species_params,

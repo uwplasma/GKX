@@ -28,7 +28,7 @@ from spectraxgk.diagnostics.growth_rates import _normalize_growth_rate
 from spectraxgk.validation.benchmarks.initialization import _build_initial_condition
 from spectraxgk.validation.benchmarks.defaults import LinearRunResult, LinearScanResult
 from spectraxgk.validation.benchmarks.defaults import _midplane_index
-from spectraxgk.validation.benchmarks.species import _two_species_params
+from spectraxgk.validation.benchmarks.defaults import _two_species_params
 from spectraxgk.validation.benchmarks.scan import (
     normalize_solver_key,
     resolve_scan_mode_method,

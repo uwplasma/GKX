@@ -45,7 +45,7 @@ from spectraxgk.validation.benchmarks.scan import (
     should_use_ky_batch,
 )
 from spectraxgk.validation.benchmarks.defaults import _midplane_index
-from spectraxgk.validation.benchmarks.species import (
+from spectraxgk.validation.benchmarks.defaults import (
     _apply_reference_hypercollisions,
     _linked_boundary_end_damping,
     _two_species_params,
