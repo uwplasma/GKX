@@ -42,10 +42,10 @@ jobs:
             --out-json /tmp/quasilinear_promotion_guardrails.json
           python tools/release/check_vmec_boozer_differentiability_claim.py \
             --out-json docs/_static/vmec_boozer_differentiability_claim_guard.json
-          python tools/build_parallelization_completion_status.py \
+          python tools/artifacts/build_parallelization_completion_status.py \
             --out-prefix /tmp/parallelization_completion_status \
             --skip-figures
-          python tools/build_technical_release_status.py \
+          python tools/artifacts/build_technical_release_status.py \
             --out-json /tmp/technical_release_status.json \
             --fail-under 98
           python tools/release/check_release_readiness.py \

@@ -520,7 +520,7 @@ def build_external_holdout_runbook(
         "acceptance_gate": _external_holdout_acceptance_gate(min_launch_gamma),
         "notes": (
             "Run the selected configurations on the large-run host, build a convergence gate with "
-            "tools/plot_external_vmec_nonlinear_convergence_gate.py, and admit the resulting transport "
+            "tools/artifacts/plot_external_vmec_nonlinear_convergence_gate.py, and admit the resulting transport "
             "window to quasilinear calibration only if the gate passes and the split is holdout."
         ),
     }
