@@ -137,15 +137,8 @@ jobs:
               tests/tools/artifacts/test_compress_release_previews.py
               tests/unit/quasilinear/test_quasilinear.py
               tests/validation/quasilinear/test_quasilinear_calibration.py
-              tests/tools/artifacts/test_plot_quasilinear_calibration.py
-              tests/tools/artifacts/test_plot_quasilinear_spectrum.py
-              tests/tools/artifacts/test_plot_quasilinear_spectrum_shape_gate.py
-              tests/tools/artifacts/test_plot_quasilinear_saturation_rule_sweep.py
-              tests/tools/artifacts/test_plot_quasilinear_shape_aware_saturation.py
-              tests/tools/artifacts/test_plot_quasilinear_candidate_uncertainty.py
-              tests/tools/artifacts/test_plot_quasilinear_dataset_sufficiency.py
+              tests/tools/artifacts/test_quasilinear_artifact_plots.py
               tests/tools/profiling/test_profile_quasilinear_uq_ensemble_scaling.py
-              tests/tools/artifacts/test_plot_quasilinear_uq_ensemble_scaling.py
               tests/validation/quasilinear/test_quasilinear_uq_ensemble_scaling_artifacts.py
               tests/integration/examples/test_quasilinear_implicit_sensitivity_demo.py
           - name: linear-core
