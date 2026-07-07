@@ -1,17 +1,12 @@
-"""Diagnostics for replicated nonlinear transport-window spread.
-
-The routines here are intentionally data-only. They consume already-generated
-ensemble JSON artifacts and classify why a replicated nonlinear window passed
-or failed before more GPU time is spent on follow-up runs.
-"""
+"""Diagnostics for replicated nonlinear transport-window spread."""
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Mapping, Sequence
+from typing import Any
 import math
 import re
-
 
 _STATE_RE = re.compile(r"(?:^|_)(baseline|plus_delta|minus_delta)(?:_|$)")
 _SEED_RE = re.compile(r"seed(\d+)")

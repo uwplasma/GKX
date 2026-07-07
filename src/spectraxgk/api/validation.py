@@ -37,7 +37,7 @@ from spectraxgk.diagnostics.transport_windows import (
 from spectraxgk.diagnostics.transport_windows import (
     nonlinear_window_stats_promotion_ready,
 )
-from spectraxgk.validation.nonlinear_transport.optimization_guard import (
+from spectraxgk.diagnostics.nonlinear_transport_optimization import (
     ProductionNonlinearOptimizationGuardConfig,
     matched_optimized_transport_report,
     optimized_equilibrium_transport_report,
