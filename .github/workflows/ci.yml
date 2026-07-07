@@ -54,7 +54,7 @@ jobs:
           python tools/build_technical_release_status.py \
             --out-json docs/_static/technical_release_status.json \
             --fail-under 98
-          python tools/check_release_readiness.py \
+          python tools/release/check_release_readiness.py \
             --out-json docs/_static/release_readiness.json
 
   mypy:
