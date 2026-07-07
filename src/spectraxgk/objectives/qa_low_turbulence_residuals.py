@@ -18,7 +18,7 @@ from spectraxgk.objectives.qa_low_turbulence_model import (
     qa_low_turbulence_observables,
 )
 from spectraxgk.objectives.stellarator import PARAMETER_NAMES, _validate_params
-from spectraxgk.validation.autodiff import (
+from spectraxgk.objectives.autodiff_validation import (
     autodiff_finite_difference_report,
     covariance_diagnostics,
 )

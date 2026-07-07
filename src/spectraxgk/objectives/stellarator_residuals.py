@@ -19,7 +19,7 @@ from spectraxgk.objectives.stellarator_reduced import (
     nonlinear_heat_flux_trace,
     nonlinear_heat_flux_window_metrics,
 )
-from spectraxgk.validation.autodiff import (
+from spectraxgk.objectives.autodiff_validation import (
     autodiff_finite_difference_report,
     covariance_diagnostics,
 )

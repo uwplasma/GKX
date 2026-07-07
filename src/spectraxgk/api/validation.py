@@ -68,7 +68,7 @@ from spectraxgk.diagnostics.validation_gates import (
     observed_order_gate_report,
     zonal_response_gate_report,
 )
-from spectraxgk.validation.autodiff import (
+from spectraxgk.objectives.autodiff_validation import (
     autodiff_finite_difference_report,
     central_finite_difference_jacobian,
     covariance_diagnostics,

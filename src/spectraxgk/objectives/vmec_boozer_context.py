@@ -27,7 +27,7 @@ from spectraxgk.objectives.vmec_state import (
 from spectraxgk.operators.linear.cache import build_linear_cache
 from spectraxgk.operators.linear.rhs import linear_rhs_cached
 from spectraxgk.diagnostics.quasilinear_transport import effective_kperp2, phi_norm2
-from spectraxgk.validation.autodiff import explicit_complex_operator_matrix
+from spectraxgk.objectives.autodiff_validation import explicit_complex_operator_matrix
 
 
 def _load_vmec_boozer_example(case_name: str) -> tuple[Any, Any, Any, Any]:

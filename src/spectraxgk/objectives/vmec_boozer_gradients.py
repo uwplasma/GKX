@@ -9,7 +9,7 @@ from typing import Any
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.validation.autodiff import implicit_eigenpair_observable_sensitivity_report
+from spectraxgk.objectives.autodiff_validation import implicit_eigenpair_observable_sensitivity_report
 from spectraxgk.objectives.geometry import _objective_gate_rows
 from spectraxgk.objectives.nonlinear_window import (
     _reduced_nonlinear_window_metrics_from_linear_observables,

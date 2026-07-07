@@ -49,7 +49,7 @@ from spectraxgk.objectives.vmec_boozer import (
     vmec_boozer_solver_objective_table_with_metadata_from_state,
 )
 from spectraxgk.parallel import independent_map
-from spectraxgk.validation.autodiff import autodiff_finite_difference_report
+from spectraxgk.objectives.autodiff_validation import autodiff_finite_difference_report
 
 
 @dataclass(frozen=True)

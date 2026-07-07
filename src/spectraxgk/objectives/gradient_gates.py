@@ -8,7 +8,7 @@ from typing import Any, Mapping
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.validation.autodiff import (
+from spectraxgk.objectives.autodiff_validation import (
     explicit_complex_operator_matrix,
     implicit_eigenpair_observable_sensitivity_report,
 )

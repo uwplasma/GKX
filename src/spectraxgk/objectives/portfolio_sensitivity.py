@@ -17,7 +17,7 @@ from spectraxgk.objectives.portfolio_contracts import (
     aggregate_objective_portfolio,
     validate_objective_portfolio_contract,
 )
-from spectraxgk.validation.autodiff import autodiff_finite_difference_report, covariance_diagnostics
+from spectraxgk.objectives.autodiff_validation import autodiff_finite_difference_report, covariance_diagnostics
 
 
 @dataclass(frozen=True)
