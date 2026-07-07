@@ -111,18 +111,18 @@ jobs:
         shard:
           - name: fundamentals-core
             files: >-
-              tests/test_analysis.py
-              tests/test_auto_fit_signal.py
-              tests/test_basis.py
-              tests/test_config.py
-              tests/test_geometry.py
-              tests/test_grids.py
-              tests/test_gyroaverage.py
-              tests/test_normalization.py
-              tests/test_operators.py
-              tests/test_plotting.py
-              tests/test_species.py
-              tests/test_io.py
+              tests/unit/diagnostics/test_analysis.py
+              tests/unit/diagnostics/test_auto_fit_signal.py
+              tests/unit/core/test_basis.py
+              tests/unit/core/test_config.py
+              tests/unit/geometry/test_geometry.py
+              tests/unit/core/test_grids.py
+              tests/unit/operators/test_gyroaverage.py
+              tests/unit/core/test_normalization.py
+              tests/unit/operators/test_operators.py
+              tests/unit/diagnostics/test_plotting.py
+              tests/unit/core/test_species.py
+              tests/unit/core/test_io.py
           - name: release-artifacts
             files: >-
               tests/release/test_audit_repository_size.py
@@ -135,7 +135,7 @@ jobs:
               tests/release/test_check_quasilinear_calibration_inputs.py
               tests/tools/artifacts/test_compress_docs_previews.py
               tests/tools/artifacts/test_compress_release_previews.py
-              tests/test_quasilinear.py
+              tests/unit/quasilinear/test_quasilinear.py
               tests/test_quasilinear_calibration.py
               tests/tools/artifacts/test_plot_quasilinear_calibration.py
               tests/tools/artifacts/test_plot_quasilinear_spectrum.py
@@ -150,44 +150,44 @@ jobs:
               tests/test_quasilinear_implicit_sensitivity_demo.py
           - name: linear-core
             files: >-
-              tests/test_linear.py
-              tests/test_full_operator.py
-              tests/test_terms_assembly.py
-              tests/test_terms_fields.py
-              tests/test_terms_integrators.py
-              tests/test_terms_operators.py
-              tests/test_terms_validation.py
-              tests/test_linear_krylov_core.py
+              tests/unit/linear/test_linear.py
+              tests/unit/operators/test_full_operator.py
+              tests/unit/operators/test_terms_assembly.py
+              tests/unit/operators/test_terms_fields.py
+              tests/unit/operators/test_terms_integrators.py
+              tests/unit/operators/test_terms_operators.py
+              tests/unit/operators/test_terms_validation.py
+              tests/unit/solvers/test_linear_krylov_core.py
           - name: runtime-core
             files: >-
-              tests/test_diffrax_integrators.py
-              tests/test_diffrax_integrators_core.py
+              tests/unit/solvers/test_diffrax_integrators.py
+              tests/unit/solvers/test_diffrax_integrators_core.py
               tests/test_runtime_config.py
-              tests/test_runtime_helpers.py
+              tests/integration/runtime/test_runtime_helpers.py
               tests/test_runtime_runner.py
-              tests/test_runners.py
+              tests/unit/solvers/test_runners.py
               tests/test_cli.py
-              tests/test_example_smoke.py
+              tests/integration/examples/test_example_smoke.py
           - name: nonlinear-core
             files: >-
-              tests/test_nonlinear.py
-              tests/test_nonlinear_exb.py
-              tests/test_hyperdiffusion.py
-              tests/test_gx_consistency.py
-              tests/test_runtime_diagnostics.py
+              tests/unit/nonlinear/test_nonlinear.py
+              tests/unit/nonlinear/test_nonlinear_exb.py
+              tests/unit/operators/test_hyperdiffusion.py
+              tests/validation/benchmarks/test_gx_consistency.py
+              tests/integration/runtime/test_runtime_diagnostics.py
           - name: parallel-autodiff
             files: >-
-              tests/test_parallel.py
+              tests/unit/parallel/test_parallel.py
               tests/test_parallelization_examples.py
               tests/tools/artifacts/test_build_parallelization_completion_status.py
-              tests/test_sharding.py
-              tests/test_sharded_integrators.py
+              tests/unit/parallel/test_sharding.py
+              tests/unit/solvers/test_sharded_integrators.py
               tests/tools/artifacts/test_generate_parallel_ky_scan_gate.py
               tests/tools/artifacts/test_gate_laguerre_nonlinear_modes.py
               tests/release/test_performance_optimization_manifest.py
               tests/tools/profiling/test_profile_nonlinear_sharding.py
               tests/test_nonlinear_sharding_artifacts.py
-              tests/test_autodiff_validation.py
+              tests/unit/objectives/test_autodiff_validation.py
               tests/test_differentiable_geometry_bridge.py
 
     steps:
@@ -264,10 +264,10 @@ jobs:
         run: |
           pytest -q \
             tests/test_cli.py \
-            tests/test_plotting.py \
-            tests/test_runtime_artifacts.py \
-            tests/test_secondary.py \
-            tests/test_analysis.py \
+            tests/unit/diagnostics/test_plotting.py \
+            tests/integration/runtime/test_runtime_artifacts.py \
+            tests/unit/nonlinear/test_secondary.py \
+            tests/unit/diagnostics/test_analysis.py \
             --maxfail=1 --disable-warnings \
             --cov=spectraxgk \
             --cov-report=xml:coverage-fast.xml \
@@ -570,13 +570,13 @@ jobs:
           SPECTRAX_X64: "1"
         run: |
           pytest -q \
-            tests/test_terms_assembly.py \
-            tests/test_terms_operators.py \
-            tests/test_terms_fields.py \
-            tests/test_terms_integrators.py \
-            tests/test_terms_validation.py \
-            tests/test_nonlinear_exb.py \
-            tests/test_nonlinear.py \
+            tests/unit/operators/test_terms_assembly.py \
+            tests/unit/operators/test_terms_operators.py \
+            tests/unit/operators/test_terms_fields.py \
+            tests/unit/operators/test_terms_integrators.py \
+            tests/unit/operators/test_terms_validation.py \
+            tests/unit/nonlinear/test_nonlinear_exb.py \
+            tests/unit/nonlinear/test_nonlinear.py \
             --maxfail=1 --disable-warnings \
             --cov=src/spectraxgk/terms \
             --cov-fail-under=90
@@ -588,9 +588,9 @@ jobs:
           SPECTRAX_X64: "1"
         run: |
           pytest -q \
-            tests/test_linear_krylov_core.py \
-            tests/test_diffrax_integrators.py \
-            tests/test_diffrax_integrators_core.py \
+            tests/unit/solvers/test_linear_krylov_core.py \
+            tests/unit/solvers/test_diffrax_integrators.py \
+            tests/unit/solvers/test_diffrax_integrators_core.py \
             --maxfail=1 --disable-warnings \
             --cov=src/spectraxgk \
             --cov-report=xml:coverage-core.xml \
