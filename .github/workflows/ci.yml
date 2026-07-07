@@ -182,7 +182,7 @@ jobs:
               tests/tools/artifacts/test_build_parallelization_completion_status.py
               tests/unit/parallel/test_sharding.py
               tests/unit/solvers/test_sharded_integrators.py
-              tests/tools/artifacts/test_generate_parallel_ky_scan_gate.py
+              tests/tools/artifacts/test_parallel_identity_gate_artifacts.py
               tests/tools/artifacts/test_gate_laguerre_nonlinear_modes.py
               tests/release/test_performance_optimization_manifest.py
               tests/tools/profiling/test_profile_nonlinear_sharding.py
