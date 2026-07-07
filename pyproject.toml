@@ -89,6 +89,8 @@ markers = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["E402"]
+"tools/**/*.py" = ["E402"]
 "tests/*.py" = ["E402"]
 "tools/*.py" = ["E402"]
 

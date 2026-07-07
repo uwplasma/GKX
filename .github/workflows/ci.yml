@@ -125,27 +125,27 @@ jobs:
               tests/test_io.py
           - name: release-artifacts
             files: >-
-              tests/test_audit_repository_size.py
-              tests/test_check_repository_size_manifest.py
-              tests/test_check_release_artifact_manifest.py
-              tests/test_check_release_readiness.py
-              tests/test_build_technical_release_status.py
-              tests/test_release_scope_docs.py
-              tests/test_check_release_version.py
-              tests/test_check_quasilinear_calibration_inputs.py
-              tests/test_compress_docs_previews.py
-              tests/test_compress_release_previews.py
+              tests/release/test_audit_repository_size.py
+              tests/release/test_check_repository_size_manifest.py
+              tests/release/test_check_release_artifact_manifest.py
+              tests/release/test_check_release_readiness.py
+              tests/release/test_build_technical_release_status.py
+              tests/release/test_release_scope_docs.py
+              tests/release/test_check_release_version.py
+              tests/release/test_check_quasilinear_calibration_inputs.py
+              tests/tools/artifacts/test_compress_docs_previews.py
+              tests/tools/artifacts/test_compress_release_previews.py
               tests/test_quasilinear.py
               tests/test_quasilinear_calibration.py
-              tests/test_plot_quasilinear_calibration.py
-              tests/test_plot_quasilinear_spectrum.py
-              tests/test_plot_quasilinear_spectrum_shape_gate.py
-              tests/test_plot_quasilinear_saturation_rule_sweep.py
-              tests/test_plot_quasilinear_shape_aware_saturation.py
-              tests/test_plot_quasilinear_candidate_uncertainty.py
-              tests/test_plot_quasilinear_dataset_sufficiency.py
-              tests/test_profile_quasilinear_uq_ensemble_scaling.py
-              tests/test_plot_quasilinear_uq_ensemble_scaling.py
+              tests/tools/artifacts/test_plot_quasilinear_calibration.py
+              tests/tools/artifacts/test_plot_quasilinear_spectrum.py
+              tests/tools/artifacts/test_plot_quasilinear_spectrum_shape_gate.py
+              tests/tools/artifacts/test_plot_quasilinear_saturation_rule_sweep.py
+              tests/tools/artifacts/test_plot_quasilinear_shape_aware_saturation.py
+              tests/tools/artifacts/test_plot_quasilinear_candidate_uncertainty.py
+              tests/tools/artifacts/test_plot_quasilinear_dataset_sufficiency.py
+              tests/tools/profiling/test_profile_quasilinear_uq_ensemble_scaling.py
+              tests/tools/artifacts/test_plot_quasilinear_uq_ensemble_scaling.py
               tests/test_quasilinear_uq_ensemble_scaling_artifacts.py
               tests/test_quasilinear_implicit_sensitivity_demo.py
           - name: linear-core
@@ -179,13 +179,13 @@ jobs:
             files: >-
               tests/test_parallel.py
               tests/test_parallelization_examples.py
-              tests/test_build_parallelization_completion_status.py
+              tests/tools/artifacts/test_build_parallelization_completion_status.py
               tests/test_sharding.py
               tests/test_sharded_integrators.py
-              tests/test_generate_parallel_ky_scan_gate.py
-              tests/test_gate_laguerre_nonlinear_modes.py
-              tests/test_performance_optimization_manifest.py
-              tests/test_profile_nonlinear_sharding.py
+              tests/tools/generators/test_generate_parallel_ky_scan_gate.py
+              tests/tools/generators/test_gate_laguerre_nonlinear_modes.py
+              tests/release/test_performance_optimization_manifest.py
+              tests/tools/profiling/test_profile_nonlinear_sharding.py
               tests/test_nonlinear_sharding_artifacts.py
               tests/test_autodiff_validation.py
               tests/test_differentiable_geometry_bridge.py
