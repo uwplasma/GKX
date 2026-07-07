@@ -29,7 +29,7 @@ from spectraxgk.validation.benchmarks.harness_timeseries import (
     late_time_window,
     load_diagnostic_time_series,
 )
-from spectraxgk.validation.gates import (
+from spectraxgk.diagnostics.validation_gates import (
     BranchContinuationMetrics,
     DiagnosticTimeSeries,
     EigenfunctionComparisonMetrics,

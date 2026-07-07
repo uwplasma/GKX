@@ -51,7 +51,7 @@ from spectraxgk.validation.external_holdout import (
     external_vmec_family,
     read_external_holdout_screen,
 )
-from spectraxgk.validation.gates import (
+from spectraxgk.diagnostics.validation_gates import (
     BranchContinuationMetrics,
     GateReport,
     LateTimeLinearMetrics,

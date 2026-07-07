@@ -7,7 +7,7 @@ from pathlib import Path
 import netCDF4 as nc
 import numpy as np
 
-from spectraxgk.validation.gates import DiagnosticTimeSeries
+from spectraxgk.diagnostics.validation_gates import DiagnosticTimeSeries
 
 
 def _decode_netcdf_values(var) -> np.ndarray:

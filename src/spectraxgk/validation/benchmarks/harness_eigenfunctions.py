@@ -7,7 +7,7 @@ import json
 
 import numpy as np
 
-from spectraxgk.validation.gates import (
+from spectraxgk.diagnostics.validation_gates import (
     EigenfunctionComparisonMetrics,
     EigenfunctionReferenceBundle,
 )

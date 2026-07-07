@@ -12,7 +12,7 @@ from spectraxgk.validation.benchmarks.harness_timeseries import (
     _leading_window,
     _tail_window,
 )
-from spectraxgk.validation.gates import ZonalFlowResponseMetrics
+from spectraxgk.diagnostics.validation_gates import ZonalFlowResponseMetrics
 
 
 @dataclass(frozen=True)

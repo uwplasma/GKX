@@ -11,7 +11,7 @@ from spectraxgk.validation.benchmarks.harness_timeseries import (
     _tail_stats,
     _tail_window,
 )
-from spectraxgk.validation.gates import (
+from spectraxgk.diagnostics.validation_gates import (
     BranchContinuationMetrics,
     LateTimeLinearMetrics,
     NonlinearHeatFluxConvergenceMetrics,
