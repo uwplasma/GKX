@@ -35,7 +35,7 @@ jobs:
         run: |
           python tools/release/check_repository_size_manifest.py
           python tools/check_release_artifact_manifest.py
-          python tools/check_package_architecture_manifest.py
+          python tools/release/check_package_architecture_manifest.py
           python tools/check_performance_optimization_manifest.py
           python tools/check_parallel_scaling_artifacts.py
           python tools/check_quasilinear_promotion_guardrails.py \
