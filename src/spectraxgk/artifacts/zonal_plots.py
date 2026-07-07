@@ -226,7 +226,7 @@ def zonal_flow_response_figure(
 ) -> tuple[plt.Figure, np.ndarray]:
     """Render a zonal-flow response trace and its envelope summary."""
 
-    from spectraxgk.validation.benchmarks.harness import zonal_flow_response_metrics
+    from spectraxgk.benchmarks import zonal_flow_response_metrics
 
     set_plot_style()
     t_arr, resp = _validated_zonal_trace(t, response)

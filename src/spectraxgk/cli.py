@@ -10,7 +10,7 @@ from typing import Any, Sequence
 import jax.numpy as jnp
 
 from spectraxgk.diagnostics.modes import extract_eigenfunction, extract_mode_time_series
-from spectraxgk.validation.benchmarks.harness import normalize_eigenfunction, run_linear_scan
+from spectraxgk.benchmarks import normalize_eigenfunction, run_linear_scan
 from spectraxgk.benchmarks import (
     ETGBaseCase,
     CycloneBaseCase,

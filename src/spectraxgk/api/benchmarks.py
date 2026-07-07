@@ -24,7 +24,7 @@ from spectraxgk.benchmarks import (
     run_cyclone_linear,
     run_cyclone_scan,
 )
-from spectraxgk.validation.benchmarks.harness import (
+from spectraxgk.benchmarks import (
     ScanAndModeResult,
     branch_continuity_metrics,
     normalize_eigenfunction,
