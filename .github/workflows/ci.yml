@@ -136,7 +136,7 @@ jobs:
               tests/tools/artifacts/test_compress_docs_previews.py
               tests/tools/artifacts/test_compress_release_previews.py
               tests/unit/quasilinear/test_quasilinear.py
-              tests/test_quasilinear_calibration.py
+              tests/validation/quasilinear/test_quasilinear_calibration.py
               tests/tools/artifacts/test_plot_quasilinear_calibration.py
               tests/tools/artifacts/test_plot_quasilinear_spectrum.py
               tests/tools/artifacts/test_plot_quasilinear_spectrum_shape_gate.py
@@ -146,8 +146,8 @@ jobs:
               tests/tools/artifacts/test_plot_quasilinear_dataset_sufficiency.py
               tests/tools/profiling/test_profile_quasilinear_uq_ensemble_scaling.py
               tests/tools/artifacts/test_plot_quasilinear_uq_ensemble_scaling.py
-              tests/test_quasilinear_uq_ensemble_scaling_artifacts.py
-              tests/test_quasilinear_implicit_sensitivity_demo.py
+              tests/validation/quasilinear/test_quasilinear_uq_ensemble_scaling_artifacts.py
+              tests/integration/examples/test_quasilinear_implicit_sensitivity_demo.py
           - name: linear-core
             files: >-
               tests/unit/linear/test_linear.py
@@ -178,7 +178,7 @@ jobs:
           - name: parallel-autodiff
             files: >-
               tests/unit/parallel/test_parallel.py
-              tests/test_parallelization_examples.py
+              tests/unit/parallel/test_parallelization_examples.py
               tests/tools/artifacts/test_build_parallelization_completion_status.py
               tests/unit/parallel/test_sharding.py
               tests/unit/solvers/test_sharded_integrators.py
@@ -186,9 +186,9 @@ jobs:
               tests/tools/artifacts/test_gate_laguerre_nonlinear_modes.py
               tests/release/test_performance_optimization_manifest.py
               tests/tools/profiling/test_profile_nonlinear_sharding.py
-              tests/test_nonlinear_sharding_artifacts.py
+              tests/unit/parallel/test_nonlinear_sharding_artifacts.py
               tests/unit/objectives/test_autodiff_validation.py
-              tests/test_differentiable_geometry_bridge.py
+              tests/unit/objectives/test_differentiable_geometry_bridge.py
 
     steps:
       - uses: actions/checkout@v6
