@@ -21,20 +21,18 @@ from spectraxgk.diagnostics.modes import (
     save_eigenfunction_reference_bundle,
 )
 from spectraxgk.validation.benchmarks.harness_scan import ScanAndModeResult
-from spectraxgk.validation.benchmarks.harness_timeseries import (
+from spectraxgk.diagnostics.validation_gates import (
     _analytic_signal,
     _explicit_time_window,
     _leading_window,
-    infer_triple_dealiased_ny,
-    late_time_window,
-    load_diagnostic_time_series,
-)
-from spectraxgk.diagnostics.validation_gates import (
     BranchContinuationMetrics,
     DiagnosticTimeSeries,
     EigenfunctionComparisonMetrics,
     EigenfunctionReferenceBundle,
     GateReport as GateReport,
+    infer_triple_dealiased_ny,
+    late_time_window,
+    load_diagnostic_time_series,
     LateTimeLinearMetrics,
     NonlinearHeatFluxConvergenceMetrics,
     NonlinearWindowMetrics,

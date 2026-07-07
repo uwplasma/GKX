@@ -7,11 +7,9 @@ from dataclasses import dataclass
 import numpy as np
 
 from spectraxgk.diagnostics.analysis import extract_mode_time_series, fit_growth_rate
-from spectraxgk.validation.benchmarks.harness_timeseries import (
+from spectraxgk.diagnostics.validation_gates import (
     _tail_stats,
     _tail_window,
-)
-from spectraxgk.diagnostics.validation_gates import (
     BranchContinuationMetrics,
     LateTimeLinearMetrics,
     NonlinearHeatFluxConvergenceMetrics,

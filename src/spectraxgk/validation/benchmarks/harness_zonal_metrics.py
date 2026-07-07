@@ -6,13 +6,13 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from spectraxgk.validation.benchmarks.harness_timeseries import (
+from spectraxgk.diagnostics.validation_gates import (
+    ZonalFlowResponseMetrics,
     _analytic_signal,
     _explicit_time_window,
     _leading_window,
     _tail_window,
 )
-from spectraxgk.diagnostics.validation_gates import ZonalFlowResponseMetrics
 
 
 @dataclass(frozen=True)
