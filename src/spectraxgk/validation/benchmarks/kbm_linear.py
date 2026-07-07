@@ -25,7 +25,7 @@ from spectraxgk.validation.benchmarks.defaults import (
     KBM_OMEGA_STAR_SCALE,
     KBM_RHO_STAR,
 )
-from spectraxgk.validation.benchmarks.scan import _resolve_streaming_window
+from spectraxgk.validation.benchmarks.defaults import _resolve_streaming_window
 from spectraxgk.diagnostics.growth_rates import (
     _extract_mode_only_signal,
     _normalize_growth_rate,
@@ -43,7 +43,7 @@ from spectraxgk.validation.benchmarks.defaults import (
     _linked_boundary_end_damping,
     _two_species_params,
 )
-from spectraxgk.validation.benchmarks.scan import (
+from spectraxgk.validation.benchmarks.defaults import (
     ScanFitWindowPolicy,
     apply_auto_fit_scan_policy,
     indexed_float_value,

@@ -25,7 +25,7 @@ from spectraxgk.validation.benchmarks.defaults import (
     CYCLONE_OMEGA_STAR_SCALE,
     CYCLONE_RHO_STAR,
 )
-from spectraxgk.validation.benchmarks.scan import (
+from spectraxgk.validation.benchmarks.defaults import (
     _iter_ky_batches,
     _resolve_streaming_window,
 )
@@ -42,7 +42,7 @@ from spectraxgk.validation.benchmarks.defaults import (
     REFERENCE_DAMP_ENDS_WIDTHFRAC,
     _apply_reference_hypercollisions,
 )
-from spectraxgk.validation.benchmarks.scan import (
+from spectraxgk.validation.benchmarks.defaults import (
     ScanFitWindowPolicy,
     apply_auto_fit_scan_policy,
     indexed_float_value,

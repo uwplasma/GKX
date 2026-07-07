@@ -30,7 +30,7 @@ from spectraxgk.validation.benchmarks.defaults import (
     _kinetic_reference_init_cfg,
 )
 from spectraxgk.validation.benchmarks.defaults import LinearRunResult
-from spectraxgk.validation.benchmarks.scan import scan_window_valid
+from spectraxgk.validation.benchmarks.defaults import scan_window_valid
 from spectraxgk.validation.benchmarks.defaults import _midplane_index
 from spectraxgk.validation.benchmarks.defaults import (
     _apply_reference_hypercollisions,

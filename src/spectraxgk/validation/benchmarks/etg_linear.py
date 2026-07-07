@@ -24,7 +24,7 @@ from spectraxgk.validation.benchmarks.defaults import (
     ETG_OMEGA_STAR_SCALE,
     ETG_RHO_STAR,
 )
-from spectraxgk.validation.benchmarks.scan import (
+from spectraxgk.validation.benchmarks.defaults import (
     _iter_ky_batches,
     _resolve_streaming_window,
 )
@@ -41,7 +41,7 @@ from spectraxgk.validation.benchmarks.defaults import (
     _electron_only_params,
     _two_species_params,
 )
-from spectraxgk.validation.benchmarks.scan import (
+from spectraxgk.validation.benchmarks.defaults import (
     ScanFitWindowPolicy,
     apply_auto_fit_scan_policy,
     indexed_float_value,

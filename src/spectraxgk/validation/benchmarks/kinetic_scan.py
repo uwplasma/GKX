@@ -22,7 +22,7 @@ from spectraxgk.validation.benchmarks.defaults import (
     KINETIC_OMEGA_STAR_SCALE,
     KINETIC_RHO_STAR,
 )
-from spectraxgk.validation.benchmarks.scan import (
+from spectraxgk.validation.benchmarks.defaults import (
     _iter_ky_batches,
     _resolve_streaming_window,
 )
@@ -36,7 +36,7 @@ from spectraxgk.validation.benchmarks.defaults import (
     _kinetic_reference_init_cfg,
 )
 from spectraxgk.validation.benchmarks.defaults import LinearScanResult
-from spectraxgk.validation.benchmarks.scan import (
+from spectraxgk.validation.benchmarks.defaults import (
     ScanFitWindowPolicy,
     indexed_float_value,
     normalize_fit_signal,

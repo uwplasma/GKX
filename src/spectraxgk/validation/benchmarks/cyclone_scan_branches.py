@@ -9,9 +9,9 @@ import jax.numpy as jnp
 import numpy as np
 
 from spectraxgk.diagnostics.analysis import ModeSelection, ModeSelectionBatch
-from spectraxgk.validation.benchmarks.scan import _iter_ky_batches
+from spectraxgk.validation.benchmarks.defaults import _iter_ky_batches
 from spectraxgk.validation.benchmarks.defaults import CycloneScanResult
-from spectraxgk.validation.benchmarks.scan import indexed_float_value
+from spectraxgk.validation.benchmarks.defaults import indexed_float_value
 
 @dataclass(frozen=True)
 class CycloneScanHooks:

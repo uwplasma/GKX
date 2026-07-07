@@ -17,7 +17,7 @@ from spectraxgk.diagnostics.analysis import (
     fit_growth_rate_auto,
     select_ky_index,
 )
-from spectraxgk.validation.benchmarks.scan import _iter_ky_batches, _resolve_streaming_window
+from spectraxgk.validation.benchmarks.defaults import _iter_ky_batches, _resolve_streaming_window
 from spectraxgk.validation.benchmarks.defaults import (
     TEM_KRYLOV_DEFAULT,
     TEM_OMEGA_D_SCALE,
@@ -29,7 +29,7 @@ from spectraxgk.validation.benchmarks.defaults import _build_initial_condition
 from spectraxgk.validation.benchmarks.defaults import LinearRunResult, LinearScanResult
 from spectraxgk.validation.benchmarks.defaults import _midplane_index
 from spectraxgk.validation.benchmarks.defaults import _two_species_params
-from spectraxgk.validation.benchmarks.scan import (
+from spectraxgk.validation.benchmarks.defaults import (
     ScanFitWindowPolicy,
     normalize_solver_key,
     resolve_scan_mode_method,
