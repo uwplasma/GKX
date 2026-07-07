@@ -26,7 +26,7 @@ jobs:
 
       - name: Verify release version
         run: |
-          python tools/check_release_version.py \
+          python tools/release/check_release_version.py \
             --tag "${GITHUB_REF_NAME}" \
             --require-tag \
             --check-pypi
@@ -34,9 +34,9 @@ jobs:
       - name: Release readiness gates
         run: |
           python tools/release/check_repository_size_manifest.py
-          python tools/check_release_artifact_manifest.py
+          python tools/release/check_release_artifact_manifest.py
           python tools/release/check_package_architecture_manifest.py
-          python tools/check_performance_optimization_manifest.py
+          python tools/release/check_performance_optimization_manifest.py
           python tools/check_parallel_scaling_artifacts.py
           python tools/check_quasilinear_promotion_guardrails.py \
             --out-json /tmp/quasilinear_promotion_guardrails.json
