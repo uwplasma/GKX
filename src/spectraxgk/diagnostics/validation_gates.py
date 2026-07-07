@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import numpy as np
+
+_MetricHook = Callable[..., Any]
 
 
 @dataclass(frozen=True)
@@ -628,8 +632,8 @@ def branch_continuity_gate_report(
 
 # Optional hooks preserve benchmark-harness monkeypatch seams without importing
 # diagnostics.analysis during validation-gates import.
-extract_mode_time_series = None
-fit_growth_rate = None
+extract_mode_time_series: _MetricHook | None = None
+fit_growth_rate: _MetricHook | None = None
 
 
 def _metric_extract_mode_time_series(*args, **kwargs):
