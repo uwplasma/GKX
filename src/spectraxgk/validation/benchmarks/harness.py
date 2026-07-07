@@ -11,7 +11,8 @@ from spectraxgk.diagnostics.analysis import (
     fit_growth_rate,
     fit_growth_rate_auto,
 )
-from spectraxgk.validation.benchmarks import harness_metrics as _harness_metrics
+import spectraxgk.diagnostics.validation_gates as _gate_metrics
+import spectraxgk.diagnostics.zonal_validation as _zonal_validation
 from spectraxgk.validation.benchmarks import harness_scan as _harness_scan
 from spectraxgk.diagnostics.modes import (
     compare_eigenfunctions,
@@ -53,8 +54,8 @@ from spectraxgk.diagnostics.validation_gates import (
 
 
 def _sync_metric_hooks() -> None:
-    _harness_metrics.extract_mode_time_series = extract_mode_time_series
-    _harness_metrics.fit_growth_rate = fit_growth_rate
+    _gate_metrics.extract_mode_time_series = extract_mode_time_series
+    _gate_metrics.fit_growth_rate = fit_growth_rate
 
 
 def _sync_scan_hooks() -> None:
@@ -67,20 +68,20 @@ def _sync_scan_hooks() -> None:
 def zonal_flow_response_metrics(*args: Any, **kwargs: Any) -> ZonalFlowResponseMetrics:
     """Estimate residual level and GAM envelope metrics from a zonal response."""
 
-    return _harness_metrics.zonal_flow_response_metrics(*args, **kwargs)
+    return _zonal_validation.zonal_flow_response_metrics(*args, **kwargs)
 
 
 def late_time_linear_metrics(*args: Any, **kwargs: Any) -> LateTimeLinearMetrics:
     """Return late-time growth/frequency metrics from a linear result."""
 
     _sync_metric_hooks()
-    return _harness_metrics.late_time_linear_metrics(*args, **kwargs)
+    return _gate_metrics.late_time_linear_metrics(*args, **kwargs)
 
 
 def windowed_nonlinear_metrics(*args: Any, **kwargs: Any) -> NonlinearWindowMetrics:
     """Return late-window transport metrics from nonlinear diagnostics."""
 
-    return _harness_metrics.windowed_nonlinear_metrics(*args, **kwargs)
+    return _gate_metrics.windowed_nonlinear_metrics(*args, **kwargs)
 
 
 def nonlinear_heat_flux_convergence_metrics(
@@ -88,19 +89,19 @@ def nonlinear_heat_flux_convergence_metrics(
 ) -> NonlinearHeatFluxConvergenceMetrics:
     """Summarize post-transient heat-flux average stability."""
 
-    return _harness_metrics.nonlinear_heat_flux_convergence_metrics(*args, **kwargs)
+    return _gate_metrics.nonlinear_heat_flux_convergence_metrics(*args, **kwargs)
 
 
 def estimate_observed_order(*args: Any, **kwargs: Any) -> ObservedOrderMetrics:
     """Estimate observed order from step-size refinements."""
 
-    return _harness_metrics.estimate_observed_order(*args, **kwargs)
+    return _gate_metrics.estimate_observed_order(*args, **kwargs)
 
 
 def branch_continuity_metrics(*args: Any, **kwargs: Any) -> BranchContinuationMetrics:
     """Compute branch-continuity diagnostics for a linear scan."""
 
-    return _harness_metrics.branch_continuity_metrics(*args, **kwargs)
+    return _gate_metrics.branch_continuity_metrics(*args, **kwargs)
 
 
 def run_linear_scan(*args: Any, **kwargs: Any):
