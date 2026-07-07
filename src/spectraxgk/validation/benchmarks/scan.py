@@ -14,7 +14,7 @@ import numpy as np
 
 from spectraxgk.diagnostics.analysis import fit_growth_rate, fit_growth_rate_auto
 from spectraxgk.validation.benchmarks.batching import _is_array_like
-from spectraxgk.validation.benchmarks.fit_signals import _normalize_growth_rate
+from spectraxgk.diagnostics.growth_rates import _normalize_growth_rate
 from spectraxgk.operators.linear.params import LinearParams
 
 

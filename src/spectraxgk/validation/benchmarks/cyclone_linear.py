@@ -29,7 +29,7 @@ from spectraxgk.validation.benchmarks.batching import (
     _iter_ky_batches,
     _resolve_streaming_window,
 )
-from spectraxgk.validation.benchmarks.fit_signals import (
+from spectraxgk.diagnostics.growth_rates import (
     _normalize_growth_rate,
     _select_fit_signal,
     _select_fit_signal_auto,

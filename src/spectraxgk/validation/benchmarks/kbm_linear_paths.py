@@ -14,7 +14,7 @@ from spectraxgk.diagnostics.analysis import (
     windowed_growth_rate_from_omega_series,
 )
 from spectraxgk.validation.benchmarks.defaults import KBM_KRYLOV_DEFAULT
-from spectraxgk.validation.benchmarks.fit_signals import _normalize_growth_rate
+from spectraxgk.diagnostics.growth_rates import _normalize_growth_rate
 from spectraxgk.validation.benchmarks.reference import LinearRunResult
 from spectraxgk.validation.benchmarks.scan import scan_window_valid
 from spectraxgk.validation.benchmarks.solver_policy import _kbm_use_multi_target_krylov

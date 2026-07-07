@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from typing import Tuple
-
 import numpy as np
 
 from spectraxgk.diagnostics.modes import ModeSelection, extract_mode_time_series
@@ -115,4 +114,3 @@ def windowed_growth_rate_from_omega_series(
     istart = int(len(gamma) * navg_fraction)
     istart = max(0, min(istart, len(gamma) - 1))
     return float(np.mean(gamma[istart:])), float(np.mean(omega[istart:])), gamma, omega
-

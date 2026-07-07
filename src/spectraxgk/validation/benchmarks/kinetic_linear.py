@@ -21,7 +21,7 @@ from spectraxgk.validation.benchmarks.defaults import (
     KINETIC_OMEGA_STAR_SCALE,
     KINETIC_RHO_STAR,
 )
-from spectraxgk.validation.benchmarks.fit_signals import (
+from spectraxgk.diagnostics.growth_rates import (
     _normalize_growth_rate,
     _select_fit_signal,
 )

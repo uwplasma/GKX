@@ -24,7 +24,7 @@ from spectraxgk.validation.benchmarks.defaults import (
     TEM_OMEGA_STAR_SCALE,
     TEM_RHO_STAR,
 )
-from spectraxgk.validation.benchmarks.fit_signals import _normalize_growth_rate
+from spectraxgk.diagnostics.growth_rates import _normalize_growth_rate
 from spectraxgk.validation.benchmarks.initialization import _build_initial_condition
 from spectraxgk.validation.benchmarks.reference import LinearRunResult, LinearScanResult
 from spectraxgk.validation.benchmarks.solver_policy import _midplane_index
