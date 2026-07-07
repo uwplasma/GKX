@@ -5,29 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass, fields, replace
 from typing import Any, Callable
 
+import jax.numpy as jnp
 import numpy as np
 
 from spectraxgk.diagnostics.analysis import ModeSelection, ModeSelectionBatch
 from spectraxgk.validation.benchmarks.scan import _iter_ky_batches
 from spectraxgk.validation.benchmarks.defaults import CycloneScanResult
 from spectraxgk.validation.benchmarks.scan import indexed_float_value
-from spectraxgk.validation.benchmarks.cyclone_scan_explicit import (
-    choose_reselected_frequency,
-    explicit_reselection_target,
-    explicit_time_config_for_scan_point,
-    krylov_reselected_frequency,
-    run_explicit_time_cyclone_scan,
-)
-from spectraxgk.validation.benchmarks.cyclone_scan_krylov import (
-    run_krylov_cyclone_scan,
-)
-from spectraxgk.validation.benchmarks.cyclone_scan_seed import (
-    reduced_seed_from_explicit_trace,
-    seed_from_explicit_trace,
-    seed_shift,
-    use_explicit_seed,
-)
-
 
 @dataclass(frozen=True)
 class CycloneScanHooks:
@@ -57,6 +41,941 @@ class CycloneScanHooks:
     resolve_streaming_window: Callable[..., tuple[float, float]]
     midplane_index: Callable[..., int]
     resolve_cfl_fac: Callable[..., float]
+
+
+# Krylov and explicit-time branch policies are local here so Cyclone scan
+# behavior has one patchable owner during validation.
+def seed_from_explicit_trace(
+    G0: Any,
+    grid: Any,
+    cache: Any,
+    params: Any,
+    geom: Any,
+    terms: Any,
+    cfg_use: Any,
+    hooks: Any,
+    *,
+    show_progress: bool,
+) -> tuple[bool, bool, float, float]:
+    """Estimate the starting branch from a short explicit trace."""
+
+    gamma_seed = 0.0
+    omega_seed = 0.0
+    try:
+        t_seed = min(150.0, float(cfg_use.power_dt) * 15000.0)
+        explicit_time_cfg = hooks.explicit_time_config(
+            dt=float(cfg_use.power_dt),
+            t_max=t_seed,
+            sample_stride=1,
+            fixed_dt=True,
+        )
+        t_short, phi_seed, _g_t, _o_t = hooks.integrate_linear_explicit(
+            jnp.array(G0),
+            grid,
+            cache,
+            params,
+            geom,
+            explicit_time_cfg,
+            terms=terms,
+            mode_method="z_index",
+            show_progress=show_progress,
+        )
+        sel = hooks.mode_selection(
+            ky_index=0,
+            kx_index=0,
+            z_index=hooks.midplane_index(grid),
+        )
+        gamma_seed, omega_seed, _g, _o, _t_mid = (
+            hooks.instantaneous_growth_rate_from_phi(
+                phi_seed,
+                t_short,
+                sel,
+                navg_fraction=0.5,
+                mode_method="z_index",
+            )
+        )
+        omega_ok = np.isfinite(omega_seed) and abs(omega_seed) > 1.0e-8
+        seed_ok = omega_ok and np.isfinite(gamma_seed) and gamma_seed > 0.0
+    except Exception:
+        seed_ok = False
+        omega_ok = False
+    return seed_ok, omega_ok, float(gamma_seed), float(omega_seed)
+
+
+def reduced_seed_from_explicit_trace(
+    grid: Any,
+    geom: Any,
+    params: Any,
+    terms: Any,
+    cfg_use: Any,
+    hooks: Any,
+    *,
+    init_cfg: Any,
+    n_laguerre: int,
+    n_hermite: int,
+    show_progress: bool,
+) -> tuple[bool, bool, float, float]:
+    """Build a smaller velocity-space seed trace when the full seed fails."""
+
+    n_laguerre_seed = min(n_laguerre, 16)
+    n_hermite_seed = min(n_hermite, 12)
+    try:
+        cache_seed = hooks.build_linear_cache(
+            grid,
+            geom,
+            params,
+            n_laguerre_seed,
+            n_hermite_seed,
+        )
+        G0_seed = hooks.build_initial_condition(
+            grid,
+            geom,
+            ky_index=0,
+            kx_index=0,
+            Nl=n_laguerre_seed,
+            Nm=n_hermite_seed,
+            init_cfg=init_cfg,
+        )
+    except Exception:
+        return False, False, 0.0, 0.0
+    return seed_from_explicit_trace(
+        G0_seed,
+        grid,
+        cache_seed,
+        params,
+        geom,
+        terms,
+        cfg_use,
+        hooks,
+        show_progress=show_progress,
+    )
+
+
+def seed_shift(
+    prev_eig: complex | None,
+    *,
+    omega_ok: bool,
+    seed_ok: bool,
+    gamma_seed: float,
+    omega_seed: float,
+) -> complex | None:
+    """Choose the Krylov shift implied by continuation or a trace seed."""
+
+    if prev_eig is not None and np.isfinite(prev_eig):
+        return prev_eig
+    if omega_ok:
+        return complex(float(gamma_seed) if seed_ok else 0.0, float(-omega_seed))
+    return None
+
+
+def use_explicit_seed(
+    gamma: float,
+    omega: float,
+    *,
+    seed_ok: bool,
+    gamma_seed: float,
+    omega_seed: float,
+) -> bool:
+    """Return whether the explicit trace should override the eigen-solver result."""
+
+    if not seed_ok:
+        return False
+    seed_strong = (gamma_seed > 0.0) and (abs(omega_seed) > 1.0e-6)
+    if not seed_strong:
+        return False
+    omega_tol = 0.15 * max(abs(omega_seed), 1.0e-6)
+    gamma_tol = 0.15 * max(abs(gamma_seed), 1.0e-6)
+    return (
+        not np.isfinite(gamma)
+        or not np.isfinite(omega)
+        or (gamma_seed > 0.0 and gamma < 0.0)
+        or abs(omega - omega_seed) > omega_tol
+        or abs(gamma - gamma_seed) > gamma_tol
+    )
+
+def explicit_time_config_for_scan_point(
+    *,
+    dt_i: float,
+    steps_i: int,
+    reference_aligned: bool,
+    time_cfg: Any | None,
+    time_base: Any,
+    hooks: Any,
+) -> Any:
+    """Build the explicit-time configuration for one ky scan point."""
+
+    t_max_val = dt_i * float(steps_i)
+    if reference_aligned and time_cfg is None:
+        fixed_dt_i = True
+        dt_min_i = dt_i
+        dt_max_i: float | None = dt_i
+        cfl_i = 1.0
+        cfl_fac_i = 1.0
+    else:
+        fixed_dt_i = bool(time_base.fixed_dt)
+        dt_min_i = float(time_base.dt_min)
+        dt_max_i = None if time_base.dt_max is None else float(time_base.dt_max)
+        cfl_i = float(time_base.cfl)
+        cfl_fac_i = hooks.resolve_cfl_fac(str(time_base.method), time_base.cfl_fac)
+    return hooks.explicit_time_config(
+        dt=dt_i,
+        t_max=t_max_val,
+        sample_stride=1,
+        fixed_dt=fixed_dt_i,
+        dt_min=dt_min_i,
+        dt_max=dt_max_i,
+        cfl=cfl_i,
+        cfl_fac=cfl_fac_i,
+    )
+
+
+def explicit_reselection_target(
+    *,
+    explicit_growth_ok: bool,
+    prev_omega: float | None,
+    prev_prev_omega: float | None,
+) -> float | None:
+    """Predict the next branch frequency used when explicit fits jump branch."""
+
+    target_omega = (
+        prev_omega if (explicit_growth_ok and prev_omega is not None) else None
+    )
+    if (
+        target_omega is not None
+        and prev_prev_omega is not None
+        and prev_omega is not None
+        and prev_omega > prev_prev_omega
+    ):
+        target_omega = prev_omega + (prev_omega - prev_prev_omega)
+    return target_omega
+
+
+def krylov_reselected_frequency(
+    G0: Any,
+    cache: Any,
+    params: Any,
+    terms: Any,
+    kcfg: Any,
+    hooks: Any,
+    diagnostic_norm: str,
+) -> tuple[float, float]:
+    """Re-evaluate a scan point with Krylov mode selection after a bad fit."""
+
+    eig, _vec = hooks.dominant_eigenpair(
+        jnp.array(G0),
+        cache,
+        params,
+        terms=terms,
+        krylov_dim=kcfg.krylov_dim,
+        restarts=kcfg.restarts,
+        omega_min_factor=kcfg.omega_min_factor,
+        omega_target_factor=kcfg.omega_target_factor,
+        omega_cap_factor=kcfg.omega_cap_factor,
+        omega_sign=kcfg.omega_sign,
+        method=kcfg.method,
+        power_iters=kcfg.power_iters,
+        power_dt=kcfg.power_dt,
+        shift=kcfg.shift,
+        shift_source=kcfg.shift_source,
+        shift_tol=kcfg.shift_tol,
+        shift_maxiter=kcfg.shift_maxiter,
+        shift_restart=kcfg.shift_restart,
+        shift_solve_method=kcfg.shift_solve_method,
+        shift_preconditioner=kcfg.shift_preconditioner,
+        shift_selection=kcfg.shift_selection,
+        mode_family=kcfg.mode_family,
+        fallback_method=kcfg.fallback_method,
+        fallback_real_floor=kcfg.fallback_real_floor,
+    )
+    gamma_k = float(np.real(eig))
+    omega_k = float(abs(-np.imag(eig)))
+    return hooks.normalize_growth_rate(gamma_k, omega_k, params, diagnostic_norm)
+
+
+def choose_reselected_frequency(
+    *,
+    gamma: float,
+    omega: float,
+    gamma_k: float,
+    omega_k: float,
+    target_omega: float,
+) -> tuple[float, float]:
+    """Pick the frequency closest to the continuation target without growth jumps."""
+
+    candidates: list[tuple[float, float]] = [(float(gamma), float(abs(omega)))]
+    gamma_base = abs(float(gamma))
+    gamma_delta_limit = max(3.0 * gamma_base, gamma_base + 0.05, 1.0e-3)
+    if (
+        np.isfinite(gamma_k)
+        and np.isfinite(omega_k)
+        and gamma_k > 0.0
+        and abs(gamma_k - float(gamma)) <= gamma_delta_limit
+    ):
+        candidates.append((gamma_k, omega_k))
+
+    def _score(candidate: tuple[float, float]) -> float:
+        g_val, o_val = candidate
+        penalty = 0.0 if g_val > 0.0 else 1.0e3
+        return penalty + abs(o_val - target_omega)
+
+    return min(candidates, key=_score)
+
+
+@dataclass(frozen=True)
+class _CycloneExplicitPoint:
+    """Prepared state for one ky point in the explicit Cyclone scan."""
+
+    index: int
+    ky_value: float
+    grid: Any
+    state: Any
+    cache: Any
+    dt: float
+    steps: int
+
+
+@dataclass(frozen=True)
+class _CycloneExplicitFit:
+    """Raw explicit-time fit before optional branch reselection."""
+
+    gamma: float
+    omega: float
+    growth_ok: bool
+
+
+@dataclass
+class _CycloneExplicitContinuation:
+    """Previous-frequency state used by explicit branch reselection."""
+
+    prev_omega: float | None = None
+    prev_prev_omega: float | None = None
+
+    def update(self, omega: float) -> None:
+        self.prev_prev_omega = self.prev_omega
+        self.prev_omega = float(omega)
+
+
+def _prepare_explicit_scan_point(
+    *,
+    index: int,
+    ky_values: np.ndarray,
+    grid_full: Any,
+    geom: Any,
+    params: Any,
+    init_cfg: Any,
+    n_laguerre: int,
+    n_hermite: int,
+    dt: float | np.ndarray,
+    steps: int | np.ndarray,
+    hooks: Any,
+) -> _CycloneExplicitPoint:
+    """Build grid, initial condition, cache, and time step for one ky point."""
+
+    ky_val = float(ky_values[index])
+    ky_index = hooks.select_ky_index(np.asarray(grid_full.ky), ky_val)
+    grid = hooks.select_ky_grid(grid_full, ky_index)
+    state = hooks.build_initial_condition(
+        grid,
+        geom,
+        ky_index=0,
+        kx_index=0,
+        Nl=n_laguerre,
+        Nm=n_hermite,
+        init_cfg=init_cfg,
+    )
+    cache = hooks.build_linear_cache(grid, geom, params, n_laguerre, n_hermite)
+    dt_i = float(dt[index]) if isinstance(dt, np.ndarray) else float(dt)
+    steps_i = int(steps[index]) if isinstance(steps, np.ndarray) else int(steps)
+    return _CycloneExplicitPoint(
+        index=index,
+        ky_value=ky_val,
+        grid=grid,
+        state=state,
+        cache=cache,
+        dt=dt_i,
+        steps=steps_i,
+    )
+
+
+def _fit_explicit_scan_point(
+    point: _CycloneExplicitPoint,
+    *,
+    geom: Any,
+    params: Any,
+    terms: Any,
+    explicit_time_cfg: Any,
+    diagnostic_norm: str,
+    hooks: Any,
+    show_progress: bool,
+) -> _CycloneExplicitFit:
+    """Integrate one explicit-time trace and fit its instantaneous growth."""
+
+    t, phi_t, _g_t, _o_t = hooks.integrate_linear_explicit(
+        jnp.array(point.state),
+        point.grid,
+        point.cache,
+        params,
+        geom,
+        explicit_time_cfg,
+        terms=terms,
+        mode_method="z_index",
+        show_progress=show_progress,
+    )
+    sel_local = hooks.mode_selection(
+        ky_index=0,
+        kx_index=0,
+        z_index=hooks.midplane_index(point.grid),
+    )
+    try:
+        gamma, omega, _g, _o, _t_mid = hooks.instantaneous_growth_rate_from_phi(
+            phi_t,
+            t,
+            sel_local,
+            navg_fraction=0.5,
+            mode_method="z_index",
+        )
+        gamma, omega = hooks.normalize_growth_rate(
+            gamma,
+            omega,
+            params,
+            diagnostic_norm,
+        )
+        return _CycloneExplicitFit(float(gamma), float(omega), True)
+    except ValueError:
+        return _CycloneExplicitFit(float("nan"), float("nan"), False)
+
+
+def _explicit_scan_needs_reselection(
+    *,
+    reference_aligned: bool,
+    fit: _CycloneExplicitFit,
+    continuation: _CycloneExplicitContinuation,
+    index: int,
+) -> bool:
+    """Return whether explicit branch history suggests a Krylov reselection."""
+
+    return (
+        (reference_aligned and fit.growth_ok)
+        and continuation.prev_omega is not None
+        and continuation.prev_omega > 0.0
+        and (
+            fit.omega <= 0.0
+            or ((index >= 2) and (fit.omega < 0.85 * continuation.prev_omega))
+        )
+    )
+
+
+def _reselected_explicit_scan_fit(
+    point: _CycloneExplicitPoint,
+    fit: _CycloneExplicitFit,
+    *,
+    params: Any,
+    terms: Any,
+    kcfg: Any,
+    diagnostic_norm: str,
+    continuation: _CycloneExplicitContinuation,
+    hooks: Any,
+) -> _CycloneExplicitFit:
+    """Apply Krylov reselection when explicit-time branch tracking fails."""
+
+    target_omega = explicit_reselection_target(
+        explicit_growth_ok=fit.growth_ok,
+        prev_omega=continuation.prev_omega,
+        prev_prev_omega=continuation.prev_prev_omega,
+    )
+    gamma_k, omega_k = krylov_reselected_frequency(
+        point.state,
+        point.cache,
+        params,
+        terms,
+        kcfg,
+        hooks,
+        diagnostic_norm,
+    )
+    if not fit.growth_ok:
+        return _CycloneExplicitFit(gamma_k, omega_k, True)
+    assert target_omega is not None
+    gamma, omega = choose_reselected_frequency(
+        gamma=fit.gamma,
+        omega=fit.omega,
+        gamma_k=gamma_k,
+        omega_k=omega_k,
+        target_omega=target_omega,
+    )
+    return _CycloneExplicitFit(gamma, omega, True)
+
+
+def _final_explicit_scan_fit(
+    point: _CycloneExplicitPoint,
+    fit: _CycloneExplicitFit,
+    *,
+    params: Any,
+    terms: Any,
+    kcfg: Any,
+    diagnostic_norm: str,
+    reference_aligned: bool,
+    continuation: _CycloneExplicitContinuation,
+    hooks: Any,
+) -> _CycloneExplicitFit:
+    """Resolve sign convention and optional branch reselection for one point."""
+
+    if reference_aligned and continuation.prev_omega is None and fit.omega < 0.0:
+        fit = _CycloneExplicitFit(fit.gamma, abs(fit.omega), fit.growth_ok)
+    if _explicit_scan_needs_reselection(
+        reference_aligned=reference_aligned,
+        fit=fit,
+        continuation=continuation,
+        index=point.index,
+    ) or not fit.growth_ok:
+        return _reselected_explicit_scan_fit(
+            point,
+            fit,
+            params=params,
+            terms=terms,
+            kcfg=kcfg,
+            diagnostic_norm=diagnostic_norm,
+            continuation=continuation,
+            hooks=hooks,
+        )
+    return fit
+
+
+def _append_explicit_scan_point(
+    *,
+    point: _CycloneExplicitPoint,
+    geom: Any,
+    params: Any,
+    terms: Any,
+    time_cfg: Any | None,
+    time_base: Any,
+    kcfg: Any,
+    reference_aligned: bool,
+    diagnostic_norm: str,
+    continuation: _CycloneExplicitContinuation,
+    gamma_out: np.ndarray,
+    omega_out: np.ndarray,
+    hooks: Any,
+    show_progress: bool,
+) -> None:
+    """Evaluate one explicit scan point and update continuation/output arrays."""
+
+    explicit_time_cfg = explicit_time_config_for_scan_point(
+        dt_i=point.dt,
+        steps_i=point.steps,
+        reference_aligned=reference_aligned,
+        time_cfg=time_cfg,
+        time_base=time_base,
+        hooks=hooks,
+    )
+    fit = _fit_explicit_scan_point(
+        point,
+        geom=geom,
+        params=params,
+        terms=terms,
+        explicit_time_cfg=explicit_time_cfg,
+        diagnostic_norm=diagnostic_norm,
+        hooks=hooks,
+        show_progress=show_progress,
+    )
+    fit = _final_explicit_scan_fit(
+        point,
+        fit,
+        params=params,
+        terms=terms,
+        kcfg=kcfg,
+        diagnostic_norm=diagnostic_norm,
+        reference_aligned=reference_aligned,
+        continuation=continuation,
+        hooks=hooks,
+    )
+    gamma_out[point.index] = fit.gamma
+    omega_out[point.index] = fit.omega
+    continuation.update(fit.omega)
+
+
+def run_explicit_time_cyclone_scan(
+    *,
+    ky_values: np.ndarray,
+    grid_full: Any,
+    geom: Any,
+    params: Any,
+    terms: Any,
+    cfg: Any,
+    time_cfg: Any | None,
+    init_cfg: Any,
+    n_laguerre: int,
+    n_hermite: int,
+    dt: float | np.ndarray,
+    steps: int | np.ndarray,
+    krylov_cfg: Any | None,
+    krylov_default: Any,
+    reference_aligned: bool,
+    diagnostic_norm: str,
+    show_progress: bool,
+    hooks: Any,
+) -> Any:
+    """Run the reference-aligned explicit-time branch for a Cyclone ky scan."""
+
+    if ky_values.size == 0:
+        return hooks.cyclone_scan_result(
+            ky=ky_values,
+            gamma=np.array([]),
+            omega=np.array([]),
+        )
+
+    gamma_out = np.zeros_like(ky_values, dtype=float)
+    omega_out = np.zeros_like(ky_values, dtype=float)
+    continuation = _CycloneExplicitContinuation()
+    kcfg = krylov_cfg or krylov_default
+    time_base = time_cfg or cfg.time
+    for idx, _ky_val in enumerate(ky_values):
+        point = _prepare_explicit_scan_point(
+            index=idx,
+            ky_values=ky_values,
+            grid_full=grid_full,
+            geom=geom,
+            params=params,
+            init_cfg=init_cfg,
+            n_laguerre=n_laguerre,
+            n_hermite=n_hermite,
+            dt=dt,
+            steps=steps,
+            hooks=hooks,
+        )
+        _append_explicit_scan_point(
+            point=point,
+            geom=geom,
+            params=params,
+            terms=terms,
+            time_cfg=time_cfg,
+            time_base=time_base,
+            kcfg=kcfg,
+            reference_aligned=reference_aligned,
+            diagnostic_norm=diagnostic_norm,
+            continuation=continuation,
+            gamma_out=gamma_out,
+            omega_out=omega_out,
+            hooks=hooks,
+            show_progress=show_progress,
+        )
+    return hooks.cyclone_scan_result(ky=ky_values, gamma=gamma_out, omega=omega_out)
+
+def _empty_scan_result(ky_values: np.ndarray, hooks: Any) -> CycloneScanResult:
+    return hooks.cyclone_scan_result(
+        ky=ky_values,
+        gamma=np.array([]),
+        omega=np.array([]),
+    )
+
+
+@dataclass(frozen=True)
+class _CycloneKrylovPoint:
+    """Prepared state for one ky point in the Cyclone Krylov scan."""
+
+    index: int
+    ky_value: float
+    grid: Any
+    state: Any
+    cache: Any
+
+
+@dataclass(frozen=True)
+class _CycloneKrylovSeed:
+    """Explicit-trace seed information used to stabilize branch following."""
+
+    seed_ok: bool
+    omega_ok: bool
+    gamma: float
+    omega: float
+
+
+@dataclass
+class _CycloneKrylovContinuation:
+    """Mutable branch-following state carried between ky points."""
+
+    v_ref: Any = None
+    prev_eig: complex | None = None
+
+
+def _prepare_krylov_scan_point(
+    *,
+    index: int,
+    ky_values: np.ndarray,
+    grid_full: Any,
+    geom: Any,
+    params: Any,
+    init_cfg: Any,
+    n_laguerre: int,
+    n_hermite: int,
+    hooks: Any,
+) -> _CycloneKrylovPoint:
+    """Build grid, initial condition, and cache for one Cyclone scan point."""
+
+    ky_val = float(ky_values[index])
+    ky_index = hooks.select_ky_index(np.asarray(grid_full.ky), ky_val)
+    grid = hooks.select_ky_grid(grid_full, ky_index)
+    state = hooks.build_initial_condition(
+        grid,
+        geom,
+        ky_index=0,
+        kx_index=0,
+        Nl=n_laguerre,
+        Nm=n_hermite,
+        init_cfg=init_cfg,
+    )
+    cache = hooks.build_linear_cache(grid, geom, params, n_laguerre, n_hermite)
+    return _CycloneKrylovPoint(
+        index=index,
+        ky_value=ky_val,
+        grid=grid,
+        state=state,
+        cache=cache,
+    )
+
+
+def _explicit_seed_for_krylov_point(
+    point: _CycloneKrylovPoint,
+    *,
+    geom: Any,
+    params: Any,
+    terms: Any,
+    cfg_use: Any,
+    init_cfg: Any,
+    n_laguerre: int,
+    n_hermite: int,
+    prev_eig: complex | None,
+    hooks: Any,
+    show_progress: bool,
+) -> _CycloneKrylovSeed:
+    """Resolve the full or reduced explicit seed used by the Krylov branch."""
+
+    seed_ok = False
+    omega_ok = False
+    gamma_seed = 0.0
+    omega_seed = 0.0
+    if prev_eig is None:
+        seed_ok, omega_ok, gamma_seed, omega_seed = seed_from_explicit_trace(
+            point.state,
+            point.grid,
+            point.cache,
+            params,
+            geom,
+            terms,
+            cfg_use,
+            hooks,
+            show_progress=show_progress,
+        )
+    if not seed_ok:
+        seed_ok, omega_ok, gamma_seed, omega_seed = (
+            reduced_seed_from_explicit_trace(
+                point.grid,
+                geom,
+                params,
+                terms,
+                cfg_use,
+                hooks,
+                init_cfg=init_cfg,
+                n_laguerre=n_laguerre,
+                n_hermite=n_hermite,
+                show_progress=show_progress,
+            )
+        )
+    return _CycloneKrylovSeed(
+        seed_ok=bool(seed_ok),
+        omega_ok=bool(omega_ok),
+        gamma=float(gamma_seed),
+        omega=float(omega_seed),
+    )
+
+
+def _dominant_krylov_scan_pair(
+    point: _CycloneKrylovPoint,
+    *,
+    params: Any,
+    terms: Any,
+    cfg_use: Any,
+    continuation: _CycloneKrylovContinuation,
+    seed: _CycloneKrylovSeed,
+    hooks: Any,
+) -> tuple[Any, Any]:
+    """Run the dominant-eigenpair solve for one prepared Cyclone scan point."""
+
+    shift = seed_shift(
+        continuation.prev_eig,
+        omega_ok=seed.omega_ok,
+        seed_ok=seed.seed_ok,
+        gamma_seed=seed.gamma,
+        omega_seed=seed.omega,
+    )
+    return hooks.dominant_eigenpair(
+        point.state,
+        point.cache,
+        params,
+        terms=terms,
+        v_ref=continuation.v_ref,
+        select_overlap=continuation.v_ref is not None,
+        krylov_dim=cfg_use.krylov_dim,
+        restarts=cfg_use.restarts,
+        omega_min_factor=cfg_use.omega_min_factor,
+        omega_target_factor=cfg_use.omega_target_factor,
+        omega_cap_factor=cfg_use.omega_cap_factor,
+        omega_sign=cfg_use.omega_sign,
+        method=cfg_use.method,
+        power_iters=cfg_use.power_iters,
+        power_dt=cfg_use.power_dt,
+        shift=shift if shift is not None else cfg_use.shift,
+        shift_source=cfg_use.shift_source,
+        shift_tol=cfg_use.shift_tol,
+        shift_maxiter=cfg_use.shift_maxiter,
+        shift_restart=cfg_use.shift_restart,
+        shift_solve_method=cfg_use.shift_solve_method,
+        shift_preconditioner=cfg_use.shift_preconditioner,
+        shift_selection=cfg_use.shift_selection,
+        mode_family=cfg_use.mode_family,
+        fallback_method=cfg_use.fallback_method,
+        fallback_real_floor=cfg_use.fallback_real_floor,
+    )
+
+
+def _raw_krylov_scan_rates(
+    *,
+    eig: Any,
+    vec: Any,
+    seed: _CycloneKrylovSeed,
+    continuation: _CycloneKrylovContinuation,
+) -> tuple[float, float]:
+    """Return raw rates and update continuation before normalization."""
+
+    gamma = float(np.real(eig))
+    omega = float(-np.imag(eig))
+    if use_explicit_seed(
+        gamma,
+        omega,
+        seed_ok=seed.seed_ok,
+        gamma_seed=seed.gamma,
+        omega_seed=seed.omega,
+    ):
+        gamma = float(seed.gamma)
+        omega = float(seed.omega)
+    else:
+        continuation.v_ref = vec
+    continuation.prev_eig = complex(float(gamma), float(-omega))
+    return gamma, omega
+
+
+def _append_krylov_scan_point(
+    *,
+    point: _CycloneKrylovPoint,
+    geom: Any,
+    params: Any,
+    terms: Any,
+    cfg_use: Any,
+    init_cfg: Any,
+    n_laguerre: int,
+    n_hermite: int,
+    diagnostic_norm: str,
+    continuation: _CycloneKrylovContinuation,
+    gamma_out: np.ndarray,
+    omega_out: np.ndarray,
+    hooks: Any,
+    show_progress: bool,
+) -> None:
+    """Evaluate one ky point and write normalized scan outputs."""
+
+    seed = _explicit_seed_for_krylov_point(
+        point,
+        geom=geom,
+        params=params,
+        terms=terms,
+        cfg_use=cfg_use,
+        init_cfg=init_cfg,
+        n_laguerre=n_laguerre,
+        n_hermite=n_hermite,
+        prev_eig=continuation.prev_eig,
+        hooks=hooks,
+        show_progress=show_progress,
+    )
+    eig, vec = _dominant_krylov_scan_pair(
+        point,
+        params=params,
+        terms=terms,
+        cfg_use=cfg_use,
+        continuation=continuation,
+        seed=seed,
+        hooks=hooks,
+    )
+    gamma, omega = _raw_krylov_scan_rates(
+        eig=eig,
+        vec=vec,
+        seed=seed,
+        continuation=continuation,
+    )
+    gamma, omega = hooks.normalize_growth_rate(
+        gamma,
+        omega,
+        params,
+        diagnostic_norm,
+    )
+    gamma_out[point.index] = gamma
+    omega_out[point.index] = omega
+
+
+def run_krylov_cyclone_scan(
+    *,
+    ky_values: np.ndarray,
+    grid_full: Any,
+    geom: Any,
+    params: Any,
+    terms: Any,
+    init_cfg: Any,
+    n_laguerre: int,
+    n_hermite: int,
+    mode_follow: bool,
+    krylov_cfg: Any | None,
+    krylov_default: Any,
+    diagnostic_norm: str,
+    show_progress: bool,
+    hooks: Any,
+) -> CycloneScanResult:
+    """Run the Krylov branch-following path for a Cyclone ky scan."""
+
+    if ky_values.size == 0:
+        return _empty_scan_result(ky_values, hooks)
+
+    order = np.argsort(ky_values) if mode_follow else np.arange(ky_values.size)
+    gamma_out = np.zeros_like(ky_values, dtype=float)
+    omega_out = np.zeros_like(ky_values, dtype=float)
+    continuation = _CycloneKrylovContinuation()
+    cfg_use = krylov_cfg or krylov_default
+    for idx in order:
+        point = _prepare_krylov_scan_point(
+            index=int(idx),
+            ky_values=ky_values,
+            grid_full=grid_full,
+            geom=geom,
+            params=params,
+            init_cfg=init_cfg,
+            n_laguerre=n_laguerre,
+            n_hermite=n_hermite,
+            hooks=hooks,
+        )
+        _append_krylov_scan_point(
+            point=point,
+            geom=geom,
+            params=params,
+            terms=terms,
+            cfg_use=cfg_use,
+            init_cfg=init_cfg,
+            n_laguerre=n_laguerre,
+            n_hermite=n_hermite,
+            diagnostic_norm=diagnostic_norm,
+            continuation=continuation,
+            gamma_out=gamma_out,
+            omega_out=omega_out,
+            hooks=hooks,
+            show_progress=show_progress,
+        )
+    return hooks.cyclone_scan_result(ky=ky_values, gamma=gamma_out, omega=omega_out)
 
 
 def _valid_time_branch_growth(
