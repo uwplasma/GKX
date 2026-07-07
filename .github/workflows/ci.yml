@@ -162,11 +162,11 @@ jobs:
             files: >-
               tests/unit/solvers/test_diffrax_integrators.py
               tests/unit/solvers/test_diffrax_integrators_core.py
-              tests/test_runtime_config.py
+              tests/integration/runtime/test_runtime_config.py
               tests/integration/runtime/test_runtime_helpers.py
-              tests/test_runtime_runner.py
+              tests/integration/runtime/test_runtime_runner.py
               tests/unit/solvers/test_runners.py
-              tests/test_cli.py
+              tests/integration/runtime/test_cli.py
               tests/integration/examples/test_example_smoke.py
           - name: nonlinear-core
             files: >-
@@ -263,7 +263,7 @@ jobs:
           SPECTRAX_X64: "1"
         run: |
           pytest -q \
-            tests/test_cli.py \
+            tests/integration/runtime/test_cli.py \
             tests/unit/diagnostics/test_plotting.py \
             tests/integration/runtime/test_runtime_artifacts.py \
             tests/unit/nonlinear/test_secondary.py \
