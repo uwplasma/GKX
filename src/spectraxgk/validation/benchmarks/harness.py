@@ -13,7 +13,7 @@ from spectraxgk.diagnostics.analysis import (
 )
 from spectraxgk.validation.benchmarks import harness_metrics as _harness_metrics
 from spectraxgk.validation.benchmarks import harness_scan as _harness_scan
-from spectraxgk.validation.benchmarks.harness_eigenfunctions import (
+from spectraxgk.diagnostics.modes import (
     compare_eigenfunctions,
     load_eigenfunction_reference_bundle,
     normalize_eigenfunction,
