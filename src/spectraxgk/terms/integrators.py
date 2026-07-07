@@ -13,8 +13,8 @@ from spectraxgk.terms.config import FieldState, RHSFn
 
 _EXPLICIT_METHODS = {"euler", "rk2", "rk3", "rk3_classic", "rk3_heun", "rk4", "k10", "sspx3"}
 
-# Keep the SSPX3 coefficients in one importable location because the cETG and
-# runtime paths reuse the same low-storage update.
+# Keep the SSPX3 coefficients in one importable location for runtime paths
+# that reuse the same low-storage update.
 _SSPX3_ADT = float((1.0 / 6.0) ** (1.0 / 3.0))
 _SSPX3_WGTFAC = float((9.0 - 2.0 * (6.0 ** (2.0 / 3.0))) ** 0.5)
 _SSPX3_W1 = 0.5 * (_SSPX3_WGTFAC - 1.0)

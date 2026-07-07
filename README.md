@@ -1241,8 +1241,7 @@ A full-GK ETG nonlinear pilot lane is also available at
 pilot until its benchmark operating point, observable contract, and gate-indexed
 artifact are promoted.
 
-The reduced `cETG` example remains available as a separate reduced-model
-workflow; it is not the same thing as the full-GK ETG nonlinear lane.
+Reduced collisional ETG workflows have been retired from `main`; the maintained examples now use the full-GK runtime.
 
 ## Documentation
 

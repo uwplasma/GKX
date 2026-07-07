@@ -14,9 +14,6 @@ class RuntimeLinearDispatchDeps:
     """Patchable dependencies for one configured linear runtime run."""
 
     resolve_runtime_hl_dims: Callable[..., tuple[int, int]]
-    runtime_model_key: Callable[[RuntimeConfig], str]
-    run_cetg_linear_runtime: Callable[..., RuntimeLinearResult]
-    cetg_deps: Any
     run_full_linear_runtime: Callable[..., RuntimeLinearResult]
     full_deps: Any
 
@@ -54,25 +51,12 @@ def build_runtime_linear_dispatch_deps(scope: Any) -> RuntimeLinearDispatchDeps:
     """Build linear dispatch dependencies from a patchable runtime facade scope."""
 
     from spectraxgk.workflows.linear import FullLinearRuntimeDeps
-    from spectraxgk.workflows.reduced_models import CETGLinearRuntimeDeps
     from spectraxgk.workflows.runtime.diagnostics import (
         RuntimeQuasilinearFinalizationDeps,
     )
 
     return RuntimeLinearDispatchDeps(
         resolve_runtime_hl_dims=scope._resolve_runtime_hl_dims,
-        runtime_model_key=scope._runtime_model_key,
-        run_cetg_linear_runtime=scope.run_cetg_linear_runtime,
-        cetg_deps=CETGLinearRuntimeDeps(
-            build_runtime_geometry=scope.build_runtime_geometry,
-            validate_cetg_runtime_config=scope.validate_cetg_runtime_config,
-            build_initial_condition=scope._build_initial_condition,
-            build_runtime_term_config=scope.build_runtime_term_config,
-            build_cetg_model_params=scope.build_cetg_model_params,
-            integrate_cetg_explicit_diagnostics_state=scope.integrate_cetg_explicit_diagnostics_state,
-            fit_growth_rate_auto=scope.fit_growth_rate_auto,
-            fit_growth_rate=scope.fit_growth_rate,
-        ),
         run_full_linear_runtime=scope.run_full_linear_runtime,
         full_deps=FullLinearRuntimeDeps(
             build_runtime_geometry=scope.build_runtime_geometry,
@@ -110,45 +94,6 @@ def build_runtime_linear_dispatch_deps(scope: Any) -> RuntimeLinearDispatchDeps:
 def _runtime_linear_status(request: _RuntimeLinearRequest, message: str) -> None:
     if request.status_callback is not None:
         request.status_callback(message)
-
-
-def _reject_reduced_quasilinear_if_enabled(request: _RuntimeLinearRequest) -> None:
-    if bool(getattr(request.cfg.quasilinear, "enabled", False)):
-        raise NotImplementedError(
-            "quasilinear diagnostics are not yet validated for reduced_model='cetg'"
-        )
-
-
-def _run_reduced_linear_request(
-    request: _RuntimeLinearRequest,
-    *,
-    Nl_use: int,
-    Nm_use: int,
-) -> RuntimeLinearResult:
-    _reject_reduced_quasilinear_if_enabled(request)
-    return request.deps.run_cetg_linear_runtime(
-        request.cfg,
-        deps=request.deps.cetg_deps,
-        ky_target=request.ky_target,
-        Nl=Nl_use,
-        Nm=Nm_use,
-        solver=request.solver,
-        method=request.method,
-        dt=request.dt,
-        steps=request.steps,
-        sample_stride=request.sample_stride,
-        auto_window=request.auto_window,
-        tmin=request.tmin,
-        tmax=request.tmax,
-        window_fraction=request.window_fraction,
-        min_points=request.min_points,
-        start_fraction=request.start_fraction,
-        growth_weight=request.growth_weight,
-        require_positive=request.require_positive,
-        min_amp_fraction=request.min_amp_fraction,
-        return_state=request.return_state,
-        status_callback=request.status_callback,
-    )
 
 
 def _run_full_linear_request(
@@ -193,8 +138,6 @@ def _dispatch_runtime_linear_request(
         request.cfg, Nl=request.Nl, Nm=request.Nm
     )
     _runtime_linear_status(request, "building runtime geometry")
-    if request.deps.runtime_model_key(request.cfg) == "cetg":
-        return _run_reduced_linear_request(request, Nl_use=Nl_use, Nm_use=Nm_use)
     return _run_full_linear_request(request, Nl_use=Nl_use, Nm_use=Nm_use)
 
 
@@ -264,9 +207,6 @@ class RuntimeNonlinearDispatchDeps:
     """Patchable dependencies for one configured nonlinear runtime run."""
 
     resolve_runtime_hl_dims: Callable[..., tuple[int, int]]
-    runtime_model_key: Callable[[RuntimeConfig], str]
-    run_cetg_nonlinear_runtime: Callable[..., RuntimeNonlinearResult]
-    cetg_deps: Any
     run_full_nonlinear_runtime: Callable[..., RuntimeNonlinearResult]
     full_deps: Any
 
@@ -275,23 +215,9 @@ def build_runtime_nonlinear_dispatch_deps(scope: Any) -> RuntimeNonlinearDispatc
     """Build nonlinear dispatch dependencies from a patchable runtime facade scope."""
 
     from spectraxgk.workflows.nonlinear import FullNonlinearRuntimeDeps
-    from spectraxgk.workflows.reduced_models import CETGNonlinearRuntimeDeps
 
     return RuntimeNonlinearDispatchDeps(
         resolve_runtime_hl_dims=scope._resolve_runtime_hl_dims,
-        runtime_model_key=scope._runtime_model_key,
-        run_cetg_nonlinear_runtime=scope.run_cetg_nonlinear_runtime,
-        cetg_deps=CETGNonlinearRuntimeDeps(
-            build_runtime_geometry=scope.build_runtime_geometry,
-            validate_cetg_runtime_config=scope.validate_cetg_runtime_config,
-            select_nonlinear_mode_indices=scope._select_nonlinear_mode_indices,
-            build_initial_condition=scope._build_initial_condition,
-            build_cetg_model_params=scope.build_cetg_model_params,
-            build_runtime_term_config=scope.build_runtime_term_config,
-            integrate_cetg_explicit_diagnostics_state=scope.integrate_cetg_explicit_diagnostics_state,
-            run_adaptive_runtime_chunk_loop=scope.run_adaptive_runtime_chunk_loop,
-            build_runtime_nonlinear_result=scope.build_runtime_nonlinear_result,
-        ),
         run_full_nonlinear_runtime=scope.run_full_nonlinear_runtime,
         full_deps=FullNonlinearRuntimeDeps(
             build_runtime_geometry=scope.build_runtime_geometry,
@@ -341,25 +267,6 @@ def run_runtime_nonlinear_impl(
 
     Nl_use, Nm_use = deps.resolve_runtime_hl_dims(cfg, Nl=Nl, Nm=Nm)
     _status("building runtime geometry")
-    if deps.runtime_model_key(cfg) == "cetg":
-        return deps.run_cetg_nonlinear_runtime(
-            cfg,
-            deps=deps.cetg_deps,
-            ky_target=ky_target,
-            kx_target=kx_target,
-            Nl=Nl_use,
-            Nm=Nm_use,
-            dt=dt,
-            steps=steps,
-            method=method,
-            sample_stride=sample_stride,
-            diagnostics_stride=diagnostics_stride,
-            diagnostics=diagnostics,
-            return_state=return_state,
-            show_progress=show_progress,
-            status_callback=status_callback,
-        )
-
     return deps.run_full_nonlinear_runtime(
         cfg,
         deps=deps.full_deps,

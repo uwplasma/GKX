@@ -8,13 +8,6 @@ import sys
 
 import numpy as np
 
-from spectraxgk.terms.reduced.cetg_integrator import (
-    integrate_cetg_explicit_diagnostics_state,
-)
-from spectraxgk.terms.reduced.cetg_model import (
-    build_cetg_model_params,
-    validate_cetg_runtime_config,
-)
 from spectraxgk.diagnostics.growth_rates import (
     fit_growth_rate,
     fit_growth_rate_auto,
@@ -110,10 +103,6 @@ from spectraxgk.workflows.cases import (
 )
 from spectraxgk.workflows.linear import run_full_linear_runtime
 from spectraxgk.workflows.nonlinear import run_full_nonlinear_runtime
-from spectraxgk.workflows.reduced_models import (
-    run_cetg_linear_runtime,
-    run_cetg_nonlinear_runtime,
-)
 from spectraxgk.terms.config import TermConfig
 from spectraxgk.geometry.miller_eik import generate_runtime_miller_eik
 from spectraxgk.geometry.vmec_eik import generate_runtime_vmec_eik
@@ -125,7 +114,6 @@ _RUNTIME_CASE_FIT_KEYS = _WORKFLOW_RUNTIME_CASE_FIT_KEYS
 _PATCHABLE_RUNTIME_GLOBALS = (
     apply_diagnostic_normalization,
     apply_geometry_grid_defaults,
-    build_cetg_model_params,
     build_linear_cache,
     build_runtime_nonlinear_diagnostics_kwargs,
     build_runtime_nonlinear_result,
@@ -140,20 +128,16 @@ _PATCHABLE_RUNTIME_GLOBALS = (
     fit_growth_rate_auto_with_stats,
     fit_runtime_linear_diagnostics,
     independent_map,
-    integrate_cetg_explicit_diagnostics_state,
     integrate_linear_diagnostics,
     integrate_linear_from_config,
     integrate_nonlinear_explicit_diagnostics_state,
     integrate_nonlinear_from_config,
     linear_terms_to_term_config,
     run_adaptive_runtime_chunk_loop,
-    run_cetg_linear_runtime,
-    run_cetg_nonlinear_runtime,
     run_full_linear_runtime,
     run_full_nonlinear_runtime,
     select_ky_grid,
     select_ky_index,
-    validate_cetg_runtime_config,
     _parallel_requests_combined_ky_scan,
 )
 

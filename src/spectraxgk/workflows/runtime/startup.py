@@ -9,7 +9,7 @@ touching the time-integration control flow.
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Any, Callable, Sequence
+from typing import Any, Callable, NoReturn, Sequence
 
 import jax.numpy as jnp
 
@@ -98,6 +98,19 @@ def _runtime_model_key(cfg: RuntimeConfig) -> str:
     return cfg.physics.reduced_model.strip().lower()
 
 
+def _raise_unsupported_reduced_model(cfg: RuntimeConfig) -> NoReturn:
+    """Fail closed for retired or non-promoted reduced-model contracts."""
+
+    model = _runtime_model_key(cfg)
+    if model in {"cetg", "krehm"}:
+        raise NotImplementedError(
+            f"physics.reduced_model={cfg.physics.reduced_model!r} is not supported "
+            "by the maintained runtime. Use physics.reduced_model='gyrokinetic' "
+            "for promoted full-GK workflows."
+        )
+    raise ValueError(f"Unknown physics.reduced_model={cfg.physics.reduced_model!r}")
+
+
 def _runtime_default_krylov_config(cfg: RuntimeConfig) -> KrylovConfig:
     """Return a model-aware Krylov default for runtime-configured linear runs."""
 
@@ -147,37 +160,16 @@ def _resolve_runtime_hl_dims(
     model = _runtime_model_key(cfg)
     if model in {"", "gyrokinetic", "full", "full-gk"}:
         return int(24 if Nl is None else Nl), int(12 if Nm is None else Nm)
-    if model == "cetg":
-        Nl_use = 2 if Nl is None else int(Nl)
-        Nm_use = 1 if Nm is None else int(Nm)
-        if Nl_use != 2 or Nm_use != 1:
-            raise ValueError("cETG requires exactly Nl=2 and Nm=1")
-        return Nl_use, Nm_use
-    if model == "krehm":
-        raise NotImplementedError(
-            "physics.reduced_model='krehm' requires the dedicated KREHM solver; "
-            "the full-GK runtime path does not emulate the KREHM reduced model."
-        )
-    raise ValueError(f"Unknown physics.reduced_model={cfg.physics.reduced_model!r}")
+    _raise_unsupported_reduced_model(cfg)
 
 
 def _require_full_gk_runtime_model(cfg: RuntimeConfig) -> None:
-    """Reject reduced-model configs until their dedicated solvers exist."""
+    """Reject non-promoted reduced-model configs before full-GK execution."""
 
-    model = cfg.physics.reduced_model.strip().lower()
+    model = _runtime_model_key(cfg)
     if model in {"", "gyrokinetic", "full", "full-gk"}:
         return
-    if model == "cetg":
-        raise NotImplementedError(
-            "physics.reduced_model='cetg' requires the dedicated collisional-slab ETG solver; "
-            "the full-GK runtime path does not emulate the cETG model."
-        )
-    if model == "krehm":
-        raise NotImplementedError(
-            "physics.reduced_model='krehm' requires the dedicated KREHM solver; "
-            "the full-GK runtime path does not emulate the KREHM reduced model."
-        )
-    raise ValueError(f"Unknown physics.reduced_model={cfg.physics.reduced_model!r}")
+    _raise_unsupported_reduced_model(cfg)
 
 
 def runtime_geometry_config_for_builder(
