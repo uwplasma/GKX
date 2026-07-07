@@ -48,7 +48,7 @@ from spectraxgk.diagnostics.growth_rates import (
     _select_fit_signal,
     _select_fit_signal_auto,
 )
-from spectraxgk.validation.benchmarks.initialization import (
+from spectraxgk.validation.benchmarks.defaults import (
     _build_gaussian_profile,
     _build_initial_condition,
     _kinetic_reference_init_cfg,

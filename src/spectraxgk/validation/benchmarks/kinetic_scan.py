@@ -31,7 +31,7 @@ from spectraxgk.diagnostics.growth_rates import (
     _normalize_growth_rate,
     _select_fit_signal,
 )
-from spectraxgk.validation.benchmarks.initialization import (
+from spectraxgk.validation.benchmarks.defaults import (
     _build_initial_condition,
     _kinetic_reference_init_cfg,
 )

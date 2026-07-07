@@ -40,7 +40,7 @@ from spectraxgk.validation.benchmarks.kbm_beta_solver_paths import (
     fit_kbm_beta_time_sample,
     solve_kbm_beta_krylov_sample,
 )
-from spectraxgk.validation.benchmarks.initialization import _build_initial_condition
+from spectraxgk.validation.benchmarks.defaults import _build_initial_condition
 from spectraxgk.validation.benchmarks.defaults import LinearRunResult, LinearScanResult
 from spectraxgk.validation.benchmarks.defaults import (
     _kbm_use_multi_target_krylov,

@@ -20,7 +20,7 @@ from spectraxgk.diagnostics.growth_rates import (
     _select_fit_signal,
     _select_fit_signal_auto,
 )
-from spectraxgk.validation.benchmarks.initialization import _build_initial_condition
+from spectraxgk.validation.benchmarks.defaults import _build_initial_condition
 from spectraxgk.validation.benchmarks.defaults import _midplane_index
 from spectraxgk.solvers.time.explicit import ExplicitTimeConfig, integrate_linear_explicit
 from spectraxgk.linear import integrate_linear, integrate_linear_diagnostics

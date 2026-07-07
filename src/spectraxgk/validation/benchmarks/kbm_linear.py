@@ -32,7 +32,7 @@ from spectraxgk.diagnostics.growth_rates import (
     _select_fit_signal,
     _select_fit_signal_auto,
 )
-from spectraxgk.validation.benchmarks.initialization import _build_initial_condition
+from spectraxgk.validation.benchmarks.defaults import _build_initial_condition
 from spectraxgk.validation.benchmarks.defaults import LinearRunResult, LinearScanResult
 from spectraxgk.validation.benchmarks.defaults import (
     _kbm_use_multi_target_krylov,
