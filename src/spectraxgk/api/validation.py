@@ -14,7 +14,7 @@ from spectraxgk.diagnostics.quasilinear_calibration import (
 from spectraxgk.diagnostics.quasilinear_calibration import (
     integrated_quasilinear_flux_from_spectrum,
 )
-from spectraxgk.validation.quasilinear.model_selection import (
+from spectraxgk.diagnostics.quasilinear_model_selection import (
     build_quasilinear_model_selection_status as build_quasilinear_model_selection_status,
     build_quasilinear_model_selection_status_from_paths as build_quasilinear_model_selection_status_from_paths,
 )
