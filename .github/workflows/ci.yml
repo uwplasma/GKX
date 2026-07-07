@@ -165,7 +165,7 @@ jobs:
               tests/unit/nonlinear/test_nonlinear.py
               tests/unit/nonlinear/test_nonlinear_exb.py
               tests/unit/operators/test_hyperdiffusion.py
-              tests/validation/benchmarks/test_gx_consistency.py
+              tests/validation/benchmarks/test_benchmark_contracts.py
               tests/integration/runtime/test_runtime_diagnostics.py
           - name: parallel-autodiff
             files: >-
