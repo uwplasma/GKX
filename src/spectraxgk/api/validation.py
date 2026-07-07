@@ -45,12 +45,6 @@ from spectraxgk.validation.nonlinear_transport.optimization_guard import (
     reduced_artifact_scope_report,
     replicated_transport_ensemble_report,
 )
-from spectraxgk.validation.external_holdout import (
-    ExternalHoldoutScreenRow,
-    build_external_holdout_runbook,
-    external_vmec_family,
-    read_external_holdout_screen,
-)
 from spectraxgk.diagnostics.validation_gates import (
     BranchContinuationMetrics,
     GateReport,
@@ -137,10 +131,6 @@ __all__ = [
     "production_nonlinear_optimization_guard_report",
     "reduced_artifact_scope_report",
     "replicated_transport_ensemble_report",
-    "ExternalHoldoutScreenRow",
-    "build_external_holdout_runbook",
-    "external_vmec_family",
-    "read_external_holdout_screen",
     "BranchContinuationMetrics",
     "ScalarGateResult",
     "GateReport",
