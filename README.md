@@ -444,7 +444,7 @@ same four variants to `t=700` gives a passed `t=[350,700]` ensemble gate:
 mean heat flux `9.60`, mean relative spread `0.041`, and combined SEM/mean
 `0.052`. Together with the full-grid failure sidecar, the passed high-grid
 gates, and the late time-horizon gate, this passes
-`tools/check_external_vmec_high_grid_admission.py` and enters the quasilinear
+`tools/release/check_external_vmec_high_grid_admission.py` and enters the quasilinear
 ledger as `split = holdout`. The claim remains bounded: this improves the
 model-development holdout set but does not promote absolute quasilinear fluxes.
 
