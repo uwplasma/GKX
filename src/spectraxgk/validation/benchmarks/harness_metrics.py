@@ -16,7 +16,7 @@ from spectraxgk.diagnostics.validation_gates import (
     NonlinearWindowMetrics,
     ObservedOrderMetrics,
 )
-from spectraxgk.validation.benchmarks.harness_zonal_metrics import (
+from spectraxgk.diagnostics.zonal_validation import (
     zonal_flow_response_metrics,
 )
 
