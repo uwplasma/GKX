@@ -35,7 +35,7 @@ from spectraxgk.diagnostics.growth_rates import (
     _select_fit_signal_auto,
 )
 from spectraxgk.validation.benchmarks.initialization import _build_initial_condition
-from spectraxgk.validation.benchmarks.reference import CycloneRunResult, CycloneScanResult
+from spectraxgk.validation.benchmarks.defaults import CycloneRunResult, CycloneScanResult
 from spectraxgk.validation.benchmarks.defaults import _midplane_index
 from spectraxgk.validation.benchmarks.species import (
     REFERENCE_DAMP_ENDS_AMP,

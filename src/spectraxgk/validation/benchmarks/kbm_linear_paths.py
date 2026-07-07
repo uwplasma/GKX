@@ -15,7 +15,7 @@ from spectraxgk.diagnostics.analysis import (
 )
 from spectraxgk.validation.benchmarks.defaults import KBM_KRYLOV_DEFAULT
 from spectraxgk.diagnostics.growth_rates import _normalize_growth_rate
-from spectraxgk.validation.benchmarks.reference import LinearRunResult
+from spectraxgk.validation.benchmarks.defaults import LinearRunResult
 from spectraxgk.validation.benchmarks.scan import scan_window_valid
 from spectraxgk.validation.benchmarks.defaults import _kbm_use_multi_target_krylov
 from spectraxgk.config import resolve_cfl_fac

@@ -53,7 +53,7 @@ from spectraxgk.validation.benchmarks.initialization import (
     _build_initial_condition,
     _kinetic_reference_init_cfg,
 )
-from spectraxgk.validation.benchmarks.reference import (
+from spectraxgk.validation.benchmarks.defaults import (
     CycloneComparison,
     CycloneReference,
     CycloneRunResult,

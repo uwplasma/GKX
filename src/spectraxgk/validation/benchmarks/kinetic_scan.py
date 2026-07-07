@@ -35,7 +35,7 @@ from spectraxgk.validation.benchmarks.initialization import (
     _build_initial_condition,
     _kinetic_reference_init_cfg,
 )
-from spectraxgk.validation.benchmarks.reference import LinearScanResult
+from spectraxgk.validation.benchmarks.defaults import LinearScanResult
 from spectraxgk.validation.benchmarks.scan import (
     ScanFitWindowPolicy,
     indexed_float_value,

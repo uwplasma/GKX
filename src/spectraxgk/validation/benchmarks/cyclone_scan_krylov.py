@@ -7,7 +7,7 @@ from typing import Any
 
 import numpy as np
 
-from spectraxgk.validation.benchmarks.reference import CycloneScanResult
+from spectraxgk.validation.benchmarks.defaults import CycloneScanResult
 from spectraxgk.validation.benchmarks.cyclone_scan_seed import (
     reduced_seed_from_explicit_trace,
     seed_from_explicit_trace,
