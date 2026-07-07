@@ -36,7 +36,7 @@ from spectraxgk.validation.benchmarks.defaults import (
     TEM_OMEGA_STAR_SCALE,
     TEM_RHO_STAR,
 )
-from spectraxgk.validation.benchmarks.batching import (
+from spectraxgk.validation.benchmarks.scan import (
     _is_array_like,
     _iter_ky_batches,
     _resolve_streaming_window,

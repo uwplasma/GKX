@@ -8,7 +8,7 @@ from typing import Any, Callable
 import numpy as np
 
 from spectraxgk.diagnostics.analysis import ModeSelection, ModeSelectionBatch
-from spectraxgk.validation.benchmarks.batching import _iter_ky_batches
+from spectraxgk.validation.benchmarks.scan import _iter_ky_batches
 from spectraxgk.validation.benchmarks.reference import CycloneScanResult
 from spectraxgk.validation.benchmarks.scan import indexed_float_value
 from spectraxgk.validation.benchmarks.cyclone_scan_explicit import (

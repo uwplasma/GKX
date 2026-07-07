@@ -17,7 +17,7 @@ from spectraxgk.diagnostics.analysis import (
     select_ky_index,
 )
 from spectraxgk.validation.benchmarks import tem_paths as _paths
-from spectraxgk.validation.benchmarks.batching import _resolve_streaming_window
+from spectraxgk.validation.benchmarks.scan import _resolve_streaming_window
 from spectraxgk.validation.benchmarks.defaults import (
     TEM_KRYLOV_DEFAULT,
     TEM_OMEGA_D_SCALE,

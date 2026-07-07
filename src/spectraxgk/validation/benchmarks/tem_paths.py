@@ -10,7 +10,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from spectraxgk.diagnostics.analysis import ModeSelection, ModeSelectionBatch
-from spectraxgk.validation.benchmarks.batching import _iter_ky_batches
+from spectraxgk.validation.benchmarks.scan import _iter_ky_batches
 from spectraxgk.diagnostics.growth_rates import _extract_mode_only_signal
 from spectraxgk.validation.benchmarks.reference import LinearRunResult, LinearScanResult
 from spectraxgk.validation.benchmarks.scan import ScanFitWindowPolicy

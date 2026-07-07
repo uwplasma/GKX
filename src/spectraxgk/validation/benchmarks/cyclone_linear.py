@@ -25,7 +25,7 @@ from spectraxgk.validation.benchmarks.defaults import (
     CYCLONE_OMEGA_STAR_SCALE,
     CYCLONE_RHO_STAR,
 )
-from spectraxgk.validation.benchmarks.batching import (
+from spectraxgk.validation.benchmarks.scan import (
     _iter_ky_batches,
     _resolve_streaming_window,
 )

@@ -25,7 +25,7 @@ from spectraxgk.validation.benchmarks.defaults import (
     KBM_OMEGA_STAR_SCALE,
     KBM_RHO_STAR,
 )
-from spectraxgk.validation.benchmarks.batching import _resolve_streaming_window
+from spectraxgk.validation.benchmarks.scan import _resolve_streaming_window
 from spectraxgk.diagnostics.growth_rates import (
     _extract_mode_only_signal,
     _normalize_growth_rate,

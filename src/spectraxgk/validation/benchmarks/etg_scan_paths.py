@@ -12,7 +12,7 @@ from spectraxgk.diagnostics.analysis import (
     ModeSelection,
     instantaneous_growth_rate_from_phi,
 )
-from spectraxgk.validation.benchmarks.batching import _resolve_streaming_window
+from spectraxgk.validation.benchmarks.scan import _resolve_streaming_window
 from spectraxgk.validation.benchmarks.defaults import ETG_KRYLOV_DEFAULT
 from spectraxgk.diagnostics.growth_rates import (
     _extract_mode_only_signal,
