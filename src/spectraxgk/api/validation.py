@@ -18,23 +18,23 @@ from spectraxgk.validation.quasilinear.model_selection import (
     build_quasilinear_model_selection_status as build_quasilinear_model_selection_status,
     build_quasilinear_model_selection_status_from_paths as build_quasilinear_model_selection_status_from_paths,
 )
-from spectraxgk.validation.quasilinear.window_config import (
+from spectraxgk.diagnostics.transport_windows import (
     NonlinearWindowConvergenceConfig,
     NonlinearWindowEnsembleConfig,
     NonlinearWindowEnsembleManifestConfig,
 )
-from spectraxgk.validation.quasilinear.window_io import (
+from spectraxgk.diagnostics.transport_windows import (
     nonlinear_window_convergence_from_csv,
     nonlinear_window_convergence_from_summary,
 )
-from spectraxgk.validation.quasilinear.window_statistics import (
+from spectraxgk.diagnostics.transport_windows import (
     nonlinear_window_convergence_report,
 )
-from spectraxgk.validation.quasilinear.window_ensemble import (
+from spectraxgk.diagnostics.transport_windows import (
     nonlinear_window_ensemble_artifact_manifest,
     nonlinear_window_ensemble_report,
 )
-from spectraxgk.validation.quasilinear.window_promotion import (
+from spectraxgk.diagnostics.transport_windows import (
     nonlinear_window_stats_promotion_ready,
 )
 from spectraxgk.validation.nonlinear_transport.optimization_guard import (

@@ -7,7 +7,7 @@ from typing import Any, Iterable
 
 import numpy as np
 
-from spectraxgk.validation.quasilinear.window_promotion import (
+from spectraxgk.diagnostics.transport_windows import (
     nonlinear_window_stats_promotion_ready,
 )
 
