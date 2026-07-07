@@ -1,10 +1,4 @@
-"""Acceptance gates for VMEC-JAX stellarator-optimization candidates.
-
-The helpers here are intentionally independent of the SPECTRAX-GK time
-integrator. They answer a narrower question: is a solved VMEC-JAX equilibrium
-candidate physically acceptable enough to spend expensive nonlinear GK audit
-time on it?
-"""
+"""Acceptance gates for VMEC-JAX stellarator-optimization candidates."""
 
 from __future__ import annotations
 

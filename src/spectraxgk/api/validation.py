@@ -71,36 +71,36 @@ from spectraxgk.objectives.autodiff_validation import (
     isolated_eigenpair_observable_sensitivity_report,
     isolated_eigenvalue_sensitivity_report,
 )
-from spectraxgk.validation.stellarator.candidate_gate import (
+from spectraxgk.objectives.vmec_candidate_admission import (
     build_authoritative_wout_candidate_gate,
     build_solved_vmec_candidate_gate,
     build_wout_reproducibility_gate,
     final_iota_profiles_from_vmec_result,
 )
-from spectraxgk.validation.stellarator.transport_audit import (
+from spectraxgk.diagnostics.stellarator_transport_reports import (
     build_nonlinear_audit_redesign_report,
 )
-from spectraxgk.validation.stellarator.transport_campaign import (
+from spectraxgk.diagnostics.stellarator_transport_reports import (
     build_nonlinear_campaign_admission_report,
 )
-from spectraxgk.validation.stellarator.transport_landscape import (
+from spectraxgk.diagnostics.stellarator_transport_reports import (
     build_nonlinear_landscape_admission_report,
 )
-from spectraxgk.validation.stellarator.transport_policies import (
+from spectraxgk.objectives.vmec_transport_admission import (
     DEFAULT_TRANSPORT_METRIC_KEYS,
     VMECJAXNonlinearAuditPolicy,
     VMECJAXNonlinearCampaignPolicy,
     VMECJAXReducedPrelaunchPolicy,
     VMECJAXTransportAdmissionPolicy,
 )
-from spectraxgk.validation.stellarator.transport_prelaunch import (
+from spectraxgk.diagnostics.stellarator_transport_reports import (
     build_reduced_nonlinear_audit_prelaunch_report,
 )
-from spectraxgk.validation.stellarator.transport_samples import (
+from spectraxgk.objectives.vmec_transport_admission import (
     candidate_transport_metric,
     transport_objective_sample_summary,
 )
-from spectraxgk.validation.stellarator.transport_selection import (
+from spectraxgk.objectives.vmec_transport_admission import (
     build_transport_admission_report,
     select_admitted_transport_candidate,
 )
