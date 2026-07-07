@@ -942,7 +942,7 @@ nonlinear turbulent-flux optimization claim.
 The control-variate campaign has both a launch contract and a completed
 independent control-mean gate for the rel7.5 evidence lane. The post-run
 reduction is automated by
-`tools/postprocess_nonlinear_gradient_control_mean_campaign.py`, which requires
+`tools/campaigns/postprocess_nonlinear_gradient_control_mean_campaign.py`, which requires
 the full matched plus/minus seed set with outputs reaching the final
 post-transient window before producing the final control-mean gate. It accepts
 stride-rounded final times but rejects intermediate checkpoint chunks.
@@ -1259,11 +1259,11 @@ Default `pytest` runs skip integration tests for faster feedback. Use:
 ```bash
 pytest
 pytest -m integration
-python tools/run_tests_fast.py
-python tools/run_wide_coverage_gate.py --shards 48 --timeout 300 --fail-under 95 --pytest-arg=-o --pytest-arg=addopts= --pytest-arg=-m --pytest-arg="not slow"
+python tools/release/run_tests_fast.py
+python tools/release/run_wide_coverage_gate.py --shards 48 --timeout 300 --fail-under 95 --pytest-arg=-o --pytest-arg=addopts= --pytest-arg=-m --pytest-arg="not slow"
 ```
 
-`tools/run_tests_fast.py` runs per-file pytest shards with a 300 s per-file
+`tools/release/run_tests_fast.py` runs per-file pytest shards with a 300 s per-file
 timeout and a 300 s total local budget by default. Use
 `--total-timeout 0` only when you explicitly want the full sequential local
 pass.

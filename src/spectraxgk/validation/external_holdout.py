@@ -390,7 +390,7 @@ def _external_holdout_launch_command(
 
     case = str(row["case"]).replace("_nc", "")
     return (
-        "python tools/write_external_vmec_holdout_configs.py "
+        "python tools/campaigns/write_external_vmec_holdout_configs.py "
         f"--case {case}{case_suffix} "
         f"--vmec-file {row['vmec_file']} "
         f"--out-dir {out_dir}/{case}{out_suffix} "

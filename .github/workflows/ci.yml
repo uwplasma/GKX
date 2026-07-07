@@ -356,7 +356,7 @@ jobs:
           JAX_ENABLE_X64: "true"
           SPECTRAX_X64: "1"
         run: |
-          python tools/run_wide_coverage_gate.py \
+          python tools/release/run_wide_coverage_gate.py \
             --shards 48 \
             --timeout 300 \
             --only-shard "${{ matrix.shard }}" \
@@ -431,7 +431,7 @@ jobs:
           SPECTRAX_X64: "1"
         run: |
           find coverage-wide-artifacts -name '*.tgz' -print -exec tar -xzf {} \;
-          python tools/run_wide_coverage_gate.py \
+          python tools/release/run_wide_coverage_gate.py \
             --shards 48 \
             --combine-only \
             --require-shard-data \
