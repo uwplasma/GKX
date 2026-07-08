@@ -1,34 +1,25 @@
 """Domain-organized public API registry for SPECTRAX-GK."""
 
-from spectraxgk.api import (
-    artifacts as _artifacts,
-    benchmarks as _benchmarks,
-    configuration as _configuration,
-    diagnostics as _diagnostics,
-    geometry as _geometry,
-    objectives as _objectives,
-    parallel as _parallel,
-    runtime as _runtime,
-    solvers as _solvers,
-    validation as _validation,
+from __future__ import annotations
+
+import ast
+from importlib import import_module
+from pathlib import Path
+from typing import Any
+
+_API_MODULE_ORDER = (
+    "configuration",
+    "geometry",
+    "diagnostics",
+    "runtime",
+    "solvers",
+    "benchmarks",
+    "validation",
+    "parallel",
+    "objectives",
+    "artifacts",
 )
 
-_API_MODULES = (
-    _configuration,
-    _geometry,
-    _diagnostics,
-    _runtime,
-    _solvers,
-    _benchmarks,
-    _validation,
-    _parallel,
-    _objectives,
-    _artifacts,
-)
-
-for _module in _API_MODULES:
-    for _name in _module.__all__:
-        globals()[_name] = getattr(_module, _name)
 
 __all__ = [
     "CycloneBaseCase",
@@ -439,8 +430,52 @@ __all__ = [
     "set_plot_style",
 ]
 
-for _name in __all__:
-    if _name not in globals():
-        raise RuntimeError(f"public API export {_name!r} is not defined")
 
-del _API_MODULES, _module, _name
+def _literal_all(path: Path) -> list[str]:
+    """Read a grouped API module's export list without importing it."""
+
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        if any(
+            isinstance(target, ast.Name) and target.id == "__all__"
+            for target in node.targets
+        ):
+            names = ast.literal_eval(node.value)
+            return [str(name) for name in names]
+    raise RuntimeError(f"{path} does not define a literal __all__")
+
+
+def _api_export_modules() -> dict[str, str]:
+    api_dir = Path(__file__).parent
+    export_modules: dict[str, str] = {}
+    for module_name in _API_MODULE_ORDER:
+        for name in _literal_all(api_dir / f"{module_name}.py"):
+            export_modules.setdefault(name, module_name)
+    missing = [name for name in __all__ if name not in export_modules]
+    if missing:
+        joined = ", ".join(missing)
+        raise RuntimeError(
+            f"public API export(s) are missing from API modules: {joined}"
+        )
+    return export_modules
+
+
+_EXPORT_MODULES = _api_export_modules()
+
+
+def __getattr__(name: str) -> Any:
+    """Lazily resolve grouped public API exports."""
+
+    module_name = _EXPORT_MODULES.get(name)
+    if module_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    module = import_module(f"spectraxgk.api.{module_name}")
+    value = getattr(module, name)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    return sorted({*globals(), *__all__})
