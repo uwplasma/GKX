@@ -18,12 +18,12 @@ from spectraxgk.geometry_backends.vmec_backend_discovery import (
     _new_booz_object,
     internal_vmec_backend_available,
 )
+from spectraxgk.geometry_backends.vmec_fieldline_numerics import dermv, nperiod_set
 from spectraxgk.geometry_backends.vmec_fieldlines import _vmec_fieldlines, _vmec_splines
 from spectraxgk.geometry_backends.vmec_io import (
     _write_vmec_eik_netcdf_atomically,
     write_vmec_eik_netcdf,
 )
-from spectraxgk.geometry_backends.vmec_numerics import dermv, nperiod_set
 from spectraxgk.geometry_backends.vmec_pipeline import generate_vmec_eik_internal
 from spectraxgk.geometry_backends.vmec_remap import _apply_flux_tube_cut, _equal_arc_remap
 from spectraxgk.geometry_backends.vmec_splines import _Struct
