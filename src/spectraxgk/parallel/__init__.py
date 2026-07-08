@@ -2,49 +2,62 @@
 
 from __future__ import annotations
 
+import ast
+from importlib import import_module
+from pathlib import Path
 from typing import Any
 
-from spectraxgk.parallel.batch import *  # noqa: F403
-from spectraxgk.parallel.batch import __all__ as _batch_all
-from spectraxgk.parallel.decomposition import *  # noqa: F403
-from spectraxgk.parallel.decomposition import __all__ as _decomposition_all
-from spectraxgk.parallel.identity import *  # noqa: F403
-from spectraxgk.parallel.identity import __all__ as _identity_all
-from spectraxgk.parallel.independent import *  # noqa: F403
-from spectraxgk.parallel.independent import __all__ as _independent_all
-from spectraxgk.parallel.state import *  # noqa: F403
-from spectraxgk.parallel.state import __all__ as _state_all
-from spectraxgk.parallel.velocity import *  # noqa: F403
-from spectraxgk.parallel.velocity import __all__ as _velocity_all
+_PARALLEL_MODULE_ORDER = (
+    "identity",
+    "batch",
+    "independent",
+    "decomposition",
+    "state",
+    "velocity",
+    "integrators",
+)
 
-_INTEGRATOR_EXPORTS = {
-    "integrate_linear_sharded",
-    "integrate_nonlinear_sharded",
-}
+
+def _literal_all(path: Path) -> list[str]:
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        if any(
+            isinstance(target, ast.Name) and target.id == "__all__"
+            for target in node.targets
+        ):
+            names = ast.literal_eval(node.value)
+            return [str(name) for name in names]
+    raise RuntimeError(f"{path} does not define a literal __all__")
+
+
+def _parallel_exports() -> tuple[list[str], dict[str, str]]:
+    package_dir = Path(__file__).parent
+    public_names: list[str] = []
+    export_modules: dict[str, str] = {}
+    for module_name in _PARALLEL_MODULE_ORDER:
+        for name in _literal_all(package_dir / f"{module_name}.py"):
+            if name not in export_modules:
+                public_names.append(name)
+                export_modules[name] = module_name
+    return public_names, export_modules
+
+
+__all__, _EXPORT_MODULES = _parallel_exports()
 
 
 def __getattr__(name: str) -> Any:
-    """Load sharded integrators only when requested to avoid import cycles."""
+    """Lazily resolve parallel exports so pure contracts stay dependency-light."""
 
-    if name in _INTEGRATOR_EXPORTS:
-        from spectraxgk.parallel import integrators
+    module_name = _EXPORT_MODULES.get(name)
+    if module_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    module = import_module(f"spectraxgk.parallel.{module_name}")
+    value = getattr(module, name)
+    globals()[name] = value
+    return value
 
-        value = getattr(integrators, name)
-        globals()[name] = value
-        return value
-    raise AttributeError(f"module 'spectraxgk.parallel' has no attribute {name!r}")
 
-
-__all__ = list(
-    dict.fromkeys(
-        [
-            *_identity_all,
-            *_batch_all,
-            *_independent_all,
-            *_decomposition_all,
-            *_state_all,
-            *_velocity_all,
-            *_INTEGRATOR_EXPORTS,
-        ]
-    )
-)
+def __dir__() -> list[str]:
+    return sorted({*globals(), *__all__})
