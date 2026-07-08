@@ -26,6 +26,7 @@ from spectraxgk.operators.linear.moments import (
     diamagnetic_drive_coeffs,
     energy_operator,
     grad_z_periodic,
+    hermite_streaming,
     lenard_bernstein_eigenvalues,
     quasineutrality_phi,
     shift_axis,
@@ -46,7 +47,6 @@ from spectraxgk.operators.linear.params import (
     term_config_to_linear_terms,
 )
 from spectraxgk.operators.linear.rhs import linear_rhs, linear_rhs_cached
-from spectraxgk.operators.linear.streaming import hermite_streaming
 
 __all__ = [
     "LinearCache",

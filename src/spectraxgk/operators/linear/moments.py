@@ -19,6 +19,7 @@ __all__ = [
     "diamagnetic_drive_coeffs",
     "energy_operator",
     "grad_z_periodic",
+    "hermite_streaming",
     "lenard_bernstein_eigenvalues",
     "quasineutrality_phi",
     "shift_axis",
@@ -76,6 +77,25 @@ def apply_hermite_v(G: jnp.ndarray) -> jnp.ndarray:
     sqrt_p = sqrt_p.reshape(shape)
     sqrt_m = sqrt_m.reshape(shape)
     return sqrt_p * G_plus + sqrt_m * G_minus
+
+
+def hermite_streaming(G: jnp.ndarray, kpar: jnp.ndarray, vth: float) -> jnp.ndarray:
+    """Parallel streaming operator acting on the Hermite index."""
+
+    Nm = G.shape[-1]
+    if Nm < 1:
+        raise ValueError("Hermite axis must have length >= 1")
+    sqrt_p, sqrt_m = hermite_ladder_coeffs(Nm - 1)
+    sqrt_p = sqrt_p[:Nm]
+    sqrt_m = sqrt_m[:Nm]
+
+    pad_width = [(0, 0)] * (G.ndim - 1) + [(1, 1)]
+    G_pad = jnp.pad(G, pad_width)
+    G_mplus = G_pad[..., 2:]
+    G_mminus = G_pad[..., :-2]
+
+    ladder = sqrt_p * G_mplus + sqrt_m * G_mminus
+    return -1j * kpar * vth * ladder
 
 
 def apply_hermite_v2(G: jnp.ndarray) -> jnp.ndarray:
