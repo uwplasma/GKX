@@ -26,7 +26,7 @@ from spectraxgk.geometry_backends.vmec_io import (
 from spectraxgk.geometry_backends.vmec_numerics import dermv, nperiod_set
 from spectraxgk.geometry_backends.vmec_pipeline import generate_vmec_eik_internal
 from spectraxgk.geometry_backends.vmec_remap import _apply_flux_tube_cut, _equal_arc_remap
-from spectraxgk.geometry_backends.vmec_types import _Struct
+from spectraxgk.geometry_backends.vmec_splines import _Struct
 
 __all__ = [
     "_Struct",

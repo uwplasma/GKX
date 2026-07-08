@@ -9,7 +9,7 @@ import numpy as np
 from scipy.integrate import cumulative_trapezoid as _ctrap
 from scipy.interpolate import CubicSpline, InterpolatedUnivariateSpline, PPoly, splrep
 
-from spectraxgk.geometry_backends.vmec_types import _Struct
+from spectraxgk.geometry_backends.vmec_splines import _Struct
 
 
 @dataclass(frozen=True)

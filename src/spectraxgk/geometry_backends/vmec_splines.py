@@ -7,7 +7,15 @@ from typing import Any
 import numpy as np
 from scipy.interpolate import InterpolatedUnivariateSpline
 
-from spectraxgk.geometry_backends.vmec_types import _Struct
+
+class _Struct:
+    """Mutable attribute bag for assembled VMEC geometry records."""
+
+    def __init__(self, **fields: Any) -> None:
+        self.__dict__.update(fields)
+
+    def __getattr__(self, name: str) -> Any:
+        raise AttributeError(name)
 
 
 def _vmec_splines(nc_obj: Any, booz_obj: Any) -> _Struct:
@@ -77,4 +85,3 @@ def _vmec_splines(nc_obj: Any, booz_obj: Any) -> _Struct:
     r.nboz = booz_obj.nboz
 
     return r
-

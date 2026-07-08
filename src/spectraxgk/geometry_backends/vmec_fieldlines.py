@@ -13,8 +13,7 @@ from spectraxgk.geometry_backends.vmec_backend_discovery import (
     _import_booz_backend,
     _new_booz_object,
 )
-from spectraxgk.geometry_backends.vmec_splines import _vmec_splines
-from spectraxgk.geometry_backends.vmec_types import _Struct
+from spectraxgk.geometry_backends.vmec_splines import _Struct, _vmec_splines
 
 from spectraxgk.geometry_backends.vmec_fieldline_numerics import (
     _MU_0,
