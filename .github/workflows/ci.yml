@@ -125,13 +125,12 @@ jobs:
               tests/unit/core/test_io.py
           - name: release-artifacts
             files: >-
-              tests/release/test_audit_repository_size.py
-              tests/release/test_check_repository_size_manifest.py
-              tests/release/test_check_release_artifact_manifest.py
+              tests/release/test_release_hygiene_gates.py
+              tests/release/test_package_architecture_manifest.py
+              tests/release/test_refactor_coverage_manifest.py
+              tests/release/test_validation_coverage_manifest.py
               tests/release/test_check_release_readiness.py
-              tests/release/test_build_technical_release_status.py
               tests/release/test_release_scope_docs.py
-              tests/release/test_check_release_version.py
               tests/release/test_check_quasilinear_calibration_inputs.py
               tests/tools/artifacts/test_compress_previews.py
               tests/unit/quasilinear/test_quasilinear.py
