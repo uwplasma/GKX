@@ -581,7 +581,7 @@ _EXPORT_TARGETS: dict[str, tuple[str, str]] = {
     'NonlinearWindowMetrics': ('spectraxgk.diagnostics.validation_gates', 'NonlinearWindowMetrics'),
     'ZonalFlowResponseMetrics': ('spectraxgk.diagnostics.validation_gates', 'ZonalFlowResponseMetrics'),
     'branch_continuity_gate_report': ('spectraxgk.diagnostics.validation_gates', 'branch_continuity_gate_report'),
-    'branch_continuity_metrics': ('spectraxgk.benchmarks', 'branch_continuity_metrics'),
+    'branch_continuity_metrics': ('spectraxgk.diagnostics.validation_gates', 'branch_continuity_metrics'),
     'covariance_diagnostics': ('spectraxgk.objectives.autodiff_validation', 'covariance_diagnostics'),
     'autodiff_finite_difference_report': ('spectraxgk.objectives.autodiff_validation', 'autodiff_finite_difference_report'),
     'central_finite_difference_jacobian': ('spectraxgk.objectives.autodiff_validation', 'central_finite_difference_jacobian'),

@@ -99,7 +99,10 @@ def eigenfunction_reference_overlay_figure(
 ) -> Tuple[plt.Figure, np.ndarray]:
     """Render a phase-aligned raw overlay against a frozen reference mode."""
 
-    from spectraxgk.benchmarks import compare_eigenfunctions, phase_align_eigenfunction
+    from spectraxgk.diagnostics.modes import (
+        compare_eigenfunctions,
+        phase_align_eigenfunction,
+    )
 
     set_plot_style()
     theta_arr = np.asarray(theta, dtype=float)
