@@ -8,7 +8,7 @@ from typing import Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 
-from spectraxgk.artifacts.plot_style import set_plot_style
+from spectraxgk.artifacts.plotting import set_plot_style
 from spectraxgk.benchmarks import CycloneReference, CycloneScanResult
 
 def cyclone_reference_figure(ref: CycloneReference) -> Tuple[plt.Figure, np.ndarray]:

@@ -7,7 +7,7 @@ from typing import Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 
-from spectraxgk.artifacts.plot_style import set_plot_style
+from spectraxgk.artifacts.plotting import set_plot_style
 from spectraxgk.diagnostics.growth_rates import fit_growth_rate
 
 def growth_fit_figure(

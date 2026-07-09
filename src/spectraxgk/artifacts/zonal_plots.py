@@ -8,7 +8,7 @@ from typing import Any
 import matplotlib.pyplot as plt
 import numpy as np
 
-from spectraxgk.artifacts.plot_style import set_plot_style
+from spectraxgk.artifacts.plotting import set_plot_style
 
 
 @dataclass(frozen=True)
