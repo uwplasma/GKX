@@ -125,7 +125,7 @@ jobs:
               tests/release/test_check_release_readiness.py
               tests/release/test_release_scope_docs.py
               tests/release/test_check_quasilinear_calibration_inputs.py
-              tests/tools/artifacts/test_compress_previews.py
+              tests/tools/artifacts/test_artifact_plot_smoke.py
               tests/unit/quasilinear/test_quasilinear.py
               tests/validation/quasilinear/test_quasilinear_calibration.py
               tests/tools/artifacts/test_quasilinear_artifact_plots.py
