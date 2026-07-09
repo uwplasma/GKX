@@ -20,7 +20,7 @@ from spectraxgk.workflows.runtime.diagnostic_arrays import (
     truncate_runtime_diagnostics,
     validate_finite_runtime_diagnostics,
 )
-from spectraxgk.workflows.runtime.orchestration import (
+from spectraxgk.workflows.runtime.orchestration_progress import (
     build_runtime_progress_message,
 )
 from spectraxgk.terms.config import FieldState

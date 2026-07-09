@@ -10,7 +10,7 @@ from spectraxgk.runtime import (
     _concat_runtime_diagnostics,
     run_runtime_nonlinear,
 )
-from spectraxgk.workflows.runtime.orchestration import (
+from spectraxgk.workflows.runtime.orchestration_artifacts import (
     RuntimeArtifactHandoffDeps,
     run_runtime_nonlinear_artifact_handoff,
 )

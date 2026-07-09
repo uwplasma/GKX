@@ -59,7 +59,7 @@ from spectraxgk.workflows.runtime.results import (
     RuntimeNonlinearResult,
     build_runtime_nonlinear_result,
 )
-from spectraxgk.workflows.runtime.orchestration import (
+from spectraxgk.workflows.runtime.orchestration_scan import (
     build_runtime_scan_batch_deps,
     build_runtime_scan_orchestration_deps,
     run_runtime_scan_ky_task as _run_runtime_scan_ky_task_impl,
@@ -360,7 +360,7 @@ def run_runtime_scan(
     """Run a ky scan using the unified runtime config path.
 
     The public facade keeps runtime monkeypatch seams intact while scan
-    coordination lives in ``workflows/runtime/orchestration.py``.
+    coordination lives in ``workflows/runtime/orchestration_scan.py``.
     """
 
     return _run_runtime_scan_orchestration_impl(
