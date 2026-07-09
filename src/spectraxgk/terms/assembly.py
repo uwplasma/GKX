@@ -15,9 +15,9 @@ from spectraxgk.terms.assembly_core import (
     assemble_rhs_cached,
     assemble_rhs_cached_electrostatic_jit,
     assemble_rhs_cached_jit,
+    assemble_rhs_terms_cached,
     compute_fields_cached,
 )
-from spectraxgk.terms.assembly_diagnostics import assemble_rhs_terms_cached
 from spectraxgk.terms.assembly_helpers import (
     _apply_external_phi_source,
     _collision_contribution_or_zero,
