@@ -132,7 +132,7 @@ jobs:
               tests/unit/quasilinear/test_quasilinear.py
               tests/validation/quasilinear/test_quasilinear_calibration.py
               tests/tools/artifacts/test_quasilinear_artifact_plots.py
-              tests/tools/profiling/test_profile_scaling_contracts.py
+              tests/tools/profiling/test_runtime_and_scaling_profile_contracts.py
               tests/unit/parallel/test_parallel_artifact_contracts.py
               tests/integration/examples/test_examples.py
           - name: linear-core
