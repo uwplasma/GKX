@@ -322,21 +322,15 @@ def _solved_rhs_fields(
 ) -> _RHSFields:
     """Solve fields and build the Hamiltonian views used by RHS terms."""
 
-    fields_fn = solve_fields if use_custom_vjp else _solve_fields_impl
-    fields = fields_fn(
+    fields = _solve_cached_fields(
         G,
         cache,
         params,
-        charge=species.charge,
-        density=species.density,
-        temp=species.temp,
-        mass=species.mass,
-        tz=species.tz,
-        vth=species.vth,
-        fapar=weights.fapar,
-        w_bpar=weights.bpar,
+        species=species,
+        weights=weights,
+        use_custom_vjp=use_custom_vjp,
+        external_phi=external_phi,
     )
-    fields = _apply_external_phi_source(fields, external_phi=external_phi)
     _, _, h_apar, h_bpar = _rhs_field_views(
         fields,
         term_cfg,
@@ -353,6 +347,35 @@ def _solved_rhs_fields(
         JlB=cache.JlB,
     )
     return _RHSFields(fields=fields, H=H, h_apar=h_apar, h_bpar=h_bpar)
+
+
+def _solve_cached_fields(
+    G: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    *,
+    species: _SpeciesArrays,
+    weights: _TermWeights,
+    use_custom_vjp: bool,
+    external_phi: jnp.ndarray | float | None = None,
+) -> FieldState:
+    """Solve cached fields after shared RHS state/species normalization."""
+
+    fields_fn = solve_fields if use_custom_vjp else _solve_fields_impl
+    fields = fields_fn(
+        G,
+        cache,
+        params,
+        charge=species.charge,
+        density=species.density,
+        temp=species.temp,
+        mass=species.mass,
+        tz=species.tz,
+        vth=species.vth,
+        fapar=weights.fapar,
+        w_bpar=weights.bpar,
+    )
+    return _apply_external_phi_source(fields, external_phi=external_phi)
 
 
 def _streaming_contribution(
