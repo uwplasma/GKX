@@ -12,7 +12,7 @@ try:
     import jax
     import jax.numpy as jnp
 except Exception as exc:  # pragma: no cover - optional runtime dependency
-    raise ImportError("spectraxgk.geometry_backends.kernels requires JAX") from exc
+    raise ImportError("spectraxgk.geometry.kernels requires JAX") from exc
 
 
 @jax.jit

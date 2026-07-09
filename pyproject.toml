@@ -124,10 +124,5 @@ module = [
 ignore_errors = true
 
 [[tool.mypy.overrides]]
-module = [
-  "spectraxgk.geometry_backends.miller",
-  "spectraxgk.geometry_backends.miller_core",
-  "spectraxgk.geometry_backends.miller_numerics",
-  "spectraxgk.geometry_backends.miller_profiles",
-]
+module = ["spectraxgk.geometry.imported_miller"]
 disable_error_code = ["arg-type"]

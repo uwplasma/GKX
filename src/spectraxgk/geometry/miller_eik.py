@@ -8,7 +8,7 @@ import json
 import math
 from pathlib import Path
 
-from spectraxgk.geometry_backends.miller import (
+from spectraxgk.geometry.imported_miller import (
     generate_miller_eik_internal,
     internal_miller_backend_available,
 )

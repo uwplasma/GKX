@@ -10,7 +10,7 @@ from scipy.integrate import cumulative_trapezoid as _ctrap
 from scipy.integrate import simpson as _simps
 from scipy.interpolate import InterpolatedUnivariateSpline
 
-from spectraxgk.geometry_backends.kernels import finite_diff_nonuniform, nperiod_contract
+from spectraxgk.geometry.kernels import finite_diff_nonuniform, nperiod_contract
 
 _MU_0 = 4.0 * np.pi * 1.0e-7
 
