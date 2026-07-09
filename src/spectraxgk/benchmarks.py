@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, fields, replace
+from dataclasses import dataclass, replace
 from typing import Any, Callable, Sequence
 
 import jax.numpy as jnp
@@ -65,6 +65,7 @@ from spectraxgk.benchmarking.shared import (
     resources,
     VALID_FIT_SIGNALS,
     _is_array_like,
+    _pack_dataclass_fields,
     _iter_ky_batches,
     _resolve_streaming_window,
     normalize_solver_key,
@@ -215,13 +216,6 @@ class _CycloneLinearRequest:
     reference_aligned: bool | None
     show_progress: bool
     status_callback: Callable[[str], None] | None
-
-def _cyclone_linear_request_from_locals(values: dict[str, Any]) -> _CycloneLinearRequest:
-    """Pack public ``run_cyclone_linear`` arguments once for internal routing."""
-
-    return _CycloneLinearRequest(
-        **{field.name: values[field.name] for field in fields(_CycloneLinearRequest)}
-    )
 
 def _default_cyclone_params(cfg: CycloneBaseCase, geom: SAlphaGeometry, Nm: int) -> LinearParams:
     params = LinearParams(
@@ -425,11 +419,6 @@ class _CycloneTimePathRequest:
     min_slope_frac: float
     slope_var_weight: float
     window_method: str
-
-def _cyclone_time_path_request_from_locals(values: dict[str, Any]) -> _CycloneTimePathRequest:
-    return _CycloneTimePathRequest(
-        **{field.name: values[field.name] for field in fields(_CycloneTimePathRequest)}
-    )
 
 def _fit_cyclone_explicit_seed(
     *,
@@ -1363,7 +1352,9 @@ def run_cyclone_time_path(
 ) -> tuple[float, float, np.ndarray, np.ndarray]:
     """Run the Cyclone time-integration branch and fit late-time growth."""
 
-    return _run_cyclone_time_path_request(_cyclone_time_path_request_from_locals(locals()))
+    return _run_cyclone_time_path_request(
+        _pack_dataclass_fields(_CycloneTimePathRequest, locals())
+    )
 
 def _valid_cyclone_growth(gamma_val: float, omega_val: float, *, require_positive: bool) -> bool:
     if not np.isfinite(gamma_val) or not np.isfinite(omega_val):
@@ -1643,7 +1634,9 @@ def run_cyclone_linear(
 ) -> CycloneRunResult:
     """Run the linear Cyclone benchmark and extract growth rate."""
 
-    return _run_cyclone_linear_request(_cyclone_linear_request_from_locals(locals()))
+    return _run_cyclone_linear_request(
+        _pack_dataclass_fields(_CycloneLinearRequest, locals())
+    )
 
 @dataclass(frozen=True)
 class CycloneScanHooks:
@@ -2785,13 +2778,6 @@ class _CycloneTimeScanInputs:
     hooks: CycloneScanHooks
     show_progress: bool
 
-def _cyclone_time_scan_inputs_from_locals(values: dict[str, Any]) -> _CycloneTimeScanInputs:
-    """Pack public ``run_time_cyclone_scan`` arguments once for internal routing."""
-
-    return _CycloneTimeScanInputs(
-        **{field.name: values[field.name] for field in fields(_CycloneTimeScanInputs)}
-    )
-
 def _iter_cyclone_time_scan_batches(options: _CycloneTimeRunOptions):
     if options.use_batch:
         return _iter_ky_batches(
@@ -3603,7 +3589,7 @@ def run_time_cyclone_scan(
 ) -> CycloneScanResult:
     """Run the standard Cyclone scan time-integration branches."""
 
-    inputs = _cyclone_time_scan_inputs_from_locals(locals())
+    inputs = _pack_dataclass_fields(_CycloneTimeScanInputs, locals())
     controls = _prepare_cyclone_time_scan_controls(inputs)
     output = _run_cyclone_time_scan_batches(
         run_options=controls.run_options,
@@ -3724,13 +3710,6 @@ class _CycloneScanRequest:
     mode_follow: bool
     reference_aligned: bool | None
     show_progress: bool
-
-def _cyclone_scan_request_from_locals(values: dict[str, Any]) -> _CycloneScanRequest:
-    """Pack public ``run_cyclone_scan`` arguments once for internal routing."""
-
-    return _CycloneScanRequest(
-        **{field.name: values[field.name] for field in fields(_CycloneScanRequest)}
-    )
 
 def _scan_hooks() -> CycloneScanHooks:
     return CycloneScanHooks(
@@ -4301,7 +4280,9 @@ def run_cyclone_scan(
     If ``time_cfg`` is provided, its ``dt`` and ``t_max`` override ``dt``/``steps``.
     """
 
-    return _run_cyclone_scan_request(_cyclone_scan_request_from_locals(locals()))
+    return _run_cyclone_scan_request(
+        _pack_dataclass_fields(_CycloneScanRequest, locals())
+    )
 
 
 # KBM single-mode and beta-scan benchmark implementations live with the public
@@ -4393,14 +4374,6 @@ class _KBMLinearRequest:
     bpar_beta_scale: float | None
     reference_aligned: bool | None
     show_progress: bool
-
-
-def _kbm_linear_request_from_locals(values: dict[str, Any]) -> _KBMLinearRequest:
-    """Pack public ``run_kbm_linear`` arguments once for internal routing."""
-
-    return _KBMLinearRequest(
-        **{field.name: values[field.name] for field in fields(_KBMLinearRequest)}
-    )
 
 
 def _resolve_kbm_fit_signal(fit_signal: str) -> str:
@@ -5600,7 +5573,9 @@ def run_kbm_linear(
 ) -> LinearRunResult:
     """Run a single linear KBM point and return the stored field history."""
 
-    return _run_kbm_linear_request(_kbm_linear_request_from_locals(locals()))
+    return _run_kbm_linear_request(
+        _pack_dataclass_fields(_KBMLinearRequest, locals())
+    )
 
 @dataclass(frozen=True)
 class _KBMBetaScanSetup:
@@ -5740,13 +5715,6 @@ class _KBMBetaScanRequest:
     ampere_g0_scale: float | None
     bpar_beta_scale: float | None
     reference_aligned: bool | None
-
-
-def _kbm_beta_scan_request_from_locals(values: dict[str, Any]) -> _KBMBetaScanRequest:
-    """Build a beta-scan request from ``run_kbm_beta_scan`` locals."""
-
-    names = {field.name for field in fields(_KBMBetaScanRequest)}
-    return _KBMBetaScanRequest(**{name: values[name] for name in names})
 
 
 # Fixed-ky beta-scan path contracts and sample solvers live with the scan owner.
@@ -7261,7 +7229,9 @@ def run_kbm_beta_scan(
     If ``time_cfg`` is provided, its ``dt`` and ``t_max`` override ``dt``/``steps``.
     """
 
-    return _run_kbm_beta_scan_request(_kbm_beta_scan_request_from_locals(locals()))
+    return _run_kbm_beta_scan_request(
+        _pack_dataclass_fields(_KBMBetaScanRequest, locals())
+    )
 
 
 _ETG_KRYLOV_FORWARD_KEYS = (
@@ -7394,16 +7364,6 @@ class _TEMTimePathFitPolicy:
     min_amp_fraction: float
 
 
-def _tem_time_path_fit_policy_from_locals(
-    values: dict[str, Any],
-) -> _TEMTimePathFitPolicy:
-    """Pack the single-run TEM fit policy from public path arguments."""
-
-    return _TEMTimePathFitPolicy(
-        **{field.name: values[field.name] for field in fields(_TEMTimePathFitPolicy)}
-    )
-
-
 def _tem_scan_fit_policy_from_locals(
     values: dict[str, Any],
     *,
@@ -7424,16 +7384,6 @@ def _tem_scan_fit_policy_from_locals(
         fit_growth_rate_fn=hooks.fit_growth_rate,
         fit_growth_rate_auto_fn=hooks.fit_growth_rate_auto,
         normalize_growth_rate_fn=hooks.normalize_growth_rate,
-    )
-
-
-def _tem_scan_runtime_options_from_locals(
-    values: dict[str, Any],
-) -> _TEMScanRuntimeOptions:
-    """Pack scan runtime options once after the fit policy is resolved."""
-
-    return _TEMScanRuntimeOptions(
-        **{field.name: values[field.name] for field in fields(_TEMScanRuntimeOptions)}
     )
 
 
@@ -8086,7 +8036,7 @@ def run_tem_time_linear_path(
         mode_method=mode_method,
         hooks=hooks,
     )
-    fit_policy = _tem_time_path_fit_policy_from_locals(locals())
+    fit_policy = _pack_dataclass_fields(_TEMTimePathFitPolicy, locals())
     gamma, omega = _fit_tem_time_path_signal(
         t=trace.t,
         signal=signal,
@@ -8146,7 +8096,7 @@ def run_tem_scan_batches(
     """Run TEM scan batches across Krylov, streaming, and saved-time branches."""
 
     fit_policy = _tem_scan_fit_policy_from_locals(locals(), hooks=hooks)
-    options = _tem_scan_runtime_options_from_locals(locals())
+    options = _pack_dataclass_fields(_TEMScanRuntimeOptions, locals())
     return _run_tem_scan_loop(
         ky_values=ky_values,
         grid_full=grid_full,
@@ -8290,22 +8240,6 @@ class _TEMLinearState:
     grid: Any
     selection: ModeSelection
     state: jnp.ndarray
-
-
-def _tem_linear_request_from_locals(values: dict[str, Any]) -> _TEMLinearRequest:
-    """Pack public ``run_tem_linear`` arguments once for internal routing."""
-
-    return _TEMLinearRequest(
-        **{field.name: values[field.name] for field in fields(_TEMLinearRequest)}
-    )
-
-
-def _tem_scan_request_from_locals(values: dict[str, Any]) -> _TEMScanRequest:
-    """Pack public ``run_tem_scan`` arguments once for internal routing."""
-
-    return _TEMScanRequest(
-        **{field.name: values[field.name] for field in fields(_TEMScanRequest)}
-    )
 
 
 def _validate_tem_species_indices(
@@ -8537,7 +8471,9 @@ def run_tem_linear(
 ) -> LinearRunResult:
     """Run the TEM benchmark and extract growth rate."""
 
-    return _run_tem_linear_request(_tem_linear_request_from_locals(locals()))
+    return _run_tem_linear_request(
+        _pack_dataclass_fields(_TEMLinearRequest, locals())
+    )
 
 
 def run_tem_scan(
@@ -8576,7 +8512,9 @@ def run_tem_scan(
 ) -> LinearScanResult:
     """Run the TEM benchmark for a list of ky values."""
 
-    return _run_tem_scan_request(_tem_scan_request_from_locals(locals()))
+    return _run_tem_scan_request(
+        _pack_dataclass_fields(_TEMScanRequest, locals())
+    )
 
 @dataclass(frozen=True)
 class _ETGLinearSetup:
@@ -8648,13 +8586,6 @@ class _ETGLinearRequest:
     reference_navg_fraction: float
     diagnostic_norm: str
     show_progress: bool
-
-
-def _etg_linear_request_from_locals(values: dict[str, Any]) -> _ETGLinearRequest:
-    """Build an ETG request from ``run_etg_linear`` locals."""
-
-    names = {field.name for field in fields(_ETGLinearRequest)}
-    return _ETGLinearRequest(**{name: values[name] for name in names})
 
 
 def _default_etg_params(cfg: ETGBaseCase, geom: Any, Nm: int) -> LinearParams:
@@ -9411,7 +9342,9 @@ def run_etg_linear(
 ) -> LinearRunResult:
     """Run an ETG linear benchmark and extract growth rate."""
 
-    return _run_etg_linear_request(_etg_linear_request_from_locals(locals()))
+    return _run_etg_linear_request(
+        _pack_dataclass_fields(_ETGLinearRequest, locals())
+    )
 
 @dataclass(frozen=True)
 class _ETGScanSetup:
@@ -9538,14 +9471,6 @@ class _ETGScanRequest:
     reference_navg_fraction: float
     diagnostic_norm: str
     show_progress: bool
-
-
-def _etg_scan_request_from_locals(values: dict[str, Any]) -> _ETGScanRequest:
-    """Pack public ``run_etg_scan`` arguments once for internal routing."""
-
-    return _ETGScanRequest(
-        **{field.name: values[field.name] for field in fields(_ETGScanRequest)}
-    )
 
 
 def _default_etg_scan_params(
@@ -9777,14 +9702,6 @@ class _ETGTimeBatchContext:
     gammas: list[float]
     omegas: list[float]
     ky_out: list[float]
-
-
-def _etg_time_batch_context_from_locals(values: dict[str, Any]) -> _ETGTimeBatchContext:
-    """Pack ``run_etg_time_batch`` arguments for internal routing."""
-
-    return _ETGTimeBatchContext(
-        **{field.name: values[field.name] for field in fields(_ETGTimeBatchContext)}
-    )
 
 
 def run_etg_krylov_batch(
@@ -10044,7 +9961,7 @@ def run_etg_time_batch(
 ) -> ETGTimeBatchResult:
     """Integrate one ETG time-path batch and append streaming-fit results if used."""
 
-    context = _etg_time_batch_context_from_locals(locals())
+    context = _pack_dataclass_fields(_ETGTimeBatchContext, locals())
     time_cfg_i = _etg_time_config_for_batch(context)
     if time_cfg_i is not None and time_cfg_i.use_diffrax and streaming_fit:
         _append_etg_streaming_time_results(context, time_cfg_i=time_cfg_i)
@@ -10634,7 +10551,9 @@ def run_etg_scan(
     If ``time_cfg`` is provided, its ``dt`` and ``t_max`` override ``dt``/``steps``.
     """
 
-    return _run_etg_scan_request(_etg_scan_request_from_locals(locals()))
+    return _run_etg_scan_request(
+        _pack_dataclass_fields(_ETGScanRequest, locals())
+    )
 
 @dataclass(frozen=True)
 class _KineticLinearSetup:
@@ -11408,15 +11327,6 @@ class _KineticScanControlRequest:
     show_progress: bool
 
 
-def _kinetic_scan_control_request_from_locals(
-    values: dict[str, Any],
-) -> _KineticScanControlRequest:
-    """Build a request from ``run_kinetic_scan`` locals without forwarding Nl."""
-
-    names = {field.name for field in fields(_KineticScanControlRequest)}
-    return _KineticScanControlRequest(**{name: values[name] for name in names})
-
-
 def _resolve_kinetic_scan_setup(
     *,
     cfg: KineticElectronBaseCase | None,
@@ -12117,7 +12027,7 @@ def run_kinetic_scan(
     """
 
     controls = _prepare_kinetic_scan_controls(
-        _kinetic_scan_control_request_from_locals(locals())
+        _pack_dataclass_fields(_KineticScanControlRequest, locals())
     )
     output = _run_kinetic_scan_batches(
         setup=controls.setup,
@@ -12238,14 +12148,6 @@ class _KBMScanOutput:
             gamma=np.asarray(self.gamma, dtype=float),
             omega=np.asarray(self.omega, dtype=float),
         )
-
-
-def _kbm_scan_request_from_locals(values: dict[str, Any]) -> _KBMScanRequest:
-    """Pack public ``run_kbm_scan`` arguments once for internal routing."""
-
-    return _KBMScanRequest(
-        **{field.name: values[field.name] for field in fields(_KBMScanRequest)}
-    )
 
 
 def _resolve_kbm_scan_case(
@@ -12515,7 +12417,9 @@ def run_kbm_scan(
     at fixed beta.
     """
 
-    return _run_kbm_scan_request(_kbm_scan_request_from_locals(locals()))
+    return _run_kbm_scan_request(
+        _pack_dataclass_fields(_KBMScanRequest, locals())
+    )
 
 
 
