@@ -133,7 +133,7 @@ jobs:
               tests/validation/quasilinear/test_quasilinear_calibration.py
               tests/tools/artifacts/test_quasilinear_artifact_plots.py
               tests/tools/profiling/test_profile_scaling_contracts.py
-              tests/validation/quasilinear/test_quasilinear_uq_ensemble_scaling_artifacts.py
+              tests/unit/parallel/test_parallel_artifact_contracts.py
               tests/integration/examples/test_examples.py
           - name: linear-core
             files: >-
@@ -171,7 +171,6 @@ jobs:
               tests/tools/artifacts/test_parallel_identity_gate_artifacts.py
               tests/tools/artifacts/test_nonlinear_artifact_reports.py
               tests/tools/profiling/test_profile_nonlinear_sharding.py
-              tests/unit/parallel/test_nonlinear_sharding_artifacts.py
               tests/unit/objectives/test_autodiff_validation.py
               tests/unit/objectives/test_differentiable_geometry_bridge.py
 
