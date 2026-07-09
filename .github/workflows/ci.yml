@@ -51,7 +51,7 @@ jobs:
           python tools/artifacts/build_parallelization_completion_status.py \
             --out-prefix docs/_static/parallelization_completion_status \
             --skip-figures
-          python tools/artifacts/build_technical_release_status.py \
+          python tools/release/check_release_readiness.py technical-status \
             --out-json docs/_static/technical_release_status.json \
             --fail-under 98
           python tools/release/check_release_readiness.py \
