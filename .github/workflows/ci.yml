@@ -135,9 +135,9 @@ jobs:
               tests/unit/quasilinear/test_quasilinear.py
               tests/validation/quasilinear/test_quasilinear_calibration.py
               tests/tools/artifacts/test_quasilinear_artifact_plots.py
-              tests/tools/profiling/test_profile_quasilinear_uq_ensemble_scaling.py
+              tests/tools/profiling/test_profile_scaling_contracts.py
               tests/validation/quasilinear/test_quasilinear_uq_ensemble_scaling_artifacts.py
-              tests/integration/examples/test_quasilinear_implicit_sensitivity_demo.py
+              tests/integration/examples/test_examples.py
           - name: linear-core
             files: >-
               tests/unit/linear/test_linear.py
@@ -156,7 +156,7 @@ jobs:
               tests/integration/runtime/test_runtime_runner.py
               tests/unit/solvers/test_runners.py
               tests/integration/runtime/test_cli.py
-              tests/integration/examples/test_example_smoke.py
+              tests/integration/examples/test_examples.py
           - name: nonlinear-core
             files: >-
               tests/unit/nonlinear/test_nonlinear.py
