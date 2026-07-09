@@ -8,7 +8,14 @@ from typing import Any, Callable
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.diagnostics.modes import ModeSelection
+from spectraxgk.benchmarking.shared import LinearRunResult, LinearScanResult
+from spectraxgk.core.grid import SpectralGrid, build_spectral_grid
+from spectraxgk.diagnostics.analysis import fit_growth_rate_auto
+from spectraxgk.diagnostics.modes import (
+    ModeSelection,
+    extract_eigenfunction,
+    extract_mode_time_series,
+)
 from spectraxgk.workflows.runtime.config import RuntimeConfig
 from spectraxgk.workflows.runtime.diagnostics import RuntimeQuasilinearFinalizationDeps
 from spectraxgk.workflows.runtime.results import RuntimeLinearResult
@@ -765,4 +772,204 @@ def run_full_linear_runtime(
         krylov_cfg=krylov_cfg,
         show_progress=show_progress,
         status_callback=status_callback,
+    )
+
+
+@dataclass(frozen=True)
+class ScanAndModeResult:
+    """Linear scan plus a representative fitted eigenfunction."""
+
+    scan: LinearScanResult
+    eigenfunction: np.ndarray
+    grid: SpectralGrid
+    ky_selected: float
+    tmin: float | None
+    tmax: float | None
+
+
+def _indexed_control(value: float | int | np.ndarray | None, index: int, cast):
+    if isinstance(value, np.ndarray):
+        return cast(value[index])
+    return None if value is None else cast(value)
+
+
+def run_linear_scan(
+    *,
+    ky_values: np.ndarray,
+    run_linear_fn: Callable[..., LinearRunResult],
+    cfg: Any,
+    Nl: int,
+    Nm: int,
+    dt: float | np.ndarray,
+    steps: int | np.ndarray,
+    method: str,
+    solver: str,
+    krylov_cfg: Any,
+    window_kw: dict[str, Any],
+    tmin: float | np.ndarray | None = None,
+    tmax: float | np.ndarray | None = None,
+    auto_window: bool = True,
+    run_kwargs: dict[str, Any] | None = None,
+    resolution_policy: Callable[[float], tuple[int, int]] | None = None,
+    krylov_policy: Callable[[float], object] | None = None,
+) -> LinearScanResult:
+    """Run a deterministic pointwise linear scan over ``ky_values``."""
+
+    rows: list[tuple[float, float, float]] = []
+    for index, ky in enumerate(np.asarray(ky_values, dtype=float)):
+        n_l, n_m = (
+            resolution_policy(float(ky))
+            if resolution_policy is not None
+            else (Nl, Nm)
+        )
+        result = run_linear_fn(
+            ky_target=float(ky),
+            cfg=cfg,
+            Nl=int(n_l),
+            Nm=int(n_m),
+            dt=_indexed_control(dt, index, float),
+            steps=_indexed_control(steps, index, int),
+            method=method,
+            solver=solver,
+            krylov_cfg=(
+                krylov_policy(float(ky)) if krylov_policy is not None else krylov_cfg
+            ),
+            auto_window=auto_window,
+            tmin=_indexed_control(tmin, index, float),
+            tmax=_indexed_control(tmax, index, float),
+            **window_kw,
+            **(run_kwargs or {}),
+        )
+        rows.append((float(result.ky), float(result.gamma), float(result.omega)))
+    if not rows:
+        empty = np.asarray([], dtype=float)
+        return LinearScanResult(ky=empty, gamma=empty.copy(), omega=empty.copy())
+    values = np.asarray(rows, dtype=float)
+    return LinearScanResult(ky=values[:, 0], gamma=values[:, 1], omega=values[:, 2])
+
+
+def _representative_run(
+    scan: LinearScanResult,
+    ky_selected: float,
+    *,
+    linear_fn: Callable[..., LinearRunResult],
+    cfg: Any,
+    Nl: int,
+    Nm: int,
+    dt: float | np.ndarray,
+    steps: int | np.ndarray,
+    method: str,
+    mode_solver: str,
+    window_kw: dict[str, Any],
+    mode_kwargs: dict[str, Any] | None,
+    resolution_policy: Callable[[float], tuple[int, int]] | None,
+) -> LinearRunResult:
+    n_l, n_m = (
+        resolution_policy(ky_selected)
+        if resolution_policy is not None
+        else (Nl, Nm)
+    )
+    index = int(np.argmin(np.abs(scan.ky - ky_selected)))
+    return linear_fn(
+        cfg=cfg,
+        ky_target=ky_selected,
+        Nl=int(n_l),
+        Nm=int(n_m),
+        dt=_indexed_control(dt, index, float),
+        steps=_indexed_control(steps, index, int),
+        method=method,
+        solver=mode_solver,
+        **window_kw,
+        **(mode_kwargs or {}),
+    )
+
+
+def run_scan_and_mode(
+    *,
+    ky_values: np.ndarray,
+    linear_fn: Callable[..., LinearRunResult],
+    cfg: Any,
+    Nl: int,
+    Nm: int,
+    dt: float | np.ndarray,
+    steps: int | np.ndarray,
+    method: str,
+    solver: str,
+    mode_solver: str,
+    krylov_cfg: Any,
+    window_kw: dict[str, Any],
+    tmin: float | np.ndarray | None = None,
+    tmax: float | np.ndarray | None = None,
+    auto_window: bool = True,
+    run_kwargs: dict[str, Any] | None = None,
+    mode_kwargs: dict[str, Any] | None = None,
+    resolution_policy: Callable[[float], tuple[int, int]] | None = None,
+    krylov_policy: Callable[[float], object] | None = None,
+    select_ky: Callable[[LinearScanResult], float] | None = None,
+) -> ScanAndModeResult:
+    """Run a pointwise scan and extract the fastest or selected eigenmode."""
+
+    scan = run_linear_scan(
+        ky_values=ky_values,
+        run_linear_fn=linear_fn,
+        cfg=cfg,
+        Nl=Nl,
+        Nm=Nm,
+        dt=dt,
+        steps=steps,
+        method=method,
+        solver=solver,
+        krylov_cfg=krylov_cfg,
+        window_kw=window_kw,
+        tmin=tmin,
+        tmax=tmax,
+        auto_window=auto_window,
+        run_kwargs=run_kwargs,
+        resolution_policy=resolution_policy,
+        krylov_policy=krylov_policy,
+    )
+    ky_selected = (
+        float(select_ky(scan))
+        if select_ky is not None
+        else float(scan.ky[int(np.nanargmax(scan.gamma))])
+    )
+    run = _representative_run(
+        scan,
+        ky_selected,
+        linear_fn=linear_fn,
+        cfg=cfg,
+        Nl=Nl,
+        Nm=Nm,
+        dt=dt,
+        steps=steps,
+        method=method,
+        mode_solver=mode_solver,
+        window_kw=window_kw,
+        mode_kwargs=mode_kwargs,
+        resolution_policy=resolution_policy,
+    )
+    grid = build_spectral_grid(cfg.grid)
+    tmin_fit: float | None = None
+    tmax_fit: float | None = None
+    if run.t.size >= 2:
+        signal = extract_mode_time_series(run.phi_t, run.selection, method="project")
+        _gamma, _omega, tmin_fit, tmax_fit = fit_growth_rate_auto(
+            run.t, signal, **window_kw
+        )
+    eigenfunction = extract_eigenfunction(
+        run.phi_t,
+        run.t,
+        run.selection,
+        z=np.asarray(grid.z),
+        method="snapshot",
+        tmin=tmin_fit,
+        tmax=tmax_fit,
+    )
+    return ScanAndModeResult(
+        scan=scan,
+        eigenfunction=eigenfunction,
+        grid=grid,
+        ky_selected=ky_selected,
+        tmin=tmin_fit,
+        tmax=tmax_fit,
     )

@@ -14,7 +14,7 @@ from spectraxgk.diagnostics.modes import (
     extract_mode_time_series,
     normalize_eigenfunction,
 )
-from spectraxgk.benchmarks import run_linear_scan
+from spectraxgk.workflows.linear import run_linear_scan
 from spectraxgk.benchmarks import (
     ETGBaseCase,
     CycloneBaseCase,
