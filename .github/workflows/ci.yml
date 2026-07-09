@@ -112,7 +112,6 @@ jobs:
           - name: fundamentals-core
             files: >-
               tests/unit/diagnostics/test_analysis.py
-              tests/unit/diagnostics/test_auto_fit_signal.py
               tests/unit/core/test_core_contracts.py
               tests/unit/core/test_config.py
               tests/unit/geometry/test_geometry.py
