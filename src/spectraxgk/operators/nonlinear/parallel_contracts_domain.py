@@ -10,7 +10,7 @@ import jax
 
 @dataclass(frozen=True)
 class NonlinearDomainDecompositionPlan:
-    """Static decomposition plan for a local nonlinear state-domain prototype."""
+    """Static decomposition plan for a local nonlinear state-domain local-stencil diagnostic."""
 
     state_shape: tuple[int, ...]
     axis: int
@@ -89,7 +89,7 @@ class NonlinearDomainDecompositionPlan:
 
 @dataclass(frozen=True)
 class NonlinearDomainIdentityReport:
-    """Numerical identity report for a decomposed nonlinear prototype step."""
+    """Numerical identity report for a decomposed nonlinear local-stencil step."""
 
     gate_name: str
     plan: NonlinearDomainDecompositionPlan
@@ -116,7 +116,7 @@ class NonlinearDomainIdentityReport:
 
 @dataclass(frozen=True)
 class NonlinearDomainTransportWindowReport:
-    """Transport-window identity report for the nonlinear domain prototype."""
+    """Transport-window identity report for the nonlinear domain local-stencil diagnostic."""
 
     gate_name: str
     plan: NonlinearDomainDecompositionPlan
@@ -163,7 +163,7 @@ _NONLINEAR_DOMAIN_GATE_NAME = "nonlinear_domain_local_stencil_identity"
 _NONLINEAR_DOMAIN_TRANSPORT_GATE_NAME = "nonlinear_domain_transport_window_identity"
 _NONLINEAR_DOMAIN_CLAIM_SCOPE = (
     "diagnostic nonlinear state-domain identity gate only; "
-    "bounded local-stencil prototype with no production routing or speedup claim"
+    "bounded local-stencil diagnostic with no production routing or speedup claim"
 )
 _NONLINEAR_DOMAIN_TRANSPORT_CLAIM_SCOPE = (
     "diagnostic nonlinear state-domain transport-window identity gate only; "

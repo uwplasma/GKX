@@ -1,7 +1,7 @@
 """Public facade for nonlinear parallelization contracts and identity gates.
 
 The production-facing paths in this module remain policy metadata. Numerical
-routes are conservative diagnostic prototypes: they only enable decomposed
+routes are conservative diagnostic local-stencil routes: they only enable decomposed
 updates after direct numerical identity against serial reference operations.
 """
 
@@ -40,8 +40,8 @@ from spectraxgk.operators.nonlinear.domain_decomposition import (
     nonlinear_domain_identity_report,
     nonlinear_domain_parallel_identity_gate,
     nonlinear_domain_transport_window_identity_gate,
-    prototype_nonlinear_domain_decomposed_step,
-    prototype_nonlinear_domain_serial_step,
+    local_stencil_nonlinear_domain_decomposed_step,
+    local_stencil_nonlinear_domain_serial_step,
 )
 
 
@@ -190,7 +190,7 @@ __all__ = [
     "nonlinear_spectral_rhs_identity_gate",
     "nonlinear_spectral_rhs_identity_report",
     "pencil_decomposed_nonlinear_spectral_rhs",
-    "prototype_nonlinear_domain_decomposed_step",
-    "prototype_nonlinear_domain_serial_step",
+    "local_stencil_nonlinear_domain_decomposed_step",
+    "local_stencil_nonlinear_domain_serial_step",
     "release_ready_nonlinear_parallel_strategies",
 ]

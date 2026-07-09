@@ -1,4 +1,4 @@
-"""Local nonlinear domain prototype gates for parallelization validation.
+"""Local nonlinear domain local-stencil gates for parallelization validation.
 
 These routines exercise bounded halo decomposition on a deterministic local
 stencil.  They are diagnostic identity gates only; they do not implement a
@@ -71,7 +71,7 @@ def build_nonlinear_domain_decomposition_plan(
     if int(num_domains) > domain_size:
         raise ValueError("num_domains cannot exceed decomposed axis size")
     if int(halo) != 1:
-        raise ValueError("this prototype only supports a one-cell halo")
+        raise ValueError("this diagnostic only supports a one-cell halo")
 
     base, remainder = divmod(domain_size, int(num_domains))
     chunk_sizes = tuple(
@@ -104,7 +104,7 @@ def deterministic_nonlinear_domain_state(
     return scaled + 0.125j * jnp.cos(2.0 * jnp.pi * scaled)
 
 
-def _prototype_nonlinear_step_axis0(state: jax.Array, dt: float) -> jax.Array:
+def _local_stencil_step_axis0(state: jax.Array, dt: float) -> jax.Array:
     left = jnp.roll(state, shift=1, axis=0)
     right = jnp.roll(state, shift=-1, axis=0)
     centered_gradient = 0.5 * (right - left)
@@ -116,20 +116,20 @@ def _prototype_nonlinear_step_axis0(state: jax.Array, dt: float) -> jax.Array:
     return state + jnp.asarray(dt, dtype=jnp.real(state).dtype) * rhs
 
 
-def prototype_nonlinear_domain_serial_step(
+def local_stencil_nonlinear_domain_serial_step(
     state: jax.Array,
     *,
     axis: int = 0,
     dt: float = 0.05,
 ) -> jax.Array:
-    """Apply the serial local nonlinear prototype step along one state axis."""
+    """Apply the serial local nonlinear diagnostic step along one state axis."""
 
     moved = jnp.moveaxis(state, axis % state.ndim, 0)
-    stepped = _prototype_nonlinear_step_axis0(moved, dt)
+    stepped = _local_stencil_step_axis0(moved, dt)
     return jnp.moveaxis(stepped, 0, axis % state.ndim)
 
 
-def prototype_nonlinear_domain_decomposed_step(
+def local_stencil_nonlinear_domain_decomposed_step(
     state: jax.Array,
     plan: NonlinearDomainDecompositionPlan,
     *,
@@ -154,7 +154,7 @@ def prototype_nonlinear_domain_decomposed_step(
             % domain_size
         )
         local_state = jnp.take(moved, indices, axis=0)
-        local_step = _prototype_nonlinear_step_axis0(local_state, dt)
+        local_step = _local_stencil_step_axis0(local_state, dt)
         chunks.append(
             jax.lax.dynamic_slice_in_dim(local_step, plan.halo, chunk_size, axis=0)
         )
@@ -236,10 +236,10 @@ def nonlinear_domain_parallel_identity_gate(
     atol: float = 1.0e-6,
     rtol: float = 1.0e-6,
 ) -> tuple[jax.Array, NonlinearDomainIdentityReport]:
-    """Return a fail-closed decomposed prototype step and its identity report."""
+    """Return a fail-closed decomposed local-stencil step and its identity report."""
 
-    serial = prototype_nonlinear_domain_serial_step(state, axis=plan.axis, dt=dt)
-    decomposed = prototype_nonlinear_domain_decomposed_step(state, plan, dt=dt)
+    serial = local_stencil_nonlinear_domain_serial_step(state, axis=plan.axis, dt=dt)
+    decomposed = local_stencil_nonlinear_domain_decomposed_step(state, plan, dt=dt)
     report = nonlinear_domain_identity_report(
         serial, decomposed, plan, atol=atol, rtol=rtol
     )
@@ -378,12 +378,12 @@ def _run_domain_transport_window(
     _append_transport_observables(serial_trace_lists, serial_state, plan)
     _append_transport_observables(decomposed_trace_lists, decomposed_state, plan)
     for _ in range(int(steps)):
-        serial_state = prototype_nonlinear_domain_serial_step(
+        serial_state = local_stencil_nonlinear_domain_serial_step(
             serial_state,
             axis=plan.axis,
             dt=dt,
         )
-        decomposed_state = prototype_nonlinear_domain_decomposed_step(
+        decomposed_state = local_stencil_nonlinear_domain_decomposed_step(
             decomposed_state,
             plan,
             dt=dt,
@@ -572,6 +572,6 @@ __all__ = [
     "nonlinear_domain_identity_report",
     "nonlinear_domain_parallel_identity_gate",
     "nonlinear_domain_transport_window_identity_gate",
-    "prototype_nonlinear_domain_decomposed_step",
-    "prototype_nonlinear_domain_serial_step",
+    "local_stencil_nonlinear_domain_decomposed_step",
+    "local_stencil_nonlinear_domain_serial_step",
 ]
