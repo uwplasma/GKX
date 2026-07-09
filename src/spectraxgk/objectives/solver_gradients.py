@@ -28,7 +28,7 @@ from spectraxgk.objectives.geometry import (
     solver_ready_geometry_mapping,
     tiny_differentiable_objective_gradient_report,
 )
-from spectraxgk.objectives.nonlinear_window import (
+from spectraxgk.objectives.vmec_boozer_gradients import (
     _reduced_nonlinear_window_metrics_from_linear_observables,
 )
 from spectraxgk.objectives.sampling import (

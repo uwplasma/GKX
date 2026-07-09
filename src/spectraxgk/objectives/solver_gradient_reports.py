@@ -14,7 +14,7 @@ from spectraxgk.objectives.gradient_gates import (
     linear_solver_geometry_gradient_report as _linear_solver_geometry_gradient_report_impl,
     solver_objective_branch_gradient_report as _solver_objective_branch_gradient_report_impl,
 )
-from spectraxgk.objectives.nonlinear_window import (
+from spectraxgk.objectives.vmec_boozer_gradients import (
     _reduced_nonlinear_window_metrics_from_linear_observables,
 )
 from spectraxgk.objectives.vmec_boozer_gradients import (
