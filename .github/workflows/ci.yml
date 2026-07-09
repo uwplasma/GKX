@@ -118,15 +118,10 @@ jobs:
           - name: release-artifacts
             files: >-
               tests/release/test_release_gates.py
-              tests/release/test_release_gates.py
-              tests/release/test_release_gates.py
-              tests/release/test_release_gates.py
-              tests/release/test_release_gates.py
-              tests/release/test_release_gates.py
-              tests/tools/artifacts/test_artifact_plot_smoke.py
+              tests/tools/artifacts/test_general_artifact_tools.py
               tests/unit/quasilinear/test_quasilinear.py
               tests/validation/quasilinear/test_quasilinear_calibration.py
-              tests/tools/artifacts/test_quasilinear_artifact_plots.py
+              tests/tools/artifacts/test_quasilinear_artifact_tools.py
               tests/tools/profiling/test_runtime_and_scaling_profile_contracts.py
               tests/unit/parallel/test_parallel_artifact_contracts.py
               tests/integration/examples/test_examples.py
@@ -157,11 +152,10 @@ jobs:
           - name: parallel-autodiff
             files: >-
               tests/unit/parallel/test_parallel.py
-              tests/tools/artifacts/test_status_readiness_artifacts.py
+              tests/tools/artifacts/test_stellarator_artifact_tools.py
               tests/unit/parallel/test_sharding.py
               tests/unit/solvers/test_sharded_integrators.py
-              tests/tools/artifacts/test_parallel_identity_gate_artifacts.py
-              tests/tools/artifacts/test_nonlinear_artifact_reports.py
+              tests/tools/artifacts/test_transport_artifact_tools.py
               tests/tools/profiling/test_nonlinear_sharding_profile_contracts.py
               tests/unit/objectives/test_autodiff_validation.py
               tests/unit/objectives/test_differentiable_geometry_bridge.py
