@@ -10,7 +10,6 @@ from spectraxgk.geometry_backends.miller_core import (
     compute_straight_field_theta,
     rebuild_straight_theta_state,
 )
-from spectraxgk.geometry_backends.miller_io import write_miller_eik_netcdf
 from spectraxgk.geometry_backends.miller_numerics import (
     _safe_denom,
     cumulative_trapezoid,
@@ -24,6 +23,7 @@ from spectraxgk.geometry_backends.miller_pipeline import (
     _request_attr,
     generate_miller_eik_internal,
     internal_miller_backend_available,
+    write_miller_eik_netcdf,
 )
 from spectraxgk.geometry_backends.miller_profiles import assemble_miller_profiles
 
