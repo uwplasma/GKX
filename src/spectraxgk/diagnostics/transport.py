@@ -10,7 +10,7 @@ from spectraxgk.diagnostics.channels import (
     _particle_flux_channel_contrib_species,
     _turbulent_heating_contrib_species,
 )
-from spectraxgk.operators.linear.cache import LinearCache
+from spectraxgk.operators.linear.cache_model import LinearCache
 from spectraxgk.operators.linear.params import LinearParams
 
 __all__ = [

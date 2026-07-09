@@ -67,7 +67,7 @@ from spectraxgk.geometry import (
     build_flux_tube_geometry,
 )
 from spectraxgk.linear import integrate_linear, integrate_linear_diagnostics
-from spectraxgk.operators.linear.cache import build_linear_cache
+from spectraxgk.operators.linear.cache_builder import build_linear_cache
 from spectraxgk.operators.linear.params import (
     LinearParams,
     LinearTerms,

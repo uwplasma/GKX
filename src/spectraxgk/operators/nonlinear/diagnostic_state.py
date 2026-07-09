@@ -15,7 +15,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from spectraxgk.core.grid import SpectralGrid
-from spectraxgk.operators.linear.cache import LinearCache
+from spectraxgk.operators.linear.cache_model import LinearCache
 from spectraxgk.operators.linear.params import LinearParams
 from spectraxgk.terms.config import FieldState
 

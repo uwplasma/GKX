@@ -12,7 +12,7 @@ import numpy as np
 from spectraxgk.artifacts.restart import load_netcdf_restart_state
 from spectraxgk.core.grid import SpectralGrid
 from spectraxgk.geometry import FluxTubeGeometryLike
-from spectraxgk.operators.linear.cache import build_linear_cache
+from spectraxgk.operators.linear.cache_builder import build_linear_cache
 from spectraxgk.operators.linear.params import LinearParams
 from spectraxgk.workflows.runtime.config import RuntimeConfig
 from spectraxgk.workflows.runtime.initial_phi import _density_moments_for_target_phi

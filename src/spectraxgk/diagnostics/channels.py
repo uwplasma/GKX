@@ -11,7 +11,7 @@ from spectraxgk.diagnostics.weights import (
     _species_array,
 )
 from spectraxgk.core.grid import SpectralGrid
-from spectraxgk.operators.linear.cache import LinearCache
+from spectraxgk.operators.linear.cache_model import LinearCache
 from spectraxgk.operators.linear.params import LinearParams
 from spectraxgk.terms.operators import shift_axis
 

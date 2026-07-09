@@ -8,7 +8,7 @@ import functools
 import jax
 import jax.numpy as jnp
 
-from spectraxgk.operators.linear.cache import LinearCache
+from spectraxgk.operators.linear.cache_model import LinearCache
 from spectraxgk.operators.linear.moments import build_H
 from spectraxgk.operators.linear.params import LinearParams
 from spectraxgk.terms.assembly_helpers import (

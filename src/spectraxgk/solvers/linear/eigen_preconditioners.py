@@ -6,7 +6,7 @@ from typing import Callable
 
 import jax.numpy as jnp
 
-from spectraxgk.operators.linear.cache import LinearCache
+from spectraxgk.operators.linear.cache_model import LinearCache
 from spectraxgk.operators.linear.params import LinearParams
 from spectraxgk.solvers.linear.eigen_operator import _compute_damping
 from spectraxgk.terms.config import TermConfig

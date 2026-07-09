@@ -9,7 +9,8 @@ import jax.numpy as jnp
 from spectraxgk.config import resolve_cfl_fac
 from spectraxgk.geometry import FluxTubeGeometryLike, ensure_flux_tube_geometry_data
 from spectraxgk.core.grid import SpectralGrid
-from spectraxgk.operators.linear.cache import LinearCache, build_linear_cache
+from spectraxgk.operators.linear.cache_model import LinearCache
+from spectraxgk.operators.linear.cache_builder import build_linear_cache
 from spectraxgk.operators.linear.params import LinearParams
 from spectraxgk.terms.assembly import compute_fields_cached
 from spectraxgk.terms.config import FieldState, TermConfig

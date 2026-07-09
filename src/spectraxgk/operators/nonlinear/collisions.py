@@ -7,8 +7,8 @@ from typing import Callable
 
 import jax.numpy as jnp
 
-from spectraxgk.operators.linear.cache import (
-    LinearCache,
+from spectraxgk.operators.linear.cache_model import LinearCache
+from spectraxgk.operators.linear.cache_arrays import (
     collision_damping as _base_collision_damping,
     hypercollision_damping,
 )

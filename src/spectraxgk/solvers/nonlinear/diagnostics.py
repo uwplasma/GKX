@@ -17,7 +17,7 @@ import jax.numpy as jnp
 from spectraxgk.diagnostics import SimulationDiagnostics
 from spectraxgk.geometry import FluxTubeGeometryLike
 from spectraxgk.core.grid import SpectralGrid
-from spectraxgk.operators.linear.cache import LinearCache
+from spectraxgk.operators.linear.cache_model import LinearCache
 from spectraxgk.operators.linear.params import LinearParams
 from spectraxgk.terms.config import FieldState, TermConfig
 from spectraxgk.solvers.nonlinear.imex_diagnostics import (

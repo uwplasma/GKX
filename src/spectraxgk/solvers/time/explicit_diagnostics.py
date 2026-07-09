@@ -21,7 +21,7 @@ from spectraxgk.diagnostics import (
     total_energy,
 )
 from spectraxgk.geometry import FluxTubeGeometryLike, ensure_flux_tube_geometry_data
-from spectraxgk.operators.linear.cache import LinearCache
+from spectraxgk.operators.linear.cache_model import LinearCache
 from spectraxgk.operators.linear.params import LinearParams, LinearTerms
 from spectraxgk.solvers.time.explicit_cfl import _linear_frequency_bound
 from spectraxgk.solvers.time.explicit_steps import (

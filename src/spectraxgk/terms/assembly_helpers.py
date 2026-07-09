@@ -9,7 +9,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.operators.linear.cache import LinearCache
+from spectraxgk.operators.linear.cache_model import LinearCache
 from spectraxgk.operators.linear.params import LinearParams, _as_species_array
 from spectraxgk.terms.config import FieldState, TermConfig
 from spectraxgk.terms.fields import _solve_fields_impl, solve_fields

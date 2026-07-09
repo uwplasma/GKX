@@ -17,7 +17,7 @@ from spectraxgk.diagnostics.weights import (
     _hermitian_mode_weight,
     _species_array,
 )
-from spectraxgk.operators.linear.cache import LinearCache
+from spectraxgk.operators.linear.cache_model import LinearCache
 from spectraxgk.operators.linear.params import LinearParams
 
 __all__ = [

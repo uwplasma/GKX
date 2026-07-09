@@ -7,7 +7,7 @@ from typing import Any, TYPE_CHECKING
 import jax
 import jax.numpy as jnp
 
-from spectraxgk.operators.linear.cache import LinearCache
+from spectraxgk.operators.linear.cache_model import LinearCache
 from spectraxgk.operators.linear.params import LinearParams
 from spectraxgk.terms.assembly import assemble_rhs_cached, assemble_rhs_cached_jit, compute_fields_cached
 from spectraxgk.terms.config import FieldState, TermConfig

@@ -15,7 +15,7 @@ from spectraxgk.geometry import (
     apply_geometry_grid_defaults,
     ensure_flux_tube_geometry_data,
 )
-from spectraxgk.operators.linear.cache import build_linear_cache
+from spectraxgk.operators.linear.cache_builder import build_linear_cache
 from spectraxgk.runtime import (
     build_runtime_geometry,
     build_runtime_linear_params,

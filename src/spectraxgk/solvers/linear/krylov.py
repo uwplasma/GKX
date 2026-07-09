@@ -14,7 +14,7 @@ from typing import Any, Callable, Mapping
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.operators.linear.cache import LinearCache
+from spectraxgk.operators.linear.cache_model import LinearCache
 from spectraxgk.operators.linear.params import (
     LinearParams,
     LinearTerms,

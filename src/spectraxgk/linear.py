@@ -16,18 +16,23 @@ from spectraxgk.operators.linear.moments import (
     diamagnetic_drive_coeffs,  # noqa: F401 - linear API helper re-export
     energy_operator,  # noqa: F401 - linear API helper re-export
     grad_z_periodic,  # noqa: F401 - linear API helper re-export
+    hermite_streaming,  # noqa: F401 - linear API helper re-export
     lenard_bernstein_eigenvalues,  # noqa: F401 - linear API helper re-export
     quasineutrality_phi,  # noqa: F401 - linear API helper re-export
     shift_axis,  # noqa: F401 - linear API helper re-export
     streaming_term,  # noqa: F401 - linear API helper re-export
 )
-from spectraxgk.operators.linear.cache import (
+from spectraxgk.operators.linear.cache_model import (
     LinearCache,  # noqa: F401 - linear API type re-export
+)
+from spectraxgk.operators.linear.cache_builder import (
+    build_linear_cache,  # noqa: F401 - linear API helper re-export
+)
+from spectraxgk.operators.linear.cache_arrays import (
     _build_end_damping_profile_array,  # noqa: F401 - linear API helper re-export
     _build_gyroaverage_cache_arrays,  # noqa: F401 - linear API helper re-export
     _build_low_rank_moment_cache_arrays,  # noqa: F401 - linear API helper re-export
     _numpy_dtype_for_jax,  # noqa: F401 - linear API helper re-export
-    build_linear_cache,  # noqa: F401 - linear API helper re-export
     collision_damping,  # noqa: F401 - linear API helper re-export
     hypercollision_damping,  # noqa: F401 - linear API helper re-export
 )

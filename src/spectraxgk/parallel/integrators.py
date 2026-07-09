@@ -10,7 +10,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from spectraxgk.operators.linear.rhs import linear_rhs_cached
-from spectraxgk.operators.linear.cache import LinearCache
+from spectraxgk.operators.linear.cache_model import LinearCache
 from spectraxgk.operators.linear.params import LinearParams, LinearTerms
 from spectraxgk.nonlinear import _make_hermitian_projector, nonlinear_rhs_cached
 from spectraxgk.terms.config import FieldState, TermConfig

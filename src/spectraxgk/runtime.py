@@ -21,7 +21,7 @@ from spectraxgk.diagnostics.modes import (
 from spectraxgk.geometry import apply_geometry_grid_defaults, FluxTubeGeometryLike
 from spectraxgk.core.grid import build_spectral_grid, select_ky_grid
 from spectraxgk.linear import integrate_linear_diagnostics
-from spectraxgk.operators.linear.cache import build_linear_cache
+from spectraxgk.operators.linear.cache_builder import build_linear_cache
 from spectraxgk.operators.linear.params import (
     LinearParams,
     LinearTerms,

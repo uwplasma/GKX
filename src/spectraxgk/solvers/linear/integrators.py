@@ -10,9 +10,9 @@ import jax.numpy as jnp
 
 from spectraxgk.geometry import FluxTubeGeometryLike
 from spectraxgk.core.grid import SpectralGrid
-from spectraxgk.operators.linear.cache import (
-    LinearCache,
-    build_linear_cache,
+from spectraxgk.operators.linear.cache_model import LinearCache
+from spectraxgk.operators.linear.cache_builder import build_linear_cache
+from spectraxgk.operators.linear.cache_arrays import (
     collision_damping,
     hypercollision_damping,
 )

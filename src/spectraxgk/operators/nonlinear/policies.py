@@ -11,7 +11,7 @@ import numpy as np
 
 from spectraxgk.core.grid import SpectralGrid, real_fft_mesh
 from spectraxgk.solvers.linear.implicit import _build_implicit_operator
-from spectraxgk.operators.linear.cache import LinearCache
+from spectraxgk.operators.linear.cache_model import LinearCache
 from spectraxgk.operators.linear.params import (
     LinearParams,
     term_config_to_linear_terms,

@@ -6,7 +6,7 @@ from typing import Any
 
 import jax.numpy as jnp
 
-from spectraxgk.operators.linear.cache import LinearCache
+from spectraxgk.operators.linear.cache_model import LinearCache
 from spectraxgk.operators.linear.params import LinearParams, _as_species_array
 from spectraxgk.solvers.linear.parallel_common import _resolve_parallel_devices
 

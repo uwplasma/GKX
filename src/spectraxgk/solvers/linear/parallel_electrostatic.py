@@ -9,7 +9,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.operators.linear.cache import LinearCache
+from spectraxgk.operators.linear.cache_model import LinearCache
 from spectraxgk.operators.linear.moments import build_H
 from spectraxgk.operators.linear.params import LinearParams, LinearTerms
 from spectraxgk.solvers.linear.parallel_common import (

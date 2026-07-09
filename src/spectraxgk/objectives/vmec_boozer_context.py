@@ -24,7 +24,7 @@ from spectraxgk.objectives.vmec_state import (
     _vmec_boozer_state_array,
     _vmec_boozer_state_parameter_name,
 )
-from spectraxgk.operators.linear.cache import build_linear_cache
+from spectraxgk.operators.linear.cache_builder import build_linear_cache
 from spectraxgk.operators.linear.rhs import linear_rhs_cached
 from spectraxgk.diagnostics.quasilinear_transport import effective_kperp2, phi_norm2
 from spectraxgk.objectives.autodiff_validation import explicit_complex_operator_matrix

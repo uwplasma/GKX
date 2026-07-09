@@ -10,7 +10,7 @@ from spectraxgk.geometry import (
     ensure_flux_tube_geometry_data,
 )
 from spectraxgk.core.grid import SpectralGrid
-from spectraxgk.operators.linear.cache import LinearCache
+from spectraxgk.operators.linear.cache_model import LinearCache
 from spectraxgk.terms.operators import shift_axis
 
 

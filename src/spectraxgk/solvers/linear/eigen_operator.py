@@ -5,8 +5,8 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 
-from spectraxgk.operators.linear.cache import (
-    LinearCache,
+from spectraxgk.operators.linear.cache_model import LinearCache
+from spectraxgk.operators.linear.cache_arrays import (
     collision_damping,
     hypercollision_damping,
 )

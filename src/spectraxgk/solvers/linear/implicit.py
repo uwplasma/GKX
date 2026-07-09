@@ -10,8 +10,8 @@ import jax.numpy as jnp
 import numpy as np
 from jax.scipy.sparse.linalg import gmres
 
-from spectraxgk.operators.linear.cache import (
-    LinearCache,
+from spectraxgk.operators.linear.cache_model import LinearCache
+from spectraxgk.operators.linear.cache_arrays import (
     collision_damping,
     hypercollision_damping,
 )
