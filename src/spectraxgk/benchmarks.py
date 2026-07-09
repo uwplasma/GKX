@@ -75,10 +75,8 @@ from spectraxgk.operators.linear.params import (
 )
 from spectraxgk.runtime import run_runtime_linear, run_runtime_nonlinear
 from spectraxgk.solvers.linear.krylov import KrylovConfig, dominant_eigenpair
-from spectraxgk.solvers.time.diffrax import (
-    integrate_linear_diffrax,
-    integrate_linear_diffrax_streaming,
-)
+from spectraxgk.solvers.time.diffrax_linear import integrate_linear_diffrax
+from spectraxgk.solvers.time.diffrax_streaming import integrate_linear_diffrax_streaming
 from spectraxgk.solvers.time.explicit import (
     ExplicitTimeConfig,
     integrate_linear_explicit,

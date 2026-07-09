@@ -41,11 +41,9 @@ from spectraxgk.nonlinear import (
     nonlinear_rhs_cached,
 )
 from spectraxgk.core.species import Species, build_linear_params
-from spectraxgk.solvers.time.diffrax import (
-    integrate_linear_diffrax,
-    integrate_linear_diffrax_streaming,
-    integrate_nonlinear_diffrax,
-)
+from spectraxgk.solvers.time.diffrax_linear import integrate_linear_diffrax
+from spectraxgk.solvers.time.diffrax_nonlinear import integrate_nonlinear_diffrax
+from spectraxgk.solvers.time.diffrax_streaming import integrate_linear_diffrax_streaming
 from spectraxgk.parallel.integrators import (
     integrate_linear_sharded,
     integrate_nonlinear_sharded,

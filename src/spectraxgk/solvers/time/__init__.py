@@ -4,11 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from spectraxgk.solvers.time.diffrax import (
-    integrate_linear_diffrax,
-    integrate_linear_diffrax_streaming,
-    integrate_nonlinear_diffrax,
-)
+from spectraxgk.solvers.time.diffrax_linear import integrate_linear_diffrax
+from spectraxgk.solvers.time.diffrax_nonlinear import integrate_nonlinear_diffrax
+from spectraxgk.solvers.time.diffrax_streaming import integrate_linear_diffrax_streaming
 from spectraxgk.solvers.time.explicit import (
     ExplicitTimeConfig,
     integrate_linear_explicit,
