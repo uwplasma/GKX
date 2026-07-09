@@ -10,7 +10,7 @@ import math
 from pathlib import Path
 
 from spectraxgk.config import REFERENCE_ELECTRON_MASS
-from spectraxgk.geometry_backends.vmec import (
+from spectraxgk.geometry.imported_vmec import (
     generate_vmec_eik_internal,
     internal_vmec_backend_available,
 )

@@ -541,7 +541,7 @@ def _vmec_eik_request(
 
 def _imported_vmec_eik_geometry(*, case_name: str, request: SimpleNamespace) -> Any:
     from spectraxgk.geometry import load_imported_geometry_netcdf
-    from spectraxgk.geometry_backends.vmec import generate_vmec_eik_internal
+    from spectraxgk.geometry.imported_vmec import generate_vmec_eik_internal
 
     with tempfile.TemporaryDirectory(prefix="spectrax_vmec_eik_parity_") as tmp:
         eik_path = Path(tmp) / f"{case_name}.eik.nc"
@@ -785,7 +785,7 @@ def _vmec_array_parity_options(
 def _vmec_array_parity_backend_unavailable_reason(info: dict[str, object]) -> str | None:
     if not info.get("vmec_jax_available", False):
         return "vmec_jax is not available"
-    from spectraxgk.geometry_backends.vmec import internal_vmec_backend_available
+    from spectraxgk.geometry.imported_vmec import internal_vmec_backend_available
 
     if not internal_vmec_backend_available():
         return "internal VMEC/EIK backend is not available"
