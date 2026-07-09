@@ -10,9 +10,6 @@ from spectraxgk.runtime import (
     _concat_runtime_diagnostics,
     run_runtime_nonlinear,
 )
-from spectraxgk.artifacts.validation import (
-    validate_finite_runtime_result as _validate_finite_runtime_result,
-)
 from spectraxgk.workflows.runtime.orchestration import (
     RuntimeArtifactHandoffDeps,
     run_runtime_nonlinear_artifact_handoff,
@@ -78,6 +75,7 @@ from spectraxgk.artifacts.io import (
     _write_csv as _write_csv,
     _write_json as _write_json,
     _write_state as _write_state,
+    validate_finite_runtime_result as _validate_finite_runtime_result,
 )
 
 

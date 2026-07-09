@@ -13,7 +13,7 @@ from spectraxgk.artifacts.nonlinear import (
 from spectraxgk.artifacts.nonlinear_diagnostics import (
     load_nonlinear_netcdf_diagnostics,
 )
-from spectraxgk.artifacts.validation import (
+from spectraxgk.artifacts.io import (
     validate_finite_array,
     validate_finite_runtime_result,
 )
