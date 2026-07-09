@@ -54,10 +54,6 @@ from spectraxgk.solvers.time.explicit import (
     integrate_linear_explicit_diagnostics,
 )
 
-LinearExplicitTimeConfig = ExplicitTimeConfig
-
-integrate_nonlinear_diagnostics = integrate_nonlinear_explicit_diagnostics
-
 __all__ = [
     "QuasilinearTransportResult",
     "compute_quasilinear_from_linear_state",
@@ -92,12 +88,10 @@ __all__ = [
     "integrate_nonlinear",
     "integrate_nonlinear_cached",
     "integrate_nonlinear_explicit_diagnostics",
-    "integrate_nonlinear_diagnostics",
     "integrate_nonlinear_diffrax",
     "build_nonlinear_imex_operator",
     "IMEXLinearOperator",
     "ExplicitTimeConfig",
-    "LinearExplicitTimeConfig",
     "integrate_linear_explicit",
     "integrate_linear_explicit_diagnostics",
     "nonlinear_rhs_cached",
