@@ -3,7 +3,7 @@
 These helpers compare linear/quasilinear flux estimates with accepted nonlinear
 transport windows. They are diagnostics and validation mathematics, not solver
 kernels: long campaign launch policy belongs in ``tools`` while public imports
-are re-exported through ``spectraxgk.api.validation``.
+are re-exported through ``spectraxgk.api``.
 """
 
 from __future__ import annotations

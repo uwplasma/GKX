@@ -2,60 +2,14 @@
 
 from __future__ import annotations
 
-import ast
 from importlib import import_module
-from pathlib import Path
 from typing import Any
 
 from spectraxgk._version import __version__
 
-_API_MODULE_ORDER = (
-    "configuration",
-    "geometry",
-    "diagnostics",
-    "runtime",
-    "solvers",
-    "benchmarks",
-    "validation",
-    "parallel",
-    "objectives",
-    "artifacts",
-)
-
-
-def _literal_all(path: Path) -> list[str]:
-    """Read a module-level ``__all__`` list without importing the module."""
-
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    for node in tree.body:
-        if not isinstance(node, ast.Assign):
-            continue
-        if any(
-            isinstance(target, ast.Name) and target.id == "__all__"
-            for target in node.targets
-        ):
-            names = ast.literal_eval(node.value)
-            return [str(name) for name in names]
-    raise RuntimeError(f"{path} does not define a literal __all__")
-
-
-def _api_exports() -> tuple[list[str], dict[str, str]]:
-    api_dir = Path(__file__).with_name("api")
-    public_names = _literal_all(api_dir / "__init__.py")
-    export_modules: dict[str, str] = {}
-    for module_name in _API_MODULE_ORDER:
-        for name in _literal_all(api_dir / f"{module_name}.py"):
-            export_modules.setdefault(name, module_name)
-    missing = [name for name in public_names if name not in export_modules]
-    if missing:
-        joined = ", ".join(missing)
-        raise RuntimeError(
-            f"public API export(s) are missing from API modules: {joined}"
-        )
-    return public_names, export_modules
-
-
-__all__, _EXPORT_MODULES = _api_exports()
+_api = import_module("spectraxgk.api")
+__all__ = list(_api.__all__)
+_EXPORT_TARGETS: dict[str, tuple[str, str]] = dict(_api._EXPORT_TARGETS)
 __all__ = ["__version__", *__all__]
 
 
@@ -64,11 +18,11 @@ def __getattr__(name: str) -> Any:
 
     if name == "__version__":
         return __version__
-    module_name = _EXPORT_MODULES.get(name)
-    if module_name is None:
+    try:
+        module_name, attr_name = _EXPORT_TARGETS[name]
+    except KeyError:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-    module = import_module(f"spectraxgk.api.{module_name}")
-    value = getattr(module, name)
+    value = getattr(import_module(module_name), attr_name)
     globals()[name] = value
     return value
 
