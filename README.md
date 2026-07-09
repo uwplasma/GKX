@@ -942,7 +942,7 @@ nonlinear turbulent-flux optimization claim.
 The control-variate campaign has both a launch contract and a completed
 independent control-mean gate for the rel7.5 evidence lane. The post-run
 reduction is automated by
-`tools/campaigns/postprocess_nonlinear_gradient_control_mean_campaign.py`, which requires
+`tools/campaigns/run_nonlinear_gradient_direct_campaign.py control-mean-postprocess`, which requires
 the full matched plus/minus seed set with outputs reaching the final
 post-transient window before producing the final control-mean gate. It accepts
 stride-rounded final times but rejects intermediate checkpoint chunks.
