@@ -99,16 +99,12 @@ def _runtime_model_key(cfg: RuntimeConfig) -> str:
 
 
 def _raise_unsupported_reduced_model(cfg: RuntimeConfig) -> NoReturn:
-    """Fail closed for retired or non-promoted reduced-model contracts."""
+    """Fail closed unless the promoted full gyrokinetic runtime is selected."""
 
-    model = _runtime_model_key(cfg)
-    if model in {"cetg", "krehm"}:
-        raise NotImplementedError(
-            f"physics.reduced_model={cfg.physics.reduced_model!r} is not supported "
-            "by the maintained runtime. Use physics.reduced_model='gyrokinetic' "
-            "for promoted full-GK workflows."
-        )
-    raise ValueError(f"Unknown physics.reduced_model={cfg.physics.reduced_model!r}")
+    raise ValueError(
+        f"Unknown physics.reduced_model={cfg.physics.reduced_model!r}. "
+        "Use physics.reduced_model='gyrokinetic' for promoted full-GK workflows."
+    )
 
 
 def _runtime_default_krylov_config(cfg: RuntimeConfig) -> KrylovConfig:
@@ -314,6 +310,7 @@ def build_runtime_term_config(cfg: RuntimeConfig) -> TermConfig:
     lin_terms = build_runtime_linear_terms(cfg)
     nonlinear_on = float(cfg.terms.nonlinear if cfg.physics.nonlinear else 0.0)
     return linear_terms_to_term_config(lin_terms, nonlinear=nonlinear_on)
+
 
 def _build_initial_condition(
     grid,

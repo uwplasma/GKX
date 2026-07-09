@@ -1241,8 +1241,6 @@ A full-GK ETG nonlinear pilot lane is also available at
 pilot until its benchmark operating point, observable contract, and gate-indexed
 artifact are promoted.
 
-Reduced collisional ETG workflows have been retired from `main`; the maintained examples now use the full-GK runtime.
-
 ## Documentation
 
 Comprehensive documentation is available in `docs/`. Start with
