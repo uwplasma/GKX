@@ -126,8 +126,7 @@ jobs:
           - name: release-artifacts
             files: >-
               tests/release/test_release_hygiene_gates.py
-              tests/release/test_package_architecture_manifest.py
-              tests/release/test_refactor_coverage_manifest.py
+              tests/release/test_release_manifests.py
               tests/release/test_validation_coverage_manifest.py
               tests/release/test_check_release_readiness.py
               tests/release/test_release_scope_docs.py
@@ -175,7 +174,6 @@ jobs:
               tests/unit/solvers/test_sharded_integrators.py
               tests/tools/artifacts/test_parallel_identity_gate_artifacts.py
               tests/tools/artifacts/test_nonlinear_artifact_reports.py
-              tests/release/test_performance_optimization_manifest.py
               tests/tools/profiling/test_profile_nonlinear_sharding.py
               tests/unit/parallel/test_nonlinear_sharding_artifacts.py
               tests/unit/objectives/test_autodiff_validation.py
