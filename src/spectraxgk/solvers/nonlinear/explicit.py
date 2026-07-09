@@ -244,6 +244,7 @@ def _maybe_emit_progress(
         "checkpoint",
         "project_state",
         "show_progress",
+        "return_fields",
     ),
     donate_argnums=(1,),
 )
@@ -257,7 +258,8 @@ def integrate_nonlinear_scan(
     checkpoint: bool = False,
     project_state: ProjectFn | None = None,
     show_progress: bool = False,
-) -> tuple[jnp.ndarray, Any]:
+    return_fields: bool = True,
+) -> tuple[jnp.ndarray, Any] | jnp.ndarray:
     """Integrate a cached nonlinear RHS using the explicit solver scan policy."""
 
     state_dtype = jnp.result_type(G0, jnp.complex64)
@@ -287,11 +289,16 @@ def integrate_nonlinear_scan(
             project_state=projector,
             state_dtype=state_dtype,
         )
+        if not return_fields:
+            return G_new, None
         _dG_new, fields_new = rhs_fn(G_new)
         return G_new, fields_new
 
     step_fn = checkpoint_explicit_step(step, checkpoint)
-    return jax.lax.scan(step_fn, G0, jnp.arange(steps))
+    G_final, fields_t = jax.lax.scan(step_fn, G0, jnp.arange(steps))
+    if return_fields:
+        return G_final, fields_t
+    return G_final
 
 
 def integrate_cached_explicit_scan(
@@ -305,7 +312,8 @@ def integrate_cached_explicit_scan(
     checkpoint: bool = False,
     project_state: ProjectFn | None = None,
     show_progress: bool = False,
-) -> tuple[jnp.ndarray, Any]:
+    return_fields: bool = True,
+) -> tuple[jnp.ndarray, Any] | jnp.ndarray:
     """Run a cached explicit nonlinear scan with injected RHS and projection."""
 
     return scan_fn(
@@ -317,6 +325,7 @@ def integrate_cached_explicit_scan(
         checkpoint=checkpoint,
         project_state=project_state,
         show_progress=show_progress,
+        return_fields=return_fields,
     )
 
 

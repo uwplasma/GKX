@@ -262,7 +262,8 @@ def _nonlinear_sharded_step_fn(
     setup: _NonlinearShardSetup,
     rhs: Callable[[jnp.ndarray], tuple[jnp.ndarray, FieldState]],
     project_shard: Callable[[jnp.ndarray], jnp.ndarray],
-) -> Callable[[jnp.ndarray, None], tuple[jnp.ndarray, FieldState]]:
+    return_fields: bool,
+) -> Callable[[jnp.ndarray, None], tuple[jnp.ndarray, FieldState | None]]:
     """Build one explicit sharded nonlinear scan step."""
 
     def stage(state: jnp.ndarray, increment: jnp.ndarray, scale: float) -> jnp.ndarray:
@@ -271,7 +272,7 @@ def _nonlinear_sharded_step_fn(
             + jnp.asarray(scale, dtype=setup.dt_val.dtype) * setup.dt_val * increment
         )
 
-    def step(G: jnp.ndarray, _) -> tuple[jnp.ndarray, FieldState]:
+    def step(G: jnp.ndarray, _) -> tuple[jnp.ndarray, FieldState | None]:
         G = project_shard(G)
         k1, _ = rhs(G)
         G_next = _nonlinear_explicit_update(
@@ -284,6 +285,8 @@ def _nonlinear_sharded_step_fn(
             dt_val=setup.dt_val,
         )
         G_next = project_shard(jnp.asarray(G_next, dtype=setup.state_dtype))
+        if not return_fields:
+            return G_next, None
         _dG_next, fields_next = rhs(G_next)
         return G_next, fields_next
 
@@ -304,7 +307,7 @@ def _maybe_put_sharded_state(
 def _run_nonlinear_sharded_scan(
     G0: jnp.ndarray,
     *,
-    step: Callable[[jnp.ndarray, None], tuple[jnp.ndarray, FieldState]],
+    step: Callable[[jnp.ndarray, None], tuple[jnp.ndarray, FieldState | None]],
     steps: int,
     state_sharding: Any | None,
     return_fields: bool,
@@ -316,7 +319,7 @@ def _run_nonlinear_sharded_scan(
         return G_final, fields_t
 
     def run_final_only(G_init):
-        G_final, _fields_t = jax.lax.scan(step, G_init, xs=None, length=steps)
+        G_final, _ = jax.lax.scan(step, G_init, xs=None, length=steps)
         return G_final
 
     if return_fields:
@@ -375,6 +378,7 @@ def integrate_nonlinear_sharded(
         setup=setup,
         rhs=rhs,
         project_shard=project_shard,
+        return_fields=return_fields,
     )
     G_init = _maybe_put_sharded_state(
         setup.G0,

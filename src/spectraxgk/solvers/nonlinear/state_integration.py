@@ -88,12 +88,13 @@ def integrate_nonlinear_cached(
     compressed_real_fft: bool = True,
     laguerre_mode: str = "grid",
     show_progress: bool = False,
-) -> tuple[jnp.ndarray, FieldState]:
+    return_fields: bool = True,
+) -> tuple[jnp.ndarray, FieldState] | jnp.ndarray:
     """Integrate the nonlinear system using a cached geometry object."""
 
     term_cfg = terms or TermConfig()
     if method in {"imex", "semi-implicit"}:
-        return integrate_nonlinear_imex_cached(
+        result = integrate_nonlinear_imex_cached(
             G0,
             cache,
             params,
@@ -105,6 +106,7 @@ def integrate_nonlinear_cached(
             laguerre_mode=laguerre_mode,
             show_progress=show_progress,
         )
+        return result if return_fields else result[0]
 
     def rhs_fn(G):
         return nonlinear_rhs_cached(
@@ -132,6 +134,7 @@ def integrate_nonlinear_cached(
         checkpoint=checkpoint,
         project_state=project_state,
         show_progress=show_progress,
+        return_fields=return_fields,
     )
 
 
@@ -149,7 +152,8 @@ def integrate_nonlinear(
     compressed_real_fft: bool = True,
     laguerre_mode: str = "grid",
     show_progress: bool = False,
-) -> tuple[jnp.ndarray, FieldState]:
+    return_fields: bool = True,
+) -> tuple[jnp.ndarray, FieldState] | jnp.ndarray:
     """Integrate the nonlinear system using built-in cache construction."""
 
     geom_eff = ensure_flux_tube_geometry_data(geom, grid.z)
@@ -175,6 +179,7 @@ def integrate_nonlinear(
         compressed_real_fft=compressed_real_fft,
         laguerre_mode=laguerre_mode,
         show_progress=show_progress,
+        return_fields=return_fields,
     )
 
 

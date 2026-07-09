@@ -8,6 +8,19 @@ It does not launch simulations. Campaign design and follow-up planning live in
 
 from __future__ import annotations
 
+from dataclasses import asdict, dataclass
+import json
+import math
+from pathlib import Path
+import re
+from typing import Any, Iterable, Sequence
+
+from spectraxgk.diagnostics.transport_windows import (
+    NonlinearWindowEnsembleConfig,
+    nonlinear_window_ensemble_report,
+    nonlinear_window_stats_promotion_ready,
+)
+
 # ---- shared parsing and gate primitives ----
 """Core helpers for nonlinear turbulence-gradient evidence gates.
 
@@ -17,11 +30,6 @@ pieces separate so they can be tested and reused without importing the full
 reporting layer.
 """
 
-
-from dataclasses import dataclass
-from typing import Any, Iterable, Sequence
-import math
-import re
 
 NON_PRODUCTION_SCOPE_MARKERS = (
     "startup",
@@ -547,7 +555,6 @@ __all__ = [
 """Classification helpers for nonlinear turbulence-gradient evidence artifacts."""
 
 
-from typing import Any
 
 
 
@@ -609,18 +616,6 @@ __all__ = ["classify_gradient_artifact"]
 # ---- replicated window summaries ----
 """Replicated nonlinear-window evidence summaries for turbulence-gradient gates."""
 
-
-from typing import Any, Sequence
-
-from spectraxgk.diagnostics.transport_windows import (
-    NonlinearWindowEnsembleConfig,
-)
-from spectraxgk.diagnostics.transport_windows import (
-    nonlinear_window_ensemble_report,
-)
-from spectraxgk.diagnostics.transport_windows import (
-    nonlinear_window_stats_promotion_ready,
-)
 
 
 def _ensemble_row(
@@ -841,12 +836,6 @@ __all__ = ["_ensemble_row", "summarize_window_evidence"]
 
 # ---- finite-difference evidence reports ----
 """Finite-difference turbulence-gradient evidence reports."""
-
-
-from dataclasses import asdict, dataclass
-from typing import Any
-import math
-
 
 
 @dataclass(frozen=True)
@@ -1247,7 +1236,6 @@ __all__ = ["nonlinear_turbulence_gradient_finite_difference_report"]
 """Shared score-margin helpers for nonlinear-gradient screening reports."""
 
 
-import math
 
 
 def _metric_margin(
@@ -1276,12 +1264,6 @@ __all__ = ["_metric_margin"]
 
 # ---- bracket sweep reports ----
 """Same-control bracket-sweep reports for nonlinear-gradient evidence."""
-
-
-from dataclasses import asdict, dataclass
-from typing import Any, Sequence
-import math
-
 
 
 def _paired_uncertainty_rel(artifact: dict[str, Any]) -> float | None:
@@ -1633,9 +1615,6 @@ __all__ = [
 """Screening reports for nonlinear turbulence-gradient campaign planning."""
 
 
-from dataclasses import asdict
-from typing import Any, Sequence
-import math
 
 
 
@@ -1972,11 +1951,6 @@ __all__ = [
 
 # ---- evidence-gap reports ----
 """Gap and production-report orchestration for nonlinear gradient evidence."""
-
-
-from dataclasses import asdict, dataclass
-from typing import Any, Sequence
-
 
 
 @dataclass(frozen=True)
@@ -2336,12 +2310,6 @@ summaries.  The default behavior is fail-closed unless an artifact explicitly
 records production long-window gradient scope, finite-difference conditioning,
 gradient uncertainty, and replicated nonlinear-window uncertainty evidence.
 """
-
-
-from pathlib import Path
-from typing import Any
-import json
-
 
 
 def load_json_artifact(path: str | Path) -> dict[str, Any]:
