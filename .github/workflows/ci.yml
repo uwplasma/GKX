@@ -40,7 +40,7 @@ jobs:
         run: |
           python tools/release/check_repository_size_manifest.py
           python tools/release/check_release_artifact_manifest.py
-          python tools/release/check_release_version.py
+          python tools/release/check_release_readiness.py version
           python tools/release/check_package_architecture_manifest.py
           python tools/release/check_performance_optimization_manifest.py
           python tools/release/check_parallel_scaling_artifacts.py

@@ -26,7 +26,7 @@ jobs:
 
       - name: Verify release version
         run: |
-          python tools/release/check_release_version.py \
+          python tools/release/check_release_readiness.py version \
             --tag "${GITHUB_REF_NAME}" \
             --require-tag \
             --check-pypi
