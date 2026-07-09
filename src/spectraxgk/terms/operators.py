@@ -4,9 +4,25 @@ from __future__ import annotations
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 from spectraxgk.core.velocity import hermite_ladder_coeffs
-from spectraxgk.terms.validation import _check_positive
+
+
+def _is_tracer(x) -> bool:
+    return isinstance(x, jax.core.Tracer)
+
+
+def _check_positive(x, name: str) -> None:
+    arr = jnp.asarray(x)
+    if _is_tracer(x) or _is_tracer(arr):
+        return
+    if arr.ndim == 0:
+        if float(arr) <= 0.0:
+            raise ValueError(f"{name} must be > 0")
+        return
+    if np.any(np.asarray(arr) <= 0.0):
+        raise ValueError(f"{name} must be > 0")
 
 
 def _fft_ik_multiplier(kz: jnp.ndarray, like: jnp.ndarray) -> jnp.ndarray:

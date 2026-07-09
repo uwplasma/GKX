@@ -146,7 +146,6 @@ jobs:
               tests/unit/operators/test_terms_fields.py
               tests/unit/operators/test_terms_integrators.py
               tests/unit/operators/test_terms_operators.py
-              tests/unit/operators/test_terms_validation.py
               tests/unit/solvers/test_linear_krylov_core.py
           - name: runtime-core
             files: >-
@@ -562,7 +561,6 @@ jobs:
             tests/unit/operators/test_terms_operators.py \
             tests/unit/operators/test_terms_fields.py \
             tests/unit/operators/test_terms_integrators.py \
-            tests/unit/operators/test_terms_validation.py \
             tests/unit/nonlinear/test_nonlinear_exb.py \
             tests/unit/nonlinear/test_nonlinear.py \
             --maxfail=1 --disable-warnings \
