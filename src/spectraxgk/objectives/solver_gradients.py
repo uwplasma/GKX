@@ -70,7 +70,7 @@ from spectraxgk.objectives.vmec_boozer_gradients import (
     VMEC_BOOZER_NONLINEAR_WINDOW_OBJECTIVE_NAMES,
     VMEC_BOOZER_QUASILINEAR_OBJECTIVE_NAMES,
 )
-from spectraxgk.objectives.vmec_state import (
+from spectraxgk.geometry.vmec_state_controls import (
     VMEC_BOOZER_STATE_PARAMETER_FAMILIES,
     VMEC_BOOZER_STATE_PARAMETER_NAMES,
     _replace_vmec_boozer_state_coefficient,

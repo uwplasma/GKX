@@ -19,7 +19,7 @@ from spectraxgk.objectives.core import (
     _default_gradient_linear_params,
     _default_gradient_linear_terms,
 )
-from spectraxgk.objectives.vmec_state import (
+from spectraxgk.geometry.vmec_state_controls import (
     _replace_vmec_boozer_state_coefficient,
     _vmec_boozer_state_array,
     _vmec_boozer_state_parameter_name,
