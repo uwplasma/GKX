@@ -160,7 +160,6 @@ jobs:
           - name: parallel-autodiff
             files: >-
               tests/unit/parallel/test_parallel.py
-              tests/unit/parallel/test_parallelization_examples.py
               tests/tools/artifacts/test_status_readiness_artifacts.py
               tests/unit/parallel/test_sharding.py
               tests/unit/solvers/test_sharded_integrators.py
