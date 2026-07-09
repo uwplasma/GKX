@@ -1257,11 +1257,11 @@ Default `pytest` runs skip integration tests for faster feedback. Use:
 ```bash
 pytest
 pytest -m integration
-python tools/release/run_tests_fast.py
-python tools/release/run_wide_coverage_gate.py --shards 48 --timeout 300 --fail-under 95 --pytest-arg=-o --pytest-arg=addopts= --pytest-arg=-m --pytest-arg="not slow"
+python tools/release/run_test_gates.py fast
+python tools/release/run_test_gates.py wide-coverage --shards 48 --timeout 300 --fail-under 95 --pytest-arg=-o --pytest-arg=addopts= --pytest-arg=-m --pytest-arg="not slow"
 ```
 
-`tools/release/run_tests_fast.py` runs per-file pytest shards with a 300 s per-file
+`tools/release/run_test_gates.py fast` runs per-file pytest shards with a 300 s per-file
 timeout and a 300 s total local budget by default. Use
 `--total-timeout 0` only when you explicitly want the full sequential local
 pass.
