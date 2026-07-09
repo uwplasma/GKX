@@ -76,6 +76,26 @@ def nonlinear_rhs_cached(
     )
 
 
+def _nonlinear_rhs_scan(
+    G: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    term_cfg: TermConfig,
+    compressed_real_fft: bool,
+    laguerre_mode: str,
+) -> tuple[jnp.ndarray, FieldState]:
+    """Stable scan callable; arrays are dynamic while model switches are static."""
+
+    return nonlinear_rhs_cached(
+        G,
+        cache,
+        params,
+        term_cfg,
+        compressed_real_fft=compressed_real_fft,
+        laguerre_mode=laguerre_mode,
+    )
+
+
 def integrate_nonlinear_cached(
     G0: jnp.ndarray,
     cache: LinearCache,
@@ -108,16 +128,6 @@ def integrate_nonlinear_cached(
         )
         return result if return_fields else result[0]
 
-    def rhs_fn(G):
-        return nonlinear_rhs_cached(
-            G,
-            cache,
-            params,
-            term_cfg,
-            compressed_real_fft=compressed_real_fft,
-            laguerre_mode=laguerre_mode,
-        )
-
     project_state = None
     if compressed_real_fft:
         project_state = _make_hermitian_projector(
@@ -129,7 +139,9 @@ def integrate_nonlinear_cached(
         dt,
         steps,
         method=method,
-        rhs_fn=rhs_fn,
+        rhs_fn=_nonlinear_rhs_scan,
+        rhs_args=(cache, params),
+        rhs_static_args=(term_cfg, compressed_real_fft, laguerre_mode),
         scan_fn=integrate_nonlinear_scan,
         checkpoint=checkpoint,
         project_state=project_state,

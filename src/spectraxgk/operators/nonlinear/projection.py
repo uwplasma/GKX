@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
 from typing import Callable
 
 import jax.numpy as jnp
@@ -14,14 +15,13 @@ __all__ = [
 ]
 
 
-def _make_hermitian_projector(
-    ky_vals: np.ndarray, nx: int
+@lru_cache(maxsize=32)
+def _cached_hermitian_projector(
+    ky_vals: tuple[float, ...], nx: int
 ) -> Callable[[jnp.ndarray], jnp.ndarray]:
-    """Project full-ky states onto the compressed real-FFT Hermitian manifold."""
-
-    ny_full = int(ky_vals.size)
+    ny_full = len(ky_vals)
     nyc = ny_full // 2 + 1
-    use_hermitian = nyc > 2 and bool(np.any(np.asarray(ky_vals) < 0.0))
+    use_hermitian = nyc > 2 and any(value < 0.0 for value in ky_vals)
     if not use_hermitian:
         return lambda G_state: G_state
 
@@ -41,6 +41,15 @@ def _make_hermitian_projector(
         return jnp.concatenate([pos, neg], axis=-3)
 
     return project
+
+
+def _make_hermitian_projector(
+    ky_vals: np.ndarray, nx: int
+) -> Callable[[jnp.ndarray], jnp.ndarray]:
+    """Return a stable projector for one full-ky grid signature."""
+
+    ky_key = tuple(float(value) for value in np.asarray(ky_vals, dtype=float))
+    return _cached_hermitian_projector(ky_key, int(nx))
 
 
 def _make_nonlinear_state_projector(
