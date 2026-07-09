@@ -6,8 +6,6 @@ from spectraxgk.config import GeometryConfig, GridConfig
 from spectraxgk.geometry.analytic import (
     SAlphaGeometry,
     SlabGeometry,
-)
-from spectraxgk.geometry.boundaries import (
     ZERO_SHAT_THRESHOLD,
     effective_boundary,
     zero_shear_enabled,

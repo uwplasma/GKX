@@ -12,7 +12,34 @@ import jax
 import jax.numpy as jnp
 
 from spectraxgk.config import GeometryConfig
-from spectraxgk.geometry.boundaries import zero_shear_enabled
+
+ZERO_SHAT_THRESHOLD = 1.0e-5
+
+
+def zero_shear_enabled(
+    s_hat: float,
+    *,
+    zero_shat: bool = False,
+    threshold: float = ZERO_SHAT_THRESHOLD,
+) -> bool:
+    """Return the effective zero-shear state."""
+
+    return bool(zero_shat) or abs(float(s_hat)) < float(threshold)
+
+
+def effective_boundary(
+    boundary: str,
+    *,
+    s_hat: float,
+    zero_shat: bool = False,
+    threshold: float = ZERO_SHAT_THRESHOLD,
+) -> str:
+    """Return the effective boundary after zero-shear promotion."""
+
+    if zero_shear_enabled(s_hat, zero_shat=zero_shat, threshold=threshold):
+        return "periodic"
+    return str(boundary)
+
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
@@ -297,5 +324,3 @@ class SlabGeometry:
         return jnp.zeros(
             (ky0.shape[0], kx0.shape[0], theta0.shape[0]), dtype=theta0.dtype
         )
-
-
