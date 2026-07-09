@@ -27,16 +27,14 @@ from spectraxgk.solvers.linear.eigen_operator import (
     _compute_damping,
     _normalize,
 )
-from spectraxgk.solvers.linear.eigen_selection import (
+from spectraxgk.solvers.linear.krylov_algorithms import (
+    _arnoldi,
+    _build_shift_invert_precond,
     _mode_family_sign,
     _omega_scale,
     _physical_omega,
     _select_by_overlap,
     _select_by_target,
-)
-from spectraxgk.solvers.linear.krylov_algorithms import (
-    _arnoldi,
-    _build_shift_invert_precond,
     dominant_eigenpair_cached,
     dominant_eigenpair_power,
     dominant_eigenpair_propagator_cached,
