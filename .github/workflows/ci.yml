@@ -170,7 +170,7 @@ jobs:
               tests/unit/solvers/test_sharded_integrators.py
               tests/tools/artifacts/test_parallel_identity_gate_artifacts.py
               tests/tools/artifacts/test_nonlinear_artifact_reports.py
-              tests/tools/profiling/test_profile_nonlinear_sharding.py
+              tests/tools/profiling/test_nonlinear_sharding_profile_contracts.py
               tests/unit/objectives/test_autodiff_validation.py
               tests/unit/objectives/test_differentiable_geometry_bridge.py
 
