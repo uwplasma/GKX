@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from functools import partial
+from typing import Callable
 
 import jax
 import jax.numpy as jnp
@@ -13,9 +14,9 @@ from spectraxgk.operators.linear.params import LinearParams
 from spectraxgk.solvers.linear.eigen_operator import (
     _advance_imex2,
     _apply_operator,
+    _compute_damping,
     _normalize,
 )
-from spectraxgk.solvers.linear.eigen_preconditioners import _build_shift_invert_precond
 from spectraxgk.solvers.linear.eigen_selection import (
     _omega_scale,
     _physical_omega,
@@ -23,6 +24,63 @@ from spectraxgk.solvers.linear.eigen_selection import (
     _select_by_target,
 )
 from spectraxgk.terms.config import TermConfig
+
+
+def _build_shift_invert_precond(
+    v: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    term_cfg: TermConfig,
+    sigma: jnp.ndarray,
+    mode: str | None,
+) -> tuple[jnp.ndarray | None, Callable[[jnp.ndarray], jnp.ndarray] | None]:
+    """Build the preconditioner used inside shift-invert Krylov GMRES solves."""
+
+    del term_cfg
+    if mode is None or mode.lower() == "none":
+        return None, None
+    mode_key = mode.lower()
+    if mode_key == "damping":
+        damping = _compute_damping(v, cache, params)
+        diag = -damping.astype(v.dtype) - sigma
+        safe = jnp.where(jnp.abs(diag) > 0.0, diag, 1.0 + 0.0j)
+        precond = 1.0 / safe
+        shape = v.shape
+        size = v.size
+
+        def apply_precond_damping(x_flat: jnp.ndarray) -> jnp.ndarray:
+            x = x_flat.reshape(shape)
+            return (x * precond).reshape(size)
+
+        return precond, apply_precond_damping
+
+    if mode_key not in {
+        "hermite-line",
+        "hermite_line",
+        "hermite",
+        "streaming-line",
+        "streaming_line",
+        "hermite-line-coarse",
+        "hermite_line_coarse",
+        "hermite_coarse",
+        "streaming-line-coarse",
+    }:
+        return None, None
+
+    # Complex Hermite-line shift-invert solves are not available yet; use the
+    # damping preconditioner as the conservative fallback for those aliases.
+    damping = _compute_damping(v, cache, params)
+    diag = -damping.astype(v.dtype) - sigma
+    safe = jnp.where(jnp.abs(diag) > 0.0, diag, 1.0 + 0.0j)
+    precond = 1.0 / safe
+    shape = v.shape
+    size = v.size
+
+    def apply_precond_fallback(x_flat: jnp.ndarray) -> jnp.ndarray:
+        x = x_flat.reshape(shape)
+        return (x * precond).reshape(size)
+
+    return precond, apply_precond_fallback
 
 
 @partial(jax.jit, static_argnames=("iterations",))
@@ -643,6 +701,7 @@ def dominant_eigenpair_propagator_cached(
 
 __all__ = [
     "_arnoldi",
+    "_build_shift_invert_precond",
     "dominant_eigenpair_cached",
     "dominant_eigenpair_power",
     "dominant_eigenpair_propagator_cached",
