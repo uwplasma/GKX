@@ -25,8 +25,6 @@ from spectraxgk.operators.nonlinear.spectral_layout import (
     _spectral_tile_bounds,
     _split_reassemble,
     _validate_chunks,
-)
-from spectraxgk.operators.nonlinear.spectral_state import (
     _validate_spectral_state_shape,
     deterministic_nonlinear_spectral_state,
 )

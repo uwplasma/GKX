@@ -7,7 +7,7 @@ from typing import Any
 import jax
 import jax.numpy as jnp
 
-from spectraxgk.operators.nonlinear.spectral_state import _validate_spectral_state_shape
+from spectraxgk.operators.nonlinear.spectral_layout import _validate_spectral_state_shape
 
 
 def _spectral_wave_numbers(ny: int, nx: int, dtype: Any) -> tuple[jax.Array, jax.Array]:

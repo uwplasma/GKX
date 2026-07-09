@@ -13,8 +13,8 @@ from spectraxgk.operators.nonlinear.spectral_layout import (
     _chunk_offsets,
     _spectral_tile_bounds,
     _validate_chunks,
+    _validate_spectral_state_shape,
 )
-from spectraxgk.operators.nonlinear.spectral_state import _validate_spectral_state_shape
 
 
 def nonlinear_spectral_domain_work_model(
