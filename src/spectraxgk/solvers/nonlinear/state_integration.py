@@ -23,7 +23,10 @@ from spectraxgk.operators.nonlinear.rhs import (
     nonlinear_em_term_cached_impl,
     nonlinear_rhs_cached_impl,
 )
-from spectraxgk.solvers.nonlinear.explicit import integrate_cached_explicit_scan
+from spectraxgk.solvers.nonlinear.explicit import (
+    integrate_cached_explicit_scan,
+    integrate_nonlinear_scan,
+)
 from spectraxgk.solvers.nonlinear.imex import integrate_cached_imex_scan
 from spectraxgk.terms.assembly import (
     _is_static_zero,
@@ -32,7 +35,6 @@ from spectraxgk.terms.assembly import (
     compute_fields_cached,
 )
 from spectraxgk.terms.config import FieldState, TermConfig
-from spectraxgk.terms.integrators import integrate_nonlinear as integrate_nonlinear_scan
 from spectraxgk.terms.nonlinear import nonlinear_em_contribution
 
 

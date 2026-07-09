@@ -18,7 +18,6 @@ if TYPE_CHECKING:  # pragma: no cover
         assemble_rhs_cached_jit,
         assemble_rhs_terms_cached,
     )
-    from spectraxgk.terms.integrators import integrate_nonlinear
 
 __all__ = [
     "FieldState",
@@ -27,7 +26,6 @@ __all__ = [
     "assemble_rhs_cached",
     "assemble_rhs_cached_jit",
     "assemble_rhs_terms_cached",
-    "integrate_nonlinear",
 ]
 
 
@@ -36,8 +34,4 @@ def __getattr__(name: str):
         from spectraxgk.terms import assembly
 
         return getattr(assembly, name)
-    if name == "integrate_nonlinear":
-        from spectraxgk.terms import integrators
-
-        return integrators.integrate_nonlinear
     raise AttributeError(name)

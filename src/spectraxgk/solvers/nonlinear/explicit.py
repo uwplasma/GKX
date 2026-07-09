@@ -7,6 +7,7 @@ step policy remains pure, small, and directly testable.
 
 from __future__ import annotations
 
+from functools import partial
 from typing import Any, Callable
 
 import jax
@@ -202,6 +203,95 @@ def checkpoint_explicit_step(step: Callable[..., object], checkpoint: bool):
     """Apply JAX checkpointing to an explicit scan step when requested."""
 
     return jax.checkpoint(step) if checkpoint else step
+
+
+def _maybe_emit_progress(
+    G: jnp.ndarray,
+    idx: jnp.ndarray,
+    *,
+    steps: int,
+    dt_val: jnp.ndarray,
+    real_dtype: jnp.dtype,
+    show_progress: bool,
+) -> jnp.ndarray:
+    """Emit executable progress without changing the traced state."""
+
+    if not show_progress:
+        return G
+    from spectraxgk.utils.callbacks import (  # type: ignore[import-untyped]
+        print_callback,
+        should_emit_progress,
+    )
+
+    sim_time = (idx + 1) * dt_val
+    sim_total = jnp.asarray(steps, dtype=real_dtype) * dt_val
+    return jax.lax.cond(
+        should_emit_progress(idx, steps),
+        lambda state: print_callback(
+            state, idx, steps, 0.0, 0.0, 0.0, 0.0, sim_time, sim_total
+        ),
+        lambda state: state,
+        G,
+    )
+
+
+@partial(
+    jax.jit,
+    static_argnames=(
+        "rhs_fn",
+        "steps",
+        "method",
+        "checkpoint",
+        "project_state",
+        "show_progress",
+    ),
+    donate_argnums=(1,),
+)
+def integrate_nonlinear_scan(
+    rhs_fn: RhsFn,
+    G0: jnp.ndarray,
+    dt: float,
+    steps: int,
+    *,
+    method: str = "rk4",
+    checkpoint: bool = False,
+    project_state: ProjectFn | None = None,
+    show_progress: bool = False,
+) -> tuple[jnp.ndarray, Any]:
+    """Integrate a cached nonlinear RHS using the explicit solver scan policy."""
+
+    state_dtype = jnp.result_type(G0, jnp.complex64)
+    G0 = jnp.asarray(G0, dtype=state_dtype)
+    real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
+    dt_val = jnp.asarray(dt, dtype=real_dtype)
+    projector = project_state if project_state is not None else (lambda G: G)
+
+    def step(G: jnp.ndarray, idx: jnp.ndarray) -> tuple[jnp.ndarray, Any]:
+        G = _maybe_emit_progress(
+            G,
+            idx,
+            steps=steps,
+            dt_val=dt_val,
+            real_dtype=real_dtype,
+            show_progress=show_progress,
+        )
+        G = jnp.asarray(projector(G), dtype=state_dtype)
+        dG, _fields = rhs_fn(G)
+        dG = jnp.asarray(dG, dtype=state_dtype)
+        G_new = advance_explicit_nonlinear_state(
+            G,
+            dG,
+            dt_val,
+            method=method,
+            rhs_fn=rhs_fn,
+            project_state=projector,
+            state_dtype=state_dtype,
+        )
+        _dG_new, fields_new = rhs_fn(G_new)
+        return G_new, fields_new
+
+    step_fn = checkpoint_explicit_step(step, checkpoint)
+    return jax.lax.scan(step_fn, G0, jnp.arange(steps))
 
 
 def integrate_cached_explicit_scan(
@@ -456,6 +546,7 @@ __all__ = [
     "advance_explicit_nonlinear_state",
     "checkpoint_explicit_step",
     "integrate_cached_explicit_scan",
+    "integrate_nonlinear_scan",
     "make_explicit_diagnostic_step",
     "run_explicit_diagnostic_scan",
 ]
