@@ -123,7 +123,7 @@ jobs:
               tests/validation/quasilinear/test_quasilinear_calibration.py
               tests/tools/artifacts/test_quasilinear_artifact_tools.py
               tests/tools/profiling/test_runtime_and_scaling_profile_contracts.py
-              tests/unit/parallel/test_parallel_artifact_contracts.py
+              tests/unit/parallel/test_parallel_artifacts.py
               tests/integration/examples/test_examples.py
           - name: linear-core
             files: >-
@@ -151,14 +151,13 @@ jobs:
               tests/integration/runtime/test_runtime_diagnostics.py
           - name: parallel-autodiff
             files: >-
-              tests/unit/parallel/test_parallel.py
+              tests/unit/parallel/test_parallel_core.py
               tests/tools/artifacts/test_stellarator_artifact_tools.py
-              tests/unit/parallel/test_sharding.py
               tests/unit/solvers/test_sharded_integrators.py
               tests/tools/artifacts/test_transport_artifact_tools.py
               tests/tools/profiling/test_nonlinear_sharding_profile_contracts.py
-              tests/unit/objectives/test_autodiff_validation.py
-              tests/unit/objectives/test_differentiable_geometry_bridge.py
+              tests/unit/objectives/test_autodiff_solver_objectives.py
+              tests/unit/objectives/test_differentiable_geometry_objectives.py
 
     steps:
       - uses: actions/checkout@v6
