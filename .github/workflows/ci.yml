@@ -117,8 +117,6 @@ jobs:
               tests/unit/core/test_config.py
               tests/unit/geometry/test_geometry.py
               tests/unit/core/test_grids.py
-              tests/unit/operators/test_gyroaverage.py
-              tests/unit/operators/test_operators.py
               tests/unit/diagnostics/test_plotting.py
           - name: release-artifacts
             files: >-
@@ -138,7 +136,7 @@ jobs:
           - name: linear-core
             files: >-
               tests/unit/linear/test_linear.py
-              tests/unit/operators/test_full_operator.py
+              tests/unit/operators/test_operator_kernels.py
               tests/unit/operators/test_terms_assembly.py
               tests/unit/operators/test_terms_fields.py
               tests/unit/operators/test_terms_integrators.py
@@ -158,7 +156,6 @@ jobs:
             files: >-
               tests/unit/nonlinear/test_nonlinear.py
               tests/unit/nonlinear/test_nonlinear_exb.py
-              tests/unit/operators/test_hyperdiffusion.py
               tests/validation/benchmarks/test_benchmark_contracts.py
               tests/integration/runtime/test_runtime_diagnostics.py
           - name: parallel-autodiff
