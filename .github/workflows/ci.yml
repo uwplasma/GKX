@@ -113,16 +113,13 @@ jobs:
             files: >-
               tests/unit/diagnostics/test_analysis.py
               tests/unit/diagnostics/test_auto_fit_signal.py
-              tests/unit/core/test_basis.py
+              tests/unit/core/test_core_contracts.py
               tests/unit/core/test_config.py
               tests/unit/geometry/test_geometry.py
               tests/unit/core/test_grids.py
               tests/unit/operators/test_gyroaverage.py
-              tests/unit/core/test_normalization.py
               tests/unit/operators/test_operators.py
               tests/unit/diagnostics/test_plotting.py
-              tests/unit/core/test_species.py
-              tests/unit/core/test_io.py
           - name: release-artifacts
             files: >-
               tests/release/test_release_hygiene_gates.py
