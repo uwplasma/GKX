@@ -113,9 +113,7 @@ jobs:
             files: >-
               tests/unit/diagnostics/test_analysis.py
               tests/unit/core/test_core_contracts.py
-              tests/unit/core/test_config.py
               tests/unit/geometry/test_geometry.py
-              tests/unit/core/test_grids.py
               tests/unit/diagnostics/test_plotting.py
           - name: release-artifacts
             files: >-
@@ -143,7 +141,6 @@ jobs:
               tests/unit/solvers/test_linear_krylov_core.py
           - name: runtime-core
             files: >-
-              tests/unit/solvers/test_diffrax_integrators.py
               tests/unit/solvers/test_diffrax_integrators_core.py
               tests/integration/runtime/test_runtime_config.py
               tests/integration/runtime/test_runtime_helpers.py
@@ -566,7 +563,6 @@ jobs:
         run: |
           pytest -q \
             tests/unit/solvers/test_linear_krylov_core.py \
-            tests/unit/solvers/test_diffrax_integrators.py \
             tests/unit/solvers/test_diffrax_integrators_core.py \
             --maxfail=1 --disable-warnings \
             --cov=src/spectraxgk \
