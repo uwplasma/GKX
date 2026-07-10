@@ -94,12 +94,12 @@ not treated as parity evidence.
 
 The panel reports measured cold wall time and peak memory for the tracked CPU,
 GPU, and comparison-code runs. Cold JAX rows include startup and compilation.
-For repeated Python simulations on the shipped Cyclone grid, the prepared
-adaptive RK3 path records `4.078 s` on the local CPU and `0.4648 s` on one RTX
-A4000 for 20 steps, an `8.77x` GPU throughput advantage. That is a compile-once
-fixed-policy result, not a cold-start or multi-GPU claim. See
+Prepared Python simulations avoid recompiling a fixed geometry and numerical
+policy, but their CPU/GPU throughput depends on the software stack and GPU
+operating state. See
 [performance](docs/performance.rst) for profiler artifacts, memory accounting,
-and the distinction between executable, prepared, and distributed runs.
+current reproducibility notes, and the distinction between executable,
+prepared, and distributed runs.
 
 ## Differentiable Python API
 
