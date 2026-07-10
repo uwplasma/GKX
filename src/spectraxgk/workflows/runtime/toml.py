@@ -44,13 +44,8 @@ RUNTIME_TOML_TOP_LEVEL_KEYS = {
     "output",
     "quasilinear",
 }
-NAMED_CASE_TOML_TOP_LEVEL_KEYS = {"case", "model", "reference_alignment"}
 EXECUTABLE_TOML_SHORTHAND_COMMANDS = {
     "run",
-    "cyclone-info",
-    "cyclone-kperp",
-    "run-linear",
-    "scan-linear",
     "run-runtime-linear",
     "scan-runtime-linear",
     "run-runtime-nonlinear",
@@ -66,19 +61,17 @@ def load_toml(path: str | Path) -> dict:
 
 
 def is_runtime_toml(data: dict[str, Any]) -> bool:
-    """Return whether parsed TOML data should use the runtime executable path."""
+    """Return whether a parsed input uses the supported runtime schema."""
 
-    if any(key in data for key in NAMED_CASE_TOML_TOP_LEVEL_KEYS):
-        return False
-    if any(key in data for key in RUNTIME_TOML_TOP_LEVEL_KEYS):
-        return True
+    _ = data
     return True
 
 
 def toml_shorthand_command(data: dict[str, Any]) -> str:
     """Return the executable command used for direct TOML path shorthand."""
 
-    return "run" if is_runtime_toml(data) else "run-linear"
+    _ = data
+    return "run"
 
 
 def direct_config_shorthand_args(

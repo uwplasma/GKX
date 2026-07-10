@@ -7,40 +7,16 @@ import sys
 from pathlib import Path
 from typing import Any, Sequence
 
-import jax.numpy as jnp
-
-from spectraxgk.diagnostics.modes import (
-    extract_eigenfunction,
-    extract_mode_time_series,
-    normalize_eigenfunction,
-)
-from spectraxgk.workflows.linear import run_linear_scan
-from spectraxgk.benchmarks import (
-    ETGBaseCase,
-    CycloneBaseCase,
-    load_cyclone_reference,
-    load_etg_reference,
-    run_cyclone_linear,
-    run_etg_linear,
-)
-from spectraxgk.geometry import SAlphaGeometry
-from spectraxgk.core.grid import build_spectral_grid
 from spectraxgk.workflows.runtime import toml as runtime_toml
 from spectraxgk.workflows.runtime.toml import (
-    load_case_from_toml,
-    load_krylov_from_toml,
-    load_linear_terms_from_toml,
     load_runtime_from_toml,
     load_toml,
     resolve_runtime_path,
 )
 from spectraxgk._version import __version__
 from spectraxgk.artifacts.plotting import (
-    growth_fit_figure,
     linear_runtime_panel_figure,
     plot_saved_output,
-    scan_comparison_figure,
-    set_plot_style,
 )
 from spectraxgk.workflows.runtime.artifacts import (
     run_runtime_nonlinear_with_artifacts,
@@ -50,25 +26,17 @@ from spectraxgk.workflows.runtime.artifacts import (
 )
 from spectraxgk.workflows.demo import (
     DefaultDemoDeps,
-    default_example_config_path as _default_example_config_path,
     run_default_linear_demo,
-)
-from spectraxgk.workflows.named_cases import (
-    NamedLinearCommandDeps,
-    run_named_linear_command,
-    scan_named_linear_command,
 )
 from spectraxgk.runtime import run_runtime_linear, run_runtime_scan
 from spectraxgk.workflows.runtime.commands import (
     RuntimeCommandDeps,
     attach_preloaded_runtime_config,
     build_runtime_command_deps,
-    print_linear_run_header as _print_linear_run_header,
     plot_saved_output_command,
     run_runtime_linear_command,
     run_runtime_nonlinear_command,
     scan_runtime_linear_command,
-    should_show_progress as _should_show_progress,
 )
 
 
@@ -104,32 +72,6 @@ def _direct_config_shorthand_args(argv: Sequence[str]) -> list[str] | None:
     return runtime_toml.direct_config_shorthand_args(argv, load_toml_func=load_toml)
 
 
-def _status_printer(prefix: str):
-    def _emit(message: str) -> None:
-        print(f"{prefix}: {message}", flush=True)
-
-    return _emit
-
-
-def _cmd_cyclone_info(_: argparse.Namespace) -> int:
-    cfg = CycloneBaseCase()
-    print("Cyclone base case")
-    print(cfg.to_dict())
-    return 0
-
-
-def _cmd_cyclone_kperp(args: argparse.Namespace) -> int:
-    cfg = CycloneBaseCase()
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
-    theta = grid.z
-    kx0 = jnp.array(args.kx0)
-    ky = jnp.array(args.ky)
-    kperp2 = geom.k_perp2(kx0, ky, theta)
-    print(f"k_perp^2(theta) min={kperp2.min():.6g} max={kperp2.max():.6g}")
-    return 0
-
-
 def _cmd_run(args: argparse.Namespace) -> int:
     try:
         cfg, data = load_runtime_from_toml(args.config)
@@ -145,17 +87,12 @@ def _cmd_run(args: argparse.Namespace) -> int:
 
 def _cmd_default_demo() -> int:
     deps = DefaultDemoDeps(
-        load_case_from_toml=load_case_from_toml,
-        run_cyclone_linear=run_cyclone_linear,
-        cyclone_base_case=CycloneBaseCase,
-        build_spectral_grid=build_spectral_grid,
-        extract_mode_time_series=extract_mode_time_series,
-        extract_eigenfunction=extract_eigenfunction,
-        normalize_eigenfunction=normalize_eigenfunction,
+        load_runtime_from_toml=load_runtime_from_toml,
+        run_runtime_linear=run_runtime_linear,
         linear_runtime_panel_figure=linear_runtime_panel_figure,
         write_runtime_linear_artifacts=write_runtime_linear_artifacts,
     )
-    return run_default_linear_demo(deps=deps, example_path=_default_example_config_path())
+    return run_default_linear_demo(deps=deps)
 
 
 def _add_quasilinear_flags(cmd: argparse.ArgumentParser) -> None:
@@ -248,11 +185,6 @@ def _add_ky_values_flag(cmd: argparse.ArgumentParser) -> None:
     cmd.add_argument("--ky-values", type=str, default=None, help="Comma-separated ky list")
 
 
-def _add_plot_output_flags(cmd: argparse.ArgumentParser, *, plot_help: str) -> None:
-    cmd.add_argument("--plot", action="store_true", help=plot_help)
-    cmd.add_argument("--outdir", default=".", help="Output directory for plots")
-
-
 def _add_scan_worker_flags(cmd: argparse.ArgumentParser) -> None:
     cmd.add_argument(
         "--batch-ky", action="store_true", help="Integrate all ky in one batch"
@@ -291,43 +223,6 @@ def _add_generic_run_parser(sub: argparse._SubParsersAction) -> None:
     _add_quasilinear_flags(generic_run)
     _add_progress_flags(generic_run)
     generic_run.set_defaults(func=_cmd_run)
-
-
-def _add_named_case_parsers(sub: argparse._SubParsersAction) -> None:
-    info = sub.add_parser("cyclone-info", help="Print Cyclone base case defaults")
-    info.set_defaults(func=_cmd_cyclone_info)
-
-    kperp = sub.add_parser("cyclone-kperp", help="Compute k_perp^2(theta)")
-    kperp.add_argument("--kx0", type=float, default=0.0)
-    kperp.add_argument("--ky", type=float, default=0.3)
-    kperp.set_defaults(func=_cmd_cyclone_kperp)
-
-    run_linear = sub.add_parser(
-        "run-linear", help="Run a single linear case from a TOML config"
-    )
-    _add_config_flag(run_linear)
-    run_linear.add_argument("--case", default=None, help="Case name (cyclone, etg, ...)")
-    _add_resolution_flags(run_linear, ky_help="Single ky value")
-    _add_time_solver_flags(
-        run_linear, solver=True, sample_stride=True, fit_signal=True
-    )
-    _add_plot_output_flags(run_linear, plot_help="Save fit/eigenfunction plots")
-    _add_progress_flags(run_linear)
-    run_linear.set_defaults(func=_cmd_run_linear)
-
-    scan_linear = sub.add_parser("scan-linear", help="Run a ky scan from a TOML config")
-    _add_config_flag(scan_linear)
-    scan_linear.add_argument(
-        "--case", default=None, help="Case name (cyclone, etg, ...)"
-    )
-    _add_ky_values_flag(scan_linear)
-    scan_linear.add_argument("--Nl", type=int, default=None)
-    scan_linear.add_argument("--Nm", type=int, default=None)
-    _add_time_solver_flags(scan_linear, solver=True, fit_signal=True)
-    _add_plot_output_flags(
-        scan_linear, plot_help="Save comparison plot if reference exists"
-    )
-    scan_linear.set_defaults(func=_cmd_scan_linear)
 
 
 def _add_runtime_parsers(sub: argparse._SubParsersAction) -> None:
@@ -404,7 +299,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sub = parser.add_subparsers(dest="cmd")
     _add_generic_run_parser(sub)
-    _add_named_case_parsers(sub)
     _add_runtime_parsers(sub)
 
     return parser
@@ -428,47 +322,6 @@ def main() -> int:
     if args.cmd is None:
         return _cmd_default_demo()
     return args.func(args)
-
-
-def _resolve_case(case_name: str):
-    name = case_name.lower()
-    if name == "cyclone":
-        return CycloneBaseCase, run_cyclone_linear
-    if name == "etg":
-        return ETGBaseCase, run_etg_linear
-    raise ValueError(
-        f"Unsupported case '{case_name}' in executable dispatcher (supported: cyclone, etg)"
-    )
-
-
-def _cmd_run_linear(args: argparse.Namespace) -> int:
-    return run_named_linear_command(args, deps=_named_linear_command_deps())
-
-
-def _cmd_scan_linear(args: argparse.Namespace) -> int:
-    return scan_named_linear_command(args, deps=_named_linear_command_deps())
-
-
-def _named_linear_command_deps() -> NamedLinearCommandDeps:
-    return NamedLinearCommandDeps(
-        load_case_from_toml=load_case_from_toml,
-        resolve_case=_resolve_case,
-        load_linear_terms_from_toml=load_linear_terms_from_toml,
-        load_krylov_from_toml=load_krylov_from_toml,
-        should_show_progress=_should_show_progress,
-        print_linear_run_header=_print_linear_run_header,
-        status_printer=_status_printer,
-        run_linear_scan=run_linear_scan,
-        build_spectral_grid=build_spectral_grid,
-        extract_mode_time_series=extract_mode_time_series,
-        growth_fit_figure=growth_fit_figure,
-        extract_eigenfunction=extract_eigenfunction,
-        normalize_eigenfunction=normalize_eigenfunction,
-        set_plot_style=set_plot_style,
-        load_cyclone_reference=load_cyclone_reference,
-        load_etg_reference=load_etg_reference,
-        scan_comparison_figure=scan_comparison_figure,
-    )
 
 
 def _runtime_command_deps() -> RuntimeCommandDeps:
