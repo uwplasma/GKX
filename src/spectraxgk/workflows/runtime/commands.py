@@ -132,6 +132,19 @@ def _runtime_fit_config(data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _validate_linear_sampling(solver: str, steps: int, sample_stride: int) -> None:
+    """Reject invalid explicit-time output cadence before solver setup."""
+
+    solver_key = solver.strip().lower().replace("-", "_")
+    if sample_stride < 1:
+        raise ValueError("sample_stride must be >= 1")
+    if solver_key in {"time", "explicit", "explicit_time"} and steps % sample_stride:
+        raise ValueError(
+            f"time solver steps ({steps}) must be divisible by sample_stride "
+            f"({sample_stride})"
+        )
+
+
 def should_show_progress(args: Any, configured: bool) -> bool:
     """Resolve progress output from executable flags, TOML config, and TTY state."""
 
@@ -156,6 +169,12 @@ def _resolve_linear_command_options(
     )
     solver, fit_signal = _resolve_linear_fit_options(args, run_cfg)
     dt_for_header = dt if dt is not None else float(cfg.time.dt)
+    steps_for_header = (
+        steps
+        if steps is not None
+        else int(round(float(cfg.time.t_max) / dt_for_header))
+    )
+    _validate_linear_sampling(solver, steps_for_header, sample_stride)
     return RuntimeLinearCommandOptions(
         ky=float(_arg_or_section(args, run_cfg, "ky", 0.3)),
         Nl=Nl,
@@ -168,11 +187,7 @@ def _resolve_linear_command_options(
         sample_stride=sample_stride,
         method_for_header=str(method if method is not None else cfg.time.method),
         dt_for_header=dt_for_header,
-        steps_for_header=(
-            steps
-            if steps is not None
-            else int(round(float(cfg.time.t_max) / dt_for_header))
-        ),
+        steps_for_header=steps_for_header,
         show_progress=should_show_progress(args, bool(cfg.time.progress_bar)),
     )
 
