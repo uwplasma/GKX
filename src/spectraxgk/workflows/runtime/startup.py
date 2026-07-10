@@ -228,12 +228,22 @@ def build_runtime_linear_params(
 
     species = _species_to_linear(cfg.species)
     has_kinetic_electron = any(float(s.charge) < 0.0 for s in species)
+    has_kinetic_ion = any(float(s.charge) > 0.0 for s in species)
+    if cfg.physics.adiabatic_electrons and cfg.physics.adiabatic_ions:
+        raise ValueError("adiabatic_electrons and adiabatic_ions are mutually exclusive")
     if cfg.physics.adiabatic_electrons and has_kinetic_electron:
         raise ValueError(
             "adiabatic_electrons=True conflicts with kinetic electron species"
         )
+    if cfg.physics.adiabatic_ions and has_kinetic_ion:
+        raise ValueError("adiabatic_ions=True conflicts with kinetic ion species")
 
-    tau_e = float(cfg.physics.tau_e) if cfg.physics.adiabatic_electrons else 0.0
+    # ``tau_e`` is the field solver's historical name for the Boltzmann-species
+    # quasineutrality coefficient; it applies to either adiabatic species.
+    has_boltzmann_species = (
+        cfg.physics.adiabatic_electrons or cfg.physics.adiabatic_ions
+    )
+    tau_e = float(cfg.physics.tau_e) if has_boltzmann_species else 0.0
     beta = float(cfg.physics.beta) if cfg.physics.electromagnetic else 0.0
     fapar = (
         1.0
