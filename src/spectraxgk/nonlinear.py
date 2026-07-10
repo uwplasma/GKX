@@ -22,9 +22,11 @@ from spectraxgk.solvers.nonlinear.diagnostic_integration import (
     _integrate_nonlinear_explicit_diagnostics_impl,
     _nonlinear_diagnostic_kernels,
     _options_from_scope,
+    PreparedExplicitNonlinearDiagnostics,
     integrate_nonlinear_explicit_diagnostics,
     integrate_nonlinear_explicit_diagnostics_state,
     integrate_nonlinear_imex_diagnostics,
+    prepare_nonlinear_explicit_diagnostics,
 )
 from spectraxgk.operators.nonlinear.diagnostics import (
     _pack_resolved_diagnostics,
@@ -60,6 +62,7 @@ __all__ = [
     "NonlinearCollisionSplitPolicy",
     "NonlinearDiagnosticSetup",
     "NonlinearTimeStepPolicy",
+    "PreparedExplicitNonlinearDiagnostics",
     "_EXPLICIT_DIAGNOSTIC_OPTION_KEYS",
     "_IMEX_DIAGNOSTIC_OPTION_KEYS",
     "_apply_collision_split",
@@ -92,6 +95,7 @@ __all__ = [
     "integrate_nonlinear_imex_diagnostics",
     "maybe_emit_nonlinear_progress",
     "nonlinear_rhs_cached",
+    "prepare_nonlinear_explicit_diagnostics",
     "run_sampled_explicit_diagnostic_scan",
     "sampled_scan_intervals",
     "select_nonlinear_step_diagnostics",

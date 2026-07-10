@@ -60,8 +60,10 @@ from spectraxgk.operators.nonlinear.rhs import nonlinear_em_term_cached_impl
 from spectraxgk.solvers.nonlinear.diagnostics import (
     ExplicitNonlinearDiagnosticsDeps,
     IMEXNonlinearDiagnosticsDeps,
+    PreparedExplicitNonlinearDiagnostics,
     integrate_explicit_nonlinear_diagnostics_impl,
     integrate_imex_nonlinear_diagnostics_impl,
+    prepare_explicit_nonlinear_diagnostics_impl,
 )
 from spectraxgk.solvers.nonlinear.explicit import (
     make_explicit_diagnostic_step,
@@ -349,6 +351,36 @@ def integrate_nonlinear_explicit_diagnostics_state(
     )
 
 
+def prepare_nonlinear_explicit_diagnostics(
+    G0: jnp.ndarray,
+    grid: SpectralGrid,
+    geom: FluxTubeGeometryLike,
+    params: LinearParams,
+    dt: float,
+    steps: int,
+    **options: Any,
+) -> PreparedExplicitNonlinearDiagnostics:
+    """Prepare a reusable explicit diagnostic scan for repeated Python calls.
+
+    ``options`` accepts the same explicit-only keywords as
+    :func:`integrate_nonlinear_explicit_diagnostics_state`.
+    """
+
+    method = str(options.get("method", "rk3"))
+    if method in _IMEX_METHODS:
+        raise ValueError("prepared nonlinear diagnostics only support explicit methods")
+    return prepare_explicit_nonlinear_diagnostics_impl(
+        G0,
+        grid,
+        geom,
+        params,
+        dt,
+        steps,
+        deps=_explicit_nonlinear_diagnostics_deps(),
+        **options,
+    )
+
+
 def _imex_nonlinear_diagnostics_deps() -> IMEXNonlinearDiagnosticsDeps:
     """Collect dependencies for IMEX diagnostic integration."""
 
@@ -443,4 +475,5 @@ __all__ = [
     "integrate_nonlinear_explicit_diagnostics",
     "integrate_nonlinear_explicit_diagnostics_state",
     "integrate_nonlinear_imex_diagnostics",
+    "prepare_nonlinear_explicit_diagnostics",
 ]

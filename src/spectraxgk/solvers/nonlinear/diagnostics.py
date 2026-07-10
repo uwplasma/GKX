@@ -111,6 +111,41 @@ class _ExplicitScanComponents:
     compute_diag_from_state: Callable[..., Any]
 
 
+@dataclass(frozen=True)
+class PreparedExplicitNonlinearDiagnostics:
+    """Reusable compiled explicit nonlinear diagnostic simulation.
+
+    Geometry, field operators, and static numerical policy are prepared once.
+    Calls to :meth:`run` may supply a new initial state with the same shape and
+    dtype without rebuilding the scan closure.
+    """
+
+    initial_state: jnp.ndarray
+    _run_raw: Callable[[jnp.ndarray], tuple[Any, Any, Any]]
+    _finalize: Callable[..., SimulationDiagnostics]
+    stride: int
+    sampled_scan: bool
+    resolved_diagnostics: bool
+
+    def run(
+        self, initial_state: jnp.ndarray | None = None
+    ) -> tuple[jnp.ndarray, SimulationDiagnostics, jnp.ndarray, FieldState]:
+        """Advance one state through the prepared compiled simulation."""
+
+        state = self.initial_state if initial_state is None else initial_state
+        G_final, scan_diag_out, fields_final = self._run_raw(jnp.asarray(state))
+        diag, t, dt_series = scan_diag_out
+        diag_out = self._finalize(
+            diag,
+            t=t,
+            dt_series=dt_series,
+            stride=self.stride,
+            sampled_scan=self.sampled_scan,
+            resolved_diagnostics=self.resolved_diagnostics,
+        )
+        return jnp.asarray(diag_out.t), diag_out, G_final, fields_final
+
+
 _EXPLICIT_DIAGNOSTIC_OPTION_KEYS = tuple(_ExplicitDiagnosticOptions.__annotations__)
 
 
@@ -354,8 +389,55 @@ def _run_explicit_diagnostic_scan_and_finalize(
 ) -> tuple[jnp.ndarray, SimulationDiagnostics, jnp.ndarray, FieldState]:
     """Run the explicit scan and convert raw scan output into diagnostics."""
 
+    G_final, scan_diag_out, fields_final = _run_explicit_diagnostic_scan_raw(
+        prepared,
+        policies,
+        step,
+        compute_diag_from_state,
+        params,
+        deps=deps,
+        initial_state=prepared.G0,
+        steps=steps,
+        sample_stride=sample_stride,
+        diagnostics_stride=diagnostics_stride,
+        checkpoint=checkpoint,
+        external_phi=external_phi,
+    )
+    diag, t, dt_series = scan_diag_out
+    stride = int(max(sample_stride, diagnostics_stride, 1))
+    sampled_scan = stride > 1 and jax.default_backend() != "cpu"
+    diag_out = deps.finalize_scan_diagnostics_fn(
+        diag,
+        t=t,
+        dt_series=dt_series,
+        stride=stride,
+        sampled_scan=sampled_scan,
+        resolved_diagnostics=resolved_diagnostics,
+    )
+    return jnp.asarray(diag_out.t), diag_out, G_final, fields_final
+
+
+def _run_explicit_diagnostic_scan_raw(
+    prepared: _ExplicitPreparedState,
+    policies: _ExplicitRuntimePolicies,
+    step: Callable[..., Any],
+    compute_diag_from_state: Callable[..., Any],
+    params: LinearParams,
+    *,
+    deps: ExplicitNonlinearDiagnosticsDeps,
+    initial_state: jnp.ndarray,
+    steps: int,
+    sample_stride: int,
+    diagnostics_stride: int,
+    checkpoint: bool,
+    external_phi: jnp.ndarray | float | None,
+) -> tuple[jnp.ndarray, tuple[Any, Any, Any], FieldState]:
+    """Run the device scan and return raw arrays for outside-JIT packaging."""
+
+    G0 = prepared.project_state(jnp.asarray(initial_state, dtype=prepared.state_dtype))
+
     fields0 = deps.compute_fields_fn(
-        prepared.G0,
+        G0,
         prepared.cache,
         params,
         terms=prepared.term_cfg,
@@ -367,14 +449,14 @@ def _run_explicit_diagnostic_scan_and_finalize(
         ),
         dtype=prepared.real_dtype,
     )
-    diag_zero = compute_diag_from_state(prepared.G0, fields0, prepared.G0, fields0, dt0)
+    diag_zero = compute_diag_from_state(G0, fields0, G0, fields0, dt0)
     stride = int(max(sample_stride, diagnostics_stride, 1))
     sampled_scan = stride > 1 and jax.default_backend() != "cpu"
     G_final, scan_diag_out = deps.run_explicit_scan_fn(
         step,
         (
-            prepared.G0,
-            prepared.G0,
+            G0,
+            G0,
             fields0,
             diag_zero,
             jnp.asarray(0.0, dtype=prepared.real_dtype),
@@ -387,15 +469,6 @@ def _run_explicit_diagnostic_scan_and_finalize(
         sampled_scan_fn=deps.run_sampled_explicit_scan_fn,
     )
 
-    diag, t, dt_series = scan_diag_out
-    diag_out = deps.finalize_scan_diagnostics_fn(
-        diag,
-        t=t,
-        dt_series=dt_series,
-        stride=stride,
-        sampled_scan=sampled_scan,
-        resolved_diagnostics=resolved_diagnostics,
-    )
     fields_final = deps.compute_fields_fn(
         G_final,
         prepared.cache,
@@ -403,7 +476,7 @@ def _run_explicit_diagnostic_scan_and_finalize(
         terms=prepared.term_cfg,
         external_phi=external_phi,
     )
-    return jnp.asarray(diag_out.t), diag_out, G_final, fields_final
+    return G_final, scan_diag_out, fields_final
 
 
 def _build_explicit_scan_closures(
@@ -539,6 +612,100 @@ def _run_explicit_scan_components(
     )
 
 
+def prepare_explicit_nonlinear_diagnostics_impl(
+    G0: jnp.ndarray,
+    grid: SpectralGrid,
+    geom: FluxTubeGeometryLike,
+    params: LinearParams,
+    dt: float,
+    steps: int,
+    *,
+    deps: ExplicitNonlinearDiagnosticsDeps,
+    method: str = "rk3",
+    cache: LinearCache | None = None,
+    terms: TermConfig | None = None,
+    checkpoint: bool = False,
+    sample_stride: int = 1,
+    diagnostics_stride: int = 1,
+    use_dealias_mask: bool = False,
+    z_index: int | None = None,
+    compressed_real_fft: bool = True,
+    laguerre_mode: str = "grid",
+    omega_ky_index: int | None = None,
+    omega_kx_index: int | None = None,
+    flux_scale: float = 1.0,
+    wphi_scale: float = 1.0,
+    fixed_dt: bool = True,
+    dt_min: float = 1.0e-7,
+    dt_max: float | None = None,
+    cfl: float = 0.9,
+    cfl_fac: float | None = None,
+    collision_split: bool = False,
+    collision_scheme: str = "implicit",
+    implicit_tol: float = 1.0e-6,
+    implicit_maxiter: int = 200,
+    implicit_iters: int = 3,
+    implicit_relax: float = 0.7,
+    implicit_restart: int = 20,
+    implicit_solve_method: str = "batched",
+    implicit_preconditioner: str | None = None,
+    fixed_mode_ky_index: int | None = None,
+    fixed_mode_kx_index: int | None = None,
+    external_phi: jnp.ndarray | float | None = None,
+    resolved_diagnostics: bool = True,
+    show_progress: bool = False,
+) -> PreparedExplicitNonlinearDiagnostics:
+    """Prepare one compile-stable explicit nonlinear diagnostic simulation."""
+
+    _discard_imex_only_options(
+        implicit_tol,
+        implicit_maxiter,
+        implicit_iters,
+        implicit_relax,
+        implicit_restart,
+        implicit_solve_method,
+        implicit_preconditioner,
+    )
+    options = _explicit_options_from_values(locals())
+    components = _build_explicit_scan_components(
+        G0,
+        grid,
+        geom,
+        params,
+        deps=deps,
+        cache=cache,
+        terms=terms,
+        options=options,
+    )
+    stride = int(max(sample_stride, diagnostics_stride, 1))
+    sampled_scan = stride > 1 and jax.default_backend() != "cpu"
+
+    def run_raw(initial_state: jnp.ndarray) -> tuple[Any, Any, Any]:
+        return _run_explicit_diagnostic_scan_raw(
+            components.prepared,
+            components.policies,
+            components.step,
+            components.compute_diag_from_state,
+            params,
+            deps=deps,
+            initial_state=initial_state,
+            steps=steps,
+            sample_stride=sample_stride,
+            diagnostics_stride=diagnostics_stride,
+            checkpoint=checkpoint,
+            external_phi=external_phi,
+        )
+
+    return PreparedExplicitNonlinearDiagnostics(
+        initial_state=components.prepared.G0,
+        _run_raw=jax.jit(run_raw),
+        _finalize=deps.finalize_scan_diagnostics_fn,
+        stride=stride,
+        sampled_scan=sampled_scan,
+        resolved_diagnostics=resolved_diagnostics,
+    )
+
+
 def integrate_explicit_nonlinear_diagnostics_impl(
     G0: jnp.ndarray,
     grid: SpectralGrid,
@@ -610,6 +777,8 @@ def integrate_explicit_nonlinear_diagnostics_impl(
 __all__ = [
     "ExplicitNonlinearDiagnosticsDeps",
     "IMEXNonlinearDiagnosticsDeps",
+    "PreparedExplicitNonlinearDiagnostics",
     "integrate_explicit_nonlinear_diagnostics_impl",
     "integrate_imex_nonlinear_diagnostics_impl",
+    "prepare_explicit_nonlinear_diagnostics_impl",
 ]
