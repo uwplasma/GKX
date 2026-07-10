@@ -654,6 +654,9 @@ def run_runtime_scan_batch(
 ) -> RuntimeLinearScanResult:
     """Batch a ky scan using one time integration over the full grid."""
 
+    if ky_arr.size == 0:
+        raise ValueError("ky_values must not be empty")
+
     setup = _batch_scan_setup(cfg, ky_arr, Nl=Nl, Nm=Nm, deps=deps)
     g0 = _combined_batch_initial_condition(
         cfg, setup, Nl=Nl, Nm=Nm, deps=deps

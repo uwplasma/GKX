@@ -690,5 +690,4 @@ __all__ = [
     "end_damping_contribution",
     "hypercollisions_contribution",
     "hyperdiffusion_contribution",
-    "resolve_custom_collision",
 ]
