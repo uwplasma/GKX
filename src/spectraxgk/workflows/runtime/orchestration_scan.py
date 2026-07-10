@@ -21,6 +21,7 @@ class RuntimeScanBatchDeps(Protocol):
     build_initial_condition: Callable[..., Any]
     apply_geometry_grid_defaults: Callable[..., Any]
     build_spectral_grid: Callable[[Any], Any]
+    select_ky_grid: Callable[[Any, Any], Any]
     select_ky_index: Callable[[Any, float], int]
     midplane_index: Callable[[Any], int]
     integrate_linear_diagnostics: Callable[..., Any]
@@ -153,6 +154,7 @@ def build_runtime_scan_batch_deps(facade: Any) -> RuntimeScanBatchDeps:
             build_initial_condition=facade._build_initial_condition,
             apply_geometry_grid_defaults=facade.apply_geometry_grid_defaults,
             build_spectral_grid=facade.build_spectral_grid,
+            select_ky_grid=facade.select_ky_grid,
             select_ky_index=facade.select_ky_index,
             midplane_index=facade._midplane_index,
             integrate_linear_diagnostics=facade.integrate_linear_diagnostics,
@@ -330,12 +332,17 @@ def _batch_scan_setup(
 ) -> _BatchScanSetup:
     geom = deps.build_runtime_geometry(cfg)
     grid_cfg = deps.apply_geometry_grid_defaults(geom, cfg.grid)
-    grid = deps.build_spectral_grid(grid_cfg)
+    full_grid = deps.build_spectral_grid(grid_cfg)
+    full_ky_indices = np.asarray(
+        [deps.select_ky_index(np.asarray(full_grid.ky), ky) for ky in ky_arr],
+        dtype=int,
+    )
+    # Linear scans retain every requested mode. The parent mask is only for
+    # nonlinear convolution dealiasing and would otherwise suppress high ky.
+    grid = deps.select_ky_grid(full_grid, full_ky_indices)
     params = deps.build_runtime_linear_params(cfg, Nm=Nm, geom=geom)
     terms = deps.build_runtime_linear_terms(cfg)
-    ky_indices = np.asarray(
-        [deps.select_ky_index(np.asarray(grid.ky), ky) for ky in ky_arr], dtype=int
-    )
+    ky_indices = np.arange(ky_arr.size, dtype=int)
     nspecies = max(len([s for s in cfg.species if s.kinetic]), 1)
     return _BatchScanSetup(
         geom=geom,
