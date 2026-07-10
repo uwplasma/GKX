@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import fields, is_dataclass, replace
+from dataclasses import is_dataclass, replace
 from typing import Any, Callable, Sequence, cast
 import os
 from pathlib import Path
@@ -12,15 +12,6 @@ try:
 except ModuleNotFoundError:  # pragma: no cover - only on Python <3.11
     import tomli as tomllib  # type: ignore[import-not-found,no-redef]
 
-from spectraxgk.config import (
-    CycloneBaseCase,
-    ETGBaseCase,
-    KineticElectronBaseCase,
-    KBMBaseCase,
-    TEMBaseCase,
-)
-from spectraxgk.operators.linear.params import LinearTerms
-from spectraxgk.solvers.linear.krylov import KrylovConfig
 from spectraxgk.workflows.runtime.config import (
     RuntimeCollisionConfig,
     RuntimeConfig,
@@ -33,7 +24,6 @@ from spectraxgk.workflows.runtime.config import (
     RuntimeSpeciesConfig,
     RuntimeTermsConfig,
 )
-from spectraxgk.terms.config import TermConfig
 
 RUNTIME_TOML_TOP_LEVEL_KEYS = {
     "species",
@@ -158,50 +148,6 @@ def _normalize_geometry_overrides(overrides: dict | None) -> dict | None:
     return dict(overrides)
 
 
-def _case_registry():
-    return {
-        "cyclone": CycloneBaseCase,
-        "etg": ETGBaseCase,
-        "kinetic_itg": KineticElectronBaseCase,
-        "kbm": KBMBaseCase,
-        "tem": TEMBaseCase,
-    }
-
-
-def load_case_from_toml(path: str | Path, case_name: str | None = None):
-    """Load a case config from TOML, returning (case_name, case_config, data)."""
-
-    data = load_toml(path)
-    if case_name is None:
-        case_name = str(data.get("case", "cyclone")).lower()
-    registry = _case_registry()
-    if case_name not in registry:
-        raise ValueError(
-            f"Unknown case '{case_name}'. Available: {', '.join(registry)}"
-        )
-    cfg = registry[case_name]()
-    reference_aligned = None
-    reference_raw = data.get("reference_alignment")
-    if isinstance(reference_raw, dict):
-        enabled = reference_raw.get("enabled")
-        if enabled is not None:
-            reference_aligned = bool(enabled)
-    elif reference_raw is not None:
-        reference_aligned = bool(reference_raw)
-
-    overrides = {
-        "grid": data.get("grid"),
-        "time": data.get("time"),
-        "geometry": _normalize_geometry_overrides(data.get("geometry")),
-        "model": data.get("model"),
-        "init": data.get("init"),
-    }
-    if reference_aligned is not None and hasattr(cfg, "reference_aligned"):
-        overrides["reference_aligned"] = reference_aligned
-    cfg = _merge_dataclass(cfg, overrides)
-    return case_name, cfg, data
-
-
 def _runtime_base_config(data: dict[str, Any]) -> RuntimeConfig:
     """Return a runtime config after applying common dataclass sections."""
 
@@ -321,32 +267,3 @@ def load_runtime_from_toml(path: str | Path) -> tuple[RuntimeConfig, dict]:
     if species is not None:
         cfg = replace(cfg, species=species)
     return _resolve_runtime_config_paths(cfg, base_dir=base_dir), data
-
-
-def load_linear_terms_from_toml(data: dict) -> LinearTerms | None:
-    """Parse LinearTerms from a TOML dict."""
-
-    terms = data.get("terms")
-    if not isinstance(terms, dict):
-        return None
-    linear_fields = {field.name for field in fields(LinearTerms)}
-    linear_terms = {key: value for key, value in terms.items() if key in linear_fields}
-    return LinearTerms(**linear_terms)
-
-
-def load_krylov_from_toml(data: dict) -> KrylovConfig | None:
-    """Parse KrylovConfig from a TOML dict."""
-
-    krylov = data.get("krylov")
-    if not isinstance(krylov, dict):
-        return None
-    return KrylovConfig(**krylov)
-
-
-def load_term_config_from_toml(data: dict) -> TermConfig | None:
-    """Parse TermConfig for nonlinear runs from TOML dict."""
-
-    terms = data.get("terms")
-    if not isinstance(terms, dict):
-        return None
-    return TermConfig(**terms)
