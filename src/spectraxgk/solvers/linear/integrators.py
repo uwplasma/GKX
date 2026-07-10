@@ -8,6 +8,7 @@ from typing import Any, Callable
 import jax
 import jax.numpy as jnp
 
+from spectraxgk.core.extension_points import CollisionOperator
 from spectraxgk.geometry import FluxTubeGeometryLike
 from spectraxgk.core.grid import SpectralGrid
 from spectraxgk.operators.linear.cache_model import LinearCache
@@ -58,6 +59,8 @@ def _prepared_linear_state_and_damping(
     G0: jnp.ndarray,
     cache: LinearCache,
     params: LinearParams,
+    *,
+    include_collisions: bool = True,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     base_dtype = jnp.complex128 if _x64_enabled() else jnp.complex64
     state_dtype = jnp.result_type(G0, base_dtype)
@@ -66,10 +69,11 @@ def _prepared_linear_state_and_damping(
     hyper_damp = hypercollision_damping(cache, params, real_dtype)
     if G0.ndim == 5 and hyper_damp.ndim == 6:
         hyper_damp = hyper_damp[0]
-    damping = (
-        collision_damping(cache, params, real_dtype, squeeze_species=(G0.ndim == 5))
-        + hyper_damp
-    )
+    damping = hyper_damp
+    if include_collisions:
+        damping = damping + collision_damping(
+            cache, params, real_dtype, squeeze_species=(G0.ndim == 5)
+        )
     return G0, damping.astype(real_dtype)
 
 
@@ -88,6 +92,7 @@ def _linear_rhs_callable(
     parallel: Any | None,
     parallel_strategy: str,
     force_electrostatic_fields: bool,
+    collision_operator: CollisionOperator | None = None,
 ) -> Callable[[jnp.ndarray], tuple[jnp.ndarray, jnp.ndarray]]:
     def rhs(G_in: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
         if parallel_strategy == "serial":
@@ -98,6 +103,7 @@ def _linear_rhs_callable(
                 terms=terms,
                 dt=dt_val,
                 force_electrostatic_fields=force_electrostatic_fields,
+                collision_operator=collision_operator,
             )
         return linear_rhs_parallel_cached(
             G_in, cache, params, terms=terms, parallel=parallel, dt=dt_val
@@ -208,12 +214,18 @@ def _integrate_linear_cached_impl(
     show_progress: bool = False,
     parallel: Any | None = None,
     force_electrostatic_fields: bool = False,
+    collision_operator: CollisionOperator | None = None,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Time integrate the linear system using cached geometry arrays."""
     _validate_linear_method(method)
     if terms is None:
         terms = LinearTerms()
-    G0, damping = _prepared_linear_state_and_damping(G0, cache, params)
+    G0, damping = _prepared_linear_state_and_damping(
+        G0,
+        cache,
+        params,
+        include_collisions=collision_operator is None,
+    )
     real_dtype = jnp.real(jnp.empty((), dtype=G0.dtype)).dtype
     dt_val = jnp.asarray(dt, dtype=real_dtype)
     parallel_strategy = _linear_parallel_strategy(parallel)
@@ -225,6 +237,7 @@ def _integrate_linear_cached_impl(
         parallel=parallel,
         parallel_strategy=parallel_strategy,
         force_electrostatic_fields=force_electrostatic_fields,
+        collision_operator=collision_operator,
     )
 
     def advance(G: jnp.ndarray) -> jnp.ndarray:
@@ -573,6 +586,7 @@ def integrate_linear(
     donate: bool = False,
     show_progress: bool = False,
     parallel: Any | None = None,
+    collision_operator: CollisionOperator | None = None,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Time integrate the linear system using a fixed-step scheme."""
     terms = LinearTerms() if terms is None else terms
@@ -581,6 +595,33 @@ def integrate_linear(
     method = _normalize_linear_method(method)
     parallel_strategy = _linear_parallel_strategy(parallel)
     force_electrostatic_fields = _is_electrostatic_field_terms(terms)
+    if collision_operator is not None:
+        if method == "implicit":
+            raise NotImplementedError(
+                "custom collision operators currently require an explicit or IMEX method"
+            )
+        if parallel_strategy != "serial":
+            raise NotImplementedError(
+                "custom collision operators currently require serial state integration"
+            )
+        if donate:
+            raise NotImplementedError(
+                "custom collision operators currently do not support donated state buffers"
+            )
+        return _integrate_linear_cached_impl(
+            G0,
+            cache,
+            params,
+            dt,
+            steps,
+            method=method,
+            checkpoint=checkpoint,
+            terms=terms,
+            sample_stride=sample_stride,
+            show_progress=show_progress,
+            force_electrostatic_fields=force_electrostatic_fields,
+            collision_operator=collision_operator,
+        )
     if method == "implicit":
         if parallel_strategy != "serial":
             raise NotImplementedError(

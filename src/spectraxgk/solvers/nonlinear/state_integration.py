@@ -86,6 +86,7 @@ def _nonlinear_rhs_scan(
     term_cfg: TermConfig,
     compressed_real_fft: bool,
     laguerre_mode: str,
+    collision_operator: CollisionOperator | None,
 ) -> tuple[jnp.ndarray, FieldState]:
     """Stable scan callable; arrays are dynamic while model switches are static."""
 
@@ -96,6 +97,7 @@ def _nonlinear_rhs_scan(
         term_cfg,
         compressed_real_fft=compressed_real_fft,
         laguerre_mode=laguerre_mode,
+        collision_operator=collision_operator,
     )
 
 
@@ -112,11 +114,16 @@ def integrate_nonlinear_cached(
     laguerre_mode: str = "grid",
     show_progress: bool = False,
     return_fields: bool = True,
+    collision_operator: CollisionOperator | None = None,
 ) -> tuple[jnp.ndarray, FieldState] | jnp.ndarray:
     """Integrate the nonlinear system using a cached geometry object."""
 
     term_cfg = terms or TermConfig()
     if method in {"imex", "semi-implicit"}:
+        if collision_operator is not None:
+            raise NotImplementedError(
+                "custom collision operators currently require explicit nonlinear integration"
+            )
         result = integrate_nonlinear_imex_cached(
             G0,
             cache,
@@ -144,7 +151,12 @@ def integrate_nonlinear_cached(
         method=method,
         rhs_fn=_nonlinear_rhs_scan,
         rhs_args=(cache, params),
-        rhs_static_args=(term_cfg, compressed_real_fft, laguerre_mode),
+        rhs_static_args=(
+            term_cfg,
+            compressed_real_fft,
+            laguerre_mode,
+            collision_operator,
+        ),
         scan_fn=integrate_nonlinear_scan,
         checkpoint=checkpoint,
         project_state=project_state,
@@ -168,6 +180,7 @@ def integrate_nonlinear(
     laguerre_mode: str = "grid",
     show_progress: bool = False,
     return_fields: bool = True,
+    collision_operator: CollisionOperator | None = None,
 ) -> tuple[jnp.ndarray, FieldState] | jnp.ndarray:
     """Integrate the nonlinear system using built-in cache construction."""
 
@@ -195,6 +208,7 @@ def integrate_nonlinear(
         laguerre_mode=laguerre_mode,
         show_progress=show_progress,
         return_fields=return_fields,
+        collision_operator=collision_operator,
     )
 
 

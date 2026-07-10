@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import jax.numpy as jnp
 
+from spectraxgk.core.extension_points import CollisionOperator
 from spectraxgk.geometry import FluxTubeGeometryLike
 from spectraxgk.core.grid import SpectralGrid
 from spectraxgk.operators.linear.cache_model import LinearCache
@@ -23,6 +26,7 @@ def linear_rhs(
     terms: LinearTerms | None = None,
     *,
     dt: jnp.ndarray | float | None = None,
+    collision_operator: CollisionOperator | None = None,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Compute the linear RHS and electrostatic potential from grid/geometry inputs."""
 
@@ -35,7 +39,14 @@ def linear_rhs(
             "G must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)"
         )
     cache = build_linear_cache(grid, geom, params, Nl, Nm)
-    return linear_rhs_cached(G, cache, params, terms=terms, dt=dt)
+    return linear_rhs_cached(
+        G,
+        cache,
+        params,
+        terms=terms,
+        dt=dt,
+        collision_operator=collision_operator,
+    )
 
 
 def linear_rhs_cached(
@@ -48,6 +59,7 @@ def linear_rhs_cached(
     use_custom_vjp: bool = True,
     dt: jnp.ndarray | float | None = None,
     force_electrostatic_fields: bool = False,
+    collision_operator: CollisionOperator | None = None,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Compute the linear RHS using precomputed geometry/cache arrays."""
 
@@ -58,6 +70,11 @@ def linear_rhs_cached(
     )
 
     term_cfg = linear_terms_to_term_config(terms)
+    assembled_terms = (
+        replace(term_cfg, collisions=0.0)
+        if collision_operator is not None and term_cfg.collisions != 0.0
+        else term_cfg
+    )
 
     if use_jit:
         rhs_fn = (
@@ -65,17 +82,26 @@ def linear_rhs_cached(
             if force_electrostatic_fields
             else assemble_rhs_cached_jit
         )
-        dG, fields = rhs_fn(G, cache, params, term_cfg, dt)
+        dG, fields = rhs_fn(G, cache, params, assembled_terms, dt)
     else:
         dG, fields = assemble_rhs_cached(
             G,
             cache,
             params,
-            terms=term_cfg,
+            terms=assembled_terms,
             use_custom_vjp=use_custom_vjp,
             dt=dt,
             force_electrostatic_fields=force_electrostatic_fields,
         )
+    if collision_operator is not None and term_cfg.collisions != 0.0:
+        collision_rhs = jnp.asarray(collision_operator.apply(G, cache, params))
+        if collision_rhs.shape != G.shape:
+            raise ValueError(
+                "collision operator must return the same state shape "
+                f"(expected {G.shape}, got {collision_rhs.shape})"
+            )
+        real_dtype = jnp.real(jnp.empty((), dtype=G.dtype)).dtype
+        dG = dG + jnp.asarray(term_cfg.collisions, dtype=real_dtype) * collision_rhs
     return dG, fields.phi
 
 

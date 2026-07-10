@@ -1,9 +1,9 @@
-"""Protocol definitions for planned SPECTRAX-GK extension points.
+"""Structural protocols for SPECTRAX-GK extension points.
 
-The protocols are intentionally structural and dependency-light. They describe
-how future basis, geometry, field, collision, diagnostic, and objective plugins
-should connect to the solver without requiring current kernels to be moved in
-this tranche.
+The protocols are intentionally structural and dependency-light. Collision
+operators are active in cached RHS and explicit state-integration paths; the
+remaining protocols define the narrow interfaces used as other domains become
+pluggable.
 """
 
 from __future__ import annotations
