@@ -161,7 +161,7 @@ for JVP, VJP, implicit differentiation, conditioning, covariance, and finite-dif
 
 The current quasilinear implementation is a scoped model-development and
 optimization-screening result. It supports ranking and correlation studies but
-is not a runtime/TOML universal absolute-flux predictor. Absolute-flux
+is not a runtime/TOML absolute-flux predictor. Absolute-flux
 promotion remains rejected when the declared Solovev and shaped-pressure stress
 outliers are retained. Model definitions, derivations, calibration splits,
 uncertainty, residual anatomy, and holdout gates are in the
