@@ -51,7 +51,7 @@ class _HypercollisionLinkedRoute:
     linked_use_gather: bool
 
 
-def _is_static_zero(value: jnp.ndarray, dtype: jnp.dtype | None = None) -> bool:
+def _is_static_zero(value: Any, dtype: jnp.dtype | None = None) -> bool:
     arr = jnp.asarray(value, dtype=dtype)
     if isinstance(arr, jax.core.Tracer):
         return False
