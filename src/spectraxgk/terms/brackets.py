@@ -91,22 +91,17 @@ def _spectral_bracket_multi_real_fft(
     axes = (-2, -3)
     kx_b = _broadcast_grid(kx_nyc, G_nyc.ndim)
     ky_b = _broadcast_grid(ky_nyc, G_nyc.ndim)
+    grad_G = jnp.stack([imag * kx_b * G_nyc, imag * ky_b * G_nyc], axis=0)
+    grad_G = jnp.fft.irfft2(grad_G, s=(kx.shape[1], ny_full), axes=axes) * ifft_scale
+    dG_dx = grad_G[0]
+    dG_dy = grad_G[1]
+
     kx_chi = _broadcast_grid(kx_nyc, chi_nyc.ndim)
     ky_chi = _broadcast_grid(ky_nyc, chi_nyc.ndim)
-    gradients = jnp.stack(
-        [
-            imag * kx_b * G_nyc,
-            imag * ky_b * G_nyc,
-            imag * kx_chi * chi_nyc,
-            imag * ky_chi * chi_nyc,
-        ],
-        axis=0,
-    )
-    gradients = (
-        jnp.fft.irfft2(gradients, s=(kx.shape[1], ny_full), axes=axes)
-        * ifft_scale
-    )
-    dG_dx, dG_dy, dchi_dx, dchi_dy = gradients
+    grad_chi = jnp.stack([imag * kx_chi * chi_nyc, imag * ky_chi * chi_nyc], axis=0)
+    grad_chi = jnp.fft.irfft2(grad_chi, s=(kx.shape[1], ny_full), axes=axes) * ifft_scale
+    dchi_dx = grad_chi[0]
+    dchi_dy = grad_chi[1]
 
     bracket = dG_dx[None, ...] * dchi_dy - dG_dy[None, ...] * dchi_dx
 
@@ -305,18 +300,17 @@ def _spectral_bracket_full(
 
     kx_b = _broadcast_grid(kx, G_hat.ndim)
     ky_b = _broadcast_grid(ky, G_hat.ndim)
+    grad_G = jnp.stack([imag * kx_b * G_hat, imag * ky_b * G_hat], axis=0)
+    grad_G = _ifft2_xy(grad_G) * ifft_scale
+    dG_dx = grad_G[0]
+    dG_dy = grad_G[1]
+
     kx_chi = _broadcast_grid(kx, chi_hat.ndim)
     ky_chi = _broadcast_grid(ky, chi_hat.ndim)
-    gradients = jnp.stack(
-        [
-            imag * kx_b * G_hat,
-            imag * ky_b * G_hat,
-            imag * kx_chi * chi_hat,
-            imag * ky_chi * chi_hat,
-        ],
-        axis=0,
-    )
-    dG_dx, dG_dy, dchi_dx, dchi_dy = _ifft2_xy(gradients) * ifft_scale
+    grad_chi = jnp.stack([imag * kx_chi * chi_hat, imag * ky_chi * chi_hat], axis=0)
+    grad_chi = _ifft2_xy(grad_chi) * ifft_scale
+    dchi_dx = grad_chi[0]
+    dchi_dy = grad_chi[1]
 
     bracket = dG_dx * dchi_dy - dG_dy * dchi_dx
 
@@ -355,3 +349,4 @@ def _spectral_bracket_multi(
         kxfac=kxfac,
         fft_norm=fft_norm,
     )
+
