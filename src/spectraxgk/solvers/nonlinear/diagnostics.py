@@ -127,13 +127,25 @@ class PreparedExplicitNonlinearDiagnostics:
     sampled_scan: bool
     resolved_diagnostics: bool
 
+    def run_arrays(
+        self, initial_state: jnp.ndarray | None = None
+    ) -> tuple[jnp.ndarray, tuple[Any, Any, Any], FieldState]:
+        """Run the compiled scan without host conversion or artifact assembly.
+
+        This method is the differentiable Python boundary. The initial state is
+        dynamic, while grid, geometry, cache, and numerical policy are fixed by
+        :func:`prepare_nonlinear_explicit_diagnostics`.
+        """
+
+        state = self.initial_state if initial_state is None else initial_state
+        return self._run_raw(jnp.asarray(state))
+
     def run(
         self, initial_state: jnp.ndarray | None = None
     ) -> tuple[jnp.ndarray, SimulationDiagnostics, jnp.ndarray, FieldState]:
         """Advance one state through the prepared compiled simulation."""
 
-        state = self.initial_state if initial_state is None else initial_state
-        G_final, scan_diag_out, fields_final = self._run_raw(jnp.asarray(state))
+        G_final, scan_diag_out, fields_final = self.run_arrays(initial_state)
         diag, t, dt_series = scan_diag_out
         diag_out = self._finalize(
             diag,
