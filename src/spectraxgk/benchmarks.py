@@ -42,7 +42,6 @@ from spectraxgk.terms.assembly import compute_fields_cached
 from spectraxgk.config import (
     CycloneBaseCase,
     InitializationConfig,
-    ETGBaseCase,
     KBMBaseCase,
     KineticElectronBaseCase,
     TEMBaseCase,
@@ -10416,7 +10415,6 @@ __all__ = [
     "CycloneReference",
     "CycloneRunResult",
     "CycloneScanResult",
-    "ETGBaseCase",
     "KBMBaseCase",
     "KineticElectronBaseCase",
     "KrylovConfig",

@@ -293,68 +293,6 @@ class CycloneBaseCase:
 
 
 @dataclass(frozen=True)
-class ETGModelConfig:
-    """Dimensionless gradients and ratios for a canonical ETG setup."""
-
-    R_over_LTi: float = 2.49
-    R_over_LTe: float = 2.49
-    R_over_Ln: float = 0.8
-    R_over_Lni: float | None = None
-    R_over_Lne: float | None = None
-    Te_over_Ti: float = 1.0
-    mass_ratio: float = REFERENCE_MASS_RATIO
-    nu_i: float = 0.0
-    nu_e: float = 0.0
-    beta: float = 1.0e-5
-    adiabatic_ions: bool = True
-
-    def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
-
-
-@dataclass(frozen=True)
-class ETGBaseCase:
-    """Parameters for a reduced ETG linear benchmark."""
-
-    grid: GridConfig = GridConfig(
-        Nx=1,
-        Ny=24,
-        Nz=96,
-        Lx=6.28,
-        Ly=6.28,
-        boundary="linked",
-        y0=0.2,
-        ntheta=32,
-        nperiod=2,
-    )
-    time: TimeConfig = TimeConfig(
-        t_max=10.0,
-        dt=0.05,
-        diffrax_solver="Dopri8",
-        diffrax_adaptive=True,
-        diffrax_rtol=1.0e-5,
-        diffrax_atol=1.0e-7,
-        diffrax_max_steps=200000,
-    )
-    geometry: GeometryConfig = GeometryConfig(R0=2.77778)
-    model: ETGModelConfig = ETGModelConfig()
-    init: InitializationConfig = InitializationConfig(
-        init_field="density",
-        init_amp=1.0e-10,
-        gaussian_init=True,
-    )
-
-    def to_dict(self) -> Dict[str, Dict[str, Any]]:
-        return {
-            "grid": self.grid.to_dict(),
-            "time": self.time.to_dict(),
-            "geometry": self.geometry.to_dict(),
-            "model": self.model.to_dict(),
-            "init": self.init.to_dict(),
-        }
-
-
-@dataclass(frozen=True)
 class KineticElectronModelConfig:
     """Gradients and ratios for a kinetic-electron Cyclone-base-case setup."""
 
@@ -519,8 +457,6 @@ class TEMBaseCase:
 
 __all__ = [
     "CycloneBaseCase",
-    "ETGBaseCase",
-    "ETGModelConfig",
     "GeometryConfig",
     "GridConfig",
     "InitializationConfig",
