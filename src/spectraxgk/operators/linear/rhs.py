@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
-
 import jax.numpy as jnp
 
 from spectraxgk.core.extension_points import CollisionOperator
@@ -16,6 +14,7 @@ from spectraxgk.operators.linear.params import (
     LinearTerms,
     linear_terms_to_term_config,
 )
+from spectraxgk.terms.linear_dissipation import resolve_custom_collision
 
 
 def linear_rhs(
@@ -70,10 +69,8 @@ def linear_rhs_cached(
     )
 
     term_cfg = linear_terms_to_term_config(terms)
-    assembled_terms = (
-        replace(term_cfg, collisions=0.0)
-        if collision_operator is not None and term_cfg.collisions != 0.0
-        else term_cfg
+    assembled_terms, collision_rhs = resolve_custom_collision(
+        G, cache, params, term_cfg, collision_operator
     )
 
     if use_jit:
@@ -93,15 +90,8 @@ def linear_rhs_cached(
             dt=dt,
             force_electrostatic_fields=force_electrostatic_fields,
         )
-    if collision_operator is not None and term_cfg.collisions != 0.0:
-        collision_rhs = jnp.asarray(collision_operator.apply(G, cache, params))
-        if collision_rhs.shape != G.shape:
-            raise ValueError(
-                "collision operator must return the same state shape "
-                f"(expected {G.shape}, got {collision_rhs.shape})"
-            )
-        real_dtype = jnp.real(jnp.empty((), dtype=G.dtype)).dtype
-        dG = dG + jnp.asarray(term_cfg.collisions, dtype=real_dtype) * collision_rhs
+    if collision_rhs is not None:
+        dG = dG + collision_rhs
     return dG, fields.phi
 
 

@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from typing import Any
 
 import numpy as np
 
 import jax
 import jax.numpy as jnp
 
+from spectraxgk.core.extension_points import CollisionOperator
+from spectraxgk.terms.config import TermConfig
 from spectraxgk.terms.operators import abs_z_linked_fft, shift_axis
 
 
@@ -57,6 +60,28 @@ def _is_static_zero(value: jnp.ndarray, dtype: jnp.dtype | None = None) -> bool:
 
 def _zeros_like_result(x: jnp.ndarray, *values: jnp.ndarray) -> jnp.ndarray:
     return jnp.zeros_like(x, dtype=jnp.result_type(x, *values))
+
+
+def resolve_custom_collision(
+    state: jnp.ndarray,
+    cache: Any,
+    parameters: Any,
+    terms: TermConfig,
+    operator: CollisionOperator | None,
+) -> tuple[TermConfig, jnp.ndarray | None]:
+    """Disable built-in collisions and return a weighted custom contribution."""
+
+    if operator is None or _is_static_zero(terms.collisions):
+        return terms, None
+    contribution = jnp.asarray(operator.apply(state, cache, parameters))
+    if contribution.shape != state.shape:
+        raise ValueError(
+            "collision operator must return the same state shape "
+            f"(expected {state.shape}, got {contribution.shape})"
+        )
+    real_dtype = jnp.real(jnp.empty((), dtype=state.dtype)).dtype
+    weighted = jnp.asarray(terms.collisions, dtype=real_dtype) * contribution
+    return replace(terms, collisions=0.0), weighted
 
 
 def _hermite_mode_drive(
@@ -665,4 +690,5 @@ __all__ = [
     "end_damping_contribution",
     "hypercollisions_contribution",
     "hyperdiffusion_contribution",
+    "resolve_custom_collision",
 ]

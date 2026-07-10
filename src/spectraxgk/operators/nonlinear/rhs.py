@@ -8,7 +8,6 @@ same seams while the implementation stays isolated and easier to profile.
 
 from __future__ import annotations
 
-from dataclasses import replace
 from typing import Any, Callable
 
 import jax.numpy as jnp
@@ -22,6 +21,7 @@ from spectraxgk.terms.assembly import (
     assemble_rhs_cached_jit,
 )
 from spectraxgk.terms.config import FieldState, TermConfig
+from spectraxgk.terms.linear_dissipation import resolve_custom_collision
 from spectraxgk.terms.nonlinear import nonlinear_em_contribution
 
 RhsCallable = Callable[..., tuple[jnp.ndarray, FieldState]]
@@ -64,10 +64,8 @@ def nonlinear_rhs_cached_impl(
     """Compute the assembled nonlinear RHS and electromagnetic field state."""
 
     term_cfg = terms or TermConfig()
-    linear_terms = (
-        replace(term_cfg, collisions=0.0)
-        if collision_operator is not None and term_cfg.collisions != 0.0
-        else term_cfg
+    linear_terms, collision_rhs = resolve_custom_collision(
+        G, cache, params, term_cfg, collision_operator
     )
     linear_rhs_fn = linear_rhs_jit_for_terms_impl(
         linear_terms,
@@ -78,15 +76,8 @@ def nonlinear_rhs_cached_impl(
     dG, fields = linear_rhs_fn(
         G, cache, params, linear_terms, external_phi=external_phi
     )
-    if collision_operator is not None and term_cfg.collisions != 0.0:
-        collision_rhs = jnp.asarray(collision_operator.apply(G, cache, params))
-        if collision_rhs.shape != G.shape:
-            raise ValueError(
-                "collision operator must return the same state shape "
-                f"(expected {G.shape}, got {collision_rhs.shape})"
-            )
-        real_dtype = jnp.real(jnp.empty((), dtype=G.dtype)).dtype
-        dG = dG + jnp.asarray(term_cfg.collisions, dtype=real_dtype) * collision_rhs
+    if collision_rhs is not None:
+        dG = dG + collision_rhs
     if term_cfg.nonlinear != 0.0:
         real_dtype = jnp.real(jnp.empty((), dtype=G.dtype)).dtype
         weight = jnp.asarray(term_cfg.nonlinear, dtype=real_dtype)
