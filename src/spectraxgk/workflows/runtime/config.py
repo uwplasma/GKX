@@ -150,6 +150,7 @@ class RuntimeOutputConfig:
     restart_from_file: str | None = None
     restart_with_perturb: bool = False
     append_on_restart: bool = True
+    resolved_diagnostics: bool = True
     restart_scale: float = 1.0
     nsave: int = 10000
 

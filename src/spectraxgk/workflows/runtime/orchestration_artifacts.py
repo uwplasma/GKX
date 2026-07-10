@@ -493,6 +493,7 @@ def _run_runtime_nonlinear_chunk(
         diagnostics_stride=options.diagnostics_stride,
         laguerre_mode=options.laguerre_mode,
         diagnostics=options.diagnostics,
+        resolved_diagnostics=bool(cfg_run.output.resolved_diagnostics),
         return_state=policy.netcdf_output_target,
         show_progress=options.show_progress,
         status_callback=options.status_callback,
