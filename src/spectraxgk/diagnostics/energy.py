@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import jax.numpy as jnp
-import numpy as np
 
 from spectraxgk.core.grid import SpectralGrid
 from spectraxgk.core.velocity import gamma0
@@ -20,9 +19,7 @@ __all__ = [
     "_masked_abs2",
     "distribution_free_energy",
     "electrostatic_field_energy",
-    "electrostatic_field_energy_krehm",
     "magnetic_vector_potential_energy",
-    "magnetic_vector_potential_energy_krehm",
     "runtime_energy_total",
     "total_energy",
 ]
@@ -62,56 +59,6 @@ def distribution_free_energy(
     return 0.5 * jnp.sum(g2 * fac * vol * nt)
 
 
-def electrostatic_field_energy_krehm(
-    phi: jnp.ndarray,
-    grid: SpectralGrid,
-    params: LinearParams,
-    vol_fac: jnp.ndarray,
-    *,
-    kx: jnp.ndarray | None = None,
-    ky: jnp.ndarray | None = None,
-    use_dealias: bool = True,
-    compressed_real_fft: bool = False,
-    wphi_scale: float = 1.0,
-) -> jnp.ndarray:
-    """Krehm electrostatic field-energy (Wphi) diagnostic."""
-
-    kx_arr = grid.kx if kx is None else kx
-    ky_arr = grid.ky if ky is None else ky
-    kx = jnp.asarray(kx_arr)[None, :]
-    ky = jnp.asarray(ky_arr)[:, None]
-    mask = grid.dealias_mask
-    kperp2 = kx * kx + ky * ky
-    rho = jnp.asarray(params.rho)
-    if rho.ndim == 0:
-        rho = rho[None]
-    rho2 = rho * rho
-    if use_dealias:
-        mask = mask.astype(ky.dtype)
-    else:
-        mask = jnp.ones_like(mask, dtype=ky.dtype)
-    if compressed_real_fft:
-        fac = jnp.where(ky[:, 0] > 0.0, 2.0, jnp.where(ky[:, 0] == 0.0, 1.0, 0.0))[:, None]
-    else:
-        has_negative = bool(np.any(np.asarray(ky_arr) < 0.0))
-        if has_negative:
-            fac = jnp.ones((ky.shape[0], kx.shape[1]), dtype=ky.dtype)
-        else:
-            fac = jnp.where(ky[:, 0] == 0.0, 1.0, 2.0)[:, None]
-    fac = fac * mask
-    vol = vol_fac[None, None, :]
-
-    wphi = jnp.asarray(0.0, dtype=jnp.real(phi).dtype)
-    for rho2_s in rho2:
-        b = 0.5 * kperp2 * rho2_s
-        gam0 = gamma0(b)
-        active = fac[:, :, None] != 0.0
-        weight = (1.0 - gam0)[:, :, None] * fac[:, :, None]
-        contrib = 0.5 * (2.0 / rho2_s) * _masked_abs2(phi, active) * weight * vol
-        wphi = wphi + jnp.sum(contrib)
-    return wphi * jnp.asarray(wphi_scale, dtype=jnp.real(phi).dtype)
-
-
 def electrostatic_field_energy(
     phi: jnp.ndarray,
     cache: LinearCache,
@@ -140,27 +87,6 @@ def electrostatic_field_energy(
     return wphi * jnp.asarray(wphi_scale, dtype=jnp.real(phi).dtype)
 
 
-def magnetic_vector_potential_energy_krehm(
-    apar: jnp.ndarray,
-    grid: SpectralGrid,
-    *,
-    kx: jnp.ndarray | None = None,
-    ky: jnp.ndarray | None = None,
-    use_dealias: bool = True,
-) -> jnp.ndarray:
-    """Krehm magnetic vector-potential energy (Wapar) diagnostic."""
-
-    kx_arr = grid.kx if kx is None else kx
-    ky_arr = grid.ky if ky is None else ky
-    kx = jnp.asarray(kx_arr)[None, :]
-    ky = jnp.asarray(ky_arr)[:, None]
-    kperp2 = kx * kx + ky * ky
-    fac = _hermitian_mode_weight(grid, use_dealias=use_dealias)
-    weight = fac[:, :, None]
-    contrib = 0.5 * kperp2[:, :, None] * _masked_abs2(apar, weight != 0.0) * weight
-    return jnp.sum(contrib)
-
-
 def magnetic_vector_potential_energy(
     apar: jnp.ndarray,
     cache: LinearCache,
@@ -182,5 +108,4 @@ def total_energy(Wg: ArrayLike, Wphi: ArrayLike, Wapar: ArrayLike) -> ArrayLike:
 
 
 runtime_energy_total = total_energy
-
 
