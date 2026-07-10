@@ -9,6 +9,7 @@ import numpy as np
 
 from spectraxgk.geometry import FluxTubeGeometryLike, ensure_flux_tube_geometry_data
 from spectraxgk.core.grid import SpectralGrid
+from spectraxgk.core.extension_points import CollisionOperator
 from spectraxgk.solvers.linear.implicit import _build_implicit_operator
 from spectraxgk.operators.linear.cache_model import LinearCache
 from spectraxgk.operators.linear.cache_builder import build_linear_cache
@@ -58,6 +59,7 @@ def nonlinear_rhs_cached(
     compressed_real_fft: bool = True,
     laguerre_mode: str = "grid",
     external_phi: jnp.ndarray | float | None = None,
+    collision_operator: CollisionOperator | None = None,
 ) -> tuple[jnp.ndarray, FieldState]:
     """Compute the assembled nonlinear RHS and electromagnetic field state."""
 
@@ -69,6 +71,7 @@ def nonlinear_rhs_cached(
         compressed_real_fft=compressed_real_fft,
         laguerre_mode=laguerre_mode,
         external_phi=external_phi,
+        collision_operator=collision_operator,
         electrostatic_rhs_fn=assemble_rhs_cached_electrostatic_jit,
         full_rhs_fn=assemble_rhs_cached_jit,
         is_static_zero_fn=_is_static_zero,

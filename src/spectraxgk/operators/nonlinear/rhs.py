@@ -8,10 +8,12 @@ same seams while the implementation stays isolated and easier to profile.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any, Callable
 
 import jax.numpy as jnp
 
+from spectraxgk.core.extension_points import CollisionOperator
 from spectraxgk.operators.linear.cache_model import LinearCache
 from spectraxgk.operators.linear.params import LinearParams
 from spectraxgk.terms.assembly import (
@@ -53,6 +55,7 @@ def nonlinear_rhs_cached_impl(
     compressed_real_fft: bool = True,
     laguerre_mode: str = "grid",
     external_phi: jnp.ndarray | float | None = None,
+    collision_operator: CollisionOperator | None = None,
     electrostatic_rhs_fn: RhsCallable = assemble_rhs_cached_electrostatic_jit,
     full_rhs_fn: RhsCallable = assemble_rhs_cached_jit,
     is_static_zero_fn: StaticZeroCallable = _is_static_zero,
@@ -61,13 +64,29 @@ def nonlinear_rhs_cached_impl(
     """Compute the assembled nonlinear RHS and electromagnetic field state."""
 
     term_cfg = terms or TermConfig()
+    linear_terms = (
+        replace(term_cfg, collisions=0.0)
+        if collision_operator is not None and term_cfg.collisions != 0.0
+        else term_cfg
+    )
     linear_rhs_fn = linear_rhs_jit_for_terms_impl(
-        term_cfg,
+        linear_terms,
         electrostatic_rhs_fn=electrostatic_rhs_fn,
         full_rhs_fn=full_rhs_fn,
         is_static_zero_fn=is_static_zero_fn,
     )
-    dG, fields = linear_rhs_fn(G, cache, params, term_cfg, external_phi=external_phi)
+    dG, fields = linear_rhs_fn(
+        G, cache, params, linear_terms, external_phi=external_phi
+    )
+    if collision_operator is not None and term_cfg.collisions != 0.0:
+        collision_rhs = jnp.asarray(collision_operator.apply(G, cache, params))
+        if collision_rhs.shape != G.shape:
+            raise ValueError(
+                "collision operator must return the same state shape "
+                f"(expected {G.shape}, got {collision_rhs.shape})"
+            )
+        real_dtype = jnp.real(jnp.empty((), dtype=G.dtype)).dtype
+        dG = dG + jnp.asarray(term_cfg.collisions, dtype=real_dtype) * collision_rhs
     if term_cfg.nonlinear != 0.0:
         real_dtype = jnp.real(jnp.empty((), dtype=G.dtype)).dtype
         weight = jnp.asarray(term_cfg.nonlinear, dtype=real_dtype)

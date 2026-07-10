@@ -29,10 +29,10 @@ class GeometryProvider(Protocol):
 
 @runtime_checkable
 class CollisionOperator(Protocol):
-    """Collision or hypercollision model applied to a distribution state."""
+    """JAX-compatible unit-weight collision model for a distribution state."""
 
-    def apply(self, state: Any, geometry: Any, parameters: Any) -> Any:
-        """Return the collision contribution with the same state layout."""
+    def apply(self, state: Any, cache: Any, parameters: Any) -> Any:
+        """Return a collision RHS contribution with the same state layout."""
 
 
 @runtime_checkable
