@@ -123,7 +123,8 @@ nu_hermite = 1.0
 nu_laguerre = 2.0
 nu_hyper = 0.0
 p_hyper = 4.0
-hypercollisions_const = 1.0
+hypercollisions_const = 0.0
+hypercollisions_kz = 1.0
 damp_ends_amp = 0.1
 damp_ends_widthfrac = 0.125
 
