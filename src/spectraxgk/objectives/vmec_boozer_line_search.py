@@ -1,5 +1,4 @@
 """Line-search and holdout gates for VMEC/Boozer objectives."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -45,6 +44,10 @@ class _AggregateHoldoutConfig:
     min_holdout_improvement: float
     response_atol: float
     max_curvature_ratio: float
+
+    def __post_init__(self) -> None:
+        if self.min_holdout_improvement < 0.0:
+            raise ValueError("min_holdout_improvement must be non-negative")
 
 
 @dataclass(frozen=True)
@@ -779,13 +782,6 @@ def _aggregate_holdout_functions(kwargs: dict[str, Any]) -> _AggregateHoldoutFun
     )
 
 
-def _validate_holdout_improvement(min_holdout_improvement: float) -> float:
-    min_holdout_improvement_float = float(min_holdout_improvement)
-    if min_holdout_improvement_float < 0.0:
-        raise ValueError("min_holdout_improvement must be non-negative")
-    return min_holdout_improvement_float
-
-
 def _run_aggregate_holdout_reports(
     *,
     config: _AggregateHoldoutConfig,
@@ -864,9 +860,7 @@ def _aggregate_holdout_config_from_values(
         update_step=values["update_step"],
         max_steps=values["max_steps"],
         min_improvement=values["min_improvement"],
-        min_holdout_improvement=_validate_holdout_improvement(
-            values["min_holdout_improvement"]
-        ),
+        min_holdout_improvement=float(values["min_holdout_improvement"]),
         response_atol=values["response_atol"],
         max_curvature_ratio=values["max_curvature_ratio"],
     )
