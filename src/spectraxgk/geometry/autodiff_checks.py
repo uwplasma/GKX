@@ -6,9 +6,9 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Callable, cast
 
-import jax
 import jax.numpy as jnp
 import numpy as np
+from solvax import chunked_jacfwd
 
 from spectraxgk.geometry.backend_discovery import _jax_float_dtype
 
@@ -361,11 +361,15 @@ def _autodiff_and_fd_jacobians(
     p: jnp.ndarray,
     *,
     step: float,
+    jacobian_chunk_size: int | str | None,
 ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     observables = flat_fn(p)
     if int(observables.size) == 0:
         raise ValueError("observable_fn must return at least one observable")
-    jac_ad = jax.jacfwd(flat_fn)(p)
+    jac_ad = chunked_jacfwd(
+        flat_fn,
+        chunk_size=jacobian_chunk_size,
+    )(p)
     jac_fd = finite_difference_jacobian(flat_fn, p, step=step)
     if jac_ad.ndim != 2 or jac_fd.ndim != 2 or jac_ad.shape != jac_fd.shape:
         raise ValueError(
@@ -621,12 +625,14 @@ def _gradient_derivative_data(
     observable_names: Sequence[str] | None,
     param_names: Sequence[str] | None,
     tangent: jnp.ndarray | np.ndarray | None,
+    jacobian_chunk_size: int | str | None,
 ) -> _GradientDerivativeData:
     flat_fn = _flat_observable_function(observable_fn)
     observables, jac_ad, jac_fd = _autodiff_and_fd_jacobians(
         flat_fn,
         inputs.p,
         step=inputs.step,
+        jacobian_chunk_size=jacobian_chunk_size,
     )
     obs_names, par_names = _resolve_report_names(
         int(jac_ad.shape[0]),
@@ -878,6 +884,7 @@ def observable_gradient_validation_report(
     relative_floor: float = 1.0e-12,
     min_rank: int | None = None,
     condition_number_max: float | None = 1.0e12,
+    jacobian_chunk_size: int | str | None = None,
     report_kind: str = "observable_gradient_validation",
 ) -> dict[str, object]:
     """Validate observable gradients by AD, finite differences, and conditioning.
@@ -885,7 +892,9 @@ def observable_gradient_validation_report(
     ``observable_fn(params)`` may return any array-like observable vector.  The
     returned report is strict JSON-compatible: nonfinite diagnostic numbers are
     represented as ``None`` while finite flags and failure reasons preserve why
-    the gate failed.
+    the gate failed. ``jacobian_chunk_size`` bounds the number of simultaneous
+    forward-mode directions; use ``"auto"`` for SOLVAX's device-aware policy,
+    an integer for a fixed memory budget, or ``None`` for one full ``vmap``.
     """
     inputs = _gradient_validation_inputs(
         params,
@@ -901,13 +910,14 @@ def observable_gradient_validation_report(
         observable_names=observable_names,
         param_names=param_names,
         tangent=tangent,
+        jacobian_chunk_size=jacobian_chunk_size,
     )
     gates = _gradient_gate_data(
         derivatives,
         inputs,
         min_rank=min_rank,
     )
-    return _assemble_gradient_validation_report(
+    report = _assemble_gradient_validation_report(
         report_kind=report_kind,
         finite_passed=gates.finite_passed,
         derivative_passed=gates.derivative_passed,
@@ -930,6 +940,8 @@ def observable_gradient_validation_report(
         conditioning_gate=gates.conditioning_gate,
         conditioning=gates.conditioning,
     )
+    report["jacobian_chunk_size"] = jacobian_chunk_size
+    return report
 
 
 __all__ = [

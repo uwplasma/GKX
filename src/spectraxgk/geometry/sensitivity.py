@@ -171,6 +171,7 @@ def geometry_sensitivity_report(
         observable_names=_GEOMETRY_OBSERVABLE_NAMES,
         param_names=param_names,
         relative_floor=1.0e-12,
+        jacobian_chunk_size="auto",
         report_kind="geometry_sensitivity_ad_fd_gate",
     )
     report["source_model"] = str(source_model)

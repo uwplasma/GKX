@@ -9,6 +9,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from jax.scipy.sparse.linalg import gmres
+from solvax import tridiagonal_solve
 
 from spectraxgk.operators.linear.cache_model import LinearCache
 from spectraxgk.operators.linear.cache_arrays import (
@@ -192,6 +193,33 @@ def _scatter_unique_spectral_modes(
     return jnp.moveaxis(out_t, 0, -2)
 
 
+def _solve_tridiagonal_last_axis(
+    lower: jnp.ndarray,
+    diagonal: jnp.ndarray,
+    upper: jnp.ndarray,
+    rhs: jnp.ndarray,
+) -> jnp.ndarray:
+    """Solve independent tridiagonal systems stored on the last axis.
+
+    SPECTRAX-GK stores the Hermite line last, while SOLVAX uses a leading
+    system axis so every trailing dimension is an independent column. The two
+    axis moves are views at the JAX level and keep the physics layout out of the
+    reusable structured solver.
+    """
+
+    return jnp.moveaxis(
+        tridiagonal_solve(
+            jnp.moveaxis(lower, -1, 0),
+            jnp.moveaxis(diagonal, -1, 0),
+            jnp.moveaxis(upper, -1, 0),
+            jnp.moveaxis(rhs, -1, 0),
+            method="auto",
+        ),
+        0,
+        -1,
+    )
+
+
 def _solve_hermite_lines_fft(
     x: jnp.ndarray,
     *,
@@ -223,12 +251,7 @@ def _solve_hermite_lines_fft(
     dl = jnp.broadcast_to(dl, batch_shape)
     d = jnp.broadcast_to(d, batch_shape)
     du = jnp.broadcast_to(du, batch_shape)
-    y_hat_mlast = jax.lax.linalg.tridiagonal_solve(
-        dl,
-        d,
-        du,
-        x_hat_mlast[..., None],
-    )[..., 0]
+    y_hat_mlast = _solve_tridiagonal_last_axis(dl, d, du, x_hat_mlast)
     y_hat = jnp.moveaxis(y_hat_mlast, -1, 2)
     return jnp.fft.ifft(y_hat, axis=-1)
 
@@ -285,12 +308,7 @@ def _solve_hermite_lines_linked(
         dl = jnp.broadcast_to(dl, batch_shape)
         d = jnp.broadcast_to(d, batch_shape)
         du = jnp.broadcast_to(du, batch_shape)
-        y_hat_mlast = jax.lax.linalg.tridiagonal_solve(
-            dl,
-            d,
-            du,
-            x_hat_mlast[..., None],
-        )[..., 0]
+        y_hat_mlast = _solve_tridiagonal_last_axis(dl, d, du, x_hat_mlast)
         y_hat = jnp.moveaxis(y_hat_mlast, -1, 2)
         y_link = jnp.fft.ifft(y_hat, axis=-1)
         y_link = y_link.reshape(*lead_shape, nChains * nLinks, Nz)
