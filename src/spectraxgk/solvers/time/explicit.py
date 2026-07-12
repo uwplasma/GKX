@@ -15,7 +15,9 @@ from spectraxgk.diagnostics import SimulationDiagnostics
 from spectraxgk.geometry import FluxTubeGeometryLike
 from spectraxgk.core.grid import SpectralGrid
 from spectraxgk.operators.linear.cache_model import LinearCache
+from spectraxgk.operators.linear.cache_builder import build_linear_cache
 from spectraxgk.operators.linear.params import LinearParams, LinearTerms
+from spectraxgk.config import resolve_cfl_fac
 from spectraxgk.solvers.time.explicit_diagnostics import (
     integrate_linear_explicit_diagnostics as _integrate_linear_explicit_diagnostics_impl,
 )
@@ -69,6 +71,7 @@ __all__ = [
     "_rk3_heun_step",
     "_rk4_step",
     "integrate_linear_explicit",
+    "integrate_linear_explicit_from_config",
     "integrate_linear_explicit_diagnostics",
 ]
 
@@ -563,3 +566,37 @@ def integrate_linear_explicit_diagnostics(
         show_progress=show_progress,
         linear_explicit_step_fn=_linear_explicit_step,
     )
+
+
+def integrate_linear_explicit_from_config(
+    G0: jnp.ndarray,
+    grid: SpectralGrid,
+    geom: FluxTubeGeometryLike,
+    params: LinearParams,
+    time_cfg: Any,
+    *,
+    Nl: int,
+    Nm: int,
+    terms: LinearTerms | None = None,
+    z_index: int | None = None,
+    show_progress: bool = False,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Integrate with CFL control using the common ``TimeConfig`` contract."""
+
+    explicit_cfg = ExplicitTimeConfig(
+        dt=float(time_cfg.dt),
+        t_max=float(time_cfg.t_max),
+        sample_stride=max(int(time_cfg.sample_stride), 1),
+        fixed_dt=bool(time_cfg.fixed_dt),
+        dt_min=float(time_cfg.dt_min),
+        dt_max=None if time_cfg.dt_max is None else float(time_cfg.dt_max),
+        cfl=float(time_cfg.cfl),
+        cfl_fac=resolve_cfl_fac(str(time_cfg.method), time_cfg.cfl_fac),
+    )
+    cache = build_linear_cache(grid, geom, params, Nl, Nm)
+    t, phi, _gamma, _omega, _diagnostics = integrate_linear_explicit_diagnostics(
+        G0, grid, cache, params, geom, explicit_cfg, terms,
+        mode_method="z_index", z_index=z_index, jit=True,
+        show_progress=show_progress,
+    )
+    return t, phi

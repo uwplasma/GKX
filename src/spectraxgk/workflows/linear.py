@@ -19,6 +19,7 @@ from spectraxgk.diagnostics.modes import (
 from spectraxgk.workflows.runtime.config import RuntimeConfig
 from spectraxgk.workflows.runtime.diagnostics import RuntimeQuasilinearFinalizationDeps
 from spectraxgk.workflows.runtime.results import RuntimeLinearResult
+from spectraxgk.solvers.time.explicit import integrate_linear_explicit_from_config
 
 
 @dataclass(frozen=True)
@@ -93,6 +94,7 @@ class _LinearTimeSeriesRaw:
     g_last: Any | None
     phi_t: Any
     density_t: Any | None
+    t: Any | None = None
 
 
 def _status(callback: _StatusCallback, message: str) -> None:
@@ -461,7 +463,15 @@ def _integrate_linear_time_series(
 ) -> tuple[Any | None, np.ndarray, np.ndarray | None, np.ndarray]:
     need_density = ctx.fit_key in {"density", "auto"}
     n_steps = int(round(tcfg.t_max / tcfg.dt))
-    if tcfg.use_diffrax:
+    if ctx.solver_key == "explicit_time":
+        _status(status_callback, "running CFL-controlled explicit integrator")
+        t_explicit, phi_t = integrate_linear_explicit_from_config(
+            ctx.initial_state, ctx.grid, ctx.geom, ctx.params, tcfg,
+            Nl=ctx.n_laguerre, Nm=ctx.n_hermite, terms=ctx.terms,
+            z_index=ctx.selection.z_index, show_progress=show_progress,
+        )
+        raw = _LinearTimeSeriesRaw(None, phi_t, None, t_explicit)
+    elif tcfg.use_diffrax:
         _status(
             status_callback,
             f"running diffrax integrator over {n_steps} steps with sample_stride={int(tcfg.sample_stride)}",
@@ -501,7 +511,8 @@ def _integrate_linear_time_series(
 
     phi_t_np = np.asarray(raw.phi_t)
     density_np = None if raw.density_t is None else np.asarray(raw.density_t)
-    return raw.g_last, phi_t_np, density_np, _linear_saved_sample_times(phi_t_np, tcfg)
+    times = _linear_saved_sample_times(phi_t_np, tcfg) if raw.t is None else raw.t
+    return raw.g_last, phi_t_np, density_np, np.asarray(times, dtype=float)
 
 
 def _fit_linear_time_series(
