@@ -140,9 +140,9 @@ time, diagnostics, final_state, fields = simulation.run()
 ```
 
 The prepared object accepts another same-shape initial state without rebuilding
-the scan. Geometry and model parameters are fixed in the current prepared
-contract; dynamic-geometry compile reuse remains an active differentiability
-lane.
+the scan. A matched rebuilt cache/parameter PyTree can also remain dynamic for
+autodiff; geometry layout is fixed, and dynamic-geometry compile reuse remains
+an active differentiability lane.
 
 The planted two-mode inverse problem below recovers two gradient parameters and
 checks the autodiff Jacobian against finite differences. The single-mode demo in

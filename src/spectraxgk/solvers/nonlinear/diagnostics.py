@@ -8,7 +8,7 @@ large implementation body in the facade itself.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Callable
 
 import jax
@@ -121,31 +121,48 @@ class PreparedExplicitNonlinearDiagnostics:
     """
 
     initial_state: jnp.ndarray
-    _run_raw: Callable[[jnp.ndarray], tuple[Any, Any, Any]]
+    cache: LinearCache
+    params: LinearParams
+    _run_raw: Callable[[jnp.ndarray, LinearCache, LinearParams], tuple[Any, Any, Any]]
     _finalize: Callable[..., SimulationDiagnostics]
     stride: int
     sampled_scan: bool
     resolved_diagnostics: bool
 
     def run_arrays(
-        self, initial_state: jnp.ndarray | None = None
+        self,
+        initial_state: jnp.ndarray | None = None,
+        *,
+        cache: LinearCache | None = None,
+        params: LinearParams | None = None,
     ) -> tuple[jnp.ndarray, tuple[Any, Any, Any], FieldState]:
         """Run the compiled scan without host conversion or artifact assembly.
 
         This method is the differentiable Python boundary. The initial state is
-        dynamic, while grid, geometry, cache, and numerical policy are fixed by
-        :func:`prepare_nonlinear_explicit_diagnostics`.
+        dynamic. A matched ``cache``/``params`` pair may also be supplied for
+        parameter differentiation; geometry, grid layout, and numerical policy
+        remain fixed by :func:`prepare_nonlinear_explicit_diagnostics`.
         """
 
+        if (cache is None) != (params is None):
+            raise ValueError("cache and params must be supplied together")
         state = self.initial_state if initial_state is None else initial_state
-        return self._run_raw(jnp.asarray(state))
+        cache_use = self.cache if cache is None else cache
+        params_use = self.params if params is None else params
+        return self._run_raw(jnp.asarray(state), cache_use, params_use)
 
     def run(
-        self, initial_state: jnp.ndarray | None = None
+        self,
+        initial_state: jnp.ndarray | None = None,
+        *,
+        cache: LinearCache | None = None,
+        params: LinearParams | None = None,
     ) -> tuple[jnp.ndarray, SimulationDiagnostics, jnp.ndarray, FieldState]:
         """Advance one state through the prepared compiled simulation."""
 
-        G_final, scan_diag_out, fields_final = self.run_arrays(initial_state)
+        G_final, scan_diag_out, fields_final = self.run_arrays(
+            initial_state, cache=cache, params=params
+        )
         diag, t, dt_series = scan_diag_out
         diag_out = self._finalize(
             diag,
@@ -456,9 +473,7 @@ def _run_explicit_diagnostic_scan_raw(
         external_phi=external_phi,
     )
     dt0 = jnp.asarray(
-        policies.time_step_policy.update_dt(
-            fields0, policies.time_step_policy.dt_init
-        ),
+        policies.time_step_policy.update_dt(fields0, policies.time_step_policy.dt_init),
         dtype=prepared.real_dtype,
     )
     diag_zero = compute_diag_from_state(G0, fields0, G0, fields0, dt0)
@@ -690,13 +705,42 @@ def prepare_explicit_nonlinear_diagnostics_impl(
     stride = int(max(sample_stride, diagnostics_stride, 1))
     sampled_scan = stride > 1 and jax.default_backend() != "cpu"
 
-    def run_raw(initial_state: jnp.ndarray) -> tuple[Any, Any, Any]:
+    def run_raw(
+        initial_state: jnp.ndarray,
+        dynamic_cache: LinearCache,
+        dynamic_params: LinearParams,
+    ) -> tuple[Any, Any, Any]:
+        dynamic_prepared = replace(components.prepared, cache=dynamic_cache)
+        dynamic_policies = _build_explicit_runtime_policies(
+            dynamic_prepared,
+            grid,
+            dynamic_params,
+            deps=deps,
+            method=options.method,
+            dt=options.dt,
+            steps=options.steps,
+            fixed_dt=options.fixed_dt,
+            dt_min=options.dt_min,
+            dt_max=options.dt_max,
+            cfl=options.cfl,
+            cfl_fac=options.cfl_fac,
+            compressed_real_fft=options.compressed_real_fft,
+            collision_split=options.collision_split,
+        )
+        dynamic_step, dynamic_diagnostics = _build_explicit_scan_closures(
+            dynamic_prepared,
+            dynamic_policies,
+            grid,
+            dynamic_params,
+            deps=deps,
+            options=options,
+        )
         return _run_explicit_diagnostic_scan_raw(
-            components.prepared,
-            components.policies,
-            components.step,
-            components.compute_diag_from_state,
-            params,
+            dynamic_prepared,
+            dynamic_policies,
+            dynamic_step,
+            dynamic_diagnostics,
+            dynamic_params,
             deps=deps,
             initial_state=initial_state,
             steps=steps,
@@ -708,6 +752,8 @@ def prepare_explicit_nonlinear_diagnostics_impl(
 
     return PreparedExplicitNonlinearDiagnostics(
         initial_state=components.prepared.G0,
+        cache=components.prepared.cache,
+        params=params,
         _run_raw=jax.jit(run_raw),
         _finalize=deps.finalize_scan_diagnostics_fn,
         stride=stride,
