@@ -57,7 +57,6 @@ from spectraxgk.workflows.runtime.results import (
     RuntimeLinearResult,
     RuntimeLinearScanResult,
     RuntimeNonlinearResult,
-    RuntimeParameterScanResult,
     build_runtime_nonlinear_result,
 )
 from spectraxgk.workflows.runtime.orchestration_scan import (
@@ -163,7 +162,6 @@ _RUNTIME_LINEAR_TIME_FIT_OPTION_KEYS = (
 __all__ = [
     "RuntimeIndependentParallelPlan", "RuntimeLinearResult",
     "RuntimeLinearScanResult", "RuntimeNonlinearResult",
-    "RuntimeParameterScanResult",
     "_build_gaussian_profile", "_build_initial_condition",
     "_concat_runtime_diagnostics", "_enforce_full_ky_hermitian", "_expand_ky",
     "_centered_glibc_random_pairs", "_default_hermite_hypercollision_exponent",
@@ -271,7 +269,6 @@ _concat_runtime_diagnostics = concat_runtime_diagnostics
 
 def _runtime_facade_module() -> Any:
     """Return the patchable runtime facade module used by dependency builders."""
-
     return sys.modules[__name__]
 
 
@@ -283,7 +280,6 @@ def _runtime_linear_dispatch_deps() -> RuntimeLinearDispatchDeps:
 
 def _runtime_linear_time_fit_options(values: Mapping[str, Any]) -> dict[str, Any]:
     """Return shared runtime linear time-integration and fit options."""
-
     return {name: values[name] for name in _RUNTIME_LINEAR_TIME_FIT_OPTION_KEYS}
 
 
@@ -330,87 +326,6 @@ def run_runtime_linear(
         show_progress=show_progress,
         status_callback=status_callback,
         deps=_runtime_linear_dispatch_deps(),
-    )
-
-
-def run_runtime_parameter_scan(
-    cfg: RuntimeConfig,
-    parameter_values: Sequence[float],
-    *,
-    parameter_name: str,
-    update_config: Callable[[RuntimeConfig, float, int], RuntimeConfig],
-    ky_target: float = 0.3,
-    linear_options: Mapping[str, Any] | None = None,
-    point_options: Callable[
-        [float, int, RuntimeLinearResult | None], Mapping[str, Any]
-    ] | None = None,
-    candidate_options: Callable[
-        [float, int, RuntimeLinearResult | None], Sequence[Mapping[str, Any]]
-    ] | None = None,
-    select_candidate: Callable[
-        [float, int, tuple[RuntimeLinearResult, ...], RuntimeLinearResult | None], int
-    ] | None = None,
-    continuation: bool = False,
-) -> RuntimeParameterScanResult:
-    """Run an ordered scan over one scalar runtime-configuration parameter.
-
-    When continuation is enabled, each selected result state initializes the
-    next point. Candidate callbacks support branch-following scans without
-    embedding case-specific target or selection policy in the runtime core.
-    """
-
-    name = str(parameter_name).strip()
-    if not name:
-        raise ValueError("parameter_name must be nonempty")
-    values = np.asarray(parameter_values, dtype=float)
-    if values.ndim != 1 or values.size == 0:
-        raise ValueError("parameter_values must be a nonempty one-dimensional array")
-
-    shared = dict(linear_options or {})
-    runs: list[RuntimeLinearResult] = []
-    previous: RuntimeLinearResult | None = None
-    for index, value in enumerate(values):
-        point_cfg = update_config(cfg, float(value), index)
-        if not isinstance(point_cfg, RuntimeConfig):
-            raise TypeError("update_config must return RuntimeConfig")
-        options = dict(shared)
-        if point_options is not None:
-            options.update(point_options(float(value), index, previous))
-        if continuation or candidate_options is not None:
-            options["return_state"] = True
-        if continuation and previous is not None:
-            if previous.state is None:
-                raise ValueError("continuation requires each point to return state")
-            options["initial_state"] = previous.state
-
-        candidate_overrides = (
-            tuple(candidate_options(float(value), index, previous))
-            if candidate_options is not None else ({},)
-        )
-        if not candidate_overrides:
-            raise ValueError("candidate_options must return at least one candidate")
-        candidates = tuple(
-            run_runtime_linear(
-                point_cfg, ky_target=ky_target, **(options | dict(overrides))
-            )
-            for overrides in candidate_overrides
-        )
-        selected = (
-            int(select_candidate(float(value), index, candidates, previous))
-            if select_candidate is not None else 0
-        )
-        if selected < 0 or selected >= len(candidates):
-            raise IndexError("select_candidate returned an out-of-range index")
-        result = candidates[selected]
-        runs.append(result)
-        previous = result
-
-    return RuntimeParameterScanResult(
-        parameter_name=name,
-        values=values,
-        gamma=np.asarray([result.gamma for result in runs], dtype=float),
-        omega=np.asarray([result.omega for result in runs], dtype=float),
-        runs=tuple(runs),
     )
 
 

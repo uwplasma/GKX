@@ -4,13 +4,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from types import SimpleNamespace
-from typing import Any, Callable, Protocol, cast
+from typing import Any, Callable, Mapping, Protocol, Sequence, cast
 
 import numpy as np
 
 from spectraxgk.diagnostics.modes import ModeSelection
 from spectraxgk.workflows.runtime.config import RuntimeConfig
-from spectraxgk.workflows.runtime.results import RuntimeLinearScanResult
+from spectraxgk.workflows.runtime.results import (
+    RuntimeLinearResult,
+    RuntimeLinearScanResult,
+    RuntimeParameterScanResult,
+)
 
 class RuntimeScanBatchDeps(Protocol):
     """Dependency surface needed by the combined-ky scan batch helper."""
@@ -692,6 +696,81 @@ def run_runtime_scan_batch(
     )
 
 
+def run_runtime_parameter_scan(
+    cfg: RuntimeConfig,
+    parameter_values: Sequence[float],
+    *,
+    parameter_name: str,
+    update_config: Callable[[RuntimeConfig, float, int], RuntimeConfig],
+    ky_target: float = 0.3,
+    linear_options: Mapping[str, Any] | None = None,
+    point_options: Callable[
+        [float, int, RuntimeLinearResult | None], Mapping[str, Any]
+    ] | None = None,
+    candidate_options: Callable[
+        [float, int, RuntimeLinearResult | None], Sequence[Mapping[str, Any]]
+    ] | None = None,
+    select_candidate: Callable[
+        [float, int, tuple[RuntimeLinearResult, ...], RuntimeLinearResult | None], int
+    ] | None = None,
+    continuation: bool = False,
+) -> RuntimeParameterScanResult:
+    """Run a scalar scan and optionally continue a selected solution branch."""
+
+    from spectraxgk.runtime import run_runtime_linear
+
+    name = str(parameter_name).strip()
+    if not name:
+        raise ValueError("parameter_name must be nonempty")
+    values = np.asarray(parameter_values, dtype=float)
+    if values.ndim != 1 or values.size == 0:
+        raise ValueError("parameter_values must be a nonempty one-dimensional array")
+
+    shared = dict(linear_options or {})
+    runs: list[RuntimeLinearResult] = []
+    previous: RuntimeLinearResult | None = None
+    for index, value in enumerate(values):
+        point_cfg = update_config(cfg, float(value), index)
+        if not isinstance(point_cfg, RuntimeConfig):
+            raise TypeError("update_config must return RuntimeConfig")
+        options = dict(shared)
+        if point_options is not None:
+            options.update(point_options(float(value), index, previous))
+        if continuation or candidate_options is not None:
+            options["return_state"] = True
+        if continuation and previous is not None:
+            if previous.state is None:
+                raise ValueError("continuation requires each point to return state")
+            options["initial_state"] = previous.state
+
+        overrides = (
+            tuple(candidate_options(float(value), index, previous))
+            if candidate_options is not None else ({},)
+        )
+        if not overrides:
+            raise ValueError("candidate_options must return at least one candidate")
+        candidates = tuple(
+            run_runtime_linear(point_cfg, ky_target=ky_target, **(options | dict(item)))
+            for item in overrides
+        )
+        selected = (
+            int(select_candidate(float(value), index, candidates, previous))
+            if select_candidate is not None else 0
+        )
+        if selected < 0 or selected >= len(candidates):
+            raise IndexError("select_candidate returned an out-of-range index")
+        previous = candidates[selected]
+        runs.append(previous)
+
+    return RuntimeParameterScanResult(
+        parameter_name=name,
+        values=values,
+        gamma=np.asarray([result.gamma for result in runs], dtype=float),
+        omega=np.asarray([result.omega for result in runs], dtype=float),
+        runs=tuple(runs),
+    )
+
+
 __all__ = [
     "RuntimeScanBatchDeps",
     "RuntimeScanDeps",
@@ -700,4 +779,5 @@ __all__ = [
     "run_runtime_scan_ky_task",
     "run_runtime_scan_batch",
     "run_runtime_scan_orchestration",
+    "run_runtime_parameter_scan",
 ]
