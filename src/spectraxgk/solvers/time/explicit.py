@@ -588,6 +588,7 @@ def integrate_linear_explicit_from_config(
         t_max=float(time_cfg.t_max),
         sample_stride=max(int(time_cfg.sample_stride), 1),
         fixed_dt=bool(time_cfg.fixed_dt),
+        use_dealias_mask=bool(getattr(time_cfg, "use_dealias_mask", False)),
         dt_min=float(time_cfg.dt_min),
         dt_max=None if time_cfg.dt_max is None else float(time_cfg.dt_max),
         cfl=float(time_cfg.cfl),

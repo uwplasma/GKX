@@ -411,6 +411,8 @@ def integrate_linear_explicit_diagnostics(
     t = 0.0
     step = 0
     dt_current = policy.step_dt()
+    next_progress_time = 0.0
+    progress_interval = max(policy.t_max / 20.0, policy.dt_min)
     while t < policy.t_max - 1.0e-12:
         dt_current = policy.step_dt()
         G, fields = stepper(G, cache, params, term_cfg, dt_current)
@@ -430,14 +432,16 @@ def integrate_linear_explicit_diagnostics(
                 flux_fac,
             )
             _append_sample(buffers, t=t, dt=dt_current, sample=sample)
-            _emit_sample_progress(
-                console,
-                step=step,
-                sample_stride=policy.sample_stride,
-                t=t,
-                t_max=policy.t_max,
-                sample=sample,
-            )
+            if t >= next_progress_time or t >= policy.t_max:
+                _emit_sample_progress(
+                    console,
+                    step=step,
+                    sample_stride=policy.sample_stride,
+                    t=t,
+                    t_max=policy.t_max,
+                    sample=sample,
+                )
+                next_progress_time = t + progress_interval
         phi_prev = fields.phi
 
     _finish_progress(console)
