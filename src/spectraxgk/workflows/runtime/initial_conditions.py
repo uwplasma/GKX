@@ -294,7 +294,7 @@ def _single_mode_values(
     z_period = _periodic_zp_from_grid(z)
     z_phase = np.cos(float(cfg.init.kpar_init) * z / z_period)
     amp = float(cfg.init.init_amp)
-    if cfg.init.init_single and cfg.init.gaussian_init and init_field == "phi":
+    if cfg.init.init_single and cfg.init.gaussian_init:
         profile = _build_single_phi_gaussian_profile(
             z,
             kx=float(grid.kx[kx_index]),
@@ -304,7 +304,8 @@ def _single_mode_values(
             envelope_constant=float(cfg.init.gaussian_envelope_constant),
             envelope_sine=float(cfg.init.gaussian_envelope_sine),
         )
-        return amp * profile.astype(np.complex64, copy=False)
+        phase = 1.0 if init_field == "phi" else (1.0 + 1.0j)
+        return amp * phase * profile.astype(np.complex64, copy=False)
     return amp * z_phase.astype(np.complex64, copy=False)
 
 
