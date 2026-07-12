@@ -8,13 +8,13 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from spectraxgk.diagnostics.validation_gates import (
-    ZonalFlowResponseMetrics,
+from spectraxgk.diagnostics.growth_windows import (
     _analytic_signal,
     _explicit_time_window,
     _leading_window,
     _tail_window,
 )
+from spectraxgk.diagnostics.validation_gates import ZonalFlowResponseMetrics
 
 
 def _float_groupby_key(value: object) -> float:

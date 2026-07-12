@@ -264,7 +264,24 @@ def _condense_kykx_for_output(
     return arr_np
 
 
+
+
+def infer_triple_dealiased_ny(nky_positive: int) -> int:
+    """Infer the full ``Ny`` from the number of positive ``k_y`` points.
+
+    Reference real-FFT outputs typically store only the non-negative
+    ``k_y`` branch. For the linked-boundary spectral grid used here, the
+    corresponding real-space ``Ny`` follows ``Ny = 3 * (nky - 1) + 1``.
+    """
+
+    nky = int(nky_positive)
+    if nky < 2:
+        raise ValueError("nky_positive must be >= 2")
+    return 3 * (nky - 1) + 1
+
+
 __all__ = [
+    "infer_triple_dealiased_ny",
     "_complex_to_ri",
     "_condense_kx",
     "_condense_kx_for_output",

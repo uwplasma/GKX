@@ -8,10 +8,24 @@ from pathlib import Path
 
 import numpy as np
 
-from spectraxgk.diagnostics.validation_gates import (
-    EigenfunctionComparisonMetrics,
-    EigenfunctionReferenceBundle,
-)
+@dataclass(frozen=True)
+class EigenfunctionComparisonMetrics:
+    """Phase-aligned eigenfunction comparison summary."""
+
+    overlap: float
+    relative_l2: float
+    phase_shift: float
+
+@dataclass(frozen=True)
+class EigenfunctionReferenceBundle:
+    """Frozen reference eigenfunction bundle for manuscript-grade overlays."""
+
+    theta: np.ndarray
+    mode: np.ndarray
+    source: str
+    case: str
+    metadata: dict[str, object]
+
 
 @dataclass(frozen=True)
 class ModeSelection:
@@ -314,6 +328,8 @@ def load_eigenfunction_reference_bundle(
 
 
 __all__ = [
+    "EigenfunctionReferenceBundle",
+    "EigenfunctionComparisonMetrics",
     "ModeSelection",
     "ModeSelectionBatch",
     "compare_eigenfunctions",
