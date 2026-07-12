@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 from spectraxgk.config import GeometryConfig
 
@@ -39,6 +40,94 @@ def effective_boundary(
     if zero_shear_enabled(s_hat, zero_shat=zero_shat, threshold=threshold):
         return "periodic"
     return str(boundary)
+
+
+@dataclass(frozen=True)
+class MillerCoreParams:
+    """Core Miller parameters needed by the low-level Miller geometry formulas."""
+
+    ntgrid: int
+    nperiod: int
+    rhoc: float
+    qinp: float
+    shat: float
+    rmaj: float
+    r_geo: float
+    shift: float
+    akappa: float
+    tri: float
+    akappri: float
+    tripri: float
+    betaprim: float
+    delrho: float = 1.0e-3
+
+
+def build_collocation_surfaces(
+    params: MillerCoreParams,
+) -> dict[str, np.ndarray | float]:
+    """Construct the Miller surface on the collocation grid."""
+
+    no_of_surfs = 3
+    theta = np.linspace(0.0, np.pi, int(params.ntgrid), dtype=float)
+    r0 = np.array(
+        [
+            params.rmaj - params.shift * params.delrho,
+            params.rmaj,
+            params.rmaj + params.shift * params.delrho,
+        ],
+        dtype=float,
+    )
+    rho = np.array(
+        [params.rhoc - params.delrho, params.rhoc, params.rhoc + params.delrho],
+        dtype=float,
+    )
+    qfac = np.array(
+        [
+            params.qinp - params.shat * (params.qinp / params.rhoc) * params.delrho,
+            params.qinp,
+            params.qinp + params.shat * (params.qinp / params.rhoc) * params.delrho,
+        ],
+        dtype=float,
+    )
+    kappa = np.array(
+        [
+            params.akappa - params.akappri * params.delrho,
+            params.akappa,
+            params.akappa + params.akappri * params.delrho,
+        ],
+        dtype=float,
+    )
+    delta = np.array(
+        [
+            params.tri - params.tripri * params.delrho,
+            params.tri,
+            params.tri + params.tripri * params.delrho,
+        ],
+        dtype=float,
+    )
+
+    r = np.array(
+        [
+            r0[i] + rho[i] * np.cos(theta + np.arcsin(delta[i]) * np.sin(theta))
+            for i in range(no_of_surfs)
+        ],
+        dtype=float,
+    )
+    z = np.array(
+        [kappa[i] * rho[i] * np.sin(theta) for i in range(no_of_surfs)], dtype=float
+    )
+    theta_common_mag_axis = np.arctan2(z, r - params.rmaj)
+
+    return {
+        "theta": theta,
+        "rho": rho,
+        "qfac": qfac,
+        "r": r,
+        "z": z,
+        "theta_common_mag_axis": theta_common_mag_axis,
+        "dpdrho": 0.5 * float(params.betaprim),
+        "no_of_surfs": float(no_of_surfs),
+    }
 
 
 @jax.tree_util.register_pytree_node_class
