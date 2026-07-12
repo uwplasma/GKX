@@ -96,6 +96,7 @@ _EXPLICIT_DIAGNOSTIC_OPTION_KEYS = (
     "wphi_scale", "fixed_dt", "dt_min", "dt_max", "cfl", "cfl_fac",
     "collision_split", "collision_scheme", "implicit_tol", "implicit_maxiter",
     "implicit_iters", "implicit_relax", "implicit_restart",
+    "implicit_preconditioner", "fixed_mode_ky_index",
     "fixed_mode_kx_index", "external_phi", "resolved_diagnostics",
     "show_progress",
 )

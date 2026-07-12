@@ -8,7 +8,7 @@ from typing import Callable
 import jax
 import jax.numpy as jnp
 import numpy as np
-from solvax import tridiagonal_solve
+from solvax import gmres, tridiagonal_solve
 
 from spectraxgk.operators.linear.cache_model import LinearCache
 from spectraxgk.operators.linear.cache_arrays import (
@@ -24,7 +24,6 @@ from spectraxgk.operators.linear.params import (
     _x64_enabled,
 )
 from spectraxgk.operators.linear.rhs import linear_rhs_cached
-from spectraxgk.solvers import solve_gmres
 
 __all__ = ["_build_implicit_operator", "_integrate_linear_implicit_cached"]
 
@@ -600,14 +599,15 @@ def _implicit_gmres_step(
         implicit_iters=implicit_iters,
         implicit_relax=implicit_relax,
     )
-    solution = solve_gmres(
+    solution = gmres(
         matvec,
         G_in.reshape(size),
         x0=G_guess.reshape(size),
-        tolerance=implicit_tol,
-        max_restarts=implicit_maxiter,
+        precond=precond_op,
         restart=implicit_restart,
-        preconditioner=precond_op,
+        rtol=implicit_tol,
+        atol=0.0,
+        max_restarts=implicit_maxiter,
     )
     return solution.x.reshape(shape)
 

@@ -12,8 +12,8 @@ from typing import Any, Callable
 
 import jax
 import jax.numpy as jnp
+from solvax import gmres
 
-from spectraxgk.solvers import solve_gmres
 from spectraxgk.solvers.nonlinear.imex_diagnostics import (
     advance_imex_nonlinear_state,
     make_imex_diagnostic_step,
@@ -96,14 +96,15 @@ def solve_imex_step(
         implicit_iters=implicit_iters,
         implicit_relax=implicit_relax,
     )
-    solution = solve_gmres(
+    solution = gmres(
         matvec,
         G_rhs.reshape(-1),
         x0=G_guess.reshape(-1),
-        tolerance=implicit_tol,
-        max_restarts=implicit_maxiter,
+        precond=precond_op,
         restart=implicit_restart,
-        preconditioner=precond_op,
+        rtol=implicit_tol,
+        atol=0.0,
+        max_restarts=implicit_maxiter,
     )
     return solution.x.reshape(shape)
 
