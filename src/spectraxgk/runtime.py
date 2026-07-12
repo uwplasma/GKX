@@ -344,12 +344,19 @@ def run_runtime_parameter_scan(
     point_options: Callable[
         [float, int, RuntimeLinearResult | None], Mapping[str, Any]
     ] | None = None,
+    candidate_options: Callable[
+        [float, int, RuntimeLinearResult | None], Sequence[Mapping[str, Any]]
+    ] | None = None,
+    select_candidate: Callable[
+        [float, int, tuple[RuntimeLinearResult, ...], RuntimeLinearResult | None], int
+    ] | None = None,
     continuation: bool = False,
 ) -> RuntimeParameterScanResult:
     """Run an ordered scan over one scalar runtime-configuration parameter.
 
-    When continuation is enabled, each result state initializes the next point.
-    Case-specific parameter transforms and solver policy remain in callbacks.
+    When continuation is enabled, each selected result state initializes the
+    next point. Candidate callbacks support branch-following scans without
+    embedding case-specific target or selection policy in the runtime core.
     """
 
     name = str(parameter_name).strip()
@@ -369,13 +376,32 @@ def run_runtime_parameter_scan(
         options = dict(shared)
         if point_options is not None:
             options.update(point_options(float(value), index, previous))
-        if continuation:
+        if continuation or candidate_options is not None:
             options["return_state"] = True
-            if previous is not None:
-                if previous.state is None:
-                    raise ValueError("continuation requires each point to return state")
-                options["initial_state"] = previous.state
-        result = run_runtime_linear(point_cfg, ky_target=ky_target, **options)
+        if continuation and previous is not None:
+            if previous.state is None:
+                raise ValueError("continuation requires each point to return state")
+            options["initial_state"] = previous.state
+
+        candidate_overrides = (
+            tuple(candidate_options(float(value), index, previous))
+            if candidate_options is not None else ({},)
+        )
+        if not candidate_overrides:
+            raise ValueError("candidate_options must return at least one candidate")
+        candidates = tuple(
+            run_runtime_linear(
+                point_cfg, ky_target=ky_target, **(options | dict(overrides))
+            )
+            for overrides in candidate_overrides
+        )
+        selected = (
+            int(select_candidate(float(value), index, candidates, previous))
+            if select_candidate is not None else 0
+        )
+        if selected < 0 or selected >= len(candidates):
+            raise IndexError("select_candidate returned an out-of-range index")
+        result = candidates[selected]
         runs.append(result)
         previous = result
 
