@@ -4,7 +4,6 @@ These helpers consume already-generated nonlinear transport artifacts and keep
 release-scope diagnostics separate from production turbulent-flux optimization
 claims. They are data-only and do not launch simulations.
 """
-
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
@@ -13,7 +12,6 @@ from typing import Any
 import math
 import re
 
-# ---- policy helpers ----
 _NON_PROMOTABLE_MARKERS = (
     "not_transport",
     "not transport",
@@ -265,13 +263,6 @@ def reduced_artifact_scope_report(
     }
 
 
-__all__ = [
-    "ProductionNonlinearOptimizationGuardConfig",
-    "optimization_artifact_reduction_scope",
-    "reduced_artifact_scope_report",
-]
-
-# ---- transport report helpers ----
 @dataclass(frozen=True)
 class _MatchedTransportContext:
     comparison: Mapping[str, Any]
@@ -549,13 +540,6 @@ def matched_optimized_transport_report(
     }
 
 
-__all__ = [
-    "matched_optimized_transport_report",
-    "optimized_equilibrium_transport_report",
-    "replicated_transport_ensemble_report",
-]
-
-# ---- production guard entry points ----
 @dataclass(frozen=True)
 class _GuardArtifactMaps:
     reduced: Mapping[str, Mapping[str, Any]]
@@ -1008,13 +992,9 @@ def production_nonlinear_optimization_guard_report(
     )
 
 
-__all__ = [
-    "ProductionNonlinearOptimizationGuardConfig",
-    "matched_optimized_transport_report",
-    "optimization_artifact_reduction_scope",
-    "optimized_equilibrium_transport_report",
+__all__ = (
+    "ProductionNonlinearOptimizationGuardConfig", "matched_optimized_transport_report",
+    "optimization_artifact_reduction_scope", "optimized_equilibrium_transport_report",
     "production_nonlinear_optimization_guard_report",
-    "reduced_artifact_scope_report",
-    "replicated_transport_ensemble_report",
-]
-
+    "reduced_artifact_scope_report", "replicated_transport_ensemble_report",
+)
