@@ -6,6 +6,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Callable, cast
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 from solvax import chunked_jacfwd
@@ -92,6 +93,7 @@ class _GradientDerivativeData:
     obs_names: list[str]
     par_names: list[str]
     direction: jnp.ndarray
+    jacobian_mode: str
 
 
 @dataclass(frozen=True)
@@ -153,7 +155,9 @@ def _conditioned_jacobian_arrays(
     )
 
 
-def _jacobian_conditioning_stats(arrays: _ConditioningArrays) -> _JacobianConditioningStats:
+def _jacobian_conditioning_stats(
+    arrays: _ConditioningArrays,
+) -> _JacobianConditioningStats:
     jac_ad = arrays.jac_ad
     finite_ad = bool(np.all(np.isfinite(jac_ad)))
     finite_fd = bool(np.all(np.isfinite(arrays.jac_fd)))
@@ -362,21 +366,35 @@ def _autodiff_and_fd_jacobians(
     *,
     step: float,
     jacobian_chunk_size: int | str | None,
-) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    jacobian_mode: str,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, str]:
     observables = flat_fn(p)
     if int(observables.size) == 0:
         raise ValueError("observable_fn must return at least one observable")
-    jac_ad = chunked_jacfwd(
-        flat_fn,
-        chunk_size=jacobian_chunk_size,
-    )(p)
+    requested = str(jacobian_mode).strip().lower()
+    if requested not in {"auto", "forward", "reverse"}:
+        raise ValueError("jacobian_mode must be 'auto', 'forward', or 'reverse'")
+    resolved = requested
+    if resolved == "auto":
+        resolved = (
+            "forward"
+            if jacobian_chunk_size is not None or int(p.size) <= int(observables.size)
+            else "reverse"
+        )
+    if resolved == "reverse" and jacobian_chunk_size is not None:
+        raise ValueError("jacobian_chunk_size is only valid for forward mode")
+    jac_ad = (
+        chunked_jacfwd(flat_fn, chunk_size=jacobian_chunk_size)(p)
+        if resolved == "forward"
+        else jax.jacrev(flat_fn)(p)
+    )
     jac_fd = finite_difference_jacobian(flat_fn, p, step=step)
     if jac_ad.ndim != 2 or jac_fd.ndim != 2 or jac_ad.shape != jac_fd.shape:
         raise ValueError(
             "AD and finite-difference jacobians must be two-dimensional and "
             "shape-aligned"
         )
-    return observables, jac_ad, jac_fd
+    return observables, jac_ad, jac_fd, resolved
 
 
 def _tangent_direction(
@@ -519,9 +537,7 @@ def _tangent_tolerance_passed(
     tangent_rel_error = cast(np.ndarray, tangent_errors["tangent_rel_error"])
     if not tangent_abs_error.size:
         return True
-    return bool(
-        np.all((tangent_abs_error <= abs_tol) | (tangent_rel_error <= rel_tol))
-    )
+    return bool(np.all((tangent_abs_error <= abs_tol) | (tangent_rel_error <= rel_tol)))
 
 
 def _conditioning_gate(
@@ -626,13 +642,15 @@ def _gradient_derivative_data(
     param_names: Sequence[str] | None,
     tangent: jnp.ndarray | np.ndarray | None,
     jacobian_chunk_size: int | str | None,
+    jacobian_mode: str,
 ) -> _GradientDerivativeData:
     flat_fn = _flat_observable_function(observable_fn)
-    observables, jac_ad, jac_fd = _autodiff_and_fd_jacobians(
+    observables, jac_ad, jac_fd, resolved_mode = _autodiff_and_fd_jacobians(
         flat_fn,
         inputs.p,
         step=inputs.step,
         jacobian_chunk_size=jacobian_chunk_size,
+        jacobian_mode=jacobian_mode,
     )
     obs_names, par_names = _resolve_report_names(
         int(jac_ad.shape[0]),
@@ -648,6 +666,7 @@ def _gradient_derivative_data(
         obs_names=obs_names,
         par_names=par_names,
         direction=_tangent_direction(inputs.p, tangent),
+        jacobian_mode=resolved_mode,
     )
 
 
@@ -885,6 +904,7 @@ def observable_gradient_validation_report(
     min_rank: int | None = None,
     condition_number_max: float | None = 1.0e12,
     jacobian_chunk_size: int | str | None = None,
+    jacobian_mode: str = "auto",
     report_kind: str = "observable_gradient_validation",
 ) -> dict[str, object]:
     """Validate observable gradients by AD, finite differences, and conditioning.
@@ -895,6 +915,8 @@ def observable_gradient_validation_report(
     the gate failed. ``jacobian_chunk_size`` bounds the number of simultaneous
     forward-mode directions; use ``"auto"`` for SOLVAX's device-aware policy,
     an integer for a fixed memory budget, or ``None`` for one full ``vmap``.
+    ``jacobian_mode="auto"`` chooses forward mode for few parameters (or when
+    chunking is requested) and reverse mode for few observables.
     """
     inputs = _gradient_validation_inputs(
         params,
@@ -911,6 +933,7 @@ def observable_gradient_validation_report(
         param_names=param_names,
         tangent=tangent,
         jacobian_chunk_size=jacobian_chunk_size,
+        jacobian_mode=jacobian_mode,
     )
     gates = _gradient_gate_data(
         derivatives,
@@ -941,6 +964,7 @@ def observable_gradient_validation_report(
         conditioning=gates.conditioning,
     )
     report["jacobian_chunk_size"] = jacobian_chunk_size
+    report["jacobian_mode"] = derivatives.jacobian_mode
     return report
 
 
