@@ -189,7 +189,9 @@ def dominant_eigenpair_power(
         return (v_next, mu), None
 
     v0 = _normalize(v0)
-    (v, mu), _ = jax.lax.scan(step, (v0, jnp.asarray(0.0, dtype=v0.dtype)), None, length=iterations)
+    (v, mu), _ = jax.lax.scan(
+        step, (v0, jnp.asarray(0.0, dtype=v0.dtype)), None, length=iterations
+    )
     eig = jnp.log(mu) / dt_val
     return eig, v
 
@@ -258,7 +260,9 @@ def _shift_invert_apply_factory(
 
     def matvec(x_flat: jnp.ndarray) -> jnp.ndarray:
         x = x_flat.reshape(shape)
-        return (_apply_operator(x, cache, params, term_cfg) - sigma_val * x).reshape(size)
+        return (_apply_operator(x, cache, params, term_cfg) - sigma_val * x).reshape(
+            size
+        )
 
     def apply_shift_invert(x: jnp.ndarray, _cache, _params, _term_cfg) -> jnp.ndarray:
         b = x.reshape(size)
@@ -282,11 +286,15 @@ def _shift_invert_spectrum(
     eigvals: jnp.ndarray,
     sigma_val: jnp.ndarray,
 ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    safe = jnp.where(jnp.abs(eigvals) > 1.0e-14, eigvals, 1.0e-14 + 0.0j)
+    real_dtype = jnp.real(eigvals).dtype
+    scale = jnp.maximum(jnp.max(jnp.abs(eigvals)), 1.0)
+    valid = jnp.abs(eigvals) > 100.0 * jnp.finfo(real_dtype).eps * scale
+    safe = jnp.where(valid, eigvals, 1.0 + 0.0j)
     lam = sigma_val + 1.0 / safe
+    lam = jnp.where(valid, lam, jnp.asarray(jnp.nan + 1j * jnp.nan, lam.dtype))
     real_part = jnp.real(lam)
     imag_part = jnp.imag(lam)
-    finite = jnp.isfinite(real_part) & jnp.isfinite(imag_part)
+    finite = valid & jnp.isfinite(real_part) & jnp.isfinite(imag_part)
     return lam, real_part, imag_part, finite
 
 
@@ -443,7 +451,7 @@ def _ritz_vector_from_index(
     krylov_dim: int,
 ) -> jnp.ndarray:
     y = eigvecs[:, idx]
-    return _normalize(jnp.tensordot(jnp.conj(y), V[:krylov_dim], axes=1))
+    return _normalize(jnp.tensordot(y, V[:krylov_dim], axes=1))
 
 
 def _operator_arnoldi_restart_step(
@@ -592,10 +600,9 @@ def _shift_invert_restart_step(
         select_overlap=select_overlap,
         krylov_dim=krylov_dim,
     )
-    y = eigvecs[:, idx]
-    v_next = jnp.tensordot(jnp.conj(y), V[:krylov_dim], axes=1)
+    v_next = _ritz_vector_from_index(V, eigvecs, idx, krylov_dim=krylov_dim)
     eig_out = jnp.where(jnp.any(mask0), lam[idx], jnp.nan + 1.0j * jnp.nan)
-    return _normalize(v_next), eig_out
+    return v_next, eig_out
 
 
 @partial(

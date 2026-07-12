@@ -21,7 +21,6 @@ from spectraxgk.workflows.runtime.diagnostics import RuntimeQuasilinearFinalizat
 from spectraxgk.workflows.runtime.results import RuntimeLinearResult
 from spectraxgk.solvers.time.explicit import integrate_linear_explicit_from_config
 
-
 @dataclass(frozen=True)
 class FullLinearRuntimeDeps:
     """Injected dependencies for the full-GK linear runtime workflow."""
@@ -303,6 +302,7 @@ def _run_krylov_linear(
         shift_solve_method=kcfg.shift_solve_method,
         shift_preconditioner=kcfg.shift_preconditioner,
         shift_selection=kcfg.shift_selection,
+        shift_outer_residual_tol=kcfg.shift_outer_residual_tol,
         mode_family=kcfg.mode_family,
         fallback_method=kcfg.fallback_method,
         fallback_real_floor=kcfg.fallback_real_floor,

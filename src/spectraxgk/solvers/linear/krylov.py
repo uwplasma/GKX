@@ -63,6 +63,7 @@ class KrylovConfig:
     shift_solve_method: str = "batched"
     shift_preconditioner: str | None = "damping"
     shift_selection: str = "targeted"
+    shift_outer_residual_tol: float = 0.1
     mode_family: str = "auto"
     fallback_method: str = "propagator"
     fallback_real_floor: float = -1.0e-6
@@ -98,6 +99,7 @@ def _normalized_config(
     shift_solve_method: str,
     shift_preconditioner: str | None,
     shift_selection: str,
+    shift_outer_residual_tol: float,
     fallback_method: str,
     fallback_real_floor: float,
 ) -> KrylovConfig:
@@ -121,6 +123,7 @@ def _normalized_config(
         shift_solve_method=shift_solve_method,
         shift_preconditioner=shift_preconditioner,
         shift_selection=shift_selection,
+        shift_outer_residual_tol=float(shift_outer_residual_tol),
         mode_family=mode_family,
         fallback_method=fallback_method,
         fallback_real_floor=float(fallback_real_floor),
@@ -239,7 +242,15 @@ def _shift_seed(
         if shift_source_key == "propagator":
             _status(status_callback, "estimating shift from propagator seed")
             return _propagator_branch(
-                v0, v_ref, cache, params, term_cfg, cfg, None, restarts=1, select_overlap=False
+                v0,
+                v_ref,
+                cache,
+                params,
+                term_cfg,
+                cfg,
+                None,
+                restarts=1,
+                select_overlap=False,
             )
         if shift_source_key == "target":
             _status(status_callback, "building target-frequency shift")
@@ -263,7 +274,9 @@ def _shift_seed(
         )
         return sigma, v_seed
     if shift_source_key == "power":
-        _status(status_callback, "using explicit shift with power-iteration seed vector")
+        _status(
+            status_callback, "using explicit shift with power-iteration seed vector"
+        )
         _shift_seed, v_seed = _power_branch(v0, cache, params, term_cfg, cfg, None)
         return sigma, v_seed
     _status(status_callback, "using explicit shift with reference seed vector")
@@ -275,6 +288,27 @@ def _shift_selection_flags(shift_selection: str) -> tuple[bool, bool]:
     select_targeted = selection_key in {"targeted", "target", "auto", "default"}
     select_growth = selection_key in {"targeted", "growth", "auto", "default"}
     return select_targeted, select_growth
+
+
+def _eigenpair_relative_residual(
+    eigenvalue: jnp.ndarray,
+    eigenvector: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    term_cfg: Any,
+) -> float:
+    """Return the scale-invariant residual of one matrix-free eigenpair."""
+
+    operator_vec = _apply_operator(eigenvector, cache, params, term_cfg)
+    numerator = jnp.linalg.norm(operator_vec - eigenvalue * eigenvector)
+    denominator = jnp.maximum(
+        jnp.maximum(
+            jnp.linalg.norm(operator_vec),
+            jnp.abs(eigenvalue) * jnp.linalg.norm(eigenvector),
+        ),
+        jnp.asarray(1.0e-30, dtype=jnp.real(eigenvector).dtype),
+    )
+    return float(np.asarray(numerator / denominator))
 
 
 def _shift_invert_fallback(
@@ -289,13 +323,16 @@ def _shift_invert_fallback(
     select_overlap: bool,
 ) -> tuple[jnp.ndarray, jnp.ndarray] | None:
     fallback_key = cfg.fallback_method.strip().lower()
-    _status(status_callback, f"shift-invert result rejected; falling back to {fallback_key}")
+    _status(
+        status_callback, f"shift-invert result rejected; falling back to {fallback_key}"
+    )
+    result: tuple[jnp.ndarray, jnp.ndarray] | None = None
     if fallback_key == "propagator":
-        return _propagator_branch(
+        result = _propagator_branch(
             v0, v_ref, cache, params, term_cfg, cfg, None, select_overlap=False
         )
-    if fallback_key == "arnoldi":
-        return _arnoldi_branch(
+    elif fallback_key == "arnoldi":
+        result = _arnoldi_branch(
             v0,
             v_ref,
             cache,
@@ -305,9 +342,15 @@ def _shift_invert_fallback(
             None,
             select_overlap=select_overlap,
         )
-    if fallback_key == "power":
-        return _power_branch(v0, cache, params, term_cfg, cfg, None)
-    return None
+    elif fallback_key == "power":
+        result = _power_branch(v0, cache, params, term_cfg, cfg, None)
+    if result is None:
+        return None
+    residual = _eigenpair_relative_residual(*result, cache, params, term_cfg)
+    _status(status_callback, f"{fallback_key} fallback residual={residual:.3g}")
+    if not np.isfinite(residual) or residual > cfg.shift_outer_residual_tol:
+        return None
+    return result
 
 
 def _shift_invert_branch(
@@ -339,7 +382,10 @@ def _shift_invert_branch(
         select_overlap=select_overlap,
     )
     sigma_host = complex(np.asarray(sigma))
-    _status(status_callback, f"shift-invert sigma={sigma_host.real:.6g}{sigma_host.imag:+.6g}j")
+    _status(
+        status_callback,
+        f"shift-invert sigma={sigma_host.real:.6g}{sigma_host.imag:+.6g}j",
+    )
     select_targeted, select_growth = _shift_selection_flags(cfg.shift_selection)
     _status(status_callback, "running shift-invert Arnoldi")
     eig_si, vec_si = dominant_eigenpair_shift_invert_cached(
@@ -365,11 +411,18 @@ def _shift_invert_branch(
         select_overlap=bool(select_overlap),
     )
     eig_host = complex(np.asarray(eig_si))
-    _status(status_callback, f"shift-invert solve finished with eig={eig_host.real:.6g}{eig_host.imag:+.6g}j")
+    residual = _eigenpair_relative_residual(eig_si, vec_si, cache, params, term_cfg)
+    _status(
+        status_callback,
+        "shift-invert solve finished with "
+        f"eig={eig_host.real:.6g}{eig_host.imag:+.6g}j residual={residual:.3g}",
+    )
     need_fallback = (
         not np.isfinite(eig_host.real)
         or not np.isfinite(eig_host.imag)
         or eig_host.real < cfg.fallback_real_floor
+        or not np.isfinite(residual)
+        or residual > cfg.shift_outer_residual_tol
     )
     if need_fallback and cfg.fallback_method.strip().lower() != "none":
         fallback = _shift_invert_fallback(
@@ -384,6 +437,11 @@ def _shift_invert_branch(
         )
         if fallback is not None:
             return fallback
+    if need_fallback:
+        raise RuntimeError(
+            "shift-invert eigenpair failed the outer residual gate: "
+            f"residual={residual:.6g}, tolerance={cfg.shift_outer_residual_tol:.6g}"
+        )
     return eig_si, vec_si
 
 
@@ -409,6 +467,7 @@ def _dominant_eigenpair_config_from_options(
         shift_solve_method=options["shift_solve_method"],
         shift_preconditioner=options["shift_preconditioner"],
         shift_selection=options["shift_selection"],
+        shift_outer_residual_tol=options["shift_outer_residual_tol"],
         fallback_method=options["fallback_method"],
         fallback_real_floor=options["fallback_real_floor"],
     )
@@ -490,6 +549,7 @@ def dominant_eigenpair(
     shift_solve_method: str = "batched",
     shift_preconditioner: str | None = "damping",
     shift_selection: str = "targeted",
+    shift_outer_residual_tol: float = 0.1,
     mode_family: str = "auto",
     fallback_method: str = "propagator",
     fallback_real_floor: float = -1.0e-6,
