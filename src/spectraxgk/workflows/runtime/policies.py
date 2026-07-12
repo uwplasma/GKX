@@ -101,7 +101,6 @@ def build_runtime_nonlinear_diagnostics_kwargs(
         collision_split=bool(cfg.time.collision_split),
         collision_scheme=str(cfg.time.collision_scheme),
         implicit_restart=int(cfg.time.implicit_restart),
-        implicit_solve_method=str(cfg.time.implicit_solve_method),
         implicit_preconditioner=cfg.time.implicit_preconditioner,
         fixed_mode_ky_index=fixed_mode_ky_index,
         fixed_mode_kx_index=fixed_mode_kx_index,

@@ -86,7 +86,6 @@ class TimeConfig:
     checkpoint: bool = False
     implicit_restart: int = 20
     implicit_preconditioner: str | None = None
-    implicit_solve_method: str = "gmres"
     use_diffrax: bool = True
     diffrax_solver: str = "Dopri8"
     diffrax_adaptive: bool = False

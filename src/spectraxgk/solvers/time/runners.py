@@ -106,7 +106,6 @@ def integrate_linear_from_config(
         cache=cache,
         implicit_restart=time_cfg.implicit_restart,
         implicit_preconditioner=time_cfg.implicit_preconditioner,
-        implicit_solve_method=time_cfg.implicit_solve_method,
         checkpoint=time_cfg.checkpoint,
         sample_stride=time_cfg.sample_stride,
         terms=terms,

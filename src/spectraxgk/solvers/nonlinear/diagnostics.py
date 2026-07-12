@@ -659,7 +659,6 @@ def prepare_explicit_nonlinear_diagnostics_impl(
     implicit_iters: int = 3,
     implicit_relax: float = 0.7,
     implicit_restart: int = 20,
-    implicit_solve_method: str = "gmres",
     implicit_preconditioner: str | None = None,
     fixed_mode_ky_index: int | None = None,
     fixed_mode_kx_index: int | None = None,
@@ -675,7 +674,6 @@ def prepare_explicit_nonlinear_diagnostics_impl(
         implicit_iters,
         implicit_relax,
         implicit_restart,
-        implicit_solve_method,
         implicit_preconditioner,
     )
     options = _explicit_options_from_values(locals())
@@ -753,7 +751,6 @@ def integrate_explicit_nonlinear_diagnostics_impl(
     implicit_iters: int = 3,
     implicit_relax: float = 0.7,
     implicit_restart: int = 20,
-    implicit_solve_method: str = "gmres",
     implicit_preconditioner: str | None = None,
     fixed_mode_ky_index: int | None = None,
     fixed_mode_kx_index: int | None = None,
@@ -769,7 +766,6 @@ def integrate_explicit_nonlinear_diagnostics_impl(
         implicit_iters,
         implicit_relax,
         implicit_restart,
-        implicit_solve_method,
         implicit_preconditioner,
     )
     options = _explicit_options_from_values(locals())

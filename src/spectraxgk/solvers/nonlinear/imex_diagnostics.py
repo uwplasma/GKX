@@ -249,7 +249,6 @@ class _IMEXRuntimeOptions:
     implicit_tol: float
     implicit_maxiter: int
     implicit_restart: int
-    implicit_solve_method: str
 
 
 @dataclass(frozen=True)
@@ -381,7 +380,6 @@ def _build_imex_runtime_operators(
     implicit_tol: float,
     implicit_maxiter: int,
     implicit_restart: int,
-    implicit_solve_method: str,
 ) -> _IMEXRuntimeOperators:
     """Build collision, nonlinear, and linear solve operators for IMEX scans."""
 
@@ -420,7 +418,6 @@ def _build_imex_runtime_operators(
         implicit_tol=implicit_tol,
         implicit_maxiter=implicit_maxiter,
         implicit_restart=implicit_restart,
-        implicit_solve_method=implicit_solve_method,
         precond_op=prepared.implicit_operator.precond_op,
         solve_step_fn=deps.solve_imex_step_fn,
     )
@@ -604,7 +601,6 @@ def _build_imex_scan_context(
         implicit_tol=runtime.implicit_tol,
         implicit_maxiter=runtime.implicit_maxiter,
         implicit_restart=runtime.implicit_restart,
-        implicit_solve_method=runtime.implicit_solve_method,
     )
     compute_diag_from_state = _make_imex_diagnostic_callable(
         prepared,
@@ -689,7 +685,6 @@ def _imex_option_bundle(
     implicit_tol: float,
     implicit_maxiter: int,
     implicit_restart: int,
-    implicit_solve_method: str,
     omega_ky_index: int | None,
     omega_kx_index: int | None,
     flux_scale: float,
@@ -724,7 +719,6 @@ def _imex_option_bundle(
             implicit_tol=implicit_tol,
             implicit_maxiter=implicit_maxiter,
             implicit_restart=implicit_restart,
-            implicit_solve_method=implicit_solve_method,
         ),
         diagnostics=_IMEXDiagnosticOptions(
             omega_ky_index=omega_ky_index, omega_kx_index=omega_kx_index,
@@ -770,7 +764,6 @@ def integrate_imex_nonlinear_diagnostics_impl(
     implicit_iters: int = 3,
     implicit_relax: float = 0.7,
     implicit_restart: int = 20,
-    implicit_solve_method: str = "gmres",
     implicit_preconditioner: str | None = None,
     fixed_mode_ky_index: int | None = None,
     fixed_mode_kx_index: int | None = None,
@@ -795,7 +788,6 @@ def integrate_imex_nonlinear_diagnostics_impl(
         implicit_tol=implicit_tol,
         implicit_maxiter=implicit_maxiter,
         implicit_restart=implicit_restart,
-        implicit_solve_method=implicit_solve_method,
         omega_ky_index=omega_ky_index,
         omega_kx_index=omega_kx_index,
         flux_scale=flux_scale,

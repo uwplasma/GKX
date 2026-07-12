@@ -80,7 +80,6 @@ def solve_imex_step(
     implicit_tol: float,
     implicit_maxiter: int,
     implicit_restart: int,
-    implicit_solve_method: str,
     precond_op: PreconditionerFn | None = None,
 ) -> jnp.ndarray:
     """Solve one IMEX linear system with a fixed-point predictor."""
@@ -105,7 +104,6 @@ def solve_imex_step(
         max_restarts=implicit_maxiter,
         restart=implicit_restart,
         preconditioner=precond_op,
-        method=implicit_solve_method,
     )
     return solution.x.reshape(shape)
 
@@ -163,7 +161,6 @@ def make_imex_solve_step(
     implicit_tol: float,
     implicit_maxiter: int,
     implicit_restart: int,
-    implicit_solve_method: str,
     precond_op: PreconditionerFn | None,
     solve_step_fn: Callable[..., jnp.ndarray] = solve_imex_step,
 ) -> SolveStepFn:
@@ -186,7 +183,6 @@ def make_imex_solve_step(
             implicit_tol=implicit_tol,
             implicit_maxiter=implicit_maxiter,
             implicit_restart=implicit_restart,
-            implicit_solve_method=implicit_solve_method,
             precond_op=precond_op,
         )
 
@@ -310,7 +306,6 @@ def _make_cached_imex_scan_step(
     implicit_tol: float,
     implicit_maxiter: int,
     implicit_restart: int,
-    implicit_solve_method: str,
 ) -> Callable[[jnp.ndarray, Any], tuple[jnp.ndarray, Any]]:
     """Build the cached IMEX scan body from explicit nonlinear and GMRES parts."""
 
@@ -339,7 +334,6 @@ def _make_cached_imex_scan_step(
         implicit_tol=implicit_tol,
         implicit_maxiter=implicit_maxiter,
         implicit_restart=implicit_restart,
-        implicit_solve_method=implicit_solve_method,
         precond_op=setup.precond_op,
         solve_step_fn=solve_imex_step,
     )
@@ -392,7 +386,6 @@ def integrate_cached_imex_scan(
     implicit_iters: int = 3,
     implicit_relax: float = 0.7,
     implicit_restart: int = 20,
-    implicit_solve_method: str = "gmres",
     implicit_preconditioner: str | None = None,
     implicit_operator: Any | None = None,
     compressed_real_fft: bool = True,
@@ -437,7 +430,6 @@ def integrate_cached_imex_scan(
         implicit_tol=implicit_tol,
         implicit_maxiter=implicit_maxiter,
         implicit_restart=implicit_restart,
-        implicit_solve_method=implicit_solve_method,
     )
     return _run_cached_imex_scan(setup, step, steps=steps, checkpoint=checkpoint)
 

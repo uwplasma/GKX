@@ -60,7 +60,6 @@ class _ImplicitSolveOptions:
     iters: int
     relax: float
     restart: int
-    solve_method: str
 
 
 _IMPLICIT_PRECONDITIONER_ALIASES = {
@@ -589,7 +588,6 @@ def _implicit_gmres_step(
     implicit_iters: int,
     implicit_relax: float,
     implicit_restart: int,
-    implicit_solve_method: str,
 ) -> jnp.ndarray:
     """Advance one implicit step with a fixed-point warm start and GMRES."""
 
@@ -610,7 +608,6 @@ def _implicit_gmres_step(
         max_restarts=implicit_maxiter,
         restart=implicit_restart,
         preconditioner=precond_op,
-        method=implicit_solve_method,
     )
     return solution.x.reshape(shape)
 
@@ -676,7 +673,6 @@ def _build_implicit_solve_step(
             implicit_iters=options.iters,
             implicit_relax=options.relax,
             implicit_restart=options.restart,
-            implicit_solve_method=options.solve_method,
         )
 
     return solve_step
@@ -741,7 +737,6 @@ def _integrate_linear_implicit_cached(
     implicit_iters: int = 3,
     implicit_relax: float = 0.7,
     implicit_restart: int = 20,
-    implicit_solve_method: str = "gmres",
     implicit_preconditioner: PreconditionerSpec = None,
     checkpoint: bool = False,
     sample_stride: int = 1,
@@ -768,7 +763,6 @@ def _integrate_linear_implicit_cached(
             iters=implicit_iters,
             relax=implicit_relax,
             restart=implicit_restart,
-            solve_method=implicit_solve_method,
         ),
     )
     G_out, phi_t = _scan_implicit_outputs(

@@ -17,24 +17,9 @@ def solve_gmres(
     tolerance: float,
     max_restarts: int,
     restart: int,
-    method: str,
 ) -> KrylovSolution:
-    """Solve a complex matrix-free system with the admitted FGMRES backend.
+    """Solve a complex matrix-free system with the admitted FGMRES backend."""
 
-    ``batched`` and ``incremental`` are accepted while the TOML schema moves
-    from the former JAX least-squares implementation. Both now select SOLVAX's
-    incremental unitary-Givens FGMRES; the names no longer change physics or
-    orthogonalization. Unknown values fail before tracing instead of silently
-    changing a solve policy.
-    """
-
-    normalized = str(method).strip().lower()
-    if normalized not in {"gmres", "batched", "incremental", "solvax"}:
-        raise ValueError(
-            "GMRES method must be 'gmres', 'solvax', 'batched', or "
-            "'incremental'; "
-            f"got {method!r}"
-        )
     return gmres(
         matvec,
         rhs,
