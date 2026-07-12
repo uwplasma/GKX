@@ -24,7 +24,7 @@ from spectraxgk.operators.linear.params import (
     _x64_enabled,
 )
 from spectraxgk.operators.linear.rhs import linear_rhs_cached
-from spectraxgk.solvers.algebra import solve_gmres
+from spectraxgk.solvers import solve_gmres
 
 __all__ = ["_build_implicit_operator", "_integrate_linear_implicit_cached"]
 

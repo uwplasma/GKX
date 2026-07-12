@@ -13,7 +13,7 @@ from typing import Any, Callable
 import jax
 import jax.numpy as jnp
 
-from spectraxgk.solvers.algebra import solve_gmres
+from spectraxgk.solvers import solve_gmres
 from spectraxgk.solvers.nonlinear.imex_diagnostics import (
     advance_imex_nonlinear_state,
     make_imex_diagnostic_step,
