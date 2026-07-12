@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, Mapping, Sequence
 from pathlib import Path
+from typing import Any, Callable, Mapping, Sequence
 import sys
 
 import numpy as np
@@ -97,9 +97,6 @@ from spectraxgk.solvers.time.runners import (
 )
 from spectraxgk.workflows.cases import (
     RUNTIME_CASE_FIT_KEYS as _WORKFLOW_RUNTIME_CASE_FIT_KEYS,
-    default_runtime_case_deps as _default_runtime_case_deps,
-    run_linear_case as _run_linear_case_impl,
-    run_nonlinear_case as _run_nonlinear_case_impl,
 )
 from spectraxgk.workflows.linear import run_full_linear_runtime
 from spectraxgk.workflows.nonlinear import run_full_nonlinear_runtime
@@ -176,8 +173,8 @@ __all__ = [
     "_species_to_linear", "_stride_runtime_diagnostics",
     "_truncate_runtime_diagnostics", "_zero_kx_index",
     "build_runtime_geometry", "build_runtime_linear_params",
-    "build_runtime_linear_terms", "build_runtime_term_config", "run_linear_case",
-    "run_nonlinear_case", "run_runtime_linear", "run_runtime_nonlinear",
+    "build_runtime_linear_terms", "build_runtime_term_config",
+    "run_runtime_linear", "run_runtime_nonlinear",
     "run_runtime_scan",
 ]
 
@@ -472,64 +469,4 @@ def run_runtime_nonlinear(
         show_progress=show_progress,
         status_callback=status_callback,
         deps=_runtime_nonlinear_dispatch_deps(),
-    )
-
-
-def run_linear_case(
-    config_path: str | Path,
-    *,
-    ky: float | None = None,
-    Nl: int | None = None,
-    Nm: int | None = None,
-    solver: str | None = None,
-    method: str | None = None,
-    dt: float | None = None,
-    steps: int | None = None,
-    sample_stride: int | None = None,
-    show_progress: bool = True,
-) -> int:
-    """Run a linear case from a runtime TOML with optional overrides."""
-
-    return _run_linear_case_impl(
-        config_path,
-        ky=ky,
-        Nl=Nl,
-        Nm=Nm,
-        solver=solver,
-        method=method,
-        dt=dt,
-        steps=steps,
-        sample_stride=sample_stride,
-        show_progress=show_progress,
-        deps=_default_runtime_case_deps(),
-    )
-
-
-def run_nonlinear_case(
-    config_path: str | Path,
-    *,
-    ky: float | None = None,
-    Nl: int | None = None,
-    Nm: int | None = None,
-    method: str | None = None,
-    dt: float | None = None,
-    steps: int | None = None,
-    sample_stride: int | None = None,
-    diagnostics_stride: int | None = None,
-    show_progress: bool = True,
-) -> int:
-    """Run a nonlinear case from a runtime TOML with optional overrides."""
-
-    return _run_nonlinear_case_impl(
-        config_path,
-        ky=ky,
-        Nl=Nl,
-        Nm=Nm,
-        method=method,
-        dt=dt,
-        steps=steps,
-        sample_stride=sample_stride,
-        diagnostics_stride=diagnostics_stride,
-        show_progress=show_progress,
-        deps=_default_runtime_case_deps(),
     )
