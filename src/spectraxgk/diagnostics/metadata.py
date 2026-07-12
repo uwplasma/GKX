@@ -11,7 +11,6 @@ import jax.numpy as jnp
 import numpy as np
 
 
-
 ArrayLike = jnp.ndarray | np.ndarray
 
 
@@ -688,3 +687,194 @@ def classify_gradient_artifact(
 
 
 __all__ = ["classify_gradient_artifact"]
+# ---- candidate scoring helpers ----
+"""Shared score-margin helpers for nonlinear-gradient screening reports."""
+
+
+def _metric_margin(
+    value: float | None,
+    *,
+    target: float,
+    sense: str,
+    cap: float,
+    value_floor: float,
+) -> float:
+    """Return a capped normalized evidence margin for one gate metric."""
+
+    if value is None or not math.isfinite(float(value)):
+        return 0.0
+    finite_value = float(value)
+    if sense == "min":
+        margin = finite_value / max(float(target), float(value_floor))
+    elif sense == "max":
+        margin = float(target) / max(abs(finite_value), float(value_floor))
+    else:  # pragma: no cover - guarded by internal call sites.
+        raise ValueError(f"unsupported margin sense: {sense}")
+    return max(0.0, min(float(cap), margin))
+
+
+__all__ = ["_metric_margin"]
+
+# ---- bracket sweep reports ----
+"""Same-control bracket-sweep reports for nonlinear-gradient evidence."""
+
+
+def _paired_uncertainty_rel(artifact: dict[str, Any]) -> float | None:
+    diagnostics = artifact.get("paired_replicate_diagnostics")
+    if not isinstance(diagnostics, dict):
+        return None
+    return _finite_float(diagnostics.get("central_gradient_uncertainty_rel"))
+
+
+def _paired_same_sign_fraction(artifact: dict[str, Any]) -> float | None:
+    diagnostics = artifact.get("paired_replicate_diagnostics")
+    if not isinstance(diagnostics, dict):
+        return None
+    return _finite_float(diagnostics.get("same_sign_fraction"))
+
+
+@dataclass(frozen=True)
+class _BracketConditioningMetrics:
+    central_gradient: Any
+    response_fraction: float | None
+    fd_asymmetry_rel: float | None
+    fd_condition_number: float | None
+    gradient_uncertainty_rel: float | None
+    paired_uncertainty_rel: float | None
+    paired_same_sign_fraction: float | None
+
+
+def _bracket_evidence_config(
+    config: NonlinearTurbulenceGradientBracketSweepConfig,
+) -> NonlinearTurbulenceGradientEvidenceConfig:
+    return NonlinearTurbulenceGradientEvidenceConfig(
+        max_gradient_uncertainty_rel=config.max_gradient_uncertainty_rel,
+        max_fd_asymmetry_rel=config.max_fd_asymmetry_rel,
+        max_fd_condition_number=config.max_fd_condition_number,
+        min_fd_response_fraction=config.min_fd_response_fraction,
+        value_floor=config.value_floor,
+    )
+
+
+def _bracket_conditioning_metrics(
+    artifact: dict[str, Any],
+    classified: dict[str, Any],
+) -> _BracketConditioningMetrics:
+    conditioning = classified.get("conditioning")
+    if not isinstance(conditioning, dict):
+        conditioning = {}
+    return _BracketConditioningMetrics(
+        central_gradient=conditioning.get("central_gradient"),
+        response_fraction=_finite_float(conditioning.get("response_fraction")),
+        fd_asymmetry_rel=_finite_float(conditioning.get("fd_asymmetry_rel")),
+        fd_condition_number=_finite_float(conditioning.get("fd_condition_number")),
+        gradient_uncertainty_rel=_finite_float(
+            conditioning.get("gradient_uncertainty_rel")
+        ),
+        paired_uncertainty_rel=_paired_uncertainty_rel(artifact),
+        paired_same_sign_fraction=_paired_same_sign_fraction(artifact),
+    )
+
+
+def _bracket_margin_scores(
+    metrics: _BracketConditioningMetrics,
+    config: NonlinearTurbulenceGradientBracketSweepConfig,
+) -> dict[str, float]:
+    return {
+        "response": _metric_margin(
+            metrics.response_fraction,
+            target=config.min_fd_response_fraction,
+            sense="min",
+            cap=config.score_cap,
+            value_floor=config.value_floor,
+        ),
+        "locality": _metric_margin(
+            metrics.fd_asymmetry_rel,
+            target=config.max_fd_asymmetry_rel,
+            sense="max",
+            cap=config.score_cap,
+            value_floor=config.value_floor,
+        ),
+        "uncertainty": _metric_margin(
+            metrics.gradient_uncertainty_rel,
+            target=config.max_gradient_uncertainty_rel,
+            sense="max",
+            cap=config.score_cap,
+            value_floor=config.value_floor,
+        ),
+        "conditioning": _metric_margin(
+            metrics.fd_condition_number,
+            target=config.max_fd_condition_number,
+            sense="max",
+            cap=config.score_cap,
+            value_floor=config.value_floor,
+        ),
+    }
+
+
+def _repeated_bracket_stable(
+    metrics: _BracketConditioningMetrics,
+    config: NonlinearTurbulenceGradientBracketSweepConfig,
+) -> bool:
+    return (
+        metrics.paired_uncertainty_rel is not None
+        and metrics.paired_uncertainty_rel
+        <= float(config.max_repeated_bracket_uncertainty_rel)
+        and metrics.paired_same_sign_fraction is not None
+        and metrics.paired_same_sign_fraction
+        >= float(config.min_repeated_bracket_same_sign_fraction)
+    )
+
+
+def _failed_bracket_gate_names(classified: dict[str, Any]) -> list[str]:
+    return [
+        str(gate.get("metric", ""))
+        for gate in classified.get("gates", [])
+        if isinstance(gate, dict) and not bool(gate.get("passed", False))
+    ]
+
+
+def _bracket_sweep_row(
+    artifact: dict[str, Any],
+    *,
+    label: str | None,
+    path: str | None,
+    config: NonlinearTurbulenceGradientBracketSweepConfig,
+) -> dict[str, Any]:
+    classified = classify_gradient_artifact(
+        artifact,
+        path=path,
+        config=_bracket_evidence_config(config),
+    )
+    metrics = _bracket_conditioning_metrics(artifact, classified)
+    delta = _finite_float(artifact.get("delta_parameter"))
+    margins = _bracket_margin_scores(metrics, config)
+    return {
+        "label": str(label or artifact.get("parameter_name") or path or ""),
+        "path": path,
+        "parameter_name": str(artifact.get("parameter_name", "")),
+        "delta_parameter": _json_number(delta),
+        "passed": bool(
+            classified.get("qualifies_for_production_turbulence_gradient", False)
+        ),
+        "metrics": {
+            "central_gradient": metrics.central_gradient,
+            "response_fraction": metrics.response_fraction,
+            "fd_asymmetry_rel": metrics.fd_asymmetry_rel,
+            "fd_condition_number": metrics.fd_condition_number,
+            "gradient_uncertainty_rel": metrics.gradient_uncertainty_rel,
+            "paired_gradient_uncertainty_rel": _json_number(
+                metrics.paired_uncertainty_rel
+            ),
+            "paired_same_sign_fraction": _json_number(
+                metrics.paired_same_sign_fraction
+            ),
+            "repeated_bracket_stable": _repeated_bracket_stable(metrics, config),
+        },
+        "margins": margins,
+        "weakest_margin": _json_number(min(margins.values())),
+        "score": _json_number(
+            math.prod(max(value, 0.0) for value in margins.values()) ** 0.25
+        ),
+        "failed_gates": _failed_bracket_gate_names(classified),
+    }

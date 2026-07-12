@@ -237,6 +237,7 @@ jobs:
             tests/integration/runtime/test_runtime_artifacts.py \
             tests/unit/nonlinear/test_secondary.py \
             tests/unit/diagnostics/test_analysis.py \
+            tests/validation/benchmarks/test_benchmarking.py \
             --maxfail=1 --disable-warnings \
             --cov=spectraxgk \
             --cov-report=xml:coverage-fast.xml \
