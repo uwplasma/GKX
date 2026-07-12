@@ -12,7 +12,7 @@ from typing import Any, Callable
 
 import jax
 import jax.numpy as jnp
-from solvax import gmres
+from solvax import gmres, linear_solve
 
 from spectraxgk.solvers.nonlinear.imex_diagnostics import (
     advance_imex_nonlinear_state,
@@ -82,7 +82,12 @@ def solve_imex_step(
     implicit_restart: int,
     precond_op: PreconditionerFn | None = None,
 ) -> jnp.ndarray:
-    """Solve one IMEX linear system with a fixed-point predictor."""
+    """Solve one IMEX system with a predictor and an implicit solve VJP.
+
+    The primal and transpose solves use the same tolerance-controlled FGMRES
+    policy. Reverse mode differentiates the converged linear system through
+    SOLVAX rather than tracing the dynamic Krylov stopping loop.
+    """
 
     G_guess = imex_fixed_point_guess(
         G_in,
@@ -96,17 +101,21 @@ def solve_imex_step(
         implicit_iters=implicit_iters,
         implicit_relax=implicit_relax,
     )
-    solution = gmres(
-        matvec,
-        G_rhs.reshape(-1),
-        x0=G_guess.reshape(-1),
-        precond=precond_op,
-        restart=implicit_restart,
-        rtol=implicit_tol,
-        atol=0.0,
-        max_restarts=implicit_maxiter,
-    )
-    return solution.x.reshape(shape)
+
+    def solver(operator: MatvecFn, rhs: jnp.ndarray) -> jnp.ndarray:
+        return gmres(
+            operator,
+            rhs,
+            x0=G_guess.reshape(-1),
+            precond=precond_op,
+            restart=implicit_restart,
+            rtol=implicit_tol,
+            atol=0.0,
+            max_restarts=implicit_maxiter,
+        ).x
+
+    solution = linear_solve(matvec, G_rhs.reshape(-1), solver)
+    return solution.reshape(shape)
 
 
 def make_imex_nonlinear_term(
@@ -234,8 +243,7 @@ def _state_for_imex_operator(
         G = G[None, ...]
     if G.shape != shape:
         raise ValueError(
-            "implicit_operator shape mismatch: "
-            f"expected {shape}, got {tuple(G.shape)}"
+            f"implicit_operator shape mismatch: expected {shape}, got {tuple(G.shape)}"
         )
     return G, shape, squeeze_species
 
@@ -363,7 +371,6 @@ def _run_cached_imex_scan(
     G_out, fields_t = jax.lax.scan(step_fn, setup.G, None, length=steps)
     G_out = G_out[0] if setup.squeeze_species else G_out
     return G_out, fields_t
-
 
 
 def integrate_cached_imex_scan(
