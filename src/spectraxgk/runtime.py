@@ -57,6 +57,7 @@ from spectraxgk.workflows.runtime.results import (
     RuntimeLinearResult,
     RuntimeLinearScanResult,
     RuntimeNonlinearResult,
+    RuntimeParameterScanResult,
     build_runtime_nonlinear_result,
 )
 from spectraxgk.workflows.runtime.orchestration_scan import (
@@ -162,6 +163,7 @@ _RUNTIME_LINEAR_TIME_FIT_OPTION_KEYS = (
 __all__ = [
     "RuntimeIndependentParallelPlan", "RuntimeLinearResult",
     "RuntimeLinearScanResult", "RuntimeNonlinearResult",
+    "RuntimeParameterScanResult",
     "_build_gaussian_profile", "_build_initial_condition",
     "_concat_runtime_diagnostics", "_enforce_full_ky_hermitian", "_expand_ky",
     "_centered_glibc_random_pairs", "_default_hermite_hypercollision_exponent",
@@ -309,6 +311,7 @@ def run_runtime_linear(
     mode_method: str = "project",
     fit_signal: str = "auto",
     return_state: bool = False,
+    initial_state: Any | None = None,
     show_progress: bool = False,
     status_callback: Callable[[str], None] | None = None,
 ) -> RuntimeLinearResult:
@@ -323,9 +326,65 @@ def run_runtime_linear(
         **_runtime_linear_time_fit_options(locals()),
         krylov_cfg=krylov_cfg,
         return_state=return_state,
+        initial_state=initial_state,
         show_progress=show_progress,
         status_callback=status_callback,
         deps=_runtime_linear_dispatch_deps(),
+    )
+
+
+def run_runtime_parameter_scan(
+    cfg: RuntimeConfig,
+    parameter_values: Sequence[float],
+    *,
+    parameter_name: str,
+    update_config: Callable[[RuntimeConfig, float, int], RuntimeConfig],
+    ky_target: float = 0.3,
+    linear_options: Mapping[str, Any] | None = None,
+    point_options: Callable[
+        [float, int, RuntimeLinearResult | None], Mapping[str, Any]
+    ] | None = None,
+    continuation: bool = False,
+) -> RuntimeParameterScanResult:
+    """Run an ordered scan over one scalar runtime-configuration parameter.
+
+    When continuation is enabled, each result state initializes the next point.
+    Case-specific parameter transforms and solver policy remain in callbacks.
+    """
+
+    name = str(parameter_name).strip()
+    if not name:
+        raise ValueError("parameter_name must be nonempty")
+    values = np.asarray(parameter_values, dtype=float)
+    if values.ndim != 1 or values.size == 0:
+        raise ValueError("parameter_values must be a nonempty one-dimensional array")
+
+    shared = dict(linear_options or {})
+    runs: list[RuntimeLinearResult] = []
+    previous: RuntimeLinearResult | None = None
+    for index, value in enumerate(values):
+        point_cfg = update_config(cfg, float(value), index)
+        if not isinstance(point_cfg, RuntimeConfig):
+            raise TypeError("update_config must return RuntimeConfig")
+        options = dict(shared)
+        if point_options is not None:
+            options.update(point_options(float(value), index, previous))
+        if continuation:
+            options["return_state"] = True
+            if previous is not None:
+                if previous.state is None:
+                    raise ValueError("continuation requires each point to return state")
+                options["initial_state"] = previous.state
+        result = run_runtime_linear(point_cfg, ky_target=ky_target, **options)
+        runs.append(result)
+        previous = result
+
+    return RuntimeParameterScanResult(
+        parameter_name=name,
+        values=values,
+        gamma=np.asarray([result.gamma for result in runs], dtype=float),
+        omega=np.asarray([result.omega for result in runs], dtype=float),
+        runs=tuple(runs),
     )
 
 

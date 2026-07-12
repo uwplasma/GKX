@@ -42,6 +42,7 @@ class _RuntimeLinearRequest:
     mode_method: str
     fit_signal: str
     return_state: bool
+    initial_state: Any | None
     show_progress: bool
     status_callback: Callable[[str], None] | None
     deps: RuntimeLinearDispatchDeps
@@ -126,6 +127,7 @@ def _run_full_linear_request(
         mode_method=request.mode_method,
         fit_signal=request.fit_signal,
         return_state=request.return_state,
+        initial_state=request.initial_state,
         show_progress=request.show_progress,
         status_callback=request.status_callback,
     )
@@ -165,6 +167,7 @@ def run_runtime_linear_impl(
     mode_method: str = "project",
     fit_signal: str = "auto",
     return_state: bool = False,
+    initial_state: Any | None = None,
     show_progress: bool = False,
     status_callback: Callable[[str], None] | None = None,
     deps: RuntimeLinearDispatchDeps,
@@ -195,6 +198,7 @@ def run_runtime_linear_impl(
             mode_method=mode_method,
             fit_signal=fit_signal,
             return_state=return_state,
+            initial_state=initial_state,
             show_progress=show_progress,
             status_callback=status_callback,
             deps=deps,

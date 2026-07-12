@@ -44,6 +44,17 @@ class RuntimeLinearScanResult:
 
 
 @dataclass(frozen=True)
+class RuntimeParameterScanResult:
+    """Ordered linear results for a named scalar configuration parameter."""
+
+    parameter_name: str
+    values: np.ndarray
+    gamma: np.ndarray
+    omega: np.ndarray
+    runs: tuple[RuntimeLinearResult, ...]
+
+
+@dataclass(frozen=True)
 class RuntimeNonlinearResult:
     """Result container for runtime nonlinear runs."""
 

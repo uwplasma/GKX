@@ -117,6 +117,7 @@ def _prepare_linear_runtime_context(
     solver: str,
     fit_signal: str,
     return_state: bool,
+    initial_state: Any | None,
     status_callback: _StatusCallback,
 ) -> _LinearRuntimeContext:
     ql_enabled = bool(getattr(cfg.quasilinear, "enabled", False))
@@ -142,17 +143,28 @@ def _prepare_linear_runtime_context(
         status_callback,
         f"selected ky index {ky_index} at ky={float(grid.ky[selection.ky_index]):.4f}",
     )
-    _status(status_callback, "building initial condition")
-    initial_state = deps.build_initial_condition(
-        grid,
-        geom,
-        cfg,
-        ky_index=selection.ky_index,
-        kx_index=selection.kx_index,
-        Nl=n_laguerre,
-        Nm=n_hermite,
-        nspecies=max(len([s for s in cfg.species if s.kinetic]), 1),
+    kinetic_species = max(len([s for s in cfg.species if s.kinetic]), 1)
+    expected_shape = (
+        kinetic_species, n_laguerre, n_hermite,
+        int(grid.ky.size), int(grid.kx.size), int(grid.z.size),
     )
+    if initial_state is None:
+        _status(status_callback, "building initial condition")
+        state = deps.build_initial_condition(
+            grid, geom, cfg,
+            ky_index=selection.ky_index,
+            kx_index=selection.kx_index,
+            Nl=n_laguerre,
+            Nm=n_hermite,
+            nspecies=kinetic_species,
+        )
+    else:
+        state = jnp.asarray(initial_state)
+        if tuple(state.shape) != expected_shape:
+            raise ValueError(
+                f"initial_state shape {tuple(state.shape)} does not match "
+                f"runtime shape {expected_shape}"
+            )
 
     return _LinearRuntimeContext(
         cfg=cfg,
@@ -161,7 +173,7 @@ def _prepare_linear_runtime_context(
         params=params,
         terms=terms,
         selection=selection,
-        initial_state=initial_state,
+        initial_state=state,
         solver_key=deps.normalize_linear_solver_name(solver),
         fit_key=_fit_signal_key(fit_signal),
         ql_enabled=ql_enabled,
@@ -733,6 +745,7 @@ def run_full_linear_runtime(
     fit_signal: str,
     return_state: bool,
     show_progress: bool,
+    initial_state: Any | None = None,
     status_callback: Callable[[str], None] | None = None,
 ) -> RuntimeLinearResult:
     """Run one full-GK linear point from a runtime config."""
@@ -746,6 +759,7 @@ def run_full_linear_runtime(
         solver=solver,
         fit_signal=fit_signal,
         return_state=return_state,
+        initial_state=initial_state,
         status_callback=status_callback,
     )
     fit_policy = _build_linear_fit_policy(
