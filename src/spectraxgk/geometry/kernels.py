@@ -313,7 +313,7 @@ def derm(arr: np.ndarray, ch: str, par: str = "e") -> np.ndarray:
 
     axis = "l" if ch == "l" else "r"
     return np.asarray(
-        centered_reflected_difference(np.asarray(arr), axis=axis, parity=par)
+        centered_reflected_difference(jnp.asarray(arr), axis=axis, parity=par)
     )
 
 
@@ -323,7 +323,7 @@ def dermv(arr: np.ndarray, brr: np.ndarray, ch: str, par: str = "e") -> np.ndarr
     axis = "l" if ch == "l" else "r"
     return np.asarray(
         weighted_centered_difference(
-            np.asarray(arr), np.asarray(brr), axis=axis, parity=par
+            jnp.asarray(arr), jnp.asarray(brr), axis=axis, parity=par
         )
     )
 
@@ -335,7 +335,7 @@ def nperiod_data_extend(
 
     return np.asarray(
         extend_nperiod_data(
-            np.asarray(arr), int(nperiod), istheta=bool(istheta), parity=par
+            jnp.asarray(arr), int(nperiod), istheta=bool(istheta), parity=par
         )
     )
 
@@ -343,7 +343,7 @@ def nperiod_data_extend(
 def reflect_n_append(arr: np.ndarray, ch: str) -> np.ndarray:
     """NumPy wrapper around JAX-backed Miller reflection helper."""
 
-    return np.asarray(reflect_and_append(np.asarray(arr), parity=ch))
+    return np.asarray(reflect_and_append(jnp.asarray(arr), parity=ch))
 
 
 def cumulative_trapezoid(y: np.ndarray, x: np.ndarray, axis: int = -1) -> np.ndarray:

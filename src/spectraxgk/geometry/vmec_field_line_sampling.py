@@ -72,7 +72,9 @@ def _vmec_splines(nc_obj: Any, booz_obj: Any) -> _Struct:
     Build VMEC spline data used by the imported-geometry pipeline.
     """
 
-    r = _Struct()
+    # Boozer backends expose version-dependent fields, so this record is
+    # intentionally dynamic while the assembled solver geometry is validated.
+    r: Any = _Struct()
 
     ns = int(nc_obj.variables["ns"][:].data)
     s_full = np.linspace(0.0, 1.0, ns)
