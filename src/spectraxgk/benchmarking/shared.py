@@ -10,7 +10,7 @@ from typing import Any, Sequence, TypeVar, cast
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.config import InitializationConfig, KineticElectronBaseCase
+from spectraxgk.config import InitializationConfig
 from spectraxgk.core.grid import SpectralGrid
 from spectraxgk.core.species import Species, build_linear_params
 from spectraxgk.diagnostics.analysis import fit_growth_rate, fit_growth_rate_auto
@@ -826,40 +826,6 @@ def _build_initial_condition(
                 G0[l_idx, m_idx, ky_i, kx_index, :] = init_vals
     return jnp.asarray(G0)
 
-def _kinetic_reference_init_cfg(
-    init_cfg: InitializationConfig,
-    *,
-    reference_aligned: bool | None = None,
-) -> InitializationConfig:
-    """Use the reference-aligned kinetic benchmark seed when requested.
-
-    Reference-aligned kinetic runs seed a constant electron-density moment.
-    Explicit user overrides are preserved by replacing only the exact current
-    kinetic default initialization.
-    """
-
-    if not bool(True if reference_aligned is None else reference_aligned):
-        return init_cfg
-    kinetic_default_init = KineticElectronBaseCase().init
-    if init_cfg != kinetic_default_init:
-        return init_cfg
-    return InitializationConfig(
-        init_field="density",
-        init_amp=1.0e-3,
-        init_single=True,
-        random_seed=kinetic_default_init.random_seed,
-        gaussian_init=False,
-        gaussian_width=kinetic_default_init.gaussian_width,
-        gaussian_envelope_constant=kinetic_default_init.gaussian_envelope_constant,
-        gaussian_envelope_sine=kinetic_default_init.gaussian_envelope_sine,
-        kpar_init=kinetic_default_init.kpar_init,
-        init_file=kinetic_default_init.init_file,
-        init_file_scale=kinetic_default_init.init_file_scale,
-        init_file_mode=kinetic_default_init.init_file_mode,
-        init_electrons_only=kinetic_default_init.init_electrons_only,
-    )
-
-
 __all__ = [
     'resources',
     'VALID_FIT_SIGNALS',
@@ -929,5 +895,4 @@ __all__ = [
     'compare_cyclone_to_reference',
     '_build_gaussian_profile',
     '_build_initial_condition',
-    '_kinetic_reference_init_cfg',
 ]

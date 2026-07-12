@@ -13,7 +13,6 @@ from typing import Any
 __all__ = [
     'CycloneBaseCase',
     'GridConfig',
-    'KineticElectronBaseCase',
     'KBMBaseCase',
     'TimeConfig',
     'SAlphaGeometry',
@@ -393,7 +392,6 @@ __all__ = [
 _EXPORT_TARGETS: dict[str, tuple[str, str]] = {
     'CycloneBaseCase': ('spectraxgk.config', 'CycloneBaseCase'),
     'GridConfig': ('spectraxgk.config', 'GridConfig'),
-    'KineticElectronBaseCase': ('spectraxgk.config', 'KineticElectronBaseCase'),
     'KBMBaseCase': ('spectraxgk.config', 'KBMBaseCase'),
     'TimeConfig': ('spectraxgk.config', 'TimeConfig'),
     'SAlphaGeometry': ('spectraxgk.geometry', 'SAlphaGeometry'),

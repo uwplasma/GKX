@@ -309,49 +309,6 @@ class KineticElectronModelConfig:
 
 
 @dataclass(frozen=True)
-class KineticElectronBaseCase:
-    """Parameters for kinetic-electron Cyclone benchmarks."""
-
-    grid: GridConfig = GridConfig(
-        Nx=1,
-        Ny=16,
-        Nz=96,
-        Lx=62.8,
-        Ly=62.8,
-        boundary="linked",
-        y0=10.0,
-        ntheta=32,
-        nperiod=2,
-    )
-    time: TimeConfig = TimeConfig(
-        t_max=40.0,
-        dt=0.01,
-        method="rk4",
-        diffrax_solver="Tsit5",
-        diffrax_adaptive=True,
-        diffrax_rtol=1.0e-4,
-        diffrax_atol=1.0e-7,
-        diffrax_max_steps=20000,
-    )
-    geometry: GeometryConfig = GeometryConfig(R0=2.77778)
-    model: KineticElectronModelConfig = KineticElectronModelConfig()
-    init: InitializationConfig = InitializationConfig(
-        init_field="density",
-        init_amp=1.0e-10,
-        gaussian_init=True,
-    )
-
-    def to_dict(self) -> Dict[str, Dict[str, Any]]:
-        return {
-            "grid": self.grid.to_dict(),
-            "time": self.time.to_dict(),
-            "geometry": self.geometry.to_dict(),
-            "model": self.model.to_dict(),
-            "init": self.init.to_dict(),
-        }
-
-
-@dataclass(frozen=True)
 class KBMBaseCase:
     """Parameters for an electromagnetic KBM benchmark."""
 
@@ -400,7 +357,6 @@ __all__ = [
     "GridConfig",
     "InitializationConfig",
     "KBMBaseCase",
-    "KineticElectronBaseCase",
     "KineticElectronModelConfig",
     "ModelConfig",
     "REFERENCE_ELECTRON_MASS",
