@@ -16,6 +16,7 @@ import numpy as np
 
 from spectraxgk.geometry.analytic import SAlphaGeometry, SlabGeometry
 
+
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
 class FluxTubeGeometryData:
@@ -74,18 +75,20 @@ class FluxTubeGeometryData:
             self.kxfac,
             self.theta_scale,
             self.nfp,
-            self.kperp2_bmag,
             self.bessel_bmag_power,
         )
         return children, {
             "source_model": self.source_model,
             "theta_closed_interval": self.theta_closed_interval,
+            "kperp2_bmag": self.kperp2_bmag,
         }
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
+        values = list(children)
+        values.insert(23, aux_data["kperp2_bmag"])
         return cls(
-            *children,
+            *values,
             source_model=aux_data["source_model"],
             theta_closed_interval=aux_data["theta_closed_interval"],
         )
@@ -96,7 +99,9 @@ class FluxTubeGeometryData:
             raise ValueError(
                 "theta must have the same last dimension as the sampled geometry grid"
             )
-        if isinstance(theta_arr, jax.core.Tracer):
+        if isinstance(theta_arr, jax.core.Tracer) or isinstance(
+            self.theta, jax.core.Tracer
+        ):
             return theta_arr
         theta_line = (
             theta_arr
@@ -514,13 +519,11 @@ def load_imported_geometry_netcdf(path: str | Path) -> FluxTubeGeometryData:
         bmag = _read_imported_profile(geom_vars, "bmag")
         drhodpsi = _read_imported_scalar(geom_vars, "drhodpsi", default=1.0)
         bgrad = _imported_bgrad(selection, bmag, gradpar_val)
-        cvdrift, gbdrift, cvdrift0, gbdrift0, jacobian = (
-            _imported_drifts_and_jacobian(
-                selection,
-                bmag,
-                drhodpsi=drhodpsi,
-                gradpar_val=gradpar_val,
-            )
+        cvdrift, gbdrift, cvdrift0, gbdrift0, jacobian = _imported_drifts_and_jacobian(
+            selection,
+            bmag,
+            drhodpsi=drhodpsi,
+            gradpar_val=gradpar_val,
         )
         return _pack_imported_geometry_data(
             selection,

@@ -82,7 +82,6 @@ class LinearCache:
             self.Jl,
             self.b,
             self.kperp2,
-            self.kperp2_bmag,
             self.bmag,
             self.omega_d,
             self.cv_d,
@@ -135,6 +134,7 @@ class LinearCache:
         linked_kz = self.linked_kz or ()
         children = children + tuple(linked_idx) + tuple(linked_kz)
         aux_data = (
+            self.kperp2_bmag,
             self.use_twist_shift,
             self.jtwist,
             len(linked_idx),
@@ -147,6 +147,7 @@ class LinearCache:
     @classmethod
     def tree_unflatten(cls, aux_data, children):
         (
+            kperp2_bmag,
             use_twist_shift,
             jtwist,
             n_linked_idx,
@@ -154,8 +155,9 @@ class LinearCache:
             linked_full_cover,
             linked_use_gather,
         ) = aux_data
-        base_count = 51
-        base_children = children[:base_count]
+        base_count = 50
+        base_children = list(children[:base_count])
+        base_children.insert(3, kperp2_bmag)
         linked_idx = tuple(children[base_count : base_count + n_linked_idx])
         linked_kz = tuple(
             children[
@@ -171,5 +173,3 @@ class LinearCache:
             linked_full_cover=linked_full_cover,
             linked_use_gather=linked_use_gather,
         )
-
-
