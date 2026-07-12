@@ -23,6 +23,7 @@ class RuntimeLinearResult:
     selection: ModeSelection
     t: np.ndarray | None = None
     signal: np.ndarray | None = None
+    field_history: np.ndarray | None = None
     state: np.ndarray | None = None
     z: np.ndarray | None = None
     eigenfunction: np.ndarray | None = None

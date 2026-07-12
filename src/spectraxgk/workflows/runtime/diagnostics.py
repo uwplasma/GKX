@@ -23,6 +23,7 @@ __all__ = [
     "RuntimeQuasilinearFinalizationDeps",
     "finalize_runtime_linear_quasilinear",
     "fit_runtime_linear_diagnostics",
+    "refit_runtime_linear_trajectory",
 ]
 
 
@@ -443,4 +444,52 @@ def fit_runtime_linear_diagnostics(
         fit_window_tmin=fit.fit_window_tmin,
         fit_window_tmax=fit.fit_window_tmax,
         fit_signal_used=fit.signal_name,
+    )
+
+
+def refit_runtime_linear_trajectory(
+    result: RuntimeLinearResult,
+    *,
+    mode_method: str = "project",
+    auto_window: bool = True,
+    tmin: float | None = None,
+    tmax: float | None = None,
+    window_fraction: float = 0.3,
+    min_points: int = 40,
+    start_fraction: float = 0.2,
+    growth_weight: float = 1.0,
+    require_positive: bool = True,
+    min_amp_fraction: float = 0.0,
+) -> RuntimeLinearResult:
+    """Refit one stored trajectory without repeating its integration."""
+
+    if result.t is None or result.field_history is None or result.z is None:
+        raise ValueError("result must contain t, field_history, and z")
+    fit = fit_runtime_linear_diagnostics(
+        t=result.t,
+        phi_t=result.field_history,
+        density_t=None,
+        selection=result.selection,
+        z=result.z,
+        fit_signal="phi",
+        mode_method=mode_method,
+        auto_window=auto_window,
+        tmin=tmin,
+        tmax=tmax,
+        window_fraction=window_fraction,
+        min_points=min_points,
+        start_fraction=start_fraction,
+        growth_weight=growth_weight,
+        require_positive=require_positive,
+        min_amp_fraction=min_amp_fraction,
+    )
+    return replace(
+        result,
+        gamma=float(fit.gamma),
+        omega=float(fit.omega),
+        signal=fit.signal,
+        eigenfunction=fit.eigenfunction,
+        fit_window_tmin=fit.fit_window_tmin,
+        fit_window_tmax=fit.fit_window_tmax,
+        fit_signal_used=fit.fit_signal_used,
     )

@@ -569,8 +569,9 @@ def _fit_linear_time_series(
         selection=ctx.selection,
         t=t_arr,
         signal=fit_result.signal,
+        field_history=phi_t,
         state=None if g_last is None or not ctx.return_state_effective else np.asarray(g_last),
-        z=fit_result.z if fit_result.eigenfunction is not None else None,
+        z=fit_result.z,
         eigenfunction=fit_result.eigenfunction,
         fit_window_tmin=fit_result.fit_window_tmin,
         fit_window_tmax=fit_result.fit_window_tmax,
@@ -627,7 +628,6 @@ def _run_krylov_linear_runtime(
     status_callback: _StatusCallback,
 ) -> RuntimeLinearResult:
     """Run the Krylov branch and finalize any requested quasilinear diagnostics."""
-
     gamma, omega, vec = _run_krylov_linear(
         ctx,
         deps=deps,
