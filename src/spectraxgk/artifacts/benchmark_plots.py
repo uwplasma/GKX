@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from spectraxgk.artifacts.plotting import set_plot_style
-from spectraxgk.benchmarks import CycloneReference, CycloneScanResult
+from spectraxgk.benchmarking.shared import CycloneReference, CycloneScanResult
 
 def cyclone_reference_figure(ref: CycloneReference) -> Tuple[plt.Figure, np.ndarray]:
     """Create a two-panel Cyclone base case reference plot."""
