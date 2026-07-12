@@ -578,7 +578,7 @@ def integrate_linear(
     implicit_iters: int = 3,
     implicit_relax: float = 0.7,
     implicit_restart: int = 20,
-    implicit_solve_method: str = "batched",
+    implicit_solve_method: str = "gmres",
     implicit_preconditioner: PreconditionerSpec = None,
     terms: LinearTerms | None = None,
     checkpoint: bool = False,

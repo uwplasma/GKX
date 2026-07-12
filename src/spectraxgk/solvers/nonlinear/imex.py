@@ -13,6 +13,7 @@ from typing import Any, Callable
 import jax
 import jax.numpy as jnp
 
+from spectraxgk.solvers.algebra import solve_gmres
 from spectraxgk.solvers.nonlinear.imex_diagnostics import (
     advance_imex_nonlinear_state,
     make_imex_diagnostic_step,
@@ -96,17 +97,17 @@ def solve_imex_step(
         implicit_iters=implicit_iters,
         implicit_relax=implicit_relax,
     )
-    sol, _info = jax.scipy.sparse.linalg.gmres(
+    solution = solve_gmres(
         matvec,
         G_rhs.reshape(-1),
         x0=G_guess.reshape(-1),
-        tol=implicit_tol,
-        maxiter=implicit_maxiter,
+        tolerance=implicit_tol,
+        max_restarts=implicit_maxiter,
         restart=implicit_restart,
-        M=precond_op,
-        solve_method=implicit_solve_method,
+        preconditioner=precond_op,
+        method=implicit_solve_method,
     )
-    return sol.reshape(shape)
+    return solution.x.reshape(shape)
 
 
 def make_imex_nonlinear_term(
@@ -391,7 +392,7 @@ def integrate_cached_imex_scan(
     implicit_iters: int = 3,
     implicit_relax: float = 0.7,
     implicit_restart: int = 20,
-    implicit_solve_method: str = "batched",
+    implicit_solve_method: str = "gmres",
     implicit_preconditioner: str | None = None,
     implicit_operator: Any | None = None,
     compressed_real_fft: bool = True,

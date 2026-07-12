@@ -226,7 +226,7 @@ def integrate_nonlinear_imex_cached(
     implicit_iters: int = 3,
     implicit_relax: float = 0.7,
     implicit_restart: int = 20,
-    implicit_solve_method: str = "batched",
+    implicit_solve_method: str = "gmres",
     implicit_preconditioner: str | None = None,
     implicit_operator: IMEXLinearOperator | None = None,
     compressed_real_fft: bool = True,

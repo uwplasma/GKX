@@ -8,7 +8,6 @@ from typing import Callable
 import jax
 import jax.numpy as jnp
 import numpy as np
-from jax.scipy.sparse.linalg import gmres
 from solvax import tridiagonal_solve
 
 from spectraxgk.operators.linear.cache_model import LinearCache
@@ -25,6 +24,7 @@ from spectraxgk.operators.linear.params import (
     _x64_enabled,
 )
 from spectraxgk.operators.linear.rhs import linear_rhs_cached
+from spectraxgk.solvers.algebra import solve_gmres
 
 __all__ = ["_build_implicit_operator", "_integrate_linear_implicit_cached"]
 
@@ -602,17 +602,17 @@ def _implicit_gmres_step(
         implicit_iters=implicit_iters,
         implicit_relax=implicit_relax,
     )
-    sol, _info = gmres(
+    solution = solve_gmres(
         matvec,
         G_in.reshape(size),
         x0=G_guess.reshape(size),
-        tol=implicit_tol,
-        maxiter=implicit_maxiter,
+        tolerance=implicit_tol,
+        max_restarts=implicit_maxiter,
         restart=implicit_restart,
-        M=precond_op,
-        solve_method=implicit_solve_method,
+        preconditioner=precond_op,
+        method=implicit_solve_method,
     )
-    return sol.reshape(shape)
+    return solution.x.reshape(shape)
 
 
 def _implicit_phi_diagnostic(
@@ -741,7 +741,7 @@ def _integrate_linear_implicit_cached(
     implicit_iters: int = 3,
     implicit_relax: float = 0.7,
     implicit_restart: int = 20,
-    implicit_solve_method: str = "batched",
+    implicit_solve_method: str = "gmres",
     implicit_preconditioner: PreconditionerSpec = None,
     checkpoint: bool = False,
     sample_stride: int = 1,
