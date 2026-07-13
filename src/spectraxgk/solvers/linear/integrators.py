@@ -113,6 +113,32 @@ def _linear_rhs_callable(
     return rhs
 
 
+def _linear_phi_callable(
+    *,
+    cache: LinearCache,
+    params: LinearParams,
+    terms: LinearTerms,
+    rhs: Callable[[jnp.ndarray], tuple[jnp.ndarray, jnp.ndarray]],
+    parallel_strategy: str,
+) -> Callable[[jnp.ndarray], jnp.ndarray]:
+    """Return the cheapest field-only diagnostic path for an updated state."""
+
+    if parallel_strategy != "serial" or not isinstance(cache, LinearCache):
+        return lambda value: rhs(value)[1]
+
+    from spectraxgk.operators.linear.params import linear_terms_to_term_config
+    from spectraxgk.terms.assembly import compute_fields_cached
+
+    term_config = linear_terms_to_term_config(terms)
+
+    def solve_phi(value: jnp.ndarray) -> jnp.ndarray:
+        return compute_fields_cached(
+            value, cache, params, terms=term_config, use_custom_vjp=True
+        ).phi
+
+    return solve_phi
+
+
 def _sspx3_step(
     G: jnp.ndarray,
     *,
@@ -237,6 +263,13 @@ def _integrate_linear_cached_impl(
         force_electrostatic_fields=force_electrostatic_fields,
         collision_operator=collision_operator,
     )
+    solve_phi = _linear_phi_callable(
+        cache=cache,
+        params=params,
+        terms=terms,
+        rhs=rhs,
+        parallel_strategy=parallel_strategy,
+    )
 
     def advance(G: jnp.ndarray) -> jnp.ndarray:
         return _advance_linear_state(
@@ -249,7 +282,7 @@ def _integrate_linear_cached_impl(
 
     def step(G: jnp.ndarray, idx: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
         G_new = advance(G)
-        _dG_new, phi_new = rhs(G_new)
+        phi_new = solve_phi(G_new)
         return _maybe_emit_linear_progress(
             G_new,
             idx=idx,
@@ -271,7 +304,7 @@ def _integrate_linear_cached_impl(
             return advance(state)
 
         G_out = jax.lax.fori_loop(0, sample_stride, inner_step, G)
-        _dG_out, phi_out = rhs(G_out)
+        phi_out = solve_phi(G_out)
         completed_idx = jnp.minimum((idx + 1) * sample_stride, steps) - 1
         return _maybe_emit_linear_progress(
             G_out,
