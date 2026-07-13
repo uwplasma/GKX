@@ -537,6 +537,16 @@ def _dispatch_parallel_linear(
             parallel=parallel,
             force_electrostatic_fields=force_electrostatic_fields,
         )
+    if route_axis in {"species_hermite", "s_m", "mixed"}:
+        from spectraxgk.solvers.linear.parallel_streaming import (
+            prepare_electrostatic_species_hermite_state,
+        )
+
+        G0 = prepare_electrostatic_species_hermite_state(
+            G0,
+            species_chunks=int(G0.shape[0]),
+            hermite_chunks=2,
+        )
     return _integrate_linear_cached_impl(
         G0,
         cache,

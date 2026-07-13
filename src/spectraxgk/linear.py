@@ -73,6 +73,7 @@ from spectraxgk.solvers.linear.parallel import (
     linear_rhs_streaming_electrostatic_velocity_sharded,  # noqa: F401 - linear API helper re-export
     linear_rhs_electrostatic_species_hermite_sharded,  # noqa: F401 - linear API helper re-export
     linear_rhs_streaming_velocity_sharded,  # noqa: F401 - linear API helper re-export
+    prepare_electrostatic_species_hermite_state,  # noqa: F401 - linear API helper re-export
     prepare_electrostatic_species_inputs,  # noqa: F401 - linear API helper re-export
 )
 

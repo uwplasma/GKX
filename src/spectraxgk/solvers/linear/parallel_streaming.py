@@ -16,6 +16,56 @@ from spectraxgk.operators.linear.params import (
 from spectraxgk.solvers.linear.parallel_common import _resolve_parallel_devices
 
 
+def _species_hermite_mesh_and_state_sharding(
+    state: jnp.ndarray,
+    *,
+    species_chunks: int,
+    hermite_chunks: int,
+    devices: Any | None,
+):
+    """Return the validated mixed mesh and state sharding."""
+
+    import numpy as np
+    from jax.sharding import Mesh, NamedSharding, PartitionSpec
+
+    device_list = _resolve_parallel_devices(
+        num_devices=species_chunks * hermite_chunks, devices=devices
+    )
+    mesh = Mesh(
+        np.asarray(device_list).reshape((species_chunks, hermite_chunks)),
+        ("species", "m"),
+    )
+    state_spec = PartitionSpec("species", None, "m", None, None, None)
+    return mesh, state_spec, NamedSharding(mesh, state_spec)
+
+
+def prepare_electrostatic_species_hermite_state(
+    state: jnp.ndarray,
+    *,
+    species_chunks: int = 2,
+    hermite_chunks: int = 2,
+    devices: Any | None = None,
+) -> jnp.ndarray:
+    """Place a mixed-route state once before entering a time-integration scan."""
+
+    import jax
+
+    arr = jnp.asarray(state)
+    if arr.ndim != 6:
+        raise ValueError("mixed species-Hermite routing requires a 6D state")
+    if int(arr.shape[0]) != int(species_chunks):
+        raise ValueError("mixed routing requires one species per mesh row")
+    if int(arr.shape[2]) % int(hermite_chunks) != 0:
+        raise ValueError("Hermite chunks must divide Nm evenly")
+    _mesh, _spec, sharding = _species_hermite_mesh_and_state_sharding(
+        arr,
+        species_chunks=int(species_chunks),
+        hermite_chunks=int(hermite_chunks),
+        devices=devices,
+    )
+    return jax.device_put(arr, sharding)
+
+
 def linear_rhs_electrostatic_species_hermite_sharded(
     G: jnp.ndarray,
     cache: LinearCache,
@@ -29,8 +79,7 @@ def linear_rhs_electrostatic_species_hermite_sharded(
     """Compute the collision-free electrostatic RHS on a species--Hermite mesh."""
 
     import jax
-    import numpy as np
-    from jax.sharding import Mesh, NamedSharding, PartitionSpec
+    from jax.sharding import NamedSharding, PartitionSpec
 
     from spectraxgk.operators.linear.params import _as_species_array
     from spectraxgk.terms.operators import grad_z_periodic, shift_axis
@@ -64,18 +113,15 @@ def linear_rhs_electrostatic_species_hermite_sharded(
         raise ValueError("mixed routing currently requires one species per mesh row")
     if m_chunks < 2 or nm % m_chunks != 0:
         raise ValueError("Hermite chunks must be at least two and divide Nm evenly")
-    device_list = _resolve_parallel_devices(
-        num_devices=s_chunks * m_chunks, devices=devices
+    mesh, state_spec, state_sharding = _species_hermite_mesh_and_state_sharding(
+        arr,
+        species_chunks=s_chunks,
+        hermite_chunks=m_chunks,
+        devices=devices,
     )
-    mesh = Mesh(
-        np.asarray(device_list).reshape((s_chunks, m_chunks)),
-        ("species", "m"),
-    )
-    state_spec = PartitionSpec("species", None, "m", None, None, None)
     jl_spec = PartitionSpec("species", None, None, None, None)
     species_spec = PartitionSpec("species")
     phi_spec = PartitionSpec(None, None, None)
-    state_sharding = NamedSharding(mesh, state_spec)
     jl_sharding = NamedSharding(mesh, jl_spec)
     species_sharding = NamedSharding(mesh, species_spec)
     real_dtype = jnp.real(arr).dtype
@@ -434,4 +480,5 @@ __all__ = [
     "linear_rhs_streaming_electrostatic_velocity_sharded",
     "linear_rhs_electrostatic_species_hermite_sharded",
     "linear_rhs_streaming_velocity_sharded",
+    "prepare_electrostatic_species_hermite_state",
 ]
