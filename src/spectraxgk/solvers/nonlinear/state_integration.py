@@ -262,6 +262,8 @@ def _integrate_nonlinear_sheared_scan(
     dt_max: float | None = None,
     cfl: float = 0.9,
     cfl_fac: float | None = None,
+    initial_time: jnp.ndarray | float = 0.0,
+    initial_dt: jnp.ndarray | float | None = None,
 ) -> tuple[jnp.ndarray, Any]:
     """Run the shared shearing-coordinate scan with optional transport output."""
 
@@ -293,6 +295,10 @@ def _integrate_nonlinear_sheared_scan(
     state_dtype = jnp.result_type(G0, jnp.complex64)
     real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
     dt_value = jnp.asarray(dt, dtype=real_dtype)
+    initial_time_value = jnp.asarray(initial_time, dtype=real_dtype)
+    initial_dt_value = jnp.asarray(
+        dt if initial_dt is None else initial_dt, dtype=real_dtype
+    )
     rho_star = jnp.asarray(params.rho_star, dtype=real_dtype)
     _, flux_fac = fieldline_quadrature_weights(geom_eff, grid)
     # Full-complex shearing coordinates must retain the real-field subspace.
@@ -416,7 +422,7 @@ def _integrate_nonlinear_sheared_scan(
         carry: tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray], index: jnp.ndarray
     ):
         state, adaptive_time, dt_previous = carry
-        fixed_time = jnp.asarray(index, dtype=real_dtype) * dt_value
+        fixed_time = initial_time_value + jnp.asarray(index, dtype=real_dtype) * dt_value
         time = fixed_time if fixed_dt else adaptive_time
         current = coordinates(state, time, time)
         derivative, current_fields, _ = rhs_at(current)
@@ -464,8 +470,8 @@ def _integrate_nonlinear_sheared_scan(
 
     initial_state_carry = (
         jnp.asarray(project_state(G0), dtype=state_dtype),
-        jnp.zeros((), dtype=real_dtype),
-        dt_value,
+        initial_time_value,
+        initial_dt_value,
     )
     if not record_transport and not return_fields:
         state_final_carry, output = jax.lax.scan(
@@ -549,11 +555,14 @@ def integrate_nonlinear_sheared_transport(
     dt_max: float | None = None,
     cfl: float = 0.9,
     cfl_fac: float | None = None,
+    initial_time: jnp.ndarray | float = 0.0,
+    initial_dt: jnp.ndarray | float | None = None,
 ) -> ShearedTransportTrace:
     """Integrate a sheared run and record canonical heat flux at every step.
 
     With ``fixed_dt=False``, ``steps`` is the accepted-step budget and ``time``
-    records the resulting nonuniform physical-time grid.
+    records the resulting nonuniform physical-time grid. ``initial_time`` and
+    ``initial_dt`` continue a prior trace without resetting the shearing basis.
     """
 
     final_state, samples = _integrate_nonlinear_sheared_scan(
@@ -577,6 +586,8 @@ def integrate_nonlinear_sheared_transport(
         dt_max=dt_max,
         cfl=cfl,
         cfl_fac=cfl_fac,
+        initial_time=initial_time,
+        initial_dt=initial_dt,
     )
     time, heat_flux = samples
     return ShearedTransportTrace(final_state, time, heat_flux)
