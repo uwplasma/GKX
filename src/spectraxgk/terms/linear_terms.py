@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import jax.numpy as jnp
 
+from spectraxgk.operators.nonlinear.collisions import (
+    conservative_full_f_dougherty_cross_moments as conservative_full_f_dougherty_cross_moments,
+)
 from spectraxgk.terms.linear_dissipation import (
     _hermite_mode_drive,
     _hypercollision_kz_source as _hypercollision_kz_source,
@@ -12,7 +15,6 @@ from spectraxgk.terms.linear_dissipation import (
     collision_invariant_rates as collision_invariant_rates,
     collision_quadratic_rate as collision_quadratic_rate,
     collisions_contribution as collisions_contribution,
-    conservative_full_f_dougherty_cross_moments as conservative_full_f_dougherty_cross_moments,
     drift_kinetic_dougherty_contribution as drift_kinetic_dougherty_contribution,
     end_damping_contribution as end_damping_contribution,
     hypercollisions_contribution as hypercollisions_contribution,
@@ -149,7 +151,9 @@ def _streaming_parallel_derivative(
     if not use_twist_shift:
         return grad_z_periodic(rhs, kz=kz)
     if linked_indices is None or linked_kz is None:
-        raise ValueError("linked_indices and linked_kz must be provided for linked streaming")
+        raise ValueError(
+            "linked_indices and linked_kz must be provided for linked streaming"
+        )
     return grad_z_linked_fft(
         rhs,
         dz=dz,
