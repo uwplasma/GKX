@@ -127,10 +127,7 @@ def _sspx3_step(
     G2 = (1.0 - _SSPX3_W1) * G + (_SSPX3_W1 - 1.0) * G1 + G2_euler
     G3 = euler_step(G2)
     return (
-        (1.0 - _SSPX3_W2 - _SSPX3_W3) * G
-        + _SSPX3_W3 * G1
-        + (_SSPX3_W2 - 1.0) * G2
-        + G3
+        (1.0 - _SSPX3_W2 - _SSPX3_W3) * G + _SSPX3_W3 * G1 + (_SSPX3_W2 - 1.0) * G2 + G3
     )
 
 
@@ -266,7 +263,9 @@ def _integrate_linear_cached_impl(
     if sample_stride <= 1:
         return jax.lax.scan(step_fn, G0, indices)
 
-    def sample_step(G: jnp.ndarray, idx: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
+    def sample_step(
+        G: jnp.ndarray, idx: jnp.ndarray
+    ) -> tuple[jnp.ndarray, jnp.ndarray]:
         def inner_step(_i, state):
             return advance(state)
 
@@ -461,6 +460,18 @@ def _dispatch_parallel_linear(
     if donate:
         raise NotImplementedError(
             "parallel linear integration does not currently support donated input buffers"
+        )
+    route_axis = str(getattr(parallel, "axis", "hermite")).lower().replace("-", "_")
+    if route_axis in {"s", "species"}:
+        from spectraxgk.solvers.linear.parallel_electrostatic import (
+            prepare_electrostatic_species_inputs,
+        )
+
+        G0, cache, params = prepare_electrostatic_species_inputs(
+            G0,
+            cache,
+            params,
+            num_devices=getattr(parallel, "num_devices", None),
         )
     return _integrate_linear_cached_impl(
         G0,

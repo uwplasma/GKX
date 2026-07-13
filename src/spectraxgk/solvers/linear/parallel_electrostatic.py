@@ -763,6 +763,10 @@ def linear_rhs_electrostatic_species_sharded(
     device_list = _resolve_parallel_devices(num_devices=num_devices, devices=devices)
     if len(device_list) != ns:
         raise ValueError("species-sharded route requires one device per species")
+    if not isinstance(arr, jax.core.Tracer):
+        arr, cache, params = prepare_electrostatic_species_inputs(
+            arr, cache, params, devices=device_list
+        )
     plan = build_velocity_sharding_plan(arr.shape, num_devices=ns, axes=("species",))
     real_dtype = jnp.real(arr).dtype
 
@@ -843,9 +847,74 @@ def linear_rhs_electrostatic_species_sharded(
     return dG, phi
 
 
+def prepare_electrostatic_species_inputs(
+    G: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    *,
+    num_devices: int | None = None,
+    devices: Any | None = None,
+) -> tuple[jnp.ndarray, LinearCache, LinearParams]:
+    """Place species-dependent inputs directly from host memory before JIT."""
+
+    from jax.sharding import Mesh, NamedSharding, PartitionSpec
+
+    from spectraxgk.operators.linear.params import _as_species_array
+
+    arr = jnp.asarray(G)
+    if isinstance(arr, jax.core.Tracer):
+        raise ValueError("species inputs must be prepared outside jax.jit")
+    if arr.ndim != 6:
+        raise ValueError("species preparation requires a 6D multi-species state")
+    ns = int(arr.shape[0])
+    device_list = _resolve_parallel_devices(num_devices=num_devices, devices=devices)
+    if len(device_list) != ns:
+        raise ValueError("species preparation requires one device per species")
+
+    mesh = Mesh(np.asarray(device_list), ("species",))
+    state_sharding = NamedSharding(
+        mesh, PartitionSpec("species", None, None, None, None, None)
+    )
+    jl_sharding = NamedSharding(mesh, PartitionSpec("species", None, None, None, None))
+    b_sharding = NamedSharding(mesh, PartitionSpec("species", None, None, None))
+    vector_sharding = NamedSharding(mesh, PartitionSpec("species"))
+
+    def from_host(value: Any, sharding: NamedSharding) -> jnp.ndarray:
+        return jax.device_put(np.asarray(jax.device_get(value)), sharding)
+
+    prepared_cache = replace(
+        cache,
+        Jl=from_host(cache.Jl, jl_sharding),
+        JlB=from_host(cache.JlB, jl_sharding),
+        b=from_host(cache.b, b_sharding),
+    )
+    species_names = (
+        "charge_sign",
+        "density",
+        "mass",
+        "temp",
+        "vth",
+        "rho",
+        "R_over_Ln",
+        "R_over_LTi",
+        "R_over_LTe",
+        "nu",
+        "tz",
+    )
+    prepared_values: dict[str, Any] = {
+        name: from_host(
+            _as_species_array(getattr(params, name), ns, name), vector_sharding
+        )
+        for name in species_names
+    }
+    prepared_params = replace(params, **prepared_values)
+    return from_host(arr, state_sharding), prepared_cache, prepared_params
+
+
 __all__ = [
     "_FUSED_ELECTROSTATIC_SLICE_KERNEL_CACHE",
     "_linear_rhs_electrostatic_slices_velocity_sharded_fused",
     "linear_rhs_electrostatic_species_sharded",
     "linear_rhs_electrostatic_slices_velocity_sharded",
+    "prepare_electrostatic_species_inputs",
 ]
