@@ -42,9 +42,9 @@ def _mode_family_sign(mode_family: str) -> int:
     """Map named branch families to the sign convention for physical frequency."""
 
     key = mode_family.strip().lower()
-    if key in {"ion", "itg", "cyclone", "positive"}:
+    if key in {"ion", "itg", "cyclone", "kbm", "positive"}:
         return 1
-    if key in {"electron", "etg", "tem", "kbm", "negative"}:
+    if key in {"electron", "etg", "tem", "negative"}:
         return -1
     return 0
 
