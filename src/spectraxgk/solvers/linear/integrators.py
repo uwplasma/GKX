@@ -556,6 +556,7 @@ def _integrate_species_sharded_explicit(
     """Advance one species per device inside a named-collective ``pmap``."""
 
     from spectraxgk.solvers.linear.parallel_common import (
+        _is_electrostatic_field_terms,
         _is_electrostatic_slice_terms,
         _resolve_parallel_devices,
     )
@@ -570,7 +571,11 @@ def _integrate_species_sharded_explicit(
         linear_terms_to_term_config,
     )
     from spectraxgk.terms.assembly import assemble_rhs_cached_with_fields
-    from spectraxgk.terms.fields import solve_fields_species_shard
+    from spectraxgk.terms.config import FieldState
+    from spectraxgk.terms.fields import (
+        solve_electrostatic_phi_species_shard,
+        solve_fields_species_shard,
+    )
 
     state, _damping = _prepared_linear_state_and_damping(G0, cache, params)
     real_dtype = jnp.real(jnp.empty((), dtype=state.dtype)).dtype
@@ -599,6 +604,9 @@ def _integrate_species_sharded_explicit(
         for name in species_names
     )
     term_config = linear_terms_to_term_config(terms)
+    electrostatic_fields = force_electrostatic_fields or _is_electrostatic_field_terms(
+        terms
+    )
 
     def program(local_state, local_jl, local_jlb, local_b, *species_scalars):
         local_species = tuple(jnp.reshape(value, (1,)) for value in species_scalars)
@@ -613,7 +621,17 @@ def _integrate_species_sharded_explicit(
         )
 
         def local_fields(value):
-            electromagnetic = not force_electrostatic_fields
+            if electrostatic_fields:
+                phi = solve_electrostatic_phi_species_shard(
+                    value[None, ...],
+                    local_cache,
+                    local_params,
+                    local_species[0],
+                    local_species[1],
+                    local_species[-1],
+                )
+                zero = jnp.zeros_like(phi)
+                return FieldState(phi=phi, apar=zero, bpar=zero)
             return solve_fields_species_shard(
                 value[None, ...],
                 local_cache,
@@ -624,11 +642,8 @@ def _integrate_species_sharded_explicit(
                 local_species[2],
                 local_species[-1],
                 local_species[4],
-                jnp.asarray(
-                    params.fapar * terms.apar if electromagnetic else 0.0,
-                    dtype=real_dtype,
-                ),
-                jnp.asarray(terms.bpar if electromagnetic else 0.0, dtype=real_dtype),
+                jnp.asarray(params.fapar * terms.apar, dtype=real_dtype),
+                jnp.asarray(terms.bpar, dtype=real_dtype),
             )
 
         def local_rhs(value):

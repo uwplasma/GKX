@@ -332,6 +332,37 @@ def solve_fields_species_shard(
     )
 
 
+def solve_electrostatic_phi_species_shard(
+    G: jnp.ndarray,
+    cache,
+    params,
+    charge: jnp.ndarray,
+    density: jnp.ndarray,
+    tz: jnp.ndarray,
+    *,
+    axis_name: str = "species",
+) -> jnp.ndarray:
+    """Solve only quasineutrality from one local species shard."""
+
+    zeros = jnp.zeros_like(charge)
+    ones = jnp.ones_like(charge)
+    coeffs = _field_solve_coefficients(
+        G,
+        cache,
+        params,
+        charge=charge,
+        density=density,
+        temp=ones,
+        mass=ones,
+        tz=tz,
+        vth=ones,
+        fapar=zeros,
+        w_bpar=zeros,
+    )
+    moments = _field_moments(G, coeffs, axis_name=axis_name)
+    return _electrostatic_phi(G, cache, coeffs, moments)
+
+
 @jax.custom_vjp
 def solve_fields(
     G: jnp.ndarray,
