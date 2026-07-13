@@ -13,7 +13,6 @@ from spectraxgk.solvers.linear.parallel_common import *  # noqa: F403
 from spectraxgk.solvers.linear.parallel_common import (
     __all__ as _common_all,
     _is_electrostatic_slice_terms,
-    _is_electrostatic_field_terms,
     _is_streaming_only_terms,
 )
 from spectraxgk.solvers.linear.parallel_electrostatic import *  # noqa: F403
@@ -94,7 +93,7 @@ def _resolve_velocity_backend(
     if route.backend != "auto":
         return route
     if route.axis in {"s", "species"} and state_ndim == 6:
-        if _is_electrostatic_field_terms(terms):
+        if _is_electrostatic_slice_terms(terms):
             return _ParallelLinearRoute(
                 strategy=route.strategy,
                 backend="electrostatic_species",
@@ -102,7 +101,7 @@ def _resolve_velocity_backend(
                 num_devices=route.num_devices,
             )
         raise NotImplementedError(
-            "species sharding currently supports electrostatic field terms"
+            "species sharding currently supports electrostatic linear terms"
         )
     _require_hermite_axis(
         route, "velocity sharding supports only the Hermite axis or species axis"
