@@ -897,6 +897,8 @@ def prepare_electrostatic_species_inputs(
     replicated_sharding = NamedSharding(mesh, PartitionSpec())
 
     def from_host(value: Any, sharding: NamedSharding) -> jnp.ndarray:
+        if isinstance(value, jax.core.Tracer):
+            return value
         return jax.device_put(np.asarray(jax.device_get(value)), sharding)
 
     replicated_cache = (
