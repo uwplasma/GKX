@@ -833,13 +833,15 @@ def linear_rhs_electrostatic_species_sharded(
             skip_dissipation=skip_dissipation,
         )
 
-    mapped = jax.shard_map(
-        local_rhs,
-        mesh=mesh,
-        in_specs=(state_spec, jl_spec, jl_spec, b_spec, phi_spec)
-        + (vector_spec,) * len(species_names),
-        out_specs=state_spec,
-        axis_names={"species"},
+    mapped = jax.jit(
+        jax.shard_map(
+            local_rhs,
+            mesh=mesh,
+            in_specs=(state_spec, jl_spec, jl_spec, b_spec, phi_spec)
+            + (vector_spec,) * len(species_names),
+            out_specs=state_spec,
+            axis_names={"species"},
+        )
     )
     dG = mapped(
         jax.device_put(arr, state_sharding),
