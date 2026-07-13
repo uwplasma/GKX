@@ -454,6 +454,20 @@ def _ritz_vector_from_index(
     return _normalize(jnp.tensordot(y, V[:krylov_dim], axes=1))
 
 
+def _rayleigh_quotient(
+    vector: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    term_cfg: TermConfig,
+) -> jnp.ndarray:
+    """Return the least-residual eigenvalue for a fixed physical Ritz vector."""
+
+    operator_vector = _apply_operator(vector, cache, params, term_cfg)
+    denominator = jnp.vdot(vector, vector)
+    safe_denominator = jnp.where(denominator != 0.0, denominator, 1.0 + 0.0j)
+    return jnp.vdot(vector, operator_vector) / safe_denominator
+
+
 def _operator_arnoldi_restart_step(
     v: jnp.ndarray,
     v_ref: jnp.ndarray,
@@ -601,7 +615,11 @@ def _shift_invert_restart_step(
         krylov_dim=krylov_dim,
     )
     v_next = _ritz_vector_from_index(V, eigvecs, idx, krylov_dim=krylov_dim)
-    eig_out = jnp.where(jnp.any(mask0), lam[idx], jnp.nan + 1.0j * jnp.nan)
+    # Inexact inner solves make sigma + 1/mu less accurate than the physical
+    # Rayleigh quotient for the same Ritz vector. The latter minimizes the
+    # two-norm residual over scalar eigenvalues and cannot weaken the outer gate.
+    eig_refined = _rayleigh_quotient(v_next, cache, params, term_cfg)
+    eig_out = jnp.where(jnp.any(mask0), eig_refined, jnp.nan + 1.0j * jnp.nan)
     return v_next, eig_out
 
 
@@ -792,6 +810,7 @@ __all__ = [
     "_arnoldi",
     "_build_shift_invert_precond",
     "_mode_family_sign",
+    "_rayleigh_quotient",
     "_omega_scale",
     "_physical_omega",
     "_select_by_overlap",
