@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
 import sys
 from pathlib import Path
 from typing import Any, Sequence
@@ -18,6 +19,8 @@ from spectraxgk.artifacts.plotting import (
     linear_runtime_panel_figure,
     plot_saved_output,
 )
+from spectraxgk.geometry.miller_eik import generate_runtime_miller_eik
+from spectraxgk.geometry.vmec_eik import generate_runtime_vmec_eik
 from spectraxgk.workflows.runtime.artifacts import (
     run_runtime_nonlinear_with_artifacts,
     write_quasilinear_artifacts,
@@ -207,6 +210,62 @@ def _add_laguerre_mode_flag(cmd: argparse.ArgumentParser, *, help_text: str) -> 
     cmd.add_argument("--laguerre-mode", type=str, default=None, help=help_text)
 
 
+def _with_miller_helper_overrides(
+    cfg: Any, args: argparse.Namespace
+) -> Any:
+    if args.geometry_helper_python is None and args.geometry_helper_repo is None:
+        return cfg
+    return replace(
+        cfg,
+        geometry=replace(
+            cfg.geometry,
+            geometry_helper_python=args.geometry_helper_python,
+            geometry_helper_repo=(
+                None
+                if args.geometry_helper_repo is None
+                else str(args.geometry_helper_repo)
+            ),
+        ),
+    )
+
+
+def _cmd_generate_geometry(args: argparse.Namespace) -> int:
+    cfg, _ = load_runtime_from_toml(args.config)
+    if args.geometry == "vmec":
+        output = generate_runtime_vmec_eik(
+            cfg, output_path=args.out, force=bool(args.force)
+        )
+    elif args.geometry == "miller":
+        output = generate_runtime_miller_eik(
+            _with_miller_helper_overrides(cfg, args),
+            output_path=args.out,
+            force=bool(args.force),
+        )
+    else:  # pragma: no cover - argparse owns the allowed values.
+        raise ValueError(f"unknown geometry backend: {args.geometry}")
+    print(output)
+    return 0
+
+
+def _add_geometry_parser(sub: argparse._SubParsersAction) -> None:
+    geometry = sub.add_parser(
+        "geometry", help="Generate solver geometry from a runtime TOML configuration"
+    )
+    backends = geometry.add_subparsers(dest="geometry", required=True)
+    for name, help_text in (
+        ("vmec", "Generate a VMEC-derived EIK file"),
+        ("miller", "Generate a Miller EIK file"),
+    ):
+        backend = backends.add_parser(name, help=help_text)
+        backend.add_argument("--config", required=True, type=Path)
+        backend.add_argument("--out", type=Path, default=None)
+        backend.add_argument("--force", action="store_true")
+        if name == "miller":
+            backend.add_argument("--geometry-helper-repo", type=Path, default=None)
+            backend.add_argument("--geometry-helper-python", default=None)
+        backend.set_defaults(func=_cmd_generate_geometry)
+
+
 def _add_generic_run_parser(sub: argparse._SubParsersAction) -> None:
     generic_run = sub.add_parser(
         "run",
@@ -292,14 +351,10 @@ def build_parser() -> argparse.ArgumentParser:
         action="version",
         version=f"%(prog)s {__version__}",
     )
-    parser.add_argument(
-        "config_pos",
-        nargs="?",
-        help="Path to TOML config (shorthand for 'run --config ...')",
-    )
     sub = parser.add_subparsers(dest="cmd")
     _add_generic_run_parser(sub)
     _add_runtime_parsers(sub)
+    _add_geometry_parser(sub)
 
     return parser
 
