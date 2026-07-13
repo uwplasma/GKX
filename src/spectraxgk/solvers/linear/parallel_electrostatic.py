@@ -14,6 +14,7 @@ from spectraxgk.operators.linear.cache_model import LinearCache
 from spectraxgk.operators.linear.moments import build_H
 from spectraxgk.operators.linear.params import LinearParams, LinearTerms
 from spectraxgk.solvers.linear.parallel_common import (
+    _is_electrostatic_field_terms,
     _is_electrostatic_slice_terms,
     _resolve_parallel_devices,
 )
@@ -752,10 +753,11 @@ def linear_rhs_electrostatic_species_sharded(
     from spectraxgk.terms.config import FieldState
 
     term_weights = terms if terms is not None else LinearTerms()
-    if not _is_electrostatic_slice_terms(term_weights):
+    if not _is_electrostatic_field_terms(term_weights):
         raise NotImplementedError(
-            "species-sharded route allows only electrostatic linear terms"
+            "species-sharded route allows only electrostatic field terms"
         )
+    skip_dissipation = _is_electrostatic_slice_terms(term_weights)
     arr = jnp.asarray(G)
     if arr.ndim != 6:
         raise ValueError("species-sharded route requires a 6D multi-species state")
@@ -828,7 +830,7 @@ def linear_rhs_electrostatic_species_sharded(
             FieldState(phi=local_phi, apar=zero, bpar=zero),
             terms=term_config,
             force_electrostatic_fields=True,
-            skip_dissipation=True,
+            skip_dissipation=skip_dissipation,
         )
 
     mapped = jax.shard_map(
