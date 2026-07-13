@@ -37,10 +37,14 @@ def growth_fit_figure(
         ax0.axvspan(tmin, tmax, color="orange", alpha=0.2, label="fit window")
         ax1.axvspan(tmin, tmax, color="orange", alpha=0.2)
         gamma, _omega = fit_growth_rate(t, signal, tmin=tmin, tmax=tmax)
-        idx = int(np.searchsorted(t, tmin))
-        log_ref = log_energy[idx] if idx < log_energy.size else log_energy[-1]
-        fit_line = 2.0 * gamma * (t - tmin) + log_ref
-        ax1.plot(t, fit_line, color="red", linestyle="--", label="fit line")
+        fit_mask = (t >= tmin) & (t <= tmax)
+        fit_t = t[fit_mask]
+        if fit_t.size:
+            log_ref = log_energy[fit_mask][0]
+            fit_line = 2.0 * gamma * (fit_t - fit_t[0]) + log_ref
+            ax1.plot(
+                fit_t, fit_line, color="red", linestyle="--", label="fit line"
+            )
     ax0.legend(loc="best", fontsize=9)
     ax1.legend(loc="best", fontsize=9)
     fig.tight_layout()
