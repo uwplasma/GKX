@@ -23,9 +23,11 @@ from spectraxgk.operators.nonlinear.collisions import (
     build_nonlinear_collision_split_policy,
 )
 from spectraxgk.operators.nonlinear.projection import (
+    ShearingCoordinateUpdate,
     _make_fixed_mode_projector,
     _make_hermitian_projector,
     _make_nonlinear_state_projector,
+    advance_shearing_coordinates,
 )
 from spectraxgk.terms.config import FieldState, TermConfig
 from spectraxgk.operators.nonlinear.brackets import _broadcast_grid, _ifft2_xy
@@ -35,6 +37,7 @@ __all__ = [
     "NonlinearCollisionSplitPolicy",
     "NonlinearDiagnosticSetup",
     "NonlinearTimeStepPolicy",
+    "ShearingCoordinateUpdate",
     "_apply_collision_split",
     "_collision_damping",
     "_nonlinear_cfl_frequency_components",
@@ -42,6 +45,7 @@ __all__ = [
     "_make_fixed_mode_projector",
     "_make_hermitian_projector",
     "_make_nonlinear_state_projector",
+    "advance_shearing_coordinates",
     "build_nonlinear_collision_split_policy",
     "build_nonlinear_diagnostic_setup",
     "build_nonlinear_imex_operator",

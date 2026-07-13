@@ -34,6 +34,7 @@ from spectraxgk.solvers.nonlinear.state_integration import (
     integrate_nonlinear,
     integrate_nonlinear_cached,
     integrate_nonlinear_imex_cached,
+    integrate_nonlinear_sheared_euler,
     nonlinear_rhs_cached,
 )
 
@@ -50,6 +51,7 @@ __all__ = [
     "integrate_nonlinear_explicit_diagnostics",
     "integrate_nonlinear_explicit_diagnostics_state",
     "integrate_nonlinear_imex_cached",
+    "integrate_nonlinear_sheared_euler",
     "integrate_nonlinear_imex_diagnostics",
     "integrate_cached_explicit_scan",
     "imex_fixed_point_guess",

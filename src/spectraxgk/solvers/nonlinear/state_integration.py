@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 
@@ -12,7 +13,10 @@ from spectraxgk.core.grid import SpectralGrid
 from spectraxgk.core.extension_points import CollisionOperator
 from spectraxgk.solvers.linear.implicit import _build_implicit_operator
 from spectraxgk.operators.linear.cache_model import LinearCache
-from spectraxgk.operators.linear.cache_builder import build_linear_cache
+from spectraxgk.operators.linear.cache_builder import (
+    build_linear_cache,
+    update_linear_cache_for_sheared_kx,
+)
 from spectraxgk.operators.linear.params import LinearParams
 from spectraxgk.operators.nonlinear.policies import (
     IMEXLinearOperator,
@@ -24,6 +28,7 @@ from spectraxgk.operators.nonlinear.rhs import (
     nonlinear_em_term_cached_impl,
     nonlinear_rhs_cached_impl,
 )
+from spectraxgk.operators.nonlinear.projection import advance_shearing_coordinates
 from spectraxgk.solvers.nonlinear.explicit import (
     integrate_cached_explicit_scan,
     integrate_nonlinear_scan,
@@ -60,6 +65,7 @@ def nonlinear_rhs_cached(
     laguerre_mode: str = "grid",
     external_phi: jnp.ndarray | float | None = None,
     collision_operator: CollisionOperator | None = None,
+    radial_phase: jnp.ndarray | None = None,
 ) -> tuple[jnp.ndarray, FieldState]:
     """Compute the assembled nonlinear RHS and electromagnetic field state."""
 
@@ -72,6 +78,7 @@ def nonlinear_rhs_cached(
         laguerre_mode=laguerre_mode,
         external_phi=external_phi,
         collision_operator=collision_operator,
+        radial_phase=radial_phase,
         electrostatic_rhs_fn=assemble_rhs_cached_electrostatic_jit,
         full_rhs_fn=assemble_rhs_cached_jit,
         is_static_zero_fn=_is_static_zero,
@@ -212,6 +219,106 @@ def integrate_nonlinear(
     )
 
 
+def integrate_nonlinear_sheared_euler(
+    G0: jnp.ndarray,
+    grid: SpectralGrid,
+    geom: FluxTubeGeometryLike,
+    params: LinearParams,
+    dt: float,
+    steps: int,
+    *,
+    shear_rate: jnp.ndarray | float,
+    cache: LinearCache | None = None,
+    terms: TermConfig | None = None,
+    laguerre_mode: str = "grid",
+    collision_operator: CollisionOperator | None = None,
+) -> tuple[jnp.ndarray, FieldState]:
+    """Integrate the periodic shearing-coordinate foundation with Euler steps.
+
+    This research path intentionally supports only fixed-step Euler and the
+    full-complex FFT. Higher-order stage-time routing and linked-boundary phases
+    must pass separate gates before flow shear is exposed in runtime inputs.
+    """
+
+    if str(grid.boundary).lower() != "periodic" or bool(grid.non_twist):
+        raise NotImplementedError(
+            "sheared integration currently requires a periodic standard flux tube"
+        )
+    if steps < 1:
+        raise ValueError("steps must be at least one")
+    geom_eff = ensure_flux_tube_geometry_data(geom, grid.z)
+    if cache is None:
+        if G0.ndim == 5:
+            nl, nm = G0.shape[:2]
+        elif G0.ndim == 6:
+            nl, nm = G0.shape[1:3]
+        else:
+            raise ValueError(
+                "G0 must have shape (Nl, Nm, Ny, Nx, Nz) or "
+                "(Ns, Nl, Nm, Ny, Nx, Nz)"
+            )
+        cache = build_linear_cache(grid, geom_eff, params, int(nl), int(nm))
+
+    term_cfg = terms or TermConfig()
+    state_dtype = jnp.result_type(G0, jnp.complex64)
+    real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
+    dt_value = jnp.asarray(dt, dtype=real_dtype)
+    rho_star = jnp.asarray(params.rho_star, dtype=real_dtype)
+
+    def coordinates(state: jnp.ndarray, time: jnp.ndarray, previous: jnp.ndarray):
+        return advance_shearing_coordinates(
+            state,
+            kx=grid.kx,
+            ky=grid.ky,
+            x0=grid.x0,
+            shear_rate=shear_rate,
+            previous_time=previous,
+            time=time,
+            dealias_mask=grid.dealias_mask,
+        )
+
+    def cache_at(update):
+        return update_linear_cache_for_sheared_kx(
+            cache,
+            grid,
+            geom_eff,
+            params,
+            rho_star * update.effective_kx,
+        )
+
+    def step(state: jnp.ndarray, index: jnp.ndarray):
+        time = jnp.asarray(index, dtype=real_dtype) * dt_value
+        current = coordinates(state, time, time)
+        current_cache = cache_at(current)
+        derivative, _ = nonlinear_rhs_cached(
+            current.state,
+            current_cache,
+            params,
+            term_cfg,
+            compressed_real_fft=False,
+            laguerre_mode=laguerre_mode,
+            collision_operator=collision_operator,
+            radial_phase=current.phase,
+        )
+        trial = current.state + dt_value * derivative
+        new_time = time + dt_value
+        advanced = coordinates(trial, new_time, time)
+        new_cache = cache_at(advanced)
+        _, fields = nonlinear_rhs_cached(
+            advanced.state,
+            new_cache,
+            params,
+            term_cfg,
+            compressed_real_fft=False,
+            laguerre_mode=laguerre_mode,
+            collision_operator=collision_operator,
+            radial_phase=advanced.phase,
+        )
+        return jnp.asarray(advanced.state, dtype=state_dtype), fields
+
+    return jax.lax.scan(step, jnp.asarray(G0, dtype=state_dtype), jnp.arange(steps))
+
+
 def integrate_nonlinear_imex_cached(
     G0: jnp.ndarray,
     cache: LinearCache,
@@ -272,5 +379,6 @@ __all__ = [
     "integrate_nonlinear",
     "integrate_nonlinear_cached",
     "integrate_nonlinear_imex_cached",
+    "integrate_nonlinear_sheared_euler",
     "nonlinear_rhs_cached",
 ]

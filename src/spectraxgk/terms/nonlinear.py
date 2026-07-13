@@ -68,6 +68,7 @@ class _NonlinearBracketContext:
     apar_weight: float
     bpar_weight: float
     compressed_real_fft: bool
+    radial_phase: jnp.ndarray | None
 
 
 def _prepare_nonlinear_inputs(
@@ -306,6 +307,7 @@ def _nonlinear_bracket_context(
     apar_weight: float,
     bpar_weight: float,
     compressed_real_fft: bool,
+    radial_phase: jnp.ndarray | None,
 ) -> _NonlinearBracketContext:
     return _NonlinearBracketContext(
         tz=tz,
@@ -320,6 +322,7 @@ def _nonlinear_bracket_context(
         apar_weight=apar_weight,
         bpar_weight=bpar_weight,
         compressed_real_fft=compressed_real_fft,
+        radial_phase=radial_phase,
     )
 
 
@@ -365,6 +368,7 @@ def exb_nonlinear_contribution(
     ky_grid: jnp.ndarray,
     weight: jnp.ndarray,
     compressed_real_fft: bool = True,
+    radial_phase: jnp.ndarray | None = None,
 ) -> jnp.ndarray:
     """Return the nonlinear E×B contribution using a pseudospectral bracket."""
     phi = _apply_mask_xy(phi, dealias_mask)
@@ -375,6 +379,7 @@ def exb_nonlinear_contribution(
         ky_grid=ky_grid,
         dealias_mask=dealias_mask,
         kxfac=jnp.asarray(1.0),
+        radial_phase=radial_phase,
         compressed_real_fft=compressed_real_fft,
     )
     real_dtype = jnp.real(jnp.empty((), dtype=G.dtype)).dtype
@@ -398,6 +403,7 @@ def _laguerre_contribution_from_prepared(
     apar_weight: float,
     bpar_weight: float,
     compressed_real_fft: bool,
+    radial_phase: jnp.ndarray | None,
 ) -> jnp.ndarray:
     g_mu = _laguerre_to_grid(prep.G, ctx.to_grid)
     chi_phi = _laguerre_phi_field(prep.phi, ctx)
@@ -409,6 +415,7 @@ def _laguerre_contribution_from_prepared(
             ky_grid=ky_grid,
             dealias_mask=dealias_mask,
             kxfac=kxfac,
+            radial_phase=radial_phase,
             compressed_real_fft=compressed_real_fft,
         )
         total = _laguerre_to_spectral(exb_phi, ctx.to_spectral)
@@ -430,6 +437,7 @@ def _laguerre_contribution_from_prepared(
         ky_grid=ky_grid,
         dealias_mask=dealias_mask,
         kxfac=kxfac,
+        radial_phase=radial_phase,
     )
     exb_phi = brackets[0]
     exb_bpar = brackets[idx_bpar] if idx_bpar is not None else jnp.zeros_like(exb_phi)
@@ -458,6 +466,7 @@ def _spectral_contribution_from_prepared(
     apar_weight: float,
     bpar_weight: float,
     compressed_real_fft: bool,
+    radial_phase: jnp.ndarray | None,
 ) -> jnp.ndarray:
     chi_phi = prep.Jl * prep.phi[None, None, ...]
     if electrostatic_only:
@@ -468,6 +477,7 @@ def _spectral_contribution_from_prepared(
             ky_grid=ky_grid,
             dealias_mask=dealias_mask,
             kxfac=kxfac,
+            radial_phase=radial_phase,
             compressed_real_fft=compressed_real_fft,
         )
         return _squeeze_species_output(
@@ -486,6 +496,7 @@ def _spectral_contribution_from_prepared(
         ky_grid=ky_grid,
         dealias_mask=dealias_mask,
         kxfac=kxfac,
+        radial_phase=radial_phase,
     )
     bracket_total = brackets[0]
     if idx_bpar is not None:
@@ -516,6 +527,7 @@ def _laguerre_components_from_prepared(
     apar_weight: float,
     bpar_weight: float,
     compressed_real_fft: bool,
+    radial_phase: jnp.ndarray | None,
 ) -> dict[str, jnp.ndarray | None]:
     g_mu = _laguerre_to_grid(prep.G, ctx.to_grid)
     chi_fields, idx_bpar, idx_apar = _laguerre_chi_fields(
@@ -532,6 +544,7 @@ def _laguerre_components_from_prepared(
         ky_grid=ky_grid,
         dealias_mask=dealias_mask,
         kxfac=kxfac,
+        radial_phase=radial_phase,
     )
     exb_phi_mu = brackets[0]
     exb_bpar_mu = (
@@ -575,6 +588,7 @@ def _spectral_components_from_prepared(
     apar_weight: float,
     bpar_weight: float,
     compressed_real_fft: bool,
+    radial_phase: jnp.ndarray | None,
 ) -> dict[str, jnp.ndarray | None]:
     chi_fields, idx_bpar, idx_apar = _spectral_chi_fields(
         prep,
@@ -588,6 +602,7 @@ def _spectral_components_from_prepared(
         ky_grid=ky_grid,
         dealias_mask=dealias_mask,
         kxfac=kxfac,
+        radial_phase=radial_phase,
     )
     exb_phi = brackets[0]
     exb_bpar = brackets[idx_bpar] if idx_bpar is not None else jnp.zeros_like(exb_phi)
@@ -658,6 +673,7 @@ def _nonlinear_em_contribution_from_path(
             apar_weight=ctx.apar_weight,
             bpar_weight=ctx.bpar_weight,
             compressed_real_fft=ctx.compressed_real_fft,
+            radial_phase=ctx.radial_phase,
         )
     return _spectral_contribution_from_prepared(
         path.prep,
@@ -673,6 +689,7 @@ def _nonlinear_em_contribution_from_path(
         apar_weight=ctx.apar_weight,
         bpar_weight=ctx.bpar_weight,
         compressed_real_fft=ctx.compressed_real_fft,
+        radial_phase=ctx.radial_phase,
     )
 
 
@@ -696,6 +713,7 @@ def _nonlinear_em_components_from_path(
             apar_weight=ctx.apar_weight,
             bpar_weight=ctx.bpar_weight,
             compressed_real_fft=ctx.compressed_real_fft,
+            radial_phase=ctx.radial_phase,
         )
     return _spectral_components_from_prepared(
         path.prep,
@@ -710,6 +728,7 @@ def _nonlinear_em_components_from_path(
         apar_weight=ctx.apar_weight,
         bpar_weight=ctx.bpar_weight,
         compressed_real_fft=ctx.compressed_real_fft,
+        radial_phase=ctx.radial_phase,
     )
 
 
@@ -740,6 +759,7 @@ def nonlinear_em_contribution(
     b: jnp.ndarray | None = None,
     compressed_real_fft: bool = True,
     laguerre_mode: str = "grid",
+    radial_phase: jnp.ndarray | None = None,
 ) -> jnp.ndarray:
     """Nonlinear E×B + flutter contribution using Laguerre gyroaveraging.
 
@@ -778,6 +798,7 @@ def nonlinear_em_contribution(
         apar_weight=apar_weight,
         bpar_weight=bpar_weight,
         compressed_real_fft=compressed_real_fft,
+        radial_phase=radial_phase,
     )
     return _nonlinear_em_contribution_from_path(path, ctx)
 
@@ -809,6 +830,7 @@ def nonlinear_em_components(
     b: jnp.ndarray | None = None,
     compressed_real_fft: bool = True,
     laguerre_mode: str = "grid",
+    radial_phase: jnp.ndarray | None = None,
 ) -> dict[str, jnp.ndarray]:
     """Return nonlinear E×B/flutter components for diagnostics/comparison checks."""
 
@@ -843,6 +865,7 @@ def nonlinear_em_components(
         apar_weight=apar_weight,
         bpar_weight=bpar_weight,
         compressed_real_fft=compressed_real_fft,
+        radial_phase=radial_phase,
     )
     components = _nonlinear_em_components_from_path(path, ctx)
     return _squeeze_component_payload(

@@ -17,6 +17,26 @@ def _ifft2_xy(x: jnp.ndarray) -> jnp.ndarray:
     return jnp.fft.ifft2(x, axes=(-3, -2))
 
 
+def _ifft2_xy_with_radial_phase(
+    x: jnp.ndarray, radial_phase: jnp.ndarray
+) -> jnp.ndarray:
+    """Transform a shearing wave after applying its fractional radial phase."""
+
+    radial = jnp.fft.ifft(x, axis=-2)
+    radial *= _broadcast_grid(radial_phase, radial.ndim)
+    return jnp.fft.ifft(radial, axis=-3)
+
+
+def _fft2_xy_remove_radial_phase(
+    x: jnp.ndarray, radial_phase: jnp.ndarray
+) -> jnp.ndarray:
+    """Return a physical field to its nearest-cell shearing-wave coefficients."""
+
+    binormal = jnp.fft.fft(x, axis=-3)
+    binormal *= _broadcast_grid(jnp.conj(radial_phase), binormal.ndim)
+    return jnp.fft.fft(binormal, axis=-2)
+
+
 def _broadcast_mask(mask: jnp.ndarray, ndim: int) -> jnp.ndarray:
     shape = (1,) * (ndim - 3) + mask.shape + (1,)
     return jnp.reshape(mask, shape)
@@ -104,8 +124,13 @@ def _spectral_bracket_real_fft_core(
     dealias_mask: jnp.ndarray,
     kxfac: jnp.ndarray,
     fft_norm: float | None = None,
+    radial_phase: jnp.ndarray | None = None,
     multiple_fields: bool,
 ) -> jnp.ndarray:
+    if radial_phase is not None:
+        raise NotImplementedError(
+            "radial shearing phases currently require compressed_real_fft=False"
+        )
     complex_dtype = jnp.result_type(G_hat, chi_hat, jnp.complex64)
     real_dtype = jnp.real(jnp.empty((), dtype=complex_dtype)).dtype
     imag = jnp.asarray(1j, dtype=complex_dtype)
@@ -160,6 +185,7 @@ def _spectral_bracket_full_core(
     dealias_mask: jnp.ndarray,
     kxfac: jnp.ndarray,
     fft_norm: float | None = None,
+    radial_phase: jnp.ndarray | None = None,
     multiple_fields: bool,
 ) -> jnp.ndarray:
     complex_dtype = jnp.result_type(G_hat, chi_hat, jnp.complex64)
@@ -173,22 +199,37 @@ def _spectral_bracket_full_core(
     ifft_scale, fft_scale = _fft_scales(
         ky_grid, real_dtype=real_dtype, fft_norm=fft_norm
     )
+    phase = None
+    if radial_phase is not None:
+        phase = jnp.asarray(radial_phase, dtype=complex_dtype)
+        if tuple(phase.shape) != tuple(kx.shape):
+            raise ValueError("radial_phase must have shape (ky, x)")
 
     kx_b = _broadcast_grid(kx, G_hat.ndim)
     ky_b = _broadcast_grid(ky, G_hat.ndim)
     grad_G = jnp.stack([imag * kx_b * G_hat, imag * ky_b * G_hat], axis=0)
-    dG_dx, dG_dy = _ifft2_xy(grad_G) * ifft_scale
+    if phase is None:
+        dG_dx, dG_dy = _ifft2_xy(grad_G) * ifft_scale
+    else:
+        dG_dx, dG_dy = _ifft2_xy_with_radial_phase(grad_G, phase) * ifft_scale
 
     kx_chi = _broadcast_grid(kx, chi_hat.ndim)
     ky_chi = _broadcast_grid(ky, chi_hat.ndim)
     grad_chi = jnp.stack([imag * kx_chi * chi_hat, imag * ky_chi * chi_hat], axis=0)
-    dchi_dx, dchi_dy = _ifft2_xy(grad_chi) * ifft_scale
+    if phase is None:
+        dchi_dx, dchi_dy = _ifft2_xy(grad_chi) * ifft_scale
+    else:
+        dchi_dx, dchi_dy = _ifft2_xy_with_radial_phase(grad_chi, phase) * ifft_scale
 
     if multiple_fields:
         bracket = dG_dx[None, ...] * dchi_dy - dG_dy[None, ...] * dchi_dx
     else:
         bracket = dG_dx * dchi_dy - dG_dy * dchi_dx
-    bracket_hat = _fft2_xy(bracket) * fft_scale
+    bracket_hat = (
+        _fft2_xy(bracket)
+        if phase is None
+        else _fft2_xy_remove_radial_phase(bracket, phase)
+    ) * fft_scale
     bracket_hat *= _broadcast_mask(mask, bracket_hat.ndim)
     return jnp.asarray(kxfac, dtype=real_dtype) * bracket_hat
 

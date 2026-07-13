@@ -59,6 +59,7 @@ def nonlinear_rhs_cached_impl(
     laguerre_mode: str = "grid",
     external_phi: jnp.ndarray | float | None = None,
     collision_operator: CollisionOperator | None = None,
+    radial_phase: jnp.ndarray | None = None,
     electrostatic_rhs_fn: RhsCallable = assemble_rhs_cached_electrostatic_jit,
     full_rhs_fn: RhsCallable = assemble_rhs_cached_jit,
     is_static_zero_fn: StaticZeroCallable = _is_static_zero,
@@ -121,6 +122,7 @@ def nonlinear_rhs_cached_impl(
             b=cache.b,
             compressed_real_fft=compressed_real_fft,
             laguerre_mode=laguerre_mode,
+            radial_phase=radial_phase,
         )
     return dG, fields
 
@@ -135,6 +137,7 @@ def nonlinear_em_term_cached_impl(
     external_phi: jnp.ndarray | float | None = None,
     compressed_real_fft: bool = True,
     laguerre_mode: str = "grid",
+    radial_phase: jnp.ndarray | None = None,
     fields_fn: FieldSolveCallable,
     nonlinear_contribution_fn: NonlinearContributionCallable = nonlinear_em_contribution,
 ) -> jnp.ndarray:
@@ -171,6 +174,7 @@ def nonlinear_em_term_cached_impl(
         b=cache.b,
         compressed_real_fft=compressed_real_fft,
         laguerre_mode=laguerre_mode,
+        radial_phase=radial_phase,
     )
 
 
