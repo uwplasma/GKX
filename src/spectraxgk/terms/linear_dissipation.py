@@ -11,7 +11,6 @@ import jax
 import jax.numpy as jnp
 
 from spectraxgk.core.extension_points import CollisionContext, CollisionOperator
-from spectraxgk.operators.linear.moments import build_H
 from spectraxgk.terms.config import FieldState
 from spectraxgk.terms.config import TermConfig
 from spectraxgk.terms.operators import abs_z_linked_fft, shift_axis
@@ -69,8 +68,8 @@ class MultispeciesCollisionRates(NamedTuple):
     total_thermal_energy: jnp.ndarray
 
 
-class DoughertyCrossMoments(NamedTuple):
-    """Pairwise primitive moments for a conservative Dougherty operator."""
+class FullFDoughertyCrossMoments(NamedTuple):
+    """Pairwise primitive moments for the nonlinear full-f Dougherty model."""
 
     parallel_flow: jnp.ndarray
     thermal_speed_sq: jnp.ndarray
@@ -112,6 +111,9 @@ def custom_collision_contribution(
 
     if operator is None or _is_static_zero(terms.collisions):
         return None
+    # Deferred to keep this low-level term module importable before operator facades.
+    from spectraxgk.operators.linear.moments import build_H
+
     apar = (
         None
         if force_electrostatic_fields
@@ -425,7 +427,7 @@ def _validate_static_physical_array(
         raise ValueError(f"{name} must be {qualifier}")
 
 
-def conservative_dougherty_cross_moments(
+def conservative_full_f_dougherty_cross_moments(
     parallel_flow: jnp.ndarray,
     thermal_speed_sq: jnp.ndarray,
     *,
@@ -433,13 +435,16 @@ def conservative_dougherty_cross_moments(
     mass: jnp.ndarray,
     collision_frequency: jnp.ndarray,
     velocity_dimensions: int = 3,
-) -> DoughertyCrossMoments:
-    """Return conservative pairwise Dougherty primitive moments.
+) -> FullFDoughertyCrossMoments:
+    """Return conservative pairwise full-f Dougherty primitive moments.
 
-    This is equations (2.11)--(2.12) of Francisquez et al. (2022). Inputs use
+    This is equations (2.11)--(2.12) of Francisquez et al. (2022), whose
+    collision operator evolves a nonlinear full distribution. Inputs use
     species as the leading axis; trailing axes are independent spatial samples.
     ``collision_frequency[s, r]`` is the directed rate for species ``s`` due to
-    species ``r``. Diagonal and zero-rate pairs retain their self moments.
+    species ``r``. Diagonal and zero-rate pairs retain their self moments. These
+    targets are not a field-particle closure for the linearized delta-f
+    gyrokinetic operator.
     """
 
     flow = jnp.asarray(parallel_flow)
@@ -513,7 +518,7 @@ def conservative_dougherty_cross_moments(
     thermal_target = thermal_numerator / safe_thermal_denominator[
         (slice(None), slice(None)) + pair_axes
     ]
-    return DoughertyCrossMoments(
+    return FullFDoughertyCrossMoments(
         parallel_flow=jnp.where(active_samples, flow_target, flow_s),
         thermal_speed_sq=jnp.where(active_samples, thermal_target, thermal_s),
     )
