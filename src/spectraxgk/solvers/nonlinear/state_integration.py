@@ -295,6 +295,10 @@ def _integrate_nonlinear_sheared_scan(
     dt_value = jnp.asarray(dt, dtype=real_dtype)
     rho_star = jnp.asarray(params.rho_star, dtype=real_dtype)
     _, flux_fac = fieldline_quadrature_weights(geom_eff, grid)
+    # Full-complex shearing coordinates must retain the real-field subspace.
+    project_state = _make_hermitian_projector(
+        np.asarray(grid.ky), int(np.asarray(grid.kx).size)
+    )
     time_step_policy = None
     if not fixed_dt:
         time_step_policy = build_nonlinear_time_step_policy(
@@ -319,7 +323,7 @@ def _integrate_nonlinear_sheared_scan(
         )
 
     def coordinates(state: jnp.ndarray, time: jnp.ndarray, previous: jnp.ndarray):
-        return advance_shearing_coordinates(
+        update = advance_shearing_coordinates(
             state,
             kx=grid.kx,
             ky=grid.ky,
@@ -329,6 +333,7 @@ def _integrate_nonlinear_sheared_scan(
             time=time,
             dealias_mask=grid.dealias_mask,
         )
+        return update._replace(state=project_state(update.state))
 
     def cache_at(update):
         return update_linear_cache_for_sheared_kx(
@@ -339,33 +344,22 @@ def _integrate_nonlinear_sheared_scan(
             rho_star * update.effective_kx,
         )
 
-    def step(carry: tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray], index: jnp.ndarray):
-        state, adaptive_time, dt_previous = carry
-        fixed_time = jnp.asarray(index, dtype=real_dtype) * dt_value
-        time = fixed_time if fixed_dt else adaptive_time
-        current = coordinates(state, time, time)
-
-        def rhs_at(update):
-            updated_cache = cache_at(update)
-            derivative, fields = nonlinear_rhs_cached(
-                update.state,
-                updated_cache,
-                params,
-                term_cfg,
-                compressed_real_fft=False,
-                laguerre_mode=laguerre_mode,
-                collision_operator=collision_operator,
-                radial_phase=update.phase,
-                differentiable=differentiable,
-            )
-            return derivative, fields, updated_cache
-
-        derivative, current_fields, _ = rhs_at(current)
-        dt_local = (
-            dt_value
-            if time_step_policy is None
-            else time_step_policy.update_dt(current_fields, dt_previous)
+    def rhs_at(update):
+        updated_cache = cache_at(update)
+        derivative, fields = nonlinear_rhs_cached(
+            update.state,
+            updated_cache,
+            params,
+            term_cfg,
+            compressed_real_fft=False,
+            laguerre_mode=laguerre_mode,
+            collision_operator=collision_operator,
+            radial_phase=update.phase,
+            differentiable=differentiable,
         )
+        return derivative, fields, updated_cache
+
+    def advance(current, derivative, time, dt_local):
         new_time = time + dt_local
         if method_key == "euler":
             trial = current.state + dt_local * derivative
@@ -411,15 +405,45 @@ def _integrate_nonlinear_sheared_scan(
             trial = current.state + 0.25 * dt_local * derivative + 0.75 * dt_local * (
                 stage2_derivative_base
             )
-        advanced = coordinates(trial, new_time, time)
+        return coordinates(trial, new_time, time), new_time
+
+    def local_dt(current_fields, dt_previous):
+        if time_step_policy is None:
+            return dt_value
+        return time_step_policy.update_dt(current_fields, dt_previous)
+
+    def state_only_step(
+        carry: tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray], index: jnp.ndarray
+    ):
+        state, adaptive_time, dt_previous = carry
+        fixed_time = jnp.asarray(index, dtype=real_dtype) * dt_value
+        time = fixed_time if fixed_dt else adaptive_time
+        current = coordinates(state, time, time)
+        derivative, current_fields, _ = rhs_at(current)
+        dt_local = local_dt(current_fields, dt_previous)
+        advanced, new_time = advance(current, derivative, time, dt_local)
         next_carry = (
             jnp.asarray(advanced.state, dtype=state_dtype),
             jnp.asarray(new_time, dtype=real_dtype),
             jnp.asarray(dt_local, dtype=real_dtype),
         )
-        if not record_transport and not return_fields:
-            return next_carry, None
-        _, fields, advanced_cache = rhs_at(advanced)
+        return next_carry, None
+
+    def endpoint_step(carry, index: jnp.ndarray):
+        state, adaptive_time, dt_previous, derivative, current_fields = carry
+        del index
+        time = adaptive_time
+        current = coordinates(state, time, time)
+        dt_local = local_dt(current_fields, dt_previous)
+        advanced, new_time = advance(current, derivative, time, dt_local)
+        next_derivative, fields, advanced_cache = rhs_at(advanced)
+        next_carry = (
+            jnp.asarray(advanced.state, dtype=state_dtype),
+            jnp.asarray(new_time, dtype=real_dtype),
+            jnp.asarray(dt_local, dtype=real_dtype),
+            jnp.asarray(next_derivative, dtype=state_dtype),
+            fields,
+        )
         if not record_transport:
             return next_carry, fields
         apar = jnp.zeros_like(fields.phi) if fields.apar is None else fields.apar
@@ -438,13 +462,24 @@ def _integrate_nonlinear_sheared_scan(
         )
         return next_carry, (new_time, heat_flux)
 
-    initial_carry = (
-        jnp.asarray(G0, dtype=state_dtype),
+    initial_state_carry = (
+        jnp.asarray(project_state(G0), dtype=state_dtype),
         jnp.zeros((), dtype=real_dtype),
         dt_value,
     )
-    final_carry, output = jax.lax.scan(step, initial_carry, jnp.arange(steps))
-    return final_carry[0], output
+    if not record_transport and not return_fields:
+        state_final_carry, output = jax.lax.scan(
+            state_only_step, initial_state_carry, jnp.arange(steps)
+        )
+        return state_final_carry[0], output
+
+    initial_update = coordinates(initial_state_carry[0], initial_state_carry[1], initial_state_carry[1])
+    initial_derivative, initial_fields, _ = rhs_at(initial_update)
+    initial_endpoint_carry = initial_state_carry + (initial_derivative, initial_fields)
+    endpoint_final_carry, output = jax.lax.scan(
+        endpoint_step, initial_endpoint_carry, jnp.arange(steps)
+    )
+    return endpoint_final_carry[0], output
 
 
 def integrate_nonlinear_sheared(
