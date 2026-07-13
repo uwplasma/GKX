@@ -801,23 +801,24 @@ def linear_rhs_electrostatic_species_sharded(
     jl_spec = PartitionSpec("species", None, None, None, None)
     b_spec = PartitionSpec("species", None, None, None)
     vector_spec = PartitionSpec("species")
+    phi_spec = PartitionSpec(None, None, None)
     state_sharding = NamedSharding(mesh, state_spec)
     jl_sharding = NamedSharding(mesh, jl_spec)
     b_sharding = NamedSharding(mesh, b_spec)
     vector_sharding = NamedSharding(mesh, vector_spec)
     term_config = linear_terms_to_term_config(term_weights)
 
-    def local_rhs(local_state, local_jl, local_jlb, local_b, *local_species):
+    def local_rhs(local_state, local_jl, local_jlb, local_b, local_phi, *local_species):
         local_cache = replace(cache, Jl=local_jl, JlB=local_jlb, b=local_b)
         local_params = replace(
             params, **dict(zip(species_names, local_species, strict=True))
         )
-        zero = jnp.zeros_like(phi)
+        zero = jnp.zeros_like(local_phi)
         return assemble_rhs_cached_with_fields(
             local_state,
             local_cache,
             local_params,
-            FieldState(phi=phi, apar=zero, bpar=zero),
+            FieldState(phi=local_phi, apar=zero, bpar=zero),
             terms=term_config,
             force_electrostatic_fields=True,
         )
@@ -825,7 +826,7 @@ def linear_rhs_electrostatic_species_sharded(
     mapped = jax.shard_map(
         local_rhs,
         mesh=mesh,
-        in_specs=(state_spec, jl_spec, jl_spec, b_spec)
+        in_specs=(state_spec, jl_spec, jl_spec, b_spec, phi_spec)
         + (vector_spec,) * len(species_names),
         out_specs=state_spec,
         axis_names={"species"},
@@ -835,6 +836,7 @@ def linear_rhs_electrostatic_species_sharded(
         jax.device_put(cache.Jl, jl_sharding),
         jax.device_put(cache.JlB, jl_sharding),
         jax.device_put(cache.b, b_sharding),
+        phi,
         *(jax.device_put(value, vector_sharding) for value in species_values),
     )
     return dG, phi
