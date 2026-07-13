@@ -466,7 +466,7 @@ jobs:
       - name: Build docs
         run: |
           python tools/release/check_validation_coverage_manifest.py --out-json docs/_static/validation_coverage_manifest_summary.json
-          python tools/release/check_quasilinear_calibration_inputs.py \
+          python tools/release/check_quasilinear_promotion_guardrails.py calibration-inputs \
             --report docs/_static/quasilinear_cyclone_miller_train_holdout_report.json \
             --report docs/_static/quasilinear_hsx_train_holdout_report.json \
             --report docs/_static/quasilinear_w7x_train_holdout_report.json \
