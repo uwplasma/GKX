@@ -473,6 +473,20 @@ def _dispatch_parallel_linear(
             params,
             num_devices=getattr(parallel, "num_devices", None),
         )
+        return _integrate_species_sharded_explicit(
+            G0,
+            cache,
+            params,
+            dt=dt,
+            steps=steps,
+            method=method,
+            terms=terms,
+            checkpoint=checkpoint,
+            sample_stride=sample_stride,
+            show_progress=show_progress,
+            parallel=parallel,
+            force_electrostatic_fields=force_electrostatic_fields,
+        )
     return _integrate_linear_cached_impl(
         G0,
         cache,
@@ -487,6 +501,59 @@ def _dispatch_parallel_linear(
         parallel=parallel,
         force_electrostatic_fields=force_electrostatic_fields,
     )
+
+
+def _integrate_species_sharded_explicit(
+    G0: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    *,
+    dt: float,
+    steps: int,
+    method: str,
+    terms: LinearTerms,
+    checkpoint: bool,
+    sample_stride: int,
+    show_progress: bool,
+    parallel: Any,
+    force_electrostatic_fields: bool,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Advance species shards with a compiled step and host-controlled loop."""
+
+    state, damping = _prepared_linear_state_and_damping(G0, cache, params)
+    real_dtype = jnp.real(jnp.empty((), dtype=state.dtype)).dtype
+    dt_val = jnp.asarray(dt, dtype=real_dtype)
+    rhs = _linear_rhs_callable(
+        cache=cache,
+        params=params,
+        terms=terms,
+        dt_val=dt_val,
+        parallel=parallel,
+        parallel_strategy="velocity",
+        force_electrostatic_fields=force_electrostatic_fields,
+    )
+
+    def step(value: jnp.ndarray, index: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
+        advanced = _advance_linear_state(
+            value, rhs=rhs, damping=damping, dt_val=dt_val, method=method
+        )
+        _dG, phi = rhs(advanced)
+        return _maybe_emit_linear_progress(
+            advanced,
+            idx=index,
+            steps=steps,
+            dt_val=dt_val,
+            phi=phi,
+            show_progress=show_progress,
+        ), phi
+
+    step_fn = jax.jit(jax.checkpoint(step) if checkpoint else step)
+    samples: list[jnp.ndarray] = []
+    for index in range(steps):
+        state, phi = step_fn(state, jnp.asarray(index, dtype=jnp.int32))
+        if (index + 1) % sample_stride == 0:
+            samples.append(phi)
+    return state, jnp.stack(samples, axis=0)
 
 
 def _dispatch_serial_linear(
