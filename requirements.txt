@@ -6,6 +6,6 @@ scipy
 netCDF4
 diffrax
 equinox
-solvax>=0.6.1,<0.7
+solvax>=0.7.3,<0.8
 tqdm
 tomli; python_version<"3.11"
