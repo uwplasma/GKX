@@ -515,22 +515,6 @@ def _integrate_linear_time_series(
     return raw.g_last, phi_t_np, density_np, np.asarray(times, dtype=float)
 
 
-def _require_finite_linear_history(
-    t: np.ndarray,
-    phi: np.ndarray,
-    density: np.ndarray | None,
-) -> None:
-    """Reject unstable trajectories before fitting plausible finite rates."""
-
-    arrays = (("time", t), ("field", phi), ("density", density))
-    for name, values in arrays:
-        if values is not None and not np.all(np.isfinite(values)):
-            raise FloatingPointError(
-                f"linear integration produced a non-finite {name} history; "
-                "reduce the timestep or select a stable integration policy"
-            )
-
-
 def _fit_linear_time_series(
     ctx: _LinearRuntimeContext,
     *,
@@ -542,7 +526,6 @@ def _fit_linear_time_series(
     g_last: Any | None,
     status_callback: _StatusCallback,
 ) -> RuntimeLinearResult:
-    _require_finite_linear_history(t_arr, phi_t, density_t)
     _status(
         status_callback,
         f"integration complete; fitting growth rate from {t_arr.size} saved samples",

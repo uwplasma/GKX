@@ -192,13 +192,24 @@ def _prepare_runtime_linear_fit_inputs(
     fit_key = str(fit_signal).strip().lower()
     if fit_key not in {"phi", "density", "auto"}:
         raise ValueError("fit_signal must be 'phi', 'density', or 'auto'")
-    return _RuntimeLinearFitInputs(
+    inputs = _RuntimeLinearFitInputs(
         fit_key=fit_key,
         t=np.asarray(t, dtype=float),
         phi=np.asarray(phi_t),
         density=None if density_t is None else np.asarray(density_t),
         z=np.asarray(z, dtype=float),
     )
+    for name, values in (
+        ("time", inputs.t),
+        ("field", inputs.phi),
+        ("density", inputs.density),
+    ):
+        if values is not None and not np.all(np.isfinite(values)):
+            raise FloatingPointError(
+                f"linear integration produced a non-finite {name} history; "
+                "reduce the timestep or select a stable integration policy"
+            )
+    return inputs
 
 
 def _fit_auto_candidate(
