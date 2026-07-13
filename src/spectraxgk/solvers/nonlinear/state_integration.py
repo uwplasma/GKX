@@ -259,8 +259,8 @@ def _integrate_nonlinear_sheared_scan(
     if steps < 1:
         raise ValueError("steps must be at least one")
     method_key = str(method).lower()
-    if method_key not in {"euler", "rk2"}:
-        raise ValueError("sheared integration method must be 'euler' or 'rk2'")
+    if method_key not in {"euler", "rk2", "rk3"}:
+        raise ValueError("sheared integration method must be 'euler', 'rk2', or 'rk3'")
     geom_eff = ensure_flux_tube_geometry_data(geom, grid.z)
     if cache is None:
         if G0.ndim == 5:
@@ -325,7 +325,7 @@ def _integrate_nonlinear_sheared_scan(
         new_time = time + dt_value
         if method_key == "euler":
             trial = current.state + dt_value * derivative
-        else:
+        elif method_key == "rk2":
             midpoint_time = time + 0.5 * dt_value
             midpoint = coordinates(
                 current.state + 0.5 * dt_value * derivative,
@@ -339,6 +339,34 @@ def _integrate_nonlinear_sheared_scan(
                 midpoint_time,
             ).state
             trial = current.state + dt_value * derivative_in_step_basis
+        else:
+            stage1_time = time + dt_value / 3.0
+            stage1 = coordinates(
+                current.state + (dt_value / 3.0) * derivative,
+                stage1_time,
+                time,
+            )
+            stage1_derivative, _, _ = rhs_at(stage1)
+            stage1_derivative_base = coordinates(
+                stage1_derivative,
+                time,
+                stage1_time,
+            ).state
+            stage2_time = time + 2.0 * dt_value / 3.0
+            stage2 = coordinates(
+                current.state + (2.0 * dt_value / 3.0) * stage1_derivative_base,
+                stage2_time,
+                time,
+            )
+            stage2_derivative, _, _ = rhs_at(stage2)
+            stage2_derivative_base = coordinates(
+                stage2_derivative,
+                time,
+                stage2_time,
+            ).state
+            trial = current.state + 0.25 * dt_value * derivative + 0.75 * dt_value * (
+                stage2_derivative_base
+            )
         advanced = coordinates(trial, new_time, time)
         _, fields, advanced_cache = rhs_at(advanced)
         if not record_transport:
@@ -380,9 +408,10 @@ def integrate_nonlinear_sheared(
 ) -> tuple[jnp.ndarray, FieldState]:
     """Integrate the periodic shearing-coordinate foundation.
 
-    This research path supports fixed-step Euler and midpoint RK2 with the
-    full-complex FFT. Midpoint states and derivatives are remapped to the stage
-    coordinate basis before the RHS and back to the step basis afterward.
+    This research path supports fixed-step Euler, midpoint RK2, and three-stage
+    Heun RK3 with the full-complex FFT. Stage states and derivatives are remapped
+    to the stage coordinate basis before the RHS and back to the step basis
+    before Runge--Kutta combinations.
     """
 
     final_state, fields = _integrate_nonlinear_sheared_scan(
