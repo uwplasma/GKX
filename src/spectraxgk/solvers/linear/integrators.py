@@ -506,6 +506,7 @@ def _dispatch_parallel_linear(
             cache,
             params,
             num_devices=getattr(parallel, "num_devices", None),
+            replicate_cache=False,
         )
         return _integrate_species_sharded_explicit(
             G0,

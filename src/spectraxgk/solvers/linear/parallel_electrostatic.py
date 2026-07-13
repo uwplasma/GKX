@@ -861,6 +861,7 @@ def prepare_electrostatic_species_inputs(
     *,
     num_devices: int | None = None,
     devices: Any | None = None,
+    replicate_cache: bool = True,
 ) -> tuple[jnp.ndarray, LinearCache, LinearParams]:
     """Place species-dependent inputs directly from host memory before JIT."""
 
@@ -885,12 +886,18 @@ def prepare_electrostatic_species_inputs(
     jl_sharding = NamedSharding(mesh, PartitionSpec("species", None, None, None, None))
     b_sharding = NamedSharding(mesh, PartitionSpec("species", None, None, None))
     vector_sharding = NamedSharding(mesh, PartitionSpec("species"))
+    replicated_sharding = NamedSharding(mesh, PartitionSpec())
 
     def from_host(value: Any, sharding: NamedSharding) -> jnp.ndarray:
         return jax.device_put(np.asarray(jax.device_get(value)), sharding)
 
+    replicated_cache = (
+        jax.tree.map(lambda value: from_host(value, replicated_sharding), cache)
+        if replicate_cache
+        else cache
+    )
     prepared_cache = replace(
-        cache,
+        replicated_cache,
         Jl=from_host(cache.Jl, jl_sharding),
         JlB=from_host(cache.JlB, jl_sharding),
         b=from_host(cache.b, b_sharding),
