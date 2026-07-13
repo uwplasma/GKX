@@ -83,15 +83,16 @@ def linear_rhs_electrostatic_species_hermite_sharded(
     from jax.sharding import NamedSharding, PartitionSpec
 
     from spectraxgk.operators.linear.params import _as_species_array
-    from spectraxgk.terms.operators import grad_z_periodic, shift_axis
+    from spectraxgk.terms.operators import (
+        abs_z_linked_fft,
+        grad_z_linked_fft,
+        grad_z_periodic,
+        shift_axis,
+    )
 
     arr = jnp.asarray(G)
     if arr.ndim != 6:
         raise ValueError("mixed species-Hermite routing requires a 6D state")
-    if bool(getattr(cache, "use_twist_shift", False)):
-        raise NotImplementedError(
-            "mixed species-Hermite routing currently requires a periodic z grid"
-        )
     term_cfg = linear_terms_to_term_config(terms)
     unsupported = {
         "apar": term_cfg.apar,
@@ -219,10 +220,24 @@ def linear_rhs_electrostatic_species_hermite_sharded(
             * phi[None, None, ...]
         )
         pre_derivative = ladder + m1 * field_drive[:, :, None, ...]
+        if cache.use_twist_shift:
+            parallel_derivative = grad_z_linked_fft(
+                pre_derivative,
+                dz=cache.dz,
+                linked_indices=cache.linked_indices,
+                linked_kz=cache.linked_kz,
+                linked_inverse_permutation=cache.linked_inverse_permutation,
+                linked_full_cover=cache.linked_full_cover,
+                linked_gather_map=cache.linked_gather_map,
+                linked_gather_mask=cache.linked_gather_mask,
+                linked_use_gather=cache.linked_use_gather,
+            )
+        else:
+            parallel_derivative = grad_z_periodic(pre_derivative, kz=cache.kz)
         streaming = (
             jnp.asarray(term_cfg.streaming, dtype=real_dtype)
             * jnp.asarray(params.kpar_scale, dtype=real_dtype)
-            * grad_z_periodic(pre_derivative, kz=cache.kz)
+            * parallel_derivative
         )
 
         zt6 = zt_s[:, None, None, None, None, None]
@@ -352,10 +367,22 @@ def linear_rhs_electrostatic_species_hermite_sharded(
             )
             * local_state
         )
-        hypercollisions = (
-            hypercollisions
-            + jnp.abs(cache.kz)[None, None, None, None, None, :] * kz_source
-        )
+        if cache.use_twist_shift:
+            parallel_hypercollision = abs_z_linked_fft(
+                kz_source,
+                linked_indices=cache.linked_indices,
+                linked_kz=cache.linked_kz,
+                linked_inverse_permutation=cache.linked_inverse_permutation,
+                linked_full_cover=cache.linked_full_cover,
+                linked_gather_map=cache.linked_gather_map,
+                linked_gather_mask=cache.linked_gather_mask,
+                linked_use_gather=cache.linked_use_gather,
+            )
+        else:
+            parallel_hypercollision = (
+                jnp.abs(cache.kz)[None, None, None, None, None, :] * kz_source
+            )
+        hypercollisions = hypercollisions + parallel_hypercollision
 
         kperp2 = cache.ky[:, None] ** 2 + cache.kx[None, :] ** 2
         kx_index = max((int(cache.kx.size) - 1) // 3, 0)
@@ -375,11 +402,16 @@ def linear_rhs_electrostatic_species_hermite_sharded(
         if dt is not None:
             dt_value = jnp.asarray(dt, dtype=real_dtype)
             damp_amp = jnp.where(dt_value != 0.0, damp_amp / dt_value, damp_amp)
+        if cache.use_twist_shift and cache.linked_damp_profile.size != 0:
+            damping_profile = cache.linked_damp_profile[None, None, None, ...]
+        else:
+            damping_profile = (cache.ky > 0.0)[
+                None, None, None, :, None, None
+            ] * cache.damp_profile[None, None, None, None, None, :]
         end_damping = (
             -jnp.asarray(term_cfg.end_damping, dtype=real_dtype)
             * damp_amp
-            * (cache.ky > 0.0)[None, None, None, :, None, None]
-            * cache.damp_profile[None, None, None, None, None, :]
+            * damping_profile
             * hamiltonian
         )
         lb_local = jax.lax.dynamic_slice_in_dim(cache.lb_lam, m_start, local_m, axis=1)
