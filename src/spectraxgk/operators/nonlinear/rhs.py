@@ -21,7 +21,10 @@ from spectraxgk.terms.assembly import (
     assemble_rhs_cached_jit,
 )
 from spectraxgk.terms.config import FieldState, TermConfig
-from spectraxgk.terms.linear_dissipation import resolve_custom_collision
+from spectraxgk.terms.linear_dissipation import (
+    custom_collision_contribution,
+    terms_without_builtin_collisions,
+)
 from spectraxgk.terms.nonlinear import nonlinear_em_contribution
 
 RhsCallable = Callable[..., tuple[jnp.ndarray, FieldState]]
@@ -64,9 +67,7 @@ def nonlinear_rhs_cached_impl(
     """Compute the assembled nonlinear RHS and electromagnetic field state."""
 
     term_cfg = terms or TermConfig()
-    linear_terms, collision_rhs = resolve_custom_collision(
-        G, cache, params, term_cfg, collision_operator
-    )
+    linear_terms = terms_without_builtin_collisions(term_cfg, collision_operator)
     linear_rhs_fn = linear_rhs_jit_for_terms_impl(
         linear_terms,
         electrostatic_rhs_fn=electrostatic_rhs_fn,
@@ -75,6 +76,9 @@ def nonlinear_rhs_cached_impl(
     )
     dG, fields = linear_rhs_fn(
         G, cache, params, linear_terms, external_phi=external_phi
+    )
+    collision_rhs = custom_collision_contribution(
+        G, fields, cache, params, term_cfg, collision_operator
     )
     if collision_rhs is not None:
         dG = dG + collision_rhs

@@ -8,7 +8,7 @@ pluggable.
 
 from __future__ import annotations
 
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, NamedTuple, Protocol, runtime_checkable
 
 
 @runtime_checkable
@@ -27,11 +27,27 @@ class GeometryProvider(Protocol):
         """Return a solver-ready sampled flux-tube geometry object."""
 
 
+class CollisionContext(NamedTuple):
+    """Post-field state needed by a gyrokinetic collision operator.
+
+    ``distribution`` is the evolved :math:`G` state, while ``hamiltonian`` is
+    the corresponding :math:`H` response after the field solve. Keeping both
+    arrays explicit prevents finite-Larmor-radius and field-particle models
+    from silently applying a long-wavelength approximation.
+    """
+
+    distribution: Any
+    hamiltonian: Any
+    fields: Any
+    cache: Any
+    parameters: Any
+
+
 @runtime_checkable
 class CollisionOperator(Protocol):
-    """JAX-compatible unit-weight collision model for a distribution state."""
+    """JAX-compatible unit-weight gyrokinetic collision model."""
 
-    def apply(self, state: Any, cache: Any, parameters: Any) -> Any:
+    def apply(self, context: CollisionContext) -> Any:
         """Return a collision RHS contribution with the same state layout."""
 
 
@@ -39,9 +55,7 @@ class CollisionOperator(Protocol):
 class SplitCollisionOperator(CollisionOperator, Protocol):
     """Collision model with a mathematically valid finite-time update."""
 
-    def split_step(
-        self, state: Any, dt: Any, cache: Any, parameters: Any
-    ) -> Any:
+    def split_step(self, context: CollisionContext, dt: Any) -> Any:
         """Advance the unit-weight collision model by ``dt``."""
 
 

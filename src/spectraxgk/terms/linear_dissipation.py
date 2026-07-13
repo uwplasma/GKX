@@ -10,7 +10,9 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 
-from spectraxgk.core.extension_points import CollisionOperator
+from spectraxgk.core.extension_points import CollisionContext, CollisionOperator
+from spectraxgk.operators.linear.moments import build_H
+from spectraxgk.terms.config import FieldState
 from spectraxgk.terms.config import TermConfig
 from spectraxgk.terms.operators import abs_z_linked_fft, shift_axis
 
@@ -85,26 +87,64 @@ def _zeros_like_result(x: jnp.ndarray, *values: jnp.ndarray) -> jnp.ndarray:
     return jnp.zeros_like(x, dtype=jnp.result_type(x, *values))
 
 
-def resolve_custom_collision(
+def terms_without_builtin_collisions(
+    terms: TermConfig,
+    operator: CollisionOperator | None,
+) -> TermConfig:
+    """Disable built-in collisions when a custom operator owns the term."""
+
+    if operator is None or _is_static_zero(terms.collisions):
+        return terms
+    return replace(terms, collisions=0.0)
+
+
+def custom_collision_contribution(
     state: jnp.ndarray,
+    fields: FieldState,
     cache: Any,
     parameters: Any,
     terms: TermConfig,
     operator: CollisionOperator | None,
-) -> tuple[TermConfig, jnp.ndarray | None]:
-    """Disable built-in collisions and return a weighted custom contribution."""
+    *,
+    force_electrostatic_fields: bool = False,
+) -> jnp.ndarray | None:
+    """Evaluate a custom operator with the post-field Hamiltonian response."""
 
     if operator is None or _is_static_zero(terms.collisions):
-        return terms, None
-    contribution = jnp.asarray(operator.apply(state, cache, parameters))
+        return None
+    apar = (
+        None
+        if force_electrostatic_fields
+        or fields.apar is None
+        or _is_static_zero(terms.apar)
+        else fields.apar
+    )
+    bpar = (
+        None
+        if force_electrostatic_fields
+        or fields.bpar is None
+        or _is_static_zero(terms.bpar)
+        else fields.bpar
+    )
+    hamiltonian = build_H(
+        state,
+        cache.Jl,
+        fields.phi,
+        jnp.asarray(parameters.tz),
+        apar=apar,
+        vth=jnp.asarray(parameters.vth),
+        bpar=bpar,
+        JlB=cache.JlB,
+    )
+    context = CollisionContext(state, hamiltonian, fields, cache, parameters)
+    contribution = jnp.asarray(operator.apply(context))
     if contribution.shape != state.shape:
         raise ValueError(
             "collision operator must return the same state shape "
             f"(expected {state.shape}, got {contribution.shape})"
         )
     real_dtype = jnp.real(jnp.empty((), dtype=state.dtype)).dtype
-    weighted = jnp.asarray(terms.collisions, dtype=real_dtype) * contribution
-    return replace(terms, collisions=0.0), weighted
+    return jnp.asarray(terms.collisions, dtype=real_dtype) * contribution
 
 
 def _hermite_mode_drive(

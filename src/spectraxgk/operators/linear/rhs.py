@@ -14,7 +14,10 @@ from spectraxgk.operators.linear.params import (
     LinearTerms,
     linear_terms_to_term_config,
 )
-from spectraxgk.terms.linear_dissipation import resolve_custom_collision
+from spectraxgk.terms.linear_dissipation import (
+    custom_collision_contribution,
+    terms_without_builtin_collisions,
+)
 
 
 def linear_rhs(
@@ -69,9 +72,7 @@ def linear_rhs_cached(
     )
 
     term_cfg = linear_terms_to_term_config(terms)
-    assembled_terms, collision_rhs = resolve_custom_collision(
-        G, cache, params, term_cfg, collision_operator
-    )
+    assembled_terms = terms_without_builtin_collisions(term_cfg, collision_operator)
 
     if use_jit:
         rhs_fn = (
@@ -90,6 +91,15 @@ def linear_rhs_cached(
             dt=dt,
             force_electrostatic_fields=force_electrostatic_fields,
         )
+    collision_rhs = custom_collision_contribution(
+        G,
+        fields,
+        cache,
+        params,
+        term_cfg,
+        collision_operator,
+        force_electrostatic_fields=force_electrostatic_fields,
+    )
     if collision_rhs is not None:
         dG = dG + collision_rhs
     return dG, fields.phi
