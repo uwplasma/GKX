@@ -36,10 +36,6 @@ def linear_rhs_streaming_electrostatic_species_hermite_sharded(
         raise NotImplementedError(
             "mixed species-Hermite streaming currently requires a periodic z grid"
         )
-    if np.any(np.asarray(jax.device_get(params.tau_e)) > 0.0):
-        raise NotImplementedError(
-            "mixed species-Hermite streaming does not yet support adiabatic closure"
-        )
     ns = int(arr.shape[0])
     nm = int(arr.shape[2])
     s_chunks = int(species_chunks)
@@ -87,9 +83,31 @@ def linear_rhs_streaming_electrostatic_species_hermite_sharded(
         zt_s = jnp.where(tz_s == 0.0, 0.0, 1.0 / tz_s)
         local_qneut = jnp.sum(weight * zt_s[:, None, None, None] * (1.0 - g0), axis=0)
         qneut = jax.lax.psum(local_qneut, "species")
-        denominator = jnp.asarray(params.tau_e, dtype=real_dtype) + qneut
+        tau_e = jnp.asarray(params.tau_e, dtype=real_dtype)
+        denominator = tau_e + qneut
         denominator_safe = jnp.where(denominator == 0.0, jnp.inf, denominator)
-        phi = nbar / denominator_safe
+        jacobian = jnp.asarray(cache.jacobian, dtype=real_dtype)
+        jac = jacobian[None, None, :]
+        average_numerator = jnp.sum(
+            jnp.where(jac == 0.0, 0.0, nbar / denominator_safe * jac), axis=-1
+        )
+        average_denominator = jnp.sum(jacobian * qneut / denominator_safe, axis=-1)
+        average_denominator_safe = jnp.where(
+            average_denominator == 0.0, jnp.inf, average_denominator
+        )
+        ky0 = (cache.ky == 0.0)[:, None]
+        finite_kx = (jnp.arange(average_numerator.shape[1]) > 0)[None, :]
+        phi_average = jnp.where(
+            ky0 & finite_kx,
+            average_numerator / average_denominator_safe,
+            0.0,
+        )
+        phi = jax.lax.cond(
+            jnp.any(tau_e > 0.0),
+            lambda _: (nbar + tau_e * phi_average[..., None]) / denominator_safe,
+            lambda _: nbar / denominator_safe,
+            operand=None,
+        )
         phi = jnp.where(cache.mask0, 0.0, phi)
 
         lower_boundary = local_state[:, :, -1:, ...]

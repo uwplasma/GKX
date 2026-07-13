@@ -496,6 +496,13 @@ def _dispatch_parallel_linear(
             "parallel linear integration does not currently support donated input buffers"
         )
     route_axis = str(getattr(parallel, "axis", "hermite")).lower().replace("-", "_")
+    if route_axis in {"species_hermite", "s_m", "mixed"} and method not in {
+        "euler",
+        "rk2",
+    }:
+        raise NotImplementedError(
+            "mixed species-Hermite integration is currently gated for Euler and RK2"
+        )
     if route_axis in {"s", "species"}:
         from spectraxgk.solvers.linear.parallel_electrostatic import (
             prepare_electrostatic_species_inputs,
@@ -521,10 +528,6 @@ def _dispatch_parallel_linear(
             show_progress=show_progress,
             parallel=parallel,
             force_electrostatic_fields=force_electrostatic_fields,
-        )
-    if route_axis in {"species_hermite", "s_m", "mixed"}:
-        raise NotImplementedError(
-            "mixed species-Hermite time integration requires a separate scan-level identity gate"
         )
     return _integrate_linear_cached_impl(
         G0,
