@@ -202,7 +202,7 @@ matched scaling artifact before any speedup claim is promoted.
 Nonlinear whole-state and domain decomposition remain diagnostic. Species-first
 and Hermite-second decomposition, explicit Hermite halo exchange, field-moment
 collectives, and physical transport-window identity must pass before a
-multi-device nonlinear speedup is claimed. See [parallelization](docs/parallelization.rst).
+nonlinear parallelization speedup is claimed. See [parallelization](docs/parallelization.rst).
 
 ## Current Claim Scope
 
