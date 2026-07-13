@@ -51,6 +51,16 @@ class NonlinearWindowEnsembleConfig:
     require_individual_passed: bool = True
 
 
+@dataclass(frozen=True)
+class MatchedTransportConfig:
+    """Acceptance thresholds for two matched nonlinear transport windows."""
+
+    min_relative_reduction: float = 0.0
+    min_uncertainty_z_score: float = 0.0
+    value_floor: float = 1.0e-12
+    require_windows_passed: bool = True
+
+
 def _validate_config(config: NonlinearWindowConvergenceConfig) -> None:
     if config.tmin is not None and not math.isfinite(float(config.tmin)):
         raise ValueError("tmin must be finite when supplied")
@@ -90,6 +100,15 @@ def _validate_ensemble_config(config: NonlinearWindowEnsembleConfig) -> None:
         raise ValueError("max_mean_rel_spread must be non-negative")
     if float(config.max_combined_sem_rel) < 0.0:
         raise ValueError("max_combined_sem_rel must be non-negative")
+    if float(config.value_floor) <= 0.0:
+        raise ValueError("value_floor must be positive")
+
+
+def _validate_matched_config(config: MatchedTransportConfig) -> None:
+    if float(config.min_relative_reduction) < 0.0:
+        raise ValueError("min_relative_reduction must be non-negative")
+    if float(config.min_uncertainty_z_score) < 0.0:
+        raise ValueError("min_uncertainty_z_score must be non-negative")
     if float(config.value_floor) <= 0.0:
         raise ValueError("value_floor must be positive")
 
@@ -155,8 +174,9 @@ def _bootstrap_sem(block_means: np.ndarray, *, samples: int, seed: int) -> float
     return float(np.std(boot_means, ddof=1))
 
 
-
-def _empty_window_statistics(config: NonlinearWindowConvergenceConfig) -> dict[str, Any]:
+def _empty_window_statistics(
+    config: NonlinearWindowConvergenceConfig,
+) -> dict[str, Any]:
     return {
         "late_mean": None,
         "late_std": None,
@@ -241,7 +261,9 @@ def _terminal_window_stats(
     n_finite_late = int(finite_late_y.size)
     terminal_start = min(
         n_finite_late - 1,
-        max(0, int(math.floor((1.0 - float(config.terminal_fraction)) * n_finite_late))),
+        max(
+            0, int(math.floor((1.0 - float(config.terminal_fraction)) * n_finite_late))
+        ),
     )
     terminal_y = finite_late_y[terminal_start:]
     terminal_t = finite_late_t[terminal_start:]
@@ -468,6 +490,111 @@ def nonlinear_window_convergence_report(
             "time_column": "t",
             "observable_column": str(observable),
         },
+        "config": asdict(cfg),
+    }
+
+
+def matched_nonlinear_transport_report(
+    baseline: dict[str, Any],
+    treatment: dict[str, Any],
+    *,
+    case: str = "matched_nonlinear_transport",
+    treatment_name: str = "treatment",
+    config: MatchedTransportConfig | None = None,
+) -> dict[str, Any]:
+    """Compare two independently gated post-transient transport windows.
+
+    The relative reduction is ``(baseline - treatment) / abs(baseline)``.
+    Uncertainty separation uses the quadrature sum of the conservative SEMs
+    already selected by the two window reports. A treatment effect is never
+    admitted from an unconverged source window.
+    """
+
+    cfg = config or MatchedTransportConfig()
+    _validate_matched_config(cfg)
+    baseline_ready, baseline_failures = nonlinear_window_stats_promotion_ready(baseline)
+    treatment_ready, treatment_failures = nonlinear_window_stats_promotion_ready(
+        treatment
+    )
+    baseline_mean = _report_late_mean(baseline)
+    treatment_mean = _report_late_mean(treatment)
+    baseline_sem = _report_sem(baseline)
+    treatment_sem = _report_sem(treatment)
+    finite_metrics = all(
+        value is not None
+        for value in (baseline_mean, treatment_mean, baseline_sem, treatment_sem)
+    )
+    relative_reduction: float | None = None
+    uncertainty_z_score: float | None = None
+    if finite_metrics:
+        assert baseline_mean is not None
+        assert treatment_mean is not None
+        assert baseline_sem is not None
+        assert treatment_sem is not None
+        difference = baseline_mean - treatment_mean
+        relative_reduction = difference / max(abs(baseline_mean), cfg.value_floor)
+        combined_sem = math.hypot(baseline_sem, treatment_sem)
+        uncertainty_z_score = difference / max(combined_sem, cfg.value_floor)
+    windows_ready = baseline_ready and treatment_ready
+    gates = [
+        _gate(
+            "baseline_window_passed",
+            (not cfg.require_windows_passed) or baseline_ready,
+            f"failures={baseline_failures}",
+        ),
+        _gate(
+            "treatment_window_passed",
+            (not cfg.require_windows_passed) or treatment_ready,
+            f"failures={treatment_failures}",
+        ),
+        _gate(
+            "finite_transport_statistics",
+            finite_metrics,
+            "means and SEMs must be finite",
+        ),
+        _gate(
+            "relative_reduction",
+            relative_reduction is not None
+            and relative_reduction >= float(cfg.min_relative_reduction),
+            f"relative_reduction={relative_reduction} gate={cfg.min_relative_reduction}",
+        ),
+        _gate(
+            "uncertainty_separation",
+            uncertainty_z_score is not None
+            and uncertainty_z_score >= float(cfg.min_uncertainty_z_score),
+            "uncertainty_z_score={value} gate={gate}".format(
+                value=uncertainty_z_score,
+                gate=cfg.min_uncertainty_z_score,
+            ),
+        ),
+    ]
+    passed = all(bool(gate["passed"]) for gate in gates)
+    return {
+        "kind": "matched_nonlinear_transport_comparison",
+        "claim_level": "matched_post_transient_transport_comparison",
+        "case": str(case),
+        "treatment": str(treatment_name),
+        "passed": passed,
+        "statistics": {
+            "baseline_mean": _json_number(baseline_mean),
+            "treatment_mean": _json_number(treatment_mean),
+            "baseline_sem": _json_number(baseline_sem),
+            "treatment_sem": _json_number(treatment_sem),
+            "relative_reduction": _json_number(relative_reduction),
+            "uncertainty_z_score": _json_number(uncertainty_z_score),
+        },
+        "gates": gates,
+        "gate_report": {
+            "case": str(case),
+            "source": "matched_nonlinear_window_reports",
+            "passed": passed,
+            "max_abs_error": 0.0 if passed else 1.0,
+            "max_rel_error": 0.0 if passed else 1.0,
+            "gates": gates,
+        },
+        "baseline": baseline,
+        "treatment_window": treatment,
+        "windows_ready": windows_ready,
         "config": asdict(cfg),
     }
 
@@ -730,7 +857,9 @@ def _ensemble_report_rows(
         if sem is not None:
             sems.append(sem)
         provenance = report.get("provenance")
-        provenance_dict: dict[str, Any] = provenance if isinstance(provenance, dict) else {}
+        provenance_dict: dict[str, Any] = (
+            provenance if isinstance(provenance, dict) else {}
+        )
         rows.append(
             {
                 "index": int(idx),
@@ -928,8 +1057,10 @@ def nonlinear_window_ensemble_report(
 
 
 __all__ = [
+    "MatchedTransportConfig",
     "NonlinearWindowConvergenceConfig",
     "NonlinearWindowEnsembleConfig",
+    "matched_nonlinear_transport_report",
     "nonlinear_window_convergence_from_csv",
     "nonlinear_window_convergence_from_summary",
     "nonlinear_window_convergence_report",
