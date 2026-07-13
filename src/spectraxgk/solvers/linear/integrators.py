@@ -640,8 +640,15 @@ def _integrate_species_sharded_explicit(
                 )
             return advanced, phi
 
-        body = jax.checkpoint(scan_step) if checkpoint else scan_step
-        return jax.lax.scan(body, local_state, jnp.arange(steps))
+        history = jnp.zeros((steps,) + local_state.shape[-3:], dtype=local_state.dtype)
+
+        def loop_body(index, carry):
+            value, fields = carry
+            value, phi = scan_step(value, index)
+            return value, fields.at[index].set(phi)
+
+        body = jax.checkpoint(loop_body) if checkpoint else loop_body
+        return jax.lax.fori_loop(0, steps, body, (local_state, history))
 
     mapped = jax.shard_map(
         program,
