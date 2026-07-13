@@ -481,7 +481,12 @@ def _integrate_nonlinear_sheared_scan(
 
     initial_update = coordinates(initial_state_carry[0], initial_state_carry[1], initial_state_carry[1])
     initial_derivative, initial_fields, _ = rhs_at(initial_update)
-    initial_endpoint_carry = initial_state_carry + (initial_derivative, initial_fields)
+    # Some field-solve policies use a lower internal precision. Match the scan
+    # carry to the requested state precision just as every subsequent step does.
+    initial_endpoint_carry = initial_state_carry + (
+        jnp.asarray(initial_derivative, dtype=state_dtype),
+        initial_fields,
+    )
     endpoint_final_carry, output = jax.lax.scan(
         endpoint_step, initial_endpoint_carry, jnp.arange(steps)
     )
