@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
-import jax
 import jax.numpy as jnp
 
 from spectraxgk.core.velocity import hermite_ladder_coeffs
 from spectraxgk.geometry import FluxTubeGeometryLike
 from spectraxgk.core.grid import SpectralGrid
 from spectraxgk.operators.linear.params import _check_nonnegative, _check_positive
+from spectraxgk.operators.linear.streaming import (
+    apply_hermite_v,
+    apply_hermite_v2,
+    apply_laguerre_x,
+    grad_z_periodic,
+    shift_axis,
+    streaming_ladder_term,
+)
 
 __all__ = [
     "apply_hermite_v",
@@ -25,18 +32,6 @@ __all__ = [
     "shift_axis",
     "streaming_term",
 ]
-
-
-def grad_z_periodic(f: jnp.ndarray, dz: float | jnp.ndarray) -> jnp.ndarray:
-    """Spectral periodic derivative along the last axis."""
-
-    _check_positive(dz, "dz")
-    n = f.shape[-1]
-    dz_val = jnp.asarray(dz, dtype=jnp.real(f).dtype)
-    kz = 2.0 * jnp.pi * jnp.fft.fftfreq(n, d=dz_val)
-    f_hat = jnp.fft.fft(f, axis=-1)
-    df_hat = (1j * kz) * f_hat
-    return jnp.fft.ifft(df_hat, axis=-1)
 
 
 def compute_b(
@@ -62,23 +57,6 @@ def lenard_bernstein_eigenvalues(
     return nu_laguerre * ell[:, None] + nu_hermite * m[None, :]
 
 
-def apply_hermite_v(G: jnp.ndarray) -> jnp.ndarray:
-    """Multiply Hermite coefficients by v_parallel (ladder form)."""
-
-    axis_m = -4
-    Nm = G.shape[axis_m]
-    sqrt_p, sqrt_m = hermite_ladder_coeffs(Nm - 1)
-    sqrt_p = sqrt_p[:Nm]
-    sqrt_m = sqrt_m[:Nm]
-    G_plus = shift_axis(G, 1, axis_m)
-    G_minus = shift_axis(G, -1, axis_m)
-    shape = [1] * G.ndim
-    shape[axis_m] = Nm
-    sqrt_p = sqrt_p.reshape(shape)
-    sqrt_m = sqrt_m.reshape(shape)
-    return sqrt_p * G_plus + sqrt_m * G_minus
-
-
 def hermite_streaming(G: jnp.ndarray, kpar: jnp.ndarray, vth: float) -> jnp.ndarray:
     """Parallel streaming operator acting on the Hermite index."""
 
@@ -96,47 +74,6 @@ def hermite_streaming(G: jnp.ndarray, kpar: jnp.ndarray, vth: float) -> jnp.ndar
 
     ladder = sqrt_p * G_mplus + sqrt_m * G_mminus
     return -1j * kpar * vth * ladder
-
-
-def apply_hermite_v2(G: jnp.ndarray) -> jnp.ndarray:
-    """Multiply Hermite coefficients by v_parallel^2."""
-
-    return apply_hermite_v(apply_hermite_v(G))
-
-
-def apply_laguerre_x(G: jnp.ndarray) -> jnp.ndarray:
-    """Multiply Laguerre coefficients by the perpendicular energy variable."""
-
-    axis_l = -5
-    Nl = G.shape[axis_l]
-    ell = jnp.arange(Nl)
-    G_plus = shift_axis(G, 1, axis_l)
-    G_minus = shift_axis(G, -1, axis_l)
-    ell_shape = [1] * G.ndim
-    ell_shape[axis_l] = Nl
-    ell_col = ell.reshape(ell_shape)
-    return (2.0 * ell_col + 1.0) * G - (ell_col + 1.0) * G_plus - ell_col * G_minus
-
-
-def shift_axis(arr: jnp.ndarray, offset: int, axis: int) -> jnp.ndarray:
-    """Shift an array along an axis with zero padding (non-periodic)."""
-
-    axis = axis % arr.ndim
-    if offset == 0:
-        return arr
-    axis_len = arr.shape[axis]
-    if abs(offset) >= axis_len:
-        return jnp.zeros_like(arr)
-    out = jnp.zeros_like(arr)
-    if offset > 0:
-        body = jax.lax.slice_in_dim(arr, offset, axis_len, axis=axis)
-        starts = [0] * arr.ndim
-        starts[axis] = 0
-        return jax.lax.dynamic_update_slice(out, body, starts)
-    body = jax.lax.slice_in_dim(arr, 0, axis_len + offset, axis=axis)
-    starts = [0] * arr.ndim
-    starts[axis] = -offset
-    return jax.lax.dynamic_update_slice(out, body, starts)
 
 
 def energy_operator(
@@ -260,33 +197,31 @@ def streaming_term(
 ) -> jnp.ndarray:
     """Streaming term using Hermite ladder and real-space z derivative."""
 
+    _check_positive(dz, "dz")
     _check_positive(vth, "vth")
-    dH_dz = grad_z_periodic(H, dz)
     axis_m = -4
     Nm = H.shape[axis_m]
     sqrt_p, sqrt_m = hermite_ladder_coeffs(Nm - 1)
     sqrt_p = sqrt_p[:Nm]
     sqrt_m = sqrt_m[:Nm]
 
-    pad = [(0, 0)] * H.ndim
-    pad[axis_m] = (1, 1)
-    dH_pad = jnp.pad(dH_dz, pad)
-    slc_plus = [slice(None)] * H.ndim
-    slc_minus = [slice(None)] * H.ndim
-    slc_plus[axis_m] = slice(2, None)
-    slc_minus[axis_m] = slice(0, -2)
-    dH_plus = dH_pad[tuple(slc_plus)]
-    dH_minus = dH_pad[tuple(slc_minus)]
-
     shape = [1] * H.ndim
     shape[axis_m] = Nm
     sqrt_p = sqrt_p.reshape(shape)
     sqrt_m = sqrt_m.reshape(shape)
-    ladder = sqrt_p * dH_plus + sqrt_m * dH_minus
+    dz_val = jnp.asarray(dz, dtype=jnp.real(H).dtype)
+    kz = 2.0 * jnp.pi * jnp.fft.fftfreq(H.shape[-1], d=dz_val)
     vth_arr = jnp.asarray(vth)
     if vth_arr.ndim == 0:
         vth_arr = vth_arr[None]
     v_shape = [1] * H.ndim
     v_shape[0] = vth_arr.shape[0]
     vth_arr = vth_arr.reshape(v_shape)
-    return vth_arr * ladder
+    return streaming_ladder_term(
+        H,
+        kz,
+        vth_arr,
+        sqrt_p,
+        sqrt_m,
+        dz=dz,
+    )

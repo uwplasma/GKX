@@ -1,4 +1,4 @@
-"""Low-level Hermite/Laguerre operators for gyrokinetic terms."""
+"""Spatial and velocity-ladder kernels for parallel streaming."""
 
 from __future__ import annotations
 
@@ -488,7 +488,7 @@ def apply_laguerre_x(G: jnp.ndarray) -> jnp.ndarray:
     )
 
 
-def streaming_term(
+def streaming_ladder_term(
     H: jnp.ndarray,
     kz: jnp.ndarray,
     vth: float | jnp.ndarray,
@@ -509,7 +509,7 @@ def streaming_term(
     linked_use_gather: bool = False,
     use_twist_shift: bool = False,
 ) -> jnp.ndarray:
-    """Streaming term using Hermite ladder and real-space z derivative."""
+    """Apply streaming with precomputed Hermite-ladder coefficients."""
 
     _check_positive(vth, "vth")
     if use_twist_shift:

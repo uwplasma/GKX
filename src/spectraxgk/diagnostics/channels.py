@@ -13,7 +13,7 @@ from spectraxgk.diagnostics.weights import (
 from spectraxgk.core.grid import SpectralGrid
 from spectraxgk.operators.linear.cache_model import LinearCache
 from spectraxgk.operators.linear.params import LinearParams
-from spectraxgk.terms.operators import shift_axis
+from spectraxgk.operators.linear.streaming import shift_axis
 
 
 def _mask_modes(value: jnp.ndarray, active: jnp.ndarray) -> jnp.ndarray:

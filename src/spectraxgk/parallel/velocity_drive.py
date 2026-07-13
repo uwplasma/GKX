@@ -121,7 +121,7 @@ def _diamagnetic_drive_from_global_m(
 ) -> Any:
     import jax.numpy as jnp
 
-    from spectraxgk.terms.operators import shift_axis
+    from spectraxgk.operators.linear.streaming import shift_axis
 
     arr = jnp.asarray(state)
     real_dtype = jnp.real(arr).dtype

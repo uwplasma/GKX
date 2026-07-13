@@ -47,6 +47,11 @@ from spectraxgk.operators.linear.params import (
     term_config_to_linear_terms,
 )
 from spectraxgk.operators.linear.rhs import linear_rhs, linear_rhs_cached
+from spectraxgk.operators.linear.streaming import (
+    abs_z_linked_fft,
+    grad_z_linked_fft,
+    streaming_ladder_term,
+)
 
 __all__ = [
     "LinearCache",
@@ -70,6 +75,7 @@ __all__ = [
     "apply_hermite_v",
     "apply_hermite_v2",
     "apply_laguerre_x",
+    "abs_z_linked_fft",
     "build_H",
     "build_linear_cache",
     "collision_damping",
@@ -77,6 +83,7 @@ __all__ = [
     "diamagnetic_drive_coeffs",
     "energy_operator",
     "grad_z_periodic",
+    "grad_z_linked_fft",
     "hermite_streaming",
     "hypercollision_damping",
     "lenard_bernstein_eigenvalues",
@@ -86,5 +93,6 @@ __all__ = [
     "quasineutrality_phi",
     "shift_axis",
     "streaming_term",
+    "streaming_ladder_term",
     "term_config_to_linear_terms",
 ]

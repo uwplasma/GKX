@@ -41,7 +41,7 @@ def hermite_shift_reference(state: Any, *, offset: int) -> Any:
 
     import jax.numpy as jnp
 
-    from spectraxgk.terms.operators import shift_axis
+    from spectraxgk.operators.linear.streaming import shift_axis
 
     arr = jnp.asarray(state)
     dims = _state_dims(arr.ndim)

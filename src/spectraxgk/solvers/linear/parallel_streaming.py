@@ -83,7 +83,7 @@ def linear_rhs_electrostatic_species_hermite_sharded(
     from jax.sharding import NamedSharding, PartitionSpec
 
     from spectraxgk.operators.linear.params import _as_species_array
-    from spectraxgk.terms.operators import (
+    from spectraxgk.operators.linear.streaming import (
         abs_z_linked_fft,
         grad_z_linked_fft,
         grad_z_periodic,
@@ -552,7 +552,7 @@ def _streaming_electrostatic_from_phi_velocity_sharded(
     """Apply electrostatic streaming with a precomputed electrostatic field."""
 
     from spectraxgk.parallel.velocity import periodic_streaming_shard_map
-    from spectraxgk.terms.operators import grad_z_periodic as operator_grad_z_periodic
+    from spectraxgk.operators.linear.streaming import grad_z_periodic as operator_grad_z_periodic
 
     particle_streaming = -periodic_streaming_shard_map(
         arr, plan, kz=cache.kz, vth=params.vth, devices=devices

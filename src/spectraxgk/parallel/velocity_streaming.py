@@ -85,7 +85,7 @@ def periodic_streaming_reference(state: Any, *, kz: Any, vth: Any = 1.0) -> Any:
 
     import jax.numpy as jnp
 
-    from spectraxgk.terms.operators import grad_z_periodic
+    from spectraxgk.operators.linear.streaming import grad_z_periodic
 
     arr = jnp.asarray(state)
     dstate_dz = grad_z_periodic(arr, kz=kz)
@@ -105,7 +105,7 @@ def periodic_streaming_shard_map(
 
     import jax.numpy as jnp
 
-    from spectraxgk.terms.operators import grad_z_periodic
+    from spectraxgk.operators.linear.streaming import grad_z_periodic
 
     arr = jnp.asarray(state)
     dstate_dz = grad_z_periodic(arr, kz=kz)
@@ -128,7 +128,7 @@ def mirror_drift_reference(
 
     import jax.numpy as jnp
 
-    from spectraxgk.terms.operators import shift_axis
+    from spectraxgk.operators.linear.streaming import shift_axis
 
     arr = jnp.asarray(H)
     dims = _state_dims(arr.ndim)
@@ -174,7 +174,7 @@ def mirror_drift_shard_map(
 
     import jax.numpy as jnp
 
-    from spectraxgk.terms.operators import shift_axis
+    from spectraxgk.operators.linear.streaming import shift_axis
 
     arr = jnp.asarray(H)
     dims = _state_dims(arr.ndim)
@@ -223,7 +223,7 @@ def curvature_gradb_drift_reference(
 
     import jax.numpy as jnp
 
-    from spectraxgk.terms.operators import shift_axis
+    from spectraxgk.operators.linear.streaming import shift_axis
 
     arr = jnp.asarray(H)
     dims = _state_dims(arr.ndim)
@@ -277,7 +277,7 @@ def curvature_gradb_drift_shard_map(
 
     import jax.numpy as jnp
 
-    from spectraxgk.terms.operators import shift_axis
+    from spectraxgk.operators.linear.streaming import shift_axis
 
     arr = jnp.asarray(H)
     dims = _state_dims(arr.ndim)

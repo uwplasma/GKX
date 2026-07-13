@@ -11,7 +11,7 @@ from spectraxgk.geometry import (
 )
 from spectraxgk.core.grid import SpectralGrid
 from spectraxgk.operators.linear.cache_model import LinearCache
-from spectraxgk.terms.operators import shift_axis
+from spectraxgk.operators.linear.streaming import shift_axis
 
 
 def fieldline_quadrature_weights(

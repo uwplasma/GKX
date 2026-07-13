@@ -76,7 +76,7 @@ def _fused_electrostatic_constants(
     *,
     local_m: int,
 ) -> SimpleNamespace:
-    from spectraxgk.terms.operators import (
+    from spectraxgk.operators.linear.streaming import (
         grad_z_periodic as operator_grad_z_periodic,
         shift_axis as operator_shift_axis,
     )

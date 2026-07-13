@@ -22,11 +22,11 @@ from spectraxgk.terms.linear_dissipation import (
     hyperdiffusion_contribution as hyperdiffusion_contribution,
     multispecies_collision_invariant_rates as multispecies_collision_invariant_rates,
 )
-from spectraxgk.terms.operators import (
+from spectraxgk.operators.linear.streaming import (
     grad_z_linked_fft,
     grad_z_periodic,
     shift_axis,
-    streaming_term,
+    streaming_ladder_term,
 )
 
 
@@ -59,7 +59,7 @@ def streaming_contribution(
     return (
         -weight
         * kpar_scale
-        * streaming_term(
+        * streaming_ladder_term(
             H,
             kz,
             vth_s,
