@@ -763,7 +763,10 @@ def linear_rhs_electrostatic_species_sharded(
     device_list = _resolve_parallel_devices(num_devices=num_devices, devices=devices)
     if len(device_list) != ns:
         raise ValueError("species-sharded route requires one device per species")
-    if not isinstance(arr, jax.core.Tracer):
+    arr_sharding = getattr(arr, "sharding", None)
+    arr_spec = tuple(getattr(arr_sharding, "spec", ()))
+    prepared = bool(arr_spec and arr_spec[0] == "species")
+    if not isinstance(arr, jax.core.Tracer) and not prepared:
         arr, cache, params = prepare_electrostatic_species_inputs(
             arr, cache, params, devices=device_list
         )
