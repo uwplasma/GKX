@@ -120,10 +120,17 @@ def _linear_phi_callable(
     terms: LinearTerms,
     rhs: Callable[[jnp.ndarray], tuple[jnp.ndarray, jnp.ndarray]],
     parallel_strategy: str,
+    parallel: Any | None = None,
 ) -> Callable[[jnp.ndarray], jnp.ndarray]:
     """Return the cheapest field-only diagnostic path for an updated state."""
 
-    if parallel_strategy != "serial" or not isinstance(cache, LinearCache):
+    parallel_axis = str(getattr(parallel, "axis", "")).lower().replace("-", "_")
+    mixed_velocity_route = parallel_axis in {"species_hermite", "s_m", "mixed"}
+    if (
+        parallel_strategy != "serial"
+        and not mixed_velocity_route
+        or not isinstance(cache, LinearCache)
+    ):
         return lambda value: rhs(value)[1]
 
     from spectraxgk.operators.linear.params import linear_terms_to_term_config
@@ -269,6 +276,7 @@ def _integrate_linear_cached_impl(
         terms=terms,
         rhs=rhs,
         parallel_strategy=parallel_strategy,
+        parallel=parallel,
     )
 
     def advance(G: jnp.ndarray) -> jnp.ndarray:
