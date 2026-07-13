@@ -13,7 +13,11 @@ from spectraxgk.diagnostics.modes import ModeSelection, ModeSelectionBatch
 from spectraxgk.geometry import FluxTubeGeometryLike
 from spectraxgk.operators.linear.cache_model import LinearCache
 from spectraxgk.operators.linear.cache_builder import build_linear_cache
-from spectraxgk.operators.linear.params import LinearParams, LinearTerms, linear_terms_to_term_config
+from spectraxgk.operators.linear.params import (
+    LinearParams,
+    LinearTerms,
+    linear_terms_to_term_config,
+)
 from spectraxgk.solvers.time.diffrax_core import (
     _adjoint,
     _assemble_rhs,
@@ -69,7 +73,9 @@ def _prepare_linear_state_and_cache(
     return G0, real_dtype, cache
 
 
-def _apply_state_sharding(state: jnp.ndarray, state_sharding: Any | None) -> jnp.ndarray:
+def _apply_state_sharding(
+    state: jnp.ndarray, state_sharding: Any | None
+) -> jnp.ndarray:
     if state_sharding is None:
         return state
     return jax.lax.with_sharding_constraint(state, state_sharding)
@@ -110,7 +116,9 @@ def _extract_linear_saved_mode(
     if mode_method == "max":
         idx = jnp.argmax(jnp.abs(data))
         return data[idx]
-    raise ValueError("mode_method must be one of {'z_index', 'max'} when save_mode is set")
+    raise ValueError(
+        "mode_method must be one of {'z_index', 'max'} when save_mode is set"
+    )
 
 
 def _linear_density_field(
@@ -183,7 +191,9 @@ def _linear_save_payload(
     else:
         saved_value = field
     if return_state:
-        return _apply_state_sharding(_pack_complex_state(G), state_sharding), saved_value
+        return _apply_state_sharding(
+            _pack_complex_state(G), state_sharding
+        ), saved_value
     return saved_value
 
 
@@ -311,7 +321,9 @@ def _run_linear_diffrax_solve(
     return solve(G0_packed)
 
 
-def _linear_diffrax_output(sol: Any, *, return_state: bool) -> tuple[jnp.ndarray | None, Any]:
+def _linear_diffrax_output(
+    sol: Any, *, return_state: bool
+) -> tuple[jnp.ndarray | None, Any]:
     if return_state:
         G_t_packed, saved = sol.ys
         return _unpack_complex_state(G_t_packed[-1]), saved
@@ -337,13 +349,17 @@ def _linear_diffrax_run_bundle(
     save_field: str,
     density_species_index: int | None,
     state_sharding: Any | None,
+    derivative_mode: str,
 ) -> _LinearDiffraxRunBundle:
     G0, real_dtype, cache = _prepare_linear_state_and_cache(
         G0, grid, geom, params, cache
     )
     term_cfg = linear_terms_to_term_config(terms or LinearTerms())
     method_is_special = _is_imex_solver(method) or _is_implicit_solver(method)
-    use_custom_vjp = not method_is_special
+    derivative_key = str(derivative_mode).strip().lower().replace("-", "_")
+    if derivative_key not in {"reverse", "forward"}:
+        raise ValueError("derivative_mode must be 'reverse' or 'forward'")
+    use_custom_vjp = derivative_key == "reverse" and not method_is_special
     dt_val, ts = _linear_save_times(
         dt=dt,
         steps=steps,
@@ -399,8 +415,14 @@ def integrate_linear_diffrax(
     save_field: str = "phi",
     density_species_index: int | None = None,
     state_sharding: Any | None = None,
+    derivative_mode: str = "reverse",
 ) -> tuple[jnp.ndarray | None, jnp.ndarray]:
-    """Integrate the linear system with diffrax."""
+    """Integrate the linear system with an explicit AD policy.
+
+    ``derivative_mode="reverse"`` preserves the custom-VJP field solve used by
+    scalar objectives. ``"forward"`` selects native JAX rules so low-dimensional
+    JVPs can pass through fixed or adaptive Diffrax trajectories.
+    """
 
     dfx, eqx = _require_diffrax()
     bundle = _linear_diffrax_run_bundle(
@@ -421,6 +443,7 @@ def integrate_linear_diffrax(
         save_field=save_field,
         density_species_index=density_species_index,
         state_sharding=state_sharding,
+        derivative_mode=derivative_mode,
     )
     sol = _run_linear_diffrax_solve(
         dfx=dfx,
