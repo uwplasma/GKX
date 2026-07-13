@@ -14,7 +14,7 @@ from spectraxgk.operators.linear.params import (
     LinearTerms,
     linear_terms_to_term_config,
 )
-from spectraxgk.terms.linear_dissipation import (
+from spectraxgk.operators.linear.dissipation import (
     custom_collision_contribution,
     terms_without_builtin_collisions,
 )

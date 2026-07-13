@@ -28,7 +28,7 @@ from spectraxgk.operators.nonlinear.projection import (
     _make_nonlinear_state_projector,
 )
 from spectraxgk.terms.config import FieldState, TermConfig
-from spectraxgk.terms.brackets import _broadcast_grid, _ifft2_xy
+from spectraxgk.operators.nonlinear.brackets import _broadcast_grid, _ifft2_xy
 
 __all__ = [
     "IMEXLinearOperator",

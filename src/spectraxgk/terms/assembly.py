@@ -18,7 +18,7 @@ from spectraxgk.operators.linear.moments import build_H
 from spectraxgk.operators.linear.params import LinearParams, _as_species_array
 from spectraxgk.terms.config import FieldState, TermConfig
 from spectraxgk.terms.fields import _solve_fields_impl, solve_fields
-from spectraxgk.terms.linear_dissipation import (
+from spectraxgk.operators.linear.dissipation import (
     collisions_contribution,
     end_damping_contribution,
     hypercollisions_contribution,

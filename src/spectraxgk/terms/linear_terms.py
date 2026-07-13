@@ -7,7 +7,7 @@ import jax.numpy as jnp
 from spectraxgk.operators.nonlinear.collisions import (
     conservative_full_f_dougherty_cross_moments as conservative_full_f_dougherty_cross_moments,
 )
-from spectraxgk.terms.linear_dissipation import (
+from spectraxgk.operators.linear.dissipation import (
     CollisionInvariantRates as CollisionInvariantRates,
     _hermite_mode_drive,
     _hypercollision_kz_source as _hypercollision_kz_source,

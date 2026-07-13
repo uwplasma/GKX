@@ -21,7 +21,7 @@ from spectraxgk.terms.assembly import (
     assemble_rhs_cached_jit,
 )
 from spectraxgk.terms.config import FieldState, TermConfig
-from spectraxgk.terms.linear_dissipation import (
+from spectraxgk.operators.linear.dissipation import (
     custom_collision_contribution,
     terms_without_builtin_collisions,
 )

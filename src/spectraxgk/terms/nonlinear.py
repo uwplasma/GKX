@@ -8,7 +8,7 @@ from typing import cast
 import jax
 import jax.numpy as jnp
 
-from spectraxgk.terms.brackets import (
+from spectraxgk.operators.nonlinear.brackets import (
     _apply_mask_xy,
     _spectral_bracket,
     _spectral_bracket_multi_full,
