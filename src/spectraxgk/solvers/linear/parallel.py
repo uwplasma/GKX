@@ -24,7 +24,7 @@ from spectraxgk.solvers.linear.parallel_electrostatic import (
 from spectraxgk.solvers.linear.parallel_streaming import *  # noqa: F403
 from spectraxgk.solvers.linear.parallel_streaming import (
     __all__ as _streaming_all,
-    linear_rhs_streaming_electrostatic_species_hermite_sharded,
+    linear_rhs_electrostatic_species_hermite_sharded,
     linear_rhs_streaming_electrostatic_velocity_sharded,
     linear_rhs_streaming_velocity_sharded,
 )
@@ -93,6 +93,18 @@ def _resolve_velocity_backend(
 ) -> _ParallelLinearRoute:
     if route.backend != "auto":
         return route
+    if route.axis in {"species_hermite", "s_m", "mixed"} and state_ndim == 6:
+        if _is_electrostatic_slice_terms(terms):
+            return _ParallelLinearRoute(
+                strategy=route.strategy,
+                backend="electrostatic_species_hermite",
+                axis=route.axis,
+                num_devices=route.num_devices,
+            )
+        raise NotImplementedError(
+            "mixed species-Hermite routing currently supports collision-free "
+            "electrostatic linear terms"
+        )
     if route.axis in {"s", "species"} and state_ndim == 6:
         if _is_electrostatic_slice_terms(terms):
             return _ParallelLinearRoute(
@@ -203,30 +215,29 @@ def _velocity_parallel_rhs_cached(
     use_custom_vjp: bool,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     route = _resolve_velocity_backend(route, terms, state_ndim=G.ndim)
-    if route.backend in {
-        "electrostatic_species_hermite_streaming",
-        "linear_electrostatic_species_hermite_streaming",
-    }:
+    if route.backend == "electrostatic_species_hermite":
         if route.axis not in {"species_hermite", "s_m", "mixed"}:
             raise NotImplementedError(
-                "mixed species-Hermite streaming requires axis='species_hermite'"
+                "mixed species-Hermite routing requires axis='species_hermite'"
             )
-        if not _is_streaming_only_terms(terms):
+        if not _is_electrostatic_slice_terms(terms):
             raise NotImplementedError(
-                "mixed species-Hermite streaming requires streaming-only LinearTerms"
+                "mixed species-Hermite routing requires collision-free "
+                "electrostatic LinearTerms"
             )
         if G.ndim != 6:
             raise NotImplementedError(
-                "mixed species-Hermite streaming requires a multi-species 6D state"
+                "mixed species-Hermite routing requires a multi-species 6D state"
             )
         if route.num_devices != 4:
             raise NotImplementedError(
                 "the gated mixed species-Hermite mesh currently requires four devices"
             )
-        return linear_rhs_streaming_electrostatic_species_hermite_sharded(
+        return linear_rhs_electrostatic_species_hermite_sharded(
             G,
             cache,
             params,
+            terms=terms,
             species_chunks=2,
             hermite_chunks=2,
         )

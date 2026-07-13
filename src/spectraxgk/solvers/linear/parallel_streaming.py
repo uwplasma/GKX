@@ -7,41 +7,61 @@ from typing import Any
 import jax.numpy as jnp
 
 from spectraxgk.operators.linear.cache_model import LinearCache
-from spectraxgk.operators.linear.params import LinearParams, _as_species_array
+from spectraxgk.operators.linear.params import (
+    LinearParams,
+    LinearTerms,
+    _as_species_array,
+    linear_terms_to_term_config,
+)
 from spectraxgk.solvers.linear.parallel_common import _resolve_parallel_devices
 
 
-def linear_rhs_streaming_electrostatic_species_hermite_sharded(
+def linear_rhs_electrostatic_species_hermite_sharded(
     G: jnp.ndarray,
     cache: LinearCache,
     params: LinearParams,
     *,
+    terms: LinearTerms | None = None,
     species_chunks: int = 2,
     hermite_chunks: int = 2,
     devices: Any | None = None,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
-    """Compute electrostatic streaming on a species-by-Hermite device mesh."""
+    """Compute the collision-free electrostatic RHS on a species--Hermite mesh."""
 
     import jax
     import numpy as np
     from jax.sharding import Mesh, NamedSharding, PartitionSpec
 
     from spectraxgk.operators.linear.params import _as_species_array
-    from spectraxgk.terms.operators import grad_z_periodic
+    from spectraxgk.terms.operators import grad_z_periodic, shift_axis
 
     arr = jnp.asarray(G)
     if arr.ndim != 6:
-        raise ValueError("mixed species-Hermite streaming requires a 6D state")
+        raise ValueError("mixed species-Hermite routing requires a 6D state")
     if bool(getattr(cache, "use_twist_shift", False)):
         raise NotImplementedError(
-            "mixed species-Hermite streaming currently requires a periodic z grid"
+            "mixed species-Hermite routing currently requires a periodic z grid"
+        )
+    term_cfg = linear_terms_to_term_config(terms)
+    unsupported = {
+        "collisions": term_cfg.collisions,
+        "hypercollisions": term_cfg.hypercollisions,
+        "hyperdiffusion": term_cfg.hyperdiffusion,
+        "end_damping": term_cfg.end_damping,
+        "apar": term_cfg.apar,
+        "bpar": term_cfg.bpar,
+    }
+    if any(float(value) != 0.0 for value in unsupported.values()):
+        active = ", ".join(name for name, value in unsupported.items() if value)
+        raise NotImplementedError(
+            "mixed species-Hermite electrostatic routing does not yet support " + active
         )
     ns = int(arr.shape[0])
     nm = int(arr.shape[2])
     s_chunks = int(species_chunks)
     m_chunks = int(hermite_chunks)
     if s_chunks != ns:
-        raise ValueError("mixed streaming currently requires one species per mesh row")
+        raise ValueError("mixed routing currently requires one species per mesh row")
     if m_chunks < 2 or nm % m_chunks != 0:
         raise ValueError("Hermite chunks must be at least two and divide Nm evenly")
     device_list = _resolve_parallel_devices(
@@ -63,11 +83,26 @@ def linear_rhs_streaming_electrostatic_species_hermite_sharded(
     density = _as_species_array(params.density, ns, "density").astype(real_dtype)
     tz = _as_species_array(params.tz, ns, "tz").astype(real_dtype)
     vth = _as_species_array(params.vth, ns, "vth").astype(real_dtype)
+    tprim = _as_species_array(params.R_over_LTi, ns, "R_over_LTi").astype(real_dtype)
+    fprim = _as_species_array(params.R_over_Ln, ns, "R_over_Ln").astype(real_dtype)
     local_m = nm // m_chunks
+    if local_m < 2:
+        raise ValueError(
+            "mixed drift routing requires at least two modes per Hermite chunk"
+        )
     lower_pairs = tuple((index, index + 1) for index in range(m_chunks - 1))
     upper_pairs = tuple((index, index - 1) for index in range(1, m_chunks))
 
-    def mixed_streaming(local_state, local_jl, charge_s, density_s, tz_s, vth_s):
+    def mixed_rhs(
+        local_state,
+        local_jl,
+        charge_s,
+        density_s,
+        tz_s,
+        vth_s,
+        tprim_s,
+        fprim_s,
+    ):
         m_start = jax.lax.axis_index("m") * local_m
         global_m = m_start + jnp.arange(local_m, dtype=jnp.int32)
         m_shape = (1, 1, local_m, 1, 1, 1)
@@ -110,12 +145,18 @@ def linear_rhs_streaming_electrostatic_species_hermite_sharded(
         )
         phi = jnp.where(cache.mask0, 0.0, phi)
 
-        lower_boundary = local_state[:, :, -1:, ...]
-        lower_received = jax.lax.ppermute(lower_boundary, "m", lower_pairs)
-        lower = jnp.concatenate([lower_received, local_state[:, :, :-1, ...]], axis=2)
-        upper_boundary = local_state[:, :, :1, ...]
-        upper_received = jax.lax.ppermute(upper_boundary, "m", upper_pairs)
-        upper = jnp.concatenate([local_state[:, :, 1:, ...], upper_received], axis=2)
+        def shift_m(value, offset):
+            width = abs(offset)
+            if offset > 0:
+                boundary = value[:, :, :width, ...]
+                received = jax.lax.ppermute(boundary, "m", upper_pairs)
+                return jnp.concatenate([value[:, :, width:, ...], received], axis=2)
+            boundary = value[:, :, -width:, ...]
+            received = jax.lax.ppermute(boundary, "m", lower_pairs)
+            return jnp.concatenate([received, value[:, :, :-width, ...]], axis=2)
+
+        lower = shift_m(local_state, -1)
+        upper = shift_m(local_state, 1)
         vth6 = vth_s[:, None, None, None, None, None]
         ladder = -vth6 * (jnp.sqrt(m_real + 1.0) * upper + jnp.sqrt(m_real) * lower)
         field_drive = (
@@ -125,17 +166,106 @@ def linear_rhs_streaming_electrostatic_species_hermite_sharded(
             * phi[None, None, ...]
         )
         pre_derivative = ladder + m1 * field_drive[:, :, None, ...]
-        rhs = jnp.asarray(params.kpar_scale, dtype=real_dtype) * grad_z_periodic(
-            pre_derivative, kz=cache.kz
+        streaming = (
+            jnp.asarray(term_cfg.streaming, dtype=real_dtype)
+            * jnp.asarray(params.kpar_scale, dtype=real_dtype)
+            * grad_z_periodic(pre_derivative, kz=cache.kz)
         )
+
+        zt6 = zt_s[:, None, None, None, None, None]
+        hamiltonian = local_state + m0 * (
+            zt6 * local_jl[:, :, None, ...] * phi[None, None, None, ...]
+        )
+        h_m_p1 = shift_m(hamiltonian, 1)
+        h_m_m1 = shift_m(hamiltonian, -1)
+        ell = cache.l[None, ...]
+        ell_p1 = ell + 1.0
+        sqrt_m = jnp.sqrt(m_real)
+        sqrt_m_p1 = jnp.sqrt(m_real + 1.0)
+        mirror_kernel = (
+            -sqrt_m_p1 * ell_p1 * h_m_p1
+            - sqrt_m_p1 * ell * shift_axis(h_m_p1, -1, axis=1)
+            + sqrt_m * ell * h_m_m1
+            + sqrt_m * ell_p1 * shift_axis(h_m_m1, 1, axis=1)
+        )
+        mirror = (
+            -jnp.asarray(term_cfg.mirror, dtype=real_dtype)
+            * vth6
+            * cache.bgrad[None, None, None, None, None, :]
+            * mirror_kernel
+        )
+
+        h_m_p2 = shift_m(hamiltonian, 2)
+        h_m_m2 = shift_m(hamiltonian, -2)
+        curvature_kernel = (
+            jnp.sqrt((m_real + 1.0) * (m_real + 2.0)) * h_m_p2
+            + (2.0 * m_real + 1.0) * hamiltonian
+            + jnp.sqrt(m_real * jnp.maximum(m_real - 1.0, 0.0)) * h_m_m2
+        )
+        gradb_kernel = (
+            ell_p1 * shift_axis(hamiltonian, 1, axis=1)
+            + (2.0 * ell + 1.0) * hamiltonian
+            + ell * shift_axis(hamiltonian, -1, axis=1)
+        )
+        drift_scale = (
+            jnp.asarray(1j, dtype=local_state.dtype)
+            * zt_s[:, None, None, None, None, None]
+            * jnp.asarray(params.omega_d_scale, dtype=real_dtype)
+        )
+        curvature = (
+            -jnp.asarray(term_cfg.curvature, dtype=real_dtype)
+            * drift_scale
+            * cache.cv_d[None, None, None, ...]
+            * curvature_kernel
+        )
+        gradb = (
+            -jnp.asarray(term_cfg.gradb, dtype=real_dtype)
+            * drift_scale
+            * cache.gb_d[None, None, None, ...]
+            * gradb_kernel
+        )
+
+        jl_m1 = shift_axis(local_jl, -1, axis=1)
+        jl_p1 = shift_axis(local_jl, 1, axis=1)
+        l4 = cache.l4[None, ...]
+        tprim5 = tprim_s[:, None, None, None, None]
+        fprim5 = fprim_s[:, None, None, None, None]
+        omega_star = (
+            jnp.asarray(1j, dtype=local_state.dtype)
+            * jnp.asarray(params.omega_star_scale, dtype=real_dtype)
+            * cache.ky
+        )[None, None, :, None, None]
+        drive_m0 = (
+            omega_star
+            * phi[None, None, ...]
+            * (
+                jl_m1 * (l4 * tprim5)
+                + local_jl * (fprim5 + 2.0 * l4 * tprim5)
+                + jl_p1 * ((l4 + 1.0) * tprim5)
+            )
+        )
+        drive_m2 = (
+            omega_star
+            * phi[None, None, ...]
+            * local_jl
+            * (tprim5 / jnp.sqrt(jnp.asarray(2.0, dtype=real_dtype)))
+        )
+        diamagnetic = jnp.asarray(term_cfg.diamagnetic, dtype=real_dtype) * (
+            m0 * drive_m0[:, :, None, ...]
+            + (global_m == 2).astype(local_state.dtype).reshape(m_shape)
+            * drive_m2[:, :, None, ...]
+        )
+        rhs = streaming + mirror + curvature + gradb + diamagnetic
         return rhs, phi
 
     mapped = jax.shard_map(
-        mixed_streaming,
+        mixed_rhs,
         mesh=mesh,
         in_specs=(
             state_spec,
             jl_spec,
+            species_spec,
+            species_spec,
             species_spec,
             species_spec,
             species_spec,
@@ -151,6 +281,8 @@ def linear_rhs_streaming_electrostatic_species_hermite_sharded(
         jax.device_put(density, species_sharding),
         jax.device_put(tz, species_sharding),
         jax.device_put(vth, species_sharding),
+        jax.device_put(tprim, species_sharding),
+        jax.device_put(fprim, species_sharding),
     )
 
 
@@ -300,6 +432,6 @@ __all__ = [
     "_electrostatic_streaming_field_rhs",
     "_streaming_electrostatic_from_phi_velocity_sharded",
     "linear_rhs_streaming_electrostatic_velocity_sharded",
-    "linear_rhs_streaming_electrostatic_species_hermite_sharded",
+    "linear_rhs_electrostatic_species_hermite_sharded",
     "linear_rhs_streaming_velocity_sharded",
 ]
