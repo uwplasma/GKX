@@ -560,6 +560,8 @@ def _rhs_term_contributions(
     scalars: _ScalarParams,
     weights: _TermWeights,
     rhs_fields: _RHSFields,
+    *,
+    skip_dissipation: bool = False,
 ) -> dict[str, jnp.ndarray]:
     """Return named RHS contributions in the fixed diagnostic sum convention."""
 
@@ -571,11 +573,16 @@ def _rhs_term_contributions(
         weights,
         state.imag,
     )
-    collisions, hypercollisions, hyperdiffusion, end_damping = (
-        _dissipation_contributions(
-            state.G, rhs_fields.H, cache, species, scalars, weights
+    if skip_dissipation:
+        collisions = hypercollisions = hyperdiffusion = end_damping = jnp.zeros_like(
+            state.G
         )
-    )
+    else:
+        collisions, hypercollisions, hyperdiffusion, end_damping = (
+            _dissipation_contributions(
+                state.G, rhs_fields.H, cache, species, scalars, weights
+            )
+        )
     return {
         "streaming": _streaming_contribution(
             state.G, cache, species, scalars, weights, rhs_fields
@@ -609,9 +616,17 @@ def _assemble_normalized_rhs(
     scalars: _ScalarParams,
     weights: _TermWeights,
     rhs_fields: _RHSFields,
+    *,
+    skip_dissipation: bool = False,
 ) -> jnp.ndarray:
     contrib = _rhs_term_contributions(
-        state, cache, species, scalars, weights, rhs_fields
+        state,
+        cache,
+        species,
+        scalars,
+        weights,
+        rhs_fields,
+        skip_dissipation=skip_dissipation,
     )
     dG = _sum_rhs_terms(contrib)
     if state.squeeze_species:
@@ -680,6 +695,7 @@ def assemble_rhs_cached_with_fields(
     terms: TermConfig | None = None,
     dt: jnp.ndarray | float | None = None,
     force_electrostatic_fields: bool = False,
+    skip_dissipation: bool = False,
 ) -> jnp.ndarray:
     """Assemble local RHS terms from fields reduced outside this state shard."""
 
@@ -706,7 +722,15 @@ def assemble_rhs_cached_with_fields(
         h_apar=h_apar,
         h_bpar=h_bpar,
     )
-    return _assemble_normalized_rhs(state, cache, species, scalars, weights, rhs_fields)
+    return _assemble_normalized_rhs(
+        state,
+        cache,
+        species,
+        scalars,
+        weights,
+        rhs_fields,
+        skip_dissipation=skip_dissipation,
+    )
 
 
 def assemble_rhs_cached_jit(

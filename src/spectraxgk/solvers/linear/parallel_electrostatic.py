@@ -821,6 +821,7 @@ def linear_rhs_electrostatic_species_sharded(
             FieldState(phi=local_phi, apar=zero, bpar=zero),
             terms=term_config,
             force_electrostatic_fields=True,
+            skip_dissipation=True,
         )
 
     mapped = jax.shard_map(
