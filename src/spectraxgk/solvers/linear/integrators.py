@@ -522,6 +522,10 @@ def _dispatch_parallel_linear(
             parallel=parallel,
             force_electrostatic_fields=force_electrostatic_fields,
         )
+    if route_axis in {"species_hermite", "s_m", "mixed"}:
+        raise NotImplementedError(
+            "mixed species-Hermite time integration requires a separate scan-level identity gate"
+        )
     return _integrate_linear_cached_impl(
         G0,
         cache,

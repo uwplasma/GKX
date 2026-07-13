@@ -24,6 +24,7 @@ from spectraxgk.solvers.linear.parallel_electrostatic import (
 from spectraxgk.solvers.linear.parallel_streaming import *  # noqa: F403
 from spectraxgk.solvers.linear.parallel_streaming import (
     __all__ as _streaming_all,
+    linear_rhs_streaming_electrostatic_species_hermite_sharded,
     linear_rhs_streaming_electrostatic_velocity_sharded,
     linear_rhs_streaming_velocity_sharded,
 )
@@ -202,6 +203,33 @@ def _velocity_parallel_rhs_cached(
     use_custom_vjp: bool,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     route = _resolve_velocity_backend(route, terms, state_ndim=G.ndim)
+    if route.backend in {
+        "electrostatic_species_hermite_streaming",
+        "linear_electrostatic_species_hermite_streaming",
+    }:
+        if route.axis not in {"species_hermite", "s_m", "mixed"}:
+            raise NotImplementedError(
+                "mixed species-Hermite streaming requires axis='species_hermite'"
+            )
+        if not _is_streaming_only_terms(terms):
+            raise NotImplementedError(
+                "mixed species-Hermite streaming requires streaming-only LinearTerms"
+            )
+        if G.ndim != 6:
+            raise NotImplementedError(
+                "mixed species-Hermite streaming requires a multi-species 6D state"
+            )
+        if route.num_devices != 4:
+            raise NotImplementedError(
+                "the gated mixed species-Hermite mesh currently requires four devices"
+            )
+        return linear_rhs_streaming_electrostatic_species_hermite_sharded(
+            G,
+            cache,
+            params,
+            species_chunks=2,
+            hermite_chunks=2,
+        )
     if route.backend in {"electrostatic_species", "linear_electrostatic_species"}:
         if route.axis not in {"s", "species"}:
             raise NotImplementedError(
