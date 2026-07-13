@@ -420,8 +420,10 @@ def integrate_linear_diffrax(
     """Integrate the linear system with an explicit AD policy.
 
     ``derivative_mode="reverse"`` preserves the custom-VJP field solve used by
-    scalar objectives. ``"forward"`` selects native JAX rules so low-dimensional
-    JVPs can pass through fixed or adaptive Diffrax trajectories.
+    scalar objectives. For adaptive reverse gradients, set ``checkpoint=True``
+    to select Diffrax's bounded-memory recursive checkpoint adjoint.
+    ``"forward"`` selects native JAX rules so low-dimensional JVPs can pass
+    through fixed or adaptive Diffrax trajectories.
     """
 
     dfx, eqx = _require_diffrax()
