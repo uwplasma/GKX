@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from functools import partial
 from typing import Any, Callable
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 from spectraxgk.core.extension_points import CollisionOperator
 from spectraxgk.geometry import FluxTubeGeometryLike
@@ -518,42 +520,141 @@ def _integrate_species_sharded_explicit(
     parallel: Any,
     force_electrostatic_fields: bool,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
-    """Advance species shards with a compiled step and host-controlled loop."""
+    """Advance species shards inside one manual-axis scan program."""
 
-    state, damping = _prepared_linear_state_and_damping(G0, cache, params)
+    if method in {"imex", "imex2"}:
+        raise NotImplementedError(
+            "species-sharded IMEX requires a separately gated local damping solve"
+        )
+    from jax.sharding import Mesh, PartitionSpec
+
+    from spectraxgk.operators.linear.params import (
+        _as_species_array,
+        linear_terms_to_term_config,
+    )
+    from spectraxgk.solvers.linear.parallel_common import _resolve_parallel_devices
+    from spectraxgk.terms.assembly import assemble_rhs_cached_with_fields
+    from spectraxgk.terms.config import FieldState
+
+    state, _damping = _prepared_linear_state_and_damping(G0, cache, params)
     real_dtype = jnp.real(jnp.empty((), dtype=state.dtype)).dtype
     dt_val = jnp.asarray(dt, dtype=real_dtype)
-    rhs = _linear_rhs_callable(
-        cache=cache,
-        params=params,
-        terms=terms,
-        dt_val=dt_val,
-        parallel=parallel,
-        parallel_strategy="velocity",
-        force_electrostatic_fields=force_electrostatic_fields,
+    devices = _resolve_parallel_devices(
+        num_devices=getattr(parallel, "num_devices", None)
+    )
+    ns = int(state.shape[0])
+    if len(devices) != ns:
+        raise ValueError("species integration requires one device per species")
+    mesh = Mesh(np.asarray(devices), ("species",))
+    state_spec = PartitionSpec("species", None, None, None, None, None)
+    jl_spec = PartitionSpec("species", None, None, None, None)
+    b_spec = PartitionSpec("species", None, None, None)
+    vector_spec = PartitionSpec("species")
+    history_spec = PartitionSpec(None, None, None, None)
+    term_config = linear_terms_to_term_config(terms)
+    species_names = (
+        "charge_sign",
+        "density",
+        "mass",
+        "temp",
+        "vth",
+        "rho",
+        "R_over_Ln",
+        "R_over_LTi",
+        "R_over_LTe",
+        "nu",
+        "tz",
+    )
+    species_values = tuple(
+        _as_species_array(getattr(params, name), ns, name).astype(real_dtype)
+        for name in species_names
     )
 
-    def step(value: jnp.ndarray, index: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
-        advanced = _advance_linear_state(
-            value, rhs=rhs, damping=damping, dt_val=dt_val, method=method
+    def program(local_state, local_jl, local_jlb, local_b, *local_species):
+        local_cache = replace(cache, Jl=local_jl, JlB=local_jlb, b=local_b)
+        local_params = replace(
+            params, **dict(zip(species_names, local_species, strict=True))
         )
-        _dG, phi = rhs(advanced)
-        return _maybe_emit_linear_progress(
-            advanced,
-            idx=index,
-            steps=steps,
-            dt_val=dt_val,
-            phi=phi,
-            show_progress=show_progress,
-        ), phi
 
-    step_fn = jax.jit(jax.checkpoint(step) if checkpoint else step)
-    samples: list[jnp.ndarray] = []
-    for index in range(steps):
-        state, phi = step_fn(state, jnp.asarray(index, dtype=jnp.int32))
-        if (index + 1) % sample_stride == 0:
-            samples.append(phi)
-    return state, jnp.stack(samples, axis=0)
+        def local_rhs(value):
+            gm0 = value[:, :, 0, ...]
+            charge = local_species[0]
+            density = local_species[1]
+            tz = local_species[-1]
+            weight = density[:, None, None, None] * charge[:, None, None, None]
+            local_nbar = jnp.sum(weight * jnp.sum(local_jl * gm0, axis=1), axis=0)
+            g0 = jnp.sum(local_jl * local_jl, axis=1)
+            zt = jnp.where(tz == 0.0, 0.0, 1.0 / tz)
+            local_qneut = jnp.sum(weight * zt[:, None, None, None] * (1.0 - g0), axis=0)
+            nbar = jax.lax.psum(local_nbar, "species")
+            qneut = jax.lax.psum(local_qneut, "species")
+            denominator = jnp.asarray(params.tau_e, dtype=real_dtype) + qneut
+            phi = nbar / jnp.where(denominator == 0.0, jnp.inf, denominator)
+            phi = jnp.where(cache.mask0, 0.0, phi)
+            zero = jnp.zeros_like(phi)
+            rhs = assemble_rhs_cached_with_fields(
+                value,
+                local_cache,
+                local_params,
+                FieldState(phi=phi, apar=zero, bpar=zero),
+                terms=term_config,
+                force_electrostatic_fields=True,
+                skip_dissipation=True,
+            )
+            return rhs, phi
+
+        def advance(value):
+            k1, _ = local_rhs(value)
+            if method == "euler":
+                return value + dt_val * k1
+            if method == "rk2":
+                k2, _ = local_rhs(value + 0.5 * dt_val * k1)
+                return value + dt_val * k2
+            if method == "sspx3":
+
+                def rhs_fn(stage):
+                    return local_rhs(stage)
+
+                return _sspx3_step(value, rhs=rhs_fn, dt_val=dt_val)
+            k2, _ = local_rhs(value + 0.5 * dt_val * k1)
+            k3, _ = local_rhs(value + 0.5 * dt_val * k2)
+            k4, _ = local_rhs(value + dt_val * k3)
+            return value + (dt_val / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+
+        def scan_step(value, index):
+            advanced = advance(value)
+            _rhs, phi = local_rhs(advanced)
+            if show_progress:
+                advanced = jax.lax.cond(
+                    jax.lax.axis_index("species") == 0,
+                    lambda x: _maybe_emit_linear_progress(
+                        x,
+                        idx=index,
+                        steps=steps,
+                        dt_val=dt_val,
+                        phi=phi,
+                        show_progress=True,
+                    ),
+                    lambda x: x,
+                    advanced,
+                )
+            return advanced, phi
+
+        body = jax.checkpoint(scan_step) if checkpoint else scan_step
+        return jax.lax.scan(body, local_state, jnp.arange(steps))
+
+    mapped = jax.shard_map(
+        program,
+        mesh=mesh,
+        in_specs=(state_spec, jl_spec, jl_spec, b_spec)
+        + (vector_spec,) * len(species_names),
+        out_specs=(state_spec, history_spec),
+        axis_names={"species"},
+    )
+    final_state, phi_history = mapped(
+        state, cache.Jl, cache.JlB, cache.b, *species_values
+    )
+    return final_state, phi_history[sample_stride - 1 :: sample_stride]
 
 
 def _dispatch_serial_linear(
