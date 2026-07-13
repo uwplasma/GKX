@@ -554,6 +554,15 @@ def _integrate_species_sharded_explicit(
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Advance one species per device inside a named-collective ``pmap``."""
 
+    from spectraxgk.solvers.linear.parallel_common import (
+        _is_electrostatic_slice_terms,
+        _resolve_parallel_devices,
+    )
+
+    if not _is_electrostatic_slice_terms(terms):
+        raise NotImplementedError(
+            "species integration currently supports electrostatic linear slices only"
+        )
     if method in {"imex", "imex2"}:
         raise NotImplementedError(
             "species-parallel IMEX requires a separately gated local damping solve"
@@ -562,7 +571,6 @@ def _integrate_species_sharded_explicit(
         _as_species_array,
         linear_terms_to_term_config,
     )
-    from spectraxgk.solvers.linear.parallel_common import _resolve_parallel_devices
     from spectraxgk.terms.assembly import assemble_rhs_cached_with_fields
     from spectraxgk.terms.config import FieldState
 
