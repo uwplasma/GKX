@@ -72,6 +72,7 @@ def linear_rhs_electrostatic_species_hermite_sharded(
     params: LinearParams,
     *,
     terms: LinearTerms | None = None,
+    dt: jnp.ndarray | float | None = None,
     species_chunks: int = 2,
     hermite_chunks: int = 2,
     devices: Any | None = None,
@@ -94,9 +95,6 @@ def linear_rhs_electrostatic_species_hermite_sharded(
     term_cfg = linear_terms_to_term_config(terms)
     unsupported = {
         "collisions": term_cfg.collisions,
-        "hypercollisions": term_cfg.hypercollisions,
-        "hyperdiffusion": term_cfg.hyperdiffusion,
-        "end_damping": term_cfg.end_damping,
         "apar": term_cfg.apar,
         "bpar": term_cfg.bpar,
     }
@@ -301,7 +299,90 @@ def linear_rhs_electrostatic_species_hermite_sharded(
             + (global_m == 2).astype(local_state.dtype).reshape(m_shape)
             * drive_m2[:, :, None, ...]
         )
-        rhs = streaming + mirror + curvature + gradb + diamagnetic
+
+        def m_slice(value):
+            return jax.lax.dynamic_slice_in_dim(value, m_start, local_m, axis=1)
+
+        ratio_l = cache.ratio_l[None, ...]
+        ratio_m = m_slice(cache.ratio_m)[None, ...]
+        ratio_lm = m_slice(cache.ratio_lm)[None, ...]
+        hyper_ratio = m_slice(cache.hyper_ratio)[None, ...]
+        mask_const = m_slice(cache.mask_const)[None, ...]
+        l_norm = jnp.asarray(max(int(arr.shape[1]), 1), dtype=real_dtype)
+        m_norm = jnp.asarray(max(nm, 1), dtype=real_dtype)
+        constant_rate = -(
+            vth6
+            * (
+                l_norm * jnp.asarray(params.nu_hyper_l, dtype=real_dtype) * ratio_l
+                + m_norm * jnp.asarray(params.nu_hyper_m, dtype=real_dtype) * ratio_m
+            )
+            + jnp.asarray(params.nu_hyper_lm, dtype=real_dtype) * ratio_lm
+        )
+        hypercollisions = (
+            jnp.asarray(term_cfg.hypercollisions, dtype=real_dtype)
+            * jnp.asarray(params.hypercollisions_const, dtype=real_dtype)
+            * jnp.where(mask_const, constant_rate, 0.0)
+            * local_state
+            - jnp.asarray(term_cfg.hypercollisions, dtype=real_dtype)
+            * jnp.asarray(params.nu_hyper, dtype=real_dtype)
+            * hyper_ratio
+            * local_state
+        )
+        kz_source = (
+            -jnp.asarray(term_cfg.hypercollisions, dtype=real_dtype)
+            * jnp.asarray(params.hypercollisions_kz, dtype=real_dtype)
+            * jnp.asarray(params.nu_hyper_m, dtype=real_dtype)
+            * cache.m_norm_kz_factor
+            * 2.3
+            * vth6
+            * jnp.abs(jnp.asarray(params.kpar_scale, dtype=real_dtype))
+            * jnp.where(
+                m_slice(cache.mask_kz)[None, ...],
+                m_slice(cache.m_pow)[None, ...],
+                0.0,
+            )
+            * local_state
+        )
+        hypercollisions = (
+            hypercollisions
+            + jnp.abs(cache.kz)[None, None, None, None, None, :] * kz_source
+        )
+
+        kperp2 = cache.ky[:, None] ** 2 + cache.kx[None, :] ** 2
+        kx_index = max((int(cache.kx.size) - 1) // 3, 0)
+        ky_index = max((int(cache.ky.size) - 1) // 3, 0)
+        kperp2_max = cache.kx[kx_index] ** 2 + cache.ky[ky_index] ** 2
+        kperp2_max = jnp.where(kperp2_max > 0.0, kperp2_max, 1.0)
+        hyperdiffusion_rate = jnp.asarray(params.D_hyper, dtype=real_dtype) * (
+            kperp2 / kperp2_max
+        ) ** jnp.asarray(params.p_hyper_kperp, dtype=real_dtype)
+        hyperdiffusion = (
+            -jnp.asarray(term_cfg.hyperdiffusion, dtype=real_dtype)
+            * hyperdiffusion_rate[None, None, None, :, :, None]
+            * cache.dealias_mask[None, None, None, :, :, None]
+            * local_state
+        )
+        damp_amp = jnp.asarray(params.damp_ends_amp, dtype=real_dtype)
+        if dt is not None:
+            dt_value = jnp.asarray(dt, dtype=real_dtype)
+            damp_amp = jnp.where(dt_value != 0.0, damp_amp / dt_value, damp_amp)
+        end_damping = (
+            -jnp.asarray(term_cfg.end_damping, dtype=real_dtype)
+            * damp_amp
+            * (cache.ky > 0.0)[None, None, None, :, None, None]
+            * cache.damp_profile[None, None, None, None, None, :]
+            * hamiltonian
+        )
+        rhs = (
+            streaming
+            + mirror
+            + curvature
+            + gradb
+            + diamagnetic
+            + hypercollisions
+            + hyperdiffusion
+            + end_damping
+        )
         return rhs, phi
 
     mapped = jax.shard_map(

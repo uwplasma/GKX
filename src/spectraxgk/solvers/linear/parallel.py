@@ -57,6 +57,15 @@ def _use_serial_linear_route(parallel: Any | None) -> bool:
     return parallel is None or _parallel_linear_route(parallel).strategy == "serial"
 
 
+def _is_mixed_electrostatic_terms(terms: LinearTerms | None) -> bool:
+    """Return whether terms need no conserving or electromagnetic collectives."""
+
+    active = terms or LinearTerms()
+    return not any(
+        float(value) != 0.0 for value in (active.collisions, active.apar, active.bpar)
+    )
+
+
 def _serial_linear_rhs_cached(
     G: jnp.ndarray,
     cache: LinearCache,
@@ -94,7 +103,7 @@ def _resolve_velocity_backend(
     if route.backend != "auto":
         return route
     if route.axis in {"species_hermite", "s_m", "mixed"} and state_ndim == 6:
-        if _is_electrostatic_slice_terms(terms):
+        if _is_mixed_electrostatic_terms(terms):
             return _ParallelLinearRoute(
                 strategy=route.strategy,
                 backend="electrostatic_species_hermite",
@@ -213,6 +222,7 @@ def _velocity_parallel_rhs_cached(
     route: _ParallelLinearRoute,
     *,
     use_custom_vjp: bool,
+    dt: jnp.ndarray | float | None,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     route = _resolve_velocity_backend(route, terms, state_ndim=G.ndim)
     if route.backend == "electrostatic_species_hermite":
@@ -220,10 +230,10 @@ def _velocity_parallel_rhs_cached(
             raise NotImplementedError(
                 "mixed species-Hermite routing requires axis='species_hermite'"
             )
-        if not _is_electrostatic_slice_terms(terms):
+        if not _is_mixed_electrostatic_terms(terms):
             raise NotImplementedError(
-                "mixed species-Hermite routing requires collision-free "
-                "electrostatic LinearTerms"
+                "mixed species-Hermite routing requires electrostatic terms "
+                "without conserving collisions"
             )
         if G.ndim != 6:
             raise NotImplementedError(
@@ -238,6 +248,7 @@ def _velocity_parallel_rhs_cached(
             cache,
             params,
             terms=terms,
+            dt=dt,
             species_chunks=2,
             hermite_chunks=2,
         )
@@ -306,6 +317,7 @@ def linear_rhs_parallel_cached(
             terms,
             route,
             use_custom_vjp=use_custom_vjp,
+            dt=dt,
         )
 
     raise NotImplementedError(
