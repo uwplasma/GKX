@@ -58,12 +58,10 @@ def _use_serial_linear_route(parallel: Any | None) -> bool:
 
 
 def _is_mixed_electrostatic_terms(terms: LinearTerms | None) -> bool:
-    """Return whether terms need no conserving or electromagnetic collectives."""
+    """Return whether terms need no electromagnetic field collectives."""
 
     active = terms or LinearTerms()
-    return not any(
-        float(value) != 0.0 for value in (active.collisions, active.apar, active.bpar)
-    )
+    return not any(float(value) != 0.0 for value in (active.apar, active.bpar))
 
 
 def _serial_linear_rhs_cached(
@@ -232,8 +230,7 @@ def _velocity_parallel_rhs_cached(
             )
         if not _is_mixed_electrostatic_terms(terms):
             raise NotImplementedError(
-                "mixed species-Hermite routing requires electrostatic terms "
-                "without conserving collisions"
+                "mixed species-Hermite routing requires electrostatic terms"
             )
         if G.ndim != 6:
             raise NotImplementedError(

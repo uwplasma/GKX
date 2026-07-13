@@ -77,7 +77,7 @@ def linear_rhs_electrostatic_species_hermite_sharded(
     hermite_chunks: int = 2,
     devices: Any | None = None,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
-    """Compute the collision-free electrostatic RHS on a species--Hermite mesh."""
+    """Compute the electrostatic RHS on a species--Hermite mesh."""
 
     import jax
     from jax.sharding import NamedSharding, PartitionSpec
@@ -94,7 +94,6 @@ def linear_rhs_electrostatic_species_hermite_sharded(
         )
     term_cfg = linear_terms_to_term_config(terms)
     unsupported = {
-        "collisions": term_cfg.collisions,
         "apar": term_cfg.apar,
         "bpar": term_cfg.bpar,
     }
@@ -102,6 +101,10 @@ def linear_rhs_electrostatic_species_hermite_sharded(
         active = ", ".join(name for name, value in unsupported.items() if value)
         raise NotImplementedError(
             "mixed species-Hermite electrostatic routing does not yet support " + active
+        )
+    if cache.collision_lam.size != 0:
+        raise NotImplementedError(
+            "mixed routing requires the standard factorized collision operator"
         )
     ns = int(arr.shape[0])
     nm = int(arr.shape[2])
@@ -118,9 +121,11 @@ def linear_rhs_electrostatic_species_hermite_sharded(
         devices=devices,
     )
     jl_spec = PartitionSpec("species", None, None, None, None)
+    b_spec = PartitionSpec("species", None, None, None)
     species_spec = PartitionSpec("species")
     phi_spec = PartitionSpec(None, None, None)
     jl_sharding = NamedSharding(mesh, jl_spec)
+    b_sharding = NamedSharding(mesh, b_spec)
     species_sharding = NamedSharding(mesh, species_spec)
     real_dtype = jnp.real(arr).dtype
     charge = _as_species_array(params.charge_sign, ns, "charge_sign").astype(real_dtype)
@@ -129,6 +134,7 @@ def linear_rhs_electrostatic_species_hermite_sharded(
     vth = _as_species_array(params.vth, ns, "vth").astype(real_dtype)
     tprim = _as_species_array(params.R_over_LTi, ns, "R_over_LTi").astype(real_dtype)
     fprim = _as_species_array(params.R_over_Ln, ns, "R_over_Ln").astype(real_dtype)
+    nu = _as_species_array(params.nu, ns, "nu").astype(real_dtype)
     local_m = nm // m_chunks
     if local_m < 2:
         raise ValueError(
@@ -140,12 +146,15 @@ def linear_rhs_electrostatic_species_hermite_sharded(
     def mixed_rhs(
         local_state,
         local_jl,
+        local_jlb,
+        local_b,
         charge_s,
         density_s,
         tz_s,
         vth_s,
         tprim_s,
         fprim_s,
+        nu_s,
     ):
         m_start = jax.lax.axis_index("m") * local_m
         global_m = m_start + jnp.arange(local_m, dtype=jnp.int32)
@@ -373,12 +382,53 @@ def linear_rhs_electrostatic_species_hermite_sharded(
             * cache.damp_profile[None, None, None, None, None, :]
             * hamiltonian
         )
+        lb_local = jax.lax.dynamic_slice_in_dim(cache.lb_lam, m_start, local_m, axis=1)
+        collision_rate = nu_s[:, None, None, None, None, None] * (
+            lb_local[None, :, :, None, None, None] + local_b[:, None, None, ...]
+        )
+        h_m0 = jax.lax.psum(jnp.sum(hamiltonian * m0, axis=2), "m")
+        h_m1 = jax.lax.psum(jnp.sum(hamiltonian * m1, axis=2), "m")
+        m2 = (global_m == 2).astype(local_state.dtype).reshape(m_shape)
+        g_m2 = jax.lax.psum(jnp.sum(local_state * m2, axis=2), "m")
+        laguerre_index = jnp.arange(local_jl.shape[1], dtype=real_dtype)[
+            None, :, None, None, None
+        ]
+        coeff_t = (
+            laguerre_index * shift_axis(local_jl, -1, axis=1)
+            + 2.0 * laguerre_index * local_jl
+            + (laguerre_index + 1.0) * shift_axis(local_jl, 1, axis=1)
+        )
+        if int(local_jl.shape[1]) == 1:
+            t_bar = jnp.sqrt(2.0) * jnp.sum(local_jl * g_m2, axis=1)
+        else:
+            t_bar = (jnp.sqrt(2.0) / 3.0) * jnp.sum(local_jl * g_m2, axis=1) + (
+                2.0 / 3.0
+            ) * jnp.sum(coeff_t * h_m0, axis=1)
+        sqrt_b = jnp.sqrt(jnp.maximum(local_b, 0.0))
+        uperp_bar = sqrt_b * jnp.sum(local_jlb * h_m0, axis=1)
+        upar_bar = jnp.sum(local_jl * h_m1, axis=1)
+        nu5 = nu_s[:, None, None, None, None]
+        correction_m0 = (
+            nu5 * sqrt_b[:, None, ...] * local_jlb * uperp_bar[:, None, ...]
+            + nu5 * 2.0 * coeff_t * t_bar[:, None, ...]
+        )
+        correction_m1 = nu5 * local_jl * upar_bar[:, None, ...]
+        correction_m2 = nu5 * jnp.sqrt(2.0) * local_jl * t_bar[:, None, ...]
+        collision_correction = (
+            m0 * correction_m0[:, :, None, ...]
+            + m1 * correction_m1[:, :, None, ...]
+            + m2 * correction_m2[:, :, None, ...]
+        )
+        collisions = jnp.asarray(term_cfg.collisions, dtype=real_dtype) * (
+            -collision_rate * hamiltonian + collision_correction
+        )
         rhs = (
             streaming
             + mirror
             + curvature
             + gradb
             + diamagnetic
+            + collisions
             + hypercollisions
             + hyperdiffusion
             + end_damping
@@ -391,6 +441,9 @@ def linear_rhs_electrostatic_species_hermite_sharded(
         in_specs=(
             state_spec,
             jl_spec,
+            jl_spec,
+            b_spec,
+            species_spec,
             species_spec,
             species_spec,
             species_spec,
@@ -404,12 +457,15 @@ def linear_rhs_electrostatic_species_hermite_sharded(
     return mapped(
         jax.device_put(arr, state_sharding),
         jax.device_put(cache.Jl, jl_sharding),
+        jax.device_put(cache.JlB, jl_sharding),
+        jax.device_put(cache.b, b_sharding),
         jax.device_put(charge, species_sharding),
         jax.device_put(density, species_sharding),
         jax.device_put(tz, species_sharding),
         jax.device_put(vth, species_sharding),
         jax.device_put(tprim, species_sharding),
         jax.device_put(fprim, species_sharding),
+        jax.device_put(nu, species_sharding),
     )
 
 
