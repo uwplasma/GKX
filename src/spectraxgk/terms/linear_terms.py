@@ -15,6 +15,7 @@ from spectraxgk.terms.linear_dissipation import (
     end_damping_contribution as end_damping_contribution,
     hypercollisions_contribution as hypercollisions_contribution,
     hyperdiffusion_contribution as hyperdiffusion_contribution,
+    multispecies_collision_invariant_rates as multispecies_collision_invariant_rates,
 )
 from spectraxgk.terms.operators import (
     grad_z_linked_fft,

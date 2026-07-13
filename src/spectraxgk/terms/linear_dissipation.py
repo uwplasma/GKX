@@ -59,6 +59,14 @@ class CollisionInvariantRates(NamedTuple):
     thermal_energy: jnp.ndarray
 
 
+class MultispeciesCollisionRates(NamedTuple):
+    """Physical rates used to gate a species-coupled collision model."""
+
+    particle_density: jnp.ndarray
+    total_parallel_momentum: jnp.ndarray
+    total_thermal_energy: jnp.ndarray
+
+
 def _is_static_zero(value: Any, dtype: jnp.dtype | None = None) -> bool:
     arr = jnp.asarray(value, dtype=dtype)
     if isinstance(arr, jax.core.Tracer):
@@ -303,6 +311,52 @@ def collision_invariant_rates(contribution: jnp.ndarray) -> CollisionInvariantRa
             jnp.sqrt(jnp.asarray(2.0, dtype=jnp.real(state).dtype))
             * state[:, 0, 2, ...]
             + 2.0 * state[:, 1, 0, ...]
+        ),
+    )
+
+
+def multispecies_collision_invariant_rates(
+    contribution: jnp.ndarray,
+    *,
+    density: jnp.ndarray,
+    mass: jnp.ndarray,
+    temperature: jnp.ndarray,
+) -> MultispeciesCollisionRates:
+    """Return particle, total-momentum, and total-energy collision rates.
+
+    The Hermite--Laguerre coefficients are normalized separately for each
+    species.  Particle density therefore carries a factor ``n_s``, parallel
+    momentum carries ``n_s sqrt(m_s T_s)``, and thermal energy carries
+    ``n_s T_s``.  A multispecies collision model must conserve particle number
+    for every species and the sums of the latter two rates.
+    """
+
+    rates = collision_invariant_rates(contribution)
+    ns = int(rates.density.shape[0])
+    real_dtype = jnp.real(rates.density).dtype
+
+    def species_vector(value: jnp.ndarray, name: str) -> jnp.ndarray:
+        vector = jnp.asarray(value, dtype=real_dtype).reshape(-1)
+        if int(vector.size) != ns:
+            raise ValueError(f"{name} must have length {ns} (got {vector.size})")
+        return vector
+
+    density_s = species_vector(density, "density")
+    mass_s = species_vector(mass, "mass")
+    temperature_s = species_vector(temperature, "temperature")
+    spatial_axes = (None,) * (rates.density.ndim - 1)
+    particle_weight = density_s[(slice(None),) + spatial_axes]
+    momentum_weight = (
+        density_s * jnp.sqrt(mass_s * temperature_s)
+    )[(slice(None),) + spatial_axes]
+    energy_weight = (density_s * temperature_s)[(slice(None),) + spatial_axes]
+    return MultispeciesCollisionRates(
+        particle_density=particle_weight * rates.density,
+        total_parallel_momentum=jnp.sum(
+            momentum_weight * rates.parallel_momentum, axis=0
+        ),
+        total_thermal_energy=jnp.sum(
+            energy_weight * rates.thermal_energy, axis=0
         ),
     )
 
