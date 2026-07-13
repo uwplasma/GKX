@@ -297,7 +297,7 @@ jobs:
       fail-fast: false
       max-parallel: 8
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
 
     steps:
       - uses: actions/checkout@v6
@@ -320,14 +320,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
-      - name: Wide package coverage shard ${{ matrix.shard }}/48
+      - name: Wide package coverage shard ${{ matrix.shard }}/24
         env:
           MPLBACKEND: Agg
           JAX_ENABLE_X64: "true"
           SPECTRAX_X64: "1"
         run: |
           python tools/release/run_test_gates.py wide-coverage \
-            --shards 48 \
+            --shards 24 \
             --timeout 300 \
             --only-shard "${{ matrix.shard }}" \
             --skip-combine \
@@ -402,7 +402,7 @@ jobs:
         run: |
           find coverage-wide-artifacts -name '*.tgz' -print -exec tar -xzf {} \;
           python tools/release/run_test_gates.py wide-coverage \
-            --shards 48 \
+            --shards 24 \
             --combine-only \
             --require-shard-data \
             --shard-manifest coverage-wide-shard-manifest.json \
