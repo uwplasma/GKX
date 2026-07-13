@@ -573,7 +573,7 @@ def _integrate_species_sharded_explicit(
             params, **dict(zip(species_names, local_species, strict=True))
         )
 
-        def local_rhs(value):
+        def local_phi(value):
             state6 = value[None, ...]
             gm0 = state6[:, :, 0, ...]
             charge, density, tz = local_species[0], local_species[1], local_species[-1]
@@ -586,7 +586,11 @@ def _integrate_species_sharded_explicit(
             qneut = jax.lax.psum(local_qneut, "species")
             denominator = jnp.asarray(params.tau_e, dtype=real_dtype) + qneut
             phi = nbar / jnp.where(denominator == 0.0, jnp.inf, denominator)
-            phi = jnp.where(cache.mask0, 0.0, phi)
+            return jnp.where(cache.mask0, 0.0, phi)
+
+        def local_rhs(value):
+            state6 = value[None, ...]
+            phi = local_phi(value)
             zero = jnp.zeros_like(phi)
             rhs = assemble_rhs_cached_with_fields(
                 state6,
@@ -615,7 +619,7 @@ def _integrate_species_sharded_explicit(
 
         def step(value, index):
             advanced = advance(value)
-            _rhs, phi = local_rhs(advanced)
+            phi = local_phi(advanced)
             if show_progress:
                 advanced = jax.lax.cond(
                     jax.lax.axis_index("species") == 0,
