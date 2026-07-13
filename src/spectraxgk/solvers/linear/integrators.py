@@ -547,31 +547,13 @@ def _integrate_species_sharded_explicit(
             show_progress=show_progress,
         ), phi
 
-    step_body = jax.checkpoint(step) if checkpoint else step
-    chunk_size = 8
-
-    def chunk(
-        value: jnp.ndarray, start: jnp.ndarray
-    ) -> tuple[jnp.ndarray, jnp.ndarray]:
-        fields = []
-        for offset in range(chunk_size):
-            value, phi = step_body(value, start + offset)
-            fields.append(phi)
-        return value, jnp.stack(fields, axis=0)
-
-    chunk_fn = jax.jit(chunk)
-    step_fn = jax.jit(step_body)
-    histories: list[jnp.ndarray] = []
-    full_chunks, remainder = divmod(steps, chunk_size)
-    for chunk_index in range(full_chunks):
-        start = jnp.asarray(chunk_index * chunk_size, dtype=jnp.int32)
-        state, phi_chunk = chunk_fn(state, start)
-        histories.append(phi_chunk)
-    for index in range(full_chunks * chunk_size, steps):
+    step_fn = jax.jit(jax.checkpoint(step) if checkpoint else step)
+    samples: list[jnp.ndarray] = []
+    for index in range(steps):
         state, phi = step_fn(state, jnp.asarray(index, dtype=jnp.int32))
-        histories.append(phi[None, ...])
-    phi_history = jnp.concatenate(histories, axis=0)
-    return state, phi_history[sample_stride - 1 :: sample_stride]
+        if (index + 1) % sample_stride == 0:
+            samples.append(phi)
+    return state, jnp.stack(samples, axis=0)
 
 
 def _dispatch_serial_linear(
