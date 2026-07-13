@@ -35,7 +35,9 @@ from spectraxgk.solvers.nonlinear.state_integration import (
     integrate_nonlinear_cached,
     integrate_nonlinear_imex_cached,
     integrate_nonlinear_sheared,
+    integrate_nonlinear_sheared_transport,
     nonlinear_rhs_cached,
+    ShearedTransportTrace,
 )
 
 __all__ = [
@@ -52,6 +54,7 @@ __all__ = [
     "integrate_nonlinear_explicit_diagnostics_state",
     "integrate_nonlinear_imex_cached",
     "integrate_nonlinear_sheared",
+    "integrate_nonlinear_sheared_transport",
     "integrate_nonlinear_imex_diagnostics",
     "integrate_cached_explicit_scan",
     "imex_fixed_point_guess",
@@ -64,4 +67,5 @@ __all__ = [
     "make_imex_solve_step",
     "run_imex_diagnostic_scan",
     "solve_imex_step",
+    "ShearedTransportTrace",
 ]

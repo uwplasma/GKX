@@ -13,7 +13,9 @@ from spectraxgk.solvers.nonlinear.state_integration import (
     integrate_nonlinear_cached,
     integrate_nonlinear_imex_cached,
     integrate_nonlinear_sheared,
+    integrate_nonlinear_sheared_transport,
     nonlinear_rhs_cached,
+    ShearedTransportTrace,
 )
 from spectraxgk.solvers.nonlinear.diagnostic_integration import (
     _EXPLICIT_DIAGNOSTIC_OPTION_KEYS,
@@ -98,6 +100,7 @@ __all__ = [
     "integrate_nonlinear_explicit_diagnostics_state",
     "integrate_nonlinear_imex_cached",
     "integrate_nonlinear_sheared",
+    "integrate_nonlinear_sheared_transport",
     "integrate_nonlinear_imex_diagnostics",
     "maybe_emit_nonlinear_progress",
     "nonlinear_rhs_cached",
@@ -105,4 +108,5 @@ __all__ = [
     "run_sampled_explicit_diagnostic_scan",
     "sampled_scan_intervals",
     "select_nonlinear_step_diagnostics",
+    "ShearedTransportTrace",
 ]

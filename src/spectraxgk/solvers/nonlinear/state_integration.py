@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import Any, NamedTuple
 
 import jax
 import jax.numpy as jnp
@@ -11,6 +12,8 @@ import numpy as np
 from spectraxgk.geometry import FluxTubeGeometryLike, ensure_flux_tube_geometry_data
 from spectraxgk.core.grid import SpectralGrid
 from spectraxgk.core.extension_points import CollisionOperator
+from spectraxgk.diagnostics.transport import heat_flux_species
+from spectraxgk.diagnostics.weights import fieldline_quadrature_weights
 from spectraxgk.solvers.linear.implicit import _build_implicit_operator
 from spectraxgk.operators.linear.cache_model import LinearCache
 from spectraxgk.operators.linear.cache_builder import (
@@ -44,6 +47,14 @@ from spectraxgk.terms.config import FieldState, TermConfig
 from spectraxgk.terms.nonlinear import nonlinear_em_contribution
 
 
+class ShearedTransportTrace(NamedTuple):
+    """Final state and compact heat-flux history from a sheared run."""
+
+    final_state: jnp.ndarray
+    time: jnp.ndarray
+    heat_flux: jnp.ndarray
+
+
 def _linear_rhs_jit_for_terms(term_cfg: TermConfig):
     """Return the narrowest compiled linear RHS path compatible with ``term_cfg``."""
 
@@ -66,6 +77,7 @@ def nonlinear_rhs_cached(
     external_phi: jnp.ndarray | float | None = None,
     collision_operator: CollisionOperator | None = None,
     radial_phase: jnp.ndarray | None = None,
+    differentiable: bool = False,
 ) -> tuple[jnp.ndarray, FieldState]:
     """Compute the assembled nonlinear RHS and electromagnetic field state."""
 
@@ -79,6 +91,7 @@ def nonlinear_rhs_cached(
         external_phi=external_phi,
         collision_operator=collision_operator,
         radial_phase=radial_phase,
+        differentiable=differentiable,
         electrostatic_rhs_fn=assemble_rhs_cached_electrostatic_jit,
         full_rhs_fn=assemble_rhs_cached_jit,
         is_static_zero_fn=_is_static_zero,
@@ -219,7 +232,7 @@ def integrate_nonlinear(
     )
 
 
-def integrate_nonlinear_sheared(
+def _integrate_nonlinear_sheared_scan(
     G0: jnp.ndarray,
     grid: SpectralGrid,
     geom: FluxTubeGeometryLike,
@@ -233,13 +246,11 @@ def integrate_nonlinear_sheared(
     terms: TermConfig | None = None,
     laguerre_mode: str = "grid",
     collision_operator: CollisionOperator | None = None,
-) -> tuple[jnp.ndarray, FieldState]:
-    """Integrate the periodic shearing-coordinate foundation.
-
-    This research path supports fixed-step Euler and midpoint RK2 with the
-    full-complex FFT. Midpoint states and derivatives are remapped to the stage
-    coordinate basis before the RHS and back to the step basis afterward.
-    """
+    record_transport: bool = False,
+    flux_scale: float = 1.0,
+    differentiable: bool = False,
+) -> tuple[jnp.ndarray, Any]:
+    """Run the shared shearing-coordinate scan with optional transport output."""
 
     if str(grid.boundary).lower() != "periodic" or bool(grid.non_twist):
         raise NotImplementedError(
@@ -268,6 +279,7 @@ def integrate_nonlinear_sheared(
     real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
     dt_value = jnp.asarray(dt, dtype=real_dtype)
     rho_star = jnp.asarray(params.rho_star, dtype=real_dtype)
+    _, flux_fac = fieldline_quadrature_weights(geom_eff, grid)
 
     def coordinates(state: jnp.ndarray, time: jnp.ndarray, previous: jnp.ndarray):
         return advance_shearing_coordinates(
@@ -293,19 +305,23 @@ def integrate_nonlinear_sheared(
     def step(state: jnp.ndarray, index: jnp.ndarray):
         time = jnp.asarray(index, dtype=real_dtype) * dt_value
         current = coordinates(state, time, time)
+
         def rhs_at(update):
-            return nonlinear_rhs_cached(
+            updated_cache = cache_at(update)
+            derivative, fields = nonlinear_rhs_cached(
                 update.state,
-                cache_at(update),
+                updated_cache,
                 params,
                 term_cfg,
                 compressed_real_fft=False,
                 laguerre_mode=laguerre_mode,
                 collision_operator=collision_operator,
                 radial_phase=update.phase,
+                differentiable=differentiable,
             )
+            return derivative, fields, updated_cache
 
-        derivative, _ = rhs_at(current)
+        derivative, _, _ = rhs_at(current)
         new_time = time + dt_value
         if method_key == "euler":
             trial = current.state + dt_value * derivative
@@ -316,7 +332,7 @@ def integrate_nonlinear_sheared(
                 midpoint_time,
                 time,
             )
-            midpoint_derivative, _ = rhs_at(midpoint)
+            midpoint_derivative, _, _ = rhs_at(midpoint)
             derivative_in_step_basis = coordinates(
                 midpoint_derivative,
                 time,
@@ -324,10 +340,107 @@ def integrate_nonlinear_sheared(
             ).state
             trial = current.state + dt_value * derivative_in_step_basis
         advanced = coordinates(trial, new_time, time)
-        _, fields = rhs_at(advanced)
-        return jnp.asarray(advanced.state, dtype=state_dtype), fields
+        _, fields, advanced_cache = rhs_at(advanced)
+        if not record_transport:
+            return jnp.asarray(advanced.state, dtype=state_dtype), fields
+        apar = jnp.zeros_like(fields.phi) if fields.apar is None else fields.apar
+        bpar = jnp.zeros_like(fields.phi) if fields.bpar is None else fields.bpar
+        heat_flux = heat_flux_species(
+            advanced.state,
+            fields.phi,
+            apar,
+            bpar,
+            advanced_cache,
+            grid,
+            params,
+            flux_fac,
+            use_dealias=True,
+            flux_scale=flux_scale,
+        )
+        return jnp.asarray(advanced.state, dtype=state_dtype), (new_time, heat_flux)
 
     return jax.lax.scan(step, jnp.asarray(G0, dtype=state_dtype), jnp.arange(steps))
+
+
+def integrate_nonlinear_sheared(
+    G0: jnp.ndarray,
+    grid: SpectralGrid,
+    geom: FluxTubeGeometryLike,
+    params: LinearParams,
+    dt: float,
+    steps: int,
+    *,
+    shear_rate: jnp.ndarray | float,
+    method: str = "rk2",
+    cache: LinearCache | None = None,
+    terms: TermConfig | None = None,
+    laguerre_mode: str = "grid",
+    collision_operator: CollisionOperator | None = None,
+    differentiable: bool = False,
+) -> tuple[jnp.ndarray, FieldState]:
+    """Integrate the periodic shearing-coordinate foundation.
+
+    This research path supports fixed-step Euler and midpoint RK2 with the
+    full-complex FFT. Midpoint states and derivatives are remapped to the stage
+    coordinate basis before the RHS and back to the step basis afterward.
+    """
+
+    final_state, fields = _integrate_nonlinear_sheared_scan(
+        G0,
+        grid,
+        geom,
+        params,
+        dt,
+        steps,
+        shear_rate=shear_rate,
+        method=method,
+        cache=cache,
+        terms=terms,
+        laguerre_mode=laguerre_mode,
+        collision_operator=collision_operator,
+        differentiable=differentiable,
+    )
+    return final_state, fields
+
+
+def integrate_nonlinear_sheared_transport(
+    G0: jnp.ndarray,
+    grid: SpectralGrid,
+    geom: FluxTubeGeometryLike,
+    params: LinearParams,
+    dt: float,
+    steps: int,
+    *,
+    shear_rate: jnp.ndarray | float,
+    method: str = "rk2",
+    cache: LinearCache | None = None,
+    terms: TermConfig | None = None,
+    laguerre_mode: str = "grid",
+    collision_operator: CollisionOperator | None = None,
+    flux_scale: float = 1.0,
+    differentiable: bool = True,
+) -> ShearedTransportTrace:
+    """Integrate a sheared run and record canonical heat flux at every step."""
+
+    final_state, samples = _integrate_nonlinear_sheared_scan(
+        G0,
+        grid,
+        geom,
+        params,
+        dt,
+        steps,
+        shear_rate=shear_rate,
+        method=method,
+        cache=cache,
+        terms=terms,
+        laguerre_mode=laguerre_mode,
+        collision_operator=collision_operator,
+        record_transport=True,
+        flux_scale=flux_scale,
+        differentiable=differentiable,
+    )
+    time, heat_flux = samples
+    return ShearedTransportTrace(final_state, time, heat_flux)
 
 
 def integrate_nonlinear_imex_cached(
@@ -391,5 +504,7 @@ __all__ = [
     "integrate_nonlinear_cached",
     "integrate_nonlinear_imex_cached",
     "integrate_nonlinear_sheared",
+    "integrate_nonlinear_sheared_transport",
     "nonlinear_rhs_cached",
+    "ShearedTransportTrace",
 ]

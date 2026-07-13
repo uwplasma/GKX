@@ -17,6 +17,7 @@ from spectraxgk.operators.linear.cache_model import LinearCache
 from spectraxgk.operators.linear.params import LinearParams
 from spectraxgk.terms.assembly import (
     _is_static_zero,
+    assemble_rhs_cached,
     assemble_rhs_cached_electrostatic_jit,
     assemble_rhs_cached_jit,
 )
@@ -60,8 +61,10 @@ def nonlinear_rhs_cached_impl(
     external_phi: jnp.ndarray | float | None = None,
     collision_operator: CollisionOperator | None = None,
     radial_phase: jnp.ndarray | None = None,
+    differentiable: bool = False,
     electrostatic_rhs_fn: RhsCallable = assemble_rhs_cached_electrostatic_jit,
     full_rhs_fn: RhsCallable = assemble_rhs_cached_jit,
+    differentiable_rhs_fn: RhsCallable = assemble_rhs_cached,
     is_static_zero_fn: StaticZeroCallable = _is_static_zero,
     nonlinear_contribution_fn: NonlinearContributionCallable = nonlinear_em_contribution,
 ) -> tuple[jnp.ndarray, FieldState]:
@@ -69,15 +72,29 @@ def nonlinear_rhs_cached_impl(
 
     term_cfg = terms or TermConfig()
     linear_terms = terms_without_builtin_collisions(term_cfg, collision_operator)
-    linear_rhs_fn = linear_rhs_jit_for_terms_impl(
-        linear_terms,
-        electrostatic_rhs_fn=electrostatic_rhs_fn,
-        full_rhs_fn=full_rhs_fn,
-        is_static_zero_fn=is_static_zero_fn,
+    electrostatic = is_static_zero_fn(linear_terms.apar) and is_static_zero_fn(
+        linear_terms.bpar
     )
-    dG, fields = linear_rhs_fn(
-        G, cache, params, linear_terms, external_phi=external_phi
-    )
+    if differentiable:
+        dG, fields = differentiable_rhs_fn(
+            G,
+            cache,
+            params,
+            terms=linear_terms,
+            use_custom_vjp=False,
+            external_phi=external_phi,
+            force_electrostatic_fields=electrostatic,
+        )
+    else:
+        linear_rhs_fn = linear_rhs_jit_for_terms_impl(
+            linear_terms,
+            electrostatic_rhs_fn=electrostatic_rhs_fn,
+            full_rhs_fn=full_rhs_fn,
+            is_static_zero_fn=is_static_zero_fn,
+        )
+        dG, fields = linear_rhs_fn(
+            G, cache, params, linear_terms, external_phi=external_phi
+        )
     collision_rhs = custom_collision_contribution(
         G, fields, cache, params, term_cfg, collision_operator
     )
