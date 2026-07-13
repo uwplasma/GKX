@@ -19,6 +19,7 @@ from spectraxgk.solvers.linear.parallel_electrostatic import *  # noqa: F403
 from spectraxgk.solvers.linear.parallel_electrostatic import (
     __all__ as _electrostatic_all,
     linear_rhs_electrostatic_slices_velocity_sharded,
+    linear_rhs_electrostatic_species_sharded,
 )
 from spectraxgk.solvers.linear.parallel_streaming import *  # noqa: F403
 from spectraxgk.solvers.linear.parallel_streaming import (
@@ -42,7 +43,9 @@ def _normalize_parallel_token(value: Any, default: str) -> str:
 
 def _parallel_linear_route(parallel: Any) -> _ParallelLinearRoute:
     return _ParallelLinearRoute(
-        strategy=_normalize_parallel_token(getattr(parallel, "strategy", "serial"), "serial"),
+        strategy=_normalize_parallel_token(
+            getattr(parallel, "strategy", "serial"), "serial"
+        ),
         backend=_normalize_parallel_token(getattr(parallel, "backend", "auto"), "auto"),
         axis=_normalize_parallel_token(getattr(parallel, "axis", "hermite"), "hermite"),
         num_devices=getattr(parallel, "num_devices", None),
@@ -84,12 +87,24 @@ def _require_hermite_axis(route: _ParallelLinearRoute, message: str) -> None:
 def _resolve_velocity_backend(
     route: _ParallelLinearRoute,
     terms: LinearTerms | None,
+    *,
+    state_ndim: int,
 ) -> _ParallelLinearRoute:
     if route.backend != "auto":
         return route
+    if route.axis in {"s", "species"} and state_ndim == 6:
+        if _is_electrostatic_slice_terms(terms):
+            return _ParallelLinearRoute(
+                strategy=route.strategy,
+                backend="electrostatic_species",
+                axis=route.axis,
+                num_devices=route.num_devices,
+            )
+        raise NotImplementedError(
+            "species sharding currently supports electrostatic linear terms"
+        )
     _require_hermite_axis(
-        route,
-        "velocity sharding currently supports only the Hermite axis",
+        route, "velocity sharding supports only the Hermite axis or species axis"
     )
     if _is_electrostatic_slice_terms(terms):
         return _ParallelLinearRoute(
@@ -116,7 +131,9 @@ def _streaming_velocity_rhs(
         "streaming-only velocity sharding currently supports only the Hermite axis",
     )
     if not _is_streaming_only_terms(terms):
-        raise NotImplementedError("velocity streaming route requires streaming-only LinearTerms")
+        raise NotImplementedError(
+            "velocity streaming route requires streaming-only LinearTerms"
+        )
     return linear_rhs_streaming_velocity_sharded(
         G,
         cache,
@@ -184,7 +201,15 @@ def _velocity_parallel_rhs_cached(
     *,
     use_custom_vjp: bool,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
-    route = _resolve_velocity_backend(route, terms)
+    route = _resolve_velocity_backend(route, terms, state_ndim=G.ndim)
+    if route.backend in {"electrostatic_species", "linear_electrostatic_species"}:
+        if route.axis not in {"s", "species"}:
+            raise NotImplementedError(
+                "electrostatic species route requires axis='species'"
+            )
+        return linear_rhs_electrostatic_species_sharded(
+            G, cache, params, terms=terms, num_devices=route.num_devices
+        )
     if route.backend in {"streaming_only", "linear_streaming_only"}:
         return _streaming_velocity_rhs(G, cache, params, terms, route)
     if route.backend in {"streaming_electrostatic", "linear_streaming_electrostatic"}:

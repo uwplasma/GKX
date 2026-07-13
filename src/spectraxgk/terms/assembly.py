@@ -250,12 +250,8 @@ def _species_arrays(params: LinearParams, ns: int, real_dtype: Any) -> _SpeciesA
         temp=_as_species_array(params.temp, ns, "temp").astype(real_dtype),
         tz=_as_species_array(params.tz, ns, "tz").astype(real_dtype),
         vth=_as_species_array(params.vth, ns, "vth").astype(real_dtype),
-        tprim=_as_species_array(params.R_over_LTi, ns, "R_over_LTi").astype(
-            real_dtype
-        ),
-        fprim=_as_species_array(params.R_over_Ln, ns, "R_over_Ln").astype(
-            real_dtype
-        ),
+        tprim=_as_species_array(params.R_over_LTi, ns, "R_over_LTi").astype(real_dtype),
+        fprim=_as_species_array(params.R_over_Ln, ns, "R_over_Ln").astype(real_dtype),
         nu=_as_species_array(params.nu, ns, "nu").astype(real_dtype),
     )
 
@@ -606,6 +602,23 @@ def _sum_rhs_terms(contrib: dict[str, jnp.ndarray]) -> jnp.ndarray:
     return total
 
 
+def _assemble_normalized_rhs(
+    state: _RHSState,
+    cache: LinearCache,
+    species: _SpeciesArrays,
+    scalars: _ScalarParams,
+    weights: _TermWeights,
+    rhs_fields: _RHSFields,
+) -> jnp.ndarray:
+    contrib = _rhs_term_contributions(
+        state, cache, species, scalars, weights, rhs_fields
+    )
+    dG = _sum_rhs_terms(contrib)
+    if state.squeeze_species:
+        dG = dG[0]
+    return dG.astype(state.out_dtype)
+
+
 def _squeeze_species_rhs_outputs(
     total: jnp.ndarray,
     contrib: dict[str, jnp.ndarray],
@@ -613,6 +626,7 @@ def _squeeze_species_rhs_outputs(
     """Remove the synthetic species axis from total and per-term outputs."""
 
     return total[0], {key: arr[0] for key, arr in contrib.items()}
+
 
 def assemble_rhs_cached(
     G: jnp.ndarray,
@@ -651,13 +665,48 @@ def assemble_rhs_cached(
         force_electrostatic_fields=force_electrostatic_fields,
         build_H_fn=build_H,
     )
-    contrib = _rhs_term_contributions(
-        state, cache, species, scalars, weights, rhs_fields
+    return (
+        _assemble_normalized_rhs(state, cache, species, scalars, weights, rhs_fields),
+        rhs_fields.fields,
     )
-    dG = _sum_rhs_terms(contrib)
-    if state.squeeze_species:
-        dG = dG[0]
-    return dG.astype(state.out_dtype), rhs_fields.fields
+
+
+def assemble_rhs_cached_with_fields(
+    G: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    fields: FieldState,
+    *,
+    terms: TermConfig | None = None,
+    dt: jnp.ndarray | float | None = None,
+    force_electrostatic_fields: bool = False,
+) -> jnp.ndarray:
+    """Assemble local RHS terms from fields reduced outside this state shard."""
+
+    term_cfg = terms or TermConfig()
+    state = _normalized_rhs_state(G, cache)
+    species = _species_arrays(params, state.G.shape[0], state.real_dtype)
+    scalars = _scalar_params(params, state.real_dtype, dt)
+    weights = _term_weights(params, term_cfg, state.real_dtype)
+    _, _, h_apar, h_bpar = _rhs_field_views(
+        fields, term_cfg, force_electrostatic_fields=force_electrostatic_fields
+    )
+    rhs_fields = _RHSFields(
+        fields=fields,
+        H=build_H(
+            state.G,
+            cache.Jl,
+            fields.phi,
+            species.tz,
+            apar=h_apar,
+            vth=species.vth,
+            bpar=h_bpar,
+            JlB=cache.JlB,
+        ),
+        h_apar=h_apar,
+        h_bpar=h_bpar,
+    )
+    return _assemble_normalized_rhs(state, cache, species, scalars, weights, rhs_fields)
 
 
 def assemble_rhs_cached_jit(
@@ -766,6 +815,7 @@ def assemble_rhs_terms_cached(
     if state.squeeze_species:
         total, contrib = _squeeze_species_rhs_outputs(total, contrib)
     return total.astype(state.out_dtype), rhs_fields.fields, contrib
+
 
 def assemble_rhs(
     G: jnp.ndarray,

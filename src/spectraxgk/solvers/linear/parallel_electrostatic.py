@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from types import SimpleNamespace
 from typing import Any
 
@@ -132,7 +133,9 @@ def _fused_electrostatic_constants(
         w_curv=jnp.asarray(term_weights.curvature, dtype=real_dtype),
         w_gradb=jnp.asarray(term_weights.gradb, dtype=real_dtype),
         w_diamag=jnp.asarray(term_weights.diamagnetic, dtype=real_dtype),
-        local_m_index=jnp.arange(local_m, dtype=jnp.int32).reshape((1, local_m, 1, 1, 1)),
+        local_m_index=jnp.arange(local_m, dtype=jnp.int32).reshape(
+            (1, local_m, 1, 1, 1)
+        ),
         grad_z=operator_grad_z_periodic,
         shift_axis=operator_shift_axis,
         kz=cache.kz,
@@ -252,9 +255,7 @@ def _fused_mirror_term(
     )
     mirror_term = (
         -jnp.sqrt(global_m_real + 1.0) * data.ell_p1 * h_m_p1
-        - jnp.sqrt(global_m_real + 1.0)
-        * data.ell
-        * data.shift_axis(h_m_p1, -1, axis=0)
+        - jnp.sqrt(global_m_real + 1.0) * data.ell * data.shift_axis(h_m_p1, -1, axis=0)
         + jnp.sqrt(global_m_real) * data.ell * h_m_m1
         + jnp.sqrt(global_m_real) * data.ell_p1 * data.shift_axis(h_m_m1, 1, axis=0)
     )
@@ -726,8 +727,122 @@ def linear_rhs_electrostatic_slices_velocity_sharded(
     )
 
 
+def linear_rhs_electrostatic_species_sharded(
+    G: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    terms: LinearTerms | None = None,
+    *,
+    num_devices: int | None = None,
+    devices: Any | None = None,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Compute electrostatic linear terms with one species shard per device."""
+
+    from jax.sharding import Mesh, NamedSharding, PartitionSpec
+
+    from spectraxgk.operators.linear.params import (
+        _as_species_array,
+        linear_terms_to_term_config,
+    )
+    from spectraxgk.parallel.velocity import (
+        build_velocity_sharding_plan,
+        electrostatic_phi_shard_map,
+    )
+    from spectraxgk.terms.assembly import assemble_rhs_cached_with_fields
+    from spectraxgk.terms.config import FieldState
+
+    term_weights = terms if terms is not None else LinearTerms()
+    if not _is_electrostatic_slice_terms(term_weights):
+        raise NotImplementedError(
+            "species-sharded route allows only electrostatic linear terms"
+        )
+    arr = jnp.asarray(G)
+    if arr.ndim != 6:
+        raise ValueError("species-sharded route requires a 6D multi-species state")
+    ns = int(arr.shape[0])
+    device_list = _resolve_parallel_devices(num_devices=num_devices, devices=devices)
+    if len(device_list) != ns:
+        raise ValueError("species-sharded route requires one device per species")
+    plan = build_velocity_sharding_plan(arr.shape, num_devices=ns, axes=("species",))
+    real_dtype = jnp.real(arr).dtype
+
+    species_names = (
+        "charge_sign",
+        "density",
+        "mass",
+        "temp",
+        "vth",
+        "rho",
+        "R_over_Ln",
+        "R_over_LTi",
+        "R_over_LTe",
+        "nu",
+        "tz",
+    )
+    species_values = tuple(
+        _as_species_array(getattr(params, name), ns, name).astype(real_dtype)
+        for name in species_names
+    )
+    phi = electrostatic_phi_shard_map(
+        arr,
+        plan,
+        Jl=cache.Jl,
+        tau_e=params.tau_e,
+        charge=species_values[0],
+        density=species_values[1],
+        tz=species_values[-1],
+        mask0=cache.mask0,
+        devices=device_list,
+        axis_name="species",
+    )
+
+    mesh = Mesh(np.asarray(device_list), ("species",))
+    state_spec = PartitionSpec("species", None, None, None, None, None)
+    jl_spec = PartitionSpec("species", None, None, None, None)
+    b_spec = PartitionSpec("species", None, None, None)
+    vector_spec = PartitionSpec("species")
+    state_sharding = NamedSharding(mesh, state_spec)
+    jl_sharding = NamedSharding(mesh, jl_spec)
+    b_sharding = NamedSharding(mesh, b_spec)
+    vector_sharding = NamedSharding(mesh, vector_spec)
+    term_config = linear_terms_to_term_config(term_weights)
+
+    def local_rhs(local_state, local_jl, local_jlb, local_b, *local_species):
+        local_cache = replace(cache, Jl=local_jl, JlB=local_jlb, b=local_b)
+        local_params = replace(
+            params, **dict(zip(species_names, local_species, strict=True))
+        )
+        zero = jnp.zeros_like(phi)
+        return assemble_rhs_cached_with_fields(
+            local_state,
+            local_cache,
+            local_params,
+            FieldState(phi=phi, apar=zero, bpar=zero),
+            terms=term_config,
+            force_electrostatic_fields=True,
+        )
+
+    mapped = jax.shard_map(
+        local_rhs,
+        mesh=mesh,
+        in_specs=(state_spec, jl_spec, jl_spec, b_spec)
+        + (vector_spec,) * len(species_names),
+        out_specs=state_spec,
+        axis_names={"species"},
+    )
+    dG = mapped(
+        jax.device_put(arr, state_sharding),
+        jax.device_put(cache.Jl, jl_sharding),
+        jax.device_put(cache.JlB, jl_sharding),
+        jax.device_put(cache.b, b_sharding),
+        *(jax.device_put(value, vector_sharding) for value in species_values),
+    )
+    return dG, phi
+
+
 __all__ = [
     "_FUSED_ELECTROSTATIC_SLICE_KERNEL_CACHE",
     "_linear_rhs_electrostatic_slices_velocity_sharded_fused",
+    "linear_rhs_electrostatic_species_sharded",
     "linear_rhs_electrostatic_slices_velocity_sharded",
 ]

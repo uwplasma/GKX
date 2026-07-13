@@ -32,9 +32,13 @@ def _single_species_state_and_plan(
 
     arr = jnp.asarray(state)
     if arr.ndim != 5:
-        raise NotImplementedError(f"{caller} currently supports single-species 5D states")
+        raise NotImplementedError(
+            f"{caller} currently supports single-species 5D states"
+        )
     if tuple(arr.shape) != tuple(plan.state_shape):
-        raise ValueError("state shape does not match the supplied velocity sharding plan")
+        raise ValueError(
+            "state shape does not match the supplied velocity sharding plan"
+        )
     dims = _state_dims(arr.ndim)
     m_axis = dims.index("m")
     m_chunks = int(plan.chunks.get("m", 1))
@@ -56,6 +60,15 @@ def _normalise_single_species_jl(Jl: Any) -> Any:
         jl = jl[0]
     if jl.ndim != 4:
         raise ValueError("Jl must have shape (Nl, Ny, Nx, Nz) or (1, Nl, Ny, Nx, Nz)")
+    return jl
+
+
+def _normalise_species_jl(Jl: Any, *, species: int) -> Any:
+    import jax.numpy as jnp
+
+    jl = jnp.asarray(Jl)
+    if jl.ndim != 5 or int(jl.shape[0]) != species:
+        raise ValueError("Jl must have shape (Ns, Nl, Ny, Nx, Nz)")
     return jl
 
 
@@ -232,7 +245,9 @@ def diamagnetic_drive_shard_map(
     )
 
     def drive(local):
-        global_m = jax.lax.axis_index(axis_name) * shard_ctx.local_m + shard_ctx.local_m_index
+        global_m = (
+            jax.lax.axis_index(axis_name) * shard_ctx.local_m + shard_ctx.local_m_index
+        )
         return _diamagnetic_drive_from_global_m(
             state=local,
             global_m=global_m,
@@ -266,24 +281,40 @@ def electrostatic_phi_reference(
     tz: Any = 1.0,
     mask0: Any | None = None,
 ) -> Any:
-    """Return single-species electrostatic phi from a full 5D state."""
+    """Return electrostatic phi from a full single- or multi-species state."""
 
     import jax.numpy as jnp
 
     arr = jnp.asarray(state)
-    if arr.ndim != 5:
-        raise NotImplementedError(
-            "electrostatic_phi_reference currently supports single-species 5D states"
-        )
-    jl = _normalise_single_species_jl(Jl)
+    if arr.ndim not in (5, 6):
+        raise ValueError("state must have shape (l,m,ky,kx,z) or (s,l,m,ky,kx,z)")
+    multi_species = arr.ndim == 6
+    species = int(arr.shape[0]) if multi_species else 1
+    jl = (
+        _normalise_species_jl(Jl, species=species)
+        if multi_species
+        else _normalise_single_species_jl(Jl)[None, ...]
+    )
+    species_state = arr if multi_species else arr[None, ...]
     real_dtype = jnp.real(arr).dtype
-    charge_s = jnp.asarray(charge, dtype=real_dtype).reshape(-1)[0]
-    density_s = jnp.asarray(density, dtype=real_dtype).reshape(-1)[0]
-    tz_s = jnp.asarray(tz, dtype=real_dtype).reshape(-1)[0]
+    charge_s = jnp.broadcast_to(jnp.asarray(charge, dtype=real_dtype), (species,))
+    density_s = jnp.broadcast_to(jnp.asarray(density, dtype=real_dtype), (species,))
+    tz_s = jnp.broadcast_to(jnp.asarray(tz, dtype=real_dtype), (species,))
     zt = jnp.where(tz_s == 0.0, 0.0, 1.0 / tz_s)
-    nbar = density_s * charge_s * jnp.sum(jl * arr[:, 0, ...], axis=0)
-    g0 = jnp.sum(jl * jl, axis=0)
-    qneut = density_s * charge_s * zt * (1.0 - g0)
+    nbar = jnp.sum(
+        density_s[:, None, None, None]
+        * charge_s[:, None, None, None]
+        * jnp.sum(jl * species_state[:, :, 0, ...], axis=1),
+        axis=0,
+    )
+    g0 = jnp.sum(jl * jl, axis=1)
+    qneut = jnp.sum(
+        density_s[:, None, None, None]
+        * charge_s[:, None, None, None]
+        * zt[:, None, None, None]
+        * (1.0 - g0),
+        axis=0,
+    )
     den_safe = jnp.where(
         jnp.asarray(tau_e, dtype=real_dtype) + qneut == 0.0,
         jnp.inf,
@@ -308,18 +339,100 @@ def electrostatic_phi_shard_map(
     devices: Sequence[Any] | None = None,
     axis_name: str = "m",
 ) -> Any:
-    """Solve electrostatic phi using a Hermite-sharded density reduction."""
+    """Solve electrostatic phi using a species- or Hermite-sharded reduction."""
 
     import jax
     import jax.numpy as jnp
 
+    arr = jnp.asarray(state)
+    if tuple(arr.shape) != tuple(plan.state_shape):
+        raise ValueError(
+            "state shape does not match the supplied velocity sharding plan"
+        )
+    if arr.ndim == 6:
+        active_other_axes = tuple(axis for axis in plan.active_axes if axis != "s")
+        if active_other_axes:
+            raise NotImplementedError(
+                "multi-species electrostatic reduction supports only an active 's' axis"
+            )
+        s_chunks = int(plan.chunks.get("s", 1))
+        if int(arr.shape[0]) % s_chunks != 0:
+            raise ValueError(
+                "species dimension must divide evenly across species chunks"
+            )
+        if s_chunks == 1:
+            return electrostatic_phi_reference(
+                arr,
+                Jl=Jl,
+                tau_e=tau_e,
+                charge=charge,
+                density=density,
+                tz=tz,
+                mask0=mask0,
+            )
+        species = int(arr.shape[0])
+        jl = _normalise_species_jl(Jl, species=species)
+        real_dtype = jnp.real(arr).dtype
+        charge_s = jnp.broadcast_to(jnp.asarray(charge, dtype=real_dtype), (species,))
+        density_s = jnp.broadcast_to(jnp.asarray(density, dtype=real_dtype), (species,))
+        tz_s = jnp.broadcast_to(jnp.asarray(tz, dtype=real_dtype), (species,))
+        zt = jnp.where(tz_s == 0.0, 0.0, 1.0 / tz_s)
+        device_list = list(devices) if devices is not None else list(jax.devices())
+        if len(device_list) < s_chunks:
+            raise ValueError(
+                "not enough devices for the requested species decomposition"
+            )
+        from jax.sharding import Mesh, NamedSharding, PartitionSpec
+
+        mesh = Mesh(np.asarray(device_list[:s_chunks]), (axis_name,))
+        state_spec = PartitionSpec(axis_name, None, None, None, None, None)
+        jl_spec = PartitionSpec(axis_name, None, None, None, None)
+        vector_spec = PartitionSpec(axis_name)
+        output_spec = PartitionSpec(None, None, None)
+        state_sharding = NamedSharding(mesh, state_spec)
+        jl_sharding = NamedSharding(mesh, jl_spec)
+        vector_sharding = NamedSharding(mesh, vector_spec)
+
+        def local_moments(local_state, local_jl, local_charge, local_density, local_zt):
+            local_weight = (
+                local_density[:, None, None, None] * local_charge[:, None, None, None]
+            )
+            local_nbar = jnp.sum(
+                local_weight * jnp.sum(local_jl * local_state[:, :, 0, ...], axis=1),
+                axis=0,
+            )
+            local_g0 = jnp.sum(local_jl * local_jl, axis=1)
+            local_qneut = jnp.sum(
+                local_weight * local_zt[:, None, None, None] * (1.0 - local_g0), axis=0
+            )
+            return (
+                jax.lax.psum(local_nbar, axis_name),
+                jax.lax.psum(local_qneut, axis_name),
+            )
+
+        species_mapped = jax.shard_map(
+            local_moments,
+            mesh=mesh,
+            in_specs=(state_spec, jl_spec, vector_spec, vector_spec, vector_spec),
+            out_specs=(output_spec, output_spec),
+            axis_names={axis_name},
+        )
+        nbar, qneut = species_mapped(
+            jax.device_put(arr, state_sharding),
+            jax.device_put(jl, jl_sharding),
+            jax.device_put(charge_s, vector_sharding),
+            jax.device_put(density_s, vector_sharding),
+            jax.device_put(zt, vector_sharding),
+        )
+        denominator = jnp.asarray(tau_e, dtype=real_dtype) + qneut
+        phi = nbar / jnp.where(denominator == 0.0, jnp.inf, denominator)
+        return phi if mask0 is None else jnp.where(jnp.asarray(mask0), 0.0, phi)
+
     arr, m_axis, m_chunks = _single_species_state_and_plan(
-        state,
+        arr,
         plan,
         caller="electrostatic_phi_shard_map",
-        active_axis_message=(
-            "electrostatic field-reduction gate currently supports only an active 'm' axis"
-        ),
+        active_axis_message="electrostatic field reduction supports only an active 'm' axis",
     )
     if m_chunks == 1:
         return electrostatic_phi_reference(
@@ -356,20 +469,22 @@ def electrostatic_phi_shard_map(
     output_spec = PartitionSpec(*[None for _ in range(arr.ndim - 2)])
 
     def local_density(local):
-        global_m = jax.lax.axis_index(axis_name) * shard_ctx.local_m + shard_ctx.local_m_index
+        global_m = (
+            jax.lax.axis_index(axis_name) * shard_ctx.local_m + shard_ctx.local_m_index
+        )
         m0 = (global_m == 0).astype(local.dtype)
         local_gm0 = jnp.sum(local * m0, axis=m_axis)
         local_nbar = density_s * charge_s * jnp.sum(jl * local_gm0, axis=0)
         return jax.lax.psum(local_nbar, axis_name)
 
-    mapped = jax.shard_map(
+    hermite_mapped = jax.shard_map(
         local_density,
         mesh=shard_ctx.mesh,
         in_specs=input_spec,
         out_specs=output_spec,
         axis_names={axis_name},
     )
-    nbar = mapped(jax.device_put(arr, shard_ctx.sharding))
+    nbar = hermite_mapped(jax.device_put(arr, shard_ctx.sharding))
     phi = nbar / den_safe
     if mask0 is not None:
         phi = jnp.where(jnp.asarray(mask0), 0.0, phi)

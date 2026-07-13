@@ -240,38 +240,33 @@ def velocity_field_reduce_shard_map(
         raise ValueError(f"Unknown reduction axis '{axis}'")
     if key not in dims:
         raise ValueError(f"axis '{axis}' is not present in a {arr.ndim}D state")
-    if key != "m":
-        raise NotImplementedError(
-            "field-reduction shard-map gate currently supports only the Hermite axis"
-        )
-
-    m_axis = dims.index("m")
-    m_chunks = int(plan.chunks.get("m", 1))
-    active_non_hermite = tuple(
-        active_axis for active_axis in plan.active_axes if active_axis != "m"
+    reduce_axis = dims.index(key)
+    chunks = int(plan.chunks.get(key, 1))
+    active_other_axes = tuple(
+        active_axis for active_axis in plan.active_axes if active_axis != key
     )
-    if active_non_hermite:
+    if active_other_axes:
         raise NotImplementedError(
-            "field-reduction shard-map gate currently supports only an active 'm' axis"
+            "field-reduction shard-map gate supports one active reduction axis"
         )
-    if m_chunks == 1:
+    if chunks == 1:
         return velocity_field_reduce_reference(arr, axis=axis)
-    if int(arr.shape[m_axis]) % m_chunks != 0:
-        raise ValueError("Hermite dimension must divide evenly across Hermite chunks")
+    if int(arr.shape[reduce_axis]) % chunks != 0:
+        raise ValueError(f"{key} dimension must divide evenly across {key} chunks")
 
     device_list = list(devices) if devices is not None else list(jax.devices())
-    if len(device_list) < m_chunks:
+    if len(device_list) < chunks:
         raise ValueError("not enough devices for the requested Hermite decomposition")
 
-    mesh = Mesh(np.asarray(device_list[:m_chunks]), (axis_name,))
+    mesh = Mesh(np.asarray(device_list[:chunks]), (axis_name,))
     spec_list: list[str | None] = [None] * arr.ndim
-    spec_list[m_axis] = axis_name
+    spec_list[reduce_axis] = axis_name
     input_spec = PartitionSpec(*spec_list)
     output_spec = PartitionSpec(*[None for _ in range(arr.ndim - 1)])
     sharding = NamedSharding(mesh, input_spec)
 
     def reduce(local):
-        local_sum = jnp.sum(local, axis=m_axis)
+        local_sum = jnp.sum(local, axis=reduce_axis)
         return jax.lax.psum(local_sum, axis_name)
 
     mapped = jax.shard_map(
