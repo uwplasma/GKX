@@ -149,8 +149,6 @@ def _build_shift_invert_precond(
     }:
         return None, None
 
-    # Complex Hermite-line shift-invert solves are not available yet; use the
-    # damping preconditioner as the conservative fallback for those aliases.
     damping = _compute_damping(v, cache, params)
     diag = -damping.astype(v.dtype) - sigma
     safe = jnp.where(jnp.abs(diag) > 0.0, diag, 1.0 + 0.0j)
@@ -158,6 +156,8 @@ def _build_shift_invert_precond(
     shape = v.shape
     size = v.size
 
+    # A direct complex streaming-line factorization was tested here, but both
+    # ETG and KBM require field-coupled low moments for useful preconditioning.
     def apply_precond_fallback(x_flat: jnp.ndarray) -> jnp.ndarray:
         x = x_flat.reshape(shape)
         return (x * precond).reshape(size)
