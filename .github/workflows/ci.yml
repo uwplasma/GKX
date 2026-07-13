@@ -133,7 +133,7 @@ jobs:
               tests/unit/operators/test_terms_assembly.py
               tests/unit/operators/test_terms_fields.py
               tests/unit/solvers/test_nonlinear_explicit_scan.py
-              tests/unit/operators/test_terms_operators.py
+              tests/unit/operators/test_linear_streaming.py
               tests/unit/solvers/test_linear_krylov_core.py
           - name: runtime-core
             files: >-
@@ -541,7 +541,7 @@ jobs:
         run: |
           pytest -q \
             tests/unit/operators/test_terms_assembly.py \
-            tests/unit/operators/test_terms_operators.py \
+            tests/unit/operators/test_linear_streaming.py \
             tests/unit/operators/test_terms_fields.py \
             tests/unit/solvers/test_nonlinear_explicit_scan.py \
             tests/unit/nonlinear/test_nonlinear_exb.py \
