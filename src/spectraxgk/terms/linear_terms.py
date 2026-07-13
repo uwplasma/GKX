@@ -13,6 +13,7 @@ from spectraxgk.terms.linear_dissipation import (
     collision_quadratic_rate as collision_quadratic_rate,
     collisions_contribution as collisions_contribution,
     conservative_full_f_dougherty_cross_moments as conservative_full_f_dougherty_cross_moments,
+    drift_kinetic_dougherty_contribution as drift_kinetic_dougherty_contribution,
     end_damping_contribution as end_damping_contribution,
     hypercollisions_contribution as hypercollisions_contribution,
     hyperdiffusion_contribution as hyperdiffusion_contribution,

@@ -305,6 +305,58 @@ def _collision_moment_correction(
     return corr
 
 
+def drift_kinetic_dougherty_contribution(
+    state: jnp.ndarray,
+    *,
+    nu: jnp.ndarray,
+    weight: jnp.ndarray = jnp.asarray(1.0),
+) -> jnp.ndarray:
+    """Apply the linearized drift-kinetic Dougherty moment operator.
+
+    This is Appendix C, equation (C6), of Frei, Hoffmann & Ricci (2022),
+    mapped to SPECTRAX-GK's ``(species, ell, m, ky, kx, z)`` ordering and
+    Laguerre-sign convention. The density and parallel-flow moments and the
+    combined thermal moment ``sqrt(2) G[0, 2] + 2 G[1, 0]`` are exact null
+    directions. Five-dimensional single-species states are also accepted.
+
+    The kernel is both an independently auditable reference and a usable
+    long-wavelength collision operator. It is not the finite-Larmor-radius
+    Sugama or Coulomb operator.
+    """
+
+    value = jnp.asarray(state)
+    if value.ndim not in {5, 6}:
+        raise ValueError("collision state must have five or six dimensions")
+    expanded = value[None, ...] if value.ndim == 5 else value
+    if expanded.shape[1] < 2 or expanded.shape[2] < 3:
+        raise ValueError("drift-kinetic Dougherty requires Nl >= 2 and Nm >= 3")
+
+    ns, nl, nm = map(int, expanded.shape[:3])
+    real_dtype = jnp.real(expanded).dtype
+    nu_s = _species_collision_frequency(nu, ns=ns, dtype=real_dtype)
+    rate = nu_s[:, None, None, None, None, None]
+    ell = jnp.arange(nl, dtype=real_dtype)[None, :, None, None, None, None]
+    hermite = jnp.arange(nm, dtype=real_dtype)[None, None, :, None, None, None]
+    contribution = -rate * (2.0 * ell + hermite) * expanded
+
+    temperature = (
+        jnp.sqrt(jnp.asarray(2.0, dtype=real_dtype)) * expanded[:, 0, 2]
+        + 2.0 * expanded[:, 1, 0]
+    ) / 3.0
+    spatial_rate = nu_s[(slice(None),) + (None,) * (temperature.ndim - 1)]
+    contribution = contribution.at[:, 0, 1].add(
+        spatial_rate * expanded[:, 0, 1]
+    )
+    contribution = contribution.at[:, 0, 2].add(
+        spatial_rate * jnp.sqrt(jnp.asarray(2.0, dtype=real_dtype)) * temperature
+    )
+    contribution = contribution.at[:, 1, 0].add(
+        2.0 * spatial_rate * temperature
+    )
+    result = jnp.asarray(weight, dtype=real_dtype) * contribution
+    return result[0] if value.ndim == 5 else result
+
+
 def collisions_contribution(
     H: jnp.ndarray,
     *,
@@ -962,6 +1014,7 @@ __all__ = [
     "collision_invariant_rates",
     "collision_quadratic_rate",
     "collisions_contribution",
+    "drift_kinetic_dougherty_contribution",
     "end_damping_contribution",
     "hypercollisions_contribution",
     "hyperdiffusion_contribution",
