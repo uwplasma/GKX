@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from functools import partial
 from typing import Any, Callable
 
@@ -518,42 +519,134 @@ def _integrate_species_sharded_explicit(
     parallel: Any,
     force_electrostatic_fields: bool,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
-    """Advance species shards with a compiled step and host-controlled loop."""
+    """Advance one species per device inside a named-collective ``pmap``."""
 
-    state, damping = _prepared_linear_state_and_damping(G0, cache, params)
+    if method in {"imex", "imex2"}:
+        raise NotImplementedError(
+            "species-parallel IMEX requires a separately gated local damping solve"
+        )
+    from spectraxgk.operators.linear.params import (
+        _as_species_array,
+        linear_terms_to_term_config,
+    )
+    from spectraxgk.solvers.linear.parallel_common import _resolve_parallel_devices
+    from spectraxgk.terms.assembly import assemble_rhs_cached_with_fields
+    from spectraxgk.terms.config import FieldState
+
+    state, _damping = _prepared_linear_state_and_damping(G0, cache, params)
     real_dtype = jnp.real(jnp.empty((), dtype=state.dtype)).dtype
     dt_val = jnp.asarray(dt, dtype=real_dtype)
-    rhs = _linear_rhs_callable(
-        cache=cache,
-        params=params,
-        terms=terms,
-        dt_val=dt_val,
-        parallel=parallel,
-        parallel_strategy="velocity",
-        force_electrostatic_fields=force_electrostatic_fields,
+    devices = _resolve_parallel_devices(
+        num_devices=getattr(parallel, "num_devices", None)
     )
+    ns = int(state.shape[0])
+    if len(devices) != ns:
+        raise ValueError("species integration requires one device per species")
+    species_names = (
+        "charge_sign",
+        "density",
+        "mass",
+        "temp",
+        "vth",
+        "rho",
+        "R_over_Ln",
+        "R_over_LTi",
+        "R_over_LTe",
+        "nu",
+        "tz",
+    )
+    species_values = tuple(
+        _as_species_array(getattr(params, name), ns, name).astype(real_dtype)
+        for name in species_names
+    )
+    term_config = linear_terms_to_term_config(terms)
 
-    def step(value: jnp.ndarray, index: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
-        advanced = _advance_linear_state(
-            value, rhs=rhs, damping=damping, dt_val=dt_val, method=method
+    def program(local_state, local_jl, local_jlb, local_b, *species_scalars):
+        local_species = tuple(jnp.reshape(value, (1,)) for value in species_scalars)
+        local_cache = replace(
+            cache,
+            Jl=local_jl[None, ...],
+            JlB=local_jlb[None, ...],
+            b=local_b[None, ...],
         )
-        _dG, phi = rhs(advanced)
-        return _maybe_emit_linear_progress(
-            advanced,
-            idx=index,
-            steps=steps,
-            dt_val=dt_val,
-            phi=phi,
-            show_progress=show_progress,
-        ), phi
+        local_params = replace(
+            params, **dict(zip(species_names, local_species, strict=True))
+        )
 
-    step_fn = jax.jit(jax.checkpoint(step) if checkpoint else step)
-    samples: list[jnp.ndarray] = []
-    for index in range(steps):
-        state, phi = step_fn(state, jnp.asarray(index, dtype=jnp.int32))
-        if (index + 1) % sample_stride == 0:
-            samples.append(phi)
-    return state, jnp.stack(samples, axis=0)
+        def local_rhs(value):
+            state6 = value[None, ...]
+            gm0 = state6[:, :, 0, ...]
+            charge, density, tz = local_species[0], local_species[1], local_species[-1]
+            weight = density[:, None, None, None] * charge[:, None, None, None]
+            local_nbar = jnp.sum(weight * jnp.sum(local_cache.Jl * gm0, axis=1), axis=0)
+            g0 = jnp.sum(local_cache.Jl * local_cache.Jl, axis=1)
+            zt = jnp.where(tz == 0.0, 0.0, 1.0 / tz)
+            local_qneut = jnp.sum(weight * zt[:, None, None, None] * (1.0 - g0), axis=0)
+            nbar = jax.lax.psum(local_nbar, "species")
+            qneut = jax.lax.psum(local_qneut, "species")
+            denominator = jnp.asarray(params.tau_e, dtype=real_dtype) + qneut
+            phi = nbar / jnp.where(denominator == 0.0, jnp.inf, denominator)
+            phi = jnp.where(cache.mask0, 0.0, phi)
+            zero = jnp.zeros_like(phi)
+            rhs = assemble_rhs_cached_with_fields(
+                state6,
+                local_cache,
+                local_params,
+                FieldState(phi=phi, apar=zero, bpar=zero),
+                terms=term_config,
+                force_electrostatic_fields=True,
+                skip_dissipation=True,
+            )
+            return rhs[0], phi
+
+        def advance(value):
+            k1, _ = local_rhs(value)
+            if method == "euler":
+                return value + dt_val * k1
+            if method == "rk2":
+                k2, _ = local_rhs(value + 0.5 * dt_val * k1)
+                return value + dt_val * k2
+            if method == "sspx3":
+                return _sspx3_step(value, rhs=local_rhs, dt_val=dt_val)
+            k2, _ = local_rhs(value + 0.5 * dt_val * k1)
+            k3, _ = local_rhs(value + 0.5 * dt_val * k2)
+            k4, _ = local_rhs(value + dt_val * k3)
+            return value + (dt_val / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+
+        def step(value, index):
+            advanced = advance(value)
+            _rhs, phi = local_rhs(advanced)
+            if show_progress:
+                advanced = jax.lax.cond(
+                    jax.lax.axis_index("species") == 0,
+                    lambda x: _maybe_emit_linear_progress(
+                        x,
+                        idx=index,
+                        steps=steps,
+                        dt_val=dt_val,
+                        phi=phi,
+                        show_progress=True,
+                    ),
+                    lambda x: x,
+                    advanced,
+                )
+            return advanced, phi
+
+        body = jax.checkpoint(step) if checkpoint else step
+        return jax.lax.scan(body, local_state, jnp.arange(steps))
+
+    mapped = jax.pmap(program, axis_name="species", devices=devices)
+    final_state, fields_by_device = mapped(
+        state,
+        cache.Jl,
+        cache.JlB,
+        cache.b,
+        *species_values,
+    )
+    return (
+        final_state,
+        fields_by_device[0, sample_stride - 1 :: sample_stride],
+    )
 
 
 def _dispatch_serial_linear(
