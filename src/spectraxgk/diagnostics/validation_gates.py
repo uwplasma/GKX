@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 
@@ -14,6 +15,9 @@ from spectraxgk.diagnostics.analysis import (
     ObservedOrderMetrics,
 )
 from spectraxgk.diagnostics.modes import EigenfunctionComparisonMetrics
+from spectraxgk.diagnostics.transport_windows import (
+    nonlinear_window_stats_promotion_ready,
+)
 
 
 @dataclass(frozen=True)
@@ -519,6 +523,108 @@ def branch_continuity_gate_report(
     return gate_report(case, source, gates)
 
 
+def _transport_stat(report: dict[str, Any], key: str) -> float | None:
+    stats = report.get("statistics")
+    if not isinstance(stats, dict):
+        return None
+    try:
+        value = float(stats[key])
+    except (KeyError, TypeError, ValueError):
+        return None
+    return value if np.isfinite(value) else None
+
+
+def matched_nonlinear_transport_report(
+    baseline: dict[str, Any],
+    treatment: dict[str, Any],
+    *,
+    case: str = "matched_nonlinear_transport",
+    treatment_name: str = "treatment",
+    min_relative_reduction: float = 0.0,
+    min_uncertainty_z_score: float = 0.0,
+    value_floor: float = 1.0e-12,
+) -> dict[str, Any]:
+    """Compare two independently converged post-transient transport windows."""
+
+    if min_relative_reduction < 0.0 or min_uncertainty_z_score < 0.0:
+        raise ValueError("matched transport thresholds must be non-negative")
+    if value_floor <= 0.0:
+        raise ValueError("value_floor must be positive")
+    baseline_ready, baseline_failures = nonlinear_window_stats_promotion_ready(baseline)
+    treatment_ready, treatment_failures = nonlinear_window_stats_promotion_ready(
+        treatment
+    )
+    baseline_mean = _transport_stat(baseline, "late_mean")
+    treatment_mean = _transport_stat(treatment, "late_mean")
+    baseline_sem = _transport_stat(baseline, "sem")
+    treatment_sem = _transport_stat(treatment, "sem")
+    finite = all(
+        value is not None
+        for value in (baseline_mean, treatment_mean, baseline_sem, treatment_sem)
+    )
+    reduction = separation = None
+    if finite:
+        assert baseline_mean is not None and treatment_mean is not None
+        assert baseline_sem is not None and treatment_sem is not None
+        difference = baseline_mean - treatment_mean
+        reduction = difference / max(abs(baseline_mean), value_floor)
+        separation = difference / max(
+            float(np.hypot(baseline_sem, treatment_sem)), value_floor
+        )
+    gate_specs = (
+        ("baseline_window_passed", baseline_ready, baseline_failures),
+        ("treatment_window_passed", treatment_ready, treatment_failures),
+        ("finite_transport_statistics", finite, "means and SEMs must be finite"),
+        (
+            "relative_reduction",
+            reduction is not None and reduction >= min_relative_reduction,
+            f"value={reduction} gate={min_relative_reduction}",
+        ),
+        (
+            "uncertainty_separation",
+            separation is not None and separation >= min_uncertainty_z_score,
+            f"value={separation} gate={min_uncertainty_z_score}",
+        ),
+    )
+    gates = [
+        {"metric": metric, "passed": bool(passed), "detail": str(detail)}
+        for metric, passed, detail in gate_specs
+    ]
+    passed = all(gate["passed"] for gate in gates)
+    return {
+        "kind": "matched_nonlinear_transport_comparison",
+        "claim_level": "matched_post_transient_transport_comparison",
+        "case": case,
+        "treatment": treatment_name,
+        "passed": passed,
+        "statistics": {
+            "baseline_mean": baseline_mean,
+            "treatment_mean": treatment_mean,
+            "baseline_sem": baseline_sem,
+            "treatment_sem": treatment_sem,
+            "relative_reduction": reduction,
+            "uncertainty_z_score": separation,
+        },
+        "gates": gates,
+        "gate_report": {
+            "case": case,
+            "source": "matched_nonlinear_window_reports",
+            "passed": passed,
+            "max_abs_error": 0.0 if passed else 1.0,
+            "max_rel_error": 0.0 if passed else 1.0,
+            "gates": gates,
+        },
+        "baseline": baseline,
+        "treatment_window": treatment,
+        "windows_ready": baseline_ready and treatment_ready,
+        "config": {
+            "min_relative_reduction": min_relative_reduction,
+            "min_uncertainty_z_score": min_uncertainty_z_score,
+            "value_floor": value_floor,
+        },
+    }
+
+
 
 __all__ = [
     "GateReport",
@@ -530,6 +636,7 @@ __all__ = [
     "gate_report",
     "gate_report_to_dict",
     "linear_metrics_gate_report",
+    "matched_nonlinear_transport_report",
     "nonlinear_heat_flux_convergence_gate_report",
     "nonlinear_window_gate_report",
     "observed_order_gate_report",
