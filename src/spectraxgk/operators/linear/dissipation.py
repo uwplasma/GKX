@@ -853,13 +853,19 @@ def hyperdiffusion_contribution(
 
     kx2 = kx * kx
     ky2 = ky * ky
-    kperp2 = ky2[:, None] + kx2[None, :]
+    if kx2.ndim == 1:
+        kperp2 = ky2[:, None] + kx2[None, :]
+    elif kx2.ndim == 2 and tuple(kx2.shape) == (ky.size, dealias_mask.shape[1]):
+        kperp2 = ky2[:, None] + kx2
+    else:
+        raise ValueError("kx must have shape (kx,) or (ky, kx)")
 
-    nx = kx.size
+    nx = int(dealias_mask.shape[1])
     ny = ky.size
     kx_idx = max((nx - 1) // 3, 0)
     ky_idx = max((ny - 1) // 3, 0)
-    kperp2_max = kx2[kx_idx] + ky2[ky_idx]
+    kx2_max = kx2[kx_idx] if kx2.ndim == 1 else kx2[ky_idx, kx_idx]
+    kperp2_max = kx2_max + ky2[ky_idx]
     kperp2_max = jnp.where(kperp2_max > 0.0, kperp2_max, 1.0)
 
     Dfac = D_hyper * (kperp2 / kperp2_max) ** p_hyper_kperp

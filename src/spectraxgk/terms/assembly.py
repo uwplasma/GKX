@@ -535,7 +535,7 @@ def _dissipation_contributions(
     )
     hyperdiffusion = hyperdiffusion_contribution(
         G,
-        kx=cache.kx,
+        kx=cache.kx_grid,
         ky=cache.ky,
         dealias_mask=cache.dealias_mask,
         D_hyper=scalars.D_hyper,

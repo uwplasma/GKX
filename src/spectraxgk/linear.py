@@ -27,6 +27,7 @@ from spectraxgk.operators.linear.cache_model import (
 )
 from spectraxgk.operators.linear.cache_builder import (
     build_linear_cache,  # noqa: F401 - linear API helper re-export
+    update_linear_cache_for_sheared_kx,  # noqa: F401 - linear API helper re-export
 )
 from spectraxgk.operators.linear.cache_arrays import (
     _build_end_damping_profile_array,  # noqa: F401 - linear API helper re-export

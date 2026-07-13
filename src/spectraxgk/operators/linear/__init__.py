@@ -7,7 +7,7 @@ from typing import Any
 
 _EXPORTS = {
     "cache_model": ["LinearCache"],
-    "cache_builder": ["build_linear_cache"],
+    "cache_builder": ["build_linear_cache", "update_linear_cache_for_sheared_kx"],
     "cache_arrays": [
         "_build_end_damping_profile_array",
         "_build_gyroaverage_cache_arrays",

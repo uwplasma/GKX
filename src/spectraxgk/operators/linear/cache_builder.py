@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 import jax.numpy as jnp
@@ -401,6 +401,79 @@ def _build_standard_kperp_and_drift_arrays(
     gb_d = gb_d.astype(kx_eff.dtype)
     omega_d = (cv_d + gb_d).astype(kx_eff.dtype)
     return kperp2, cv_d, gb_d, omega_d
+
+
+def update_linear_cache_for_sheared_kx(
+    cache: LinearCache,
+    grid: SpectralGrid,
+    geom: FluxTubeGeometryLike,
+    params: LinearParams,
+    effective_kx_grid: jnp.ndarray,
+) -> LinearCache:
+    """Rebuild every continuously sheared ``kx``-dependent cache array.
+
+    ``effective_kx_grid`` uses the same normalized units and ``(ky, kx)``
+    layout as ``cache.kx_grid``. This foundation currently admits periodic,
+    standard flux tubes only. Linked and non-twist boundaries need an
+    additional boundary-phase update and therefore fail closed.
+    """
+
+    boundary = str(grid.boundary).lower()
+    if boundary != "periodic" or bool(grid.non_twist):
+        raise NotImplementedError(
+            "sheared-kx cache updates currently require a periodic standard flux tube"
+        )
+    kx_grid = jnp.asarray(effective_kx_grid, dtype=cache.kx_grid.dtype)
+    if tuple(kx_grid.shape) != tuple(cache.kx_grid.shape):
+        raise ValueError("effective_kx_grid must have shape (ky, kx)")
+
+    theta = jnp.asarray(grid.z, dtype=cache.kperp2.dtype)
+    geom_data = ensure_flux_tube_geometry_data(geom, theta)
+    kx0 = kx_grid[:, :, None]
+    ky0 = jnp.asarray(cache.ky, dtype=cache.kperp2.dtype)[:, None, None]
+    theta0 = theta[None, None, :]
+    kperp2 = geom_data.k_perp2(kx0, ky0, theta0).astype(cache.kperp2.dtype)
+
+    cv, gb, cv0, gb0 = geom_data.drift_coeffs(theta)
+    shear = jnp.asarray(geom_data.s_hat, dtype=cache.kperp2.dtype)
+    shear_safe = jnp.where(shear == 0.0, 1.0, shear)
+    kx_hat = jnp.where(shear == 0.0, kx0, kx0 / shear_safe)
+    cv_d = (ky0 * cv[None, None, :] + kx_hat * cv0[None, None, :]).astype(
+        cache.cv_d.dtype
+    )
+    gb_d = (ky0 * gb[None, None, :] + kx_hat * gb0[None, None, :]).astype(
+        cache.gb_d.dtype
+    )
+    mask = jnp.asarray(cache.dealias_mask, dtype=cache.kperp2.dtype)[:, :, None]
+    kperp2 = kperp2 * mask
+    cv_d = cv_d * mask
+    gb_d = gb_d * mask
+    omega_d = cv_d + gb_d
+
+    gyro = _build_laguerre_gyro_cache(
+        params,
+        geom_data=geom_data,
+        kperp2=kperp2,
+        bmag=cache.bmag,
+        Nl=int(cache.Jl.shape[1]),
+        real_dtype=cache.kperp2.dtype,
+    )
+    return replace(
+        cache,
+        Jl=gyro.Jl,
+        b=gyro.b.astype(cache.b.dtype),
+        kperp2=kperp2,
+        omega_d=omega_d,
+        cv_d=cv_d,
+        gb_d=gb_d,
+        kx_grid=kx_grid,
+        JlB=gyro.JlB.astype(cache.JlB.dtype),
+        laguerre_to_grid=gyro.laguerre_to_grid,
+        laguerre_to_spectral=gyro.laguerre_to_spectral,
+        laguerre_roots=gyro.laguerre_roots,
+        laguerre_j0=gyro.laguerre_j0,
+        laguerre_j1_over_alpha=gyro.laguerre_j1_over_alpha,
+    )
 
 
 def _apply_dealias_to_kperp_and_drifts(
