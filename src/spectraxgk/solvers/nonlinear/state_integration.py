@@ -219,7 +219,7 @@ def integrate_nonlinear(
     )
 
 
-def integrate_nonlinear_sheared_euler(
+def integrate_nonlinear_sheared(
     G0: jnp.ndarray,
     grid: SpectralGrid,
     geom: FluxTubeGeometryLike,
@@ -228,16 +228,17 @@ def integrate_nonlinear_sheared_euler(
     steps: int,
     *,
     shear_rate: jnp.ndarray | float,
+    method: str = "rk2",
     cache: LinearCache | None = None,
     terms: TermConfig | None = None,
     laguerre_mode: str = "grid",
     collision_operator: CollisionOperator | None = None,
 ) -> tuple[jnp.ndarray, FieldState]:
-    """Integrate the periodic shearing-coordinate foundation with Euler steps.
+    """Integrate the periodic shearing-coordinate foundation.
 
-    This research path intentionally supports only fixed-step Euler and the
-    full-complex FFT. Higher-order stage-time routing and linked-boundary phases
-    must pass separate gates before flow shear is exposed in runtime inputs.
+    This research path supports fixed-step Euler and midpoint RK2 with the
+    full-complex FFT. Midpoint states and derivatives are remapped to the stage
+    coordinate basis before the RHS and back to the step basis afterward.
     """
 
     if str(grid.boundary).lower() != "periodic" or bool(grid.non_twist):
@@ -246,6 +247,9 @@ def integrate_nonlinear_sheared_euler(
         )
     if steps < 1:
         raise ValueError("steps must be at least one")
+    method_key = str(method).lower()
+    if method_key not in {"euler", "rk2"}:
+        raise ValueError("sheared integration method must be 'euler' or 'rk2'")
     geom_eff = ensure_flux_tube_geometry_data(geom, grid.z)
     if cache is None:
         if G0.ndim == 5:
@@ -289,31 +293,38 @@ def integrate_nonlinear_sheared_euler(
     def step(state: jnp.ndarray, index: jnp.ndarray):
         time = jnp.asarray(index, dtype=real_dtype) * dt_value
         current = coordinates(state, time, time)
-        current_cache = cache_at(current)
-        derivative, _ = nonlinear_rhs_cached(
-            current.state,
-            current_cache,
-            params,
-            term_cfg,
-            compressed_real_fft=False,
-            laguerre_mode=laguerre_mode,
-            collision_operator=collision_operator,
-            radial_phase=current.phase,
-        )
-        trial = current.state + dt_value * derivative
+        def rhs_at(update):
+            return nonlinear_rhs_cached(
+                update.state,
+                cache_at(update),
+                params,
+                term_cfg,
+                compressed_real_fft=False,
+                laguerre_mode=laguerre_mode,
+                collision_operator=collision_operator,
+                radial_phase=update.phase,
+            )
+
+        derivative, _ = rhs_at(current)
         new_time = time + dt_value
+        if method_key == "euler":
+            trial = current.state + dt_value * derivative
+        else:
+            midpoint_time = time + 0.5 * dt_value
+            midpoint = coordinates(
+                current.state + 0.5 * dt_value * derivative,
+                midpoint_time,
+                time,
+            )
+            midpoint_derivative, _ = rhs_at(midpoint)
+            derivative_in_step_basis = coordinates(
+                midpoint_derivative,
+                time,
+                midpoint_time,
+            ).state
+            trial = current.state + dt_value * derivative_in_step_basis
         advanced = coordinates(trial, new_time, time)
-        new_cache = cache_at(advanced)
-        _, fields = nonlinear_rhs_cached(
-            advanced.state,
-            new_cache,
-            params,
-            term_cfg,
-            compressed_real_fft=False,
-            laguerre_mode=laguerre_mode,
-            collision_operator=collision_operator,
-            radial_phase=advanced.phase,
-        )
+        _, fields = rhs_at(advanced)
         return jnp.asarray(advanced.state, dtype=state_dtype), fields
 
     return jax.lax.scan(step, jnp.asarray(G0, dtype=state_dtype), jnp.arange(steps))
@@ -379,6 +390,6 @@ __all__ = [
     "integrate_nonlinear",
     "integrate_nonlinear_cached",
     "integrate_nonlinear_imex_cached",
-    "integrate_nonlinear_sheared_euler",
+    "integrate_nonlinear_sheared",
     "nonlinear_rhs_cached",
 ]
