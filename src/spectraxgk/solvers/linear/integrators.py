@@ -556,15 +556,10 @@ def _integrate_species_sharded_explicit(
     """Advance one species per device inside a named-collective ``pmap``."""
 
     from spectraxgk.solvers.linear.parallel_common import (
-        _is_electrostatic_field_terms,
         _is_electrostatic_slice_terms,
         _resolve_parallel_devices,
     )
 
-    if not _is_electrostatic_field_terms(terms):
-        raise NotImplementedError(
-            "species integration currently supports electrostatic field terms only"
-        )
     skip_dissipation = _is_electrostatic_slice_terms(terms)
     if method in {"imex", "imex2"}:
         raise NotImplementedError(
@@ -575,7 +570,7 @@ def _integrate_species_sharded_explicit(
         linear_terms_to_term_config,
     )
     from spectraxgk.terms.assembly import assemble_rhs_cached_with_fields
-    from spectraxgk.terms.config import FieldState
+    from spectraxgk.terms.fields import solve_fields_species_shard
 
     state, _damping = _prepared_linear_state_and_damping(G0, cache, params)
     real_dtype = jnp.real(jnp.empty((), dtype=state.dtype)).dtype
@@ -617,35 +612,38 @@ def _integrate_species_sharded_explicit(
             params, **dict(zip(species_names, local_species, strict=True))
         )
 
-        def local_phi(value):
-            state6 = value[None, ...]
-            gm0 = state6[:, :, 0, ...]
-            charge, density, tz = local_species[0], local_species[1], local_species[-1]
-            weight = density[:, None, None, None] * charge[:, None, None, None]
-            local_nbar = jnp.sum(weight * jnp.sum(local_cache.Jl * gm0, axis=1), axis=0)
-            g0 = jnp.sum(local_cache.Jl * local_cache.Jl, axis=1)
-            zt = jnp.where(tz == 0.0, 0.0, 1.0 / tz)
-            local_qneut = jnp.sum(weight * zt[:, None, None, None] * (1.0 - g0), axis=0)
-            nbar = jax.lax.psum(local_nbar, "species")
-            qneut = jax.lax.psum(local_qneut, "species")
-            denominator = jnp.asarray(params.tau_e, dtype=real_dtype) + qneut
-            phi = nbar / jnp.where(denominator == 0.0, jnp.inf, denominator)
-            return jnp.where(cache.mask0, 0.0, phi)
+        def local_fields(value):
+            electromagnetic = not force_electrostatic_fields
+            return solve_fields_species_shard(
+                value[None, ...],
+                local_cache,
+                local_params,
+                local_species[0],
+                local_species[1],
+                local_species[3],
+                local_species[2],
+                local_species[-1],
+                local_species[4],
+                jnp.asarray(
+                    params.fapar * terms.apar if electromagnetic else 0.0,
+                    dtype=real_dtype,
+                ),
+                jnp.asarray(terms.bpar if electromagnetic else 0.0, dtype=real_dtype),
+            )
 
         def local_rhs(value):
             state6 = value[None, ...]
-            phi = local_phi(value)
-            zero = jnp.zeros_like(phi)
+            fields = local_fields(value)
             rhs = assemble_rhs_cached_with_fields(
                 state6,
                 local_cache,
                 local_params,
-                FieldState(phi=phi, apar=zero, bpar=zero),
+                fields,
                 terms=term_config,
-                force_electrostatic_fields=True,
+                force_electrostatic_fields=force_electrostatic_fields,
                 skip_dissipation=skip_dissipation,
             )
-            return rhs[0], phi
+            return rhs[0], fields.phi
 
         def advance(value):
             k1, _ = local_rhs(value)
@@ -663,7 +661,7 @@ def _integrate_species_sharded_explicit(
 
         def step(value, index):
             advanced = advance(value)
-            phi = local_phi(advanced)
+            phi = local_fields(advanced).phi
             if show_progress:
                 advanced = jax.lax.cond(
                     jax.lax.axis_index("species") == 0,

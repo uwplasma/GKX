@@ -7,7 +7,6 @@ from dataclasses import dataclass
 import jax
 import jax.numpy as jnp
 
-from spectraxgk.operators.linear.moments import quasineutrality_phi
 from spectraxgk.terms.config import FieldState
 
 
@@ -40,6 +39,13 @@ class _FieldMoments:
     g0: jnp.ndarray
     qneut: jnp.ndarray
     qphi: jnp.ndarray
+
+
+def _species_sum(value: jnp.ndarray, axis_name: str | None) -> jnp.ndarray:
+    """Sum local species contributions and optionally reduce across devices."""
+
+    local_sum = jnp.sum(value, axis=0)
+    return local_sum if axis_name is None else jax.lax.psum(local_sum, axis_name)
 
 
 def _field_solve_coefficients(
@@ -81,21 +87,26 @@ def _field_solve_coefficients(
     )
 
 
-def _field_moments(G: jnp.ndarray, coeffs: _FieldSolveCoefficients) -> _FieldMoments:
+def _field_moments(
+    G: jnp.ndarray,
+    coeffs: _FieldSolveCoefficients,
+    *,
+    axis_name: str | None = None,
+) -> _FieldMoments:
     Gm0 = G[:, :, 0, ...]
-    nbar = jnp.sum(
+    nbar = _species_sum(
         coeffs.density[:, None, None, None]
         * coeffs.charge[:, None, None, None]
         * jnp.sum(coeffs.Jl * Gm0, axis=1),
-        axis=0,
+        axis_name,
     )
     g0 = jnp.sum(coeffs.Jl * coeffs.Jl, axis=1)
-    qneut = jnp.sum(
+    qneut = _species_sum(
         coeffs.density[:, None, None, None]
         * coeffs.charge[:, None, None, None]
         * coeffs.zt[:, None, None, None]
         * (1.0 - g0),
-        axis=0,
+        axis_name,
     )
     return _FieldMoments(
         Gm0=Gm0,
@@ -106,7 +117,9 @@ def _field_moments(G: jnp.ndarray, coeffs: _FieldSolveCoefficients) -> _FieldMom
     )
 
 
-def _adiabatic_quasineutrality(cache, coeffs: _FieldSolveCoefficients, moments: _FieldMoments) -> jnp.ndarray:
+def _adiabatic_quasineutrality(
+    cache, coeffs: _FieldSolveCoefficients, moments: _FieldMoments
+) -> jnp.ndarray:
     jacobian = jnp.asarray(cache.jacobian, dtype=coeffs.tau_e.dtype)
     jac = jacobian[None, None, :]
     denom_safe = jnp.where(moments.qphi == 0.0, jnp.inf, moments.qphi)
@@ -127,12 +140,11 @@ def _electrostatic_phi(
     coeffs: _FieldSolveCoefficients,
     moments: _FieldMoments,
 ) -> jnp.ndarray:
+    denom_safe = jnp.where(moments.qphi == 0.0, jnp.inf, moments.qphi)
     phi_es = jax.lax.cond(
         jnp.any(coeffs.tau_e > 0.0),
         lambda _: _adiabatic_quasineutrality(cache, coeffs, moments),
-        lambda _: quasineutrality_phi(
-            G, coeffs.Jl, coeffs.tau_e, coeffs.charge, coeffs.density, coeffs.tz
-        ),
+        lambda _: moments.nbar / denom_safe,
         operand=None,
     )
     return jnp.where(cache.mask0, 0.0, phi_es)
@@ -143,44 +155,46 @@ def _solve_phi_bpar(
     coeffs: _FieldSolveCoefficients,
     moments: _FieldMoments,
     phi_es: jnp.ndarray,
+    *,
+    axis_name: str | None = None,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     def solve_branch(_) -> tuple[jnp.ndarray, jnp.ndarray]:
         bmag_inv2 = 1.0 / (coeffs.bmag * coeffs.bmag)
         bpar_beta = coeffs.bpar_beta_scale * coeffs.beta
         g01 = jnp.sum(coeffs.Jl * coeffs.JlB, axis=1)
         g11 = jnp.sum(coeffs.JlB * coeffs.JlB, axis=1)
-        jperpbar = jnp.sum(
+        jperpbar = _species_sum(
             (-bpar_beta)
             * coeffs.density[:, None, None, None]
             * coeffs.temp[:, None, None, None]
             * bmag_inv2[None, None, :]
             * jnp.sum(coeffs.JlB * moments.Gm0, axis=1),
-            axis=0,
+            axis_name,
         )
-        qb = -jnp.sum(
+        qb = -_species_sum(
             coeffs.density[:, None, None, None]
             * coeffs.charge[:, None, None, None]
             * g01,
-            axis=0,
+            axis_name,
         )
         aphi = (
             bpar_beta
-            * jnp.sum(
+            * _species_sum(
                 coeffs.density[:, None, None, None]
                 * coeffs.charge[:, None, None, None]
                 * g01,
-                axis=0,
+                axis_name,
             )
             * bmag_inv2[None, None, :]
         )
         ab = (
             1.0
             + bpar_beta
-            * jnp.sum(
+            * _species_sum(
                 coeffs.density[:, None, None, None]
                 * coeffs.temp[:, None, None, None]
                 * g11,
-                axis=0,
+                axis_name,
             )
             * bmag_inv2[None, None, :]
         )
@@ -206,25 +220,34 @@ def _solve_apar(
     coeffs: _FieldSolveCoefficients,
     moments: _FieldMoments,
     phi: jnp.ndarray,
+    *,
+    axis_name: str | None = None,
 ) -> jnp.ndarray:
     def solve_branch(_) -> jnp.ndarray:
         Gm1 = G[:, :, 1, ...]
-        jpar = jnp.sum(
+        jpar = _species_sum(
             coeffs.density[:, None, None, None]
             * coeffs.charge[:, None, None, None]
             * coeffs.vth[:, None, None, None]
             * jnp.sum(coeffs.Jl * Gm1, axis=1),
-            axis=0,
+            axis_name,
         )
         jpar = coeffs.apar_beta_scale * coeffs.beta * jpar
         bmag2 = coeffs.bmag[None, None, :] * coeffs.bmag[None, None, :]
-        use_bmag = jnp.asarray(getattr(cache, "kperp2_bmag", True), dtype=coeffs.tau_e.dtype)
+        use_bmag = jnp.asarray(
+            getattr(cache, "kperp2_bmag", True), dtype=coeffs.tau_e.dtype
+        )
         ampere_kperp2 = coeffs.kperp2 * (use_bmag * bmag2 + (1.0 - use_bmag))
-        ampere_denom = ampere_kperp2 + coeffs.ampere_g0_scale * coeffs.beta * jnp.sum(
-            coeffs.density[:, None, None, None]
-            * (coeffs.charge * coeffs.charge / coeffs.mass)[:, None, None, None]
-            * moments.g0,
-            axis=0,
+        ampere_denom = (
+            ampere_kperp2
+            + coeffs.ampere_g0_scale
+            * coeffs.beta
+            * _species_sum(
+                coeffs.density[:, None, None, None]
+                * (coeffs.charge * coeffs.charge / coeffs.mass)[:, None, None, None]
+                * moments.g0,
+                axis_name,
+            )
         )
         ampere_safe = jnp.where(ampere_denom == 0.0, jnp.inf, ampere_denom)
         return jnp.where(cache.mask0, 0.0, coeffs.fapar * jpar / ampere_safe)
@@ -251,6 +274,8 @@ def _solve_fields_impl(
     vth: jnp.ndarray,
     fapar: jnp.ndarray,
     w_bpar: jnp.ndarray,
+    *,
+    axis_name: str | None = None,
 ) -> FieldState:
     """Solve for (phi, apar, bpar) given a distribution G and cached geometry."""
 
@@ -267,11 +292,44 @@ def _solve_fields_impl(
         fapar=fapar,
         w_bpar=w_bpar,
     )
-    moments = _field_moments(G, coeffs)
+    moments = _field_moments(G, coeffs, axis_name=axis_name)
     phi_es = _electrostatic_phi(G, cache, coeffs, moments)
-    phi, bpar = _solve_phi_bpar(cache, coeffs, moments, phi_es)
-    apar = _solve_apar(G, cache, coeffs, moments, phi)
+    phi, bpar = _solve_phi_bpar(cache, coeffs, moments, phi_es, axis_name=axis_name)
+    apar = _solve_apar(G, cache, coeffs, moments, phi, axis_name=axis_name)
     return FieldState(phi=phi, apar=apar, bpar=bpar)
+
+
+def solve_fields_species_shard(
+    G: jnp.ndarray,
+    cache,
+    params,
+    charge: jnp.ndarray,
+    density: jnp.ndarray,
+    temp: jnp.ndarray,
+    mass: jnp.ndarray,
+    tz: jnp.ndarray,
+    vth: jnp.ndarray,
+    fapar: jnp.ndarray,
+    w_bpar: jnp.ndarray,
+    *,
+    axis_name: str = "species",
+) -> FieldState:
+    """Solve fields from one local species shard using named reductions."""
+
+    return _solve_fields_impl(
+        G,
+        cache,
+        params,
+        charge,
+        density,
+        temp,
+        mass,
+        tz,
+        vth,
+        fapar,
+        w_bpar,
+        axis_name=axis_name,
+    )
 
 
 @jax.custom_vjp
