@@ -768,10 +768,22 @@ def linear_rhs_electrostatic_species_sharded(
     arr_sharding = getattr(arr, "sharding", None)
     arr_spec = tuple(getattr(arr_sharding, "spec", ()))
     prepared = bool(arr_spec and arr_spec[0] == "species")
-    if not isinstance(arr, jax.core.Tracer) and not prepared:
-        arr, cache, params = prepare_electrostatic_species_inputs(
-            arr, cache, params, devices=device_list
-        )
+    if not isinstance(arr, jax.core.Tracer):
+        if not prepared:
+            arr, cache, params = prepare_electrostatic_species_inputs(
+                arr, cache, params, devices=device_list
+            )
+
+        def compiled_route(value, dynamic_cache, dynamic_params):
+            return linear_rhs_electrostatic_species_sharded(
+                value,
+                dynamic_cache,
+                dynamic_params,
+                terms=term_weights,
+                devices=device_list,
+            )
+
+        return jax.jit(compiled_route)(arr, cache, params)
     plan = build_velocity_sharding_plan(arr.shape, num_devices=ns, axes=("species",))
     real_dtype = jnp.real(arr).dtype
 
@@ -833,15 +845,13 @@ def linear_rhs_electrostatic_species_sharded(
             skip_dissipation=skip_dissipation,
         )
 
-    mapped = jax.jit(
-        jax.shard_map(
-            local_rhs,
-            mesh=mesh,
-            in_specs=(state_spec, jl_spec, jl_spec, b_spec, phi_spec)
-            + (vector_spec,) * len(species_names),
-            out_specs=state_spec,
-            axis_names={"species"},
-        )
+    mapped = jax.shard_map(
+        local_rhs,
+        mesh=mesh,
+        in_specs=(state_spec, jl_spec, jl_spec, b_spec, phi_spec)
+        + (vector_spec,) * len(species_names),
+        out_specs=state_spec,
+        axis_names={"species"},
     )
     dG = mapped(
         jax.device_put(arr, state_sharding),
