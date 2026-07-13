@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Any
+from typing import Any, NamedTuple
 
 import numpy as np
 
@@ -49,6 +49,14 @@ class _HypercollisionLinkedRoute:
     linked_gather_map: jnp.ndarray | None
     linked_gather_mask: jnp.ndarray | None
     linked_use_gather: bool
+
+
+class CollisionInvariantRates(NamedTuple):
+    """Long-wavelength collisional rates of the conserved fluid moments."""
+
+    density: jnp.ndarray
+    parallel_momentum: jnp.ndarray
+    thermal_energy: jnp.ndarray
 
 
 def _is_static_zero(value: Any, dtype: jnp.dtype | None = None) -> bool:
@@ -272,6 +280,53 @@ def collisions_contribution(
 
     corr = _collision_moment_correction(H, G=G, Jl=Jl, JlB=JlB, b=b, nu=nu)
     return base + weight * corr
+
+
+def collision_invariant_rates(contribution: jnp.ndarray) -> CollisionInvariantRates:
+    """Return density, parallel-momentum, and thermal-energy collision rates.
+
+    The Hermite--Laguerre state must have ``(ell, m)`` axes first, optionally
+    preceded by species.  These are the discrete long-wavelength invariants;
+    finite-Larmor-radius operators require their full gyroaveraged moments.
+    """
+
+    value = jnp.asarray(contribution)
+    if value.ndim not in {5, 6}:
+        raise ValueError("collision state must have five or six dimensions")
+    state = value[None, ...] if value.ndim == 5 else value
+    if state.shape[1] < 2 or state.shape[2] < 3:
+        raise ValueError("collision invariant rates require Nl >= 2 and Nm >= 3")
+    return CollisionInvariantRates(
+        density=state[:, 0, 0, ...],
+        parallel_momentum=state[:, 0, 1, ...],
+        thermal_energy=(
+            jnp.sqrt(jnp.asarray(2.0, dtype=jnp.real(state).dtype))
+            * state[:, 0, 2, ...]
+            + 2.0 * state[:, 1, 0, ...]
+        ),
+    )
+
+
+def collision_quadratic_rate(
+    state: jnp.ndarray,
+    contribution: jnp.ndarray,
+    *,
+    weights: jnp.ndarray | None = None,
+) -> jnp.ndarray:
+    """Return ``Re <state, C[state]>`` in the discrete moment norm.
+
+    A dissipative collision model has a non-positive rate.  Optional
+    broadcastable ``weights`` can supply species and spatial quadrature factors.
+    """
+
+    state_arr = jnp.asarray(state)
+    contribution_arr = jnp.asarray(contribution)
+    if state_arr.shape != contribution_arr.shape:
+        raise ValueError("state and collision contribution must have the same shape")
+    product = jnp.real(jnp.conj(state_arr) * contribution_arr)
+    if weights is not None:
+        product = product * jnp.asarray(weights, dtype=product.dtype)
+    return jnp.sum(product)
 
 
 def _hypercollision_zero_result(
@@ -686,6 +741,9 @@ def end_damping_contribution(
 
 
 __all__ = [
+    "CollisionInvariantRates",
+    "collision_invariant_rates",
+    "collision_quadratic_rate",
     "collisions_contribution",
     "end_damping_contribution",
     "hypercollisions_contribution",

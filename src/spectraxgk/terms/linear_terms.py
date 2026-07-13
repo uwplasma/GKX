@@ -9,6 +9,8 @@ from spectraxgk.terms.linear_dissipation import (
     _hypercollision_kz_source as _hypercollision_kz_source,
     _is_static_zero,
     _zeros_like_result,
+    collision_invariant_rates as collision_invariant_rates,
+    collision_quadratic_rate as collision_quadratic_rate,
     collisions_contribution as collisions_contribution,
     end_damping_contribution as end_damping_contribution,
     hypercollisions_contribution as hypercollisions_contribution,

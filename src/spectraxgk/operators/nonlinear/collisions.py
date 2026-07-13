@@ -9,7 +9,6 @@ import jax.numpy as jnp
 
 from spectraxgk.operators.linear.cache_model import LinearCache
 from spectraxgk.operators.linear.cache_arrays import (
-    collision_damping as _base_collision_damping,
     hypercollision_damping,
 )
 from spectraxgk.operators.linear.params import LinearParams
@@ -40,19 +39,18 @@ def _collision_damping(
     *,
     squeeze_species: bool,
 ) -> jnp.ndarray:
-    """Assemble collision + hypercollision damping for operator splitting."""
+    """Assemble the diagonal hypercollision damping safe to split.
 
-    damping = _base_collision_damping(
-        cache, params, real_dtype, squeeze_species=squeeze_species
-    )
+    The conserving collision operator includes non-diagonal field-particle
+    corrections and must remain in the RHS unless an operator supplies its own
+    mathematically valid split update.
+    """
+
     hyper_damp = hypercollision_damping(cache, params, real_dtype)
-    coll_w = jnp.asarray(term_cfg.collisions, dtype=real_dtype)
     hyper_w = jnp.asarray(term_cfg.hypercollisions, dtype=real_dtype)
     if squeeze_species and hyper_damp.ndim == 6:
         hyper_damp = hyper_damp[0]
-
-    damping = coll_w * damping + hyper_w * hyper_damp
-    return damping.astype(real_dtype)
+    return (hyper_w * hyper_damp).astype(real_dtype)
 
 
 def build_nonlinear_collision_split_policy(
@@ -67,14 +65,8 @@ def build_nonlinear_collision_split_policy(
 ) -> NonlinearCollisionSplitPolicy:
     """Build collision splitting weights and RHS terms for nonlinear scans."""
 
-    active = bool(collision_split) and (
-        float(term_cfg.collisions) != 0.0 or float(term_cfg.hypercollisions) != 0.0
-    )
-    rhs_terms = (
-        replace(term_cfg, collisions=0.0, hypercollisions=0.0)
-        if active
-        else term_cfg
-    )
+    active = bool(collision_split) and float(term_cfg.hypercollisions) != 0.0
+    rhs_terms = replace(term_cfg, hypercollisions=0.0) if active else term_cfg
     damping = (
         collision_damping_fn(
             cache, params, term_cfg, real_dtype, squeeze_species=squeeze_species

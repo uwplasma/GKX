@@ -36,6 +36,16 @@ class CollisionOperator(Protocol):
 
 
 @runtime_checkable
+class SplitCollisionOperator(CollisionOperator, Protocol):
+    """Collision model with a mathematically valid finite-time update."""
+
+    def split_step(
+        self, state: Any, dt: Any, cache: Any, parameters: Any
+    ) -> Any:
+        """Advance the unit-weight collision model by ``dt``."""
+
+
+@runtime_checkable
 class FieldSolver(Protocol):
     """Field-equation solver for potential and electromagnetic response fields."""
 
