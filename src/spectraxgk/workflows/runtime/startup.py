@@ -142,6 +142,12 @@ def _runtime_default_krylov_config(cfg: RuntimeConfig) -> KrylovConfig:
             fallback_real_floor=-1.0e-6,
         )
 
+    if contract == "kbm":
+        # Keep the benchmark-specific branch policy in its validation owner.
+        from spectraxgk.benchmarking.shared import KBM_KRYLOV_DEFAULT
+
+        return KBM_KRYLOV_DEFAULT
+
     return KrylovConfig()
 
 

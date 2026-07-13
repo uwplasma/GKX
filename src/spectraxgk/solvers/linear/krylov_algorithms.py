@@ -212,6 +212,7 @@ def _arnoldi(
     def outer(i, carry):
         V, H = carry
         w = apply_op(V[i], cache, params, term_cfg)
+        operator_scale = jnp.linalg.norm(w)
 
         def inner(j, inner_carry):
             w, H = inner_carry
@@ -230,8 +231,12 @@ def _arnoldi(
         w, H = jax.lax.fori_loop(0, i + 1, inner, (w, H))
         w, H = jax.lax.fori_loop(0, i + 1, reorth, (w, H))
         h_next = jnp.linalg.norm(w)
-        H = H.at[i + 1, i].set(h_next)
-        v_next = jnp.where(h_next > 0.0, w / h_next, w)
+        real_dtype = jnp.real(jnp.empty((), dtype=v0.dtype)).dtype
+        breakdown_tol = 10.0 * jnp.finfo(real_dtype).eps * operator_scale
+        resolved = h_next > breakdown_tol
+        H = H.at[i + 1, i].set(jnp.where(resolved, h_next, 0.0))
+        safe_norm = jnp.where(resolved, h_next, 1.0)
+        v_next = jnp.where(resolved, w / safe_norm, jnp.zeros_like(w))
         V = V.at[i + 1].set(v_next)
         return V, H
 
@@ -266,17 +271,31 @@ def _shift_invert_apply_factory(
 
     def apply_shift_invert(x: jnp.ndarray, _cache, _params, _term_cfg) -> jnp.ndarray:
         b = x.reshape(size)
-        x0 = precond_op(b) if precond_op is not None else b
-        sol, _info = gmres(
-            matvec,
-            b,
-            x0=x0,
-            tol=gmres_tol,
-            maxiter=gmres_maxiter,
-            restart=gmres_restart,
-            M=precond_op,
-            solve_method=gmres_solve_method,
-        )
+        def solve(preconditioner):
+            x0 = preconditioner(b) if preconditioner is not None else b
+            solution, _info = gmres(
+                matvec,
+                b,
+                x0=x0,
+                tol=gmres_tol,
+                maxiter=gmres_maxiter,
+                restart=gmres_restart,
+                M=preconditioner,
+                solve_method=gmres_solve_method,
+            )
+            return solution
+
+        sol = solve(precond_op)
+        if precond_op is not None:
+            real_dtype = jnp.real(jnp.empty((), dtype=b.dtype)).dtype
+            relative_floor = jnp.maximum(
+                10.0 * gmres_tol,
+                100.0 * jnp.finfo(real_dtype).eps,
+            )
+            true_residual = jnp.linalg.norm(matvec(sol) - b)
+            true_tolerance = relative_floor * jnp.linalg.norm(b)
+            retry = ~jnp.isfinite(true_residual) | (true_residual > true_tolerance)
+            sol = jax.lax.cond(retry, lambda: solve(None), lambda: sol)
         return sol.reshape(shape)
 
     return apply_shift_invert
