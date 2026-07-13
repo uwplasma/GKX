@@ -693,11 +693,44 @@ def _integrate_species_sharded_explicit(
                 )
             return advanced, phi
 
-        body = jax.checkpoint(step) if checkpoint else step
-        return jax.lax.scan(body, local_state, jnp.arange(steps))
+        if sample_stride <= 1:
+            body = jax.checkpoint(step) if checkpoint else step
+            return jax.lax.scan(body, local_state, jnp.arange(steps))
 
-    mapped = jax.pmap(program, axis_name="species", devices=devices)
-    final_state, fields_by_device = mapped(
+        def sample_step(value, sample_index):
+            advanced = jax.lax.fori_loop(
+                0, sample_stride, lambda _index, carry: advance(carry), value
+            )
+            phi = local_fields(advanced).phi
+            completed_index = jnp.minimum((sample_index + 1) * sample_stride, steps) - 1
+            if show_progress:
+                advanced = jax.lax.cond(
+                    jax.lax.axis_index("species") == 0,
+                    lambda x: _maybe_emit_linear_progress(
+                        x,
+                        idx=completed_index,
+                        steps=steps,
+                        dt_val=dt_val,
+                        phi=phi,
+                        show_progress=True,
+                    ),
+                    lambda x: x,
+                    advanced,
+                )
+            return advanced, phi
+
+        sample_body = jax.checkpoint(sample_step) if checkpoint else sample_step
+        return jax.lax.scan(
+            sample_body, local_state, jnp.arange(steps // sample_stride)
+        )
+
+    mapped = jax.pmap(
+        program,
+        axis_name="species",
+        devices=devices,
+        out_axes=(0, None),
+    )
+    final_state, field_history = mapped(
         state,
         cache.Jl,
         cache.JlB,
@@ -706,7 +739,7 @@ def _integrate_species_sharded_explicit(
     )
     return (
         final_state,
-        fields_by_device[0, sample_stride - 1 :: sample_stride],
+        field_history,
     )
 
 
