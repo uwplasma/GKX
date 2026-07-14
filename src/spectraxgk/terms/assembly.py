@@ -8,7 +8,6 @@ from typing import Any, Callable, Tuple
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 
 from spectraxgk.core.grid import SpectralGrid
 from spectraxgk.geometry import FluxTubeGeometryLike
@@ -19,6 +18,7 @@ from spectraxgk.operators.linear.params import LinearParams, _as_species_array
 from spectraxgk.terms.config import FieldState, TermConfig
 from spectraxgk.terms.fields import _solve_fields_impl, solve_fields
 from spectraxgk.operators.linear.dissipation import (
+    _is_static_zero,
     collisions_contribution,
     end_damping_contribution,
     hypercollisions_contribution,
@@ -120,15 +120,6 @@ def _apply_external_phi_source(
     return FieldState(phi=fields.phi + phi_shift, apar=fields.apar, bpar=fields.bpar)
 
 
-def _is_static_zero(value: object) -> bool:
-    """Return true when a Python/JAX value is known to be exactly zero at trace time."""
-
-    arr = jnp.asarray(value)
-    if isinstance(arr, jax.core.Tracer):
-        return False
-    return bool(np.all(np.asarray(arr) == 0.0))
-
-
 def _rhs_field_views(
     fields: FieldState,
     terms: TermConfig,
@@ -178,17 +169,11 @@ def _collision_contribution_or_zero(
 
     real_dtype = jnp.real(G).dtype
 
-    def _is_static_zero(value: jnp.ndarray) -> bool:
-        arr = jnp.asarray(value, dtype=real_dtype)
-        if isinstance(arr, jax.core.Tracer):
-            return False
-        return bool(np.all(np.asarray(arr) == 0.0))
-
-    if _is_static_zero(weight):
+    if _is_static_zero(weight, real_dtype):
         return jnp.zeros_like(H)
 
     no_preexpanded_operator = collision_lam.size == 0
-    if no_preexpanded_operator and _is_static_zero(nu):
+    if no_preexpanded_operator and _is_static_zero(nu, real_dtype):
         return jnp.zeros_like(H)
 
     zero_nu_operator = jnp.logical_and(no_preexpanded_operator, jnp.all(nu == 0.0))
