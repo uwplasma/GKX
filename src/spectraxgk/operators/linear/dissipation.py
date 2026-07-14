@@ -348,62 +348,88 @@ def drift_kinetic_dougherty_contribution(
     return result[0] if value.ndim == 5 else result
 
 
+def _drift_kinetic_six_moment_contribution(
+    state: jnp.ndarray,
+    *,
+    nu: jnp.ndarray,
+    weight: jnp.ndarray,
+    thermal_coefficients: tuple[float, float, float],
+    heat_coefficients: tuple[float, float, float],
+) -> jnp.ndarray:
+    value = jnp.asarray(state)
+    if value.ndim not in {5, 6}:
+        raise ValueError("collision state must have five or six dimensions")
+    expanded = value[None, ...] if value.ndim == 5 else value
+    if expanded.shape[1] < 2 or expanded.shape[2] < 4:
+        raise ValueError("six-moment collision model requires Nl >= 2 and Nm >= 4")
+
+    ns = int(expanded.shape[0])
+    real_dtype = jnp.real(expanded).dtype
+    rate = _species_collision_frequency(nu, ns=ns, dtype=real_dtype)
+    rate = rate[(slice(None),) + (None,) * (expanded.ndim - 1)]
+    inverse_sqrt_pi = 1.0 / jnp.sqrt(jnp.asarray(jnp.pi, dtype=real_dtype))
+    thermal = jnp.asarray(thermal_coefficients, dtype=real_dtype) * inverse_sqrt_pi
+    heat = jnp.asarray(heat_coefficients, dtype=real_dtype) * inverse_sqrt_pi
+
+    result = jnp.zeros_like(expanded)
+    result = result.at[:, 0, 2].set(
+        thermal[0] * expanded[:, 0, 2] + thermal[1] * expanded[:, 1, 0]
+    )
+    result = result.at[:, 1, 0].set(
+        thermal[1] * expanded[:, 0, 2] + thermal[2] * expanded[:, 1, 0]
+    )
+    result = result.at[:, 0, 3].set(
+        heat[0] * expanded[:, 0, 3] + heat[1] * expanded[:, 1, 1]
+    )
+    result = result.at[:, 1, 1].set(
+        heat[1] * expanded[:, 0, 3] + heat[2] * expanded[:, 1, 1]
+    )
+    result = jnp.asarray(weight, dtype=real_dtype) * rate * result
+    return result[0] if value.ndim == 5 else result
+
+
 def drift_kinetic_sugama_six_moment_contribution(
     state: jnp.ndarray,
     *,
     nu: jnp.ndarray,
     weight: jnp.ndarray = jnp.asarray(1.0),
 ) -> jnp.ndarray:
-    """Apply the like-species drift-kinetic Sugama six-moment matrix.
+    """Apply Frei, Ernst & Ricci (2022), equations (C6a)--(C6f)."""
 
-    The four nontrivial rows are Appendix C, equations (C6a)--(C6f), of
-    Frei, Ernst & Ricci (2022). Their ``(p, j)`` ordering maps to this code's
-    ``(ell=j, m=p)`` ordering. Off-diagonal entries change sign because this
-    code stores the opposite Laguerre convention. Density and parallel flow
-    are null, the combined thermal moment is conserved, and heat-flux moments
-    are dissipated. Modes outside the six-moment projection receive zero, so
-    this reduced kernel is not a full-hierarchy Sugama collision operator.
-    """
+    sqrt_two = 2.0**0.5
+    return _drift_kinetic_six_moment_contribution(
+        state,
+        nu=nu,
+        weight=weight,
+        thermal_coefficients=(-64 * sqrt_two / 45, 64 / 45, -32 * sqrt_two / 45),
+        heat_coefficients=(
+            -361.0 * sqrt_two / 175.0,
+            208.0 / (175.0 * 3.0**0.5),
+            -1187.0 * sqrt_two / 525.0,
+        ),
+    )
 
-    value = jnp.asarray(state)
-    if value.ndim not in {5, 6}:
-        raise ValueError("collision state must have five or six dimensions")
-    expanded = value[None, ...] if value.ndim == 5 else value
-    if expanded.shape[1] < 2 or expanded.shape[2] < 4:
-        raise ValueError("six-moment Sugama requires Nl >= 2 and Nm >= 4")
 
-    ns = int(expanded.shape[0])
-    real_dtype = jnp.real(expanded).dtype
-    rate = _species_collision_frequency(nu, ns=ns, dtype=real_dtype)
-    rate = rate[(slice(None),) + (None,) * (expanded.ndim - 1)]
-    pi = jnp.asarray(jnp.pi, dtype=real_dtype)
-    sqrt_two_over_pi = jnp.sqrt(2.0 / pi)
-    sqrt_one_over_pi = jnp.sqrt(1.0 / pi)
-    sqrt_one_over_three_pi = jnp.sqrt(1.0 / (3.0 * pi))
+def drift_kinetic_coulomb_six_moment_contribution(
+    state: jnp.ndarray,
+    *,
+    nu: jnp.ndarray,
+    weight: jnp.ndarray = jnp.asarray(1.0),
+) -> jnp.ndarray:
+    """Apply Frei, Ernst & Ricci (2022), equations (C9a)--(C9f)."""
 
-    result = jnp.zeros_like(expanded)
-    parallel_temperature = expanded[:, 0, 2]
-    perpendicular_temperature = expanded[:, 1, 0]
-    parallel_heat_flux = expanded[:, 0, 3]
-    perpendicular_heat_flux = expanded[:, 1, 1]
-    result = result.at[:, 0, 2].set(
-        -(64.0 / 45.0) * sqrt_two_over_pi * parallel_temperature
-        + (64.0 / 45.0) * sqrt_one_over_pi * perpendicular_temperature
+    sqrt_two = 2.0**0.5
+    return _drift_kinetic_six_moment_contribution(
+        state,
+        nu=nu,
+        weight=weight,
+        thermal_coefficients=(-16 * sqrt_two / 15, 16 / 15, -8 * sqrt_two / 15),
+        heat_coefficients=(
+            -8.0 * sqrt_two / 5.0,
+            8.0 / (5.0 * 3.0**0.5),
+            -28.0 * sqrt_two / 15.0,
+        ),
     )
-    result = result.at[:, 1, 0].set(
-        (64.0 / 45.0) * sqrt_one_over_pi * parallel_temperature
-        - (32.0 / 45.0) * sqrt_two_over_pi * perpendicular_temperature
-    )
-    result = result.at[:, 0, 3].set(
-        -(361.0 / 175.0) * sqrt_two_over_pi * parallel_heat_flux
-        + (208.0 / 175.0) * sqrt_one_over_three_pi * perpendicular_heat_flux
-    )
-    result = result.at[:, 1, 1].set(
-        (208.0 / 175.0) * sqrt_one_over_three_pi * parallel_heat_flux
-        - (1187.0 / 525.0) * sqrt_two_over_pi * perpendicular_heat_flux
-    )
-    result = jnp.asarray(weight, dtype=real_dtype) * rate * result
-    return result[0] if value.ndim == 5 else result
 
 
 def collisions_contribution(
@@ -958,6 +984,7 @@ __all__ = [
     "collision_invariant_rates",
     "collision_quadratic_rate",
     "collisions_contribution",
+    "drift_kinetic_coulomb_six_moment_contribution",
     "drift_kinetic_dougherty_contribution",
     "drift_kinetic_sugama_six_moment_contribution",
     "end_damping_contribution",
