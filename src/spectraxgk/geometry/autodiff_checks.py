@@ -113,15 +113,6 @@ class _GradientGateData:
     failure_reasons: list[str]
 
 
-@dataclass(frozen=True)
-class _GradientConditioningGateData:
-    conditioning: dict[str, object]
-    conditioning_gate: dict[str, object]
-    conditioning_passed: bool
-    rank_passed: bool
-    condition_number_passed: bool
-
-
 def _conditioned_jacobian_arrays(
     jacobian_ad: Any,
     jacobian_fd: Any,
@@ -314,7 +305,7 @@ def _validated_gradient_inputs(
     atol: float,
     relative_floor: float,
     condition_number_max: float | None,
-) -> tuple[jnp.ndarray, float, float, float, float, float | None]:
+) -> _GradientValidationInputs:
     p = jnp.asarray(params, dtype=_jax_float_dtype())
     if p.ndim != 1:
         raise ValueError("params must be one-dimensional")
@@ -333,7 +324,14 @@ def _validated_gradient_inputs(
     cond_max = None if condition_number_max is None else float(condition_number_max)
     if cond_max is not None and cond_max <= 0.0:
         raise ValueError("condition_number_max must be positive or None")
-    return p, step, rel_tol, abs_tol, floor, cond_max
+    return _GradientValidationInputs(
+        p=p,
+        step=step,
+        rel_tol=rel_tol,
+        abs_tol=abs_tol,
+        floor=floor,
+        cond_max=cond_max,
+    )
 
 
 def _resolve_report_names(
@@ -607,33 +605,6 @@ def _failure_reasons(
     return reasons
 
 
-def _gradient_validation_inputs(
-    params: jnp.ndarray | np.ndarray,
-    *,
-    fd_step: float,
-    rtol: float,
-    atol: float,
-    relative_floor: float,
-    condition_number_max: float | None,
-) -> _GradientValidationInputs:
-    p, step, rel_tol, abs_tol, floor, cond_max = _validated_gradient_inputs(
-        params,
-        fd_step=fd_step,
-        rtol=rtol,
-        atol=atol,
-        relative_floor=relative_floor,
-        condition_number_max=condition_number_max,
-    )
-    return _GradientValidationInputs(
-        p=p,
-        step=step,
-        rel_tol=rel_tol,
-        abs_tol=abs_tol,
-        floor=floor,
-        cond_max=cond_max,
-    )
-
-
 def _gradient_derivative_data(
     observable_fn: Callable[[jnp.ndarray], Any],
     inputs: _GradientValidationInputs,
@@ -667,46 +638,6 @@ def _gradient_derivative_data(
         par_names=par_names,
         direction=_tangent_direction(inputs.p, tangent),
         jacobian_mode=resolved_mode,
-    )
-
-
-def _gradient_conditioning_gate_data(
-    derivatives: _GradientDerivativeData,
-    inputs: _GradientValidationInputs,
-    finite_flags: Mapping[str, bool],
-    *,
-    min_rank: int | None,
-) -> _GradientConditioningGateData:
-    """Evaluate conditioning and rank gates for an AD/FD Jacobian pair."""
-
-    conditioning = _sensitivity_conditioning_metadata(
-        derivatives.jac_ad,
-        derivatives.jac_fd,
-        inputs.p,
-        fd_step=inputs.step,
-        observable_names=derivatives.obs_names,
-        param_names=derivatives.par_names,
-        relative_floor=inputs.floor,
-    )
-    (
-        conditioning_gate,
-        conditioning_passed,
-        rank_passed,
-        condition_number_passed,
-    ) = _conditioning_gate(
-        conditioning,
-        n_obs=int(derivatives.jac_ad.shape[0]),
-        n_params=int(derivatives.jac_ad.shape[1]),
-        min_rank=min_rank,
-        condition_number_max=inputs.cond_max,
-        finite_flags=finite_flags,
-    )
-    return _GradientConditioningGateData(
-        conditioning=conditioning,
-        conditioning_gate=conditioning_gate,
-        conditioning_passed=conditioning_passed,
-        rank_passed=rank_passed,
-        condition_number_passed=condition_number_passed,
     )
 
 
@@ -744,11 +675,27 @@ def _gradient_gate_data(
         abs_tol=inputs.abs_tol,
         rel_tol=inputs.rel_tol,
     )
-    conditioning = _gradient_conditioning_gate_data(
-        derivatives,
-        inputs,
-        finite_flags,
+    conditioning = _sensitivity_conditioning_metadata(
+        derivatives.jac_ad,
+        derivatives.jac_fd,
+        inputs.p,
+        fd_step=inputs.step,
+        observable_names=derivatives.obs_names,
+        param_names=derivatives.par_names,
+        relative_floor=inputs.floor,
+    )
+    (
+        conditioning_gate,
+        conditioning_passed,
+        rank_passed,
+        condition_number_passed,
+    ) = _conditioning_gate(
+        conditioning,
+        n_obs=int(derivatives.jac_ad.shape[0]),
+        n_params=int(derivatives.jac_ad.shape[1]),
         min_rank=min_rank,
+        condition_number_max=inputs.cond_max,
+        finite_flags=finite_flags,
     )
     finite_passed = bool(all(finite_flags.values()))
     derivative_passed = bool(
@@ -764,9 +711,9 @@ def _gradient_gate_data(
         finite_passed=finite_passed,
         derivative_passed=derivative_passed,
         tangent_passed=tangent_passed,
-        conditioning_passed=conditioning.conditioning_passed,
-        rank_passed=conditioning.rank_passed,
-        condition_number_passed=conditioning.condition_number_passed,
+        conditioning_passed=conditioning_passed,
+        rank_passed=rank_passed,
+        condition_number_passed=condition_number_passed,
     )
     return _GradientGateData(
         jacobian_errors=jacobian_errors,
@@ -776,11 +723,11 @@ def _gradient_gate_data(
         gradient_checks=gradient_checks,
         derivative_passed=derivative_passed,
         tangent_passed=tangent_passed,
-        conditioning=conditioning.conditioning,
-        conditioning_gate=conditioning.conditioning_gate,
-        conditioning_passed=conditioning.conditioning_passed,
-        rank_passed=conditioning.rank_passed,
-        condition_number_passed=conditioning.condition_number_passed,
+        conditioning=conditioning,
+        conditioning_gate=conditioning_gate,
+        conditioning_passed=conditioning_passed,
+        rank_passed=rank_passed,
+        condition_number_passed=condition_number_passed,
         failure_reasons=failure_reasons,
     )
 
@@ -836,57 +783,39 @@ def _tangent_report_fields(
 
 
 def _assemble_gradient_validation_report(
-    *,
     report_kind: str,
-    finite_passed: bool,
-    derivative_passed: bool,
-    tangent_passed: bool,
-    conditioning_passed: bool,
-    failure_reasons: Sequence[str],
-    step: float,
-    rel_tol: float,
-    abs_tol: float,
-    floor: float,
-    obs_names: Sequence[str],
-    par_names: Sequence[str],
-    p: jnp.ndarray,
-    observables: jnp.ndarray,
-    jacobian_errors: Mapping[str, np.ndarray],
-    gradient_checks: Sequence[Mapping[str, object]],
-    finite_flags: Mapping[str, bool],
-    direction: jnp.ndarray,
-    tangent_errors: Mapping[str, np.ndarray | float],
-    conditioning_gate: Mapping[str, object],
-    conditioning: Mapping[str, object],
+    inputs: _GradientValidationInputs,
+    derivatives: _GradientDerivativeData,
+    gates: _GradientGateData,
 ) -> dict[str, object]:
     report = {
         "kind": str(report_kind),
         "passed": bool(
-            finite_passed
-            and derivative_passed
-            and tangent_passed
-            and conditioning_passed
+            gates.finite_passed
+            and gates.derivative_passed
+            and gates.tangent_passed
+            and gates.conditioning_passed
         ),
-        "finite_passed": finite_passed,
-        "derivative_tolerance_passed": derivative_passed,
-        "tangent_tolerance_passed": tangent_passed,
-        "conditioning_passed": conditioning_passed,
-        "failure_reasons": list(failure_reasons),
-        "fd_step": step,
-        "rtol": rel_tol,
-        "atol": abs_tol,
-        "relative_error_floor": floor,
-        "observable_names": list(obs_names),
-        "parameter_names": list(par_names),
-        "params": np.asarray(p, dtype=float).tolist(),
-        "observables": np.asarray(observables, dtype=float).tolist(),
-        "gradient_checks": list(gradient_checks),
-        "finite_flags": dict(finite_flags),
-        "conditioning_gate": dict(conditioning_gate),
-        "conditioning": dict(conditioning),
+        "finite_passed": gates.finite_passed,
+        "derivative_tolerance_passed": gates.derivative_passed,
+        "tangent_tolerance_passed": gates.tangent_passed,
+        "conditioning_passed": gates.conditioning_passed,
+        "failure_reasons": gates.failure_reasons,
+        "fd_step": inputs.step,
+        "rtol": inputs.rel_tol,
+        "atol": inputs.abs_tol,
+        "relative_error_floor": inputs.floor,
+        "observable_names": derivatives.obs_names,
+        "parameter_names": derivatives.par_names,
+        "params": np.asarray(inputs.p, dtype=float).tolist(),
+        "observables": np.asarray(derivatives.observables, dtype=float).tolist(),
+        "gradient_checks": gates.gradient_checks,
+        "finite_flags": gates.finite_flags,
+        "conditioning_gate": gates.conditioning_gate,
+        "conditioning": gates.conditioning,
     }
-    report.update(_jacobian_report_fields(jacobian_errors))
-    report.update(_tangent_report_fields(direction, tangent_errors))
+    report.update(_jacobian_report_fields(gates.jacobian_errors))
+    report.update(_tangent_report_fields(derivatives.direction, gates.tangent_errors))
     return cast(dict[str, object], _json_ready(report))
 
 
@@ -918,7 +847,7 @@ def observable_gradient_validation_report(
     ``jacobian_mode="auto"`` chooses forward mode for few parameters (or when
     chunking is requested) and reverse mode for few observables.
     """
-    inputs = _gradient_validation_inputs(
+    inputs = _validated_gradient_inputs(
         params,
         fd_step=fd_step,
         rtol=rtol,
@@ -941,27 +870,10 @@ def observable_gradient_validation_report(
         min_rank=min_rank,
     )
     report = _assemble_gradient_validation_report(
-        report_kind=report_kind,
-        finite_passed=gates.finite_passed,
-        derivative_passed=gates.derivative_passed,
-        tangent_passed=gates.tangent_passed,
-        conditioning_passed=gates.conditioning_passed,
-        failure_reasons=gates.failure_reasons,
-        step=inputs.step,
-        rel_tol=inputs.rel_tol,
-        abs_tol=inputs.abs_tol,
-        floor=inputs.floor,
-        obs_names=derivatives.obs_names,
-        par_names=derivatives.par_names,
-        p=inputs.p,
-        observables=derivatives.observables,
-        jacobian_errors=gates.jacobian_errors,
-        gradient_checks=gates.gradient_checks,
-        finite_flags=gates.finite_flags,
-        direction=derivatives.direction,
-        tangent_errors=gates.tangent_errors,
-        conditioning_gate=gates.conditioning_gate,
-        conditioning=gates.conditioning,
+        report_kind,
+        inputs,
+        derivatives,
+        gates,
     )
     report["jacobian_chunk_size"] = jacobian_chunk_size
     report["jacobian_mode"] = derivatives.jacobian_mode
