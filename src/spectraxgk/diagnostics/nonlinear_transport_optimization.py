@@ -93,6 +93,22 @@ def _finite_float(value: object) -> float | None:
     return out if math.isfinite(out) else None
 
 
+def _first_finite(*values: object) -> float | None:
+    """Return the first finite value without treating a physical zero as absent."""
+
+    for value in values:
+        if (finite := _finite_float(value)) is not None:
+            return finite
+    return None
+
+
+def _mapping_rows(payload: Mapping[str, Any], key: str) -> list[Mapping[str, Any]]:
+    rows = payload.get(key)
+    if not isinstance(rows, Sequence):
+        return []
+    return [row for row in rows if isinstance(row, Mapping)]
+
+
 def _artifact_passed(payload: Mapping[str, Any]) -> bool:
     if any(bool(payload.get(key, False)) for key in ("passed", "gate_passed")):
         return True
@@ -165,12 +181,7 @@ def _ensemble_variant_provenance_report(
     *,
     config: ProductionNonlinearOptimizationGuardConfig,
 ) -> dict[str, Any]:
-    rows = payload.get("rows")
-    row_maps = (
-        [row for row in rows if isinstance(row, Mapping)]
-        if isinstance(rows, Sequence)
-        else []
-    )
+    row_maps = _mapping_rows(payload, "rows")
     seed_values = sorted(
         {
             value
@@ -205,12 +216,7 @@ def _ensemble_variant_provenance_report(
 def optimization_artifact_reduction_scope(payload: Mapping[str, Any]) -> dict[str, Any]:
     """Return scope metadata for the differentiable optimization comparison."""
 
-    results = payload.get("results")
-    result_rows = (
-        [row for row in results if isinstance(row, Mapping)]
-        if isinstance(results, Sequence)
-        else []
-    )
+    result_rows = _mapping_rows(payload, "results")
     objective_kinds = [str(row.get("objective_kind", "unknown")) for row in result_rows]
     nonlinear_rows = [
         row for row in result_rows if row.get("objective_kind") == "nonlinear_heat_flux"
@@ -295,12 +301,7 @@ def _payload_mapping(payload: Mapping[str, Any], key: str) -> Mapping[str, Any]:
 
 
 def _named_gate_status(payload: Mapping[str, Any]) -> dict[str, bool]:
-    gates = payload.get("gates")
-    gate_rows = (
-        [row for row in gates if isinstance(row, Mapping)]
-        if isinstance(gates, Sequence)
-        else []
-    )
+    gate_rows = _mapping_rows(payload, "gates")
     return {str(row.get("metric")): bool(row.get("passed", False)) for row in gate_rows}
 
 
@@ -414,16 +415,15 @@ def optimized_equilibrium_transport_report(
 def _matched_transport_metrics(
     context: _MatchedTransportContext,
 ) -> _MatchedTransportMetrics:
-    relative_reduction = _finite_float(
-        context.comparison.get("relative_reduction")
-        if "relative_reduction" in context.comparison
-        else context.statistics.get("relative_reduction")
+    relative_reduction = _first_finite(
+        context.comparison.get("relative_reduction"),
+        context.statistics.get("relative_reduction"),
     )
-    uncertainty_sigma = _finite_float(
-        context.comparison.get("uncertainty_separation_sigma")
-        or context.comparison.get("uncertainty_z_score")
-        or context.statistics.get("uncertainty_separation_sigma")
-        or context.statistics.get("uncertainty_z_score")
+    uncertainty_sigma = _first_finite(
+        context.comparison.get("uncertainty_separation_sigma"),
+        context.comparison.get("uncertainty_z_score"),
+        context.statistics.get("uncertainty_separation_sigma"),
+        context.statistics.get("uncertainty_z_score"),
     )
     return _MatchedTransportMetrics(
         relative_reduction=relative_reduction,
@@ -704,32 +704,25 @@ def _promotion_gates(
 
 def _guard_summary(
     *,
-    qualifying_ensembles: list[dict[str, Any]],
-    qualifying_optimized: list[dict[str, Any]],
-    qualifying_matched_optimized: list[dict[str, Any]],
-    matched_optimized_rows: list[dict[str, Any]],
-    failed_matched_optimized: list[dict[str, Any]],
-    best_matched_reduction: float | None,
+    rows: _GuardRows,
     promoted: bool,
 ) -> dict[str, Any]:
     return {
-        "qualifying_replicated_holdout_ensembles": len(qualifying_ensembles),
-        "qualifying_optimized_equilibrium_ensembles": len(qualifying_optimized),
+        "qualifying_replicated_holdout_ensembles": len(rows.qualifying_ensembles),
+        "qualifying_optimized_equilibrium_ensembles": len(rows.qualifying_optimized),
         "qualifying_matched_optimized_transport_audits": len(
-            qualifying_matched_optimized
+            rows.qualifying_matched_optimized
         ),
-        "total_matched_optimized_transport_audits": len(matched_optimized_rows),
-        "failed_matched_optimized_transport_audits": len(failed_matched_optimized),
-        "best_matched_optimized_relative_reduction": best_matched_reduction,
+        "total_matched_optimized_transport_audits": len(rows.matched_optimized),
+        "failed_matched_optimized_transport_audits": len(rows.failed_matched_optimized),
+        "best_matched_optimized_relative_reduction": rows.best_matched_reduction,
         "production_nonlinear_optimization_ready": int(promoted),
     }
 
 
 def _evidence_gap(
     *,
-    failed_matched_optimized: list[dict[str, Any]],
-    qualifying_optimized: list[dict[str, Any]],
-    qualifying_matched_optimized: list[dict[str, Any]],
+    rows: _GuardRows,
     cfg: ProductionNonlinearOptimizationGuardConfig,
 ) -> dict[str, Any]:
     return {
@@ -738,13 +731,15 @@ def _evidence_gap(
             "They do not promote broad nonlinear turbulent-flux optimization unless "
             "they pass the same long-window reduction and uncertainty-separation gates."
         ),
-        "failed_matched_optimized_transport_audits": failed_matched_optimized,
+        "failed_matched_optimized_transport_audits": rows.failed_matched_optimized,
         "required_additional_optimized_equilibrium_ensembles": max(
-            int(cfg.min_optimized_equilibrium_ensembles) - len(qualifying_optimized),
+            int(cfg.min_optimized_equilibrium_ensembles)
+            - len(rows.qualifying_optimized),
             0,
         ),
         "required_additional_matched_optimized_audits": max(
-            int(cfg.min_matched_optimized_audits) - len(qualifying_matched_optimized),
+            int(cfg.min_matched_optimized_audits)
+            - len(rows.qualifying_matched_optimized),
             0,
         ),
     }
@@ -886,18 +881,11 @@ def _guard_report_payload(
         "optimized_equilibrium_artifacts": rows.optimized,
         "matched_optimized_transport_artifacts": rows.matched_optimized,
         "summary": _guard_summary(
-            qualifying_ensembles=rows.qualifying_ensembles,
-            qualifying_optimized=rows.qualifying_optimized,
-            qualifying_matched_optimized=rows.qualifying_matched_optimized,
-            matched_optimized_rows=rows.matched_optimized,
-            failed_matched_optimized=rows.failed_matched_optimized,
-            best_matched_reduction=rows.best_matched_reduction,
+            rows=rows,
             promoted=gates.promoted,
         ),
         "evidence_gap": _evidence_gap(
-            failed_matched_optimized=rows.failed_matched_optimized,
-            qualifying_optimized=rows.qualifying_optimized,
-            qualifying_matched_optimized=rows.qualifying_matched_optimized,
+            rows=rows,
             cfg=cfg,
         ),
         "config": asdict(cfg),
