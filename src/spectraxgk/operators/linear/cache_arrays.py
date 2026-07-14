@@ -51,6 +51,69 @@ def load_collision_moment_matrix(model: str) -> np.ndarray:
     return np.array(matrices[names.index(key)], copy=True)
 
 
+def interpolate_collision_moment_matrix(
+    kperp_grid: jnp.ndarray,
+    matrices: jnp.ndarray,
+    kperp: jnp.ndarray,
+) -> jnp.ndarray:
+    """Interpolate collision matrices onto a scalar or spatial ``kperp`` field.
+
+    ``matrices`` may contain one shared table with shape
+    ``(kperp, modes, modes)`` or one table per species with shape
+    ``(species, kperp, modes, modes)``. Values outside the tabulated interval
+    use the nearest endpoint. The coefficient grid is validated on the host;
+    interpolation and its derivative with respect to ``kperp`` remain in JAX.
+    """
+
+    grid = jnp.asarray(kperp_grid)
+    table = jnp.asarray(matrices)
+    target = jnp.asarray(kperp, dtype=jnp.result_type(grid, table))
+    if grid.ndim != 1 or int(grid.size) < 2:
+        raise ValueError(
+            "collision kperp grid must be one-dimensional with at least two points"
+        )
+    if table.ndim not in {3, 4}:
+        raise ValueError(
+            "collision table must have shape (kperp, modes, modes) or "
+            "(species, kperp, modes, modes)"
+        )
+    grid_axis = 0 if table.ndim == 3 else 1
+    if int(table.shape[grid_axis]) != int(grid.size):
+        raise ValueError("collision table kperp axis must match the coefficient grid")
+    if int(table.shape[-1]) != int(table.shape[-2]):
+        raise ValueError("collision table matrices must be square")
+    if not isinstance(grid, jax.core.Tracer):
+        host_grid = np.asarray(grid)
+        if not np.all(np.isfinite(host_grid)) or not np.all(np.diff(host_grid) > 0.0):
+            raise ValueError(
+                "collision kperp grid must be finite and strictly increasing"
+            )
+
+    def interpolate_one(species_table: jnp.ndarray, values: jnp.ndarray) -> jnp.ndarray:
+        clipped = jnp.clip(values, grid[0], grid[-1])
+        left = jnp.clip(
+            jnp.searchsorted(grid, clipped, side="right") - 1, 0, grid.size - 2
+        )
+        fraction = (clipped - grid[left]) / (grid[left + 1] - grid[left])
+        interpolated = species_table[left] + fraction[..., None, None] * (
+            species_table[left + 1] - species_table[left]
+        )
+        return jnp.moveaxis(interpolated, (-2, -1), (0, 1))
+
+    if table.ndim == 3:
+        return interpolate_one(table, target)
+    species_count = int(table.shape[0])
+    if target.ndim == 0:
+        return jax.vmap(lambda species_table: interpolate_one(species_table, target))(
+            table
+        )
+    if int(target.shape[0]) != species_count:
+        raise ValueError(
+            "species collision table requires scalar kperp or a species-leading kperp field"
+        )
+    return jax.vmap(interpolate_one)(table, target)
+
+
 def apply_collision_moment_matrix(
     state: jnp.ndarray,
     matrix: jnp.ndarray,
@@ -67,18 +130,21 @@ def apply_collision_moment_matrix(
     ns, nl, nm = map(int, expanded.shape[:3])
     mode_count = nl * nm
     coefficients = jnp.asarray(matrix, dtype=jnp.result_type(value, matrix))
-    if coefficients.ndim == 2:
-        coefficients = jnp.broadcast_to(coefficients, (ns,) + coefficients.shape)
-    if coefficients.ndim != 3 or coefficients.shape not in {
-        (1, mode_count, mode_count),
-        (ns, mode_count, mode_count),
-    }:
+    spatial_shape = tuple(map(int, expanded.shape[3:]))
+    static_shared = (mode_count, mode_count)
+    static_species = {(1,) + static_shared, (ns,) + static_shared}
+    spatial_shared = static_shared + spatial_shape
+    spatial_species = {(1,) + spatial_shared, (ns,) + spatial_shared}
+    if coefficients.shape == static_shared or coefficients.shape == spatial_shared:
+        coefficients = coefficients[None, ...]
+    if coefficients.shape not in static_species | spatial_species:
         raise ValueError(
-            "collision matrix must have shape (modes, modes) or (species, modes, modes)"
+            "collision matrix must have shape for a static or state-spatial operator, "
+            "with an optional leading species axis"
         )
-    coefficients = jnp.broadcast_to(coefficients, (ns, mode_count, mode_count))
+    coefficients = jnp.broadcast_to(coefficients, (ns,) + coefficients.shape[1:])
     packed = jnp.swapaxes(expanded, 1, 2).reshape((ns, mode_count) + expanded.shape[3:])
-    applied = jnp.einsum("sij,sj...->si...", coefficients, packed)
+    applied = jnp.einsum("sij...,sj...->si...", coefficients, packed)
     result = jnp.swapaxes(applied.reshape((ns, nm, nl) + expanded.shape[3:]), 1, 2)
     real_dtype = jnp.real(expanded).dtype
     frequency = jnp.asarray(nu, dtype=real_dtype).reshape(-1)

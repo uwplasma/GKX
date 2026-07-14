@@ -16,6 +16,7 @@ _EXPORTS = {
         "apply_collision_moment_matrix",
         "collision_damping",
         "hypercollision_damping",
+        "interpolate_collision_moment_matrix",
         "load_collision_moment_matrix",
     ],
     "linked": [
