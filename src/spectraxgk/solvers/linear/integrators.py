@@ -410,49 +410,6 @@ def _linear_cache_or_build(
     return build_linear_cache(grid, geom, params, Nl, Nm)
 
 
-def _normalize_linear_method(method: str) -> str:
-    """Map public aliases onto the fixed-step method names used internally."""
-
-    return "imex" if method == "semi-implicit" else method
-
-
-def _dispatch_implicit_linear(
-    G0: jnp.ndarray,
-    cache: LinearCache,
-    params: LinearParams,
-    *,
-    dt: float,
-    steps: int,
-    terms: LinearTerms,
-    implicit_tol: float,
-    implicit_maxiter: int,
-    implicit_iters: int,
-    implicit_relax: float,
-    implicit_restart: int,
-    implicit_preconditioner: PreconditionerSpec,
-    checkpoint: bool,
-    sample_stride: int,
-) -> tuple[jnp.ndarray, jnp.ndarray]:
-    """Route the implicit linear integration policy."""
-
-    return _integrate_linear_implicit_cached(
-        G0,
-        cache,
-        params,
-        dt=dt,
-        steps=steps,
-        terms=terms,
-        implicit_tol=implicit_tol,
-        implicit_maxiter=implicit_maxiter,
-        implicit_iters=implicit_iters,
-        implicit_relax=implicit_relax,
-        implicit_restart=implicit_restart,
-        implicit_preconditioner=implicit_preconditioner,
-        checkpoint=checkpoint,
-        sample_stride=sample_stride,
-    )
-
-
 def _dispatch_parallel_linear(
     G0: jnp.ndarray,
     cache: LinearCache,
@@ -734,90 +691,6 @@ def _integrate_species_sharded_explicit(
     )
 
 
-def _dispatch_serial_linear(
-    G0: jnp.ndarray,
-    cache: LinearCache,
-    params: LinearParams,
-    *,
-    dt: float,
-    steps: int,
-    method: str,
-    terms: LinearTerms,
-    checkpoint: bool,
-    sample_stride: int,
-    donate: bool,
-    show_progress: bool,
-    force_electrostatic_fields: bool,
-) -> tuple[jnp.ndarray, jnp.ndarray]:
-    """Route explicit serial linear integration, optionally donating ``G0``."""
-
-    integrator = _integrate_linear_cached_donate if donate else _integrate_linear_cached
-    return integrator(
-        G0,
-        cache,
-        params,
-        dt,
-        steps,
-        method=method,
-        checkpoint=checkpoint,
-        terms=terms,
-        sample_stride=sample_stride,
-        show_progress=show_progress,
-        force_electrostatic_fields=force_electrostatic_fields,
-    )
-
-
-def _dispatch_explicit_linear(
-    G0: jnp.ndarray,
-    cache: LinearCache,
-    params: LinearParams,
-    *,
-    dt: float,
-    steps: int,
-    method: str,
-    terms: LinearTerms,
-    checkpoint: bool,
-    sample_stride: int,
-    donate: bool,
-    show_progress: bool,
-    parallel: Any | None,
-    parallel_strategy: str,
-    force_electrostatic_fields: bool,
-) -> tuple[jnp.ndarray, jnp.ndarray]:
-    """Route explicit linear integration through serial or parallel kernels."""
-
-    if parallel_strategy != "serial":
-        return _dispatch_parallel_linear(
-            G0,
-            cache,
-            params,
-            dt=dt,
-            steps=steps,
-            method=method,
-            terms=terms,
-            checkpoint=checkpoint,
-            sample_stride=sample_stride,
-            donate=donate,
-            show_progress=show_progress,
-            parallel=parallel,
-            force_electrostatic_fields=force_electrostatic_fields,
-        )
-    return _dispatch_serial_linear(
-        G0,
-        cache,
-        params,
-        dt=dt,
-        steps=steps,
-        method=method,
-        terms=terms,
-        checkpoint=checkpoint,
-        sample_stride=sample_stride,
-        donate=donate,
-        show_progress=show_progress,
-        force_electrostatic_fields=force_electrostatic_fields,
-    )
-
-
 def integrate_linear(
     G0: jnp.ndarray,
     grid: SpectralGrid,
@@ -845,7 +718,7 @@ def integrate_linear(
     terms = LinearTerms() if terms is None else terms
     _validate_linear_sampling(steps=steps, sample_stride=sample_stride)
     cache = _linear_cache_or_build(G0, grid, geom, params, cache)
-    method = _normalize_linear_method(method)
+    method = "imex" if method == "semi-implicit" else method
     parallel_strategy = _linear_parallel_strategy(parallel)
     force_electrostatic_fields = _is_electrostatic_field_terms(terms)
     if collision_operator is not None:
@@ -880,7 +753,7 @@ def integrate_linear(
             raise NotImplementedError(
                 "parallel linear integration currently supports only explicit fixed-step methods"
             )
-        return _dispatch_implicit_linear(
+        return _integrate_linear_implicit_cached(
             G0,
             cache,
             params,
@@ -896,20 +769,34 @@ def integrate_linear(
             checkpoint=checkpoint,
             sample_stride=sample_stride,
         )
-    return _dispatch_explicit_linear(
+    if parallel_strategy != "serial":
+        return _dispatch_parallel_linear(
+            G0,
+            cache,
+            params,
+            dt=dt,
+            steps=steps,
+            method=method,
+            terms=terms,
+            checkpoint=checkpoint,
+            sample_stride=sample_stride,
+            donate=donate,
+            show_progress=show_progress,
+            parallel=parallel,
+            force_electrostatic_fields=force_electrostatic_fields,
+        )
+    integrator = _integrate_linear_cached_donate if donate else _integrate_linear_cached
+    return integrator(
         G0,
         cache,
         params,
-        dt=dt,
-        steps=steps,
+        dt,
+        steps,
         method=method,
-        terms=terms,
         checkpoint=checkpoint,
+        terms=terms,
         sample_stride=sample_stride,
-        donate=donate,
         show_progress=show_progress,
-        parallel=parallel,
-        parallel_strategy=parallel_strategy,
         force_electrostatic_fields=force_electrostatic_fields,
     )
 
