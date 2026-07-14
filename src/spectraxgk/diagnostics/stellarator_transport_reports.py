@@ -16,6 +16,7 @@ from spectraxgk.objectives.vmec_transport_admission import (
     transport_objective_sample_summary,
 )
 
+
 # ---- replicated landscape admission ----
 @dataclass(frozen=True)
 class _LandscapeReductionMetrics:
@@ -23,16 +24,31 @@ class _LandscapeReductionMetrics:
     uncertainty_z_score: float | None
 
 
+def _explicit_true(value: Any) -> bool:
+    """Accept only explicit Boolean truth from persisted gate artifacts."""
+
+    return isinstance(value, (bool, np.bool_)) and bool(value)
+
+
+def _nonnegative_int(value: Any) -> int:
+    """Decode a nonnegative integral artifact field, failing closed to zero."""
+
+    finite = _finite_float_or_none(value)
+    if finite is None or finite < 0.0 or not float(finite).is_integer():
+        return 0
+    return int(finite)
+
+
 def _ensemble_statistics(ensemble: Mapping[str, Any]) -> dict[str, Any]:
     stats = ensemble.get("statistics", {})
     if not isinstance(stats, Mapping):
         stats = {}
     return {
-        "passed": bool(ensemble.get("passed", False)),
+        "passed": _explicit_true(ensemble.get("passed")),
         "ensemble_mean": _finite_float_or_none(stats.get("ensemble_mean")),
         "combined_sem": _finite_float_or_none(stats.get("combined_sem")),
         "combined_sem_rel": _finite_float_or_none(stats.get("combined_sem_rel")),
-        "n_reports": int(stats.get("n_reports", 0) or 0),
+        "n_reports": _nonnegative_int(stats.get("n_reports")),
         "case": ensemble.get("case"),
     }
 
@@ -44,7 +60,7 @@ def _ensemble_blockers(
     policy: VMECJAXNonlinearAuditPolicy,
 ) -> list[str]:
     blockers: list[str] = []
-    if not bool(stats.get("passed")):
+    if not _explicit_true(stats.get("passed")):
         blockers.append(f"{role}_ensemble_failed")
     if stats.get("ensemble_mean") is None:
         blockers.append(f"{role}_missing_ensemble_mean")
@@ -55,7 +71,7 @@ def _ensemble_blockers(
         blockers.append(f"{role}_missing_combined_sem_rel")
     elif float(sem_rel) > float(policy.maximum_combined_sem_rel):
         blockers.append(f"{role}_combined_sem_rel_too_large")
-    if int(stats.get("n_reports", 0) or 0) < int(policy.minimum_replicate_count):
+    if _nonnegative_int(stats.get("n_reports")) < int(policy.minimum_replicate_count):
         blockers.append(f"{role}_insufficient_replicates")
     return blockers
 
@@ -70,7 +86,9 @@ def _candidate_landscape_labels(
         else tuple(f"candidate_{index}" for index, _ in enumerate(candidate_ensembles))
     )
     if len(labels) != len(candidate_ensembles):
-        raise ValueError("candidate_labels must have the same length as candidate_ensembles")
+        raise ValueError(
+            "candidate_labels must have the same length as candidate_ensembles"
+        )
     return labels
 
 
@@ -145,7 +163,9 @@ def _candidate_landscape_row(
     }
 
 
-def _select_landscape_candidate(rows: Sequence[Mapping[str, Any]]) -> Mapping[str, Any] | None:
+def _select_landscape_candidate(
+    rows: Sequence[Mapping[str, Any]],
+) -> Mapping[str, Any] | None:
     admitted = [row for row in rows if not row.get("admission_blockers")]
     if not admitted:
         return None
@@ -155,15 +175,6 @@ def _select_landscape_candidate(rows: Sequence[Mapping[str, Any]]) -> Mapping[st
             float(row.get("relative_reduction") or 0.0),
             float(row.get("uncertainty_z_score") or 0.0),
         ),
-    )
-
-
-def _landscape_next_action(selected: Mapping[str, Any] | None) -> str:
-    if selected is not None:
-        return "use selected direction for the next uncertainty-aware optimizer admission step"
-    return (
-        "do not launch a broader optimizer from this landscape without more resolved "
-        "nonlinear evidence"
     )
 
 
@@ -186,7 +197,9 @@ def build_nonlinear_landscape_admission_report(
     policy = policy or VMECJAXNonlinearAuditPolicy()
     labels = _candidate_landscape_labels(candidate_ensembles, candidate_labels)
     baseline_stats = _ensemble_statistics(baseline_ensemble)
-    baseline_blockers = _ensemble_blockers(baseline_stats, role="baseline", policy=policy)
+    baseline_blockers = _ensemble_blockers(
+        baseline_stats, role="baseline", policy=policy
+    )
     rows = [
         _candidate_landscape_row(
             label=label,
@@ -209,10 +222,12 @@ def build_nonlinear_landscape_admission_report(
         "candidates": rows,
         "selected_candidate": selected,
         "passed": selected is not None,
-        "next_action": _landscape_next_action(selected),
+        "next_action": (
+            "use selected direction for the next uncertainty-aware optimizer admission step"
+            if selected is not None
+            else "do not launch a broader optimizer from this landscape without more resolved nonlinear evidence"
+        ),
     }
-
-
 
 
 # ---- reduced prelaunch gates ----
@@ -276,17 +291,6 @@ def _sample_statistics_summary(
     }
 
 
-def _prelaunch_policies(
-    *,
-    policy: VMECJAXReducedPrelaunchPolicy | None,
-    nonlinear_policy: VMECJAXNonlinearAuditPolicy | None,
-) -> tuple[VMECJAXReducedPrelaunchPolicy, VMECJAXNonlinearAuditPolicy]:
-    return (
-        policy or VMECJAXReducedPrelaunchPolicy(),
-        nonlinear_policy or VMECJAXNonlinearAuditPolicy(),
-    )
-
-
 def _relative_reduction(
     baseline: float | None,
     candidate: float | None,
@@ -309,7 +313,9 @@ def _threshold_sources(
         "failed_reference_threshold": None,
     }
     if failed_reference is not None:
-        failed_threshold = float(policy.failed_reference_safety_factor) * failed_reference
+        failed_threshold = (
+            float(policy.failed_reference_safety_factor) * failed_reference
+        )
         sources["failed_reference_threshold"] = failed_threshold
         threshold = max(threshold, failed_threshold)
     return threshold, sources
@@ -371,8 +377,10 @@ def _cross_sample_status(
             role="candidate",
         ),
     ]
-    available = all(bool(row["available"]) for row in rows)
-    passed = None if not available else all(bool(row["passed"]) for row in rows)
+    available = all(_explicit_true(row["available"]) for row in rows)
+    passed = (
+        None if not available else all(_explicit_true(row["passed"]) for row in rows)
+    )
     return _CrossSampleStatus(available=available, passed=passed, rows=rows)
 
 
@@ -387,7 +395,7 @@ def _sample_coverage_blockers(
     *,
     policy: VMECJAXReducedPrelaunchPolicy,
 ) -> list[str]:
-    if bool(policy.require_sample_coverage) and not bool(sample_summary["passed"]):
+    if policy.require_sample_coverage and not _explicit_true(sample_summary["passed"]):
         return [str(item) for item in sample_summary["blockers"]]
     return []
 
@@ -404,15 +412,14 @@ def _prelaunch_gates(
     return [
         {
             "metric": "reduced_margin_for_nonlinear_audit",
-            "passed": "insufficient_reduced_margin_for_nonlinear_audit"
-            not in blockers
+            "passed": "insufficient_reduced_margin_for_nonlinear_audit" not in blockers
             and "missing_relative_reduced_reduction" not in blockers,
             "value": metrics.relative_reduction,
             "threshold": metrics.threshold,
         },
         {
             "metric": "multi_sample_objective_coverage",
-            "passed": bool(sample_summary["passed"]),
+            "passed": _explicit_true(sample_summary["passed"]),
             "value": int(sample_summary["sample_count"]),
             "threshold": int(nonlinear_policy.minimum_sample_count),
         },
@@ -427,27 +434,6 @@ def _prelaunch_gates(
             "threshold": float(policy.maximum_cross_sample_sem_rel),
         },
     ]
-
-
-def _cross_sample_payload(status: _CrossSampleStatus) -> dict[str, Any]:
-    return {
-        "available": status.available,
-        "passed": status.passed,
-        "rows": status.rows,
-        "claim_scope": (
-            "deterministic spread over the reduced surface/field-line/ky "
-            "objective grid; not stochastic nonlinear heat-flux uncertainty"
-        ),
-    }
-
-
-def _next_action(blockers: list[str]) -> str:
-    if not blockers:
-        return "launch replicated long-window nonlinear audit only with baseline/candidate ensembles"
-    return (
-        "do not launch an expensive nonlinear audit; increase reduced-objective "
-        "margin or broaden the objective before spending GPU time"
-    )
 
 
 def _prelaunch_payload(
@@ -474,7 +460,15 @@ def _prelaunch_payload(
         "required_relative_reduced_reduction": metrics.threshold,
         "threshold_sources": metrics.threshold_sources,
         "objective_sample_summary": sample_summary,
-        "reduced_cross_sample_statistics": _cross_sample_payload(cross_sample),
+        "reduced_cross_sample_statistics": {
+            "available": cross_sample.available,
+            "passed": cross_sample.passed,
+            "rows": cross_sample.rows,
+            "claim_scope": (
+                "deterministic spread over the reduced surface/field-line/ky "
+                "objective grid; not stochastic nonlinear heat-flux uncertainty"
+            ),
+        },
         "passed": not blockers,
         "blockers": blockers,
         "gates": _prelaunch_gates(
@@ -485,7 +479,12 @@ def _prelaunch_payload(
             policy=policy,
             blockers=blockers,
         ),
-        "next_action": _next_action(blockers),
+        "next_action": (
+            "do not launch an expensive nonlinear audit; increase reduced-objective "
+            "margin or broaden the objective before spending GPU time"
+            if blockers
+            else "launch replicated long-window nonlinear audit only with baseline/candidate ensembles"
+        ),
     }
 
 
@@ -508,10 +507,8 @@ def build_reduced_nonlinear_audit_prelaunch_report(
     another long GPU campaign.
     """
 
-    policy, nonlinear_policy = _prelaunch_policies(
-        policy=policy,
-        nonlinear_policy=nonlinear_policy,
-    )
+    policy = policy or VMECJAXReducedPrelaunchPolicy()
+    nonlinear_policy = nonlinear_policy or VMECJAXNonlinearAuditPolicy()
     metrics = _prelaunch_metrics(
         baseline_metric=baseline_metric,
         candidate_metric=candidate_metric,
@@ -547,9 +544,9 @@ def _reduced_prelaunch_gate(
     reduced_prelaunch_report: Mapping[str, Any],
     policy: VMECJAXNonlinearCampaignPolicy,
 ) -> tuple[dict[str, Any], list[str]]:
-    prelaunch_passed = bool(reduced_prelaunch_report.get("passed", False))
+    prelaunch_passed = _explicit_true(reduced_prelaunch_report.get("passed"))
     blockers: list[str] = []
-    if bool(policy.require_reduced_prelaunch_passed) and not prelaunch_passed:
+    if policy.require_reduced_prelaunch_passed and not prelaunch_passed:
         blockers.append("reduced_prelaunch_gate_failed")
     return (
         {
@@ -566,7 +563,7 @@ def _reduced_objective_sample_gate(
 ) -> tuple[dict[str, Any], list[str]]:
     sample_summary = reduced_prelaunch_report.get("objective_sample_summary")
     sample_map = sample_summary if isinstance(sample_summary, Mapping) else None
-    sample_passed = bool(sample_map.get("passed", False)) if sample_map else False
+    sample_passed = _explicit_true(sample_map.get("passed")) if sample_map else False
     blockers = [] if sample_passed else ["reduced_objective_sample_coverage_failed"]
     return (
         {
@@ -593,14 +590,16 @@ def _reduced_cross_sample_gate(
 ) -> tuple[dict[str, Any], list[str]]:
     cross_sample = reduced_prelaunch_report.get("reduced_cross_sample_statistics")
     cross_map = cross_sample if isinstance(cross_sample, Mapping) else None
-    cross_sample_available = bool(cross_map.get("available", False)) if cross_map else False
+    cross_sample_available = (
+        _explicit_true(cross_map.get("available")) if cross_map else False
+    )
     cross_sample_passed = (
-        bool(cross_map.get("passed", False))
+        _explicit_true(cross_map.get("passed"))
         if cross_map is not None and cross_map.get("passed") is not None
         else None
     )
     blockers: list[str] = []
-    if bool(policy.require_reduced_cross_sample_gate):
+    if policy.require_reduced_cross_sample_gate:
         if not cross_sample_available:
             blockers.append("reduced_cross_sample_statistics_missing")
         elif cross_sample_passed is not True:
@@ -623,9 +622,9 @@ def _landscape_admission_gate(
     landscape_admission_report: Mapping[str, Any],
     policy: VMECJAXNonlinearCampaignPolicy,
 ) -> tuple[dict[str, Any], list[str]]:
-    landscape_passed = bool(landscape_admission_report.get("passed", False))
+    landscape_passed = _explicit_true(landscape_admission_report.get("passed"))
     blockers: list[str] = []
-    if bool(policy.require_landscape_admission_passed) and not landscape_passed:
+    if policy.require_landscape_admission_passed and not landscape_passed:
         blockers.append("replicated_landscape_admission_failed")
     return (
         {
@@ -642,7 +641,9 @@ def _selected_landscape_candidate(
 ) -> tuple[Mapping[str, Any], list[str]]:
     selected = landscape_admission_report.get("selected_candidate")
     selected_map: Mapping[str, Any] = selected if isinstance(selected, Mapping) else {}
-    return selected_map, ([] if selected_map else ["missing_selected_landscape_candidate"])
+    return selected_map, (
+        [] if selected_map else ["missing_selected_landscape_candidate"]
+    )
 
 
 def _candidate_gate_specs(
@@ -652,12 +653,13 @@ def _candidate_gate_specs(
     relative_reduction = _finite_float_or_none(selected_map.get("relative_reduction"))
     z_score = _finite_float_or_none(selected_map.get("uncertainty_z_score"))
     sem_rel = _finite_float_or_none(selected_map.get("combined_sem_rel"))
-    n_reports = int(selected_map.get("n_reports", 0) or 0)
+    n_reports = _nonnegative_int(selected_map.get("n_reports"))
     return [
         (
             "landscape_relative_reduction",
             relative_reduction is not None
-            and relative_reduction >= float(policy.minimum_landscape_relative_reduction),
+            and relative_reduction
+            >= float(policy.minimum_landscape_relative_reduction),
             relative_reduction,
             float(policy.minimum_landscape_relative_reduction),
             "selected_landscape_reduction_too_small",
@@ -699,7 +701,7 @@ def _candidate_gates_and_blockers(
         gates.append(
             {
                 "metric": metric,
-                "passed": bool(passed),
+                "passed": passed,
                 "value": value,
                 "threshold": threshold,
             }
@@ -707,42 +709,6 @@ def _candidate_gates_and_blockers(
         if not passed:
             blockers.append(blocker)
     return gates, blockers
-
-
-def _campaign_next_action(admitted: bool) -> str:
-    if admitted:
-        return (
-            "launch a bounded multi-control optimizer campaign from the admitted landscape direction, "
-            "with matched baseline/candidate t=[350,700] replicated nonlinear audits before promotion"
-        )
-    return (
-        "do not launch a broader nonlinear optimizer campaign; fix the reduced gate, "
-        "cross-sample dispersion, or replicated landscape uncertainty first"
-    )
-
-
-def _pack_campaign_admission_report(
-    *,
-    policy: VMECJAXNonlinearCampaignPolicy,
-    blockers: list[str],
-    gates: list[dict[str, Any]],
-    selected_map: Mapping[str, Any],
-) -> dict[str, Any]:
-    admitted = not blockers
-    return {
-        "kind": "vmec_jax_nonlinear_campaign_admission_report",
-        "claim_scope": (
-            "next nonlinear optimizer-campaign admission only; not a production "
-            "multi-coefficient turbulent-flux optimization claim"
-        ),
-        "policy": policy.to_dict(),
-        "passed": admitted,
-        "campaign_admitted": admitted,
-        "blockers": blockers,
-        "gates": gates,
-        "selected_landscape_candidate": dict(selected_map) if selected_map else None,
-        "next_action": _campaign_next_action(admitted),
-    }
 
 
 def build_nonlinear_campaign_admission_report(
@@ -779,16 +745,28 @@ def build_nonlinear_campaign_admission_report(
     )
     gates.extend(candidate_gates)
     blockers.extend(candidate_blockers)
-    return _pack_campaign_admission_report(
-        policy=policy,
-        blockers=blockers,
-        gates=gates,
-        selected_map=selected_map,
-    )
-
-
-
-
+    admitted = not blockers
+    return {
+        "kind": "vmec_jax_nonlinear_campaign_admission_report",
+        "claim_scope": (
+            "next nonlinear optimizer-campaign admission only; not a production "
+            "multi-coefficient turbulent-flux optimization claim"
+        ),
+        "policy": policy.to_dict(),
+        "passed": admitted,
+        "campaign_admitted": admitted,
+        "blockers": blockers,
+        "gates": gates,
+        "selected_landscape_candidate": dict(selected_map) if selected_map else None,
+        "next_action": (
+            "launch a bounded multi-control optimizer campaign from the admitted "
+            "landscape direction, with matched baseline/candidate t=[350,700] "
+            "replicated nonlinear audits before promotion"
+            if admitted
+            else "do not launch a broader nonlinear optimizer campaign; fix the reduced "
+            "gate, cross-sample dispersion, or replicated landscape uncertainty first"
+        ),
+    }
 
 
 # ---- matched nonlinear audit redesign ----
@@ -812,13 +790,13 @@ def _matched_nonlinear_audit_metrics(
     return _MatchedNonlinearAuditMetrics(
         relative_reduction=_finite_float_or_none(stats.get("relative_reduction")),
         z_score=_finite_float_or_none(stats.get("uncertainty_z_score")),
-        baseline_passed=bool(baseline.get("passed", False))
+        baseline_passed=_explicit_true(baseline.get("passed"))
         if isinstance(baseline, Mapping)
         else False,
-        candidate_passed=bool(candidate.get("passed", False))
+        candidate_passed=_explicit_true(candidate.get("passed"))
         if isinstance(candidate, Mapping)
         else False,
-        comparison_passed=bool(matched_comparison.get("passed", False)),
+        comparison_passed=_explicit_true(matched_comparison.get("passed")),
     )
 
 
@@ -883,21 +861,11 @@ def _nonlinear_audit_gate_rows(
         },
         {
             "metric": "multi_sample_objective_coverage",
-            "passed": bool(sample_summary["passed"]),
+            "passed": _explicit_true(sample_summary["passed"]),
             "value": int(sample_summary["sample_count"]),
             "threshold": int(policy.minimum_sample_count),
         },
     ]
-
-
-def _nonlinear_audit_next_action(promoted: bool) -> str:
-    if promoted:
-        return "candidate may be used as nonlinear turbulent-flux optimization evidence"
-    return (
-        "redesign the reduced transport objective with the recommended multi-surface, "
-        "multi-field-line, multi-ky sample set; rerun projected admission; then repeat "
-        "the matched long-window nonlinear audit"
-    )
 
 
 def build_nonlinear_audit_redesign_report(
@@ -918,7 +886,9 @@ def build_nonlinear_audit_redesign_report(
     policy = policy or VMECJAXNonlinearAuditPolicy()
     metrics = _matched_nonlinear_audit_metrics(matched_comparison)
     nonlinear_blockers = _nonlinear_audit_blockers(metrics, policy)
-    sample_summary = transport_objective_sample_summary(objective_sample_set, policy=policy)
+    sample_summary = transport_objective_sample_summary(
+        objective_sample_set, policy=policy
+    )
     all_blockers = nonlinear_blockers + list(sample_summary["blockers"])
     promoted = not all_blockers
     return {
@@ -938,12 +908,14 @@ def build_nonlinear_audit_redesign_report(
             sample_summary=sample_summary,
             policy=policy,
         ),
-        "next_action": _nonlinear_audit_next_action(promoted),
+        "next_action": (
+            "candidate may be used as nonlinear turbulent-flux optimization evidence"
+            if promoted
+            else "redesign the reduced transport objective with the recommended "
+            "multi-surface, multi-field-line, multi-ky sample set; rerun projected "
+            "admission; then repeat the matched long-window nonlinear audit"
+        ),
     }
-
-
-
-
 
 
 __all__ = [
