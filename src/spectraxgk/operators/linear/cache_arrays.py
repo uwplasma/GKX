@@ -471,11 +471,13 @@ def interpolate_collision_moment_matrix(
 ) -> jnp.ndarray:
     """Interpolate collision matrices onto a scalar or spatial ``kperp`` field.
 
-    ``matrices`` may contain one shared table with shape
-    ``(kperp, modes, modes)`` or one table per species with shape
-    ``(species, kperp, modes, modes)``. Values outside the tabulated interval
-    use the nearest endpoint. The coefficient grid is validated on the host;
-    interpolation and its derivative with respect to ``kperp`` remain in JAX.
+    ``matrices`` may contain one shared table, one table per species, or one
+    table per ordered target/source species pair. Their respective shapes are
+    ``(kperp, modes, modes)``, ``(species, kperp, modes, modes)``, and
+    ``(target, source, kperp, modes, modes)``. Values outside the tabulated
+    interval use the nearest endpoint. The coefficient grid is validated on
+    the host; interpolation and its derivative with respect to ``kperp``
+    remain in JAX.
     """
 
     grid = jnp.asarray(kperp_grid)
@@ -485,12 +487,13 @@ def interpolate_collision_moment_matrix(
         raise ValueError(
             "collision kperp grid must be one-dimensional with at least two points"
         )
-    if table.ndim not in {3, 4}:
+    if table.ndim not in {3, 4, 5}:
         raise ValueError(
             "collision table must have shape (kperp, modes, modes) or "
-            "(species, kperp, modes, modes)"
+            "(species, kperp, modes, modes), optionally with separate "
+            "target/source species axes"
         )
-    grid_axis = 0 if table.ndim == 3 else 1
+    grid_axis = table.ndim - 3
     if int(table.shape[grid_axis]) != int(grid.size):
         raise ValueError("collision table kperp axis must match the coefficient grid")
     if int(table.shape[-1]) != int(table.shape[-2]):
@@ -516,6 +519,29 @@ def interpolate_collision_moment_matrix(
     if table.ndim == 3:
         return interpolate_one(table, target)
     species_count = int(table.shape[0])
+    if table.ndim == 5:
+        if int(table.shape[1]) != species_count:
+            raise ValueError(
+                "multispecies collision table must have equal target/source axes"
+            )
+
+        def interpolate_target_pairs(
+            pair_tables: jnp.ndarray, values: jnp.ndarray
+        ) -> jnp.ndarray:
+            return jax.vmap(lambda pair_table: interpolate_one(pair_table, values))(
+                pair_tables
+            )
+
+        if target.ndim == 0:
+            return jax.vmap(lambda pairs: interpolate_target_pairs(pairs, target))(
+                table
+            )
+        if int(target.shape[0]) != species_count:
+            raise ValueError(
+                "multispecies collision table requires scalar kperp or a "
+                "target-species-leading kperp field"
+            )
+        return jax.vmap(interpolate_target_pairs)(table, target)
     if target.ndim == 0:
         return jax.vmap(lambda species_table: interpolate_one(species_table, target))(
             table
