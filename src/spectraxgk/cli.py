@@ -344,7 +344,12 @@ def _add_runtime_parsers(sub: argparse._SubParsersAction) -> None:
 # and $VAR is expanded from the environment. See _apply_runtime_path_overrides.
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog=Path(sys.argv[0]).name if sys.argv else "spectraxgk"
+        prog=Path(sys.argv[0]).name if sys.argv else "spectraxgk",
+        description="Run, diagnose, and plot SPECTRAX-GK simulations.",
+        epilog=(
+            "Run without arguments for the self-contained linear demo. "
+            "Plot a saved result with: %(prog)s --plot OUTPUT_FILE [--out FIGURE.png]"
+        ),
     )
     parser.add_argument(
         "--version",
