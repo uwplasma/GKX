@@ -253,6 +253,7 @@ def _integrate_nonlinear_sheared_scan(
     terms: TermConfig | None = None,
     laguerre_mode: str = "grid",
     collision_operator: CollisionOperator | None = None,
+    compressed_real_fft: bool = False,
     record_transport: bool = False,
     return_fields: bool = True,
     flux_scale: float = 1.0,
@@ -286,8 +287,7 @@ def _integrate_nonlinear_sheared_scan(
             nl, nm = G0.shape[1:3]
         else:
             raise ValueError(
-                "G0 must have shape (Nl, Nm, Ny, Nx, Nz) or "
-                "(Ns, Nl, Nm, Ny, Nx, Nz)"
+                "G0 must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)"
             )
         cache = build_linear_cache(grid, geom_eff, params, int(nl), int(nm))
 
@@ -320,7 +320,7 @@ def _integrate_nonlinear_sheared_scan(
             dt_max=dt_max,
             cfl=cfl,
             cfl_fac=cfl_fac,
-            compressed_real_fft=False,
+            compressed_real_fft=compressed_real_fft,
             real_dtype=real_dtype,
             resolve_cfl_fac_fn=resolve_cfl_fac,
             linear_frequency_bound_fn=_linear_frequency_bound,
@@ -357,7 +357,7 @@ def _integrate_nonlinear_sheared_scan(
             updated_cache,
             params,
             term_cfg,
-            compressed_real_fft=False,
+            compressed_real_fft=compressed_real_fft,
             laguerre_mode=laguerre_mode,
             collision_operator=collision_operator,
             radial_phase=update.phase,
@@ -408,8 +408,10 @@ def _integrate_nonlinear_sheared_scan(
                 time,
                 stage2_time,
             ).state
-            trial = current.state + 0.25 * dt_local * derivative + 0.75 * dt_local * (
-                stage2_derivative_base
+            trial = (
+                current.state
+                + 0.25 * dt_local * derivative
+                + 0.75 * dt_local * (stage2_derivative_base)
             )
         return coordinates(trial, new_time, time), new_time
 
@@ -422,7 +424,9 @@ def _integrate_nonlinear_sheared_scan(
         carry: tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray], index: jnp.ndarray
     ):
         state, adaptive_time, dt_previous = carry
-        fixed_time = initial_time_value + jnp.asarray(index, dtype=real_dtype) * dt_value
+        fixed_time = (
+            initial_time_value + jnp.asarray(index, dtype=real_dtype) * dt_value
+        )
         time = fixed_time if fixed_dt else adaptive_time
         current = coordinates(state, time, time)
         derivative, current_fields, _ = rhs_at(current)
@@ -479,7 +483,9 @@ def _integrate_nonlinear_sheared_scan(
         )
         return state_final_carry[0], output
 
-    initial_update = coordinates(initial_state_carry[0], initial_state_carry[1], initial_state_carry[1])
+    initial_update = coordinates(
+        initial_state_carry[0], initial_state_carry[1], initial_state_carry[1]
+    )
     initial_derivative, initial_fields, _ = rhs_at(initial_update)
     # Some field-solve policies use a lower internal precision. Match the scan
     # carry to the requested state precision just as every subsequent step does.
@@ -507,15 +513,17 @@ def integrate_nonlinear_sheared(
     terms: TermConfig | None = None,
     laguerre_mode: str = "grid",
     collision_operator: CollisionOperator | None = None,
+    compressed_real_fft: bool = False,
     differentiable: bool = False,
     return_fields: bool = True,
 ) -> tuple[jnp.ndarray, FieldState] | jnp.ndarray:
     """Integrate the periodic shearing-coordinate foundation.
 
     This research path supports fixed-step Euler, midpoint RK2, and three-stage
-    Heun RK3 with the full-complex FFT. Stage states and derivatives are remapped
-    to the stage coordinate basis before the RHS and back to the step basis
-    before Runge--Kutta combinations.
+    Heun RK3. Stage states and derivatives are remapped to the stage coordinate
+    basis before the RHS and back to the step basis before Runge--Kutta
+    combinations. ``compressed_real_fft`` evaluates the nonlinear bracket in
+    the equivalent canonical shearing-coordinate representation.
     """
 
     final_state, fields = _integrate_nonlinear_sheared_scan(
@@ -531,6 +539,7 @@ def integrate_nonlinear_sheared(
         terms=terms,
         laguerre_mode=laguerre_mode,
         collision_operator=collision_operator,
+        compressed_real_fft=compressed_real_fft,
         differentiable=differentiable,
         return_fields=return_fields,
     )
@@ -553,6 +562,7 @@ def integrate_nonlinear_sheared_transport(
     terms: TermConfig | None = None,
     laguerre_mode: str = "grid",
     collision_operator: CollisionOperator | None = None,
+    compressed_real_fft: bool = False,
     flux_scale: float = 1.0,
     differentiable: bool = True,
     fixed_dt: bool = True,
@@ -583,6 +593,7 @@ def integrate_nonlinear_sheared_transport(
         terms=terms,
         laguerre_mode=laguerre_mode,
         collision_operator=collision_operator,
+        compressed_real_fft=compressed_real_fft,
         record_transport=True,
         flux_scale=flux_scale,
         differentiable=differentiable,

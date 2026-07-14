@@ -127,10 +127,6 @@ def _spectral_bracket_real_fft_core(
     radial_phase: jnp.ndarray | None = None,
     multiple_fields: bool,
 ) -> jnp.ndarray:
-    if radial_phase is not None:
-        raise NotImplementedError(
-            "radial shearing phases currently require compressed_real_fft=False"
-        )
     complex_dtype = jnp.result_type(G_hat, chi_hat, jnp.complex64)
     real_dtype = jnp.real(jnp.empty((), dtype=complex_dtype)).dtype
     imag = jnp.asarray(1j, dtype=complex_dtype)
@@ -139,6 +135,14 @@ def _spectral_bracket_real_fft_core(
     mask = jnp.asarray(dealias_mask, dtype=real_dtype)
     kx = jnp.asarray(kx_grid, dtype=real_dtype)
     ky = jnp.asarray(ky_grid, dtype=real_dtype)
+    if radial_phase is not None:
+        phase = jnp.asarray(radial_phase, dtype=complex_dtype)
+        if tuple(phase.shape) != tuple(kx.shape):
+            raise ValueError("radial_phase must have shape (ky, x)")
+        # Both bracket operands carry the same residual radial phase. It
+        # cancels from their Poisson bracket, leaving the canonical shearing-
+        # coordinate derivatives represented by the row-relative kx mesh.
+        kx = kx - kx[:, :1]
     ifft_scale, fft_scale = _fft_scales(
         ky_grid, real_dtype=real_dtype, fft_norm=fft_norm
     )
