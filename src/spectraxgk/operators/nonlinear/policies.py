@@ -18,14 +18,10 @@ from spectraxgk.operators.linear.params import (
 )
 from spectraxgk.operators.nonlinear.collisions import (
     NonlinearCollisionSplitPolicy,
-    _apply_collision_split,
-    _collision_damping,
     build_nonlinear_collision_split_policy,
 )
 from spectraxgk.operators.nonlinear.projection import (
     ShearingCoordinateUpdate,
-    _make_fixed_mode_projector,
-    _make_hermitian_projector,
     _make_nonlinear_state_projector,
     advance_shearing_coordinates,
 )
@@ -38,13 +34,6 @@ __all__ = [
     "NonlinearDiagnosticSetup",
     "NonlinearTimeStepPolicy",
     "ShearingCoordinateUpdate",
-    "_apply_collision_split",
-    "_collision_damping",
-    "_nonlinear_cfl_frequency_components",
-    "_diagnostic_omega_mode_mask",
-    "_make_fixed_mode_projector",
-    "_make_hermitian_projector",
-    "_make_nonlinear_state_projector",
     "advance_shearing_coordinates",
     "build_nonlinear_collision_split_policy",
     "build_nonlinear_diagnostic_setup",

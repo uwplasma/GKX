@@ -25,16 +25,18 @@ from spectraxgk.operators.linear.params import LinearParams, _x64_enabled
 from spectraxgk.operators.nonlinear.policies import (
     IMEXLinearOperator,
     _nonlinear_cfl_frequency_components,
-    _make_hermitian_projector,
     build_nonlinear_imex_operator,
     build_nonlinear_time_step_policy,
+)
+from spectraxgk.operators.nonlinear.projection import (
+    _make_hermitian_projector,
+    advance_shearing_coordinates,
 )
 from spectraxgk.operators.nonlinear.rhs import (
     linear_rhs_jit_for_terms_impl,
     nonlinear_em_term_cached_impl,
     nonlinear_rhs_cached_impl,
 )
-from spectraxgk.operators.nonlinear.projection import advance_shearing_coordinates
 from spectraxgk.solvers.nonlinear.explicit import (
     integrate_cached_explicit_scan,
     integrate_nonlinear_scan,

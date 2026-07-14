@@ -47,14 +47,16 @@ from spectraxgk.operators.nonlinear.diagnostics import (
     select_nonlinear_step_diagnostics,
 )
 from spectraxgk.operators.nonlinear.policies import (
-    _apply_collision_split,
-    _collision_damping,
     _diagnostic_omega_mode_mask,
     _nonlinear_cfl_frequency_components,
     build_nonlinear_collision_split_policy,
     build_nonlinear_diagnostic_setup,
     build_nonlinear_imex_operator,
     build_nonlinear_time_step_policy,
+)
+from spectraxgk.operators.nonlinear.collisions import (
+    _apply_collision_split,
+    _collision_damping,
 )
 from spectraxgk.operators.nonlinear.rhs import nonlinear_em_term_cached_impl
 from spectraxgk.solvers.nonlinear.diagnostics import (
