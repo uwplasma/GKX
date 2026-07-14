@@ -9,6 +9,7 @@ _EXPORTS = {
     "cache_model": ["LinearCache"],
     "cache_builder": ["build_linear_cache", "update_linear_cache_for_sheared_kx"],
     "cache_arrays": [
+        "DriftKineticSugamaOperator",
         "_build_end_damping_profile_array",
         "_build_gyroaverage_cache_arrays",
         "_build_low_rank_moment_cache_arrays",

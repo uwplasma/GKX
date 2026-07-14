@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from functools import lru_cache
 import hashlib
 import io
@@ -17,6 +18,7 @@ from spectraxgk.core.velocity import J_l_all
 from spectraxgk.operators.linear.params import LinearParams, _as_species_array
 
 if TYPE_CHECKING:
+    from spectraxgk.core.extension_points import CollisionContext
     from spectraxgk.operators.linear.cache_model import LinearCache
 
 
@@ -235,6 +237,40 @@ def assemble_drift_kinetic_sugama_matrix(
     return matrix.at[diagonal, diagonal].add(
         jnp.sum(frequency[..., None, None] * test, axis=1)
     )
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
+class DriftKineticSugamaOperator:
+    """Reduced multispecies Sugama model for the collision extension seam."""
+
+    matrix: jnp.ndarray
+
+    @classmethod
+    def from_species(
+        cls,
+        density: jnp.ndarray,
+        mass: jnp.ndarray,
+        temperature: jnp.ndarray,
+    ) -> DriftKineticSugamaOperator:
+        """Build the ordered-pair matrix from physical species parameters."""
+
+        return cls(assemble_drift_kinetic_sugama_matrix(density, mass, temperature))
+
+    def apply(self, context: CollisionContext) -> jnp.ndarray:
+        """Apply the model to the post-field nonadiabatic response."""
+
+        return apply_multispecies_collision_moment_matrix(
+            context.hamiltonian, self.matrix
+        )
+
+    def tree_flatten(self):
+        return (self.matrix,), None
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        del aux_data
+        return cls(*children)
 
 
 def interpolate_collision_moment_matrix(
