@@ -271,8 +271,14 @@ def _shift_invert_apply_factory(
 
     def apply_shift_invert(x: jnp.ndarray, _cache, _params, _term_cfg) -> jnp.ndarray:
         b = x.reshape(size)
-        def solve(preconditioner):
-            x0 = preconditioner(b) if preconditioner is not None else b
+
+        def solve(preconditioner, initial_guess=None):
+            if initial_guess is not None:
+                x0 = initial_guess
+            elif preconditioner is not None:
+                x0 = preconditioner(b)
+            else:
+                x0 = b
             solution, _info = gmres(
                 matvec,
                 b,
@@ -295,7 +301,7 @@ def _shift_invert_apply_factory(
             true_residual = jnp.linalg.norm(matvec(sol) - b)
             true_tolerance = relative_floor * jnp.linalg.norm(b)
             retry = ~jnp.isfinite(true_residual) | (true_residual > true_tolerance)
-            sol = jax.lax.cond(retry, lambda: solve(None), lambda: sol)
+            sol = jax.lax.cond(retry, lambda: solve(None, sol), lambda: sol)
         return sol.reshape(shape)
 
     return apply_shift_invert
