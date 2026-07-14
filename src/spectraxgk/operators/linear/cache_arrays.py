@@ -190,6 +190,53 @@ def drift_kinetic_sugama_pair_matrices(
     return convention * test, convention * field
 
 
+def assemble_drift_kinetic_sugama_matrix(
+    density: jnp.ndarray,
+    mass: jnp.ndarray,
+    temperature: jnp.ndarray,
+) -> jnp.ndarray:
+    """Assemble the normalized low-order Sugama operator for all species.
+
+    The returned axes are ``(target species, source species, target moment,
+    source moment)``. Collision frequencies use the dimensionless scaling
+    ``nu_ab = n_b / (sqrt(m_a) T_a**(3/2))``; callers remain responsible for
+    any common dimensional prefactor.
+    """
+
+    density_s = jnp.asarray(density)
+    mass_s = jnp.asarray(mass, dtype=jnp.result_type(density_s, float))
+    temperature_s = jnp.asarray(
+        temperature, dtype=jnp.result_type(density_s, mass_s, float)
+    )
+    if density_s.ndim != 1 or mass_s.shape != density_s.shape:
+        raise ValueError("density and mass must be one-dimensional with equal length")
+    if temperature_s.shape != density_s.shape:
+        raise ValueError("temperature must have the same shape as density")
+    for value, name in (
+        (density_s, "density"),
+        (mass_s, "mass"),
+        (temperature_s, "temperature"),
+    ):
+        if not isinstance(value, jax.core.Tracer) and np.any(np.asarray(value) <= 0.0):
+            raise ValueError(f"{name} must be positive")
+
+    ns = int(density_s.size)
+    mass_ratio = mass_s[:, None] / mass_s[None, :]
+    temperature_ratio = temperature_s[:, None] / temperature_s[None, :]
+    pair_function = jax.vmap(drift_kinetic_sugama_pair_matrices)
+    test, field = pair_function(mass_ratio.reshape(-1), temperature_ratio.reshape(-1))
+    test = test.reshape(ns, ns, 8, 8)
+    field = field.reshape(ns, ns, 8, 8)
+    frequency = density_s[None, :] / (
+        jnp.sqrt(mass_s[:, None]) * temperature_s[:, None] ** 1.5
+    )
+    matrix = frequency[..., None, None] * field
+    diagonal = jnp.arange(ns)
+    return matrix.at[diagonal, diagonal].add(
+        jnp.sum(frequency[..., None, None] * test, axis=1)
+    )
+
+
 def interpolate_collision_moment_matrix(
     kperp_grid: jnp.ndarray,
     matrices: jnp.ndarray,

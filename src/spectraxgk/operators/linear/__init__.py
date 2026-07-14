@@ -15,6 +15,7 @@ _EXPORTS = {
         "_numpy_dtype_for_jax",
         "apply_collision_moment_matrix",
         "apply_multispecies_collision_moment_matrix",
+        "assemble_drift_kinetic_sugama_matrix",
         "collision_damping",
         "drift_kinetic_sugama_pair_matrices",
         "hypercollision_damping",
