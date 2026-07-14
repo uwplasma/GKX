@@ -61,5 +61,23 @@ jobs:
         run: |
           twine check dist/*
 
+      - name: Smoke-test installed wheel
+        run: |
+          python -m venv /tmp/spectraxgk-wheel-smoke
+          /tmp/spectraxgk-wheel-smoke/bin/pip install dist/*.whl
+          cd /tmp
+          /tmp/spectraxgk-wheel-smoke/bin/python - <<'PY'
+          import spectraxgk
+          import spectraxgk.parallel
+          from spectraxgk.cli import build_parser
+
+          assert "--plot" in build_parser().format_help()
+          assert "batch_map" in spectraxgk.parallel.__all__
+          assert spectraxgk.parallel.batch_map.__module__ == "spectraxgk.parallel.batch"
+          print(spectraxgk.__version__)
+          PY
+          /tmp/spectraxgk-wheel-smoke/bin/spectraxgk --help >/dev/null
+          /tmp/spectraxgk-wheel-smoke/bin/spectrax-gk --help >/dev/null
+
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
