@@ -198,6 +198,55 @@ def bessel_laguerre_kernels(kperp_rho: jnp.ndarray, n_max: int) -> jnp.ndarray:
     return jnp.concatenate([kernel0[None, ...], tail], axis=0)
 
 
+def associated_bessel_laguerre_coefficients(
+    kperp_rho: jnp.ndarray,
+    bessel_order: int,
+    n_max: int,
+) -> jnp.ndarray:
+    r"""Return coefficients of the associated-Laguerre expansion of ``J_m``.
+
+    For ``m = bessel_order``, the returned coefficients are
+
+    .. math::
+
+       A_n^m(b) = \frac{n!}{(n+m)!}\left(\frac{b}{2}\right)^m K_n(b),
+
+    so that :math:`J_m(b\sqrt{x}) = x^{m/2}\sum_n A_n^m L_n^m(x)`.
+    The leading axis indexes ``n=0, ..., n_max``.
+    """
+
+    if bessel_order < 0:
+        raise ValueError("bessel_order must be >= 0")
+    if n_max < 0:
+        raise ValueError("n_max must be >= 0")
+    b = jnp.asarray(kperp_rho)
+    if not jnp.issubdtype(b.dtype, jnp.inexact):
+        b = b.astype(jnp.float32)
+    half_b = 0.5 * b
+    argument = half_b * half_b
+    coefficient0 = (
+        jnp.exp(-argument - gammaln(jnp.asarray(bessel_order + 1, dtype=b.dtype)))
+        * half_b**bessel_order
+    )
+    if n_max == 0:
+        return coefficient0[None, ...]
+
+    def step(coefficient, denominator):
+        next_coefficient = coefficient * argument / denominator
+        return next_coefficient, next_coefficient
+
+    _, tail = jax.lax.scan(
+        step,
+        coefficient0,
+        jnp.arange(
+            bessel_order + 1,
+            bessel_order + n_max + 1,
+            dtype=argument.dtype,
+        ),
+    )
+    return jnp.concatenate([coefficient0[None, ...], tail], axis=0)
+
+
 def single_precision_factorial(m: jnp.ndarray) -> jnp.ndarray:
     """Return the single-precision factorial approximation."""
 
