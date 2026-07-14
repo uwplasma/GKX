@@ -1,11 +1,11 @@
 """Boundary-chain diagnostics for VMEC-JAX/SPECTRAX-GK gradients.
 
-These helpers classify the scalar contractions produced by the expensive
-``tools/campaigns/audit_vmec_jax_boundary_chain.py`` diagnostic.  The diagnostic compares
-raw exact-solve finite differences, frozen-axis initial-state finite
-differences, and VMEC-JAX exact-tape JVP/VJP contractions.  Keeping the
-classification logic in the package makes the paper-facing convention explicit
-and unit-testable without launching VMEC solves.
+These helpers classify scalar contractions recorded by the historical
+boundary-chain artifacts. Those studies compared raw exact-solve finite
+differences, frozen-axis initial-state finite differences, and VMEC-JAX tape
+JVP/VJP contractions. Keeping the classification logic makes that paper-facing
+convention explicit and testable without retaining a tool tied to VMEC-JAX's
+removed private optimizer API.
 """
 
 from __future__ import annotations
