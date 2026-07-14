@@ -1,4 +1,5 @@
 """Line-search and holdout gates for VMEC/Boozer objectives."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -107,7 +108,9 @@ def _serializable_scalar_options(kwargs: dict[str, Any]) -> dict[str, object]:
     }
 
 
-def _relative_reduction(initial_objective: float, final_objective: float) -> float | None:
+def _relative_reduction(
+    initial_objective: float, final_objective: float
+) -> float | None:
     if not np.isfinite(initial_objective) or abs(initial_objective) == 0.0:
         return None
     return float((initial_objective - final_objective) / abs(initial_objective))
@@ -436,10 +439,12 @@ def _run_one_parameter_line_search(
     response_atol: float,
     max_curvature_ratio: float,
 ) -> dict[str, object]:
-    max_steps_int, update_step_float, min_improvement_float = _validate_line_search_controls(
-        max_steps=max_steps,
-        update_step=update_step,
-        min_improvement=min_improvement,
+    max_steps_int, update_step_float, min_improvement_float = (
+        _validate_line_search_controls(
+            max_steps=max_steps,
+            update_step=update_step,
+            min_improvement=min_improvement,
+        )
     )
     base_probe_kwargs = _line_search_probe_kwargs(
         probe_kwargs=probe_kwargs,
@@ -477,7 +482,9 @@ def _run_one_parameter_line_search(
         if outcome.should_stop:
             break
 
-    initial_objective = float(cast(Any, history[0]["objective"])) if history else float("nan")
+    initial_objective = (
+        float(cast(Any, history[0]["objective"])) if history else float("nan")
+    )
     final_objective = float(best_value) if best_value is not None else initial_objective
     return {
         "passed": bool(accepted_steps > 0 and final_objective < initial_objective),
@@ -573,54 +580,6 @@ def vmec_boozer_aggregate_scalar_objective_line_search_report(  # pragma: no cov
     )
 
 
-def _run_heldout_fd_probe(
-    finite_difference_report_fn: Any,
-    *,
-    case_name: str,
-    objective: SolverScalarObjective,
-    reduction: Literal["mean", "weighted_mean", "max"],
-    weights: tuple[float, ...] | list[float] | np.ndarray | None,
-    surface_indices: int | None | tuple[int | None, ...] | list[int | None],
-    alphas: float | tuple[float, ...] | list[float],
-    selected_ky_indices: int | tuple[int, ...] | list[int],
-    radial_index: int | None,
-    mode_index: int,
-    parameter_family: str,
-    base_delta: float,
-    perturbation_step: float,
-    response_atol: float,
-    max_curvature_ratio: float,
-    extra_options: dict[str, Any],
-) -> dict[str, object]:
-    return finite_difference_report_fn(
-        case_name=case_name,
-        objective=objective,
-        reduction=reduction,
-        weights=weights,
-        surface_indices=surface_indices,
-        alphas=alphas,
-        selected_ky_indices=selected_ky_indices,
-        radial_index=radial_index,
-        mode_index=mode_index,
-        parameter_family=parameter_family,
-        base_delta=base_delta,
-        perturbation_step=perturbation_step,
-        response_atol=response_atol,
-        max_curvature_ratio=max_curvature_ratio,
-        **extra_options,
-    )
-
-
-def _holdout_relative_reduction(
-    heldout_initial_value: float,
-    heldout_final_value: float,
-) -> float | None:
-    heldout_reduction = heldout_initial_value - heldout_final_value
-    if np.isfinite(heldout_initial_value) and abs(heldout_initial_value) > 0.0:
-        return float(heldout_reduction / abs(heldout_initial_value))
-    return None
-
-
 def _aggregate_holdout_payload(
     *,
     case_name: str,
@@ -665,7 +624,7 @@ def _aggregate_holdout_payload(
         "training_relative_reduction": training.get("relative_reduction"),
         "heldout_initial_objective": heldout_initial_value,
         "heldout_final_objective": heldout_final_value,
-        "heldout_relative_reduction": _holdout_relative_reduction(
+        "heldout_relative_reduction": _relative_reduction(
             heldout_initial_value,
             heldout_final_value,
         ),
@@ -680,93 +639,6 @@ def _aggregate_holdout_payload(
             "or field lines and then survives nonlinear-window transport audits."
         ),
     }
-
-
-def _run_aggregate_training_line_search(
-    line_search_report_fn: Any,
-    *,
-    case_name: str,
-    objective: SolverScalarObjective,
-    reduction: Literal["mean", "weighted_mean", "max"],
-    weights: tuple[float, ...] | list[float] | np.ndarray | None,
-    surface_indices: int | None | tuple[int | None, ...] | list[int | None],
-    alphas: float | tuple[float, ...] | list[float],
-    selected_ky_indices: int | tuple[int, ...] | list[int],
-    radial_index: int | None,
-    mode_index: int,
-    parameter_family: str,
-    initial_delta: float,
-    perturbation_step: float,
-    update_step: float,
-    max_steps: int,
-    min_improvement: float,
-    response_atol: float,
-    max_curvature_ratio: float,
-    extra_options: dict[str, Any],
-) -> dict[str, object]:
-    return line_search_report_fn(
-        case_name=case_name,
-        objective=objective,
-        reduction=reduction,
-        weights=weights,
-        surface_indices=surface_indices,
-        alphas=alphas,
-        selected_ky_indices=selected_ky_indices,
-        radial_index=radial_index,
-        mode_index=mode_index,
-        parameter_family=parameter_family,
-        initial_delta=initial_delta,
-        perturbation_step=perturbation_step,
-        update_step=update_step,
-        max_steps=max_steps,
-        min_improvement=min_improvement,
-        response_atol=response_atol,
-        max_curvature_ratio=max_curvature_ratio,
-        **extra_options,
-    )
-
-
-def _run_holdout_fd_pair(
-    finite_difference_report_fn: Any,
-    *,
-    case_name: str,
-    objective: SolverScalarObjective,
-    reduction: Literal["mean", "weighted_mean", "max"],
-    weights: tuple[float, ...] | list[float] | np.ndarray | None,
-    surface_indices: int | None | tuple[int | None, ...] | list[int | None],
-    alphas: float | tuple[float, ...] | list[float],
-    selected_ky_indices: int | tuple[int, ...] | list[int],
-    radial_index: int | None,
-    mode_index: int,
-    parameter_family: str,
-    initial_delta: float,
-    final_delta: float,
-    perturbation_step: float,
-    response_atol: float,
-    max_curvature_ratio: float,
-    extra_options: dict[str, Any],
-) -> tuple[dict[str, object], dict[str, object]]:
-    def run_probe(base_delta: float) -> dict[str, object]:
-        return _run_heldout_fd_probe(
-            finite_difference_report_fn,
-            case_name=case_name,
-            objective=objective,
-            reduction=reduction,
-            weights=weights,
-            surface_indices=surface_indices,
-            alphas=alphas,
-            selected_ky_indices=selected_ky_indices,
-            radial_index=radial_index,
-            mode_index=mode_index,
-            parameter_family=parameter_family,
-            base_delta=base_delta,
-            perturbation_step=perturbation_step,
-            response_atol=response_atol,
-            max_curvature_ratio=max_curvature_ratio,
-            extra_options=extra_options,
-        )
-
-    return run_probe(initial_delta), run_probe(final_delta)
 
 
 def _aggregate_holdout_functions(kwargs: dict[str, Any]) -> _AggregateHoldoutFunctions:
@@ -788,8 +660,7 @@ def _run_aggregate_holdout_reports(
     fns: _AggregateHoldoutFunctions,
     extra_options: dict[str, Any],
 ) -> _AggregateHoldoutReports:
-    training = _run_aggregate_training_line_search(
-        fns.line_search_report_fn,
+    training_probe_kwargs = _aggregate_probe_kwargs(
         case_name=config.case_name,
         objective=config.objective,
         reduction=config.reduction,
@@ -800,6 +671,10 @@ def _run_aggregate_holdout_reports(
         radial_index=config.radial_index,
         mode_index=config.mode_index,
         parameter_family=config.parameter_family,
+        extra_options=extra_options,
+    )
+    training = fns.line_search_report_fn(
+        **training_probe_kwargs,
         initial_delta=config.initial_delta,
         perturbation_step=config.perturbation_step,
         update_step=config.update_step,
@@ -807,11 +682,9 @@ def _run_aggregate_holdout_reports(
         min_improvement=config.min_improvement,
         response_atol=config.response_atol,
         max_curvature_ratio=config.max_curvature_ratio,
-        extra_options=extra_options,
     )
     final_delta = _report_float(training, "final_delta")
-    heldout_initial, heldout_final = _run_holdout_fd_pair(
-        fns.finite_difference_report_fn,
+    heldout_probe_kwargs = _aggregate_probe_kwargs(
         case_name=config.case_name,
         objective=config.objective,
         reduction=config.reduction,
@@ -822,12 +695,21 @@ def _run_aggregate_holdout_reports(
         radial_index=config.radial_index,
         mode_index=config.mode_index,
         parameter_family=config.parameter_family,
-        initial_delta=config.initial_delta,
-        final_delta=final_delta,
+        extra_options=extra_options,
+    )
+    heldout_probe_kwargs = _line_search_probe_kwargs(
+        probe_kwargs=heldout_probe_kwargs,
         perturbation_step=config.perturbation_step,
         response_atol=config.response_atol,
         max_curvature_ratio=config.max_curvature_ratio,
-        extra_options=extra_options,
+    )
+    heldout_initial = fns.finite_difference_report_fn(
+        base_delta=config.initial_delta,
+        **heldout_probe_kwargs,
+    )
+    heldout_final = fns.finite_difference_report_fn(
+        base_delta=final_delta,
+        **heldout_probe_kwargs,
     )
     return _AggregateHoldoutReports(
         training=training,
