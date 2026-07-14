@@ -158,6 +158,46 @@ def bessel_j1(x: jnp.ndarray) -> jnp.ndarray:
     return jnp.where(jnp.isfinite(out), out, res_small)
 
 
+def bessel_laguerre_kernels(kperp_rho: jnp.ndarray, n_max: int) -> jnp.ndarray:
+    r"""Return finite-Larmor Bessel--Laguerre kernels through order ``n_max``.
+
+    The coefficients
+
+    .. math::
+
+       K_n(b) = \exp(-b^2/4)\frac{(b^2/4)^n}{n!}
+
+    expand :math:`J_0(b\sqrt{x})` in ordinary Laguerre polynomials.  A recurrence
+    avoids factorial overflow and preserves the exact ``b=0`` limit.  The leading
+    axis indexes ``n=0, ..., n_max``.
+
+    References
+    ----------
+    Frei et al., *Journal of Plasma Physics* 87, 905870501 (2021), Eq. (2.13).
+    """
+
+    if n_max < 0:
+        raise ValueError("n_max must be >= 0")
+    b = jnp.asarray(kperp_rho)
+    if not jnp.issubdtype(b.dtype, jnp.inexact):
+        b = b.astype(jnp.float32)
+    argument = 0.25 * b * b
+    kernel0 = jnp.exp(-argument)
+    if n_max == 0:
+        return kernel0[None, ...]
+
+    def step(kernel, order):
+        next_kernel = kernel * argument / order
+        return next_kernel, next_kernel
+
+    _, tail = jax.lax.scan(
+        step,
+        kernel0,
+        jnp.arange(1, n_max + 1, dtype=argument.dtype),
+    )
+    return jnp.concatenate([kernel0[None, ...], tail], axis=0)
+
+
 def single_precision_factorial(m: jnp.ndarray) -> jnp.ndarray:
     """Return the single-precision factorial approximation."""
 
