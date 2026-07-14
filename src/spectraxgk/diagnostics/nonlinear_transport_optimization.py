@@ -4,13 +4,14 @@ These helpers consume already-generated nonlinear transport artifacts and keep
 release-scope diagnostics separate from production turbulent-flux optimization
 claims. They are data-only and do not launch simulations.
 """
+
 from __future__ import annotations
 
+import math
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from typing import Any
-import math
-import re
 
 _NON_PROMOTABLE_MARKERS = (
     "not_transport",
@@ -61,30 +62,25 @@ class ProductionNonlinearOptimizationGuardConfig:
     def validate(self) -> None:
         """Raise if the guard configuration is inconsistent."""
 
-        if int(self.min_replicated_ensembles) < 1:
-            raise ValueError("min_replicated_ensembles must be positive")
+        for name in (
+            "min_replicated_ensembles",
+            "min_optimized_equilibrium_ensembles",
+            "min_matched_optimized_audits",
+            "min_seed_variants",
+            "min_timestep_variants",
+        ):
+            if int(getattr(self, name)) < 1:
+                raise ValueError(f"{name} must be positive")
         if int(self.min_reports_per_ensemble) < 2:
             raise ValueError("min_reports_per_ensemble must be at least 2")
-        if float(self.max_mean_rel_spread) < 0.0:
-            raise ValueError("max_mean_rel_spread must be non-negative")
-        if float(self.max_combined_sem_rel) < 0.0:
-            raise ValueError("max_combined_sem_rel must be non-negative")
-        if int(self.min_optimized_equilibrium_ensembles) < 1:
-            raise ValueError("min_optimized_equilibrium_ensembles must be positive")
-        if int(self.min_matched_optimized_audits) < 1:
-            raise ValueError("min_matched_optimized_audits must be positive")
-        if int(self.min_seed_variants) < 1:
-            raise ValueError("min_seed_variants must be positive")
-        if int(self.min_timestep_variants) < 1:
-            raise ValueError("min_timestep_variants must be positive")
-        if float(self.min_matched_optimized_relative_reduction) < 0.0:
-            raise ValueError(
-                "min_matched_optimized_relative_reduction must be non-negative"
-            )
-        if float(self.min_matched_optimized_uncertainty_sigma) < 0.0:
-            raise ValueError(
-                "min_matched_optimized_uncertainty_sigma must be non-negative"
-            )
+        for name in (
+            "max_mean_rel_spread",
+            "max_combined_sem_rel",
+            "min_matched_optimized_relative_reduction",
+            "min_matched_optimized_uncertainty_sigma",
+        ):
+            if float(getattr(self, name)) < 0.0:
+                raise ValueError(f"{name} must be non-negative")
         if float(self.value_floor) <= 0.0:
             raise ValueError("value_floor must be positive")
 
@@ -98,15 +94,13 @@ def _finite_float(value: object) -> float | None:
 
 
 def _artifact_passed(payload: Mapping[str, Any]) -> bool:
-    if bool(payload.get("passed", False)):
+    if any(bool(payload.get(key, False)) for key in ("passed", "gate_passed")):
         return True
-    if bool(payload.get("gate_passed", False)):
-        return True
-    for key in ("gate_report", "promotion_gate"):
-        nested = payload.get(key)
-        if isinstance(nested, Mapping) and bool(nested.get("passed", False)):
-            return True
-    return False
+    nested = (payload.get(key) for key in ("gate_report", "promotion_gate"))
+    return any(
+        isinstance(report, Mapping) and bool(report.get("passed", False))
+        for report in nested
+    )
 
 
 def _claim_text(payload: Mapping[str, Any]) -> str:
@@ -132,9 +126,13 @@ def _claims_production(payload: Mapping[str, Any]) -> bool:
     text = _claim_text(payload)
     if any(marker in text for marker in _NON_PROMOTABLE_MARKERS):
         return False
-    if bool(payload.get("production_transport_claim", False)):
-        return True
-    if bool(payload.get("production_nonlinear_optimization_claim", False)):
+    if any(
+        bool(payload.get(key, False))
+        for key in (
+            "production_transport_claim",
+            "production_nonlinear_optimization_claim",
+        )
+    ):
         return True
     return any(marker in text for marker in _PRODUCTION_CLAIM_MARKERS)
 
@@ -327,8 +325,7 @@ def replicated_transport_ensemble_report(
 ) -> dict[str, Any]:
     """Return quality metadata for a long-window replicated transport ensemble."""
 
-    cfg = config or ProductionNonlinearOptimizationGuardConfig()
-    cfg.validate()
+    cfg = _validated_config(config)
     stats = payload.get("statistics")
     stats_map: Mapping[str, Any] = stats if isinstance(stats, Mapping) else {}
     kind = str(payload.get("kind", "")).strip().lower()
@@ -487,20 +484,15 @@ def _matched_transport_flags(
 
 
 def _matched_transport_blockers(flags: _MatchedTransportFlags) -> list[str]:
-    blockers: list[str] = []
-    if not flags.passed:
-        blockers.append("matched_optimized_audit_failed")
-    if not flags.baseline_qualified:
-        blockers.append("baseline_replicated_ensemble_not_qualified")
-    if not flags.optimized_qualified:
-        blockers.append("optimized_replicated_ensemble_not_qualified")
-    if not flags.selected_closed:
-        blockers.append("selected_optimized_audit_not_closed")
-    if not flags.reduction_ok:
-        blockers.append("insufficient_matched_optimized_reduction")
-    if not flags.uncertainty_ok:
-        blockers.append("insufficient_matched_optimized_uncertainty_separation")
-    return blockers
+    checks = (
+        (flags.passed, "matched_optimized_audit_failed"),
+        (flags.baseline_qualified, "baseline_replicated_ensemble_not_qualified"),
+        (flags.optimized_qualified, "optimized_replicated_ensemble_not_qualified"),
+        (flags.selected_closed, "selected_optimized_audit_not_closed"),
+        (flags.reduction_ok, "insufficient_matched_optimized_reduction"),
+        (flags.uncertainty_ok, "insufficient_matched_optimized_uncertainty_separation"),
+    )
+    return [blocker for passed, blocker in checks if not passed]
 
 
 def matched_optimized_transport_report(
@@ -511,8 +503,7 @@ def matched_optimized_transport_report(
 ) -> dict[str, Any]:
     """Return whether a matched baseline-to-optimized audit promotes transport."""
 
-    cfg = config or ProductionNonlinearOptimizationGuardConfig()
-    cfg.validate()
+    cfg = _validated_config(config)
     context = _matched_transport_context(payload)
     metrics = _matched_transport_metrics(context)
     flags = _matched_transport_flags(
@@ -584,7 +575,9 @@ def _empty_optimization_scope() -> dict[str, Any]:
     }
 
 
-def _optimization_scope(optimization_artifact: Mapping[str, Any] | None) -> dict[str, Any]:
+def _optimization_scope(
+    optimization_artifact: Mapping[str, Any] | None,
+) -> dict[str, Any]:
     if isinstance(optimization_artifact, Mapping):
         return optimization_artifact_reduction_scope(optimization_artifact)
     return _empty_optimization_scope()
@@ -755,8 +748,7 @@ def _evidence_gap(
             0,
         ),
         "required_additional_matched_optimized_audits": max(
-            int(cfg.min_matched_optimized_audits)
-            - len(qualifying_matched_optimized),
+            int(cfg.min_matched_optimized_audits) - len(qualifying_matched_optimized),
             0,
         ),
     }
@@ -846,17 +838,17 @@ def _gate_status(
         qualifying_ensembles=rows.qualifying_ensembles,
         cfg=cfg,
     )
-    safety_blockers = [
-        gate["metric"] for gate in safety_gates if not bool(gate["passed"])
-    ]
+
+    def blockers(gates: list[dict[str, object]]) -> list[object]:
+        return [gate["metric"] for gate in gates if not bool(gate["passed"])]
+
+    safety_blockers = blockers(safety_gates)
     promotion_gates = _promotion_gates(
         qualifying_optimized=rows.qualifying_optimized,
         qualifying_matched_optimized=rows.qualifying_matched_optimized,
         cfg=cfg,
     )
-    promotion_blockers = [
-        gate["metric"] for gate in promotion_gates if not bool(gate["passed"])
-    ]
+    promotion_blockers = blockers(promotion_gates)
     safe_to_release = not safety_blockers
     promoted = safe_to_release and not promotion_blockers
     return _GuardGateStatus(
@@ -870,9 +862,11 @@ def _gate_status(
 
 
 def _claim_level(gates: _GuardGateStatus) -> str:
-    if gates.promoted:
-        return "production_nonlinear_optimization_promoted_by_replicated_transport_windows"
-    return "production_nonlinear_optimization_blocked_until_optimized_equilibrium_replicated_transport_windows"
+    return (
+        "production_nonlinear_optimization_promoted_by_replicated_transport_windows"
+        if gates.promoted
+        else "production_nonlinear_optimization_blocked_until_optimized_equilibrium_replicated_transport_windows"
+    )
 
 
 def _safety_gate_payload(gates: _GuardGateStatus) -> dict[str, Any]:
@@ -993,8 +987,11 @@ def production_nonlinear_optimization_guard_report(
 
 
 __all__ = (
-    "ProductionNonlinearOptimizationGuardConfig", "matched_optimized_transport_report",
-    "optimization_artifact_reduction_scope", "optimized_equilibrium_transport_report",
+    "ProductionNonlinearOptimizationGuardConfig",
+    "matched_optimized_transport_report",
+    "optimization_artifact_reduction_scope",
+    "optimized_equilibrium_transport_report",
     "production_nonlinear_optimization_guard_report",
-    "reduced_artifact_scope_report", "replicated_transport_ensemble_report",
+    "reduced_artifact_scope_report",
+    "replicated_transport_ensemble_report",
 )
