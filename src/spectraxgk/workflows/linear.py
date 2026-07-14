@@ -88,13 +88,30 @@ class _LinearFitPolicy:
 
 
 @dataclass(frozen=True)
-class _LinearTimeSeriesRaw:
-    """Raw linear time-integration arrays before NumPy normalization."""
+class _LinearTrajectory:
+    """Saved state and diagnostics from one linear time integration."""
 
     g_last: Any | None
     phi_t: Any
     density_t: Any | None
     t: Any | None = None
+
+    def as_numpy(self, time_config: Any) -> _LinearTrajectory:
+        """Materialize saved diagnostics and infer fixed-step sample times."""
+
+        phi_t = np.asarray(self.phi_t)
+        density_t = None if self.density_t is None else np.asarray(self.density_t)
+        times = (
+            _linear_saved_sample_times(phi_t, time_config)
+            if self.t is None
+            else self.t
+        )
+        return _LinearTrajectory(
+            g_last=self.g_last,
+            phi_t=phi_t,
+            density_t=density_t,
+            t=np.asarray(times, dtype=float),
+        )
 
 
 def _status(callback: _StatusCallback, message: str) -> None:
@@ -337,7 +354,7 @@ def _integrate_linear_diffrax_path(
     mode_method: str,
     need_density: bool,
     show_progress: bool,
-) -> _LinearTimeSeriesRaw:
+) -> _LinearTrajectory:
     save_field = "phi+density" if need_density else "phi"
     g_last, saved = deps.integrate_linear_from_config(
         ctx.initial_state,
@@ -354,7 +371,7 @@ def _integrate_linear_diffrax_path(
         parallel=ctx.cfg.parallel,
     )
     phi_t, density_t = saved if need_density else (saved, None)
-    return _LinearTimeSeriesRaw(g_last=g_last, phi_t=phi_t, density_t=density_t)
+    return _LinearTrajectory(g_last=g_last, phi_t=phi_t, density_t=density_t)
 
 
 def _integrate_linear_density_path(
@@ -364,7 +381,7 @@ def _integrate_linear_density_path(
     tcfg: Any,
     n_steps: int,
     show_progress: bool,
-) -> _LinearTimeSeriesRaw:
+) -> _LinearTrajectory:
     diag = deps.integrate_linear_diagnostics(
         ctx.initial_state,
         ctx.grid,
@@ -379,7 +396,7 @@ def _integrate_linear_density_path(
         record_hl_energy=False,
         show_progress=show_progress,
     )
-    return _LinearTimeSeriesRaw(
+    return _LinearTrajectory(
         g_last=diag[0],
         phi_t=diag[1],
         density_t=diag[2] if len(diag) > 2 else None,
@@ -393,7 +410,7 @@ def _integrate_linear_cached_phi_path(
     tcfg: Any,
     mode_method: str,
     show_progress: bool,
-) -> _LinearTimeSeriesRaw:
+) -> _LinearTrajectory:
     g_last, phi_t = deps.integrate_linear_from_config(
         ctx.initial_state,
         ctx.grid,
@@ -407,7 +424,7 @@ def _integrate_linear_cached_phi_path(
         show_progress=show_progress,
         parallel=ctx.cfg.parallel,
     )
-    return _LinearTimeSeriesRaw(g_last=g_last, phi_t=phi_t, density_t=None)
+    return _LinearTrajectory(g_last=g_last, phi_t=phi_t, density_t=None)
 
 
 def _linear_saved_sample_times(phi_t: np.ndarray, tcfg: Any) -> np.ndarray:
@@ -426,7 +443,7 @@ def _integrate_linear_time_series(
     mode_method: str,
     show_progress: bool,
     status_callback: _StatusCallback,
-) -> tuple[Any | None, np.ndarray, np.ndarray | None, np.ndarray]:
+) -> _LinearTrajectory:
     need_density = ctx.fit_key in {"density", "auto"}
     n_steps = int(round(tcfg.t_max / tcfg.dt))
     if ctx.solver_key == "explicit_time":
@@ -443,13 +460,13 @@ def _integrate_linear_time_series(
             z_index=ctx.selection.z_index,
             show_progress=show_progress,
         )
-        raw = _LinearTimeSeriesRaw(None, phi_t, None, t_explicit)
+        trajectory = _LinearTrajectory(None, phi_t, None, t_explicit)
     elif tcfg.use_diffrax:
         _status(
             status_callback,
             f"running diffrax integrator over {n_steps} steps with sample_stride={int(tcfg.sample_stride)}",
         )
-        raw = _integrate_linear_diffrax_path(
+        trajectory = _integrate_linear_diffrax_path(
             ctx,
             deps=deps,
             tcfg=tcfg,
@@ -462,7 +479,7 @@ def _integrate_linear_time_series(
             status_callback,
             f"running diagnostics integrator over {n_steps} steps with sample_stride={int(tcfg.sample_stride)}",
         )
-        raw = _integrate_linear_density_path(
+        trajectory = _integrate_linear_density_path(
             ctx,
             deps=deps,
             tcfg=tcfg,
@@ -474,7 +491,7 @@ def _integrate_linear_time_series(
             status_callback,
             f"running cached linear integrator over {n_steps} steps with sample_stride={int(tcfg.sample_stride)}",
         )
-        raw = _integrate_linear_cached_phi_path(
+        trajectory = _integrate_linear_cached_phi_path(
             ctx,
             deps=deps,
             tcfg=tcfg,
@@ -482,10 +499,7 @@ def _integrate_linear_time_series(
             show_progress=show_progress,
         )
 
-    phi_t_np = np.asarray(raw.phi_t)
-    density_np = None if raw.density_t is None else np.asarray(raw.density_t)
-    times = _linear_saved_sample_times(phi_t_np, tcfg) if raw.t is None else raw.t
-    return raw.g_last, phi_t_np, density_np, np.asarray(times, dtype=float)
+    return trajectory.as_numpy(tcfg)
 
 
 def _fit_linear_time_series(
@@ -493,20 +507,17 @@ def _fit_linear_time_series(
     *,
     deps: FullLinearRuntimeDeps,
     fit_policy: _LinearFitPolicy,
-    t_arr: np.ndarray,
-    phi_t: np.ndarray,
-    density_t: np.ndarray | None,
-    g_last: Any | None,
+    trajectory: _LinearTrajectory,
     status_callback: _StatusCallback,
 ) -> RuntimeLinearResult:
     _status(
         status_callback,
-        f"integration complete; fitting growth rate from {t_arr.size} saved samples",
+        f"integration complete; fitting growth rate from {trajectory.t.size} saved samples",
     )
     fit_result = deps.fit_runtime_linear_diagnostics(
-        t=t_arr,
-        phi_t=phi_t,
-        density_t=density_t,
+        t=trajectory.t,
+        phi_t=trajectory.phi_t,
+        density_t=trajectory.density_t,
         selection=ctx.selection,
         z=np.asarray(ctx.grid.z, dtype=float),
         fit_signal=ctx.fit_key,
@@ -543,60 +554,17 @@ def _fit_linear_time_series(
         gamma=float(gamma),
         omega=float(omega),
         selection=ctx.selection,
-        t=t_arr,
+        t=trajectory.t,
         signal=fit_result.signal,
-        field_history=phi_t,
+        field_history=trajectory.phi_t,
         state=None
-        if g_last is None or not ctx.return_state_effective
-        else np.asarray(g_last),
+        if trajectory.g_last is None or not ctx.return_state_effective
+        else np.asarray(trajectory.g_last),
         z=fit_result.z,
         eigenfunction=fit_result.eigenfunction,
         fit_window_tmin=fit_result.fit_window_tmin,
         fit_window_tmax=fit_result.fit_window_tmax,
         fit_signal_used=fit_result.fit_signal_used,
-    )
-
-
-def _run_time_linear(
-    ctx: _LinearRuntimeContext,
-    *,
-    deps: FullLinearRuntimeDeps,
-    method: str | None,
-    dt: float | None,
-    steps: int | None,
-    sample_stride: int | None,
-    fit_policy: _LinearFitPolicy,
-    show_progress: bool,
-    status_callback: _StatusCallback,
-) -> RuntimeLinearResult:
-    _status(
-        status_callback, f"starting time integration path with fit_signal={ctx.fit_key}"
-    )
-    tcfg = _resolve_linear_time_config(
-        ctx,
-        method=method,
-        dt=dt,
-        steps=steps,
-        sample_stride=sample_stride,
-    )
-    _validate_parallel_linear_time_path(ctx, tcfg)
-    g_last, phi_t, density_t, t_arr = _integrate_linear_time_series(
-        ctx,
-        deps=deps,
-        tcfg=tcfg,
-        mode_method=fit_policy.mode_method,
-        show_progress=show_progress,
-        status_callback=status_callback,
-    )
-    return _fit_linear_time_series(
-        ctx,
-        deps=deps,
-        fit_policy=fit_policy,
-        t_arr=t_arr,
-        phi_t=phi_t,
-        density_t=density_t,
-        g_last=g_last,
-        status_callback=status_callback,
     )
 
 
@@ -630,37 +598,6 @@ def _run_krylov_linear_runtime(
     )
 
 
-def _finalize_auto_linear_runtime(
-    result: RuntimeLinearResult,
-    ctx: _LinearRuntimeContext,
-    *,
-    deps: FullLinearRuntimeDeps,
-    fit_policy: _LinearFitPolicy,
-    krylov_cfg: Any | None,
-    status_callback: _StatusCallback,
-) -> RuntimeLinearResult:
-    """Accept a valid time-path result or fall back to the Krylov branch."""
-
-    if _valid_growth(
-        result.gamma,
-        result.omega,
-        require_positive=fit_policy.require_positive,
-    ):
-        return _finalize_linear_result(
-            result,
-            ctx=ctx,
-            deps=deps,
-            status_callback=status_callback,
-        )
-    _status(status_callback, "time-path result rejected; falling back to Krylov solve")
-    return _run_krylov_linear_runtime(
-        ctx,
-        deps=deps,
-        krylov_cfg=krylov_cfg,
-        status_callback=status_callback,
-    )
-
-
 def _run_linear_runtime_branch(
     ctx: _LinearRuntimeContext,
     *,
@@ -682,23 +619,43 @@ def _run_linear_runtime_branch(
             status_callback=status_callback,
         )
 
-    result = _run_time_linear(
+    _status(
+        status_callback, f"starting time integration path with fit_signal={ctx.fit_key}"
+    )
+    time_config = _resolve_linear_time_config(
         ctx,
-        deps=deps,
         method=method,
         dt=dt,
         steps=steps,
         sample_stride=sample_stride,
-        fit_policy=fit_policy,
+    )
+    _validate_parallel_linear_time_path(ctx, time_config)
+    trajectory = _integrate_linear_time_series(
+        ctx,
+        deps=deps,
+        tcfg=time_config,
+        mode_method=fit_policy.mode_method,
         show_progress=show_progress,
         status_callback=status_callback,
     )
-    if ctx.solver_key == "auto":
-        return _finalize_auto_linear_runtime(
-            result,
-            ctx=ctx,
+    result = _fit_linear_time_series(
+        ctx,
+        deps=deps,
+        fit_policy=fit_policy,
+        trajectory=trajectory,
+        status_callback=status_callback,
+    )
+    if ctx.solver_key == "auto" and not _valid_growth(
+        result.gamma,
+        result.omega,
+        require_positive=fit_policy.require_positive,
+    ):
+        _status(
+            status_callback, "time-path result rejected; falling back to Krylov solve"
+        )
+        return _run_krylov_linear_runtime(
+            ctx,
             deps=deps,
-            fit_policy=fit_policy,
             krylov_cfg=krylov_cfg,
             status_callback=status_callback,
         )
