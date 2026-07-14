@@ -306,7 +306,6 @@ def turbulent_heating_total(
 
 
 # ---- finite-difference evidence reports ----
-"""Finite-difference turbulence-gradient evidence reports."""
 
 
 @dataclass(frozen=True)
