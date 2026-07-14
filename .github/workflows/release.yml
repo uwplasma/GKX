@@ -78,6 +78,7 @@ jobs:
           assert spectraxgk.parallel.batch_map.__module__ == "spectraxgk.parallel.batch"
           assert find_spec("spectraxgk.objectives.qa_low_turbulence_contracts") is None
           assert find_spec("spectraxgk.objectives.qa_low_turbulence_residuals") is None
+          assert find_spec("spectraxgk.objectives.stellarator_residuals") is None
           print(spectraxgk.__version__)
           PY
           /tmp/spectraxgk-wheel-smoke/bin/spectraxgk --help >/dev/null

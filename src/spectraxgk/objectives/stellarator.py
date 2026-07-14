@@ -21,6 +21,8 @@ from spectraxgk.objectives.stellarator_contracts import (
     StellaratorObjectiveKind,
 )
 from spectraxgk.objectives.stellarator_reduced import (
+    _RESIDUAL_CONDITION_NUMBER_LIMIT,
+    _precision_gate_tolerances,
     _validate_params,
     default_stellarator_initial_params,
     nonlinear_heat_flux_trace,
@@ -28,10 +30,6 @@ from spectraxgk.objectives.stellarator_reduced import (
     qa_max_mode1_observables,
     qa_observable_vector,
     smooth_positive,
-)
-from spectraxgk.objectives.stellarator_residuals import (
-    _RESIDUAL_CONDITION_NUMBER_LIMIT,
-    _precision_gate_tolerances,
     stellarator_itg_objective,
     stellarator_itg_objective_residual_names,
     stellarator_itg_objective_residual_vector,
