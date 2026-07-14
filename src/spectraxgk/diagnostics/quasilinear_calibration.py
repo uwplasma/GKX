@@ -49,14 +49,6 @@ class QuasilinearCalibrationPoint:
         return asdict(self)
 
 
-@dataclass(frozen=True)
-class _CalibrationReportControls:
-    saturation_rule: str
-    version: str
-    holdout_mean_rel_gate: float
-    observed_floor: float
-
-
 def _point_from_mapping(
     item: QuasilinearCalibrationPoint | dict[str, Any],
 ) -> QuasilinearCalibrationPoint:
@@ -72,25 +64,6 @@ def _normalized_calibration_points(
     if not pts:
         raise ValueError("at least one calibration point is required")
     return pts
-
-
-def _calibration_report_controls(
-    *,
-    saturation_rule: str,
-    version: str,
-    holdout_mean_rel_gate: float,
-    observed_floor: float,
-) -> _CalibrationReportControls:
-    if observed_floor <= 0.0:
-        raise ValueError("observed_floor must be positive")
-    if holdout_mean_rel_gate <= 0.0:
-        raise ValueError("holdout_mean_rel_gate must be positive")
-    return _CalibrationReportControls(
-        saturation_rule=str(saturation_rule),
-        version=str(version),
-        holdout_mean_rel_gate=float(holdout_mean_rel_gate),
-        observed_floor=float(observed_floor),
-    )
 
 
 def _validate_calibration_points(
@@ -280,7 +253,9 @@ def _calibration_split_metrics(
     points: list[QuasilinearCalibrationPoint],
     *,
     observed_floor: float,
-) -> tuple[dict[str, list[QuasilinearCalibrationPoint]], dict[str, Any], dict[str, Any]]:
+) -> tuple[
+    dict[str, list[QuasilinearCalibrationPoint]], dict[str, Any], dict[str, Any]
+]:
     allowed_splits = {"train", "holdout", "audit"}
     by_split_points = {
         split: [p for p in points if p.split == split] for split in allowed_splits
@@ -316,37 +291,6 @@ def _calibration_report_claim(
     return passed, claim_level
 
 
-def _calibration_report_payload(
-    *,
-    controls: _CalibrationReportControls,
-    points: list[QuasilinearCalibrationPoint],
-    metrics: dict[str, Any],
-    by_split: dict[str, Any],
-    passed: bool,
-    claim_level: str,
-    holdout_window_convergence: dict[str, Any],
-    scale_fit: dict[str, Any] | None,
-    metadata: dict[str, Any] | None,
-) -> dict[str, Any]:
-    return {
-        "kind": "quasilinear_calibration_report",
-        "version": controls.version,
-        "saturation_rule": controls.saturation_rule,
-        "claim_level": claim_level,
-        "passed": passed,
-        "holdout_mean_rel_gate": controls.holdout_mean_rel_gate,
-        "observed_floor": controls.observed_floor,
-        "metrics": metrics,
-        "by_split": by_split,
-        "points": [p.to_dict() for p in points],
-        "metadata": {
-            **dict(metadata or {}),
-            "holdout_window_convergence": holdout_window_convergence,
-            **({} if scale_fit is None else {"heat_flux_scale_fit": scale_fit}),
-        },
-    }
-
-
 def quasilinear_calibration_report(
     points: Iterable[QuasilinearCalibrationPoint | dict[str, Any]],
     *,
@@ -364,39 +308,47 @@ def quasilinear_calibration_report(
     relative error passes the supplied gate.
     """
 
-    controls = _calibration_report_controls(
-        saturation_rule=saturation_rule,
-        version=version,
-        holdout_mean_rel_gate=holdout_mean_rel_gate,
-        observed_floor=observed_floor,
-    )
+    if observed_floor <= 0.0:
+        raise ValueError("observed_floor must be positive")
+    if holdout_mean_rel_gate <= 0.0:
+        raise ValueError("holdout_mean_rel_gate must be positive")
+    rule = str(saturation_rule)
+    version = str(version)
+    holdout_mean_rel_gate = float(holdout_mean_rel_gate)
+    observed_floor = float(observed_floor)
     pts = _normalized_calibration_points(points)
-    _validate_calibration_points(pts, saturation_rule=controls.saturation_rule)
+    _validate_calibration_points(pts, saturation_rule=rule)
     pts, scale_fit = _maybe_apply_train_scale(
         pts,
         fit_train_scale_enabled=fit_train_scale,
     )
     _, by_split, all_metrics = _calibration_split_metrics(
         pts,
-        observed_floor=controls.observed_floor,
+        observed_floor=observed_floor,
     )
     holdout_window_convergence = _holdout_window_convergence_summary(pts)
     passed, claim_level = _calibration_report_claim(
         by_split=by_split,
         holdout_window_convergence=holdout_window_convergence,
-        holdout_mean_rel_gate=controls.holdout_mean_rel_gate,
+        holdout_mean_rel_gate=holdout_mean_rel_gate,
     )
-    return _calibration_report_payload(
-        controls=controls,
-        points=pts,
-        metrics=all_metrics,
-        by_split=by_split,
-        passed=passed,
-        claim_level=claim_level,
-        holdout_window_convergence=holdout_window_convergence,
-        scale_fit=scale_fit,
-        metadata=metadata,
-    )
+    return {
+        "kind": "quasilinear_calibration_report",
+        "version": version,
+        "saturation_rule": rule,
+        "claim_level": claim_level,
+        "passed": passed,
+        "holdout_mean_rel_gate": holdout_mean_rel_gate,
+        "observed_floor": observed_floor,
+        "metrics": all_metrics,
+        "by_split": by_split,
+        "points": [point.to_dict() for point in pts],
+        "metadata": {
+            **dict(metadata or {}),
+            "holdout_window_convergence": holdout_window_convergence,
+            **({} if scale_fit is None else {"heat_flux_scale_fit": scale_fit}),
+        },
+    }
 
 
 # Consolidated from calibration_spectrum.py.
@@ -719,8 +671,7 @@ def _ensemble_calibration_point(
     ready, failures = nonlinear_window_stats_promotion_ready(summary)
     if not ready:
         raise ValueError(
-            "nonlinear ensemble summary is not promotion-ready: "
-            + "; ".join(failures)
+            "nonlinear ensemble summary is not promotion-ready: " + "; ".join(failures)
         )
     statistics = summary.get("statistics", {})
     note_items = [
