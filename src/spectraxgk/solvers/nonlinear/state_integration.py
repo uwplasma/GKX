@@ -39,7 +39,10 @@ from spectraxgk.solvers.nonlinear.explicit import (
     integrate_cached_explicit_scan,
     integrate_nonlinear_scan,
 )
-from spectraxgk.solvers.nonlinear.imex import integrate_cached_imex_scan
+from spectraxgk.solvers.nonlinear.imex import (
+    integrate_cached_imex_scan,
+    solve_imex_step,
+)
 from spectraxgk.solvers.time.explicit import (
     _laguerre_velocity_max,
     _linear_frequency_bound,
@@ -265,20 +268,36 @@ def _integrate_nonlinear_sheared_scan(
     cfl_fac: float | None = None,
     initial_time: jnp.ndarray | float = 0.0,
     initial_dt: jnp.ndarray | float | None = None,
+    implicit_tol: float = 1.0e-6,
+    implicit_maxiter: int = 200,
+    implicit_iters: int = 3,
+    implicit_relax: float = 0.7,
+    implicit_restart: int = 20,
+    implicit_preconditioner: str | None = None,
 ) -> tuple[jnp.ndarray, Any]:
     """Run the shared shearing-coordinate scan with optional transport output."""
 
-    if str(grid.boundary).lower() != "periodic" or bool(grid.non_twist):
+    if str(grid.boundary).lower() not in {"periodic", "linked"} or bool(
+        grid.non_twist
+    ):
         raise NotImplementedError(
-            "sheared integration currently requires a periodic standard flux tube"
+            "sheared integration requires a periodic or linked standard flux tube"
         )
     if steps < 1:
         raise ValueError("steps must be at least one")
     method_key = str(method).lower()
-    if method_key not in {"euler", "rk2", "rk3"}:
-        raise ValueError("sheared integration method must be 'euler', 'rk2', or 'rk3'")
+    if method_key not in {"euler", "rk2", "rk3", "imex"}:
+        raise ValueError(
+            "sheared integration method must be 'euler', 'rk2', 'rk3', or 'imex'"
+        )
     if not fixed_dt and not record_transport:
         raise ValueError("adaptive sheared integration requires a transport trace")
+    if method_key == "imex" and not fixed_dt:
+        raise ValueError("sheared IMEX integration currently requires fixed_dt=True")
+    if method_key == "imex" and collision_operator is not None:
+        raise NotImplementedError(
+            "sheared IMEX does not yet support custom collision operators"
+        )
     geom_eff = ensure_flux_tube_geometry_data(geom, grid.z)
     if cache is None:
         if G0.ndim == 5:
@@ -292,6 +311,8 @@ def _integrate_nonlinear_sheared_scan(
         cache = build_linear_cache(grid, geom_eff, params, int(nl), int(nm))
 
     term_cfg = terms or TermConfig()
+    linear_cfg = replace(term_cfg, nonlinear=0.0)
+    linear_rhs_fn = _linear_rhs_jit_for_terms(linear_cfg)
     state_dtype = jnp.result_type(G0, jnp.complex64)
     real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
     dt_value = jnp.asarray(dt, dtype=real_dtype)
@@ -300,6 +321,12 @@ def _integrate_nonlinear_sheared_scan(
         dt if initial_dt is None else initial_dt, dtype=real_dtype
     )
     rho_star = jnp.asarray(params.rho_star, dtype=real_dtype)
+    coordinate_kx = jnp.asarray(cache.kx, dtype=real_dtype)
+    coordinate_ky = jnp.asarray(cache.ky, dtype=real_dtype)
+    if int(coordinate_kx.size) > 1:
+        coordinate_x0 = 1.0 / jnp.abs(coordinate_kx[1] - coordinate_kx[0])
+    else:
+        coordinate_x0 = jnp.asarray(grid.x0, dtype=real_dtype) / rho_star
     _, flux_fac = fieldline_quadrature_weights(geom_eff, grid)
     # Full-complex shearing coordinates must retain the real-field subspace.
     project_state = _make_hermitian_projector(
@@ -331,9 +358,12 @@ def _integrate_nonlinear_sheared_scan(
     def coordinates(state: jnp.ndarray, time: jnp.ndarray, previous: jnp.ndarray):
         update = advance_shearing_coordinates(
             state,
-            kx=grid.kx,
-            ky=grid.ky,
-            x0=grid.x0,
+            # The linked-boundary cache may adjust the radial spacing to close
+            # the twist-shift chain. Working in the cache's normalized units
+            # preserves both that adjustment and the periodic convention.
+            kx=coordinate_kx,
+            ky=coordinate_ky,
+            x0=coordinate_x0,
             shear_rate=shear_rate,
             previous_time=previous,
             time=time,
@@ -347,7 +377,7 @@ def _integrate_nonlinear_sheared_scan(
             grid,
             geom_eff,
             params,
-            rho_star * update.effective_kx,
+            update.effective_kx,
         )
 
     def rhs_at(update):
@@ -365,8 +395,92 @@ def _integrate_nonlinear_sheared_scan(
         )
         return derivative, fields, updated_cache
 
+    def sheared_fields(
+        state,
+        updated_cache,
+        field_params,
+        *,
+        terms=None,
+        external_phi=None,
+    ):
+        return compute_fields_cached(
+            state,
+            updated_cache,
+            field_params,
+            terms=terms,
+            use_custom_vjp=not differentiable,
+            external_phi=external_phi,
+        )
+
+    def fields_at(update):
+        updated_cache = cache_at(update)
+        fields = sheared_fields(
+            update.state,
+            updated_cache,
+            params,
+            terms=term_cfg,
+        )
+        return fields, updated_cache
+
     def advance(current, derivative, time, dt_local):
         new_time = time + dt_local
+        if method_key == "imex":
+            current_cache = cache_at(current)
+            nonlinear_term = nonlinear_em_term_cached_impl(
+                current.state,
+                current_cache,
+                params,
+                term_cfg,
+                external_phi=None,
+                compressed_real_fft=compressed_real_fft,
+                laguerre_mode=laguerre_mode,
+                radial_phase=current.phase,
+                fields_fn=sheared_fields,
+                nonlinear_contribution_fn=nonlinear_em_contribution,
+            )
+            endpoint_guess = coordinates(current.state, new_time, time)
+            endpoint_rhs = coordinates(
+                current.state + dt_local * nonlinear_term,
+                new_time,
+                time,
+            )
+            endpoint_cache = cache_at(endpoint_guess)
+            operator = build_nonlinear_imex_operator(
+                endpoint_guess.state,
+                endpoint_cache,
+                params,
+                dt_local,
+                terms=linear_cfg,
+                implicit_preconditioner=implicit_preconditioner,
+                compressed_real_fft=compressed_real_fft,
+                build_implicit_operator_fn=_build_implicit_operator,
+            )
+            guess = endpoint_guess.state
+            rhs = endpoint_rhs.state
+            if operator.squeeze_species:
+                guess = guess[None, ...]
+                rhs = rhs[None, ...]
+            solution = solve_imex_step(
+                guess,
+                rhs,
+                linear_rhs_fn=linear_rhs_fn,
+                cache=endpoint_cache,
+                params=params,
+                linear_cfg=linear_cfg,
+                external_phi=None,
+                dt_val=operator.dt_val,
+                implicit_iters=implicit_iters,
+                implicit_relax=implicit_relax,
+                matvec=operator.matvec,
+                shape=operator.shape,
+                implicit_tol=implicit_tol,
+                implicit_maxiter=implicit_maxiter,
+                implicit_restart=implicit_restart,
+                precond_op=operator.precond_op,
+            )
+            if operator.squeeze_species:
+                solution = solution[0]
+            return endpoint_rhs._replace(state=project_state(solution)), new_time
         if method_key == "euler":
             trial = current.state + dt_local * derivative
         elif method_key == "rk2":
@@ -429,7 +543,11 @@ def _integrate_nonlinear_sheared_scan(
         )
         time = fixed_time if fixed_dt else adaptive_time
         current = coordinates(state, time, time)
-        derivative, current_fields, _ = rhs_at(current)
+        if method_key == "imex":
+            derivative = jnp.zeros_like(current.state)
+            current_fields = None
+        else:
+            derivative, current_fields, _ = rhs_at(current)
         dt_local = local_dt(current_fields, dt_previous)
         advanced, new_time = advance(current, derivative, time, dt_local)
         next_carry = (
@@ -446,7 +564,11 @@ def _integrate_nonlinear_sheared_scan(
         current = coordinates(state, time, time)
         dt_local = local_dt(current_fields, dt_previous)
         advanced, new_time = advance(current, derivative, time, dt_local)
-        next_derivative, fields, advanced_cache = rhs_at(advanced)
+        if method_key == "imex":
+            next_derivative = jnp.zeros_like(advanced.state)
+            fields, advanced_cache = fields_at(advanced)
+        else:
+            next_derivative, fields, advanced_cache = rhs_at(advanced)
         next_carry = (
             jnp.asarray(advanced.state, dtype=state_dtype),
             jnp.asarray(new_time, dtype=real_dtype),
@@ -486,7 +608,11 @@ def _integrate_nonlinear_sheared_scan(
     initial_update = coordinates(
         initial_state_carry[0], initial_state_carry[1], initial_state_carry[1]
     )
-    initial_derivative, initial_fields, _ = rhs_at(initial_update)
+    if method_key == "imex":
+        initial_derivative = jnp.zeros_like(initial_update.state)
+        initial_fields, _ = fields_at(initial_update)
+    else:
+        initial_derivative, initial_fields, _ = rhs_at(initial_update)
     # Some field-solve policies use a lower internal precision. Match the scan
     # carry to the requested state precision just as every subsequent step does.
     initial_endpoint_carry = initial_state_carry + (
@@ -516,14 +642,22 @@ def integrate_nonlinear_sheared(
     compressed_real_fft: bool = False,
     differentiable: bool = False,
     return_fields: bool = True,
+    implicit_tol: float = 1.0e-6,
+    implicit_maxiter: int = 200,
+    implicit_iters: int = 3,
+    implicit_relax: float = 0.7,
+    implicit_restart: int = 20,
+    implicit_preconditioner: str | None = None,
 ) -> tuple[jnp.ndarray, FieldState] | jnp.ndarray:
-    """Integrate the periodic shearing-coordinate foundation.
+    """Integrate the standard-flux-tube shearing-coordinate foundation.
 
-    This research path supports fixed-step Euler, midpoint RK2, and three-stage
-    Heun RK3. Stage states and derivatives are remapped to the stage coordinate
-    basis before the RHS and back to the step basis before Runge--Kutta
-    combinations. ``compressed_real_fft`` evaluates the nonlinear bracket in
-    the equivalent canonical shearing-coordinate representation.
+    This research path supports fixed-step Euler, midpoint RK2, three-stage
+    Heun RK3, and first-order IMEX. Stage states and derivatives are remapped to
+    the stage coordinate basis before the RHS and back to the step basis before
+    Runge--Kutta combinations. IMEX evaluates the explicit nonlinear term in the
+    current basis and rebuilds the implicit linear operator in the endpoint
+    basis. ``compressed_real_fft`` evaluates the nonlinear bracket in the
+    equivalent canonical shearing-coordinate representation.
     """
 
     final_state, fields = _integrate_nonlinear_sheared_scan(
@@ -542,6 +676,12 @@ def integrate_nonlinear_sheared(
         compressed_real_fft=compressed_real_fft,
         differentiable=differentiable,
         return_fields=return_fields,
+        implicit_tol=implicit_tol,
+        implicit_maxiter=implicit_maxiter,
+        implicit_iters=implicit_iters,
+        implicit_relax=implicit_relax,
+        implicit_restart=implicit_restart,
+        implicit_preconditioner=implicit_preconditioner,
     )
     if return_fields:
         return final_state, fields
@@ -572,6 +712,12 @@ def integrate_nonlinear_sheared_transport(
     cfl_fac: float | None = None,
     initial_time: jnp.ndarray | float = 0.0,
     initial_dt: jnp.ndarray | float | None = None,
+    implicit_tol: float = 1.0e-6,
+    implicit_maxiter: int = 200,
+    implicit_iters: int = 3,
+    implicit_relax: float = 0.7,
+    implicit_restart: int = 20,
+    implicit_preconditioner: str | None = None,
 ) -> ShearedTransportTrace:
     """Integrate a sheared run and record canonical heat flux at every step.
 
@@ -604,6 +750,12 @@ def integrate_nonlinear_sheared_transport(
         cfl_fac=cfl_fac,
         initial_time=initial_time,
         initial_dt=initial_dt,
+        implicit_tol=implicit_tol,
+        implicit_maxiter=implicit_maxiter,
+        implicit_iters=implicit_iters,
+        implicit_relax=implicit_relax,
+        implicit_restart=implicit_restart,
+        implicit_preconditioner=implicit_preconditioner,
     )
     time, heat_flux = samples
     return ShearedTransportTrace(final_state, time, heat_flux)

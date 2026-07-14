@@ -39,7 +39,7 @@ def advance_shearing_coordinates(
     *,
     kx: jnp.ndarray,
     ky: jnp.ndarray,
-    x0: float,
+    x0: jnp.ndarray | float,
     shear_rate: jnp.ndarray | float,
     previous_time: jnp.ndarray | float,
     time: jnp.ndarray | float,

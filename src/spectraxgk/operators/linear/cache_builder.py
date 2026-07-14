@@ -413,15 +413,17 @@ def update_linear_cache_for_sheared_kx(
     """Rebuild every continuously sheared ``kx``-dependent cache array.
 
     ``effective_kx_grid`` uses the same normalized units and ``(ky, kx)``
-    layout as ``cache.kx_grid``. This foundation currently admits periodic,
-    standard flux tubes only. Linked and non-twist boundaries need an
-    additional boundary-phase update and therefore fail closed.
+    layout as ``cache.kx_grid``. Periodic and linked standard flux tubes are
+    supported. A flow-shear displacement is constant along each fixed-``ky``
+    linked chain, so its precomputed twist-shift maps remain valid. Non-twist
+    flux tubes use a separate, ``z``-dependent radial representation and fail
+    closed here.
     """
 
     boundary = str(grid.boundary).lower()
-    if boundary != "periodic" or bool(grid.non_twist):
+    if boundary not in {"periodic", "linked"} or bool(grid.non_twist):
         raise NotImplementedError(
-            "sheared-kx cache updates currently require a periodic standard flux tube"
+            "sheared-kx cache updates require a periodic or linked standard flux tube"
         )
     kx_grid = jnp.asarray(effective_kx_grid, dtype=cache.kx_grid.dtype)
     if tuple(kx_grid.shape) != tuple(cache.kx_grid.shape):
