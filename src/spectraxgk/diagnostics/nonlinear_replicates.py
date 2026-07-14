@@ -225,6 +225,10 @@ def _state_diagnostics(
     if ensemble_mean is None and finite_means:
         ensemble_mean = sum(finite_means) / len(finite_means)
     scale = max(abs(float(ensemble_mean or 0.0)), float(config.value_floor))
+    high_label: str | None = None
+    high_axis: str | None = None
+    low_label: str | None = None
+    low_axis: str | None = None
     if row_means:
         high_label, high_axis = _variant_label(
             max(row_means, key=lambda item: item[1])[0]
@@ -232,8 +236,6 @@ def _state_diagnostics(
         low_label, low_axis = _variant_label(
             min(row_means, key=lambda item: item[1])[0]
         )
-    else:
-        high_label = high_axis = low_label = low_axis = None
     mean_rel_spread = _finite_float(stats.get("mean_rel_spread"))
     if mean_rel_spread is None and finite_means:
         mean_rel_spread = (max(finite_means) - min(finite_means)) / scale

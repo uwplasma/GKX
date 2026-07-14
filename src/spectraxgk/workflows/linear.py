@@ -102,9 +102,7 @@ class _LinearTrajectory:
         phi_t = np.asarray(self.phi_t)
         density_t = None if self.density_t is None else np.asarray(self.density_t)
         times = (
-            _linear_saved_sample_times(phi_t, time_config)
-            if self.t is None
-            else self.t
+            _linear_saved_sample_times(phi_t, time_config) if self.t is None else self.t
         )
         return _LinearTrajectory(
             g_last=self.g_last,
@@ -510,12 +508,17 @@ def _fit_linear_time_series(
     trajectory: _LinearTrajectory,
     status_callback: _StatusCallback,
 ) -> RuntimeLinearResult:
+    times = trajectory.t
+    if times is None:
+        raise RuntimeError(
+            "linear trajectory times must be materialized before fitting"
+        )
     _status(
         status_callback,
-        f"integration complete; fitting growth rate from {trajectory.t.size} saved samples",
+        f"integration complete; fitting growth rate from {times.size} saved samples",
     )
     fit_result = deps.fit_runtime_linear_diagnostics(
-        t=trajectory.t,
+        t=times,
         phi_t=trajectory.phi_t,
         density_t=trajectory.density_t,
         selection=ctx.selection,
@@ -554,7 +557,7 @@ def _fit_linear_time_series(
         gamma=float(gamma),
         omega=float(omega),
         selection=ctx.selection,
-        t=trajectory.t,
+        t=times,
         signal=fit_result.signal,
         field_history=trajectory.phi_t,
         state=None
