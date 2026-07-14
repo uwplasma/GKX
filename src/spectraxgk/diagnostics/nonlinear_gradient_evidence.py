@@ -36,13 +36,6 @@ from spectraxgk.diagnostics.transport import (
 )
 
 # ---- shared parsing and gate primitives ----
-"""Core helpers for nonlinear turbulence-gradient evidence gates.
-
-The public :mod:`spectraxgk.diagnostics.nonlinear_gradient_evidence` facade owns artifact
-report assembly.  This module keeps the small, deterministic claim-boundary
-pieces separate so they can be tested and reused without importing the full
-reporting layer.
-"""
 
 
 def _delta_key(row: dict[str, Any]) -> float:
@@ -220,15 +213,7 @@ def nonlinear_turbulence_gradient_bracket_sweep_report(
     }
 
 
-__all__ = [
-    "_bracket_sweep_recommendation",
-    "_bracket_sweep_row",
-    "_delta_key",
-    "nonlinear_turbulence_gradient_bracket_sweep_report",
-]
-
 # ---- screening reports ----
-"""Screening reports for nonlinear turbulence-gradient campaign planning."""
 
 
 def _candidate_next_action(
@@ -556,18 +541,7 @@ def nonlinear_turbulence_gradient_candidate_ranking_report(
     )
 
 
-__all__ = [
-    "_bracket_sweep_recommendation",
-    "_bracket_sweep_row",
-    "_candidate_next_action",
-    "_delta_key",
-    "_metric_margin",
-    "nonlinear_turbulence_gradient_bracket_sweep_report",
-    "nonlinear_turbulence_gradient_candidate_ranking_report",
-]
-
 # ---- evidence-gap reports ----
-"""Gap and production-report orchestration for nonlinear gradient evidence."""
 
 
 @dataclass(frozen=True)
@@ -911,22 +885,7 @@ def nonlinear_turbulence_gradient_evidence_report(
     return report
 
 
-__all__ = [
-    "_required_run_rows",
-    "nonlinear_turbulence_gradient_evidence_gap_report",
-    "nonlinear_turbulence_gradient_evidence_report",
-]
-
 # ---- production evidence entry points ----
-"""Claim-boundary gates for nonlinear turbulence-gradient evidence.
-
-This module is intentionally data-only.  It does not run nonlinear solves and
-does not infer production turbulence-gradient support from startup finite
-differences, reduced nonlinear-window estimators, or single late-window
-summaries.  The default behavior is fail-closed unless an artifact explicitly
-records production long-window gradient scope, finite-difference conditioning,
-gradient uncertainty, and replicated nonlinear-window uncertainty evidence.
-"""
 
 
 def load_json_artifact(path: str | Path) -> dict[str, Any]:
