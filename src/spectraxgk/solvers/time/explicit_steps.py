@@ -263,6 +263,13 @@ def _linear_explicit_stage_update(
 ) -> jnp.ndarray:
     """Advance one explicit method before post-step masking and field solve."""
 
+    # These schemes build their own first stage; evaluating ``rhs(G)`` here would
+    # add an unused full gyrokinetic RHS evaluation to every completed step.
+    if method_key == "sspx3":
+        return _linear_sspx3_state(G, dt_val, rhs=rhs)
+    if method_key == "k10":
+        return _linear_k10_state(G, dt_val, rhs=rhs)
+
     k1 = rhs(G)
     if method_key == "euler":
         return G + dt_val * k1
@@ -274,10 +281,6 @@ def _linear_explicit_stage_update(
         return _linear_rk3_heun_state(G, dt_val, k1=k1, rhs=rhs)
     if method_key == "rk4":
         return _linear_rk4_state(G, dt_val, k1=k1, rhs=rhs)
-    if method_key == "sspx3":
-        return _linear_sspx3_state(G, dt_val, rhs=rhs)
-    if method_key == "k10":
-        return _linear_k10_state(G, dt_val, rhs=rhs)
     raise ValueError(
         "explicit linear method must be one of {'euler', 'rk2', 'rk3', "
         "'rk3_classic', 'rk3_heun', 'rk4', 'k10', 'sspx3'}"

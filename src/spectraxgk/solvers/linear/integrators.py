@@ -31,6 +31,7 @@ from spectraxgk.solvers.linear.parallel import (
     _is_electrostatic_field_terms,
     linear_rhs_parallel_cached,
 )
+from spectraxgk.solvers.time.explicit_steps import _linear_explicit_stage_update
 
 __all__ = [
     "_integrate_linear_cached",
@@ -41,11 +42,6 @@ __all__ = [
 ]
 
 
-_SSPX3_ADT = float((1.0 / 6.0) ** (1.0 / 3.0))
-_SSPX3_WGTFAC = float((9.0 - 2.0 * (6.0 ** (2.0 / 3.0))) ** 0.5)
-_SSPX3_W1 = 0.5 * (_SSPX3_WGTFAC - 1.0)
-_SSPX3_W2 = 0.5 * ((6.0 ** (2.0 / 3.0)) - 1.0 - _SSPX3_WGTFAC)
-_SSPX3_W3 = (1.0 / _SSPX3_ADT) - 1.0 - _SSPX3_W2 * (_SSPX3_W1 + 1.0)
 _LINEAR_METHODS = {"euler", "rk2", "rk4", "imex", "imex2", "sspx3"}
 
 
@@ -146,25 +142,6 @@ def _linear_phi_callable(
     return solve_phi
 
 
-def _sspx3_step(
-    G: jnp.ndarray,
-    *,
-    rhs: Callable[[jnp.ndarray], tuple[jnp.ndarray, jnp.ndarray]],
-    dt_val: jnp.ndarray,
-) -> jnp.ndarray:
-    def euler_step(G_state: jnp.ndarray) -> jnp.ndarray:
-        dG_state, _ = rhs(G_state)
-        return G_state + (_SSPX3_ADT * dt_val) * dG_state
-
-    G1 = euler_step(G)
-    G2_euler = euler_step(G1)
-    G2 = (1.0 - _SSPX3_W1) * G + (_SSPX3_W1 - 1.0) * G1 + G2_euler
-    G3 = euler_step(G2)
-    return (
-        (1.0 - _SSPX3_W2 - _SSPX3_W3) * G + _SSPX3_W3 * G1 + (_SSPX3_W2 - 1.0) * G2 + G3
-    )
-
-
 def _advance_linear_state(
     G: jnp.ndarray,
     *,
@@ -173,28 +150,23 @@ def _advance_linear_state(
     dt_val: jnp.ndarray,
     method: str,
 ) -> jnp.ndarray:
-    dG, _phi = rhs(G)
     if method == "imex":
+        dG, _phi = rhs(G)
         dG_explicit = dG + damping * G
         return (G + dt_val * dG_explicit) / (1.0 + dt_val * damping)
     if method == "imex2":
+        dG, _phi = rhs(G)
         dG_explicit = dG + damping * G
         G_half = (G + 0.5 * dt_val * dG_explicit) / (1.0 + 0.5 * dt_val * damping)
         dG_half, _phi = rhs(G_half)
         dG_half_exp = dG_half + damping * G_half
         return (G + dt_val * dG_half_exp) / (1.0 + dt_val * damping)
-    if method == "euler":
-        return G + dt_val * dG
-    if method == "rk2":
-        k2, _ = rhs(G + 0.5 * dt_val * dG)
-        return G + dt_val * k2
-    if method == "sspx3":
-        return _sspx3_step(G, rhs=rhs, dt_val=dt_val)
-    k1 = dG
-    k2, _ = rhs(G + 0.5 * dt_val * k1)
-    k3, _ = rhs(G + 0.5 * dt_val * k2)
-    k4, _ = rhs(G + dt_val * k3)
-    return G + (dt_val / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+    return _linear_explicit_stage_update(
+        G,
+        dt_val,
+        method_key=method,
+        rhs=lambda value: rhs(value)[0],
+    )
 
 
 def _maybe_emit_linear_progress(
@@ -686,18 +658,12 @@ def _integrate_species_sharded_explicit(
             return rhs[0], fields.phi
 
         def advance(value):
-            k1, _ = local_rhs(value)
-            if method == "euler":
-                return value + dt_val * k1
-            if method == "rk2":
-                k2, _ = local_rhs(value + 0.5 * dt_val * k1)
-                return value + dt_val * k2
-            if method == "sspx3":
-                return _sspx3_step(value, rhs=local_rhs, dt_val=dt_val)
-            k2, _ = local_rhs(value + 0.5 * dt_val * k1)
-            k3, _ = local_rhs(value + 0.5 * dt_val * k2)
-            k4, _ = local_rhs(value + dt_val * k3)
-            return value + (dt_val / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+            return _linear_explicit_stage_update(
+                value,
+                dt_val,
+                method_key=method,
+                rhs=lambda state: local_rhs(state)[0],
+            )
 
         def step(value, index):
             advanced = advance(value)

@@ -17,12 +17,7 @@ from spectraxgk.operators.linear.cache_arrays import (
 )
 from spectraxgk.operators.linear.params import LinearParams, LinearTerms, _x64_enabled
 from spectraxgk.operators.linear.rhs import linear_rhs_cached
-
-_SSPX3_ADT = float((1.0 / 6.0) ** (1.0 / 3.0))
-_SSPX3_WGTFAC = float((9.0 - 2.0 * (6.0 ** (2.0 / 3.0))) ** 0.5)
-_SSPX3_W1 = 0.5 * (_SSPX3_WGTFAC - 1.0)
-_SSPX3_W2 = 0.5 * ((6.0 ** (2.0 / 3.0)) - 1.0 - _SSPX3_WGTFAC)
-_SSPX3_W3 = (1.0 / _SSPX3_ADT) - 1.0 - _SSPX3_W2 * (_SSPX3_W1 + 1.0)
+from spectraxgk.solvers.time.explicit_steps import _linear_explicit_stage_update
 
 
 def _validate_sampling(steps: int, sample_stride: int) -> None:
@@ -93,29 +88,6 @@ def _rhs(
     )
 
 
-def _sspx3_step(
-    G_in: jnp.ndarray,
-    cache: LinearCache,
-    params: LinearParams,
-    terms: LinearTerms,
-    dt_val: jnp.ndarray,
-) -> jnp.ndarray:
-    def euler_step(G_state: jnp.ndarray) -> jnp.ndarray:
-        dG_state, _phi_state = _rhs(G_state, cache, params, terms, dt_val)
-        return G_state + (_SSPX3_ADT * dt_val) * dG_state
-
-    G1 = euler_step(G_in)
-    G2_euler = euler_step(G1)
-    G2 = (1.0 - _SSPX3_W1) * G_in + (_SSPX3_W1 - 1.0) * G1 + G2_euler
-    G3 = euler_step(G2)
-    return (
-        (1.0 - _SSPX3_W2 - _SSPX3_W3) * G_in
-        + _SSPX3_W3 * G1
-        + (_SSPX3_W2 - 1.0) * G2
-        + G3
-    )
-
-
 def _advance_linear_state(
     G_in: jnp.ndarray,
     cache: LinearCache,
@@ -126,32 +98,26 @@ def _advance_linear_state(
     dt_val: jnp.ndarray,
     damping: jnp.ndarray,
 ) -> jnp.ndarray:
-    dG, _phi = _rhs(G_in, cache, params, terms, dt_val)
+    def explicit_rhs(state: jnp.ndarray) -> jnp.ndarray:
+        return _rhs(state, cache, params, terms, dt_val)[0]
+
     if method == "imex":
+        dG = explicit_rhs(G_in)
         dG_explicit = dG + damping * G_in
         return (G_in + dt_val * dG_explicit) / (1.0 + dt_val * damping)
     if method == "imex2":
+        dG = explicit_rhs(G_in)
         dG_explicit = dG + damping * G_in
-        G_half = (G_in + 0.5 * dt_val * dG_explicit) / (
-            1.0 + 0.5 * dt_val * damping
-        )
-        dG_half, _phi = _rhs(G_half, cache, params, terms, dt_val)
+        G_half = (G_in + 0.5 * dt_val * dG_explicit) / (1.0 + 0.5 * dt_val * damping)
+        dG_half = explicit_rhs(G_half)
         dG_half_exp = dG_half + damping * G_half
         return (G_in + dt_val * dG_half_exp) / (1.0 + dt_val * damping)
-    if method == "euler":
-        return G_in + dt_val * dG
-    if method == "rk2":
-        k2, _ = _rhs(G_in + 0.5 * dt_val * dG, cache, params, terms, dt_val)
-        return G_in + dt_val * k2
-    if method == "sspx3":
-        return _sspx3_step(G_in, cache, params, terms, dt_val)
-    if method == "rk4":
-        k1 = dG
-        k2, _ = _rhs(G_in + 0.5 * dt_val * k1, cache, params, terms, dt_val)
-        k3, _ = _rhs(G_in + 0.5 * dt_val * k2, cache, params, terms, dt_val)
-        k4, _ = _rhs(G_in + dt_val * k3, cache, params, terms, dt_val)
-        return G_in + (dt_val / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
-    raise ValueError(f"Unsupported method '{method}'")
+    return _linear_explicit_stage_update(
+        G_in,
+        dt_val,
+        method_key=method,
+        rhs=explicit_rhs,
+    )
 
 
 def _density_from_state(
