@@ -697,6 +697,3 @@ def nonlinear_turbulence_gradient_finite_difference_report(
         gates=gates,
         cfg=cfg,
     )
-
-
-__all__ = ["nonlinear_turbulence_gradient_finite_difference_report"]

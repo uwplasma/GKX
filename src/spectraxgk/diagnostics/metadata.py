@@ -610,34 +610,7 @@ def _gradient_conditioning_summary(
     return _gradient_conditioning_payload(metrics, gates)
 
 
-__all__ = [
-    "NON_PRODUCTION_SCOPE_MARKERS",
-    "PRODUCTION_SCOPE_MARKERS",
-    "NonlinearTurbulenceGradientBracketSweepConfig",
-    "NonlinearTurbulenceGradientCandidateRankingConfig",
-    "NonlinearTurbulenceGradientEvidenceConfig",
-    "NonlinearTurbulenceGradientFiniteDifferenceConfig",
-    "NonlinearTurbulenceGradientGapConfig",
-    "_artifact_passed",
-    "_claim_text",
-    "_ensemble_statistics_row",
-    "_explicit_true",
-    "_explicit_production_scope",
-    "_finite_float",
-    "_first_finite",
-    "_gate",
-    "_gradient_conditioning_summary",
-    "_json_number",
-    "_late_mean_by_replicate",
-    "_nested_dict",
-    "_objective_gate_values",
-    "_paired_replicate_fd_diagnostics",
-    "_replicate_label_from_row",
-    "_scope_blockers",
-]
-
 # ---- artifact classification helpers ----
-"""Classification helpers for nonlinear turbulence-gradient evidence artifacts."""
 
 
 def classify_gradient_artifact(
@@ -693,9 +666,7 @@ def classify_gradient_artifact(
     }
 
 
-__all__ = ["classify_gradient_artifact"]
 # ---- candidate scoring helpers ----
-"""Shared score-margin helpers for nonlinear-gradient screening reports."""
 
 
 def _metric_margin(
@@ -720,10 +691,7 @@ def _metric_margin(
     return max(0.0, min(float(cap), margin))
 
 
-__all__ = ["_metric_margin"]
-
 # ---- bracket sweep reports ----
-"""Same-control bracket-sweep reports for nonlinear-gradient evidence."""
 
 
 def _paired_uncertainty_rel(artifact: dict[str, Any]) -> float | None:
@@ -885,3 +853,36 @@ def _bracket_sweep_row(
         ),
         "failed_gates": _failed_bracket_gate_names(classified),
     }
+
+
+__all__ = [
+    "ArrayLike",
+    "NON_PRODUCTION_SCOPE_MARKERS",
+    "PRODUCTION_SCOPE_MARKERS",
+    "NonlinearTurbulenceGradientBracketSweepConfig",
+    "NonlinearTurbulenceGradientCandidateRankingConfig",
+    "NonlinearTurbulenceGradientEvidenceConfig",
+    "NonlinearTurbulenceGradientFiniteDifferenceConfig",
+    "NonlinearTurbulenceGradientGapConfig",
+    "ResolvedDiagnostics",
+    "SimulationDiagnostics",
+    "_artifact_passed",
+    "_bracket_sweep_row",
+    "_claim_text",
+    "_ensemble_statistics_row",
+    "_explicit_production_scope",
+    "_explicit_true",
+    "_finite_float",
+    "_first_finite",
+    "_gate",
+    "_gradient_conditioning_summary",
+    "_json_number",
+    "_late_mean_by_replicate",
+    "_metric_margin",
+    "_nested_dict",
+    "_objective_gate_values",
+    "_paired_replicate_fd_diagnostics",
+    "_replicate_label_from_row",
+    "_scope_blockers",
+    "classify_gradient_artifact",
+]
