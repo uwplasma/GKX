@@ -230,16 +230,22 @@ def _finite_float(value: Any) -> float | None:
     return None if number is None else float(number)
 
 
+def _explicit_true(value: Any) -> bool:
+    """Accept only explicit Boolean truth from persisted evidence fields."""
+
+    return isinstance(value, (bool, np.bool_)) and bool(value)
+
+
 def _gate(metric: str, passed: bool, detail: str) -> dict[str, Any]:
     return {"metric": metric, "passed": bool(passed), "detail": str(detail)}
 
 
 def _artifact_passed(payload: dict[str, Any]) -> bool:
-    if bool(payload.get("passed", False)):
+    if _explicit_true(payload.get("passed")):
         return True
     for key in ("gate_report", "promotion_gate"):
         nested = payload.get(key)
-        if isinstance(nested, dict) and bool(nested.get("passed", False)):
+        if isinstance(nested, dict) and _explicit_true(nested.get("passed")):
             return True
     return False
 
@@ -615,6 +621,7 @@ __all__ = [
     "_artifact_passed",
     "_claim_text",
     "_ensemble_statistics_row",
+    "_explicit_true",
     "_explicit_production_scope",
     "_finite_float",
     "_first_finite",

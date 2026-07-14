@@ -13,6 +13,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from spectraxgk.diagnostics.metadata import _explicit_true
+
 _NON_PROMOTABLE_MARKERS = (
     "not_transport",
     "not transport",
@@ -86,6 +88,8 @@ class ProductionNonlinearOptimizationGuardConfig:
 
 
 def _finite_float(value: object) -> float | None:
+    if isinstance(value, bool):
+        return None
     try:
         out = float(value)  # type: ignore[arg-type]
     except (TypeError, ValueError):
@@ -102,6 +106,19 @@ def _first_finite(*values: object) -> float | None:
     return None
 
 
+def _any_explicit_true(*values: object) -> bool:
+    return any(_explicit_true(value) for value in values)
+
+
+def _nonnegative_int(value: object) -> int:
+    """Decode an integral artifact count, failing closed to zero."""
+
+    finite = _finite_float(value)
+    if finite is None or finite < 0.0 or not finite.is_integer():
+        return 0
+    return int(finite)
+
+
 def _mapping_rows(payload: Mapping[str, Any], key: str) -> list[Mapping[str, Any]]:
     rows = payload.get(key)
     if not isinstance(rows, Sequence):
@@ -110,11 +127,11 @@ def _mapping_rows(payload: Mapping[str, Any], key: str) -> list[Mapping[str, Any
 
 
 def _artifact_passed(payload: Mapping[str, Any]) -> bool:
-    if any(bool(payload.get(key, False)) for key in ("passed", "gate_passed")):
+    if any(_explicit_true(payload.get(key)) for key in ("passed", "gate_passed")):
         return True
     nested = (payload.get(key) for key in ("gate_report", "promotion_gate"))
     return any(
-        isinstance(report, Mapping) and bool(report.get("passed", False))
+        isinstance(report, Mapping) and _explicit_true(report.get("passed"))
         for report in nested
     )
 
@@ -131,11 +148,6 @@ def _claim_text(payload: Mapping[str, Any]) -> str:
         "model",
     )
     return " ".join(str(payload.get(field, "")) for field in fields).lower()
-
-
-def _has_non_promotable_marker(payload: Mapping[str, Any]) -> bool:
-    text = _claim_text(payload)
-    return any(marker in text for marker in _NON_PROMOTABLE_MARKERS)
 
 
 def _claims_production(payload: Mapping[str, Any]) -> bool:
@@ -247,7 +259,9 @@ def reduced_artifact_scope_report(
     claims_production = _claims_production(payload)
     blocked_by_transport = transport_average_gate is False
     blocked_by_production_gate = production_gradient_gate is False
-    blocked_by_claim = _has_non_promotable_marker(payload)
+    blocked_by_claim = any(
+        marker in _claim_text(payload) for marker in _NON_PROMOTABLE_MARKERS
+    )
     safely_blocked = bool(
         (blocked_by_transport or blocked_by_production_gate or blocked_by_claim)
         and not claims_production
@@ -302,7 +316,9 @@ def _payload_mapping(payload: Mapping[str, Any], key: str) -> Mapping[str, Any]:
 
 def _named_gate_status(payload: Mapping[str, Any]) -> dict[str, bool]:
     gate_rows = _mapping_rows(payload, "gates")
-    return {str(row.get("metric")): bool(row.get("passed", False)) for row in gate_rows}
+    return {
+        str(row.get("metric")): _explicit_true(row.get("passed")) for row in gate_rows
+    }
 
 
 def _matched_transport_context(payload: Mapping[str, Any]) -> _MatchedTransportContext:
@@ -331,7 +347,7 @@ def replicated_transport_ensemble_report(
     stats_map: Mapping[str, Any] = stats if isinstance(stats, Mapping) else {}
     kind = str(payload.get("kind", "")).strip().lower()
     claim = _claim_text(payload)
-    n_reports = int(_finite_float(stats_map.get("n_reports")) or 0)
+    n_reports = _nonnegative_int(stats_map.get("n_reports"))
     mean_rel_spread = _finite_float(stats_map.get("mean_rel_spread"))
     combined_sem_rel = _finite_float(stats_map.get("combined_sem_rel"))
     ensemble_mean = _finite_float(stats_map.get("ensemble_mean"))
@@ -439,29 +455,28 @@ def _matched_transport_flags(
     config: ProductionNonlinearOptimizationGuardConfig,
 ) -> _MatchedTransportFlags:
     named_gate_passed = context.named_gate_passed
-    baseline_qualified = bool(
-        context.baseline.get("qualifies", False)
-        or context.strict_baseline.get("passed", False)
-        or context.strict_baseline.get("raw_passed", False)
-        or named_gate_passed.get("baseline_replicated_ensemble_qualified", False)
-        or named_gate_passed.get("baseline_ensemble_passed", False)
+    baseline_qualified = _any_explicit_true(
+        context.baseline.get("qualifies"),
+        context.strict_baseline.get("passed"),
+        context.strict_baseline.get("raw_passed"),
+        named_gate_passed.get("baseline_replicated_ensemble_qualified"),
+        named_gate_passed.get("baseline_ensemble_passed"),
     )
-    optimized_qualified = bool(
-        context.optimized.get("qualifies", False)
-        or context.strict_candidate.get("passed", False)
-        or context.strict_candidate.get("raw_passed", False)
-        or named_gate_passed.get("optimized_replicated_ensemble_qualified", False)
-        or named_gate_passed.get("candidate_ensemble_passed", False)
+    optimized_qualified = _any_explicit_true(
+        context.optimized.get("qualifies"),
+        context.strict_candidate.get("passed"),
+        context.strict_candidate.get("raw_passed"),
+        named_gate_passed.get("optimized_replicated_ensemble_qualified"),
+        named_gate_passed.get("candidate_ensemble_passed"),
     )
-    selected_closed = bool(
-        context.selected.get("passed", False)
-        or named_gate_passed.get("selected_optimized_equilibrium_audit", False)
-        or (
-            context.strict_baseline
-            and context.strict_candidate
-            and baseline_qualified
-            and optimized_qualified
-        )
+    selected_closed = _any_explicit_true(
+        context.selected.get("passed"),
+        named_gate_passed.get("selected_optimized_equilibrium_audit"),
+    ) or bool(
+        context.strict_baseline
+        and context.strict_candidate
+        and baseline_qualified
+        and optimized_qualified
     )
     reduction_ok = (
         metrics.relative_reduction is not None
@@ -676,7 +691,7 @@ def _promotion_gates(
         _gate(
             "optimized_equilibrium_replicated_transport_window",
             len(qualifying_optimized) >= int(cfg.min_optimized_equilibrium_ensembles)
-            or not bool(cfg.require_optimized_equilibrium_transport),
+            or not cfg.require_optimized_equilibrium_transport,
             (
                 "; ".join(str(row["path"]) for row in qualifying_optimized)
                 if qualifying_optimized
@@ -689,7 +704,7 @@ def _promotion_gates(
         _gate(
             "matched_baseline_to_optimized_transport_reduction",
             len(qualifying_matched_optimized) >= int(cfg.min_matched_optimized_audits)
-            or not bool(cfg.require_matched_optimized_transport_audit),
+            or not cfg.require_matched_optimized_transport_audit,
             (
                 "; ".join(str(row["path"]) for row in qualifying_matched_optimized)
                 if qualifying_matched_optimized
@@ -700,49 +715,6 @@ def _promotion_gates(
             ),
         ),
     ]
-
-
-def _guard_summary(
-    *,
-    rows: _GuardRows,
-    promoted: bool,
-) -> dict[str, Any]:
-    return {
-        "qualifying_replicated_holdout_ensembles": len(rows.qualifying_ensembles),
-        "qualifying_optimized_equilibrium_ensembles": len(rows.qualifying_optimized),
-        "qualifying_matched_optimized_transport_audits": len(
-            rows.qualifying_matched_optimized
-        ),
-        "total_matched_optimized_transport_audits": len(rows.matched_optimized),
-        "failed_matched_optimized_transport_audits": len(rows.failed_matched_optimized),
-        "best_matched_optimized_relative_reduction": rows.best_matched_reduction,
-        "production_nonlinear_optimization_ready": int(promoted),
-    }
-
-
-def _evidence_gap(
-    *,
-    rows: _GuardRows,
-    cfg: ProductionNonlinearOptimizationGuardConfig,
-) -> dict[str, Any]:
-    return {
-        "claim_boundary": (
-            "Existing strict matched audits are included as negative evidence. "
-            "They do not promote broad nonlinear turbulent-flux optimization unless "
-            "they pass the same long-window reduction and uncertainty-separation gates."
-        ),
-        "failed_matched_optimized_transport_audits": rows.failed_matched_optimized,
-        "required_additional_optimized_equilibrium_ensembles": max(
-            int(cfg.min_optimized_equilibrium_ensembles)
-            - len(rows.qualifying_optimized),
-            0,
-        ),
-        "required_additional_matched_optimized_audits": max(
-            int(cfg.min_matched_optimized_audits)
-            - len(rows.qualifying_matched_optimized),
-            0,
-        ),
-    }
 
 
 def _validated_config(
@@ -880,14 +852,39 @@ def _guard_report_payload(
         "replicated_ensemble_artifacts": rows.ensembles,
         "optimized_equilibrium_artifacts": rows.optimized,
         "matched_optimized_transport_artifacts": rows.matched_optimized,
-        "summary": _guard_summary(
-            rows=rows,
-            promoted=gates.promoted,
-        ),
-        "evidence_gap": _evidence_gap(
-            rows=rows,
-            cfg=cfg,
-        ),
+        "summary": {
+            "qualifying_replicated_holdout_ensembles": len(rows.qualifying_ensembles),
+            "qualifying_optimized_equilibrium_ensembles": len(
+                rows.qualifying_optimized
+            ),
+            "qualifying_matched_optimized_transport_audits": len(
+                rows.qualifying_matched_optimized
+            ),
+            "total_matched_optimized_transport_audits": len(rows.matched_optimized),
+            "failed_matched_optimized_transport_audits": len(
+                rows.failed_matched_optimized
+            ),
+            "best_matched_optimized_relative_reduction": rows.best_matched_reduction,
+            "production_nonlinear_optimization_ready": int(gates.promoted),
+        },
+        "evidence_gap": {
+            "claim_boundary": (
+                "Existing strict matched audits are included as negative evidence. "
+                "They do not promote broad nonlinear turbulent-flux optimization unless "
+                "they pass the same long-window reduction and uncertainty-separation gates."
+            ),
+            "failed_matched_optimized_transport_audits": rows.failed_matched_optimized,
+            "required_additional_optimized_equilibrium_ensembles": max(
+                int(cfg.min_optimized_equilibrium_ensembles)
+                - len(rows.qualifying_optimized),
+                0,
+            ),
+            "required_additional_matched_optimized_audits": max(
+                int(cfg.min_matched_optimized_audits)
+                - len(rows.qualifying_matched_optimized),
+                0,
+            ),
+        },
         "config": asdict(cfg),
         "notes": (
             "This guard intentionally allows release when reduced/startup nonlinear "
