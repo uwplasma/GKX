@@ -21,7 +21,7 @@ from spectraxgk.operators.linear.cache_builder import (
     build_linear_cache,
     update_linear_cache_for_sheared_kx,
 )
-from spectraxgk.operators.linear.params import LinearParams
+from spectraxgk.operators.linear.params import LinearParams, _x64_enabled
 from spectraxgk.operators.nonlinear.policies import (
     IMEXLinearOperator,
     _nonlinear_cfl_frequency_components,
@@ -313,7 +313,8 @@ def _integrate_nonlinear_sheared_scan(
     term_cfg = terms or TermConfig()
     linear_cfg = replace(term_cfg, nonlinear=0.0)
     linear_rhs_fn = _linear_rhs_jit_for_terms(linear_cfg)
-    state_dtype = jnp.result_type(G0, jnp.complex64)
+    base_complex_dtype = jnp.complex128 if _x64_enabled() else jnp.complex64
+    state_dtype = jnp.result_type(G0, base_complex_dtype)
     real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
     dt_value = jnp.asarray(dt, dtype=real_dtype)
     initial_time_value = jnp.asarray(initial_time, dtype=real_dtype)
@@ -455,8 +456,8 @@ def _integrate_nonlinear_sheared_scan(
                 compressed_real_fft=compressed_real_fft,
                 build_implicit_operator_fn=_build_implicit_operator,
             )
-            guess = endpoint_guess.state
-            rhs = endpoint_rhs.state
+            guess = jnp.asarray(endpoint_guess.state, dtype=operator.state_dtype)
+            rhs = jnp.asarray(endpoint_rhs.state, dtype=operator.state_dtype)
             if operator.squeeze_species:
                 guess = guess[None, ...]
                 rhs = rhs[None, ...]
