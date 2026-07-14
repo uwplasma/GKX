@@ -16,8 +16,7 @@ from spectraxgk.diagnostics.transport_windows import (
     NonlinearWindowEnsembleConfig,
     _gate,
     _json_number as _window_json_number,
-    _report_late_mean,
-    _report_sem,
+    _report_statistic,
     nonlinear_window_ensemble_report,
     nonlinear_window_stats_promotion_ready,
 )
@@ -451,8 +450,8 @@ def _manifest_record_row(
         "promotion_ready": ready,
         "failures": failures,
         "variant": {axis: variant.get(axis) for axis in required_axes},
-        "late_mean": _window_json_number(_report_late_mean(report)),
-        "sem": _window_json_number(_report_sem(report)),
+        "late_mean": _window_json_number(_report_statistic(report, "late_mean")),
+        "sem": _window_json_number(_report_statistic(report, "sem")),
     }
 
 

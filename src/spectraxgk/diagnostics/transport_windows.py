@@ -111,6 +111,12 @@ def _finite_number(value: Any) -> bool:
         return False
 
 
+def _explicit_true(value: Any) -> bool:
+    """Accept only explicit Boolean truth from persisted report fields."""
+
+    return isinstance(value, (bool, np.bool_)) and bool(value)
+
+
 def _gate(metric: str, passed: bool, detail: str) -> dict[str, Any]:
     return {"metric": metric, "passed": bool(passed), "detail": detail}
 
@@ -577,10 +583,12 @@ def _ensemble_window_stats_failures(stats: dict[str, Any]) -> list[str]:
     """Return promotion failures for replicated ensemble-window reports."""
 
     failures: list[str] = []
-    if not bool(stats.get("passed", False)):
+    if not _explicit_true(stats.get("passed")):
         failures.append("nonlinear window ensemble report did not pass")
     gate_report = stats.get("gate_report")
-    if not isinstance(gate_report, dict) or not bool(gate_report.get("passed", False)):
+    if not isinstance(gate_report, dict) or not _explicit_true(
+        gate_report.get("passed")
+    ):
         failures.append("missing passed ensemble gate_report")
     statistics = stats.get("statistics")
     if not isinstance(statistics, dict):
@@ -599,7 +607,7 @@ def _ensemble_window_stats_failures(stats: dict[str, Any]) -> list[str]:
         ready_rows = [
             row
             for row in rows
-            if isinstance(row, dict) and bool(row.get("promotion_ready", False))
+            if isinstance(row, dict) and _explicit_true(row.get("promotion_ready"))
         ]
         if len(ready_rows) != len(rows):
             failures.append("not all ensemble rows are promotion-ready")
@@ -624,7 +632,7 @@ def _convergence_window_stats_failures(stats: dict[str, Any]) -> list[str]:
     failures: list[str] = []
     if stats.get("kind") != "nonlinear_window_convergence_report":
         failures.append("unexpected nonlinear_window_stats kind")
-    if not bool(stats.get("passed", False)):
+    if not _explicit_true(stats.get("passed")):
         failures.append("nonlinear window convergence report did not pass")
     provenance = stats.get("provenance")
     if (
@@ -664,7 +672,9 @@ def _convergence_window_stats_failures(stats: dict[str, Any]) -> list[str]:
     if not _finite_number(n_finite_late) or int(float(n_finite_late)) <= 0:
         failures.append("window has no finite late samples")
     gate_report = stats.get("gate_report")
-    if not isinstance(gate_report, dict) or not bool(gate_report.get("passed", False)):
+    if not isinstance(gate_report, dict) or not _explicit_true(
+        gate_report.get("passed")
+    ):
         failures.append("missing passed gate_report")
     return failures
 
@@ -683,32 +693,18 @@ def nonlinear_window_stats_promotion_ready(
     return not failures, failures
 
 
-def _report_late_mean(report: dict[str, Any]) -> float | None:
+def _report_statistic(report: dict[str, Any], name: str) -> float | None:
     statistics = report.get("statistics")
     if not isinstance(statistics, dict):
         return None
-    value = statistics.get("late_mean")
+    value = statistics.get(name)
     if value is None:
         return None
     try:
-        late_mean = float(value)
+        result = float(value)
     except (TypeError, ValueError):
         return None
-    return late_mean if math.isfinite(late_mean) else None
-
-
-def _report_sem(report: dict[str, Any]) -> float | None:
-    statistics = report.get("statistics")
-    if not isinstance(statistics, dict):
-        return None
-    value = statistics.get("sem")
-    if value is None:
-        return None
-    try:
-        sem = float(value)
-    except (TypeError, ValueError):
-        return None
-    return sem if math.isfinite(sem) else None
+    return result if math.isfinite(result) else None
 
 
 # Consolidated from window_ensemble.py.
@@ -722,11 +718,11 @@ def _ensemble_report_rows(
     for idx, report in enumerate(reports):
         if not isinstance(report, dict):
             raise TypeError("reports must contain nonlinear window report dictionaries")
-        late_mean = _report_late_mean(report)
-        sem = _report_sem(report)
-        report_passed = bool(report.get("passed", False))
+        late_mean = _report_statistic(report, "late_mean")
+        sem = _report_statistic(report, "sem")
+        report_passed = _explicit_true(report.get("passed"))
         ready, failures = nonlinear_window_stats_promotion_ready(report)
-        if not bool(report_passed and ready):
+        if not (report_passed and ready):
             individual_ready = False
         if late_mean is not None:
             means.append(late_mean)
@@ -856,38 +852,6 @@ def _ensemble_gates(
     ]
 
 
-def _pack_ensemble_report(
-    *,
-    case: str,
-    comparison: str,
-    rows: list[dict[str, Any]],
-    statistics: dict[str, Any],
-    gates: list[dict[str, Any]],
-    cfg: NonlinearWindowEnsembleConfig,
-) -> dict[str, Any]:
-    passed = all(bool(gate["passed"]) for gate in gates)
-    report_statistics = {"n_reports": len(rows), **statistics}
-    return {
-        "kind": "nonlinear_window_ensemble_report",
-        "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
-        "case": str(case),
-        "comparison": str(comparison),
-        "passed": passed,
-        "statistics": report_statistics,
-        "gates": gates,
-        "gate_report": {
-            "case": str(case),
-            "source": "nonlinear_window_convergence_reports",
-            "passed": passed,
-            "max_abs_error": 0.0 if passed else 1.0,
-            "max_rel_error": 0.0 if passed else 1.0,
-            "gates": gates,
-        },
-        "rows": rows,
-        "config": asdict(cfg),
-    }
-
-
 def nonlinear_window_ensemble_report(
     reports: Sequence[dict[str, Any]],
     *,
@@ -922,14 +886,26 @@ def nonlinear_window_ensemble_report(
         statistics=statistics,
         cfg=cfg,
     )
-    return _pack_ensemble_report(
-        case=case,
-        comparison=comparison,
-        rows=rows,
-        statistics=statistics,
-        gates=gates,
-        cfg=cfg,
-    )
+    passed = all(bool(gate["passed"]) for gate in gates)
+    return {
+        "kind": "nonlinear_window_ensemble_report",
+        "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
+        "case": str(case),
+        "comparison": str(comparison),
+        "passed": passed,
+        "statistics": {"n_reports": len(rows), **statistics},
+        "gates": gates,
+        "gate_report": {
+            "case": str(case),
+            "source": "nonlinear_window_convergence_reports",
+            "passed": passed,
+            "max_abs_error": 0.0 if passed else 1.0,
+            "max_rel_error": 0.0 if passed else 1.0,
+            "gates": gates,
+        },
+        "rows": rows,
+        "config": asdict(cfg),
+    }
 
 
 __all__ = [
