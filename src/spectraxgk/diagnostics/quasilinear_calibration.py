@@ -460,36 +460,6 @@ def _window_from_summary(summary: dict[str, Any], t: np.ndarray) -> tuple[float,
     return tmin, tmax
 
 
-def _read_csv_window_heat_flux(
-    path: Path,
-    summary: dict[str, Any],
-    *,
-    heat_flux_column: str,
-) -> dict[str, Any]:
-    data = np.genfromtxt(path, delimiter=",", names=True)
-    if data.shape == ():
-        data = np.asarray([data], dtype=data.dtype)
-    names = set(data.dtype.names or ())
-    if "t" not in names:
-        raise ValueError(f"{path} is missing a 't' column")
-    if heat_flux_column not in names:
-        raise ValueError(f"{path} is missing heat-flux column '{heat_flux_column}'")
-    t = np.asarray(data["t"], dtype=float)
-    heat = np.asarray(data[heat_flux_column], dtype=float)
-    tmin, tmax = _window_from_summary(summary, t)
-    mask = (t >= tmin) & (t <= tmax) & np.isfinite(heat)
-    if not np.any(mask):
-        raise ValueError(f"no finite heat-flux samples in [{tmin}, {tmax}] from {path}")
-    return {
-        "mean": float(np.mean(heat[mask])),
-        "std": float(np.std(heat[mask])),
-        "tmin": tmin,
-        "tmax": tmax,
-        "n_samples": int(np.count_nonzero(mask)),
-        "variable": heat_flux_column,
-    }
-
-
 def _csv_heat_flux_trace(
     path: Path, *, heat_flux_column: str
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -504,6 +474,28 @@ def _csv_heat_flux_trace(
     return np.asarray(data["t"], dtype=float), np.asarray(
         data[heat_flux_column], dtype=float
     )
+
+
+def _window_heat_flux(
+    path: Path,
+    summary: dict[str, Any],
+    t: np.ndarray,
+    heat: np.ndarray,
+    *,
+    variable: str,
+) -> dict[str, Any]:
+    tmin, tmax = _window_from_summary(summary, t)
+    mask = (t >= tmin) & (t <= tmax) & np.isfinite(heat)
+    if not np.any(mask):
+        raise ValueError(f"no finite heat-flux samples in [{tmin}, {tmax}] from {path}")
+    return {
+        "mean": float(np.mean(heat[mask])),
+        "std": float(np.std(heat[mask])),
+        "tmin": tmin,
+        "tmax": tmax,
+        "n_samples": int(np.count_nonzero(mask)),
+        "variable": variable,
+    }
 
 
 def _netcdf_variable(root: Any, path: str) -> Any:
@@ -536,59 +528,6 @@ def _netcdf_heat_flux_variable(heat_flux_column: str) -> str:
         "Use one of heat_flux, heat_flux_es, heat_flux_apar, heat_flux_bpar, "
         "or an explicit NetCDF path such as Diagnostics/HeatFlux_st."
     )
-
-
-def _read_netcdf_window_heat_flux(
-    path: Path,
-    summary: dict[str, Any],
-    *,
-    heat_flux_column: str,
-    species_index: int | None,
-) -> dict[str, Any]:
-    try:
-        import netCDF4
-    except (
-        ImportError
-    ) as exc:  # pragma: no cover - exercised only without optional dependency.
-        raise RuntimeError(
-            "netCDF4 is required to read nonlinear NetCDF calibration windows"
-        ) from exc
-
-    variable_path = _netcdf_heat_flux_variable(heat_flux_column)
-    with netCDF4.Dataset(path) as root:
-        t = np.asarray(_netcdf_variable(root, "Grids/time")[:], dtype=float)
-        values = np.asarray(_netcdf_variable(root, variable_path)[:], dtype=float)
-    if values.shape[0] != t.size:
-        raise ValueError(
-            f"{variable_path} first dimension does not match Grids/time in {path}"
-        )
-    if values.ndim == 1:
-        heat = values
-    elif values.ndim == 2:
-        if species_index is None:
-            heat = np.sum(values, axis=1)
-        else:
-            if species_index < 0 or species_index >= values.shape[1]:
-                raise ValueError(
-                    f"species_index {species_index} is out of bounds for {values.shape[1]} species"
-                )
-            heat = values[:, int(species_index)]
-    else:
-        raise ValueError(
-            f"{variable_path} must have shape (time,) or (time, species), got {values.shape}"
-        )
-    tmin, tmax = _window_from_summary(summary, t)
-    mask = (t >= tmin) & (t <= tmax) & np.isfinite(heat)
-    if not np.any(mask):
-        raise ValueError(f"no finite heat-flux samples in [{tmin}, {tmax}] from {path}")
-    return {
-        "mean": float(np.mean(heat[mask])),
-        "std": float(np.std(heat[mask])),
-        "tmin": tmin,
-        "tmax": tmax,
-        "n_samples": int(np.count_nonzero(mask)),
-        "variable": variable_path,
-    }
 
 
 def _netcdf_heat_flux_trace(
@@ -666,7 +605,7 @@ def _ensemble_calibration_point(
     quasilinear_artifact: str | None,
     notes: str | None,
 ) -> QuasilinearCalibrationPoint:
-    if not bool(summary.get("passed", False)):
+    if summary.get("passed") is not True:
         raise ValueError("nonlinear ensemble summary did not pass")
     ready, failures = nonlinear_window_stats_promotion_ready(summary)
     if not ready:
@@ -712,20 +651,11 @@ def _read_window_heat_flux_artifact(
     diag_path = _resolve_summary_artifact(summary_path, source)
     suffixes = [suffix.lower() for suffix in diag_path.suffixes]
     if diag_path.suffix.lower() == ".csv":
-        window = _read_csv_window_heat_flux(
-            diag_path, summary, heat_flux_column=heat_flux_column
-        )
         trace_t, trace_heat = _csv_heat_flux_trace(
             diag_path, heat_flux_column=heat_flux_column
         )
         convergence_variable = heat_flux_column
     elif suffixes[-2:] == [".out", ".nc"] or diag_path.suffix.lower() == ".nc":
-        window = _read_netcdf_window_heat_flux(
-            diag_path,
-            summary,
-            heat_flux_column=heat_flux_column,
-            species_index=species_index,
-        )
         trace_t, trace_heat, convergence_variable = _netcdf_heat_flux_trace(
             diag_path,
             heat_flux_column=heat_flux_column,
@@ -735,6 +665,13 @@ def _read_window_heat_flux_artifact(
         raise NotImplementedError(
             "nonlinear calibration ingestion supports diagnostics CSV and NetCDF files"
         )
+    window = _window_heat_flux(
+        diag_path,
+        summary,
+        trace_t,
+        trace_heat,
+        variable=convergence_variable,
+    )
     return _WindowHeatFluxArtifact(
         path=diag_path,
         window=window,
