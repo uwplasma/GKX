@@ -563,7 +563,11 @@ class _GuardGateStatus:
     promoted: bool
 
 
-def _empty_optimization_scope() -> dict[str, Any]:
+def _optimization_scope(
+    optimization_artifact: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    if isinstance(optimization_artifact, Mapping):
+        return optimization_artifact_reduction_scope(optimization_artifact)
     return {
         "objective_kinds": [],
         "contains_reduced_nonlinear_window_objective": False,
@@ -573,14 +577,6 @@ def _empty_optimization_scope() -> dict[str, Any]:
         "artifact_claims_production": False,
         "bounded_reduced_scope": False,
     }
-
-
-def _optimization_scope(
-    optimization_artifact: Mapping[str, Any] | None,
-) -> dict[str, Any]:
-    if isinstance(optimization_artifact, Mapping):
-        return optimization_artifact_reduction_scope(optimization_artifact)
-    return _empty_optimization_scope()
 
 
 def _sorted_report_rows(
@@ -762,21 +758,6 @@ def _validated_config(
     return cfg
 
 
-def _artifact_maps(
-    *,
-    reduced_artifacts: Mapping[str, Mapping[str, Any]] | None,
-    replicated_ensemble_artifacts: Mapping[str, Mapping[str, Any]] | None,
-    optimized_equilibrium_artifacts: Mapping[str, Mapping[str, Any]] | None,
-    matched_optimized_transport_artifacts: Mapping[str, Mapping[str, Any]] | None,
-) -> _GuardArtifactMaps:
-    return _GuardArtifactMaps(
-        reduced=reduced_artifacts or {},
-        replicated_ensembles=replicated_ensemble_artifacts or {},
-        optimized_equilibria=optimized_equilibrium_artifacts or {},
-        matched_optimized=matched_optimized_transport_artifacts or {},
-    )
-
-
 def _guard_rows(
     *,
     optimization_artifact: Mapping[str, Any] | None,
@@ -861,39 +842,6 @@ def _gate_status(
     )
 
 
-def _claim_level(gates: _GuardGateStatus) -> str:
-    return (
-        "production_nonlinear_optimization_promoted_by_replicated_transport_windows"
-        if gates.promoted
-        else "production_nonlinear_optimization_blocked_until_optimized_equilibrium_replicated_transport_windows"
-    )
-
-
-def _safety_gate_payload(gates: _GuardGateStatus) -> dict[str, Any]:
-    return {
-        "passed": gates.safe_to_release,
-        "blockers": gates.safety_blockers,
-        "requirements": [
-            "differentiable optimization artifacts must not claim production nonlinear turbulent transport",
-            "startup and reduced nonlinear-window artifacts must record false production/transport gates",
-            "at least two long post-transient replicated nonlinear-window holdout ensembles must pass",
-        ],
-    }
-
-
-def _promotion_gate_payload(gates: _GuardGateStatus) -> dict[str, Any]:
-    return {
-        "passed": gates.promoted,
-        "blockers": gates.promotion_blockers,
-        "requirements": [
-            "optimized equilibrium must have long post-transient replicated nonlinear transport-window audits",
-            "at least three matched baseline-to-optimized nonlinear audits must show positive uncertainty-separated reductions",
-            "replicates must include independent seed/initial-condition and timestep evidence",
-            "optimized-equilibrium transport means must satisfy running-window, block/SEM, spread, and finite-flux gates",
-        ],
-    }
-
-
 def _guard_report_payload(
     *,
     optimization_artifact_path: str,
@@ -903,14 +851,35 @@ def _guard_report_payload(
 ) -> dict[str, Any]:
     return {
         "kind": "production_nonlinear_turbulent_flux_optimization_guard",
-        "claim_level": _claim_level(gates),
+        "claim_level": (
+            "production_nonlinear_optimization_promoted_by_replicated_transport_windows"
+            if gates.promoted
+            else "production_nonlinear_optimization_blocked_until_optimized_equilibrium_replicated_transport_windows"
+        ),
         "passed": gates.safe_to_release,
         "safe_to_release": gates.safe_to_release,
         "production_nonlinear_optimization_promoted": gates.promoted,
         "optimization_artifact_path": optimization_artifact_path,
         "optimization_scope": rows.optimization_scope,
-        "safety_gate": _safety_gate_payload(gates),
-        "promotion_gate": _promotion_gate_payload(gates),
+        "safety_gate": {
+            "passed": gates.safe_to_release,
+            "blockers": gates.safety_blockers,
+            "requirements": [
+                "differentiable optimization artifacts must not claim production nonlinear turbulent transport",
+                "startup and reduced nonlinear-window artifacts must record false production/transport gates",
+                "at least two long post-transient replicated nonlinear-window holdout ensembles must pass",
+            ],
+        },
+        "promotion_gate": {
+            "passed": gates.promoted,
+            "blockers": gates.promotion_blockers,
+            "requirements": [
+                "optimized equilibrium must have long post-transient replicated nonlinear transport-window audits",
+                "at least three matched baseline-to-optimized nonlinear audits must show positive uncertainty-separated reductions",
+                "replicates must include independent seed/initial-condition and timestep evidence",
+                "optimized-equilibrium transport means must satisfy running-window, block/SEM, spread, and finite-flux gates",
+            ],
+        },
         "gates": gates.safety_gates + gates.promotion_gates,
         "reduced_artifacts": rows.reduced,
         "replicated_ensemble_artifacts": rows.ensembles,
@@ -961,11 +930,11 @@ def production_nonlinear_optimization_guard_report(
     """
 
     cfg = _validated_config(config)
-    artifacts = _artifact_maps(
-        reduced_artifacts=reduced_artifacts,
-        replicated_ensemble_artifacts=replicated_ensemble_artifacts,
-        optimized_equilibrium_artifacts=optimized_equilibrium_artifacts,
-        matched_optimized_transport_artifacts=matched_optimized_transport_artifacts,
+    artifacts = _GuardArtifactMaps(
+        reduced=reduced_artifacts or {},
+        replicated_ensembles=replicated_ensemble_artifacts or {},
+        optimized_equilibria=optimized_equilibrium_artifacts or {},
+        matched_optimized=matched_optimized_transport_artifacts or {},
     )
     rows = _guard_rows(
         optimization_artifact=optimization_artifact,
