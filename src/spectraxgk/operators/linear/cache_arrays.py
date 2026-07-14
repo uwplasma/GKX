@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
+import hashlib
+import io
+import json
+from importlib import resources
 from typing import TYPE_CHECKING, Any
 
 import jax
@@ -13,6 +18,77 @@ from spectraxgk.operators.linear.params import LinearParams, _as_species_array
 
 if TYPE_CHECKING:
     from spectraxgk.operators.linear.cache_model import LinearCache
+
+
+_COLLISION_MATRIX_DATA = "advanced_collision_six_moment.npy"
+_COLLISION_MATRIX_METADATA = "advanced_collision_six_moment.json"
+
+
+@lru_cache(maxsize=1)
+def _collision_matrix_bundle() -> tuple[np.ndarray, dict[str, Any]]:
+    data_root = resources.files("spectraxgk").joinpath("data")
+    payload = data_root.joinpath(_COLLISION_MATRIX_DATA).read_bytes()
+    metadata = json.loads(
+        data_root.joinpath(_COLLISION_MATRIX_METADATA).read_text(encoding="utf-8")
+    )
+    digest = hashlib.sha256(payload).hexdigest()
+    if digest != metadata.get("sha256"):
+        raise ValueError("collision coefficient checksum does not match metadata")
+    matrices = np.load(io.BytesIO(payload), allow_pickle=False)
+    if list(matrices.shape) != metadata.get("shape"):
+        raise ValueError("collision coefficient shape does not match metadata")
+    return np.asarray(matrices), metadata
+
+
+def load_collision_moment_matrix(model: str) -> np.ndarray:
+    """Load a provenance-checked drift-kinetic collision moment matrix."""
+
+    matrices, metadata = _collision_matrix_bundle()
+    names = list(metadata["models"])
+    key = model.strip().lower()
+    if key not in names:
+        raise ValueError(f"collision model must be one of {names}")
+    return np.array(matrices[names.index(key)], copy=True)
+
+
+def apply_collision_moment_matrix(
+    state: jnp.ndarray,
+    matrix: jnp.ndarray,
+    *,
+    nu: jnp.ndarray,
+    weight: jnp.ndarray = jnp.asarray(1.0),
+) -> jnp.ndarray:
+    """Apply a dense drift-kinetic matrix in Hermite-major moment ordering."""
+
+    value = jnp.asarray(state)
+    if value.ndim not in {5, 6}:
+        raise ValueError("collision state must have five or six dimensions")
+    expanded = value[None, ...] if value.ndim == 5 else value
+    ns, nl, nm = map(int, expanded.shape[:3])
+    mode_count = nl * nm
+    coefficients = jnp.asarray(matrix, dtype=jnp.result_type(value, matrix))
+    if coefficients.ndim == 2:
+        coefficients = jnp.broadcast_to(coefficients, (ns,) + coefficients.shape)
+    if coefficients.ndim != 3 or coefficients.shape not in {
+        (1, mode_count, mode_count),
+        (ns, mode_count, mode_count),
+    }:
+        raise ValueError(
+            "collision matrix must have shape (modes, modes) or (species, modes, modes)"
+        )
+    coefficients = jnp.broadcast_to(coefficients, (ns, mode_count, mode_count))
+    packed = jnp.swapaxes(expanded, 1, 2).reshape((ns, mode_count) + expanded.shape[3:])
+    applied = jnp.einsum("sij,sj...->si...", coefficients, packed)
+    result = jnp.swapaxes(applied.reshape((ns, nm, nl) + expanded.shape[3:]), 1, 2)
+    real_dtype = jnp.real(expanded).dtype
+    frequency = jnp.asarray(nu, dtype=real_dtype).reshape(-1)
+    if frequency.size == 1:
+        frequency = jnp.broadcast_to(frequency, (ns,))
+    if int(frequency.size) != ns:
+        raise ValueError(f"nu must have length {ns} (got {frequency.size})")
+    scale = frequency[(slice(None),) + (None,) * (result.ndim - 1)]
+    result = jnp.asarray(weight, dtype=real_dtype) * scale * result
+    return result[0] if value.ndim == 5 else result
 
 
 def _shift_axis_for_cache(arr: jnp.ndarray, offset: int, axis: int) -> jnp.ndarray:

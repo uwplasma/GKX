@@ -57,6 +57,7 @@ dev = [
   "pytest-cov",
   "ruff",
   "mypy",
+  "mpmath",
   "pandas",
   "Pillow",
   "mkdocs",

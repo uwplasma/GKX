@@ -13,8 +13,10 @@ _EXPORTS = {
         "_build_gyroaverage_cache_arrays",
         "_build_low_rank_moment_cache_arrays",
         "_numpy_dtype_for_jax",
+        "apply_collision_moment_matrix",
         "collision_damping",
         "hypercollision_damping",
+        "load_collision_moment_matrix",
     ],
     "linked": [
         "_build_linked_end_damping_profile",
