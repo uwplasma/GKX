@@ -282,7 +282,8 @@ def _linear_explicit_stage_update(
     if method_key == "rk4":
         return _linear_rk4_state(G, dt_val, k1=k1, rhs=rhs)
     raise ValueError(
-        "explicit linear method must be one of {'euler', 'rk2', 'rk3', "
+        f"Unsupported method {method_key!r}; explicit linear method must be one of "
+        "{'euler', 'rk2', 'rk3', "
         "'rk3_classic', 'rk3_heun', 'rk4', 'k10', 'sspx3'}"
     )
 
