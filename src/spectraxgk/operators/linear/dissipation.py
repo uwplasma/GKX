@@ -560,29 +560,6 @@ def collision_quadratic_rate(
     return jnp.sum(product)
 
 
-def _hypercollision_zero_result(
-    G: jnp.ndarray,
-    *,
-    weight: jnp.ndarray,
-    nu_hyper: jnp.ndarray,
-    nu_hyper_l: jnp.ndarray,
-    nu_hyper_m: jnp.ndarray,
-    nu_hyper_lm: jnp.ndarray,
-    hypercollisions_const: jnp.ndarray,
-    hypercollisions_kz: jnp.ndarray,
-) -> jnp.ndarray:
-    return _zeros_like_result(
-        G,
-        weight,
-        nu_hyper,
-        nu_hyper_l,
-        nu_hyper_m,
-        nu_hyper_lm,
-        hypercollisions_const,
-        hypercollisions_kz,
-    )
-
-
 def _hypercollision_operator_is_static_zero(
     *,
     weight: jnp.ndarray,
@@ -703,30 +680,17 @@ def _inactive_hypercollision_result(
         hypercollisions_kz=hypercollisions_kz,
         dtype=dtype,
     ):
-        return _hypercollision_zero_result(
+        return _zeros_like_result(
             G,
-            weight=weight,
-            nu_hyper=nu_hyper,
-            nu_hyper_l=nu_hyper_l,
-            nu_hyper_m=nu_hyper_m,
-            nu_hyper_lm=nu_hyper_lm,
-            hypercollisions_const=hypercollisions_const,
-            hypercollisions_kz=hypercollisions_kz,
+            weight,
+            nu_hyper,
+            nu_hyper_l,
+            nu_hyper_m,
+            nu_hyper_lm,
+            hypercollisions_const,
+            hypercollisions_kz,
         )
     return None
-
-
-def _hypercollision_kz_weight_is_static_zero(
-    *,
-    weight: jnp.ndarray,
-    hypercollisions_kz: jnp.ndarray,
-) -> bool:
-    """Return true when the parallel hypercollision branch is statically off."""
-
-    kz_weight = jnp.asarray(weight) * jnp.asarray(hypercollisions_kz)
-    return not isinstance(kz_weight, jax.core.Tracer) and bool(
-        np.all(np.asarray(kz_weight) == 0.0)
-    )
 
 
 def _parallel_hypercollision_contribution(
@@ -772,79 +736,6 @@ def _parallel_hypercollision_contribution(
         linked_gather_map=linked_gather_map,
         linked_gather_mask=linked_gather_mask,
         linked_use_gather=linked_use_gather,
-    )
-
-
-def _inactive_hypercollision_result_from_policy(
-    G: jnp.ndarray,
-    coeffs: _HypercollisionCoefficients,
-    *,
-    weight: jnp.ndarray,
-    dtype: jnp.dtype,
-) -> jnp.ndarray | None:
-    return _inactive_hypercollision_result(
-        G,
-        weight=weight,
-        nu_hyper=coeffs.nu_hyper,
-        nu_hyper_l=coeffs.nu_hyper_l,
-        nu_hyper_m=coeffs.nu_hyper_m,
-        nu_hyper_lm=coeffs.nu_hyper_lm,
-        hypercollisions_const=coeffs.hypercollisions_const,
-        hypercollisions_kz=coeffs.hypercollisions_kz,
-        dtype=dtype,
-    )
-
-
-def _constant_hypercollision_from_policy(
-    G: jnp.ndarray,
-    coeffs: _HypercollisionCoefficients,
-    masks: _HypercollisionMasks,
-    *,
-    weight: jnp.ndarray,
-) -> jnp.ndarray:
-    return _constant_hypercollision_contribution(
-        G,
-        vth=coeffs.vth,
-        nu_hyper=coeffs.nu_hyper,
-        nu_hyper_l=coeffs.nu_hyper_l,
-        nu_hyper_m=coeffs.nu_hyper_m,
-        nu_hyper_lm=coeffs.nu_hyper_lm,
-        hyper_ratio=coeffs.hyper_ratio,
-        ratio_l=coeffs.ratio_l,
-        ratio_m=coeffs.ratio_m,
-        ratio_lm=coeffs.ratio_lm,
-        mask_const=masks.mask_const,
-        hypercollisions_const=coeffs.hypercollisions_const,
-        weight=weight,
-    )
-
-
-def _parallel_hypercollision_from_policy(
-    G: jnp.ndarray,
-    coeffs: _HypercollisionCoefficients,
-    masks: _HypercollisionMasks,
-    route: _HypercollisionLinkedRoute,
-    *,
-    weight: jnp.ndarray,
-) -> jnp.ndarray:
-    return _parallel_hypercollision_contribution(
-        G,
-        weight=weight,
-        hypercollisions_kz=coeffs.hypercollisions_kz,
-        nu_hyper_m=coeffs.nu_hyper_m,
-        m_norm_kz_factor=masks.m_norm_kz_factor,
-        vth=coeffs.vth,
-        kpar_scale=masks.kpar_scale,
-        mask_kz=masks.mask_kz,
-        m_pow=masks.m_pow,
-        kz=route.kz,
-        linked_indices=route.linked_indices,
-        linked_kz=route.linked_kz,
-        linked_inverse_permutation=route.linked_inverse_permutation,
-        linked_full_cover=route.linked_full_cover,
-        linked_gather_map=route.linked_gather_map,
-        linked_gather_mask=route.linked_gather_mask,
-        linked_use_gather=route.linked_use_gather,
     )
 
 
@@ -903,19 +794,56 @@ def hypercollisions_contribution(
         linked_gather_mask=linked_gather_mask,
         linked_use_gather=linked_use_gather,
     )
-    inactive_result = _inactive_hypercollision_result_from_policy(
-        G, coeffs, weight=weight, dtype=jnp.real(G).dtype
+    real_dtype = jnp.real(G).dtype
+    inactive_result = _inactive_hypercollision_result(
+        G,
+        weight=weight,
+        nu_hyper=coeffs.nu_hyper,
+        nu_hyper_l=coeffs.nu_hyper_l,
+        nu_hyper_m=coeffs.nu_hyper_m,
+        nu_hyper_lm=coeffs.nu_hyper_lm,
+        hypercollisions_const=coeffs.hypercollisions_const,
+        hypercollisions_kz=coeffs.hypercollisions_kz,
+        dtype=real_dtype,
     )
     if inactive_result is not None:
         return inactive_result
 
-    dG = _constant_hypercollision_from_policy(G, coeffs, masks, weight=weight)
-    if _hypercollision_kz_weight_is_static_zero(
-        weight=weight, hypercollisions_kz=coeffs.hypercollisions_kz
-    ):
+    dG = _constant_hypercollision_contribution(
+        G,
+        vth=coeffs.vth,
+        nu_hyper=coeffs.nu_hyper,
+        nu_hyper_l=coeffs.nu_hyper_l,
+        nu_hyper_m=coeffs.nu_hyper_m,
+        nu_hyper_lm=coeffs.nu_hyper_lm,
+        hyper_ratio=coeffs.hyper_ratio,
+        ratio_l=coeffs.ratio_l,
+        ratio_m=coeffs.ratio_m,
+        ratio_lm=coeffs.ratio_lm,
+        mask_const=masks.mask_const,
+        hypercollisions_const=coeffs.hypercollisions_const,
+        weight=weight,
+    )
+    if _is_static_zero(weight * coeffs.hypercollisions_kz, real_dtype):
         return dG
-    return dG + _parallel_hypercollision_from_policy(
-        G, coeffs, masks, route, weight=weight
+    return dG + _parallel_hypercollision_contribution(
+        G,
+        weight=weight,
+        hypercollisions_kz=coeffs.hypercollisions_kz,
+        nu_hyper_m=coeffs.nu_hyper_m,
+        m_norm_kz_factor=masks.m_norm_kz_factor,
+        vth=coeffs.vth,
+        kpar_scale=masks.kpar_scale,
+        mask_kz=masks.mask_kz,
+        m_pow=masks.m_pow,
+        kz=route.kz,
+        linked_indices=route.linked_indices,
+        linked_kz=route.linked_kz,
+        linked_inverse_permutation=route.linked_inverse_permutation,
+        linked_full_cover=route.linked_full_cover,
+        linked_gather_map=route.linked_gather_map,
+        linked_gather_mask=route.linked_gather_mask,
+        linked_use_gather=route.linked_use_gather,
     )
 
 
