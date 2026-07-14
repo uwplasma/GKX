@@ -1,23 +1,25 @@
 {
   "Nl": 2,
   "Nm": 4,
-  "claim_scope": "validated_drift_kinetic_like_species_six_moment_vertical_slice",
+  "claim_scope": "validated_drift_kinetic_like_species_low_order_vertical_slice",
   "dtype": "float64",
   "equations": {
     "coulomb": "C9a-C9f",
+    "improved_sugama": "C6a-C6f plus C103a-C103c",
     "sugama": "C6a-C6f"
   },
   "kind": "spectraxgk_collision_moment_coefficients",
   "laguerre_convention": "spectraxgk_opposite_to_paper",
   "models": [
     "sugama",
+    "improved_sugama",
     "coulomb"
   ],
   "moment_order": "hermite_major_index=p*Nl+j",
   "precision_decimal_digits": 80,
-  "sha256": "be824aba6ae1e5e37c4f1c7b414b0302c4137da05b0b3e8ccfb611e39b86bdc9",
+  "sha256": "3c71d6ac59c02e2293c75175dc6e79bb507e243dfa598b66e76949711c9ca773",
   "shape": [
-    2,
+    3,
     8,
     8
   ],

@@ -8,7 +8,7 @@ import hashlib
 import io
 import json
 from importlib import resources
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 import jax
 import jax.numpy as jnp
@@ -192,19 +192,167 @@ def drift_kinetic_sugama_pair_matrices(
     return convention * test, convention * field
 
 
-def assemble_drift_kinetic_sugama_matrix(
+def drift_kinetic_improved_sugama_pair_matrices(
+    mass_ratio: jnp.ndarray,
+    temperature_ratio: jnp.ndarray,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Return the lowest-order improved-Sugama test and field matrices.
+
+    The correction is Frei, Ernst & Ricci (2022), Appendix C, equations
+    (101)--(102), added to the original-Sugama ordered-pair matrices. As for
+    :func:`drift_kinetic_sugama_pair_matrices`, the directed frequency is not
+    included and the result uses the code's signed-Laguerre convention.
+    """
+
+    original_test, original_field = drift_kinetic_sugama_pair_matrices(
+        mass_ratio, temperature_ratio
+    )
+    sigma = jnp.asarray(mass_ratio)
+    tau = jnp.asarray(temperature_ratio, dtype=original_test.dtype)
+    pi = jnp.asarray(jnp.pi, dtype=original_test.dtype)
+    root_pi = jnp.sqrt(pi)
+    total = sigma + tau
+    root_tau = jnp.sqrt(tau)
+    ratio_root = jnp.sqrt((sigma + 1.0) * tau / total)
+    test = jnp.zeros((8, 8), dtype=original_test.dtype)
+    field = jnp.zeros((8, 8), dtype=original_test.dtype)
+    mode_10, mode_11, mode_30 = 2, 3, 6
+
+    test = test.at[mode_30, mode_10].set(
+        4.0
+        * tau**1.5
+        * jnp.sqrt(6.0 / pi)
+        * (tau * (-ratio_root + sigma + 1.0) - sigma * ratio_root)
+        / (5.0 * total**2.5)
+    )
+    test = test.at[mode_11, mode_10].set(
+        8.0
+        * tau**1.5
+        * (sigma * ratio_root + tau * (ratio_root - sigma - 1.0))
+        / (5.0 * root_pi * total**2.5)
+    )
+    mixed_polynomial = (
+        10.0 * sigma**2 * (tau - 1.0)
+        + 3.0 * jnp.sqrt((sigma + 1.0) * tau**5 / total)
+        + sigma * tau * (3.0 * ratio_root + tau - 4.0)
+        - 3.0 * tau**2
+    )
+    test = test.at[mode_10, mode_30].set(
+        -4.0
+        * root_tau
+        * jnp.sqrt(2.0 / (3.0 * pi))
+        * mixed_polynomial
+        / (5.0 * total**2.5)
+    )
+    diagonal_polynomial = (
+        sigma
+        * (tau - 1.0)
+        * root_tau
+        * (10.0 * sigma**2 - 2.0 * sigma * tau + 3.0 * tau**2)
+    )
+    test = test.at[mode_30, mode_30].set(
+        -12.0 * diagonal_polynomial / (25.0 * root_pi * total**3.5)
+    )
+    test_11_30 = 4.0 * jnp.sqrt(6.0 / pi) * diagonal_polynomial / (25.0 * total**3.5)
+    test = test.at[mode_11, mode_30].set(test_11_30)
+    test = test.at[mode_10, mode_11].set(
+        8.0 * root_tau * mixed_polynomial / (15.0 * root_pi * total**2.5)
+    )
+    test = test.at[mode_30, mode_11].set(test_11_30)
+    test = test.at[mode_11, mode_11].set(
+        -8.0 * diagonal_polynomial / (25.0 * root_pi * total**3.5)
+    )
+
+    root_total = jnp.sqrt(total)
+    root_sigma_tau = jnp.sqrt(sigma * tau)
+    root_sigma_plus_one = jnp.sqrt(sigma + 1.0)
+    field = field.at[mode_30, mode_10].set(
+        -4.0
+        * jnp.sqrt(6.0 / pi)
+        * sigma**1.5
+        * tau
+        * (-jnp.sqrt((sigma + 1.0) * total) + sigma + 1.0)
+        / (5.0 * total**2.5)
+    )
+    field = field.at[mode_11, mode_10].set(
+        8.0
+        * sigma
+        * root_sigma_tau
+        * (
+            -jnp.sqrt((sigma + 1.0) * tau**3)
+            + sigma * (jnp.sqrt(tau * total) - jnp.sqrt((sigma + 1.0) * tau))
+            + jnp.sqrt(tau * total)
+        )
+        / (5.0 * root_pi * total**3)
+    )
+    field = field.at[mode_10, mode_30].set(
+        4.0
+        * jnp.sqrt(6.0 / pi)
+        * jnp.sqrt(sigma)
+        * tau
+        * (
+            jnp.sqrt((sigma + 1.0) * tau**3)
+            - tau * root_total
+            + sigma
+            * (
+                -3.0 * tau * root_total
+                + jnp.sqrt((sigma + 1.0) * tau)
+                + 2.0 * root_total
+            )
+        )
+        / (5.0 * total**3)
+    )
+    field_diagonal = sigma * (5.0 * tau - root_tau - 2.0) - (root_tau - 3.0) * tau
+    field = field.at[mode_30, mode_30].set(
+        36.0 * sigma**1.5 * tau * field_diagonal / (25.0 * root_pi * total**3.5)
+    )
+    field_11_30 = (
+        12.0
+        * jnp.sqrt(6.0 / pi)
+        * sigma**1.5
+        * tau
+        * (sigma * (-5.0 * tau + root_tau + 2.0) + (root_tau - 3.0) * tau)
+        / (25.0 * total**3.5)
+    )
+    field = field.at[mode_11, mode_30].set(field_11_30)
+    field = field.at[mode_10, mode_11].set(
+        -8.0
+        * root_sigma_tau
+        * (
+            sigma
+            * (
+                -3.0 * jnp.sqrt(tau**3 * total)
+                + root_sigma_plus_one * tau
+                + 2.0 * jnp.sqrt(tau * total)
+            )
+            - jnp.sqrt(tau**3 * total)
+            + root_sigma_plus_one * tau**2
+        )
+        / (5.0 * root_pi * total**3)
+    )
+    field = field.at[mode_30, mode_11].set(field_11_30)
+    field = field.at[mode_11, mode_11].set(
+        24.0 * sigma**1.5 * tau * field_diagonal / (25.0 * root_pi * total**3.5)
+    )
+
+    laguerre_sign = jnp.asarray(
+        [1.0, -1.0, 1.0, -1.0, 1.0, -1.0, 1.0, -1.0],
+        dtype=original_test.dtype,
+    )
+    convention = laguerre_sign[:, None] * laguerre_sign[None, :]
+    # Appendix C writes the driven moment as the superscript and the response
+    # moment as the subscript, opposite to the row/column application contract.
+    return original_test + convention * test.T, original_field + convention * field.T
+
+
+def _assemble_drift_kinetic_sugama_matrix(
     density: jnp.ndarray,
     mass: jnp.ndarray,
     temperature: jnp.ndarray,
+    pair_matrices: Callable[
+        [jnp.ndarray, jnp.ndarray], tuple[jnp.ndarray, jnp.ndarray]
+    ],
 ) -> jnp.ndarray:
-    """Assemble the normalized low-order Sugama operator for all species.
-
-    The returned axes are ``(target species, source species, target moment,
-    source moment)``. Collision frequencies use the dimensionless scaling
-    ``nu_ab = n_b / (sqrt(m_a) T_a**(3/2))``; callers remain responsible for
-    any common dimensional prefactor.
-    """
-
     density_s = jnp.asarray(density)
     mass_s = jnp.asarray(mass, dtype=jnp.result_type(density_s, float))
     temperature_s = jnp.asarray(
@@ -225,7 +373,7 @@ def assemble_drift_kinetic_sugama_matrix(
     ns = int(density_s.size)
     mass_ratio = mass_s[:, None] / mass_s[None, :]
     temperature_ratio = temperature_s[:, None] / temperature_s[None, :]
-    pair_function = jax.vmap(drift_kinetic_sugama_pair_matrices)
+    pair_function = jax.vmap(pair_matrices)
     test, field = pair_function(mass_ratio.reshape(-1), temperature_ratio.reshape(-1))
     test = test.reshape(ns, ns, 8, 8)
     field = field.reshape(ns, ns, 8, 8)
@@ -236,6 +384,36 @@ def assemble_drift_kinetic_sugama_matrix(
     diagonal = jnp.arange(ns)
     return matrix.at[diagonal, diagonal].add(
         jnp.sum(frequency[..., None, None] * test, axis=1)
+    )
+
+
+def assemble_drift_kinetic_sugama_matrix(
+    density: jnp.ndarray,
+    mass: jnp.ndarray,
+    temperature: jnp.ndarray,
+) -> jnp.ndarray:
+    """Assemble the normalized original-Sugama operator for all species.
+
+    The returned axes are ``(target species, source species, target moment,
+    source moment)``. Collision frequencies use the dimensionless scaling
+    ``nu_ab = n_b / (sqrt(m_a) T_a**(3/2))``; callers remain responsible for
+    any common dimensional prefactor.
+    """
+
+    return _assemble_drift_kinetic_sugama_matrix(
+        density, mass, temperature, drift_kinetic_sugama_pair_matrices
+    )
+
+
+def assemble_drift_kinetic_improved_sugama_matrix(
+    density: jnp.ndarray,
+    mass: jnp.ndarray,
+    temperature: jnp.ndarray,
+) -> jnp.ndarray:
+    """Assemble the normalized lowest-order improved-Sugama species matrix."""
+
+    return _assemble_drift_kinetic_sugama_matrix(
+        density, mass, temperature, drift_kinetic_improved_sugama_pair_matrices
     )
 
 
@@ -256,6 +434,19 @@ class DriftKineticSugamaOperator:
         """Build the ordered-pair matrix from physical species parameters."""
 
         return cls(assemble_drift_kinetic_sugama_matrix(density, mass, temperature))
+
+    @classmethod
+    def from_improved_species(
+        cls,
+        density: jnp.ndarray,
+        mass: jnp.ndarray,
+        temperature: jnp.ndarray,
+    ) -> DriftKineticSugamaOperator:
+        """Build the lowest-order improved-Sugama matrix for all species."""
+
+        return cls(
+            assemble_drift_kinetic_improved_sugama_matrix(density, mass, temperature)
+        )
 
     def apply(self, context: CollisionContext) -> jnp.ndarray:
         """Apply the model to the post-field nonadiabatic response."""
