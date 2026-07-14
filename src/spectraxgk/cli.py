@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import replace
 import sys
 from pathlib import Path
 from typing import Any, Sequence
@@ -100,7 +99,8 @@ def _cmd_default_demo() -> int:
 
 def _add_quasilinear_flags(cmd: argparse.ArgumentParser) -> None:
     cmd.add_argument(
-        "--quasilinear", action="store_true",
+        "--quasilinear",
+        action="store_true",
         help="Compute quasilinear transport diagnostics",
     )
     for flag, kwargs in (
@@ -150,14 +150,18 @@ def _add_time_solver_flags(
     fit_signal: bool = False,
 ) -> None:
     if solver:
-        cmd.add_argument("--solver", type=str, default=None, help="auto, time, or krylov")
+        cmd.add_argument(
+            "--solver", type=str, default=None, help="auto, time, or krylov"
+        )
     cmd.add_argument("--method", type=str, default=None, help="time integrator method")
     cmd.add_argument("--dt", type=float, default=None)
     cmd.add_argument("--steps", type=int, default=None)
     if sample_stride:
         cmd.add_argument("--sample-stride", type=int, default=None)
     if fit_signal:
-        cmd.add_argument("--fit-signal", type=str, default=None, help="auto, phi, or density")
+        cmd.add_argument(
+            "--fit-signal", type=str, default=None, help="auto, phi, or density"
+        )
 
 
 def _add_runtime_paths(
@@ -185,7 +189,9 @@ def _add_config_flag(cmd: argparse.ArgumentParser) -> None:
 
 
 def _add_ky_values_flag(cmd: argparse.ArgumentParser) -> None:
-    cmd.add_argument("--ky-values", type=str, default=None, help="Comma-separated ky list")
+    cmd.add_argument(
+        "--ky-values", type=str, default=None, help="Comma-separated ky list"
+    )
 
 
 def _add_scan_worker_flags(cmd: argparse.ArgumentParser) -> None:
@@ -210,25 +216,6 @@ def _add_laguerre_mode_flag(cmd: argparse.ArgumentParser, *, help_text: str) -> 
     cmd.add_argument("--laguerre-mode", type=str, default=None, help=help_text)
 
 
-def _with_miller_helper_overrides(
-    cfg: Any, args: argparse.Namespace
-) -> Any:
-    if args.geometry_helper_python is None and args.geometry_helper_repo is None:
-        return cfg
-    return replace(
-        cfg,
-        geometry=replace(
-            cfg.geometry,
-            geometry_helper_python=args.geometry_helper_python,
-            geometry_helper_repo=(
-                None
-                if args.geometry_helper_repo is None
-                else str(args.geometry_helper_repo)
-            ),
-        ),
-    )
-
-
 def _cmd_generate_geometry(args: argparse.Namespace) -> int:
     cfg, _ = load_runtime_from_toml(args.config)
     if args.geometry == "vmec":
@@ -237,7 +224,7 @@ def _cmd_generate_geometry(args: argparse.Namespace) -> int:
         )
     elif args.geometry == "miller":
         output = generate_runtime_miller_eik(
-            _with_miller_helper_overrides(cfg, args),
+            cfg,
             output_path=args.out,
             force=bool(args.force),
         )
@@ -260,9 +247,6 @@ def _add_geometry_parser(sub: argparse._SubParsersAction) -> None:
         backend.add_argument("--config", required=True, type=Path)
         backend.add_argument("--out", type=Path, default=None)
         backend.add_argument("--force", action="store_true")
-        if name == "miller":
-            backend.add_argument("--geometry-helper-repo", type=Path, default=None)
-            backend.add_argument("--geometry-helper-python", default=None)
         backend.set_defaults(func=_cmd_generate_geometry)
 
 

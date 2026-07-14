@@ -469,25 +469,36 @@ def _bishop_profiles(
         + 2.0
         * center.f_const
         * q
-        * cumulative_trapezoid(1.0 / _safe_denom(ext.r**2 * ext.bpol_geo**2), theta_st_ex)
+        * cumulative_trapezoid(
+            1.0 / _safe_denom(ext.r**2 * ext.bpol_geo**2), theta_st_ex
+        )
     )
-    b_s = -2.0 * q * cumulative_trapezoid(
-        1.0 / _safe_denom(ext.bpol_geo**2), theta_st_ex
+    b_s = (
+        -2.0 * q * cumulative_trapezoid(1.0 / _safe_denom(ext.bpol_geo**2), theta_st_ex)
     )
-    c_s = 2.0 * q * cumulative_trapezoid(
-        (2.0 * np.sin(ext.u_ml) / _safe_denom(ext.r) - 2.0 / _safe_denom(ext.r_c))
-        * (1.0 / _safe_denom(ext.r * ext.bpol_geo)),
-        theta_st_ex,
+    c_s = (
+        2.0
+        * q
+        * cumulative_trapezoid(
+            (2.0 * np.sin(ext.u_ml) / _safe_denom(ext.r) - 2.0 / _safe_denom(ext.r_c))
+            * (1.0 / _safe_denom(ext.r * ext.bpol_geo)),
+            theta_st_ex,
+        )
     )
     prefac = (
         center.rho[c]
         * (center.psi_diff[c] / center.diffrho[c])
         * (1.0 / (2.0 * np.pi * q * (2 * params.nperiod - 1)))
     )
-    dfdpsi = (-params.shat / _safe_denom(prefac) - (b_s[-1] * center.dpdpsi - c_s[-1])) / _safe_denom(a_s[-1])
+    dfdpsi = (
+        -params.shat / _safe_denom(prefac) - (b_s[-1] * center.dpdpsi - c_s[-1])
+    ) / _safe_denom(a_s[-1])
     dqdr = center.diffq[c] * ext.dpsi_dr / center.psi_diff[c]
-    aprime = -ext.r * ext.bpol * (a_s * dfdpsi + b_s * center.dpdpsi - c_s) / (
-        2.0 * np.abs(center.drhodpsi)
+    aprime = (
+        -ext.r
+        * ext.bpol
+        * (a_s * dfdpsi + b_s * center.dpdpsi - c_s)
+        / (2.0 * np.abs(center.drhodpsi))
     )
     return _BishopProfiles(
         a_s=a_s,
@@ -570,9 +581,9 @@ def _drift_profiles(
             / _safe_denom(ext.b)
         )
     )
-    cvdrift = (
-        1.0 / np.clip(np.abs(center.drhodpsi * ext.b**3), 1.0e-30, None)
-    ) * (2.0 * ext.b * center.dpdpsi) + gbdrift
+    cvdrift = (1.0 / np.clip(np.abs(center.drhodpsi * ext.b**3), 1.0e-30, None)) * (
+        2.0 * ext.b * center.dpdpsi
+    ) + gbdrift
     grho = center.drhodpsi * ext.dpsi_dr
     return _DriftProfiles(
         grho=grho,
@@ -695,20 +706,16 @@ def assemble_miller_profiles(
     *,
     params: MillerCoreParams,
     state: dict[str, np.ndarray | float],
-    gradients: dict[str, np.ndarray],
     straight_state: dict[str, np.ndarray],
-    theta_st_center: np.ndarray,
     theta_st_ex: np.ndarray,
     theta_source_ex: np.ndarray,
     theta_target_ex: np.ndarray,
     gradpar_target_ex: np.ndarray,
-    bmag_center: np.ndarray,
     bpol_center: np.ndarray,
     dpsidrho: float,
 ) -> dict[str, np.ndarray | float]:
     """Assemble imported Miller profiles on the selected theta grid."""
 
-    _ = gradients, theta_st_center, bmag_center
     center = _collect_center_data(
         params=params,
         state=state,
@@ -741,17 +748,6 @@ def assemble_miller_profiles(
         aprime=bishop.aprime,
     )
     return _pack_miller_profiles(params, center, balloon)
-
-
-def internal_miller_backend_available() -> bool:
-    """Return True when internal Miller backend dependencies are present."""
-
-    try:
-        import jax  # noqa: F401
-        import jax.numpy as jnp  # noqa: F401
-    except Exception:
-        return False
-    return True
 
 
 def _request_attr(request: Any, *names: str) -> Any:
@@ -858,14 +854,11 @@ def _assemble_miller_profiles_for_request(request: Any) -> dict[str, Any]:
     return assemble_miller_profiles(
         params=params,
         state=state,
-        gradients=gradients,
         straight_state=straight_state,
-        theta_st_center=theta_st[1],
         theta_st_ex=nperiod_data_extend(theta_st[1], params.nperiod, istheta=1),
         theta_source_ex=theta_source_ex,
         theta_target_ex=theta_target_ex,
         gradpar_target_ex=gradpar_target_ex,
-        bmag_center=normalizations.bmag,
         bpol_center=normalizations.bpol,
         dpsidrho=normalizations.dpsidrho,
     )
@@ -917,16 +910,8 @@ def write_miller_eik_netcdf(
         ds.createVariable("shat", "f8").assignValue(float(profiles["shat"]))
 
 
-def generate_miller_eik_internal(
-    *, output_path: str | Path, request: Any | None = None
-) -> Path:
-    """Internal Miller->EIK pipeline entry point (in progress)."""
-
-    if request is None:
-        raise NotImplementedError(
-            "Internal Miller geometry backend requires runtime request data. "
-            "Current status: low-level Miller geometry numerics are ported; final EIK writeout is pending."
-        )
+def generate_miller_eik_internal(*, output_path: str | Path, request: Any) -> Path:
+    """Generate an EIK file from a complete Miller geometry request."""
 
     profiles = _assemble_miller_profiles_for_request(request)
     out = Path(output_path).expanduser().resolve()
@@ -948,7 +933,6 @@ __all__ = [
     "derm",
     "dermv",
     "generate_miller_eik_internal",
-    "internal_miller_backend_available",
     "nperiod_data_extend",
     "rebuild_straight_theta_state",
     "reflect_n_append",

@@ -10,7 +10,6 @@ from pathlib import Path
 
 from spectraxgk.geometry.imported_miller import (
     generate_miller_eik_internal,
-    internal_miller_backend_available,
 )
 from spectraxgk.workflows.runtime.config import RuntimeConfig
 
@@ -128,12 +127,9 @@ def generate_runtime_miller_eik(
             "Expected one of: 'auto', 'internal'."
         )
 
-    if not internal_miller_backend_available():
-        raise RuntimeError(
-            "Internal Miller geometry backend dependencies are missing. "
-            "Install JAX to enable the in-repo backend."
-        )
-
     if resolved_output is None:
         resolved_output = default_miller_eik_output_path(request)
-    return generate_miller_eik_internal(output_path=resolved_output, request=request)
+    out = Path(resolved_output).expanduser().resolve()
+    if out.exists() and not force:
+        return out
+    return generate_miller_eik_internal(output_path=out, request=request)
