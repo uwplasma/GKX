@@ -51,6 +51,145 @@ def load_collision_moment_matrix(model: str) -> np.ndarray:
     return np.array(matrices[names.index(key)], copy=True)
 
 
+def drift_kinetic_sugama_pair_matrices(
+    mass_ratio: jnp.ndarray,
+    temperature_ratio: jnp.ndarray,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Return normalized test/field matrices for one ordered species pair.
+
+    This is Frei, Ernst & Ricci (2022), Appendix C, equations (C4)--(C5),
+    with ``mass_ratio = m_a / m_b`` and ``temperature_ratio = T_a / T_b``.
+    Multiplication by the directed collision frequency ``nu_ab`` is left to the
+    caller. The matrices use the code's Hermite-major, signed-Laguerre ordering.
+    """
+
+    sigma = jnp.asarray(mass_ratio)
+    tau = jnp.asarray(temperature_ratio, dtype=jnp.result_type(sigma, float))
+    if sigma.ndim != 0 or tau.ndim != 0:
+        raise ValueError("mass_ratio and temperature_ratio must be scalars")
+    if not isinstance(sigma, jax.core.Tracer) and float(sigma) <= 0.0:
+        raise ValueError("mass_ratio must be positive")
+    if not isinstance(tau, jax.core.Tracer) and float(tau) <= 0.0:
+        raise ValueError("temperature_ratio must be positive")
+    dtype = jnp.result_type(sigma, tau)
+    pi = jnp.asarray(jnp.pi, dtype=dtype)
+    root_pi = jnp.sqrt(pi)
+    total = sigma + tau
+    test = jnp.zeros((8, 8), dtype=dtype)
+    field = jnp.zeros((8, 8), dtype=dtype)
+    mode_01, mode_10, mode_11, mode_20, mode_30 = 1, 2, 3, 4, 6
+
+    test = test.at[mode_10, mode_10].set(
+        -8.0 * (sigma + 1.0) / (3.0 * root_pi) * (tau / total) ** 1.5
+    )
+    test_10_30 = (
+        4.0 / 5.0 * jnp.sqrt(6.0 / pi) * jnp.sqrt(sigma + 1.0) * tau**2 / total**2
+    )
+    test_10_11 = -8.0 * jnp.sqrt(sigma + 1.0) * tau**2 / (5.0 * root_pi * total**2)
+    test = test.at[mode_10, mode_30].set(test_10_30)
+    test = test.at[mode_30, mode_10].set(test_10_30)
+    test = test.at[mode_10, mode_11].set(test_10_11)
+    test = test.at[mode_11, mode_10].set(test_10_11)
+    test = test.at[mode_20, mode_20].set(
+        -16.0
+        * jnp.sqrt(tau)
+        * (5.0 * sigma**2 * (tau + 2.0) + 21.0 * sigma * tau + 6.0 * tau**2)
+        / (45.0 * root_pi * total**2.5)
+    )
+    test_20_01 = (
+        -16.0
+        * jnp.sqrt(2.0 / pi)
+        * jnp.sqrt(tau)
+        * (-5.0 * sigma**2 * (tau - 1.0) + 3.0 * sigma * tau + 3.0 * tau**2)
+        / (45.0 * total**2.5)
+    )
+    test = test.at[mode_20, mode_01].set(test_20_01)
+    test = test.at[mode_01, mode_20].set(test_20_01)
+    test = test.at[mode_01, mode_01].set(
+        -16.0
+        * jnp.sqrt(tau)
+        * (5.0 * sigma**2 + 2.0 * (5.0 * sigma + 9.0) * sigma * tau + 3.0 * tau**2)
+        / (45.0 * root_pi * total**2.5)
+    )
+    test = test.at[mode_30, mode_30].set(
+        -4.0
+        * jnp.sqrt(tau)
+        * (70.0 * sigma**2 + 56.0 * sigma * tau + 31.0 * tau**2)
+        / (35.0 * root_pi * total**2.5)
+    )
+    test_30_11 = (
+        -4.0
+        * jnp.sqrt(2.0 / (3.0 * pi))
+        * tau**1.5
+        * (28.0 * sigma + tau)
+        / (35.0 * total**2.5)
+    )
+    test = test.at[mode_30, mode_11].set(test_30_11)
+    test = test.at[mode_11, mode_30].set(test_30_11)
+    test = test.at[mode_11, mode_11].set(
+        -8.0
+        * jnp.sqrt(tau)
+        * (105.0 * sigma**2 + 98.0 * sigma * tau + 47.0 * tau**2)
+        / (105.0 * root_pi * total**2.5)
+    )
+
+    field = field.at[mode_10, mode_10].set(
+        8.0 * sigma * (sigma + 1.0) * tau / (3.0 * root_pi * jnp.sqrt(sigma * total**3))
+    )
+    field = field.at[mode_10, mode_30].set(
+        -4.0
+        * jnp.sqrt(6.0 / pi)
+        * jnp.sqrt(sigma**3 * (sigma + 1.0))
+        * tau
+        / (5.0 * total**2)
+    )
+    field = field.at[mode_10, mode_11].set(
+        8.0 * jnp.sqrt(sigma**3 * (sigma + 1.0)) * tau / (5.0 * root_pi * total**2)
+    )
+    field_20_01 = (
+        -16.0
+        * jnp.sqrt(2.0 / pi)
+        * sigma
+        * (sigma + 1.0)
+        * tau**1.5
+        / (9.0 * total**2.5)
+    )
+    field = field.at[mode_20, mode_20].set(
+        16.0 * sigma * (sigma + 1.0) * tau**1.5 / (9.0 * root_pi * total**2.5)
+    )
+    field = field.at[mode_20, mode_01].set(field_20_01)
+    field = field.at[mode_01, mode_20].set(field_20_01)
+    field = field.at[mode_01, mode_01].set(
+        32.0 * sigma * (sigma + 1.0) * tau**1.5 / (9.0 * root_pi * total**2.5)
+    )
+    field = field.at[mode_30, mode_10].set(
+        -4.0
+        * jnp.sqrt(6.0 / pi)
+        * jnp.sqrt(sigma * (sigma + 1.0) * tau**3)
+        / (5.0 * total**2)
+    )
+    field = field.at[mode_30, mode_30].set(
+        36.0 * (sigma * tau) ** 1.5 / (25.0 * root_pi * total**2.5)
+    )
+    field_30_11 = (
+        -12.0 * jnp.sqrt(6.0 / pi) * (sigma * tau) ** 1.5 / (25.0 * total**2.5)
+    )
+    field = field.at[mode_30, mode_11].set(field_30_11)
+    field = field.at[mode_11, mode_10].set(
+        8.0 * jnp.sqrt(sigma * (sigma + 1.0) * tau**3) / (5.0 * root_pi * total**2)
+    )
+    field = field.at[mode_11, mode_30].set(field_30_11)
+    field = field.at[mode_11, mode_11].set(
+        24.0 * (sigma * tau) ** 1.5 / (25.0 * root_pi * total**2.5)
+    )
+
+    laguerre_sign = jnp.asarray(
+        [1.0, -1.0, 1.0, -1.0, 1.0, -1.0, 1.0, -1.0], dtype=dtype
+    )
+    convention = laguerre_sign[:, None] * laguerre_sign[None, :]
+    return convention * test, convention * field
+
+
 def interpolate_collision_moment_matrix(
     kperp_grid: jnp.ndarray,
     matrices: jnp.ndarray,
@@ -154,6 +293,38 @@ def apply_collision_moment_matrix(
         raise ValueError(f"nu must have length {ns} (got {frequency.size})")
     scale = frequency[(slice(None),) + (None,) * (result.ndim - 1)]
     result = jnp.asarray(weight, dtype=real_dtype) * scale * result
+    return result[0] if value.ndim == 5 else result
+
+
+def apply_multispecies_collision_moment_matrix(
+    state: jnp.ndarray,
+    matrix: jnp.ndarray,
+    *,
+    weight: jnp.ndarray = jnp.asarray(1.0),
+) -> jnp.ndarray:
+    """Apply a target/source-species collision matrix and sum source species."""
+
+    value = jnp.asarray(state)
+    if value.ndim not in {5, 6}:
+        raise ValueError("collision state must have five or six dimensions")
+    expanded = value[None, ...] if value.ndim == 5 else value
+    ns, nl, nm = map(int, expanded.shape[:3])
+    mode_count = nl * nm
+    spatial_shape = tuple(map(int, expanded.shape[3:]))
+    coefficients = jnp.asarray(matrix, dtype=jnp.result_type(value, matrix))
+    allowed = {
+        (ns, ns, mode_count, mode_count),
+        (ns, ns, mode_count, mode_count) + spatial_shape,
+    }
+    if coefficients.shape not in allowed:
+        raise ValueError(
+            "multispecies collision matrix must have target/source species and "
+            "square moment axes, optionally followed by the state spatial shape"
+        )
+    packed = jnp.swapaxes(expanded, 1, 2).reshape((ns, mode_count) + expanded.shape[3:])
+    applied = jnp.einsum("stij...,tj...->si...", coefficients, packed)
+    result = jnp.swapaxes(applied.reshape((ns, nm, nl) + expanded.shape[3:]), 1, 2)
+    result = jnp.asarray(weight, dtype=jnp.real(expanded).dtype) * result
     return result[0] if value.ndim == 5 else result
 
 
