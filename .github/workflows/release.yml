@@ -79,6 +79,7 @@ jobs:
           assert find_spec("spectraxgk.objectives.qa_low_turbulence_contracts") is None
           assert find_spec("spectraxgk.objectives.qa_low_turbulence_residuals") is None
           assert find_spec("spectraxgk.objectives.stellarator_residuals") is None
+          assert find_spec("spectraxgk.diagnostics.growth_series") is None
           print(spectraxgk.__version__)
           PY
           /tmp/spectraxgk-wheel-smoke/bin/spectraxgk --help >/dev/null
