@@ -8,6 +8,7 @@ from typing import Any, cast
 
 import numpy as np
 
+from spectraxgk.diagnostics.metadata import _explicit_true, _nonnegative_int
 from spectraxgk.objectives.vmec_transport_admission import (
     VMECJAXNonlinearAuditPolicy,
     VMECJAXNonlinearCampaignPolicy,
@@ -22,21 +23,6 @@ from spectraxgk.objectives.vmec_transport_admission import (
 class _LandscapeReductionMetrics:
     relative_reduction: float | None
     uncertainty_z_score: float | None
-
-
-def _explicit_true(value: Any) -> bool:
-    """Accept only explicit Boolean truth from persisted gate artifacts."""
-
-    return isinstance(value, (bool, np.bool_)) and bool(value)
-
-
-def _nonnegative_int(value: Any) -> int:
-    """Decode a nonnegative integral artifact field, failing closed to zero."""
-
-    finite = _finite_float_or_none(value)
-    if finite is None or finite < 0.0 or not float(finite).is_integer():
-        return 0
-    return int(finite)
 
 
 def _ensemble_statistics(ensemble: Mapping[str, Any]) -> dict[str, Any]:

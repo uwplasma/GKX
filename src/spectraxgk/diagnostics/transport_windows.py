@@ -17,6 +17,8 @@ import math
 
 import numpy as np
 
+from spectraxgk.diagnostics.metadata import _explicit_true, _gate
+
 
 # Consolidated from window_config.py.
 @dataclass(frozen=True)
@@ -109,16 +111,6 @@ def _finite_number(value: Any) -> bool:
         return math.isfinite(float(value))
     except (TypeError, ValueError):
         return False
-
-
-def _explicit_true(value: Any) -> bool:
-    """Accept only explicit Boolean truth from persisted report fields."""
-
-    return isinstance(value, (bool, np.bool_)) and bool(value)
-
-
-def _gate(metric: str, passed: bool, detail: str) -> dict[str, Any]:
-    return {"metric": metric, "passed": bool(passed), "detail": detail}
 
 
 def _late_window_bounds(

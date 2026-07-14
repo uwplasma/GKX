@@ -1,4 +1,4 @@
-"""Diagnostic container dataclasses for runtime outputs."""
+"""Diagnostic data contracts and strict persisted-evidence decoding."""
 
 from __future__ import annotations
 
@@ -228,6 +228,15 @@ def _json_number(value: Any) -> float | int | None:
 def _finite_float(value: Any) -> float | None:
     number = _json_number(value)
     return None if number is None else float(number)
+
+
+def _nonnegative_int(value: Any) -> int:
+    """Decode a persisted nonnegative integer, failing closed to zero."""
+
+    number = _finite_float(value)
+    if number is None or number < 0.0 or not number.is_integer():
+        return 0
+    return int(number)
 
 
 def _explicit_true(value: Any) -> bool:
@@ -880,6 +889,7 @@ __all__ = [
     "_late_mean_by_replicate",
     "_metric_margin",
     "_nested_dict",
+    "_nonnegative_int",
     "_objective_gate_values",
     "_paired_replicate_fd_diagnostics",
     "_replicate_label_from_row",

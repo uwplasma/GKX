@@ -7,13 +7,17 @@ claims. They are data-only and do not launch simulations.
 
 from __future__ import annotations
 
-import math
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from typing import Any
 
-from spectraxgk.diagnostics.metadata import _explicit_true
+from spectraxgk.diagnostics.metadata import (
+    _explicit_true,
+    _finite_float,
+    _gate,
+    _nonnegative_int,
+)
 
 _NON_PROMOTABLE_MARKERS = (
     "not_transport",
@@ -87,16 +91,6 @@ class ProductionNonlinearOptimizationGuardConfig:
             raise ValueError("value_floor must be positive")
 
 
-def _finite_float(value: object) -> float | None:
-    if isinstance(value, bool):
-        return None
-    try:
-        out = float(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        return None
-    return out if math.isfinite(out) else None
-
-
 def _first_finite(*values: object) -> float | None:
     """Return the first finite value without treating a physical zero as absent."""
 
@@ -108,15 +102,6 @@ def _first_finite(*values: object) -> float | None:
 
 def _any_explicit_true(*values: object) -> bool:
     return any(_explicit_true(value) for value in values)
-
-
-def _nonnegative_int(value: object) -> int:
-    """Decode an integral artifact count, failing closed to zero."""
-
-    finite = _finite_float(value)
-    if finite is None or finite < 0.0 or not finite.is_integer():
-        return 0
-    return int(finite)
 
 
 def _mapping_rows(payload: Mapping[str, Any], key: str) -> list[Mapping[str, Any]]:
@@ -163,10 +148,6 @@ def _claims_production(payload: Mapping[str, Any]) -> bool:
     ):
         return True
     return any(marker in text for marker in _PRODUCTION_CLAIM_MARKERS)
-
-
-def _gate(metric: str, passed: bool, detail: str) -> dict[str, Any]:
-    return {"metric": metric, "passed": bool(passed), "detail": detail}
 
 
 def _variant_value_from_row(row: Mapping[str, Any], axis: str) -> str | None:

@@ -11,8 +11,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 import json
-import math
 
+from spectraxgk.diagnostics.metadata import _finite_float, _gate
 
 # Consolidated from model_selection_inputs.py.
 ABSOLUTE_FLUX_PROMOTED_CLAIM = "calibrated_absolute_flux"
@@ -23,18 +23,6 @@ _OPTIMIZED_EQUILIBRIUM_MARKERS = (
     "post_optimization",
     "post-optimization",
 )
-
-
-def _finite_float(value: object) -> float | None:
-    try:
-        out = float(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        return None
-    return out if math.isfinite(out) else None
-
-
-def _gate(metric: str, passed: bool, detail: str) -> dict[str, Any]:
-    return {"metric": metric, "passed": bool(passed), "detail": str(detail)}
 
 
 def _as_dict(payload: dict[str, Any] | str | Path) -> dict[str, Any]:

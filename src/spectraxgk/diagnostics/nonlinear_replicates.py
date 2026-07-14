@@ -11,10 +11,11 @@ import re
 from spectraxgk.diagnostics.metadata import (
     NonlinearTurbulenceGradientEvidenceConfig,
     _artifact_passed,
+    _finite_float,
+    _gate,
 )
 from spectraxgk.diagnostics.transport_windows import (
     NonlinearWindowEnsembleConfig,
-    _gate,
     _json_number as _window_json_number,
     _report_statistic,
     nonlinear_window_ensemble_report,
@@ -49,14 +50,6 @@ class _StateSpreadDiagnostics:
     low_label: str | None
     low_axis: str | None
     classification: str
-
-
-def _finite_float(value: Any) -> float | None:
-    try:
-        out = float(value)
-    except (TypeError, ValueError):
-        return None
-    return out if math.isfinite(out) else None
 
 
 def _json_number(value: float | int | None) -> float | int | None:
