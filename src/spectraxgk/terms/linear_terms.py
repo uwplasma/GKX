@@ -17,6 +17,7 @@ from spectraxgk.operators.linear.dissipation import (
     collision_quadratic_rate as collision_quadratic_rate,
     collisions_contribution as collisions_contribution,
     drift_kinetic_dougherty_contribution as drift_kinetic_dougherty_contribution,
+    drift_kinetic_sugama_six_moment_contribution as drift_kinetic_sugama_six_moment_contribution,
     end_damping_contribution as end_damping_contribution,
     hypercollisions_contribution as hypercollisions_contribution,
     hyperdiffusion_contribution as hyperdiffusion_contribution,
