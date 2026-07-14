@@ -151,14 +151,11 @@ def _recommendation(classification: str) -> str:
 
 def _classify_state(
     *,
-    passed: bool,
     mean_rel_spread: float | None,
     spread_gate: float,
     high_axis: str | None,
     low_axis: str | None,
 ) -> str:
-    if passed and mean_rel_spread is not None and mean_rel_spread <= spread_gate:
-        return "passed_replicate_spread_gate"
     if mean_rel_spread is not None and mean_rel_spread <= spread_gate:
         return "passed_replicate_spread_gate"
     if high_axis is not None and low_axis is not None and high_axis != low_axis:
@@ -188,47 +185,14 @@ def _ensemble_rows(ensemble: Mapping[str, Any]) -> list[Mapping[str, Any]]:
     return [row for row in rows_obj if isinstance(row, Mapping)]
 
 
-def _finite_late_means(rows: Sequence[Mapping[str, Any]]) -> list[float]:
+def _finite_row_means(
+    rows: Sequence[Mapping[str, Any]],
+) -> list[tuple[Mapping[str, Any], float]]:
     return [
-        mean
+        (row, mean)
         for row in rows
         if (mean := _finite_float(row.get("late_mean"))) is not None
     ]
-
-
-def _ensemble_mean_from_stats(
-    stats: Mapping[str, Any],
-    *,
-    finite_means: Sequence[float],
-) -> float | None:
-    ensemble_mean = _finite_float(stats.get("ensemble_mean"))
-    if ensemble_mean is None and finite_means:
-        ensemble_mean = sum(finite_means) / len(finite_means)
-    return ensemble_mean
-
-
-def _row_mean_pairs(
-    rows: Sequence[Mapping[str, Any]],
-) -> list[tuple[Mapping[str, Any], float]]:
-    pairs: list[tuple[Mapping[str, Any], float]] = []
-    for row in rows:
-        row_mean = _finite_float(row.get("late_mean"))
-        if row_mean is not None:
-            pairs.append((row, row_mean))
-    return pairs
-
-
-def _high_low_variant_labels(
-    rows: Sequence[Mapping[str, Any]],
-) -> tuple[str | None, str | None, str | None, str | None]:
-    pairs = _row_mean_pairs(rows)
-    if not pairs:
-        return None, None, None, None
-    high_row = max(pairs, key=lambda item: item[1])[0]
-    low_row = min(pairs, key=lambda item: item[1])[0]
-    high_label, high_axis = _variant_label(high_row)
-    low_label, low_axis = _variant_label(low_row)
-    return high_label, high_axis, low_label, low_axis
 
 
 def _spread_gate(
@@ -245,18 +209,6 @@ def _spread_gate(
     return float(config.max_mean_rel_spread if spread_gate is None else spread_gate)
 
 
-def _mean_rel_spread(
-    stats: Mapping[str, Any],
-    *,
-    finite_means: Sequence[float],
-    scale: float,
-) -> float | None:
-    mean_rel_spread = _finite_float(stats.get("mean_rel_spread"))
-    if mean_rel_spread is None and finite_means:
-        mean_rel_spread = (max(finite_means) - min(finite_means)) / scale
-    return mean_rel_spread
-
-
 def _state_diagnostics(
     ensemble: Mapping[str, Any],
     *,
@@ -267,15 +219,27 @@ def _state_diagnostics(
     statistics = ensemble.get("statistics")
     stats = statistics if isinstance(statistics, Mapping) else {}
     rows = _ensemble_rows(ensemble)
-    finite_means = _finite_late_means(rows)
-    ensemble_mean = _ensemble_mean_from_stats(stats, finite_means=finite_means)
+    row_means = _finite_row_means(rows)
+    finite_means = [mean for _row, mean in row_means]
+    ensemble_mean = _finite_float(stats.get("ensemble_mean"))
+    if ensemble_mean is None and finite_means:
+        ensemble_mean = sum(finite_means) / len(finite_means)
     scale = max(abs(float(ensemble_mean or 0.0)), float(config.value_floor))
-    high_label, high_axis, low_label, low_axis = _high_low_variant_labels(rows)
-    mean_rel_spread = _mean_rel_spread(stats, finite_means=finite_means, scale=scale)
+    if row_means:
+        high_label, high_axis = _variant_label(
+            max(row_means, key=lambda item: item[1])[0]
+        )
+        low_label, low_axis = _variant_label(
+            min(row_means, key=lambda item: item[1])[0]
+        )
+    else:
+        high_label = high_axis = low_label = low_axis = None
+    mean_rel_spread = _finite_float(stats.get("mean_rel_spread"))
+    if mean_rel_spread is None and finite_means:
+        mean_rel_spread = (max(finite_means) - min(finite_means)) / scale
     spread_gate = _spread_gate(ensemble, stats, config=config)
     passed = bool(ensemble.get("passed", False))
     classification = _classify_state(
-        passed=passed,
         mean_rel_spread=mean_rel_spread,
         spread_gate=spread_gate,
         high_axis=high_axis,
@@ -366,27 +330,6 @@ def _replicate_rows(
     ]
 
 
-def _summary(
-    *,
-    ensembles: Sequence[Mapping[str, Any]],
-    replicate_rows: Sequence[Mapping[str, Any]],
-    failed_states: Sequence[str],
-    classifications: Mapping[str, int],
-) -> dict[str, Any]:
-    passed = not failed_states
-    return {
-        "n_states": len(ensembles),
-        "n_replicates": len(replicate_rows),
-        "failed_states": list(failed_states),
-        "classifications": dict(classifications),
-        "recommendation": (
-            "All replicated ensembles are within spread gates."
-            if passed
-            else "Keep the nonlinear-gradient claim fail-closed and target the failed states first."
-        ),
-    }
-
-
 def nonlinear_replicate_spread_report(
     ensembles: Sequence[Mapping[str, Any]],
     *,
@@ -429,12 +372,17 @@ def nonlinear_replicate_spread_report(
         "claim_level": "replicate_spread_diagnostic_not_simulation_claim",
         "case": str(case),
         "passed": passed,
-        "summary": _summary(
-            ensembles=ensembles,
-            replicate_rows=replicate_rows,
-            failed_states=failed_states,
-            classifications=classifications,
-        ),
+        "summary": {
+            "n_states": len(ensembles),
+            "n_replicates": len(replicate_rows),
+            "failed_states": failed_states,
+            "classifications": classifications,
+            "recommendation": (
+                "All replicated ensembles are within spread gates."
+                if passed
+                else "Keep the nonlinear-gradient claim fail-closed and target the failed states first."
+            ),
+        },
         "state_rows": state_rows,
         "replicate_rows": replicate_rows,
         "config": {
@@ -665,41 +613,6 @@ def _manifest_gates(
     ]
 
 
-def _pack_ensemble_artifact_manifest(
-    *,
-    case: str,
-    rows: list[dict[str, Any]],
-    case_rows: list[dict[str, Any]],
-    missing_artifacts: list[dict[str, Any]],
-    gates: list[dict[str, Any]],
-    cfg: NonlinearWindowEnsembleManifestConfig,
-) -> dict[str, Any]:
-    passed = all(bool(gate["passed"]) for gate in gates)
-    return {
-        "kind": "nonlinear_window_ensemble_readiness_manifest",
-        "claim_level": (
-            "replicated_seed_timestep_artifact_manifest_blocks_promotion_until_ready"
-        ),
-        "case": str(case),
-        "passed": passed,
-        "promotion_gate": {
-            "passed": passed,
-            "blockers": [gate["metric"] for gate in gates if not bool(gate["passed"])],
-            "requirements": [
-                "every observed late-window report must pass convergence metadata gates",
-                "each case must include distinct passed seed-replicate artifacts",
-                "each case must include distinct passed timestep-replicate artifacts",
-                "only after this manifest passes should the replicated ensemble gate be run",
-            ],
-        },
-        "gates": gates,
-        "cases": case_rows,
-        "observed_artifacts": rows,
-        "missing_artifacts": missing_artifacts,
-        "config": asdict(cfg),
-    }
-
-
 def nonlinear_window_ensemble_artifact_manifest(
     records: Sequence[dict[str, Any]],
     *,
@@ -732,18 +645,30 @@ def nonlinear_window_ensemble_artifact_manifest(
         missing_artifacts=missing_artifacts,
         cfg=cfg,
     )
-    return _pack_ensemble_artifact_manifest(
-        case=case,
-        rows=rows,
-        case_rows=case_rows,
-        missing_artifacts=missing_artifacts,
-        gates=gates,
-        cfg=cfg,
-    )
-
-
-# ---- replicated window summaries ----
-"""Replicated nonlinear-window evidence summaries for turbulence-gradient gates."""
+    passed = all(bool(gate["passed"]) for gate in gates)
+    return {
+        "kind": "nonlinear_window_ensemble_readiness_manifest",
+        "claim_level": (
+            "replicated_seed_timestep_artifact_manifest_blocks_promotion_until_ready"
+        ),
+        "case": str(case),
+        "passed": passed,
+        "promotion_gate": {
+            "passed": passed,
+            "blockers": [gate["metric"] for gate in gates if not bool(gate["passed"])],
+            "requirements": [
+                "every observed late-window report must pass convergence metadata gates",
+                "each case must include distinct passed seed-replicate artifacts",
+                "each case must include distinct passed timestep-replicate artifacts",
+                "only after this manifest passes should the replicated ensemble gate be run",
+            ],
+        },
+        "gates": gates,
+        "cases": case_rows,
+        "observed_artifacts": rows,
+        "missing_artifacts": missing_artifacts,
+        "config": asdict(cfg),
+    }
 
 
 def _ensemble_row(
@@ -956,9 +881,6 @@ def summarize_window_evidence(
         "single_window_rows": single_window_rows,
         "derived_ensemble": derived_ensemble,
     }
-
-
-__all__ = ["_ensemble_row", "summarize_window_evidence"]
 
 
 __all__ = [
