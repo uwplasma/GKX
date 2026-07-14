@@ -102,7 +102,9 @@ class _LinkedFFTCache:
     linked_use_gather: bool
 
 
-def _build_grid_cache_arrays(grid: SpectralGrid, params: LinearParams) -> _GridCacheArrays:
+def _build_grid_cache_arrays(
+    grid: SpectralGrid, params: LinearParams
+) -> _GridCacheArrays:
     real_dtype = jnp.float64 if _x64_enabled() else jnp.float32
     dz = jnp.asarray(grid.z[1] - grid.z[0], dtype=real_dtype)
     kz = jnp.asarray(
@@ -153,44 +155,6 @@ def _build_geometry_cache_arrays(
     )
 
 
-def _build_twist_shift_cache_policy(
-    grid: SpectralGrid,
-    geom_arrays: _GeometryCacheArrays,
-    grid_arrays: _GridCacheArrays,
-) -> _TwistShiftCachePolicy:
-    (
-        boundary,
-        use_twist_shift,
-        use_ntft,
-        y0,
-        shat_arr,
-        x0_eff,
-        jtwist,
-        kxfac_val,
-        kx_eff,
-        kx_grid,
-    ) = _resolve_twist_shift_policy(
-        grid,
-        geom_arrays.geom_data,
-        gds21=geom_arrays.gds21,
-        gds22=geom_arrays.gds22,
-        kx_eff=grid_arrays.kx_eff,
-        kx_grid=grid_arrays.kx_grid,
-    )
-    return _TwistShiftCachePolicy(
-        boundary=boundary,
-        use_twist_shift=use_twist_shift,
-        use_ntft=use_ntft,
-        y0=y0,
-        shat_arr=shat_arr,
-        x0_eff=x0_eff,
-        jtwist=jtwist,
-        kxfac_val=kxfac_val,
-        kx_eff=kx_eff,
-        kx_grid=kx_grid,
-    )
-
-
 def _default_twist_y0(grid: SpectralGrid) -> float:
     y0 = getattr(grid, "y0", None)
     if y0 is not None:
@@ -227,8 +191,10 @@ def _jtwist_and_x0_target(
     jtwist_val = getattr(grid, "jtwist", None)
     if twist_shift_geo_fac == 0.0:
         return int(jtwist_val) if jtwist_val is not None else 1, x0_eff
-    jtwist = int(jtwist_val) if jtwist_val is not None else int(
-        np.round(twist_shift_geo_fac)
+    jtwist = (
+        int(jtwist_val)
+        if jtwist_val is not None
+        else int(np.round(twist_shift_geo_fac))
     )
     jtwist = 1 if jtwist == 0 else jtwist
     return jtwist, float(y0) * abs(jtwist) / abs(twist_shift_geo_fac)
@@ -262,18 +228,7 @@ def _resolve_twist_shift_policy(
     gds22: jnp.ndarray,
     kx_eff: jnp.ndarray,
     kx_grid: jnp.ndarray,
-) -> tuple[
-    str,
-    bool,
-    bool,
-    float,
-    jnp.ndarray,
-    float,
-    int,
-    float,
-    jnp.ndarray,
-    jnp.ndarray,
-]:
+) -> _TwistShiftCachePolicy:
     boundary = str(getattr(grid, "boundary", "periodic")).lower()
     use_twist_shift = boundary in {"linked", "fix aspect", "continuous drifts"}
     use_ntft = bool(getattr(grid, "non_twist", False))
@@ -305,17 +260,17 @@ def _resolve_twist_shift_policy(
             kx_grid=kx_grid,
         )
     kxfac_val = float(getattr(grid, "kxfac", 1.0))
-    return (
-        boundary,
-        use_twist_shift,
-        use_ntft,
-        float(y0),
-        shat_arr,
-        x0_eff,
-        jtwist,
-        kxfac_val,
-        kx_eff,
-        kx_grid,
+    return _TwistShiftCachePolicy(
+        boundary=boundary,
+        use_twist_shift=use_twist_shift,
+        use_ntft=use_ntft,
+        y0=float(y0),
+        shat_arr=shat_arr,
+        x0_eff=x0_eff,
+        jtwist=jtwist,
+        kxfac_val=kxfac_val,
+        kx_eff=kx_eff,
+        kx_grid=kx_grid,
     )
 
 
@@ -361,10 +316,7 @@ def _build_ntft_kperp_and_drift_arrays(
     term_ky = ky_eff[:, None, None] ** 2 * (
         gds2[None, None, :]
         - 2.0 * ftwist[None, None, :] * gds21[None, None, :] * shat_inv
-        + (ftwist[None, None, :] ** 2)
-        * gds22_arr[None, None, :]
-        * shat_inv
-        * shat_inv
+        + (ftwist[None, None, :] ** 2) * gds22_arr[None, None, :] * shat_inv * shat_inv
     )
     term_kx = (
         (kx_eff[None, :, None] + delta_kx[:, None, :]) ** 2
@@ -927,7 +879,14 @@ def build_linear_cache(
         theta=grid_arrays.theta,
         real_dtype=grid_arrays.real_dtype,
     )
-    twist = _build_twist_shift_cache_policy(grid, geom_arrays, grid_arrays)
+    twist = _resolve_twist_shift_policy(
+        grid,
+        geom_arrays.geom_data,
+        gds21=geom_arrays.gds21,
+        gds22=geom_arrays.gds22,
+        kx_eff=grid_arrays.kx_eff,
+        kx_grid=grid_arrays.kx_grid,
+    )
     kperp2_bmag = bool(getattr(geom_arrays.geom_data, "kperp2_bmag", True))
     kperp2, cv_d, gb_d, omega_d = _build_kperp_and_drift_arrays(
         grid,
