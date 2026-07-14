@@ -342,7 +342,6 @@ _EXPORT_TARGETS: dict[str, tuple[str, str]] = {
     'solver_objective_vector_from_geometry': ('spectraxgk.objectives.core', 'solver_objective_vector_from_geometry'),
     'solver_grid_options_from_ky_values': ('spectraxgk.objectives.sampling', 'solver_grid_options_from_ky_values'),
     'solver_scalar_objective_from_vector': ('spectraxgk.objectives.core', 'solver_scalar_objective_from_vector'),
-    'spectrax_transport_objective_tuple': ('spectraxgk.objectives.vmec_transport', 'spectrax_transport_objective_tuple'),
     'select_admitted_transport_candidate': ('spectraxgk.objectives.vmec_transport_admission', 'select_admitted_transport_candidate'),
     'transport_objective_sample_summary': ('spectraxgk.objectives.vmec_transport_admission', 'transport_objective_sample_summary'),
     'build_boundary_transport_gradient_report': ('spectraxgk.objectives.vmec_transport_gradient', 'build_boundary_transport_gradient_report'),
