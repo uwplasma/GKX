@@ -10,18 +10,14 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.objectives.qa_low_turbulence_contracts import (
+from spectraxgk.objectives.qa_low_turbulence_model import (
     QA_LOW_TURBULENCE_OBSERVABLE_NAMES,
     QALowTurbulenceConfig,
     QALowTurbulenceResult,
-)
-from spectraxgk.objectives.qa_low_turbulence_model import (
-    default_qa_low_turbulence_initial_params,
-    qa_low_turbulence_observable_vector,
-)
-from spectraxgk.objectives.qa_low_turbulence_residuals import (
     _sensitivity_reports,
+    default_qa_low_turbulence_initial_params,
     qa_low_turbulence_objective,
+    qa_low_turbulence_observable_vector,
 )
 from spectraxgk.objectives.stellarator import PARAMETER_NAMES, _validate_params
 

@@ -477,6 +477,7 @@ jobs:
 
       - name: Build distribution artifacts
         run: |
+          rm -rf build dist
           python -m build
 
       - name: Check distribution metadata
@@ -491,11 +492,14 @@ jobs:
           /tmp/spectraxgk-wheel-smoke/bin/python - <<'PY'
           import spectraxgk
           import spectraxgk.parallel
+          from importlib.util import find_spec
           from spectraxgk.cli import build_parser
 
           assert "--plot" in build_parser().format_help()
           assert "batch_map" in spectraxgk.parallel.__all__
           assert spectraxgk.parallel.batch_map.__module__ == "spectraxgk.parallel.batch"
+          assert find_spec("spectraxgk.objectives.qa_low_turbulence_contracts") is None
+          assert find_spec("spectraxgk.objectives.qa_low_turbulence_residuals") is None
           print(spectraxgk.__version__)
           PY
           /tmp/spectraxgk-wheel-smoke/bin/spectraxgk --help >/dev/null

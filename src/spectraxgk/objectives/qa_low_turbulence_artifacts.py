@@ -8,11 +8,9 @@ from typing import Any, Sequence
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.objectives.qa_low_turbulence_contracts import (
+from spectraxgk.objectives.qa_low_turbulence_model import (
     QA_LOW_TURBULENCE_OBSERVABLE_NAMES,
     QALowTurbulenceConfig,
-)
-from spectraxgk.objectives.qa_low_turbulence_model import (
     _qa_low_turbulence_core,
     qa_low_turbulence_heat_flux_trace,
     qa_low_turbulence_window_metrics,

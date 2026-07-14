@@ -1,17 +1,136 @@
-"""Reduced differentiable QA/ITG model used by low-turbulence diagnostics."""
+"""Reduced differentiable QA/ITG contracts, model, and objective gates."""
 
 from __future__ import annotations
 
-from typing import Sequence
+from dataclasses import dataclass
+from typing import Any, Sequence
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 
-from spectraxgk.objectives.qa_low_turbulence_contracts import (
-    QA_LOW_TURBULENCE_OBSERVABLE_NAMES,
-    QALowTurbulenceConfig,
+from spectraxgk.objectives.autodiff_validation import (
+    autodiff_finite_difference_report,
+    covariance_diagnostics,
 )
-from spectraxgk.objectives.stellarator import _validate_params, smooth_positive
+from spectraxgk.objectives.stellarator import (
+    PARAMETER_NAMES,
+    _validate_params,
+    smooth_positive,
+)
+
+
+QA_LOW_TURBULENCE_DESIGN_NAMES = (
+    "qa_constraints",
+    "qa_plus_nonlinear_heat_flux",
+)
+
+QA_LOW_TURBULENCE_OBSERVABLE_NAMES = (
+    "aspect",
+    "mean_iota",
+    "iota_floor_violation",
+    "iota_operating_floor_violation",
+    "qa_residual",
+    "growth_rate",
+    "kperp_eff2",
+    "linear_heat_flux_weight",
+    "quasilinear_heat_flux",
+    "nonlinear_heat_flux_mean",
+    "nonlinear_heat_flux_cv",
+    "nonlinear_heat_flux_trend",
+)
+
+
+@dataclass(frozen=True)
+class QALowTurbulenceConfig:
+    """Configuration for the reduced QA low-turbulence comparison."""
+
+    target_aspect: float = 6.0
+    min_iota: float = 0.41
+    iota_operating_floor: float = 0.70
+    max_mode: int = 1
+    aspect_weight: float = 8.0
+    iota_floor_weight: float = 160.0
+    iota_operating_weight: float = 70.0
+    qa_weight: float = 8.0
+    target_helical_amplitude: float = 0.16
+    helical_shaping_weight: float = 24.0
+    regularization: float = 2.0e-3
+    nonlinear_weight: float = 8.0
+    learning_rate: float = 0.030
+    steps: int = 60
+    nonlinear_dt: float = 0.20
+    nonlinear_steps: int = 2000
+    nonlinear_tail_fraction: float = 0.50
+    long_window_min_time: float = 300.0
+    long_window_max_cv: float = 0.03
+    long_window_max_trend: float = 0.02
+    long_window_max_half_mean_rel_change: float = 0.02
+    fixed_density_gradient: float = 2.2
+    fixed_temperature_gradient: float = 6.0
+    scan_density_gradients: tuple[float, ...] = (
+        0.6,
+        1.0,
+        1.4,
+        1.8,
+        2.2,
+        2.8,
+        3.4,
+        4.0,
+        4.8,
+    )
+    fd_step: float = 1.0e-4
+    surface_ntheta: int = 72
+    surface_nzeta: int = 72
+    n_field_periods: int = 2
+
+
+@dataclass(frozen=True)
+class QALowTurbulenceResult:
+    """JSON-ready result for one reduced QA optimization."""
+
+    design_name: str
+    includes_nonlinear_heat_flux: bool
+    parameter_names: tuple[str, ...]
+    observable_names: tuple[str, ...]
+    initial_params: tuple[float, ...]
+    final_params: tuple[float, ...]
+    initial_objective: float
+    final_objective: float
+    initial_observables: tuple[float, ...]
+    final_observables: tuple[float, ...]
+    history: tuple[dict[str, Any], ...]
+    residual_gradient_gate: dict[str, Any]
+    scalar_gradient_gate: dict[str, Any]
+    observable_gradient_gate: dict[str, Any]
+    covariance: dict[str, Any]
+    config: dict[str, Any]
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a stable JSON-friendly payload."""
+
+        return {
+            "design_name": self.design_name,
+            "includes_nonlinear_heat_flux": self.includes_nonlinear_heat_flux,
+            "parameter_names": list(self.parameter_names),
+            "observable_names": list(self.observable_names),
+            "initial_params": list(self.initial_params),
+            "final_params": list(self.final_params),
+            "initial_objective": self.initial_objective,
+            "final_objective": self.final_objective,
+            "initial_observables": list(self.initial_observables),
+            "final_observables": list(self.final_observables),
+            "history": list(self.history),
+            "residual_gradient_gate": self.residual_gradient_gate,
+            "scalar_gradient_gate": self.scalar_gradient_gate,
+            "observable_gradient_gate": self.observable_gradient_gate,
+            "covariance": self.covariance,
+            "config": self.config,
+            "claim_level": (
+                "reduced_differentiable_qa_low_turbulence_comparison_"
+                "not_full_vmec_nonlinear_transport_optimization"
+            ),
+        }
 
 
 def default_qa_low_turbulence_initial_params() -> jnp.ndarray:
@@ -346,12 +465,189 @@ def qa_low_turbulence_observable_vector(
     return jnp.asarray([obs[name] for name in QA_LOW_TURBULENCE_OBSERVABLE_NAMES])
 
 
+def qa_low_turbulence_residual_names(
+    *,
+    includes_nonlinear_heat_flux: bool,
+) -> tuple[str, ...]:
+    """Return the stable residual names for the comparison objective."""
+
+    names = (
+        "aspect_constraint",
+        "minimum_iota_floor",
+        "operating_iota_floor",
+        "quasisymmetry_residual",
+        "qa_helical_shaping_amplitude",
+        *(f"regularization_{name}" for name in PARAMETER_NAMES),
+    )
+    if includes_nonlinear_heat_flux:
+        return (*names, "reduced_nonlinear_heat_flux")
+    return names
+
+
+def qa_low_turbulence_residual_vector(
+    params: jnp.ndarray | Sequence[float],
+    config: QALowTurbulenceConfig | None = None,
+    *,
+    includes_nonlinear_heat_flux: bool,
+) -> jnp.ndarray:
+    """Return weighted residuals for the aspect-6 QA low-turbulence objective."""
+
+    cfg = config or QALowTurbulenceConfig()
+    p = _validate_params(params)
+    obs = qa_low_turbulence_observables(p, cfg)
+    dtype = p.dtype
+    aspect_res = jnp.sqrt(jnp.asarray(cfg.aspect_weight, dtype=dtype)) * (
+        (obs["aspect"] - cfg.target_aspect) / cfg.target_aspect
+    )
+    iota_res = (
+        jnp.sqrt(jnp.asarray(cfg.iota_floor_weight, dtype=dtype))
+        * obs["iota_floor_violation"]
+    )
+    operating_iota_res = (
+        jnp.sqrt(jnp.asarray(cfg.iota_operating_weight, dtype=dtype))
+        * obs["iota_operating_floor_violation"]
+    )
+    qa_res = jnp.sqrt(jnp.asarray(cfg.qa_weight, dtype=dtype)) * obs["qa_residual"]
+    helical_res = (
+        jnp.sqrt(jnp.asarray(cfg.helical_shaping_weight, dtype=dtype))
+        * _qa_low_turbulence_core(p, cfg)["helical_mismatch"]
+    )
+    reg_res = jnp.sqrt(jnp.asarray(cfg.regularization, dtype=dtype)) * p
+    parts = [
+        jnp.asarray(
+            [aspect_res, iota_res, operating_iota_res, qa_res, helical_res],
+            dtype=dtype,
+        ),
+        reg_res,
+    ]
+    if includes_nonlinear_heat_flux:
+        q_res = jnp.sqrt(
+            jnp.maximum(
+                jnp.asarray(cfg.nonlinear_weight, dtype=dtype)
+                * obs["nonlinear_heat_flux_mean"],
+                jnp.asarray(0.0, dtype=dtype),
+            )
+        )
+        parts.append(jnp.asarray([q_res], dtype=dtype))
+    return jnp.concatenate(parts)
+
+
+def qa_low_turbulence_objective(
+    params: jnp.ndarray | Sequence[float],
+    config: QALowTurbulenceConfig | None = None,
+    *,
+    includes_nonlinear_heat_flux: bool,
+) -> jnp.ndarray:
+    """Return the scalar reduced QA comparison objective."""
+
+    residual = qa_low_turbulence_residual_vector(
+        params,
+        config,
+        includes_nonlinear_heat_flux=includes_nonlinear_heat_flux,
+    )
+    return jnp.dot(residual, residual)
+
+
+def qa_low_turbulence_observable_sensitivity_report(
+    params: jnp.ndarray | Sequence[float],
+    config: QALowTurbulenceConfig | None = None,
+    *,
+    finite_difference_workers: int = 1,
+) -> dict[str, Any]:
+    """Compare the complete controls-to-observables Jacobian with finite differences."""
+
+    cfg = config or QALowTurbulenceConfig()
+    p = _validate_params(params)
+    fd_step, rtol, atol = _fd_gate_tolerances(cfg.fd_step)
+    report = autodiff_finite_difference_report(
+        lambda x: qa_low_turbulence_observable_vector(x, cfg),
+        p,
+        step=fd_step,
+        rtol=rtol,
+        atol=atol,
+        workers=finite_difference_workers,
+    )
+    report["observable_names"] = list(QA_LOW_TURBULENCE_OBSERVABLE_NAMES)
+    report["parameter_names"] = list(PARAMETER_NAMES)
+    report["kind"] = "qa_low_turbulence_observable_sensitivity_report"
+    report["claim_level"] = (
+        "full_reduced_controls_to_linear_quasilinear_nonlinear_observable_"
+        "differentiability_gate"
+    )
+    return report
+
+
+def _sensitivity_reports(
+    params: jnp.ndarray,
+    config: QALowTurbulenceConfig,
+    *,
+    includes_nonlinear_heat_flux: bool,
+    finite_difference_workers: int,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
+    fd_step, rtol, atol = _fd_gate_tolerances(config.fd_step)
+    scalar_gate = autodiff_finite_difference_report(
+        lambda x: qa_low_turbulence_objective(
+            x,
+            config,
+            includes_nonlinear_heat_flux=includes_nonlinear_heat_flux,
+        ),
+        params,
+        step=fd_step,
+        rtol=rtol,
+        atol=atol,
+        workers=finite_difference_workers,
+    )
+    residual_gate = autodiff_finite_difference_report(
+        lambda x: qa_low_turbulence_residual_vector(
+            x,
+            config,
+            includes_nonlinear_heat_flux=includes_nonlinear_heat_flux,
+        ),
+        params,
+        step=fd_step,
+        rtol=rtol,
+        atol=atol,
+        workers=finite_difference_workers,
+    )
+    jac = np.asarray(residual_gate["jacobian_ad"], dtype=float)
+    residual = np.asarray(
+        qa_low_turbulence_residual_vector(
+            params,
+            config,
+            includes_nonlinear_heat_flux=includes_nonlinear_heat_flux,
+        ),
+        dtype=float,
+    )
+    covariance = covariance_diagnostics(jac, residual, regularization=1.0e-8)
+    covariance["residual_names"] = list(
+        qa_low_turbulence_residual_names(
+            includes_nonlinear_heat_flux=includes_nonlinear_heat_flux,
+        )
+    )
+    covariance["source"] = "qa_low_turbulence_weighted_residuals"
+    observable_gate = qa_low_turbulence_observable_sensitivity_report(
+        params,
+        config,
+        finite_difference_workers=finite_difference_workers,
+    )
+    return scalar_gate, residual_gate, observable_gate, covariance
+
+
 __all__ = [
+    "QA_LOW_TURBULENCE_DESIGN_NAMES",
+    "QA_LOW_TURBULENCE_OBSERVABLE_NAMES",
+    "QALowTurbulenceConfig",
+    "QALowTurbulenceResult",
     "_fd_gate_tolerances",
     "_qa_low_turbulence_core",
+    "_sensitivity_reports",
     "default_qa_low_turbulence_initial_params",
     "qa_low_turbulence_heat_flux_trace",
+    "qa_low_turbulence_objective",
+    "qa_low_turbulence_observable_sensitivity_report",
     "qa_low_turbulence_observable_vector",
     "qa_low_turbulence_observables",
+    "qa_low_turbulence_residual_names",
+    "qa_low_turbulence_residual_vector",
     "qa_low_turbulence_window_metrics",
 ]
