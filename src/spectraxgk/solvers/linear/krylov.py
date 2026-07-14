@@ -417,13 +417,10 @@ def _shift_invert_branch(
         "shift-invert solve finished with "
         f"eig={eig_host.real:.6g}{eig_host.imag:+.6g}j residual={residual:.3g}",
     )
-    need_fallback = (
-        not np.isfinite(eig_host.real)
-        or not np.isfinite(eig_host.imag)
-        or eig_host.real < cfg.fallback_real_floor
-        or not np.isfinite(residual)
-        or residual > cfg.shift_outer_residual_tol
-    )
+    nonfinite_pair = not np.isfinite(eig_host.real) or not np.isfinite(eig_host.imag)
+    growth_floor_failed = select_growth and eig_host.real < cfg.fallback_real_floor
+    residual_failed = not np.isfinite(residual) or residual > cfg.shift_outer_residual_tol
+    need_fallback = nonfinite_pair or growth_floor_failed or residual_failed
     if need_fallback and cfg.fallback_method.strip().lower() != "none":
         fallback = _shift_invert_fallback(
             v0,
@@ -438,9 +435,19 @@ def _shift_invert_branch(
         if fallback is not None:
             return fallback
     if need_fallback:
+        if residual_failed:
+            raise RuntimeError(
+                "shift-invert eigenpair failed the outer residual gate: "
+                f"residual={residual:.6g}, tolerance={cfg.shift_outer_residual_tol:.6g}"
+            )
+        if growth_floor_failed:
+            raise RuntimeError(
+                "shift-invert eigenpair failed the growth-selection floor: "
+                f"growth={eig_host.real:.6g}, floor={cfg.fallback_real_floor:.6g}"
+            )
         raise RuntimeError(
-            "shift-invert eigenpair failed the outer residual gate: "
-            f"residual={residual:.6g}, tolerance={cfg.shift_outer_residual_tol:.6g}"
+            "shift-invert eigenpair is non-finite: "
+            f"eigenvalue={eig_host.real:.6g}{eig_host.imag:+.6g}j"
         )
     return eig_si, vec_si
 
