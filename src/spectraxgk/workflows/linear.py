@@ -21,6 +21,7 @@ from spectraxgk.workflows.runtime.diagnostics import RuntimeQuasilinearFinalizat
 from spectraxgk.workflows.runtime.results import RuntimeLinearResult
 from spectraxgk.solvers.time.explicit import integrate_linear_explicit_from_config
 
+
 @dataclass(frozen=True)
 class FullLinearRuntimeDeps:
     """Injected dependencies for the full-GK linear runtime workflow."""
@@ -146,13 +147,19 @@ def _prepare_linear_runtime_context(
     )
     kinetic_species = max(len([s for s in cfg.species if s.kinetic]), 1)
     expected_shape = (
-        kinetic_species, n_laguerre, n_hermite,
-        int(grid.ky.size), int(grid.kx.size), int(grid.z.size),
+        kinetic_species,
+        n_laguerre,
+        n_hermite,
+        int(grid.ky.size),
+        int(grid.kx.size),
+        int(grid.z.size),
     )
     if initial_state is None:
         _status(status_callback, "building initial condition")
         state = deps.build_initial_condition(
-            grid, geom, cfg,
+            grid,
+            geom,
+            cfg,
             ky_index=selection.ky_index,
             kx_index=selection.kx_index,
             Nl=n_laguerre,
@@ -186,37 +193,10 @@ def _prepare_linear_runtime_context(
 
 
 def _valid_growth(gamma: float, omega: float, *, require_positive: bool) -> bool:
-    if not np.isfinite(gamma) or not np.isfinite(omega):
-        return False
-    if require_positive and gamma <= 0.0:
-        return False
-    return True
-
-
-def _build_linear_fit_policy(
-    *,
-    mode_method: str,
-    auto_window: bool,
-    tmin: float | None,
-    tmax: float | None,
-    window_fraction: float,
-    min_points: int,
-    start_fraction: float,
-    growth_weight: float,
-    require_positive: bool,
-    min_amp_fraction: float,
-) -> _LinearFitPolicy:
-    return _LinearFitPolicy(
-        mode_method=mode_method,
-        auto_window=auto_window,
-        tmin=tmin,
-        tmax=tmax,
-        window_fraction=window_fraction,
-        min_points=min_points,
-        start_fraction=start_fraction,
-        growth_weight=growth_weight,
-        require_positive=require_positive,
-        min_amp_fraction=min_amp_fraction,
+    return bool(
+        np.isfinite(gamma)
+        and np.isfinite(omega)
+        and (not require_positive or gamma > 0.0)
     )
 
 
@@ -244,22 +224,6 @@ def _finalize_linear_result(
         state_for_quasilinear=state_for_quasilinear,
         deps=deps.quasilinear_finalization_deps,
         status_callback=lambda message: _status(status_callback, message),
-    )
-
-
-def _linear_result_from_eigenvector(
-    ctx: _LinearRuntimeContext,
-    *,
-    gamma: float,
-    omega: float,
-    eigenvector: np.ndarray,
-) -> RuntimeLinearResult:
-    return RuntimeLinearResult(
-        ky=float(ctx.grid.ky[ctx.selection.ky_index]),
-        gamma=gamma,
-        omega=omega,
-        selection=ctx.selection,
-        state=eigenvector if ctx.return_state_effective else None,
     )
 
 
@@ -316,7 +280,9 @@ def _run_krylov_linear(
         rho_star=float(np.asarray(ctx.params.rho_star)),
         diagnostic_norm=ctx.cfg.normalization.diagnostic_norm,
     )
-    _status(status_callback, f"Krylov solve complete: gamma={gamma:.6f} omega={omega:.6f}")
+    _status(
+        status_callback, f"Krylov solve complete: gamma={gamma:.6f} omega={omega:.6f}"
+    )
     return gamma, omega, np.asarray(vec)
 
 
@@ -466,9 +432,16 @@ def _integrate_linear_time_series(
     if ctx.solver_key == "explicit_time":
         _status(status_callback, "running CFL-controlled explicit integrator")
         t_explicit, phi_t = integrate_linear_explicit_from_config(
-            ctx.initial_state, ctx.grid, ctx.geom, ctx.params, tcfg,
-            Nl=ctx.n_laguerre, Nm=ctx.n_hermite, terms=ctx.terms,
-            z_index=ctx.selection.z_index, show_progress=show_progress,
+            ctx.initial_state,
+            ctx.grid,
+            ctx.geom,
+            ctx.params,
+            tcfg,
+            Nl=ctx.n_laguerre,
+            Nm=ctx.n_hermite,
+            terms=ctx.terms,
+            z_index=ctx.selection.z_index,
+            show_progress=show_progress,
         )
         raw = _LinearTimeSeriesRaw(None, phi_t, None, t_explicit)
     elif tcfg.use_diffrax:
@@ -554,7 +527,10 @@ def _fit_linear_time_series(
         extract_eigenfunction_fn=deps.extract_eigenfunction,
     )
     if ctx.fit_key == "auto":
-        _status(status_callback, f"automatic fit selected signal '{fit_result.fit_signal_used}'")
+        _status(
+            status_callback,
+            f"automatic fit selected signal '{fit_result.fit_signal_used}'",
+        )
     gamma, omega = deps.apply_diagnostic_normalization(
         fit_result.gamma,
         fit_result.omega,
@@ -570,7 +546,9 @@ def _fit_linear_time_series(
         t=t_arr,
         signal=fit_result.signal,
         field_history=phi_t,
-        state=None if g_last is None or not ctx.return_state_effective else np.asarray(g_last),
+        state=None
+        if g_last is None or not ctx.return_state_effective
+        else np.asarray(g_last),
         z=fit_result.z,
         eigenfunction=fit_result.eigenfunction,
         fit_window_tmin=fit_result.fit_window_tmin,
@@ -591,7 +569,9 @@ def _run_time_linear(
     show_progress: bool,
     status_callback: _StatusCallback,
 ) -> RuntimeLinearResult:
-    _status(status_callback, f"starting time integration path with fit_signal={ctx.fit_key}")
+    _status(
+        status_callback, f"starting time integration path with fit_signal={ctx.fit_key}"
+    )
     tcfg = _resolve_linear_time_config(
         ctx,
         method=method,
@@ -634,11 +614,12 @@ def _run_krylov_linear_runtime(
         krylov_cfg=krylov_cfg,
         status_callback=status_callback,
     )
-    result = _linear_result_from_eigenvector(
-        ctx,
+    result = RuntimeLinearResult(
+        ky=float(ctx.grid.ky[ctx.selection.ky_index]),
         gamma=gamma,
         omega=omega,
-        eigenvector=vec,
+        selection=ctx.selection,
+        state=vec if ctx.return_state_effective else None,
     )
     return _finalize_linear_result(
         result,
@@ -773,7 +754,7 @@ def run_full_linear_runtime(
         initial_state=initial_state,
         status_callback=status_callback,
     )
-    fit_policy = _build_linear_fit_policy(
+    fit_policy = _LinearFitPolicy(
         mode_method=mode_method,
         auto_window=auto_window,
         tmin=tmin,
@@ -843,9 +824,7 @@ def run_linear_scan(
     rows: list[tuple[float, float, float]] = []
     for index, ky in enumerate(np.asarray(ky_values, dtype=float)):
         n_l, n_m = (
-            resolution_policy(float(ky))
-            if resolution_policy is not None
-            else (Nl, Nm)
+            resolution_policy(float(ky)) if resolution_policy is not None else (Nl, Nm)
         )
         result = run_linear_fn(
             ky_target=float(ky),
@@ -890,9 +869,7 @@ def _representative_run(
     resolution_policy: Callable[[float], tuple[int, int]] | None,
 ) -> LinearRunResult:
     n_l, n_m = (
-        resolution_policy(ky_selected)
-        if resolution_policy is not None
-        else (Nl, Nm)
+        resolution_policy(ky_selected) if resolution_policy is not None else (Nl, Nm)
     )
     index = int(np.argmin(np.abs(scan.ky - ky_selected)))
     return linear_fn(
