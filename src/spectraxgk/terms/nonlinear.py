@@ -16,7 +16,7 @@ from spectraxgk.operators.nonlinear.brackets import (
     _stack_fields,
 )
 
-from spectraxgk.terms.gyroaveraging import (
+from spectraxgk.core.velocity import (
     _laguerre_bpar_correction,
     _laguerre_bpar_correction_precomputed,
     _laguerre_j0_field,
@@ -152,7 +152,9 @@ def _multi_bracket_fn(compressed_real_fft: bool):
     )
 
 
-def _weighted_total(reference: jnp.ndarray, weight: jnp.ndarray, total: jnp.ndarray) -> jnp.ndarray:
+def _weighted_total(
+    reference: jnp.ndarray, weight: jnp.ndarray, total: jnp.ndarray
+) -> jnp.ndarray:
     real_dtype = jnp.real(jnp.empty((), dtype=reference.dtype)).dtype
     return jnp.asarray(weight, dtype=real_dtype) * total
 
@@ -354,7 +356,8 @@ def _apply_flutter(
         )
     if sqrt_m_p1_b.ndim < bracket_apar.ndim:
         sqrt_m_p1_b = jnp.reshape(
-            sqrt_m_p1_b, (1,) * (bracket_apar.ndim - sqrt_m_p1_b.ndim) + sqrt_m_p1_b.shape
+            sqrt_m_p1_b,
+            (1,) * (bracket_apar.ndim - sqrt_m_p1_b.ndim) + sqrt_m_p1_b.shape,
         )
     return -vth_s * (sqrt_m_b * b_m1 + sqrt_m_p1_b * b_p1)
 
