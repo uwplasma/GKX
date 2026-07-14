@@ -26,7 +26,9 @@ from spectraxgk.operators.linear.params import (
 )
 from spectraxgk.operators.linear.rhs import linear_rhs_cached
 from spectraxgk.solvers.linear.implicit import _integrate_linear_implicit_cached
-from spectraxgk.solvers.linear import integrator_diagnostics as _linear_diagnostics
+from spectraxgk.solvers.linear.integrator_diagnostics import (
+    integrate_linear_diagnostics,
+)
 from spectraxgk.solvers.linear.parallel import (
     _is_electrostatic_field_terms,
     linear_rhs_parallel_cached,
@@ -798,46 +800,4 @@ def integrate_linear(
         sample_stride=sample_stride,
         show_progress=show_progress,
         force_electrostatic_fields=force_electrostatic_fields,
-    )
-
-
-def integrate_linear_diagnostics(
-    G0: jnp.ndarray,
-    grid: SpectralGrid,
-    geom: FluxTubeGeometryLike,
-    params: LinearParams,
-    dt: float,
-    steps: int,
-    *,
-    method: str = "rk4",
-    cache: LinearCache | None = None,
-    terms: LinearTerms | None = None,
-    sample_stride: int = 1,
-    species_index: int | None = 0,
-    record_hl_energy: bool = False,
-    show_progress: bool = False,
-) -> (
-    tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]
-    | tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]
-):
-    """Integrate and return (G_out, phi_t, density_t) for diagnostics."""
-
-    _linear_diagnostics.build_linear_cache = build_linear_cache
-    _linear_diagnostics.collision_damping = collision_damping
-    _linear_diagnostics.hypercollision_damping = hypercollision_damping
-    _linear_diagnostics.linear_rhs_cached = linear_rhs_cached
-    return _linear_diagnostics.integrate_linear_diagnostics(
-        G0,
-        grid,
-        geom,
-        params,
-        dt,
-        steps,
-        method=method,
-        cache=cache,
-        terms=terms,
-        sample_stride=sample_stride,
-        species_index=species_index,
-        record_hl_energy=record_hl_energy,
-        show_progress=show_progress,
     )
