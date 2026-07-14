@@ -464,6 +464,46 @@ class DriftKineticSugamaOperator:
         return cls(*children)
 
 
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
+class TabulatedMultispeciesCollisionOperator:
+    """Finite-wavelength target/source collision matrices on a kperp grid.
+
+    The table contains fully assembled collision-frequency-weighted blocks with
+    shape ``(target, source, kperp, moment, moment)``. The runtime derives each
+    target species' normalized ``kperp`` from ``sqrt(cache.b)`` and keeps the
+    interpolation and matrix application inside JAX.
+    """
+
+    kperp_grid: jnp.ndarray
+    matrices: jnp.ndarray
+
+    def apply(self, context: CollisionContext) -> jnp.ndarray:
+        """Interpolate and apply the table to the post-field Hamiltonian."""
+
+        table = jnp.asarray(self.matrices)
+        if table.ndim != 5:
+            raise ValueError(
+                "tabulated multispecies collision matrices must have target, "
+                "source, kperp, and two moment axes"
+            )
+        kperp = jnp.sqrt(jnp.maximum(jnp.asarray(context.cache.b), 0.0))
+        matrix = interpolate_collision_moment_matrix(
+            self.kperp_grid, table, kperp
+        )
+        return apply_multispecies_collision_moment_matrix(
+            context.hamiltonian, matrix
+        )
+
+    def tree_flatten(self):
+        return (self.kperp_grid, self.matrices), None
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        del aux_data
+        return cls(*children)
+
+
 def interpolate_collision_moment_matrix(
     kperp_grid: jnp.ndarray,
     matrices: jnp.ndarray,

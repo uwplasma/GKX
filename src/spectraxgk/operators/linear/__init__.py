@@ -10,6 +10,7 @@ _EXPORTS = {
     "cache_builder": ["build_linear_cache", "update_linear_cache_for_sheared_kx"],
     "cache_arrays": [
         "DriftKineticSugamaOperator",
+        "TabulatedMultispeciesCollisionOperator",
         "apply_collision_moment_matrix",
         "apply_multispecies_collision_moment_matrix",
         "assemble_drift_kinetic_improved_sugama_matrix",
