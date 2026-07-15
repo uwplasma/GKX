@@ -88,6 +88,19 @@ windows, tolerances, and artifact provenance are in the
 [verification matrix](docs/verification_matrix.rst). A visual overlay alone is
 not treated as parity evidence.
 
+The advanced-collision research lane now generates the complete retained
+finite-Larmor Coulomb moment algebra and checks it against independent
+velocity-space projection, spectral convergence, conservation, and the
+H-theorem. The panel below passes all operator-level gates, but does not claim
+production Landau transport yet; multispecies field coupling, conductivity,
+collisional ITG, and zonal-damping gates remain required.
+
+![Coulomb collision operator verification](docs/_static/collision_operator_verification.png)
+
+Equations, thresholds, machine-readable results, literature links, and the
+one-command reproduction recipe are in the [collision-operator
+documentation](docs/operators.rst).
+
 ## Runtime and Memory
 
 ![Runtime and memory comparison](docs/_static/runtime_memory_benchmark.png)
