@@ -93,8 +93,9 @@ finite-Larmor Coulomb moment algebra and checks it against independent
 velocity-space projection, spectral convergence, drift-kinetic conservation,
 finite-wavelength gyro-diffusion, and the H-theorem. The panel below passes all
 operator-level gates, but does not claim production Landau transport yet;
-the finite-Larmor collisional-ITG gate is closed, while the independent
-collisional zonal-damping gate remains required.
+the finite-Larmor collisional-ITG gate and drift-kinetic collisional-zonal gate
+are closed, while finite-wavelength zonal traces and velocity sections remain
+required before input-file promotion.
 The differentiable driven-current solve is equation-tested, and the direct
 Coulomb hierarchy is now converged through ``(P,J)=(20,5)`` with a maximum
 nested current change of 0.017%. Its collision-frequency and electric-field
@@ -111,6 +112,14 @@ input-file promotion still waits on the collisional zonal-response campaign.
 Equations, thresholds, machine-readable results, literature links, and the
 one-command reproduction recipe are in the [collision-operator
 documentation](docs/operators.rst).
+
+![Drift-kinetic collisional zonal response](docs/_static/collision_drift_kinetic_zonal_response.png)
+
+At the paper resolution ``(P,J)=(24,10)``, all three operators approach the
+Xiao residual: late-window responses are 0.00565 (original Sugama), 0.00572
+(Coulomb), and 0.00585 (improved Sugama, ``K=5``), versus 0.00508 analytically.
+The original model damps most strongly and the improved model is closer to
+Coulomb over ``t nu_ii <= 10``, reproducing the published Figure-12 ordering.
 
 ## Runtime and Memory
 
