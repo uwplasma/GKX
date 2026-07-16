@@ -564,13 +564,15 @@ class TabulatedMultispeciesCollisionOperator:
 class FiniteWavelengthCoulombOperator:
     """Tabulated finite-wavelength Coulomb test, field, and polarization blocks.
 
-    Pair tables have independent target/source ``kperp*rho`` grid axes. Their
-    matrices act on gyrocenter moments ``G``; polarization vectors supply the
-    particle-to-gyrocenter pullback terms from Frei et al. (2021), equation
-    (3.50), without double-counting ``build_H``.
+    Pair tables have independent target/source Bessel-argument axes
+    ``B = kperp*v_thermal/Omega``. Since the runtime cache stores
+    ``b = kperp**2*T*m/(q*B_ref)**2``, the interpolation coordinate is
+    ``B = sqrt(2*b)``. Their matrices act on gyrocenter moments ``G``;
+    polarization vectors supply the particle-to-gyrocenter pullback terms from
+    Frei et al. (2021), equation (3.50), without double-counting ``build_H``.
     """
 
-    kperp_grid: jnp.ndarray
+    bessel_argument_grid: jnp.ndarray
     pair_frequency: jnp.ndarray
     test_table: jnp.ndarray
     field_table: jnp.ndarray
@@ -587,9 +589,13 @@ class FiniteWavelengthCoulombOperator:
             0.0,
             1.0 / jnp.asarray(context.parameters.tz),
         )
-        kperp = jnp.sqrt(jnp.maximum(jnp.asarray(context.cache.b), 0.0))
+        bessel_argument = jnp.sqrt(
+            2.0 * jnp.maximum(jnp.asarray(context.cache.b), 0.0)
+        )
         resolved = tuple(
-            interpolate_collision_pair_table(self.kperp_grid, table, kperp)
+            interpolate_collision_pair_table(
+                self.bessel_argument_grid, table, bessel_argument
+            )
             for table in (
                 self.test_table,
                 self.field_table,
@@ -609,7 +615,7 @@ class FiniteWavelengthCoulombOperator:
 
     def tree_flatten(self):
         return (
-            self.kperp_grid,
+            self.bessel_argument_grid,
             self.pair_frequency,
             self.test_table,
             self.field_table,
