@@ -94,9 +94,12 @@ velocity-space projection, spectral convergence, drift-kinetic conservation,
 finite-wavelength gyro-diffusion, and the H-theorem. The panel below passes all
 operator-level gates, but does not claim production Landau transport yet;
 conductivity, collisional ITG, and zonal-damping gates remain required.
-The differentiable driven-current solve is implemented and equation-tested;
-paper-scale Spitzer conductivity still requires the full converged moment
-hierarchy and is not inferred from the reduced matrix comparison.
+The differentiable driven-current solve is equation-tested, and the direct
+Coulomb hierarchy is now converged through ``(P,J)=(20,5)`` with a maximum
+nested current change of 0.017%. Absolute Spitzer conductivity is still not
+inferred from that normalized response: matched collision-frequency
+normalization and arbitrary-order original/improved-Sugama comparisons remain
+required.
 
 ![Coulomb collision operator verification](docs/_static/collision_operator_verification.png)
 
