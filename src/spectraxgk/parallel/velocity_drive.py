@@ -72,6 +72,17 @@ def _normalise_species_jl(Jl: Any, *, species: int) -> Any:
     return jl
 
 
+def _normalise_single_species_b(b: Any) -> Any:
+    import jax.numpy as jnp
+
+    value = jnp.asarray(b)
+    if value.ndim == 4:
+        value = value[0]
+    if value.ndim != 3:
+        raise ValueError("b must have shape (Ny, Nx, Nz) or (1, Ny, Nx, Nz)")
+    return value
+
+
 def _hermite_shard_context(
     arr: Any,
     *,
@@ -112,6 +123,7 @@ def _diamagnetic_drive_from_global_m(
     global_m: Any,
     phi: Any,
     Jl: Any,
+    b: Any,
     l4: Any,
     tprim: Any,
     fprim: Any,
@@ -121,13 +133,13 @@ def _diamagnetic_drive_from_global_m(
 ) -> Any:
     import jax.numpy as jnp
 
-    from spectraxgk.operators.linear.streaming import shift_axis
+    from spectraxgk.core.velocity import laguerre_gyroaverage_neighbors
 
     arr = jnp.asarray(state)
     real_dtype = jnp.real(arr).dtype
     jl = _normalise_single_species_jl(Jl)
-    jl_m1 = shift_axis(jl, -1, axis=0)
-    jl_p1 = shift_axis(jl, 1, axis=0)
+    b_arr = _normalise_single_species_b(b)
+    jl_m1, jl_p1 = laguerre_gyroaverage_neighbors(jl, b_arr, axis=0)
     ell = jnp.asarray(l4, dtype=real_dtype).reshape((jl.shape[0], 1, 1, 1))
     tprim_s = jnp.asarray(tprim, dtype=real_dtype).reshape(-1)[0]
     fprim_s = jnp.asarray(fprim, dtype=real_dtype).reshape(-1)[0]
@@ -164,6 +176,7 @@ def diamagnetic_drive_reference(
     *,
     phi: Any,
     Jl: Any,
+    b: Any,
     l4: Any,
     tprim: Any,
     fprim: Any,
@@ -188,6 +201,7 @@ def diamagnetic_drive_reference(
         global_m=global_m,
         phi=phi,
         Jl=Jl,
+        b=b,
         l4=l4,
         tprim=tprim,
         fprim=fprim,
@@ -203,6 +217,7 @@ def diamagnetic_drive_shard_map(
     *,
     phi: Any,
     Jl: Any,
+    b: Any,
     l4: Any,
     tprim: Any,
     fprim: Any,
@@ -229,6 +244,7 @@ def diamagnetic_drive_shard_map(
             arr,
             phi=phi,
             Jl=Jl,
+            b=b,
             l4=l4,
             tprim=tprim,
             fprim=fprim,
@@ -253,6 +269,7 @@ def diamagnetic_drive_shard_map(
             global_m=global_m,
             phi=phi,
             Jl=Jl,
+            b=b,
             l4=l4,
             tprim=tprim,
             fprim=fprim,

@@ -607,6 +607,7 @@ def _serial_diamagnetic_contribution(
         plan,
         phi=phi,
         Jl=cache.Jl,
+        b=cache.b,
         l4=cache.l4,
         tprim=params.R_over_LTi,
         fprim=params.R_over_Ln,

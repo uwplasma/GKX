@@ -287,6 +287,32 @@ def J_l_all(b: jnp.ndarray, l_max: int) -> jnp.ndarray:
     return Jl
 
 
+def laguerre_gyroaverage_neighbors(
+    coefficients: jnp.ndarray,
+    b: jnp.ndarray,
+    *,
+    axis: int,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    r"""Return the lower and upper Laguerre neighbors of gyroaverage coefficients.
+
+    The upper neighbor at the truncation boundary is known analytically even
+    though the corresponding distribution moment is not retained. For
+    :math:`\mathcal J_\ell=(-1)^\ell e^{-b/2}(b/2)^\ell/\ell!`, it is
+    :math:`\mathcal J_{L}=-\mathcal J_{L-1}(b/2)/L`. Zero-padding that value
+    drops a physical term from the highest retained diamagnetic-drive equation.
+    """
+
+    values = jnp.moveaxis(jnp.asarray(coefficients), axis, 0)
+    if values.shape[0] < 1:
+        raise ValueError("Laguerre coefficient axis must be non-empty")
+    b_arr = jnp.asarray(b, dtype=values.dtype)
+    lower = jnp.concatenate([jnp.zeros_like(values[:1]), values[:-1]], axis=0)
+    order = jnp.asarray(values.shape[0], dtype=values.dtype)
+    boundary = -values[-1] * (0.5 * b_arr) / order
+    upper = jnp.concatenate([values[1:], boundary[None, ...]], axis=0)
+    return jnp.moveaxis(lower, 0, axis), jnp.moveaxis(upper, 0, axis)
+
+
 def sum_Jl2(b: jnp.ndarray, l_max: int) -> jnp.ndarray:
     """Truncated sum of J_l(b)^2, useful for Gamma_0 convergence checks."""
 

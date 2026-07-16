@@ -458,6 +458,7 @@ def _diamagnetic_contribution(
         apar=rhs_fields.h_apar,
         bpar=rhs_fields.h_bpar,
         Jl=cache.Jl,
+        b=cache.b,
         JlB=cache.JlB,
         l4=cache.l4,
         tprim=species.tprim,

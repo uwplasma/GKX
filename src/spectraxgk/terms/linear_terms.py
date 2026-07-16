@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import jax.numpy as jnp
 
+from spectraxgk.core.velocity import laguerre_gyroaverage_neighbors
+
 from spectraxgk.operators.nonlinear.collisions import (
     conservative_full_f_dougherty_cross_moments as conservative_full_f_dougherty_cross_moments,
 )
@@ -289,13 +291,16 @@ def curvature_gradb_contribution(
 def _laguerre_gradient_profile(
     J: jnp.ndarray,
     *,
+    b: jnp.ndarray,
     l4: jnp.ndarray,
     tprim_s: jnp.ndarray,
     fprim_s: jnp.ndarray,
     thermal_shift: float,
+    upper_boundary: jnp.ndarray | None = None,
 ) -> jnp.ndarray:
-    J_m1 = shift_axis(J, -1, axis=1)
-    J_p1 = shift_axis(J, 1, axis=1)
+    J_m1, J_p1 = laguerre_gyroaverage_neighbors(J, b, axis=1)
+    if upper_boundary is not None:
+        J_p1 = J_p1.at[:, -1].set(upper_boundary)
     return (
         J_m1 * (l4 * tprim_s)
         + J * (fprim_s + (2.0 * l4 + thermal_shift) * tprim_s)
@@ -325,6 +330,7 @@ def _diamagnetic_m0_drive(
     phi: jnp.ndarray,
     bpar: jnp.ndarray | None,
     Jl: jnp.ndarray,
+    b: jnp.ndarray,
     JlB: jnp.ndarray,
     l4: jnp.ndarray,
     tprim_s: jnp.ndarray,
@@ -336,13 +342,26 @@ def _diamagnetic_m0_drive(
         omega_star_s
         * phi
         * _laguerre_gradient_profile(
-            Jl, l4=l4, tprim_s=tprim_s, fprim_s=fprim_s, thermal_shift=0.0
+            Jl,
+            b=b,
+            l4=l4,
+            tprim_s=tprim_s,
+            fprim_s=fprim_s,
+            thermal_shift=0.0,
         )
     )
     if bpar is None:
         return drive_m0
+    _, jl_p1 = laguerre_gyroaverage_neighbors(Jl, b, axis=1)
+    jlb_upper_boundary = jl_p1[:, -1] + Jl[:, -1]
     return drive_m0 + omega_star_bpar * bpar * _laguerre_gradient_profile(
-        JlB, l4=l4, tprim_s=tprim_s, fprim_s=fprim_s, thermal_shift=0.0
+        JlB,
+        b=b,
+        l4=l4,
+        tprim_s=tprim_s,
+        fprim_s=fprim_s,
+        thermal_shift=0.0,
+        upper_boundary=jlb_upper_boundary,
     )
 
 
@@ -367,6 +386,7 @@ def _diamagnetic_apar_profile_drive(
     *,
     apar: jnp.ndarray,
     Jl: jnp.ndarray,
+    b: jnp.ndarray,
     l4: jnp.ndarray,
     tprim_s: jnp.ndarray,
     fprim_s: jnp.ndarray,
@@ -379,7 +399,12 @@ def _diamagnetic_apar_profile_drive(
         * omega_star_s
         * apar
         * _laguerre_gradient_profile(
-            Jl, l4=l4, tprim_s=tprim_s, fprim_s=fprim_s, thermal_shift=1.0
+            Jl,
+            b=b,
+            l4=l4,
+            tprim_s=tprim_s,
+            fprim_s=fprim_s,
+            thermal_shift=1.0,
         )
     )
 
@@ -404,6 +429,7 @@ def diamagnetic_contribution(
     apar: jnp.ndarray | None,
     bpar: jnp.ndarray | None,
     Jl: jnp.ndarray,
+    b: jnp.ndarray,
     JlB: jnp.ndarray,
     l4: jnp.ndarray,
     tprim: jnp.ndarray,
@@ -428,6 +454,7 @@ def diamagnetic_contribution(
         phi=phi,
         bpar=bpar,
         Jl=Jl,
+        b=b,
         JlB=JlB,
         l4=l4,
         tprim_s=tprim_s,
@@ -451,6 +478,7 @@ def diamagnetic_contribution(
         apar_drive = _diamagnetic_apar_profile_drive(
             apar=apar,
             Jl=Jl,
+            b=b,
             l4=l4,
             tprim_s=tprim_s,
             fprim_s=fprim_s,
