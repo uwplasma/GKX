@@ -531,42 +531,6 @@ class DriftKineticMomentCollisionOperator:
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
-class TabulatedMultispeciesCollisionOperator:
-    """Finite-wavelength target/source collision matrices on a kperp grid.
-
-    The table contains fully assembled collision-frequency-weighted blocks with
-    shape ``(target, source, kperp, moment, moment)``. The runtime derives each
-    target species' normalized ``kperp`` from ``sqrt(cache.b)`` and keeps the
-    interpolation and matrix application inside JAX.
-    """
-
-    kperp_grid: jnp.ndarray
-    matrices: jnp.ndarray
-
-    def apply(self, context: CollisionContext) -> jnp.ndarray:
-        """Interpolate and apply the table to the post-field Hamiltonian."""
-
-        table = jnp.asarray(self.matrices)
-        if table.ndim != 5:
-            raise ValueError(
-                "tabulated multispecies collision matrices must have target, "
-                "source, kperp, and two moment axes"
-            )
-        kperp = jnp.sqrt(jnp.maximum(jnp.asarray(context.cache.b), 0.0))
-        matrix = interpolate_collision_moment_matrix(self.kperp_grid, table, kperp)
-        return apply_multispecies_collision_moment_matrix(context.hamiltonian, matrix)
-
-    def tree_flatten(self):
-        return (self.kperp_grid, self.matrices), None
-
-    @classmethod
-    def tree_unflatten(cls, aux_data, children):
-        del aux_data
-        return cls(*children)
-
-
-@jax.tree_util.register_pytree_node_class
-@dataclass(frozen=True)
 class FiniteWavelengthCoulombOperator:
     """Tabulated finite-wavelength Coulomb test, field, and polarization blocks.
 
@@ -635,93 +599,132 @@ class FiniteWavelengthCoulombOperator:
         return cls(*children)
 
 
-def interpolate_collision_moment_matrix(
-    kperp_grid: jnp.ndarray,
-    matrices: jnp.ndarray,
-    kperp: jnp.ndarray,
-) -> jnp.ndarray:
-    """Interpolate collision matrices onto a scalar or spatial ``kperp`` field.
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
+class EqualSpeciesFiniteWavelengthCoulombOperator:
+    """Finite-wavelength Coulomb tables for one equal-species plasma.
 
-    ``matrices`` may contain one shared table, one table per species, or one
-    table per ordered target/source species pair. Their respective shapes are
-    ``(kperp, modes, modes)``, ``(species, kperp, modes, modes)``, and
-    ``(target, source, kperp, modes, modes)``. Values outside the tabulated
-    interval use the nearest endpoint. The coefficient grid is validated on
-    the host; interpolation and its derivative with respect to ``kperp``
-    remain in JAX.
+    Like-species collisions have the same target and source Bessel argument at
+    every spatial point. Storing only that diagonal avoids the quadratic
+    target/source wavelength table while retaining the complete test, field,
+    and polarization terms. The interpolation remains differentiable in JAX.
     """
 
-    grid = jnp.asarray(kperp_grid)
-    table = jnp.asarray(matrices)
-    target = jnp.asarray(kperp, dtype=jnp.result_type(grid, table))
+    bessel_argument_grid: jnp.ndarray
+    pair_frequency: jnp.ndarray
+    test_table: jnp.ndarray
+    field_table: jnp.ndarray
+    test_phi1: jnp.ndarray
+    field_phi1: jnp.ndarray
+    test_phi2: jnp.ndarray
+    field_phi2: jnp.ndarray
+
+    def apply(self, context: CollisionContext) -> jnp.ndarray:
+        """Interpolate the diagonal table and apply it to one species."""
+
+        distribution = jnp.asarray(context.distribution)
+        species_count = 1 if distribution.ndim == 5 else int(distribution.shape[0])
+        if species_count != 1:
+            raise ValueError(
+                "equal-species finite-wavelength Coulomb tables require one species"
+            )
+        bessel_argument = jnp.sqrt(2.0 * jnp.maximum(jnp.asarray(context.cache.b), 0.0))
+        if bessel_argument.ndim < 1 or int(bessel_argument.shape[0]) != 1:
+            raise ValueError("collision Bessel argument must have one species axis")
+        resolved = tuple(
+            interpolate_collision_diagonal_table(
+                self.bessel_argument_grid, table, bessel_argument[0]
+            )[None, None, ...]
+            for table in (
+                self.test_table,
+                self.field_table,
+                self.test_phi1,
+                self.field_phi1,
+                self.test_phi2,
+                self.field_phi2,
+            )
+        )
+        inverse_tz = jnp.where(
+            jnp.asarray(context.parameters.tz) == 0.0,
+            0.0,
+            1.0 / jnp.asarray(context.parameters.tz),
+        )
+        return apply_finite_wavelength_coulomb_moment_operator(
+            distribution,
+            *resolved,
+            phi=context.fields.phi,
+            pair_frequency=self.pair_frequency,
+            charge_over_temperature=inverse_tz,
+        )
+
+    def tree_flatten(self):
+        return (
+            self.bessel_argument_grid,
+            self.pair_frequency,
+            self.test_table,
+            self.field_table,
+            self.test_phi1,
+            self.field_phi1,
+            self.test_phi2,
+            self.field_phi2,
+        ), None
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        del aux_data
+        return cls(*children)
+
+
+def interpolate_collision_diagonal_table(
+    bessel_argument_grid: jnp.ndarray,
+    table: jnp.ndarray,
+    bessel_argument: jnp.ndarray,
+) -> jnp.ndarray:
+    """Interpolate one equal-species vector or matrix table along its diagonal.
+
+    ``table`` has shape ``(B, moment)`` or ``(B, output_moment, input_moment)``.
+    Coefficient axes are moved before the spatial axes in the returned array.
+    Values outside the tabulated interval use the nearest endpoint.
+    """
+
+    grid = jnp.asarray(bessel_argument_grid)
+    coefficients = jnp.asarray(table)
+    target = jnp.asarray(bessel_argument, dtype=jnp.result_type(grid, coefficients))
     if grid.ndim != 1 or int(grid.size) < 2:
         raise ValueError(
-            "collision kperp grid must be one-dimensional with at least two points"
+            "collision Bessel-argument grid must be one-dimensional with at least two points"
         )
-    if table.ndim not in {3, 4, 5}:
+    if coefficients.ndim not in {2, 3}:
         raise ValueError(
-            "collision table must have shape (kperp, modes, modes) or "
-            "(species, kperp, modes, modes), optionally with separate "
-            "target/source species axes"
+            "diagonal collision table must contain one vector or two matrix axes"
         )
-    grid_axis = table.ndim - 3
-    if int(table.shape[grid_axis]) != int(grid.size):
-        raise ValueError("collision table kperp axis must match the coefficient grid")
-    if int(table.shape[-1]) != int(table.shape[-2]):
-        raise ValueError("collision table matrices must be square")
+    if int(coefficients.shape[0]) != int(grid.size):
+        raise ValueError("diagonal collision table axis must match the grid")
+    if coefficients.ndim == 3 and int(coefficients.shape[-1]) != int(
+        coefficients.shape[-2]
+    ):
+        raise ValueError("diagonal collision matrices must be square")
     if not isinstance(grid, jax.core.Tracer):
         host_grid = np.asarray(grid)
         if not np.all(np.isfinite(host_grid)) or not np.all(np.diff(host_grid) > 0.0):
             raise ValueError(
-                "collision kperp grid must be finite and strictly increasing"
+                "collision Bessel-argument grid must be finite and strictly increasing"
             )
 
-    def interpolate_one(species_table: jnp.ndarray, values: jnp.ndarray) -> jnp.ndarray:
-        clipped = jnp.clip(values, grid[0], grid[-1])
-        left = jnp.clip(
-            jnp.searchsorted(grid, clipped, side="right") - 1, 0, grid.size - 2
-        )
-        fraction = (clipped - grid[left]) / (grid[left + 1] - grid[left])
-        interpolated = species_table[left] + fraction[..., None, None] * (
-            species_table[left + 1] - species_table[left]
-        )
-        return jnp.moveaxis(interpolated, (-2, -1), (0, 1))
-
-    if table.ndim == 3:
-        return interpolate_one(table, target)
-    species_count = int(table.shape[0])
-    if table.ndim == 5:
-        if int(table.shape[1]) != species_count:
-            raise ValueError(
-                "multispecies collision table must have equal target/source axes"
-            )
-
-        def interpolate_target_pairs(
-            pair_tables: jnp.ndarray, values: jnp.ndarray
-        ) -> jnp.ndarray:
-            return jax.vmap(lambda pair_table: interpolate_one(pair_table, values))(
-                pair_tables
-            )
-
-        if target.ndim == 0:
-            return jax.vmap(lambda pairs: interpolate_target_pairs(pairs, target))(
-                table
-            )
-        if int(target.shape[0]) != species_count:
-            raise ValueError(
-                "multispecies collision table requires scalar kperp or a "
-                "target-species-leading kperp field"
-            )
-        return jax.vmap(interpolate_target_pairs)(table, target)
-    if target.ndim == 0:
-        return jax.vmap(lambda species_table: interpolate_one(species_table, target))(
-            table
-        )
-    if int(target.shape[0]) != species_count:
-        raise ValueError(
-            "species collision table requires scalar kperp or a species-leading kperp field"
-        )
-    return jax.vmap(interpolate_one)(table, target)
+    clipped = jnp.clip(target, grid[0], grid[-1])
+    left = jnp.clip(jnp.searchsorted(grid, clipped, side="right") - 1, 0, grid.size - 2)
+    fraction = (clipped - grid[left]) / (grid[left + 1] - grid[left])
+    coefficient_ndim = coefficients.ndim - 1
+    weight = fraction[(...,) + (None,) * coefficient_ndim]
+    interpolated = coefficients[left] + weight * (
+        coefficients[left + 1] - coefficients[left]
+    )
+    spatial_ndim = target.ndim
+    return jnp.moveaxis(
+        interpolated,
+        tuple(range(spatial_ndim, spatial_ndim + coefficient_ndim)),
+        tuple(range(coefficient_ndim)),
+    )
 
 
 def interpolate_collision_pair_table(
