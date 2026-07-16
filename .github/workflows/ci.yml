@@ -120,12 +120,13 @@ jobs:
             files: >-
               tests/release/test_release_gates.py
               tests/tools/artifacts/test_general_artifact_tools.py
+          - name: model-artifacts
+            files: >-
               tests/unit/quasilinear/test_quasilinear.py
               tests/validation/quasilinear/test_quasilinear_calibration.py
               tests/tools/artifacts/test_quasilinear_artifact_tools.py
               tests/tools/profiling/test_runtime_and_scaling_profile_contracts.py
               tests/unit/parallel/test_parallel_artifacts.py
-              tests/integration/examples/test_examples.py
           - name: linear-core
             files: >-
               tests/unit/linear/test_linear.py

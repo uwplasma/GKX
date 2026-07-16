@@ -98,8 +98,10 @@ The differentiable driven-current solve is equation-tested, and the direct
 Coulomb hierarchy is now converged through ``(P,J)=(20,5)`` with a maximum
 nested current change of 0.017%. Absolute Spitzer conductivity is still not
 inferred from that normalized response: matched collision-frequency
-normalization and arbitrary-order original/improved-Sugama comparisons remain
-required.
+normalization remains required. The arbitrary-order original- and improved-
+Sugama boundaries are now included: the original model reproduces its
+published 11% low-charge current deficit, while the converged improved model
+is within 0.31% of Coulomb over the complete ion-charge scan.
 
 ![Coulomb collision operator verification](docs/_static/collision_operator_verification.png)
 
