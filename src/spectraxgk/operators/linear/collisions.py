@@ -48,6 +48,70 @@ def load_collision_moment_matrix(model: str) -> np.ndarray:
     return np.array(matrices[names.index(key)], copy=True)
 
 
+def parallel_electric_field_source(
+    maximum_hermite_order: int,
+    maximum_laguerre_order: int,
+    normalized_field: jnp.ndarray,
+) -> jnp.ndarray:
+    r"""Return the linearized parallel-electric-field gyro-moment source.
+
+    Frei, Ernst & Ricci (2022), equation (81), gives the force ladder
+    :math:`E\sqrt{2p}N^{p-1,j}`.  Linearizing about a Maxwellian leaves only
+    the ``(p, j) = (1, 0)`` source in ``dN/dt = C N + s``.  The normalized
+    field is :math:`eE/(v_{Te}m_e)` in the equation's convention, including
+    its sign; for electrons in a positive physical field it is positive and
+    the source is negative.
+    """
+
+    if maximum_hermite_order < 1:
+        raise ValueError("maximum_hermite_order must be >= 1")
+    if maximum_laguerre_order < 0:
+        raise ValueError("maximum_laguerre_order must be >= 0")
+    field = jnp.asarray(normalized_field)
+    if field.ndim != 0:
+        raise ValueError("normalized_field must be a scalar")
+    n_laguerre = maximum_laguerre_order + 1
+    source = jnp.zeros(
+        ((maximum_hermite_order + 1) * n_laguerre,),
+        dtype=jnp.result_type(field, float),
+    )
+    return source.at[n_laguerre].set(-jnp.sqrt(2.0) * field)
+
+
+def solve_driven_collision_response(
+    collision_matrix: jnp.ndarray,
+    source: jnp.ndarray,
+    *,
+    active_modes: tuple[int, ...],
+) -> jnp.ndarray:
+    r"""Solve the constrained steady response ``C N + source = 0``.
+
+    ``active_modes`` removes exact collision invariants and any intentionally
+    truncated moments before the dense solve.  The returned full vector is
+    zero outside that subspace.  The solve remains in JAX so currents and
+    transport coefficients can be differentiated with respect to collision
+    coefficients, species parameters, and the applied drive.
+    """
+
+    matrix = jnp.asarray(collision_matrix)
+    drive = jnp.asarray(source, dtype=jnp.result_type(matrix, source))
+    if matrix.ndim != 2 or matrix.shape[0] != matrix.shape[1]:
+        raise ValueError("collision_matrix must be square")
+    if drive.shape != (matrix.shape[0],):
+        raise ValueError("source must match the collision-matrix dimension")
+    if not active_modes:
+        raise ValueError("active_modes must contain at least one mode")
+    if len(set(active_modes)) != len(active_modes):
+        raise ValueError("active_modes must be unique")
+    if min(active_modes) < 0 or max(active_modes) >= matrix.shape[0]:
+        raise ValueError("active_modes contains an out-of-range index")
+
+    indices = jnp.asarray(active_modes, dtype=jnp.int32)
+    reduced = matrix[indices[:, None], indices[None, :]]
+    response = -jnp.linalg.solve(reduced, drive[indices])
+    return jnp.zeros_like(drive).at[indices].set(response)
+
+
 def drift_kinetic_sugama_pair_matrices(
     mass_ratio: jnp.ndarray,
     temperature_ratio: jnp.ndarray,

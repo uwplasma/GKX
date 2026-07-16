@@ -26,6 +26,8 @@ _EXPORTS = {
         "interpolate_collision_moment_matrix",
         "interpolate_collision_pair_table",
         "load_collision_moment_matrix",
+        "parallel_electric_field_source",
+        "solve_driven_collision_response",
     ],
     "moments": [
         "build_H",
