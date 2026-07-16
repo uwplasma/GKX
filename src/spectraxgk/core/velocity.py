@@ -158,7 +158,7 @@ def bessel_j1(x: jnp.ndarray) -> jnp.ndarray:
     return jnp.where(jnp.isfinite(out), out, res_small)
 
 
-def bessel_laguerre_kernels(kperp_rho: jnp.ndarray, n_max: int) -> jnp.ndarray:
+def bessel_laguerre_kernels(bessel_argument: jnp.ndarray, n_max: int) -> jnp.ndarray:
     r"""Return finite-Larmor Bessel--Laguerre kernels through order ``n_max``.
 
     The coefficients
@@ -167,7 +167,8 @@ def bessel_laguerre_kernels(kperp_rho: jnp.ndarray, n_max: int) -> jnp.ndarray:
 
        K_n(b) = \exp(-b^2/4)\frac{(b^2/4)^n}{n!}
 
-    expand :math:`J_0(b\sqrt{x})` in ordinary Laguerre polynomials.  A recurrence
+    expand :math:`J_0(B\sqrt{x})` in ordinary Laguerre polynomials, where
+    :math:`B=k_\perp v_{\mathrm{th}}/\Omega`. A recurrence
     avoids factorial overflow and preserves the exact ``b=0`` limit.  The leading
     axis indexes ``n=0, ..., n_max``.
 
@@ -178,7 +179,7 @@ def bessel_laguerre_kernels(kperp_rho: jnp.ndarray, n_max: int) -> jnp.ndarray:
 
     if n_max < 0:
         raise ValueError("n_max must be >= 0")
-    b = jnp.asarray(kperp_rho)
+    b = jnp.asarray(bessel_argument)
     if not jnp.issubdtype(b.dtype, jnp.inexact):
         b = b.astype(jnp.float32)
     argument = 0.25 * b * b
@@ -199,7 +200,7 @@ def bessel_laguerre_kernels(kperp_rho: jnp.ndarray, n_max: int) -> jnp.ndarray:
 
 
 def associated_bessel_laguerre_coefficients(
-    kperp_rho: jnp.ndarray,
+    bessel_argument: jnp.ndarray,
     bessel_order: int,
     n_max: int,
 ) -> jnp.ndarray:
@@ -211,7 +212,8 @@ def associated_bessel_laguerre_coefficients(
 
        A_n^m(b) = \frac{n!}{(n+m)!}\left(\frac{b}{2}\right)^m K_n(b),
 
-    so that :math:`J_m(b\sqrt{x}) = x^{m/2}\sum_n A_n^m L_n^m(x)`.
+    so that :math:`J_m(B\sqrt{x}) = x^{m/2}\sum_n A_n^m L_n^m(x)`, with
+    :math:`B=k_\perp v_{\mathrm{th}}/\Omega`.
     The leading axis indexes ``n=0, ..., n_max``.
     """
 
@@ -219,7 +221,7 @@ def associated_bessel_laguerre_coefficients(
         raise ValueError("bessel_order must be >= 0")
     if n_max < 0:
         raise ValueError("n_max must be >= 0")
-    b = jnp.asarray(kperp_rho)
+    b = jnp.asarray(bessel_argument)
     if not jnp.issubdtype(b.dtype, jnp.inexact):
         b = b.astype(jnp.float32)
     half_b = 0.5 * b
