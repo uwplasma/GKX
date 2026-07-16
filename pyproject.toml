@@ -58,6 +58,7 @@ dev = [
   "ruff",
   "mypy",
   "mpmath",
+  "gmpy2",
   "pandas",
   "Pillow",
   "mkdocs",
