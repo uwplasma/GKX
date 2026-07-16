@@ -92,8 +92,8 @@ The advanced-collision research lane now generates the complete retained
 finite-Larmor Coulomb moment algebra and checks it against independent
 velocity-space projection, spectral convergence, conservation, and the
 H-theorem. The panel below passes all operator-level gates, but does not claim
-production Landau transport yet; multispecies field coupling, conductivity,
-collisional ITG, and zonal-damping gates remain required.
+production Landau transport yet; converged particle-space conservation,
+conductivity, collisional ITG, and zonal-damping gates remain required.
 
 ![Coulomb collision operator verification](docs/_static/collision_operator_verification.png)
 
