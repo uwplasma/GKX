@@ -478,8 +478,14 @@ def assemble_drift_kinetic_improved_sugama_matrix(
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
-class DriftKineticSugamaOperator:
-    """Reduced multispecies Sugama model for the collision extension seam."""
+class DriftKineticMomentCollisionOperator:
+    r"""Dense drift-kinetic collision matrix acting on gyrocenter moments.
+
+    In the zero-Larmor-radius limit the particle perturbation satisfies
+    :math:`f\simeq g`; the Hermite--Laguerre matrix therefore acts on the
+    evolved gyrocenter distribution, not on the post-field Hamiltonian
+    :math:`H=g+qF_M\phi/T`. See Frei, Ernst & Ricci (2022), equation (73).
+    """
 
     matrix: jnp.ndarray
 
@@ -489,7 +495,7 @@ class DriftKineticSugamaOperator:
         density: jnp.ndarray,
         mass: jnp.ndarray,
         temperature: jnp.ndarray,
-    ) -> DriftKineticSugamaOperator:
+    ) -> DriftKineticMomentCollisionOperator:
         """Build the ordered-pair matrix from physical species parameters."""
 
         return cls(assemble_drift_kinetic_sugama_matrix(density, mass, temperature))
@@ -500,7 +506,7 @@ class DriftKineticSugamaOperator:
         density: jnp.ndarray,
         mass: jnp.ndarray,
         temperature: jnp.ndarray,
-    ) -> DriftKineticSugamaOperator:
+    ) -> DriftKineticMomentCollisionOperator:
         """Build the lowest-order improved-Sugama matrix for all species."""
 
         return cls(
@@ -508,10 +514,10 @@ class DriftKineticSugamaOperator:
         )
 
     def apply(self, context: CollisionContext) -> jnp.ndarray:
-        """Apply the model to the post-field nonadiabatic response."""
+        """Apply the drift-kinetic matrix to evolved gyrocenter moments."""
 
         return apply_multispecies_collision_moment_matrix(
-            context.hamiltonian, self.matrix
+            context.distribution, self.matrix
         )
 
     def tree_flatten(self):
@@ -589,9 +595,7 @@ class FiniteWavelengthCoulombOperator:
             0.0,
             1.0 / jnp.asarray(context.parameters.tz),
         )
-        bessel_argument = jnp.sqrt(
-            2.0 * jnp.maximum(jnp.asarray(context.cache.b), 0.0)
-        )
+        bessel_argument = jnp.sqrt(2.0 * jnp.maximum(jnp.asarray(context.cache.b), 0.0))
         resolved = tuple(
             interpolate_collision_pair_table(
                 self.bessel_argument_grid, table, bessel_argument

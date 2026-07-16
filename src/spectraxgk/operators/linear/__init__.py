@@ -13,7 +13,7 @@ _EXPORTS = {
         "hypercollision_damping",
     ],
     "collisions": [
-        "DriftKineticSugamaOperator",
+        "DriftKineticMomentCollisionOperator",
         "FiniteWavelengthCoulombOperator",
         "TabulatedMultispeciesCollisionOperator",
         "apply_collision_moment_matrix",
