@@ -93,7 +93,8 @@ finite-Larmor Coulomb moment algebra and checks it against independent
 velocity-space projection, spectral convergence, drift-kinetic conservation,
 finite-wavelength gyro-diffusion, and the H-theorem. The panel below passes all
 operator-level gates, but does not claim production Landau transport yet;
-finite-Larmor collisional ITG and zonal-damping gates remain required.
+the finite-Larmor collisional-ITG gate is closed, while the independent
+collisional zonal-damping gate remains required.
 The differentiable driven-current solve is equation-tested, and the direct
 Coulomb hierarchy is now converged through ``(P,J)=(20,5)`` with a maximum
 nested current change of 0.017%. Its collision-frequency and electric-field
@@ -102,8 +103,8 @@ three operators saturate by ``t nu_ee=50``, remain linear over a 100x field
 scan, and Coulomb reaches the high-charge analytic limit within 7.46%. The
 arbitrary-order original model reproduces its published 11% low-charge current
 deficit, while the converged improved model is within 0.31% of Coulomb over the
-complete ion-charge scan. Finite-Larmor ITG and collisional zonal-response
-promotion remain separate gates.
+complete ion-charge scan. The converged finite-Larmor ITG artifact is accepted;
+input-file promotion still waits on the collisional zonal-response campaign.
 
 ![Coulomb collision operator verification](docs/_static/collision_operator_verification.png)
 
