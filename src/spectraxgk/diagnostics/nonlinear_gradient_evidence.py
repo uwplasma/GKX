@@ -2,8 +2,9 @@
 
 This module contains pure JSON/dictionary diagnostics used to decide whether
 long-window nonlinear transport-gradient artifacts support production claims.
-It does not launch simulations. Campaign design and follow-up planning live in
-``tools.campaigns.nonlinear_gradient_followup``.
+It does not launch simulations. Replicated uncertainty and control-variate
+gates live in :mod:`spectraxgk.diagnostics.nonlinear_gradient_statistics`;
+repository campaign launch policy remains outside the installable package.
 """
 
 from __future__ import annotations
