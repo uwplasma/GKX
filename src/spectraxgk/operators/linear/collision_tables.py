@@ -11,6 +11,7 @@ import numpy as np
 from spectraxgk.core.extension_points import CollisionContext
 from spectraxgk.operators.linear.collisions import (
     apply_multispecies_collision_moment_matrix,
+    interpolate_collision_diagonal_table,
 )
 
 
@@ -43,6 +44,60 @@ class TabulatedMultispeciesCollisionOperator:
 
     def tree_flatten(self):
         return (self.kperp_grid, self.matrices), None
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        del aux_data
+        return cls(*children)
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
+class EqualSpeciesFiniteWavelengthOriginalSugamaOperator:
+    r"""Finite-wavelength original-Sugama tables for one species.
+
+    The tabulated test and field matrices implement Frei et al. (2021),
+    equations (3.72) and (3.79), on the post-field nonadiabatic response
+    :math:`H`. Unlike the Coulomb table, this model has no separately tabulated
+    electrostatic polarization vectors.
+    """
+
+    bessel_argument_grid: jnp.ndarray
+    pair_frequency: jnp.ndarray
+    test_table: jnp.ndarray
+    field_table: jnp.ndarray
+
+    def apply(self, context: CollisionContext) -> jnp.ndarray:
+        """Interpolate and apply the equal-species original-Sugama matrix."""
+
+        state = jnp.asarray(context.hamiltonian)
+        species_count = 1 if state.ndim == 5 else int(state.shape[0])
+        if species_count != 1:
+            raise ValueError(
+                "equal-species finite-wavelength Sugama tables require one species"
+            )
+        bessel_argument = jnp.sqrt(2.0 * jnp.maximum(jnp.asarray(context.cache.b), 0.0))
+        if bessel_argument.ndim < 1 or int(bessel_argument.shape[0]) != 1:
+            raise ValueError("collision Bessel argument must have one species axis")
+        test, field = (
+            interpolate_collision_diagonal_table(
+                self.bessel_argument_grid, table, bessel_argument[0]
+            )
+            for table in (self.test_table, self.field_table)
+        )
+        frequency = jnp.asarray(self.pair_frequency)
+        if frequency.shape != (1, 1):
+            raise ValueError("pair_frequency must have shape (1, 1)")
+        matrix = (frequency[0, 0] * (test + field))[None, None, ...]
+        return apply_multispecies_collision_moment_matrix(state, matrix)
+
+    def tree_flatten(self):
+        return (
+            self.bessel_argument_grid,
+            self.pair_frequency,
+            self.test_table,
+            self.field_table,
+        ), None
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):

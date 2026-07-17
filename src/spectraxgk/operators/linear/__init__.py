@@ -13,6 +13,7 @@ _EXPORTS = {
         "hypercollision_damping",
     ],
     "collision_tables": [
+        "EqualSpeciesFiniteWavelengthOriginalSugamaOperator",
         "TabulatedMultispeciesCollisionOperator",
         "interpolate_collision_moment_matrix",
     ],
