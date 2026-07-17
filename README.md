@@ -273,7 +273,7 @@ Detailed user and developer documentation:
 - [Outputs and plotting](docs/outputs.rst)
 - [Testing and validation](docs/testing.rst)
 - [Code structure](docs/code_structure.rst)
-- [Roadmap](docs/roadmap.rst)
+- [Release and research scope](docs/release_scope.rst)
 
 ## Testing
 
