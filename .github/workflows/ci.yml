@@ -42,7 +42,6 @@ jobs:
           python tools/release/check_repository_size_manifest.py release-artifacts
           python tools/release/check_release_readiness.py version
           python tools/release/check_package_architecture_manifest.py
-          python tools/release/check_package_architecture_manifest.py differentiable-refactor
           python tools/release/check_parallel_scaling_artifacts.py --performance-manifest-only
           python tools/release/check_parallel_scaling_artifacts.py
           python tools/release/check_quasilinear_promotion_guardrails.py \

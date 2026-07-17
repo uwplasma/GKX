@@ -187,7 +187,7 @@ parameter recovery.
 
 ![Two-mode autodiff inverse validation](docs/_static/autodiff_inverse_twomode.png)
 
-See [differentiable workflows](docs/differentiable_refactor_plan.rst),
+See [differentiable geometry](docs/geometry.rst),
 [algorithms](docs/algorithms.rst), and [stellarator optimization](docs/stellarator_optimization.rst)
 for JVP, VJP, implicit differentiation, conditioning, covariance, and finite-difference gates.
 
