@@ -12,7 +12,7 @@ import numpy as np
 from spectraxgk.config import resolve_cfl_fac
 from spectraxgk.geometry import FluxTubeGeometryLike, ensure_flux_tube_geometry_data
 from spectraxgk.core.grid import SpectralGrid
-from spectraxgk.core.extension_points import CollisionOperator
+from spectraxgk.operators.collision import CollisionOperator
 from spectraxgk.diagnostics.transport import heat_flux_species
 from spectraxgk.diagnostics.moments import fieldline_quadrature_weights
 from spectraxgk.solvers.linear.implicit import _build_implicit_operator

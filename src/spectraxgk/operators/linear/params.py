@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Callable, Iterable
 
 import jax
 import jax.numpy as jnp
@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 __all__ = [
     "LinearParams",
     "LinearTerms",
+    "Species",
     "Preconditioner",
     "PreconditionerSpec",
     "_as_species_array",
@@ -24,8 +25,22 @@ __all__ = [
     "_resolve_implicit_preconditioner",
     "_x64_enabled",
     "linear_terms_to_term_config",
+    "build_linear_params",
     "term_config_to_linear_terms",
 ]
+
+
+@dataclass(frozen=True)
+class Species:
+    """Dimensionless kinetic-species inputs used to build solver parameters."""
+
+    charge: float
+    mass: float
+    density: float
+    temperature: float
+    tprim: float
+    fprim: float
+    nu: float = 0.0
 
 
 @jax.tree_util.register_pytree_node_class
@@ -122,6 +137,38 @@ class LinearParams:
     @classmethod
     def tree_unflatten(cls, aux_data, children):
         return cls(*children)
+
+
+def build_linear_params(
+    species: Iterable[Species],
+    **overrides: float,
+) -> LinearParams:
+    """Build multi-species :class:`LinearParams` from physical inputs."""
+
+    rows = tuple(species)
+    if not rows:
+        raise ValueError("species must contain at least one kinetic species")
+
+    def array(name: str) -> jnp.ndarray:
+        values = [getattr(row, name) for row in rows]
+        return jnp.asarray(np.asarray(values, dtype=float))
+
+    charge = array("charge")
+    mass = array("mass")
+    temperature = array("temperature")
+    return LinearParams(
+        charge_sign=charge,
+        density=array("density"),
+        mass=mass,
+        temp=temperature,
+        vth=jnp.sqrt(temperature / mass),
+        rho=jnp.sqrt(temperature * mass) / jnp.abs(charge),
+        tz=temperature / charge,
+        R_over_LTi=array("tprim"),
+        R_over_Ln=array("fprim"),
+        nu=array("nu"),
+        **overrides,
+    )
 
 
 @jax.tree_util.register_pytree_node_class
@@ -258,7 +305,9 @@ Preconditioner = Callable[[jnp.ndarray], jnp.ndarray]
 PreconditionerSpec = Preconditioner | str | None
 
 
-def _resolve_implicit_preconditioner(preconditioner: PreconditionerSpec) -> PreconditionerSpec:
+def _resolve_implicit_preconditioner(
+    preconditioner: PreconditionerSpec,
+) -> PreconditionerSpec:
     if preconditioner is None:
         return "auto"
     if isinstance(preconditioner, str):

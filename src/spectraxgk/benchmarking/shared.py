@@ -12,7 +12,7 @@ import numpy as np
 
 from spectraxgk.config import InitializationConfig
 from spectraxgk.core.grid import SpectralGrid
-from spectraxgk.core.species import Species, build_linear_params
+from spectraxgk.operators.linear.params import Species, build_linear_params
 from spectraxgk.diagnostics.analysis import fit_growth_rate, fit_growth_rate_auto
 from spectraxgk.diagnostics.growth_rates import _normalize_growth_rate
 from spectraxgk.diagnostics.modes import ModeSelection

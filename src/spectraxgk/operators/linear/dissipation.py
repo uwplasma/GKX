@@ -10,7 +10,7 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 
-from spectraxgk.core.extension_points import CollisionContext, CollisionOperator
+from spectraxgk.operators.collision import CollisionContext, CollisionOperator
 from spectraxgk.terms.config import FieldState
 from spectraxgk.terms.config import TermConfig
 from spectraxgk.operators.linear.streaming import abs_z_linked_fft, shift_axis

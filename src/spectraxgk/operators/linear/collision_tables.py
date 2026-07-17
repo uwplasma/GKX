@@ -8,7 +8,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.core.extension_points import CollisionContext
+from spectraxgk.operators.collision import CollisionContext
 from spectraxgk.operators.linear.collisions import (
     apply_multispecies_collision_moment_matrix,
     interpolate_collision_diagonal_table,

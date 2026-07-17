@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import jax.numpy as jnp
 
-from spectraxgk.core.extension_points import CollisionOperator
+from spectraxgk.operators.collision import CollisionOperator
 from spectraxgk.geometry import FluxTubeGeometryLike
 from spectraxgk.core.grid import SpectralGrid
 from spectraxgk.operators.linear.cache_model import LinearCache

@@ -12,7 +12,7 @@ from typing import Any, Callable
 
 import jax.numpy as jnp
 
-from spectraxgk.core.extension_points import CollisionOperator
+from spectraxgk.operators.collision import CollisionOperator
 from spectraxgk.operators.linear.cache_model import LinearCache
 from spectraxgk.operators.linear.params import LinearParams
 from spectraxgk.terms.assembly import (

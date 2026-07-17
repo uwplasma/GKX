@@ -15,7 +15,7 @@ import jax.numpy as jnp
 import numpy as np
 
 if TYPE_CHECKING:
-    from spectraxgk.core.extension_points import CollisionContext
+    from spectraxgk.operators.collision import CollisionContext
 
 _COLLISION_MATRIX_DATA = "advanced_collision_six_moment.npy"
 _COLLISION_MATRIX_METADATA = "advanced_collision_six_moment.json"

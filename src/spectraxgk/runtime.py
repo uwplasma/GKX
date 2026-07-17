@@ -95,7 +95,7 @@ from spectraxgk.solvers.time.runners import (
     integrate_linear_from_config,
     integrate_nonlinear_from_config,
 )
-from spectraxgk.workflows.cases import (
+from spectraxgk.workflows.runtime.commands import (
     RUNTIME_CASE_FIT_KEYS as _WORKFLOW_RUNTIME_CASE_FIT_KEYS,
 )
 from spectraxgk.workflows.linear import run_full_linear_runtime
