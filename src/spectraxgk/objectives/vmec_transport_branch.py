@@ -10,11 +10,11 @@ from spectraxgk.geometry.vmec_boozer_core import (
 )
 from spectraxgk.objectives.core import solver_linear_operator_matrix_from_geometry
 from spectraxgk.objectives.eigen import dominant_eigenvalue_branch_locality_report
-from spectraxgk.objectives.vmec_transport_config import (
+from spectraxgk.objectives.vmec_transport import (
     VMECJAXTransportObjectiveConfig,
     _pin_current_optional_backend_paths,
 )
-from spectraxgk.objectives.vmec_transport_tables import (
+from spectraxgk.objectives.vmec_transport import (
     _static_grid_options_from_ky_values,
 )
 
