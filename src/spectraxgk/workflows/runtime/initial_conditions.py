@@ -9,7 +9,7 @@ from typing import Callable, cast
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.artifacts.restart import load_netcdf_restart_state
+from spectraxgk.artifacts.io import load_netcdf_restart_state
 from spectraxgk.core.grid import SpectralGrid
 from spectraxgk.geometry import FluxTubeGeometryLike
 from spectraxgk.operators.linear.cache_builder import build_linear_cache

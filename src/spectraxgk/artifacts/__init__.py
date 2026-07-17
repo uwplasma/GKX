@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from spectraxgk.artifacts.linear import (
+from spectraxgk.artifacts.io import (
     write_quasilinear_artifacts,
     write_runtime_linear_artifacts,
     write_runtime_linear_scan_artifacts,
 )
-from spectraxgk.artifacts.nonlinear import (
+from spectraxgk.artifacts.io import (
     write_runtime_nonlinear_table_artifacts,
 )
-from spectraxgk.artifacts.nonlinear_diagnostics import (
+from spectraxgk.artifacts.io import (
     load_nonlinear_netcdf_diagnostics,
 )
 from spectraxgk.artifacts.io import (

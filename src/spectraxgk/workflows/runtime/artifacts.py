@@ -49,7 +49,7 @@ from spectraxgk.artifacts.nonlinear_netcdf import (
     _write_input_parameters_group as _write_input_parameters_group,
     _write_nonlinear_netcdf_outputs as _write_nonlinear_netcdf_outputs,
 )
-from spectraxgk.artifacts.nonlinear_diagnostics import (
+from spectraxgk.artifacts.io import (
     _condense_diagnostics_for_netcdf_output as _condense_diagnostics_for_netcdf_output,
     _condense_resolved_for_output as _condense_resolved_for_output,
     _read_optional_var as _read_optional_var,
@@ -57,11 +57,11 @@ from spectraxgk.artifacts.nonlinear_diagnostics import (
     _resolve_restart_path as _resolve_restart_path,
     load_nonlinear_netcdf_diagnostics as load_nonlinear_netcdf_diagnostics,
 )
-from spectraxgk.artifacts.nonlinear import (
+from spectraxgk.artifacts.io import (
     _nonlinear_summary as _nonlinear_summary,
     write_runtime_nonlinear_table_artifacts as write_runtime_nonlinear_table_artifacts,
 )
-from spectraxgk.artifacts.linear import (
+from spectraxgk.artifacts.io import (
     write_quasilinear_artifacts as write_quasilinear_artifacts,
     write_runtime_linear_artifacts as write_runtime_linear_artifacts,
     write_runtime_linear_scan_artifacts as write_runtime_linear_scan_artifacts,

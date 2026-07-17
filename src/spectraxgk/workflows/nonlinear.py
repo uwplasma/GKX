@@ -10,7 +10,7 @@ import jax.numpy as jnp
 import numpy as np
 from jax.typing import ArrayLike
 
-from spectraxgk.artifacts.restart import write_netcdf_restart_state
+from spectraxgk.artifacts.io import write_netcdf_restart_state
 from spectraxgk.core.grid import build_spectral_grid
 from spectraxgk.diagnostics.analysis import fit_growth_rate
 from spectraxgk.geometry import apply_geometry_grid_defaults, build_flux_tube_geometry

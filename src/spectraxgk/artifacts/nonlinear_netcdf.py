@@ -9,7 +9,7 @@ from typing import Any, Mapping
 import numpy as np
 
 from spectraxgk.artifacts.io import _ensure_parent, _netcdf_bundle_base
-from spectraxgk.artifacts.nonlinear_diagnostics import (
+from spectraxgk.artifacts.io import (
     _resolve_restart_path,
     _resolved_species_time,
 )
