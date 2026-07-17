@@ -7,7 +7,7 @@ from typing import Any, cast
 
 import numpy as np
 
-from spectraxgk.objectives.portfolio_contracts import (
+from spectraxgk.objectives.portfolio import (
     PortfolioReduction,
     aggregate_objective_portfolio,
     validate_objective_portfolio_contract,
@@ -39,14 +39,9 @@ class ReducedPortfolioArtifactGuardConfig:
     value_atol: float = 1.0e-8
 
     def __post_init__(self) -> None:
-        if int(self.min_alphas) < 1:
-            raise ValueError("min_alphas must be >= 1")
-        if int(self.min_ky) < 1:
-            raise ValueError("min_ky must be >= 1")
-        if int(self.min_objectives) < 1:
-            raise ValueError("min_objectives must be >= 1")
-        if int(self.min_boozer_mode) < 1:
-            raise ValueError("min_boozer_mode must be >= 1")
+        for name in ("min_alphas", "min_ky", "min_objectives", "min_boozer_mode"):
+            if int(getattr(self, name)) < 1:
+                raise ValueError(f"{name} must be >= 1")
         if float(self.value_rtol) < 0.0 or float(self.value_atol) < 0.0:
             raise ValueError("value tolerances must be non-negative")
 
@@ -58,8 +53,6 @@ class ReducedPortfolioArtifactGuardConfig:
 
 @dataclass(frozen=True)
 class _PortfolioArtifactInputs:
-    """Canonical arrays and labels extracted from a portfolio artifact."""
-
     sample_rows: np.ndarray
     sample_weights: np.ndarray
     surfaces: list[str]
@@ -107,14 +100,18 @@ def _sample_key(sample: dict[str, Any]) -> tuple[str, float, float]:
     return surface_key, alpha, ky
 
 
-def _axis_indices(samples: list[dict[str, Any]]) -> tuple[list[str], list[float], list[float]]:
+def _axis_indices(
+    samples: list[dict[str, Any]],
+) -> tuple[list[str], list[float], list[float]]:
     surfaces = sorted({_sample_key(sample)[0] for sample in samples})
     alphas = sorted({_sample_key(sample)[1] for sample in samples})
     kys = sorted({_sample_key(sample)[2] for sample in samples})
     return surfaces, alphas, kys
 
 
-def _artifact_sample_values(payload: dict[str, Any]) -> tuple[list[dict[str, Any]], np.ndarray]:
+def _artifact_sample_values(
+    payload: dict[str, Any],
+) -> tuple[list[dict[str, Any]], np.ndarray]:
     samples_raw = payload.get("samples")
     if not isinstance(samples_raw, list) or not samples_raw:
         raise ValueError("payload must contain a non-empty samples list")
@@ -150,13 +147,23 @@ def _artifact_sample_value_tensor(
         table[idx] = value
         weights[idx] = _as_finite_float(sample.get("weight", 1.0), name="sample weight")
     if len(seen) != int(np.prod(shape)) or not np.all(np.isfinite(table)):
-        raise ValueError("samples must form a complete rectangular surface/alpha/ky table")
-    if not np.all(np.isfinite(weights)) or np.any(weights < 0.0) or float(np.sum(weights)) <= 0.0:
-        raise ValueError("sample weights must be finite, non-negative, and have positive sum")
+        raise ValueError(
+            "samples must form a complete rectangular surface/alpha/ky table"
+        )
+    if (
+        not np.all(np.isfinite(weights))
+        or np.any(weights < 0.0)
+        or float(np.sum(weights)) <= 0.0
+    ):
+        raise ValueError(
+            "sample weights must be finite, non-negative, and have positive sum"
+        )
     return table[..., None], weights, surfaces, alphas, kys
 
 
-def _artifact_full_objective_table(payload: dict[str, Any], *, n_samples: int) -> np.ndarray:
+def _artifact_full_objective_table(
+    payload: dict[str, Any], *, n_samples: int
+) -> np.ndarray:
     table = np.asarray(payload.get("base_objective_table"), dtype=float)
     if table.ndim != 2:
         raise ValueError("base_objective_table must be a two-dimensional array")
@@ -201,12 +208,16 @@ def _artifact_provenance_gate(
     options: dict[str, Any] = options_raw if isinstance(options_raw, dict) else {}
     mboz = int(payload.get("mboz") or options.get("mboz") or 0)
     nboz = int(payload.get("nboz") or options.get("nboz") or 0)
-    text = _artifact_text(payload, "kind", "artifact_kind", "source_scope", "claim_scope", "builder")
+    text = _artifact_text(
+        payload, "kind", "artifact_kind", "source_scope", "claim_scope", "builder"
+    )
     has_vmec_boozer_scope = "vmec_boozer" in text or "vmec/boozer" in text
     input_path = str(payload.get("input_path", ""))
     wout_path = str(payload.get("wout_path", ""))
     has_paths = bool(input_path and wout_path)
-    mode_gate = bool(mboz >= int(config.min_boozer_mode) and nboz >= int(config.min_boozer_mode))
+    mode_gate = bool(
+        mboz >= int(config.min_boozer_mode) and nboz >= int(config.min_boozer_mode)
+    )
     return {
         "passed": bool(
             has_vmec_boozer_scope
@@ -284,30 +295,53 @@ def _artifact_fd_gate(payload: dict[str, Any]) -> dict[str, object]:
     return {
         "passed": passed,
         "artifact_passed": bool(payload.get("passed", False)),
-        "finite_difference_consistent": bool(payload.get("finite_difference_consistent", False)),
+        "finite_difference_consistent": bool(
+            payload.get("finite_difference_consistent", False)
+        ),
         "response_resolved": bool(payload.get("response_resolved", True)),
         "finite_array_fields": finite_fields,
         "finite_scalar_fields": scalar_fields,
     }
 
 
-def _gradient_artifact_gate(gradient_artifacts: list[dict[str, Any]]) -> dict[str, object]:
+def _gradient_artifact_gate(
+    gradient_artifacts: list[dict[str, Any]],
+) -> dict[str, object]:
     objective_names: set[str] = set()
     n_gates = 0
     n_passed = 0
     finite = True
     for artifact in gradient_artifacts:
-        for gate in artifact.get("objective_gates", []) if isinstance(artifact, dict) else []:
+        for gate in (
+            artifact.get("objective_gates", []) if isinstance(artifact, dict) else []
+        ):
             if not isinstance(gate, dict):
                 finite = False
                 continue
             n_gates += 1
             objective_names.add(str(gate.get("objective", "")).lower())
             n_passed += int(bool(gate.get("passed", False)))
-            finite = bool(finite and all(_finite_nested(gate.get(name)) for name in ("implicit", "finite_difference", "abs_error", "rel_error")))
+            finite = bool(
+                finite
+                and all(
+                    _finite_nested(gate.get(name))
+                    for name in (
+                        "implicit",
+                        "finite_difference",
+                        "abs_error",
+                        "rel_error",
+                    )
+                )
+            )
     has_growth = bool(objective_names & _GROWTH_OBJECTIVE_NAMES)
     has_quasilinear = bool(objective_names & _QUASILINEAR_OBJECTIVE_NAMES)
-    passed = bool(n_gates > 0 and n_passed == n_gates and finite and has_growth and has_quasilinear)
+    passed = bool(
+        n_gates > 0
+        and n_passed == n_gates
+        and finite
+        and has_growth
+        and has_quasilinear
+    )
     return {
         "passed": passed,
         "n_gradient_artifacts": len(gradient_artifacts),
@@ -321,8 +355,6 @@ def _gradient_artifact_gate(gradient_artifacts: list[dict[str, Any]]) -> dict[st
 
 
 def _artifact_reduction(payload: dict[str, Any]) -> PortfolioReduction:
-    """Return the requested portfolio reduction after validating the artifact."""
-
     reduction = str(payload.get("reduction", "weighted_mean"))
     if reduction not in ("weighted_mean", "mean", "max"):
         raise ValueError("artifact reduction must be weighted_mean, mean, or max")
@@ -332,10 +364,8 @@ def _artifact_reduction(payload: dict[str, Any]) -> PortfolioReduction:
 def _portfolio_artifact_inputs(
     payload: dict[str, Any],
 ) -> _PortfolioArtifactInputs:
-    """Extract the rectangular portfolio sample table and metadata."""
-
-    sample_rows, sample_weights, surfaces, alphas, kys = (
-        _artifact_sample_value_tensor(payload)
+    sample_rows, sample_weights, surfaces, alphas, kys = _artifact_sample_value_tensor(
+        payload
     )
     samples, _values = _artifact_sample_values(payload)
     full_table = _artifact_full_objective_table(payload, n_samples=len(samples))
@@ -358,8 +388,6 @@ def _portfolio_coverage_gate(
     *,
     config: ReducedPortfolioArtifactGuardConfig,
 ) -> dict[str, object]:
-    """Return the surface/alpha/ky coverage gate for the portfolio artifact."""
-
     return {
         "passed": bool(
             len(inputs.alphas) >= int(config.min_alphas)
@@ -382,8 +410,6 @@ def _portfolio_full_table_gate(
     *,
     config: ReducedPortfolioArtifactGuardConfig,
 ) -> dict[str, object]:
-    """Return the objective-table shape/finite-value gate."""
-
     table = inputs.full_table
     finite = bool(np.all(np.isfinite(table)))
     return {
@@ -405,30 +431,21 @@ def _portfolio_reducer_gate(
 ) -> dict[str, object]:
     """Recompute and validate the artifact's scalar portfolio reduction."""
 
-    if inputs.reduction == "weighted_mean":
-        reduced_value = float(
-            aggregate_objective_portfolio(
-                inputs.sample_rows,
-                sample_weights=inputs.sample_weights,
-                reduction=inputs.reduction,
-            )
-        )
-        contract = validate_objective_portfolio_contract(
+    sample_weights = (
+        inputs.sample_weights if inputs.reduction == "weighted_mean" else None
+    )
+    reduced_value = float(
+        aggregate_objective_portfolio(
             inputs.sample_rows,
-            sample_weights=inputs.sample_weights,
+            sample_weights=sample_weights,
             reduction=inputs.reduction,
         )
-    else:
-        reduced_value = float(
-            aggregate_objective_portfolio(
-                inputs.sample_rows,
-                reduction=inputs.reduction,
-            )
-        )
-        contract = validate_objective_portfolio_contract(
-            inputs.sample_rows,
-            reduction=inputs.reduction,
-        )
+    )
+    contract = validate_objective_portfolio_contract(
+        inputs.sample_rows,
+        sample_weights=sample_weights,
+        reduction=inputs.reduction,
+    )
     artifact_value = _as_finite_float(payload.get("base_value"), name="base_value")
     reducer_matches = bool(
         np.isclose(
@@ -450,44 +467,13 @@ def _portfolio_reducer_gate(
     }
 
 
-def _portfolio_guard_passed(
-    *,
-    provenance_gate: dict[str, object],
-    coverage_gate: dict[str, object],
-    full_table_gate: dict[str, object],
-    objective_name_gate: dict[str, object],
-    reducer_gate: dict[str, object],
-    fd_gate: dict[str, object],
-    ad_fd_gate: dict[str, object],
-    claim_scope_gate: dict[str, object],
-) -> bool:
-    """Return whether all portfolio artifact promotion gates pass."""
-
-    return bool(
-        provenance_gate["passed"]
-        and coverage_gate["passed"]
-        and full_table_gate["passed"]
-        and objective_name_gate["passed"]
-        and reducer_gate["passed"]
-        and fd_gate["passed"]
-        and ad_fd_gate["passed"]
-        and claim_scope_gate["passed"]
-    )
-
-
 def reduced_portfolio_artifact_guard_report(
     row_artifact: dict[str, Any],
     *,
     gradient_artifacts: list[dict[str, Any]] | tuple[dict[str, Any], ...] = (),
     config: ReducedPortfolioArtifactGuardConfig | None = None,
 ) -> dict[str, object]:
-    """Validate a real VMEC/Boozer reduced-portfolio artifact before promotion.
-
-    The guard is backend-free: it consumes already-generated JSON payloads,
-    rebuilds a ``(surface, alpha, ky, objective)`` reducer table from real
-    VMEC/Boozer sample rows, and checks that provenance, coverage, FD/AD
-    diagnostics, and nonlinear-claim boundaries are explicit.
-    """
+    """Gate persisted portfolios on provenance, coverage, reduction, and AD/FD."""
 
     cfg = config or ReducedPortfolioArtifactGuardConfig()
     inputs = _portfolio_artifact_inputs(row_artifact)
@@ -501,15 +487,18 @@ def reduced_portfolio_artifact_guard_report(
     claim_scope_gate = _artifact_claim_scope_gate(row_artifact)
     fd_gate = _artifact_fd_gate(row_artifact)
     ad_fd_gate = _gradient_artifact_gate(list(gradient_artifacts))
-    passed = _portfolio_guard_passed(
-        provenance_gate=provenance_gate,
-        coverage_gate=coverage_gate,
-        full_table_gate=full_table_gate,
-        objective_name_gate=objective_name_gate,
-        reducer_gate=reducer_gate,
-        fd_gate=fd_gate,
-        ad_fd_gate=ad_fd_gate,
-        claim_scope_gate=claim_scope_gate,
+    passed = all(
+        gate["passed"]
+        for gate in (
+            provenance_gate,
+            coverage_gate,
+            full_table_gate,
+            objective_name_gate,
+            reducer_gate,
+            fd_gate,
+            ad_fd_gate,
+            claim_scope_gate,
+        )
     )
     return {
         "kind": "vmec_boozer_reduced_portfolio_artifact_guard",
@@ -533,7 +522,6 @@ def reduced_portfolio_artifact_guard_report(
             "nonlinear-window ensembles and transport audits."
         ),
     }
-
 
 
 __all__ = [

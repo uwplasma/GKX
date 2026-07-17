@@ -13,8 +13,8 @@ from spectraxgk.objectives.core import (
     SolverScalarObjective,
     solver_scalar_objective_from_vector,
 )
-from spectraxgk.objectives.portfolio_contracts import aggregate_objective_portfolio
-from spectraxgk.objectives.portfolio_sensitivity import (
+from spectraxgk.objectives.portfolio import aggregate_objective_portfolio
+from spectraxgk.objectives.portfolio import (
     objective_portfolio_sensitivity_report,
 )
 from spectraxgk.objectives.stellarator_contracts import (

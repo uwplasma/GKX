@@ -15,7 +15,7 @@ from spectraxgk.objectives.core import (
     SOLVER_OBJECTIVE_NAMES,
     solver_growth_rate_from_geometry,
 )
-from spectraxgk.objectives.portfolio_contracts import aggregate_objective_portfolio
+from spectraxgk.objectives.portfolio import aggregate_objective_portfolio
 from spectraxgk.objectives.stellarator import StellaratorITGSampleSet, smooth_positive
 from spectraxgk.objectives.vmec_transport_config import (
     VMECJAXTransportObjectiveConfig,
