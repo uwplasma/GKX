@@ -1,4 +1,4 @@
-"""Public growth-rate, frequency, and fit-window diagnostics."""
+"""Growth-rate, frequency, least-squares, and fit-window diagnostics."""
 
 from __future__ import annotations
 
@@ -8,18 +8,108 @@ import warnings
 
 import numpy as np
 
-from spectraxgk.diagnostics.growth_fit import (
-    _log_amp_phase,
-    fit_growth_rate,
-    fit_growth_rate_with_stats,
-)
-from spectraxgk.diagnostics.modes import ModeSelection, extract_mode_time_series
-from spectraxgk.diagnostics.normalization import apply_diagnostic_normalization
 from spectraxgk.diagnostics.growth_windows import (
+    _log_amp_phase,
     select_fit_window,
     select_fit_window_loglinear,
 )
+from spectraxgk.diagnostics.modes import ModeSelection, extract_mode_time_series
+from spectraxgk.diagnostics.normalization import apply_diagnostic_normalization
 from spectraxgk.operators.linear.params import LinearParams
+
+
+def fit_growth_rate(
+    t: np.ndarray,
+    signal: np.ndarray,
+    tmin: float | None = None,
+    tmax: float | None = None,
+) -> Tuple[float, float]:
+    """Fit gamma and omega from a complex signal ~ exp((gamma - i*omega) t)."""
+
+    if t.ndim != 1:
+        raise ValueError("t must be 1D")
+    if signal.ndim != 1:
+        raise ValueError("signal must be 1D")
+    if t.shape[0] != signal.shape[0]:
+        raise ValueError("t and signal must have same length")
+
+    finite = np.isfinite(signal)
+    if not np.all(finite):
+        t = t[finite]
+        signal = signal[finite]
+        if t.size < 2:
+            raise ValueError("not enough finite points to fit")
+
+    mask = np.ones_like(t, dtype=bool)
+    if tmin is not None:
+        mask &= t >= tmin
+    if tmax is not None:
+        mask &= t <= tmax
+
+    tt = t[mask]
+    yy = signal[mask]
+    if tt.size < 2:
+        raise ValueError("not enough points to fit")
+
+    log_amp, phase = _log_amp_phase(yy)
+
+    A = np.vstack([tt, np.ones_like(tt)]).T
+    gamma, _ = np.linalg.lstsq(A, log_amp, rcond=None)[0]
+    omega, _ = np.linalg.lstsq(A, phase, rcond=None)[0]
+    return float(gamma), float(-omega)
+
+
+def fit_growth_rate_with_stats(
+    t: np.ndarray,
+    signal: np.ndarray,
+    tmin: float | None = None,
+    tmax: float | None = None,
+) -> Tuple[float, float, float, float]:
+    """Fit gamma/omega and return (gamma, omega, r2_log_amp, r2_phase)."""
+
+    if t.ndim != 1:
+        raise ValueError("t must be 1D")
+    if signal.ndim != 1:
+        raise ValueError("signal must be 1D")
+    if t.shape[0] != signal.shape[0]:
+        raise ValueError("t and signal must have same length")
+
+    finite = np.isfinite(signal)
+    if not np.all(finite):
+        t = t[finite]
+        signal = signal[finite]
+        if t.size < 2:
+            raise ValueError("not enough finite points to fit")
+
+    mask = np.ones_like(t, dtype=bool)
+    if tmin is not None:
+        mask &= t >= tmin
+    if tmax is not None:
+        mask &= t <= tmax
+
+    tt = t[mask]
+    yy = signal[mask]
+    if tt.size < 2:
+        raise ValueError("not enough points to fit")
+
+    log_amp, phase = _log_amp_phase(yy)
+    A = np.vstack([tt, np.ones_like(tt)]).T
+    gamma, offset = np.linalg.lstsq(A, log_amp, rcond=None)[0]
+    phase_slope, phase_off = np.linalg.lstsq(A, phase, rcond=None)[0]
+    log_fit = gamma * tt + offset
+    phase_fit = phase_slope * tt + phase_off
+
+    def r2_score(y: np.ndarray, yfit: np.ndarray) -> float:
+        ss_res = float(np.sum((y - yfit) ** 2))
+        ss_tot = float(np.sum((y - np.mean(y)) ** 2))
+        if ss_tot <= 0.0:
+            return -np.inf
+        return 1.0 - ss_res / ss_tot
+
+    r2_log = r2_score(log_amp, log_fit)
+    r2_phase = r2_score(phase, phase_fit)
+    return float(gamma), float(-phase_slope), r2_log, r2_phase
+
 
 __all__ = [
     "_log_amp_phase",
@@ -59,7 +149,9 @@ def instantaneous_growth_rate_from_phi(
     if phi_t.shape[0] < 2:
         raise ValueError("phi_t must have at least two time samples")
     if mode_method not in {"z_index", "max", "project", "svd"}:
-        raise ValueError("mode_method must be one of {'z_index', 'max', 'project', 'svd'}")
+        raise ValueError(
+            "mode_method must be one of {'z_index', 'max', 'project', 'svd'}"
+        )
 
     signal = extract_mode_time_series(phi_t, sel, method=mode_method)
     phi_now = signal[1:]
@@ -262,6 +354,7 @@ def fit_growth_rate_auto_with_stats(
         r2_log = -np.inf
         r2_phase = -np.inf
     return gamma, omega, tmin_out, tmax_out, float(r2_log), float(r2_phase)
+
 
 # Fit-signal selection helpers used by benchmark and runtime linear diagnostics.
 @dataclass(frozen=True)

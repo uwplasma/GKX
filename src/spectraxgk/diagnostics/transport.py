@@ -9,7 +9,7 @@ from typing import Any
 import jax.numpy as jnp
 
 from spectraxgk.core.grid import SpectralGrid
-from spectraxgk.diagnostics.channels import (
+from spectraxgk.diagnostics.moments import (
     _heat_flux_channel_contrib_species,
     _particle_flux_channel_contrib_species,
     _turbulent_heating_contrib_species,

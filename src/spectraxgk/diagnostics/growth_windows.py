@@ -7,10 +7,25 @@ from typing import Tuple
 
 import numpy as np
 
-from spectraxgk.diagnostics.growth_fit import _log_amp_phase
+
+def _log_amp_phase(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """Return ``(log|signal|, unwrapped phase)`` with robust scaling."""
+
+    if signal.size == 0:
+        raise ValueError("signal must be non-empty")
+    signal = np.asarray(signal)
+    finite = np.isfinite(signal)
+    scale = float(np.max(np.abs(signal[finite]))) if np.any(finite) else 1.0
+    signal = np.where(finite, signal, 0.0) if not np.all(finite) else signal
+    scale = scale if np.isfinite(scale) and scale > 0.0 else 1.0
+    scaled = signal / scale
+    log_amp = np.log(np.maximum(np.abs(scaled), 1.0e-30)) + np.log(scale)
+    return log_amp, np.unwrap(np.angle(scaled))
 
 
-def _validated_fit_inputs(t: np.ndarray, signal: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def _validated_fit_inputs(
+    t: np.ndarray, signal: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
     if t.ndim != 1:
         raise ValueError("t must be 1D")
     if signal.ndim != 1:
@@ -37,7 +52,9 @@ def _r2_score(y: np.ndarray, yfit: np.ndarray) -> float:
     return 1.0 - ss_res / ss_tot
 
 
-def _least_squares_line(tt: np.ndarray, y: np.ndarray) -> tuple[float, float, np.ndarray]:
+def _least_squares_line(
+    tt: np.ndarray, y: np.ndarray
+) -> tuple[float, float, np.ndarray]:
     A = np.vstack([tt, np.ones_like(tt)]).T
     slope, offset = np.linalg.lstsq(A, y, rcond=None)[0]
     return float(slope), float(offset), slope * tt + offset
@@ -223,7 +240,9 @@ def _loglinear_lengths(
 ) -> np.ndarray:
     max_points = max(min_points, int(max_fraction * n))
     max_points = min(max_points, n)
-    lengths = np.unique(np.linspace(min_points, max_points, num=num_windows).astype(int))
+    lengths = np.unique(
+        np.linspace(min_points, max_points, num=num_windows).astype(int)
+    )
     lengths = lengths[lengths >= 2]
     if lengths.size == 0:
         raise ValueError("no valid window lengths")
