@@ -94,8 +94,8 @@ velocity-space projection, spectral convergence, drift-kinetic conservation,
 finite-wavelength gyro-diffusion, and the H-theorem. The panel below passes all
 operator-level gates, but does not claim production Landau transport yet;
 the finite-Larmor collisional-ITG gate and drift-kinetic collisional-zonal gate
-are closed, while finite-wavelength zonal traces and velocity sections remain
-required before input-file promotion.
+are closed, and the paper-resolution finite-wavelength zonal traces and
+velocity sections now pass their independent literature gate.
 The differentiable driven-current solve is equation-tested, and the direct
 Coulomb hierarchy is now converged through ``(P,J)=(20,5)`` with a maximum
 nested current change of 0.017%. Its collision-frequency and electric-field
@@ -105,7 +105,9 @@ scan, and Coulomb reaches the high-charge analytic limit within 7.46%. The
 arbitrary-order original model reproduces its published 11% low-charge current
 deficit, while the converged improved model is within 0.31% of Coulomb over the
 complete ion-charge scan. The converged finite-Larmor ITG artifact is accepted;
-input-file promotion still waits on the collisional zonal-response campaign.
+the generated equal-species operator remains a Python research path because a
+production input-file selector would imply broader multispecies coefficients
+that are not yet implemented.
 
 ![Coulomb collision operator verification](docs/_static/collision_operator_verification.png)
 
@@ -113,13 +115,14 @@ Equations, thresholds, machine-readable results, literature links, and the
 one-command reproduction recipe are in the [collision-operator
 documentation](docs/operators.rst).
 
-![Drift-kinetic collisional zonal response](docs/_static/collision_drift_kinetic_zonal_response.png)
+![Paper-resolution collisional zonal response](docs/_static/collision_finite_wavelength_zonal_response.png)
 
-At the paper resolution ``(P,J)=(24,10)``, all three operators approach the
-Xiao residual: late-window responses are 0.00565 (original Sugama), 0.00572
-(Coulomb), and 0.00585 (improved Sugama, ``K=5``), versus 0.00508 analytically.
-The original model damps most strongly and the improved model is closer to
-Coulomb over ``t nu_ii <= 10``, reproducing the published Figure-12 ordering.
+At ``(P,J)=(24,10)``, the drift-kinetic traces approach the Xiao residual and
+the finite-wavelength tails reproduce the published original < improved <
+Coulomb ordering at both ``kx rho_i=0.1`` and ``0.2``. The improved model is
+also closer to Coulomb over ``t nu_ii <= 10`` at both wavenumbers. Equations,
+velocity-space convergence, compact replay data, and the Figure 12--14 gate
+are documented in [Operators and Terms](docs/operators.rst).
 
 ## Runtime and Memory
 
