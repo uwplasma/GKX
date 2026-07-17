@@ -53,13 +53,14 @@ class TabulatedMultispeciesCollisionOperator:
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
-class EqualSpeciesFiniteWavelengthOriginalSugamaOperator:
-    r"""Finite-wavelength original-Sugama tables for one species.
+class EqualSpeciesFiniteWavelengthSugamaOperator:
+    r"""Finite-wavelength original/improved-Sugama tables for one species.
 
     The tabulated test and field matrices implement Frei et al. (2021),
-    equations (3.72) and (3.79), on the post-field nonadiabatic response
-    :math:`H`. Unlike the Coulomb table, this model has no separately tabulated
-    electrostatic polarization vectors.
+    equations (3.72) and (3.79), optionally augmented by the improved field
+    correction of Frei, Ernst & Ricci (2022), on the post-field nonadiabatic
+    response :math:`H`. Unlike the Coulomb table, these models have no
+    separately tabulated electrostatic polarization vectors.
     """
 
     bessel_argument_grid: jnp.ndarray
