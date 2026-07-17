@@ -20,7 +20,7 @@ from spectraxgk.operators.linear.params import (
     LinearTerms,
     linear_terms_to_term_config,
 )
-from spectraxgk.solvers.linear.eigen_operator import (
+from spectraxgk.solvers.linear.krylov_algorithms import (
     _advance_imex2,
     _apply_operator,
     _assemble_rhs_cached_novjp,
@@ -419,7 +419,9 @@ def _shift_invert_branch(
     )
     nonfinite_pair = not np.isfinite(eig_host.real) or not np.isfinite(eig_host.imag)
     growth_floor_failed = select_growth and eig_host.real < cfg.fallback_real_floor
-    residual_failed = not np.isfinite(residual) or residual > cfg.shift_outer_residual_tol
+    residual_failed = (
+        not np.isfinite(residual) or residual > cfg.shift_outer_residual_tol
+    )
     need_fallback = nonfinite_pair or growth_floor_failed or residual_failed
     if need_fallback and cfg.fallback_method.strip().lower() != "none":
         fallback = _shift_invert_fallback(
