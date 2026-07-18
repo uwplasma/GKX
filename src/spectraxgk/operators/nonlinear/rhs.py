@@ -1,9 +1,10 @@
 """Nonlinear RHS assembly helpers.
 
-This module owns the performance-critical RHS composition path.  The public
-``spectraxgk.nonlinear`` facade passes its module-level callables into these
-helpers so existing tests and downstream monkeypatch/debug workflows keep the
-same seams while the implementation stays isolated and easier to profile.
+This module owns the performance-critical RHS composition path.  The nonlinear
+integration solvers in :mod:`spectraxgk.solvers.nonlinear` pass their
+module-level callables into these helpers so existing tests and downstream
+monkeypatch/debug workflows keep the same seams while the implementation stays
+isolated and easier to profile.
 """
 
 from __future__ import annotations

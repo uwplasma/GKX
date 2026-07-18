@@ -12,7 +12,7 @@ import numpy as np
 from spectraxgk.operators.linear.rhs import linear_rhs_cached
 from spectraxgk.operators.linear.cache_model import LinearCache
 from spectraxgk.operators.linear.params import LinearParams, LinearTerms
-from spectraxgk.nonlinear import nonlinear_rhs_cached
+from spectraxgk.solvers.nonlinear.state_integration import nonlinear_rhs_cached
 from spectraxgk.operators.nonlinear.projection import _make_hermitian_projector
 from spectraxgk.terms.config import FieldState, TermConfig
 

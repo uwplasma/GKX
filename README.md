@@ -161,7 +161,7 @@ For repeated nonlinear calls with fixed geometry and numerical policy, prepare
 the compiled simulation once:
 
 ```python
-from spectraxgk.nonlinear import prepare_nonlinear_explicit_diagnostics
+from spectraxgk.solvers.nonlinear.diagnostic_integration import prepare_nonlinear_explicit_diagnostics
 
 simulation = prepare_nonlinear_explicit_diagnostics(
     initial_state,

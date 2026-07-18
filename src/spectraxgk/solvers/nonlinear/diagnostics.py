@@ -1,9 +1,9 @@
 """Nonlinear diagnostic integration drivers.
 
-This module owns the orchestration for explicit nonlinear diagnostic runs.  The
-public :mod:`spectraxgk.nonlinear` facade injects the concrete kernels so tests
-and downstream users can still patch facade-level seams without keeping the
-large implementation body in the facade itself.
+This module owns the orchestration for explicit nonlinear diagnostic runs.
+:mod:`spectraxgk.solvers.nonlinear.diagnostic_integration` injects the concrete
+kernels so tests and downstream users can still patch these seams without
+keeping the large implementation body inline.
 """
 
 from __future__ import annotations

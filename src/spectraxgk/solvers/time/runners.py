@@ -10,11 +10,11 @@ from spectraxgk.solvers.time.diffrax_linear import integrate_linear_diffrax
 from spectraxgk.solvers.time.diffrax_nonlinear import integrate_nonlinear_diffrax
 from spectraxgk.geometry import FluxTubeGeometryLike
 from spectraxgk.core.grid import SpectralGrid
-from spectraxgk.linear import integrate_linear
+from spectraxgk.solvers.linear.integrators import integrate_linear
 from spectraxgk.operators.linear.cache_model import LinearCache
 from spectraxgk.operators.linear.cache_builder import build_linear_cache
 from spectraxgk.operators.linear.params import LinearParams, LinearTerms
-from spectraxgk.nonlinear import integrate_nonlinear
+from spectraxgk.solvers.nonlinear.state_integration import integrate_nonlinear
 from spectraxgk.parallel.state import resolve_state_sharding
 from spectraxgk.parallel.integrators import integrate_nonlinear_sharded
 from spectraxgk.terms.config import TermConfig

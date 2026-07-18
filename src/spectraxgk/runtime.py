@@ -20,14 +20,14 @@ from spectraxgk.diagnostics.modes import (
 )
 from spectraxgk.geometry import apply_geometry_grid_defaults, FluxTubeGeometryLike
 from spectraxgk.core.grid import build_spectral_grid, select_ky_grid
-from spectraxgk.linear import integrate_linear_diagnostics
+from spectraxgk.solvers.linear.integrators import integrate_linear_diagnostics
 from spectraxgk.operators.linear.cache_builder import build_linear_cache
 from spectraxgk.operators.linear.params import (
     LinearParams,
     LinearTerms,
     linear_terms_to_term_config,
 )
-from spectraxgk.nonlinear import integrate_nonlinear_explicit_diagnostics_state
+from spectraxgk.solvers.nonlinear.diagnostic_integration import integrate_nonlinear_explicit_diagnostics_state
 from spectraxgk.solvers.linear.krylov import KrylovConfig, dominant_eigenpair
 from spectraxgk.diagnostics.normalization import apply_diagnostic_normalization
 from spectraxgk.parallel import independent_map
