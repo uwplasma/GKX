@@ -104,7 +104,7 @@ def final_iota_profiles_from_vmec_result(result: Any) -> tuple[np.ndarray, np.nd
     if state is None or optimizer is None:
         return None
     try:
-        import vmec_jax as vj  # type: ignore[import-not-found]
+        import vmex as vj  # type: ignore[import-not-found]
 
         _chips, iotas, iotaf = vj.equilibrium_iota_profiles_from_state(
             state=state,
@@ -127,7 +127,7 @@ def _final_quasisymmetry_from_vmec_result(result: Any) -> float | None:
     if state is not None:
         try:
             import jax.numpy as jnp
-            import vmec_jax as vj  # type: ignore[import-not-found]
+            import vmex as vj  # type: ignore[import-not-found]
 
             static = getattr(optimizer, "_static")
             qs = vj.QuasisymmetryRatioResidual(
@@ -222,7 +222,7 @@ def _wout_quasisymmetry(
         value = _finite_float_or_none(source.get("qs_residual", source.get("quasisymmetry")))
         return value, str(source.get("qs_source", "mapping")), None if value is not None else "missing_qs_residual"
     try:
-        import vmec_jax as vj  # type: ignore[import-not-found]
+        import vmex as vj  # type: ignore[import-not-found]
 
         wout = vj.load_wout(source)
         qs = vj.quasisymmetry_ratio_residual_from_wout(

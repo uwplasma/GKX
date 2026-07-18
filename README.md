@@ -53,7 +53,7 @@ spectraxgk --plot cyclone.out.nc
 Generate the small VMEC equilibria used by the self-contained examples:
 
 ```bash
-pip install vmec-jax
+pip install vmex
 cd examples/vmec
 ./generate_wouts.sh
 ```
@@ -205,12 +205,12 @@ uncertainty, residual anatomy, and holdout gates are in the
 
 ## QA ITG Optimization
 
-The VMEC-JAX-style examples append a SPECTRAX-GK growth-rate, quasilinear, or
+The VMEX-style examples append a SPECTRAX-GK growth-rate, quasilinear, or
 nonlinear-window residual to the aspect-ratio, mean-iota, and quasisymmetry
 objective tuples. The baseline follows the max-mode-5 QA workflow; all
 transport comparisons use solved VMEC equilibria.
 
-![VMEC-JAX QA max-mode-5 optimizer sweep](docs/_static/vmec_jax_qa_full_sweep_panel.png)
+![VMEX QA max-mode-5 optimizer sweep](docs/_static/vmec_jax_qa_full_sweep_panel.png)
 
 These rows are not promoted turbulent-flux designs. Their matched long
 post-transient nonlinear audits use converged post-transient heat-flux windows

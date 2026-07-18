@@ -55,7 +55,7 @@ def vmec_boundary_aspect_sensitivity_report(
             "fd_step": float(fd_step),
         }
 
-    import vmec_jax as vj  # type: ignore[import-untyped, import-not-found]
+    import vmex as vj  # type: ignore[import-untyped, import-not-found]
 
     modes = vj.vmec_mode_table(int(mpol), int(ntor))
     grid = vj.make_angle_grid(int(ntheta), int(nphi), int(nfp))
