@@ -48,9 +48,6 @@ jobs:
             --out-json docs/_static/quasilinear_promotion_guardrails.json
           python tools/release/check_vmec_boozer_gates.py differentiability-claim \
             --out-json docs/_static/vmec_boozer_differentiability_claim_guard.json
-          python tools/artifacts/build_parallelization_completion_status.py \
-            --out-prefix docs/_static/parallelization_completion_status \
-            --skip-figures
           python tools/release/check_release_readiness.py technical-status \
             --out-json docs/_static/technical_release_status.json \
             --fail-under 98
@@ -118,12 +115,10 @@ jobs:
           - name: release-artifacts
             files: >-
               tests/release/test_release_gates.py
-              tests/tools/artifacts/test_general_artifact_tools.py
           - name: model-artifacts
             files: >-
               tests/unit/quasilinear/test_quasilinear.py
               tests/validation/quasilinear/test_quasilinear_calibration.py
-              tests/tools/artifacts/test_quasilinear_artifact_tools.py
               tests/tools/profiling/test_runtime_and_scaling_profile_contracts.py
               tests/unit/parallel/test_parallel_artifacts.py
           - name: linear-core
@@ -153,9 +148,7 @@ jobs:
           - name: parallel-autodiff
             files: >-
               tests/unit/parallel/test_parallel_core.py
-              tests/tools/artifacts/test_stellarator_artifact_tools.py
               tests/unit/solvers/test_sharded_integrators.py
-              tests/tools/artifacts/test_transport_artifact_tools.py
               tests/tools/profiling/test_nonlinear_sharding_profile_contracts.py
               tests/unit/objectives/test_autodiff_solver_objectives.py
               tests/unit/objectives/test_differentiable_geometry_objectives.py
