@@ -529,6 +529,46 @@ class DriftKineticMomentCollisionOperator:
         return cls(*children)
 
 
+COLLISION_OPERATOR_NAMES: tuple[str, ...] = (
+    "none",
+    "lenard_bernstein",
+    "sugama",
+    "improved_sugama",
+)
+
+
+def collision_operator_from_config(
+    name: str,
+    *,
+    density: jnp.ndarray,
+    mass: jnp.ndarray,
+    temperature: jnp.ndarray,
+) -> DriftKineticMomentCollisionOperator | None:
+    """Resolve a TOML ``collision_operator`` name to a solver collision operator.
+
+    ``"none"`` and ``"lenard_bernstein"`` return ``None`` so the linear RHS
+    keeps its built-in diagonal Lenard-Bernstein term (the solver re-enables
+    ``collisions_contribution`` exactly when ``collision_operator is None``).
+    ``"sugama"`` and ``"improved_sugama"`` build the dense drift-kinetic
+    Hermite-Laguerre moment operator (Frei, Ernst & Ricci 2022) that replaces
+    the diagonal term. ``density``/``mass``/``temperature`` are the per-species
+    normalizations (length ``n_species``).
+    """
+
+    key = name.strip().lower()
+    if key in ("none", "lenard_bernstein"):
+        return None
+    if key == "sugama":
+        return DriftKineticMomentCollisionOperator.from_species(
+            density, mass, temperature
+        )
+    if key == "improved_sugama":
+        return DriftKineticMomentCollisionOperator.from_improved_species(
+            density, mass, temperature
+        )
+    raise ValueError(f"collision_operator must be one of {COLLISION_OPERATOR_NAMES}")
+
+
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
 class FiniteWavelengthCoulombOperator:

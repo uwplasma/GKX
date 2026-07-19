@@ -18,10 +18,12 @@ _EXPORTS = {
         "interpolate_collision_moment_matrix",
     ],
     "collisions": [
+        "COLLISION_OPERATOR_NAMES",
         "DriftKineticMomentCollisionOperator",
         "EqualSpeciesFiniteWavelengthCoulombOperator",
         "FiniteWavelengthCoulombOperator",
         "apply_collision_moment_matrix",
+        "collision_operator_from_config",
         "apply_finite_wavelength_coulomb_moment_operator",
         "apply_multispecies_collision_moment_matrix",
         "assemble_drift_kinetic_improved_sugama_matrix",
