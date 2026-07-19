@@ -53,21 +53,22 @@ def _module_search_root(module_name: str) -> Path | None:
 
 
 def _pin_current_optional_backend_paths() -> None:
-    """Keep geometry discovery on the same optional backends VMEC-JAX imported.
+    """Keep geometry discovery on the same optional backends already imported.
 
     The differentiable-geometry bridge intentionally prefers explicit local
     checkouts over globally installed packages.  When examples run from a fresh
-    temporary clone while another VMEC-JAX checkout exists in ``$HOME``, that
-    preference can otherwise evict the VMEC-JAX module that owns the traced
+    temporary clone while another vmex checkout exists in ``$HOME``, that
+    preference can otherwise evict the vmex module that owns the traced
     optimization state.  Pinning the currently importable backend paths makes
-    the VMEC-JAX/SPECTRAX-GK objective reproducible without requiring users to
-    hand-set environment variables.
+    the vmex/SPECTRAX-GK objective reproducible without requiring users to
+    hand-set environment variables (the historical ``*_VMEC_JAX_PATH``
+    environment-variable names are retained).
     """
 
     if not (
         os.environ.get("SPECTRAX_VMEC_JAX_PATH") or os.environ.get("VMEC_JAX_PATH")
     ):
-        root = _module_search_root("vmec_jax")
+        root = _module_search_root("vmex")
         if root is not None:
             os.environ.setdefault("SPECTRAX_VMEC_JAX_PATH", str(root))
     if not (

@@ -1,4 +1,4 @@
-"""VMEC-state differentiable sensitivity reports."""
+"""VMEC-state differentiable sensitivity reports (vmex-backed)."""
 
 from __future__ import annotations
 
@@ -25,11 +25,8 @@ from spectraxgk.geometry.flux_tube_contract import (
     _VMEC_FIELD_LINE_OBSERVABLE_NAMES,
     _VMEC_METRIC_OBSERVABLE_NAMES,
 )
-from spectraxgk.geometry.vmec_field_line_sampling import (
-    _rms_with_floor,
-    _vmec_field_line_sampling_coordinates,
-)
-from spectraxgk.geometry.numerics import _periodic_bilinear_sample_2d
+from spectraxgk.geometry.vmec_boozer_core import _boozer_xform_inputs_from_state
+from spectraxgk.geometry.vmec_field_line_sampling import _rms_with_floor
 from spectraxgk.geometry.sensitivity import geometry_sensitivity_report
 from spectraxgk.geometry.vmec_state_controls import (
     _VMECStateContext,
@@ -38,6 +35,7 @@ from spectraxgk.geometry.vmec_state_controls import (
     _perturb_vmec_state,
     _resolve_vmec_state_indices,
 )
+from spectraxgk.geometry.vmec_tensor_mapping import _import_vmex_turbulence
 
 
 @dataclass(frozen=True)
@@ -158,33 +156,42 @@ def _ad_fd_jacobian_diagnostics(
     }
 
 
+def _vmec_state_metric_grid_shape(runtime: Any) -> list[int]:
+    """Return the vmex real-space evaluation grid shape ``[ns, ntheta, nzeta]``."""
+
+    resolution = runtime.resolution
+    return [int(resolution.ns), int(resolution.ntheta), int(resolution.nzeta)]
+
+
 def _metric_tensor_observable_fn(
     *,
     ctx: _VMECStateContext,
-    geom_mod: Any,
+    turbulence_mod: Any,
     radial_index: int,
     mode_index: int,
     surface_index: int,
+    ntheta: int,
     rms_epsilon: jnp.ndarray,
 ) -> Callable[[jnp.ndarray], jnp.ndarray]:
     def metric_observables(x: jnp.ndarray) -> jnp.ndarray:
         traced_state = _perturb_vmec_state(
             ctx, x, radial_index=radial_index, mode_index=mode_index
         )
-        geom = geom_mod.eval_geom(traced_state, ctx.static)
-        sqrtg, g_ss, g_st, g_sp, g_tt, g_tp, g_pp = (
-            jnp.asarray(getattr(geom, name))[surface_index]
-            for name in ("sqrtg", "g_ss", "g_st", "g_sp", "g_tt", "g_tp", "g_pp")
+        mapping = turbulence_mod.gk_fieldline_geometry(
+            traced_state,
+            ctx.runtime,
+            s_index=int(surface_index),
+            ntheta=int(ntheta),
         )
         return jnp.asarray(
             [
-                _rms_with_floor(sqrtg, rms_epsilon),
-                jnp.mean(g_ss),
-                jnp.mean(g_tt),
-                jnp.mean(g_pp),
-                _rms_with_floor(g_st, rms_epsilon),
-                _rms_with_floor(g_sp, rms_epsilon),
-                _rms_with_floor(g_tp, rms_epsilon),
+                _rms_with_floor(jnp.asarray(mapping["jacobian"]), rms_epsilon),
+                jnp.mean(jnp.asarray(mapping["gds2"])),
+                jnp.mean(jnp.asarray(mapping["gds22"])),
+                _rms_with_floor(jnp.asarray(mapping["gds21"]), rms_epsilon),
+                jnp.mean(jnp.asarray(mapping["grho"])),
+                jnp.mean(jnp.asarray(mapping["gradpar"])),
+                jnp.asarray(mapping["s_hat"]),
             ]
         )
 
@@ -194,51 +201,34 @@ def _metric_tensor_observable_fn(
 def _field_line_tensor_observable_fn(
     *,
     ctx: _VMECStateContext,
-    geom_mod: Any,
-    bcovar_mod: Any,
-    field_mod: Any,
+    turbulence_mod: Any,
     radial_index: int,
     mode_index: int,
     surface_index: int,
-    theta_vmec: jnp.ndarray,
-    zeta_line: jnp.ndarray,
-    b2_floor: jnp.ndarray,
+    alpha: float,
+    ntheta: int,
     rms_epsilon: jnp.ndarray,
 ) -> Callable[[jnp.ndarray], jnp.ndarray]:
     def field_line_observables(x: jnp.ndarray) -> jnp.ndarray:
         traced_state = _perturb_vmec_state(
             ctx, x, radial_index=radial_index, mode_index=mode_index
         )
-        geom = geom_mod.eval_geom(traced_state, ctx.static)
-        bcovar = bcovar_mod.vmec_bcovar_half_mesh_from_wout(
-            state=traced_state,
-            static=ctx.static,
-            wout=ctx.wout,
-            pres=getattr(ctx.wout, "pres", None),
-        )
-        b2 = field_mod.b2_from_bsup(geom, bcovar.bsupu, bcovar.bsupv)
-        def sample(values: jnp.ndarray) -> jnp.ndarray:
-            return _periodic_bilinear_sample_2d(
-                values[surface_index], theta_vmec, zeta_line
-            )
-        bmag = jnp.sqrt(jnp.maximum(sample(b2), b2_floor))
-        sqrtg, g_tt, g_tp, g_pp, g_ss = (
-            sample(getattr(geom, name))
-            for name in ("sqrtg", "g_tt", "g_tp", "g_pp", "g_ss")
-        )
-        mean_b = jnp.mean(bmag)
-        ripple = jnp.std(bmag) / jnp.maximum(
-            jnp.abs(mean_b), jnp.asarray(1.0e-30, dtype=bmag.dtype)
+        mapping = turbulence_mod.gk_fieldline_geometry(
+            traced_state,
+            ctx.runtime,
+            s_index=int(surface_index),
+            alpha=float(alpha),
+            ntheta=int(ntheta),
         )
         return jnp.asarray(
             [
-                mean_b,
-                ripple,
-                _rms_with_floor(sqrtg, rms_epsilon),
-                jnp.mean(g_tt),
-                jnp.mean(g_pp),
-                _rms_with_floor(g_tp, rms_epsilon),
-                jnp.mean(g_ss),
+                jnp.mean(jnp.asarray(mapping["bmag"])),
+                jnp.asarray(mapping["epsilon"]),
+                _rms_with_floor(jnp.asarray(mapping["bgrad"]), rms_epsilon),
+                _rms_with_floor(jnp.asarray(mapping["cvdrift"]), rms_epsilon),
+                _rms_with_floor(jnp.asarray(mapping["gbdrift"]), rms_epsilon),
+                _rms_with_floor(jnp.asarray(mapping["gbdrift0"]), rms_epsilon),
+                _rms_with_floor(jnp.asarray(mapping["jacobian"]), rms_epsilon),
             ]
         )
 
@@ -341,10 +331,10 @@ def _load_vmec_geom_sensitivity_context(
     surface_index: int | None,
     surface_grid: str,
 ) -> tuple[_VMECStateContext, Any, int, int, int]:
-    """Load the shared VMEC geometry context for tensor AD/FD gates."""
+    """Load the shared vmex geometry context for flux-tube AD/FD gates."""
 
     ctx = _load_vmec_state_context(str(case_name))
-    geom_mod = importlib.import_module("vmec_jax.geom")
+    turbulence_mod = _import_vmex_turbulence()
     ridx, midx, sidx = _resolve_vmec_state_indices(
         ctx.base_Rcos,
         radial_index=radial_index,
@@ -352,7 +342,7 @@ def _load_vmec_geom_sensitivity_context(
         surface_index=surface_index,
         surface_grid=surface_grid,
     )
-    return ctx, geom_mod, ridx, midx, sidx
+    return ctx, turbulence_mod, ridx, midx, sidx
 
 
 def _load_vmec_boozer_sensitivity_context(
@@ -362,10 +352,10 @@ def _load_vmec_boozer_sensitivity_context(
     mode_index: int,
     surface_index: int | None,
 ) -> tuple[_VMECStateContext, Any, int, int, int]:
-    """Load VMEC state data and Boozer input conversion hooks."""
+    """Load vmex state data and the traceable Boozer-tables seam."""
 
     ctx = _load_vmec_state_context(str(case_name))
-    booz_input_mod = importlib.import_module("vmec_jax.booz_input")
+    boozer_tables_mod = importlib.import_module("vmex.core.boozer_tables")
     ridx, midx, sidx = _resolve_vmec_state_indices(
         ctx.base_Rcos,
         radial_index=radial_index,
@@ -373,13 +363,13 @@ def _load_vmec_boozer_sensitivity_context(
         surface_index=surface_index,
         surface_grid="half_mesh",
     )
-    return ctx, booz_input_mod, ridx, midx, sidx
+    return ctx, boozer_tables_mod, ridx, midx, sidx
 
 
 def _vmec_to_boozer_mapping_fn(
     *,
     ctx: _VMECStateContext,
-    booz_input_mod: Any,
+    boozer_tables_mod: Any,
     radial_index: int,
     mode_index: int,
     surface_index: int,
@@ -393,11 +383,13 @@ def _vmec_to_boozer_mapping_fn(
         traced_state = _perturb_vmec_state(
             ctx, x, radial_index=radial_index, mode_index=mode_index
         )
-        inputs = booz_input_mod.booz_xform_inputs_from_state(
-            state=traced_state,
-            static=ctx.static,
-            indata=ctx.indata,
-            signgs=ctx.wout.signgs,
+        inputs = _boozer_xform_inputs_from_state(
+            traced_state,
+            ctx.runtime,
+            inp=ctx.inp,
+            wout=ctx.wout,
+            boozer_tables_mod=boozer_tables_mod,
+            ns_full=int(ctx.base_Rcos.shape[0]),
         )
         return booz_xform_flux_tube_mapping_from_inputs(
             inputs,
@@ -446,7 +438,7 @@ def _run_vmec_boozer_flux_tube_sensitivity(
     nboz: int,
     ntheta: int,
 ) -> _BoozerFluxTubeSensitivityRun:
-    ctx, booz_input_mod, ridx, midx, sidx = _load_vmec_boozer_sensitivity_context(
+    ctx, boozer_tables_mod, ridx, midx, sidx = _load_vmec_boozer_sensitivity_context(
         case_name=str(case_name),
         radial_index=radial_index,
         mode_index=mode_index,
@@ -454,7 +446,7 @@ def _run_vmec_boozer_flux_tube_sensitivity(
     )
     mapping_fn = _vmec_to_boozer_mapping_fn(
         ctx=ctx,
-        booz_input_mod=booz_input_mod,
+        boozer_tables_mod=boozer_tables_mod,
         radial_index=ridx,
         mode_index=midx,
         surface_index=sidx,
@@ -522,22 +514,24 @@ def _run_vmec_boozer_flux_tube_report(
 def _metric_tensor_report_payload(
     *,
     ctx: _VMECStateContext,
-    geom_mod: Any,
+    turbulence_mod: Any,
     params: jnp.ndarray,
     radial_index: int,
     mode_index: int,
     surface_index: int,
+    ntheta: int,
     fd_step: float,
     rms_epsilon: float,
 ) -> dict[str, object]:
-    """Build the VMEC metric-tensor sensitivity payload."""
+    """Build the VMEC metric sensitivity payload from the PEST flux tube."""
 
     metric_observables = _metric_tensor_observable_fn(
         ctx=ctx,
-        geom_mod=geom_mod,
+        turbulence_mod=turbulence_mod,
         radial_index=radial_index,
         mode_index=mode_index,
         surface_index=surface_index,
+        ntheta=int(ntheta),
         rms_epsilon=jnp.asarray(float(rms_epsilon), dtype=params.dtype),
     )
     tensor_payload = _tensor_sensitivity_payload(
@@ -547,11 +541,11 @@ def _metric_tensor_report_payload(
         observable_names=_VMEC_METRIC_OBSERVABLE_NAMES,
         relative_floor=1.0e-12,
     )
-    geom0 = geom_mod.eval_geom(ctx.state, ctx.static)
     return {
         "source_model": "vmec_jax:state->metric-tensors",
         **tensor_payload,
-        "metric_grid_shape": [int(v) for v in np.asarray(geom0.sqrtg).shape],
+        "ntheta": int(ntheta),
+        "metric_grid_shape": _vmec_state_metric_grid_shape(ctx.runtime),
         "rms_epsilon": float(rms_epsilon),
     }
 
@@ -563,12 +557,13 @@ def _run_vmec_metric_tensor_sensitivity(
     radial_index: int | None,
     mode_index: int,
     surface_index: int | None,
+    ntheta: int,
     fd_step: float,
     rms_epsilon: float,
 ) -> _VMECStateSensitivityReportRun:
-    """Return a metadata-ready VMEC metric-tensor sensitivity run."""
+    """Return a metadata-ready VMEC metric sensitivity run."""
 
-    ctx, geom_mod, ridx, midx, sidx = _load_vmec_geom_sensitivity_context(
+    ctx, turbulence_mod, ridx, midx, sidx = _load_vmec_geom_sensitivity_context(
         case_name=case_name,
         radial_index=radial_index,
         mode_index=mode_index,
@@ -582,11 +577,12 @@ def _run_vmec_metric_tensor_sensitivity(
         surface_index=sidx,
         payload=_metric_tensor_report_payload(
             ctx=ctx,
-            geom_mod=geom_mod,
+            turbulence_mod=turbulence_mod,
             params=params,
             radial_index=ridx,
             mode_index=midx,
             surface_index=sidx,
+            ntheta=int(ntheta),
             fd_step=float(fd_step),
             rms_epsilon=rms_epsilon,
         ),
@@ -596,7 +592,7 @@ def _run_vmec_metric_tensor_sensitivity(
 def _field_line_tensor_report_payload(
     *,
     ctx: _VMECStateContext,
-    geom_mod: Any,
+    turbulence_mod: Any,
     params: jnp.ndarray,
     radial_index: int,
     mode_index: int,
@@ -607,30 +603,16 @@ def _field_line_tensor_report_payload(
     b2_floor: float,
     rms_epsilon: float,
 ) -> dict[str, object]:
-    """Build the VMEC field-line tensor sensitivity payload."""
+    """Build the VMEC field-line sensitivity payload from the PEST flux tube."""
 
-    bcovar_mod = importlib.import_module("vmec_jax.vmec_bcovar")
-    field_mod = importlib.import_module("vmec_jax.field")
-    iota_line, _iota_safe, _theta_line, theta_vmec, zeta_line = (
-        _vmec_field_line_sampling_coordinates(
-            ctx.wout,
-            surface_index=surface_index,
-            alpha=alpha,
-            ntheta=ntheta,
-            dtype=params.dtype,
-        )
-    )
     field_line_observables = _field_line_tensor_observable_fn(
         ctx=ctx,
-        geom_mod=geom_mod,
-        bcovar_mod=bcovar_mod,
-        field_mod=field_mod,
+        turbulence_mod=turbulence_mod,
         radial_index=radial_index,
         mode_index=mode_index,
         surface_index=surface_index,
-        theta_vmec=theta_vmec,
-        zeta_line=zeta_line,
-        b2_floor=jnp.asarray(float(b2_floor), dtype=params.dtype),
+        alpha=float(alpha),
+        ntheta=int(ntheta),
         rms_epsilon=jnp.asarray(float(rms_epsilon), dtype=params.dtype),
     )
     tensor_payload = _tensor_sensitivity_payload(
@@ -640,15 +622,24 @@ def _field_line_tensor_report_payload(
         observable_names=_VMEC_FIELD_LINE_OBSERVABLE_NAMES,
         relative_floor=1.0e-10,
     )
-    geom0 = geom_mod.eval_geom(ctx.state, ctx.static)
+    mapping0 = turbulence_mod.gk_fieldline_geometry(
+        ctx.state,
+        ctx.runtime,
+        s_index=int(surface_index),
+        alpha=float(alpha),
+        ntheta=int(ntheta),
+    )
+    vmex_meta = mapping0["vmex"]
     return {
         "source_model": "vmec_jax:state->field-line-metric-and-b",
-        "field_line_convention": "VMEC theta, zeta=(theta-alpha)/iota with periodic bilinear sampling",
+        "field_line_convention": str(vmex_meta["field_line_convention"]),
         **tensor_payload,
-        "iota": float(np.asarray(iota_line)),
+        "iota": float(np.asarray(vmex_meta["iota"])),
         "alpha": float(alpha),
         "ntheta": int(ntheta),
-        "metric_grid_shape": [int(v) for v in np.asarray(geom0.sqrtg).shape],
+        "metric_grid_shape": _vmec_state_metric_grid_shape(ctx.runtime),
+        # Retained for report-schema stability; the vmex spectral route needs
+        # no |B|^2 floor.
         "b2_floor": float(b2_floor),
         "rms_epsilon": float(rms_epsilon),
     }
@@ -667,9 +658,9 @@ def _run_vmec_field_line_tensor_sensitivity(
     b2_floor: float,
     rms_epsilon: float,
 ) -> _VMECStateSensitivityReportRun:
-    """Return a metadata-ready VMEC field-line tensor sensitivity run."""
+    """Return a metadata-ready VMEC field-line sensitivity run."""
 
-    ctx, geom_mod, ridx, midx, sidx = _load_vmec_geom_sensitivity_context(
+    ctx, turbulence_mod, ridx, midx, sidx = _load_vmec_geom_sensitivity_context(
         case_name=case_name,
         radial_index=radial_index,
         mode_index=mode_index,
@@ -683,7 +674,7 @@ def _run_vmec_field_line_tensor_sensitivity(
         surface_index=sidx,
         payload=_field_line_tensor_report_payload(
             ctx=ctx,
-            geom_mod=geom_mod,
+            turbulence_mod=turbulence_mod,
             params=params,
             radial_index=ridx,
             mode_index=midx,
@@ -709,16 +700,16 @@ def vmec_jax_boozer_flux_tube_sensitivity_report(  # pragma: no cover
     nboz: int = 0,
     ntheta: int = 32,
 ) -> dict[str, object]:
-    """AD/FD-check ``vmec_jax`` state coefficients through the Boozer bridge.
+    """AD/FD-check vmex state coefficients through the Boozer bridge.
 
     This is the first end-to-end optional-backend gate that starts from a real
-    ``vmec_jax`` ``VMECState`` instead of a hand-built Boozer input bundle. It
-    loads a small bundled VMEC example, perturbs two VMEC Fourier coefficients
-    ``[Rcos(radial_index, mode_index), Zsin(radial_index, mode_index)]``,
-    converts the perturbed state to ``booz_xform_jax`` inputs, samples the
-    resulting Boozer ``|B|`` spectrum on a field line, and checks
-    SPECTRAX-GK geometry-observable derivatives against central finite
-    differences.
+    solved ``vmex`` spectral state instead of a hand-built Boozer input bundle.
+    It solves a small bundled VMEC example, perturbs two Fourier coefficients
+    ``[R_cos(radial_index, mode_index), Z_sin(radial_index, mode_index)]``,
+    stacks the traceable half-mesh Boozer tables from
+    ``vmex.core.boozer_tables.boozer_input_tables``, samples the resulting
+    Boozer ``|B|`` spectrum on a field line, and checks SPECTRAX-GK
+    geometry-observable derivatives against central finite differences.
 
     The current metric/drift closure is still intentionally smooth and local to
     SPECTRAX-GK. Full production promotion requires replacing it with sampled
@@ -759,21 +750,19 @@ def vmec_jax_metric_tensor_sensitivity_report(  # pragma: no cover
     radial_index: int | None = None,
     mode_index: int = 1,
     surface_index: int | None = None,
+    ntheta: int = 32,
     fd_step: float = 1.0e-5,
     rms_epsilon: float = 1.0e-24,
 ) -> dict[str, object]:
-    """AD/FD-check real ``vmec_jax`` metric tensors from a ``VMECState``.
+    """AD/FD-check flux-tube metric coefficients from a solved ``vmex`` state.
 
     The Boozer bridge validates the straight-field-line ``|B|`` spectrum, but
-    SPECTRAX-GK's production geometry contract also needs sampled metric and
-    drift tensors. This gate stays upstream of any reduced closure: it loads a
-    real ``vmec_jax`` example state, perturbs two VMEC Fourier coefficients,
-    evaluates ``vmec_jax.geom.eval_geom``, and checks metric-tensor observable
-    derivatives against central finite differences.
-
-    This is a prerequisite for replacing the smooth metric/drift closure in
-    :func:`booz_xform_flux_tube_mapping_from_inputs`; it is not by itself the
-    final Boozer-field-line metric parity gate.
+    SPECTRAX-GK's production geometry contract also needs the perpendicular
+    metric and Jacobian profiles. This gate perturbs two vmex Fourier
+    coefficients, evaluates the PEST field-line metric arrays of
+    ``vmex.core.turbulence.gk_fieldline_geometry`` (``gds2``/``gds21``/
+    ``gds22``/``grho``/``jacobian``/``gradpar`` plus the magnetic shear), and
+    checks metric-observable derivatives against central finite differences.
     """
 
     return _optional_vmec_state_sensitivity_report(
@@ -789,6 +778,7 @@ def vmec_jax_metric_tensor_sensitivity_report(  # pragma: no cover
             radial_index=radial_index,
             mode_index=mode_index,
             surface_index=surface_index,
+            ntheta=int(ntheta),
             fd_step=float(fd_step),
             rms_epsilon=rms_epsilon,
         ),
@@ -808,19 +798,18 @@ def vmec_jax_field_line_tensor_sensitivity_report(  # pragma: no cover
     b2_floor: float = 1.0e-24,
     rms_epsilon: float = 1.0e-24,
 ) -> dict[str, object]:
-    """AD/FD-check VMEC field-line metric and ``|B|`` tensors from ``vmec_jax``.
+    """AD/FD-check field-line ``|B|`` and drift arrays from a ``vmex`` state.
 
-    This optional-backend gate is deliberately upstream of the production
-    SPECTRAX-GK metric/drift closure. It loads a real stellarator
-    ``vmec_jax`` example state, perturbs two VMEC Fourier coefficients,
-    evaluates ``vmec_jax.geom.eval_geom`` and ``vmec_jax.vmec_bcovar``, samples
-    raw metric/``|B|`` tensors on a fixed VMEC field-line convention, and checks
-    those observable derivatives against central finite differences.
+    This optional-backend gate perturbs two Fourier coefficients of a real
+    solved stellarator ``vmex`` example state, samples the PEST field-line
+    ``|B|``, its parallel derivative, and the projected grad-B/curvature drift
+    arrays of ``vmex.core.turbulence.gk_fieldline_geometry``, and checks those
+    observable derivatives against central finite differences.
 
-    The gate proves differentiability from ``VMECState`` through real VMEC
-    metric and magnetic-field tensors. The later production gate must still
-    convert those tensors into the exact SPECTRAX-GK ``gds*``/drift contract and
-    compare against the imported VMEC/EIK path.
+    The gate proves differentiability from the vmex spectral state through the
+    real field-line magnetic geometry. The later production gate must still
+    parity-check the exact SPECTRAX-GK ``gds*``/drift contract against the
+    imported VMEC/EIK path.
     """
 
     return _optional_vmec_state_sensitivity_report(

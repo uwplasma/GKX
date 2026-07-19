@@ -136,7 +136,6 @@ def _call_with_vmec_state_facade_hooks(func: Any, *args: Any, **kwargs: Any) -> 
             ),
             "geometry_sensitivity_report": geometry_sensitivity_report,
             "finite_difference_jacobian": finite_difference_jacobian,
-            "_periodic_bilinear_sample_2d": _periodic_bilinear_sample_2d,
             "_sensitivity_conditioning_metadata": (
                 _sensitivity_conditioning_metadata
             ),
@@ -174,13 +173,9 @@ def vmec_jax_field_line_tensor_sensitivity_report(*args: Any, **kwargs: Any) -> 
 
 @wraps(_vmec_tensor_mapping.vmec_jax_flux_tube_mapping_from_state)
 def vmec_jax_flux_tube_mapping_from_state(*args: Any, **kwargs: Any) -> Any:
-    with _patched_module_attrs(
-        _vmec_tensor_mapping,
-        {"_periodic_bilinear_sample_2d": _periodic_bilinear_sample_2d},
-    ):
-        return _vmec_tensor_mapping.vmec_jax_flux_tube_mapping_from_state(
-            *args, **kwargs
-        )
+    return _vmec_tensor_mapping.vmec_jax_flux_tube_mapping_from_state(
+        *args, **kwargs
+    )
 
 
 _cached_booz_xform_constants = _vmec_boozer_core._cached_booz_xform_constants
@@ -226,8 +221,8 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(
 
 def flux_tube_geometry_from_vmec_boozer_state(  # pragma: no cover
     state: Any,
-    static: Any,
-    indata: Any,
+    runtime: Any,
+    inp: Any,
     wout: Any,
     *,
     surface_index: int | None = None,
@@ -243,12 +238,13 @@ def flux_tube_geometry_from_vmec_boozer_state(  # pragma: no cover
     source_model: str = "mode21_vmec_boozer_state",
     validate_finite: bool = True,
 ) -> FluxTubeGeometryData:
-    """Build solver-ready geometry directly from a solved ``vmec_jax`` state.
+    """Build solver-ready geometry directly from a solved ``vmex`` state.
 
     This is the production-facing in-memory bridge for differentiable
     optimization workflows. It keeps the path inside JAX-compatible objects:
 
-    ``VMECState -> BoozXformInputs -> booz_xform_jax -> FluxTubeGeometryData``.
+    ``SpectralState -> boozer_input_tables -> booz_xform_jax ->
+    FluxTubeGeometryData``.
 
     Runtime VMEC file generation can still use the NetCDF/EIK route, but
     differentiable stellarator optimization should call this function or a
@@ -258,8 +254,8 @@ def flux_tube_geometry_from_vmec_boozer_state(  # pragma: no cover
 
     mapping = vmec_jax_boozer_equal_arc_core_profiles_from_state(
         state,
-        static,
-        indata,
+        runtime,
+        inp,
         wout,
         surface_index=surface_index,
         torflux=torflux,

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
@@ -97,66 +96,92 @@ def _profile_minima_from_arrays(iotas: np.ndarray, iotaf: np.ndarray) -> tuple[f
 
 
 def final_iota_profiles_from_vmec_result(result: Any) -> tuple[np.ndarray, np.ndarray] | None:
-    """Return final solved iota profiles from a VMEC-JAX result if available."""
+    """Return final solved iota profiles from a vmex result bundle if available.
 
-    state = getattr(result, "final_state", None)
-    optimizer = getattr(result, "final_optimizer", None)
-    if state is None or optimizer is None:
+    ``result`` may carry ``final_wout`` (a ``vmex`` ``WoutData``-like object
+    with ``iotas``/``iotaf`` tables) or ``final_equilibrium`` (a
+    ``vmex.optimize.Equilibrium``, whose lazily built ``wout`` is used).
+    """
+
+    wout = getattr(result, "final_wout", None)
+    if wout is None:
+        equilibrium = getattr(result, "final_equilibrium", None)
+        if equilibrium is not None:
+            try:
+                wout = equilibrium.wout
+            except Exception:
+                return None
+    if wout is None:
+        return None
+    iotas = getattr(wout, "iotas", None)
+    iotaf = getattr(wout, "iotaf", None)
+    if iotas is None or iotaf is None:
         return None
     try:
-        import vmex as vj  # type: ignore[import-not-found]
-
-        _chips, iotas, iotaf = vj.equilibrium_iota_profiles_from_state(
-            state=state,
-            static=getattr(optimizer, "_static"),
-            indata=getattr(optimizer, "_indata"),
-            signgs=int(getattr(optimizer, "_signgs")),
-        )
+        return np.asarray(iotas, dtype=float), np.asarray(iotaf, dtype=float)
     except Exception:
         return None
-    return np.asarray(iotas, dtype=float), np.asarray(iotaf, dtype=float)
 
 
 def _final_quasisymmetry_from_vmec_result(result: Any) -> float | None:
-    """Return an independent final QS residual from a VMEC-JAX result."""
+    """Return an independent final QS residual from a vmex result bundle.
 
-    optimizer = getattr(result, "final_optimizer", None)
-    if optimizer is None:
-        return None
+    Preference order: the standalone ``vmex`` quasisymmetry residual on the
+    solved state (``total_state``), then on the wout tables (``total``), then a
+    caller-provided ``final_optimizer.quasisymmetry_objective(final_params)``
+    fallback. The independent residual deliberately avoids any assembled
+    transport-objective block.
+    """
+
+    equilibrium = getattr(result, "final_equilibrium", None)
     state = getattr(result, "final_state", None)
-    if state is not None:
+    runtime = getattr(result, "final_runtime", None)
+    if equilibrium is not None:
+        state = state if state is not None else getattr(equilibrium, "state", None)
+        runtime = runtime if runtime is not None else getattr(equilibrium, "runtime", None)
+    helicity_m = int(getattr(result, "helicity_m", 1) or 1)
+    helicity_n = int(getattr(result, "helicity_n", 0) or 0)
+    surfaces = np.arange(0.0, 1.01, 0.1)
+
+    if state is not None and runtime is not None:
         try:
-            import jax.numpy as jnp
             import vmex as vj  # type: ignore[import-not-found]
 
-            static = getattr(optimizer, "_static")
-            qs = vj.QuasisymmetryRatioResidual(
-                helicity_m=int(getattr(optimizer, "_helicity_m", 1) or 1),
-                helicity_n=int(getattr(optimizer, "_helicity_n", 0) or 0),
-                surfaces=np.arange(0.0, 1.01, 0.1),
+            qs = vj.optimize.QuasisymmetryRatioResidual(
+                surfaces,
+                helicity_m=helicity_m,
+                helicity_n=helicity_n,
             )
-            ctx = SimpleNamespace(
-                static=static,
-                indata=getattr(optimizer, "_indata"),
-                signgs=int(getattr(optimizer, "_signgs")),
-                flux=getattr(optimizer, "_flux"),
-                pressure=jnp.zeros_like(jnp.asarray(getattr(static, "s"))),
-            )
-            value = _finite_float_or_none(qs.total(ctx, state))
+            value = _finite_float_or_none(qs.total_state(state, runtime))
             if value is not None:
                 return value
         except Exception:
             pass
+
+    wout = getattr(result, "final_wout", None)
+    if wout is None and equilibrium is not None:
         try:
-            residuals = getattr(optimizer, "_evaluate_residuals_from_state")(state)
-            qs_total = getattr(optimizer, "_qs_total_from_state")(state, residuals)
-            value = _finite_float_or_none(qs_total)
+            wout = equilibrium.wout
+        except Exception:
+            wout = None
+    if wout is not None:
+        try:
+            import vmex as vj  # type: ignore[import-not-found]
+
+            qs = vj.optimize.QuasisymmetryRatioResidual(
+                surfaces,
+                helicity_m=helicity_m,
+                helicity_n=helicity_n,
+            )
+            value = _finite_float_or_none(qs.total(wout))
             if value is not None:
                 return value
         except Exception:
             pass
+
+    optimizer = getattr(result, "final_optimizer", None)
     params = getattr(result, "final_params", None)
-    if params is not None:
+    if optimizer is not None and params is not None:
         try:
             return _finite_float_or_none(getattr(optimizer, "quasisymmetry_objective")(params))
         except Exception:
@@ -224,19 +249,15 @@ def _wout_quasisymmetry(
     try:
         import vmex as vj  # type: ignore[import-not-found]
 
-        wout = vj.load_wout(source)
-        qs = vj.quasisymmetry_ratio_residual_from_wout(
-            wout,
-            surfaces=np.asarray(surfaces, dtype=float),
+        wout = vj.read_wout(source)
+        qs = vj.optimize.QuasisymmetryRatioResidual(
+            np.asarray(surfaces, dtype=float),
             helicity_m=int(helicity_m),
             helicity_n=int(helicity_n),
             ntheta=int(ntheta),
             nphi=int(nphi),
         )
-        if isinstance(qs, Mapping):
-            value = _finite_float_or_none(qs.get("total"))
-        else:
-            value = _finite_float_or_none(qs)
+        value = _finite_float_or_none(qs.total(wout))
         return value, "vmec_jax_wout", None if value is not None else "nonfinite_qs_residual"
     except Exception as exc:
         return None, "vmec_jax_wout_error", f"{type(exc).__name__}: {exc}"
@@ -473,8 +494,9 @@ def build_solved_vmec_candidate_gate(
 ) -> dict[str, Any]:
     """Build a JSON-safe solved-equilibrium gate report.
 
-    ``candidate`` may be a VMEC-JAX optimization result with a ``history``
-    property or a history mapping loaded from ``history.json``.
+    ``candidate`` may be a vmex optimization result bundle with a ``history``
+    property (and ``final_equilibrium``/``final_wout``/``final_state`` fields)
+    or a history mapping loaded from ``history.json``.
     """
 
     history = _history_from_candidate(candidate)
