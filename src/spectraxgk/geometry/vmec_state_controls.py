@@ -1,8 +1,7 @@
-"""Shared VMEC-JAX state control helpers for differentiable geometry gates."""
+"""Shared vmex state control helpers for differentiable geometry gates."""
 
 from __future__ import annotations
 
-import importlib
 import os
 from dataclasses import dataclass, replace as dc_replace
 from pathlib import Path
@@ -15,6 +14,10 @@ from spectraxgk.geometry.backend_discovery import (
     _booz_read_wout_square_layout_failure,
     _import_booz_backend,
     _new_booz_object,
+)
+from spectraxgk.geometry.vmec_boozer_core import (
+    load_solved_vmex_case,
+    resolve_vmex_case_input_path,
 )
 from spectraxgk.geometry.vmec_boozer_derivatives import (
     _axisym_flip_required,
@@ -33,6 +36,17 @@ from spectraxgk.geometry.vmec_field_line_sampling import (
 
 VMEC_BOOZER_STATE_PARAMETER_NAMES = ("Rcos_mid_surface_m1",)
 VMEC_BOOZER_STATE_PARAMETER_FAMILIES = ("Rcos", "Rsin", "Zcos", "Zsin", "Lcos", "Lsin")
+#: Public family strings (config/report values) -> vmex SpectralState attributes.
+_VMEC_STATE_FAMILY_ATTRS = {
+    "Rcos": "R_cos",
+    "Rsin": "R_sin",
+    "Zcos": "Z_cos",
+    "Zsin": "Z_sin",
+    "Lcos": "L_cos",
+    "Lsin": "L_sin",
+}
+#: Provenance marker: vmex equilibria are solved in memory, without a wout file.
+VMEC_STATE_IN_MEMORY_WOUT_PATH = "in-memory:vmex.optimize.solve_equilibrium"
 
 
 def _new_boozer_object_with_auto_fallback(
@@ -40,9 +54,9 @@ def _new_boozer_object_with_auto_fallback(
 ) -> Any:
     """Create a Boozer transform object, using the classic reader if needed.
 
-    Some VMEC-JAX WOUT files expose a square ``(radius, mode)`` layout that old
-    ``booz_xform_jax`` readers reject as ambiguous. In automatic backend mode,
-    the imported-geometry path can safely fall back to the classic
+    Some vmex-written WOUT files expose a square ``(radius, mode)`` layout that
+    old ``booz_xform_jax`` readers reject as ambiguous. In automatic backend
+    mode, the imported-geometry path can safely fall back to the classic
     ``booz_xform`` reader; explicit backend selections remain fail-fast.
     """
 
@@ -63,13 +77,17 @@ def _new_boozer_object_with_auto_fallback(
 
 @dataclass(frozen=True)
 class _VMECStateContext:
-    """Loaded VMEC-JAX example state plus coefficient arrays used by AD gates."""
+    """Solved vmex example state plus coefficient arrays used by AD gates.
+
+    ``base_Rcos``/``base_Zsin`` mirror the vmex ``R_cos``/``Z_sin`` spectral
+    tables; ``wout_path`` is the in-memory provenance marker because vmex
+    solves the equilibrium directly instead of reading a wout file.
+    """
 
     input_path: Any
     wout_path: Any
-    cfg: Any
-    indata: Any
-    static: Any
+    inp: Any
+    runtime: Any
     wout: Any
     state: Any
     base_Rcos: jnp.ndarray
@@ -77,33 +95,19 @@ class _VMECStateContext:
 
 
 def _load_vmec_state_context(case_name: str) -> _VMECStateContext:
-    """Load a bundled VMEC-JAX example and expose differentiable state arrays."""
+    """Solve a bundled vmex example and expose differentiable state arrays."""
 
-    driver = importlib.import_module("vmec_jax.driver")
-    config_mod = importlib.import_module("vmec_jax.config")
-    static_mod = importlib.import_module("vmec_jax.static")
-    wout_mod = importlib.import_module("vmec_jax.wout")
-
-    input_path, wout_path = driver.example_paths(str(case_name))
-    if wout_path is None:
-        raise RuntimeError(
-            f"vmec_jax example {case_name!r} has no bundled wout reference"
-        )
-
-    cfg, indata = config_mod.load_config(str(input_path))
-    static = static_mod.build_static(cfg)
-    wout = wout_mod.read_wout(wout_path)
-    state = wout_mod.state_from_wout(wout)
-    base_Rcos = jnp.asarray(state.Rcos)
-    base_Zsin = jnp.asarray(state.Zsin)
+    input_path = resolve_vmex_case_input_path(str(case_name))
+    inp, state, runtime, wout = load_solved_vmex_case(str(case_name))
+    base_Rcos = jnp.asarray(state.R_cos)
+    base_Zsin = jnp.asarray(state.Z_sin)
     if base_Rcos.ndim != 2 or base_Zsin.ndim != 2:
-        raise RuntimeError("vmec_jax state Rcos/Zsin arrays must be two-dimensional")
+        raise RuntimeError("vmex state R_cos/Z_sin arrays must be two-dimensional")
     return _VMECStateContext(
         input_path=input_path,
-        wout_path=wout_path,
-        cfg=cfg,
-        indata=indata,
-        static=static,
+        wout_path=VMEC_STATE_IN_MEMORY_WOUT_PATH,
+        inp=inp,
+        runtime=runtime,
         wout=wout,
         state=state,
         base_Rcos=base_Rcos,
@@ -111,21 +115,29 @@ def _load_vmec_state_context(case_name: str) -> _VMECStateContext:
     )
 
 
-def _vmec_boozer_state_array(state: Any, parameter_family: str) -> jnp.ndarray:
-    """Return a validated VMEC state coefficient table for one Fourier family."""
+def _vmec_state_family_attribute(parameter_family: str) -> str:
+    """Map a public Fourier-family string to its vmex state attribute name."""
 
     family = str(parameter_family)
-    if family not in VMEC_BOOZER_STATE_PARAMETER_FAMILIES:
+    attribute = _VMEC_STATE_FAMILY_ATTRS.get(family)
+    if attribute is None:
         raise ValueError(
             "parameter_family must be one of "
             f"{', '.join(VMEC_BOOZER_STATE_PARAMETER_FAMILIES)}"
         )
-    if not hasattr(state, family):
-        raise RuntimeError(f"vmec_jax state does not expose {family}")
-    array = jnp.asarray(getattr(state, family))
+    return attribute
+
+
+def _vmec_boozer_state_array(state: Any, parameter_family: str) -> jnp.ndarray:
+    """Return a validated VMEC state coefficient table for one Fourier family."""
+
+    attribute = _vmec_state_family_attribute(parameter_family)
+    if not hasattr(state, attribute):
+        raise RuntimeError(f"vmex state does not expose {attribute}")
+    array = jnp.asarray(getattr(state, attribute))
     if array.ndim != 2 or int(array.shape[1]) < 2:
         raise RuntimeError(
-            f"vmec_jax state {family} array must expose at least one non-axisymmetric mode"
+            f"vmex state {attribute} array must expose at least one non-axisymmetric mode"
         )
     return array
 
@@ -143,7 +155,7 @@ def _replace_vmec_boozer_state_coefficient(
     return dc_replace(
         state,
         **{
-            str(parameter_family): base_array.at[
+            _vmec_state_family_attribute(parameter_family): base_array.at[
                 int(radial_index),
                 int(mode_index),
             ].add(delta)
@@ -216,8 +228,8 @@ def _perturb_vmec_state(
 
     return dc_replace(
         ctx.state,
-        Rcos=ctx.base_Rcos.at[radial_index, mode_index].add(x[0]),
-        Zsin=ctx.base_Zsin.at[radial_index, mode_index].add(x[1]),
+        R_cos=ctx.base_Rcos.at[radial_index, mode_index].add(x[0]),
+        Z_sin=ctx.base_Zsin.at[radial_index, mode_index].add(x[1]),
     )
 
 
@@ -522,6 +534,7 @@ def _sample_fieldline_boozer_state(
 __all__ = [
     "VMEC_BOOZER_STATE_PARAMETER_FAMILIES",
     "VMEC_BOOZER_STATE_PARAMETER_NAMES",
+    "VMEC_STATE_IN_MEMORY_WOUT_PATH",
     "_VMECStateContext",
     "_length_two_params",
     "_load_vmec_state_context",

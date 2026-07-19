@@ -192,9 +192,6 @@ def _call_with_vmec_boozer_core_facade_hooks(
     with _patched_module_attrs(
         _vmec_boozer_core,
         {
-            "discover_differentiable_geometry_backends": (
-                discover_differentiable_geometry_backends
-            ),
             "_boozer_half_mesh_s_grid": _boozer_half_mesh_s_grid,
             "_cumulative_trapezoid": _cumulative_trapezoid,
             "_evaluate_boozer_cosine_series_on_field_line": (

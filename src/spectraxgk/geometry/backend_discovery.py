@@ -72,10 +72,12 @@ def _find_importable_module(name: str, paths: Sequence[Path]) -> Any | None:
     # Prefer explicitly configured/local differentiable-geometry checkouts over
     # globally installed packages. Some editable VMEC checkouts carry example
     # data that the site package does not ship, so importing the site package
-    # first can silently disable real validation gates.
+    # first can silently disable real validation gates.  Only drop an already
+    # imported package when a candidate checkout actually exists: re-importing
+    # vmex/booz_xform_jax invalidates their pytree registrations and caches.
     root_name = name.split(".", maxsplit=1)[0]
     root_path = _module_file(root_name)
-    if root_path is not None and not _inside_candidates(root_path):
+    if paths and root_path is not None and not _inside_candidates(root_path):
         for module_name in list(sys.modules):
             if module_name == root_name or module_name.startswith(f"{root_name}."):
                 sys.modules.pop(module_name, None)
@@ -100,7 +102,14 @@ def _is_traced(value: Any) -> bool:
 
 
 def discover_differentiable_geometry_backends() -> dict[str, object]:
-    """Discover optional ``vmec_jax`` and ``booz_xform_jax`` bridge APIs."""
+    """Discover the optional ``vmex`` and ``booz_xform_jax`` bridge APIs.
+
+    ``vmex`` is normally the installed package; the filesystem fallbacks keep
+    working for local checkouts (the historical ``vmec_jax`` repository IS the
+    vmex source tree).  The report KEY NAMES intentionally keep the legacy
+    ``vmec_jax_*`` spelling: they are string-coupled to frozen validation
+    artifacts, and the coordinated identifier rename happens in a later phase.
+    """
 
     repo_parent = Path(__file__).resolve().parents[3].parent
     home = Path.home()
@@ -120,7 +129,7 @@ def discover_differentiable_geometry_backends() -> dict[str, object]:
             home / "local" / "booz_xform_jax",
         ),
     )
-    vmec = _find_importable_module("vmec_jax", vmec_paths)
+    vmec = _find_importable_module("vmex", vmec_paths)
     booz = _find_importable_module("booz_xform_jax", booz_paths)
     booz_jax_api = (
         None
@@ -128,6 +137,9 @@ def discover_differentiable_geometry_backends() -> dict[str, object]:
         else _find_importable_module("booz_xform_jax.jax_api", booz_paths)
     )
 
+    # The boundary bridge still targets the retired vmec_jax boundary helpers;
+    # vmex does not expose them, so this reports False until that route is
+    # ported (spectraxgk.geometry.booz_xform_bridge).
     vmec_boundary_api = vmec is not None and all(
         hasattr(vmec, name)
         for name in (

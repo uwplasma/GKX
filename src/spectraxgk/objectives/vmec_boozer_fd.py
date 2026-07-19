@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import importlib
 from typing import Any, Literal, cast
 
 import numpy as np
 
-from spectraxgk.geometry.backend_discovery import discover_differentiable_geometry_backends
+from spectraxgk.geometry.vmec_boozer_core import (
+    load_solved_vmex_case,
+    resolve_vmex_case_input_path,
+)
 from spectraxgk.objectives.core import (
     SOLVER_OBJECTIVE_NAMES,
     SolverScalarObjective,
@@ -26,6 +28,7 @@ from spectraxgk.objectives.vmec_boozer import (
     vmec_boozer_solver_objective_vector_from_state,
 )
 from spectraxgk.geometry.vmec_state_controls import (
+    VMEC_STATE_IN_MEMORY_WOUT_PATH,
     _replace_vmec_boozer_state_coefficient,
     _vmec_boozer_state_array,
     _vmec_boozer_state_parameter_name,
@@ -328,8 +331,8 @@ def _evaluate_scalar_fd_point(
     traced_state = _perturbed_state(ctx, fns.replace_state_coefficient_fn, delta)
     vector = fns.vector_fn(
         traced_state,
-        ctx.bundle["static"],
-        ctx.bundle["indata"],
+        ctx.bundle["runtime"],
+        ctx.bundle["inp"],
         ctx.bundle["wout"],
         **kwargs,
     )
@@ -483,8 +486,8 @@ def _evaluate_aggregate_fd_point(
     traced_state = _perturbed_state(ctx, fns.replace_state_coefficient_fn, delta)
     table, sample_metadata = fns.table_with_metadata_fn(
         traced_state,
-        ctx.bundle["static"],
-        ctx.bundle["indata"],
+        ctx.bundle["runtime"],
+        ctx.bundle["inp"],
         ctx.bundle["wout"],
         surface_indices=surface_indices,
         torflux_values=torflux_values,
@@ -659,26 +662,17 @@ def _aggregate_fd_report_payload(
 def _load_vmec_jax_example_state_bundle(
     case_name: str,
 ) -> dict[str, Any]:  # pragma: no cover
-    """Load a local ``vmec_jax`` example state bundle for offline gates."""
+    """Solve a local vmex example and bundle its state for offline gates."""
 
-    discover_differentiable_geometry_backends()
-    driver = importlib.import_module("vmec_jax.driver")
-    config_mod = importlib.import_module("vmec_jax.config")
-    static_mod = importlib.import_module("vmec_jax.static")
-    wout_mod = importlib.import_module("vmec_jax.wout")
-
-    input_path, wout_path = driver.example_paths(str(case_name))
-    cfg_vmec, indata = config_mod.load_config(str(input_path))
-    static = static_mod.build_static(cfg_vmec)
-    wout = wout_mod.read_wout(wout_path)
-    state = wout_mod.state_from_wout(wout)
+    input_path = resolve_vmex_case_input_path(str(case_name))
+    inp, state, runtime, wout = load_solved_vmex_case(str(case_name))
     return {
         "case_name": str(case_name),
         "input_path": str(input_path),
-        "wout_path": str(wout_path),
+        "wout_path": VMEC_STATE_IN_MEMORY_WOUT_PATH,
         "state": state,
-        "static": static,
-        "indata": indata,
+        "runtime": runtime,
+        "inp": inp,
         "wout": wout,
     }
 
@@ -700,7 +694,7 @@ def vmec_boozer_scalar_objective_finite_difference_report(  # pragma: no cover
 
     This report is the safe optimization pre-step for full-chain stellarator
     objectives. It perturbs one VMEC state coefficient in a solved
-    ``vmec_jax`` state, evaluates the in-memory VMEC/Boozer/SPECTRAX-GK scalar
+    ``vmex`` state, evaluates the in-memory VMEC/Boozer/SPECTRAX-GK scalar
     objective at ``x0+base_delta-h``, ``x0+base_delta``, and
     ``x0+base_delta+h``, and records the central
     finite-difference sensitivity.

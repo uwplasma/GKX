@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import importlib
 from typing import Any
 
 import jax.numpy as jnp
@@ -10,9 +9,9 @@ import jax.numpy as jnp
 from spectraxgk.config import CycloneBaseCase, GridConfig
 from spectraxgk.core.grid import build_spectral_grid, select_ky_grid
 from spectraxgk.diagnostics import fieldline_quadrature_weights, heat_flux_species
-from spectraxgk.geometry.backend_discovery import discover_differentiable_geometry_backends
 from spectraxgk.geometry.flux_tube_contract import flux_tube_geometry_from_mapping
 from spectraxgk.geometry.vmec_boozer_core import (
+    load_solved_vmex_case,
     vmec_jax_boozer_equal_arc_core_profiles_from_state,
 )
 from spectraxgk.objectives.core import (
@@ -31,20 +30,9 @@ from spectraxgk.objectives.autodiff_validation import explicit_complex_operator_
 
 
 def _load_vmec_boozer_example(case_name: str) -> tuple[Any, Any, Any, Any]:
-    """Load VMEC-JAX example inputs and the corresponding differentiable state."""
+    """Solve a vmex example case and return ``(inp, state, runtime, wout)``."""
 
-    discover_differentiable_geometry_backends()
-    driver = importlib.import_module("vmec_jax.driver")
-    config_mod = importlib.import_module("vmec_jax.config")
-    static_mod = importlib.import_module("vmec_jax.static")
-    wout_mod = importlib.import_module("vmec_jax.wout")
-
-    input_path, wout_path = driver.example_paths(str(case_name))
-    cfg_vmec, indata = config_mod.load_config(str(input_path))
-    static = static_mod.build_static(cfg_vmec)
-    wout = wout_mod.read_wout(wout_path)
-    state = wout_mod.state_from_wout(wout)
-    return static, indata, wout, state
+    return load_solved_vmex_case(str(case_name))
 
 
 def _resolve_mode21_state_parameter(
@@ -104,8 +92,8 @@ def _mode21_state_shape(
 def _make_mode21_geometry_for(
     *,
     state: Any,
-    static: Any,
-    indata: Any,
+    runtime: Any,
+    inp: Any,
     wout: Any,
     parameter_family: str,
     base_coeff: Any,
@@ -130,8 +118,8 @@ def _make_mode21_geometry_for(
         )
         mapping = vmec_jax_boozer_equal_arc_core_profiles_from_state(
             traced_state,
-            static,
-            indata,
+            runtime,
+            inp,
             wout,
             surface_index=surface_index,
             ntheta=int(ntheta),
@@ -200,7 +188,7 @@ def _mode21_vmec_boozer_linear_context(  # pragma: no cover
 ) -> dict[str, Any]:
     """Build shared VMEC/Boozer geometry and linear-RHS closures for gates."""
 
-    static, indata, wout, state = _load_vmec_boozer_example(str(case_name))
+    inp, state, runtime, wout = _load_vmec_boozer_example(str(case_name))
     base_coeff, radial_index_int, mode_index_int, parameter_names = (
         _resolve_mode21_state_parameter(
             state,
@@ -219,8 +207,8 @@ def _mode21_vmec_boozer_linear_context(  # pragma: no cover
     terms = _default_gradient_linear_terms()
     geometry_for = _make_mode21_geometry_for(
         state=state,
-        static=static,
-        indata=indata,
+        runtime=runtime,
+        inp=inp,
         wout=wout,
         parameter_family=parameter_family,
         base_coeff=base_coeff,

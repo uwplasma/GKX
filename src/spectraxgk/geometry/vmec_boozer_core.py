@@ -1,18 +1,17 @@
-"""VMEC-JAX to Boozer equal-arc core-profile bridge."""
+"""vmex (VMEC-in-JAX) to Boozer equal-arc core-profile bridge."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 import importlib
-from types import SimpleNamespace
+from importlib import resources as importlib_resources
+from pathlib import Path
 from typing import Any
 
 import jax.numpy as jnp
 import numpy as np
 
-from spectraxgk.geometry.backend_discovery import (
-    discover_differentiable_geometry_backends,
-)
 from spectraxgk.geometry.core import FluxTubeGeometryData
 from spectraxgk.geometry.flux_tube_contract import flux_tube_geometry_from_mapping
 from spectraxgk.geometry.numerics import (
@@ -27,6 +26,7 @@ from spectraxgk.geometry.numerics import (
 from spectraxgk.geometry.vmec_boozer_constants import (
     _VMEC_BOOZER_PARITY_MIN_MODE_COUNT,
     _cached_booz_xform_constants,
+    _grid_mode_limits,
     prewarm_vmec_boozer_equal_arc_cache,
 )
 from spectraxgk.geometry.vmec_boozer_derivatives import (
@@ -34,6 +34,92 @@ from spectraxgk.geometry.vmec_boozer_derivatives import (
     boozer_coordinate_gradients,
     evaluate_boozer_field_line_derivatives,
 )
+
+
+def _import_vmex_boozer_modules() -> tuple[Any, Any]:
+    """Import the vmex Boozer-tables seam and the booz_xform_jax API."""
+
+    try:
+        boozer_tables_mod = importlib.import_module("vmex.core.boozer_tables")
+        bx = importlib.import_module("booz_xform_jax.jax_api")
+    except Exception as exc:  # pragma: no cover - environment-dependent
+        raise RuntimeError(
+            "vmex and booz_xform_jax are required for the VMEC/Boozer bridge"
+        ) from exc
+    return boozer_tables_mod, bx
+
+
+def resolve_vmex_case_input_path(case_name: str) -> Path:
+    """Resolve a case name (path, vmex packaged resource, or tracked example).
+
+    Accepts an existing filesystem path, a ``vmex.resources/input.<name>``
+    resource (e.g. ``nfp4_QH_warm_start``), or ``examples/vmec/input.<name>``.
+    """
+
+    direct = Path(str(case_name)).expanduser()
+    if direct.is_file():
+        return direct.resolve()
+    name = str(case_name).removeprefix("input.")
+    try:
+        packaged_dir: Any = importlib_resources.files("vmex.resources")
+    except ModuleNotFoundError:  # pragma: no cover - vmex resources unavailable
+        packaged_dir = Path("/nonexistent")
+    repo_examples = Path(__file__).resolve().parents[3] / "examples" / "vmec"
+    for candidate_dir in (packaged_dir, repo_examples):
+        candidate = candidate_dir / f"input.{name}"
+        if candidate.is_file():
+            return Path(str(candidate)).resolve()
+    known = {
+        str(entry.name).removeprefix("input.")
+        for candidate_dir in (packaged_dir, repo_examples)
+        if candidate_dir.is_dir()
+        for entry in candidate_dir.iterdir()
+        if str(entry.name).startswith("input.")
+    }
+    raise ValueError(
+        f"unknown VMEC/Boozer case {case_name!r}; pass an input-file path or one of: "
+        + ", ".join(sorted(known))
+    )
+
+
+@lru_cache(maxsize=8)
+def _load_solved_vmex_case_cached(input_path: str) -> tuple[Any, Any, Any, Any]:
+    """Parse and converge one VMEC input file (cached; solves are expensive)."""
+
+    _import_vmex_boozer_modules()
+    vmex = importlib.import_module("vmex")
+    eq = vmex.optimize.solve_equilibrium(vmex.VmecInput.from_file(input_path))
+    return eq.inp, eq.state, eq.runtime, eq.wout
+
+
+def load_solved_vmex_case(case_name: str) -> tuple[Any, Any, Any, Any]:
+    """Solve a named VMEC case with vmex; return ``(inp, state, runtime, wout)``.
+
+    The canonical loader for in-memory differentiable VMEC/Boozer geometry:
+    the parsed :class:`vmex.VmecInput`, the converged spectral state, the
+    matching solver runtime, and the host-NumPy wout dataset.
+    """
+
+    return _load_solved_vmex_case_cached(str(resolve_vmex_case_input_path(case_name)))
+
+
+@dataclass(frozen=True)
+class _BoozXformInputs:
+    """Duck-typed half-mesh input bundle for ``booz_xform_jax.jax_api``."""
+
+    rmnc: jnp.ndarray
+    zmns: jnp.ndarray
+    lmns: jnp.ndarray
+    bmnc: jnp.ndarray
+    bsubumnc: jnp.ndarray
+    bsubvmnc: jnp.ndarray
+    iota: jnp.ndarray
+    xm: np.ndarray
+    xn: np.ndarray
+    xm_nyq: np.ndarray
+    xn_nyq: np.ndarray
+    nfp: int
+    bmns: Any = None
 
 
 @dataclass(frozen=True)
@@ -126,33 +212,6 @@ class _RawDriftProfiles:
     cvdrift0: jnp.ndarray
 
 
-def _interp_boozer_profile(
-    out: dict[str, Any],
-    name: str,
-    *,
-    dtype: Any,
-    s_half: jnp.ndarray,
-    s_value: float,
-) -> jnp.ndarray:
-    return _interp_radial(jnp.asarray(out[name], dtype=dtype), s_half, s_value)
-
-
-def _interp_boozer_profile_derivative(
-    out: dict[str, Any],
-    name: str,
-    *,
-    dtype: Any,
-    radial_spacing: float,
-    s_half: jnp.ndarray,
-    s_value: float,
-) -> jnp.ndarray:
-    return _interp_radial(
-        _radial_derivative_array(jnp.asarray(out[name], dtype=dtype), radial_spacing),
-        s_half,
-        s_value,
-    )
-
-
 def _resolve_boozer_core_request(
     state: Any,
     *,
@@ -177,12 +236,12 @@ def _resolve_boozer_core_request(
             f"{_VMEC_BOOZER_PARITY_MIN_MODE_COUNT} for VMEC/Boozer parity gates"
         )
 
-    base_Rcos = jnp.asarray(state.Rcos)
+    base_Rcos = jnp.asarray(state.R_cos)
     if base_Rcos.ndim != 2:
-        raise RuntimeError("vmec_jax state Rcos array must be two-dimensional")
+        raise RuntimeError("vmex state R_cos array must be two-dimensional")
     ns_full = int(base_Rcos.shape[0])
     if ns_full < 3:
-        raise RuntimeError("vmec_jax state needs at least three radial surfaces")
+        raise RuntimeError("vmex state needs at least three radial surfaces")
 
     sidx = (
         max(1, min(ns_full // 2, ns_full - 2))
@@ -256,61 +315,80 @@ def _surface_indices_for_stencil(
     return jnp.arange(start, start + width, dtype=jnp.int32)
 
 
+def _boozer_xform_inputs_from_state(
+    state: Any, runtime: Any, *, inp: Any, wout: Any,
+    boozer_tables_mod: Any, ns_full: int,
+) -> _BoozXformInputs:
+    """Stack traceable vmex Boozer tables over all half-mesh rows ``1..ns-1``."""
+
+    if bool(getattr(getattr(runtime, "resolution", None), "lasym", False)):
+        raise NotImplementedError(
+            "the vmex Boozer-tables bridge is stellarator-symmetric only"
+        )
+    rows = [
+        boozer_tables_mod.boozer_input_tables(state, runtime, int(j))
+        for j in range(1, int(ns_full))
+    ]
+    nfp_raw = getattr(inp, "nfp", None)
+    if nfp_raw is None:
+        nfp_raw = getattr(wout, "nfp", 1)
+    stacked = {
+        key: jnp.stack([jnp.asarray(row[key]) for row in rows])
+        for key in ("rmnc", "zmns", "lmns", "bmnc", "bsubumnc", "bsubvmnc", "iota")
+    }
+    xm = np.asarray(rows[0]["xm"], dtype=np.int32)
+    xn = np.asarray(rows[0]["xn"], dtype=np.int32)
+    return _BoozXformInputs(
+        xm=xm, xn=xn, xm_nyq=xm, xn_nyq=xn, nfp=int(nfp_raw), bmns=None, **stacked
+    )
+
+
 def _run_boozer_transform_from_state(
     state: Any,
-    static: Any,
-    indata: Any,
+    runtime: Any,
+    inp: Any,
     wout: Any,
     request: _BoozerCoreRequest,
     *,
     jit: bool,
     surface_stencil_width: int | None,
 ) -> tuple[dict[str, Any], jnp.ndarray | None]:
-    info = discover_differentiable_geometry_backends()
-    if not (
-        info.get("vmec_jax_available", False)
-        and info.get("booz_xform_jax_api_available", False)
-    ):
-        raise RuntimeError("vmec_jax and booz_xform_jax functional APIs are required")
-
-    booz_input_mod = importlib.import_module("vmec_jax.booz_input")
-    bx = importlib.import_module("booz_xform_jax.jax_api")
-
-    inputs = booz_input_mod.booz_xform_inputs_from_state(
-        state=state,
-        static=static,
-        indata=indata,
-        signgs=getattr(wout, "signgs", 1),
+    boozer_tables_mod, bx = _import_vmex_boozer_modules()
+    surface_indices = _surface_indices_for_stencil(
+        surface_stencil_width=surface_stencil_width,
+        ns_full=request.ns_full,
+        torflux=request.torflux,
     )
-    asym = bool(getattr(inputs, "bmns", None) is not None)
-    cfg = getattr(static, "cfg", SimpleNamespace())
-    nfp_raw = getattr(wout, "nfp", None)
-    if nfp_raw is None:
-        nfp_raw = getattr(cfg, "nfp", 1)
-    nfp_int = 1 if nfp_raw is None else int(nfp_raw)
+    inputs = _boozer_xform_inputs_from_state(
+        state,
+        runtime,
+        inp=inp,
+        wout=wout,
+        boozer_tables_mod=boozer_tables_mod,
+        ns_full=request.ns_full,
+    )
+    asym = bool(inputs.bmns is not None)
     try:
+        resolution = runtime.resolution
+        ntheta1, nzeta = int(resolution.ntheta1), int(resolution.nzeta)
+        m_max, n_max = _grid_mode_limits(ntheta1, nzeta)
+        if (n_max + 1) + m_max * (2 * n_max + 1) != int(inputs.xm.size):
+            raise ValueError("cached mode table does not match vmex Boozer tables")
         constants, grids = _cached_booz_xform_constants(
-            nfp=nfp_int,
-            mpol=int(getattr(cfg, "mpol", max(2, request.base_Rcos.shape[1]))),
-            ntor=int(getattr(cfg, "ntor", max(1, request.base_Rcos.shape[1] - 1))),
-            ntheta=int(getattr(cfg, "ntheta", max(16, request.ntheta))),
-            nzeta=int(getattr(cfg, "nzeta", max(16, 2 * request.ntheta))),
+            nfp=int(inputs.nfp),
+            ntheta1=ntheta1,
+            nzeta=nzeta,
             mboz=request.mboz,
             nboz=request.nboz,
             asym=asym,
         )
-    except (AttributeError, ModuleNotFoundError):
+    except (AttributeError, ModuleNotFoundError, ValueError):
         constants, grids = bx.prepare_booz_xform_constants_from_inputs(
             inputs=inputs,
             mboz=request.mboz,
             nboz=request.nboz,
             asym=asym,
         )
-    surface_indices = _surface_indices_for_stencil(
-        surface_stencil_width=surface_stencil_width,
-        ns_full=request.ns_full,
-        torflux=request.torflux,
-    )
     out = bx.booz_xform_from_inputs(
         inputs=inputs,
         constants=constants,
@@ -358,22 +436,15 @@ def _interpolate_boozer_radial_profiles(
     bmnc_b = _interp_radial(jnp.asarray(out["bmnc_b"], dtype=dtype), s_half, s_value)
 
     def interp_profile(name: str) -> jnp.ndarray:
-        return _interp_boozer_profile(
-            out,
-            name,
-            dtype=dtype,
-            s_half=s_half,
-            s_value=s_value,
-        )
+        return _interp_radial(jnp.asarray(out[name], dtype=dtype), s_half, s_value)
 
     def interp_derivative(name: str) -> jnp.ndarray:
-        return _interp_boozer_profile_derivative(
-            out,
-            name,
-            dtype=dtype,
-            radial_spacing=radial_spacing,
-            s_half=s_half,
-            s_value=s_value,
+        return _interp_radial(
+            _radial_derivative_array(
+                jnp.asarray(out[name], dtype=dtype), radial_spacing
+            ),
+            s_half,
+            s_value,
         )
 
     iota_profile = jnp.asarray(out["iota_b"], dtype=dtype)
@@ -819,8 +890,8 @@ def _core_mapping_from_boozer_output(
 
 def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
     state: Any,
-    static: Any,
-    indata: Any,
+    runtime: Any,
+    inp: Any,
     wout: Any,
     *,
     surface_index: int | None = None,
@@ -834,16 +905,14 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
     reference_length: float | None = None,
     reference_b: float | None = None,
 ) -> dict[str, Any]:
-    """Return Boozer equal-arc core profiles from a real ``vmec_jax`` state.
+    """Return Boozer equal-arc core profiles from a solved ``vmex`` state.
 
-    This bridge follows the same high-level convention as the imported VMEC/EIK
-    runtime path for scalar/core field-line quantities and the zero-beta Boozer
-    metric/drift terms that can be reconstructed directly from
-    ``booz_xform_jax`` output: Boozer ``|B|``, equal-arc constant ``gradpar``,
-    ``q``, magnetic shear, solver Jacobian normalization, ``gds*``/``grho``,
-    and loaded-convention ``cvdrift``/``gbdrift`` coefficients.  General
-    finite-beta pressure corrections and broader-equilibrium drift gates remain
-    separate promotion steps.
+    ``state``/``runtime``/``inp``/``wout`` come from
+    :func:`load_solved_vmex_case` (or any :class:`vmex.optimize.Equilibrium`).
+    The bridge keeps the imported VMEC/EIK conventions for the scalar/core
+    field-line quantities and the zero-beta Boozer metric/drift terms from
+    ``booz_xform_jax`` output; finite-beta pressure corrections and
+    broader-equilibrium drift gates remain separate promotion steps.
     """
 
     request = _resolve_boozer_core_request(
@@ -860,8 +929,8 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
     )
     out, surface_indices = _run_boozer_transform_from_state(
         state,
-        static,
-        indata,
+        runtime,
+        inp,
         wout,
         request,
         jit=jit,
@@ -879,8 +948,8 @@ def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
 
 def flux_tube_geometry_from_vmec_boozer_state(  # pragma: no cover
     state: Any,
-    static: Any,
-    indata: Any,
+    runtime: Any,
+    inp: Any,
     wout: Any,
     *,
     surface_index: int | None = None,
@@ -896,12 +965,12 @@ def flux_tube_geometry_from_vmec_boozer_state(  # pragma: no cover
     source_model: str = "mode21_vmec_boozer_state",
     validate_finite: bool = True,
 ) -> FluxTubeGeometryData:
-    """Build solver-ready geometry directly from an in-memory VMEC/Boozer state."""
+    """Build solver-ready geometry directly from an in-memory vmex/Boozer state."""
 
     mapping = vmec_jax_boozer_equal_arc_core_profiles_from_state(
         state,
-        static,
-        indata,
+        runtime,
+        inp,
         wout,
         surface_index=surface_index,
         torflux=torflux,
@@ -923,6 +992,8 @@ def flux_tube_geometry_from_vmec_boozer_state(  # pragma: no cover
 
 __all__ = [
     "flux_tube_geometry_from_vmec_boozer_state",
+    "load_solved_vmex_case",
     "prewarm_vmec_boozer_equal_arc_cache",
+    "resolve_vmex_case_input_path",
     "vmec_jax_boozer_equal_arc_core_profiles_from_state",
 ]

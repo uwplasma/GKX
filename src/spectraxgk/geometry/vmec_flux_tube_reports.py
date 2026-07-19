@@ -171,8 +171,8 @@ def _equal_arc_core_profiles(
 ) -> dict[str, Any]:
     return vmec_jax_boozer_equal_arc_core_profiles_from_state(
         ctx.state,
-        ctx.static,
-        ctx.indata,
+        ctx.runtime,
+        ctx.inp,
         ctx.wout,
         surface_index=surface_index,
         torflux=torflux,
@@ -320,9 +320,12 @@ def _vmec_flux_tube_mapping_fn(
             radial_index=radial_index,
             mode_index=mode_index,
         )
+        # The tensor-mapping route still targets the retired vmec_jax static
+        # contract; the vmex runtime is handed through until that route is
+        # ported (spectraxgk.geometry.vmec_tensor_mapping).
         return vmec_jax_flux_tube_mapping_from_state(
             traced_state,
-            ctx.static,
+            ctx.runtime,
             ctx.wout,
             surface_index=surface_index,
             alpha=float(alpha),
@@ -499,9 +502,10 @@ def _direct_vmec_flux_tube_geometry(
     alpha: float,
     ntheta: int,
 ) -> Any:
+    # Legacy tensor-mapping route (see _vmec_flux_tube_mapping_fn note).
     direct_mapping = vmec_jax_flux_tube_mapping_from_state(
         ctx.state,
-        ctx.static,
+        ctx.runtime,
         ctx.wout,
         surface_index=surface_index,
         alpha=float(alpha),
