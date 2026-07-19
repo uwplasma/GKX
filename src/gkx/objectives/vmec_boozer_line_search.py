@@ -1,0 +1,882 @@
+"""Line-search and holdout gates for VMEC/Boozer objectives."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any, Literal, cast
+
+import numpy as np
+
+from gkx.objectives.core import SolverScalarObjective
+from gkx.objectives.vmec_boozer_fd import (
+    _report_float,
+    vmec_boozer_aggregate_scalar_objective_finite_difference_report,
+    vmec_boozer_scalar_objective_finite_difference_report,
+)
+
+
+@dataclass(frozen=True)
+class _AggregateHoldoutFunctions:
+    line_search_report_fn: Any
+    finite_difference_report_fn: Any
+
+
+@dataclass(frozen=True)
+class _AggregateHoldoutConfig:
+    case_name: str
+    objective: SolverScalarObjective
+    reduction: Literal["mean", "weighted_mean", "max"]
+    training_weights: tuple[float, ...] | list[float] | np.ndarray | None
+    holdout_weights: tuple[float, ...] | list[float] | np.ndarray | None
+    training_surface_indices: int | None | tuple[int | None, ...] | list[int | None]
+    training_alphas: float | tuple[float, ...] | list[float]
+    training_selected_ky_indices: int | tuple[int, ...] | list[int]
+    holdout_surface_indices: int | None | tuple[int | None, ...] | list[int | None]
+    holdout_alphas: float | tuple[float, ...] | list[float]
+    holdout_selected_ky_indices: int | tuple[int, ...] | list[int]
+    radial_index: int | None
+    mode_index: int
+    parameter_family: str
+    initial_delta: float
+    perturbation_step: float
+    update_step: float
+    max_steps: int
+    min_improvement: float
+    min_holdout_improvement: float
+    response_atol: float
+    max_curvature_ratio: float
+
+    def __post_init__(self) -> None:
+        if self.min_holdout_improvement < 0.0:
+            raise ValueError("min_holdout_improvement must be non-negative")
+
+
+@dataclass(frozen=True)
+class _AggregateHoldoutReports:
+    training: dict[str, object]
+    heldout_initial: dict[str, object]
+    heldout_final: dict[str, object]
+    final_delta: float
+
+
+@dataclass(frozen=True)
+class _LineSearchProbeResult:
+    report: dict[str, object]
+    value: float
+    derivative: float
+    curvature_ratio: float
+    passed: bool
+    sample_metadata: list[dict[str, object]]
+    n_samples: int
+
+
+@dataclass(frozen=True)
+class _LineSearchStepOutcome:
+    delta: float
+    best_value: float | None
+    accepted_steps: int
+    stop_reason: str
+    sample_metadata: list[dict[str, object]]
+    n_samples: int
+    row: dict[str, object]
+    should_stop: bool
+
+
+def _validate_line_search_controls(
+    *,
+    max_steps: int,
+    update_step: float,
+    min_improvement: float,
+) -> tuple[int, float, float]:
+    max_steps_int = int(max_steps)
+    if max_steps_int < 1:
+        raise ValueError("max_steps must be >= 1")
+    update_step_float = float(update_step)
+    if update_step_float <= 0.0:
+        raise ValueError("update_step must be positive")
+    min_improvement_float = float(min_improvement)
+    if min_improvement_float < 0.0:
+        raise ValueError("min_improvement must be non-negative")
+    return max_steps_int, update_step_float, min_improvement_float
+
+
+def _serializable_scalar_options(kwargs: dict[str, Any]) -> dict[str, object]:
+    return {
+        key: value
+        for key, value in kwargs.items()
+        if isinstance(value, (str, int, float, bool, type(None)))
+    }
+
+
+def _relative_reduction(
+    initial_objective: float, final_objective: float
+) -> float | None:
+    if not np.isfinite(initial_objective) or abs(initial_objective) == 0.0:
+        return None
+    return float((initial_objective - final_objective) / abs(initial_objective))
+
+
+def _scalar_probe_kwargs(
+    *,
+    case_name: str,
+    objective: SolverScalarObjective,
+    radial_index: int | None,
+    mode_index: int,
+    parameter_family: str,
+    extra_options: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "case_name": case_name,
+        "objective": objective,
+        "radial_index": radial_index,
+        "mode_index": mode_index,
+        "parameter_family": parameter_family,
+        **extra_options,
+    }
+
+
+def _aggregate_probe_kwargs(
+    *,
+    case_name: str,
+    objective: SolverScalarObjective,
+    reduction: Literal["mean", "weighted_mean", "max"],
+    weights: tuple[float, ...] | list[float] | np.ndarray | None,
+    surface_indices: int | None | tuple[int | None, ...] | list[int | None],
+    alphas: float | tuple[float, ...] | list[float],
+    selected_ky_indices: int | tuple[int, ...] | list[int],
+    radial_index: int | None,
+    mode_index: int,
+    parameter_family: str,
+    extra_options: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "case_name": case_name,
+        "objective": objective,
+        "reduction": reduction,
+        "weights": weights,
+        "surface_indices": surface_indices,
+        "alphas": alphas,
+        "selected_ky_indices": selected_ky_indices,
+        "radial_index": radial_index,
+        "mode_index": mode_index,
+        "parameter_family": parameter_family,
+        **extra_options,
+    }
+
+
+def _line_search_payload(
+    *,
+    kind: str,
+    source_scope: str,
+    claim_scope: str,
+    case_name: str,
+    objective: SolverScalarObjective,
+    radial_index: int | None,
+    mode_index: int,
+    initial_delta: float,
+    perturbation_step: float,
+    search: dict[str, object],
+    options: dict[str, object],
+    reduction: Literal["mean", "weighted_mean", "max"] | None = None,
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "kind": kind,
+        "passed": bool(search["passed"]),
+        "source_scope": source_scope,
+        "claim_scope": claim_scope,
+        "case_name": str(case_name),
+        "objective": str(objective),
+    }
+    if reduction is not None:
+        payload["reduction"] = str(reduction)
+        payload["samples"] = search["samples"]
+        payload["n_samples"] = search["n_samples"]
+    payload.update(
+        {
+            "radial_index": None if radial_index is None else int(radial_index),
+            "mode_index": int(mode_index),
+            "initial_delta": float(initial_delta),
+            "final_delta": search["final_delta"],
+            "perturbation_step": float(perturbation_step),
+            "update_step": search["update_step"],
+            "max_steps": search["max_steps"],
+            "accepted_steps": search["accepted_steps"],
+            "stop_reason": search["stop_reason"],
+            "initial_objective": search["initial_objective"],
+            "final_objective": search["final_objective"],
+            "relative_reduction": search["relative_reduction"],
+            "history": search["history"],
+            "options": options,
+        }
+    )
+    return payload
+
+
+def _line_search_probe_kwargs(
+    *,
+    probe_kwargs: dict[str, Any],
+    perturbation_step: float,
+    response_atol: float,
+    max_curvature_ratio: float,
+) -> dict[str, Any]:
+    return {
+        **probe_kwargs,
+        "perturbation_step": perturbation_step,
+        "response_atol": response_atol,
+        "max_curvature_ratio": max_curvature_ratio,
+    }
+
+
+def _capture_probe_sample_metadata(
+    report: dict[str, object],
+    sample_metadata: list[dict[str, object]],
+    n_samples: int,
+) -> tuple[list[dict[str, object]], int]:
+    if not sample_metadata and isinstance(report.get("samples"), list):
+        sample_metadata = cast(list[dict[str, object]], report["samples"])
+    return sample_metadata, int(cast(Any, report.get("n_samples", n_samples)))
+
+
+def _run_line_search_probe(
+    finite_difference_report_fn: Any,
+    *,
+    base_delta: float,
+    base_probe_kwargs: dict[str, Any],
+    sample_metadata: list[dict[str, object]],
+    n_samples: int,
+) -> _LineSearchProbeResult:
+    report = finite_difference_report_fn(base_delta=base_delta, **base_probe_kwargs)
+    sample_metadata, n_samples = _capture_probe_sample_metadata(
+        report,
+        sample_metadata,
+        n_samples,
+    )
+    return _LineSearchProbeResult(
+        report=report,
+        value=_report_float(report, "base_value"),
+        derivative=_report_float(report, "central_derivative"),
+        curvature_ratio=_report_float(report, "curvature_ratio"),
+        passed=bool(report["passed"]),
+        sample_metadata=sample_metadata,
+        n_samples=n_samples,
+    )
+
+
+def _line_search_history_row(
+    step_index: int,
+    delta: float,
+    probe: _LineSearchProbeResult,
+) -> dict[str, object]:
+    return {
+        "step": step_index,
+        "delta": delta,
+        "objective": probe.value,
+        "central_derivative": probe.derivative,
+        "finite_difference_passed": probe.passed,
+        "curvature_ratio": probe.curvature_ratio,
+        "accepted": False,
+        "candidate_delta": None,
+        "candidate_objective": None,
+    }
+
+
+def _candidate_delta(delta: float, derivative: float, update_step: float) -> float:
+    return delta - float(np.sign(derivative)) * update_step
+
+
+def _candidate_is_acceptable(
+    candidate: _LineSearchProbeResult,
+    *,
+    base_value: float,
+    min_improvement: float,
+) -> bool:
+    return bool(candidate.passed and candidate.value < base_value - min_improvement)
+
+
+def _line_search_stop_outcome(
+    *,
+    delta: float,
+    best_value: float | None,
+    accepted_steps: int,
+    stop_reason: str,
+    sample_metadata: list[dict[str, object]],
+    n_samples: int,
+    row: dict[str, object],
+) -> _LineSearchStepOutcome:
+    return _LineSearchStepOutcome(
+        delta,
+        best_value,
+        accepted_steps,
+        stop_reason,
+        sample_metadata,
+        n_samples,
+        row,
+        True,
+    )
+
+
+def _evaluate_line_search_candidate(
+    finite_difference_report_fn: Any,
+    *,
+    delta: float,
+    probe: _LineSearchProbeResult,
+    best_value: float | None,
+    accepted_steps: int,
+    sample_metadata: list[dict[str, object]],
+    n_samples: int,
+    row: dict[str, object],
+    base_probe_kwargs: dict[str, Any],
+    update_step: float,
+    min_improvement: float,
+) -> _LineSearchStepOutcome:
+    next_delta = _candidate_delta(delta, probe.derivative, update_step)
+    candidate = _run_line_search_probe(
+        finite_difference_report_fn,
+        base_delta=next_delta,
+        base_probe_kwargs=base_probe_kwargs,
+        sample_metadata=sample_metadata,
+        n_samples=n_samples,
+    )
+    row["candidate_delta"] = next_delta
+    row["candidate_objective"] = candidate.value
+    if not _candidate_is_acceptable(
+        candidate,
+        base_value=probe.value,
+        min_improvement=min_improvement,
+    ):
+        return _line_search_stop_outcome(
+            delta=delta,
+            best_value=best_value,
+            accepted_steps=accepted_steps,
+            stop_reason="no_accepted_candidate",
+            sample_metadata=sample_metadata,
+            n_samples=n_samples,
+            row=row,
+        )
+
+    row["accepted"] = True
+    return _LineSearchStepOutcome(
+        next_delta,
+        candidate.value,
+        accepted_steps + 1,
+        "max_steps",
+        sample_metadata,
+        n_samples,
+        row,
+        False,
+    )
+
+
+def _run_one_line_search_step(
+    finite_difference_report_fn: Any,
+    *,
+    step_index: int,
+    delta: float,
+    best_value: float | None,
+    accepted_steps: int,
+    sample_metadata: list[dict[str, object]],
+    n_samples: int,
+    base_probe_kwargs: dict[str, Any],
+    update_step: float,
+    min_improvement: float,
+) -> _LineSearchStepOutcome:
+    probe = _run_line_search_probe(
+        finite_difference_report_fn,
+        base_delta=delta,
+        base_probe_kwargs=base_probe_kwargs,
+        sample_metadata=sample_metadata,
+        n_samples=n_samples,
+    )
+    sample_metadata = probe.sample_metadata
+    n_samples = probe.n_samples
+    best_value = probe.value if best_value is None else best_value
+    row = _line_search_history_row(step_index, delta, probe)
+    if not probe.passed:
+        return _line_search_stop_outcome(
+            delta=delta,
+            best_value=best_value,
+            accepted_steps=accepted_steps,
+            stop_reason="finite_difference_gate_failed",
+            sample_metadata=sample_metadata,
+            n_samples=n_samples,
+            row=row,
+        )
+    if not np.isfinite(probe.derivative) or abs(probe.derivative) == 0.0:
+        return _line_search_stop_outcome(
+            delta=delta,
+            best_value=best_value,
+            accepted_steps=accepted_steps,
+            stop_reason="zero_or_nonfinite_derivative",
+            sample_metadata=sample_metadata,
+            n_samples=n_samples,
+            row=row,
+        )
+
+    return _evaluate_line_search_candidate(
+        finite_difference_report_fn,
+        delta=delta,
+        probe=probe,
+        best_value=best_value,
+        accepted_steps=accepted_steps,
+        sample_metadata=sample_metadata,
+        n_samples=n_samples,
+        row=row,
+        base_probe_kwargs=base_probe_kwargs,
+        update_step=update_step,
+        min_improvement=min_improvement,
+    )
+
+
+def _run_one_parameter_line_search(
+    *,
+    finite_difference_report_fn: Any,
+    probe_kwargs: dict[str, Any],
+    initial_delta: float,
+    perturbation_step: float,
+    update_step: float,
+    max_steps: int,
+    min_improvement: float,
+    response_atol: float,
+    max_curvature_ratio: float,
+) -> dict[str, object]:
+    max_steps_int, update_step_float, min_improvement_float = (
+        _validate_line_search_controls(
+            max_steps=max_steps,
+            update_step=update_step,
+            min_improvement=min_improvement,
+        )
+    )
+    base_probe_kwargs = _line_search_probe_kwargs(
+        probe_kwargs=probe_kwargs,
+        perturbation_step=perturbation_step,
+        response_atol=response_atol,
+        max_curvature_ratio=max_curvature_ratio,
+    )
+    delta = float(initial_delta)
+    history: list[dict[str, object]] = []
+    best_value: float | None = None
+    accepted_steps = 0
+    stop_reason = "max_steps"
+    sample_metadata: list[dict[str, object]] = []
+    n_samples = 0
+    for step_index in range(max_steps_int):
+        outcome = _run_one_line_search_step(
+            finite_difference_report_fn,
+            step_index=step_index,
+            delta=delta,
+            best_value=best_value,
+            accepted_steps=accepted_steps,
+            base_probe_kwargs=base_probe_kwargs,
+            sample_metadata=sample_metadata,
+            n_samples=n_samples,
+            update_step=update_step_float,
+            min_improvement=min_improvement_float,
+        )
+        delta = outcome.delta
+        best_value = outcome.best_value
+        accepted_steps = outcome.accepted_steps
+        stop_reason = outcome.stop_reason
+        sample_metadata = outcome.sample_metadata
+        n_samples = outcome.n_samples
+        history.append(outcome.row)
+        if outcome.should_stop:
+            break
+
+    initial_objective = (
+        float(cast(Any, history[0]["objective"])) if history else float("nan")
+    )
+    final_objective = float(best_value) if best_value is not None else initial_objective
+    return {
+        "passed": bool(accepted_steps > 0 and final_objective < initial_objective),
+        "final_delta": delta,
+        "update_step": update_step_float,
+        "max_steps": max_steps_int,
+        "accepted_steps": accepted_steps,
+        "stop_reason": stop_reason,
+        "initial_objective": initial_objective,
+        "final_objective": final_objective,
+        "relative_reduction": _relative_reduction(initial_objective, final_objective),
+        "history": history,
+        "samples": sample_metadata,
+        "n_samples": n_samples,
+    }
+
+
+def vmec_boozer_aggregate_scalar_objective_line_search_report(  # pragma: no cover
+    *,
+    case_name: str = "nfp4_QH_warm_start",
+    objective: SolverScalarObjective = "growth",
+    reduction: Literal["mean", "weighted_mean", "max"] = "mean",
+    weights: tuple[float, ...] | list[float] | np.ndarray | None = None,
+    surface_indices: int | None | tuple[int | None, ...] | list[int | None] = (None,),
+    alphas: float | tuple[float, ...] | list[float] = (0.0,),
+    selected_ky_indices: int | tuple[int, ...] | list[int] = (1,),
+    radial_index: int | None = None,
+    mode_index: int = 1,
+    parameter_family: str = "Rcos",
+    initial_delta: float = 0.0,
+    perturbation_step: float = 1.0e-7,
+    update_step: float = 1.0e-8,
+    max_steps: int = 3,
+    min_improvement: float = 0.0,
+    response_atol: float = 0.0,
+    max_curvature_ratio: float = 5.0,
+    **kwargs: Any,
+) -> dict[str, object]:
+    """Run a curvature-gated line search for an aggregate VMEC objective.
+
+    This is the first optimizer-control gate for multi-surface, field-line, or
+    ``k_y`` reduced objectives.  It keeps the update one-dimensional so each
+    step can be audited against the finite-difference curvature gate and
+    rejected when the aggregate objective does not decrease.
+    """
+
+    finite_difference_report_fn = kwargs.pop(
+        "_finite_difference_report_fn",
+        vmec_boozer_aggregate_scalar_objective_finite_difference_report,
+    )
+
+    probe_kwargs = _aggregate_probe_kwargs(
+        case_name=case_name,
+        objective=objective,
+        reduction=reduction,
+        weights=weights,
+        surface_indices=surface_indices,
+        alphas=alphas,
+        selected_ky_indices=selected_ky_indices,
+        radial_index=radial_index,
+        mode_index=mode_index,
+        parameter_family=parameter_family,
+        extra_options=kwargs,
+    )
+    search = _run_one_parameter_line_search(
+        finite_difference_report_fn=finite_difference_report_fn,
+        probe_kwargs=probe_kwargs,
+        initial_delta=initial_delta,
+        perturbation_step=perturbation_step,
+        update_step=update_step,
+        max_steps=max_steps,
+        min_improvement=min_improvement,
+        response_atol=response_atol,
+        max_curvature_ratio=max_curvature_ratio,
+    )
+    return _line_search_payload(
+        kind="vmec_boozer_aggregate_scalar_objective_line_search_report",
+        source_scope="mode21_vmec_boozer_state_multi_point",
+        claim_scope=(
+            "curvature-gated one-parameter line search for an aggregated "
+            "VMEC/Boozer/GKX linear/quasilinear objective; not a "
+            "multi-parameter or nonlinear turbulent transport optimization claim"
+        ),
+        case_name=case_name,
+        objective=objective,
+        reduction=reduction,
+        radial_index=radial_index,
+        mode_index=mode_index,
+        initial_delta=initial_delta,
+        perturbation_step=perturbation_step,
+        search=search,
+        options=_serializable_scalar_options(kwargs),
+    )
+
+
+def _aggregate_holdout_payload(
+    *,
+    case_name: str,
+    objective: SolverScalarObjective,
+    reduction: Literal["mean", "weighted_mean", "max"],
+    radial_index: int | None,
+    mode_index: int,
+    initial_delta: float,
+    final_delta: float,
+    training: dict[str, object],
+    heldout_initial: dict[str, object],
+    heldout_final: dict[str, object],
+    min_holdout_improvement: float,
+) -> dict[str, object]:
+    heldout_initial_value = _report_float(heldout_initial, "base_value")
+    heldout_final_value = _report_float(heldout_final, "base_value")
+    heldout_reduction = heldout_initial_value - heldout_final_value
+    heldout_passed = bool(
+        bool(heldout_initial["passed"])
+        and bool(heldout_final["passed"])
+        and heldout_reduction > min_holdout_improvement
+    )
+    training_passed = bool(training["passed"])
+    return {
+        "kind": "vmec_boozer_aggregate_line_search_holdout_report",
+        "passed": bool(training_passed and heldout_passed),
+        "source_scope": "mode21_vmec_boozer_state_train_holdout",
+        "claim_scope": (
+            "one-parameter aggregate reduced-objective line search with held-out "
+            "surface/field-line/ky validation; not a nonlinear turbulent transport "
+            "or broad stellarator optimization claim"
+        ),
+        "case_name": str(case_name),
+        "objective": str(objective),
+        "reduction": str(reduction),
+        "initial_delta": float(initial_delta),
+        "final_delta": final_delta,
+        "training_passed": training_passed,
+        "heldout_passed": heldout_passed,
+        "training_initial_objective": _report_float(training, "initial_objective"),
+        "training_final_objective": _report_float(training, "final_objective"),
+        "training_relative_reduction": training.get("relative_reduction"),
+        "heldout_initial_objective": heldout_initial_value,
+        "heldout_final_objective": heldout_final_value,
+        "heldout_relative_reduction": _relative_reduction(
+            heldout_initial_value,
+            heldout_final_value,
+        ),
+        "min_holdout_improvement": min_holdout_improvement,
+        "training_samples": training.get("samples", []),
+        "heldout_samples": heldout_initial.get("samples", []),
+        "training_report": training,
+        "heldout_initial_report": heldout_initial,
+        "heldout_final_report": heldout_final,
+        "next_action": (
+            "Promote only if this split gate passes on multiple held-out surfaces "
+            "or field lines and then survives nonlinear-window transport audits."
+        ),
+    }
+
+
+def _aggregate_holdout_functions(kwargs: dict[str, Any]) -> _AggregateHoldoutFunctions:
+    return _AggregateHoldoutFunctions(
+        line_search_report_fn=kwargs.pop(
+            "_line_search_report_fn",
+            vmec_boozer_aggregate_scalar_objective_line_search_report,
+        ),
+        finite_difference_report_fn=kwargs.pop(
+            "_finite_difference_report_fn",
+            vmec_boozer_aggregate_scalar_objective_finite_difference_report,
+        ),
+    )
+
+
+def _run_aggregate_holdout_reports(
+    *,
+    config: _AggregateHoldoutConfig,
+    fns: _AggregateHoldoutFunctions,
+    extra_options: dict[str, Any],
+) -> _AggregateHoldoutReports:
+    training_probe_kwargs = _aggregate_probe_kwargs(
+        case_name=config.case_name,
+        objective=config.objective,
+        reduction=config.reduction,
+        weights=config.training_weights,
+        surface_indices=config.training_surface_indices,
+        alphas=config.training_alphas,
+        selected_ky_indices=config.training_selected_ky_indices,
+        radial_index=config.radial_index,
+        mode_index=config.mode_index,
+        parameter_family=config.parameter_family,
+        extra_options=extra_options,
+    )
+    training = fns.line_search_report_fn(
+        **training_probe_kwargs,
+        initial_delta=config.initial_delta,
+        perturbation_step=config.perturbation_step,
+        update_step=config.update_step,
+        max_steps=config.max_steps,
+        min_improvement=config.min_improvement,
+        response_atol=config.response_atol,
+        max_curvature_ratio=config.max_curvature_ratio,
+    )
+    final_delta = _report_float(training, "final_delta")
+    heldout_probe_kwargs = _aggregate_probe_kwargs(
+        case_name=config.case_name,
+        objective=config.objective,
+        reduction=config.reduction,
+        weights=config.holdout_weights,
+        surface_indices=config.holdout_surface_indices,
+        alphas=config.holdout_alphas,
+        selected_ky_indices=config.holdout_selected_ky_indices,
+        radial_index=config.radial_index,
+        mode_index=config.mode_index,
+        parameter_family=config.parameter_family,
+        extra_options=extra_options,
+    )
+    heldout_probe_kwargs = _line_search_probe_kwargs(
+        probe_kwargs=heldout_probe_kwargs,
+        perturbation_step=config.perturbation_step,
+        response_atol=config.response_atol,
+        max_curvature_ratio=config.max_curvature_ratio,
+    )
+    heldout_initial = fns.finite_difference_report_fn(
+        base_delta=config.initial_delta,
+        **heldout_probe_kwargs,
+    )
+    heldout_final = fns.finite_difference_report_fn(
+        base_delta=final_delta,
+        **heldout_probe_kwargs,
+    )
+    return _AggregateHoldoutReports(
+        training=training,
+        heldout_initial=heldout_initial,
+        heldout_final=heldout_final,
+        final_delta=final_delta,
+    )
+
+
+def _aggregate_holdout_config_from_values(
+    values: dict[str, Any],
+) -> _AggregateHoldoutConfig:
+    return _AggregateHoldoutConfig(
+        case_name=values["case_name"],
+        objective=values["objective"],
+        reduction=values["reduction"],
+        training_weights=values["training_weights"],
+        holdout_weights=values["holdout_weights"],
+        training_surface_indices=values["training_surface_indices"],
+        training_alphas=values["training_alphas"],
+        training_selected_ky_indices=values["training_selected_ky_indices"],
+        holdout_surface_indices=values["holdout_surface_indices"],
+        holdout_alphas=values["holdout_alphas"],
+        holdout_selected_ky_indices=values["holdout_selected_ky_indices"],
+        radial_index=values["radial_index"],
+        mode_index=values["mode_index"],
+        parameter_family=values["parameter_family"],
+        initial_delta=values["initial_delta"],
+        perturbation_step=values["perturbation_step"],
+        update_step=values["update_step"],
+        max_steps=values["max_steps"],
+        min_improvement=values["min_improvement"],
+        min_holdout_improvement=float(values["min_holdout_improvement"]),
+        response_atol=values["response_atol"],
+        max_curvature_ratio=values["max_curvature_ratio"],
+    )
+
+
+def vmec_boozer_aggregate_line_search_holdout_report(  # pragma: no cover
+    *,
+    case_name: str = "nfp4_QH_warm_start",
+    objective: SolverScalarObjective = "growth",
+    reduction: Literal["mean", "weighted_mean", "max"] = "mean",
+    training_weights: tuple[float, ...] | list[float] | np.ndarray | None = None,
+    holdout_weights: tuple[float, ...] | list[float] | np.ndarray | None = None,
+    training_surface_indices: int | None | tuple[int | None, ...] | list[int | None] = (
+        None,
+    ),
+    training_alphas: float | tuple[float, ...] | list[float] = (0.0,),
+    training_selected_ky_indices: int | tuple[int, ...] | list[int] = (1,),
+    holdout_surface_indices: int | None | tuple[int | None, ...] | list[int | None] = (
+        None,
+    ),
+    holdout_alphas: float | tuple[float, ...] | list[float] = (0.0,),
+    holdout_selected_ky_indices: int | tuple[int, ...] | list[int] = (2,),
+    radial_index: int | None = None,
+    mode_index: int = 1,
+    parameter_family: str = "Rcos",
+    initial_delta: float = 0.0,
+    perturbation_step: float = 1.0e-7,
+    update_step: float = 1.0e-8,
+    max_steps: int = 3,
+    min_improvement: float = 0.0,
+    min_holdout_improvement: float = 0.0,
+    response_atol: float = 0.0,
+    max_curvature_ratio: float = 5.0,
+    **kwargs: Any,
+) -> dict[str, object]:
+    """Audit a training aggregate update against held-out aggregate samples.
+
+    A report passes only when the training line search accepts at least one
+    curvature-gated update and the same final VMEC coefficient offset reduces
+    the held-out aggregate objective.  This is a reduced linear/quasilinear
+    validation split, not a nonlinear transport optimization claim.
+    """
+
+    fns = _aggregate_holdout_functions(kwargs)
+    config = _aggregate_holdout_config_from_values(locals())
+    reports = _run_aggregate_holdout_reports(
+        config=config,
+        fns=fns,
+        extra_options=kwargs,
+    )
+    return _aggregate_holdout_payload(
+        case_name=config.case_name,
+        objective=config.objective,
+        reduction=config.reduction,
+        radial_index=config.radial_index,
+        mode_index=config.mode_index,
+        initial_delta=config.initial_delta,
+        final_delta=reports.final_delta,
+        training=reports.training,
+        heldout_initial=reports.heldout_initial,
+        heldout_final=reports.heldout_final,
+        min_holdout_improvement=config.min_holdout_improvement,
+    )
+
+
+def vmec_boozer_scalar_objective_line_search_report(  # pragma: no cover
+    *,
+    case_name: str = "nfp4_QH_warm_start",
+    objective: SolverScalarObjective = "growth",
+    radial_index: int | None = None,
+    mode_index: int = 1,
+    parameter_family: str = "Rcos",
+    initial_delta: float = 0.0,
+    perturbation_step: float = 1.0e-7,
+    update_step: float = 1.0e-8,
+    max_steps: int = 3,
+    min_improvement: float = 0.0,
+    response_atol: float = 0.0,
+    max_curvature_ratio: float = 5.0,
+    **kwargs: Any,
+) -> dict[str, object]:
+    """Run a curvature-gated one-parameter VMEC/Boozer objective line search.
+
+    This is the first safe optimizer scaffold for the real in-memory
+    VMEC/Boozer/GKX path. Each accepted update must pass the scalar
+    finite-difference curvature gate, and candidate steps are accepted only
+    when the scalar objective decreases. It is still a one-coefficient audit,
+    not a broad stellarator-optimization claim.
+    """
+
+    finite_difference_report_fn = kwargs.pop(
+        "_finite_difference_report_fn",
+        vmec_boozer_scalar_objective_finite_difference_report,
+    )
+
+    probe_kwargs = _scalar_probe_kwargs(
+        case_name=case_name,
+        objective=objective,
+        radial_index=radial_index,
+        mode_index=mode_index,
+        parameter_family=parameter_family,
+        extra_options=kwargs,
+    )
+    search = _run_one_parameter_line_search(
+        finite_difference_report_fn=finite_difference_report_fn,
+        probe_kwargs=probe_kwargs,
+        initial_delta=initial_delta,
+        perturbation_step=perturbation_step,
+        update_step=update_step,
+        max_steps=max_steps,
+        min_improvement=min_improvement,
+        response_atol=response_atol,
+        max_curvature_ratio=max_curvature_ratio,
+    )
+    return _line_search_payload(
+        kind="vmec_boozer_scalar_objective_line_search_report",
+        source_scope="mode21_vmec_boozer_state",
+        claim_scope=(
+            "curvature-gated one-parameter VMEC/Boozer/GKX scalar objective "
+            "line search; not a multi-parameter stellarator optimization or nonlinear transport claim"
+        ),
+        case_name=case_name,
+        objective=objective,
+        radial_index=radial_index,
+        mode_index=mode_index,
+        initial_delta=initial_delta,
+        perturbation_step=perturbation_step,
+        search=search,
+        options=_serializable_scalar_options(kwargs),
+    )
+
+
+__all__ = [
+    "vmec_boozer_aggregate_line_search_holdout_report",
+    "vmec_boozer_aggregate_scalar_objective_line_search_report",
+    "vmec_boozer_scalar_objective_line_search_report",
+]

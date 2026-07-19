@@ -189,7 +189,7 @@ jobs:
         env:
           MPLBACKEND: Agg
           JAX_ENABLE_X64: "true"
-          SPECTRAX_X64: "1"
+          GKX_X64: "1"
         run: |
           pytest -q --maxfail=1 --disable-warnings ${{ matrix.shard.files }}
 
@@ -223,7 +223,7 @@ jobs:
         env:
           MPLBACKEND: Agg
           JAX_ENABLE_X64: "true"
-          SPECTRAX_X64: "1"
+          GKX_X64: "1"
         run: |
           pytest -q \
             tests/integration/runtime/test_cli.py \
@@ -233,7 +233,7 @@ jobs:
             tests/unit/diagnostics/test_analysis.py \
             tests/validation/benchmarks/test_benchmarking.py \
             --maxfail=1 --disable-warnings \
-            --cov=spectraxgk \
+            --cov=gkx \
             --cov-report=xml:coverage-fast.xml \
             --cov-report=term
           python - <<'PY'
@@ -317,7 +317,7 @@ jobs:
         env:
           MPLBACKEND: Agg
           JAX_ENABLE_X64: "true"
-          SPECTRAX_X64: "1"
+          GKX_X64: "1"
         run: |
           python tools/release/run_test_gates.py wide-coverage \
             --shards 24 \
@@ -391,7 +391,7 @@ jobs:
         env:
           MPLBACKEND: Agg
           JAX_ENABLE_X64: "true"
-          SPECTRAX_X64: "1"
+          GKX_X64: "1"
         run: |
           find coverage-wide-artifacts -name '*.tgz' -print -exec tar -xzf {} \;
           python tools/release/run_test_gates.py wide-coverage \
@@ -479,27 +479,27 @@ jobs:
 
       - name: Smoke-test installed wheel
         run: |
-          python -m venv /tmp/spectraxgk-wheel-smoke
-          /tmp/spectraxgk-wheel-smoke/bin/pip install dist/*.whl
+          python -m venv /tmp/gkx-wheel-smoke
+          /tmp/gkx-wheel-smoke/bin/pip install dist/*.whl
           cd /tmp
-          /tmp/spectraxgk-wheel-smoke/bin/python - <<'PY'
-          import spectraxgk
-          import spectraxgk.parallel
+          /tmp/gkx-wheel-smoke/bin/python - <<'PY'
+          import gkx
+          import gkx.parallel
           from importlib.util import find_spec
-          from spectraxgk.cli import build_parser
+          from gkx.cli import build_parser
 
           assert "--plot" in build_parser().format_help()
-          assert "batch_map" in spectraxgk.parallel.__all__
-          assert spectraxgk.parallel.batch_map.__module__ == "spectraxgk.parallel.batch"
-          assert find_spec("spectraxgk.objectives.qa_low_turbulence_contracts") is None
-          assert find_spec("spectraxgk.objectives.qa_low_turbulence_residuals") is None
-          assert find_spec("spectraxgk.objectives.stellarator_residuals") is None
-          assert find_spec("spectraxgk.diagnostics.growth_series") is None
-          assert find_spec("spectraxgk.geometry.vmec_boundary_collection") is None
-          print(spectraxgk.__version__)
+          assert "batch_map" in gkx.parallel.__all__
+          assert gkx.parallel.batch_map.__module__ == "gkx.parallel.batch"
+          assert find_spec("gkx.objectives.qa_low_turbulence_contracts") is None
+          assert find_spec("gkx.objectives.qa_low_turbulence_residuals") is None
+          assert find_spec("gkx.objectives.stellarator_residuals") is None
+          assert find_spec("gkx.diagnostics.growth_series") is None
+          assert find_spec("gkx.geometry.vmec_boundary_collection") is None
+          print(gkx.__version__)
           PY
-          /tmp/spectraxgk-wheel-smoke/bin/spectraxgk --help >/dev/null
-          /tmp/spectraxgk-wheel-smoke/bin/spectrax-gk --help >/dev/null
+          /tmp/gkx-wheel-smoke/bin/gkx --help >/dev/null
+          /tmp/gkx-wheel-smoke/bin/gkx --help >/dev/null
 
   nightly-full:
     if: github.event_name == 'workflow_dispatch' && inputs.run_nightly
@@ -547,7 +547,7 @@ jobs:
         env:
           MPLBACKEND: Agg
           JAX_ENABLE_X64: "true"
-          SPECTRAX_X64: "1"
+          GKX_X64: "1"
         run: |
           pytest -q --maxfail=1 --disable-warnings
 
@@ -555,7 +555,7 @@ jobs:
         env:
           MPLBACKEND: Agg
           JAX_ENABLE_X64: "true"
-          SPECTRAX_X64: "1"
+          GKX_X64: "1"
         run: |
           pytest -q \
             tests/unit/operators/test_terms_assembly.py \
@@ -565,20 +565,20 @@ jobs:
             tests/unit/nonlinear/test_nonlinear_exb.py \
             tests/unit/nonlinear/test_nonlinear.py \
             --maxfail=1 --disable-warnings \
-            --cov=src/spectraxgk/terms \
+            --cov=src/gkx/terms \
             --cov-fail-under=90
 
       - name: Krylov + Diffrax Core Coverage (>=90% each)
         env:
           MPLBACKEND: Agg
           JAX_ENABLE_X64: "true"
-          SPECTRAX_X64: "1"
+          GKX_X64: "1"
         run: |
           pytest -q \
             tests/unit/solvers/test_linear_krylov_core.py \
             tests/unit/solvers/test_diffrax_integrators_core.py \
             --maxfail=1 --disable-warnings \
-            --cov=src/spectraxgk \
+            --cov=src/gkx \
             --cov-report=xml:coverage-core.xml \
             --cov-report=term
           python - <<'PY'
