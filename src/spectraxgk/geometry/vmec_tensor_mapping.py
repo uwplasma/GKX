@@ -5,7 +5,7 @@ retired ``vmec_jax`` internals and rebuilt the flux-tube contract locally.
 The route is now a thin adapter over the vmex public turbulence seam
 :func:`vmex.core.turbulence.gk_fieldline_geometry`, which emits the exact
 in-memory mapping contract consumed by
-:func:`spectraxgk.flux_tube_geometry_from_mapping` (GS2/GX normalizations,
+:func:`spectraxgk.flux_tube_geometry_from_mapping` (GS2-style normalizations,
 PEST field-line sampling, pure JAX, differentiable w.r.t. ``(state,
 runtime)``).
 """
@@ -46,7 +46,7 @@ def vmec_jax_flux_tube_mapping_from_state(  # pragma: no cover
     ``theta* = alpha + iota (phi - zeta0)`` on full-mesh surface
     ``surface_index`` (vmex default, ~60 % of the radius, when ``None``),
     sampled on ``theta = linspace(-pi, pi, ntheta, endpoint=False)`` with the
-    GS2/GX normalizations ``L_ref`` = effective minor radius and
+    GS2-style normalizations ``L_ref`` = effective minor radius and
     ``B_ref = 2 |psi_edge| / L_ref**2``.  ``equal_arc=True`` (the SPECTRAX-GK
     solver contract) resamples the parallel coordinate so ``gradpar`` is
     exactly uniform.
