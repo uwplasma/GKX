@@ -888,7 +888,7 @@ def _core_mapping_from_boozer_output(
     )
 
 
-def vmec_jax_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
+def vmex_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
     state: Any,
     runtime: Any,
     inp: Any,
@@ -967,7 +967,7 @@ def flux_tube_geometry_from_vmec_boozer_state(  # pragma: no cover
 ) -> FluxTubeGeometryData:
     """Build solver-ready geometry directly from an in-memory vmex/Boozer state."""
 
-    mapping = vmec_jax_boozer_equal_arc_core_profiles_from_state(
+    mapping = vmex_boozer_equal_arc_core_profiles_from_state(
         state,
         runtime,
         inp,
@@ -995,5 +995,5 @@ __all__ = [
     "load_solved_vmex_case",
     "prewarm_vmec_boozer_equal_arc_cache",
     "resolve_vmex_case_input_path",
-    "vmec_jax_boozer_equal_arc_core_profiles_from_state",
+    "vmex_boozer_equal_arc_core_profiles_from_state",
 ]

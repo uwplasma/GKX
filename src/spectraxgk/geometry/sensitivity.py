@@ -138,7 +138,7 @@ def geometry_sensitivity_report(
     fd_step: float = 1.0e-4,
     rtol: float = 1.0e-4,
     atol: float = 1.0e-6,
-    source_model: str = "vmec_jax:in-memory",
+    source_model: str = "vmex:in-memory",
 ) -> dict[str, object]:
     """Validate geometry-observable sensitivities by AD and finite differences.
 
@@ -267,13 +267,13 @@ def geometry_inverse_design_report(
     damping: float = 1.0e-8,
     fd_step: float = 1.0e-4,
     regularization: float = 1.0e-8,
-    source_model: str = "vmec_jax:in-memory",
+    source_model: str = "vmex:in-memory",
 ) -> dict[str, object]:
     """Run a small Gauss-Newton geometry inverse-design validation.
 
     ``mapping_fn(params)`` must be the same solver-ready field-line mapping
     accepted by :func:`flux_tube_geometry_from_mapping`. The routine is meant
-    for differentiable ``vmec_jax`` / ``booz_xform_jax`` workflows: it keeps
+    for differentiable ``vmex`` / ``booz_xform_jax`` workflows: it keeps
     the optimization, sensitivity check, and local UQ covariance in one
     JSON-friendly report so examples can validate the full AD contract without
     depending on a long equilibrium solve in CI.

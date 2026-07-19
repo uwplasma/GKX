@@ -61,16 +61,16 @@ def _pin_current_optional_backend_paths() -> None:
     preference can otherwise evict the vmex module that owns the traced
     optimization state.  Pinning the currently importable backend paths makes
     the vmex/SPECTRAX-GK objective reproducible without requiring users to
-    hand-set environment variables (the historical ``*_VMEC_JAX_PATH``
+    hand-set environment variables (the historical ``*_VMEX_PATH``
     environment-variable names are retained).
     """
 
     if not (
-        os.environ.get("SPECTRAX_VMEC_JAX_PATH") or os.environ.get("VMEC_JAX_PATH")
+        os.environ.get("SPECTRAX_VMEX_PATH") or os.environ.get("VMEX_PATH")
     ):
         root = _module_search_root("vmex")
         if root is not None:
-            os.environ.setdefault("SPECTRAX_VMEC_JAX_PATH", str(root))
+            os.environ.setdefault("SPECTRAX_VMEX_PATH", str(root))
     if not (
         os.environ.get("SPECTRAX_BOOZ_XFORM_JAX_PATH")
         or os.environ.get("BOOZ_XFORM_JAX_PATH")
@@ -571,7 +571,7 @@ def _chunked_transport_objective_raw_value_from_state(
     return jnp.asarray(raw_value)
 
 
-def vmec_jax_transport_objective_from_state(
+def vmex_transport_objective_from_state(
     state: Any,
     static: Any,
     indata: Any,
@@ -618,7 +618,7 @@ class VMECJAXSpectraxTransportObjective:
             if self.wout_reference is not None
             else _reference_wout_from_context(ctx)
         )
-        return vmec_jax_transport_objective_from_state(
+        return vmex_transport_objective_from_state(
             state,
             ctx.static,
             ctx.indata,
@@ -632,5 +632,5 @@ __all__ = [
     "VMECJAXTransportObjectiveConfig",
     "VMECJAXTransportObjectiveKind",
     "VMECJAXTransportObjectiveTransform",
-    "vmec_jax_transport_objective_from_state",
+    "vmex_transport_objective_from_state",
 ]

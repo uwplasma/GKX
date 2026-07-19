@@ -458,7 +458,7 @@ def _run_vmec_boozer_flux_tube_sensitivity(
         mapping_fn,
         params,
         fd_step=float(fd_step),
-        source_model="vmec_jax:state->booz_xform_jax:field-line-bmag",
+        source_model="vmex:state->booz_xform_jax:field-line-bmag",
     )
     mapping = mapping_fn(params)
     return _BoozerFluxTubeSensitivityRun(
@@ -542,7 +542,7 @@ def _metric_tensor_report_payload(
         relative_floor=1.0e-12,
     )
     return {
-        "source_model": "vmec_jax:state->metric-tensors",
+        "source_model": "vmex:state->metric-tensors",
         **tensor_payload,
         "ntheta": int(ntheta),
         "metric_grid_shape": _vmec_state_metric_grid_shape(ctx.runtime),
@@ -631,7 +631,7 @@ def _field_line_tensor_report_payload(
     )
     vmex_meta = mapping0["vmex"]
     return {
-        "source_model": "vmec_jax:state->field-line-metric-and-b",
+        "source_model": "vmex:state->field-line-metric-and-b",
         "field_line_convention": str(vmex_meta["field_line_convention"]),
         **tensor_payload,
         "iota": float(np.asarray(vmex_meta["iota"])),
@@ -688,7 +688,7 @@ def _run_vmec_field_line_tensor_sensitivity(
     )
 
 
-def vmec_jax_boozer_flux_tube_sensitivity_report(  # pragma: no cover
+def vmex_boozer_flux_tube_sensitivity_report(  # pragma: no cover
     *,
     params: jnp.ndarray | None = None,
     case_name: str = "circular_tokamak",
@@ -723,11 +723,11 @@ def vmec_jax_boozer_flux_tube_sensitivity_report(  # pragma: no cover
         case_name=str(case_name),
         fd_step=float(fd_step),
         backend_available=lambda info: bool(
-            info.get("vmec_jax_available", False)
+            info.get("vmex_available", False)
             and info.get("booz_xform_jax_api_available", False)
         ),
         unavailable_reason=(
-            "vmec_jax or booz_xform_jax functional API is not available"
+            "vmex or booz_xform_jax functional API is not available"
         ),
         build_run=lambda p: _run_vmec_boozer_flux_tube_report(
             params=p,
@@ -743,7 +743,7 @@ def vmec_jax_boozer_flux_tube_sensitivity_report(  # pragma: no cover
     )
 
 
-def vmec_jax_metric_tensor_sensitivity_report(  # pragma: no cover
+def vmex_metric_tensor_sensitivity_report(  # pragma: no cover
     *,
     params: jnp.ndarray | None = None,
     case_name: str = "circular_tokamak",
@@ -770,8 +770,8 @@ def vmec_jax_metric_tensor_sensitivity_report(  # pragma: no cover
         default_param=1.0e-3,
         case_name=str(case_name),
         fd_step=float(fd_step),
-        backend_available=lambda info: bool(info.get("vmec_jax_available", False)),
-        unavailable_reason="vmec_jax is not available",
+        backend_available=lambda info: bool(info.get("vmex_available", False)),
+        unavailable_reason="vmex is not available",
         build_run=lambda p: _run_vmec_metric_tensor_sensitivity(
             params=p,
             case_name=str(case_name),
@@ -785,7 +785,7 @@ def vmec_jax_metric_tensor_sensitivity_report(  # pragma: no cover
     )
 
 
-def vmec_jax_field_line_tensor_sensitivity_report(  # pragma: no cover
+def vmex_field_line_tensor_sensitivity_report(  # pragma: no cover
     *,
     params: jnp.ndarray | None = None,
     case_name: str = "nfp4_QH_warm_start",
@@ -817,8 +817,8 @@ def vmec_jax_field_line_tensor_sensitivity_report(  # pragma: no cover
         default_param=1.0e-4,
         case_name=str(case_name),
         fd_step=float(fd_step),
-        backend_available=lambda info: bool(info.get("vmec_jax_available", False)),
-        unavailable_reason="vmec_jax is not available",
+        backend_available=lambda info: bool(info.get("vmex_available", False)),
+        unavailable_reason="vmex is not available",
         build_run=lambda p: _run_vmec_field_line_tensor_sensitivity(
             params=p,
             case_name=str(case_name),
@@ -835,7 +835,7 @@ def vmec_jax_field_line_tensor_sensitivity_report(  # pragma: no cover
 
 
 __all__ = [
-    "vmec_jax_boozer_flux_tube_sensitivity_report",
-    "vmec_jax_field_line_tensor_sensitivity_report",
-    "vmec_jax_metric_tensor_sensitivity_report",
+    "vmex_boozer_flux_tube_sensitivity_report",
+    "vmex_field_line_tensor_sensitivity_report",
+    "vmex_metric_tensor_sensitivity_report",
 ]

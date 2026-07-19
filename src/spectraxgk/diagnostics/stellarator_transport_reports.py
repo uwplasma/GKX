@@ -432,7 +432,7 @@ def _prelaunch_payload(
     blockers: list[str],
 ) -> dict[str, Any]:
     return {
-        "kind": "vmec_jax_reduced_nonlinear_audit_prelaunch_report",
+        "kind": "vmex_reduced_nonlinear_audit_prelaunch_report",
         "claim_scope": (
             "reduced-objective prelaunch guard only; passing this gate permits a "
             "replicated nonlinear audit but does not promote a turbulence claim"
@@ -733,7 +733,7 @@ def build_nonlinear_campaign_admission_report(
     blockers.extend(candidate_blockers)
     admitted = not blockers
     return {
-        "kind": "vmec_jax_nonlinear_campaign_admission_report",
+        "kind": "vmex_nonlinear_campaign_admission_report",
         "claim_scope": (
             "next nonlinear optimizer-campaign admission only; not a production "
             "multi-coefficient turbulent-flux optimization claim"
@@ -878,7 +878,7 @@ def build_nonlinear_audit_redesign_report(
     all_blockers = nonlinear_blockers + list(sample_summary["blockers"])
     promoted = not all_blockers
     return {
-        "kind": "vmec_jax_nonlinear_transport_audit_redesign_report",
+        "kind": "vmex_nonlinear_transport_audit_redesign_report",
         "policy": policy.to_dict(),
         "matched_comparison_case": matched_comparison.get("case"),
         "matched_comparison_passed": metrics.comparison_passed,

@@ -210,7 +210,7 @@ nonlinear-window residual to the aspect-ratio, mean-iota, and quasisymmetry
 objective tuples. The baseline follows the max-mode-5 QA workflow; all
 transport comparisons use solved VMEC equilibria.
 
-![VMEX QA max-mode-5 optimizer sweep](docs/_static/vmec_jax_qa_full_sweep_panel.png)
+![VMEX QA max-mode-5 optimizer sweep](docs/_static/vmex_qa_full_sweep_panel.png)
 
 These rows are not promoted turbulent-flux designs. Their matched long
 post-transient nonlinear audits use converged post-transient heat-flux windows

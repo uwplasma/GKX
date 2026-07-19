@@ -105,20 +105,20 @@ def discover_differentiable_geometry_backends() -> dict[str, object]:
     """Discover the optional ``vmex`` and ``booz_xform_jax`` bridge APIs.
 
     ``vmex`` is normally the installed package; the filesystem fallbacks keep
-    working for local checkouts (the historical ``vmec_jax`` repository IS the
+    working for local checkouts (the historical ``vmex`` repository IS the
     vmex source tree).  The report KEY NAMES intentionally keep the legacy
-    ``vmec_jax_*`` spelling: they are string-coupled to frozen validation
+    ``vmex_*`` spelling: they are string-coupled to frozen validation
     artifacts, and the coordinated identifier rename happens in a later phase.
     """
 
     repo_parent = Path(__file__).resolve().parents[3].parent
     home = Path.home()
     vmec_paths = _candidate_paths(
-        ("SPECTRAX_VMEC_JAX_PATH", "VMEC_JAX_PATH"),
+        ("SPECTRAX_VMEX_PATH", "VMEX_PATH"),
         (
-            repo_parent / "vmec_jax",
-            home / "vmec_jax",
-            home / "local" / "vmec_jax",
+            repo_parent / "vmex",
+            home / "vmex",
+            home / "local" / "vmex",
         ),
     )
     booz_paths = _candidate_paths(
@@ -137,7 +137,7 @@ def discover_differentiable_geometry_backends() -> dict[str, object]:
         else _find_importable_module("booz_xform_jax.jax_api", booz_paths)
     )
 
-    # The boundary bridge still targets the retired vmec_jax boundary helpers;
+    # The boundary bridge still targets the retired vmex boundary helpers;
     # vmex does not expose them, so this reports False until that route is
     # ported (spectraxgk.geometry.booz_xform_bridge).
     vmec_boundary_api = vmec is not None and all(
@@ -158,11 +158,11 @@ def discover_differentiable_geometry_backends() -> dict[str, object]:
     )
 
     return {
-        "vmec_jax_available": vmec is not None,
-        "vmec_jax_boundary_api_available": vmec_boundary_api,
+        "vmex_available": vmec is not None,
+        "vmex_boundary_api_available": vmec_boundary_api,
         "booz_xform_jax_available": booz is not None,
         "booz_xform_jax_api_available": booz_api,
-        "vmec_jax_paths": [str(path) for path in vmec_paths],
+        "vmex_paths": [str(path) for path in vmec_paths],
         "booz_xform_jax_paths": [str(path) for path in booz_paths],
     }
 

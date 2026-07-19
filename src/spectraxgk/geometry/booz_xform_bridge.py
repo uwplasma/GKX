@@ -31,12 +31,12 @@ def vmec_boundary_aspect_sensitivity_report(
     nphi: int = 1,
     nfp: int = 1,
 ) -> dict[str, object]:
-    """Validate a real ``vmec_jax`` boundary-aspect derivative when available.
+    """Validate a real ``vmex`` boundary-aspect derivative when available.
 
     The check intentionally stops at the boundary Fourier API. Full VMEC solves
     are too expensive and environment-sensitive for the default package tests,
     but the boundary-aspect path verifies that SPECTRAX-GK can discover a
-    ``vmec_jax`` checkout and differentiate through its JAX-native boundary
+    ``vmex`` checkout and differentiate through its JAX-native boundary
     data structures before higher-cost optimization workflows are promoted.
     """
 
@@ -44,7 +44,7 @@ def vmec_boundary_aspect_sensitivity_report(
     if p.ndim != 1 or int(p.shape[0]) != 2:
         raise ValueError("params must be a one-dimensional length-2 vector")
     info = discover_differentiable_geometry_backends()
-    if not info.get("vmec_jax_boundary_api_available", False):
+    if not info.get("vmex_boundary_api_available", False):
         return {
             "available": False,
             "backend_info": info,

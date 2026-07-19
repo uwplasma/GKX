@@ -258,9 +258,9 @@ def _wout_quasisymmetry(
             nphi=int(nphi),
         )
         value = _finite_float_or_none(qs.total(wout))
-        return value, "vmec_jax_wout", None if value is not None else "nonfinite_qs_residual"
+        return value, "vmex_wout", None if value is not None else "nonfinite_qs_residual"
     except Exception as exc:
-        return None, "vmec_jax_wout_error", f"{type(exc).__name__}: {exc}"
+        return None, "vmex_wout_error", f"{type(exc).__name__}: {exc}"
 
 
 def build_authoritative_wout_candidate_gate(
@@ -323,7 +323,7 @@ def build_authoritative_wout_candidate_gate(
     }
     passed = _checks_passed(checks)
     return {
-        "kind": "vmec_jax_authoritative_wout_candidate_gate",
+        "kind": "vmex_authoritative_wout_candidate_gate",
         "passed": bool(passed),
         "authoritative_wout": summary,
         "checks": checks,
@@ -467,7 +467,7 @@ def build_wout_reproducibility_gate(
     )
     passed = _checks_passed(checks)
     return {
-        "kind": "vmec_jax_wout_reproducibility_gate",
+        "kind": "vmex_wout_reproducibility_gate",
         "passed": bool(passed),
         "reference_wout": reference,
         "rerun_wout": rerun,
@@ -507,12 +507,12 @@ def build_solved_vmec_candidate_gate(
     if not isinstance(candidate, Mapping):
         qs_residual = _final_quasisymmetry_from_vmec_result(candidate)
         if qs_residual is not None:
-            qs_source = "vmec_jax_state"
+            qs_source = "vmex_state"
     if qs_residual is None:
         qs_residual = _finite_float_or_none(history.get("qs_final"))
 
     if iota_profiles is None and not isinstance(candidate, Mapping):
-        profile_source = "vmec_jax_state"
+        profile_source = "vmex_state"
         iota_profiles = final_iota_profiles_from_vmec_result(candidate)
 
     min_iota_profile: float | None = None
@@ -541,7 +541,7 @@ def build_solved_vmec_candidate_gate(
     }
     passed = _checks_passed(checks)
     return {
-        "kind": "vmec_jax_solved_wout_candidate_gate",
+        "kind": "vmex_solved_wout_candidate_gate",
         "passed": bool(passed),
         "checks": checks,
         "claim_level": "solved VMEC candidate gate before expensive SPECTRAX-GK nonlinear transport audit",

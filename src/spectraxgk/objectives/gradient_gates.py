@@ -581,7 +581,7 @@ def _pack_linear_solver_geometry_gradient_report(
         "source_scope": "solver_ready_geometry_contract",
         "claim_scope": (
             "actual_linear_rhs_solver_objectives; not yet a full "
-            "vmec_jax_to_booz_xform_jax_to_solver gradient claim"
+            "vmex_to_booz_xform_jax_to_solver gradient claim"
         ),
         "parameter_names": list(SOLVER_GEOMETRY_PARAMETER_NAMES),
         "objective_names": list(SOLVER_OBJECTIVE_NAMES),

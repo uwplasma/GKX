@@ -318,7 +318,7 @@ def _pack_branch_locality_report(
     )
     classifications = sorted({str(row.get("classification")) for row in rows})
     return {
-        "kind": "vmec_jax_transport_growth_branch_locality_report",
+        "kind": "vmex_transport_growth_branch_locality_report",
         "claim_scope": (
             "VMEC/Boozer final-state perturbation -> SPECTRAX-GK linear operator "
             "dominant-growth branch locality; not a full transport-gradient promotion by itself"
@@ -357,7 +357,7 @@ def _pack_branch_locality_report(
     }
 
 
-def vmec_jax_transport_growth_branch_locality_report_from_states(
+def vmex_transport_growth_branch_locality_report_from_states(
     base_state: Any,
     plus_state: Any,
     minus_state: Any,
@@ -402,4 +402,4 @@ def vmec_jax_transport_growth_branch_locality_report_from_states(
     )
 
 
-__all__ = ["vmec_jax_transport_growth_branch_locality_report_from_states"]
+__all__ = ["vmex_transport_growth_branch_locality_report_from_states"]

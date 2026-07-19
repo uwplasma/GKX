@@ -435,7 +435,7 @@ def _mode21_nonlinear_window_gradient_payload(
         gate=gate,
         rows=rows,
         claim_scope=(
-            "full vmec_jax state coefficient -> booz_xform_jax mode-21 equal-arc geometry "
+            "full vmex state coefficient -> booz_xform_jax mode-21 equal-arc geometry "
             "-> SPECTRAX-GK linear-RHS eigenpair -> reduced nonlinear-window estimator gradient"
         ),
     )
@@ -480,7 +480,7 @@ def mode21_vmec_boozer_linear_frequency_gradient_report(  # pragma: no cover
     """Validate a full VMEC/Boozer-state gradient of linear frequency.
 
     This is an offline manuscript artifact gate.  It perturbs one mid-surface
-    VMEC Fourier coefficient, maps it through ``vmec_jax`` and
+    VMEC Fourier coefficient, maps it through ``vmex`` and
     ``booz_xform_jax`` into the mode-21 equal-arc flux-tube geometry contract,
     builds the SPECTRAX-GK linear RHS, and compares implicit eigenpair
     sensitivities against central finite differences.  Quasilinear flux-weight
@@ -520,7 +520,7 @@ def mode21_vmec_boozer_linear_frequency_gradient_report(  # pragma: no cover
         gate=gate,
         rows=rows,
         claim_scope=(
-            "full vmec_jax state coefficient -> booz_xform_jax mode-21 equal-arc "
+            "full vmex state coefficient -> booz_xform_jax mode-21 equal-arc "
             "geometry -> SPECTRAX-GK linear-RHS eigenfrequency gradient"
         ),
     )
@@ -600,7 +600,7 @@ def mode21_vmec_boozer_quasilinear_gradient_report(  # pragma: no cover
         gate=gate,
         rows=rows,
         claim_scope=(
-            "full vmec_jax state coefficient -> booz_xform_jax mode-21 equal-arc "
+            "full vmex state coefficient -> booz_xform_jax mode-21 equal-arc "
             "geometry -> SPECTRAX-GK linear-RHS quasilinear heat-flux-weight gradient"
         ),
     )
@@ -643,7 +643,7 @@ def mode21_vmec_boozer_nonlinear_window_gradient_report(  # pragma: no cover
 ) -> dict[str, object]:
     """Validate VMEC/Boozer-state gradients of a nonlinear-window estimator.
 
-    The gate reuses the full ``vmec_jax`` state to ``booz_xform_jax`` to
+    The gate reuses the full ``vmex`` state to ``booz_xform_jax`` to
     SPECTRAX-GK linear-RHS path from the quasilinear gradient gate, then feeds
     the isolated eigenpair observables into a differentiable late-time
     heat-flux-envelope estimator.  It is a reduced nonlinear-window

@@ -1,7 +1,7 @@
 """Direct VMEC (PEST field-line) flux-tube mapping bridge via ``vmex``.
 
 The historical tensor route evaluated raw VMEC metric/``|B|`` tensors from the
-retired ``vmec_jax`` internals and rebuilt the flux-tube contract locally.
+retired ``vmex`` internals and rebuilt the flux-tube contract locally.
 The route is now a thin adapter over the vmex public turbulence seam
 :func:`vmex.core.turbulence.gk_fieldline_geometry`, which emits the exact
 in-memory mapping contract consumed by
@@ -27,7 +27,7 @@ def _import_vmex_turbulence() -> Any:
         ) from exc
 
 
-def vmec_jax_flux_tube_mapping_from_state(  # pragma: no cover
+def vmex_flux_tube_mapping_from_state(  # pragma: no cover
     state: Any,
     runtime: Any,
     *,
@@ -54,7 +54,7 @@ def vmec_jax_flux_tube_mapping_from_state(  # pragma: no cover
     The returned dict satisfies :func:`flux_tube_geometry_from_mapping` and is
     differentiable with respect to the vmex spectral state.  The vmex parity
     diagnostics (``dp_drho``, ``gradpar_profile``, sampled PEST angles, ...)
-    are passed through under the ``"vmec_jax"`` key expected by the existing
+    are passed through under the ``"vmex"`` key expected by the existing
     report consumers, with ``reference_length``/``reference_b`` aliases for
     ``L_ref``/``B_ref``.
     """
@@ -73,7 +73,7 @@ def vmec_jax_flux_tube_mapping_from_state(  # pragma: no cover
         )
     )
     vmex_meta = dict(mapping.pop("vmex"))
-    mapping["vmec_jax"] = {
+    mapping["vmex"] = {
         **vmex_meta,
         "reference_length": vmex_meta["L_ref"],
         "reference_b": vmex_meta["B_ref"],
@@ -81,4 +81,4 @@ def vmec_jax_flux_tube_mapping_from_state(  # pragma: no cover
     return mapping
 
 
-__all__ = ["vmec_jax_flux_tube_mapping_from_state"]
+__all__ = ["vmex_flux_tube_mapping_from_state"]

@@ -169,13 +169,13 @@ def _scalar_metadata(data: Mapping[str, Any], *, validate_finite: bool) -> dict[
 def flux_tube_geometry_from_mapping(
     data: Mapping[str, Any],
     *,
-    source_model: str = "vmec_jax",
+    source_model: str = "vmex",
     validate_finite: bool = True,
 ) -> FluxTubeGeometryData:
     """Build ``FluxTubeGeometryData`` from an in-memory differentiable backend.
 
     The input is intentionally the solver-ready flux-tube contract, not a fake
-    equilibrium. ``vmec_jax`` / ``booz_xform_jax`` pipelines should first
+    equilibrium. ``vmex`` / ``booz_xform_jax`` pipelines should first
     produce the sampled field-line arrays named here, then this function
     validates shapes/finite values and hands them to the existing solver.
     """
@@ -243,7 +243,7 @@ def flux_tube_geometry_observables(geom: FluxTubeGeometryData) -> jnp.ndarray:
     The observables are intentionally geometry-level quantities: mean field
     strength, relative ripple, metric norm, drift norm, mean Jacobian, and mean
     parallel-gradient factor. They are used to validate the differentiable
-    ``vmec_jax`` / ``booz_xform_jax`` bridge before any turbulence observable
+    ``vmex`` / ``booz_xform_jax`` bridge before any turbulence observable
     is promoted into an optimization claim.
     """
 

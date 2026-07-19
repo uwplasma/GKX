@@ -276,7 +276,7 @@ def _reduce_scalar_values(
 def _aggregate_dependency_fns(kwargs: dict[str, Any]) -> _VmecBoozerDependencyFns:
     return _VmecBoozerDependencyFns(
         load_state_bundle_fn=kwargs.pop(
-            "_load_state_bundle_fn", _load_vmec_jax_example_state_bundle
+            "_load_state_bundle_fn", _load_vmex_example_state_bundle
         ),
         state_array_fn=kwargs.pop("_state_array_fn", _vmec_boozer_state_array),
         replace_state_coefficient_fn=kwargs.pop(
@@ -300,7 +300,7 @@ def _scalar_dependency_fns(kwargs: dict[str, Any]) -> _VmecBoozerScalarDependenc
 
     return _VmecBoozerScalarDependencyFns(
         load_state_bundle_fn=kwargs.pop(
-            "_load_state_bundle_fn", _load_vmec_jax_example_state_bundle
+            "_load_state_bundle_fn", _load_vmex_example_state_bundle
         ),
         state_array_fn=kwargs.pop("_state_array_fn", _vmec_boozer_state_array),
         replace_state_coefficient_fn=kwargs.pop(
@@ -659,7 +659,7 @@ def _aggregate_fd_report_payload(
     }
 
 
-def _load_vmec_jax_example_state_bundle(
+def _load_vmex_example_state_bundle(
     case_name: str,
 ) -> dict[str, Any]:  # pragma: no cover
     """Solve a local vmex example and bundle its state for offline gates."""
@@ -815,7 +815,7 @@ def vmec_boozer_aggregate_scalar_objective_finite_difference_report(  # pragma: 
 
 
 __all__ = [
-    "_load_vmec_jax_example_state_bundle",
+    "_load_vmex_example_state_bundle",
     "_report_float",
     "vmec_boozer_aggregate_scalar_objective_finite_difference_report",
     "vmec_boozer_scalar_objective_finite_difference_report",

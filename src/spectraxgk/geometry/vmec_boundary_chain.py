@@ -499,7 +499,7 @@ def _nonfinite_boundary_chain_summary(
     """Return the fail-closed payload for a nonfinite boundary-chain probe."""
 
     return {
-        "kind": "vmec_jax_boundary_chain_summary",
+        "kind": "vmex_boundary_chain_summary",
         "finite": False,
         "classification": "nonfinite_boundary_chain_probe",
         "metrics": dict(metrics),
@@ -547,7 +547,7 @@ def _finite_boundary_chain_summary(
     )
 
     return {
-        "kind": "vmec_jax_boundary_chain_summary",
+        "kind": "vmex_boundary_chain_summary",
         "finite": True,
         "classification": classification,
         "exact_relative_tolerance": float(exact_relative_tolerance),
@@ -681,7 +681,7 @@ def build_boundary_chain_collection_summary(
 
     if not probes:
         return {
-            "kind": "vmec_jax_boundary_chain_collection_summary",
+            "kind": "vmex_boundary_chain_collection_summary",
             "finite": False,
             "classification": "empty_boundary_chain_collection",
             "rows": [],
@@ -711,7 +711,7 @@ def build_boundary_chain_collection_summary(
     finite, classification, next_action = _boundary_chain_collection_decision(counts)
 
     return {
-        "kind": "vmec_jax_boundary_chain_collection_summary",
+        "kind": "vmex_boundary_chain_collection_summary",
         "finite": finite,
         "classification": classification,
         "exact_relative_tolerance": float(exact_relative_tolerance),

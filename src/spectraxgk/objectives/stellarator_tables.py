@@ -222,7 +222,7 @@ def stellarator_itg_portfolio_sensitivity_report(
         "objective_names": list(objective_names),
         "sample_set": samples.to_dict(),
         "backend_boundary": (
-            "same reducer/gate contract intended for vmec_jax -> booz_xform_jax "
+            "same reducer/gate contract intended for vmex -> booz_xform_jax "
             "objective rows after geometry parity passes"
         ),
         "portfolio_report": report,
@@ -345,7 +345,7 @@ def stellarator_itg_portfolio_gate_payload(
         "portfolio_report": report["portfolio_report"],
         "config": asdict(cfg),
         "next_action": (
-            "Replace the reduced surrogate row producer with real vmec_jax -> "
+            "Replace the reduced surrogate row producer with real vmex -> "
             "booz_xform_jax -> SPECTRAX-GK rows, then rerun the same gate "
             "with held-out surface/alpha samples before optimization claims."
         ),

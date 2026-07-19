@@ -12,7 +12,7 @@ from spectraxgk.diagnostics import fieldline_quadrature_weights, heat_flux_speci
 from spectraxgk.geometry.flux_tube_contract import flux_tube_geometry_from_mapping
 from spectraxgk.geometry.vmec_boozer_core import (
     load_solved_vmex_case,
-    vmec_jax_boozer_equal_arc_core_profiles_from_state,
+    vmex_boozer_equal_arc_core_profiles_from_state,
 )
 from spectraxgk.objectives.core import (
     _default_gradient_linear_params,
@@ -116,7 +116,7 @@ def _make_mode21_geometry_for(
             mode_index_int,
             x[0],
         )
-        mapping = vmec_jax_boozer_equal_arc_core_profiles_from_state(
+        mapping = vmex_boozer_equal_arc_core_profiles_from_state(
             traced_state,
             runtime,
             inp,

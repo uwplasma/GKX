@@ -465,7 +465,7 @@ def _transport_admission_payload(
     promoted: dict[str, Any] | None,
 ) -> dict[str, Any]:
     return {
-        "kind": "vmec_jax_transport_admission_report",
+        "kind": "vmex_transport_admission_report",
         "policy": policy.to_dict(),
         "baseline_label": None if baseline.item is None else baseline.item.get("label"),
         "baseline_transport_metric": baseline.metric,

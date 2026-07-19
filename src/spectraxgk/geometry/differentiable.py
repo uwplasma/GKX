@@ -144,36 +144,36 @@ def _call_with_vmec_state_facade_hooks(func: Any, *args: Any, **kwargs: Any) -> 
         return func(*args, **kwargs)
 
 
-@wraps(_vmec_state_sensitivity.vmec_jax_boozer_flux_tube_sensitivity_report)
-def vmec_jax_boozer_flux_tube_sensitivity_report(*args: Any, **kwargs: Any) -> Any:
+@wraps(_vmec_state_sensitivity.vmex_boozer_flux_tube_sensitivity_report)
+def vmex_boozer_flux_tube_sensitivity_report(*args: Any, **kwargs: Any) -> Any:
     return _call_with_vmec_state_facade_hooks(
-        _vmec_state_sensitivity.vmec_jax_boozer_flux_tube_sensitivity_report,
+        _vmec_state_sensitivity.vmex_boozer_flux_tube_sensitivity_report,
         *args,
         **kwargs,
     )
 
 
-@wraps(_vmec_state_sensitivity.vmec_jax_metric_tensor_sensitivity_report)
-def vmec_jax_metric_tensor_sensitivity_report(*args: Any, **kwargs: Any) -> Any:
+@wraps(_vmec_state_sensitivity.vmex_metric_tensor_sensitivity_report)
+def vmex_metric_tensor_sensitivity_report(*args: Any, **kwargs: Any) -> Any:
     return _call_with_vmec_state_facade_hooks(
-        _vmec_state_sensitivity.vmec_jax_metric_tensor_sensitivity_report,
+        _vmec_state_sensitivity.vmex_metric_tensor_sensitivity_report,
         *args,
         **kwargs,
     )
 
 
-@wraps(_vmec_state_sensitivity.vmec_jax_field_line_tensor_sensitivity_report)
-def vmec_jax_field_line_tensor_sensitivity_report(*args: Any, **kwargs: Any) -> Any:
+@wraps(_vmec_state_sensitivity.vmex_field_line_tensor_sensitivity_report)
+def vmex_field_line_tensor_sensitivity_report(*args: Any, **kwargs: Any) -> Any:
     return _call_with_vmec_state_facade_hooks(
-        _vmec_state_sensitivity.vmec_jax_field_line_tensor_sensitivity_report,
+        _vmec_state_sensitivity.vmex_field_line_tensor_sensitivity_report,
         *args,
         **kwargs,
     )
 
 
-@wraps(_vmec_tensor_mapping.vmec_jax_flux_tube_mapping_from_state)
-def vmec_jax_flux_tube_mapping_from_state(*args: Any, **kwargs: Any) -> Any:
-    return _vmec_tensor_mapping.vmec_jax_flux_tube_mapping_from_state(
+@wraps(_vmec_tensor_mapping.vmex_flux_tube_mapping_from_state)
+def vmex_flux_tube_mapping_from_state(*args: Any, **kwargs: Any) -> Any:
+    return _vmec_tensor_mapping.vmex_flux_tube_mapping_from_state(
         *args, **kwargs
     )
 
@@ -208,12 +208,12 @@ def prewarm_vmec_boozer_equal_arc_cache(*args: Any, **kwargs: Any) -> Any:
     )
 
 
-@wraps(_vmec_boozer_core.vmec_jax_boozer_equal_arc_core_profiles_from_state)
-def vmec_jax_boozer_equal_arc_core_profiles_from_state(
+@wraps(_vmec_boozer_core.vmex_boozer_equal_arc_core_profiles_from_state)
+def vmex_boozer_equal_arc_core_profiles_from_state(
     *args: Any, **kwargs: Any
 ) -> Any:
     return _call_with_vmec_boozer_core_facade_hooks(
-        _vmec_boozer_core.vmec_jax_boozer_equal_arc_core_profiles_from_state,
+        _vmec_boozer_core.vmex_boozer_equal_arc_core_profiles_from_state,
         *args,
         **kwargs,
     )
@@ -252,7 +252,7 @@ def flux_tube_geometry_from_vmec_boozer_state(  # pragma: no cover
     filesystem artifacts.
     """
 
-    mapping = vmec_jax_boozer_equal_arc_core_profiles_from_state(
+    mapping = vmex_boozer_equal_arc_core_profiles_from_state(
         state,
         runtime,
         inp,
@@ -284,11 +284,11 @@ def _call_with_vmec_report_facade_hooks(func: Any, *args: Any, **kwargs: Any) ->
             ),
             "flux_tube_geometry_from_mapping": flux_tube_geometry_from_mapping,
             "geometry_sensitivity_report": geometry_sensitivity_report,
-            "vmec_jax_boozer_equal_arc_core_profiles_from_state": (
-                vmec_jax_boozer_equal_arc_core_profiles_from_state
+            "vmex_boozer_equal_arc_core_profiles_from_state": (
+                vmex_boozer_equal_arc_core_profiles_from_state
             ),
-            "vmec_jax_flux_tube_mapping_from_state": (
-                vmec_jax_flux_tube_mapping_from_state
+            "vmex_flux_tube_mapping_from_state": (
+                vmex_flux_tube_mapping_from_state
             ),
             "_array_parity_metrics": _array_parity_metrics,
             "_scalar_parity_metrics": _scalar_parity_metrics,
@@ -297,19 +297,19 @@ def _call_with_vmec_report_facade_hooks(func: Any, *args: Any, **kwargs: Any) ->
         return func(*args, **kwargs)
 
 
-@wraps(_vmec_flux_tube_reports.vmec_jax_flux_tube_sensitivity_report)
-def vmec_jax_flux_tube_sensitivity_report(*args: Any, **kwargs: Any) -> Any:
+@wraps(_vmec_flux_tube_reports.vmex_flux_tube_sensitivity_report)
+def vmex_flux_tube_sensitivity_report(*args: Any, **kwargs: Any) -> Any:
     return _call_with_vmec_report_facade_hooks(
-        _vmec_flux_tube_reports.vmec_jax_flux_tube_sensitivity_report,
+        _vmec_flux_tube_reports.vmex_flux_tube_sensitivity_report,
         *args,
         **kwargs,
     )
 
 
-@wraps(_vmec_flux_tube_reports.vmec_jax_flux_tube_array_parity_report)
-def vmec_jax_flux_tube_array_parity_report(*args: Any, **kwargs: Any) -> Any:
+@wraps(_vmec_flux_tube_reports.vmex_flux_tube_array_parity_report)
+def vmex_flux_tube_array_parity_report(*args: Any, **kwargs: Any) -> Any:
     return _call_with_vmec_report_facade_hooks(
-        _vmec_flux_tube_reports.vmec_jax_flux_tube_array_parity_report,
+        _vmec_flux_tube_reports.vmex_flux_tube_array_parity_report,
         *args,
         **kwargs,
     )
@@ -329,13 +329,13 @@ __all__ = [
     "geometry_observable_names",
     "geometry_sensitivity_report",
     "observable_gradient_validation_report",
-    "vmec_jax_boozer_flux_tube_sensitivity_report",
-    "vmec_jax_boozer_equal_arc_core_profiles_from_state",
-    "vmec_jax_field_line_tensor_sensitivity_report",
-    "vmec_jax_flux_tube_array_parity_report",
-    "vmec_jax_flux_tube_mapping_from_state",
-    "vmec_jax_flux_tube_sensitivity_report",
-    "vmec_jax_metric_tensor_sensitivity_report",
+    "vmex_boozer_flux_tube_sensitivity_report",
+    "vmex_boozer_equal_arc_core_profiles_from_state",
+    "vmex_field_line_tensor_sensitivity_report",
+    "vmex_flux_tube_array_parity_report",
+    "vmex_flux_tube_mapping_from_state",
+    "vmex_flux_tube_sensitivity_report",
+    "vmex_metric_tensor_sensitivity_report",
     "vmec_boundary_aspect_sensitivity_report",
     "vmec_field_line_tensor_observable_names",
     "vmec_metric_tensor_observable_names",

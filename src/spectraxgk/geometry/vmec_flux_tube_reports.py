@@ -21,7 +21,7 @@ from spectraxgk.geometry.numerics import (
 )
 from spectraxgk.geometry.sensitivity import geometry_sensitivity_report
 from spectraxgk.geometry.vmec_boozer_core import (
-    vmec_jax_boozer_equal_arc_core_profiles_from_state,
+    vmex_boozer_equal_arc_core_profiles_from_state,
 )
 from spectraxgk.geometry.vmec_state_controls import (
     _length_two_params,
@@ -30,7 +30,7 @@ from spectraxgk.geometry.vmec_state_controls import (
     _resolve_vmec_state_indices,
 )
 from spectraxgk.geometry.vmec_tensor_mapping import (
-    vmec_jax_flux_tube_mapping_from_state,
+    vmex_flux_tube_mapping_from_state,
 )
 
 _VMEC_BOOZER_PARITY_MIN_MODE_COUNT = 21
@@ -169,7 +169,7 @@ def _equal_arc_core_profiles(
     mboz: int,
     nboz: int,
 ) -> dict[str, Any]:
-    return vmec_jax_boozer_equal_arc_core_profiles_from_state(
+    return vmex_boozer_equal_arc_core_profiles_from_state(
         ctx.state,
         ctx.runtime,
         ctx.inp,
@@ -320,10 +320,10 @@ def _vmec_flux_tube_mapping_fn(
             radial_index=radial_index,
             mode_index=mode_index,
         )
-        # The tensor-mapping route still targets the retired vmec_jax static
+        # The tensor-mapping route still targets the retired vmex static
         # contract; the vmex runtime is handed through until that route is
         # ported (spectraxgk.geometry.vmec_tensor_mapping).
-        return vmec_jax_flux_tube_mapping_from_state(
+        return vmex_flux_tube_mapping_from_state(
             traced_state,
             ctx.runtime,
             ctx.wout,
@@ -349,14 +349,14 @@ def _pack_vmec_sensitivity_report(
     fd_step: float,
     info: dict[str, object],
 ) -> dict[str, object]:
-    vmec_meta = mapping["vmec_jax"]
+    vmec_meta = mapping["vmex"]
     return {
         "available": True,
         "backend_info": info,
         "case_name": str(case_name),
         "input_path": str(ctx.input_path),
         "wout_path": str(ctx.wout_path),
-        "source_model": "vmec_jax:state->tensor-flux-tube",
+        "source_model": "vmex:state->tensor-flux-tube",
         "param_names": ["delta_Rcos", "delta_Zsin"],
         "params": np.asarray(params).tolist(),
         "radial_index": int(radial_index),
@@ -378,7 +378,7 @@ def _pack_vmec_sensitivity_report(
     }
 
 
-def vmec_jax_flux_tube_sensitivity_report(  # pragma: no cover
+def vmex_flux_tube_sensitivity_report(  # pragma: no cover
     *,
     params: jnp.ndarray | None = None,
     case_name: str = "nfp4_QH_warm_start",
@@ -392,7 +392,7 @@ def vmec_jax_flux_tube_sensitivity_report(  # pragma: no cover
     """AD/FD-check VMEC-state derivatives through a solver-ready flux tube.
 
     Unlike the Boozer-only bridge, this report starts from a real
-    ``vmec_jax`` state, evaluates VMEC metric and magnetic-field tensors, emits
+    ``vmex`` state, evaluates VMEC metric and magnetic-field tensors, emits
     the SPECTRAX-GK ``FluxTubeGeometryData`` mapping, and differentiates
     geometry observables through that path.
     """
@@ -400,12 +400,12 @@ def vmec_jax_flux_tube_sensitivity_report(  # pragma: no cover
     p = _length_two_params(params, default=1.0e-4)
 
     info = discover_differentiable_geometry_backends()
-    if not info.get("vmec_jax_available", False):
+    if not info.get("vmex_available", False):
         return _vmec_sensitivity_unavailable_report(
             info=info,
             case_name=case_name,
             fd_step=fd_step,
-            reason="vmec_jax is not available",
+            reason="vmex is not available",
         )
 
     try:
@@ -429,7 +429,7 @@ def vmec_jax_flux_tube_sensitivity_report(  # pragma: no cover
             mapping_fn,
             p,
             fd_step=float(fd_step),
-            source_model="vmec_jax:state->tensor-flux-tube",
+            source_model="vmex:state->tensor-flux-tube",
         )
         mapping = mapping_fn(p)
     except Exception as exc:
@@ -503,7 +503,7 @@ def _direct_vmec_flux_tube_geometry(
     ntheta: int,
 ) -> Any:
     # Legacy tensor-mapping route (see _vmec_flux_tube_mapping_fn note).
-    direct_mapping = vmec_jax_flux_tube_mapping_from_state(
+    direct_mapping = vmex_flux_tube_mapping_from_state(
         ctx.state,
         ctx.runtime,
         ctx.wout,
@@ -513,7 +513,7 @@ def _direct_vmec_flux_tube_geometry(
     )
     return flux_tube_geometry_from_mapping(
         direct_mapping,
-        source_model="vmec_jax:state->tensor-flux-tube",
+        source_model="vmex:state->tensor-flux-tube",
         validate_finite=False,
     )
 
@@ -649,7 +649,7 @@ def _pack_vmec_array_parity_report(
         "case_name": str(case_name),
         "input_path": str(ctx.input_path),
         "wout_path": str(ctx.wout_path),
-        "source_model": "vmec_jax:state->tensor-flux-tube vs imported-vmec-eik",
+        "source_model": "vmex:state->tensor-flux-tube vs imported-vmec-eik",
         "surface_index": int(surface_index),
         "torflux": float(torflux),
         "alpha": float(alpha),
@@ -787,8 +787,8 @@ def _vmec_array_parity_options(
 
 
 def _vmec_array_parity_backend_unavailable_reason(info: dict[str, object]) -> str | None:
-    if not info.get("vmec_jax_available", False):
-        return "vmec_jax is not available"
+    if not info.get("vmex_available", False):
+        return "vmex is not available"
     from spectraxgk.geometry.imported_vmec import internal_vmec_backend_available
 
     if not internal_vmec_backend_available():
@@ -864,7 +864,7 @@ def _vmec_array_parity_result(
     )
 
 
-def vmec_jax_flux_tube_array_parity_report(  # pragma: no cover
+def vmex_flux_tube_array_parity_report(  # pragma: no cover
     *,
     case_name: str = "nfp4_QH_warm_start",
     surface_index: int | None = None,
@@ -882,11 +882,11 @@ def vmec_jax_flux_tube_array_parity_report(  # pragma: no cover
     equal_arc_metric_tolerance: float = 8.0e-2,
     equal_arc_drift_tolerance: float = 8.0e-2,
 ) -> dict[str, object]:
-    """Compare the direct ``vmec_jax`` flux-tube arrays to imported VMEC/EIK.
+    """Compare the direct ``vmex`` flux-tube arrays to imported VMEC/EIK.
 
     This is a diagnostic promotion gate, not a differentiability check.  It
-    starts from the same real ``vmec_jax`` example state used by
-    :func:`vmec_jax_flux_tube_sensitivity_report`, builds the direct
+    starts from the same real ``vmex`` example state used by
+    :func:`vmex_flux_tube_sensitivity_report`, builds the direct
     VMEC-tensor-derived flux-tube mapping, then generates the existing imported
     VMEC/EIK geometry on the same surface and compares solver-facing arrays.
 
@@ -935,6 +935,6 @@ def vmec_jax_flux_tube_array_parity_report(  # pragma: no cover
 
 
 __all__ = [
-    "vmec_jax_flux_tube_array_parity_report",
-    "vmec_jax_flux_tube_sensitivity_report",
+    "vmex_flux_tube_array_parity_report",
+    "vmex_flux_tube_sensitivity_report",
 ]

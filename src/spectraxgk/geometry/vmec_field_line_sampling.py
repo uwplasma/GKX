@@ -37,7 +37,7 @@ def _vmec_field_line_sampling_coordinates(
     sidx = int(surface_index)
     if iota_profile.ndim != 1 or int(iota_profile.shape[0]) <= sidx:
         raise RuntimeError(
-            "vmec_jax wout iotas profile is missing or incompatible with the state grid"
+            "vmex wout iotas profile is missing or incompatible with the state grid"
         )
     iota_line = iota_profile[sidx]
     iota_safe = jnp.where(

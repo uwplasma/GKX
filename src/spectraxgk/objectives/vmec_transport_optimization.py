@@ -180,7 +180,7 @@ def _boundary_transport_gradient_report_payload(
     """Pack the JSON-safe base report for a VMEC transport-gradient diagnostic."""
 
     return {
-        "kind": "vmec_jax_transport_gradient_diagnostic",
+        "kind": "vmex_transport_gradient_diagnostic",
         "label": str(label),
         "parameter_count": int(evaluation.params.size),
         "residual_count": int(evaluation.residual.size),
@@ -239,7 +239,7 @@ def build_boundary_transport_gradient_report(
     optimizer: Any,
     *,
     params: Sequence[float] | np.ndarray | None = None,
-    label: str = "vmec_jax_transport_gradient",
+    label: str = "vmex_transport_gradient",
     top_n: int = 12,
     sensitivity_atol: float = 1.0e-12,
     include_jacobian: bool = False,
@@ -444,7 +444,7 @@ def projected_line_search_input_manifest(
             }
         )
     manifest = {
-        "kind": "vmec_jax_projected_transport_line_search_input_manifest",
+        "kind": "vmex_projected_transport_line_search_input_manifest",
         "parameter_count": int(direction.size),
         "top_n": int(
             len(report.get("top_gradient_components", ())) if top_n is None else top_n
@@ -536,7 +536,7 @@ def select_projected_line_search_candidate(
             ),
         )
     return {
-        "kind": "vmec_jax_projected_transport_line_search_admission",
+        "kind": "vmex_projected_transport_line_search_admission",
         "policy": policy.to_dict(),
         "baseline_transport_metric": baseline_metric,
         "candidates": annotated,

@@ -26,7 +26,7 @@ from spectraxgk.objectives.vmec_boozer import (
     vmec_boozer_solver_objective_vector_from_state as _vmec_boozer_solver_objective_vector_from_state_impl,
 )
 from spectraxgk.objectives.vmec_boozer_fd import (
-    _load_vmec_jax_example_state_bundle as _load_vmec_jax_example_state_bundle_impl,
+    _load_vmex_example_state_bundle as _load_vmex_example_state_bundle_impl,
     _report_float as _report_float_impl,
     vmec_boozer_aggregate_scalar_objective_finite_difference_report as _vmec_boozer_aggregate_scalar_objective_finite_difference_report_impl,
     vmec_boozer_scalar_objective_finite_difference_report as _vmec_boozer_scalar_objective_finite_difference_report_impl,
@@ -191,10 +191,10 @@ def vmec_boozer_scalar_objective_from_state(  # pragma: no cover
     )
 
 
-def _load_vmec_jax_example_state_bundle(
+def _load_vmex_example_state_bundle(
     case_name: str,
 ) -> dict[str, Any]:  # pragma: no cover
-    return _load_vmec_jax_example_state_bundle_impl(case_name)
+    return _load_vmex_example_state_bundle_impl(case_name)
 
 
 def vmec_boozer_scalar_objective_finite_difference_report(  # pragma: no cover
@@ -222,7 +222,7 @@ def vmec_boozer_scalar_objective_finite_difference_report(  # pragma: no cover
         perturbation_step=perturbation_step,
         response_atol=response_atol,
         max_curvature_ratio=max_curvature_ratio,
-        _load_state_bundle_fn=_load_vmec_jax_example_state_bundle,
+        _load_state_bundle_fn=_load_vmex_example_state_bundle,
         _state_array_fn=_vmec_boozer_state_array,
         _replace_state_coefficient_fn=_replace_vmec_boozer_state_coefficient,
         _parameter_name_fn=_vmec_boozer_state_parameter_name,
@@ -273,7 +273,7 @@ def vmec_boozer_aggregate_scalar_objective_finite_difference_report(  # pragma: 
         perturbation_step=perturbation_step,
         response_atol=response_atol,
         max_curvature_ratio=max_curvature_ratio,
-        _load_state_bundle_fn=_load_vmec_jax_example_state_bundle,
+        _load_state_bundle_fn=_load_vmex_example_state_bundle,
         _state_array_fn=_vmec_boozer_state_array,
         _replace_state_coefficient_fn=_replace_vmec_boozer_state_coefficient,
         _parameter_name_fn=_vmec_boozer_state_parameter_name,
@@ -426,7 +426,7 @@ def vmec_boozer_scalar_objective_line_search_report(  # pragma: no cover
     )
 
 __all__ = [
-    "_load_vmec_jax_example_state_bundle",
+    "_load_vmex_example_state_bundle",
     "_report_float",
     "_split_vmec_boozer_objective_kwargs",
     "vmec_boozer_aggregate_line_search_holdout_report",
