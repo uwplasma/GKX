@@ -38,7 +38,7 @@ def _cached_booz_xform_constants(
     The mode table matches the single grid-representable mode set emitted by
     ``vmex.core.boozer_tables.boozer_input_tables`` (``xn`` carries ``nfp``;
     ``xm_nyq``/``xn_nyq`` equal ``xm``/``xn`` because the traceable tables
-    project |B| and R/Z/lambda on one mode set).
+    project ``|B|`` and R/Z/lambda on one mode set).
     """
 
     fourier_mod = importlib.import_module("vmex.core.fourier")
