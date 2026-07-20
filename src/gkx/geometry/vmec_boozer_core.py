@@ -329,9 +329,7 @@ def _boozer_xform_inputs_from_state(
         boozer_tables_mod.boozer_input_tables(state, runtime, int(j))
         for j in range(1, int(ns_full))
     ]
-    nfp_raw = getattr(inp, "nfp", None)
-    if nfp_raw is None:
-        nfp_raw = getattr(wout, "nfp", 1)
+    nfp_raw = getattr(inp, "nfp", None) or getattr(wout, "nfp", None) or 1
     stacked = {
         key: jnp.stack([jnp.asarray(row[key]) for row in rows])
         for key in ("rmnc", "zmns", "lmns", "bmnc", "bsubumnc", "bsubvmnc", "iota")

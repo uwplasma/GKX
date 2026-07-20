@@ -326,7 +326,6 @@ def _vmec_flux_tube_mapping_fn(
         return vmex_flux_tube_mapping_from_state(
             traced_state,
             ctx.runtime,
-            ctx.wout,
             surface_index=surface_index,
             alpha=float(alpha),
             ntheta=int(ntheta),
@@ -506,7 +505,6 @@ def _direct_vmec_flux_tube_geometry(
     direct_mapping = vmex_flux_tube_mapping_from_state(
         ctx.state,
         ctx.runtime,
-        ctx.wout,
         surface_index=surface_index,
         alpha=float(alpha),
         ntheta=ntheta,
