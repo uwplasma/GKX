@@ -36,16 +36,12 @@ jobs:
           python tools/release/check_repository_size_manifest.py
           python tools/release/check_repository_size_manifest.py release-artifacts
           python tools/release/check_package_architecture_manifest.py
-          python tools/release/check_package_architecture_manifest.py differentiable-refactor
           python tools/release/check_parallel_scaling_artifacts.py --performance-manifest-only
           python tools/release/check_parallel_scaling_artifacts.py
           python tools/release/check_quasilinear_promotion_guardrails.py \
             --out-json /tmp/quasilinear_promotion_guardrails.json
           python tools/release/check_vmec_boozer_gates.py differentiability-claim \
             --out-json docs/_static/vmec_boozer_differentiability_claim_guard.json
-          python tools/artifacts/build_parallelization_completion_status.py \
-            --out-prefix /tmp/parallelization_completion_status \
-            --skip-figures
           python tools/release/check_release_readiness.py technical-status \
             --out-json /tmp/technical_release_status.json \
             --fail-under 98
@@ -64,27 +60,27 @@ jobs:
 
       - name: Smoke-test installed wheel
         run: |
-          python -m venv /tmp/spectraxgk-wheel-smoke
-          /tmp/spectraxgk-wheel-smoke/bin/pip install dist/*.whl
+          python -m venv /tmp/gkx-wheel-smoke
+          /tmp/gkx-wheel-smoke/bin/pip install dist/*.whl
           cd /tmp
-          /tmp/spectraxgk-wheel-smoke/bin/python - <<'PY'
-          import spectraxgk
-          import spectraxgk.parallel
+          /tmp/gkx-wheel-smoke/bin/python - <<'PY'
+          import gkx
+          import gkx.parallel
           from importlib.util import find_spec
-          from spectraxgk.cli import build_parser
+          from gkx.cli import build_parser
 
           assert "--plot" in build_parser().format_help()
-          assert "batch_map" in spectraxgk.parallel.__all__
-          assert spectraxgk.parallel.batch_map.__module__ == "spectraxgk.parallel.batch"
-          assert find_spec("spectraxgk.objectives.qa_low_turbulence_contracts") is None
-          assert find_spec("spectraxgk.objectives.qa_low_turbulence_residuals") is None
-          assert find_spec("spectraxgk.objectives.stellarator_residuals") is None
-          assert find_spec("spectraxgk.diagnostics.growth_series") is None
-          assert find_spec("spectraxgk.geometry.vmec_boundary_collection") is None
-          print(spectraxgk.__version__)
+          assert "batch_map" in gkx.parallel.__all__
+          assert gkx.parallel.batch_map.__module__ == "gkx.parallel.batch"
+          assert find_spec("gkx.objectives.qa_low_turbulence_contracts") is None
+          assert find_spec("gkx.objectives.qa_low_turbulence_residuals") is None
+          assert find_spec("gkx.objectives.stellarator_residuals") is None
+          assert find_spec("gkx.diagnostics.growth_series") is None
+          assert find_spec("gkx.geometry.vmec_boundary_collection") is None
+          print(gkx.__version__)
           PY
-          /tmp/spectraxgk-wheel-smoke/bin/spectraxgk --help >/dev/null
-          /tmp/spectraxgk-wheel-smoke/bin/spectrax-gk --help >/dev/null
+          /tmp/gkx-wheel-smoke/bin/gkx --help >/dev/null
+          /tmp/gkx-wheel-smoke/bin/gkx --help >/dev/null
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1

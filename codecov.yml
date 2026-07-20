@@ -1,5 +1,5 @@
 # Codecov should mirror the CI coverage contract:
-# package coverage is measured for src/spectraxgk, while tools, docs,
+# package coverage is measured for src/gkx, while tools, docs,
 # examples, tests, and generated artifacts are validated by separate gates.
 # CI uploads a fast diagnostic report first and the package-wide release gate
 # second. Wait for both uploads and evaluate the project status only against

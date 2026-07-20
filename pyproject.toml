@@ -3,14 +3,14 @@ requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "spectraxgk"
+name = "gkx"
 version = "1.7.0"
 description = "JAX gyrokinetic solver with Hermite-Laguerre velocity space"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 license-files = ["LICENSE"]
-authors = [{name = "SPECTRAX-GK team"}]
+authors = [{name = "GKX team"}]
 keywords = ["gyrokinetics", "jax", "plasma-physics", "tokamak", "stellarator", "turbulence"]
 classifiers = [
   "Development Status :: 3 - Alpha",
@@ -31,16 +31,16 @@ dependencies = [
   "netCDF4",
   "diffrax",
   "equinox",
-  "solvax>=0.7.3,<0.8",
+  "solvax>=0.8.6,<0.9",
   "tomli; python_version < '3.11'",
   "tqdm",
 ]
 
 [project.urls]
-Homepage = "https://github.com/uwplasma/SPECTRAX-GK"
-Documentation = "https://github.com/uwplasma/SPECTRAX-GK/tree/main/docs"
-Repository = "https://github.com/uwplasma/SPECTRAX-GK"
-Issues = "https://github.com/uwplasma/SPECTRAX-GK/issues"
+Homepage = "https://github.com/uwplasma/GKX"
+Documentation = "https://github.com/uwplasma/GKX/tree/main/docs"
+Repository = "https://github.com/uwplasma/GKX"
+Issues = "https://github.com/uwplasma/GKX/issues"
 
 [project.optional-dependencies]
 docs = [
@@ -73,8 +73,7 @@ assets = [
 ]
 
 [project.scripts]
-spectrax-gk = "spectraxgk.cli:main"
-spectraxgk = "spectraxgk.cli:main"
+gkx = "gkx.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -98,7 +97,7 @@ markers = [
 "tools/*.py" = ["E402"]
 
 [tool.mypy]
-files = ["src/spectraxgk"]
+files = ["src/gkx"]
 exclude = ["legacy_archive", "examples", "docs"]
 
 [[tool.mypy.overrides]]
@@ -115,9 +114,9 @@ module = [
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = ["spectraxgk.geometry.imported_vmec"]
+module = ["gkx.geometry.imported_vmec"]
 ignore_errors = true
 
 [[tool.mypy.overrides]]
-module = ["spectraxgk.geometry.imported_miller"]
+module = ["gkx.geometry.imported_miller"]
 disable_error_code = ["arg-type"]

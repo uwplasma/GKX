@@ -11,7 +11,7 @@ A clear and concise description of the bug.
 1. Command(s) you ran (paste exact input):
 ```
 
-spectraxgk examples/<file>.toml
+gkx examples/<file>.toml
 
 ```
 2. What happened vs what you expected?
@@ -30,7 +30,7 @@ spectraxgk examples/<file>.toml
 ## Environment
 - OS:
 - Python version: `python --version`
-- spectraxgk version: `python -c "import spectraxgk, importlib.metadata as m; print(m.version('spectraxgk'))"`
+- gkx version: `python -c "import gkx, importlib.metadata as m; print(m.version('gkx'))"`
 - JAX version: `python -c "import jax; print(jax.__version__)"`
 
 ## Config snippet

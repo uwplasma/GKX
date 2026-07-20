@@ -1,0 +1,728 @@
+"""Quasilinear model-selection claim-boundary diagnostics.
+
+The functions here combine dataset sufficiency, candidate-skill, calibration,
+and scoped optimized-equilibrium evidence into a JSON-ready model-selection
+status. They are diagnostics/reporting policy, not solver kernels.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Iterable
+import json
+
+from gkx.diagnostics.metadata import _finite_float, _gate
+
+# Consolidated from model_selection_inputs.py.
+ABSOLUTE_FLUX_PROMOTED_CLAIM = "calibrated_absolute_flux"
+
+_OPTIMIZED_EQUILIBRIUM_MARKERS = (
+    "optimized_equilibrium",
+    "optimized-equilibrium",
+    "post_optimization",
+    "post-optimization",
+)
+
+
+def _as_dict(payload: dict[str, Any] | str | Path) -> dict[str, Any]:
+    if isinstance(payload, dict):
+        return payload
+    path = Path(payload)
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"{path} must contain a JSON object")
+    out = dict(data)
+    out.setdefault("source_artifact", str(path))
+    return out
+
+
+def _ensure_path_payload(name: str, payload: object) -> str | Path:
+    if not isinstance(payload, (str, Path)):
+        raise TypeError(f"{name} must be a path, got {type(payload).__name__}")
+    return payload
+
+
+def _accepted_candidates(gate: dict[str, Any]) -> list[str]:
+    raw = gate.get("accepted_candidates", gate.get("accepted_rules", []))
+    if not isinstance(raw, list):
+        return []
+    return [str(item) for item in raw]
+
+
+def _required_candidate_metrics(
+    candidate: dict[str, Any],
+    candidate_gate: dict[str, Any],
+    *,
+    required_candidate: str,
+    transport_gate: float | None,
+    interval_coverage_gate: float | None,
+) -> dict[str, Any]:
+    """Collect the metric bundle used by required-candidate promotion gates."""
+
+    candidates = candidate.get("candidates", {})
+    required_payload = (
+        candidates.get(required_candidate, {}) if isinstance(candidates, dict) else {}
+    )
+    if not isinstance(required_payload, dict):
+        required_payload = {}
+
+    transport_threshold = (
+        _finite_float(candidate_gate.get("transport_mean_relative_error_gate"))
+        if transport_gate is None
+        else float(transport_gate)
+    )
+    coverage_threshold = (
+        _finite_float(candidate_gate.get("interval_coverage_gate"))
+        if interval_coverage_gate is None
+        else float(interval_coverage_gate)
+    )
+    return {
+        "accepted": _accepted_candidates(candidate_gate),
+        "required_payload": required_payload,
+        "candidate_error": _finite_float(
+            required_payload.get("mean_abs_relative_error")
+        ),
+        "candidate_coverage": _finite_float(
+            required_payload.get("prediction_interval_coverage")
+        ),
+        "transport_threshold": transport_threshold,
+        "coverage_threshold": coverage_threshold,
+        "null_error": _finite_float(
+            candidate_gate.get("null_training_mean_mean_abs_relative_error")
+        ),
+        "linear_error": _finite_float(
+            candidate_gate.get("linear_weight_mean_abs_relative_error")
+        ),
+        "promotion_eligible": bool(required_payload.get("promotion_eligible", True)),
+    }
+
+
+def _calibration_summary(report: dict[str, Any]) -> dict[str, Any]:
+    by_split = report.get("by_split", {})
+    holdout = by_split.get("holdout", {}) if isinstance(by_split, dict) else {}
+    holdout_error = (
+        holdout.get("mean_abs_relative_error")
+        if isinstance(holdout, dict)
+        else None
+    )
+    return {
+        "artifact": report.get("source_artifact"),
+        "kind": report.get("kind", "unknown"),
+        "claim_level": report.get("claim_level"),
+        "passed": bool(report.get("passed", False)),
+        "holdout_mean_abs_relative_error": _finite_float(holdout_error),
+    }
+
+
+def _claim_text(report: dict[str, Any]) -> str:
+    fields = (
+        "kind",
+        "case",
+        "claim_level",
+        "claim_scope",
+        "notes",
+        "next_action",
+        "source_artifact",
+    )
+    return " ".join(str(report.get(field, "")) for field in fields).lower()
+
+
+def _nested_gate_passed(report: dict[str, Any], key: str) -> bool:
+    gate = report.get(key)
+    return isinstance(gate, dict) and bool(gate.get("passed", False))
+
+
+def _claims_universal_absolute_flux(report: dict[str, Any]) -> bool:
+    claim = str(report.get("claim_level", ""))
+    if claim == ABSOLUTE_FLUX_PROMOTED_CLAIM:
+        return True
+    for key in (
+        "absolute_flux_promoted",
+        "universal_absolute_flux_promoted",
+        "runtime_absolute_flux_predictor",
+    ):
+        if bool(report.get(key, False)):
+            return True
+    return False
+
+
+def _optimized_equilibrium_rows(report: dict[str, Any]) -> list[object]:
+    rows = report.get("optimized_equilibrium_artifacts")
+    return rows if isinstance(rows, list) else []
+
+
+def _qualifying_optimized_count(
+    report: dict[str, Any], optimized_rows: list[object]
+) -> int:
+    summary = report.get("summary")
+    summary = summary if isinstance(summary, dict) else {}
+    return int(
+        _finite_float(summary.get("qualifying_optimized_equilibrium_ensembles"))
+        or sum(
+            1
+            for row in optimized_rows
+            if isinstance(row, dict)
+            and bool(row.get("qualifies_for_production_optimization", False))
+        )
+        or 0
+    )
+
+
+def _optimized_row_has_marker(row: object) -> bool:
+    if not isinstance(row, dict):
+        return False
+    return bool(row.get("optimized_equilibrium_marker", False)) or any(
+        marker in str(row.get(field, "")).lower()
+        for field in ("path", "case")
+        for marker in _OPTIMIZED_EQUILIBRIUM_MARKERS
+    )
+
+
+def _has_optimized_equilibrium_marker(
+    report: dict[str, Any], optimized_rows: list[object]
+) -> bool:
+    if any(marker in _claim_text(report) for marker in _OPTIMIZED_EQUILIBRIUM_MARKERS):
+        return True
+    return any(_optimized_row_has_marker(row) for row in optimized_rows)
+
+
+def _optimized_equilibrium_audit_passed(
+    report: dict[str, Any],
+    *,
+    production_guard: bool,
+    production_promoted: bool,
+    promotion_gate_passed: bool,
+    gate_report_passed: bool,
+    optimized_marker: bool,
+    qualifying_optimized_count: int,
+) -> bool:
+    if production_guard:
+        return bool(
+            production_promoted
+            and promotion_gate_passed
+            and qualifying_optimized_count > 0
+        )
+    return bool(
+        (
+            bool(report.get("passed", False))
+            or promotion_gate_passed
+            or gate_report_passed
+        )
+        and optimized_marker
+    )
+
+
+def _optimized_equilibrium_audit_summary(report: dict[str, Any]) -> dict[str, Any]:
+    """Summarize optimized-equilibrium nonlinear evidence without broad promotion."""
+
+    kind = str(report.get("kind", ""))
+    claim_level = str(report.get("claim_level", ""))
+    path = report.get("source_artifact")
+    optimized_rows = _optimized_equilibrium_rows(report)
+    qualifying_optimized_count = _qualifying_optimized_count(report, optimized_rows)
+    optimized_marker = _has_optimized_equilibrium_marker(report, optimized_rows)
+    production_guard = kind == "production_nonlinear_turbulent_flux_optimization_guard"
+    production_promoted = bool(
+        report.get("production_nonlinear_optimization_promoted", False)
+    )
+    promotion_gate_passed = _nested_gate_passed(report, "promotion_gate")
+    gate_report_passed = _nested_gate_passed(report, "gate_report")
+    top_level_passed = bool(report.get("passed", False))
+    claims_universal = _claims_universal_absolute_flux(report)
+    audit_passed = _optimized_equilibrium_audit_passed(
+        report,
+        production_guard=production_guard,
+        production_promoted=production_promoted,
+        promotion_gate_passed=promotion_gate_passed,
+        gate_report_passed=gate_report_passed,
+        optimized_marker=optimized_marker,
+        qualifying_optimized_count=qualifying_optimized_count,
+    )
+    supports_scoped = bool(audit_passed and optimized_marker and not claims_universal)
+    blockers: list[str] = []
+    if not optimized_marker:
+        blockers.append("missing_optimized_equilibrium_marker")
+    if not audit_passed:
+        blockers.append("optimized_equilibrium_audit_not_passed")
+    if claims_universal:
+        blockers.append("universal_absolute_flux_overclaim")
+
+    return {
+        "artifact": path,
+        "kind": kind,
+        "claim_level": claim_level,
+        "passed": top_level_passed,
+        "promotion_gate_passed": promotion_gate_passed,
+        "production_nonlinear_optimization_promoted": production_promoted,
+        "optimized_equilibrium_marker": optimized_marker,
+        "qualifying_optimized_equilibrium_ensembles": qualifying_optimized_count,
+        "claims_universal_absolute_flux": claims_universal,
+        "supports_scoped_optimized_equilibrium_transport": supports_scoped,
+        "blockers": blockers,
+    }
+
+
+# Consolidated from model_selection.py.
+DEFAULT_REQUIRED_CANDIDATE = "spectral_envelope_ridge"
+
+
+@dataclass(frozen=True)
+class _ModelSelectionArtifacts:
+    dataset: dict[str, Any]
+    candidate: dict[str, Any]
+    calibration_reports: list[dict[str, Any]]
+    optimized_audits: list[dict[str, Any]]
+
+
+@dataclass(frozen=True)
+class _ModelSelectionContext:
+    dataset_gate: dict[str, Any]
+    candidate_gate: dict[str, Any]
+    candidate_metrics: dict[str, Any]
+    calibration_summaries: list[dict[str, Any]]
+    promoted_absolute_reports: list[dict[str, Any]]
+    calibration_reports_missing_holdout_metrics: list[dict[str, Any]]
+    optimized_audit_summaries: list[dict[str, Any]]
+    qualifying_optimized_audits: list[dict[str, Any]]
+    optimized_audits_claiming_universal_absolute_flux: list[dict[str, Any]]
+
+
+def _promotion_gate(payload: dict[str, Any]) -> dict[str, Any]:
+    gate = payload.get("promotion_gate", {})
+    return gate if isinstance(gate, dict) else {}
+
+
+def _calibration_gate_context(
+    reports: Iterable[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    summaries = [_calibration_summary(report) for report in reports]
+    promoted = [
+        row
+        for row in summaries
+        if row["claim_level"] == ABSOLUTE_FLUX_PROMOTED_CLAIM and bool(row["passed"])
+    ]
+    missing_holdout = [
+        row for row in summaries if row["holdout_mean_abs_relative_error"] is None
+    ]
+    return summaries, promoted, missing_holdout
+
+
+def _optimized_audit_gate_context(
+    audits: Iterable[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    summaries = [_optimized_equilibrium_audit_summary(report) for report in audits]
+    qualifying = [
+        row
+        for row in summaries
+        if bool(row["supports_scoped_optimized_equilibrium_transport"])
+    ]
+    overclaims = [row for row in summaries if bool(row["claims_universal_absolute_flux"])]
+    return summaries, qualifying, overclaims
+
+
+def _required_candidate_gate_rows(
+    *,
+    dataset_gate: dict[str, Any],
+    candidate_gate: dict[str, Any],
+    candidate_metrics: dict[str, Any],
+    required_candidate: str,
+) -> list[dict[str, Any]]:
+    accepted = candidate_metrics["accepted"]
+    required_payload = candidate_metrics["required_payload"]
+    candidate_error = candidate_metrics["candidate_error"]
+    candidate_coverage = candidate_metrics["candidate_coverage"]
+    transport_threshold = candidate_metrics["transport_threshold"]
+    coverage_threshold = candidate_metrics["coverage_threshold"]
+    null_error = candidate_metrics["null_error"]
+    linear_error = candidate_metrics["linear_error"]
+    gates = [
+        _gate(
+            "dataset_sufficiency_passed",
+            bool(dataset_gate.get("passed", False)),
+            f"blockers={dataset_gate.get('blockers', [])}",
+        ),
+        _gate(
+            "candidate_uncertainty_passed",
+            bool(candidate_gate.get("passed", False)),
+            f"accepted={accepted}",
+        ),
+        _gate(
+            "required_candidate_accepted",
+            required_candidate in accepted,
+            f"required={required_candidate} accepted={accepted}",
+        ),
+        _gate(
+            "required_candidate_eligible",
+            bool(candidate_metrics["promotion_eligible"]),
+            f"eligibility_failures={required_payload.get('eligibility_failures', [])}",
+        ),
+    ]
+    gates.append(
+        _gate(
+            "required_candidate_transport_error",
+            candidate_error is not None
+            and transport_threshold is not None
+            and candidate_error <= transport_threshold,
+            f"mean_abs_relative_error={candidate_error} gate={transport_threshold}"
+            if transport_threshold is not None
+            else "missing transport_mean_relative_error_gate",
+        )
+    )
+    gates.append(
+        _gate(
+            "required_candidate_interval_coverage",
+            candidate_coverage is not None
+            and coverage_threshold is not None
+            and candidate_coverage >= coverage_threshold,
+            f"coverage={candidate_coverage} gate={coverage_threshold}"
+            if coverage_threshold is not None
+            else "missing interval_coverage_gate",
+        )
+    )
+    gates.extend(
+        [
+            _gate(
+                "required_candidate_beats_training_mean_null",
+                candidate_error is not None
+                and null_error is not None
+                and candidate_error < null_error,
+                f"candidate={candidate_error} null={null_error}",
+            ),
+            _gate(
+                "required_candidate_beats_linear_weight",
+                candidate_error is not None
+                and linear_error is not None
+                and candidate_error < linear_error,
+                f"candidate={candidate_error} linear_weight={linear_error}",
+            ),
+        ]
+    )
+    return gates
+
+
+def _claim_boundary_gate_rows(
+    *,
+    promoted_absolute_reports: list[dict[str, Any]],
+    calibration_reports_missing_holdout_metrics: list[dict[str, Any]],
+    optimized_audit_summaries: list[dict[str, Any]],
+    qualifying_optimized_audits: list[dict[str, Any]],
+    optimized_audits_claiming_universal_absolute_flux: list[dict[str, Any]],
+    require_optimized_equilibrium_nonlinear_audit: bool,
+) -> list[dict[str, Any]]:
+    gates = [
+        _gate(
+            "absolute_flux_not_promoted",
+            not promoted_absolute_reports,
+            f"promoted_reports={len(promoted_absolute_reports)}",
+        ),
+        _gate(
+            "calibration_reports_have_holdout_metrics",
+            not calibration_reports_missing_holdout_metrics,
+            "missing_holdout_metrics="
+            f"{len(calibration_reports_missing_holdout_metrics)}",
+        ),
+    ]
+    if optimized_audit_summaries or require_optimized_equilibrium_nonlinear_audit:
+        gates.extend(
+            [
+                _gate(
+                    "optimized_equilibrium_nonlinear_audit_present",
+                    bool(optimized_audit_summaries),
+                    f"audits={len(optimized_audit_summaries)}",
+                ),
+                _gate(
+                    "optimized_equilibrium_nonlinear_audit_qualified",
+                    bool(qualifying_optimized_audits),
+                    "qualifying_audits=" f"{len(qualifying_optimized_audits)}",
+                ),
+                _gate(
+                    "optimized_equilibrium_nonlinear_audit_scope_limited",
+                    not optimized_audits_claiming_universal_absolute_flux,
+                    "universal_absolute_flux_overclaims="
+                    f"{len(optimized_audits_claiming_universal_absolute_flux)}",
+                ),
+            ]
+        )
+    return gates
+
+
+def _claim_level(passed: bool, scoped_optimized_evidence: bool) -> str:
+    if passed and scoped_optimized_evidence:
+        return "scoped_candidate_model_selection_with_optimized_equilibrium_nonlinear_audit_not_universal_absolute_flux"
+    if passed:
+        return "scoped_candidate_model_selection_not_runtime_absolute_flux"
+    return "model_selection_or_scope_incomplete"
+
+
+def _absolute_flux_promotion_status(
+    *, passed: bool, scoped_optimized_evidence: bool, blockers: list[str]
+) -> dict[str, Any]:
+    if passed and scoped_optimized_evidence:
+        honest_status = (
+            "scoped_candidate_with_audited_optimized_equilibrium_evidence_not_universal_absolute_flux"
+        )
+    elif passed:
+        honest_status = "scoped_candidate_only_not_absolute_flux"
+    else:
+        honest_status = "not_promoted"
+    return {
+        "universal_absolute_flux_promoted": False,
+        "runtime_absolute_flux_predictor_promoted": False,
+        "scoped_model_selection_promoted": passed,
+        "scoped_optimized_equilibrium_nonlinear_audit_supported": (
+            scoped_optimized_evidence
+        ),
+        "honest_status": honest_status,
+        "blockers": blockers,
+    }
+
+
+def _load_model_selection_artifacts(
+    *,
+    dataset_sufficiency: dict[str, Any] | str | Path,
+    candidate_uncertainty: dict[str, Any] | str | Path,
+    calibration_reports: Iterable[dict[str, Any] | str | Path],
+    optimized_equilibrium_nonlinear_audits: Iterable[
+        dict[str, Any] | str | Path
+    ],
+) -> _ModelSelectionArtifacts:
+    return _ModelSelectionArtifacts(
+        dataset=_as_dict(dataset_sufficiency),
+        candidate=_as_dict(candidate_uncertainty),
+        calibration_reports=[_as_dict(report) for report in calibration_reports],
+        optimized_audits=[
+            _as_dict(report) for report in optimized_equilibrium_nonlinear_audits
+        ],
+    )
+
+
+def _model_selection_context(
+    *,
+    artifacts: _ModelSelectionArtifacts,
+    required_candidate: str,
+    transport_gate: float | None,
+    interval_coverage_gate: float | None,
+) -> _ModelSelectionContext:
+    dataset_gate = _promotion_gate(artifacts.dataset)
+    candidate_gate = _promotion_gate(artifacts.candidate)
+    candidate_metrics = _required_candidate_metrics(
+        artifacts.candidate,
+        candidate_gate,
+        required_candidate=required_candidate,
+        transport_gate=transport_gate,
+        interval_coverage_gate=interval_coverage_gate,
+    )
+    summaries, promoted_reports, missing_holdout = _calibration_gate_context(
+        artifacts.calibration_reports
+    )
+    audit_summaries, qualifying_audits, universal_overclaims = (
+        _optimized_audit_gate_context(artifacts.optimized_audits)
+    )
+    return _ModelSelectionContext(
+        dataset_gate=dataset_gate,
+        candidate_gate=candidate_gate,
+        candidate_metrics=candidate_metrics,
+        calibration_summaries=summaries,
+        promoted_absolute_reports=promoted_reports,
+        calibration_reports_missing_holdout_metrics=missing_holdout,
+        optimized_audit_summaries=audit_summaries,
+        qualifying_optimized_audits=qualifying_audits,
+        optimized_audits_claiming_universal_absolute_flux=universal_overclaims,
+    )
+
+
+def _model_selection_gate_rows(
+    *,
+    context: _ModelSelectionContext,
+    required_candidate: str,
+    require_optimized_equilibrium_nonlinear_audit: bool,
+) -> list[dict[str, Any]]:
+    gates = _required_candidate_gate_rows(
+        dataset_gate=context.dataset_gate,
+        candidate_gate=context.candidate_gate,
+        candidate_metrics=context.candidate_metrics,
+        required_candidate=required_candidate,
+    )
+    gates.extend(
+        _claim_boundary_gate_rows(
+            promoted_absolute_reports=context.promoted_absolute_reports,
+            calibration_reports_missing_holdout_metrics=(
+                context.calibration_reports_missing_holdout_metrics
+            ),
+            optimized_audit_summaries=context.optimized_audit_summaries,
+            qualifying_optimized_audits=context.qualifying_optimized_audits,
+            optimized_audits_claiming_universal_absolute_flux=(
+                context.optimized_audits_claiming_universal_absolute_flux
+            ),
+            require_optimized_equilibrium_nonlinear_audit=(
+                require_optimized_equilibrium_nonlinear_audit
+            ),
+        )
+    )
+    return gates
+
+
+def _model_selection_metrics(context: _ModelSelectionContext) -> dict[str, Any]:
+    candidate_metrics = context.candidate_metrics
+    return {
+        "candidate_mean_abs_relative_error": candidate_metrics["candidate_error"],
+        "candidate_prediction_interval_coverage": candidate_metrics[
+            "candidate_coverage"
+        ],
+        "transport_mean_relative_error_gate": candidate_metrics[
+            "transport_threshold"
+        ],
+        "interval_coverage_gate": candidate_metrics["coverage_threshold"],
+        "null_training_mean_mean_abs_relative_error": candidate_metrics["null_error"],
+        "linear_weight_mean_abs_relative_error": candidate_metrics["linear_error"],
+    }
+
+
+def _model_selection_payload(
+    *,
+    context: _ModelSelectionContext,
+    gates: list[dict[str, Any]],
+    required_candidate: str,
+    require_optimized_equilibrium_nonlinear_audit: bool,
+) -> dict[str, Any]:
+    passed = all(bool(gate["passed"]) for gate in gates)
+    blockers = [gate["metric"] for gate in gates if not bool(gate["passed"])]
+    scoped_optimized_evidence = bool(context.qualifying_optimized_audits)
+    return {
+        "kind": "quasilinear_model_selection_status",
+        "claim_level": _claim_level(passed, scoped_optimized_evidence),
+        "passed": passed,
+        "required_candidate": str(required_candidate),
+        "accepted_candidates": context.candidate_metrics["accepted"],
+        "promotion_gate": {
+            "passed": passed,
+            "blockers": blockers,
+            "requires_dataset_sufficiency": True,
+            "requires_uncertainty_skill": True,
+            "requires_no_absolute_flux_promotion": True,
+            "requires_optimized_equilibrium_nonlinear_audit": bool(
+                require_optimized_equilibrium_nonlinear_audit
+            ),
+        },
+        "absolute_flux_promotion": _absolute_flux_promotion_status(
+            passed=passed,
+            scoped_optimized_evidence=scoped_optimized_evidence,
+            blockers=blockers,
+        ),
+        "metrics": _model_selection_metrics(context),
+        "gate_report": {
+            "case": "quasilinear_model_selection",
+            "passed": passed,
+            "max_abs_error": 0.0 if passed else 1.0,
+            "max_rel_error": 0.0 if passed else 1.0,
+            "gates": gates,
+        },
+        "calibration_reports": context.calibration_summaries,
+        "optimized_equilibrium_nonlinear_audits": context.optimized_audit_summaries,
+        "notes": (
+            "A passed status promotes only the scoped model-selection result. "
+            "Optimized-equilibrium nonlinear audits, when supplied, can support "
+            "only that audited equilibrium. The status does not promote a "
+            "runtime/TOML absolute-flux predictor or a universal nonlinear "
+            "transport model."
+        ),
+    }
+
+
+def build_quasilinear_model_selection_status(
+    *,
+    dataset_sufficiency: dict[str, Any] | str | Path,
+    candidate_uncertainty: dict[str, Any] | str | Path,
+    calibration_reports: Iterable[dict[str, Any] | str | Path] = (),
+    optimized_equilibrium_nonlinear_audits: Iterable[
+        dict[str, Any] | str | Path
+    ] = (),
+    required_candidate: str = DEFAULT_REQUIRED_CANDIDATE,
+    transport_gate: float | None = None,
+    interval_coverage_gate: float | None = None,
+    require_optimized_equilibrium_nonlinear_audit: bool = False,
+) -> dict[str, Any]:
+    """Combine quasilinear model-selection gates into one claim ledger.
+
+    The status is intentionally narrower than an absolute-flux calibration
+    report. It passes only when the dataset-volume gate and uncertainty gate
+    support the selected reduced candidate while all simple train/holdout
+    calibration reports remain unpromoted. This lets documentation state a
+    positive model-selection result without implying a runtime absolute-flux
+    predictor. Optional optimized-equilibrium nonlinear audit artifacts can
+    strengthen the scoped evidence ledger, but they never promote a universal
+    absolute-flux claim.
+    """
+
+    artifacts = _load_model_selection_artifacts(
+        dataset_sufficiency=dataset_sufficiency,
+        candidate_uncertainty=candidate_uncertainty,
+        calibration_reports=calibration_reports,
+        optimized_equilibrium_nonlinear_audits=optimized_equilibrium_nonlinear_audits,
+    )
+    context = _model_selection_context(
+        artifacts=artifacts,
+        required_candidate=required_candidate,
+        transport_gate=transport_gate,
+        interval_coverage_gate=interval_coverage_gate,
+    )
+    gates = _model_selection_gate_rows(
+        context=context,
+        required_candidate=required_candidate,
+        require_optimized_equilibrium_nonlinear_audit=(
+            require_optimized_equilibrium_nonlinear_audit
+        ),
+    )
+    return _model_selection_payload(
+        context=context,
+        gates=gates,
+        required_candidate=required_candidate,
+        require_optimized_equilibrium_nonlinear_audit=(
+            require_optimized_equilibrium_nonlinear_audit
+        ),
+    )
+
+def build_quasilinear_model_selection_status_from_paths(
+    *,
+    dataset_sufficiency: str | Path,
+    candidate_uncertainty: str | Path,
+    calibration_reports: Iterable[str | Path],
+    optimized_equilibrium_nonlinear_audits: Iterable[str | Path] = (),
+    required_candidate: str = DEFAULT_REQUIRED_CANDIDATE,
+    require_optimized_equilibrium_nonlinear_audit: bool = False,
+) -> dict[str, Any]:
+    """Path-based wrapper for artifact scripts and CI checks."""
+
+    calibration_report_paths = tuple(
+        _ensure_path_payload(f"calibration_reports[{idx}]", report)
+        for idx, report in enumerate(calibration_reports)
+    )
+    optimized_audit_paths = tuple(
+        _ensure_path_payload(
+            f"optimized_equilibrium_nonlinear_audits[{idx}]", report
+        )
+        for idx, report in enumerate(optimized_equilibrium_nonlinear_audits)
+    )
+    return build_quasilinear_model_selection_status(
+        dataset_sufficiency=_ensure_path_payload(
+            "dataset_sufficiency", dataset_sufficiency
+        ),
+        candidate_uncertainty=_ensure_path_payload(
+            "candidate_uncertainty", candidate_uncertainty
+        ),
+        calibration_reports=calibration_report_paths,
+        optimized_equilibrium_nonlinear_audits=optimized_audit_paths,
+        required_candidate=required_candidate,
+        require_optimized_equilibrium_nonlinear_audit=(
+            require_optimized_equilibrium_nonlinear_audit
+        ),
+    )
+
+
+__all__ = [
+    "ABSOLUTE_FLUX_PROMOTED_CLAIM",
+    "DEFAULT_REQUIRED_CANDIDATE",
+    "build_quasilinear_model_selection_status",
+    "build_quasilinear_model_selection_status_from_paths",
+]

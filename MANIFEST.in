@@ -1,7 +1,7 @@
 recursive-include examples *.py *.toml
 recursive-include benchmarks *.py *.toml *.md
 recursive-include docs *.rst *.py
-recursive-include src/spectraxgk/data *.csv *.json *.npy
+recursive-include src/gkx/data *.csv *.json *.npy
 include README.md LICENSE
 prune docs/_build
 prune docs/_static

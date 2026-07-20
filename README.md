@@ -1,13 +1,13 @@
-# SPECTRAX-GK
+# GKX
 
-[![Release](https://img.shields.io/github/v/release/uwplasma/SPECTRAX-GK?display_name=tag)](https://github.com/uwplasma/SPECTRAX-GK/releases)
-[![PyPI](https://img.shields.io/pypi/v/spectraxgk.svg)](https://pypi.org/project/spectraxgk/)
-[![CI](https://github.com/uwplasma/SPECTRAX-GK/actions/workflows/ci.yml/badge.svg)](https://github.com/uwplasma/SPECTRAX-GK/actions/workflows/ci.yml)
-[![Coverage](https://codecov.io/gh/uwplasma/SPECTRAX-GK/graph/badge.svg)](https://codecov.io/gh/uwplasma/SPECTRAX-GK)
+[![Release](https://img.shields.io/github/v/release/uwplasma/GKX?display_name=tag)](https://github.com/uwplasma/GKX/releases)
+[![PyPI](https://img.shields.io/pypi/v/gkx.svg)](https://pypi.org/project/gkx/)
+[![CI](https://github.com/uwplasma/GKX/actions/workflows/ci.yml/badge.svg)](https://github.com/uwplasma/GKX/actions/workflows/ci.yml)
+[![Coverage](https://codecov.io/gh/uwplasma/GKX/graph/badge.svg)](https://codecov.io/gh/uwplasma/GKX)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-%3E%3D3.10-blue.svg)](pyproject.toml)
 
-SPECTRAX-GK is a JAX-native gyrokinetic solver for linear stability,
+GKX is a JAX-native gyrokinetic solver for linear stability,
 nonlinear turbulence, differentiable analysis, and stellarator design. It uses
 Fourier perpendicular coordinates, a Hermite-Laguerre velocity basis, and
 field-aligned analytic, Miller, or VMEC geometry. The package runs on CPUs and
@@ -17,14 +17,14 @@ executable for routine simulations.
 ## Installation
 
 ```bash
-pip install spectraxgk
+pip install gkx
 ```
 
 For development:
 
 ```bash
-git clone https://github.com/uwplasma/SPECTRAX-GK
-cd SPECTRAX-GK
+git clone https://github.com/uwplasma/GKX
+cd GKX
 pip install -e .
 ```
 
@@ -33,27 +33,27 @@ pip install -e .
 Run the built-in linear initial-value example:
 
 ```bash
-spectraxgk
+gkx
 ```
 
-The equivalent `spectrax-gk` entry point is also installed. The default run
+The equivalent `gkx` entry point is also installed. The default run
 prints setup, progress, elapsed time, and ETA, then writes its input, summary,
 time series, eigenfunction, and a two-panel plot in the current directory.
 
 Run a checked-in case or plot an existing result:
 
 ```bash
-spectraxgk examples/linear/axisymmetric/cyclone.toml
-spectraxgk run-runtime-nonlinear \
+gkx examples/linear/axisymmetric/cyclone.toml
+gkx run-runtime-nonlinear \
   --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml \
   --steps 200 --out cyclone.out.nc
-spectraxgk --plot cyclone.out.nc
+gkx --plot cyclone.out.nc
 ```
 
 Generate the small VMEC equilibria used by the self-contained examples:
 
 ```bash
-pip install vmec-jax
+pip install vmex
 cd examples/vmec
 ./generate_wouts.sh
 ```
@@ -69,7 +69,7 @@ for linear, nonlinear, Miller, VMEC, restart, quasilinear, and plotting workflow
 - JAX JIT, forward/reverse autodiff, implicit eigenvalue derivatives, and UQ tools.
 - Quasilinear transport diagnostics with explicit saturation-rule metadata.
 - CPU/GPU execution and production parallelization for independent scans and ensembles.
-- Restartable NetCDF output and `spectraxgk --plot` publication-style figures.
+- Restartable NetCDF output and `gkx --plot` publication-style figures.
 - A limited conserving Lenard-Bernstein/Dougherty-like collision model, with
   advanced multispecies and linearized Landau operators remaining research lanes.
 
@@ -142,9 +142,9 @@ prepared, and distributed runs.
 ```python
 import jax.numpy as jnp
 
-from spectraxgk import CycloneBaseCase, LinearParams, integrate_linear_from_config
-from spectraxgk.core.grid import build_spectral_grid
-from spectraxgk.geometry import SAlphaGeometry
+from gkx import CycloneBaseCase, LinearParams, integrate_linear_from_config
+from gkx.core.grid import build_spectral_grid
+from gkx.geometry import SAlphaGeometry
 
 cfg = CycloneBaseCase()
 grid = build_spectral_grid(cfg.grid)
@@ -161,7 +161,7 @@ For repeated nonlinear calls with fixed geometry and numerical policy, prepare
 the compiled simulation once:
 
 ```python
-from spectraxgk.nonlinear import prepare_nonlinear_explicit_diagnostics
+from gkx.solvers.nonlinear.diagnostic_integration import prepare_nonlinear_explicit_diagnostics
 
 simulation = prepare_nonlinear_explicit_diagnostics(
     initial_state,
@@ -187,7 +187,7 @@ parameter recovery.
 
 ![Two-mode autodiff inverse validation](docs/_static/autodiff_inverse_twomode.png)
 
-See [differentiable workflows](docs/differentiable_refactor_plan.rst),
+See [differentiable geometry](docs/geometry.rst),
 [algorithms](docs/algorithms.rst), and [stellarator optimization](docs/stellarator_optimization.rst)
 for JVP, VJP, implicit differentiation, conditioning, covariance, and finite-difference gates.
 
@@ -205,12 +205,12 @@ uncertainty, residual anatomy, and holdout gates are in the
 
 ## QA ITG Optimization
 
-The VMEC-JAX-style examples append a SPECTRAX-GK growth-rate, quasilinear, or
+The VMEX-style examples append a GKX growth-rate, quasilinear, or
 nonlinear-window residual to the aspect-ratio, mean-iota, and quasisymmetry
 objective tuples. The baseline follows the max-mode-5 QA workflow; all
 transport comparisons use solved VMEC equilibria.
 
-![VMEC-JAX QA max-mode-5 optimizer sweep](docs/_static/vmec_jax_qa_full_sweep_panel.png)
+![VMEX QA max-mode-5 optimizer sweep](docs/_static/vmex_qa_full_sweep_panel.png)
 
 These rows are not promoted turbulent-flux designs. Their matched long
 post-transient nonlinear audits use converged post-transient heat-flux windows
@@ -273,7 +273,7 @@ Detailed user and developer documentation:
 - [Outputs and plotting](docs/outputs.rst)
 - [Testing and validation](docs/testing.rst)
 - [Code structure](docs/code_structure.rst)
-- [Roadmap](docs/roadmap.rst)
+- [Release and research scope](docs/release_scope.rst)
 
 ## Testing
 
@@ -292,4 +292,4 @@ to line coverage.
 
 ## License
 
-SPECTRAX-GK is distributed under the [MIT License](LICENSE).
+GKX is distributed under the [MIT License](LICENSE).
