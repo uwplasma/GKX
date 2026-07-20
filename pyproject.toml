@@ -31,7 +31,7 @@ dependencies = [
   "netCDF4",
   "diffrax",
   "equinox",
-  "solvax>=0.8.6,<0.9",
+  "solvax",
   "tomli; python_version < '3.11'",
   "tqdm",
 ]
@@ -81,6 +81,9 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+gkx = ["data/*.csv", "data/*.json", "data/*.npy"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

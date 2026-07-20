@@ -6,6 +6,7 @@
 [![Coverage](https://codecov.io/gh/uwplasma/GKX/graph/badge.svg)](https://codecov.io/gh/uwplasma/GKX)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-%3E%3D3.10-blue.svg)](pyproject.toml)
+[![Docs](https://readthedocs.org/projects/gkx/badge/?version=latest)](https://gkx.readthedocs.io)
 
 GKX is a JAX-native gyrokinetic solver for linear stability,
 nonlinear turbulence, differentiable analysis, and stellarator design. It uses
@@ -58,8 +59,10 @@ cd examples/vmec
 ./generate_wouts.sh
 ```
 
-Start with the [quickstart](docs/quickstart.rst) and [input reference](docs/inputs.rst)
-for linear, nonlinear, Miller, VMEC, restart, quasilinear, and plotting workflows.
+Full documentation is hosted at **[gkx.readthedocs.io](https://gkx.readthedocs.io)**.
+Start with the [quickstart](https://gkx.readthedocs.io/en/latest/quickstart.html) and
+[input reference](https://gkx.readthedocs.io/en/latest/inputs.html) for linear,
+nonlinear, Miller, VMEC, restart, quasilinear, and plotting workflows.
 
 ## Highlights
 
