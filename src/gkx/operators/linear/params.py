@@ -10,9 +10,12 @@ import jax.numpy as jnp
 import numpy as np
 
 if TYPE_CHECKING:
+    from gkx.operators.linear.collisions import DriftKineticMomentCollisionOperator
     from gkx.terms.config import TermConfig
 
 __all__ = [
+    "COLLISION_OPERATOR_NAMES",
+    "collision_operator_from_config",
     "LinearParams",
     "LinearTerms",
     "Species",
@@ -313,3 +316,45 @@ def _resolve_implicit_preconditioner(
     if isinstance(preconditioner, str):
         return preconditioner.strip().lower()
     return preconditioner
+
+
+COLLISION_OPERATOR_NAMES: tuple[str, ...] = (
+    "none",
+    "lenard_bernstein",
+    "sugama",
+    "improved_sugama",
+)
+
+
+def collision_operator_from_config(
+    name: str,
+    *,
+    density: jnp.ndarray,
+    mass: jnp.ndarray,
+    temperature: jnp.ndarray,
+) -> DriftKineticMomentCollisionOperator | None:
+    """Resolve a TOML ``collision_operator`` name to a solver collision operator.
+
+    ``"none"`` and ``"lenard_bernstein"`` return ``None`` so the linear RHS
+    keeps its built-in diagonal Lenard-Bernstein term (the solver re-enables
+    ``collisions_contribution`` exactly when ``collision_operator is None``).
+    ``"sugama"`` and ``"improved_sugama"`` build the dense drift-kinetic
+    Hermite-Laguerre moment operator (Frei, Ernst & Ricci 2022) that replaces
+    the diagonal term. ``density``/``mass``/``temperature`` are the per-species
+    normalizations (length ``n_species``).
+    """
+
+    from gkx.operators.linear.collisions import DriftKineticMomentCollisionOperator
+
+    key = name.strip().lower()
+    if key in ("none", "lenard_bernstein"):
+        return None
+    if key == "sugama":
+        return DriftKineticMomentCollisionOperator.from_species(
+            density, mass, temperature
+        )
+    if key == "improved_sugama":
+        return DriftKineticMomentCollisionOperator.from_improved_species(
+            density, mass, temperature
+        )
+    raise ValueError(f"collision_operator must be one of {COLLISION_OPERATOR_NAMES}")
