@@ -29,6 +29,89 @@ def _steps_from_time(cfg: TimeConfig) -> int:
     return steps
 
 
+def _resolve_config_collision_operator(time_cfg: TimeConfig, params: LinearParams, G0=None):
+    """Build the moment collision operator selected by ``TimeConfig``.
+
+    Returns ``None`` for ``"none"``/``"lenard_bernstein"``, which keeps the
+    built-in diagonal Lenard-Bernstein term in the linear RHS. ``"sugama"`` and
+    ``"improved_sugama"`` return the dense drift-kinetic Hermite-Laguerre moment
+    operator that replaces that diagonal term.
+    """
+
+    import jax.numpy as jnp
+
+    from gkx.operators.linear.params import collision_operator_from_config
+
+    name = str(time_cfg.collision_operator).strip().lower()
+    if name in ("none", "lenard_bernstein"):
+        return None
+    # Single-species LinearParams carries scalar normalizations; the moment
+    # operator is assembled from per-species vectors.
+    density, mass, temperature = (
+        jnp.atleast_1d(jnp.asarray(value))
+        for value in (params.density, params.mass, params.temp)
+    )
+    sizes = {int(value.size) for value in (density, mass, temperature)}
+    if len(sizes) != 1:
+        raise ValueError(
+            "collision_operator requires matching per-species density, mass, and "
+            f"temperature; got sizes {sorted(sizes)}"
+        )
+    operator = collision_operator_from_config(
+        name,
+        density=density,
+        mass=mass,
+        temperature=temperature,
+    )
+    _check_moment_basis_matches_operator(operator, name, G0)
+    return operator
+
+
+def _check_moment_basis_matches_operator(operator, name: str, G0) -> None:
+    """Reject a moment basis the tabulated collision matrix cannot act on.
+
+    The drift-kinetic Sugama matrices are the fixed truncation of Frei, Ernst &
+    Ricci (2022), Appendix C, so they only apply when the run's Hermite-Laguerre
+    moment count matches. Without this check the mismatch surfaces deep in the
+    RHS as an opaque einsum shape error.
+    """
+
+    if operator is None or G0 is None:
+        return
+    shape = getattr(G0, "shape", None)
+    if shape is None or len(shape) not in {5, 6}:
+        return
+    offset = 0 if len(shape) == 5 else 1
+    nl, nm = int(shape[offset]), int(shape[offset + 1])
+    expected = int(operator.matrix.shape[-1])
+    if nl * nm == expected:
+        return
+    raise ValueError(
+        f"collision_operator={name!r} provides a {expected}-moment drift-kinetic "
+        f"matrix, but the run uses Nl*Nm = {nl}*{nm} = {nl * nm} moments. "
+        f"Choose Nl and Nm with Nl*Nm = {expected} (for example Nl={expected // 2}, "
+        "Nm=2), or select collision_operator = \"lenard_bernstein\"."
+    )
+
+
+def _reject_unsupported_config_collision_operator(time_cfg: TimeConfig, path: str) -> None:
+    """Fail loudly when a solver path cannot honour the selected operator.
+
+    Silently ignoring ``collision_operator`` would report Lenard-Bernstein
+    results under an advanced-operator label, so the unsupported combinations
+    raise instead.
+    """
+
+    name = str(time_cfg.collision_operator).strip().lower()
+    if name in ("none", "lenard_bernstein"):
+        return
+    raise NotImplementedError(
+        f"collision_operator={name!r} is not supported by the {path} path; "
+        "it is currently available on the fixed-step cached integrator "
+        "(set use_diffrax = false and leave state_sharding unset)."
+    )
+
+
 def _validate_nonlinear_config_state_sharding(spec: str | None) -> None:
     """Keep config-level nonlinear sharding on release-gated state axes."""
 
@@ -69,6 +152,7 @@ def integrate_linear_from_config(
     if time_cfg.use_diffrax:
         if parallel_strategy != "serial":
             raise NotImplementedError("parallel linear RHS is currently supported only by the fixed-step cached integrator")
+        _reject_unsupported_config_collision_operator(time_cfg, "diffrax linear")
         state_sharding = resolve_state_sharding(G0, time_cfg.state_sharding)
         return integrate_linear_diffrax(
             G0,
@@ -111,6 +195,7 @@ def integrate_linear_from_config(
         terms=terms,
         show_progress=show_progress_use,
         parallel=parallel,
+        collision_operator=_resolve_config_collision_operator(time_cfg, params, G0),
     )
 
 
@@ -132,6 +217,7 @@ def integrate_nonlinear_from_config(
     _validate_nonlinear_config_state_sharding(time_cfg.state_sharding)
     state_sharding = resolve_state_sharding(G0, time_cfg.state_sharding)
     if time_cfg.use_diffrax:
+        _reject_unsupported_config_collision_operator(time_cfg, "diffrax nonlinear")
         return integrate_nonlinear_diffrax(
             G0,
             grid,
@@ -154,6 +240,7 @@ def integrate_nonlinear_from_config(
             state_sharding=state_sharding,
         )
     if state_sharding is not None:
+        _reject_unsupported_config_collision_operator(time_cfg, "sharded nonlinear")
         if cache is None:
             if G0.ndim == 5:
                 nl, nm = G0.shape[0], G0.shape[1]
@@ -195,5 +282,6 @@ def integrate_nonlinear_from_config(
             laguerre_mode=time_cfg.laguerre_nonlinear_mode,
             show_progress=show_progress_use,
             return_fields=True,
+            collision_operator=_resolve_config_collision_operator(time_cfg, params, G0),
         ),
     )
