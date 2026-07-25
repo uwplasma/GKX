@@ -12,7 +12,60 @@ from gkx.operators.collision import CollisionContext
 from gkx.operators.linear.collisions import (
     apply_multispecies_collision_moment_matrix,
     interpolate_collision_diagonal_table,
+    load_collision_moment_matrix,
 )
+
+
+def assemble_drift_kinetic_coulomb_matrix(
+    density: jnp.ndarray,
+    mass: jnp.ndarray,
+    temperature: jnp.ndarray,
+) -> jnp.ndarray:
+    """Assemble the drift-kinetic Coulomb operator for one species.
+
+    The tabulated matrix is the full linearized Coulomb (Landau) collision
+    operator projected onto the eight lowest Hermite-Laguerre moments, from
+    Frei, Ernst & Ricci (2022), equations (C9a)--(C9f), generated at 80 decimal
+    digits. Unlike the Sugama models it is only validated for like-species
+    collisions, so a multi-species plasma is rejected rather than silently
+    extrapolated.
+
+    The tabulated coefficients are normalized to unit collision frequency; they
+    are scaled here by the same dimensionless ``nu_aa = n / (sqrt(m) T**1.5)``
+    used by the Sugama assemblers, so all three drift-kinetic models share one
+    normalization.
+    """
+
+    density_s = jnp.atleast_1d(jnp.asarray(density))
+    mass_s = jnp.atleast_1d(jnp.asarray(mass, dtype=jnp.result_type(density_s, float)))
+    temperature_s = jnp.atleast_1d(
+        jnp.asarray(temperature, dtype=jnp.result_type(density_s, mass_s, float))
+    )
+    if mass_s.shape != density_s.shape or temperature_s.shape != density_s.shape:
+        raise ValueError("density, mass, and temperature must have equal length")
+    for value, name in (
+        (density_s, "density"),
+        (mass_s, "mass"),
+        (temperature_s, "temperature"),
+    ):
+        if not isinstance(value, jax.core.Tracer) and np.any(np.asarray(value) <= 0.0):
+            raise ValueError(f"{name} must be positive")
+
+    species_count = int(density_s.size)
+    if species_count != 1:
+        raise ValueError(
+            "the tabulated drift-kinetic Coulomb operator is validated for "
+            f"like-species collisions only, but {species_count} species were "
+            "given; use collision_operator='sugama' or 'improved_sugama' for "
+            "multispecies runs"
+        )
+
+    base = jnp.asarray(
+        load_collision_moment_matrix("coulomb"),
+        dtype=jnp.result_type(density_s, mass_s, temperature_s, float),
+    )
+    frequency = density_s[0] / (jnp.sqrt(mass_s[0]) * temperature_s[0] ** 1.5)
+    return (frequency * base)[None, None, ...]
 
 
 @jax.tree_util.register_pytree_node_class

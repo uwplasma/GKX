@@ -323,6 +323,7 @@ COLLISION_OPERATOR_NAMES: tuple[str, ...] = (
     "lenard_bernstein",
     "sugama",
     "improved_sugama",
+    "coulomb",
 )
 
 
@@ -338,10 +339,12 @@ def collision_operator_from_config(
     ``"none"`` and ``"lenard_bernstein"`` return ``None`` so the linear RHS
     keeps its built-in diagonal Lenard-Bernstein term (the solver re-enables
     ``collisions_contribution`` exactly when ``collision_operator is None``).
-    ``"sugama"`` and ``"improved_sugama"`` build the dense drift-kinetic
-    Hermite-Laguerre moment operator (Frei, Ernst & Ricci 2022) that replaces
-    the diagonal term. ``density``/``mass``/``temperature`` are the per-species
-    normalizations (length ``n_species``).
+    ``"sugama"``, ``"improved_sugama"``, and ``"coulomb"`` build the dense
+    drift-kinetic Hermite-Laguerre moment operator (Frei, Ernst & Ricci 2022)
+    that replaces the diagonal term. ``"coulomb"`` is the full linearized
+    Coulomb (Landau) operator of equations (C9a)--(C9f) and is validated for
+    like-species collisions only. ``density``/``mass``/``temperature`` are the
+    per-species normalizations (length ``n_species``).
     """
 
     from gkx.operators.linear.collisions import DriftKineticMomentCollisionOperator
@@ -356,5 +359,13 @@ def collision_operator_from_config(
     if key == "improved_sugama":
         return DriftKineticMomentCollisionOperator.from_improved_species(
             density, mass, temperature
+        )
+    if key == "coulomb":
+        from gkx.operators.linear.collision_tables import (
+            assemble_drift_kinetic_coulomb_matrix,
+        )
+
+        return DriftKineticMomentCollisionOperator(
+            assemble_drift_kinetic_coulomb_matrix(density, mass, temperature)
         )
     raise ValueError(f"collision_operator must be one of {COLLISION_OPERATOR_NAMES}")
