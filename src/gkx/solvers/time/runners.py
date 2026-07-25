@@ -62,6 +62,10 @@ def _resolve_config_collision_operator(time_cfg: TimeConfig, params: LinearParam
         density=density,
         mass=mass,
         temperature=temperature,
+        # The moment matrices carry only the dimensionless pair scaling, so the
+        # run's collisionality has to be applied on top; without it every
+        # advanced operator would silently run at nu = 1.
+        nu=params.nu,
     )
     _check_moment_basis_matches_operator(operator, name, G0)
     return operator
