@@ -83,7 +83,14 @@ def _check_moment_basis_matches_operator(operator, name: str, G0) -> None:
         return
     offset = 0 if len(shape) == 5 else 1
     nl, nm = int(shape[offset]), int(shape[offset + 1])
-    expected = int(operator.matrix.shape[-1])
+    # Drift-kinetic operators carry one dense matrix; the finite-wavelength
+    # operators carry Bessel-argument-indexed test/field tables instead.
+    table = getattr(operator, "matrix", None)
+    if table is None:
+        table = getattr(operator, "test_table", None)
+    if table is None:
+        return
+    expected = int(table.shape[-1])
     if nl * nm == expected:
         return
     raise ValueError(

@@ -1,0 +1,60 @@
+{
+  "bessel_argument": "B = k_perp v_th / Omega; runtime interpolates at sqrt(2 b)",
+  "bessel_argument_grid": [
+    0.0,
+    0.125,
+    0.25,
+    0.375,
+    0.5,
+    0.75,
+    1.0,
+    1.25,
+    1.5,
+    2.0,
+    2.5,
+    3.0,
+    3.5,
+    4.0
+  ],
+  "claim_scope": "validated_like_species_finite_larmor_coulomb",
+  "dtype": "float64",
+  "equations": "3.47-3.50",
+  "kind": "gkx_finite_wavelength_coulomb_coefficients",
+  "laguerre_convention": "gkx_signed_runtime",
+  "mass_ratio": 1.0,
+  "maximum_hermite_order": 3,
+  "maximum_laguerre_order": 1,
+  "moment_order": "hermite_major_index=p*(J+1)+j",
+  "precision_decimal_digits": 60,
+  "sha256": "fb195401adcf283820de7f4d109ac3a33d95898c786bbbced852fc1f17ce06cb",
+  "shapes": {
+    "field_matrix": [
+      14,
+      8,
+      8
+    ],
+    "field_phi1": [
+      14,
+      8
+    ],
+    "field_phi2": [
+      14,
+      8
+    ],
+    "test_matrix": [
+      14,
+      8,
+      8
+    ],
+    "test_phi1": [
+      14,
+      8
+    ],
+    "test_phi2": [
+      14,
+      8
+    ]
+  },
+  "source": "Frei, Ball, Hoffmann, Jorge, Ricci & Stenger (2021), arXiv:2104.11480",
+  "temperature_ratio": 1.0
+}

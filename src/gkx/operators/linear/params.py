@@ -324,6 +324,7 @@ COLLISION_OPERATOR_NAMES: tuple[str, ...] = (
     "sugama",
     "improved_sugama",
     "coulomb",
+    "coulomb_finite_kperp",
 )
 
 
@@ -368,4 +369,10 @@ def collision_operator_from_config(
         return DriftKineticMomentCollisionOperator(
             assemble_drift_kinetic_coulomb_matrix(density, mass, temperature)
         )
+    if key == "coulomb_finite_kperp":
+        from gkx.operators.linear.collision_tables import (
+            build_finite_wavelength_coulomb_operator,
+        )
+
+        return build_finite_wavelength_coulomb_operator(density, mass, temperature)
     raise ValueError(f"collision_operator must be one of {COLLISION_OPERATOR_NAMES}")
