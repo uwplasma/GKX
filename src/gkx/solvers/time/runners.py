@@ -66,9 +66,21 @@ def _resolve_config_collision_operator(time_cfg: TimeConfig, params: LinearParam
         # run's collisionality has to be applied on top; without it every
         # advanced operator would silently run at nu = 1.
         nu=params.nu,
+        # Select the shipped table matching the run's moment count.
+        moments=_moment_count(G0),
     )
     _check_moment_basis_matches_operator(operator, name, G0)
     return operator
+
+
+def _moment_count(G0) -> int:
+    """Return the run's Hermite-Laguerre moment count Nl*Nm."""
+
+    shape = getattr(G0, "shape", None)
+    if shape is None or len(shape) not in {5, 6}:
+        return 8
+    offset = 0 if len(shape) == 5 else 1
+    return int(shape[offset]) * int(shape[offset + 1])
 
 
 def _check_moment_basis_matches_operator(operator, name: str, G0) -> None:

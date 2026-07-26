@@ -336,6 +336,7 @@ def collision_operator_from_config(
     mass: jnp.ndarray,
     temperature: jnp.ndarray,
     nu: jnp.ndarray | float = 1.0,
+    moments: int = 8,
 ) -> CollisionOperator | None:
     """Resolve a TOML ``collision_operator`` name to a solver collision operator.
 
@@ -390,7 +391,9 @@ def collision_operator_from_config(
             build_finite_wavelength_coulomb_operator,
         )
 
-        finite = build_finite_wavelength_coulomb_operator(density, mass, temperature)
+        finite = build_finite_wavelength_coulomb_operator(
+            density, mass, temperature, moments
+        )
         scale = jnp.reshape(jnp.asarray(nu), ()) if jnp.asarray(nu).ndim == 0 else (
             jnp.asarray(nu).reshape((-1, 1))
         )
