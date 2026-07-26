@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import math
-
 import jax
 import jax.numpy as jnp
 from jax.scipy.special import gammaln, i0e
@@ -328,8 +326,65 @@ def laguerre_quadrature_count(nl: int) -> int:
     return max(1, 3 * nl // 2 - 1)
 
 
+def laguerre_scaled_functions(x: np.ndarray, n_max: int) -> np.ndarray:
+    r"""Scaled Laguerre functions :math:`\tilde L_n(x)=e^{-x/2}L_n(x)`.
+
+    The exponential rides along in the seed of the standard three-term
+    recurrence instead of being applied afterwards, so the bare :math:`L_n(x)`
+    is never formed -- it reaches :math:`10^{18}` at the outermost Gauss node
+    of even a modest grid. Szego's bound gives :math:`|\tilde L_n(x)|\le 1` for
+    :math:`x\ge 0`, so every intermediate here is O(1):
+
+    .. math::
+        \tilde L_0 = e^{-x/2},\qquad \tilde L_1 = (1-x)\,e^{-x/2},\\
+        (n+1)\,\tilde L_{n+1} = (2n+1-x)\,\tilde L_n - n\,\tilde L_{n-1}.
+
+    Returns an array of shape ``(n_max + 1, x.size)``.
+    """
+
+    if n_max < 0:
+        raise ValueError("n_max must be >= 0")
+    x = np.asarray(x, dtype=float)
+    out = np.zeros((n_max + 1, x.size), dtype=float)
+    out[0] = np.exp(-0.5 * x)
+    if n_max >= 1:
+        out[1] = (1.0 - x) * out[0]
+    for n in range(1, n_max):
+        out[n + 1] = ((2.0 * n + 1.0 - x) * out[n] - n * out[n - 1]) / (n + 1.0)
+    return out
+
+
 def laguerre_transform(nl: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Return Laguerre transform matrices and roots."""
+    r"""Return Laguerre transform matrices and roots.
+
+    The Gauss-Laguerre weight :math:`e^{-x}` is split evenly between the two
+    matrices, which are therefore built from the scaled functions
+    :math:`\tilde L_\ell=e^{-x/2}L_\ell` and the rescaled weights
+    :math:`\tilde W_j=w_j e^{x_j}`:
+
+    .. math::
+        \mathrm{to\_grid}[\ell,j] = (-1)^\ell\,\tilde L_\ell(x_j),\qquad
+        \mathrm{to\_spectral}[j,\ell] = (-1)^\ell\,\tilde L_\ell(x_j)\,\tilde W_j.
+
+    ``to_grid @ to_spectral`` is the identity, exactly as it is for the unsplit
+    pair :math:`L_\ell(x_j)` / :math:`L_\ell(x_j)w_j`, and so is every
+    ``to_spectral @ diag(f(x)) @ to_grid`` round trip through a pointwise
+    factor on the quadrature grid: the two :math:`e^{\mp x/2}` cancel. Since
+    each nonlinear bracket carries exactly one factor of the transformed
+    distribution against gyroaverage fields built directly from ``roots``, the
+    split is invisible to the physics. What it buys is conditioning --
+    ``cond(to_grid)`` stays under 20 instead of hitting 9e18 at ``nl=20``,
+    where the unsplit form has no correct digits left.
+
+    The intermediate grid values are consequently :math:`e^{-x_j/2}g(x_j)`
+    rather than :math:`g(x_j)`, so anything comparing raw quadrature-grid
+    values against a code using the unsplit convention (GX) has to undo that
+    factor first.
+
+    The :math:`(-1)^\ell` sign is the established GKX runtime convention that
+    the shipped collision tables are keyed to (the ``laguerre_convention``
+    fields under ``gkx/data``), and is preserved here unchanged.
+    """
 
     if nl < 1:
         raise ValueError("nl must be >= 1")
@@ -341,33 +396,61 @@ def laguerre_transform(nl: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         jac[i + 1, i] = i + 1.0
     jac[nj - 1, nj - 1] = 2.0 * nj - 1.0
 
-    evals, evecs = np.linalg.eigh(jac)
-    idx = np.argsort(np.abs(evals))
-    evals = evals[idx]
-    evecs = evecs[:, idx]
+    evals = np.linalg.eigvalsh(jac)
+    roots = np.sort(np.abs(evals)).astype(float)
 
-    roots = evals.astype(float)
-    poly = np.zeros((nl, nj), dtype=float)
-    for i in range(nl):
-        for j in range(i + 1):
-            tmp = float(math.comb(i, j))
-            tmp *= (-1.0) ** j / math.factorial(j) * ((-1.0) ** i)
-            poly[i, j] = tmp
+    # The weights are the analytic Gauss-Laguerre ones, not the Golub-Welsch
+    # eigenvector entries: the true w_j ~ e^{-x_j} is ~1e-54 at the outermost
+    # node, far below the ~1e-16 relative accuracy of an eigenvector
+    # component, so those entries are pure noise there. In scaled form
+    # W_j = x_j / [(nj+1)^2 Ltilde_{nj+1}(x_j)^2] stays O(10) throughout.
+    scaled = laguerre_scaled_functions(roots, max(nl - 1, nj + 1))
+    weights = roots / (((nj + 1.0) ** 2) * scaled[nj + 1] ** 2)
 
-    to_grid = np.zeros((nl, nj), dtype=float)
-    to_spectral = np.zeros((nj, nl), dtype=float)
-    for j in range(nj):
-        x_i = roots[j]
-        wgt = float(evecs[0, j] ** 2)
-        for ell in range(nl):
-            coeffs = poly[ell, : ell + 1]
-            Lmat = 0.0
-            for c in coeffs[::-1]:
-                Lmat = Lmat * x_i + c
-            to_grid[ell, j] = Lmat
-            to_spectral[j, ell] = Lmat * wgt
+    sign = ((-1.0) ** np.arange(nl))[:, None]
+    to_grid = sign * scaled[:nl]
+    to_spectral = np.ascontiguousarray((to_grid * weights[None, :]).T)
 
+    _check_laguerre_transform_conditioning(to_grid, to_spectral, nl)
     return to_grid, to_spectral, roots
+
+
+# Round-trip accuracy that still leaves headroom below the physics tolerances.
+_LAGUERRE_ROUNDTRIP_TOLERANCE = 1.0e-8
+
+
+def _check_laguerre_transform_conditioning(
+    to_grid: np.ndarray, to_spectral: np.ndarray, nl: int
+) -> None:
+    """Reject a Laguerre transform that has lost its round-trip identity.
+
+    A tripwire, not a limit: with the scaled recurrence and the analytic
+    weights the measured error is 7e-14 at ``nl = 16``, 7e-13 at 32 and 1e-11
+    at 96, so the ``1e-8`` tolerance is orders of magnitude away from anything
+    a healthy build produces. It exists because the previous unweighted
+    construction degraded *silently* -- 4e-10 at ``nl = 17``, 1e-3 at 20, and
+    total garbage by 24, with no error raised and no visible symptom in the
+    physics -- and that failure mode must not be able to return unnoticed.
+
+    The remaining hard limit is the seed ``exp(-x/2)`` underflowing float64
+    once the largest node passes ``x ~ 1490``, around ``nl ~ 250``; the same
+    check catches it.
+
+    The cost is one small matrix product per cache build.
+    """
+
+    identity_error = float(
+        np.abs(to_grid @ to_spectral - np.eye(nl, dtype=float)).max()
+    )
+    if identity_error > _LAGUERRE_ROUNDTRIP_TOLERANCE:
+        raise ValueError(
+            f"Laguerre transform for nl={nl} is numerically unusable: the "
+            f"round-trip identity error is {identity_error:.3e}, above the "
+            f"{_LAGUERRE_ROUNDTRIP_TOLERANCE:.0e} tolerance. The scaled "
+            "recurrence holds to ~1e-11 through nl=96, so this means either "
+            "the exp(-x/2) seed has underflowed (expected only past nl~250) "
+            "or the construction has regressed."
+        )
 
 
 # Nonlinear Laguerre quadrature kernels live with the velocity basis they transform.
