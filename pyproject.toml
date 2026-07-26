@@ -83,7 +83,7 @@ include-package-data = true
 where = ["src"]
 
 [tool.setuptools.package-data]
-gkx = ["data/*.csv", "data/*.json", "data/*.npy"]
+gkx = ["data/*.csv", "data/*.json", "data/*.npy", "data/*.npz"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

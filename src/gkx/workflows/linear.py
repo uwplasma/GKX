@@ -380,6 +380,11 @@ def _integrate_linear_density_path(
     n_steps: int,
     show_progress: bool,
 ) -> _LinearTrajectory:
+    from gkx.solvers.time.runners import _resolve_config_collision_operator
+
+    # This is the executable's density-diagnostic path, so the TOML
+    # collision_operator selection has to be resolved here as well as on the
+    # cached-phi path.
     diag = deps.integrate_linear_diagnostics(
         ctx.initial_state,
         ctx.grid,
@@ -393,6 +398,9 @@ def _integrate_linear_density_path(
         species_index=0,
         record_hl_energy=False,
         show_progress=show_progress,
+        collision_operator=_resolve_config_collision_operator(
+            tcfg, ctx.params, ctx.initial_state
+        ),
     )
     return _LinearTrajectory(
         g_last=diag[0],

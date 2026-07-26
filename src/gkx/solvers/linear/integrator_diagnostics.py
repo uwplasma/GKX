@@ -60,14 +60,19 @@ def _linear_damping(
     cache: LinearCache,
     params: LinearParams,
     real_dtype: Any,
+    *,
+    include_collisions: bool = True,
 ) -> jnp.ndarray:
     hyper_damp = hypercollision_damping(cache, params, real_dtype)
     if G.ndim == 5 and hyper_damp.ndim == 6:
         hyper_damp = hyper_damp[0]
-    damping = (
-        collision_damping(cache, params, real_dtype, squeeze_species=(G.ndim == 5))
-        + hyper_damp
-    )
+    damping = hyper_damp
+    if include_collisions:
+        # A moment collision operator replaces the built-in diagonal term;
+        # keeping both would apply collisions twice.
+        damping = damping + collision_damping(
+            cache, params, real_dtype, squeeze_species=(G.ndim == 5)
+        )
     return damping.astype(real_dtype)
 
 
@@ -77,6 +82,7 @@ def _rhs(
     params: LinearParams,
     terms: LinearTerms,
     dt_val: jnp.ndarray,
+    collision_operator: Any | None = None,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     return linear_rhs_cached(
         G,
@@ -85,6 +91,7 @@ def _rhs(
         terms=terms,
         use_jit=False,
         dt=dt_val,
+        collision_operator=collision_operator,
     )
 
 
@@ -97,9 +104,10 @@ def _advance_linear_state(
     method: str,
     dt_val: jnp.ndarray,
     damping: jnp.ndarray,
+    collision_operator: Any | None = None,
 ) -> jnp.ndarray:
     def explicit_rhs(state: jnp.ndarray) -> jnp.ndarray:
-        return _rhs(state, cache, params, terms, dt_val)[0]
+        return _rhs(state, cache, params, terms, dt_val, collision_operator)[0]
 
     if method == "imex":
         dG = explicit_rhs(G_in)
@@ -193,8 +201,9 @@ def _diagnostic_sample(
     species_index: int | None,
     *,
     record_hl_energy: bool,
+    collision_operator: Any | None = None,
 ) -> tuple[jnp.ndarray, ...]:
-    _dG, phi = _rhs(G, cache, params, terms, dt_val)
+    _dG, phi = _rhs(G, cache, params, terms, dt_val, collision_operator)
     density = _density_from_state(G, cache, species_index)
     if record_hl_energy:
         return phi, density, _hl_energy_from_state(G)
@@ -214,6 +223,7 @@ def _every_step_scan(
     species_index: int | None,
     record_hl_energy: bool,
     show_progress: bool,
+    collision_operator: Any | None = None,
 ) -> tuple[jnp.ndarray, tuple[jnp.ndarray, ...]]:
     def step(G_in: jnp.ndarray, idx: jnp.ndarray):
         G_out = _advance_linear_state(
@@ -224,6 +234,7 @@ def _every_step_scan(
             method=method,
             dt_val=dt_val,
             damping=damping,
+            collision_operator=collision_operator,
         )
         outputs = _diagnostic_sample(
             G_out,
@@ -233,6 +244,7 @@ def _every_step_scan(
             dt_val,
             species_index,
             record_hl_energy=record_hl_energy,
+            collision_operator=collision_operator,
         )
         G_out = _maybe_emit_progress(
             G_out,
@@ -262,6 +274,7 @@ def _strided_sample_scan(
     species_index: int | None,
     record_hl_energy: bool,
     show_progress: bool,
+    collision_operator: Any | None = None,
 ) -> tuple[jnp.ndarray, tuple[jnp.ndarray, ...]]:
     def sample_step(G_in: jnp.ndarray, idx: jnp.ndarray):
         def inner_step(_i: jnp.ndarray, g: jnp.ndarray) -> jnp.ndarray:
@@ -273,6 +286,7 @@ def _strided_sample_scan(
                 method=method,
                 dt_val=dt_val,
                 damping=damping,
+                collision_operator=collision_operator,
             )
 
         G_out = jax.lax.fori_loop(0, sample_stride, inner_step, G_in)
@@ -284,6 +298,7 @@ def _strided_sample_scan(
             dt_val,
             species_index,
             record_hl_energy=record_hl_energy,
+            collision_operator=collision_operator,
         )
         G_out = _maybe_emit_progress(
             G_out,
@@ -316,6 +331,7 @@ def integrate_linear_diagnostics(
     species_index: int | None = 0,
     record_hl_energy: bool = False,
     show_progress: bool = False,
+    collision_operator: Any | None = None,
 ) -> (
     tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]
     | tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]
@@ -327,7 +343,13 @@ def integrate_linear_diagnostics(
     cache_use = _resolve_cache(G0, grid, geom, params, cache)
     G, real_dtype = _initial_state(G0)
     dt_val = jnp.asarray(dt, dtype=real_dtype)
-    damping = _linear_damping(G, cache_use, params, real_dtype)
+    damping = _linear_damping(
+        G,
+        cache_use,
+        params,
+        real_dtype,
+        include_collisions=collision_operator is None,
+    )
     if sample_stride <= 1:
         G_out, outputs = _every_step_scan(
             G,
@@ -341,6 +363,7 @@ def integrate_linear_diagnostics(
             species_index=species_index,
             record_hl_energy=record_hl_energy,
             show_progress=show_progress,
+            collision_operator=collision_operator,
         )
     else:
         G_out, outputs = _strided_sample_scan(
@@ -356,6 +379,7 @@ def integrate_linear_diagnostics(
             species_index=species_index,
             record_hl_energy=record_hl_energy,
             show_progress=show_progress,
+            collision_operator=collision_operator,
         )
     if record_hl_energy:
         phi_t, density_t, hl_t = outputs

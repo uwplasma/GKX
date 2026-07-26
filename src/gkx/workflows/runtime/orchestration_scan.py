@@ -409,7 +409,12 @@ def _run_batch_diagnostics(
     show_progress: bool,
     deps: RuntimeScanBatchDeps,
 ) -> _BatchDiagnostics:
+    from gkx.solvers.time.runners import _resolve_config_collision_operator
+
     steps_val = int(round(tcfg.t_max / tcfg.dt))
+    # The runtime linear scan is the path the executable takes, so the TOML
+    # collision_operator selection has to be resolved here too.
+    collision_operator = _resolve_config_collision_operator(tcfg, setup.params, g0)
     diag = deps.integrate_linear_diagnostics(
         g0,
         setup.grid,
@@ -423,6 +428,7 @@ def _run_batch_diagnostics(
         species_index=0,
         record_hl_energy=False,
         show_progress=show_progress,
+        collision_operator=collision_operator,
     )
     phi_t_np = np.asarray(diag[1])
     dens_t_np = np.asarray(diag[2])

@@ -3,6 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
+import hashlib
+import io
+import json
+from importlib import resources
+from typing import Any
 
 import jax
 import jax.numpy as jnp
@@ -10,9 +16,174 @@ import numpy as np
 
 from gkx.operators.collision import CollisionContext
 from gkx.operators.linear.collisions import (
+    EqualSpeciesFiniteWavelengthCoulombOperator,
     apply_multispecies_collision_moment_matrix,
     interpolate_collision_diagonal_table,
+    load_collision_moment_matrix,
 )
+
+
+_FINITE_WAVELENGTH_DATA = "finite_wavelength_coulomb.npz"
+_FINITE_WAVELENGTH_METADATA = "finite_wavelength_coulomb.json"
+_FINITE_WAVELENGTH_BLOCKS = (
+    "test_matrix",
+    "field_matrix",
+    "test_phi1",
+    "field_phi1",
+    "test_phi2",
+    "field_phi2",
+)
+
+
+@lru_cache(maxsize=1)
+def _finite_wavelength_coulomb_bundle() -> tuple[dict[str, np.ndarray], dict[str, Any]]:
+    """Load and provenance-check the shipped finite-wavelength Coulomb tables."""
+
+    data_root = resources.files("gkx").joinpath("data")
+    payload = data_root.joinpath(_FINITE_WAVELENGTH_DATA).read_bytes()
+    metadata = json.loads(
+        data_root.joinpath(_FINITE_WAVELENGTH_METADATA).read_text(encoding="utf-8")
+    )
+    if hashlib.sha256(payload).hexdigest() != metadata.get("sha256"):
+        raise ValueError(
+            "finite-wavelength Coulomb coefficient checksum does not match metadata"
+        )
+    with np.load(io.BytesIO(payload), allow_pickle=False) as archive:
+        arrays = {name: np.asarray(archive[name]) for name in archive.files}
+    missing = set(_FINITE_WAVELENGTH_BLOCKS + ("bessel_argument_grid",)) - set(arrays)
+    if missing:
+        raise ValueError(
+            f"finite-wavelength Coulomb tables are missing {sorted(missing)}"
+        )
+    return arrays, metadata
+
+
+def finite_wavelength_coulomb_metadata() -> dict[str, Any]:
+    """Return the provenance metadata of the shipped Coulomb tables."""
+
+    return dict(_finite_wavelength_coulomb_bundle()[1])
+
+
+def build_finite_wavelength_coulomb_operator(
+    density: jnp.ndarray,
+    mass: jnp.ndarray,
+    temperature: jnp.ndarray,
+) -> EqualSpeciesFiniteWavelengthCoulombOperator:
+    r"""Build the gyrokinetic (finite-Larmor) Coulomb operator for one species.
+
+    This is the full linearized Coulomb operator retaining finite perpendicular
+    wavelength, from Frei, Ball, Hoffmann, Jorge, Ricci & Stenger (2021),
+    arXiv:2104.11480, equations (3.47)--(3.50). The shipped tables are indexed
+    by the Bessel argument :math:`B=k_\perp v_{\mathrm{th}}/\Omega`; the runtime
+    interpolates them at :math:`B=\sqrt{2b}` from the cached ``b``, so the same
+    operator covers every perpendicular wavenumber in the simulation.
+
+    As :math:`k_\perp\to0` the tables reduce to the drift-kinetic Coulomb
+    operator, which is enforced by a physics gate.
+
+    The shipped tables are generated at ``mass_ratio = temperature_ratio = 1``,
+    so they are valid for like-species collisions; a multi-species request is
+    refused rather than silently extrapolated.
+    """
+
+    density_s = jnp.atleast_1d(jnp.asarray(density))
+    mass_s = jnp.atleast_1d(jnp.asarray(mass, dtype=jnp.result_type(density_s, float)))
+    temperature_s = jnp.atleast_1d(
+        jnp.asarray(temperature, dtype=jnp.result_type(density_s, mass_s, float))
+    )
+    if mass_s.shape != density_s.shape or temperature_s.shape != density_s.shape:
+        raise ValueError("density, mass, and temperature must have equal length")
+    for value, name in (
+        (density_s, "density"),
+        (mass_s, "mass"),
+        (temperature_s, "temperature"),
+    ):
+        if not isinstance(value, jax.core.Tracer) and np.any(np.asarray(value) <= 0.0):
+            raise ValueError(f"{name} must be positive")
+
+    species_count = int(density_s.size)
+    if species_count != 1:
+        raise ValueError(
+            "the shipped finite-wavelength Coulomb tables are generated for "
+            f"like-species collisions, but {species_count} species were given; "
+            "use collision_operator='sugama' or 'improved_sugama' for "
+            "multispecies runs"
+        )
+
+    arrays, _ = _finite_wavelength_coulomb_bundle()
+    dtype = jnp.result_type(density_s, mass_s, temperature_s, float)
+    # Same dimensionless normalization as the drift-kinetic assemblers.
+    frequency = density_s[0] / (jnp.sqrt(mass_s[0]) * temperature_s[0] ** 1.5)
+    # The stored block names are the generator's; the operator names its two
+    # matrix fields *_table.
+    field_names = {
+        "test_matrix": "test_table",
+        "field_matrix": "field_table",
+        "test_phi1": "test_phi1",
+        "field_phi1": "field_phi1",
+        "test_phi2": "test_phi2",
+        "field_phi2": "field_phi2",
+    }
+    return EqualSpeciesFiniteWavelengthCoulombOperator(
+        bessel_argument_grid=jnp.asarray(arrays["bessel_argument_grid"], dtype=dtype),
+        pair_frequency=jnp.reshape(frequency, (1, 1)).astype(dtype),
+        **{
+            field: jnp.asarray(arrays[stored], dtype=dtype)
+            for stored, field in field_names.items()
+        },
+    )
+
+
+def assemble_drift_kinetic_coulomb_matrix(
+    density: jnp.ndarray,
+    mass: jnp.ndarray,
+    temperature: jnp.ndarray,
+) -> jnp.ndarray:
+    """Assemble the drift-kinetic Coulomb operator for one species.
+
+    The tabulated matrix is the full linearized Coulomb (Landau) collision
+    operator projected onto the eight lowest Hermite-Laguerre moments, from
+    Frei, Ernst & Ricci (2022), equations (C9a)--(C9f), generated at 80 decimal
+    digits. Unlike the Sugama models it is only validated for like-species
+    collisions, so a multi-species plasma is rejected rather than silently
+    extrapolated.
+
+    The tabulated coefficients are normalized to unit collision frequency; they
+    are scaled here by the same dimensionless ``nu_aa = n / (sqrt(m) T**1.5)``
+    used by the Sugama assemblers, so all three drift-kinetic models share one
+    normalization.
+    """
+
+    density_s = jnp.atleast_1d(jnp.asarray(density))
+    mass_s = jnp.atleast_1d(jnp.asarray(mass, dtype=jnp.result_type(density_s, float)))
+    temperature_s = jnp.atleast_1d(
+        jnp.asarray(temperature, dtype=jnp.result_type(density_s, mass_s, float))
+    )
+    if mass_s.shape != density_s.shape or temperature_s.shape != density_s.shape:
+        raise ValueError("density, mass, and temperature must have equal length")
+    for value, name in (
+        (density_s, "density"),
+        (mass_s, "mass"),
+        (temperature_s, "temperature"),
+    ):
+        if not isinstance(value, jax.core.Tracer) and np.any(np.asarray(value) <= 0.0):
+            raise ValueError(f"{name} must be positive")
+
+    species_count = int(density_s.size)
+    if species_count != 1:
+        raise ValueError(
+            "the tabulated drift-kinetic Coulomb operator is validated for "
+            f"like-species collisions only, but {species_count} species were "
+            "given; use collision_operator='sugama' or 'improved_sugama' for "
+            "multispecies runs"
+        )
+
+    base = jnp.asarray(
+        load_collision_moment_matrix("coulomb"),
+        dtype=jnp.result_type(density_s, mass_s, temperature_s, float),
+    )
+    frequency = density_s[0] / (jnp.sqrt(mass_s[0]) * temperature_s[0] ** 1.5)
+    return (frequency * base)[None, None, ...]
 
 
 @jax.tree_util.register_pytree_node_class
