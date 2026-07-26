@@ -23,8 +23,12 @@ from gkx.operators.linear.collisions import (
 )
 
 
-_FINITE_WAVELENGTH_DATA = "finite_wavelength_coulomb.npz"
-_FINITE_WAVELENGTH_METADATA = "finite_wavelength_coulomb.json"
+_FINITE_WAVELENGTH_STEM = "finite_wavelength_coulomb"
+# Shipped resolutions, keyed by Hermite-Laguerre moment count (P+1)*(J+1). The
+# default eight-moment table matches the drift-kinetic tables so the two
+# operators can be compared at equal resolution; the larger ones exist because
+# published convergence studies need considerably more.
+FINITE_WAVELENGTH_MOMENT_COUNTS: tuple[int, ...] = (8, 18)
 _FINITE_WAVELENGTH_BLOCKS = (
     "test_matrix",
     "field_matrix",
@@ -35,14 +39,29 @@ _FINITE_WAVELENGTH_BLOCKS = (
 )
 
 
-@lru_cache(maxsize=1)
-def _finite_wavelength_coulomb_bundle() -> tuple[dict[str, np.ndarray], dict[str, Any]]:
-    """Load and provenance-check the shipped finite-wavelength Coulomb tables."""
+@lru_cache(maxsize=len(FINITE_WAVELENGTH_MOMENT_COUNTS))
+def _finite_wavelength_coulomb_bundle(
+    moments: int = 8,
+) -> tuple[dict[str, np.ndarray], dict[str, Any]]:
+    """Load and provenance-check one shipped finite-wavelength Coulomb table.
 
+    ``moments`` is the Hermite-Laguerre moment count ``(P+1)*(J+1)``, which must
+    equal the run's ``Nl*Nm``.
+    """
+
+    if moments not in FINITE_WAVELENGTH_MOMENT_COUNTS:
+        raise ValueError(
+            f"no shipped finite-wavelength Coulomb table with {moments} moments; "
+            f"available: {sorted(FINITE_WAVELENGTH_MOMENT_COUNTS)}. Generate more "
+            "with tools/artifacts/build_finite_wavelength_coulomb_data.py"
+        )
+    suffix = "" if moments == 8 else f"_{moments}"
     data_root = resources.files("gkx").joinpath("data")
-    payload = data_root.joinpath(_FINITE_WAVELENGTH_DATA).read_bytes()
+    payload = data_root.joinpath(f"{_FINITE_WAVELENGTH_STEM}{suffix}.npz").read_bytes()
     metadata = json.loads(
-        data_root.joinpath(_FINITE_WAVELENGTH_METADATA).read_text(encoding="utf-8")
+        data_root.joinpath(f"{_FINITE_WAVELENGTH_STEM}{suffix}.json").read_text(
+            encoding="utf-8"
+        )
     )
     if hashlib.sha256(payload).hexdigest() != metadata.get("sha256"):
         raise ValueError(
@@ -58,16 +77,17 @@ def _finite_wavelength_coulomb_bundle() -> tuple[dict[str, np.ndarray], dict[str
     return arrays, metadata
 
 
-def finite_wavelength_coulomb_metadata() -> dict[str, Any]:
-    """Return the provenance metadata of the shipped Coulomb tables."""
+def finite_wavelength_coulomb_metadata(moments: int = 8) -> dict[str, Any]:
+    """Return the provenance metadata of one shipped Coulomb table."""
 
-    return dict(_finite_wavelength_coulomb_bundle()[1])
+    return dict(_finite_wavelength_coulomb_bundle(moments)[1])
 
 
 def build_finite_wavelength_coulomb_operator(
     density: jnp.ndarray,
     mass: jnp.ndarray,
     temperature: jnp.ndarray,
+    moments: int = 8,
 ) -> EqualSpeciesFiniteWavelengthCoulombOperator:
     r"""Build the gyrokinetic (finite-Larmor) Coulomb operator for one species.
 
@@ -80,6 +100,9 @@ def build_finite_wavelength_coulomb_operator(
 
     As :math:`k_\perp\to0` the tables reduce to the drift-kinetic Coulomb
     operator, which is enforced by a physics gate.
+
+    ``moments`` selects the shipped Hermite-Laguerre resolution and must equal
+    the run's ``Nl*Nm``; see ``FINITE_WAVELENGTH_MOMENT_COUNTS``.
 
     The shipped tables are generated at ``mass_ratio = temperature_ratio = 1``,
     so they are valid for like-species collisions; a multi-species request is
@@ -110,7 +133,7 @@ def build_finite_wavelength_coulomb_operator(
             "multispecies runs"
         )
 
-    arrays, _ = _finite_wavelength_coulomb_bundle()
+    arrays, _ = _finite_wavelength_coulomb_bundle(moments)
     dtype = jnp.result_type(density_s, mass_s, temperature_s, float)
     # Same dimensionless normalization as the drift-kinetic assemblers.
     frequency = density_s[0] / (jnp.sqrt(mass_s[0]) * temperature_s[0] ** 1.5)
