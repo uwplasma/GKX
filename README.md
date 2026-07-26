@@ -73,8 +73,9 @@ nonlinear, Miller, VMEC, restart, quasilinear, and plotting workflows.
 - Quasilinear transport diagnostics with explicit saturation-rule metadata.
 - CPU/GPU execution and production parallelization for independent scans and ensembles.
 - Restartable NetCDF output and `gkx --plot` publication-style figures.
-- A limited conserving Lenard-Bernstein/Dougherty-like collision model, with
-  advanced multispecies and linearized Landau operators remaining research lanes.
+- Five selectable collision operators, from a conserving Lenard-Bernstein model
+  to the full linearized Coulomb (Landau) operator with finite-Larmor-radius
+  effects.
 
 ## Main Validation Results
 
@@ -91,32 +92,64 @@ windows, tolerances, and artifact provenance are in the
 [verification matrix](docs/verification_matrix.rst). A visual overlay alone is
 not treated as parity evidence.
 
-The advanced-collision research lane now generates the complete retained
-finite-Larmor Coulomb moment algebra and checks it against independent
-velocity-space projection, spectral convergence, drift-kinetic conservation,
-finite-wavelength gyro-diffusion, and the H-theorem. The panel below passes all
-operator-level gates, but does not claim production Landau transport yet;
-the finite-Larmor collisional-ITG gate and drift-kinetic collisional-zonal gate
-are closed, and the paper-resolution finite-wavelength zonal traces and
-velocity sections now pass their independent literature gate.
-The differentiable driven-current solve is equation-tested, and the direct
-Coulomb hierarchy is now converged through ``(P,J)=(20,5)`` with a maximum
-nested current change of 0.017%. Its collision-frequency and electric-field
-normalizations are now closed against the stationary Spitzer problem: all
-three operators saturate by ``t nu_ee=50``, remain linear over a 100x field
-scan, and Coulomb reaches the high-charge analytic limit within 7.46%. The
-arbitrary-order original model reproduces its published 11% low-charge current
-deficit, while the converged improved model is within 0.31% of Coulomb over the
-complete ion-charge scan. The converged finite-Larmor ITG artifact is accepted;
-the generated equal-species operator remains a Python research path because a
-production input-file selector would imply broader multispecies coefficients
-that are not yet implemented.
+## Collision Operators
+
+GKX ships five collision models spanning the full hierarchy, selected with one
+TOML key or one argument to the Python factory:
+
+| `collision_operator` | Model | Reference |
+| --- | --- | --- |
+| `none` / `lenard_bernstein` | Conserving diagonal Lenard-Bernstein/Dougherty relaxation | built in |
+| `sugama` | Drift-kinetic Sugama, conservative by construction | Frei, Ernst & Ricci (2022), Eqs. (C6a)-(C6f) |
+| `improved_sugama` | Improved Sugama, corrected Pfirsch-Schlüter friction | Sugama et al. (2019); Frei, Ernst & Ricci (2022) |
+| `coulomb` | Drift-kinetic linearized Coulomb (Landau) | Frei, Ernst & Ricci (2022), Eqs. (C9a)-(C9f) |
+| `coulomb_finite_kperp` | Gyrokinetic Coulomb retaining finite `k_perp` | Frei, Ball, Hoffmann, Jorge, Ricci & Stenger (2021), Eqs. (3.47)-(3.50) |
+
+```toml
+[time]
+collision_operator = "coulomb_finite_kperp"
+```
+
+The models agree in the collisionless limit and separate as collisionality
+rises, with Lenard-Bernstein over-damping and finite-Larmor gyroaveraging
+weakening the collisional damping relative to the drift-kinetic operator:
+
+![Collision operator comparison](docs/_static/collision_operator_comparison.png)
+
+Reproduce with
+[`examples/theory_and_demos/collision_operator_comparison.py`](examples/theory_and_demos/collision_operator_comparison.py)
+(`--nu-scan` draws the figure), or run
+[`examples/linear/axisymmetric/cyclone_coulomb_collisions.toml`](examples/linear/axisymmetric/cyclone_coulomb_collisions.toml)
+through the executable.
+
+### How the operators are verified
+
+Every shipped matrix is checked against the published closed forms rather than
+only against itself. All twelve Appendix-C coefficients reproduce exactly, and
+the structural properties a linearized collision operator must satisfy are
+gated numerically:
+
+| Property | Result |
+| --- | --- |
+| Density, parallel-momentum, energy conservation | machine precision (≤ 2.2e-16) |
+| H-theorem (negative semidefinite) | holds for every model |
+| Onsager self-adjointness | exact (≤ 3.4e-17) |
+| Published Appendix-C coefficients | reproduce to 1e-12 |
+| Finite-Larmor `b -> 0` limit | reduces to the drift-kinetic operator exactly |
+| Finite-Larmor conservation defect | scales as `B^1.96`-`B^1.99`, i.e. first order in `b` |
+
+The finite-Larmor operator acts on gyrocenter moments, whose conservation is
+modified by gyroaveraging, so the *ordering* is the test: the defect must vanish
+at `b = 0` and enter at first order in `b`. Tables ship at 8 and 18
+Hermite-Laguerre moments, generated in 60-digit arithmetic and stored as
+checksummed float64.
+
+The Coulomb tables are generated for like-species collisions; a multispecies
+request is refused rather than silently extrapolated. Equations, thresholds,
+machine-readable results, literature links, and the reproduction recipe are in
+the [collision-operator documentation](docs/operators.rst).
 
 ![Coulomb collision operator verification](docs/_static/collision_operator_verification.png)
-
-Equations, thresholds, machine-readable results, literature links, and the
-one-command reproduction recipe are in the [collision-operator
-documentation](docs/operators.rst).
 
 ![Paper-resolution collisional zonal response](docs/_static/collision_finite_wavelength_zonal_response.png)
 
@@ -254,8 +287,14 @@ Validated release claims are bounded by the [release scope](docs/release_scope.r
 - Nonlinear optimization evidence requires matched, replicated, long
   post-transient windows; startup or reduced envelopes are not production evidence.
 - W7-X zonal long-window recurrence/damping and W7-X TEM / kinetic-electron extensions are deferred.
-- Production nonlinear domain decomposition, equilibrium ExB flow shear,
-  species-coupled collisions, and linearized Landau/Sugama operators remain open.
+- The Sugama, improved-Sugama, and Coulomb operators are verified against their
+  published closed forms and structural invariants, and are validated for
+  like-species collisions; species-coupled Coulomb coefficients remain open.
+- Collision operators run on the fixed-step cached integrator. The diffrax,
+  sharded, and Krylov eigenvalue paths reject them rather than silently
+  substituting the built-in diagonal term.
+- Production nonlinear domain decomposition and equilibrium ExB flow shear
+  remain open.
 
 ## Examples and Documentation
 
