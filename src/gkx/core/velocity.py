@@ -378,8 +378,8 @@ def laguerre_transform(nl: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
 
     The intermediate grid values are consequently :math:`e^{-x_j/2}g(x_j)`
     rather than :math:`g(x_j)`, so anything comparing raw quadrature-grid
-    values against a code using the unsplit convention (GX) has to undo that
-    factor first.
+    values against an implementation that carries the weight separately has to
+    undo that factor first.
 
     The :math:`(-1)^\ell` sign is the established GKX runtime convention that
     the shipped collision tables are keyed to (the ``laguerre_convention``
