@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal
 
+import jax.lax.linalg as lax_linalg
 import jax.numpy as jnp
 import numpy as np
 
@@ -163,7 +164,17 @@ def _solver_operator_matrix(context: _SolverGeometryContext) -> jnp.ndarray:
 
 def _dominant_linear_branch(context: _SolverGeometryContext) -> _DominantLinearBranch:
     matrix = _solver_operator_matrix(context)
-    eigenvalues, eigenvectors = jnp.linalg.eig(matrix)
+    # jnp.linalg.eig refuses to differentiate non-symmetric eigenvectors unless
+    # the caller opts in (jax >= 0.11). The dominant ITG branch is a simple,
+    # well-separated eigenvalue here, which is exactly the condition under which
+    # the eigenvector derivative is well defined, so opt in explicitly -- without
+    # it the whole objective vector is forward-only.
+    eigenvalues, eigenvectors = lax_linalg.eig(
+        matrix,
+        compute_left_eigenvectors=False,
+        compute_right_eigenvectors=True,
+        enable_eigvec_derivs=True,
+    )
     branch_index = jnp.argmax(jnp.real(eigenvalues))
     eigenvalue = eigenvalues[branch_index]
     eigenvector = eigenvectors[:, branch_index]
