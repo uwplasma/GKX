@@ -195,20 +195,41 @@ test.
 Full key-by-key reference:
 [inputs](https://gkx.readthedocs.io/en/latest/inputs.html).
 
-## Main Validation Results
+## Validation
 
-The release atlas compares growth rates, frequencies, eigenfunctions, and
-nonlinear transport windows with established gyrokinetic reference results.
-Promoted cases include Cyclone ITG, Cyclone Miller, KBM, W7-X, and HSX, with
-ETG and kinetic-electron stress cases kept at their documented claim level.
+Every figure below is anchored to something external — an exact root, a
+published coefficient, or a tracked reference run — and regenerates from a
+script in [`tools/artifacts`](tools/artifacts).
 
-![Linear and nonlinear benchmark summary](docs/_static/benchmark_readme_panel.png)
+### Landau damping against the exact kinetic roots
 
-The exact equations, normalization, grids, boundary conditions, diagnostic
-windows, tolerances, and artifact provenance are in the
-[benchmark documentation](docs/benchmarks.rst) and
-[verification matrix](docs/verification_matrix.rst). A visual overlay alone is
-not treated as parity evidence.
+GKX's own linear operator, extrapolated to zero collisionality, against the
+roots of `1 + T_i/T_e + zeta Z(zeta) = 0` solved to double precision:
+
+| | exact | GKX | error |
+| --- | --- | --- | --- |
+| `T_e/T_i = 1`, `omega` | 2.045904866 | 2.047220793 | 0.064% |
+| `T_e/T_i = 1`, `gamma` | -0.851330459 | -0.849234188 | 0.246% |
+| `T_e/T_i = 10`, `omega` | 3.728834801 | 3.728993838 | 0.004% |
+| `T_e/T_i = 10`, `gamma` | -0.058337421 | -0.058339802 | 0.004% |
+
+![Landau damping validation](docs/_static/landau_damping_validation.png)
+
+The measurement is harder than it looks, and the figure shows why: a
+collisionless truncated Hermite system has a **purely real spectrum** (verified
+to 3e-14), so it cannot Landau damp at all — what looks like damping is a
+transient ending at recurrence. The root is not an eigenvalue either; it is a
+pole reached by `nu -> 0` extrapolation.
+
+### Linear benchmark parity
+
+![Linear benchmark parity](docs/_static/benchmark_linear_parity.png)
+
+Max relative difference against tracked reference results: ETG and KAW below
+0.1%, W7-X and HSX below 0.6%, Cyclone ITG 6.8%, **KBM 20%** — the KBM case is
+the known outlier and is documented at its claim level rather than smoothed
+over. Per-case detail: [benchmarks](docs/benchmarks.rst) and the
+[verification matrix](docs/verification_matrix.rst).
 
 ## Collision Operators
 
@@ -300,15 +321,13 @@ are documented in [Operators and Terms](docs/operators.rst).
 
 ![Runtime and memory comparison](docs/_static/runtime_memory_benchmark.png)
 
-Measured cold wall time and peak memory, CPU and GPU.
+Cold wall time and peak memory across the tracked cases. Cold times include JAX
+startup and compilation, which is the right number for "how long does a run
+take" and the wrong one for kernel speed.
 
-| Row type | What it includes |
-| --- | --- |
-| Cold JAX | startup + compilation |
-| Prepared | compiled once, geometry and numerics fixed |
-
-Prepared throughput depends on the software stack and GPU state. Details in
-[performance](docs/performance.rst).
+GKX CPU→GPU speedup spans **0.7× to 13.1×** depending on the case — the small
+linear cases are dominated by startup, so the GPU can be slower. Warm timings
+and profiler artifacts: [performance](docs/performance.rst).
 
 ## Differentiable Python API
 
