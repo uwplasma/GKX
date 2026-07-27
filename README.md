@@ -77,6 +77,114 @@ nonlinear, Miller, VMEC, restart, quasilinear, and plotting workflows.
   to the full linearized Coulomb (Landau) operator with finite-Larmor-radius
   effects.
 
+## What GKX Solves
+
+The gyrokinetic equation for the perturbed distribution of each species,
+expanded in a **Hermite-Laguerre** velocity basis. Writing the gyrocenter
+distribution as
+
+```
+delta f_s = F_Maxwellian * sum_{m,l}  G_s^{m,l}  psi_m(v_par / v_th)  L_l(mu B / T)
+```
+
+with `psi_m = H_m / sqrt(2^m m! sqrt(pi))` the normalized Hermite functions and
+`L_l` the Laguerre polynomials. This turns velocity space into two spectral
+indices: `m` resolves parallel dynamics (Landau damping, parallel heat flux),
+`l` resolves perpendicular dynamics (FLR effects, trapping). The evolved state
+is a single array
+
+```
+G[species, laguerre l, hermite m, ky, kx, z]
+```
+
+and each physical effect becomes a specific coupling on it:
+
+| Term | What it does to `G` | Set by |
+| --- | --- | --- |
+| Parallel streaming | couples `m` to `m±1` (a ladder in Hermite index) | geometry `gradpar` |
+| Magnetic mirror | couples `m` and `l` together | `bgrad` |
+| Curvature / grad-B drift | multiplies by `i(k · v_d)` | geometry curvature |
+| Diamagnetic drive | injects free energy from the gradients | `[[species]] tprim`, `fprim` |
+| Collisions | couples moments within a species | `collision_operator` |
+| Nonlinearity | `E × B` convolution in `(kx, ky)`, pseudo-spectral | nonlinear solver |
+| Field solve | quasineutrality + parallel Ampere for `phi`, `A_par`, `B_par` | `beta`, species list |
+
+Perpendicular directions are Fourier (`kx`, `ky`); the parallel direction `z`
+follows a field line (flux tube). Electrons are kinetic or Boltzmann.
+
+**Why a moment basis:** `m` and `l` are the same kind of index as `kx` and
+`ky`, so the whole problem is dense linear algebra on one array — which is what
+a GPU is good at. The cost is that the parallel ladder must be terminated
+somewhere, which is what the closure section below is about.
+
+## Geometry
+
+| `[geometry] model` | Gives you | Needs |
+| --- | --- | --- |
+| `"s-alpha"` | circular tokamak, `B = B0/(1 + eps cos theta)` | `q`, `s_hat`, `epsilon`, `R0` |
+| `"slab"` | uniform field, sharpest numerics tests | grid only |
+| `"imported-eik"` / `"vmec-eik"` | Miller or full 3D stellarator from a file | `geometry_file` |
+
+Miller equilibria and VMEC/Boozer flux tubes are also built in-process through
+the Python API, where the metric coefficients stay differentiable — that is the
+path stellarator shape optimization uses.
+
+## Velocity Resolution, Closures and Recurrence
+
+Truncating the Hermite ladder at `m = M` is not free. The free-energy pulse
+streams up in `m`, reaches the end and comes *back*: **recurrence**, at
+
+```
+t_rec ~ 2 sqrt(M) / (k_par v_th)
+```
+
+Nothing after `t_rec` is physics. Because `t_rec` grows only as `sqrt(M)`,
+adding moments is a weak fix; the end of the ladder has to absorb instead.
+
+| Closure | What happens at `m = M` | Free energy returned |
+| --- | --- | --- |
+| Truncation (default) | `G_{M+1} = 0` — a reflecting wall | **8-16x the initial amplitude** |
+| Reflectionless | outgoing condition, `G_{M+1} = -i sgn(k_par) R G_M` | ~0.05-0.15 |
+| Hypercollisions | scale-selective damping in `m` | ~0.04-0.08 |
+
+The reflectionless coefficient `R = M/sqrt(2(M+1)) * Gamma(M/2)/Gamma((M+1)/2)`
+(Kanekar et al., JPP **81**, 305810104 (2015), Eq. 4.36) tends to 1 as `M` grows,
+so absorption gets *better* with resolution rather than needing retuning. At
+`M = 3` it reproduces the Hammett-Perkins three-pole coefficient exactly.
+
+Hypercollisions and the reflectionless closure perform comparably; either beats
+a bare truncation by roughly 200x. Hypercollisions are the shipped default path
+(`[physics] hypercollisions = true`); the reflectionless closure is currently
+reached through the Python API
+(`linked_streaming_contribution(..., hermite_closure="reflectionless")`), so no
+existing result moves.
+
+## Configuration
+
+One TOML file. Every key has a default, so a working input is short — the
+sections you actually touch most days are the first five.
+
+| Section | Controls | Common keys |
+| --- | --- | --- |
+| `[[species]]` | one block per species | `charge`, `mass`, `temperature`, `tprim`, `fprim`, `nu`, `kinetic` |
+| `[grid]` | resolution and box | `Nx`, `Ny`, `Nz`, `Lx`, `Ly`, `boundary` |
+| `[geometry]` | equilibrium | `model`, `q`, `s_hat`, `epsilon`, `R0`, `geometry_file` |
+| `[time]` | integration | `t_max`, `dt`, `method`, `collision_operator` |
+| `[physics]` | what to include | `linear`, `nonlinear`, `electrostatic`, `adiabatic_electrons`, `tau_e` |
+| `[init]` | initial condition | `init_field`, `init_amp`, `gaussian_width` |
+| `[collisions]` | collision and hypercollision rates | `nu_hermite`, `nu_laguerre`, `nu_hyper`, `p_hyper` |
+| `[terms]` | switch individual terms on/off (0/1) | `streaming`, `mirror`, `curvature`, `diamagnetic`, `nonlinear` |
+| `[run]`, `[scan]` | single run / `k_y` scan resolution | `ky`, `Nl`, `Nm`, `solver` |
+| `[normalization]` | benchmark normalization contract | `contract`, `diagnostic_norm` |
+| `[fit]` | growth-rate fit window | `auto_window`, `window_method` |
+
+`[terms]` is the debugging lever: setting one coefficient to `0.0` removes
+exactly that term, which is how most of the physics gates isolate what they
+test.
+
+Full key-by-key reference:
+[inputs](https://gkx.readthedocs.io/en/latest/inputs.html).
+
 ## Main Validation Results
 
 The release atlas compares growth rates, frequencies, eigenfunctions, and
@@ -182,14 +290,15 @@ are documented in [Operators and Terms](docs/operators.rst).
 
 ![Runtime and memory comparison](docs/_static/runtime_memory_benchmark.png)
 
-The panel reports measured cold wall time and peak memory for the tracked CPU,
-GPU, and comparison-code runs. Cold JAX rows include startup and compilation.
-Prepared Python simulations avoid recompiling a fixed geometry and numerical
-policy, but their CPU/GPU throughput depends on the software stack and GPU
-operating state. See
-[performance](docs/performance.rst) for profiler artifacts, memory accounting,
-current reproducibility notes, and the distinction between executable,
-prepared, and distributed runs.
+Measured cold wall time and peak memory, CPU and GPU.
+
+| Row type | What it includes |
+| --- | --- |
+| Cold JAX | startup + compilation |
+| Prepared | compiled once, geometry and numerics fixed |
+
+Prepared throughput depends on the software stack and GPU state. Details in
+[performance](docs/performance.rst).
 
 ## Differentiable Python API
 
@@ -249,50 +358,52 @@ for JVP, VJP, implicit differentiation, conditioning, covariance, and finite-dif
 
 ![Stellarator quasilinear usefulness](docs/_static/quasilinear_stellarator_usefulness.png)
 
-The current quasilinear implementation is a scoped model-development and
-optimization-screening result. It supports ranking and correlation studies but
-is not a runtime/TOML absolute-flux predictor. Absolute-flux
-promotion remains rejected when the declared Solovev and shaped-pressure stress
-outliers are retained. Model definitions, derivations, calibration splits,
-uncertainty, residual anatomy, and holdout gates are in the
-[quasilinear documentation](docs/quasilinear.rst).
+**Use it for:** ranking and correlation studies, optimization screening.
+**Not for:** absolute heat flux — it is not a runtime/TOML absolute-flux
+predictor. Absolute-flux promotion stays rejected while the declared Solovev and
+shaped-pressure stress outliers are retained.
+
+Derivations, calibration splits, uncertainty and holdout gates:
+[quasilinear docs](docs/quasilinear.rst).
 
 ## QA ITG Optimization
 
-The VMEX-style examples append a GKX growth-rate, quasilinear, or
-nonlinear-window residual to the aspect-ratio, mean-iota, and quasisymmetry
-objective tuples. The baseline follows the max-mode-5 QA workflow; all
-transport comparisons use solved VMEC equilibria.
+Objective = aspect ratio + mean iota + quasisymmetry, plus one GKX residual
+(growth rate, quasilinear, or nonlinear window). Baseline is the max-mode-5 QA
+workflow; all transport comparisons use solved VMEC equilibria.
 
 ![VMEX QA max-mode-5 optimizer sweep](docs/_static/vmex_qa_full_sweep_panel.png)
 
-These rows are not promoted turbulent-flux designs. Their matched long
+**These rows are not promoted turbulent-flux designs.** Their matched long
 post-transient nonlinear audits use converged post-transient heat-flux windows
-and do not show a statistically significant reduction relative to the strict
-QA baseline. They are useful negative transfer evidence for improving objective
-conditioning and optimizer choice.
+and show no statistically significant transport reduction against the strict QA
+baseline — useful negative evidence for objective conditioning and optimizer
+choice.
 
-The RBC(1,1) scan is a landscape and noise/convergence diagnostic, not a source
-of admitted optimized candidates. It compares linear growth, all shipped
-quasilinear rules, and replicated long-window nonlinear transport.
+The RBC(1,1) scan below is a landscape and noise diagnostic, not a source of
+admitted candidates.
 
 ![QA RBC(1,1) transport landscape](docs/_static/vmec_boundary_transport_landscape_rbc11_full.png)
 
-Reproducible scripts are in [examples/optimization](examples/optimization), and
-full objective equations, optimizer policies, comparison fingerprints, and
-long-window audits are in the [optimization documentation](docs/stellarator_optimization.rst).
+Scripts: [examples/optimization](examples/optimization). Objective equations,
+optimizer policies and long-window audits:
+[optimization docs](docs/stellarator_optimization.rst).
 
 ## Parallelization
 
-Production parallelization currently covers independent `k_y` scans,
-quasilinear/UQ ensembles, and file-backed independent tasks with deterministic
-ordering and serial identity gates. Sensitivity sweeps can use the same deterministic independent-work reconstruction, but they need a dedicated
-matched scaling artifact before any speedup claim is promoted.
+| Status | Covers |
+| --- | --- |
+| Production | independent `k_y` scans, quasilinear/UQ ensembles, file-backed tasks — deterministic ordering, serial-identity gated |
+| Needs a scaling artifact | sensitivity sweeps |
+| Diagnostic only | nonlinear whole-state and domain decomposition |
 
-Nonlinear whole-state and domain decomposition remain diagnostic. Species-first
-and Hermite-second decomposition, explicit Hermite halo exchange, field-moment
-collectives, and physical transport-window identity must pass before a
-nonlinear parallelization speedup is claimed. See [parallelization](docs/parallelization.rst).
+Sensitivity sweeps can use the same deterministic independent-work
+reconstruction, but they need a dedicated matched scaling artifact before any
+speedup claim is promoted. Nonlinear speedup is not claimed until species-first
+and Hermite-second decomposition, Hermite halo exchange, field-moment
+collectives, and transport-window identity all pass.
+
+Details: [parallelization](docs/parallelization.rst).
 
 ## Current Claim Scope
 

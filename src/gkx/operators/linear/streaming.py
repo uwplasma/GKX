@@ -368,6 +368,25 @@ def _linked_fft_apply(
     return _restore_linked_real_fft_conjugates(out, covered_rows=covered_rows)
 
 
+def abs_z_periodic(
+    f: jnp.ndarray, dz: float | jnp.ndarray | None = None, kz: jnp.ndarray | None = None
+) -> jnp.ndarray:
+    """Apply ``|k_z|`` spectrally along the last axis, periodic case.
+
+    The companion of :func:`grad_z_periodic` for operators that need the
+    magnitude of the parallel wavenumber rather than the signed derivative,
+    such as the reflectionless Hermite closure.
+    """
+
+    if kz is None:
+        if dz is None:
+            raise ValueError("Either dz or kz must be provided")
+        _check_positive(dz, "dz")
+        kz = 2.0 * jnp.pi * jnp.fft.fftfreq(f.shape[-1], d=jnp.asarray(dz, dtype=jnp.real(f).dtype))
+    f_hat = jnp.fft.fft(f, axis=-1)
+    return jnp.fft.ifft(_fft_abs_multiplier(kz, f_hat) * f_hat, axis=-1)
+
+
 def grad_z_linked_fft(
     f: jnp.ndarray,
     dz: float | jnp.ndarray,
