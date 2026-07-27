@@ -288,6 +288,48 @@ def diamagnetic_drive_shard_map(
     return mapped(jax.device_put(arr, shard_ctx.sharding))
 
 
+def zonal_adiabatic_correction(
+    nbar: Any,
+    qneut: Any,
+    tau_e: Any,
+    *,
+    jacobian: Any | None = None,
+    ky: Any | None = None,
+) -> Any:
+    """Return the ``tau_e<phi>`` source that the adiabatic species requires.
+
+    The adiabatic electrons respond to ``phi - <phi>``, so the flux-surface
+    average has to be removed at ``ky = 0``. Eliminating ``<phi>`` from
+    ``(q_neut + tau_e) phi = nbar + tau_e <phi>`` gives
+
+        <phi> = sum_z J nbar/q_phi  /  sum_z J q_neut/q_phi
+
+    which is exact rather than iterative. The correction applies only at
+    ``ky = 0`` with ``kx != 0``; everywhere else the true flux-surface average
+    vanishes and returning zero keeps those modes untouched.
+
+    Returns zeros when the caller has no geometry information, which preserves
+    the previous behaviour for callers that genuinely have no zonal content.
+    """
+
+    import jax.numpy as jnp
+
+    if jacobian is None or ky is None:
+        return jnp.zeros_like(jnp.asarray(nbar)[..., 0])
+
+    tau = jnp.asarray(tau_e, dtype=jnp.real(jnp.asarray(nbar)).dtype)
+    qphi = tau + qneut
+    denom_safe = jnp.where(qphi == 0.0, jnp.inf, qphi)
+    jac = jnp.asarray(jacobian, dtype=denom_safe.dtype)[None, None, :]
+    numerator = jnp.sum(jnp.where(jac == 0.0, 0.0, nbar / denom_safe * jac), axis=-1)
+    weight = jnp.sum(jac * qneut / denom_safe, axis=-1)
+    weight_safe = jnp.where(weight == 0.0, jnp.inf, weight)
+    ratio = numerator / weight_safe
+    ky0_mask = (jnp.asarray(ky) == 0.0)[:, None]
+    kx_mask = (jnp.arange(numerator.shape[-1]) > 0)[None, :]
+    return jnp.where(ky0_mask & kx_mask, ratio, 0.0)
+
+
 def electrostatic_phi_reference(
     state: Any,
     *,
@@ -297,8 +339,16 @@ def electrostatic_phi_reference(
     density: Any = 1.0,
     tz: Any = 1.0,
     mask0: Any | None = None,
+    jacobian: Any | None = None,
+    ky: Any | None = None,
 ) -> Any:
-    """Return electrostatic phi from a full single- or multi-species state."""
+    """Return electrostatic phi from a full single- or multi-species state.
+
+    Pass ``jacobian`` and ``ky`` to include the ``ky = 0`` adiabatic
+    flux-surface-average term. Without them the zonal potential is
+    over-screened, which is what the production solve in ``terms/fields.py``
+    corrects; see :func:`zonal_adiabatic_correction`.
+    """
 
     import jax.numpy as jnp
 
@@ -337,7 +387,10 @@ def electrostatic_phi_reference(
         jnp.inf,
         jnp.asarray(tau_e, dtype=real_dtype) + qneut,
     )
-    phi = nbar / den_safe
+    phi_avg = zonal_adiabatic_correction(
+        nbar, qneut, tau_e, jacobian=jacobian, ky=ky
+    )
+    phi = (nbar + jnp.asarray(tau_e, dtype=real_dtype) * phi_avg[..., None]) / den_safe
     if mask0 is not None:
         phi = jnp.where(jnp.asarray(mask0), 0.0, phi)
     return phi
@@ -355,8 +408,14 @@ def electrostatic_phi_shard_map(
     mask0: Any | None = None,
     devices: Sequence[Any] | None = None,
     axis_name: str = "m",
+    jacobian: Any | None = None,
+    ky: Any | None = None,
 ) -> Any:
-    """Solve electrostatic phi using a species- or Hermite-sharded reduction."""
+    """Solve electrostatic phi using a species- or Hermite-sharded reduction.
+
+    ``jacobian`` and ``ky`` enable the ``ky = 0`` adiabatic flux-surface-average
+    term, exactly as in :func:`electrostatic_phi_reference`.
+    """
 
     import jax
     import jax.numpy as jnp
@@ -502,7 +561,10 @@ def electrostatic_phi_shard_map(
         axis_names={axis_name},
     )
     nbar = hermite_mapped(jax.device_put(arr, shard_ctx.sharding))
-    phi = nbar / den_safe
+    phi_avg = zonal_adiabatic_correction(
+        nbar, qneut, tau_e, jacobian=jacobian, ky=ky
+    )
+    phi = (nbar + jnp.asarray(tau_e, dtype=real_dtype) * phi_avg[..., None]) / den_safe
     if mask0 is not None:
         phi = jnp.where(jnp.asarray(mask0), 0.0, phi)
     return phi
