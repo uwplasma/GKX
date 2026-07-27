@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 import jax.numpy as jnp
 
 from gkx.core.velocity import laguerre_gyroaverage_neighbors
@@ -32,6 +34,37 @@ from gkx.operators.linear.streaming import (
     shift_axis,
     streaming_ladder_term,
 )
+
+
+def hermite_closure_coefficient(hermite_count: int) -> float:
+    r"""Return ``R_{M+1}`` for the reflectionless Hermite closure.
+
+    Closing the hierarchy with ``g_{M+1} = 0`` makes the truncation a
+    reflecting wall: the free-energy pulse that streams up in ``m`` bounces
+    back and returns as recurrence. The outgoing (absorbing) condition is
+
+    .. math:: g_{M+1} = -i\,\mathrm{sgn}(k_\parallel)\,R_{M+1}\,g_M,
+       \qquad R_{M+1}=\frac{M}{\sqrt{2(M+1)}}\frac{\Gamma(M/2)}{\Gamma((M+1)/2)}
+
+    which adds ``-R sqrt(M+1) v_th |k_par| G_M`` to the last moment. Since
+    ``R > 0`` that is a strictly positive-definite sink -- it can only remove
+    free energy. ``R -> 1 - 1/(4M)``, so the absorption becomes exact as the
+    resolution grows, and ``R_3 = 0.921318`` reproduces the Hammett-Perkins
+    three-pole coefficient exactly, the ``M = 2`` member of the same family.
+
+    Reference: Kanekar, Schekochihin, Dorland & Loureiro, *J. Plasma Phys.*
+    81, 305810104 (2015), equation (4.36).
+    """
+
+    order = int(hermite_count) - 1
+    if order < 1:
+        return 0.0
+    return float(
+        order
+        / math.sqrt(2.0 * (order + 1.0))
+        * math.gamma(order / 2.0)
+        / math.gamma((order + 1.0) / 2.0)
+    )
 
 
 def streaming_contribution(
@@ -196,8 +229,16 @@ def linked_streaming_contribution(
     linked_gather_map: jnp.ndarray | None = None,
     linked_gather_mask: jnp.ndarray | None = None,
     linked_use_gather: bool = False,
+    hermite_closure: str = "truncation",
 ) -> jnp.ndarray:
-    """Hermite-Laguerre streaming: ladder on g, add field terms, then apply parallel derivative."""
+    """Hermite-Laguerre streaming: ladder on g, add field terms, then apply parallel derivative.
+
+    ``hermite_closure`` selects how the hierarchy terminates at ``m = M``.
+    ``"truncation"`` sets ``g_{M+1} = 0``, which reflects the free-energy pulse
+    and produces recurrence. ``"reflectionless"`` applies the outgoing
+    condition of :func:`hermite_closure_coefficient`, a strictly dissipative
+    sink acting only on the last moment.
+    """
 
     if _is_static_zero(weight, jnp.real(G).dtype):
         return _zeros_like_result(G, weight)
@@ -214,7 +255,7 @@ def linked_streaming_contribution(
         vth=vth,
     )
     rhs = kpar_scale * (ladder_rhs + field_rhs)
-    return weight * _streaming_parallel_derivative(
+    streamed = weight * _streaming_parallel_derivative(
         rhs,
         kz=kz,
         dz=dz,
@@ -227,6 +268,78 @@ def linked_streaming_contribution(
         linked_gather_mask=linked_gather_mask,
         linked_use_gather=linked_use_gather,
     )
+    if str(hermite_closure).strip().lower() != "reflectionless":
+        return streamed
+    return streamed + weight * _reflectionless_closure(
+        G,
+        vth=vth,
+        kpar_scale=kpar_scale,
+        kz=kz,
+        dz=dz,
+        use_twist_shift=use_twist_shift,
+        linked_indices=linked_indices,
+        linked_kz=linked_kz,
+        linked_inverse_permutation=linked_inverse_permutation,
+        linked_full_cover=linked_full_cover,
+        linked_gather_map=linked_gather_map,
+        linked_gather_mask=linked_gather_mask,
+        linked_use_gather=linked_use_gather,
+    )
+
+
+def _reflectionless_closure(
+    G: jnp.ndarray,
+    *,
+    vth: jnp.ndarray,
+    kpar_scale: jnp.ndarray,
+    kz: jnp.ndarray,
+    dz: jnp.ndarray,
+    use_twist_shift: bool,
+    linked_indices: tuple[jnp.ndarray, ...] | None,
+    linked_kz: tuple[jnp.ndarray, ...] | None,
+    linked_inverse_permutation: jnp.ndarray | None,
+    linked_full_cover: bool,
+    linked_gather_map: jnp.ndarray | None,
+    linked_gather_mask: jnp.ndarray | None,
+    linked_use_gather: bool,
+) -> jnp.ndarray:
+    """Return ``-R sqrt(M+1) v_th |k_par| G`` on the last Hermite moment only."""
+
+    from gkx.operators.linear.streaming import abs_z_linked_fft, abs_z_periodic
+
+    axis_m = -4
+    hermite_count = int(G.shape[axis_m])
+    coefficient = hermite_closure_coefficient(hermite_count)
+    if coefficient == 0.0:
+        return jnp.zeros_like(G)
+
+    # Isolate the last moment; the closure must not touch any other m.
+    last = jnp.arange(hermite_count) == (hermite_count - 1)
+    shape = [1] * G.ndim
+    shape[axis_m] = hermite_count
+    mask = last.reshape(shape)
+    tail = jnp.where(mask, G, 0.0)
+
+    if use_twist_shift:
+        if linked_indices is None or linked_kz is None:
+            raise ValueError(
+                "linked_indices and linked_kz must be provided for linked streaming"
+            )
+        abs_tail = abs_z_linked_fft(
+            tail,
+            linked_indices,
+            linked_kz,
+            linked_inverse_permutation=linked_inverse_permutation,
+            linked_full_cover=linked_full_cover,
+            linked_gather_map=linked_gather_map,
+            linked_gather_mask=linked_gather_mask,
+            linked_use_gather=linked_use_gather,
+        )
+    else:
+        abs_tail = abs_z_periodic(tail, kz=kz)
+
+    scale = coefficient * math.sqrt(float(hermite_count))
+    return -scale * kpar_scale * vth * abs_tail
 
 
 def mirror_contribution(
