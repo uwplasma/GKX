@@ -203,12 +203,11 @@ the [collision-operator documentation](docs/operators.rst).
 
 ![Coulomb collision operator verification](docs/_static/collision_operator_verification.png)
 
-![Paper-resolution collisional zonal response](docs/_static/collision_finite_wavelength_zonal_response.png)
-
-At `(P,J)=(24,10)` the drift-kinetic traces approach the Xiao residual, and the
+At `(P,J)=(24,10)` the drift-kinetic traces approach the Xiao residual and the
 finite-wavelength tails reproduce the published `original < improved < Coulomb`
-ordering at both `kx rho_i = 0.1` and `0.2`. Equations, convergence and the
-Figure 12–14 gate: [operators](docs/operators.rst).
+ordering at both `kx rho_i = 0.1` and `0.2`. Paper-resolution zonal-response
+panels, velocity-space convergence and the Figure 12–14 gate:
+[operators](docs/operators.rst).
 
 ## Full feature list
 
