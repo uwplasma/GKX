@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 __all__ = [
     "COLLISION_OPERATOR_NAMES",
     "collision_operator_from_config",
+    "linear_params_for_geometry",
     "LinearParams",
     "LinearTerms",
     "Species",
@@ -143,11 +144,34 @@ class LinearParams:
         return cls(*children)
 
 
+def linear_params_for_geometry(geometry, **overrides) -> LinearParams:
+    r"""Build :class:`LinearParams` whose parallel scale matches the geometry.
+
+    ``kpar_scale`` multiplies the parallel derivative, so it has to carry the
+    geometry's ``gradpar`` :math:`=1/(qR_0)` for s-alpha. It defaults to ``1.0``
+    because :class:`LinearParams` knows nothing about geometry, which means a
+    hand-built ``LinearParams()`` silently streams at the wrong rate -- by a
+    factor of 8.4 for a typical Cyclone-like case. The runtime path sets it from
+    the geometry; this is the equivalent for the Python API.
+
+    Pass ``kpar_scale`` explicitly to override, for instance when reproducing a
+    published normalization that folds :math:`qR_0` in elsewhere.
+    """
+
+    if "kpar_scale" not in overrides:
+        overrides["kpar_scale"] = float(np.asarray(geometry.gradpar()))
+    return LinearParams(**overrides)
+
+
 def build_linear_params(
     species: Iterable[Species],
     **overrides: float,
 ) -> LinearParams:
-    """Build multi-species :class:`LinearParams` from physical inputs."""
+    """Build multi-species :class:`LinearParams` from physical inputs.
+
+    Note that ``kpar_scale`` is not inferred here either; see
+    :func:`linear_params_for_geometry`.
+    """
 
     rows = tuple(species)
     if not rows:

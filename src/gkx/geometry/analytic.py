@@ -210,7 +210,16 @@ class SAlphaGeometry:
         shear = self.s_hat * theta - self.alpha * jnp.sin(theta)
         gds2 = 1.0 + shear * shear
         gds21 = -self.s_hat * shear
-        gds22 = jnp.asarray(self.s_hat) * jnp.asarray(self.s_hat)
+        # ``k_perp2`` divides kx by s_hat, so the kx contribution is
+        # ``(kx/s_hat)**2 * gds22`` and the two factors cancel at finite shear.
+        # At zero shear it uses kx directly, so gds22 must be 1 rather than
+        # s_hat**2; leaving it at zero erases the kx dependence of k_perp
+        # entirely, giving every radial mode the same FLR factors. This mirrors
+        # the guard SlabGeometry already carries.
+        if float(self.s_hat) == 0.0:
+            gds22 = jnp.ones_like(jnp.asarray(theta, dtype=float))
+        else:
+            gds22 = jnp.asarray(self.s_hat) * jnp.asarray(self.s_hat)
         return gds2, gds21, gds22
 
     def k_perp2(
