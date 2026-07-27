@@ -122,6 +122,24 @@ Reproduce with
 [`examples/linear/axisymmetric/cyclone_coulomb_collisions.toml`](examples/linear/axisymmetric/cyclone_coulomb_collisions.toml)
 through the executable.
 
+### How GKX compares
+
+GKX shares its Hermite-Laguerre gyro-moment velocity representation with GX,
+which is what makes GX the closest parity reference. The differences that
+matter for verification are the collision hierarchy and the differentiable
+geometry path:
+
+| | GKX | GX | GENE |
+| --- | --- | --- | --- |
+| Velocity space | Hermite-Laguerre moments | Hermite-Laguerre moments | grid in `(v_par, mu)` |
+| Collision models | 5, through gyrokinetic Coulomb | Dougherty + hypercollisions | Landau and model operators |
+| Differentiable | JAX autodiff end to end | not a design goal | not a design goal |
+
+This records scope, not quality — both codes are mature and each is stronger
+than GKX in areas GKX does not attempt. A well-converged Dougherty operator can
+also be a better physical answer than an unconverged Coulomb one; see
+[related codes](docs/codes.rst) for the qualifications.
+
 ### How the operators are verified
 
 Every shipped matrix is checked against the published closed forms rather than
