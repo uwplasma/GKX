@@ -158,14 +158,14 @@ so absorption becomes exact with resolution instead of needing retuning. At
 `M = 3` it reproduces the Hammett-Perkins three-pole coefficient exactly, which
 is an independent check on the family.
 
-On these measurements a **hypercollision at the GX Appendix-B normalization
-outperforms the reflectionless closure on both metrics**. The closure's
-advantages are that it has no free parameter and touches only `m = M`, so it
-cannot bias resolved moments; it is not a drop-in improvement on a well-tuned
-hypercollision. Hypercollisions remain the shipped default
-(`[physics] hypercollisions = true`); the reflectionless closure is reached
-through the Python API
-(`linked_streaming_contribution(..., hermite_closure="reflectionless")`).
+**A hypercollision at the GX normalization wins on both metrics.** The closure's
+advantages are structural, not numerical: no free parameter, and confined to
+`m = M` so it cannot bias resolved moments.
+
+- Default: `[physics] hypercollisions = true`
+- Opt-in: `linked_streaming_contribution(..., hermite_closure="reflectionless")`
+
+Derivation and the full comparison: [numerics](docs/numerics.rst).
 
 ![Recurrence and Hermite closure](docs/_static/recurrence_hermite_closure.png)
 
@@ -310,12 +310,10 @@ the [collision-operator documentation](docs/operators.rst).
 
 ![Paper-resolution collisional zonal response](docs/_static/collision_finite_wavelength_zonal_response.png)
 
-At ``(P,J)=(24,10)``, the drift-kinetic traces approach the Xiao residual and
-the finite-wavelength tails reproduce the published original < improved <
-Coulomb ordering at both ``kx rho_i=0.1`` and ``0.2``. The improved model is
-also closer to Coulomb over ``t nu_ii <= 10`` at both wavenumbers. Equations,
-velocity-space convergence, compact replay data, and the Figure 12--14 gate
-are documented in [Operators and Terms](docs/operators.rst).
+At `(P,J)=(24,10)` the drift-kinetic traces approach the Xiao residual, and the
+finite-wavelength tails reproduce the published `original < improved < Coulomb`
+ordering at both `kx rho_i = 0.1` and `0.2`. Equations, convergence and the
+Figure 12–14 gate: [operators](docs/operators.rst).
 
 ## Runtime and Memory
 
