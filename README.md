@@ -15,6 +15,32 @@ field-aligned analytic, Miller, or VMEC geometry. The package runs on CPUs and
 GPUs, exposes a Python API for autodiff and optimization, and provides a simple
 executable for routine simulations.
 
+GKX is a **JAX-native gyrokinetic solver** for tokamaks and stellarators: linear
+stability, nonlinear turbulence, and differentiable analysis that plugs straight
+into stellarator optimization. It runs on CPUs and GPUs, from a one-line command
+or from Python.
+
+```bash
+pip install gkx && gkx
+```
+
+## Turbulence in 3D
+
+Ion-temperature-gradient turbulence on a field-aligned flux tube — the
+perpendicular cut a gyrokineticist reads, beside the tube along **B** that shows
+why the cut looks the way it does.
+
+<!--MOVIES-->
+
+## Why GKX
+
+| | |
+| --- | --- |
+| **Collisions other codes don't have** | Five operators, from Lenard-Bernstein up to the **full gyrokinetic Coulomb** with finite-Larmor-radius effects — selected with one TOML key |
+| **Differentiable end to end** | JAX autodiff through geometry, solver and diagnostics, including implicit eigenvalue derivatives — real gradients for stellarator shape optimization |
+| **Verified against exact physics** | Landau roots to 0.004%, conservation to machine precision, published Appendix-C coefficients to 1e-12 |
+| **Fast where it matters** | GPU execution, restartable NetCDF output, publication figures from `gkx --plot` |
+
 ## Installation
 
 ```bash
@@ -63,137 +89,6 @@ Full documentation is hosted at **[gkx.readthedocs.io](https://gkx.readthedocs.i
 Start with the [quickstart](https://gkx.readthedocs.io/en/latest/quickstart.html) and
 [input reference](https://gkx.readthedocs.io/en/latest/inputs.html) for linear,
 nonlinear, Miller, VMEC, restart, quasilinear, and plotting workflows.
-
-## Highlights
-
-- Electrostatic and electromagnetic gyrokinetics with kinetic or Boltzmann species.
-- Linear initial-value, dominant-eigenmode, and nonlinear turbulence solvers.
-- Analytic s-alpha, Miller, imported VMEC, and differentiable VMEC/Boozer geometry.
-- JAX JIT, forward/reverse autodiff, implicit eigenvalue derivatives, and UQ tools.
-- Quasilinear transport diagnostics with explicit saturation-rule metadata.
-- CPU/GPU execution and production parallelization for independent scans and ensembles.
-- Restartable NetCDF output and `gkx --plot` publication-style figures.
-- Five selectable collision operators, from a conserving Lenard-Bernstein model
-  to the full linearized Coulomb (Landau) operator with finite-Larmor-radius
-  effects.
-
-## What GKX Solves
-
-The gyrokinetic equation for the perturbed distribution of each species,
-expanded in a **Hermite-Laguerre** velocity basis. Writing the gyrocenter
-distribution as
-
-```
-delta f_s = F_Maxwellian * sum_{m,l}  G_s^{m,l}  psi_m(v_par / v_th)  L_l(mu B / T)
-```
-
-with `psi_m = H_m / sqrt(2^m m! sqrt(pi))` the normalized Hermite functions and
-`L_l` the Laguerre polynomials. This turns velocity space into two spectral
-indices: `m` resolves parallel dynamics (Landau damping, parallel heat flux),
-`l` resolves perpendicular dynamics (FLR effects, trapping). The evolved state
-is a single array
-
-```
-G[species, laguerre l, hermite m, ky, kx, z]
-```
-
-and each physical effect becomes a specific coupling on it:
-
-| Term | What it does to `G` | Set by |
-| --- | --- | --- |
-| Parallel streaming | couples `m` to `m±1` (a ladder in Hermite index) | geometry `gradpar` |
-| Magnetic mirror | couples `m` and `l` together | `bgrad` |
-| Curvature / grad-B drift | multiplies by `i(k · v_d)` | geometry curvature |
-| Diamagnetic drive | injects free energy from the gradients | `[[species]] tprim`, `fprim` |
-| Collisions | couples moments within a species | `collision_operator` |
-| Nonlinearity | `E × B` convolution in `(kx, ky)`, pseudo-spectral | nonlinear solver |
-| Field solve | quasineutrality + parallel Ampere for `phi`, `A_par`, `B_par` | `beta`, species list |
-
-Perpendicular directions are Fourier (`kx`, `ky`); the parallel direction `z`
-follows a field line (flux tube). Electrons are kinetic or Boltzmann.
-
-**Why a moment basis:** `m` and `l` are the same kind of index as `kx` and
-`ky`, so the whole problem is dense linear algebra on one array — which is what
-a GPU is good at. The cost is that the parallel ladder must be terminated
-somewhere, which is what the closure section below is about.
-
-## Geometry
-
-| `[geometry] model` | Gives you | Needs |
-| --- | --- | --- |
-| `"s-alpha"` | circular tokamak, `B = B0/(1 + eps cos theta)` | `q`, `s_hat`, `epsilon`, `R0` |
-| `"slab"` | uniform field, sharpest numerics tests | grid only |
-| `"imported-eik"` / `"vmec-eik"` | Miller or full 3D stellarator from a file | `geometry_file` |
-
-Miller equilibria and VMEC/Boozer flux tubes are also built in-process through
-the Python API, where the metric coefficients stay differentiable — that is the
-path stellarator shape optimization uses.
-
-## Velocity Resolution, Closures and Recurrence
-
-Truncating the Hermite ladder at `m = M` is not free. The free-energy pulse
-streams up in `m`, reaches the end and comes *back*: **recurrence**, at
-
-```
-t_rec ~ 2 sqrt(M) / (k_par v_th)
-```
-
-Nothing after `t_rec` is physics. Because `t_rec` grows only as `sqrt(M)`,
-adding moments is a weak fix; the end of the ladder has to absorb instead.
-
-| Closure | What happens at `m = M` | Revived `|g_0|` (initial = 1) | Error on resolved window |
-| --- | --- | --- | --- |
-| Truncation (default) | `G_{M+1} = 0` — a reflecting wall | **0.999** | **1.0** |
-| Hypercollisions | scale-selective damping over `m > 2` | 0.0002 | 2e-4 |
-| Reflectionless | outgoing condition, `G_{M+1} = -i sgn(k_par) R G_M` | 0.019 | 2e-2 |
-
-Measured on the free-streaming hierarchy at `N_m = 64`, against a converged
-`N_m = 1024` reference. Truncation reflects the pulse back **essentially
-intact** — it provides no dissipation whatsoever, and everything after `t_rec`
-is an artifact.
-
-The reflectionless coefficient `R = M/sqrt(2(M+1)) * Gamma(M/2)/Gamma((M+1)/2)`
-(Kanekar et al., JPP **81**, 305810104 (2015), Eq. 4.36) tends to 1 as `M` grows,
-so absorption becomes exact with resolution instead of needing retuning. At
-`M = 3` it reproduces the Hammett-Perkins three-pole coefficient exactly, which
-is an independent check on the family.
-
-**A hypercollision at the GX normalization wins on both metrics.** The closure's
-advantages are structural, not numerical: no free parameter, and confined to
-`m = M` so it cannot bias resolved moments.
-
-- Default: `[physics] hypercollisions = true`
-- Opt-in: `linked_streaming_contribution(..., hermite_closure="reflectionless")`
-
-Derivation and the full comparison: [numerics](docs/numerics.rst).
-
-![Recurrence and Hermite closure](docs/_static/recurrence_hermite_closure.png)
-
-## Configuration
-
-One TOML file. Every key has a default, so a working input is short — the
-sections you actually touch most days are the first five.
-
-| Section | Controls | Common keys |
-| --- | --- | --- |
-| `[[species]]` | one block per species | `charge`, `mass`, `temperature`, `tprim`, `fprim`, `nu`, `kinetic` |
-| `[grid]` | resolution and box | `Nx`, `Ny`, `Nz`, `Lx`, `Ly`, `boundary` |
-| `[geometry]` | equilibrium | `model`, `q`, `s_hat`, `epsilon`, `R0`, `geometry_file` |
-| `[time]` | integration | `t_max`, `dt`, `method`, `collision_operator` |
-| `[physics]` | what to include | `linear`, `nonlinear`, `electrostatic`, `adiabatic_electrons`, `tau_e` |
-| `[init]` | initial condition | `init_field`, `init_amp`, `gaussian_width` |
-| `[collisions]` | collision and hypercollision rates | `nu_hermite`, `nu_laguerre`, `nu_hyper`, `p_hyper` |
-| `[terms]` | switch individual terms on/off (0/1) | `streaming`, `mirror`, `curvature`, `diamagnetic`, `nonlinear` |
-| `[run]`, `[scan]` | single run / `k_y` scan resolution | `ky`, `Nl`, `Nm`, `solver` |
-| `[normalization]` | benchmark normalization contract | `contract`, `diagnostic_norm` |
-| `[fit]` | growth-rate fit window | `auto_window`, `window_method` |
-
-`[terms]` is the debugging lever: setting one coefficient to `0.0` removes
-exactly that term, which is how most of the physics gates isolate what they
-test.
-
-Full key-by-key reference:
-[inputs](https://gkx.readthedocs.io/en/latest/inputs.html).
 
 ## Validation
 
@@ -315,6 +210,97 @@ finite-wavelength tails reproduce the published `original < improved < Coulomb`
 ordering at both `kx rho_i = 0.1` and `0.2`. Equations, convergence and the
 Figure 12–14 gate: [operators](docs/operators.rst).
 
+## Full feature list
+
+- Electrostatic and electromagnetic gyrokinetics with kinetic or Boltzmann species.
+- Linear initial-value, dominant-eigenmode, and nonlinear turbulence solvers.
+- Analytic s-alpha, Miller, imported VMEC, and differentiable VMEC/Boozer geometry.
+- JAX JIT, forward/reverse autodiff, implicit eigenvalue derivatives, and UQ tools.
+- Quasilinear transport diagnostics with explicit saturation-rule metadata.
+- CPU/GPU execution and production parallelization for independent scans and ensembles.
+- Restartable NetCDF output and `gkx --plot` publication-style figures.
+- Five selectable collision operators, from a conserving Lenard-Bernstein model
+  to the full linearized Coulomb (Landau) operator with finite-Larmor-radius
+  effects.
+
+## What GKX Solves
+
+The gyrokinetic equation for the perturbed distribution of each species,
+expanded in a **Hermite-Laguerre** velocity basis. Writing the gyrocenter
+distribution as
+
+```
+delta f_s = F_Maxwellian * sum_{m,l}  G_s^{m,l}  psi_m(v_par / v_th)  L_l(mu B / T)
+```
+
+with `psi_m = H_m / sqrt(2^m m! sqrt(pi))` the normalized Hermite functions and
+`L_l` the Laguerre polynomials. This turns velocity space into two spectral
+indices: `m` resolves parallel dynamics (Landau damping, parallel heat flux),
+`l` resolves perpendicular dynamics (FLR effects, trapping). The evolved state
+is a single array
+
+```
+G[species, laguerre l, hermite m, ky, kx, z]
+```
+
+and each physical effect becomes a specific coupling on it:
+
+| Term | What it does to `G` | Set by |
+| --- | --- | --- |
+| Parallel streaming | couples `m` to `m±1` (a ladder in Hermite index) | geometry `gradpar` |
+| Magnetic mirror | couples `m` and `l` together | `bgrad` |
+| Curvature / grad-B drift | multiplies by `i(k · v_d)` | geometry curvature |
+| Diamagnetic drive | injects free energy from the gradients | `[[species]] tprim`, `fprim` |
+| Collisions | couples moments within a species | `collision_operator` |
+| Nonlinearity | `E × B` convolution in `(kx, ky)`, pseudo-spectral | nonlinear solver |
+| Field solve | quasineutrality + parallel Ampere for `phi`, `A_par`, `B_par` | `beta`, species list |
+
+Perpendicular directions are Fourier (`kx`, `ky`); the parallel direction `z`
+follows a field line (flux tube). Electrons are kinetic or Boltzmann.
+
+**Why a moment basis:** `m` and `l` are the same kind of index as `kx` and
+`ky`, so the whole problem is dense linear algebra on one array — which is what
+a GPU is good at. The cost is that the parallel ladder must be terminated
+somewhere, which is what the closure section below is about.
+
+## Geometry
+
+| `[geometry] model` | Gives you | Needs |
+| --- | --- | --- |
+| `"s-alpha"` | circular tokamak, `B = B0/(1 + eps cos theta)` | `q`, `s_hat`, `epsilon`, `R0` |
+| `"slab"` | uniform field, sharpest numerics tests | grid only |
+| `"imported-eik"` / `"vmec-eik"` | Miller or full 3D stellarator from a file | `geometry_file` |
+
+Miller equilibria and VMEC/Boozer flux tubes are also built in-process through
+the Python API, where the metric coefficients stay differentiable — that is the
+path stellarator shape optimization uses.
+
+## Configuration
+
+One TOML file. Every key has a default, so a working input is short — the
+sections you actually touch most days are the first five.
+
+| Section | Controls | Common keys |
+| --- | --- | --- |
+| `[[species]]` | one block per species | `charge`, `mass`, `temperature`, `tprim`, `fprim`, `nu`, `kinetic` |
+| `[grid]` | resolution and box | `Nx`, `Ny`, `Nz`, `Lx`, `Ly`, `boundary` |
+| `[geometry]` | equilibrium | `model`, `q`, `s_hat`, `epsilon`, `R0`, `geometry_file` |
+| `[time]` | integration | `t_max`, `dt`, `method`, `collision_operator` |
+| `[physics]` | what to include | `linear`, `nonlinear`, `electrostatic`, `adiabatic_electrons`, `tau_e` |
+| `[init]` | initial condition | `init_field`, `init_amp`, `gaussian_width` |
+| `[collisions]` | collision and hypercollision rates | `nu_hermite`, `nu_laguerre`, `nu_hyper`, `p_hyper` |
+| `[terms]` | switch individual terms on/off (0/1) | `streaming`, `mirror`, `curvature`, `diamagnetic`, `nonlinear` |
+| `[run]`, `[scan]` | single run / `k_y` scan resolution | `ky`, `Nl`, `Nm`, `solver` |
+| `[normalization]` | benchmark normalization contract | `contract`, `diagnostic_norm` |
+| `[fit]` | growth-rate fit window | `auto_window`, `window_method` |
+
+`[terms]` is the debugging lever: setting one coefficient to `0.0` removes
+exactly that term, which is how most of the physics gates isolate what they
+test.
+
+Full key-by-key reference:
+[inputs](https://gkx.readthedocs.io/en/latest/inputs.html).
+
 ## Runtime and Memory
 
 ![Runtime and memory comparison](docs/_static/runtime_memory_benchmark.png)
@@ -380,6 +366,29 @@ parameter recovery.
 See [differentiable geometry](docs/geometry.rst),
 [algorithms](docs/algorithms.rst), and [stellarator optimization](docs/stellarator_optimization.rst)
 for JVP, VJP, implicit differentiation, conditioning, covariance, and finite-difference gates.
+
+## Velocity resolution and recurrence
+
+Truncating the Hermite ladder at `m = M` makes the end of it a **reflecting
+wall**: free energy streams up in `m`, hits the wall, and returns as
+*recurrence* at
+
+```
+t_rec ~ 2 sqrt(M) / (k_par v_th)
+```
+
+Nothing after `t_rec` is physics, and because `t_rec` grows only as `sqrt(M)`,
+adding moments is a weak fix — the ladder has to absorb instead. Measured on the
+free-streaming hierarchy, a hard truncation returns **99.9% of the initial
+amplitude** (it dissipates nothing), while hypercollisions cut that to 0.0002.
+
+Hypercollisions are the default and are what you want. GKX also ships an opt-in
+**reflectionless closure** (Kanekar et al., JPP **81**, 305810104 (2015)) whose
+coefficient tends to 1 with resolution, so it needs no tuning and touches only
+`m = M`; on measurement it does not beat a well-tuned hypercollision.
+
+Full derivation, both metrics, resolution scans and the closure coefficient:
+[numerics](docs/numerics.rst).
 
 ## Quasilinear Modeling
 
