@@ -200,8 +200,34 @@ def _solve_phi_bpar(
         )
         denom = moments.qphi * ab - qb * aphi
         denom_safe = jnp.where(denom == 0.0, jnp.inf, denom)
-        phi_em = (ab * moments.nbar - qb * jperpbar) / denom_safe
-        bpar_em = (-aphi * moments.nbar + moments.qphi * jperpbar) / denom_safe
+
+        # The adiabatic species responds to phi - <phi>, so the quasineutrality
+        # source carries tau_e<phi> at ky = 0 exactly as in the electrostatic
+        # branch. Solving phi = (ab (nbar + tau_e<phi>) - qb jperpbar)/denom
+        # together with its own flux-surface average gives
+        #     <phi> = A / (N - B),
+        #     A = sum_z J (ab nbar - qb jperpbar)/denom,
+        #     B = sum_z J ab tau_e/denom,
+        #     N = sum_z J,
+        # which reduces to the electrostatic expression as beta -> 0 (ab -> 1,
+        # qb -> 0), since qphi - tau_e = qneut. Without this the solve is
+        # discontinuous in beta and the zonal potential is over-screened.
+        jacobian = jnp.asarray(cache.jacobian, dtype=coeffs.tau_e.dtype)
+        jac = jacobian[None, None, :]
+        source = ab * moments.nbar - qb * jperpbar
+        numerator = jnp.sum(jnp.where(jac == 0.0, 0.0, source / denom_safe * jac), axis=-1)
+        weight = jnp.sum(jac * ab * coeffs.tau_e / denom_safe, axis=-1)
+        total = jnp.sum(jacobian)
+        avg_denom = total - weight
+        avg_denom_safe = jnp.where(avg_denom == 0.0, jnp.inf, avg_denom)
+        ratio = numerator / avg_denom_safe
+        ky0_mask = (cache.ky == 0.0)[:, None]
+        kx_mask = (jnp.arange(numerator.shape[-1]) > 0)[None, :]
+        phi_avg = jnp.where(ky0_mask & kx_mask, ratio, 0.0)
+
+        corrected = moments.nbar + coeffs.tau_e * phi_avg[..., None]
+        phi_em = (ab * corrected - qb * jperpbar) / denom_safe
+        bpar_em = (-aphi * corrected + moments.qphi * jperpbar) / denom_safe
         return jnp.where(cache.mask0, 0.0, phi_em), jnp.where(
             cache.mask0, 0.0, bpar_em * jnp.sign(coeffs.w_bpar)
         )
