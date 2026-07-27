@@ -141,23 +141,33 @@ t_rec ~ 2 sqrt(M) / (k_par v_th)
 Nothing after `t_rec` is physics. Because `t_rec` grows only as `sqrt(M)`,
 adding moments is a weak fix; the end of the ladder has to absorb instead.
 
-| Closure | What happens at `m = M` | Free energy returned |
-| --- | --- | --- |
-| Truncation (default) | `G_{M+1} = 0` — a reflecting wall | **8-16x the initial amplitude** |
-| Reflectionless | outgoing condition, `G_{M+1} = -i sgn(k_par) R G_M` | ~0.05-0.15 |
-| Hypercollisions | scale-selective damping in `m` | ~0.04-0.08 |
+| Closure | What happens at `m = M` | Revived `|g_0|` (initial = 1) | Error on resolved window |
+| --- | --- | --- | --- |
+| Truncation (default) | `G_{M+1} = 0` — a reflecting wall | **0.999** | **1.0** |
+| Hypercollisions | scale-selective damping over `m > 2` | 0.0002 | 2e-4 |
+| Reflectionless | outgoing condition, `G_{M+1} = -i sgn(k_par) R G_M` | 0.019 | 2e-2 |
+
+Measured on the free-streaming hierarchy at `N_m = 64`, against a converged
+`N_m = 1024` reference. Truncation reflects the pulse back **essentially
+intact** — it provides no dissipation whatsoever, and everything after `t_rec`
+is an artifact.
 
 The reflectionless coefficient `R = M/sqrt(2(M+1)) * Gamma(M/2)/Gamma((M+1)/2)`
 (Kanekar et al., JPP **81**, 305810104 (2015), Eq. 4.36) tends to 1 as `M` grows,
-so absorption gets *better* with resolution rather than needing retuning. At
-`M = 3` it reproduces the Hammett-Perkins three-pole coefficient exactly.
+so absorption becomes exact with resolution instead of needing retuning. At
+`M = 3` it reproduces the Hammett-Perkins three-pole coefficient exactly, which
+is an independent check on the family.
 
-Hypercollisions and the reflectionless closure perform comparably; either beats
-a bare truncation by roughly 200x. Hypercollisions are the shipped default path
-(`[physics] hypercollisions = true`); the reflectionless closure is currently
-reached through the Python API
-(`linked_streaming_contribution(..., hermite_closure="reflectionless")`), so no
-existing result moves.
+On these measurements a **hypercollision at the GX Appendix-B normalization
+outperforms the reflectionless closure on both metrics**. The closure's
+advantages are that it has no free parameter and touches only `m = M`, so it
+cannot bias resolved moments; it is not a drop-in improvement on a well-tuned
+hypercollision. Hypercollisions remain the shipped default
+(`[physics] hypercollisions = true`); the reflectionless closure is reached
+through the Python API
+(`linked_streaming_contribution(..., hermite_closure="reflectionless")`).
+
+![Recurrence and Hermite closure](docs/_static/recurrence_hermite_closure.png)
 
 ## Configuration
 
