@@ -17,14 +17,6 @@ or from Python.
 pip install gkx && gkx
 ```
 
-## Turbulence in 3D
-
-Ion-temperature-gradient turbulence on a field-aligned flux tube — the
-perpendicular cut a gyrokineticist reads, beside the tube along **B** that shows
-why the cut looks the way it does.
-
-<!--MOVIES-->
-
 ## Why GKX
 
 | | |
