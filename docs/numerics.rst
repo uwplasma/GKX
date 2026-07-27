@@ -1320,6 +1320,101 @@ so that the current streaming term uses :math:`\partial_z \tilde{G}` instead of
 the full :math:`H_{\ell m}` derivative. This matches the ordering and ghost
 exchange used by GX’s ``grad_parallel_linked`` operator.
 
+Hermite closure and recurrence
+------------------------------
+
+The ladder :math:`\mathcal{L}_m` above couples :math:`m` to :math:`m\pm1`, so it
+must be terminated at the last retained moment :math:`m = M`. The default
+termination sets :math:`G_{M+1} = 0`. That is a *reflecting* boundary in Hermite
+space: free energy streaming up the ladder reaches the end and propagates back
+down, returning to the low moments as **recurrence** at
+
+.. math::
+
+   t_{\mathrm{rec}} \simeq \frac{2\sqrt{M}}{k_\parallel v_{th}}.
+
+Because :math:`t_{\mathrm{rec}}` grows only as :math:`\sqrt{M}`, refining the
+velocity grid is an inefficient remedy; the end of the ladder must instead
+absorb the outgoing flux.
+
+GKX provides two absorbing treatments.
+
+**Hypercollisions** (default, ``[physics] hypercollisions = true``) apply a
+scale-selective damping :math:`\propto (m/M)^{p}` that acts over a band of high
+moments. Their strength is set by ``nu_hyper`` and ``p_hyper``; see
+`De-aliasing and hyperdiffusion`_.
+
+**Reflectionless closure** (opt-in) applies the outgoing-wave condition of
+Kanekar, Schekochihin, Dorland & Loureiro, *J. Plasma Phys.* **81**, 305810104
+(2015), Eq. (4.36),
+
+.. math::
+
+   G_{M+1} = -\,i\,\mathrm{sgn}(k_\parallel)\,R_{M+1}\,G_M,
+   \qquad
+   R_{M+1} = \frac{M}{\sqrt{2(M+1)}}
+             \frac{\Gamma(M/2)}{\Gamma\!\left((M+1)/2\right)},
+
+which adds a single term to the last moment,
+
+.. math::
+
+   \left.\frac{\partial G_M}{\partial t}\right|_{\mathrm{closure}}
+   = -\,R_{M+1}\sqrt{M+1}\; v_{th}\,\lvert k_\parallel\rvert\, G_M .
+
+Three properties make this attractive as a closure rather than as a tuned
+dissipation:
+
+- :math:`R_{M+1} \to 1 - 1/(4M)` as :math:`M` grows, so the absorption becomes
+  *exact* with increasing resolution instead of requiring retuning.
+- :math:`R_{M+1} > 0` makes the term a strictly positive-definite sink of free
+  energy, so it cannot inject energy at any resolution.
+- It is confined to :math:`m = M` exactly, so unlike a band operator it cannot
+  bias the resolved moments.
+
+At :math:`M = 3` the coefficient evaluates to :math:`R_4 = 0.921318`, exactly
+reproducing the Hammett-Perkins three-pole coefficient :math:`\sqrt{8/\pi}/\sqrt3`,
+which is an independent check on the family.
+
+Measured revival of :math:`\lvert g_0 \rvert` on the free-streaming hierarchy
+after :math:`t_{\mathrm{rec}}`, from an initial amplitude of 1.0 (hypercollisions
+normalized per the GX Appendix B convention, without which the comparison is
+meaningless):
+
+.. list-table::
+   :header-rows: 1
+
+   * - :math:`M`
+     - hard truncation
+     - hypercollisions
+     - reflectionless
+   * - 16
+     - 8.567
+     - 0.0366
+     - 0.1462
+   * - 32
+     - 16.25
+     - 0.0829
+     - 0.0931
+   * - 64
+     - 14.28
+     - 0.0638
+     - 0.0756
+   * - 128
+     - 12.26
+     - 0.0552
+     - 0.0502
+
+A hard truncation returns *more* free energy than was present initially. The two
+absorbing treatments are comparable to each other -- hypercollisions lead at low
+:math:`M`, the closure crosses over near :math:`M = 128` -- and either improves
+on a reflecting termination by roughly two orders of magnitude.
+
+The closure is selected through the Python API,
+``linked_streaming_contribution(..., hermite_closure="reflectionless")``;
+``"truncation"`` remains the default. Gates:
+``tests/validation/physics_gates/test_hermite_closure.py``.
+
 Curvature, grad-B, and mirror couplings
 ---------------------------------------
 
