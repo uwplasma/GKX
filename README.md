@@ -8,13 +8,6 @@
 [![Python](https://img.shields.io/badge/python-%3E%3D3.10-blue.svg)](pyproject.toml)
 [![Docs](https://readthedocs.org/projects/gkx/badge/?version=latest)](https://gkx.readthedocs.io)
 
-GKX is a JAX-native gyrokinetic solver for linear stability,
-nonlinear turbulence, differentiable analysis, and stellarator design. It uses
-Fourier perpendicular coordinates, a Hermite-Laguerre velocity basis, and
-field-aligned analytic, Miller, or VMEC geometry. The package runs on CPUs and
-GPUs, exposes a Python API for autodiff and optimization, and provides a simple
-executable for routine simulations.
-
 GKX is a **JAX-native gyrokinetic solver** for tokamaks and stellarators: linear
 stability, nonlinear turbulence, and differentiable analysis that plugs straight
 into stellarator optimization. It runs on CPUs and GPUs, from a one-line command
