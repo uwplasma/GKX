@@ -392,13 +392,42 @@ Objective = aspect ratio + mean iota + quasisymmetry, plus one GKX residual
 (growth rate, quasilinear, or nonlinear window). Baseline is the max-mode-5 QA
 workflow; all transport comparisons use solved VMEC equilibria.
 
+### Turbulence has to be weighted to be optimized
+
+At the shipped weight the transport term was **0.00% of the objective** — iota
+94.4%, aspect 5.4%, quasisymmetry 0.2%. The optimizer never saw it. Weighting
+the seed-normalized transport residual properly buys a large flux reduction for
+a modest quasisymmetry cost:
+
+| transport weight | quasisymmetry / seed | quasilinear flux / seed |
+| --- | --- | --- |
+| 0.01 (old default) | 0.14 | 0.38 |
+| 0.5 | 0.24 | 0.29 |
+| **2.0** (current default) | 0.67 | **0.07** |
+| 8.0 | — | solver stalls |
+
+![QA transport weight scan](docs/_static/qa_transport_weight_scan.png)
+
+`TRANSPORT_WEIGHT = 2.0` cuts the quasilinear proxy by **93%** while
+quasisymmetry stays 33% better than the seed. Above ~4 the least-squares solver
+stalls on the finite-difference gradient of the proxy — raise it only with an
+analytic Jacobian. Regenerate with
+[`build_qa_transport_weight_scan.py`](tools/artifacts/build_qa_transport_weight_scan.py).
+
+**This is the quasilinear proxy, not a transport prediction.** A 0.07x proxy is
+evidence the objective now drives the design it is supposed to drive; it is not
+evidence of nonlinear flux reduction, which requires the audits below.
+
+### Long-window audits
+
 ![VMEX QA max-mode-5 optimizer sweep](docs/_static/vmex_qa_full_sweep_panel.png)
 
 **These rows are not promoted turbulent-flux designs.** Their matched long
 post-transient nonlinear audits use converged post-transient heat-flux windows
 and show no statistically significant transport reduction against the strict QA
 baseline — useful negative evidence for objective conditioning and optimizer
-choice.
+choice. Those audits predate the reweighting above and are the next thing to
+repeat.
 
 The RBC(1,1) scan below is a landscape and noise diagnostic, not a source of
 admitted candidates.
