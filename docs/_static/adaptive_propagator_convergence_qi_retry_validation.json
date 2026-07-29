@@ -1,0 +1,131 @@
+{
+  "schema_version": 1,
+  "certified": true,
+  "all_growth_converged": true,
+  "all_eigenvalue_converged": false,
+  "scope": "certificate-only ntheta=64 velocity-space ladder beyond the dense oracle memory range; growth and full-eigenvalue convergence separately require two consecutive changes to pass tolerance",
+  "provenance": {
+    "ntheta": 64,
+    "s_index": 7,
+    "selected_ky_index": 1,
+    "ladder": [
+      [
+        40,
+        48
+      ],
+      [
+        44,
+        52
+      ],
+      [
+        48,
+        56
+      ]
+    ],
+    "krylov_dim": 16,
+    "max_restarts": 4,
+    "residual_tolerance": 1e-09,
+    "convergence_tolerance": 0.05,
+    "chunk_horizon": 30.0,
+    "stability_dimension": 12,
+    "stability_safety": 0.9,
+    "python": "3.10.12 (main, Jan  8 2026, 06:52:19) [GCC 11.4.0]",
+    "platform": "Linux-6.17.9-76061709-generic-x86_64-with-glibc2.35",
+    "jax": "0.6.2",
+    "jaxlib": "0.6.2",
+    "gkx": "1.7.1",
+    "solvax": "0.11.1",
+    "gkx_commit": "a2bd9b10d13d5caa612e51b07c526e2acb0e874b",
+    "solvax_commit": "0aa2fad34c713ec415ce11642eef4a2496eb0ec5",
+    "postprocessing": "the n=172032 operator count includes the failed estimated-step attempt plus the successful half-step attempt, with the one-time stability sketch counted once; this accounting correction is implemented in GKX commit 0c827bf4",
+    "jax_x64": true,
+    "devices": [
+      "cuda:0"
+    ]
+  },
+  "devices": [
+    {
+      "device": "qi",
+      "input": "examples/vmec/input.nfp3_QI_fixed_resolution_final",
+      "input_sha256": "b64dc2221e19452d426c60104b0c67d12de9b13a7ca5152a43b562bbf36fc0ba",
+      "certified": true,
+      "growth_converged": true,
+      "growth_converged_resolution": [
+        40,
+        48
+      ],
+      "eigenvalue_converged": false,
+      "eigenvalue_converged_resolution": null,
+      "growth_relative_changes": [
+        0.005425928003712423,
+        0.013194075650716394
+      ],
+      "eigenvalue_relative_changes": [
+        0.07235840527191886,
+        0.0620142209062688
+      ],
+      "rows": [
+        {
+          "n_laguerre": 40,
+          "n_hermite": 48,
+          "n": 122880,
+          "eigenvalue": [
+            0.09883706221643365,
+            0.04068088799708394
+          ],
+          "residual": 9.048373418970963e-10,
+          "converged": true,
+          "stability_passed": true,
+          "filter_growth_defect": -4.76146899686114e-14,
+          "restarts": 1,
+          "selected_propagator_dt": 0.005865102639296188,
+          "selected_propagator_steps": 5115,
+          "original_operator_evaluations": 327374,
+          "continuation_overlap": null,
+          "compile_seconds": 169.44836735725403,
+          "warm_seconds": 167.71170663833618
+        },
+        {
+          "n_laguerre": 44,
+          "n_hermite": 52,
+          "n": 146432,
+          "eigenvalue": [
+            0.09830367356119019,
+            0.03319223082170739
+          ],
+          "residual": 6.315923402914709e-13,
+          "converged": true,
+          "stability_passed": true,
+          "filter_growth_defect": 1.2240208846492351e-14,
+          "restarts": 1,
+          "selected_propagator_dt": 0.005870841487279843,
+          "selected_propagator_steps": 5110,
+          "original_operator_evaluations": 327054,
+          "continuation_overlap": 0.9950531180806572,
+          "compile_seconds": 193.13344144821167,
+          "warm_seconds": 191.84038162231445
+        },
+        {
+          "n_laguerre": 48,
+          "n_hermite": 56,
+          "n": 172032,
+          "eigenvalue": [
+            0.09702353766533364,
+            0.02707803459992042
+          ],
+          "residual": 1.3920444920136396e-12,
+          "converged": true,
+          "stability_passed": true,
+          "filter_growth_defect": 4.987676938128516e-14,
+          "restarts": 1,
+          "selected_propagator_dt": 0.002808199943836001,
+          "selected_propagator_steps": 10683,
+          "original_operator_evaluations": 2051286,
+          "continuation_overlap": 0.9954026512910206,
+          "compile_seconds": 1326.2442286014557,
+          "warm_seconds": 1279.6062891483307
+        }
+      ]
+    }
+  ]
+}

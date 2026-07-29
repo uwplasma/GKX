@@ -1,18 +1,22 @@
 Harmonic Krylov-Schur eigensolver
 =================================
 
-Status: **not ready to merge as the production objective.** The original SOLVAX restart was not the
-harmonic Krylov--Schur algorithm in STR-9: it extracted harmonic Ritz pairs but
-Schur-sorted the unmodified projected matrix during restart. The corrected
-translation/recovery restart now passes the first two real-operator oracle
-rungs. Block candidates, locking, a field-corrected rational alternative, and
-implicit eigenpair sensitivities are implemented. A full-operator long-horizon
-propagator now passes all four QA oracle rungs, including the original-operator
-residual gate, but its conservative uniform settings are still slower than
-dense at the measured sizes. The rational path passes the first three
-circular-tokamak accuracy gates and a reduced seven-configuration physics
-matrix, but it is also slower than dense. Measurements and remaining work are
-below.
+Status: **adaptive propagator qualified as the production low-memory
+eigensolver; objective integration remains gated.** SOLVAX now estimates a
+stable full-operator RK4 step from a small peripheral-spectrum sketch, advances
+in fixed physical-horizon restart chunks, and stops on the original-operator
+residual. It matches dense eigenpairs on four-rung QA, QH, and QI ladders and is
+at timing parity on QA and 1.89x and 2.34x faster than dense on QH and QI at
+``n=4480``. A refined seven-configuration matrix passes ITG, ETG, TEM, KBM,
+Miller, QHS, and QI.
+Certificate-only GPU ladders reach ``n=172032`` with linear memory and certify
+growth-rate convergence; an individual ``n=199680`` solve also passes. Full
+complex-eigenvalue convergence remains unresolved for the QI ladder because the
+frequency continues to move despite candidate overlaps above 0.99. The dense
+differentiable objective should therefore remain the default until candidate
+continuation and the implicit derivative are wired through the objective API
+and the QI frequency gate is either passed or made an explicit growth-only
+exception. Measurements and remaining work are below.
 
 .. _hks-motivation:
 
@@ -22,7 +26,8 @@ Why
 The linear growth rate is currently obtained from a dense eigendecomposition of
 the flux-tube operator: all ``n`` eigenvalues and eigenvectors are computed and
 one is kept, with ``n = n_laguerre * n_hermite * ntheta``. Measured on a QA
-boundary at ``ntheta = 32``, the dense solve scales as :math:`t \sim n^{2.19}`:
+boundary at ``ntheta = 32``, the median of three dense solves scales as
+:math:`t \sim n^{2.32}`:
 
 .. list-table::
    :header-rows: 1
@@ -34,26 +39,28 @@ boundary at ``ntheta = 32``, the dense solve scales as :math:`t \sim n^{2.19}`:
    * - (2, 3)
      - 192
      - 0.6 MB
-     - 0.02 s
+     - 0.01 s
    * - (4, 6)
      - 768
      - 9.4 MB
-     - 0.90 s
+     - 0.40 s
    * - (6, 8)
      - 1536
      - 37.7 MB
-     - 5.32 s
+     - 1.87 s
    * - (8, 10)
      - 2560
      - 104.9 MB
-     - 12.23 s
+     - 6.66 s
 
-Projected to converged resolution: ``(12,16)`` with ``ntheta = 64`` is 7 min and
-2.4 GB per evaluation; ``(32,16)`` -- roughly the published ITG guidance -- is
-60 min and 17.2 GB, which exceeds the memory of the GPUs this runs on. A
+Projected to converged resolution: ``(12,16)`` with ``ntheta = 64`` is 4.1 min
+and 2.4 GB per evaluation; ``(32,16)`` -- roughly the published ITG guidance --
+is 40.2 min and 17.2 GB, which exceeds the memory of the GPUs this runs on. A
 convergence ladder needs several evaluations per configuration and a campaign
 needs a ladder per configuration, so the dense path is what bounds how much
-converged science is affordable.
+converged science is affordable. The :download:`cost-model artifact
+<_static/eigensolver_cost_model.json>` retains all timing samples and
+projections.
 
 .. _hks-difficulty:
 
@@ -64,9 +71,9 @@ The wanted eigenvalue is **interior**. Measured on the same QA boundary:
 
 .. code-block:: text
 
-   rightmost eigenvalue    0.143 - 0.127i     (the ITG mode)
-   spectral radius        80.15
-   ratio                  ~560
+   rightmost eigenvalue    0.08694 - 0.91716i
+   spectral radius        79.36
+   magnitude ratio        86.1
 
 Plain Arnoldi converges to extremal :math:`|\lambda|` and returns the large
 :math:`|\mathrm{Im}\,\lambda|` modes. This was verified rather than assumed: the
@@ -328,8 +335,8 @@ warm solves take 30.91 and 102.61 seconds; reduction latency makes CPU the
 preferred backend at these sizes.
 
 The long-horizon path resolves the accuracy failure without a shifted solve.
-With one uniform, conservative setting (RK4 ``dt=0.015``, horizon 60,
-``m=16``), all four QA rungs pass:
+The original uniform configuration (RK4 ``dt=0.015``, horizon 60, ``m=16``)
+passes all four QA rungs:
 
 .. list-table::
    :header-rows: 1
@@ -382,36 +389,99 @@ Regenerate it with:
      --solver long-horizon --krylov-dim 16 --max-restarts 1 \
      --tol 1e-9 --propagator-dt 1.5e-2 --propagator-steps 4000
 
-This closes V1--V3 for the tested QA ladder, not V8. A tuned horizon 30 at the
-largest rung is faster than dense (18.68 versus 24.68 seconds), but its
-``2.98e-6`` residual fails certification; horizon 60 passes in 37.96 seconds.
-At the first three rungs, stable resolution-specific steps and horizon 30 pass
-with residuals through ``3.24e-11``, but remain slower than dense. A refined
-block-propagator restart is available for competing branches; on the largest
-rung it reaches ``1.73e-10`` residual in 49.30 seconds. The scalar one-vector
-path is therefore preferred until a crossing requires candidates.
+The production candidate removes that uniform-setting penalty. Two 12-vector
+Arnoldi sketches, one from the caller seed and one deterministic broadband
+probe, estimate the peripheral spectrum and evaluate the actual complex RK4
+stability polynomial to select ``dt`` with a 0.9 safety factor.
+Each restart advances by horizon 30 and stops as soon as the original-operator
+relative residual is below tolerance. A growth-defect guard rejects artificial
+RK4 amplification. If either stability gate fails, the step is halved and
+retried.
 
-The TOML-driven reduced-resolution physics matrix passes all seven shipped
-configurations: ITG, ETG, TEM, KBM, Miller, QHS, and QI. It covers
+The adaptive result closes V1--V3 and establishes the measured V8 crossover on
+three stellarator devices:
+
+.. list-table::
+   :header-rows: 1
+
+   * - device
+     - n
+     - dense
+     - warm adaptive
+     - speedup
+     - rel. error
+     - residual
+   * - QA
+     - 4480
+     - 26.89 s
+     - 27.97 s
+     - 0.96x
+     - 9.96e-14
+     - 6.49e-14
+   * - QH
+     - 4480
+     - 26.06 s
+     - 13.82 s
+     - 1.89x
+     - 1.91e-12
+     - 1.14e-13
+   * - QI
+     - 4480
+     - 26.65 s
+     - 11.39 s
+     - 2.34x
+     - 4.32e-14
+     - 3.78e-14
+
+The robust :download:`QA artifact
+<_static/adaptive_propagator_broadband_qa_validation.json>`,
+:download:`QH crossover artifact
+<_static/adaptive_propagator_broadband_qh_rung4_validation.json>`, and
+:download:`QI crossover artifact
+<_static/adaptive_propagator_broadband_qi_rung4_validation.json>` record
+selected steps, restart counts, operator evaluations, versions, and timings.
+The earlier single-probe artifacts remain as provenance for the estimator
+ablation. Regenerate the production setting with
+``--solver adaptive-propagator``; for example:
+
+.. code-block:: bash
+
+   JAX_ENABLE_X64=1 python tools/campaigns/validate_harmonic_krylov_schur.py \
+     --input examples/vmec/input.LandremanPaul2021_QA_lowres \
+     --solver adaptive-propagator --krylov-dim 16 --max-restarts 4 \
+     --tol 1e-9 --propagator-chunk-horizon 30 \
+     --stability-dimension 12 --stability-probe-count 2 \
+     --stability-safety 0.9
+
+A refined block-propagator restart remains available for competing branches.
+The scalar path is preferred for a single isolated objective; continuation must
+retain multiple candidates near crossings.
+
+The TOML-driven adaptive physics matrix passes all seven shipped configurations:
+ITG, ETG, TEM, KBM, Miller, QHS, and QI. It covers
 electrostatic/electromagnetic, single-/multi-species, and periodic/linked
-layouts. The maximum relative eigenvalue error is ``2.60e-11`` and maximum
-original-operator residual is ``2.13e-10``. This is a branch-selection and
-architecture gate only, not a claim of velocity-space convergence. The
-:download:`regenerable artifact
-<_static/rational_eigensolver_physics_matrix.json>` records input hashes,
-device, versions, timings, and the exact scope.
+layouts. On the refined ``(N_l,N_m)=(4,6)`` matrix, the maximum relative
+eigenvalue error is ``1.45e-10`` and maximum original-operator residual is
+``1.09e-9``. This is a branch-selection and architecture gate only, not a claim
+of velocity-space convergence. The :download:`broadband-probe artifact
+<_static/adaptive_propagator_broadband_physics_matrix_refined.json>` records
+input hashes, device, versions, timings, and the exact scope. The earlier
+single-probe artifact remains as estimator-ablation provenance.
 
 Regenerate it from the repository root with:
 
 .. code-block:: bash
 
-   JAX_ENABLE_X64=1 python tools/campaigns/validate_rational_physics_matrix.py
+   JAX_ENABLE_X64=1 python tools/campaigns/validate_rational_physics_matrix.py \
+     --solver adaptive-propagator --spatial-points 16 \
+     --n-laguerre 4 --n-hermite 6 --stability-probe-count 2
 
-The remaining primary work is adaptive method selection: polynomial harmonic
-restarts where they converge cheaply, one-candidate rational extraction for an
-isolated objective, and block candidates only where continuation or a crossing
-requires them. The low-moment field Schur/Woodbury correction is implemented;
-the measured bottleneck is now convergence of the kinetic complement.
+The rational and harmonic solvers remain useful fallbacks and research
+comparators, but the adaptive propagator is the measured default for a
+rightmost eigenpair. The next production work is candidate continuation through
+crossings and objective integration with implicit sensitivities. The low-moment
+field Schur/Woodbury correction remains available for rational extraction; its
+measured bottleneck is convergence of the kinetic complement.
 
 Recycling the eigenvector, zero-padded into the next Hermite--Laguerre
 resolution, is much more effective than recycling only the scalar target. With
@@ -420,6 +490,88 @@ guarded recycling and ``m=80``, the first three rungs pass V1 in 85, 134, and
 ``3.5e-7`` residual, but still fails after 16,440 matrix-vector products and
 36.5 s versus 27.4 s dense. This is a useful continuation path, not yet a
 production replacement.
+
+Convergence beyond the dense-memory limit
+-----------------------------------------
+
+Dense-oracle agreement establishes solver accuracy, not velocity-space
+convergence. The adaptive path was therefore run at ``ntheta=64`` without
+forming a dense matrix. Every reported point passes the original-operator
+residual, RK4 stability, and growth-defect gates. Growth and the full complex
+eigenvalue are audited separately because a growth-only linear objective does
+not require a converged frequency.
+
+The fine QA ladder ``(16,24)`` through ``(28,36)`` reaches ``n=64512``. Its
+growth changes are 0.76%, 0.66%, and 0.69%, while full-eigenvalue changes are
+0.51%, 0.45%, and 0.49%; both quantities pass the 5% two-consecutive-rung gate.
+The QI ultra-fine ladder ``(24,32)`` through ``(36,44)`` reaches ``n=101376``.
+Growth changes are 2.45%, 2.63%, and 1.64%, so the growth rate passes. The
+full-eigenvalue changes are 19.58%, 15.26%, and 11.53%, so the frequency does
+not. Consecutive normalized eigenvector overlaps rise from 0.9878 to 0.9934,
+which is evidence for slow convergence of one branch rather than accidental
+branch switching, but it does not waive the numerical gate.
+
+The production two-probe hyperfine ladder continues through ``n=172032``. Its
+three rows all certify in one restart, with selected steps decreasing from
+``0.0058651`` to ``0.00522193`` as the velocity resolution rises. The largest
+certified point has ``lambda=0.09702353767 + 0.02707803460i``, relative
+residual ``8.61e-13``, 367,706 original-operator evaluations, and 229.3 s warm
+solve time. Its dense complex matrix would require about 474 GB, whereas the
+GPU campaign remained near 1.24 GiB observed allocation. Growth changes of
+0.54% and 1.32% pass the two-consecutive-rung gate; full-eigenvalue changes of
+7.24% and 6.20% do not, so the QI frequency remains unresolved.
+
+This is the principal scaling result: memory is linear in state size and the
+solve is feasible well beyond the dense path. See the :download:`QA/QI fine
+artifact <_static/adaptive_propagator_convergence_fine.json>`,
+:download:`QI ultra-fine artifact
+<_static/adaptive_propagator_convergence_qi_ultrafine.json>`, and
+:download:`production broadband hyperfine artifact
+<_static/adaptive_propagator_convergence_qi_broadband_validation.json>`.
+
+A predecessor hyperfine extension records the first large-scale failure rather
+than hiding it. Rungs at ``n=122880`` and ``n=146432`` pass with residuals
+``9.05e-10`` and ``6.32e-13``. At ``n=172032`` the recycled-seed-only
+12-vector stability sketch admits a step that returns essentially the prolonged
+prior vector (overlap 1.0) with residual ``1.67e1`` after all four restarts. The
+next rung, ``n=199680``, selects roughly half that step and passes with residual
+``2.80e-12`` in 684.1 s. Its dense complex matrix would be about 638 GB while
+observed GPU allocation remained about 1.24 GiB. The whole predecessor ladder
+is correctly marked uncertified because every rung must pass; neither growth
+nor eigenvalue convergence is claimed. The :download:`negative-evidence artifact
+<_static/adaptive_propagator_convergence_qi_hyperfine.json>` preserves the raw
+values and timings. This pattern motivates a bounded step-halving retry after
+residual exhaustion, even when the selected scalar mode alone appears RK4
+stable.
+
+That retry is now implemented and closes the failed rung. Replaying the
+``n=122880``, ``146432``, and ``172032`` continuation selects
+``dt=0.0028082`` after the estimated ``dt=0.0056159`` exhausts its residual
+budget. The recovered value is
+``0.09702353767 + 0.02707803460i`` with residual ``1.39e-12`` and continuation
+overlap 0.9954. Growth changes of 0.54% and 1.32% pass the two-consecutive-rung
+gate. Full-eigenvalue changes of 7.24% and 6.20% remain outside 5%, so the
+frequency is still not converged. The warm solve takes 1279.6 s and 2,051,286
+operator evaluations including the failed first attempt; this is a correctness
+fallback, not the desired steady-state cost. See the :download:`retry artifact
+<_static/adaptive_propagator_convergence_qi_retry_validation.json>`.
+The production broadband probe avoids that failed attempt, reducing both warm
+time and operator work by 5.58x while retaining the retry as a fail-safe.
+
+Regenerate a certificate-only ladder with:
+
+.. code-block:: bash
+
+   CUDA_VISIBLE_DEVICES=1 XLA_PYTHON_CLIENT_PREALLOCATE=false \
+   JAX_ENABLE_X64=1 python \
+     tools/campaigns/validate_adaptive_propagator_convergence.py \
+     --device qi --ntheta 64 \
+     --resolution 40,48 --resolution 44,52 \
+     --resolution 48,56 \
+     --krylov-dim 16 --max-restarts 4 --tol 1e-9 \
+     --convergence-tol 0.05 --chunk-horizon 30 \
+     --stability-dimension 12 --stability-probe-count 2 \
+     --stability-safety 0.9
 
 .. _hks-plan:
 
@@ -475,6 +627,15 @@ block transformed-subspace path uses Rayleigh--Ritz for ``largest_real``;
 harmonic extraction about an unrelated target would undo the transformation.
 The scalar and block paths always certify the original-operator residual.
 
+**S9 -- Adaptive stability, horizon, and certification.** Implemented in SOLVAX
+and GKX. Caller-seeded and deterministic broadband peripheral-spectrum sketches
+choose a stable RK4 step using the complex stability region,
+residual-controlled restart chunks avoid unnecessary long horizons, and a
+growth-defect guard detects numerically induced amplification. Step halving
+after either instability or residual exhaustion is the guarded fallback. The
+estimator, invariant-seed blindness, early stop, retry accounting, and
+instability rejection have focused regression tests.
+
 .. _hks-validation:
 
 Validation gates
@@ -484,9 +645,9 @@ Release gates use **real GKX operators** against dense references. Synthetic
 normal, non-normal, clustered, Grcar, and near-Jordan matrices remain mandatory
 unit tests because they isolate restart invariants and conditioning failures.
 
-**V1 Numerical agreement.** Eigenvalue matches dense to :math:`10^{-8}` relative
-across :math:`(N_\ell, N_m)` from (2,3) to (10,14), on at least three devices
-spanning QA, QH and QI.
+**V1 Numerical agreement.** Passed by the adaptive propagator: eigenvalue
+matches dense to :math:`10^{-8}` relative across four rungs through
+``(10,14)`` on QA, QH, and QI.
 
 **V2 Eigenvector agreement.** :math:`|\langle v_{\rm hks}, v_{\rm dense}\rangle|
 > 1 - 10^{-8}` after phase alignment.
@@ -508,13 +669,17 @@ across a stated range, confirming [Roman2010]_'s claim in GKX's setting.
 
 **V7 Determinism.** Bitwise-identical across reruns.
 
-**V8 Performance.** Measured speedup and peak memory versus dense across the
-ladder, with the crossover size reported. The claim to be established is the
-order-of-magnitude gain [Roman2010]_ report; anything less is still worth having
-but must be stated as measured.
+**V8 Performance.** Passed on QH and QI at the first measured crossover: at
+``n=4480`` the robust two-probe warm solve is 1.89x and 2.34x faster than dense.
+QA is at timing parity (0.96x), so no QA crossover is claimed. The certified GPU
+continuation reaches ``n=172032`` with observed allocation about 1.24 GiB; a
+dense complex matrix there is about 474 GB. An individual ``n=199680`` row also
+passes. This is not an order-of-magnitude timing claim, and the 172k residual
+fallback is not yet a performance win.
 
-**V9 Gradient.** Once S7 lands: custom VJP/JVP agrees with dense-path
-``jax.grad`` and frozen-branch directional finite differences to 1e-6 relative.
+**V9 Gradient.** SOLVAX's custom JVP agrees with dense-path ``jax.grad`` and
+frozen-branch directional finite differences on the small real-operator gate.
+GKX objective integration and end-to-end optimization gradients remain open.
 
 References
 ----------

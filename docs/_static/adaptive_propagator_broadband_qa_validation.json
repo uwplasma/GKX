@@ -1,0 +1,258 @@
+{
+  "schema_version": 5,
+  "passed": true,
+  "provenance": {
+    "input": "examples/vmec/input.LandremanPaul2021_QA_lowres",
+    "input_sha256": "4f56d4c674b6340a9e359d3645ab1dbb4f841eccc563b5fc969a27928cb9cf84",
+    "s_index": 7,
+    "ntheta": 32,
+    "selected_ky_index": 1,
+    "ladder": [
+      [
+        4,
+        6
+      ],
+      [
+        6,
+        8
+      ],
+      [
+        8,
+        10
+      ],
+      [
+        10,
+        14
+      ]
+    ],
+    "solver": "adaptive-propagator",
+    "target_mode": "oracle",
+    "start_mode": "random",
+    "krylov_dim": 16,
+    "candidates": 1,
+    "tolerance": 1e-09,
+    "recycle_residual_limit": 1.0000000000000001e-07,
+    "max_restarts": 4,
+    "propagator_chunk_horizon": 30.0,
+    "stability_dimension": 12,
+    "stability_probe_count": 2,
+    "stability_safety": 0.9,
+    "max_stability_retries": 2,
+    "shift_offset": null,
+    "shift_tolerance": null,
+    "shift_maxiter": null,
+    "shift_restart": null,
+    "shift_solve_method": null,
+    "shift_preconditioner": null,
+    "propagator_dt": null,
+    "propagator_steps_per_application": null,
+    "propagator_horizon": null,
+    "cost_note": "outer_applications includes the stability sketch and residual-driven Arnoldi restarts; original_operator_evaluations includes all RK4 stages and certifications",
+    "python": "3.13.7 (main, Aug 14 2025, 11:12:11) [Clang 17.0.0 (clang-1700.3.19.1)]",
+    "platform": "macOS-26.5.1-arm64-arm-64bit-Mach-O",
+    "jax": "0.11.0",
+    "jaxlib": "0.11.0",
+    "gkx": "1.7.1",
+    "solvax": "0.11.1",
+    "gkx_commit": "08eefcdc326622560dfd6f060fe0e18dfac08c5a",
+    "solvax_commit": "2218df7e05154d8d7a9699333315dfbd8625e8e5",
+    "jax_x64": true,
+    "devices": [
+      "cpu:0"
+    ]
+  },
+  "rows": [
+    {
+      "n_laguerre": 4,
+      "n_hermite": 6,
+      "n": 768,
+      "spectral_ratio": 47.18416303853614,
+      "dense_seconds": 0.3944990634918213,
+      "compile_seconds": 2.8585667610168457,
+      "krylov_seconds": 2.2733840942382812,
+      "dense": [
+        0.09000512301104559,
+        -1.1352848848827386
+      ],
+      "target": [
+        0.09000512301104559,
+        -1.1352848848827386
+      ],
+      "solver_target": null,
+      "recycled_start": false,
+      "krylov": [
+        0.09000512301105658,
+        -1.1352848848827304
+      ],
+      "selected_candidate": 0,
+      "candidates": [
+        {
+          "eigenvalue": [
+            0.09000512301105658,
+            -1.1352848848827304
+          ],
+          "residual": 2.313009917028418e-13,
+          "converged": true
+        }
+      ],
+      "relative_error": 1.2049356478377288e-14,
+      "residual": 2.313009917028418e-13,
+      "recycle_eligible": true,
+      "converged": true,
+      "restarts": 1,
+      "outer_applications": 40,
+      "propagator_steps": 10048,
+      "original_operator_evaluations": 40218,
+      "selected_propagator_dt": 0.04777070063694268,
+      "selected_propagator_steps": 628,
+      "filter_growth_defect": -3.534053237552737e-08,
+      "stability_passed": true,
+      "propagator_substeps_upper_bound": null,
+      "orthogonality": null
+    },
+    {
+      "n_laguerre": 6,
+      "n_hermite": 8,
+      "n": 1536,
+      "spectral_ratio": 66.20928686436733,
+      "dense_seconds": 1.7750108242034912,
+      "compile_seconds": 4.995451927185059,
+      "krylov_seconds": 4.538353204727173,
+      "dense": [
+        0.0981348512782833,
+        -1.0124238871890303
+      ],
+      "target": [
+        0.0981348512782833,
+        -1.0124238871890303
+      ],
+      "solver_target": null,
+      "recycled_start": false,
+      "krylov": [
+        0.09813485127827928,
+        -1.0124238871890445
+      ],
+      "selected_candidate": 0,
+      "candidates": [
+        {
+          "eigenvalue": [
+            0.09813485127827928,
+            -1.0124238871890445
+          ],
+          "residual": 3.4758157589231536e-14,
+          "converged": true
+        }
+      ],
+      "relative_error": 1.451673631734264e-14,
+      "residual": 3.4758157589231536e-14,
+      "recycle_eligible": true,
+      "converged": true,
+      "restarts": 1,
+      "outer_applications": 40,
+      "propagator_steps": 12544,
+      "original_operator_evaluations": 50202,
+      "selected_propagator_dt": 0.03826530612244898,
+      "selected_propagator_steps": 784,
+      "filter_growth_defect": -9.558774369256007e-09,
+      "stability_passed": true,
+      "propagator_substeps_upper_bound": null,
+      "orthogonality": null
+    },
+    {
+      "n_laguerre": 8,
+      "n_hermite": 10,
+      "n": 2560,
+      "spectral_ratio": 86.14452162985995,
+      "dense_seconds": 6.411891222000122,
+      "compile_seconds": 8.143587827682495,
+      "krylov_seconds": 7.687822103500366,
+      "dense": [
+        0.08693905219947713,
+        -0.917155464405776
+      ],
+      "target": [
+        0.08693905219947713,
+        -0.917155464405776
+      ],
+      "solver_target": null,
+      "recycled_start": false,
+      "krylov": [
+        0.08693905219956839,
+        -0.9171554644055984
+      ],
+      "selected_candidate": 0,
+      "candidates": [
+        {
+          "eigenvalue": [
+            0.08693905219956839,
+            -0.9171554644055984
+          ],
+          "residual": 2.6943000894672042e-11,
+          "converged": true
+        }
+      ],
+      "relative_error": 2.1677433007295243e-13,
+      "residual": 2.6943000894672042e-11,
+      "recycle_eligible": true,
+      "converged": true,
+      "restarts": 1,
+      "outer_applications": 40,
+      "propagator_steps": 14800,
+      "original_operator_evaluations": 59226,
+      "selected_propagator_dt": 0.032432432432432434,
+      "selected_propagator_steps": 925,
+      "filter_growth_defect": -2.9122988604024513e-09,
+      "stability_passed": true,
+      "propagator_substeps_upper_bound": null,
+      "orthogonality": null
+    },
+    {
+      "n_laguerre": 10,
+      "n_hermite": 14,
+      "n": 4480,
+      "spectral_ratio": 127.83975008615214,
+      "dense_seconds": 26.8896222114563,
+      "compile_seconds": 28.59896183013916,
+      "krylov_seconds": 27.96751117706299,
+      "dense": [
+        0.05965865581595391,
+        -0.7792811529935938
+      ],
+      "target": [
+        0.05965865581595391,
+        -0.7792811529935938
+      ],
+      "solver_target": null,
+      "recycled_start": false,
+      "krylov": [
+        0.0596586558158831,
+        -0.7792811529935614
+      ],
+      "selected_candidate": 0,
+      "candidates": [
+        {
+          "eigenvalue": [
+            0.0596586558158831,
+            -0.7792811529935614
+          ],
+          "residual": 6.489279212037519e-14,
+          "converged": true
+        }
+      ],
+      "relative_error": 9.963796164847093e-14,
+      "residual": 6.489279212037519e-14,
+      "recycle_eligible": true,
+      "converged": true,
+      "restarts": 2,
+      "outer_applications": 56,
+      "propagator_steps": 37216,
+      "original_operator_evaluations": 148892,
+      "selected_propagator_dt": 0.025795356835769563,
+      "selected_propagator_steps": 1163,
+      "filter_growth_defect": -4.172661591250737e-10,
+      "stability_passed": true,
+      "propagator_substeps_upper_bound": null,
+      "orthogonality": null
+    }
+  ]
+}

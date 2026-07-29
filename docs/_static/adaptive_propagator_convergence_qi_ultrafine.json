@@ -1,0 +1,156 @@
+{
+  "schema_version": 1,
+  "certified": true,
+  "all_growth_converged": true,
+  "all_eigenvalue_converged": false,
+  "scope": "certificate-only ntheta=64 velocity-space ladder beyond the dense oracle memory range; growth and full-eigenvalue convergence separately require two consecutive changes to pass tolerance",
+  "provenance": {
+    "ntheta": 64,
+    "s_index": 7,
+    "selected_ky_index": 1,
+    "ladder": [
+      [
+        24,
+        32
+      ],
+      [
+        28,
+        36
+      ],
+      [
+        32,
+        40
+      ],
+      [
+        36,
+        44
+      ]
+    ],
+    "krylov_dim": 16,
+    "max_restarts": 4,
+    "residual_tolerance": 1e-09,
+    "convergence_tolerance": 0.05,
+    "chunk_horizon": 30.0,
+    "stability_dimension": 12,
+    "stability_safety": 0.9,
+    "python": "3.10.12 (main, Jan  8 2026, 06:52:19) [GCC 11.4.0]",
+    "platform": "Linux-6.17.9-76061709-generic-x86_64-with-glibc2.35",
+    "jax": "0.6.2",
+    "jaxlib": "0.6.2",
+    "gkx": "1.7.1",
+    "solvax": "0.11.1",
+    "gkx_commit": "1279c9e5381b1d94b682a3c88524997b96d8e116",
+    "solvax_commit": "0aa2fad34c713ec415ce11642eef4a2496eb0ec5",
+    "jax_x64": true,
+    "devices": [
+      "cuda:0"
+    ]
+  },
+  "devices": [
+    {
+      "device": "qi",
+      "input": "examples/vmec/input.nfp3_QI_fixed_resolution_final",
+      "input_sha256": "b64dc2221e19452d426c60104b0c67d12de9b13a7ca5152a43b562bbf36fc0ba",
+      "certified": true,
+      "growth_converged": true,
+      "growth_converged_resolution": [
+        24,
+        32
+      ],
+      "eigenvalue_converged": false,
+      "eigenvalue_converged_resolution": null,
+      "growth_relative_changes": [
+        0.024503729602611244,
+        0.026346829623803553,
+        0.016401541937799535
+      ],
+      "eigenvalue_relative_changes": [
+        0.1958468953680401,
+        0.15258956419827058,
+        0.11534345569727153
+      ],
+      "rows": [
+        {
+          "n_laguerre": 24,
+          "n_hermite": 32,
+          "n": 49152,
+          "eigenvalue": [
+            0.09191545909131318,
+            0.1043922648770321
+          ],
+          "residual": 3.739161139178346e-13,
+          "converged": true,
+          "stability_passed": true,
+          "filter_growth_defect": 1.8610113450279187e-14,
+          "restarts": 2,
+          "selected_propagator_dt": 0.007712082262210797,
+          "selected_propagator_steps": 3890,
+          "original_operator_evaluations": 497936,
+          "continuation_overlap": null,
+          "compile_seconds": 140.01066207885742,
+          "warm_seconds": 116.94541430473328
+        },
+        {
+          "n_laguerre": 28,
+          "n_hermite": 36,
+          "n": 64512,
+          "eigenvalue": [
+            0.09422430600772005,
+            0.08026160384352597
+          ],
+          "residual": 6.58944757029489e-12,
+          "converged": true,
+          "stability_passed": true,
+          "filter_growth_defect": -8.396061623727746e-15,
+          "restarts": 1,
+          "selected_propagator_dt": 0.007267441860465116,
+          "selected_propagator_steps": 4128,
+          "original_operator_evaluations": 264206,
+          "continuation_overlap": 0.9878348096612731,
+          "compile_seconds": 76.40750908851624,
+          "warm_seconds": 75.16905760765076
+        },
+        {
+          "n_laguerre": 32,
+          "n_hermite": 40,
+          "n": 81920,
+          "eigenvalue": [
+            0.09677399393802007,
+            0.06284037081274198
+          ],
+          "residual": 1.895485396581736e-12,
+          "converged": true,
+          "stability_passed": true,
+          "filter_growth_defect": 9.908740494779522e-15,
+          "restarts": 1,
+          "selected_propagator_dt": 0.006824385805277525,
+          "selected_propagator_steps": 4396,
+          "original_operator_evaluations": 281358,
+          "continuation_overlap": 0.9915116834112455,
+          "compile_seconds": 118.83189105987549,
+          "warm_seconds": 106.95157861709595
+        },
+        {
+          "n_laguerre": 36,
+          "n_hermite": 44,
+          "n": 101376,
+          "eigenvalue": [
+            0.09838770399119547,
+            0.050202647489147205
+          ],
+          "residual": 7.382846107661066e-13,
+          "converged": true,
+          "stability_passed": true,
+          "filter_growth_defect": -5.509481759702339e-15,
+          "restarts": 1,
+          "selected_propagator_dt": 0.006461339651087659,
+          "selected_propagator_steps": 4643,
+          "original_operator_evaluations": 297166,
+          "continuation_overlap": 0.9934262186966277,
+          "compile_seconds": 161.11448907852173,
+          "warm_seconds": 149.166494846344
+        }
+      ]
+    }
+  ]
+}

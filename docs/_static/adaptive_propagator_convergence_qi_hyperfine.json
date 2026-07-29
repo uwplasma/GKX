@@ -1,0 +1,154 @@
+{
+  "schema_version": 1,
+  "certified": false,
+  "all_growth_converged": false,
+  "all_eigenvalue_converged": false,
+  "scope": "certificate-only ntheta=64 velocity-space ladder beyond the dense oracle memory range; growth and full-eigenvalue convergence separately require two consecutive changes to pass tolerance",
+  "provenance": {
+    "ntheta": 64,
+    "s_index": 7,
+    "selected_ky_index": 1,
+    "ladder": [
+      [
+        40,
+        48
+      ],
+      [
+        44,
+        52
+      ],
+      [
+        48,
+        56
+      ],
+      [
+        52,
+        60
+      ]
+    ],
+    "krylov_dim": 16,
+    "max_restarts": 4,
+    "residual_tolerance": 1e-09,
+    "convergence_tolerance": 0.05,
+    "chunk_horizon": 30.0,
+    "stability_dimension": 12,
+    "stability_safety": 0.9,
+    "python": "3.10.12 (main, Jan  8 2026, 06:52:19) [GCC 11.4.0]",
+    "platform": "Linux-6.17.9-76061709-generic-x86_64-with-glibc2.35",
+    "jax": "0.6.2",
+    "jaxlib": "0.6.2",
+    "gkx": "1.7.1",
+    "solvax": "0.11.1",
+    "gkx_commit": "1279c9e5381b1d94b682a3c88524997b96d8e116",
+    "solvax_commit": "0aa2fad34c713ec415ce11642eef4a2496eb0ec5",
+    "postprocessing": "convergence flags were corrected fail-closed after the n=172032 residual failure; raw eigenpairs, residuals, stability diagnostics, and timings are unchanged",
+    "jax_x64": true,
+    "devices": [
+      "cuda:0"
+    ]
+  },
+  "devices": [
+    {
+      "device": "qi",
+      "input": "examples/vmec/input.nfp3_QI_fixed_resolution_final",
+      "input_sha256": "b64dc2221e19452d426c60104b0c67d12de9b13a7ca5152a43b562bbf36fc0ba",
+      "certified": false,
+      "growth_converged": false,
+      "growth_converged_resolution": null,
+      "eigenvalue_converged": false,
+      "eigenvalue_converged_resolution": null,
+      "growth_relative_changes": [
+        0.005425928003712423,
+        1.2933064324256466e-10,
+        0.032651817440779676
+      ],
+      "eigenvalue_relative_changes": [
+        0.07235840527191886,
+        1.5165946236266559e-10,
+        0.11970462127284102
+      ],
+      "rows": [
+        {
+          "n_laguerre": 40,
+          "n_hermite": 48,
+          "n": 122880,
+          "eigenvalue": [
+            0.09883706221643365,
+            0.04068088799708394
+          ],
+          "residual": 9.048373418970963e-10,
+          "converged": true,
+          "stability_passed": true,
+          "filter_growth_defect": -4.76146899686114e-14,
+          "restarts": 1,
+          "selected_propagator_dt": 0.005865102639296188,
+          "selected_propagator_steps": 5115,
+          "original_operator_evaluations": 327374,
+          "continuation_overlap": null,
+          "compile_seconds": 181.88284516334534,
+          "warm_seconds": 171.9513611793518
+        },
+        {
+          "n_laguerre": 44,
+          "n_hermite": 52,
+          "n": 146432,
+          "eigenvalue": [
+            0.09830367356119019,
+            0.03319223082170739
+          ],
+          "residual": 6.315923402914709e-13,
+          "converged": true,
+          "stability_passed": true,
+          "filter_growth_defect": 1.2240208846492351e-14,
+          "restarts": 1,
+          "selected_propagator_dt": 0.005870841487279843,
+          "selected_propagator_steps": 5110,
+          "original_operator_evaluations": 327054,
+          "continuation_overlap": 0.9950531180806572,
+          "compile_seconds": 204.93681573867798,
+          "warm_seconds": 192.46328902244568
+        },
+        {
+          "n_laguerre": 48,
+          "n_hermite": 56,
+          "n": 172032,
+          "eigenvalue": [
+            0.09830367354847651,
+            0.03319223081243531
+          ],
+          "residual": 16.74830355161381,
+          "converged": false,
+          "stability_passed": true,
+          "filter_growth_defect": 1.124100812432971e-14,
+          "restarts": 4,
+          "selected_propagator_dt": 0.005615874204417821,
+          "selected_propagator_steps": 5342,
+          "original_operator_evaluations": 1367572,
+          "continuation_overlap": 1.0000000000000004,
+          "compile_seconds": 1020.859831571579,
+          "warm_seconds": 877.6401784420013
+        },
+        {
+          "n_laguerre": 52,
+          "n_hermite": 60,
+          "n": 199680,
+          "eigenvalue": [
+            0.09519537165208544,
+            0.02191940843781308
+          ],
+          "residual": 2.7987488393836188e-12,
+          "converged": true,
+          "stability_passed": true,
+          "filter_growth_defect": 1.4613310561628623e-14,
+          "restarts": 1,
+          "selected_propagator_dt": 0.0027019724398811133,
+          "selected_propagator_steps": 11103,
+          "original_operator_evaluations": 710606,
+          "continuation_overlap": 0.9864702973699021,
+          "compile_seconds": 709.9949884414673,
+          "warm_seconds": 684.1029167175293
+        }
+      ]
+    }
+  ]
+}
