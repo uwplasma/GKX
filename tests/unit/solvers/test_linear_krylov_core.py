@@ -668,6 +668,61 @@ def test_long_horizon_propagator_selects_growth_and_recovers_frequency(
 
 
 @requires_solvax_eigen_api
+def test_adaptive_propagator_selects_stable_step_and_stops_on_residual(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The production adapter must infer dt and avoid its unused restart budget."""
+
+    _grid, cache, params, _v0, term_cfg, terms = _tiny_krylov_setup(linked=False)
+    eigenvalues = jnp.asarray(
+        [
+            0.3 + 0.2j,
+            0.1 - 0.4j,
+            -0.2 + 3.0j,
+            -0.3 - 4.0j,
+            -0.4 + 5.0j,
+            -0.5 - 6.0j,
+            -0.6 + 7.0j,
+            -0.7 - 8.0j,
+            -0.8 + 9.0j,
+            -0.9 - 10.0j,
+        ],
+        dtype=jnp.complex128,
+    )
+    monkeypatch.setattr(
+        lk,
+        "_apply_operator",
+        lambda state, *_args: eigenvalues * state,
+    )
+    monkeypatch.setattr(
+        ka,
+        "_apply_operator",
+        lambda state, *_args: eigenvalues * state,
+    )
+    initial = jnp.ones_like(eigenvalues)
+    solution = lk.adaptive_propagator_eigenpair(
+        initial,
+        cache,
+        params,
+        terms=terms,
+        krylov_dim=8,
+        max_restarts=5,
+        tol=1.0e-9,
+        chunk_horizon=20.0,
+        stability_dimension=8,
+    )
+
+    assert solution.converged
+    assert solution.stable
+    assert solution.restarts < 5
+    assert solution.filter_dt < 2.8 / float(jnp.max(jnp.abs(eigenvalues)))
+    assert complex(np.asarray(solution.eigenvalue)) == pytest.approx(
+        complex(np.asarray(eigenvalues[0])), rel=1.0e-9
+    )
+    assert float(np.asarray(solution.residual)) < 1.0e-9
+
+
+@requires_solvax_eigen_api
 def test_rational_eigenpairs_use_the_field_corrected_shifted_inverse(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

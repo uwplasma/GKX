@@ -118,6 +118,7 @@ _EXPORT_TARGETS: dict[str, tuple[str, str]] = {
     'linear_rhs_streaming_velocity_sharded': ('gkx.solvers.linear.parallel', 'linear_rhs_streaming_velocity_sharded'),
     'integrate_linear': ('gkx.solvers.linear.integrators', 'integrate_linear'),
     'KrylovConfig': ('gkx.solvers.linear.krylov', 'KrylovConfig'),
+    'adaptive_propagator_eigenpair': ('gkx.solvers.linear.krylov', 'adaptive_propagator_eigenpair'),
     'dominant_eigenpair': ('gkx.solvers.linear.krylov', 'dominant_eigenpair'),
     'dominant_eigenvalue': ('gkx.solvers.linear.krylov', 'dominant_eigenvalue'),
     'prepare_rational_shifted_inverse': ('gkx.solvers.linear.krylov', 'prepare_rational_shifted_inverse'),

@@ -1,10 +1,10 @@
-"""Audit the rational eigensolver across branch, field, and geometry families.
+"""Audit certified eigensolvers across branch, field, and geometry families.
 
 Each row loads a shipped TOML case, preserves its species, field, normalization,
 and geometry path, and reduces only spatial/velocity resolution so a dense
-reference remains affordable. The rational candidate is certified with the
-original GKX operator residual. Stable configurations are valid rows: the
-solver must return the rightmost damped mode rather than invent instability.
+reference remains affordable. Every candidate is certified with the original
+GKX operator residual. Stable configurations are valid rows: the solver must
+return the rightmost damped mode rather than invent instability.
 
 This is an architecture/branch-selection gate, not a convergence study. The
 full velocity-space ladder remains the responsibility of
@@ -106,6 +106,11 @@ def _reduced_grid_config(grid_config, spatial_points: int):
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--solver",
+        choices=("rational", "adaptive-propagator"),
+        default="rational",
+    )
     parser.add_argument("--spatial-points", type=int, default=8)
     parser.add_argument("--n-laguerre", type=int, default=2)
     parser.add_argument("--n-hermite", type=int, default=4)
@@ -115,6 +120,9 @@ def main() -> int:
     parser.add_argument("--shift-offset", type=float, default=0.02)
     parser.add_argument("--shift-tol", type=float, default=1.0e-10)
     parser.add_argument("--max-restarts", type=int, default=4)
+    parser.add_argument("--propagator-chunk-horizon", type=float, default=30.0)
+    parser.add_argument("--stability-dimension", type=int, default=12)
+    parser.add_argument("--stability-safety", type=float, default=0.9)
     parser.add_argument(
         "--case",
         action="append",
@@ -125,7 +133,7 @@ def main() -> int:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("docs/_static/rational_eigensolver_physics_matrix.json"),
+        default=None,
     )
     args = parser.parse_args()
     if args.spatial_points < 4:
@@ -134,8 +142,18 @@ def main() -> int:
         parser.error("velocity-space dimensions must be positive")
     if args.candidates < 1 or args.krylov_dim <= args.candidates:
         parser.error("--krylov-dim must exceed the positive candidate count")
-    if args.shift_offset <= 0.0:
+    if args.solver == "rational" and args.shift_offset <= 0.0:
         parser.error("--shift-offset must be positive")
+    if args.propagator_chunk_horizon <= 0.0:
+        parser.error("--propagator-chunk-horizon must be positive")
+    if args.stability_dimension < 2 or not 0.0 < args.stability_safety < 1.0:
+        parser.error("stability dimension/safety must satisfy dimension >= 2 and 0 < safety < 1")
+    if args.output is None:
+        args.output = Path("docs/_static") / (
+            "rational_eigensolver_physics_matrix.json"
+            if args.solver == "rational"
+            else "adaptive_propagator_physics_matrix.json"
+        )
 
     from gkx.core.grid import build_spectral_grid, select_ky_grid
     from gkx.operators.linear.cache_builder import build_linear_cache
@@ -146,6 +164,7 @@ def main() -> int:
         build_runtime_linear_terms,
     )
     from gkx.solvers.linear.krylov import (
+        adaptive_propagator_eigenpair,
         prepare_rational_shifted_inverse,
         rational_eigenpairs,
     )
@@ -210,54 +229,103 @@ def main() -> int:
         spectrum = np.linalg.eigvals(matrix)
         dense_seconds = time.time() - started
         reference = complex(spectrum[int(np.argmax(spectrum.real))])
-        shift_scale = max(abs(reference), 1.0e-3)
-        shift = reference - args.shift_offset * shift_scale
         generator = np.random.default_rng(case_index)
         start = jnp.asarray(
             generator.normal(size=state_shape) + 1j * generator.normal(size=state_shape)
         )
-        inner_limit = size
-        started = time.time()
-        shifted_inverse = prepare_rational_shifted_inverse(
-            start,
-            cache,
-            params,
-            terms=terms,
-            shift=shift,
-            shift_tol=args.shift_tol,
-            shift_maxiter=inner_limit,
-            shift_restart=inner_limit,
-            shift_preconditioner="field-corrected",
-        )
-        shifted_inverse(start).block_until_ready()
-        compile_seconds = time.time() - started
-        started = time.time()
-        solution = rational_eigenpairs(
-            start,
-            cache,
-            params,
-            terms=terms,
-            shift=shift,
-            candidates=args.candidates,
-            krylov_dim=args.krylov_dim,
-            restarts=args.max_restarts,
-            tol=args.tol,
-            shift_tol=args.shift_tol,
-            shift_maxiter=inner_limit,
-            shift_restart=inner_limit,
-            shift_preconditioner="field-corrected",
-            shifted_inverse=shifted_inverse,
-        )
-        rational_seconds = time.time() - started
-        values = np.asarray(solution.eigenvalues)
-        selected = int(np.argmin(np.abs(values - reference)))
-        value = complex(values[selected])
-        residual = float(np.asarray(solution.residuals[selected]))
+        if args.solver == "rational":
+            shift_scale = max(abs(reference), 1.0e-3)
+            shift = reference - args.shift_offset * shift_scale
+            inner_limit = size
+            started = time.time()
+            shifted_inverse = prepare_rational_shifted_inverse(
+                start,
+                cache,
+                params,
+                terms=terms,
+                shift=shift,
+                shift_tol=args.shift_tol,
+                shift_maxiter=inner_limit,
+                shift_restart=inner_limit,
+                shift_preconditioner="field-corrected",
+            )
+            shifted_inverse(start).block_until_ready()
+            compile_seconds = time.time() - started
+            started = time.time()
+            solution = rational_eigenpairs(
+                start,
+                cache,
+                params,
+                terms=terms,
+                shift=shift,
+                candidates=args.candidates,
+                krylov_dim=args.krylov_dim,
+                restarts=args.max_restarts,
+                tol=args.tol,
+                shift_tol=args.shift_tol,
+                shift_maxiter=inner_limit,
+                shift_restart=inner_limit,
+                shift_preconditioner="field-corrected",
+                shifted_inverse=shifted_inverse,
+            )
+            solver_seconds = time.time() - started
+            values = np.asarray(solution.eigenvalues)
+            selected = int(np.argmin(np.abs(values - reference)))
+            value = complex(values[selected])
+            residual = float(np.asarray(solution.residuals[selected]))
+            converged = bool(np.asarray(solution.converged[selected]))
+            restarts = solution.restarts
+            outer_applications = solution.matvecs
+            selected_dt = None
+            selected_steps = None
+            stability_passed = None
+            filter_growth_defect = None
+        else:
+            started = time.time()
+            compiled = adaptive_propagator_eigenpair(
+                start,
+                cache,
+                params,
+                terms=terms,
+                krylov_dim=args.krylov_dim,
+                max_restarts=args.max_restarts,
+                tol=args.tol,
+                chunk_horizon=args.propagator_chunk_horizon,
+                stability_dimension=args.stability_dimension,
+                stability_safety=args.stability_safety,
+            )
+            compiled.eigenvalue.block_until_ready()
+            compiled.eigenvector.block_until_ready()
+            compile_seconds = time.time() - started
+            started = time.time()
+            solution = adaptive_propagator_eigenpair(
+                start,
+                cache,
+                params,
+                terms=terms,
+                krylov_dim=args.krylov_dim,
+                max_restarts=args.max_restarts,
+                tol=args.tol,
+                chunk_horizon=args.propagator_chunk_horizon,
+                stability_dimension=args.stability_dimension,
+                stability_safety=args.stability_safety,
+            )
+            solution.eigenvalue.block_until_ready()
+            solution.eigenvector.block_until_ready()
+            solver_seconds = time.time() - started
+            value = complex(np.asarray(solution.eigenvalue))
+            residual = float(np.asarray(solution.residual))
+            converged = bool(solution.converged)
+            restarts = solution.restarts
+            outer_applications = solution.operator_applications
+            selected_dt = solution.filter_dt
+            selected_steps = solution.filter_steps
+            stability_passed = solution.stable
+            filter_growth_defect = solution.filter_growth_defect
         relative_error = abs(value - reference) / max(
             abs(reference),
             np.finfo(float).tiny,
         )
-        converged = bool(np.asarray(solution.converged[selected]))
         passed = converged and residual < args.tol and relative_error < 1.0e-8
         field_model = (
             "electromagnetic"
@@ -278,16 +346,27 @@ def main() -> int:
             "state_shape": list(state_shape),
             "n": size,
             "dense": [reference.real, reference.imag],
-            "rational": [value.real, value.imag],
+            "solver": args.solver,
+            "eigenvalue": [value.real, value.imag],
+            "rational": (
+                [value.real, value.imag] if args.solver == "rational" else None
+            ),
             "relative_error": relative_error,
             "residual": residual,
             "converged": converged,
             "passed": passed,
             "compile_seconds": compile_seconds,
             "dense_seconds": dense_seconds,
-            "rational_seconds": rational_seconds,
-            "restarts": solution.restarts,
-            "outer_applications": solution.matvecs,
+            "solver_seconds": solver_seconds,
+            "rational_seconds": (
+                solver_seconds if args.solver == "rational" else None
+            ),
+            "restarts": restarts,
+            "outer_applications": outer_applications,
+            "selected_propagator_dt": selected_dt,
+            "selected_propagator_steps": selected_steps,
+            "stability_passed": stability_passed,
+            "filter_growth_defect": filter_growth_defect,
         }
         rows.append(row)
         print(
@@ -306,14 +385,34 @@ def main() -> int:
             "not a velocity-space convergence claim"
         ),
         "provenance": {
+            "solver": args.solver,
             "spatial_points": args.spatial_points,
             "n_laguerre": args.n_laguerre,
             "n_hermite": args.n_hermite,
             "krylov_dim": args.krylov_dim,
             "candidates": args.candidates,
             "tolerance": args.tol,
-            "shift_offset_fraction": args.shift_offset,
-            "shift_tolerance": args.shift_tol,
+            "shift_offset_fraction": (
+                args.shift_offset if args.solver == "rational" else None
+            ),
+            "shift_tolerance": (
+                args.shift_tol if args.solver == "rational" else None
+            ),
+            "propagator_chunk_horizon": (
+                args.propagator_chunk_horizon
+                if args.solver == "adaptive-propagator"
+                else None
+            ),
+            "stability_dimension": (
+                args.stability_dimension
+                if args.solver == "adaptive-propagator"
+                else None
+            ),
+            "stability_safety": (
+                args.stability_safety
+                if args.solver == "adaptive-propagator"
+                else None
+            ),
             "max_restarts": args.max_restarts,
             "python": sys.version,
             "platform": platform.platform(),

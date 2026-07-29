@@ -1,10 +1,4 @@
-"""Public Krylov solver facade for linear gyrokinetic eigenmodes.
-
-The compiled kernels live in focused eigenmode modules so that branch selection,
-operator application, preconditioning, and Arnoldi iterations can be tested and
-optimized independently.  This facade keeps the documented script import path
-and the monkeypatch seams used by benchmark/runtime tests.
-"""
+"""Public facade preserving the API above independently tested eigenmode kernels."""
 
 from __future__ import annotations
 
@@ -83,56 +77,36 @@ def _status(status_callback: _StatusCallback, message: str) -> None:
         status_callback(message)
 
 
-def _normalized_config(
-    *,
-    method: str,
-    krylov_dim: int,
-    restarts: int,
-    omega_min_factor: float,
-    omega_target_factor: float,
-    omega_cap_factor: float,
-    omega_sign: int,
-    mode_family: str,
-    power_iters: int,
-    power_dt: float,
-    propagator_steps: int,
-    shift: complex | None,
-    shift_source: str,
-    shift_tol: float,
-    shift_maxiter: int,
-    shift_restart: int,
-    shift_solve_method: str,
-    shift_preconditioner: str | None,
-    shift_selection: str,
-    shift_outer_residual_tol: float,
-    fallback_method: str,
-    fallback_real_floor: float,
-) -> KrylovConfig:
+def _normalized_config(options: Mapping[str, Any]) -> KrylovConfig:
+    """Normalize public options once at the dispatch boundary."""
+    value = options.__getitem__
+    mode_family = str(value("mode_family"))
+    omega_sign = int(value("omega_sign"))
     mode_family_sign = _mode_family_sign(mode_family)
-    omega_sign_eff = int(omega_sign) if int(omega_sign) != 0 else mode_family_sign
+    omega_sign_eff = omega_sign if omega_sign != 0 else mode_family_sign
     return KrylovConfig(
-        method=method.strip().lower(),
-        krylov_dim=max(int(krylov_dim), 1),
-        restarts=max(int(restarts), 1),
-        omega_min_factor=float(omega_min_factor),
-        omega_target_factor=float(omega_target_factor),
-        omega_cap_factor=float(omega_cap_factor),
+        method=str(value("method")).strip().lower(),
+        krylov_dim=max(int(value("krylov_dim")), 1),
+        restarts=max(int(value("restarts")), 1),
+        omega_min_factor=float(value("omega_min_factor")),
+        omega_target_factor=float(value("omega_target_factor")),
+        omega_cap_factor=float(value("omega_cap_factor")),
         omega_sign=omega_sign_eff,
-        power_iters=max(int(power_iters), 1),
-        power_dt=float(power_dt),
-        propagator_steps=max(int(propagator_steps), 1),
-        shift=shift,
-        shift_source=shift_source,
-        shift_tol=float(shift_tol),
-        shift_maxiter=max(int(shift_maxiter), 1),
-        shift_restart=max(int(shift_restart), 1),
-        shift_solve_method=shift_solve_method,
-        shift_preconditioner=shift_preconditioner,
-        shift_selection=shift_selection,
-        shift_outer_residual_tol=float(shift_outer_residual_tol),
+        power_iters=max(int(value("power_iters")), 1),
+        power_dt=float(value("power_dt")),
+        propagator_steps=max(int(value("propagator_steps")), 1),
+        shift=value("shift"),
+        shift_source=str(value("shift_source")),
+        shift_tol=float(value("shift_tol")),
+        shift_maxiter=max(int(value("shift_maxiter")), 1),
+        shift_restart=max(int(value("shift_restart")), 1),
+        shift_solve_method=str(value("shift_solve_method")),
+        shift_preconditioner=value("shift_preconditioner"),
+        shift_selection=str(value("shift_selection")),
+        shift_outer_residual_tol=float(value("shift_outer_residual_tol")),
         mode_family=mode_family,
-        fallback_method=fallback_method,
-        fallback_real_floor=float(fallback_real_floor),
+        fallback_method=str(value("fallback_method")),
+        fallback_real_floor=float(value("fallback_real_floor")),
     )
 
 
@@ -482,15 +456,10 @@ def rational_eigenpairs(
     shift_preconditioner: str | None = "field-corrected",
     shifted_inverse: Callable[[jnp.ndarray], jnp.ndarray] | None = None,
 ) -> Any:
-    """Return several nearby branches from a field-corrected rational subspace.
+    """Return nearby branches from a field-corrected rational subspace.
 
-    The outer block method retains and locks competing gyrokinetic branches.
-    Each subspace application solves ``(A - shift I) x = b`` with the existing
-    matrix-free GMRES path; by default its Hermite-line inverse is corrected for
-    the exact low-moment field coupling. Rayleigh quotients and residuals are
-    always evaluated against the original operator. A shifted inverse prepared
-    by :func:`prepare_rational_shifted_inverse` may be supplied to amortize JAX
-    compilation across repeated solves at a fixed geometry and shift.
+    Block locking retains competitors, while values and residuals always use
+    the original operator. ``shifted_inverse`` amortizes compilation.
     """
 
     if candidates < 1:
@@ -550,12 +519,9 @@ def prepare_long_horizon_propagator(
     dt: float,
     steps: int,
 ) -> Callable[[jnp.ndarray], jnp.ndarray]:
-    """Prepare a full-operator RK4 polynomial filter for repeated eigen solves.
+    """Prepare an RK4 polynomial filter that shares the operator eigenvectors.
 
-    The polynomial shares eigenvectors with the original operator, unlike a
-    split time step. Its amplification magnitude separates modes by growth,
-    while the original operator remains responsible for Rayleigh values and
-    residual certification. Rebuild after any captured problem data changes.
+    The original operator still supplies Rayleigh values and certification.
     """
 
     if dt <= 0.0:
@@ -598,13 +564,9 @@ def propagator_eigenpairs(
     initial_subspace: jnp.ndarray | None = None,
     propagator: Callable[[jnp.ndarray], jnp.ndarray] | None = None,
 ) -> Any:
-    """Return rightmost modes from a certified long-horizon Krylov subspace.
+    """Return rightmost modes from a long-horizon Krylov subspace.
 
-    Basis generation uses an RK4 polynomial approximation to ``exp(T A)`` so
-    maximum growth becomes an extremal amplification problem and wrapped phase
-    cannot change its ordering. Block/refined extraction, Rayleigh quotients,
-    and residuals use the original continuous operator. A prepared propagator
-    may be supplied to amortize compilation across repeated solves.
+    Growth selects the basis; the continuous operator certifies every pair.
     """
 
     if candidates < 1:
@@ -650,6 +612,82 @@ def propagator_eigenpairs(
     )
 
 
+def adaptive_propagator_eigenpair(
+    v0: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    terms: LinearTerms | None = None,
+    *,
+    krylov_dim: int = 16,
+    max_restarts: int = 4,
+    tol: float = 1.0e-10,
+    chunk_horizon: float = 30.0,
+    stability_dimension: int = 12,
+    stability_safety: float = 0.9,
+    max_stability_retries: int = 2,
+) -> Any:
+    """Adapt RK4 stability and horizon while certifying the continuous pair."""
+
+    try:
+        from solvax import adaptive_eigenpair, estimate_rk4_timestep
+    except ImportError as error:
+        raise RuntimeError(
+            "adaptive_propagator_eigenpair requires the SOLVAX adaptive "
+            "propagator API"
+        ) from error
+    if chunk_horizon <= 0.0 or max_stability_retries < 0:
+        raise ValueError("chunk_horizon must be positive and retries non-negative")
+    term_cfg = linear_terms_to_term_config(terms)
+
+    def apply(state: jnp.ndarray) -> jnp.ndarray:
+        return _apply_operator(state, cache, params, term_cfg)
+
+    estimate = estimate_rk4_timestep(
+        apply,
+        v0,
+        dimension=min(max(stability_dimension, 2), v0.size - 1),
+        safety=stability_safety,
+    )
+    solution = None
+    for retry in range(max_stability_retries + 1):
+        dt_limit = estimate.dt / 2**retry
+        steps = max(int(np.ceil(chunk_horizon / dt_limit)), 1)
+        dt = chunk_horizon / steps
+
+        def restart_once(vector: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
+            return dominant_eigenpair_propagator_cached(
+                vector,
+                v0,
+                cache,
+                params,
+                term_cfg,
+                krylov_dim=krylov_dim,
+                restarts=1,
+                dt=dt,
+                propagator_steps=steps,
+                omega_min_factor=0.0,
+                omega_target_factor=0.0,
+                omega_cap_factor=2.0,
+                omega_sign=0,
+                select_overlap=False,
+            )
+
+        solution = adaptive_eigenpair(
+            apply,
+            restart_once,
+            v0,
+            tol=tol,
+            max_restarts=max_restarts,
+            filter_dt=dt,
+            filter_steps=steps,
+            applications_per_restart=krylov_dim,
+            base_operator_applications=estimate.operator_applications,
+        )
+        if solution.stable:
+            break
+    return solution
+
+
 def prepare_rational_shifted_inverse(
     v0: jnp.ndarray,
     cache: LinearCache,
@@ -663,11 +701,9 @@ def prepare_rational_shifted_inverse(
     shift_solve_method: str = "batched",
     shift_preconditioner: str | None = "field-corrected",
 ) -> Callable[[jnp.ndarray], jnp.ndarray]:
-    """Prepare a compiled ``(A - shift I)`` inverse for repeated eigen solves.
+    """Prepare a compiled ``(A - shift I)`` inverse for repeated solves.
 
-    The returned callable captures one cache, parameter set, term selection, and
-    shift. Call it once and synchronize the result to pay compilation before a
-    steady-state timing. Rebuild it whenever any captured problem data changes.
+    Rebuild whenever captured problem data or the shift changes.
     """
 
     term_cfg = linear_terms_to_term_config(terms)
@@ -783,35 +819,6 @@ def _rational_branch(
     return solution.eigenvalues[index], solution.eigenvectors[index]
 
 
-def _dominant_eigenpair_config_from_options(
-    options: Mapping[str, Any],
-) -> KrylovConfig:
-    return _normalized_config(
-        method=options["method"],
-        krylov_dim=options["krylov_dim"],
-        restarts=options["restarts"],
-        omega_min_factor=options["omega_min_factor"],
-        omega_target_factor=options["omega_target_factor"],
-        omega_cap_factor=options["omega_cap_factor"],
-        omega_sign=options["omega_sign"],
-        mode_family=options["mode_family"],
-        power_iters=options["power_iters"],
-        power_dt=options["power_dt"],
-        propagator_steps=options["propagator_steps"],
-        shift=options["shift"],
-        shift_source=options["shift_source"],
-        shift_tol=options["shift_tol"],
-        shift_maxiter=options["shift_maxiter"],
-        shift_restart=options["shift_restart"],
-        shift_solve_method=options["shift_solve_method"],
-        shift_preconditioner=options["shift_preconditioner"],
-        shift_selection=options["shift_selection"],
-        shift_outer_residual_tol=options["shift_outer_residual_tol"],
-        fallback_method=options["fallback_method"],
-        fallback_real_floor=options["fallback_real_floor"],
-    )
-
-
 def _dispatch_dominant_eigenpair(
     v0: jnp.ndarray,
     v_ref: jnp.ndarray,
@@ -908,7 +915,7 @@ def dominant_eigenpair(
     status_callback: Callable[[str], None] | None = None,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Python wrapper for the cached Krylov solver."""
-    cfg = _dominant_eigenpair_config_from_options(locals())
+    cfg = _normalized_config(locals())
     term_cfg = linear_terms_to_term_config(terms)
     v_ref_use = v0 if v_ref is None else v_ref
     _status(
@@ -961,6 +968,7 @@ __all__ = [
     "_physical_omega",
     "_select_by_overlap",
     "_select_by_target",
+    "adaptive_propagator_eigenpair",
     "dominant_eigenpair",
     "dominant_eigenpair_cached",
     "dominant_eigenpair_power",

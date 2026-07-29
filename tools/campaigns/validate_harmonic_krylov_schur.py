@@ -106,6 +106,7 @@ def main() -> int:
             "harmonic",
             "block-rational",
             "long-horizon",
+            "adaptive-propagator",
             "block-propagator",
         ),
         default="harmonic",
@@ -141,6 +142,10 @@ def main() -> int:
     parser.add_argument("--shift-restart", type=int, default=320)
     parser.add_argument("--propagator-dt", type=float, default=1.0e-3)
     parser.add_argument("--propagator-steps", type=int, default=5000)
+    parser.add_argument("--propagator-chunk-horizon", type=float, default=30.0)
+    parser.add_argument("--stability-dimension", type=int, default=12)
+    parser.add_argument("--stability-safety", type=float, default=0.9)
+    parser.add_argument("--max-stability-retries", type=int, default=2)
     parser.add_argument(
         "--shift-solve-method",
         choices=("flexible", "batched", "incremental"),
@@ -199,6 +204,15 @@ def main() -> int:
             parser.error("--propagator-dt must be positive")
         if args.propagator_steps < 2:
             parser.error("--propagator-steps must be at least two")
+    if args.solver == "adaptive-propagator":
+        if args.propagator_chunk_horizon <= 0.0:
+            parser.error("--propagator-chunk-horizon must be positive")
+        if args.stability_dimension < 2:
+            parser.error("--stability-dimension must be at least two")
+        if not 0.0 < args.stability_safety < 1.0:
+            parser.error("--stability-safety must lie in (0, 1)")
+        if args.max_stability_retries < 0:
+            parser.error("--max-stability-retries must be non-negative")
     if args.solver == "block-propagator":
         if args.candidates < 1:
             parser.error("--candidates must be positive")
@@ -209,6 +223,7 @@ def main() -> int:
             "harmonic": "harmonic_krylov_schur_validation.json",
             "block-rational": "block_rational_eigensolver_validation.json",
             "long-horizon": "long_horizon_propagator_validation.json",
+            "adaptive-propagator": "adaptive_propagator_validation.json",
             "block-propagator": "block_propagator_eigensolver_validation.json",
         }[args.solver]
         args.output = Path("docs/_static") / stem
@@ -224,6 +239,7 @@ def main() -> int:
     from gkx.objectives.core import _solver_geometry_context
     from gkx.operators.linear.rhs import linear_rhs_cached
     from gkx.solvers.linear.krylov import (
+        adaptive_propagator_eigenpair,
         dominant_eigenpair,
         prepare_long_horizon_propagator,
         prepare_rational_shifted_inverse,
@@ -355,6 +371,45 @@ def main() -> int:
                 shift_preconditioner=preconditioner,
                 shifted_inverse=shifted_inverse,
             )
+        elif args.solver == "adaptive-propagator":
+            solver_target = None
+            started = time.time()
+            compiled_solution = adaptive_propagator_eigenpair(
+                start,
+                context.cache,
+                context.linear_params,
+                terms=context.linear_terms,
+                krylov_dim=args.krylov_dim,
+                max_restarts=args.max_restarts,
+                tol=args.tol,
+                chunk_horizon=args.propagator_chunk_horizon,
+                stability_dimension=args.stability_dimension,
+                stability_safety=args.stability_safety,
+                max_stability_retries=args.max_stability_retries,
+            )
+            jax.tree.map(
+                lambda item: item.block_until_ready()
+                if hasattr(item, "block_until_ready")
+                else item,
+                compiled_solution,
+            )
+            compile_seconds = time.time() - started
+            started = time.time()
+            solution = adaptive_propagator_eigenpair(
+                start,
+                context.cache,
+                context.linear_params,
+                terms=context.linear_terms,
+                krylov_dim=args.krylov_dim,
+                max_restarts=args.max_restarts,
+                tol=args.tol,
+                chunk_horizon=args.propagator_chunk_horizon,
+                stability_dimension=args.stability_dimension,
+                stability_safety=args.stability_safety,
+                max_stability_retries=args.max_stability_retries,
+            )
+            solution.eigenvalue.block_until_ready()
+            solution.eigenvector.block_until_ready()
         elif args.solver == "long-horizon":
             solver_target = None
             started = time.time()
@@ -414,7 +469,18 @@ def main() -> int:
                 propagator=propagator,
             )
         krylov_seconds = time.time() - started
-        if args.solver == "long-horizon":
+        if args.solver == "adaptive-propagator":
+            value = complex(np.asarray(solution.eigenvalue))
+            vector = solution.eigenvector
+            residual = float(np.asarray(solution.residual))
+            error = abs(value - reference) / abs(reference)
+            converged = bool(solution.converged)
+            selected = 0
+            candidate_values = np.asarray([value])
+            candidate_vectors = np.asarray([vector])
+            candidate_residuals = np.asarray([residual])
+            candidate_converged = np.asarray([converged])
+        elif args.solver == "long-horizon":
             value = complex(np.asarray(propagator_value))
             vector = propagator_vector
             applied = apply(vector)
@@ -499,16 +565,51 @@ def main() -> int:
                 "outer_applications": (
                     args.max_restarts * args.krylov_dim
                     if args.solver == "long-horizon"
-                    else solution.matvecs
+                    else (
+                        solution.restarts * args.krylov_dim
+                        + args.stability_dimension
+                        if args.solver == "adaptive-propagator"
+                        else solution.matvecs
+                    )
                 ),
                 "propagator_steps": (
                     args.max_restarts * args.krylov_dim * args.propagator_steps
                     if args.solver == "long-horizon"
-                    else None
+                    else (
+                        solution.restarts
+                        * args.krylov_dim
+                        * solution.filter_steps
+                        if args.solver == "adaptive-propagator"
+                        else None
+                    )
                 ),
                 "original_operator_evaluations": (
                     4 * args.max_restarts * args.krylov_dim * args.propagator_steps + 1
                     if args.solver == "long-horizon"
+                    else (
+                        solution.operator_applications
+                        if args.solver == "adaptive-propagator"
+                        else None
+                    )
+                ),
+                "selected_propagator_dt": (
+                    solution.filter_dt
+                    if args.solver == "adaptive-propagator"
+                    else None
+                ),
+                "selected_propagator_steps": (
+                    solution.filter_steps
+                    if args.solver == "adaptive-propagator"
+                    else None
+                ),
+                "filter_growth_defect": (
+                    solution.filter_growth_defect
+                    if args.solver == "adaptive-propagator"
+                    else None
+                ),
+                "stability_passed": (
+                    solution.stable
+                    if args.solver == "adaptive-propagator"
                     else None
                 ),
                 "propagator_substeps_upper_bound": (
@@ -517,7 +618,9 @@ def main() -> int:
                     else None
                 ),
                 "orthogonality": (
-                    None if args.solver == "long-horizon" else solution.orthogonality
+                    None
+                    if args.solver in {"long-horizon", "adaptive-propagator"}
+                    else solution.orthogonality
                 ),
             }
         )
@@ -555,6 +658,26 @@ def main() -> int:
             "tolerance": args.tol,
             "recycle_residual_limit": 100.0 * args.tol,
             "max_restarts": args.max_restarts,
+            "propagator_chunk_horizon": (
+                args.propagator_chunk_horizon
+                if args.solver == "adaptive-propagator"
+                else None
+            ),
+            "stability_dimension": (
+                args.stability_dimension
+                if args.solver == "adaptive-propagator"
+                else None
+            ),
+            "stability_safety": (
+                args.stability_safety
+                if args.solver == "adaptive-propagator"
+                else None
+            ),
+            "max_stability_retries": (
+                args.max_stability_retries
+                if args.solver == "adaptive-propagator"
+                else None
+            ),
             "shift_offset": (
                 args.shift_offset if args.solver == "block-rational" else None
             ),
@@ -597,11 +720,17 @@ def main() -> int:
                     "propagator_steps is the total number of RK4 substeps"
                     if args.solver == "long-horizon"
                     else (
+                        "outer_applications includes the stability sketch and "
+                        "residual-driven Arnoldi restarts; original_operator_"
+                        "evaluations includes all RK4 stages and certifications"
+                        if args.solver == "adaptive-propagator"
+                        else (
                         "outer_applications counts original-operator and "
                         "propagator calls; propagator_substeps_upper_bound is "
                         "conservative because SOLVAX does not expose that split"
                         if args.solver == "block-propagator"
                         else "outer_applications is the matrix-vector count"
+                        )
                     )
                 )
             ),

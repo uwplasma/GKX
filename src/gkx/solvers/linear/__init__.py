@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from gkx.solvers.linear.krylov import KrylovConfig, dominant_eigenpair
+from gkx.solvers.linear.krylov import (
+    KrylovConfig,
+    adaptive_propagator_eigenpair,
+    dominant_eigenpair,
+)
 from gkx.solvers.linear.implicit import (
     _build_implicit_operator,
     _integrate_linear_implicit_cached,
@@ -23,6 +27,7 @@ from gkx.solvers.linear.parallel import (
 
 __all__ = [
     "KrylovConfig",
+    "adaptive_propagator_eigenpair",
     "_build_implicit_operator",
     "_integrate_linear_cached",
     "_integrate_linear_cached_donate",
