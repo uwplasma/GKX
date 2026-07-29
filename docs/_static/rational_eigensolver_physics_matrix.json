@@ -1,0 +1,296 @@
+{
+  "schema_version": 1,
+  "passed": true,
+  "scope": "reduced-resolution architecture and branch-selection audit; not a velocity-space convergence claim",
+  "provenance": {
+    "spatial_points": 8,
+    "n_laguerre": 2,
+    "n_hermite": 4,
+    "krylov_dim": 8,
+    "candidates": 1,
+    "tolerance": 1e-08,
+    "shift_offset_fraction": 0.02,
+    "shift_tolerance": 1e-10,
+    "max_restarts": 4,
+    "python": "3.13.7 (main, Aug 14 2025, 11:12:11) [Clang 17.0.0 (clang-1700.3.19.1)]",
+    "platform": "macOS-26.5.1-arm64-arm-64bit-Mach-O",
+    "jax": "0.11.0",
+    "jaxlib": "0.11.0",
+    "gkx": "1.7.1",
+    "solvax": "0.10.0",
+    "gkx_commit": "b7146a96a3c8a8490c870c68975bb7a3b9688d4e",
+    "solvax_commit": "58d7572530d1e65077d262ae59ab099172ce1c8d",
+    "jax_x64": true,
+    "devices": [
+      "cpu:0"
+    ]
+  },
+  "rows": [
+    {
+      "case": "itg-circular",
+      "branch": "ITG",
+      "geometry_model": "s-alpha",
+      "boundary": "periodic",
+      "field_model": "electrostatic",
+      "species": 1,
+      "input": "examples/linear/axisymmetric/runtime_cyclone_quasilinear.toml",
+      "input_sha256": "60cae6d384d58a30273c3e2d063e10d4e151df7f528b4edb1c00682519b525c2",
+      "requested_ky": 0.3,
+      "actual_ky": 0.30015216435571274,
+      "state_shape": [
+        1,
+        2,
+        4,
+        1,
+        1,
+        8
+      ],
+      "n": 64,
+      "dense": [
+        0.1453828035609386,
+        -0.3566192552749971
+      ],
+      "rational": [
+        0.145382803560816,
+        -0.35661925527419647
+      ],
+      "relative_error": 2.103188514005418e-12,
+      "residual": 3.507038321371302e-11,
+      "converged": true,
+      "passed": true,
+      "compile_seconds": 7.987878799438477,
+      "dense_seconds": 0.4198000431060791,
+      "rational_seconds": 1.4700651168823242,
+      "restarts": 1,
+      "outer_applications": 15
+    },
+    {
+      "case": "etg-linked",
+      "branch": "ETG",
+      "geometry_model": "s-alpha",
+      "boundary": "linked",
+      "field_model": "electrostatic",
+      "species": 1,
+      "input": "examples/linear/axisymmetric/runtime_etg.toml",
+      "input_sha256": "40c518d8dfa996df6cda80bd2eb471aebcb2927df7035f06c2235b14e3930f96",
+      "requested_ky": 15.0,
+      "actual_ky": 15.0,
+      "state_shape": [
+        1,
+        2,
+        4,
+        1,
+        1,
+        8
+      ],
+      "n": 64,
+      "dense": [
+        8.172688116594074,
+        17.088739272587322
+      ],
+      "rational": [
+        8.172688116611722,
+        17.088739272510427
+      ],
+      "relative_error": 4.164930678622095e-12,
+      "residual": 1.0811551829092672e-10,
+      "converged": true,
+      "passed": true,
+      "compile_seconds": 3.0456981658935547,
+      "dense_seconds": 0.4396970272064209,
+      "rational_seconds": 0.293349027633667,
+      "restarts": 2,
+      "outer_applications": 28
+    },
+    {
+      "case": "tem-electromagnetic-linked",
+      "branch": "TEM",
+      "geometry_model": "s-alpha",
+      "boundary": "linked",
+      "field_model": "electromagnetic",
+      "species": 2,
+      "input": "examples/linear/axisymmetric/runtime_tem.toml",
+      "input_sha256": "f2452aac78bc309add6836a93f85d4c89c313430d7536b0ec01baf1c85fa3eec",
+      "requested_ky": 0.3,
+      "actual_ky": 0.3,
+      "state_shape": [
+        2,
+        2,
+        4,
+        1,
+        1,
+        8
+      ],
+      "n": 128,
+      "dense": [
+        5.026807460317028,
+        -5.403196038738422
+      ],
+      "rational": [
+        5.026807460294503,
+        -5.403196038729666
+      ],
+      "relative_error": 3.27468683515908e-12,
+      "residual": 1.0437319455025465e-11,
+      "converged": true,
+      "passed": true,
+      "compile_seconds": 7.601752758026123,
+      "dense_seconds": 0.4273819923400879,
+      "rational_seconds": 1.1159019470214844,
+      "restarts": 2,
+      "outer_applications": 28
+    },
+    {
+      "case": "kbm-electromagnetic-linked",
+      "branch": "KBM",
+      "geometry_model": "s-alpha",
+      "boundary": "linked",
+      "field_model": "electromagnetic",
+      "species": 2,
+      "input": "examples/linear/axisymmetric/runtime_kbm.toml",
+      "input_sha256": "020699c9784fd5af0e09a4c1598a9dc6162c8cc3cd12ff567834c4ca4a2041e5",
+      "requested_ky": 0.3,
+      "actual_ky": 0.3,
+      "state_shape": [
+        2,
+        2,
+        4,
+        1,
+        1,
+        8
+      ],
+      "n": 128,
+      "dense": [
+        0.6516053834256893,
+        -0.4831415340894566
+      ],
+      "rational": [
+        0.6516053834263162,
+        -0.48314153407957827
+      ],
+      "relative_error": 1.2202196620493324e-11,
+      "residual": 2.974717683369102e-11,
+      "converged": true,
+      "passed": true,
+      "compile_seconds": 1.604400873184204,
+      "dense_seconds": 0.39983415603637695,
+      "rational_seconds": 0.40369105339050293,
+      "restarts": 2,
+      "outer_applications": 28
+    },
+    {
+      "case": "itg-miller",
+      "branch": "ITG",
+      "geometry_model": "miller",
+      "boundary": "linked",
+      "field_model": "electrostatic",
+      "species": 1,
+      "input": "examples/linear/axisymmetric/runtime_cyclone_miller_quasilinear.toml",
+      "input_sha256": "1094799ce0fc91820562a157e3c8b7a95f53778acb578c405154d613df96229c",
+      "requested_ky": 0.3,
+      "actual_ky": 0.2836879432624113,
+      "state_shape": [
+        1,
+        2,
+        4,
+        1,
+        1,
+        8
+      ],
+      "n": 64,
+      "dense": [
+        0.0966373695977539,
+        -0.2607553131352398
+      ],
+      "rational": [
+        0.09663736959644442,
+        -0.2607553131339637
+      ],
+      "relative_error": 6.5750290926016364e-12,
+      "residual": 2.1283786500710273e-10,
+      "converged": true,
+      "passed": true,
+      "compile_seconds": 2.0148229598999023,
+      "dense_seconds": 0.002235889434814453,
+      "rational_seconds": 0.04977011680603027,
+      "restarts": 2,
+      "outer_applications": 28
+    },
+    {
+      "case": "itg-qhs",
+      "branch": "ITG",
+      "geometry_model": "vmec",
+      "boundary": "fix aspect",
+      "field_model": "electrostatic",
+      "species": 1,
+      "input": "examples/linear/non-axisymmetric/runtime_hsx_linear_quasilinear.toml",
+      "input_sha256": "8f082d6ce171d42ca5e4ef04626e81d25e1d802c72f76e57e8e1f3ada490f577",
+      "requested_ky": 0.047619047619047616,
+      "actual_ky": 0.047619047619047616,
+      "state_shape": [
+        1,
+        2,
+        4,
+        1,
+        1,
+        8
+      ],
+      "n": 64,
+      "dense": [
+        -0.05322909239241821,
+        -0.0008482214878260357
+      ],
+      "rational": [
+        -0.05322909239210469,
+        -0.0008482214879058226
+      ],
+      "relative_error": 6.076979730779547e-12,
+      "residual": 1.3270787693362046e-11,
+      "converged": true,
+      "passed": true,
+      "compile_seconds": 1.7882509231567383,
+      "dense_seconds": 0.3563573360443115,
+      "rational_seconds": 0.3019700050354004,
+      "restarts": 2,
+      "outer_applications": 28
+    },
+    {
+      "case": "itg-qi",
+      "branch": "ITG",
+      "geometry_model": "vmec",
+      "boundary": "fix aspect",
+      "field_model": "electrostatic",
+      "species": 1,
+      "input": "examples/linear/non-axisymmetric/runtime_w7x_linear_quasilinear_vmec.toml",
+      "input_sha256": "d4ced6ff36c5028d38212e4a9e28b5f6f8fed74a544d1e242d9a3e0a621d03e6",
+      "requested_ky": 0.047619047619047616,
+      "actual_ky": 0.047619047619047616,
+      "state_shape": [
+        1,
+        2,
+        4,
+        1,
+        1,
+        8
+      ],
+      "n": 64,
+      "dense": [
+        -0.047928179140442506,
+        0.008089498383484982
+      ],
+      "rational": [
+        -0.0479281791409029,
+        0.008089498382312094
+      ],
+      "relative_error": 2.592293799127224e-11,
+      "residual": 2.4864466688634708e-11,
+      "converged": true,
+      "passed": true,
+      "compile_seconds": 1.6259350776672363,
+      "dense_seconds": 0.3860039710998535,
+      "rational_seconds": 0.30550384521484375,
+      "restarts": 2,
+      "outer_applications": 28
+    }
+  ]
+}

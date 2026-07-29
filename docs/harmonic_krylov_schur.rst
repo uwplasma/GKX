@@ -6,9 +6,10 @@ harmonic Krylov--Schur algorithm in STR-9: it extracted harmonic Ritz pairs but
 Schur-sorted the unmodified projected matrix during restart. The corrected
 translation/recovery restart now passes the first two real-operator oracle
 rungs. Block candidates, locking, a field-corrected rational alternative, and
-implicit eigenpair sensitivities are implemented, but larger real-operator
-rungs still fail the accuracy/performance gate. Measurements and remaining work
-are below.
+implicit eigenpair sensitivities are implemented. The rational path passes the
+first three circular-tokamak accuracy gates and a reduced seven-configuration
+physics matrix, but it is still slower than dense and the largest rung is not
+qualified. Measurements and remaining work are below.
 
 .. _hks-motivation:
 
@@ -273,6 +274,65 @@ convergence-rate and subspace-size problem, not a reason to accept the current
 cost. Locking is required for multiple/clustered modes but cannot explain the
 present ``k=1`` failure.
 
+The field-corrected rational path changes the accuracy result but not yet the
+performance verdict. A one-candidate, ``m=8`` solve with a prepared shifted
+inverse gives:
+
+.. list-table::
+   :header-rows: 1
+
+   * - :math:`(N_\ell, N_m)`
+     - n
+     - compile
+     - warm rational
+     - dense
+     - rel. error
+     - residual
+   * - (4, 6)
+     - 768
+     - 1.72 s
+     - 2.90 s
+     - 0.38 s
+     - 7.45e-12
+     - 4.10e-11
+   * - (6, 8)
+     - 1536
+     - 4.36 s
+     - 20.64 s
+     - 1.72 s
+     - 2.81e-11
+     - 1.34e-10
+   * - (8, 10)
+     - 2560
+     - 23.02 s
+     - 117.09 s
+     - 6.23 s
+     - 1.57e-11
+     - 7.37e-11
+
+All three converge in one restart and 15 outer applications. That count does
+not include FGMRES-internal operator applications. Strict inner spaces of 512,
+1024, and 2048 vectors respectively are what make the residuals pass, so the
+kinetic complement remains the scaling wall. On the office GPU, the first two
+warm solves take 30.91 and 102.61 seconds; reduction latency makes CPU the
+preferred backend at these sizes.
+
+The TOML-driven reduced-resolution physics matrix passes all seven shipped
+configurations: ITG, ETG, TEM, KBM, Miller, QHS, and QI. It covers
+electrostatic/electromagnetic, single-/multi-species, and periodic/linked
+layouts. The maximum relative eigenvalue error is ``2.60e-11`` and maximum
+original-operator residual is ``2.13e-10``. This is a branch-selection and
+architecture gate only, not a claim of velocity-space convergence. The
+:download:`regenerable artifact
+<_static/rational_eigensolver_physics_matrix.json>` records input hashes,
+device, versions, timings, and the exact scope.
+
+Regenerate it from the repository root with:
+
+.. code-block:: bash
+
+   JAX_ENABLE_X64=1 python tools/campaigns/validate_rational_physics_matrix.py
+
 The remaining primary work is adaptive method selection: polynomial harmonic
 restarts where they converge cheaply, one-candidate rational extraction for an
 isolated objective, and block candidates only where continuation or a crossing
@@ -327,7 +387,12 @@ quasilinear outputs, it solves Nelson's bordered system [Nelson1976]_ for the
 right-eigenvector tangent and differentiates the matrix-free action
 :math:`A(p)v`. A left/right condition-number guard fails explicitly near a
 cluster or exceptional point. Replacing GKX's dense objective remains gated on
-the real-operator solver qualification.
+the real-operator solver qualification. On a 24-state real GKX operator, a
+phase-invariant objective combining growth and a quadratic eigenvector weight
+has implicit gradient ``0.22387295824979078`` versus
+``0.2238729582497859`` from differentiating the dense eigensolve; centered
+finite differences agree to ``8.1e-10`` relative. This validates the AD
+mechanism, not the production branch selection.
 
 .. _hks-validation:
 

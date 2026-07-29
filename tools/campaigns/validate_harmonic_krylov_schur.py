@@ -91,11 +91,18 @@ def main() -> int:
         choices=("harmonic", "block-rational"),
         default="harmonic",
     )
-    parser.add_argument(
+    rung_group = parser.add_mutually_exclusive_group()
+    rung_group.add_argument(
         "--max-rungs",
         type=int,
         default=len(_LADDER),
         help="run only the first N velocity-space rungs",
+    )
+    rung_group.add_argument(
+        "--rung-index",
+        type=int,
+        default=None,
+        help="run only one 1-based velocity-space rung (oracle audits only)",
     )
     parser.add_argument("--krylov-dim", type=int, default=64)
     parser.add_argument("--tol", type=float, default=1e-9)
@@ -106,7 +113,7 @@ def main() -> int:
         type=float,
         default=0.02,
         help=(
-            "subtract this fraction of max(abs(target), 1) from Re(target) "
+            "subtract this fraction of max(abs(target), 1e-3) from Re(target) "
             "for block-rational; a nonzero offset avoids a singular oracle shift"
         ),
     )
@@ -153,6 +160,12 @@ def main() -> int:
     args = parser.parse_args()
     if not 1 <= args.max_rungs <= len(_LADDER):
         parser.error(f"--max-rungs must lie in [1, {len(_LADDER)}]")
+    if args.rung_index is not None and not 1 <= args.rung_index <= len(_LADDER):
+        parser.error(f"--rung-index must lie in [1, {len(_LADDER)}]")
+    if args.rung_index is not None and (
+        args.target_mode == "continuation" or args.start_mode == "continuation"
+    ):
+        parser.error("--rung-index requires oracle targeting and a random start")
     if args.solver == "block-rational":
         if args.candidates < 1:
             parser.error("--candidates must be positive")
@@ -199,7 +212,11 @@ def main() -> int:
     rows: list[dict] = []
     seed: complex | None = None
     previous_vector: jax.Array | None = None
-    ladder = _LADDER[: args.max_rungs]
+    ladder = (
+        (_LADDER[args.rung_index - 1],)
+        if args.rung_index is not None
+        else _LADDER[: args.max_rungs]
+    )
     for n_laguerre, n_hermite in ladder:
         context = _solver_geometry_context(
             geometry,
@@ -258,7 +275,10 @@ def main() -> int:
                 which="target",
             )
         else:
-            shift_scale = max(abs(target), 1.0)
+            # Scale the nonsingular oracle displacement to the eigenvalue. An
+            # O(1) floor moves weakly damped stellarator branches past nearby
+            # modes even though the intended shift is only a singularity guard.
+            shift_scale = max(abs(target), 1.0e-3)
             solver_target = target - args.shift_offset * shift_scale
             preconditioner = (
                 None

@@ -713,6 +713,96 @@ def test_rational_eigenpairs_accept_a_prepared_shifted_inverse(
     assert bool(np.asarray(solution.converged[0]))
 
 
+def test_implicit_eigenpair_gradient_matches_dense_and_finite_difference() -> None:
+    """Nelson sensitivity must cover GKX eigenvector-dependent observables."""
+
+    grid = build_spectral_grid(GridConfig(Nx=1, Ny=2, Nz=4, Lx=6.0, Ly=6.0))
+    geometry = SAlphaGeometry.from_config(CycloneBaseCase().geometry)
+    params = LinearParams(
+        nu=0.01,
+        nu_hyper=0.0,
+        damp_ends_amp=0.0,
+        damp_ends_widthfrac=0.0,
+    )
+    cache = build_linear_cache(grid, geometry, params, Nl=1, Nm=3)
+    term_cfg = linear_terms_to_term_config(
+        LinearTerms(
+            hypercollisions=0.0,
+            end_damping=0.0,
+            apar=0.0,
+            bpar=0.0,
+        )
+    )
+    shape = (1, 3, grid.ky.size, grid.kx.size, grid.z.size)
+    size = int(np.prod(shape))
+    basis = jnp.eye(size, dtype=jnp.complex128)
+    parameter = jnp.asarray(6.9)
+
+    def apply(current_parameter, state):
+        current_params = replace(params, R_over_LTi=current_parameter)
+        return ka._apply_operator(state, cache, current_params, term_cfg)
+
+    matrix = jax.vmap(
+        lambda vector: apply(parameter, vector.reshape(shape)).reshape(-1)
+    )(basis).T
+    reference_values = np.linalg.eigvals(np.asarray(matrix))
+    target = complex(reference_values[np.argmax(reference_values.real)])
+    generator = np.random.default_rng(19)
+    initial = jnp.asarray(
+        generator.normal(size=shape) + 1j * generator.normal(size=shape)
+    )
+    weights = jnp.arange(size, dtype=jnp.float64).reshape(shape) / size
+
+    def mode_observable(value, vector):
+        normalized = vector / jnp.linalg.norm(vector)
+        quadratic = jnp.real(jnp.vdot(normalized, weights * normalized))
+        return jnp.real(value) + 0.05 * quadratic
+
+    def implicit_objective(current_parameter):
+        value, vector = solvax.eigenpair(
+            current_parameter,
+            lambda selected: lambda state: apply(selected, state),
+            initial,
+            sigma=target,
+            m=size - 1,
+            tol=1.0e-10,
+            max_restarts=5,
+            which="target",
+            sensitivity_rtol=1.0e-10,
+            sensitivity_restart=size,
+            sensitivity_max_restarts=4,
+            condition_limit=1.0e7,
+        )
+        return mode_observable(value, vector)
+
+    def dense_objective(current_parameter):
+        current_matrix = jax.vmap(
+            lambda vector: apply(
+                current_parameter,
+                vector.reshape(shape),
+            ).reshape(-1)
+        )(basis).T
+        values, vectors = jax.lax.linalg.eig(
+            current_matrix,
+            compute_left_eigenvectors=False,
+            compute_right_eigenvectors=True,
+            enable_eigvec_derivs=True,
+        )
+        index = jnp.argmax(jnp.real(values))
+        return mode_observable(values[index], vectors[:, index].reshape(shape))
+
+    implicit_gradient = float(jax.grad(implicit_objective)(parameter))
+    dense_gradient = float(jax.grad(dense_objective)(parameter))
+    step = 1.0e-4
+    finite_difference = float(
+        (implicit_objective(parameter + step) - implicit_objective(parameter - step))
+        / (2.0 * step)
+    )
+
+    assert implicit_gradient == pytest.approx(dense_gradient, rel=1.0e-9)
+    assert implicit_gradient == pytest.approx(finite_difference, rel=1.0e-7)
+
+
 @pytest.mark.parametrize(
     ("select_overlap", "expected_candidates"), [(False, 1), (True, 4)]
 )

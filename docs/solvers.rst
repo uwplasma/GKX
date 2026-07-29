@@ -43,14 +43,26 @@ and an outer original-operator eigenpair residual remains mandatory.
 The ``field-corrected`` shifted preconditioner represents the three
 low-moment field maps exactly as a Woodbury correction to the Hermite-line
 inverse. On the driven electrostatic unit fixture this reduces the one-apply
-shifted residual from ``3.01`` to ``0.143``. On the first circular-tokamak
-validation rung (``n=768``), a one-candidate rational solve reaches
-``6.7e-13`` original-operator residual and ``1.3e-14`` relative eigenvalue
-error in 9.5 seconds. The next rung (``n=1536``) does not pass: with a
-512-vector inner restart it takes 75.9 seconds and stops at ``2.1e-6``
-eigenpair residual. The rational lane is therefore an explicit experimental
-method, not the release default; validated dense eigensolves and time
-integration remain the fail-closed paths.
+shifted residual from ``3.01`` to ``0.143``. A prepared shifted inverse can be
+compiled once with ``prepare_rational_shifted_inverse`` and reused by
+``rational_eigenpairs`` at fixed geometry, parameters, terms, and shift. This
+keeps compile time out of repeated-solve throughput measurements.
+
+With an eight-vector rational subspace, the first three circular-tokamak rungs
+(``n=768, 1536, 2560``) pass the original-operator residual and ``1e-8``
+eigenvalue gates in one outer restart. Their measured warm CPU times are
+``2.90, 20.64, 117.09`` seconds, however, versus dense times of
+``0.38, 1.72, 6.23`` seconds. GPU execution is also slower at the qualified
+sizes: ``30.91`` seconds at ``n=768`` and ``102.61`` seconds at ``n=1536``
+after compilation. The rational lane is therefore an explicit experimental
+correctness path, not the release default; validated dense eigensolves and time
+integration remain the fail-closed paths until the kinetic-complement
+preconditioner produces a measured crossover.
+
+A reduced-resolution TOML-driven matrix additionally passes ITG, ETG, TEM,
+KBM, Miller, QHS, and QI configurations, including electrostatic,
+electromagnetic, single-/multi-species, periodic, and linked layouts. Its scope
+is architecture and branch selection, not velocity-space convergence.
 
 Two bounded full-resolution refinements were also rejected. Re-projecting the
 physical operator onto the shift-focused Arnoldi basis returned a non-finite
