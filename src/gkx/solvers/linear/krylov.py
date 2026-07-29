@@ -683,7 +683,7 @@ def adaptive_propagator_eigenpair(
             applications_per_restart=krylov_dim,
             base_operator_applications=estimate.operator_applications,
         )
-        if solution.stable:
+        if solution.stable and solution.converged:
             break
     return solution
 

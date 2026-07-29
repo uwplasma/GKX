@@ -730,6 +730,39 @@ def test_adaptive_propagator_selects_stable_step_and_stops_on_residual(
 
 
 @requires_solvax_eigen_api
+def test_adaptive_propagator_halves_step_after_false_stable_residual(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Residual exhaustion must retry when the spectral sketch misses a mode."""
+
+    _grid, cache, params, v0, _term_cfg, terms = _tiny_krylov_setup(linked=False)
+    attempted_steps: list[float] = []
+    monkeypatch.setattr(
+        solvax,
+        "estimate_rk4_timestep",
+        lambda *_args, **_kwargs: SimpleNamespace(dt=0.2, operator_applications=12),
+    )
+
+    def fake_adaptive(*_args, filter_dt: float, **_kwargs):
+        attempted_steps.append(filter_dt)
+        converged = len(attempted_steps) == 2
+        return SimpleNamespace(stable=True, converged=converged)
+
+    monkeypatch.setattr(solvax, "adaptive_eigenpair", fake_adaptive)
+    solution = lk.adaptive_propagator_eigenpair(
+        v0,
+        cache,
+        params,
+        terms=terms,
+        chunk_horizon=20.0,
+        max_stability_retries=2,
+    )
+
+    assert solution.converged
+    assert attempted_steps == pytest.approx([0.2, 0.1])
+
+
+@requires_solvax_eigen_api
 def test_rational_eigenpairs_use_the_field_corrected_shifted_inverse(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
