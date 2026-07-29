@@ -44,20 +44,20 @@ Plain Arnoldi converges to extremal |lambda| and therefore finds the |lambda| ~
 not improve with krylov_dim, which is the signature of converging to the wrong
 part of the spectrum rather than of under-convergence.
 
-The propagator variant maps max-Re to max-|mu| via mu = exp(lambda dt), but only
-while |Im lambda| dt << pi. Here |Im lambda| = 80, so power_dt = 0.05 gives 4.0
-and aliases badly; a dt small enough to avoid aliasing leaves a per-step growth
-separation of exp(0.143 dt) ~ 1.0014, which converges far too slowly to be
-useful.
+The original propagator objection was incomplete. For a long horizon T,
+|mu| = exp(T Re(lambda)), so phase aliasing cannot corrupt growth ordering.
+Selecting by |mu| and recovering lambda from the original-operator Rayleigh
+quotient avoids the logarithm branch entirely. A full-operator RK4 polynomial
+propagator now passes all four QA accuracy/residual rungs. Its cost is governed
+by the growth-gap horizon and the explicit stability step: conservative uniform
+settings are still slower than dense through n=4480, while a shorter inaccurate
+horizon crosses at that rung. This is a viable low-memory scaling path, not yet
+a measured production speedup.
 
-So the dense eigensolve is not simply a missed optimization -- it is the
-straightforward way to reach an interior eigenvalue, and that is presumably why
-it is there. The correct fast algorithm is **shift-invert Arnoldi** with a shift
-near the expected growth rate, where each iteration applies (A - sigma I)^-1
-matrix-free via GMRES. GKX already carries the scaffolding for this
-(shift_source, shift_solve_method, shift_preconditioner), so the work is to make
-that path reach the same eigenvalue as the dense reference, not to build a new
-solver.
+Shift-invert/rational and harmonic extraction remain complementary candidates.
+The former is accurate with strict inner solves but currently slower; the latter
+is cheap where polynomial restarts converge. Method selection must be based on
+the original-operator residual rather than assuming one transformation wins.
 
 Two further notes for whoever picks this up:
 
@@ -163,7 +163,9 @@ def measure(
     return rows
 
 
-def extrapolate(rows: list[dict], targets: tuple[tuple[int, int, int], ...]) -> list[dict]:
+def extrapolate(
+    rows: list[dict], targets: tuple[tuple[int, int, int], ...]
+) -> list[dict]:
     """Cubic extrapolation of the dense cost to converged resolutions."""
 
     sizes = np.array([r["n"] for r in rows], dtype=float)
@@ -206,7 +208,10 @@ def main() -> int:
 
     equilibrium = opt.solve_equilibrium(vj.VmecInput.from_file(args.input))
     geometry = turb.flux_tube_geometry(
-        equilibrium.state, equilibrium.runtime, s_index=args.s_index, alpha=0.0,
+        equilibrium.state,
+        equilibrium.runtime,
+        s_index=args.s_index,
+        alpha=0.0,
         ntheta=args.ntheta,
     )
 
@@ -233,8 +238,9 @@ def main() -> int:
             "spectral radius of 80.15, so plain Arnoldi converges to the "
             "oscillatory extremes instead. Matrix-free and dense operators "
             "agree to 3e-16, so this is a spectrum-structure problem, not an "
-            "operator mismatch. Shift-invert Arnoldi with a matrix-free GMRES "
-            "inner solve is the correct fast algorithm."
+            "operator mismatch. A full-operator long-horizon propagator passes "
+            "the four-rung residual gate but is not yet faster with conservative "
+            "settings; rational and harmonic paths remain measured alternatives."
         ),
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)

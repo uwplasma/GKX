@@ -586,6 +586,28 @@ def _rayleigh_quotient(
     return jnp.vdot(vector, operator_vector) / safe_denominator
 
 
+def _advance_rk4(
+    state: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    term_cfg: TermConfig,
+    dt: jnp.ndarray,
+) -> jnp.ndarray:
+    """Advance the full linear operator with a fourth-order polynomial map.
+
+    Unlike a split IMEX step, this map is a polynomial in the original
+    continuous operator. It therefore has the same eigenvectors as that
+    operator, which is essential when a long-time propagator is used as an
+    eigenvector filter before a continuous-operator Rayleigh quotient.
+    """
+
+    k1 = _apply_operator(state, cache, params, term_cfg)
+    k2 = _apply_operator(state + 0.5 * dt * k1, cache, params, term_cfg)
+    k3 = _apply_operator(state + 0.5 * dt * k2, cache, params, term_cfg)
+    k4 = _apply_operator(state + dt * k3, cache, params, term_cfg)
+    return state + (dt / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+
+
 def _operator_arnoldi_restart_step(
     v: jnp.ndarray,
     v_ref: jnp.ndarray,
@@ -642,7 +664,8 @@ def _propagator_arnoldi_restart_step(
     term_cfg: TermConfig,
     *,
     krylov_dim: int,
-    dt_val: jnp.ndarray,
+    horizon: jnp.ndarray,
+    growth_only: bool,
     omega_min_factor: float,
     omega_target_factor: float,
     omega_cap_factor: float,
@@ -652,7 +675,28 @@ def _propagator_arnoldi_restart_step(
     V, H = _arnoldi(v, apply_prop, cache, params, term_cfg, krylov_dim)
     Hk = H[:krylov_dim, :krylov_dim]
     eigvals, eigvecs = jnp.linalg.eig(Hk)
-    lam = jnp.log(eigvals) / dt_val
+    lam = jnp.log(eigvals) / horizon
+    if growth_only:
+        if select_overlap:
+            lifted = jnp.tensordot(
+                eigvecs.T,
+                V[:krylov_dim],
+                axes=1,
+            ).reshape(krylov_dim, -1)
+            norms = jnp.linalg.norm(lifted, axis=1)
+            safe_norms = jnp.where(norms > 0.0, norms, 1.0)
+            lifted = lifted / safe_norms[:, None]
+            reference = _normalize(v_ref).reshape(-1)
+            idx = jnp.argmax(jnp.abs(lifted.conj() @ reference))
+        else:
+            # For P ~= exp(T A), |mu| = exp(T Re(lambda)). The phase may wrap
+            # many times without changing the ordering by physical growth.
+            idx = jnp.argmax(jnp.abs(eigvals))
+        return (
+            _ritz_vector_from_index(V, eigvecs, idx, krylov_dim=krylov_dim),
+            lam[idx],
+        )
+
     real_part = jnp.real(lam)
     imag_part = jnp.imag(lam)
     mask0, mask, omega_scale = _frequency_masks_from_imaginary_part(
@@ -865,7 +909,15 @@ def dominant_eigenpair_cached(
     return eig, v
 
 
-@partial(jax.jit, static_argnames=("krylov_dim", "restarts", "select_overlap"))
+@partial(
+    jax.jit,
+    static_argnames=(
+        "krylov_dim",
+        "restarts",
+        "propagator_steps",
+        "select_overlap",
+    ),
+)
 def dominant_eigenpair_propagator_cached(
     v0: jnp.ndarray,
     v_ref: jnp.ndarray,
@@ -876,19 +928,42 @@ def dominant_eigenpair_propagator_cached(
     krylov_dim: int,
     restarts: int,
     dt: float,
+    propagator_steps: int,
     omega_min_factor: float,
     omega_target_factor: float,
     omega_cap_factor: float,
     omega_sign: int,
     select_overlap: bool,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
-    """Arnoldi on a stable IMEX2 propagator; eigenvalue from Rayleigh quotient."""
+    """Arnoldi on a time-stepper; always return a physical Rayleigh value.
+
+    With more than one substep, Arnoldi acts on a finite-horizon time-stepper
+    built from a full-operator RK4 polynomial and selects the largest
+    amplification magnitude. Frequency aliasing in the logarithm cannot change
+    that ordering because only ``|mu|`` is used; the physical complex
+    eigenvalue is recovered from the original operator. A single step retains
+    the established IMEX2 behavior.
+    """
 
     v = v0
     dt_val = jnp.asarray(dt, dtype=jnp.real(v0).dtype)
+    horizon = dt_val * propagator_steps
 
     def apply_prop(x, cache, params, term_cfg):
-        return _advance_imex2(x, cache, params, term_cfg, dt_val)
+        if propagator_steps == 1:
+            return _advance_imex2(x, cache, params, term_cfg, dt_val)
+        return jax.lax.fori_loop(
+            0,
+            propagator_steps,
+            lambda _index, state: _advance_rk4(
+                state,
+                cache,
+                params,
+                term_cfg,
+                dt_val,
+            ),
+            x,
+        )
 
     def restart_body(i, state):
         del i
@@ -901,7 +976,8 @@ def dominant_eigenpair_propagator_cached(
             params,
             term_cfg,
             krylov_dim=krylov_dim,
-            dt_val=dt_val,
+            horizon=horizon,
+            growth_only=propagator_steps > 1,
             omega_min_factor=omega_min_factor,
             omega_target_factor=omega_target_factor,
             omega_cap_factor=omega_cap_factor,
@@ -909,23 +985,15 @@ def dominant_eigenpair_propagator_cached(
             select_overlap=select_overlap,
         )
 
-    v, eig_sel = jax.lax.fori_loop(
+    v, _eig_sel = jax.lax.fori_loop(
         0, restarts, restart_body, (v, jnp.asarray(0.0, dtype=v0.dtype))
     )
-    Lv = _apply_operator(v, cache, params, term_cfg)
-    num = jnp.vdot(v, Lv)
-    den = jnp.vdot(v, v)
-    eig_rayleigh = jnp.where(den == 0.0, 0.0, num / den)
-    sel_finite = jnp.isfinite(jnp.real(eig_sel)) & jnp.isfinite(jnp.imag(eig_sel))
-    prefer_rayleigh = (~sel_finite) | (
-        (jnp.real(eig_sel) <= 0.0) & (jnp.real(eig_rayleigh) > jnp.real(eig_sel))
-    )
-    eig = jnp.where(prefer_rayleigh, eig_rayleigh, eig_sel)
-    return eig, v
+    return _rayleigh_quotient(v, cache, params, term_cfg), v
 
 
 __all__ = [
     "_advance_imex2",
+    "_advance_rk4",
     "_apply_operator",
     "_arnoldi",
     "_assemble_rhs_cached_novjp",

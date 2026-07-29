@@ -625,6 +625,48 @@ def test_dominant_eigenpair_methods_produce_finite_values(method: str) -> None:
     assert jnp.isfinite(jnp.imag(eig))
 
 
+def test_long_horizon_propagator_selects_growth_and_recovers_frequency(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Phase wrapping may not corrupt growth selection or physical frequency."""
+
+    _grid, cache, params, _v0, term_cfg, _terms = _tiny_krylov_setup(linked=False)
+    eigenvalues = jnp.asarray(
+        [0.2 + 4.0j, 0.1 - 0.5j, -0.3 + 1.0j],
+        dtype=jnp.complex128,
+    )
+    step_dt = 0.2
+    monkeypatch.setattr(
+        ka,
+        "_apply_operator",
+        lambda state, *_args: eigenvalues * state,
+    )
+    initial = jnp.ones((3,), dtype=jnp.complex128)
+
+    value, vector = ka.dominant_eigenpair_propagator_cached(
+        initial,
+        initial,
+        cache,
+        params,
+        term_cfg,
+        krylov_dim=3,
+        restarts=1,
+        dt=step_dt,
+        propagator_steps=10,
+        omega_min_factor=0.0,
+        omega_target_factor=0.0,
+        omega_cap_factor=1.0,
+        omega_sign=0,
+        select_overlap=False,
+    )
+
+    assert complex(np.asarray(value)) == pytest.approx(
+        complex(np.asarray(eigenvalues[0])),
+        rel=1.0e-10,
+    )
+    assert abs(complex(np.asarray(vector[0]))) > 1.0 - 1.0e-10
+
+
 @requires_solvax_eigen_api
 def test_rational_eigenpairs_use_the_field_corrected_shifted_inverse(
     monkeypatch: pytest.MonkeyPatch,
@@ -728,6 +770,72 @@ def test_rational_eigenpairs_accept_a_prepared_shifted_inverse(
 
     assert complex(np.asarray(solution.eigenvalues[0])) == pytest.approx(0.5 + 0.2j)
     assert bool(np.asarray(solution.converged[0]))
+
+
+@requires_solvax_eigen_api
+def test_propagator_eigenpairs_use_original_operator_certification(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The time filter may generate the basis but may not certify its own map."""
+
+    eigenvalues = jnp.asarray(
+        [
+            0.5 + 0.2j,
+            0.46 - 0.3j,
+            -0.2 + 2.0j,
+            -0.4 - 2.2j,
+            -0.5 + 1.3j,
+            -0.7 - 1.5j,
+            -0.9 + 0.8j,
+            -1.1 - 0.7j,
+        ],
+        dtype=jnp.complex128,
+    )
+    matrix = jnp.diag(eigenvalues)
+    monkeypatch.setattr(
+        lk,
+        "_apply_operator",
+        lambda vector, *_args: matrix @ vector,
+    )
+    monkeypatch.setattr(
+        ka,
+        "_apply_operator",
+        lambda vector, *_args: matrix @ vector,
+    )
+    start = jnp.ones((matrix.shape[0],), dtype=matrix.dtype)
+    propagator = lk.prepare_long_horizon_propagator(
+        start,
+        None,
+        None,
+        terms=LinearTerms(apar=0.0, bpar=0.0),
+        dt=0.05,
+        steps=200,
+    )
+    solution = lk.propagator_eigenpairs(
+        start,
+        None,
+        None,
+        terms=LinearTerms(apar=0.0, bpar=0.0),
+        candidates=2,
+        krylov_dim=7,
+        restarts=3,
+        tol=1.0e-8,
+        propagator=propagator,
+    )
+
+    expected = np.asarray(eigenvalues[:2])
+    observed = np.asarray(solution.eigenvalues)
+    assert max(np.min(np.abs(observed - value)) for value in expected) < 1.0e-7
+    assert np.all(np.asarray(solution.converged))
+    for value, vector, residual in zip(
+        observed,
+        np.asarray(solution.eigenvectors),
+        np.asarray(solution.residuals),
+        strict=True,
+    ):
+        independent = np.linalg.norm(np.asarray(matrix) @ vector - value * vector)
+        independent /= max(abs(value), np.finfo(float).tiny)
+        assert independent == pytest.approx(residual, rel=1.0e-10, abs=1.0e-12)
 
 
 @requires_solvax_eigen_api

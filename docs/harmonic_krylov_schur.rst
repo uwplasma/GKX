@@ -6,10 +6,13 @@ harmonic Krylov--Schur algorithm in STR-9: it extracted harmonic Ritz pairs but
 Schur-sorted the unmodified projected matrix during restart. The corrected
 translation/recovery restart now passes the first two real-operator oracle
 rungs. Block candidates, locking, a field-corrected rational alternative, and
-implicit eigenpair sensitivities are implemented. The rational path passes the
-first three circular-tokamak accuracy gates and a reduced seven-configuration
-physics matrix, but it is still slower than dense and the largest rung is not
-qualified. Measurements and remaining work are below.
+implicit eigenpair sensitivities are implemented. A full-operator long-horizon
+propagator now passes all four QA oracle rungs, including the original-operator
+residual gate, but its conservative uniform settings are still slower than
+dense at the measured sizes. The rational path passes the first three
+circular-tokamak accuracy gates and a reduced seven-configuration physics
+matrix, but it is also slower than dense. Measurements and remaining work are
+below.
 
 .. _hks-motivation:
 
@@ -69,12 +72,19 @@ Plain Arnoldi converges to extremal :math:`|\lambda|` and returns the large
 :math:`|\mathrm{Im}\,\lambda|` modes. This was verified rather than assumed: the
 error does **not** decrease with ``krylov_dim`` (30x to 300x too large at
 ``krylov_dim`` = 32, 64, 96), which distinguishes convergence to the wrong region
-from under-convergence. The propagator variant maps max-Re to max-:math:`|\mu|`
-via :math:`\mu = e^{\lambda \Delta t}`, but only while
-:math:`|\mathrm{Im}\,\lambda|\,\Delta t \ll \pi`; at
-:math:`|\mathrm{Im}\,\lambda| = 80` a step large enough to be useful aliases,
-and a step small enough to avoid aliasing leaves per-step separation
-:math:`e^{0.143\Delta t} \approx 1.0014`.
+from under-convergence.
+
+A long-horizon propagator changes the problem: for
+:math:`P \simeq e^{T A}`, :math:`|\mu|=e^{T\operatorname{Re}\lambda}` makes the
+rightmost mode extremal, following the timestepper stability-analysis posture
+of [Tuckerman2000]_. Phase wrapping changes only
+:math:`\operatorname{Im}(\log\mu)/T`, not the amplification ordering. GKX
+therefore selects by :math:`|\mu|` and recovers the physical complex
+eigenvalue from :math:`v^* A v/v^*v`, never from the wrapped logarithm. The
+multi-step map is full-operator RK4, a polynomial in :math:`A`, so it shares
+eigenvectors with :math:`A`; a split IMEX map does not provide that guarantee.
+The remaining cost is the physical growth-gap horizon and the explicit RK4
+stability limit, not phase aliasing.
 
 The matrix-free RHS and the dense matrix agree to 3e-16 on the same vector, so
 none of this is an operator mismatch.
@@ -317,6 +327,70 @@ kinetic complement remains the scaling wall. On the office GPU, the first two
 warm solves take 30.91 and 102.61 seconds; reduction latency makes CPU the
 preferred backend at these sizes.
 
+The long-horizon path resolves the accuracy failure without a shifted solve.
+With one uniform, conservative setting (RK4 ``dt=0.015``, horizon 60,
+``m=16``), all four QA rungs pass:
+
+.. list-table::
+   :header-rows: 1
+
+   * - :math:`(N_\ell, N_m)`
+     - n
+     - compile
+     - warm propagator
+     - dense
+     - rel. error
+     - residual
+   * - (4, 6)
+     - 768
+     - 14.71 s
+     - 13.81 s
+     - 0.37 s
+     - 1.21e-14
+     - 1.30e-14
+   * - (6, 8)
+     - 1536
+     - 21.92 s
+     - 21.09 s
+     - 1.65 s
+     - 1.42e-14
+     - 1.70e-14
+   * - (8, 10)
+     - 2560
+     - 26.95 s
+     - 26.06 s
+     - 5.86 s
+     - 2.63e-14
+     - 2.01e-14
+   * - (10, 14)
+     - 4480
+     - 37.44 s
+     - 37.26 s
+     - 24.14 s
+     - 1.00e-13
+     - 8.04e-13
+
+The :download:`long-horizon artifact
+<_static/long_horizon_propagator_validation.json>` records the input hash,
+versions, device, timings, horizon, and exact operator-evaluation count.
+Regenerate it with:
+
+.. code-block:: bash
+
+   JAX_ENABLE_X64=1 python tools/campaigns/validate_harmonic_krylov_schur.py \
+     --input examples/vmec/input.LandremanPaul2021_QA_lowres \
+     --solver long-horizon --krylov-dim 16 --max-restarts 1 \
+     --tol 1e-9 --propagator-dt 1.5e-2 --propagator-steps 4000
+
+This closes V1--V3 for the tested QA ladder, not V8. A tuned horizon 30 at the
+largest rung is faster than dense (18.68 versus 24.68 seconds), but its
+``2.98e-6`` residual fails certification; horizon 60 passes in 37.96 seconds.
+At the first three rungs, stable resolution-specific steps and horizon 30 pass
+with residuals through ``3.24e-11``, but remain slower than dense. A refined
+block-propagator restart is available for competing branches; on the largest
+rung it reaches ``1.73e-10`` residual in 49.30 seconds. The scalar one-vector
+path is therefore preferred until a crossing requires candidates.
+
 The TOML-driven reduced-resolution physics matrix passes all seven shipped
 configurations: ITG, ETG, TEM, KBM, Miller, QHS, and QI. It covers
 electrostatic/electromagnetic, single-/multi-species, and periodic/linked
@@ -394,6 +468,13 @@ has implicit gradient ``0.22387295824979078`` versus
 finite differences agree to ``8.1e-10`` relative. This validates the AD
 mechanism, not the production branch selection.
 
+**S8 -- Long-horizon polynomial propagator.** Implemented in GKX. Multi-step
+basis generation uses full-operator RK4, selection uses amplification magnitude,
+and the returned value is the continuous-operator Rayleigh quotient. SOLVAX's
+block transformed-subspace path uses Rayleigh--Ritz for ``largest_real``;
+harmonic extraction about an unrelated target would undo the transformation.
+The scalar and block paths always certify the original-operator residual.
+
 .. _hks-validation:
 
 Validation gates
@@ -466,6 +547,12 @@ References
    calculations in a massively parallel plasma turbulence code", *Parallel
    Computing* **36**\ (5-6), 339-358 (2010).
    https://doi.org/10.1016/j.parco.2009.12.001
+
+.. [Tuckerman2000] L. S. Tuckerman & D. Barkley, "Bifurcation Analysis for
+   Timesteppers", in *Numerical Methods for Bifurcation Problems and Large-Scale
+   Dynamical Systems*, IMA Volumes in Mathematics and its Applications
+   **119**, 453-466 (2000).
+   https://doi.org/10.1007/978-1-4612-1208-9_20
 
 .. [SLEPcSTR7] V. Hernandez, J. E. Roman, A. Tomas & V. Vidal, "Krylov-Schur
    Methods in SLEPc", SLEPc Technical Report STR-7.

@@ -13,7 +13,17 @@ from gkx.geometry import SAlphaGeometry, SlabGeometry, sample_flux_tube_geometry
 from gkx.core.grid import build_spectral_grid, select_ky_grid
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.cache_model import LinearCache
-from gkx.operators.linear.moments import apply_hermite_v, apply_laguerre_x, build_H, compute_b, diamagnetic_drive_coeffs, energy_operator, grad_z_periodic, quasineutrality_phi, streaming_term
+from gkx.operators.linear.moments import (
+    apply_hermite_v,
+    apply_laguerre_x,
+    build_H,
+    compute_b,
+    diamagnetic_drive_coeffs,
+    energy_operator,
+    grad_z_periodic,
+    quasineutrality_phi,
+    streaming_term,
+)
 from gkx.operators.linear.params import LinearParams, LinearTerms
 from gkx.operators.linear.rhs import linear_rhs, linear_rhs_cached
 from gkx.solvers.linear.integrators import integrate_linear
@@ -244,9 +254,7 @@ def test_slab_itg_matrix_matches_published_gyro_moment_hierarchy() -> None:
         rhs, _ = linear_rhs_cached(
             jnp.asarray(state), cache, params, terms=terms, use_jit=False
         )
-        observed[:, column] = (
-            np.asarray(rhs)[0, :, :, 1, 0, 0].reshape(-1) / phase[0]
-        )
+        observed[:, column] = np.asarray(rhs)[0, :, :, 1, 0, 0].reshape(-1) / phase[0]
 
     kperp, kpar, tau, eta = 0.5, 0.1, 1.0, 3.0
     bessel_argument = np.sqrt(2.0 * tau) * kperp
@@ -264,13 +272,9 @@ def test_slab_itg_matrix_matches_published_gyro_moment_hierarchy() -> None:
         for j in range(nl):
             row = p * nl + j
             if p + 1 < nm:
-                published[row, (p + 1) * nl + j] -= (
-                    1j * kpar * np.sqrt(tau * (p + 1))
-                )
+                published[row, (p + 1) * nl + j] -= 1j * kpar * np.sqrt(tau * (p + 1))
             if p > 0:
-                published[row, (p - 1) * nl + j] -= (
-                    1j * kpar * np.sqrt(tau * p)
-                )
+                published[row, (p - 1) * nl + j] -= 1j * kpar * np.sqrt(tau * p)
             perpendicular_drive = (
                 2 * j * kernels[j]
                 - (j * kernels[j - 1] if j else 0.0)
@@ -1703,8 +1707,11 @@ def test_shift_invert_nearest_pair_passes_physical_outer_residual():
         shift=0.5j,
         shift_source="reference",
         shift_tol=1.0e-4,
-        shift_maxiter=30,
-        shift_restart=20,
+        # The right-preconditioned solve is certified in the physical residual,
+        # not the smaller transformed norm. This streaming case needs the
+        # larger inner space to make that stronger contract portable.
+        shift_maxiter=120,
+        shift_restart=60,
         shift_solve_method="batched",
         shift_preconditioner="damping",
         shift_selection="nearest",

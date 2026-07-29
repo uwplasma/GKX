@@ -23,6 +23,7 @@ from gkx.operators.linear.params import (
 )
 from gkx.solvers.linear.krylov_algorithms import (
     _advance_imex2,
+    _advance_rk4,
     _apply_operator,
     _assemble_rhs_cached_novjp,
     _compute_damping,
@@ -57,6 +58,7 @@ class KrylovConfig:
     method: str = "propagator"
     power_iters: int = 200
     power_dt: float = 0.01
+    propagator_steps: int = 1
     shift: complex | None = None
     shift_source: str = "propagator"
     shift_tol: float = 1.0e-4
@@ -93,6 +95,7 @@ def _normalized_config(
     mode_family: str,
     power_iters: int,
     power_dt: float,
+    propagator_steps: int,
     shift: complex | None,
     shift_source: str,
     shift_tol: float,
@@ -117,6 +120,7 @@ def _normalized_config(
         omega_sign=omega_sign_eff,
         power_iters=max(int(power_iters), 1),
         power_dt=float(power_dt),
+        propagator_steps=max(int(propagator_steps), 1),
         shift=shift,
         shift_source=shift_source,
         shift_tol=float(shift_tol),
@@ -166,7 +170,9 @@ def _propagator_branch(
     _status(
         status_callback,
         "running propagator Arnoldi with "
-        f"dt={cfg.power_dt:.6g} dim={cfg.krylov_dim} restarts={restarts_use}",
+        f"dt={cfg.power_dt:.6g} steps={cfg.propagator_steps} "
+        f"horizon={cfg.power_dt * cfg.propagator_steps:.6g} "
+        f"dim={cfg.krylov_dim} restarts={restarts_use}",
     )
     return dominant_eigenpair_propagator_cached(
         v0,
@@ -177,6 +183,7 @@ def _propagator_branch(
         krylov_dim=cfg.krylov_dim,
         restarts=restarts_use,
         dt=cfg.power_dt,
+        propagator_steps=cfg.propagator_steps,
         omega_min_factor=cfg.omega_min_factor,
         omega_target_factor=cfg.omega_target_factor,
         omega_cap_factor=cfg.omega_cap_factor,
@@ -534,6 +541,115 @@ def rational_eigenpairs(
     )
 
 
+def prepare_long_horizon_propagator(
+    v0: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    terms: LinearTerms | None = None,
+    *,
+    dt: float,
+    steps: int,
+) -> Callable[[jnp.ndarray], jnp.ndarray]:
+    """Prepare a full-operator RK4 polynomial filter for repeated eigen solves.
+
+    The polynomial shares eigenvectors with the original operator, unlike a
+    split time step. Its amplification magnitude separates modes by growth,
+    while the original operator remains responsible for Rayleigh values and
+    residual certification. Rebuild after any captured problem data changes.
+    """
+
+    if dt <= 0.0:
+        raise ValueError("dt must be positive")
+    if steps < 1:
+        raise ValueError("steps must be positive")
+    term_cfg = linear_terms_to_term_config(terms)
+    dt_value = jnp.asarray(dt, dtype=jnp.real(v0).dtype)
+
+    @jax.jit
+    def apply_propagator(state: jnp.ndarray) -> jnp.ndarray:
+        return jax.lax.fori_loop(
+            0,
+            steps,
+            lambda _index, current: _advance_rk4(
+                current,
+                cache,
+                params,
+                term_cfg,
+                dt_value,
+            ),
+            state,
+        )
+
+    return apply_propagator
+
+
+def propagator_eigenpairs(
+    v0: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    terms: LinearTerms | None = None,
+    *,
+    candidates: int = 1,
+    krylov_dim: int = 16,
+    restarts: int = 2,
+    tol: float = 1.0e-9,
+    dt: float = 1.0e-2,
+    steps: int = 3000,
+    initial_subspace: jnp.ndarray | None = None,
+    propagator: Callable[[jnp.ndarray], jnp.ndarray] | None = None,
+) -> Any:
+    """Return rightmost modes from a certified long-horizon Krylov subspace.
+
+    Basis generation uses an RK4 polynomial approximation to ``exp(T A)`` so
+    maximum growth becomes an extremal amplification problem and wrapped phase
+    cannot change its ordering. Block/refined extraction, Rayleigh quotients,
+    and residuals use the original continuous operator. A prepared propagator
+    may be supplied to amortize compilation across repeated solves.
+    """
+
+    if candidates < 1:
+        raise ValueError("candidates must be positive")
+    if krylov_dim <= candidates:
+        raise ValueError("krylov_dim must exceed candidates")
+    try:
+        from solvax import block_harmonic_krylov  # type: ignore[attr-defined]
+    except ImportError as error:
+        raise RuntimeError(
+            "propagator_eigenpairs requires a SOLVAX release that provides "
+            "block_harmonic_krylov; the remaining GKX solver methods are "
+            "available with the current dependency"
+        ) from error
+
+    term_cfg = linear_terms_to_term_config(terms)
+    if propagator is None:
+        propagator = prepare_long_horizon_propagator(
+            v0,
+            cache,
+            params,
+            terms=terms,
+            dt=dt,
+            steps=steps,
+        )
+
+    def apply(state: jnp.ndarray) -> jnp.ndarray:
+        return _apply_operator(state, cache, params, term_cfg)
+
+    return block_harmonic_krylov(
+        apply,
+        v0,
+        sigma=0.0,
+        k=candidates,
+        m=krylov_dim,
+        block_size=min(max(candidates + 1, 2), krylov_dim - 1),
+        tol=tol,
+        max_restarts=restarts,
+        which="largest_real",
+        restart_keep=min(max(2 * candidates, candidates + 1), krylov_dim - 1),
+        initial_subspace=initial_subspace,
+        subspace_apply=propagator,
+    )
+
+
 def prepare_rational_shifted_inverse(
     v0: jnp.ndarray,
     cache: LinearCache,
@@ -681,6 +797,7 @@ def _dominant_eigenpair_config_from_options(
         mode_family=options["mode_family"],
         power_iters=options["power_iters"],
         power_dt=options["power_dt"],
+        propagator_steps=options["propagator_steps"],
         shift=options["shift"],
         shift_source=options["shift_source"],
         shift_tol=options["shift_tol"],
@@ -775,6 +892,7 @@ def dominant_eigenpair(
     method: str = "power",
     power_iters: int = 40,
     power_dt: float = 0.01,
+    propagator_steps: int = 1,
     shift: complex | None = None,
     shift_source: str = "propagator",
     shift_tol: float = 1.0e-4,
@@ -849,6 +967,8 @@ __all__ = [
     "dominant_eigenpair_propagator_cached",
     "dominant_eigenpair_shift_invert_cached",
     "dominant_eigenvalue",
+    "prepare_long_horizon_propagator",
     "prepare_rational_shifted_inverse",
+    "propagator_eigenpairs",
     "rational_eigenpairs",
 ]

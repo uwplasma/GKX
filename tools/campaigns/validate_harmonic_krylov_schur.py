@@ -8,7 +8,9 @@ reference rather than another approximation.
 The harmonic solver reports its matrix-vector count. The rational solver reports
 outer operator/subspace applications separately from its inner GMRES controls;
 wall time is the comparable end-to-end cost until inner operator evaluations are
-exposed directly by the shifted-solve API.
+exposed directly by the shifted-solve API. The long-horizon propagator reports
+its IMEX2 step count and certifies the returned Rayleigh pair against the
+original continuous-time operator.
 
 By default each rung uses the dense dominant eigenvalue as its target, isolating
 eigensolver correctness from mode-tracking correctness. ``--target-mode
@@ -56,6 +58,18 @@ def _package_version(name: str) -> str | None:
         return None
 
 
+def _package_git_revision(name: str) -> str | None:
+    """Return a revision only for a source checkout, never an enclosing venv."""
+
+    module_path = Path(__import__(name).__file__).resolve()
+    candidate = module_path.parents[2]
+    if not (candidate / "pyproject.toml").is_file():
+        return None
+    if not (candidate / "src" / name).is_dir():
+        return None
+    return _git_revision(candidate)
+
+
 def _initial_vector(
     shape: tuple[int, ...],
     *,
@@ -88,7 +102,12 @@ def main() -> int:
     parser.add_argument("--ntheta", type=int, default=32)
     parser.add_argument(
         "--solver",
-        choices=("harmonic", "block-rational"),
+        choices=(
+            "harmonic",
+            "block-rational",
+            "long-horizon",
+            "block-propagator",
+        ),
         default="harmonic",
     )
     rung_group = parser.add_mutually_exclusive_group()
@@ -120,6 +139,8 @@ def main() -> int:
     parser.add_argument("--shift-tol", type=float, default=1e-7)
     parser.add_argument("--shift-maxiter", type=int, default=640)
     parser.add_argument("--shift-restart", type=int, default=320)
+    parser.add_argument("--propagator-dt", type=float, default=1.0e-3)
+    parser.add_argument("--propagator-steps", type=int, default=5000)
     parser.add_argument(
         "--shift-solve-method",
         choices=("flexible", "batched", "incremental"),
@@ -173,24 +194,40 @@ def main() -> int:
             parser.error("--krylov-dim must exceed --candidates")
         if args.shift_offset <= 0.0:
             parser.error("--shift-offset must be positive for block-rational")
+    if args.solver in {"long-horizon", "block-propagator"}:
+        if args.propagator_dt <= 0.0:
+            parser.error("--propagator-dt must be positive")
+        if args.propagator_steps < 2:
+            parser.error("--propagator-steps must be at least two")
+    if args.solver == "block-propagator":
+        if args.candidates < 1:
+            parser.error("--candidates must be positive")
+        if args.krylov_dim <= args.candidates:
+            parser.error("--krylov-dim must exceed --candidates")
     if args.output is None:
-        stem = (
-            "harmonic_krylov_schur_validation.json"
-            if args.solver == "harmonic"
-            else "block_rational_eigensolver_validation.json"
-        )
+        stem = {
+            "harmonic": "harmonic_krylov_schur_validation.json",
+            "block-rational": "block_rational_eigensolver_validation.json",
+            "long-horizon": "long_horizon_propagator_validation.json",
+            "block-propagator": "block_propagator_eigensolver_validation.json",
+        }[args.solver]
         args.output = Path("docs/_static") / stem
 
     import gkx
     import vmex as vj
-    from solvax import harmonic_krylov_schur
     from vmex import optimize as opt
     from vmex.core import turbulence as turb
+
+    if args.solver == "harmonic":
+        from solvax import harmonic_krylov_schur
 
     from gkx.objectives.core import _solver_geometry_context
     from gkx.operators.linear.rhs import linear_rhs_cached
     from gkx.solvers.linear.krylov import (
+        dominant_eigenpair,
+        prepare_long_horizon_propagator,
         prepare_rational_shifted_inverse,
+        propagator_eigenpairs,
         rational_eigenpairs,
     )
 
@@ -274,7 +311,7 @@ def main() -> int:
                 max_restarts=args.max_restarts,
                 which="target",
             )
-        else:
+        elif args.solver == "block-rational":
             # Scale the nonsingular oracle displacement to the eigenvalue. An
             # O(1) floor moves weakly damped stellarator branches past nearby
             # modes even though the intended shift is only a singularity guard.
@@ -318,30 +355,107 @@ def main() -> int:
                 shift_preconditioner=preconditioner,
                 shifted_inverse=shifted_inverse,
             )
-        krylov_seconds = time.time() - started
-        candidate_values = np.asarray(solution.eigenvalues)
-        candidate_vectors = np.asarray(solution.eigenvectors)
-        candidate_residuals = np.asarray(solution.residuals)
-        candidate_converged = np.asarray(solution.converged)
-        if args.target_mode == "oracle":
-            selected = int(np.nanargmin(np.abs(candidate_values - reference)))
-        else:
-            flattened_start = np.asarray(start).reshape(-1)
-            flattened_candidates = candidate_vectors.reshape(
-                candidate_vectors.shape[0], -1
+        elif args.solver == "long-horizon":
+            solver_target = None
+            started = time.time()
+            compiled_value, compiled_vector = dominant_eigenpair(
+                start,
+                context.cache,
+                context.linear_params,
+                terms=context.linear_terms,
+                method="propagator",
+                krylov_dim=args.krylov_dim,
+                restarts=args.max_restarts,
+                power_dt=args.propagator_dt,
+                propagator_steps=args.propagator_steps,
             )
-            overlaps = np.abs(flattened_candidates.conj() @ flattened_start)
-            selected = int(np.nanargmax(overlaps))
-        value = complex(candidate_values[selected])
-        residual = float(candidate_residuals[selected])
-        converged = bool(candidate_converged[selected])
+            compiled_value.block_until_ready()
+            compiled_vector.block_until_ready()
+            compile_seconds = time.time() - started
+            started = time.time()
+            propagator_value, propagator_vector = dominant_eigenpair(
+                start,
+                context.cache,
+                context.linear_params,
+                terms=context.linear_terms,
+                method="propagator",
+                krylov_dim=args.krylov_dim,
+                restarts=args.max_restarts,
+                power_dt=args.propagator_dt,
+                propagator_steps=args.propagator_steps,
+            )
+            propagator_value.block_until_ready()
+            propagator_vector.block_until_ready()
+        else:
+            solver_target = None
+            started = time.time()
+            propagator = prepare_long_horizon_propagator(
+                start,
+                context.cache,
+                context.linear_params,
+                terms=context.linear_terms,
+                dt=args.propagator_dt,
+                steps=args.propagator_steps,
+            )
+            propagator(start).block_until_ready()
+            compile_seconds = time.time() - started
+            started = time.time()
+            solution = propagator_eigenpairs(
+                start,
+                context.cache,
+                context.linear_params,
+                terms=context.linear_terms,
+                candidates=args.candidates,
+                krylov_dim=args.krylov_dim,
+                restarts=args.max_restarts,
+                tol=args.tol,
+                dt=args.propagator_dt,
+                steps=args.propagator_steps,
+                propagator=propagator,
+            )
+        krylov_seconds = time.time() - started
+        if args.solver == "long-horizon":
+            value = complex(np.asarray(propagator_value))
+            vector = propagator_vector
+            applied = apply(vector)
+            residual = float(
+                np.asarray(jnp.linalg.norm(applied - propagator_value * vector))
+                / max(
+                    abs(value) * float(np.asarray(jnp.linalg.norm(vector))),
+                    np.finfo(float).tiny,
+                )
+            )
+            error = abs(value - reference) / abs(reference)
+            converged = residual < args.tol
+            selected = 0
+            candidate_values = np.asarray([value])
+            candidate_vectors = np.asarray([vector])
+            candidate_residuals = np.asarray([residual])
+            candidate_converged = np.asarray([converged])
+        else:
+            candidate_values = np.asarray(solution.eigenvalues)
+            candidate_vectors = np.asarray(solution.eigenvectors)
+            candidate_residuals = np.asarray(solution.residuals)
+            candidate_converged = np.asarray(solution.converged)
+            if args.target_mode == "oracle":
+                selected = int(np.nanargmin(np.abs(candidate_values - reference)))
+            else:
+                flattened_start = np.asarray(start).reshape(-1)
+                flattened_candidates = candidate_vectors.reshape(
+                    candidate_vectors.shape[0], -1
+                )
+                overlaps = np.abs(flattened_candidates.conj() @ flattened_start)
+                selected = int(np.nanargmax(overlaps))
+            value = complex(candidate_values[selected])
+            residual = float(candidate_residuals[selected])
+            converged = bool(candidate_converged[selected])
+            error = abs(value - reference) / abs(reference)
         if converged:
             seed = value
-        error = abs(value - reference) / abs(reference)
         recycle_residual_limit = 100.0 * args.tol
         recycle_eligible = np.isfinite(residual) and residual <= recycle_residual_limit
         if recycle_eligible:
-            previous_vector = solution.eigenvectors[selected]
+            previous_vector = jnp.asarray(candidate_vectors[selected])
 
         rows.append(
             {
@@ -354,7 +468,11 @@ def main() -> int:
                 "krylov_seconds": krylov_seconds,
                 "dense": [reference.real, reference.imag],
                 "target": [target.real, target.imag],
-                "solver_target": [solver_target.real, solver_target.imag],
+                "solver_target": (
+                    None
+                    if solver_target is None
+                    else [solver_target.real, solver_target.imag]
+                ),
                 "recycled_start": recycled_start,
                 "krylov": [value.real, value.imag],
                 "selected_candidate": selected,
@@ -373,9 +491,34 @@ def main() -> int:
                 "residual": residual,
                 "recycle_eligible": recycle_eligible,
                 "converged": converged,
-                "restarts": solution.restarts,
-                "outer_applications": solution.matvecs,
-                "orthogonality": solution.orthogonality,
+                "restarts": (
+                    args.max_restarts
+                    if args.solver == "long-horizon"
+                    else solution.restarts
+                ),
+                "outer_applications": (
+                    args.max_restarts * args.krylov_dim
+                    if args.solver == "long-horizon"
+                    else solution.matvecs
+                ),
+                "propagator_steps": (
+                    args.max_restarts * args.krylov_dim * args.propagator_steps
+                    if args.solver == "long-horizon"
+                    else None
+                ),
+                "original_operator_evaluations": (
+                    4 * args.max_restarts * args.krylov_dim * args.propagator_steps + 1
+                    if args.solver == "long-horizon"
+                    else None
+                ),
+                "propagator_substeps_upper_bound": (
+                    solution.matvecs * args.propagator_steps
+                    if args.solver == "block-propagator"
+                    else None
+                ),
+                "orthogonality": (
+                    None if args.solver == "long-horizon" else solution.orthogonality
+                ),
             }
         )
         print(
@@ -383,14 +526,15 @@ def main() -> int:
             f"ratio={radius / abs(reference):>5.0f} | dense {dense_seconds:>7.2f}s | "
             f"compile {compile_seconds:>7.2f}s | "
             f"{args.solver} {krylov_seconds:>7.2f}s conv={str(converged):<5} "
-            f"rel_err={error:.2e} restarts={solution.restarts:>3} "
-            f"outer={solution.matvecs:>5}",
+            f"rel_err={error:.2e} residual={residual:.2e} "
+            f"restarts={rows[-1]['restarts']:>3} "
+            f"outer={rows[-1]['outer_applications']:>5}",
             flush=True,
         )
 
     passed = all(r["converged"] and r["relative_error"] < 1e-8 for r in rows)
     artifact = {
-        "schema_version": 4,
+        "schema_version": 5,
         "passed": passed,
         "provenance": {
             "input": input_label,
@@ -403,7 +547,11 @@ def main() -> int:
             "target_mode": args.target_mode,
             "start_mode": args.start_mode,
             "krylov_dim": args.krylov_dim,
-            "candidates": args.candidates if args.solver == "block-rational" else 1,
+            "candidates": (
+                args.candidates
+                if args.solver in {"block-rational", "block-propagator"}
+                else 1
+            ),
             "tolerance": args.tol,
             "recycle_residual_limit": 100.0 * args.tol,
             "max_restarts": args.max_restarts,
@@ -425,11 +573,37 @@ def main() -> int:
             "shift_preconditioner": (
                 args.shift_preconditioner if args.solver == "block-rational" else None
             ),
+            "propagator_dt": (
+                args.propagator_dt
+                if args.solver in {"long-horizon", "block-propagator"}
+                else None
+            ),
+            "propagator_steps_per_application": (
+                args.propagator_steps
+                if args.solver in {"long-horizon", "block-propagator"}
+                else None
+            ),
+            "propagator_horizon": (
+                args.propagator_dt * args.propagator_steps
+                if args.solver in {"long-horizon", "block-propagator"}
+                else None
+            ),
             "cost_note": (
                 "outer_applications includes original-operator and shifted-inverse "
                 "calls, but not GMRES-internal operator evaluations"
                 if args.solver == "block-rational"
-                else "outer_applications is the matrix-vector count"
+                else (
+                    "outer_applications is the Arnoldi propagator count; "
+                    "propagator_steps is the total number of RK4 substeps"
+                    if args.solver == "long-horizon"
+                    else (
+                        "outer_applications counts original-operator and "
+                        "propagator calls; propagator_substeps_upper_bound is "
+                        "conservative because SOLVAX does not expose that split"
+                        if args.solver == "block-propagator"
+                        else "outer_applications is the matrix-vector count"
+                    )
+                )
             ),
             "python": sys.version,
             "platform": platform.platform(),
@@ -438,9 +612,7 @@ def main() -> int:
             "gkx": _package_version("gkx"),
             "solvax": _package_version("solvax"),
             "gkx_commit": _git_revision(repository),
-            "solvax_commit": _git_revision(
-                Path(__import__("solvax").__file__).parents[2]
-            ),
+            "solvax_commit": _package_git_revision("solvax"),
             "jax_x64": bool(jax.config.jax_enable_x64),
             "devices": [str(device) for device in jax.devices()],
         },
