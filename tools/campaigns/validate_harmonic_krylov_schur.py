@@ -176,7 +176,10 @@ def main() -> int:
 
     from gkx.objectives.core import _solver_geometry_context
     from gkx.operators.linear.rhs import linear_rhs_cached
-    from gkx.solvers.linear.krylov import rational_eigenpairs
+    from gkx.solvers.linear.krylov import (
+        prepare_rational_shifted_inverse,
+        rational_eigenpairs,
+    )
 
     equilibrium = opt.solve_equilibrium(vj.VmecInput.from_file(args.input))
     geometry = turb.flux_tube_geometry(
@@ -237,12 +240,13 @@ def main() -> int:
         )
         apply(start).block_until_ready()  # exclude compilation from the timing
 
-        started = time.time()
         target = (
             complex(reference) if args.target_mode == "oracle" or seed is None else seed
         )
+        compile_seconds = 0.0
         if args.solver == "harmonic":
             solver_target = target
+            started = time.time()
             solution = harmonic_krylov_schur(
                 apply,
                 start,
@@ -261,6 +265,22 @@ def main() -> int:
                 if args.shift_preconditioner == "none"
                 else args.shift_preconditioner
             )
+            started = time.time()
+            shifted_inverse = prepare_rational_shifted_inverse(
+                start,
+                context.cache,
+                context.linear_params,
+                terms=context.linear_terms,
+                shift=solver_target,
+                shift_tol=args.shift_tol,
+                shift_maxiter=args.shift_maxiter,
+                shift_restart=args.shift_restart,
+                shift_solve_method=args.shift_solve_method,
+                shift_preconditioner=preconditioner,
+            )
+            shifted_inverse(start).block_until_ready()
+            compile_seconds = time.time() - started
+            started = time.time()
             solution = rational_eigenpairs(
                 start,
                 context.cache,
@@ -276,6 +296,7 @@ def main() -> int:
                 shift_restart=args.shift_restart,
                 shift_solve_method=args.shift_solve_method,
                 shift_preconditioner=preconditioner,
+                shifted_inverse=shifted_inverse,
             )
         krylov_seconds = time.time() - started
         candidate_values = np.asarray(solution.eigenvalues)
@@ -309,6 +330,7 @@ def main() -> int:
                 "n": int(matrix.shape[0]),
                 "spectral_ratio": radius / abs(reference),
                 "dense_seconds": dense_seconds,
+                "compile_seconds": compile_seconds,
                 "krylov_seconds": krylov_seconds,
                 "dense": [reference.real, reference.imag],
                 "target": [target.real, target.imag],
@@ -318,7 +340,10 @@ def main() -> int:
                 "selected_candidate": selected,
                 "candidates": [
                     {
-                        "eigenvalue": [complex(candidate).real, complex(candidate).imag],
+                        "eigenvalue": [
+                            complex(candidate).real,
+                            complex(candidate).imag,
+                        ],
                         "residual": float(candidate_residuals[index]),
                         "converged": bool(candidate_converged[index]),
                     }
@@ -336,6 +361,7 @@ def main() -> int:
         print(
             f"({n_laguerre:>2},{n_hermite:>2}) n={matrix.shape[0]:>5} "
             f"ratio={radius / abs(reference):>5.0f} | dense {dense_seconds:>7.2f}s | "
+            f"compile {compile_seconds:>7.2f}s | "
             f"{args.solver} {krylov_seconds:>7.2f}s conv={str(converged):<5} "
             f"rel_err={error:.2e} restarts={solution.restarts:>3} "
             f"outer={solution.matvecs:>5}",
@@ -344,7 +370,7 @@ def main() -> int:
 
     passed = all(r["converged"] and r["relative_error"] < 1e-8 for r in rows)
     artifact = {
-        "schema_version": 3,
+        "schema_version": 4,
         "passed": passed,
         "provenance": {
             "input": input_label,
@@ -374,14 +400,10 @@ def main() -> int:
                 args.shift_restart if args.solver == "block-rational" else None
             ),
             "shift_solve_method": (
-                args.shift_solve_method
-                if args.solver == "block-rational"
-                else None
+                args.shift_solve_method if args.solver == "block-rational" else None
             ),
             "shift_preconditioner": (
-                args.shift_preconditioner
-                if args.solver == "block-rational"
-                else None
+                args.shift_preconditioner if args.solver == "block-rational" else None
             ),
             "cost_note": (
                 "outer_applications includes original-operator and shifted-inverse "

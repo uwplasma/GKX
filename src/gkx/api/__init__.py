@@ -120,6 +120,7 @@ _EXPORT_TARGETS: dict[str, tuple[str, str]] = {
     'KrylovConfig': ('gkx.solvers.linear.krylov', 'KrylovConfig'),
     'dominant_eigenpair': ('gkx.solvers.linear.krylov', 'dominant_eigenpair'),
     'dominant_eigenvalue': ('gkx.solvers.linear.krylov', 'dominant_eigenvalue'),
+    'prepare_rational_shifted_inverse': ('gkx.solvers.linear.krylov', 'prepare_rational_shifted_inverse'),
     'rational_eigenpairs': ('gkx.solvers.linear.krylov', 'rational_eigenpairs'),
     'integrate_linear_diffrax': ('gkx.solvers.time.diffrax_linear', 'integrate_linear_diffrax'),
     'integrate_linear_diffrax_streaming': ('gkx.solvers.time.diffrax_streaming', 'integrate_linear_diffrax_streaming'),

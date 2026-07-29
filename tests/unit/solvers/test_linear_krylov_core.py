@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 from types import SimpleNamespace
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -29,7 +30,9 @@ def test_published_solvax_contract_matches_consumed_interfaces() -> None:
     """Check that the consumed solvax interfaces are available (no version pin)."""
 
     for name in (
+        "block_harmonic_krylov",
         "chunked_jacfwd",
+        "eigenpair",
         "gmres",
         "linear_solve",
         "low_rank_corrected",
@@ -669,7 +672,50 @@ def test_rational_eigenpairs_use_the_field_corrected_shifted_inverse(
     assert captured["preconditioner"] == "field-corrected"
 
 
-@pytest.mark.parametrize(("select_overlap", "expected_candidates"), [(False, 1), (True, 4)])
+def test_rational_eigenpairs_accept_a_prepared_shifted_inverse(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Repeated solves may reuse a compiled shifted inverse without rebuilding."""
+
+    matrix = jnp.diag(
+        jnp.asarray(
+            [0.5 + 0.2j, 0.46 + 0.18j, -1.0 + 7.0j, -1.1 - 8.0j],
+            dtype=jnp.complex128,
+        )
+    )
+    shift = 0.48 + 0.2j
+    shifted = matrix - shift * jnp.eye(matrix.shape[0], dtype=matrix.dtype)
+    prepared = jax.jit(lambda vector: jnp.linalg.solve(shifted, vector))
+    monkeypatch.setattr(
+        lk,
+        "_apply_operator",
+        lambda vector, *_args: matrix @ vector,
+    )
+
+    def fail_factory(*_args, **_kwargs):
+        raise AssertionError("the prepared inverse must bypass factory construction")
+
+    monkeypatch.setattr(lk, "_shift_invert_apply_factory", fail_factory)
+    solution = lk.rational_eigenpairs(
+        jnp.ones((matrix.shape[0],), dtype=matrix.dtype),
+        None,
+        None,
+        terms=LinearTerms(apar=0.0, bpar=0.0),
+        shift=shift,
+        candidates=1,
+        krylov_dim=3,
+        restarts=3,
+        tol=1.0e-7,
+        shifted_inverse=prepared,
+    )
+
+    assert complex(np.asarray(solution.eigenvalues[0])) == pytest.approx(0.5 + 0.2j)
+    assert bool(np.asarray(solution.converged[0]))
+
+
+@pytest.mark.parametrize(
+    ("select_overlap", "expected_candidates"), [(False, 1), (True, 4)]
+)
 def test_rational_branch_only_pays_for_competing_continuation_candidates(
     monkeypatch: pytest.MonkeyPatch,
     select_overlap: bool,
@@ -683,7 +729,10 @@ def test_rational_branch_only_pays_for_competing_continuation_candidates(
     def fake_rational(*_args, candidates, **_kwargs):
         captured["candidates"] = candidates
         vectors = jnp.stack(
-            [v0 if index == 0 else jnp.roll(v0, index, axis=-1) for index in range(candidates)]
+            [
+                v0 if index == 0 else jnp.roll(v0, index, axis=-1)
+                for index in range(candidates)
+            ]
         )
         values = jnp.asarray(
             [0.4 - 0.01 * index + 0.2j for index in range(candidates)],

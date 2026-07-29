@@ -473,6 +473,7 @@ def rational_eigenpairs(
     shift_restart: int = 30,
     shift_solve_method: str = "batched",
     shift_preconditioner: str | None = "field-corrected",
+    shifted_inverse: Callable[[jnp.ndarray], jnp.ndarray] | None = None,
 ) -> Any:
     """Return several nearby branches from a field-corrected rational subspace.
 
@@ -480,14 +481,71 @@ def rational_eigenpairs(
     Each subspace application solves ``(A - shift I) x = b`` with the existing
     matrix-free GMRES path; by default its Hermite-line inverse is corrected for
     the exact low-moment field coupling. Rayleigh quotients and residuals are
-    always evaluated against the original operator.
+    always evaluated against the original operator. A shifted inverse prepared
+    by :func:`prepare_rational_shifted_inverse` may be supplied to amortize JAX
+    compilation across repeated solves at a fixed geometry and shift.
     """
 
     if candidates < 1:
         raise ValueError("candidates must be positive")
     if krylov_dim <= candidates:
         raise ValueError("krylov_dim must exceed candidates")
-    from solvax import block_harmonic_krylov
+    from solvax import block_harmonic_krylov  # type: ignore[attr-defined]
+
+    sigma = jnp.asarray(shift, dtype=v0.dtype)
+    term_cfg = linear_terms_to_term_config(terms)
+    if shifted_inverse is None:
+        shifted_inverse = prepare_rational_shifted_inverse(
+            v0,
+            cache,
+            params,
+            terms=terms,
+            shift=shift,
+            shift_tol=shift_tol,
+            shift_maxiter=shift_maxiter,
+            shift_restart=shift_restart,
+            shift_solve_method=shift_solve_method,
+            shift_preconditioner=shift_preconditioner,
+        )
+
+    def apply(state: jnp.ndarray) -> jnp.ndarray:
+        return _apply_operator(state, cache, params, term_cfg)
+
+    return block_harmonic_krylov(
+        apply,
+        v0,
+        sigma=complex(np.asarray(sigma)),
+        k=candidates,
+        m=krylov_dim,
+        block_size=min(max(candidates + 1, 2), krylov_dim - 1),
+        tol=tol,
+        max_restarts=restarts,
+        which="target",
+        restart_keep=min(max(2 * candidates, candidates + 1), krylov_dim - 1),
+        initial_subspace=initial_subspace,
+        subspace_apply=shifted_inverse,
+    )
+
+
+def prepare_rational_shifted_inverse(
+    v0: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    terms: LinearTerms | None = None,
+    *,
+    shift: complex,
+    shift_tol: float = 1e-6,
+    shift_maxiter: int = 60,
+    shift_restart: int = 30,
+    shift_solve_method: str = "batched",
+    shift_preconditioner: str | None = "field-corrected",
+) -> Callable[[jnp.ndarray], jnp.ndarray]:
+    """Prepare a compiled ``(A - shift I)`` inverse for repeated eigen solves.
+
+    The returned callable captures one cache, parameter set, term selection, and
+    shift. Call it once and synchronize the result to pay compilation before a
+    steady-state timing. Rebuild it whenever any captured problem data changes.
+    """
 
     term_cfg = linear_terms_to_term_config(terms)
     sigma = jnp.asarray(shift, dtype=v0.dtype)
@@ -504,27 +562,11 @@ def rational_eigenpairs(
         shift_preconditioner=shift_preconditioner,
     )
 
-    def apply(state: jnp.ndarray) -> jnp.ndarray:
-        return _apply_operator(state, cache, params, term_cfg)
-
     @jax.jit
     def apply_inverse(state: jnp.ndarray) -> jnp.ndarray:
         return inverse(state, cache, params, term_cfg)
 
-    return block_harmonic_krylov(
-        apply,
-        v0,
-        sigma=complex(np.asarray(sigma)),
-        k=candidates,
-        m=krylov_dim,
-        block_size=min(max(candidates + 1, 2), krylov_dim - 1),
-        tol=tol,
-        max_restarts=restarts,
-        which="target",
-        restart_keep=min(max(2 * candidates, candidates + 1), krylov_dim - 1),
-        initial_subspace=initial_subspace,
-        subspace_apply=apply_inverse,
-    )
+    return apply_inverse
 
 
 def _rational_branch(
@@ -611,11 +653,7 @@ def _rational_branch(
             if select_growth
             else int(
                 allowed[
-                    int(
-                        np.argmin(
-                            np.abs(values[allowed] - complex(np.asarray(sigma)))
-                        )
-                    )
+                    int(np.argmin(np.abs(values[allowed] - complex(np.asarray(sigma)))))
                 ]
             )
         )
@@ -804,5 +842,6 @@ __all__ = [
     "dominant_eigenpair_propagator_cached",
     "dominant_eigenpair_shift_invert_cached",
     "dominant_eigenvalue",
+    "prepare_rational_shifted_inverse",
     "rational_eigenpairs",
 ]
