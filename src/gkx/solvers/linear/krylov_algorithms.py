@@ -593,13 +593,7 @@ def _advance_rk4(
     term_cfg: TermConfig,
     dt: jnp.ndarray,
 ) -> jnp.ndarray:
-    """Advance the full linear operator with a fourth-order polynomial map.
-
-    Unlike a split IMEX step, this map is a polynomial in the original
-    continuous operator. It therefore has the same eigenvectors as that
-    operator, which is essential when a long-time propagator is used as an
-    eigenvector filter before a continuous-operator Rayleigh quotient.
-    """
+    """Advance with a full-operator polynomial that preserves eigenvectors."""
 
     k1 = _apply_operator(state, cache, params, term_cfg)
     k2 = _apply_operator(state + 0.5 * dt * k1, cache, params, term_cfg)
@@ -935,15 +929,7 @@ def dominant_eigenpair_propagator_cached(
     omega_sign: int,
     select_overlap: bool,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
-    """Arnoldi on a time-stepper; always return a physical Rayleigh value.
-
-    With more than one substep, Arnoldi acts on a finite-horizon time-stepper
-    built from a full-operator RK4 polynomial and selects the largest
-    amplification magnitude. Frequency aliasing in the logarithm cannot change
-    that ordering because only ``|mu|`` is used; the physical complex
-    eigenvalue is recovered from the original operator. A single step retains
-    the established IMEX2 behavior.
-    """
+    """Filter by finite-horizon growth and return a physical Rayleigh pair."""
 
     v = v0
     dt_val = jnp.asarray(dt, dtype=jnp.real(v0).dtype)
