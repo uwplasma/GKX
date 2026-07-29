@@ -490,7 +490,14 @@ def rational_eigenpairs(
         raise ValueError("candidates must be positive")
     if krylov_dim <= candidates:
         raise ValueError("krylov_dim must exceed candidates")
-    from solvax import block_harmonic_krylov  # type: ignore[attr-defined]
+    try:
+        from solvax import block_harmonic_krylov  # type: ignore[attr-defined]
+    except ImportError as error:
+        raise RuntimeError(
+            "rational_eigenpairs requires a SOLVAX release that provides "
+            "block_harmonic_krylov; the remaining GKX solver methods are "
+            "available with the current dependency"
+        ) from error
 
     sigma = jnp.asarray(shift, dtype=v0.dtype)
     term_cfg = linear_terms_to_term_config(terms)

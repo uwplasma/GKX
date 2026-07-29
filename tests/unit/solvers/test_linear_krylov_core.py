@@ -25,20 +25,35 @@ from gkx.operators.linear.params import (
 import gkx.solvers.linear.krylov as lk
 import gkx.solvers.linear.krylov_algorithms as ka
 
+_HAS_SOLVAX_EIGEN_API = all(
+    callable(getattr(solvax, name, None))
+    for name in ("block_harmonic_krylov", "eigenpair")
+)
+requires_solvax_eigen_api = pytest.mark.skipif(
+    not _HAS_SOLVAX_EIGEN_API,
+    reason="requires the block eigenmode and eigenpair API from SOLVAX PR 65",
+)
+
 
 def test_published_solvax_contract_matches_consumed_interfaces() -> None:
     """Check that the consumed solvax interfaces are available (no version pin)."""
 
     for name in (
-        "block_harmonic_krylov",
         "chunked_jacfwd",
-        "eigenpair",
         "gmres",
         "linear_solve",
         "low_rank_corrected",
         "tridiagonal_solve",
     ):
         assert callable(getattr(solvax, name))
+
+
+@requires_solvax_eigen_api
+def test_experimental_solvax_eigen_contract() -> None:
+    """The downstream branch must expose both experimental eigenmode APIs."""
+
+    assert callable(solvax.block_harmonic_krylov)
+    assert callable(solvax.eigenpair)
 
 
 def _tiny_krylov_setup(*, linked: bool = False):
@@ -610,6 +625,7 @@ def test_dominant_eigenpair_methods_produce_finite_values(method: str) -> None:
     assert jnp.isfinite(jnp.imag(eig))
 
 
+@requires_solvax_eigen_api
 def test_rational_eigenpairs_use_the_field_corrected_shifted_inverse(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -672,6 +688,7 @@ def test_rational_eigenpairs_use_the_field_corrected_shifted_inverse(
     assert captured["preconditioner"] == "field-corrected"
 
 
+@requires_solvax_eigen_api
 def test_rational_eigenpairs_accept_a_prepared_shifted_inverse(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -713,6 +730,7 @@ def test_rational_eigenpairs_accept_a_prepared_shifted_inverse(
     assert bool(np.asarray(solution.converged[0]))
 
 
+@requires_solvax_eigen_api
 def test_implicit_eigenpair_gradient_matches_dense_and_finite_difference() -> None:
     """Nelson sensitivity must cover GKX eigenvector-dependent observables."""
 
