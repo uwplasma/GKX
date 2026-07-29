@@ -631,10 +631,7 @@ def adaptive_propagator_eigenpair(
     try:
         from solvax import adaptive_eigenpair, estimate_rk4_timestep  # type: ignore
     except ImportError as error:
-        raise RuntimeError(
-            "adaptive_propagator_eigenpair requires the SOLVAX adaptive "
-            "propagator API"
-        ) from error
+        raise RuntimeError("SOLVAX adaptive propagator API is required") from error
     if chunk_horizon <= 0.0 or max_stability_retries < 0:
         raise ValueError("chunk_horizon must be positive and retries non-negative")
     term_cfg = linear_terms_to_term_config(terms)
@@ -649,6 +646,7 @@ def adaptive_propagator_eigenpair(
         safety=stability_safety,
     )
     solution = None
+    operator_applications = estimate.operator_applications
     for retry in range(max_stability_retries + 1):
         dt_limit = estimate.dt / 2**retry
         steps = max(int(np.ceil(chunk_horizon / dt_limit)), 1)
@@ -681,11 +679,13 @@ def adaptive_propagator_eigenpair(
             filter_dt=dt,
             filter_steps=steps,
             applications_per_restart=krylov_dim,
-            base_operator_applications=estimate.operator_applications,
+            base_operator_applications=0,
         )
+        operator_applications += solution.operator_applications
         if solution.stable and solution.converged:
             break
-    return solution
+    assert solution is not None
+    return solution._replace(operator_applications=operator_applications)
 
 
 def prepare_rational_shifted_inverse(

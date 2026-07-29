@@ -746,7 +746,19 @@ def test_adaptive_propagator_halves_step_after_false_stable_residual(
     def fake_adaptive(*_args, filter_dt: float, **_kwargs):
         attempted_steps.append(filter_dt)
         converged = len(attempted_steps) == 2
-        return SimpleNamespace(stable=True, converged=converged)
+        return solvax.AdaptiveEigenSolution(
+            eigenvalue=jnp.asarray(0.2 + 0.1j),
+            eigenvector=v0,
+            residual=jnp.asarray(0.0 if converged else 1.0),
+            converged=converged,
+            stable=True,
+            restarts=1,
+            operator_applications=100,
+            filter_dt=filter_dt,
+            filter_steps=100,
+            filter_horizon=20.0,
+            filter_growth_defect=0.0,
+        )
 
     monkeypatch.setattr(solvax, "adaptive_eigenpair", fake_adaptive)
     solution = lk.adaptive_propagator_eigenpair(
@@ -760,6 +772,7 @@ def test_adaptive_propagator_halves_step_after_false_stable_residual(
 
     assert solution.converged
     assert attempted_steps == pytest.approx([0.2, 0.1])
+    assert solution.operator_applications == 212
 
 
 @requires_solvax_eigen_api
