@@ -1,9 +1,12 @@
 Harmonic Krylov-Schur eigensolver
 =================================
 
-Status: **not merged, and not ready to merge.** The solver exists and is
-validated in solvax, but gate V1 fails on real GKX operators. Measurements and
-diagnosis below.
+Status: **not ready to merge.** The original SOLVAX restart was not the
+harmonic Krylov--Schur algorithm in STR-9: it extracted harmonic Ritz pairs but
+Schur-sorted the unmodified projected matrix during restart. The corrected
+translation/recovery restart now passes the first two real-operator oracle
+rungs, but larger rungs still fail the accuracy/performance gate. Measurements
+and remaining work are below.
 
 .. _hks-motivation:
 
@@ -75,7 +78,7 @@ none of this is an operator mismatch.
 
 .. _hks-choice:
 
-Why harmonic Krylov-Schur rather than shift-and-invert
+Why test harmonic Krylov-Schur before shift-and-invert
 ------------------------------------------------------
 
 Roman, Kammerer, Merz & Jenko [Roman2010]_ evaluated shift-and-invert, the
@@ -88,9 +91,16 @@ exceeding the real by three orders of magnitude). Their conclusions:
 * it converges with a small basis, about 10-12 vectors;
 * it requires **no large linear solves**, which is decisive for a matrix-free
   code;
-* shift-and-invert is a poor fit precisely because the operator is available
-  only implicitly, so no good preconditioner exists for the inner solves, and
-  its accuracy degrades as the shift moves away from the spectrum.
+* shift-and-invert requires accurate inner linear solves, so its performance is
+  controlled by a physics-structured preconditioner rather than only the outer
+  eigensolver.
+
+Those measurements are evidence for the method, not a guarantee for every GKX
+operator. GKX now has an FFT-in-``z``/tridiagonal-Hermite line inverse that can
+precondition shifted solves. A first reuse of that inverse substantially
+improves the inner residual, but field-coupled low moments still prevent it from
+meeting the production gate cheaply. Harmonic and rational approaches therefore
+remain measured competitors rather than assumptions.
 
 Harmonic extraction alone is **not** sufficient. Applied to a single Arnoldi
 pass it does not recover the interior eigenvalue on GKX's operator. The method
@@ -138,10 +148,26 @@ about a target :math:`\kappa` approximate eigenvalues of :math:`A` closest to
    g = (B_m - \kappa I)^{-*} b_m,
 
 the harmonic Ritz values are the eigenvalues of :math:`B_m + g b_m^{*}`
-([Roman2010]_, Eq. 21). Everything is :math:`m \times m` with :math:`m \sim 10`,
-so the extraction costs nothing beside the matrix-vector products -- this is the
-whole appeal relative to a spectral transformation, which pays a large linear
-solve per iteration.
+([Roman2010]_, Eq. 21). Everything is :math:`m \times m` with :math:`m \ll n`
+(``m=64``--``128`` in the current GKX measurements), so the extraction remains
+small beside the matrix-vector products. This is the appeal relative to a
+spectral transformation, which pays a large linear solve per iteration.
+
+**Harmonic restart and recovery.** It is not valid to extract harmonic Ritz
+vectors and then restart from Schur vectors of :math:`B_m`. STR-9 translates
+the decomposition so its Rayleigh quotient is
+:math:`\widetilde B_m = B_m + g b_m^*`, Schur-sorts
+:math:`\widetilde B_m`, truncates the harmonic subspace, and applies a recovery
+translation that restores an orthonormal Krylov decomposition of the original
+operator. The implementation now checks the recovered relation directly after
+restart.
+
+**Refined extraction.** Harmonic Ritz values can identify the desired interior
+mode while the associated vector converges erratically. For each selected
+harmonic value :math:`\theta`, refined extraction minimizes
+:math:`\|(A-\theta I)V_m y\|` by taking the smallest right singular vector of
+:math:`[B_m-\theta I; b_m^*]` [Jia2002]_. The final eigenvalue is the
+original-operator Rayleigh quotient of that vector.
 
 **Locking and purging.** [Stewart2001]_ defines both: locking decouples a
 converged Ritz pair from the active subspace so later iterations do not rediscover
@@ -162,15 +188,17 @@ and a norm-based criterion (SLEPc's default; see [SLEPcSTR1]_). Gate: the basis
 must satisfy :math:`\|V^{*}V - I\| < 10^{-10}` at every restart.
 
 **Harmonic extraction breakdown.** :math:`(B_m - \kappa I)` is singular when
-:math:`\kappa` is itself a Ritz value. Detect via condition estimate and perturb
-:math:`\kappa`, rather than letting the solve return noise.
+:math:`\kappa` is itself a Ritz value. Detect this with a condition estimate and
+fall back to the untranslated quotient once the projected solve has lost about
+half the working digits.
 
-**Target selection.** Harmonic extraction needs a :math:`\kappa` near the wanted
-eigenvalue. [Roman2010]_ report the error is *insensitive* to the target, unlike
-shift-and-invert. GKX has a natural source: the dense eigenvalue at a small
-:math:`(N_\ell, N_m)` costs milliseconds and lands within a few percent, so
-continuation up the resolution ladder supplies :math:`\kappa` for free. Gate: the
-converged eigenvalue must be independent of :math:`\kappa` over a stated range.
+**Target and branch selection.** Harmonic extraction needs a :math:`\kappa`
+near the wanted eigenvalue. Resolution continuation is useful, but the dominant
+branch moves enough on the tested ladder that a target solver can converge
+accurately to the wrong physical mode. The numerical gate therefore uses each
+rung's dense value as an oracle target, while a separate continuation audit
+tests branch tracking. Production continuation must retain a small candidate
+subspace and use overlap/conditioning diagnostics rather than one scalar seed.
 
 **Convergence criterion.** Judge on the residual of the *original* problem,
 :math:`\|A x - \lambda x\| / \|\lambda\|`, not on the transformed one --
@@ -191,10 +219,10 @@ bitwise-identical output across two runs with the same seed.
 Measured result on real operators
 ----------------------------------
 
-The solver converges to machine precision on synthetic spectra harder than
-GKX's (relative error 3.8e-14 at an imaginary spread of 120, twice GKX's), and
-its analytic derivative agrees with finite differences to 1.4e-08. On the real
-GKX operator it does **not** converge:
+The corrected solver preserves the restarted Krylov relation to about
+``3e-15`` and passes normal and triangular non-normal synthetic spectra. On the
+shipped QA low-resolution VMEC input, using an oracle target and ``m=64``, it
+passes the first two rungs but not the larger two:
 
 .. list-table::
    :header-rows: 1
@@ -208,54 +236,52 @@ GKX operator it does **not** converge:
      - converged
    * - (4, 6)
      - 768
-     - 289
-     - 0.48 s
-     - 10.51 s
-     - 1.35e-03
-     - NO
+     - 47
+     - 0.39 s
+     - 4.19 s
+     - 6.62e-11
+     - YES
    * - (6, 8)
      - 1536
-     - 357
-     - 2.31 s
-     - 12.97 s
-     - 5.63e-01
-     - NO
+     - 66
+     - 1.66 s
+     - 11.67 s
+     - 4.42e-10
+     - YES
    * - (8, 10)
      - 2560
-     - 420
-     - 7.71 s
-     - 22.25 s
-     - 7.07e-04
+     - 86
+     - 6.04 s
+     - 17.71 s
+     - 3.83e-07
      - NO
    * - (10, 14)
      - 4480
-     - 526
-     - 36.57 s
-     - 15.01 s
-     - 1.01e+00
+     - 128
+     - 25.19 s
+     - 21.39 s
+     - 9.46e-02
      - NO
 
-Two rungs approach the right eigenvalue slowly (7e-4, 1.4e-3 relative) without
-reaching ``tol``; two lock onto a different eigenvalue entirely. 400 restarts
-and 6816 matrix-vector products in every case, so it is also not cheap.
+Increasing the basis confirms that the largest rung is approachable: at
+``m=128`` its eigenvalue error reaches ``1.4e-10``, but the vector residual is
+still ``5.9e-9`` after 26,064 matrix-vector products. That is evidence of a
+convergence-rate and subspace-size problem, not a reason to accept the current
+cost. Locking is required for multiple/clustered modes but cannot explain the
+present ``k=1`` failure.
 
-Diagnosis, and why the solvax tests did not catch it: those spectra were built
-as :math:`Q \Lambda Q^H` with :math:`Q` unitary, i.e. **normal** matrices. The
-GKX operator is not. Measured departure from normality
-:math:`\|A^HA - AA^H\| / \|A\|^2` is 7e-4 to 4e-3, with eigenvector-basis
-condition 31-62 and a condition number of about 5.5 on the wanted eigenvalue.
-That is mild non-normality rather than catastrophic, so it is a contributing
-cause and not a complete explanation -- but it does mean the residual
-overestimates eigenvalue accuracy, and it makes the synthetic suite easier than
-the real problem in exactly the dimension that matters.
+The remaining primary work is adaptive subspace growth and block/recycled
+candidate subspaces. In parallel, the shifted Hermite-line preconditioner must
+be extended with an explicit low-moment field Schur/Woodbury correction before
+rational or contour extraction can be competitive.
 
-Next steps before this can be reconsidered: add non-normal spectra to the solvax
-test suite so difficulty is represented honestly, and determine whether the
-erratic branch selection is a locking problem (step S5, not yet implemented)
-rather than a convergence-rate problem. Locking is the mechanism that stops an
-iteration from rediscovering and re-converging on a wrong branch, and its
-absence is the most likely explanation for two rungs landing on the wrong
-eigenvalue while two others approach the right one.
+Recycling the eigenvector, zero-padded into the next Hermite--Laguerre
+resolution, is much more effective than recycling only the scalar target. With
+guarded recycling and ``m=80``, the first three rungs pass V1 in 85, 134, and
+243 restarts. The largest rung improves to ``6.6e-8`` eigenvalue error and
+``3.5e-7`` residual, but still fails after 16,440 matrix-vector products and
+36.5 s versus 27.4 s dense. This is a useful continuation path, not yet a
+production replacement.
 
 .. _hks-plan:
 
@@ -273,37 +299,37 @@ uses. Validated by the 3e-16 agreement already measured.
 return the Krylov decomposition in the form S3 needs, with the orthogonality
 gate above. GKX already has this modulo the return signature.
 
-**S3 -- Krylov-Schur restart.** Schur form of :math:`B_m`, reordering so wanted
-Ritz values lead, truncation to the restart dimension. Gate against the dense
-spectrum of the real operator at small :math:`n`.
+**S3 -- Harmonic Krylov-Schur restart.** Translate, Schur-sort the modified
+quotient, truncate, and recover per STR-9. Gate the Krylov relation itself as
+well as the dense spectrum. Implemented in SOLVAX.
 
-**S4 -- Harmonic extraction.** :math:`g = (B_m - \kappa I)^{-*} b_m`, eigenvalues
-of :math:`B_m + g b_m^{*}`, with the breakdown guard. Gate: harmonic Ritz values
-approach eigenvalues near :math:`\kappa` faster than standard Ritz values do, on
-the real operator.
+**S4 -- Refined harmonic extraction.** Select through
+:math:`B_m + g b_m^{*}`, minimize the original residual in the retained
+subspace, and return its Rayleigh quotient. Implemented in SOLVAX.
 
-**S5 -- Locking and purging.** Per [Stewart2001]_ and [SLEPcSTR9]_. Required for
-computing the subdominant modes the transport work eventually needs, not only the
-rightmost.
+**S5 -- Block candidates, locking, and recycling.** Per [Stewart2001]_ and
+[SLEPcSTR9]_. Required for branch crossings and the subdominant modes transport
+eventually needs.
 
-**S6 -- Continuation-based target.** Solve at the smallest ladder rung densely,
-use that eigenvalue as :math:`\kappa` for the next rung, and so on. Removes the
-target as a user-facing knob.
+**S6 -- Candidate continuation.** Solve a small rung densely, retain several
+rightmost candidates, and propagate them with biorthogonal overlap. Periodically
+reseed from a broader spectral search so a newly dominant branch is not missed.
 
-**S7 -- Custom JVP.** For a simple eigenvalue,
-:math:`d\lambda = (w^{*} dA\, v)/(w^{*} v)` with :math:`w` the left eigenvector,
-so the eigenpair carries an analytic derivative rather than being differentiated
-through the iteration -- the same implicit-differentiation posture as the VMEC
-adjoint. Only then can the differentiable objective switch over.
+**S7 -- Custom VJP.** For growth-only objectives, use
+:math:`d\lambda = (w^{*} dA\, v)/(w^{*} v)`. For eigenvector-dependent
+quasilinear outputs, solve one bordered adjoint system per scalar objective and
+differentiate the matrix-free action :math:`A(p)v`. Near a cluster or
+exceptional point, differentiate an invariant subspace/projector or fail
+explicitly rather than returning a singular individual-mode gradient.
 
 .. _hks-validation:
 
 Validation gates
 ----------------
 
-All against **real GKX operators**. No synthetic matrices: the dense solve is an
-exact reference at the sizes where it is affordable, and it is the thing being
-replaced, so it is the correct comparison.
+Release gates use **real GKX operators** against dense references. Synthetic
+normal, non-normal, clustered, Grcar, and near-Jordan matrices remain mandatory
+unit tests because they isolate restart invariants and conditioning failures.
 
 **V1 Numerical agreement.** Eigenvalue matches dense to :math:`10^{-8}` relative
 across :math:`(N_\ell, N_m)` from (2,3) to (10,14), on at least three devices
@@ -334,8 +360,8 @@ ladder, with the crossover size reported. The claim to be established is the
 order-of-magnitude gain [Roman2010]_ report; anything less is still worth having
 but must be stated as measured.
 
-**V9 Gradient.** Once S7 lands: custom JVP agrees with dense-path ``jax.grad``
-and with finite differences to 1e-6 relative.
+**V9 Gradient.** Once S7 lands: custom VJP/JVP agrees with dense-path
+``jax.grad`` and frozen-branch directional finite differences to 1e-6 relative.
 
 References
 ----------
@@ -343,6 +369,11 @@ References
 .. [Stewart2001] G. W. Stewart, "A Krylov-Schur Algorithm for Large
    Eigenproblems", *SIAM J. Matrix Anal. Appl.* **23**\ (3), 601-614 (2001).
    https://doi.org/10.1137/S0895479800371529
+
+.. [Jia2002] Z. Jia, "The refined harmonic Arnoldi method and an implicitly
+   restarted refined algorithm for computing interior eigenpairs of large
+   matrices", *Applied Numerical Mathematics* **42**, 489-512 (2002).
+   https://doi.org/10.1016/S0168-9274(01)00132-5
 
 .. [Sorensen1992] D. C. Sorensen, "Implicit Application of Polynomial Filters in
    a k-Step Arnoldi Method", *SIAM J. Matrix Anal. Appl.* **13**\ (1), 357-385
