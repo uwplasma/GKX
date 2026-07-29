@@ -117,6 +117,37 @@ def _overlap(previous: jax.Array | None, current: jax.Array) -> float | None:
     )
 
 
+def _write_checkpoint(
+    output: Path,
+    *,
+    device: str,
+    input_path: Path,
+    ladder: tuple[tuple[int, int], ...],
+    rows: list[dict[str, object]],
+) -> Path:
+    """Preserve completed expensive rungs without representing a certificate."""
+
+    checkpoint = output.with_suffix(output.suffix + f".{device}.partial")
+    checkpoint.parent.mkdir(parents=True, exist_ok=True)
+    checkpoint.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "complete": False,
+                "scope": "interrupted-run recovery only; not a convergence certificate",
+                "device": device,
+                "input": str(input_path),
+                "input_sha256": hashlib.sha256(input_path.read_bytes()).hexdigest(),
+                "ladder": [list(rung) for rung in ladder],
+                "rows": rows,
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+    return checkpoint
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -133,6 +164,7 @@ def main() -> int:
     parser.add_argument("--convergence-tol", type=float, default=0.05)
     parser.add_argument("--chunk-horizon", type=float, default=30.0)
     parser.add_argument("--stability-dimension", type=int, default=12)
+    parser.add_argument("--stability-probe-count", type=int, default=2)
     parser.add_argument("--stability-safety", type=float, default=0.9)
     parser.add_argument(
         "--resolution",
@@ -149,6 +181,8 @@ def main() -> int:
     args = parser.parse_args()
     if args.ntheta < 8 or args.krylov_dim < 4:
         parser.error("--ntheta must be at least 8 and --krylov-dim at least 4")
+    if args.stability_probe_count < 1:
+        parser.error("--stability-probe-count must be positive")
 
     import vmex as vj
     from vmex import optimize as opt
@@ -163,6 +197,7 @@ def main() -> int:
     if len(ladder) < 3:
         parser.error("the convergence ladder requires at least three resolutions")
     reports = []
+    checkpoint_paths: list[Path] = []
     for device_index, name in enumerate(selected):
         input_path = repository / _DEVICES[name]
         equilibrium = opt.solve_equilibrium(vj.VmecInput.from_file(input_path))
@@ -205,6 +240,7 @@ def main() -> int:
                 tol=args.tol,
                 chunk_horizon=args.chunk_horizon,
                 stability_dimension=args.stability_dimension,
+                stability_probe_count=args.stability_probe_count,
                 stability_safety=args.stability_safety,
             )
             compiled.eigenvalue.block_until_ready()
@@ -221,6 +257,7 @@ def main() -> int:
                 tol=args.tol,
                 chunk_horizon=args.chunk_horizon,
                 stability_dimension=args.stability_dimension,
+                stability_probe_count=args.stability_probe_count,
                 stability_safety=args.stability_safety,
             )
             solution.eigenvalue.block_until_ready()
@@ -249,6 +286,15 @@ def main() -> int:
                 "warm_seconds": warm_seconds,
             }
             rows.append(row)
+            checkpoint_path = _write_checkpoint(
+                args.output,
+                device=name,
+                input_path=input_path,
+                ladder=ladder,
+                rows=rows,
+            )
+            if checkpoint_path not in checkpoint_paths:
+                checkpoint_paths.append(checkpoint_path)
             print(
                 f"{name.upper()} ({row['n_laguerre']:>2},{row['n_hermite']:>2}) "
                 f"n={row['n']:>6} growth={value.real:+.8e} "
@@ -258,15 +304,15 @@ def main() -> int:
         growth_changes = _changes(values, growth_only=True)
         eigenvalue_changes = _changes(values, growth_only=False)
         certified = all(row["converged"] for row in rows)
-        growth_resolution = _plateau(
-            growth_changes,
-            ladder,
-            args.convergence_tol,
+        growth_resolution = (
+            _plateau(growth_changes, ladder, args.convergence_tol)
+            if certified
+            else None
         )
-        eigenvalue_resolution = _plateau(
-            eigenvalue_changes,
-            ladder,
-            args.convergence_tol,
+        eigenvalue_resolution = (
+            _plateau(eigenvalue_changes, ladder, args.convergence_tol)
+            if certified
+            else None
         )
         reports.append(
             {
@@ -316,6 +362,7 @@ def main() -> int:
             "convergence_tolerance": args.convergence_tol,
             "chunk_horizon": args.chunk_horizon,
             "stability_dimension": args.stability_dimension,
+            "stability_probe_count": args.stability_probe_count,
             "stability_safety": args.stability_safety,
             "python": sys.version,
             "platform": platform.platform(),
@@ -334,6 +381,8 @@ def main() -> int:
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(artifact, indent=2) + "\n")
+    for checkpoint_path in checkpoint_paths:
+        checkpoint_path.unlink(missing_ok=True)
     print(f"\ncertificate {'PASS' if certified else 'FAIL'}: {args.output}")
     return 0 if certified else 1
 

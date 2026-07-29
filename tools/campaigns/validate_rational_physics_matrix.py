@@ -122,6 +122,7 @@ def main() -> int:
     parser.add_argument("--max-restarts", type=int, default=4)
     parser.add_argument("--propagator-chunk-horizon", type=float, default=30.0)
     parser.add_argument("--stability-dimension", type=int, default=12)
+    parser.add_argument("--stability-probe-count", type=int, default=2)
     parser.add_argument("--stability-safety", type=float, default=0.9)
     parser.add_argument(
         "--case",
@@ -146,8 +147,15 @@ def main() -> int:
         parser.error("--shift-offset must be positive")
     if args.propagator_chunk_horizon <= 0.0:
         parser.error("--propagator-chunk-horizon must be positive")
-    if args.stability_dimension < 2 or not 0.0 < args.stability_safety < 1.0:
-        parser.error("stability dimension/safety must satisfy dimension >= 2 and 0 < safety < 1")
+    if (
+        args.stability_dimension < 2
+        or args.stability_probe_count < 1
+        or not 0.0 < args.stability_safety < 1.0
+    ):
+        parser.error(
+            "stability settings require dimension >= 2, probe count >= 1, "
+            "and 0 < safety < 1"
+        )
     if args.output is None:
         args.output = Path("docs/_static") / (
             "rational_eigensolver_physics_matrix.json"
@@ -292,6 +300,7 @@ def main() -> int:
                 tol=args.tol,
                 chunk_horizon=args.propagator_chunk_horizon,
                 stability_dimension=args.stability_dimension,
+                stability_probe_count=args.stability_probe_count,
                 stability_safety=args.stability_safety,
             )
             compiled.eigenvalue.block_until_ready()
@@ -308,6 +317,7 @@ def main() -> int:
                 tol=args.tol,
                 chunk_horizon=args.propagator_chunk_horizon,
                 stability_dimension=args.stability_dimension,
+                stability_probe_count=args.stability_probe_count,
                 stability_safety=args.stability_safety,
             )
             solution.eigenvalue.block_until_ready()
@@ -405,6 +415,11 @@ def main() -> int:
             ),
             "stability_dimension": (
                 args.stability_dimension
+                if args.solver == "adaptive-propagator"
+                else None
+            ),
+            "stability_probe_count": (
+                args.stability_probe_count
                 if args.solver == "adaptive-propagator"
                 else None
             ),

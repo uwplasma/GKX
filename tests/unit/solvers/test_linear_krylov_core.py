@@ -737,10 +737,15 @@ def test_adaptive_propagator_halves_step_after_false_stable_residual(
 
     _grid, cache, params, v0, _term_cfg, terms = _tiny_krylov_setup(linked=False)
     attempted_steps: list[float] = []
+
+    def fake_estimate(*_args, probe_count: int, **_kwargs):
+        assert probe_count == 2
+        return SimpleNamespace(dt=0.2, operator_applications=12)
+
     monkeypatch.setattr(
         solvax,
         "estimate_rk4_timestep",
-        lambda *_args, **_kwargs: SimpleNamespace(dt=0.2, operator_applications=12),
+        fake_estimate,
     )
 
     def fake_adaptive(*_args, filter_dt: float, **_kwargs):

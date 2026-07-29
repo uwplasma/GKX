@@ -623,6 +623,7 @@ def adaptive_propagator_eigenpair(
     tol: float = 1.0e-10,
     chunk_horizon: float = 30.0,
     stability_dimension: int = 12,
+    stability_probe_count: int = 2,
     stability_safety: float = 0.9,
     max_stability_retries: int = 2,
 ) -> Any:
@@ -643,6 +644,7 @@ def adaptive_propagator_eigenpair(
         apply,
         v0,
         dimension=min(max(stability_dimension, 2), v0.size - 1),
+        probe_count=stability_probe_count,
         safety=stability_safety,
     )
     solution = None
@@ -651,7 +653,6 @@ def adaptive_propagator_eigenpair(
         dt_limit = estimate.dt / 2**retry
         steps = max(int(np.ceil(chunk_horizon / dt_limit)), 1)
         dt = chunk_horizon / steps
-
         def restart_once(vector: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
             return dominant_eigenpair_propagator_cached(
                 vector,

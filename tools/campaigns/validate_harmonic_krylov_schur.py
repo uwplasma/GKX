@@ -144,6 +144,7 @@ def main() -> int:
     parser.add_argument("--propagator-steps", type=int, default=5000)
     parser.add_argument("--propagator-chunk-horizon", type=float, default=30.0)
     parser.add_argument("--stability-dimension", type=int, default=12)
+    parser.add_argument("--stability-probe-count", type=int, default=2)
     parser.add_argument("--stability-safety", type=float, default=0.9)
     parser.add_argument("--max-stability-retries", type=int, default=2)
     parser.add_argument(
@@ -209,6 +210,8 @@ def main() -> int:
             parser.error("--propagator-chunk-horizon must be positive")
         if args.stability_dimension < 2:
             parser.error("--stability-dimension must be at least two")
+        if args.stability_probe_count < 1:
+            parser.error("--stability-probe-count must be positive")
         if not 0.0 < args.stability_safety < 1.0:
             parser.error("--stability-safety must lie in (0, 1)")
         if args.max_stability_retries < 0:
@@ -384,6 +387,7 @@ def main() -> int:
                 tol=args.tol,
                 chunk_horizon=args.propagator_chunk_horizon,
                 stability_dimension=args.stability_dimension,
+                stability_probe_count=args.stability_probe_count,
                 stability_safety=args.stability_safety,
                 max_stability_retries=args.max_stability_retries,
             )
@@ -405,6 +409,7 @@ def main() -> int:
                 tol=args.tol,
                 chunk_horizon=args.propagator_chunk_horizon,
                 stability_dimension=args.stability_dimension,
+                stability_probe_count=args.stability_probe_count,
                 stability_safety=args.stability_safety,
                 max_stability_retries=args.max_stability_retries,
             )
@@ -567,7 +572,7 @@ def main() -> int:
                     if args.solver == "long-horizon"
                     else (
                         solution.restarts * args.krylov_dim
-                        + args.stability_dimension
+                        + args.stability_dimension * args.stability_probe_count
                         if args.solver == "adaptive-propagator"
                         else solution.matvecs
                     )
@@ -665,6 +670,11 @@ def main() -> int:
             ),
             "stability_dimension": (
                 args.stability_dimension
+                if args.solver == "adaptive-propagator"
+                else None
+            ),
+            "stability_probe_count": (
+                args.stability_probe_count
                 if args.solver == "adaptive-propagator"
                 else None
             ),
