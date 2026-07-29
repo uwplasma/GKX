@@ -629,7 +629,7 @@ def adaptive_propagator_eigenpair(
     """Adapt RK4 stability and horizon while certifying the continuous pair."""
 
     try:
-        from solvax import adaptive_eigenpair, estimate_rk4_timestep
+        from solvax import adaptive_eigenpair, estimate_rk4_timestep  # type: ignore
     except ImportError as error:
         raise RuntimeError(
             "adaptive_propagator_eigenpair requires the SOLVAX adaptive "

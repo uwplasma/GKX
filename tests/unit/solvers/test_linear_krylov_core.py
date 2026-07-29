@@ -27,7 +27,12 @@ import gkx.solvers.linear.krylov_algorithms as ka
 
 _HAS_SOLVAX_EIGEN_API = all(
     callable(getattr(solvax, name, None))
-    for name in ("block_harmonic_krylov", "eigenpair")
+    for name in (
+        "adaptive_eigenpair",
+        "block_harmonic_krylov",
+        "eigenpair",
+        "estimate_rk4_timestep",
+    )
 )
 requires_solvax_eigen_api = pytest.mark.skipif(
     not _HAS_SOLVAX_EIGEN_API,
@@ -50,10 +55,12 @@ def test_published_solvax_contract_matches_consumed_interfaces() -> None:
 
 @requires_solvax_eigen_api
 def test_experimental_solvax_eigen_contract() -> None:
-    """The downstream branch must expose both experimental eigenmode APIs."""
+    """The downstream branch must expose every experimental eigenmode API."""
 
+    assert callable(solvax.adaptive_eigenpair)
     assert callable(solvax.block_harmonic_krylov)
     assert callable(solvax.eigenpair)
+    assert callable(solvax.estimate_rk4_timestep)
 
 
 def _tiny_krylov_setup(*, linked: bool = False):
