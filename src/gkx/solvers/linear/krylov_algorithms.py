@@ -175,7 +175,6 @@ def _build_shift_invert_precond(
 ) -> tuple[jnp.ndarray | None, Callable[[jnp.ndarray], jnp.ndarray] | None]:
     """Build the preconditioner used inside shift-invert Krylov GMRES solves."""
 
-    del term_cfg
     if mode is None or mode.lower() == "none":
         return None, None
     mode_key = mode.lower()
@@ -206,20 +205,37 @@ def _build_shift_invert_precond(
     }:
         return None, None
 
+    # Import lazily to keep the core operator module independent of the
+    # implicit integration policy at import time.
+    from gkx.solvers.linear.implicit import _build_shifted_hermite_preconditioner
+
+    coarse = mode_key in {
+        "hermite-line-coarse",
+        "hermite_line_coarse",
+        "hermite_coarse",
+        "streaming-line-coarse",
+    }
+    apply_preconditioner = _build_shifted_hermite_preconditioner(
+        v,
+        cache,
+        params,
+        term_cfg,
+        sigma,
+        coarse=coarse,
+    )
     damping = _compute_damping(v, cache, params)
-    diag = -damping.astype(v.dtype) - sigma
-    safe = jnp.where(jnp.abs(diag) > 0.0, diag, 1.0 + 0.0j)
-    precond = 1.0 / safe
-    shape = v.shape
-    size = v.size
+    diagonal = -damping.astype(v.dtype) - sigma
+    safe_diagonal = jnp.where(jnp.abs(diagonal) > 0.0, diagonal, 1.0 + 0.0j)
+    damping_inverse = 1.0 / safe_diagonal
+    shift_floor = jnp.sqrt(jnp.finfo(jnp.real(v).dtype).eps)
+    use_line = jnp.abs(sigma) > shift_floor
 
-    # A direct complex streaming-line factorization was tested here, but both
-    # ETG and KBM require field-coupled low moments for useful preconditioning.
-    def apply_precond_fallback(x_flat: jnp.ndarray) -> jnp.ndarray:
-        x = x_flat.reshape(shape)
-        return (x * precond).reshape(size)
+    def apply_with_zero_shift_fallback(x_flat: jnp.ndarray) -> jnp.ndarray:
+        line_result = apply_preconditioner(x_flat)
+        damping_result = (x_flat.reshape(v.shape) * damping_inverse).reshape(v.size)
+        return jnp.where(use_line, line_result, damping_result)
 
-    return precond, apply_precond_fallback
+    return None, apply_with_zero_shift_fallback
 
 
 @partial(jax.jit, static_argnames=("iterations",))

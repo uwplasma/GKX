@@ -22,10 +22,16 @@ from gkx.operators.linear.params import (
     _as_species_array,
     _resolve_implicit_preconditioner,
     _x64_enabled,
+    term_config_to_linear_terms,
 )
 from gkx.operators.linear.rhs import linear_rhs_cached
+from gkx.terms.config import TermConfig
 
-__all__ = ["_build_implicit_operator", "_integrate_linear_implicit_cached"]
+__all__ = [
+    "_build_implicit_operator",
+    "_build_shifted_hermite_preconditioner",
+    "_integrate_linear_implicit_cached",
+]
 
 
 @dataclass(frozen=True)
@@ -72,7 +78,12 @@ _IMPLICIT_PRECONDITIONER_ALIASES = {
         {"hermite-line", "hermite_line", "hermite", "streaming-line", "streaming_line"}
     ),
     "hermite_line_coarse": frozenset(
-        {"hermite-line-coarse", "hermite_line_coarse", "hermite_coarse", "streaming-line-coarse"}
+        {
+            "hermite-line-coarse",
+            "hermite_line_coarse",
+            "hermite_coarse",
+            "streaming-line-coarse",
+        }
     ),
     "identity": frozenset({"identity", "none", "off"}),
 }
@@ -80,15 +91,22 @@ _IMPLICIT_PRECONDITIONER_ALIASES = {
 
 def _prepare_implicit_state(
     G0: jnp.ndarray,
-    dt: float,
-    terms: LinearTerms | None,
+    dt: float | complex | jax.Array,
+    terms: LinearTerms | TermConfig | None,
 ) -> _ImplicitState:
-    terms = LinearTerms() if terms is None else terms
+    terms = (
+        term_config_to_linear_terms(terms)
+        if isinstance(terms, TermConfig)
+        else LinearTerms()
+        if terms is None
+        else terms
+    )
     base_dtype = jnp.complex128 if _x64_enabled() else jnp.complex64
     state_dtype = jnp.result_type(G0, base_dtype)
     G = jnp.asarray(G0, dtype=state_dtype)
     real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
-    dt_val = jnp.asarray(dt, dtype=real_dtype)
+    dt_dtype = jnp.result_type(real_dtype, jnp.asarray(dt).dtype)
+    dt_val = jnp.asarray(dt, dtype=dt_dtype)
 
     squeeze_species = False
     if G.ndim == 5:
@@ -389,7 +407,9 @@ def _apply_hermite_line_preconditioner(
 ) -> jnp.ndarray:
     x = x_flat.reshape(state.shape) * data.precond_full
     x = (
-        _solve_hermite_lines_linked(x, cache=cache, params=params, state=state, data=data)
+        _solve_hermite_lines_linked(
+            x, cache=cache, params=params, state=state, data=data
+        )
         if cache.use_twist_shift
         else _solve_hermite_lines_fft(
             x,
@@ -462,6 +482,48 @@ def _build_implicit_preconditioner_callable(
     if canonical == "identity":
         return lambda x_flat: x_flat
     raise ValueError(f"Unknown canonical implicit_preconditioner '{canonical}'")
+
+
+def _build_shifted_hermite_preconditioner(
+    G0: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    terms: LinearTerms | TermConfig,
+    sigma: jnp.ndarray,
+    *,
+    coarse: bool = False,
+) -> Callable[[jnp.ndarray], jnp.ndarray]:
+    """Approximate ``(A - sigma I)^-1`` with the FFT/Hermite line solver.
+
+    The implicit preconditioner approximates ``(I - dt A)^-1``.  Setting
+    ``dt = 1 / sigma`` and multiplying by ``-1 / sigma`` gives the corresponding
+    inverse for ``A - sigma I`` while reusing exactly the same physics-aware
+    streaming, drift, and damping factors.
+    """
+
+    sigma_value = jnp.asarray(sigma, dtype=G0.dtype)
+    real_dtype = jnp.real(jnp.empty((), dtype=G0.dtype)).dtype
+    shift_floor = jnp.sqrt(jnp.finfo(real_dtype).eps)
+    safe_sigma = jnp.where(
+        jnp.abs(sigma_value) > shift_floor,
+        sigma_value,
+        jnp.asarray(1.0 + 0.0j, dtype=G0.dtype),
+    )
+    state = _prepare_implicit_state(G0, 1.0 / safe_sigma, terms)
+    data = _build_implicit_preconditioner_data(cache, params, state)
+    canonical = "hermite_line_coarse" if coarse else "hermite_line"
+    line_inverse = _build_implicit_preconditioner_callable(
+        canonical,
+        cache=cache,
+        params=params,
+        state=state,
+        data=data,
+    )
+
+    def apply_shifted_preconditioner(x_flat: jnp.ndarray) -> jnp.ndarray:
+        return (-1.0 / safe_sigma) * line_inverse(x_flat)
+
+    return apply_shifted_preconditioner
 
 
 def _select_implicit_preconditioner(

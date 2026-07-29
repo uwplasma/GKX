@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import jax.numpy as jnp
 import pytest
 import solvax
@@ -10,7 +12,11 @@ from gkx.config import CycloneBaseCase, GridConfig
 from gkx.geometry import SAlphaGeometry
 from gkx.core.grid import build_spectral_grid
 from gkx.operators.linear.cache_builder import build_linear_cache
-from gkx.operators.linear.params import LinearParams, LinearTerms, linear_terms_to_term_config
+from gkx.operators.linear.params import (
+    LinearParams,
+    LinearTerms,
+    linear_terms_to_term_config,
+)
 import gkx.solvers.linear.krylov as lk
 import gkx.solvers.linear.krylov_algorithms as ka
 
@@ -341,6 +347,47 @@ def test_build_shift_invert_preconditioner_modes() -> None:
     y = op(v0.reshape(-1))
     assert y.shape == (v0.size,)
     assert jnp.all(jnp.isfinite(jnp.real(y)))
+
+
+def test_shifted_hermite_preconditioner_has_the_correct_complex_scaling() -> None:
+    """With a zero approximate operator, the inverse is exactly ``-I/sigma``."""
+
+    _grid, cache, params, v0, term_cfg, _terms = _tiny_krylov_setup(linked=False)
+    params = replace(
+        params,
+        nu=0.0,
+        hypercollisions_const=0.0,
+        hypercollisions_kz=0.0,
+    )
+    term_cfg = replace(term_cfg, streaming=0.0, collisions=0.0)
+    sigma = jnp.asarray(0.3 - 0.7j, dtype=v0.dtype)
+
+    _precond, op = lk._build_shift_invert_precond(
+        v0, cache, params, term_cfg, sigma, "hermite-line"
+    )
+
+    assert op is not None
+    result = op(v0.reshape(-1)).reshape(v0.shape)
+    assert jnp.allclose(result, -v0 / sigma, rtol=2e-6, atol=2e-6)
+
+
+def test_shifted_hermite_preconditioner_handles_a_zero_shift() -> None:
+    """A marginal target must use the finite damping fallback."""
+
+    _grid, cache, params, v0, term_cfg, _terms = _tiny_krylov_setup(linked=False)
+    sigma = jnp.asarray(0.0 + 0.0j, dtype=v0.dtype)
+    _diagonal, damping_op = lk._build_shift_invert_precond(
+        v0, cache, params, term_cfg, sigma, "damping"
+    )
+    _precond, line_op = lk._build_shift_invert_precond(
+        v0, cache, params, term_cfg, sigma, "hermite-line"
+    )
+
+    assert damping_op is not None and line_op is not None
+    expected = damping_op(v0.reshape(-1))
+    result = line_op(v0.reshape(-1))
+    assert jnp.all(jnp.isfinite(result))
+    assert jnp.allclose(result, expected)
 
 
 def test_build_shift_invert_preconditioner_linked_branch() -> None:
