@@ -1,9 +1,9 @@
 Harmonic Krylov-Schur eigensolver
 =================================
 
-Status: specification and validation plan. No solver is wired into the objective
-until every gate in :ref:`hks-validation` passes against the dense reference on
-real GKX operators.
+Status: **not merged, and not ready to merge.** The solver exists and is
+validated in solvax, but gate V1 fails on real GKX operators. Measurements and
+diagnosis below.
 
 .. _hks-motivation:
 
@@ -185,6 +185,77 @@ matrix-vector products stay on device. Keep that split explicit.
 **Determinism.** Restart decisions must not depend on non-deterministic
 reductions, or the same input gives different eigenvalues on reruns. Gate:
 bitwise-identical output across two runs with the same seed.
+
+.. _hks-result:
+
+Measured result on real operators
+----------------------------------
+
+The solver converges to machine precision on synthetic spectra harder than
+GKX's (relative error 3.8e-14 at an imaginary spread of 120, twice GKX's), and
+its analytic derivative agrees with finite differences to 1.4e-08. On the real
+GKX operator it does **not** converge:
+
+.. list-table::
+   :header-rows: 1
+
+   * - :math:`(N_\ell, N_m)`
+     - n
+     - ratio
+     - dense
+     - hks
+     - rel. error
+     - converged
+   * - (4, 6)
+     - 768
+     - 289
+     - 0.48 s
+     - 10.51 s
+     - 1.35e-03
+     - NO
+   * - (6, 8)
+     - 1536
+     - 357
+     - 2.31 s
+     - 12.97 s
+     - 5.63e-01
+     - NO
+   * - (8, 10)
+     - 2560
+     - 420
+     - 7.71 s
+     - 22.25 s
+     - 7.07e-04
+     - NO
+   * - (10, 14)
+     - 4480
+     - 526
+     - 36.57 s
+     - 15.01 s
+     - 1.01e+00
+     - NO
+
+Two rungs approach the right eigenvalue slowly (7e-4, 1.4e-3 relative) without
+reaching ``tol``; two lock onto a different eigenvalue entirely. 400 restarts
+and 6816 matrix-vector products in every case, so it is also not cheap.
+
+Diagnosis, and why the solvax tests did not catch it: those spectra were built
+as :math:`Q \Lambda Q^H` with :math:`Q` unitary, i.e. **normal** matrices. The
+GKX operator is not. Measured departure from normality
+:math:`\|A^HA - AA^H\| / \|A\|^2` is 7e-4 to 4e-3, with eigenvector-basis
+condition 31-62 and a condition number of about 5.5 on the wanted eigenvalue.
+That is mild non-normality rather than catastrophic, so it is a contributing
+cause and not a complete explanation -- but it does mean the residual
+overestimates eigenvalue accuracy, and it makes the synthetic suite easier than
+the real problem in exactly the dimension that matters.
+
+Next steps before this can be reconsidered: add non-normal spectra to the solvax
+test suite so difficulty is represented honestly, and determine whether the
+erratic branch selection is a locking problem (step S5, not yet implemented)
+rather than a convergence-rate problem. Locking is the mechanism that stops an
+iteration from rediscovering and re-converging on a wrong branch, and its
+absence is the most likely explanation for two rungs landing on the wrong
+eigenvalue while two others approach the right one.
 
 .. _hks-plan:
 
