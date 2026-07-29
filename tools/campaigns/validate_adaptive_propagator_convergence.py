@@ -89,6 +89,34 @@ def _changes(values: list[complex], *, growth_only: bool) -> list[float]:
     ]
 
 
+def _plateau(
+    changes: list[float],
+    ladder: tuple[tuple[int, int], ...],
+    tolerance: float,
+) -> tuple[int, int] | None:
+    for index in range(len(changes) - 1):
+        if changes[index] < tolerance and changes[index + 1] < tolerance:
+            return ladder[index]
+    return None
+
+
+def _overlap(previous: jax.Array | None, current: jax.Array) -> float | None:
+    if previous is None:
+        return None
+    old = np.asarray(previous)
+    new = np.asarray(current)
+    common = tuple(
+        slice(0, min(old_size, new_size))
+        for old_size, new_size in zip(old.shape, new.shape, strict=True)
+    )
+    old_flat = old[common].reshape(-1)
+    new_flat = new[common].reshape(-1)
+    return float(
+        abs(np.vdot(old_flat, new_flat))
+        / max(np.linalg.norm(old_flat) * np.linalg.norm(new_flat), np.finfo(float).tiny)
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -200,6 +228,7 @@ def main() -> int:
             warm_seconds = time.time() - started
             value = complex(np.asarray(solution.eigenvalue))
             values.append(value)
+            continuation_overlap = _overlap(previous, solution.eigenvector)
             if solution.converged:
                 previous = solution.eigenvector
             row = {
@@ -215,6 +244,7 @@ def main() -> int:
                 "selected_propagator_dt": solution.filter_dt,
                 "selected_propagator_steps": solution.filter_steps,
                 "original_operator_evaluations": solution.operator_applications,
+                "continuation_overlap": continuation_overlap,
                 "compile_seconds": compile_seconds,
                 "warm_seconds": warm_seconds,
             }
@@ -228,8 +258,15 @@ def main() -> int:
         growth_changes = _changes(values, growth_only=True)
         eigenvalue_changes = _changes(values, growth_only=False)
         certified = all(row["converged"] for row in rows)
-        growth_converged = all(
-            change < args.convergence_tol for change in growth_changes
+        growth_resolution = _plateau(
+            growth_changes,
+            ladder,
+            args.convergence_tol,
+        )
+        eigenvalue_resolution = _plateau(
+            eigenvalue_changes,
+            ladder,
+            args.convergence_tol,
         )
         reports.append(
             {
@@ -237,7 +274,16 @@ def main() -> int:
                 "input": str(_DEVICES[name]),
                 "input_sha256": hashlib.sha256(input_path.read_bytes()).hexdigest(),
                 "certified": certified,
-                "growth_converged": growth_converged,
+                "growth_converged": growth_resolution is not None,
+                "growth_converged_resolution": (
+                    list(growth_resolution) if growth_resolution is not None else None
+                ),
+                "eigenvalue_converged": eigenvalue_resolution is not None,
+                "eigenvalue_converged_resolution": (
+                    list(eigenvalue_resolution)
+                    if eigenvalue_resolution is not None
+                    else None
+                ),
                 "growth_relative_changes": growth_changes,
                 "eigenvalue_relative_changes": eigenvalue_changes,
                 "rows": rows,
@@ -251,10 +297,13 @@ def main() -> int:
         "all_growth_converged": all(
             report["growth_converged"] for report in reports
         ),
+        "all_eigenvalue_converged": all(
+            report["eigenvalue_converged"] for report in reports
+        ),
         "scope": (
             "certificate-only ntheta=64 velocity-space ladder beyond the dense "
-            "oracle memory range; convergence requires both consecutive growth "
-            "changes to pass the declared tolerance"
+            "oracle memory range; growth and full-eigenvalue convergence "
+            "separately require two consecutive changes to pass tolerance"
         ),
         "provenance": {
             "ntheta": args.ntheta,

@@ -1,0 +1,256 @@
+{
+  "schema_version": 1,
+  "certified": true,
+  "all_growth_converged": true,
+  "all_eigenvalue_converged": false,
+  "scope": "certificate-only ntheta=64 velocity-space ladder beyond the dense oracle memory range; growth and full-eigenvalue convergence separately require two consecutive changes to pass the declared tolerance",
+  "provenance": {
+    "ntheta": 64,
+    "s_index": 7,
+    "selected_ky_index": 1,
+    "ladder": [
+      [
+        16,
+        24
+      ],
+      [
+        20,
+        28
+      ],
+      [
+        24,
+        32
+      ],
+      [
+        28,
+        36
+      ]
+    ],
+    "krylov_dim": 16,
+    "max_restarts": 4,
+    "residual_tolerance": 1e-09,
+    "convergence_tolerance": 0.05,
+    "chunk_horizon": 30.0,
+    "stability_dimension": 12,
+    "stability_safety": 0.9,
+    "python": "3.10.12 (main, Jan  8 2026, 06:52:19) [GCC 11.4.0]",
+    "platform": "Linux-6.17.9-76061709-generic-x86_64-with-glibc2.35",
+    "jax": "0.6.2",
+    "jaxlib": "0.6.2",
+    "gkx": "1.7.1",
+    "solvax": "0.11.1",
+    "gkx_commit": "90101cf9963a0fc66048ccd906cdca55b9f868a4",
+    "solvax_commit": "0aa2fad34c713ec415ce11642eef4a2496eb0ec5",
+    "jax_x64": true,
+    "devices": [
+      "cuda:0"
+    ]
+  },
+  "devices": [
+    {
+      "device": "qa",
+      "input": "examples/vmec/input.LandremanPaul2021_QA_lowres",
+      "input_sha256": "4f56d4c674b6340a9e359d3645ab1dbb4f841eccc563b5fc969a27928cb9cf84",
+      "certified": true,
+      "growth_converged": true,
+      "growth_converged_resolution": [
+        16,
+        24
+      ],
+      "eigenvalue_converged": true,
+      "eigenvalue_converged_resolution": [
+        16,
+        24
+      ],
+      "growth_relative_changes": [
+        0.0076478333026401765,
+        0.006603737971685322,
+        0.006917397970783358
+      ],
+      "eigenvalue_relative_changes": [
+        0.0051051235089253555,
+        0.004476286550715054,
+        0.00486323539393981
+      ],
+      "rows": [
+        {
+          "n_laguerre": 16,
+          "n_hermite": 24,
+          "n": 24576,
+          "eigenvalue": [
+            0.05123257801807664,
+            -0.06298106812370487
+          ],
+          "residual": 4.816854699980943e-10,
+          "converged": true,
+          "stability_passed": true,
+          "filter_growth_defect": -2.282896094385478e-15,
+          "restarts": 2,
+          "selected_propagator_dt": 0.009383797309978105,
+          "selected_propagator_steps": 3197,
+          "original_operator_evaluations": 409232,
+          "compile_seconds": 85.62902116775513,
+          "warm_seconds": 67.66139435768127
+        },
+        {
+          "n_laguerre": 20,
+          "n_hermite": 28,
+          "n": 35840,
+          "eigenvalue": [
+            0.051627415888639026,
+            -0.0628525120402379
+          ],
+          "residual": 6.953464691072286e-13,
+          "converged": true,
+          "stability_passed": true,
+          "filter_growth_defect": 1.4051260155412137e-14,
+          "restarts": 2,
+          "selected_propagator_dt": 0.008655510675129832,
+          "selected_propagator_steps": 3466,
+          "original_operator_evaluations": 443664,
+          "compile_seconds": 91.04225206375122,
+          "warm_seconds": 88.66012024879456
+        },
+        {
+          "n_laguerre": 24,
+          "n_hermite": 32,
+          "n": 49152,
+          "eigenvalue": [
+            0.05197061622038547,
+            -0.06272931208301447
+          ],
+          "residual": 7.461835427045632e-13,
+          "converged": true,
+          "stability_passed": true,
+          "filter_growth_defect": 1.5286383270307624e-14,
+          "restarts": 2,
+          "selected_propagator_dt": 0.00801924619085806,
+          "selected_propagator_steps": 3741,
+          "original_operator_evaluations": 478864,
+          "compile_seconds": 124.31117725372314,
+          "warm_seconds": 114.64683437347412
+        },
+        {
+          "n_laguerre": 28,
+          "n_hermite": 36,
+          "n": 64512,
+          "eigenvalue": [
+            0.052332621792176445,
+            -0.06256710652107192
+          ],
+          "residual": 7.65375975103771e-13,
+          "converged": true,
+          "stability_passed": true,
+          "filter_growth_defect": 2.904620988175566e-14,
+          "restarts": 2,
+          "selected_propagator_dt": 0.007466401194624191,
+          "selected_propagator_steps": 4018,
+          "original_operator_evaluations": 514320,
+          "compile_seconds": 160.12427473068237,
+          "warm_seconds": 149.46790432929993
+        }
+      ]
+    },
+    {
+      "device": "qi",
+      "input": "examples/vmec/input.nfp3_QI_fixed_resolution_final",
+      "input_sha256": "b64dc2221e19452d426c60104b0c67d12de9b13a7ca5152a43b562bbf36fc0ba",
+      "certified": true,
+      "growth_converged": true,
+      "growth_converged_resolution": [
+        20,
+        28
+      ],
+      "eigenvalue_converged": false,
+      "eigenvalue_converged_resolution": null,
+      "growth_relative_changes": [
+        0.0671385947114599,
+        0.0014703949685003672,
+        0.024503729602021667
+      ],
+      "eigenvalue_relative_changes": [
+        0.25703669250967764,
+        0.23416452728738618,
+        0.1958468953681606
+      ],
+      "rows": [
+        {
+          "n_laguerre": 16,
+          "n_hermite": 24,
+          "n": 24576,
+          "eigenvalue": [
+            0.0979423079011756,
+            0.178889409653868
+          ],
+          "residual": 2.5041430860407165e-10,
+          "converged": true,
+          "stability_passed": true,
+          "filter_growth_defect": 1.1809997424450103e-14,
+          "restarts": 1,
+          "selected_propagator_dt": 0.009287925696594427,
+          "selected_propagator_steps": 3230,
+          "original_operator_evaluations": 206734,
+          "compile_seconds": 43.49287700653076,
+          "warm_seconds": 34.08113694190979
+        },
+        {
+          "n_laguerre": 20,
+          "n_hermite": 28,
+          "n": 35840,
+          "eigenvalue": [
+            0.09178030706279337,
+            0.13696207039132077
+          ],
+          "residual": 1.1141961828007358e-11,
+          "converged": true,
+          "stability_passed": true,
+          "filter_growth_defect": -3.991251773527438e-14,
+          "restarts": 1,
+          "selected_propagator_dt": 0.008450704225352112,
+          "selected_propagator_steps": 3550,
+          "original_operator_evaluations": 227214,
+          "compile_seconds": 46.71969747543335,
+          "warm_seconds": 46.094791650772095
+        },
+        {
+          "n_laguerre": 24,
+          "n_hermite": 32,
+          "n": 49152,
+          "eigenvalue": [
+            0.09191545909136872,
+            0.10439226487705244
+          ],
+          "residual": 1.8839317307594936e-11,
+          "converged": true,
+          "stability_passed": true,
+          "filter_growth_defect": -1.416922135177856e-14,
+          "restarts": 1,
+          "selected_propagator_dt": 0.00779423226812159,
+          "selected_propagator_steps": 3849,
+          "original_operator_evaluations": 246350,
+          "compile_seconds": 62.06777572631836,
+          "warm_seconds": 57.794676065444946
+        },
+        {
+          "n_laguerre": 28,
+          "n_hermite": 36,
+          "n": 64512,
+          "eigenvalue": [
+            0.09422430600772004,
+            0.08026160384352601
+          ],
+          "residual": 6.587220725291369e-12,
+          "converged": true,
+          "stability_passed": true,
+          "filter_growth_defect": -8.382183835919932e-15,
+          "restarts": 1,
+          "selected_propagator_dt": 0.007267441860465116,
+          "selected_propagator_steps": 4128,
+          "original_operator_evaluations": 264206,
+          "compile_seconds": 79.75197863578796,
+          "warm_seconds": 75.66010117530823
+        }
+      ]
+    }
+  ]
+}
