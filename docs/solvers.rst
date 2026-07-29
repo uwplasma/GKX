@@ -32,20 +32,25 @@ available:
 Implicit time stepping has one supported complex unitary-Givens FGMRES
 algorithm. Users configure its tolerance, restart length, iteration limit,
 and physical preconditioner rather than selecting equivalent backend aliases.
-Shift-invert eigenmode extraction is separate and is not yet migrated because
-its branch-continuity gate remains open. Complex Ritz vectors now use the
-mathematically correct ``V @ y`` reconstruction. Arnoldi directions smaller
-than a dtype-scaled operator threshold are treated as numerical breakdown
-rather than normalized roundoff. Preconditioned shifted solves are also checked
-against the original physical linear system and retried without the
-preconditioner if that residual is not converged. An outer eigenpair-residual
-gate then rejects both primary and fallback pairs. These corrections reduce a
-representative reduced shifted-solve residual from ``4.76`` to ``1.14e-5`` and
-recover its dense-reference mode with residual ``3.18e-6``. The full canonical
-KBM audit now reports outer residual ``0.936`` against the ``0.1`` threshold
-after preserving the preconditioned iterate as the unpreconditioned retry seed,
-so this lane remains unpromoted rather than silently returning that branch;
-validated time integration remains the release path.
+Shift-invert and block-rational eigenmode extraction now reuse SOLVAX's
+right-preconditioned FGMRES. Its least-squares norm is the physical residual
+``||b - (A - sigma I)x||``; this removes the former false-convergence path in
+which a small left-preconditioned norm triggered a complete unpreconditioned
+retry. Complex Ritz vectors use the mathematically correct ``V @ y``
+reconstruction, small Arnoldi directions are treated as numerical breakdown,
+and an outer original-operator eigenpair residual remains mandatory.
+
+The ``field-corrected`` shifted preconditioner represents the three
+low-moment field maps exactly as a Woodbury correction to the Hermite-line
+inverse. On the driven electrostatic unit fixture this reduces the one-apply
+shifted residual from ``3.01`` to ``0.143``. On the first circular-tokamak
+validation rung (``n=768``), a one-candidate rational solve reaches
+``6.7e-13`` original-operator residual and ``1.3e-14`` relative eigenvalue
+error in 9.5 seconds. The next rung (``n=1536``) does not pass: with a
+512-vector inner restart it takes 75.9 seconds and stops at ``2.1e-6``
+eigenpair residual. The rational lane is therefore an explicit experimental
+method, not the release default; validated dense eigensolves and time
+integration remain the fail-closed paths.
 
 Two bounded full-resolution refinements were also rejected. Re-projecting the
 physical operator onto the shift-focused Arnoldi basis returned a non-finite
@@ -98,12 +103,10 @@ continues to use validated time integration for KBM, while a future direct
 interior spectral transformation must establish branch identity before it can
 be considered an acceleration.
 
-The generic inner solve is intentionally not migrated to SOLVAX yet. A matched
-SOLVAX 0.7.3 FGMRES probe at reduced ``Nl=8,Nm=24`` resolution selected a
-damped ``-2.1301+0.8333i`` eigenvalue with physical residual ``0.912``, compared
-with ``0.584`` for the current JAX GMRES route. SOLVAX remains the owner of the
-admitted implicit linear and nonlinear solves; shift-invert migration requires
-both lower residual and identical KBM branch selection.
+The earlier SOLVAX 0.7.3 comparison used a left/right-preconditioning mismatch
+and is superseded by the physical-residual FGMRES measurements above. Migration
+of the inner algebra is complete; promotion of the eigensolver is still blocked
+by high-resolution cost, residual, and branch-identity gates.
 
 Acceptance also follows the requested spectral selection. Growth-selected
 searches enforce ``fallback_real_floor``; nearest-shift, overlap, and explicit

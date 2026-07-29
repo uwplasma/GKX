@@ -1,12 +1,14 @@
 Harmonic Krylov-Schur eigensolver
 =================================
 
-Status: **not ready to merge.** The original SOLVAX restart was not the
+Status: **not ready to merge as the production objective.** The original SOLVAX restart was not the
 harmonic Krylov--Schur algorithm in STR-9: it extracted harmonic Ritz pairs but
 Schur-sorted the unmodified projected matrix during restart. The corrected
 translation/recovery restart now passes the first two real-operator oracle
-rungs, but larger rungs still fail the accuracy/performance gate. Measurements
-and remaining work are below.
+rungs. Block candidates, locking, a field-corrected rational alternative, and
+implicit eigenpair sensitivities are implemented, but larger real-operator
+rungs still fail the accuracy/performance gate. Measurements and remaining work
+are below.
 
 .. _hks-motivation:
 
@@ -96,11 +98,12 @@ exceeding the real by three orders of magnitude). Their conclusions:
   eigensolver.
 
 Those measurements are evidence for the method, not a guarantee for every GKX
-operator. GKX now has an FFT-in-``z``/tridiagonal-Hermite line inverse that can
-precondition shifted solves. A first reuse of that inverse substantially
-improves the inner residual, but field-coupled low moments still prevent it from
-meeting the production gate cheaply. Harmonic and rational approaches therefore
-remain measured competitors rather than assumptions.
+operator. GKX now has an FFT-in-``z``/tridiagonal-Hermite line inverse plus an
+exact Woodbury representation of the field-coupled low moments. The correction
+substantially improves the inner residual, but the kinetic complement still
+requires a large FGMRES space at the second validation rung. Harmonic and
+rational approaches therefore remain measured competitors rather than
+assumptions.
 
 Harmonic extraction alone is **not** sufficient. Applied to a single Arnoldi
 pass it does not recover the interior eigenvalue on GKX's operator. The method
@@ -270,10 +273,11 @@ convergence-rate and subspace-size problem, not a reason to accept the current
 cost. Locking is required for multiple/clustered modes but cannot explain the
 present ``k=1`` failure.
 
-The remaining primary work is adaptive subspace growth and block/recycled
-candidate subspaces. In parallel, the shifted Hermite-line preconditioner must
-be extended with an explicit low-moment field Schur/Woodbury correction before
-rational or contour extraction can be competitive.
+The remaining primary work is adaptive method selection: polynomial harmonic
+restarts where they converge cheaply, one-candidate rational extraction for an
+isolated objective, and block candidates only where continuation or a crossing
+requires them. The low-moment field Schur/Woodbury correction is implemented;
+the measured bottleneck is now convergence of the kinetic complement.
 
 Recycling the eigenvector, zero-padded into the next Hermite--Laguerre
 resolution, is much more effective than recycling only the scalar target. With
@@ -307,20 +311,23 @@ well as the dense spectrum. Implemented in SOLVAX.
 :math:`B_m + g b_m^{*}`, minimize the original residual in the retained
 subspace, and return its Rayleigh quotient. Implemented in SOLVAX.
 
-**S5 -- Block candidates, locking, and recycling.** Per [Stewart2001]_ and
-[SLEPcSTR9]_. Required for branch crossings and the subdominant modes transport
-eventually needs.
+**S5 -- Block candidates, locking, and recycling.** Implemented in SOLVAX,
+including structured continuation seeds, duplicate rejection, exact-target
+breakdown handling, and an optional rational subspace action. Required for
+branch crossings and the subdominant modes transport eventually needs.
 
 **S6 -- Candidate continuation.** Solve a small rung densely, retain several
 rightmost candidates, and propagate them with biorthogonal overlap. Periodically
 reseed from a broader spectral search so a newly dominant branch is not missed.
 
-**S7 -- Custom VJP.** For growth-only objectives, use
+**S7 -- Implicit eigenpair derivative.** SOLVAX now provides a custom JVP. For
+growth-only objectives it uses
 :math:`d\lambda = (w^{*} dA\, v)/(w^{*} v)`. For eigenvector-dependent
-quasilinear outputs, solve one bordered adjoint system per scalar objective and
-differentiate the matrix-free action :math:`A(p)v`. Near a cluster or
-exceptional point, differentiate an invariant subspace/projector or fail
-explicitly rather than returning a singular individual-mode gradient.
+quasilinear outputs, it solves Nelson's bordered system [Nelson1976]_ for the
+right-eigenvector tangent and differentiates the matrix-free action
+:math:`A(p)v`. A left/right condition-number guard fails explicitly near a
+cluster or exceptional point. Replacing GKX's dense objective remains gated on
+the real-operator solver qualification.
 
 .. _hks-validation:
 
@@ -374,6 +381,10 @@ References
    restarted refined algorithm for computing interior eigenpairs of large
    matrices", *Applied Numerical Mathematics* **42**, 489-512 (2002).
    https://doi.org/10.1016/S0168-9274(01)00132-5
+
+.. [Nelson1976] R. B. Nelson, "Simplified calculation of eigenvector
+   derivatives", *AIAA Journal* **14**\ (9), 1201-1205 (1976).
+   https://doi.org/10.2514/3.7211
 
 .. [Sorensen1992] D. C. Sorensen, "Implicit Application of Polynomial Filters in
    a k-Step Arnoldi Method", *SIAM J. Matrix Anal. Appl.* **13**\ (1), 357-385

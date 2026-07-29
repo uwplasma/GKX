@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import math
 from functools import partial
 from typing import Callable
 
 import jax
 import jax.numpy as jnp
-from jax.scipy.sparse.linalg import gmres
+from solvax import gmres
 
 from gkx.operators.linear.cache_arrays import (
     collision_damping,
@@ -202,27 +203,56 @@ def _build_shift_invert_precond(
         "hermite_line_coarse",
         "hermite_coarse",
         "streaming-line-coarse",
+        "field-corrected",
+        "field_corrected",
+        "field-schur",
+        "field_schur",
+        "field-corrected-coarse",
+        "field_corrected_coarse",
     }:
         return None, None
 
     # Import lazily to keep the core operator module independent of the
     # implicit integration policy at import time.
-    from gkx.solvers.linear.implicit import _build_shifted_hermite_preconditioner
+    from gkx.solvers.linear.implicit import (
+        _build_field_corrected_shifted_preconditioner,
+        _build_shifted_hermite_preconditioner,
+    )
 
     coarse = mode_key in {
         "hermite-line-coarse",
         "hermite_line_coarse",
         "hermite_coarse",
         "streaming-line-coarse",
+        "field-corrected-coarse",
+        "field_corrected_coarse",
     }
-    apply_preconditioner = _build_shifted_hermite_preconditioner(
-        v,
-        cache,
-        params,
-        term_cfg,
-        sigma,
-        coarse=coarse,
-    )
+    field_corrected = mode_key in {
+        "field-corrected",
+        "field_corrected",
+        "field-schur",
+        "field_schur",
+        "field-corrected-coarse",
+        "field_corrected_coarse",
+    }
+    if field_corrected:
+        apply_preconditioner = _build_field_corrected_shifted_preconditioner(
+            v,
+            cache,
+            params,
+            term_cfg,
+            sigma,
+            coarse=coarse,
+        )
+    else:
+        apply_preconditioner = _build_shifted_hermite_preconditioner(
+            v,
+            cache,
+            params,
+            term_cfg,
+            sigma,
+            coarse=coarse,
+        )
     damping = _compute_damping(v, cache, params)
     diagonal = -damping.astype(v.dtype) - sigma
     safe_diagonal = jnp.where(jnp.abs(diagonal) > 0.0, diagonal, 1.0 + 0.0j)
@@ -330,6 +360,10 @@ def _shift_invert_apply_factory(
     gmres_solve_method: str,
     shift_preconditioner: str | None,
 ):
+    if gmres_solve_method not in {"batched", "incremental", "flexible"}:
+        raise ValueError(
+            "shift_solve_method must be 'batched', 'incremental', or 'flexible'"
+        )
     shape = v0.shape
     size = v0.size
     _precond, precond_op = _build_shift_invert_precond(
@@ -344,38 +378,24 @@ def _shift_invert_apply_factory(
 
     def apply_shift_invert(x: jnp.ndarray, _cache, _params, _term_cfg) -> jnp.ndarray:
         b = x.reshape(size)
-
-        def solve(preconditioner, initial_guess=None):
-            if initial_guess is not None:
-                x0 = initial_guess
-            elif preconditioner is not None:
-                x0 = preconditioner(b)
-            else:
-                x0 = b
-            solution, _info = gmres(
-                matvec,
-                b,
-                x0=x0,
-                tol=gmres_tol,
-                maxiter=gmres_maxiter,
-                restart=gmres_restart,
-                M=preconditioner,
-                solve_method=gmres_solve_method,
-            )
-            return solution
-
-        sol = solve(precond_op)
-        if precond_op is not None:
-            real_dtype = jnp.real(jnp.empty((), dtype=b.dtype)).dtype
-            relative_floor = jnp.maximum(
-                10.0 * gmres_tol,
-                100.0 * jnp.finfo(real_dtype).eps,
-            )
-            true_residual = jnp.linalg.norm(matvec(sol) - b)
-            true_tolerance = relative_floor * jnp.linalg.norm(b)
-            retry = ~jnp.isfinite(true_residual) | (true_residual > true_tolerance)
-            sol = jax.lax.cond(retry, lambda: solve(None, sol), lambda: sol)
-        return sol.reshape(shape)
+        # SOLVAX FGMRES applies the structured inverse on the right, so its
+        # least-squares norm is the physical residual ||b - (A-sigma I)x||.
+        # A left-preconditioned solve can report convergence in a transformed
+        # norm while this residual remains O(1), which previously forced an
+        # expensive unpreconditioned retry for nearly every right-hand side.
+        restart = min(max(gmres_restart, 1), gmres_maxiter, size)
+        max_restarts = max(1, math.ceil(gmres_maxiter / restart))
+        initial_guess = precond_op(b) if precond_op is not None else b
+        solution = gmres(
+            matvec,
+            b,
+            x0=initial_guess,
+            precond=precond_op,
+            rtol=gmres_tol,
+            restart=restart,
+            max_restarts=max_restarts,
+        )
+        return solution.x.reshape(shape)
 
     return apply_shift_invert
 

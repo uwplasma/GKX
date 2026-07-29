@@ -8,7 +8,7 @@ from typing import Callable
 import jax
 import jax.numpy as jnp
 import numpy as np
-from solvax import gmres, tridiagonal_solve
+from solvax import gmres, low_rank_corrected, tridiagonal_solve
 
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.cache_arrays import (
@@ -22,13 +22,16 @@ from gkx.operators.linear.params import (
     _as_species_array,
     _resolve_implicit_preconditioner,
     _x64_enabled,
+    linear_terms_to_term_config,
     term_config_to_linear_terms,
 )
 from gkx.operators.linear.rhs import linear_rhs_cached
-from gkx.terms.config import TermConfig
+from gkx.terms.assembly import assemble_rhs_cached_with_fields, compute_fields_cached
+from gkx.terms.config import FieldState, TermConfig
 
 __all__ = [
     "_build_implicit_operator",
+    "_build_field_corrected_shifted_preconditioner",
     "_build_shifted_hermite_preconditioner",
     "_integrate_linear_implicit_cached",
 ]
@@ -521,9 +524,145 @@ def _build_shifted_hermite_preconditioner(
     )
 
     def apply_shifted_preconditioner(x_flat: jnp.ndarray) -> jnp.ndarray:
-        return (-1.0 / safe_sigma) * line_inverse(x_flat)
+        result = (-1.0 / safe_sigma) * line_inverse(x_flat)
+        return result.astype(x_flat.dtype)
 
     return apply_shifted_preconditioner
+
+
+def _pack_field_state(fields: FieldState) -> jnp.ndarray:
+    """Pack only active linear field arrays into one low-moment vector."""
+
+    arrays = [fields.phi]
+    if fields.apar is not None:
+        arrays.append(fields.apar)
+    if fields.bpar is not None:
+        arrays.append(fields.bpar)
+    return jnp.concatenate(tuple(jnp.ravel(array) for array in arrays))
+
+
+def _unpack_field_state(vector: jnp.ndarray, template: FieldState) -> FieldState:
+    """Inverse of :func:`_pack_field_state` with static template shapes."""
+
+    phi_size = template.phi.size
+    offset = phi_size
+    phi = vector[:phi_size].reshape(template.phi.shape)
+    if template.apar is None:
+        apar = None
+    else:
+        apar_size = template.apar.size
+        apar = vector[offset : offset + apar_size].reshape(template.apar.shape)
+        offset += apar_size
+    if template.bpar is None:
+        bpar = None
+    else:
+        bpar = vector[offset:].reshape(template.bpar.shape)
+    return FieldState(phi=phi, apar=apar, bpar=bpar)
+
+
+def _build_field_corrected_shifted_preconditioner(
+    G0: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    terms: LinearTerms | TermConfig,
+    sigma: jnp.ndarray,
+    *,
+    coarse: bool = False,
+) -> Callable[[jnp.ndarray], jnp.ndarray]:
+    r"""Add the exact low-moment field coupling to the Hermite-line inverse.
+
+    For fixed geometry the field solve is a linear moment map ``F: G -> f``.
+    Linear gyrokinetic forcing by those fields is another map ``R: f -> dG``,
+    so the shifted operator separates as
+
+    ``A - sigma I = (A_0 - sigma I) + R F``.
+
+    ``F`` has at most three active field degrees of freedom per spatial
+    spectral point, independent of velocity resolution. Its transpose supplies
+    the Woodbury extraction factor without materializing the full kinetic
+    operator; probing ``R`` supplies the columns. The existing Hermite-line
+    inverse remains the approximate inverse of ``A_0 - sigma I``, while the
+    global field coupling is represented exactly through a small capacitance
+    solve.
+    """
+
+    term_cfg = (
+        terms
+        if isinstance(terms, TermConfig)
+        else linear_terms_to_term_config(terms)
+    )
+    base_flat = _build_shifted_hermite_preconditioner(
+        G0,
+        cache,
+        params,
+        term_cfg,
+        sigma,
+        coarse=coarse,
+    )
+    zero_state = jnp.zeros_like(G0)
+    field_template = compute_fields_cached(
+        zero_state,
+        cache,
+        params,
+        terms=term_cfg,
+        use_custom_vjp=False,
+    )
+    zero_fields = _unpack_field_state(
+        jnp.zeros_like(_pack_field_state(field_template)),
+        field_template,
+    )
+    zero_rhs = assemble_rhs_cached_with_fields(
+        zero_state,
+        cache,
+        params,
+        zero_fields,
+        terms=term_cfg,
+    )
+
+    def field_map(state: jnp.ndarray) -> jnp.ndarray:
+        fields = compute_fields_cached(
+            state,
+            cache,
+            params,
+            terms=term_cfg,
+            use_custom_vjp=False,
+        )
+        return _pack_field_state(fields).astype(G0.dtype)
+
+    def field_response(field_vector: jnp.ndarray) -> jnp.ndarray:
+        fields = _unpack_field_state(field_vector, field_template)
+        response = assemble_rhs_cached_with_fields(
+            zero_state,
+            cache,
+            params,
+            fields,
+            terms=term_cfg,
+        )
+        return (response - zero_rhs).astype(G0.dtype)
+
+    field_size = _pack_field_state(field_template).size
+    field_basis = jnp.eye(field_size, dtype=G0.dtype)
+    columns = jnp.moveaxis(jax.vmap(field_response)(field_basis), 0, -1)
+    transpose_field_map = jax.linear_transpose(field_map, zero_state)
+    extraction = jnp.moveaxis(
+        jax.vmap(lambda cotangent: transpose_field_map(cotangent)[0])(field_basis),
+        0,
+        -1,
+    )
+
+    def base_state_preconditioner(state: jnp.ndarray) -> jnp.ndarray:
+        return base_flat(jnp.ravel(state)).reshape(G0.shape)
+
+    corrected = low_rank_corrected(
+        base_state_preconditioner,
+        columns,
+        extraction,
+    )
+
+    def apply_corrected(vector: jnp.ndarray) -> jnp.ndarray:
+        return jnp.ravel(corrected(vector.reshape(G0.shape))).astype(vector.dtype)
+
+    return apply_corrected
 
 
 def _select_implicit_preconditioner(

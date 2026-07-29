@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from types import SimpleNamespace
 
 import jax.numpy as jnp
+import numpy as np
 import pytest
 import solvax
 
@@ -15,6 +17,8 @@ from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.params import (
     LinearParams,
     LinearTerms,
+    Species,
+    build_linear_params,
     linear_terms_to_term_config,
 )
 import gkx.solvers.linear.krylov as lk
@@ -24,7 +28,13 @@ import gkx.solvers.linear.krylov_algorithms as ka
 def test_published_solvax_contract_matches_consumed_interfaces() -> None:
     """Check that the consumed solvax interfaces are available (no version pin)."""
 
-    for name in ("gmres", "linear_solve", "tridiagonal_solve", "chunked_jacfwd"):
+    for name in (
+        "chunked_jacfwd",
+        "gmres",
+        "linear_solve",
+        "low_rank_corrected",
+        "tridiagonal_solve",
+    ):
         assert callable(getattr(solvax, name))
 
 
@@ -390,6 +400,141 @@ def test_shifted_hermite_preconditioner_handles_a_zero_shift() -> None:
     assert jnp.allclose(result, expected)
 
 
+def test_field_corrected_shifted_preconditioner_removes_low_moment_coupling() -> None:
+    """Woodbury field correction must fix the Hermite line inverse's main defect."""
+
+    _grid, cache, params, v0, _term_cfg, _terms = _tiny_krylov_setup(linked=False)
+    params = replace(
+        params,
+        omega_star_scale=1.0,
+        omega_d_scale=1.0,
+        R_over_LTi=6.9,
+        R_over_Ln=2.2,
+    )
+    term_cfg = linear_terms_to_term_config(
+        LinearTerms(
+            streaming=1.0,
+            mirror=1.0,
+            curvature=1.0,
+            gradb=1.0,
+            diamagnetic=1.0,
+            collisions=1.0,
+            hypercollisions=0.0,
+            end_damping=0.0,
+            apar=0.0,
+            bpar=0.0,
+        )
+    )
+    sigma = jnp.asarray(0.3 - 0.7j, dtype=v0.dtype)
+
+    def preconditioned_residual(mode: str) -> jnp.ndarray:
+        _diagonal, preconditioner = lk._build_shift_invert_precond(
+            v0,
+            cache,
+            params,
+            term_cfg,
+            sigma,
+            mode,
+        )
+        assert preconditioner is not None
+        candidate = preconditioner(jnp.ravel(v0)).reshape(v0.shape)
+        residual = ka._apply_operator(candidate, cache, params, term_cfg)
+        residual = residual - sigma * candidate - v0
+        return jnp.linalg.norm(residual) / jnp.linalg.norm(v0)
+
+    line_residual = preconditioned_residual("hermite-line")
+    corrected_residual = preconditioned_residual("field-corrected")
+    assert corrected_residual < 0.1 * line_residual
+    assert corrected_residual < 0.2
+
+
+@pytest.mark.parametrize(
+    ("linked", "multi_species"),
+    [(False, True), (True, False)],
+)
+def test_field_corrected_preconditioner_covers_em_species_and_linked_layouts(
+    linked: bool,
+    multi_species: bool,
+) -> None:
+    """The field map must retain EM/species axes and twist-linked state layout."""
+
+    grid_cfg = GridConfig(
+        Nx=4 if linked else 2,
+        Ny=4 if linked else 2,
+        Nz=8,
+        Lx=6.0,
+        Ly=6.0,
+        boundary="linked" if linked else "periodic",
+        y0=20.0 if linked else None,
+        jtwist=1 if linked else None,
+    )
+    cfg = CycloneBaseCase(grid=grid_cfg)
+    grid = build_spectral_grid(cfg.grid)
+    geom = SAlphaGeometry.from_config(cfg.geometry)
+    if multi_species:
+        params = build_linear_params(
+            (
+                Species(1.0, 1.0, 1.0, 1.0, 6.9, 2.2),
+                Species(-1.0, 0.01, 1.0, 1.0, 6.9, 2.2),
+            ),
+            beta=0.01,
+            fapar=1.0,
+            nu_hyper=0.0,
+            damp_ends_amp=0.0,
+            damp_ends_widthfrac=0.0,
+        )
+        species_shape = (2,)
+    else:
+        params = LinearParams(
+            beta=0.01,
+            fapar=1.0,
+            nu_hyper=0.0,
+            damp_ends_amp=0.0,
+            damp_ends_widthfrac=0.0,
+        )
+        species_shape = ()
+    n_laguerre, n_hermite = 2, 4
+    cache = build_linear_cache(
+        grid,
+        geom,
+        params,
+        Nl=n_laguerre,
+        Nm=n_hermite,
+    )
+    shape = (
+        *species_shape,
+        n_laguerre,
+        n_hermite,
+        grid.ky.size,
+        grid.kx.size,
+        grid.z.size,
+    )
+    vector = jnp.ones(shape, dtype=jnp.complex128) * (1.0 + 0.1j)
+    terms = linear_terms_to_term_config(
+        LinearTerms(
+            hypercollisions=0.0,
+            end_damping=0.0,
+            apar=1.0,
+            bpar=1.0,
+        )
+    )
+    sigma = jnp.asarray(0.3 - 0.7j, dtype=vector.dtype)
+    _diagonal, preconditioner = lk._build_shift_invert_precond(
+        vector,
+        cache,
+        params,
+        terms,
+        sigma,
+        "field-corrected",
+    )
+    assert preconditioner is not None
+    observed = preconditioner(jnp.ravel(vector))
+    scaled = preconditioner(jnp.ravel((1.0 - 0.25j) * vector))
+    assert observed.shape == (vector.size,)
+    assert jnp.all(jnp.isfinite(observed))
+    assert jnp.allclose(scaled, (1.0 - 0.25j) * observed, rtol=1.0e-10, atol=1.0e-10)
+
+
 def test_build_shift_invert_preconditioner_linked_branch() -> None:
     _grid, cache, params, v0, term_cfg, _terms = _tiny_krylov_setup(linked=True)
     sigma = jnp.asarray(0.2j, dtype=v0.dtype)
@@ -402,13 +547,13 @@ def test_build_shift_invert_preconditioner_linked_branch() -> None:
     assert jnp.all(jnp.isfinite(jnp.real(y)))
 
 
-def test_shift_invert_retries_preconditioned_false_convergence(
+def test_shift_invert_uses_right_preconditioning_and_physical_fgmres_residual(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A small preconditioned residual must not hide a bad physical solve."""
+    """The shifted solve must minimize the original, not transformed, residual."""
 
     _grid, cache, params, v0, term_cfg, _terms = _tiny_krylov_setup(linked=False)
-    calls: list[tuple[bool, jnp.ndarray]] = []
+    calls: list[tuple[bool, jnp.ndarray, int]] = []
     monkeypatch.setattr(
         ka,
         "_build_shift_invert_precond",
@@ -416,10 +561,9 @@ def test_shift_invert_retries_preconditioned_false_convergence(
     )
     monkeypatch.setattr(ka, "_apply_operator", lambda value, *_args: value)
 
-    def fake_gmres(_matvec, b, *, M, x0, **_kwargs):
-        calls.append((M is not None, x0))
-        solution = 0.25 * b if M is not None else b
-        return solution, None
+    def fake_gmres(_matvec, b, *, precond, x0, max_restarts, **_kwargs):
+        calls.append((precond is not None, x0, max_restarts))
+        return SimpleNamespace(x=b)
 
     monkeypatch.setattr(ka, "gmres", fake_gmres)
     apply_inverse = ka._shift_invert_apply_factory(
@@ -437,8 +581,10 @@ def test_shift_invert_retries_preconditioned_false_convergence(
 
     observed = apply_inverse(v0, cache, params, term_cfg)
 
-    assert [preconditioned for preconditioned, _x0 in calls] == [True, False]
-    assert jnp.allclose(calls[1][1], 0.25 * v0.reshape(-1))
+    assert len(calls) == 1
+    assert calls[0][0]
+    assert jnp.allclose(calls[0][1], 0.1 * v0.reshape(-1))
+    assert calls[0][2] == 1
     assert jnp.allclose(observed, v0)
 
 
@@ -459,6 +605,117 @@ def test_dominant_eigenpair_methods_produce_finite_values(method: str) -> None:
     assert vec.shape == v0.shape
     assert jnp.isfinite(jnp.real(eig))
     assert jnp.isfinite(jnp.imag(eig))
+
+
+def test_rational_eigenpairs_use_the_field_corrected_shifted_inverse(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The GKX adapter must feed exact original-operator residuals to SOLVAX."""
+
+    matrix = jnp.diag(
+        jnp.asarray(
+            [
+                0.5 + 0.2j,
+                0.46 + 0.18j,
+                -1.0 + 7.0j,
+                -1.1 - 8.0j,
+                -0.9 + 4.0j,
+                -1.2 - 5.0j,
+                -1.3 + 9.0j,
+                -0.8 - 6.0j,
+            ],
+            dtype=jnp.complex128,
+        )
+    )
+    shift = 0.48 + 0.2j
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(
+        lk,
+        "_apply_operator",
+        lambda vector, *_args: matrix @ vector,
+    )
+
+    def fake_factory(_v0, *_args, sigma_val, shift_preconditioner, **_kwargs):
+        captured["preconditioner"] = shift_preconditioner
+        shifted = matrix - sigma_val * jnp.eye(matrix.shape[0], dtype=matrix.dtype)
+        return lambda vector, *_unused: jnp.linalg.solve(shifted, vector)
+
+    monkeypatch.setattr(lk, "_shift_invert_apply_factory", fake_factory)
+    solution = lk.rational_eigenpairs(
+        jnp.ones((matrix.shape[0],), dtype=matrix.dtype),
+        None,
+        None,
+        terms=LinearTerms(apar=0.0, bpar=0.0),
+        shift=shift,
+        candidates=2,
+        krylov_dim=7,
+        restarts=3,
+        tol=1.0e-7,
+    )
+
+    expected = np.asarray([0.5 + 0.2j, 0.46 + 0.18j])
+    observed = np.asarray(solution.eigenvalues)
+    assert max(np.min(np.abs(observed - value)) for value in expected) < 1.0e-6
+    assert np.all(np.asarray(solution.converged))
+    for value, vector, residual in zip(
+        observed,
+        np.asarray(solution.eigenvectors),
+        np.asarray(solution.residuals),
+        strict=True,
+    ):
+        independent = np.linalg.norm(np.asarray(matrix) @ vector - value * vector)
+        independent /= max(abs(value), np.finfo(float).tiny)
+        assert independent == pytest.approx(residual, rel=1.0e-10, abs=1.0e-12)
+    assert captured["preconditioner"] == "field-corrected"
+
+
+@pytest.mark.parametrize(("select_overlap", "expected_candidates"), [(False, 1), (True, 4)])
+def test_rational_branch_only_pays_for_competing_continuation_candidates(
+    monkeypatch: pytest.MonkeyPatch,
+    select_overlap: bool,
+    expected_candidates: int,
+) -> None:
+    """A scalar objective uses one branch; overlap tracking retains alternatives."""
+
+    _grid, cache, params, v0, _term_cfg, terms = _tiny_krylov_setup(linked=False)
+    captured: dict[str, int] = {}
+
+    def fake_rational(*_args, candidates, **_kwargs):
+        captured["candidates"] = candidates
+        vectors = jnp.stack(
+            [v0 if index == 0 else jnp.roll(v0, index, axis=-1) for index in range(candidates)]
+        )
+        values = jnp.asarray(
+            [0.4 - 0.01 * index + 0.2j for index in range(candidates)],
+            dtype=v0.dtype,
+        )
+        return SimpleNamespace(
+            eigenvalues=values,
+            eigenvectors=vectors,
+            residuals=jnp.zeros((candidates,)),
+            converged=jnp.ones((candidates,), dtype=bool),
+        )
+
+    monkeypatch.setattr(lk, "rational_eigenpairs", fake_rational)
+    eigenvalue, eigenvector = lk.dominant_eigenpair(
+        v0,
+        cache,
+        params,
+        terms=terms,
+        v_ref=v0,
+        select_overlap=select_overlap,
+        method="rational",
+        krylov_dim=6,
+        restarts=1,
+        shift=0.3 + 0.2j,
+        shift_source="reference",
+        shift_preconditioner="field-corrected",
+        fallback_method="none",
+    )
+
+    assert captured["candidates"] == expected_candidates
+    assert jnp.allclose(eigenvalue, jnp.asarray(0.4 + 0.2j, dtype=v0.dtype))
+    assert jnp.allclose(eigenvector, v0)
 
 
 def test_dominant_eigenpair_shift_invert_rejects_unconverged_sources() -> None:
