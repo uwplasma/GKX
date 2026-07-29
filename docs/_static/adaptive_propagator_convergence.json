@@ -1,0 +1,268 @@
+{
+  "schema_version": 1,
+  "certified": true,
+  "all_growth_converged": false,
+  "scope": "certificate-only ntheta=64 velocity-space ladder beyond the dense oracle memory range; convergence requires both consecutive growth changes to pass the declared tolerance",
+  "provenance": {
+    "ntheta": 64,
+    "s_index": 7,
+    "selected_ky_index": 1,
+    "ladder": [
+      [
+        8,
+        10
+      ],
+      [
+        10,
+        14
+      ],
+      [
+        12,
+        16
+      ]
+    ],
+    "krylov_dim": 16,
+    "max_restarts": 4,
+    "residual_tolerance": 1e-09,
+    "convergence_tolerance": 0.05,
+    "chunk_horizon": 30.0,
+    "stability_dimension": 12,
+    "stability_safety": 0.9,
+    "python": "3.10.12 (main, Jan  8 2026, 06:52:19) [GCC 11.4.0]",
+    "platform": "Linux-6.17.9-76061709-generic-x86_64-with-glibc2.35",
+    "jax": "0.6.2",
+    "jaxlib": "0.6.2",
+    "gkx": "1.7.1",
+    "solvax": "0.11.1",
+    "gkx_commit": "2f42318612a92c1768a82b6fb7b31f316d3eeed1",
+    "solvax_commit": "0aa2fad34c713ec415ce11642eef4a2496eb0ec5",
+    "jax_x64": true,
+    "devices": [
+      "cuda:0"
+    ]
+  },
+  "devices": [
+    {
+      "device": "qa",
+      "input": "examples/vmec/input.LandremanPaul2021_QA_lowres",
+      "input_sha256": "4f56d4c674b6340a9e359d3645ab1dbb4f841eccc563b5fc969a27928cb9cf84",
+      "certified": true,
+      "growth_converged": false,
+      "growth_relative_changes": [
+        0.45764950556395667,
+        0.055283025939339064
+      ],
+      "eigenvalue_relative_changes": [
+        0.17982995847917793,
+        0.2894637187588248
+      ],
+      "rows": [
+        {
+          "n_laguerre": 8,
+          "n_hermite": 10,
+          "n": 5120,
+          "eigenvalue": [
+            0.08690265473791119,
+            -0.9171630032094039
+          ],
+          "residual": 1.182403541610207e-10,
+          "converged": true,
+          "stability_passed": true,
+          "filter_growth_defect": -1.8843558657888337e-10,
+          "restarts": 1,
+          "selected_propagator_dt": 0.01644736842105263,
+          "selected_propagator_steps": 1824,
+          "original_operator_evaluations": 116750,
+          "compile_seconds": 24.492928504943848,
+          "warm_seconds": 12.50594162940979
+        },
+        {
+          "n_laguerre": 10,
+          "n_hermite": 14,
+          "n": 8960,
+          "eigenvalue": [
+            0.05961834748764863,
+            -0.7792879236871034
+          ],
+          "residual": 4.147472512736259e-14,
+          "converged": true,
+          "stability_passed": true,
+          "filter_growth_defect": -2.9533250844870906e-11,
+          "restarts": 2,
+          "selected_propagator_dt": 0.013368983957219251,
+          "selected_propagator_steps": 2244,
+          "original_operator_evaluations": 287248,
+          "compile_seconds": 46.05814743041992,
+          "warm_seconds": 36.17001032829285
+        },
+        {
+          "n_laguerre": 12,
+          "n_hermite": 16,
+          "n": 12288,
+          "eigenvalue": [
+            0.056495125973035104,
+            -1.0973307040588582
+          ],
+          "residual": 7.27088354214454e-12,
+          "converged": true,
+          "stability_passed": true,
+          "filter_growth_defect": -8.139242752003284e-11,
+          "restarts": 2,
+          "selected_propagator_dt": 0.012315270935960592,
+          "selected_propagator_steps": 2436,
+          "original_operator_evaluations": 311824,
+          "compile_seconds": 48.7678861618042,
+          "warm_seconds": 38.97494554519653
+        }
+      ]
+    },
+    {
+      "device": "qh",
+      "input": "examples/vmec/input.LandremanPaul2021_QH_reactorScale_lowres",
+      "input_sha256": "830431ca2395aa98a4587914414e9e99fbeca39fad9ffd752a91681f6c9fd9e6",
+      "certified": true,
+      "growth_converged": true,
+      "growth_relative_changes": [
+        0.03718847182960136,
+        0.015635054168234623
+      ],
+      "eigenvalue_relative_changes": [
+        0.03997510323976932,
+        0.016567690764356338
+      ],
+      "rows": [
+        {
+          "n_laguerre": 8,
+          "n_hermite": 10,
+          "n": 5120,
+          "eigenvalue": [
+            0.12175538158257132,
+            -0.013464772921448634
+          ],
+          "residual": 1.9010398599637964e-13,
+          "converged": true,
+          "stability_passed": true,
+          "filter_growth_defect": -2.040034807748725e-14,
+          "restarts": 1,
+          "selected_propagator_dt": 0.016384489350081924,
+          "selected_propagator_steps": 1831,
+          "original_operator_evaluations": 117198,
+          "compile_seconds": 16.865920066833496,
+          "warm_seconds": 12.539764165878296
+        },
+        {
+          "n_laguerre": 10,
+          "n_hermite": 14,
+          "n": 8960,
+          "eigenvalue": [
+            0.12645816758544567,
+            -0.011553765618974894
+          ],
+          "residual": 2.189079733623138e-13,
+          "converged": true,
+          "stability_passed": true,
+          "filter_growth_defect": 1.73749903353837e-14,
+          "restarts": 1,
+          "selected_propagator_dt": 0.013175230566534914,
+          "selected_propagator_steps": 2277,
+          "original_operator_evaluations": 145742,
+          "compile_seconds": 22.864076137542725,
+          "warm_seconds": 18.40414834022522
+        },
+        {
+          "n_laguerre": 12,
+          "n_hermite": 16,
+          "n": 12288,
+          "eigenvalue": [
+            0.12846675221514667,
+            -0.010827238671539457
+          ],
+          "residual": 2.237130881998143e-13,
+          "converged": true,
+          "stability_passed": true,
+          "filter_growth_defect": 4.163336342344337e-16,
+          "restarts": 1,
+          "selected_propagator_dt": 0.012096774193548387,
+          "selected_propagator_steps": 2480,
+          "original_operator_evaluations": 158734,
+          "compile_seconds": 24.105119705200195,
+          "warm_seconds": 19.82115650177002
+        }
+      ]
+    },
+    {
+      "device": "qi",
+      "input": "examples/vmec/input.nfp3_QI_fixed_resolution_final",
+      "input_sha256": "b64dc2221e19452d426c60104b0c67d12de9b13a7ca5152a43b562bbf36fc0ba",
+      "certified": true,
+      "growth_converged": false,
+      "growth_relative_changes": [
+        0.058841626598228045,
+        0.05657698411140937
+      ],
+      "eigenvalue_relative_changes": [
+        0.2515355111668748,
+        0.10712214206619694
+      ],
+      "rows": [
+        {
+          "n_laguerre": 8,
+          "n_hermite": 10,
+          "n": 5120,
+          "eigenvalue": [
+            0.13924444873422184,
+            0.3965852001697065
+          ],
+          "residual": 5.2391537751870365e-14,
+          "converged": true,
+          "stability_passed": true,
+          "filter_growth_defect": -7.816469693722183e-12,
+          "restarts": 1,
+          "selected_propagator_dt": 0.01639344262295082,
+          "selected_propagator_steps": 1830,
+          "original_operator_evaluations": 117134,
+          "compile_seconds": 17.565282344818115,
+          "warm_seconds": 12.705243110656738
+        },
+        {
+          "n_laguerre": 10,
+          "n_hermite": 14,
+          "n": 8960,
+          "eigenvalue": [
+            0.13150639834738706,
+            0.31181505258913805
+          ],
+          "residual": 8.327502053512479e-14,
+          "converged": true,
+          "stability_passed": true,
+          "filter_growth_defect": -9.715839244250901e-13,
+          "restarts": 1,
+          "selected_propagator_dt": 0.013060513713539399,
+          "selected_propagator_steps": 2297,
+          "original_operator_evaluations": 147022,
+          "compile_seconds": 23.60457491874695,
+          "warm_seconds": 18.763506412506104
+        },
+        {
+          "n_laguerre": 12,
+          "n_hermite": 16,
+          "n": 12288,
+          "eigenvalue": [
+            0.12446456843652061,
+            0.2797775402782666
+          ],
+          "residual": 1.0711039892914577e-13,
+          "converged": true,
+          "stability_passed": true,
+          "filter_growth_defect": -3.879119248040297e-13,
+          "restarts": 1,
+          "selected_propagator_dt": 0.011976047904191617,
+          "selected_propagator_steps": 2505,
+          "original_operator_evaluations": 160334,
+          "compile_seconds": 25.039721965789795,
+          "warm_seconds": 20.379990339279175
+        }
+      ]
+    }
+  ]
+}

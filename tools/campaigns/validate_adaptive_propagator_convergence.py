@@ -33,6 +33,16 @@ _DEVICES = {
 _DEFAULT_LADDER = ((8, 10), (10, 14), (12, 16))
 
 
+def _resolution(raw: str) -> tuple[int, int]:
+    try:
+        n_laguerre, n_hermite = (int(token) for token in raw.split(",", maxsplit=1))
+    except (TypeError, ValueError) as error:
+        raise argparse.ArgumentTypeError("resolution must be Nl,Nm") from error
+    if n_laguerre < 1 or n_hermite < 2:
+        raise argparse.ArgumentTypeError("resolution must satisfy Nl >= 1 and Nm >= 2")
+    return n_laguerre, n_hermite
+
+
 def _git_revision(path: Path) -> str | None:
     try:
         return subprocess.run(
@@ -97,6 +107,13 @@ def main() -> int:
     parser.add_argument("--stability-dimension", type=int, default=12)
     parser.add_argument("--stability-safety", type=float, default=0.9)
     parser.add_argument(
+        "--resolution",
+        action="append",
+        type=_resolution,
+        default=None,
+        help="velocity resolution Nl,Nm; repeat to replace the default ladder",
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default=Path("docs/_static/adaptive_propagator_convergence.json"),
@@ -114,6 +131,9 @@ def main() -> int:
 
     repository = Path(__file__).resolve().parents[2]
     selected = args.device or list(_DEVICES)
+    ladder = tuple(args.resolution or _DEFAULT_LADDER)
+    if len(ladder) < 3:
+        parser.error("the convergence ladder requires at least three resolutions")
     reports = []
     for device_index, name in enumerate(selected):
         input_path = repository / _DEVICES[name]
@@ -128,7 +148,7 @@ def main() -> int:
         previous = None
         values: list[complex] = []
         rows = []
-        for rung_index, (n_laguerre, n_hermite) in enumerate(_DEFAULT_LADDER):
+        for rung_index, (n_laguerre, n_hermite) in enumerate(ladder):
             context = _solver_geometry_context(
                 geometry,
                 selected_ky_index=1,
@@ -240,7 +260,7 @@ def main() -> int:
             "ntheta": args.ntheta,
             "s_index": args.s_index,
             "selected_ky_index": 1,
-            "ladder": [list(rung) for rung in _DEFAULT_LADDER],
+            "ladder": [list(rung) for rung in ladder],
             "krylov_dim": args.krylov_dim,
             "max_restarts": args.max_restarts,
             "residual_tolerance": args.tol,
