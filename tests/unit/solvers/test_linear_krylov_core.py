@@ -23,7 +23,9 @@ from gkx.operators.linear.params import (
     linear_terms_to_term_config,
 )
 import gkx.solvers.linear.krylov as lk
+import gkx.solvers.linear.adaptive_propagator as ap
 import gkx.solvers.linear.krylov_algorithms as ka
+import gkx.solvers.linear.krylov_propagator as kp
 
 _HAS_SOLVAX_EIGEN_API = all(
     callable(getattr(solvax, name, None))
@@ -697,7 +699,12 @@ def test_adaptive_propagator_selects_stable_step_and_stops_on_residual(
         dtype=jnp.complex128,
     )
     monkeypatch.setattr(
-        lk,
+        ap,
+        "_apply_operator",
+        lambda state, *_args: eigenvalues * state,
+    )
+    monkeypatch.setattr(
+        kp,
         "_apply_operator",
         lambda state, *_args: eigenvalues * state,
     )
@@ -834,7 +841,7 @@ def test_adaptive_propagator_uses_smaller_corrective_subspaces(
         return values, vectors, residuals
 
     monkeypatch.setattr(
-        lk,
+        ap,
         "dominant_eigenpairs_propagator_cached",
         fake_candidates,
     )
