@@ -115,6 +115,7 @@ jobs:
           - name: release-artifacts
             files: >-
               tests/release/test_release_gates.py
+              tests/release/test_adaptive_eigensolver_gates.py
           - name: model-artifacts
             files: >-
               tests/unit/quasilinear/test_quasilinear.py
