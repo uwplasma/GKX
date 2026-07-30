@@ -59,13 +59,7 @@ def adaptive_propagator_eigenpair(
     restart_krylov_dim: int | None = None,
     candidate_count: int = 1,
 ) -> AdaptivePropagatorSolution:
-    """Adapt RK4 stability, horizon, and corrective-subspace cost.
-
-    ``restart_krylov_dim`` may reduce the subspace after the first restart.
-    This matters for cold solves: once the first horizon has isolated the
-    branch, a smaller correction can certify its residual without compiling
-    and executing another full-size Arnoldi pass.
-    """
+    """Adapt RK4 stability, horizon, and corrective-subspace cost."""
 
     try:
         from solvax import adaptive_eigenpair, estimate_rk4_timestep  # type: ignore
@@ -176,11 +170,13 @@ def adaptive_propagator_eigenpair(
         if candidate_count >= 2
         else jnp.asarray(jnp.inf, dtype=jnp.real(solution.eigenvalue).dtype)
     )
-    return AdaptivePropagatorSolution(
-        *solution._replace(operator_applications=operator_applications),
-        candidate_values,
-        candidate_residuals,
-        growth_gap,
+    return AdaptivePropagatorSolution._make(
+        (
+            *solution._replace(operator_applications=operator_applications),
+            candidate_values,
+            candidate_residuals,
+            growth_gap,
+        )
     )
 
 
