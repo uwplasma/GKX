@@ -5,165 +5,68 @@ Time integration
 ----------------
 
 The linear solver supports explicit Euler, RK2, and RK4 updates inside a JAX
-``scan`` loop, enabling JIT compilation and differentiability of the entire time
-history. The time integrator lives in ``gkx.solvers.linear.integrators.integrate_linear`` and
-is configured via the ``method`` argument. RK4 is used in the Cyclone harness.
+``scan`` loop.  RK4 is used in the Cyclone harness.
 
-To stabilize higher-order Hermite-Laguerre scans, two additional options are
-available:
+Two options address stiff Hermite--Laguerre systems:
 
-- ``method="imex"``: a semi-implicit update that treats Lenard-Bernstein and
-  hyper-diffusion damping implicitly while keeping the drift/streaming terms
-  explicit.
-- ``method="implicit"``: a backward-Euler solve using a matrix-free GMRES
-  iteration provided by SOLVAX. This is slower but robust for stiff linear runs.
-  The same shared policy is used by nonlinear IMEX time steps. A few stabilized
-  fixed-point sub-iterations provide an initial guess and a diagonal
-  preconditioner based on the damping terms and drift/mirror diagonals
-  (cv/gb/bgrad) accelerates convergence for higher-order scans. For
-  streaming-dominated stiffness, ``implicit_preconditioner="hermite-line"``
-  applies a Hermite streaming line solve (tridiagonal in ``m`` at fixed
-  :math:`k_z`) and can substantially reduce GMRES iterations. The reusable
-  tridiagonal algebra is provided by SOLVAX; GKX constructs the
-  gyrokinetic coefficients and linked-chain layout. CPU execution uses a
-  deterministic Thomas recurrence, while accelerator execution uses the fused
-  backend selected by SOLVAX.
+* ``method="imex"`` treats collision and hyper-diffusion damping implicitly
+  while keeping drift and streaming terms explicit.
+* ``method="implicit"`` applies backward Euler through SOLVAX FGMRES.  Its
+  physical preconditioners include diagonal damping and an FFT/Hermite-line
+  streaming approximation.  Linked chains retain the twist-and-shift layout.
 
-Implicit time stepping has one supported complex unitary-Givens FGMRES
-algorithm. Users configure its tolerance, restart length, iteration limit,
-and physical preconditioner rather than selecting equivalent backend aliases.
-Shift-invert and block-rational eigenmode extraction now reuse SOLVAX's
-right-preconditioned FGMRES. Its least-squares norm is the physical residual
-``||b - (A - sigma I)x||``; this removes the former false-convergence path in
-which a small left-preconditioned norm triggered a complete unpreconditioned
-retry. Complex Ritz vectors use the mathematically correct ``V @ y``
-reconstruction, small Arnoldi directions are treated as numerical breakdown,
-and an outer original-operator eigenpair residual remains mandatory.
+Complex FGMRES uses unitary Givens rotations and reports the physical residual
+``||b - A x||``.  Users set its tolerance, restart length, iteration limit,
+and preconditioner; a failed residual gate is never converted into a finite
+success value.
 
-The ``field-corrected`` shifted preconditioner represents the three
-low-moment field maps exactly as a Woodbury correction to the Hermite-line
-inverse. On the driven electrostatic unit fixture this reduces the one-apply
-shifted residual from ``3.01`` to ``0.143``. A prepared shifted inverse can be
-compiled once with ``prepare_rational_shifted_inverse`` and reused by
-``rational_eigenpairs`` at fixed geometry, parameters, terms, and shift. This
-keeps compile time out of repeated-solve throughput measurements.
+Differentiable eigenmodes
+-------------------------
 
-With an eight-vector rational subspace, the first three circular-tokamak rungs
-(``n=768, 1536, 2560``) pass the original-operator residual and ``1e-8``
-eigenvalue gates in one outer restart. Their measured warm CPU times are
-``2.90, 20.64, 117.09`` seconds, however, versus dense times of
-``0.38, 1.72, 6.23`` seconds. GPU execution is also slower at the qualified
-sizes: ``30.91`` seconds at ``n=768`` and ``102.61`` seconds at ``n=1536``
-after compilation. The rational lane is therefore an explicit experimental
-correctness path, not the release default; validated dense eigensolves and time
-integration remain the fail-closed paths until the kinetic-complement
-preconditioner produces a measured crossover.
+``adaptive_propagator_eigenpair`` is the opt-in matrix-free path for linear and
+quasilinear objectives.  It:
 
-A reduced-resolution TOML-driven matrix additionally passes ITG, ETG, TEM,
-KBM, Miller, QHS, and QI configurations, including electrostatic,
-electromagnetic, single-/multi-species, periodic, and linked layouts. Its scope
-is architecture and branch selection, not velocity-space convergence.
+* estimates a stable RK4 step from broadband spectral probes;
+* extracts several leading-growth candidates from a long-horizon propagator;
+* certifies every pair against the original continuous operator;
+* tracks a requested branch with right or biorthogonal overlap; and
+* uses an implicit reverse rule for eigenvalue and eigenvector observables.
 
-Two bounded full-resolution refinements were also rejected. Re-projecting the
-physical operator onto the shift-focused Arnoldi basis returned a non-finite
-pair and increased peak resident memory from about ``0.87`` to ``1.18`` GB.
-Starting the unpreconditioned inner retry from zero likewise returned a
-non-finite pair without reducing the roughly ``133`` second CPU runtime. The
-released implementation therefore retains the finite fail-closed baseline;
-future work requires a branch-preserving thick restart or field-coupled complex
-preconditioner with a lower physical residual, not another tolerance sweep.
-
-A bounded full-operator defect-correction preconditioner lowered the same
-full-resolution residual to ``0.330``, but a second explicit restart returned
-``0.326`` and therefore added cost without canonical-grid convergence. The
-candidate was removed. A future revisit should use retained-subspace
-Krylov--Schur with harmonic extraction for this interior mode and must pass the
-same physical residual, branch-identity, memory, and runtime gates before it
-can replace time integration.
-
-Three subsequent reduced-operator discriminators further narrow that work.
-An exact projected Jacobi--Davidson step solved its correction equation to
-relative residual ``0.035`` but worsened the physical eigenpair residual from
-``0.742`` to ``0.876``. Ordered complex-Schur compression retaining four
-vectors selected a damped branch, worsened ``0.755`` to ``0.956``, and cost
-about ``61`` seconds per restart. Seeding shift-invert from a short propagator
-lowered the residual to ``0.521`` but also selected the wrong damped branch.
-No implementation was retained. A release candidate must instead demonstrate
-a branch-preserving two-sided or field-coupled low-moment correction on the
-physical operator, not only convergence of its inner projected equation.
-A bounded A4000 run at ``Nl=8,Nm=24`` likewise reached residual ``0.429`` only
-after moving to the wrong high-frequency branch, so the negative result is not
-confined to the smallest CPU case.
-
-A two-sided correction did not repair the problem: the left inverse iterations
-remained unconverged and the first well-solved projected equation moved to a
-different branch with residual ``0.870``. A matrix-free field-coupled
-low-moment preconditioner was also rejected because it took ``240`` seconds
-versus ``30`` seconds for the damping baseline and returned residual ``0.972``
-on the wrong branch. Any future field-coupled candidate must use an explicitly
-reduced Schur block; nesting a full-operator solve is neither accurate nor
-competitive.
-
-An explicitly assembled field/moment block confirmed that the remaining
-problem is the complement, not block construction. The ``1536 x 1536`` complex
-coarse matrix assembled in ``0.49`` seconds, factored in ``0.15`` seconds, and
-used ``36`` MiB. Coupling it to either a diagonal or full Hermite-line
-high-moment smoother nevertheless selected incorrect branches with residuals
-``0.936`` and ``0.999``; both complete solves took about ``55`` seconds and
-exceeded ``1.3`` GB resident memory. These variants were removed. The release
-continues to use validated time integration for KBM, while a future direct
-interior spectral transformation must establish branch identity before it can
-be considered an acceleration.
-
-The earlier SOLVAX 0.7.3 comparison used a left/right-preconditioning mismatch
-and is superseded by the physical-residual FGMRES measurements above. Migration
-of the inner algebra is complete; promotion of the eigensolver is still blocked
-by high-resolution cost, residual, and branch-identity gates.
-
-Acceptance also follows the requested spectral selection. Growth-selected
-searches enforce ``fallback_real_floor``; nearest-shift, overlap, and explicit
-shift searches may intentionally select a stable mode and therefore use
-finiteness plus the physical outer residual instead. Rejection messages identify
-which of the non-finite, growth-floor, or residual criteria failed.
+It avoids the ``O(n^2)`` dense matrix, but the explicit filter is still slow at
+high Hermite resolution.  The qualification, QI full-frequency result, cold
+timings, and remaining preconditioner gate are documented in
+:doc:`differentiable_eigensolver`.
 
 Optional damping
 ----------------
 
-To stabilize high-order Hermite-Laguerre moments, the linear operator supports
-two damping models:
+The linear operator supports:
 
-- A Lenard-Bernstein diagonal rate ``nu`` with coefficients
-  :math:`\nu(\alpha m + \beta l)`.
-- Hyper-collisions in velocity space with coefficients ``nu_hyper_l``,
-  ``nu_hyper_m``, and ``nu_hyper_lm`` and exponents ``p_hyper_l``,
-  ``p_hyper_m``, ``p_hyper_lm``. These damp the highest Hermite/Laguerre
-  indices and are enabled by default for Cyclone-style scans.
-- Smooth end-cap damping in the field-aligned direction controlled by
-  ``damp_ends_widthfrac`` and ``damp_ends_amp`` to suppress reflections at
-  linked boundaries.
+* Lenard--Bernstein diagonal damping with rate ``nu``;
+* velocity-space hyper-collisions controlled by ``nu_hyper_l``,
+  ``nu_hyper_m``, ``nu_hyper_lm`` and their exponents; and
+* smooth field-aligned end damping controlled by ``damp_ends_widthfrac`` and
+  ``damp_ends_amp``.
 
-Both can be disabled or tuned via ``LinearParams`` for resolution studies.
+All may be disabled or refined independently in resolution studies.
 
 Performance caching
 -------------------
 
-To reduce repeated geometry work inside the time loop, we cache the gyroaverage
-coefficients, drift frequency, and zero-mode mask in a ``LinearCache`` object.
-The helper ``build_linear_cache`` constructs this cache, and
-``integrate_linear`` will build and reuse it automatically.
+``LinearCache`` stores geometry-dependent gyroaverages, drift coefficients,
+linked-chain maps, and masks outside the time loop.  ``build_linear_cache``
+constructs it, while the runtime integration entry points build and reuse it
+automatically.
 
-Growth rate extraction
+Growth-rate extraction
 ----------------------
 
-Given a complex mode time series
+For
 
 .. math::
 
-   \phi(t) \approx \exp[(\gamma - i \omega) t],
+   \phi(t) \approx \exp[(\gamma - i\omega)t],
 
-we estimate :math:`\gamma` and :math:`\omega` by least-squares fits of
-:math:`\log|\phi|` and the unwrapped phase versus time. The helper
-``fit_growth_rate_auto`` can automatically select a fitting window by scanning
-for the most exponential-like segment of the time history, reducing sensitivity
-to early transients in ky scans. This method is used in the Cyclone linear
-benchmark harness when ``auto_window=True``.
+GKX fits :math:`\log|\phi|` and unwrapped phase against time.
+``fit_growth_rate_auto`` scans for the most exponential window and is used by
+the Cyclone harness when ``auto_window=True``.

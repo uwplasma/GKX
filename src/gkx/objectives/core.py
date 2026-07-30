@@ -556,11 +556,6 @@ def _matrix_free_dominant_linear_branch(
             if config.sensitivity_solver == "propagator"
             else None
         ),
-        sigma=0.0,
-        m=adjoint_krylov_dim,
-        tol=config.tolerance,
-        max_restarts=config.adjoint_max_restarts,
-        which="target",
         sensitivity_rtol=config.sensitivity_rtol,
         sensitivity_restart=config.sensitivity_restart,
         sensitivity_max_restarts=config.sensitivity_max_restarts,

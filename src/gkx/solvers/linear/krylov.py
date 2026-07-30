@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping
 
-import jax
 import jax.numpy as jnp
 import numpy as np
 
@@ -21,7 +20,6 @@ from gkx.solvers.linear.adaptive_propagator import (
 )
 from gkx.solvers.linear.krylov_algorithms import (
     _advance_imex2,
-    _advance_rk4,
     _apply_operator,
     _assemble_rhs_cached_novjp,
     _compute_damping,
@@ -35,7 +33,6 @@ from gkx.solvers.linear.krylov_algorithms import (
     _physical_omega,
     _select_by_overlap,
     _select_by_target,
-    _shift_invert_apply_factory,
     dominant_eigenpair_cached,
     dominant_eigenpair_power,
     dominant_eigenpair_propagator_cached,
@@ -441,312 +438,6 @@ def _shift_invert_branch(
     return eig_si, vec_si
 
 
-def rational_eigenpairs(
-    v0: jnp.ndarray,
-    cache: LinearCache,
-    params: LinearParams,
-    terms: LinearTerms | None = None,
-    *,
-    shift: complex,
-    candidates: int = 4,
-    krylov_dim: int = 32,
-    restarts: int = 20,
-    tol: float = 1e-9,
-    initial_subspace: jnp.ndarray | None = None,
-    shift_tol: float = 1e-6,
-    shift_maxiter: int = 60,
-    shift_restart: int = 30,
-    shift_solve_method: str = "batched",
-    shift_preconditioner: str | None = "field-corrected",
-    shifted_inverse: Callable[[jnp.ndarray], jnp.ndarray] | None = None,
-) -> Any:
-    """Return nearby branches from a field-corrected rational subspace.
-
-    Block locking retains competitors, while values and residuals always use
-    the original operator. ``shifted_inverse`` amortizes compilation.
-    """
-
-    if candidates < 1:
-        raise ValueError("candidates must be positive")
-    if krylov_dim <= candidates:
-        raise ValueError("krylov_dim must exceed candidates")
-    try:
-        from solvax import block_harmonic_krylov  # type: ignore[attr-defined]
-    except ImportError as error:
-        raise RuntimeError(
-            "rational_eigenpairs requires a SOLVAX release that provides "
-            "block_harmonic_krylov; the remaining GKX solver methods are "
-            "available with the current dependency"
-        ) from error
-
-    sigma = jnp.asarray(shift, dtype=v0.dtype)
-    term_cfg = linear_terms_to_term_config(terms)
-    if shifted_inverse is None:
-        shifted_inverse = prepare_rational_shifted_inverse(
-            v0,
-            cache,
-            params,
-            terms=terms,
-            shift=shift,
-            shift_tol=shift_tol,
-            shift_maxiter=shift_maxiter,
-            shift_restart=shift_restart,
-            shift_solve_method=shift_solve_method,
-            shift_preconditioner=shift_preconditioner,
-        )
-
-    def apply(state: jnp.ndarray) -> jnp.ndarray:
-        return _apply_operator(state, cache, params, term_cfg)
-
-    return block_harmonic_krylov(
-        apply,
-        v0,
-        sigma=complex(np.asarray(sigma)),
-        k=candidates,
-        m=krylov_dim,
-        block_size=min(max(candidates + 1, 2), krylov_dim - 1),
-        tol=tol,
-        max_restarts=restarts,
-        which="target",
-        restart_keep=min(max(2 * candidates, candidates + 1), krylov_dim - 1),
-        initial_subspace=initial_subspace,
-        subspace_apply=shifted_inverse,
-    )
-
-
-def prepare_long_horizon_propagator(
-    v0: jnp.ndarray,
-    cache: LinearCache,
-    params: LinearParams,
-    terms: LinearTerms | None = None,
-    *,
-    dt: float,
-    steps: int,
-) -> Callable[[jnp.ndarray], jnp.ndarray]:
-    """Prepare an RK4 polynomial filter that shares the operator eigenvectors.
-
-    The original operator still supplies Rayleigh values and certification.
-    """
-
-    if dt <= 0.0:
-        raise ValueError("dt must be positive")
-    if steps < 1:
-        raise ValueError("steps must be positive")
-    term_cfg = linear_terms_to_term_config(terms)
-    dt_value = jnp.asarray(dt, dtype=jnp.real(v0).dtype)
-
-    @jax.jit
-    def apply_propagator(state: jnp.ndarray) -> jnp.ndarray:
-        return jax.lax.fori_loop(
-            0,
-            steps,
-            lambda _index, current: _advance_rk4(
-                current,
-                cache,
-                params,
-                term_cfg,
-                dt_value,
-            ),
-            state,
-        )
-
-    return apply_propagator
-
-
-def propagator_eigenpairs(
-    v0: jnp.ndarray,
-    cache: LinearCache,
-    params: LinearParams,
-    terms: LinearTerms | None = None,
-    *,
-    candidates: int = 1,
-    krylov_dim: int = 16,
-    restarts: int = 2,
-    tol: float = 1.0e-9,
-    dt: float = 1.0e-2,
-    steps: int = 3000,
-    initial_subspace: jnp.ndarray | None = None,
-    propagator: Callable[[jnp.ndarray], jnp.ndarray] | None = None,
-) -> Any:
-    """Return rightmost modes from a long-horizon Krylov subspace.
-
-    Growth selects the basis; the continuous operator certifies every pair.
-    """
-
-    if candidates < 1:
-        raise ValueError("candidates must be positive")
-    if krylov_dim <= candidates:
-        raise ValueError("krylov_dim must exceed candidates")
-    try:
-        from solvax import block_harmonic_krylov  # type: ignore[attr-defined]
-    except ImportError as error:
-        raise RuntimeError(
-            "propagator_eigenpairs requires a SOLVAX release that provides "
-            "block_harmonic_krylov; the remaining GKX solver methods are "
-            "available with the current dependency"
-        ) from error
-
-    term_cfg = linear_terms_to_term_config(terms)
-    if propagator is None:
-        propagator = prepare_long_horizon_propagator(
-            v0,
-            cache,
-            params,
-            terms=terms,
-            dt=dt,
-            steps=steps,
-        )
-
-    def apply(state: jnp.ndarray) -> jnp.ndarray:
-        return _apply_operator(state, cache, params, term_cfg)
-
-    return block_harmonic_krylov(
-        apply,
-        v0,
-        sigma=0.0,
-        k=candidates,
-        m=krylov_dim,
-        block_size=min(max(candidates + 1, 2), krylov_dim - 1),
-        tol=tol,
-        max_restarts=restarts,
-        which="largest_real",
-        restart_keep=min(max(2 * candidates, candidates + 1), krylov_dim - 1),
-        initial_subspace=initial_subspace,
-        subspace_apply=propagator,
-    )
-
-
-def prepare_rational_shifted_inverse(
-    v0: jnp.ndarray,
-    cache: LinearCache,
-    params: LinearParams,
-    terms: LinearTerms | None = None,
-    *,
-    shift: complex,
-    shift_tol: float = 1e-6,
-    shift_maxiter: int = 60,
-    shift_restart: int = 30,
-    shift_solve_method: str = "batched",
-    shift_preconditioner: str | None = "field-corrected",
-) -> Callable[[jnp.ndarray], jnp.ndarray]:
-    """Prepare a compiled ``(A - shift I)`` inverse for repeated solves.
-
-    Rebuild whenever captured problem data or the shift changes.
-    """
-
-    term_cfg = linear_terms_to_term_config(terms)
-    sigma = jnp.asarray(shift, dtype=v0.dtype)
-    inverse = _shift_invert_apply_factory(
-        v0,
-        cache,
-        params,
-        term_cfg,
-        sigma_val=sigma,
-        gmres_tol=shift_tol,
-        gmres_maxiter=shift_maxiter,
-        gmres_restart=shift_restart,
-        gmres_solve_method=shift_solve_method,
-        shift_preconditioner=shift_preconditioner,
-    )
-
-    @jax.jit
-    def apply_inverse(state: jnp.ndarray) -> jnp.ndarray:
-        return inverse(state, cache, params, term_cfg)
-
-    return apply_inverse
-
-
-def _rational_branch(
-    v0: jnp.ndarray,
-    v_ref: jnp.ndarray,
-    cache: LinearCache,
-    params: LinearParams,
-    term_cfg,
-    cfg: KrylovConfig,
-    status_callback: _StatusCallback,
-    *,
-    select_overlap: bool,
-) -> tuple[jnp.ndarray, jnp.ndarray]:
-    """Select one production branch from a small rational candidate set."""
-
-    sigma, v_seed = _shift_seed(
-        v0,
-        v_ref,
-        cache,
-        params,
-        term_cfg,
-        cfg,
-        status_callback,
-        select_overlap=select_overlap,
-    )
-    # The scalar dominant-mode objective should not pay three additional
-    # shifted-solve sequences. Continuation/overlap tracking retains a small
-    # branch set because crossings need alternatives; an isolated solve needs
-    # only its best residual-certified candidate.
-    requested_candidates = 4 if select_overlap else 1
-    candidate_count = min(requested_candidates, max(cfg.krylov_dim - 2, 1))
-    _status(
-        status_callback,
-        "running field-corrected block rational solve with "
-        f"candidates={candidate_count} dim={cfg.krylov_dim}",
-    )
-    solution = rational_eigenpairs(
-        v_seed,
-        cache,
-        params,
-        terms=LinearTerms(
-            streaming=term_cfg.streaming,
-            mirror=term_cfg.mirror,
-            curvature=term_cfg.curvature,
-            gradb=term_cfg.gradb,
-            diamagnetic=term_cfg.diamagnetic,
-            collisions=term_cfg.collisions,
-            hypercollisions=term_cfg.hypercollisions,
-            hyperdiffusion=term_cfg.hyperdiffusion,
-            end_damping=term_cfg.end_damping,
-            apar=term_cfg.apar,
-            bpar=term_cfg.bpar,
-        ),
-        shift=complex(np.asarray(sigma)),
-        candidates=candidate_count,
-        krylov_dim=cfg.krylov_dim,
-        restarts=cfg.restarts,
-        tol=min(cfg.shift_outer_residual_tol, 1.0e-9),
-        initial_subspace=v_ref[None, ...],
-        shift_tol=cfg.shift_tol,
-        shift_maxiter=cfg.shift_maxiter,
-        shift_restart=cfg.shift_restart,
-        shift_solve_method=cfg.shift_solve_method,
-        shift_preconditioner=cfg.shift_preconditioner,
-    )
-    values = np.asarray(solution.eigenvalues)
-    converged = np.asarray(solution.converged)
-    finite = np.isfinite(values.real) & np.isfinite(values.imag) & converged
-    if not np.any(finite):
-        raise RuntimeError(
-            "block rational eigenpairs failed the outer residual gate: "
-            f"residuals={np.asarray(solution.residuals).tolist()}"
-        )
-    allowed = np.flatnonzero(finite)
-    if select_overlap:
-        reference = np.asarray(v_ref).reshape(-1)
-        vectors = np.asarray(solution.eigenvectors).reshape(candidate_count, -1)
-        overlaps = np.abs(vectors[allowed].conj() @ reference)
-        index = int(allowed[int(np.argmax(overlaps))])
-    else:
-        _select_targeted, select_growth = _shift_selection_flags(cfg.shift_selection)
-        index = (
-            int(allowed[int(np.argmax(values[allowed].real))])
-            if select_growth
-            else int(
-                allowed[
-                    int(np.argmin(np.abs(values[allowed] - complex(np.asarray(sigma)))))
-                ]
-            )
-        )
-    return solution.eigenvalues[index], solution.eigenvectors[index]
-
-
 def _dispatch_dominant_eigenpair(
     v0: jnp.ndarray,
     v_ref: jnp.ndarray,
@@ -782,21 +473,9 @@ def _dispatch_dominant_eigenpair(
             status_callback,
             select_overlap=select_overlap,
         )
-    if cfg.method == "rational":
-        return _rational_branch(
-            v0,
-            v_ref,
-            cache,
-            params,
-            term_cfg,
-            cfg,
-            status_callback,
-            select_overlap=select_overlap,
-        )
     if cfg.method != "arnoldi":
         raise ValueError(
-            "Krylov method must be 'power', 'propagator', 'shift_invert', "
-            "'rational', or 'arnoldi'"
+            "Krylov method must be 'power', 'propagator', 'shift_invert', or 'arnoldi'"
         )
     return _arnoldi_branch(
         v0,
@@ -903,8 +582,4 @@ __all__ = [
     "dominant_eigenpair_propagator_cached",
     "dominant_eigenpair_shift_invert_cached",
     "dominant_eigenvalue",
-    "prepare_long_horizon_propagator",
-    "prepare_rational_shifted_inverse",
-    "propagator_eigenpairs",
-    "rational_eigenpairs",
 ]

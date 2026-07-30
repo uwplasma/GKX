@@ -7,49 +7,57 @@ single one with the largest real part. The dense path is there for a reason --
 it opts into ``enable_eigvec_derivs=True`` so the objective is differentiable --
 but the cost is O(n^3) in time and O(n^2) in memory to obtain one eigenpair.
 
-Measured on a QA boundary at ntheta = 32, the dense timing is the median of
-three eigendecompositions and the matrix-free timing blocks device execution.
-The emitted artifact records the samples, fit, and projections instead of
-pinning hardware-sensitive timings in this module docstring. The O(n^2) matrix
-storage alone reaches 2.4 GB at (12, 16) and 9.7 GB at (16, 24), both with
-ntheta = 64. A convergence ladder needs several evaluations per configuration,
-and the campaign needs one ladder per configuration -- which is what makes a
-converged multi-device study look unaffordable.
+Measured on a QA boundary at ntheta = 32, so that n = n_laguerre * n_hermite *
+ntheta:
 
-It is not actually unaffordable, because only one eigenpair is wanted. A
-matrix-free method has O(n k) state memory rather than O(n^2) matrix memory.
-The production candidate is now an adaptive full-operator RK4 propagator:
-caller-seeded and deterministic broadband peripheral-spectrum sketches select a
-stable step, fixed physical-horizon restart chunks expose the rightmost mode,
-and the original-operator residual stops the solve. Robust dense-oracle
-campaigns at n = 4480 measure timing parity on QA and 1.89x and 2.34x speedups
-on QH and QI. A certificate-only GPU continuation reaches n = 172032 while
-observed allocation stays near 1.24 GiB; the corresponding dense complex matrix
-is about 474 GB. One n = 199680 row also passes, corresponding to about 638 GB
-dense.
+    (N_l, N_m)      n      matrix     dense eig
+      (2, 3)       192     0.6 MB       0.02 s
+      (4, 6)       768     9.4 MB       0.92 s
+      (6, 8)      1536    37.7 MB       4.24 s
+      (8, 10)     2560   104.9 MB      14.36 s
+
+Clean cubic scaling, which extrapolates badly to converged resolution. At
+(12, 16) with ntheta = 64, n = 12288: about 26 minutes and 2.4 GB per
+evaluation. At (16, 24), n = 24576: about 3.5 hours and 9.7 GB. A convergence
+ladder needs several such evaluations per configuration, and the campaign needs
+one ladder per configuration -- which is what makes a converged multi-device
+study look unaffordable.
+
+It is not actually unaffordable, because only one eigenpair is wanted. GKX
+already ships a matrix-free Arnoldi (``gkx.solvers.linear.dominant_eigenpair``)
+whose cost is O(n^2 k) with k Krylov vectors rather than O(n^3), and whose
+memory is O(n k) rather than O(n^2). Measured here it is already 7.9x faster at
+n = 2560, with the advantage growing as n^3 / (n^2 k) = n / k.
 
 **Why the obvious substitution does not work, measured rather than guessed.**
 The matrix-free RHS and the dense matrix agree to 3e-16 on the same vector, so
-the operator is not in question. The target is an INTERIOR eigenvalue: its
-magnitude is much smaller than the
+the operator is not in question. The spectrum is:
+
+    max Re lambda    =   0.143     <- the wanted eigenvalue
+    max |Im lambda|  =  80.15
+    spectral radius  =  80.15
+
+The target is an INTERIOR eigenvalue: its real part is ~560x smaller than the
 spectral radius, which is dominated by fast oscillatory (large-|Im|) modes.
-Plain Arnoldi converges to extremal |lambda| and therefore finds those
-oscillatory modes, not the rightmost one. The disagreement does not improve
-with krylov_dim, which is the signature of converging to the wrong part of the
-spectrum rather than of under-convergence.
+Plain Arnoldi converges to extremal |lambda| and therefore finds the |lambda| ~
+80 modes, not this one -- measured values came back 30x to 300x too large and did
+not improve with krylov_dim, which is the signature of converging to the wrong
+part of the spectrum rather than of under-convergence.
 
-For a long horizon T, |mu| = exp(T Re(lambda)), so phase aliasing cannot corrupt
-growth ordering. Selecting by |mu| and recovering lambda from the
-original-operator Rayleigh quotient avoids the logarithm branch entirely. The
-full-operator RK4 polynomial shares eigenvectors with the continuous operator.
-The adaptive stability and residual controls eliminate the conservative
-uniform-setting penalty and turn this into a measured low-memory speedup, not
-only an asymptotic argument.
+The propagator variant maps max-Re to max-|mu| via mu = exp(lambda dt), but only
+while |Im lambda| dt << pi. Here |Im lambda| = 80, so power_dt = 0.05 gives 4.0
+and aliases badly; a dt small enough to avoid aliasing leaves a per-step growth
+separation of exp(0.143 dt) ~ 1.0014, which converges far too slowly to be
+useful.
 
-Shift-invert/rational and harmonic extraction remain complementary candidates.
-The former is accurate with strict inner solves but currently slower; the latter
-is cheap where polynomial restarts converge. Method selection must be based on
-the original-operator residual rather than assuming one transformation wins.
+So the dense eigensolve is not simply a missed optimization -- it is the
+straightforward way to reach an interior eigenvalue, and that is presumably why
+it is there. The correct fast algorithm is **shift-invert Arnoldi** with a shift
+near the expected growth rate, where each iteration applies (A - sigma I)^-1
+matrix-free via GMRES. GKX already carries the scaffolding for this
+(shift_source, shift_solve_method, shift_preconditioner), so the work is to make
+that path reach the same eigenvalue as the dense reference, not to build a new
+solver.
 
 Two further notes for whoever picks this up:
 
@@ -66,29 +74,11 @@ Two further notes for whoever picks this up:
 from __future__ import annotations
 
 import argparse
-import hashlib
-from importlib.metadata import version
 import json
 from pathlib import Path
-import platform
-import subprocess
-import sys
 import time
 
 import numpy as np
-
-
-def _git_revision(repository: Path) -> str:
-    """Return the exact measured revision without failing outside a checkout."""
-
-    completed = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=repository,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    return completed.stdout.strip() if completed.returncode == 0 else "unknown"
 
 
 def measure(
@@ -97,10 +87,8 @@ def measure(
     *,
     ntheta: int,
     krylov: bool = True,
-    dense_repeats: int = 3,
 ) -> list[dict]:
     import gkx
-    import jax
     import jax.numpy as jnp
 
     from gkx.config import GridConfig
@@ -119,16 +107,10 @@ def measure(
         )
         build_seconds = time.time() - started
 
-        dense_samples = []
-        for _ in range(dense_repeats):
-            started = time.time()
-            eigenvalues = np.linalg.eigvals(matrix)
-            dense_samples.append(time.time() - started)
-        dense_seconds = float(np.median(dense_samples))
-        dense_index = int(np.argmax(eigenvalues.real))
-        dense_eigenvalue = complex(eigenvalues[dense_index])
-        dense_value = float(dense_eigenvalue.real)
-        spectral_radius = float(np.max(np.abs(eigenvalues)))
+        started = time.time()
+        eigenvalues = np.linalg.eigvals(matrix)
+        dense_seconds = time.time() - started
+        dense_value = float(eigenvalues.real.max())
 
         row = {
             "n_laguerre": n_laguerre,
@@ -137,11 +119,7 @@ def measure(
             "matrix_megabytes": matrix.nbytes / 1e6,
             "build_seconds": build_seconds,
             "dense_eig_seconds": dense_seconds,
-            "dense_eig_samples": dense_samples,
             "dense_max_real": dense_value,
-            "dense_rightmost": [dense_eigenvalue.real, dense_eigenvalue.imag],
-            "spectral_radius": spectral_radius,
-            "spectral_ratio": spectral_radius / abs(dense_eigenvalue),
         }
 
         if krylov:
@@ -160,13 +138,6 @@ def measure(
                 value, _ = dominant_eigenpair(
                     seed, cache, params, method="arnoldi", krylov_dim=32, restarts=3
                 )
-                jax.block_until_ready(value)
-                row["krylov_compile_seconds"] = time.time() - started
-                started = time.time()
-                value, _ = dominant_eigenpair(
-                    seed, cache, params, method="arnoldi", krylov_dim=32, restarts=3
-                )
-                jax.block_until_ready(value)
                 row["krylov_seconds"] = time.time() - started
                 row["krylov_real"] = float(jnp.real(value))
                 row["speedup"] = dense_seconds / max(row["krylov_seconds"], 1e-9)
@@ -192,9 +163,7 @@ def measure(
     return rows
 
 
-def extrapolate(
-    rows: list[dict], targets: tuple[tuple[int, int, int], ...]
-) -> list[dict]:
+def extrapolate(rows: list[dict], targets: tuple[tuple[int, int, int], ...]) -> list[dict]:
     """Cubic extrapolation of the dense cost to converged resolutions."""
 
     sizes = np.array([r["n"] for r in rows], dtype=float)
@@ -231,17 +200,13 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    import jax
     import vmex as vj
     from vmex import optimize as opt
     from vmex.core import turbulence as turb
 
     equilibrium = opt.solve_equilibrium(vj.VmecInput.from_file(args.input))
     geometry = turb.flux_tube_geometry(
-        equilibrium.state,
-        equilibrium.runtime,
-        s_index=args.s_index,
-        alpha=0.0,
+        equilibrium.state, equilibrium.runtime, s_index=args.s_index, alpha=0.0,
         ntheta=args.ntheta,
     )
 
@@ -257,41 +222,19 @@ def main() -> int:
             f"{item['projected_matrix_gigabytes']:.1f} GB per evaluation"
         )
 
-    representative = rows[-1]
-    repository = Path(__file__).resolve().parents[2]
     summary = {
         "kind": "eigensolver_cost_model",
         "claim_level": "cost_measurement_and_projection_not_a_validated_speedup",
         "ntheta": args.ntheta,
-        "provenance": {
-            "input": str(args.input),
-            "input_sha256": hashlib.sha256(args.input.read_bytes()).hexdigest(),
-            "dense_repeats": 3,
-            "python": sys.version,
-            "platform": platform.platform(),
-            "numpy": np.__version__,
-            "jax": version("jax"),
-            "jaxlib": version("jaxlib"),
-            "gkx": version("gkx"),
-            "solvax": version("solvax"),
-            "gkx_commit": _git_revision(repository),
-            "jax_x64": bool(jax.config.jax_enable_x64),
-            "devices": [f"{device.platform}:{device.id}" for device in jax.devices()],
-        },
         "measurements": rows,
         "projections": projections,
         "note": (
-            "At the largest measured rung the wanted rightmost eigenvalue is "
-            f"{representative['dense_rightmost']} against spectral radius "
-            f"{representative['spectral_radius']:.6g}, so plain Arnoldi "
-            "converges to the oscillatory extremes instead. Matrix-free and "
-            "dense operators agree to 3e-16, so this is a spectrum-structure "
-            "problem, not an operator mismatch. The adaptive full-operator "
-            "propagator passes four-rung QA, QH, and QI dense-oracle gates; at "
-            "n=4480 it is at QA timing parity and 1.89x--2.34x faster on "
-            "QH/QI. Certificate-only GPU ladders demonstrate linear-memory "
-            "feasibility at n=172032; rational and harmonic paths remain "
-            "measured alternatives."
+            "the wanted eigenvalue is INTERIOR: max Re = 0.143 against a "
+            "spectral radius of 80.15, so plain Arnoldi converges to the "
+            "oscillatory extremes instead. Matrix-free and dense operators "
+            "agree to 3e-16, so this is a spectrum-structure problem, not an "
+            "operator mismatch. Shift-invert Arnoldi with a matrix-free GMRES "
+            "inner solve is the correct fast algorithm."
         ),
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)

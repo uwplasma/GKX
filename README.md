@@ -75,6 +75,109 @@ Start with the [quickstart](https://gkx.readthedocs.io/en/latest/quickstart.html
 [input reference](https://gkx.readthedocs.io/en/latest/inputs.html) for linear,
 nonlinear, Miller, VMEC, restart, quasilinear, and plotting workflows.
 
+## Differentiable matrix-free eigenmodes
+
+Linear and quasilinear design studies usually need only a few unstable modes,
+not the entire spectrum. Forming the dense linear operator costs `O(n²)` memory:
+the final QI convergence case in GKX has `n = 494,592`, for which the complex
+matrix alone would occupy about **3.6 TiB**. GKX instead applies the physical
+right-hand side directly inside a restarted Krylov solver, using `O(n m)`
+storage for a small subspace of `m` vectors.
+
+```python
+import jax
+import gkx
+
+config = gkx.AdaptiveLinearEigensolverConfig(
+    tolerance=1e-9,
+    candidate_count=2,  # retain a competing mode near a branch crossing
+)
+
+def objective(shape_parameters):
+    geometry = build_solver_geometry(shape_parameters)  # VMEX/Boozer or analytic
+    observables = gkx.solver_objective_vector_from_geometry(
+        geometry,
+        n_laguerre=16,
+        n_hermite=24,
+        eigensolver="adaptive-propagator",
+        adaptive_config=config,
+    )
+    growth_rate, frequency, *_, quasilinear_flux = observables
+    return quasilinear_flux
+
+value, gradient = jax.value_and_grad(objective)(initial_shape)
+```
+
+`build_solver_geometry` is deliberately application supplied: the same solver
+accepts analytic s-alpha and Miller geometry or a differentiable VMEX/Boozer
+geometry pipeline. The returned objective contains growth rate, real frequency,
+mode-scale and quasilinear transport observables in
+[`SOLVER_OBJECTIVE_NAMES`](src/gkx/objectives/core.py).
+
+The eigensolve itself is not unrolled through autodiff. For a simple
+eigenvalue, GKX computes the left and right modes and applies the implicit
+identity
+
+```text
+dλ/dp = wᴴ (dA/dp) v / (wᴴv).
+```
+
+Eigenvector-dependent objectives use the corresponding bordered linear solve.
+Reverse mode therefore costs an adjoint eigenmode and one sensitivity solve,
+instead of storing or differentiating through thousands of time steps. A
+condition-number and branch-gap check fails closed where a single-mode
+derivative is not mathematically well defined.
+
+### What is better than a standard implementation?
+
+| Approach | Memory | Branch handling | Optimization derivative |
+| --- | ---: | --- | --- |
+| Dense `eig(A)` | `O(n²)` | all modes, but only at small `n` | dense eigenvector AD |
+| Initial-value time stepping | `O(n)` | slow or ambiguous as growth rates cross | differentiates a long trajectory |
+| Generic matrix-free eigensolver | `O(n m)` | depends on targeting and restart policy | usually external to the physics graph |
+| **GKX matrix-free objective** | **`O(n m)`** | **residual-certified candidates and biorthogonal continuation** | **implicit JAX VJP through geometry, fields and the full RHS** |
+
+The improvement over a standard dense implementation is decisive in memory and
+in how derivatives are formed: GKX never allocates the `n × n` matrix and one
+reverse derivative costs one adjoint eigenmode plus one reduced-resolvent solve,
+not a derivative of every dense eigenvector. Compared with treating a
+simulation code as an opaque function, geometry, fields, the gyrokinetic RHS,
+the selected mode, and quasilinear observables remain in one JAX computation.
+
+This does **not** mean the current cold solve is universally faster than mature
+GX or GENE/SLEPc runs. GX is a highly optimized GPU initial-value code, while
+GENE uses preconditioned SLEPc eigensolvers and has demonstrated efficient
+parameter scans. GKX's measured advantages are narrower and directly tested:
+
+- unlike a dense implementation, it reaches velocity resolutions where the
+  matrix cannot fit in memory;
+- unlike dominant-mode time stepping, it retains competing modes and can
+  follow one physical branch through a growth-order exchange;
+- unlike an external eigensolver wrapped around a simulation, its eigenvalue
+  and eigenvector observables remain inside the JAX transformation graph for
+  gradient-based equilibrium optimization.
+
+### Current performance boundary
+
+The implementation remains opt-in. At `n = 6,144`, a cold objective plus
+reverse gradient took 142.75 s versus 171.81 s for dense AD, with a
+`1.5e-10` relative gradient error. At the final QI frequency-convergence rung,
+`n = 494,592`, the matrix-free solve was possible but took 1,504 s on an RTX
+A4000 because the explicit filter needed 8,935 RK4 steps per propagator
+application. That is an accuracy and memory success, but not yet an acceptable
+production cold time.
+
+Every accepted pair is checked against the original continuous complex128 GKX
+operator; projected, transformed, or low-precision residuals never stand in
+for that test. The remaining production task is a robust physics-aware
+preconditioner for the oscillatory Hermite-streaming spectrum. See
+[the eigensolver qualification](docs/differentiable_eigensolver.rst) for the
+four retained evidence records, rejected alternatives, and reproducible
+commands. Relevant external comparisons are
+[GENE's matrix-free eigenvalue study](https://doi.org/10.1016/j.cpc.2011.12.018),
+[SLEPc's Krylov-Schur documentation](https://slepc.upv.es/release/documentation/manual/eps.html),
+and the [GX methods paper](https://arxiv.org/abs/2209.06731).
+
 ## Validation
 
 Every figure below is anchored to something external — an exact root, a

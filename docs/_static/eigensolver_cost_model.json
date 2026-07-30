@@ -2,136 +2,71 @@
   "kind": "eigensolver_cost_model",
   "claim_level": "cost_measurement_and_projection_not_a_validated_speedup",
   "ntheta": 32,
-  "provenance": {
-    "input": "examples/vmec/input.LandremanPaul2021_QA_lowres",
-    "input_sha256": "4f56d4c674b6340a9e359d3645ab1dbb4f841eccc563b5fc969a27928cb9cf84",
-    "dense_repeats": 3,
-    "python": "3.13.7 (main, Aug 14 2025, 11:12:11) [Clang 17.0.0 (clang-1700.3.19.1)]",
-    "platform": "macOS-26.5.1-arm64-arm-64bit-Mach-O",
-    "numpy": "2.5.1",
-    "jax": "0.11.0",
-    "jaxlib": "0.11.0",
-    "gkx": "1.7.1",
-    "solvax": "0.11.2",
-    "gkx_commit": "3500d53bd078c8ca49bd14a0c57d6937181ada53",
-    "jax_x64": true,
-    "devices": [
-      "cpu:0"
-    ]
-  },
   "measurements": [
     {
       "n_laguerre": 2,
       "n_hermite": 3,
       "n": 192,
       "matrix_megabytes": 0.589824,
-      "build_seconds": 0.8896260261535645,
-      "dense_eig_seconds": 0.013214111328125,
-      "dense_eig_samples": [
-        0.013192892074584961,
-        0.013214111328125,
-        0.013254880905151367
-      ],
-      "dense_max_real": 0.3598234354457788,
-      "dense_rightmost": [
-        0.3598234354457788,
-        -0.5938944001206535
-      ],
-      "spectral_radius": 30.625030159111308,
-      "spectral_ratio": 44.10322715153504,
-      "krylov_compile_seconds": 0.16432690620422363,
-      "krylov_seconds": 0.006896018981933594,
-      "krylov_real": 0.5446329205644551,
-      "speedup": 1.916194164016042,
-      "relative_disagreement": 0.5136115853313421
+      "build_seconds": 1.7720918655395508,
+      "dense_eig_seconds": 0.01638507843017578,
+      "dense_max_real": 0.14819918355947928,
+      "krylov_seconds": 0.5523667335510254,
+      "krylov_real": 0.5471539219999548,
+      "speedup": 0.029663405550946695,
+      "relative_disagreement": 2.6920171141182863
     },
     {
       "n_laguerre": 4,
       "n_hermite": 6,
       "n": 768,
       "matrix_megabytes": 9.437184,
-      "build_seconds": 0.7813529968261719,
-      "dense_eig_seconds": 0.4029388427734375,
-      "dense_eig_samples": [
-        0.4029388427734375,
-        0.42287111282348633,
-        0.4001810550689697
-      ],
-      "dense_max_real": 0.09000512301104559,
-      "dense_rightmost": [
-        0.09000512301104559,
-        -1.1352848848827386
-      ],
-      "spectral_radius": 53.73554672101133,
-      "spectral_ratio": 47.18416303853614,
-      "krylov_compile_seconds": 0.15956401824951172,
-      "krylov_seconds": 0.0428469181060791,
-      "krylov_real": 0.5246470912904204,
-      "speedup": 9.404149950198372,
-      "relative_disagreement": 4.829080320528364
+      "build_seconds": 1.902677059173584,
+      "dense_eig_seconds": 0.9035348892211914,
+      "dense_max_real": 0.13946702799351993,
+      "krylov_seconds": 0.6036441326141357,
+      "krylov_real": 0.06356857435861167,
+      "speedup": 1.4968005823370658,
+      "relative_disagreement": 0.5442035635722784
     },
     {
       "n_laguerre": 6,
       "n_hermite": 8,
       "n": 1536,
       "matrix_megabytes": 37.748736,
-      "build_seconds": 1.1259419918060303,
-      "dense_eig_seconds": 1.8733210563659668,
-      "dense_eig_samples": [
-        1.8733210563659668,
-        1.8880000114440918,
-        1.8375988006591797
-      ],
-      "dense_max_real": 0.0981348512782833,
-      "dense_rightmost": [
-        0.0981348512782833,
-        -1.0124238871890303
-      ],
-      "spectral_radius": 67.34602766077647,
-      "spectral_ratio": 66.20928686436733,
-      "krylov_compile_seconds": 0.17390704154968262,
-      "krylov_seconds": 0.03997993469238281,
-      "krylov_real": 0.5297921823126157,
-      "speedup": 46.85653117694766,
-      "relative_disagreement": 4.398614003197209
+      "build_seconds": 2.571160078048706,
+      "dense_eig_seconds": 5.322623014450073,
+      "dense_max_real": 0.14224075806133865,
+      "krylov_seconds": 1.7844948768615723,
+      "krylov_real": 0.13848505961433516,
+      "speedup": 2.9827056852138907,
+      "relative_disagreement": 0.026403813493344273
     },
     {
       "n_laguerre": 8,
       "n_hermite": 10,
       "n": 2560,
       "matrix_megabytes": 104.8576,
-      "build_seconds": 1.5343050956726074,
-      "dense_eig_seconds": 6.655268907546997,
-      "dense_eig_samples": [
-        6.562618017196655,
-        6.689763069152832,
-        6.655268907546997
-      ],
-      "dense_max_real": 0.08693905219947713,
-      "dense_rightmost": [
-        0.08693905219947713,
-        -0.917155464405776
-      ],
-      "spectral_radius": 79.36208908409822,
-      "spectral_ratio": 86.14452162985995,
-      "krylov_compile_seconds": 0.20529389381408691,
-      "krylov_seconds": 0.07225966453552246,
-      "krylov_real": 0.5046827676094517,
-      "speedup": 92.10212848795199,
-      "relative_disagreement": 4.80501805392913
+      "build_seconds": 2.050020933151245,
+      "dense_eig_seconds": 12.225829839706421,
+      "dense_max_real": 0.1429399588859297,
+      "krylov_seconds": 0.9078881740570068,
+      "krylov_real": 0.1691619101062824,
+      "speedup": 13.466228759290738,
+      "relative_disagreement": 0.18344731189742816
     }
   ],
   "projections": [
     {
-      "fitted_exponent": 2.3227934310355987,
-      "fitted_scale": 7.828002589915838e-08
+      "fitted_exponent": 2.1864367284570014,
+      "fitted_scale": 4.793452963438747e-07
     },
     {
       "n_laguerre": 12,
       "n_hermite": 16,
       "ntheta": 64,
       "n": 12288,
-      "projected_dense_seconds": 246.9852595108239,
+      "projected_dense_seconds": 418.83249799277786,
       "projected_matrix_gigabytes": 2.415919104
     },
     {
@@ -139,7 +74,7 @@
       "n_hermite": 24,
       "ntheta": 64,
       "n": 24576,
-      "projected_dense_seconds": 1235.6672350934857,
+      "projected_dense_seconds": 1906.4411822792931,
       "projected_matrix_gigabytes": 9.663676416
     },
     {
@@ -147,9 +82,9 @@
       "n_hermite": 16,
       "ntheta": 64,
       "n": 32768,
-      "projected_dense_seconds": 2410.5070598124785,
+      "projected_dense_seconds": 3575.9715376701083,
       "projected_matrix_gigabytes": 17.179869184
     }
   ],
-  "note": "At the largest measured rung the wanted rightmost eigenvalue is [0.08693905219947713, -0.917155464405776] against spectral radius 79.3621, so plain Arnoldi converges to the oscillatory extremes instead. Matrix-free and dense operators agree to 3e-16, so this is a spectrum-structure problem, not an operator mismatch. The adaptive full-operator propagator passes four-rung QA, QH, and QI dense-oracle gates; at n=4480 it is at QA timing parity and 1.89x--2.34x faster on QH/QI. Certificate-only GPU ladders demonstrate linear-memory feasibility at n=172032; rational and harmonic paths remain measured alternatives."
+  "note": "krylov and dense disagree because dominant_eigenpair selects a physical branch while the dense path takes argmax(Re lambda); matching the selection is a prerequisite to any substitution"
 }
