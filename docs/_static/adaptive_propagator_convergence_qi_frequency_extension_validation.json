@@ -1,0 +1,180 @@
+{
+  "schema_version": 1,
+  "passed": true,
+  "required_observable": "frequency",
+  "certified": true,
+  "all_growth_converged": true,
+  "all_eigenvalue_converged": true,
+  "all_frequency_converged": true,
+  "scope": "certificate-only ntheta=64 velocity-space ladder beyond the dense oracle memory range; growth, full-eigenvalue, and frequency-only convergence separately require two consecutive normalized changes to pass tolerance",
+  "provenance": {
+    "ntheta": 64,
+    "s_index": 7,
+    "selected_ky_index": 1,
+    "ladder": [
+      [
+        72,
+        80
+      ],
+      [
+        76,
+        84
+      ],
+      [
+        80,
+        88
+      ],
+      [
+        84,
+        92
+      ]
+    ],
+    "krylov_dim": 24,
+    "restart_krylov_dim": 12,
+    "adaptive_candidates": 2,
+    "max_restarts": 4,
+    "residual_tolerance": 1e-09,
+    "convergence_tolerance": 0.05,
+    "chunk_horizon": 30.0,
+    "stability_dimension": 12,
+    "stability_probe_count": 2,
+    "stability_safety": 0.9,
+    "warm_repeats": 0,
+    "python": "3.10.12 (main, Jan  8 2026, 06:52:19) [GCC 11.4.0]",
+    "platform": "Linux-6.17.9-76061709-generic-x86_64-with-glibc2.35",
+    "jax": "0.6.2",
+    "jaxlib": "0.6.2",
+    "gkx": null,
+    "solvax": "0.7.3",
+    "gkx_commit": "729818033101c30139356bc8699c232a26188d96",
+    "solvax_commit": "abecac19468bb879656681394a1d2327ebfe5385",
+    "jax_x64": true,
+    "devices": [
+      "cuda:0"
+    ]
+  },
+  "devices": [
+    {
+      "device": "qi",
+      "input": "examples/vmec/input.nfp3_QI_fixed_resolution_final",
+      "input_sha256": "b64dc2221e19452d426c60104b0c67d12de9b13a7ca5152a43b562bbf36fc0ba",
+      "certified": true,
+      "growth_converged": true,
+      "growth_converged_resolution": [
+        80,
+        88
+      ],
+      "eigenvalue_converged": true,
+      "eigenvalue_converged_resolution": [
+        80,
+        88
+      ],
+      "frequency_converged": true,
+      "frequency_converged_resolution": [
+        80,
+        88
+      ],
+      "growth_relative_changes": [
+        0.006678463007867267,
+        0.013212319197213097,
+        0.01932360305422119
+      ],
+      "eigenvalue_relative_changes": [
+        0.030185828223987528,
+        0.029356929432705913,
+        0.028915681766775357
+      ],
+      "frequency_normalized_changes": [
+        0.030081907092174856,
+        0.028923386694779757,
+        0.027947716101184298
+      ],
+      "rows": [
+        {
+          "n_laguerre": 72,
+          "n_hermite": 80,
+          "n": 368640,
+          "eigenvalue": [
+            0.0857149419516487,
+            -0.2174993237108516
+          ],
+          "residual": 3.817011876084768e-13,
+          "converged": true,
+          "stability_passed": true,
+          "filter_growth_defect": 3.93574062229618e-14,
+          "restarts": 1,
+          "selected_propagator_dt": 0.003795066413662239,
+          "selected_propagator_steps": 7905,
+          "original_operator_evaluations": 758907,
+          "continuation_overlap": null,
+          "compile_seconds": 916.6762890815735,
+          "cold_seconds": 916.6762890815735,
+          "warm_seconds": null
+        },
+        {
+          "n_laguerre": 76,
+          "n_hermite": 84,
+          "n": 408576,
+          "eigenvalue": [
+            0.08514629556645122,
+            -0.2106640914225082
+          ],
+          "residual": 4.464459353601983e-13,
+          "converged": true,
+          "stability_passed": true,
+          "filter_growth_defect": -6.522560269672795e-16,
+          "restarts": 1,
+          "selected_propagator_dt": 0.0036607687614399025,
+          "selected_propagator_steps": 8195,
+          "original_operator_evaluations": 786747,
+          "continuation_overlap": 0.9975297394928401,
+          "compile_seconds": 1221.9022088050842,
+          "cold_seconds": 1221.9022088050842,
+          "warm_seconds": null
+        },
+        {
+          "n_laguerre": 80,
+          "n_hermite": 88,
+          "n": 450560,
+          "eigenvalue": [
+            0.08403598530455512,
+            -0.20427533117859037
+          ],
+          "residual": 4.907994288260861e-13,
+          "converged": true,
+          "stability_passed": true,
+          "filter_growth_defect": 1.0255685189974884e-14,
+          "restarts": 1,
+          "selected_propagator_dt": 0.0034706154558074966,
+          "selected_propagator_steps": 8644,
+          "original_operator_evaluations": 829851,
+          "continuation_overlap": 0.9975632771471287,
+          "compile_seconds": 1174.431786775589,
+          "cold_seconds": 1174.431786775589,
+          "warm_seconds": null
+        },
+        {
+          "n_laguerre": 84,
+          "n_hermite": 92,
+          "n": 494592,
+          "eigenvalue": [
+            0.08244289159277417,
+            -0.19827408743480576
+          ],
+          "residual": 5.293342074739676e-13,
+          "converged": true,
+          "stability_passed": true,
+          "filter_growth_defect": -1.4876988529977098e-14,
+          "restarts": 1,
+          "selected_propagator_dt": 0.003357582540570789,
+          "selected_propagator_steps": 8935,
+          "original_operator_evaluations": 857787,
+          "continuation_overlap": 0.9975468618759806,
+          "compile_seconds": 1504.3680255413055,
+          "cold_seconds": 1504.3680255413055,
+          "warm_seconds": null
+        }
+      ]
+    }
+  ]
+}

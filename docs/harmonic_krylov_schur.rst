@@ -15,17 +15,14 @@ uses the already stable propagator and a small GMRES polynomial in the
 time-stepper, avoiding the restarted bordered-GMRES stagnation measured at
 larger velocity resolution. Every primal, adjoint, continuous sensitivity
 residual, branch-gap, and exceptional-point check fails closed.
-Certificate-only GPU ladders reach ``n=172032`` with linear memory and certify
-growth-rate convergence; an individual ``n=199680`` solve also passes. Full
-complex-eigenvalue convergence remains unresolved for the QI ladder because the
-frequency continues to move despite candidate overlaps above 0.99. The dense
-differentiable objective therefore remains the default, while
-``eigensolver="adaptive-propagator"`` is the fail-closed production candidate
-for admitted branches. Cross-step candidate continuation remains required
-before making that backend the unconditional default. The QI convergence
-campaign exposes an explicit growth-only contract rather than treating an
-unresolved frequency as an implicit exception. Measurements and remaining
-work are below.
+Certificate-only GPU ladders reach ``n=494592`` with linear memory and certify
+growth-rate, frequency, and full-complex-eigenvalue convergence on QI after an
+explicit rightmost-mode exchange. Stateful biorthogonal continuation separately
+retains one physical mode when its growth rank changes from first to third.
+The dense differentiable objective remains the default until the SOLVAX release
+dependency is available, while ``eigensolver="adaptive-propagator"`` is the
+fail-closed production candidate for admitted branches. Measurements and the
+remaining dependency work are below.
 
 .. _hks-motivation:
 
@@ -478,8 +475,33 @@ the rounded operator-probe hash. Regenerate the production setting with
 
 A refined block-propagator restart remains available for broader clusters. The
 fast scalar path is preferred for an isolated objective and now audits two
-same-subspace candidates; continuation must still retain modes across parameter
-steps near crossings.
+same-subspace candidates. Cross-step continuation accepts the previous right
+mode and, when available, its left mode. It ranks certified candidates by the
+relative biorthogonal projection
+:math:`|w_{k-1}^{*}v_k|/|w_{k-1}^{*}v_{k-1}|`, then separately gates the
+selected mode's complex spectral separation. Thus a growth-order exchange does
+not masquerade as an eigenvalue degeneracy.
+
+The :download:`real branch-crossing artifact
+<_static/adaptive_propagator_branch_crossing_validation.json>` scans the actual
+Cyclone linear operator over
+``R/LTi=[12,12.5,13,13.25,13.5,14]``. The retained ITG mode is dominant through
+``13.0``, second at ``13.25`` and ``13.5``, and third at ``14.0``. The adaptive
+solver selects candidate indices ``1,1,2`` after the exchange rather than
+jumping branches. Across all six points, relative dense-oracle eigenvalue error
+is at most ``2.33e-15``, dense/adaptive right-eigenvector overlap is unity to
+roundoff, relative biorthogonal continuation overlap is at least ``0.9730``,
+and separation from every other extracted candidate is at least ``0.3965``.
+Left and right residuals both pass ``1e-8``. Dense eigensystems are used only
+as the qualification oracle; cross-step selection uses the previous
+matrix-free adaptive left/right pair.
+
+Regenerate this reduced-resolution qualification from the repository root:
+
+.. code-block:: bash
+
+   JAX_ENABLE_X64=1 python \
+     tools/campaigns/validate_adaptive_branch_continuation.py
 
 The TOML-driven adaptive physics matrix passes all seven shipped configurations:
 ITG, ETG, TEM, KBM, Miller, QHS, and QI. It covers
@@ -503,10 +525,11 @@ Regenerate it from the repository root with:
 The rational and harmonic solvers remain useful fallbacks and research
 comparators, but the adaptive propagator is the measured default for a
 rightmost eigenpair. The objective integration and implicit reverse
-sensitivities are implemented; candidate continuation through crossings is the
-remaining promotion gate. The low-moment field Schur/Woodbury correction
-remains available for rational extraction; its measured bottleneck is
-convergence of the kinetic complement.
+sensitivities are implemented. Candidate continuation is qualified through a
+real growth-order exchange, while the stateless dominant objective continues
+to use a deterministic broadband seed on every evaluation. The low-moment
+field Schur/Woodbury correction remains available for rational extraction; its
+measured bottleneck is convergence of the kinetic complement.
 
 Recycling the eigenvector, zero-padded into the next Hermite--Laguerre
 resolution, is much more effective than recycling only the scalar target. With
@@ -544,7 +567,8 @@ residual ``8.61e-13``, 367,706 original-operator evaluations, and 229.3 s warm
 solve time. Its dense complex matrix would require about 474 GB, whereas the
 GPU campaign remained near 1.24 GiB observed allocation. Growth changes of
 0.54% and 1.32% pass the two-consecutive-rung gate; full-eigenvalue changes of
-7.24% and 6.20% do not, so the QI frequency remains unresolved.
+7.24% and 6.20% do not, so the QI frequency remains unresolved at that
+resolution.
 
 This is the principal scaling result: memory is linear in state size and the
 solve is feasible well beyond the dense path. See the :download:`QA/QI fine
@@ -553,6 +577,39 @@ artifact <_static/adaptive_propagator_convergence_fine.json>`,
 <_static/adaptive_propagator_convergence_qi_ultrafine.json>`, and
 :download:`production broadband hyperfine artifact
 <_static/adaptive_propagator_convergence_qi_broadband_validation.json>`.
+
+The strict frequency extension first carries the same low-frequency branch
+from ``(48,56)`` through ``(60,68)``. Its last two direct frequency changes,
+4.73% and 4.36%, pass, but the corresponding full-complex changes, 5.28% and
+5.14%, do not. The :download:`near-miss artifact
+<_static/adaptive_propagator_convergence_qi_frequency_validation.json>` is
+therefore deliberately marked failed; direct frequency convergence cannot hide
+a full-mode near miss.
+
+At ``(68,76)`` the rightmost mode changes branch: frequency moves from
+``+0.00983145`` to ``-0.22486081`` and consecutive eigenvector overlap falls
+from 0.9961 to 0.4278, while the new pair still certifies at ``3.61e-13``.
+This is a resolution-dependent dominant-branch exchange, not slow drift. The
+:download:`branch-switch checkpoint
+<_static/adaptive_propagator_convergence_qi_branch_switch_checkpoint.json>`
+preserves the interrupted negative run and explicitly states that it is not a
+convergence certificate. Stateful continuation should retain the old physical
+branch when that is the requested observable; the stateless rightmost objective
+must instead admit the newly dominant branch.
+
+A fresh cold ladder on that new branch closes the production gate. Its first
+three points ``(72,80)``, ``(76,84)``, and ``(80,88)`` reach ``n=450560``.
+Their two full-complex changes are 3.019% and 2.936%; direct frequency changes
+are 3.008% and 2.892%, and growth changes are 0.668% and 1.321%. All rows
+converge in one restart. A fourth ``(84,92)`` row strengthens the result at
+``n=494592``: its full-complex, direct-frequency, and growth changes are 2.892%,
+2.795%, and 1.932%. Across the four rows, residuals range from ``3.82e-13`` to
+``5.29e-13`` and consecutive overlaps stay above 0.9975. The cold
+compile-plus-solve times are 916.7 s, 1221.9 s, 1174.4 s, and 1504.4 s; warm
+repeats are intentionally disabled. A dense complex matrix at the largest
+point would require about 3.56 TiB before eigendecomposition workspace. See
+the :download:`passing full-frequency artifact
+<_static/adaptive_propagator_convergence_qi_frequency_extension_validation.json>`.
 
 A predecessor hyperfine extension records the first large-scale failure rather
 than hiding it. Rungs at ``n=122880`` and ``n=146432`` pass with residuals
@@ -576,9 +633,10 @@ budget. The recovered value is
 ``0.09702353767 + 0.02707803460i`` with residual ``1.39e-12`` and continuation
 overlap 0.9954. Growth changes of 0.54% and 1.32% pass the two-consecutive-rung
 gate. Full-eigenvalue changes of 7.24% and 6.20% remain outside 5%, so the
-frequency is still not converged. The warm solve takes 1279.6 s and 2,051,286
-operator evaluations including the failed first attempt; this is a correctness
-fallback, not the desired steady-state cost. See the :download:`retry artifact
+frequency is not converged on that predecessor ladder. The warm solve takes
+1279.6 s and 2,051,286 operator evaluations including the failed first attempt;
+this is a correctness fallback, not the desired steady-state cost. See the
+:download:`retry artifact
 <_static/adaptive_propagator_convergence_qi_retry_validation.json>`.
 The production broadband probe avoids that failed attempt, reducing both warm
 time and operator work by 5.58x while retaining the retry as a fail-safe.
@@ -591,12 +649,15 @@ Regenerate a certificate-only ladder with:
    JAX_ENABLE_X64=1 python \
      tools/campaigns/validate_adaptive_propagator_convergence.py \
      --device qi --ntheta 64 \
-     --resolution 40,48 --resolution 44,52 \
-     --resolution 48,56 \
-     --krylov-dim 16 --max-restarts 4 --tol 1e-9 \
+     --resolution 72,80 --resolution 76,84 \
+     --resolution 80,88 --resolution 84,92 \
+     --krylov-dim 24 --restart-krylov-dim 12 \
+     --adaptive-candidates 2 --max-restarts 4 --tol 1e-9 \
      --convergence-tol 0.05 --chunk-horizon 30 \
      --stability-dimension 12 --stability-probe-count 2 \
-     --stability-safety 0.9 --required-observable growth
+     --stability-safety 0.9 --warm-repeats 0 \
+     --required-observable frequency \
+     --output docs/_static/adaptive_propagator_convergence_qi_frequency_extension_validation.json
 
 .. _hks-plan:
 
@@ -627,12 +688,13 @@ including structured continuation seeds, duplicate rejection, exact-target
 breakdown handling, and an optional rational subspace action. Required for
 branch crossings and the subdominant modes transport eventually needs.
 
-**S6 -- Candidate continuation.** The fast scalar propagator now extracts
-several leading candidates from the *same* Arnoldi space, certifies each with a
-continuous-operator Rayleigh residual, and ranks their physical growth. This
-removes near-tie mistakes without another propagator pass. Continuation across
-ky or optimization steps still needs biorthogonal overlap and periodic broad
-reseeding so a newly dominant branch is not missed.
+**S6 -- Candidate continuation.** Implemented and qualified. The fast scalar
+propagator extracts several leading candidates from the *same* Arnoldi space,
+certifies each with a continuous-operator Rayleigh residual, and ranks physical
+growth for a stateless dominant solve. A stateful scan instead uses the
+previous left/right pair for relative biorthogonal selection and a distinct
+complex-gap gate. The stateless objective's deterministic broadband start
+provides the complementary newly-dominant-mode audit.
 
 **S7 -- Implicit eigenpair derivative.** SOLVAX provides both a custom JVP and a
 reverse-efficient custom VJP. For growth-only objectives they use

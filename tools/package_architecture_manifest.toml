@@ -135,7 +135,7 @@ name = "installable_source_python_lines"
 path = "src/gkx"
 pattern = "*.py"
 recursive = true
-baseline = 88490
+baseline = 88602
 target = 45000
 
 [[line_budget_policy.counts]]

@@ -898,6 +898,129 @@ def test_adaptive_propagator_uses_smaller_corrective_subspaces(
 
 
 @requires_solvax_eigen_api
+def test_adaptive_propagator_biorthogonally_continues_subdominant_branch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A previous left mode must outrank maximum growth across an exchange."""
+
+    _grid, cache, params, v0, _term_cfg, terms = _tiny_krylov_setup(linked=False)
+    first = np.zeros(v0.size, dtype=complex)
+    second = np.zeros(v0.size, dtype=complex)
+    first[0] = 1.0
+    second[1] = 1.0
+    vectors = jnp.asarray(np.stack([first, second]).reshape((2, *v0.shape)))
+    continuation_covector = vectors[1]
+    values = jnp.asarray([0.31 + 0.2j, 0.30 - 0.4j], dtype=v0.dtype)
+
+    monkeypatch.setattr(
+        solvax,
+        "estimate_rk4_timestep",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            dt=0.2,
+            operator_applications=12,
+        ),
+    )
+    monkeypatch.setattr(
+        ap,
+        "dominant_eigenpairs_propagator_cached",
+        lambda *_args, **_kwargs: (values, vectors, jnp.zeros((2,))),
+    )
+
+    def fake_adaptive(
+        _apply,
+        restart_once,
+        vector,
+        *,
+        filter_dt: float,
+        filter_steps: int,
+        **_kwargs,
+    ):
+        value, selected = restart_once(vector)
+        return solvax.AdaptiveEigenSolution(
+            eigenvalue=value,
+            eigenvector=selected,
+            residual=jnp.asarray(0.0),
+            converged=True,
+            stable=True,
+            restarts=1,
+            operator_applications=2,
+            filter_dt=filter_dt,
+            filter_steps=filter_steps,
+            filter_horizon=20.0,
+            filter_growth_defect=0.0,
+        )
+
+    monkeypatch.setattr(solvax, "adaptive_eigenpair", fake_adaptive)
+    solution = lk.adaptive_propagator_eigenpair(
+        v0,
+        cache,
+        params,
+        terms=terms,
+        krylov_dim=8,
+        candidate_count=2,
+        continuation_vector=vectors[1],
+        continuation_covector=continuation_covector,
+        continuation_overlap_floor=0.95,
+        continuation_spectral_gap_floor=0.1,
+        chunk_horizon=20.0,
+    )
+
+    assert solution.converged
+    assert solution.continued
+    assert solution.continuation_passed
+    assert solution.selected_candidate_index == 1
+    assert complex(np.asarray(solution.eigenvalue)) == pytest.approx(0.30 - 0.4j)
+    assert float(np.asarray(solution.continuation_overlap)) == pytest.approx(1.0)
+    assert float(np.asarray(solution.selected_spectral_gap)) == pytest.approx(
+        abs(complex(values[1] - values[0]))
+    )
+    np.testing.assert_allclose(
+        np.asarray(solution.candidate_overlaps),
+        np.asarray([0.0, 1.0]),
+    )
+    right_only = lk.adaptive_propagator_eigenpair(
+        v0,
+        cache,
+        params,
+        terms=terms,
+        krylov_dim=8,
+        candidate_count=2,
+        continuation_vector=vectors[1],
+        continuation_overlap_floor=0.95,
+        chunk_horizon=20.0,
+    )
+    assert right_only.selected_candidate_index == 1
+    assert float(np.asarray(right_only.continuation_overlap)) == pytest.approx(1.0)
+    monkeypatch.setattr(
+        ap,
+        "dominant_eigenpairs_propagator_cached",
+        lambda *_args, **_kwargs: (
+            values,
+            vectors,
+            jnp.asarray([1.0, 0.0]),
+        ),
+    )
+    rejected = lk.adaptive_propagator_eigenpair(
+        v0,
+        cache,
+        params,
+        terms=terms,
+        krylov_dim=8,
+        candidate_count=2,
+        continuation_vector=vectors[1],
+        continuation_covector=continuation_covector,
+        continuation_overlap_floor=0.95,
+        continuation_spectral_gap_floor=1.0,
+        chunk_horizon=20.0,
+    )
+    assert rejected.continuation_passed is False
+    assert rejected.converged is False
+    assert float(np.asarray(rejected.selected_spectral_gap)) == pytest.approx(
+        abs(complex(values[1] - values[0]))
+    )
+
+
+@requires_solvax_eigen_api
 def test_rational_eigenpairs_use_the_field_corrected_shifted_inverse(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -40,6 +40,35 @@ class AdaptivePropagatorSolution(NamedTuple):
     candidate_eigenvalues: jax.Array
     candidate_residuals: jax.Array
     candidate_growth_gap: jax.Array
+    candidate_overlaps: jax.Array
+    selected_candidate_index: int
+    continuation_overlap: jax.Array
+    selected_spectral_gap: jax.Array
+    continued: bool
+    continuation_passed: bool
+
+
+def _candidate_overlap_scores(
+    reference: jax.Array,
+    vectors: jax.Array,
+    *,
+    anchor: jax.Array | None,
+) -> jax.Array:
+    """Return phase-invariant right or biorthogonal continuation scores."""
+
+    reference_flat = jnp.reshape(reference, (-1,))
+    vectors_flat = jnp.reshape(vectors, (vectors.shape[0], -1))
+    numerator = jnp.abs(jnp.einsum("n,kn->k", jnp.conj(reference_flat), vectors_flat))
+    vector_norms = jnp.linalg.norm(vectors_flat, axis=1)
+    tiny = jnp.finfo(jnp.real(vectors).dtype).tiny
+    if anchor is None:
+        denominator = jnp.linalg.norm(reference_flat) * vector_norms
+        return numerator / jnp.maximum(denominator, tiny)
+    anchor_flat = jnp.reshape(anchor, (-1,))
+    anchor_projection = jnp.abs(jnp.vdot(reference_flat, anchor_flat))
+    anchor_projection /= jnp.maximum(jnp.linalg.norm(anchor_flat), tiny)
+    normalized_projection = numerator / jnp.maximum(vector_norms, tiny)
+    return normalized_projection / jnp.maximum(anchor_projection, tiny)
 
 
 def adaptive_propagator_eigenpair(
@@ -58,8 +87,19 @@ def adaptive_propagator_eigenpair(
     max_stability_retries: int = 2,
     restart_krylov_dim: int | None = None,
     candidate_count: int = 1,
+    continuation_vector: jnp.ndarray | None = None,
+    continuation_covector: jnp.ndarray | None = None,
+    continuation_overlap_floor: float = 0.0,
+    continuation_spectral_gap_floor: float = 0.0,
 ) -> AdaptivePropagatorSolution:
-    """Adapt RK4 stability, horizon, and corrective-subspace cost."""
+    """Adapt RK4 stability, horizon, and corrective-subspace cost.
+
+    A supplied continuation covector selects the certified candidate maximizing
+    ``|w_previous**H v_candidate|``. A right reference is the normalized-overlap
+    fallback when a left vector is unavailable. This follows one physical mode
+    through a growth-rate crossing instead of silently switching to the newly
+    dominant branch.
+    """
 
     try:
         from solvax import adaptive_eigenpair, estimate_rk4_timestep  # type: ignore
@@ -74,6 +114,22 @@ def adaptive_propagator_eigenpair(
         raise ValueError("Krylov dimensions must be at least two")
     if not 1 <= candidate_count <= min(krylov_dim, restart_dimension):
         raise ValueError("candidate_count must fit every Krylov subspace")
+    if continuation_vector is not None and continuation_vector.shape != v0.shape:
+        raise ValueError("continuation_vector must have the same shape as v0")
+    if continuation_covector is not None and continuation_covector.shape != v0.shape:
+        raise ValueError("continuation_covector must have the same shape as v0")
+    continued = continuation_covector is not None or continuation_vector is not None
+    if continued and candidate_count < 2:
+        raise ValueError("continuation requires at least two candidates")
+    if continuation_overlap_floor < 0.0:
+        raise ValueError("continuation_overlap_floor must be non-negative")
+    if continuation_spectral_gap_floor < 0.0:
+        raise ValueError("continuation_spectral_gap_floor must be non-negative")
+    selection_reference = (
+        continuation_covector
+        if continuation_covector is not None
+        else continuation_vector
+    )
     term_cfg = linear_terms_to_term_config(terms)
 
     def apply(state: jnp.ndarray) -> jnp.ndarray:
@@ -88,7 +144,7 @@ def adaptive_propagator_eigenpair(
     )
     solution = None
     operator_applications = estimate.operator_applications
-    candidate_records: list[tuple[jax.Array, jax.Array]] = []
+    candidate_records: list[tuple[jax.Array, jax.Array, jax.Array, jax.Array]] = []
     for retry in range(max_stability_retries + 1):
         dt_limit = estimate.dt / 2**retry
         steps = max(int(np.ceil(chunk_horizon / dt_limit)), 1)
@@ -125,10 +181,28 @@ def adaptive_propagator_eigenpair(
                 propagator_steps=steps,
                 candidates=candidate_count,
             )
-            candidate_records.append((values, residuals))
             certified = residuals < tol
-            growth = jnp.where(certified, jnp.real(values), -jnp.inf)
-            selected = jnp.where(jnp.any(certified), jnp.argmax(growth), 0)
+            if selection_reference is None:
+                scores = jnp.full(
+                    (candidate_count,),
+                    jnp.nan,
+                    dtype=jnp.real(values).dtype,
+                )
+                ranking = jnp.real(values)
+            else:
+                scores = _candidate_overlap_scores(
+                    selection_reference,
+                    vectors,
+                    anchor=(
+                        continuation_vector
+                        if continuation_covector is not None
+                        else None
+                    ),
+                )
+                ranking = scores
+            admissible = jnp.where(certified, ranking, -jnp.inf)
+            selected = jnp.where(jnp.any(certified), jnp.argmax(admissible), 0)
+            candidate_records.append((values, residuals, scores, selected))
             return values[selected], vectors[selected]
 
         solution = adaptive_eigenpair(
@@ -151,10 +225,22 @@ def adaptive_propagator_eigenpair(
             break
     assert solution is not None
     if candidate_records:
-        candidate_values, candidate_residuals = candidate_records[-1]
+        (
+            candidate_values,
+            candidate_residuals,
+            candidate_overlaps,
+            selected_index_array,
+        ) = candidate_records[-1]
+        selected_index = int(np.asarray(selected_index_array))
     else:
         candidate_values = jnp.reshape(solution.eigenvalue, (1,))
         candidate_residuals = jnp.reshape(solution.residual, (1,))
+        candidate_overlaps = jnp.full(
+            (1,),
+            jnp.nan,
+            dtype=jnp.real(solution.eigenvalue).dtype,
+        )
+        selected_index = 0
     certified_growth = jnp.where(
         candidate_residuals < tol,
         jnp.real(candidate_values),
@@ -170,12 +256,42 @@ def adaptive_propagator_eigenpair(
         if candidate_count >= 2
         else jnp.asarray(jnp.inf, dtype=jnp.real(solution.eigenvalue).dtype)
     )
+    candidate_indices = jnp.arange(candidate_values.size)
+    selected_value = candidate_values[selected_index]
+    spectral_distances = jnp.where(
+        candidate_indices != selected_index,
+        jnp.abs(candidate_values - selected_value),
+        jnp.inf,
+    )
+    selected_spectral_gap = jnp.min(spectral_distances)
+    continuation_overlap = (
+        candidate_overlaps[selected_index]
+        if continued
+        else jnp.asarray(jnp.nan, dtype=jnp.real(solution.eigenvalue).dtype)
+    )
+    continuation_passed = bool(
+        not continued
+        or (
+            float(np.asarray(continuation_overlap)) >= continuation_overlap_floor
+            and float(np.asarray(selected_spectral_gap))
+            >= continuation_spectral_gap_floor
+        )
+    )
+    solution = solution._replace(
+        converged=bool(solution.converged) and continuation_passed
+    )
     return AdaptivePropagatorSolution._make(
         (
             *solution._replace(operator_applications=operator_applications),
             candidate_values,
             candidate_residuals,
             growth_gap,
+            candidate_overlaps,
+            selected_index,
+            continuation_overlap,
+            selected_spectral_gap,
+            continued,
+            continuation_passed,
         )
     )
 

@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "complete": false,
+  "scope": "interrupted-run recovery only; not a convergence certificate",
+  "device": "qi",
+  "input": "examples/vmec/input.nfp3_QI_fixed_resolution_final",
+  "input_sha256": "b64dc2221e19452d426c60104b0c67d12de9b13a7ca5152a43b562bbf36fc0ba",
+  "ladder": [
+    [
+      60,
+      68
+    ],
+    [
+      64,
+      72
+    ],
+    [
+      68,
+      76
+    ],
+    [
+      72,
+      80
+    ]
+  ],
+  "rows": [
+    {
+      "n_laguerre": 60,
+      "n_hermite": 68,
+      "n": 261120,
+      "eigenvalue": [
+        0.09047665465598284,
+        0.013456250423395603
+      ],
+      "residual": 8.083692863480229e-13,
+      "converged": true,
+      "stability_passed": true,
+      "filter_growth_defect": -3.175237850427948e-14,
+      "restarts": 1,
+      "selected_propagator_dt": 0.004476275738585497,
+      "selected_propagator_steps": 6702,
+      "original_operator_evaluations": 643419,
+      "continuation_overlap": null,
+      "compile_seconds": 619.2335157394409,
+      "cold_seconds": 619.2335157394409,
+      "warm_seconds": null
+    },
+    {
+      "n_laguerre": 64,
+      "n_hermite": 72,
+      "n": 294912,
+      "eigenvalue": [
+        0.08777578750954054,
+        0.009831447242777985
+      ],
+      "residual": 1.0957733206465478e-12,
+      "converged": true,
+      "stability_passed": true,
+      "filter_growth_defect": -2.157996004115148e-14,
+      "restarts": 1,
+      "selected_propagator_dt": 0.004237886707162028,
+      "selected_propagator_steps": 7079,
+      "original_operator_evaluations": 679611,
+      "continuation_overlap": 0.9961370547623075,
+      "compile_seconds": 686.4324700832367,
+      "cold_seconds": 686.4324700832367,
+      "warm_seconds": null
+    },
+    {
+      "n_laguerre": 68,
+      "n_hermite": 76,
+      "n": 330752,
+      "eigenvalue": [
+        0.08566257723460223,
+        -0.22486080538565617
+      ],
+      "residual": 3.609002597711403e-13,
+      "converged": true,
+      "stability_passed": true,
+      "filter_growth_defect": 6.906974991949255e-14,
+      "restarts": 1,
+      "selected_propagator_dt": 0.003955696202531646,
+      "selected_propagator_steps": 7584,
+      "original_operator_evaluations": 728091,
+      "continuation_overlap": 0.4277714750345145,
+      "compile_seconds": 784.7676997184753,
+      "cold_seconds": 784.7676997184753,
+      "warm_seconds": null
+    }
+  ]
+}

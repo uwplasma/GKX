@@ -1,10 +1,11 @@
 """Certificate-only adaptive eigensolver ladders beyond dense-memory sizes.
 
-The dense oracle campaign ends at ``n=4480``. This companion holds
-``ntheta=64`` and advances the velocity-space ladder through ``(12, 16)``
-without materializing the matrix. Every row must pass the continuous-operator
-residual and RK4 stability gates; consecutive growth and complex-eigenvalue
-changes are recorded rather than replaced by an unsupported convergence claim.
+The dense-oracle campaign ends at ``n=4480``. This companion holds ``ntheta``
+fixed and advances a configurable velocity-space ladder without materializing
+the matrix. Every cold row must pass the continuous-operator residual and RK4
+stability gates. Growth, frequency, and full-complex-eigenvalue changes are
+reported separately, and a convergence claim requires two consecutive changes
+below the requested tolerance.
 """
 
 from __future__ import annotations
@@ -91,6 +92,18 @@ def _changes(values: list[complex], *, growth_only: bool) -> list[float]:
     ]
 
 
+def _frequency_changes(values: list[complex]) -> list[float]:
+    """Normalize frequency changes by the magnitude of the refined mode."""
+
+    return [
+        float(
+            abs(values[index + 1].imag - values[index].imag)
+            / max(abs(values[index + 1]), np.finfo(float).tiny)
+        )
+        for index in range(len(values) - 1)
+    ]
+
+
 def _plateau(
     changes: list[float],
     ladder: tuple[tuple[int, int], ...],
@@ -98,7 +111,7 @@ def _plateau(
 ) -> tuple[int, int] | None:
     for index in range(len(changes) - 1):
         if changes[index] < tolerance and changes[index + 1] < tolerance:
-            return ladder[index]
+            return ladder[index + 2]
     return None
 
 
@@ -138,7 +151,9 @@ def _write_checkpoint(
                 "complete": False,
                 "scope": "interrupted-run recovery only; not a convergence certificate",
                 "device": device,
-                "input": str(input_path),
+                "input": str(
+                    input_path.relative_to(Path(__file__).resolve().parents[2])
+                ),
                 "input_sha256": hashlib.sha256(input_path.read_bytes()).hexdigest(),
                 "ladder": [list(rung) for rung in ladder],
                 "rows": rows,
@@ -172,9 +187,15 @@ def main() -> int:
     parser.add_argument("--stability-safety", type=float, default=0.9)
     parser.add_argument(
         "--required-observable",
-        choices=("residual", "growth", "eigenvalue"),
+        choices=("residual", "growth", "eigenvalue", "frequency"),
         default="residual",
         help="gate that controls the process exit status",
+    )
+    parser.add_argument(
+        "--warm-repeats",
+        type=int,
+        default=1,
+        help="post-compilation timing repeats per rung; zero avoids a duplicate solve",
     )
     parser.add_argument(
         "--resolution",
@@ -193,6 +214,8 @@ def main() -> int:
         parser.error("--ntheta must be at least 8 and --krylov-dim at least 4")
     if args.stability_probe_count < 1:
         parser.error("--stability-probe-count must be positive")
+    if args.warm_repeats < 0:
+        parser.error("--warm-repeats must be non-negative")
     corrective_dimension = args.restart_krylov_dim or args.krylov_dim
     if corrective_dimension < 2:
         parser.error("--restart-krylov-dim must be at least two")
@@ -270,25 +293,29 @@ def main() -> int:
             compiled.eigenvalue.block_until_ready()
             compiled.eigenvector.block_until_ready()
             compile_seconds = time.time() - started
-            started = time.time()
-            solution = adaptive_propagator_eigenpair(
-                start,
-                context.cache,
-                context.linear_params,
-                terms=context.linear_terms,
-                krylov_dim=args.krylov_dim,
-                max_restarts=args.max_restarts,
-                tol=args.tol,
-                chunk_horizon=args.chunk_horizon,
-                stability_dimension=args.stability_dimension,
-                stability_probe_count=args.stability_probe_count,
-                stability_safety=args.stability_safety,
-                restart_krylov_dim=args.restart_krylov_dim,
-                candidate_count=args.adaptive_candidates,
-            )
-            solution.eigenvalue.block_until_ready()
-            solution.eigenvector.block_until_ready()
-            warm_seconds = time.time() - started
+            solution = compiled
+            warm_samples = []
+            for _repeat in range(args.warm_repeats):
+                started = time.time()
+                solution = adaptive_propagator_eigenpair(
+                    start,
+                    context.cache,
+                    context.linear_params,
+                    terms=context.linear_terms,
+                    krylov_dim=args.krylov_dim,
+                    max_restarts=args.max_restarts,
+                    tol=args.tol,
+                    chunk_horizon=args.chunk_horizon,
+                    stability_dimension=args.stability_dimension,
+                    stability_probe_count=args.stability_probe_count,
+                    stability_safety=args.stability_safety,
+                    restart_krylov_dim=args.restart_krylov_dim,
+                    candidate_count=args.adaptive_candidates,
+                )
+                solution.eigenvalue.block_until_ready()
+                solution.eigenvector.block_until_ready()
+                warm_samples.append(time.time() - started)
+            warm_seconds = min(warm_samples) if warm_samples else None
             value = complex(np.asarray(solution.eigenvalue))
             values.append(value)
             continuation_overlap = _overlap(previous, solution.eigenvector)
@@ -325,11 +352,13 @@ def main() -> int:
             print(
                 f"{name.upper()} ({row['n_laguerre']:>2},{row['n_hermite']:>2}) "
                 f"n={row['n']:>6} growth={value.real:+.8e} "
-                f"res={row['residual']:.2e} warm={warm_seconds:.2f}s",
+                f"res={row['residual']:.2e} cold={compile_seconds:.2f}s "
+                f"warm={warm_seconds if warm_seconds is not None else 'skipped'}",
                 flush=True,
             )
         growth_changes = _changes(values, growth_only=True)
         eigenvalue_changes = _changes(values, growth_only=False)
+        frequency_changes = _frequency_changes(values)
         certified = all(row["converged"] for row in rows)
         growth_resolution = (
             _plateau(growth_changes, ladder, args.convergence_tol)
@@ -338,6 +367,11 @@ def main() -> int:
         )
         eigenvalue_resolution = (
             _plateau(eigenvalue_changes, ladder, args.convergence_tol)
+            if certified
+            else None
+        )
+        frequency_resolution = (
+            _plateau(frequency_changes, ladder, args.convergence_tol)
             if certified
             else None
         )
@@ -357,8 +391,15 @@ def main() -> int:
                     if eigenvalue_resolution is not None
                     else None
                 ),
+                "frequency_converged": frequency_resolution is not None,
+                "frequency_converged_resolution": (
+                    list(frequency_resolution)
+                    if frequency_resolution is not None
+                    else None
+                ),
                 "growth_relative_changes": growth_changes,
                 "eigenvalue_relative_changes": eigenvalue_changes,
+                "frequency_normalized_changes": frequency_changes,
                 "rows": rows,
             }
         )
@@ -366,10 +407,14 @@ def main() -> int:
     certified = all(report["certified"] for report in reports)
     all_growth_converged = all(report["growth_converged"] for report in reports)
     all_eigenvalue_converged = all(report["eigenvalue_converged"] for report in reports)
+    all_frequency_converged = all(report["frequency_converged"] for report in reports)
     passed = {
         "residual": certified,
         "growth": bool(certified and all_growth_converged),
         "eigenvalue": bool(certified and all_eigenvalue_converged),
+        "frequency": bool(
+            certified and all_eigenvalue_converged and all_frequency_converged
+        ),
     }[args.required_observable]
     artifact = {
         "schema_version": 1,
@@ -378,10 +423,12 @@ def main() -> int:
         "certified": certified,
         "all_growth_converged": all_growth_converged,
         "all_eigenvalue_converged": all_eigenvalue_converged,
+        "all_frequency_converged": all_frequency_converged,
         "scope": (
-            "certificate-only ntheta=64 velocity-space ladder beyond the dense "
-            "oracle memory range; growth and full-eigenvalue convergence "
-            "separately require two consecutive changes to pass tolerance"
+            "certificate-only fixed-ntheta velocity-space ladder beyond the dense "
+            "oracle memory range; growth, full-eigenvalue, and frequency-only "
+            "convergence separately require two consecutive normalized changes "
+            "to pass tolerance"
         ),
         "provenance": {
             "ntheta": args.ntheta,
@@ -398,6 +445,7 @@ def main() -> int:
             "stability_dimension": args.stability_dimension,
             "stability_probe_count": args.stability_probe_count,
             "stability_safety": args.stability_safety,
+            "warm_repeats": args.warm_repeats,
             "python": sys.version,
             "platform": platform.platform(),
             "jax": _version("jax"),
