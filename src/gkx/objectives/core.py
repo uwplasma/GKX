@@ -92,7 +92,7 @@ class _SolverGeometryContext:
     linear_params: LinearParams
     linear_terms: LinearTerms
     cache: Any
-    state_shape: tuple[int, int, int, int, int]
+    state_shape: tuple[int, ...]
 
 
 @dataclass(frozen=True)
@@ -317,7 +317,7 @@ def _matrix_free_dominant_linear_branch(
     """Return a residual-certified primal with an implicit eigenpair tangent."""
 
     try:
-        from solvax import eigenpair_reverse, propagator_eigenpairs
+        from solvax import eigenpair_reverse, propagator_eigenpairs  # type: ignore[attr-defined]
     except ImportError as error:
         raise RuntimeError("SOLVAX differentiable eigenpair API is required") from error
 

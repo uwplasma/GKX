@@ -178,9 +178,9 @@ def adaptive_propagator_eigenpair(
     )
     return AdaptivePropagatorSolution(
         *solution._replace(operator_applications=operator_applications),
-        candidate_eigenvalues=candidate_values,
-        candidate_residuals=candidate_residuals,
-        candidate_growth_gap=growth_gap,
+        candidate_values,
+        candidate_residuals,
+        growth_gap,
     )
 
 
