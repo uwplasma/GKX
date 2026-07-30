@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Mapping
+from typing import Any, Callable, Mapping, NamedTuple
 
 import jax
 import jax.numpy as jnp
@@ -35,6 +35,7 @@ from gkx.solvers.linear.krylov_algorithms import (
     dominant_eigenpair_cached,
     dominant_eigenpair_power,
     dominant_eigenpair_propagator_cached,
+    dominant_eigenpairs_propagator_cached,
     dominant_eigenpair_shift_invert_cached,
 )
 
@@ -67,6 +68,25 @@ class KrylovConfig:
     fallback_real_floor: float = -1.0e-6
     continuation: bool = False
     continuation_selection: str = "overlap"
+
+
+class AdaptivePropagatorSolution(NamedTuple):
+    """Certified pair plus the branch-cluster diagnostics from its last restart."""
+
+    eigenvalue: jax.Array
+    eigenvector: jax.Array
+    residual: jax.Array
+    converged: bool
+    stable: bool
+    restarts: int
+    operator_applications: int
+    filter_dt: float
+    filter_steps: int
+    filter_horizon: float
+    filter_growth_defect: float
+    candidate_eigenvalues: jax.Array
+    candidate_residuals: jax.Array
+    candidate_growth_gap: jax.Array
 
 
 _StatusCallback = Callable[[str], None] | None
@@ -626,15 +646,30 @@ def adaptive_propagator_eigenpair(
     stability_probe_count: int = 2,
     stability_safety: float = 0.9,
     max_stability_retries: int = 2,
+    restart_krylov_dim: int | None = None,
+    candidate_count: int = 1,
 ) -> Any:
-    """Adapt RK4 stability and horizon while certifying the continuous pair."""
+    """Adapt RK4 stability, horizon, and corrective-subspace cost.
+
+    ``restart_krylov_dim`` may reduce the subspace after the first restart.
+    This matters for cold solves: once the first horizon has isolated the
+    branch, a smaller correction can certify its residual without compiling
+    and executing another full-size Arnoldi pass.
+    """
 
     try:
         from solvax import adaptive_eigenpair, estimate_rk4_timestep  # type: ignore
     except ImportError as error:
         raise RuntimeError("SOLVAX adaptive propagator API is required") from error
+    restart_dimension = (
+        krylov_dim if restart_krylov_dim is None else int(restart_krylov_dim)
+    )
     if chunk_horizon <= 0.0 or max_stability_retries < 0:
         raise ValueError("chunk_horizon must be positive and retries non-negative")
+    if krylov_dim < 2 or restart_dimension < 2:
+        raise ValueError("Krylov dimensions must be at least two")
+    if not 1 <= candidate_count <= min(krylov_dim, restart_dimension):
+        raise ValueError("candidate_count must fit every Krylov subspace")
     term_cfg = linear_terms_to_term_config(terms)
 
     def apply(state: jnp.ndarray) -> jnp.ndarray:
@@ -649,27 +684,48 @@ def adaptive_propagator_eigenpair(
     )
     solution = None
     operator_applications = estimate.operator_applications
+    candidate_records: list[tuple[jax.Array, jax.Array]] = []
     for retry in range(max_stability_retries + 1):
         dt_limit = estimate.dt / 2**retry
         steps = max(int(np.ceil(chunk_horizon / dt_limit)), 1)
         dt = chunk_horizon / steps
+        restart_dimensions: list[int] = []
+
         def restart_once(vector: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
-            return dominant_eigenpair_propagator_cached(
+            dimension = krylov_dim if not restart_dimensions else restart_dimension
+            restart_dimensions.append(dimension)
+            if candidate_count == 1:
+                return dominant_eigenpair_propagator_cached(
+                    vector,
+                    v0,
+                    cache,
+                    params,
+                    term_cfg,
+                    krylov_dim=dimension,
+                    restarts=1,
+                    dt=dt,
+                    propagator_steps=steps,
+                    omega_min_factor=0.0,
+                    omega_target_factor=0.0,
+                    omega_cap_factor=2.0,
+                    omega_sign=0,
+                    select_overlap=False,
+                )
+            values, vectors, residuals = dominant_eigenpairs_propagator_cached(
                 vector,
-                v0,
                 cache,
                 params,
                 term_cfg,
-                krylov_dim=krylov_dim,
-                restarts=1,
+                krylov_dim=dimension,
                 dt=dt,
                 propagator_steps=steps,
-                omega_min_factor=0.0,
-                omega_target_factor=0.0,
-                omega_cap_factor=2.0,
-                omega_sign=0,
-                select_overlap=False,
+                candidates=candidate_count,
             )
+            candidate_records.append((values, residuals))
+            certified = residuals < tol
+            growth = jnp.where(certified, jnp.real(values), -jnp.inf)
+            selected = jnp.where(jnp.any(certified), jnp.argmax(growth), 0)
+            return values[selected], vectors[selected]
 
         solution = adaptive_eigenpair(
             apply,
@@ -679,14 +735,43 @@ def adaptive_propagator_eigenpair(
             max_restarts=max_restarts,
             filter_dt=dt,
             filter_steps=steps,
-            applications_per_restart=krylov_dim,
+            applications_per_restart=0,
             base_operator_applications=0,
         )
-        operator_applications += solution.operator_applications
+        operator_applications += (
+            solution.operator_applications
+            + (candidate_count - 1) * len(restart_dimensions)
+            + 4 * steps * sum(restart_dimensions)
+        )
         if solution.stable and solution.converged:
             break
     assert solution is not None
-    return solution._replace(operator_applications=operator_applications)
+    if candidate_records:
+        candidate_values, candidate_residuals = candidate_records[-1]
+    else:
+        candidate_values = jnp.reshape(solution.eigenvalue, (1,))
+        candidate_residuals = jnp.reshape(solution.residual, (1,))
+    certified_growth = jnp.where(
+        candidate_residuals < tol,
+        jnp.real(candidate_values),
+        -jnp.inf,
+    )
+    ordered_growth = jnp.sort(certified_growth)[::-1]
+    growth_gap = (
+        jnp.where(
+            jnp.sum(jnp.isfinite(certified_growth)) >= 2,
+            ordered_growth[0] - ordered_growth[1],
+            jnp.inf,
+        )
+        if candidate_count >= 2
+        else jnp.asarray(jnp.inf, dtype=jnp.real(solution.eigenvalue).dtype)
+    )
+    return AdaptivePropagatorSolution(
+        *solution._replace(operator_applications=operator_applications),
+        candidate_eigenvalues=candidate_values,
+        candidate_residuals=candidate_residuals,
+        candidate_growth_gap=growth_gap,
+    )
 
 
 def prepare_rational_shifted_inverse(

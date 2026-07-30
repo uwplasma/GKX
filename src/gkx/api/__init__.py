@@ -308,6 +308,8 @@ _EXPORT_TARGETS: dict[str, tuple[str, str]] = {
     'zonal_flow_objective_sensitivity_report': ('gkx.objectives.zonal', 'zonal_flow_objective_sensitivity_report'),
     'zonal_flow_reduced_objective': ('gkx.objectives.zonal', 'zonal_flow_reduced_objective'),
     'SOLVER_GEOMETRY_PARAMETER_NAMES': ('gkx.objectives.geometry', 'SOLVER_GEOMETRY_PARAMETER_NAMES'),
+    'AdaptiveLinearEigensolverConfig': ('gkx.objectives.core', 'AdaptiveLinearEigensolverConfig'),
+    'LinearEigensolver': ('gkx.objectives.core', 'LinearEigensolver'),
     'SOLVER_OBJECTIVE_NAMES': ('gkx.objectives.core', 'SOLVER_OBJECTIVE_NAMES'),
     'SolverScalarObjective': ('gkx.objectives.core', 'SolverScalarObjective'),
     'VMEC_BOOZER_FREQUENCY_OBJECTIVE_NAMES': ('gkx.objectives.vmec_boozer_gradients', 'VMEC_BOOZER_FREQUENCY_OBJECTIVE_NAMES'),

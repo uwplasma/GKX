@@ -62,7 +62,9 @@ def _version(name: str) -> str | None:
         return None
 
 
-def _prolong(previous: jax.Array | None, shape: tuple[int, ...], seed: int) -> jax.Array:
+def _prolong(
+    previous: jax.Array | None, shape: tuple[int, ...], seed: int
+) -> jax.Array:
     generator = np.random.default_rng(seed)
     noise = generator.normal(size=shape) + 1j * generator.normal(size=shape)
     if previous is None:
@@ -159,6 +161,8 @@ def main() -> int:
     parser.add_argument("--ntheta", type=int, default=64)
     parser.add_argument("--s-index", type=int, default=7)
     parser.add_argument("--krylov-dim", type=int, default=16)
+    parser.add_argument("--restart-krylov-dim", type=int, default=None)
+    parser.add_argument("--adaptive-candidates", type=int, default=1)
     parser.add_argument("--max-restarts", type=int, default=4)
     parser.add_argument("--tol", type=float, default=1.0e-9)
     parser.add_argument("--convergence-tol", type=float, default=0.05)
@@ -166,6 +170,12 @@ def main() -> int:
     parser.add_argument("--stability-dimension", type=int, default=12)
     parser.add_argument("--stability-probe-count", type=int, default=2)
     parser.add_argument("--stability-safety", type=float, default=0.9)
+    parser.add_argument(
+        "--required-observable",
+        choices=("residual", "growth", "eigenvalue"),
+        default="residual",
+        help="gate that controls the process exit status",
+    )
     parser.add_argument(
         "--resolution",
         action="append",
@@ -183,6 +193,18 @@ def main() -> int:
         parser.error("--ntheta must be at least 8 and --krylov-dim at least 4")
     if args.stability_probe_count < 1:
         parser.error("--stability-probe-count must be positive")
+    corrective_dimension = args.restart_krylov_dim or args.krylov_dim
+    if corrective_dimension < 2:
+        parser.error("--restart-krylov-dim must be at least two")
+    if (
+        not 1
+        <= args.adaptive_candidates
+        <= min(
+            args.krylov_dim,
+            corrective_dimension,
+        )
+    ):
+        parser.error("--adaptive-candidates must fit every Krylov subspace")
 
     import vmex as vj
     from vmex import optimize as opt
@@ -242,6 +264,8 @@ def main() -> int:
                 stability_dimension=args.stability_dimension,
                 stability_probe_count=args.stability_probe_count,
                 stability_safety=args.stability_safety,
+                restart_krylov_dim=args.restart_krylov_dim,
+                candidate_count=args.adaptive_candidates,
             )
             compiled.eigenvalue.block_until_ready()
             compiled.eigenvector.block_until_ready()
@@ -259,6 +283,8 @@ def main() -> int:
                 stability_dimension=args.stability_dimension,
                 stability_probe_count=args.stability_probe_count,
                 stability_safety=args.stability_safety,
+                restart_krylov_dim=args.restart_krylov_dim,
+                candidate_count=args.adaptive_candidates,
             )
             solution.eigenvalue.block_until_ready()
             solution.eigenvector.block_until_ready()
@@ -283,6 +309,7 @@ def main() -> int:
                 "original_operator_evaluations": solution.operator_applications,
                 "continuation_overlap": continuation_overlap,
                 "compile_seconds": compile_seconds,
+                "cold_seconds": compile_seconds,
                 "warm_seconds": warm_seconds,
             }
             rows.append(row)
@@ -337,15 +364,20 @@ def main() -> int:
         )
 
     certified = all(report["certified"] for report in reports)
+    all_growth_converged = all(report["growth_converged"] for report in reports)
+    all_eigenvalue_converged = all(report["eigenvalue_converged"] for report in reports)
+    passed = {
+        "residual": certified,
+        "growth": bool(certified and all_growth_converged),
+        "eigenvalue": bool(certified and all_eigenvalue_converged),
+    }[args.required_observable]
     artifact = {
         "schema_version": 1,
+        "passed": passed,
+        "required_observable": args.required_observable,
         "certified": certified,
-        "all_growth_converged": all(
-            report["growth_converged"] for report in reports
-        ),
-        "all_eigenvalue_converged": all(
-            report["eigenvalue_converged"] for report in reports
-        ),
+        "all_growth_converged": all_growth_converged,
+        "all_eigenvalue_converged": all_eigenvalue_converged,
         "scope": (
             "certificate-only ntheta=64 velocity-space ladder beyond the dense "
             "oracle memory range; growth and full-eigenvalue convergence "
@@ -357,6 +389,8 @@ def main() -> int:
             "selected_ky_index": 1,
             "ladder": [list(rung) for rung in ladder],
             "krylov_dim": args.krylov_dim,
+            "restart_krylov_dim": args.restart_krylov_dim,
+            "adaptive_candidates": args.adaptive_candidates,
             "max_restarts": args.max_restarts,
             "residual_tolerance": args.tol,
             "convergence_tolerance": args.convergence_tol,
@@ -383,8 +417,11 @@ def main() -> int:
     args.output.write_text(json.dumps(artifact, indent=2) + "\n")
     for checkpoint_path in checkpoint_paths:
         checkpoint_path.unlink(missing_ok=True)
-    print(f"\ncertificate {'PASS' if certified else 'FAIL'}: {args.output}")
-    return 0 if certified else 1
+    print(
+        f"\n{args.required_observable} certificate "
+        f"{'PASS' if passed else 'FAIL'}: {args.output}"
+    )
+    return 0 if passed else 1
 
 
 if __name__ == "__main__":

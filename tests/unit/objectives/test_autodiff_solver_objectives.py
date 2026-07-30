@@ -30,9 +30,15 @@ from gkx.objectives.autodiff_validation import (
 )
 from gkx.config import CycloneBaseCase, GridConfig
 from gkx.geometry import SAlphaGeometry
+from gkx.geometry.flux_tube import sample_flux_tube_geometry
 from gkx.core.grid import build_spectral_grid, select_ky_grid
 from gkx.operators.linear.cache_builder import build_linear_cache
-from gkx.operators.linear.params import LinearParams, LinearTerms
+from gkx.operators.linear.params import (
+    LinearParams,
+    LinearTerms,
+    Species,
+    build_linear_params,
+)
 from gkx.operators.linear.rhs import linear_rhs_cached
 from gkx.diagnostics import fieldline_quadrature_weights
 from gkx.diagnostics.quasilinear_transport import (
@@ -110,9 +116,7 @@ def _actual_linear_rhs_objective_functions():
         _rhs, phi = rhs_with_params(state, params)
         kperp_eff = effective_kperp2(phi, cache, vol_fac)
         gamma = jnp.real(eigenvalue)
-        return jnp.asarray(
-            [gamma, kperp_eff, gamma / jnp.maximum(kperp_eff, 1.0e-12)]
-        )
+        return jnp.asarray([gamma, kperp_eff, gamma / jnp.maximum(kperp_eff, 1.0e-12)])
 
     return matrix_fn, objective_fn
 
@@ -206,14 +210,8 @@ def test_covariance_diagnostics_rejects_inconsistent_shapes() -> None:
 
 
 def test_autodiff_finite_difference_report_matches_closed_form_jacobian() -> None:
-    assert (
-        gkx.autodiff_finite_difference_report
-        is autodiff_finite_difference_report
-    )
-    assert (
-        gkx.central_finite_difference_jacobian
-        is central_finite_difference_jacobian
-    )
+    assert gkx.autodiff_finite_difference_report is autodiff_finite_difference_report
+    assert gkx.central_finite_difference_jacobian is central_finite_difference_jacobian
 
     def fn(x):
         return jnp.asarray([x[0] ** 2 + 3.0 * x[1], x[0] * x[1]])
@@ -398,9 +396,7 @@ def test_isolated_eigenvalue_sensitivity_report_tracks_branch_derivatives() -> N
 def test_actual_linear_rhs_eigenvalue_derivative_gate() -> None:
     """Gate AD through a tiny GKX linear RHS dense fixture."""
 
-    assert (
-        gkx.explicit_complex_operator_matrix is explicit_complex_operator_matrix
-    )
+    assert gkx.explicit_complex_operator_matrix is explicit_complex_operator_matrix
     cfg = CycloneBaseCase(grid=GridConfig(Nx=1, Ny=4, Nz=4, Lx=6.0, Ly=6.0))
     grid = select_ky_grid(build_spectral_grid(cfg.grid), 1)
     geom = SAlphaGeometry.from_config(cfg.geometry)
@@ -965,13 +961,124 @@ def test_solver_objective_vector_from_geometry_is_finite_and_exported() -> None:
         solver_objective_vector_from_geometry(geom, n_laguerre=0)
 
 
+def test_adaptive_solver_objective_matches_dense_and_implicit_gradient() -> None:
+    """The matrix-free primal and bordered tangent must preserve QL observables."""
+
+    dtype = jnp.float64 if bool(jax.config.read("jax_enable_x64")) else jnp.float32
+    step = 2.0e-5 if dtype == jnp.float64 else 2.0e-3
+    theta = jnp.linspace(-jnp.pi, jnp.pi, 8, endpoint=False, dtype=dtype)
+    base = jnp.asarray([0.05, 0.20], dtype=dtype)
+    direction = jnp.asarray([0.3, -0.2], dtype=dtype)
+    weights = jnp.asarray([1.0, 0.2, 0.1, 0.05, 0.0, 0.01], dtype=dtype)
+
+    def objective_vector(parameter: jnp.ndarray, *, eigensolver: str) -> jnp.ndarray:
+        geom = gkx.flux_tube_geometry_from_mapping(
+            solver_ready_geometry_mapping(parameter, theta),
+            validate_finite=False,
+        )
+        return solver_objective_vector_from_geometry(
+            geom,
+            n_laguerre=2,
+            n_hermite=1,
+            ny=4,
+            selected_ky_index=1,
+            eigensolver=eigensolver,  # type: ignore[arg-type]
+        )
+
+    dense = objective_vector(base, eigensolver="dense")
+    adaptive = objective_vector(base, eigensolver="adaptive-propagator")
+    np.testing.assert_allclose(
+        np.asarray(adaptive),
+        np.asarray(dense),
+        rtol=2.0e-8 if dtype == jnp.float64 else 2.0e-3,
+        atol=2.0e-9 if dtype == jnp.float64 else 2.0e-4,
+    )
+
+    def scalar(offset: jnp.ndarray) -> jnp.ndarray:
+        return jnp.vdot(
+            weights,
+            objective_vector(
+                base + offset * direction,
+                eigensolver="adaptive-propagator",
+            ),
+        )
+
+    implicit = float(jax.grad(scalar)(jnp.asarray(0.0, dtype=dtype)))
+    finite_difference = float(
+        (
+            scalar(jnp.asarray(step, dtype=dtype))
+            - scalar(jnp.asarray(-step, dtype=dtype))
+        )
+        / (2.0 * step)
+    )
+    assert implicit == pytest.approx(
+        finite_difference,
+        rel=2.0e-5 if dtype == jnp.float64 else 2.0e-2,
+        abs=2.0e-7 if dtype == jnp.float64 else 2.0e-3,
+    )
+    assert gkx.AdaptiveLinearEigensolverConfig is not None
+
+
+def test_solver_objective_accepts_runtime_grid_and_multi_species_state() -> None:
+    """The objective adapter must preserve linked-grid and species dimensions."""
+
+    cfg = CycloneBaseCase(grid=GridConfig(Nx=1, Ny=4, Nz=8, Lx=6.0, Ly=12.0))
+    full_grid = build_spectral_grid(cfg.grid)
+    grid = select_ky_grid(full_grid, 1)
+    analytic = SAlphaGeometry.from_config(cfg.geometry)
+    geometry = sample_flux_tube_geometry(analytic, grid.z)
+    params = build_linear_params(
+        (
+            Species(1.0, 1.0, 1.0, 1.0, 6.9, 2.2),
+            Species(-1.0, 5.0e-4, 1.0, 1.0, 6.9, 2.2),
+        ),
+        beta=0.01,
+        fapar=1.0,
+    )
+    terms = LinearTerms(
+        collisions=0.0,
+        hypercollisions=0.0,
+        end_damping=0.0,
+        apar=1.0,
+        bpar=1.0,
+    )
+
+    matrix = solver_linear_operator_matrix_from_geometry(
+        geometry,
+        spectral_grid=grid,
+        n_laguerre=1,
+        n_hermite=2,
+        params_linear=params,
+        terms=terms,
+    )
+    vector = solver_objective_vector_from_geometry(
+        geometry,
+        spectral_grid=grid,
+        n_laguerre=1,
+        n_hermite=2,
+        params_linear=params,
+        terms=terms,
+    )
+
+    assert matrix.shape == (32, 32)
+    assert np.all(np.isfinite(np.asarray(vector)))
+    with pytest.raises(ValueError, match="exactly one ky"):
+        solver_objective_vector_from_geometry(
+            geometry,
+            spectral_grid=full_grid,
+            n_laguerre=1,
+            n_hermite=2,
+            params_linear=params,
+            terms=terms,
+        )
+
+
 def test_solver_scalar_objective_selector_aliases_and_errors() -> None:
     vector = jnp.asarray([1.0, -0.5, 2.0, 3.0, 4.0, 5.0])
 
     assert gkx.SolverScalarObjective is SolverScalarObjective
     assert (
-        gkx.solver_scalar_objective_from_vector
-        is solver_scalar_objective_from_vector
+        gkx.solver_scalar_objective_from_vector is solver_scalar_objective_from_vector
     )
     assert float(
         solver_scalar_objective_from_vector(vector, "growth")
@@ -1186,10 +1293,7 @@ def test_solver_growth_rate_from_geometry_validates_small_grid_contracts() -> No
 def test_solver_grid_options_from_ky_values_maps_physical_scan_to_fft_rows() -> None:
     options = solver_grid_options_from_ky_values((0.1, 0.3, 0.5))
 
-    assert (
-        gkx.solver_grid_options_from_ky_values
-        is solver_grid_options_from_ky_values
-    )
+    assert gkx.solver_grid_options_from_ky_values is solver_grid_options_from_ky_values
     assert options["selected_ky_indices"] == (1, 3, 5)
     assert options["ny"] == 12
     assert float(options["ly"]) == pytest.approx(2.0 * np.pi / 0.1)
@@ -1715,9 +1819,8 @@ def test_vmec_boozer_aggregate_scalar_objective_finite_difference_report(
         ntheta=4,
     )
 
-    assert (
-        gkx.vmec_boozer_aggregate_scalar_objective_finite_difference_report
-        is (vmec_boozer_aggregate_scalar_objective_finite_difference_report)
+    assert gkx.vmec_boozer_aggregate_scalar_objective_finite_difference_report is (
+        vmec_boozer_aggregate_scalar_objective_finite_difference_report
     )
     assert report["passed"] is True
     assert report["source_scope"] == "mode21_vmec_boozer_state_multi_point"
@@ -2071,8 +2174,7 @@ def test_mode21_vmec_boozer_frequency_gate_exports_and_scope() -> None:
     )
     assert tuple(VMEC_BOOZER_STATE_PARAMETER_NAMES) == ("Rcos_mid_surface_m1",)
     assert (
-        gkx.VMEC_BOOZER_STATE_PARAMETER_FAMILIES
-        is VMEC_BOOZER_STATE_PARAMETER_FAMILIES
+        gkx.VMEC_BOOZER_STATE_PARAMETER_FAMILIES is VMEC_BOOZER_STATE_PARAMETER_FAMILIES
     )
     assert tuple(VMEC_BOOZER_STATE_PARAMETER_FAMILIES) == (
         "Rcos",

@@ -70,6 +70,20 @@ def _package_git_revision(name: str) -> str | None:
     return _git_revision(candidate)
 
 
+def _operator_probe_fingerprint(array: jax.Array) -> str:
+    """Hash a rounded deterministic probe so cached oracles stay problem-local."""
+
+    host = np.asarray(array)
+    rounded = np.stack(
+        (
+            np.round(np.real(host), decimals=12),
+            np.round(np.imag(host), decimals=12),
+        ),
+        axis=-1,
+    ).astype(np.float64, copy=False)
+    return hashlib.sha256(rounded.tobytes()).hexdigest()
+
+
 def _initial_vector(
     shape: tuple[int, ...],
     *,
@@ -143,6 +157,21 @@ def main() -> int:
     parser.add_argument("--propagator-dt", type=float, default=1.0e-3)
     parser.add_argument("--propagator-steps", type=int, default=5000)
     parser.add_argument("--propagator-chunk-horizon", type=float, default=30.0)
+    parser.add_argument(
+        "--restart-krylov-dim",
+        type=int,
+        default=None,
+        help=(
+            "corrective Krylov dimension after the first adaptive-propagator "
+            "restart; defaults to --krylov-dim"
+        ),
+    )
+    parser.add_argument(
+        "--adaptive-candidates",
+        type=int,
+        default=1,
+        help="continuous-Rayleigh candidates ranked from each filtered subspace",
+    )
     parser.add_argument("--stability-dimension", type=int, default=12)
     parser.add_argument("--stability-probe-count", type=int, default=2)
     parser.add_argument("--stability-safety", type=float, default=0.9)
@@ -184,6 +213,15 @@ def main() -> int:
         type=Path,
         default=None,
     )
+    parser.add_argument(
+        "--reference-artifact",
+        type=Path,
+        default=None,
+        help=(
+            "reuse dense eigenvalues from a provenance-checked prior artifact; "
+            "this isolates fresh-process cold solver timing"
+        ),
+    )
     args = parser.parse_args()
     if not 1 <= args.max_rungs <= len(_LADDER):
         parser.error(f"--max-rungs must lie in [1, {len(_LADDER)}]")
@@ -193,6 +231,8 @@ def main() -> int:
         args.target_mode == "continuation" or args.start_mode == "continuation"
     ):
         parser.error("--rung-index requires oracle targeting and a random start")
+    if args.reference_artifact is not None and args.target_mode != "oracle":
+        parser.error("--reference-artifact requires oracle targeting")
     if args.solver == "block-rational":
         if args.candidates < 1:
             parser.error("--candidates must be positive")
@@ -208,6 +248,22 @@ def main() -> int:
     if args.solver == "adaptive-propagator":
         if args.propagator_chunk_horizon <= 0.0:
             parser.error("--propagator-chunk-horizon must be positive")
+        if args.restart_krylov_dim is not None and args.restart_krylov_dim < 2:
+            parser.error("--restart-krylov-dim must be at least two")
+        corrective_dimension = (
+            args.restart_krylov_dim
+            if args.restart_krylov_dim is not None
+            else args.krylov_dim
+        )
+        if (
+            not 1
+            <= args.adaptive_candidates
+            <= min(
+                args.krylov_dim,
+                corrective_dimension,
+            )
+        ):
+            parser.error("--adaptive-candidates must fit every Krylov subspace")
         if args.stability_dimension < 2:
             parser.error("--stability-dimension must be at least two")
         if args.stability_probe_count < 1:
@@ -265,6 +321,21 @@ def main() -> int:
         input_label = str(input_path.relative_to(repository))
     except ValueError:
         input_label = str(input_path)
+    input_sha256 = hashlib.sha256(input_path.read_bytes()).hexdigest()
+    reference_rows: dict[tuple[int, int], dict] = {}
+    reference_artifact_sha256: str | None = None
+    if args.reference_artifact is not None:
+        reference_path = args.reference_artifact.resolve()
+        reference_payload = json.loads(reference_path.read_text())
+        reference_provenance = reference_payload.get("provenance", {})
+        if reference_provenance.get("input_sha256") != input_sha256:
+            parser.error("--reference-artifact input hash does not match --input")
+        for row in reference_payload.get("rows", []):
+            key = (int(row["n_laguerre"]), int(row["n_hermite"]))
+            reference_rows[key] = row
+        reference_artifact_sha256 = hashlib.sha256(
+            reference_path.read_bytes()
+        ).hexdigest()
     rows: list[dict] = []
     seed: complex | None = None
     previous_vector: jax.Array | None = None
@@ -274,6 +345,7 @@ def main() -> int:
         else _LADDER[: args.max_rungs]
     )
     for n_laguerre, n_hermite in ladder:
+        context_started = time.time()
         context = _solver_geometry_context(
             geometry,
             selected_ky_index=1,
@@ -286,16 +358,50 @@ def main() -> int:
             params_linear=None,
             terms=None,
         )
-        matrix = np.asarray(
-            gkx.solver_linear_operator_matrix_from_geometry(
-                geometry, n_laguerre=n_laguerre, n_hermite=n_hermite
-            )
+        jax.tree.map(
+            lambda item: (
+                item.block_until_ready() if hasattr(item, "block_until_ready") else item
+            ),
+            context.cache,
         )
-        started = time.time()
-        spectrum = np.linalg.eigvals(matrix)
-        dense_seconds = time.time() - started
-        reference = spectrum[int(np.argmax(spectrum.real))]
-        radius = float(np.abs(spectrum).max())
+        context_seconds = time.time() - context_started
+        operator_size = int(np.prod(context.state_shape))
+        reference_row = reference_rows.get((n_laguerre, n_hermite))
+        if reference_rows and reference_row is None:
+            parser.error(
+                "--reference-artifact has no row for "
+                f"(n_laguerre, n_hermite)=({n_laguerre}, {n_hermite})"
+            )
+        if reference_row is None:
+            matrix_started = time.time()
+            matrix = np.asarray(
+                gkx.solver_linear_operator_matrix_from_geometry(
+                    geometry,
+                    n_laguerre=n_laguerre,
+                    n_hermite=n_hermite,
+                )
+            )
+            dense_matrix_seconds: float | None = time.time() - matrix_started
+            started = time.time()
+            spectrum, dense_eigenvectors = np.linalg.eig(matrix)
+            dense_seconds: float | None = time.time() - started
+            reference_index = int(np.argmax(spectrum.real))
+            reference = spectrum[reference_index]
+            reference_vector = dense_eigenvectors[:, reference_index]
+            spectral_ratio = float(np.abs(spectrum).max()) / abs(reference)
+            reference_dense_seconds = dense_seconds
+        else:
+            reference = complex(*reference_row["dense"])
+            reference_vector = None
+            spectral_ratio = float(reference_row["spectral_ratio"])
+            dense_seconds = None
+            dense_matrix_seconds = None
+            reference_dense_seconds = reference_row.get("dense_seconds")
+        reference_dense_cold_total_seconds = (
+            reference_row.get("dense_cold_total_seconds")
+            if reference_row is not None
+            else context_seconds + dense_matrix_seconds + dense_seconds
+        )
 
         apply = jax.jit(
             lambda state: linear_rhs_cached(
@@ -311,7 +417,19 @@ def main() -> int:
             previous=previous_vector if args.start_mode == "continuation" else None,
             seed=0,
         )
-        apply(start).block_until_ready()  # exclude compilation from the timing
+        operator_compile_started = time.time()
+        probe_image = apply(start)
+        probe_image.block_until_ready()
+        operator_compile_seconds = time.time() - operator_compile_started
+        operator_probe_sha256 = _operator_probe_fingerprint(probe_image)
+        expected_probe_sha256 = (
+            None
+            if reference_row is None
+            else reference_row.get("operator_probe_sha256")
+        )
+        reference_verified = bool(
+            reference_row is None or expected_probe_sha256 == operator_probe_sha256
+        )
 
         target = (
             complex(reference) if args.target_mode == "oracle" or seed is None else seed
@@ -390,11 +508,15 @@ def main() -> int:
                 stability_probe_count=args.stability_probe_count,
                 stability_safety=args.stability_safety,
                 max_stability_retries=args.max_stability_retries,
+                restart_krylov_dim=args.restart_krylov_dim,
+                candidate_count=args.adaptive_candidates,
             )
             jax.tree.map(
-                lambda item: item.block_until_ready()
-                if hasattr(item, "block_until_ready")
-                else item,
+                lambda item: (
+                    item.block_until_ready()
+                    if hasattr(item, "block_until_ready")
+                    else item
+                ),
                 compiled_solution,
             )
             compile_seconds = time.time() - started
@@ -412,6 +534,8 @@ def main() -> int:
                 stability_probe_count=args.stability_probe_count,
                 stability_safety=args.stability_safety,
                 max_stability_retries=args.max_stability_retries,
+                restart_krylov_dim=args.restart_krylov_dim,
+                candidate_count=args.adaptive_candidates,
             )
             solution.eigenvalue.block_until_ready()
             solution.eigenvector.block_until_ready()
@@ -523,6 +647,17 @@ def main() -> int:
             error = abs(value - reference) / abs(reference)
         if converged:
             seed = value
+        if reference_vector is None:
+            eigenvector_overlap = None
+        else:
+            flattened_vector = np.asarray(vector).reshape(-1)
+            eigenvector_overlap = float(
+                abs(np.vdot(reference_vector, flattened_vector))
+                / max(
+                    np.linalg.norm(reference_vector) * np.linalg.norm(flattened_vector),
+                    np.finfo(float).tiny,
+                )
+            )
         recycle_residual_limit = 100.0 * args.tol
         recycle_eligible = np.isfinite(residual) and residual <= recycle_residual_limit
         if recycle_eligible:
@@ -532,10 +667,37 @@ def main() -> int:
             {
                 "n_laguerre": n_laguerre,
                 "n_hermite": n_hermite,
-                "n": int(matrix.shape[0]),
-                "spectral_ratio": radius / abs(reference),
+                "n": operator_size,
+                "spectral_ratio": spectral_ratio,
+                "context_seconds": context_seconds,
+                "operator_compile_seconds": operator_compile_seconds,
+                "operator_probe_sha256": operator_probe_sha256,
+                "reference_verified": reference_verified,
                 "dense_seconds": dense_seconds,
+                "dense_matrix_seconds": dense_matrix_seconds,
+                "dense_cold_total_seconds": (
+                    context_seconds + dense_matrix_seconds + dense_seconds
+                    if dense_seconds is not None and dense_matrix_seconds is not None
+                    else None
+                ),
+                "reference_dense_seconds": reference_dense_seconds,
+                "reference_dense_cold_total_seconds": (
+                    reference_dense_cold_total_seconds
+                ),
                 "compile_seconds": compile_seconds,
+                "cold_seconds": (
+                    compile_seconds if args.solver == "adaptive-propagator" else None
+                ),
+                "cold_total_seconds": (
+                    context_seconds + operator_compile_seconds + compile_seconds
+                    if args.solver == "adaptive-propagator"
+                    else None
+                ),
+                "compile_overhead_seconds": (
+                    compile_seconds - krylov_seconds
+                    if args.solver == "adaptive-propagator"
+                    else None
+                ),
                 "krylov_seconds": krylov_seconds,
                 "dense": [reference.real, reference.imag],
                 "target": [target.real, target.imag],
@@ -559,6 +721,7 @@ def main() -> int:
                     for index, candidate in enumerate(candidate_values)
                 ],
                 "relative_error": error,
+                "eigenvector_overlap": eigenvector_overlap,
                 "residual": residual,
                 "recycle_eligible": recycle_eligible,
                 "converged": converged,
@@ -571,8 +734,16 @@ def main() -> int:
                     args.max_restarts * args.krylov_dim
                     if args.solver == "long-horizon"
                     else (
-                        solution.restarts * args.krylov_dim
-                        + args.stability_dimension * args.stability_probe_count
+                        (
+                            args.krylov_dim
+                            + max(solution.restarts - 1, 0)
+                            * (
+                                args.restart_krylov_dim
+                                if args.restart_krylov_dim is not None
+                                else args.krylov_dim
+                            )
+                            + args.stability_dimension * args.stability_probe_count
+                        )
                         if args.solver == "adaptive-propagator"
                         else solution.matvecs
                     )
@@ -581,8 +752,15 @@ def main() -> int:
                     args.max_restarts * args.krylov_dim * args.propagator_steps
                     if args.solver == "long-horizon"
                     else (
-                        solution.restarts
-                        * args.krylov_dim
+                        (
+                            args.krylov_dim
+                            + max(solution.restarts - 1, 0)
+                            * (
+                                args.restart_krylov_dim
+                                if args.restart_krylov_dim is not None
+                                else args.krylov_dim
+                            )
+                        )
                         * solution.filter_steps
                         if args.solver == "adaptive-propagator"
                         else None
@@ -598,9 +776,7 @@ def main() -> int:
                     )
                 ),
                 "selected_propagator_dt": (
-                    solution.filter_dt
-                    if args.solver == "adaptive-propagator"
-                    else None
+                    solution.filter_dt if args.solver == "adaptive-propagator" else None
                 ),
                 "selected_propagator_steps": (
                     solution.filter_steps
@@ -612,10 +788,33 @@ def main() -> int:
                     if args.solver == "adaptive-propagator"
                     else None
                 ),
-                "stability_passed": (
-                    solution.stable
+                "certified_candidate_eigenvalues": (
+                    [
+                        [complex(candidate).real, complex(candidate).imag]
+                        for candidate in np.asarray(
+                            solution.candidate_eigenvalues,
+                        )
+                    ]
                     if args.solver == "adaptive-propagator"
                     else None
+                ),
+                "certified_candidate_residuals": (
+                    [
+                        float(candidate_residual)
+                        for candidate_residual in np.asarray(
+                            solution.candidate_residuals,
+                        )
+                    ]
+                    if args.solver == "adaptive-propagator"
+                    else None
+                ),
+                "candidate_growth_gap": (
+                    float(np.asarray(solution.candidate_growth_gap))
+                    if args.solver == "adaptive-propagator"
+                    else None
+                ),
+                "stability_passed": (
+                    solution.stable if args.solver == "adaptive-propagator" else None
                 ),
                 "propagator_substeps_upper_bound": (
                     solution.matvecs * args.propagator_steps
@@ -629,9 +828,12 @@ def main() -> int:
                 ),
             }
         )
+        dense_label = (
+            f"{dense_seconds:>7.2f}s" if dense_seconds is not None else " cached "
+        )
         print(
-            f"({n_laguerre:>2},{n_hermite:>2}) n={matrix.shape[0]:>5} "
-            f"ratio={radius / abs(reference):>5.0f} | dense {dense_seconds:>7.2f}s | "
+            f"({n_laguerre:>2},{n_hermite:>2}) n={operator_size:>5} "
+            f"ratio={spectral_ratio:>5.0f} | dense {dense_label} | "
             f"compile {compile_seconds:>7.2f}s | "
             f"{args.solver} {krylov_seconds:>7.2f}s conv={str(converged):<5} "
             f"rel_err={error:.2e} residual={residual:.2e} "
@@ -640,13 +842,55 @@ def main() -> int:
             flush=True,
         )
 
-    passed = all(r["converged"] and r["relative_error"] < 1e-8 for r in rows)
+    residual_passed = all(r["converged"] for r in rows)
+    reference_identity_verified = all(r["reference_verified"] for r in rows)
+    accuracy_verified = all(
+        r["reference_verified"] and r["eigenvector_overlap"] is not None for r in rows
+    )
+    accuracy_passed = (
+        all(
+            r["relative_error"] < 1e-8
+            and r["eigenvector_overlap"] is not None
+            and r["eigenvector_overlap"] > 1.0 - 1.0e-8
+            for r in rows
+        )
+        if accuracy_verified
+        else None
+    )
+    passed = bool(residual_passed and (accuracy_passed is not False))
     artifact = {
         "schema_version": 5,
         "passed": passed,
+        "residual_passed": residual_passed,
+        "reference_identity_verified": reference_identity_verified,
+        "accuracy_verified": accuracy_verified,
+        "accuracy_passed": accuracy_passed,
+        "claim_scope": (
+            "dense-oracle accuracy and cold/warm performance"
+            if accuracy_verified
+            else (
+                (
+                    "fresh-process cold/warm performance and continuous residual "
+                    "only; the deterministic operator probe matched, but the cached "
+                    "reference did not include an eigenvector accuracy oracle"
+                )
+                if reference_identity_verified
+                else (
+                    "fresh-process cold/warm performance and continuous residual "
+                    "only; cached dense accuracy was not admitted because the "
+                    "deterministic operator probe did not match"
+                )
+            )
+        ),
         "provenance": {
             "input": input_label,
-            "input_sha256": hashlib.sha256(input_path.read_bytes()).hexdigest(),
+            "input_sha256": input_sha256,
+            "reference_artifact": (
+                str(args.reference_artifact.resolve())
+                if args.reference_artifact is not None
+                else None
+            ),
+            "reference_artifact_sha256": reference_artifact_sha256,
             "s_index": args.s_index,
             "ntheta": args.ntheta,
             "selected_ky_index": 1,
@@ -655,6 +899,16 @@ def main() -> int:
             "target_mode": args.target_mode,
             "start_mode": args.start_mode,
             "krylov_dim": args.krylov_dim,
+            "restart_krylov_dim": (
+                args.restart_krylov_dim
+                if args.solver == "adaptive-propagator"
+                else None
+            ),
+            "adaptive_candidates": (
+                args.adaptive_candidates
+                if args.solver == "adaptive-propagator"
+                else None
+            ),
             "candidates": (
                 args.candidates
                 if args.solver in {"block-rational", "block-propagator"}
@@ -679,9 +933,7 @@ def main() -> int:
                 else None
             ),
             "stability_safety": (
-                args.stability_safety
-                if args.solver == "adaptive-propagator"
-                else None
+                args.stability_safety if args.solver == "adaptive-propagator" else None
             ),
             "max_stability_retries": (
                 args.max_stability_retries
@@ -735,11 +987,11 @@ def main() -> int:
                         "evaluations includes all RK4 stages and certifications"
                         if args.solver == "adaptive-propagator"
                         else (
-                        "outer_applications counts original-operator and "
-                        "propagator calls; propagator_substeps_upper_bound is "
-                        "conservative because SOLVAX does not expose that split"
-                        if args.solver == "block-propagator"
-                        else "outer_applications is the matrix-vector count"
+                            "outer_applications counts original-operator and "
+                            "propagator calls; propagator_substeps_upper_bound is "
+                            "conservative because SOLVAX does not expose that split"
+                            if args.solver == "block-propagator"
+                            else "outer_applications is the matrix-vector count"
                         )
                     )
                 )
@@ -759,7 +1011,8 @@ def main() -> int:
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(artifact, indent=2) + "\n")
-    print(f"\nV1 {'PASS' if passed else 'FAIL'}: written to {args.output}")
+    gate_label = "V1" if accuracy_verified else "COLD-RESIDUAL"
+    print(f"\n{gate_label} {'PASS' if passed else 'FAIL'}: written to {args.output}")
     return 0 if passed else 1
 
 

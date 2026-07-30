@@ -1,0 +1,122 @@
+{
+  "schema_version": 5,
+  "passed": true,
+  "residual_passed": true,
+  "reference_identity_verified": true,
+  "accuracy_verified": true,
+  "accuracy_passed": true,
+  "claim_scope": "dense-oracle accuracy and cold/warm performance",
+  "provenance": {
+    "input": "examples/vmec/input.LandremanPaul2021_QA_lowres",
+    "input_sha256": "4f56d4c674b6340a9e359d3645ab1dbb4f841eccc563b5fc969a27928cb9cf84",
+    "reference_artifact": null,
+    "reference_artifact_sha256": null,
+    "s_index": 7,
+    "ntheta": 32,
+    "selected_ky_index": 1,
+    "ladder": [
+      [
+        10,
+        14
+      ]
+    ],
+    "solver": "adaptive-propagator",
+    "target_mode": "oracle",
+    "start_mode": "random",
+    "krylov_dim": 24,
+    "restart_krylov_dim": 12,
+    "adaptive_candidates": 2,
+    "candidates": 1,
+    "tolerance": 1e-09,
+    "recycle_residual_limit": 1.0000000000000001e-07,
+    "max_restarts": 4,
+    "propagator_chunk_horizon": 30.0,
+    "stability_dimension": 12,
+    "stability_probe_count": 2,
+    "stability_safety": 0.9,
+    "max_stability_retries": 2,
+    "shift_offset": null,
+    "shift_tolerance": null,
+    "shift_maxiter": null,
+    "shift_restart": null,
+    "shift_solve_method": null,
+    "shift_preconditioner": null,
+    "propagator_dt": null,
+    "propagator_steps_per_application": null,
+    "propagator_horizon": null,
+    "cost_note": "outer_applications includes the stability sketch and residual-driven Arnoldi restarts; original_operator_evaluations includes all RK4 stages and certifications",
+    "python": "3.13.7 (main, Aug 14 2025, 11:12:11) [Clang 17.0.0 (clang-1700.3.19.1)]",
+    "platform": "macOS-26.5.1-arm64-arm-64bit-Mach-O",
+    "jax": "0.11.0",
+    "jaxlib": "0.11.0",
+    "gkx": "1.7.1",
+    "solvax": "0.11.2",
+    "gkx_commit": "b9734bb9b7806ecc3d84db2f27769c4649e976d3",
+    "solvax_commit": "bf219c79a40a80b2c3115b749bf670b9f5de3cb5",
+    "jax_x64": true,
+    "devices": [
+      "cpu:0"
+    ]
+  },
+  "rows": [
+    {
+      "n_laguerre": 10,
+      "n_hermite": 14,
+      "n": 4480,
+      "spectral_ratio": 127.83975008615428,
+      "context_seconds": 0.2640101909637451,
+      "operator_compile_seconds": 0.0650489330291748,
+      "operator_probe_sha256": "2b5dd68afdab0ed714f7c2e1c814194ff01c55d685f4b6d63f078019af7ff7a5",
+      "reference_verified": true,
+      "dense_seconds": 38.884515047073364,
+      "dense_matrix_seconds": 2.2953941822052,
+      "dense_cold_total_seconds": 41.44391942024231,
+      "reference_dense_seconds": 38.884515047073364,
+      "compile_seconds": 20.86352300643921,
+      "cold_seconds": 20.86352300643921,
+      "cold_total_seconds": 21.19258213043213,
+      "compile_overhead_seconds": 1.8027329444885254,
+      "krylov_seconds": 19.060790061950684,
+      "dense": [
+        0.059658655815948904,
+        -0.7792811529935771
+      ],
+      "target": [
+        0.059658655815948904,
+        -0.7792811529935771
+      ],
+      "solver_target": null,
+      "recycled_start": false,
+      "krylov": [
+        0.059658655815880444,
+        -0.7792811529935627
+      ],
+      "selected_candidate": 0,
+      "candidates": [
+        {
+          "eigenvalue": [
+            0.059658655815880444,
+            -0.7792811529935627
+          ],
+          "residual": 3.3098129547096563e-12,
+          "converged": true
+        }
+      ],
+      "relative_error": 8.951822961630178e-14,
+      "eigenvector_overlap": 0.9999999999999988,
+      "residual": 3.3098129547096563e-12,
+      "recycle_eligible": true,
+      "converged": true,
+      "restarts": 1,
+      "outer_applications": 48,
+      "propagator_steps": 27912,
+      "original_operator_evaluations": 111675,
+      "selected_propagator_dt": 0.025795356835769563,
+      "selected_propagator_steps": 1163,
+      "filter_growth_defect": -4.1727210575714935e-10,
+      "stability_passed": true,
+      "propagator_substeps_upper_bound": null,
+      "orthogonality": null
+    }
+  ]
+}

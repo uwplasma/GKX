@@ -1,0 +1,123 @@
+{
+  "schema_version": 5,
+  "passed": true,
+  "residual_passed": true,
+  "reference_identity_verified": true,
+  "accuracy_verified": false,
+  "accuracy_passed": null,
+  "claim_scope": "fresh-process cold/warm performance and continuous residual only; the deterministic operator probe matched, but the cached reference did not include an eigenvector accuracy oracle",
+  "provenance": {
+    "input": "examples/vmec/input.LandremanPaul2021_QH_reactorScale_lowres",
+    "input_sha256": "830431ca2395aa98a4587914414e9e99fbeca39fad9ffd752a91681f6c9fd9e6",
+    "reference_artifact": "/Users/rogerio/local/spectrax-gk/docs/_static/adaptive_propagator_cold_qh_rung4_validation.json",
+    "reference_artifact_sha256": "68ed7a9a6c1f8c61b0da3db6df2bd15050d4a2b8c506cd542ddcc6c5f010215b",
+    "s_index": 7,
+    "ntheta": 32,
+    "selected_ky_index": 1,
+    "ladder": [
+      [
+        10,
+        14
+      ]
+    ],
+    "solver": "adaptive-propagator",
+    "target_mode": "oracle",
+    "start_mode": "random",
+    "krylov_dim": 24,
+    "restart_krylov_dim": 12,
+    "adaptive_candidates": 2,
+    "candidates": 1,
+    "tolerance": 1e-09,
+    "recycle_residual_limit": 1.0000000000000001e-07,
+    "max_restarts": 4,
+    "propagator_chunk_horizon": 30.0,
+    "stability_dimension": 12,
+    "stability_probe_count": 2,
+    "stability_safety": 0.9,
+    "max_stability_retries": 2,
+    "shift_offset": null,
+    "shift_tolerance": null,
+    "shift_maxiter": null,
+    "shift_restart": null,
+    "shift_solve_method": null,
+    "shift_preconditioner": null,
+    "propagator_dt": null,
+    "propagator_steps_per_application": null,
+    "propagator_horizon": null,
+    "cost_note": "outer_applications includes the stability sketch and residual-driven Arnoldi restarts; original_operator_evaluations includes all RK4 stages and certifications",
+    "python": "3.13.7 (main, Aug 14 2025, 11:12:11) [Clang 17.0.0 (clang-1700.3.19.1)]",
+    "platform": "macOS-26.5.1-arm64-arm-64bit-Mach-O",
+    "jax": "0.11.0",
+    "jaxlib": "0.11.0",
+    "gkx": "1.7.1",
+    "solvax": "0.11.2",
+    "gkx_commit": "b9734bb9b7806ecc3d84db2f27769c4649e976d3",
+    "solvax_commit": "bf219c79a40a80b2c3115b749bf670b9f5de3cb5",
+    "jax_x64": true,
+    "devices": [
+      "cpu:0"
+    ]
+  },
+  "rows": [
+    {
+      "n_laguerre": 10,
+      "n_hermite": 14,
+      "n": 4480,
+      "spectral_ratio": 806.6179059368795,
+      "context_seconds": 0.2539200782775879,
+      "operator_compile_seconds": 0.07732295989990234,
+      "operator_probe_sha256": "797b1638af27649839c342af4f554f1fab50c9f1918ab0c934f64879feafa36f",
+      "reference_verified": true,
+      "dense_seconds": null,
+      "dense_matrix_seconds": null,
+      "dense_cold_total_seconds": null,
+      "reference_dense_seconds": 39.495521783828735,
+      "reference_dense_cold_total_seconds": 41.594156980514526,
+      "compile_seconds": 17.4143168926239,
+      "cold_seconds": 17.4143168926239,
+      "cold_total_seconds": 17.74555993080139,
+      "compile_overhead_seconds": -3.0798680782318115,
+      "krylov_seconds": 20.494184970855713,
+      "dense": [
+        0.12447260632484418,
+        -0.010991856062113258
+      ],
+      "target": [
+        0.12447260632484418,
+        -0.010991856062113258
+      ],
+      "solver_target": null,
+      "recycled_start": false,
+      "krylov": [
+        0.12447260632505816,
+        -0.010991856062025749
+      ],
+      "selected_candidate": 0,
+      "candidates": [
+        {
+          "eigenvalue": [
+            0.12447260632505816,
+            -0.010991856062025749
+          ],
+          "residual": 7.460755303191991e-14,
+          "converged": true
+        }
+      ],
+      "relative_error": 1.8501096059596916e-12,
+      "eigenvector_overlap": null,
+      "residual": 7.460755303191991e-14,
+      "recycle_eligible": true,
+      "converged": true,
+      "restarts": 1,
+      "outer_applications": 48,
+      "propagator_steps": 27984,
+      "original_operator_evaluations": 111963,
+      "selected_propagator_dt": 0.025728987993138937,
+      "selected_propagator_steps": 1166,
+      "filter_growth_defect": -1.0248746296070976e-13,
+      "stability_passed": true,
+      "propagator_substeps_upper_bound": null,
+      "orthogonality": null
+    }
+  ]
+}

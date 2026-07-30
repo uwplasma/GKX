@@ -713,6 +713,19 @@ def test_adaptive_propagator_selects_stable_step_and_stops_on_residual(
         params,
         terms=terms,
         krylov_dim=8,
+        candidate_count=2,
+        max_restarts=5,
+        tol=1.0e-9,
+        chunk_horizon=20.0,
+        stability_dimension=8,
+    )
+    repeated = lk.adaptive_propagator_eigenpair(
+        initial,
+        cache,
+        params,
+        terms=terms,
+        krylov_dim=8,
+        candidate_count=2,
         max_restarts=5,
         tol=1.0e-9,
         chunk_horizon=20.0,
@@ -727,6 +740,14 @@ def test_adaptive_propagator_selects_stable_step_and_stops_on_residual(
         complex(np.asarray(eigenvalues[0])), rel=1.0e-9
     )
     assert float(np.asarray(solution.residual)) < 1.0e-9
+    np.testing.assert_array_equal(
+        np.asarray(solution.eigenvalue),
+        np.asarray(repeated.eigenvalue),
+    )
+    np.testing.assert_array_equal(
+        np.asarray(solution.eigenvector),
+        np.asarray(repeated.eigenvector),
+    )
 
 
 @requires_solvax_eigen_api
@@ -778,6 +799,95 @@ def test_adaptive_propagator_halves_step_after_false_stable_residual(
     assert solution.converged
     assert attempted_steps == pytest.approx([0.2, 0.1])
     assert solution.operator_applications == 212
+
+
+@requires_solvax_eigen_api
+def test_adaptive_propagator_uses_smaller_corrective_subspaces(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Later residual corrections may cost less without corrupting accounting."""
+
+    _grid, cache, params, v0, _term_cfg, terms = _tiny_krylov_setup(linked=False)
+    dimensions: list[int] = []
+    selected_values: list[complex] = []
+
+    monkeypatch.setattr(
+        solvax,
+        "estimate_rk4_timestep",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            dt=0.2,
+            operator_applications=12,
+        ),
+    )
+
+    def fake_candidates(
+        *_args,
+        krylov_dim: int,
+        candidates: int,
+        **_kwargs,
+    ) -> tuple[jax.Array, jax.Array, jax.Array]:
+        dimensions.append(krylov_dim)
+        assert candidates == 2
+        values = jnp.asarray([0.19 + 0.1j, 0.2 + 0.1j])
+        vectors = jnp.stack([v0, v0])
+        residuals = jnp.zeros((2,))
+        return values, vectors, residuals
+
+    monkeypatch.setattr(
+        lk,
+        "dominant_eigenpairs_propagator_cached",
+        fake_candidates,
+    )
+
+    def fake_adaptive(
+        _apply,
+        restart_once,
+        vector,
+        *,
+        filter_dt: float,
+        filter_steps: int,
+        applications_per_restart: int,
+        **_kwargs,
+    ):
+        assert applications_per_restart == 0
+        first_value, _first = restart_once(vector)
+        selected_values.append(complex(first_value))
+        second_value, corrected = restart_once(vector)
+        selected_values.append(complex(second_value))
+        return solvax.AdaptiveEigenSolution(
+            eigenvalue=jnp.asarray(0.2 + 0.1j),
+            eigenvector=corrected,
+            residual=jnp.asarray(0.0),
+            converged=True,
+            stable=True,
+            restarts=2,
+            operator_applications=4,
+            filter_dt=filter_dt,
+            filter_steps=filter_steps,
+            filter_horizon=20.0,
+            filter_growth_defect=0.0,
+        )
+
+    monkeypatch.setattr(solvax, "adaptive_eigenpair", fake_adaptive)
+    solution = lk.adaptive_propagator_eigenpair(
+        v0,
+        cache,
+        params,
+        terms=terms,
+        krylov_dim=16,
+        restart_krylov_dim=8,
+        candidate_count=2,
+        chunk_horizon=20.0,
+    )
+
+    assert dimensions == [16, 8]
+    assert selected_values == pytest.approx([0.2 + 0.1j, 0.2 + 0.1j])
+    assert solution.operator_applications == 12 + 4 + 2 + 4 * 100 * (16 + 8)
+    np.testing.assert_allclose(
+        np.asarray(solution.candidate_eigenvalues),
+        np.asarray([0.19 + 0.1j, 0.2 + 0.1j]),
+    )
+    assert float(np.asarray(solution.candidate_growth_gap)) == pytest.approx(0.01)
 
 
 @requires_solvax_eigen_api

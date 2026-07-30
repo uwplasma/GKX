@@ -2,21 +2,30 @@ Harmonic Krylov-Schur eigensolver
 =================================
 
 Status: **adaptive propagator qualified as the production low-memory
-eigensolver; objective integration remains gated.** SOLVAX now estimates a
-stable full-operator RK4 step from a small peripheral-spectrum sketch, advances
-in fixed physical-horizon restart chunks, and stops on the original-operator
-residual. It matches dense eigenpairs on four-rung QA, QH, and QI ladders and is
-at timing parity on QA and 1.89x and 2.34x faster than dense on QH and QI at
-``n=4480``. A refined seven-configuration matrix passes ITG, ETG, TEM, KBM,
-Miller, QHS, and QI.
+eigensolver and integrated as an explicit objective backend.** SOLVAX now
+estimates a stable full-operator RK4 step from a small peripheral-spectrum
+sketch, advances in fixed physical-horizon restart chunks, and stops on the
+original-operator residual. It matches dense eigenpairs on four-rung QA, QH,
+and QI ladders and is faster than the complete dense objective on cold QA, QH,
+and QI solves at ``n=4480``. A refined seven-configuration matrix passes ITG,
+ETG, TEM, KBM, Miller, QHS, and QI. The matrix-free objective differentiates
+the eigenvalue and phase-invariant eigenvector observables through SOLVAX's
+reverse implicit eigenpair. Its application-specific reduced-resolvent solve
+uses the already stable propagator and a small GMRES polynomial in the
+time-stepper, avoiding the restarted bordered-GMRES stagnation measured at
+larger velocity resolution. Every primal, adjoint, continuous sensitivity
+residual, branch-gap, and exceptional-point check fails closed.
 Certificate-only GPU ladders reach ``n=172032`` with linear memory and certify
 growth-rate convergence; an individual ``n=199680`` solve also passes. Full
 complex-eigenvalue convergence remains unresolved for the QI ladder because the
 frequency continues to move despite candidate overlaps above 0.99. The dense
-differentiable objective should therefore remain the default until candidate
-continuation and the implicit derivative are wired through the objective API
-and the QI frequency gate is either passed or made an explicit growth-only
-exception. Measurements and remaining work are below.
+differentiable objective therefore remains the default, while
+``eigensolver="adaptive-propagator"`` is the fail-closed production candidate
+for admitted branches. Cross-step candidate continuation remains required
+before making that backend the unconditional default. The QI convergence
+campaign exposes an explicit growth-only contract rather than treating an
+unresolved frequency as an implicit exception. Measurements and remaining
+work are below.
 
 .. _hks-motivation:
 
@@ -441,21 +450,36 @@ The robust :download:`QA artifact
 <_static/adaptive_propagator_broadband_qi_rung4_validation.json>` record
 selected steps, restart counts, operator evaluations, versions, and timings.
 The earlier single-probe artifacts remain as provenance for the estimator
-ablation. Regenerate the production setting with
+ablation. The newer :download:`QA dense/eigenvector
+artifact <_static/adaptive_propagator_cold_qa_rung4_validation.json>`,
+:download:`QH artifact
+<_static/adaptive_propagator_cold_qh_rung4_validation.json>`, and
+:download:`QI artifact
+<_static/adaptive_propagator_cold_qi_rung4_validation.json>` qualify the
+24-vector, two-candidate policy. Matching :download:`QA true-cold
+<_static/adaptive_propagator_true_cold_qa_rung4_validation.json>`,
+:download:`QH true-cold
+<_static/adaptive_propagator_true_cold_qh_rung4_validation.json>`, and
+:download:`QI true-cold
+<_static/adaptive_propagator_true_cold_qi_rung4_validation.json>` artifacts run
+the solver first in a fresh process and bind back to the dense problem through
+the rounded operator-probe hash. Regenerate the production setting with
 ``--solver adaptive-propagator``; for example:
 
 .. code-block:: bash
 
    JAX_ENABLE_X64=1 python tools/campaigns/validate_harmonic_krylov_schur.py \
      --input examples/vmec/input.LandremanPaul2021_QA_lowres \
-     --solver adaptive-propagator --krylov-dim 16 --max-restarts 4 \
+     --solver adaptive-propagator --krylov-dim 24 \
+     --restart-krylov-dim 12 --adaptive-candidates 2 --max-restarts 4 \
      --tol 1e-9 --propagator-chunk-horizon 30 \
      --stability-dimension 12 --stability-probe-count 2 \
      --stability-safety 0.9
 
-A refined block-propagator restart remains available for competing branches.
-The scalar path is preferred for a single isolated objective; continuation must
-retain multiple candidates near crossings.
+A refined block-propagator restart remains available for broader clusters. The
+fast scalar path is preferred for an isolated objective and now audits two
+same-subspace candidates; continuation must still retain modes across parameter
+steps near crossings.
 
 The TOML-driven adaptive physics matrix passes all seven shipped configurations:
 ITG, ETG, TEM, KBM, Miller, QHS, and QI. It covers
@@ -478,10 +502,11 @@ Regenerate it from the repository root with:
 
 The rational and harmonic solvers remain useful fallbacks and research
 comparators, but the adaptive propagator is the measured default for a
-rightmost eigenpair. The next production work is candidate continuation through
-crossings and objective integration with implicit sensitivities. The low-moment
-field Schur/Woodbury correction remains available for rational extraction; its
-measured bottleneck is convergence of the kinetic complement.
+rightmost eigenpair. The objective integration and implicit reverse
+sensitivities are implemented; candidate continuation through crossings is the
+remaining promotion gate. The low-moment field Schur/Woodbury correction
+remains available for rational extraction; its measured bottleneck is
+convergence of the kinetic complement.
 
 Recycling the eigenvector, zero-padded into the next Hermite--Laguerre
 resolution, is much more effective than recycling only the scalar target. With
@@ -571,7 +596,7 @@ Regenerate a certificate-only ladder with:
      --krylov-dim 16 --max-restarts 4 --tol 1e-9 \
      --convergence-tol 0.05 --chunk-horizon 30 \
      --stability-dimension 12 --stability-probe-count 2 \
-     --stability-safety 0.9
+     --stability-safety 0.9 --required-observable growth
 
 .. _hks-plan:
 
@@ -602,18 +627,29 @@ including structured continuation seeds, duplicate rejection, exact-target
 breakdown handling, and an optional rational subspace action. Required for
 branch crossings and the subdominant modes transport eventually needs.
 
-**S6 -- Candidate continuation.** Solve a small rung densely, retain several
-rightmost candidates, and propagate them with biorthogonal overlap. Periodically
-reseed from a broader spectral search so a newly dominant branch is not missed.
+**S6 -- Candidate continuation.** The fast scalar propagator now extracts
+several leading candidates from the *same* Arnoldi space, certifies each with a
+continuous-operator Rayleigh residual, and ranks their physical growth. This
+removes near-tie mistakes without another propagator pass. Continuation across
+ky or optimization steps still needs biorthogonal overlap and periodic broad
+reseeding so a newly dominant branch is not missed.
 
-**S7 -- Implicit eigenpair derivative.** SOLVAX now provides a custom JVP. For
-growth-only objectives it uses
+**S7 -- Implicit eigenpair derivative.** SOLVAX provides both a custom JVP and a
+reverse-efficient custom VJP. For growth-only objectives they use
 :math:`d\lambda = (w^{*} dA\, v)/(w^{*} v)`. For eigenvector-dependent
 quasilinear outputs, it solves Nelson's bordered system [Nelson1976]_ for the
 right-eigenvector tangent and differentiates the matrix-free action
 :math:`A(p)v`. A left/right condition-number guard fails explicitly near a
-cluster or exceptional point. Replacing GKX's dense objective remains gated on
-the real-operator solver qualification. On a 24-state real GKX operator, a
+cluster or exceptional point. The reverse path accepts an
+application-supplied transposed solve. GKX removes the neutral eigenmode,
+forms a stable shifted time-stepper on the complementary subspace, and solves
+the fixed point of one propagator chunk with a 16-vector GMRES polynomial. The
+final continuous bordered residual, not the time-stepper residual, is the
+admission gate. This converges where the physics-preconditioned restarted
+bordered GMRES stagnates. GKX exposes the path through
+``solver_objective_vector_from_geometry(...,
+eigensolver="adaptive-propagator")`` while preserving the dense default. On a
+24-state real GKX operator, a
 phase-invariant objective combining growth and a quadratic eigenvector weight
 has implicit gradient ``0.22387295824979078`` versus
 ``0.2238729582497859`` from differentiating the dense eigensolve; centered
@@ -667,19 +703,45 @@ changes no shipped result.
 **V6 Target insensitivity.** Converged eigenvalue independent of :math:`\kappa`
 across a stated range, confirming [Roman2010]_'s claim in GKX's setting.
 
-**V7 Determinism.** Bitwise-identical across reruns.
+**V7 Determinism.** Bitwise-identical across same-device reruns is pinned by a
+focused adaptive multi-candidate regression.
 
-**V8 Performance.** Passed on QH and QI at the first measured crossover: at
-``n=4480`` the robust two-probe warm solve is 1.89x and 2.34x faster than dense.
-QA is at timing parity (0.96x), so no QA crossover is claimed. The certified GPU
+**V8 Performance.** Passed for cold and warm solves at ``n=4480``. The
+production setting uses a 24-vector first subspace, a 12-vector corrective
+subspace, and two continuous-Rayleigh candidates. Fresh-process cold totals
+from a solver-ready geometry are 18.01 s (QA), 17.75 s (QH), and 23.07 s (QI).
+The complete dense baseline includes context construction, matrix assembly, and
+right eigenvectors and takes 41.44 s, 41.59 s, and 45.72 s, respectively:
+2.30x, 2.34x, and 1.98x cold speedups. Separate same-process dense-oracle
+artifacts pass :math:`10^{-8}` eigenvalue error and
+:math:`1-10^{-8}` eigenvector overlap. Cached oracles are admitted only for
+cold timing when a deterministic operator probe matches; they never stand in
+for the eigenvector gate. The certified GPU
 continuation reaches ``n=172032`` with observed allocation about 1.24 GiB; a
 dense complex matrix there is about 474 GB. An individual ``n=199680`` row also
-passes. This is not an order-of-magnitude timing claim, and the 172k residual
-fallback is not yet a performance win.
+passes. This is not an order-of-magnitude timing claim.
 
 **V9 Gradient.** SOLVAX's custom JVP agrees with dense-path ``jax.grad`` and
 frozen-branch directional finite differences on the small real-operator gate.
-GKX objective integration and end-to-end optimization gradients remain open.
+GKX's six-observable matrix-free objective now matches the dense forward values
+and a weighted phase-invariant objective gradient agrees with centered finite
+differences. The production reverse path also passes increasingly resolved
+``n=768``, ``1536``, ``3072``, and ``6144`` real-operator gates. At ``n=1536``
+the reduced-resolvent gradient differs from centered finite differences by
+``1.8e-9`` relative. At ``n=3072`` it differs from dense AD by ``6e-11``
+relative. The :download:`objective physics-matrix artifact
+<_static/adaptive_objective_physics_matrix.json>` passes ITG, ETG, TEM, KBM,
+electrostatic/electromagnetic, one-/multi-species, circular/Miller, and linked
+QHS/QI cases. Its maximum value and gradient errors versus dense AD are
+``1.72e-14`` and ``4.98e-10`` relative. Fresh-process ``n=6144`` timings and
+the exact dense-gradient
+comparison are recorded in the :download:`cold objective-gradient artifact
+<_static/adaptive_objective_gradient_cold_n6144_validation.json>`: 142.75 s
+adaptive versus 171.81 s dense (1.20x), with ``1.47e-10`` relative gradient
+error. Dense remains faster at small sizes; the matrix-free reverse path is
+admitted on accuracy and on its measured large-state cold crossover, not on
+warm-only timing. End-to-end VMEC optimization promotion remains guarded by
+the existing branch-locality and exceptional-point admission reports.
 
 References
 ----------

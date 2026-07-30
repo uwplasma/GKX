@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "scope": "fresh-process cold value-and-reverse-gradient comparison on one phase-invariant linear/quasilinear objective",
+  "resolution": {
+    "ntheta": 32,
+    "n_laguerre": 12,
+    "n_hermite": 16,
+    "operator_size": 6144
+  },
+  "adaptive": {
+    "method": "adaptive-propagator",
+    "value": 0.022342826847789612,
+    "directional_gradient": 0.2252771272447609,
+    "cold_value_and_gradient_seconds": 142.74953070800984,
+    "finite": true,
+    "adaptive_config": {
+      "krylov_dim": 24,
+      "restart_krylov_dim": 12,
+      "candidate_count": 2,
+      "max_restarts": 4,
+      "tolerance": 1e-09,
+      "chunk_horizon": 30.0,
+      "stability_dimension": 12,
+      "stability_probe_count": 2,
+      "stability_safety": 0.9,
+      "max_stability_retries": 2,
+      "adjoint_krylov_dim": 24,
+      "adjoint_max_restarts": 200,
+      "sensitivity_rtol": 1e-08,
+      "sensitivity_restart": 200,
+      "sensitivity_max_restarts": 4,
+      "sensitivity_solver": "propagator",
+      "sensitivity_krylov_dim": 16,
+      "sensitivity_preconditioner": "field-corrected",
+      "condition_limit": 100000000.0,
+      "branch_gap_floor": 1e-08
+    }
+  },
+  "dense": {
+    "method": "dense",
+    "value": 0.022342826847773757,
+    "directional_gradient": 0.22527712727786747,
+    "cold_value_and_gradient_seconds": 171.81476933299564,
+    "finite": true,
+    "adaptive_config": null
+  },
+  "value_relative_error": 7.096403995096014e-13,
+  "gradient_relative_error": 1.4695931823442866e-10,
+  "cold_speedup_over_dense": 1.2036100467779325,
+  "accuracy_passed": true,
+  "cold_speed_passed": true,
+  "cold_speed_required": true,
+  "passed": true,
+  "provenance": {
+    "python": "3.13.7",
+    "platform": "macOS-26.5.1-arm64-arm-64bit-Mach-O",
+    "jax": "0.11.0",
+    "jaxlib": "0.11.0",
+    "gkx_revision": "b9734bb9b7806ecc3d84db2f27769c4649e976d3",
+    "solvax_revision": "abecac19468bb879656681394a1d2327ebfe5385",
+    "devices": [
+      "cpu:0"
+    ]
+  }
+}
