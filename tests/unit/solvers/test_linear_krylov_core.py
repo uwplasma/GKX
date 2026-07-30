@@ -11,9 +11,13 @@ import numpy as np
 import pytest
 import solvax
 
+import gkx.solvers.linear.adaptive_propagator as ap
+import gkx.solvers.linear.krylov as lk
+import gkx.solvers.linear.krylov_algorithms as ka
+import gkx.solvers.linear.krylov_propagator as kp
 from gkx.config import CycloneBaseCase, GridConfig
-from gkx.geometry import SAlphaGeometry
 from gkx.core.grid import build_spectral_grid
+from gkx.geometry import SAlphaGeometry
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.params import (
     LinearParams,
@@ -22,10 +26,7 @@ from gkx.operators.linear.params import (
     build_linear_params,
     linear_terms_to_term_config,
 )
-import gkx.solvers.linear.krylov as lk
-import gkx.solvers.linear.adaptive_propagator as ap
-import gkx.solvers.linear.krylov_algorithms as ka
-import gkx.solvers.linear.krylov_propagator as kp
+from gkx.solvers.linear import implicit
 
 _HAS_SOLVAX_EIGEN_API = all(
     callable(getattr(solvax, name, None))
@@ -369,7 +370,7 @@ def test_build_shift_invert_preconditioner_modes() -> None:
     assert y.shape == (v0.size,)
     assert jnp.all(jnp.isfinite(jnp.real(y)))
 
-    precond, op = lk._build_shift_invert_precond(
+    _precond, op = lk._build_shift_invert_precond(
         v0, cache, params, term_cfg, sigma, "hermite-line"
     )
     assert op is not None
@@ -406,6 +407,37 @@ def test_shifted_hermite_preconditioner_has_the_correct_complex_scaling() -> Non
     assert op is not None
     result = op(v0.reshape(-1)).reshape(v0.shape)
     assert jnp.allclose(result, -v0 / sigma, rtol=2e-6, atol=2e-6)
+
+
+def test_hermite_line_inverts_additive_diagonal_and_streaming_symbol() -> None:
+    """The line solve represents ``D + S``, not the old product ``D S``."""
+
+    _grid, cache, params, v0, term_cfg, _terms = _tiny_krylov_setup(linked=False)
+    state = implicit._prepare_implicit_state(v0, 0.4 - 0.2j, term_cfg)
+    data = implicit._build_implicit_preconditioner_data(cache, params, state)
+    mode, kz_index = jnp.arange(v0.shape[1], dtype=v0.dtype) + 0.3j, 1
+    phase = jnp.exp(2j * jnp.pi * kz_index * jnp.arange(v0.shape[-1]) / v0.shape[-1])
+    rhs = jnp.zeros_like(state.G).at[0, 0, :, 0, 0, :].set(mode[:, None] * phase)
+
+    solved = implicit._apply_hermite_line_preconditioner(
+        rhs.reshape(-1), cache=cache, params=params, state=state, data=data
+    ).reshape(state.shape)
+    observed = jnp.fft.fft(solved, axis=-1)[0, 0, :, 0, 0, kz_index]
+    coefficient = (
+        state.dt_val
+        * data.w_stream
+        * params.kpar_scale
+        * data.vth[0]
+        * data.imag
+        * cache.kz[kz_index]
+    )
+    diagonal = jnp.reciprocal(data.precond_full)
+    matrix = jnp.diag(jnp.mean(diagonal[0, 0, :, 0, 0], axis=-1))
+    matrix += jnp.diag(coefficient * data.sqrt_m_line[1:], -1)
+    matrix += jnp.diag(coefficient * data.sqrt_p_line[:-1], 1)
+
+    expected = jnp.linalg.solve(matrix, mode * v0.shape[-1])
+    assert jnp.allclose(observed, expected, rtol=2.0e-5, atol=2.0e-5)
 
 
 def test_shifted_hermite_preconditioner_handles_a_zero_shift() -> None:
@@ -560,12 +592,16 @@ def test_field_corrected_preconditioner_covers_em_species_and_linked_layouts(
     assert observed.shape == (vector.size,)
     assert jnp.all(jnp.isfinite(observed))
     assert jnp.allclose(scaled, (1.0 - 0.25j) * observed, rtol=1.0e-10, atol=1.0e-10)
+    _, tangent = jax.jvp(
+        preconditioner, (jnp.ravel(vector),), (jnp.ravel(0.2j * vector),)
+    )
+    assert jnp.allclose(tangent, 0.2j * observed, rtol=1.0e-10, atol=1.0e-10)
 
 
 def test_build_shift_invert_preconditioner_linked_branch() -> None:
     _grid, cache, params, v0, term_cfg, _terms = _tiny_krylov_setup(linked=True)
     sigma = jnp.asarray(0.2j, dtype=v0.dtype)
-    precond, op = lk._build_shift_invert_precond(
+    _precond, op = lk._build_shift_invert_precond(
         v0, cache, params, term_cfg, sigma, "hermite-line"
     )
     assert op is not None
@@ -682,7 +718,7 @@ def test_adaptive_propagator_selects_stable_step_and_stops_on_residual(
 ) -> None:
     """The production adapter must infer dt and avoid its unused restart budget."""
 
-    _grid, cache, params, _v0, term_cfg, terms = _tiny_krylov_setup(linked=False)
+    _grid, cache, params, _v0, _term_cfg, terms = _tiny_krylov_setup(linked=False)
     eigenvalues = jnp.asarray(
         [
             0.3 + 0.2j,
@@ -1184,7 +1220,7 @@ def test_dominant_eigenpair_target_shift_uses_physical_omega_sign(
 
 
 def test_shift_invert_fallback_policy(monkeypatch: pytest.MonkeyPatch) -> None:
-    _grid, cache, params, v0, term_cfg, terms = _tiny_krylov_setup(linked=False)
+    _grid, cache, params, v0, _term_cfg, terms = _tiny_krylov_setup(linked=False)
 
     def fake_shift(*args, **kwargs):
         return jnp.asarray(jnp.nan + 1j * jnp.nan, dtype=v0.dtype), jnp.ones_like(v0)

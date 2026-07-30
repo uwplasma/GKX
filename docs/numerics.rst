@@ -469,17 +469,15 @@ end-to-end JAX differentiability:
 - **Shift-invert preconditioning hooks**: the shift-invert Krylov solver uses
   GMRES solves for ``(A - \sigma I)^{-1}``. Configure
   ``KrylovConfig.shift_preconditioner`` to accelerate these solves with
-  ``"damping"`` (element-wise inverse of the collisional/hyper damping).
-  ``"hermite-line"`` and ``"hermite-line-coarse"`` remain accepted aliases but
-  currently resolve to that conservative damping preconditioner; the real-time
-  IMEX Hermite factorization is not a valid complex shift preconditioner.
-  A dedicated complex block implementation must pass inner and outer residual
-  gates before those aliases can advertise streaming-line acceleration.
-  A preconditioned solve is checked against the original shifted system; if its
-  true residual exceeds the requested tolerance by an order of magnitude, the
-  solve is retried without that preconditioner, starting from the finite
-  rejected iterate so useful Krylov progress is not discarded. This prevents
-  convergence in a transformed norm from hiding a poor physical solve.
+  ``"damping"`` (element-wise collisional/hyper damping),
+  ``"hermite-line"`` (FFT in :math:`z` plus a tridiagonal Hermite solve for
+  the additive diagonal-and-streaming symbol), or ``"field-corrected"`` (the
+  Hermite line plus the exact linear field response in a Woodbury capacitance
+  solve). The complex shift scaling is shared with backward Euler, and
+  right-preconditioned FGMRES minimizes the original shifted-system residual.
+  The line path costs :math:`O(n)` storage and work. The field correction maps
+  response columns sequentially and stores one state-by-field factor, trading
+  a larger setup for lower Krylov counts in field-dominated cases.
   Every returned pair is checked with the matrix-free relative residual
   :math:`\lVert Av-\lambda v\rVert/
   \max(\lVert Av\rVert,|\lambda|\lVert v\rVert)`. Configure the acceptance

@@ -144,6 +144,46 @@ not a derivative of every dense eigenvector. Compared with treating a
 simulation code as an opaque function, geometry, fields, the gyrokinetic RHS,
 the selected mode, and quasilinear observables remain in one JAX computation.
 
+### Physics-aware shift-invert
+
+For a supplied target or continuation shift, GKX can replace the explicit
+filter with right-preconditioned shift-invert Arnoldi:
+
+```python
+from gkx.solvers.linear import dominant_eigenpair
+
+eigenvalue, mode = dominant_eigenpair(
+    seed,
+    cache,
+    linear_params,
+    terms=linear_terms,
+    method="shift_invert",
+    shift=previous_eigenvalue,
+    shift_source="reference",
+    shift_preconditioner="field-corrected",
+    shift_tol=1e-8,
+)
+```
+
+`"hermite-line"` applies an `O(n)` FFT/tridiagonal inverse of the additive
+diagonal-plus-streaming symbol. `"field-corrected"` adds the exact
+electrostatic/electromagnetic moment coupling through a Woodbury capacitance
+solve. Its setup maps field columns sequentially and retains one tall kinetic
+factor, avoiding the two-factor and batched-column memory peak of a standard
+low-rank construction. Both paths are JAX-transformable; gradients of the
+accepted mode still use the implicit eigenpair rule above, not an iteration
+tape.
+
+On the retained complex128 QA qualification (RTX A4000, shift supplied from the
+adjacent certified branch), the Hermite line reduced a representative shifted
+GMRES solve from more than 1,024 iterations to 39 at `n=768`, and to 63 at
+`n=1,536` where diagonal damping again exceeded 1,024 iterations. The complete
+targeted eigenpair at `n=4,480` took 12.40 s cold and 11.37 s warm, versus
+25.19 s for the same-device dense full-spectrum solve; eigenvalue error was
+`9.2e-12` and the original-operator residual was `1.8e-10`. “Cold” includes JAX
+compilation after geometry/cache construction. These are targeted/continuation
+measurements, not branch-discovery timings.
+
 This does **not** mean the current cold solve is universally faster than mature
 GX or GENE/SLEPc runs. GX is a highly optimized GPU initial-value code, while
 GENE uses preconditioned SLEPc eigensolvers and has demonstrated efficient
@@ -170,11 +210,16 @@ production cold time.
 Every accepted pair is checked against the original continuous complex128 GKX
 operator; projected, transformed, or low-precision residuals never stand in
 for that test. The remaining production task is a robust physics-aware
-preconditioner for the oscillatory Hermite-streaming spectrum. See
+inverse for the coupled high-moment mirror/streaming orbit operator. The new
+line and field correction close the practical targeted regime but do not make
+the full-frequency QI cold-discovery solve fast: averaging the sign-changing
+mirror coefficient removes trapped-orbit physics, while local mirror-only
+splittings are both slower and less convergent. See
 [the eigensolver qualification](docs/differentiable_eigensolver.rst) for the
 four retained evidence records, rejected alternatives, and reproducible
 commands. Relevant external comparisons are
 [GENE's matrix-free eigenvalue study](https://doi.org/10.1016/j.cpc.2011.12.018),
+[the Laguerre–Hermite gyrokinetic formulation](https://doi.org/10.1017/S0022377818000041),
 [SLEPc's Krylov-Schur documentation](https://slepc.upv.es/release/documentation/manual/eps.html),
 and the [GX methods paper](https://arxiv.org/abs/2209.06731).
 

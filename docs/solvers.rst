@@ -13,7 +13,15 @@ Two options address stiff Hermite--Laguerre systems:
   while keeping drift and streaming terms explicit.
 * ``method="implicit"`` applies backward Euler through SOLVAX FGMRES.  Its
   physical preconditioners include diagonal damping and an FFT/Hermite-line
-  streaming approximation.  Linked chains retain the twist-and-shift layout.
+  inverse of the additive diagonal-plus-streaming symbol.  Linked chains
+  retain the twist-and-shift layout.
+
+The same line inverse is available to shift-invert Arnoldi with
+``shift_preconditioner="hermite-line"``.  ``"field-corrected"`` adds the
+electrostatic/electromagnetic moment response through a Woodbury capacitance
+solve while mapping field columns sequentially to bound setup memory.  Both
+are opt-in: the default damping inverse remains the conservative choice when
+no branch-specific qualification is available.
 
 Complex FGMRES uses unitary Givens rotations and reports the physical residual
 ``||b - A x||``.  Users set its tolerance, restart length, iteration limit,

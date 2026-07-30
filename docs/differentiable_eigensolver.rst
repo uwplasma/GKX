@@ -7,8 +7,9 @@ Status
 GKX has an opt-in, matrix-free eigensolver for linear and quasilinear
 observables.  It is accurate, differentiable, branch-aware, and has
 ``O(n m)`` storage for state size ``n`` and Krylov dimension ``m``.  It is
-not yet the default solver: high velocity-space resolutions remain limited by
-the cold cost of the explicit propagator filter.
+not yet the default solver: targeted and continued modes now have a fast
+physics-aware shift-invert path, but high-resolution cold branch discovery
+remains limited by the explicit propagator filter.
 
 This distinction is intentional.  The qualification records below establish
 correctness and differentiation.  They do not claim that the current cold
@@ -99,6 +100,44 @@ took 917--1504 s and 7,905--8,935 RK4 steps per propagator application.  The
 high-order Hermite streaming spectrum, not JAX compilation or dense storage,
 is the dominant cost.
 
+Physics-aware targeted solves
+-----------------------------
+
+For a supplied target or continuation shift, ``dominant_eigenpair`` can use
+right-preconditioned FGMRES inside shift-invert Arnoldi.  The
+``"hermite-line"`` preconditioner inverts
+
+.. math::
+
+   D(\ell,m,k_x,k_y) + S(k_z,m)
+
+with one FFT and a batched tridiagonal solve.  Keeping :math:`D+S` additive is
+essential; applying a point inverse and streaming inverse as a product is a
+different operator and loses the high-Hermite scaling.  The linked variant
+uses the same solve on complete twist-and-shift chains.
+
+``"field-corrected"`` applies the Woodbury identity to the linear field map.
+It supports electrostatic and electromagnetic fields, multiple kinetic
+species, and periodic or linked layouts.  Field columns are mapped
+sequentially, and only the solved response factor is retained, cutting the two
+tall factors and batched-column peak of the earlier implementation.
+
+This design combines three established ideas: retaining the stiff parallel
+kinetic block in gyrokinetic eigenvalue preconditioning [Merz12]_, exploiting
+the sparse Laguerre--Hermite streaming hierarchy [MDL17]_, and correcting a
+kinetic inverse with a reduced moment/field model [Chen14]_.  GKX's contribution
+is a JAX-native structured realization whose primal and tangent paths use the
+same matrix-free operators.
+
+On the retained QA targeted-solve qualification, the line inverse reduced a
+representative complex128 shifted solve from more than 1,024 iterations with
+diagonal damping to 39 at ``n=768`` and 63 at ``n=1,536``.  At ``n=4,480`` the
+complete eigenpair took 12.40 s cold and 11.37 s warm on an RTX A4000, compared
+with 25.19 s for the same-device dense full-spectrum solve.  The eigenvalue
+error was ``9.2e-12`` and the continuous-operator residual ``1.8e-10``.  Cold
+time includes JIT compilation after geometry/cache construction; the shift was
+carried from the adjacent certified branch.
+
 Usage
 -----
 
@@ -149,15 +188,18 @@ Reproduce the retained evidence
 Next performance work
 ---------------------
 
-The production blocker is a preconditioner for the oscillatory
-Hermite-streaming spectrum.  The next candidate must beat the current cold
-operator-application count while preserving the original-operator residual,
-branch-crossing, QI frequency, and implicit-gradient gates.  In particular,
-mixed precision or a transformed residual is not an acceptable substitute for
-the continuous complex128 certificate.
+The remaining production blocker is the full-frequency QI cold solve.  At
+extreme :math:`(N_\ell,N_m)`, its residual is concentrated in the high-moment
+mirror and grad-B tail.  The sign-changing mirror coefficient has zero
+field-line mean, so neither the Fourier/Hermite line nor a positive diagonal
+envelope retains trapped-orbit transport.  Local mirror-only block solves,
+velocity-collocation diagonals, defect polynomials, and low-moment coarse
+corrections were rejected because they increased memory or failed to contract
+the original residual.
 
-Relevant precedents are the matrix-free Jacobi--Davidson implementation in
-GENE, SLEPc's Krylov--Schur/Jacobi--Davidson methods, and timestepper Arnoldi.
-GKX's evidence supports the same conclusion as the GENE literature: an
-effective physics-aware preconditioner is required before this path should be
-advertised as a universally fast cold eigensolver.
+The next research candidate must invert the coupled parallel-orbit principal
+operator—streaming and mirror force together—then apply the existing field
+capacitance correction.  It must beat the explicit cold operator count while
+preserving the branch-crossing, QI frequency, original-operator residual, peak
+memory, and implicit-gradient gates.  Mixed precision or a transformed
+residual is not a substitute for the continuous complex128 certificate.

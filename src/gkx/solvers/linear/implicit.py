@@ -2,19 +2,20 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 import jax
 import jax.numpy as jnp
 import numpy as np
-from solvax import gmres, low_rank_corrected, tridiagonal_solve
+from jax.scipy.linalg import lu_factor, lu_solve
+from solvax import gmres, tridiagonal_solve
 
-from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.cache_arrays import (
     collision_damping,
     hypercollision_damping,
 )
+from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.params import (
     LinearParams,
     LinearTerms,
@@ -30,8 +31,8 @@ from gkx.terms.assembly import assemble_rhs_cached_with_fields, compute_fields_c
 from gkx.terms.config import FieldState, TermConfig
 
 __all__ = [
-    "_build_implicit_operator",
     "_build_field_corrected_shifted_preconditioner",
+    "_build_implicit_operator",
     "_build_shifted_hermite_preconditioner",
     "_integrate_linear_implicit_cached",
 ]
@@ -94,7 +95,7 @@ _IMPLICIT_PRECONDITIONER_ALIASES = {
 
 def _prepare_implicit_state(
     G0: jnp.ndarray,
-    dt: float | complex | jax.Array,
+    dt: complex | jax.Array,
     terms: LinearTerms | TermConfig | None,
 ) -> _ImplicitState:
     terms = (
@@ -248,7 +249,7 @@ def _solve_hermite_lines_fft(
     state: _ImplicitState,
     data: _ImplicitPreconditionerData,
 ) -> jnp.ndarray:
-    """Invert ``I - dt L_stream`` approximately via FFT(z) + tridiagonal(m)."""
+    """Invert the averaged diagonal plus Hermite streaming line."""
 
     x_hat = jnp.fft.fft(x, axis=-1)
     x_hat_mlast = jnp.moveaxis(x_hat, 2, -1)
@@ -265,14 +266,20 @@ def _solve_hermite_lines_fft(
     dl = coeff * data.sqrt_m_line
     du = coeff * data.sqrt_p_line
     du = du.at[..., -1].set(jnp.asarray(0.0, dtype=du.dtype))
-    d = jnp.ones_like(du)
+    # Drifts vary along z and therefore couple Fourier modes.  Their mean
+    # keeps the separable principal symbol D(l,m,kx,ky) + S(kz,m).
+    d = jnp.moveaxis(
+        jnp.mean(jnp.reciprocal(data.precond_full), axis=-1, keepdims=True),
+        2,
+        -1,
+    )
     batch_shape = x_hat_mlast.shape
     dl = jnp.broadcast_to(dl, batch_shape)
     d = jnp.broadcast_to(d, batch_shape)
     du = jnp.broadcast_to(du, batch_shape)
     y_hat_mlast = _solve_tridiagonal_last_axis(dl, d, du, x_hat_mlast)
     y_hat = jnp.moveaxis(y_hat_mlast, -1, 2)
-    return jnp.fft.ifft(y_hat, axis=-1)
+    return jnp.fft.ifft(y_hat, axis=-1).astype(x.dtype)
 
 
 def _solve_hermite_lines_linked(
@@ -301,6 +308,7 @@ def _solve_hermite_lines_linked(
     lead_shape = x.shape[:-3]
     x_flat = x.reshape(*lead_shape, Ny * Nx, Nz)
     y_flat = jnp.zeros_like(x_flat)
+    diagonal_flat = jnp.reciprocal(data.precond_full).reshape(*lead_shape, Ny * Nx, Nz)
 
     for idx_map, kz_link in zip(cache.linked_indices, cache.linked_kz):
         nChains, nLinks = idx_map.shape
@@ -322,14 +330,20 @@ def _solve_hermite_lines_linked(
         dl = coeff * data.sqrt_m_line
         du = coeff * data.sqrt_p_line
         du = du.at[..., -1].set(jnp.asarray(0.0, dtype=du.dtype))
-        d = jnp.ones_like(du)
+        diagonal_link = jnp.take(diagonal_flat, idx_flat, axis=-2)
+        diagonal_link = diagonal_link.reshape(
+            *lead_shape,
+            nChains,
+            nLinks * Nz,
+        )
+        d = jnp.moveaxis(jnp.mean(diagonal_link, axis=-1), 2, -1)[..., None, :]
         batch_shape = x_hat_mlast.shape
         dl = jnp.broadcast_to(dl, batch_shape)
         d = jnp.broadcast_to(d, batch_shape)
         du = jnp.broadcast_to(du, batch_shape)
         y_hat_mlast = _solve_tridiagonal_last_axis(dl, d, du, x_hat_mlast)
         y_hat = jnp.moveaxis(y_hat_mlast, -1, 2)
-        y_link = jnp.fft.ifft(y_hat, axis=-1)
+        y_link = jnp.fft.ifft(y_hat, axis=-1).astype(x.dtype)
         y_link = y_link.reshape(*lead_shape, nChains * nLinks, Nz)
         y_flat = _scatter_unique_spectral_modes(y_flat, idx_flat, y_link)
 
@@ -408,8 +422,8 @@ def _apply_hermite_line_preconditioner(
     state: _ImplicitState,
     data: _ImplicitPreconditionerData,
 ) -> jnp.ndarray:
-    x = x_flat.reshape(state.shape) * data.precond_full
-    x = (
+    x = x_flat.reshape(state.shape)
+    hermite = (
         _solve_hermite_lines_linked(
             x, cache=cache, params=params, state=state, data=data
         )
@@ -423,7 +437,7 @@ def _apply_hermite_line_preconditioner(
             data=data,
         )
     )
-    return x.reshape(state.size)
+    return hermite.reshape(state.size)
 
 
 def _apply_hermite_line_coarse_preconditioner(
@@ -577,19 +591,15 @@ def _build_field_corrected_shifted_preconditioner(
 
     ``A - sigma I = (A_0 - sigma I) + R F``.
 
-    ``F`` has at most three active field degrees of freedom per spatial
-    spectral point, independent of velocity resolution. Its transpose supplies
-    the Woodbury extraction factor without materializing the full kinetic
-    operator; probing ``R`` supplies the columns. The existing Hermite-line
-    inverse remains the approximate inverse of ``A_0 - sigma I``, while the
-    global field coupling is represented exactly through a small capacitance
-    solve.
+    ``F`` has at most three active fields per spatial spectral point,
+    independent of velocity resolution. Sequentially probing ``R`` and
+    applying ``F`` avoids materializing either the kinetic operator or its
+    transpose. The Hermite-line inverse approximates ``A_0 - sigma I`` while
+    a velocity-independent capacitance solve represents the field coupling.
     """
 
     term_cfg = (
-        terms
-        if isinstance(terms, TermConfig)
-        else linear_terms_to_term_config(terms)
+        terms if isinstance(terms, TermConfig) else linear_terms_to_term_config(terms)
     )
     base_flat = _build_shifted_hermite_preconditioner(
         G0,
@@ -641,23 +651,31 @@ def _build_field_corrected_shifted_preconditioner(
         return (response - zero_rhs).astype(G0.dtype)
 
     field_size = _pack_field_state(field_template).size
-    field_basis = jnp.eye(field_size, dtype=G0.dtype)
-    columns = jnp.moveaxis(jax.vmap(field_response)(field_basis), 0, -1)
-    transpose_field_map = jax.linear_transpose(field_map, zero_state)
-    extraction = jnp.moveaxis(
-        jax.vmap(lambda cotangent: transpose_field_map(cotangent)[0])(field_basis),
-        0,
-        -1,
-    )
 
     def base_state_preconditioner(state: jnp.ndarray) -> jnp.ndarray:
         return base_flat(jnp.ravel(state)).reshape(G0.shape)
 
-    corrected = low_rank_corrected(
-        base_state_preconditioner,
-        columns,
-        extraction,
+    solved_columns = jnp.moveaxis(
+        jax.lax.map(
+            lambda index: base_state_preconditioner(
+                field_response(jax.nn.one_hot(index, field_size, dtype=G0.dtype))
+            ),
+            jnp.arange(field_size),
+        ),
+        0,
+        -1,
     )
+    capacitance = jnp.eye(field_size, dtype=G0.dtype) + jnp.moveaxis(
+        jax.lax.map(field_map, jnp.moveaxis(solved_columns, -1, 0)),
+        0,
+        -1,
+    )
+    capacitance_lu = lu_factor(capacitance)
+
+    def corrected(state: jnp.ndarray) -> jnp.ndarray:
+        base = base_state_preconditioner(state)
+        weights = lu_solve(capacitance_lu, field_map(base))
+        return base - jnp.tensordot(solved_columns, weights, axes=(-1, 0))
 
     def apply_corrected(vector: jnp.ndarray) -> jnp.ndarray:
         return jnp.ravel(corrected(vector.reshape(G0.shape))).astype(vector.dtype)

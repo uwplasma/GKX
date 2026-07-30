@@ -11,7 +11,19 @@ References
 
 .. [MDL17] N. R. Mandell, W. Dorland, and M. Landreman, "Laguerre-Hermite
    Pseudo-Spectral Velocity Formulation of Gyrokinetics," arXiv:1708.04029
-   (2017). `arXiv <https://arxiv.org/abs/1708.04029>`__.
+   (2017). `arXiv <https://arxiv.org/abs/1708.04029>`__,
+   `DOI <https://doi.org/10.1017/S0022377818000041>`__.
+
+.. [Merz12] F. Merz, C. Kowitz, E. Romero, J. E. Roman, and F. Jenko,
+   "Multi-dimensional gyrokinetic parameter studies based on eigenvalue
+   computations," Computer Physics Communications 183, 922 (2012).
+   `DOI <https://doi.org/10.1016/j.cpc.2011.12.018>`__.
+
+.. [Chen14] G. Chen, L. Chacón, C. A. Leibs, D. A. Knoll, and W. Taitano,
+   "Fluid preconditioning for Newton-Krylov-based, fully implicit,
+   electrostatic particle-in-cell simulations," Journal of Computational
+   Physics 258, 555 (2014). `arXiv <https://arxiv.org/abs/1309.6243>`__,
+   `DOI <https://doi.org/10.1016/j.jcp.2013.10.052>`__.
 
 .. [Dimits00] A. M. Dimits et al., "Comparisons and physics basis of tokamak
    transport models and turbulence simulations," Physics of Plasmas 7, 969
