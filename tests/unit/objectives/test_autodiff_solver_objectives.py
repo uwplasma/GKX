@@ -16,6 +16,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+import solvax
 
 import gkx
 import gkx.objectives.autodiff_validation as adv
@@ -45,6 +46,15 @@ from gkx.diagnostics.quasilinear_transport import (
     effective_kperp2,
     quasilinear_feature_objective,
     shape_aware_power_law_objective,
+)
+
+
+requires_solvax_reverse_eigenpair = pytest.mark.skipif(
+    not all(
+        callable(getattr(solvax, name, None))
+        for name in ("eigenpair_reverse", "propagator_eigenpairs")
+    ),
+    reason="requires the reverse eigenpair API from SOLVAX PR 65",
 )
 
 
@@ -961,6 +971,7 @@ def test_solver_objective_vector_from_geometry_is_finite_and_exported() -> None:
         solver_objective_vector_from_geometry(geom, n_laguerre=0)
 
 
+@requires_solvax_reverse_eigenpair
 def test_adaptive_solver_objective_matches_dense_and_implicit_gradient() -> None:
     """The matrix-free primal and bordered tangent must preserve QL observables."""
 
