@@ -1,142 +1,96 @@
 Differentiable matrix-free eigenmodes
 =====================================
 
-Status
-------
+Scope
+-----
 
-GKX has an opt-in, matrix-free eigensolver for linear and quasilinear
-observables.  It is accurate, differentiable, branch-aware, and has
-``O(n m)`` storage for state size ``n`` and Krylov dimension ``m``.  It is
-not yet the default solver: targeted and continued modes now have a fast
-physics-aware shift-invert path, but high-resolution cold branch discovery
-remains limited by the explicit propagator filter.
+GKX provides an opt-in eigensolver for linear and quasilinear objectives.  It
+applies the production gyrokinetic right-hand side without forming its dense
+matrix, retains competing modes near crossings, and differentiates accepted
+simple eigenpairs with an implicit adjoint.  The path supports ITG, ETG, TEM,
+and KBM models; electrostatic and electromagnetic fields; one or more kinetic
+species; periodic and twist-and-shift domains; and analytic, Miller, and VMEC
+geometry.
 
-This distinction is intentional.  The qualification records below establish
-correctness and differentiation.  They do not claim that the current cold
-wall time is competitive with mature preconditioned gyrokinetic eigensolvers.
+The adaptive objective currently requires the differentiable eigenpair API in
+SOLVAX pull request 65.  GKX CI tests the paired repositories at an immutable
+SOLVAX commit; the feature becomes installable from released packages after
+that API is merged and released.  Published SOLVAX already supports the
+shift-invert and Hermite-line path.
 
-Why the dense path stops scaling
---------------------------------
+The matrix-free storage is ``O(n m)`` for state size ``n`` and subspace size
+``m``, versus ``O(n^2)`` for dense validation.  A complex128 matrix for the
+largest tested QI truncation, ``n = 494,592``, would require about 3.6 TiB.
 
-The validation path materializes the complex linear operator and computes all
-eigenpairs.  Its matrix storage grows as ``O(n^2)``.  At the qualified QI rung
-``n = 494,592``, a complex128 dense matrix alone would require about 3.6 TiB.
-The matrix-free path retains only a small basis and applies the production
-linear RHS directly.
+Algorithm and acceptance
+------------------------
 
-The solver forms an RK4 approximation to ``exp(T A)``, builds an Arnoldi
-subspace of that propagator, and ranks its leading candidates by the
-continuous-operator Rayleigh quotient.  Every returned vector is certified
-with
-
-.. math::
-
-   \frac{\lVert A v - \lambda v\rVert_2}
-        {|\lambda|\lVert v\rVert_2} < \epsilon .
-
-The timestep comes from broadband Arnoldi probes of the original operator.
-If the inferred RK4 filter is unstable or the continuous residual misses the
-tolerance, the solve fails closed.
-
-Branch continuation
--------------------
-
-Maximum growth is not a smooth branch label.  At a growth-rate crossing, a
-plain ``argmax(Re(lambda))`` switches modes.  GKX can instead retain several
-certified candidates and select by the phase-invariant overlap with the
-previous right eigenvector, or by the biorthogonal overlap with its left
-eigenvector.  The implementation also gates the overlap and complex spectral
-gap.
-
-The checked-in branch-crossing record scans a real ITG crossing, observes the
-dense growth-order exchange, follows the requested subdominant branch, and
-matches the dense right and left eigenpairs:
-
-* :download:`branch-crossing qualification
-  <_static/adaptive_propagator_branch_crossing_validation.json>`
-
-Implicit reverse-mode differentiation
--------------------------------------
-
-The iteration is not differentiated.  For a simple eigenpair with
-``w^H v = 1``, the eigenvalue derivative is
+Cold discovery builds a restarted Arnoldi space of a stable RK4 polynomial of
+the full operator.  A continuous-operator Rayleigh quotient recovers frequency,
+and every accepted vector must satisfy
 
 .. math::
 
-   d\lambda = w^H (dA) v .
+   \frac{\lVert A v-\lambda v\rVert_2}
+        {\max(\lVert A v\rVert_2,|\lambda|\lVert v\rVert_2)} < \epsilon .
 
-Eigenvector observables use a bordered reduced-resolvent solve.  Reverse mode
-therefore costs a primal eigenpair, an adjoint eigenvector, and one transposed
-bordered solve; it does not tape thousands of propagator steps.  GKX rejects a
-branch when ``||w|| ||v|| / |w^H v|`` exceeds the configured condition limit,
-because an exceptional point does not have a trustworthy single-eigenvector
-gradient.
+Near a growth-rate crossing, candidate vectors may be selected by overlap with
+the previous right mode or by biorthogonal overlap with its left mode.  The
+overlap, complex spectral gap, residual, and eigenpair condition number are
+independent fail-closed gates.
 
-The cold CPU value-and-gradient record at ``n = 6,144`` agrees with dense AD
-to ``1.5e-10`` relative error and used 142.75 s versus 171.81 s for the dense
-calculation:
+For a supplied target or continuation shift, ``dominant_eigenpair`` can instead
+use right-preconditioned shift-invert Arnoldi.  ``"hermite-line"`` inverts the
+additive diagonal-plus-Hermite-streaming symbol with an FFT and batched
+tridiagonal solve.  ``"field-corrected"`` adds the exact low-moment field map
+through a Woodbury capacitance solve.  It maps field columns sequentially and
+retains one tall response factor, keeping setup memory bounded.
 
-* :download:`objective and gradient qualification
-  <_static/adaptive_objective_gradient_cold_n6144_validation.json>`
+This follows the established use of the stiff parallel kinetic block in
+gyrokinetic preconditioning [Merz12]_ and the sparse Laguerre--Hermite
+hierarchy [MDL17]_.  The implementation is JAX-native and uses the same
+matrix-free physics in primal and tangent calculations.
 
-Qualified physics and resolution
---------------------------------
+Differentiation
+---------------
 
-The reduced dense-oracle matrix covers ITG, ETG, TEM, and KBM; electrostatic
-and electromagnetic fields; periodic and linked layouts; circular, Miller,
-QHS, and QI geometry.  Each value and directional gradient passes:
-
-* :download:`physics-matrix qualification
-  <_static/adaptive_objective_physics_matrix.json>`
-
-The QI full-frequency ladder reaches ``(N_l,N_m)=(84,92)`` and
-``n=494,592`` with continuous residuals below ``5.3e-13``:
-
-* :download:`QI frequency-convergence qualification
-  <_static/adaptive_propagator_convergence_qi_frequency_extension_validation.json>`
-
-That same record exposes the open performance gate: its four cold GPU solves
-took 917--1504 s and 7,905--8,935 RK4 steps per propagator application.  The
-high-order Hermite streaming spectrum, not JAX compilation or dense storage,
-is the dominant cost.
-
-Physics-aware targeted solves
------------------------------
-
-For a supplied target or continuation shift, ``dominant_eigenpair`` can use
-right-preconditioned FGMRES inside shift-invert Arnoldi.  The
-``"hermite-line"`` preconditioner inverts
+Solver iterations are not unrolled through reverse mode.  For a simple
+eigenpair normalized by ``w^H v = 1``,
 
 .. math::
 
-   D(\ell,m,k_x,k_y) + S(k_z,m)
+   d\lambda = w^H(dA)v .
 
-with one FFT and a batched tridiagonal solve.  Keeping :math:`D+S` additive is
-essential; applying a point inverse and streaming inverse as a product is a
-different operator and loses the high-Hermite scaling.  The linked variant
-uses the same solve on complete twist-and-shift chains.
+Eigenvector-dependent observables use the corresponding bordered
+reduced-resolvent solve.  Reverse mode therefore needs an adjoint eigenmode and
+one sensitivity solve rather than an iteration tape.  GKX rejects exceptional
+or poorly separated modes because a single-mode derivative is then not
+well-defined.  A value-only call does not compute the left mode; that cost is
+paid only when reverse mode requests the custom VJP.
 
-``"field-corrected"`` applies the Woodbury identity to the linear field map.
-It supports electrostatic and electromagnetic fields, multiple kinetic
-species, and periodic or linked layouts.  Field columns are mapped
-sequentially, and only the solved response factor is retained, cutting the two
-tall factors and batched-column peak of the earlier implementation.
+Measured boundary
+-----------------
 
-This design combines three established ideas: retaining the stiff parallel
-kinetic block in gyrokinetic eigenvalue preconditioning [Merz12]_, exploiting
-the sparse Laguerre--Hermite streaming hierarchy [MDL17]_, and correcting a
-kinetic inverse with a reduced moment/field model [Chen14]_.  GKX's contribution
-is a JAX-native structured realization whose primal and tangent paths use the
-same matrix-free operators.
+On the retained complex128 targeted test (RTX A4000), the Hermite line reduced
+a shifted solve from more than 1,024 iterations with diagonal damping to 39 at
+``n=768`` and 63 at ``n=1,536``.  At ``n=4,480`` the complete continued
+eigenpair took 12.40 s cold and 11.37 s warm, versus 25.19 s for the
+same-device dense full spectrum.  Its eigenvalue error was ``9.2e-12`` and its
+full-operator residual ``1.8e-10``.  These are supplied-shift measurements,
+not cold branch-discovery timings.
 
-On the retained QA targeted-solve qualification, the line inverse reduced a
-representative complex128 shifted solve from more than 1,024 iterations with
-diagonal damping to 39 at ``n=768`` and 63 at ``n=1,536``.  At ``n=4,480`` the
-complete eigenpair took 12.40 s cold and 11.37 s warm on an RTX A4000, compared
-with 25.19 s for the same-device dense full-spectrum solve.  The eigenvalue
-error was ``9.2e-12`` and the continuous-operator residual ``1.8e-10``.  Cold
-time includes JIT compilation after geometry/cache construction; the shift was
-carried from the adjacent certified branch.
+The largest hard-truncated QI matrices also produced residuals below
+``6e-13``, but their frequencies continued to drift as velocity resolution
+increased.  Residual convergence for each finite matrix is **not**
+velocity-space convergence.  Moreover, the ``n=494,592`` cold solve took
+1,504 s because explicit stability is controlled by the high-moment
+streaming/mirror spectrum.  Consequently this path remains opt-in and no
+full-frequency QI convergence or universally fast cold solve is claimed.
+
+The production unit and integration tests cover dense parity, original-operator
+residuals, continuation selection, implicit gradients, field correction,
+periodic and linked layouts, and CPU JIT behavior.  GPU timing is hardware
+evidence, not a numerical acceptance substitute.
 
 Usage
 -----
@@ -149,57 +103,24 @@ Usage
        solver_objective_vector_from_geometry,
    )
 
-   config = AdaptiveLinearEigensolverConfig(
+   settings = AdaptiveLinearEigensolverConfig(
        tolerance=1e-9,
        candidate_count=2,
    )
 
-   def growth(boundary):
+   def objective(boundary):
        geometry = build_flux_tube_geometry(boundary)
-       observables = solver_objective_vector_from_geometry(
+       values = solver_objective_vector_from_geometry(
            geometry,
            n_laguerre=12,
            n_hermite=16,
            eigensolver="adaptive-propagator",
-           adaptive_config=config,
+           adaptive_config=settings,
        )
-       return observables[0]
+       return values[-1]  # quasilinear transport objective
 
-   value, gradient = jax.value_and_grad(growth)(boundary)
+   value, gradient = jax.value_and_grad(objective)(initial_boundary)
 
-The geometry builder must be JAX-transformable.  During a future optimization
-campaign, pass continuation vectors between nearby configurations and keep the
-condition, overlap, gap, residual, and velocity-resolution gates active.
-
-Reproduce the retained evidence
--------------------------------
-
-.. code-block:: bash
-
-   JAX_ENABLE_X64=1 python tools/campaigns/validate_adaptive_objective_physics_matrix.py
-   JAX_ENABLE_X64=1 python tools/campaigns/validate_adaptive_objective_gradient.py
-   JAX_ENABLE_X64=1 python tools/campaigns/validate_adaptive_branch_continuation.py
-   JAX_ENABLE_X64=1 python tools/campaigns/validate_adaptive_propagator_convergence.py \
-     --device qi --required-observable frequency \
-     --resolution 72,80 --resolution 76,84 \
-     --resolution 80,88 --resolution 84,92 \
-     --output docs/_static/adaptive_propagator_convergence_qi_frequency_extension_validation.json
-
-Next performance work
----------------------
-
-The remaining production blocker is the full-frequency QI cold solve.  At
-extreme :math:`(N_\ell,N_m)`, its residual is concentrated in the high-moment
-mirror and grad-B tail.  The sign-changing mirror coefficient has zero
-field-line mean, so neither the Fourier/Hermite line nor a positive diagonal
-envelope retains trapped-orbit transport.  Local mirror-only block solves,
-velocity-collocation diagonals, defect polynomials, and low-moment coarse
-corrections were rejected because they increased memory or failed to contract
-the original residual.
-
-The next research candidate must invert the coupled parallel-orbit principal
-operator—streaming and mirror force together—then apply the existing field
-capacitance correction.  It must beat the explicit cold operator count while
-preserving the branch-crossing, QI frequency, original-operator residual, peak
-memory, and implicit-gradient gates.  Mixed precision or a transformed
-residual is not a substitute for the continuous complex128 certificate.
+Pass continuation data between nearby design points and keep the residual,
+overlap, gap, conditioning, and velocity-resolution checks active throughout
+an optimization campaign.

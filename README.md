@@ -77,82 +77,61 @@ nonlinear, Miller, VMEC, restart, quasilinear, and plotting workflows.
 
 ## Differentiable matrix-free eigenmodes
 
-Linear and quasilinear design studies usually need only a few unstable modes,
-not the entire spectrum. Forming the dense linear operator costs `O(n²)` memory:
-the final QI convergence case in GKX has `n = 494,592`, for which the complex
-matrix alone would occupy about **3.6 TiB**. GKX instead applies the physical
-right-hand side directly inside a restarted Krylov solver, using `O(n m)`
-storage for a small subspace of `m` vectors.
+Linear and quasilinear design studies need a few physical modes and their
+derivatives, not a dense spectrum. GKX applies the full gyrokinetic RHS inside
+a restarted eigensolver, so storage is `O(n m)` rather than `O(n²)`. At the
+largest tested QI truncation (`n = 494,592`), that avoids a **3.6 TiB**
+complex128 matrix.
+
+> **Availability:** the adaptive objective currently uses the differentiable
+> eigenpair API in [SOLVAX PR #65](https://github.com/uwplasma/SOLVAX/pull/65).
+> CI pins that paired commit until the API is merged and released. The
+> shift-invert and Hermite-line solver works with released SOLVAX.
 
 ```python
 import jax
 import gkx
 
-config = gkx.AdaptiveLinearEigensolverConfig(
-    tolerance=1e-9,
-    candidate_count=2,  # retain a competing mode near a branch crossing
-)
+settings = gkx.AdaptiveLinearEigensolverConfig(tolerance=1e-9, candidate_count=2)
 
-def objective(shape_parameters):
-    geometry = build_solver_geometry(shape_parameters)  # VMEX/Boozer or analytic
-    observables = gkx.solver_objective_vector_from_geometry(
+def objective(boundary):
+    geometry = build_solver_geometry(boundary)
+    values = gkx.solver_objective_vector_from_geometry(
         geometry,
         n_laguerre=16,
         n_hermite=24,
         eigensolver="adaptive-propagator",
-        adaptive_config=config,
+        adaptive_config=settings,
     )
-    growth_rate, frequency, *_, quasilinear_flux = observables
-    return quasilinear_flux
+    return values[-1]  # quasilinear transport objective
 
 value, gradient = jax.value_and_grad(objective)(initial_shape)
 ```
 
-`build_solver_geometry` is deliberately application supplied: the same solver
-accepts analytic s-alpha and Miller geometry or a differentiable VMEX/Boozer
-geometry pipeline. The returned objective contains growth rate, real frequency,
-mode-scale and quasilinear transport observables in
-[`SOLVER_OBJECTIVE_NAMES`](src/gkx/objectives/core.py).
+The geometry builder may be analytic, Miller, or a differentiable VMEC/Boozer
+pipeline. The objective exposes growth, frequency, mode scale, and quasilinear
+transport. Reverse mode uses
+`dλ/dp = wᴴ(dA/dp)v / (wᴴv)` plus a bordered solve for eigenvector observables;
+it does not differentiate through thousands of iterations. Value-only calls
+skip the unused adjoint solve. Residual, overlap, spectral-gap, and
+eigenpair-conditioning gates reject ambiguous modes.
 
-The eigensolve itself is not unrolled through autodiff. For a simple
-eigenvalue, GKX computes the left and right modes and applies the implicit
-identity
-
-```text
-dλ/dp = wᴴ (dA/dp) v / (wᴴv).
-```
-
-Eigenvector-dependent objectives use the corresponding bordered linear solve.
-Reverse mode therefore costs an adjoint eigenmode and one sensitivity solve,
-instead of storing or differentiating through thousands of time steps. A
-condition-number and branch-gap check fails closed where a single-mode
-derivative is not mathematically well defined.
-
-### What is better than a standard implementation?
+### Why this is different
 
 | Approach | Memory | Branch handling | Optimization derivative |
 | --- | ---: | --- | --- |
-| Dense `eig(A)` | `O(n²)` | all modes, but only at small `n` | dense eigenvector AD |
-| Initial-value time stepping | `O(n)` | slow or ambiguous as growth rates cross | differentiates a long trajectory |
-| Generic matrix-free eigensolver | `O(n m)` | depends on targeting and restart policy | usually external to the physics graph |
-| **GKX matrix-free objective** | **`O(n m)`** | **residual-certified candidates and biorthogonal continuation** | **implicit JAX VJP through geometry, fields and the full RHS** |
+| Dense eigensolve | `O(n²)` | all modes at small `n` | dense eigenvector AD |
+| Initial-value fit | `O(n)` | can switch at crossings | long-trajectory AD |
+| **GKX** | **`O(n m)`** | **certified candidates and continuation** | **implicit JAX VJP** |
 
-The improvement over a standard dense implementation is decisive in memory and
-in how derivatives are formed: GKX never allocates the `n × n` matrix and one
-reverse derivative costs one adjoint eigenmode plus one reduced-resolvent solve,
-not a derivative of every dense eigenvector. Compared with treating a
-simulation code as an opaque function, geometry, fields, the gyrokinetic RHS,
-the selected mode, and quasilinear observables remain in one JAX computation.
-
-### Physics-aware shift-invert
-
-For a supplied target or continuation shift, GKX can replace the explicit
-filter with right-preconditioned shift-invert Arnoldi:
+For a target or continuation shift, the physics-aware inverse keeps the
+additive diagonal-plus-Hermite-streaming block and adds exact low-moment field
+coupling:
 
 ```python
 from gkx.solvers.linear import dominant_eigenpair
 
-eigenvalue, mode = dominant_eigenpair(
+value, mode = dominant_eigenpair(
     seed,
     cache,
     linear_params,
@@ -161,67 +140,32 @@ eigenvalue, mode = dominant_eigenpair(
     shift=previous_eigenvalue,
     shift_source="reference",
     shift_preconditioner="field-corrected",
-    shift_tol=1e-8,
 )
 ```
 
-`"hermite-line"` applies an `O(n)` FFT/tridiagonal inverse of the additive
-diagonal-plus-streaming symbol. `"field-corrected"` adds the exact
-electrostatic/electromagnetic moment coupling through a Woodbury capacitance
-solve. Its setup maps field columns sequentially and retains one tall kinetic
-factor, avoiding the two-factor and batched-column memory peak of a standard
-low-rank construction. Both paths are JAX-transformable; gradients of the
-accepted mode still use the implicit eigenpair rule above, not an iteration
-tape.
-
-On the retained complex128 QA qualification (RTX A4000, shift supplied from the
-adjacent certified branch), the Hermite line reduced a representative shifted
-GMRES solve from more than 1,024 iterations to 39 at `n=768`, and to 63 at
-`n=1,536` where diagonal damping again exceeded 1,024 iterations. The complete
-targeted eigenpair at `n=4,480` took 12.40 s cold and 11.37 s warm, versus
-25.19 s for the same-device dense full-spectrum solve; eigenvalue error was
-`9.2e-12` and the original-operator residual was `1.8e-10`. “Cold” includes JAX
-compilation after geometry/cache construction. These are targeted/continuation
-measurements, not branch-discovery timings.
-
-This does **not** mean the current cold solve is universally faster than mature
-GX or GENE/SLEPc runs. GX is a highly optimized GPU initial-value code, while
-GENE uses preconditioned SLEPc eigensolvers and has demonstrated efficient
-parameter scans. GKX's measured advantages are narrower and directly tested:
-
-- unlike a dense implementation, it reaches velocity resolutions where the
-  matrix cannot fit in memory;
-- unlike dominant-mode time stepping, it retains competing modes and can
-  follow one physical branch through a growth-order exchange;
-- unlike an external eigensolver wrapped around a simulation, its eigenvalue
-  and eigenvector observables remain inside the JAX transformation graph for
-  gradient-based equilibrium optimization.
+On an RTX A4000, the structured line inverse reduced representative shifted
+solves from more than 1,024 iterations with diagonal damping to 39 at `n=768`
+and 63 at `n=1,536`. A continued eigenpair at `n=4,480` took 12.40 s cold and
+11.37 s warm, versus 25.19 s for a same-device dense full spectrum; eigenvalue
+error was `9.2e-12` and the full-operator residual `1.8e-10`. These are
+supplied-shift results, not cold-discovery timings.
 
 ### Current performance boundary
 
-The implementation remains opt-in. At `n = 6,144`, a cold objective plus
-reverse gradient took 142.75 s versus 171.81 s for dense AD, with a
-`1.5e-10` relative gradient error. At the final QI frequency-convergence rung,
-`n = 494,592`, the matrix-free solve was possible but took 1,504 s on an RTX
-A4000 because the explicit filter needed 8,935 RK4 steps per propagator
-application. That is an accuracy and memory success, but not yet an acceptable
-production cold time.
+The path remains opt-in. A cold `n=6,144` objective plus reverse gradient took
+142.75 s versus 171.81 s for dense AD, with `1.5e-10` relative gradient error.
+The largest hard-truncated QI solve (`n=494,592`) was possible and certified
+below `6e-13`, but took 1,504 s and its frequency still drifted with velocity
+resolution. A finite-matrix residual is not a velocity-convergence result.
 
-Every accepted pair is checked against the original continuous complex128 GKX
-operator; projected, transformed, or low-precision residuals never stand in
-for that test. The remaining production task is a robust physics-aware
-inverse for the coupled high-moment mirror/streaming orbit operator. The new
-line and field correction close the practical targeted regime but do not make
-the full-frequency QI cold-discovery solve fast: averaging the sign-changing
-mirror coefficient removes trapped-orbit physics, while local mirror-only
-splittings are both slower and less convergent. See
-[the eigensolver qualification](docs/differentiable_eigensolver.rst) for the
-four retained evidence records, rejected alternatives, and reproducible
-commands. Relevant external comparisons are
-[GENE's matrix-free eigenvalue study](https://doi.org/10.1016/j.cpc.2011.12.018),
-[the Laguerre–Hermite gyrokinetic formulation](https://doi.org/10.1017/S0022377818000041),
-[SLEPc's Krylov-Schur documentation](https://slepc.upv.es/release/documentation/manual/eps.html),
-and the [GX methods paper](https://arxiv.org/abs/2209.06731).
+GKX therefore does **not** claim universally faster cold discovery than mature
+gyrokinetic eigensolvers. Its demonstrated advantages are bounded memory,
+fast supplied-shift continuation, explicit branch tracking, and differentiable
+objectives that stay inside the JAX physics graph. Every claim uses the
+original complex128 operator residual. Details and limitations are in the
+[eigensolver documentation](docs/differentiable_eigensolver.rst); relevant
+methods include the [gyrokinetic matrix-free study](https://doi.org/10.1016/j.cpc.2011.12.018)
+and the [Laguerre–Hermite formulation](https://doi.org/10.1017/S0022377818000041).
 
 ## Validation
 

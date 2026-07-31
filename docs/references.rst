@@ -19,12 +19,6 @@ References
    computations," Computer Physics Communications 183, 922 (2012).
    `DOI <https://doi.org/10.1016/j.cpc.2011.12.018>`__.
 
-.. [Chen14] G. Chen, L. Chacón, C. A. Leibs, D. A. Knoll, and W. Taitano,
-   "Fluid preconditioning for Newton-Krylov-based, fully implicit,
-   electrostatic particle-in-cell simulations," Journal of Computational
-   Physics 258, 555 (2014). `arXiv <https://arxiv.org/abs/1309.6243>`__,
-   `DOI <https://doi.org/10.1016/j.jcp.2013.10.052>`__.
-
 .. [Dimits00] A. M. Dimits et al., "Comparisons and physics basis of tokamak
    transport models and turbulence simulations," Physics of Plasmas 7, 969
    (2000). `DOI <https://doi.org/10.1063/1.873896>`__.

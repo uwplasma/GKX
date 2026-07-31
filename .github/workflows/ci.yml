@@ -115,7 +115,6 @@ jobs:
           - name: release-artifacts
             files: >-
               tests/release/test_release_gates.py
-              tests/release/test_adaptive_eigensolver_gates.py
           - name: model-artifacts
             files: >-
               tests/unit/quasilinear/test_quasilinear.py
@@ -193,6 +192,40 @@ jobs:
           GKX_X64: "1"
         run: |
           pytest -q --maxfail=1 --disable-warnings ${{ matrix.shard.files }}
+
+  adaptive-eigensolver:
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    needs: mypy
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install paired GKX and SOLVAX branches
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          pip install --no-deps --force-reinstall \
+            "solvax @ git+https://github.com/uwplasma/SOLVAX.git@a090bba5532c110d1e06f6f5d8ff42b8adfa4723"
+
+      - name: Paired eigenmode and implicit-AD gates
+        env:
+          JAX_ENABLE_X64: "true"
+          GKX_X64: "1"
+        run: |
+          python -c "import solvax; assert callable(solvax.eigenpair_reverse)"
+          pytest -q --maxfail=1 --disable-warnings \
+            tests/integration/test_adaptive_eigenmodes.py \
+            tests/unit/solvers/test_linear_krylov_core.py \
+            tests/unit/objectives/test_autodiff_solver_objectives.py \
+            -m "integration or not integration" \
+            -k "adaptive or biorthogonal or experimental_solvax_eigen_contract"
 
   fast-coverage:
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'

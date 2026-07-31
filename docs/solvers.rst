@@ -41,7 +41,7 @@ quasilinear objectives.  It:
 * uses an implicit reverse rule for eigenvalue and eigenvector observables.
 
 It avoids the ``O(n^2)`` dense matrix, but the explicit filter is still slow at
-high Hermite resolution.  The qualification, QI full-frequency result, cold
+high Hermite resolution.  The qualification, QI convergence status, cold
 timings, and remaining preconditioner gate are documented in
 :doc:`differentiable_eigensolver`.
 
