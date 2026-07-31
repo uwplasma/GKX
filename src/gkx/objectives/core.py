@@ -123,6 +123,8 @@ class AdaptiveLinearEigensolverConfig:
     stability_probe_count: int = 2
     stability_safety: float = 0.9
     max_stability_retries: int = 2
+    exponential_krylov_dim: int | None = None
+    exponential_horizon: float = 5.0
     adjoint_krylov_dim: int = 24
     adjoint_max_restarts: int = 200
     sensitivity_rtol: float = 1.0e-8
@@ -143,6 +145,12 @@ class AdaptiveLinearEigensolverConfig:
         )
         if any(int(value) < 2 for value in dimensions):
             raise ValueError("all adaptive eigensolver dimensions must be at least two")
+        if self.exponential_krylov_dim is not None and (
+            self.exponential_krylov_dim < 2 or self.exponential_horizon <= 0.0
+        ):
+            raise ValueError(
+                "exponential Krylov dimension and horizon must be positive"
+            )
         if (
             self.max_restarts < 1
             or self.adjoint_max_restarts < 1
@@ -370,6 +378,8 @@ def _matrix_free_dominant_linear_branch(
             stability_probe_count=config.stability_probe_count,
             stability_safety=config.stability_safety,
             max_stability_retries=config.max_stability_retries,
+            exponential_krylov_dim=config.exponential_krylov_dim,
+            exponential_horizon=config.exponential_horizon,
         )
         if not bool(solution.stable) or not bool(solution.converged):
             raise RuntimeError(
@@ -403,15 +413,29 @@ def _matrix_free_dominant_linear_branch(
         def adjoint(vector: jnp.ndarray) -> jnp.ndarray:
             return jnp.conj(transpose(jnp.conj(vector))[0])
 
-        candidates = propagator_eigenpairs(
-            adjoint,
-            initial,
-            dt=primal.filter_dt,
-            steps=primal.filter_steps,
-            krylov_dim=adjoint_krylov_dim,
-            candidates=config.candidate_count,
-            tol=config.tolerance,
-        )
+        if config.exponential_krylov_dim is None:
+            candidates = propagator_eigenpairs(
+                adjoint,
+                initial,
+                dt=primal.filter_dt,
+                steps=primal.filter_steps,
+                krylov_dim=adjoint_krylov_dim,
+                candidates=config.candidate_count,
+                tol=config.tolerance,
+            )
+        else:
+            from solvax import exponential_eigenpairs
+
+            candidates = exponential_eigenpairs(
+                adjoint,
+                initial,
+                horizon=config.exponential_horizon,
+                inner_krylov_dim=min(config.exponential_krylov_dim, operator_size),
+                outer_krylov_dim=adjoint_krylov_dim,
+                candidates=config.candidate_count,
+                tol=config.tolerance,
+                restarts=config.max_restarts,
+            )
         converged = np.asarray(candidates.converged, dtype=bool)
         if not np.any(converged):
             raise RuntimeError(
@@ -549,11 +573,15 @@ def _matrix_free_dominant_linear_branch(
         primal_solver=primal_solver,
         left_solver=left_solver,
         tangent_preconditioner=(
-            tangent_preconditioner if config.sensitivity_solver == "gmres" else None
+            tangent_preconditioner
+            if config.sensitivity_solver == "gmres"
+            or config.exponential_krylov_dim is not None
+            else None
         ),
         transpose_tangent_solver=(
             transpose_propagator_solver
             if config.sensitivity_solver == "propagator"
+            and config.exponential_krylov_dim is None
             else None
         ),
         sensitivity_rtol=config.sensitivity_rtol,

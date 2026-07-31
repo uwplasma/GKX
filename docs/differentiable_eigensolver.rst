@@ -51,6 +51,25 @@ gyrokinetic preconditioning [Merz12]_ and the sparse Laguerre--Hermite
 hierarchy [MDL17]_.  The implementation is JAX-native and uses the same
 matrix-free physics in primal and tangent calculations.
 
+Cold discovery
+--------------
+
+The optional exponential path approximates each action of
+:math:`\exp(TA)` in an inner Arnoldi space and performs the leading-mode
+extraction in a second, smaller Arnoldi space.  This is the standard
+matrix-free projection of a large matrix exponential [HL97]_; it avoids the
+explicit RK4 stability limit without forming :math:`A` or
+:math:`\exp(TA)`.  GKX always recomputes the Rayleigh value and residual with
+the original continuous operator.
+
+On the retained complex128 QI case (``Nl=4``, ``Nm=8``, ``n=1,536``; RTX
+A4000), inner/outer dimensions 96/24, horizon 5, and 14 restarts reached
+``3.1e-10`` residual in 61.32 s cold.  The stability-limited path took
+110.12 s and stopped at ``3.2e-6``.  This is an opt-in qualified point, not a
+resolution-independent default: at large hard truncations the inner
+exponential space must grow with the streaming/mirror spectral radius, and
+the original-residual gate rejects an under-resolved projection.
+
 Differentiation
 ---------------
 
@@ -106,6 +125,9 @@ Usage
    settings = AdaptiveLinearEigensolverConfig(
        tolerance=1e-9,
        candidate_count=2,
+       max_restarts=14,
+       exponential_krylov_dim=96,
+       exponential_horizon=5.0,
    )
 
    def objective(boundary):

@@ -150,6 +150,26 @@ and 63 at `n=1,536`. A continued eigenpair at `n=4,480` took 12.40 s cold and
 error was `9.2e-12` and the full-operator residual `1.8e-10`. These are
 supplied-shift results, not cold-discovery timings.
 
+Cold discovery can instead project matrix-free actions of `exp(T A)` onto an
+inner Arnoldi space, then extract the leading modes in a small outer space:
+
+```python
+settings = AdaptiveLinearEigensolverConfig(
+    krylov_dim=24,
+    candidate_count=2,
+    max_restarts=14,
+    exponential_krylov_dim=96,
+    exponential_horizon=5.0,
+)
+```
+
+This opt-in path removes the explicit RK4 stability limit while still
+certifying the final pair against `A`, not against the exponential
+approximation. For the qualified reduced `Nl=4`, `Nm=8`, `n=1,536` QI case it reached
+`3.1e-10` residual in 61.32 s cold; the stability-limited path took 110.12 s
+and stopped at `3.2e-6`. The exponential basis is also used for the adjoint
+mode, while the optimization derivative remains an implicit bordered solve.
+
 ### Current performance boundary
 
 The path remains opt-in. A cold `n=6,144` objective plus reverse gradient took
@@ -160,12 +180,14 @@ resolution. A finite-matrix residual is not a velocity-convergence result.
 
 GKX therefore does **not** claim universally faster cold discovery than mature
 gyrokinetic eigensolvers. Its demonstrated advantages are bounded memory,
-fast supplied-shift continuation, explicit branch tracking, and differentiable
-objectives that stay inside the JAX physics graph. Every claim uses the
-original complex128 operator residual. Details and limitations are in the
+faster certified cold discovery in the qualified regime, fast supplied-shift
+continuation, explicit branch tracking, and differentiable objectives that
+stay inside the JAX physics graph. Every claim uses the original complex128
+operator residual. Details and limitations are in the
 [eigensolver documentation](docs/differentiable_eigensolver.rst); relevant
-methods include the [gyrokinetic matrix-free study](https://doi.org/10.1016/j.cpc.2011.12.018)
-and the [Laguerre–Hermite formulation](https://doi.org/10.1017/S0022377818000041).
+methods include the [gyrokinetic matrix-free study](https://doi.org/10.1016/j.cpc.2011.12.018),
+the [Laguerre–Hermite formulation](https://doi.org/10.1017/S0022377818000041),
+and [Krylov matrix exponentials](https://doi.org/10.1137/S0036142995280572).
 
 ## Validation
 

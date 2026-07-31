@@ -19,6 +19,11 @@ References
    computations," Computer Physics Communications 183, 922 (2012).
    `DOI <https://doi.org/10.1016/j.cpc.2011.12.018>`__.
 
+.. [HL97] M. Hochbruck and C. Lubich, "On Krylov Subspace Approximations to
+   the Matrix Exponential Operator," SIAM Journal on Numerical Analysis 34,
+   1911 (1997).
+   `DOI <https://doi.org/10.1137/S0036142995280572>`__.
+
 .. [Dimits00] A. M. Dimits et al., "Comparisons and physics basis of tokamak
    transport models and turbulence simulations," Physics of Plasmas 7, 969
    (2000). `DOI <https://doi.org/10.1063/1.873896>`__.

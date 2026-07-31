@@ -91,6 +91,8 @@ def adaptive_propagator_eigenpair(
     continuation_covector: jnp.ndarray | None = None,
     continuation_overlap_floor: float = 0.0,
     continuation_spectral_gap_floor: float = 0.0,
+    exponential_krylov_dim: int | None = None,
+    exponential_horizon: float = 5.0,
 ) -> AdaptivePropagatorSolution:
     """Adapt RK4 stability, horizon, and corrective-subspace cost.
 
@@ -102,7 +104,10 @@ def adaptive_propagator_eigenpair(
     """
 
     try:
-        from solvax import adaptive_eigenpair, estimate_rk4_timestep  # type: ignore
+        from solvax import (  # type: ignore
+            adaptive_eigenpair,
+            estimate_rk4_timestep,
+        )
     except ImportError as error:
         raise RuntimeError("SOLVAX adaptive propagator API is required") from error
     restart_dimension = (
@@ -134,6 +139,86 @@ def adaptive_propagator_eigenpair(
 
     def apply(state: jnp.ndarray) -> jnp.ndarray:
         return _apply_operator(state, cache, params, term_cfg)
+
+    if exponential_krylov_dim is not None:
+        try:
+            from solvax import exponential_eigenpairs  # type: ignore
+        except ImportError as error:
+            raise RuntimeError(
+                "SOLVAX exponential propagator API is required"
+            ) from error
+        if continued:
+            raise ValueError(
+                "exponential cold discovery does not replace continuation selection"
+            )
+        inner_dimension = min(int(exponential_krylov_dim), v0.size)
+        if inner_dimension < 2 or exponential_horizon <= 0.0:
+            raise ValueError("exponential dimension and horizon must both be positive")
+        modes = exponential_eigenpairs(
+            apply,
+            v0,
+            horizon=exponential_horizon,
+            inner_krylov_dim=inner_dimension,
+            outer_krylov_dim=krylov_dim,
+            candidates=candidate_count,
+            tol=tol,
+            restarts=max_restarts,
+        )
+        certified = modes.residuals < tol
+        selected_index = int(
+            np.asarray(
+                jnp.argmax(jnp.where(certified, jnp.real(modes.eigenvalues), -jnp.inf))
+            )
+        )
+        selected_value = modes.eigenvalues[selected_index]
+        ordered_growth = jnp.sort(
+            jnp.where(certified, jnp.real(modes.eigenvalues), -jnp.inf)
+        )[::-1]
+        growth_gap = (
+            jnp.where(
+                jnp.sum(certified) >= 2,
+                ordered_growth[0] - ordered_growth[1],
+                jnp.inf,
+            )
+            if candidate_count >= 2
+            else jnp.asarray(jnp.inf, dtype=jnp.real(selected_value).dtype)
+        )
+        indices = jnp.arange(candidate_count)
+        spectral_gap = jnp.min(
+            jnp.where(
+                indices != selected_index,
+                jnp.abs(modes.eigenvalues - selected_value),
+                jnp.inf,
+            )
+        )
+        return AdaptivePropagatorSolution(
+            eigenvalue=selected_value,
+            eigenvector=modes.eigenvectors[selected_index],
+            residual=modes.residuals[selected_index],
+            converged=bool(np.asarray(certified[selected_index])),
+            stable=True,
+            restarts=max_restarts,
+            operator_applications=modes.operator_applications,
+            filter_dt=exponential_horizon,
+            filter_steps=1,
+            filter_horizon=exponential_horizon,
+            filter_growth_defect=0.0,
+            candidate_eigenvalues=modes.eigenvalues,
+            candidate_residuals=modes.residuals,
+            candidate_growth_gap=growth_gap,
+            candidate_overlaps=jnp.full(
+                (candidate_count,),
+                jnp.nan,
+                dtype=jnp.real(selected_value).dtype,
+            ),
+            selected_candidate_index=selected_index,
+            continuation_overlap=jnp.asarray(
+                jnp.nan, dtype=jnp.real(selected_value).dtype
+            ),
+            selected_spectral_gap=spectral_gap,
+            continued=False,
+            continuation_passed=True,
+        )
 
     estimate = estimate_rk4_timestep(
         apply,

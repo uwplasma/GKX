@@ -785,6 +785,7 @@ import gkx.objectives.gradient_gates as gradient_gates
 import gkx.objectives.sampling as sampling
 import gkx.objectives.solver_vmec as solver_vmec
 from gkx import (
+    AdaptiveLinearEigensolverConfig,
     SOLVER_GEOMETRY_PARAMETER_NAMES,
     SOLVER_OBJECTIVE_NAMES,
     SolverScalarObjective,
@@ -982,7 +983,12 @@ def test_adaptive_solver_objective_matches_dense_and_implicit_gradient() -> None
     direction = jnp.asarray([0.3, -0.2], dtype=dtype)
     weights = jnp.asarray([1.0, 0.2, 0.1, 0.05, 0.0, 0.01], dtype=dtype)
 
-    def objective_vector(parameter: jnp.ndarray, *, eigensolver: str) -> jnp.ndarray:
+    def objective_vector(
+        parameter: jnp.ndarray,
+        *,
+        eigensolver: str,
+        adaptive_config: AdaptiveLinearEigensolverConfig | None = None,
+    ) -> jnp.ndarray:
         geom = gkx.flux_tube_geometry_from_mapping(
             solver_ready_geometry_mapping(parameter, theta),
             validate_finite=False,
@@ -994,6 +1000,7 @@ def test_adaptive_solver_objective_matches_dense_and_implicit_gradient() -> None
             ny=4,
             selected_ky_index=1,
             eigensolver=eigensolver,  # type: ignore[arg-type]
+            adaptive_config=adaptive_config,
         )
 
     dense = objective_vector(base, eigensolver="dense")
@@ -1004,6 +1011,30 @@ def test_adaptive_solver_objective_matches_dense_and_implicit_gradient() -> None
         rtol=2.0e-8 if dtype == jnp.float64 else 2.0e-3,
         atol=2.0e-9 if dtype == jnp.float64 else 2.0e-4,
     )
+    exponential_config = None
+    if callable(getattr(solvax, "exponential_eigenpairs", None)):
+        exponential_config = AdaptiveLinearEigensolverConfig(
+            krylov_dim=15,
+            restart_krylov_dim=12,
+            candidate_count=2,
+            max_restarts=1,
+            tolerance=1.0e-9 if dtype == jnp.float64 else 2.0e-4,
+            exponential_krylov_dim=16,
+            exponential_horizon=10.0,
+            adjoint_krylov_dim=15,
+            sensitivity_solver="gmres",
+        )
+        exponential = objective_vector(
+            base,
+            eigensolver="adaptive-propagator",
+            adaptive_config=exponential_config,
+        )
+        np.testing.assert_allclose(
+            np.asarray(exponential),
+            np.asarray(dense),
+            rtol=2.0e-8 if dtype == jnp.float64 else 2.0e-3,
+            atol=2.0e-9 if dtype == jnp.float64 else 2.0e-4,
+        )
 
     def scalar(offset: jnp.ndarray) -> jnp.ndarray:
         return jnp.vdot(
@@ -1027,6 +1058,27 @@ def test_adaptive_solver_objective_matches_dense_and_implicit_gradient() -> None
         rel=2.0e-5 if dtype == jnp.float64 else 2.0e-2,
         abs=2.0e-7 if dtype == jnp.float64 else 2.0e-3,
     )
+
+    if exponential_config is not None:
+
+        def exponential_scalar(offset: jnp.ndarray) -> jnp.ndarray:
+            return jnp.vdot(
+                weights,
+                objective_vector(
+                    base + offset * direction,
+                    eigensolver="adaptive-propagator",
+                    adaptive_config=exponential_config,
+                ),
+            )
+
+        exponential_gradient = float(
+            jax.grad(exponential_scalar)(jnp.asarray(0.0, dtype=dtype))
+        )
+        assert exponential_gradient == pytest.approx(
+            implicit,
+            rel=2.0e-5 if dtype == jnp.float64 else 2.0e-2,
+            abs=2.0e-7 if dtype == jnp.float64 else 2.0e-3,
+        )
     assert gkx.AdaptiveLinearEigensolverConfig is not None
 
 

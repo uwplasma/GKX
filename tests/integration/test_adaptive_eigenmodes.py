@@ -152,6 +152,23 @@ def test_adaptive_observables_match_dense_across_physics(
     dense = objective("dense")
     adaptive = objective("adaptive-propagator")
     np.testing.assert_allclose(adaptive, dense, rtol=1.0e-8, atol=1.0e-9)
+    if callable(getattr(solvax, "exponential_eigenpairs", None)):
+        exponential = solver_objective_vector_from_geometry(
+            geometry,
+            spectral_grid=grid,
+            n_laguerre=2,
+            n_hermite=4,
+            params_linear=params,
+            terms=terms,
+            eigensolver="adaptive-propagator",
+            adaptive_config=replace(
+                adaptive_config,
+                exponential_krylov_dim=128,
+                exponential_horizon=10.0,
+                max_restarts=2,
+            ),
+        )
+        np.testing.assert_allclose(exponential, dense, rtol=1.0e-8, atol=1.0e-9)
 
 
 def test_biorthogonal_continuation_crosses_real_growth_ordering() -> None:
