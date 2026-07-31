@@ -148,8 +148,25 @@ certified the result with the unmodified operator:
 The final two relative frequency changes, 0.50 and 0.90 percent, satisfy the
 predeclared two-consecutive-rung 1 percent gate.  The largest matrix retained
 2.29 million nonzeros and took 10.10 s to assemble plus 420.18 s for the
-native sparse eigensolve on the qualification host.  This is a slow validation
-gate, not yet the default primal implementation.
+native sparse eigensolve on the qualification host.
+
+The same algorithm is the opt-in ``method="sparse_shift_invert"`` production
+fallback.  It factors the complete shifted streaming--mirror--field operator;
+there is no mirror closure or reduced field approximation in that solve.  At
+``n=6,144``, four candidates took 3.09 s to assemble, 38.05 s to factor with
+the fill-reducing default ordering, and 1.64 s for Arnoldi, with ``8.5e-14``
+original-operator residual.  The LU contained 9.29 million nonzeros.  A tested
+minimum-degree ordering was still factoring after 225 s and was rejected.
+
+One LU also applies the conjugate-transpose shifted inverse.  The four-candidate
+left solve reused it in 1.81 s with ``2.2e-13`` residual, so the left mode
+needed by ``eigenpair_reverse`` does not require another 38.05 s factorization.
+This is the standard implicit derivative posture: the eager native primal is
+not differentiated, while the original JAX operator supplies :math:`(dA)v`
+and the bordered sensitivity equation.  An unshifted rightmost sparse solve
+exceeded 100 s at only ``n=1,536`` and was stopped.  The production path
+consequently requires a supplied or coarse-grid shift; it is a fast cold
+factor-and-solve fallback, not a claim of target-free branch discovery.
 
 The distinct collisionless hard-truncation stress test still drifted with
 velocity resolution.  Its ``n=494,592`` solve took 1,504 s because explicit

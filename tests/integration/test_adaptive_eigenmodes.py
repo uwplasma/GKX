@@ -28,7 +28,7 @@ from gkx.runtime import (
     build_runtime_linear_params,
     build_runtime_linear_terms,
 )
-from gkx.solvers.linear import adaptive_propagator_eigenpair
+from gkx.solvers.linear import adaptive_propagator_eigenpair, dominant_eigenpair
 from gkx.workflows.runtime.toml import load_runtime_from_toml
 
 
@@ -175,9 +175,6 @@ def test_adaptive_observables_match_dense_across_physics(
 def test_qi_sparse_full_frequency_ladder() -> None:
     """Close two consecutive 1% frequency rungs after the physical cutoff."""
 
-    from scipy.sparse import csr_matrix, hstack
-    from scipy.sparse.linalg import eigs
-
     from gkx.geometry import load_imported_geometry_netcdf
 
     case = (
@@ -208,6 +205,7 @@ def test_qi_sparse_full_frequency_ladder() -> None:
         species_shape = () if density.ndim == 0 else (int(density.size),)
         shape = species_shape + (nl, nm, 1, 1, nz)
         size = int(np.prod(shape))
+        seed = jnp.exp(1j * jnp.arange(size) * np.sqrt(2.0)).reshape(shape)
 
         def apply(state):
             return linear_rhs_cached(
@@ -219,25 +217,19 @@ def test_qi_sparse_full_frequency_ladder() -> None:
                 use_custom_vjp=False,
             )[0]
 
-        def column(vector):
-            return apply(vector.reshape(shape)).reshape(size)
-
-        columns = jax.jit(jax.vmap(column))
-        chunks = []
-        for start in range(0, size, 64):
-            indices = jnp.arange(start, start + 64)
-            host = np.asarray(
-                columns(jax.nn.one_hot(indices, size, dtype=jnp.complex128))
-            ).T.copy()
-            host[np.abs(host) <= 1.0e-14] = 0.0
-            chunks.append(csr_matrix(host))
-        matrix = hstack(chunks, format="csr")
-        values, vectors = eigs(
-            matrix, k=6, sigma=sigma, which="LM", tol=1.0e-10, maxiter=20_000
+        value_array, vector = dominant_eigenpair(
+            seed,
+            cache,
+            params,
+            terms=terms,
+            method="sparse_shift_invert",
+            shift=sigma,
+            shift_selection="growth",
+            shift_tol=1.0e-10,
+            shift_maxiter=20_000,
+            shift_outer_residual_tol=1.0e-10,
         )
-        index = int(np.argmax(values.real))
-        value = complex(values[index])
-        vector = jnp.asarray(vectors[:, index]).reshape(shape)
+        value = complex(value_array)
         image = apply(vector)
         residual = float(
             jnp.linalg.norm(image - value * vector)

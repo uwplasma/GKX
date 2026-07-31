@@ -212,14 +212,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
           pip install --no-deps --force-reinstall \
-            "solvax @ git+https://github.com/uwplasma/SOLVAX.git@4c6731172f4713eb34f56318e8322988261d27f2"
+            "solvax @ git+https://github.com/uwplasma/SOLVAX.git@4c493b67307c099a3668d63313f4f23966f84b29"
 
       - name: Paired eigenmode and implicit-AD gates
         env:
           JAX_ENABLE_X64: "true"
           GKX_X64: "1"
         run: |
-          python -c "import solvax; assert callable(solvax.exponential_eigenpairs)"
+          python -c "import solvax; assert callable(solvax.exponential_eigenpairs); assert callable(solvax.sparse_eigenpairs)"
           pytest -q --maxfail=1 --disable-warnings \
             tests/integration/test_adaptive_eigenmodes.py \
             tests/unit/solvers/test_linear_krylov_core.py \

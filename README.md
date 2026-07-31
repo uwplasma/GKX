@@ -189,6 +189,30 @@ The physical-collision QI ladder is now closed through `(Nl,Nm)=(14,28)`
 the predeclared 1% gate, and the original-operator residuals were `2.4e-13` and
 `2.3e-13`. A bounded sparse validation assembled 64 operator columns at a time,
 so this gate required `2.29e6` stored nonzeros rather than a dense matrix.
+
+That validation is available as `method="sparse_shift_invert"` for a supplied
+or coarse-grid shift. It factors the complete streaming–mirror–field operator,
+not a reduced physics model. At `n=6,144`, a fresh process took 3.09 s to
+assemble, 38.05 s to factor, and 1.64 s for four Arnoldi candidates
+(`8.5e-14` residual). The SOLVAX bridge can reuse that factor for the
+conjugate-transpose adjoint: the four-candidate left solve took 1.81 s with a
+`2.2e-13` residual, so an implicit reverse wrapper need not repeat the 38.05 s
+factorization.
+Unshifted rightmost Arnoldi exceeded 100 s already at `n=1,536`; GKX therefore
+requires an informed shift for this high-resolution fallback rather than
+hiding slow branch discovery behind a “cold” label.
+
+```python
+fine_value, fine_mode = dominant_eigenpair(
+    fine_seed,
+    fine_cache,
+    linear_params,
+    terms=linear_terms,
+    method="sparse_shift_invert",
+    shift=coarse_value,
+)
+```
+
 The separate collisionless hard-truncation stress test (`n=494,592`) remained
 unconverged in frequency and took 1,504 s; a small residual for one finite
 matrix is not a velocity-convergence result.
@@ -200,7 +224,8 @@ advantages are bounded memory, faster certified solves in the qualified
 regime, explicit branch tracking, and implicit derivatives that stay inside
 the JAX physics graph. Geometry-to-growth optimization therefore needs neither
 finite differences nor differentiation through an iteration tape. Every claim
-uses the original complex128 operator residual. Details and limitations are in the
+uses the original complex128 operator residual. Details and limitations are in
+the
 [eigensolver documentation](docs/differentiable_eigensolver.rst); relevant
 methods include the [gyrokinetic matrix-free study](https://doi.org/10.1016/j.cpc.2011.12.018),
 the [Laguerre–Hermite formulation](https://doi.org/10.1017/S0022377818000041),

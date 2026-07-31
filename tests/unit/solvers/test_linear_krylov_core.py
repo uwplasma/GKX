@@ -35,6 +35,8 @@ _HAS_SOLVAX_EIGEN_API = all(
         "eigenpair_reverse",
         "estimate_rk4_timestep",
         "propagator_eigenpairs",
+        "sparse_eigenpairs",
+        "sparse_operator_matrix",
     )
 )
 requires_solvax_eigen_api = pytest.mark.skipif(
@@ -1395,6 +1397,56 @@ def test_shift_invert_auto_selects_and_certifies_physics_preconditioner(
         fallback_method="none",
     )
     assert tuple(calls) == expected
+
+
+def test_sparse_shift_invert_selects_only_original_operator_certified_modes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The sparse approximation cannot certify a pair on the physics operator."""
+
+    from scipy.sparse import eye
+
+    _grid, cache, params, v0, _term_cfg, terms = _tiny_krylov_setup(linked=False)
+    values = jnp.asarray((0.1 + 0.2j, 0.4 + 0.2j, 0.3 + 0.2j))
+    vectors = jnp.stack(
+        (jnp.ones(v0.size), 2.0 * jnp.ones(v0.size), 3.0 * jnp.ones(v0.size))
+    )
+    captured = {}
+    monkeypatch.setattr(
+        solvax,
+        "sparse_operator_matrix",
+        lambda *_args, **_kwargs: eye(v0.size, dtype=np.complex128),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        solvax, "SpluFactorization", lambda _matrix: "factor", raising=False
+    )
+
+    def fake_modes(*_args, **kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(
+            eigenvalues=values,
+            eigenvectors=vectors,
+            converged=jnp.ones((3,), dtype=bool),
+        )
+
+    monkeypatch.setattr(solvax, "sparse_eigenpairs", fake_modes, raising=False)
+    residuals = iter((1.0e-12, 1.0, 1.0e-12))
+    monkeypatch.setattr(
+        lk, "_eigenpair_relative_residual", lambda *_args: next(residuals)
+    )
+    value, vector = lk.dominant_eigenpair(
+        v0,
+        cache,
+        params,
+        terms=terms,
+        method="sparse_shift_invert",
+        shift=0.2 + 0.2j,
+        shift_selection="growth",
+    )
+    assert value == values[2]
+    assert jnp.all(vector == 3.0)
+    assert captured["factorization"] == "factor"
 
 
 def test_shift_invert_outer_residual_triggers_fallback(

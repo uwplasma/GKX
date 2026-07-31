@@ -27,6 +27,15 @@ Complex FGMRES uses unitary Givens rotations and reports the physical residual
 and preconditioner; a failed residual gate is never converted into a finite
 success value.
 
+When the matrix-free inner solve still stalls at high velocity resolution,
+``method="sparse_shift_invert"`` assembles the sparse operator 64 columns at a
+time and factors the complete shifted operator through the optional SciPy
+backend.  It requires ``shift`` from a coarse solve or continuation point and
+certifies every candidate with the original JAX operator.  The SOLVAX bridge
+can reuse the same factors for the adjoint inverse in implicit eigenpair AD.
+This path is eager and CPU-factorized; it is not the default for small or
+target-free solves.
+
 Differentiable eigenmodes
 -------------------------
 

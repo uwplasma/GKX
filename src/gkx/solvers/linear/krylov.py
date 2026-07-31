@@ -470,6 +470,82 @@ def _shift_invert_branch(
     return eig_si, vec_si
 
 
+def _sparse_shift_invert_branch(
+    v0: jnp.ndarray,
+    v_ref: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    term_cfg,
+    cfg: KrylovConfig,
+    status_callback: _StatusCallback,
+    *,
+    select_overlap: bool,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Factor the exact sparse shifted operator when matrix-free cold solves stall."""
+
+    if int(v0.size) < 3:
+        raise ValueError("sparse shift-invert requires an operator of size at least three")
+    if cfg.shift is None:
+        raise ValueError("sparse shift-invert requires a supplied or coarse-grid shift")
+    from scipy.sparse import eye
+    from solvax import SpluFactorization, sparse_eigenpairs, sparse_operator_matrix
+
+    def apply(state):
+        return _apply_operator(state, cache, params, term_cfg)
+
+    _status(status_callback, "assembling sparse operator in bounded column batches")
+    matrix = sparse_operator_matrix(
+        apply, v0, batch_size=64, drop_tolerance=1.0e-14
+    )
+    shift = complex(cfg.shift)
+    _status(
+        status_callback,
+        f"factoring coupled sparse operator n={matrix.shape[0]} nnz={matrix.nnz}",
+    )
+    factor = SpluFactorization(
+        matrix - shift * eye(matrix.shape[0], format="csr", dtype=matrix.dtype)
+    )
+    modes = sparse_eigenpairs(
+        matrix,
+        candidates=min(6, int(v0.size) - 2),
+        shift=shift,
+        initial=v0,
+        tolerance=min(cfg.shift_tol, 1.0e-10),
+        maxiter=max(cfg.shift_maxiter, 20_000),
+        residual_tolerance=cfg.shift_outer_residual_tol,
+        factorization=factor,
+    )
+    vectors = modes.eigenvectors.reshape((modes.eigenvectors.shape[0], *v0.shape))
+    residuals = np.asarray(
+        [
+            _eigenpair_relative_residual(value, vector, cache, params, term_cfg)
+            for value, vector in zip(modes.eigenvalues, vectors, strict=True)
+        ]
+    )
+    certified = np.asarray(modes.converged) & np.isfinite(residuals)
+    certified &= residuals <= cfg.shift_outer_residual_tol
+    _targeted, select_growth = _shift_selection_flags(cfg.shift_selection)
+    if select_overlap:
+        scores = np.abs(
+            np.asarray(vectors).reshape((vectors.shape[0], -1))
+            @ np.asarray(v_ref).reshape(-1).conj()
+        )
+    elif select_growth:
+        scores = np.asarray(modes.eigenvalues).real
+    else:
+        scores = -np.abs(np.asarray(modes.eigenvalues) - shift)
+    if not np.any(certified):
+        raise RuntimeError(
+            "sparse shift-invert returned no original-operator-certified eigenpair"
+        )
+    selected = int(np.argmax(np.where(certified, scores, -np.inf)))
+    _status(
+        status_callback,
+        f"sparse shift-invert residual={residuals[selected]:.3g}",
+    )
+    return modes.eigenvalues[selected], vectors[selected]
+
+
 def _dispatch_dominant_eigenpair(
     v0: jnp.ndarray,
     v_ref: jnp.ndarray,
@@ -505,9 +581,21 @@ def _dispatch_dominant_eigenpair(
             status_callback,
             select_overlap=select_overlap,
         )
+    if cfg.method == "sparse_shift_invert":
+        return _sparse_shift_invert_branch(
+            v0,
+            v_ref,
+            cache,
+            params,
+            term_cfg,
+            cfg,
+            status_callback,
+            select_overlap=select_overlap,
+        )
     if cfg.method != "arnoldi":
         raise ValueError(
-            "Krylov method must be 'power', 'propagator', 'shift_invert', or 'arnoldi'"
+            "Krylov method must be power, propagator, shift_invert, "
+            "sparse_shift_invert, or arnoldi"
         )
     return _arnoldi_branch(
         v0,
@@ -553,7 +641,7 @@ def dominant_eigenpair(
     fallback_real_floor: float = -1.0e-6,
     status_callback: Callable[[str], None] | None = None,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
-    """Python wrapper for the cached Krylov solver."""
+    """Python wrapper for cached matrix-free and sparse eigen solvers."""
     cfg = _normalized_config(locals())
     term_cfg = linear_terms_to_term_config(terms)
     v_ref_use = v0 if v_ref is None else v_ref
