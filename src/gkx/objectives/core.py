@@ -424,7 +424,7 @@ def _matrix_free_dominant_linear_branch(
                 tol=config.tolerance,
             )
         else:
-            from solvax import exponential_eigenpairs
+            from solvax import exponential_eigenpairs  # type: ignore[attr-defined]
 
             candidates = exponential_eigenpairs(
                 adjoint,
