@@ -488,7 +488,11 @@ def _sparse_shift_invert_branch(
     if cfg.shift is None:
         raise ValueError("sparse shift-invert requires a supplied or coarse-grid shift")
     from scipy.sparse import eye
-    from solvax import SpluFactorization, sparse_eigenpairs, sparse_operator_matrix
+    from solvax import SpluFactorization
+    from solvax import (  # type: ignore[attr-defined]
+        sparse_eigenpairs,
+        sparse_operator_matrix,
+    )
 
     def apply(state):
         return _apply_operator(state, cache, params, term_cfg)
