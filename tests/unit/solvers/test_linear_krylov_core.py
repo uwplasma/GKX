@@ -253,6 +253,17 @@ def test_normalize_handles_zero_and_tiny_vectors_without_nan() -> None:
     assert jnp.linalg.norm(tiny_normed) == pytest.approx(1.0)
 
 
+def test_candidate_certification_rejects_zero_and_nonfinite_vectors() -> None:
+    vectors = jnp.stack((jnp.zeros((2,)), jnp.ones((2,)), jnp.ones((2,))))
+    certified = ap._certified_candidates(
+        jnp.asarray([0.0, jnp.nan, 1.0]),
+        vectors,
+        jnp.asarray([0.0, 0.0, 1.0e-10]),
+        1.0e-8,
+    )
+    np.testing.assert_array_equal(np.asarray(certified), (False, False, True))
+
+
 def test_dominant_eigenpair_arnoldi_branch_normalizes_wrapper_flags(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1337,6 +1348,53 @@ def test_shift_invert_fallback_policy(monkeypatch: pytest.MonkeyPatch) -> None:
         v0, cache, params, terms=terms, krylov_dim=4, restarts=1
     )
     assert jnp.allclose(eig_val, jnp.asarray(0.7 + 0.1j))
+
+
+@pytest.mark.parametrize(
+    ("beta", "apar", "bpar", "residuals", "expected"),
+    (
+        (0.0, 0.0, 0.0, (0.0,), ("hermite-line",)),
+        (0.0, 1.0, 1.0, (0.0,), ("hermite-line",)),
+        (0.01, 1.0, 0.0, (0.0,), ("field-corrected",)),
+        (0.01, 0.0, 1.0, (0.0,), ("field-corrected",)),
+        (0.0, 0.0, 0.0, (1.0, 0.0), ("hermite-line", "field-corrected")),
+    ),
+)
+def test_shift_invert_auto_selects_and_certifies_physics_preconditioner(
+    monkeypatch: pytest.MonkeyPatch,
+    beta: float,
+    apar: float,
+    bpar: float,
+    residuals: tuple[float, ...],
+    expected: tuple[str, ...],
+) -> None:
+    """Auto avoids field setup for ES, uses it for EM, and retries failed ES."""
+
+    _grid, cache, params, v0, _term_cfg, terms = _tiny_krylov_setup(linked=False)
+    calls: list[str] = []
+    remaining = iter(residuals)
+
+    def fake_shift(*_args, shift_preconditioner, **_kwargs):
+        calls.append(shift_preconditioner)
+        return jnp.asarray(0.4 + 0.2j, dtype=v0.dtype), jnp.ones_like(v0)
+
+    monkeypatch.setattr(lk, "dominant_eigenpair_shift_invert_cached", fake_shift)
+    monkeypatch.setattr(
+        lk, "_eigenpair_relative_residual", lambda *_args: next(remaining)
+    )
+    lk.dominant_eigenpair(
+        v0,
+        cache,
+        replace(params, beta=beta, fapar=float(apar != 0.0)),
+        terms=replace(terms, apar=apar, bpar=bpar),
+        method="shift_invert",
+        shift=0.4 + 0.2j,
+        shift_source="reference",
+        shift_selection="nearest",
+        shift_preconditioner="auto",
+        fallback_method="none",
+    )
+    assert tuple(calls) == expected
 
 
 def test_shift_invert_outer_residual_triggers_fallback(

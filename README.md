@@ -124,9 +124,12 @@ eigenpair-conditioning gates reject ambiguous modes.
 | Initial-value fit | `O(n)` | can switch at crossings | long-trajectory AD |
 | **GKX** | **`O(n m)`** | **certified candidates and continuation** | **implicit JAX VJP** |
 
-For a target or continuation shift, the physics-aware inverse keeps the
-additive diagonal-plus-Hermite-streaming block and adds exact low-moment field
-coupling:
+For a target or continuation shift, the default physics-aware policy keeps
+cold setup small: it uses the FFT plus tridiagonal Hermite-streaming inverse
+for electrostatic models, selects the exact low-moment field correction
+immediately for electromagnetic models, and retries a rejected electrostatic
+pair with that correction. Every choice is certified with the original
+operator residual:
 
 ```python
 from gkx.solvers.linear import dominant_eigenpair
@@ -139,15 +142,22 @@ value, mode = dominant_eigenpair(
     method="shift_invert",
     shift=previous_eigenvalue,
     shift_source="reference",
-    shift_preconditioner="field-corrected",
+    shift_preconditioner="auto",
+    shift_outer_residual_tol=1e-7,
 )
 ```
 
 On an RTX A4000, the structured line inverse reduced representative shifted
 solves from more than 1,024 iterations with diagonal damping to 39 at `n=768`
-and 63 at `n=1,536`. A continued eigenpair at `n=4,480` took 12.40 s cold and
-11.37 s warm, versus 25.19 s for a same-device dense full spectrum; eigenvalue
-error was `9.2e-12` and the full-operator residual `1.8e-10`. These are
+and 63 at `n=1,536`. For the reduced QI eigenpair at `n=1,536`, avoiding
+unneeded field setup reduced a certified cold solve from 11.72 s to 9.64 s
+(`2.6e-11` residual); on an 18-core Xeon W-2295 the same fresh-process pair was
+12.28 s versus 13.08 s. Across reduced ITG, ETG, finite-mass TEM, Miller, and
+electromagnetic KBM/Bpar gates, auto recovered the dense target with
+`2.3e-10` or smaller residual and selected field correction for the
+electromagnetic cases. A continued eigenpair at `n=4,480` took 12.40 s cold
+and 11.37 s warm, versus 25.19 s for a same-device dense full spectrum;
+eigenvalue error was `9.2e-12` and the residual `1.8e-10`. These are
 supplied-shift results, not cold-discovery timings.
 
 Cold discovery can instead project matrix-free actions of `exp(T A)` onto an
@@ -174,16 +184,23 @@ mode, while the optimization derivative remains an implicit bordered solve.
 
 The path remains opt-in. A cold `n=6,144` objective plus reverse gradient took
 142.75 s versus 171.81 s for dense AD, with `1.5e-10` relative gradient error.
-The largest hard-truncated QI solve (`n=494,592`) was possible and certified
-below `6e-13`, but took 1,504 s and its frequency still drifted with velocity
-resolution. A finite-matrix residual is not a velocity-convergence result.
+The physical-collision QI ladder is now closed through `(Nl,Nm)=(14,28)`
+(`n=18,816`). The last two frequency changes were 0.50% and 0.90%, both below
+the predeclared 1% gate, and the original-operator residuals were `2.4e-13` and
+`2.3e-13`. A bounded sparse validation assembled 64 operator columns at a time,
+so this gate required `2.29e6` stored nonzeros rather than a dense matrix.
+The separate collisionless hard-truncation stress test (`n=494,592`) remained
+unconverged in frequency and took 1,504 s; a small residual for one finite
+matrix is not a velocity-convergence result.
 
-GKX therefore does **not** claim universally faster cold discovery than mature
-gyrokinetic eigensolvers. Its demonstrated advantages are bounded memory,
-faster certified cold discovery in the qualified regime, fast supplied-shift
-continuation, explicit branch tracking, and differentiable objectives that
-stay inside the JAX physics graph. Every claim uses the original complex128
-operator residual. Details and limitations are in the
+GKX therefore does **not** claim universally faster cold discovery than other
+eigensolvers without a same-physics benchmark. Against the standard dense
+matrix and long-trajectory implementations tested here, its demonstrated
+advantages are bounded memory, faster certified solves in the qualified
+regime, explicit branch tracking, and implicit derivatives that stay inside
+the JAX physics graph. Geometry-to-growth optimization therefore needs neither
+finite differences nor differentiation through an iteration tape. Every claim
+uses the original complex128 operator residual. Details and limitations are in the
 [eigensolver documentation](docs/differentiable_eigensolver.rst); relevant
 methods include the [gyrokinetic matrix-free study](https://doi.org/10.1016/j.cpc.2011.12.018),
 the [Laguerre–Hermite formulation](https://doi.org/10.1017/S0022377818000041),

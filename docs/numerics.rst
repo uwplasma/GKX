@@ -469,7 +469,9 @@ end-to-end JAX differentiability:
 - **Shift-invert preconditioning hooks**: the shift-invert Krylov solver uses
   GMRES solves for ``(A - \sigma I)^{-1}``. Configure
   ``KrylovConfig.shift_preconditioner`` to accelerate these solves with
-  ``"damping"`` (element-wise collisional/hyper damping),
+  ``"auto"`` (line-first electrostatic, field-corrected electromagnetic, with
+  a certified electrostatic retry), ``"damping"`` (element-wise
+  collisional/hyper damping),
   ``"hermite-line"`` (FFT in :math:`z` plus a tridiagonal Hermite solve for
   the additive diagonal-and-streaming symbol), or ``"field-corrected"`` (the
   Hermite line plus the exact linear field response in a Woodbury capacitance
@@ -482,7 +484,7 @@ end-to-end JAX differentiability:
   :math:`\lVert Av-\lambda v\rVert/
   \max(\lVert Av\rVert,|\lambda|\lVert v\rVert)`. Configure the acceptance
   threshold with ``KrylovConfig.shift_outer_residual_tol``; the default is
-  ``0.1``. Rejected primary and fallback pairs raise instead of returning a
+  ``1e-6``. Rejected primary and fallback pairs raise instead of returning a
   plausible frequency with an unconverged eigenvector.
 - **Arnoldi breakdown policy**: a candidate basis direction is retained only
   when its norm exceeds a dtype-scaled threshold relative to the applied

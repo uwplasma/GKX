@@ -14,6 +14,11 @@ References
    (2017). `arXiv <https://arxiv.org/abs/1708.04029>`__,
    `DOI <https://doi.org/10.1017/S0022377818000041>`__.
 
+.. [Kanekar15] A. Kanekar, A. A. Schekochihin, W. Dorland, and N. F. Loureiro,
+   "Fluctuation-dissipation relations for a plasma-kinetic Langevin equation,"
+   Journal of Plasma Physics 81, 305810104 (2015).
+   `DOI <https://doi.org/10.1017/S0022377814000622>`__.
+
 .. [Merz12] F. Merz, C. Kowitz, E. Romero, J. E. Roman, and F. Jenko,
    "Multi-dimensional gyrokinetic parameter studies based on eigenvalue
    computations," Computer Physics Communications 183, 922 (2012).
@@ -23,6 +28,11 @@ References
    the Matrix Exponential Operator," SIAM Journal on Numerical Analysis 34,
    1911 (1997).
    `DOI <https://doi.org/10.1137/S0036142995280572>`__.
+
+.. [LSY98] R. B. Lehoucq, D. C. Sorensen, and C. Yang, *ARPACK Users' Guide:
+   Solution of Large-Scale Eigenvalue Problems with Implicitly Restarted
+   Arnoldi Methods*, SIAM (1998).
+   `DOI <https://doi.org/10.1137/1.9780898719628>`__.
 
 .. [Dimits00] A. M. Dimits et al., "Comparisons and physics basis of tokamak
    transport models and turbulence simulations," Physics of Plasmas 7, 969

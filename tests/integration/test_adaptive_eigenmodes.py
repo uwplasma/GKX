@@ -68,8 +68,8 @@ _FAST_CONFIG = AdaptiveLinearEigensolverConfig(
 )
 
 
-def _use_cached_vmec_eik(runtime):
-    """Use a generated reduced fixture when the VMEC backend is unavailable."""
+def _use_cached_vmec_eik(runtime, *, finest: bool = False):
+    """Use a generated fixture, optionally the finest cached resolution."""
 
     if runtime.geometry.model != "vmec":
         return runtime
@@ -79,7 +79,7 @@ def _use_cached_vmec_eik(runtime):
     matches = tuple((_ROOT / ".cache/gkx/vmec_eik").glob(f"{stem}_*.eik.nc"))
     if not matches:
         pytest.skip("VMEC integration needs its backend or a generated eik cache")
-    fixture = min(matches, key=lambda path: path.stat().st_size)
+    fixture = (max if finest else min)(matches, key=lambda path: path.stat().st_size)
     return replace(
         runtime,
         geometry=replace(
@@ -169,6 +169,95 @@ def test_adaptive_observables_match_dense_across_physics(
             ),
         )
         np.testing.assert_allclose(exponential, dense, rtol=1.0e-8, atol=1.0e-9)
+
+
+@pytest.mark.slow
+def test_qi_sparse_full_frequency_ladder() -> None:
+    """Close two consecutive 1% frequency rungs after the physical cutoff."""
+
+    from scipy.sparse import csr_matrix, hstack
+    from scipy.sparse.linalg import eigs
+
+    from gkx.geometry import load_imported_geometry_netcdf
+
+    case = (
+        _ROOT
+        / "examples/linear/non-axisymmetric/runtime_w7x_linear_quasilinear_vmec.toml"
+    )
+    runtime, raw = load_runtime_from_toml(case)
+    runtime = _use_cached_vmec_eik(runtime, finest=True)
+    geometry = load_imported_geometry_netcdf(runtime.geometry.geometry_file)
+    if geometry.theta_closed_interval:
+        geometry = geometry.trim_terminal_theta_point()
+    nz = int(geometry.theta.size)
+    runtime = replace(
+        runtime,
+        grid=replace(runtime.grid, Nx=1, Nz=nz, ntheta=nz, nperiod=1),
+    )
+    full_grid = build_spectral_grid(runtime.grid)
+    ky_index = int(
+        np.argmin(np.abs(np.asarray(full_grid.ky) - float(raw["run"]["ky"])))
+    )
+    grid = select_ky_grid(full_grid, ky_index)
+    terms = build_runtime_linear_terms(runtime)
+
+    def solve(nl: int, nm: int, sigma: complex) -> tuple[complex, float]:
+        params = build_runtime_linear_params(runtime, Nm=nm, geom=geometry)
+        cache = build_linear_cache(grid, geometry, params, Nl=nl, Nm=nm)
+        density = jnp.asarray(params.density)
+        species_shape = () if density.ndim == 0 else (int(density.size),)
+        shape = species_shape + (nl, nm, 1, 1, nz)
+        size = int(np.prod(shape))
+
+        def apply(state):
+            return linear_rhs_cached(
+                state,
+                cache,
+                params,
+                terms=terms,
+                use_jit=False,
+                use_custom_vjp=False,
+            )[0]
+
+        def column(vector):
+            return apply(vector.reshape(shape)).reshape(size)
+
+        columns = jax.jit(jax.vmap(column))
+        chunks = []
+        for start in range(0, size, 64):
+            indices = jnp.arange(start, start + 64)
+            host = np.asarray(
+                columns(jax.nn.one_hot(indices, size, dtype=jnp.complex128))
+            ).T.copy()
+            host[np.abs(host) <= 1.0e-14] = 0.0
+            chunks.append(csr_matrix(host))
+        matrix = hstack(chunks, format="csr")
+        values, vectors = eigs(
+            matrix, k=6, sigma=sigma, which="LM", tol=1.0e-10, maxiter=20_000
+        )
+        index = int(np.argmax(values.real))
+        value = complex(values[index])
+        vector = jnp.asarray(vectors[:, index]).reshape(shape)
+        image = apply(vector)
+        residual = float(
+            jnp.linalg.norm(image - value * vector)
+            / jnp.maximum(jnp.linalg.norm(image), abs(value) * jnp.linalg.norm(vector))
+        )
+        return value, residual
+
+    sigma = -0.047657932456584465 - 0.0008235053240640602j
+    values = []
+    for nl, nm in ((8, 16), (10, 20), (12, 24), (14, 28)):
+        value, residual = solve(nl, nm, sigma)
+        assert residual < 1.0e-10
+        values.append(value)
+        sigma = value
+    frequency_drifts = [
+        abs(values[index].imag - values[index - 1].imag) / abs(values[index - 1].imag)
+        for index in range(1, len(values))
+    ]
+    assert frequency_drifts[-2] < 0.01
+    assert frequency_drifts[-1] < 0.01
 
 
 def test_biorthogonal_continuation_crosses_real_growth_ordering() -> None:

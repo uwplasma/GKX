@@ -16,12 +16,11 @@ Two options address stiff Hermite--Laguerre systems:
   inverse of the additive diagonal-plus-streaming symbol.  Linked chains
   retain the twist-and-shift layout.
 
-The same line inverse is available to shift-invert Arnoldi with
-``shift_preconditioner="hermite-line"``.  ``"field-corrected"`` adds the
-electrostatic/electromagnetic moment response through a Woodbury capacitance
-solve while mapping field columns sequentially to bound setup memory.  Both
-are opt-in: the default damping inverse remains the conservative choice when
-no branch-specific qualification is available.
+The same line inverse is available to shift-invert Arnoldi.  The default
+``shift_preconditioner="auto"`` uses it for electrostatic models, selects the
+Woodbury field correction directly for electromagnetic models, and retries a
+residual-rejected electrostatic pair with field correction.  Explicit
+``"hermite-line"`` and ``"field-corrected"`` choices remain available.
 
 Complex FGMRES uses unitary Givens rotations and reports the physical residual
 ``||b - A x||``.  Users set its tolerance, restart length, iteration limit,
@@ -41,8 +40,9 @@ quasilinear objectives.  It:
 * uses an implicit reverse rule for eigenvalue and eigenvector observables.
 
 It avoids the ``O(n^2)`` dense matrix, but the explicit filter is still slow at
-high Hermite resolution.  The qualification, QI convergence status, cold
-timings, and remaining preconditioner gate are documented in
+high Hermite resolution.  The collisional QI full-frequency ladder is closed;
+the separate collisionless stress case remains unresolved.  Qualification,
+cold timings, and the remaining implementation boundary are documented in
 :doc:`differentiable_eigensolver`.
 
 Optional damping

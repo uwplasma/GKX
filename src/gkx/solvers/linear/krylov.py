@@ -60,9 +60,9 @@ class KrylovConfig:
     shift_maxiter: int = 50
     shift_restart: int = 20
     shift_solve_method: str = "batched"
-    shift_preconditioner: str | None = "damping"
+    shift_preconditioner: str | None = "auto"
     shift_selection: str = "targeted"
-    shift_outer_residual_tol: float = 0.1
+    shift_outer_residual_tol: float = 1.0e-6
     mode_family: str = "auto"
     fallback_method: str = "propagator"
     fallback_real_floor: float = -1.0e-6
@@ -274,6 +274,17 @@ def _shift_selection_flags(shift_selection: str) -> tuple[bool, bool]:
     return select_targeted, select_growth
 
 
+def _automatic_shift_preconditioner(params: LinearParams, term_cfg: Any) -> str:
+    """Use the cheap streaming inverse unless electromagnetic fields require more."""
+
+    apar = bool(np.asarray(term_cfg.apar) != 0.0)
+    bpar = bool(np.asarray(term_cfg.bpar) != 0.0)
+    beta = bool(np.asarray(getattr(params, "beta", 0.0)) != 0.0)
+    fapar = bool(np.any(np.asarray(getattr(params, "fapar", 0.0)) != 0.0))
+    electromagnetic = beta and (bpar or (apar and fapar))
+    return "field-corrected" if electromagnetic else "hermite-line"
+
+
 def _eigenpair_relative_residual(
     eigenvalue: jnp.ndarray,
     eigenvector: jnp.ndarray,
@@ -371,42 +382,63 @@ def _shift_invert_branch(
         f"shift-invert sigma={sigma_host.real:.6g}{sigma_host.imag:+.6g}j",
     )
     select_targeted, select_growth = _shift_selection_flags(cfg.shift_selection)
-    _status(status_callback, "running shift-invert Arnoldi")
-    eig_si, vec_si = dominant_eigenpair_shift_invert_cached(
-        v_init,
-        v_ref,
-        cache,
-        params,
-        term_cfg,
-        krylov_dim=cfg.krylov_dim,
-        restarts=cfg.restarts,
-        sigma=sigma,
-        omega_min_factor=cfg.omega_min_factor,
-        omega_target_factor=cfg.omega_target_factor,
-        omega_cap_factor=cfg.omega_cap_factor,
-        omega_sign=cfg.omega_sign,
-        gmres_tol=cfg.shift_tol,
-        gmres_maxiter=cfg.shift_maxiter,
-        gmres_restart=cfg.shift_restart,
-        gmres_solve_method=cfg.shift_solve_method,
-        shift_preconditioner=cfg.shift_preconditioner,
-        select_targeted=select_targeted,
-        select_growth=select_growth,
-        select_overlap=bool(select_overlap),
+    requested = str(cfg.shift_preconditioner).strip().lower()
+    automatic = requested in {"auto", "physics-auto", "physics_auto"}
+    preconditioner = (
+        _automatic_shift_preconditioner(params, term_cfg)
+        if automatic
+        else cfg.shift_preconditioner
     )
-    eig_host = complex(np.asarray(eig_si))
-    residual = _eigenpair_relative_residual(eig_si, vec_si, cache, params, term_cfg)
-    _status(
-        status_callback,
-        "shift-invert solve finished with "
-        f"eig={eig_host.real:.6g}{eig_host.imag:+.6g}j residual={residual:.3g}",
+    preconditioners = (
+        (preconditioner, "field-corrected")
+        if automatic and preconditioner == "hermite-line"
+        else (preconditioner,)
     )
-    nonfinite_pair = not np.isfinite(eig_host.real) or not np.isfinite(eig_host.imag)
-    growth_floor_failed = select_growth and eig_host.real < cfg.fallback_real_floor
-    residual_failed = (
-        not np.isfinite(residual) or residual > cfg.shift_outer_residual_tol
-    )
-    need_fallback = nonfinite_pair or growth_floor_failed or residual_failed
+    for attempt, mode in enumerate(preconditioners):
+        _status(status_callback, f"running shift-invert Arnoldi ({mode})")
+        eig_si, vec_si = dominant_eigenpair_shift_invert_cached(
+            v_init,
+            v_ref,
+            cache,
+            params,
+            term_cfg,
+            krylov_dim=cfg.krylov_dim,
+            restarts=cfg.restarts,
+            sigma=sigma,
+            omega_min_factor=cfg.omega_min_factor,
+            omega_target_factor=cfg.omega_target_factor,
+            omega_cap_factor=cfg.omega_cap_factor,
+            omega_sign=cfg.omega_sign,
+            gmres_tol=cfg.shift_tol,
+            gmres_maxiter=cfg.shift_maxiter,
+            gmres_restart=cfg.shift_restart,
+            gmres_solve_method=cfg.shift_solve_method,
+            shift_preconditioner=mode,
+            select_targeted=select_targeted,
+            select_growth=select_growth,
+            select_overlap=bool(select_overlap),
+        )
+        eig_host = complex(np.asarray(eig_si))
+        residual = _eigenpair_relative_residual(eig_si, vec_si, cache, params, term_cfg)
+        _status(
+            status_callback,
+            "shift-invert solve finished with "
+            f"eig={eig_host.real:.6g}{eig_host.imag:+.6g}j residual={residual:.3g}",
+        )
+        nonfinite_pair = not np.isfinite(eig_host.real) or not np.isfinite(
+            eig_host.imag
+        )
+        growth_floor_failed = select_growth and eig_host.real < cfg.fallback_real_floor
+        residual_failed = (
+            not np.isfinite(residual) or residual > cfg.shift_outer_residual_tol
+        )
+        need_fallback = nonfinite_pair or growth_floor_failed or residual_failed
+        if not need_fallback or attempt + 1 == len(preconditioners):
+            break
+        _status(
+            status_callback,
+            "line solve rejected; retrying with exact low-moment field correction",
+        )
     if need_fallback and cfg.fallback_method.strip().lower() != "none":
         fallback = _shift_invert_fallback(
             v0,
@@ -513,9 +545,9 @@ def dominant_eigenpair(
     shift_maxiter: int = 50,
     shift_restart: int = 20,
     shift_solve_method: str = "batched",
-    shift_preconditioner: str | None = "damping",
+    shift_preconditioner: str | None = "auto",
     shift_selection: str = "targeted",
-    shift_outer_residual_tol: float = 0.1,
+    shift_outer_residual_tol: float = 1.0e-6,
     mode_family: str = "auto",
     fallback_method: str = "propagator",
     fallback_real_floor: float = -1.0e-6,

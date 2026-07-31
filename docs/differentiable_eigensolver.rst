@@ -40,11 +40,14 @@ overlap, complex spectral gap, residual, and eigenpair condition number are
 independent fail-closed gates.
 
 For a supplied target or continuation shift, ``dominant_eigenpair`` can instead
-use right-preconditioned shift-invert Arnoldi.  ``"hermite-line"`` inverts the
-additive diagonal-plus-Hermite-streaming symbol with an FFT and batched
-tridiagonal solve.  ``"field-corrected"`` adds the exact low-moment field map
-through a Woodbury capacitance solve.  It maps field columns sequentially and
-retains one tall response factor, keeping setup memory bounded.
+use right-preconditioned shift-invert Arnoldi.  The default ``"auto"`` policy
+inverts the additive diagonal-plus-Hermite-streaming symbol with an FFT and
+batched tridiagonal solve for electrostatic systems.  Electromagnetic systems
+go directly to ``"field-corrected"``, which adds the exact low-moment field map
+through a Woodbury capacitance solve.  If the cheaper electrostatic solve fails
+the original-operator residual, auto retries it with the same field correction
+before invoking a generic fallback.  Field columns are mapped sequentially and
+only one tall response factor is retained, keeping setup memory bounded.
 
 This follows the established use of the stiff parallel kinetic block in
 gyrokinetic preconditioning [Merz12]_ and the sparse Laguerre--Hermite
@@ -98,13 +101,72 @@ same-device dense full spectrum.  Its eigenvalue error was ``9.2e-12`` and its
 full-operator residual ``1.8e-10``.  These are supplied-shift measurements,
 not cold branch-discovery timings.
 
-The largest hard-truncated QI matrices also produced residuals below
-``6e-13``, but their frequencies continued to drift as velocity resolution
-increased.  Residual convergence for each finite matrix is **not**
-velocity-space convergence.  Moreover, the ``n=494,592`` cold solve took
-1,504 s because explicit stability is controlled by the high-moment
-streaming/mirror spectrum.  Consequently this path remains opt-in and no
-full-frequency QI convergence or universally fast cold solve is claimed.
+On the reduced ``n=1,536`` QI eigenpair, the line-first cold solve took 9.64 s
+with ``2.6e-11`` residual, versus 11.72 s for eager field correction.  Fresh
+processes on an 18-core Xeon W-2295 took 12.28 s and 13.08 s respectively.
+Reduced ITG, ETG, finite-electron-mass TEM, Miller, KBM-Apar, and
+KBM-Apar-Bpar gates all recovered their dense target with residual at most
+``2.3e-10``; auto chose the exact field path for both KBM cases.  Timings are
+descriptive hardware measurements, while dense parity and residuals are the
+acceptance criteria.
+
+The collisional QI runtime contract was also followed past the physical
+velocity-space cutoff.  A bounded sparse qualification built 64 matrix-free
+operator columns at a time, discarded entries below ``1e-14``, solved near the
+continued branch with shift-invert implicitly restarted Arnoldi [LSY98]_, and
+certified the result with the unmodified operator:
+
+.. list-table:: Collisional QI full-frequency ladder
+   :header-rows: 1
+
+   * - ``(Nl,Nm)``
+     - state size
+     - growth rate
+     - frequency
+     - residual
+   * - ``(8,16)``
+     - 6,144
+     - -0.0473847353
+     - -0.0010064988
+     - ``8.5e-14``
+   * - ``(10,20)``
+     - 9,600
+     - -0.0472648235
+     - -0.0010649098
+     - ``1.2e-13``
+   * - ``(12,24)``
+     - 13,824
+     - -0.0472192892
+     - -0.0010702563
+     - ``2.4e-13``
+   * - ``(14,28)``
+     - 18,816
+     - -0.0472042045
+     - -0.0010606607
+     - ``2.3e-13``
+
+The final two relative frequency changes, 0.50 and 0.90 percent, satisfy the
+predeclared two-consecutive-rung 1 percent gate.  The largest matrix retained
+2.29 million nonzeros and took 10.10 s to assemble plus 420.18 s for the
+native sparse eigensolve on the qualification host.  This is a slow validation
+gate, not yet the default primal implementation.
+
+The distinct collisionless hard-truncation stress test still drifted with
+velocity resolution.  Its ``n=494,592`` solve took 1,504 s because explicit
+stability is controlled by the high-moment streaming/mirror spectrum.
+Residual convergence for each finite matrix is **not** velocity-space
+convergence.  The matrix-free cold path therefore remains opt-in and universal
+cold-solve speed is not claimed.
+
+An outgoing slab Hermite-tail closure [Kanekar15]_ was also screened rather
+than promoted.  On the collisionless QI operator its frequency changed by
+10.7 percent between ``(Nl,Nm)=(4,8)`` and ``(6,12)``, and neither structured
+inverse certified ``(8,16)`` despite much larger inner spaces.  This is
+consistent with the Laguerre--Hermite analysis [MDL17]_: toroidal low-moment
+closures must represent parallel phase mixing together with trapping and
+curvature resonance.  Production hard-truncation ladders are therefore judged
+only after the physical collisional cutoff is resolved; an accurate slab sink
+is not presented as a general stellarator closure.
 
 The production unit and integration tests cover dense parity, original-operator
 residuals, continuation selection, implicit gradients, field correction,
@@ -146,3 +208,19 @@ Usage
 Pass continuation data between nearby design points and keep the residual,
 overlap, gap, conditioning, and velocity-resolution checks active throughout
 an optimization campaign.
+
+For a supplied continuation shift, use the fail-closed cold policy directly:
+
+.. code-block:: python
+
+   value, mode = dominant_eigenpair(
+       seed,
+       cache,
+       linear_params,
+       terms=linear_terms,
+       method="shift_invert",
+       shift=previous_value,
+       shift_source="reference",
+       shift_preconditioner="auto",
+       shift_outer_residual_tol=1e-7,
+   )

@@ -48,6 +48,24 @@ class AdaptivePropagatorSolution(NamedTuple):
     continuation_passed: bool
 
 
+def _certified_candidates(
+    values: jax.Array,
+    vectors: jax.Array,
+    residuals: jax.Array,
+    tol: float,
+) -> jax.Array:
+    """Reject zero and non-finite vectors even when their residual is zero."""
+
+    norms = jnp.linalg.norm(vectors.reshape((vectors.shape[0], -1)), axis=1)
+    finite = (
+        jnp.isfinite(jnp.real(values))
+        & jnp.isfinite(jnp.imag(values))
+        & jnp.isfinite(residuals)
+        & jnp.isfinite(norms)
+    )
+    return finite & (norms > jnp.sqrt(jnp.finfo(norms.dtype).eps)) & (residuals < tol)
+
+
 def _candidate_overlap_scores(
     reference: jax.Array,
     vectors: jax.Array,
@@ -164,7 +182,9 @@ def adaptive_propagator_eigenpair(
             tol=tol,
             restarts=max_restarts,
         )
-        certified = modes.residuals < tol
+        certified = _certified_candidates(
+            modes.eigenvalues, modes.eigenvectors, modes.residuals, tol
+        )
         selected_index = int(
             np.asarray(
                 jnp.argmax(jnp.where(certified, jnp.real(modes.eigenvalues), -jnp.inf))
@@ -229,7 +249,9 @@ def adaptive_propagator_eigenpair(
     )
     solution = None
     operator_applications = estimate.operator_applications
-    candidate_records: list[tuple[jax.Array, jax.Array, jax.Array, jax.Array]] = []
+    candidate_records: list[
+        tuple[jax.Array, jax.Array, jax.Array, jax.Array, jax.Array]
+    ] = []
     for retry in range(max_stability_retries + 1):
         dt_limit = estimate.dt / 2**retry
         steps = max(int(np.ceil(chunk_horizon / dt_limit)), 1)
@@ -266,7 +288,7 @@ def adaptive_propagator_eigenpair(
                 propagator_steps=steps,
                 candidates=candidate_count,
             )
-            certified = residuals < tol
+            certified = _certified_candidates(values, vectors, residuals, tol)
             if selection_reference is None:
                 scores = jnp.full(
                     (candidate_count,),
@@ -287,7 +309,7 @@ def adaptive_propagator_eigenpair(
                 ranking = scores
             admissible = jnp.where(certified, ranking, -jnp.inf)
             selected = jnp.where(jnp.any(certified), jnp.argmax(admissible), 0)
-            candidate_records.append((values, residuals, scores, selected))
+            candidate_records.append((values, residuals, scores, certified, selected))
             return values[selected], vectors[selected]
 
         solution = adaptive_eigenpair(
@@ -314,6 +336,7 @@ def adaptive_propagator_eigenpair(
             candidate_values,
             candidate_residuals,
             candidate_overlaps,
+            certified,
             selected_index_array,
         ) = candidate_records[-1]
         selected_index = int(np.asarray(selected_index_array))
@@ -325,9 +348,15 @@ def adaptive_propagator_eigenpair(
             jnp.nan,
             dtype=jnp.real(solution.eigenvalue).dtype,
         )
+        certified = _certified_candidates(
+            candidate_values,
+            jnp.expand_dims(solution.eigenvector, 0),
+            candidate_residuals,
+            tol,
+        )
         selected_index = 0
     certified_growth = jnp.where(
-        candidate_residuals < tol,
+        certified,
         jnp.real(candidate_values),
         -jnp.inf,
     )
@@ -362,8 +391,18 @@ def adaptive_propagator_eigenpair(
             >= continuation_spectral_gap_floor
         )
     )
+    solution_valid = bool(
+        np.asarray(
+            _certified_candidates(
+                jnp.reshape(solution.eigenvalue, (1,)),
+                jnp.expand_dims(solution.eigenvector, 0),
+                jnp.reshape(solution.residual, (1,)),
+                tol,
+            )[0]
+        )
+    )
     solution = solution._replace(
-        converged=bool(solution.converged) and continuation_passed
+        converged=bool(solution.converged) and continuation_passed and solution_valid
     )
     return AdaptivePropagatorSolution._make(
         (

@@ -144,8 +144,6 @@ def _build_implicit_preconditioner_data(
     m = cache.m.astype(real_dtype)
     cv_d = cache.cv_d.astype(real_dtype)
     gb_d = cache.gb_d.astype(real_dtype)
-    bgrad = cache.bgrad.astype(real_dtype)
-    w_mirror = jnp.asarray(state.terms.mirror, dtype=real_dtype)
     w_curv = jnp.asarray(state.terms.curvature, dtype=real_dtype)
     w_gradb = jnp.asarray(state.terms.gradb, dtype=real_dtype)
     diag = jnp.zeros_like(damping, dtype=state.state_dtype)
@@ -160,11 +158,6 @@ def _build_implicit_preconditioner_data(
         w_curv * cv_d[None, None, None, ...] * (2.0 * m + 1.0)
         + w_gradb * gb_d[None, None, None, ...] * (2.0 * ell + 1.0)
     )
-    bgrad = bgrad[None, None, None, None, None, :]
-    mirror_diag = vth_b * (2.0 * ell + 1.0) * (2.0 * m + 1.0)
-    mirror_weight = 0.2
-    diag = diag - w_mirror * mirror_weight * bgrad * mirror_diag
-
     precond_full = 1.0 / (1.0 + state.dt_val * damping - state.dt_val * diag)
     precond_full = precond_full.astype(state.G.dtype)
     precond_damp = (1.0 / (1.0 + state.dt_val * damping)).astype(state.G.dtype)
