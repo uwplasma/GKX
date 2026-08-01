@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+from support.paired_solvax import requires_paired_solvax
 from support.paths import REPO_ROOT, load_artifact_tool, load_repo_script
 
 # ---- test_autodiff_validation.py ----
@@ -49,12 +50,8 @@ from gkx.diagnostics.quasilinear_transport import (
 )
 
 
-requires_solvax_reverse_eigenpair = pytest.mark.skipif(
-    not all(
-        callable(getattr(solvax, name, None))
-        for name in ("eigenpair_reverse", "propagator_eigenpairs")
-    ),
-    reason="requires the reverse eigenpair API from SOLVAX PR 65",
+requires_solvax_reverse_eigenpair = requires_paired_solvax(
+    "eigenpair_reverse", "propagator_eigenpairs"
 )
 
 

@@ -130,7 +130,9 @@ def refine(
             break
 
     if verbose:
-        state = f"converged at {converged!r}" if converged is not None else "NOT CONVERGED"
+        state = (
+            f"converged at {converged!r}" if converged is not None else "NOT CONVERGED"
+        )
         print(f"    -> {parameter}: {state} (tol {tolerance:.0%})", flush=True)
 
     return LadderResult(
@@ -198,39 +200,104 @@ def provenance() -> dict[str, Any]:
     }
 
 
+def growth_evaluator(
+    equilibrium,
+    *,
+    s_index: int,
+    ky_index: int,
+    r_over_lt: float,
+    r_over_ln: float,
+    eigensolver: str = "dense",
+    adaptive_config: Any | None = None,
+) -> Callable[..., float]:
+    """Return a growth-rate callable over one equilibrium at chosen settings.
+
+    The geometry is built through VMEX and the eigenbranch through GKX's own
+    objective, rather than through ``vmex.turbulent_growth_rate``, because that
+    helper hard-codes a dense ``eigvals`` reduction. Routing through
+    ``solver_objective_vector_from_geometry`` is what lets one ladder run on
+    either solver and be compared rung by rung.
+
+    ``eigensolver="adaptive-propagator"`` never forms the operator, so it reaches
+    truncations whose dense matrix does not fit in memory. It is opt-in: the
+    dense path stays the default here so existing ladder results are unchanged.
+    """
+
+    import dataclasses
+
+    from vmex.core import turbulence as turb
+
+    from gkx.objectives.core import (
+        _default_gradient_linear_params,
+        solver_objective_vector_from_geometry,
+    )
+
+    params_linear = dataclasses.replace(
+        _default_gradient_linear_params(),
+        R_over_LTi=float(r_over_lt),
+        R_over_Ln=float(r_over_ln),
+    )
+
+    def growth(
+        *, n_laguerre: int, n_hermite: int, ntheta: int, alpha: float = 0.0
+    ) -> float:
+        geometry = turb.flux_tube_geometry(
+            equilibrium.state,
+            equilibrium.runtime,
+            s_index=s_index,
+            alpha=alpha,
+            ntheta=ntheta,
+        )
+        values = solver_objective_vector_from_geometry(
+            geometry,
+            selected_ky_index=ky_index,
+            n_laguerre=n_laguerre,
+            n_hermite=n_hermite,
+            params_linear=params_linear,
+            eigensolver=eigensolver,
+            adaptive_config=adaptive_config,
+        )
+        return float(values[0])  # SOLVER_OBJECTIVE_NAMES[0] == "gamma"
+
+    return growth
+
+
 def linear_convergence(
     equilibrium,
     *,
     s_index: int = 7,
     tolerance: float = 0.05,
     alphas: Sequence[float] = (0.0, 0.25, 0.5, 0.75),
-    velocity_ladder: Sequence[tuple[int, int]] = ((2, 3), (4, 6), (8, 10), (12, 16), (16, 24)),
+    velocity_ladder: Sequence[tuple[int, int]] = (
+        (2, 3),
+        (4, 6),
+        (8, 10),
+        (12, 16),
+        (16, 24),
+    ),
     ntheta_ladder: Sequence[int] = (32, 48, 64, 96),
     ky_index: int = 1,
     r_over_lt: float = 6.9,
     r_over_ln: float = 2.2,
+    eigensolver: str = "dense",
+    adaptive_config: Any | None = None,
     verbose: bool = True,
 ) -> dict[str, Any]:
     """Converge the linear growth rate for one equilibrium."""
 
-    from vmex.core import turbulence as turb
-
     best = {"n_laguerre": 8, "n_hermite": 10, "ntheta": 64}
+    evaluate = growth_evaluator(
+        equilibrium,
+        s_index=s_index,
+        ky_index=ky_index,
+        r_over_lt=r_over_lt,
+        r_over_ln=r_over_ln,
+        eigensolver=eigensolver,
+        adaptive_config=adaptive_config,
+    )
 
     def growth(**overrides) -> float:
-        settings = {**best, **overrides}
-        return float(
-            turb.turbulent_growth_rate(
-                equilibrium.state,
-                equilibrium.runtime,
-                s_index=s_index,
-                alpha=settings.pop("alpha", 0.0),
-                selected_ky_index=ky_index,
-                r_over_lt=r_over_lt,
-                r_over_ln=r_over_ln,
-                **settings,
-            )
-        )
+        return evaluate(**{**best, **overrides})
 
     if verbose:
         print("  linear: velocity-space ladder", flush=True)
@@ -262,6 +329,7 @@ def linear_convergence(
 
     return {
         "kind": "linear_convergence",
+        "eigensolver": eigensolver,
         "s_index": s_index,
         "ky_index": ky_index,
         "r_over_lt": r_over_lt,
@@ -284,6 +352,13 @@ def main() -> int:
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--s-index", type=int, default=7)
     parser.add_argument("--tolerance", type=float, default=0.05)
+    parser.add_argument(
+        "--eigensolver",
+        choices=("dense", "adaptive-propagator"),
+        default="dense",
+        help="dense forms the operator; adaptive-propagator does not and so "
+        "reaches rungs whose matrix would not fit in memory",
+    )
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
@@ -293,7 +368,10 @@ def main() -> int:
     print(f"equilibrium: {args.input}", flush=True)
     equilibrium = opt.solve_equilibrium(vj.VmecInput.from_file(args.input))
     report = linear_convergence(
-        equilibrium, s_index=args.s_index, tolerance=args.tolerance
+        equilibrium,
+        s_index=args.s_index,
+        tolerance=args.tolerance,
+        eigensolver=args.eigensolver,
     )
     report["input"] = str(args.input)
 

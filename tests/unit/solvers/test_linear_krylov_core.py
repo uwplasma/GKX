@@ -27,21 +27,15 @@ from gkx.operators.linear.params import (
     linear_terms_to_term_config,
 )
 from gkx.solvers.linear import implicit
+from support.paired_solvax import requires_paired_solvax
 
-_HAS_SOLVAX_EIGEN_API = all(
-    callable(getattr(solvax, name, None))
-    for name in (
-        "adaptive_eigenpair",
-        "eigenpair_reverse",
-        "estimate_rk4_timestep",
-        "propagator_eigenpairs",
-        "sparse_eigenpairs",
-        "sparse_operator_matrix",
-    )
-)
-requires_solvax_eigen_api = pytest.mark.skipif(
-    not _HAS_SOLVAX_EIGEN_API,
-    reason="requires the propagator and implicit eigenpair API from SOLVAX PR 65",
+requires_solvax_eigen_api = requires_paired_solvax(
+    "adaptive_eigenpair",
+    "eigenpair_reverse",
+    "estimate_rk4_timestep",
+    "propagator_eigenpairs",
+    "sparse_eigenpairs",
+    "sparse_operator_matrix",
 )
 
 

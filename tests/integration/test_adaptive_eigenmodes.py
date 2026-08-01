@@ -30,22 +30,16 @@ from gkx.runtime import (
 )
 from gkx.solvers.linear import adaptive_propagator_eigenpair, dominant_eigenpair
 from gkx.workflows.runtime.toml import load_runtime_from_toml
+from support.paired_solvax import requires_paired_solvax
 
 
-_HAS_SOLVAX_EIGEN_API = all(
-    callable(getattr(solvax, name, None))
-    for name in (
+pytestmark = [
+    pytest.mark.integration,
+    requires_paired_solvax(
         "adaptive_eigenpair",
         "eigenpair_reverse",
         "estimate_rk4_timestep",
         "propagator_eigenpairs",
-    )
-)
-pytestmark = [
-    pytest.mark.integration,
-    pytest.mark.skipif(
-        not _HAS_SOLVAX_EIGEN_API,
-        reason="requires the SOLVAX differentiable eigenpair API",
     ),
 ]
 _ROOT = Path(__file__).resolve().parents[2]

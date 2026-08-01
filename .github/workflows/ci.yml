@@ -218,6 +218,9 @@ jobs:
         env:
           JAX_ENABLE_X64: "true"
           GKX_X64: "1"
+          # Turn a missing paired API into a collection error. Without this the
+          # job passes while skipping every test it exists to run.
+          GKX_REQUIRE_PAIRED_SOLVAX: "1"
         run: |
           python -c "import solvax; assert callable(solvax.exponential_eigenpairs); assert callable(solvax.sparse_eigenpairs)"
           pytest -q --maxfail=1 --disable-warnings \

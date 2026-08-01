@@ -44,31 +44,36 @@ Plain Arnoldi converges to extremal |lambda| and therefore finds the |lambda| ~
 not improve with krylov_dim, which is the signature of converging to the wrong
 part of the spectrum rather than of under-convergence.
 
-The propagator variant maps max-Re to max-|mu| via mu = exp(lambda dt), but only
-while |Im lambda| dt << pi. Here |Im lambda| = 80, so power_dt = 0.05 gives 4.0
-and aliases badly; a dt small enough to avoid aliasing leaves a per-step growth
-separation of exp(0.143 dt) ~ 1.0014, which converges far too slowly to be
-useful.
+**Superseded conclusion, kept because the measurements above still stand.**
+This module originally argued that the propagator route was a dead end -- that
+mu = exp(lambda dt) aliases once |Im lambda| dt approaches pi, and that a dt
+small enough to avoid aliasing leaves a per-step separation exp(0.143 dt) that
+converges too slowly to be useful. The premise is right and the conclusion was
+wrong. Aliasing corrupts the *recovered* frequency, not the *selection*, because
+|mu| = exp(Re lambda * T) does not wrap: a long horizon T separates modes by
+growth alone, and the frequency is then recovered exactly from a Rayleigh
+quotient against the original continuous operator rather than from log(mu). That
+is the path ``gkx.solvers.linear.adaptive_propagator`` now takes, and it reaches
+truncations the dense solve cannot represent at all.
 
-So the dense eigensolve is not simply a missed optimization -- it is the
-straightforward way to reach an interior eigenvalue, and that is presumably why
-it is there. The correct fast algorithm is **shift-invert Arnoldi** with a shift
-near the expected growth rate, where each iteration applies (A - sigma I)^-1
-matrix-free via GMRES. GKX already carries the scaffolding for this
-(shift_source, shift_solve_method, shift_preconditioner), so the work is to make
-that path reach the same eigenvalue as the dense reference, not to build a new
-solver.
+Shift-invert was likewise reframed rather than dropped. It is not the cold
+discovery method -- an unshifted rightmost sparse solve already exceeded 100 s at
+n = 1536 -- but with a supplied or continuation shift it is the fast path, and
+the inner solve became affordable only once the shift inverse exploited the
+diagonal-plus-Hermite-streaming structure (FFT plus batched tridiagonal solve)
+instead of a generic preconditioner.
 
-Two further notes for whoever picks this up:
+See ``docs/differentiable_eigensolver.rst`` for the algorithm that replaced this
+recommendation and the measurements that qualify it.
 
-* Gradients do not have to block the swap. The eigenvalue derivative of a simple
+One note below survived intact:
+
+* Gradients do not block the swap. The eigenvalue derivative of a simple
   eigenvalue is ``dlambda = (w^H dA v) / (w^H v)`` with w the left eigenvector,
-  so a Krylov eigenpair can carry an analytic custom JVP instead of being
-  differentiated through the iteration. That is the same implicit-differentiation
-  posture already used for the VMEC adjoint.
-* Convergence ladders and campaign scans do not need gradients at all. They can
-  take the faster path as soon as branch selection is matched, independently of
-  the differentiable objective.
+  so a Krylov eigenpair carries an analytic implicit derivative instead of being
+  differentiated through the iteration -- the same posture as the VMEC adjoint.
+  Eigenvector-dependent observables need the bordered reduced-resolvent solve in
+  addition, which is what ``solvax.eigenpair_reverse`` supplies.
 """
 
 from __future__ import annotations
@@ -163,7 +168,9 @@ def measure(
     return rows
 
 
-def extrapolate(rows: list[dict], targets: tuple[tuple[int, int, int], ...]) -> list[dict]:
+def extrapolate(
+    rows: list[dict], targets: tuple[tuple[int, int, int], ...]
+) -> list[dict]:
     """Cubic extrapolation of the dense cost to converged resolutions."""
 
     sizes = np.array([r["n"] for r in rows], dtype=float)
@@ -206,7 +213,10 @@ def main() -> int:
 
     equilibrium = opt.solve_equilibrium(vj.VmecInput.from_file(args.input))
     geometry = turb.flux_tube_geometry(
-        equilibrium.state, equilibrium.runtime, s_index=args.s_index, alpha=0.0,
+        equilibrium.state,
+        equilibrium.runtime,
+        s_index=args.s_index,
+        alpha=0.0,
         ntheta=args.ntheta,
     )
 
@@ -233,8 +243,11 @@ def main() -> int:
             "spectral radius of 80.15, so plain Arnoldi converges to the "
             "oscillatory extremes instead. Matrix-free and dense operators "
             "agree to 3e-16, so this is a spectrum-structure problem, not an "
-            "operator mismatch. Shift-invert Arnoldi with a matrix-free GMRES "
-            "inner solve is the correct fast algorithm."
+            "operator mismatch. The method that resolved it is a long-horizon "
+            "propagator Arnoldi with the frequency recovered from a Rayleigh "
+            "quotient against the continuous operator, plus structure-aware "
+            "shift-invert for continuation; see "
+            "docs/differentiable_eigensolver.rst."
         ),
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
