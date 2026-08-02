@@ -7,13 +7,14 @@ smaller without changing the accepted diagnostics truncation/stride behavior.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields as dataclass_fields, replace
 import time
 from typing import Any, Callable
 
 import numpy as np
 
 from gkx.diagnostics import SimulationDiagnostics
+from gkx.diagnostics.metadata import ResolvedDiagnostics
 from gkx.workflows.runtime.diagnostic_arrays import (
     concat_runtime_diagnostics,
     stride_runtime_diagnostics,
@@ -93,6 +94,37 @@ class AdaptiveChunkResult:
 
 
 _TIME_PROGRESS_EPS = 1.0e-12
+
+
+def _chunk_diagnostics_to_host(diag: SimulationDiagnostics) -> SimulationDiagnostics:
+    """Move one chunk's diagnostic arrays to host memory.
+
+    The chunk list lives until the final concatenation, so leaving each
+    chunk's arrays on the accelerator makes device memory grow linearly with
+    ``t_max`` — long adaptive runs then fail inside a later chunk whose
+    workspace no longer fits. ``concat_runtime_diagnostics`` converts to
+    numpy anyway; doing it per chunk releases the device buffers as soon as
+    the chunk completes and bounds device residency at one chunk.
+    """
+
+    def _host(value):
+        return None if value is None else np.asarray(value)
+
+    resolved = diag.resolved
+    if resolved is not None:
+        resolved = replace(
+            resolved,
+            **{
+                field.name: _host(getattr(resolved, field.name))
+                for field in dataclass_fields(ResolvedDiagnostics)
+            },
+        )
+    converted = {
+        field.name: _host(getattr(diag, field.name))
+        for field in dataclass_fields(SimulationDiagnostics)
+        if field.name != "resolved"
+    }
+    return replace(diag, **converted, resolved=resolved)
 
 
 def _offset_chunk_diagnostics_time(
@@ -178,6 +210,7 @@ def run_adaptive_runtime_chunk_loop(
         chunk_start = time.perf_counter()
         _t_chunk, diag_chunk, state_chunk, fields_final = integrate_chunk(show_progress)
         chunk_index = chunk + 1
+        diag_chunk = _chunk_diagnostics_to_host(diag_chunk)
         diag_chunk = _offset_chunk_diagnostics_time(diag_chunk, offset=t_elapsed)
         validate_finite_runtime_diagnostics(
             diag_chunk, label=f"adaptive {label} chunk {chunk_index}"
