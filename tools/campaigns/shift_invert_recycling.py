@@ -33,7 +33,14 @@ from typing import Any, Callable
 import numpy as np
 
 
-def build_case(n_laguerre: int, n_hermite: int, nz: int) -> dict[str, Any]:
+def build_case(
+    n_laguerre: int,
+    n_hermite: int,
+    nz: int,
+    *,
+    preconditioner: str = "hermite-line",
+    shift_offset: float = 1.0e-2,
+) -> dict[str, Any]:
     """Assemble the shifted operator, preconditioner and target GKX actually uses."""
 
     import jax.numpy as jnp
@@ -68,18 +75,48 @@ def build_case(n_laguerre: int, n_hermite: int, nz: int) -> dict[str, Any]:
             size
         )
 
-    # The shift is the dense rightmost eigenvalue: production gets it by
-    # continuation from a coarser rung, and a benchmark that used a luckier or
-    # unluckier shift than production would measure the shift, not the solver.
     basis = np.eye(size, dtype=np.complex128)
     dense = np.stack([np.asarray(operator(jnp.asarray(col))) for col in basis], axis=1)
     spectrum = np.linalg.eigvals(dense)
-    sigma = complex(spectrum[np.argmax(spectrum.real)])
+    reference = complex(spectrum[np.argmax(spectrum.real)])
+
+    # The shift is a CONTROLLED perturbation of the true eigenvalue, and the
+    # offset is the experiment's independent variable.
+    #
+    # Two rejected alternatives, both measured. Using the exact eigenvalue makes
+    # A - sigma I singular by construction: unpreconditioned GMRES stalls on it,
+    # but a working preconditioner inverts the near-null direction and returns
+    # NaN. Taking sigma from a genuinely coarser rung is what production
+    # continuation does, but at the sizes that fit a dense reference there is no
+    # room on the ladder -- coarsening (2,4) to (1,2) moved the eigenvalue 6.5
+    # magnitudes, so every solver correctly converged to a different eigenvalue
+    # and the run measured the shift rather than the solver.
+    #
+    # A stated offset separates the two questions: how good must a continuation
+    # shift be, and which inner solver is best at a given shift quality.
+    direction = np.exp(1j * 0.7)  # fixed, so runs are comparable
+    sigma = reference + shift_offset * abs(reference) * direction
 
     seed = jnp.zeros(shape, dtype=jnp.complex128)
+    # "hermite-line", not "auto": _build_shift_invert_precond matches its mode
+    # against a whitelist and returns (None, None) for anything else, so a name
+    # it does not know silently disables preconditioning instead of failing.
+    # This benchmark spent a full round measuring an unpreconditioned solve while
+    # reporting that the physics-aware inverse was on; assert it is active.
     _precond, precond_op = _build_shift_invert_precond(
-        seed, cache, params, term_cfg, jnp.asarray(sigma, dtype=jnp.complex128), "auto"
+        seed,
+        cache,
+        params,
+        term_cfg,
+        jnp.asarray(sigma, dtype=jnp.complex128),
+        preconditioner,
     )
+    if precond_op is None:
+        raise RuntimeError(
+            f"preconditioner {preconditioner!r} resolved to None -- GKX returns "
+            "None for an unrecognised mode rather than raising, so this is "
+            "almost certainly a name it does not know"
+        )
 
     def shifted(x_flat):
         return operator(x_flat) - jnp.asarray(sigma, dtype=x_flat.dtype) * x_flat
@@ -90,7 +127,9 @@ def build_case(n_laguerre: int, n_hermite: int, nz: int) -> dict[str, Any]:
         "size": size,
         "sigma": sigma,
         "spectral_radius": float(np.abs(spectrum).max()),
-        "dense_rightmost": [float(sigma.real), float(sigma.imag)],
+        "dense_rightmost": [float(reference.real), float(reference.imag)],
+        "shift": [float(sigma.real), float(sigma.imag)],
+        "shift_relative_offset": shift_offset,
     }
 
 
@@ -261,6 +300,14 @@ def main() -> int:
     parser.add_argument("--maxiter", type=int, default=200)
     parser.add_argument("--restart", type=int, default=20)
     parser.add_argument("--recycle-k", type=int, default=8)
+    parser.add_argument("--preconditioner", default="hermite-line")
+    parser.add_argument(
+        "--shift-offset",
+        type=float,
+        default=1.0e-2,
+        help="relative distance of the shift from the true eigenvalue, standing "
+        "in for the accuracy of a production continuation shift",
+    )
     parser.add_argument("--output", type=Path, default=None)
     args = parser.parse_args()
 
@@ -268,11 +315,20 @@ def main() -> int:
 
     jax.config.update("jax_enable_x64", True)
 
-    print(f"building case Nl={args.n_laguerre} Nm={args.n_hermite} nz={args.nz}")
-    case = build_case(args.n_laguerre, args.n_hermite, args.nz)
+    print(
+        f"building case Nl={args.n_laguerre} Nm={args.n_hermite} nz={args.nz} "
+        f"precond={args.preconditioner}"
+    )
+    case = build_case(
+        args.n_laguerre,
+        args.n_hermite,
+        args.nz,
+        preconditioner=args.preconditioner,
+        shift_offset=args.shift_offset,
+    )
     reference = complex(*case["dense_rightmost"])
     print(
-        f"  n={case['size']}  sigma={reference:.8g}  "
+        f"  n={case['size']}  sigma offset={case['shift_relative_offset']:.1e}  "
         f"spectral radius={case['spectral_radius']:.4g}  "
         f"ratio={case['spectral_radius'] / max(abs(reference), 1e-30):.0f}\n"
     )
@@ -308,6 +364,7 @@ def main() -> int:
         "size": case["size"],
         "sigma": case["dense_rightmost"],
         "spectral_radius": case["spectral_radius"],
+        "preconditioner": args.preconditioner,
         "krylov_dim": args.krylov_dim,
         "restarts": args.restarts,
         "results": rows,

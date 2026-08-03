@@ -11,12 +11,10 @@ actually ran; the largest, ``n = 494,592``, would need 3.6 TiB as a dense matrix
 which is why "faster" is the wrong word for what changed -- the dense path cannot
 represent that problem at any speed.
 
-**Right -- the inner solve decides accuracy.** Shift-invert Arnoldi issues many
-solves against one shifted operator. Measured against an exact direct inner solve
-(the control), Krylov recycling reproduces it to machine precision while plain
-GMRES stalls near 1e-2, at both sizes tested. This is what
-``docs/solvax_defaults.rst`` records, and it is the reason the inner solver is
-treated as a physics-accuracy choice rather than a performance knob.
+The inner-solver accuracy panel that used to sit on the right has been removed:
+the measurement behind it was invalid (unpreconditioned, and on a shifted system
+that was singular by construction -- see ``docs/solvax_defaults.rst``). It will
+come back when a run passes its controls.
 
 Numbers come from the committed evidence JSON, never from literals here, so the
 figure cannot drift away from what was measured.
@@ -25,7 +23,6 @@ figure cannot drift away from what was measured.
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
 
 import numpy as np
@@ -34,7 +31,6 @@ from gkx.artifacts.figure_style import (
     GKX_COLORS,
     annotate_reference,
     figure_style,
-    panel_label,
     save_figure,
 )
 
@@ -110,74 +106,19 @@ def memory_panel(ax) -> None:
     ax.legend(frameon=False, fontsize=8, loc="upper left")
 
 
-def accuracy_panel(ax, records: list[dict]) -> None:
-    """Error against the dense reference, per inner solver, at each size."""
-
-    labels = {
-        "exact-lu (control)": "exact LU\n(control)",
-        "jax-gmres": "jax.scipy\nGMRES",
-        "solvax-gmres": "solvax\nGMRES",
-        "gcrot-fifo": "gcrot\nFIFO",
-        "gcrot-harmonic": "gcrot\nharmonic",
-    }
-    order = list(labels)
-    positions = np.arange(len(order))
-    width = 0.36
-
-    for offset, record in enumerate(records):
-        errors = {row["name"]: row["relative_error"] for row in record["results"]}
-        heights = [max(errors.get(name, np.nan), 1e-16) for name in order]
-        ax.bar(
-            positions + (offset - 0.5) * width,
-            heights,
-            width,
-            color=SIZE_COLORS[offset % len(SIZE_COLORS)],
-            label=f"$n={record['size']:,}$",
-        )
-
-    ax.set_yscale("log")
-    ax.set_xticks(positions)
-    ax.set_xticklabels([labels[name] for name in order], fontsize=7.5)
-    ax.set_ylabel("relative error vs dense reference")
-    ax.set_title("Recycling matches an exact inner solve")
-    ax.set_ylim(1e-16, 3e2)
-    ax.axhline(1e-12, color="0.45", ls=":", lw=1.0)
-    ax.annotate("machine precision", xy=(-0.45, 2e-13), fontsize=7, color="0.35")
-    ax.legend(frameon=False, fontsize=8, loc="upper left")
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--evidence",
-        type=Path,
-        nargs="+",
-        default=[
-            Path("docs/_static/shift_invert_recycling.json"),
-            Path("docs/_static/shift_invert_recycling_n1536.json"),
-        ],
-    )
     parser.add_argument(
         "--output", type=Path, default=Path("docs/_static/eigensolver_reach.png")
     )
     args = parser.parse_args()
 
-    records = [json.loads(path.read_text()) for path in args.evidence]
-    records.sort(key=lambda record: record["size"])
-
     import matplotlib.pyplot as plt
 
     with figure_style():
-        fig, axes = plt.subplots(1, 2, figsize=(10.5, 4.2))
-        memory_panel(axes[0])
-        accuracy_panel(axes[1], records)
-        panel_label(axes[0], "a")
-        panel_label(axes[1], "b")
-        annotate_reference(
-            axes[1],
-            "tools/campaigns/shift_invert_recycling.py",
-            loc="upper right",
-        )
+        fig, ax = plt.subplots(1, 1, figsize=(5.6, 4.2))
+        memory_panel(ax)
+        annotate_reference(ax, "docs/differentiable_eigensolver.rst", loc="lower right")
         fig.tight_layout()
         written = save_figure(fig, args.output)
 

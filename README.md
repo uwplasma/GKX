@@ -84,13 +84,12 @@ a restarted eigensolver, so storage is `O(n m)` rather than `O(n²)`. At the
 largest tested QI truncation (`n = 494,592`), that avoids a **3.6 TiB**
 complex128 matrix.
 
-![Matrix-free reach and inner-solver accuracy](docs/_static/eigensolver_reach.png)
+![Matrix-free reach](docs/_static/eigensolver_reach.png)
 
-**(a)** The dense path is bounded by memory, not speed — it cannot represent the
-largest truncations at any speed. **(b)** Inside shift-invert, the inner solver
-sets the *accuracy*, not just the cost: Krylov recycling reproduces an exact
-direct solve, plain GMRES stalls near `1e-2`. Details and the open candidates
-are in [numerical defaults](docs/solvax_defaults.rst).
+The dense path is bounded by memory, not speed — it cannot represent the largest
+truncations at any speed. Which inner solver to use inside shift-invert is a
+separate, still-open question; see [numerical defaults](docs/solvax_defaults.rst)
+for what is settled and what is not.
 
 > **Availability:** the adaptive objective currently uses the differentiable
 > eigenpair API in [SOLVAX PR #65](https://github.com/uwplasma/SOLVAX/pull/65).

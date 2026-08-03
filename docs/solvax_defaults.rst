@@ -40,8 +40,34 @@ promoted. What was missing is the size of the difference.
 Shift-invert Arnoldi issues ``krylov_dim * restarts`` solves against the *same*
 shifted operator, varying only the right-hand side, and starts each one cold.
 ``tools/campaigns/shift_invert_recycling.py`` measures the alternatives on the
-production operator with the physics-aware Hermite-line preconditioner left on,
-counting matrix-vector products.
+production operator, counting matrix-vector products.
+
+.. warning::
+
+   **The comparison table below is retracted.** It was produced by a harness
+   with two defects, both found after publication:
+
+   1. The tool passed ``preconditioner="auto"``, which is a valid value for
+      ``dominant_eigenpair`` but **not** one of the names
+      ``_build_shift_invert_precond`` matches. That function returns
+      ``(None, None)`` for an unrecognised name rather than raising, so the runs
+      were **unpreconditioned** while reporting that the Hermite-line inverse was
+      active.
+   2. The shift was set to the exact dense rightmost eigenvalue, making
+      :math:`A - \sigma I` singular by construction. Unpreconditioned GMRES only
+      stalls on that -- which is what produced the ``1e-2`` "stall" readings --
+      whereas a working preconditioner inverts the near-null direction and
+      returns NaN.
+
+   The exact-LU control could not catch either defect, because it bypasses both
+   the preconditioner and the conditioning of the shifted solve. A control that
+   shares an assumption with the thing it checks validates nothing.
+
+   The tool now takes a **stated** relative shift offset, so shift quality is an
+   independent variable rather than an accident, and raises if the
+   preconditioner resolves to ``None``. Numbers will be restored here only after
+   a run passes its controls. **Nothing in this section should be cited until
+   then**, and no default was changed on the strength of it.
 
 .. list-table:: Cyclone s-alpha, error against the dense reference
    :header-rows: 1
@@ -74,17 +100,15 @@ counting matrix-vector products.
 "Ratio" is the spectral radius over the wanted eigenvalue's magnitude, the
 measure of how interior the target is.
 
-At both sizes, both recycling strategies reproduce an exact direct inner solve
-while neither plain GMRES does. **Recycling is buying convergence here, not
-speed** -- it costs 2.4x the matrix-vector products. The cheaper FIFO strategy is
-as accurate as harmonic deflation at both sizes, so harmonic Ritz deflation is
-not yet justified: the extra machinery would have to earn its place at a larger
-ratio than 48.
+The apparent reading -- that recycling reproduced an exact direct inner solve
+while plain GMRES stalled near ``1e-2`` -- does not survive the defects listed in
+the warning above. The ``1e-2`` figures are what an *unpreconditioned* GMRES does
+on a *singular* shifted system, which is not a statement about GMRES.
 
-Two sizes on one geometry is enough to rule out a coincidence and not enough to
-set a default. Production truncations reach a ratio near 500, and the ``n=1536``
-error moved the wrong way for ``solvax.gmres`` (``4.9e-04`` to ``1.0e-02``),
-which is the kind of non-monotonicity that a two-point ladder cannot resolve.
+Whether recycling helps a correctly preconditioned, non-singular shifted solve
+is therefore still **open**. It is worth re-measuring, because the underlying
+argument stands on its own: shift-invert really does issue many solves against
+one operator, and that really is what recycling targets.
 
 Wall-clock times from that run are not reported: the variants share one process
 and the first JAX-backed rung absorbs compilation, which makes the ordering an
