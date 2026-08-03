@@ -202,15 +202,21 @@ def main() -> int:
     parser.add_argument("--ny", type=int, default=None)
     parser.add_argument("--nz", type=int, default=None)
     parser.add_argument("--dt", type=float, default=1.0e-2)
-    parser.add_argument("--saturate-steps", type=int, default=4000)
-    parser.add_argument("--max-window", type=int, default=512)
     parser.add_argument(
-        "--min-growth",
-        type=float,
-        default=100.0,
-        help="minimum energy growth over the seed before a run counts as "
-        "saturated rather than merely flat",
+        "--saturated-state",
+        type=Path,
+        required=True,
+        help="npz written by nonlinear_saturated_state.py, which reaches "
+        "saturation with the production CFL-adaptive stepper; a fixed-step loop "
+        "cannot, because the ExB CFL tightens as the amplitude grows",
     )
+    parser.add_argument(
+        "--allow-unsaturated",
+        action="store_true",
+        help="proceed even if the state was flagged NOT SATURATED (the ladder "
+        "is then uninterpretable and is labelled as such)",
+    )
+    parser.add_argument("--max-window", type=int, default=512)
     parser.add_argument("--output", type=Path, default=None)
     args = parser.parse_args()
 
@@ -231,63 +237,36 @@ def main() -> int:
         f"dissipation={case['dissipation']}",
         flush=True,
     )
-    generator = np.random.default_rng(0)
-    seed = 1.0e-3 * (
-        generator.standard_normal(case["shape"])
-        + 1j * generator.standard_normal(case["shape"])
-    )
-    state = jnp.asarray(seed)
-    seed_energy = float(heat_flux_proxy(state))
-
-    # Saturation is sampled, not assumed: a gradient-divergence curve measured
-    # on a still-growing linear phase reports the growth rate, not the Lyapunov
-    # exponent, and the two look identical on a log plot.
-    print(f"saturating: {args.saturate_steps} steps of dt={args.dt}", flush=True)
-    chunks = 20
-    per_chunk = max(1, args.saturate_steps // chunks)
-    trace = []
-    started = time.time()
-    saturated = state
-    for chunk in range(chunks):
-        saturated = integrate(case["rhs"], saturated, case["drive"], args.dt, per_chunk)
-        energy = float(heat_flux_proxy(saturated))
-        trace.append({"step": (chunk + 1) * per_chunk, "energy": energy})
-        if not np.isfinite(energy):
-            raise RuntimeError("saturation diverged; reduce dt or raise hyperdiffusion")
-    energy = trace[-1]["energy"]
+    # The saturated state comes from the production CFL-adaptive stepper via
+    # nonlinear_saturated_state.py. This tool no longer integrates to saturation
+    # itself: a fixed-step loop cannot get there, because the ExB CFL tightens
+    # with amplitude and the scheme destabilises exactly when the nonlinearity
+    # would otherwise saturate the run.
+    archive = np.load(args.saturated_state)
+    saturated = jnp.asarray(archive["state"])
+    state_saturated = bool(archive["saturated"])
     print(
-        f"  {time.time() - started:.1f}s, fluctuation energy {energy:.6e}", flush=True
-    )
-
-    # Saturation needs BOTH conditions. Flatness alone is not enough: a trace
-    # still sitting at the seed amplitude, before the instability has grown, is
-    # perfectly flat and would pass a drift test on its own. So also require the
-    # energy to have grown well clear of the seed.
-    quarter = max(1, len(trace) // 4)
-    late = np.mean([r["energy"] for r in trace[-quarter:]])
-    prior = np.mean([r["energy"] for r in trace[-2 * quarter : -quarter]])
-    drift = abs(late - prior) / max(abs(late), 1e-300)
-    growth_factor = energy / max(seed_energy, 1e-300)
-    flat = bool(drift < 0.25)
-    grown = bool(growth_factor > args.min_growth)
-    saturated_ok = flat and grown
-    print(
-        f"  energy drift over the last two quarters: {drift:.1%} "
-        f"({'flat' if flat else 'still trending'})",
+        f"loaded state from {args.saturated_state.name}: shape={saturated.shape} "
+        f"t_end={float(archive['t_end']):.1f} "
+        f"-> {'SATURATED' if state_saturated else 'NOT SATURATED'}",
         flush=True,
     )
-    print(
-        f"  growth over the seed: {growth_factor:.3g}x "
-        f"({'grown' if grown else 'STILL AT SEED LEVEL'})",
-        flush=True,
-    )
-    print(f"  -> {'SATURATED' if saturated_ok else 'NOT SATURATED'}", flush=True)
-    if not saturated_ok:
-        print(
-            "  WARNING: not saturated. The ladder below does not measure "
-            "turbulence and must not be read as a Lyapunov result.",
-            flush=True,
+    if saturated.shape != case["shape"]:
+        raise RuntimeError(
+            f"state shape {saturated.shape} does not match the case built from "
+            f"{case['case']} ({case['shape']}); the grid overrides must match "
+            "those used to produce the state"
         )
+    if not state_saturated and not args.allow_unsaturated:
+        raise SystemExit(
+            "refusing to measure a gradient ladder on an unsaturated state: the "
+            "curve would report linear growth, not a chaotic adjoint. Rerun "
+            "nonlinear_saturated_state.py for longer, or pass --allow-unsaturated "
+            "to record it as uninterpretable."
+        )
+    saturated_ok = state_saturated
+    energy = float(heat_flux_proxy(saturated))
+    print(f"  fluctuation energy at the start of the window: {energy:.6e}", flush=True)
 
     windows = [2**k for k in range(int(np.log2(args.max_window)) + 1)]
     rows = []
@@ -337,13 +316,10 @@ def main() -> int:
         "grid_override": override,
         "dissipation": case["dissipation"],
         "dt": args.dt,
-        "saturate_steps": args.saturate_steps,
         "saturated_energy": energy,
-        "saturation_trace": trace,
-        "saturation_drift": drift,
-        "seed_energy": seed_energy,
-        "growth_over_seed": growth_factor,
+        "saturated_state": str(args.saturated_state),
         "saturated": saturated_ok,
+        "interpretable": saturated_ok,
         "tail_growth_per_time": growth,
         "rows": rows,
     }
