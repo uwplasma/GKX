@@ -100,12 +100,36 @@ propagated from those understated error bars; corrected for correlation it is
 larger still. The gap to the 0.5 gate is therefore wider than 13x of extra
 sampling -- which strengthens rather than weakens the case for changing method.
 
-**N2 -- Gradient-divergence curve.** Backpropagate :math:`N` steps for
-:math:`N = 2^k` and plot the gradient norm against :math:`N`. Expect a plateau
-then exponential growth; the knee is the usable window. Compare the knee against
-:math:`\tau_{\rm ac}` from N1. If the knee is far below :math:`\tau_{\rm ac}`,
-GKX has a numerical problem on top of the physical one and that has to be fixed
-before any of this matters.
+**N2 -- Gradient-divergence curve. BLOCKED on the integrator, with the cause
+diagnosed.** ``tools/campaigns/nonlinear_gradient_window.py`` is written, runs on
+GPU, and refuses to report a result -- correctly.
+
+The measurement needs a *saturated* trajectory. The tool integrates with a
+fixed-step RK2, and on the reduced Cyclone case that never saturates: over
+``t = 600`` the fluctuation energy grew by :math:`3.3\times 10^{49}`, drift over
+the final quarters was 100%, and the saturation gate returned **NOT SATURATED**.
+The gradient ladder over :math:`N = 1 \dots 1024` came out *linear* in :math:`N`
+(each doubling roughly doubles the gradient) rather than exponential -- the
+signature of unbounded linear growth, not of a chaotic adjoint.
+
+The cause is the time step, not the physics. The shipped nonlinear TOML sets
+``fixed_dt = false`` with ``dt_max = 0.05``: the :math:`E\times B` nonlinearity
+imposes a CFL condition that tightens as the amplitude grows, so a fixed-step
+scheme that is stable during the linear phase goes unstable once the
+nonlinearity would otherwise bite. Forcing a fixed step removed exactly the
+mechanism that saturates the run.
+
+The fix is to separate the two phases, which is also what the windowed-adjoint
+literature does: reach saturation with the production adaptive integrator, then
+unroll a *short* fixed-step window from that state for differentiation. Adaptive
+stepping is awkward to differentiate because the step count varies with the
+parameter; a fixed-step window avoids that, and only needs to be stable over the
+window rather than over the whole trajectory.
+
+A second constraint is memory. Reverse mode through the window OOM'd a 16 GB
+card at ``N = 2048`` even with ``jax.checkpoint``; XLA reported it could not get
+below 5.3 GiB. ``N = 1024`` fits at a ``16^3`` grid. Any production scheme has to
+budget for this rather than discover it.
 
 **N3 -- Bias against finite differences, inside the window.** At
 :math:`N` below the knee, compare the windowed adjoint with the existing central

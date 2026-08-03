@@ -1,0 +1,186 @@
+{
+  "kind": "nonlinear_gradient_window",
+  "claim_level": "windowed_adjoint_divergence_curve_on_the_production_nonlinear_rhs",
+  "case": "runtime_cyclone_nonlinear_t400.toml",
+  "grid_override": {
+    "Nx": 16,
+    "Ny": 16,
+    "Nz": 16
+  },
+  "dissipation": {
+    "nu": 0.0,
+    "nu_hyper": 0.0,
+    "nu_hyper_m": 1.0,
+    "nu_hyper_l": 0.0,
+    "D_hyper": 0.05
+  },
+  "dt": 0.01,
+  "saturate_steps": 60000,
+  "saturated_energy": 6.665888069008986e+43,
+  "saturation_trace": [
+    {
+      "step": 3000,
+      "energy": 1.1331492007725718e-05
+    },
+    {
+      "step": 6000,
+      "energy": 0.0007388294652898222
+    },
+    {
+      "step": 9000,
+      "energy": 0.20399924626937302
+    },
+    {
+      "step": 12000,
+      "energy": 68.38967471285875
+    },
+    {
+      "step": 15000,
+      "energy": 24960.096041560257
+    },
+    {
+      "step": 18000,
+      "energy": 9607423.736847943
+    },
+    {
+      "step": 21000,
+      "energy": 3825521703.454912
+    },
+    {
+      "step": 24000,
+      "energy": 1559802478830.3362
+    },
+    {
+      "step": 27000,
+      "energy": 647121072040097.4
+    },
+    {
+      "step": 30000,
+      "energy": 2.7204893163683555e+17
+    },
+    {
+      "step": 33000,
+      "energy": 1.1556399977568469e+20
+    },
+    {
+      "step": 36000,
+      "energy": 4.950229557662678e+22
+    },
+    {
+      "step": 39000,
+      "energy": 2.1349734407368905e+25
+    },
+    {
+      "step": 42000,
+      "energy": 9.260071574667039e+27
+    },
+    {
+      "step": 45000,
+      "energy": 4.0354411033215026e+30
+    },
+    {
+      "step": 48000,
+      "energy": 1.7656475328416473e+33
+    },
+    {
+      "step": 51000,
+      "energy": 7.751700752398197e+35
+    },
+    {
+      "step": 54000,
+      "energy": 3.4132016114120605e+38
+    },
+    {
+      "step": 57000,
+      "energy": 1.5067071933026853e+41
+    },
+    {
+      "step": 60000,
+      "energy": 6.665888069008986e+43
+    }
+  ],
+  "saturation_drift": 0.9999999999999394,
+  "seed_energy": 2.0056940793033343e-06,
+  "growth_over_seed": 3.3234819496123467e+49,
+  "saturated": false,
+  "tail_growth_per_time": 0.5165245612572175,
+  "rows": [
+    {
+      "window": 1,
+      "objective": 6.679440828955437e+43,
+      "gradient": 1.8809318849798465e+41,
+      "abs_gradient": 1.8809318849798465e+41,
+      "seconds": 22.237157583236694
+    },
+    {
+      "window": 2,
+      "objective": 6.693021145162328e+43,
+      "gradient": 3.770397963816532e+41,
+      "abs_gradient": 3.770397963816532e+41,
+      "seconds": 11.170786380767822
+    },
+    {
+      "window": 4,
+      "objective": 6.720264670598869e+43,
+      "gradient": 7.575042089530012e+41,
+      "abs_gradient": 7.575042089530012e+41,
+      "seconds": 11.839004516601562
+    },
+    {
+      "window": 8,
+      "objective": 6.775084869646602e+43,
+      "gradient": 1.5287947230652568e+42,
+      "abs_gradient": 1.5287947230652568e+42,
+      "seconds": 11.488746881484985
+    },
+    {
+      "window": 16,
+      "objective": 6.886070565639405e+43,
+      "gradient": 3.113442714218556e+42,
+      "abs_gradient": 3.113442714218556e+42,
+      "seconds": 11.780198574066162
+    },
+    {
+      "window": 32,
+      "objective": 7.113526354903224e+43,
+      "gradient": 6.456048884408171e+42,
+      "abs_gradient": 6.456048884408171e+42,
+      "seconds": 11.977940082550049
+    },
+    {
+      "window": 64,
+      "objective": 7.591226835226856e+43,
+      "gradient": 1.3876158685186004e+43,
+      "abs_gradient": 1.3876158685186004e+43,
+      "seconds": 11.822292566299438
+    },
+    {
+      "window": 128,
+      "objective": 8.645026013815499e+43,
+      "gradient": 3.2011307091673886e+43,
+      "abs_gradient": 3.2011307091673886e+43,
+      "seconds": 13.184247255325317
+    },
+    {
+      "window": 256,
+      "objective": 1.1211820143064136e+44,
+      "gradient": 8.469875156289867e+43,
+      "abs_gradient": 8.469875156289867e+43,
+      "seconds": 14.509806871414185
+    },
+    {
+      "window": 512,
+      "objective": 1.8858203450798408e+44,
+      "gradient": 2.899559534826849e+44,
+      "abs_gradient": 2.899559534826849e+44,
+      "seconds": 17.34305238723755
+    },
+    {
+      "window": 1024,
+      "objective": 5.335396744240501e+44,
+      "gradient": 1.6131622799283758e+45,
+      "abs_gradient": 1.6131622799283758e+45,
+      "seconds": 22.076958894729614
+    }
+  ]
+}
