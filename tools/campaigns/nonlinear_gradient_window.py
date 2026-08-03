@@ -150,8 +150,16 @@ def heat_flux_proxy(state):
     return jnp.real(jnp.vdot(state, state)) / state.size
 
 
-def integrate(rhs, state, drive, dt: float, steps: int):
-    """Fixed-step RK2 over ``steps``, returning the final state."""
+def integrate(rhs, state, drive, dt: float, steps: int, *, checkpoint: bool = False):
+    """Fixed-step RK2 over ``steps``, returning the final state.
+
+    ``checkpoint`` rematerializes each step in the backward pass instead of
+    storing its residuals. Reverse mode through a plain scan keeps every
+    intermediate, which is the standard memory wall for windowed adjoints -- at
+    a 16x16x16 grid and N=2048 it asked for 5.4 GB and exhausted a 16 GB card.
+    Remat trades that for recomputing the forward step, which is the right side
+    of the trade when the alternative is not running at all.
+    """
 
     import jax
     import jax.numpy as jnp
@@ -161,7 +169,8 @@ def integrate(rhs, state, drive, dt: float, steps: int):
         k2 = rhs(carry + dt * k1, drive)
         return carry + 0.5 * dt * (k1 + k2), None
 
-    final, _ = jax.lax.scan(body, state, jnp.arange(steps))
+    step = jax.checkpoint(body) if checkpoint else body
+    final, _ = jax.lax.scan(step, state, jnp.arange(steps))
     return final
 
 
@@ -173,7 +182,7 @@ def windowed_gradient(case, saturated, drive: float, dt: float, window: int):
     detached = jax.lax.stop_gradient(saturated)
 
     def objective(value):
-        final = integrate(case["rhs"], detached, value, dt, window)
+        final = integrate(case["rhs"], detached, value, dt, window, checkpoint=True)
         return heat_flux_proxy(final)
 
     value, gradient = jax.value_and_grad(objective)(drive)
