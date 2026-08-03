@@ -23,6 +23,7 @@ pip install gkx && gkx
 | --- | --- |
 | **Collisions other codes don't have** | Five operators, from Lenard-Bernstein up to the **full gyrokinetic Coulomb** with finite-Larmor-radius effects — selected with one TOML key |
 | **Differentiable end to end** | JAX autodiff through geometry, solver and diagnostics, including implicit eigenvalue derivatives — real gradients for stellarator shape optimization |
+| **Resolutions a dense solver can't hold** | Matrix-free eigenmodes at `n = 494,592`, where the dense operator alone would be **3.6 TiB** — with the eigenpair still differentiable |
 | **Verified against exact physics** | Landau roots to 0.004%, conservation to machine precision, published Appendix-C coefficients to 1e-12 |
 | **Fast where it matters** | GPU execution, restartable NetCDF output, publication figures from `gkx --plot` |
 
@@ -82,6 +83,14 @@ derivatives, not a dense spectrum. GKX applies the full gyrokinetic RHS inside
 a restarted eigensolver, so storage is `O(n m)` rather than `O(n²)`. At the
 largest tested QI truncation (`n = 494,592`), that avoids a **3.6 TiB**
 complex128 matrix.
+
+![Matrix-free reach and inner-solver accuracy](docs/_static/eigensolver_reach.png)
+
+**(a)** The dense path is bounded by memory, not speed — it cannot represent the
+largest truncations at any speed. **(b)** Inside shift-invert, the inner solver
+sets the *accuracy*, not just the cost: Krylov recycling reproduces an exact
+direct solve, plain GMRES stalls near `1e-2`. Details and the open candidates
+are in [numerical defaults](docs/solvax_defaults.rst).
 
 > **Availability:** the adaptive objective currently uses the differentiable
 > eigenpair API in [SOLVAX PR #65](https://github.com/uwplasma/SOLVAX/pull/65).
@@ -354,6 +363,8 @@ panels, velocity-space convergence and the Figure 12–14 gate:
 
 - Electrostatic and electromagnetic gyrokinetics with kinetic or Boltzmann species.
 - Linear initial-value, dominant-eigenmode, and nonlinear turbulence solvers.
+- Matrix-free eigenmodes with certified residuals, branch continuation, and
+  implicit derivatives — `O(n m)` storage instead of `O(n²)`.
 - Analytic s-alpha, Miller, imported VMEC, and differentiable VMEC/Boozer geometry.
 - JAX JIT, forward/reverse autodiff, implicit eigenvalue derivatives, and UQ tools.
 - Quasilinear transport diagnostics with explicit saturation-rule metadata.
@@ -645,6 +656,8 @@ Detailed user and developer documentation:
 - [Physics and equations](docs/theory.rst)
 - [Operators and models](docs/operators.rst)
 - [Numerics and solvers](docs/numerics.rst)
+- [Matrix-free eigenmodes](docs/differentiable_eigensolver.rst) and the
+  [numerical defaults](docs/solvax_defaults.rst) behind them
 - [Geometry](docs/geometry.rst)
 - [Outputs and plotting](docs/outputs.rst)
 - [Testing and validation](docs/testing.rst)

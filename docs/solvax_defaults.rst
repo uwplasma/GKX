@@ -43,32 +43,48 @@ shifted operator, varying only the right-hand side, and starts each one cold.
 production operator with the physics-aware Hermite-line preconditioner left on,
 counting matrix-vector products.
 
-.. list-table:: Cyclone s-alpha, ``(Nl,Nm)=(2,4)``, ``nz=12``, ``n=384``
+.. list-table:: Cyclone s-alpha, error against the dense reference
    :header-rows: 1
 
    * - inner solver
      - matvecs
-     - error vs dense
+     - ``n=384`` (ratio 21)
+     - ``n=1536`` (ratio 48)
    * - exact LU (harness control)
      - --
      - ``1.42e-15``
+     - ``5.44e-15``
    * - ``jax.scipy`` GMRES (incumbent)
      - 320
      - ``2.27e-02``
+     - ``1.19e-02``
    * - ``solvax.gmres``
      - 256
      - ``4.91e-04``
+     - ``9.96e-03``
    * - ``solvax.gcrot`` (FIFO recycling)
      - 760
      - ``1.42e-15``
+     - ``5.60e-15``
    * - ``solvax.gcrot`` (harmonic / GCRO-DR)
      - 760
      - ``1.48e-15``
+     - ``5.60e-15``
 
-Both recycling strategies reproduce an exact direct inner solve; neither plain
-GMRES does. **Recycling is buying convergence here, not speed** -- it costs 2.4x
-the matrix-vector products. The cheaper FIFO strategy is as accurate as harmonic
-deflation at this size, so harmonic Ritz deflation is not yet justified.
+"Ratio" is the spectral radius over the wanted eigenvalue's magnitude, the
+measure of how interior the target is.
+
+At both sizes, both recycling strategies reproduce an exact direct inner solve
+while neither plain GMRES does. **Recycling is buying convergence here, not
+speed** -- it costs 2.4x the matrix-vector products. The cheaper FIFO strategy is
+as accurate as harmonic deflation at both sizes, so harmonic Ritz deflation is
+not yet justified: the extra machinery would have to earn its place at a larger
+ratio than 48.
+
+Two sizes on one geometry is enough to rule out a coincidence and not enough to
+set a default. Production truncations reach a ratio near 500, and the ``n=1536``
+error moved the wrong way for ``solvax.gmres`` (``4.9e-04`` to ``1.0e-02``),
+which is the kind of non-monotonicity that a two-point ladder cannot resolve.
 
 Wall-clock times from that run are not reported: the variants share one process
 and the first JAX-backed rung absorbs compilation, which makes the ordering an
@@ -117,6 +133,8 @@ Reproducing the table
        --n-laguerre 2 --n-hermite 4 --nz 12 \
        --krylov-dim 16 --restarts 4 --maxiter 2000 --restart 60 \
        --output docs/_static/shift_invert_recycling.json
+
+and for the second column, ``--n-laguerre 4 --n-hermite 6 --nz 16``.
 
 The exact-LU control runs first and must report an error at machine precision.
 If it does not, no other row in the output is interpretable.

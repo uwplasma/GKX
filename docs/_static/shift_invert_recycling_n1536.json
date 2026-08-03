@@ -1,0 +1,64 @@
+{
+  "kind": "shift_invert_recycling",
+  "claim_level": "matvec_accounting_on_the_production_operator",
+  "size": 1536,
+  "sigma": [
+    0.35248102385166885,
+    0.522039336545465
+  ],
+  "spectral_radius": 30.324512460968922,
+  "krylov_dim": 16,
+  "restarts": 4,
+  "results": [
+    {
+      "matvecs": 1536,
+      "seconds": 5.873827934265137,
+      "eigenvalue": [
+        0.3524810238516677,
+        0.5220393365454618
+      ],
+      "name": "exact-lu (control)",
+      "relative_error": 5.436123038617944e-15
+    },
+    {
+      "matvecs": 320,
+      "seconds": 1086.138030052185,
+      "eigenvalue": [
+        0.35256426319597367,
+        0.5145421172194019
+      ],
+      "name": "jax-gmres",
+      "relative_error": 0.011903061984533477
+    },
+    {
+      "matvecs": 256,
+      "seconds": 181.8029842376709,
+      "eigenvalue": [
+        0.357060615469482,
+        0.526324964752169
+      ],
+      "name": "solvax-gmres",
+      "relative_error": 0.009957374770958548
+    },
+    {
+      "matvecs": 760,
+      "seconds": 191.42544412612915,
+      "eigenvalue": [
+        0.3524810238516674,
+        0.5220393365454618
+      ],
+      "name": "gcrot-fifo",
+      "relative_error": 5.60147793787188e-15
+    },
+    {
+      "matvecs": 760,
+      "seconds": 207.2766752243042,
+      "eigenvalue": [
+        0.3524810238516674,
+        0.5220393365454618
+      ],
+      "name": "gcrot-harmonic",
+      "relative_error": 5.60147793787188e-15
+    }
+  ]
+}
