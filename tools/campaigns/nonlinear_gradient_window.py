@@ -42,40 +42,98 @@ import numpy as np
 
 
 def build_nonlinear_case(
-    n_laguerre: int, n_hermite: int, nx: int, ny: int, nz: int
+    toml_path: Path, grid_override: dict | None = None
 ) -> dict[str, Any]:
-    """Cyclone-like nonlinear flux tube with the nonlinear term verified on."""
+    """Load a shipped production nonlinear case, overriding only the grid size.
 
-    from gkx.config import CycloneBaseCase, GridConfig
+    Assembling ``LinearParams`` and ``TermConfig`` by hand is how this tool first
+    failed: ``TermConfig`` defaults ``nonlinear=0.0`` (a silently linear run) and
+    ``LinearParams`` defaults ``nu = nu_hyper = 0.0``, so switching the
+    hyperdiffusion *term* on multiplies a zero coefficient and leaves the run
+    with no dissipation at all -- which duly blew up during saturation. The
+    shipped TOMLs carry the coefficients that actually saturate this case
+    (``D_hyper``, ``p_hyper*``, ``hypercollisions*``, end damping), so the
+    configuration comes from there and only the grid is reduced for affordability.
+    """
+
+    import dataclasses
+
+    import jax.numpy as jnp
+
     from gkx.core.grid import build_spectral_grid
-    from gkx.geometry import SAlphaGeometry
     from gkx.operators.linear.cache_builder import build_linear_cache
-    from gkx.operators.linear.params import LinearParams
+    from gkx.runtime import (
+        build_runtime_geometry,
+        build_runtime_linear_params,
+        build_runtime_term_config,
+    )
     from gkx.solvers.nonlinear.state_integration import nonlinear_rhs_cached
-    from gkx.terms.config import TermConfig
+    from gkx.workflows.runtime.toml import load_runtime_from_toml
 
-    cfg = CycloneBaseCase(grid=GridConfig(Nx=nx, Ny=ny, Nz=nz, Lx=6.0, Ly=12.0))
-    grid = build_spectral_grid(cfg.grid)
-    geometry = SAlphaGeometry.from_config(cfg.geometry)
-    params = LinearParams()
+    runtime, raw = load_runtime_from_toml(toml_path)
+    if grid_override:
+        runtime = dataclasses.replace(
+            runtime, grid=dataclasses.replace(runtime.grid, **grid_override)
+        )
 
-    # TermConfig() defaults nonlinear=0.0. A linear run grows forever and would
-    # look exactly like a diverging adjoint, so this is asserted, not assumed.
-    term_cfg = TermConfig(nonlinear=1.0, hyperdiffusion=1.0)
-    if float(term_cfg.nonlinear) == 0.0:  # pragma: no cover - guard, not logic
-        raise RuntimeError("nonlinear term is off; this would measure a linear run")
+    grid = build_spectral_grid(runtime.grid)
+    geometry = build_runtime_geometry(runtime)
+    # build_runtime_term_config, NOT build_runtime_linear_terms: the latter is
+    # the linear term set and reports nonlinear=0.0 even for a nonlinear TOML.
+    term_cfg = build_runtime_term_config(runtime)
+
+    # Nl/Nm live in the raw [run] table rather than on RuntimeConfig.
+    run_section = raw.get("run", {})
+    n_laguerre = int(run_section["Nl"])
+    n_hermite = int(run_section["Nm"])
+    params = build_runtime_linear_params(runtime, Nm=n_hermite, geom=geometry)
+
+    if float(term_cfg.nonlinear) == 0.0:
+        raise RuntimeError(
+            f"{toml_path.name} has the nonlinear term off; this would measure a "
+            "linear run whose unbounded growth is indistinguishable from a "
+            "diverging adjoint"
+        )
+    # Some coefficients are per-species or per-moment arrays, so summarise by
+    # maximum magnitude rather than assuming a scalar.
+    dissipation = {}
+    for name in ("nu", "nu_hyper", "nu_hyper_m", "nu_hyper_l", "D_hyper"):
+        if hasattr(params, name):
+            dissipation[name] = float(np.max(np.abs(np.asarray(getattr(params, name)))))
+    if not any(v > 0.0 for v in dissipation.values()):
+        raise RuntimeError(
+            f"no active dissipation in {toml_path.name}: {dissipation}. A "
+            "collisionless run at finite resolution piles energy at the grid "
+            "scale and diverges."
+        )
 
     cache = build_linear_cache(grid, geometry, params, Nl=n_laguerre, Nm=n_hermite)
     shape = (1, n_laguerre, n_hermite, grid.ky.size, grid.kx.size, grid.z.size)
+    base_drive = jnp.asarray(params.R_over_LTi)
 
-    def rhs(state, drive):
-        """RHS with the temperature-gradient drive as a differentiable input."""
+    def rhs(state, scale):
+        """RHS differentiable in a scalar multiplier on the R/L_T drive.
 
-        scaled = params.__class__(**{**vars(params), "R_over_LTi": drive})
-        value, _fields = nonlinear_rhs_cached(state, cache, scaled, term_cfg)
-        return value
+        R_over_LTi is per-species, so the differentiable design parameter is a
+        uniform scale on it rather than the array itself -- a scalar an
+        optimizer would actually perturb, and one whose gradient is a single
+        number the divergence ladder can plot.
+        """
 
-    return {"rhs": rhs, "shape": shape, "drive": float(params.R_over_LTi)}
+        scaled = dataclasses.replace(params, R_over_LTi=base_drive * scale)
+        out, _fields = nonlinear_rhs_cached(state, cache, scaled, term_cfg)
+        return out
+
+    return {
+        "rhs": rhs,
+        "shape": shape,
+        "drive": 1.0,  # the differentiable parameter is a multiplier
+        "base_drive": [float(v) for v in np.asarray(base_drive).ravel()],
+        "dissipation": dissipation,
+        "case": toml_path.name,
+        "n_laguerre": n_laguerre,
+        "n_hermite": n_hermite,
+    }
 
 
 def heat_flux_proxy(state):
@@ -124,14 +182,26 @@ def windowed_gradient(case, saturated, drive: float, dt: float, window: int):
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--n-laguerre", type=int, default=2)
-    parser.add_argument("--n-hermite", type=int, default=4)
-    parser.add_argument("--nx", type=int, default=8)
-    parser.add_argument("--ny", type=int, default=8)
-    parser.add_argument("--nz", type=int, default=16)
-    parser.add_argument("--dt", type=float, default=2.0e-3)
+    parser.add_argument(
+        "--toml",
+        type=Path,
+        default=Path(
+            "examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_t400.toml"
+        ),
+    )
+    parser.add_argument("--nx", type=int, default=None)
+    parser.add_argument("--ny", type=int, default=None)
+    parser.add_argument("--nz", type=int, default=None)
+    parser.add_argument("--dt", type=float, default=1.0e-2)
     parser.add_argument("--saturate-steps", type=int, default=4000)
     parser.add_argument("--max-window", type=int, default=512)
+    parser.add_argument(
+        "--min-growth",
+        type=float,
+        default=100.0,
+        help="minimum energy growth over the seed before a run counts as "
+        "saturated rather than merely flat",
+    )
     parser.add_argument("--output", type=Path, default=None)
     args = parser.parse_args()
 
@@ -141,8 +211,16 @@ def main() -> int:
     jax.config.update("jax_enable_x64", True)
     print(f"devices: {jax.devices()}", flush=True)
 
-    case = build_nonlinear_case(
-        args.n_laguerre, args.n_hermite, args.nx, args.ny, args.nz
+    override = {
+        k: v
+        for k, v in (("Nx", args.nx), ("Ny", args.ny), ("Nz", args.nz))
+        if v is not None
+    }
+    case = build_nonlinear_case(args.toml, override or None)
+    print(
+        f"case: {case['case']}  (Nl,Nm)=({case['n_laguerre']},{case['n_hermite']})  "
+        f"dissipation={case['dissipation']}",
+        flush=True,
     )
     generator = np.random.default_rng(0)
     seed = 1.0e-3 * (
@@ -150,6 +228,7 @@ def main() -> int:
         + 1j * generator.standard_normal(case["shape"])
     )
     state = jnp.asarray(seed)
+    seed_energy = float(heat_flux_proxy(state))
 
     # Saturation is sampled, not assumed: a gradient-divergence curve measured
     # on a still-growing linear phase reports the growth rate, not the Lyapunov
@@ -171,22 +250,33 @@ def main() -> int:
         f"  {time.time() - started:.1f}s, fluctuation energy {energy:.6e}", flush=True
     )
 
-    # Accept saturation only if the last quarter of the trace has stopped
-    # trending: |mean(last quarter) - mean(previous quarter)| / mean < 25%.
+    # Saturation needs BOTH conditions. Flatness alone is not enough: a trace
+    # still sitting at the seed amplitude, before the instability has grown, is
+    # perfectly flat and would pass a drift test on its own. So also require the
+    # energy to have grown well clear of the seed.
     quarter = max(1, len(trace) // 4)
     late = np.mean([r["energy"] for r in trace[-quarter:]])
     prior = np.mean([r["energy"] for r in trace[-2 * quarter : -quarter]])
     drift = abs(late - prior) / max(abs(late), 1e-300)
-    saturated_ok = bool(drift < 0.25)
+    growth_factor = energy / max(seed_energy, 1e-300)
+    flat = bool(drift < 0.25)
+    grown = bool(growth_factor > args.min_growth)
+    saturated_ok = flat and grown
     print(
         f"  energy drift over the last two quarters: {drift:.1%} "
-        f"-> {'SATURATED' if saturated_ok else 'NOT SATURATED'}",
+        f"({'flat' if flat else 'still trending'})",
         flush=True,
     )
+    print(
+        f"  growth over the seed: {growth_factor:.3g}x "
+        f"({'grown' if grown else 'STILL AT SEED LEVEL'})",
+        flush=True,
+    )
+    print(f"  -> {'SATURATED' if saturated_ok else 'NOT SATURATED'}", flush=True)
     if not saturated_ok:
         print(
-            "  WARNING: still trending. The ladder below measures the growth "
-            "phase, not turbulence, and must not be read as a Lyapunov result.",
+            "  WARNING: not saturated. The ladder below does not measure "
+            "turbulence and must not be read as a Lyapunov result.",
             flush=True,
         )
 
@@ -207,7 +297,7 @@ def main() -> int:
             }
         )
         print(
-            f"  N={window:>4d}  |dQ/d(R/LT)| = {abs(gradient):.6e}"
+            f"  N={window:>4d}  |dQ/d(drive scale)| = {abs(gradient):.6e}"
             f"   [{rows[-1]['seconds']:.1f}s]",
             flush=True,
         )
@@ -234,18 +324,16 @@ def main() -> int:
     summary = {
         "kind": "nonlinear_gradient_window",
         "claim_level": "windowed_adjoint_divergence_curve_on_the_production_nonlinear_rhs",
-        "resolution": {
-            "n_laguerre": args.n_laguerre,
-            "n_hermite": args.n_hermite,
-            "nx": args.nx,
-            "ny": args.ny,
-            "nz": args.nz,
-        },
+        "case": case["case"],
+        "grid_override": override,
+        "dissipation": case["dissipation"],
         "dt": args.dt,
         "saturate_steps": args.saturate_steps,
         "saturated_energy": energy,
         "saturation_trace": trace,
         "saturation_drift": drift,
+        "seed_energy": seed_energy,
+        "growth_over_seed": growth_factor,
         "saturated": saturated_ok,
         "tail_growth_per_time": growth,
         "rows": rows,
