@@ -100,36 +100,76 @@ propagated from those understated error bars; corrected for correlation it is
 larger still. The gap to the 0.5 gate is therefore wider than 13x of extra
 sampling -- which strengthens rather than weakens the case for changing method.
 
-**N2 -- Gradient-divergence curve. BLOCKED on the integrator, with the cause
-diagnosed.** ``tools/campaigns/nonlinear_gradient_window.py`` is written, runs on
-GPU, and refuses to report a result -- correctly.
+**N2 -- Gradient-divergence curve. MEASURED, and it does not diverge.**
+``tools/campaigns/nonlinear_saturated_state.py`` reaches saturation with the
+production CFL-adaptive stepper (all five checks pass:
+:math:`\tau_{\rm ac} = 8.92`, window 22.4 :math:`\tau_{\rm ac}`, late drift
+1.6%), and ``nonlinear_gradient_window.py`` differentiates a fixed-step window
+from that state. On a ``16^3`` Cyclone case:
 
-The measurement needs a *saturated* trajectory. The tool integrates with a
-fixed-step RK2, and on the reduced Cyclone case that never saturates: over
-``t = 600`` the fluctuation energy grew by :math:`3.3\times 10^{49}`, drift over
-the final quarters was 100%, and the saturation gate returned **NOT SATURATED**.
-The gradient ladder over :math:`N = 1 \dots 1024` came out *linear* in :math:`N`
-(each doubling roughly doubles the gradient) rather than exponential -- the
-signature of unbounded linear growth, not of a chaotic adjoint.
+.. list-table:: :math:`|dQ/d(\text{drive scale})|` from a verified-saturated state
+   :header-rows: 1
 
-The cause is the time step, not the physics. The shipped nonlinear TOML sets
-``fixed_dt = false`` with ``dt_max = 0.05``: the :math:`E\times B` nonlinearity
-imposes a CFL condition that tightens as the amplitude grows, so a fixed-step
-scheme that is stable during the linear phase goes unstable once the
-nonlinearity would otherwise bite. Forcing a fixed step removed exactly the
-mechanism that saturates the run.
+   * - :math:`N`
+     - :math:`t`
+     - :math:`t/\tau_{\rm ac}`
+     - gradient
+     - ratio to previous
+   * - 64
+     - 2.49
+     - 0.28
+     - 1.854e-01
+     - 2.190
+   * - 128
+     - 4.98
+     - 0.56
+     - 4.040e-01
+     - 2.179
+   * - 256
+     - 9.96
+     - 1.12
+     - 8.353e-01
+     - 2.068
+   * - 512
+     - 19.92
+     - 2.23
+     - 1.673e+00
+     - 2.003
+   * - 1024
+     - 39.83
+     - 4.47
+     - 2.297e+00
+     - **1.373**
 
-The fix is to separate the two phases, which is also what the windowed-adjoint
-literature does: reach saturation with the production adaptive integrator, then
-unroll a *short* fixed-step window from that state for differentiation. Adaptive
-stepping is awkward to differentiate because the step count varies with the
-parameter; a fixed-step window avoids that, and only needs to be stable over the
-window rather than over the whole trajectory.
+The gradient grows **linearly** in :math:`N` -- each doubling multiplies it by
+2.0 to 2.2 -- out to :math:`N = 512`, then the ratio breaks to 1.37. There is no
+exponential divergence anywhere in the accessible range, which reaches
+:math:`t \approx 40 \approx 4.5\,\tau_{\rm ac}`.
 
-A second constraint is memory. Reverse mode through the window OOM'd a 16 GB
-card at ``N = 2048`` even with ``jax.checkpoint``; XLA reported it could not get
-below 5.3 GiB. ``N = 1024`` fits at a ``16^3`` grid. Any production scheme has to
-budget for this rather than discover it.
+That is the opposite of the expected behaviour and better news than the plan
+assumed. Linear growth is what a windowed adjoint does while the perturbation is
+still propagating coherently; the break at :math:`N = 1024` is the beginning of
+decorrelation, not blow-up. **The usable window is therefore at least 4.5
+correlation times**, against [iGENE2026]_'s divergence at roughly one.
+
+Three caveats, none of which the numbers above resolve:
+
+* This is a **lower bound**. The knee was not found because the ladder stops at
+  :math:`N = 1024`; reverse mode OOM'd a 16 GB card at :math:`N = 2048` even with
+  ``jax.checkpoint`` (XLA could not get below 5.3 GiB). Whether divergence
+  appears at 10 or 100 :math:`\tau_{\rm ac}` is untested.
+* The objective is a state-norm proxy, not the production heat flux. It shares
+  the trajectory's Lyapunov behaviour but is not the quantity being optimized.
+* One case, one resolution, one drive parameter.
+
+**Precision note, found here and applicable well beyond this measurement.** The
+production stepper sets its state dtype with ``result_type(G0, complex64)``, so a
+single-precision seed pins the whole trajectory to complex64 **even with
+JAX_ENABLE_X64 set**. The saved saturated state came back single precision and
+only surfaced because ``lax.scan`` rejected the mismatched carry against an x64
+RHS. Whether the tracked nonlinear production results are themselves single
+precision is worth checking on its own; it would affect every nonlinear number in
+the repository, not just this one.
 
 **N3 -- Bias against finite differences, inside the window.** At
 :math:`N` below the knee, compare the windowed adjoint with the existing central

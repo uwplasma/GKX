@@ -17,6 +17,15 @@ or from Python.
 pip install gkx && gkx
 ```
 
+<!-- MOVIE SLOT: replace with the committed asset once encoded.
+     Do not point this at a URL that has not been uploaded. -->
+
+**Saturated ITG turbulence on a Cyclone flux tube**, shown as the perpendicular
+cut a gyrokineticist reads and as the field-aligned tube in real space — the
+same data, twice, because a flux-tube movie that only shows the perpendicular
+plane hides the parallel elongation that defines the turbulence. Regenerate with
+[`tools/artifacts/build_turbulence_movie.py`](tools/artifacts/build_turbulence_movie.py).
+
 ## Why GKX
 
 | | |
@@ -78,166 +87,49 @@ nonlinear, Miller, VMEC, restart, quasilinear, and plotting workflows.
 
 ## Differentiable matrix-free eigenmodes
 
-Linear and quasilinear design studies need a few physical modes and their
-derivatives, not a dense spectrum. GKX applies the full gyrokinetic RHS inside
-a restarted eigensolver, so storage is `O(n m)` rather than `O(n²)`. At the
-largest tested QI truncation (`n = 494,592`), that avoids a **3.6 TiB**
-complex128 matrix.
+Design studies need a few physical modes and their derivatives, not a dense
+spectrum. GKX applies the full gyrokinetic RHS inside a restarted eigensolver, so
+storage is `O(n m)` rather than `O(n²)`.
 
 ![Matrix-free reach](docs/_static/eigensolver_reach.png)
 
-The dense path is bounded by memory, not speed — it cannot represent the largest
-truncations at any speed. Which inner solver to use inside shift-invert is a
-separate, still-open question; see [numerical defaults](docs/solvax_defaults.rst)
-for what is settled and what is not.
-
-> **Availability:** the adaptive objective currently uses the differentiable
-> eigenpair API in [SOLVAX PR #65](https://github.com/uwplasma/SOLVAX/pull/65).
-> CI pins that paired commit until the API is merged and released. The
-> shift-invert and Hermite-line solver works with released SOLVAX.
+The dense path is bounded by **memory, not speed** — at the largest tested
+truncation (`n = 494,592`) its operator alone would be 3.6 TiB, so it cannot
+represent the problem at any speed.
 
 ```python
-import jax
-import gkx
-
 settings = gkx.AdaptiveLinearEigensolverConfig(tolerance=1e-9, candidate_count=2)
 
 def objective(boundary):
-    geometry = build_solver_geometry(boundary)
     values = gkx.solver_objective_vector_from_geometry(
-        geometry,
-        n_laguerre=16,
-        n_hermite=24,
-        eigensolver="adaptive-propagator",
-        adaptive_config=settings,
+        build_solver_geometry(boundary),
+        n_laguerre=16, n_hermite=24,
+        eigensolver="adaptive-propagator", adaptive_config=settings,
     )
-    return values[-1]  # quasilinear transport objective
+    return values[-1]          # quasilinear transport objective
 
 value, gradient = jax.value_and_grad(objective)(initial_shape)
 ```
 
-The geometry builder may be analytic, Miller, or a differentiable VMEC/Boozer
-pipeline. The objective exposes growth, frequency, mode scale, and quasilinear
-transport. Reverse mode uses
-`dλ/dp = wᴴ(dA/dp)v / (wᴴv)` plus a bordered solve for eigenvector observables;
-it does not differentiate through thousands of iterations. Value-only calls
-skip the unused adjoint solve. Residual, overlap, spectral-gap, and
-eigenpair-conditioning gates reject ambiguous modes.
+Reverse mode uses `dλ/dp = wᴴ(dA/dp)v / (wᴴv)` plus a bordered solve for
+eigenvector observables — no differentiation through the iteration. Residual,
+overlap, spectral-gap and conditioning gates reject ambiguous modes.
 
-### Why this is different
-
-| Approach | Memory | Branch handling | Optimization derivative |
+| | Memory | Branch handling | Derivative |
 | --- | ---: | --- | --- |
 | Dense eigensolve | `O(n²)` | all modes at small `n` | dense eigenvector AD |
 | Initial-value fit | `O(n)` | can switch at crossings | long-trajectory AD |
-| **GKX** | **`O(n m)`** | **certified candidates and continuation** | **implicit JAX VJP** |
+| **GKX** | **`O(n m)`** | **certified candidates + continuation** | **implicit JAX VJP** |
 
-For a target or continuation shift, the default physics-aware policy keeps
-cold setup small: it uses the FFT plus tridiagonal Hermite-streaming inverse
-for electrostatic models, selects the exact low-moment field correction
-immediately for electromagnetic models, and retries a rejected electrostatic
-pair with that correction. Every choice is certified with the original
-operator residual:
+Opt-in: the default stays dense so established results are unchanged. Measured
+boundaries, the sparse fallback, the physics-aware shift inverse and what is
+*not* claimed are in the [eigensolver documentation](docs/differentiable_eigensolver.rst);
+the inner-solver choice behind it is in [numerical defaults](docs/solvax_defaults.rst).
 
-```python
-from gkx.solvers.linear import dominant_eigenpair
+> **Availability:** the adaptive objective uses the eigenpair API in
+> [SOLVAX PR #65](https://github.com/uwplasma/SOLVAX/pull/65); CI pins that
+> commit until it is released. The shift-invert path works with released SOLVAX.
 
-value, mode = dominant_eigenpair(
-    seed,
-    cache,
-    linear_params,
-    terms=linear_terms,
-    method="shift_invert",
-    shift=previous_eigenvalue,
-    shift_source="reference",
-    shift_preconditioner="auto",
-    shift_outer_residual_tol=1e-7,
-)
-```
-
-On an RTX A4000, the structured line inverse reduced representative shifted
-solves from more than 1,024 iterations with diagonal damping to 39 at `n=768`
-and 63 at `n=1,536`. For the reduced QI eigenpair at `n=1,536`, avoiding
-unneeded field setup reduced a certified cold solve from 11.72 s to 9.64 s
-(`2.6e-11` residual); on an 18-core Xeon W-2295 the same fresh-process pair was
-12.28 s versus 13.08 s. Across reduced ITG, ETG, finite-mass TEM, Miller, and
-electromagnetic KBM/Bpar gates, auto recovered the dense target with
-`2.3e-10` or smaller residual and selected field correction for the
-electromagnetic cases. A continued eigenpair at `n=4,480` took 12.40 s cold
-and 11.37 s warm, versus 25.19 s for a same-device dense full spectrum;
-eigenvalue error was `9.2e-12` and the residual `1.8e-10`. These are
-supplied-shift results, not cold-discovery timings.
-
-Cold discovery can instead project matrix-free actions of `exp(T A)` onto an
-inner Arnoldi space, then extract the leading modes in a small outer space:
-
-```python
-settings = AdaptiveLinearEigensolverConfig(
-    krylov_dim=24,
-    candidate_count=2,
-    max_restarts=14,
-    exponential_krylov_dim=96,
-    exponential_horizon=5.0,
-)
-```
-
-This opt-in path removes the explicit RK4 stability limit while still
-certifying the final pair against `A`, not against the exponential
-approximation. For the qualified reduced `Nl=4`, `Nm=8`, `n=1,536` QI case it reached
-`3.1e-10` residual in 61.32 s cold; the stability-limited path took 110.12 s
-and stopped at `3.2e-6`. The exponential basis is also used for the adjoint
-mode, while the optimization derivative remains an implicit bordered solve.
-
-### Current performance boundary
-
-The path remains opt-in. A cold `n=6,144` objective plus reverse gradient took
-142.75 s versus 171.81 s for dense AD, with `1.5e-10` relative gradient error.
-The physical-collision QI ladder is now closed through `(Nl,Nm)=(14,28)`
-(`n=18,816`). The last two frequency changes were 0.50% and 0.90%, both below
-the predeclared 1% gate, and the original-operator residuals were `2.4e-13` and
-`2.3e-13`. A bounded sparse validation assembled 64 operator columns at a time,
-so this gate required `2.29e6` stored nonzeros rather than a dense matrix.
-
-That validation is available as `method="sparse_shift_invert"` for a supplied
-or coarse-grid shift. It factors the complete streaming–mirror–field operator,
-not a reduced physics model. At `n=6,144`, a fresh process took 3.09 s to
-assemble, 38.05 s to factor, and 1.64 s for four Arnoldi candidates
-(`8.5e-14` residual). The SOLVAX bridge can reuse that factor for the
-conjugate-transpose adjoint: the four-candidate left solve took 1.81 s with a
-`2.2e-13` residual, so an implicit reverse wrapper need not repeat the 38.05 s
-factorization.
-Unshifted rightmost Arnoldi exceeded 100 s already at `n=1,536`; GKX therefore
-requires an informed shift for this high-resolution fallback rather than
-hiding slow branch discovery behind a “cold” label.
-
-```python
-fine_value, fine_mode = dominant_eigenpair(
-    fine_seed,
-    fine_cache,
-    linear_params,
-    terms=linear_terms,
-    method="sparse_shift_invert",
-    shift=coarse_value,
-)
-```
-
-The separate collisionless hard-truncation stress test (`n=494,592`) remained
-unconverged in frequency and took 1,504 s; a small residual for one finite
-matrix is not a velocity-convergence result.
-
-GKX therefore does **not** claim universally faster cold discovery than other
-eigensolvers without a same-physics benchmark. Against the standard dense
-matrix and long-trajectory implementations tested here, its demonstrated
-advantages are bounded memory, faster certified solves in the qualified
-regime, explicit branch tracking, and implicit derivatives that stay inside
-the JAX physics graph. Geometry-to-growth optimization therefore needs neither
-finite differences nor differentiation through an iteration tape. Every claim
-uses the original complex128 operator residual. Details and limitations are in
-the
-[eigensolver documentation](docs/differentiable_eigensolver.rst); relevant
-methods include the [gyrokinetic matrix-free study](https://doi.org/10.1016/j.cpc.2011.12.018),
-the [Laguerre–Hermite formulation](https://doi.org/10.1017/S0022377818000041),
-and [Krylov matrix exponentials](https://doi.org/10.1137/S0036142995280572).
 
 ## Validation
 
@@ -325,10 +217,8 @@ also be a better physical answer than an unconverged Coulomb one; see
 
 ### How the operators are verified
 
-Every shipped matrix is checked against the published closed forms rather than
-only against itself. All twelve Appendix-C coefficients reproduce exactly, and
-the structural properties a linearized collision operator must satisfy are
-gated numerically:
+Every shipped matrix is checked against the published closed forms, not only
+against itself:
 
 | Property | Result |
 | --- | --- |
@@ -337,26 +227,17 @@ gated numerically:
 | Onsager self-adjointness | exact (≤ 3.4e-17) |
 | Published Appendix-C coefficients | reproduce to 1e-12 |
 | Finite-Larmor `b -> 0` limit | reduces to the drift-kinetic operator exactly |
-| Finite-Larmor conservation defect | scales as `B^1.96`-`B^1.99`, i.e. first order in `b` |
-
-The finite-Larmor operator acts on gyrocenter moments, whose conservation is
-modified by gyroaveraging, so the *ordering* is the test: the defect must vanish
-at `b = 0` and enter at first order in `b`. Tables ship at 8 and 18
-Hermite-Laguerre moments, generated in 60-digit arithmetic and stored as
-checksummed float64.
-
-The Coulomb tables are generated for like-species collisions; a multispecies
-request is refused rather than silently extrapolated. Equations, thresholds,
-machine-readable results, literature links, and the reproduction recipe are in
-the [collision-operator documentation](docs/operators.rst).
+| Finite-Larmor conservation defect | scales as `B^1.96`-`B^1.99`, first order in `b` |
 
 ![Coulomb collision operator verification](docs/_static/collision_operator_verification.png)
 
-At `(P,J)=(24,10)` the drift-kinetic traces approach the Xiao residual and the
-finite-wavelength tails reproduce the published `original < improved < Coulomb`
-ordering at both `kx rho_i = 0.1` and `0.2`. Paper-resolution zonal-response
-panels, velocity-space convergence and the Figure 12–14 gate:
-[operators](docs/operators.rst).
+The finite-Larmor operator acts on gyrocenter moments, whose conservation is
+modified by gyroaveraging, so the *ordering* is the test: the defect must vanish
+at `b = 0` and enter at first order. Coulomb tables are generated for
+like-species collisions; a multispecies request is refused rather than silently
+extrapolated. Equations, thresholds, convergence panels and the reproduction
+recipe: [operators](docs/operators.rst).
+
 
 ## Full feature list
 
