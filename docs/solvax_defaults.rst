@@ -25,51 +25,27 @@ What GKX consumes today
    * - ``chunked_jacfwd``
      - bounded-memory geometry Jacobians (``geometry/autodiff_checks.py``)
 
-Four of SOLVAX's 113 public entry points. The gap is not by itself a defect --
-most of SOLVAX exists for problems GKX does not have -- but two of the unused
-facilities address costs GKX measurably pays, and those are recorded below.
+Four of SOLVAX's 113 public entry points. That ratio is not evidence of
+anything on its own -- most of SOLVAX exists for problems GKX does not have --
+and the one place it was tested, the shift-invert inner solve below, the
+unmigrated incumbent turned out to be the right choice.
 
-The shift-invert inner solve is not migrated
---------------------------------------------
+The shift-invert inner solve: measured, and the incumbent wins
+--------------------------------------------------------------
 
 ``solvers/linear/krylov_algorithms.py`` imports ``gmres`` from
 ``jax.scipy.sparse.linalg``, not from SOLVAX. This is deliberate and recorded in
 :doc:`solvers`: the branch-continuity gate on that lane is open, so it was never
-promoted. What was missing is the size of the difference.
+promoted. The open question was whether migrating would buy anything.
 
 Shift-invert Arnoldi issues ``krylov_dim * restarts`` solves against the *same*
-shifted operator, varying only the right-hand side, and starts each one cold.
-``tools/campaigns/shift_invert_recycling.py`` measures the alternatives on the
-production operator, counting matrix-vector products.
+shifted operator, varying only the right-hand side, and starts each one cold --
+the sequence-of-related-systems that Krylov recycling targets.
+``tools/campaigns/shift_invert_recycling.py`` measures the candidates on the
+production operator with the physics-aware Hermite-line preconditioner active
+and a stated shift offset, counting matrix-vector products.
 
-.. warning::
-
-   **The comparison table below is retracted.** It was produced by a harness
-   with two defects, both found after publication:
-
-   1. The tool passed ``preconditioner="auto"``, which is a valid value for
-      ``dominant_eigenpair`` but **not** one of the names
-      ``_build_shift_invert_precond`` matches. That function returns
-      ``(None, None)`` for an unrecognised name rather than raising, so the runs
-      were **unpreconditioned** while reporting that the Hermite-line inverse was
-      active.
-   2. The shift was set to the exact dense rightmost eigenvalue, making
-      :math:`A - \sigma I` singular by construction. Unpreconditioned GMRES only
-      stalls on that -- which is what produced the ``1e-2`` "stall" readings --
-      whereas a working preconditioner inverts the near-null direction and
-      returns NaN.
-
-   The exact-LU control could not catch either defect, because it bypasses both
-   the preconditioner and the conditioning of the shifted solve. A control that
-   shares an assumption with the thing it checks validates nothing.
-
-   The tool now takes a **stated** relative shift offset, so shift quality is an
-   independent variable rather than an accident, and raises if the
-   preconditioner resolves to ``None``. Numbers will be restored here only after
-   a run passes its controls. **Nothing in this section should be cited until
-   then**, and no default was changed on the strength of it.
-
-.. list-table:: Cyclone s-alpha, error against the dense reference
+.. list-table:: Cyclone s-alpha, 1% shift offset, error against the dense reference
    :header-rows: 1
 
    * - inner solver
@@ -78,51 +54,70 @@ production operator, counting matrix-vector products.
      - ``n=1536`` (ratio 48)
    * - exact LU (harness control)
      - --
-     - ``1.42e-15``
-     - ``5.44e-15``
-   * - ``jax.scipy`` GMRES (incumbent)
-     - 320
-     - ``2.27e-02``
-     - ``1.19e-02``
+     - ``1.56e-15``
+     - ``5.48e-15``
+   * - **jax.scipy GMRES (incumbent)**
+     - **320**
+     - **9.12e-15**
+     - **4.39e-15**
    * - ``solvax.gmres``
      - 256
-     - ``4.91e-04``
-     - ``9.96e-03``
+     - ``1.06e-11``
+     - ``2.95e-11``
    * - ``solvax.gcrot`` (FIFO recycling)
      - 760
-     - ``1.42e-15``
-     - ``5.60e-15``
+     - ``3.12e-12``
+     - ``2.70e-12``
    * - ``solvax.gcrot`` (harmonic / GCRO-DR)
      - 760
-     - ``1.48e-15``
-     - ``5.60e-15``
+     - ``2.99e-13``
+     - ``7.99e-12``
 
-"Ratio" is the spectral radius over the wanted eigenvalue's magnitude, the
-measure of how interior the target is.
+**Verdict: change nothing.** Every candidate converges. The incumbent matches an
+exact direct inner solve to within a few times machine epsilon, at the second
+lowest matrix-vector count. Recycling costs 2.4x the matrix-vector products and
+is one to three orders of magnitude less accurate: the recycle space buys nothing
+here because the preconditioned shifted system is already well conditioned, and
+its extra operator applications per restart are pure overhead.
 
-The apparent reading -- that recycling reproduced an exact direct inner solve
-while plain GMRES stalled near ``1e-2`` -- does not survive the defects listed in
-the warning above. The ``1e-2`` figures are what an *unpreconditioned* GMRES does
-on a *singular* shifted system, which is not a statement about GMRES.
+That GKX consumes four of 113 SOLVAX entry points is therefore not, by itself,
+evidence of a missed opportunity on this path.
 
-Whether recycling helps a correctly preconditioned, non-singular shifted solve
-is therefore still **open**. It is worth re-measuring, because the underlying
-argument stands on its own: shift-invert really does issue many solves against
-one operator, and that really is what recycling targets.
+Wall-clock times are not reported: the variants share one process and the first
+JAX-backed rung absorbs compilation, which makes the ordering an artifact of the
+harness rather than a property of the solvers.
 
-Wall-clock times from that run are not reported: the variants share one process
-and the first JAX-backed rung absorbs compilation, which makes the ordering an
-artifact of the harness rather than a property of the solvers.
+How this was got wrong first
+----------------------------
 
-The exact-LU row is a control, not a candidate. An outer Arnoldi that cannot
-reach the dense reference with exact inner solves makes every other row
-meaningless, and this one earned its place immediately: it failed at ``5.09`` and
-exposed a branch-selection bug in the measurement tool. Shift-invert concentrates
-the eigenvalue nearest the shift into the largest :math:`|\theta|`; the tool had
-selected on :math:`\max \operatorname{Re}\lambda` after mapping back through
-:math:`\lambda = \sigma + 1/\theta`, which lets an inaccurate Ritz value with
-small :math:`|\theta|` map to a spurious :math:`\lambda` right of the true
-rightmost eigenvalue.
+Recorded because the failure mode is reusable, not for penance. An earlier
+version of this page reported the opposite conclusion -- that plain GMRES stalled
+near ``1e-2`` while recycling reached machine precision. Two defects produced it:
+
+1. The tool passed ``preconditioner="auto"``. That is a valid value for
+   ``dominant_eigenpair`` but not one of the names
+   ``_build_shift_invert_precond`` matches, and that function returns
+   ``(None, None)`` for an unrecognised name rather than raising. Every run was
+   **unpreconditioned** while the docs claimed otherwise.
+2. The shift was the exact dense rightmost eigenvalue, making
+   :math:`A - \sigma I` singular by construction. Unpreconditioned GMRES stalls
+   on that -- the stall *was* the reported finding -- while a working
+   preconditioner inverts the near-null direction and returns NaN, which is how
+   this finally surfaced.
+
+The tool carried an exact-LU control throughout, and it caught an unrelated
+branch-selection bug. It could not catch either of these, because it bypasses
+both the preconditioner and the conditioning of the shifted solve. **A control
+that shares an assumption with the thing it checks validates nothing.**
+
+A third attempt took the shift from a genuinely coarser rung, which is what
+production continuation does. That failed too: at sizes where a dense reference
+fits there is no room on the resolution ladder, and coarsening ``(2,4)`` to
+``(1,2)`` moved the eigenvalue 6.5 magnitudes, so every solver correctly
+converged to a different eigenvalue. Hence the stated offset, which makes shift
+quality an independent variable instead of an accident.
+
+The tool now raises if the preconditioner resolves to ``None``.
 
 Open candidates
 ---------------
@@ -156,6 +151,7 @@ Reproducing the table
    python tools/campaigns/shift_invert_recycling.py \
        --n-laguerre 2 --n-hermite 4 --nz 12 \
        --krylov-dim 16 --restarts 4 --maxiter 2000 --restart 60 \
+       --shift-offset 1e-2 \
        --output docs/_static/shift_invert_recycling.json
 
 and for the second column, ``--n-laguerre 4 --n-hermite 6 --nz 16``.
