@@ -264,6 +264,21 @@ def main() -> int:
             "nonlinear_saturated_state.py for longer, or pass --allow-unsaturated "
             "to record it as uninterpretable."
         )
+    # The production stepper sets its state dtype from the seed via
+    # result_type(G0, complex64), so a single-precision seed pins the whole
+    # trajectory to complex64 even under JAX_ENABLE_X64 -- the saved state comes
+    # back single precision. The differentiated window runs in the dtype this
+    # case's RHS actually produces, and the mismatch is reported rather than
+    # silently promoted inside the scan carry.
+    probe_dtype = case["rhs"](saturated, 1.0).dtype
+    if saturated.dtype != probe_dtype:
+        print(
+            f"  state dtype {saturated.dtype} != RHS dtype {probe_dtype}; "
+            f"casting the window to {probe_dtype}",
+            flush=True,
+        )
+        saturated = saturated.astype(probe_dtype)
+
     saturated_ok = state_saturated
     energy = float(heat_flux_proxy(saturated))
     print(f"  fluctuation energy at the start of the window: {energy:.6e}", flush=True)
@@ -320,6 +335,7 @@ def main() -> int:
         "saturated_state": str(args.saturated_state),
         "saturated": saturated_ok,
         "interpretable": saturated_ok,
+        "window_dtype": str(probe_dtype),
         "tail_growth_per_time": growth,
         "rows": rows,
     }
