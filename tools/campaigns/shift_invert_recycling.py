@@ -2,7 +2,9 @@
 
 Shift-invert Arnoldi issues ``krylov_dim * restarts`` inner solves against the
 *same* shifted operator ``A - sigma I``, varying only the right-hand side, and
-GKX currently starts each one from scratch with ``solvax.gmres``. That is the
+GKX currently starts each one from scratch with ``jax.scipy.sparse.linalg.gmres``
+-- this path predates the SOLVAX dependency and was never migrated
+(``docs/solvers.rst``). That is the
 textbook sequence-of-related-systems that Krylov recycling targets: the
 directions that limited convergence on solve ``j`` limit solve ``j+1`` too, so
 rediscovering them every time is wasted work (Parks et al. 2006).

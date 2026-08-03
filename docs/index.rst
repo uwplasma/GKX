@@ -52,6 +52,7 @@ the same order they appear in the code.
    geometry
    algorithms
    solvers
+   solvax_defaults
    architecture
    benchmarks
    examples
