@@ -239,21 +239,6 @@ extrapolated. Equations, thresholds, convergence panels and the reproduction
 recipe: [operators](docs/operators.rst).
 
 
-## Full feature list
-
-- Electrostatic and electromagnetic gyrokinetics with kinetic or Boltzmann species.
-- Linear initial-value, dominant-eigenmode, and nonlinear turbulence solvers.
-- Matrix-free eigenmodes with certified residuals, branch continuation, and
-  implicit derivatives — `O(n m)` storage instead of `O(n²)`.
-- Analytic s-alpha, Miller, imported VMEC, and differentiable VMEC/Boozer geometry.
-- JAX JIT, forward/reverse autodiff, implicit eigenvalue derivatives, and UQ tools.
-- Quasilinear transport diagnostics with explicit saturation-rule metadata.
-- CPU/GPU execution and production parallelization for independent scans and ensembles.
-- Restartable NetCDF output and `gkx --plot` publication-style figures.
-- Five selectable collision operators, from a conserving Lenard-Bernstein model
-  to the full linearized Coulomb (Landau) operator with finite-Larmor-radius
-  effects.
-
 ## What GKX Solves
 
 The gyrokinetic equation for the perturbed distribution of each species,
@@ -520,6 +505,21 @@ Validated release claims are bounded by the [release scope](docs/release_scope.r
   substituting the built-in diagonal term.
 - Production nonlinear domain decomposition and equilibrium ExB flow shear
   remain open.
+
+## Full feature list
+
+- Electrostatic and electromagnetic gyrokinetics with kinetic or Boltzmann species.
+- Linear initial-value, dominant-eigenmode, and nonlinear turbulence solvers.
+- Matrix-free eigenmodes with certified residuals, branch continuation, and
+  implicit derivatives — `O(n m)` storage instead of `O(n²)`.
+- Analytic s-alpha, Miller, imported VMEC, and differentiable VMEC/Boozer geometry.
+- JAX JIT, forward/reverse autodiff, implicit eigenvalue derivatives, and UQ tools.
+- Quasilinear transport diagnostics with explicit saturation-rule metadata.
+- CPU/GPU execution and production parallelization for independent scans and ensembles.
+- Restartable NetCDF output and `gkx --plot` publication-style figures.
+- Five selectable collision operators, from a conserving Lenard-Bernstein model
+  to the full linearized Coulomb (Landau) operator with finite-Larmor-radius
+  effects.
 
 ## Examples and Documentation
 
