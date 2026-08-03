@@ -475,6 +475,12 @@ end-to-end JAX differentiability:
   IMEX Hermite factorization is not a valid complex shift preconditioner.
   A dedicated complex block implementation must pass inner and outer residual
   gates before those aliases can advertise streaming-line acceleration.
+  ``None`` and ``"none"`` are the explicit opt-outs; any other unrecognized name
+  raises ``ValueError`` listing the accepted names. Note that ``"auto"`` is
+  *not* accepted here even though ``implicit_preconditioner``, ``mode_family``,
+  and ``shift_selection`` all take it -- silently dropping the preconditioner on
+  an unrecognized name previously let a run report preconditioned timings for a
+  solve that had none.
   A preconditioned solve is checked against the original shifted system; if its
   true residual exceeds the requested tolerance by an order of magnitude, the
   solve is retried without that preconditioner, starting from the finite

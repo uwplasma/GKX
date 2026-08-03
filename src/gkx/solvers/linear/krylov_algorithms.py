@@ -165,6 +165,31 @@ def _select_by_target(
     return jnp.where(use_choice, idx_target, fallback_idx)
 
 
+#: Element-wise inverse of the collisional/hyper damping diagonal.
+SHIFT_PRECOND_DAMPING_NAMES: frozenset[str] = frozenset({"damping"})
+
+#: Streaming-line aliases. They are accepted, but currently resolve to the same
+#: damping diagonal as ``"damping"`` -- see the comment in the branch below.
+SHIFT_PRECOND_LINE_NAMES: frozenset[str] = frozenset(
+    {
+        "hermite-line",
+        "hermite_line",
+        "hermite",
+        "streaming-line",
+        "streaming_line",
+        "hermite-line-coarse",
+        "hermite_line_coarse",
+        "hermite_coarse",
+        "streaming-line-coarse",
+    }
+)
+
+#: Every value ``shift_preconditioner`` accepts, including the explicit opt-out.
+SHIFT_PRECOND_NAMES: frozenset[str] = (
+    SHIFT_PRECOND_DAMPING_NAMES | SHIFT_PRECOND_LINE_NAMES | {"none"}
+)
+
+
 def _build_shift_invert_precond(
     v: jnp.ndarray,
     cache: LinearCache,
@@ -173,13 +198,34 @@ def _build_shift_invert_precond(
     sigma: jnp.ndarray,
     mode: str | None,
 ) -> tuple[jnp.ndarray | None, Callable[[jnp.ndarray], jnp.ndarray] | None]:
-    """Build the preconditioner used inside shift-invert Krylov GMRES solves."""
+    """Build the preconditioner used inside shift-invert Krylov GMRES solves.
+
+    ``None`` and ``"none"`` are the explicit opt-outs and return ``(None, None)``.
+    Any other unrecognized name raises :class:`ValueError`: silently dropping the
+    preconditioner made a mistyped or unsupported mode look like a successful
+    preconditioned solve.
+    """
 
     del term_cfg
-    if mode is None or mode.lower() == "none":
+    if mode is None:
         return None, None
-    mode_key = mode.lower()
-    if mode_key == "damping":
+    mode_key = mode.strip().lower()
+    if mode_key == "none":
+        return None, None
+    if mode_key not in SHIFT_PRECOND_NAMES:
+        accepted = ", ".join(repr(name) for name in sorted(SHIFT_PRECOND_NAMES))
+        hint = ""
+        if mode_key == "auto":
+            hint = (
+                " 'auto' is accepted by 'implicit_preconditioner' and by the"
+                " 'mode_family'/'shift_selection' options, but not here; pass"
+                " 'damping' to request the default shift-invert preconditioner."
+            )
+        raise ValueError(
+            f"unknown shift-invert preconditioner {mode!r}; accepted names are "
+            f"{accepted}, or None to disable preconditioning.{hint}"
+        )
+    if mode_key in SHIFT_PRECOND_DAMPING_NAMES:
         damping = _compute_damping(v, cache, params)
         diag = -damping.astype(v.dtype) - sigma
         safe = jnp.where(jnp.abs(diag) > 0.0, diag, 1.0 + 0.0j)
@@ -192,19 +238,6 @@ def _build_shift_invert_precond(
             return (x * precond).reshape(size)
 
         return precond, apply_precond_damping
-
-    if mode_key not in {
-        "hermite-line",
-        "hermite_line",
-        "hermite",
-        "streaming-line",
-        "streaming_line",
-        "hermite-line-coarse",
-        "hermite_line_coarse",
-        "hermite_coarse",
-        "streaming-line-coarse",
-    }:
-        return None, None
 
     damping = _compute_damping(v, cache, params)
     diag = -damping.astype(v.dtype) - sigma
@@ -889,6 +922,9 @@ def dominant_eigenpair_propagator_cached(
 
 
 __all__ = [
+    "SHIFT_PRECOND_DAMPING_NAMES",
+    "SHIFT_PRECOND_LINE_NAMES",
+    "SHIFT_PRECOND_NAMES",
     "_advance_imex2",
     "_apply_operator",
     "_arnoldi",
