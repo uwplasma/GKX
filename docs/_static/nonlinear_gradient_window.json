@@ -1,0 +1,103 @@
+{
+  "kind": "nonlinear_gradient_window",
+  "claim_level": "windowed_adjoint_divergence_curve_on_the_production_nonlinear_rhs",
+  "case": "runtime_cyclone_nonlinear_t400.toml",
+  "grid_override": {
+    "Nx": 16,
+    "Ny": 16,
+    "Nz": 16
+  },
+  "dissipation": {
+    "nu": 0.0,
+    "nu_hyper": 0.0,
+    "nu_hyper_m": 1.0,
+    "nu_hyper_l": 0.0,
+    "D_hyper": 0.05
+  },
+  "dt": 0.0389,
+  "saturated_energy": 0.7676553675076255,
+  "saturated_state": "/home/rjorge/saturated_state.npz",
+  "saturated": true,
+  "interpretable": true,
+  "window_dtype": "complex128",
+  "tail_growth_per_time": 0.07403229140024488,
+  "rows": [
+    {
+      "window": 1,
+      "objective": 0.7677613087256644,
+      "gradient": 0.002321884912184117,
+      "abs_gradient": 0.002321884912184117,
+      "seconds": 20.745908498764038
+    },
+    {
+      "window": 2,
+      "objective": 0.7678707232563448,
+      "gradient": 0.004665369067939747,
+      "abs_gradient": 0.004665369067939747,
+      "seconds": 11.613214492797852
+    },
+    {
+      "window": 4,
+      "objective": 0.7680999085484393,
+      "gradient": 0.009417171818489854,
+      "abs_gradient": 0.009417171818489854,
+      "seconds": 11.462032794952393
+    },
+    {
+      "window": 8,
+      "objective": 0.7685990133924436,
+      "gradient": 0.019179862394852126,
+      "abs_gradient": 0.019179862394852126,
+      "seconds": 11.650436401367188
+    },
+    {
+      "window": 16,
+      "objective": 0.7697493608209603,
+      "gradient": 0.03973083463997993,
+      "abs_gradient": 0.03973083463997993,
+      "seconds": 11.458418369293213
+    },
+    {
+      "window": 32,
+      "objective": 0.7724509789157737,
+      "gradient": 0.08467551920677778,
+      "abs_gradient": 0.08467551920677778,
+      "seconds": 11.81362009048462
+    },
+    {
+      "window": 64,
+      "objective": 0.776735838143328,
+      "gradient": 0.18541168256373647,
+      "abs_gradient": 0.18541168256373647,
+      "seconds": 12.35582709312439
+    },
+    {
+      "window": 128,
+      "objective": 0.7753860164976224,
+      "gradient": 0.4040002744496272,
+      "abs_gradient": 0.4040002744496272,
+      "seconds": 12.981787204742432
+    },
+    {
+      "window": 256,
+      "objective": 0.7542412437256751,
+      "gradient": 0.8352953108279533,
+      "abs_gradient": 0.8352953108279533,
+      "seconds": 14.861341953277588
+    },
+    {
+      "window": 512,
+      "objective": 0.7691676278137604,
+      "gradient": 1.6727521018908786,
+      "abs_gradient": 1.6727521018908786,
+      "seconds": 25.02611017227173
+    },
+    {
+      "window": 1024,
+      "objective": 0.8660838409241686,
+      "gradient": 2.297245018611267,
+      "abs_gradient": 2.297245018611267,
+      "seconds": 44.729278564453125
+    }
+  ]
+}
