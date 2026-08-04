@@ -67,12 +67,19 @@ def _check_healthy(phi: np.ndarray, where: str, ceiling: float) -> None:
         raise RuntimeError(
             f"{where}: solution contains non-finite values -- the timestep "
             "violates the CFL condition for this grid. Reduce --dt."
+            " If the run was merely approaching saturation, raise --ceiling "
+            "instead: measure the saturated amplitude rather than assuming it."
         )
     if peak > ceiling:
         raise RuntimeError(
             f"{where}: max|phi| = {peak:.3e} exceeds the sanity ceiling "
-            f"{ceiling:.3e}. Saturated ITG turbulence is order 0.1-1, so this "
-            "is a numerical blow-up, not physics. Reduce --dt."
+            f"{ceiling:.3e}. Raise --ceiling if this case genuinely saturates "
+            "higher -- measure it with "
+            "tools/campaigns/nonlinear_saturated_state.py rather than guessing. "
+            "A verified-saturated Cyclone state has max|phi| = 137.7, so a "
+            "ceiling near 50 aborts healthy runs. Reducing --dt is usually the "
+            "wrong lever: this case ran stably under the adaptive stepper at "
+            "dt = 0.031, larger than fixed steps that appeared to fail."
         )
 
 
@@ -582,8 +589,10 @@ def main() -> int:
     parser.add_argument(
         "--ceiling",
         type=float,
-        default=50.0,
-        help="abort if max|phi| exceeds this; saturated ITG is order 0.1-1",
+        default=1.0e3,
+        help="abort if max|phi| exceeds this. Calibrated against a state that "
+        "passes every check in tools/campaigns/nonlinear_saturated_state.py, "
+        "which has max|phi| = 137.7 -- not against an assumed order of magnitude",
     )
     parser.add_argument("--nx", type=int, default=None)
     parser.add_argument("--ny", type=int, default=None)
