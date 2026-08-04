@@ -53,7 +53,6 @@ the same order they appear in the code.
    algorithms
    solvers
    solvax_defaults
-   nonlinear_gradient_plan
    architecture
    benchmarks
    examples
