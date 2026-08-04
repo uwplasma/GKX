@@ -41,9 +41,9 @@ promoted. The open question was whether migrating would buy anything.
 Shift-invert Arnoldi issues ``krylov_dim * restarts`` solves against the *same*
 shifted operator, varying only the right-hand side, and starts each one cold --
 the sequence-of-related-systems that Krylov recycling targets.
-``tools/campaigns/shift_invert_recycling.py`` measures the candidates on the
-production operator with the physics-aware Hermite-line preconditioner active
-and a stated shift offset, counting matrix-vector products.
+The candidates were measured on the production operator with the physics-aware
+Hermite-line preconditioner active and a stated shift offset, counting
+matrix-vector products.
 
 .. list-table:: Cyclone s-alpha, 1% shift offset, error against the dense reference
    :header-rows: 1
@@ -117,8 +117,6 @@ fits there is no room on the resolution ladder, and coarsening ``(2,4)`` to
 converged to a different eigenvalue. Hence the stated offset, which makes shift
 quality an independent variable instead of an accident.
 
-The tool now raises if the preconditioner resolves to ``None``.
-
 Open candidates
 ---------------
 
@@ -143,18 +141,15 @@ Each of these is a hypothesis with a stated reason, not a plan of record.
     operators exact by construction rather than approximations. Untested, and
     the most promising of the three.
 
-Reproducing the table
----------------------
+Provenance
+----------
 
-.. code-block:: bash
+The harness that produced the table, ``tools/campaigns/shift_invert_recycling.py``,
+was **removed after it answered its question**. It existed to decide one thing --
+whether to migrate the shift-invert inner solve -- and the answer was no. Keeping
+380 lines of benchmark in the tree to defend a decision to change nothing is the
+wrong trade; it is recoverable from commit ``3aa1591b`` if the question reopens.
 
-   python tools/campaigns/shift_invert_recycling.py \
-       --n-laguerre 2 --n-hermite 4 --nz 12 \
-       --krylov-dim 16 --restarts 4 --maxiter 2000 --restart 60 \
-       --shift-offset 1e-2 \
-       --output docs/_static/shift_invert_recycling.json
-
-and for the second column, ``--n-laguerre 4 --n-hermite 6 --nz 16``.
-
-The exact-LU control runs first and must report an error at machine precision.
-If it does not, no other row in the output is interpretable.
+What survives is the number that matters and the reason to trust it: the exact-LU
+control reached machine precision on the same harness that produced the rest of
+the column, so the comparison was measured rather than assumed.
