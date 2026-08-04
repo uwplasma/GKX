@@ -447,25 +447,25 @@ analytic Jacobian. Regenerate with
 evidence the objective now drives the design it is supposed to drive; it is not
 evidence of nonlinear flux reduction, which requires the audits below.
 
-### Long-window audits
+### Nonlinear flux reduction is not demonstrated
 
-![VMEX QA max-mode-5 optimizer sweep](docs/_static/vmex_qa_full_sweep_panel.png)
+The weight scan above fixes the *objective*, not the physics claim. Matched
+long post-transient nonlinear audits of the reweighted designs have not been
+run. The earlier audits, which used converged post-transient heat-flux windows,
+predate the reweighting and showed no statistically significant transport
+reduction against the strict QA baseline.
 
-**These rows are not promoted turbulent-flux designs.** Their matched long
-post-transient nonlinear audits use converged post-transient heat-flux windows
-and show no statistically significant transport reduction against the strict QA
-baseline — useful negative evidence for objective conditioning and optimizer
-choice. Those audits predate the reweighting above and are the next thing to
-repeat.
-
-The RBC(1,1) scan below is a landscape and noise diagnostic, not a source of
-admitted candidates.
-
-![QA RBC(1,1) transport landscape](docs/_static/vmec_boundary_transport_landscape_rbc11_full.png)
+Two measurements say why that evidence is not close. The production gradient
+gate is blocked at `gradient_uncertainty_rel = 1.806` against a 0.5 maximum,
+and the heat-flux windows behind it hold only 2.6-11.8 statistically
+independent samples, so their error bars are understated 2.0-3.7x. Closing that
+by longer averaging alone costs more than 13x the sampling. See the
+[nonlinear gradient plan](docs/nonlinear_gradient_plan.rst).
 
 Scripts: [examples/optimization](examples/optimization). Objective equations,
-optimizer policies and long-window audits:
+optimizer policies and the audit record:
 [optimization docs](docs/stellarator_optimization.rst).
+
 
 ## Parallelization
 

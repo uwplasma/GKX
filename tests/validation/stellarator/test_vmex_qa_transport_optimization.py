@@ -168,14 +168,18 @@ def test_readme_uses_solved_vmec_qa_geometry_not_reduced_surface_panel() -> None
     manuscript = (ROOT / "docs" / "manuscript_figures.rst").read_text(encoding="utf-8")
     normalized_readme = re.sub(r"\s+", " ", readme)
 
-    assert "docs/_static/vmex_qa_full_sweep_panel.png" in readme
-    assert "docs/_static/vmec_boundary_transport_landscape_rbc11_full.png" in readme
+    # The README must not present a reduced or flattering optimization figure.
+    # It is NOT required to carry the solved-geometry sweep panel: that panel's
+    # own status line reads "failed_empty_strict_window", its four boundaries and
+    # |B| contours are visually identical, and a 16-panel diagnostic dump is not
+    # a README result. It stays in the docs, which is where the audit record
+    # belongs; what the README owes the reader is the honest statement below.
     assert "docs/_static/qa_itg_optimization_summary_panel.png" not in readme
     assert "docs/_static/vmex_qa_solved_boundary_boozer_panel.png" not in readme
     assert "docs/_static/stellarator_itg_optimization_comparison.png" not in readme
     assert "docs/_static/stellarator_itg_optimization_uq.png" not in readme
-    assert "not promoted turbulent-flux designs" in normalized_readme
-    assert "matched long post-transient nonlinear" in normalized_readme
+    assert "Nonlinear flux reduction is not demonstrated" in normalized_readme
+    assert "matched long post-transient nonlinear" in normalized_readme.lower()
 
     assert "_static/vmex_qa_full_sweep_panel.png" in docs
     assert "_static/vmec_boundary_transport_landscape_rbc11_full.png" in docs
