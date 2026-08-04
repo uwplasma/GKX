@@ -12,11 +12,9 @@ and KBM models; electrostatic and electromagnetic fields; one or more kinetic
 species; periodic and twist-and-shift domains; and analytic, Miller, and VMEC
 geometry.
 
-The adaptive objective currently requires the differentiable eigenpair API in
-SOLVAX pull request 65.  GKX CI tests the paired repositories at an immutable
-SOLVAX commit; the feature becomes installable from released packages after
-that API is merged and released.  Published SOLVAX already supports the
-shift-invert and Hermite-line path.
+The differentiable eigenpair API this path uses ships in SOLVAX 0.12.0, so the
+feature installs from released packages; ``pyproject.toml`` requires that
+version.  GKX CI no longer pins a SOLVAX commit.
 
 The matrix-free storage is ``O(n m)`` for state size ``n`` and subspace size
 ``m``, versus ``O(n^2)`` for dense validation.  A complex128 matrix for the

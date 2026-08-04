@@ -126,9 +126,6 @@ boundaries, the sparse fallback, the physics-aware shift inverse and what is
 *not* claimed are in the [eigensolver documentation](docs/differentiable_eigensolver.rst);
 the inner-solver choice behind it is in [numerical defaults](docs/solvax_defaults.rst).
 
-> **Availability:** the adaptive objective uses the eigenpair API in
-> [SOLVAX PR #65](https://github.com/uwplasma/SOLVAX/pull/65); CI pins that
-> commit until it is released. The shift-invert path works with released SOLVAX.
 
 
 ## Validation

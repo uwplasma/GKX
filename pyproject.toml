@@ -31,7 +31,7 @@ dependencies = [
   "netCDF4",
   "diffrax",
   "equinox",
-  "solvax",
+  "solvax>=0.12.0",
   "tomli; python_version < '3.11'",
   "tqdm",
 ]
