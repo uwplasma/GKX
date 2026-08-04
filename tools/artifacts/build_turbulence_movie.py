@@ -52,6 +52,14 @@ def _check_healthy(phi: np.ndarray, where: str, ceiling: float) -> None:
     linear phase can go unstable once the nonlinearity bites. Without this check
     the failure surfaces as a movie of amplified noise, or as NaN written to a
     snapshot file 40 minutes later.
+
+    The ceiling is calibrated against a measurement, not an assumption. An
+    earlier version asserted that "saturated ITG turbulence is order 0.1-1" and
+    aborted above 50, which is wrong for this normalization by two orders of
+    magnitude: a state that passes every saturation check in
+    ``tools/campaigns/nonlinear_saturated_state.py`` -- tau_ac 8.92, window 22.4
+    tau_ac, late drift 1.6% -- has max|phi| = 137.7. That guard fired on correct
+    physics and aborted three otherwise healthy runs partway up the linear phase.
     """
 
     peak = float(np.abs(phi).max()) if phi.size else 0.0
@@ -279,7 +287,10 @@ def run(
     nx: int | None = None,
     ny: int | None = None,
     nz: int | None = None,
-    ceiling: float = 50.0,
+    # Measured against a state that passes every saturation check (max|phi| =
+    # 137.7 at 16^3), with room for the overshoot a fixed-step run shows on the
+    # way into saturation. A genuine numerical blow-up leaves this far behind.
+    ceiling: float = 1.0e3,
 ) -> int:
     cfg, _ = load_runtime_from_toml(config)
     geometry = build_runtime_geometry(cfg)
