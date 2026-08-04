@@ -60,6 +60,12 @@ def _check_healthy(phi: np.ndarray, where: str, ceiling: float) -> None:
     ``tools/campaigns/nonlinear_saturated_state.py`` -- tau_ac 8.92, window 22.4
     tau_ac, late drift 1.6% -- has max|phi| = 137.7. That guard fired on correct
     physics and aborted three otherwise healthy runs partway up the linear phase.
+
+    The mismatch had a cause worth stating: the shipped TOML sets
+    diagnostic_norm = "rho_star", so this quantity is the rho-star-normalized
+    potential. "Order 0.1 to 1" is right for ephi/T_i and wrong for
+    (ephi/T_i)/rho_star by a factor 1/rho_star -- the ceiling and the field were
+    two different quantities.
     """
 
     peak = float(np.abs(phi).max()) if phi.size else 0.0
@@ -214,7 +220,11 @@ def render_frame(
         ax.set_title("Perpendicular cut at the outboard midplane")
         ax.grid(False)
         bar = fig.colorbar(mesh, ax=ax, fraction=0.046, pad=0.03)
-        bar.set_label(r"$e\phi/T_i$")
+        # The shipped nonlinear TOML sets diagnostic_norm = "rho_star", so the
+        # field carried here is the rho-star-normalized potential, not ephi/T_i.
+        # Labelling it ephi/T_i overstates the amplitude by 1/rho_star and is
+        # what made a physically saturated run look like a blow-up.
+        bar.set_label(r"$(e\phi/T_i)\,/\,\rho_*$")
 
         # ---- field-aligned tube -------------------------------------------
         ax3d = fig.add_subplot(grid[0, 1], projection="3d")
