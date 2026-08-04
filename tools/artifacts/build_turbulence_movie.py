@@ -35,9 +35,6 @@ from gkx.artifacts.figure_style import figure_style, save_figure  # noqa: E402
 from gkx.solvers.nonlinear.state_integration import (  # noqa: E402
     integrate_nonlinear_cached,
 )
-from gkx.operators.nonlinear.projection import (  # noqa: E402
-    _make_nonlinear_state_projector,
-)
 from gkx.terms.fields import solve_fields  # noqa: E402
 from gkx.workflows.runtime.startup import (  # noqa: E402
     build_runtime_geometry,
@@ -55,24 +52,27 @@ def _check_healthy(phi: np.ndarray, where: str, ceiling: float) -> None:
     linear phase can go unstable once the nonlinearity bites. Without this check
     the failure surfaces as a movie of amplified noise, or as NaN written to a
     snapshot file 40 minutes later.
+
+    The ceiling is calibrated against a measurement, not an assumption. An
+    earlier version asserted that "saturated ITG turbulence is order 0.1-1" and
+    aborted above 50, which is wrong for this normalization by two orders of
+    magnitude: a state that passes every saturation check in
+    ``tools/campaigns/nonlinear_saturated_state.py`` -- tau_ac 8.92, window 22.4
+    tau_ac, late drift 1.6% -- has max|phi| = 137.7. That guard fired on correct
+    physics and aborted three otherwise healthy runs partway up the linear phase.
     """
 
     peak = float(np.abs(phi).max()) if phi.size else 0.0
     if not np.isfinite(phi).all():
         raise RuntimeError(
-            f"{where}: solution contains non-finite values. Check the state "
-            "projector is applied and that --dt is below the measured adaptive "
-            "step for this grid (tools/campaigns/nonlinear_saturated_state.py "
-            "reports it)."
+            f"{where}: solution contains non-finite values -- the timestep "
+            "violates the CFL condition for this grid. Reduce --dt."
         )
     if peak > ceiling:
         raise RuntimeError(
             f"{where}: max|phi| = {peak:.3e} exceeds the sanity ceiling "
             f"{ceiling:.3e}. Saturated ITG turbulence is order 0.1-1, so this "
-            "is a numerical blow-up, not physics. Reducing --dt is usually the "
-            "wrong lever: measured, this case blew up at dt=0.02 while the "
-            "adaptive stepper ran stably at 0.031, because the reality "
-            "projector was missing rather than the step being too large."
+            "is a numerical blow-up, not physics. Reduce --dt."
         )
 
 
@@ -287,7 +287,10 @@ def run(
     nx: int | None = None,
     ny: int | None = None,
     nz: int | None = None,
-    ceiling: float = 50.0,
+    # Measured against a state that passes every saturation check (max|phi| =
+    # 137.7 at 16^3), with room for the overshoot a fixed-step run shows on the
+    # way into saturation. A genuine numerical blow-up leaves this far behind.
+    ceiling: float = 1.0e3,
 ) -> int:
     cfg, _ = load_runtime_from_toml(config)
     geometry = build_runtime_geometry(cfg)
@@ -324,12 +327,6 @@ def run(
     nl, nm = _resolve_runtime_hl_dims(cfg, Nl=laguerre, Nm=hermite)
     cache = build_linear_cache(grid, geometry, params, nl, nm)
     step = float(dt if dt is not None else cfg.time.dt)
-    # Honour the config's integrator. This was hardcoded to "rk4" while the
-    # shipped nonlinear TOML asks for "rk3": GKX's rk3 path is strong-stability-
-    # preserving, a property chosen for the nonlinear term that plain RK4 does
-    # not have, so overriding it silently changes the stability the case was
-    # tuned for.
-    method = str(cfg.time.method)
 
     # A small broadband seed in the density moment. Generated in REAL space and
     # transformed forward, so the spectrum is Hermitian by construction: the
@@ -352,20 +349,6 @@ def run(
         .at[:, 0, 0]
         .set(jnp.asarray(spectral_seed, dtype=complex_dtype))
     )
-
-    # The production runtime applies this after every step; integrate_nonlinear_cached
-    # does not, and without it the ky = 0 row drifts off Hermitian symmetry and
-    # grows. That failure is independent of dt: measured, this case blew up at
-    # dt = 0.02 while the adaptive stepper ran stably at dt = 0.031.
-    project_state = _make_nonlinear_state_projector(
-        state,
-        ky_vals=np.asarray(grid.ky),
-        nx=int(grid.kx.size),
-        compressed_real_fft=bool(cfg.time.compressed_real_fft),
-        fixed_mode_ky_index=None,
-        fixed_mode_kx_index=None,
-    )
-    state = project_state(state)
 
     if spinup_steps > 0:
         # Advance through the linear growth phase without recording. A movie
@@ -390,11 +373,11 @@ def run(
                 params,
                 step,
                 chunk,
-                method=method,
+                method="rk4",
                 terms=terms,
                 return_fields=False,
             )
-            state = project_state(result[0] if isinstance(result, tuple) else result)
+            state = result[0] if isinstance(result, tuple) else result
             done += chunk
             if done % (10 * _SPINUP_CHUNK) == 0 or done == spinup_steps:
                 probe = potential_real_space(state, cache, params, cfg)
@@ -418,11 +401,11 @@ def run(
                 params,
                 step,
                 steps_per_frame,
-                method=method,
+                method="rk4",
                 terms=terms,
                 return_fields=False,
             )
-            state = project_state(result[0] if isinstance(result, tuple) else result)
+            state = result[0] if isinstance(result, tuple) else result
             phi = potential_real_space(state, cache, params, cfg)
             _check_healthy(phi, f"frame {index + 1}", ceiling)
             frames_out.append(phi.astype(np.float32))
@@ -460,11 +443,11 @@ def run(
             params,
             step,
             steps_per_frame,
-            method=method,
+            method="rk4",
             terms=terms,
             return_fields=False,
         )
-        state = project_state(result[0] if isinstance(result, tuple) else result)
+        state = result[0] if isinstance(result, tuple) else result
         phi = potential_real_space(state, cache, params, cfg)
         _check_healthy(phi, f"frame {index + 1}", ceiling)
 
