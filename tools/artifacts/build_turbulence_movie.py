@@ -324,6 +324,12 @@ def run(
     nl, nm = _resolve_runtime_hl_dims(cfg, Nl=laguerre, Nm=hermite)
     cache = build_linear_cache(grid, geometry, params, nl, nm)
     step = float(dt if dt is not None else cfg.time.dt)
+    # Honour the config's integrator. This was hardcoded to "rk4" while the
+    # shipped nonlinear TOML asks for "rk3": GKX's rk3 path is strong-stability-
+    # preserving, a property chosen for the nonlinear term that plain RK4 does
+    # not have, so overriding it silently changes the stability the case was
+    # tuned for.
+    method = str(cfg.time.method)
 
     # A small broadband seed in the density moment. Generated in REAL space and
     # transformed forward, so the spectrum is Hermitian by construction: the
@@ -384,7 +390,7 @@ def run(
                 params,
                 step,
                 chunk,
-                method="rk4",
+                method=method,
                 terms=terms,
                 return_fields=False,
             )
@@ -412,7 +418,7 @@ def run(
                 params,
                 step,
                 steps_per_frame,
-                method="rk4",
+                method=method,
                 terms=terms,
                 return_fields=False,
             )
@@ -454,7 +460,7 @@ def run(
             params,
             step,
             steps_per_frame,
-            method="rk4",
+            method=method,
             terms=terms,
             return_fields=False,
         )
