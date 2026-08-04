@@ -17,14 +17,14 @@ or from Python.
 pip install gkx && gkx
 ```
 
-<!-- MOVIE SLOT: replace with the committed asset once encoded.
-     Do not point this at a URL that has not been uploaded. -->
+https://github.com/uwplasma/GKX/releases/download/v1.7.0/gkx-cyclone-itg-turbulence.mp4
 
-**Saturated ITG turbulence on a Cyclone flux tube**, shown as the perpendicular
-cut a gyrokineticist reads and as the field-aligned tube in real space — the
-same data, twice, because a flux-tube movie that only shows the perpendicular
-plane hides the parallel elongation that defines the turbulence. Regenerate with
-[`tools/artifacts/build_turbulence_movie.py`](tools/artifacts/build_turbulence_movie.py).
+**Saturated ITG turbulence on a Cyclone flux tube** (32×32×24, `t ≈ 300–376`),
+shown as the perpendicular cut a gyrokineticist reads and as the field-aligned
+tube in real space — the same data twice, because a flux-tube movie that only
+shows the perpendicular plane hides the parallel elongation that defines the
+turbulence. Amplitude is steady across all 120 frames, not growing. Regenerate
+with [`build_turbulence_movie.py`](tools/artifacts/build_turbulence_movie.py).
 
 ## Why GKX
 
