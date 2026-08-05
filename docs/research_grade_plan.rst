@@ -4,63 +4,59 @@ Research-grade GKX: removing the proxies
 Status: **plan**. Nothing here is promoted. Each step names what it removes or
 proves, and the gate that decides it.
 
-The one problem underneath all of this
---------------------------------------
+What the optimization examples actually compute
+-----------------------------------------------
 
-GKX carries **two parallel objective stacks**, and the user-facing optimization
-examples use the wrong one.
+An earlier version of this page asserted that the three optimization examples
+run on ``objectives/stellarator_reduced.py``'s analytic feature-map model. That
+is **wrong**, and the correction matters because it inverts the plan's ordering.
+Reading the call chain rather than the filenames:
 
-``src/gkx/objectives/stellarator_reduced.py`` and its facade, contracts and
-tables are 1709 lines of an *analytic feature-map model* -- growth rate,
-:math:`k_\perp^2` and flux weights from fitted expressions in the boundary
-parameters, with the nonlinear "trace" an ODE envelope,
+.. list-table::
+   :header-rows: 1
 
-.. math::
+   * - example
+     - calls
+     - what it computes
+   * - linear
+     - ``turbulent_growth_rate``
+     - GKX's **real** dense linear operator, then ``eigvals``
+   * - quasilinear
+     - ``quasilinear_flux_proxy``
+     - **real** linear solve, then a named mixing-length saturation rule
+   * - nonlinear
+     - ``nonlinear_heat_flux_proxy``
+     - **real** linear solve, then the algebraic closure
+       :math:`c_{\rm sat} W_Q\, 2\gamma_+ / (1 + 2.2 k_{\perp,\rm eff}^2 + 0.15\gamma_+)`
 
-   \frac{dE}{dt} = 2\gamma E - \alpha E^2, \qquad Q_{\rm env} = W_i E .
+All three already sit on the real linear gyrokinetic solve. The reduced
+feature-map model is consumed by ``vmec_transport.py``, the
+``reduced_stellarator_itg`` demo and one test -- not by these examples.
 
-That is not gyrokinetics. The docstring of
-``examples/optimization/QA_optimization_nonlinear_ITG.py`` says so plainly: it
-optimizes "a reduced nonlinear-window ITG proxy" whose "smooth saturation-rule
-proxy uses a dominant eigenvector and therefore uses finite-difference
-optimization".
+So the genuine gap is narrower and deeper than "migrate the examples". The
+nonlinear objective is an **algebraic surrogate of nonlinear flux built from
+linear quantities**: quasilinear-class physics wearing a nonlinear label. No file
+move fixes that. It is fixed by having a differentiable nonlinear flux at all,
+which is P4.
 
-Meanwhile the *real* stack exists and works: ``objectives/core.py`` builds the
-production linear RHS on a solver-ready flux tube and returns growth, frequency,
-mode scale and quasilinear transport, differentiably, and the ``vmec_boozer_*``
-modules carry the VMEC chain. Dense and matrix-free agree to **6.42e-11 across
-all six objectives**, including the eigenvector-dependent ones.
+P1 -- Rename what the nonlinear surrogate claims
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-So the work is not to build a research-grade path. It is to **delete the proxy
-path and move the examples onto the real one**, then close the gaps that made
-the proxy attractive in the first place.
+Until P4 lands, the honest change is naming. ``nonlinear_heat_flux_proxy``
+returns a closure over linear quantities; calling it a nonlinear heat flux
+invites exactly the reading this page made. Rename it to
+``saturation_rule_flux_estimate`` and say in one line what closure it applies.
 
-Ordered steps
--------------
+*Gate*: no public name asserts nonlinear gyrokinetics for a quantity computed
+from a linear solve.
 
-P1 -- Move the three optimization examples onto the real objective
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+P2 -- Re-scope, do not delete
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``QA_optimization_{linear,quasilinear,nonlinear}_ITG.py`` should call
-``solver_objective_vector_from_geometry`` on VMEX geometry, not the reduced
-model. Linear and quasilinear work today: the objective is differentiable and
-the dense/matrix-free parity is measured. Nonlinear is blocked on P4.
-
-*Gate*: each example reports a growth rate and a quasilinear flux that match a
-direct call on the same boundary to round-off, and the reduced-model import
-disappears from ``examples/``.
-
-P2 -- Delete the reduced stellarator model
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Once P1 lands, ``stellarator_reduced.py``, ``stellarator.py``,
-``stellarator_contracts.py`` and ``stellarator_tables.py`` have no production
-consumer. Delete them and the tests that only exercise them.
-
-*Gate*: 1709 lines out, coverage unchanged on the real path, and no test asserts
-a property of a model nobody runs. Anything the reduced model was uniquely
-testing gets re-pointed at the real objective or deleted with its rationale
-recorded.
+``stellarator_reduced.py`` and friends have three real consumers. Whether they
+should exist is a separate question this page has not answered, and the previous
+version of it proposed deleting 1709 lines on an inference that turned out to be
+wrong. Deferred until someone establishes what the reduced model is uniquely for.
 
 P3 -- Audit the remaining "proxy" names
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -228,9 +224,11 @@ appears as a result.
 Sequencing
 ----------
 
-P1 and P3 are independent and can start now. P2 follows P1. P5 and P6 are
-independent of everything and gate the credibility of all nonlinear numbers, so
-they should not wait behind P4. P4 is the long pole and P4.1 is its first step.
+**P5 and P6 come first.** They are independent of everything, they gate the
+credibility of every nonlinear number already in the tree, and neither depends on
+research going well. P1 and P3 are naming work and can run alongside. P4 is the
+long pole; the nonlinear example is rewritten as part of it, not before it. P2 is
+deferred.
 P7 is a reporting exercise once P4--P6 land. P8 and P9 are independent. P10
 follows whatever P1--P4 produce, because the README should showcase working
 features rather than promise them.
