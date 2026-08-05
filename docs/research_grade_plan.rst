@@ -111,24 +111,46 @@ unbiased and expensive; it is the fallback, not the default.
 measured on the correlation-time protocol, with the gradient's bias **and**
 variance both reported.
 
-P5 -- Fix the statistics the gradients rest on
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+P5 -- Fix the statistics the gradients rest on. P5.1 and P5.2 DONE
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Independently of the gradient method, every nonlinear window in the tree reports
-:math:`\sigma/\sqrt{n}` over correlated samples. Measured: windows hold **2.6 to
-11.8 independent samples**, so error bars are understated **2.0x to 3.7x**, and
-the blocked production gate (``gradient_uncertainty_rel = 1.806`` against 0.5)
-inherits that.
+Every nonlinear window in the tree reported :math:`\sigma/\sqrt{n}` over
+correlated samples, which understates the uncertainty of the mean by
+:math:`\sqrt{n/n_{\rm eff}}`.
 
-**P5.1** Make ``n_eff`` a required field of every window artifact, computed from
-:math:`\tau_{\rm ac}`, and have the window gate assert a minimum.
+**P5.1 -- done.** ``NonlinearWindowMetrics`` now carries ``heat_flux_tau_ac``,
+``window_in_tau_ac``, ``heat_flux_n_eff`` and ``heat_flux_stderr``, computed in
+``gkx.diagnostics.analysis`` where every window metric already flows. The
+corrected standard error divides by :math:`\sqrt{n_{\rm eff}}`, and a test pins
+the contract against an AR(1) process with a known correlation time.
 
-**P5.2** Re-score the existing tracked windows. Some will fail; that is the point.
+**P5.2 -- done, and the finding holds.** Re-scoring the 16 tracked heat-flux
+traces through the production path:
 
-**P5.3** State every window length in :math:`\tau_{\rm ac}`, not code time.
+.. list-table::
+   :header-rows: 1
 
-*Gate*: no artifact reports a flux uncertainty computed as if samples were
-independent.
+   * - quantity
+     - range
+   * - :math:`\tau_{\rm ac}`
+     - 3.98 -- 15.59
+   * - window length in :math:`\tau_{\rm ac}`
+     - 5.5 -- 26.9
+   * - **independent samples**
+     - **2.6 -- 11.8**
+   * - error-bar understatement
+     - **2.05x -- 3.67x**
+
+**14 of 16 windows hold fewer than ten independent samples**, and the worst
+averages 2.6. This is the one nonlinear finding in this program that has grown
+rather than shrunk under scrutiny -- the recycling win, the movie blow-up and the
+precision defect all became smaller when measured; this became larger.
+
+**P5.3 -- remaining.** Have the window promotion gate assert a minimum
+:math:`n_{\rm eff}`, and state window lengths in :math:`\tau_{\rm ac}` rather
+than code time. This will fail windows that currently pass, which is the point;
+it should land with the re-scored numbers so the failures are legible rather than
+surprising.
 
 P6 -- Precision. MEASURED, and it is a controllability bug, not an accuracy one
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
