@@ -130,18 +130,50 @@ inherits that.
 *Gate*: no artifact reports a flux uncertainty computed as if samples were
 independent.
 
-P6 -- Precision
-~~~~~~~~~~~~~~~
+P6 -- Precision. MEASURED, and it is a controllability bug, not an accuracy one
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``integrate_nonlinear_scan`` sets ``state_dtype = result_type(G0, complex64)``,
-so **a single-precision seed pins the whole trajectory to complex64 even with
-JAX_ENABLE_X64 set**. This surfaced only because ``lax.scan`` rejected a
-mismatched carry.
+``integrate_nonlinear_scan`` sets ``state_dtype = result_type(G0, complex64)``.
+Confirmed by running the production path with ``JAX_ENABLE_X64=True``: the
+returned state is ``complex64``. **Every tracked nonlinear number in the tree was
+computed in single precision.**
 
-*Gate*: determine whether the tracked nonlinear results are single precision, and
-either justify that (with a measured x64-vs-x32 comparison on one case) or fix
-the seed dtype and re-run. This affects every nonlinear number in the repository,
-so it comes before new production campaigns, not after.
+Whether that matters was then measured rather than assumed. Same case, same seed,
+integrated to ``t = 60`` in both precisions:
+
+.. list-table::
+   :header-rows: 1
+
+   * - precision
+     - final fluctuation energy
+   * - ``complex64``
+     - ``2.4002927603e-05``
+   * - ``complex128``
+     - ``2.4003281458e-05``
+   * - relative difference
+     - **1.47e-05**
+
+That is three orders of magnitude below the error-bar understatement P5
+addresses and far below the window-to-window scatter, so single precision is
+**not** a threat to the tracked results. An earlier version of this page claimed
+it "would affect every nonlinear number in the repository"; that claim is
+withdrawn.
+
+The caveat the measurement does not cover: ``t = 60`` is still the growth phase,
+where two precisions track each other. A chaotic saturated trajectory separates
+exponentially, so this bounds the *integrator's* precision sensitivity, not the
+long-time divergence of two trajectories. A saturated-regime comparison should
+report ensemble statistics, not a pointwise difference, because pointwise
+divergence there is expected physics rather than a defect.
+
+The defect that remains is real but narrower: **double precision cannot be
+requested**. ``result_type(G0, complex64)`` silently ignores ``JAX_ENABLE_X64``
+unless the caller happens to pass a complex128 seed. That is a controllability
+bug.
+
+*Gate*: a complex128 seed, or an explicit dtype argument, produces a complex128
+trajectory, and a test asserts it. The default may stay single precision -- it is
+faster and, measured, accurate enough.
 
 P7 -- The physics matrix
 ~~~~~~~~~~~~~~~~~~~~~~~~
