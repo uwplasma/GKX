@@ -54,6 +54,7 @@ the same order they appear in the code.
    solvers
    research_grade_plan
    solvax_defaults
+   nonlinear_gradient_plan
    architecture
    benchmarks
    examples
