@@ -52,6 +52,7 @@ the same order they appear in the code.
    geometry
    algorithms
    solvers
+   research_grade_plan
    solvax_defaults
    architecture
    benchmarks
